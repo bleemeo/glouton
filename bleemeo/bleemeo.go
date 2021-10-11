@@ -514,7 +514,7 @@ func (c *Connector) DiagnosticZip(zipFile *zip.Writer) error {
 			indices[i] = i
 		}
 
-		const maxSample = 50
+		const maxSample = 100
 		if len(failed) > maxSample {
 			fmt.Fprintf(file, "%d metrics fail to register. The following is 50 randomly choose metrics that fail:\n", len(failed))
 			indices = rand.Perm(len(failed))[:maxSample]
@@ -527,7 +527,11 @@ func (c *Connector) DiagnosticZip(zipFile *zip.Writer) error {
 
 		for _, i := range indices {
 			row := failed[i]
-			fmt.Fprintf(file, "count=%d nextRetryAt=%s failureKind=%v labels=%s\n", row.FailCounter, row.RetryAfter().Format(time.RFC3339), row.LastFailKind, row.LabelsText)
+			if row.LastFailKind.IsPermanentFailure() {
+				fmt.Fprintf(file, "count=%d nextRetryAt=on next full sync failureKind=%v labels=%s\n", row.FailCounter, row.LastFailKind, row.LabelsText)
+			} else {
+				fmt.Fprintf(file, "count=%d nextRetryAt=%s failureKind=%v labels=%s\n", row.FailCounter, row.RetryAfter().Format(time.RFC3339), row.LastFailKind, row.LabelsText)
+			}
 		}
 	}
 
