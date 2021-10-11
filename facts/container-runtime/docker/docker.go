@@ -486,12 +486,18 @@ func (d *Docker) updateContainers(ctx context.Context) error {
 
 	for _, c := range dockerContainers {
 		inspect, err := cl.ContainerInspect(ctx, c.ID)
-		if err != nil && docker.IsErrNotFound(err) || inspect.ContainerJSONBase == nil {
+		if err != nil && docker.IsErrNotFound(err) {
 			continue // the container was deleted between call. Ignore it
 		}
 
 		if err != nil {
 			return err
+		}
+
+		if inspect.ContainerJSONBase == nil {
+			logger.V(2).Printf("containerJSON base is empty for %s", c.ID)
+
+			continue
 		}
 
 		sortInspect(inspect)
