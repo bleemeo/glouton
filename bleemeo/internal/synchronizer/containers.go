@@ -191,7 +191,7 @@ func (s *Synchronizer) containerRegisterAndUpdate(localContainers []facts.Contai
 	params := map[string]string{
 		"fields": "id,name,docker_id,docker_inspect,host,command,docker_status,docker_created_at,docker_started_at,docker_finished_at," +
 			"docker_api_version,docker_image_id,docker_image_name,container_id,container_inspect,container_status,container_created_at," +
-			"container_finished_at,container_image_id,container_image_name",
+			"container_finished_at,container_image_id,container_image_name,container_runtime",
 	}
 
 	newDelayedContainer := make(map[string]time.Time, len(s.delayedContainer))
