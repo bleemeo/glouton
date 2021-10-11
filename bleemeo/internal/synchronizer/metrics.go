@@ -510,7 +510,7 @@ func (s *Synchronizer) syncMetrics(fullSync bool, onlyEssential bool) error {
 
 	filteredMetrics = prioritizeAndFilterMetrics(s.option.MetricFormat, filteredMetrics, onlyEssential)
 
-	if err := s.metricRegisterAndUpdate(filteredMetrics); err != nil {
+	if err := newMetricRegisterer(s).registerMetrics(filteredMetrics); err != nil {
 		return err
 	}
 
@@ -825,14 +825,30 @@ func (s *Synchronizer) metricDeleteFromRemote(localMetrics []types.Metric, previ
 	return nil
 }
 
-func (s *Synchronizer) metricRegisterAndUpdate(localMetrics []types.Metric) error { //nolint:cyclop
-	registeredMetricsByUUID := s.option.Cache.MetricsByUUID()
-	registeredMetricsByKey := common.MetricLookupFromList(s.option.Cache.Metrics())
+type metricRegisterer struct {
+	s                       *Synchronizer
+	registeredMetricsByUUID map[string]bleemeoTypes.Metric
+	registeredMetricsByKey  map[string]bleemeoTypes.Metric
+	containersByContainerID map[string]bleemeoTypes.Container
+	servicesByKey           map[serviceNameInstance]bleemeoTypes.Service
+	failedRegistrationByKey map[string]bleemeoTypes.MetricRegistration
+	monitors                []bleemeoTypes.Monitor
 
-	containersByContainerID := s.option.Cache.ContainersByContainerID()
+	// Metric that need to be re-created
+	needReregisterMetrics []types.Metric
+	// Metric that should be re-tried (likely because they depend on another metric)
+	retryMetrics []types.Metric
+
+	regCountBeforeUpdate int
+	errorCount           int
+	pendingErr           error
+}
+
+func newMetricRegisterer(s *Synchronizer) *metricRegisterer {
+	fails := s.option.Cache.MetricRegistrationsFail()
 	services := s.option.Cache.Services()
 	servicesByKey := make(map[serviceNameInstance]bleemeoTypes.Service, len(services))
-	failedRegistrationByKey := make(map[string]bleemeoTypes.MetricRegistration)
+	failedRegistrationByKey := make(map[string]bleemeoTypes.MetricRegistration, len(fails))
 
 	for _, v := range s.option.Cache.MetricRegistrationsFail() {
 		failedRegistrationByKey[v.LabelsText] = v
@@ -843,19 +859,50 @@ func (s *Synchronizer) metricRegisterAndUpdate(localMetrics []types.Metric) erro
 		servicesByKey[k] = v
 	}
 
-	monitors := s.option.Cache.Monitors()
-
-	params := map[string]string{
-		"fields": "id,label,item,labels_text,unit,unit_text,service,container,deactivated_at,threshold_low_warning,threshold_low_critical,threshold_high_warning,threshold_high_critical,status_of,agent",
+	return &metricRegisterer{
+		s:                       s,
+		registeredMetricsByUUID: s.option.Cache.MetricsByUUID(),
+		registeredMetricsByKey:  common.MetricLookupFromList(s.option.Cache.Metrics()),
+		containersByContainerID: s.option.Cache.ContainersByContainerID(),
+		servicesByKey:           servicesByKey,
+		failedRegistrationByKey: failedRegistrationByKey,
+		monitors:                s.option.Cache.Monitors(),
+		regCountBeforeUpdate:    30,
+		needReregisterMetrics:   make([]types.Metric, 0),
+		retryMetrics:            make([]types.Metric, 0),
 	}
-	regCountBeforeUpdate := 30
-	errorCount := 0
+}
 
-	var firstErr error
+func (mr *metricRegisterer) registerMetrics(localMetrics []types.Metric) error {
+	err := mr.do(localMetrics)
 
-	retryMetrics := make([]types.Metric, 0)
-	registerMetrics := make([]types.Metric, 0)
+	metrics := make([]bleemeoTypes.Metric, 0, len(mr.registeredMetricsByUUID))
 
+	for _, v := range mr.registeredMetricsByUUID {
+		metrics = append(metrics, v)
+	}
+
+	mr.s.option.Cache.SetMetrics(metrics)
+
+	minRetryAt := mr.s.now().Add(time.Hour)
+
+	registrations := make([]bleemeoTypes.MetricRegistration, 0, len(mr.failedRegistrationByKey))
+
+	for _, v := range mr.failedRegistrationByKey {
+		if !v.LastFailKind.IsPermanentFailure() && minRetryAt.After(v.RetryAfter()) {
+			minRetryAt = v.RetryAfter()
+		}
+
+		registrations = append(registrations, v)
+	}
+
+	mr.s.metricRetryAt = minRetryAt
+	mr.s.option.Cache.SetMetricRegistrationsFail(registrations)
+
+	return err
+}
+
+func (mr *metricRegisterer) do(localMetrics []types.Metric) error {
 	for state := metricPassAgentStatus; state <= metricPassRetry; state++ {
 		var currentList []types.Metric
 
@@ -867,170 +914,155 @@ func (s *Synchronizer) metricRegisterAndUpdate(localMetrics []types.Metric) erro
 		case metricPassMain:
 			currentList = localMetrics
 		case metricPassRecreate:
-			currentList = registerMetrics
+			currentList = mr.needReregisterMetrics
 
-			if len(registerMetrics) > 0 {
-				metrics := make([]bleemeoTypes.Metric, 0, len(registeredMetricsByUUID))
+			if len(mr.needReregisterMetrics) > 0 {
+				metrics := make([]bleemeoTypes.Metric, 0, len(mr.registeredMetricsByUUID))
 
-				for _, v := range registeredMetricsByUUID {
+				for _, v := range mr.registeredMetricsByUUID {
 					metrics = append(metrics, v)
 				}
 
-				s.option.Cache.SetMetrics(metrics)
+				mr.s.option.Cache.SetMetrics(metrics)
 
-				if err := s.metricUpdateList(registerMetrics); err != nil {
+				if err := mr.s.metricUpdateList(mr.needReregisterMetrics); err != nil {
 					return err
 				}
 
-				registeredMetricsByUUID = s.option.Cache.MetricsByUUID()
-				registeredMetricsByKey = common.MetricLookupFromList(s.option.Cache.Metrics())
+				mr.registeredMetricsByUUID = mr.s.option.Cache.MetricsByUUID()
+				mr.registeredMetricsByKey = common.MetricLookupFromList(mr.s.option.Cache.Metrics())
 			}
 		case metricPassRetry:
-			currentList = retryMetrics
+			currentList = mr.retryMetrics
 		}
 
-		logger.V(3).Printf("Metric registration phase %v start with %d metrics to process", state, len(currentList))
-
-	metricLoop:
-		for _, metric := range currentList {
-			if s.ctx.Err() != nil {
-				break
-			}
-
-			labels := metric.Labels()
-			annotations := metric.Annotations()
-			key := common.LabelsToText(labels, annotations, s.option.MetricFormat == types.MetricFormatBleemeo)
-
-			registration, hadPreviousFailure := failedRegistrationByKey[key]
-			if hadPreviousFailure {
-				if registration.LastFailKind.IsPermanentFailure() && !s.retryableMetricFailure[registration.LastFailKind] {
-					continue
-				}
-
-				if s.now().Before(registration.RetryAfter()) {
-					continue
-				}
-			}
-
-			err := s.metricRegisterAndUpdateOne(metric, registeredMetricsByUUID, registeredMetricsByKey, containersByContainerID, servicesByKey, params, monitors)
-			if err != nil && errors.Is(err, errRetryLater) && state < metricPassRetry {
-				retryMetrics = append(retryMetrics, metric)
-
-				continue metricLoop
-			}
-
-			if errReReg, ok := err.(needRegisterError); ok && err != nil && state < metricPassRecreate {
-				registerMetrics = append(registerMetrics, metric)
-
-				delete(registeredMetricsByUUID, errReReg.remoteMetric.ID)
-				delete(registeredMetricsByKey, errReReg.remoteMetric.LabelsText)
-
-				continue metricLoop
-			}
-
-			if err != nil {
-				if client.IsServerError(err) {
-					return err
-				}
-
-				if client.IsBadRequest(err) {
-					content := client.APIErrorContent(err)
-					registration.LastFailKind = httpResponseToMetricFailureKind(content)
-					registration.LastFailAt = s.now()
-					registration.FailCounter++
-					registration.LabelsText = key
-
-					failedRegistrationByKey[key] = registration
-					s.retryableMetricFailure[registration.LastFailKind] = false
-
-					continue
-				}
-
-				if firstErr == nil {
-					firstErr = err
-				}
-
-				errorCount++
-				if errorCount > 10 {
-					return err
-				}
-
-				time.Sleep(time.Duration(errorCount/2) * time.Second)
-
-				continue metricLoop
-			}
-
-			delete(failedRegistrationByKey, key)
-
-			regCountBeforeUpdate--
-			if regCountBeforeUpdate == 0 {
-				regCountBeforeUpdate = 60
-
-				metrics := make([]bleemeoTypes.Metric, 0, len(registeredMetricsByUUID))
-
-				for _, v := range registeredMetricsByUUID {
-					metrics = append(metrics, v)
-				}
-
-				s.option.Cache.SetMetrics(metrics)
-
-				registrations := make([]bleemeoTypes.MetricRegistration, 0, len(failedRegistrationByKey))
-				for _, v := range failedRegistrationByKey {
-					registrations = append(registrations, v)
-				}
-
-				s.option.Cache.SetMetricRegistrationsFail(registrations)
-			}
+		if err := mr.doOnePass(currentList, state); err != nil {
+			return err
 		}
 	}
 
-	metrics := make([]bleemeoTypes.Metric, 0, len(registeredMetricsByUUID))
-
-	for _, v := range registeredMetricsByUUID {
-		metrics = append(metrics, v)
-	}
-
-	s.option.Cache.SetMetrics(metrics)
-
-	minRetryAt := s.now().Add(time.Hour)
-
-	registrations := make([]bleemeoTypes.MetricRegistration, 0, len(failedRegistrationByKey))
-
-	for _, v := range failedRegistrationByKey {
-		if !v.LastFailKind.IsPermanentFailure() && minRetryAt.After(v.RetryAfter()) {
-			minRetryAt = v.RetryAfter()
-		}
-
-		registrations = append(registrations, v)
-	}
-
-	s.metricRetryAt = minRetryAt
-	s.option.Cache.SetMetricRegistrationsFail(registrations)
-
-	return firstErr
+	return mr.pendingErr
 }
 
-func (s *Synchronizer) metricRegisterAndUpdateOne(metric types.Metric, registeredMetricsByUUID map[string]bleemeoTypes.Metric,
-	registeredMetricsByKey map[string]bleemeoTypes.Metric, containersByContainerID map[string]bleemeoTypes.Container,
-	servicesByKey map[serviceNameInstance]bleemeoTypes.Service, params map[string]string, monitors []bleemeoTypes.Monitor) error {
+func (mr *metricRegisterer) doOnePass(currentList []types.Metric, state metricRegisterPass) error { //nolint: cyclop
+	logger.V(3).Printf("Metric registration phase %v start with %d metrics to process", state, len(currentList))
+
+	for _, metric := range currentList {
+		if mr.s.ctx.Err() != nil {
+			break
+		}
+
+		labels := metric.Labels()
+		annotations := metric.Annotations()
+		key := common.LabelsToText(labels, annotations, mr.s.option.MetricFormat == types.MetricFormatBleemeo)
+
+		registration, hadPreviousFailure := mr.failedRegistrationByKey[key]
+		if hadPreviousFailure {
+			if registration.LastFailKind.IsPermanentFailure() && !mr.s.retryableMetricFailure[registration.LastFailKind] {
+				continue
+			}
+
+			if mr.s.now().Before(registration.RetryAfter()) {
+				continue
+			}
+		}
+
+		err := mr.metricRegisterAndUpdateOne(metric)
+		if err != nil && errors.Is(err, errRetryLater) && state < metricPassRetry {
+			mr.retryMetrics = append(mr.retryMetrics, metric)
+
+			continue
+		}
+
+		if errReReg, ok := err.(needRegisterError); ok && err != nil && state < metricPassRecreate {
+			mr.needReregisterMetrics = append(mr.needReregisterMetrics, metric)
+
+			delete(mr.registeredMetricsByUUID, errReReg.remoteMetric.ID)
+			delete(mr.registeredMetricsByKey, errReReg.remoteMetric.LabelsText)
+
+			continue
+		}
+
+		if err != nil {
+			if client.IsServerError(err) {
+				return err
+			}
+
+			if client.IsBadRequest(err) {
+				content := client.APIErrorContent(err)
+				registration.LastFailKind = httpResponseToMetricFailureKind(content)
+				registration.LastFailAt = mr.s.now()
+				registration.FailCounter++
+				registration.LabelsText = key
+
+				mr.failedRegistrationByKey[key] = registration
+				mr.s.retryableMetricFailure[registration.LastFailKind] = false
+
+				continue
+			}
+
+			if mr.pendingErr == nil {
+				mr.pendingErr = err
+			}
+
+			mr.errorCount++
+			if mr.errorCount > 10 {
+				return err
+			}
+
+			time.Sleep(time.Duration(mr.errorCount/2) * time.Second)
+
+			continue
+		}
+
+		delete(mr.failedRegistrationByKey, key)
+
+		mr.regCountBeforeUpdate--
+		if mr.regCountBeforeUpdate == 0 {
+			mr.regCountBeforeUpdate = 60
+
+			metrics := make([]bleemeoTypes.Metric, 0, len(mr.registeredMetricsByUUID))
+
+			for _, v := range mr.registeredMetricsByUUID {
+				metrics = append(metrics, v)
+			}
+
+			mr.s.option.Cache.SetMetrics(metrics)
+
+			registrations := make([]bleemeoTypes.MetricRegistration, 0, len(mr.failedRegistrationByKey))
+			for _, v := range mr.failedRegistrationByKey {
+				registrations = append(registrations, v)
+			}
+
+			mr.s.option.Cache.SetMetricRegistrationsFail(registrations)
+		}
+	}
+
+	return mr.s.ctx.Err()
+}
+
+func (mr *metricRegisterer) metricRegisterAndUpdateOne(metric types.Metric) error {
+	params := map[string]string{
+		"fields": "id,label,item,labels_text,unit,unit_text,service,container,deactivated_at,threshold_low_warning,threshold_low_critical,threshold_high_warning,threshold_high_critical,status_of,agent",
+	}
 	labels := metric.Labels()
 	annotations := metric.Annotations()
-	key := common.LabelsToText(labels, annotations, s.option.MetricFormat == types.MetricFormatBleemeo)
-	remoteMetric, remoteFound := registeredMetricsByKey[key]
+	key := common.LabelsToText(labels, annotations, mr.s.option.MetricFormat == types.MetricFormatBleemeo)
+	remoteMetric, remoteFound := mr.registeredMetricsByKey[key]
 
 	if remoteFound {
-		result, err := s.metricUpdateOne(metric, remoteMetric)
+		result, err := mr.s.metricUpdateOne(metric, remoteMetric)
 		if err != nil {
 			return err
 		}
 
-		registeredMetricsByKey[key] = result
-		registeredMetricsByUUID[result.ID] = result
+		mr.registeredMetricsByKey[key] = result
+		mr.registeredMetricsByUUID[result.ID] = result
 
 		return nil
 	}
 
-	payload, err := s.prepareMetricPayload(metric, registeredMetricsByKey, containersByContainerID, servicesByKey, monitors)
+	payload, err := mr.s.prepareMetricPayload(metric, mr.registeredMetricsByKey, mr.containersByContainerID, mr.servicesByKey, mr.monitors)
 	if errors.Is(err, errIgnore) {
 		return nil
 	}
@@ -1041,14 +1073,14 @@ func (s *Synchronizer) metricRegisterAndUpdateOne(metric types.Metric, registere
 
 	var result metricPayload
 
-	_, err = s.client.Do(s.ctx, "POST", "v1/metric/", params, payload, &result)
+	_, err = mr.s.client.Do(mr.s.ctx, "POST", "v1/metric/", params, payload, &result)
 	if err != nil {
 		return err
 	}
 
 	logger.V(2).Printf("Metric %v registered with UUID %s", key, result.ID)
-	registeredMetricsByKey[key] = result.metricFromAPI()
-	registeredMetricsByUUID[result.ID] = result.metricFromAPI()
+	mr.registeredMetricsByKey[key] = result.metricFromAPI()
+	mr.registeredMetricsByUUID[result.ID] = result.metricFromAPI()
 
 	return nil
 }
