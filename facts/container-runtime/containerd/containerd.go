@@ -614,6 +614,10 @@ func (c *Containerd) updateContainers(ctx context.Context) error {
 		}
 	}
 
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+
 	if len(deletedContainerID) > 0 && c.DeletedContainersCallback != nil {
 		c.DeletedContainersCallback(deletedContainerID)
 	}

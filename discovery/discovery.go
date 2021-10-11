@@ -301,23 +301,7 @@ func (d *Discovery) updateDiscovery(ctx context.Context) error {
 	servicesMap := make(map[NameContainer]Service)
 
 	for key, service := range d.discoveredServicesMap {
-		if service.ContainerID != "" {
-			container, found := d.containerInfo.CachedContainer(service.ContainerID)
-
-			if found {
-				service.container = container
-			}
-
-			if !found || facts.ContainerIgnored(container) {
-				service.Active = false
-			} else if container.StoppedAndReplaced() {
-				service.Active = false
-			}
-		} else if service.ExePath != "" {
-			if _, err := os.Stat(service.ExePath); os.IsNotExist(err) {
-				service.Active = false
-			}
-		}
+		service = d.setServiceActiveAndContainer(service)
 
 		servicesMap[key] = service
 	}
@@ -339,12 +323,38 @@ func (d *Discovery) updateDiscovery(ctx context.Context) error {
 		servicesMap[key] = service
 	}
 
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+
 	d.discoveredServicesMap = servicesMap
 	d.servicesMap = applyOveride(servicesMap, d.servicesOverride)
 
 	d.ignoreServicesAndPorts()
 
 	return nil
+}
+
+func (d *Discovery) setServiceActiveAndContainer(service Service) Service {
+	if service.ContainerID != "" {
+		container, found := d.containerInfo.CachedContainer(service.ContainerID)
+
+		if found {
+			service.container = container
+		}
+
+		if !found || facts.ContainerIgnored(container) {
+			service.Active = false
+		} else if container.StoppedAndReplaced() {
+			service.Active = false
+		}
+	} else if service.ExePath != "" {
+		if _, err := os.Stat(service.ExePath); os.IsNotExist(err) {
+			service.Active = false
+		}
+	}
+
+	return service
 }
 
 //nolint:cyclop

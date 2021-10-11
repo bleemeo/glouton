@@ -514,6 +514,10 @@ func (d *Docker) updateContainers(ctx context.Context) error {
 		}
 	}
 
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+
 	var deletedContainerID []string
 
 	for k := range d.containers {
@@ -532,7 +536,7 @@ func (d *Docker) updateContainers(ctx context.Context) error {
 	d.bridgeNetworks = bridgeNetworks
 	d.containerAddressOnDockerBridge = containerAddressOnDockerBridge
 
-	return nil
+	return ctx.Err()
 }
 
 func (d *Docker) updateContainer(ctx context.Context, cl dockerClient, containerID string) (dockerContainer, error) {

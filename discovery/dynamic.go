@@ -240,6 +240,10 @@ func (dd *DynamicDiscovery) updateDiscovery(ctx context.Context, maxAge time.Dur
 		logger.V(1).Printf("An error occurred while trying to retrieve netstat information: %v", err)
 	}
 
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+
 	// Process PID present in netstat output before other PID, because
 	// two processes may listen on same port (e.g. multiple Apache process)
 	// but netstat only see one of them.
@@ -261,59 +265,21 @@ func (dd *DynamicDiscovery) updateDiscovery(ctx context.Context, maxAge time.Dur
 			continue
 		}
 
-		if process.Status == "zombie" {
-			continue
-		}
-
-		serviceType, ok := serviceByCommand(process.CmdLineList)
+		service, ok := dd.serviceFromProcess(process, servicesMap, netstat)
 		if !ok {
 			continue
-		}
-
-		service := Service{
-			ServiceType:   serviceType,
-			Name:          string(serviceType),
-			ContainerID:   process.ContainerID,
-			ContainerName: process.ContainerName,
-			ExePath:       process.Executable,
-			Active:        true,
-			Stack:         dd.defaultStack,
 		}
 
 		key := NameContainer{
 			Name:          service.Name,
 			ContainerName: service.ContainerName,
 		}
-		if _, ok := servicesMap[key]; ok {
-			continue
-		}
-
-		if service.ContainerID != "" {
-			service.container, ok = dd.containerInfo.CachedContainer(service.ContainerID)
-			if !ok || facts.ContainerIgnored(service.container) {
-				continue
-			}
-
-			getContainerStack(&service)
-		}
-
-		di := getDiscoveryInfo(&service, netstat, pid)
-
-		dd.updateListenAddresses(&service, di)
-
-		dd.fillExtraAttributes(&service)
-		dd.fillGenericExtraAttributes(&service, di)
-		dd.guessJMX(&service, process.CmdLineList)
-
-		logger.V(2).Printf(
-			"Discovered service %v from PID %d (%s) with IP %s",
-			service,
-			pid,
-			process.Name,
-			service.IPAddress,
-		)
 
 		servicesMap[key] = service
+	}
+
+	if ctx.Err() != nil {
+		return ctx.Err()
 	}
 
 	dd.lastDiscoveryUpdate = time.Now()
@@ -326,6 +292,62 @@ func (dd *DynamicDiscovery) updateDiscovery(ctx context.Context, maxAge time.Dur
 	dd.services = services
 
 	return nil
+}
+
+func (dd *DynamicDiscovery) serviceFromProcess(process facts.Process, servicesMap map[NameContainer]Service, netstat map[int][]facts.ListenAddress) (Service, bool) {
+	if process.Status == "zombie" {
+		return Service{}, false
+	}
+
+	serviceType, ok := serviceByCommand(process.CmdLineList)
+	if !ok {
+		return Service{}, false
+	}
+
+	service := Service{
+		ServiceType:   serviceType,
+		Name:          string(serviceType),
+		ContainerID:   process.ContainerID,
+		ContainerName: process.ContainerName,
+		ExePath:       process.Executable,
+		Active:        true,
+		Stack:         dd.defaultStack,
+	}
+
+	key := NameContainer{
+		Name:          service.Name,
+		ContainerName: service.ContainerName,
+	}
+	if _, ok := servicesMap[key]; ok {
+		return Service{}, false
+	}
+
+	if service.ContainerID != "" {
+		service.container, ok = dd.containerInfo.CachedContainer(service.ContainerID)
+		if !ok || facts.ContainerIgnored(service.container) {
+			return Service{}, false
+		}
+
+		getContainerStack(&service)
+	}
+
+	di := getDiscoveryInfo(&service, netstat, process.PID)
+
+	dd.updateListenAddresses(&service, di)
+
+	dd.fillExtraAttributes(&service)
+	dd.fillGenericExtraAttributes(&service, di)
+	dd.guessJMX(&service, process.CmdLineList)
+
+	logger.V(2).Printf(
+		"Discovered service %v from PID %d (%s) with IP %s",
+		service,
+		process.PID,
+		process.Name,
+		service.IPAddress,
+	)
+
+	return service, true
 }
 
 func getContainerStack(service *Service) {

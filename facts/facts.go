@@ -106,7 +106,7 @@ func (f *FactProvider) Facts(ctx context.Context, maxAge time.Duration) (facts m
 		logger.V(2).Printf("facts: updateFacts() took %v", time.Since(t))
 	}
 
-	return f.facts, nil
+	return f.facts, ctx.Err()
 }
 
 // FastFacts returns an incomplete list of facts for this system. The slowest facts
@@ -150,6 +150,10 @@ func (f *FactProvider) updateFacts(ctx context.Context) {
 	collectCloudProvidersFacts(ctx, newFacts)
 
 	cleanFacts(newFacts)
+
+	if ctx.Err() != nil {
+		return
+	}
 
 	f.facts = newFacts
 	f.lastFactsUpdate = time.Now()
