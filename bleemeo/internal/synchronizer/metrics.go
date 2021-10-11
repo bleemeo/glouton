@@ -253,8 +253,14 @@ func newComparator(format types.MetricFormat) *metricComparator {
 	}
 }
 
-func (m *metricComparator) IsEssential(metric map[string]string) bool {
-	return m.isEssentials[metric[types.LabelName]]
+func (m *metricComparator) KeepInOnlyEssential(metric map[string]string) bool {
+	name := metric[types.LabelName]
+	item := getItem(metric)
+	essential := m.isEssentials[name]
+	highCard := m.isHighCardinality[name]
+	goodItem := m.IsSignificantItem(item)
+
+	return essential && (!highCard || goodItem)
 }
 
 // IsSignificantItem return true of "important" item. Like "/", "/home" or "eth0".
@@ -333,7 +339,7 @@ func prioritizeAndFilterMetrics(format types.MetricFormat, metrics []types.Metri
 		i := 0
 
 		for _, m := range metrics {
-			if !cmp.IsEssential(m.Labels()) {
+			if !cmp.KeepInOnlyEssential(m.Labels()) {
 				continue
 			}
 

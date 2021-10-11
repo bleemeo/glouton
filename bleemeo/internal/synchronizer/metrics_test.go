@@ -410,6 +410,60 @@ func Test_metricComparator_IsSignificantItem(t *testing.T) {
 	}
 }
 
+func Test_metricComparator_SkipInOnlyEssential(t *testing.T) {
+	tests := []struct {
+		name                string
+		format              types.MetricFormat
+		metric              string
+		keepInOnlyEssential bool
+	}{
+		{
+			name:                "default dashboard metrics are essential 1",
+			format:              types.MetricFormatBleemeo,
+			metric:              `__name__="cpu_used"`,
+			keepInOnlyEssential: true,
+		},
+		{
+			name:                "default dashboard metrics are essential 2",
+			format:              types.MetricFormatBleemeo,
+			metric:              `__name__="io_reads",item="nvme0"`,
+			keepInOnlyEssential: true,
+		},
+		{
+			name:                "default dashboard metrics are essential 3",
+			format:              types.MetricFormatBleemeo,
+			metric:              `__name__="net_bits_recv",item="eth0"`,
+			keepInOnlyEssential: true,
+		},
+		{
+			name:                "high cardinality aren't essential",
+			format:              types.MetricFormatBleemeo,
+			metric:              `__name__="net_bits_recv",item="the_item"`,
+			keepInOnlyEssential: false,
+		},
+		{
+			name:                "high cardinality aren't essential",
+			format:              types.MetricFormatBleemeo,
+			metric:              `__name__="net_bits_recv",item="br-2a4d1a465acd"`,
+			keepInOnlyEssential: false,
+		},
+	}
+	for _, tt := range tests {
+		tt := tt
+
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			m := newComparator(tt.format)
+			metric := types.TextToLabels(tt.metric)
+
+			if got := m.KeepInOnlyEssential(metric); got != tt.keepInOnlyEssential {
+				t.Errorf("metricComparator.KeepInOnlyEssential() = %v, want %v", got, tt.keepInOnlyEssential)
+			}
+		})
+	}
+}
+
 func Test_metricComparator_importanceWeight(t *testing.T) {
 	tests := []struct {
 		name         string

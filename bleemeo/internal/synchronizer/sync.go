@@ -258,10 +258,6 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 		}
 
 		if firstSync {
-			if err == nil {
-				minimalDelay = delay.JitterDelay(time.Second, 0.05)
-			}
-
 			firstSync = false
 		}
 	}
@@ -526,10 +522,14 @@ func (s *Synchronizer) setClient() error {
 
 //nolint:cyclop
 func (s *Synchronizer) runOnce(onlyEssential bool) error {
+	var wasCreation bool
+
 	if s.agentID == "" {
 		if err := s.register(); err != nil {
 			return err
 		}
+
+		wasCreation = true
 
 		s.option.NotifyFirstRegistration(s.ctx)
 		// Do one pass of metric registration to register agent_status.
@@ -636,6 +636,10 @@ func (s *Synchronizer) runOnce(onlyEssential bool) error {
 	}
 
 	logger.V(2).Printf("Synchronization took %v for %v (and did %d requests)", s.now().Sub(startAt), syncMethods, s.realClient.RequestsCount()-previousCount)
+
+	if wasCreation {
+		s.UpdateUnitsAndThresholds(true)
+	}
 
 	if len(syncMethods) == len(syncStep) && firstErr == nil {
 		s.option.Cache.Save()
