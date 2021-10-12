@@ -141,15 +141,24 @@ func (t *Target) GatherWithState(ctx context.Context, state registry.GatherState
 	var (
 		totalInterfaces     int
 		connectedInterfaces int
+		interfaceUp         map[string]bool
 	)
 
 	for _, mf := range result {
 		if mf.GetName() == "ifOperStatus" {
+			interfaceUp = make(map[string]bool, len(mf.Metric))
+
 			for _, m := range mf.Metric {
 				totalInterfaces++
 
 				if m.GetGauge().GetValue() == 1 {
 					connectedInterfaces++
+
+					for _, l := range m.Label {
+						if l.GetName() == "ifIndex" {
+							interfaceUp[l.GetValue()] = true
+						}
+					}
 				}
 			}
 		}
@@ -179,6 +188,10 @@ func (t *Target) GatherWithState(ctx context.Context, state registry.GatherState
 				},
 			},
 		})
+
+		if !state.NoFilter {
+			result = mfsFilterInterface(result, interfaceUp)
+		}
 	}
 
 	if status, msg := t.getStatus(); status != types.StatusUnset {
@@ -200,6 +213,49 @@ func (t *Target) GatherWithState(ctx context.Context, state registry.GatherState
 	}
 
 	return result, err
+}
+
+func mfsFilterInterface(mfs []*dto.MetricFamily, interfaceUp map[string]bool) []*dto.MetricFamily {
+	i := 0
+
+	for _, mf := range mfs {
+		mfFilterInterface(mf, interfaceUp)
+
+		if len(mf.Metric) > 0 {
+			mfs[i] = mf
+			i++
+		}
+	}
+
+	mfs = mfs[:i]
+
+	return mfs
+}
+
+func mfFilterInterface(mf *dto.MetricFamily, interfaceUp map[string]bool) {
+	// ifOperStatus is always sent
+	if mf.GetName() == "ifOperStatus" {
+		return
+	}
+
+	i := 0
+
+	for _, m := range mf.Metric {
+		var ifIndex string
+
+		for _, l := range m.Label {
+			if l.GetName() == "ifIndex" {
+				ifIndex = l.GetValue()
+			}
+		}
+
+		if ifIndex == "" || interfaceUp[ifIndex] {
+			mf.Metric[i] = m
+			i++
+		}
+	}
+
+	mf.Metric = mf.Metric[:i]
 }
 
 func (t *Target) extraLabels() map[string]string {

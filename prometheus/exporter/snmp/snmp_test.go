@@ -25,6 +25,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gogo/protobuf/proto"
 	"github.com/google/go-cmp/cmp"
 	dto "github.com/prometheus/client_model/go"
 	"github.com/prometheus/common/expfmt"
@@ -145,6 +146,247 @@ func Test_humanError(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := humanError(tt.err); got != tt.want {
 				t.Errorf("humanError() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func Test_mfsFilterInterface(t *testing.T) {
+	type args struct {
+		mfs         []*dto.MetricFamily
+		interfaceUp map[string]bool
+	}
+
+	tests := []struct {
+		name string
+		args args
+		want []*dto.MetricFamily
+	}{
+		{
+			name: "metric of disconnected interface are excluded",
+			args: args{
+				interfaceUp: map[string]bool{
+					"1": true,
+					"3": true,
+				},
+				mfs: []*dto.MetricFamily{
+					{
+						Name: proto.String("ifInOctets"),
+						Metric: []*dto.Metric{
+							{
+								Label: []*dto.LabelPair{
+									{Name: proto.String("ifIndex"), Value: proto.String("1")},
+									{Name: proto.String("other"), Value: proto.String("label")},
+								},
+							},
+							{
+								Label: []*dto.LabelPair{
+									{Name: proto.String("ifIndex"), Value: proto.String("2")},
+									{Name: proto.String("other"), Value: proto.String("label")},
+								},
+							},
+							{
+								Label: []*dto.LabelPair{
+									{Name: proto.String("ifIndex"), Value: proto.String("3")},
+									{Name: proto.String("other"), Value: proto.String("label")},
+								},
+							},
+						},
+					},
+					{
+						Name: proto.String("all_disconnected"),
+						Metric: []*dto.Metric{
+							{
+								Label: []*dto.LabelPair{
+									{Name: proto.String("ifIndex"), Value: proto.String("2")},
+								},
+							},
+							{
+								Label: []*dto.LabelPair{
+									{Name: proto.String("ifIndex"), Value: proto.String("4")},
+								},
+							},
+						},
+					},
+					{
+						Name: proto.String("all_connected"),
+						Metric: []*dto.Metric{
+							{
+								Label: []*dto.LabelPair{
+									{Name: proto.String("other"), Value: proto.String("label")},
+									{Name: proto.String("ifIndex"), Value: proto.String("1")},
+								},
+							},
+							{
+								Label: []*dto.LabelPair{
+									{Name: proto.String("ifIndex"), Value: proto.String("3")},
+									{Name: proto.String("other"), Value: proto.String("label")},
+								},
+							},
+						},
+					},
+				},
+			},
+			want: []*dto.MetricFamily{
+				{
+					Name: proto.String("ifInOctets"),
+					Metric: []*dto.Metric{
+						{
+							Label: []*dto.LabelPair{
+								{Name: proto.String("ifIndex"), Value: proto.String("1")},
+								{Name: proto.String("other"), Value: proto.String("label")},
+							},
+						},
+						{
+							Label: []*dto.LabelPair{
+								{Name: proto.String("ifIndex"), Value: proto.String("3")},
+								{Name: proto.String("other"), Value: proto.String("label")},
+							},
+						},
+					},
+				},
+				{
+					Name: proto.String("all_connected"),
+					Metric: []*dto.Metric{
+						{
+							Label: []*dto.LabelPair{
+								{Name: proto.String("other"), Value: proto.String("label")},
+								{Name: proto.String("ifIndex"), Value: proto.String("1")},
+							},
+						},
+						{
+							Label: []*dto.LabelPair{
+								{Name: proto.String("ifIndex"), Value: proto.String("3")},
+								{Name: proto.String("other"), Value: proto.String("label")},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "ifOperStatus and non-interface metric are always kept",
+			args: args{
+				interfaceUp: map[string]bool{
+					"1": true,
+					"3": true,
+				},
+				mfs: []*dto.MetricFamily{
+					{
+						Name: proto.String("ifOperStatus"),
+						Metric: []*dto.Metric{
+							{
+								Label: []*dto.LabelPair{
+									{Name: proto.String("ifIndex"), Value: proto.String("1")},
+									{Name: proto.String("other"), Value: proto.String("label")},
+								},
+							},
+							{
+								Label: []*dto.LabelPair{
+									{Name: proto.String("ifIndex"), Value: proto.String("2")},
+									{Name: proto.String("other"), Value: proto.String("label")},
+								},
+							},
+							{
+								Label: []*dto.LabelPair{
+									{Name: proto.String("ifIndex"), Value: proto.String("3")},
+									{Name: proto.String("other"), Value: proto.String("label")},
+								},
+							},
+						},
+					},
+					{
+						Name: proto.String("another_metric"),
+						Metric: []*dto.Metric{
+							{
+								Label: []*dto.LabelPair{
+									{Name: proto.String("notIfIndex"), Value: proto.String("1")},
+								},
+							},
+							{
+								Label: []*dto.LabelPair{
+									{Name: proto.String("notIfIndex"), Value: proto.String("2")},
+								},
+							},
+						},
+					},
+					{
+						Name: proto.String("both_ifIndex_and_not"),
+						Metric: []*dto.Metric{
+							{
+								Label: []*dto.LabelPair{
+									{Name: proto.String("other"), Value: proto.String("label")},
+									{Name: proto.String("ifIndex"), Value: proto.String("2")},
+								},
+							},
+							{
+								Label: []*dto.LabelPair{
+									{Name: proto.String("other"), Value: proto.String("label")},
+								},
+							},
+						},
+					},
+				},
+			},
+			want: []*dto.MetricFamily{
+				{
+					Name: proto.String("ifOperStatus"),
+					Metric: []*dto.Metric{
+						{
+							Label: []*dto.LabelPair{
+								{Name: proto.String("ifIndex"), Value: proto.String("1")},
+								{Name: proto.String("other"), Value: proto.String("label")},
+							},
+						},
+						{
+							Label: []*dto.LabelPair{
+								{Name: proto.String("ifIndex"), Value: proto.String("2")},
+								{Name: proto.String("other"), Value: proto.String("label")},
+							},
+						},
+						{
+							Label: []*dto.LabelPair{
+								{Name: proto.String("ifIndex"), Value: proto.String("3")},
+								{Name: proto.String("other"), Value: proto.String("label")},
+							},
+						},
+					},
+				},
+				{
+					Name: proto.String("another_metric"),
+					Metric: []*dto.Metric{
+						{
+							Label: []*dto.LabelPair{
+								{Name: proto.String("notIfIndex"), Value: proto.String("1")},
+							},
+						},
+						{
+							Label: []*dto.LabelPair{
+								{Name: proto.String("notIfIndex"), Value: proto.String("2")},
+							},
+						},
+					},
+				},
+				{
+					Name: proto.String("both_ifIndex_and_not"),
+					Metric: []*dto.Metric{
+						{
+							Label: []*dto.LabelPair{
+								{Name: proto.String("other"), Value: proto.String("label")},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := mfsFilterInterface(tt.args.mfs, tt.args.interfaceUp)
+
+			if diff := cmp.Diff(tt.want, got); diff != "" {
+				t.Errorf("mfsFilterInterface() mismatch (-want +got):\n%s", diff)
 			}
 		})
 	}

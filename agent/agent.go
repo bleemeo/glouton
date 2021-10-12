@@ -1229,7 +1229,7 @@ func (a *agent) minuteMetric(ctx context.Context) error {
 				continue
 			}
 
-			switch srv.ServiceType { //nolint:exhaustive
+			switch srv.ServiceType { //nolint:exhaustive,nolintlint
 			case discovery.PostfixService:
 				n, err := postfixQueueSize(ctx, srv, a.hostRootPath, a.containerRuntime)
 				if err != nil {
