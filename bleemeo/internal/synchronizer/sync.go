@@ -254,8 +254,9 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 		} else {
 			s.successiveErrors = 0
 			successiveAuthErrors = 0
-			minimalDelay = delay.JitterDelay(15*time.Second, 0.05)
 		}
+
+		minimalDelay = delay.JitterDelay(15*time.Second, 0.05)
 
 		if firstSync {
 			firstSync = false
