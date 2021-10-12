@@ -6,22 +6,6 @@ import (
 	"time"
 )
 
-func Min(durations ...time.Duration) time.Duration {
-	var result time.Duration
-
-	if len(durations) > 0 {
-		result = durations[0]
-	}
-
-	for _, v := range durations {
-		if result > v {
-			result = v
-		}
-	}
-
-	return result
-}
-
 // Exponential return an exponential delay. N should be the number of successive iteration/errors (counting from 1).
 // The value retuned is "base * powerFactor ^ n". The value is capped at max.
 // powerFactor should be > 1 (or the delay will be smaller and smaller).
@@ -35,7 +19,11 @@ func Exponential(base time.Duration, powerFactor float64, n int, max time.Durati
 	baseSeconds := base.Seconds()
 	seconds := baseSeconds * math.Pow(powerFactor, float64(n))
 
-	return Min(max, time.Duration(seconds)*time.Second)
+	if seconds > max.Seconds() {
+		seconds = max.Seconds()
+	}
+
+	return time.Duration(seconds) * time.Second
 }
 
 // JitterDelay return a number between value * [1-factor; 1+factor[

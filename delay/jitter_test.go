@@ -84,3 +84,70 @@ func TestExponential(t *testing.T) {
 		})
 	}
 }
+
+func TestExponentialMax(t *testing.T) {
+	type args struct {
+		base        time.Duration
+		powerFactor float64
+		max         time.Duration
+	}
+
+	const maxIter = 100000
+
+	tests := []struct {
+		name         string
+		args         args
+		wantLessThan time.Duration
+		wantMoreThan time.Duration
+	}{
+		{
+			name: "60-seconds-1.55",
+			args: args{
+				base:        60 * time.Second,
+				powerFactor: 1.55,
+				max:         time.Hour,
+			},
+			wantLessThan: time.Hour,
+			wantMoreThan: 60 * time.Second,
+		},
+		{
+			name: "2-seconds-1.55",
+			args: args{
+				base:        2 * time.Second,
+				powerFactor: 1.55,
+				max:         time.Hour,
+			},
+			wantLessThan: time.Hour,
+			wantMoreThan: 2 * time.Second,
+		},
+		{
+			name: "1-hour-1.75",
+			args: args{
+				base:        time.Hour,
+				powerFactor: 1.75,
+				max:         12 * time.Hour,
+			},
+			wantLessThan: 12 * time.Hour,
+			wantMoreThan: time.Hour,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			for n := 0; n < maxIter; n++ {
+				got := Exponential(tt.args.base, tt.args.powerFactor, n, tt.args.max)
+
+				if got > tt.wantLessThan {
+					t.Fatalf("Exponential(%d) = %v, want less than %v", n, got, tt.wantLessThan)
+				}
+
+				if got < tt.wantMoreThan {
+					t.Fatalf("Exponential(%d) = %v, want more than %v", n, got, tt.wantMoreThan)
+				}
+			}
+		})
+	}
+}
