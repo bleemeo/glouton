@@ -175,19 +175,19 @@ func Test_mfsFilterInterface(t *testing.T) {
 						Metric: []*dto.Metric{
 							{
 								Label: []*dto.LabelPair{
-									{Name: proto.String("ifIndex"), Value: proto.String("1")},
+									{Name: proto.String(ifIndexLabelName), Value: proto.String("1")},
 									{Name: proto.String("other"), Value: proto.String("label")},
 								},
 							},
 							{
 								Label: []*dto.LabelPair{
-									{Name: proto.String("ifIndex"), Value: proto.String("2")},
+									{Name: proto.String(ifIndexLabelName), Value: proto.String("2")},
 									{Name: proto.String("other"), Value: proto.String("label")},
 								},
 							},
 							{
 								Label: []*dto.LabelPair{
-									{Name: proto.String("ifIndex"), Value: proto.String("3")},
+									{Name: proto.String(ifIndexLabelName), Value: proto.String("3")},
 									{Name: proto.String("other"), Value: proto.String("label")},
 								},
 							},
@@ -198,12 +198,12 @@ func Test_mfsFilterInterface(t *testing.T) {
 						Metric: []*dto.Metric{
 							{
 								Label: []*dto.LabelPair{
-									{Name: proto.String("ifIndex"), Value: proto.String("2")},
+									{Name: proto.String(ifIndexLabelName), Value: proto.String("2")},
 								},
 							},
 							{
 								Label: []*dto.LabelPair{
-									{Name: proto.String("ifIndex"), Value: proto.String("4")},
+									{Name: proto.String(ifIndexLabelName), Value: proto.String("4")},
 								},
 							},
 						},
@@ -214,12 +214,12 @@ func Test_mfsFilterInterface(t *testing.T) {
 							{
 								Label: []*dto.LabelPair{
 									{Name: proto.String("other"), Value: proto.String("label")},
-									{Name: proto.String("ifIndex"), Value: proto.String("1")},
+									{Name: proto.String(ifIndexLabelName), Value: proto.String("1")},
 								},
 							},
 							{
 								Label: []*dto.LabelPair{
-									{Name: proto.String("ifIndex"), Value: proto.String("3")},
+									{Name: proto.String(ifIndexLabelName), Value: proto.String("3")},
 									{Name: proto.String("other"), Value: proto.String("label")},
 								},
 							},
@@ -233,13 +233,13 @@ func Test_mfsFilterInterface(t *testing.T) {
 					Metric: []*dto.Metric{
 						{
 							Label: []*dto.LabelPair{
-								{Name: proto.String("ifIndex"), Value: proto.String("1")},
+								{Name: proto.String(ifIndexLabelName), Value: proto.String("1")},
 								{Name: proto.String("other"), Value: proto.String("label")},
 							},
 						},
 						{
 							Label: []*dto.LabelPair{
-								{Name: proto.String("ifIndex"), Value: proto.String("3")},
+								{Name: proto.String(ifIndexLabelName), Value: proto.String("3")},
 								{Name: proto.String("other"), Value: proto.String("label")},
 							},
 						},
@@ -251,12 +251,12 @@ func Test_mfsFilterInterface(t *testing.T) {
 						{
 							Label: []*dto.LabelPair{
 								{Name: proto.String("other"), Value: proto.String("label")},
-								{Name: proto.String("ifIndex"), Value: proto.String("1")},
+								{Name: proto.String(ifIndexLabelName), Value: proto.String("1")},
 							},
 						},
 						{
 							Label: []*dto.LabelPair{
-								{Name: proto.String("ifIndex"), Value: proto.String("3")},
+								{Name: proto.String(ifIndexLabelName), Value: proto.String("3")},
 								{Name: proto.String("other"), Value: proto.String("label")},
 							},
 						},
@@ -273,23 +273,23 @@ func Test_mfsFilterInterface(t *testing.T) {
 				},
 				mfs: []*dto.MetricFamily{
 					{
-						Name: proto.String("ifOperStatus"),
+						Name: proto.String(ifOperStatusMetricName),
 						Metric: []*dto.Metric{
 							{
 								Label: []*dto.LabelPair{
-									{Name: proto.String("ifIndex"), Value: proto.String("1")},
+									{Name: proto.String(ifIndexLabelName), Value: proto.String("1")},
 									{Name: proto.String("other"), Value: proto.String("label")},
 								},
 							},
 							{
 								Label: []*dto.LabelPair{
-									{Name: proto.String("ifIndex"), Value: proto.String("2")},
+									{Name: proto.String(ifIndexLabelName), Value: proto.String("2")},
 									{Name: proto.String("other"), Value: proto.String("label")},
 								},
 							},
 							{
 								Label: []*dto.LabelPair{
-									{Name: proto.String("ifIndex"), Value: proto.String("3")},
+									{Name: proto.String(ifIndexLabelName), Value: proto.String("3")},
 									{Name: proto.String("other"), Value: proto.String("label")},
 								},
 							},
@@ -316,7 +316,7 @@ func Test_mfsFilterInterface(t *testing.T) {
 							{
 								Label: []*dto.LabelPair{
 									{Name: proto.String("other"), Value: proto.String("label")},
-									{Name: proto.String("ifIndex"), Value: proto.String("2")},
+									{Name: proto.String(ifIndexLabelName), Value: proto.String("2")},
 								},
 							},
 							{
@@ -330,23 +330,23 @@ func Test_mfsFilterInterface(t *testing.T) {
 			},
 			want: []*dto.MetricFamily{
 				{
-					Name: proto.String("ifOperStatus"),
+					Name: proto.String(ifOperStatusMetricName),
 					Metric: []*dto.Metric{
 						{
 							Label: []*dto.LabelPair{
-								{Name: proto.String("ifIndex"), Value: proto.String("1")},
+								{Name: proto.String(ifIndexLabelName), Value: proto.String("1")},
 								{Name: proto.String("other"), Value: proto.String("label")},
 							},
 						},
 						{
 							Label: []*dto.LabelPair{
-								{Name: proto.String("ifIndex"), Value: proto.String("2")},
+								{Name: proto.String(ifIndexLabelName), Value: proto.String("2")},
 								{Name: proto.String("other"), Value: proto.String("label")},
 							},
 						},
 						{
 							Label: []*dto.LabelPair{
-								{Name: proto.String("ifIndex"), Value: proto.String("3")},
+								{Name: proto.String(ifIndexLabelName), Value: proto.String("3")},
 								{Name: proto.String("other"), Value: proto.String("label")},
 							},
 						},

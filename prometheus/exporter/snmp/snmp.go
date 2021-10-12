@@ -34,7 +34,11 @@ import (
 	dto "github.com/prometheus/client_model/go"
 )
 
-const defaultGatherTimeout = 10 * time.Second
+const (
+	defaultGatherTimeout   = 10 * time.Second
+	ifIndexLabelName       = "ifIndex"
+	ifOperStatusMetricName = "ifOperStatus"
+)
 
 // Target represents a snmp config instance.
 type Target struct {
@@ -145,7 +149,7 @@ func (t *Target) GatherWithState(ctx context.Context, state registry.GatherState
 	)
 
 	for _, mf := range result {
-		if mf.GetName() == "ifOperStatus" {
+		if mf.GetName() == ifOperStatusMetricName {
 			interfaceUp = make(map[string]bool, len(mf.Metric))
 
 			for _, m := range mf.Metric {
@@ -155,7 +159,7 @@ func (t *Target) GatherWithState(ctx context.Context, state registry.GatherState
 					connectedInterfaces++
 
 					for _, l := range m.Label {
-						if l.GetName() == "ifIndex" {
+						if l.GetName() == ifIndexLabelName {
 							interfaceUp[l.GetValue()] = true
 						}
 					}
@@ -234,7 +238,7 @@ func mfsFilterInterface(mfs []*dto.MetricFamily, interfaceUp map[string]bool) []
 
 func mfFilterInterface(mf *dto.MetricFamily, interfaceUp map[string]bool) {
 	// ifOperStatus is always sent
-	if mf.GetName() == "ifOperStatus" {
+	if mf.GetName() == ifOperStatusMetricName {
 		return
 	}
 
@@ -244,7 +248,7 @@ func mfFilterInterface(mf *dto.MetricFamily, interfaceUp map[string]bool) {
 		var ifIndex string
 
 		for _, l := range m.Label {
-			if l.GetName() == "ifIndex" {
+			if l.GetName() == ifIndexLabelName {
 				ifIndex = l.GetValue()
 			}
 		}
