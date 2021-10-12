@@ -1,6 +1,7 @@
 package delay
 
 import (
+	"math"
 	"testing"
 	"time"
 )
@@ -138,6 +139,18 @@ func TestExponentialMax(t *testing.T) {
 			t.Parallel()
 
 			for n := 0; n < maxIter; n++ {
+				got := Exponential(tt.args.base, tt.args.powerFactor, n, tt.args.max)
+
+				if got > tt.wantLessThan {
+					t.Fatalf("Exponential(%d) = %v, want less than %v", n, got, tt.wantLessThan)
+				}
+
+				if got < tt.wantMoreThan {
+					t.Fatalf("Exponential(%d) = %v, want more than %v", n, got, tt.wantMoreThan)
+				}
+			}
+
+			for _, n := range []int{-1000, math.MaxInt, math.MinInt} {
 				got := Exponential(tt.args.base, tt.args.powerFactor, n, tt.args.max)
 
 				if got > tt.wantLessThan {
