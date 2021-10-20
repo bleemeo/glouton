@@ -18,8 +18,8 @@
 package agent
 
 import (
-	"archive/zip"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"glouton/agent/state"
@@ -56,7 +56,6 @@ import (
 	"glouton/types"
 	"glouton/version"
 	"glouton/zabbix"
-	"io"
 	"io/ioutil"
 	"log"
 	"math"
@@ -833,7 +832,7 @@ func (a *agent) run() { //nolint:cyclop
 		Threshold:          a.threshold,
 		StaticCDNURL:       a.oldConfig.String("web.static_cdn_url"),
 		DiagnosticPage:     a.DiagnosticPage,
-		DiagnosticZip:      a.writeDiagnosticZip,
+		DiagnosticArchive:  a.writeDiagnosticArchive,
 		MetricFormat:       a.metricFormat,
 	}
 
@@ -1838,40 +1837,42 @@ func (a *agent) DiagnosticPage() string {
 	return builder.String()
 }
 
-func (a *agent) writeDiagnosticZip(w io.Writer) error {
-	zipFile := zip.NewWriter(w)
-	defer zipFile.Close()
-
-	type Diagnosticer interface {
-		DiagnosticZip(zipFile *zip.Writer) error
-	}
-
-	modules := []Diagnosticer{
-		a,
-		a.metricFilter,
-		a.discovery,
-		a.gathererRegistry,
+func (a *agent) writeDiagnosticArchive(ctx context.Context, archive types.ArchiveWriter) error {
+	modules := []func(ctx context.Context, archive types.ArchiveWriter) error{
+		a.diagnosticGlobalInfo,
+		a.diagnosticGloutonState,
+		a.taskRegistry.DiagnosticArchive,
+		a.diagnosticConfig,
+		a.discovery.DiagnosticArchive,
+		a.diagnosticContainers,
+		a.diagnosticSNMP,
+		a.metricFilter.DiagnosticArchive,
+		a.gathererRegistry.DiagnosticArchive,
 	}
 
 	if a.bleemeoConnector != nil {
-		modules = append(modules, a.bleemeoConnector)
+		modules = append(modules, a.bleemeoConnector.DiagnosticArchive)
 	}
 
 	if a.monitorManager != nil {
-		modules = append(modules, a.monitorManager)
+		modules = append(modules, a.monitorManager.DiagnosticArchive)
 	}
 
-	for _, m := range modules {
-		if err := m.DiagnosticZip(zipFile); err != nil {
+	for _, f := range modules {
+		if err := f(ctx, archive); err != nil {
 			return err
+		}
+
+		if ctx.Err() != nil {
+			break
 		}
 	}
 
-	return nil
+	return ctx.Err()
 }
 
-func (a *agent) DiagnosticZip(zipFile *zip.Writer) error {
-	file, err := zipFile.Create("diagnostic.txt")
+func (a *agent) diagnosticGlobalInfo(ctx context.Context, archive types.ArchiveWriter) error {
+	file, err := archive.Create("diagnostic.txt")
 	if err != nil {
 		return err
 	}
@@ -1881,7 +1882,17 @@ func (a *agent) DiagnosticZip(zipFile *zip.Writer) error {
 		return err
 	}
 
-	file, err = zipFile.Create("goroutines.txt")
+	file, err = archive.Create("log.txt")
+	if err != nil {
+		return err
+	}
+
+	_, err = file.Write(logger.Buffer())
+	if err != nil {
+		return err
+	}
+
+	file, err = archive.Create("goroutines.txt")
 	if err != nil {
 		return err
 	}
@@ -1898,22 +1909,58 @@ func (a *agent) DiagnosticZip(zipFile *zip.Writer) error {
 		return err
 	}
 
-	file, err = zipFile.Create("log.txt")
+	return nil
+}
+
+func (a *agent) diagnosticGloutonState(ctx context.Context, archive types.ArchiveWriter) error {
+	file, err := archive.Create("glouton-state.json")
 	if err != nil {
 		return err
 	}
 
-	_, err = file.Write(logger.Buffer())
+	a.l.Lock()
+	a.triggerLock.Lock()
+
+	obj := struct {
+		HostRootPath              string
+		LastHealCheck             time.Time
+		LastContainerEventTime    time.Time
+		TriggerDiscAt             time.Time
+		TriggerDiscImmediate      bool
+		TriggerFact               bool
+		TriggerSystemUpdateMetric bool
+		DockerInputPresent        bool
+		DockerInputID             int
+		MetricResolutionSeconds   float64
+	}{
+		HostRootPath:              a.hostRootPath,
+		LastHealCheck:             a.lastHealCheck,
+		LastContainerEventTime:    a.lastContainerEventTime,
+		TriggerDiscAt:             a.triggerDiscAt,
+		TriggerDiscImmediate:      a.triggerDiscImmediate,
+		TriggerFact:               a.triggerFact,
+		TriggerSystemUpdateMetric: a.triggerSystemUpdateMetric,
+		DockerInputPresent:        a.dockerInputPresent,
+		DockerInputID:             a.dockerInputID,
+		MetricResolutionSeconds:   a.metricResolution.Seconds(),
+	}
+
+	a.triggerLock.Unlock()
+	a.l.Unlock()
+
+	enc := json.NewEncoder(file)
+	enc.SetIndent("", "  ")
+
+	return enc.Encode(obj)
+}
+
+func (a *agent) diagnosticContainers(ctx context.Context, archive types.ArchiveWriter) error {
+	file, err := archive.Create("containers.txt")
 	if err != nil {
 		return err
 	}
 
-	file, err = zipFile.Create("containers.txt")
-	if err != nil {
-		return err
-	}
-
-	containers, err := a.containerRuntime.Containers(context.Background(), time.Hour, true)
+	containers, err := a.containerRuntime.Containers(ctx, time.Hour, true)
 	if err != nil {
 		fmt.Fprintf(file, "can't list containers: %v", err)
 	} else {
@@ -1951,12 +1998,11 @@ func (a *agent) DiagnosticZip(zipFile *zip.Writer) error {
 		}
 	}
 
-	err = yamlZip(zipFile, a)
-	if err != nil {
-		return err
-	}
+	return nil
+}
 
-	file, err = zipFile.Create("snmp-targets.txt")
+func (a *agent) diagnosticSNMP(ctx context.Context, archive types.ArchiveWriter) error {
+	file, err := archive.Create("snmp-targets.txt")
 	if err != nil {
 		return err
 	}
@@ -1970,8 +2016,8 @@ func (a *agent) DiagnosticZip(zipFile *zip.Writer) error {
 	return err
 }
 
-func yamlZip(zipFile *zip.Writer, a *agent) error {
-	file, err := zipFile.Create("config.yaml")
+func (a *agent) diagnosticConfig(ctx context.Context, archive types.ArchiveWriter) error {
+	file, err := archive.Create("config.yaml")
 	if err != nil {
 		return err
 	}
@@ -1991,7 +2037,7 @@ func yamlZip(zipFile *zip.Writer, a *agent) error {
 		fmt.Fprintf(file, "# error: %v\n", err)
 	}
 
-	file, err = zipFile.Create("config-new.yaml")
+	file, err = archive.Create("config-new.yaml")
 	if err != nil {
 		return err
 	}

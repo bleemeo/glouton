@@ -17,7 +17,6 @@
 package mqtt
 
 import (
-	"archive/zip"
 	"context"
 	"crypto/tls"
 	"crypto/x509"
@@ -82,16 +81,21 @@ type Client struct {
 	lastFailedPointsRetry      time.Time
 	encoder                    mqttEncoder
 
-	l                sync.Mutex
-	pendingMessage   []message
-	pendingPoints    []types.MetricPoint
-	lastReport       time.Time
-	maxPointCount    int
-	sendingSuspended bool // stop sending points, used when the user is is read-only mode
-	disabledUntil    time.Time
-	disableReason    bleemeoTypes.DisableReason
-	connectionLost   chan interface{}
-	disableNotify    chan interface{}
+	l                   sync.Mutex
+	startedAt           time.Time
+	pendingMessage      []message
+	pendingPoints       []types.MetricPoint
+	lastReport          time.Time
+	maxPointCount       int
+	sendingSuspended    bool // stop sending points, used when the user is is read-only mode
+	disabledUntil       time.Time
+	disableReason       bleemeoTypes.DisableReason
+	connectionLost      chan interface{}
+	disableNotify       chan interface{}
+	lastConnectionTimes []time.Time
+	lastResend          time.Time
+	currentConnectDelay time.Duration
+	consecutiveError    int
 }
 
 type message struct {
@@ -221,6 +225,10 @@ func (c *Client) Run(ctx context.Context) error {
 		}
 	}
 
+	c.l.Lock()
+	c.startedAt = time.Now()
+	c.l.Unlock()
+
 	err := c.run(ctx)
 
 	return err
@@ -238,11 +246,11 @@ func (c *Client) DiagnosticPage() string {
 	return builder.String()
 }
 
-// DiagnosticZip add to a zipfile useful diagnostic information.
-func (c *Client) DiagnosticZip(zipFile *zip.Writer) error {
+// DiagnosticArchive add to a zipfile useful diagnostic information.
+func (c *Client) DiagnosticArchive(ctx context.Context, archive types.ArchiveWriter) error {
 	c.l.Lock()
 	if len(c.failedPoints) > 100 {
-		file, err := zipFile.Create("mqtt-failed-metric-points.txt")
+		file, err := archive.Create("mqtt-failed-metric-points.txt")
 		if err != nil {
 			return err
 		}
@@ -268,9 +276,45 @@ func (c *Client) DiagnosticZip(zipFile *zip.Writer) error {
 		}
 	}
 
+	file, err := archive.Create("bleemeo-mqtt-state.json")
+	if err != nil {
+		return err
+	}
+
+	obj := struct {
+		StartedAt                  time.Time
+		LastRegisteredMetricsCount int
+		LastFailedPointsRetry      time.Time
+		PendingMessageCount        int
+		PendingPointsCount         int
+		LastReport                 time.Time
+		MaxPointCount              int
+		SendingSuspended           bool
+		DisabledUntil              time.Time
+		DisableReason              bleemeoTypes.DisableReason
+		LastConnectionTimes        []time.Time
+		LastResend                 time.Time
+	}{
+		StartedAt:                  c.startedAt,
+		LastRegisteredMetricsCount: c.lastRegisteredMetricsCount,
+		LastFailedPointsRetry:      c.lastFailedPointsRetry,
+		PendingMessageCount:        len(c.pendingMessage),
+		PendingPointsCount:         len(c.pendingPoints),
+		LastReport:                 c.lastReport,
+		MaxPointCount:              c.maxPointCount,
+		SendingSuspended:           c.sendingSuspended,
+		DisabledUntil:              c.disabledUntil,
+		DisableReason:              c.disableReason,
+		LastConnectionTimes:        c.lastConnectionTimes,
+		LastResend:                 c.lastResend,
+	}
+
 	c.l.Unlock()
 
-	return nil
+	enc := json.NewEncoder(file)
+	enc.SetIndent("", "  ")
+
+	return enc.Encode(obj)
 }
 
 // LastReport returns the date of last report with Bleemeo API.
@@ -937,6 +981,15 @@ func (c *Client) connectionManager(ctx context.Context) { //nolint:cyclop
 
 mainLoop:
 	for ctx.Err() == nil {
+		c.l.Lock()
+
+		c.lastConnectionTimes = lastConnectionTimes
+		c.lastResend = lastResend
+		c.currentConnectDelay = currentConnectDelay
+		c.consecutiveError = consecutiveError
+
+		c.l.Unlock()
+
 		disableUntil, disableReason := c.getDisableUntil()
 		switch {
 		case time.Now().Before(disableUntil):

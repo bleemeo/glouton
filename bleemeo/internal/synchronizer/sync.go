@@ -20,6 +20,7 @@ import (
 	"context"
 	cryptoRand "crypto/rand"
 	"crypto/tls"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"glouton/bleemeo/client"
@@ -137,6 +138,66 @@ func New(option Option) (*Synchronizer, error) {
 	}
 
 	return s, nil
+}
+
+func (s *Synchronizer) DiagnosticArchive(ctx context.Context, archive types.ArchiveWriter) error {
+	s.l.Lock()
+
+	file, err := archive.Create("bleemeo-sync-state.json")
+	if err != nil {
+		return err
+	}
+
+	obj := struct {
+		NextFullSync               time.Time
+		FullSyncCount              int
+		StartedAt                  time.Time
+		LastSync                   time.Time
+		LastFactUpdatedAt          string
+		SuccessiveErrors           int
+		WarnAccountMismatchDone    bool
+		MaintenanceMode            bool
+		LastMetricCount            int
+		AgentID                    string
+		LastMaintenanceSync        time.Time
+		DisabledUntil              time.Time
+		DisableReason              bleemeoTypes.DisableReason
+		ForceSync                  map[string]bool
+		PendingMetricsUpdateCount  int
+		PendingMonitorsUpdateCount int
+		DelayedContainer           map[string]time.Time
+		RetryableMetricFailure     map[bleemeoTypes.FailureKind]bool
+		MetricRetryAt              time.Time
+		LastInfo                   bleemeoTypes.GlobalInfo
+	}{
+		NextFullSync:               s.nextFullSync,
+		FullSyncCount:              s.fullSyncCount,
+		StartedAt:                  s.startedAt,
+		LastSync:                   s.lastSync,
+		LastFactUpdatedAt:          s.lastFactUpdatedAt,
+		SuccessiveErrors:           s.successiveErrors,
+		WarnAccountMismatchDone:    s.warnAccountMismatchDone,
+		MaintenanceMode:            s.maintenanceMode,
+		LastMetricCount:            s.lastMetricCount,
+		AgentID:                    s.agentID,
+		LastMaintenanceSync:        s.lastMaintenanceSync,
+		DisabledUntil:              s.disabledUntil,
+		DisableReason:              s.disableReason,
+		ForceSync:                  s.forceSync,
+		PendingMetricsUpdateCount:  len(s.pendingMetricsUpdate),
+		PendingMonitorsUpdateCount: len(s.pendingMonitorsUpdate),
+		DelayedContainer:           s.delayedContainer,
+		RetryableMetricFailure:     s.retryableMetricFailure,
+		MetricRetryAt:              s.metricRetryAt,
+		LastInfo:                   s.lastInfo,
+	}
+
+	defer s.l.Unlock()
+
+	enc := json.NewEncoder(file)
+	enc.SetIndent("", "  ")
+
+	return enc.Encode(obj)
 }
 
 // Run run the Connector.

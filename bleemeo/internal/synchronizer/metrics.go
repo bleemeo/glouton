@@ -558,6 +558,9 @@ func (s *Synchronizer) syncMetrics(fullSync bool, onlyEssential bool) error {
 		}
 	}
 
+	s.l.Lock()
+	defer s.l.Unlock()
+
 	s.lastMetricCount = len(localMetrics)
 
 	return nil

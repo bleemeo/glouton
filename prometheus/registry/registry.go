@@ -21,8 +21,8 @@
 package registry
 
 import (
-	"archive/zip"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"glouton/logger"
@@ -164,9 +164,9 @@ type registration struct {
 }
 
 type reschedule struct {
-	id    int
-	reg   *registration
-	runAt time.Time
+	ID    int
+	Reg   *registration
+	RunAt time.Time
 }
 
 // This type is used to have another Collecto() method private which only return pushed points.
@@ -391,8 +391,8 @@ func (r *Registry) UpdateRelabelHook(hook RelabelHook) {
 	r.condition.Broadcast()
 }
 
-func (r *Registry) DiagnosticZip(zipFile *zip.Writer) error {
-	file, err := zipFile.Create("metrics.txt")
+func (r *Registry) DiagnosticArchive(ctx context.Context, archive types.ArchiveWriter) error {
+	file, err := archive.Create("metrics.txt")
 	if err != nil {
 		return err
 	}
@@ -401,7 +401,7 @@ func (r *Registry) DiagnosticZip(zipFile *zip.Writer) error {
 		return err
 	}
 
-	file, err = zipFile.Create("metrics-filtered.txt")
+	file, err = archive.Create("metrics-filtered.txt")
 	if err != nil {
 		return err
 	}
@@ -410,7 +410,7 @@ func (r *Registry) DiagnosticZip(zipFile *zip.Writer) error {
 		return err
 	}
 
-	file, err = zipFile.Create("metrics-self.txt")
+	file, err = archive.Create("metrics-self.txt")
 	if err != nil {
 		return err
 	}
@@ -419,10 +419,14 @@ func (r *Registry) DiagnosticZip(zipFile *zip.Writer) error {
 		return err
 	}
 
+	if err := r.diagnosticState(archive); err != nil {
+		return err
+	}
+
 	r.l.Lock()
 	defer r.l.Unlock()
 
-	file, err = zipFile.Create("scrape-loop.txt")
+	file, err = archive.Create("scrape-loop.txt")
 	if err != nil {
 		return err
 	}
@@ -478,6 +482,44 @@ func (r *Registry) DiagnosticZip(zipFile *zip.Writer) error {
 	}
 
 	return nil
+}
+
+func (r *Registry) diagnosticState(archive types.ArchiveWriter) error {
+	file, err := archive.Create("metrics-registry-state.json")
+	if err != nil {
+		return err
+	}
+
+	r.l.Lock()
+
+	obj := struct {
+		Option                  Option
+		CountScrape             int
+		CountPushPoints         int
+		BlockScrape             bool
+		BlockPushPoint          bool
+		Reschedules             []reschedule
+		LastPushedPointsCleanup time.Time
+		CurrentDelaySeconds     float64
+		PushedPointsCount       int
+	}{
+		Option:                  r.option,
+		CountScrape:             r.countScrape,
+		CountPushPoints:         r.countPushPoints,
+		BlockScrape:             r.blockScrape,
+		BlockPushPoint:          r.blockPushPoint,
+		Reschedules:             r.reschedules,
+		LastPushedPointsCleanup: r.lastPushedPointsCleanup,
+		CurrentDelaySeconds:     r.currentDelay.Seconds(),
+		PushedPointsCount:       len(r.pushedPoints),
+	}
+
+	defer r.l.Unlock()
+
+	enc := json.NewEncoder(file)
+	enc.SetIndent("", "  ")
+
+	return enc.Encode(obj)
 }
 
 func (r *Registry) writeMetrics(file io.Writer, filter bool) error {
@@ -620,13 +662,13 @@ func (r *Registry) scheduleUpdate(id int, reg *registration, runAt time.Time) {
 	}
 
 	r.reschedules = append(r.reschedules, reschedule{
-		id:    id,
-		reg:   reg,
-		runAt: runAt,
+		ID:    id,
+		Reg:   reg,
+		RunAt: runAt,
 	})
 
 	sort.Slice(r.reschedules, func(i, j int) bool {
-		return r.reschedules[i].runAt.Before(r.reschedules[j].runAt)
+		return r.reschedules[i].RunAt.Before(r.reschedules[j].RunAt)
 	})
 }
 
@@ -638,17 +680,17 @@ func (r *Registry) checkReschedule(ctx context.Context) time.Duration {
 	now := time.Now()
 
 	for i, value := range r.reschedules {
-		if value.runAt.After(now) {
+		if value.RunAt.After(now) {
 			firstInFuture = i
 
 			break
 		}
 
-		if reg2, ok := r.registrations[value.id]; !ok || reg2 != value.reg {
+		if reg2, ok := r.registrations[value.ID]; !ok || reg2 != value.Reg {
 			continue
 		}
 
-		reg := value.reg
+		reg := value.Reg
 
 		go func() {
 			ctx, cancel := context.WithTimeout(ctx, defaultGatherTimeout)
@@ -671,7 +713,7 @@ func (r *Registry) checkReschedule(ctx context.Context) time.Duration {
 		r.reschedules = r.reschedules[:initialLength-firstInFuture]
 	}
 
-	delta := time.Until(r.reschedules[0].runAt)
+	delta := time.Until(r.reschedules[0].RunAt)
 	if delta < time.Second {
 		delta = time.Second
 	}

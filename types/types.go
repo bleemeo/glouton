@@ -19,6 +19,7 @@ package types
 import (
 	"errors"
 	"glouton/logger"
+	"io"
 	"sort"
 	"strings"
 	"time"
@@ -306,4 +307,9 @@ func (errs MultiErrors) Is(target error) bool {
 	}
 
 	return false
+}
+
+type ArchiveWriter interface {
+	Create(filename string) (io.Writer, error)
+	CurrentFileName() string
 }

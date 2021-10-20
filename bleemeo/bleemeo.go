@@ -17,7 +17,6 @@
 package bleemeo
 
 import (
-	"archive/zip"
 	"context"
 	"fmt"
 	"glouton/bleemeo/internal/cache"
@@ -490,21 +489,21 @@ func (c *Connector) DiagnosticPage() string {
 	return builder.String()
 }
 
-// DiagnosticZip add to a zipfile useful diagnostic information.
-func (c *Connector) DiagnosticZip(zipFile *zip.Writer) error {
+// DiagnosticArchive add to a zipfile useful diagnostic information.
+func (c *Connector) DiagnosticArchive(ctx context.Context, archive gloutonTypes.ArchiveWriter) error {
 	c.l.Lock()
 	mqtt := c.mqtt
 	c.l.Unlock()
 
 	if mqtt != nil {
-		if err := mqtt.DiagnosticZip(zipFile); err != nil {
+		if err := mqtt.DiagnosticArchive(ctx, archive); err != nil {
 			return err
 		}
 	}
 
 	failed := c.cache.MetricRegistrationsFail()
 	if len(failed) > 0 {
-		file, err := zipFile.Create("metric-registration-failed.txt")
+		file, err := archive.Create("metric-registration-failed.txt")
 		if err != nil {
 			return err
 		}
@@ -535,12 +534,16 @@ func (c *Connector) DiagnosticZip(zipFile *zip.Writer) error {
 		}
 	}
 
-	file, err := zipFile.Create("bleemeo-cache.txt")
+	file, err := archive.Create("bleemeo-cache.txt")
 	if err != nil {
 		return err
 	}
 
 	c.diagnosticCache(file)
+
+	if err := c.sync.DiagnosticArchive(ctx, archive); err != nil {
+		return err
+	}
 
 	return nil
 }

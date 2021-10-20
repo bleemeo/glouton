@@ -17,7 +17,6 @@
 package discovery
 
 import (
-	"archive/zip"
 	"context"
 	"errors"
 	"fmt"
@@ -145,9 +144,9 @@ func (d *Discovery) LastUpdate() time.Time {
 	return d.lastDiscoveryUpdate
 }
 
-// DiagnosticZip add to a zipfile useful diagnostic information.
+// DiagnosticArchive add to a zipfile useful diagnostic information.
 //nolint:cyclop
-func (d *Discovery) DiagnosticZip(zipFile *zip.Writer) error {
+func (d *Discovery) DiagnosticArchive(ctx context.Context, zipFile types.ArchiveWriter) error {
 	d.l.Lock()
 	defer d.l.Unlock()
 

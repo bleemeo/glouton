@@ -29,7 +29,6 @@ import (
 	"glouton/threshold"
 	"glouton/types"
 	"html/template"
-	"io"
 	"io/ioutil"
 	"net/http"
 	"path"
@@ -71,7 +70,7 @@ type API struct {
 	PrometheurExporter http.Handler
 	Threshold          *threshold.Registry
 	DiagnosticPage     func() string
-	DiagnosticZip      func(w io.Writer) error
+	DiagnosticArchive  func(ctx context.Context, w types.ArchiveWriter) error
 
 	router http.Handler
 }
@@ -170,8 +169,23 @@ func (api *API) init() {
 		hdr := w.Header()
 		hdr.Add("Content-Type", "application/zip")
 
-		if err := api.DiagnosticZip(w); err != nil {
-			logger.V(1).Printf("failed to serve diagnostic.zip: %v", err)
+		zipFile := newZipWriter(w)
+		defer zipFile.Close()
+
+		if err := api.diagnosticArchive(r.Context(), zipFile); err != nil {
+			logger.V(1).Printf("failed to serve diagnostic.zip (current file %s): %v", zipFile.CurrentFileName(), err)
+		}
+	})
+
+	router.HandleFunc("/diagnostic.tar", func(w http.ResponseWriter, r *http.Request) {
+		hdr := w.Header()
+		hdr.Add("Content-Type", "application/x-tar")
+
+		archive := newTarWriter(w)
+		defer archive.Close()
+
+		if err := api.diagnosticArchive(r.Context(), archive); err != nil {
+			logger.V(1).Printf("failed to serve diagnostic.tar (current file %s): %v", archive.CurrentFileName(), err)
 		}
 	})
 
@@ -191,6 +205,25 @@ func (api *API) init() {
 	})
 
 	api.router = router
+}
+
+func (api *API) diagnosticArchive(ctx context.Context, archive types.ArchiveWriter) error {
+	if err := api.DiagnosticArchive(ctx, archive); err != nil {
+		currentFile := archive.CurrentFileName()
+
+		file, err2 := archive.Create("diagnostic-error.txt")
+		if err2 != nil {
+			return err
+		}
+
+		errFull := fmt.Errorf("writing file %s: %w", currentFile, err)
+
+		fmt.Fprintf(file, "%s\n", errFull.Error())
+
+		return errFull
+	}
+
+	return nil
 }
 
 // Run starts our API.

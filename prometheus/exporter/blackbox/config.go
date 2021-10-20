@@ -17,7 +17,7 @@
 package blackbox
 
 import (
-	"archive/zip"
+	"context"
 	"errors"
 	"fmt"
 	"glouton/logger"
@@ -257,13 +257,13 @@ func New(registry *registry.Registry, externalConf interface{}, userAgent string
 	return manager, nil
 }
 
-// DiagnosticZip add diagnostic information.
-func (m *RegisterManager) DiagnosticZip(zipFile *zip.Writer) error {
+// DiagnosticArchive add diagnostic information.
+func (m *RegisterManager) DiagnosticArchive(ctx context.Context, archive types.ArchiveWriter) error {
 	m.l.Lock()
 	targets := m.targets
 	m.l.Unlock()
 
-	file, err := zipFile.Create("blackbox.txt")
+	file, err := archive.Create("blackbox.txt")
 	if err != nil {
 		return err
 	}

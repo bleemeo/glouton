@@ -17,7 +17,7 @@
 package agent
 
 import (
-	"archive/zip"
+	"context"
 	"fmt"
 	"glouton/config"
 	"glouton/discovery"
@@ -762,8 +762,8 @@ func getDefaultMetrics(format types.MetricFormat) []string {
 	return res
 }
 
-func (m *metricFilter) DiagnosticZip(zipFile *zip.Writer) error {
-	file, err := zipFile.Create("metrics-filter.txt")
+func (m *metricFilter) DiagnosticArchive(ctx context.Context, archive types.ArchiveWriter) error {
+	file, err := archive.Create("filter-metrics.txt")
 	if err != nil {
 		return err
 	}
