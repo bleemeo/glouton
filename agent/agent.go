@@ -125,6 +125,7 @@ type agent struct {
 	dynamicScrapper        *promexporter.DynamicScrapper
 	lastHealCheck          time.Time
 	lastContainerEventTime time.Time
+	watchdogRunAt          []time.Time
 	metricFilter           *metricFilter
 	monitorManager         *blackbox.RegisterManager
 
@@ -1357,9 +1358,17 @@ func (a *agent) watchdog(ctx context.Context) error {
 			return nil
 		}
 
+		now := time.Now()
+
 		a.l.Lock()
 
 		lastHealCheck := a.lastHealCheck
+		a.watchdogRunAt = append(a.watchdogRunAt, now)
+
+		if len(a.watchdogRunAt) > 90 {
+			copy(a.watchdogRunAt[0:60], a.watchdogRunAt[len(a.watchdogRunAt)-60:len(a.watchdogRunAt)])
+			a.watchdogRunAt = a.watchdogRunAt[:60]
+		}
 
 		a.l.Unlock()
 
@@ -1841,6 +1850,7 @@ func (a *agent) writeDiagnosticArchive(ctx context.Context, archive types.Archiv
 	modules := []func(ctx context.Context, archive types.ArchiveWriter) error{
 		a.diagnosticGlobalInfo,
 		a.diagnosticGloutonState,
+		a.diagnosticJitter,
 		a.taskRegistry.DiagnosticArchive,
 		a.diagnosticConfig,
 		a.discovery.DiagnosticArchive,
@@ -1952,6 +1962,56 @@ func (a *agent) diagnosticGloutonState(ctx context.Context, archive types.Archiv
 	enc.SetIndent("", "  ")
 
 	return enc.Encode(obj)
+}
+
+func (a *agent) diagnosticJitter(ctx context.Context, archive types.ArchiveWriter) error {
+	file, err := archive.Create("jitter.txt")
+	if err != nil {
+		return err
+	}
+
+	a.l.Lock()
+	defer a.l.Unlock()
+
+	fmt.Fprintln(file, "# This file contains time & jitter delay")
+	fmt.Fprintln(file, "# A variable jitter may indidate overloaded system")
+
+	var (
+		previousTime time.Time
+		maxJitter    time.Duration
+		avgJitter    time.Duration
+	)
+
+	for i, t := range a.watchdogRunAt {
+		if i == 0 {
+			fmt.Fprintf(file, "run_at=%v jitter=n/a\n", t)
+		} else {
+			delay := t.Sub(previousTime)
+			jitter := delay - time.Minute
+
+			fmt.Fprintf(file, "run_at=%v jitter=%v\n", t, jitter)
+
+			if jitter < 0 {
+				jitter = -jitter
+			}
+
+			if jitter > maxJitter {
+				maxJitter = jitter
+			}
+
+			avgJitter += maxJitter
+		}
+
+		previousTime = t
+	}
+
+	if len(a.watchdogRunAt) > 1 {
+		avgJitter /= time.Duration(len(a.watchdogRunAt) - 1)
+	}
+
+	fmt.Fprintf(file, "max jitter=%v, avg jitter=%v\n", maxJitter, avgJitter)
+
+	return nil
 }
 
 func (a *agent) diagnosticContainers(ctx context.Context, archive types.ArchiveWriter) error {
