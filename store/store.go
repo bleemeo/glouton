@@ -22,6 +22,7 @@ package store
 import (
 	"context"
 	"errors"
+	"fmt"
 	"glouton/logger"
 	"glouton/types"
 	"reflect"
@@ -55,6 +56,46 @@ func New() *Store {
 	}
 
 	return s
+}
+
+func (s *Store) DiagnosticArchive(ctx context.Context, archive types.ArchiveWriter) error {
+	file, err := archive.Create("store.txt")
+	if err != nil {
+		return err
+	}
+
+	s.lock.Lock()
+
+	var (
+		oldestTime   time.Time
+		youngestTime time.Time
+		pointsCount  int
+	)
+
+	for _, pts := range s.points {
+		pointsCount += len(pts)
+
+		for _, p := range pts {
+			if oldestTime.IsZero() || p.Time.Before(oldestTime) {
+				oldestTime = p.Time
+			}
+
+			if youngestTime.IsZero() || p.Time.After(youngestTime) {
+				youngestTime = p.Time
+			}
+		}
+	}
+
+	metricsCount := len(s.metrics)
+
+	s.lock.Unlock()
+
+	fmt.Fprintln(file, "Metric store:")
+	fmt.Fprintf(file, "metrics count: %d\n", metricsCount)
+	fmt.Fprintf(file, "points count: %d\n", pointsCount)
+	fmt.Fprintf(file, "points time range: %v to %v\n", oldestTime, youngestTime)
+
+	return nil
 }
 
 // Run will run the store until context is cancelled.

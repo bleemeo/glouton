@@ -1852,6 +1852,7 @@ func (a *agent) writeDiagnosticArchive(ctx context.Context, archive types.Archiv
 		a.diagnosticGloutonState,
 		a.diagnosticJitter,
 		a.taskRegistry.DiagnosticArchive,
+		a.store.DiagnosticArchive,
 		a.diagnosticConfig,
 		a.discovery.DiagnosticArchive,
 		a.diagnosticContainers,
