@@ -929,7 +929,10 @@ func (mr *metricRegisterer) registerMetrics(localMetrics []types.Metric) error {
 		registrations = append(registrations, v)
 	}
 
+	mr.s.l.Lock()
 	mr.s.metricRetryAt = minRetryAt
+	mr.s.l.Unlock()
+
 	mr.s.option.Cache.SetMetricRegistrationsFail(registrations)
 
 	return err
@@ -1383,7 +1386,9 @@ func (s *Synchronizer) metricDeactivate(localMetrics []types.Metric) error {
 		s.retryableMetricFailure[bleemeoTypes.FailureTooManyMetric] = true
 
 		if len(s.option.Cache.MetricRegistrationsFail()) > 0 {
+			s.l.Lock()
 			s.metricRetryAt = s.now()
+			s.l.Unlock()
 		}
 	}
 
