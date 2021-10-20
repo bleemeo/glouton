@@ -27,6 +27,7 @@ import (
 	"fmt"
 	"glouton/logger"
 	"glouton/types"
+	"io"
 	"net/http"
 	"sort"
 	"strings"
@@ -391,10 +392,37 @@ func (r *Registry) UpdateRelabelHook(hook RelabelHook) {
 }
 
 func (r *Registry) DiagnosticZip(zipFile *zip.Writer) error {
+	file, err := zipFile.Create("metrics.txt")
+	if err != nil {
+		return err
+	}
+
+	if err := r.writeMetrics(file, false); err != nil {
+		return err
+	}
+
+	file, err = zipFile.Create("metrics-filtered.txt")
+	if err != nil {
+		return err
+	}
+
+	if err := r.writeMetrics(file, true); err != nil {
+		return err
+	}
+
+	file, err = zipFile.Create("metrics-self.txt")
+	if err != nil {
+		return err
+	}
+
+	if err := r.writeMetricsSelf(file); err != nil {
+		return err
+	}
+
 	r.l.Lock()
 	defer r.l.Unlock()
 
-	file, err := zipFile.Create("scrape-loop.txt")
+	file, err = zipFile.Create("scrape-loop.txt")
 	if err != nil {
 		return err
 	}
@@ -447,6 +475,38 @@ func (r *Registry) DiagnosticZip(zipFile *zip.Writer) error {
 		fmt.Fprintf(file, "    %s\n", reg.option.String())
 
 		reg.l.Unlock()
+	}
+
+	return nil
+}
+
+func (r *Registry) writeMetrics(file io.Writer, filter bool) error {
+	result, err := r.GatherWithState(context.TODO(), GatherState{QueryType: FromStore, NoFilter: !filter})
+	if err != nil {
+		return err
+	}
+
+	enc := expfmt.NewEncoder(file, expfmt.FmtOpenMetrics)
+	for _, mf := range result {
+		if err := enc.Encode(mf); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (r *Registry) writeMetricsSelf(file io.Writer) error {
+	result, err := r.internalRegistry.Gather()
+	if err != nil {
+		return err
+	}
+
+	enc := expfmt.NewEncoder(file, expfmt.FmtOpenMetrics)
+	for _, mf := range result {
+		if err := enc.Encode(mf); err != nil {
+			return err
+		}
 	}
 
 	return nil
