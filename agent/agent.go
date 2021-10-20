@@ -243,8 +243,8 @@ func (a *agent) init(configFiles []string) (ok bool) {
 
 func (a *agent) setupLogger() {
 	logger.SetBufferCapacity(
-		a.oldConfig.Int("logging.buffer.head_size"),
-		a.oldConfig.Int("logging.buffer.tail_size"),
+		a.oldConfig.Int("logging.buffer.head_size_bytes"),
+		a.oldConfig.Int("logging.buffer.tail_size_bytes"),
 	)
 
 	var err error

@@ -18,8 +18,8 @@ func Test_buffer(t *testing.T) {
 
 	const (
 		maxLine  = 100000
-		headSize = 100
-		tailSize = 200
+		headSize = 10000
+		tailSize = 20000
 	)
 
 	b.SetCapacity(headSize, tailSize)
@@ -38,7 +38,7 @@ func Test_buffer(t *testing.T) {
 			t.Fatalf("Write() = %d, want %d", n, len([]byte(line)))
 		}
 
-		if b.tail != nil && !tailAlreadyPresent {
+		if b.state == stateWritingTail && !tailAlreadyPresent {
 			tailAlreadyPresent = true
 
 			content := b.Content()
@@ -148,29 +148,31 @@ func Test_buffer(t *testing.T) {
 				hadError = true
 			}
 
-			// +2 is for the elipis and last empty line
-			if len(strings.Split(string(content), "\n")) > headSize+tailSize+2 {
-				t.Errorf("len(content) = %d, want < %d", len(strings.Split(string(content), "\n")), headSize+tailSize+2)
+			// +6 is for the elipis marked and its newline
+			if len(content) > headSize+tailSize+6 {
+				t.Errorf("len(content) = %d, want < %d", len(content), headSize+tailSize+6)
 
 				hadError = true
 			}
 
-			if len(strings.Split(string(content), "\n")) < headSize+tailSize/2 {
-				t.Errorf("len(content) = %d, want > %d", len(strings.Split(string(content), "\n")), headSize+tailSize/2)
+			if len(content) < headSize+tailSize/2 {
+				t.Errorf("len(content) = %d, want > %d", len(content), headSize+tailSize/2)
 
 				hadError = true
 			}
 
-			if len(b.head) > b.headMaxSize {
-				t.Errorf("head size = %d, want < %d", len(b.head), b.headMaxSize)
+			if b.head.Len() > b.headMaxSize {
+				t.Errorf("head size = %d, want < %d", b.head.Len(), b.headMaxSize)
 
 				hadError = true
 			}
 
-			if len(b.tail) > b.tailMaxSize {
-				t.Errorf("tail size = %d, want < %d", len(b.tail), b.tailMaxSize)
+			for i := range b.tails {
+				if b.tails[i].Len() > b.tailMaxSize {
+					t.Errorf("tails[%d] size = %d, want < %d", i, b.tails[i].Len(), b.tailMaxSize)
 
-				hadError = true
+					hadError = true
+				}
 			}
 
 			if hadError {

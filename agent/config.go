@@ -217,8 +217,8 @@ func defaultConfig() map[string]interface{} {
 		"kubernetes.enable":                false,
 		"kubernetes.nodename":              "",
 		"kubernetes.kubeconfig":            "",
-		"logging.buffer.head_size":         150,
-		"logging.buffer.tail_size":         1000,
+		"logging.buffer.head_size_bytes":   500000,
+		"logging.buffer.tail_size_bytes":   500000,
 		"logging.level":                    "INFO",
 		"logging.output":                   "console",
 		"logging.package_levels":           "",
@@ -369,6 +369,25 @@ func migrateMovedKeys(cfg *config.Configuration) (warnings []error) {
 	return warnings
 }
 
+func migrateLogging(cfg *config.Configuration) (warnings []error) {
+	for _, name := range []string{"tail_size", "head_size"} {
+		oldKey := "logging.buffer." + name
+		newKey := "logging.buffer." + name + "_bytes"
+
+		value := cfg.Int(oldKey)
+		if value == 0 {
+			continue
+		}
+
+		cfg.Set(newKey, value*100)
+		cfg.Delete(oldKey)
+
+		warnings = append(warnings, fmt.Errorf("%w: %s. Please use %s", errSettingsDeprecated, oldKey, newKey))
+	}
+
+	return warnings
+}
+
 func migrateMetricsPrometheus(cfg *config.Configuration) (warnings []error) {
 	// metrics.prometheus was renamed metrics.prometheus.scrapper
 	// We guess that old path was used when metrics.prometheus.*.url exist and is a string
@@ -414,6 +433,7 @@ func migrateMetricsPrometheus(cfg *config.Configuration) (warnings []error) {
 // The list returned are actually warnings, not errors.
 func migrate(cfg *config.Configuration) (warnings []error) {
 	warnings = append(warnings, migrateMovedKeys(cfg)...)
+	warnings = append(warnings, migrateLogging(cfg)...)
 	warnings = append(warnings, migrateMetricsPrometheus(cfg)...)
 	warnings = append(warnings, migrateScrapperMetrics(cfg)...)
 

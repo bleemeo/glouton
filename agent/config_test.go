@@ -436,6 +436,21 @@ func Test_loadConfiguration(t *testing.T) {
 				"environement variable is deprecated: BLEEMEO_AGENT_BLEEMEO_ENABLED, use GLOUTON_BLEEMEO_ENABLE instead",
 			},
 		},
+		{
+			name: "old-logging",
+			configFiles: []string{
+				"testdata/old-logging.conf",
+			},
+			wantKeys: map[string]interface{}{
+				"logging.buffer.head_size_bytes": 4200,
+				"logging.buffer.tail_size_bytes": 4800,
+			},
+			absentKeys: []string{"logging.buffer.head_size", "logging.buffer.tail_size"},
+			warnings: []string{
+				"setting is deprecated: logging.buffer.head_size. Please use logging.buffer.head_size_bytes",
+				"setting is deprecated: logging.buffer.tail_size. Please use logging.buffer.tail_size_bytes",
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
