@@ -602,7 +602,13 @@ func (a *agent) run() { //nolint:cyclop
 	}
 
 	a.metricFilter = mFilter
-	a.store = store.New()
+
+	if a.oldConfig.Bool("web.local_ui.enable") {
+		a.store = store.New(time.Hour)
+	} else {
+		a.store = store.New(2 * time.Minute)
+	}
+
 	rulesManager := rules.NewManager(ctx, a.store)
 
 	filteredStore := store.NewFilteredStore(a.store, mFilter.FilterPoints, mFilter.filterMetrics)
@@ -835,6 +841,7 @@ func (a *agent) run() { //nolint:cyclop
 		DiagnosticPage:     a.DiagnosticPage,
 		DiagnosticArchive:  a.writeDiagnosticArchive,
 		MetricFormat:       a.metricFormat,
+		LocalUIDisabled:    !a.oldConfig.Bool("web.local_ui.enable"),
 	}
 
 	a.FireTrigger(true, true, false, false)

@@ -581,7 +581,7 @@ func newMetricHelper(t *testing.T) *metricTestHelper {
 		t:     t,
 		api:   newAPI(),
 		mt:    &mockTime{now: time.Now()},
-		store: store.New(),
+		store: store.New(time.Hour),
 	}
 	cfg := &config.Configuration{}
 	helper.httpServer = helper.api.Server()

@@ -42,17 +42,19 @@ type Store struct {
 	metrics         map[uint64]metric
 	points          map[uint64][]types.Point
 	notifyCallbacks map[int]func([]types.MetricPoint)
+	maxAge          time.Duration
 	workLabels      labels.Labels
 	lock            sync.Mutex
 	notifeeLock     sync.Mutex
 }
 
 // New create a return a store. Store should be Close()d before leaving.
-func New() *Store {
+func New(maxAge time.Duration) *Store {
 	s := &Store{
 		metrics:         make(map[uint64]metric),
 		points:          make(map[uint64][]types.Point),
 		notifyCallbacks: make(map[int]func([]types.MetricPoint)),
+		maxAge:          maxAge,
 	}
 
 	return s
@@ -261,7 +263,7 @@ func (s *Store) run() {
 		newPoints := make([]types.Point, 0)
 
 		for _, p := range points {
-			if time.Since(p.Time) < time.Hour {
+			if time.Since(p.Time) < s.maxAge {
 				newPoints = append(newPoints, p)
 			}
 		}

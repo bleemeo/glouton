@@ -834,7 +834,7 @@ func TestSync(t *testing.T) {
 
 	discovery := &discovery.MockDiscoverer{}
 
-	store := store.New()
+	store := store.New(time.Hour)
 	store.PushPoints([]types.MetricPoint{
 		{
 			Point: types.Point{

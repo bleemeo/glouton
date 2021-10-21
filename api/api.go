@@ -60,6 +60,7 @@ type agentInterface interface {
 type API struct {
 	BindAddress        string
 	StaticCDNURL       string
+	LocalUIDisabled    bool
 	MetricFormat       types.MetricFormat
 	DB                 *store.Store
 	ContainerRuntime   containerInterface
@@ -106,7 +107,12 @@ func (api *API) init() {
 
 	var indexBody []byte
 
-	indexFile, err := staticFolder.Open("static/index.html")
+	indexFileName := "static/index.html"
+	if api.LocalUIDisabled {
+		indexFileName = "static/index_disabled.html"
+	}
+
+	indexFile, err := staticFolder.Open(indexFileName)
 	if err == nil {
 		indexBody, err = ioutil.ReadAll(indexFile)
 		indexFile.Close()
@@ -251,7 +257,10 @@ func (api *API) Run(ctx context.Context) error {
 	}()
 
 	logger.Printf("Starting API on %s ✔️", api.BindAddress)
-	logger.Printf("To access the local panel connect to http://%s 🌐", api.BindAddress)
+
+	if !api.LocalUIDisabled {
+		logger.Printf("To access the local panel connect to http://%s 🌐", api.BindAddress)
+	}
 
 	if err := srv.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
 		return err

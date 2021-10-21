@@ -173,7 +173,7 @@ func TestMetricsSimple(t *testing.T) {
 	labels := map[string]string{
 		types.LabelName: "measurement_fieldFloat",
 	}
-	db := New()
+	db := New(time.Hour)
 	m := db.metricGetOrCreate(labels, types.MetricAnnotations{})
 
 	if _, ok := db.metrics[m.metricID]; !ok {
@@ -207,7 +207,7 @@ func TestMetricsMultiple(t *testing.T) {
 		"mountpoint":    "/srv",
 		"fstype":        "ext4",
 	}
-	db := New()
+	db := New(time.Hour)
 	db.metricGetOrCreate(labels1, types.MetricAnnotations{})
 	db.metricGetOrCreate(labels2, types.MetricAnnotations{})
 	db.metricGetOrCreate(labels3, types.MetricAnnotations{})
@@ -258,7 +258,7 @@ func TestPoints(t *testing.T) {
 	labels := map[string]string{
 		types.LabelName: "cpu_used",
 	}
-	db := New()
+	db := New(time.Hour)
 	m := db.metricGetOrCreate(labels, types.MetricAnnotations{})
 
 	t0 := time.Now().Add(-60 * time.Second)
@@ -478,7 +478,7 @@ func Benchmark_metricGetOrCreate(b *testing.B) {
 		tt := tt
 
 		b.Run(tt.name, func(b *testing.B) {
-			db := New()
+			db := New(time.Hour)
 
 			rnd := rand.New(rand.NewSource(42)) //nolint: gosec
 			metricsLabels := makeMetrics(b, rnd, tt.metricCount, tt.labelsCount)

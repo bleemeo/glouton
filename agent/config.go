@@ -254,6 +254,7 @@ func defaultConfig() map[string]interface{} {
 		"web.enable":                     true,
 		"web.listener.address":           "127.0.0.1",
 		"web.listener.port":              8015,
+		"web.local_ui.enable":            true,
 		"web.static_cdn_url":             "/static/",
 		"zabbix.enable":                  false,
 		"zabbix.address":                 "127.0.0.1",
