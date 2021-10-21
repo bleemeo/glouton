@@ -1,0 +1,280 @@
+# HELP ifAdminStatus The desired state of the interface - 1.3.6.1.2.1.2.2.1.7
+# TYPE ifAdminStatus gauge
+ifAdminStatus{ifAlias="",ifDescr="Qualcomm Atheros QCA6174 802.11ac Wireless Network Adapter",ifType="ethernetCsmacd",ifName="wlp2s0"} 1
+ifAdminStatus{ifAlias="",ifDescr="docker0",ifType="ethernetCsmacd",ifName="docker0"} 1
+ifAdminStatus{ifAlias="",ifDescr="lo",ifType="softwareLoopback",ifName="lo"} 1
+ifAdminStatus{ifAlias="",ifDescr="virbr0",ifType="ethernetCsmacd",ifName="virbr0"} 1
+ifAdminStatus{ifAlias="",ifDescr="virbr0-nic",ifType="ethernetCsmacd",ifName="virbr0-nic"} 2
+# HELP ifConnectorPresent This object has the value 'true(1)' if the interface sublayer has a physical connector and the value 'false(2)' otherwise. - 1.3.6.1.2.1.31.1.1.1.17
+# TYPE ifConnectorPresent gauge
+ifConnectorPresent{ifAlias="",ifDescr="Qualcomm Atheros QCA6174 802.11ac Wireless Network Adapter",ifType="ethernetCsmacd",ifName="wlp2s0"} 1
+ifConnectorPresent{ifAlias="",ifDescr="docker0",ifType="ethernetCsmacd",ifName="docker0"} 1
+ifConnectorPresent{ifAlias="",ifDescr="lo",ifType="softwareLoopback",ifName="lo"} 2
+ifConnectorPresent{ifAlias="",ifDescr="virbr0",ifType="ethernetCsmacd",ifName="virbr0"} 1
+ifConnectorPresent{ifAlias="",ifDescr="virbr0-nic",ifType="ethernetCsmacd",ifName="virbr0-nic"} 1
+# HELP ifCounterDiscontinuityTime The value of sysUpTime on the most recent occasion at which any one or more of this interface's counters suffered a discontinuity - 1.3.6.1.2.1.31.1.1.1.19
+# TYPE ifCounterDiscontinuityTime gauge
+ifCounterDiscontinuityTime{ifAlias="",ifDescr="Qualcomm Atheros QCA6174 802.11ac Wireless Network Adapter",ifType="ethernetCsmacd",ifName="wlp2s0"} 0
+ifCounterDiscontinuityTime{ifAlias="",ifDescr="docker0",ifType="ethernetCsmacd",ifName="docker0"} 0
+ifCounterDiscontinuityTime{ifAlias="",ifDescr="lo",ifType="softwareLoopback",ifName="lo"} 0
+ifCounterDiscontinuityTime{ifAlias="",ifDescr="virbr0",ifType="ethernetCsmacd",ifName="virbr0"} 0
+ifCounterDiscontinuityTime{ifAlias="",ifDescr="virbr0-nic",ifType="ethernetCsmacd",ifName="virbr0-nic"} 0
+# HELP ifHCInBroadcastPkts The number of packets, delivered by this sub-layer to a higher (sub-)layer, which were addressed to a broadcast address at this sub-layer - 1.3.6.1.2.1.31.1.1.1.9
+# TYPE ifHCInBroadcastPkts counter
+ifHCInBroadcastPkts{ifAlias="",ifDescr="Qualcomm Atheros QCA6174 802.11ac Wireless Network Adapter",ifType="ethernetCsmacd",ifName="wlp2s0"} 0
+ifHCInBroadcastPkts{ifAlias="",ifDescr="docker0",ifType="ethernetCsmacd",ifName="docker0"} 0
+ifHCInBroadcastPkts{ifAlias="",ifDescr="lo",ifType="softwareLoopback",ifName="lo"} 0
+ifHCInBroadcastPkts{ifAlias="",ifDescr="virbr0",ifType="ethernetCsmacd",ifName="virbr0"} 0
+ifHCInBroadcastPkts{ifAlias="",ifDescr="virbr0-nic",ifType="ethernetCsmacd",ifName="virbr0-nic"} 0
+# HELP ifHCInMulticastPkts The number of packets, delivered by this sub-layer to a higher (sub-)layer, which were addressed to a multicast address at this sub-layer - 1.3.6.1.2.1.31.1.1.1.8
+# TYPE ifHCInMulticastPkts counter
+ifHCInMulticastPkts{ifAlias="",ifDescr="Qualcomm Atheros QCA6174 802.11ac Wireless Network Adapter",ifType="ethernetCsmacd",ifName="wlp2s0"} 0
+ifHCInMulticastPkts{ifAlias="",ifDescr="docker0",ifType="ethernetCsmacd",ifName="docker0"} 0
+ifHCInMulticastPkts{ifAlias="",ifDescr="lo",ifType="softwareLoopback",ifName="lo"} 0
+ifHCInMulticastPkts{ifAlias="",ifDescr="virbr0",ifType="ethernetCsmacd",ifName="virbr0"} 0
+ifHCInMulticastPkts{ifAlias="",ifDescr="virbr0-nic",ifType="ethernetCsmacd",ifName="virbr0-nic"} 0
+# HELP ifHCInOctets The total number of octets received on the interface, including framing characters - 1.3.6.1.2.1.31.1.1.1.6
+# TYPE ifHCInOctets counter
+ifHCInOctets{ifAlias="",ifDescr="Qualcomm Atheros QCA6174 802.11ac Wireless Network Adapter",ifType="ethernetCsmacd",ifName="wlp2s0"} 5.411548106e+09
+ifHCInOctets{ifAlias="",ifDescr="docker0",ifType="ethernetCsmacd",ifName="docker0"} 2.0147541e+07
+ifHCInOctets{ifAlias="",ifDescr="lo",ifType="softwareLoopback",ifName="lo"} 7.883255296e+09
+ifHCInOctets{ifAlias="",ifDescr="virbr0",ifType="ethernetCsmacd",ifName="virbr0"} 0
+ifHCInOctets{ifAlias="",ifDescr="virbr0-nic",ifType="ethernetCsmacd",ifName="virbr0-nic"} 0
+# HELP ifHCInUcastPkts The number of packets, delivered by this sub-layer to a higher (sub-)layer, which were not addressed to a multicast or broadcast address at this sub-layer - 1.3.6.1.2.1.31.1.1.1.7
+# TYPE ifHCInUcastPkts counter
+ifHCInUcastPkts{ifAlias="",ifDescr="Qualcomm Atheros QCA6174 802.11ac Wireless Network Adapter",ifType="ethernetCsmacd",ifName="wlp2s0"} 4.843781e+06
+ifHCInUcastPkts{ifAlias="",ifDescr="docker0",ifType="ethernetCsmacd",ifName="docker0"} 51324
+ifHCInUcastPkts{ifAlias="",ifDescr="lo",ifType="softwareLoopback",ifName="lo"} 1.1616304e+07
+ifHCInUcastPkts{ifAlias="",ifDescr="virbr0",ifType="ethernetCsmacd",ifName="virbr0"} 0
+ifHCInUcastPkts{ifAlias="",ifDescr="virbr0-nic",ifType="ethernetCsmacd",ifName="virbr0-nic"} 0
+# HELP ifHCOutBroadcastPkts The total number of packets that higher-level protocols requested be transmitted, and which were addressed to a broadcast address at this sub-layer, including those that were discarded or not sent - 1.3.6.1.2.1.31.1.1.1.13
+# TYPE ifHCOutBroadcastPkts counter
+ifHCOutBroadcastPkts{ifAlias="",ifDescr="Qualcomm Atheros QCA6174 802.11ac Wireless Network Adapter",ifType="ethernetCsmacd",ifName="wlp2s0"} 0
+ifHCOutBroadcastPkts{ifAlias="",ifDescr="docker0",ifType="ethernetCsmacd",ifName="docker0"} 0
+ifHCOutBroadcastPkts{ifAlias="",ifDescr="lo",ifType="softwareLoopback",ifName="lo"} 0
+ifHCOutBroadcastPkts{ifAlias="",ifDescr="virbr0",ifType="ethernetCsmacd",ifName="virbr0"} 0
+ifHCOutBroadcastPkts{ifAlias="",ifDescr="virbr0-nic",ifType="ethernetCsmacd",ifName="virbr0-nic"} 0
+# HELP ifHCOutMulticastPkts The total number of packets that higher-level protocols requested be transmitted, and which were addressed to a multicast address at this sub-layer, including those that were discarded or not sent - 1.3.6.1.2.1.31.1.1.1.12
+# TYPE ifHCOutMulticastPkts counter
+ifHCOutMulticastPkts{ifAlias="",ifDescr="Qualcomm Atheros QCA6174 802.11ac Wireless Network Adapter",ifType="ethernetCsmacd",ifName="wlp2s0"} 0
+ifHCOutMulticastPkts{ifAlias="",ifDescr="docker0",ifType="ethernetCsmacd",ifName="docker0"} 0
+ifHCOutMulticastPkts{ifAlias="",ifDescr="lo",ifType="softwareLoopback",ifName="lo"} 0
+ifHCOutMulticastPkts{ifAlias="",ifDescr="virbr0",ifType="ethernetCsmacd",ifName="virbr0"} 0
+ifHCOutMulticastPkts{ifAlias="",ifDescr="virbr0-nic",ifType="ethernetCsmacd",ifName="virbr0-nic"} 0
+# HELP ifHCOutOctets The total number of octets transmitted out of the interface, including framing characters - 1.3.6.1.2.1.31.1.1.1.10
+# TYPE ifHCOutOctets counter
+ifHCOutOctets{ifAlias="",ifDescr="Qualcomm Atheros QCA6174 802.11ac Wireless Network Adapter",ifType="ethernetCsmacd",ifName="wlp2s0"} 3.93071322e+08
+ifHCOutOctets{ifAlias="",ifDescr="docker0",ifType="ethernetCsmacd",ifName="docker0"} 3.9410313e+07
+ifHCOutOctets{ifAlias="",ifDescr="lo",ifType="softwareLoopback",ifName="lo"} 7.883255296e+09
+ifHCOutOctets{ifAlias="",ifDescr="virbr0",ifType="ethernetCsmacd",ifName="virbr0"} 0
+ifHCOutOctets{ifAlias="",ifDescr="virbr0-nic",ifType="ethernetCsmacd",ifName="virbr0-nic"} 0
+# HELP ifHCOutUcastPkts The total number of packets that higher-level protocols requested be transmitted, and which were not addressed to a multicast or broadcast address at this sub-layer, including those that were discarded or not sent - 1.3.6.1.2.1.31.1.1.1.11
+# TYPE ifHCOutUcastPkts counter
+ifHCOutUcastPkts{ifAlias="",ifDescr="Qualcomm Atheros QCA6174 802.11ac Wireless Network Adapter",ifType="ethernetCsmacd",ifName="wlp2s0"} 2.354057e+06
+ifHCOutUcastPkts{ifAlias="",ifDescr="docker0",ifType="ethernetCsmacd",ifName="docker0"} 64698
+ifHCOutUcastPkts{ifAlias="",ifDescr="lo",ifType="softwareLoopback",ifName="lo"} 1.1616304e+07
+ifHCOutUcastPkts{ifAlias="",ifDescr="virbr0",ifType="ethernetCsmacd",ifName="virbr0"} 0
+ifHCOutUcastPkts{ifAlias="",ifDescr="virbr0-nic",ifType="ethernetCsmacd",ifName="virbr0-nic"} 0
+# HELP ifHighSpeed An estimate of the interface's current bandwidth in units of 1,000,000 bits per second - 1.3.6.1.2.1.31.1.1.1.15
+# TYPE ifHighSpeed gauge
+ifHighSpeed{ifAlias="",ifDescr="Qualcomm Atheros QCA6174 802.11ac Wireless Network Adapter",ifType="ethernetCsmacd",ifName="wlp2s0"} 0
+ifHighSpeed{ifAlias="",ifDescr="docker0",ifType="ethernetCsmacd",ifName="docker0"} 0
+ifHighSpeed{ifAlias="",ifDescr="lo",ifType="softwareLoopback",ifName="lo"} 10
+ifHighSpeed{ifAlias="",ifDescr="virbr0",ifType="ethernetCsmacd",ifName="virbr0"} 0
+ifHighSpeed{ifAlias="",ifDescr="virbr0-nic",ifType="ethernetCsmacd",ifName="virbr0-nic"} 10
+# HELP ifInBroadcastPkts The number of packets, delivered by this sub-layer to a higher (sub-)layer, which were addressed to a broadcast address at this sub-layer - 1.3.6.1.2.1.31.1.1.1.3
+# TYPE ifInBroadcastPkts counter
+ifInBroadcastPkts{ifAlias="",ifDescr="Qualcomm Atheros QCA6174 802.11ac Wireless Network Adapter",ifType="ethernetCsmacd",ifName="wlp2s0"} 0
+ifInBroadcastPkts{ifAlias="",ifDescr="docker0",ifType="ethernetCsmacd",ifName="docker0"} 0
+ifInBroadcastPkts{ifAlias="",ifDescr="lo",ifType="softwareLoopback",ifName="lo"} 0
+ifInBroadcastPkts{ifAlias="",ifDescr="virbr0",ifType="ethernetCsmacd",ifName="virbr0"} 0
+ifInBroadcastPkts{ifAlias="",ifDescr="virbr0-nic",ifType="ethernetCsmacd",ifName="virbr0-nic"} 0
+# HELP ifInDiscards The number of inbound packets which were chosen to be discarded even though no errors had been detected to prevent their being deliverable to a higher-layer protocol - 1.3.6.1.2.1.2.2.1.13
+# TYPE ifInDiscards counter
+ifInDiscards{ifAlias="",ifDescr="Qualcomm Atheros QCA6174 802.11ac Wireless Network Adapter",ifType="ethernetCsmacd",ifName="wlp2s0"} 756
+ifInDiscards{ifAlias="",ifDescr="docker0",ifType="ethernetCsmacd",ifName="docker0"} 0
+ifInDiscards{ifAlias="",ifDescr="lo",ifType="softwareLoopback",ifName="lo"} 0
+ifInDiscards{ifAlias="",ifDescr="virbr0",ifType="ethernetCsmacd",ifName="virbr0"} 0
+ifInDiscards{ifAlias="",ifDescr="virbr0-nic",ifType="ethernetCsmacd",ifName="virbr0-nic"} 0
+# HELP ifInErrors For packet-oriented interfaces, the number of inbound packets that contained errors preventing them from being deliverable to a higher-layer protocol - 1.3.6.1.2.1.2.2.1.14
+# TYPE ifInErrors counter
+ifInErrors{ifAlias="",ifDescr="Qualcomm Atheros QCA6174 802.11ac Wireless Network Adapter",ifType="ethernetCsmacd",ifName="wlp2s0"} 0
+ifInErrors{ifAlias="",ifDescr="docker0",ifType="ethernetCsmacd",ifName="docker0"} 0
+ifInErrors{ifAlias="",ifDescr="lo",ifType="softwareLoopback",ifName="lo"} 0
+ifInErrors{ifAlias="",ifDescr="virbr0",ifType="ethernetCsmacd",ifName="virbr0"} 0
+ifInErrors{ifAlias="",ifDescr="virbr0-nic",ifType="ethernetCsmacd",ifName="virbr0-nic"} 0
+# HELP ifInMulticastPkts The number of packets, delivered by this sub-layer to a higher (sub-)layer, which were addressed to a multicast address at this sub-layer - 1.3.6.1.2.1.31.1.1.1.2
+# TYPE ifInMulticastPkts counter
+ifInMulticastPkts{ifAlias="",ifDescr="Qualcomm Atheros QCA6174 802.11ac Wireless Network Adapter",ifType="ethernetCsmacd",ifName="wlp2s0"} 0
+ifInMulticastPkts{ifAlias="",ifDescr="docker0",ifType="ethernetCsmacd",ifName="docker0"} 0
+ifInMulticastPkts{ifAlias="",ifDescr="lo",ifType="softwareLoopback",ifName="lo"} 0
+ifInMulticastPkts{ifAlias="",ifDescr="virbr0",ifType="ethernetCsmacd",ifName="virbr0"} 0
+ifInMulticastPkts{ifAlias="",ifDescr="virbr0-nic",ifType="ethernetCsmacd",ifName="virbr0-nic"} 0
+# HELP ifInNUcastPkts The number of packets, delivered by this sub-layer to a higher (sub-)layer, which were addressed to a multicast or broadcast address at this sub-layer - 1.3.6.1.2.1.2.2.1.12
+# TYPE ifInNUcastPkts counter
+ifInNUcastPkts{ifAlias="",ifDescr="Qualcomm Atheros QCA6174 802.11ac Wireless Network Adapter",ifType="ethernetCsmacd",ifName="wlp2s0"} 0
+ifInNUcastPkts{ifAlias="",ifDescr="docker0",ifType="ethernetCsmacd",ifName="docker0"} 0
+ifInNUcastPkts{ifAlias="",ifDescr="lo",ifType="softwareLoopback",ifName="lo"} 0
+ifInNUcastPkts{ifAlias="",ifDescr="virbr0",ifType="ethernetCsmacd",ifName="virbr0"} 0
+ifInNUcastPkts{ifAlias="",ifDescr="virbr0-nic",ifType="ethernetCsmacd",ifName="virbr0-nic"} 0
+# HELP ifInOctets The total number of octets received on the interface, including framing characters - 1.3.6.1.2.1.2.2.1.10
+# TYPE ifInOctets counter
+ifInOctets{ifAlias="",ifDescr="Qualcomm Atheros QCA6174 802.11ac Wireless Network Adapter",ifType="ethernetCsmacd",ifName="wlp2s0"} 1.11658081e+09
+ifInOctets{ifAlias="",ifDescr="docker0",ifType="ethernetCsmacd",ifName="docker0"} 2.0147541e+07
+ifInOctets{ifAlias="",ifDescr="lo",ifType="softwareLoopback",ifName="lo"} 3.588288e+09
+ifInOctets{ifAlias="",ifDescr="virbr0",ifType="ethernetCsmacd",ifName="virbr0"} 0
+ifInOctets{ifAlias="",ifDescr="virbr0-nic",ifType="ethernetCsmacd",ifName="virbr0-nic"} 0
+# HELP ifInUcastPkts The number of packets, delivered by this sub-layer to a higher (sub-)layer, which were not addressed to a multicast or broadcast address at this sub-layer - 1.3.6.1.2.1.2.2.1.11
+# TYPE ifInUcastPkts counter
+ifInUcastPkts{ifAlias="",ifDescr="Qualcomm Atheros QCA6174 802.11ac Wireless Network Adapter",ifType="ethernetCsmacd",ifName="wlp2s0"} 4.843781e+06
+ifInUcastPkts{ifAlias="",ifDescr="docker0",ifType="ethernetCsmacd",ifName="docker0"} 51324
+ifInUcastPkts{ifAlias="",ifDescr="lo",ifType="softwareLoopback",ifName="lo"} 1.1616304e+07
+ifInUcastPkts{ifAlias="",ifDescr="virbr0",ifType="ethernetCsmacd",ifName="virbr0"} 0
+ifInUcastPkts{ifAlias="",ifDescr="virbr0-nic",ifType="ethernetCsmacd",ifName="virbr0-nic"} 0
+# HELP ifInUnknownProtos For packet-oriented interfaces, the number of packets received via the interface which were discarded because of an unknown or unsupported protocol - 1.3.6.1.2.1.2.2.1.15
+# TYPE ifInUnknownProtos counter
+ifInUnknownProtos{ifAlias="",ifDescr="Qualcomm Atheros QCA6174 802.11ac Wireless Network Adapter",ifType="ethernetCsmacd",ifName="wlp2s0"} 0
+ifInUnknownProtos{ifAlias="",ifDescr="docker0",ifType="ethernetCsmacd",ifName="docker0"} 0
+ifInUnknownProtos{ifAlias="",ifDescr="lo",ifType="softwareLoopback",ifName="lo"} 0
+ifInUnknownProtos{ifAlias="",ifDescr="virbr0",ifType="ethernetCsmacd",ifName="virbr0"} 0
+ifInUnknownProtos{ifAlias="",ifDescr="virbr0-nic",ifType="ethernetCsmacd",ifName="virbr0-nic"} 0
+# HELP ifIndex A unique value, greater than zero, for each interface - 1.3.6.1.2.1.2.2.1.1
+# TYPE ifIndex gauge
+ifIndex{ifAlias="",ifDescr="Qualcomm Atheros QCA6174 802.11ac Wireless Network Adapter",ifType="ethernetCsmacd",ifName="wlp2s0"} 2
+ifIndex{ifAlias="",ifDescr="docker0",ifType="ethernetCsmacd",ifName="docker0"} 5
+ifIndex{ifAlias="",ifDescr="lo",ifType="softwareLoopback",ifName="lo"} 1
+ifIndex{ifAlias="",ifDescr="virbr0",ifType="ethernetCsmacd",ifName="virbr0"} 3
+ifIndex{ifAlias="",ifDescr="virbr0-nic",ifType="ethernetCsmacd",ifName="virbr0-nic"} 4
+# HELP ifLastChange The value of sysUpTime at the time the interface entered its current operational state - 1.3.6.1.2.1.2.2.1.9
+# TYPE ifLastChange gauge
+ifLastChange{ifAlias="",ifDescr="Qualcomm Atheros QCA6174 802.11ac Wireless Network Adapter",ifType="ethernetCsmacd",ifName="wlp2s0"} 2.3169209e+07
+ifLastChange{ifAlias="",ifDescr="docker0",ifType="ethernetCsmacd",ifName="docker0"} 905
+ifLastChange{ifAlias="",ifDescr="lo",ifType="softwareLoopback",ifName="lo"} 0
+ifLastChange{ifAlias="",ifDescr="virbr0",ifType="ethernetCsmacd",ifName="virbr0"} 305
+ifLastChange{ifAlias="",ifDescr="virbr0-nic",ifType="ethernetCsmacd",ifName="virbr0-nic"} 305
+# HELP ifMtu The size of the largest packet which can be sent/received on the interface, specified in octets - 1.3.6.1.2.1.2.2.1.4
+# TYPE ifMtu gauge
+ifMtu{ifAlias="",ifDescr="Qualcomm Atheros QCA6174 802.11ac Wireless Network Adapter",ifType="ethernetCsmacd",ifName="wlp2s0"} 1500
+ifMtu{ifAlias="",ifDescr="docker0",ifType="ethernetCsmacd",ifName="docker0"} 1500
+ifMtu{ifAlias="",ifDescr="lo",ifType="softwareLoopback",ifName="lo"} 65536
+ifMtu{ifAlias="",ifDescr="virbr0",ifType="ethernetCsmacd",ifName="virbr0"} 1500
+ifMtu{ifAlias="",ifDescr="virbr0-nic",ifType="ethernetCsmacd",ifName="virbr0-nic"} 1500
+# HELP ifNumber The number of network interfaces (regardless of their current state) present on this system. - 1.3.6.1.2.1.2.1
+# TYPE ifNumber gauge
+ifNumber 25
+# HELP ifOperStatus The current operational state of the interface - 1.3.6.1.2.1.2.2.1.8
+# TYPE ifOperStatus gauge
+ifOperStatus{ifAlias="",ifDescr="Qualcomm Atheros QCA6174 802.11ac Wireless Network Adapter",ifType="ethernetCsmacd",ifName="wlp2s0"} 1
+ifOperStatus{ifAlias="",ifDescr="docker0",ifType="ethernetCsmacd",ifName="docker0"} 1
+ifOperStatus{ifAlias="",ifDescr="lo",ifType="softwareLoopback",ifName="lo"} 1
+ifOperStatus{ifAlias="",ifDescr="virbr0",ifType="ethernetCsmacd",ifName="virbr0"} 2
+ifOperStatus{ifAlias="",ifDescr="virbr0-nic",ifType="ethernetCsmacd",ifName="virbr0-nic"} 2
+# HELP ifOutBroadcastPkts The total number of packets that higher-level protocols requested be transmitted, and which were addressed to a broadcast address at this sub-layer, including those that were discarded or not sent - 1.3.6.1.2.1.31.1.1.1.5
+# TYPE ifOutBroadcastPkts counter
+ifOutBroadcastPkts{ifAlias="",ifDescr="Qualcomm Atheros QCA6174 802.11ac Wireless Network Adapter",ifType="ethernetCsmacd",ifName="wlp2s0"} 0
+ifOutBroadcastPkts{ifAlias="",ifDescr="docker0",ifType="ethernetCsmacd",ifName="docker0"} 0
+ifOutBroadcastPkts{ifAlias="",ifDescr="lo",ifType="softwareLoopback",ifName="lo"} 0
+ifOutBroadcastPkts{ifAlias="",ifDescr="virbr0",ifType="ethernetCsmacd",ifName="virbr0"} 0
+ifOutBroadcastPkts{ifAlias="",ifDescr="virbr0-nic",ifType="ethernetCsmacd",ifName="virbr0-nic"} 0
+# HELP ifOutDiscards The number of outbound packets which were chosen to be discarded even though no errors had been detected to prevent their being transmitted - 1.3.6.1.2.1.2.2.1.19
+# TYPE ifOutDiscards counter
+ifOutDiscards{ifAlias="",ifDescr="Qualcomm Atheros QCA6174 802.11ac Wireless Network Adapter",ifType="ethernetCsmacd",ifName="wlp2s0"} 0
+ifOutDiscards{ifAlias="",ifDescr="docker0",ifType="ethernetCsmacd",ifName="docker0"} 0
+ifOutDiscards{ifAlias="",ifDescr="lo",ifType="softwareLoopback",ifName="lo"} 0
+ifOutDiscards{ifAlias="",ifDescr="virbr0",ifType="ethernetCsmacd",ifName="virbr0"} 0
+ifOutDiscards{ifAlias="",ifDescr="virbr0-nic",ifType="ethernetCsmacd",ifName="virbr0-nic"} 0
+# HELP ifOutErrors For packet-oriented interfaces, the number of outbound packets that could not be transmitted because of errors - 1.3.6.1.2.1.2.2.1.20
+# TYPE ifOutErrors counter
+ifOutErrors{ifAlias="",ifDescr="Qualcomm Atheros QCA6174 802.11ac Wireless Network Adapter",ifType="ethernetCsmacd",ifName="wlp2s0"} 0
+ifOutErrors{ifAlias="",ifDescr="docker0",ifType="ethernetCsmacd",ifName="docker0"} 0
+ifOutErrors{ifAlias="",ifDescr="lo",ifType="softwareLoopback",ifName="lo"} 0
+ifOutErrors{ifAlias="",ifDescr="virbr0",ifType="ethernetCsmacd",ifName="virbr0"} 0
+ifOutErrors{ifAlias="",ifDescr="virbr0-nic",ifType="ethernetCsmacd",ifName="virbr0-nic"} 0
+# HELP ifOutMulticastPkts The total number of packets that higher-level protocols requested be transmitted, and which were addressed to a multicast address at this sub-layer, including those that were discarded or not sent - 1.3.6.1.2.1.31.1.1.1.4
+# TYPE ifOutMulticastPkts counter
+ifOutMulticastPkts{ifAlias="",ifDescr="Qualcomm Atheros QCA6174 802.11ac Wireless Network Adapter",ifType="ethernetCsmacd",ifName="wlp2s0"} 0
+ifOutMulticastPkts{ifAlias="",ifDescr="docker0",ifType="ethernetCsmacd",ifName="docker0"} 0
+ifOutMulticastPkts{ifAlias="",ifDescr="lo",ifType="softwareLoopback",ifName="lo"} 0
+ifOutMulticastPkts{ifAlias="",ifDescr="virbr0",ifType="ethernetCsmacd",ifName="virbr0"} 0
+ifOutMulticastPkts{ifAlias="",ifDescr="virbr0-nic",ifType="ethernetCsmacd",ifName="virbr0-nic"} 0
+# HELP ifOutNUcastPkts The total number of packets that higher-level protocols requested be transmitted, and which were addressed to a multicast or broadcast address at this sub-layer, including those that were discarded or not sent - 1.3.6.1.2.1.2.2.1.18
+# TYPE ifOutNUcastPkts counter
+ifOutNUcastPkts{ifAlias="",ifDescr="Qualcomm Atheros QCA6174 802.11ac Wireless Network Adapter",ifType="ethernetCsmacd",ifName="wlp2s0"} 0
+ifOutNUcastPkts{ifAlias="",ifDescr="docker0",ifType="ethernetCsmacd",ifName="docker0"} 0
+ifOutNUcastPkts{ifAlias="",ifDescr="lo",ifType="softwareLoopback",ifName="lo"} 0
+ifOutNUcastPkts{ifAlias="",ifDescr="virbr0",ifType="ethernetCsmacd",ifName="virbr0"} 0
+ifOutNUcastPkts{ifAlias="",ifDescr="virbr0-nic",ifType="ethernetCsmacd",ifName="virbr0-nic"} 0
+# HELP ifOutOctets The total number of octets transmitted out of the interface, including framing characters - 1.3.6.1.2.1.2.2.1.16
+# TYPE ifOutOctets counter
+ifOutOctets{ifAlias="",ifDescr="Qualcomm Atheros QCA6174 802.11ac Wireless Network Adapter",ifType="ethernetCsmacd",ifName="wlp2s0"} 3.93071322e+08
+ifOutOctets{ifAlias="",ifDescr="docker0",ifType="ethernetCsmacd",ifName="docker0"} 3.9410313e+07
+ifOutOctets{ifAlias="",ifDescr="lo",ifType="softwareLoopback",ifName="lo"} 3.588288e+09
+ifOutOctets{ifAlias="",ifDescr="virbr0",ifType="ethernetCsmacd",ifName="virbr0"} 0
+ifOutOctets{ifAlias="",ifDescr="virbr0-nic",ifType="ethernetCsmacd",ifName="virbr0-nic"} 0
+# HELP ifOutQLen The length of the output packet queue (in packets). - 1.3.6.1.2.1.2.2.1.21
+# TYPE ifOutQLen gauge
+ifOutQLen{ifAlias="",ifDescr="Qualcomm Atheros QCA6174 802.11ac Wireless Network Adapter",ifType="ethernetCsmacd",ifName="wlp2s0"} 0
+ifOutQLen{ifAlias="",ifDescr="docker0",ifType="ethernetCsmacd",ifName="docker0"} 0
+ifOutQLen{ifAlias="",ifDescr="lo",ifType="softwareLoopback",ifName="lo"} 0
+ifOutQLen{ifAlias="",ifDescr="virbr0",ifType="ethernetCsmacd",ifName="virbr0"} 0
+ifOutQLen{ifAlias="",ifDescr="virbr0-nic",ifType="ethernetCsmacd",ifName="virbr0-nic"} 0
+# HELP ifOutUcastPkts The total number of packets that higher-level protocols requested be transmitted, and which were not addressed to a multicast or broadcast address at this sub-layer, including those that were discarded or not sent - 1.3.6.1.2.1.2.2.1.17
+# TYPE ifOutUcastPkts counter
+ifOutUcastPkts{ifAlias="",ifDescr="Qualcomm Atheros QCA6174 802.11ac Wireless Network Adapter",ifType="ethernetCsmacd",ifName="wlp2s0"} 2.354057e+06
+ifOutUcastPkts{ifAlias="",ifDescr="docker0",ifType="ethernetCsmacd",ifName="docker0"} 64698
+ifOutUcastPkts{ifAlias="",ifDescr="lo",ifType="softwareLoopback",ifName="lo"} 1.1616304e+07
+ifOutUcastPkts{ifAlias="",ifDescr="virbr0",ifType="ethernetCsmacd",ifName="virbr0"} 0
+ifOutUcastPkts{ifAlias="",ifDescr="virbr0-nic",ifType="ethernetCsmacd",ifName="virbr0-nic"} 0
+# HELP ifPhysAddress The interface's address at its protocol sub-layer - 1.3.6.1.2.1.2.2.1.6
+# TYPE ifPhysAddress gauge
+ifPhysAddress{ifAlias="",ifDescr="Qualcomm Atheros QCA6174 802.11ac Wireless Network Adapter",ifType="ethernetCsmacd",ifName="wlp2s0",ifPhysAddress="9C:B6:D0:89:D3:4F"} 1
+ifPhysAddress{ifAlias="",ifDescr="docker0",ifType="ethernetCsmacd",ifName="docker0",ifPhysAddress="02:42:D1:7C:09:DE"} 1
+ifPhysAddress{ifAlias="",ifDescr="lo",ifType="softwareLoopback",ifName="lo",ifPhysAddress="00:00:00:00:00:00"} 1
+ifPhysAddress{ifAlias="",ifDescr="virbr0",ifType="ethernetCsmacd",ifName="virbr0",ifPhysAddress="52:54:00:43:AF:12"} 1
+ifPhysAddress{ifAlias="",ifDescr="virbr0-nic",ifType="ethernetCsmacd",ifName="virbr0-nic",ifPhysAddress="52:54:00:43:AF:12"} 1
+# HELP ifPromiscuousMode This object has a value of false(2) if this interface only accepts packets/frames that are addressed to this station - 1.3.6.1.2.1.31.1.1.1.16
+# TYPE ifPromiscuousMode gauge
+ifPromiscuousMode{ifAlias="",ifDescr="Qualcomm Atheros QCA6174 802.11ac Wireless Network Adapter",ifType="ethernetCsmacd",ifName="wlp2s0"} 2
+ifPromiscuousMode{ifAlias="",ifDescr="docker0",ifType="ethernetCsmacd",ifName="docker0"} 2
+ifPromiscuousMode{ifAlias="",ifDescr="lo",ifType="softwareLoopback",ifName="lo"} 2
+ifPromiscuousMode{ifAlias="",ifDescr="virbr0",ifType="ethernetCsmacd",ifName="virbr0"} 2
+ifPromiscuousMode{ifAlias="",ifDescr="virbr0-nic",ifType="ethernetCsmacd",ifName="virbr0-nic"} 2
+# HELP ifSpecific A reference to MIB definitions specific to the particular media being used to realize the interface - 1.3.6.1.2.1.2.2.1.22
+# TYPE ifSpecific gauge
+ifSpecific{ifAlias="",ifDescr="Qualcomm Atheros QCA6174 802.11ac Wireless Network Adapter",ifType="ethernetCsmacd",ifName="wlp2s0",ifSpecific="0.0"} 1
+ifSpecific{ifAlias="",ifDescr="docker0",ifType="ethernetCsmacd",ifName="docker0",ifSpecific="0.0"} 1
+ifSpecific{ifAlias="",ifDescr="lo",ifType="softwareLoopback",ifName="lo",ifSpecific="0.0"} 1
+ifSpecific{ifAlias="",ifDescr="virbr0",ifType="ethernetCsmacd",ifName="virbr0",ifSpecific="0.0"} 1
+ifSpecific{ifAlias="",ifDescr="virbr0-nic",ifType="ethernetCsmacd",ifName="virbr0-nic",ifSpecific="0.0"} 1
+# HELP ifSpeed An estimate of the interface's current bandwidth in bits per second - 1.3.6.1.2.1.2.2.1.5
+# TYPE ifSpeed gauge
+ifSpeed{ifAlias="",ifDescr="Qualcomm Atheros QCA6174 802.11ac Wireless Network Adapter",ifType="ethernetCsmacd",ifName="wlp2s0"} 0
+ifSpeed{ifAlias="",ifDescr="docker0",ifType="ethernetCsmacd",ifName="docker0"} 0
+ifSpeed{ifAlias="",ifDescr="lo",ifType="softwareLoopback",ifName="lo"} 1e+07
+ifSpeed{ifAlias="",ifDescr="virbr0",ifType="ethernetCsmacd",ifName="virbr0"} 0
+ifSpeed{ifAlias="",ifDescr="virbr0-nic",ifType="ethernetCsmacd",ifName="virbr0-nic"} 1e+07
+# HELP ifType_info The type of interface - 1.3.6.1.2.1.2.2.1.3 (EnumAsInfo)
+# TYPE ifType_info gauge
+ifType_info{ifAlias="",ifDescr="Qualcomm Atheros QCA6174 802.11ac Wireless Network Adapter",ifIndex="2",ifName="wlp2s0",ifType="ethernetCsmacd"} 1
+ifType_info{ifAlias="",ifDescr="docker0",ifIndex="5",ifName="docker0",ifType="ethernetCsmacd"} 1
+ifType_info{ifAlias="",ifDescr="lo",ifIndex="1",ifName="lo",ifType="softwareLoopback"} 1
+ifType_info{ifAlias="",ifDescr="virbr0",ifIndex="3",ifName="virbr0",ifType="ethernetCsmacd"} 1
+ifType_info{ifAlias="",ifDescr="virbr0-nic",ifIndex="4",ifName="virbr0-nic",ifType="ethernetCsmacd"} 1
+# HELP snmp_scrape_duration_seconds Total SNMP time scrape took (walk and processing).
+# TYPE snmp_scrape_duration_seconds gauge
+snmp_scrape_duration_seconds 0.028239671
+# HELP snmp_scrape_pdus_returned PDUs returned from walk.
+# TYPE snmp_scrape_pdus_returned gauge
+snmp_scrape_pdus_returned 1002
+# HELP snmp_scrape_walk_duration_seconds Time SNMP walk/bulkwalk took.
+# TYPE snmp_scrape_walk_duration_seconds gauge
+snmp_scrape_walk_duration_seconds 0.014112961
+# HELP sysUpTime The time (in hundredths of a second) since the network management portion of the system was last re-initialized. - 1.3.6.1.2.1.1.3
+# TYPE sysUpTime gauge
+sysUpTime 2.325208e+07
+# TYPE total_interfaces gauge
+total_interfaces 5
+# TYPE connected_interfaces gauge
+connected_interfaces 3
+# TYPE agent_status gauge
+agent_status{__meta_current_status="ok",__meta_current_description=""} 0

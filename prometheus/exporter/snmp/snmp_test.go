@@ -20,8 +20,10 @@ import (
 	"fmt"
 	"glouton/prometheus/registry"
 	"glouton/prometheus/scrapper"
+	"glouton/types"
 	"os"
 	"path/filepath"
+	"sort"
 	"testing"
 	"time"
 
@@ -30,6 +32,32 @@ import (
 	dto "github.com/prometheus/client_model/go"
 	"github.com/prometheus/common/expfmt"
 )
+
+func fileToMFS(filename string) ([]*dto.MetricFamily, error) {
+	fd, err := os.Open(filename)
+	if err != nil {
+		return nil, err
+	}
+
+	var parser expfmt.TextParser
+
+	tmpMap, err := parser.TextToMetricFamilies(fd)
+	if err != nil {
+		return nil, err
+	}
+
+	tmp := make([]*dto.MetricFamily, 0, len(tmpMap))
+
+	for _, v := range tmpMap {
+		tmp = append(tmp, v)
+	}
+
+	sort.Slice(tmp, func(i, j int) bool {
+		return tmp[i].GetName() < tmp[j].GetName()
+	})
+
+	return tmp, nil
+}
 
 func Test_factFromPoints(t *testing.T) {
 	now := time.Date(2021, 9, 28, 9, 43, 4, 1234, time.UTC)
@@ -102,22 +130,9 @@ func Test_factFromPoints(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			fd, err := os.Open(filepath.Join("testdata", tt.metricFile))
+			tmp, err := fileToMFS(filepath.Join("testdata", tt.metricFile))
 			if err != nil {
 				t.Fatal(err)
-			}
-
-			var parser expfmt.TextParser
-
-			tmpMap, err := parser.TextToMetricFamilies(fd)
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			tmp := make([]*dto.MetricFamily, 0, len(tmpMap))
-
-			for _, v := range tmpMap {
-				tmp = append(tmp, v)
 			}
 
 			result := registry.FamiliesToMetricPoints(time.Now(), tmp)
@@ -430,6 +445,57 @@ func Test_mfsFilterInterface(t *testing.T) {
 
 			if diff := cmp.Diff(tt.want, got); diff != "" {
 				t.Errorf("mfsFilterInterface() mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func Test_processMFS(t *testing.T) {
+	tests := []struct {
+		name      string
+		state     registry.GatherState
+		status    types.Status
+		msg       string
+		inputFile string
+		wantFile  string
+	}{
+		{
+			name:      "linux snmpd",
+			state:     registry.GatherState{},
+			status:    types.StatusOk,
+			msg:       "",
+			inputFile: "linux-snmpd.input",
+			wantFile:  "linux-snmpd.want",
+		},
+		{
+			name:      "linux snmpd noFilter",
+			state:     registry.GatherState{NoFilter: true},
+			status:    types.StatusOk,
+			msg:       "",
+			inputFile: "linux-snmpd.input",
+			wantFile:  "linux-snmpd-nofilter.want",
+		},
+	}
+	for _, tt := range tests {
+		tt := tt
+
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			input, err := fileToMFS(filepath.Join("testdata", tt.inputFile))
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			want, err := fileToMFS(filepath.Join("testdata", tt.wantFile))
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			got := processMFS(input, tt.state, tt.status, tt.msg)
+
+			if diff := cmp.Diff(want, got); diff != "" {
+				t.Errorf("processMFS() mismatch (-want +got):\n%s", diff)
 			}
 		})
 	}

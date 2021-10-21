@@ -26,6 +26,7 @@ import (
 	"glouton/prometheus/scrapper"
 	"glouton/types"
 	"net/url"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -37,7 +38,9 @@ import (
 const (
 	defaultGatherTimeout   = 10 * time.Second
 	ifIndexLabelName       = "ifIndex"
+	ifTypeLabelName        = "ifType"
 	ifOperStatusMetricName = "ifOperStatus"
+	ifTypeInfoMetricName   = "ifType_info"
 )
 
 // Target represents a snmp config instance.
@@ -142,13 +145,49 @@ func (t *Target) GatherWithState(ctx context.Context, state registry.GatherState
 		t.l.Unlock()
 	}
 
+	status, msg := t.getStatus()
+
+	return processMFS(result, state, status, msg), err
+}
+
+func processMFS(result []*dto.MetricFamily, state registry.GatherState, status types.Status, msg string) []*dto.MetricFamily {
 	var (
 		totalInterfaces     int
 		connectedInterfaces int
 		interfaceUp         map[string]bool
+		indexToType         map[string]string
 	)
 
+	if len(result) > 0 {
+		indexToType = make(map[string]string, len(result[0].Metric))
+	}
+
 	for _, mf := range result {
+		if mf.GetName() == ifTypeInfoMetricName {
+			for _, m := range mf.Metric {
+				var (
+					idxStr  string
+					typeStr string
+				)
+
+				for _, l := range m.Label {
+					if l.GetName() == ifIndexLabelName {
+						idxStr = l.GetValue()
+					}
+
+					if l.GetName() == ifTypeLabelName {
+						typeStr = l.GetValue()
+					}
+
+					if idxStr != "" && typeStr != "" {
+						indexToType[idxStr] = typeStr
+
+						break
+					}
+				}
+			}
+		}
+
 		if mf.GetName() == ifOperStatusMetricName {
 			interfaceUp = make(map[string]bool, len(mf.Metric))
 
@@ -198,7 +237,22 @@ func (t *Target) GatherWithState(ctx context.Context, state registry.GatherState
 		}
 	}
 
-	if status, msg := t.getStatus(); status != types.StatusUnset {
+	for _, mf := range result {
+		if mf.GetName() == ifTypeInfoMetricName {
+			continue
+		}
+
+		for _, m := range mf.Metric {
+			for _, l := range m.Label {
+				if l.GetName() == ifIndexLabelName && indexToType[l.GetValue()] != "" {
+					l.Name = proto.String(ifTypeLabelName)
+					l.Value = proto.String(indexToType[l.GetValue()])
+				}
+			}
+		}
+	}
+
+	if status != types.StatusUnset {
 		result = append(result, &dto.MetricFamily{
 			Name: proto.String("agent_status"),
 			Type: dto.MetricType_GAUGE.Enum(),
@@ -216,7 +270,11 @@ func (t *Target) GatherWithState(ctx context.Context, state registry.GatherState
 		})
 	}
 
-	return result, err
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].GetName() < result[j].GetName()
+	})
+
+	return result
 }
 
 func mfsFilterInterface(mfs []*dto.MetricFamily, interfaceUp map[string]bool) []*dto.MetricFamily {
