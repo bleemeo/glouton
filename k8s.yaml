@@ -7,8 +7,8 @@ metadata:
   name: glouton-credentials
 type:
 stringData:
-  GLOUTON_BLEEMEO_ACCOUNT_ID: YOUR_ACCOUNT_ID
-  GLOUTON_BLEEMEO_REGISTRATION_KEY: YOUR_REGISTRATION_KEY
+  GLOUTON_BLEEMEO_ACCOUNT_ID: ${GLOUTON_BLEEMEO_ACCOUNT_ID}
+  GLOUTON_BLEEMEO_REGISTRATION_KEY: ${GLOUTON_BLEEMEO_REGISTRATION_KEY}
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -120,7 +120,7 @@ spec:
       hostNetwork: true
       hostPID: true
       containers:
-      - image: bleemeo/bleemeo-agent
+      - image: bleemeo/bleemeo-agent:latest
         name: glouton
         ports:
         - name: http

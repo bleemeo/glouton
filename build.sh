@@ -72,5 +72,8 @@ else
       goreleaser/goreleaser:${GORELEASER_VERSION} sh -c 'go generate ./... && go test ./... && goreleaser --rm-dist --snapshot --parallelism 2'
 
    ./packaging/windows/generate_installer.sh
-fi
 
+   VERSION=$(dist/glouton_linux_amd64/glouton --version)
+
+   sed "s@image: bleemeo/bleemeo-agent:latest@image: bleemeo/bleemeo-agent:${VERSION}@" k8s.yaml > dist/k8s.yaml
+fi
