@@ -116,6 +116,7 @@ dockers:
   - etc/glouton.conf
   - packaging/docker/60-glouton.conf
   - packaging/common/glouton-05-system.conf
+  - packaging/kubernetes/glouton-k8s-default.conf
 checksum:
   name_template: 'checksums.txt'
 changelog:

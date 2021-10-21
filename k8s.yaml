@@ -139,7 +139,7 @@ spec:
           mountPath: /etc/glouton/conf-k8s.d/
         env:
         - name: GLOUTON_CONFIG_FILES
-          value: "/etc/glouton/glouton.conf,/etc/glouton/conf.d,/etc/glouton/conf-k8s.d"
+          value: "/etc/glouton/glouton.conf,/etc/glouton/glouton-k8s-default.conf,/etc/glouton/conf.d,/etc/glouton/conf-k8s.d"
         - name: GLOUTON_KUBERNETES_ENABLE
           value: "True"
         - name: GLOUTON_KUBERNETES_NODENAME
