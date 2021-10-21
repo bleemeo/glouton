@@ -413,7 +413,6 @@ func factFromPoints(points []types.MetricPoint, now time.Time) map[string]string
 				}
 			}
 		}
-
 	}
 
 	facts.CleanFacts(result)
