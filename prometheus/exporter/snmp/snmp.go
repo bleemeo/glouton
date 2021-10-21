@@ -391,6 +391,31 @@ func factFromPoints(points []types.MetricPoint, now time.Time) map[string]string
 		result["domain"] = l[1]
 	}
 
+	if strings.Contains(result["product_name"], ",") {
+		part := strings.Split(result["product_name"], ",")
+
+		result["product_name"] = part[0]
+
+		if part[0] == "Cisco IOS Software" {
+			result["product_name"] = part[0] + "," + part[1]
+		}
+
+		for _, p := range part {
+			p = strings.TrimSpace(p)
+			subpart := strings.SplitN(p, ":", 2)
+
+			if len(subpart) == 2 {
+				switch subpart[0] {
+				case "SN":
+					result["serial_number"] = subpart[1]
+				case "PID":
+					result["product_name"] = subpart[1]
+				}
+			}
+		}
+
+	}
+
 	facts.CleanFacts(result)
 
 	return result

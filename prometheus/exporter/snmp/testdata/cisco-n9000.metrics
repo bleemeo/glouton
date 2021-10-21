@@ -1,0 +1,67 @@
+# HELP dot1dBaseBridgeAddress The MAC address used by this bridge when it must be referred to in a unique fashion - 1.3.6.1.2.1.17.1.1
+# TYPE dot1dBaseBridgeAddress gauge
+dot1dBaseBridgeAddress{dot1dBaseBridgeAddress="50:87:01:A0:B0:2C"} 1
+# HELP entPhysicalFirmwareRev The vendor-specific firmware revision string for the physical entity - 1.3.6.1.2.1.47.1.1.1.1.9
+# TYPE entPhysicalFirmwareRev gauge
+entPhysicalFirmwareRev{entPhysicalFirmwareRev="",entPhysicalIndex="10"} 1
+entPhysicalFirmwareRev{entPhysicalFirmwareRev="",entPhysicalIndex="149"} 1
+entPhysicalFirmwareRev{entPhysicalFirmwareRev="",entPhysicalIndex="214"} 1
+entPhysicalFirmwareRev{entPhysicalFirmwareRev="",entPhysicalIndex="215"} 1
+entPhysicalFirmwareRev{entPhysicalFirmwareRev="",entPhysicalIndex="21590"} 1
+entPhysicalFirmwareRev{entPhysicalFirmwareRev="",entPhysicalIndex="21591"} 1
+entPhysicalFirmwareRev{entPhysicalFirmwareRev="",entPhysicalIndex="21592"} 1
+entPhysicalFirmwareRev{entPhysicalFirmwareRev="",entPhysicalIndex="21593"} 1
+entPhysicalFirmwareRev{entPhysicalFirmwareRev="",entPhysicalIndex="21594"} 1
+entPhysicalFirmwareRev{entPhysicalFirmwareRev="6.1(2)I3(2)",entPhysicalIndex="22"} 1
+entPhysicalFirmwareRev{entPhysicalFirmwareRev="6.1(2)I3(2)",entPhysicalIndex="23"} 1
+# HELP entPhysicalSerialNum The vendor-specific serial number string for the physical entity - 1.3.6.1.2.1.47.1.1.1.1.11
+# TYPE entPhysicalSerialNum gauge
+entPhysicalSerialNum{entPhysicalIndex="10",entPhysicalSerialNum="SAL1234S567"} 1
+entPhysicalSerialNum{entPhysicalIndex="149",entPhysicalSerialNum="SAL1234S567"} 1
+entPhysicalSerialNum{entPhysicalIndex="214",entPhysicalSerialNum=""} 1
+entPhysicalSerialNum{entPhysicalIndex="215",entPhysicalSerialNum=""} 1
+entPhysicalSerialNum{entPhysicalIndex="21590",entPhysicalSerialNum=""} 1
+entPhysicalSerialNum{entPhysicalIndex="21591",entPhysicalSerialNum=""} 1
+entPhysicalSerialNum{entPhysicalIndex="21592",entPhysicalSerialNum=""} 1
+entPhysicalSerialNum{entPhysicalIndex="21593",entPhysicalSerialNum=""} 1
+entPhysicalSerialNum{entPhysicalIndex="21594",entPhysicalSerialNum=""} 1
+entPhysicalSerialNum{entPhysicalIndex="22",entPhysicalSerialNum="SAL1234S567"} 1
+entPhysicalSerialNum{entPhysicalIndex="23",entPhysicalSerialNum="SAL1234UBCD"} 1
+entPhysicalSerialNum{entPhysicalIndex="470",entPhysicalSerialNum="DCH1234S012"} 1
+entPhysicalSerialNum{entPhysicalIndex="471",entPhysicalSerialNum="DCH1234S01Q"} 1
+# HELP entPhysicalSoftwareRev The vendor-specific software revision string for the physical entity - 1.3.6.1.2.1.47.1.1.1.1.10
+# TYPE entPhysicalSoftwareRev gauge
+entPhysicalSoftwareRev{entPhysicalIndex="10",entPhysicalSoftwareRev=""} 1
+entPhysicalSoftwareRev{entPhysicalIndex="149",entPhysicalSoftwareRev=""} 1
+entPhysicalSoftwareRev{entPhysicalIndex="214",entPhysicalSoftwareRev=""} 1
+entPhysicalSoftwareRev{entPhysicalIndex="215",entPhysicalSoftwareRev=""} 1
+entPhysicalSoftwareRev{entPhysicalIndex="21590",entPhysicalSoftwareRev=""} 1
+entPhysicalSoftwareRev{entPhysicalIndex="21591",entPhysicalSoftwareRev=""} 1
+entPhysicalSoftwareRev{entPhysicalIndex="21592",entPhysicalSoftwareRev=""} 1
+entPhysicalSoftwareRev{entPhysicalIndex="21593",entPhysicalSoftwareRev=""} 1
+entPhysicalSoftwareRev{entPhysicalIndex="21594",entPhysicalSoftwareRev=""} 1
+entPhysicalSoftwareRev{entPhysicalIndex="22",entPhysicalSoftwareRev="6.1(2)I3(2)"} 1
+entPhysicalSoftwareRev{entPhysicalIndex="23",entPhysicalSoftwareRev="6.1(2)I3(2)"} 1
+# HELP ipRouteNextHop The IP address of the next hop of this route - 1.3.6.1.2.1.4.21.1.7
+# TYPE ipRouteNextHop gauge
+ipRouteNextHop{ipRouteDest="0.0.0.0",ipRouteNextHop="0.0.0.0"} 1
+ipRouteNextHop{ipRouteDest="127.0.0.0",ipRouteNextHop="0.0.0.0"} 1
+ipRouteNextHop{ipRouteDest="255.255.255.255",ipRouteNextHop="0.0.0.0"} 1
+# HELP snmp_scrape_duration_seconds Total SNMP time scrape took (walk and processing).
+# TYPE snmp_scrape_duration_seconds gauge
+snmp_scrape_duration_seconds 0.548440816
+# HELP snmp_scrape_pdus_returned PDUs returned from walk.
+# TYPE snmp_scrape_pdus_returned gauge
+snmp_scrape_pdus_returned 781
+# HELP snmp_scrape_walk_duration_seconds Time SNMP walk/bulkwalk took.
+# TYPE snmp_scrape_walk_duration_seconds gauge
+snmp_scrape_walk_duration_seconds 0.544530429
+# HELP sysDescr A textual description of the entity - 1.3.6.1.2.1.1.1
+# TYPE sysDescr gauge
+sysDescr{sysDescr="Cisco NX-OS(tm) n9000, Software (n9000-dk9), Version 6.1(2)I3(2), RELEASE SOFTWARE Copyright (c) 2002-2013 by Cisco Systems, Inc. Compiled 11/8/2014 19:00:00"} 1
+# HELP sysName An administratively-assigned name for this managed node - 1.3.6.1.2.1.1.5
+# TYPE sysName gauge
+sysName{sysName="sw-nexus.example.com"} 1
+# HELP sysUpTime The time (in hundredths of a second) since the network management portion of the system was last re-initialized. - 1.3.6.1.2.1.1.3
+# TYPE sysUpTime gauge
+sysUpTime 5.00422457e+08

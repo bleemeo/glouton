@@ -54,6 +54,49 @@ func Test_factFromPoints(t *testing.T) {
 				"fact_updated_at":     "2021-09-28T09:43:04Z",
 			},
 		},
+		{
+			name:       "Cisco N9000",
+			metricFile: "cisco-n9000.metrics",
+			want: map[string]string{
+				"fqdn":                "sw-nexus.example.com",
+				"domain":              "example.com",
+				"hostname":            "sw-nexus",
+				"boot_version":        "6.1(2)I3(2)",
+				"version":             "6.1(2)I3(2)",
+				"serial_number":       "SAL1234S567",
+				"product_name":        "Cisco NX-OS(tm) n9000",
+				"primary_mac_address": "50:87:01:a0:b0:2c",
+				"fact_updated_at":     "2021-09-28T09:43:04Z",
+			},
+		},
+		{
+			name:       "Cisco C2960",
+			metricFile: "cisco-c2960.metrics",
+			want: map[string]string{
+				"fqdn":                "myname-switch.example.com",
+				"domain":              "example.com",
+				"hostname":            "myname-switch",
+				"boot_version":        "15.0(2)SE6",
+				"version":             "15.0(2)SE6",
+				"serial_number":       "FOC1234Z1Y2",
+				"primary_address":     "192.168.1.2",
+				"product_name":        "Cisco IOS Software, C2960 Software (C2960-LANLITEK9-M)",
+				"primary_mac_address": "34:6f:01:02:a1:00",
+				"fact_updated_at":     "2021-09-28T09:43:04Z",
+			},
+		},
+		{
+			name:       "hp-printer",
+			metricFile: "hp-printer.metrics",
+			want: map[string]string{
+				"fqdn":            "home-printer1",
+				"hostname":        "home-printer1",
+				"serial_number":   "CNB1A2B34C",
+				"primary_address": "192.168.1.2",
+				"product_name":    "HP Color LaserJet MFP M476dw",
+				"fact_updated_at": "2021-09-28T09:43:04Z",
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -81,7 +124,7 @@ func Test_factFromPoints(t *testing.T) {
 			got := factFromPoints(result, now)
 
 			if diff := cmp.Diff(tt.want, got); diff != "" {
-				t.Errorf("factFromPoints() missmatch:\n%s", diff)
+				t.Errorf("factFromPoints() missmatch (-want +got):\n%s", diff)
 			}
 		})
 	}

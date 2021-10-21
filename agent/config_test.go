@@ -479,6 +479,9 @@ func Test_loadConfiguration(t *testing.T) {
 				"setting is deprecated: logging.buffer.head_size. Please use logging.buffer.head_size_bytes",
 				"setting is deprecated: logging.buffer.tail_size. Please use logging.buffer.tail_size_bytes",
 			},
+			wantCfg: Config{
+				SNMP: SNMP{ExporterURL: URLMustParse("http://localhost:9116/snmp")},
+			},
 		},
 	}
 	for _, tt := range tests {
