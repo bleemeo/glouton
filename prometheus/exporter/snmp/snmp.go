@@ -150,14 +150,7 @@ func (t *Target) GatherWithState(ctx context.Context, state registry.GatherState
 	return processMFS(result, state, status, msg), err
 }
 
-func processMFS(result []*dto.MetricFamily, state registry.GatherState, status types.Status, msg string) []*dto.MetricFamily {
-	var (
-		totalInterfaces     int
-		connectedInterfaces int
-		interfaceUp         map[string]bool
-		indexToType         map[string]string
-	)
-
+func buildInformationMap(result []*dto.MetricFamily) (interfaceUp map[string]bool, indexToType map[string]string, totalInterfaces int, connectedInterfaces int) {
 	if len(result) > 0 {
 		indexToType = make(map[string]string, len(result[0].Metric))
 	}
@@ -206,6 +199,12 @@ func processMFS(result []*dto.MetricFamily, state registry.GatherState, status t
 			}
 		}
 	}
+
+	return interfaceUp, indexToType, totalInterfaces, connectedInterfaces
+}
+
+func processMFS(result []*dto.MetricFamily, state registry.GatherState, status types.Status, msg string) []*dto.MetricFamily {
+	interfaceUp, indexToType, totalInterfaces, connectedInterfaces := buildInformationMap(result)
 
 	if totalInterfaces > 0 {
 		result = append(result, &dto.MetricFamily{
