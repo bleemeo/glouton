@@ -276,5 +276,5 @@ sysUpTime 2.325208e+07
 total_interfaces 5
 # TYPE connected_interfaces gauge
 connected_interfaces 3
-# TYPE agent_status gauge
-agent_status{__meta_current_status="ok",__meta_current_description=""} 0
+# TYPE snmp_device_status gauge
+snmp_device_status{__meta_current_status="ok",__meta_current_description=""} 0

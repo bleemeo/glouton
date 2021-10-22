@@ -1319,9 +1319,29 @@ func (s *Synchronizer) metricDeleteFromLocal() error {
 	return nil
 }
 
+func (s *Synchronizer) undeactivableMetric(v bleemeoTypes.Metric, agents map[string]bleemeoTypes.Agent) bool {
+	if v.Labels[types.LabelName] == "agent_sent_message" {
+		return true
+	}
+
+	if v.Labels[types.LabelName] == agentStatusName {
+		agent := agents[v.AgentID]
+		snmpTypeID, found := s.getAgentType(bleemeoTypes.AgentTypeSNMP)
+
+		// We only skip deactivation of agent_status when it not an SNMP agent.
+		// On SNMP agent, "agent_status" isn't special.
+		if !found || agent.AgentType != snmpTypeID {
+			return true
+		}
+	}
+
+	return false
+}
+
 func (s *Synchronizer) metricDeactivate(localMetrics []types.Metric) error {
 	duplicatedKey := make(map[string]bool)
 	localByMetricKey := make(map[string]types.Metric, len(localMetrics))
+	agents := s.option.Cache.AgentsByUUID()
 
 	for _, v := range localMetrics {
 		labels := v.Labels()
@@ -1339,7 +1359,7 @@ func (s *Synchronizer) metricDeactivate(localMetrics []types.Metric) error {
 			continue
 		}
 
-		if v.Labels[types.LabelName] == "agent_sent_message" || v.Labels[types.LabelName] == agentStatusName {
+		if s.undeactivableMetric(v, agents) {
 			continue
 		}
 

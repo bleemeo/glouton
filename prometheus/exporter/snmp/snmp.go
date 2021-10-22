@@ -253,7 +253,7 @@ func processMFS(result []*dto.MetricFamily, state registry.GatherState, status t
 
 	if status != types.StatusUnset {
 		result = append(result, &dto.MetricFamily{
-			Name: proto.String("agent_status"),
+			Name: proto.String("snmp_device_status"),
 			Type: dto.MetricType_GAUGE.Enum(),
 			Metric: []*dto.Metric{
 				{
@@ -484,11 +484,11 @@ func humanError(err error) string {
 	if errors.As(err, &targetErr) {
 		switch {
 		case targetErr.StatusCode >= 400 && bytes.Contains(targetErr.PartialBody, []byte("read: connection refused")):
-			return "connection refused"
+			return "SNMP device didn't responded"
 		case targetErr.StatusCode >= 400 && bytes.Contains(targetErr.PartialBody, []byte("request timeout")):
-			return "request timeout"
+			return "SNMP device request timeout"
 		case targetErr.ConnectErr != nil:
-			return "snmp_exporter is not running"
+			return "snmp_exporter didn't responded"
 		}
 	}
 

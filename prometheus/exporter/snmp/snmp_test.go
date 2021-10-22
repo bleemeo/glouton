@@ -166,14 +166,14 @@ func Test_humanError(t *testing.T) {
 				),
 				StatusCode: 500,
 			},
-			want: "connection refused",
+			want: "SNMP device didn't responded",
 		},
 		{
 			name: "exporter connection refused",
 			err: scrapper.TargetError{
 				ConnectErr: fmt.Errorf("something like dial tcp 127.0.0.1:9116: connect: connection refused"), //nolint: goerr113
 			},
-			want: "snmp_exporter is not running",
+			want: "snmp_exporter didn't responded",
 		},
 		{
 			name: "SNMP connection refused wrapper",
@@ -185,7 +185,7 @@ func Test_humanError(t *testing.T) {
 				),
 				StatusCode: 500,
 			}),
-			want: "connection refused",
+			want: "SNMP device didn't responded",
 		},
 		{
 			name: "SNMP connection timeout",
@@ -197,7 +197,7 @@ func Test_humanError(t *testing.T) {
 				),
 				StatusCode: 500,
 			},
-			want: "request timeout",
+			want: "SNMP device request timeout",
 		},
 	}
 	for _, tt := range tests {

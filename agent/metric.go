@@ -217,6 +217,7 @@ var bleemeoDefaultSystemMetrics = []string{
 
 //nolint:gochecknoglobals
 var snmpMetrics = []string{
+	"snmp_device_status",
 	"sysUpTime",
 	"ifOperStatus",
 	"ifInOctets",
