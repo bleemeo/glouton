@@ -196,11 +196,11 @@ func (b *buffer) Content() []byte {
 			results.Write([]byte("[...]\n"))
 		}
 
-		for n := 0; n < len(b.tails); n++ {
+		for n := 1; n <= len(b.tails); n++ {
 			idx := (b.tailIndex + n) % len(b.tails)
 
 			if b.tails[idx] == nil || b.tails[idx].Len() == 0 {
-				break
+				continue
 			}
 
 			r := flate.NewReader(bytes.NewReader(b.tails[idx].Bytes()))
