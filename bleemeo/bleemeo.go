@@ -144,6 +144,7 @@ func (c *Connector) initMQTT(previousPoint []gloutonTypes.MetricPoint, first boo
 			UpdateMaintenance:    c.sync.UpdateMaintenance,
 			UpdateMonitor:        c.sync.UpdateMonitor,
 			InitialPoints:        previousPoint,
+			GetJWT:               c.sync.GetJWT,
 		},
 		first,
 	)

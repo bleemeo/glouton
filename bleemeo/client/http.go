@@ -21,6 +21,7 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"glouton/logger"
 	"glouton/version"
@@ -40,6 +41,8 @@ const (
 	// If the throttle delay is less than this, automatically retry the requests.
 	maxAutoRetryDelay = time.Minute
 )
+
+var errInvalidAgentID = errors.New("got an invalid agent ID")
 
 // HTTPClient is a wrapper around Bleemeo API. It mostly perform JWT authentication.
 type HTTPClient struct {
@@ -423,6 +426,32 @@ func (c *HTTPClient) GetJWT() (string, error) {
 	}
 
 	return token.Token, nil
+}
+
+// VerifyAndGetJWT is used to get a valid JWT.
+// It differs from GetJWT because the JWT is only renewed if necessary.
+func (c *HTTPClient) VerifyAndGetJWT(agentID string) (string, error) {
+	var res struct {
+		ID string
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// Low cost API endpoint, used to test our JWT.
+	path := fmt.Sprintf("v1/agent/%s/?fields=id", agentID)
+
+	// We rely on the client to renew the JWT if it has expired.
+	_, err := c.Do(ctx, "GET", path, nil, nil, &res)
+	if err != nil {
+		return "", err
+	}
+
+	if res.ID != agentID {
+		return "", errInvalidAgentID
+	}
+
+	return c.jwtToken, nil
 }
 
 func (c *HTTPClient) sendRequest(req *http.Request, result interface{}, forceInsecure bool) (statusCode int, err error) {
