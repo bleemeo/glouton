@@ -103,7 +103,7 @@ func (s *Store) DiagnosticArchive(ctx context.Context, archive types.ArchiveWrit
 // Run will run the store until context is cancelled.
 func (s *Store) Run(ctx context.Context) error {
 	for {
-		s.run()
+		s.run(time.Now())
 
 		select {
 		case <-time.After(300 * time.Second):
@@ -250,7 +250,7 @@ func labelsMatch(labels, filter map[string]string, exact bool) bool {
 	return true
 }
 
-func (s *Store) run() {
+func (s *Store) run(now time.Time) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
@@ -263,7 +263,7 @@ func (s *Store) run() {
 		newPoints := make([]types.Point, 0)
 
 		for _, p := range points {
-			if time.Since(p.Time) < s.maxAge {
+			if now.Sub(p.Time) < s.maxAge {
 				newPoints = append(newPoints, p)
 			}
 		}
