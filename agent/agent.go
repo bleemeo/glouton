@@ -118,7 +118,8 @@ type agent struct {
 	influxdbConnector      *influxdb.Client
 	threshold              *threshold.Registry
 	jmx                    *jmxtrans.JMX
-	snmpTargets            []snmp.Target
+	snmpManager            *snmp.Manager
+	snmpRegistration       []int
 	store                  *store.Store
 	gathererRegistry       *registry.Registry
 	metricFormat           types.MetricFormat
@@ -380,25 +381,71 @@ func (a *agent) UpdateThresholds(thresholds map[threshold.MetricNameItem]thresho
 // notifyBleemeoFirstRegistration is called when Glouton is registered with Bleemeo Cloud platform for the first time
 // This means that when this function is called, BleemeoAgentID and BleemeoAccountID are set.
 func (a *agent) notifyBleemeoFirstRegistration(ctx context.Context) {
-	a.gathererRegistry.UpdateRelabelHook(a.bleemeoConnector.RelabelHook)
+	a.gathererRegistry.UpdateRelabelHook(ctx, a.bleemeoConnector.RelabelHook)
 	a.store.DropAllMetrics()
 }
 
-func (a *agent) updateMetricResolution(resolution time.Duration) {
+// notifyBleemeoUpdateLabels is called when Labels might change for some metrics.
+// This likely happen when SNMP target are deleted/recreated.
+func (a *agent) notifyBleemeoUpdateLabels(ctx context.Context) {
+	a.gathererRegistry.UpdateRelabelHook(ctx, a.bleemeoConnector.RelabelHook)
+}
+
+func (a *agent) updateSNMPResolution(resolution time.Duration) {
 	a.l.Lock()
-	a.metricResolution = resolution
+	defer a.l.Unlock()
+
+	for _, id := range a.snmpRegistration {
+		a.gathererRegistry.Unregister(id)
+	}
+
+	if a.snmpRegistration != nil {
+		a.snmpRegistration = a.snmpRegistration[:0]
+	}
+
+	if resolution == 0 {
+		return
+	}
+
+	for _, target := range a.snmpManager.Gatherers() {
+		hash := labels.FromMap(target.ExtraLabels).Hash()
+
+		id, err := a.gathererRegistry.RegisterGatherer(
+			registry.RegistrationOption{
+				Description: "snmp target " + target.Address,
+				JitterSeed:  hash,
+				Interval:    resolution,
+				Timeout:     40 * time.Second,
+				ExtraLabels: target.ExtraLabels,
+			},
+			target.Gatherer,
+			true,
+		)
+		if err != nil {
+			logger.Printf("Unable to add SNMP scrapper for target %s: %v", target.Address, err)
+		} else {
+			a.snmpRegistration = append(a.snmpRegistration, id)
+		}
+	}
+}
+
+func (a *agent) updateMetricResolution(defaultResolution time.Duration, snmpResolution time.Duration) {
+	a.l.Lock()
+	a.metricResolution = defaultResolution
 	a.l.Unlock()
 
-	a.gathererRegistry.UpdateDelay(resolution)
+	a.gathererRegistry.UpdateDelay(defaultResolution)
 
 	services, err := a.discovery.Discovery(a.context, time.Hour)
 	if err != nil {
 		logger.V(1).Printf("error during discovery: %v", err)
 	} else if a.jmx != nil {
-		if err := a.jmx.UpdateConfig(services, resolution); err != nil {
+		if err := a.jmx.UpdateConfig(services, defaultResolution); err != nil {
 			logger.V(1).Printf("failed to update JMX configuration: %v", err)
 		}
 	}
+
+	a.updateSNMPResolution(snmpResolution)
 }
 
 func (a *agent) getConfigThreshold(firstUpdate bool) map[string]threshold.Threshold {
@@ -575,28 +622,16 @@ func (a *agent) run() { //nolint:cyclop
 
 	var targets []*scrapper.Target
 
-	var scrapperSNMPTargets []*scrapper.Target
-
-	if snmpCfg, found := a.oldConfig.Get("metric.snmp.targets"); found {
-		if configList, ok := snmpCfg.([]interface{}); ok {
-			snmpExporterAddress := a.oldConfig.String("metric.snmp.exporter_address")
-			a.snmpTargets = snmp.ConfigToURLs(configList)
-
-			if len(a.snmpTargets) > 0 {
-				logger.V(1).Println("SNMP integration is currently in beta and not enabled in this version of Glouton.")
-
-				a.snmpTargets = nil
-			}
-
-			scrapperSNMPTargets = snmp.GenerateScrapperTargets(a.snmpTargets, snmpExporterAddress)
-		}
-	}
+	a.snmpManager = snmp.NewManager(
+		a.config.SNMP.ExporterURL,
+		a.config.SNMP.Targets.ToTargetOptions()...,
+	)
 
 	if promCfg, found := a.oldConfig.Get("metric.prometheus.targets"); found {
 		targets = prometheusConfigToURLs(promCfg)
 	}
 
-	mFilter, err := newMetricFilter(a.oldConfig, a.snmpTargets, a.metricFormat)
+	mFilter, err := newMetricFilter(a.oldConfig, len(a.snmpManager.Targets()) > 0, a.metricFormat)
 	if err != nil {
 		logger.Printf("An error occurred while building the metric filter, allow/deny list may be partial: %v", err)
 	}
@@ -760,23 +795,7 @@ func (a *agent) run() { //nolint:cyclop
 		a.metricFormat,
 	)
 
-	for _, target := range scrapperSNMPTargets {
-		hash := labels.FromMap(target.ExtraLabels).Hash()
-		// TODO: use the correct interval
-		_, err := a.gathererRegistry.RegisterGatherer(
-			registry.RegistrationOption{
-				Description: "snmp target " + target.URL.String(),
-				JitterSeed:  hash,
-				Interval:    defaultInterval,
-				ExtraLabels: target.ExtraLabels,
-			},
-			target,
-			true,
-		)
-		if err != nil {
-			logger.Printf("Unable to add SNMP scrapper for target %s: %v", target.URL.String(), err)
-		}
-	}
+	a.updateSNMPResolution(time.Minute)
 
 	for _, target := range targets {
 		hash := labels.FromMap(target.ExtraLabels).Hash()
@@ -896,7 +915,8 @@ func (a *agent) run() { //nolint:cyclop
 			Process:                 psFact,
 			Docker:                  a.containerRuntime,
 			Store:                   filteredStore,
-			SNMP:                    a.snmpTargets,
+			SNMP:                    a.snmpManager.Targets(),
+			SNMPOnlineTarget:        a.snmpManager.OnlineCount,
 			Acc:                     acc,
 			Discovery:               a.discovery,
 			MonitorManager:          a.monitorManager,
@@ -905,6 +925,7 @@ func (a *agent) run() { //nolint:cyclop
 			UpdateUnits:             a.threshold.SetUnits,
 			MetricFormat:            a.metricFormat,
 			NotifyFirstRegistration: a.notifyBleemeoFirstRegistration,
+			NotifyLabelsUpdate:      a.notifyBleemeoUpdateLabels,
 			BlackboxScraperName:     scaperName,
 		})
 		if err != nil {
@@ -913,7 +934,7 @@ func (a *agent) run() { //nolint:cyclop
 			return
 		}
 
-		a.gathererRegistry.UpdateRelabelHook(a.bleemeoConnector.RelabelHook)
+		a.gathererRegistry.UpdateRelabelHook(ctx, a.bleemeoConnector.RelabelHook)
 		tasks = append(tasks, taskInfo{a.bleemeoConnector.Run, "Bleemeo SAAS connector"})
 	}
 
@@ -1208,7 +1229,7 @@ func (a *agent) minuteMetric(ctx context.Context) error {
 				continue
 			}
 
-			switch srv.ServiceType { //nolint:exhaustive
+			switch srv.ServiceType { //nolint:exhaustive,nolintlint
 			case discovery.PostfixService:
 				n, err := postfixQueueSize(ctx, srv, a.hostRootPath, a.containerRuntime)
 				if err != nil {
@@ -2075,13 +2096,29 @@ func (a *agent) diagnosticSNMP(ctx context.Context, archive types.ArchiveWriter)
 		return err
 	}
 
-	fmt.Fprintf(file, "# %d SNMP target configured\n", len(a.snmpTargets))
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
 
-	for _, t := range a.snmpTargets {
-		fmt.Fprintf(file, "initial_name=%s target=%s module=%s\n", t.InitialName, t.Address, t.Module())
+	fmt.Fprintf(file, "# %d SNMP target configured\n", len(a.snmpManager.Targets()))
+
+	for _, t := range a.snmpManager.Targets() {
+		fmt.Fprintf(file, "\n%s\n", t.String())
+		facts, err := t.Facts(context.Background(), 48*time.Hour)
+
+		if err != nil {
+			fmt.Fprintf(file, " facts failed: %v\n", err)
+		} else {
+			for k, v := range facts {
+				fmt.Fprintf(file, " * %s = %s\n", k, v)
+			}
+		}
 	}
 
-	return err
+	if a.bleemeoConnector != nil {
+		a.bleemeoConnector.DiagnosticSNMPAssociation(ctx, file)
+	}
+
+	return nil
 }
 
 func (a *agent) diagnosticConfig(ctx context.Context, archive types.ArchiveWriter) error {

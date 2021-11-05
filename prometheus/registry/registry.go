@@ -48,6 +48,7 @@ import (
 const (
 	pushedPointsCleanupInterval = 5 * time.Minute
 	hookRetryDelay              = 2 * time.Minute
+	relabelTimeout              = 20 * time.Second
 	baseJitter                  = 0
 	defaultInterval             = 0
 )
@@ -58,7 +59,7 @@ const (
 // processed by relabeling rules.
 // If the hook return retryLater, it means that hook can not processed the labels currently
 // and it registry should retry later. Points or gatherer associated will be dropped.
-type RelabelHook func(labels map[string]string) (newLabel map[string]string, retryLater bool)
+type RelabelHook func(ctx context.Context, labels map[string]string) (newLabel map[string]string, retryLater bool)
 
 var errInvalidName = errors.New("invalid metric name or label name")
 
@@ -336,11 +337,14 @@ func (r *Registry) RegisterPushPointsCallback(opt RegistrationOption, f func(con
 	r.l.Lock()
 	defer r.l.Unlock()
 
+	ctx, cancel := context.WithTimeout(context.Background(), relabelTimeout)
+	defer cancel()
+
 	reg := &registration{
 		option:                    opt,
 		includedInMetricsEndpoint: false,
 	}
-	r.setupGatherer(reg, pushGatherer{fun: f})
+	r.setupGatherer(ctx, reg, pushGatherer{fun: f})
 
 	return r.addRegistration(reg, true)
 }
@@ -349,7 +353,7 @@ func (r *Registry) RegisterPushPointsCallback(opt RegistrationOption, f func(con
 // When this function return, it's guaratee that all call to Option.PushPoint will use new labels.
 // The hook is assumed to be idempotent, that is for a given labels input the result is the same.
 // If the hook want break this idempotence, UpdateRelabelHook() should be re-called to force update of existings Gatherer.
-func (r *Registry) UpdateRelabelHook(hook RelabelHook) {
+func (r *Registry) UpdateRelabelHook(ctx context.Context, hook RelabelHook) {
 	r.init()
 
 	r.l.Lock()
@@ -381,7 +385,7 @@ func (r *Registry) UpdateRelabelHook(hook RelabelHook) {
 	// Update labels of all gatherers
 	for _, reg := range r.registrations {
 		reg.l.Lock()
-		r.setupGatherer(reg, reg.gatherer.source)
+		r.setupGatherer(ctx, reg, reg.gatherer.source)
 		reg.l.Unlock()
 	}
 
@@ -585,10 +589,13 @@ func (r *Registry) RegisterGatherer(opt RegistrationOption, gatherer prometheus.
 	r.l.Lock()
 	defer r.l.Unlock()
 
+	ctx, cancel := context.WithTimeout(context.Background(), relabelTimeout)
+	defer cancel()
+
 	reg := &registration{
 		option: opt,
 	}
-	r.setupGatherer(reg, gatherer)
+	r.setupGatherer(ctx, reg, gatherer)
 
 	return r.addRegistration(reg, pushPoints)
 }
@@ -986,7 +993,7 @@ func (r *Registry) scrape(ctx context.Context, t0 time.Time, reg *registration) 
 	reg.l.Lock()
 
 	if reg.relabelHookSkip && time.Since(reg.lastRebalHookRetry) > hookRetryDelay {
-		r.setupGatherer(reg, reg.gatherer.source)
+		r.setupGatherer(ctx, reg, reg.gatherer.source)
 	}
 
 	r.l.Unlock()
@@ -1024,7 +1031,7 @@ func (r *Registry) scrape(ctx context.Context, t0 time.Time, reg *registration) 
 	}
 }
 
-func familiesToMetricPoints(now time.Time, families []*dto.MetricFamily) []types.MetricPoint {
+func FamiliesToMetricPoints(now time.Time, families []*dto.MetricFamily) []types.MetricPoint {
 	samples, err := expfmt.ExtractSamples(
 		&expfmt.DecodeOptions{Timestamp: model.TimeFromUnixNano(now.UnixNano())},
 		families...,
@@ -1097,7 +1104,10 @@ func (r *Registry) pushPoint(points []types.MetricPoint, ttl time.Duration) {
 			point.Labels = r.addMetaLabels(point.Labels)
 
 			if r.relabelHook != nil {
-				point.Labels, skip = r.relabelHook(point.Labels)
+				ctx, cancel := context.WithTimeout(context.Background(), relabelTimeout)
+				point.Labels, skip = r.relabelHook(ctx, point.Labels)
+
+				cancel()
 			}
 
 			newLabels, _ := r.applyRelabel(point.Labels)
@@ -1202,13 +1212,13 @@ func (r *Registry) applyRelabel(input map[string]string) (labels.Labels, types.M
 	return result, annotations
 }
 
-func (r *Registry) setupGatherer(reg *registration, source prometheus.Gatherer) {
+func (r *Registry) setupGatherer(ctx context.Context, reg *registration, source prometheus.Gatherer) {
 	extraLabels := r.addMetaLabels(reg.option.ExtraLabels)
 
 	reg.relabelHookSkip = false
 
 	if r.relabelHook != nil {
-		extraLabels, reg.relabelHookSkip = r.relabelHook(extraLabels)
+		extraLabels, reg.relabelHookSkip = r.relabelHook(ctx, extraLabels)
 		reg.lastRebalHookRetry = time.Now()
 	}
 

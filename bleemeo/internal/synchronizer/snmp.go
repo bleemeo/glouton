@@ -17,9 +17,12 @@
 package synchronizer
 
 import (
+	"context"
+	"errors"
 	"glouton/bleemeo/types"
 	"glouton/logger"
 	"glouton/prometheus/exporter/snmp"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -38,12 +41,6 @@ func (s *Synchronizer) syncSNMP(fullSync bool, onlyEssential bool) error {
 		return nil
 	}
 
-	if len(s.option.SNMP) > 0 {
-		logger.V(1).Println("SNMP integration is currently in beta.")
-
-		return nil
-	}
-
 	if onlyEssential {
 		// no essential snmp, skip registering.
 		return nil
@@ -52,9 +49,64 @@ func (s *Synchronizer) syncSNMP(fullSync bool, onlyEssential bool) error {
 	return s.snmpRegisterAndUpdate(s.option.SNMP)
 }
 
-func (s *Synchronizer) snmpRegisterAndUpdate(localTargets []snmp.Target) error {
-	remoteAgentList := s.option.Cache.Agents()
-	remoteIndexByFqdn := make(map[string]int, len(remoteAgentList))
+type snmpAssociation struct {
+	Address string
+	ID      string
+}
+
+func (s *Synchronizer) FindSNMPAgent(ctx context.Context, target *snmp.Target, snmpType string, agentsByID map[string]types.Agent) (types.Agent, error) {
+	var association snmpAssociation
+
+	err := s.option.State.Get("bleemeo:snmp:"+target.Address(), &association)
+	if err != nil {
+		return types.Agent{}, err
+	}
+
+	if agent, ok := agentsByID[association.ID]; ok && association.ID != "" {
+		return agent, nil
+	}
+
+	// Match any SNMP agent that: has the correct FQDN & don't have current association
+
+	facts, err := target.Facts(ctx, 24*time.Hour)
+	if err != nil {
+		return types.Agent{}, err
+	}
+
+	associatedID := make(map[string]bool, len(s.option.SNMP))
+
+	for _, v := range s.option.SNMP {
+		err := s.option.State.Get("bleemeo:snmp:"+v.Address(), &association)
+		if err != nil {
+			return types.Agent{}, err
+		}
+
+		if association.ID != "" {
+			associatedID[association.ID] = true
+		}
+	}
+
+	for _, agent := range agentsByID {
+		if agent.AgentType != snmpType {
+			continue
+		}
+
+		if _, ok := associatedID[agent.ID]; ok {
+			continue
+		}
+
+		if agent.FQDN == facts["fqdn"] && facts["fqdn"] != "" {
+			return agent, nil
+		}
+	}
+
+	return types.Agent{}, errNotExist
+}
+
+func (s *Synchronizer) snmpRegisterAndUpdate(localTargets []*snmp.Target) error {
+	var newAgent []types.Agent //nolint: prealloc
+
+	remoteAgentList := s.option.Cache.AgentsByUUID()
 
 	agentTypeID, found := s.getAgentType(types.AgentTypeSNMP)
 	if !found {
@@ -65,17 +117,36 @@ func (s *Synchronizer) snmpRegisterAndUpdate(localTargets []snmp.Target) error {
 		"fields": "id,display_name,account,agent_type,abstracted,fqdn,initial_password,created_at,next_config_at,current_config,tags",
 	}
 
-	for i, agent := range remoteAgentList {
-		if agent.AgentType == agentTypeID {
-			remoteIndexByFqdn[agent.FQDN] = i
-		}
-	}
-
 	for _, snmp := range localTargets {
+		if _, err := s.FindSNMPAgent(s.ctx, snmp, agentTypeID, remoteAgentList); err != nil && !errors.Is(err, errNotExist) {
+			logger.V(2).Printf("skip registration of SNMP agent: %v", err)
+
+			continue
+		} else if err == nil {
+			continue
+		}
+
+		facts, err := snmp.Facts(s.ctx, 24*time.Hour)
+		if err != nil {
+			logger.V(2).Printf("skip registration of SNMP agent: %v", err)
+
+			continue
+		}
+
+		name, err := snmp.Name(s.ctx)
+		if err != nil {
+			return err
+		}
+
+		fqdn := facts["fqdn"]
+		if fqdn == "" {
+			fqdn = snmp.Address()
+		}
+
 		payload := payloadAgent{
 			Agent: types.Agent{
-				FQDN:        snmp.Address,
-				DisplayName: snmp.InitialName,
+				FQDN:        fqdn,
+				DisplayName: name,
 				AgentType:   agentTypeID,
 				Tags:        []types.Tag{},
 			},
@@ -83,36 +154,42 @@ func (s *Synchronizer) snmpRegisterAndUpdate(localTargets []snmp.Target) error {
 			InitialPassword: uuid.New().String(),
 		}
 
-		address := snmp.Address
-		_, remoteFound := remoteIndexByFqdn[address]
-
-		if remoteFound {
-			continue
-		}
-
-		err := s.remoteRegisterSNMP(&remoteAgentList, params, payload)
+		tmp, err := s.remoteRegisterSNMP(params, payload)
 		if err != nil {
 			return err
 		}
+
+		newAgent = append(newAgent, tmp)
+		err = s.option.State.Set("bleemeo:snmp:"+snmp.Address(), snmpAssociation{
+			Address: snmp.Address(),
+			ID:      tmp.ID,
+		})
+
+		if err != nil {
+			logger.V(2).Printf("failed to update state: %v", err)
+		}
 	}
 
-	s.option.Cache.SetAgentList(remoteAgentList)
+	if len(newAgent) > 0 {
+		agents := s.option.Cache.Agents()
+		agents = append(agents, newAgent...)
+		s.option.Cache.SetAgentList(agents)
+	}
 
 	return nil
 }
 
-func (s *Synchronizer) remoteRegisterSNMP(remoteSNMPs *[]types.Agent, params map[string]string, payload payloadAgent) error {
+func (s *Synchronizer) remoteRegisterSNMP(params map[string]string, payload payloadAgent) (types.Agent, error) {
 	var result types.Agent
 
 	_, err := s.client.Do(s.ctx, "POST", "v1/agent/", params, payload, &result)
 	if err != nil {
-		return err
+		return result, err
 	}
 
 	logger.V(2).Printf("SNMP agent %v registered with UUID %s", payload.DisplayName, result.ID)
-	*remoteSNMPs = append(*remoteSNMPs, result)
 
-	return nil
+	return result, nil
 }
 
 func (s *Synchronizer) getAgentType(name string) (id string, found bool) {

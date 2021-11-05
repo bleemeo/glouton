@@ -17,83 +17,480 @@
 package snmp
 
 import (
+	"bytes"
+	"context"
+	"errors"
 	"fmt"
-	"glouton/logger"
+	"glouton/facts"
+	"glouton/prometheus/registry"
 	"glouton/prometheus/scrapper"
 	"glouton/types"
 	"net/url"
+	"sort"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/gogo/protobuf/proto"
+	dto "github.com/prometheus/client_model/go"
+)
+
+const (
+	defaultGatherTimeout   = 10 * time.Second
+	ifIndexLabelName       = "ifIndex"
+	ifTypeLabelName        = "ifType"
+	ifOperStatusMetricName = "ifOperStatus"
+	ifTypeInfoMetricName   = "ifType_info"
 )
 
 // Target represents a snmp config instance.
 type Target struct {
-	InitialName string
-	Address     string
-	Type        string
+	opt             TargetOptions
+	exporterAddress *url.URL
+
+	l                sync.Mutex
+	scraper          *scrapper.Target
+	facts            map[string]string
+	lastFactUpdate   time.Time
+	lastFactErrAt    time.Time
+	lastFactErr      error
+	lastSuccess      time.Time
+	lastErrorMessage string
+	consecutiveErr   int
+
+	// MockFacts could be used for testing. It bypass real facts discovery.
+	MockFacts map[string]string
 }
 
-func (t Target) Module() string {
+type TargetOptions struct {
+	Address     string
+	InitialName string
+}
+
+func New(opt TargetOptions, exporterAddress *url.URL) *Target {
+	return newTarget(opt, exporterAddress)
+}
+
+func NewMock(opt TargetOptions, mockFacts map[string]string) *Target {
+	r := newTarget(opt, nil)
+	r.MockFacts = mockFacts
+
+	return r
+}
+
+func newTarget(opt TargetOptions, exporterAddress *url.URL) *Target {
+	return &Target{
+		opt:             opt,
+		exporterAddress: exporterAddress,
+	}
+}
+
+func (t *Target) Address() string {
+	return t.opt.Address
+}
+
+func (t *Target) Module() string {
 	return "if_mib"
 }
 
-func (t Target) URL(snmpExporterAddress string) (*url.URL, error) {
-	urlText := fmt.Sprintf("%s/snmp?module=%s&target=%s", snmpExporterAddress, t.Module(), t.Address)
-
-	return url.Parse(urlText)
-}
-
-func ConfigToURLs(vMap []interface{}) (result []Target) {
-	for _, iMap := range vMap {
-		tmp, ok := iMap.(map[string]interface{})
-
-		if !ok {
-			continue
-		}
-
-		target, ok := tmp["target"].(string)
-		if !ok {
-			logger.Printf("Warning: target is absent from the snmp configuration. the scrap URL will not work.")
-
-			continue
-		}
-
-		initialName, ok := tmp["initial_name"].(string)
-		if !ok {
-			initialName = target
-		}
-
-		t := Target{
-			InitialName: initialName,
-			Address:     target,
-		}
-
-		result = append(result, t)
+func (t *Target) Name(ctx context.Context) (string, error) {
+	if t.opt.InitialName != "" {
+		return t.opt.InitialName, nil
 	}
 
-	return result
+	facts, err := t.Facts(ctx, 48*time.Hour)
+	if err != nil {
+		return "", err
+	}
+
+	if facts["fqdn"] != "" {
+		return facts["fqdn"], nil
+	}
+
+	return t.opt.Address, nil
 }
 
-func GenerateScrapperTargets(snmpTargets []Target, snmpExporterAddress string) (result []*scrapper.Target) {
-	for _, t := range snmpTargets {
-		u, err := t.URL(snmpExporterAddress)
-		if err != nil {
-			logger.Printf("ignoring invalid exporter config: %v", err)
+// Gather implement prometheus.Gatherer.
+func (t *Target) Gather() ([]*dto.MetricFamily, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultGatherTimeout)
+	defer cancel()
+
+	return t.GatherWithState(ctx, registry.GatherState{})
+}
+
+func (t *Target) GatherWithState(ctx context.Context, state registry.GatherState) ([]*dto.MetricFamily, error) {
+	t.l.Lock()
+
+	if t.scraper == nil {
+		t.scraper = t.buildScraper(t.Module())
+	}
+
+	t.l.Unlock()
+
+	result, err := t.scraper.GatherWithState(ctx, state)
+
+	if state.FromScrapeLoop {
+		t.l.Lock()
+
+		if err == nil {
+			t.lastSuccess = time.Now()
+			t.consecutiveErr = 0
+		} else {
+			t.lastErrorMessage = humanError(err)
+			t.consecutiveErr++
 		}
 
-		target := &scrapper.Target{
-			ExtraLabels: map[string]string{
-				types.LabelMetaScrapeJob: t.InitialName,
-				// HostPort could be empty, but this ExtraLabels is used by Registry which
-				// correctly handle empty value value (drop the label).
-				types.LabelMetaScrapeInstance: scrapper.HostPort(u),
-				types.LabelMetaSNMPTarget:     t.Address,
+		err = nil
+
+		t.l.Unlock()
+	}
+
+	status, msg := t.getStatus()
+
+	return processMFS(result, state, status, msg), err
+}
+
+func buildInformationMap(result []*dto.MetricFamily) (interfaceUp map[string]bool, indexToType map[string]string, totalInterfaces int, connectedInterfaces int) {
+	if len(result) > 0 {
+		indexToType = make(map[string]string, len(result[0].Metric))
+	}
+
+	for _, mf := range result {
+		if mf.GetName() == ifTypeInfoMetricName {
+			for _, m := range mf.Metric {
+				var (
+					idxStr  string
+					typeStr string
+				)
+
+				for _, l := range m.Label {
+					if l.GetName() == ifIndexLabelName {
+						idxStr = l.GetValue()
+					}
+
+					if l.GetName() == ifTypeLabelName {
+						typeStr = l.GetValue()
+					}
+
+					if idxStr != "" && typeStr != "" {
+						indexToType[idxStr] = typeStr
+
+						break
+					}
+				}
+			}
+		}
+
+		if mf.GetName() == ifOperStatusMetricName {
+			interfaceUp = make(map[string]bool, len(mf.Metric))
+
+			for _, m := range mf.Metric {
+				totalInterfaces++
+
+				if m.GetGauge().GetValue() == 1 {
+					connectedInterfaces++
+
+					for _, l := range m.Label {
+						if l.GetName() == ifIndexLabelName {
+							interfaceUp[l.GetValue()] = true
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return interfaceUp, indexToType, totalInterfaces, connectedInterfaces
+}
+
+func processMFS(result []*dto.MetricFamily, state registry.GatherState, status types.Status, msg string) []*dto.MetricFamily {
+	interfaceUp, indexToType, totalInterfaces, connectedInterfaces := buildInformationMap(result)
+
+	if totalInterfaces > 0 {
+		result = append(result, &dto.MetricFamily{
+			Name: proto.String("total_interfaces"),
+			Type: dto.MetricType_GAUGE.Enum(),
+			Metric: []*dto.Metric{
+				{
+					Gauge: &dto.Gauge{
+						Value: proto.Float64(float64(totalInterfaces)),
+					},
+				},
 			},
-			URL:       u,
-			AllowList: []string{},
-			DenyList:  []string{},
-		}
+		})
 
-		result = append(result, target)
+		result = append(result, &dto.MetricFamily{
+			Name: proto.String("connected_interfaces"),
+			Type: dto.MetricType_GAUGE.Enum(),
+			Metric: []*dto.Metric{
+				{
+					Gauge: &dto.Gauge{
+						Value: proto.Float64(float64(connectedInterfaces)),
+					},
+				},
+			},
+		})
+
+		if !state.NoFilter {
+			result = mfsFilterInterface(result, interfaceUp)
+		}
 	}
 
+	for _, mf := range result {
+		if mf.GetName() == ifTypeInfoMetricName {
+			continue
+		}
+
+		for _, m := range mf.Metric {
+			for _, l := range m.Label {
+				if l.GetName() == ifIndexLabelName && indexToType[l.GetValue()] != "" {
+					l.Name = proto.String(ifTypeLabelName)
+					l.Value = proto.String(indexToType[l.GetValue()])
+				}
+			}
+		}
+	}
+
+	if status != types.StatusUnset {
+		result = append(result, &dto.MetricFamily{
+			Name: proto.String("snmp_device_status"),
+			Type: dto.MetricType_GAUGE.Enum(),
+			Metric: []*dto.Metric{
+				{
+					Label: []*dto.LabelPair{
+						{Name: proto.String(types.LabelMetaCurrentStatus), Value: proto.String(status.String())},
+						{Name: proto.String(types.LabelMetaCurrentDescription), Value: proto.String(msg)},
+					},
+					Gauge: &dto.Gauge{
+						Value: proto.Float64(float64(status.NagiosCode())),
+					},
+				},
+			},
+		})
+	}
+
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].GetName() < result[j].GetName()
+	})
+
 	return result
+}
+
+func mfsFilterInterface(mfs []*dto.MetricFamily, interfaceUp map[string]bool) []*dto.MetricFamily {
+	i := 0
+
+	for _, mf := range mfs {
+		mfFilterInterface(mf, interfaceUp)
+
+		if len(mf.Metric) > 0 {
+			mfs[i] = mf
+			i++
+		}
+	}
+
+	mfs = mfs[:i]
+
+	return mfs
+}
+
+func mfFilterInterface(mf *dto.MetricFamily, interfaceUp map[string]bool) {
+	// ifOperStatus is always sent
+	if mf.GetName() == ifOperStatusMetricName {
+		return
+	}
+
+	i := 0
+
+	for _, m := range mf.Metric {
+		var ifIndex string
+
+		for _, l := range m.Label {
+			if l.GetName() == ifIndexLabelName {
+				ifIndex = l.GetValue()
+			}
+		}
+
+		if ifIndex == "" || interfaceUp[ifIndex] {
+			mf.Metric[i] = m
+			i++
+		}
+	}
+
+	mf.Metric = mf.Metric[:i]
+}
+
+func (t *Target) extraLabels() map[string]string {
+	return map[string]string{
+		types.LabelMetaSNMPTarget: t.opt.Address,
+	}
+}
+
+func (t *Target) buildScraper(module string) *scrapper.Target {
+	u := t.exporterAddress.ResolveReference(&url.URL{}) // clone URL
+	qs := u.Query()
+	qs.Set("module", module)
+	qs.Set("target", t.opt.Address)
+	u.RawQuery = qs.Encode()
+
+	target := &scrapper.Target{
+		ExtraLabels: t.extraLabels(),
+		URL:         u,
+		AllowList:   []string{},
+		DenyList:    []string{},
+	}
+
+	return target
+}
+
+func (t *Target) getStatus() (types.Status, string) {
+	t.l.Lock()
+	defer t.l.Unlock()
+
+	if t.lastSuccess.IsZero() && t.consecutiveErr == 0 {
+		// never scrapper, status is not yet available.
+		return types.StatusUnset, ""
+	}
+
+	if t.consecutiveErr == 0 {
+		return types.StatusOk, ""
+	}
+
+	if t.consecutiveErr >= 2 {
+		return types.StatusCritical, t.lastErrorMessage
+	}
+
+	if t.lastSuccess.IsZero() {
+		return types.StatusUnset, ""
+	}
+
+	// At this point: lastSuccess is set (we already had at least one success)
+	// and consecutiveErr == 1 (e.g. the last scrape was an error, but not the one before).
+	// Kept the Ok, as we allow one failure.
+	return types.StatusOk, ""
+}
+
+func (t *Target) String() string {
+	t.l.Lock()
+	defer t.l.Unlock()
+
+	return fmt.Sprintf("initial_name=%s target=%s module=%s lastSuccess=%s (consecutive err=%d)", t.opt.InitialName, t.opt.Address, t.Module(), t.lastSuccess, t.consecutiveErr)
+}
+
+func (t *Target) Facts(ctx context.Context, maxAge time.Duration) (facts map[string]string, err error) {
+	t.l.Lock()
+	defer t.l.Unlock()
+
+	if t.exporterAddress == nil || t.MockFacts != nil {
+		return t.MockFacts, nil
+	}
+
+	if time.Since(t.lastFactUpdate) < maxAge {
+		return t.facts, nil
+	}
+
+	if time.Since(t.lastFactErrAt) < maxAge {
+		return nil, t.lastFactErr
+	}
+
+	tgt := t.buildScraper("discovery")
+
+	tmp, err := tgt.GatherWithState(ctx, registry.GatherState{})
+	if err != nil {
+		t.lastFactErrAt = time.Now()
+		t.lastFactErr = err
+
+		return nil, err
+	}
+
+	t.lastFactErr = nil
+	result := registry.FamiliesToMetricPoints(time.Now(), tmp)
+
+	t.facts = factFromPoints(result, time.Now())
+	t.lastFactUpdate = time.Now()
+
+	return t.facts, nil
+}
+
+func factFromPoints(points []types.MetricPoint, now time.Time) map[string]string {
+	result := make(map[string]string)
+
+	convertMap := map[string]string{
+		"dot1dBaseBridgeAddress": "primary_mac_address",
+		"entPhysicalFirmwareRev": "boot_version",
+		"entPhysicalSerialNum":   "serial_number",
+		"entPhysicalSoftwareRev": "version",
+		"ipAdEntAddr":            "primary_address",
+		"sysDescr":               "product_name",
+		"sysName":                "fqdn",
+	}
+
+	for _, p := range points {
+		key := p.Labels[types.LabelName]
+		value := p.Labels[key]
+		target := convertMap[key]
+
+		if target == "" || value == "" {
+			continue
+		}
+
+		if result[target] == "" {
+			result[target] = value
+		}
+	}
+
+	result["fact_updated_at"] = now.UTC().Format(time.RFC3339)
+	result["primary_mac_address"] = strings.ToLower(result["primary_mac_address"])
+	result["hostname"] = result["fqdn"]
+
+	if strings.Contains(result["fqdn"], ".") {
+		l := strings.SplitN(result["fqdn"], ".", 2)
+		result["hostname"] = l[0]
+		result["domain"] = l[1]
+	}
+
+	if strings.Contains(result["product_name"], ",") {
+		part := strings.Split(result["product_name"], ",")
+
+		result["product_name"] = part[0]
+
+		if part[0] == "Cisco IOS Software" {
+			result["product_name"] = part[0] + "," + part[1]
+		}
+
+		for _, p := range part {
+			p = strings.TrimSpace(p)
+			subpart := strings.SplitN(p, ":", 2)
+
+			if len(subpart) == 2 {
+				switch subpart[0] {
+				case "SN":
+					result["serial_number"] = subpart[1]
+				case "PID":
+					result["product_name"] = subpart[1]
+				}
+			}
+		}
+	}
+
+	facts.CleanFacts(result)
+
+	return result
+}
+
+// humanError convert error from the scrapper in easier to understand format.
+func humanError(err error) string {
+	var targetErr scrapper.TargetError
+
+	if errors.As(err, &targetErr) {
+		switch {
+		case targetErr.StatusCode >= 400 && bytes.Contains(targetErr.PartialBody, []byte("read: connection refused")):
+			return "SNMP device didn't responded"
+		case targetErr.StatusCode >= 400 && bytes.Contains(targetErr.PartialBody, []byte("request timeout")):
+			return "SNMP device request timeout"
+		case targetErr.ConnectErr != nil:
+			return "snmp_exporter didn't responded"
+		}
+	}
+
+	return err.Error()
 }

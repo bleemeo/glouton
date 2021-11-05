@@ -60,10 +60,43 @@ func (s *Synchronizer) syncFacts(fullSync bool, onlyEssential bool) error {
 		localFacts = copyFacts
 	}
 
+	previousFacts := s.option.Cache.FactsByKey()
+
+	allAgentFacts := make(map[string]map[string]string, 1+len(s.option.SNMP))
+	allAgentFacts[s.agentID] = localFacts
+
+	if !onlyEssential {
+		agentTypeID, found := s.getAgentType(types.AgentTypeSNMP)
+		if !found {
+			return errRetryLater
+		}
+
+		remoteAgentList := s.option.Cache.AgentsByUUID()
+
+		for _, t := range s.option.SNMP {
+			if agent, err := s.FindSNMPAgent(s.ctx, t, agentTypeID, remoteAgentList); err == nil {
+				facts, err := t.Facts(s.ctx, 24*time.Hour)
+				if err != nil {
+					logger.V(2).Printf("unable to get SNMP facts: %v", err)
+
+					// Reuse previous facts
+					tmp := previousFacts[agent.ID]
+					facts = make(map[string]string, len(tmp))
+
+					for _, v := range tmp {
+						facts[v.Key] = v.Value
+					}
+				}
+
+				allAgentFacts[agent.ID] = facts
+			}
+		}
+	}
+
 	// s.factUpdateList() is already done by checkDuplicated
 	// s.serviceDeleteFromRemote() is uneeded, API don't delete facts
 
-	if err := s.factRegister(localFacts); err != nil {
+	if err := s.factRegister(allAgentFacts); err != nil {
 		return err
 	}
 
@@ -72,7 +105,7 @@ func (s *Synchronizer) syncFacts(fullSync bool, onlyEssential bool) error {
 		return nil
 	}
 
-	if err := s.factDeleteFromLocal(localFacts); err != nil {
+	if err := s.factDeleteFromLocal(allAgentFacts); err != nil {
 		return err
 	}
 
@@ -82,9 +115,7 @@ func (s *Synchronizer) syncFacts(fullSync bool, onlyEssential bool) error {
 }
 
 func (s *Synchronizer) factsUpdateList() error {
-	params := map[string]string{
-		"agent": s.agentID,
-	}
+	params := map[string]string{}
 
 	result, err := s.client.Iter(s.ctx, "agentfact", params)
 	if err != nil {
@@ -108,34 +139,36 @@ func (s *Synchronizer) factsUpdateList() error {
 	return nil
 }
 
-func (s *Synchronizer) factRegister(localFacts map[string]string) error {
+func (s *Synchronizer) factRegister(allAgentFacts map[string]map[string]string) error {
 	registeredFacts := s.option.Cache.FactsByKey()
 	facts := s.option.Cache.Facts()
 
-	for key, value := range localFacts {
-		remoteValue := registeredFacts[key]
-		if value == remoteValue.Value {
-			continue
+	for agentID, localFacts := range allAgentFacts {
+		for key, value := range localFacts {
+			remoteValue := registeredFacts[agentID][key]
+			if value == remoteValue.Value {
+				continue
+			}
+
+			logger.V(3).Printf("fact %s:%#v changed from %#v to %#v", agentID, key, remoteValue.Value, value)
+
+			// Agent can't update fact. We delete and re-create the facts
+			payload := map[string]string{
+				"agent": agentID,
+				"key":   key,
+				"value": value,
+			}
+
+			var response types.AgentFact
+
+			_, err := s.client.Do(s.ctx, "POST", "v1/agentfact/", nil, payload, &response)
+			if err != nil {
+				return err
+			}
+
+			facts = append(facts, response)
+			logger.V(2).Printf("Send fact %s:%s, stored with uuid %s", agentID, key, response.ID)
 		}
-
-		logger.V(3).Printf("fact %#v changed from %#v to %#v", key, remoteValue.Value, value)
-
-		// Agent can't update fact. We delete and re-create the facts
-		payload := map[string]string{
-			"agent": s.agentID,
-			"key":   key,
-			"value": value,
-		}
-
-		var response types.AgentFact
-
-		_, err := s.client.Do(s.ctx, "POST", "v1/agentfact/", nil, payload, &response)
-		if err != nil {
-			return err
-		}
-
-		facts = append(facts, response)
-		logger.V(2).Printf("Send fact %s, stored with uuid %s", key, response.ID)
 	}
 
 	s.option.Cache.SetFacts(facts)
@@ -143,14 +176,16 @@ func (s *Synchronizer) factRegister(localFacts map[string]string) error {
 	return nil
 }
 
-func (s *Synchronizer) factDeleteFromLocal(localFacts map[string]string) error {
+func (s *Synchronizer) factDeleteFromLocal(allAgentFacts map[string]map[string]string) error {
 	duplicatedKey := make(map[string]bool)
 	registeredFacts := s.option.Cache.FactsByUUID()
 
 	for k, v := range registeredFacts {
+		localFacts := allAgentFacts[v.AgentID]
 		localValue, ok := localFacts[v.Key]
-		if ok && localValue == v.Value && !duplicatedKey[v.Key] {
-			duplicatedKey[v.Key] = true
+
+		if ok && localValue == v.Value && !duplicatedKey[v.AgentID+"\x00"+v.Key] {
+			duplicatedKey[v.AgentID+"\x00"+v.Key] = true
 
 			continue
 		}
@@ -160,7 +195,7 @@ func (s *Synchronizer) factDeleteFromLocal(localFacts map[string]string) error {
 			return err
 		}
 
-		logger.V(2).Printf("Fact %v (uuid=%v) deleted", v.Key, v.ID)
+		logger.V(2).Printf("Fact %s:%v (uuid=%v) deleted", v.AgentID, v.Key, v.ID)
 		delete(registeredFacts, k)
 	}
 

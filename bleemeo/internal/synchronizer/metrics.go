@@ -570,6 +570,7 @@ func (s *Synchronizer) metricUpdatePendingOrSync(fullSync bool, pendingMetricsUp
 	if fullSync {
 		err := s.metricUpdateAll(false)
 		if err != nil {
+			// Re-add the metric on the pending update
 			s.UpdateMetrics(*pendingMetricsUpdate...)
 
 			return err
@@ -578,6 +579,7 @@ func (s *Synchronizer) metricUpdatePendingOrSync(fullSync bool, pendingMetricsUp
 		logger.V(2).Printf("Update %d metrics by UUID", len(*pendingMetricsUpdate))
 
 		if err := s.metricUpdateListUUID(*pendingMetricsUpdate); err != nil {
+			// Re-add the metric on the pending update
 			s.UpdateMetrics(*pendingMetricsUpdate...)
 
 			return err
@@ -608,9 +610,8 @@ func (s *Synchronizer) UpdateUnitsAndThresholds(firstUpdate bool) {
 }
 
 // metricsListWithAgentID fetches the list of all metrics for a given agent, and returns a UUID:metric mapping.
-func (s *Synchronizer) metricsListWithAgentID(agentID string, fetchInactive bool) (map[string]bleemeoTypes.Metric, error) {
+func (s *Synchronizer) metricsListWithAgentID(fetchInactive bool) (map[string]bleemeoTypes.Metric, error) {
 	params := map[string]string{
-		"agent":  agentID,
 		"fields": "id,agent,item,label,labels_text,unit,unit_text,deactivated_at,threshold_low_warning,threshold_low_critical,threshold_high_warning,threshold_high_critical,service,container,status_of",
 	}
 
@@ -641,14 +642,15 @@ func (s *Synchronizer) metricsListWithAgentID(agentID string, fetchInactive bool
 		}
 
 		// Do not modify metrics declared by other agents when the target agent is a monitor
-		if agentID != s.agentID {
-			agentUUID, present := types.TextToLabels(metric.LabelsText)[types.LabelScraperUUID]
+		agentUUID, present := types.TextToLabels(metric.LabelsText)[types.LabelScraperUUID]
 
-			if present && agentUUID != s.agentID {
-				continue
-			}
+		if present && agentUUID != s.agentID {
+			continue
+		}
 
-			if !present && types.TextToLabels(metric.LabelsText)[types.LabelScraper] != s.option.BlackboxScraperName {
+		if !present {
+			scraperName, present := types.TextToLabels(metric.LabelsText)[types.LabelScraper]
+			if present && scraperName != s.option.BlackboxScraperName {
 				continue
 			}
 		}
@@ -660,27 +662,15 @@ func (s *Synchronizer) metricsListWithAgentID(agentID string, fetchInactive bool
 }
 
 func (s *Synchronizer) metricUpdateAll(fetchInactive bool) error {
-	// iterate over our agent AND every monitor for metrics
-	metrics := []bleemeoTypes.Metric{}
-
-	agentMetrics, err := s.metricsListWithAgentID(s.agentID, fetchInactive)
+	metricsMap, err := s.metricsListWithAgentID(fetchInactive)
 	if err != nil {
 		return err
 	}
 
-	for _, metric := range agentMetrics {
+	metrics := make([]bleemeoTypes.Metric, 0, len(metricsMap))
+
+	for _, metric := range metricsMap {
 		metrics = append(metrics, metric)
-	}
-
-	for _, monitor := range s.option.Cache.Monitors() {
-		monitorMetrics, err := s.metricsListWithAgentID(monitor.AgentID, fetchInactive)
-		if err != nil {
-			return err
-		}
-
-		for _, metric := range monitorMetrics {
-			metrics = append(metrics, metric)
-		}
 	}
 
 	s.option.Cache.SetMetrics(metrics)
@@ -708,7 +698,6 @@ func (s *Synchronizer) metricUpdateInactiveList(metrics []types.Metric, allowLis
 		map[string]string{
 			"fields":    "id",
 			"active":    "False",
-			"agent":     s.agentID,
 			"page_size": "0",
 		},
 		nil,
@@ -767,10 +756,15 @@ func (s *Synchronizer) metricUpdateList(metrics []types.Metric) error {
 			}
 
 			// Do not modify metrics declared by other agents when the target agent is a monitor
-			if agentID != s.agentID {
-				agentUUID, present := types.TextToLabels(metric.LabelsText)[types.LabelScraperUUID]
+			agentUUID, present := types.TextToLabels(metric.LabelsText)[types.LabelScraperUUID]
 
-				if !present || agentUUID != s.agentID {
+			if present && agentUUID != s.agentID {
+				continue
+			}
+
+			if !present {
+				scraperName, present := types.TextToLabels(metric.LabelsText)[types.LabelScraper]
+				if present && scraperName != s.option.BlackboxScraperName {
 					continue
 				}
 			}
@@ -1325,9 +1319,29 @@ func (s *Synchronizer) metricDeleteFromLocal() error {
 	return nil
 }
 
+func (s *Synchronizer) undeactivableMetric(v bleemeoTypes.Metric, agents map[string]bleemeoTypes.Agent) bool {
+	if v.Labels[types.LabelName] == "agent_sent_message" {
+		return true
+	}
+
+	if v.Labels[types.LabelName] == agentStatusName {
+		agent := agents[v.AgentID]
+		snmpTypeID, found := s.getAgentType(bleemeoTypes.AgentTypeSNMP)
+
+		// We only skip deactivation of agent_status when it not an SNMP agent.
+		// On SNMP agent, "agent_status" isn't special.
+		if !found || agent.AgentType != snmpTypeID {
+			return true
+		}
+	}
+
+	return false
+}
+
 func (s *Synchronizer) metricDeactivate(localMetrics []types.Metric) error {
 	duplicatedKey := make(map[string]bool)
 	localByMetricKey := make(map[string]types.Metric, len(localMetrics))
+	agents := s.option.Cache.AgentsByUUID()
 
 	for _, v := range localMetrics {
 		labels := v.Labels()
@@ -1345,7 +1359,7 @@ func (s *Synchronizer) metricDeactivate(localMetrics []types.Metric) error {
 			continue
 		}
 
-		if v.Labels[types.LabelName] == "agent_sent_message" || v.Labels[types.LabelName] == agentStatusName {
+		if s.undeactivableMetric(v, agents) {
 			continue
 		}
 

@@ -45,6 +45,7 @@ var (
 	errBleemeoUndefined           = errors.New("bleemeo.account_id and/or bleemeo.registration_key is undefined. Please see  https://docs.bleemeo.com/agent/configuration#bleemeoaccount_id ")
 	errIncorrectStatusCode        = errors.New("registration status code is")
 	errUninitialized              = errors.New("uninitialized")
+	errNotExist                   = errors.New("does not exist")
 )
 
 const (
@@ -74,9 +75,11 @@ type Synchronizer struct {
 	startedAt               time.Time
 	lastSync                time.Time
 	lastFactUpdatedAt       string
+	lastSNMPcount           int
 	successiveErrors        int
 	warnAccountMismatchDone bool
 	maintenanceMode         bool
+	callUpdateLabels        bool
 	lastMetricCount         int
 	agentID                 string
 
@@ -124,12 +127,16 @@ type Option struct {
 
 // New return a new Synchronizer.
 func New(option Option) (*Synchronizer, error) {
+	return newWithNow(option, time.Now)
+}
+
+func newWithNow(option Option, now func() time.Time) (*Synchronizer, error) {
 	s := &Synchronizer{
 		option: option,
-		now:    time.Now,
+		now:    now,
 
 		forceSync:              make(map[string]bool),
-		nextFullSync:           time.Now(),
+		nextFullSync:           now(),
 		retryableMetricFailure: make(map[bleemeoTypes.FailureKind]bool),
 	}
 
@@ -282,7 +289,7 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 			case client.IsAuthError(err) && s.agentID != "":
 				fqdnMessage := ""
 
-				fqdn := s.option.Cache.FactsByKey()["fqdn"].Value
+				fqdn := s.option.Cache.FactsByKey()[s.agentID]["fqdn"].Value
 				if fqdn != "" {
 					fqdnMessage = fmt.Sprintf(" with fqdn %s", fqdn)
 				}
@@ -697,6 +704,13 @@ func (s *Synchronizer) runOnce(onlyEssential bool) error {
 		}
 	}
 
+	if s.callUpdateLabels {
+		s.callUpdateLabels = false
+		if s.option.NotifyLabelsUpdate != nil {
+			s.option.NotifyLabelsUpdate(s.ctx)
+		}
+	}
+
 	logger.V(2).Printf("Synchronization took %v for %v (and did %d requests)", s.now().Sub(startAt), syncMethods, s.realClient.RequestsCount()-previousCount)
 
 	if wasCreation {
@@ -749,6 +763,11 @@ func (s *Synchronizer) syncToPerform() map[string]bool {
 
 	if fullSync || s.lastFactUpdatedAt != localFacts["fact_updated_at"] {
 		syncMethods[syncMethodFact] = fullSync
+	}
+
+	if s.lastSNMPcount != s.option.SNMPOnlineTarget() {
+		syncMethods[syncMethodFact] = fullSync
+		syncMethods[syncMethodSNMP] = fullSync
 	}
 
 	minDelayed := time.Time{}
@@ -810,12 +829,12 @@ func (s *Synchronizer) checkDuplicated() error {
 
 	factNames := []string{"fqdn", "primary_address", "primary_mac_address"}
 	for _, name := range factNames {
-		old, ok := oldFacts[name]
+		old, ok := oldFacts[s.agentID][name]
 		if !ok {
 			continue
 		}
 
-		new, ok := newFacts[name] //nolint:predeclared
+		new, ok := newFacts[s.agentID][name] //nolint:predeclared
 		if !ok {
 			continue
 		}

@@ -32,9 +32,10 @@ const (
 
 // AgentFact is an agent facts.
 type AgentFact struct {
-	ID    string
-	Key   string
-	Value string
+	ID      string `json:"id"`
+	AgentID string `json:"agent"`
+	Key     string `json:"key"`
+	Value   string `json:"value"`
 }
 
 // Agent is an Agent object on Bleemeo API.

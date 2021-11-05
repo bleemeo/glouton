@@ -18,12 +18,14 @@ package bleemeo
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"glouton/bleemeo/internal/cache"
 	"glouton/bleemeo/internal/mqtt"
 	"glouton/bleemeo/internal/synchronizer"
 	"glouton/bleemeo/types"
 	"glouton/logger"
+	"glouton/prometheus/exporter/snmp"
 	"io"
 	"math/rand"
 	"runtime"
@@ -34,6 +36,8 @@ import (
 
 	gloutonTypes "glouton/types"
 )
+
+var ErrBadOption = errors.New("bad option")
 
 // Connector manager the connection between the Agent and Bleemeo.
 type Connector struct {
@@ -70,6 +74,10 @@ func New(option types.GlobalOption) (c *Connector, err error) {
 		SetBleemeoInMaintenanceMode: c.setMaintenance,
 		IsMqttConnected:             c.Connected,
 	})
+
+	if option.SNMPOnlineTarget == nil {
+		return c, fmt.Errorf("%w: missing SNMPOnlineTarget function", ErrBadOption)
+	}
 
 	return c, err
 }
@@ -110,7 +118,7 @@ func (c *Connector) ApplyCachedConfiguration() {
 	currentConfig, ok := c.cache.CurrentAccountConfig()
 
 	if ok && c.option.UpdateMetricResolution != nil && currentConfig.AgentConfigByName[types.AgentTypeAgent].MetricResolution != 0 {
-		c.option.UpdateMetricResolution(currentConfig.AgentConfigByName[types.AgentTypeAgent].MetricResolution)
+		c.option.UpdateMetricResolution(currentConfig.AgentConfigByName[types.AgentTypeAgent].MetricResolution, currentConfig.AgentConfigByName[types.AgentTypeSNMP].MetricResolution)
 	}
 }
 
@@ -373,7 +381,7 @@ func (c *Connector) UpdateMonitors() {
 	c.sync.UpdateMonitors()
 }
 
-func (c *Connector) RelabelHook(labels map[string]string) (newLabel map[string]string, retryLater bool) {
+func (c *Connector) RelabelHook(ctx context.Context, labels map[string]string) (newLabel map[string]string, retryLater bool) {
 	agentID := c.AgentID()
 
 	if agentID == "" {
@@ -385,8 +393,22 @@ func (c *Connector) RelabelHook(labels map[string]string) (newLabel map[string]s
 	if labels[gloutonTypes.LabelMetaSNMPTarget] != "" {
 		var (
 			snmpTypeID string
-			found      bool
+			target     *snmp.Target
 		)
+
+		for _, t := range c.option.SNMP {
+			if t.Address() == labels[gloutonTypes.LabelMetaSNMPTarget] {
+				target = t
+
+				break
+			}
+		}
+
+		if target == nil {
+			// set retryLater which will cause metrics from the gatherer to be ignored.
+			// This hook will be automatically re-called every 2 minutes.
+			return labels, true
+		}
 
 		for _, t := range c.cache.AgentTypes() {
 			if t.Name == types.AgentTypeSNMP {
@@ -396,20 +418,14 @@ func (c *Connector) RelabelHook(labels map[string]string) (newLabel map[string]s
 			}
 		}
 
-		for _, a := range c.cache.Agents() {
-			if a.AgentType == snmpTypeID && a.FQDN == labels[gloutonTypes.LabelMetaSNMPTarget] {
-				labels[gloutonTypes.LabelMetaBleemeoTargetAgentUUID] = a.ID
-				found = true
+		agent, err := c.sync.FindSNMPAgent(ctx, target, snmpTypeID, c.cache.AgentsByUUID())
+		if err != nil {
+			logger.V(2).Printf("FindSNMPAgent failed: %w", err)
 
-				break
-			}
-		}
-
-		if !found {
-			// set retryLater which will cause metrics from the gatherer to be ignored.
-			// This hook will be automatically re-called every 2 minutes.
 			return labels, true
 		}
+
+		labels[gloutonTypes.LabelMetaBleemeoTargetAgentUUID] = agent.ID
 	}
 
 	return labels, false
@@ -546,6 +562,30 @@ func (c *Connector) DiagnosticArchive(ctx context.Context, archive gloutonTypes.
 	}
 
 	return nil
+}
+
+// DiagnosticSNMPAssociation return useful information to troubleshoot issue.
+func (c *Connector) DiagnosticSNMPAssociation(ctx context.Context, file io.Writer) {
+	fmt.Fprintf(file, "\n# Association with Bleemeo Agent\n")
+
+	var snmpTypeID string
+
+	for _, t := range c.cache.AgentTypes() {
+		if t.Name == types.AgentTypeSNMP {
+			snmpTypeID = t.ID
+
+			break
+		}
+	}
+
+	for _, t := range c.option.SNMP {
+		agent, err := c.sync.FindSNMPAgent(ctx, t, snmpTypeID, c.cache.AgentsByUUID())
+		if err != nil {
+			fmt.Fprintf(file, " * %s => %v\n", t.String(), err)
+		} else {
+			fmt.Fprintf(file, " * %s => %s\n", t.String(), agent.ID)
+		}
+	}
 }
 
 func (c *Connector) diagnosticCache(file io.Writer) {
@@ -769,7 +809,7 @@ func (c *Connector) updateConfig() {
 	logger.Printf("Changed to configuration %s", currentConfig.Name)
 
 	if c.option.UpdateMetricResolution != nil {
-		c.option.UpdateMetricResolution(currentConfig.AgentConfigByName[types.AgentTypeAgent].MetricResolution)
+		c.option.UpdateMetricResolution(currentConfig.AgentConfigByName[types.AgentTypeAgent].MetricResolution, currentConfig.AgentConfigByName[types.AgentTypeSNMP].MetricResolution)
 	}
 }
 

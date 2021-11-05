@@ -76,6 +76,10 @@ func (mt *mockTime) Now() time.Time {
 	return mt.now
 }
 
+func (mt *mockTime) Advance(d time.Duration) {
+	mt.now = mt.now.Add(d)
+}
+
 func TestPrioritizeAndFilterMetrics(t *testing.T) {
 	inputNames := []struct {
 		Name         string
@@ -656,12 +660,13 @@ func newMetricHelper(t *testing.T) *metricTestHelper {
 	helper.s, err = New(Option{
 		Cache: &cache,
 		GlobalOption: bleemeoTypes.GlobalOption{
-			Config:       cfg,
-			Facts:        facts.NewMockFacter(),
-			State:        state,
-			Discovery:    discovery,
-			Store:        helper.store,
-			MetricFormat: types.MetricFormatBleemeo,
+			Config:           cfg,
+			Facts:            facts.NewMockFacter(),
+			State:            state,
+			Discovery:        discovery,
+			Store:            helper.store,
+			MetricFormat:     types.MetricFormatBleemeo,
+			SNMPOnlineTarget: func() int { return 0 },
 		},
 	})
 	if err != nil {

@@ -1,0 +1,207 @@
+# HELP dot1dBaseBridgeAddress The MAC address used by this bridge when it must be referred to in a unique fashion - 1.3.6.1.2.1.17.1.1
+# TYPE dot1dBaseBridgeAddress gauge
+dot1dBaseBridgeAddress{dot1dBaseBridgeAddress="00:1E:45:67:89:AB"} 1
+# HELP entPhysicalFirmwareRev The vendor-specific firmware revision string for the physical entity - 1.3.6.1.2.1.47.1.1.1.1.9
+# TYPE entPhysicalFirmwareRev gauge
+entPhysicalFirmwareRev{entPhysicalFirmwareRev="",entPhysicalIndex="64"} 1
+entPhysicalFirmwareRev{entPhysicalFirmwareRev="",entPhysicalIndex="67109185"} 1
+entPhysicalFirmwareRev{entPhysicalFirmwareRev="",entPhysicalIndex="67109249"} 1
+entPhysicalFirmwareRev{entPhysicalFirmwareRev="",entPhysicalIndex="67109250"} 1
+entPhysicalFirmwareRev{entPhysicalFirmwareRev="",entPhysicalIndex="67109251"} 1
+entPhysicalFirmwareRev{entPhysicalFirmwareRev="",entPhysicalIndex="68157952"} 1
+entPhysicalFirmwareRev{entPhysicalFirmwareRev="",entPhysicalIndex="68420352"} 1
+entPhysicalFirmwareRev{entPhysicalFirmwareRev="",entPhysicalIndex="68420481"} 1
+entPhysicalFirmwareRev{entPhysicalFirmwareRev="",entPhysicalIndex="68424704"} 1
+entPhysicalFirmwareRev{entPhysicalFirmwareRev="",entPhysicalIndex="68424769"} 1
+entPhysicalFirmwareRev{entPhysicalFirmwareRev="",entPhysicalIndex="68424770"} 1
+entPhysicalFirmwareRev{entPhysicalFirmwareRev="",entPhysicalIndex="68424771"} 1
+entPhysicalFirmwareRev{entPhysicalFirmwareRev="",entPhysicalIndex="68424772"} 1
+entPhysicalFirmwareRev{entPhysicalFirmwareRev="",entPhysicalIndex="68424773"} 1
+entPhysicalFirmwareRev{entPhysicalFirmwareRev="",entPhysicalIndex="68424774"} 1
+entPhysicalFirmwareRev{entPhysicalFirmwareRev="",entPhysicalIndex="68424775"} 1
+entPhysicalFirmwareRev{entPhysicalFirmwareRev="",entPhysicalIndex="68424776"} 1
+entPhysicalFirmwareRev{entPhysicalFirmwareRev="",entPhysicalIndex="68424777"} 1
+entPhysicalFirmwareRev{entPhysicalFirmwareRev="",entPhysicalIndex="68424778"} 1
+entPhysicalFirmwareRev{entPhysicalFirmwareRev="",entPhysicalIndex="68424779"} 1
+entPhysicalFirmwareRev{entPhysicalFirmwareRev="",entPhysicalIndex="68424780"} 1
+entPhysicalFirmwareRev{entPhysicalFirmwareRev="",entPhysicalIndex="68424781"} 1
+entPhysicalFirmwareRev{entPhysicalFirmwareRev="",entPhysicalIndex="68424782"} 1
+entPhysicalFirmwareRev{entPhysicalFirmwareRev="",entPhysicalIndex="68424783"} 1
+entPhysicalFirmwareRev{entPhysicalFirmwareRev="",entPhysicalIndex="68424784"} 1
+entPhysicalFirmwareRev{entPhysicalFirmwareRev="",entPhysicalIndex="68424785"} 1
+entPhysicalFirmwareRev{entPhysicalFirmwareRev="",entPhysicalIndex="68424786"} 1
+entPhysicalFirmwareRev{entPhysicalFirmwareRev="",entPhysicalIndex="68424787"} 1
+entPhysicalFirmwareRev{entPhysicalFirmwareRev="",entPhysicalIndex="68424788"} 1
+entPhysicalFirmwareRev{entPhysicalFirmwareRev="",entPhysicalIndex="68424789"} 1
+entPhysicalFirmwareRev{entPhysicalFirmwareRev="",entPhysicalIndex="68424790"} 1
+entPhysicalFirmwareRev{entPhysicalFirmwareRev="",entPhysicalIndex="68424791"} 1
+entPhysicalFirmwareRev{entPhysicalFirmwareRev="",entPhysicalIndex="68424792"} 1
+entPhysicalFirmwareRev{entPhysicalFirmwareRev="",entPhysicalIndex="68428800"} 1
+entPhysicalFirmwareRev{entPhysicalFirmwareRev="",entPhysicalIndex="68428865"} 1
+entPhysicalFirmwareRev{entPhysicalFirmwareRev="",entPhysicalIndex="68428866"} 1
+entPhysicalFirmwareRev{entPhysicalFirmwareRev="",entPhysicalIndex="68428867"} 1
+entPhysicalFirmwareRev{entPhysicalFirmwareRev="",entPhysicalIndex="68428868"} 1
+entPhysicalFirmwareRev{entPhysicalFirmwareRev="",entPhysicalIndex="68428869"} 1
+entPhysicalFirmwareRev{entPhysicalFirmwareRev="",entPhysicalIndex="68428870"} 1
+entPhysicalFirmwareRev{entPhysicalFirmwareRev="",entPhysicalIndex="68428871"} 1
+entPhysicalFirmwareRev{entPhysicalFirmwareRev="",entPhysicalIndex="68428872"} 1
+entPhysicalFirmwareRev{entPhysicalFirmwareRev="",entPhysicalIndex="68428873"} 1
+entPhysicalFirmwareRev{entPhysicalFirmwareRev="",entPhysicalIndex="68428874"} 1
+entPhysicalFirmwareRev{entPhysicalFirmwareRev="",entPhysicalIndex="68428875"} 1
+entPhysicalFirmwareRev{entPhysicalFirmwareRev="",entPhysicalIndex="68428876"} 1
+entPhysicalFirmwareRev{entPhysicalFirmwareRev="",entPhysicalIndex="68428877"} 1
+entPhysicalFirmwareRev{entPhysicalFirmwareRev="",entPhysicalIndex="68428878"} 1
+entPhysicalFirmwareRev{entPhysicalFirmwareRev="",entPhysicalIndex="68428879"} 1
+entPhysicalFirmwareRev{entPhysicalFirmwareRev="",entPhysicalIndex="68428880"} 1
+entPhysicalFirmwareRev{entPhysicalFirmwareRev="",entPhysicalIndex="68428881"} 1
+entPhysicalFirmwareRev{entPhysicalFirmwareRev="",entPhysicalIndex="68428882"} 1
+entPhysicalFirmwareRev{entPhysicalFirmwareRev="",entPhysicalIndex="68428883"} 1
+entPhysicalFirmwareRev{entPhysicalFirmwareRev="",entPhysicalIndex="68428884"} 1
+entPhysicalFirmwareRev{entPhysicalFirmwareRev="",entPhysicalIndex="68428885"} 1
+entPhysicalFirmwareRev{entPhysicalFirmwareRev="",entPhysicalIndex="68428886"} 1
+entPhysicalFirmwareRev{entPhysicalFirmwareRev="",entPhysicalIndex="68428887"} 1
+entPhysicalFirmwareRev{entPhysicalFirmwareRev="",entPhysicalIndex="68428888"} 1
+entPhysicalFirmwareRev{entPhysicalFirmwareRev="1.0.0.6",entPhysicalIndex="67108992"} 1
+# HELP entPhysicalSerialNum The vendor-specific serial number string for the physical entity - 1.3.6.1.2.1.47.1.1.1.1.11
+# TYPE entPhysicalSerialNum gauge
+entPhysicalSerialNum{entPhysicalIndex="64",entPhysicalSerialNum=""} 1
+entPhysicalSerialNum{entPhysicalIndex="67108992",entPhysicalSerialNum="CN1234567890ABCDEFGH"} 1
+entPhysicalSerialNum{entPhysicalIndex="67109185",entPhysicalSerialNum=""} 1
+entPhysicalSerialNum{entPhysicalIndex="67109249",entPhysicalSerialNum=""} 1
+entPhysicalSerialNum{entPhysicalIndex="67109250",entPhysicalSerialNum=""} 1
+entPhysicalSerialNum{entPhysicalIndex="67109251",entPhysicalSerialNum=""} 1
+entPhysicalSerialNum{entPhysicalIndex="68157952",entPhysicalSerialNum=""} 1
+entPhysicalSerialNum{entPhysicalIndex="68420352",entPhysicalSerialNum=""} 1
+entPhysicalSerialNum{entPhysicalIndex="68420481",entPhysicalSerialNum=""} 1
+entPhysicalSerialNum{entPhysicalIndex="68424704",entPhysicalSerialNum=""} 1
+entPhysicalSerialNum{entPhysicalIndex="68424769",entPhysicalSerialNum=""} 1
+entPhysicalSerialNum{entPhysicalIndex="68424770",entPhysicalSerialNum=""} 1
+entPhysicalSerialNum{entPhysicalIndex="68424771",entPhysicalSerialNum=""} 1
+entPhysicalSerialNum{entPhysicalIndex="68424772",entPhysicalSerialNum=""} 1
+entPhysicalSerialNum{entPhysicalIndex="68424773",entPhysicalSerialNum=""} 1
+entPhysicalSerialNum{entPhysicalIndex="68424774",entPhysicalSerialNum=""} 1
+entPhysicalSerialNum{entPhysicalIndex="68424775",entPhysicalSerialNum=""} 1
+entPhysicalSerialNum{entPhysicalIndex="68424776",entPhysicalSerialNum=""} 1
+entPhysicalSerialNum{entPhysicalIndex="68424777",entPhysicalSerialNum=""} 1
+entPhysicalSerialNum{entPhysicalIndex="68424778",entPhysicalSerialNum=""} 1
+entPhysicalSerialNum{entPhysicalIndex="68424779",entPhysicalSerialNum=""} 1
+entPhysicalSerialNum{entPhysicalIndex="68424780",entPhysicalSerialNum=""} 1
+entPhysicalSerialNum{entPhysicalIndex="68424781",entPhysicalSerialNum=""} 1
+entPhysicalSerialNum{entPhysicalIndex="68424782",entPhysicalSerialNum=""} 1
+entPhysicalSerialNum{entPhysicalIndex="68424783",entPhysicalSerialNum=""} 1
+entPhysicalSerialNum{entPhysicalIndex="68424784",entPhysicalSerialNum=""} 1
+entPhysicalSerialNum{entPhysicalIndex="68424785",entPhysicalSerialNum=""} 1
+entPhysicalSerialNum{entPhysicalIndex="68424786",entPhysicalSerialNum=""} 1
+entPhysicalSerialNum{entPhysicalIndex="68424787",entPhysicalSerialNum=""} 1
+entPhysicalSerialNum{entPhysicalIndex="68424788",entPhysicalSerialNum=""} 1
+entPhysicalSerialNum{entPhysicalIndex="68424789",entPhysicalSerialNum=""} 1
+entPhysicalSerialNum{entPhysicalIndex="68424790",entPhysicalSerialNum=""} 1
+entPhysicalSerialNum{entPhysicalIndex="68424791",entPhysicalSerialNum=""} 1
+entPhysicalSerialNum{entPhysicalIndex="68424792",entPhysicalSerialNum=""} 1
+entPhysicalSerialNum{entPhysicalIndex="68428800",entPhysicalSerialNum=""} 1
+entPhysicalSerialNum{entPhysicalIndex="68428865",entPhysicalSerialNum=""} 1
+entPhysicalSerialNum{entPhysicalIndex="68428866",entPhysicalSerialNum=""} 1
+entPhysicalSerialNum{entPhysicalIndex="68428867",entPhysicalSerialNum=""} 1
+entPhysicalSerialNum{entPhysicalIndex="68428868",entPhysicalSerialNum=""} 1
+entPhysicalSerialNum{entPhysicalIndex="68428869",entPhysicalSerialNum=""} 1
+entPhysicalSerialNum{entPhysicalIndex="68428870",entPhysicalSerialNum=""} 1
+entPhysicalSerialNum{entPhysicalIndex="68428871",entPhysicalSerialNum=""} 1
+entPhysicalSerialNum{entPhysicalIndex="68428872",entPhysicalSerialNum=""} 1
+entPhysicalSerialNum{entPhysicalIndex="68428873",entPhysicalSerialNum=""} 1
+entPhysicalSerialNum{entPhysicalIndex="68428874",entPhysicalSerialNum=""} 1
+entPhysicalSerialNum{entPhysicalIndex="68428875",entPhysicalSerialNum=""} 1
+entPhysicalSerialNum{entPhysicalIndex="68428876",entPhysicalSerialNum=""} 1
+entPhysicalSerialNum{entPhysicalIndex="68428877",entPhysicalSerialNum=""} 1
+entPhysicalSerialNum{entPhysicalIndex="68428878",entPhysicalSerialNum=""} 1
+entPhysicalSerialNum{entPhysicalIndex="68428879",entPhysicalSerialNum=""} 1
+entPhysicalSerialNum{entPhysicalIndex="68428880",entPhysicalSerialNum=""} 1
+entPhysicalSerialNum{entPhysicalIndex="68428881",entPhysicalSerialNum=""} 1
+entPhysicalSerialNum{entPhysicalIndex="68428882",entPhysicalSerialNum=""} 1
+entPhysicalSerialNum{entPhysicalIndex="68428883",entPhysicalSerialNum=""} 1
+entPhysicalSerialNum{entPhysicalIndex="68428884",entPhysicalSerialNum=""} 1
+entPhysicalSerialNum{entPhysicalIndex="68428885",entPhysicalSerialNum=""} 1
+entPhysicalSerialNum{entPhysicalIndex="68428886",entPhysicalSerialNum=""} 1
+entPhysicalSerialNum{entPhysicalIndex="68428887",entPhysicalSerialNum=""} 1
+entPhysicalSerialNum{entPhysicalIndex="68428888",entPhysicalSerialNum=""} 1
+# HELP entPhysicalSoftwareRev The vendor-specific software revision string for the physical entity - 1.3.6.1.2.1.47.1.1.1.1.10
+# TYPE entPhysicalSoftwareRev gauge
+entPhysicalSoftwareRev{entPhysicalIndex="64",entPhysicalSoftwareRev=""} 1
+entPhysicalSoftwareRev{entPhysicalIndex="67108992",entPhysicalSoftwareRev="1.0.0.35"} 1
+entPhysicalSoftwareRev{entPhysicalIndex="67109185",entPhysicalSoftwareRev=""} 1
+entPhysicalSoftwareRev{entPhysicalIndex="67109249",entPhysicalSoftwareRev=""} 1
+entPhysicalSoftwareRev{entPhysicalIndex="67109250",entPhysicalSoftwareRev=""} 1
+entPhysicalSoftwareRev{entPhysicalIndex="67109251",entPhysicalSoftwareRev=""} 1
+entPhysicalSoftwareRev{entPhysicalIndex="68157952",entPhysicalSoftwareRev=""} 1
+entPhysicalSoftwareRev{entPhysicalIndex="68420352",entPhysicalSoftwareRev=""} 1
+entPhysicalSoftwareRev{entPhysicalIndex="68420481",entPhysicalSoftwareRev=""} 1
+entPhysicalSoftwareRev{entPhysicalIndex="68424704",entPhysicalSoftwareRev=""} 1
+entPhysicalSoftwareRev{entPhysicalIndex="68424769",entPhysicalSoftwareRev=""} 1
+entPhysicalSoftwareRev{entPhysicalIndex="68424770",entPhysicalSoftwareRev=""} 1
+entPhysicalSoftwareRev{entPhysicalIndex="68424771",entPhysicalSoftwareRev=""} 1
+entPhysicalSoftwareRev{entPhysicalIndex="68424772",entPhysicalSoftwareRev=""} 1
+entPhysicalSoftwareRev{entPhysicalIndex="68424773",entPhysicalSoftwareRev=""} 1
+entPhysicalSoftwareRev{entPhysicalIndex="68424774",entPhysicalSoftwareRev=""} 1
+entPhysicalSoftwareRev{entPhysicalIndex="68424775",entPhysicalSoftwareRev=""} 1
+entPhysicalSoftwareRev{entPhysicalIndex="68424776",entPhysicalSoftwareRev=""} 1
+entPhysicalSoftwareRev{entPhysicalIndex="68424777",entPhysicalSoftwareRev=""} 1
+entPhysicalSoftwareRev{entPhysicalIndex="68424778",entPhysicalSoftwareRev=""} 1
+entPhysicalSoftwareRev{entPhysicalIndex="68424779",entPhysicalSoftwareRev=""} 1
+entPhysicalSoftwareRev{entPhysicalIndex="68424780",entPhysicalSoftwareRev=""} 1
+entPhysicalSoftwareRev{entPhysicalIndex="68424781",entPhysicalSoftwareRev=""} 1
+entPhysicalSoftwareRev{entPhysicalIndex="68424782",entPhysicalSoftwareRev=""} 1
+entPhysicalSoftwareRev{entPhysicalIndex="68424783",entPhysicalSoftwareRev=""} 1
+entPhysicalSoftwareRev{entPhysicalIndex="68424784",entPhysicalSoftwareRev=""} 1
+entPhysicalSoftwareRev{entPhysicalIndex="68424785",entPhysicalSoftwareRev=""} 1
+entPhysicalSoftwareRev{entPhysicalIndex="68424786",entPhysicalSoftwareRev=""} 1
+entPhysicalSoftwareRev{entPhysicalIndex="68424787",entPhysicalSoftwareRev=""} 1
+entPhysicalSoftwareRev{entPhysicalIndex="68424788",entPhysicalSoftwareRev=""} 1
+entPhysicalSoftwareRev{entPhysicalIndex="68424789",entPhysicalSoftwareRev=""} 1
+entPhysicalSoftwareRev{entPhysicalIndex="68424790",entPhysicalSoftwareRev=""} 1
+entPhysicalSoftwareRev{entPhysicalIndex="68424791",entPhysicalSoftwareRev=""} 1
+entPhysicalSoftwareRev{entPhysicalIndex="68424792",entPhysicalSoftwareRev=""} 1
+entPhysicalSoftwareRev{entPhysicalIndex="68428800",entPhysicalSoftwareRev=""} 1
+entPhysicalSoftwareRev{entPhysicalIndex="68428865",entPhysicalSoftwareRev=""} 1
+entPhysicalSoftwareRev{entPhysicalIndex="68428866",entPhysicalSoftwareRev=""} 1
+entPhysicalSoftwareRev{entPhysicalIndex="68428867",entPhysicalSoftwareRev=""} 1
+entPhysicalSoftwareRev{entPhysicalIndex="68428868",entPhysicalSoftwareRev=""} 1
+entPhysicalSoftwareRev{entPhysicalIndex="68428869",entPhysicalSoftwareRev=""} 1
+entPhysicalSoftwareRev{entPhysicalIndex="68428870",entPhysicalSoftwareRev=""} 1
+entPhysicalSoftwareRev{entPhysicalIndex="68428871",entPhysicalSoftwareRev=""} 1
+entPhysicalSoftwareRev{entPhysicalIndex="68428872",entPhysicalSoftwareRev=""} 1
+entPhysicalSoftwareRev{entPhysicalIndex="68428873",entPhysicalSoftwareRev=""} 1
+entPhysicalSoftwareRev{entPhysicalIndex="68428874",entPhysicalSoftwareRev=""} 1
+entPhysicalSoftwareRev{entPhysicalIndex="68428875",entPhysicalSoftwareRev=""} 1
+entPhysicalSoftwareRev{entPhysicalIndex="68428876",entPhysicalSoftwareRev=""} 1
+entPhysicalSoftwareRev{entPhysicalIndex="68428877",entPhysicalSoftwareRev=""} 1
+entPhysicalSoftwareRev{entPhysicalIndex="68428878",entPhysicalSoftwareRev=""} 1
+entPhysicalSoftwareRev{entPhysicalIndex="68428879",entPhysicalSoftwareRev=""} 1
+entPhysicalSoftwareRev{entPhysicalIndex="68428880",entPhysicalSoftwareRev=""} 1
+entPhysicalSoftwareRev{entPhysicalIndex="68428881",entPhysicalSoftwareRev=""} 1
+entPhysicalSoftwareRev{entPhysicalIndex="68428882",entPhysicalSoftwareRev=""} 1
+entPhysicalSoftwareRev{entPhysicalIndex="68428883",entPhysicalSoftwareRev=""} 1
+entPhysicalSoftwareRev{entPhysicalIndex="68428884",entPhysicalSoftwareRev=""} 1
+entPhysicalSoftwareRev{entPhysicalIndex="68428885",entPhysicalSoftwareRev=""} 1
+entPhysicalSoftwareRev{entPhysicalIndex="68428886",entPhysicalSoftwareRev=""} 1
+entPhysicalSoftwareRev{entPhysicalIndex="68428887",entPhysicalSoftwareRev=""} 1
+entPhysicalSoftwareRev{entPhysicalIndex="68428888",entPhysicalSoftwareRev=""} 1
+# HELP ipAdEntAddr The IPv4 address to which this entry's addressing information pertains. - 1.3.6.1.2.1.4.20.1.1
+# TYPE ipAdEntAddr gauge
+ipAdEntAddr{ipAdEntAddr="192.168.1.2"} 1
+# HELP snmp_scrape_duration_seconds Total SNMP time scrape took (walk and processing).
+# TYPE snmp_scrape_duration_seconds gauge
+snmp_scrape_duration_seconds 2.015920898
+# HELP snmp_scrape_pdus_returned PDUs returned from walk.
+# TYPE snmp_scrape_pdus_returned gauge
+snmp_scrape_pdus_returned 182
+# HELP snmp_scrape_walk_duration_seconds Time SNMP walk/bulkwalk took.
+# TYPE snmp_scrape_walk_duration_seconds gauge
+snmp_scrape_walk_duration_seconds 2.013510144
+# HELP sysDescr A textual description of the entity - 1.3.6.1.2.1.1.1
+# TYPE sysDescr gauge
+sysDescr{sysDescr="PowerConnect 5448"} 1
+# HELP sysName An administratively-assigned name for this managed node - 1.3.6.1.2.1.1.5
+# TYPE sysName gauge
+sysName{sysName="bleemeo-switch01"} 1
+# HELP sysUpTime The time (in hundredths of a second) since the network management portion of the system was last re-initialized. - 1.3.6.1.2.1.1.3
+# TYPE sysUpTime gauge
+sysUpTime 1.9882365e+09

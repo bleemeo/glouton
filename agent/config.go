@@ -23,9 +23,11 @@ import (
 	"glouton/config"
 	"glouton/discovery"
 	"glouton/logger"
+	"glouton/prometheus/exporter/snmp"
 	"glouton/types"
 	"glouton/version"
 	"io/ioutil"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -46,9 +48,30 @@ var (
 // New settings should use Config.
 type Config struct {
 	Services Services
+	SNMP     SNMP
 }
 
 type Services []Service
+
+type Service struct {
+	ID             string
+	Instance       string
+	NagiosNRPEName string
+	IgnoredPorts   []int
+	ExtraAttribute map[string]string
+}
+
+type SNMP struct {
+	Targets     SNMPTargets
+	ExporterURL *url.URL
+}
+
+type SNMPTargets []SNMPTarget
+
+type SNMPTarget struct {
+	Address     string
+	InitialName string
+}
 
 func (srvs Services) ToDiscoveryMap() map[discovery.NameContainer]discovery.ServiceOveride {
 	result := make(map[discovery.NameContainer]discovery.ServiceOveride, len(srvs))
@@ -84,14 +107,6 @@ func (srvs Services) ToNRPEMap() map[string]discovery.NameContainer {
 	return result
 }
 
-type Service struct {
-	ID             string
-	Instance       string
-	NagiosNRPEName string
-	IgnoredPorts   []int
-	ExtraAttribute map[string]string
-}
-
 // Name return a human name of this service.
 func (srv Service) Name() string {
 	if srv.ID == "" {
@@ -103,6 +118,19 @@ func (srv Service) Name() string {
 	}
 
 	return fmt.Sprintf("%s on %s", srv.ID, srv.Instance)
+}
+
+func (snmps SNMPTargets) ToTargetOptions() []snmp.TargetOptions {
+	result := make([]snmp.TargetOptions, 0, len(snmps))
+
+	for _, t := range snmps {
+		result = append(result, snmp.TargetOptions{
+			Address:     t.Address,
+			InitialName: t.InitialName,
+		})
+	}
+
+	return result
 }
 
 func defaultConfig() map[string]interface{} {
@@ -629,9 +657,72 @@ func convertConfig(cfg *config.Configuration) (agentConfig Config, warnings []er
 		agentConfig.Services = append(agentConfig.Services, srv)
 	}
 
+	warnings = append(warnings, agentConfig.parseSNMP(cfg)...)
 	warnings = append(warnings, agentConfig.validate()...)
 
 	return agentConfig, warnings
+}
+
+func (cfg *Config) parseSNMP(oldCfg *config.Configuration) []error {
+	u, err := url.Parse(oldCfg.String("metric.snmp.exporter_address"))
+	if err != nil {
+		return []error{err}
+	}
+
+	u, err = u.Parse("snmp")
+	if err != nil {
+		return []error{err}
+	}
+
+	cfg.SNMP.ExporterURL = u
+
+	tmp, ok := oldCfg.Get("metric.snmp.targets")
+	if !ok {
+		return nil
+	}
+
+	confList, ok := tmp.([]interface{})
+	if !ok {
+		return []error{fmt.Errorf("%w: metric.snmp.targets should be a list", ErrInvalidValue)}
+	}
+
+	var errs []error
+
+	seenAddress := make(map[string]bool, len(confList))
+
+	for i, iMap := range confList {
+		tmp, ok := iMap.(map[string]interface{})
+
+		if !ok {
+			errs = append(errs, fmt.Errorf("%w: metric.snmp.targets[%d] should be a map", ErrInvalidValue, i))
+
+			continue
+		}
+
+		target, ok := tmp["target"].(string)
+		if !ok {
+			errs = append(errs, fmt.Errorf("%w: metric.snmp.targets[%d] must have a target value", ErrInvalidValue, i))
+
+			continue
+		}
+
+		if seenAddress[target] {
+			errs = append(errs, fmt.Errorf("%w: the SNMP target %s is duplicated", ErrInvalidValue, target))
+
+			continue
+		}
+
+		seenAddress[target] = true
+
+		initialName, _ := tmp["initial_name"].(string)
+
+		cfg.SNMP.Targets = append(cfg.SNMP.Targets, SNMPTarget{
+			Address:     target,
+			InitialName: initialName,
+		})
+	}
+
+	return errs
 }
 
 func (cfg *Config) validate() []error {

@@ -149,7 +149,7 @@ func (f *FactProvider) updateFacts(ctx context.Context) {
 
 	collectCloudProvidersFacts(ctx, newFacts)
 
-	cleanFacts(newFacts)
+	CleanFacts(newFacts)
 
 	if ctx.Err() != nil {
 		return
@@ -264,14 +264,14 @@ func (f *FactProvider) fastUpdateFacts(ctx context.Context) map[string]string {
 		newFacts[k] = v
 	}
 
-	cleanFacts(newFacts)
+	CleanFacts(newFacts)
 
 	return newFacts
 }
 
-// cleanFacts will remove key with empty values and truncate value
+// CleanFacts will remove key with empty values and truncate value
 // with 100 characters or more.
-func cleanFacts(facts map[string]string) {
+func CleanFacts(facts map[string]string) {
 	for k, v := range facts {
 		if v == "" {
 			delete(facts, k)

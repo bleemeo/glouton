@@ -108,6 +108,8 @@ const (
 	LabelMetaProbeServiceUUID       = "__meta_probe_service_uuid"
 	LabelMetaProbeScraperName       = "__meta_probe_scraper_name"
 	LabelMetaSendScraperUUID        = "__meta_probe_send_agent_uuid"
+	LabelMetaCurrentStatus          = "__meta_current_status"
+	LabelMetaCurrentDescription     = "__meta_current_description"
 	LabelK8SPODName                 = "kubernetes_pod_name"
 	LabelK8SNamespace               = "kubernetes_namespace"
 	LabelInstanceUUID               = "instance_uuid"
@@ -138,6 +140,21 @@ func (s Status) String() string {
 		return "critical"
 	default:
 		return "unknown"
+	}
+}
+
+func FromString(s string) Status {
+	switch strings.ToLower(s) {
+	case "unset":
+		return StatusUnset
+	case "ok":
+		return StatusOk
+	case "warning":
+		return StatusWarning
+	case "critical":
+		return StatusCritical
+	default:
+		return StatusUnknown
 	}
 }
 

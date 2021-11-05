@@ -228,11 +228,19 @@ func mergeLabels(a []*dto.LabelPair, b []*dto.LabelPair) []*dto.LabelPair {
 
 func (g labeledGatherer) GatherPoints(ctx context.Context, now time.Time, state GatherState) ([]types.MetricPoint, error) {
 	mfs, err := g.GatherWithState(ctx, state)
-	points := familiesToMetricPoints(now, mfs)
+	points := FamiliesToMetricPoints(now, mfs)
 
-	if (g.annotations != types.MetricAnnotations{}) {
-		for i := range points {
+	for i := range points {
+		if (g.annotations != types.MetricAnnotations{}) {
 			points[i].Annotations = g.annotations
+		}
+
+		if statusText := points[i].Labels[types.LabelMetaCurrentStatus]; statusText != "" {
+			points[i].Annotations.Status.CurrentStatus = types.FromString(statusText)
+			points[i].Annotations.Status.StatusDescription = points[i].Labels[types.LabelMetaCurrentDescription]
+
+			delete(points[i].Labels, types.LabelMetaCurrentStatus)
+			delete(points[i].Labels, types.LabelMetaCurrentDescription)
 		}
 	}
 
@@ -282,6 +290,24 @@ func (gs Gatherers) GatherWithState(ctx context.Context, state GatherState) ([]*
 				currentMFs, err = cg.GatherWithState(ctx, state)
 			} else {
 				currentMFs, err = g.Gather()
+			}
+
+			// Make sure to drop __meta labels
+			for _, mf := range currentMFs {
+				for _, m := range mf.Metric {
+					i := 0
+
+					for _, l := range m.Label {
+						if l.GetName() == types.LabelMetaCurrentStatus || l.GetName() == types.LabelMetaCurrentDescription {
+							continue
+						}
+
+						m.Label[i] = l
+						i++
+					}
+
+					m.Label = m.Label[:i]
+				}
 			}
 
 			mutex.Lock()
