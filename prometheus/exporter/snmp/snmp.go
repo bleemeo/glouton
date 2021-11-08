@@ -47,6 +47,7 @@ const (
 type Target struct {
 	opt             TargetOptions
 	exporterAddress *url.URL
+	scraperFacts    FactProvider
 
 	l                sync.Mutex
 	scraper          *scrapper.Target
@@ -67,21 +68,18 @@ type TargetOptions struct {
 	InitialName string
 }
 
-func New(opt TargetOptions, exporterAddress *url.URL) *Target {
-	return newTarget(opt, exporterAddress)
-}
-
 func NewMock(opt TargetOptions, mockFacts map[string]string) *Target {
-	r := newTarget(opt, nil)
+	r := newTarget(opt, nil, nil)
 	r.MockFacts = mockFacts
 
 	return r
 }
 
-func newTarget(opt TargetOptions, exporterAddress *url.URL) *Target {
+func newTarget(opt TargetOptions, scraperFact FactProvider, exporterAddress *url.URL) *Target {
 	return &Target{
 		opt:             opt,
 		exporterAddress: exporterAddress,
+		scraperFacts:    scraperFact,
 	}
 }
 
@@ -392,6 +390,20 @@ func (t *Target) Facts(ctx context.Context, maxAge time.Duration) (facts map[str
 		return nil, t.lastFactErr
 	}
 
+	scraperMaxAge := maxAge
+	if scraperMaxAge < time.Hour {
+		scraperMaxAge = time.Hour
+	}
+
+	var scraperFact map[string]string
+
+	if t.scraperFacts != nil {
+		scraperFact, err = t.scraperFacts.Facts(ctx, scraperMaxAge)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	tgt := t.buildScraper("discovery")
 
 	tmp, err := tgt.GatherWithState(ctx, registry.GatherState{})
@@ -405,13 +417,13 @@ func (t *Target) Facts(ctx context.Context, maxAge time.Duration) (facts map[str
 	t.lastFactErr = nil
 	result := registry.FamiliesToMetricPoints(time.Now(), tmp)
 
-	t.facts = factFromPoints(result, time.Now())
+	t.facts = factFromPoints(result, time.Now(), scraperFact)
 	t.lastFactUpdate = time.Now()
 
 	return t.facts, nil
 }
 
-func factFromPoints(points []types.MetricPoint, now time.Time) map[string]string {
+func factFromPoints(points []types.MetricPoint, now time.Time, scraperFact map[string]string) map[string]string {
 	result := make(map[string]string)
 
 	convertMap := map[string]string{
@@ -471,6 +483,10 @@ func factFromPoints(points []types.MetricPoint, now time.Time) map[string]string
 			}
 		}
 	}
+
+	result["agent_version"] = scraperFact["agent_version"]
+	result["glouton_version"] = scraperFact["glouton_version"]
+	result["scraper_fqdn"] = scraperFact["fqdn"]
 
 	facts.CleanFacts(result)
 

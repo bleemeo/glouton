@@ -63,13 +63,20 @@ func Test_factFromPoints(t *testing.T) {
 	now := time.Date(2021, 9, 28, 9, 43, 4, 1234, time.UTC)
 
 	tests := []struct {
-		name       string
-		metricFile string
-		want       map[string]string
+		name         string
+		metricFile   string
+		scraperFacts map[string]string
+		want         map[string]string
 	}{
 		{
 			name:       "PowerConnect 5448",
 			metricFile: "powerconnect-5448.metrics",
+			scraperFacts: map[string]string{
+				"fqdn":            "bleemeo-linux01",
+				"agent_version":   "21.11.08.123456",
+				"glouton_version": "21.11.08.123456",
+				"somthing":        "else",
+			},
 			want: map[string]string{
 				"fqdn":                "bleemeo-switch01",
 				"hostname":            "bleemeo-switch01",
@@ -80,6 +87,9 @@ func Test_factFromPoints(t *testing.T) {
 				"primary_address":     "192.168.1.2",
 				"primary_mac_address": "00:1e:45:67:89:ab",
 				"fact_updated_at":     "2021-09-28T09:43:04Z",
+				"agent_version":       "21.11.08.123456",
+				"glouton_version":     "21.11.08.123456",
+				"scraper_fqdn":        "bleemeo-linux01",
 			},
 		},
 		{
@@ -136,7 +146,7 @@ func Test_factFromPoints(t *testing.T) {
 			}
 
 			result := registry.FamiliesToMetricPoints(time.Now(), tmp)
-			got := factFromPoints(result, now)
+			got := factFromPoints(result, now, tt.scraperFacts)
 
 			if diff := cmp.Diff(tt.want, got); diff != "" {
 				t.Errorf("factFromPoints() missmatch (-want +got):\n%s", diff)

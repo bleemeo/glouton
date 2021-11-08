@@ -624,6 +624,7 @@ func (a *agent) run() { //nolint:cyclop
 
 	a.snmpManager = snmp.NewManager(
 		a.config.SNMP.ExporterURL,
+		a.factProvider,
 		a.config.SNMP.Targets.ToTargetOptions()...,
 	)
 
