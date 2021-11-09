@@ -17,6 +17,7 @@
 package store
 
 import (
+	"context"
 	"fmt"
 	"glouton/types"
 	"math/rand"
@@ -270,7 +271,7 @@ func TestPoints(t *testing.T) {
 	p1 := types.Point{Time: t1, Value: -88}
 	p2 := types.Point{Time: t2, Value: 13.37}
 
-	db.PushPoints([]types.MetricPoint{
+	db.PushPoints(context.Background(), []types.MetricPoint{
 		{Point: p0, Labels: labels},
 	})
 
@@ -286,10 +287,10 @@ func TestPoints(t *testing.T) {
 		t.Errorf("db.points[%v][0] == %v, want %v", m.metricID, db.points[m.metricID][0], p0)
 	}
 
-	db.PushPoints([]types.MetricPoint{
+	db.PushPoints(context.Background(), []types.MetricPoint{
 		{Point: p1, Labels: labels},
 	})
-	db.PushPoints([]types.MetricPoint{
+	db.PushPoints(context.Background(), []types.MetricPoint{
 		{Point: p2, Labels: labels},
 	})
 
@@ -662,7 +663,7 @@ func TestStore_run(t *testing.T) {
 
 	for i, tt := range steps {
 		t.Run(fmt.Sprintf("step-%d", i), func(t *testing.T) {
-			store.PushPoints(tt.pushPoints)
+			store.PushPoints(context.Background(), tt.pushPoints)
 			store.run(tt.now)
 
 			for _, want := range tt.want {

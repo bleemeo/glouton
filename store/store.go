@@ -338,7 +338,7 @@ func (s *Store) metricGetOrCreate(lbls map[string]string, annotations types.Metr
 // PushPoints append new metric points to the store, creating new metric
 // if needed.
 // The points must not be mutated after this call.
-func (s *Store) PushPoints(points []types.MetricPoint) {
+func (s *Store) PushPoints(_ context.Context, points []types.MetricPoint) {
 	dedupPoints := make([]types.MetricPoint, 0, len(points))
 
 	s.lock.Lock()
@@ -370,7 +370,7 @@ type store interface {
 	DropMetrics(labelsList []map[string]string)
 	AddNotifiee(func([]types.MetricPoint)) int
 	RemoveNotifiee(int)
-	PushPoints(points []types.MetricPoint)
+	PushPoints(ctx context.Context, points []types.MetricPoint)
 }
 
 // FilteredStore is a store wrapper that intercepts all call to pushPoints and execute filters on points.
@@ -395,12 +395,12 @@ func NewFilteredStore(store store, fc func([]types.MetricPoint) []types.MetricPo
 }
 
 // PushPoints wraps the store PushPoints function. It precedes the call with filterCallback.
-func (s *FilteredStore) PushPoints(points []types.MetricPoint) {
+func (s *FilteredStore) PushPoints(ctx context.Context, points []types.MetricPoint) {
 	if s.filterCallback != nil && len(points) > 0 {
 		points = s.filterCallback(points)
 	}
 
-	s.store.PushPoints(points)
+	s.store.PushPoints(ctx, points)
 }
 
 func (s *FilteredStore) Metrics(filters map[string]string) (result []types.Metric, err error) {

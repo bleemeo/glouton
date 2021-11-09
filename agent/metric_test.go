@@ -523,7 +523,7 @@ func Test_RebuildDynamicList(t *testing.T) {
 
 	err = mf.RebuildDynamicLists(&d, []discovery.Service{}, []string{})
 	if err != nil {
-		t.Errorf("Unexpected error: %w", err)
+		t.Errorf("Unexpected error: %v", err)
 	}
 
 	got := sortMatchers(listFromMap(mf.allowList))
@@ -545,7 +545,7 @@ func Test_RebuildDynamicList(t *testing.T) {
 	// Rebuild is done twice to make sure the build is effectively cleared and rebuild
 	err = mf.RebuildDynamicLists(&d, []discovery.Service{}, []string{})
 	if err != nil {
-		t.Errorf("Unexpected error: %w", err)
+		t.Errorf("Unexpected error: %v", err)
 	}
 
 	got = sortMatchers(listFromMap(mf.allowList))

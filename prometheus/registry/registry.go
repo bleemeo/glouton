@@ -63,11 +63,11 @@ type RelabelHook func(ctx context.Context, labels map[string]string) (newLabel m
 
 var errInvalidName = errors.New("invalid metric name or label name")
 
-type pushFunction func(points []types.MetricPoint)
+type pushFunction func(ctx context.Context, points []types.MetricPoint)
 
 // AddMetricPoints implement PointAdder.
-func (f pushFunction) PushPoints(points []types.MetricPoint) {
-	f(points)
+func (f pushFunction) PushPoints(ctx context.Context, points []types.MetricPoint) {
+	f(ctx, points)
 }
 
 type metricFilter interface {
@@ -401,7 +401,7 @@ func (r *Registry) DiagnosticArchive(ctx context.Context, archive types.ArchiveW
 		return err
 	}
 
-	if err := r.writeMetrics(file, false); err != nil {
+	if err := r.writeMetrics(ctx, file, false); err != nil {
 		return err
 	}
 
@@ -410,7 +410,7 @@ func (r *Registry) DiagnosticArchive(ctx context.Context, archive types.ArchiveW
 		return err
 	}
 
-	if err := r.writeMetrics(file, true); err != nil {
+	if err := r.writeMetrics(ctx, file, true); err != nil {
 		return err
 	}
 
@@ -526,8 +526,8 @@ func (r *Registry) diagnosticState(archive types.ArchiveWriter) error {
 	return enc.Encode(obj)
 }
 
-func (r *Registry) writeMetrics(file io.Writer, filter bool) error {
-	result, err := r.GatherWithState(context.TODO(), GatherState{QueryType: FromStore, NoFilter: !filter})
+func (r *Registry) writeMetrics(ctx context.Context, file io.Writer, filter bool) error {
+	result, err := r.GatherWithState(ctx, GatherState{QueryType: FromStore, NoFilter: !filter})
 	if err != nil {
 		return err
 	}
@@ -935,8 +935,8 @@ func (r *Registry) Exporter() http.Handler {
 func (r *Registry) WithTTL(ttl time.Duration) types.PointPusher {
 	r.init()
 
-	return pushFunction(func(points []types.MetricPoint) {
-		r.pushPoint(points, ttl)
+	return pushFunction(func(ctx context.Context, points []types.MetricPoint) {
+		r.pushPoint(ctx, points, ttl)
 	})
 }
 
@@ -1027,7 +1027,7 @@ func (r *Registry) scrape(ctx context.Context, t0 time.Time, reg *registration) 
 	reg.l.Unlock()
 
 	if len(points) > 0 && r.option.PushPoint != nil {
-		r.option.PushPoint.PushPoints(points)
+		r.option.PushPoint.PushPoints(ctx, points)
 	}
 }
 
@@ -1063,7 +1063,7 @@ func FamiliesToMetricPoints(now time.Time, families []*dto.MetricFamily) []types
 
 // pushPoint add a new point to the list of pushed point with a specified TTL.
 // As for AddMetricPointFunction, points should not be mutated after the call.
-func (r *Registry) pushPoint(points []types.MetricPoint, ttl time.Duration) {
+func (r *Registry) pushPoint(ctx context.Context, points []types.MetricPoint, ttl time.Duration) {
 	r.l.Lock()
 
 	for r.blockPushPoint {
@@ -1104,7 +1104,7 @@ func (r *Registry) pushPoint(points []types.MetricPoint, ttl time.Duration) {
 			point.Labels = r.addMetaLabels(point.Labels)
 
 			if r.relabelHook != nil {
-				ctx, cancel := context.WithTimeout(context.Background(), relabelTimeout)
+				ctx, cancel := context.WithTimeout(ctx, relabelTimeout)
 				point.Labels, skip = r.relabelHook(ctx, point.Labels)
 
 				cancel()
@@ -1138,7 +1138,7 @@ func (r *Registry) pushPoint(points []types.MetricPoint, ttl time.Duration) {
 	r.l.Unlock()
 
 	if r.option.PushPoint != nil {
-		r.option.PushPoint.PushPoints(points)
+		r.option.PushPoint.PushPoints(ctx, points)
 	}
 
 	r.l.Lock()

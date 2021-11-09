@@ -138,7 +138,7 @@ func (m *mockContainerRuntime) ContainerFromCGroup(ctx context.Context, cgroupDa
 		return nil, ErrContainerDoesNotExists
 	}
 
-	return nil, nil
+	return nil, nil //nolint: nilnil // here first nil means not found and its not an error.
 }
 
 func (m *mockContainerRuntime) ContainerFromPID(ctx context.Context, parentContainerID string, pid int) (Container, error) {

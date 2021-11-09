@@ -43,7 +43,7 @@ import (
 )
 
 //go:embed static
-var staticFolder embed.FS //nolint:gochecknoglobals
+var staticFolder embed.FS
 
 type containerInterface interface {
 	Containers(ctx context.Context, maxAge time.Duration, includeIgnored bool) (containers []facts.Container, err error)
@@ -70,7 +70,7 @@ type API struct {
 	AgentInfo          agentInterface
 	PrometheurExporter http.Handler
 	Threshold          *threshold.Registry
-	DiagnosticPage     func() string
+	DiagnosticPage     func(ctx context.Context) string
 	DiagnosticArchive  func(ctx context.Context, w types.ArchiveWriter) error
 
 	router http.Handler
@@ -155,7 +155,7 @@ func (api *API) init() {
 	router.Handle("/playground", playground.Handler("GraphQL playground", "/graphql"))
 	router.Handle("/graphql", handler.NewDefaultServer(NewExecutableSchema(Config{Resolvers: &Resolver{api: api}})))
 	router.HandleFunc("/diagnostic", func(w http.ResponseWriter, r *http.Request) {
-		content := api.DiagnosticPage()
+		content := api.DiagnosticPage(r.Context())
 
 		var err error
 
@@ -234,7 +234,7 @@ func (api *API) diagnosticArchive(ctx context.Context, archive types.ArchiveWrit
 
 // Run starts our API.
 func (api *API) Run(ctx context.Context) error {
-	api.init()
+	api.init() //nolint: contextcheck // no idea why we should pass a context...
 
 	srv := http.Server{
 		Addr:    api.BindAddress,
@@ -249,7 +249,7 @@ func (api *API) Run(ctx context.Context) error {
 		subCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 
-		if err := srv.Shutdown(subCtx); err != nil {
+		if err := srv.Shutdown(subCtx); err != nil { //nolint: contextcheck // its a "shutdown" context. It must outlive the parent context.
 			logger.V(2).Printf("HTTP server Shutdown: %v", err)
 		}
 

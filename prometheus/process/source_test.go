@@ -121,7 +121,7 @@ func testProc(t *testing.T, procs proc.Iter) {
 			return
 		}
 
-		t.Errorf("An error occurred for the current process: %w", current.procErr)
+		t.Errorf("An error occurred for the current process: %v", current.procErr)
 	}
 
 	if current.proc == nil {

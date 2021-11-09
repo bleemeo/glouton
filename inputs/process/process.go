@@ -121,5 +121,5 @@ func (i Input) Gather(ctx context.Context, now time.Time) {
 		})
 	}
 
-	i.pusher.PushPoints(points)
+	i.pusher.PushPoints(ctx, points)
 }

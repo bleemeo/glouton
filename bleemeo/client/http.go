@@ -46,7 +46,6 @@ type HTTPClient struct {
 	baseURL  *url.URL
 	username string
 	password string
-	ctx      context.Context
 
 	cl *http.Client
 
@@ -137,7 +136,7 @@ func (ae APIError) Error() string {
 //
 // It does the authentication (using JWT currently) and may do rate-limiting/throtteling, so
 // most function may return a ThrottleError.
-func NewClient(ctx context.Context, baseURL string, username string, password string, insecureTLS bool) (*HTTPClient, error) {
+func NewClient(baseURL string, username string, password string, insecureTLS bool) (*HTTPClient, error) {
 	u, err := url.Parse(baseURL)
 	if err != nil {
 		return nil, err
@@ -153,7 +152,6 @@ func NewClient(ctx context.Context, baseURL string, username string, password st
 	}
 
 	return &HTTPClient{
-		ctx:      ctx,
 		baseURL:  u,
 		username: username,
 		password: password,
@@ -256,7 +254,7 @@ func (c *HTTPClient) prepareRequest(method string, path string, params map[strin
 }
 
 // PostAuth perform the post on specified path. baseURL will be always be added.
-func (c *HTTPClient) PostAuth(path string, data interface{}, username string, password string, result interface{}) (statusCode int, err error) {
+func (c *HTTPClient) PostAuth(ctx context.Context, path string, data interface{}, username string, password string, result interface{}) (statusCode int, err error) {
 	c.l.Lock()
 	defer c.l.Unlock()
 
@@ -267,7 +265,7 @@ func (c *HTTPClient) PostAuth(path string, data interface{}, username string, pa
 
 	req.SetBasicAuth(username, password)
 
-	statusCode, err = c.sendRequest(req, result, false)
+	statusCode, err = c.sendRequest(ctx, req, result, false)
 
 	return statusCode, err
 }
@@ -328,7 +326,7 @@ func (c *HTTPClient) do(ctx context.Context, req *http.Request, result interface
 
 	if withAuth {
 		if c.jwtToken == "" {
-			newToken, err := c.GetJWT()
+			newToken, err := c.GetJWT(ctx)
 			if err != nil {
 				return 0, err
 			}
@@ -340,7 +338,7 @@ func (c *HTTPClient) do(ctx context.Context, req *http.Request, result interface
 	}
 
 	for {
-		statusCode, err := c.sendRequest(req, result, forceInsecure)
+		statusCode, err := c.sendRequest(ctx, req, result, forceInsecure)
 
 		// reset the JWT token if the call wasn't authorized, the JWT token may have expired
 		if withAuth && firstCall && err != nil {
@@ -375,7 +373,7 @@ func (c *HTTPClient) do(ctx context.Context, req *http.Request, result interface
 }
 
 // GetJWT return a new JWT token for authentication with Bleemeo API.
-func (c *HTTPClient) GetJWT() (string, error) {
+func (c *HTTPClient) GetJWT(ctx context.Context) (string, error) {
 	u, _ := c.baseURL.Parse("v1/jwt-auth/")
 
 	body, _ := json.Marshal(map[string]string{
@@ -394,7 +392,7 @@ func (c *HTTPClient) GetJWT() (string, error) {
 		Token string
 	}
 
-	statusCode, err := c.sendRequest(req, &token, false)
+	statusCode, err := c.sendRequest(ctx, req, &token, false)
 	if err != nil {
 		if apiError, ok := err.(APIError); ok {
 			if apiError.StatusCode < 500 && apiError.StatusCode != 429 {
@@ -425,7 +423,7 @@ func (c *HTTPClient) GetJWT() (string, error) {
 	return token.Token, nil
 }
 
-func (c *HTTPClient) sendRequest(req *http.Request, result interface{}, forceInsecure bool) (statusCode int, err error) {
+func (c *HTTPClient) sendRequest(ctx context.Context, req *http.Request, result interface{}, forceInsecure bool) (statusCode int, err error) {
 	if time.Until(c.throttleDeadline) > 0 {
 		return 0, APIError{
 			StatusCode: 429,
@@ -436,7 +434,7 @@ func (c *HTTPClient) sendRequest(req *http.Request, result interface{}, forceIns
 	req.Header.Add("X-Requested-With", "XMLHttpRequest")
 	req.Header.Add("User-Agent", version.UserAgent())
 
-	ctx, cancel := context.WithTimeout(c.ctx, 10*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
 	req = req.WithContext(ctx)

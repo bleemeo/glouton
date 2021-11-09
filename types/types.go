@@ -17,6 +17,7 @@
 package types
 
 import (
+	"context"
 	"errors"
 	"glouton/logger"
 	"io"
@@ -229,7 +230,7 @@ type MetricPoint struct {
 
 // PointPusher push new points. Points must not be mutated after call.
 type PointPusher interface {
-	PushPoints(points []MetricPoint)
+	PushPoints(ctx context.Context, points []MetricPoint)
 }
 
 // StatusDescription store a service/metric status with an optional description.

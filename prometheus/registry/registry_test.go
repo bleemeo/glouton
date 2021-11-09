@@ -260,6 +260,7 @@ func TestRegistry_pushPoint(t *testing.T) {
 
 	pusher := reg.WithTTL(24 * time.Hour)
 	pusher.PushPoints(
+		context.Background(),
 		[]types.MetricPoint{
 			{
 				Point: types.Point{Value: 1.0, Time: t0},
@@ -360,6 +361,7 @@ func TestRegistry_pushPoint(t *testing.T) {
 	}
 
 	pusher.PushPoints(
+		context.Background(),
 		[]types.MetricPoint{
 			{
 				Point: types.Point{Value: 1.0, Time: t0},
@@ -540,7 +542,7 @@ func TestRegistry_run(t *testing.T) {
 			reg := &Registry{
 				option: Option{
 					MetricFormat: format,
-					PushPoint: pushFunction(func(pts []types.MetricPoint) {
+					PushPoint: pushFunction(func(_ context.Context, pts []types.MetricPoint) {
 						l.Lock()
 						points = append(points, pts...)
 						l.Unlock()
@@ -586,7 +588,7 @@ func TestRegistry_run(t *testing.T) {
 				t0 = t
 				l.Unlock()
 
-				reg.WithTTL(5 * time.Minute).PushPoints([]types.MetricPoint{
+				reg.WithTTL(5*time.Minute).PushPoints(context.Background(), []types.MetricPoint{ //nolint: contextcheck
 					{Point: types.Point{Time: t, Value: 42.0}, Labels: map[string]string{"__name__": "push", "something": "value"}, Annotations: types.MetricAnnotations{BleemeoItem: "/home"}},
 				})
 			})

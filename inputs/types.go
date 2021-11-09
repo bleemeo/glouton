@@ -1,6 +1,7 @@
 package inputs
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"glouton/logger"
@@ -26,7 +27,8 @@ type AnnotationAccumulator interface {
 
 // Accumulator implement telegraf.Accumulator (+AddFieldsWithAnnotations) and emit the metric points.
 type Accumulator struct {
-	Pusher types.PointPusher
+	Pusher  types.PointPusher
+	Context context.Context
 }
 
 // AddFields adds a metric to the accumulator with the given measurement
@@ -154,7 +156,7 @@ func (a *Accumulator) addMetrics(measurement string, fields map[string]interface
 		})
 	}
 
-	a.Pusher.PushPoints(points)
+	a.Pusher.PushPoints(a.Context, points)
 }
 
 // CollectorConfig represents the configuration of a collector.

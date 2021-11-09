@@ -680,7 +680,10 @@ func (a *agent) run() { //nolint:cyclop
 	}
 
 	a.threshold = threshold.New(a.state)
-	acc := &inputs.Accumulator{Pusher: a.threshold.WithPusher(a.gathererRegistry.WithTTL(5 * time.Minute))}
+	acc := &inputs.Accumulator{
+		Pusher:  a.threshold.WithPusher(a.gathererRegistry.WithTTL(5 * time.Minute)),
+		Context: ctx,
+	}
 
 	a.dockerRuntime = &dockerRuntime.Docker{
 		DockerSockets:             dockerRuntime.DefaultAddresses(a.hostRootPath),
@@ -1168,7 +1171,7 @@ func (a *agent) miscGather(pusher types.PointPusher) func(context.Context, time.
 			},
 		})
 
-		pusher.PushPoints(points)
+		pusher.PushPoints(ctx, points)
 	}
 }
 
@@ -1252,7 +1255,7 @@ func (a *agent) minuteMetric(ctx context.Context) error {
 					ServiceName: srv.Name,
 				}
 
-				a.threshold.WithPusher(a.gathererRegistry.WithTTL(5 * time.Minute)).PushPoints([]types.MetricPoint{
+				a.threshold.WithPusher(a.gathererRegistry.WithTTL(5*time.Minute)).PushPoints(ctx, []types.MetricPoint{
 					{
 						Labels:      labels,
 						Annotations: annotations,
@@ -1283,7 +1286,7 @@ func (a *agent) minuteMetric(ctx context.Context) error {
 					ServiceName: srv.Name,
 				}
 
-				a.threshold.WithPusher(a.gathererRegistry.WithTTL(5 * time.Minute)).PushPoints([]types.MetricPoint{
+				a.threshold.WithPusher(a.gathererRegistry.WithTTL(5*time.Minute)).PushPoints(ctx, []types.MetricPoint{
 					{
 						Labels:      labels,
 						Annotations: annotations,
@@ -1305,7 +1308,7 @@ func (a *agent) minuteMetric(ctx context.Context) error {
 			desc = "configuration returned no warnings."
 		}
 
-		a.gathererRegistry.WithTTL(5 * time.Minute).PushPoints([]types.MetricPoint{
+		a.gathererRegistry.WithTTL(5*time.Minute).PushPoints(ctx, []types.MetricPoint{
 			{
 				Point: types.Point{
 					Value: float64(status.NagiosCode()),
@@ -1544,7 +1547,7 @@ func (a *agent) dockerWatcher(ctx context.Context) error {
 					a.bleemeoConnector.UpdateContainers()
 				}
 
-				a.sendDockerContainerHealth(ev.Container)
+				a.sendDockerContainerHealth(ctx, ev.Container)
 			}
 		case <-pendingTimer.C:
 			if pendingDiscovery {
@@ -1573,7 +1576,7 @@ func (a *agent) dockerWatcherContainerHealth(ctx context.Context) {
 			}
 
 			for _, c := range containers {
-				a.sendDockerContainerHealth(c)
+				a.sendDockerContainerHealth(ctx, c)
 			}
 		case <-ctx.Done():
 			return
@@ -1581,7 +1584,7 @@ func (a *agent) dockerWatcherContainerHealth(ctx context.Context) {
 	}
 }
 
-func (a *agent) sendDockerContainerHealth(container facts.Container) {
+func (a *agent) sendDockerContainerHealth(ctx context.Context, container facts.Container) {
 	health, message := container.Health()
 	if health == facts.ContainerNoHealthCheck {
 		return
@@ -1612,7 +1615,7 @@ func (a *agent) sendDockerContainerHealth(container facts.Container) {
 		status.StatusDescription = fmt.Sprintf("Unknown health status %s", message)
 	}
 
-	a.gathererRegistry.WithTTL(5 * time.Minute).PushPoints([]types.MetricPoint{
+	a.gathererRegistry.WithTTL(5*time.Minute).PushPoints(ctx, []types.MetricPoint{
 		{
 			Labels: map[string]string{
 				types.LabelName:              "container_health_status",
@@ -1784,7 +1787,7 @@ func systemUpdateMetric(ctx context.Context, a *agent) {
 		})
 	}
 
-	a.threshold.WithPusher(a.gathererRegistry.WithTTL(time.Hour)).PushPoints(points)
+	a.threshold.WithPusher(a.gathererRegistry.WithTTL(time.Hour)).PushPoints(ctx, points)
 }
 
 func (a *agent) deletedContainersCallback(containersID []string) {
@@ -1818,10 +1821,10 @@ func (a *agent) migrateState() {
 }
 
 // DiagnosticPage return useful information to troubleshoot issue.
-func (a *agent) DiagnosticPage() string {
+func (a *agent) DiagnosticPage(ctx context.Context) string {
 	builder := &strings.Builder{}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
 	fmt.Fprintf(
@@ -1917,7 +1920,7 @@ func (a *agent) diagnosticGlobalInfo(ctx context.Context, archive types.ArchiveW
 		return err
 	}
 
-	_, err = file.Write([]byte(a.DiagnosticPage()))
+	_, err = file.Write([]byte(a.DiagnosticPage(ctx)))
 	if err != nil {
 		return err
 	}
@@ -2104,7 +2107,7 @@ func (a *agent) diagnosticSNMP(ctx context.Context, archive types.ArchiveWriter)
 
 	for _, t := range a.snmpManager.Targets() {
 		fmt.Fprintf(file, "\n%s\n", t.String())
-		facts, err := t.Facts(context.Background(), 48*time.Hour)
+		facts, err := t.Facts(ctx, 48*time.Hour)
 
 		if err != nil {
 			fmt.Fprintf(file, " facts failed: %v\n", err)

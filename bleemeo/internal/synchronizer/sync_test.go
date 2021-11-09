@@ -953,7 +953,7 @@ func (helper *syncTestHelper) pushPoints(t *testing.T, metrics []labels.Labels) 
 		t.Fatal("pushPoints called before store is initilized")
 	}
 
-	helper.store.PushPoints(points)
+	helper.store.PushPoints(context.Background(), points)
 }
 
 func (helper *syncTestHelper) Close() {
@@ -967,13 +967,15 @@ func (helper *syncTestHelper) Close() {
 func (helper *syncTestHelper) runOnce(t *testing.T) error {
 	t.Helper()
 
+	ctx := context.Background()
+
 	if helper.s == nil {
 		return fmt.Errorf("%w: runOnce called before initSynchronizer", errUnexpectedOperation)
 	}
 
 	helper.api.ResetCount()
 
-	if err := helper.s.runOnce(false); err != nil {
+	if err := helper.s.runOnce(ctx, false); err != nil {
 		return fmt.Errorf("runOnce failed: %w", err)
 	}
 
