@@ -27,11 +27,9 @@ case "$1" in
       exit 1
 esac
 
-if [ -e .build-cache ]; then
-   mkdir -p .build-cache/node
-
-   GO_MOUNT_CACHE="-v $(pwd)/.build-cache:/go/pkg"
-   NODE_MOUNT_CACHE="-v $(pwd)/.build-cache/node:/tmp/home"
+if docker volume ls | grep -q glouton-buildcache; then
+   GO_MOUNT_CACHE="-v glouton-buildcache:/go/pkg"
+   NODE_MOUNT_CACHE="-v glouton-buildcache:/go/pkg"
 fi
 
 if [ "${ONLY_GO}" = "1" ]; then
@@ -43,37 +41,43 @@ fi
 
 if [ "${SKIP_JS}" != "1" -a "${ONLY_GO}" != "1" ]; then
    echo "Building webui"
-   docker run --rm -u $USER_UID -e HOME=/tmp/home \
-      -v $(pwd):/src -w /src/webui ${NODE_MOUNT_CACHE} \
+   mkdir -p api/static/assets/css/ api/static/assets/js/ webui/node_modules
+   docker run --rm -e HOME=/go/pkg/node \
+      -v $(pwd):/src --tmpfs /src/webui/node_modules:exec -w /src/webui ${NODE_MOUNT_CACHE} \
       node:lts \
-      sh -c 'rm -fr node_modules && npm install && npm run deploy'
+      sh -c "(npm install && npm run deploy); result=\$?; chown -R $USER_UID dist ../api/static/assets/js/ ../api/static/assets/css/; exit \$result"
 fi
 
 GORELEASER_VERSION="v0.176.0"
 
 echo "Building Go binary"
 if [ "${ONLY_GO}" = "1" -a "${WITH_RACE}" != "1" ]; then
-   docker run --rm -u $USER_UID:`getent group docker|cut -d: -f 3` -e HOME=/go/pkg -e CGO_ENABLED=0 \
+   docker run --rm -e HOME=/go/pkg -e CGO_ENABLED=0 \
       -v $(pwd):/src -w /src ${GO_MOUNT_CACHE} \
-      -v /var/run/docker.sock:/var/run/docker.sock \
       --entrypoint '' \
-      goreleaser/goreleaser:${GORELEASER_VERSION} sh -c 'go build .'
+      goreleaser/goreleaser:${GORELEASER_VERSION} sh -c "go build . && chown $USER_UID glouton"
 elif [ "${ONLY_GO}" = "1" -a "${WITH_RACE}" = "1" ]; then
-   docker run --rm -u $USER_UID:`getent group docker|cut -d: -f 3` -e HOME=/go/pkg -e CGO_ENABLED=1 \
+   docker run --rm -e HOME=/go/pkg -e CGO_ENABLED=1 \
       -v $(pwd):/src -w /src ${GO_MOUNT_CACHE} \
-      -v /var/run/docker.sock:/var/run/docker.sock \
       --entrypoint '' \
-      goreleaser/goreleaser:${GORELEASER_VERSION} sh -c 'go build -ldflags="-linkmode external -extldflags=-static" -race .'
+      goreleaser/goreleaser:${GORELEASER_VERSION} sh -c "go build -ldflags='-linkmode external -extldflags=-static' -race . && chown $USER_UID glouton"
 else
-   docker run --rm -u $USER_UID:`getent group docker|cut -d: -f 3` -e HOME=/go/pkg -e CGO_ENABLED=0 \
+   docker run --rm -e HOME=/go/pkg -e CGO_ENABLED=0 \
       -v $(pwd):/src -w /src ${GO_MOUNT_CACHE} \
       -v /var/run/docker.sock:/var/run/docker.sock \
       --entrypoint '' \
-      goreleaser/goreleaser:${GORELEASER_VERSION} sh -c 'go generate ./... && go test ./... && goreleaser --rm-dist --snapshot --parallelism 2'
+      goreleaser/goreleaser:${GORELEASER_VERSION} sh -c "(go generate ./... && go test ./... && goreleaser --rm-dist --snapshot --parallelism 2); result=\$?;chown -R $USER_UID dist coverage.html coverage.out api/models_gen.go; exit \$result"
+
+   # This isn't valid on all system. When building on Linux/ARM64 it don't work.
+   # VERSION=$(dist/glouton_linux_amd64/glouton --version)
+   # Use the filename instead
+   filename=$(echo dist/glouton_*_linux_amd64.deb)
+   VERSION=${filename#"dist/glouton_"}
+   VERSION=${VERSION%"_linux_amd64.deb"}
+
+   echo $VERSION > dist/VERSION
 
    ./packaging/windows/generate_installer.sh
-
-   VERSION=$(dist/glouton_linux_amd64/glouton --version)
 
    sed "s@image: bleemeo/bleemeo-agent:latest@image: bleemeo/bleemeo-agent:${VERSION}@" k8s.yaml > dist/k8s.yaml
 fi
