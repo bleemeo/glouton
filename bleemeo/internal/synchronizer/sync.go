@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/getsentry/sentry-go"
 	"glouton/bleemeo/client"
 	"glouton/bleemeo/internal/cache"
 	"glouton/bleemeo/internal/common"
@@ -925,6 +926,15 @@ func (s *Synchronizer) register() error {
 	}
 
 	s.agentID = objectID.ID
+
+	version := s.option.Config.String("bleemeo.glouton_version")
+
+	sentry.ConfigureScope(func(scope *sentry.Scope) {
+		scope.SetContext("agent", map[string]interface{}{
+			"agent_id"       :   s.agentID,
+			"glouton_version":   version,
+		})
+	})
 
 	if err := s.option.State.Set("agent_uuid", objectID.ID); err != nil {
 		return err

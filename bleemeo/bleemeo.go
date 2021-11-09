@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/getsentry/sentry-go"
 	"glouton/bleemeo/internal/cache"
 	"glouton/bleemeo/internal/mqtt"
 	"glouton/bleemeo/internal/synchronizer"
@@ -282,6 +283,15 @@ func (c *Connector) Run(ctx context.Context) error {
 	go func() {
 		defer wg.Done()
 		defer cancel()
+		defer func() {
+			err := recover()
+	
+			if err != nil {
+				sentry.CurrentHub().Recover(err)
+				sentry.Flush(time.Second * 5)
+				panic(err)
+			}
+		}()
 
 		syncErr = c.sync.Run(subCtx)
 	}()
@@ -291,6 +301,15 @@ func (c *Connector) Run(ctx context.Context) error {
 	go func() {
 		defer wg.Done()
 		defer cancel()
+		defer func() {
+			err := recover()
+	
+			if err != nil {
+				sentry.CurrentHub().Recover(err)
+				sentry.Flush(time.Second * 5)
+				panic(err)
+			}
+		}()
 
 		ticker := time.NewTicker(10 * time.Second)
 		defer ticker.Stop()
@@ -319,6 +338,15 @@ func (c *Connector) Run(ctx context.Context) error {
 			go func() {
 				defer wg.Done()
 				defer cancel()
+				defer func() {
+					err := recover()
+			
+					if err != nil {
+						sentry.CurrentHub().Recover(err)
+						sentry.Flush(time.Second * 5)
+						panic(err)
+					}
+				}()
 
 				mqttErr = c.mqttRestarter(subCtx)
 			}()

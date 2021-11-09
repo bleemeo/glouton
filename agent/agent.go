@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/getsentry/sentry-go"
 	"glouton/agent/state"
 	"glouton/api"
 	"glouton/bleemeo"
@@ -938,6 +939,13 @@ func (a *agent) run() { //nolint:cyclop
 		a.gathererRegistry.UpdateRelabelHook(ctx, a.bleemeoConnector.RelabelHook)
 		tasks = append(tasks, taskInfo{a.bleemeoConnector.Run, "Bleemeo SAAS connector"})
 	}
+
+	sentry.ConfigureScope(func(scope *sentry.Scope) {
+		scope.SetContext("agent", map[string]interface{}{
+			"agent_id"       :   a.BleemeoAgentID(),
+			"glouton_version":   version.Version,
+		})
+	})
 
 	if a.oldConfig.Bool("nrpe.enable") {
 		nrpeConfFile := a.oldConfig.StringList("nrpe.conf_paths")
