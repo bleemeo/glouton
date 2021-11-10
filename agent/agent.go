@@ -182,6 +182,21 @@ func (a *agent) init(configFiles []string) (ok bool) {
 		return false
 	}
 
+	if dsn := a.oldConfig.String("bleemeo.sentry.dsn"); dsn != "" {
+		err := sentry.Init(sentry.ClientOptions{
+			Dsn: dsn,
+		})
+		if err != nil {
+			logger.V(1).Printf("sentry.Init failed: %s", err)
+		}
+	}
+
+	sentry.ConfigureScope(func(scope *sentry.Scope) {
+		scope.SetContext("agent", map[string]interface{}{
+			"glouton_version": version.Version,
+		})
+	})
+
 	for _, w := range warnings {
 		logger.Printf("Warning while loading configuration: %v", w)
 	}

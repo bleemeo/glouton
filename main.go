@@ -21,12 +21,9 @@ import (
 	"fmt"
 	"glouton/agent"
 	versionPkg "glouton/version"
-	"log"
 	"strings"
 
 	_ "net/http/pprof" //nolint:gosec
-
-	"github.com/getsentry/sentry-go"
 )
 
 //nolint:gochecknoglobals
@@ -56,19 +53,6 @@ func main() {
 		fmt.Println(versionPkg.Version) //nolint:forbidigo
 
 		return
-	}
-
-	sentry.ConfigureScope(func(scope *sentry.Scope) {
-		scope.SetContext("agent", map[string]interface{}{
-			"glouton_version": versionPkg.Version,
-		})
-	})
-
-	err := sentry.Init(sentry.ClientOptions{
-		Dsn: "https://55b4938036a1488ca0362792a77ac3e2@errors.bleemeo.work/4",
-	})
-	if err != nil {
-		log.Fatalf("sentry.Init: %s", err)
 	}
 
 	// run os-specific initialisation codd
