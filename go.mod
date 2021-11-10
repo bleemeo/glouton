@@ -13,6 +13,7 @@ require (
 	github.com/containerd/typeurl v1.0.2
 	github.com/docker/docker v20.10.8+incompatible
 	github.com/eclipse/paho.mqtt.golang v1.3.5
+	github.com/getsentry/sentry-go v0.11.0 // indirect
 	github.com/go-chi/chi v4.1.2+incompatible
 	github.com/go-kit/kit v0.11.0
 	github.com/go-ole/go-ole v1.2.5
@@ -44,6 +45,7 @@ require (
 	github.com/shopspring/decimal v1.2.0 // indirect
 	github.com/stretchr/objx v0.3.0 // indirect
 	github.com/tklauser/go-sysconf v0.3.9 // indirect
+	github.com/urfave/cli/v2 v2.1.1 // indirect
 	github.com/vektah/gqlparser/v2 v2.1.0
 	github.com/vishvananda/netlink v1.1.1-0.20201029203352-d40f9887b852
 	golang.org/x/sys v0.0.0-20210903071746-97244b99971b

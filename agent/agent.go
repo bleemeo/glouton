@@ -75,6 +75,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/getsentry/sentry-go"
+
 	bleemeoTypes "glouton/bleemeo/types"
 
 	dockerRuntime "glouton/facts/container-runtime/docker"
@@ -179,6 +181,21 @@ func (a *agent) init(configFiles []string) (ok bool) {
 
 		return false
 	}
+
+	if dsn := a.oldConfig.String("bleemeo.sentry.dsn"); dsn != "" {
+		err := sentry.Init(sentry.ClientOptions{
+			Dsn: dsn,
+		})
+		if err != nil {
+			logger.V(1).Printf("sentry.Init failed: %s", err)
+		}
+	}
+
+	sentry.ConfigureScope(func(scope *sentry.Scope) {
+		scope.SetContext("agent", map[string]interface{}{
+			"glouton_version": version.Version,
+		})
+	})
 
 	for _, w := range warnings {
 		logger.Printf("Warning while loading configuration: %v", w)
@@ -941,6 +958,13 @@ func (a *agent) run() { //nolint:cyclop
 		a.gathererRegistry.UpdateRelabelHook(ctx, a.bleemeoConnector.RelabelHook)
 		tasks = append(tasks, taskInfo{a.bleemeoConnector.Run, "Bleemeo SAAS connector"})
 	}
+
+	sentry.ConfigureScope(func(scope *sentry.Scope) {
+		scope.SetContext("agent", map[string]interface{}{
+			"agent_id":        a.BleemeoAgentID(),
+			"glouton_version": version.Version,
+		})
+	})
 
 	if a.oldConfig.Bool("nrpe.enable") {
 		nrpeConfFile := a.oldConfig.StringList("nrpe.conf_paths")

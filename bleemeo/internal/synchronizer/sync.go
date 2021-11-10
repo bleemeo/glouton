@@ -37,6 +37,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/getsentry/sentry-go"
 )
 
 var (
@@ -926,6 +928,15 @@ func (s *Synchronizer) register(ctx context.Context) error {
 	}
 
 	s.agentID = objectID.ID
+
+	version := s.option.Config.String("bleemeo.glouton_version")
+
+	sentry.ConfigureScope(func(scope *sentry.Scope) {
+		scope.SetContext("agent", map[string]interface{}{
+			"agent_id":        s.agentID,
+			"glouton_version": version,
+		})
+	})
 
 	if err := s.option.State.Set("agent_uuid", objectID.ID); err != nil {
 		return err

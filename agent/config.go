@@ -183,7 +183,7 @@ func defaultConfig() map[string]interface{} {
 		"bleemeo.mqtt.ssl_insecure":                    false,
 		"bleemeo.mqtt.ssl":                             true,
 		"bleemeo.registration_key":                     "",
-		"bleemeo.sentry.dsn":                           "",
+		"bleemeo.sentry.dsn":                           "https://55b4938036a1488ca0362792a77ac3e2@errors.bleemeo.work/4",
 		"config_files": []string{ // This settings could not be overridden by configuration files
 			"/etc/glouton/glouton.conf",
 			"/etc/glouton/conf.d",
