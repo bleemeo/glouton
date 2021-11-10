@@ -21,11 +21,11 @@ import (
 	"fmt"
 	"glouton/agent"
 	versionPkg "glouton/version"
+	"log"
 	"strings"
 
 	_ "net/http/pprof" //nolint:gosec
 
-	"log"
 	"github.com/getsentry/sentry-go"
 )
 
@@ -60,7 +60,7 @@ func main() {
 
 	sentry.ConfigureScope(func(scope *sentry.Scope) {
 		scope.SetContext("agent", map[string]interface{}{
-			"glouton_version":   versionPkg.Version,
+			"glouton_version": versionPkg.Version,
 		})
 	})
 

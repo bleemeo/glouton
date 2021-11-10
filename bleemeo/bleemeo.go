@@ -20,7 +20,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/getsentry/sentry-go"
 	"glouton/bleemeo/internal/cache"
 	"glouton/bleemeo/internal/mqtt"
 	"glouton/bleemeo/internal/synchronizer"
@@ -34,6 +33,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/getsentry/sentry-go"
 
 	gloutonTypes "glouton/types"
 )
@@ -285,7 +286,6 @@ func (c *Connector) Run(ctx context.Context) error {
 		defer cancel()
 		defer func() {
 			err := recover()
-	
 			if err != nil {
 				sentry.CurrentHub().Recover(err)
 				sentry.Flush(time.Second * 5)
@@ -303,7 +303,6 @@ func (c *Connector) Run(ctx context.Context) error {
 		defer cancel()
 		defer func() {
 			err := recover()
-	
 			if err != nil {
 				sentry.CurrentHub().Recover(err)
 				sentry.Flush(time.Second * 5)
@@ -340,7 +339,6 @@ func (c *Connector) Run(ctx context.Context) error {
 				defer cancel()
 				defer func() {
 					err := recover()
-			
 					if err != nil {
 						sentry.CurrentHub().Recover(err)
 						sentry.Flush(time.Second * 5)

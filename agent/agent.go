@@ -22,7 +22,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/getsentry/sentry-go"
 	"glouton/agent/state"
 	"glouton/api"
 	"glouton/bleemeo"
@@ -75,6 +74,8 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/getsentry/sentry-go"
 
 	bleemeoTypes "glouton/bleemeo/types"
 
@@ -942,8 +943,8 @@ func (a *agent) run() { //nolint:cyclop
 
 	sentry.ConfigureScope(func(scope *sentry.Scope) {
 		scope.SetContext("agent", map[string]interface{}{
-			"agent_id"       :   a.BleemeoAgentID(),
-			"glouton_version":   version.Version,
+			"agent_id":        a.BleemeoAgentID(),
+			"glouton_version": version.Version,
 		})
 	})
 
