@@ -26,7 +26,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/shirou/gopsutil/process"
+	"github.com/shirou/gopsutil/v3/process"
 )
 
 // Processes retrieves the list of all the current processes and their respective information.
@@ -113,11 +113,11 @@ func (z PsutilLister) Processes(ctx context.Context, maxAge time.Duration) (proc
 		}
 
 		status, err := p.StatusWithContext(ctx)
-		if err != nil {
+		if err != nil || len(status) == 0 {
 			continue
 		}
 
-		res.Status = PsStat2Status(status)
+		res.Status = PsStat2Status(status[0])
 
 		numThreads, _ := p.NumThreads()
 

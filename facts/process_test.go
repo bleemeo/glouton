@@ -36,8 +36,10 @@ import (
 func TestPsStat2Status(t *testing.T) {
 	cases := []struct {
 		in   string
-		want string
+		want ProcessStatus
 	}{
+		// Note: the test use strings and not ProcessStatus* constant, because
+		// the value of the constant is exposed (used in topinfo sent to Bleemeo).
 		{"D", "disk-sleep"},
 		{"I", "idle"},
 		{"I<", "idle"},

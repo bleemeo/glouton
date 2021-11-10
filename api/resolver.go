@@ -377,7 +377,7 @@ func (r *queryResolver) Processes(ctx context.Context, containerID *string) (*To
 				MemoryRss:   int(process.MemoryRSS),
 				CPUPercent:  process.CPUPercent,
 				CPUTime:     process.CPUTime,
-				Status:      process.Status,
+				Status:      string(process.Status),
 				Username:    process.Username,
 				Executable:  process.Executable,
 				ContainerID: process.ContainerID,

@@ -23,7 +23,7 @@ import (
 	"github.com/AstromechZA/etcpwdparse"
 	"github.com/ncabatoff/process-exporter/proc"
 	"github.com/prometheus/procfs"
-	"github.com/shirou/gopsutil/process"
+	"github.com/shirou/gopsutil/v3/process"
 )
 
 var (
