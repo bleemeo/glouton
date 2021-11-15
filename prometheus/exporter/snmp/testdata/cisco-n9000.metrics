@@ -42,11 +42,6 @@ entPhysicalSoftwareRev{entPhysicalIndex="21593",entPhysicalSoftwareRev=""} 1
 entPhysicalSoftwareRev{entPhysicalIndex="21594",entPhysicalSoftwareRev=""} 1
 entPhysicalSoftwareRev{entPhysicalIndex="22",entPhysicalSoftwareRev="6.1(2)I3(2)"} 1
 entPhysicalSoftwareRev{entPhysicalIndex="23",entPhysicalSoftwareRev="6.1(2)I3(2)"} 1
-# HELP ipRouteNextHop The IP address of the next hop of this route - 1.3.6.1.2.1.4.21.1.7
-# TYPE ipRouteNextHop gauge
-ipRouteNextHop{ipRouteDest="0.0.0.0",ipRouteNextHop="0.0.0.0"} 1
-ipRouteNextHop{ipRouteDest="127.0.0.0",ipRouteNextHop="0.0.0.0"} 1
-ipRouteNextHop{ipRouteDest="255.255.255.255",ipRouteNextHop="0.0.0.0"} 1
 # HELP snmp_scrape_duration_seconds Total SNMP time scrape took (walk and processing).
 # TYPE snmp_scrape_duration_seconds gauge
 snmp_scrape_duration_seconds 0.548440816
