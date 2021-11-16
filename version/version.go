@@ -41,6 +41,11 @@ func IsWindows() bool {
 	return runtime.GOOS == "windows"
 }
 
+// IsLinux returns true when the current operating system is windows.
+func IsLinux() bool {
+	return runtime.GOOS == "linux"
+}
+
 type version struct {
 	valid bool
 	date  time.Time
