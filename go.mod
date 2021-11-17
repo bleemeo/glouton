@@ -42,7 +42,7 @@ require (
 	github.com/prometheus/procfs v0.7.3
 	github.com/prometheus/prometheus v1.8.2-0.20210518124745-db7f0bcec27b // 2.27.1
 	github.com/rs/cors v1.8.0
-	github.com/shirou/gopsutil v3.21.10+incompatible
+	github.com/shirou/gopsutil v3.21.8+incompatible
 	github.com/shopspring/decimal v1.3.1 // indirect
 	github.com/stretchr/objx v0.3.0 // indirect
 	github.com/urfave/cli/v2 v2.3.0 // indirect
