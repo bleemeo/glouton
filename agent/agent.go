@@ -2285,6 +2285,10 @@ func setupContainer(hostRootPath string) {
 			os.Setenv("HOST_RUN", filepath.Join(hostRootPath, "run"))
 		}
 
+		if os.Getenv("HOST_DEV") == "" {
+			os.Setenv("HOST_DEV", filepath.Join(hostRootPath, "dev"))
+		}
+
 		if os.Getenv("HOST_MOUNT_PREFIX") == "" {
 			os.Setenv("HOST_MOUNT_PREFIX", hostRootPath)
 		}
