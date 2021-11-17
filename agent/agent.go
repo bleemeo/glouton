@@ -2254,17 +2254,39 @@ func setupContainer(hostRootPath string) {
 		return
 	}
 
-	if hostRootPath != "" && hostRootPath != "/" && os.Getenv("HOST_VAR") == "" {
-		// gopsutil will use HOST_VAR as prefix to host /var
-		// It's used at least for reading the number of connected user from /var/run/utmp
-		os.Setenv("HOST_VAR", hostRootPath+"/var")
+	if hostRootPath != "" && hostRootPath != "/" {
+		if os.Getenv("HOST_VAR") == "" {
+			// gopsutil will use HOST_VAR as prefix to host /var
+			// It's used at least for reading the number of connected user from /var/run/utmp
+			os.Setenv("HOST_VAR", filepath.Join(hostRootPath, "var"))
 
-		// ... but /var/run is usually a symlink to /run.
-		varRun := filepath.Join(hostRootPath, "var/run")
-		target, err := os.Readlink(varRun)
+			// ... but /var/run is usually a symlink to /run.
+			varRun := filepath.Join(hostRootPath, "var/run")
+			target, err := os.Readlink(varRun)
 
-		if err == nil && target == "/run" {
-			os.Setenv("HOST_VAR", hostRootPath)
+			if err == nil && target == "/run" {
+				os.Setenv("HOST_VAR", hostRootPath)
+			}
+		}
+
+		if os.Getenv("HOST_ETC") == "" {
+			os.Setenv("HOST_ETC", filepath.Join(hostRootPath, "etc"))
+		}
+
+		if os.Getenv("HOST_PROC") == "" {
+			os.Setenv("HOST_PROC", filepath.Join(hostRootPath, "proc"))
+		}
+
+		if os.Getenv("HOST_SYS") == "" {
+			os.Setenv("HOST_SYS", filepath.Join(hostRootPath, "sys"))
+		}
+
+		if os.Getenv("HOST_RUN") == "" {
+			os.Setenv("HOST_RUN", filepath.Join(hostRootPath, "run"))
+		}
+
+		if os.Getenv("HOST_MOUNT_PREFIX") == "" {
+			os.Setenv("HOST_MOUNT_PREFIX", hostRootPath)
 		}
 	}
 }
