@@ -210,14 +210,21 @@ func (f *FactProvider) fastUpdateFacts(ctx context.Context) map[string]string {
 	}
 
 	vType, vRole, err := host.VirtualizationWithContext(ctx)
-	if err == nil && vRole == "guest" {
+	if err == nil && vRole == "guest" && vType != "" {
 		if vType == "vbox" {
 			vType = "virtualbox"
 		}
 
 		newFacts["virtual"] = vType
 	} else {
-		newFacts["virtual"] = guessVirtual(newFacts)
+		gloutonvType := guessVirtual(newFacts)
+
+		if gloutonvType == "physical" && vType == "" && err == nil && vRole == "guest" {
+			// Let's default to "kvm", we have no clue on what the hypervisor is.
+			gloutonvType = "kvm"
+		}
+
+		newFacts["virtual"] = gloutonvType
 	}
 
 	if !version.IsWindows() {
