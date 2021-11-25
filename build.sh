@@ -54,6 +54,10 @@ if [ -z "${VERSION}" ]; then
    VERSION=$(date -u +%y.%m.%d.%H%M%S)
 fi
 
+if [ -z "${BUILX_OPTION}" ]; then
+   BUILX_OPTION="--platform linux/amd64,linux/arm64/v8,linux/arm/v7 -t glouton:latest -t glouton:${VERSION}"
+fi
+
 export VERSION
 
 echo "Building Go binary"
@@ -77,6 +81,12 @@ else
    echo $VERSION > dist/VERSION
 
    ./packaging/windows/generate_installer.sh
+
+   # Build Docker image using buildx. We use docker buildx instead of goreleaser because
+   # goreleaser use "docker manifest" which require to push image to a registry. This means we ends with 4 tags:
+   # 3 for each of the 3 supported architectures and 1 for the multi-architecture image.
+   # Using buildx only generate 1 tag on the Docker Hub.
+   docker buildx build ${BUILX_OPTION} .
 
    sed "s@image: bleemeo/bleemeo-agent:latest@image: bleemeo/bleemeo-agent:${VERSION}@" k8s.yaml > dist/k8s.yaml
 fi
