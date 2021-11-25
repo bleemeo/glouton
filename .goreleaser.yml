@@ -49,6 +49,10 @@ nfpms:
     dst: /usr/sbin/glouton-netstat
   - src: bin/glouton-gather-facts
     dst: /usr/sbin/glouton-gather-facts
+  - type: dir
+    dst: /etc/glouton/conf.d
+  - type: dir
+    dst: /var/lib/glouton
   # Global config files
   - src: etc/glouton.conf
     dst: /etc/glouton/glouton.conf
@@ -84,9 +88,6 @@ nfpms:
     dst: /usr/lib/python3.6/site-packages/dnf-plugins/glouton.py
     type: config
     packager: rpm
-  empty_folders:
-  - /etc/glouton/conf.d
-  - /var/lib/glouton
   scripts:
     postinstall: "packaging/scripts/postinstall.sh"
     preremove: "packaging/scripts/preremove.sh"
