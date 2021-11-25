@@ -1,7 +1,7 @@
 project_name: glouton
 snapshot:
   # Our version is based on the date.
-  name_template: '{{ time "06.01.02.150405" }}'
+  name_template: '{{ .Env.VERSION }}'
 builds:
 - env:
   - CGO_ENABLED=0

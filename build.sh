@@ -50,30 +50,29 @@ fi
 
 GORELEASER_VERSION="v1.0.0"
 
+if [ -z "${VERSION}" ]; then
+   VERSION=$(date -u +%y.%m.%d.%H%M%S)
+fi
+
+export VERSION
+
 echo "Building Go binary"
 if [ "${ONLY_GO}" = "1" -a "${WITH_RACE}" != "1" ]; then
    docker run --rm -e HOME=/go/pkg -e CGO_ENABLED=0 \
       -v $(pwd):/src -w /src ${GO_MOUNT_CACHE} \
       --entrypoint '' \
-      goreleaser/goreleaser:${GORELEASER_VERSION} sh -c "go build . && chown $USER_UID glouton"
+      goreleaser/goreleaser:${GORELEASER_VERSION} sh -c "go build -ldflags='-X main.version=${VERSION}' . && chown $USER_UID glouton"
 elif [ "${ONLY_GO}" = "1" -a "${WITH_RACE}" = "1" ]; then
    docker run --rm -e HOME=/go/pkg -e CGO_ENABLED=1 \
       -v $(pwd):/src -w /src ${GO_MOUNT_CACHE} \
       --entrypoint '' \
-      goreleaser/goreleaser:${GORELEASER_VERSION} sh -c "go build -ldflags='-linkmode external -extldflags=-static' -race . && chown $USER_UID glouton"
+      goreleaser/goreleaser:${GORELEASER_VERSION} sh -c "go build -ldflags='-X main.version=${VERSION} -linkmode external -extldflags=-static' -race . && chown $USER_UID glouton"
 else
    docker run --rm -e HOME=/go/pkg -e CGO_ENABLED=0 \
       -v $(pwd):/src -w /src ${GO_MOUNT_CACHE} \
       -v /var/run/docker.sock:/var/run/docker.sock \
-      --entrypoint '' \
+      --entrypoint '' -e VERSION \
       goreleaser/goreleaser:${GORELEASER_VERSION} sh -c "(goreleaser check && go generate ./... && go test ./... && goreleaser --rm-dist --snapshot --parallelism 2); result=\$?;chown -R $USER_UID dist coverage.html coverage.out api/models_gen.go; exit \$result"
-
-   # This isn't valid on all system. When building on Linux/ARM64 it don't work.
-   # VERSION=$(dist/glouton_linux_amd64/glouton --version)
-   # Use the filename instead
-   filename=$(echo dist/glouton_*_linux_amd64.deb)
-   VERSION=${filename#"dist/glouton_"}
-   VERSION=${VERSION%"_linux_amd64.deb"}
 
    echo $VERSION > dist/VERSION
 
