@@ -226,6 +226,8 @@ var snmpMetrics = []string{
 	"ifOutErrors",
 	"total_interfaces",
 	"connected_interfaces",
+	"hrProcessorLoad",
+	"hrStorageUsed",
 }
 
 //nolint:gochecknoglobals
