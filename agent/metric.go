@@ -228,6 +228,15 @@ var snmpMetrics = []string{
 	"connected_interfaces",
 	"hrProcessorLoad",
 	"hrStorageUsed",
+	"cpmCPUTotal1min",
+	"ciscoMemoryPoolUsed",
+	"ciscoMemoryPoolFree",
+	"ciscoEnvMonTemperatureStatusDescr",
+	"ciscoEnvMonTemperatureStatusValue",
+	"ciscoEnvMonFanStatusDescr",
+	"ciscoEnvMonFanState",
+	"cpmCPUTotal1minRev",
+	"cpmCPUMemoryUsed",
 }
 
 //nolint:gochecknoglobals
