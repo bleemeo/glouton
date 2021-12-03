@@ -237,6 +237,7 @@ var snmpMetrics = []string{
 	"ciscoEnvMonFanState",
 	"cpmCPUTotal1minRev",
 	"cpmCPUMemoryUsed",
+	"prtMarkerSuppliesLevel",
 }
 
 //nolint:gochecknoglobals
