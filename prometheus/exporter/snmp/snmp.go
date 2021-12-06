@@ -93,8 +93,21 @@ func (t *Target) Address() string {
 	return t.opt.Address
 }
 
-func (t *Target) Module() string {
-	return "if_mib"
+func (t *Target) Module(ctx context.Context) (string, error) {
+	facts, err := t.Facts(ctx, 24*time.Hour)
+	if err != nil {
+		return "", err
+	}
+
+	if strings.Contains(facts["product_name"], "Cisco") {
+		return "cisco", nil
+	}
+
+	if strings.Contains(facts["product_name"], "LaserJet") {
+		return "printer_mib", nil
+	}
+
+	return "if_mib", nil
 }
 
 func (t *Target) Name(ctx context.Context) (string, error) {
@@ -126,7 +139,12 @@ func (t *Target) GatherWithState(ctx context.Context, state registry.GatherState
 	t.l.Lock()
 
 	if t.scraper == nil {
-		t.scraper = t.buildScraper(t.Module())
+		mod, err := t.Module(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		t.scraper = t.buildScraper(mod)
 	}
 
 	t.l.Unlock()
@@ -381,11 +399,16 @@ func (t *Target) getStatus() (types.Status, string) {
 	return types.StatusOk, ""
 }
 
-func (t *Target) String() string {
+func (t *Target) String(ctx context.Context) string {
 	t.l.Lock()
 	defer t.l.Unlock()
 
-	return fmt.Sprintf("initial_name=%s target=%s module=%s lastSuccess=%s (consecutive err=%d)", t.opt.InitialName, t.opt.Address, t.Module(), t.lastSuccess, t.consecutiveErr)
+	mod, err := t.Module(ctx)
+	if err != nil {
+		mod = "!ERR: " + err.Error()
+	}
+
+	return fmt.Sprintf("initial_name=%s target=%s module=%s lastSuccess=%s (consecutive err=%d)", t.opt.InitialName, t.opt.Address, mod, t.lastSuccess, t.consecutiveErr)
 }
 
 func (t *Target) Facts(ctx context.Context, maxAge time.Duration) (facts map[string]string, err error) {

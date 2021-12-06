@@ -2130,7 +2130,7 @@ func (a *agent) diagnosticSNMP(ctx context.Context, archive types.ArchiveWriter)
 	fmt.Fprintf(file, "# %d SNMP target configured\n", len(a.snmpManager.Targets()))
 
 	for _, t := range a.snmpManager.Targets() {
-		fmt.Fprintf(file, "\n%s\n", t.String())
+		fmt.Fprintf(file, "\n%s\n", t.String(ctx))
 		facts, err := t.Facts(ctx, 48*time.Hour)
 
 		if err != nil {

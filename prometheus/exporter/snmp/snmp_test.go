@@ -577,3 +577,60 @@ func TestNewMock(t *testing.T) {
 		})
 	}
 }
+
+func TestTarget_Module(t *testing.T) {
+	tests := []struct {
+		name       string
+		metricFile string
+		want       string
+	}{
+		{
+			name:       "PowerConnect 5448",
+			metricFile: "powerconnect-5448.metrics",
+			want:       "if_mib",
+		},
+		{
+			name:       "Cisco N9000",
+			metricFile: "cisco-n9000.metrics",
+			want:       "cisco",
+		},
+		{
+			name:       "Cisco C2960",
+			metricFile: "cisco-c2960.metrics",
+			want:       "cisco",
+		},
+		{
+			name:       "hp-printer",
+			metricFile: "hp-printer.metrics",
+			want:       "printer_mib",
+		},
+		{
+			name:       "anything else",
+			metricFile: "linux-snmpd.input",
+			want:       "if_mib",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			body, err := ioutil.ReadFile(filepath.Join("testdata", tt.metricFile))
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			tr := newTarget(TargetOptions{}, nil, nil)
+			tr.mockPerModule = map[string][]byte{
+				snmpDiscoveryModule: body,
+			}
+
+			got, err := tr.Module(context.Background())
+			if err != nil {
+				t.Error(err)
+			}
+
+			if got != tt.want {
+				t.Errorf("Target.Module() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
