@@ -17,10 +17,13 @@
 package snmp
 
 import (
+	"context"
 	"fmt"
+	"glouton/facts"
 	"glouton/prometheus/registry"
 	"glouton/prometheus/scrapper"
 	"glouton/types"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"sort"
@@ -140,6 +143,17 @@ func Test_factFromPoints(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
+			body, err := ioutil.ReadFile(filepath.Join("testdata", tt.metricFile))
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			tgt := newTarget(TargetOptions{}, facts.NewMockFacter(tt.scraperFacts), nil)
+			tgt.mockPerModule = map[string][]byte{
+				snmpDiscoveryModule: body,
+			}
+			tgt.now = func() time.Time { return now }
+
 			tmp, err := fileToMFS(filepath.Join("testdata", tt.metricFile))
 			if err != nil {
 				t.Fatal(err)
@@ -148,8 +162,17 @@ func Test_factFromPoints(t *testing.T) {
 			result := registry.FamiliesToMetricPoints(time.Now(), tmp)
 			got := factFromPoints(result, now, tt.scraperFacts)
 
+			got2, err := tgt.Facts(context.Background(), 0)
+			if err != nil {
+				t.Error(err)
+			}
+
 			if diff := cmp.Diff(tt.want, got); diff != "" {
 				t.Errorf("factFromPoints() missmatch (-want +got):\n%s", diff)
+			}
+
+			if diff := cmp.Diff(tt.want, got2); diff != "" {
+				t.Errorf("Facts() missmatch (-want +got):\n%s", diff)
 			}
 		})
 	}
@@ -506,6 +529,50 @@ func Test_processMFS(t *testing.T) {
 
 			if diff := cmp.Diff(want, got); diff != "" {
 				t.Errorf("processMFS() mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestNewMock(t *testing.T) {
+	tests := []struct {
+		name      string
+		opt       TargetOptions
+		mockFacts map[string]string
+	}{
+		{
+			name:      "empty facts",
+			mockFacts: map[string]string{},
+		},
+		{
+			name: "some facts",
+			mockFacts: map[string]string{
+				"my_facts": "test",
+				"fqdn":     "example.com",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			wantFacts := make(map[string]string, len(tt.mockFacts))
+			for k, v := range tt.mockFacts {
+				wantFacts[k] = v
+			}
+
+			tgt := NewMock(tt.opt, tt.mockFacts)
+
+			got, err := tgt.Facts(context.Background(), 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if diff := cmp.Diff(wantFacts, got); diff != "" {
+				t.Errorf("facts mismatch (-want +got)\n%s", diff)
 			}
 		})
 	}

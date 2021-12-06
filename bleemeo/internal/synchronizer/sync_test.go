@@ -843,7 +843,7 @@ func newHelper(t *testing.T) *syncTestHelper {
 	helper := &syncTestHelper{
 		api:   newAPI(),
 		cfg:   &config.Configuration{},
-		facts: facts.NewMockFacter(),
+		facts: facts.NewMockFacter(nil),
 		cache: &cache.Cache{},
 		state: state.NewMock(),
 
