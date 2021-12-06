@@ -56,7 +56,7 @@ type Target struct {
 
 	l                sync.Mutex
 	scraper          registry.GathererWithState
-	facts            map[string]string
+	lastFacts        map[string]string
 	lastFactUpdate   time.Time
 	lastFactErrAt    time.Time
 	lastFactErr      error
@@ -93,8 +93,8 @@ func (t *Target) Address() string {
 	return t.opt.Address
 }
 
-func (t *Target) Module(ctx context.Context) (string, error) {
-	facts, err := t.Facts(ctx, 24*time.Hour)
+func (t *Target) module(ctx context.Context) (string, error) {
+	facts, err := t.facts(ctx, 24*time.Hour)
 	if err != nil {
 		return "", err
 	}
@@ -139,7 +139,7 @@ func (t *Target) GatherWithState(ctx context.Context, state registry.GatherState
 	t.l.Lock()
 
 	if t.scraper == nil {
-		mod, err := t.Module(ctx)
+		mod, err := t.module(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -403,7 +403,7 @@ func (t *Target) String(ctx context.Context) string {
 	t.l.Lock()
 	defer t.l.Unlock()
 
-	mod, err := t.Module(ctx)
+	mod, err := t.module(ctx)
 	if err != nil {
 		mod = "!ERR: " + err.Error()
 	}
@@ -415,8 +415,12 @@ func (t *Target) Facts(ctx context.Context, maxAge time.Duration) (facts map[str
 	t.l.Lock()
 	defer t.l.Unlock()
 
+	return t.facts(ctx, maxAge)
+}
+
+func (t *Target) facts(ctx context.Context, maxAge time.Duration) (facts map[string]string, err error) {
 	if time.Since(t.lastFactUpdate) < maxAge {
-		return t.facts, nil
+		return t.lastFacts, nil
 	}
 
 	if time.Since(t.lastFactErrAt) < maxAge {
@@ -450,10 +454,10 @@ func (t *Target) Facts(ctx context.Context, maxAge time.Duration) (facts map[str
 	t.lastFactErr = nil
 	result := registry.FamiliesToMetricPoints(t.now(), tmp)
 
-	t.facts = factFromPoints(result, t.now(), scraperFact)
+	t.lastFacts = factFromPoints(result, t.now(), scraperFact)
 	t.lastFactUpdate = t.now()
 
-	return t.facts, nil
+	return t.lastFacts, nil
 }
 
 func factFromPoints(points []types.MetricPoint, now time.Time, scraperFact map[string]string) map[string]string {

@@ -623,7 +623,7 @@ func TestTarget_Module(t *testing.T) {
 				snmpDiscoveryModule: body,
 			}
 
-			got, err := tr.Module(context.Background())
+			got, err := tr.module(context.Background())
 			if err != nil {
 				t.Error(err)
 			}
