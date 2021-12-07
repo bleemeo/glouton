@@ -141,6 +141,8 @@ func (t *Target) GatherWithState(ctx context.Context, state registry.GatherState
 	if t.scraper == nil {
 		mod, err := t.module(ctx)
 		if err != nil {
+			t.l.Unlock()
+
 			return nil, err
 		}
 
