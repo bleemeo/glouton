@@ -528,6 +528,63 @@ func TestRegistry_applyRelabel(t *testing.T) {
 	}
 }
 
+func BenchmarkRegistry_applyRelabel(b *testing.B) {
+	cases := []struct {
+		name   string
+		labels map[string]string
+	}{
+		{
+			name: "cpu_used",
+			labels: map[string]string{
+				types.LabelName: "cpu_used",
+			},
+		},
+		{
+			name: "disk_used_1",
+			labels: map[string]string{
+				types.LabelName: "disk_used",
+				types.LabelItem: "/",
+			},
+		},
+		{
+			name: "disk_used_2",
+			labels: map[string]string{
+				types.LabelName:     "disk_used",
+				types.LabelItem:     "/",
+				types.LabelInstance: "localhost:8015",
+			},
+		},
+		{
+			name: "mysql",
+			labels: map[string]string{
+				types.LabelName:              "mysql_command_select",
+				types.LabelMetaServiceName:   "mysql",
+				types.LabelMetaContainerName: "mysql_1",
+				types.LabelMetaContainerID:   "1234",
+				types.LabelMetaGloutonFQDN:   "hostname",
+				types.LabelMetaGloutonPort:   "8015",
+				types.LabelMetaServicePort:   "3306",
+				types.LabelMetaPort:          "3306",
+			},
+		},
+	}
+
+	for _, tt := range cases {
+		tt := tt
+
+		b.Run(tt.name, func(b *testing.B) {
+			r := &Registry{}
+			r.relabelConfigs = getDefaultRelabelConfig()
+
+			b.ResetTimer()
+
+			for n := 0; n < b.N; n++ {
+				r.applyRelabel(tt.labels)
+			}
+		})
+	}
+}
+
 func TestRegistry_run(t *testing.T) {
 	for _, format := range []types.MetricFormat{types.MetricFormatBleemeo, types.MetricFormatPrometheus} {
 		format := format
@@ -640,4 +697,388 @@ func TestRegistry_run(t *testing.T) {
 			reg.Unregister(id3)
 		})
 	}
+}
+
+func TestRegistry_pointsAlteration(t *testing.T) {
+	type sourceKind string
+
+	const (
+		kindPushPoint         sourceKind = "pushpoint"
+		kindPushPointCallback sourceKind = "pushpointCallback"
+		kindGatherer          sourceKind = "gatherer"
+	)
+
+	tests := []struct {
+		name         string
+		input        []types.MetricPoint
+		extraLabels  map[string]string
+		kindToTest   sourceKind
+		metricFormat types.MetricFormat
+		want         []types.MetricPoint
+	}{
+		{
+			name:         "pushpoint-bleemeo",
+			kindToTest:   kindPushPoint,
+			metricFormat: types.MetricFormatBleemeo,
+			input: []types.MetricPoint{
+				{
+					Labels: map[string]string{
+						types.LabelName: "cpu_used",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName: "disk_used",
+						types.LabelItem: "/home",
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoItem: "/home",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName: "disk_used_perc",
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoItem: "/srv",
+					},
+				},
+			},
+			want: []types.MetricPoint{
+				{
+					Labels: map[string]string{
+						types.LabelName: "cpu_used",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName: "disk_used",
+						types.LabelItem: "/home",
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoItem: "/home",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName: "disk_used_perc",
+						types.LabelItem: "/srv",
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoItem: "/srv",
+					},
+				},
+			},
+		},
+		{
+			name:         "pushpointCallback-bleemeo",
+			kindToTest:   kindPushPointCallback,
+			metricFormat: types.MetricFormatBleemeo,
+			input: []types.MetricPoint{
+				{
+					Labels: map[string]string{
+						types.LabelName: "cpu_used",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName: "disk_used",
+						types.LabelItem: "/home",
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoItem: "/home",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName: "disk_used_perc",
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoItem: "/srv",
+					},
+				},
+			},
+			want: []types.MetricPoint{
+				{
+					Labels: map[string]string{
+						types.LabelName: "cpu_used",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName: "disk_used",
+						types.LabelItem: "/home",
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoItem: "/home",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName: "disk_used_perc",
+						types.LabelItem: "/srv",
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoItem: "/srv",
+					},
+				},
+			},
+		},
+		{
+			name:         "gatherer-bleemeo",
+			kindToTest:   kindGatherer,
+			metricFormat: types.MetricFormatBleemeo,
+			input: []types.MetricPoint{
+				{
+					Labels: map[string]string{
+						types.LabelName: "cpu_used",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName: "disk_used",
+						types.LabelItem: "/home",
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoItem: "/home... but annotation are NOT used with Gatherer",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName: "disk_used_perc",
+						types.LabelItem: "/srv",
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoItem: "/srv",
+					},
+				},
+			},
+			want: []types.MetricPoint{
+				{
+					Labels: map[string]string{
+						types.LabelName:     "cpu_used",
+						types.LabelInstance: "localhost:8015",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:     "disk_used",
+						types.LabelItem:     "/home",
+						types.LabelInstance: "localhost:8015",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:     "disk_used_perc",
+						types.LabelItem:     "/srv",
+						types.LabelInstance: "localhost:8015",
+					},
+				},
+			},
+		},
+		{
+			name:         "gatherer-extralabels",
+			kindToTest:   kindGatherer,
+			metricFormat: types.MetricFormatBleemeo,
+			input: []types.MetricPoint{
+				{
+					Labels: map[string]string{
+						types.LabelName: "ifOutBytes",
+						"ifDesc":        "Some value",
+					},
+				},
+			},
+			extraLabels: map[string]string{
+				types.LabelMetaSNMPTarget: "1.2.3.4:8080",
+				"another":                 "value",
+			},
+			want: []types.MetricPoint{
+				{
+					Labels: map[string]string{
+						types.LabelName:       "ifOutBytes",
+						"ifDesc":              "Some value",
+						types.LabelInstance:   "localhost:8015",
+						"another":             "value",
+						types.LabelSNMPTarget: "1.2.3.4:8080",
+					},
+					Annotations: types.MetricAnnotations{
+						SNMPTarget: "1.2.3.4:8080",
+					},
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			var (
+				l         sync.Mutex
+				gotPoints []types.MetricPoint
+			)
+
+			reg, err := New(
+				Option{
+					PushPoint: pushFunction(func(_ context.Context, pts []types.MetricPoint) {
+						l.Lock()
+						gotPoints = append(gotPoints, pts...)
+						l.Unlock()
+					}),
+					FQDN:         "localhost",
+					GloutonPort:  "8015",
+					MetricFormat: tt.metricFormat,
+				},
+			)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			now := time.Date(2021, 12, 7, 10, 11, 13, 0, time.UTC)
+			fillDateAndValue(tt.input, now)
+			fillDateAndValue(tt.want, now)
+
+			switch tt.kindToTest {
+			case kindPushPoint:
+				reg.WithTTL(5*time.Minute).PushPoints(context.Background(), tt.input)
+			case kindPushPointCallback:
+				id, err := reg.registerPushPointsCallback(
+					RegistrationOption{ExtraLabels: copyLabels(tt.extraLabels)},
+					func(c context.Context, t time.Time) {
+						reg.WithTTL(5*time.Minute).PushPoints(c, tt.input)
+					},
+					false,
+				)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				reg.scrape(context.Background(), now, reg.registrations[id])
+			case kindGatherer:
+				id, err := reg.RegisterGatherer(
+					RegistrationOption{ExtraLabels: copyLabels(tt.extraLabels)},
+					&fakeGatherer{
+						response: metricPointsToFamilies(tt.input, time.Time{}, false),
+					},
+					false,
+				)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				reg.scrape(context.Background(), now, reg.registrations[id])
+			}
+
+			sort.Slice(gotPoints, func(i, j int) bool {
+				return gotPoints[i].Labels[types.LabelName] < gotPoints[j].Labels[types.LabelName]
+			})
+
+			if diff := cmp.Diff(tt.want, gotPoints); diff != "" {
+				t.Errorf("gotPoints mismatch (-want +got):\n%s", diff)
+			}
+
+			got, err := reg.Gather()
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			wantMFs := metricPointsToFamilies(tt.want, time.Time{}, false)
+
+			if tt.kindToTest == kindPushPoint || tt.kindToTest == kindPushPointCallback {
+				// When using pushPoints, we don't have the metric type. And since we do not gather on demand
+				// we store the timestamp.
+				wantMFs = metricPointsToFamilies(tt.want, now, true)
+			}
+
+			if diff := cmp.Diff(wantMFs, got); diff != "" {
+				t.Errorf("Gather mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func fillDateAndValue(in []types.MetricPoint, now time.Time) {
+	for i := range in {
+		in[i].Point.Time = now
+		in[i].Point.Value = 4.2
+	}
+}
+
+func copyLabels(in map[string]string) map[string]string {
+	out := make(map[string]string, len(in))
+
+	for k, v := range in {
+		out[k] = v
+	}
+
+	return out
+}
+
+func metricPointsToFamilies(points []types.MetricPoint, now time.Time, useUntyped bool) []*dto.MetricFamily {
+	resultMap := make(map[string]*dto.MetricFamily)
+
+	for _, pts := range points {
+		mf := resultMap[pts.Labels[types.LabelName]]
+		if mf == nil {
+			mf = &dto.MetricFamily{
+				Name: proto.String(pts.Labels[types.LabelName]),
+				Type: dto.MetricType_COUNTER.Enum(),
+				Help: proto.String("fake metrics"),
+			}
+
+			if useUntyped {
+				mf.Type = dto.MetricType_UNTYPED.Enum()
+				mf.Help = proto.String("")
+			}
+		}
+
+		var ts *int64
+
+		if !now.IsZero() {
+			ts = proto.Int64(now.UnixMilli())
+		}
+
+		m := &dto.Metric{
+			Counter:     &dto.Counter{Value: proto.Float64(pts.Value)},
+			TimestampMs: ts,
+		}
+
+		if useUntyped {
+			m = &dto.Metric{
+				Untyped:     &dto.Untyped{Value: proto.Float64(pts.Value)},
+				TimestampMs: ts,
+			}
+		}
+
+		for k, v := range pts.Labels {
+			if k == types.LabelName {
+				continue
+			}
+
+			m.Label = append(m.Label, &dto.LabelPair{
+				Name:  proto.String(k),
+				Value: proto.String(v),
+			})
+		}
+
+		sort.Slice(m.Label, func(i, j int) bool {
+			return m.Label[i].GetName() < m.Label[j].GetName()
+		})
+
+		mf.Metric = append(mf.Metric, m)
+		resultMap[pts.Labels[types.LabelName]] = mf
+	}
+
+	result := make([]*dto.MetricFamily, 0, len(resultMap))
+	for _, mf := range resultMap {
+		result = append(result, mf)
+	}
+
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].GetName() < result[j].GetName()
+	})
+
+	return result
 }

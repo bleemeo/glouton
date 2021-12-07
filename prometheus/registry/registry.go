@@ -332,6 +332,10 @@ func (r *Registry) Run(ctx context.Context) error {
 // This callback will be called for each collection period. It's mostly used to
 // add Telegraf input (using glouton/collector).
 func (r *Registry) RegisterPushPointsCallback(opt RegistrationOption, f func(context.Context, time.Time)) (int, error) {
+	return r.registerPushPointsCallback(opt, f, true)
+}
+
+func (r *Registry) registerPushPointsCallback(opt RegistrationOption, f func(context.Context, time.Time), startLoop bool) (int, error) {
 	r.init()
 
 	r.l.Lock()
@@ -346,7 +350,7 @@ func (r *Registry) RegisterPushPointsCallback(opt RegistrationOption, f func(con
 	}
 	r.setupGatherer(ctx, reg, pushGatherer{fun: f})
 
-	return r.addRegistration(reg, true)
+	return r.addRegistration(reg, startLoop)
 }
 
 // UpdateRelabelHook change the hook used just before relabeling and wait for all pending metrics emission.
