@@ -217,6 +217,7 @@ var bleemeoDefaultSystemMetrics = []string{
 
 //nolint:gochecknoglobals
 var snmpMetrics = []string{
+	"snmp_scrape_duration_seconds",
 	"snmp_device_status",
 	"sysUpTime",
 	"ifOperStatus",
@@ -228,13 +229,8 @@ var snmpMetrics = []string{
 	"connected_interfaces",
 	"hrProcessorLoad",
 	"hrStorageUsed",
-	"cpmCPUTotal1min",
 	"ciscoMemoryPoolUsed",
-	"ciscoMemoryPoolFree",
-	"ciscoEnvMonTemperatureStatusDescr",
 	"ciscoEnvMonTemperatureStatusValue",
-	"ciscoEnvMonFanStatusDescr",
-	"ciscoEnvMonFanState",
 	"cpmCPUTotal1minRev",
 	"cpmCPUMemoryUsed",
 	"prtMarkerSuppliesLevel",
