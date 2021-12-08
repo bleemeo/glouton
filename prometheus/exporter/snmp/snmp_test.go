@@ -585,9 +585,14 @@ func TestTarget_Module(t *testing.T) {
 		want       string
 	}{
 		{
+			name:       "VMware ESXi 6.5.0",
+			metricFile: "vmware-esxi-6.5.0.metrics",
+			want:       "if_mib",
+		},
+		{
 			name:       "PowerConnect 5448",
 			metricFile: "powerconnect-5448.metrics",
-			want:       "if_mib",
+			want:       "dell",
 		},
 		{
 			name:       "Cisco N9000",

@@ -137,5 +137,19 @@ func GetDefaultRules() []Rule {
 				},
 			},
 		},
+		{
+			MetricName: "rlPhdUnitEnvParamTempSensorValue",
+			RewriteRules: []RewriteRule{
+				{
+					LabelName: types.LabelName,
+					NewValue:  "temperature",
+				},
+				{
+					LabelName:    "rlPhdUnitEnvParamStackUnit",
+					NewLabelName: "sensor",
+					NewValue:     "$1",
+				},
+			},
+		},
 	}
 }

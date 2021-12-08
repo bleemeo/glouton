@@ -1172,6 +1172,19 @@ func TestRegistry_pointsAlteration(t *testing.T) {
 						"uniqueValue":                       "7",
 					},
 				},
+				{
+					Labels: map[string]string{
+						types.LabelName:                     "rlCpuUtilDuringLastMinute",
+						"uniqueValue":                       "8",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:                     "rlPhdUnitEnvParamTempSensorValue",
+						"rlPhdUnitEnvParamStackUnit":        "1",
+						"uniqueValue":                       "9",
+					},
+				},
 			},
 			extraLabels: map[string]string{
 				types.LabelMetaSNMPTarget: "192.168.1.2",
@@ -1252,6 +1265,29 @@ func TestRegistry_pointsAlteration(t *testing.T) {
 						types.LabelSNMPTarget: "192.168.1.2",
 						"sensor":              "CPU",
 						"uniqueValue":         "7",
+					},
+					Annotations: types.MetricAnnotations{
+						SNMPTarget: "192.168.1.2",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:       "cpu_used",
+						types.LabelInstance:   "localhost:8015",
+						types.LabelSNMPTarget: "192.168.1.2",
+						"uniqueValue":         "8",
+					},
+					Annotations: types.MetricAnnotations{
+						SNMPTarget: "192.168.1.2",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:       "temperature",
+						types.LabelInstance:   "localhost:8015",
+						types.LabelSNMPTarget: "192.168.1.2",
+						"sensor":              "CPU",
+						"uniqueValue":         "9",
 					},
 					Annotations: types.MetricAnnotations{
 						SNMPTarget: "192.168.1.2",
