@@ -227,6 +227,7 @@ var snmpMetrics = []string{
 	"ifOutErrors",
 	"total_interfaces",
 	"connected_interfaces",
+	"prtMarkerSuppliesLevel",
 	"temperature",
 }
 
