@@ -41,6 +41,15 @@ func GetDefaultRules() []Rule {
 			},
 		},
 		{
+			MetricName: "rlCpuUtilDuringLastMinute",
+			RewriteRules: []RewriteRule{
+				{
+					LabelName: types.LabelName,
+					NewValue:  "cpu_used",
+				},
+			},
+		},
+		{
 			MetricName: "hrStorageUsed",
 			LabelMatchers: []*labels.Matcher{
 				labels.MustNewMatcher(labels.MatchEqual, "hrStorageDescr", "Real Memory"),

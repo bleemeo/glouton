@@ -107,6 +107,10 @@ func (t *Target) module(ctx context.Context) (string, error) {
 		return "printer_mib", nil
 	}
 
+	if strings.Contains(facts["product_name"], "PowerConnect") {
+		return "dell", nil
+	}
+
 	return "if_mib", nil
 }
 
