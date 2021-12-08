@@ -19,7 +19,6 @@ package rules
 import (
 	"context"
 	"glouton/logger"
-	"glouton/store"
 	"os"
 	"runtime"
 	"time"
@@ -35,8 +34,6 @@ import (
 // Manager is a wrapper handling everything related to prometheus recording
 // and alerting rules.
 type Manager struct {
-	// store implements both appendable and queryable.
-	store          *store.Store
 	recordingRules []*rules.Group
 	alertingRules  []*rules.Group
 
@@ -54,7 +51,16 @@ var (
 	}
 )
 
-func NewManager(ctx context.Context, store *store.Store, app storage.Appendable) *Manager {
+func NewManager(ctx context.Context, queryable storage.Queryable, app storage.Appendable) *Manager {
+	defaultRules := defaultLinuxRecordingRules
+	if runtime.GOOS == "windows" {
+		defaultRules = defaultWindowsRecordingRules
+	}
+
+	return newManager(ctx, queryable, app, defaultRules)
+}
+
+func newManager(ctx context.Context, queryable storage.Queryable, app storage.Appendable, defaultRules map[string]string) *Manager {
 	promLogger := log.NewLogfmtLogger(log.NewSyncWriter(os.Stderr))
 	engine := promql.NewEngine(promql.EngineOpts{
 		Logger:             log.With(promLogger, "component", "query engine"),
@@ -69,8 +75,8 @@ func NewManager(ctx context.Context, store *store.Store, app storage.Appendable)
 		Context:    ctx,
 		Logger:     log.With(promLogger, "component", "rules manager"),
 		Appendable: app,
-		Queryable:  store,
-		QueryFunc:  rules.EngineQueryFunc(engine, store),
+		Queryable:  queryable,
+		QueryFunc:  rules.EngineQueryFunc(engine, queryable),
 		NotifyFunc: func(ctx context.Context, expr string, alerts ...*rules.Alert) {
 			if len(alerts) == 0 {
 				return
@@ -81,11 +87,6 @@ func NewManager(ctx context.Context, store *store.Store, app storage.Appendable)
 	}
 
 	defaultGroupRules := []rules.Rule{}
-
-	defaultRules := defaultLinuxRecordingRules
-	if runtime.GOOS == "windows" {
-		defaultRules = defaultWindowsRecordingRules
-	}
 
 	for metricName, val := range defaultRules {
 		exp, err := parser.ParseExpr(val)
@@ -105,7 +106,6 @@ func NewManager(ctx context.Context, store *store.Store, app storage.Appendable)
 	})
 
 	rm := Manager{
-		store:          store,
 		engine:         engine,
 		recordingRules: []*rules.Group{defaultGroup},
 	}
@@ -113,9 +113,8 @@ func NewManager(ctx context.Context, store *store.Store, app storage.Appendable)
 	return &rm
 }
 
-func (rm *Manager) Run() {
+func (rm *Manager) Run(now time.Time) {
 	ctx := context.Background()
-	now := time.Now()
 
 	for _, rgr := range rm.recordingRules {
 		rgr.Eval(ctx, now)

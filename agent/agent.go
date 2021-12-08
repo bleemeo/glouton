@@ -688,8 +688,8 @@ func (a *agent) run() { //nolint:cyclop
 			Description: "rulesManager",
 			JitterSeed:  baseJitterPlus,
 		},
-		func(context.Context, time.Time) {
-			rulesManager.Run()
+		func(_ context.Context, t0 time.Time) {
+			rulesManager.Run(t0)
 		},
 	)
 	if err != nil {
