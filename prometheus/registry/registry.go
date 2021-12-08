@@ -26,6 +26,7 @@ import (
 	"errors"
 	"fmt"
 	"glouton/logger"
+	"glouton/prometheus/registry/internal/renamer"
 	"glouton/types"
 	"io"
 	"net/http"
@@ -119,6 +120,7 @@ type Registry struct {
 	lastPushedPointsCleanup time.Time
 	currentDelay            time.Duration
 	relabelHook             RelabelHook
+	renamer                 *renamer.Renamer
 }
 
 type Option struct {
@@ -303,6 +305,7 @@ func (r *Registry) init() {
 	r.pushedPointsExpiration = make(map[string]time.Time)
 	r.currentDelay = 10 * time.Second
 	r.relabelConfigs = getDefaultRelabelConfig()
+	r.renamer = renamer.LoadRules(renamer.GetDefaultRules())
 
 	r.l.Unlock()
 
@@ -812,6 +815,7 @@ func (r *Registry) GatherWithState(ctx context.Context, state GatherState) ([]*d
 	r.l.Unlock()
 
 	mfs, err := gatherers.GatherWithState(ctx, state)
+	mfs = r.renamer.RenameMFS(mfs)
 
 	return mfs, err
 }
@@ -1025,6 +1029,8 @@ func (r *Registry) scrape(ctx context.Context, t0 time.Time, reg *registration) 
 		}
 	}
 
+	points = r.renamer.Rename(points)
+
 	reg.l.Lock()
 	reg.lastScrape = t0
 	reg.lastScrapeDuration = time.Since(start)
@@ -1119,6 +1125,7 @@ func (r *Registry) pushPoint(ctx context.Context, points []types.MetricPoint, tt
 		}
 
 		if !skip {
+			point = r.renamer.RenameOne(point)
 			key := types.LabelsToText(point.Labels)
 			points[n] = point
 			r.pushedPoints[key] = points[n]

@@ -907,6 +907,358 @@ func TestRegistry_pointsAlteration(t *testing.T) {
 				},
 			},
 		},
+		{
+			name:         "metric-rename-simple-gathere",
+			kindToTest:   kindGatherer,
+			metricFormat: types.MetricFormatBleemeo,
+			input: []types.MetricPoint{
+				{
+					Labels: map[string]string{
+						types.LabelName: "hrProcessorLoad",
+						"hrDeviceDescr": "CPU Pkg/ID/Node: 0/0/0 Intel Xeon E3-12xx v2 (Ivy Bridge, IBRS)",
+						"hrDeviceIndex": "1",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:  "hrStorageUsed",
+						"hrStorageDescr": "Real Memory",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:  "hrStorageUsed",
+						"hrStorageDescr": "Unreal memory",
+					},
+				},
+			},
+			extraLabels: map[string]string{
+				types.LabelMetaSNMPTarget: "192.168.1.2",
+			},
+			want: []types.MetricPoint{
+				{
+					Labels: map[string]string{
+						types.LabelName:       "cpu_used",
+						"core":                "1",
+						types.LabelInstance:   "localhost:8015",
+						types.LabelSNMPTarget: "192.168.1.2",
+					},
+					Annotations: types.MetricAnnotations{
+						SNMPTarget: "192.168.1.2",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:       "hrStorageUsed",
+						"hrStorageDescr":      "Unreal memory",
+						types.LabelInstance:   "localhost:8015",
+						types.LabelSNMPTarget: "192.168.1.2",
+					},
+					Annotations: types.MetricAnnotations{
+						SNMPTarget: "192.168.1.2",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:       "mem_used",
+						types.LabelInstance:   "localhost:8015",
+						types.LabelSNMPTarget: "192.168.1.2",
+					},
+					Annotations: types.MetricAnnotations{
+						SNMPTarget: "192.168.1.2",
+					},
+				},
+			},
+		},
+		{
+			name:         "metric-rename-simple-pushpoint",
+			kindToTest:   kindPushPointCallback,
+			metricFormat: types.MetricFormatPrometheus,
+			input: []types.MetricPoint{
+				{
+					Labels: map[string]string{
+						types.LabelName: "hrProcessorLoad",
+						"hrDeviceDescr": "CPU Pkg/ID/Node: 0/0/0 Intel Xeon E3-12xx v2 (Ivy Bridge, IBRS)",
+						"hrDeviceIndex": "1",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:  "hrStorageUsed",
+						"hrStorageDescr": "Real Memory",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:  "hrStorageUsed",
+						"hrStorageDescr": "Unreal memory",
+					},
+				},
+			},
+			extraLabels: map[string]string{
+				types.LabelMetaSNMPTarget: "192.168.1.2",
+				"extranLabels":            "are ignored by pushpoints. So snmp target will be ignored",
+			},
+			want: []types.MetricPoint{
+				{
+					Labels: map[string]string{
+						types.LabelName:     "cpu_used",
+						"core":              "1",
+						types.LabelInstance: "localhost:8015",
+					},
+					Annotations: types.MetricAnnotations{},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:     "hrStorageUsed",
+						"hrStorageDescr":    "Unreal memory",
+						types.LabelInstance: "localhost:8015",
+					},
+					Annotations: types.MetricAnnotations{},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:     "mem_used",
+						types.LabelInstance: "localhost:8015",
+					},
+					Annotations: types.MetricAnnotations{},
+				},
+			},
+		},
+		{
+			name:         "metric-rename-simple-2",
+			kindToTest:   kindGatherer,
+			metricFormat: types.MetricFormatBleemeo,
+			input: []types.MetricPoint{
+				{
+					Labels: map[string]string{
+						types.LabelName:    "cpmCPUTotal1minRev",
+						"cpmCPUTotalIndex": "1",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:    "cpmCPUMemoryUsed",
+						"cpmCPUTotalIndex": "42",
+					},
+				},
+			},
+			extraLabels: map[string]string{
+				types.LabelMetaSNMPTarget: "192.168.1.2",
+			},
+			want: sortMetricPoints([]types.MetricPoint{
+				{
+					Labels: map[string]string{
+						types.LabelName:       "cpu_used",
+						"core":                "1",
+						types.LabelInstance:   "localhost:8015",
+						types.LabelSNMPTarget: "192.168.1.2",
+					},
+					Annotations: types.MetricAnnotations{
+						SNMPTarget: "192.168.1.2",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:       "mem_used",
+						types.LabelInstance:   "localhost:8015",
+						types.LabelSNMPTarget: "192.168.1.2",
+					},
+					Annotations: types.MetricAnnotations{
+						SNMPTarget: "192.168.1.2",
+					},
+				},
+			}),
+		},
+		{
+			name:         "metric-rename-multiple-1",
+			kindToTest:   kindGatherer,
+			metricFormat: types.MetricFormatBleemeo,
+			input: []types.MetricPoint{
+				{
+					Labels: map[string]string{
+						types.LabelName:       "ciscoMemoryPoolUsed",
+						"ciscoMemoryPoolName": "Processor",
+						"uniqueValue":         "1",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:       "ciscoMemoryPoolUsed",
+						"ciscoMemoryPoolName": "Processor",
+						"uniqueValue":         "2",
+					},
+				},
+			},
+			extraLabels: map[string]string{
+				types.LabelMetaSNMPTarget: "192.168.1.2",
+			},
+			want: sortMetricPoints([]types.MetricPoint{
+				{
+					Labels: map[string]string{
+						types.LabelName:       "mem_used",
+						types.LabelInstance:   "localhost:8015",
+						types.LabelSNMPTarget: "192.168.1.2",
+						"uniqueValue":         "1",
+					},
+					Annotations: types.MetricAnnotations{
+						SNMPTarget: "192.168.1.2",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:       "mem_used",
+						types.LabelInstance:   "localhost:8015",
+						types.LabelSNMPTarget: "192.168.1.2",
+						"uniqueValue":         "2",
+					},
+					Annotations: types.MetricAnnotations{
+						SNMPTarget: "192.168.1.2",
+					},
+				},
+			}),
+		},
+		{
+			name:         "metric-rename-multiple-2",
+			kindToTest:   kindGatherer,
+			metricFormat: types.MetricFormatBleemeo,
+			input: []types.MetricPoint{
+				{
+					Labels: map[string]string{
+						types.LabelName:       "ciscoMemoryPoolUsed",
+						"ciscoMemoryPoolName": "System memory",
+						"uniqueValue":         "1",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:       "ciscoMemoryPoolUsed",
+						"ciscoMemoryPoolName": "Anything Else",
+						"uniqueValue":         "2",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:       "ciscoMemoryPoolFree",
+						"ciscoMemoryPoolName": "Processor",
+						"uniqueValue":         "3",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:       "ciscoMemoryPoolFree",
+						"ciscoMemoryPoolName": "System memory",
+						"uniqueValue":         "4",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:       "ciscoMemoryPoolFree",
+						"ciscoMemoryPoolName": "anything else",
+						"uniqueValue":         "5",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:    "cpmCPUMemoryFree",
+						"cpmCPUTotalIndex": "2021",
+						"uniqueValue":      "6",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:                     "ciscoEnvMonTemperatureStatusValue",
+						"ciscoEnvMonTemperatureStatusDescr": "CPU",
+						"uniqueValue":                       "7",
+					},
+				},
+			},
+			extraLabels: map[string]string{
+				types.LabelMetaSNMPTarget: "192.168.1.2",
+			},
+			want: sortMetricPoints([]types.MetricPoint{
+				{
+					Labels: map[string]string{
+						types.LabelName:       "mem_used",
+						types.LabelInstance:   "localhost:8015",
+						types.LabelSNMPTarget: "192.168.1.2",
+						"uniqueValue":         "1",
+					},
+					Annotations: types.MetricAnnotations{
+						SNMPTarget: "192.168.1.2",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:       "ciscoMemoryPoolUsed",
+						types.LabelInstance:   "localhost:8015",
+						types.LabelSNMPTarget: "192.168.1.2",
+						"ciscoMemoryPoolName": "Anything Else",
+						"uniqueValue":         "2",
+					},
+					Annotations: types.MetricAnnotations{
+						SNMPTarget: "192.168.1.2",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:       "mem_free",
+						types.LabelInstance:   "localhost:8015",
+						types.LabelSNMPTarget: "192.168.1.2",
+						"uniqueValue":         "3",
+					},
+					Annotations: types.MetricAnnotations{
+						SNMPTarget: "192.168.1.2",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:       "mem_free",
+						types.LabelInstance:   "localhost:8015",
+						types.LabelSNMPTarget: "192.168.1.2",
+						"uniqueValue":         "4",
+					},
+					Annotations: types.MetricAnnotations{
+						SNMPTarget: "192.168.1.2",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:       "ciscoMemoryPoolFree",
+						types.LabelInstance:   "localhost:8015",
+						types.LabelSNMPTarget: "192.168.1.2",
+						"ciscoMemoryPoolName": "anything else",
+						"uniqueValue":         "5",
+					},
+					Annotations: types.MetricAnnotations{
+						SNMPTarget: "192.168.1.2",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:       "mem_free",
+						types.LabelInstance:   "localhost:8015",
+						types.LabelSNMPTarget: "192.168.1.2",
+						"uniqueValue":         "6",
+					},
+					Annotations: types.MetricAnnotations{
+						SNMPTarget: "192.168.1.2",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:       "temperature",
+						types.LabelInstance:   "localhost:8015",
+						types.LabelSNMPTarget: "192.168.1.2",
+						"sensor":              "CPU",
+						"uniqueValue":         "7",
+					},
+					Annotations: types.MetricAnnotations{
+						SNMPTarget: "192.168.1.2",
+					},
+				},
+			}),
+		},
 	}
 
 	for _, tt := range tests {
@@ -971,9 +1323,7 @@ func TestRegistry_pointsAlteration(t *testing.T) {
 				reg.scrape(context.Background(), now, reg.registrations[id])
 			}
 
-			sort.Slice(gotPoints, func(i, j int) bool {
-				return gotPoints[i].Labels[types.LabelName] < gotPoints[j].Labels[types.LabelName]
-			})
+			gotPoints = sortMetricPoints(gotPoints)
 
 			if diff := cmp.Diff(tt.want, gotPoints); diff != "" {
 				t.Errorf("gotPoints mismatch (-want +got):\n%s", diff)
@@ -1081,4 +1431,15 @@ func metricPointsToFamilies(points []types.MetricPoint, now time.Time, useUntype
 	})
 
 	return result
+}
+
+func sortMetricPoints(points []types.MetricPoint) []types.MetricPoint {
+	sort.SliceStable(points, func(i, j int) bool {
+		nameA := points[i].Labels[types.LabelName]
+		nameB := points[j].Labels[types.LabelName]
+
+		return nameA < nameB
+	})
+
+	return points
 }
