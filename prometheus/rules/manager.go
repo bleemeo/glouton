@@ -29,6 +29,7 @@ import (
 	"github.com/prometheus/prometheus/promql"
 	"github.com/prometheus/prometheus/promql/parser"
 	"github.com/prometheus/prometheus/rules"
+	"github.com/prometheus/prometheus/storage"
 )
 
 // Manager is a wrapper handling everything related to prometheus recording
@@ -53,7 +54,7 @@ var (
 	}
 )
 
-func NewManager(ctx context.Context, store *store.Store) *Manager {
+func NewManager(ctx context.Context, store *store.Store, app storage.Appendable) *Manager {
 	promLogger := log.NewLogfmtLogger(log.NewSyncWriter(os.Stderr))
 	engine := promql.NewEngine(promql.EngineOpts{
 		Logger:             log.With(promLogger, "component", "query engine"),
@@ -67,7 +68,7 @@ func NewManager(ctx context.Context, store *store.Store) *Manager {
 	mgrOptions := &rules.ManagerOptions{
 		Context:    ctx,
 		Logger:     log.With(promLogger, "component", "rules manager"),
-		Appendable: store,
+		Appendable: app,
 		Queryable:  store,
 		QueryFunc:  rules.EngineQueryFunc(engine, store),
 		NotifyFunc: func(ctx context.Context, expr string, alerts ...*rules.Alert) {

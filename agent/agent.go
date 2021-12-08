@@ -662,8 +662,6 @@ func (a *agent) run() { //nolint:cyclop
 		a.store = store.New(2 * time.Minute)
 	}
 
-	rulesManager := rules.NewManager(ctx, a.store)
-
 	filteredStore := store.NewFilteredStore(a.store, mFilter.FilterPoints, mFilter.filterMetrics)
 
 	a.gathererRegistry, err = registry.New(
@@ -682,6 +680,8 @@ func (a *agent) run() { //nolint:cyclop
 
 		return
 	}
+
+	rulesManager := rules.NewManager(ctx, a.store, a.gathererRegistry.Appendable(5*time.Minute))
 
 	_, err = a.gathererRegistry.RegisterPushPointsCallback(
 		registry.RegistrationOption{

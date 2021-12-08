@@ -699,12 +699,13 @@ func TestRegistry_run(t *testing.T) {
 	}
 }
 
-func TestRegistry_pointsAlteration(t *testing.T) {
+func TestRegistry_pointsAlteration(t *testing.T) { //nolint: cyclop
 	type sourceKind string
 
 	const (
 		kindPushPoint         sourceKind = "pushpoint"
 		kindPushPointCallback sourceKind = "pushpointCallback"
+		kindAppender          sourceKind = "appender"
 		kindGatherer          sourceKind = "gatherer"
 	)
 
@@ -821,6 +822,122 @@ func TestRegistry_pointsAlteration(t *testing.T) {
 					Annotations: types.MetricAnnotations{
 						BleemeoItem: "/srv",
 					},
+				},
+			},
+		},
+		{
+			name:         "pushpoint-prometheus",
+			kindToTest:   kindPushPoint,
+			metricFormat: types.MetricFormatPrometheus,
+			input: []types.MetricPoint{
+				{
+					Labels: map[string]string{
+						types.LabelName: "cpu_used",
+						"anyOther":      "label",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName: "disk_used",
+						types.LabelItem: "/home",
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoItem: "/home",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName: "disk_used_perc",
+						types.LabelItem: "/srv",
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoItem: "/srv",
+					},
+				},
+			},
+			want: []types.MetricPoint{
+				{
+					Labels: map[string]string{
+						types.LabelName:     "cpu_used",
+						"anyOther":          "label",
+						types.LabelInstance: "localhost:8015",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:     "disk_used",
+						types.LabelItem:     "/home",
+						types.LabelInstance: "localhost:8015",
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoItem: "/home",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:     "disk_used_perc",
+						types.LabelItem:     "/srv",
+						types.LabelInstance: "localhost:8015",
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoItem: "/srv",
+					},
+				},
+			},
+		},
+		{
+			name:         "appender",
+			kindToTest:   kindAppender,
+			metricFormat: types.MetricFormatBleemeo,
+			input: []types.MetricPoint{
+				{
+					Labels: map[string]string{
+						types.LabelName: "cpu_used",
+						"anyOther":      "label",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName: "disk_used",
+						types.LabelItem: "/home",
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoItem: "/home",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName: "disk_used_perc",
+						types.LabelItem: "/srv",
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoItem: "annotation are not used in appender mode",
+					},
+				},
+			},
+			want: []types.MetricPoint{
+				{
+					Labels: map[string]string{
+						types.LabelName:     "cpu_used",
+						"anyOther":          "label",
+						types.LabelInstance: "localhost:8015",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:     "disk_used",
+						types.LabelItem:     "/home",
+						types.LabelInstance: "localhost:8015",
+					},
+					Annotations: types.MetricAnnotations{},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:     "disk_used_perc",
+						types.LabelItem:     "/srv",
+						types.LabelInstance: "localhost:8015",
+					},
+					Annotations: types.MetricAnnotations{},
 				},
 			},
 		},
@@ -1344,6 +1461,19 @@ func TestRegistry_pointsAlteration(t *testing.T) {
 				}
 
 				reg.scrape(context.Background(), now, reg.registrations[id])
+			case kindAppender:
+				app := reg.Appendable(5 * time.Minute).Appender(context.Background())
+				for _, p := range tt.input {
+					_, err = app.Append(0, labels.FromMap(p.Labels), p.Time.UnixMilli(), p.Value)
+					if err != nil {
+						t.Fatal(err)
+					}
+				}
+
+				err = app.Commit()
+				if err != nil {
+					t.Fatal(err)
+				}
 			case kindGatherer:
 				id, err := reg.RegisterGatherer(
 					RegistrationOption{ExtraLabels: copyLabels(tt.extraLabels)},
@@ -1372,9 +1502,8 @@ func TestRegistry_pointsAlteration(t *testing.T) {
 
 			wantMFs := metricPointsToFamilies(tt.want, time.Time{}, false)
 
-			if tt.kindToTest == kindPushPoint || tt.kindToTest == kindPushPointCallback {
-				// When using pushPoints, we don't have the metric type. And since we do not gather on demand
-				// we store the timestamp.
+			if tt.kindToTest != kindGatherer {
+				// Only Gatherer is done on demand and kept the metric type.
 				wantMFs = metricPointsToFamilies(tt.want, now, true)
 			}
 

@@ -282,9 +282,13 @@ func getDefaultRelabelConfig() []*relabel.Config {
 }
 
 func New(opt Option) (*Registry, error) {
-	return &Registry{
+	reg := &Registry{
 		option: opt,
-	}, nil
+	}
+
+	reg.init()
+
+	return reg, nil
 }
 
 func (r *Registry) init() {
@@ -944,8 +948,16 @@ func (r *Registry) WithTTL(ttl time.Duration) types.PointPusher {
 	r.init()
 
 	return pushFunction(func(ctx context.Context, points []types.MetricPoint) {
-		r.pushPoint(ctx, points, ttl)
+		r.pushPoint(ctx, points, ttl, r.option.MetricFormat)
 	})
+}
+
+// Appendable return a Prometheus appendable. It's the same as WithTTL and push points, but with
+// slightly different interface.
+// Also, unlike WithTTL() which do not kept all labels when metric format is Bleemeo, Appendable will
+// keeps labels (behave as if metric format is Prometheus).
+func (r *Registry) Appendable(ttl time.Duration) Appendable {
+	return Appendable{reg: r, ttl: ttl}
 }
 
 // UpdateDelay change the delay between metric gather.
@@ -1073,7 +1085,7 @@ func FamiliesToMetricPoints(now time.Time, families []*dto.MetricFamily) []types
 
 // pushPoint add a new point to the list of pushed point with a specified TTL.
 // As for AddMetricPointFunction, points should not be mutated after the call.
-func (r *Registry) pushPoint(ctx context.Context, points []types.MetricPoint, ttl time.Duration) {
+func (r *Registry) pushPoint(ctx context.Context, points []types.MetricPoint, ttl time.Duration, format types.MetricFormat) {
 	r.l.Lock()
 
 	for r.blockPushPoint {
@@ -1100,7 +1112,7 @@ func (r *Registry) pushPoint(ctx context.Context, points []types.MetricPoint, tt
 			continue
 		}
 
-		if r.option.MetricFormat == types.MetricFormatBleemeo {
+		if format == types.MetricFormatBleemeo {
 			newLabelsMap := map[string]string{
 				types.LabelName: point.Labels[types.LabelName],
 			}
