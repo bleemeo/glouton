@@ -1174,15 +1174,15 @@ func TestRegistry_pointsAlteration(t *testing.T) {
 				},
 				{
 					Labels: map[string]string{
-						types.LabelName:                     "rlCpuUtilDuringLastMinute",
-						"uniqueValue":                       "8",
+						types.LabelName: "rlCpuUtilDuringLastMinute",
+						"uniqueValue":   "8",
 					},
 				},
 				{
 					Labels: map[string]string{
-						types.LabelName:                     "rlPhdUnitEnvParamTempSensorValue",
-						"rlPhdUnitEnvParamStackUnit":        "1",
-						"uniqueValue":                       "9",
+						types.LabelName:              "rlPhdUnitEnvParamTempSensorValue",
+						"rlPhdUnitEnvParamStackUnit": "1",
+						"uniqueValue":                "9",
 					},
 				},
 			},

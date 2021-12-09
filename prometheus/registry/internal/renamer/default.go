@@ -139,6 +139,9 @@ func GetDefaultRules() []Rule {
 		},
 		{
 			MetricName: "rlPhdUnitEnvParamTempSensorValue",
+			LabelMatchers: []*labels.Matcher{
+				labels.MustNewMatcher(labels.MatchEqual, "rlPhdUnitEnvParamStackUnit", "1"),
+			},
 			RewriteRules: []RewriteRule{
 				{
 					LabelName: types.LabelName,
@@ -147,7 +150,7 @@ func GetDefaultRules() []Rule {
 				{
 					LabelName:    "rlPhdUnitEnvParamStackUnit",
 					NewLabelName: "sensor",
-					NewValue:     "$1",
+					NewValue:     "CPU",
 				},
 			},
 		},
