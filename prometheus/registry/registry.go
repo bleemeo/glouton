@@ -43,6 +43,8 @@ import (
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/pkg/labels"
 	"github.com/prometheus/prometheus/pkg/relabel"
+	"github.com/prometheus/prometheus/promql/parser"
+	"github.com/prometheus/prometheus/rules"
 	"github.com/prometheus/prometheus/storage"
 )
 
@@ -140,9 +142,37 @@ type RegistrationOption struct {
 	Timeout      time.Duration
 	StopCallback func()
 	ExtraLabels  map[string]string
+	Rules        []SimpleRule
+	rrules       []*rules.RecordingRule
 }
 
-func (opt RegistrationOption) String() string {
+func (opt *RegistrationOption) buildRules() error {
+	rrules := make([]*rules.RecordingRule, 0, len(opt.Rules))
+
+	for _, r := range opt.Rules {
+		expr, err := parser.ParseExpr(r.PromQLQuery)
+		if err != nil {
+			return err
+		}
+
+		rr := rules.NewRecordingRule(r.TargetName, expr, nil)
+		rrules = append(rrules, rr)
+	}
+
+	opt.rrules = rrules
+
+	return nil
+}
+
+// SimpleRule is a PromQL run on output from the Gatherer.
+// It's similar to a recording rule, but it's not able to use historical data and can
+// only works on latest point (so no rate, avg_over_time, ...).
+type SimpleRule struct {
+	TargetName  string
+	PromQLQuery string
+}
+
+func (opt *RegistrationOption) String() string {
 	hasStop := "without stop callback"
 	if opt.StopCallback != nil {
 		hasStop = "with stop callback"
@@ -344,6 +374,10 @@ func (r *Registry) RegisterPushPointsCallback(opt RegistrationOption, f func(con
 
 func (r *Registry) registerPushPointsCallback(opt RegistrationOption, f func(context.Context, time.Time), startLoop bool) (int, error) {
 	r.init()
+
+	if err := opt.buildRules(); err != nil {
+		return 0, err
+	}
 
 	r.l.Lock()
 	defer r.l.Unlock()
@@ -597,6 +631,11 @@ func (r *Registry) scrapeDone() {
 // extraLabels add labels added. If a labels already exists, extraLabels take precedence.
 func (r *Registry) RegisterGatherer(opt RegistrationOption, gatherer prometheus.Gatherer, pushPoints bool) (int, error) {
 	r.init()
+
+	if err := opt.buildRules(); err != nil {
+		return 0, err
+	}
+
 	r.l.Lock()
 	defer r.l.Unlock()
 
@@ -1053,36 +1092,6 @@ func (r *Registry) scrape(ctx context.Context, t0 time.Time, reg *registration) 
 	}
 }
 
-func FamiliesToMetricPoints(now time.Time, families []*dto.MetricFamily) []types.MetricPoint {
-	samples, err := expfmt.ExtractSamples(
-		&expfmt.DecodeOptions{Timestamp: model.TimeFromUnixNano(now.UnixNano())},
-		families...,
-	)
-	if err != nil {
-		logger.Printf("Conversion of metrics failed, some metrics may be missing: %v", err)
-	}
-
-	result := make([]types.MetricPoint, len(samples))
-
-	for i, sample := range samples {
-		labels := make(map[string]string, len(sample.Metric))
-
-		for k, v := range sample.Metric {
-			labels[string(k)] = string(v)
-		}
-
-		result[i] = types.MetricPoint{
-			Labels: labels,
-			Point: types.Point{
-				Time:  sample.Timestamp.Time(),
-				Value: float64(sample.Value),
-			},
-		}
-	}
-
-	return result
-}
-
 // pushPoint add a new point to the list of pushed point with a specified TTL.
 // As for AddMetricPointFunction, points should not be mutated after the call.
 func (r *Registry) pushPoint(ctx context.Context, points []types.MetricPoint, ttl time.Duration, format types.MetricFormat) {
@@ -1137,16 +1146,19 @@ func (r *Registry) pushPoint(ctx context.Context, points []types.MetricPoint, tt
 		}
 
 		if !skip {
-			point = r.renamer.RenameOne(point)
-			key := types.LabelsToText(point.Labels)
 			points[n] = point
-			r.pushedPoints[key] = points[n]
-			r.pushedPointsExpiration[key] = deadline
 			n++
 		}
 	}
 
 	points = points[:n]
+	points = r.renamer.Rename(points)
+
+	for _, point := range points {
+		key := types.LabelsToText(point.Labels)
+		r.pushedPoints[key] = point
+		r.pushedPointsExpiration[key] = deadline
+	}
 
 	if now.Sub(r.lastPushedPointsCleanup) > pushedPointsCleanupInterval {
 		r.lastPushedPointsCleanup = now
@@ -1246,7 +1258,7 @@ func (r *Registry) setupGatherer(ctx context.Context, reg *registration, source 
 	}
 
 	promLabels, annotations := r.applyRelabel(extraLabels)
-	g := newLabeledGatherer(source, promLabels, annotations)
+	g := newLabeledGatherer(source, promLabels, reg.option.rrules, annotations)
 	reg.gatherer = g
 }
 

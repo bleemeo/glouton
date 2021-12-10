@@ -10,6 +10,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
+	"github.com/prometheus/prometheus/pkg/labels"
 )
 
 func Test_mergeLabels(t *testing.T) {
@@ -139,7 +140,7 @@ func Test_labeledGatherer_GatherPoints(t *testing.T) {
 
 	type fields struct {
 		source      prometheus.Gatherer
-		labels      []*dto.LabelPair
+		labels      labels.Labels
 		annotations types.MetricAnnotations
 	}
 
@@ -181,9 +182,7 @@ func Test_labeledGatherer_GatherPoints(t *testing.T) {
 				annotations: types.MetricAnnotations{
 					ServiceName: "service-name",
 				},
-				labels: []*dto.LabelPair{
-					{Name: &strJob, Value: &strValue},
-				},
+				labels: labels.FromStrings(strJob, strValue),
 			},
 			want: []types.MetricPoint{
 				{
@@ -216,9 +215,7 @@ func Test_labeledGatherer_GatherPoints(t *testing.T) {
 				annotations: types.MetricAnnotations{
 					ServiceName: "service-name",
 				},
-				labels: []*dto.LabelPair{
-					{Name: &strMountpoint, Value: &strJob},
-				},
+				labels: labels.FromStrings(strMountpoint, strJob),
 			},
 			want: []types.MetricPoint{
 				{
@@ -246,11 +243,7 @@ func Test_labeledGatherer_GatherPoints(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			g := labeledGatherer{
-				source:      tt.fields.source,
-				labels:      tt.fields.labels,
-				annotations: tt.fields.annotations,
-			}
+			g := newLabeledGatherer(tt.fields.source, tt.fields.labels, nil, tt.fields.annotations)
 
 			got, err := g.GatherPoints(context.Background(), time.Now(), GatherState{})
 			if (err != nil) != tt.wantErr {

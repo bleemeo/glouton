@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"glouton/facts"
+	"glouton/prometheus/model"
 	"glouton/prometheus/registry"
 	"glouton/prometheus/scrapper"
 	"glouton/types"
@@ -159,7 +160,7 @@ func Test_factFromPoints(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			result := registry.FamiliesToMetricPoints(time.Now(), tmp)
+			result := model.FamiliesToMetricPoints(time.Now(), tmp)
 			got := factFromPoints(result, now, tt.scraperFacts)
 
 			got2, err := tgt.Facts(context.Background(), 0)

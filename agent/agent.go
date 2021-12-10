@@ -434,6 +434,7 @@ func (a *agent) updateSNMPResolution(resolution time.Duration) {
 				Interval:    resolution,
 				Timeout:     40 * time.Second,
 				ExtraLabels: target.ExtraLabels,
+				Rules:       registry.DefaultSNMPRules(),
 			},
 			target.Gatherer,
 			true,

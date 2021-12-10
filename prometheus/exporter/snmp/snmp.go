@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"glouton/facts"
+	"glouton/prometheus/model"
 	"glouton/prometheus/registry"
 	"glouton/prometheus/scrapper"
 	"glouton/types"
@@ -458,7 +459,7 @@ func (t *Target) facts(ctx context.Context, maxAge time.Duration) (facts map[str
 	}
 
 	t.lastFactErr = nil
-	result := registry.FamiliesToMetricPoints(t.now(), tmp)
+	result := model.FamiliesToMetricPoints(t.now(), tmp)
 
 	t.lastFacts = factFromPoints(result, t.now(), scraperFact)
 	t.lastFactUpdate = t.now()

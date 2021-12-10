@@ -43,22 +43,6 @@ func LoadRules(rules []Rule) *Renamer {
 	return renamer
 }
 
-func (r *Renamer) RenameOne(point types.MetricPoint) types.MetricPoint {
-	rules, ok := r.Rules[point.Labels[types.LabelName]]
-	if !ok {
-		return point
-	}
-
-	for _, rule := range rules {
-		point, ok = rule.rename(point)
-		if ok {
-			break
-		}
-	}
-
-	return point
-}
-
 func (r *Renamer) Rename(points []types.MetricPoint) []types.MetricPoint {
 	for i, pts := range points {
 		rules, ok := r.Rules[pts.Labels[types.LabelName]]
@@ -78,6 +62,7 @@ func (r *Renamer) Rename(points []types.MetricPoint) []types.MetricPoint {
 }
 
 func (r *Renamer) RenameMFS(mfs []*dto.MetricFamily) []*dto.MetricFamily {
+	idToSort := make(map[int]bool)
 	nameToIndex := make(map[string]int, len(mfs))
 
 	for i, mf := range mfs {
@@ -103,6 +88,8 @@ func (r *Renamer) RenameMFS(mfs []*dto.MetricFamily) []*dto.MetricFamily {
 
 			if name == mf.GetName() {
 				mf.Metric[i] = m
+				idToSort[i] = true
+
 				i++
 			} else {
 				idx, ok := nameToIndex[name]
@@ -116,13 +103,20 @@ func (r *Renamer) RenameMFS(mfs []*dto.MetricFamily) []*dto.MetricFamily {
 					idx = len(mfs) - 1
 
 					nameToIndex[name] = idx
+				} else {
+					m = fixType(m, mfs[idx].GetType())
 				}
 
 				mfs[idx].Metric = append(mfs[idx].Metric, m)
+				idToSort[idx] = true
 			}
 		}
 
 		mf.Metric = mf.Metric[:i]
+	}
+
+	for idx := range idToSort {
+		sortMetrics(mfs[idx].Metric)
 	}
 
 	// Drop empty MF
@@ -144,6 +138,39 @@ func (r *Renamer) RenameMFS(mfs []*dto.MetricFamily) []*dto.MetricFamily {
 	})
 
 	return mfs
+}
+
+func sortMetrics(input []*dto.Metric) []*dto.Metric {
+	sort.Slice(input, func(i, j int) bool {
+		mA := input[i]
+		mB := input[j]
+
+		for i := range mA.Label {
+			if len(mB.Label) <= i {
+				return false
+			}
+
+			if mA.Label[i].GetName() < mB.Label[i].GetName() {
+				return true
+			}
+
+			if mA.Label[i].GetName() > mB.Label[i].GetName() {
+				return false
+			}
+
+			if mA.Label[i].GetValue() < mB.Label[i].GetValue() {
+				return true
+			}
+
+			if mA.Label[i].GetValue() > mB.Label[i].GetValue() {
+				return false
+			}
+		}
+
+		return false
+	})
+
+	return input
 }
 
 func (r Rule) rename(point types.MetricPoint) (types.MetricPoint, bool) {
@@ -223,4 +250,61 @@ func (r Rule) renameMetric(metric *dto.Metric, name string) (*dto.Metric, string
 	})
 
 	return metric, name, true
+}
+
+func fixType(m *dto.Metric, wantType dto.MetricType) *dto.Metric { //nolint: cyclop
+	var (
+		value   *float64
+		gotType dto.MetricType
+	)
+
+	switch {
+	case m.Counter != nil:
+		value = m.Counter.Value
+		gotType = dto.MetricType_COUNTER
+	case m.Gauge != nil:
+		value = m.Gauge.Value
+		gotType = dto.MetricType_GAUGE
+	case m.Histogram != nil:
+		value = m.Histogram.SampleSum
+		gotType = dto.MetricType_HISTOGRAM
+	case m.Summary != nil:
+		value = m.Summary.SampleSum
+		gotType = dto.MetricType_SUMMARY
+	case m.Untyped != nil:
+		value = m.Counter.Value
+		gotType = dto.MetricType_UNTYPED
+	}
+
+	if gotType == wantType {
+		return m
+	}
+
+	switch wantType {
+	case dto.MetricType_COUNTER:
+		m.Counter = &dto.Counter{Value: value}
+	case dto.MetricType_GAUGE:
+		m.Gauge = &dto.Gauge{Value: value}
+	case dto.MetricType_HISTOGRAM:
+		m.Histogram = &dto.Histogram{SampleCount: proto.Uint64(1), SampleSum: value}
+	case dto.MetricType_SUMMARY:
+		m.Summary = &dto.Summary{SampleCount: proto.Uint64(1), SampleSum: value}
+	case dto.MetricType_UNTYPED:
+		m.Untyped = &dto.Untyped{Value: value}
+	}
+
+	switch gotType {
+	case dto.MetricType_COUNTER:
+		m.Counter = nil
+	case dto.MetricType_GAUGE:
+		m.Gauge = nil
+	case dto.MetricType_HISTOGRAM:
+		m.Histogram = nil
+	case dto.MetricType_SUMMARY:
+		m.Summary = nil
+	case dto.MetricType_UNTYPED:
+		m.Untyped = nil
+	}
+
+	return m
 }

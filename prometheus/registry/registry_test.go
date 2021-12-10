@@ -18,7 +18,7 @@
 //
 // It support both pushed metrics (using AddMetricPointFunction) and pulled
 // metrics thought Collector or Gatherer
-//nolint:scopelint
+//nolint:scopelint,dupl
 package registry
 
 import (
@@ -710,12 +710,15 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint: cyclop
 	)
 
 	tests := []struct {
-		name         string
-		input        []types.MetricPoint
-		extraLabels  map[string]string
-		kindToTest   sourceKind
-		metricFormat types.MetricFormat
-		want         []types.MetricPoint
+		name                  string
+		input                 []types.MetricPoint
+		opt                   RegistrationOption
+		kindToTest            sourceKind
+		metricFormat          types.MetricFormat
+		metricFamiliesUseTime bool
+		wantOverrideMFType    map[string]*dto.MetricType
+		wantOverrideMFHelp    map[string]string
+		want                  []types.MetricPoint
 	}{
 		{
 			name:         "pushpoint-bleemeo",
@@ -770,6 +773,17 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint: cyclop
 					},
 				},
 			},
+			metricFamiliesUseTime: true,
+			wantOverrideMFType: map[string]*dto.MetricType{
+				"cpu_used":       dto.MetricType_UNTYPED.Enum(),
+				"disk_used":      dto.MetricType_UNTYPED.Enum(),
+				"disk_used_perc": dto.MetricType_UNTYPED.Enum(),
+			},
+			wantOverrideMFHelp: map[string]string{
+				"cpu_used":       "",
+				"disk_used":      "",
+				"disk_used_perc": "",
+			},
 		},
 		{
 			name:         "pushpointCallback-bleemeo",
@@ -823,6 +837,17 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint: cyclop
 						BleemeoItem: "/srv",
 					},
 				},
+			},
+			metricFamiliesUseTime: true,
+			wantOverrideMFType: map[string]*dto.MetricType{
+				"cpu_used":       dto.MetricType_UNTYPED.Enum(),
+				"disk_used":      dto.MetricType_UNTYPED.Enum(),
+				"disk_used_perc": dto.MetricType_UNTYPED.Enum(),
+			},
+			wantOverrideMFHelp: map[string]string{
+				"cpu_used":       "",
+				"disk_used":      "",
+				"disk_used_perc": "",
 			},
 		},
 		{
@@ -884,6 +909,17 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint: cyclop
 					},
 				},
 			},
+			metricFamiliesUseTime: true,
+			wantOverrideMFType: map[string]*dto.MetricType{
+				"cpu_used":       dto.MetricType_UNTYPED.Enum(),
+				"disk_used":      dto.MetricType_UNTYPED.Enum(),
+				"disk_used_perc": dto.MetricType_UNTYPED.Enum(),
+			},
+			wantOverrideMFHelp: map[string]string{
+				"cpu_used":       "",
+				"disk_used":      "",
+				"disk_used_perc": "",
+			},
 		},
 		{
 			name:         "appender",
@@ -939,6 +975,17 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint: cyclop
 					},
 					Annotations: types.MetricAnnotations{},
 				},
+			},
+			metricFamiliesUseTime: true,
+			wantOverrideMFType: map[string]*dto.MetricType{
+				"cpu_used":       dto.MetricType_UNTYPED.Enum(),
+				"disk_used":      dto.MetricType_UNTYPED.Enum(),
+				"disk_used_perc": dto.MetricType_UNTYPED.Enum(),
+			},
+			wantOverrideMFHelp: map[string]string{
+				"cpu_used":       "",
+				"disk_used":      "",
+				"disk_used_perc": "",
 			},
 		},
 		{
@@ -1005,9 +1052,12 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint: cyclop
 					},
 				},
 			},
-			extraLabels: map[string]string{
-				types.LabelMetaSNMPTarget: "1.2.3.4:8080",
-				"another":                 "value",
+			opt: RegistrationOption{
+				ExtraLabels: map[string]string{
+					types.LabelMetaSNMPTarget: "1.2.3.4:8080",
+					"another":                 "value",
+				},
+				Rules: DefaultSNMPRules(),
 			},
 			want: []types.MetricPoint{
 				{
@@ -1041,16 +1091,34 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint: cyclop
 						types.LabelName:  "hrStorageUsed",
 						"hrStorageDescr": "Real Memory",
 					},
+					Point: types.Point{Value: 8},
 				},
 				{
 					Labels: map[string]string{
 						types.LabelName:  "hrStorageUsed",
-						"hrStorageDescr": "Unreal memory",
+						"hrStorageDescr": "Unreal Memory",
 					},
 				},
+				{
+					Labels: map[string]string{
+						types.LabelName:  "hrStorageAllocationUnits",
+						"hrStorageDescr": "Real Memory",
+					},
+					Point: types.Point{Value: 1024},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:  "hrStorageAllocationUnits",
+						"hrStorageDescr": "Unreal Memory",
+					},
+					Point: types.Point{Value: 1},
+				},
 			},
-			extraLabels: map[string]string{
-				types.LabelMetaSNMPTarget: "192.168.1.2",
+			opt: RegistrationOption{
+				ExtraLabels: map[string]string{
+					types.LabelMetaSNMPTarget: "192.168.1.2",
+				},
+				Rules: DefaultSNMPRules(),
 			},
 			want: []types.MetricPoint{
 				{
@@ -1066,8 +1134,44 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint: cyclop
 				},
 				{
 					Labels: map[string]string{
+						types.LabelName:       "hrStorageAllocationUnits",
+						"hrStorageDescr":      "Real Memory",
+						types.LabelInstance:   "localhost:8015",
+						types.LabelSNMPTarget: "192.168.1.2",
+					},
+					Point: types.Point{Value: 1024},
+					Annotations: types.MetricAnnotations{
+						SNMPTarget: "192.168.1.2",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:       "hrStorageAllocationUnits",
+						"hrStorageDescr":      "Unreal Memory",
+						types.LabelInstance:   "localhost:8015",
+						types.LabelSNMPTarget: "192.168.1.2",
+					},
+					Point: types.Point{Value: 1},
+					Annotations: types.MetricAnnotations{
+						SNMPTarget: "192.168.1.2",
+					},
+				},
+				{
+					Labels: map[string]string{
 						types.LabelName:       "hrStorageUsed",
-						"hrStorageDescr":      "Unreal memory",
+						"hrStorageDescr":      "Real Memory",
+						types.LabelInstance:   "localhost:8015",
+						types.LabelSNMPTarget: "192.168.1.2",
+					},
+					Point: types.Point{Value: 8},
+					Annotations: types.MetricAnnotations{
+						SNMPTarget: "192.168.1.2",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:       "hrStorageUsed",
+						"hrStorageDescr":      "Unreal Memory",
 						types.LabelInstance:   "localhost:8015",
 						types.LabelSNMPTarget: "192.168.1.2",
 					},
@@ -1081,10 +1185,17 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint: cyclop
 						types.LabelInstance:   "localhost:8015",
 						types.LabelSNMPTarget: "192.168.1.2",
 					},
+					Point: types.Point{Value: 8192},
 					Annotations: types.MetricAnnotations{
 						SNMPTarget: "192.168.1.2",
 					},
 				},
+			},
+			wantOverrideMFType: map[string]*dto.MetricType{
+				"mem_used": dto.MetricType_GAUGE.Enum(),
+			},
+			wantOverrideMFHelp: map[string]string{
+				"mem_used": "",
 			},
 		},
 		{
@@ -1108,13 +1219,16 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint: cyclop
 				{
 					Labels: map[string]string{
 						types.LabelName:  "hrStorageUsed",
-						"hrStorageDescr": "Unreal memory",
+						"hrStorageDescr": "Unreal Memory",
 					},
 				},
 			},
-			extraLabels: map[string]string{
-				types.LabelMetaSNMPTarget: "192.168.1.2",
-				"extranLabels":            "are ignored by pushpoints. So snmp target will be ignored",
+			opt: RegistrationOption{
+				ExtraLabels: map[string]string{
+					types.LabelMetaSNMPTarget: "192.168.1.2",
+					"extranLabels":            "are ignored by pushpoints. So snmp target will be ignored, like rules",
+				},
+				Rules: DefaultSNMPRules(),
 			},
 			want: []types.MetricPoint{
 				{
@@ -1128,18 +1242,28 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint: cyclop
 				{
 					Labels: map[string]string{
 						types.LabelName:     "hrStorageUsed",
-						"hrStorageDescr":    "Unreal memory",
+						"hrStorageDescr":    "Real Memory",
 						types.LabelInstance: "localhost:8015",
 					},
 					Annotations: types.MetricAnnotations{},
 				},
 				{
 					Labels: map[string]string{
-						types.LabelName:     "mem_used",
+						types.LabelName:     "hrStorageUsed",
+						"hrStorageDescr":    "Unreal Memory",
 						types.LabelInstance: "localhost:8015",
 					},
 					Annotations: types.MetricAnnotations{},
 				},
+			},
+			metricFamiliesUseTime: true,
+			wantOverrideMFType: map[string]*dto.MetricType{
+				"cpu_used":      dto.MetricType_UNTYPED.Enum(),
+				"hrStorageUsed": dto.MetricType_UNTYPED.Enum(),
+			},
+			wantOverrideMFHelp: map[string]string{
+				"cpu_used":      "",
+				"hrStorageUsed": "",
 			},
 		},
 		{
@@ -1158,10 +1282,14 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint: cyclop
 						types.LabelName:    "cpmCPUMemoryUsed",
 						"cpmCPUTotalIndex": "42",
 					},
+					Point: types.Point{Value: 145},
 				},
 			},
-			extraLabels: map[string]string{
-				types.LabelMetaSNMPTarget: "192.168.1.2",
+			opt: RegistrationOption{
+				ExtraLabels: map[string]string{
+					types.LabelMetaSNMPTarget: "192.168.1.2",
+				},
+				Rules: DefaultSNMPRules(),
 			},
 			want: sortMetricPoints([]types.MetricPoint{
 				{
@@ -1177,15 +1305,34 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint: cyclop
 				},
 				{
 					Labels: map[string]string{
+						types.LabelName:       "cpmCPUMemoryUsed",
+						"cpmCPUTotalIndex":    "42",
+						types.LabelInstance:   "localhost:8015",
+						types.LabelSNMPTarget: "192.168.1.2",
+					},
+					Point: types.Point{Value: 145},
+					Annotations: types.MetricAnnotations{
+						SNMPTarget: "192.168.1.2",
+					},
+				},
+				{
+					Labels: map[string]string{
 						types.LabelName:       "mem_used",
 						types.LabelInstance:   "localhost:8015",
 						types.LabelSNMPTarget: "192.168.1.2",
 					},
+					Point: types.Point{Value: 148480},
 					Annotations: types.MetricAnnotations{
 						SNMPTarget: "192.168.1.2",
 					},
 				},
 			}),
+			wantOverrideMFType: map[string]*dto.MetricType{
+				"mem_used": dto.MetricType_GAUGE.Enum().Enum(),
+			},
+			wantOverrideMFHelp: map[string]string{
+				"mem_used": "",
+			},
 		},
 		{
 			name:         "metric-rename-multiple-1",
@@ -1207,8 +1354,11 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint: cyclop
 					},
 				},
 			},
-			extraLabels: map[string]string{
-				types.LabelMetaSNMPTarget: "192.168.1.2",
+			opt: RegistrationOption{
+				ExtraLabels: map[string]string{
+					types.LabelMetaSNMPTarget: "192.168.1.2",
+				},
+				Rules: DefaultSNMPRules(),
 			},
 			want: sortMetricPoints([]types.MetricPoint{
 				{
@@ -1281,6 +1431,7 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint: cyclop
 						"cpmCPUTotalIndex": "2021",
 						"uniqueValue":      "6",
 					},
+					Point: types.Point{Value: 789},
 				},
 				{
 					Labels: map[string]string{
@@ -1303,8 +1454,11 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint: cyclop
 					},
 				},
 			},
-			extraLabels: map[string]string{
-				types.LabelMetaSNMPTarget: "192.168.1.2",
+			opt: RegistrationOption{
+				ExtraLabels: map[string]string{
+					types.LabelMetaSNMPTarget: "192.168.1.2",
+				},
+				Rules: DefaultSNMPRules(),
 			},
 			want: sortMetricPoints([]types.MetricPoint{
 				{
@@ -1366,11 +1520,25 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint: cyclop
 				},
 				{
 					Labels: map[string]string{
+						types.LabelName:       "cpmCPUMemoryFree",
+						"cpmCPUTotalIndex":    "2021",
+						types.LabelInstance:   "localhost:8015",
+						types.LabelSNMPTarget: "192.168.1.2",
+						"uniqueValue":         "6",
+					},
+					Point: types.Point{Value: 789},
+					Annotations: types.MetricAnnotations{
+						SNMPTarget: "192.168.1.2",
+					},
+				},
+				{
+					Labels: map[string]string{
 						types.LabelName:       "mem_free",
 						types.LabelInstance:   "localhost:8015",
 						types.LabelSNMPTarget: "192.168.1.2",
 						"uniqueValue":         "6",
 					},
+					Point: types.Point{Value: 807936},
 					Annotations: types.MetricAnnotations{
 						SNMPTarget: "192.168.1.2",
 					},
@@ -1411,6 +1579,136 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint: cyclop
 					},
 				},
 			}),
+			wantOverrideMFType: map[string]*dto.MetricType{
+				"mem_free": dto.MetricType_GAUGE.Enum().Enum(),
+			},
+			wantOverrideMFHelp: map[string]string{
+				"mem_free": "",
+			},
+		},
+		{
+			name:         "metric-rule-and-rename",
+			kindToTest:   kindGatherer,
+			metricFormat: types.MetricFormatBleemeo,
+			input: []types.MetricPoint{
+				{
+					Labels: map[string]string{
+						types.LabelName:  "hrStorageUsed",
+						"hrStorageDescr": "Real Memory",
+						"hrStorageIndex": "6",
+					},
+					Point: types.Point{
+						Value: 1.49028e+06,
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:  "hrStorageAllocationUnits",
+						"hrStorageDescr": "Real Memory",
+						"hrStorageIndex": "6",
+					},
+					Point: types.Point{
+						Value: 1024,
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:  "hrStorageSize",
+						"hrStorageDescr": "Real Memory",
+						"hrStorageIndex": "6",
+					},
+					Point: types.Point{
+						Value: 8.385008e+06,
+					},
+				},
+			},
+			opt: RegistrationOption{
+				ExtraLabels: map[string]string{
+					types.LabelMetaSNMPTarget: "192.168.1.2",
+				},
+				Rules: DefaultSNMPRules(),
+			},
+			want: sortMetricPoints([]types.MetricPoint{
+				{
+					Labels: map[string]string{
+						types.LabelName:       "hrStorageAllocationUnits",
+						"hrStorageDescr":      "Real Memory",
+						"hrStorageIndex":      "6",
+						types.LabelInstance:   "localhost:8015",
+						types.LabelSNMPTarget: "192.168.1.2",
+					},
+					Point: types.Point{
+						Value: 1024.0,
+					},
+					Annotations: types.MetricAnnotations{
+						SNMPTarget: "192.168.1.2",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:       "hrStorageSize",
+						"hrStorageDescr":      "Real Memory",
+						"hrStorageIndex":      "6",
+						types.LabelInstance:   "localhost:8015",
+						types.LabelSNMPTarget: "192.168.1.2",
+					},
+					Point: types.Point{
+						Value: 8.385008e+06,
+					},
+					Annotations: types.MetricAnnotations{
+						SNMPTarget: "192.168.1.2",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:       "hrStorageUsed",
+						"hrStorageDescr":      "Real Memory",
+						"hrStorageIndex":      "6",
+						types.LabelInstance:   "localhost:8015",
+						types.LabelSNMPTarget: "192.168.1.2",
+					},
+					Point: types.Point{
+						Value: 1.49028e+06,
+					},
+					Annotations: types.MetricAnnotations{
+						SNMPTarget: "192.168.1.2",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:       "mem_used",
+						types.LabelInstance:   "localhost:8015",
+						types.LabelSNMPTarget: "192.168.1.2",
+					},
+					Point: types.Point{
+						Value: 1526046720.0,
+					},
+					Annotations: types.MetricAnnotations{
+						SNMPTarget: "192.168.1.2",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:       "mem_free",
+						types.LabelInstance:   "localhost:8015",
+						types.LabelSNMPTarget: "192.168.1.2",
+					},
+					Point: types.Point{
+						Value: 7060201472.0,
+					},
+					Annotations: types.MetricAnnotations{
+						SNMPTarget: "192.168.1.2",
+					},
+				},
+			}),
+			wantOverrideMFType: map[string]*dto.MetricType{
+				"mem_used": dto.MetricType_GAUGE.Enum(),
+				"mem_free": dto.MetricType_GAUGE.Enum(),
+			},
+			wantOverrideMFHelp: map[string]string{
+				"mem_used": "",
+				"mem_free": "",
+			},
 		},
 	}
 
@@ -1450,7 +1748,7 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint: cyclop
 				reg.WithTTL(5*time.Minute).PushPoints(context.Background(), tt.input)
 			case kindPushPointCallback:
 				id, err := reg.registerPushPointsCallback(
-					RegistrationOption{ExtraLabels: copyLabels(tt.extraLabels)},
+					tt.opt,
 					func(c context.Context, t time.Time) {
 						reg.WithTTL(5*time.Minute).PushPoints(c, tt.input)
 					},
@@ -1476,9 +1774,9 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint: cyclop
 				}
 			case kindGatherer:
 				id, err := reg.RegisterGatherer(
-					RegistrationOption{ExtraLabels: copyLabels(tt.extraLabels)},
+					tt.opt,
 					&fakeGatherer{
-						response: metricPointsToFamilies(tt.input, time.Time{}, false),
+						response: metricPointsToFamilies(tt.input, time.Time{}, nil, nil),
 					},
 					false,
 				)
@@ -1500,12 +1798,13 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint: cyclop
 				t.Fatal(err)
 			}
 
-			wantMFs := metricPointsToFamilies(tt.want, time.Time{}, false)
+			var mfsTime time.Time
 
-			if tt.kindToTest != kindGatherer {
-				// Only Gatherer is done on demand and kept the metric type.
-				wantMFs = metricPointsToFamilies(tt.want, now, true)
+			if tt.metricFamiliesUseTime {
+				mfsTime = now
 			}
+
+			wantMFs := metricPointsToFamilies(tt.want, mfsTime, tt.wantOverrideMFType, tt.wantOverrideMFHelp)
 
 			if diff := cmp.Diff(wantMFs, got); diff != "" {
 				t.Errorf("Gather mismatch (-want +got):\n%s", diff)
@@ -1517,35 +1816,34 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint: cyclop
 func fillDateAndValue(in []types.MetricPoint, now time.Time) {
 	for i := range in {
 		in[i].Point.Time = now
-		in[i].Point.Value = 4.2
+		if in[i].Point.Value == 0 {
+			in[i].Point.Value = 4.2
+		}
 	}
 }
 
-func copyLabels(in map[string]string) map[string]string {
-	out := make(map[string]string, len(in))
-
-	for k, v := range in {
-		out[k] = v
-	}
-
-	return out
-}
-
-func metricPointsToFamilies(points []types.MetricPoint, now time.Time, useUntyped bool) []*dto.MetricFamily {
+func metricPointsToFamilies(points []types.MetricPoint, now time.Time, typeOverload map[string]*dto.MetricType, helpOverload map[string]string) []*dto.MetricFamily {
 	resultMap := make(map[string]*dto.MetricFamily)
 
 	for _, pts := range points {
-		mf := resultMap[pts.Labels[types.LabelName]]
+		name := pts.Labels[types.LabelName]
+		mf := resultMap[name]
+
 		if mf == nil {
-			mf = &dto.MetricFamily{
-				Name: proto.String(pts.Labels[types.LabelName]),
-				Type: dto.MetricType_COUNTER.Enum(),
-				Help: proto.String("fake metrics"),
+			typ := typeOverload[name]
+			if typ == nil {
+				typ = dto.MetricType_COUNTER.Enum()
 			}
 
-			if useUntyped {
-				mf.Type = dto.MetricType_UNTYPED.Enum()
-				mf.Help = proto.String("")
+			help, ok := helpOverload[name]
+			if !ok {
+				help = "fake metrics"
+			}
+
+			mf = &dto.MetricFamily{
+				Name: proto.String(pts.Labels[types.LabelName]),
+				Type: typ,
+				Help: proto.String(help),
 			}
 		}
 
@@ -1556,15 +1854,20 @@ func metricPointsToFamilies(points []types.MetricPoint, now time.Time, useUntype
 		}
 
 		m := &dto.Metric{
-			Counter:     &dto.Counter{Value: proto.Float64(pts.Value)},
 			TimestampMs: ts,
 		}
 
-		if useUntyped {
-			m = &dto.Metric{
-				Untyped:     &dto.Untyped{Value: proto.Float64(pts.Value)},
-				TimestampMs: ts,
-			}
+		switch *mf.Type {
+		case dto.MetricType_COUNTER:
+			m.Counter = &dto.Counter{Value: proto.Float64(pts.Value)}
+		case dto.MetricType_GAUGE:
+			m.Gauge = &dto.Gauge{Value: proto.Float64(pts.Value)}
+		case dto.MetricType_UNTYPED:
+			m.Untyped = &dto.Untyped{Value: proto.Float64(pts.Value)}
+		case dto.MetricType_HISTOGRAM:
+			m.Histogram = &dto.Histogram{SampleCount: proto.Uint64(1), SampleSum: proto.Float64(pts.Value)}
+		case dto.MetricType_SUMMARY:
+			m.Summary = &dto.Summary{SampleCount: proto.Uint64(1), SampleSum: proto.Float64(pts.Value)}
 		}
 
 		for k, v := range pts.Labels {

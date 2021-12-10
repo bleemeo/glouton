@@ -50,22 +50,6 @@ func GetDefaultRules() []Rule {
 			},
 		},
 		{
-			MetricName: "hrStorageUsed",
-			LabelMatchers: []*labels.Matcher{
-				labels.MustNewMatcher(labels.MatchEqual, "hrStorageDescr", "Real Memory"),
-			},
-			RewriteRules: []RewriteRule{
-				{
-					LabelName: types.LabelName,
-					NewValue:  "mem_used",
-				},
-				{
-					LabelName: "hrStorageDescr",
-					NewValue:  "",
-				},
-			},
-		},
-		{
 			MetricName: "ciscoMemoryPoolUsed",
 			LabelMatchers: []*labels.Matcher{
 				labels.MustNewMatcher(labels.MatchRegexp, "ciscoMemoryPoolName", "(Processor|System memory)"),
@@ -82,19 +66,6 @@ func GetDefaultRules() []Rule {
 			},
 		},
 		{
-			MetricName: "cpmCPUMemoryUsed",
-			RewriteRules: []RewriteRule{
-				{
-					LabelName: types.LabelName,
-					NewValue:  "mem_used",
-				},
-				{
-					LabelName: "cpmCPUTotalIndex",
-					NewValue:  "",
-				},
-			},
-		},
-		{
 			MetricName: "ciscoMemoryPoolFree",
 			LabelMatchers: []*labels.Matcher{
 				labels.MustNewMatcher(labels.MatchRegexp, "ciscoMemoryPoolName", "(Processor|System memory)"),
@@ -106,19 +77,6 @@ func GetDefaultRules() []Rule {
 				},
 				{
 					LabelName: "ciscoMemoryPoolName",
-					NewValue:  "",
-				},
-			},
-		},
-		{
-			MetricName: "cpmCPUMemoryFree",
-			RewriteRules: []RewriteRule{
-				{
-					LabelName: types.LabelName,
-					NewValue:  "mem_free",
-				},
-				{
-					LabelName: "cpmCPUTotalIndex",
 					NewValue:  "",
 				},
 			},
