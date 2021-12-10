@@ -1689,6 +1689,19 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint: cyclop
 				},
 				{
 					Labels: map[string]string{
+						types.LabelName:       "mem_used_perc",
+						types.LabelInstance:   "localhost:8015",
+						types.LabelSNMPTarget: "192.168.1.2",
+					},
+					Point: types.Point{
+						Value: 17.77,
+					},
+					Annotations: types.MetricAnnotations{
+						SNMPTarget: "192.168.1.2",
+					},
+				},
+				{
+					Labels: map[string]string{
 						types.LabelName:       "mem_free",
 						types.LabelInstance:   "localhost:8015",
 						types.LabelSNMPTarget: "192.168.1.2",
@@ -1702,12 +1715,14 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint: cyclop
 				},
 			}),
 			wantOverrideMFType: map[string]*dto.MetricType{
-				"mem_used": dto.MetricType_GAUGE.Enum(),
-				"mem_free": dto.MetricType_GAUGE.Enum(),
+				"mem_used":      dto.MetricType_GAUGE.Enum(),
+				"mem_used_perc": dto.MetricType_GAUGE.Enum(),
+				"mem_free":      dto.MetricType_GAUGE.Enum(),
 			},
 			wantOverrideMFHelp: map[string]string{
-				"mem_used": "",
-				"mem_free": "",
+				"mem_used":      "",
+				"mem_used_perc": "",
+				"mem_free":      "",
 			},
 		},
 	}
@@ -1789,7 +1804,7 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint: cyclop
 
 			gotPoints = sortMetricPoints(gotPoints)
 
-			if diff := cmp.Diff(tt.want, gotPoints); diff != "" {
+			if diff := cmp.Diff(tt.want, gotPoints, cmpopts.EquateApprox(0.001, 0)); diff != "" {
 				t.Errorf("gotPoints mismatch (-want +got):\n%s", diff)
 			}
 
@@ -1806,7 +1821,7 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint: cyclop
 
 			wantMFs := metricPointsToFamilies(tt.want, mfsTime, tt.wantOverrideMFType, tt.wantOverrideMFHelp)
 
-			if diff := cmp.Diff(wantMFs, got); diff != "" {
+			if diff := cmp.Diff(wantMFs, got, cmpopts.EquateApprox(0.001, 0)); diff != "" {
 				t.Errorf("Gather mismatch (-want +got):\n%s", diff)
 			}
 		})
