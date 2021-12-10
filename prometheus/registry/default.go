@@ -26,5 +26,9 @@ func DefaultSNMPRules() []SimpleRule {
 			TargetName:  "mem_used_perc",
 			PromQLQuery: `sum without (cpmCPUTotalIndex) (cpmCPUMemoryUsed/(cpmCPUMemoryUsed+cpmCPUMemoryFree)) * 100`,
 		},
+		{
+			TargetName:  "mem_used_perc",
+			PromQLQuery: `sum without (ciscoMemoryPoolName, ciscoMemoryPoolType) (ciscoMemoryPoolUsed{ciscoMemoryPoolName=~"(Processor|System memory)"}/(ciscoMemoryPoolUsed+ciscoMemoryPoolFree)) * 100`,
+		},
 	}
 }

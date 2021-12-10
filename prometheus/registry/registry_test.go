@@ -1399,6 +1399,13 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint: cyclop
 				},
 				{
 					Labels: map[string]string{
+						types.LabelName:       "ciscoMemoryPoolFree",
+						"ciscoMemoryPoolName": "System memory",
+						"uniqueValue":         "1",
+					},
+				},
+				{
+					Labels: map[string]string{
 						types.LabelName:       "ciscoMemoryPoolUsed",
 						"ciscoMemoryPoolName": "Anything Else",
 						"uniqueValue":         "2",
@@ -1409,13 +1416,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint: cyclop
 						types.LabelName:       "ciscoMemoryPoolFree",
 						"ciscoMemoryPoolName": "Processor",
 						"uniqueValue":         "3",
-					},
-				},
-				{
-					Labels: map[string]string{
-						types.LabelName:       "ciscoMemoryPoolFree",
-						"ciscoMemoryPoolName": "System memory",
-						"uniqueValue":         "4",
 					},
 				},
 				{
@@ -1474,6 +1474,29 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint: cyclop
 				},
 				{
 					Labels: map[string]string{
+						types.LabelName:       "mem_free",
+						types.LabelInstance:   "localhost:8015",
+						types.LabelSNMPTarget: "192.168.1.2",
+						"uniqueValue":         "1",
+					},
+					Annotations: types.MetricAnnotations{
+						SNMPTarget: "192.168.1.2",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:       "mem_used_perc",
+						types.LabelInstance:   "localhost:8015",
+						types.LabelSNMPTarget: "192.168.1.2",
+						"uniqueValue":         "1",
+					},
+					Point: types.Point{Value: 50},
+					Annotations: types.MetricAnnotations{
+						SNMPTarget: "192.168.1.2",
+					},
+				},
+				{
+					Labels: map[string]string{
 						types.LabelName:       "ciscoMemoryPoolUsed",
 						types.LabelInstance:   "localhost:8015",
 						types.LabelSNMPTarget: "192.168.1.2",
@@ -1490,17 +1513,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint: cyclop
 						types.LabelInstance:   "localhost:8015",
 						types.LabelSNMPTarget: "192.168.1.2",
 						"uniqueValue":         "3",
-					},
-					Annotations: types.MetricAnnotations{
-						SNMPTarget: "192.168.1.2",
-					},
-				},
-				{
-					Labels: map[string]string{
-						types.LabelName:       "mem_free",
-						types.LabelInstance:   "localhost:8015",
-						types.LabelSNMPTarget: "192.168.1.2",
-						"uniqueValue":         "4",
 					},
 					Annotations: types.MetricAnnotations{
 						SNMPTarget: "192.168.1.2",
@@ -1580,10 +1592,12 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint: cyclop
 				},
 			}),
 			wantOverrideMFType: map[string]*dto.MetricType{
-				"mem_free": dto.MetricType_GAUGE.Enum().Enum(),
+				"mem_free":      dto.MetricType_GAUGE.Enum().Enum(),
+				"mem_used_perc": dto.MetricType_GAUGE.Enum(),
 			},
 			wantOverrideMFHelp: map[string]string{
-				"mem_free": "",
+				"mem_free":      "",
+				"mem_used_perc": "",
 			},
 		},
 		{

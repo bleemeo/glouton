@@ -63,6 +63,10 @@ func GetDefaultRules() []Rule {
 					LabelName: "ciscoMemoryPoolName",
 					NewValue:  "",
 				},
+				{
+					LabelName: "ciscoMemoryPoolType",
+					NewValue:  "",
+				},
 			},
 		},
 		{
@@ -77,6 +81,10 @@ func GetDefaultRules() []Rule {
 				},
 				{
 					LabelName: "ciscoMemoryPoolName",
+					NewValue:  "",
+				},
+				{
+					LabelName: "ciscoMemoryPoolType",
 					NewValue:  "",
 				},
 			},
