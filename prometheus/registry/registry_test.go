@@ -1284,6 +1284,13 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint: cyclop
 					},
 					Point: types.Point{Value: 145},
 				},
+				{
+					Labels: map[string]string{
+						types.LabelName:    "cpmCPUMemoryFree",
+						"cpmCPUTotalIndex": "42",
+					},
+					Point: types.Point{Value: 7},
+				},
 			},
 			opt: RegistrationOption{
 				ExtraLabels: map[string]string{
@@ -1317,6 +1324,29 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint: cyclop
 				},
 				{
 					Labels: map[string]string{
+						types.LabelName:       "cpmCPUMemoryFree",
+						"cpmCPUTotalIndex":    "42",
+						types.LabelInstance:   "localhost:8015",
+						types.LabelSNMPTarget: "192.168.1.2",
+					},
+					Point: types.Point{Value: 7},
+					Annotations: types.MetricAnnotations{
+						SNMPTarget: "192.168.1.2",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:       "mem_free",
+						types.LabelInstance:   "localhost:8015",
+						types.LabelSNMPTarget: "192.168.1.2",
+					},
+					Point: types.Point{Value: 7168},
+					Annotations: types.MetricAnnotations{
+						SNMPTarget: "192.168.1.2",
+					},
+				},
+				{
+					Labels: map[string]string{
 						types.LabelName:       "mem_used",
 						types.LabelInstance:   "localhost:8015",
 						types.LabelSNMPTarget: "192.168.1.2",
@@ -1326,12 +1356,27 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint: cyclop
 						SNMPTarget: "192.168.1.2",
 					},
 				},
+				{
+					Labels: map[string]string{
+						types.LabelName:       "mem_used_perc",
+						types.LabelInstance:   "localhost:8015",
+						types.LabelSNMPTarget: "192.168.1.2",
+					},
+					Point: types.Point{Value: 95.39},
+					Annotations: types.MetricAnnotations{
+						SNMPTarget: "192.168.1.2",
+					},
+				},
 			}),
 			wantOverrideMFType: map[string]*dto.MetricType{
-				"mem_used": dto.MetricType_GAUGE.Enum().Enum(),
+				"mem_used":      dto.MetricType_GAUGE.Enum().Enum(),
+				"mem_free":      dto.MetricType_GAUGE.Enum().Enum(),
+				"mem_used_perc": dto.MetricType_GAUGE.Enum().Enum(),
 			},
 			wantOverrideMFHelp: map[string]string{
-				"mem_used": "",
+				"mem_used":      "",
+				"mem_free":      "",
+				"mem_used_perc": "",
 			},
 		},
 		{
