@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"glouton/facts"
+	"glouton/prometheus/model"
 	"glouton/prometheus/registry"
 	"glouton/prometheus/scrapper"
 	"glouton/types"
@@ -33,6 +34,7 @@ import (
 
 	"github.com/gogo/protobuf/proto"
 	dto "github.com/prometheus/client_model/go"
+	"github.com/prometheus/common/expfmt"
 )
 
 const (
@@ -41,6 +43,10 @@ const (
 	ifTypeLabelName        = "ifType"
 	ifOperStatusMetricName = "ifOperStatus"
 	ifTypeInfoMetricName   = "ifType_info"
+	snmpDiscoveryModule    = "discovery"
+	mockFactMetricName     = "__snmp_metric_for_mock_fact"
+	mockFactLabelKey       = "__snmp_fact_key"
+	mockFactLabelValue     = "__snmp_fact_value"
 )
 
 // Target represents a snmp config instance.
@@ -50,8 +56,8 @@ type Target struct {
 	scraperFacts    FactProvider
 
 	l                sync.Mutex
-	scraper          *scrapper.Target
-	facts            map[string]string
+	scraper          registry.GathererWithState
+	lastFacts        map[string]string
 	lastFactUpdate   time.Time
 	lastFactErrAt    time.Time
 	lastFactErr      error
@@ -59,8 +65,8 @@ type Target struct {
 	lastErrorMessage string
 	consecutiveErr   int
 
-	// MockFacts could be used for testing. It bypass real facts discovery.
-	MockFacts map[string]string
+	mockPerModule map[string][]byte
+	now           func() time.Time
 }
 
 type TargetOptions struct {
@@ -70,7 +76,7 @@ type TargetOptions struct {
 
 func NewMock(opt TargetOptions, mockFacts map[string]string) *Target {
 	r := newTarget(opt, nil, nil)
-	r.MockFacts = mockFacts
+	r.mockPerModule = mockFromFacts(mockFacts)
 
 	return r
 }
@@ -80,6 +86,7 @@ func newTarget(opt TargetOptions, scraperFact FactProvider, exporterAddress *url
 		opt:             opt,
 		exporterAddress: exporterAddress,
 		scraperFacts:    scraperFact,
+		now:             time.Now,
 	}
 }
 
@@ -87,8 +94,25 @@ func (t *Target) Address() string {
 	return t.opt.Address
 }
 
-func (t *Target) Module() string {
-	return "if_mib"
+func (t *Target) module(ctx context.Context) (string, error) {
+	facts, err := t.facts(ctx, 24*time.Hour)
+	if err != nil {
+		return "", err
+	}
+
+	if strings.Contains(facts["product_name"], "Cisco") {
+		return "cisco", nil
+	}
+
+	if strings.Contains(facts["product_name"], "LaserJet") {
+		return "printer_mib", nil
+	}
+
+	if strings.Contains(facts["product_name"], "PowerConnect") {
+		return "dell", nil
+	}
+
+	return "if_mib", nil
 }
 
 func (t *Target) Name(ctx context.Context) (string, error) {
@@ -120,7 +144,14 @@ func (t *Target) GatherWithState(ctx context.Context, state registry.GatherState
 	t.l.Lock()
 
 	if t.scraper == nil {
-		t.scraper = t.buildScraper(t.Module())
+		mod, err := t.module(ctx)
+		if err != nil {
+			t.l.Unlock()
+
+			return nil, err
+		}
+
+		t.scraper = t.buildScraper(mod)
 	}
 
 	t.l.Unlock()
@@ -131,7 +162,7 @@ func (t *Target) GatherWithState(ctx context.Context, state registry.GatherState
 		t.l.Lock()
 
 		if err == nil {
-			t.lastSuccess = time.Now()
+			t.lastSuccess = t.now()
 			t.consecutiveErr = 0
 		} else {
 			t.lastErrorMessage = humanError(err)
@@ -323,19 +354,27 @@ func (t *Target) extraLabels() map[string]string {
 	}
 }
 
-func (t *Target) buildScraper(module string) *scrapper.Target {
+func (t *Target) buildScraper(module string) registry.GathererWithState {
+	if t.exporterAddress == nil {
+		if _, ok := t.mockPerModule[module]; !ok {
+			return errGatherer{
+				alwaysErr: scrapper.TargetError{
+					PartialBody: []byte(fmt.Sprintf("Unknown module '%s'", module)),
+					StatusCode:  400,
+				},
+			}
+		}
+
+		return scrapper.NewMock(t.mockPerModule[module], t.extraLabels())
+	}
+
 	u := t.exporterAddress.ResolveReference(&url.URL{}) // clone URL
 	qs := u.Query()
 	qs.Set("module", module)
 	qs.Set("target", t.opt.Address)
 	u.RawQuery = qs.Encode()
 
-	target := &scrapper.Target{
-		ExtraLabels: t.extraLabels(),
-		URL:         u,
-		AllowList:   []string{},
-		DenyList:    []string{},
-	}
+	target := scrapper.New(u, t.extraLabels())
 
 	return target
 }
@@ -367,23 +406,28 @@ func (t *Target) getStatus() (types.Status, string) {
 	return types.StatusOk, ""
 }
 
-func (t *Target) String() string {
+func (t *Target) String(ctx context.Context) string {
 	t.l.Lock()
 	defer t.l.Unlock()
 
-	return fmt.Sprintf("initial_name=%s target=%s module=%s lastSuccess=%s (consecutive err=%d)", t.opt.InitialName, t.opt.Address, t.Module(), t.lastSuccess, t.consecutiveErr)
+	mod, err := t.module(ctx)
+	if err != nil {
+		mod = "!ERR: " + err.Error()
+	}
+
+	return fmt.Sprintf("initial_name=%s target=%s module=%s lastSuccess=%s (consecutive err=%d)", t.opt.InitialName, t.opt.Address, mod, t.lastSuccess, t.consecutiveErr)
 }
 
 func (t *Target) Facts(ctx context.Context, maxAge time.Duration) (facts map[string]string, err error) {
 	t.l.Lock()
 	defer t.l.Unlock()
 
-	if t.exporterAddress == nil || t.MockFacts != nil {
-		return t.MockFacts, nil
-	}
+	return t.facts(ctx, maxAge)
+}
 
+func (t *Target) facts(ctx context.Context, maxAge time.Duration) (facts map[string]string, err error) {
 	if time.Since(t.lastFactUpdate) < maxAge {
-		return t.facts, nil
+		return t.lastFacts, nil
 	}
 
 	if time.Since(t.lastFactErrAt) < maxAge {
@@ -404,26 +448,27 @@ func (t *Target) Facts(ctx context.Context, maxAge time.Duration) (facts map[str
 		}
 	}
 
-	tgt := t.buildScraper("discovery")
+	tgt := t.buildScraper(snmpDiscoveryModule)
 
 	tmp, err := tgt.GatherWithState(ctx, registry.GatherState{})
 	if err != nil {
-		t.lastFactErrAt = time.Now()
+		t.lastFactErrAt = t.now()
 		t.lastFactErr = err
 
 		return nil, err
 	}
 
 	t.lastFactErr = nil
-	result := registry.FamiliesToMetricPoints(time.Now(), tmp)
+	result := model.FamiliesToMetricPoints(t.now(), tmp)
 
-	t.facts = factFromPoints(result, time.Now(), scraperFact)
-	t.lastFactUpdate = time.Now()
+	t.lastFacts = factFromPoints(result, t.now(), scraperFact)
+	t.lastFactUpdate = t.now()
 
-	return t.facts, nil
+	return t.lastFacts, nil
 }
 
 func factFromPoints(points []types.MetricPoint, now time.Time, scraperFact map[string]string) map[string]string {
+	useMockFact := false
 	result := make(map[string]string)
 
 	convertMap := map[string]string{
@@ -441,6 +486,16 @@ func factFromPoints(points []types.MetricPoint, now time.Time, scraperFact map[s
 		value := p.Labels[key]
 		target := convertMap[key]
 
+		if key == mockFactMetricName {
+			useMockFact = true
+
+			if p.Labels[mockFactLabelKey] != "" {
+				result[p.Labels[mockFactLabelKey]] = p.Labels[mockFactLabelValue]
+			}
+
+			continue
+		}
+
 		if target == "" || value == "" {
 			continue
 		}
@@ -448,6 +503,10 @@ func factFromPoints(points []types.MetricPoint, now time.Time, scraperFact map[s
 		if result[target] == "" {
 			result[target] = value
 		}
+	}
+
+	if useMockFact {
+		return result
 	}
 
 	result["fact_updated_at"] = now.UTC().Format(time.RFC3339)
@@ -509,4 +568,46 @@ func humanError(err error) string {
 	}
 
 	return err.Error()
+}
+
+type errGatherer struct {
+	alwaysErr error
+}
+
+func (g errGatherer) GatherWithState(context.Context, registry.GatherState) ([]*dto.MetricFamily, error) {
+	return nil, g.alwaysErr
+}
+
+func mockFromFacts(facts map[string]string) map[string][]byte {
+	if facts == nil {
+		facts = make(map[string]string)
+	}
+
+	mf := &dto.MetricFamily{
+		Name: proto.String(mockFactMetricName),
+		Type: dto.MetricType_GAUGE.Enum(),
+	}
+
+	// sentinel marked, used in factsFromPoints to know we use mock facts
+	facts[""] = ""
+
+	for k, v := range facts {
+		mf.Metric = append(mf.Metric, &dto.Metric{
+			Label: []*dto.LabelPair{
+				{Name: proto.String(mockFactLabelKey), Value: proto.String(k)},
+				{Name: proto.String(mockFactLabelValue), Value: proto.String(v)},
+			},
+			Gauge: &dto.Gauge{
+				Value: proto.Float64(42),
+			},
+		})
+	}
+
+	writer := bytes.NewBuffer(nil)
+
+	_, _ = expfmt.MetricFamilyToText(writer, mf)
+
+	return map[string][]byte{
+		snmpDiscoveryModule: writer.Bytes(),
+	}
 }
