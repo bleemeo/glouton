@@ -58,7 +58,6 @@ func (i Input) Gather(ctx context.Context, now time.Time) {
 		"sleeping": 0,
 		"blocked":  0,
 		"zombies":  0,
-		"paging":   0,
 		"running":  0,
 		"stopped":  0,
 	}
@@ -69,20 +68,27 @@ func (i Input) Gather(ctx context.Context, now time.Time) {
 		status := p.Status
 
 		switch status {
-		case "idle":
+		case facts.ProcessStatusIdle, facts.ProcessStatusSleeping:
 			// Merge idle & sleeping
-			status = "sleeping"
-		case "disk-sleep":
-			status = "blocked"
-		case "zombie":
-			status = "zombies"
-		case "?":
+			counts["sleeping"]++
+		case facts.ProcessStatusRunning:
+			counts["running"]++
+		case facts.ProcessStatusStopped, facts.ProcessStatusDead, facts.ProcessStatusTracingStop:
+			counts["stopped"]++
+		case facts.ProcessStatusIOWait:
+			counts["blocked"]++
+		case facts.ProcessStatusZombie:
+			counts["zombies"]++
+		case facts.ProcessStatusUnknown:
 			logger.V(2).Printf("Process %v has status unknown, assume sleeping", p)
 
-			status = "sleeping"
+			counts["sleeping"]++
+		default:
+			logger.V(2).Printf("Process %v has status unknown (%#v), assume sleeping", p, status)
+
+			counts["sleeping"]++
 		}
 
-		counts[status]++
 		total++
 
 		totalThreads += p.NumThreads

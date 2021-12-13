@@ -31,10 +31,24 @@ import (
 
 	"github.com/AstromechZA/etcpwdparse"
 	"github.com/cespare/xxhash"
-	"github.com/shirou/gopsutil/cpu"
-	"github.com/shirou/gopsutil/host"
-	"github.com/shirou/gopsutil/mem"
-	"github.com/shirou/gopsutil/process"
+	"github.com/shirou/gopsutil/v3/cpu"
+	"github.com/shirou/gopsutil/v3/host"
+	"github.com/shirou/gopsutil/v3/mem"
+	"github.com/shirou/gopsutil/v3/process"
+)
+
+type ProcessStatus string
+
+const (
+	ProcessStatusRunning     ProcessStatus = "running"
+	ProcessStatusSleeping    ProcessStatus = "sleeping"
+	ProcessStatusStopped     ProcessStatus = "stopped"
+	ProcessStatusIdle        ProcessStatus = "idle"
+	ProcessStatusZombie      ProcessStatus = "zombie"
+	ProcessStatusIOWait      ProcessStatus = "disk-sleep"
+	ProcessStatusTracingStop ProcessStatus = "tracing-stop"
+	ProcessStatusDead        ProcessStatus = "dead"
+	ProcessStatusUnknown     ProcessStatus = "?"
 )
 
 // ProcessProvider provider information about processes.
@@ -53,22 +67,22 @@ type ProcessProvider struct {
 
 // Process describe one Process.
 type Process struct {
-	PID             int       `json:"pid"`
-	PPID            int       `json:"ppid"`
-	CreateTime      time.Time `json:"-"`
-	CreateTimestamp int64     `json:"create_time"`
-	CmdLineList     []string  `json:"-"`
-	CmdLine         string    `json:"cmdline"`
-	Name            string    `json:"name"`
-	MemoryRSS       uint64    `json:"memory_rss"`
-	CPUPercent      float64   `json:"cpu_percent"`
-	CPUTime         float64   `json:"cpu_times"`
-	Status          string    `json:"status"`
-	Username        string    `json:"username"`
-	Executable      string    `json:"exe"`
-	ContainerID     string    `json:"-"`
-	ContainerName   string    `json:"instance"`
-	NumThreads      int       `json:"num_threads"`
+	PID             int           `json:"pid"`
+	PPID            int           `json:"ppid"`
+	CreateTime      time.Time     `json:"-"`
+	CreateTimestamp int64         `json:"create_time"`
+	CmdLineList     []string      `json:"-"`
+	CmdLine         string        `json:"cmdline"`
+	Name            string        `json:"name"`
+	MemoryRSS       uint64        `json:"memory_rss"`
+	CPUPercent      float64       `json:"cpu_percent"`
+	CPUTime         float64       `json:"cpu_times"`
+	Status          ProcessStatus `json:"status"`
+	Username        string        `json:"username"`
+	Executable      string        `json:"exe"`
+	ContainerID     string        `json:"-"`
+	ContainerName   string        `json:"instance"`
+	NumThreads      int           `json:"num_threads"`
 }
 
 // TopInfo contains all information to show a top-like view.
@@ -199,30 +213,51 @@ func (pp *ProcessProvider) ProcessesWithTime(ctx context.Context, maxAge time.Du
 }
 
 // PsStat2Status convert status (value in ps output - or in /proc/pid/stat) to human status.
-func PsStat2Status(psStat string) string {
+func PsStat2Status(psStat string) ProcessStatus {
 	if psStat == "" {
-		return "?"
+		return ProcessStatusUnknown
 	}
 
-	switch psStat[0] {
+	switch psStat {
+	case process.Running:
+		return ProcessStatusRunning
+	case process.Sleep:
+		return ProcessStatusSleeping
+	case process.Stop:
+		return ProcessStatusStopped
+	case process.Idle:
+		return ProcessStatusIdle
+	case process.Zombie:
+		return ProcessStatusZombie
+	case process.Wait:
+		return ProcessStatusIOWait
+	case process.Lock:
+		return ProcessStatusUnknown
+	}
+
+	return convertPSStatusOneChar(psStat[0])
+}
+
+func convertPSStatusOneChar(letter byte) ProcessStatus {
+	switch letter {
 	case 'D':
-		return "disk-sleep"
+		return ProcessStatusIOWait
 	case 'R':
-		return "running"
+		return ProcessStatusRunning
 	case 'S':
-		return "sleeping"
+		return ProcessStatusSleeping
 	case 'T':
-		return "stopped"
+		return ProcessStatusStopped
 	case 't':
-		return "tracing-stop"
+		return ProcessStatusTracingStop
 	case 'X':
-		return "dead"
+		return ProcessStatusDead
 	case 'Z':
-		return "zombie"
+		return ProcessStatusZombie
 	case 'I':
-		return "idle"
+		return ProcessStatusIdle
 	default:
-		return "?"
+		return ProcessStatusUnknown
 	}
 }
 

@@ -42,10 +42,10 @@ require (
 	github.com/prometheus/procfs v0.7.3
 	github.com/prometheus/prometheus v1.8.2-0.20210518124745-db7f0bcec27b // 2.27.1
 	github.com/rs/cors v1.8.0
-	github.com/shirou/gopsutil v3.21.8+incompatible
+	github.com/shirou/gopsutil v3.21.10+incompatible // indirect
+	github.com/shirou/gopsutil/v3 v3.21.11
 	github.com/shopspring/decimal v1.3.1 // indirect
 	github.com/stretchr/objx v0.3.0 // indirect
-	github.com/urfave/cli/v2 v2.3.0 // indirect
 	github.com/vektah/gqlparser/v2 v2.2.0
 	github.com/vishvananda/netlink v1.1.1-0.20201029203352-d40f9887b852
 	golang.org/x/sys v0.0.0-20211116061358-0a5406a5449c

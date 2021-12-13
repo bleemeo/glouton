@@ -34,7 +34,7 @@ import (
 	"github.com/influxdata/telegraf/plugins/inputs/win_perf_counters"
 	"github.com/influxdata/toml"
 	"github.com/influxdata/toml/ast"
-	"github.com/shirou/gopsutil/mem"
+	"github.com/shirou/gopsutil/v3/mem"
 )
 
 var (

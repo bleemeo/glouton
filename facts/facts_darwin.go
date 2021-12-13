@@ -19,7 +19,7 @@ package facts
 import (
 	"context"
 
-	"github.com/shirou/gopsutil/load"
+	"github.com/shirou/gopsutil/v3/load"
 )
 
 const dmiDir = "/sys/devices/virtual/dmi/id/"

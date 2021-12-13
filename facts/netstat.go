@@ -29,7 +29,7 @@ import (
 	"syscall"
 	"time"
 
-	psutilNet "github.com/shirou/gopsutil/net"
+	psutilNet "github.com/shirou/gopsutil/v3/net"
 )
 
 // NetstatProvider provide netstat information from both a file (output of netstat command) and using gopsutil
