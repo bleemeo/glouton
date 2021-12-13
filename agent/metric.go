@@ -217,6 +217,7 @@ var bleemeoDefaultSystemMetrics = []string{
 
 //nolint:gochecknoglobals
 var snmpMetrics = []string{
+	"snmp_scrape_duration_seconds",
 	"snmp_device_status",
 	"sysUpTime",
 	"ifOperStatus",
@@ -226,6 +227,8 @@ var snmpMetrics = []string{
 	"ifOutErrors",
 	"total_interfaces",
 	"connected_interfaces",
+	"prtMarkerSuppliesLevel",
+	"temperature",
 }
 
 //nolint:gochecknoglobals

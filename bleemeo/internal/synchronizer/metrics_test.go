@@ -661,7 +661,7 @@ func newMetricHelper(t *testing.T) *metricTestHelper {
 		Cache: &cache,
 		GlobalOption: bleemeoTypes.GlobalOption{
 			Config:           cfg,
-			Facts:            facts.NewMockFacter(),
+			Facts:            facts.NewMockFacter(nil),
 			State:            state,
 			Discovery:        discovery,
 			Store:            helper.store,

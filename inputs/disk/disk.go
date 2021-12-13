@@ -86,13 +86,6 @@ func (dt diskTransformer) renameGlobal(gatherContext internal.GatherContext) (in
 		item = item[1:]
 	}
 
-	if !strings.HasPrefix(item, dt.mountPoint) {
-		// partition don't start with mountPoint, so it's a parition
-		// which is only inside the container. Ignore it
-		return gatherContext, true
-	}
-
-	item = strings.TrimPrefix(item, dt.mountPoint)
 	if item == "" {
 		item = "/"
 	}

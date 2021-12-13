@@ -17,10 +17,14 @@
 package snmp
 
 import (
+	"context"
 	"fmt"
+	"glouton/facts"
+	"glouton/prometheus/model"
 	"glouton/prometheus/registry"
 	"glouton/prometheus/scrapper"
 	"glouton/types"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"sort"
@@ -140,16 +144,36 @@ func Test_factFromPoints(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
+			body, err := ioutil.ReadFile(filepath.Join("testdata", tt.metricFile))
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			tgt := newTarget(TargetOptions{}, facts.NewMockFacter(tt.scraperFacts), nil)
+			tgt.mockPerModule = map[string][]byte{
+				snmpDiscoveryModule: body,
+			}
+			tgt.now = func() time.Time { return now }
+
 			tmp, err := fileToMFS(filepath.Join("testdata", tt.metricFile))
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			result := registry.FamiliesToMetricPoints(time.Now(), tmp)
+			result := model.FamiliesToMetricPoints(time.Now(), tmp)
 			got := factFromPoints(result, now, tt.scraperFacts)
+
+			got2, err := tgt.Facts(context.Background(), 0)
+			if err != nil {
+				t.Error(err)
+			}
 
 			if diff := cmp.Diff(tt.want, got); diff != "" {
 				t.Errorf("factFromPoints() missmatch (-want +got):\n%s", diff)
+			}
+
+			if diff := cmp.Diff(tt.want, got2); diff != "" {
+				t.Errorf("Facts() missmatch (-want +got):\n%s", diff)
 			}
 		})
 	}
@@ -506,6 +530,112 @@ func Test_processMFS(t *testing.T) {
 
 			if diff := cmp.Diff(want, got); diff != "" {
 				t.Errorf("processMFS() mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestNewMock(t *testing.T) {
+	tests := []struct {
+		name      string
+		opt       TargetOptions
+		mockFacts map[string]string
+	}{
+		{
+			name:      "empty facts",
+			mockFacts: map[string]string{},
+		},
+		{
+			name: "some facts",
+			mockFacts: map[string]string{
+				"my_facts": "test",
+				"fqdn":     "example.com",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			wantFacts := make(map[string]string, len(tt.mockFacts))
+			for k, v := range tt.mockFacts {
+				wantFacts[k] = v
+			}
+
+			tgt := NewMock(tt.opt, tt.mockFacts)
+
+			got, err := tgt.Facts(context.Background(), 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if diff := cmp.Diff(wantFacts, got); diff != "" {
+				t.Errorf("facts mismatch (-want +got)\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestTarget_Module(t *testing.T) {
+	tests := []struct {
+		name       string
+		metricFile string
+		want       string
+	}{
+		{
+			name:       "VMware ESXi 6.5.0",
+			metricFile: "vmware-esxi-6.5.0.metrics",
+			want:       "if_mib",
+		},
+		{
+			name:       "PowerConnect 5448",
+			metricFile: "powerconnect-5448.metrics",
+			want:       "dell",
+		},
+		{
+			name:       "Cisco N9000",
+			metricFile: "cisco-n9000.metrics",
+			want:       "cisco",
+		},
+		{
+			name:       "Cisco C2960",
+			metricFile: "cisco-c2960.metrics",
+			want:       "cisco",
+		},
+		{
+			name:       "hp-printer",
+			metricFile: "hp-printer.metrics",
+			want:       "printer_mib",
+		},
+		{
+			name:       "anything else",
+			metricFile: "linux-snmpd.input",
+			want:       "if_mib",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			body, err := ioutil.ReadFile(filepath.Join("testdata", tt.metricFile))
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			tr := newTarget(TargetOptions{}, nil, nil)
+			tr.mockPerModule = map[string][]byte{
+				snmpDiscoveryModule: body,
+			}
+
+			got, err := tr.module(context.Background())
+			if err != nil {
+				t.Error(err)
+			}
+
+			if got != tt.want {
+				t.Errorf("Target.Module() = %v, want %v", got, tt.want)
 			}
 		})
 	}

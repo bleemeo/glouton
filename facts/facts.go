@@ -39,6 +39,8 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+const virtualTypeKVM = "kvm"
+
 // FactProvider provider information about system. Mostly static facts like OS version, architecture, ...
 //
 // It also possible to define fixed facts that this provider won't discover. This is useful for
@@ -210,14 +212,21 @@ func (f *FactProvider) fastUpdateFacts(ctx context.Context) map[string]string {
 	}
 
 	vType, vRole, err := host.VirtualizationWithContext(ctx)
-	if err == nil && vRole == "guest" {
+	if err == nil && vRole == "guest" && vType != "" {
 		if vType == "vbox" {
 			vType = "virtualbox"
 		}
 
 		newFacts["virtual"] = vType
 	} else {
-		newFacts["virtual"] = guessVirtual(newFacts)
+		gloutonvType := guessVirtual(newFacts)
+
+		if gloutonvType == "physical" && vType == "" && err == nil && vRole == "guest" {
+			// Let's default to "kvm", we have no clue on what the hypervisor is.
+			gloutonvType = virtualTypeKVM
+		}
+
+		newFacts["virtual"] = gloutonvType
 	}
 
 	if !version.IsWindows() {
@@ -354,7 +363,7 @@ func guessVirtual(facts map[string]string) string {
 
 	switch {
 	case strings.Contains(vendorName, "qemu"), strings.Contains(vendorName, "bochs"), strings.Contains(vendorName, "digitalocean"):
-		return "kvm"
+		return virtualTypeKVM
 	case strings.Contains(vendorName, "xen"):
 		if strings.Contains(biosVersion, "amazon") {
 			return "aws"
@@ -374,7 +383,7 @@ func guessVirtual(facts map[string]string) string {
 	case strings.Contains(vendorName, "openstack"):
 		switch {
 		case strings.Contains(biosVendor, "bochs"):
-			return "kvm"
+			return virtualTypeKVM
 		case strings.Contains(strings.ToLower(facts["serial_number"]), "vmware"):
 			return "vmware"
 		default:

@@ -2,14 +2,16 @@ package discovery
 
 import (
 	"fmt"
-	"glouton/prometheus/exporter/memcached"
+	"glouton/logger"
 	"glouton/prometheus/registry"
 	"glouton/types"
 	"runtime"
 	"strconv"
 	"time"
 
+	"github.com/go-kit/log"
 	"github.com/prometheus/client_golang/prometheus"
+	memcachedExporter "github.com/prometheus/memcached_exporter/pkg/exporter"
 	"github.com/prometheus/prometheus/pkg/labels"
 )
 
@@ -24,7 +26,8 @@ func (d *Discovery) createPrometheusMemcached(service Service) error {
 
 	address := fmt.Sprintf("%s:%d", ip, port)
 
-	collector := memcached.NewExporter(address, 5*time.Second)
+	extLogger := log.With(logger.GoKitLoggerWrapper(logger.V(2)), "service", "memcached", "container_name", service.ContainerName)
+	collector := memcachedExporter.New(address, 5*time.Second, extLogger)
 	lbls := map[string]string{
 		types.LabelMetaServiceName:   service.Name,
 		types.LabelMetaContainerID:   service.ContainerID,

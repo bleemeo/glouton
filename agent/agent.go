@@ -434,6 +434,7 @@ func (a *agent) updateSNMPResolution(resolution time.Duration) {
 				Interval:    resolution,
 				Timeout:     40 * time.Second,
 				ExtraLabels: target.ExtraLabels,
+				Rules:       registry.DefaultSNMPRules(),
 			},
 			target.Gatherer,
 			true,
@@ -662,8 +663,6 @@ func (a *agent) run() { //nolint:cyclop
 		a.store = store.New(2 * time.Minute)
 	}
 
-	rulesManager := rules.NewManager(ctx, a.store)
-
 	filteredStore := store.NewFilteredStore(a.store, mFilter.FilterPoints, mFilter.filterMetrics)
 
 	a.gathererRegistry, err = registry.New(
@@ -683,13 +682,15 @@ func (a *agent) run() { //nolint:cyclop
 		return
 	}
 
+	rulesManager := rules.NewManager(ctx, a.store, a.gathererRegistry.Appendable(5*time.Minute))
+
 	_, err = a.gathererRegistry.RegisterPushPointsCallback(
 		registry.RegistrationOption{
 			Description: "rulesManager",
 			JitterSeed:  baseJitterPlus,
 		},
-		func(context.Context, time.Time) {
-			rulesManager.Run()
+		func(_ context.Context, t0 time.Time) {
+			rulesManager.Run(t0)
 		},
 	)
 	if err != nil {
@@ -739,7 +740,7 @@ func (a *agent) run() { //nolint:cyclop
 	if !useProc {
 		logger.V(1).Printf("The agent is running in a container and \"container.pid_namespace_host\", is not true. Not all processes will be seen")
 	} else {
-		if version.IsWindows() {
+		if !version.IsLinux() {
 			psLister = facts.NewPsUtilLister("")
 		} else {
 			psLister = process.NewProcessLister(a.hostRootPath, 9*time.Second)
@@ -2130,7 +2131,7 @@ func (a *agent) diagnosticSNMP(ctx context.Context, archive types.ArchiveWriter)
 	fmt.Fprintf(file, "# %d SNMP target configured\n", len(a.snmpManager.Targets()))
 
 	for _, t := range a.snmpManager.Targets() {
-		fmt.Fprintf(file, "\n%s\n", t.String())
+		fmt.Fprintf(file, "\n%s\n", t.String(ctx))
 		facts, err := t.Facts(ctx, 48*time.Hour)
 
 		if err != nil {
@@ -2254,17 +2255,43 @@ func setupContainer(hostRootPath string) {
 		return
 	}
 
-	if hostRootPath != "" && hostRootPath != "/" && os.Getenv("HOST_VAR") == "" {
-		// gopsutil will use HOST_VAR as prefix to host /var
-		// It's used at least for reading the number of connected user from /var/run/utmp
-		os.Setenv("HOST_VAR", hostRootPath+"/var")
+	if hostRootPath != "" && hostRootPath != "/" {
+		if os.Getenv("HOST_VAR") == "" {
+			// gopsutil will use HOST_VAR as prefix to host /var
+			// It's used at least for reading the number of connected user from /var/run/utmp
+			os.Setenv("HOST_VAR", filepath.Join(hostRootPath, "var"))
 
-		// ... but /var/run is usually a symlink to /run.
-		varRun := filepath.Join(hostRootPath, "var/run")
-		target, err := os.Readlink(varRun)
+			// ... but /var/run is usually a symlink to /run.
+			varRun := filepath.Join(hostRootPath, "var/run")
+			target, err := os.Readlink(varRun)
 
-		if err == nil && target == "/run" {
-			os.Setenv("HOST_VAR", hostRootPath)
+			if err == nil && target == "/run" {
+				os.Setenv("HOST_VAR", hostRootPath)
+			}
+		}
+
+		if os.Getenv("HOST_ETC") == "" {
+			os.Setenv("HOST_ETC", filepath.Join(hostRootPath, "etc"))
+		}
+
+		if os.Getenv("HOST_PROC") == "" {
+			os.Setenv("HOST_PROC", filepath.Join(hostRootPath, "proc"))
+		}
+
+		if os.Getenv("HOST_SYS") == "" {
+			os.Setenv("HOST_SYS", filepath.Join(hostRootPath, "sys"))
+		}
+
+		if os.Getenv("HOST_RUN") == "" {
+			os.Setenv("HOST_RUN", filepath.Join(hostRootPath, "run"))
+		}
+
+		if os.Getenv("HOST_DEV") == "" {
+			os.Setenv("HOST_DEV", filepath.Join(hostRootPath, "dev"))
+		}
+
+		if os.Getenv("HOST_MOUNT_PREFIX") == "" {
+			os.Setenv("HOST_MOUNT_PREFIX", hostRootPath)
 		}
 	}
 }

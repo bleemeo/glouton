@@ -48,7 +48,7 @@ if [ "${SKIP_JS}" != "1" -a "${ONLY_GO}" != "1" ]; then
       sh -c "(npm install && npm run deploy); result=\$?; chown -R $USER_UID dist ../api/static/assets/js/ ../api/static/assets/css/; exit \$result"
 fi
 
-GORELEASER_VERSION="v0.176.0"
+GORELEASER_VERSION="v1.0.0"
 
 echo "Building Go binary"
 if [ "${ONLY_GO}" = "1" -a "${WITH_RACE}" != "1" ]; then
@@ -66,7 +66,7 @@ else
       -v $(pwd):/src -w /src ${GO_MOUNT_CACHE} \
       -v /var/run/docker.sock:/var/run/docker.sock \
       --entrypoint '' \
-      goreleaser/goreleaser:${GORELEASER_VERSION} sh -c "(go generate ./... && go test ./... && goreleaser --rm-dist --snapshot --parallelism 2); result=\$?;chown -R $USER_UID dist coverage.html coverage.out api/models_gen.go; exit \$result"
+      goreleaser/goreleaser:${GORELEASER_VERSION} sh -c "(goreleaser check && go generate ./... && go test ./... && goreleaser --rm-dist --snapshot --parallelism 2); result=\$?;chown -R $USER_UID dist coverage.html coverage.out api/models_gen.go; exit \$result"
 
    # This isn't valid on all system. When building on Linux/ARM64 it don't work.
    # VERSION=$(dist/glouton_linux_amd64/glouton --version)
