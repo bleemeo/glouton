@@ -139,6 +139,19 @@ func Test_factFromPoints(t *testing.T) {
 				"fact_updated_at": "2021-09-28T09:43:04Z",
 			},
 		},
+		{
+			name:       "VMware ESXi",
+			metricFile: "vmware-esxi-6.5.0.metrics",
+			want: map[string]string{
+				"fqdn":            "localhost.bleemeo.work",
+				"hostname":        "localhost",
+				"domain":          "bleemeo.work",
+				"boot_version":    "2.8",
+				"version":         "6.5.0",
+				"product_name":    "VMware ESXi 6.5.0 build-14320405 VMware, Inc. x86_64",
+				"fact_updated_at": "2021-09-28T09:43:04Z",
+			},
+		},
 	}
 
 	for _, tt := range tests {

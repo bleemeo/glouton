@@ -519,29 +519,7 @@ func factFromPoints(points []types.MetricPoint, now time.Time, scraperFact map[s
 		result["domain"] = l[1]
 	}
 
-	if strings.Contains(result["product_name"], ",") {
-		part := strings.Split(result["product_name"], ",")
-
-		result["product_name"] = part[0]
-
-		if part[0] == "Cisco IOS Software" {
-			result["product_name"] = part[0] + "," + part[1]
-		}
-
-		for _, p := range part {
-			p = strings.TrimSpace(p)
-			subpart := strings.SplitN(p, ":", 2)
-
-			if len(subpart) == 2 {
-				switch subpart[0] {
-				case "SN":
-					result["serial_number"] = subpart[1]
-				case "PID":
-					result["product_name"] = subpart[1]
-				}
-			}
-		}
-	}
+	result = parseProductname(result)
 
 	result["agent_version"] = scraperFact["agent_version"]
 	result["glouton_version"] = scraperFact["glouton_version"]
@@ -550,6 +528,73 @@ func factFromPoints(points []types.MetricPoint, now time.Time, scraperFact map[s
 	facts.CleanFacts(result)
 
 	return result
+}
+
+// Parse the format KEY1:VALUE1,KEY2:VALUE2.
+func parseProductnameComaKV(productName string) map[string]string {
+	if !strings.Contains(productName, ",") {
+		return nil
+	}
+
+	part := strings.Split(productName, ",")
+
+	if len(part) < 2 || !strings.Contains(part[1], ":") {
+		return nil
+	}
+
+	// Don't parse this format if it looks like an English sentence in which a
+	// colon should be followed by space.
+	value := strings.SplitN(part[1], ":", 2)[1]
+	if len(value) == 0 || value[0] == ' ' {
+		return nil
+	}
+
+	facts := make(map[string]string)
+
+	for _, p := range part {
+		p = strings.TrimSpace(p)
+		subpart := strings.SplitN(p, ":", 2)
+
+		if len(subpart) == 2 {
+			switch subpart[0] {
+			case "SN":
+				facts["serial_number"] = subpart[1]
+			case "PID":
+				facts["product_name"] = subpart[1]
+			}
+		}
+	}
+
+	return facts
+}
+
+func parseProductname(facts map[string]string) map[string]string {
+	for k, v := range parseProductnameComaKV(facts["product_name"]) {
+		facts[k] = v
+	}
+
+	// Some product name contains multiple information separated by coma. Only kept the first one
+	// ... useless the first part isn't specific enough.
+	part := strings.Split(facts["product_name"], ",")
+	if len(part) > 2 {
+		facts["product_name"] = part[0]
+		if part[0] == "Cisco IOS Software" {
+			facts["product_name"] = part[0] + "," + part[1]
+		}
+	}
+
+	if strings.HasPrefix(facts["product_name"], "VMware ESXi ") {
+		part := strings.Split(facts["product_name"], " ")
+		if len(part) >= 3 && len(part[2]) > 0 && isDigit(part[2][0]) {
+			facts["version"] = part[2]
+		}
+	}
+
+	return facts
+}
+
+func isDigit(b byte) bool {
+	return b >= '0' && b <= '9'
 }
 
 // humanError convert error from the scrapper in easier to understand format.
