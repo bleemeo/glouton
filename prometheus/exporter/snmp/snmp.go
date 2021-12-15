@@ -26,6 +26,7 @@ import (
 	"glouton/prometheus/registry"
 	"glouton/prometheus/scrapper"
 	"glouton/types"
+	"net"
 	"net/url"
 	"sort"
 	"strings"
@@ -481,6 +482,10 @@ func factFromPoints(points []types.MetricPoint, now time.Time, scraperFact map[s
 		"sysName":                "fqdn",
 	}
 
+	mergeMap := map[string]func(string, string) string{
+		"primary_address": addressSelectPublic,
+	}
+
 	for _, p := range points {
 		key := p.Labels[types.LabelName]
 		value := p.Labels[key]
@@ -502,6 +507,8 @@ func factFromPoints(points []types.MetricPoint, now time.Time, scraperFact map[s
 
 		if result[target] == "" {
 			result[target] = value
+		} else if mergeMap[target] != nil {
+			result[target] = mergeMap[target](result[target], value)
 		}
 	}
 
@@ -601,6 +608,18 @@ func isDigit(b byte) bool {
 	return b >= '0' && b <= '9'
 }
 
+func addressSelectPublic(addr1 string, addr2 string) string {
+	ip1 := net.ParseIP(addr1)
+	ip2 := net.ParseIP(addr2)
+
+	switch {
+	case ip1.IsPrivate() && !ip2.IsPrivate():
+		return addr2
+	default:
+		return addr1
+	}
+}
+
 // humanError convert error from the scrapper in easier to understand format.
 func humanError(err error) string {
 	var targetErr scrapper.TargetError
@@ -623,6 +642,8 @@ func deviceType(facts map[string]string) string {
 	switch {
 	case strings.HasPrefix(facts["product_name"], "PowerConnect"):
 		return "switch"
+	case strings.Contains(facts["product_name"], "Adaptive Security Appliance"):
+		return "firewall"
 	case strings.HasPrefix(facts["product_name"], "Cisco"):
 		return "switch"
 	case strings.Contains(facts["product_name"], "LaserJet"):

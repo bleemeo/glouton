@@ -131,6 +131,22 @@ func Test_factFromPoints(t *testing.T) {
 			},
 		},
 		{
+			name:       "Cisco ASA",
+			metricFile: "cisco-asa.metrics",
+			want: map[string]string{
+				"fqdn":            "fw.example.com",
+				"domain":          "example.com",
+				"hostname":        "fw",
+				"boot_version":    "2.1(9)8",
+				"version":         "9.4(4)32",
+				"serial_number":   "ABC1234D5EF",
+				"primary_address": "81.123.210.12",
+				"product_name":    "Cisco Adaptive Security Appliance Version 9.4(4)32",
+				"fact_updated_at": "2021-09-28T09:43:04Z",
+				"device_type":     "firewall",
+			},
+		},
+		{
 			name:       "hp-printer",
 			metricFile: "hp-printer.metrics",
 			want: map[string]string{
