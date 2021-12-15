@@ -94,6 +94,7 @@ func Test_factFromPoints(t *testing.T) {
 				"agent_version":       "21.11.08.123456",
 				"glouton_version":     "21.11.08.123456",
 				"scraper_fqdn":        "bleemeo-linux01",
+				"device_type":         "switch",
 			},
 		},
 		{
@@ -109,6 +110,7 @@ func Test_factFromPoints(t *testing.T) {
 				"product_name":        "Cisco NX-OS(tm) n9000",
 				"primary_mac_address": "50:87:01:a0:b0:2c",
 				"fact_updated_at":     "2021-09-28T09:43:04Z",
+				"device_type":         "switch",
 			},
 		},
 		{
@@ -125,6 +127,7 @@ func Test_factFromPoints(t *testing.T) {
 				"product_name":        "Cisco IOS Software, C2960 Software (C2960-LANLITEK9-M)",
 				"primary_mac_address": "34:6f:01:02:a1:00",
 				"fact_updated_at":     "2021-09-28T09:43:04Z",
+				"device_type":         "switch",
 			},
 		},
 		{
@@ -137,6 +140,7 @@ func Test_factFromPoints(t *testing.T) {
 				"primary_address": "192.168.1.2",
 				"product_name":    "HP Color LaserJet MFP M476dw",
 				"fact_updated_at": "2021-09-28T09:43:04Z",
+				"device_type":     "printer",
 			},
 		},
 		{
@@ -150,6 +154,7 @@ func Test_factFromPoints(t *testing.T) {
 				"version":         "6.5.0",
 				"product_name":    "VMware ESXi 6.5.0 build-14320405 VMware, Inc. x86_64",
 				"fact_updated_at": "2021-09-28T09:43:04Z",
+				"device_type":     "vmware",
 			},
 		},
 	}

@@ -521,6 +521,10 @@ func factFromPoints(points []types.MetricPoint, now time.Time, scraperFact map[s
 
 	result = parseProductname(result)
 
+	if value := deviceType(result); value != "" {
+		result["device_type"] = value
+	}
+
 	result["agent_version"] = scraperFact["agent_version"]
 	result["glouton_version"] = scraperFact["glouton_version"]
 	result["scraper_fqdn"] = scraperFact["fqdn"]
@@ -613,6 +617,21 @@ func humanError(err error) string {
 	}
 
 	return err.Error()
+}
+
+func deviceType(facts map[string]string) string {
+	switch {
+	case strings.HasPrefix(facts["product_name"], "PowerConnect"):
+		return "switch"
+	case strings.HasPrefix(facts["product_name"], "Cisco"):
+		return "switch"
+	case strings.Contains(facts["product_name"], "LaserJet"):
+		return "printer"
+	case strings.HasPrefix(facts["product_name"], "VMware"):
+		return "vmware"
+	}
+
+	return ""
 }
 
 type errGatherer struct {
