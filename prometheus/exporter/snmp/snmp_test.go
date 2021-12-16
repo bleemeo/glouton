@@ -170,7 +170,7 @@ func Test_factFromPoints(t *testing.T) {
 				"version":         "6.5.0",
 				"product_name":    "VMware ESXi 6.5.0 build-14320405 VMware, Inc. x86_64",
 				"fact_updated_at": "2021-09-28T09:43:04Z",
-				"device_type":     "vmware",
+				"device_type":     "hypervisor",
 			},
 		},
 	}

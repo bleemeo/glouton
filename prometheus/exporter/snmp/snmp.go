@@ -648,8 +648,8 @@ func deviceType(facts map[string]string) string {
 		return "switch"
 	case strings.Contains(facts["product_name"], "LaserJet"):
 		return "printer"
-	case strings.HasPrefix(facts["product_name"], "VMware"):
-		return "vmware"
+	case strings.HasPrefix(facts["product_name"], "VMware ESX"):
+		return "hypervisor"
 	}
 
 	return ""
