@@ -117,10 +117,9 @@ func (f *FactProvider) FastFacts(ctx context.Context) (facts map[string]string, 
 	f.l.Lock()
 	defer f.l.Unlock()
 
-	newFacts := make(map[string]string)
 	t := time.Now()
 
-	f.fastUpdateFacts(ctx)
+	newFacts := f.fastUpdateFacts(ctx)
 
 	logger.V(2).Printf("Fastfacts: FastUpdateFacts() took %v", time.Since(t))
 
