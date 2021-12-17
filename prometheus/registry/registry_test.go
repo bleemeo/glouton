@@ -885,14 +885,14 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint: cyclop
 					Labels: map[string]string{
 						types.LabelName:     "cpu_used",
 						"anyOther":          "label",
-						types.LabelInstance: "localhost:8015",
+						types.LabelInstance: "server.bleemeo.com:8016",
 					},
 				},
 				{
 					Labels: map[string]string{
 						types.LabelName:     "disk_used",
 						types.LabelItem:     "/home",
-						types.LabelInstance: "localhost:8015",
+						types.LabelInstance: "server.bleemeo.com:8016",
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoItem: "/home",
@@ -902,7 +902,7 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint: cyclop
 					Labels: map[string]string{
 						types.LabelName:     "disk_used_perc",
 						types.LabelItem:     "/srv",
-						types.LabelInstance: "localhost:8015",
+						types.LabelInstance: "server.bleemeo.com:8016",
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoItem: "/srv",
@@ -956,14 +956,14 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint: cyclop
 					Labels: map[string]string{
 						types.LabelName:     "cpu_used",
 						"anyOther":          "label",
-						types.LabelInstance: "localhost:8015",
+						types.LabelInstance: "server.bleemeo.com:8016",
 					},
 				},
 				{
 					Labels: map[string]string{
 						types.LabelName:     "disk_used",
 						types.LabelItem:     "/home",
-						types.LabelInstance: "localhost:8015",
+						types.LabelInstance: "server.bleemeo.com:8016",
 					},
 					Annotations: types.MetricAnnotations{},
 				},
@@ -971,7 +971,7 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint: cyclop
 					Labels: map[string]string{
 						types.LabelName:     "disk_used_perc",
 						types.LabelItem:     "/srv",
-						types.LabelInstance: "localhost:8015",
+						types.LabelInstance: "server.bleemeo.com:8016",
 					},
 					Annotations: types.MetricAnnotations{},
 				},
@@ -1021,21 +1021,21 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint: cyclop
 				{
 					Labels: map[string]string{
 						types.LabelName:     "cpu_used",
-						types.LabelInstance: "localhost:8015",
+						types.LabelInstance: "server.bleemeo.com:8016",
 					},
 				},
 				{
 					Labels: map[string]string{
 						types.LabelName:     "disk_used",
 						types.LabelItem:     "/home",
-						types.LabelInstance: "localhost:8015",
+						types.LabelInstance: "server.bleemeo.com:8016",
 					},
 				},
 				{
 					Labels: map[string]string{
 						types.LabelName:     "disk_used_perc",
 						types.LabelItem:     "/srv",
-						types.LabelInstance: "localhost:8015",
+						types.LabelInstance: "server.bleemeo.com:8016",
 					},
 				},
 			},
@@ -1064,7 +1064,7 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint: cyclop
 					Labels: map[string]string{
 						types.LabelName:       "ifOutBytes",
 						"ifDesc":              "Some value",
-						types.LabelInstance:   "localhost:8015",
+						types.LabelInstance:   "server.bleemeo.com:8016",
 						"another":             "value",
 						types.LabelSNMPTarget: "1.2.3.4:8080",
 					},
@@ -1125,7 +1125,7 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint: cyclop
 					Labels: map[string]string{
 						types.LabelName:       "cpu_used",
 						"core":                "1",
-						types.LabelInstance:   "localhost:8015",
+						types.LabelInstance:   "server.bleemeo.com:8016",
 						types.LabelSNMPTarget: "192.168.1.2",
 					},
 					Annotations: types.MetricAnnotations{
@@ -1136,7 +1136,7 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint: cyclop
 					Labels: map[string]string{
 						types.LabelName:       "hrStorageAllocationUnits",
 						"hrStorageDescr":      "Real Memory",
-						types.LabelInstance:   "localhost:8015",
+						types.LabelInstance:   "server.bleemeo.com:8016",
 						types.LabelSNMPTarget: "192.168.1.2",
 					},
 					Point: types.Point{Value: 1024},
@@ -1148,7 +1148,7 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint: cyclop
 					Labels: map[string]string{
 						types.LabelName:       "hrStorageAllocationUnits",
 						"hrStorageDescr":      "Unreal Memory",
-						types.LabelInstance:   "localhost:8015",
+						types.LabelInstance:   "server.bleemeo.com:8016",
 						types.LabelSNMPTarget: "192.168.1.2",
 					},
 					Point: types.Point{Value: 1},
@@ -1160,7 +1160,7 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint: cyclop
 					Labels: map[string]string{
 						types.LabelName:       "hrStorageUsed",
 						"hrStorageDescr":      "Real Memory",
-						types.LabelInstance:   "localhost:8015",
+						types.LabelInstance:   "server.bleemeo.com:8016",
 						types.LabelSNMPTarget: "192.168.1.2",
 					},
 					Point: types.Point{Value: 8},
@@ -1172,7 +1172,7 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint: cyclop
 					Labels: map[string]string{
 						types.LabelName:       "hrStorageUsed",
 						"hrStorageDescr":      "Unreal Memory",
-						types.LabelInstance:   "localhost:8015",
+						types.LabelInstance:   "server.bleemeo.com:8016",
 						types.LabelSNMPTarget: "192.168.1.2",
 					},
 					Annotations: types.MetricAnnotations{
@@ -1182,7 +1182,7 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint: cyclop
 				{
 					Labels: map[string]string{
 						types.LabelName:       "mem_used",
-						types.LabelInstance:   "localhost:8015",
+						types.LabelInstance:   "server.bleemeo.com:8016",
 						types.LabelSNMPTarget: "192.168.1.2",
 					},
 					Point: types.Point{Value: 8192},
@@ -1235,7 +1235,7 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint: cyclop
 					Labels: map[string]string{
 						types.LabelName:     "cpu_used",
 						"core":              "1",
-						types.LabelInstance: "localhost:8015",
+						types.LabelInstance: "server.bleemeo.com:8016",
 					},
 					Annotations: types.MetricAnnotations{},
 				},
@@ -1243,7 +1243,7 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint: cyclop
 					Labels: map[string]string{
 						types.LabelName:     "hrStorageUsed",
 						"hrStorageDescr":    "Real Memory",
-						types.LabelInstance: "localhost:8015",
+						types.LabelInstance: "server.bleemeo.com:8016",
 					},
 					Annotations: types.MetricAnnotations{},
 				},
@@ -1251,7 +1251,7 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint: cyclop
 					Labels: map[string]string{
 						types.LabelName:     "hrStorageUsed",
 						"hrStorageDescr":    "Unreal Memory",
-						types.LabelInstance: "localhost:8015",
+						types.LabelInstance: "server.bleemeo.com:8016",
 					},
 					Annotations: types.MetricAnnotations{},
 				},
@@ -1303,7 +1303,7 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint: cyclop
 					Labels: map[string]string{
 						types.LabelName:       "cpu_used",
 						"core":                "1",
-						types.LabelInstance:   "localhost:8015",
+						types.LabelInstance:   "server.bleemeo.com:8016",
 						types.LabelSNMPTarget: "192.168.1.2",
 					},
 					Annotations: types.MetricAnnotations{
@@ -1314,7 +1314,7 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint: cyclop
 					Labels: map[string]string{
 						types.LabelName:       "cpmCPUMemoryUsed",
 						"cpmCPUTotalIndex":    "42",
-						types.LabelInstance:   "localhost:8015",
+						types.LabelInstance:   "server.bleemeo.com:8016",
 						types.LabelSNMPTarget: "192.168.1.2",
 					},
 					Point: types.Point{Value: 145},
@@ -1326,7 +1326,7 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint: cyclop
 					Labels: map[string]string{
 						types.LabelName:       "cpmCPUMemoryFree",
 						"cpmCPUTotalIndex":    "42",
-						types.LabelInstance:   "localhost:8015",
+						types.LabelInstance:   "server.bleemeo.com:8016",
 						types.LabelSNMPTarget: "192.168.1.2",
 					},
 					Point: types.Point{Value: 7},
@@ -1337,7 +1337,7 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint: cyclop
 				{
 					Labels: map[string]string{
 						types.LabelName:       "mem_free",
-						types.LabelInstance:   "localhost:8015",
+						types.LabelInstance:   "server.bleemeo.com:8016",
 						types.LabelSNMPTarget: "192.168.1.2",
 					},
 					Point: types.Point{Value: 7168},
@@ -1348,7 +1348,7 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint: cyclop
 				{
 					Labels: map[string]string{
 						types.LabelName:       "mem_used",
-						types.LabelInstance:   "localhost:8015",
+						types.LabelInstance:   "server.bleemeo.com:8016",
 						types.LabelSNMPTarget: "192.168.1.2",
 					},
 					Point: types.Point{Value: 148480},
@@ -1359,7 +1359,7 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint: cyclop
 				{
 					Labels: map[string]string{
 						types.LabelName:       "mem_used_perc",
-						types.LabelInstance:   "localhost:8015",
+						types.LabelInstance:   "server.bleemeo.com:8016",
 						types.LabelSNMPTarget: "192.168.1.2",
 					},
 					Point: types.Point{Value: 95.39},
@@ -1409,7 +1409,7 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint: cyclop
 				{
 					Labels: map[string]string{
 						types.LabelName:       "mem_used",
-						types.LabelInstance:   "localhost:8015",
+						types.LabelInstance:   "server.bleemeo.com:8016",
 						types.LabelSNMPTarget: "192.168.1.2",
 						"uniqueValue":         "1",
 					},
@@ -1420,7 +1420,7 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint: cyclop
 				{
 					Labels: map[string]string{
 						types.LabelName:       "mem_used",
-						types.LabelInstance:   "localhost:8015",
+						types.LabelInstance:   "server.bleemeo.com:8016",
 						types.LabelSNMPTarget: "192.168.1.2",
 						"uniqueValue":         "2",
 					},
@@ -1509,7 +1509,7 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint: cyclop
 				{
 					Labels: map[string]string{
 						types.LabelName:       "mem_used",
-						types.LabelInstance:   "localhost:8015",
+						types.LabelInstance:   "server.bleemeo.com:8016",
 						types.LabelSNMPTarget: "192.168.1.2",
 						"uniqueValue":         "1",
 					},
@@ -1520,7 +1520,7 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint: cyclop
 				{
 					Labels: map[string]string{
 						types.LabelName:       "mem_free",
-						types.LabelInstance:   "localhost:8015",
+						types.LabelInstance:   "server.bleemeo.com:8016",
 						types.LabelSNMPTarget: "192.168.1.2",
 						"uniqueValue":         "1",
 					},
@@ -1531,7 +1531,7 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint: cyclop
 				{
 					Labels: map[string]string{
 						types.LabelName:       "mem_used_perc",
-						types.LabelInstance:   "localhost:8015",
+						types.LabelInstance:   "server.bleemeo.com:8016",
 						types.LabelSNMPTarget: "192.168.1.2",
 						"uniqueValue":         "1",
 					},
@@ -1543,7 +1543,7 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint: cyclop
 				{
 					Labels: map[string]string{
 						types.LabelName:       "ciscoMemoryPoolUsed",
-						types.LabelInstance:   "localhost:8015",
+						types.LabelInstance:   "server.bleemeo.com:8016",
 						types.LabelSNMPTarget: "192.168.1.2",
 						"ciscoMemoryPoolName": "Anything Else",
 						"uniqueValue":         "2",
@@ -1555,7 +1555,7 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint: cyclop
 				{
 					Labels: map[string]string{
 						types.LabelName:       "mem_free",
-						types.LabelInstance:   "localhost:8015",
+						types.LabelInstance:   "server.bleemeo.com:8016",
 						types.LabelSNMPTarget: "192.168.1.2",
 						"uniqueValue":         "3",
 					},
@@ -1566,7 +1566,7 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint: cyclop
 				{
 					Labels: map[string]string{
 						types.LabelName:       "ciscoMemoryPoolFree",
-						types.LabelInstance:   "localhost:8015",
+						types.LabelInstance:   "server.bleemeo.com:8016",
 						types.LabelSNMPTarget: "192.168.1.2",
 						"ciscoMemoryPoolName": "anything else",
 						"uniqueValue":         "5",
@@ -1579,7 +1579,7 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint: cyclop
 					Labels: map[string]string{
 						types.LabelName:       "cpmCPUMemoryFree",
 						"cpmCPUTotalIndex":    "2021",
-						types.LabelInstance:   "localhost:8015",
+						types.LabelInstance:   "server.bleemeo.com:8016",
 						types.LabelSNMPTarget: "192.168.1.2",
 						"uniqueValue":         "6",
 					},
@@ -1591,7 +1591,7 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint: cyclop
 				{
 					Labels: map[string]string{
 						types.LabelName:       "mem_free",
-						types.LabelInstance:   "localhost:8015",
+						types.LabelInstance:   "server.bleemeo.com:8016",
 						types.LabelSNMPTarget: "192.168.1.2",
 						"uniqueValue":         "6",
 					},
@@ -1603,7 +1603,7 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint: cyclop
 				{
 					Labels: map[string]string{
 						types.LabelName:       "temperature",
-						types.LabelInstance:   "localhost:8015",
+						types.LabelInstance:   "server.bleemeo.com:8016",
 						types.LabelSNMPTarget: "192.168.1.2",
 						"sensor":              "CPU",
 						"uniqueValue":         "7",
@@ -1615,7 +1615,7 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint: cyclop
 				{
 					Labels: map[string]string{
 						types.LabelName:       "cpu_used",
-						types.LabelInstance:   "localhost:8015",
+						types.LabelInstance:   "server.bleemeo.com:8016",
 						types.LabelSNMPTarget: "192.168.1.2",
 						"uniqueValue":         "8",
 					},
@@ -1626,7 +1626,7 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint: cyclop
 				{
 					Labels: map[string]string{
 						types.LabelName:       "temperature",
-						types.LabelInstance:   "localhost:8015",
+						types.LabelInstance:   "server.bleemeo.com:8016",
 						types.LabelSNMPTarget: "192.168.1.2",
 						"sensor":              "CPU",
 						"uniqueValue":         "9",
@@ -1693,7 +1693,7 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint: cyclop
 						types.LabelName:       "hrStorageAllocationUnits",
 						"hrStorageDescr":      "Real Memory",
 						"hrStorageIndex":      "6",
-						types.LabelInstance:   "localhost:8015",
+						types.LabelInstance:   "server.bleemeo.com:8016",
 						types.LabelSNMPTarget: "192.168.1.2",
 					},
 					Point: types.Point{
@@ -1708,7 +1708,7 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint: cyclop
 						types.LabelName:       "hrStorageSize",
 						"hrStorageDescr":      "Real Memory",
 						"hrStorageIndex":      "6",
-						types.LabelInstance:   "localhost:8015",
+						types.LabelInstance:   "server.bleemeo.com:8016",
 						types.LabelSNMPTarget: "192.168.1.2",
 					},
 					Point: types.Point{
@@ -1723,7 +1723,7 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint: cyclop
 						types.LabelName:       "hrStorageUsed",
 						"hrStorageDescr":      "Real Memory",
 						"hrStorageIndex":      "6",
-						types.LabelInstance:   "localhost:8015",
+						types.LabelInstance:   "server.bleemeo.com:8016",
 						types.LabelSNMPTarget: "192.168.1.2",
 					},
 					Point: types.Point{
@@ -1736,7 +1736,7 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint: cyclop
 				{
 					Labels: map[string]string{
 						types.LabelName:       "mem_used",
-						types.LabelInstance:   "localhost:8015",
+						types.LabelInstance:   "server.bleemeo.com:8016",
 						types.LabelSNMPTarget: "192.168.1.2",
 					},
 					Point: types.Point{
@@ -1749,7 +1749,7 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint: cyclop
 				{
 					Labels: map[string]string{
 						types.LabelName:       "mem_used_perc",
-						types.LabelInstance:   "localhost:8015",
+						types.LabelInstance:   "server.bleemeo.com:8016",
 						types.LabelSNMPTarget: "192.168.1.2",
 					},
 					Point: types.Point{
@@ -1762,7 +1762,7 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint: cyclop
 				{
 					Labels: map[string]string{
 						types.LabelName:       "mem_free",
-						types.LabelInstance:   "localhost:8015",
+						types.LabelInstance:   "server.bleemeo.com:8016",
 						types.LabelSNMPTarget: "192.168.1.2",
 					},
 					Point: types.Point{
@@ -1804,8 +1804,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint: cyclop
 						gotPoints = append(gotPoints, pts...)
 						l.Unlock()
 					}),
-					FQDN:         "localhost",
-					GloutonPort:  "8015",
+					FQDN:         "server.bleemeo.com",
+					GloutonPort:  "8016",
 					MetricFormat: tt.metricFormat,
 				},
 			)
