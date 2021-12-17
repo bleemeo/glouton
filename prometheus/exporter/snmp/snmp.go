@@ -50,6 +50,14 @@ const (
 	mockFactLabelValue     = "__snmp_fact_value"
 )
 
+const (
+	deviceTypeSwitch     = "switch"
+	deviceTypeFirewall   = "firewall"
+	deviceTypeAP         = "access-point"
+	deviceTypePrinter    = "printer"
+	deviceTypeHypervisor = "hypervisor"
+)
+
 // Target represents a snmp config instance.
 type Target struct {
 	opt             TargetOptions
@@ -601,6 +609,20 @@ func parseProductname(facts map[string]string) map[string]string {
 		}
 	}
 
+	if strings.HasPrefix(facts["product_name"], "U6-Lite ") {
+		part := strings.Split(facts["product_name"], " ")
+		if len(part) >= 2 && len(part[1]) > 0 && isDigit(part[1][0]) {
+			facts["version"] = part[1]
+		}
+	}
+
+	if strings.HasPrefix(facts["product_name"], "Linux USW-") {
+		// Swap Linux and the 2nd word
+		part := strings.SplitN(facts["product_name"], " ", 3)
+		part[0], part[1] = part[1], part[0]
+		facts["product_name"] = strings.Join(part, " ")
+	}
+
 	return facts
 }
 
@@ -613,7 +635,9 @@ func addressSelectPublic(addr1 string, addr2 string) string {
 	ip2 := net.ParseIP(addr2)
 
 	switch {
-	case ip1.IsPrivate() && !ip2.IsPrivate():
+	case ip1.IsPrivate() && !ip2.IsPrivate() && !ip2.IsLoopback():
+		return addr2
+	case ip1.IsLoopback() && !ip2.IsLoopback():
 		return addr2
 	default:
 		return addr1
@@ -641,15 +665,19 @@ func humanError(err error) string {
 func deviceType(facts map[string]string) string {
 	switch {
 	case strings.HasPrefix(facts["product_name"], "PowerConnect"):
-		return "switch"
+		return deviceTypeSwitch
 	case strings.Contains(facts["product_name"], "Adaptive Security Appliance"):
-		return "firewall"
+		return deviceTypeFirewall
 	case strings.HasPrefix(facts["product_name"], "Cisco"):
-		return "switch"
+		return deviceTypeSwitch
+	case strings.HasPrefix(facts["product_name"], "U6-Lite"):
+		return deviceTypeAP
+	case strings.HasPrefix(facts["product_name"], "USW-"):
+		return deviceTypeSwitch
 	case strings.Contains(facts["product_name"], "LaserJet"):
-		return "printer"
+		return deviceTypePrinter
 	case strings.HasPrefix(facts["product_name"], "VMware ESX"):
-		return "hypervisor"
+		return deviceTypeHypervisor
 	}
 
 	return ""
