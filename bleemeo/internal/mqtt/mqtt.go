@@ -351,7 +351,7 @@ func (c *Client) HealthCheck() bool {
 	return ok
 }
 
-func (c *Client) setupMQTT(ctx context.Context) paho.Client {
+func (c *Client) setupMQTT(ctx context.Context) (paho.Client, error) {
 	pahoOptions := paho.NewClientOptions()
 
 	willPayload, _ := json.Marshal(map[string]string{"disconnect-cause": "disconnect-will"})
@@ -383,13 +383,12 @@ func (c *Client) setupMQTT(ctx context.Context) paho.Client {
 
 	password, err := c.option.GetJWT(ctx)
 	if err != nil {
-		// TODO: What to do in case of an error? loop? do nothing and let the client retry?
-		logger.V(1).Printf("Unable to get JWT: %v", err)
+		return nil, fmt.Errorf("unable to get JWT: %w", err)
 	}
 
 	pahoOptions.SetPassword(password)
 
-	return paho.NewClient(pahoOptions)
+	return paho.NewClient(pahoOptions), nil
 }
 
 func (c *Client) tlsConfig() *tls.Config {
@@ -1043,7 +1042,14 @@ mainLoop:
 						_, _ = c.option.Facts.Facts(ctx, time.Minute)
 					}
 				}
-				mqttClient := c.setupMQTT(ctx)
+
+				mqttClient, err := c.setupMQTT(ctx)
+				if err != nil {
+					delay := currentConnectDelay - time.Since(lastConnectionTimes[len(lastConnectionTimes)-1])
+					logger.V(1).Printf("Unable to connect to Bleemeo MQTT (retry in %v): %v", delay, err)
+
+					continue
+				}
 
 				optionReader := mqttClient.OptionsReader()
 				logger.V(2).Printf("Connecting to MQTT broker %v", optionReader.Servers()[0])
