@@ -17,12 +17,15 @@
 package store
 
 import (
+	"context"
 	"fmt"
 	"glouton/types"
 	"math/rand"
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/google/go-cmp/cmp"
 )
 
 func TestLabelsMatchNotExact(t *testing.T) {
@@ -268,7 +271,7 @@ func TestPoints(t *testing.T) {
 	p1 := types.Point{Time: t1, Value: -88}
 	p2 := types.Point{Time: t2, Value: 13.37}
 
-	db.PushPoints([]types.MetricPoint{
+	db.PushPoints(context.Background(), []types.MetricPoint{
 		{Point: p0, Labels: labels},
 	})
 
@@ -284,10 +287,10 @@ func TestPoints(t *testing.T) {
 		t.Errorf("db.points[%v][0] == %v, want %v", m.metricID, db.points[m.metricID][0], p0)
 	}
 
-	db.PushPoints([]types.MetricPoint{
+	db.PushPoints(context.Background(), []types.MetricPoint{
 		{Point: p1, Labels: labels},
 	})
-	db.PushPoints([]types.MetricPoint{
+	db.PushPoints(context.Background(), []types.MetricPoint{
 		{Point: p2, Labels: labels},
 	})
 
@@ -493,6 +496,198 @@ func Benchmark_metricGetOrCreate(b *testing.B) {
 				for _, lbls := range metricsLabels {
 					db.metricGetOrCreate(lbls, types.MetricAnnotations{})
 				}
+			}
+		})
+	}
+}
+
+func TestStore_run(t *testing.T) {
+	type metricWant struct {
+		labels map[string]string
+		points []types.Point
+	}
+
+	t0 := time.Now()
+	testMinTime := t0.Add(-time.Hour)
+	testMaxTime := t0.Add(72 * time.Hour)
+
+	steps := []struct {
+		pushPoints []types.MetricPoint
+		now        time.Time
+		want       []metricWant
+	}{
+		{
+			pushPoints: []types.MetricPoint{
+				{
+					Point:  types.Point{Time: t0, Value: 5},
+					Labels: map[string]string{types.LabelName: "metric1"},
+				},
+			},
+			now: t0,
+			want: []metricWant{
+				{
+					labels: map[string]string{types.LabelName: "metric1"},
+					points: []types.Point{{Time: t0, Value: 5}},
+				},
+			},
+		},
+		{
+			pushPoints: []types.MetricPoint{
+				{
+					Point:  types.Point{Time: t0, Value: 5},
+					Labels: map[string]string{types.LabelName: "metric2"},
+				},
+				{
+					Point:  types.Point{Time: t0.Add(time.Hour), Value: 6},
+					Labels: map[string]string{types.LabelName: "metric2"},
+				},
+				{
+					Point:  types.Point{Time: t0.Add(2 * time.Hour), Value: 7},
+					Labels: map[string]string{types.LabelName: "metric2"},
+				},
+			},
+			now: t0.Add(3 * time.Hour),
+			want: []metricWant{
+				{
+					labels: map[string]string{types.LabelName: "metric1"},
+					points: []types.Point{{Time: t0, Value: 5}},
+				},
+				{
+					labels: map[string]string{types.LabelName: "metric2"},
+					points: []types.Point{
+						{Time: t0, Value: 5},
+						{Time: t0.Add(time.Hour), Value: 6},
+						{Time: t0.Add(2 * time.Hour), Value: 7},
+					},
+				},
+			},
+		},
+		{
+			pushPoints: []types.MetricPoint{
+				{
+					Point:  types.Point{Time: t0.Add(20 * time.Hour), Value: 5},
+					Labels: map[string]string{types.LabelName: "metric3"},
+				},
+				{
+					Point:  types.Point{Time: t0.Add(21 * time.Hour), Value: 6},
+					Labels: map[string]string{types.LabelName: "metric3"},
+				},
+				{
+					Point:  types.Point{Time: t0.Add(22 * time.Hour), Value: 7},
+					Labels: map[string]string{types.LabelName: "metric3"},
+				},
+			},
+			now: t0.Add(24 * time.Hour),
+			want: []metricWant{
+				{
+					labels: map[string]string{types.LabelName: "metric2"},
+					points: []types.Point{
+						{Time: t0.Add(time.Hour), Value: 6},
+						{Time: t0.Add(2 * time.Hour), Value: 7},
+					},
+				},
+				{
+					labels: map[string]string{types.LabelName: "metric3"},
+					points: []types.Point{
+						{Time: t0.Add(20 * time.Hour), Value: 5},
+						{Time: t0.Add(21 * time.Hour), Value: 6},
+						{Time: t0.Add(22 * time.Hour), Value: 7},
+					},
+				},
+			},
+		},
+		{
+			pushPoints: []types.MetricPoint{
+				{
+					Point:  types.Point{Time: t0.Add(25 * time.Hour), Value: 50},
+					Labels: map[string]string{types.LabelName: "metric1"},
+				},
+				{
+					Point:  types.Point{Time: t0.Add(25 * time.Hour), Value: 50},
+					Labels: map[string]string{types.LabelName: "metric2"},
+				},
+				{
+					Point:  types.Point{Time: t0.Add(25 * time.Hour), Value: 50},
+					Labels: map[string]string{types.LabelName: "metric3"},
+				},
+			},
+			now: t0.Add(25 * time.Hour),
+			want: []metricWant{
+				{
+					labels: map[string]string{types.LabelName: "metric1"},
+					points: []types.Point{
+						{Time: t0.Add(25 * time.Hour), Value: 50},
+					},
+				},
+				{
+					labels: map[string]string{types.LabelName: "metric2"},
+					points: []types.Point{
+						{Time: t0.Add(2 * time.Hour), Value: 7},
+						{Time: t0.Add(25 * time.Hour), Value: 50},
+					},
+				},
+				{
+					labels: map[string]string{types.LabelName: "metric3"},
+					points: []types.Point{
+						{Time: t0.Add(20 * time.Hour), Value: 5},
+						{Time: t0.Add(21 * time.Hour), Value: 6},
+						{Time: t0.Add(22 * time.Hour), Value: 7},
+						{Time: t0.Add(25 * time.Hour), Value: 50},
+					},
+				},
+			},
+		},
+		{
+			pushPoints: nil,
+			now:        t0.Add(50 * time.Hour),
+			want:       []metricWant{},
+		},
+		{
+			pushPoints: []types.MetricPoint{
+				{
+					Point:  types.Point{Time: t0.Add(51 * time.Hour), Value: 5},
+					Labels: map[string]string{types.LabelName: "metric1"},
+				},
+			},
+			now: t0,
+			want: []metricWant{
+				{
+					labels: map[string]string{types.LabelName: "metric1"},
+					points: []types.Point{{Time: t0.Add(51 * time.Hour), Value: 5}},
+				},
+			},
+		},
+	}
+
+	store := New(24 * time.Hour)
+
+	for i, tt := range steps {
+		t.Run(fmt.Sprintf("step-%d", i), func(t *testing.T) {
+			store.PushPoints(context.Background(), tt.pushPoints)
+			store.run(tt.now)
+
+			for _, want := range tt.want {
+				result, err := store.Metrics(want.labels)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				if len(result) != 1 {
+					t.Fatalf("len(result) = %d, want 1", len(result))
+				}
+
+				got, err := result[0].Points(testMinTime, testMaxTime)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				if diff := cmp.Diff(want.points, got); diff != "" {
+					t.Errorf("Points of %v missmatch: (-want +got):\n%s", result[0].Labels(), diff)
+				}
+			}
+
+			if len(tt.want) != store.MetricsCount() {
+				t.Errorf("MetricsCount() = %d, want %d", store.MetricsCount(), len(tt.want))
 			}
 		})
 	}

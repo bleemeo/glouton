@@ -35,7 +35,7 @@ import (
 type jmxtransClient struct {
 	Connection *net.TCPConn
 	Config     configInterface
-	EmitPoint  func(types.MetricPoint)
+	EmitPoint  func(context.Context, types.MetricPoint)
 
 	lastPurgeAt time.Time
 	lastTime    time.Time
@@ -75,7 +75,7 @@ func (c *jmxtransClient) init() {
 
 	// avoir nil-pointer dereference
 	if c.EmitPoint == nil {
-		c.EmitPoint = func(types.MetricPoint) {}
+		c.EmitPoint = func(context.Context, types.MetricPoint) {}
 	}
 }
 
@@ -121,20 +121,20 @@ func (c *jmxtransClient) Run(ctx context.Context) {
 				continue
 			}
 
-			c.processLine(string(line))
+			c.processLine(ctx, string(line))
 		}
 
 		c.purge()
 	}
 
-	c.flush()
+	c.flush(ctx)
 
 	logger.V(2).Printf("Closing jmxtrans connection from %s", c.Connection.RemoteAddr())
 	c.Connection.Close()
 }
 
 //nolint:cyclop
-func (c *jmxtransClient) processLine(line string) {
+func (c *jmxtransClient) processLine(ctx context.Context, line string) {
 	parts := strings.Split(line, " ")
 	if len(parts) != 3 {
 		return
@@ -153,7 +153,7 @@ func (c *jmxtransClient) processLine(line string) {
 	lineTime := time.Unix(timestamp, 0)
 
 	if !c.lastTime.IsZero() && math.Abs(lineTime.Sub(c.lastTime).Seconds()) > 1 {
-		c.flush()
+		c.flush(ctx)
 	}
 
 	c.lastTime = lineTime
@@ -280,7 +280,7 @@ func (c *jmxtransClient) processLine(line string) {
 				Value:       value,
 			}
 		default:
-			c.EmitPoint(types.MetricPoint{
+			c.EmitPoint(ctx, types.MetricPoint{
 				Labels:      labels,
 				Annotations: annotations,
 				Point: types.Point{
@@ -328,7 +328,7 @@ func (c *jmxtransClient) deriveValue(name string, item string, value float64, ti
 	return (value - previousValue.Value) / deltaT.Seconds(), true
 }
 
-func (c *jmxtransClient) flush() {
+func (c *jmxtransClient) flush(ctx context.Context) {
 	for key, points := range c.pendingSum {
 		if len(points) == 0 {
 			continue
@@ -352,7 +352,7 @@ func (c *jmxtransClient) flush() {
 			continue
 		}
 
-		c.EmitPoint(types.MetricPoint{
+		c.EmitPoint(ctx, types.MetricPoint{
 			Labels:      points[0].Labels,
 			Annotations: points[0].Annotations,
 			Point: types.Point{
@@ -393,7 +393,7 @@ func (c *jmxtransClient) flush() {
 			value = point.Value / divisor.Value
 		}
 
-		c.EmitPoint(types.MetricPoint{
+		c.EmitPoint(ctx, types.MetricPoint{
 			Labels:      point.Labels,
 			Annotations: point.Annotations,
 			Point: types.Point{

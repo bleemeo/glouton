@@ -36,8 +36,10 @@ import (
 func TestPsStat2Status(t *testing.T) {
 	cases := []struct {
 		in   string
-		want string
+		want ProcessStatus
 	}{
+		// Note: the test use strings and not ProcessStatus* constant, because
+		// the value of the constant is exposed (used in topinfo sent to Bleemeo).
 		{"D", "disk-sleep"},
 		{"I", "idle"},
 		{"I<", "idle"},
@@ -138,7 +140,7 @@ func (m *mockContainerRuntime) ContainerFromCGroup(ctx context.Context, cgroupDa
 		return nil, ErrContainerDoesNotExists
 	}
 
-	return nil, nil
+	return nil, nil //nolint: nilnil // here first nil means not found and its not an error.
 }
 
 func (m *mockContainerRuntime) ContainerFromPID(ctx context.Context, parentContainerID string, pid int) (Container, error) {

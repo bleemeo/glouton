@@ -75,6 +75,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/getsentry/sentry-go"
+
 	bleemeoTypes "glouton/bleemeo/types"
 
 	dockerRuntime "glouton/facts/container-runtime/docker"
@@ -179,6 +181,21 @@ func (a *agent) init(configFiles []string) (ok bool) {
 
 		return false
 	}
+
+	if dsn := a.oldConfig.String("bleemeo.sentry.dsn"); dsn != "" {
+		err := sentry.Init(sentry.ClientOptions{
+			Dsn: dsn,
+		})
+		if err != nil {
+			logger.V(1).Printf("sentry.Init failed: %s", err)
+		}
+	}
+
+	sentry.ConfigureScope(func(scope *sentry.Scope) {
+		scope.SetContext("agent", map[string]interface{}{
+			"glouton_version": version.Version,
+		})
+	})
 
 	for _, w := range warnings {
 		logger.Printf("Warning while loading configuration: %v", w)
@@ -417,6 +434,7 @@ func (a *agent) updateSNMPResolution(resolution time.Duration) {
 				Interval:    resolution,
 				Timeout:     40 * time.Second,
 				ExtraLabels: target.ExtraLabels,
+				Rules:       registry.DefaultSNMPRules(),
 			},
 			target.Gatherer,
 			true,
@@ -624,6 +642,7 @@ func (a *agent) run() { //nolint:cyclop
 
 	a.snmpManager = snmp.NewManager(
 		a.config.SNMP.ExporterURL,
+		a.factProvider,
 		a.config.SNMP.Targets.ToTargetOptions()...,
 	)
 
@@ -644,8 +663,6 @@ func (a *agent) run() { //nolint:cyclop
 		a.store = store.New(2 * time.Minute)
 	}
 
-	rulesManager := rules.NewManager(ctx, a.store)
-
 	filteredStore := store.NewFilteredStore(a.store, mFilter.FilterPoints, mFilter.filterMetrics)
 
 	a.gathererRegistry, err = registry.New(
@@ -665,13 +682,15 @@ func (a *agent) run() { //nolint:cyclop
 		return
 	}
 
+	rulesManager := rules.NewManager(ctx, a.store, a.gathererRegistry.Appendable(5*time.Minute))
+
 	_, err = a.gathererRegistry.RegisterPushPointsCallback(
 		registry.RegistrationOption{
 			Description: "rulesManager",
 			JitterSeed:  baseJitterPlus,
 		},
-		func(context.Context, time.Time) {
-			rulesManager.Run()
+		func(_ context.Context, t0 time.Time) {
+			rulesManager.Run(t0)
 		},
 	)
 	if err != nil {
@@ -679,7 +698,10 @@ func (a *agent) run() { //nolint:cyclop
 	}
 
 	a.threshold = threshold.New(a.state)
-	acc := &inputs.Accumulator{Pusher: a.threshold.WithPusher(a.gathererRegistry.WithTTL(5 * time.Minute))}
+	acc := &inputs.Accumulator{
+		Pusher:  a.threshold.WithPusher(a.gathererRegistry.WithTTL(5 * time.Minute)),
+		Context: ctx,
+	}
 
 	a.dockerRuntime = &dockerRuntime.Docker{
 		DockerSockets:             dockerRuntime.DefaultAddresses(a.hostRootPath),
@@ -718,7 +740,7 @@ func (a *agent) run() { //nolint:cyclop
 	if !useProc {
 		logger.V(1).Printf("The agent is running in a container and \"container.pid_namespace_host\", is not true. Not all processes will be seen")
 	} else {
-		if version.IsWindows() {
+		if !version.IsLinux() {
 			psLister = facts.NewPsUtilLister("")
 		} else {
 			psLister = process.NewProcessLister(a.hostRootPath, 9*time.Second)
@@ -937,6 +959,13 @@ func (a *agent) run() { //nolint:cyclop
 		a.gathererRegistry.UpdateRelabelHook(ctx, a.bleemeoConnector.RelabelHook)
 		tasks = append(tasks, taskInfo{a.bleemeoConnector.Run, "Bleemeo SAAS connector"})
 	}
+
+	sentry.ConfigureScope(func(scope *sentry.Scope) {
+		scope.SetContext("agent", map[string]interface{}{
+			"agent_id":        a.BleemeoAgentID(),
+			"glouton_version": version.Version,
+		})
+	})
 
 	if a.oldConfig.Bool("nrpe.enable") {
 		nrpeConfFile := a.oldConfig.StringList("nrpe.conf_paths")
@@ -1167,7 +1196,7 @@ func (a *agent) miscGather(pusher types.PointPusher) func(context.Context, time.
 			},
 		})
 
-		pusher.PushPoints(points)
+		pusher.PushPoints(ctx, points)
 	}
 }
 
@@ -1251,7 +1280,7 @@ func (a *agent) minuteMetric(ctx context.Context) error {
 					ServiceName: srv.Name,
 				}
 
-				a.threshold.WithPusher(a.gathererRegistry.WithTTL(5 * time.Minute)).PushPoints([]types.MetricPoint{
+				a.threshold.WithPusher(a.gathererRegistry.WithTTL(5*time.Minute)).PushPoints(ctx, []types.MetricPoint{
 					{
 						Labels:      labels,
 						Annotations: annotations,
@@ -1282,7 +1311,7 @@ func (a *agent) minuteMetric(ctx context.Context) error {
 					ServiceName: srv.Name,
 				}
 
-				a.threshold.WithPusher(a.gathererRegistry.WithTTL(5 * time.Minute)).PushPoints([]types.MetricPoint{
+				a.threshold.WithPusher(a.gathererRegistry.WithTTL(5*time.Minute)).PushPoints(ctx, []types.MetricPoint{
 					{
 						Labels:      labels,
 						Annotations: annotations,
@@ -1304,7 +1333,7 @@ func (a *agent) minuteMetric(ctx context.Context) error {
 			desc = "configuration returned no warnings."
 		}
 
-		a.gathererRegistry.WithTTL(5 * time.Minute).PushPoints([]types.MetricPoint{
+		a.gathererRegistry.WithTTL(5*time.Minute).PushPoints(ctx, []types.MetricPoint{
 			{
 				Point: types.Point{
 					Value: float64(status.NagiosCode()),
@@ -1543,7 +1572,7 @@ func (a *agent) dockerWatcher(ctx context.Context) error {
 					a.bleemeoConnector.UpdateContainers()
 				}
 
-				a.sendDockerContainerHealth(ev.Container)
+				a.sendDockerContainerHealth(ctx, ev.Container)
 			}
 		case <-pendingTimer.C:
 			if pendingDiscovery {
@@ -1572,7 +1601,7 @@ func (a *agent) dockerWatcherContainerHealth(ctx context.Context) {
 			}
 
 			for _, c := range containers {
-				a.sendDockerContainerHealth(c)
+				a.sendDockerContainerHealth(ctx, c)
 			}
 		case <-ctx.Done():
 			return
@@ -1580,7 +1609,7 @@ func (a *agent) dockerWatcherContainerHealth(ctx context.Context) {
 	}
 }
 
-func (a *agent) sendDockerContainerHealth(container facts.Container) {
+func (a *agent) sendDockerContainerHealth(ctx context.Context, container facts.Container) {
 	health, message := container.Health()
 	if health == facts.ContainerNoHealthCheck {
 		return
@@ -1611,7 +1640,7 @@ func (a *agent) sendDockerContainerHealth(container facts.Container) {
 		status.StatusDescription = fmt.Sprintf("Unknown health status %s", message)
 	}
 
-	a.gathererRegistry.WithTTL(5 * time.Minute).PushPoints([]types.MetricPoint{
+	a.gathererRegistry.WithTTL(5*time.Minute).PushPoints(ctx, []types.MetricPoint{
 		{
 			Labels: map[string]string{
 				types.LabelName:              "container_health_status",
@@ -1783,7 +1812,7 @@ func systemUpdateMetric(ctx context.Context, a *agent) {
 		})
 	}
 
-	a.threshold.WithPusher(a.gathererRegistry.WithTTL(time.Hour)).PushPoints(points)
+	a.threshold.WithPusher(a.gathererRegistry.WithTTL(time.Hour)).PushPoints(ctx, points)
 }
 
 func (a *agent) deletedContainersCallback(containersID []string) {
@@ -1817,10 +1846,10 @@ func (a *agent) migrateState() {
 }
 
 // DiagnosticPage return useful information to troubleshoot issue.
-func (a *agent) DiagnosticPage() string {
+func (a *agent) DiagnosticPage(ctx context.Context) string {
 	builder := &strings.Builder{}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
 	fmt.Fprintf(
@@ -1916,7 +1945,7 @@ func (a *agent) diagnosticGlobalInfo(ctx context.Context, archive types.ArchiveW
 		return err
 	}
 
-	_, err = file.Write([]byte(a.DiagnosticPage()))
+	_, err = file.Write([]byte(a.DiagnosticPage(ctx)))
 	if err != nil {
 		return err
 	}
@@ -2102,8 +2131,8 @@ func (a *agent) diagnosticSNMP(ctx context.Context, archive types.ArchiveWriter)
 	fmt.Fprintf(file, "# %d SNMP target configured\n", len(a.snmpManager.Targets()))
 
 	for _, t := range a.snmpManager.Targets() {
-		fmt.Fprintf(file, "\n%s\n", t.String())
-		facts, err := t.Facts(context.Background(), 48*time.Hour)
+		fmt.Fprintf(file, "\n%s\n", t.String(ctx))
+		facts, err := t.Facts(ctx, 48*time.Hour)
 
 		if err != nil {
 			fmt.Fprintf(file, " facts failed: %v\n", err)
@@ -2226,17 +2255,43 @@ func setupContainer(hostRootPath string) {
 		return
 	}
 
-	if hostRootPath != "" && hostRootPath != "/" && os.Getenv("HOST_VAR") == "" {
-		// gopsutil will use HOST_VAR as prefix to host /var
-		// It's used at least for reading the number of connected user from /var/run/utmp
-		os.Setenv("HOST_VAR", hostRootPath+"/var")
+	if hostRootPath != "" && hostRootPath != "/" {
+		if os.Getenv("HOST_VAR") == "" {
+			// gopsutil will use HOST_VAR as prefix to host /var
+			// It's used at least for reading the number of connected user from /var/run/utmp
+			os.Setenv("HOST_VAR", filepath.Join(hostRootPath, "var"))
 
-		// ... but /var/run is usually a symlink to /run.
-		varRun := filepath.Join(hostRootPath, "var/run")
-		target, err := os.Readlink(varRun)
+			// ... but /var/run is usually a symlink to /run.
+			varRun := filepath.Join(hostRootPath, "var/run")
+			target, err := os.Readlink(varRun)
 
-		if err == nil && target == "/run" {
-			os.Setenv("HOST_VAR", hostRootPath)
+			if err == nil && target == "/run" {
+				os.Setenv("HOST_VAR", hostRootPath)
+			}
+		}
+
+		if os.Getenv("HOST_ETC") == "" {
+			os.Setenv("HOST_ETC", filepath.Join(hostRootPath, "etc"))
+		}
+
+		if os.Getenv("HOST_PROC") == "" {
+			os.Setenv("HOST_PROC", filepath.Join(hostRootPath, "proc"))
+		}
+
+		if os.Getenv("HOST_SYS") == "" {
+			os.Setenv("HOST_SYS", filepath.Join(hostRootPath, "sys"))
+		}
+
+		if os.Getenv("HOST_RUN") == "" {
+			os.Setenv("HOST_RUN", filepath.Join(hostRootPath, "run"))
+		}
+
+		if os.Getenv("HOST_DEV") == "" {
+			os.Setenv("HOST_DEV", filepath.Join(hostRootPath, "dev"))
+		}
+
+		if os.Getenv("HOST_MOUNT_PREFIX") == "" {
+			os.Setenv("HOST_MOUNT_PREFIX", hostRootPath)
 		}
 	}
 }

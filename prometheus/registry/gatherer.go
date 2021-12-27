@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"glouton/logger"
+	"glouton/prometheus/model"
+	"glouton/prometheus/registry/internal/ruler"
 	"glouton/types"
 	"strings"
 	"sync"
@@ -12,8 +14,9 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
-	"github.com/prometheus/common/model"
+	prometheusModel "github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/pkg/labels"
+	"github.com/prometheus/prometheus/rules"
 )
 
 const defaultGatherTimeout = 10 * time.Second
@@ -130,14 +133,15 @@ type labeledGatherer struct {
 	source      prometheus.Gatherer
 	labels      []*dto.LabelPair
 	annotations types.MetricAnnotations
+	ruler       *ruler.SimpleRuler
 }
 
-func newLabeledGatherer(g prometheus.Gatherer, extraLabels labels.Labels, annotations types.MetricAnnotations) labeledGatherer {
+func newLabeledGatherer(g prometheus.Gatherer, extraLabels labels.Labels, rrules []*rules.RecordingRule, annotations types.MetricAnnotations) labeledGatherer {
 	labels := make([]*dto.LabelPair, 0, len(extraLabels))
 
 	for _, l := range extraLabels {
 		l := l
-		if !strings.HasPrefix(l.Name, model.ReservedLabelPrefix) {
+		if !strings.HasPrefix(l.Name, prometheusModel.ReservedLabelPrefix) {
 			labels = append(labels, &dto.LabelPair{
 				Name:  &l.Name,
 				Value: &l.Value,
@@ -149,6 +153,7 @@ func newLabeledGatherer(g prometheus.Gatherer, extraLabels labels.Labels, annota
 		source:      g,
 		labels:      labels,
 		annotations: annotations,
+		ruler:       ruler.New(rrules),
 	}
 }
 
@@ -176,9 +181,16 @@ func (g labeledGatherer) GatherWithState(ctx context.Context, state GatherState)
 		return nil, nil
 	}
 
-	var mfs []*dto.MetricFamily
+	var (
+		mfs []*dto.MetricFamily
+		err error
+	)
 
-	var err error
+	now := time.Now()
+
+	if !state.T0.IsZero() {
+		now = state.T0
+	}
 
 	if cg, ok := g.source.(GathererWithState); ok {
 		mfs, err = cg.GatherWithState(ctx, state)
@@ -189,6 +201,8 @@ func (g labeledGatherer) GatherWithState(ctx context.Context, state GatherState)
 	if len(g.labels) == 0 {
 		return mfs, err
 	}
+
+	mfs = g.ruler.ApplyRulesMFS(ctx, now, mfs)
 
 	for _, mf := range mfs {
 		for i, m := range mf.Metric {
@@ -228,7 +242,7 @@ func mergeLabels(a []*dto.LabelPair, b []*dto.LabelPair) []*dto.LabelPair {
 
 func (g labeledGatherer) GatherPoints(ctx context.Context, now time.Time, state GatherState) ([]types.MetricPoint, error) {
 	mfs, err := g.GatherWithState(ctx, state)
-	points := FamiliesToMetricPoints(now, mfs)
+	points := model.FamiliesToMetricPoints(now, mfs)
 
 	for i := range points {
 		if (g.annotations != types.MetricAnnotations{}) {

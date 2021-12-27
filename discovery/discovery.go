@@ -179,7 +179,7 @@ func (d *Discovery) DiagnosticArchive(ctx context.Context, zipFile types.Archive
 	}
 
 	if dd, ok := d.dynamicDiscovery.(*DynamicDiscovery); ok {
-		procs, err := dd.ps.Processes(context.Background(), time.Hour)
+		procs, err := dd.ps.Processes(ctx, time.Hour)
 		if err != nil {
 			return err
 		}

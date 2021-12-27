@@ -1047,7 +1047,7 @@ mainLoop:
 					)
 					if consecutiveError == 5 {
 						// Trigger facts synchronization to check for duplicate agent
-						_, _ = c.option.Facts.Facts(c.ctx, time.Minute)
+						_, _ = c.option.Facts.Facts(ctx, time.Minute)
 					}
 				}
 				mqttClient := c.setupMQTT()

@@ -35,7 +35,7 @@ type pusher struct {
 	lastTime  map[string]time.Time
 }
 
-func (p *pusher) push(_ context.Context, t0 time.Time) {
+func (p *pusher) push(ctx context.Context, t0 time.Time) {
 	p.exporter.init()
 	p.exporter.l.Lock()
 	defer p.exporter.l.Unlock()
@@ -242,7 +242,7 @@ func (p *pusher) push(_ context.Context, t0 time.Time) {
 				)
 			}
 
-			p.pusher.PushPoints(points)
+			p.pusher.PushPoints(ctx, points)
 		}
 	}
 }

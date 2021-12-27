@@ -5,21 +5,13 @@ snapshot:
 builds:
 - env:
   - CGO_ENABLED=0
-  goos:
-  - linux
-  - windows
-  goarch:
-  - amd64
-  - arm
-  - arm64
-  - 386
-  goarm:
-  - 6
-  ignore:
-  - goos: windows
-    goarch: arm
-  - goos: windows
-    goarch: arm64
+  targets:
+  - linux_amd64
+  - linux_386
+  - linux_arm_6
+  - linux_arm64
+  - windows_amd64
+  - windows_386
 archives:
 - replacements:
     darwin: Darwin
@@ -57,6 +49,10 @@ nfpms:
     dst: /usr/sbin/glouton-netstat
   - src: bin/glouton-gather-facts
     dst: /usr/sbin/glouton-gather-facts
+  - type: dir
+    dst: /etc/glouton/conf.d
+  - type: dir
+    dst: /var/lib/glouton
   # Global config files
   - src: etc/glouton.conf
     dst: /etc/glouton/glouton.conf
@@ -92,9 +88,6 @@ nfpms:
     dst: /usr/lib/python3.6/site-packages/dnf-plugins/glouton.py
     type: config
     packager: rpm
-  empty_folders:
-  - /etc/glouton/conf.d
-  - /var/lib/glouton
   scripts:
     postinstall: "packaging/scripts/postinstall.sh"
     preremove: "packaging/scripts/preremove.sh"

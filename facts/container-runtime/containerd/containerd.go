@@ -28,8 +28,8 @@ import (
 	"github.com/containerd/containerd/oci"
 	"github.com/containerd/typeurl"
 	"github.com/opencontainers/runtime-spec/specs-go"
-	"github.com/shirou/gopsutil/mem"
-	"github.com/shirou/gopsutil/process"
+	"github.com/shirou/gopsutil/v3/mem"
+	"github.com/shirou/gopsutil/v3/process"
 )
 
 var (

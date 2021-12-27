@@ -34,6 +34,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/getsentry/sentry-go"
+
 	gloutonTypes "glouton/types"
 )
 
@@ -283,6 +285,14 @@ func (c *Connector) Run(ctx context.Context) error {
 	go func() {
 		defer wg.Done()
 		defer cancel()
+		defer func() {
+			err := recover()
+			if err != nil {
+				sentry.CurrentHub().Recover(err)
+				sentry.Flush(time.Second * 5)
+				panic(err)
+			}
+		}()
 
 		syncErr = c.sync.Run(subCtx)
 	}()
@@ -292,6 +302,14 @@ func (c *Connector) Run(ctx context.Context) error {
 	go func() {
 		defer wg.Done()
 		defer cancel()
+		defer func() {
+			err := recover()
+			if err != nil {
+				sentry.CurrentHub().Recover(err)
+				sentry.Flush(time.Second * 5)
+				panic(err)
+			}
+		}()
 
 		ticker := time.NewTicker(10 * time.Second)
 		defer ticker.Stop()
@@ -320,6 +338,14 @@ func (c *Connector) Run(ctx context.Context) error {
 			go func() {
 				defer wg.Done()
 				defer cancel()
+				defer func() {
+					err := recover()
+					if err != nil {
+						sentry.CurrentHub().Recover(err)
+						sentry.Flush(time.Second * 5)
+						panic(err)
+					}
+				}()
 
 				mqttErr = c.mqttRestarter(subCtx)
 			}()
@@ -582,9 +608,9 @@ func (c *Connector) DiagnosticSNMPAssociation(ctx context.Context, file io.Write
 	for _, t := range c.option.SNMP {
 		agent, err := c.sync.FindSNMPAgent(ctx, t, snmpTypeID, c.cache.AgentsByUUID())
 		if err != nil {
-			fmt.Fprintf(file, " * %s => %v\n", t.String(), err)
+			fmt.Fprintf(file, " * %s => %v\n", t.String(ctx), err)
 		} else {
-			fmt.Fprintf(file, " * %s => %s\n", t.String(), agent.ID)
+			fmt.Fprintf(file, " * %s => %s\n", t.String(ctx), agent.ID)
 		}
 	}
 }

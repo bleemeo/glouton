@@ -29,8 +29,8 @@ The release build will
 
 The build process use Docker and is run by the build script:
 ```
-# Optional, to speed-up subsequent build
-mkdir -p .build-cache
+docker volume create glouton-buildcache  # (optional) enable cache and speed-up build/lint run
+
 ./build.sh
 ```
 
@@ -88,7 +88,8 @@ docker-compose up -d
 To build binary you may use build.sh script. For example to just
 compile Go binary (skip building JS, Docker image and Windows installer):
 ```
-mkdir -p .build-cache
+docker volume create glouton-buildcache  # (optional) enable cache and speed-up build/lint run
+
 ./build.sh go
 ```
 
@@ -99,7 +100,8 @@ Then run Glouton:
 
 Glouton use golangci-lint as linter. You may run it with:
 ```
-mkdir -p .build-cache  # enable cache and speed-up build/lint run
+docker volume create glouton-buildcache  # (optional) enable cache and speed-up build/lint run
+
 ./lint.sh
 ```
 

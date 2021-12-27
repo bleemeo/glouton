@@ -18,7 +18,7 @@
 //
 // It support both pushed metrics (using AddMetricPointFunction) and pulled
 // metrics thought Collector or Gatherer
-//nolint:scopelint
+//nolint:scopelint,dupl
 package registry
 
 import (
@@ -260,6 +260,7 @@ func TestRegistry_pushPoint(t *testing.T) {
 
 	pusher := reg.WithTTL(24 * time.Hour)
 	pusher.PushPoints(
+		context.Background(),
 		[]types.MetricPoint{
 			{
 				Point: types.Point{Value: 1.0, Time: t0},
@@ -360,6 +361,7 @@ func TestRegistry_pushPoint(t *testing.T) {
 	}
 
 	pusher.PushPoints(
+		context.Background(),
 		[]types.MetricPoint{
 			{
 				Point: types.Point{Value: 1.0, Time: t0},
@@ -526,6 +528,63 @@ func TestRegistry_applyRelabel(t *testing.T) {
 	}
 }
 
+func BenchmarkRegistry_applyRelabel(b *testing.B) {
+	cases := []struct {
+		name   string
+		labels map[string]string
+	}{
+		{
+			name: "cpu_used",
+			labels: map[string]string{
+				types.LabelName: "cpu_used",
+			},
+		},
+		{
+			name: "disk_used_1",
+			labels: map[string]string{
+				types.LabelName: "disk_used",
+				types.LabelItem: "/",
+			},
+		},
+		{
+			name: "disk_used_2",
+			labels: map[string]string{
+				types.LabelName:     "disk_used",
+				types.LabelItem:     "/",
+				types.LabelInstance: "localhost:8015",
+			},
+		},
+		{
+			name: "mysql",
+			labels: map[string]string{
+				types.LabelName:              "mysql_command_select",
+				types.LabelMetaServiceName:   "mysql",
+				types.LabelMetaContainerName: "mysql_1",
+				types.LabelMetaContainerID:   "1234",
+				types.LabelMetaGloutonFQDN:   "hostname",
+				types.LabelMetaGloutonPort:   "8015",
+				types.LabelMetaServicePort:   "3306",
+				types.LabelMetaPort:          "3306",
+			},
+		},
+	}
+
+	for _, tt := range cases {
+		tt := tt
+
+		b.Run(tt.name, func(b *testing.B) {
+			r := &Registry{}
+			r.relabelConfigs = getDefaultRelabelConfig()
+
+			b.ResetTimer()
+
+			for n := 0; n < b.N; n++ {
+				r.applyRelabel(tt.labels)
+			}
+		})
+	}
+}
+
 func TestRegistry_run(t *testing.T) {
 	for _, format := range []types.MetricFormat{types.MetricFormatBleemeo, types.MetricFormatPrometheus} {
 		format := format
@@ -540,7 +599,7 @@ func TestRegistry_run(t *testing.T) {
 			reg := &Registry{
 				option: Option{
 					MetricFormat: format,
-					PushPoint: pushFunction(func(pts []types.MetricPoint) {
+					PushPoint: pushFunction(func(_ context.Context, pts []types.MetricPoint) {
 						l.Lock()
 						points = append(points, pts...)
 						l.Unlock()
@@ -586,7 +645,7 @@ func TestRegistry_run(t *testing.T) {
 				t0 = t
 				l.Unlock()
 
-				reg.WithTTL(5 * time.Minute).PushPoints([]types.MetricPoint{
+				reg.WithTTL(5*time.Minute).PushPoints(context.Background(), []types.MetricPoint{ //nolint: contextcheck
 					{Point: types.Point{Time: t, Value: 42.0}, Labels: map[string]string{"__name__": "push", "something": "value"}, Annotations: types.MetricAnnotations{BleemeoItem: "/home"}},
 				})
 			})
@@ -638,4 +697,1291 @@ func TestRegistry_run(t *testing.T) {
 			reg.Unregister(id3)
 		})
 	}
+}
+
+func TestRegistry_pointsAlteration(t *testing.T) { //nolint: cyclop
+	type sourceKind string
+
+	const (
+		kindPushPoint         sourceKind = "pushpoint"
+		kindPushPointCallback sourceKind = "pushpointCallback"
+		kindAppender          sourceKind = "appender"
+		kindGatherer          sourceKind = "gatherer"
+	)
+
+	tests := []struct {
+		name                  string
+		input                 []types.MetricPoint
+		opt                   RegistrationOption
+		kindToTest            sourceKind
+		metricFormat          types.MetricFormat
+		metricFamiliesUseTime bool
+		wantOverrideMFType    map[string]*dto.MetricType
+		wantOverrideMFHelp    map[string]string
+		want                  []types.MetricPoint
+	}{
+		{
+			name:         "pushpoint-bleemeo",
+			kindToTest:   kindPushPoint,
+			metricFormat: types.MetricFormatBleemeo,
+			input: []types.MetricPoint{
+				{
+					Labels: map[string]string{
+						types.LabelName: "cpu_used",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName: "disk_used",
+						types.LabelItem: "/home",
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoItem: "/home",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName: "disk_used_perc",
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoItem: "/srv",
+					},
+				},
+			},
+			want: []types.MetricPoint{
+				{
+					Labels: map[string]string{
+						types.LabelName: "cpu_used",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName: "disk_used",
+						types.LabelItem: "/home",
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoItem: "/home",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName: "disk_used_perc",
+						types.LabelItem: "/srv",
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoItem: "/srv",
+					},
+				},
+			},
+			metricFamiliesUseTime: true,
+			wantOverrideMFType: map[string]*dto.MetricType{
+				"cpu_used":       dto.MetricType_UNTYPED.Enum(),
+				"disk_used":      dto.MetricType_UNTYPED.Enum(),
+				"disk_used_perc": dto.MetricType_UNTYPED.Enum(),
+			},
+			wantOverrideMFHelp: map[string]string{
+				"cpu_used":       "",
+				"disk_used":      "",
+				"disk_used_perc": "",
+			},
+		},
+		{
+			name:         "pushpointCallback-bleemeo",
+			kindToTest:   kindPushPointCallback,
+			metricFormat: types.MetricFormatBleemeo,
+			input: []types.MetricPoint{
+				{
+					Labels: map[string]string{
+						types.LabelName: "cpu_used",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName: "disk_used",
+						types.LabelItem: "/home",
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoItem: "/home",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName: "disk_used_perc",
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoItem: "/srv",
+					},
+				},
+			},
+			want: []types.MetricPoint{
+				{
+					Labels: map[string]string{
+						types.LabelName: "cpu_used",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName: "disk_used",
+						types.LabelItem: "/home",
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoItem: "/home",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName: "disk_used_perc",
+						types.LabelItem: "/srv",
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoItem: "/srv",
+					},
+				},
+			},
+			metricFamiliesUseTime: true,
+			wantOverrideMFType: map[string]*dto.MetricType{
+				"cpu_used":       dto.MetricType_UNTYPED.Enum(),
+				"disk_used":      dto.MetricType_UNTYPED.Enum(),
+				"disk_used_perc": dto.MetricType_UNTYPED.Enum(),
+			},
+			wantOverrideMFHelp: map[string]string{
+				"cpu_used":       "",
+				"disk_used":      "",
+				"disk_used_perc": "",
+			},
+		},
+		{
+			name:         "pushpoint-prometheus",
+			kindToTest:   kindPushPoint,
+			metricFormat: types.MetricFormatPrometheus,
+			input: []types.MetricPoint{
+				{
+					Labels: map[string]string{
+						types.LabelName: "cpu_used",
+						"anyOther":      "label",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName: "disk_used",
+						types.LabelItem: "/home",
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoItem: "/home",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName: "disk_used_perc",
+						types.LabelItem: "/srv",
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoItem: "/srv",
+					},
+				},
+			},
+			want: []types.MetricPoint{
+				{
+					Labels: map[string]string{
+						types.LabelName:     "cpu_used",
+						"anyOther":          "label",
+						types.LabelInstance: "server.bleemeo.com:8016",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:     "disk_used",
+						types.LabelItem:     "/home",
+						types.LabelInstance: "server.bleemeo.com:8016",
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoItem: "/home",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:     "disk_used_perc",
+						types.LabelItem:     "/srv",
+						types.LabelInstance: "server.bleemeo.com:8016",
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoItem: "/srv",
+					},
+				},
+			},
+			metricFamiliesUseTime: true,
+			wantOverrideMFType: map[string]*dto.MetricType{
+				"cpu_used":       dto.MetricType_UNTYPED.Enum(),
+				"disk_used":      dto.MetricType_UNTYPED.Enum(),
+				"disk_used_perc": dto.MetricType_UNTYPED.Enum(),
+			},
+			wantOverrideMFHelp: map[string]string{
+				"cpu_used":       "",
+				"disk_used":      "",
+				"disk_used_perc": "",
+			},
+		},
+		{
+			name:         "appender",
+			kindToTest:   kindAppender,
+			metricFormat: types.MetricFormatBleemeo,
+			input: []types.MetricPoint{
+				{
+					Labels: map[string]string{
+						types.LabelName: "cpu_used",
+						"anyOther":      "label",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName: "disk_used",
+						types.LabelItem: "/home",
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoItem: "/home",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName: "disk_used_perc",
+						types.LabelItem: "/srv",
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoItem: "annotation are not used in appender mode",
+					},
+				},
+			},
+			want: []types.MetricPoint{
+				{
+					Labels: map[string]string{
+						types.LabelName:     "cpu_used",
+						"anyOther":          "label",
+						types.LabelInstance: "server.bleemeo.com:8016",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:     "disk_used",
+						types.LabelItem:     "/home",
+						types.LabelInstance: "server.bleemeo.com:8016",
+					},
+					Annotations: types.MetricAnnotations{},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:     "disk_used_perc",
+						types.LabelItem:     "/srv",
+						types.LabelInstance: "server.bleemeo.com:8016",
+					},
+					Annotations: types.MetricAnnotations{},
+				},
+			},
+			metricFamiliesUseTime: true,
+			wantOverrideMFType: map[string]*dto.MetricType{
+				"cpu_used":       dto.MetricType_UNTYPED.Enum(),
+				"disk_used":      dto.MetricType_UNTYPED.Enum(),
+				"disk_used_perc": dto.MetricType_UNTYPED.Enum(),
+			},
+			wantOverrideMFHelp: map[string]string{
+				"cpu_used":       "",
+				"disk_used":      "",
+				"disk_used_perc": "",
+			},
+		},
+		{
+			name:         "gatherer-bleemeo",
+			kindToTest:   kindGatherer,
+			metricFormat: types.MetricFormatBleemeo,
+			input: []types.MetricPoint{
+				{
+					Labels: map[string]string{
+						types.LabelName: "cpu_used",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName: "disk_used",
+						types.LabelItem: "/home",
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoItem: "/home... but annotation are NOT used with Gatherer",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName: "disk_used_perc",
+						types.LabelItem: "/srv",
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoItem: "/srv",
+					},
+				},
+			},
+			want: []types.MetricPoint{
+				{
+					Labels: map[string]string{
+						types.LabelName:     "cpu_used",
+						types.LabelInstance: "server.bleemeo.com:8016",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:     "disk_used",
+						types.LabelItem:     "/home",
+						types.LabelInstance: "server.bleemeo.com:8016",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:     "disk_used_perc",
+						types.LabelItem:     "/srv",
+						types.LabelInstance: "server.bleemeo.com:8016",
+					},
+				},
+			},
+		},
+		{
+			name:         "gatherer-extralabels",
+			kindToTest:   kindGatherer,
+			metricFormat: types.MetricFormatBleemeo,
+			input: []types.MetricPoint{
+				{
+					Labels: map[string]string{
+						types.LabelName: "ifOutBytes",
+						"ifDesc":        "Some value",
+					},
+				},
+			},
+			opt: RegistrationOption{
+				ExtraLabels: map[string]string{
+					types.LabelMetaSNMPTarget: "1.2.3.4:8080",
+					"another":                 "value",
+				},
+				Rules: DefaultSNMPRules(),
+			},
+			want: []types.MetricPoint{
+				{
+					Labels: map[string]string{
+						types.LabelName:       "ifOutBytes",
+						"ifDesc":              "Some value",
+						types.LabelInstance:   "server.bleemeo.com:8016",
+						"another":             "value",
+						types.LabelSNMPTarget: "1.2.3.4:8080",
+					},
+					Annotations: types.MetricAnnotations{
+						SNMPTarget: "1.2.3.4:8080",
+					},
+				},
+			},
+		},
+		{
+			name:         "metric-rename-simple-gathere",
+			kindToTest:   kindGatherer,
+			metricFormat: types.MetricFormatBleemeo,
+			input: []types.MetricPoint{
+				{
+					Labels: map[string]string{
+						types.LabelName: "hrProcessorLoad",
+						"hrDeviceDescr": "CPU Pkg/ID/Node: 0/0/0 Intel Xeon E3-12xx v2 (Ivy Bridge, IBRS)",
+						"hrDeviceIndex": "1",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:  "hrStorageUsed",
+						"hrStorageDescr": "Real Memory",
+					},
+					Point: types.Point{Value: 8},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:  "hrStorageUsed",
+						"hrStorageDescr": "Unreal Memory",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:  "hrStorageAllocationUnits",
+						"hrStorageDescr": "Real Memory",
+					},
+					Point: types.Point{Value: 1024},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:  "hrStorageAllocationUnits",
+						"hrStorageDescr": "Unreal Memory",
+					},
+					Point: types.Point{Value: 1},
+				},
+			},
+			opt: RegistrationOption{
+				ExtraLabels: map[string]string{
+					types.LabelMetaSNMPTarget: "192.168.1.2",
+				},
+				Rules: DefaultSNMPRules(),
+			},
+			want: []types.MetricPoint{
+				{
+					Labels: map[string]string{
+						types.LabelName:       "cpu_used",
+						"core":                "1",
+						types.LabelInstance:   "server.bleemeo.com:8016",
+						types.LabelSNMPTarget: "192.168.1.2",
+					},
+					Annotations: types.MetricAnnotations{
+						SNMPTarget: "192.168.1.2",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:       "hrStorageAllocationUnits",
+						"hrStorageDescr":      "Real Memory",
+						types.LabelInstance:   "server.bleemeo.com:8016",
+						types.LabelSNMPTarget: "192.168.1.2",
+					},
+					Point: types.Point{Value: 1024},
+					Annotations: types.MetricAnnotations{
+						SNMPTarget: "192.168.1.2",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:       "hrStorageAllocationUnits",
+						"hrStorageDescr":      "Unreal Memory",
+						types.LabelInstance:   "server.bleemeo.com:8016",
+						types.LabelSNMPTarget: "192.168.1.2",
+					},
+					Point: types.Point{Value: 1},
+					Annotations: types.MetricAnnotations{
+						SNMPTarget: "192.168.1.2",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:       "hrStorageUsed",
+						"hrStorageDescr":      "Real Memory",
+						types.LabelInstance:   "server.bleemeo.com:8016",
+						types.LabelSNMPTarget: "192.168.1.2",
+					},
+					Point: types.Point{Value: 8},
+					Annotations: types.MetricAnnotations{
+						SNMPTarget: "192.168.1.2",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:       "hrStorageUsed",
+						"hrStorageDescr":      "Unreal Memory",
+						types.LabelInstance:   "server.bleemeo.com:8016",
+						types.LabelSNMPTarget: "192.168.1.2",
+					},
+					Annotations: types.MetricAnnotations{
+						SNMPTarget: "192.168.1.2",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:       "mem_used",
+						types.LabelInstance:   "server.bleemeo.com:8016",
+						types.LabelSNMPTarget: "192.168.1.2",
+					},
+					Point: types.Point{Value: 8192},
+					Annotations: types.MetricAnnotations{
+						SNMPTarget: "192.168.1.2",
+					},
+				},
+			},
+			wantOverrideMFType: map[string]*dto.MetricType{
+				"mem_used": dto.MetricType_GAUGE.Enum(),
+			},
+			wantOverrideMFHelp: map[string]string{
+				"mem_used": "",
+			},
+		},
+		{
+			name:         "metric-rename-simple-pushpoint",
+			kindToTest:   kindPushPointCallback,
+			metricFormat: types.MetricFormatPrometheus,
+			input: []types.MetricPoint{
+				{
+					Labels: map[string]string{
+						types.LabelName: "hrProcessorLoad",
+						"hrDeviceDescr": "CPU Pkg/ID/Node: 0/0/0 Intel Xeon E3-12xx v2 (Ivy Bridge, IBRS)",
+						"hrDeviceIndex": "1",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:  "hrStorageUsed",
+						"hrStorageDescr": "Real Memory",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:  "hrStorageUsed",
+						"hrStorageDescr": "Unreal Memory",
+					},
+				},
+			},
+			opt: RegistrationOption{
+				ExtraLabels: map[string]string{
+					types.LabelMetaSNMPTarget: "192.168.1.2",
+					"extranLabels":            "are ignored by pushpoints. So snmp target will be ignored, like rules",
+				},
+				Rules: DefaultSNMPRules(),
+			},
+			want: []types.MetricPoint{
+				{
+					Labels: map[string]string{
+						types.LabelName:     "cpu_used",
+						"core":              "1",
+						types.LabelInstance: "server.bleemeo.com:8016",
+					},
+					Annotations: types.MetricAnnotations{},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:     "hrStorageUsed",
+						"hrStorageDescr":    "Real Memory",
+						types.LabelInstance: "server.bleemeo.com:8016",
+					},
+					Annotations: types.MetricAnnotations{},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:     "hrStorageUsed",
+						"hrStorageDescr":    "Unreal Memory",
+						types.LabelInstance: "server.bleemeo.com:8016",
+					},
+					Annotations: types.MetricAnnotations{},
+				},
+			},
+			metricFamiliesUseTime: true,
+			wantOverrideMFType: map[string]*dto.MetricType{
+				"cpu_used":      dto.MetricType_UNTYPED.Enum(),
+				"hrStorageUsed": dto.MetricType_UNTYPED.Enum(),
+			},
+			wantOverrideMFHelp: map[string]string{
+				"cpu_used":      "",
+				"hrStorageUsed": "",
+			},
+		},
+		{
+			name:         "metric-rename-simple-2",
+			kindToTest:   kindGatherer,
+			metricFormat: types.MetricFormatBleemeo,
+			input: []types.MetricPoint{
+				{
+					Labels: map[string]string{
+						types.LabelName:    "cpmCPUTotal1minRev",
+						"cpmCPUTotalIndex": "1",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:    "cpmCPUMemoryUsed",
+						"cpmCPUTotalIndex": "42",
+					},
+					Point: types.Point{Value: 145},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:    "cpmCPUMemoryFree",
+						"cpmCPUTotalIndex": "42",
+					},
+					Point: types.Point{Value: 7},
+				},
+			},
+			opt: RegistrationOption{
+				ExtraLabels: map[string]string{
+					types.LabelMetaSNMPTarget: "192.168.1.2",
+				},
+				Rules: DefaultSNMPRules(),
+			},
+			want: sortMetricPoints([]types.MetricPoint{
+				{
+					Labels: map[string]string{
+						types.LabelName:       "cpu_used",
+						"core":                "1",
+						types.LabelInstance:   "server.bleemeo.com:8016",
+						types.LabelSNMPTarget: "192.168.1.2",
+					},
+					Annotations: types.MetricAnnotations{
+						SNMPTarget: "192.168.1.2",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:       "cpmCPUMemoryUsed",
+						"cpmCPUTotalIndex":    "42",
+						types.LabelInstance:   "server.bleemeo.com:8016",
+						types.LabelSNMPTarget: "192.168.1.2",
+					},
+					Point: types.Point{Value: 145},
+					Annotations: types.MetricAnnotations{
+						SNMPTarget: "192.168.1.2",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:       "cpmCPUMemoryFree",
+						"cpmCPUTotalIndex":    "42",
+						types.LabelInstance:   "server.bleemeo.com:8016",
+						types.LabelSNMPTarget: "192.168.1.2",
+					},
+					Point: types.Point{Value: 7},
+					Annotations: types.MetricAnnotations{
+						SNMPTarget: "192.168.1.2",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:       "mem_free",
+						types.LabelInstance:   "server.bleemeo.com:8016",
+						types.LabelSNMPTarget: "192.168.1.2",
+					},
+					Point: types.Point{Value: 7168},
+					Annotations: types.MetricAnnotations{
+						SNMPTarget: "192.168.1.2",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:       "mem_used",
+						types.LabelInstance:   "server.bleemeo.com:8016",
+						types.LabelSNMPTarget: "192.168.1.2",
+					},
+					Point: types.Point{Value: 148480},
+					Annotations: types.MetricAnnotations{
+						SNMPTarget: "192.168.1.2",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:       "mem_used_perc",
+						types.LabelInstance:   "server.bleemeo.com:8016",
+						types.LabelSNMPTarget: "192.168.1.2",
+					},
+					Point: types.Point{Value: 95.39},
+					Annotations: types.MetricAnnotations{
+						SNMPTarget: "192.168.1.2",
+					},
+				},
+			}),
+			wantOverrideMFType: map[string]*dto.MetricType{
+				"mem_used":      dto.MetricType_GAUGE.Enum().Enum(),
+				"mem_free":      dto.MetricType_GAUGE.Enum().Enum(),
+				"mem_used_perc": dto.MetricType_GAUGE.Enum().Enum(),
+			},
+			wantOverrideMFHelp: map[string]string{
+				"mem_used":      "",
+				"mem_free":      "",
+				"mem_used_perc": "",
+			},
+		},
+		{
+			name:         "metric-rename-multiple-1",
+			kindToTest:   kindGatherer,
+			metricFormat: types.MetricFormatBleemeo,
+			input: []types.MetricPoint{
+				{
+					Labels: map[string]string{
+						types.LabelName:       "ciscoMemoryPoolUsed",
+						"ciscoMemoryPoolName": "Processor",
+						"uniqueValue":         "1",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:       "ciscoMemoryPoolUsed",
+						"ciscoMemoryPoolName": "Processor",
+						"uniqueValue":         "2",
+					},
+				},
+			},
+			opt: RegistrationOption{
+				ExtraLabels: map[string]string{
+					types.LabelMetaSNMPTarget: "192.168.1.2",
+				},
+				Rules: DefaultSNMPRules(),
+			},
+			want: sortMetricPoints([]types.MetricPoint{
+				{
+					Labels: map[string]string{
+						types.LabelName:       "mem_used",
+						types.LabelInstance:   "server.bleemeo.com:8016",
+						types.LabelSNMPTarget: "192.168.1.2",
+						"uniqueValue":         "1",
+					},
+					Annotations: types.MetricAnnotations{
+						SNMPTarget: "192.168.1.2",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:       "mem_used",
+						types.LabelInstance:   "server.bleemeo.com:8016",
+						types.LabelSNMPTarget: "192.168.1.2",
+						"uniqueValue":         "2",
+					},
+					Annotations: types.MetricAnnotations{
+						SNMPTarget: "192.168.1.2",
+					},
+				},
+			}),
+		},
+		{
+			name:         "metric-rename-multiple-2",
+			kindToTest:   kindGatherer,
+			metricFormat: types.MetricFormatBleemeo,
+			input: []types.MetricPoint{
+				{
+					Labels: map[string]string{
+						types.LabelName:       "ciscoMemoryPoolUsed",
+						"ciscoMemoryPoolName": "System memory",
+						"uniqueValue":         "1",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:       "ciscoMemoryPoolFree",
+						"ciscoMemoryPoolName": "System memory",
+						"uniqueValue":         "1",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:       "ciscoMemoryPoolUsed",
+						"ciscoMemoryPoolName": "Anything Else",
+						"uniqueValue":         "2",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:       "ciscoMemoryPoolFree",
+						"ciscoMemoryPoolName": "Processor",
+						"uniqueValue":         "3",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:       "ciscoMemoryPoolFree",
+						"ciscoMemoryPoolName": "anything else",
+						"uniqueValue":         "5",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:    "cpmCPUMemoryFree",
+						"cpmCPUTotalIndex": "2021",
+						"uniqueValue":      "6",
+					},
+					Point: types.Point{Value: 789},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:                     "ciscoEnvMonTemperatureStatusValue",
+						"ciscoEnvMonTemperatureStatusDescr": "CPU",
+						"uniqueValue":                       "7",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName: "rlCpuUtilDuringLastMinute",
+						"uniqueValue":   "8",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:              "rlPhdUnitEnvParamTempSensorValue",
+						"rlPhdUnitEnvParamStackUnit": "1",
+						"uniqueValue":                "9",
+					},
+				},
+			},
+			opt: RegistrationOption{
+				ExtraLabels: map[string]string{
+					types.LabelMetaSNMPTarget: "192.168.1.2",
+				},
+				Rules: DefaultSNMPRules(),
+			},
+			want: sortMetricPoints([]types.MetricPoint{
+				{
+					Labels: map[string]string{
+						types.LabelName:       "mem_used",
+						types.LabelInstance:   "server.bleemeo.com:8016",
+						types.LabelSNMPTarget: "192.168.1.2",
+						"uniqueValue":         "1",
+					},
+					Annotations: types.MetricAnnotations{
+						SNMPTarget: "192.168.1.2",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:       "mem_free",
+						types.LabelInstance:   "server.bleemeo.com:8016",
+						types.LabelSNMPTarget: "192.168.1.2",
+						"uniqueValue":         "1",
+					},
+					Annotations: types.MetricAnnotations{
+						SNMPTarget: "192.168.1.2",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:       "mem_used_perc",
+						types.LabelInstance:   "server.bleemeo.com:8016",
+						types.LabelSNMPTarget: "192.168.1.2",
+						"uniqueValue":         "1",
+					},
+					Point: types.Point{Value: 50},
+					Annotations: types.MetricAnnotations{
+						SNMPTarget: "192.168.1.2",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:       "ciscoMemoryPoolUsed",
+						types.LabelInstance:   "server.bleemeo.com:8016",
+						types.LabelSNMPTarget: "192.168.1.2",
+						"ciscoMemoryPoolName": "Anything Else",
+						"uniqueValue":         "2",
+					},
+					Annotations: types.MetricAnnotations{
+						SNMPTarget: "192.168.1.2",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:       "mem_free",
+						types.LabelInstance:   "server.bleemeo.com:8016",
+						types.LabelSNMPTarget: "192.168.1.2",
+						"uniqueValue":         "3",
+					},
+					Annotations: types.MetricAnnotations{
+						SNMPTarget: "192.168.1.2",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:       "ciscoMemoryPoolFree",
+						types.LabelInstance:   "server.bleemeo.com:8016",
+						types.LabelSNMPTarget: "192.168.1.2",
+						"ciscoMemoryPoolName": "anything else",
+						"uniqueValue":         "5",
+					},
+					Annotations: types.MetricAnnotations{
+						SNMPTarget: "192.168.1.2",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:       "cpmCPUMemoryFree",
+						"cpmCPUTotalIndex":    "2021",
+						types.LabelInstance:   "server.bleemeo.com:8016",
+						types.LabelSNMPTarget: "192.168.1.2",
+						"uniqueValue":         "6",
+					},
+					Point: types.Point{Value: 789},
+					Annotations: types.MetricAnnotations{
+						SNMPTarget: "192.168.1.2",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:       "mem_free",
+						types.LabelInstance:   "server.bleemeo.com:8016",
+						types.LabelSNMPTarget: "192.168.1.2",
+						"uniqueValue":         "6",
+					},
+					Point: types.Point{Value: 807936},
+					Annotations: types.MetricAnnotations{
+						SNMPTarget: "192.168.1.2",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:       "temperature",
+						types.LabelInstance:   "server.bleemeo.com:8016",
+						types.LabelSNMPTarget: "192.168.1.2",
+						"sensor":              "CPU",
+						"uniqueValue":         "7",
+					},
+					Annotations: types.MetricAnnotations{
+						SNMPTarget: "192.168.1.2",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:       "cpu_used",
+						types.LabelInstance:   "server.bleemeo.com:8016",
+						types.LabelSNMPTarget: "192.168.1.2",
+						"uniqueValue":         "8",
+					},
+					Annotations: types.MetricAnnotations{
+						SNMPTarget: "192.168.1.2",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:       "temperature",
+						types.LabelInstance:   "server.bleemeo.com:8016",
+						types.LabelSNMPTarget: "192.168.1.2",
+						"sensor":              "CPU",
+						"uniqueValue":         "9",
+					},
+					Annotations: types.MetricAnnotations{
+						SNMPTarget: "192.168.1.2",
+					},
+				},
+			}),
+			wantOverrideMFType: map[string]*dto.MetricType{
+				"mem_free":      dto.MetricType_GAUGE.Enum().Enum(),
+				"mem_used_perc": dto.MetricType_GAUGE.Enum(),
+			},
+			wantOverrideMFHelp: map[string]string{
+				"mem_free":      "",
+				"mem_used_perc": "",
+			},
+		},
+		{
+			name:         "metric-rule-and-rename",
+			kindToTest:   kindGatherer,
+			metricFormat: types.MetricFormatBleemeo,
+			input: []types.MetricPoint{
+				{
+					Labels: map[string]string{
+						types.LabelName:  "hrStorageUsed",
+						"hrStorageDescr": "Real Memory",
+						"hrStorageIndex": "6",
+					},
+					Point: types.Point{
+						Value: 1.49028e+06,
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:  "hrStorageAllocationUnits",
+						"hrStorageDescr": "Real Memory",
+						"hrStorageIndex": "6",
+					},
+					Point: types.Point{
+						Value: 1024,
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:  "hrStorageSize",
+						"hrStorageDescr": "Real Memory",
+						"hrStorageIndex": "6",
+					},
+					Point: types.Point{
+						Value: 8.385008e+06,
+					},
+				},
+			},
+			opt: RegistrationOption{
+				ExtraLabels: map[string]string{
+					types.LabelMetaSNMPTarget: "192.168.1.2",
+				},
+				Rules: DefaultSNMPRules(),
+			},
+			want: sortMetricPoints([]types.MetricPoint{
+				{
+					Labels: map[string]string{
+						types.LabelName:       "hrStorageAllocationUnits",
+						"hrStorageDescr":      "Real Memory",
+						"hrStorageIndex":      "6",
+						types.LabelInstance:   "server.bleemeo.com:8016",
+						types.LabelSNMPTarget: "192.168.1.2",
+					},
+					Point: types.Point{
+						Value: 1024.0,
+					},
+					Annotations: types.MetricAnnotations{
+						SNMPTarget: "192.168.1.2",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:       "hrStorageSize",
+						"hrStorageDescr":      "Real Memory",
+						"hrStorageIndex":      "6",
+						types.LabelInstance:   "server.bleemeo.com:8016",
+						types.LabelSNMPTarget: "192.168.1.2",
+					},
+					Point: types.Point{
+						Value: 8.385008e+06,
+					},
+					Annotations: types.MetricAnnotations{
+						SNMPTarget: "192.168.1.2",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:       "hrStorageUsed",
+						"hrStorageDescr":      "Real Memory",
+						"hrStorageIndex":      "6",
+						types.LabelInstance:   "server.bleemeo.com:8016",
+						types.LabelSNMPTarget: "192.168.1.2",
+					},
+					Point: types.Point{
+						Value: 1.49028e+06,
+					},
+					Annotations: types.MetricAnnotations{
+						SNMPTarget: "192.168.1.2",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:       "mem_used",
+						types.LabelInstance:   "server.bleemeo.com:8016",
+						types.LabelSNMPTarget: "192.168.1.2",
+					},
+					Point: types.Point{
+						Value: 1526046720.0,
+					},
+					Annotations: types.MetricAnnotations{
+						SNMPTarget: "192.168.1.2",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:       "mem_used_perc",
+						types.LabelInstance:   "server.bleemeo.com:8016",
+						types.LabelSNMPTarget: "192.168.1.2",
+					},
+					Point: types.Point{
+						Value: 17.77,
+					},
+					Annotations: types.MetricAnnotations{
+						SNMPTarget: "192.168.1.2",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:       "mem_free",
+						types.LabelInstance:   "server.bleemeo.com:8016",
+						types.LabelSNMPTarget: "192.168.1.2",
+					},
+					Point: types.Point{
+						Value: 7060201472.0,
+					},
+					Annotations: types.MetricAnnotations{
+						SNMPTarget: "192.168.1.2",
+					},
+				},
+			}),
+			wantOverrideMFType: map[string]*dto.MetricType{
+				"mem_used":      dto.MetricType_GAUGE.Enum(),
+				"mem_used_perc": dto.MetricType_GAUGE.Enum(),
+				"mem_free":      dto.MetricType_GAUGE.Enum(),
+			},
+			wantOverrideMFHelp: map[string]string{
+				"mem_used":      "",
+				"mem_used_perc": "",
+				"mem_free":      "",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			var (
+				l         sync.Mutex
+				gotPoints []types.MetricPoint
+			)
+
+			reg, err := New(
+				Option{
+					PushPoint: pushFunction(func(_ context.Context, pts []types.MetricPoint) {
+						l.Lock()
+						gotPoints = append(gotPoints, pts...)
+						l.Unlock()
+					}),
+					FQDN:         "server.bleemeo.com",
+					GloutonPort:  "8016",
+					MetricFormat: tt.metricFormat,
+				},
+			)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			now := time.Date(2021, 12, 7, 10, 11, 13, 0, time.UTC)
+			fillDateAndValue(tt.input, now)
+			fillDateAndValue(tt.want, now)
+
+			switch tt.kindToTest {
+			case kindPushPoint:
+				reg.WithTTL(5*time.Minute).PushPoints(context.Background(), tt.input)
+			case kindPushPointCallback:
+				id, err := reg.registerPushPointsCallback(
+					tt.opt,
+					func(c context.Context, t time.Time) {
+						reg.WithTTL(5*time.Minute).PushPoints(c, tt.input)
+					},
+					false,
+				)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				reg.scrape(context.Background(), now, reg.registrations[id])
+			case kindAppender:
+				app := reg.Appendable(5 * time.Minute).Appender(context.Background())
+				for _, p := range tt.input {
+					_, err = app.Append(0, labels.FromMap(p.Labels), p.Time.UnixMilli(), p.Value)
+					if err != nil {
+						t.Fatal(err)
+					}
+				}
+
+				err = app.Commit()
+				if err != nil {
+					t.Fatal(err)
+				}
+			case kindGatherer:
+				id, err := reg.RegisterGatherer(
+					tt.opt,
+					&fakeGatherer{
+						response: metricPointsToFamilies(tt.input, time.Time{}, nil, nil),
+					},
+					false,
+				)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				reg.scrape(context.Background(), now, reg.registrations[id])
+			}
+
+			gotPoints = sortMetricPoints(gotPoints)
+
+			if diff := cmp.Diff(tt.want, gotPoints, cmpopts.EquateApprox(0.001, 0)); diff != "" {
+				t.Errorf("gotPoints mismatch (-want +got):\n%s", diff)
+			}
+
+			got, err := reg.Gather()
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			var mfsTime time.Time
+
+			if tt.metricFamiliesUseTime {
+				mfsTime = now
+			}
+
+			wantMFs := metricPointsToFamilies(tt.want, mfsTime, tt.wantOverrideMFType, tt.wantOverrideMFHelp)
+
+			if diff := cmp.Diff(wantMFs, got, cmpopts.EquateApprox(0.001, 0)); diff != "" {
+				t.Errorf("Gather mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func fillDateAndValue(in []types.MetricPoint, now time.Time) {
+	for i := range in {
+		in[i].Point.Time = now
+		if in[i].Point.Value == 0 {
+			in[i].Point.Value = 4.2
+		}
+	}
+}
+
+func metricPointsToFamilies(points []types.MetricPoint, now time.Time, typeOverload map[string]*dto.MetricType, helpOverload map[string]string) []*dto.MetricFamily {
+	resultMap := make(map[string]*dto.MetricFamily)
+
+	for _, pts := range points {
+		name := pts.Labels[types.LabelName]
+		mf := resultMap[name]
+
+		if mf == nil {
+			typ := typeOverload[name]
+			if typ == nil {
+				typ = dto.MetricType_COUNTER.Enum()
+			}
+
+			help, ok := helpOverload[name]
+			if !ok {
+				help = "fake metrics"
+			}
+
+			mf = &dto.MetricFamily{
+				Name: proto.String(pts.Labels[types.LabelName]),
+				Type: typ,
+				Help: proto.String(help),
+			}
+		}
+
+		var ts *int64
+
+		if !now.IsZero() {
+			ts = proto.Int64(now.UnixMilli())
+		}
+
+		m := &dto.Metric{
+			TimestampMs: ts,
+		}
+
+		switch *mf.Type {
+		case dto.MetricType_COUNTER:
+			m.Counter = &dto.Counter{Value: proto.Float64(pts.Value)}
+		case dto.MetricType_GAUGE:
+			m.Gauge = &dto.Gauge{Value: proto.Float64(pts.Value)}
+		case dto.MetricType_UNTYPED:
+			m.Untyped = &dto.Untyped{Value: proto.Float64(pts.Value)}
+		case dto.MetricType_HISTOGRAM:
+			m.Histogram = &dto.Histogram{SampleCount: proto.Uint64(1), SampleSum: proto.Float64(pts.Value)}
+		case dto.MetricType_SUMMARY:
+			m.Summary = &dto.Summary{SampleCount: proto.Uint64(1), SampleSum: proto.Float64(pts.Value)}
+		}
+
+		for k, v := range pts.Labels {
+			if k == types.LabelName {
+				continue
+			}
+
+			m.Label = append(m.Label, &dto.LabelPair{
+				Name:  proto.String(k),
+				Value: proto.String(v),
+			})
+		}
+
+		sort.Slice(m.Label, func(i, j int) bool {
+			return m.Label[i].GetName() < m.Label[j].GetName()
+		})
+
+		mf.Metric = append(mf.Metric, m)
+		resultMap[pts.Labels[types.LabelName]] = mf
+	}
+
+	result := make([]*dto.MetricFamily, 0, len(resultMap))
+	for _, mf := range resultMap {
+		result = append(result, mf)
+	}
+
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].GetName() < result[j].GetName()
+	})
+
+	return result
+}
+
+func sortMetricPoints(points []types.MetricPoint) []types.MetricPoint {
+	sort.SliceStable(points, func(i, j int) bool {
+		nameA := points[i].Labels[types.LabelName]
+		nameB := points[j].Labels[types.LabelName]
+
+		return nameA < nameB
+	})
+
+	return points
 }

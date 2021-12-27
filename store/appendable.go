@@ -28,11 +28,12 @@ import (
 
 type appender struct {
 	store *Store
+	ctx   context.Context
 }
 
 // Appender returns a prometheus appender wrapping the in memory store.
 func (s *Store) Appender(ctx context.Context) storage.Appender {
-	return appender{store: s}
+	return appender{store: s, ctx: ctx}
 }
 
 func (a appender) Append(ref uint64, l labels.Labels, t int64, v float64) (uint64, error) {
@@ -51,7 +52,7 @@ func (a appender) Append(ref uint64, l labels.Labels, t int64, v float64) (uint6
 		Annotations: types.MetricAnnotations{},
 	}
 
-	a.store.PushPoints([]types.MetricPoint{newPoint})
+	a.store.PushPoints(a.ctx, []types.MetricPoint{newPoint})
 
 	return 0, nil
 }

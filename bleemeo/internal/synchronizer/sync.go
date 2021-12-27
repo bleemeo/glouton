@@ -37,6 +37,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/getsentry/sentry-go"
 )
 
 var (
@@ -246,15 +248,15 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 		minimalDelay = delay.JitterDelay(20*time.Second, 0.5)
 	}
 
-	for s.ctx.Err() == nil {
+	for ctx.Err() == nil {
 		// TODO: allow WaitDeadline to be interrupted when new metrics arrive
-		common.WaitDeadline(s.ctx, minimalDelay, s.getDisabledUntil, "Synchronization with Bleemeo Cloud platform")
+		common.WaitDeadline(ctx, minimalDelay, s.getDisabledUntil, "Synchronization with Bleemeo Cloud platform")
 
-		if s.ctx.Err() != nil {
+		if ctx.Err() != nil {
 			break
 		}
 
-		err := s.runOnce(firstSync)
+		err := s.runOnce(ctx, firstSync)
 		if err != nil {
 			s.successiveErrors++
 
@@ -509,7 +511,7 @@ func (s *Synchronizer) popPendingMetricsUpdate() []string {
 	return result
 }
 
-func (s *Synchronizer) waitCPUMetric() {
+func (s *Synchronizer) waitCPUMetric(ctx context.Context) {
 	metrics := s.option.Cache.Metrics()
 	for _, m := range metrics {
 		if m.Labels[types.LabelName] == "cpu_used" || m.Labels[types.LabelName] == "node_cpu_seconds_total" {
@@ -521,7 +523,7 @@ func (s *Synchronizer) waitCPUMetric() {
 	filter2 := map[string]string{types.LabelName: "node_cpu_seconds_total"}
 	count := 0
 
-	for s.ctx.Err() == nil && count < 20 {
+	for ctx.Err() == nil && count < 20 {
 		count++
 
 		m, _ := s.option.Store.Metrics(filter)
@@ -535,7 +537,7 @@ func (s *Synchronizer) waitCPUMetric() {
 		}
 
 		select {
-		case <-s.ctx.Done():
+		case <-ctx.Done():
 		case <-time.After(1 * time.Second):
 		}
 	}
@@ -584,7 +586,7 @@ func (s *Synchronizer) setClient() error {
 		return err
 	}
 
-	client, err := client.NewClient(s.ctx, s.option.Config.String("bleemeo.api_base"), username, password, s.option.Config.Bool("bleemeo.api_ssl_insecure"))
+	client, err := client.NewClient(s.option.Config.String("bleemeo.api_base"), username, password, s.option.Config.Bool("bleemeo.api_ssl_insecure"))
 	if err != nil {
 		return err
 	}
@@ -595,17 +597,17 @@ func (s *Synchronizer) setClient() error {
 }
 
 //nolint:cyclop
-func (s *Synchronizer) runOnce(onlyEssential bool) error {
+func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) error {
 	var wasCreation bool
 
 	if s.agentID == "" {
-		if err := s.register(); err != nil {
+		if err := s.register(ctx); err != nil {
 			return err
 		}
 
 		wasCreation = true
 
-		s.option.NotifyFirstRegistration(s.ctx)
+		s.option.NotifyFirstRegistration(ctx)
 		// Do one pass of metric registration to register agent_status.
 		// MQTT connection require this metric to exists before connecting
 		_ = s.syncMetrics(false, true)
@@ -615,10 +617,10 @@ func (s *Synchronizer) runOnce(onlyEssential bool) error {
 
 		// Then wait CPU (which should arrive the all other system metrics)
 		// before continuing to process.
-		s.waitCPUMetric()
+		s.waitCPUMetric(ctx)
 	}
 
-	syncMethods := s.syncToPerform()
+	syncMethods := s.syncToPerform(ctx)
 
 	if len(syncMethods) == 0 {
 		return nil
@@ -651,7 +653,7 @@ func (s *Synchronizer) runOnce(onlyEssential bool) error {
 	var firstErr error
 
 	for _, step := range syncStep {
-		if s.ctx.Err() != nil {
+		if ctx.Err() != nil {
 			break
 		}
 
@@ -712,7 +714,7 @@ func (s *Synchronizer) runOnce(onlyEssential bool) error {
 	if s.callUpdateLabels {
 		s.callUpdateLabels = false
 		if s.option.NotifyLabelsUpdate != nil {
-			s.option.NotifyLabelsUpdate(s.ctx)
+			s.option.NotifyLabelsUpdate(ctx)
 		}
 	}
 
@@ -740,7 +742,7 @@ func (s *Synchronizer) runOnce(onlyEssential bool) error {
 }
 
 //nolint:cyclop
-func (s *Synchronizer) syncToPerform() map[string]bool {
+func (s *Synchronizer) syncToPerform(ctx context.Context) map[string]bool {
 	s.l.Lock()
 	defer s.l.Unlock()
 
@@ -756,7 +758,7 @@ func (s *Synchronizer) syncToPerform() map[string]bool {
 		fullSync = true
 	}
 
-	localFacts, _ := s.option.Facts.Facts(s.ctx, 24*time.Hour)
+	localFacts, _ := s.option.Facts.Facts(ctx, 24*time.Hour)
 
 	if fullSync {
 		syncMethods[syncMethodInfo] = fullSync
@@ -872,8 +874,8 @@ func (s *Synchronizer) checkDuplicated() error {
 	return nil
 }
 
-func (s *Synchronizer) register() error {
-	facts, err := s.option.Facts.Facts(s.ctx, 15*time.Minute)
+func (s *Synchronizer) register(ctx context.Context) error {
+	facts, err := s.option.Facts.Facts(ctx, 15*time.Minute)
 	if err != nil {
 		return err
 	}
@@ -910,6 +912,7 @@ func (s *Synchronizer) register() error {
 	}
 
 	statusCode, err := s.realClient.PostAuth(
+		ctx,
 		"v1/agent/",
 		map[string]string{
 			"account":          accountID,
@@ -930,6 +933,15 @@ func (s *Synchronizer) register() error {
 	}
 
 	s.agentID = objectID.ID
+
+	version := s.option.Config.String("bleemeo.glouton_version")
+
+	sentry.ConfigureScope(func(scope *sentry.Scope) {
+		scope.SetContext("agent", map[string]interface{}{
+			"agent_id":        s.agentID,
+			"glouton_version": version,
+		})
+	})
 
 	if err := s.option.State.Set("agent_uuid", objectID.ID); err != nil {
 		return err

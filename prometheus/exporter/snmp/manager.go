@@ -10,6 +10,10 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
+type FactProvider interface {
+	Facts(ctx context.Context, maxAge time.Duration) (facts map[string]string, err error)
+}
+
 type Manager struct {
 	exporterAddress *url.URL
 	targets         []*Target
@@ -25,14 +29,14 @@ type GathererWithInfo struct {
 }
 
 // NewManager return a new SNMP manager.
-func NewManager(exporterAddress *url.URL, targets ...TargetOptions) *Manager {
+func NewManager(exporterAddress *url.URL, scaperFact FactProvider, targets ...TargetOptions) *Manager {
 	mgr := &Manager{
 		exporterAddress: exporterAddress,
 		targets:         make([]*Target, 0, len(targets)),
 	}
 
 	for _, t := range targets {
-		mgr.targets = append(mgr.targets, newTarget(t, exporterAddress))
+		mgr.targets = append(mgr.targets, newTarget(t, scaperFact, exporterAddress))
 	}
 
 	return mgr

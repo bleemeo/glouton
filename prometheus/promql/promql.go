@@ -16,7 +16,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi"
-	"github.com/go-kit/kit/log"
+	"github.com/go-kit/log"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/promql"

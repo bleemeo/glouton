@@ -322,7 +322,12 @@ func (c *Cache) FactsByKey() map[string]map[string]bleemeoTypes.AgentFact {
 	result := make(map[string]map[string]bleemeoTypes.AgentFact)
 	for _, v := range c.data.Facts {
 		if _, ok := result[v.AgentID]; !ok {
-			result[v.AgentID] = make(map[string]bleemeoTypes.AgentFact, len(c.data.Facts)/len(c.data.Agents))
+			estimatedSize := len(c.data.Facts)
+			if len(c.data.Agents) > 1 {
+				estimatedSize /= len(c.data.Agents)
+			}
+
+			result[v.AgentID] = make(map[string]bleemeoTypes.AgentFact, estimatedSize)
 		}
 
 		result[v.AgentID][v.Key] = v

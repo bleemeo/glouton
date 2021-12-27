@@ -661,7 +661,7 @@ func newMetricHelper(t *testing.T) *metricTestHelper {
 		Cache: &cache,
 		GlobalOption: bleemeoTypes.GlobalOption{
 			Config:           cfg,
-			Facts:            facts.NewMockFacter(),
+			Facts:            facts.NewMockFacter(nil),
 			State:            state,
 			Discovery:        discovery,
 			Store:            helper.store,
@@ -728,7 +728,7 @@ func (h *metricTestHelper) RunSync(maxLoop int, timeStep time.Duration, forceFir
 	for result.runCount = 0; result.runCount < maxLoop; result.runCount++ {
 		h.s.client = &wrapperClient{s: h.s, client: h.s.realClient, duplicateChecked: true}
 
-		methods := h.s.syncToPerform()
+		methods := h.s.syncToPerform(context.Background())
 		if full, ok := methods[syncMethodMetric]; !ok && !forceFirst {
 			break
 		} else if full {
@@ -747,7 +747,7 @@ func (h *metricTestHelper) RunSync(maxLoop int, timeStep time.Duration, forceFir
 		h.mt.now = h.mt.Now().Add(timeStep)
 	}
 
-	_, result.stillWantSync = h.s.syncToPerform()[syncMethodMetric]
+	_, result.stillWantSync = h.s.syncToPerform(context.Background())[syncMethodMetric]
 
 	return result
 }
@@ -831,7 +831,7 @@ func TestMetricSimpleSync(t *testing.T) {
 	}
 
 	helper.AddTime(30 * time.Minute)
-	helper.store.PushPoints([]types.MetricPoint{
+	helper.store.PushPoints(context.Background(), []types.MetricPoint{
 		{
 			Point: types.Point{Time: helper.mt.Now()},
 			Labels: map[string]string{
@@ -877,7 +877,7 @@ func TestMetricSimpleSync(t *testing.T) {
 
 	// Register 1000 metrics
 	for n := 0; n < 1000; n++ {
-		helper.store.PushPoints([]types.MetricPoint{
+		helper.store.PushPoints(context.Background(), []types.MetricPoint{
 			{
 				Point: types.Point{Time: helper.mt.Now()},
 				Labels: map[string]string{
@@ -932,7 +932,7 @@ func TestMetricSimpleSync(t *testing.T) {
 	helper.AddTime(30 * time.Minute)
 
 	// re-activate one metric + register one
-	helper.store.PushPoints([]types.MetricPoint{
+	helper.store.PushPoints(context.Background(), []types.MetricPoint{
 		{
 			Point: types.Point{Time: helper.mt.Now()},
 			Labels: map[string]string{
@@ -992,7 +992,7 @@ func TestMetricDeleted(t *testing.T) {
 
 	helper.AddTime(time.Minute)
 
-	helper.store.PushPoints([]types.MetricPoint{
+	helper.store.PushPoints(context.Background(), []types.MetricPoint{
 		{
 			Point: types.Point{Time: helper.mt.Now()},
 			Labels: map[string]string{
@@ -1027,7 +1027,7 @@ func TestMetricDeleted(t *testing.T) {
 	}
 
 	helper.AddTime(70 * time.Minute)
-	helper.store.PushPoints([]types.MetricPoint{
+	helper.store.PushPoints(context.Background(), []types.MetricPoint{
 		{
 			Point: types.Point{Time: helper.mt.Now()},
 			Labels: map[string]string{
@@ -1059,7 +1059,7 @@ func TestMetricDeleted(t *testing.T) {
 	helper.AddTime(1 * time.Minute)
 
 	// metric1 is still alive
-	helper.store.PushPoints([]types.MetricPoint{
+	helper.store.PushPoints(context.Background(), []types.MetricPoint{
 		{
 			Point: types.Point{Time: helper.mt.Now()},
 			Labels: map[string]string{
@@ -1117,7 +1117,7 @@ func TestMetricDeleted(t *testing.T) {
 		}
 	}
 
-	helper.store.PushPoints([]types.MetricPoint{
+	helper.store.PushPoints(context.Background(), []types.MetricPoint{
 		{
 			Point: types.Point{Time: helper.mt.Now()},
 			Labels: map[string]string{
@@ -1167,7 +1167,7 @@ func TestMetricError(t *testing.T) {
 	}
 	helper.AddTime(time.Minute)
 
-	helper.store.PushPoints([]types.MetricPoint{
+	helper.store.PushPoints(context.Background(), []types.MetricPoint{
 		{
 			Point: types.Point{Time: helper.mt.Now()},
 			Labels: map[string]string{
@@ -1220,7 +1220,7 @@ func TestMetricUnknownError(t *testing.T) {
 
 	helper.AddTime(time.Minute)
 
-	helper.store.PushPoints([]types.MetricPoint{
+	helper.store.PushPoints(context.Background(), []types.MetricPoint{
 		{
 			Point: types.Point{Time: helper.mt.Now()},
 			Labels: map[string]string{
@@ -1270,7 +1270,7 @@ func TestMetricUnknownError(t *testing.T) {
 
 	// Finally on next fullSync re-retry the metrics registration
 	helper.mt.now = helper.s.nextFullSync.Add(5 * time.Second)
-	helper.store.PushPoints([]types.MetricPoint{
+	helper.store.PushPoints(context.Background(), []types.MetricPoint{
 		{
 			Point: types.Point{Time: helper.mt.Now()},
 			Labels: map[string]string{
@@ -1339,7 +1339,7 @@ func TestMetricPermanentError(t *testing.T) {
 
 			helper.AddTime(time.Minute)
 
-			helper.store.PushPoints([]types.MetricPoint{
+			helper.store.PushPoints(context.Background(), []types.MetricPoint{
 				{
 					Point: types.Point{Time: helper.mt.Now()},
 					Labels: map[string]string{
@@ -1392,7 +1392,7 @@ func TestMetricPermanentError(t *testing.T) {
 
 			// After a long delay we do not retry because error is permanent
 			helper.AddTime(50 * time.Minute)
-			helper.store.PushPoints([]types.MetricPoint{
+			helper.store.PushPoints(context.Background(), []types.MetricPoint{
 				{
 					Point: types.Point{Time: helper.mt.Now()},
 					Labels: map[string]string{
@@ -1440,7 +1440,7 @@ func TestMetricPermanentError(t *testing.T) {
 			// Now metric registration will succeeds and retry all
 			helper.api.resources["metric"].(*genericResource).CreateHook = nil
 			helper.AddTime(70 * time.Minute)
-			helper.store.PushPoints([]types.MetricPoint{
+			helper.store.PushPoints(context.Background(), []types.MetricPoint{
 				{
 					Point: types.Point{Time: helper.mt.Now()},
 					Labels: map[string]string{
@@ -1523,7 +1523,7 @@ func TestMetricTooMany(t *testing.T) { //nolint:cyclop
 
 	helper.AddTime(time.Minute)
 
-	helper.store.PushPoints([]types.MetricPoint{
+	helper.store.PushPoints(context.Background(), []types.MetricPoint{
 		{
 			Point: types.Point{Time: helper.mt.Now()},
 			Labels: map[string]string{
@@ -1551,7 +1551,7 @@ func TestMetricTooMany(t *testing.T) { //nolint:cyclop
 	}
 
 	helper.AddTime(5 * time.Minute)
-	helper.store.PushPoints([]types.MetricPoint{
+	helper.store.PushPoints(context.Background(), []types.MetricPoint{
 		{
 			Point: types.Point{Time: helper.mt.Now()},
 			Labels: map[string]string{
@@ -1594,7 +1594,7 @@ func TestMetricTooMany(t *testing.T) { //nolint:cyclop
 	// drop all because normally store drop inactive metrics and
 	// metric1 don't emitted for 70 minutes
 	helper.store.DropAllMetrics()
-	helper.store.PushPoints([]types.MetricPoint{
+	helper.store.PushPoints(context.Background(), []types.MetricPoint{
 		{
 			Point: types.Point{Time: helper.mt.Now()},
 			Labels: map[string]string{
@@ -1633,7 +1633,7 @@ func TestMetricTooMany(t *testing.T) { //nolint:cyclop
 	}
 
 	helper.AddTime(5 * time.Minute)
-	helper.store.PushPoints([]types.MetricPoint{
+	helper.store.PushPoints(context.Background(), []types.MetricPoint{
 		{
 			Point: types.Point{Time: helper.mt.Now()},
 			Labels: map[string]string{
@@ -1672,7 +1672,7 @@ func TestMetricTooMany(t *testing.T) { //nolint:cyclop
 
 	// Excepted ONE per full-sync
 	helper.AddTime(70 * time.Minute)
-	helper.store.PushPoints([]types.MetricPoint{
+	helper.store.PushPoints(context.Background(), []types.MetricPoint{
 		{
 			Point: types.Point{Time: helper.mt.Now()},
 			Labels: map[string]string{
@@ -1731,7 +1731,7 @@ func TestMetricLongItem(t *testing.T) {
 	helper.AddTime(time.Minute)
 	// This test is perfect as it don't set service, but helper does not yet support
 	// synchronization with service.
-	helper.store.PushPoints([]types.MetricPoint{
+	helper.store.PushPoints(context.Background(), []types.MetricPoint{
 		{
 			Point: types.Point{Time: helper.mt.Now()},
 			Labels: map[string]string{
@@ -1764,7 +1764,7 @@ func TestMetricLongItem(t *testing.T) {
 
 	helper.AddTime(70 * time.Minute)
 
-	helper.store.PushPoints([]types.MetricPoint{
+	helper.store.PushPoints(context.Background(), []types.MetricPoint{
 		{
 			Point: types.Point{Time: helper.mt.Now()},
 			Labels: map[string]string{
@@ -1809,7 +1809,7 @@ func TestWithSNMP(t *testing.T) {
 
 	helper.AddTime(time.Minute)
 
-	helper.store.PushPoints([]types.MetricPoint{
+	helper.store.PushPoints(context.Background(), []types.MetricPoint{
 		{
 			Point: types.Point{Time: helper.mt.Now()},
 			Labels: map[string]string{
