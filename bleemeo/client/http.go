@@ -428,12 +428,12 @@ func (c *HTTPClient) GetJWT(ctx context.Context) (string, error) {
 
 // VerifyAndGetJWT is used to get a valid JWT.
 // It differs from GetJWT because the JWT is only renewed if necessary.
-func (c *HTTPClient) VerifyAndGetJWT(agentID string) (string, error) {
+func (c *HTTPClient) VerifyAndGetJWT(ctx context.Context, agentID string) (string, error) {
 	var res struct {
 		ID string
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
 	// Low cost API endpoint, used to test our JWT.

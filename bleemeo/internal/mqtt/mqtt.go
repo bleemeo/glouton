@@ -66,7 +66,7 @@ type Option struct {
 	// UpdateMaintenance requests to check for the maintenance mode again
 	UpdateMaintenance func()
 	// GetJWT returns the JWT used to talk with the Bleemeo API.
-	GetJWT func() (string, error)
+	GetJWT func(ctx context.Context) (string, error)
 
 	InitialPoints []types.MetricPoint
 }
@@ -351,7 +351,7 @@ func (c *Client) HealthCheck() bool {
 	return ok
 }
 
-func (c *Client) setupMQTT() paho.Client {
+func (c *Client) setupMQTT(ctx context.Context) paho.Client {
 	pahoOptions := paho.NewClientOptions()
 
 	willPayload, _ := json.Marshal(map[string]string{"disconnect-cause": "disconnect-will"})
@@ -379,24 +379,17 @@ func (c *Client) setupMQTT() paho.Client {
 	pahoOptions.SetAutoReconnect(false)
 	pahoOptions.SetConnectionLostHandler(c.onConnectionLost)
 	pahoOptions.SetOnConnectHandler(c.onConnect)
+	pahoOptions.SetUsername(fmt.Sprintf("%s@bleemeo.com", c.option.AgentID))
 
-	// CredentialsProvider allows the username and password to be updated
-	// before reconnecting. We use it to update our JWT.
-	pahoOptions.SetCredentialsProvider(c.credentialsProvider)
-
-	return paho.NewClient(pahoOptions)
-}
-
-func (c *Client) credentialsProvider() (username string, password string) {
-	username = fmt.Sprintf("%s@bleemeo.com", c.option.AgentID)
-
-	password, err := c.option.GetJWT()
+	password, err := c.option.GetJWT(ctx)
 	if err != nil {
 		// TODO: What to do in case of an error? loop? do nothing and let the client retry?
 		logger.V(1).Printf("Unable to get JWT: %v", err)
 	}
 
-	return
+	pahoOptions.SetPassword(password)
+
+	return paho.NewClient(pahoOptions)
 }
 
 func (c *Client) tlsConfig() *tls.Config {
@@ -1050,7 +1043,7 @@ mainLoop:
 						_, _ = c.option.Facts.Facts(ctx, time.Minute)
 					}
 				}
-				mqttClient := c.setupMQTT()
+				mqttClient := c.setupMQTT(ctx)
 
 				optionReader := mqttClient.OptionsReader()
 				logger.V(2).Printf("Connecting to MQTT broker %v", optionReader.Servers()[0])
