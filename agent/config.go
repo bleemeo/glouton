@@ -290,6 +290,13 @@ func defaultConfig() map[string]interface{} {
 	}
 }
 
+// Get the default config files.
+func DefaultConfigFiles() []string {
+	cfg := config.Configuration{}
+	cfg.Set("config_files", defaultConfig()["config_files"])
+	return cfg.StringList("config_files")
+}
+
 func configLoadFile(filePath string, cfg *config.Configuration) error {
 	buffer, err := ioutil.ReadFile(filePath)
 	if err != nil {
@@ -560,7 +567,7 @@ func loadEnvironmentVariable(cfg *config.Configuration, key string, envName stri
 	return found, nil
 }
 
-func loadConfiguration(configFiles []string, mockLookupEnv func(string) (string, bool)) (cfg Config, oldCfg *config.Configuration, warnings []error, finalError error) {
+func LoadConfiguration(configFiles []string, mockLookupEnv func(string) (string, bool)) (cfg Config, oldCfg *config.Configuration, warnings []error, finalError error) {
 	oldCfg, warnings, finalError = loadOldConfiguration(configFiles, mockLookupEnv)
 	cfg, moreWarnings := convertConfig(oldCfg)
 

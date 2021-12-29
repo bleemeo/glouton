@@ -492,7 +492,7 @@ func Test_loadConfiguration(t *testing.T) {
 				return value, ok
 			}
 
-			cfg, oldCfg, warnings, err := loadConfiguration(tt.configFiles, lookupEnv)
+			cfg, oldCfg, warnings, err := LoadConfiguration(tt.configFiles, lookupEnv)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("loadConfiguration() error = %v, wantErr %v", err, tt.wantErr)
 

@@ -170,7 +170,7 @@ func (a *agent) init(configFiles []string) (ok bool) {
 	a.l.Unlock()
 
 	a.taskRegistry = task.NewRegistry(context.Background())
-	cfg, oldCfg, warnings, err := loadConfiguration(configFiles, nil)
+	cfg, oldCfg, warnings, err := LoadConfiguration(configFiles, nil)
 	a.oldConfig = oldCfg
 	a.config = cfg
 
@@ -298,7 +298,7 @@ func (a *agent) setupLogger() {
 }
 
 // Run runs Glouton.
-func Run(configFiles []string) {
+func Run(ctx context.Context, wg *sync.WaitGroup, configFiles []string) {
 	rand.Seed(time.Now().UnixNano())
 
 	agent := &agent{
@@ -314,7 +314,8 @@ func Run(configFiles []string) {
 		return
 	}
 
-	agent.run()
+	agent.run(ctx)
+	wg.Done()
 }
 
 // BleemeoAccountID returns the Account UUID of Bleemeo
@@ -560,8 +561,8 @@ func (a *agent) updateThresholds(thresholds map[threshold.MetricNameItem]thresho
 }
 
 // Run will start the agent. It will terminate when sigquit/sigterm/sigint is received.
-func (a *agent) run() { //nolint:cyclop
-	ctx, cancel := context.WithCancel(context.Background())
+func (a *agent) run(ctx context.Context) { //nolint:cyclop
+	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
 	a.cancel = cancel
