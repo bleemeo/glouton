@@ -108,6 +108,18 @@ func (c *Collector) RemoveInput(id int) {
 	delete(c.inputNames, id)
 }
 
+// Close stops all inputs.
+func (c *Collector) Close() {
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	for _, input := range c.inputs {
+		if si, ok := input.(telegraf.ServiceInput); ok {
+			si.Stop()
+		}
+	}
+}
+
 // RunGather run one gather and send metric through the accumulator.
 func (c *Collector) RunGather(_ context.Context, t0 time.Time) {
 	c.runOnce(t0)

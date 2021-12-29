@@ -78,7 +78,6 @@ func watchConfig(watcher *fsnotify.Watcher, agentReloader *debouncer.Debouncer) 
 				// Validate config before reloading.
 				_, _, _, err := agent.LoadConfiguration(myConfigFiles, nil)
 				if err == nil {
-					fmt.Println(event)
 					agentReloader.Trigger()
 				}
 			case err, ok := <-watcher.Errors:

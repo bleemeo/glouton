@@ -1078,6 +1078,7 @@ func (a *agent) run(ctx context.Context) { //nolint:cyclop
 	close(c)
 	a.taskRegistry.Close()
 	a.discovery.Close()
+	a.collector.Close()
 	logger.V(2).Printf("Agent stopped")
 }
 
