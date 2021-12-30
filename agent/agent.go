@@ -298,7 +298,7 @@ func (a *agent) setupLogger() {
 }
 
 // Run runs Glouton.
-func Run(ctx context.Context, wg *sync.WaitGroup, configFiles []string) {
+func Run(stopCtx context.Context, reloadCtx context.Context, wgReload *sync.WaitGroup, wgStop *sync.WaitGroup, configFiles []string) {
 	rand.Seed(time.Now().UnixNano())
 
 	agent := &agent{
@@ -314,8 +314,8 @@ func Run(ctx context.Context, wg *sync.WaitGroup, configFiles []string) {
 		return
 	}
 
-	agent.run(ctx)
-	wg.Done()
+	agent.run(stopCtx, reloadCtx, wgStop)
+	wgReload.Done()
 }
 
 // BleemeoAccountID returns the Account UUID of Bleemeo
@@ -561,8 +561,8 @@ func (a *agent) updateThresholds(thresholds map[threshold.MetricNameItem]thresho
 }
 
 // Run will start the agent. It will terminate when sigquit/sigterm/sigint is received.
-func (a *agent) run(ctx context.Context) { //nolint:cyclop
-	ctx, cancel := context.WithCancel(ctx)
+func (a *agent) run(stopCtx context.Context, reloadCtx context.Context, wgStop *sync.WaitGroup) { //nolint:cyclop
+	ctx, cancel := context.WithCancel(reloadCtx)
 	defer cancel()
 
 	a.cancel = cancel
@@ -950,7 +950,7 @@ func (a *agent) run(ctx context.Context) { //nolint:cyclop
 			NotifyFirstRegistration: a.notifyBleemeoFirstRegistration,
 			NotifyLabelsUpdate:      a.notifyBleemeoUpdateLabels,
 			BlackboxScraperName:     scaperName,
-		})
+		}, stopCtx, wgStop)
 		if err != nil {
 			logger.Printf("unable to start Bleemeo SAAS connector: %v", err)
 

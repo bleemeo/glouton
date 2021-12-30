@@ -39,7 +39,11 @@ import (
 	gloutonTypes "glouton/types"
 )
 
-var ErrBadOption = errors.New("bad option")
+var (
+	ErrBadOption = errors.New("bad option")
+
+	mqttStarted = false
+)
 
 // Connector manager the connection between the Agent and Bleemeo.
 type Connector struct {
@@ -58,14 +62,22 @@ type Connector struct {
 
 	// initialized indicates whether the mqtt connetcor can be started
 	initialized bool
+
+	// stopCtx is used to stop the components that are not stopped when reloading.
+	stopCtx context.Context
+
+	// wgStop is used to wait for the components that are not stopped when reloading.
+	wgStop *sync.WaitGroup
 }
 
 // New create a new Connector.
-func New(option types.GlobalOption) (c *Connector, err error) {
+func New(option types.GlobalOption, stopCtx context.Context, wgStop *sync.WaitGroup) (c *Connector, err error) {
 	c = &Connector{
 		option:      option,
 		cache:       cache.Load(option.State),
 		mqttRestart: make(chan interface{}, 1),
+		stopCtx:     stopCtx,
+		wgStop:      wgStop,
 	}
 	c.sync, err = synchronizer.New(synchronizer.Option{
 		GlobalOption:                c.option,
@@ -203,68 +215,72 @@ func (c *Connector) mqttRestarter(ctx context.Context) error {
 	default:
 	}
 
-	for range mqttRestart {
-		cancel()
+	for {
+		select {
+		case <-mqttRestart:
+			cancel()
 
-		subCtx, cancel = context.WithCancel(ctx)
+			subCtx, cancel = context.WithCancel(ctx)
 
-		c.l.Lock()
+			c.l.Lock()
 
-		if c.mqtt != nil {
-			// Try to retrieve pending points
-			resultChan := make(chan []gloutonTypes.MetricPoint, 1)
+			if c.mqtt != nil {
+				// Try to retrieve pending points
+				resultChan := make(chan []gloutonTypes.MetricPoint, 1)
+
+				go func() {
+					resultChan <- c.mqtt.PopPoints(true)
+				}()
+
+				select {
+				case previousPoints = <-resultChan:
+				case <-time.After(10 * time.Second):
+				}
+			}
+
+			c.mqtt = nil
+
+			c.l.Unlock()
+
+			err := c.initMQTT(previousPoints, !alreadyInit)
+			previousPoints = nil
+			alreadyInit = true
+
+			if err != nil {
+				l.Lock()
+
+				if mqttErr == nil {
+					mqttErr = err
+				}
+
+				l.Unlock()
+
+				break
+			}
+
+			wg.Add(1)
 
 			go func() {
-				resultChan <- c.mqtt.PopPoints(true)
+				defer wg.Done()
+
+				err := c.mqtt.Run(subCtx)
+
+				l.Lock()
+
+				if mqttErr == nil {
+					mqttErr = err
+				}
+
+				l.Unlock()
 			}()
+		case <-ctx.Done():
+			close(c.mqttRestart)
+			cancel()
+			wg.Wait()
 
-			select {
-			case previousPoints = <-resultChan:
-			case <-time.After(10 * time.Second):
-			}
+			return mqttErr
 		}
-
-		c.mqtt = nil
-
-		c.l.Unlock()
-
-		err := c.initMQTT(previousPoints, !alreadyInit)
-		previousPoints = nil
-		alreadyInit = true
-
-		if err != nil {
-			l.Lock()
-
-			if mqttErr == nil {
-				mqttErr = err
-			}
-
-			l.Unlock()
-
-			break
-		}
-
-		wg.Add(1)
-
-		go func() {
-			defer wg.Done()
-
-			err := c.mqtt.Run(subCtx)
-
-			l.Lock()
-
-			if mqttErr == nil {
-				mqttErr = err
-			}
-
-			l.Unlock()
-		}()
 	}
-
-	cancel()
-	wg.Wait()
-
-	return mqttErr
 }
 
 // Run run the Connector.
@@ -322,40 +338,40 @@ func (c *Connector) Run(ctx context.Context) error {
 			}
 		}
 
-		c.l.Lock()
-		close(c.mqttRestart)
-		c.mqttRestart = nil
-		c.l.Unlock()
-
 		logger.V(2).Printf("Bleemeo connector stopping")
 	}()
 
-	for subCtx.Err() == nil {
-		if c.AgentID() != "" && c.isInitialized() {
-			wg.Add(1)
+	if !mqttStarted {
+		for c.stopCtx.Err() == nil {
+			if c.AgentID() != "" && c.isInitialized() {
+				c.wgStop.Add(1)
 
-			go func() {
-				defer wg.Done()
-				defer cancel()
-				defer func() {
-					err := recover()
-					if err != nil {
-						sentry.CurrentHub().Recover(err)
-						sentry.Flush(time.Second * 5)
-						panic(err)
-					}
+				go func() {
+					defer c.wgStop.Done()
+					defer cancel()
+					defer func() {
+						err := recover()
+						if err != nil {
+							sentry.CurrentHub().Recover(err)
+							sentry.Flush(time.Second * 5)
+							panic(err)
+						}
+					}()
+
+					mqttStarted = true
+					mqttErr = c.mqttRestarter(c.stopCtx)
 				}()
 
-				mqttErr = c.mqttRestarter(subCtx)
-			}()
+				break
+			}
 
-			break
+			select {
+			case <-time.After(5 * time.Second):
+			case <-subCtx.Done():
+			}
 		}
-
-		select {
-		case <-time.After(5 * time.Second):
-		case <-subCtx.Done():
-		}
+	} else {
+		logger.V(2).Printf("Bleemeo MQTT connector already started")
 	}
 
 	wg.Wait()

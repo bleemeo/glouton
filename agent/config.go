@@ -290,13 +290,6 @@ func defaultConfig() map[string]interface{} {
 	}
 }
 
-// Get the default config files.
-func DefaultConfigFiles() []string {
-	cfg := config.Configuration{}
-	cfg.Set("config_files", defaultConfig()["config_files"])
-	return cfg.StringList("config_files")
-}
-
 func configLoadFile(filePath string, cfg *config.Configuration) error {
 	buffer, err := ioutil.ReadFile(filePath)
 	if err != nil {
