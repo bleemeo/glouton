@@ -53,6 +53,7 @@ func (a *agentReloader) run() {
 
 	// Run the agent for the first time.
 	reload <- struct{}{}
+
 	firstRun := true
 
 	// Ticker used to stop the program if the agent is not running.
@@ -72,12 +73,10 @@ func (a *agentReloader) run() {
 
 				stopReloadingComponents()
 				wgReload.Wait()
-			} else {
-				firstRun = false
-			}
 
-			reloadCtx, stopReloadingComponents = context.WithCancel(context.Background())
-			defer stopReloadingComponents()
+				reloadCtx, stopReloadingComponents = context.WithCancel(context.Background())
+				defer stopReloadingComponents()
+			}
 
 			wgReload.Add(1)
 
@@ -85,7 +84,9 @@ func (a *agentReloader) run() {
 			a.agentIsRunning = true
 			a.l.Unlock()
 
-			go a.runAgent(stopCtx, reloadCtx, &wgReload, &wgStop)
+			go a.runAgent(stopCtx, reloadCtx, &wgReload, &wgStop, firstRun)
+
+			firstRun = false
 		case <-ticker.C:
 			a.l.Lock()
 			isRunning := a.agentIsRunning
@@ -102,8 +103,8 @@ func (a *agentReloader) run() {
 	}
 }
 
-func (a *agentReloader) runAgent(stopCtx context.Context, reloadCtx context.Context, wgReload *sync.WaitGroup, wgStop *sync.WaitGroup) {
-	Run(stopCtx, reloadCtx, wgReload, wgStop, a.configFilesFromFlag)
+func (a *agentReloader) runAgent(stopCtx, reloadCtx context.Context, wgReload, wgStop *sync.WaitGroup, firstRun bool) {
+	Run(stopCtx, reloadCtx, wgReload, wgStop, firstRun, a.configFilesFromFlag)
 
 	a.l.Lock()
 	a.agentIsRunning = false
@@ -148,7 +149,7 @@ func (a *agentReloader) watchConfig(ctx context.Context, reload chan struct{}) {
 				}
 
 				// Validate config before reloading.
-				_, _, _, err := LoadConfiguration(myConfigFiles, nil)
+				_, _, _, err := loadConfiguration(myConfigFiles, nil)
 				if err == nil {
 					reloadDebouncer.Trigger()
 				}
@@ -165,6 +166,6 @@ func (a *agentReloader) watchConfig(ctx context.Context, reload chan struct{}) {
 	}()
 
 	for _, file := range myConfigFiles {
-		a.watcher.Add(file)
+		_ = a.watcher.Add(file)
 	}
 }

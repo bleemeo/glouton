@@ -170,7 +170,7 @@ func (a *agent) init(configFiles []string) (ok bool) {
 	a.l.Unlock()
 
 	a.taskRegistry = task.NewRegistry(context.Background())
-	cfg, oldCfg, warnings, err := LoadConfiguration(configFiles, nil)
+	cfg, oldCfg, warnings, err := loadConfiguration(configFiles, nil)
 	a.oldConfig = oldCfg
 	a.config = cfg
 
@@ -298,7 +298,7 @@ func (a *agent) setupLogger() {
 }
 
 // Run runs Glouton.
-func Run(stopCtx context.Context, reloadCtx context.Context, wgReload *sync.WaitGroup, wgStop *sync.WaitGroup, configFiles []string) {
+func Run(stopCtx, reloadCtx context.Context, wgReload, wgStop *sync.WaitGroup, firstRun bool, configFiles []string) {
 	rand.Seed(time.Now().UnixNano())
 
 	agent := &agent{
@@ -314,7 +314,7 @@ func Run(stopCtx context.Context, reloadCtx context.Context, wgReload *sync.Wait
 		return
 	}
 
-	agent.run(stopCtx, reloadCtx, wgStop)
+	agent.run(stopCtx, reloadCtx, wgStop, firstRun)
 	wgReload.Done()
 }
 
@@ -561,7 +561,7 @@ func (a *agent) updateThresholds(thresholds map[threshold.MetricNameItem]thresho
 }
 
 // Run will start the agent. It will terminate when sigquit/sigterm/sigint is received.
-func (a *agent) run(stopCtx context.Context, reloadCtx context.Context, wgStop *sync.WaitGroup) { //nolint:cyclop
+func (a *agent) run(stopCtx context.Context, reloadCtx context.Context, wgStop *sync.WaitGroup, firstRun bool) { //nolint:cyclop
 	ctx, cancel := context.WithCancel(reloadCtx)
 	defer cancel()
 
@@ -931,26 +931,27 @@ func (a *agent) run(stopCtx context.Context, reloadCtx context.Context, wgStop *
 			scaperName = fmt.Sprintf("%s:%d", fqdn, a.oldConfig.Int("web.listener.port"))
 		}
 
-		a.bleemeoConnector, err = bleemeo.New(bleemeoTypes.GlobalOption{
-			Config:                  a.oldConfig,
-			State:                   a.state,
-			Facts:                   a.factProvider,
-			Process:                 psFact,
-			Docker:                  a.containerRuntime,
-			Store:                   filteredStore,
-			SNMP:                    a.snmpManager.Targets(),
-			SNMPOnlineTarget:        a.snmpManager.OnlineCount,
-			Acc:                     acc,
-			Discovery:               a.discovery,
-			MonitorManager:          a.monitorManager,
-			UpdateMetricResolution:  a.updateMetricResolution,
-			UpdateThresholds:        a.UpdateThresholds,
-			UpdateUnits:             a.threshold.SetUnits,
-			MetricFormat:            a.metricFormat,
-			NotifyFirstRegistration: a.notifyBleemeoFirstRegistration,
-			NotifyLabelsUpdate:      a.notifyBleemeoUpdateLabels,
-			BlackboxScraperName:     scaperName,
-		}, stopCtx, wgStop)
+		a.bleemeoConnector, err = bleemeo.New(stopCtx, wgStop, firstRun,
+			bleemeoTypes.GlobalOption{
+				Config:                  a.oldConfig,
+				State:                   a.state,
+				Facts:                   a.factProvider,
+				Process:                 psFact,
+				Docker:                  a.containerRuntime,
+				Store:                   filteredStore,
+				SNMP:                    a.snmpManager.Targets(),
+				SNMPOnlineTarget:        a.snmpManager.OnlineCount,
+				Acc:                     acc,
+				Discovery:               a.discovery,
+				MonitorManager:          a.monitorManager,
+				UpdateMetricResolution:  a.updateMetricResolution,
+				UpdateThresholds:        a.UpdateThresholds,
+				UpdateUnits:             a.threshold.SetUnits,
+				MetricFormat:            a.metricFormat,
+				NotifyFirstRegistration: a.notifyBleemeoFirstRegistration,
+				NotifyLabelsUpdate:      a.notifyBleemeoUpdateLabels,
+				BlackboxScraperName:     scaperName,
+			})
 		if err != nil {
 			logger.Printf("unable to start Bleemeo SAAS connector: %v", err)
 

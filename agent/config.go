@@ -560,7 +560,7 @@ func loadEnvironmentVariable(cfg *config.Configuration, key string, envName stri
 	return found, nil
 }
 
-func LoadConfiguration(configFiles []string, mockLookupEnv func(string) (string, bool)) (cfg Config, oldCfg *config.Configuration, warnings []error, finalError error) {
+func loadConfiguration(configFiles []string, mockLookupEnv func(string) (string, bool)) (cfg Config, oldCfg *config.Configuration, warnings []error, finalError error) {
 	oldCfg, warnings, finalError = loadOldConfiguration(configFiles, mockLookupEnv)
 	cfg, moreWarnings := convertConfig(oldCfg)
 

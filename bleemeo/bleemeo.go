@@ -39,11 +39,7 @@ import (
 	gloutonTypes "glouton/types"
 )
 
-var (
-	ErrBadOption = errors.New("bad option")
-
-	mqttStarted = false
-)
+var ErrBadOption = errors.New("bad option")
 
 // Connector manager the connection between the Agent and Bleemeo.
 type Connector struct {
@@ -68,16 +64,21 @@ type Connector struct {
 
 	// wgStop is used to wait for the components that are not stopped when reloading.
 	wgStop *sync.WaitGroup
+
+	// firstRun indicates whether the Connector is run for the first time.
+	// Some components don't need to be started on the next runs when a reload occurs.
+	firstRun bool
 }
 
 // New create a new Connector.
-func New(option types.GlobalOption, stopCtx context.Context, wgStop *sync.WaitGroup) (c *Connector, err error) {
+func New(stopCtx context.Context, wgStop *sync.WaitGroup, firstRun bool, option types.GlobalOption) (c *Connector, err error) {
 	c = &Connector{
 		option:      option,
 		cache:       cache.Load(option.State),
 		mqttRestart: make(chan interface{}, 1),
 		stopCtx:     stopCtx,
 		wgStop:      wgStop,
+		firstRun:    firstRun,
 	}
 	c.sync, err = synchronizer.New(synchronizer.Option{
 		GlobalOption:                c.option,
@@ -341,7 +342,7 @@ func (c *Connector) Run(ctx context.Context) error {
 		logger.V(2).Printf("Bleemeo connector stopping")
 	}()
 
-	if !mqttStarted {
+	if c.firstRun {
 		for c.stopCtx.Err() == nil {
 			if c.AgentID() != "" && c.isInitialized() {
 				c.wgStop.Add(1)
@@ -358,7 +359,6 @@ func (c *Connector) Run(ctx context.Context) error {
 						}
 					}()
 
-					mqttStarted = true
 					mqttErr = c.mqttRestarter(c.stopCtx)
 				}()
 

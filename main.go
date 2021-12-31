@@ -76,6 +76,6 @@ func main() {
 
 		var wg sync.WaitGroup
 		wg.Add(1)
-		agent.Run(ctx, ctx, &wg, &wg, configFilesFromFlag)
+		agent.Run(ctx, ctx, &wg, &wg, true, configFilesFromFlag)
 	}
 }
