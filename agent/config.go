@@ -249,6 +249,7 @@ func defaultConfig() map[string]interface{} {
 		"logging.buffer.tail_size_bytes":   500000,
 		"logging.level":                    "INFO",
 		"logging.output":                   "console",
+		"logging.filename":                 "",
 		"logging.package_levels":           "",
 		"metric.prometheus.targets":        []interface{}{},
 		"metric.snmp.exporter_address":     "http://localhost:9116",
