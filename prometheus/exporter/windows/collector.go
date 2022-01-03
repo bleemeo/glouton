@@ -3,9 +3,9 @@
 // The only modification is switching the (deprecated) log provider from prometheus/common/log (backed by
 // logrus) to our own logger.
 
+//go:build windows
 // +build windows
 
-//nolint
 package windows
 
 import (
@@ -23,7 +23,7 @@ type windowsCollector struct {
 	collectors        map[string]collector.Collector
 }
 
-//nolint: gochecknoglobals
+//nolint:gochecknoglobals
 var (
 	scrapeDurationDesc = prometheus.NewDesc(
 		prometheus.BuildFQName(collector.Namespace, "exporter", "collector_duration_seconds"),
@@ -79,6 +79,7 @@ const (
 // Collect sends the collected metrics from each of the collectors to
 // prometheus.
 func (coll windowsCollector) Collect(ch chan<- prometheus.Metric) {
+	//nolint:promlinter // counter metrics should have "_total" suffix
 	ch <- prometheus.MustNewConstMetric(
 		startTimeDesc,
 		prometheus.CounterValue,
@@ -86,23 +87,28 @@ func (coll windowsCollector) Collect(ch chan<- prometheus.Metric) {
 	)
 
 	t := time.Now()
+
 	cs := make([]string, 0, len(coll.collectors))
 	for name := range coll.collectors {
 		cs = append(cs, name)
 	}
+
 	scrapeContext, err := collector.PrepareScrapeContext(cs)
 	ch <- prometheus.MustNewConstMetric(
 		snapshotDuration,
 		prometheus.GaugeValue,
 		time.Since(t).Seconds(),
 	)
+
 	if err != nil {
-		ch <- prometheus.NewInvalidMetric(scrapeSuccessDesc, fmt.Errorf("failed to prepare scrape: %v", err))
+		ch <- prometheus.NewInvalidMetric(scrapeSuccessDesc, fmt.Errorf("failed to prepare scrape: %w", err))
+
 		return
 	}
 
 	wg := sync.WaitGroup{}
 	wg.Add(len(coll.collectors))
+
 	collectorOutcomes := make(map[string]collectorOutcome)
 	for name := range coll.collectors {
 		collectorOutcomes[name] = pending
@@ -111,12 +117,15 @@ func (coll windowsCollector) Collect(ch chan<- prometheus.Metric) {
 	metricsBuffer := make(chan prometheus.Metric)
 	l := sync.Mutex{}
 	finished := false
+
 	go func() {
 		for m := range metricsBuffer {
 			l.Lock()
+
 			if !finished {
 				ch <- m
 			}
+
 			l.Unlock()
 		}
 	}()
@@ -124,16 +133,21 @@ func (coll windowsCollector) Collect(ch chan<- prometheus.Metric) {
 	for name, c := range coll.collectors {
 		go func(name string, c collector.Collector) {
 			defer wg.Done()
+
 			outcome := execute(name, c, scrapeContext, metricsBuffer)
+
 			l.Lock()
+
 			if !finished {
 				collectorOutcomes[name] = outcome
 			}
+
 			l.Unlock()
 		}(name, c)
 	}
 
 	allDone := make(chan struct{})
+
 	go func() {
 		wg.Wait()
 		close(allDone)
@@ -150,12 +164,16 @@ func (coll windowsCollector) Collect(ch chan<- prometheus.Metric) {
 	finished = true
 
 	remainingCollectorNames := make([]string, 0)
+
 	for name, outcome := range collectorOutcomes {
 		var successValue, timeoutValue float64
+
 		if outcome == pending {
 			timeoutValue = 1.0
+
 			remainingCollectorNames = append(remainingCollectorNames, name)
 		}
+
 		if outcome == success {
 			successValue = 1.0
 		}
@@ -183,7 +201,7 @@ func (coll windowsCollector) Collect(ch chan<- prometheus.Metric) {
 
 func execute(name string, c collector.Collector, ctx *collector.ScrapeContext, ch chan<- prometheus.Metric) collectorOutcome {
 	t := time.Now()
-	err := c.Collect(ctx, ch)
+	err := c.Collect(ctx, ch) //nolint:ifshort
 	duration := time.Since(t).Seconds()
 	ch <- prometheus.MustNewConstMetric(
 		scrapeDurationDesc,
@@ -194,8 +212,11 @@ func execute(name string, c collector.Collector, ctx *collector.ScrapeContext, c
 
 	if err != nil {
 		logger.V(1).Printf("collector %s failed after %fs: %s", name, duration, err)
+
 		return failed
 	}
+
 	logger.V(2).Printf("collector %s succeeded after %fs.", name, duration)
+
 	return success
 }

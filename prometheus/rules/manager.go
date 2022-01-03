@@ -17,10 +17,10 @@
 package rules
 
 import (
-	"archive/zip"
 	"context"
 	"errors"
 	"fmt"
+	bleemeoTypes "glouton/bleemeo/types"
 	"glouton/logger"
 	"glouton/store"
 	"glouton/threshold"
@@ -30,13 +30,12 @@ import (
 	"sync"
 	"time"
 
-	bleemeoTypes "glouton/bleemeo/types"
-
-	"github.com/go-kit/kit/log"
+	"github.com/go-kit/log"
 	"github.com/prometheus/prometheus/pkg/labels"
 	"github.com/prometheus/prometheus/promql"
 	"github.com/prometheus/prometheus/promql/parser"
 	"github.com/prometheus/prometheus/rules"
+	"github.com/prometheus/prometheus/storage"
 )
 
 // promAlertTime represents the duration for which the alerting rule
@@ -48,26 +47,28 @@ const promAlertTime = 5 * time.Minute
 // thus we add a bit a leeway in the disabled countdown.
 const minResetTime = 17 * time.Second
 
-const lowWarningState = "low_warning"
+const (
+	lowWarningState   = "low_warning"
+	highWarningState  = "high_warning"
+	lowCriticalState  = "low_critical"
+	highCriticalState = "high_critical"
+)
 
-const highWarningState = "high_warning"
-
-const lowCriticalState = "low_critical"
-
-const highCriticalState = "high_critical"
-
-var errUnknownState = errors.New("unknown state for metric")
+var (
+	errUnknownState = errors.New("unknown state for metric")
+	errSkipPoints   = errors.New("skip points")
+)
 
 // Manager is a wrapper handling everything related to prometheus recording
 // and alerting rules.
 type Manager struct {
-	// store implements both appendable and queryable.
-	store          *store.Store
 	recordingRules []*rules.Group
 	alertingRules  map[string]*ruleGroup
 
-	engine *promql.Engine
-	logger log.Logger
+	appendable storage.Appendable
+	queryable  storage.Queryable
+	engine     *promql.Engine
+	logger     log.Logger
 
 	l                sync.Mutex
 	agentStarted     time.Time
@@ -87,7 +88,7 @@ type ruleGroup struct {
 	isError     string
 }
 
-//nolint: gochecknoglobals
+//nolint:gochecknoglobals
 var (
 	defaultLinuxRecordingRules = map[string]string{
 		"node_cpu_seconds_global": "sum(node_cpu_seconds_total) without (cpu)",
@@ -98,7 +99,16 @@ var (
 	}
 )
 
-func NewManager(ctx context.Context, store *store.Store, created time.Time, metricResolution time.Duration) *Manager {
+func NewManager(ctx context.Context, queryable storage.Queryable, app storage.Appendable, metricResolution time.Duration) *Manager {
+	defaultRules := defaultLinuxRecordingRules
+	if runtime.GOOS == "windows" {
+		defaultRules = defaultWindowsRecordingRules
+	}
+
+	return newManager(ctx, queryable, app, defaultRules, time.Now(), metricResolution)
+}
+
+func newManager(ctx context.Context, queryable storage.Queryable, app storage.Appendable, defaultRules map[string]string, created time.Time, metricResolution time.Duration) *Manager {
 	promLogger := log.NewLogfmtLogger(log.NewSyncWriter(os.Stderr))
 	engine := promql.NewEngine(promql.EngineOpts{
 		Logger:             log.With(promLogger, "component", "query engine"),
@@ -112,9 +122,9 @@ func NewManager(ctx context.Context, store *store.Store, created time.Time, metr
 	mgrOptions := &rules.ManagerOptions{
 		Context:    ctx,
 		Logger:     log.With(promLogger, "component", "rules manager"),
-		Appendable: store,
-		Queryable:  store,
-		QueryFunc:  rules.EngineQueryFunc(engine, store),
+		Appendable: app,
+		Queryable:  queryable,
+		QueryFunc:  rules.EngineQueryFunc(engine, queryable),
 		NotifyFunc: func(ctx context.Context, expr string, alerts ...*rules.Alert) {
 			if len(alerts) == 0 {
 				return
@@ -125,11 +135,6 @@ func NewManager(ctx context.Context, store *store.Store, created time.Time, metr
 	}
 
 	defaultGroupRules := []rules.Rule{}
-
-	defaultRules := defaultLinuxRecordingRules
-	if runtime.GOOS == "windows" {
-		defaultRules = defaultWindowsRecordingRules
-	}
 
 	for metricName, val := range defaultRules {
 		exp, err := parser.ParseExpr(val)
@@ -154,10 +159,11 @@ func NewManager(ctx context.Context, store *store.Store, created time.Time, metr
 	minResTime := metricResolution*2 + 10*time.Second
 
 	rm := Manager{
-		store:            store,
+		appendable:       app,
+		queryable:        queryable,
+		engine:           engine,
 		recordingRules:   []*rules.Group{defaultGroup},
 		alertingRules:    map[string]*ruleGroup{},
-		engine:           engine,
 		logger:           promLogger,
 		agentStarted:     created,
 		metricResolution: minResTime,
@@ -174,7 +180,7 @@ func (rm *Manager) UpdateMetricResolution(metricResolution time.Duration) {
 	rm.metricResolution = metricResolution*2 + 10*time.Second
 }
 
-// Metriclist returns a list of all alerting rules metric names.
+// MetricList returns a list of all alerting rules metric names.
 // This is used for dynamic generation of filters.
 func (rm *Manager) MetricList() []string {
 	res := make([]string, 0, len(rm.alertingRules))
@@ -189,7 +195,6 @@ func (rm *Manager) MetricList() []string {
 	return res
 }
 
-//nolint: ifshort
 func (rm *Manager) Run(ctx context.Context, now time.Time) {
 	res := []types.MetricPoint{}
 
@@ -202,10 +207,10 @@ func (rm *Manager) Run(ctx context.Context, now time.Time) {
 	for _, agr := range rm.alertingRules {
 		point, err := agr.runGroup(ctx, now, rm)
 
-		if err != nil {
-			logger.V(2).Printf("An error occurred while trying to execute rules: %w")
-		} else if point != nil {
-			res = append(res, *point)
+		if err != nil && !errors.Is(err, errSkipPoints) {
+			logger.V(2).Printf("An error occurred while trying to execute rules: %v", err)
+		} else if !errors.Is(err, errSkipPoints) {
+			res = append(res, point)
 		}
 	}
 
@@ -213,7 +218,25 @@ func (rm *Manager) Run(ctx context.Context, now time.Time) {
 
 	if len(res) != 0 {
 		logger.V(2).Printf("Sending %d new alert to the api", len(res))
-		rm.store.PushPoints(res)
+
+		app := rm.appendable.Appender(ctx)
+
+		for _, pts := range res {
+			if pts.Annotations.Status.CurrentStatus.IsSet() {
+				pts.Labels[types.LabelMetaCurrentStatus] = pts.Annotations.Status.CurrentStatus.String()
+				pts.Labels[types.LabelMetaCurrentDescription] = pts.Annotations.Status.StatusDescription
+			}
+
+			_, err := app.Append(0, labels.FromMap(pts.Labels), pts.Time.UnixMilli(), pts.Value)
+			if err != nil {
+				logger.V(2).Printf("An error occurred while appending points: %v", err)
+			}
+		}
+
+		err := app.Commit()
+		if err != nil {
+			logger.V(2).Printf("An error occurred while commit the appender: %v", err)
+		}
 	}
 }
 
@@ -235,17 +258,17 @@ func (agr *ruleGroup) shouldSkip(now time.Time) bool {
 	return false
 }
 
-func (agr *ruleGroup) runGroup(ctx context.Context, now time.Time, rm *Manager) (*types.MetricPoint, error) {
+func (agr *ruleGroup) runGroup(ctx context.Context, now time.Time, rm *Manager) (types.MetricPoint, error) {
 	thresholdOrder := []string{highCriticalState, lowCriticalState, highWarningState, lowWarningState}
 
-	var generatedPoint *types.MetricPoint
+	var generatedPoint types.MetricPoint
 
 	if agr.shouldSkip(now) {
-		return nil, nil
+		return types.MetricPoint{}, errSkipPoints
 	}
 
 	if agr.isError != "" {
-		return &types.MetricPoint{
+		return types.MetricPoint{
 			Point: types.Point{
 				Time:  now,
 				Value: float64(types.StatusUnknown.NagiosCode()),
@@ -268,17 +291,17 @@ func (agr *ruleGroup) runGroup(ctx context.Context, now time.Time, rm *Manager) 
 		}
 
 		prevState := rule.State()
-		queryable := &store.CountingQueryable{Queryable: rm.store}
+		queryable := &store.CountingQueryable{Queryable: rm.queryable}
 
 		_, err := rule.Eval(ctx, now, rules.EngineQueryFunc(rm.engine, queryable), nil)
 		if err != nil {
-			return nil, err
+			return types.MetricPoint{}, err
 		}
 
 		state := rule.State()
 
-		if point, ret := agr.checkNoPoint(queryable, now, rm.agentStarted, rm.metricResolution); ret {
-			return point, nil
+		if queryable.Count() == 0 {
+			return agr.checkNoPoint(now, rm.agentStarted, rm.metricResolution)
 		}
 
 		agr.inactiveSince = time.Time{}
@@ -286,19 +309,19 @@ func (agr *ruleGroup) runGroup(ctx context.Context, now time.Time, rm *Manager) 
 
 		// we add 20 seconds to the promAlert time to compensate the delta between agent startup and first metrics
 		if state != rules.StateInactive && now.Sub(rm.agentStarted) < promAlertTime+20*time.Second {
-			return nil, nil
+			return types.MetricPoint{}, errSkipPoints
 		}
 
 		logger.V(2).Printf("metric state for %s previous state=%v, new state=%v", rule.Name(), prevState, state)
 
 		newPoint, err := agr.generateNewPoint(val, rule, state, now)
 		if err != nil {
-			return nil, err
+			return types.MetricPoint{}, err
 		}
 
 		if state == rules.StateFiring {
 			return newPoint, nil
-		} else if generatedPoint == nil || newPoint.Annotations.Status.CurrentStatus > generatedPoint.Annotations.Status.CurrentStatus {
+		} else if generatedPoint.Labels == nil || newPoint.Annotations.Status.CurrentStatus > generatedPoint.Annotations.Status.CurrentStatus {
 			generatedPoint = newPoint
 		}
 	}
@@ -306,32 +329,28 @@ func (agr *ruleGroup) runGroup(ctx context.Context, now time.Time, rm *Manager) 
 	return generatedPoint, nil
 }
 
-func (agr *ruleGroup) checkNoPoint(queryable *store.CountingQueryable, now time.Time, agentStart time.Time, metricRes time.Duration) (*types.MetricPoint, bool) {
-	if queryable.Count() == 0 {
-		if agr.isUserAlert && now.Sub(agentStart) > metricRes {
-			return &types.MetricPoint{
-				Point: types.Point{
-					Time:  now,
-					Value: float64(types.StatusUnknown.NagiosCode()),
+func (agr *ruleGroup) checkNoPoint(now time.Time, agentStart time.Time, metricRes time.Duration) (types.MetricPoint, error) {
+	if agr.isUserAlert && now.Sub(agentStart) > metricRes {
+		return types.MetricPoint{
+			Point: types.Point{
+				Time:  now,
+				Value: float64(types.StatusUnknown.NagiosCode()),
+			},
+			Labels: agr.labels,
+			Annotations: types.MetricAnnotations{
+				Status: types.StatusDescription{
+					CurrentStatus:     types.StatusUnknown,
+					StatusDescription: agr.unknownDescription(),
 				},
-				Labels: agr.labels,
-				Annotations: types.MetricAnnotations{
-					Status: types.StatusDescription{
-						CurrentStatus:     types.StatusUnknown,
-						StatusDescription: agr.unknownDescription(),
-					},
-				},
-			}, true
-		}
-
-		if agr.inactiveSince.IsZero() {
-			agr.inactiveSince = now
-		}
-
-		return nil, true
+			},
+		}, nil
 	}
 
-	return nil, false
+	if agr.inactiveSince.IsZero() {
+		agr.inactiveSince = now
+	}
+
+	return types.MetricPoint{}, errSkipPoints
 }
 
 func (agr *ruleGroup) unknownDescription() string {
@@ -342,7 +361,7 @@ func (agr *ruleGroup) unknownDescription() string {
 	return "PromQL read zero points. The PromQL may be incorrect or the source measurement may have disappeared"
 }
 
-func (agr *ruleGroup) generateNewPoint(thresholdType string, rule *rules.AlertingRule, state rules.AlertState, now time.Time) (*types.MetricPoint, error) {
+func (agr *ruleGroup) generateNewPoint(thresholdType string, rule *rules.AlertingRule, state rules.AlertState, now time.Time) (types.MetricPoint, error) {
 	statusCode := statusFromThreshold(thresholdType)
 	alerts := rule.ActiveAlerts()
 
@@ -367,7 +386,7 @@ func (agr *ruleGroup) generateNewPoint(thresholdType string, rule *rules.Alertin
 	}
 
 	if statusCode == types.StatusUnknown {
-		return nil, fmt.Errorf("%w for metric %s", errUnknownState, rule.Labels().String())
+		return types.MetricPoint{}, fmt.Errorf("%w for metric %s", errUnknownState, rule.Labels().String())
 	}
 
 	newPoint := types.MetricPoint{
@@ -387,7 +406,7 @@ func (agr *ruleGroup) generateNewPoint(thresholdType string, rule *rules.Alertin
 		newPoint.Annotations.Status.CurrentStatus = statusCode
 	}
 
-	return &newPoint, nil
+	return newPoint, nil
 }
 
 func (agr *ruleGroup) lowestThreshold() float64 {
@@ -518,8 +537,8 @@ func (rm *Manager) ResetInactiveRules() {
 	}
 }
 
-func (rm *Manager) DiagnosticZip(zipFile *zip.Writer) error {
-	file, err := zipFile.Create("alertings-recording-rules.txt")
+func (rm *Manager) DiagnosticArchive(ctx context.Context, archive types.ArchiveWriter) error {
+	file, err := archive.Create("alertings-recording-rules.txt")
 	if err != nil {
 		return err
 	}

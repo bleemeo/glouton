@@ -17,7 +17,6 @@
 package mqtt
 
 import (
-	"archive/zip"
 	"context"
 	"crypto/tls"
 	"crypto/x509"
@@ -27,6 +26,7 @@ import (
 	"glouton/bleemeo/internal/cache"
 	"glouton/bleemeo/internal/common"
 	bleemeoTypes "glouton/bleemeo/types"
+	"glouton/delay"
 	"glouton/logger"
 	"glouton/types"
 	"io/ioutil"
@@ -81,16 +81,21 @@ type Client struct {
 	lastFailedPointsRetry      time.Time
 	encoder                    mqttEncoder
 
-	l                sync.Mutex
-	pendingMessage   []message
-	pendingPoints    []types.MetricPoint
-	lastReport       time.Time
-	maxPointCount    int
-	sendingSuspended bool // stop sending points, used when the user is is read-only mode
-	disabledUntil    time.Time
-	disableReason    bleemeoTypes.DisableReason
-	connectionLost   chan interface{}
-	disableNotify    chan interface{}
+	l                   sync.Mutex
+	startedAt           time.Time
+	pendingMessage      []message
+	pendingPoints       []types.MetricPoint
+	lastReport          time.Time
+	maxPointCount       int
+	sendingSuspended    bool // stop sending points, used when the user is is read-only mode
+	disabledUntil       time.Time
+	disableReason       bleemeoTypes.DisableReason
+	connectionLost      chan interface{}
+	disableNotify       chan interface{}
+	lastConnectionTimes []time.Time
+	lastResend          time.Time
+	currentConnectDelay time.Duration
+	consecutiveError    int
 }
 
 type message struct {
@@ -220,6 +225,10 @@ func (c *Client) Run(ctx context.Context) error {
 		}
 	}
 
+	c.l.Lock()
+	c.startedAt = time.Now()
+	c.l.Unlock()
+
 	err := c.run(ctx)
 
 	return err
@@ -237,11 +246,11 @@ func (c *Client) DiagnosticPage() string {
 	return builder.String()
 }
 
-// DiagnosticZip add to a zipfile useful diagnostic information.
-func (c *Client) DiagnosticZip(zipFile *zip.Writer) error {
+// DiagnosticArchive add to a zipfile useful diagnostic information.
+func (c *Client) DiagnosticArchive(ctx context.Context, archive types.ArchiveWriter) error {
 	c.l.Lock()
 	if len(c.failedPoints) > 100 {
-		file, err := zipFile.Create("mqtt-failed-metric-points.txt")
+		file, err := archive.Create("mqtt-failed-metric-points.txt")
 		if err != nil {
 			return err
 		}
@@ -267,9 +276,45 @@ func (c *Client) DiagnosticZip(zipFile *zip.Writer) error {
 		}
 	}
 
+	file, err := archive.Create("bleemeo-mqtt-state.json")
+	if err != nil {
+		return err
+	}
+
+	obj := struct {
+		StartedAt                  time.Time
+		LastRegisteredMetricsCount int
+		LastFailedPointsRetry      time.Time
+		PendingMessageCount        int
+		PendingPointsCount         int
+		LastReport                 time.Time
+		MaxPointCount              int
+		SendingSuspended           bool
+		DisabledUntil              time.Time
+		DisableReason              bleemeoTypes.DisableReason
+		LastConnectionTimes        []time.Time
+		LastResend                 time.Time
+	}{
+		StartedAt:                  c.startedAt,
+		LastRegisteredMetricsCount: c.lastRegisteredMetricsCount,
+		LastFailedPointsRetry:      c.lastFailedPointsRetry,
+		PendingMessageCount:        len(c.pendingMessage),
+		PendingPointsCount:         len(c.pendingPoints),
+		LastReport:                 c.lastReport,
+		MaxPointCount:              c.maxPointCount,
+		SendingSuspended:           c.sendingSuspended,
+		DisabledUntil:              c.disabledUntil,
+		DisableReason:              c.disableReason,
+		LastConnectionTimes:        c.lastConnectionTimes,
+		LastResend:                 c.lastResend,
+	}
+
 	c.l.Unlock()
 
-	return nil
+	enc := json.NewEncoder(file)
+	enc.SetIndent("", "  ")
+
+	return enc.Encode(obj)
 }
 
 // LastReport returns the date of last report with Bleemeo API.
@@ -453,11 +498,11 @@ func (c *Client) run(ctx context.Context) error {
 	defer ticker.Stop()
 
 	for ctx.Err() == nil {
-		cfg := c.option.Cache.CurrentAccountConfig()
+		cfg, ok := c.option.Cache.CurrentAccountConfig()
 
 		c.sendPoints()
 
-		if !c.IsSendingSuspended() && cfg.LiveProcess && time.Since(topinfoSendAt) >= time.Duration(cfg.LiveProcessResolution)*time.Second {
+		if !c.IsSendingSuspended() && ok && cfg.LiveProcess && time.Since(topinfoSendAt) >= cfg.LiveProcessResolution {
 			topinfoSendAt = time.Now()
 
 			c.sendTopinfo(ctx, cfg)
@@ -661,12 +706,7 @@ func (c *Client) preparePoints(registreredMetricByKey map[string]bleemeoTypes.Me
 				}
 			}
 
-			bleemeoAgentID := c.option.AgentID
-
-			if p.Annotations.BleemeoAgentID != "" {
-				// It's a monitor and the user wants to see it in his dashboard ! The agent ID is thus the ID of the "owner" of that monitor.
-				bleemeoAgentID = bleemeoTypes.AgentID(p.Annotations.BleemeoAgentID)
-			}
+			bleemeoAgentID := bleemeoTypes.AgentID(m.AgentID)
 
 			payload[bleemeoAgentID] = append(payload[bleemeoAgentID], value)
 		} else {
@@ -788,8 +828,8 @@ func (c *Client) publishNoLock(topic string, payload []byte, retry bool) {
 	c.pendingMessage = append(c.pendingMessage, msg)
 }
 
-func (c *Client) sendTopinfo(ctx context.Context, cfg bleemeoTypes.AccountConfig) {
-	topinfo, err := c.option.Process.TopInfo(ctx, time.Duration(cfg.LiveProcessResolution)*time.Second-time.Second)
+func (c *Client) sendTopinfo(ctx context.Context, cfg bleemeoTypes.GloutonAccountConfig) {
+	topinfo, err := c.option.Process.TopInfo(ctx, cfg.LiveProcessResolution-time.Second)
 	if err != nil {
 		logger.V(1).Printf("Unable to get topinfo: %v", err)
 
@@ -872,30 +912,15 @@ func loadRootCAs(caFile string) (*x509.CertPool, error) {
 func (c *Client) filterPoints(input []types.MetricPoint) []types.MetricPoint {
 	result := make([]types.MetricPoint, 0, len(input))
 
-	currentAccountConfig := c.option.Cache.CurrentAccountConfig()
-	accountConfigs := c.option.Cache.AccountConfigs()
+	defaultConfigID := c.option.Cache.Agent().CurrentConfigID
+	accountConfigs := c.option.Cache.AccountConfigsByUUID()
 	monitors := c.option.Cache.MonitorsByAgentUUID()
+	agents := c.option.Cache.AgentsByUUID()
 
 	for _, mp := range input {
-		// retrieve the appropriate configuration for the metric
-		whitelist := currentAccountConfig.MetricsAgentWhitelistMap()
-
-		if mp.Annotations.BleemeoAgentID != "" {
-			monitor, present := monitors[bleemeoTypes.AgentID(mp.Annotations.BleemeoAgentID)]
-			if !present {
-				logger.V(2).Printf("mqtt: missing monitor for agent '%s'", mp.Annotations.BleemeoAgentID)
-
-				continue
-			}
-
-			accountConfig, present := accountConfigs[monitor.AccountConfig]
-			if !present {
-				logger.V(2).Printf("mqtt: missing account configuration '%s'", monitor.AccountConfig)
-
-				continue
-			}
-
-			whitelist = accountConfig.MetricsAgentWhitelistMap()
+		whitelist, found := c.whitelistForMetricPoint(mp, defaultConfigID, accountConfigs, monitors, agents)
+		if !found {
+			continue
 		}
 
 		// json encoder can't encode NaN (JSON standard don't allow it).
@@ -912,9 +937,20 @@ func (c *Client) filterPoints(input []types.MetricPoint) []types.MetricPoint {
 	return result
 }
 
+func (c *Client) whitelistForMetricPoint(mp types.MetricPoint, defaultConfigID string, accountConfigs map[string]bleemeoTypes.GloutonAccountConfig, monitors map[bleemeoTypes.AgentID]bleemeoTypes.Monitor, agents map[string]bleemeoTypes.Agent) (map[string]bool, bool) {
+	allowList, err := common.AllowListForMetric(accountConfigs, defaultConfigID, mp.Annotations, monitors, agents)
+	if err != nil {
+		logger.V(2).Printf("mqtt: %s", err)
+
+		return nil, false
+	}
+
+	return allowList, true
+}
+
 func (c *Client) ready() bool {
-	cfg := c.option.Cache.CurrentAccountConfig()
-	if cfg.LiveProcessResolution == 0 || cfg.MetricAgentResolution == 0 {
+	cfg, ok := c.option.Cache.CurrentAccountConfig()
+	if !ok || cfg.LiveProcessResolution == 0 || cfg.AgentConfigByName[bleemeoTypes.AgentTypeAgent].MetricResolution == 0 {
 		logger.V(2).Printf("MQTT not ready, Agent as no configuration")
 
 		return false
@@ -931,7 +967,7 @@ func (c *Client) ready() bool {
 	return false
 }
 
-func (c *Client) connectionManager(ctx context.Context) { //nolint:gocyclo,cyclop
+func (c *Client) connectionManager(ctx context.Context) { //nolint:cyclop
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 
@@ -945,6 +981,15 @@ func (c *Client) connectionManager(ctx context.Context) { //nolint:gocyclo,cyclo
 
 mainLoop:
 	for ctx.Err() == nil {
+		c.l.Lock()
+
+		c.lastConnectionTimes = lastConnectionTimes
+		c.lastResend = lastResend
+		c.currentConnectDelay = currentConnectDelay
+		c.consecutiveError = consecutiveError
+
+		c.l.Unlock()
+
 		disableUntil, disableReason := c.getDisableUntil()
 		switch {
 		case time.Now().Before(disableUntil):
@@ -963,7 +1008,7 @@ mainLoop:
 			length := len(lastConnectionTimes)
 
 			if length >= 7 && time.Since(lastConnectionTimes[length-7]) < 10*time.Minute {
-				delay := common.JitterDelay(300, 0.25, 300).Round(time.Second)
+				delay := delay.JitterDelay(5*time.Minute, 0.25).Round(time.Second)
 
 				c.Disable(time.Now().Add(delay), bleemeoTypes.DisableTooManyErrors)
 				logger.Printf("Too many attempts to connect to MQTT were made in the last 10 minutes. Disabling MQTT for %v", delay)
@@ -980,10 +1025,13 @@ mainLoop:
 
 				if currentConnectDelay < maximalDelayBetweenConnect {
 					consecutiveError++
-					currentConnectDelay = common.JitterDelay(minimalDelayBetweenConnect.Seconds()*math.Pow(1.55, float64(consecutiveError)), 0.1, maximalDelayBetweenConnect.Seconds())
+					currentConnectDelay = delay.JitterDelay(
+						delay.Exponential(minimalDelayBetweenConnect, 1.55, consecutiveError, maximalDelayBetweenConnect),
+						0.1,
+					)
 					if consecutiveError == 5 {
 						// Trigger facts synchronization to check for duplicate agent
-						_, _ = c.option.Facts.Facts(c.ctx, time.Minute)
+						_, _ = c.option.Facts.Facts(ctx, time.Minute)
 					}
 				}
 				mqttClient := c.setupMQTT()

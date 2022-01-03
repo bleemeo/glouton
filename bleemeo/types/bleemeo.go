@@ -21,15 +21,21 @@ import (
 	"fmt"
 	"glouton/threshold"
 	"math"
-	"strings"
 	"time"
+)
+
+const (
+	AgentTypeSNMP    = "snmp"
+	AgentTypeAgent   = "agent"
+	AgentTypeMonitor = "connection_check"
 )
 
 // AgentFact is an agent facts.
 type AgentFact struct {
-	ID    string
-	Key   string
-	Value string
+	ID      string `json:"id"`
+	AgentID string `json:"agent"`
+	Key     string `json:"key"`
+	Value   string `json:"value"`
 }
 
 // Agent is an Agent object on Bleemeo API.
@@ -40,6 +46,16 @@ type Agent struct {
 	NextConfigAt    time.Time `json:"next_config_at"`
 	CurrentConfigID string    `json:"current_config"`
 	Tags            []Tag     `json:"tags"`
+	AgentType       string    `json:"agent_type"`
+	FQDN            string    `json:"fqdn"`
+	DisplayName     string    `json:"display_name"`
+}
+
+// AgentType is an AgentType object on Bleemeo API.
+type AgentType struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	DisplayName string `json:"display_name"`
 }
 
 // Tag is an Tag object on Bleemeo API.
@@ -50,7 +66,7 @@ type Tag struct {
 	IsServiceTag bool   `json:"is_service_tag,omitempty"`
 }
 
-// AccountConfig is the configuration used by this agent.
+// AccountConfig is a configuration of account.
 type AccountConfig struct {
 	ID                      string `json:"id"`
 	Name                    string `json:"name"`
@@ -60,6 +76,16 @@ type AccountConfig struct {
 	LiveProcessResolution   int    `json:"live_process_resolution"`
 	LiveProcess             bool   `json:"live_process"`
 	DockerIntegration       bool   `json:"docker_integration"`
+	SNMPIntergration        bool   `json:"snmp_integration"`
+}
+
+// AgentConfig is a configuration for one kind of agent.
+type AgentConfig struct {
+	ID               string `json:"id"`
+	MetricsAllowlist string `json:"metrics_allowlist"`
+	MetricResolution int    `json:"metrics_resolution"`
+	AccountConfig    string `json:"account_config"`
+	AgentType        string `json:"agent_type"`
 }
 
 // Service is a Service object on Bleemeo API.
@@ -116,6 +142,7 @@ type MonitorHTTPOptions struct {
 // Metric is a Metric object on Bleemeo API.
 type Metric struct {
 	ID          string            `json:"id"`
+	AgentID     string            `json:"agent,omitempty"`
 	LabelsText  string            `json:"labels_text,omitempty"`
 	Labels      map[string]string `json:"-"`
 	ServiceID   string            `json:"service,omitempty"`
@@ -189,21 +216,6 @@ func (mr MetricRegistration) RetryAfter() time.Time {
 func (c *Container) FillInspectHash() {
 	bin := sha256.Sum256([]byte(c.ContainerInspect))
 	c.InspectHash = fmt.Sprintf("%x", bin)
-}
-
-// MetricsAgentWhitelistMap return a map with all whitelisted agent metrics.
-func (ac AccountConfig) MetricsAgentWhitelistMap() map[string]bool {
-	result := make(map[string]bool)
-
-	if len(ac.MetricsAgentWhitelist) == 0 {
-		return nil
-	}
-
-	for _, n := range strings.Split(ac.MetricsAgentWhitelist, ",") {
-		result[strings.Trim(n, " \t\n")] = true
-	}
-
-	return result
 }
 
 // ToInternalThreshold convert to a threshold.Threshold (use NaN instead of null pointer for unset threshold).

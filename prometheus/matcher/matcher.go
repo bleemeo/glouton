@@ -40,6 +40,10 @@ func NormalizeMetric(metric string) (Matchers, error) {
 	if !strings.Contains(metric, "{") {
 		matchType := "="
 
+		// The registry will transform some invalid char (. and -) in underscore (_).
+		// Apply the same transformation here.
+		metric = strings.NewReplacer(".", "_", "-", "_").Replace(metric)
+
 		if strings.Contains(metric, "*") {
 			// metric is in the blob format: we need to convert it in a regex
 			matchType += "~"

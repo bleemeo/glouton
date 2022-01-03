@@ -26,7 +26,7 @@ import (
 	docker "github.com/docker/docker/client"
 	"github.com/docker/docker/errdefs"
 	"github.com/docker/docker/pkg/stdcopy"
-	"github.com/shirou/gopsutil/process"
+	"github.com/shirou/gopsutil/v3/process"
 )
 
 // errors of Docker runtime.
@@ -55,6 +55,7 @@ type Docker struct {
 	DeletedContainersCallback func(containersID []string)
 
 	l                sync.Mutex
+	workedOnce       bool
 	openConnection   func(ctx context.Context, host string) (cl dockerClient, err error)
 	serverAddress    string
 	client           dockerClient
@@ -83,8 +84,8 @@ func (d *Docker) LastUpdate() time.Time {
 // ProcessWithCache facts.containerRuntime.
 func (d *Docker) ProcessWithCache() facts.ContainerRuntimeProcessQuerier {
 	return &dockerProcessQuerier{
-		d:                    d,
-		containerProcessDone: make(map[string]bool),
+		d:                   d,
+		containerProcessErr: make(map[string]error),
 	}
 }
 
@@ -135,7 +136,11 @@ func (d *Docker) Containers(ctx context.Context, maxAge time.Duration, includeIg
 	if time.Since(d.lastUpdate) >= maxAge {
 		err = d.updateContainers(ctx)
 		if err != nil {
-			return
+			if !d.workedOnce {
+				return nil, nil
+			}
+
+			return nil, err
 		}
 	}
 
@@ -308,7 +313,7 @@ func (d *Docker) ensureClient(ctx context.Context) (cl dockerClient, err error) 
 	return cl, nil
 }
 
-//nolint:gocyclo,cyclop
+//nolint:cyclop
 func (d *Docker) run(ctx context.Context) error {
 	d.l.Lock()
 
@@ -441,7 +446,7 @@ func (d *Docker) run(ctx context.Context) error {
 	}
 }
 
-//nolint:gocyclo,cyclop
+//nolint:cyclop
 func (d *Docker) updateContainers(ctx context.Context) error {
 	cl, err := d.getClient(ctx)
 	if err != nil {
@@ -481,12 +486,18 @@ func (d *Docker) updateContainers(ctx context.Context) error {
 
 	for _, c := range dockerContainers {
 		inspect, err := cl.ContainerInspect(ctx, c.ID)
-		if err != nil && docker.IsErrNotFound(err) || inspect.ContainerJSONBase == nil {
+		if err != nil && docker.IsErrNotFound(err) {
 			continue // the container was deleted between call. Ignore it
 		}
 
 		if err != nil {
 			return err
+		}
+
+		if inspect.ContainerJSONBase == nil {
+			logger.V(2).Printf("containerJSON base is empty for %s", c.ID)
+
+			continue
 		}
 
 		sortInspect(inspect)
@@ -501,6 +512,10 @@ func (d *Docker) updateContainers(ctx context.Context) error {
 		if facts.ContainerIgnored(container) {
 			ignoredID[c.ID] = true
 		}
+	}
+
+	if ctx.Err() != nil {
+		return ctx.Err()
 	}
 
 	var deletedContainerID []string
@@ -521,7 +536,7 @@ func (d *Docker) updateContainers(ctx context.Context) error {
 	d.bridgeNetworks = bridgeNetworks
 	d.containerAddressOnDockerBridge = containerAddressOnDockerBridge
 
-	return nil
+	return ctx.Err()
 }
 
 func (d *Docker) updateContainer(ctx context.Context, cl dockerClient, containerID string) (dockerContainer, error) {
@@ -642,6 +657,8 @@ func (d *Docker) getClient(ctx context.Context) (cl dockerClient, err error) {
 			return nil, firstErr
 		}
 	}
+
+	d.workedOnce = true
 
 	return d.client, nil
 }
@@ -977,10 +994,11 @@ var dockerCGroupRE = regexp.MustCompile(
 )
 
 type dockerProcessQuerier struct {
-	d                    *Docker
-	containers           map[string]dockerContainer
-	processesMap         map[int]facts.Process
-	containerProcessDone map[string]bool
+	d                   *Docker
+	errListContainers   error
+	containers          map[string]dockerContainer
+	processesMap        map[int]facts.Process
+	containerProcessErr map[string]error
 }
 
 // Processes returns processes from all running Docker containers.
@@ -998,16 +1016,23 @@ func (d *dockerProcessQuerier) Processes(ctx context.Context) ([]facts.Process, 
 	return processes, nil
 }
 
-func (d *dockerProcessQuerier) processes(ctx context.Context, searchPID int, firstContainer string) error {
+func (d *dockerProcessQuerier) fillContainers(ctx context.Context) error {
 	if d.containers == nil {
 		_, err := d.d.Containers(ctx, 0, false)
+		d.d.l.Lock()
+
 		if err != nil {
 			d.containers = make(map[string]dockerContainer)
+			if !d.d.workedOnce {
+				err = nil
+			}
+
+			d.errListContainers = err
+
+			d.d.l.Unlock()
 
 			return err
 		}
-
-		d.d.l.Lock()
 
 		d.containers = make(map[string]dockerContainer, len(d.d.containers))
 		for k, v := range d.d.containers {
@@ -1015,6 +1040,19 @@ func (d *dockerProcessQuerier) processes(ctx context.Context, searchPID int, fir
 		}
 
 		d.d.l.Unlock()
+	}
+
+	if len(d.containers) == 0 && d.errListContainers != nil {
+		return d.errListContainers
+	}
+
+	return nil
+}
+
+func (d *dockerProcessQuerier) processes(ctx context.Context, searchPID int, firstContainer string) error {
+	err := d.fillContainers(ctx)
+	if err != nil {
+		return err
 	}
 
 	if d.processesMap == nil {
@@ -1033,10 +1071,6 @@ func (d *dockerProcessQuerier) processes(ctx context.Context, searchPID int, fir
 			return nil
 		}
 
-		if d.containerProcessDone[c.ID()] {
-			continue
-		}
-
 		if !c.State().IsRunning() {
 			continue
 		}
@@ -1051,19 +1085,24 @@ func (d *dockerProcessQuerier) processes(ctx context.Context, searchPID int, fir
 }
 
 func (d *dockerProcessQuerier) processesContainerMap(ctx context.Context, c facts.Container) error {
-	if d.containerProcessDone[c.ID()] {
-		return nil
+	if _, ok := d.containerProcessErr[c.ID()]; ok {
+		return d.containerProcessErr[c.ID()]
 	}
 
-	d.containerProcessDone[c.ID()] = true
 	top, topWaux, err := d.top(ctx, c)
 
 	switch {
 	case err != nil && errdefs.IsNotFound(err):
+		d.containerProcessErr[c.ID()] = nil
+
 		return nil
 	case err != nil && strings.Contains(fmt.Sprintf("%v", err), "is not running"):
+		d.containerProcessErr[c.ID()] = nil
+
 		return nil
 	case err != nil:
+		d.containerProcessErr[c.ID()] = err
+
 		return err
 	}
 
@@ -1083,15 +1122,23 @@ func (d *dockerProcessQuerier) processesContainerMap(ctx context.Context, c fact
 		}
 	}
 
+	d.containerProcessErr[c.ID()] = nil
+
 	return nil
 }
 
 func (d *dockerProcessQuerier) top(ctx context.Context, c facts.Container) (container.ContainerTopOKBody, container.ContainerTopOKBody, error) {
 	d.d.l.Lock()
 	cl, err := d.d.getClient(ctx)
+
+	if err != nil && !d.d.workedOnce {
+		err = nil
+		cl = nil
+	}
+
 	d.d.l.Unlock()
 
-	if err != nil {
+	if err != nil || cl == nil {
 		return container.ContainerTopOKBody{}, container.ContainerTopOKBody{}, err
 	}
 
@@ -1105,7 +1152,7 @@ func (d *dockerProcessQuerier) top(ctx context.Context, c facts.Container) (cont
 	return top, topWaux, err
 }
 
-//nolint:gocyclo,cyclop
+//nolint:cyclop
 func decodeDocker(top container.ContainerTopOKBody, c facts.Container) []facts.Process {
 	userIndex := -1
 	pidIndex := -1
@@ -1203,7 +1250,7 @@ func decodeDocker(top container.ContainerTopOKBody, c facts.Container) []facts.P
 	return processes
 }
 
-//nolint:gocyclo,cyclop
+//nolint:cyclop
 func psTime2Second(psTime string) (int, error) {
 	if strings.Count(psTime, ":") == 1 {
 		// format is MM:SS
@@ -1330,22 +1377,8 @@ func (d *dockerProcessQuerier) ContainerFromCGroup(ctx context.Context, cgroupDa
 		return nil, nil
 	}
 
-	if d.containers == nil {
-		_, err := d.d.Containers(ctx, 0, false)
-		if err != nil {
-			d.containers = make(map[string]dockerContainer)
-
-			return nil, err
-		}
-
-		d.d.l.Lock()
-
-		d.containers = make(map[string]dockerContainer, len(d.d.containers))
-		for k, v := range d.d.containers {
-			d.containers[k] = v
-		}
-
-		d.d.l.Unlock()
+	if err := d.fillContainers(ctx); err != nil {
+		return nil, err
 	}
 
 	c, ok := d.containers[containerID]

@@ -10,7 +10,6 @@ import (
 	"errors"
 	"fmt"
 	"glouton/facts"
-	"glouton/facts/container-runtime/merge"
 	crTypes "glouton/facts/container-runtime/types"
 	"glouton/logger"
 	"glouton/types"
@@ -223,7 +222,7 @@ func (k *Kubernetes) Test(ctx context.Context) error {
 }
 
 func (k *Kubernetes) Metrics(ctx context.Context) ([]types.MetricPoint, error) {
-	var multiErr merge.MultiError
+	var multiErr types.MultiErrors
 
 	points, errors := k.Runtime.Metrics(ctx)
 	now := time.Now()

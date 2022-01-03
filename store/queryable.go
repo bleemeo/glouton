@@ -81,7 +81,7 @@ outerLoop:
 
 // LabelValues returns all potential values for a label name.
 // It is not safe to use the strings beyond the lifefime of the querier.
-func (q querier) LabelValues(name string) ([]string, storage.Warnings, error) {
+func (q querier) LabelValues(name string, matchers ...*labels.Matcher) ([]string, storage.Warnings, error) {
 	return nil, nil, errNotImplemented
 }
 

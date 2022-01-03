@@ -18,24 +18,201 @@ package rules
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	bleemeoTypes "glouton/bleemeo/types"
 	"glouton/logger"
+	"glouton/prometheus/registry"
 	"glouton/store"
 	"glouton/types"
+	"sort"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
+	"github.com/prometheus/prometheus/pkg/exemplar"
+	"github.com/prometheus/prometheus/pkg/labels"
+	"github.com/prometheus/prometheus/storage"
 )
 
-const (
-	metricName  = "node_cpu_seconds_global"
-	alertLabels = "alert_on_cpu"
-)
+var errNotImplemented = errors.New("not implemented")
+
+type mockAppendable struct {
+	points []types.MetricPoint
+	l      sync.Mutex
+}
+
+type mockAppender struct {
+	parent *mockAppendable
+	buffer []types.MetricPoint
+}
+
+func (app *mockAppendable) Appender(ctx context.Context) storage.Appender {
+	return &mockAppender{
+		parent: app,
+	}
+}
+
+func (a *mockAppender) Append(ref uint64, l labels.Labels, t int64, v float64) (uint64, error) {
+	labelsMap := make(map[string]string)
+
+	for _, lblv := range l {
+		labelsMap[lblv.Name] = lblv.Value
+	}
+
+	newPoint := types.MetricPoint{
+		Point: types.Point{
+			Time:  time.Unix(0, t*1e6),
+			Value: v,
+		},
+		Labels:      labelsMap,
+		Annotations: types.MetricAnnotations{},
+	}
+
+	a.buffer = append(a.buffer, newPoint)
+
+	return 0, nil
+}
+
+func (a *mockAppender) Commit() error {
+	a.parent.l.Lock()
+	defer a.parent.l.Unlock()
+
+	a.parent.points = append(a.parent.points, a.buffer...)
+
+	a.buffer = a.buffer[:0]
+
+	return nil
+}
+
+func (a *mockAppender) Rollback() error {
+	a.buffer = a.buffer[:0]
+
+	return nil
+}
+
+func (a *mockAppender) AppendExemplar(ref uint64, l labels.Labels, e exemplar.Exemplar) (uint64, error) {
+	return 0, errNotImplemented
+}
+
+func TestManager(t *testing.T) {
+	t0 := time.Now().Add(-time.Minute).Round(time.Millisecond)
+	t1 := t0.Add(time.Second)
+
+	tests := []struct {
+		name      string
+		queryable storage.Queryable
+		rules     map[string]string
+		want      []types.MetricPoint
+	}{
+		{
+			name: "LinuxCPU",
+			queryable: storeFromPoints([]types.MetricPoint{
+				{
+					Point: types.Point{
+						Time:  t0,
+						Value: 123,
+					},
+					Labels: map[string]string{
+						types.LabelName: "node_cpu_seconds_total",
+						"cpu":           "0",
+						"mode":          "irq",
+					},
+				},
+				{
+					Point: types.Point{
+						Time:  t0,
+						Value: 321,
+					},
+					Labels: map[string]string{
+						types.LabelName: "node_cpu_seconds_total",
+						"cpu":           "2",
+						"mode":          "irq",
+					},
+				},
+				{
+					Point: types.Point{
+						Time:  t0,
+						Value: 666,
+					},
+					Labels: map[string]string{
+						types.LabelName: "node_cpu_seconds_total",
+						"cpu":           "0",
+						"mode":          "user",
+					},
+				},
+			}),
+			rules: defaultLinuxRecordingRules,
+			want: []types.MetricPoint{
+				{
+					Point: types.Point{
+						Time:  t1,
+						Value: 444,
+					},
+					Labels: map[string]string{
+						types.LabelName: "node_cpu_seconds_global",
+						"mode":          "irq",
+					},
+				},
+				{
+					Point: types.Point{
+						Time:  t1,
+						Value: 666,
+					},
+					Labels: map[string]string{
+						types.LabelName: "node_cpu_seconds_global",
+						"mode":          "user",
+					},
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		tt := tt
+
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			app := &mockAppendable{}
+
+			mgr := NewManager(context.Background(), tt.queryable, app, 10*time.Second)
+			mgr.Run(context.Background(), t1)
+
+			if diff := cmp.Diff(sortPoints(tt.want), sortPoints(app.points)); diff != "" {
+				t.Errorf("points mismatch: (-want +got)\n%s", diff)
+			}
+		})
+	}
+}
+
+func storeFromPoints(pts []types.MetricPoint) *store.Store {
+	st := store.New(time.Hour)
+	st.PushPoints(context.Background(), pts)
+
+	return st
+}
+
+func sortPoints(metrics []types.MetricPoint) []types.MetricPoint {
+	sort.Slice(metrics, func(i, j int) bool {
+		lblsA := labels.FromMap(metrics[i].Labels)
+		lblsB := labels.FromMap(metrics[j].Labels)
+
+		return labels.Compare(lblsA, lblsB) < 0
+	})
+
+	return metrics
+}
 
 func Test_manager(t *testing.T) {
+	const (
+		resultName   = "copy_of_node_cpu_seconds_global"
+		sourceMetric = "node_cpu_seconds_global"
+		promqlQuery  = "node_cpu_seconds_global"
+	)
+
 	ctx := context.Background()
 	now := time.Now().Truncate(time.Second)
 	thresholds := []float64{50, 500}
@@ -44,6 +221,9 @@ func Test_manager(t *testing.T) {
 			Point: types.Point{
 				Time:  now,
 				Value: 0,
+			},
+			Labels: map[string]string{
+				types.LabelName: resultName,
 			},
 			Annotations: types.MetricAnnotations{
 				Status: types.StatusDescription{
@@ -57,6 +237,9 @@ func Test_manager(t *testing.T) {
 				Time:  now.Add(1 * time.Minute),
 				Value: 0,
 			},
+			Labels: map[string]string{
+				types.LabelName: resultName,
+			},
 			Annotations: types.MetricAnnotations{
 				Status: types.StatusDescription{
 					CurrentStatus:     types.StatusOk,
@@ -68,6 +251,9 @@ func Test_manager(t *testing.T) {
 			Point: types.Point{
 				Time:  now.Add(2 * time.Minute),
 				Value: 0,
+			},
+			Labels: map[string]string{
+				types.LabelName: resultName,
 			},
 			Annotations: types.MetricAnnotations{
 				Status: types.StatusDescription{
@@ -81,6 +267,9 @@ func Test_manager(t *testing.T) {
 				Time:  now.Add(3 * time.Minute),
 				Value: 0,
 			},
+			Labels: map[string]string{
+				types.LabelName: resultName,
+			},
 			Annotations: types.MetricAnnotations{
 				Status: types.StatusDescription{
 					CurrentStatus:     types.StatusOk,
@@ -92,6 +281,9 @@ func Test_manager(t *testing.T) {
 			Point: types.Point{
 				Time:  now.Add(4 * time.Minute),
 				Value: 0,
+			},
+			Labels: map[string]string{
+				types.LabelName: resultName,
 			},
 			Annotations: types.MetricAnnotations{
 				Status: types.StatusDescription{
@@ -105,6 +297,9 @@ func Test_manager(t *testing.T) {
 				Time:  now.Add(5 * time.Minute),
 				Value: 0,
 			},
+			Labels: map[string]string{
+				types.LabelName: resultName,
+			},
 			Annotations: types.MetricAnnotations{
 				Status: types.StatusDescription{
 					CurrentStatus:     types.StatusOk,
@@ -116,6 +311,9 @@ func Test_manager(t *testing.T) {
 			Point: types.Point{
 				Time:  now.Add(6 * time.Minute),
 				Value: 0,
+			},
+			Labels: map[string]string{
+				types.LabelName: resultName,
 			},
 			Annotations: types.MetricAnnotations{
 				Status: types.StatusDescription{
@@ -131,6 +329,9 @@ func Test_manager(t *testing.T) {
 				Time:  now.Add(5 * time.Minute),
 				Value: 1,
 			},
+			Labels: map[string]string{
+				types.LabelName: resultName,
+			},
 			Annotations: types.MetricAnnotations{
 				Status: types.StatusDescription{
 					CurrentStatus:     types.StatusWarning,
@@ -142,6 +343,9 @@ func Test_manager(t *testing.T) {
 			Point: types.Point{
 				Time:  now.Add(6 * time.Minute),
 				Value: 1,
+			},
+			Labels: map[string]string{
+				types.LabelName: resultName,
 			},
 			Annotations: types.MetricAnnotations{
 				Status: types.StatusDescription{
@@ -157,6 +361,9 @@ func Test_manager(t *testing.T) {
 				Time:  now.Add(5 * time.Minute),
 				Value: 2,
 			},
+			Labels: map[string]string{
+				types.LabelName: resultName,
+			},
 			Annotations: types.MetricAnnotations{
 				Status: types.StatusDescription{
 					CurrentStatus:     types.StatusCritical,
@@ -168,6 +375,9 @@ func Test_manager(t *testing.T) {
 			Point: types.Point{
 				Time:  now.Add(6 * time.Minute),
 				Value: 2,
+			},
+			Labels: map[string]string{
+				types.LabelName: resultName,
 			},
 			Annotations: types.MetricAnnotations{
 				Status: types.StatusDescription{
@@ -192,12 +402,14 @@ func Test_manager(t *testing.T) {
 			Points:      []types.MetricPoint{},
 			Rules: []bleemeoTypes.Metric{
 				{
-					LabelsText: metricName,
+					Labels: map[string]string{
+						types.LabelName: resultName,
+					},
 					Threshold: bleemeoTypes.Threshold{
 						HighWarning:  &thresholds[0],
 						HighCritical: &thresholds[1],
 					},
-					PromQLQuery:       metricName,
+					PromQLQuery:       promqlQuery,
 					IsUserPromQLAlert: false,
 				},
 			},
@@ -213,7 +425,7 @@ func Test_manager(t *testing.T) {
 						Value: 25,
 					},
 					Labels: map[string]string{
-						types.LabelName: metricName,
+						types.LabelName: sourceMetric,
 					},
 				},
 				{
@@ -222,18 +434,20 @@ func Test_manager(t *testing.T) {
 						Value: 25,
 					},
 					Labels: map[string]string{
-						types.LabelName: metricName,
+						types.LabelName: sourceMetric,
 					},
 				},
 			},
 			Rules: []bleemeoTypes.Metric{
 				{
-					LabelsText: metricName,
+					Labels: map[string]string{
+						types.LabelName: resultName,
+					},
 					Threshold: bleemeoTypes.Threshold{
 						HighWarning:  &thresholds[0],
 						HighCritical: &thresholds[1],
 					},
-					PromQLQuery:       metricName,
+					PromQLQuery:       promqlQuery,
 					IsUserPromQLAlert: false,
 				},
 			},
@@ -249,7 +463,7 @@ func Test_manager(t *testing.T) {
 						Value: 120,
 					},
 					Labels: map[string]string{
-						types.LabelName: metricName,
+						types.LabelName: sourceMetric,
 					},
 				},
 				{
@@ -258,18 +472,20 @@ func Test_manager(t *testing.T) {
 						Value: 110,
 					},
 					Labels: map[string]string{
-						types.LabelName: metricName,
+						types.LabelName: sourceMetric,
 					},
 				},
 			},
 			Rules: []bleemeoTypes.Metric{
 				{
-					LabelsText: metricName,
+					Labels: map[string]string{
+						types.LabelName: resultName,
+					},
 					Threshold: bleemeoTypes.Threshold{
 						HighWarning:  &thresholds[0],
 						HighCritical: &thresholds[1],
 					},
-					PromQLQuery:       metricName,
+					PromQLQuery:       promqlQuery,
 					IsUserPromQLAlert: true,
 				},
 			},
@@ -293,7 +509,7 @@ func Test_manager(t *testing.T) {
 						Value: 800,
 					},
 					Labels: map[string]string{
-						types.LabelName: metricName,
+						types.LabelName: sourceMetric,
 					},
 				},
 				{
@@ -302,18 +518,20 @@ func Test_manager(t *testing.T) {
 						Value: 1100,
 					},
 					Labels: map[string]string{
-						types.LabelName: metricName,
+						types.LabelName: sourceMetric,
 					},
 				},
 			},
 			Rules: []bleemeoTypes.Metric{
 				{
-					LabelsText: metricName,
+					Labels: map[string]string{
+						types.LabelName: resultName,
+					},
 					Threshold: bleemeoTypes.Threshold{
 						HighWarning:  &thresholds[0],
 						HighCritical: &thresholds[1],
 					},
-					PromQLQuery:       metricName,
+					PromQLQuery:       promqlQuery,
 					IsUserPromQLAlert: true,
 				},
 			},
@@ -337,7 +555,7 @@ func Test_manager(t *testing.T) {
 						Value: 800,
 					},
 					Labels: map[string]string{
-						types.LabelName: metricName,
+						types.LabelName: sourceMetric,
 					},
 				},
 				{
@@ -346,7 +564,7 @@ func Test_manager(t *testing.T) {
 						Value: 700,
 					},
 					Labels: map[string]string{
-						types.LabelName: metricName,
+						types.LabelName: sourceMetric,
 					},
 				},
 				{
@@ -355,18 +573,20 @@ func Test_manager(t *testing.T) {
 						Value: 130,
 					},
 					Labels: map[string]string{
-						types.LabelName: metricName,
+						types.LabelName: sourceMetric,
 					},
 				},
 			},
 			Rules: []bleemeoTypes.Metric{
 				{
-					LabelsText: metricName,
+					Labels: map[string]string{
+						types.LabelName: resultName,
+					},
 					Threshold: bleemeoTypes.Threshold{
 						HighWarning:  &thresholds[0],
 						HighCritical: &thresholds[1],
 					},
-					PromQLQuery:       metricName,
+					PromQLQuery:       promqlQuery,
 					IsUserPromQLAlert: true,
 				},
 			},
@@ -390,7 +610,7 @@ func Test_manager(t *testing.T) {
 						Value: 20,
 					},
 					Labels: map[string]string{
-						types.LabelName: metricName,
+						types.LabelName: sourceMetric,
 					},
 				},
 				{
@@ -399,18 +619,20 @@ func Test_manager(t *testing.T) {
 						Value: 120,
 					},
 					Labels: map[string]string{
-						types.LabelName: metricName,
+						types.LabelName: sourceMetric,
 					},
 				},
 			},
 			Rules: []bleemeoTypes.Metric{
 				{
-					LabelsText: metricName,
+					Labels: map[string]string{
+						types.LabelName: resultName,
+					},
 					Threshold: bleemeoTypes.Threshold{
 						HighWarning:  &thresholds[0],
 						HighCritical: &thresholds[1],
 					},
-					PromQLQuery:       metricName,
+					PromQLQuery:       promqlQuery,
 					IsUserPromQLAlert: false,
 				},
 			},
@@ -422,12 +644,14 @@ func Test_manager(t *testing.T) {
 			Points:      []types.MetricPoint{},
 			Rules: []bleemeoTypes.Metric{
 				{
-					LabelsText: metricName,
+					Labels: map[string]string{
+						types.LabelName: resultName,
+					},
 					Threshold: bleemeoTypes.Threshold{
 						HighWarning:  &thresholds[0],
 						HighCritical: &thresholds[1],
 					},
-					PromQLQuery:       metricName,
+					PromQLQuery:       promqlQuery,
 					IsUserPromQLAlert: true,
 				},
 			},
@@ -448,26 +672,43 @@ func Test_manager(t *testing.T) {
 
 	for _, test := range tests {
 		test := test
-		store := store.New()
-		ruleManager := NewManager(ctx, store, now.Add(-7*time.Minute), 15*time.Second)
-		resPoints := []types.MetricPoint{}
-
-		store.PushPoints(test.Points)
-
-		store.AddNotifiee(func(mp []types.MetricPoint) {
-			resPoints = append(resPoints, mp...)
-		})
-
-		for _, r := range test.Rules {
-			err := ruleManager.addAlertingRule(r, "")
-			if err != nil {
-				t.Error(err)
-
-				return
-			}
-		}
 
 		t.Run(test.Name, func(t *testing.T) {
+			var (
+				resPoints []types.MetricPoint
+				l         sync.Mutex
+			)
+
+			store := store.New(time.Hour)
+			reg, err := registry.New(registry.Option{
+				PushPoint: pushFunction(func(ctx context.Context, points []types.MetricPoint) {
+					l.Lock()
+					defer l.Unlock()
+
+					resPoints = append(resPoints, points...)
+				}),
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			ruleManager := newManager(ctx, store, reg.Appendable(5*time.Minute), defaultLinuxRecordingRules, now.Add(-7*time.Minute), 15*time.Second)
+
+			store.PushPoints(ctx, test.Points)
+
+			store.AddNotifiee(func(mp []types.MetricPoint) {
+				resPoints = append(resPoints, mp...)
+			})
+
+			for _, r := range test.Rules {
+				err := ruleManager.addAlertingRule(r, "")
+				if err != nil {
+					t.Error(err)
+
+					return
+				}
+			}
+
 			for i := 0; i < 7; i++ {
 				ruleManager.Run(ctx, now.Add(time.Duration(i)*time.Minute))
 			}
@@ -483,31 +724,52 @@ func Test_manager(t *testing.T) {
 				resPoints[i].Annotations.Status.StatusDescription = ""
 			}
 
-			eq := cmp.Diff(resPoints, test.Want)
-
-			if eq != "" {
-				t.Errorf("\nBase time for this test => %v\n%s", now, eq)
+			if diff := cmp.Diff(test.Want, resPoints, cmpopts.EquateEmpty()); diff != "" {
+				t.Errorf("result mismatch: (-want +got)\n%s", diff)
 			}
 		})
 	}
 }
 
 func Test_Rebuild_Rules(t *testing.T) {
-	store := store.New()
+	const (
+		resultName   = "my_rule_metric"
+		sourceMetric = "node_cpu_seconds_global"
+		promqlQuery  = "node_cpu_seconds_global"
+	)
+
+	var (
+		resPoints []types.MetricPoint
+		l         sync.Mutex
+	)
+
+	reg, err := registry.New(registry.Option{
+		PushPoint: pushFunction(func(ctx context.Context, points []types.MetricPoint) {
+			l.Lock()
+			defer l.Unlock()
+
+			resPoints = append(resPoints, points...)
+		}),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	store := store.New(time.Hour)
 	ctx := context.Background()
 	t1 := time.Now().Truncate(time.Second)
 	t0 := t1.Add(-7 * time.Minute)
-	ruleManager := NewManager(ctx, store, t0, 15*time.Second)
+	ruleManager := newManager(ctx, store, reg.Appendable(5*time.Minute), defaultLinuxRecordingRules, t0, 15*time.Second)
 	thresholds := []float64{50, 500}
 
-	store.PushPoints([]types.MetricPoint{
+	store.PushPoints(context.Background(), []types.MetricPoint{
 		{
 			Point: types.Point{
 				Time:  t0.Add(-1 * time.Second),
 				Value: 700,
 			},
 			Labels: map[string]string{
-				types.LabelName: metricName,
+				types.LabelName: sourceMetric,
 			},
 		},
 		{
@@ -516,7 +778,7 @@ func Test_Rebuild_Rules(t *testing.T) {
 				Value: 700,
 			},
 			Labels: map[string]string{
-				types.LabelName: metricName,
+				types.LabelName: sourceMetric,
 			},
 		},
 		{
@@ -525,7 +787,7 @@ func Test_Rebuild_Rules(t *testing.T) {
 				Value: 700,
 			},
 			Labels: map[string]string{
-				types.LabelName: metricName,
+				types.LabelName: sourceMetric,
 			},
 		},
 		{
@@ -534,7 +796,7 @@ func Test_Rebuild_Rules(t *testing.T) {
 				Value: 700,
 			},
 			Labels: map[string]string{
-				types.LabelName: metricName,
+				types.LabelName: sourceMetric,
 			},
 		},
 	})
@@ -544,6 +806,9 @@ func Test_Rebuild_Rules(t *testing.T) {
 			Point: types.Point{
 				Time:  t1,
 				Value: 0,
+			},
+			Labels: map[string]string{
+				types.LabelName: resultName,
 			},
 			Annotations: types.MetricAnnotations{
 				Status: types.StatusDescription{
@@ -557,6 +822,9 @@ func Test_Rebuild_Rules(t *testing.T) {
 				Time:  t1.Add(time.Minute),
 				Value: 0,
 			},
+			Labels: map[string]string{
+				types.LabelName: resultName,
+			},
 			Annotations: types.MetricAnnotations{
 				Status: types.StatusDescription{
 					CurrentStatus:     types.StatusOk,
@@ -568,6 +836,9 @@ func Test_Rebuild_Rules(t *testing.T) {
 			Point: types.Point{
 				Time:  t1.Add(2 * time.Minute),
 				Value: 0,
+			},
+			Labels: map[string]string{
+				types.LabelName: resultName,
 			},
 			Annotations: types.MetricAnnotations{
 				Status: types.StatusDescription{
@@ -582,6 +853,9 @@ func Test_Rebuild_Rules(t *testing.T) {
 				Time:  t1.Add(3 * time.Minute),
 				Value: 0,
 			},
+			Labels: map[string]string{
+				types.LabelName: resultName,
+			},
 			Annotations: types.MetricAnnotations{
 				Status: types.StatusDescription{
 					CurrentStatus:     types.StatusOk,
@@ -593,6 +867,9 @@ func Test_Rebuild_Rules(t *testing.T) {
 			Point: types.Point{
 				Time:  t1.Add(4 * time.Minute),
 				Value: 0,
+			},
+			Labels: map[string]string{
+				types.LabelName: resultName,
 			},
 			Annotations: types.MetricAnnotations{
 				Status: types.StatusDescription{
@@ -618,6 +895,9 @@ func Test_Rebuild_Rules(t *testing.T) {
 				Time:  t1.Add(5 * time.Minute),
 				Value: 2,
 			},
+			Labels: map[string]string{
+				types.LabelName: resultName,
+			},
 			Annotations: types.MetricAnnotations{
 				Status: types.StatusDescription{
 					CurrentStatus:     types.StatusCritical,
@@ -629,13 +909,15 @@ func Test_Rebuild_Rules(t *testing.T) {
 
 	alertsRules := []bleemeoTypes.Metric{
 		{
-			ID:         "NODE-ID",
-			LabelsText: metricName,
+			ID: "NODE-ID",
+			Labels: map[string]string{
+				types.LabelName: resultName,
+			},
 			Threshold: bleemeoTypes.Threshold{
 				HighWarning:  &thresholds[0],
 				HighCritical: &thresholds[1],
 			},
-			PromQLQuery:       metricName,
+			PromQLQuery:       promqlQuery,
 			IsUserPromQLAlert: false,
 		},
 		// {
@@ -650,13 +932,7 @@ func Test_Rebuild_Rules(t *testing.T) {
 		// },
 	}
 
-	resPoints := []types.MetricPoint{}
-
-	store.AddNotifiee(func(mp []types.MetricPoint) {
-		resPoints = append(resPoints, mp...)
-	})
-
-	err := ruleManager.RebuildAlertingRules(alertsRules)
+	err = ruleManager.RebuildAlertingRules(alertsRules)
 	if err != nil {
 		t.Error(err)
 
@@ -684,10 +960,8 @@ func Test_Rebuild_Rules(t *testing.T) {
 		t.Errorf("Unexpected number of points: expected %d, got %d\n", len(alertsRules), len(ruleManager.alertingRules))
 	}
 
-	res := cmp.Diff(resPoints, want)
-
-	if res != "" {
-		t.Errorf("RebuildRules(): \n%s\n", res)
+	if diff := cmp.Diff(want, resPoints); diff != "" {
+		t.Errorf("RebuildRules mismatch (-want +got)\n%s", diff)
 	}
 }
 
@@ -696,21 +970,27 @@ func Test_Rebuild_Rules(t *testing.T) {
 // We should NOT send Ok points for the first 5 minutes, as to make sure Prometheus
 // can properly evaluate rules and their actual state.
 func Test_GloutonStart(t *testing.T) {
-	store := store.New()
+	const (
+		resultName   = "my_rule_metric"
+		sourceMetric = "cpu_used"
+		promqlQuery  = "cpu_used"
+	)
+
+	store := store.New(time.Hour)
 	ctx := context.Background()
 	t0 := time.Now().Truncate(time.Second)
-	ruleManager := NewManager(ctx, store, t0, 15*time.Second)
+	ruleManager := newManager(ctx, store, store, defaultLinuxRecordingRules, t0, 15*time.Second)
 	thresholds := []float64{50, 500}
 	resPoints := []types.MetricPoint{}
 
-	store.PushPoints([]types.MetricPoint{
+	store.PushPoints(context.Background(), []types.MetricPoint{
 		{
 			Point: types.Point{
 				Time:  t0,
 				Value: 700,
 			},
 			Labels: map[string]string{
-				types.LabelName: metricName,
+				types.LabelName: sourceMetric,
 			},
 		},
 		{
@@ -719,7 +999,7 @@ func Test_GloutonStart(t *testing.T) {
 				Value: 800,
 			},
 			Labels: map[string]string{
-				types.LabelName: metricName,
+				types.LabelName: sourceMetric,
 			},
 		},
 		{
@@ -728,7 +1008,7 @@ func Test_GloutonStart(t *testing.T) {
 				Value: 800,
 			},
 			Labels: map[string]string{
-				types.LabelName: metricName,
+				types.LabelName: sourceMetric,
 			},
 		},
 		{
@@ -737,19 +1017,21 @@ func Test_GloutonStart(t *testing.T) {
 				Value: 800,
 			},
 			Labels: map[string]string{
-				types.LabelName: metricName,
+				types.LabelName: sourceMetric,
 			},
 		},
 	})
 
 	metricList := []bleemeoTypes.Metric{
 		{
-			LabelsText: metricName,
+			Labels: map[string]string{
+				types.LabelName: resultName,
+			},
 			Threshold: bleemeoTypes.Threshold{
 				HighWarning:  &thresholds[0],
 				HighCritical: &thresholds[1],
 			},
-			PromQLQuery:       metricName,
+			PromQLQuery:       promqlQuery,
 			IsUserPromQLAlert: false,
 		},
 	}
@@ -774,6 +1056,12 @@ func Test_GloutonStart(t *testing.T) {
 	if len(resPoints) != 0 {
 		t.Errorf("Unexpected number of points generated: expected 0, got %d:\n%v", len(resPoints), resPoints)
 	}
+
+	ruleManager.Run(ctx, t0.Add(time.Duration(7)*time.Minute))
+
+	if len(resPoints) == 0 {
+		t.Errorf("Unexpected number of points generated: expected >0, got 0:\n%v", resPoints)
+	}
 }
 
 // Test that metrics won't temporary change status on Glouton restart.
@@ -782,54 +1070,77 @@ func Test_GloutonStart(t *testing.T) {
 // after startup.
 // This test mostly do the same as Test_GloutonStart, but with more realistic scenario.
 func Test_NotStatutsChangeOnStart(t *testing.T) {
+	const (
+		resultName   = "copy_of_node_cpu_seconds_global"
+		sourceMetric = "node_cpu_seconds_global"
+		promqlQuery  = "node_cpu_seconds_global"
+	)
+
 	for _, resolutionSecond := range []int{10, 30, 60} {
 		t.Run(fmt.Sprintf("resolution=%d", resolutionSecond), func(t *testing.T) {
-			store := store.New()
+			var (
+				resPoints []types.MetricPoint
+				l         sync.Mutex
+			)
+
+			store := store.New(time.Hour)
+			reg, err := registry.New(registry.Option{
+				PushPoint: pushFunction(func(ctx context.Context, points []types.MetricPoint) {
+					l.Lock()
+					defer l.Unlock()
+
+					resPoints = append(resPoints, points...)
+				}),
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+
 			ctx := context.Background()
 			t0 := time.Now().Truncate(time.Second)
 
 			// we always boot the manager with 10 seconds resolution
-			ruleManager := NewManager(ctx, store, t0, 10*time.Second)
+			ruleManager := newManager(ctx, store, reg.Appendable(5*time.Minute), defaultLinuxRecordingRules, t0, 10*time.Second)
 
 			// The metric will be warning
 			thresholds := []float64{0, 100}
-			resPoints := []types.MetricPoint{}
 
 			metricList := []bleemeoTypes.Metric{
 				{
-					LabelsText: "__name__=\"" + alertLabels + "\"",
-					Labels:     types.TextToLabels("__name__=\"" + alertLabels + "\""),
+					Labels: map[string]string{
+						types.LabelName: resultName,
+					},
 					Threshold: bleemeoTypes.Threshold{
 						HighWarning:  &thresholds[0],
 						HighCritical: &thresholds[1],
 					},
-					PromQLQuery:       metricName,
+					PromQLQuery:       promqlQuery,
 					IsUserPromQLAlert: false,
 				},
 			}
 
-			err := ruleManager.RebuildAlertingRules(metricList)
+			for i, m := range metricList {
+				metricList[i].LabelsText = types.LabelsToText(m.Labels)
+			}
+
+			err = ruleManager.RebuildAlertingRules(metricList)
 			if err != nil {
 				t.Error(err)
 			}
 
 			ruleManager.UpdateMetricResolution(time.Duration(resolutionSecond) * time.Second)
 
-			store.AddNotifiee(func(mp []types.MetricPoint) {
-				resPoints = append(resPoints, mp...)
-			})
-
 			for currentTime := t0; currentTime.Before(t0.Add(7 * time.Minute)); currentTime = currentTime.Add(time.Second * time.Duration(resolutionSecond)) {
 				if !currentTime.Equal(t0) {
 					// cpu_used need two gather to be calculated, skip first point.
-					store.PushPoints([]types.MetricPoint{
+					store.PushPoints(context.Background(), []types.MetricPoint{
 						{
 							Point: types.Point{
 								Time:  currentTime,
 								Value: 30,
 							},
 							Labels: map[string]string{
-								types.LabelName: metricName,
+								types.LabelName: sourceMetric,
 							},
 						},
 					})
@@ -848,7 +1159,9 @@ func Test_NotStatutsChangeOnStart(t *testing.T) {
 			// This test might be changed in the future if we implement a persistent store,
 			// as it would allow to known the exact hold state of the Prometheus rule.
 			for _, p := range resPoints {
-				if p.Labels[types.LabelName] != alertLabels {
+				if p.Labels[types.LabelName] != resultName {
+					t.Errorf("unexpected point with labels: %v", p.Labels)
+
 					continue
 				}
 
@@ -858,7 +1171,7 @@ func Test_NotStatutsChangeOnStart(t *testing.T) {
 					continue
 				}
 
-				t.Errorf("point status = %v want %v", p.Annotations.Status.CurrentStatus, types.StatusCritical)
+				t.Errorf("point status = %v want %v", p.Annotations.Status.CurrentStatus, types.StatusWarning)
 			}
 
 			if !hadResult {
@@ -866,4 +1179,10 @@ func Test_NotStatutsChangeOnStart(t *testing.T) {
 			}
 		})
 	}
+}
+
+type pushFunction func(ctx context.Context, points []types.MetricPoint)
+
+func (f pushFunction) PushPoints(ctx context.Context, points []types.MetricPoint) {
+	f(ctx, points)
 }

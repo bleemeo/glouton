@@ -317,8 +317,10 @@ func (r *Registry) GetThresholdMetricNames() []string {
 	r.l.Lock()
 	defer r.l.Unlock()
 
-	for key := range r.thresholds {
-		res = append(res, key.Name)
+	for key, val := range r.thresholds {
+		if !val.IsZero() {
+			res = append(res, key.Name)
+		}
 	}
 
 	return res
@@ -490,7 +492,7 @@ func (r *Registry) WithPusher(p types.PointPusher) types.PointPusher {
 }
 
 // PushPoints implement PointPusher and do threshold.
-func (p pusher) PushPoints(points []types.MetricPoint) {
+func (p pusher) PushPoints(ctx context.Context, points []types.MetricPoint) {
 	p.registry.l.Lock()
 
 	result := make([]types.MetricPoint, 0, len(points))
@@ -514,7 +516,7 @@ func (p pusher) PushPoints(points []types.MetricPoint) {
 	}
 
 	p.registry.l.Unlock()
-	p.pusher.PushPoints(result)
+	p.pusher.PushPoints(ctx, result)
 }
 
 func (p *pusher) addPointWithThreshold(points []types.MetricPoint, point types.MetricPoint, threshold Threshold, key MetricNameItem) []types.MetricPoint {

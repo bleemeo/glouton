@@ -28,11 +28,14 @@ import (
 	"github.com/containerd/containerd/oci"
 	"github.com/containerd/typeurl"
 	"github.com/opencontainers/runtime-spec/specs-go"
-	"github.com/shirou/gopsutil/mem"
-	"github.com/shirou/gopsutil/process"
+	"github.com/shirou/gopsutil/v3/mem"
+	"github.com/shirou/gopsutil/v3/process"
 )
 
-var errNotFound = errors.New("not found")
+var (
+	errNotFound         = errors.New("not found")
+	errIgnoredContainer = errors.New("container ignored")
+)
 
 // DefaultAddresses returns default address for the Docker socket. If hostroot is set (and not "/") ALSO add
 // socket path prefixed by hostRoot.
@@ -51,6 +54,7 @@ type Containerd struct {
 	DeletedContainersCallback func(containersID []string)
 
 	l                sync.Mutex
+	workedOnce       bool
 	openConnection   func(ctx context.Context, address string) (cl containerdClient, err error)
 	client           containerdClient
 	lastUpdate       time.Time
@@ -102,7 +106,7 @@ func (c *Containerd) RuntimeFact(ctx context.Context, currentFact map[string]str
 
 // Metrics return metrics in a format similar to the one returned by Telegraf docker input.
 // Note that Metrics will never open the connection to ContainerD and will return empty points if not connected.
-//nolint:gocyclo,cyclop
+//nolint:cyclop
 func (c *Containerd) Metrics(ctx context.Context) ([]types.MetricPoint, error) {
 	now := time.Now()
 
@@ -230,6 +234,10 @@ func (c *Containerd) Containers(ctx context.Context, maxAge time.Duration, inclu
 	if time.Since(c.lastUpdate) >= maxAge {
 		err = c.updateContainers(ctx)
 		if err != nil {
+			if !c.workedOnce {
+				return nil, nil
+			}
+
 			return nil, err
 		}
 	}
@@ -441,7 +449,7 @@ func (c *Containerd) ContainerLastKill(containerID string) time.Time {
 	return time.Time{}
 }
 
-//nolint:gocyclo,cyclop
+//nolint:cyclop
 func (c *Containerd) run(ctx context.Context) error {
 	c.l.Lock()
 
@@ -514,8 +522,21 @@ func (c *Containerd) run(ctx context.Context) error {
 				delete(c.containers, gloutonEvent.ContainerID)
 			case facts.EventTypeStop:
 				if found {
-					container.state = string(containerd.Stopped)
-					c.containers[gloutonEvent.ContainerID] = container
+					tmp, err := c.updateContainer(ctx, container.ID())
+					if err == nil {
+						container = tmp
+						c.containers[gloutonEvent.ContainerID] = container
+					} else {
+						logger.V(2).Printf("Error while updating container %s: %v", container.ID(), err)
+					}
+
+					if container.State() == facts.ContainerRunning {
+						// Ignore this event. It's likely a task_exit from "docker exec".
+						// We don't want such event to trigger a discovery.
+						c.l.Unlock()
+
+						continue
+					}
 				}
 			}
 
@@ -532,6 +553,30 @@ func (c *Containerd) run(ctx context.Context) error {
 			return ctx.Err()
 		}
 	}
+}
+
+func (c *Containerd) updateContainer(ctx context.Context, gloutonID string) (containerObject, error) {
+	cl, err := c.getClient(ctx)
+	if err != nil {
+		return containerObject{}, err
+	}
+
+	part := strings.SplitN(gloutonID, "/", 2)
+	if len(part) != 2 {
+		return containerObject{}, fmt.Errorf("%w: %v don't contains /", errIncorrectValue, gloutonID)
+	}
+
+	ns := part[0]
+	id := part[1]
+
+	ctx = namespaces.WithNamespace(ctx, ns)
+
+	container, err := cl.LoadContainer(ctx, id)
+	if err != nil {
+		return containerObject{}, err
+	}
+
+	return convertToContainerObject(ctx, ns, container)
 }
 
 func (c *Containerd) updateContainers(ctx context.Context) error {
@@ -569,6 +614,10 @@ func (c *Containerd) updateContainers(ctx context.Context) error {
 		}
 	}
 
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+
 	if len(deletedContainerID) > 0 && c.DeletedContainersCallback != nil {
 		c.DeletedContainersCallback(deletedContainerID)
 	}
@@ -580,6 +629,60 @@ func (c *Containerd) updateContainers(ctx context.Context) error {
 	return nil
 }
 
+func convertToContainerObject(ctx context.Context, ns string, cont containerd.Container) (containerObject, error) {
+	info, err := cont.Info(ctx, containerd.WithoutRefreshedMetadata)
+	if err != nil {
+		return containerObject{}, fmt.Errorf("Info() on %s/%s failed: %w", ns, cont.ID(), err)
+	}
+
+	if info.Spec == nil {
+		return containerObject{}, fmt.Errorf("%w: %s/%s has no spec", errIgnoredContainer, ns, cont.ID())
+	}
+
+	img, err := cont.Image(ctx)
+	if err != nil {
+		return containerObject{}, fmt.Errorf("Image() on %s/%s failed: %w", ns, cont.ID(), err)
+	}
+
+	var spec oci.Spec
+
+	err = json.Unmarshal(info.Spec.Value, &spec)
+	if err != nil {
+		return containerObject{}, fmt.Errorf("%w: %s/%s unable to decode spec (type=%s): %v", errIgnoredContainer, ns, cont.ID(), info.Spec.TypeUrl, err)
+	}
+
+	obj := containerObject{
+		namespace: ns,
+		info: ContainerOCISpec{
+			Container: info,
+			Spec:      &spec,
+		},
+		state:   string(containerd.Unknown),
+		imageID: img.Target().Digest.String(),
+	}
+
+	task, err := cont.Task(ctx, nil)
+	if err == nil {
+		obj.pid = int(task.Pid())
+
+		status, err := task.Status(ctx)
+		if err == nil {
+			obj.state = string(status.Status)
+			obj.exitTime = status.ExitTime
+		}
+	}
+
+	if spec.Process != nil {
+		obj.args = spec.Process.Args
+	}
+
+	if err != nil {
+		logger.V(2).Printf("container %s/%s, ignore error while fetching task status: %v", ns, cont.ID(), err)
+	}
+
+	return obj, nil
+}
+
 func addContainersInfo(ctx context.Context, containers map[string]containerObject, cl containerdClient, ns string, ignoredID map[string]bool) error {
 	list, err := cl.Containers(ctx)
 	if err != nil {
@@ -587,54 +690,13 @@ func addContainersInfo(ctx context.Context, containers map[string]containerObjec
 	}
 
 	for _, cont := range list {
-		info, err := cont.Info(ctx, containerd.WithoutRefreshedMetadata)
-		if err != nil {
-			return fmt.Errorf("Info() on %s/%s failed: %w", ns, cont.ID(), err)
-		}
-
-		if info.Spec == nil {
-			logger.V(2).Printf("container %s/%s has no spec", ns, cont.ID())
+		obj, err := convertToContainerObject(ctx, ns, cont)
+		if err != nil && !errors.Is(err, errIgnoredContainer) {
+			return err
+		} else if err != nil {
+			logger.Printf("skip container: %v", err)
 
 			continue
-		}
-
-		img, err := cont.Image(ctx)
-		if err != nil {
-			return fmt.Errorf("Image() on %s/%s failed: %w", ns, cont.ID(), err)
-		}
-
-		var spec oci.Spec
-
-		err = json.Unmarshal(info.Spec.Value, &spec)
-		if err != nil {
-			logger.V(2).Printf("unable to decode container %s/%s spec (type=%s): %v", ns, cont.ID(), info.Spec.TypeUrl, err)
-
-			continue
-		}
-
-		obj := containerObject{
-			namespace: ns,
-			info: ContainerOCISpec{
-				Container: info,
-				Spec:      &spec,
-			},
-			state:   string(containerd.Unknown),
-			imageID: img.Target().Digest.String(),
-		}
-
-		task, err := cont.Task(ctx, nil)
-		if err == nil {
-			obj.pid = int(task.Pid())
-
-			status, err := task.Status(ctx)
-			if err == nil {
-				obj.state = string(status.Status)
-				obj.exitTime = status.ExitTime
-			}
-		}
-
-		if spec.Process != nil {
-			obj.args = spec.Process.Args
 		}
 
 		containers[obj.ID()] = obj
@@ -691,6 +753,8 @@ func (c *Containerd) getClient(ctx context.Context) (containerdClient, error) {
 			return nil, firstErr
 		}
 	}
+
+	c.workedOnce = true
 
 	return c.client, nil
 }
@@ -933,7 +997,9 @@ type namespaceContainer struct {
 type containerdProcessQuerier struct {
 	c                     *Containerd
 	containersUpdated     bool
+	containersUpdateErr   error
 	containersToQueryPIDS []namespaceContainer
+	containersToQueryErr  error
 	pid2container         map[int]containerObject
 }
 
@@ -967,6 +1033,12 @@ func (q *containerdProcessQuerier) ContainerFromCGroup(ctx context.Context, cgro
 		q.containersUpdated = true
 
 		if err := q.c.updateContainers(ctx); err != nil {
+			if !q.c.workedOnce {
+				return nil, nil
+			}
+
+			q.containersUpdateErr = err
+
 			return nil, err
 		}
 
@@ -976,7 +1048,7 @@ func (q *containerdProcessQuerier) ContainerFromCGroup(ctx context.Context, cgro
 		}
 	}
 
-	return nil, nil
+	return nil, q.containersUpdateErr
 }
 
 func (q *containerdProcessQuerier) getContainerFromCGroupPath(cgroupPath string) (containerObject, bool) {
@@ -1002,7 +1074,7 @@ func (q *containerdProcessQuerier) getContainerFromCGroupPath(cgroupPath string)
 	return containerObject{}, false
 }
 
-func (q *containerdProcessQuerier) ContainerFromPID(ctx context.Context, parentContainerID string, pid int) (facts.Container, error) {
+func (q *containerdProcessQuerier) ContainerFromPID(ctx context.Context, parentContainerID string, pid int) (facts.Container, error) { //nolint: cyclop
 	q.c.l.Lock()
 	defer q.c.l.Unlock()
 
@@ -1027,6 +1099,12 @@ func (q *containerdProcessQuerier) ContainerFromPID(ctx context.Context, parentC
 
 	if q.containersToQueryPIDS == nil {
 		if err := q.listContainers(ctx); err != nil {
+			if !q.c.workedOnce {
+				return nil, nil
+			}
+
+			q.containersToQueryErr = err
+
 			return nil, err
 		}
 	}
@@ -1045,11 +1123,15 @@ func (q *containerdProcessQuerier) ContainerFromPID(ctx context.Context, parentC
 
 		task, err := obj.container.Task(ctx, nil)
 		if err != nil {
+			q.containersToQueryErr = err
+
 			return nil, err
 		}
 
 		pids, err := task.Pids(ctx)
 		if err != nil {
+			q.containersToQueryErr = err
+
 			return nil, err
 		}
 
@@ -1066,7 +1148,7 @@ func (q *containerdProcessQuerier) ContainerFromPID(ctx context.Context, parentC
 		return c, nil
 	}
 
-	return nil, nil
+	return nil, q.containersToQueryErr
 }
 
 // containerFromPID return the container which had pid as first process. It will update list of containers if needed.
@@ -1075,6 +1157,12 @@ func (q *containerdProcessQuerier) containerFromPID(ctx context.Context, pid int
 		q.containersUpdated = true
 
 		if err := q.c.updateContainers(ctx); err != nil {
+			if !q.c.workedOnce {
+				return nil, nil
+			}
+
+			q.containersUpdateErr = err
+
 			return nil, err
 		}
 
@@ -1085,7 +1173,7 @@ func (q *containerdProcessQuerier) containerFromPID(ctx context.Context, pid int
 		}
 	}
 
-	return nil, nil
+	return nil, q.containersUpdateErr
 }
 
 func (q *containerdProcessQuerier) listContainers(ctx context.Context) error {
@@ -1131,7 +1219,7 @@ type metricValue struct {
 	values             map[string]uint64
 }
 
-//nolint:gocyclo,cyclop
+//nolint:cyclop
 func rateFromMetricValue(gloutonIDToName map[string]string, pastValues []metricValue, newValues []metricValue) []types.MetricPoint {
 	memUsage, err := mem.VirtualMemory()
 	if err != nil {

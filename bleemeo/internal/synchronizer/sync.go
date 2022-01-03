@@ -20,21 +20,25 @@ import (
 	"context"
 	cryptoRand "crypto/rand"
 	"crypto/tls"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"glouton/bleemeo/client"
 	"glouton/bleemeo/internal/cache"
 	"glouton/bleemeo/internal/common"
 	bleemeoTypes "glouton/bleemeo/types"
+	"glouton/delay"
 	"glouton/logger"
 	"glouton/types"
-	"math"
 	"math/big"
+	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/getsentry/sentry-go"
 )
 
 var (
@@ -42,6 +46,20 @@ var (
 	errConnectorTemporaryDisabled = errors.New("bleemeo connector temporary disabled")
 	errBleemeoUndefined           = errors.New("bleemeo.account_id and/or bleemeo.registration_key is undefined. Please see  https://docs.bleemeo.com/agent/configuration#bleemeoaccount_id ")
 	errIncorrectStatusCode        = errors.New("registration status code is")
+	errUninitialized              = errors.New("uninitialized")
+	errNotExist                   = errors.New("does not exist")
+)
+
+const (
+	syncMethodInfo          = "info"
+	syncMethodAgent         = "agent"
+	syncMethodAccountConfig = "accountconfig"
+	syncMethodMonitor       = "monitor"
+	syncMethodSNMP          = "snmp"
+	syncMethodFact          = "facts"
+	syncMethodService       = "service"
+	syncMethodContainer     = "container"
+	syncMethodMetric        = "metric"
 )
 
 // Synchronizer synchronize object with Bleemeo.
@@ -50,15 +68,20 @@ type Synchronizer struct {
 	option Option
 	now    func() time.Time
 
-	client       *client.HTTPClient
-	nextFullSync time.Time
+	realClient       *client.HTTPClient
+	client           *wrapperClient
+	diagnosticClient *http.Client
+	nextFullSync     time.Time
+	fullSyncCount    int
 
 	startedAt               time.Time
 	lastSync                time.Time
 	lastFactUpdatedAt       string
+	lastSNMPcount           int
 	successiveErrors        int
 	warnAccountMismatchDone bool
 	maintenanceMode         bool
+	callUpdateLabels        bool
 	lastMetricCount         int
 	agentID                 string
 
@@ -105,26 +128,92 @@ type Option struct {
 }
 
 // New return a new Synchronizer.
-func New(option Option) *Synchronizer {
-	return &Synchronizer{
+func New(option Option) (*Synchronizer, error) {
+	return newWithNow(option, time.Now)
+}
+
+func newWithNow(option Option, now func() time.Time) (*Synchronizer, error) {
+	s := &Synchronizer{
 		option: option,
-		now:    time.Now,
+		now:    now,
 
 		forceSync:              make(map[string]bool),
-		nextFullSync:           time.Now(),
+		nextFullSync:           now(),
 		retryableMetricFailure: make(map[bleemeoTypes.FailureKind]bool),
 	}
+
+	if err := s.option.State.Get("agent_uuid", &s.agentID); err != nil {
+		return nil, err
+	}
+
+	return s, nil
+}
+
+func (s *Synchronizer) DiagnosticArchive(ctx context.Context, archive types.ArchiveWriter) error {
+	s.l.Lock()
+
+	file, err := archive.Create("bleemeo-sync-state.json")
+	if err != nil {
+		return err
+	}
+
+	obj := struct {
+		NextFullSync               time.Time
+		FullSyncCount              int
+		StartedAt                  time.Time
+		LastSync                   time.Time
+		LastFactUpdatedAt          string
+		SuccessiveErrors           int
+		WarnAccountMismatchDone    bool
+		MaintenanceMode            bool
+		LastMetricCount            int
+		AgentID                    string
+		LastMaintenanceSync        time.Time
+		DisabledUntil              time.Time
+		DisableReason              bleemeoTypes.DisableReason
+		ForceSync                  map[string]bool
+		PendingMetricsUpdateCount  int
+		PendingMonitorsUpdateCount int
+		DelayedContainer           map[string]time.Time
+		RetryableMetricFailure     map[bleemeoTypes.FailureKind]bool
+		MetricRetryAt              time.Time
+		LastInfo                   bleemeoTypes.GlobalInfo
+	}{
+		NextFullSync:               s.nextFullSync,
+		FullSyncCount:              s.fullSyncCount,
+		StartedAt:                  s.startedAt,
+		LastSync:                   s.lastSync,
+		LastFactUpdatedAt:          s.lastFactUpdatedAt,
+		SuccessiveErrors:           s.successiveErrors,
+		WarnAccountMismatchDone:    s.warnAccountMismatchDone,
+		MaintenanceMode:            s.maintenanceMode,
+		LastMetricCount:            s.lastMetricCount,
+		AgentID:                    s.agentID,
+		LastMaintenanceSync:        s.lastMaintenanceSync,
+		DisabledUntil:              s.disabledUntil,
+		DisableReason:              s.disableReason,
+		ForceSync:                  s.forceSync,
+		PendingMetricsUpdateCount:  len(s.pendingMetricsUpdate),
+		PendingMonitorsUpdateCount: len(s.pendingMonitorsUpdate),
+		DelayedContainer:           s.delayedContainer,
+		RetryableMetricFailure:     s.retryableMetricFailure,
+		MetricRetryAt:              s.metricRetryAt,
+		LastInfo:                   s.lastInfo,
+	}
+
+	defer s.l.Unlock()
+
+	enc := json.NewEncoder(file)
+	enc.SetIndent("", "  ")
+
+	return enc.Encode(obj)
 }
 
 // Run run the Connector.
-//nolint:gocyclo,cyclop
+//nolint:cyclop
 func (s *Synchronizer) Run(ctx context.Context) error {
 	s.ctx = ctx
 	s.startedAt = s.now()
-
-	if err := s.option.State.Get("agent_uuid", &s.agentID); err != nil {
-		return err
-	}
 
 	firstSync := true
 
@@ -156,18 +245,18 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 	if len(s.option.Cache.FactsByKey()) != 0 {
 		logger.V(2).Printf("Waiting a few seconds before running a full synchronization as this agent has a valid cache")
 
-		minimalDelay = common.JitterDelay(20, 0.5, 20)
+		minimalDelay = delay.JitterDelay(20*time.Second, 0.5)
 	}
 
-	for s.ctx.Err() == nil {
+	for ctx.Err() == nil {
 		// TODO: allow WaitDeadline to be interrupted when new metrics arrive
-		common.WaitDeadline(s.ctx, minimalDelay, s.getDisabledUntil, "Synchronization with Bleemeo Cloud platform")
+		common.WaitDeadline(ctx, minimalDelay, s.getDisabledUntil, "Synchronization with Bleemeo Cloud platform")
 
-		if s.ctx.Err() != nil {
+		if ctx.Err() != nil {
 			break
 		}
 
-		err := s.runOnce(firstSync)
+		err := s.runOnce(ctx, firstSync)
 		if err != nil {
 			s.successiveErrors++
 
@@ -177,13 +266,19 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 
 			switch {
 			case client.IsAuthError(err) && successiveAuthErrors >= 3:
-				delay := common.JitterDelay(60*math.Pow(1.55, float64(successiveAuthErrors)), 0.1, 21600)
+				delay := delay.JitterDelay(
+					delay.Exponential(60*time.Second, 1.55, successiveAuthErrors, 6*time.Hour),
+					0.1,
+				)
 				s.option.DisableCallback(bleemeoTypes.DisableAuthenticationError, s.now().Add(delay))
 			case client.IsThrottleError(err):
-				deadline := s.client.ThrottleDeadline().Add(common.JitterDelay(15, 0.3, 15))
+				deadline := s.client.ThrottleDeadline().Add(delay.JitterDelay(15*time.Second, 0.3))
 				s.Disable(deadline, bleemeoTypes.DisableTooManyRequests)
 			default:
-				delay := common.JitterDelay(15*math.Pow(1.55, float64(s.successiveErrors)), 0.1, 900)
+				delay := delay.JitterDelay(
+					delay.Exponential(15*time.Second, 1.55, s.successiveErrors, 15*time.Minute),
+					0.1,
+				)
 				s.Disable(s.now().Add(delay), bleemeoTypes.DisableTooManyErrors)
 
 				if client.IsAuthError(err) && successiveAuthErrors == 1 {
@@ -196,7 +291,7 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 			case client.IsAuthError(err) && s.agentID != "":
 				fqdnMessage := ""
 
-				fqdn := s.option.Cache.FactsByKey()["fqdn"].Value
+				fqdn := s.option.Cache.FactsByKey()[s.agentID]["fqdn"].Value
 				if fqdn != "" {
 					fqdnMessage = fmt.Sprintf(" with fqdn %s", fqdn)
 				}
@@ -229,14 +324,11 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 		} else {
 			s.successiveErrors = 0
 			successiveAuthErrors = 0
-			minimalDelay = common.JitterDelay(15, 0.05, 15)
 		}
 
-		if firstSync {
-			if err == nil {
-				minimalDelay = common.JitterDelay(1, 0.05, 1)
-			}
+		minimalDelay = delay.JitterDelay(15*time.Second, 0.05)
 
+		if firstSync {
 			firstSync = false
 		}
 	}
@@ -246,9 +338,11 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 
 // DiagnosticPage return useful information to troubleshoot issue.
 func (s *Synchronizer) DiagnosticPage() string {
+	var tlsConfig *tls.Config
+
 	builder := &strings.Builder{}
 
-	var tlsConfig *tls.Config
+	port := 80
 
 	u, err := url.Parse(s.option.Config.String("bleemeo.api_base"))
 	if err != nil {
@@ -257,14 +351,28 @@ func (s *Synchronizer) DiagnosticPage() string {
 		return builder.String()
 	}
 
-	port := 80
-
 	if u.Scheme == "https" {
 		tlsConfig = &tls.Config{
-			InsecureSkipVerify: s.option.Config.Bool("bleemeo.api_ssl_insecure"), // nolint: gosec
+			InsecureSkipVerify: s.option.Config.Bool("bleemeo.api_ssl_insecure"), //nolint:gosec
 		}
 		port = 443
 	}
+
+	s.l.Lock()
+
+	if s.diagnosticClient == nil {
+		s.diagnosticClient = &http.Client{
+			Transport: &http.Transport{
+				Proxy:           http.ProxyFromEnvironment,
+				TLSClientConfig: tlsConfig,
+			},
+			CheckRedirect: func(req *http.Request, via []*http.Request) error {
+				return http.ErrUseLastResponse
+			},
+		}
+	}
+
+	s.l.Unlock()
 
 	if u.Port() != "" {
 		tmp, err := strconv.ParseInt(u.Port(), 10, 0)
@@ -285,7 +393,7 @@ func (s *Synchronizer) DiagnosticPage() string {
 	}()
 
 	go func() {
-		httpMessage <- common.DiagnosticHTTP(u.String(), tlsConfig)
+		httpMessage <- common.DiagnosticHTTP(s.diagnosticClient, u.String())
 	}()
 
 	builder.WriteString(<-tcpMessage)
@@ -296,13 +404,27 @@ func (s *Synchronizer) DiagnosticPage() string {
 		bleemeoTime := s.lastInfo.BleemeoTime()
 		delta := s.lastInfo.TimeDrift()
 		builder.WriteString(fmt.Sprintf(
-			"Bleemeo /v1/info/ fetched at %v. At this moment, time_dift was %v (time expected was %v)\n",
+			"Bleemeo /v1/info/ fetched at %v. At this moment, time_drift was %v (time expected was %v)\n",
 			s.lastInfo.FetchedAt.Format(time.RFC3339),
 			delta.Truncate(time.Second),
 			bleemeoTime.Format(time.RFC3339),
 		))
 	}
 	s.l.Unlock()
+
+	var count int
+
+	if s.realClient != nil {
+		count = s.realClient.RequestsCount()
+	}
+
+	builder.WriteString(fmt.Sprintf(
+		"Did %d requests since start time at %s (%v ago). Avg of %.2f request/minute\n",
+		count,
+		s.startedAt.Format(time.RFC3339),
+		time.Since(s.startedAt).Round(time.Second),
+		float64(count)/time.Since(s.startedAt).Minutes()),
+	)
 
 	return builder.String()
 }
@@ -313,16 +435,17 @@ func (s *Synchronizer) NotifyConfigUpdate(immediate bool) {
 	s.l.Lock()
 	defer s.l.Unlock()
 
-	s.forceSync["info"] = true
-	s.forceSync["agent"] = true
+	s.forceSync[syncMethodInfo] = true
+	s.forceSync[syncMethodAgent] = true
+	s.forceSync[syncMethodAccountConfig] = true
 
 	if !immediate {
 		return
 	}
 
-	s.forceSync["metrics"] = true
-	s.forceSync["containers"] = true
-	s.forceSync["monitors"] = true
+	s.forceSync[syncMethodMetric] = true
+	s.forceSync[syncMethodContainer] = true
+	s.forceSync[syncMethodMonitor] = true
 }
 
 // UpdateMetrics request to update a specific metrics.
@@ -332,7 +455,7 @@ func (s *Synchronizer) UpdateMetrics(metricUUID ...string) {
 
 	if len(metricUUID) == 1 && metricUUID[0] == "" {
 		// We don't known the metric to update. Update all
-		s.forceSync["metrics"] = true
+		s.forceSync[syncMethodMetric] = true
 		s.pendingMetricsUpdate = nil
 
 		return
@@ -340,7 +463,7 @@ func (s *Synchronizer) UpdateMetrics(metricUUID ...string) {
 
 	s.pendingMetricsUpdate = append(s.pendingMetricsUpdate, metricUUID...)
 
-	s.forceSync["metrics"] = false
+	s.forceSync[syncMethodMetric] = false
 }
 
 // UpdateContainers request to update a containers.
@@ -348,7 +471,7 @@ func (s *Synchronizer) UpdateContainers() {
 	s.l.Lock()
 	defer s.l.Unlock()
 
-	s.forceSync["containers"] = false
+	s.forceSync[syncMethodContainer] = false
 }
 
 // UpdateInfo request to update a info, which include the time_drift.
@@ -356,7 +479,7 @@ func (s *Synchronizer) UpdateInfo() {
 	s.l.Lock()
 	defer s.l.Unlock()
 
-	s.forceSync["info"] = false
+	s.forceSync[syncMethodInfo] = false
 }
 
 // UpdateMonitors requests to update all the monitors.
@@ -364,7 +487,8 @@ func (s *Synchronizer) UpdateMonitors() {
 	s.l.Lock()
 	defer s.l.Unlock()
 
-	s.forceSync["monitors"] = true
+	s.forceSync[syncMethodAccountConfig] = true
+	s.forceSync[syncMethodMonitor] = true
 }
 
 func (s *Synchronizer) popPendingMetricsUpdate() []string {
@@ -387,7 +511,7 @@ func (s *Synchronizer) popPendingMetricsUpdate() []string {
 	return result
 }
 
-func (s *Synchronizer) waitCPUMetric() {
+func (s *Synchronizer) waitCPUMetric(ctx context.Context) {
 	metrics := s.option.Cache.Metrics()
 	for _, m := range metrics {
 		if m.Labels[types.LabelName] == "cpu_used" || m.Labels[types.LabelName] == "node_cpu_seconds_total" {
@@ -399,7 +523,7 @@ func (s *Synchronizer) waitCPUMetric() {
 	filter2 := map[string]string{types.LabelName: "node_cpu_seconds_total"}
 	count := 0
 
-	for s.ctx.Err() == nil && count < 20 {
+	for ctx.Err() == nil && count < 20 {
 		count++
 
 		m, _ := s.option.Store.Metrics(filter)
@@ -413,7 +537,7 @@ func (s *Synchronizer) waitCPUMetric() {
 		}
 
 		select {
-		case <-s.ctx.Done():
+		case <-ctx.Done():
 		case <-time.After(1 * time.Second):
 		}
 	}
@@ -457,24 +581,28 @@ func (s *Synchronizer) setClient() error {
 		return err
 	}
 
-	client, err := client.NewClient(s.ctx, s.option.Config.String("bleemeo.api_base"), username, password, s.option.Config.Bool("bleemeo.api_ssl_insecure"))
+	client, err := client.NewClient(s.option.Config.String("bleemeo.api_base"), username, password, s.option.Config.Bool("bleemeo.api_ssl_insecure"))
 	if err != nil {
 		return err
 	}
 
-	s.client = client
+	s.realClient = client
 
 	return nil
 }
 
-//nolint:gocyclo,cyclop
-func (s *Synchronizer) runOnce(onlyEssential bool) error {
+//nolint:cyclop
+func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) error {
+	var wasCreation bool
+
 	if s.agentID == "" {
-		if err := s.register(); err != nil {
+		if err := s.register(ctx); err != nil {
 			return err
 		}
 
-		s.option.NotifyFirstRegistration(s.ctx)
+		wasCreation = true
+
+		s.option.NotifyFirstRegistration(ctx)
 		// Do one pass of metric registration to register agent_status.
 		// MQTT connection require this metric to exists before connecting
 		_ = s.syncMetrics(false, true)
@@ -484,22 +612,20 @@ func (s *Synchronizer) runOnce(onlyEssential bool) error {
 
 		// Then wait CPU (which should arrive the all other system metrics)
 		// before continuing to process.
-		s.waitCPUMetric()
+		s.waitCPUMetric(ctx)
 	}
 
-	syncMethods := s.syncToPerform()
+	syncMethods := s.syncToPerform(ctx)
 
 	if len(syncMethods) == 0 {
 		return nil
 	}
 
-	// We do not perform this check in maintennace mode (otherwise we could end up checking it every 15 econds),
-	// we will only do it once when getting out of the maintenance mode
-	if !s.IsMaintenance() {
-		if err := s.checkDuplicated(); err != nil {
-			return err
-		}
+	s.client = &wrapperClient{
+		s:      s,
+		client: s.realClient,
 	}
+	previousCount := s.realClient.RequestsCount()
 
 	syncStep := []struct {
 		name                 string
@@ -507,20 +633,22 @@ func (s *Synchronizer) runOnce(onlyEssential bool) error {
 		enabledInMaintenance bool
 		skipOnlyEssential    bool // should be true for method that ignore onlyEssential
 	}{
-		{name: "info", method: s.syncInfo, enabledInMaintenance: true, skipOnlyEssential: true},
-		{name: "agent", method: s.syncAgent, skipOnlyEssential: true},
-		{name: "facts", method: s.syncFacts},
-		{name: "containers", method: s.syncContainers},
-		{name: "services", method: s.syncServices},
-		{name: "monitors", method: s.syncMonitors, skipOnlyEssential: true},
-		{name: "metrics", method: s.syncMetrics},
+		{name: syncMethodInfo, method: s.syncInfo, enabledInMaintenance: true, skipOnlyEssential: true},
+		{name: syncMethodAgent, method: s.syncAgent, skipOnlyEssential: true},
+		{name: syncMethodAccountConfig, method: s.syncAccountConfig, skipOnlyEssential: true},
+		{name: syncMethodFact, method: s.syncFacts},
+		{name: syncMethodContainer, method: s.syncContainers},
+		{name: syncMethodSNMP, method: s.syncSNMP},
+		{name: syncMethodService, method: s.syncServices},
+		{name: syncMethodMonitor, method: s.syncMonitors, skipOnlyEssential: true},
+		{name: syncMethodMetric, method: s.syncMetrics},
 	}
 	startAt := s.now()
 
 	var firstErr error
 
 	for _, step := range syncStep {
-		if s.ctx.Err() != nil {
+		if ctx.Err() != nil {
 			break
 		}
 
@@ -578,11 +706,26 @@ func (s *Synchronizer) runOnce(onlyEssential bool) error {
 		}
 	}
 
-	logger.V(2).Printf("Synchronization took %v for %v", s.now().Sub(startAt), syncMethods)
+	if s.callUpdateLabels {
+		s.callUpdateLabels = false
+		if s.option.NotifyLabelsUpdate != nil {
+			s.option.NotifyLabelsUpdate(ctx)
+		}
+	}
+
+	logger.V(2).Printf("Synchronization took %v for %v (and did %d requests)", s.now().Sub(startAt), syncMethods, s.realClient.RequestsCount()-previousCount)
+
+	if wasCreation {
+		s.UpdateUnitsAndThresholds(true)
+	}
 
 	if len(syncMethods) == len(syncStep) && firstErr == nil {
 		s.option.Cache.Save()
-		s.nextFullSync = s.now().Add(common.JitterDelay(3600, 0.1, 3600))
+		s.fullSyncCount++
+		s.nextFullSync = s.now().Add(delay.JitterDelay(
+			delay.Exponential(time.Hour, 1.75, s.fullSyncCount, 12*time.Hour),
+			0.25,
+		))
 		logger.V(1).Printf("New full synchronization scheduled for %s", s.nextFullSync.Format(time.RFC3339))
 	}
 
@@ -593,8 +736,8 @@ func (s *Synchronizer) runOnce(onlyEssential bool) error {
 	return firstErr
 }
 
-//nolint:gocyclo,cyclop
-func (s *Synchronizer) syncToPerform() map[string]bool {
+//nolint:cyclop
+func (s *Synchronizer) syncToPerform(ctx context.Context) map[string]bool {
 	s.l.Lock()
 	defer s.l.Unlock()
 
@@ -610,16 +753,23 @@ func (s *Synchronizer) syncToPerform() map[string]bool {
 		fullSync = true
 	}
 
-	localFacts, _ := s.option.Facts.Facts(s.ctx, 24*time.Hour)
+	localFacts, _ := s.option.Facts.Facts(ctx, 24*time.Hour)
 
 	if fullSync {
-		syncMethods["info"] = fullSync
-		syncMethods["agent"] = fullSync
-		syncMethods["monitors"] = fullSync
+		syncMethods[syncMethodInfo] = fullSync
+		syncMethods[syncMethodAgent] = fullSync
+		syncMethods[syncMethodAccountConfig] = fullSync
+		syncMethods[syncMethodMonitor] = fullSync
+		syncMethods[syncMethodSNMP] = fullSync
 	}
 
 	if fullSync || s.lastFactUpdatedAt != localFacts["fact_updated_at"] {
-		syncMethods["facts"] = fullSync
+		syncMethods[syncMethodFact] = fullSync
+	}
+
+	if s.lastSNMPcount != s.option.SNMPOnlineTarget() {
+		syncMethods[syncMethodFact] = fullSync
+		syncMethods[syncMethodSNMP] = fullSync
 	}
 
 	minDelayed := time.Time{}
@@ -631,33 +781,33 @@ func (s *Synchronizer) syncToPerform() map[string]bool {
 	}
 
 	if fullSync || s.lastSync.Before(s.option.Discovery.LastUpdate()) || (!minDelayed.IsZero() && s.now().After(minDelayed)) {
-		syncMethods["services"] = fullSync
-		syncMethods["containers"] = fullSync
+		syncMethods[syncMethodService] = fullSync
+		syncMethods[syncMethodContainer] = fullSync
 	}
 
-	if _, ok := syncMethods["services"]; ok {
+	if _, ok := syncMethods[syncMethodService]; ok {
 		// Metrics registration may need services to be synced, trigger metrics synchronization
-		syncMethods["metrics"] = false
+		syncMethods[syncMethodMetric] = false
 	}
 
-	if _, ok := syncMethods["containers"]; ok {
+	if _, ok := syncMethods[syncMethodContainer]; ok {
 		// Metrics registration may need containers to be synced, trigger metrics synchronization
-		syncMethods["metrics"] = false
+		syncMethods[syncMethodMetric] = false
 	}
 
-	if _, ok := syncMethods["monitors"]; ok {
+	if _, ok := syncMethods[syncMethodMonitor]; ok {
 		// Metrics registration may need monitors to be synced, trigger metrics synchronization
-		syncMethods["metrics"] = false
+		syncMethods[syncMethodMetric] = false
 	}
 
 	if fullSync || s.now().After(s.metricRetryAt) || s.lastSync.Before(s.option.Discovery.LastUpdate()) || s.lastMetricCount != s.option.Store.MetricsCount() {
-		syncMethods["metrics"] = fullSync
+		syncMethods[syncMethodMetric] = fullSync
 	}
 
 	// when the mqtt connector is not connected, we cannot receive notifications to get out of maintenance
 	// mode, so we poll more often.
 	if s.maintenanceMode && !s.option.IsMqttConnected() && s.now().After(s.lastMaintenanceSync.Add(15*time.Minute)) {
-		s.forceSync["info"] = false
+		s.forceSync[syncMethodInfo] = false
 
 		s.lastMaintenanceSync = s.now()
 	}
@@ -681,12 +831,12 @@ func (s *Synchronizer) checkDuplicated() error {
 
 	factNames := []string{"fqdn", "primary_address", "primary_mac_address"}
 	for _, name := range factNames {
-		old, ok := oldFacts[name]
+		old, ok := oldFacts[s.agentID][name]
 		if !ok {
 			continue
 		}
 
-		new, ok := newFacts[name] //nolint:predeclared
+		new, ok := newFacts[s.agentID][name] //nolint:predeclared
 		if !ok {
 			continue
 		}
@@ -695,7 +845,7 @@ func (s *Synchronizer) checkDuplicated() error {
 			continue
 		}
 
-		until := s.now().Add(common.JitterDelay(900, 0.05, 900))
+		until := s.now().Add(delay.JitterDelay(15*time.Minute, 0.05))
 		s.Disable(until, bleemeoTypes.DisableDuplicatedAgent)
 
 		if s.option.DisableCallback != nil {
@@ -719,8 +869,8 @@ func (s *Synchronizer) checkDuplicated() error {
 	return nil
 }
 
-func (s *Synchronizer) register() error {
-	facts, err := s.option.Facts.Facts(s.ctx, 15*time.Minute)
+func (s *Synchronizer) register(ctx context.Context) error {
+	facts, err := s.option.Facts.Facts(ctx, 15*time.Minute)
 	if err != nil {
 		return err
 	}
@@ -756,7 +906,8 @@ func (s *Synchronizer) register() error {
 		return err
 	}
 
-	statusCode, err := s.client.PostAuth(
+	statusCode, err := s.realClient.PostAuth(
+		ctx,
 		"v1/agent/",
 		map[string]string{
 			"account":          accountID,
@@ -777,6 +928,15 @@ func (s *Synchronizer) register() error {
 	}
 
 	s.agentID = objectID.ID
+
+	version := s.option.Config.String("bleemeo.glouton_version")
+
+	sentry.ConfigureScope(func(scope *sentry.Scope) {
+		scope.SetContext("agent", map[string]interface{}{
+			"agent_id":        s.agentID,
+			"glouton_version": version,
+		})
+	})
 
 	if err := s.option.State.Set("agent_uuid", objectID.ID); err != nil {
 		return err

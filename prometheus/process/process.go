@@ -14,11 +14,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//go:build linux
 // +build linux
 
 package process
 
 import (
+	"context"
 	"glouton/discovery"
 	"glouton/logger"
 	"glouton/prometheus/registry"
@@ -31,6 +33,11 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
+const (
+	defaultJitter   = 0
+	defaultInterval = 0
+)
+
 // RegisterExporter will create a new prometheus exporter using the specified parameters and adds it to the registry.
 func RegisterExporter(reg *registry.Registry, psLister interface{}, dynamicDiscovery *discovery.DynamicDiscovery, bleemeoFormat bool) {
 	if processExporter := NewExporter(psLister, dynamicDiscovery); processExporter != nil {
@@ -41,7 +48,15 @@ func RegisterExporter(reg *registry.Registry, psLister interface{}, dynamicDisco
 			logger.Printf("Failed to register process-exporter: %v", err)
 			logger.Printf("Processes metrics won't be available on /metrics endpoints")
 		} else {
-			_, err = reg.RegisterGatherer(processGatherer, nil, nil, !bleemeoFormat)
+			_, err = reg.RegisterGatherer(
+				registry.RegistrationOption{
+					Description: "process-exporter",
+					Interval:    defaultInterval,
+					JitterSeed:  defaultJitter,
+				},
+				processGatherer,
+				!bleemeoFormat,
+			)
 			if err != nil {
 				logger.Printf("Failed to register process-exporter: %v", err)
 				logger.Printf("Processes metrics won't be available on /metrics endpoints")
@@ -49,7 +64,17 @@ func RegisterExporter(reg *registry.Registry, psLister interface{}, dynamicDisco
 		}
 
 		if bleemeoFormat {
-			reg.AddPushPointsCallback(processExporter.PushTo(reg.WithTTL(5 * time.Minute)))
+			_, err := reg.RegisterPushPointsCallback(
+				registry.RegistrationOption{
+					Description: "process-exporter",
+					Interval:    defaultInterval,
+					JitterSeed:  defaultJitter,
+				},
+				processExporter.PushTo(reg.WithTTL(5*time.Minute)),
+			)
+			if err != nil {
+				logger.Printf("unable to add processes metrics: %v", err)
+			}
 		}
 	}
 }
@@ -105,7 +130,7 @@ type Exporter struct {
 }
 
 // PushTo return a callback function that will push points on each call.
-func (e *Exporter) PushTo(p types.PointPusher) func(time.Time) {
+func (e *Exporter) PushTo(p types.PointPusher) func(context.Context, time.Time) {
 	return (&pusher{
 		exporter: e,
 		pusher:   p,

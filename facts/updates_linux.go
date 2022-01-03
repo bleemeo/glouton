@@ -18,6 +18,8 @@ package facts
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"glouton/logger"
 	"io/ioutil"
 	"os"
@@ -26,12 +28,17 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 )
+
+const maxAge = 2 * 24 * time.Hour
+
+var errOutDated = errors.New("cache is too old")
 
 func decodeUpdateNotifierFile(content []byte) (pendingUpdates int, pendingSecurityUpdates int) {
 	pendingUpdates = -1
 	pendingSecurityUpdates = -1
-	re := regexp.MustCompile(`^(\d+) [\pL\s]+.$`)
+	re := regexp.MustCompile(`^(\d+) [\pL\s:]+.$`)
 	firstMatch := true
 
 	for _, line := range strings.Split(string(content), "\n") {
@@ -44,6 +51,10 @@ func decodeUpdateNotifierFile(content []byte) (pendingUpdates int, pendingSecuri
 			tmp, _ := strconv.ParseInt(match[1], 10, 0)
 			pendingSecurityUpdates = int(tmp)
 		}
+	}
+
+	if pendingUpdates != -1 && pendingSecurityUpdates == -1 {
+		pendingSecurityUpdates = 0
 	}
 
 	return pendingUpdates, pendingSecurityUpdates
@@ -132,34 +143,43 @@ func decodeYUM(content []byte, contentSecurity []byte) (pendingUpdates int, pend
 	return
 }
 
-func (uf updateFacter) fromUpdateNotifierFile(context.Context) (pendingUpdates int, pendingSecurityUpdates int) {
+func (uf updateFacter) fromUpdateNotifierFile(context.Context) (pendingUpdates int, pendingSecurityUpdates int, err error) {
 	updateFile := filepath.Join(uf.HostRootPath, "var/lib/update-notifier/updates-available")
+
+	stat, err := os.Stat(updateFile)
+	if err != nil {
+		return -1, -1, fmt.Errorf("unable to stat file %v: %w", updateFile, err)
+	}
 
 	content, err := ioutil.ReadFile(updateFile)
 	if err != nil {
-		logger.V(2).Printf("Unable to read file %#v: %v", updateFile, err)
-
-		return -1, -1
+		return -1, -1, fmt.Errorf("unable to read file %v: %w", updateFile, err)
 	}
 
-	return decodeUpdateNotifierFile(content)
+	if time.Since(stat.ModTime()) > maxAge {
+		err = fmt.Errorf("update-notifier/updates-available: %w", errOutDated)
+	}
+
+	pendingUpdates, pendingSecurityUpdates = decodeUpdateNotifierFile(content)
+
+	return pendingUpdates, pendingSecurityUpdates, err
 }
 
-func (uf updateFacter) fromAPTCheck(ctx context.Context) (pendingUpdates int, pendingSecurityUpdates int) {
+func (uf updateFacter) fromAPTCheck(ctx context.Context) (pendingUpdates int, pendingSecurityUpdates int, err error) {
 	cmd := exec.CommandContext(ctx, "/usr/lib/update-notifier/apt-check")
 	cmd.Env = uf.Environ
 
 	content, err := cmd.CombinedOutput()
 	if err != nil {
-		logger.V(2).Printf("Unable to execute apt-check: %v", err)
-
-		return -1, -1
+		return -1, -1, fmt.Errorf("unable to execute apt-check: %w", err)
 	}
 
-	return decodeAPTCheck(content)
+	a, b := decodeAPTCheck(content)
+
+	return a, b, nil
 }
 
-func (uf updateFacter) fromAPTGet(ctx context.Context) (pendingUpdates int, pendingSecurityUpdates int) {
+func (uf updateFacter) fromAPTGet(ctx context.Context) (pendingUpdates int, pendingSecurityUpdates int, err error) {
 	cmd := exec.CommandContext(ctx, "apt-get", "--simulate", "-o", "Debug::NoLocking=true", "--quiet", "--quiet", "dist-upgrade")
 	cmd.Env = uf.Environ
 
@@ -167,35 +187,35 @@ func (uf updateFacter) fromAPTGet(ctx context.Context) (pendingUpdates int, pend
 	if err != nil {
 		logger.V(2).Printf("Unable to execute apt-get: %v", err)
 
-		return -1, -1
+		return -1, -1, fmt.Errorf("unable to execute apt-get: %w", err)
 	}
 
-	return decodeAPTGet(content)
+	a, b := decodeAPTGet(content)
+
+	return a, b, nil
 }
 
-func (uf updateFacter) fromDNF(ctx context.Context) (pendingUpdates int, pendingSecurityUpdates int) {
+func (uf updateFacter) fromDNF(ctx context.Context) (pendingUpdates int, pendingSecurityUpdates int, err error) {
 	cmd := exec.CommandContext(ctx, "dnf", "--cacheonly", "--quiet", "updateinfo", "--list")
 	cmd.Env = uf.Environ
 
 	content, err := cmd.CombinedOutput()
 	if err != nil {
-		logger.V(2).Printf("Unable to execute dnf %v", err)
-
-		return -1, -1
+		return -1, -1, fmt.Errorf("unable to execute dnf: %w", err)
 	}
 
-	return decodeDNF(content)
+	a, b := decodeDNF(content)
+
+	return a, b, nil
 }
 
-func (uf updateFacter) fromYUM(ctx context.Context) (pendingUpdates int, pendingSecurityUpdates int) {
+func (uf updateFacter) fromYUM(ctx context.Context) (pendingUpdates int, pendingSecurityUpdates int, err error) {
 	cmd := exec.CommandContext(ctx, "yum", "--cacheonly", "--quiet", "list", "updates")
 	cmd.Env = uf.Environ
 
 	content, err := cmd.CombinedOutput()
 	if err != nil {
-		logger.V(2).Printf("Unable to execute yum: %v", err)
-
-		return -1, -1
+		return -1, -1, fmt.Errorf("unable to execute yum: %w", err)
 	}
 
 	cmd = exec.CommandContext(ctx, "yum", "--cacheonly", "--quiet", "--security", "list", "updates")
@@ -203,19 +223,30 @@ func (uf updateFacter) fromYUM(ctx context.Context) (pendingUpdates int, pending
 
 	contentSecurity, err := cmd.CombinedOutput()
 	if err != nil {
-		logger.V(2).Printf("Unable to execute yum: %v", err)
-
-		return -1, -1
+		return -1, -1, fmt.Errorf("unable to execute yum: %w", err)
 	}
 
-	return decodeYUM(content, contentSecurity)
+	a, b := decodeYUM(content, contentSecurity)
+
+	return a, b, nil
+}
+
+func (uf updateFacter) freshness() time.Time {
+	updateFile := filepath.Join(uf.HostRootPath, "var/lib/update-notifier/updates-available")
+
+	stat, err := os.Stat(updateFile)
+	if err != nil {
+		return time.Time{}
+	}
+
+	return stat.ModTime()
 }
 
 func (uf updateFacter) pendingUpdates(ctx context.Context) (pendingUpdates int, pendingSecurityUpdates int) {
 	pendingUpdates = -1
 	pendingSecurityUpdates = -1
 
-	methods := []func(context.Context) (int, int){
+	methods := []func(context.Context) (int, int, error){
 		uf.fromUpdateNotifierFile,
 	}
 
@@ -241,13 +272,43 @@ func (uf updateFacter) pendingUpdates(ctx context.Context) (pendingUpdates int, 
 	}
 
 	for i, m := range methods {
-		pendingUpdates, pendingSecurityUpdates = m(ctx)
-		if pendingUpdates != -1 || pendingSecurityUpdates != -1 {
-			logger.V(4).Printf("Pending updates calculated with method %d: %d, %d", i, pendingUpdates, pendingSecurityUpdates)
+		a, b, err := m(ctx)
+		if err != nil && !errors.Is(err, errOutDated) {
+			logger.V(4).Printf("Pending updates method %d failed: %v", i, err)
 
+			continue
+		}
+
+		logger.V(4).Printf("Pending updates calculated with method %d: %d, %d", i, a, b)
+
+		if errors.Is(err, errOutDated) {
+			logger.V(4).Printf("Pending updates method %d is outdated, continuing with next method", i)
+
+			if pendingUpdates == -1 {
+				pendingUpdates = a
+			}
+
+			if pendingSecurityUpdates == -1 {
+				pendingSecurityUpdates = b
+			}
+
+			continue
+		}
+
+		if a != -1 {
+			pendingUpdates = a
+		}
+
+		if b != -1 {
+			pendingSecurityUpdates = b
+		}
+
+		if pendingUpdates != -1 || pendingSecurityUpdates != -1 {
 			break
 		}
 	}
+
+	logger.V(4).Printf("Pending updates final result: %d, %d", pendingUpdates, pendingSecurityUpdates)
 
 	return pendingUpdates, pendingSecurityUpdates
 }

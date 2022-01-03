@@ -14,13 +14,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// nolint: scopelint
+//nolint:scopelint
 package agent
 
 import (
 	"glouton/config"
+	"net/url"
 	"reflect"
 	"testing"
+
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 )
 
 func Test_confFieldToSliceMap(t *testing.T) {
@@ -158,7 +162,7 @@ func Test_confFieldToSliceMap(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// nolint: scopelint
+			//nolint:scopelint
 			if got := confFieldToSliceMap(tt.args.input, tt.args.confType); !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("confFieldToSliceMap() = %v, want %v", got, tt.want)
 			}
@@ -235,7 +239,6 @@ func Test_migrate(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cfg := &config.Configuration{}
-
 			if err := configLoadFile(tt.cfgFilename, cfg); err != nil {
 				t.Error(err)
 			}
@@ -260,6 +263,272 @@ func Test_migrate(t *testing.T) {
 				} else if !reflect.DeepEqual(got, want) {
 					t.Errorf("Get(%v) = %#v, want %#v", key, got, want)
 				}
+			}
+		})
+	}
+}
+
+func Test_loadConfiguration(t *testing.T) {
+	URLMustParse := func(raw string) *url.URL {
+		u, err := url.Parse(raw)
+		if err != nil {
+			panic(err)
+		}
+
+		return u
+	}
+
+	tests := []struct {
+		name        string
+		configFiles []string
+		envs        map[string]string
+		wantKeys    map[string]interface{}
+		absentKeys  []string
+		wantErr     bool
+		warnings    []string
+		wantCfg     Config
+	}{
+		{
+			name: "migration file",
+			configFiles: []string{
+				"testdata/old-prometheus-targets.conf",
+			},
+			absentKeys: []string{"metric.prometheus.test1"},
+			wantKeys: map[string]interface{}{
+				"metric.prometheus.targets": []interface{}{
+					map[string]interface{}{
+						"name": "test1",
+						"url":  "http://localhost:9090/metrics",
+					},
+				},
+			},
+			warnings: []string{
+				"setting is deprecated: metrics.prometheus. See https://docs.bleemeo.com/metrics-sources/prometheus",
+			},
+			wantCfg: Config{
+				SNMP: SNMP{ExporterURL: URLMustParse("http://localhost:9116/snmp")},
+			},
+		},
+		{
+			name: "new file",
+			configFiles: []string{
+				"testdata/new-prometheus-targets.conf",
+			},
+			absentKeys: []string{"metric.prometheus.test1"},
+			wantKeys: map[string]interface{}{
+				"metric.prometheus.targets": []interface{}{
+					map[string]interface{}{
+						"name": "test1",
+						"url":  "http://localhost:9090/metrics",
+					},
+				},
+			},
+			warnings: nil,
+			wantCfg: Config{
+				SNMP: SNMP{ExporterURL: URLMustParse("http://localhost:9116/snmp")},
+			},
+		},
+		{
+			name: "services",
+			configFiles: []string{
+				"testdata/services.conf.d",
+			},
+			warnings: []string{
+				"invalid config value: a key \"id\" is missing in one of your service override",
+				"invalid config value: service id \" not fixable@\" can only contains letters, digits and underscore",
+				"invalid config value: service id \"custom-bad.name\" can not contains dot (.) or dash (-). Changed to \"custom_bad_name\"",
+			},
+			wantCfg: Config{
+				Services: Services{
+					{
+						ID:       "apache",
+						Instance: "",
+						ExtraAttribute: map[string]string{
+							"port":      "80",
+							"address":   "127.0.0.1",
+							"http_path": "/",
+							"http_host": "127.0.0.1:80",
+						},
+					},
+					{
+						ID:       "apache",
+						Instance: "CONTAINER_NAME",
+						ExtraAttribute: map[string]string{
+							"port":      "80",
+							"address":   "172.17.0.2",
+							"http_path": "/",
+							"http_host": "127.0.0.1:80",
+						},
+					},
+					{
+						ID: "myapplication",
+						ExtraAttribute: map[string]string{
+							"port":          "8080",
+							"check_type":    "nagios",
+							"check_command": "command-to-run",
+						},
+					},
+					{
+						ID: "custom_webserver",
+						ExtraAttribute: map[string]string{
+							"port":       "8181",
+							"check_type": "http",
+						},
+					},
+					{
+						ID: "custom_bad_name",
+						ExtraAttribute: map[string]string{
+							"check_type":    "nagios",
+							"check_command": "azerty",
+						},
+					},
+				},
+				SNMP: SNMP{ExporterURL: URLMustParse("http://localhost:9116/snmp")},
+			},
+		},
+		{
+			name: "enabled renamed",
+			configFiles: []string{
+				"testdata/enabled.conf",
+			},
+			absentKeys: []string{"agent.windows_exporter.enabled", "telegraf.docker_metrics_enabled", "web.enabled"},
+			wantKeys: map[string]interface{}{
+				"agent.windows_exporter.enable":  true,
+				"telegraf.docker_metrics_enable": true,
+			},
+			warnings: []string{
+				"setting is deprecated: agent.windows_exporter.enabled. Please use agent.windows_exporter.enable",
+				"setting is deprecated: telegraf.docker_metrics_enabled. Please use telegraf.docker_metrics_enable",
+			},
+			wantCfg: Config{
+				SNMP: SNMP{ExporterURL: URLMustParse("http://localhost:9116/snmp")},
+			},
+		},
+		{
+			name: "folder",
+			configFiles: []string{
+				"testdata/folder1",
+			},
+			absentKeys: []string{"bleemeo.enabled"},
+			wantKeys: map[string]interface{}{
+				"bleemeo.enable":     false,
+				"bleemeo.account_id": "second",
+			},
+			warnings: []string{
+				"setting is deprecated: bleemeo.enabled. Please use bleemeo.enable",
+			},
+			wantCfg: Config{
+				SNMP: SNMP{ExporterURL: URLMustParse("http://localhost:9116/snmp")},
+			},
+		},
+		{
+			name: "deprecated envs",
+			configFiles: []string{
+				"testdata/empty.conf",
+			},
+			envs: map[string]string{
+				"BLEEMEO_AGENT_ACCOUNT":      "the-account-id",
+				"GLOUTON_KUBERNETES_ENABLED": "true",
+			},
+			absentKeys: []string{"kubernetes.enabled"},
+			wantKeys: map[string]interface{}{
+				"bleemeo.account_id": "the-account-id",
+				"kubernetes.enable":  true,
+			},
+			warnings: []string{
+				"environement variable is deprecated: BLEEMEO_AGENT_ACCOUNT, use GLOUTON_BLEEMEO_ACCOUNT_ID instead",
+				"environement variable is deprecated: GLOUTON_KUBERNETES_ENABLED, use GLOUTON_KUBERNETES_ENABLE instead",
+			},
+			wantCfg: Config{
+				SNMP: SNMP{ExporterURL: URLMustParse("http://localhost:9116/snmp")},
+			},
+		},
+		{
+			name: "bleemeo-agent envs",
+			configFiles: []string{
+				"testdata/empty.conf",
+			},
+			envs: map[string]string{
+				"BLEEMEO_AGENT_KUBERNETES_ENABLE": "true",
+				"BLEEMEO_AGENT_BLEEMEO_ENABLED":   "true",
+			},
+			absentKeys: []string{"kubernetes.enabled", "bleemeo.enabled"},
+			wantKeys: map[string]interface{}{
+				"bleemeo.enable":    true,
+				"kubernetes.enable": true,
+			},
+			warnings: []string{
+				"environement variable is deprecated: BLEEMEO_AGENT_KUBERNETES_ENABLE, use GLOUTON_KUBERNETES_ENABLE instead",
+				"environement variable is deprecated: BLEEMEO_AGENT_BLEEMEO_ENABLED, use GLOUTON_BLEEMEO_ENABLE instead",
+			},
+			wantCfg: Config{
+				SNMP: SNMP{ExporterURL: URLMustParse("http://localhost:9116/snmp")},
+			},
+		},
+		{
+			name: "old-logging",
+			configFiles: []string{
+				"testdata/old-logging.conf",
+			},
+			wantKeys: map[string]interface{}{
+				"logging.buffer.head_size_bytes": 4200,
+				"logging.buffer.tail_size_bytes": 4800,
+			},
+			absentKeys: []string{"logging.buffer.head_size", "logging.buffer.tail_size"},
+			warnings: []string{
+				"setting is deprecated: logging.buffer.head_size. Please use logging.buffer.head_size_bytes",
+				"setting is deprecated: logging.buffer.tail_size. Please use logging.buffer.tail_size_bytes",
+			},
+			wantCfg: Config{
+				SNMP: SNMP{ExporterURL: URLMustParse("http://localhost:9116/snmp")},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			lookupEnv := func(envName string) (string, bool) {
+				value, ok := tt.envs[envName]
+
+				return value, ok
+			}
+
+			cfg, oldCfg, warnings, err := loadConfiguration(tt.configFiles, lookupEnv)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("loadConfiguration() error = %v, wantErr %v", err, tt.wantErr)
+
+				return
+			}
+
+			warningsString := make([]string, 0, len(warnings))
+
+			for _, v := range warnings {
+				warningsString = append(warningsString, v.Error())
+			}
+
+			lessString := func(x string, y string) bool {
+				return x < y
+			}
+
+			if diff := cmp.Diff(warningsString, tt.warnings, cmpopts.SortSlices(lessString), cmpopts.EquateEmpty()); diff != "" {
+				t.Errorf("warnings: %s", diff)
+			}
+
+			for _, key := range tt.absentKeys {
+				if v, ok := oldCfg.Get(key); ok {
+					t.Errorf("Get(%v) = %v, want absent", key, v)
+				}
+			}
+
+			for key, want := range tt.wantKeys {
+				if got, ok := oldCfg.Get(key); !ok {
+					t.Errorf("Get(%v) = nil, want present", key)
+				} else if !reflect.DeepEqual(got, want) {
+					t.Errorf("Get(%v) = %#v, want %#v", key, got, want)
+				}
+			}
+
+			if diff := cmp.Diff(tt.wantCfg, cfg, cmpopts.EquateEmpty()); diff != "" {
+				t.Error(diff)
 			}
 		})
 	}

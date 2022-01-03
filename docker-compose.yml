@@ -18,6 +18,7 @@ services:
     - GLOUTON_JMXTRANS_GRAPHITE_PORT
     - GLOUTON_LOGGING_LEVEL
     - GLOUTON_LOGGING_PACKAGE_LEVELS
+    - GLOUTON_CONFIG_FILES
     - GLOUTON_JMXTRANS_FILE_PERMISSION=644 # this file may contains password but it written in a Docker volume only accessible to jmxtrans and Glouton
     volumes:
     - /var/run/docker.sock:/var/run/docker.sock

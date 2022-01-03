@@ -14,6 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//go:build !windows
 // +build !windows
 
 package registry
@@ -39,7 +40,15 @@ func (r *Registry) AddNodeExporter(option node.Option) error {
 		return err
 	}
 
-	_, err = r.RegisterGatherer(reg, nil, nil, r.MetricFormat == types.MetricFormatPrometheus)
+	_, err = r.RegisterGatherer(
+		RegistrationOption{
+			Description: "node_exporter",
+			JitterSeed:  baseJitter,
+			Interval:    defaultInterval,
+		},
+		reg,
+		r.option.MetricFormat == types.MetricFormatPrometheus,
+	)
 
 	return err
 }

@@ -14,10 +14,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// nolint:scopelint
+//nolint:scopelint
 package jmxtrans
 
 import (
+	"context"
 	"fmt"
 	"glouton/discovery"
 	"glouton/logger"
@@ -32,7 +33,7 @@ type fakeStore struct {
 	ByName map[string]types.Point
 }
 
-func (s *fakeStore) EmitPoint(point types.MetricPoint) {
+func (s *fakeStore) EmitPoint(_ context.Context, point types.MetricPoint) {
 	if s.ByName == nil {
 		s.ByName = make(map[string]types.Point)
 	}
@@ -390,10 +391,10 @@ func Test_jmxtransClient_processLine(t *testing.T) {
 			c.init()
 
 			for _, line := range tt.lines {
-				c.processLine(line)
+				c.processLine(context.Background(), line)
 			}
 
-			c.flush()
+			c.flush(context.Background())
 
 			if !reflect.DeepEqual(store.ByName, tt.want) {
 				t.Errorf("store contains = %v, want %v", store.ByName, tt.want)

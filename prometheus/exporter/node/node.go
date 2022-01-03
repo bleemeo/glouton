@@ -9,7 +9,7 @@ import (
 	"strings"
 	_ "unsafe" // using hack with go linkname to access private variable :)
 
-	"github.com/go-kit/kit/log"
+	"github.com/go-kit/log"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/node_exporter/collector"
 	"gopkg.in/alecthomas/kingpin.v2"
@@ -27,7 +27,7 @@ type Option struct {
 }
 
 //go:linkname collectorState github.com/prometheus/node_exporter/collector.collectorState
-var collectorState map[string]*bool // nolint: gochecknoglobals
+var collectorState map[string]*bool //nolint:gochecknoglobals
 
 func setCollector(collectorName []string) {
 	var unknown []string

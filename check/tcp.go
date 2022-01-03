@@ -55,7 +55,7 @@ func NewTCP(address string, tcpAddresses []string, persistentConnection bool, se
 		expect:      expect,
 		closeMsg:    closeMsg,
 	}
-	mainCheck := tc.doCheck
+	mainCheck := tc.tcpMainCheck
 
 	if address == "" {
 		mainCheck = nil
@@ -66,7 +66,7 @@ func NewTCP(address string, tcpAddresses []string, persistentConnection bool, se
 	return tc
 }
 
-func (tc *TCPCheck) doCheck(ctx context.Context) types.StatusDescription {
+func (tc *TCPCheck) tcpMainCheck(ctx context.Context) types.StatusDescription {
 	if tc.mainAddress == "" {
 		return types.StatusDescription{}
 	}
@@ -74,7 +74,7 @@ func (tc *TCPCheck) doCheck(ctx context.Context) types.StatusDescription {
 	return checkTCP(ctx, tc.mainAddress, tc.send, tc.expect, tc.closeMsg)
 }
 
-//nolint:gocyclo,cyclop
+//nolint:cyclop
 func checkTCP(ctx context.Context, address string, send []byte, expect []byte, closeMsg []byte) types.StatusDescription {
 	_, portStr, err := net.SplitHostPort(address)
 	if err != nil {

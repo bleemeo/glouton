@@ -14,11 +14,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//go:build linux
 // +build linux
 
 package process
 
 import (
+	"context"
 	"glouton/types"
 	"time"
 
@@ -33,7 +35,7 @@ type pusher struct {
 	lastTime  map[string]time.Time
 }
 
-func (p *pusher) push(t0 time.Time) {
+func (p *pusher) push(ctx context.Context, t0 time.Time) {
 	p.exporter.init()
 	p.exporter.l.Lock()
 	defer p.exporter.l.Unlock()
@@ -240,7 +242,7 @@ func (p *pusher) push(t0 time.Time) {
 				)
 			}
 
-			p.pusher.PushPoints(points)
+			p.pusher.PushPoints(ctx, points)
 		}
 	}
 }

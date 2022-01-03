@@ -46,7 +46,6 @@ type HTTPClient struct {
 	baseURL  *url.URL
 	username string
 	password string
-	ctx      context.Context
 
 	cl *http.Client
 
@@ -54,6 +53,7 @@ type HTTPClient struct {
 	jwtToken            string
 	throttleDeadline    time.Time
 	throttleConsecutive int
+	requestsCount       int
 }
 
 // APIError are returned when HTTP request got a response but that response is
@@ -61,6 +61,8 @@ type HTTPClient struct {
 type APIError struct {
 	StatusCode   int
 	Content      string
+	ContentType  string
+	FinalURL     string
 	UnmarshalErr error
 	IsAuthError  bool
 }
@@ -134,7 +136,7 @@ func (ae APIError) Error() string {
 //
 // It does the authentication (using JWT currently) and may do rate-limiting/throtteling, so
 // most function may return a ThrottleError.
-func NewClient(ctx context.Context, baseURL string, username string, password string, insecureTLS bool) (*HTTPClient, error) {
+func NewClient(baseURL string, username string, password string, insecureTLS bool) (*HTTPClient, error) {
 	u, err := url.Parse(baseURL)
 	if err != nil {
 		return nil, err
@@ -144,13 +146,12 @@ func NewClient(ctx context.Context, baseURL string, username string, password st
 		Transport: &http.Transport{
 			Proxy: http.ProxyFromEnvironment,
 			TLSClientConfig: &tls.Config{
-				InsecureSkipVerify: insecureTLS, //nolint: gosec
+				InsecureSkipVerify: insecureTLS, //nolint:gosec
 			},
 		},
 	}
 
 	return &HTTPClient{
-		ctx:      ctx,
 		baseURL:  u,
 		username: username,
 		password: password,
@@ -164,6 +165,13 @@ func (c *HTTPClient) ThrottleDeadline() time.Time {
 	defer c.l.Unlock()
 
 	return c.throttleDeadline
+}
+
+func (c *HTTPClient) RequestsCount() int {
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	return c.requestsCount
 }
 
 // Do perform the specified request.
@@ -246,7 +254,7 @@ func (c *HTTPClient) prepareRequest(method string, path string, params map[strin
 }
 
 // PostAuth perform the post on specified path. baseURL will be always be added.
-func (c *HTTPClient) PostAuth(path string, data interface{}, username string, password string, result interface{}) (statusCode int, err error) {
+func (c *HTTPClient) PostAuth(ctx context.Context, path string, data interface{}, username string, password string, result interface{}) (statusCode int, err error) {
 	c.l.Lock()
 	defer c.l.Unlock()
 
@@ -257,7 +265,9 @@ func (c *HTTPClient) PostAuth(path string, data interface{}, username string, pa
 
 	req.SetBasicAuth(username, password)
 
-	return c.sendRequest(req, result, false)
+	statusCode, err = c.sendRequest(ctx, req, result, false)
+
+	return statusCode, err
 }
 
 // Iter read all page for given resource.
@@ -269,7 +279,7 @@ func (c *HTTPClient) Iter(ctx context.Context, resource string, params map[strin
 	}
 
 	if _, ok := params["page_size"]; !ok {
-		params["page_size"] = "100"
+		params["page_size"] = "10000"
 	}
 
 	result := make([]json.RawMessage, 0)
@@ -316,7 +326,7 @@ func (c *HTTPClient) do(ctx context.Context, req *http.Request, result interface
 
 	if withAuth {
 		if c.jwtToken == "" {
-			newToken, err := c.GetJWT()
+			newToken, err := c.GetJWT(ctx)
 			if err != nil {
 				return 0, err
 			}
@@ -328,7 +338,7 @@ func (c *HTTPClient) do(ctx context.Context, req *http.Request, result interface
 	}
 
 	for {
-		statusCode, err := c.sendRequest(req, result, forceInsecure)
+		statusCode, err := c.sendRequest(ctx, req, result, forceInsecure)
 
 		// reset the JWT token if the call wasn't authorized, the JWT token may have expired
 		if withAuth && firstCall && err != nil {
@@ -363,7 +373,7 @@ func (c *HTTPClient) do(ctx context.Context, req *http.Request, result interface
 }
 
 // GetJWT return a new JWT token for authentication with Bleemeo API.
-func (c *HTTPClient) GetJWT() (string, error) {
+func (c *HTTPClient) GetJWT(ctx context.Context) (string, error) {
 	u, _ := c.baseURL.Parse("v1/jwt-auth/")
 
 	body, _ := json.Marshal(map[string]string{
@@ -382,7 +392,7 @@ func (c *HTTPClient) GetJWT() (string, error) {
 		Token string
 	}
 
-	statusCode, err := c.sendRequest(req, &token, false)
+	statusCode, err := c.sendRequest(ctx, req, &token, false)
 	if err != nil {
 		if apiError, ok := err.(APIError); ok {
 			if apiError.StatusCode < 500 && apiError.StatusCode != 429 {
@@ -413,7 +423,7 @@ func (c *HTTPClient) GetJWT() (string, error) {
 	return token.Token, nil
 }
 
-func (c *HTTPClient) sendRequest(req *http.Request, result interface{}, forceInsecure bool) (int, error) {
+func (c *HTTPClient) sendRequest(ctx context.Context, req *http.Request, result interface{}, forceInsecure bool) (statusCode int, err error) {
 	if time.Until(c.throttleDeadline) > 0 {
 		return 0, APIError{
 			StatusCode: 429,
@@ -424,7 +434,7 @@ func (c *HTTPClient) sendRequest(req *http.Request, result interface{}, forceIns
 	req.Header.Add("X-Requested-With", "XMLHttpRequest")
 	req.Header.Add("User-Agent", version.UserAgent())
 
-	ctx, cancel := context.WithTimeout(c.ctx, 10*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
 	req = req.WithContext(ctx)
@@ -435,11 +445,13 @@ func (c *HTTPClient) sendRequest(req *http.Request, result interface{}, forceIns
 			Transport: &http.Transport{
 				Proxy: http.ProxyFromEnvironment,
 				TLSClientConfig: &tls.Config{
-					InsecureSkipVerify: true, //nolint: gosec
+					InsecureSkipVerify: true, //nolint:gosec
 				},
 			},
 		}
 	}
+
+	c.requestsCount++
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -458,7 +470,7 @@ func (c *HTTPClient) sendRequest(req *http.Request, result interface{}, forceIns
 	}
 
 	if resp.StatusCode >= 400 {
-		err := decodeError(resp)
+		err := fieldsFromResponse(resp, decodeError(resp))
 
 		if resp.StatusCode == 429 {
 			c.throttleConsecutive++
@@ -481,21 +493,39 @@ func (c *HTTPClient) sendRequest(req *http.Request, result interface{}, forceIns
 			c.throttleDeadline = time.Now().Add(delay)
 		}
 
-		return 0, err
+		return resp.StatusCode, err
 	}
 
 	if result != nil {
 		err = json.NewDecoder(resp.Body).Decode(result)
 		if err != nil {
-			return 0, APIError{
+			return resp.StatusCode, fieldsFromResponse(resp, APIError{
 				StatusCode:   resp.StatusCode,
 				Content:      "",
 				UnmarshalErr: err,
-			}
+			})
 		}
 	}
 
 	return resp.StatusCode, nil
+}
+
+func fieldsFromResponse(resp *http.Response, err APIError) APIError {
+	if resp == nil {
+		return err
+	}
+
+	if resp.Request != nil && resp.Request.URL != nil {
+		err.FinalURL = resp.Request.URL.String()
+	}
+
+	if resp.Header != nil {
+		err.ContentType = resp.Header.Get("content-type")
+	}
+
+	err.StatusCode = resp.StatusCode
+
+	return err
 }
 
 func decodeError(resp *http.Response) APIError {
@@ -504,7 +534,6 @@ func decodeError(resp *http.Response) APIError {
 		n, _ := resp.Body.Read(partialBody)
 
 		return APIError{
-			StatusCode:   resp.StatusCode,
 			Content:      string(partialBody[:n]),
 			UnmarshalErr: nil,
 			IsAuthError:  resp.StatusCode == 401,
@@ -524,7 +553,6 @@ func decodeError(resp *http.Response) APIError {
 	err := json.NewDecoder(resp.Body).Decode(&jsonMessage)
 	if err != nil {
 		return APIError{
-			StatusCode:   resp.StatusCode,
 			Content:      "",
 			UnmarshalErr: err,
 			IsAuthError:  resp.StatusCode == 401,
@@ -538,7 +566,6 @@ func decodeError(resp *http.Response) APIError {
 
 	if err != nil {
 		return APIError{
-			StatusCode:   resp.StatusCode,
 			Content:      "",
 			UnmarshalErr: err,
 			IsAuthError:  resp.StatusCode == 401,
@@ -547,7 +574,6 @@ func decodeError(resp *http.Response) APIError {
 
 	if errorList != nil {
 		return APIError{
-			StatusCode:   resp.StatusCode,
 			Content:      strings.Join(errorList, ", "),
 			UnmarshalErr: nil,
 			IsAuthError:  resp.StatusCode == 401,
@@ -565,7 +591,6 @@ func decodeError(resp *http.Response) APIError {
 		}
 
 		return APIError{
-			StatusCode:   resp.StatusCode,
 			Content:      errorMessage,
 			UnmarshalErr: nil,
 			IsAuthError:  resp.StatusCode == 401,
@@ -573,7 +598,6 @@ func decodeError(resp *http.Response) APIError {
 	}
 
 	return APIError{
-		StatusCode:   resp.StatusCode,
 		Content:      string(jsonMessage),
 		UnmarshalErr: nil,
 		IsAuthError:  resp.StatusCode == 401,

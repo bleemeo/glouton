@@ -19,9 +19,9 @@ package scrapper
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"glouton/logger"
+	"glouton/prometheus/registry"
 	"glouton/version"
 	"io"
 	"io/ioutil"
@@ -33,7 +33,28 @@ import (
 	"github.com/prometheus/common/expfmt"
 )
 
-var errIncorrectStatus = errors.New("incorrect status")
+const defaultGatherTimeout = 10 * time.Second
+
+type TargetError struct {
+	// First 32kb of response
+	PartialBody []byte
+	StatusCode  int
+	ConnectErr  error
+	ReadErr     error
+	DecodeErr   error
+}
+
+func (e TargetError) Error() string {
+	if e.ReadErr != nil {
+		return e.ReadErr.Error()
+	}
+
+	if e.ConnectErr != nil {
+		return e.ConnectErr.Error()
+	}
+
+	return fmt.Sprintf("unexpected HTTP status %d", e.StatusCode)
+}
 
 // Target is an URL to scrape.
 type Target struct {
@@ -42,6 +63,24 @@ type Target struct {
 	DenyList        []string
 	ExtraLabels     map[string]string
 	ContainerLabels map[string]string
+	mockResponse    []byte
+}
+
+func NewMock(content []byte, extraLabels map[string]string) *Target {
+	return &Target{
+		ExtraLabels:  extraLabels,
+		mockResponse: content,
+		URL: &url.URL{
+			Scheme: "mock",
+		},
+	}
+}
+
+func New(u *url.URL, extraLabels map[string]string) *Target {
+	return &Target{
+		ExtraLabels: extraLabels,
+		URL:         u,
+	}
 }
 
 // HostPort return host:port.
@@ -58,11 +97,18 @@ func HostPort(u *url.URL) string {
 
 // Gather implement prometheus.Gatherer.
 func (t *Target) Gather() ([]*dto.MetricFamily, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultGatherTimeout)
+	defer cancel()
+
+	return t.GatherWithState(ctx, registry.GatherState{})
+}
+
+func (t *Target) GatherWithState(ctx context.Context, state registry.GatherState) ([]*dto.MetricFamily, error) {
 	u := t.URL
 
 	logger.V(2).Printf("Scrapping Prometheus exporter %s", u.String())
 
-	body, err := t.readAll()
+	body, err := t.readAll(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("read from %s: %w", u.String(), err)
 	}
@@ -73,7 +119,9 @@ func (t *Target) Gather() ([]*dto.MetricFamily, error) {
 
 	resultMap, err := parser.TextToMetricFamilies(reader)
 	if err != nil {
-		return nil, fmt.Errorf("parse metrics from %s: %w", u.String(), err)
+		return nil, TargetError{
+			DecodeErr: err,
+		}
 	}
 
 	result := make([]*dto.MetricFamily, 0, len(resultMap))
@@ -85,9 +133,13 @@ func (t *Target) Gather() ([]*dto.MetricFamily, error) {
 	return result, nil
 }
 
-func (t *Target) readAll() ([]byte, error) {
+func (t *Target) readAll(ctx context.Context) ([]byte, error) {
 	if t.URL.Scheme == "file" || t.URL.Scheme == "" {
 		return ioutil.ReadFile(t.URL.Path)
+	}
+
+	if t.URL.Scheme == "mock" {
+		return t.mockResponse, nil
 	}
 
 	req, err := http.NewRequest("GET", t.URL.String(), nil)
@@ -98,24 +150,34 @@ func (t *Target) readAll() ([]byte, error) {
 	req.Header.Add("Accept", "text/plain;version=0.0.4")
 	req.Header.Set("User-Agent", version.UserAgent())
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
 	resp, err := http.DefaultClient.Do(req.WithContext(ctx))
 	if err != nil {
-		return nil, err
+		return nil, TargetError{
+			ConnectErr: err,
+		}
 	}
 
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
+		buffer, err := io.ReadAll(io.LimitReader(resp.Body, 32*1024))
+
 		// Ensure response body is read to allow HTTP keep-alive to works
 		_, _ = io.Copy(ioutil.Discard, resp.Body)
 
-		return nil, fmt.Errorf("%w: exporter %s HTTP status is %s", errIncorrectStatus, t.URL.String(), resp.Status)
+		return nil, TargetError{
+			PartialBody: buffer,
+			StatusCode:  resp.StatusCode,
+			ReadErr:     err,
+		}
 	}
 
 	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		err = TargetError{
+			ReadErr: err,
+		}
+	}
 
 	return body, err
 }

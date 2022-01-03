@@ -1,0 +1,27 @@
+# HELP entPhysicalFirmwareRev The vendor-specific firmware revision string for the physical entity - 1.3.6.1.2.1.47.1.1.1.1.9
+# TYPE entPhysicalFirmwareRev gauge
+entPhysicalFirmwareRev{entPhysicalFirmwareRev="2.8",entPhysicalIndex="1"} 1
+# HELP entPhysicalSerialNum The vendor-specific serial number string for the physical entity - 1.3.6.1.2.1.47.1.1.1.1.11
+# TYPE entPhysicalSerialNum gauge
+entPhysicalSerialNum{entPhysicalIndex="1",entPhysicalSerialNum=""} 1
+# HELP entPhysicalSoftwareRev The vendor-specific software revision string for the physical entity - 1.3.6.1.2.1.47.1.1.1.1.10
+# TYPE entPhysicalSoftwareRev gauge
+entPhysicalSoftwareRev{entPhysicalIndex="1",entPhysicalSoftwareRev=""} 1
+# HELP snmp_scrape_duration_seconds Total SNMP time scrape took (walk and processing).
+# TYPE snmp_scrape_duration_seconds gauge
+snmp_scrape_duration_seconds 0.048719959
+# HELP snmp_scrape_pdus_returned PDUs returned from walk.
+# TYPE snmp_scrape_pdus_returned gauge
+snmp_scrape_pdus_returned 6
+# HELP snmp_scrape_walk_duration_seconds Time SNMP walk/bulkwalk took.
+# TYPE snmp_scrape_walk_duration_seconds gauge
+snmp_scrape_walk_duration_seconds 0.048437625
+# HELP sysDescr A textual description of the entity - 1.3.6.1.2.1.1.1
+# TYPE sysDescr gauge
+sysDescr{sysDescr="VMware ESXi 6.5.0 build-14320405 VMware, Inc. x86_64"} 1
+# HELP sysName An administratively-assigned name for this managed node - 1.3.6.1.2.1.1.5
+# TYPE sysName gauge
+sysName{sysName="localhost.bleemeo.work"} 1
+# HELP sysUpTime The time (in hundredths of a second) since the network management portion of the system was last re-initialized. - 1.3.6.1.2.1.1.3
+# TYPE sysUpTime gauge
+sysUpTime 1.4204e+06

@@ -21,11 +21,13 @@ import (
 	bleemeoTypes "glouton/bleemeo/types"
 	"glouton/logger"
 	"glouton/types"
+	"strings"
 	"sync"
+	"time"
 )
 
 const (
-	cacheVersion = 4
+	cacheVersion = 6
 	cacheKey     = "CacheBleemeoConnector"
 )
 
@@ -45,17 +47,15 @@ type data struct {
 	AccountID               string
 	Facts                   []bleemeoTypes.AgentFact
 	Containers              []bleemeoTypes.Container
+	Agents                  []bleemeoTypes.Agent
+	AgentTypes              []bleemeoTypes.AgentType
 	Metrics                 []bleemeoTypes.Metric
 	MetricRegistrationsFail []bleemeoTypes.MetricRegistration
 	Agent                   bleemeoTypes.Agent
-	// AccountConfig groups the configuration of other accounts, something we may need for probes.
-	// mapping config UUID -> Config
-	AccountConfigs map[string]bleemeoTypes.AccountConfig
-	// In contrast, CurrentAccountConfig stores the configuration of the account in which this
-	// agent is registered.
-	CurrentAccountConfig bleemeoTypes.AccountConfig
-	Services             []bleemeoTypes.Service
-	Monitors             []bleemeoTypes.Monitor
+	AccountConfigs          []bleemeoTypes.AccountConfig
+	AgentConfigs            []bleemeoTypes.AgentConfig
+	Services                []bleemeoTypes.Service
+	Monitors                []bleemeoTypes.Monitor
 }
 
 // dataVersion1 contains fields that have been deleted since the version 1 of the state file, but that we
@@ -65,6 +65,11 @@ type data struct {
 // See Load() for more details on the transformations we will apply to parse old versions.
 type dataVersion1 struct {
 	AccountConfig bleemeoTypes.AccountConfig
+}
+
+// dataVersion5, like dataVersion1, only contains fields from V5 that we need to read.
+type dataVersion5 struct {
+	CurrentAccountConfig bleemeoTypes.AccountConfig
 }
 
 // SetAccountID update the AccountID.
@@ -111,6 +116,24 @@ func (c *Cache) SetContainers(containers []bleemeoTypes.Container) {
 	c.dirty = true
 }
 
+// SetAgentList update agent list.
+func (c *Cache) SetAgentList(agentList []bleemeoTypes.Agent) {
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	c.data.Agents = agentList
+	c.dirty = true
+}
+
+// SetAgentTypes update agent list.
+func (c *Cache) SetAgentTypes(agentTypes []bleemeoTypes.AgentType) {
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	c.data.AgentTypes = agentTypes
+	c.dirty = true
+}
+
 // SetMonitors updates the list of monitors.
 func (c *Cache) SetMonitors(monitors []bleemeoTypes.Monitor) {
 	c.l.Lock()
@@ -137,53 +160,177 @@ func (c *Cache) SetAgent(agent bleemeoTypes.Agent) {
 	c.dirty = true
 }
 
-// SetCurrentAccountConfig updates the AccountConfig of this agent.
-func (c *Cache) SetCurrentAccountConfig(accountConfig bleemeoTypes.AccountConfig) {
+// CurrentAccountConfig returns our own AccountConfig. If the
+// configuration isn't found and a default is used.
+func (c *Cache) CurrentAccountConfig() (bleemeoTypes.GloutonAccountConfig, bool) {
+	searchMap := c.AccountConfigsByUUID()
+
 	c.l.Lock()
 	defer c.l.Unlock()
 
-	c.data.CurrentAccountConfig = accountConfig
-	c.dirty = true
-}
+	result, ok := searchMap[c.data.Agent.CurrentConfigID]
 
-// CurrentAccountConfig returns our own AccountConfig.
-func (c *Cache) CurrentAccountConfig() bleemeoTypes.AccountConfig {
-	c.l.Lock()
-	defer c.l.Unlock()
+	if _, ok := result.AgentConfigByName[bleemeoTypes.AgentTypeAgent]; !ok {
+		return result, false
+	}
 
-	return c.data.CurrentAccountConfig
+	return result, ok
 }
 
 // SetAccountConfigs updates all the external accounts configurations we care about
 // (in particular, this is necessary for the monitors).
-func (c *Cache) SetAccountConfigs(configs map[string]bleemeoTypes.AccountConfig) {
+func (c *Cache) SetAccountConfigs(configs []bleemeoTypes.AccountConfig) {
 	c.l.Lock()
 	defer c.l.Unlock()
 
 	c.data.AccountConfigs = configs
 }
 
-// AccountConfigs returns the mapping between the accoutn config UUID and  list of external account configurations.
-func (c *Cache) AccountConfigs() map[string]bleemeoTypes.AccountConfig {
+// SetAgentConfigs updates all the external accounts configurations we care about
+// (in particular, this is necessary for the monitors).
+func (c *Cache) SetAgentConfigs(configs []bleemeoTypes.AgentConfig) {
 	c.l.Lock()
 	defer c.l.Unlock()
 
-	result := make(map[string]bleemeoTypes.AccountConfig, len(c.data.AccountConfigs))
-	for k, v := range c.data.AccountConfigs {
-		result[k] = v
+	c.data.AgentConfigs = configs
+}
+
+// AgentConfigs returns a copy of the AgentConfig.
+func (c *Cache) AgentConfigs() []bleemeoTypes.AgentConfig {
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	result := make([]bleemeoTypes.AgentConfig, len(c.data.AgentConfigs))
+	for i, v := range c.data.AgentConfigs {
+		result[i] = v
 	}
 
 	return result
 }
 
-// FactsByKey returns a map fact.key => facts.
-func (c *Cache) FactsByKey() map[string]bleemeoTypes.AgentFact {
+// AccountConfigs returns a (copy) of the AccountConfig.
+func (c *Cache) AccountConfigs() []bleemeoTypes.AccountConfig {
 	c.l.Lock()
 	defer c.l.Unlock()
 
-	result := make(map[string]bleemeoTypes.AgentFact)
+	result := make([]bleemeoTypes.AccountConfig, len(c.data.AccountConfigs))
+	for i, v := range c.data.AccountConfigs {
+		result[i] = v
+	}
+
+	return result
+}
+
+func (c *Cache) AccountConfigsByUUID() map[string]bleemeoTypes.GloutonAccountConfig {
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	result := make(map[string]bleemeoTypes.GloutonAccountConfig, len(c.data.AccountConfigs))
+
+	for _, accountConfig := range c.data.AccountConfigs {
+		config := bleemeoTypes.GloutonAccountConfig{
+			ID:                    accountConfig.ID,
+			Name:                  accountConfig.Name,
+			LiveProcessResolution: time.Duration(accountConfig.LiveProcessResolution) * time.Second,
+			LiveProcess:           accountConfig.LiveProcess,
+			DockerIntegration:     accountConfig.DockerIntegration,
+			SNMPIntergration:      accountConfig.SNMPIntergration,
+			AgentConfigByName:     make(map[string]bleemeoTypes.GloutonAgentConfig),
+			AgentConfigByID:       make(map[string]bleemeoTypes.GloutonAgentConfig),
+		}
+
+		var (
+			agentTypeFound   bool
+			monitorTypeFound bool
+			hasAgentConfig   bool
+		)
+
+		for _, agentType := range c.data.AgentTypes {
+			for _, agentConfig := range c.data.AgentConfigs {
+				hasAgentConfig = true
+
+				if agentConfig.AgentType == agentType.ID && agentConfig.AccountConfig == accountConfig.ID {
+					config.AgentConfigByName[agentType.Name] = bleemeoTypes.GloutonAgentConfig{
+						MetricResolution: time.Duration(agentConfig.MetricResolution) * time.Second,
+						MetricsAllowlist: allowListToMap(agentConfig.MetricsAllowlist),
+					}
+
+					config.AgentConfigByID[agentType.ID] = config.AgentConfigByName[agentType.Name]
+
+					if agentType.Name == bleemeoTypes.AgentTypeAgent {
+						agentTypeFound = true
+					}
+
+					if agentType.Name == bleemeoTypes.AgentTypeMonitor {
+						monitorTypeFound = true
+					}
+
+					break
+				}
+			}
+		}
+
+		// We only fill values from AccountConfig if we have no AgentConfig (i.e. the API is the old version).
+		if !hasAgentConfig {
+			if !agentTypeFound && accountConfig.MetricAgentResolution != 0 {
+				config.AgentConfigByName[bleemeoTypes.AgentTypeAgent] = bleemeoTypes.GloutonAgentConfig{
+					MetricsAllowlist: allowListToMap(accountConfig.MetricsAgentWhitelist),
+					MetricResolution: time.Duration(accountConfig.MetricAgentResolution) * time.Second,
+				}
+			}
+
+			if !monitorTypeFound && accountConfig.MetricMonitorResolution != 0 {
+				config.AgentConfigByName[bleemeoTypes.AgentTypeMonitor] = bleemeoTypes.GloutonAgentConfig{
+					MetricsAllowlist: nil,
+					MetricResolution: time.Duration(accountConfig.MetricMonitorResolution) * time.Second,
+				}
+			}
+		}
+
+		if _, ok := config.AgentConfigByName[bleemeoTypes.AgentTypeSNMP]; !ok {
+			config.SNMPIntergration = false
+		}
+
+		if len(config.AgentConfigByName) > 0 {
+			result[accountConfig.ID] = config
+		}
+	}
+
+	return result
+}
+
+// allowListToMap return a map with from an allow-list.
+func allowListToMap(list string) map[string]bool {
+	if len(list) == 0 {
+		return nil
+	}
+
+	result := make(map[string]bool)
+
+	for _, n := range strings.Split(list, ",") {
+		result[strings.Trim(n, " \t\n")] = true
+	}
+
+	return result
+}
+
+// FactsByKey returns a map fact.agentid => fact.key => facts.
+func (c *Cache) FactsByKey() map[string]map[string]bleemeoTypes.AgentFact {
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	result := make(map[string]map[string]bleemeoTypes.AgentFact)
 	for _, v := range c.data.Facts {
-		result[v.Key] = v
+		if _, ok := result[v.AgentID]; !ok {
+			estimatedSize := len(c.data.Facts)
+			if len(c.data.Agents) > 1 {
+				estimatedSize /= len(c.data.Agents)
+			}
+
+			result[v.AgentID] = make(map[string]bleemeoTypes.AgentFact, estimatedSize)
+		}
+
+		result[v.AgentID][v.Key] = v
 	}
 
 	return result
@@ -301,6 +448,42 @@ func (c *Cache) ContainersByUUID() map[string]bleemeoTypes.Container {
 	for _, v := range c.data.Containers {
 		result[v.ID] = v
 	}
+
+	return result
+}
+
+// Agents returns a (copy) of the list of agent.
+func (c *Cache) Agents() []bleemeoTypes.Agent {
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	result := make([]bleemeoTypes.Agent, len(c.data.Agents))
+	copy(result, c.data.Agents)
+
+	return result
+}
+
+// AgentsByUUID returns a map agent.id => agent.
+func (c *Cache) AgentsByUUID() map[string]bleemeoTypes.Agent {
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	result := make(map[string]bleemeoTypes.Agent)
+
+	for _, v := range c.data.Agents {
+		result[v.ID] = v
+	}
+
+	return result
+}
+
+// AgentTypes returns a (copy) of the list of agent types.
+func (c *Cache) AgentTypes() []bleemeoTypes.AgentType {
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	result := make([]bleemeoTypes.AgentType, len(c.data.AgentTypes))
+	copy(result, c.data.AgentTypes)
 
 	return result
 }
@@ -425,52 +608,50 @@ func Load(state bleemeoTypes.State) *Cache {
 		logger.V(1).Printf("Unable to load Bleemeo connector cache: %v", err)
 	}
 
-	switch newData.Version {
-	case 0:
-		logger.V(2).Printf("Bleemeo connector cache is too absent, starting with new empty cache")
+	versionUpgrade := map[int]func(bleemeoTypes.State, data) data{
+		1: upgradeV1,
+		2: upgradeV2,
+		3: upgradeV3,
+		4: upgradeV4,
+		5: upgradeV5,
+	}
 
-		cache.data.Version = cacheVersion
-	case 1:
-		logger.V(1).Printf("Version 1 of the cache found, upgrading it.")
+	upgradeCount := 0
+	for newData.Version != cacheVersion {
+		if upgradeCount > cacheVersion {
+			logger.V(2).Printf("Too many try to upgrade cache version. Discarding cache content")
 
-		// the main change between V1 and V2 was the renaming of AccoutConfig to CurrentAccountConfig, and
-		// the addition of Monitors and AccountConfigs
-		var oldCache dataVersion1
+			newData = data{
+				Version: cacheVersion,
+			}
 
-		if err := state.Get(cacheKey, &oldCache); err == nil {
-			newData.CurrentAccountConfig = oldCache.AccountConfig
+			break
 		}
 
-		fallthrough
-	case 2:
-		logger.V(1).Printf("Version 2 of the cache found, upgrading it.")
+		if newData.Version == 0 {
+			logger.V(2).Printf("Bleemeo connector cache is too absent, starting with new empty cache")
 
-		// well... containers had multiple fields renamed... lets drop it
-		newData.Containers = nil
-
-		fallthrough
-	case 3:
-		logger.V(1).Printf("Version 3 of cache found, upgrading it.")
-
-		// Version 4 stopped using "_item" to store Bleemeo item and use "item"
-		for i, m := range newData.Metrics {
-			labels := types.TextToLabels(m.LabelsText)
-			if v, ok := labels["_item"]; ok {
-				labels[types.LabelItem] = v
-				delete(labels, "_item")
-				newData.Metrics[i].LabelsText = types.LabelsToText(labels)
+			newData = data{
+				Version: cacheVersion,
 			}
 		}
 
-		fallthrough
-	case cacheVersion:
-		newData.Version = cacheVersion
-		cache.data = newData
-	default:
-		logger.V(2).Printf("Bleemeo connector cache is too recent. Discarding content")
+		upgradeFunc := versionUpgrade[newData.Version]
+		if upgradeFunc == nil {
+			logger.V(2).Printf("No upgrade path from version %d to %d. Discarding cache content", newData.Version, cacheVersion)
 
-		cache.data.Version = cacheVersion
+			newData = data{
+				Version: cacheVersion,
+			}
+		} else {
+			logger.V(1).Printf("Upgrading version %d of the cache", newData.Version)
+			newData = upgradeFunc(state, newData)
+		}
+
+		upgradeCount++
 	}
+
+	cache.data = newData
 
 	for i, m := range cache.data.Metrics {
 		m.Labels = types.TextToLabels(m.LabelsText)
@@ -479,4 +660,92 @@ func Load(state bleemeoTypes.State) *Cache {
 	}
 
 	return cache
+}
+
+func upgradeV1(state bleemeoTypes.State, newData data) data {
+	// the main change between V1 and V2 was the renaming of AccoutConfig to CurrentAccountConfig, and
+	// the addition of Monitors and AccountConfigs
+	var oldCache dataVersion1
+
+	if err := state.Get(cacheKey, &oldCache); err == nil {
+		newData.AccountConfigs = []bleemeoTypes.AccountConfig{oldCache.AccountConfig}
+	}
+
+	newData.Version = 2
+
+	return newData
+}
+
+func upgradeV2(_ bleemeoTypes.State, newData data) data {
+	// well... containers had multiple fields renamed... lets drop it
+	newData.Containers = nil
+	newData.Version = 3
+
+	return newData
+}
+
+func upgradeV3(_ bleemeoTypes.State, newData data) data {
+	// Version 4 stopped using "_item" to store Bleemeo item and use "item"
+	for i, m := range newData.Metrics {
+		labels := types.TextToLabels(m.LabelsText)
+		if v, ok := labels["_item"]; ok {
+			labels[types.LabelItem] = v
+			delete(labels, "_item")
+			newData.Metrics[i].LabelsText = types.LabelsToText(labels)
+		}
+	}
+
+	newData.Version = 4
+
+	return newData
+}
+
+func upgradeV4(_ bleemeoTypes.State, newData data) data {
+	// Version 5 added "AgentID" on Metric object
+	// With version 4, only metric of monitor could belong to another agent
+	for i, m := range newData.Metrics {
+		for _, v := range newData.Monitors {
+			if m.ServiceID == v.ID {
+				m.AgentID = v.AgentID
+
+				break
+			}
+		}
+
+		if m.AgentID == "" {
+			m.AgentID = newData.Agent.ID
+		}
+
+		newData.Metrics[i] = m
+	}
+
+	newData.Version = 5
+
+	return newData
+}
+
+func upgradeV5(state bleemeoTypes.State, newData data) data {
+	// Version 6 dropped the CurrentAccountConfig and store all config in
+	// AccountConfigs.
+	var oldCache dataVersion5
+
+	if err := state.Get(cacheKey, &oldCache); err == nil {
+		found := false
+
+		for _, ac := range newData.AccountConfigs {
+			if ac.ID == oldCache.CurrentAccountConfig.ID {
+				found = true
+
+				break
+			}
+		}
+
+		if !found {
+			newData.AccountConfigs = append(newData.AccountConfigs, oldCache.CurrentAccountConfig)
+		}
+	}
+
+	newData.Version = 6
+
+	return newData
 }

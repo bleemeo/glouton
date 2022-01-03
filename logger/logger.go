@@ -176,10 +176,10 @@ func Buffer() []byte {
 
 // SetBufferCapacity define the size of the buffer
 // The buffer had two part, the head (first line ever logger, never dropped) and
-// the tail (oldest line dropped when tail is full).
+// the tail (oldest lines dropped when tail is full).
 // Changing capacity will always drop the tail.
-func SetBufferCapacity(headSize int, tailSize int) {
-	logBuffer.SetCapacity(headSize, tailSize)
+func SetBufferCapacity(headSizeBytes int, tailSizeBytes int) {
+	logBuffer.SetCapacity(headSizeBytes, tailSizeBytes)
 }
 
 // SetLevel configure the log level.

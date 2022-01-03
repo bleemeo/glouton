@@ -18,6 +18,7 @@
 package collector
 
 import (
+	"context"
 	"errors"
 	"glouton/inputs"
 	"glouton/logger"
@@ -75,6 +76,12 @@ func (c *Collector) AddInput(input telegraf.Input, shortName string) (int, error
 	c.inputs[id] = input
 	c.inputNames[id] = shortName
 
+	if si, ok := input.(telegraf.Initializer); ok {
+		if err := si.Init(); err != nil {
+			return 0, err
+		}
+	}
+
 	if si, ok := input.(telegraf.ServiceInput); ok {
 		if err := si.Start(nil); err != nil {
 			return 0, err
@@ -102,7 +109,7 @@ func (c *Collector) RemoveInput(id int) {
 }
 
 // RunGather run one gather and send metric through the accumulator.
-func (c *Collector) RunGather(t0 time.Time) {
+func (c *Collector) RunGather(_ context.Context, t0 time.Time) {
 	c.runOnce(t0)
 }
 

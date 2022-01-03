@@ -54,17 +54,17 @@ func New(url string) (i telegraf.Input, err error) {
 	return
 }
 
-func renameGlobal(originalContext internal.GatherContext) (newContext internal.GatherContext, drop bool) {
-	if originalContext.Tags["db"] == "template0" || originalContext.Tags["db"] == "template1" {
-		return originalContext, true
+func renameGlobal(gatherContext internal.GatherContext) (internal.GatherContext, bool) {
+	if gatherContext.Tags["db"] == "template0" || gatherContext.Tags["db"] == "template1" {
+		return gatherContext, true
 	}
 
-	originalContext.Annotations.BleemeoItem = originalContext.Tags["db"]
+	gatherContext.Annotations.BleemeoItem = gatherContext.Tags["db"]
 
-	return originalContext, false
+	return gatherContext, false
 }
 
-func transformMetrics(originalContext internal.GatherContext, currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {
+func transformMetrics(currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {
 	newFields := make(map[string]float64)
 
 	for metricName, value := range fields {

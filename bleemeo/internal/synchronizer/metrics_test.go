@@ -14,7 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// nolint: scopelint,goconst
+//nolint:scopelint,goconst,dupl
 package synchronizer
 
 import (
@@ -38,11 +38,25 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
+const (
+	idAgentTypeAgent = "44aefd1c-29bc-4c67-89cd-197efc1d6650"
+	idAgentTypeSNMP  = "cf1d4e06-1058-4149-864f-82c6b2ba7c7a"
+	idAgentMain      = "1ea3eaa7-3c29-413c-b00e-9dbd7183fb26"
+	idAgentSNMP      = "69956bc0-943f-4125-bb9b-eb4743c83b3c"
+	idAccountConfig  = "553b1cd5-f10a-4f17-87e8-92dc6717a93f"
+	passwordAgent    = "a-secret-password"
+)
+
 type mockMetric struct {
-	Name string
+	Name   string
+	labels map[string]string
 }
 
 func (m mockMetric) Labels() map[string]string {
+	if m.labels != nil {
+		return m.labels
+	}
+
 	return map[string]string{types.LabelName: m.Name}
 }
 
@@ -60,6 +74,10 @@ type mockTime struct {
 
 func (mt *mockTime) Now() time.Time {
 	return mt.now
+}
+
+func (mt *mockTime) Advance(d time.Duration) {
+	mt.now = mt.now.Add(d)
 }
 
 func TestPrioritizeAndFilterMetrics(t *testing.T) {
@@ -110,6 +128,447 @@ func TestPrioritizeAndFilterMetrics(t *testing.T) {
 	}
 }
 
+func TestPrioritizeAndFilterMetrics2(t *testing.T) {
+	type order struct {
+		LabelBefore string
+		LabelAfter  string
+	}
+
+	cases := []struct {
+		name   string
+		inputs []string
+		format types.MetricFormat
+		order  []order
+	}{
+		{
+			name: "without item are sorted first",
+			inputs: []string{
+				`__name__="cpu_used"`,
+				`__name__="net_bits_recv",item="eth0"`,
+				`__name__="net_bits_sent",item="eth0"`,
+				`__name__="mem_used"`,
+			},
+			format: types.MetricFormatBleemeo,
+			order: []order{
+				{LabelBefore: `__name__="cpu_used"`, LabelAfter: `__name__="net_bits_recv",item="eth0"`},
+				{LabelBefore: `__name__="cpu_used"`, LabelAfter: `__name__="net_bits_sent",item="eth0"`},
+				{LabelBefore: `__name__="mem_used"`, LabelAfter: `__name__="net_bits_recv",item="eth0"`},
+				{LabelBefore: `__name__="mem_used"`, LabelAfter: `__name__="net_bits_sent",item="eth0"`},
+			},
+		},
+		{
+			name: "network and fs are after",
+			inputs: []string{
+				`__name__="io_reads",item="the_item"`,
+				`__name__="net_bits_recv",item="the_item"`,
+				`__name__="io_writes",item="the_item"`,
+				`__name__="cpu_used"`,
+				`__name__="disk_used_perc",item="the_item"`,
+				`__name__="io_utilization",item="the_item"`,
+			},
+			format: types.MetricFormatBleemeo,
+			order: []order{
+				{LabelBefore: `__name__="io_reads",item="the_item"`, LabelAfter: `__name__="net_bits_recv",item="the_item"`},
+				{LabelBefore: `__name__="io_writes",item="the_item"`, LabelAfter: `__name__="net_bits_recv",item="the_item"`},
+				{LabelBefore: `__name__="io_utilization",item="the_item"`, LabelAfter: `__name__="net_bits_recv",item="the_item"`},
+				{LabelBefore: `__name__="cpu_used"`, LabelAfter: `__name__="net_bits_recv",item="the_item"`},
+				{LabelBefore: `__name__="io_reads",item="the_item"`, LabelAfter: `__name__="disk_used_perc",item="the_item"`},
+				{LabelBefore: `__name__="io_writes",item="the_item"`, LabelAfter: `__name__="disk_used_perc",item="the_item"`},
+				{LabelBefore: `__name__="io_utilization",item="the_item"`, LabelAfter: `__name__="disk_used_perc",item="the_item"`},
+				{LabelBefore: `__name__="cpu_used"`, LabelAfter: `__name__="disk_used_perc",item="the_item"`},
+			},
+		},
+		{
+			name: "custom are always after",
+			inputs: []string{
+				`__name__="custom_metric"`,
+				`__name__="net_bits_recv",item="eth0"`,
+				`__name__="net_bits_recv",item="the_item"`,
+				`__name__="cpu_used"`,
+				`__name__="custom_metric_item",item="the_item"`,
+				`__name__="io_reads",item="the_item"`,
+				`__name__="custom_metric2"`,
+			},
+			format: types.MetricFormatBleemeo,
+			order: []order{
+				{LabelBefore: `__name__="cpu_used"`, LabelAfter: `__name__="custom_metric_item",item="the_item"`},
+				{LabelBefore: `__name__="cpu_used"`, LabelAfter: `__name__="custom_metric2"`},
+				{LabelBefore: `__name__="cpu_used"`, LabelAfter: `__name__="custom_metric"`},
+				{LabelBefore: `__name__="net_bits_recv",item="eth0"`, LabelAfter: `__name__="custom_metric_item",item="the_item"`},
+				{LabelBefore: `__name__="net_bits_recv",item="eth0"`, LabelAfter: `__name__="custom_metric2"`},
+				{LabelBefore: `__name__="net_bits_recv",item="eth0"`, LabelAfter: `__name__="custom_metric"`},
+				{LabelBefore: `__name__="net_bits_recv",item="the_item"`, LabelAfter: `__name__="custom_metric_item",item="the_item"`},
+				{LabelBefore: `__name__="net_bits_recv",item="the_item"`, LabelAfter: `__name__="custom_metric2"`},
+				{LabelBefore: `__name__="net_bits_recv",item="the_item"`, LabelAfter: `__name__="custom_metric"`},
+				{LabelBefore: `__name__="io_reads",item="the_item"`, LabelAfter: `__name__="custom_metric_item",item="the_item"`},
+				{LabelBefore: `__name__="io_reads",item="the_item"`, LabelAfter: `__name__="custom_metric2"`},
+				{LabelBefore: `__name__="io_reads",item="the_item"`, LabelAfter: `__name__="custom_metric"`},
+			},
+		},
+		{
+			name: "network item are sorted",
+			inputs: []string{
+				`__name__="net_bits_sent",item="eno1"`,
+				`__name__="net_bits_recv",item="the_item"`,
+				`__name__="net_bits_recv",item="eth0"`,
+				`__name__="net_bits_recv",item="br-1234"`,
+				`__name__="net_bits_recv",item="eno1"`,
+				`__name__="net_bits_sent",item="eth0"`,
+				`__name__="net_bits_recv",item="eth1"`,
+				`__name__="net_bits_recv",item="br-1"`,
+				`__name__="net_bits_recv",item="br-0"`,
+			},
+			format: types.MetricFormatBleemeo,
+			order: []order{
+				{LabelBefore: `__name__="net_bits_recv",item="eth0"`, LabelAfter: `__name__="net_bits_recv",item="the_item"`},
+				{LabelBefore: `__name__="net_bits_recv",item="eth0"`, LabelAfter: `__name__="net_bits_recv",item="br-0"`},
+				{LabelBefore: `__name__="net_bits_recv",item="eth0"`, LabelAfter: `__name__="net_bits_recv",item="br-1234"`},
+				{LabelBefore: `__name__="net_bits_recv",item="eth0"`, LabelAfter: `__name__="net_bits_recv",item="eth1"`},
+				{LabelBefore: `__name__="net_bits_sent",item="eth0"`, LabelAfter: `__name__="net_bits_recv",item="the_item"`},
+				{LabelBefore: `__name__="net_bits_sent",item="eth0"`, LabelAfter: `__name__="net_bits_recv",item="br-0"`},
+				{LabelBefore: `__name__="net_bits_sent",item="eth0"`, LabelAfter: `__name__="net_bits_recv",item="br-1234"`},
+				{LabelBefore: `__name__="net_bits_sent",item="eth0"`, LabelAfter: `__name__="net_bits_recv",item="eth1"`},
+				{LabelBefore: `__name__="net_bits_recv",item="eth1"`, LabelAfter: `__name__="net_bits_recv",item="the_item"`},
+				{LabelBefore: `__name__="net_bits_recv",item="eth1"`, LabelAfter: `__name__="net_bits_recv",item="br-0"`},
+				{LabelBefore: `__name__="net_bits_recv",item="eth1"`, LabelAfter: `__name__="net_bits_recv",item="br-1234"`},
+				{LabelBefore: `__name__="net_bits_recv",item="eno1"`, LabelAfter: `__name__="net_bits_recv",item="the_item"`},
+				{LabelBefore: `__name__="net_bits_recv",item="eno1"`, LabelAfter: `__name__="net_bits_recv",item="br-0"`},
+				{LabelBefore: `__name__="net_bits_recv",item="eno1"`, LabelAfter: `__name__="net_bits_recv",item="br-1234"`},
+				{LabelBefore: `__name__="net_bits_sent",item="eno1"`, LabelAfter: `__name__="net_bits_recv",item="the_item"`},
+				{LabelBefore: `__name__="net_bits_sent",item="eno1"`, LabelAfter: `__name__="net_bits_recv",item="br-0"`},
+				{LabelBefore: `__name__="net_bits_sent",item="eno1"`, LabelAfter: `__name__="net_bits_recv",item="br-1234"`},
+				{LabelBefore: `__name__="net_bits_recv",item="br-0"`, LabelAfter: `__name__="net_bits_recv",item="br-1"`},
+			},
+		},
+		{
+			name: "container are sorted",
+			inputs: []string{
+				`__name__="container_net_bits_sent",item="my_redis"`,
+				`__name__="container_mem_used",item="my_memcached"`,
+				`__name__="container_cpu_used",item="my_rabbitmq"`,
+				`__name__="container_cpu_used",item="my_redis"`,
+				`__name__="container_cpu_used",item="my_memcached"`,
+				`__name__="container_mem_used",item="my_redis"`,
+				`__name__="container_mem_used",item="my_rabbitmq"`,
+				`__name__="container_net_bits_sent",item="my_memcached"`,
+				`__name__="container_net_bits_sent",item="my_rabbitmq"`,
+			},
+			format: types.MetricFormatBleemeo,
+			order: []order{
+				// What we only want is the item are together. Currently item are sorted in lexical order
+				{LabelBefore: `__name__="container_net_bits_sent",item="my_memcached"`, LabelAfter: `__name__="container_net_bits_sent",item="my_redis"`},
+				{LabelBefore: `__name__="container_net_bits_sent",item="my_memcached"`, LabelAfter: `__name__="container_net_bits_sent",item="my_rabbitmq"`},
+				{LabelBefore: `__name__="container_net_bits_sent",item="my_memcached"`, LabelAfter: `__name__="container_mem_used",item="my_redis"`},
+				{LabelBefore: `__name__="container_net_bits_sent",item="my_memcached"`, LabelAfter: `__name__="container_mem_used",item="my_rabbitmq"`},
+				{LabelBefore: `__name__="container_net_bits_sent",item="my_memcached"`, LabelAfter: `__name__="container_cpu_used",item="my_redis"`},
+				{LabelBefore: `__name__="container_net_bits_sent",item="my_memcached"`, LabelAfter: `__name__="container_cpu_used",item="my_rabbitmq"`},
+
+				{LabelBefore: `__name__="container_cpu_used",item="my_memcached"`, LabelAfter: `__name__="container_net_bits_sent",item="my_redis"`},
+				{LabelBefore: `__name__="container_cpu_used",item="my_memcached"`, LabelAfter: `__name__="container_net_bits_sent",item="my_rabbitmq"`},
+				{LabelBefore: `__name__="container_cpu_used",item="my_memcached"`, LabelAfter: `__name__="container_mem_used",item="my_redis"`},
+				{LabelBefore: `__name__="container_cpu_used",item="my_memcached"`, LabelAfter: `__name__="container_mem_used",item="my_rabbitmq"`},
+				{LabelBefore: `__name__="container_cpu_used",item="my_memcached"`, LabelAfter: `__name__="container_cpu_used",item="my_redis"`},
+				{LabelBefore: `__name__="container_cpu_used",item="my_memcached"`, LabelAfter: `__name__="container_cpu_used",item="my_rabbitmq"`},
+
+				{LabelBefore: `__name__="container_mem_used",item="my_memcached"`, LabelAfter: `__name__="container_net_bits_sent",item="my_redis"`},
+				{LabelBefore: `__name__="container_mem_used",item="my_memcached"`, LabelAfter: `__name__="container_net_bits_sent",item="my_rabbitmq"`},
+				{LabelBefore: `__name__="container_mem_used",item="my_memcached"`, LabelAfter: `__name__="container_mem_used",item="my_redis"`},
+				{LabelBefore: `__name__="container_mem_used",item="my_memcached"`, LabelAfter: `__name__="container_mem_used",item="my_rabbitmq"`},
+				{LabelBefore: `__name__="container_mem_used",item="my_memcached"`, LabelAfter: `__name__="container_cpu_used",item="my_redis"`},
+				{LabelBefore: `__name__="container_mem_used",item="my_memcached"`, LabelAfter: `__name__="container_cpu_used",item="my_rabbitmq"`},
+			},
+		},
+	}
+
+	for _, tt := range cases {
+		tt := tt
+
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			metrics := make([]types.Metric, 0, len(tt.inputs))
+
+			for _, lbls := range tt.inputs {
+				metrics = append(metrics, mockMetric{labels: types.TextToLabels(lbls)})
+			}
+
+			result := prioritizeAndFilterMetrics(tt.format, metrics, false)
+
+			for _, ord := range tt.order {
+				firstIdx := -1
+				secondIdx := -1
+
+				for i, m := range result {
+					if reflect.DeepEqual(m.Labels(), types.TextToLabels(ord.LabelBefore)) {
+						if firstIdx == -1 {
+							firstIdx = i
+						} else {
+							t.Errorf("metric labels %s present at index %d and %d", ord.LabelBefore, firstIdx, i)
+						}
+					}
+
+					if reflect.DeepEqual(m.Labels(), types.TextToLabels(ord.LabelAfter)) {
+						if secondIdx == -1 {
+							secondIdx = i
+						} else {
+							t.Errorf("metric labels %s present at index %d and %d", ord.LabelAfter, secondIdx, i)
+						}
+					}
+				}
+
+				switch {
+				case firstIdx == -1:
+					t.Errorf("metric %s is not present", ord.LabelBefore)
+				case secondIdx == -1:
+					t.Errorf("metric %s is not present", ord.LabelAfter)
+				case firstIdx >= secondIdx:
+					t.Errorf("metric %s is after metric %s (%d >= %d)", ord.LabelBefore, ord.LabelAfter, firstIdx, secondIdx)
+				}
+			}
+		})
+	}
+}
+
+func Test_metricComparator_IsSignificantItem(t *testing.T) {
+	tests := []struct {
+		item string
+		want bool
+	}{
+		{
+			item: "/",
+			want: true,
+		},
+		{
+			item: "/home",
+			want: true,
+		},
+		{
+			item: "/home",
+			want: true,
+		},
+		{
+			item: "/srv",
+			want: true,
+		},
+		{
+			item: "/var",
+			want: true,
+		},
+		{
+			item: "eth0",
+			want: true,
+		},
+		{
+			item: "eth1",
+			want: true,
+		},
+		{
+			item: "ens18",
+			want: true,
+		},
+		{
+			item: "ens1",
+			want: true,
+		},
+		{
+			item: "eno1",
+			want: true,
+		},
+		{
+			item: "eno5",
+			want: true,
+		},
+		{
+			item: "enp7s0",
+			want: true,
+		},
+		{
+			item: "ens1f1",
+			want: true,
+		},
+
+		{
+			item: "/home/user",
+			want: false,
+		},
+		{
+			item: "enp7s0.4010",
+			want: false,
+		},
+		{
+			item: "eth99",
+			want: false,
+		},
+	}
+	for _, tt := range tests {
+		tt := tt
+
+		t.Run(tt.item, func(t *testing.T) {
+			t.Parallel()
+
+			m := newComparator(types.MetricFormatBleemeo)
+			if got := m.IsSignificantItem(tt.item); got != tt.want {
+				t.Errorf("metricComparator.IsSignificantItem() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func Test_metricComparator_SkipInOnlyEssential(t *testing.T) {
+	tests := []struct {
+		name                string
+		format              types.MetricFormat
+		metric              string
+		keepInOnlyEssential bool
+	}{
+		{
+			name:                "default dashboard metrics are essential 1",
+			format:              types.MetricFormatBleemeo,
+			metric:              `__name__="cpu_used"`,
+			keepInOnlyEssential: true,
+		},
+		{
+			name:                "default dashboard metrics are essential 2",
+			format:              types.MetricFormatBleemeo,
+			metric:              `__name__="io_reads",item="nvme0"`,
+			keepInOnlyEssential: true,
+		},
+		{
+			name:                "default dashboard metrics are essential 3",
+			format:              types.MetricFormatBleemeo,
+			metric:              `__name__="net_bits_recv",item="eth0"`,
+			keepInOnlyEssential: true,
+		},
+		{
+			name:                "high cardinality aren't essential",
+			format:              types.MetricFormatBleemeo,
+			metric:              `__name__="net_bits_recv",item="the_item"`,
+			keepInOnlyEssential: false,
+		},
+		{
+			name:                "high cardinality aren't essential",
+			format:              types.MetricFormatBleemeo,
+			metric:              `__name__="net_bits_recv",item="br-2a4d1a465acd"`,
+			keepInOnlyEssential: false,
+		},
+	}
+	for _, tt := range tests {
+		tt := tt
+
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			m := newComparator(tt.format)
+			metric := types.TextToLabels(tt.metric)
+
+			if got := m.KeepInOnlyEssential(metric); got != tt.keepInOnlyEssential {
+				t.Errorf("metricComparator.KeepInOnlyEssential() = %v, want %v", got, tt.keepInOnlyEssential)
+			}
+		})
+	}
+}
+
+func Test_metricComparator_importanceWeight(t *testing.T) {
+	tests := []struct {
+		name         string
+		format       types.MetricFormat
+		metricBefore string
+		metricAfter  string
+	}{
+		{
+			name:         "metric of system dashboard are first 1",
+			format:       types.MetricFormatBleemeo,
+			metricBefore: `__name__="cpu_used"`,
+			metricAfter:  `__name__="custom_metric"`,
+		},
+		{
+			name:         "metric of system dashboard are first 2",
+			format:       types.MetricFormatBleemeo,
+			metricBefore: `__name__="net_bits_recv",item="eth0"`,
+			metricAfter:  `__name__="custom_metric"`,
+		},
+		{
+			name:         "metric of system dashboard are first 3",
+			format:       types.MetricFormatBleemeo,
+			metricBefore: `__name__="net_bits_recv",item="the_item"`,
+			metricAfter:  `__name__="custom_metric"`,
+		},
+		{
+			name:         "metric of system dashboard are first 4",
+			format:       types.MetricFormatBleemeo,
+			metricBefore: `__name__="io_reads",item="nvme0"`,
+			metricAfter:  `__name__="custom_metric"`,
+		},
+		{
+			name:         "metric of system dashboard are first 5",
+			format:       types.MetricFormatPrometheus,
+			metricBefore: `__name__="node_cpu_seconds_global",mode="idle"`,
+			metricAfter:  `__name__="custom_metric"`,
+		},
+		{
+			name:         "high cardinality after important",
+			format:       types.MetricFormatBleemeo,
+			metricBefore: `__name__="system_pending_security_updates"`,
+			metricAfter:  `__name__="disk_used_perc",item="/random-value"`,
+		},
+		{
+			name:         "good item before important",
+			format:       types.MetricFormatBleemeo,
+			metricBefore: `__name__="disk_used_perc",item="/home"`,
+			metricAfter:  `__name__="system_pending_security_updates"`,
+		},
+		{
+			name:         "high cardinality after status",
+			format:       types.MetricFormatBleemeo,
+			metricBefore: `__name__="apache_status"`,
+			metricAfter:  `__name__="net_bits_recv",item="tap150"`,
+		},
+		{
+			name:         "good item before status",
+			format:       types.MetricFormatBleemeo,
+			metricBefore: `__name__="net_bits_recv",item="eth0"`,
+			metricAfter:  `__name__="apache_status"`,
+		},
+		{
+			name:         "high cardinality before custom",
+			format:       types.MetricFormatBleemeo,
+			metricBefore: `__name__="net_bits_recv",item="tap150"`,
+			metricAfter:  `__name__="custome_metric"`,
+		},
+		{
+			name:         "essential without item first",
+			format:       types.MetricFormatBleemeo,
+			metricBefore: `__name__="cpu_used"`,
+			metricAfter:  `__name__="cpu_used",item="value"`,
+		},
+		{
+			name:         "essential without item first 2",
+			format:       types.MetricFormatBleemeo,
+			metricBefore: `__name__="cpu_used"`,
+			metricAfter:  `__name__="io_reads",item="/dev/sda"`,
+		},
+	}
+	for _, tt := range tests {
+		tt := tt
+
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			m := newComparator(tt.format)
+
+			metricA := types.TextToLabels(tt.metricBefore)
+			metricB := types.TextToLabels(tt.metricAfter)
+
+			weightA := m.importanceWeight(metricA)
+			weightB := m.importanceWeight(metricB)
+
+			if weightA >= weightB {
+				t.Errorf("weightA = %d, want less than %d", weightA, weightB)
+			}
+		})
+	}
+}
+
 type metricTestHelper struct {
 	api        *mockAPI
 	s          *Synchronizer
@@ -126,7 +585,7 @@ func newMetricHelper(t *testing.T) *metricTestHelper {
 		t:     t,
 		api:   newAPI(),
 		mt:    &mockTime{now: time.Now()},
-		store: store.New(),
+		store: store.New(time.Hour),
 	}
 	cfg := &config.Configuration{}
 	helper.httpServer = helper.api.Server()
@@ -139,9 +598,56 @@ func newMetricHelper(t *testing.T) *metricTestHelper {
 	cfg.Set("bleemeo.api_base", helper.httpServer.URL)
 	cfg.Set("bleemeo.account_id", accountID)
 	cfg.Set("bleemeo.registration_key", registrationKey)
-	cfg.Set("blackbox.enabled", true)
+	cfg.Set("blackbox.enable", true)
 
 	cache := cache.Cache{}
+
+	cache.SetAccountConfigs([]bleemeoTypes.AccountConfig{
+		{
+			ID:   idAccountConfig,
+			Name: "default",
+		},
+	})
+	cache.SetAgentTypes([]bleemeoTypes.AgentType{
+		{
+			ID:   idAgentTypeAgent,
+			Name: bleemeoTypes.AgentTypeAgent,
+		},
+		{
+			ID:   idAgentTypeSNMP,
+			Name: bleemeoTypes.AgentTypeSNMP,
+		},
+	})
+	cache.SetAgentConfigs([]bleemeoTypes.AgentConfig{
+		{
+			MetricsAllowlist: "",
+			MetricResolution: 10,
+			AccountConfig:    idAccountConfig,
+			AgentType:        idAgentTypeAgent,
+		},
+		{
+			MetricsAllowlist: "",
+			MetricResolution: 60,
+			AccountConfig:    idAccountConfig,
+			AgentType:        idAgentTypeSNMP,
+		},
+	})
+
+	mainAgent := bleemeoTypes.Agent{
+		ID:              idAgentMain,
+		CurrentConfigID: idAccountConfig,
+		AgentType:       idAgentTypeAgent,
+	}
+
+	cache.SetAgentList([]bleemeoTypes.Agent{
+		mainAgent,
+		{
+			ID:              idAgentSNMP,
+			CurrentConfigID: idAccountConfig,
+			AgentType:       idAgentTypeSNMP,
+		},
+	})
+	cache.SetAgent(mainAgent)
 
 	state := state.NewMock()
 
@@ -149,22 +655,32 @@ func newMetricHelper(t *testing.T) *metricTestHelper {
 		UpdatedAt: helper.mt.Now(),
 	}
 
-	helper.s = New(Option{
+	var err error
+
+	helper.s, err = New(Option{
 		Cache: &cache,
 		GlobalOption: bleemeoTypes.GlobalOption{
-			Config:       cfg,
-			Facts:        facts.NewMockFacter(),
-			State:        state,
-			Discovery:    discovery,
-			Store:        helper.store,
-			MetricFormat: types.MetricFormatBleemeo,
+			Config:           cfg,
+			Facts:            facts.NewMockFacter(nil),
+			State:            state,
+			Discovery:        discovery,
+			Store:            helper.store,
+			MetricFormat:     types.MetricFormatBleemeo,
+			SNMPOnlineTarget: func() int { return 0 },
 		},
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	helper.s.now = helper.mt.Now
 	helper.s.ctx = context.Background()
 	helper.s.startedAt = helper.mt.Now()
 	helper.s.nextFullSync = helper.mt.Now()
+	helper.s.agentID = idAgentMain
+	helper.api.JWTUsername = idAgentMain + "@bleemeo.com"
+	helper.api.JWTPassword = passwordAgent
+	_ = helper.s.option.State.Set("password", passwordAgent)
 
 	if err := helper.s.setClient(); err != nil {
 		panic(err)
@@ -210,14 +726,16 @@ func (h *metricTestHelper) RunSync(maxLoop int, timeStep time.Duration, forceFir
 	h.api.ResetCount()
 
 	for result.runCount = 0; result.runCount < maxLoop; result.runCount++ {
-		methods := h.s.syncToPerform()
-		if full, ok := methods["metrics"]; !ok && !forceFirst {
+		h.s.client = &wrapperClient{s: h.s, client: h.s.realClient, duplicateChecked: true}
+
+		methods := h.s.syncToPerform(context.Background())
+		if full, ok := methods[syncMethodMetric]; !ok && !forceFirst {
 			break
 		} else if full {
 			result.didFull = true
 		}
 
-		err := h.s.syncMetrics(methods["metrics"], false)
+		err := h.s.syncMetrics(methods[syncMethodMetric], false)
 		result.lastErr = err
 
 		if err == nil {
@@ -229,13 +747,15 @@ func (h *metricTestHelper) RunSync(maxLoop int, timeStep time.Duration, forceFir
 		h.mt.now = h.mt.Now().Add(timeStep)
 	}
 
-	_, result.stillWantSync = h.s.syncToPerform()["metrics"]
+	_, result.stillWantSync = h.s.syncToPerform(context.Background())[syncMethodMetric]
 
 	return result
 }
 
 // Check verify that runSync was successful without any server error.
 func (res runResult) Check(name string, wantFull bool) {
+	res.h.t.Helper()
+
 	res.CheckAllowError(name, wantFull)
 
 	if res.h.api.ServerErrorCount > 0 {
@@ -245,6 +765,8 @@ func (res runResult) Check(name string, wantFull bool) {
 
 // CheckNoError verify that runSync was successful without any error (client or server).
 func (res runResult) CheckNoError(name string, wantFull bool) {
+	res.h.t.Helper()
+
 	res.Check(name, wantFull)
 
 	if res.h.api.ClientErrorCount > 0 {
@@ -254,6 +776,8 @@ func (res runResult) CheckNoError(name string, wantFull bool) {
 
 // CheckAllowError verify that runSync was successful possibly with error but last sync must be successful.
 func (res runResult) CheckAllowError(name string, wantFull bool) {
+	res.h.t.Helper()
+
 	if res.lastErr != nil {
 		res.h.t.Errorf("%s: sync failed after %d run: %v", name, res.runCount, res.lastErr)
 	}
@@ -275,7 +799,7 @@ func (res runResult) CheckAllowError(name string, wantFull bool) {
 // Agent start and register metrics
 // Some metrics disapear => mark inative
 // Some re-appear and some new => mark active & register.
-//nolint:gocyclo,cyclop
+//nolint:cyclop
 func TestMetricSimpleSync(t *testing.T) {
 	helper := newMetricHelper(t)
 	defer helper.Close()
@@ -295,18 +819,19 @@ func TestMetricSimpleSync(t *testing.T) {
 		{
 			Metric: bleemeoTypes.Metric{
 				ID:         "1",
+				AgentID:    idAgentMain,
 				LabelsText: "",
 			},
 			Name: agentStatusName,
 		},
 	}
 
-	if !reflect.DeepEqual(metrics, want) {
-		t.Errorf("metrics = %v, want %v", metrics, want)
+	if diff := cmp.Diff(want, metrics); diff != "" {
+		t.Errorf("metrics mismatch (-want +got):\n%s", diff)
 	}
 
 	helper.AddTime(30 * time.Minute)
-	helper.store.PushPoints([]types.MetricPoint{
+	helper.store.PushPoints(context.Background(), []types.MetricPoint{
 		{
 			Point: types.Point{Time: helper.mt.Now()},
 			Labels: map[string]string{
@@ -329,6 +854,7 @@ func TestMetricSimpleSync(t *testing.T) {
 		{
 			Metric: bleemeoTypes.Metric{
 				ID:         "1",
+				AgentID:    idAgentMain,
 				LabelsText: "",
 			},
 			Name: agentStatusName,
@@ -336,21 +862,22 @@ func TestMetricSimpleSync(t *testing.T) {
 		{
 			Metric: bleemeoTypes.Metric{
 				ID:         "2",
+				AgentID:    idAgentMain,
 				LabelsText: "",
 			},
 			Name: "cpu_system",
 		},
 	}
 
-	if !reflect.DeepEqual(metrics, want) {
-		t.Errorf("metrics = %v, want %v", metrics, want)
+	if diff := cmp.Diff(want, metrics); diff != "" {
+		t.Errorf("metrics mismatch (-want +got):\n%s", diff)
 	}
 
 	helper.AddTime(30 * time.Minute)
 
 	// Register 1000 metrics
 	for n := 0; n < 1000; n++ {
-		helper.store.PushPoints([]types.MetricPoint{
+		helper.store.PushPoints(context.Background(), []types.MetricPoint{
 			{
 				Point: types.Point{Time: helper.mt.Now()},
 				Labels: map[string]string{
@@ -405,7 +932,7 @@ func TestMetricSimpleSync(t *testing.T) {
 	helper.AddTime(30 * time.Minute)
 
 	// re-activate one metric + register one
-	helper.store.PushPoints([]types.MetricPoint{
+	helper.store.PushPoints(context.Background(), []types.MetricPoint{
 		{
 			Point: types.Point{Time: helper.mt.Now()},
 			Labels: map[string]string{
@@ -458,14 +985,14 @@ func TestMetricSimpleSync(t *testing.T) {
 }
 
 // TestMetricDeleted test that Glouton can update metrics deleted on Bleemeo.
-//nolint:gocyclo,cyclop
+//nolint:cyclop
 func TestMetricDeleted(t *testing.T) {
 	helper := newMetricHelper(t)
 	defer helper.Close()
 
 	helper.AddTime(time.Minute)
 
-	helper.store.PushPoints([]types.MetricPoint{
+	helper.store.PushPoints(context.Background(), []types.MetricPoint{
 		{
 			Point: types.Point{Time: helper.mt.Now()},
 			Labels: map[string]string{
@@ -500,7 +1027,7 @@ func TestMetricDeleted(t *testing.T) {
 	}
 
 	helper.AddTime(70 * time.Minute)
-	helper.store.PushPoints([]types.MetricPoint{
+	helper.store.PushPoints(context.Background(), []types.MetricPoint{
 		{
 			Point: types.Point{Time: helper.mt.Now()},
 			Labels: map[string]string{
@@ -532,7 +1059,7 @@ func TestMetricDeleted(t *testing.T) {
 	helper.AddTime(1 * time.Minute)
 
 	// metric1 is still alive
-	helper.store.PushPoints([]types.MetricPoint{
+	helper.store.PushPoints(context.Background(), []types.MetricPoint{
 		{
 			Point: types.Point{Time: helper.mt.Now()},
 			Labels: map[string]string{
@@ -590,7 +1117,7 @@ func TestMetricDeleted(t *testing.T) {
 		}
 	}
 
-	helper.store.PushPoints([]types.MetricPoint{
+	helper.store.PushPoints(context.Background(), []types.MetricPoint{
 		{
 			Point: types.Point{Time: helper.mt.Now()},
 			Labels: map[string]string{
@@ -640,7 +1167,7 @@ func TestMetricError(t *testing.T) {
 	}
 	helper.AddTime(time.Minute)
 
-	helper.store.PushPoints([]types.MetricPoint{
+	helper.store.PushPoints(context.Background(), []types.MetricPoint{
 		{
 			Point: types.Point{Time: helper.mt.Now()},
 			Labels: map[string]string{
@@ -682,7 +1209,7 @@ func TestMetricUnknownError(t *testing.T) {
 	helper.api.resources["metric"].(*genericResource).CreateHook = func(r *http.Request, body []byte, valuePtr interface{}) error {
 		metric, _ := valuePtr.(*metricPayload)
 		if metric.Name == "deny-me" {
-			return errClient{
+			return clientError{
 				body:       "no information about whether the error is permanent or not",
 				statusCode: http.StatusBadRequest,
 			}
@@ -693,7 +1220,7 @@ func TestMetricUnknownError(t *testing.T) {
 
 	helper.AddTime(time.Minute)
 
-	helper.store.PushPoints([]types.MetricPoint{
+	helper.store.PushPoints(context.Background(), []types.MetricPoint{
 		{
 			Point: types.Point{Time: helper.mt.Now()},
 			Labels: map[string]string{
@@ -743,7 +1270,7 @@ func TestMetricUnknownError(t *testing.T) {
 
 	// Finally on next fullSync re-retry the metrics registration
 	helper.mt.now = helper.s.nextFullSync.Add(5 * time.Second)
-	helper.store.PushPoints([]types.MetricPoint{
+	helper.store.PushPoints(context.Background(), []types.MetricPoint{
 		{
 			Point: types.Point{Time: helper.mt.Now()},
 			Labels: map[string]string{
@@ -777,7 +1304,7 @@ func TestMetricUnknownError(t *testing.T) {
 }
 
 // TestMetricPermanentError test that Glouton handle permanent failure metric from Bleemeo correctly.
-//nolint:gocyclo,cyclop
+//nolint:cyclop
 func TestMetricPermanentError(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -801,7 +1328,7 @@ func TestMetricPermanentError(t *testing.T) {
 			helper.api.resources["metric"].(*genericResource).CreateHook = func(r *http.Request, body []byte, valuePtr interface{}) error {
 				metric, _ := valuePtr.(*metricPayload)
 				if metric.Name == "deny-me" || metric.Name == "deny-me-also" {
-					return errClient{
+					return clientError{
 						body:       tt.content,
 						statusCode: http.StatusBadRequest,
 					}
@@ -812,7 +1339,7 @@ func TestMetricPermanentError(t *testing.T) {
 
 			helper.AddTime(time.Minute)
 
-			helper.store.PushPoints([]types.MetricPoint{
+			helper.store.PushPoints(context.Background(), []types.MetricPoint{
 				{
 					Point: types.Point{Time: helper.mt.Now()},
 					Labels: map[string]string{
@@ -865,7 +1392,7 @@ func TestMetricPermanentError(t *testing.T) {
 
 			// After a long delay we do not retry because error is permanent
 			helper.AddTime(50 * time.Minute)
-			helper.store.PushPoints([]types.MetricPoint{
+			helper.store.PushPoints(context.Background(), []types.MetricPoint{
 				{
 					Point: types.Point{Time: helper.mt.Now()},
 					Labels: map[string]string{
@@ -913,7 +1440,7 @@ func TestMetricPermanentError(t *testing.T) {
 			// Now metric registration will succeeds and retry all
 			helper.api.resources["metric"].(*genericResource).CreateHook = nil
 			helper.AddTime(70 * time.Minute)
-			helper.store.PushPoints([]types.MetricPoint{
+			helper.store.PushPoints(context.Background(), []types.MetricPoint{
 				{
 					Point: types.Point{Time: helper.mt.Now()},
 					Labels: map[string]string{
@@ -955,7 +1482,7 @@ func TestMetricPermanentError(t *testing.T) {
 }
 
 // TestMetricTooMany test that Glouton handle too many non-standard metric correctly.
-func TestMetricTooMany(t *testing.T) { //nolint:gocyclo,cyclop
+func TestMetricTooMany(t *testing.T) { //nolint:cyclop
 	helper := newMetricHelper(t)
 	defer helper.Close()
 
@@ -983,7 +1510,7 @@ func TestMetricTooMany(t *testing.T) { //nolint:gocyclo,cyclop
 			}
 
 			if countActive >= 3 {
-				return errClient{
+				return clientError{
 					body:       `{"label":["Too many non standard metrics"]}`,
 					statusCode: http.StatusBadRequest,
 				}
@@ -996,7 +1523,7 @@ func TestMetricTooMany(t *testing.T) { //nolint:gocyclo,cyclop
 
 	helper.AddTime(time.Minute)
 
-	helper.store.PushPoints([]types.MetricPoint{
+	helper.store.PushPoints(context.Background(), []types.MetricPoint{
 		{
 			Point: types.Point{Time: helper.mt.Now()},
 			Labels: map[string]string{
@@ -1024,7 +1551,7 @@ func TestMetricTooMany(t *testing.T) { //nolint:gocyclo,cyclop
 	}
 
 	helper.AddTime(5 * time.Minute)
-	helper.store.PushPoints([]types.MetricPoint{
+	helper.store.PushPoints(context.Background(), []types.MetricPoint{
 		{
 			Point: types.Point{Time: helper.mt.Now()},
 			Labels: map[string]string{
@@ -1067,7 +1594,7 @@ func TestMetricTooMany(t *testing.T) { //nolint:gocyclo,cyclop
 	// drop all because normally store drop inactive metrics and
 	// metric1 don't emitted for 70 minutes
 	helper.store.DropAllMetrics()
-	helper.store.PushPoints([]types.MetricPoint{
+	helper.store.PushPoints(context.Background(), []types.MetricPoint{
 		{
 			Point: types.Point{Time: helper.mt.Now()},
 			Labels: map[string]string{
@@ -1106,7 +1633,7 @@ func TestMetricTooMany(t *testing.T) { //nolint:gocyclo,cyclop
 	}
 
 	helper.AddTime(5 * time.Minute)
-	helper.store.PushPoints([]types.MetricPoint{
+	helper.store.PushPoints(context.Background(), []types.MetricPoint{
 		{
 			Point: types.Point{Time: helper.mt.Now()},
 			Labels: map[string]string{
@@ -1145,7 +1672,7 @@ func TestMetricTooMany(t *testing.T) { //nolint:gocyclo,cyclop
 
 	// Excepted ONE per full-sync
 	helper.AddTime(70 * time.Minute)
-	helper.store.PushPoints([]types.MetricPoint{
+	helper.store.PushPoints(context.Background(), []types.MetricPoint{
 		{
 			Point: types.Point{Time: helper.mt.Now()},
 			Labels: map[string]string{
@@ -1204,7 +1731,7 @@ func TestMetricLongItem(t *testing.T) {
 	helper.AddTime(time.Minute)
 	// This test is perfect as it don't set service, but helper does not yet support
 	// synchronization with service.
-	helper.store.PushPoints([]types.MetricPoint{
+	helper.store.PushPoints(context.Background(), []types.MetricPoint{
 		{
 			Point: types.Point{Time: helper.mt.Now()},
 			Labels: map[string]string{
@@ -1237,7 +1764,7 @@ func TestMetricLongItem(t *testing.T) {
 
 	helper.AddTime(70 * time.Minute)
 
-	helper.store.PushPoints([]types.MetricPoint{
+	helper.store.PushPoints(context.Background(), []types.MetricPoint{
 		{
 			Point: types.Point{Time: helper.mt.Now()},
 			Labels: map[string]string{
@@ -1275,6 +1802,67 @@ func TestMetricLongItem(t *testing.T) {
 	}
 }
 
+// Few tests with SNMP metrics.
+func TestWithSNMP(t *testing.T) {
+	helper := newMetricHelper(t)
+	defer helper.Close()
+
+	helper.AddTime(time.Minute)
+
+	helper.store.PushPoints(context.Background(), []types.MetricPoint{
+		{
+			Point: types.Point{Time: helper.mt.Now()},
+			Labels: map[string]string{
+				types.LabelName: "cpu_system",
+			},
+		},
+		{
+			Point: types.Point{Time: helper.mt.Now()},
+			Labels: map[string]string{
+				types.LabelName:       "ifOutOctets",
+				types.LabelSNMPTarget: "127.0.0.1",
+			},
+			Annotations: types.MetricAnnotations{
+				BleemeoAgentID: idAgentSNMP,
+			},
+		},
+	})
+
+	helper.RunSync(1, 0, false).CheckNoError("first sync", true)
+
+	metrics := helper.Metrics()
+	want := []metricPayload{
+		{
+			Metric: bleemeoTypes.Metric{
+				ID:         "1",
+				AgentID:    idAgentMain,
+				LabelsText: "",
+			},
+			Name: agentStatusName,
+		},
+		{
+			Metric: bleemeoTypes.Metric{
+				ID:         "2",
+				AgentID:    idAgentMain,
+				LabelsText: "",
+			},
+			Name: "cpu_system",
+		},
+		{
+			Metric: bleemeoTypes.Metric{
+				ID:         "3",
+				AgentID:    idAgentSNMP,
+				LabelsText: `__name__="ifOutOctets",snmp_target="127.0.0.1"`,
+			},
+			Name: "ifOutOctets",
+		},
+	}
+
+	if diff := cmp.Diff(want, metrics); diff != "" {
+		t.Errorf("metrics mismatch (-want +got):\n%s", diff)
+	}
+}
+
 // inactive and MQTT
 
 func Test_httpResponseToMetricFailureKind(t *testing.T) {
@@ -1299,8 +1887,13 @@ func Test_httpResponseToMetricFailureKind(t *testing.T) {
 			want:    bleemeoTypes.FailureAllowList,
 		},
 		{
-			name:    "too many metrics",
+			name:    "too many custom metrics",
 			content: `{"label":["Too many non standard metrics"]}`,
+			want:    bleemeoTypes.FailureTooManyMetric,
+		},
+		{
+			name:    "too many metrics",
+			content: `{"label":["Too many metrics"]}`,
 			want:    bleemeoTypes.FailureTooManyMetric,
 		},
 	}

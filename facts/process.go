@@ -30,10 +30,25 @@ import (
 	"time"
 
 	"github.com/AstromechZA/etcpwdparse"
-	"github.com/shirou/gopsutil/cpu"
-	"github.com/shirou/gopsutil/host"
-	"github.com/shirou/gopsutil/mem"
-	"github.com/shirou/gopsutil/process"
+	"github.com/cespare/xxhash"
+	"github.com/shirou/gopsutil/v3/cpu"
+	"github.com/shirou/gopsutil/v3/host"
+	"github.com/shirou/gopsutil/v3/mem"
+	"github.com/shirou/gopsutil/v3/process"
+)
+
+type ProcessStatus string
+
+const (
+	ProcessStatusRunning     ProcessStatus = "running"
+	ProcessStatusSleeping    ProcessStatus = "sleeping"
+	ProcessStatusStopped     ProcessStatus = "stopped"
+	ProcessStatusIdle        ProcessStatus = "idle"
+	ProcessStatusZombie      ProcessStatus = "zombie"
+	ProcessStatusIOWait      ProcessStatus = "disk-sleep"
+	ProcessStatusTracingStop ProcessStatus = "tracing-stop"
+	ProcessStatusDead        ProcessStatus = "dead"
+	ProcessStatusUnknown     ProcessStatus = "?"
 )
 
 // ProcessProvider provider information about processes.
@@ -43,30 +58,31 @@ type ProcessProvider struct {
 	containerRuntime containerRuntime
 	ps               processQuerier
 
-	processes           map[int]Process
-	topinfo             TopInfo
-	lastCPUtimes        cpu.TimesStat
-	lastProcessesUpdate time.Time
+	processes              map[int]Process
+	processesDiscoveryInfo map[int]processDiscoveryInfo
+	topinfo                TopInfo
+	lastCPUtimes           cpu.TimesStat
+	lastProcessesUpdate    time.Time
 }
 
 // Process describe one Process.
 type Process struct {
-	PID             int       `json:"pid"`
-	PPID            int       `json:"ppid"`
-	CreateTime      time.Time `json:"-"`
-	CreateTimestamp int64     `json:"create_time"`
-	CmdLineList     []string  `json:"-"`
-	CmdLine         string    `json:"cmdline"`
-	Name            string    `json:"name"`
-	MemoryRSS       uint64    `json:"memory_rss"`
-	CPUPercent      float64   `json:"cpu_percent"`
-	CPUTime         float64   `json:"cpu_times"`
-	Status          string    `json:"status"`
-	Username        string    `json:"username"`
-	Executable      string    `json:"exe"`
-	ContainerID     string    `json:"-"`
-	ContainerName   string    `json:"instance"`
-	NumThreads      int       `json:"num_threads"`
+	PID             int           `json:"pid"`
+	PPID            int           `json:"ppid"`
+	CreateTime      time.Time     `json:"-"`
+	CreateTimestamp int64         `json:"create_time"`
+	CmdLineList     []string      `json:"-"`
+	CmdLine         string        `json:"cmdline"`
+	Name            string        `json:"name"`
+	MemoryRSS       uint64        `json:"memory_rss"`
+	CPUPercent      float64       `json:"cpu_percent"`
+	CPUTime         float64       `json:"cpu_times"`
+	Status          ProcessStatus `json:"status"`
+	Username        string        `json:"username"`
+	Executable      string        `json:"exe"`
+	ContainerID     string        `json:"-"`
+	ContainerName   string        `json:"instance"`
+	NumThreads      int           `json:"num_threads"`
 }
 
 // TopInfo contains all information to show a top-like view.
@@ -109,6 +125,11 @@ type SwapUsage struct {
 	Total float64 `json:"total"`
 	Used  float64 `json:"used"`
 	Free  float64 `json:"free"`
+}
+
+type processDiscoveryInfo struct {
+	cgroupHash uint64
+	hadError   bool
 }
 
 // NewPsUtilLister creates and populate a PsUtilLister.
@@ -192,40 +213,67 @@ func (pp *ProcessProvider) ProcessesWithTime(ctx context.Context, maxAge time.Du
 }
 
 // PsStat2Status convert status (value in ps output - or in /proc/pid/stat) to human status.
-func PsStat2Status(psStat string) string {
+func PsStat2Status(psStat string) ProcessStatus {
 	if psStat == "" {
-		return "?"
+		return ProcessStatusUnknown
 	}
 
-	switch psStat[0] {
+	switch psStat {
+	case process.Running:
+		return ProcessStatusRunning
+	case process.Sleep:
+		return ProcessStatusSleeping
+	case process.Stop:
+		return ProcessStatusStopped
+	case process.Idle:
+		return ProcessStatusIdle
+	case process.Zombie:
+		return ProcessStatusZombie
+	case process.Wait:
+		return ProcessStatusIOWait
+	case process.Lock:
+		return ProcessStatusUnknown
+	}
+
+	return convertPSStatusOneChar(psStat[0])
+}
+
+func convertPSStatusOneChar(letter byte) ProcessStatus {
+	switch letter {
 	case 'D':
-		return "disk-sleep"
+		return ProcessStatusIOWait
 	case 'R':
-		return "running"
+		return ProcessStatusRunning
 	case 'S':
-		return "sleeping"
+		return ProcessStatusSleeping
 	case 'T':
-		return "stopped"
+		return ProcessStatusStopped
 	case 't':
-		return "tracing-stop"
+		return ProcessStatusTracingStop
 	case 'X':
-		return "dead"
+		return ProcessStatusDead
 	case 'Z':
-		return "zombie"
+		return ProcessStatusZombie
 	case 'I':
-		return "idle"
+		return ProcessStatusIdle
 	default:
-		return "?"
+		return ProcessStatusUnknown
 	}
 }
 
-func (pp *ProcessProvider) updateProcesses(ctx context.Context, now time.Time, maxAge time.Duration) error { //nolint:gocyclo,cyclop
+func (pp *ProcessProvider) updateProcesses(ctx context.Context, now time.Time, maxAge time.Duration) error { //nolint:cyclop
 	// Process creation time is accurate up to 1/SC_CLK_TCK seconds,
 	// usually 1/100th of seconds.
 	// Process must be started at least 1/100th before t0.
 	// Keep some additional margin by doubling this value.
-	onlyStartedBefore := now.Add(-20 * time.Millisecond)
-	newProcessesMap := make(map[int]Process)
+	//
+	// Also because other fields might be set after process creation (cgroup ?),
+	// avoid processing young processes. This shouldn't be an issue for discovery because:
+	// * The discovery is run 5 seconds after the trigger (apt-get install or docker run)
+	// * There is an additional discovery 30 seconds later for slow to start service anyway.
+	onlyStartedBefore := now.Add(1 * time.Second)
+	newProcessesMap := make(map[int]Process, len(pp.processes))
+	newProcessesDiscoveryInfoMap := make(map[int]processDiscoveryInfo, len(pp.processesDiscoveryInfo))
 
 	var queryContainerRuntime ContainerRuntimeProcessQuerier
 
@@ -276,30 +324,42 @@ func (pp *ProcessProvider) updateProcesses(ctx context.Context, now time.Time, m
 			newProcesses = append(newProcesses, p)
 		}
 
-		// This sort is important to make sure parent processed are done before children
-		sort.Slice(newProcesses, func(i, j int) bool {
-			return newProcesses[i].CreateTime.Before(newProcesses[j].CreateTime) || (newProcesses[i].CreateTime.Equal(newProcesses[j].CreateTime) && newProcesses[i].PID < newProcesses[j].PID)
-		})
+		newProcesses = sortParentFirst(newProcesses)
 
 		for _, p := range newProcesses {
-			if oldP, ok := pp.processes[p.PID]; ok && oldP.CreateTime.Equal(p.CreateTime) {
-				p.ContainerID = oldP.ContainerID
-				p.ContainerName = oldP.ContainerName
-				newProcessesMap[p.PID] = p
-
-				continue
+			if ctx.Err() != nil {
+				return ctx.Err()
 			}
+
+			var hadError bool
 
 			if p.ContainerID != "" || queryContainerRuntime == nil {
 				continue
 			}
 
 			cgroupData, err := pp.ps.CGroupFromPID(p.PID)
-			if err != nil || cgroupData == "" {
+			if err != nil {
 				logger.V(2).Printf("No cgroup data for process %d (%s): can't read cgroup data: %v", p.PID, p.Name, err)
 			} else {
 				pid2Cgroup[p.PID] = cgroupData
+			}
 
+			cgroupHash := xxhash.Sum64String(cgroupData)
+
+			// Reuse the previous discovered time if:
+			// * If the same PID & CreateTime (that is, it's the same process)
+			// * AND cgroup didn't changed. A process may change cgroup during its lifetime
+			// * AND previous discovery din't had error
+			if oldP, ok := pp.processes[p.PID]; ok && oldP.CreateTime.Equal(p.CreateTime) && pp.processesDiscoveryInfo[p.PID].cgroupHash == cgroupHash && !pp.processesDiscoveryInfo[p.PID].hadError {
+				p.ContainerID = oldP.ContainerID
+				p.ContainerName = oldP.ContainerName
+				newProcessesMap[p.PID] = p
+				newProcessesDiscoveryInfoMap[p.PID] = processDiscoveryInfo{cgroupHash: cgroupHash, hadError: false}
+
+				continue
+			}
+
+			if cgroupData != "" {
 				// Test with parent, if cgroupData if the same, it belong to the same container
 				// Note that because the list is sorted by creation time:
 				// * the parent was processed BEFORE the current process
@@ -310,7 +370,8 @@ func (pp *ProcessProvider) updateProcesses(ctx context.Context, now time.Time, m
 					if parentCGroupData == "" {
 						parentCGroupData, err = pp.ps.CGroupFromPID(parent.PID)
 						if err != nil {
-							logger.V(2).Printf("No cgroup data for parent process %d (%s): can't read cgroup data: %v", p.PID, p.Name, err)
+							logger.V(2).Printf("No cgroup data for parent of process %d (%s): can't read cgroup data: %v", p.PID, p.Name, err)
+
 							parentCGroupData = ""
 						} else {
 							pid2Cgroup[parent.PID] = parentCGroupData
@@ -318,17 +379,22 @@ func (pp *ProcessProvider) updateProcesses(ctx context.Context, now time.Time, m
 					}
 
 					if parentCGroupData != "" && parentCGroupData == cgroupData {
-						logger.V(2).Printf("Based on parent, process %d (%s) belong to container %s", p.PID, p.Name, parent.ContainerName)
+						logger.V(2).Printf("Based on parent %d, process %d (%s) belong to container %s", p.PPID, p.PID, p.Name, parent.ContainerName)
 
 						p.ContainerID = parent.ContainerID
 						p.ContainerName = parent.ContainerName
 						newProcessesMap[p.PID] = p
+						newProcessesDiscoveryInfoMap[p.PID] = processDiscoveryInfo{cgroupHash: cgroupHash, hadError: newProcessesDiscoveryInfoMap[parent.PID].hadError}
 
 						continue
 					}
 				}
 
 				container, err := queryContainerRuntime.ContainerFromCGroup(ctx, cgroupData)
+				if err != nil {
+					hadError = true
+				}
+
 				if errors.Is(err, ErrContainerDoesNotExists) && now.Sub(p.CreateTime) < 3*time.Second {
 					logger.V(2).Printf("Skipping process %d (%s) created recently and seems to belong to a container", p.PID, p.Name)
 					delete(newProcessesMap, p.PID)
@@ -346,6 +412,7 @@ func (pp *ProcessProvider) updateProcesses(ctx context.Context, now time.Time, m
 					p.ContainerID = container.ID()
 					p.ContainerName = container.ContainerName()
 					newProcessesMap[p.PID] = p
+					newProcessesDiscoveryInfoMap[p.PID] = processDiscoveryInfo{cgroupHash: cgroupHash, hadError: false}
 
 					continue
 				}
@@ -367,8 +434,11 @@ func (pp *ProcessProvider) updateProcesses(ctx context.Context, now time.Time, m
 					p.ContainerName = container.ContainerName()
 
 					newProcessesMap[p.PID] = p
+					newProcessesDiscoveryInfoMap[p.PID] = processDiscoveryInfo{cgroupHash: cgroupHash, hadError: false}
 				case err != nil:
 					logger.V(2).Printf("Error when querying container runtime for process %d (%s): %v", p.PID, p.Name, err)
+
+					hadError = true
 
 					fallthrough
 				default:
@@ -379,6 +449,8 @@ func (pp *ProcessProvider) updateProcesses(ctx context.Context, now time.Time, m
 
 						continue
 					}
+
+					newProcessesDiscoveryInfoMap[p.PID] = processDiscoveryInfo{cgroupHash: cgroupHash, hadError: hadError}
 				}
 			}
 		}
@@ -410,20 +482,75 @@ func (pp *ProcessProvider) updateProcesses(ctx context.Context, now time.Time, m
 		return err
 	}
 
-	topinfo.Time = time.Now().Unix()
+	topinfo.Time = now.Unix()
 	topinfo.Processes = make([]Process, 0, len(newProcessesMap))
 
 	for _, p := range newProcessesMap {
 		topinfo.Processes = append(topinfo.Processes, p)
 	}
 
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+
 	pp.topinfo = topinfo
 	pp.processes = newProcessesMap
-	pp.lastProcessesUpdate = time.Now()
+	pp.processesDiscoveryInfo = newProcessesDiscoveryInfoMap
+	pp.lastProcessesUpdate = now
 
 	logger.V(2).Printf("Completed %d processes update in %v", len(pp.processes), time.Since(now))
 
 	return nil
+}
+
+func sortParentFirst(processes []Process) []Process {
+	pidToIndex := make(map[int]int, len(processes))
+	pidToChildrenCount := make(map[int]int, len(processes))
+	indexToChildrens := make([][]int, len(processes))
+	rootIdx := make([]int, 0, 10)
+	tmp := make([]int, len(processes))
+	tmpIdx := 0
+
+	for i, p := range processes {
+		pidToIndex[p.PID] = i
+		pidToChildrenCount[p.PPID]++
+	}
+
+	for i, p := range processes {
+		i2, ok := pidToIndex[p.PPID]
+		if !ok || p.PID == p.PPID {
+			rootIdx = append(rootIdx, i)
+
+			continue
+		}
+
+		if indexToChildrens[i2] == nil {
+			l := pidToChildrenCount[p.PPID]
+			indexToChildrens[i2] = tmp[tmpIdx : tmpIdx : tmpIdx+l]
+			tmpIdx += l
+		}
+
+		indexToChildrens[i2] = append(indexToChildrens[i2], i)
+	}
+
+	sort.Slice(rootIdx, func(i, j int) bool {
+		p1 := processes[rootIdx[i]]
+		p2 := processes[rootIdx[j]]
+
+		return p1.CreateTime.Before(p2.CreateTime)
+	})
+
+	return addChildrens(indexToChildrens, processes, make([]Process, 0, len(processes)), rootIdx)
+}
+
+func addChildrens(childrens [][]int, proccesses []Process, result []Process, indexes []int) []Process {
+	for _, childI := range indexes {
+		result = append(result, proccesses[childI])
+
+		result = addChildrens(childrens, proccesses, result, childrens[childI])
+	}
+
+	return result
 }
 
 func (pp *ProcessProvider) baseTopinfo() (result TopInfo, err error) {

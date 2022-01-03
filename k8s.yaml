@@ -7,8 +7,8 @@ metadata:
   name: glouton-credentials
 type:
 stringData:
-  GLOUTON_BLEEMEO_ACCOUNT_ID: YOUR_ACCOUNT_ID
-  GLOUTON_BLEEMEO_REGISTRATION_KEY: YOUR_REGISTRATION_KEY
+  GLOUTON_BLEEMEO_ACCOUNT_ID: ${GLOUTON_BLEEMEO_ACCOUNT_ID}
+  GLOUTON_BLEEMEO_REGISTRATION_KEY: ${GLOUTON_BLEEMEO_REGISTRATION_KEY}
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -25,6 +25,41 @@ metadata:
   namespace: default
 ---
 kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: glouton
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - pods
+    verbs:
+      - get
+      - list
+  - apiGroups:
+      - ""
+    resources:
+      - nodes
+    verbs:
+      - get
+      - list
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: glouton
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: glouton
+subjects:
+- kind: ServiceAccount
+  name: glouton
+  namespace: default
+---
+# ClusterRole & ClusterRoleBinding are duplicated in v1 & v1beta to support
+# wider range of Kubernetes version (v1beta1 stop working in 1.22).
+kind: ClusterRole
 apiVersion: rbac.authorization.k8s.io/v1beta1
 metadata:
   name: glouton
@@ -33,6 +68,13 @@ rules:
       - ""
     resources:
       - pods
+    verbs:
+      - get
+      - list
+  - apiGroups:
+      - ""
+    resources:
+      - nodes
     verbs:
       - get
       - list
@@ -78,7 +120,7 @@ spec:
       hostNetwork: true
       hostPID: true
       containers:
-      - image: bleemeo/bleemeo-agent
+      - image: bleemeo/bleemeo-agent:latest
         name: glouton
         ports:
         - name: http
@@ -97,8 +139,8 @@ spec:
           mountPath: /etc/glouton/conf-k8s.d/
         env:
         - name: GLOUTON_CONFIG_FILES
-          value: "/etc/glouton/glouton.conf,/etc/glouton/conf.d,/etc/glouton/conf-k8s.d"
-        - name: GLOUTON_KUBERNETES_ENABLED
+          value: "/etc/glouton/glouton.conf,/etc/glouton/glouton-k8s-default.conf,/etc/glouton/conf.d,/etc/glouton/conf-k8s.d"
+        - name: GLOUTON_KUBERNETES_ENABLE
           value: "True"
         - name: GLOUTON_KUBERNETES_NODENAME
           valueFrom:

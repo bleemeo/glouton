@@ -72,6 +72,8 @@ func TestConfigParsing(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	noFollowRedirect := true
+
 	// we assume parsing preserves the order, which seems to be the case
 	expectedValue := []collectorWithLabels{
 		genCollectorFromStaticTarget(configTarget{
@@ -83,7 +85,7 @@ func TestConfigParsing(t *testing.T) {
 					ValidHTTPVersions:  []string{"HTTP/1.1", "HTTP/2.0"},
 					ValidStatusCodes:   []int{},
 					Method:             "GET",
-					NoFollowRedirects:  true,
+					NoFollowRedirects:  &noFollowRedirect,
 					IPProtocol:         "ip4",
 					IPProtocolFallback: false,
 					Headers: map[string]string{
@@ -125,7 +127,7 @@ func TestConfigParsing(t *testing.T) {
 					ValidHTTPVersions:  []string{"HTTP/1.1", "HTTP/2.0"},
 					ValidStatusCodes:   []int{},
 					Method:             "GET",
-					NoFollowRedirects:  true,
+					NoFollowRedirects:  &noFollowRedirect,
 					IPProtocol:         "ip4",
 					IPProtocolFallback: false,
 					Headers: map[string]string{

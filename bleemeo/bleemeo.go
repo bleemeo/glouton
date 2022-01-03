@@ -17,14 +17,16 @@
 package bleemeo
 
 import (
-	"archive/zip"
 	"context"
+	"errors"
 	"fmt"
 	"glouton/bleemeo/internal/cache"
 	"glouton/bleemeo/internal/mqtt"
 	"glouton/bleemeo/internal/synchronizer"
 	"glouton/bleemeo/types"
 	"glouton/logger"
+	"glouton/prometheus/exporter/snmp"
+	"io"
 	"math/rand"
 	"runtime"
 	"sort"
@@ -32,8 +34,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/getsentry/sentry-go"
+
 	gloutonTypes "glouton/types"
 )
+
+var ErrBadOption = errors.New("bad option")
 
 // Connector manager the connection between the Agent and Bleemeo.
 type Connector struct {
@@ -55,13 +61,13 @@ type Connector struct {
 }
 
 // New create a new Connector.
-func New(option types.GlobalOption) *Connector {
-	c := &Connector{
+func New(option types.GlobalOption) (c *Connector, err error) {
+	c = &Connector{
 		option:      option,
 		cache:       cache.Load(option.State),
 		mqttRestart: make(chan interface{}, 1),
 	}
-	c.sync = synchronizer.New(synchronizer.Option{
+	c.sync, err = synchronizer.New(synchronizer.Option{
 		GlobalOption:                c.option,
 		Cache:                       c.cache,
 		UpdateConfigCallback:        c.updateConfig,
@@ -71,7 +77,11 @@ func New(option types.GlobalOption) *Connector {
 		IsMqttConnected:             c.Connected,
 	})
 
-	return c
+	if option.SNMPOnlineTarget == nil {
+		return c, fmt.Errorf("%w: missing SNMPOnlineTarget function", ErrBadOption)
+	}
+
+	return c, err
 }
 
 func (c *Connector) setInitialized() {
@@ -100,17 +110,17 @@ func (c *Connector) ApplyCachedConfiguration() {
 
 	c.sync.UpdateUnitsAndThresholds(true)
 
-	if c.option.Config.Bool("blackbox.enabled") {
-		if err := c.sync.ApplyMonitorUpdate(false); err != nil {
+	if c.option.Config.Bool("blackbox.enable") {
+		if err := c.sync.ApplyMonitorUpdate(); err != nil {
 			// we just log the error, as we will try to run the monitors later anyway
 			logger.V(2).Printf("Couldn't start probes now, will retry later: %v", err)
 		}
 	}
 
-	currentConfig := c.cache.CurrentAccountConfig()
+	currentConfig, ok := c.cache.CurrentAccountConfig()
 
-	if c.option.UpdateMetricResolution != nil && currentConfig.MetricAgentResolution != 0 {
-		c.option.UpdateMetricResolution(time.Duration(currentConfig.MetricAgentResolution) * time.Second)
+	if ok && c.option.UpdateMetricResolution != nil && currentConfig.AgentConfigByName[types.AgentTypeAgent].MetricResolution != 0 {
+		c.option.UpdateMetricResolution(currentConfig.AgentConfigByName[types.AgentTypeAgent].MetricResolution, currentConfig.AgentConfigByName[types.AgentTypeSNMP].MetricResolution)
 	}
 }
 
@@ -274,6 +284,14 @@ func (c *Connector) Run(ctx context.Context) error {
 	go func() {
 		defer wg.Done()
 		defer cancel()
+		defer func() {
+			err := recover()
+			if err != nil {
+				sentry.CurrentHub().Recover(err)
+				sentry.Flush(time.Second * 5)
+				panic(err)
+			}
+		}()
 
 		syncErr = c.sync.Run(subCtx)
 	}()
@@ -283,6 +301,14 @@ func (c *Connector) Run(ctx context.Context) error {
 	go func() {
 		defer wg.Done()
 		defer cancel()
+		defer func() {
+			err := recover()
+			if err != nil {
+				sentry.CurrentHub().Recover(err)
+				sentry.Flush(time.Second * 5)
+				panic(err)
+			}
+		}()
 
 		ticker := time.NewTicker(10 * time.Second)
 		defer ticker.Stop()
@@ -311,6 +337,14 @@ func (c *Connector) Run(ctx context.Context) error {
 			go func() {
 				defer wg.Done()
 				defer cancel()
+				defer func() {
+					err := recover()
+					if err != nil {
+						sentry.CurrentHub().Recover(err)
+						sentry.Flush(time.Second * 5)
+						panic(err)
+					}
+				}()
 
 				mqttErr = c.mqttRestarter(subCtx)
 			}()
@@ -371,6 +405,56 @@ func (c *Connector) UpdateInfo() {
 // UpdateMonitors trigger a reload of the monitors.
 func (c *Connector) UpdateMonitors() {
 	c.sync.UpdateMonitors()
+}
+
+func (c *Connector) RelabelHook(ctx context.Context, labels map[string]string) (newLabel map[string]string, retryLater bool) {
+	agentID := c.AgentID()
+
+	if agentID == "" {
+		return labels, false
+	}
+
+	labels[gloutonTypes.LabelMetaBleemeoUUID] = agentID
+
+	if labels[gloutonTypes.LabelMetaSNMPTarget] != "" {
+		var (
+			snmpTypeID string
+			target     *snmp.Target
+		)
+
+		for _, t := range c.option.SNMP {
+			if t.Address() == labels[gloutonTypes.LabelMetaSNMPTarget] {
+				target = t
+
+				break
+			}
+		}
+
+		if target == nil {
+			// set retryLater which will cause metrics from the gatherer to be ignored.
+			// This hook will be automatically re-called every 2 minutes.
+			return labels, true
+		}
+
+		for _, t := range c.cache.AgentTypes() {
+			if t.Name == types.AgentTypeSNMP {
+				snmpTypeID = t.ID
+
+				break
+			}
+		}
+
+		agent, err := c.sync.FindSNMPAgent(ctx, target, snmpTypeID, c.cache.AgentsByUUID())
+		if err != nil {
+			logger.V(2).Printf("FindSNMPAgent failed: %w", err)
+
+			return labels, true
+		}
+
+		labels[gloutonTypes.LabelMetaBleemeoTargetAgentUUID] = agent.ID
+	}
+
+	return labels, false
 }
 
 // DiagnosticPage return useful information to troubleshoot issue.
@@ -447,21 +531,21 @@ func (c *Connector) DiagnosticPage() string {
 	return builder.String()
 }
 
-// DiagnosticZip add to a zipfile useful diagnostic information.
-func (c *Connector) DiagnosticZip(zipFile *zip.Writer) error {
+// DiagnosticArchive add to a zipfile useful diagnostic information.
+func (c *Connector) DiagnosticArchive(ctx context.Context, archive gloutonTypes.ArchiveWriter) error {
 	c.l.Lock()
 	mqtt := c.mqtt
 	c.l.Unlock()
 
 	if mqtt != nil {
-		if err := mqtt.DiagnosticZip(zipFile); err != nil {
+		if err := mqtt.DiagnosticArchive(ctx, archive); err != nil {
 			return err
 		}
 	}
 
 	failed := c.cache.MetricRegistrationsFail()
 	if len(failed) > 0 {
-		file, err := zipFile.Create("metric-registration-failed.txt")
+		file, err := archive.Create("metric-registration-failed.txt")
 		if err != nil {
 			return err
 		}
@@ -471,7 +555,7 @@ func (c *Connector) DiagnosticZip(zipFile *zip.Writer) error {
 			indices[i] = i
 		}
 
-		const maxSample = 50
+		const maxSample = 100
 		if len(failed) > maxSample {
 			fmt.Fprintf(file, "%d metrics fail to register. The following is 50 randomly choose metrics that fail:\n", len(failed))
 			indices = rand.Perm(len(failed))[:maxSample]
@@ -484,11 +568,123 @@ func (c *Connector) DiagnosticZip(zipFile *zip.Writer) error {
 
 		for _, i := range indices {
 			row := failed[i]
-			fmt.Fprintf(file, "count=%d nextRetryAt=%s failureKind=%v labels=%s\n", row.FailCounter, row.RetryAfter().Format(time.RFC3339), row.LastFailKind, row.LabelsText)
+			if row.LastFailKind.IsPermanentFailure() {
+				fmt.Fprintf(file, "count=%d nextRetryAt=on next full sync failureKind=%v labels=%s\n", row.FailCounter, row.LastFailKind, row.LabelsText)
+			} else {
+				fmt.Fprintf(file, "count=%d nextRetryAt=%s failureKind=%v labels=%s\n", row.FailCounter, row.RetryAfter().Format(time.RFC3339), row.LastFailKind, row.LabelsText)
+			}
 		}
 	}
 
+	file, err := archive.Create("bleemeo-cache.txt")
+	if err != nil {
+		return err
+	}
+
+	c.diagnosticCache(file)
+
+	if err := c.sync.DiagnosticArchive(ctx, archive); err != nil {
+		return err
+	}
+
 	return nil
+}
+
+// DiagnosticSNMPAssociation return useful information to troubleshoot issue.
+func (c *Connector) DiagnosticSNMPAssociation(ctx context.Context, file io.Writer) {
+	fmt.Fprintf(file, "\n# Association with Bleemeo Agent\n")
+
+	var snmpTypeID string
+
+	for _, t := range c.cache.AgentTypes() {
+		if t.Name == types.AgentTypeSNMP {
+			snmpTypeID = t.ID
+
+			break
+		}
+	}
+
+	for _, t := range c.option.SNMP {
+		agent, err := c.sync.FindSNMPAgent(ctx, t, snmpTypeID, c.cache.AgentsByUUID())
+		if err != nil {
+			fmt.Fprintf(file, " * %s => %v\n", t.String(ctx), err)
+		} else {
+			fmt.Fprintf(file, " * %s => %s\n", t.String(ctx), agent.ID)
+		}
+	}
+}
+
+func (c *Connector) diagnosticCache(file io.Writer) {
+	agents := c.cache.Agents()
+	agentTypes := c.cache.AgentTypes()
+
+	fmt.Fprintf(file, "# Cache known %d agents\n", len(agents))
+
+	for _, a := range agents {
+		agentTypeName := ""
+
+		for _, t := range agentTypes {
+			if t.ID == a.AgentType {
+				agentTypeName = t.DisplayName
+
+				break
+			}
+		}
+
+		fmt.Fprintf(file, "id=%s fqdn=%s type=%s (%s) accountID=%s, config=%s\n", a.ID, a.FQDN, agentTypeName, a.AgentType, a.AccountID, a.CurrentConfigID)
+	}
+
+	fmt.Fprintf(file, "\n# Cache known %d agent types\n", len(agentTypes))
+
+	for _, t := range agentTypes {
+		fmt.Fprintf(file, "id=%s name=%s display_name=%s\n", t.ID, t.Name, t.DisplayName)
+	}
+
+	metrics := c.cache.Metrics()
+	activeMetrics := 0
+
+	for _, m := range metrics {
+		if m.DeactivatedAt.IsZero() {
+			activeMetrics++
+		}
+	}
+
+	accountConfigs := c.cache.AccountConfigs()
+	agentConfigs := c.cache.AgentConfigs()
+
+	fmt.Fprintf(file, "\n# Cache known %d account config (raw)\n", len(accountConfigs))
+
+	for _, ac := range accountConfigs {
+		fmt.Fprintf(file, "%#v\n", ac)
+	}
+
+	fmt.Fprintf(file, "\n# Cache known %d agent config (raw)\n", len(agentConfigs))
+
+	for _, ac := range agentConfigs {
+		fmt.Fprintf(file, "%#v\n", ac)
+	}
+
+	gloutonAccountConfigs := c.cache.AccountConfigsByUUID()
+
+	fmt.Fprintf(file, "\n# Structured account config\n")
+
+	for _, ac := range gloutonAccountConfigs {
+		fmt.Fprintf(file, "%#v\n", ac)
+	}
+
+	config, ok := c.cache.CurrentAccountConfig()
+	if ok {
+		fmt.Fprintf(file, "\n# And current account config is\n")
+		fmt.Fprintf(file, "%#v\n", config)
+	} else {
+		fmt.Fprintf(file, "\n# And current account config is not yet loaded\n")
+	}
+
+	fmt.Fprintf(file, "\n# Cache known %d metrics and %d active metrics\n", len(metrics), activeMetrics)
+	fmt.Fprintf(file, "\n# Cache known %d facts\n", len(c.cache.Facts()))
+	fmt.Fprintf(file, "\n# Cache known %d services\n", len(c.cache.Services()))
+	fmt.Fprintf(file, "\n# Cache known %d containers\n", len(c.cache.Containers()))
+	fmt.Fprintf(file, "\n# Cache known %d monitors\n", len(c.cache.Monitors()))
 }
 
 // Tags returns the Tags set on Bleemeo Cloud platform.
@@ -631,12 +827,15 @@ func (c *Connector) emitInternalMetric() {
 }
 
 func (c *Connector) updateConfig() {
-	currentConfig := c.cache.CurrentAccountConfig()
+	currentConfig, ok := c.cache.CurrentAccountConfig()
+	if !ok || currentConfig.AgentConfigByName[types.AgentTypeAgent].MetricResolution == 0 {
+		return
+	}
 
 	logger.Printf("Changed to configuration %s", currentConfig.Name)
 
 	if c.option.UpdateMetricResolution != nil {
-		c.option.UpdateMetricResolution(time.Duration(currentConfig.MetricAgentResolution) * time.Second)
+		c.option.UpdateMetricResolution(currentConfig.AgentConfigByName[types.AgentTypeAgent].MetricResolution, currentConfig.AgentConfigByName[types.AgentTypeSNMP].MetricResolution)
 	}
 }
 

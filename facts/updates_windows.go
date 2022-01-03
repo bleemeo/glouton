@@ -23,6 +23,7 @@ import (
 	"os/user"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/go-ole/go-ole"
 )
@@ -64,6 +65,10 @@ func countUpdates(updateDispatcher *ole.IDispatch, query string) (res int, succe
 	}
 
 	return int(countVariant.Val), true
+}
+
+func (uf updateFacter) freshness() time.Time {
+	return time.Time{}
 }
 
 //nolint:nakedret

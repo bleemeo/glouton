@@ -18,8 +18,8 @@
 package agent
 
 import (
-	"archive/zip"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"glouton/agent/state"
@@ -28,6 +28,7 @@ import (
 	"glouton/collector"
 	"glouton/config"
 	"glouton/debouncer"
+	"glouton/delay"
 	"glouton/discovery"
 	"glouton/discovery/promexporter"
 	"glouton/facts"
@@ -43,6 +44,7 @@ import (
 	"glouton/nrpe"
 	"glouton/prometheus/exporter/blackbox"
 	"glouton/prometheus/exporter/common"
+	"glouton/prometheus/exporter/snmp"
 	"glouton/prometheus/process"
 	"glouton/prometheus/registry"
 	"glouton/prometheus/rules"
@@ -54,7 +56,6 @@ import (
 	"glouton/types"
 	"glouton/version"
 	"glouton/zabbix"
-	"io"
 	"io/ioutil"
 	"log"
 	"math"
@@ -74,6 +75,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/getsentry/sentry-go"
+
 	bleemeoTypes "glouton/bleemeo/types"
 
 	dockerRuntime "glouton/facts/container-runtime/docker"
@@ -83,14 +86,25 @@ import (
 	processInput "glouton/inputs/process"
 
 	"github.com/google/uuid"
+	"github.com/prometheus/prometheus/pkg/labels"
 	"gopkg.in/yaml.v3"
 )
 
-var errUnsupportedKey = errors.New("Unsupported item key") //nolint: stylecheck
+// Jitter define the aligned timestamp used for scrapping.
+// System collector use 0 (baseJitter here and in registry.go).
+// baseJitterPlus is a little after, useful for collector that need to re-read point of system collector.
+const (
+	baseJitter      = 0
+	baseJitterPlus  = 500000
+	defaultInterval = 0
+)
+
+var errUnsupportedKey = errors.New("Unsupported item key") //nolint:stylecheck
 
 type agent struct {
 	taskRegistry *task.Registry
-	config       *config.Configuration
+	oldConfig    *config.Configuration
+	config       Config
 	state        *state.State
 	cancel       context.CancelFunc
 	context      context.Context
@@ -106,12 +120,15 @@ type agent struct {
 	influxdbConnector      *influxdb.Client
 	threshold              *threshold.Registry
 	jmx                    *jmxtrans.JMX
+	snmpManager            *snmp.Manager
+	snmpRegistration       []int
 	store                  *store.Store
 	gathererRegistry       *registry.Registry
 	metricFormat           types.MetricFormat
 	dynamicScrapper        *promexporter.DynamicScrapper
 	lastHealCheck          time.Time
 	lastContainerEventTime time.Time
+	watchdogRunAt          []time.Time
 	metricFilter           *metricFilter
 	monitorManager         *blackbox.RegisterManager
 	rulesManager           *rules.Manager
@@ -154,7 +171,8 @@ func (a *agent) init(configFiles []string) (ok bool) {
 	a.l.Unlock()
 
 	a.taskRegistry = task.NewRegistry(context.Background())
-	cfg, warnings, err := a.loadConfiguration(configFiles)
+	cfg, oldCfg, warnings, err := loadConfiguration(configFiles, nil)
+	a.oldConfig = oldCfg
 	a.config = cfg
 
 	a.setupLogger()
@@ -165,12 +183,27 @@ func (a *agent) init(configFiles []string) (ok bool) {
 		return false
 	}
 
+	if dsn := a.oldConfig.String("bleemeo.sentry.dsn"); dsn != "" {
+		err := sentry.Init(sentry.ClientOptions{
+			Dsn: dsn,
+		})
+		if err != nil {
+			logger.V(1).Printf("sentry.Init failed: %s", err)
+		}
+	}
+
+	sentry.ConfigureScope(func(scope *sentry.Scope) {
+		scope.SetContext("agent", map[string]interface{}{
+			"glouton_version": version.Version,
+		})
+	})
+
 	for _, w := range warnings {
 		logger.Printf("Warning while loading configuration: %v", w)
 	}
 
-	statePath := a.config.String("agent.state_file")
-	oldStatePath := a.config.String("agent.deprecated_state_file")
+	statePath := a.oldConfig.String("agent.state_file")
+	oldStatePath := a.oldConfig.String("agent.deprecated_state_file")
 
 	a.state, err = state.Load(statePath)
 	if err != nil {
@@ -229,27 +262,27 @@ func (a *agent) init(configFiles []string) (ok bool) {
 
 func (a *agent) setupLogger() {
 	logger.SetBufferCapacity(
-		a.config.Int("logging.buffer.head_size"),
-		a.config.Int("logging.buffer.tail_size"),
+		a.oldConfig.Int("logging.buffer.head_size_bytes"),
+		a.oldConfig.Int("logging.buffer.tail_size_bytes"),
 	)
 
 	var err error
 
-	switch a.config.String("logging.output") {
+	switch a.oldConfig.String("logging.output") {
 	case "syslog":
 		err = logger.UseSyslog()
 	case "file":
-		err = logger.UseFile(a.config.String("logging.filename"))
+		err = logger.UseFile(a.oldConfig.String("logging.filename"))
 	}
 
 	if err != nil {
-		fmt.Printf("Unable to use logging backend '%s': %v\n", a.config.String("logging.output"), err) //nolint:forbidigo
+		fmt.Printf("Unable to use logging backend '%s': %v\n", a.oldConfig.String("logging.output"), err) //nolint:forbidigo
 	}
 
-	if level := a.config.Int("logging.level"); level != 0 {
+	if level := a.oldConfig.Int("logging.level"); level != 0 {
 		logger.SetLevel(level)
 	} else {
-		switch strings.ToLower(a.config.String("logging.level")) {
+		switch strings.ToLower(a.oldConfig.String("logging.level")) {
 		case "0", "info", "warning", "error":
 			logger.SetLevel(0)
 		case "verbose":
@@ -258,11 +291,11 @@ func (a *agent) setupLogger() {
 			logger.SetLevel(2)
 		default:
 			logger.SetLevel(0)
-			logger.Printf("Unknown logging.level = %#v. Using \"INFO\"", a.config.String("logging.level"))
+			logger.Printf("Unknown logging.level = %#v. Using \"INFO\"", a.oldConfig.String("logging.level"))
 		}
 	}
 
-	logger.SetPkgLevels(a.config.String("logging.package_levels"))
+	logger.SetPkgLevels(a.oldConfig.String("logging.package_levels"))
 }
 
 // Run runs Glouton.
@@ -338,7 +371,7 @@ func (a *agent) BleemeoConnected() bool {
 func (a *agent) Tags() []string {
 	tagsSet := make(map[string]bool)
 
-	for _, t := range a.config.StringList("tags") {
+	for _, t := range a.oldConfig.StringList("tags") {
 		tagsSet[t] = true
 	}
 
@@ -366,32 +399,77 @@ func (a *agent) UpdateThresholds(thresholds map[threshold.MetricNameItem]thresho
 // notifyBleemeoFirstRegistration is called when Glouton is registered with Bleemeo Cloud platform for the first time
 // This means that when this function is called, BleemeoAgentID and BleemeoAccountID are set.
 func (a *agent) notifyBleemeoFirstRegistration(ctx context.Context) {
-	a.gathererRegistry.UpdateBleemeoAgentID(ctx, a.BleemeoAgentID())
+	a.gathererRegistry.UpdateRelabelHook(ctx, a.bleemeoConnector.RelabelHook)
 	a.store.DropAllMetrics()
 }
 
-func (a *agent) updateMetricResolution(resolution time.Duration) {
+// notifyBleemeoUpdateLabels is called when Labels might change for some metrics.
+// This likely happen when SNMP target are deleted/recreated.
+func (a *agent) notifyBleemeoUpdateLabels(ctx context.Context) {
+	a.gathererRegistry.UpdateRelabelHook(ctx, a.bleemeoConnector.RelabelHook)
+}
+
+func (a *agent) updateSNMPResolution(resolution time.Duration) {
 	a.l.Lock()
-	a.metricResolution = resolution
+	defer a.l.Unlock()
 
-	a.rulesManager.UpdateMetricResolution(resolution)
+	for _, id := range a.snmpRegistration {
+		a.gathererRegistry.Unregister(id)
+	}
 
+	if a.snmpRegistration != nil {
+		a.snmpRegistration = a.snmpRegistration[:0]
+	}
+
+	if resolution == 0 {
+		return
+	}
+
+	for _, target := range a.snmpManager.Gatherers() {
+		hash := labels.FromMap(target.ExtraLabels).Hash()
+
+		id, err := a.gathererRegistry.RegisterGatherer(
+			registry.RegistrationOption{
+				Description: "snmp target " + target.Address,
+				JitterSeed:  hash,
+				Interval:    resolution,
+				Timeout:     40 * time.Second,
+				ExtraLabels: target.ExtraLabels,
+				Rules:       registry.DefaultSNMPRules(),
+			},
+			target.Gatherer,
+			true,
+		)
+		if err != nil {
+			logger.Printf("Unable to add SNMP scrapper for target %s: %v", target.Address, err)
+		} else {
+			a.snmpRegistration = append(a.snmpRegistration, id)
+		}
+	}
+}
+
+func (a *agent) updateMetricResolution(defaultResolution time.Duration, snmpResolution time.Duration) {
+	a.l.Lock()
+	a.metricResolution = defaultResolution
 	a.l.Unlock()
 
-	a.gathererRegistry.UpdateDelay(resolution)
+	a.gathererRegistry.UpdateDelay(defaultResolution)
+	a.rulesManager.UpdateMetricResolution(defaultResolution)
 
 	services, err := a.discovery.Discovery(a.context, time.Hour)
 	if err != nil {
 		logger.V(1).Printf("error during discovery: %v", err)
 	} else if a.jmx != nil {
-		if err := a.jmx.UpdateConfig(services, resolution); err != nil {
+		if err := a.jmx.UpdateConfig(services, defaultResolution); err != nil {
 			logger.V(1).Printf("failed to update JMX configuration: %v", err)
 		}
 	}
+
+	a.updateSNMPResolution(snmpResolution)
 }
 
 func (a *agent) getConfigThreshold(firstUpdate bool) map[string]threshold.Threshold {
-	rawValue, ok := a.config.Get("thresholds")
+	rawValue, ok := a.oldConfig.Get("thresholds")
 	if !ok {
 		rawValue = map[string]interface{}{}
 	}
@@ -483,7 +561,7 @@ func (a *agent) updateThresholds(thresholds map[threshold.MetricNameItem]thresho
 }
 
 // Run will start the agent. It will terminate when sigquit/sigterm/sigint is received.
-func (a *agent) run() { //nolint:gocyclo,cyclop
+func (a *agent) run() { //nolint:cyclop
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -492,19 +570,21 @@ func (a *agent) run() { //nolint:gocyclo,cyclop
 	a.hostRootPath = "/"
 	a.context = ctx
 
-	if a.config.String("container.type") != "" {
-		a.hostRootPath = a.config.String("df.host_mount_point")
+	if a.oldConfig.String("container.type") != "" {
+		a.hostRootPath = a.oldConfig.String("df.host_mount_point")
 		setupContainer(a.hostRootPath)
 	}
 
 	a.triggerHandler = debouncer.New(
+		ctx,
 		a.handleTrigger,
+		5*time.Second,
 		10*time.Second,
 	)
 	a.factProvider = facts.NewFacter(
-		a.config.String("agent.facts_file"),
+		a.oldConfig.String("agent.facts_file"),
 		a.hostRootPath,
-		a.config.String("agent.public_ip_indicator"),
+		a.oldConfig.String("agent.public_ip_indicator"),
 	)
 
 	factsMap, err := a.factProvider.FastFacts(ctx)
@@ -517,7 +597,7 @@ func (a *agent) run() { //nolint:gocyclo,cyclop
 		fqdn = "localhost"
 	}
 
-	cloudImageFile := a.config.String("agent.cloudimage_creation_file")
+	cloudImageFile := a.oldConfig.String("agent.cloudimage_creation_file")
 
 	content, err := ioutil.ReadFile(cloudImageFile)
 	if err != nil && !os.IsNotExist(err) {
@@ -540,53 +620,90 @@ func (a *agent) run() { //nolint:gocyclo,cyclop
 
 	logger.Printf("Starting agent version %v (commit %v)", version.Version, version.BuildHash)
 
-	_ = os.Remove(a.config.String("agent.upgrade_file"))
+	_ = os.Remove(a.oldConfig.String("agent.upgrade_file"))
 
-	a.metricFormat = types.StringToMetricFormat(a.config.String("agent.metrics_format"))
+	a.metricFormat = types.StringToMetricFormat(a.oldConfig.String("agent.metrics_format"))
 	if a.metricFormat == types.MetricFormatUnknown {
-		logger.Printf("Invalid metric format %#v. Supported option are \"Bleemeo\" and \"Prometheus\". Falling back to Bleemeo", a.config.String("agent.metrics_format"))
+		logger.Printf("Invalid metric format %#v. Supported option are \"Bleemeo\" and \"Prometheus\". Falling back to Bleemeo", a.oldConfig.String("agent.metrics_format"))
 		a.metricFormat = types.MetricFormatBleemeo
 	}
 
-	apiBindAddress := fmt.Sprintf("%s:%d", a.config.String("web.listener.address"), a.config.Int("web.listener.port"))
+	apiBindAddress := fmt.Sprintf("%s:%d", a.oldConfig.String("web.listener.address"), a.oldConfig.Int("web.listener.port"))
 
-	if a.config.Bool("agent.http_debug.enabled") {
+	if a.oldConfig.Bool("agent.http_debug.enable") {
 		go func() {
-			debugAddress := a.config.String("agent.http_debug.bind_address")
+			debugAddress := a.oldConfig.String("agent.http_debug.bind_address")
 
 			logger.Printf("Starting debug server on http://%s/debug/pprof/", debugAddress)
 			log.Println(http.ListenAndServe(debugAddress, nil))
 		}()
 	}
 
-	mFilter, err := newMetricFilter(a.config, a.metricFormat)
+	var targets []*scrapper.Target
+
+	a.snmpManager = snmp.NewManager(
+		a.config.SNMP.ExporterURL,
+		a.factProvider,
+		a.config.SNMP.Targets.ToTargetOptions()...,
+	)
+
+	if promCfg, found := a.oldConfig.Get("metric.prometheus.targets"); found {
+		targets = prometheusConfigToURLs(promCfg)
+	}
+
+	mFilter, err := newMetricFilter(a.oldConfig, len(a.snmpManager.Targets()) > 0, a.metricFormat)
 	if err != nil {
 		logger.Printf("An error occurred while building the metric filter, allow/deny list may be partial: %v", err)
 	}
 
 	a.metricFilter = mFilter
-	a.store = store.New()
 
-	a.rulesManager = rules.NewManager(ctx, a.store, time.Now().Truncate(time.Second), a.metricResolution)
-
-	a.store.SetResetRuleCallback(a.rulesManager.ResetInactiveRules)
+	if a.oldConfig.Bool("web.local_ui.enable") {
+		a.store = store.New(time.Hour)
+	} else {
+		a.store = store.New(2 * time.Minute)
+	}
 
 	filteredStore := store.NewFilteredStore(a.store, mFilter.FilterPoints, mFilter.filterMetrics)
 
-	a.gathererRegistry = &registry.Registry{
-		Option: registry.Option{
+	a.gathererRegistry, err = registry.New(
+		registry.Option{
 			PushPoint:             a.store,
 			FQDN:                  fqdn,
-			BleemeoAgentID:        a.BleemeoAgentID(),
-			GloutonPort:           strconv.FormatInt(int64(a.config.Int("web.listener.port")), 10),
+			GloutonPort:           strconv.FormatInt(int64(a.oldConfig.Int("web.listener.port")), 10),
 			MetricFormat:          a.metricFormat,
-			BlackboxSentScraperID: a.config.Bool("blackbox.scraper_send_uuid"),
+			BlackboxSentScraperID: a.oldConfig.Bool("blackbox.scraper_send_uuid"),
 			Filter:                mFilter,
-		},
-		RulesCallback: a.rulesManager.Run,
+			Queryable:             a.store,
+		})
+	if err != nil {
+		logger.Printf("Unable to create the metrics registry: %v", err)
+		logger.Printf("The metrics registry is required for Glouton. Exiting.")
+
+		return
 	}
+
+	// rulesManager := rules.NewManager(ctx, a.store, a.gathererRegistry.Appendable(5*time.Minute))
+	a.rulesManager = rules.NewManager(ctx, a.store, a.gathererRegistry.Appendable(5*time.Minute), a.metricResolution)
+
+	_, err = a.gathererRegistry.RegisterPushPointsCallback(
+		registry.RegistrationOption{
+			Description: "rulesManager",
+			JitterSeed:  baseJitterPlus,
+		},
+		func(ctx context.Context, t0 time.Time) {
+			a.rulesManager.Run(ctx, t0)
+		},
+	)
+	if err != nil {
+		logger.Printf("unable to add recording rules metrics: %v", err)
+	}
+
 	a.threshold = threshold.New(a.state)
-	acc := &inputs.Accumulator{Pusher: a.threshold.WithPusher(a.gathererRegistry.WithTTL(5 * time.Minute))}
+	acc := &inputs.Accumulator{
+		Pusher:  a.threshold.WithPusher(a.gathererRegistry.WithTTL(5 * time.Minute)),
+		Context: ctx,
+	}
 
 	a.dockerRuntime = &dockerRuntime.Docker{
 		DockerSockets:             dockerRuntime.DefaultAddresses(a.hostRootPath),
@@ -603,11 +720,11 @@ func (a *agent) run() { //nolint:gocyclo,cyclop
 		},
 	}
 
-	if a.config.Bool("kubernetes.enabled") {
+	if a.oldConfig.Bool("kubernetes.enable") {
 		kube := &kubernetes.Kubernetes{
 			Runtime:    a.containerRuntime,
-			NodeName:   a.config.String("kubernetes.nodename"),
-			KubeConfig: a.config.String("kubernetes.kubeconfig"),
+			NodeName:   a.oldConfig.String("kubernetes.nodename"),
+			KubeConfig: a.oldConfig.String("kubernetes.kubeconfig"),
 		}
 		a.containerRuntime = kube
 
@@ -621,11 +738,11 @@ func (a *agent) run() { //nolint:gocyclo,cyclop
 
 	var psLister facts.ProcessLister
 
-	useProc := a.config.String("container.type") == "" || a.config.Bool("container.pid_namespace_host")
+	useProc := a.oldConfig.String("container.type") == "" || a.oldConfig.Bool("container.pid_namespace_host")
 	if !useProc {
 		logger.V(1).Printf("The agent is running in a container and \"container.pid_namespace_host\", is not true. Not all processes will be seen")
 	} else {
-		if version.IsWindows() {
+		if !version.IsLinux() {
 			psLister = facts.NewPsUtilLister("")
 		} else {
 			psLister = process.NewProcessLister(a.hostRootPath, 9*time.Second)
@@ -637,33 +754,57 @@ func (a *agent) run() { //nolint:gocyclo,cyclop
 		a.hostRootPath,
 		a.containerRuntime,
 	)
-	netstat := &facts.NetstatProvider{FilePath: a.config.String("agent.netstat_file")}
+	netstat := &facts.NetstatProvider{FilePath: a.oldConfig.String("agent.netstat_file")}
 
 	a.factProvider.AddCallback(a.containerRuntime.RuntimeFact)
-	a.factProvider.SetFact("installation_format", a.config.String("agent.installation_format"))
+	a.factProvider.SetFact("installation_format", a.oldConfig.String("agent.installation_format"))
 
 	processInput := processInput.New(psFact, a.threshold.WithPusher(a.gathererRegistry.WithTTL(5*time.Minute)))
 
 	a.collector = collector.New(acc)
-	a.gathererRegistry.AddPushPointsCallback(a.collector.RunGather)
 
-	if a.metricFormat == types.MetricFormatBleemeo {
-		a.gathererRegistry.AddPushPointsCallback(processInput.Gather)
+	_, err = a.gathererRegistry.RegisterPushPointsCallback(
+		registry.RegistrationOption{
+			Description: "system & services metrics",
+			JitterSeed:  baseJitter,
+		},
+		a.collector.RunGather,
+	)
+	if err != nil {
+		logger.Printf("unable to add system metrics: %v", err)
 	}
 
-	a.gathererRegistry.AddPushPointsCallback(
-		a.miscGather(a.threshold.WithPusher(a.gathererRegistry.WithTTL(5 * time.Minute))),
-	)
+	if a.metricFormat == types.MetricFormatBleemeo {
+		_, err = a.gathererRegistry.RegisterPushPointsCallback(
+			registry.RegistrationOption{
+				Description: "procces status metrics",
+				JitterSeed:  baseJitter,
+			},
+			processInput.Gather,
+		)
+		if err != nil {
+			logger.Printf("unable to add processes metrics: %v", err)
+		}
+	}
 
-	services, _ := a.config.Get("service")
-	servicesIgnoreCheck, _ := a.config.Get("service_ignore_check")
-	servicesIgnoreMetrics, _ := a.config.Get("service_ignore_metrics")
-	overrideServices := confFieldToSliceMap(services, "service override")
+	_, err = a.gathererRegistry.RegisterPushPointsCallback(
+		registry.RegistrationOption{
+			Description: "miscGather",
+			JitterSeed:  baseJitter,
+		},
+		a.miscGather(a.threshold.WithPusher(a.gathererRegistry.WithTTL(5*time.Minute))),
+	)
+	if err != nil {
+		logger.Printf("unable to add miscGathere metrics: %v", err)
+	}
+
+	servicesIgnoreCheck, _ := a.oldConfig.Get("service_ignore_check")
+	servicesIgnoreMetrics, _ := a.oldConfig.Get("service_ignore_metrics")
 	serviceIgnoreCheck := confFieldToSliceMap(servicesIgnoreCheck, "service ignore check")
 	serviceIgnoreMetrics := confFieldToSliceMap(servicesIgnoreMetrics, "service ignore metrics")
 	isCheckIgnored := discovery.NewIgnoredService(serviceIgnoreCheck).IsServiceIgnored
 	isInputIgnored := discovery.NewIgnoredService(serviceIgnoreMetrics).IsServiceIgnored
-	dynamicDiscovery := discovery.NewDynamic(psFact, netstat, a.containerRuntime, discovery.SudoFileReader{HostRootPath: a.hostRootPath}, a.config.String("stack"))
+	dynamicDiscovery := discovery.NewDynamic(psFact, netstat, a.containerRuntime, discovery.SudoFileReader{HostRootPath: a.hostRootPath}, a.oldConfig.String("stack"))
 	a.discovery = discovery.New(
 		dynamicDiscovery,
 		a.collector,
@@ -672,42 +813,50 @@ func (a *agent) run() { //nolint:gocyclo,cyclop
 		a.state,
 		acc,
 		a.containerRuntime,
-		overrideServices,
+		a.config.Services.ToDiscoveryMap(),
 		isCheckIgnored,
 		isInputIgnored,
 		a.metricFormat,
 	)
 
-	var targets []*scrapper.Target
-
-	if promCfg, found := a.config.Get("metric.prometheus.targets"); found {
-		targets = prometheusConfigToURLs(promCfg)
-	}
+	a.updateSNMPResolution(time.Minute)
 
 	for _, target := range targets {
-		if _, err := a.gathererRegistry.RegisterGatherer(target, nil, target.ExtraLabels, true); err != nil {
+		hash := labels.FromMap(target.ExtraLabels).Hash()
+
+		_, err = a.gathererRegistry.RegisterGatherer(
+			registry.RegistrationOption{
+				Description: "Prom exporter " + target.URL.String(),
+				JitterSeed:  hash,
+				Interval:    defaultInterval,
+				ExtraLabels: target.ExtraLabels,
+			},
+			target,
+			true,
+		)
+		if err != nil {
 			logger.Printf("Unable to add Prometheus scrapper for target %s: %v", target.URL.String(), err)
 		}
 	}
 
 	a.gathererRegistry.AddDefaultCollector()
 
-	if _, found := a.config.Get("metric.pull"); found {
-		logger.Printf("metric.pull is deprecated and not supported by Glouton.")
-		logger.Printf("For your custom metrics, please use Prometheus exporter & metric.prometheus")
-	}
-
 	a.dynamicScrapper = &promexporter.DynamicScrapper{
 		Registry:       a.gathererRegistry,
 		DynamicJobName: "discovered-exporters",
 	}
 
-	if a.config.Bool("blackbox.enabled") {
+	if _, found := a.oldConfig.Get("metric.pull"); found {
+		logger.Printf("metric.pull is deprecated and not supported by Glouton.")
+		logger.Printf("For your custom metrics, please use Prometheus exporter & metric.prometheus")
+	}
+
+	if a.oldConfig.Bool("blackbox.enable") {
 		logger.V(1).Println("Starting blackbox_exporter...")
 		// the config is present, otherwise we would not be in this block
-		blackboxConf, _ := a.config.Get("blackbox")
+		blackboxConf, _ := a.oldConfig.Get("blackbox")
 
-		a.monitorManager, err = blackbox.New(a.gathererRegistry, blackboxConf, a.config.String("blackbox.user_agent"), a.metricFormat)
+		a.monitorManager, err = blackbox.New(a.gathererRegistry, blackboxConf, a.oldConfig.String("blackbox.user_agent"), a.metricFormat)
 		if err != nil {
 			logger.V(0).Printf("Couldn't start blackbox_exporter: %v\nMonitors will not be able to run on this agent.", err)
 		}
@@ -717,7 +866,7 @@ func (a *agent) run() { //nolint:gocyclo,cyclop
 
 	promExporter := a.gathererRegistry.Exporter()
 
-	if a.config.Bool("agent.process_exporter.enabled") {
+	if a.oldConfig.Bool("agent.process_exporter.enable") {
 		process.RegisterExporter(a.gathererRegistry, psLister, dynamicDiscovery, a.metricFormat == types.MetricFormatBleemeo)
 	}
 
@@ -731,10 +880,11 @@ func (a *agent) run() { //nolint:gocyclo,cyclop
 		AgentInfo:          a,
 		PrometheurExporter: promExporter,
 		Threshold:          a.threshold,
-		StaticCDNURL:       a.config.String("web.static_cdn_url"),
+		StaticCDNURL:       a.oldConfig.String("web.static_cdn_url"),
 		DiagnosticPage:     a.DiagnosticPage,
-		DiagnosticZip:      a.writeDiagnosticZip,
+		DiagnosticArchive:  a.writeDiagnosticArchive,
 		MetricFormat:       a.metricFormat,
+		LocalUIDisabled:    !a.oldConfig.Bool("web.local_ui.enable"),
 	}
 
 	a.FireTrigger(true, true, false, false)
@@ -742,7 +892,6 @@ func (a *agent) run() { //nolint:gocyclo,cyclop
 	tasks := []taskInfo{
 		{a.watchdog, "Agent Watchdog"},
 		{a.store.Run, "Metric store"},
-		{a.triggerHandler.Run, "Internal trigger handler"},
 		{a.containerRuntime.Run, "Docker connector"},
 		{a.healthCheck, "Agent healthcheck"},
 		{a.hourlyDiscovery, "Service Discovery"},
@@ -754,42 +903,44 @@ func (a *agent) run() { //nolint:gocyclo,cyclop
 		{a.sendToTelemetry, "Send Facts information to our telemetry tool"},
 	}
 
-	if a.config.Bool("web.enabled") {
+	if a.oldConfig.Bool("web.enable") {
 		tasks = append(tasks, taskInfo{api.Run, "Local Web UI"})
 	}
 
-	if a.config.Bool("jmx.enabled") {
-		perm, err := strconv.ParseInt(a.config.String("jmxtrans.file_permission"), 8, 0)
+	if a.oldConfig.Bool("jmx.enable") {
+		perm, err := strconv.ParseInt(a.oldConfig.String("jmxtrans.file_permission"), 8, 0)
 		if err != nil {
-			logger.Printf("invalid permission %#v: %v", a.config.String("jmxtrans.file_permission"), err)
+			logger.Printf("invalid permission %#v: %v", a.oldConfig.String("jmxtrans.file_permission"), err)
 			logger.Printf("using the default 0640")
 
 			perm = 0o640
 		}
 
 		a.jmx = &jmxtrans.JMX{
-			OutputConfigurationFile:       a.config.String("jmxtrans.config_file"),
+			OutputConfigurationFile:       a.oldConfig.String("jmxtrans.config_file"),
 			OutputConfigurationPermission: os.FileMode(perm),
-			ContactPort:                   a.config.Int("jmxtrans.graphite_port"),
+			ContactPort:                   a.oldConfig.Int("jmxtrans.graphite_port"),
 			Pusher:                        a.threshold.WithPusher(a.gathererRegistry.WithTTL(5 * time.Minute)),
 		}
 
 		tasks = append(tasks, taskInfo{a.jmx.Run, "jmxtrans"})
 	}
 
-	if a.config.Bool("bleemeo.enabled") {
-		scaperName := a.config.String("blackbox.scraper_name")
+	if a.oldConfig.Bool("bleemeo.enable") {
+		scaperName := a.oldConfig.String("blackbox.scraper_name")
 		if scaperName == "" {
-			scaperName = fmt.Sprintf("%s:%d", fqdn, a.config.Int("web.listener.port"))
+			scaperName = fmt.Sprintf("%s:%d", fqdn, a.oldConfig.Int("web.listener.port"))
 		}
 
-		a.bleemeoConnector = bleemeo.New(bleemeoTypes.GlobalOption{
-			Config:                  a.config,
+		a.bleemeoConnector, err = bleemeo.New(bleemeoTypes.GlobalOption{
+			Config:                  a.oldConfig,
 			State:                   a.state,
 			Facts:                   a.factProvider,
 			Process:                 psFact,
 			Docker:                  a.containerRuntime,
 			Store:                   filteredStore,
+			SNMP:                    a.snmpManager.Targets(),
+			SNMPOnlineTarget:        a.snmpManager.OnlineCount,
 			Acc:                     acc,
 			Discovery:               a.discovery,
 			MonitorManager:          a.monitorManager,
@@ -798,38 +949,52 @@ func (a *agent) run() { //nolint:gocyclo,cyclop
 			UpdateUnits:             a.threshold.SetUnits,
 			MetricFormat:            a.metricFormat,
 			NotifyFirstRegistration: a.notifyBleemeoFirstRegistration,
+			NotifyLabelsUpdate:      a.notifyBleemeoUpdateLabels,
 			BlackboxScraperName:     scaperName,
 			RebuildAlertingRules:    a.rulesManager.RebuildAlertingRules,
 		})
-		a.gathererRegistry.UpdateBleemeoAgentID(ctx, a.BleemeoAgentID())
+		if err != nil {
+			logger.Printf("unable to start Bleemeo SAAS connector: %v", err)
+
+			return
+		}
+
+		a.gathererRegistry.UpdateRelabelHook(ctx, a.bleemeoConnector.RelabelHook)
 		tasks = append(tasks, taskInfo{a.bleemeoConnector.Run, "Bleemeo SAAS connector"})
 	}
 
-	if a.config.Bool("nrpe.enabled") {
-		nrpeConfFile := a.config.StringList("nrpe.conf_paths")
-		nrperesponse := nrpe.NewResponse(overrideServices, a.discovery, nrpeConfFile)
+	sentry.ConfigureScope(func(scope *sentry.Scope) {
+		scope.SetContext("agent", map[string]interface{}{
+			"agent_id":        a.BleemeoAgentID(),
+			"glouton_version": version.Version,
+		})
+	})
+
+	if a.oldConfig.Bool("nrpe.enable") {
+		nrpeConfFile := a.oldConfig.StringList("nrpe.conf_paths")
+		nrperesponse := nrpe.NewResponse(a.config.Services.ToNRPEMap(), a.discovery, nrpeConfFile)
 		server := nrpe.New(
-			fmt.Sprintf("%s:%d", a.config.String("nrpe.address"), a.config.Int("nrpe.port")),
-			a.config.Bool("nrpe.ssl"),
+			fmt.Sprintf("%s:%d", a.oldConfig.String("nrpe.address"), a.oldConfig.Int("nrpe.port")),
+			a.oldConfig.Bool("nrpe.ssl"),
 			nrperesponse.Response,
 		)
 		tasks = append(tasks, taskInfo{server.Run, "NRPE server"})
 	}
 
-	if a.config.Bool("zabbix.enabled") {
+	if a.oldConfig.Bool("zabbix.enable") {
 		server := zabbix.New(
-			fmt.Sprintf("%s:%d", a.config.String("zabbix.address"), a.config.Int("zabbix.port")),
+			fmt.Sprintf("%s:%d", a.oldConfig.String("zabbix.address"), a.oldConfig.Int("zabbix.port")),
 			zabbixResponse,
 		)
 		tasks = append(tasks, taskInfo{server.Run, "Zabbix server"})
 	}
 
-	if a.config.Bool("influxdb.enabled") {
+	if a.oldConfig.Bool("influxdb.enable") {
 		server := influxdb.New(
-			fmt.Sprintf("http://%s:%s", a.config.String("influxdb.host"), a.config.String("influxdb.port")),
-			a.config.String("influxdb.db_name"),
+			fmt.Sprintf("http://%s:%s", a.oldConfig.String("influxdb.host"), a.oldConfig.String("influxdb.port")),
+			a.oldConfig.String("influxdb.db_name"),
 			a.store,
-			a.config.StringMap("influxdb.tags"),
+			a.oldConfig.StringMap("influxdb.tags"),
 		)
 		a.influxdbConnector = server
 		tasks = append(tasks, taskInfo{server.Run, "influxdb"})
@@ -843,15 +1008,15 @@ func (a *agent) run() { //nolint:gocyclo,cyclop
 		a.bleemeoConnector.ApplyCachedConfiguration()
 	}
 
-	tmp, _ := a.config.Get("metric.softstatus_period")
+	tmp, _ := a.oldConfig.Get("metric.softstatus_period")
 
 	a.threshold.SetSoftPeriod(
-		time.Duration(a.config.Int("metric.softstatus_period_default"))*time.Second,
+		time.Duration(a.oldConfig.Int("metric.softstatus_period_default"))*time.Second,
 		softPeriodsFromInterface(tmp),
 	)
 
-	if !reflect.DeepEqual(a.config.StringList("disk_monitor"), defaultConfig()["disk_monitor"]) {
-		if a.metricFormat == types.MetricFormatBleemeo && len(a.config.StringList("disk_ignore")) > 0 {
+	if !reflect.DeepEqual(a.oldConfig.StringList("disk_monitor"), defaultConfig()["disk_monitor"]) {
+		if a.metricFormat == types.MetricFormatBleemeo && len(a.oldConfig.StringList("disk_ignore")) > 0 {
 			logger.Printf("Warning: both \"disk_monitor\" and \"disk_ignore\" are set. Only \"disk_ignore\" will be used")
 		} else if a.metricFormat != types.MetricFormatBleemeo {
 			logger.Printf("Warning: configuration \"disk_monitor\" is not used in Prometheus mode. Use \"disk_ignore\"")
@@ -877,51 +1042,35 @@ func (a *agent) run() { //nolint:gocyclo,cyclop
 	a.registerOSSpecificComponents()
 
 	tasks = append(tasks, taskInfo{
-		a.gathererRegistry.RunCollection,
+		a.gathererRegistry.Run,
 		"Metric collector",
 	})
 
-	if a.config.Bool("telegraf.statsd.enabled") {
-		input, err := statsd.New(fmt.Sprintf("%s:%d", a.config.String("telegraf.statsd.address"), a.config.Int("telegraf.statsd.port")))
+	if a.oldConfig.Bool("telegraf.statsd.enable") {
+		input, err := statsd.New(fmt.Sprintf("%s:%d", a.oldConfig.String("telegraf.statsd.address"), a.oldConfig.Int("telegraf.statsd.port")))
 		if err != nil {
 			logger.Printf("Unable to create StatsD input: %v", err)
-			a.config.Set("telegraf.statsd.enabled", false)
+			a.oldConfig.Set("telegraf.statsd.enable", false)
 		} else if _, err = a.collector.AddInput(input, "statsd"); err != nil {
 			if strings.Contains(err.Error(), "address already in use") {
 				logger.Printf("Unable to listen on StatsD port because another program already use it")
 				logger.Printf("The StatsD integration is now disabled. Restart the agent to try re-enabling it.")
-				logger.Printf("See https://docs.bleemeo.com/agent/configuration#telegrafstatsdenabled to permanently disable StatsD integration or using an alternate port")
+				logger.Printf("See https://docs.bleemeo.com/agent/configuration#telegrafstatsdenable to permanently disable StatsD integration or using an alternate port")
 			} else {
 				logger.Printf("Unable to create StatsD input: %v", err)
 			}
 
-			a.config.Set("telegraf.statsd.enabled", false)
+			a.oldConfig.Set("telegraf.statsd.enable", false)
 		}
 	}
 
-	a.factProvider.SetFact("statsd_enabled", a.config.String("telegraf.statsd.enabled"))
+	a.factProvider.SetFact("statsd_enable", a.oldConfig.String("telegraf.statsd.enable"))
 	a.factProvider.SetFact("metrics_format", a.metricFormat.String())
 
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM, syscall.SIGINT, syscall.SIGHUP)
 
-	go func() {
-		for s := range c {
-			if s == syscall.SIGTERM || s == syscall.SIGINT || s == os.Interrupt {
-				cancel()
-
-				break
-			}
-
-			if s == syscall.SIGHUP {
-				if a.bleemeoConnector != nil {
-					a.bleemeoConnector.UpdateMonitors()
-				}
-
-				a.FireTrigger(true, true, false, true)
-			}
-		}
-	}()
+	go a.handleSignals(ctx, c, cancel)
 
 	a.startTasks(tasks)
 
@@ -934,22 +1083,76 @@ func (a *agent) run() { //nolint:gocyclo,cyclop
 	logger.V(2).Printf("Agent stopped")
 }
 
+func (a *agent) handleSignals(ctx context.Context, c chan os.Signal, cancel context.CancelFunc) {
+	var (
+		l                         sync.Mutex
+		systemUpdateMetricPending bool
+	)
+
+	for s := range c {
+		if s == syscall.SIGTERM || s == syscall.SIGINT || s == os.Interrupt {
+			cancel()
+
+			break
+		}
+
+		if s == syscall.SIGHUP {
+			if a.bleemeoConnector != nil {
+				a.bleemeoConnector.UpdateMonitors()
+			}
+
+			l.Lock()
+			if !systemUpdateMetricPending {
+				systemUpdateMetricPending = true
+
+				go func() {
+					t0 := time.Now()
+
+					for n := 0; n < 10; n++ {
+						time.Sleep(time.Second)
+
+						updatedAt := facts.PendingSystemUpdateFreshness(
+							ctx,
+							a.oldConfig.String("container.type") != "",
+							a.hostRootPath,
+						)
+						if updatedAt.IsZero() || updatedAt.After(t0) {
+							break
+						}
+					}
+
+					a.FireTrigger(false, false, true, false)
+
+					l.Lock()
+
+					systemUpdateMetricPending = false
+
+					l.Unlock()
+				}()
+			}
+			l.Unlock()
+
+			a.FireTrigger(true, true, false, true)
+		}
+	}
+}
+
 func (a *agent) buildCollectorsConfig() (conf inputs.CollectorConfig, err error) {
-	whitelistRE, err := common.CompileREs(a.config.StringList("disk_monitor"))
+	whitelistRE, err := common.CompileREs(a.oldConfig.StringList("disk_monitor"))
 	if err != nil {
 		logger.V(1).Printf("the whitelist for diskio regexp couldn't compile: %s", err)
 
 		return
 	}
 
-	blacklistRE, err := common.CompileREs(a.config.StringList("disk_ignore"))
+	blacklistRE, err := common.CompileREs(a.oldConfig.StringList("disk_ignore"))
 	if err != nil {
 		logger.V(1).Printf("the blacklist for diskio regexp couldn't compile: %s", err)
 
 		return
 	}
 
-	pathBlacklist := a.config.StringList("df.path_ignore")
+	pathBlacklist := a.oldConfig.StringList("df.path_ignore")
 	pathBlacklistTrimed := make([]string, len(pathBlacklist))
 
 	for i, v := range pathBlacklist {
@@ -958,23 +1161,23 @@ func (a *agent) buildCollectorsConfig() (conf inputs.CollectorConfig, err error)
 
 	return inputs.CollectorConfig{
 		DFRootPath:      a.hostRootPath,
-		NetIfBlacklist:  a.config.StringList("network_interface_blacklist"),
+		NetIfBlacklist:  a.oldConfig.StringList("network_interface_blacklist"),
 		IODiskWhitelist: whitelistRE,
 		IODiskBlacklist: blacklistRE,
 		DFPathBlacklist: pathBlacklistTrimed,
 	}, nil
 }
 
-func (a *agent) miscGather(pusher types.PointPusher) func(time.Time) {
-	return func(t0 time.Time) {
-		points, err := a.containerRuntime.Metrics(context.Background())
+func (a *agent) miscGather(pusher types.PointPusher) func(context.Context, time.Time) {
+	return func(ctx context.Context, t0 time.Time) {
+		points, err := a.containerRuntime.Metrics(ctx)
 		if err != nil {
 			logger.V(2).Printf("container Runtime metrics gather failed: %v", err)
 		}
 
 		// We don't really care about having up-to-date information because
 		// when containers are started/stopped, the information is updated anyway.
-		containers, err := a.containerRuntime.Containers(context.Background(), 2*time.Hour, false)
+		containers, err := a.containerRuntime.Containers(ctx, 2*time.Hour, false)
 		if err != nil {
 			logger.V(2).Printf("gather on DockerProvider failed: %v", err)
 
@@ -996,14 +1199,14 @@ func (a *agent) miscGather(pusher types.PointPusher) func(time.Time) {
 			},
 		})
 
-		pusher.PushPoints(points)
+		pusher.PushPoints(ctx, points)
 	}
 }
 
 func (a *agent) sendToTelemetry(ctx context.Context) error {
-	if a.config.Bool("agent.telemetry.enabled") {
+	if a.oldConfig.Bool("agent.telemetry.enable") {
 		select {
-		case <-time.After(2*time.Minute + time.Duration(rand.Intn(5))*time.Minute): //nolint:gosec
+		case <-time.After(delay.JitterDelay(5*time.Minute, 0.2)):
 		case <-ctx.Done():
 			return nil
 		}
@@ -1025,10 +1228,10 @@ func (a *agent) sendToTelemetry(ctx context.Context) error {
 				tlm = t
 			}
 
-			tlm.PostInformation(ctx, a.config.String("agent.telemetry.address"), facts)
+			tlm.PostInformation(ctx, a.oldConfig.String("agent.telemetry.address"), a.BleemeoAgentID(), facts)
 
 			select {
-			case <-time.After(24 * time.Hour):
+			case <-time.After(delay.JitterDelay(24*time.Hour, 0.05)):
 			case <-ctx.Done():
 				return nil
 			}
@@ -1058,7 +1261,7 @@ func (a *agent) minuteMetric(ctx context.Context) error {
 				continue
 			}
 
-			switch srv.ServiceType { //nolint:exhaustive
+			switch srv.ServiceType { //nolint:exhaustive,nolintlint
 			case discovery.PostfixService:
 				n, err := postfixQueueSize(ctx, srv, a.hostRootPath, a.containerRuntime)
 				if err != nil {
@@ -1080,7 +1283,7 @@ func (a *agent) minuteMetric(ctx context.Context) error {
 					ServiceName: srv.Name,
 				}
 
-				a.threshold.WithPusher(a.gathererRegistry.WithTTL(5 * time.Minute)).PushPoints([]types.MetricPoint{
+				a.threshold.WithPusher(a.gathererRegistry.WithTTL(5*time.Minute)).PushPoints(ctx, []types.MetricPoint{
 					{
 						Labels:      labels,
 						Annotations: annotations,
@@ -1111,7 +1314,7 @@ func (a *agent) minuteMetric(ctx context.Context) error {
 					ServiceName: srv.Name,
 				}
 
-				a.threshold.WithPusher(a.gathererRegistry.WithTTL(5 * time.Minute)).PushPoints([]types.MetricPoint{
+				a.threshold.WithPusher(a.gathererRegistry.WithTTL(5*time.Minute)).PushPoints(ctx, []types.MetricPoint{
 					{
 						Labels:      labels,
 						Annotations: annotations,
@@ -1123,6 +1326,33 @@ func (a *agent) minuteMetric(ctx context.Context) error {
 				})
 			}
 		}
+
+		desc := strings.Join(a.oldConfig.GetWarnings(), "\n")
+		status := types.StatusWarning
+		t0 := time.Now().Truncate(time.Second)
+
+		if len(desc) == 0 {
+			status = types.StatusOk
+			desc = "configuration returned no warnings."
+		}
+
+		a.gathererRegistry.WithTTL(5*time.Minute).PushPoints(ctx, []types.MetricPoint{
+			{
+				Point: types.Point{
+					Value: float64(status.NagiosCode()),
+					Time:  t0,
+				},
+				Labels: map[string]string{
+					types.LabelName: "agent_config_warning",
+				},
+				Annotations: types.MetricAnnotations{
+					Status: types.StatusDescription{
+						StatusDescription: desc,
+						CurrentStatus:     status,
+					},
+				},
+			},
+		})
 	}
 }
 
@@ -1188,9 +1418,17 @@ func (a *agent) watchdog(ctx context.Context) error {
 			return nil
 		}
 
+		now := time.Now()
+
 		a.l.Lock()
 
 		lastHealCheck := a.lastHealCheck
+		a.watchdogRunAt = append(a.watchdogRunAt, now)
+
+		if len(a.watchdogRunAt) > 90 {
+			copy(a.watchdogRunAt[0:60], a.watchdogRunAt[len(a.watchdogRunAt)-60:len(a.watchdogRunAt)])
+			a.watchdogRunAt = a.watchdogRunAt[:60]
+		}
 
 		a.l.Unlock()
 
@@ -1275,28 +1513,22 @@ func (a *agent) hourlyDiscovery(ctx context.Context) error {
 
 	a.FireTrigger(false, false, true, false)
 
-	ticker := time.NewTicker(time.Hour)
-	defer ticker.Stop()
-
 	for {
 		select {
 		case <-ctx.Done():
 			return nil
-		case <-ticker.C:
+		case <-time.After(delay.JitterDelay(time.Hour, 0.1)):
 			a.FireTrigger(true, false, true, false)
 		}
 	}
 }
 
 func (a *agent) dailyFact(ctx context.Context) error {
-	ticker := time.NewTicker(24 * time.Hour)
-	defer ticker.Stop()
-
 	for {
 		select {
 		case <-ctx.Done():
 			return nil
-		case <-ticker.C:
+		case <-time.After(delay.JitterDelay(24*time.Hour, 0.1)):
 			a.FireTrigger(false, true, false, false)
 		}
 	}
@@ -1343,7 +1575,7 @@ func (a *agent) dockerWatcher(ctx context.Context) error {
 					a.bleemeoConnector.UpdateContainers()
 				}
 
-				a.sendDockerContainerHealth(ev.Container)
+				a.sendDockerContainerHealth(ctx, ev.Container)
 			}
 		case <-pendingTimer.C:
 			if pendingDiscovery {
@@ -1372,7 +1604,7 @@ func (a *agent) dockerWatcherContainerHealth(ctx context.Context) {
 			}
 
 			for _, c := range containers {
-				a.sendDockerContainerHealth(c)
+				a.sendDockerContainerHealth(ctx, c)
 			}
 		case <-ctx.Done():
 			return
@@ -1380,7 +1612,7 @@ func (a *agent) dockerWatcherContainerHealth(ctx context.Context) {
 	}
 }
 
-func (a *agent) sendDockerContainerHealth(container facts.Container) {
+func (a *agent) sendDockerContainerHealth(ctx context.Context, container facts.Container) {
 	health, message := container.Health()
 	if health == facts.ContainerNoHealthCheck {
 		return
@@ -1411,7 +1643,7 @@ func (a *agent) sendDockerContainerHealth(container facts.Container) {
 		status.StatusDescription = fmt.Sprintf("Unknown health status %s", message)
 	}
 
-	a.gathererRegistry.WithTTL(5 * time.Minute).PushPoints([]types.MetricPoint{
+	a.gathererRegistry.WithTTL(5*time.Minute).PushPoints(ctx, []types.MetricPoint{
 		{
 			Labels: map[string]string{
 				types.LabelName:              "container_health_status",
@@ -1431,7 +1663,7 @@ func (a *agent) sendDockerContainerHealth(container facts.Container) {
 }
 
 func (a *agent) netstatWatcher(ctx context.Context) error {
-	filePath := a.config.String("agent.netstat_file")
+	filePath := a.oldConfig.String("agent.netstat_file")
 	stat, _ := os.Stat(filePath)
 
 	ticker := time.NewTicker(15 * time.Second)
@@ -1493,17 +1725,10 @@ func (a *agent) cleanTrigger() (discovery bool, sendFacts bool, systemUpdateMetr
 	return
 }
 
-//nolint:gocyclo,cyclop
+//nolint:cyclop
 func (a *agent) handleTrigger(ctx context.Context) {
 	runDiscovery, runFact, runSystemUpdateMetric := a.cleanTrigger()
 	if runDiscovery {
-		// force update of containers. This is important so that discovery correctly
-		// associate service with container or remove service when container is stopped.
-		_, err := a.containerRuntime.Containers(ctx, 0, false)
-		if err != nil {
-			logger.V(1).Printf("error while updating containers: %v", err)
-		}
-
 		services, err := a.discovery.Discovery(ctx, 0)
 		if err != nil {
 			logger.V(1).Printf("error during discovery: %v", err)
@@ -1530,7 +1755,7 @@ func (a *agent) handleTrigger(ctx context.Context) {
 		}
 
 		hasConnection := a.dockerRuntime.IsRuntimeRunning(ctx)
-		if hasConnection && !a.dockerInputPresent && a.config.Bool("telegraf.docker_metrics_enabled") {
+		if hasConnection && !a.dockerInputPresent && a.oldConfig.Bool("telegraf.docker_metrics_enable") {
 			i, err := docker.New(a.dockerRuntime.ServerAddress(), a.dockerRuntime)
 			if err != nil {
 				logger.V(1).Printf("error when creating Docker input: %v", err)
@@ -1560,7 +1785,7 @@ func (a *agent) handleTrigger(ctx context.Context) {
 func systemUpdateMetric(ctx context.Context, a *agent) {
 	pendingUpdate, pendingSecurityUpdate := facts.PendingSystemUpdate(
 		ctx,
-		a.config.String("container.type") != "",
+		a.oldConfig.String("container.type") != "",
 		a.hostRootPath,
 	)
 
@@ -1590,7 +1815,7 @@ func systemUpdateMetric(ctx context.Context, a *agent) {
 		})
 	}
 
-	a.threshold.WithPusher(a.gathererRegistry.WithTTL(time.Hour)).PushPoints(points)
+	a.threshold.WithPusher(a.gathererRegistry.WithTTL(time.Hour)).PushPoints(ctx, points)
 }
 
 func (a *agent) deletedContainersCallback(containersID []string) {
@@ -1624,10 +1849,10 @@ func (a *agent) migrateState() {
 }
 
 // DiagnosticPage return useful information to troubleshoot issue.
-func (a *agent) DiagnosticPage() string {
+func (a *agent) DiagnosticPage(ctx context.Context) string {
 	builder := &strings.Builder{}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
 	fmt.Fprintf(
@@ -1639,7 +1864,7 @@ func (a *agent) DiagnosticPage() string {
 		runtime.Version(),
 	)
 
-	if a.config.Bool("bleemeo.enabled") {
+	if a.oldConfig.Bool("bleemeo.enable") {
 		fmt.Fprintln(builder, "Glouton has Bleemeo connection enabled")
 
 		if a.bleemeoConnector == nil {
@@ -1681,50 +1906,65 @@ func (a *agent) DiagnosticPage() string {
 	return builder.String()
 }
 
-func (a *agent) writeDiagnosticZip(w io.Writer) error {
-	zipFile := zip.NewWriter(w)
-	defer zipFile.Close()
-
-	type Diagnosticer interface {
-		DiagnosticZip(zipFile *zip.Writer) error
-	}
-
-	modules := []Diagnosticer{
-		a,
-		a.metricFilter,
-		a.discovery,
-		a.rulesManager,
+func (a *agent) writeDiagnosticArchive(ctx context.Context, archive types.ArchiveWriter) error {
+	modules := []func(ctx context.Context, archive types.ArchiveWriter) error{
+		a.diagnosticGlobalInfo,
+		a.diagnosticGloutonState,
+		a.diagnosticJitter,
+		a.taskRegistry.DiagnosticArchive,
+		a.store.DiagnosticArchive,
+		a.diagnosticConfig,
+		a.discovery.DiagnosticArchive,
+		a.diagnosticContainers,
+		a.diagnosticSNMP,
+		a.metricFilter.DiagnosticArchive,
+		a.gathererRegistry.DiagnosticArchive,
+		a.rulesManager.DiagnosticArchive,
 	}
 
 	if a.bleemeoConnector != nil {
-		modules = append(modules, a.bleemeoConnector)
+		modules = append(modules, a.bleemeoConnector.DiagnosticArchive)
 	}
 
 	if a.monitorManager != nil {
-		modules = append(modules, a.monitorManager)
+		modules = append(modules, a.monitorManager.DiagnosticArchive)
 	}
 
-	for _, m := range modules {
-		if err := m.DiagnosticZip(zipFile); err != nil {
+	for _, f := range modules {
+		if err := f(ctx, archive); err != nil {
 			return err
+		}
+
+		if ctx.Err() != nil {
+			break
 		}
 	}
 
-	return nil
+	return ctx.Err()
 }
 
-func (a *agent) DiagnosticZip(zipFile *zip.Writer) error {
-	file, err := zipFile.Create("diagnostic.txt")
+func (a *agent) diagnosticGlobalInfo(ctx context.Context, archive types.ArchiveWriter) error {
+	file, err := archive.Create("diagnostic.txt")
 	if err != nil {
 		return err
 	}
 
-	_, err = file.Write([]byte(a.DiagnosticPage()))
+	_, err = file.Write([]byte(a.DiagnosticPage(ctx)))
 	if err != nil {
 		return err
 	}
 
-	file, err = zipFile.Create("goroutines.txt")
+	file, err = archive.Create("log.txt")
+	if err != nil {
+		return err
+	}
+
+	_, err = file.Write(logger.Buffer())
+	if err != nil {
+		return err
+	}
+
+	file, err = archive.Create("goroutines.txt")
 	if err != nil {
 		return err
 	}
@@ -1741,22 +1981,108 @@ func (a *agent) DiagnosticZip(zipFile *zip.Writer) error {
 		return err
 	}
 
-	file, err = zipFile.Create("log.txt")
+	return nil
+}
+
+func (a *agent) diagnosticGloutonState(ctx context.Context, archive types.ArchiveWriter) error {
+	file, err := archive.Create("glouton-state.json")
 	if err != nil {
 		return err
 	}
 
-	_, err = file.Write(logger.Buffer())
+	a.l.Lock()
+	a.triggerLock.Lock()
+
+	obj := struct {
+		HostRootPath              string
+		LastHealCheck             time.Time
+		LastContainerEventTime    time.Time
+		TriggerDiscAt             time.Time
+		TriggerDiscImmediate      bool
+		TriggerFact               bool
+		TriggerSystemUpdateMetric bool
+		DockerInputPresent        bool
+		DockerInputID             int
+		MetricResolutionSeconds   float64
+	}{
+		HostRootPath:              a.hostRootPath,
+		LastHealCheck:             a.lastHealCheck,
+		LastContainerEventTime:    a.lastContainerEventTime,
+		TriggerDiscAt:             a.triggerDiscAt,
+		TriggerDiscImmediate:      a.triggerDiscImmediate,
+		TriggerFact:               a.triggerFact,
+		TriggerSystemUpdateMetric: a.triggerSystemUpdateMetric,
+		DockerInputPresent:        a.dockerInputPresent,
+		DockerInputID:             a.dockerInputID,
+		MetricResolutionSeconds:   a.metricResolution.Seconds(),
+	}
+
+	a.triggerLock.Unlock()
+	a.l.Unlock()
+
+	enc := json.NewEncoder(file)
+	enc.SetIndent("", "  ")
+
+	return enc.Encode(obj)
+}
+
+func (a *agent) diagnosticJitter(ctx context.Context, archive types.ArchiveWriter) error {
+	file, err := archive.Create("jitter.txt")
 	if err != nil {
 		return err
 	}
 
-	file, err = zipFile.Create("containers.txt")
+	a.l.Lock()
+	defer a.l.Unlock()
+
+	fmt.Fprintln(file, "# This file contains time & jitter delay")
+	fmt.Fprintln(file, "# A variable jitter may indidate overloaded system")
+
+	var (
+		previousTime time.Time
+		maxJitter    time.Duration
+		avgJitter    time.Duration
+	)
+
+	for i, t := range a.watchdogRunAt {
+		if i == 0 {
+			fmt.Fprintf(file, "run_at=%v jitter=n/a\n", t)
+		} else {
+			delay := t.Sub(previousTime)
+			jitter := delay - time.Minute
+
+			fmt.Fprintf(file, "run_at=%v jitter=%v\n", t, jitter)
+
+			if jitter < 0 {
+				jitter = -jitter
+			}
+
+			if jitter > maxJitter {
+				maxJitter = jitter
+			}
+
+			avgJitter += maxJitter
+		}
+
+		previousTime = t
+	}
+
+	if len(a.watchdogRunAt) > 1 {
+		avgJitter /= time.Duration(len(a.watchdogRunAt) - 1)
+	}
+
+	fmt.Fprintf(file, "max jitter=%v, avg jitter=%v\n", maxJitter, avgJitter)
+
+	return nil
+}
+
+func (a *agent) diagnosticContainers(ctx context.Context, archive types.ArchiveWriter) error {
+	file, err := archive.Create("containers.txt")
 	if err != nil {
 		return err
 	}
 
-	containers, err := a.containerRuntime.Containers(context.Background(), time.Hour, true)
+	containers, err := a.containerRuntime.Containers(ctx, time.Hour, true)
 	if err != nil {
 		fmt.Fprintf(file, "can't list containers: %v", err)
 	} else {
@@ -1772,17 +2098,64 @@ func (a *agent) DiagnosticZip(zipFile *zip.Writer) error {
 
 		for _, c := range containers {
 			addr, _ := c.ListenAddresses()
-			fmt.Fprintf(file, "Name=%s, ID=%s, ignored=%v, IP=%s, listenAddr=%v\n", c.ContainerName(), c.ID(), facts.ContainerIgnored(c), c.PrimaryAddress(), addr)
+			health, healthMsg := c.Health()
+			fmt.Fprintf(
+				file,
+				"Name=%s, ID=%s, ignored=%v, IP=%s, listenAddr=%v,\n\tState=%v, CreatedAt=%v, StartedAt=%v, FinishedAt=%v, StoppedAndReplaced=%v\n\tHealth=%v (%s) K8S=%v/%v\n",
+				c.ContainerName(),
+				c.ID(),
+				facts.ContainerIgnored(c),
+				c.PrimaryAddress(),
+				addr,
+				c.State(),
+				c.CreatedAt(),
+				c.StartedAt(),
+				c.FinishedAt(),
+				c.StoppedAndReplaced(),
+				health,
+				strings.ReplaceAll(healthMsg, "\n", "\\n"),
+				c.PodNamespace(),
+				c.PodName(),
+			)
 		}
 	}
 
-	err = yamlZip(zipFile, a)
-
-	return err
+	return nil
 }
 
-func yamlZip(zipFile *zip.Writer, a *agent) error {
-	file, err := zipFile.Create("config.yaml")
+func (a *agent) diagnosticSNMP(ctx context.Context, archive types.ArchiveWriter) error {
+	file, err := archive.Create("snmp-targets.txt")
+	if err != nil {
+		return err
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	fmt.Fprintf(file, "# %d SNMP target configured\n", len(a.snmpManager.Targets()))
+
+	for _, t := range a.snmpManager.Targets() {
+		fmt.Fprintf(file, "\n%s\n", t.String(ctx))
+		facts, err := t.Facts(ctx, 48*time.Hour)
+
+		if err != nil {
+			fmt.Fprintf(file, " facts failed: %v\n", err)
+		} else {
+			for k, v := range facts {
+				fmt.Fprintf(file, " * %s = %s\n", k, v)
+			}
+		}
+	}
+
+	if a.bleemeoConnector != nil {
+		a.bleemeoConnector.DiagnosticSNMPAssociation(ctx, file)
+	}
+
+	return nil
+}
+
+func (a *agent) diagnosticConfig(ctx context.Context, archive types.ArchiveWriter) error {
+	file, err := archive.Create("config.yaml")
 	if err != nil {
 		return err
 	}
@@ -1792,7 +2165,27 @@ func yamlZip(zipFile *zip.Writer, a *agent) error {
 	fmt.Fprintln(file, "# This file contains in-memory configuration used by Glouton. Value from from default, files and environement.")
 	enc.SetIndent(4)
 
-	err = enc.Encode(a.config.Dump())
+	err = enc.Encode(a.oldConfig.Dump())
+	if err != nil {
+		fmt.Fprintf(file, "# error: %v\n", err)
+	}
+
+	err = enc.Close()
+	if err != nil {
+		fmt.Fprintf(file, "# error: %v\n", err)
+	}
+
+	file, err = archive.Create("config-new.yaml")
+	if err != nil {
+		return err
+	}
+
+	enc = yaml.NewEncoder(file)
+
+	fmt.Fprintln(file, "# This file parsed configuration used by Glouton. Currently this config is incomplet.")
+	enc.SetIndent(4)
+
+	err = enc.Encode(a.config)
 	if err != nil {
 		fmt.Fprintf(file, "# error: %v\n", err)
 	}
@@ -1866,17 +2259,43 @@ func setupContainer(hostRootPath string) {
 		return
 	}
 
-	if hostRootPath != "" && hostRootPath != "/" && os.Getenv("HOST_VAR") == "" {
-		// gopsutil will use HOST_VAR as prefix to host /var
-		// It's used at least for reading the number of connected user from /var/run/utmp
-		os.Setenv("HOST_VAR", hostRootPath+"/var")
+	if hostRootPath != "" && hostRootPath != "/" {
+		if os.Getenv("HOST_VAR") == "" {
+			// gopsutil will use HOST_VAR as prefix to host /var
+			// It's used at least for reading the number of connected user from /var/run/utmp
+			os.Setenv("HOST_VAR", filepath.Join(hostRootPath, "var"))
 
-		// ... but /var/run is usually a symlink to /run.
-		varRun := filepath.Join(hostRootPath, "var/run")
-		target, err := os.Readlink(varRun)
+			// ... but /var/run is usually a symlink to /run.
+			varRun := filepath.Join(hostRootPath, "var/run")
+			target, err := os.Readlink(varRun)
 
-		if err == nil && target == "/run" {
-			os.Setenv("HOST_VAR", hostRootPath)
+			if err == nil && target == "/run" {
+				os.Setenv("HOST_VAR", hostRootPath)
+			}
+		}
+
+		if os.Getenv("HOST_ETC") == "" {
+			os.Setenv("HOST_ETC", filepath.Join(hostRootPath, "etc"))
+		}
+
+		if os.Getenv("HOST_PROC") == "" {
+			os.Setenv("HOST_PROC", filepath.Join(hostRootPath, "proc"))
+		}
+
+		if os.Getenv("HOST_SYS") == "" {
+			os.Setenv("HOST_SYS", filepath.Join(hostRootPath, "sys"))
+		}
+
+		if os.Getenv("HOST_RUN") == "" {
+			os.Setenv("HOST_RUN", filepath.Join(hostRootPath, "run"))
+		}
+
+		if os.Getenv("HOST_DEV") == "" {
+			os.Setenv("HOST_DEV", filepath.Join(hostRootPath, "dev"))
+		}
+
+		if os.Getenv("HOST_MOUNT_PREFIX") == "" {
+			os.Setenv("HOST_MOUNT_PREFIX", hostRootPath)
 		}
 	}
 }

@@ -17,6 +17,7 @@
 package threshold
 
 import (
+	"context"
 	"glouton/types"
 	"math"
 	"reflect"
@@ -38,7 +39,7 @@ type mockStore struct {
 	points []types.MetricPoint
 }
 
-func (s *mockStore) PushPoints(points []types.MetricPoint) {
+func (s *mockStore) PushPoints(_ context.Context, points []types.MetricPoint) {
 	s.points = append(s.points, points...)
 }
 
@@ -371,7 +372,7 @@ func TestAccumulatorThreshold(t *testing.T) {
 	}
 
 	pusher := threshold.WithPusher(db)
-	pusher.PushPoints([]types.MetricPoint{
+	pusher.PushPoints(context.Background(), []types.MetricPoint{
 		{
 			Labels: map[string]string{
 				"__name__": "cpu_used",

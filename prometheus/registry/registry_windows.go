@@ -38,7 +38,15 @@ func (r *Registry) AddWindowsExporter(collectors []string, options inputs.Collec
 		return err
 	}
 
-	_, err = r.RegisterGatherer(reg, nil, nil, r.MetricFormat == types.MetricFormatPrometheus)
+	_, err = r.RegisterGatherer(
+		RegistrationOption{
+			Description: "windows_exporter",
+			JitterSeed:  baseJitter,
+			Interval:    defaultInterval,
+		},
+		reg,
+		r.option.MetricFormat == types.MetricFormatPrometheus,
+	)
 
 	return err
 }

@@ -101,7 +101,9 @@ func (c containerPayload) compatibilityContainer() types.Container {
 func (s *Synchronizer) syncContainers(fullSync bool, onlyEssential bool) error {
 	var localContainers []facts.Container
 
-	if s.option.Cache.CurrentAccountConfig().DockerIntegration {
+	cfg, ok := s.option.Cache.CurrentAccountConfig()
+
+	if ok && cfg.DockerIntegration {
 		var err error
 
 		// We don't need very fresh information, we sync container after discovery which will update containers anyway.
@@ -152,9 +154,9 @@ func (s *Synchronizer) containerUpdateList() error {
 	}
 
 	containersByUUID := s.option.Cache.ContainersByUUID()
-	containers := make([]types.Container, len(result))
+	containers := make([]types.Container, 0, len(result))
 
-	for i, jsonMessage := range result {
+	for _, jsonMessage := range result {
 		var container containerPayload
 
 		if err := json.Unmarshal(jsonMessage, &container); err != nil {
@@ -165,7 +167,7 @@ func (s *Synchronizer) containerUpdateList() error {
 		container.FillInspectHash()
 		container.ContainerInspect = ""
 		container.GloutonLastUpdatedAt = containersByUUID[container.ID].GloutonLastUpdatedAt
-		containers[i] = container.compatibilityContainer()
+		containers = append(containers, container.compatibilityContainer())
 	}
 
 	s.option.Cache.SetContainers(containers)
@@ -189,7 +191,7 @@ func (s *Synchronizer) containerRegisterAndUpdate(localContainers []facts.Contai
 	params := map[string]string{
 		"fields": "id,name,docker_id,docker_inspect,host,command,docker_status,docker_created_at,docker_started_at,docker_finished_at," +
 			"docker_api_version,docker_image_id,docker_image_name,container_id,container_inspect,container_status,container_created_at," +
-			"container_finished_at,container_image_id,container_image_name",
+			"container_finished_at,container_image_id,container_image_name,container_runtime",
 	}
 
 	newDelayedContainer := make(map[string]time.Time, len(s.delayedContainer))
@@ -355,7 +357,7 @@ func (s *Synchronizer) containerDeleteFromLocal(localContainers []facts.Containe
 		s.l.Lock()
 		defer s.l.Unlock()
 
-		s.forceSync["services"] = true
+		s.forceSync[syncMethodService] = true
 	}
 
 	return nil

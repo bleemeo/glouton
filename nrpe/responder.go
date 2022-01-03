@@ -50,19 +50,7 @@ type Responder struct {
 }
 
 // NewResponse returns a Response.
-func NewResponse(servicesOverride []map[string]string, checkRegistry checkRegistry, nrpeConfPath []string) Responder {
-	customChecks := make(map[string]discovery.NameContainer)
-
-	for _, fragment := range servicesOverride {
-		nagiosNRPEName, ok := fragment["nagios_nrpe_name"]
-		if ok {
-			customChecks[nagiosNRPEName] = discovery.NameContainer{
-				Name:          fragment["id"],
-				ContainerName: fragment["instance"],
-			}
-		}
-	}
-
+func NewResponse(customChecks map[string]discovery.NameContainer, checkRegistry checkRegistry, nrpeConfPath []string) Responder {
 	nrpeCommands, allowArguments := readNRPEConf(nrpeConfPath)
 
 	return Responder{
@@ -90,7 +78,7 @@ func (r Responder) Response(ctx context.Context, request string) (string, int16,
 	}
 
 	// this error has been disabled as we want to closely match the nrpe server output
-	return "", 0, fmt.Errorf("NRPE: Command '%s' not defined", requestArgs[0]) //nolint: goerr113
+	return "", 0, fmt.Errorf("NRPE: Command '%s' not defined", requestArgs[0]) //nolint:goerr113
 }
 
 func (r Responder) responseCustomCheck(ctx context.Context, request string) (string, int16, error) {
@@ -99,7 +87,7 @@ func (r Responder) responseCustomCheck(ctx context.Context, request string) (str
 	checkNow, err := r.discovery.GetCheckNow(nameContainer)
 	if err != nil {
 		// this error has been disabled as we want to closely match the nrpe server output
-		return "", 0, fmt.Errorf("NRPE: Command '%s' exists but does not have an associated check", request) //nolint: goerr113
+		return "", 0, fmt.Errorf("NRPE: Command '%s' exists but does not have an associated check", request) //nolint:goerr113
 	}
 
 	statusDescription := checkNow(ctx)
@@ -123,7 +111,7 @@ func (r Responder) responseNRPEConf(ctx context.Context, requestArgs []string) (
 	defer cancel()
 
 	// nrpeCommand[0] is not remote controlled. It come from local configuration files.
-	cmd := exec.CommandContext(ctx, nrpeCommand[0], nrpeCommand[1:]...) // nolint: gosec
+	cmd := exec.CommandContext(ctx, nrpeCommand[0], nrpeCommand[1:]...) //nolint:gosec
 	out, err := cmd.CombinedOutput()
 	nagiosCode := 0
 

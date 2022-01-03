@@ -23,7 +23,7 @@ import (
 	"testing"
 	"time"
 
-	psutilNet "github.com/shirou/gopsutil/net"
+	psutilNet "github.com/shirou/gopsutil/v3/net"
 )
 
 // (partial) output of sudo netstat -lnp with LANG=fr_FR.UTF-8.
@@ -214,7 +214,7 @@ func TestCleanRecycledPIDs(t *testing.T) {
 		MemoryRSS:     5888,
 		CPUPercent:    0,
 		CPUTime:       19.02,
-		Status:        "running",
+		Status:        ProcessStatusRunning,
 		Username:      "dummy",
 		Executable:    "/path/to/executable/redis-server",
 		ContainerID:   "",

@@ -52,17 +52,16 @@ func New(url string) (i telegraf.Input, err error) {
 	return
 }
 
-func renameGlobal(originalContext internal.GatherContext) (newContext internal.GatherContext, drop bool) {
-	newContext.Tags = originalContext.Tags
-	newContext.Measurement = "elasticsearch"
+func renameGlobal(gatherContext internal.GatherContext) (internal.GatherContext, bool) {
+	gatherContext.Measurement = "elasticsearch"
 
-	return
+	return gatherContext, false
 }
 
-func transformMetrics(originalContext internal.GatherContext, currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {
+func transformMetrics(currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {
 	newFields := make(map[string]float64)
 
-	switch originalContext.Measurement {
+	switch currentContext.OriginalMeasurement {
 	case "elasticsearch_indices":
 		if value, ok := fields["docs_count"]; ok {
 			newFields["docs_count"] = value

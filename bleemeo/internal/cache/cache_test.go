@@ -14,14 +14,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package types
+package cache
 
 import (
 	"reflect"
 	"testing"
 )
 
-func TestMetricsAgentWhitelistMap(t *testing.T) {
+func Test_allowListToMap(t *testing.T) {
 	cases := []struct {
 		flat string
 		want map[string]bool
@@ -54,13 +54,9 @@ func TestMetricsAgentWhitelistMap(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		ac := AccountConfig{
-			MetricsAgentWhitelist: c.flat,
-		}
-
-		got := ac.MetricsAgentWhitelistMap()
+		got := allowListToMap(c.flat)
 		if !reflect.DeepEqual(got, c.want) {
-			t.Errorf("MetricsAgentWhitelistMap(%#v) == %v, want %v", c.flat, got, c.want)
+			t.Errorf("allowListToMap(%#v) == %v, want %v", c.flat, got, c.want)
 		}
 	}
 }

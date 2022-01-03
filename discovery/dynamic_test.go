@@ -63,6 +63,16 @@ func (mci mockContainerInfo) CachedContainer(containerID string) (container fact
 	return c, ok
 }
 
+func (mci mockContainerInfo) Containers(ctx context.Context, maxAge time.Duration, includeIgnored bool) (containers []facts.Container, err error) {
+	res := make([]facts.Container, 0, len(mci.containers))
+
+	for _, v := range mci.containers {
+		res = append(res, v)
+	}
+
+	return res, nil
+}
+
 type mockFileReader struct {
 	contents map[string]string
 }
@@ -408,10 +418,10 @@ func TestDynamicDiscoverySingle(t *testing.T) {
 			},
 		},
 		{
-			testName: "mosquitto-ubuntu-14.04",                                               // nolint: misspell
-			cmdLine:  []string{"/usr/sbin/mosquitto", "-c", "/etc/mosquitto/mosquitto.conf"}, // nolint: misspell
+			testName: "mosquitto-ubuntu-14.04",                                               //nolint:misspell
+			cmdLine:  []string{"/usr/sbin/mosquitto", "-c", "/etc/mosquitto/mosquitto.conf"}, //nolint:misspell
 			want: Service{
-				Name:            "mosquitto", // nolint: misspell
+				Name:            "mosquitto", //nolint:misspell
 				ServiceType:     MosquittoService,
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 1883}},
 				IPAddress:       "127.0.0.1",
@@ -476,7 +486,7 @@ func TestDynamicDiscoverySingle(t *testing.T) {
 			testName: "salt-master-ubuntu-14.04",
 			cmdLine:  []string{"/usr/bin/python", "/usr/bin/salt-master"},
 			want: Service{
-				Name:            "salt-master",
+				Name:            "salt_master",
 				ServiceType:     SaltMasterService,
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 4505}},
 				IPAddress:       "127.0.0.1",
@@ -622,7 +632,7 @@ func TestDynamicDiscoverySingle(t *testing.T) {
 		},
 		{
 			testName: "service-install",
-			cmdLine:  []string{"apt", "install", "apache2", "redis-server", "postgresql", "mosquitto", "slapd", "squid3"}, // nolint: misspell
+			cmdLine:  []string{"apt", "install", "apache2", "redis-server", "postgresql", "mosquitto", "slapd", "squid3"}, //nolint:misspell
 			noMatch:  true,
 		},
 		{

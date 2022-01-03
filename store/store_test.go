@@ -17,10 +17,15 @@
 package store
 
 import (
+	"context"
+	"fmt"
 	"glouton/types"
+	"math/rand"
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/google/go-cmp/cmp"
 )
 
 func TestLabelsMatchNotExact(t *testing.T) {
@@ -171,7 +176,7 @@ func TestMetricsSimple(t *testing.T) {
 	labels := map[string]string{
 		types.LabelName: "measurement_fieldFloat",
 	}
-	db := New()
+	db := New(time.Hour)
 	m, _ := db.metricGetOrCreate(labels, types.MetricAnnotations{})
 
 	if _, ok := db.metrics[m.metricID]; !ok {
@@ -205,7 +210,7 @@ func TestMetricsMultiple(t *testing.T) {
 		"mountpoint":    "/srv",
 		"fstype":        "ext4",
 	}
-	db := New()
+	db := New(time.Hour)
 	db.metricGetOrCreate(labels1, types.MetricAnnotations{})
 	db.metricGetOrCreate(labels2, types.MetricAnnotations{})
 	db.metricGetOrCreate(labels3, types.MetricAnnotations{})
@@ -256,7 +261,7 @@ func TestPoints(t *testing.T) {
 	labels := map[string]string{
 		types.LabelName: "cpu_used",
 	}
-	db := New()
+	db := New(time.Hour)
 	m, _ := db.metricGetOrCreate(labels, types.MetricAnnotations{})
 
 	t0 := time.Now().Add(-60 * time.Second)
@@ -266,7 +271,7 @@ func TestPoints(t *testing.T) {
 	p1 := types.Point{Time: t1, Value: -88}
 	p2 := types.Point{Time: t2, Value: 13.37}
 
-	db.PushPoints([]types.MetricPoint{
+	db.PushPoints(context.Background(), []types.MetricPoint{
 		{Point: p0, Labels: labels},
 	})
 
@@ -282,10 +287,10 @@ func TestPoints(t *testing.T) {
 		t.Errorf("db.points[%v][0] == %v, want %v", m.metricID, db.points[m.metricID][0], p0)
 	}
 
-	db.PushPoints([]types.MetricPoint{
+	db.PushPoints(context.Background(), []types.MetricPoint{
 		{Point: p1, Labels: labels},
 	})
-	db.PushPoints([]types.MetricPoint{
+	db.PushPoints(context.Background(), []types.MetricPoint{
 		{Point: p2, Labels: labels},
 	})
 
@@ -317,5 +322,373 @@ func TestPoints(t *testing.T) {
 
 	if !reflect.DeepEqual(points[0], p1) {
 		t.Errorf("points[0] == %v, want %v", points[0], p1)
+	}
+}
+
+func makeMetric(b *testing.B, rnd *rand.Rand, labelCount int) map[string]string {
+	b.Helper()
+
+	metricNames := []string{
+		"cpu_used",
+		"agent_config_warning",
+		"container_cpu_used",
+		"container_io_write_bytes",
+		"go_memstats_mcache_inuse_bytes",
+		"mysql_cache_result_qcache_not_cached",
+		"namedprocess_namegroup_memory_bytes",
+		"net_bits_recv",
+		"node_network_receive_bytes_total",
+		"process_cpu_user",
+		"process_resident_memory_bytes",
+		"prometheus_remote_storage_samples_in_total",
+		"redis_uptime",
+		"uptime",
+	}
+
+	labelNames := []string{
+		"action",
+		"address",
+		"alertname",
+		"alertstate",
+		"alias",
+		"application",
+		"build_date",
+		"collector",
+		"container",
+		"container_name",
+		"core",
+		"cpu",
+		"db",
+		"device",
+		"fstype",
+		"generation",
+		"golang_version",
+		"goversion",
+		"groupname",
+		"handler",
+		"hrStorageDescr",
+		"hrStorageType",
+		"instance",
+		"instance_uuid",
+		"item",
+		"job",
+		"method",
+		"mode",
+		"mountpoint",
+		"nodename",
+		"op",
+		"port",
+		"quantile",
+		"role",
+		"scrape_instance",
+		"scrape_job",
+		"state",
+		"status",
+		"status_code",
+		"type",
+		"url",
+	}
+
+	lbls := make(map[string]string, labelCount)
+
+	for n := 0; n < labelCount; n++ {
+		if n == 0 {
+			lbls[types.LabelName] = metricNames[rnd.Intn(len(metricNames))]
+		} else {
+			name := labelNames[rnd.Intn(len(labelNames))]
+			value := fmt.Sprintf(
+				"%s-%s-%d",
+				labelNames[rnd.Intn(len(labelNames))],
+				labelNames[rnd.Intn(len(labelNames))][:2],
+				rnd.Intn(1000),
+			)
+			lbls[name] = value
+		}
+	}
+
+	return lbls
+}
+
+func makeMetrics(b *testing.B, rnd *rand.Rand, metricsCount int, labelsCount int) []map[string]string {
+	b.Helper()
+
+	metricsLabels := make([]map[string]string, 0, metricsCount)
+
+	for n := 0; n < metricsCount; n++ {
+		var lbls map[string]string
+
+		for try := 0; try < 3; try++ {
+			lbls = makeMetric(b, rnd, labelsCount)
+			duplicate := false
+
+			for _, v := range metricsLabels {
+				if reflect.DeepEqual(v, lbls) {
+					duplicate = true
+
+					break
+				}
+			}
+
+			if !duplicate {
+				break
+			}
+
+			if duplicate && try == 2 {
+				b.Logf("A metric will be duplicated")
+			}
+		}
+
+		metricsLabels = append(metricsLabels, lbls)
+	}
+
+	return metricsLabels
+}
+
+func Benchmark_metricGetOrCreate(b *testing.B) {
+	tests := []struct {
+		name        string
+		metricCount int
+		labelsCount int
+	}{
+		{
+			name:        "one",
+			metricCount: 1,
+			labelsCount: 1,
+		},
+		{
+			name:        "7 metrics",
+			metricCount: 7,
+			labelsCount: 1,
+		},
+		{
+			name:        "100 metrics",
+			metricCount: 100,
+			labelsCount: 2,
+		},
+		{
+			name:        "1000 metrics",
+			metricCount: 1000,
+			labelsCount: 3,
+		},
+		{
+			name:        "4000 metrics",
+			metricCount: 4000,
+			labelsCount: 3,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+
+		b.Run(tt.name, func(b *testing.B) {
+			db := New(time.Hour)
+
+			rnd := rand.New(rand.NewSource(42)) //nolint: gosec
+			metricsLabels := makeMetrics(b, rnd, tt.metricCount, tt.labelsCount)
+
+			// we do not benchmark first time add
+			for _, lbls := range metricsLabels {
+				db.metricGetOrCreate(lbls, types.MetricAnnotations{})
+			}
+
+			b.ResetTimer()
+			for n := 0; n < b.N; n++ {
+				for _, lbls := range metricsLabels {
+					db.metricGetOrCreate(lbls, types.MetricAnnotations{})
+				}
+			}
+		})
+	}
+}
+
+func TestStore_run(t *testing.T) {
+	type metricWant struct {
+		labels map[string]string
+		points []types.Point
+	}
+
+	t0 := time.Now()
+	testMinTime := t0.Add(-time.Hour)
+	testMaxTime := t0.Add(72 * time.Hour)
+
+	steps := []struct {
+		pushPoints []types.MetricPoint
+		now        time.Time
+		want       []metricWant
+	}{
+		{
+			pushPoints: []types.MetricPoint{
+				{
+					Point:  types.Point{Time: t0, Value: 5},
+					Labels: map[string]string{types.LabelName: "metric1"},
+				},
+			},
+			now: t0,
+			want: []metricWant{
+				{
+					labels: map[string]string{types.LabelName: "metric1"},
+					points: []types.Point{{Time: t0, Value: 5}},
+				},
+			},
+		},
+		{
+			pushPoints: []types.MetricPoint{
+				{
+					Point:  types.Point{Time: t0, Value: 5},
+					Labels: map[string]string{types.LabelName: "metric2"},
+				},
+				{
+					Point:  types.Point{Time: t0.Add(time.Hour), Value: 6},
+					Labels: map[string]string{types.LabelName: "metric2"},
+				},
+				{
+					Point:  types.Point{Time: t0.Add(2 * time.Hour), Value: 7},
+					Labels: map[string]string{types.LabelName: "metric2"},
+				},
+			},
+			now: t0.Add(3 * time.Hour),
+			want: []metricWant{
+				{
+					labels: map[string]string{types.LabelName: "metric1"},
+					points: []types.Point{{Time: t0, Value: 5}},
+				},
+				{
+					labels: map[string]string{types.LabelName: "metric2"},
+					points: []types.Point{
+						{Time: t0, Value: 5},
+						{Time: t0.Add(time.Hour), Value: 6},
+						{Time: t0.Add(2 * time.Hour), Value: 7},
+					},
+				},
+			},
+		},
+		{
+			pushPoints: []types.MetricPoint{
+				{
+					Point:  types.Point{Time: t0.Add(20 * time.Hour), Value: 5},
+					Labels: map[string]string{types.LabelName: "metric3"},
+				},
+				{
+					Point:  types.Point{Time: t0.Add(21 * time.Hour), Value: 6},
+					Labels: map[string]string{types.LabelName: "metric3"},
+				},
+				{
+					Point:  types.Point{Time: t0.Add(22 * time.Hour), Value: 7},
+					Labels: map[string]string{types.LabelName: "metric3"},
+				},
+			},
+			now: t0.Add(24 * time.Hour),
+			want: []metricWant{
+				{
+					labels: map[string]string{types.LabelName: "metric2"},
+					points: []types.Point{
+						{Time: t0.Add(time.Hour), Value: 6},
+						{Time: t0.Add(2 * time.Hour), Value: 7},
+					},
+				},
+				{
+					labels: map[string]string{types.LabelName: "metric3"},
+					points: []types.Point{
+						{Time: t0.Add(20 * time.Hour), Value: 5},
+						{Time: t0.Add(21 * time.Hour), Value: 6},
+						{Time: t0.Add(22 * time.Hour), Value: 7},
+					},
+				},
+			},
+		},
+		{
+			pushPoints: []types.MetricPoint{
+				{
+					Point:  types.Point{Time: t0.Add(25 * time.Hour), Value: 50},
+					Labels: map[string]string{types.LabelName: "metric1"},
+				},
+				{
+					Point:  types.Point{Time: t0.Add(25 * time.Hour), Value: 50},
+					Labels: map[string]string{types.LabelName: "metric2"},
+				},
+				{
+					Point:  types.Point{Time: t0.Add(25 * time.Hour), Value: 50},
+					Labels: map[string]string{types.LabelName: "metric3"},
+				},
+			},
+			now: t0.Add(25 * time.Hour),
+			want: []metricWant{
+				{
+					labels: map[string]string{types.LabelName: "metric1"},
+					points: []types.Point{
+						{Time: t0.Add(25 * time.Hour), Value: 50},
+					},
+				},
+				{
+					labels: map[string]string{types.LabelName: "metric2"},
+					points: []types.Point{
+						{Time: t0.Add(2 * time.Hour), Value: 7},
+						{Time: t0.Add(25 * time.Hour), Value: 50},
+					},
+				},
+				{
+					labels: map[string]string{types.LabelName: "metric3"},
+					points: []types.Point{
+						{Time: t0.Add(20 * time.Hour), Value: 5},
+						{Time: t0.Add(21 * time.Hour), Value: 6},
+						{Time: t0.Add(22 * time.Hour), Value: 7},
+						{Time: t0.Add(25 * time.Hour), Value: 50},
+					},
+				},
+			},
+		},
+		{
+			pushPoints: nil,
+			now:        t0.Add(50 * time.Hour),
+			want:       []metricWant{},
+		},
+		{
+			pushPoints: []types.MetricPoint{
+				{
+					Point:  types.Point{Time: t0.Add(51 * time.Hour), Value: 5},
+					Labels: map[string]string{types.LabelName: "metric1"},
+				},
+			},
+			now: t0,
+			want: []metricWant{
+				{
+					labels: map[string]string{types.LabelName: "metric1"},
+					points: []types.Point{{Time: t0.Add(51 * time.Hour), Value: 5}},
+				},
+			},
+		},
+	}
+
+	store := New(24 * time.Hour)
+
+	for i, tt := range steps {
+		t.Run(fmt.Sprintf("step-%d", i), func(t *testing.T) {
+			store.PushPoints(context.Background(), tt.pushPoints)
+			store.run(tt.now)
+
+			for _, want := range tt.want {
+				result, err := store.Metrics(want.labels)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				if len(result) != 1 {
+					t.Fatalf("len(result) = %d, want 1", len(result))
+				}
+
+				got, err := result[0].Points(testMinTime, testMaxTime)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				if diff := cmp.Diff(want.points, got); diff != "" {
+					t.Errorf("Points of %v missmatch: (-want +got):\n%s", result[0].Labels(), diff)
+				}
+			}
+
+			if len(tt.want) != store.MetricsCount() {
+				t.Errorf("MetricsCount() = %d, want %d", store.MetricsCount(), len(tt.want))
+			}
+		})
 	}
 }

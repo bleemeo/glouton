@@ -2,14 +2,20 @@ package discovery
 
 import (
 	"fmt"
-	"glouton/prometheus/exporter/memcached"
+	"glouton/logger"
+	"glouton/prometheus/registry"
 	"glouton/types"
 	"runtime"
 	"strconv"
 	"time"
 
+	"github.com/go-kit/log"
 	"github.com/prometheus/client_golang/prometheus"
+	memcachedExporter "github.com/prometheus/memcached_exporter/pkg/exporter"
+	"github.com/prometheus/prometheus/pkg/labels"
 )
+
+const defaultInterval = 0
 
 func (d *Discovery) createPrometheusMemcached(service Service) error {
 	ip, port := service.AddressPort()
@@ -20,8 +26,9 @@ func (d *Discovery) createPrometheusMemcached(service Service) error {
 
 	address := fmt.Sprintf("%s:%d", ip, port)
 
-	collector := memcached.NewExporter(address, 5*time.Second)
-	labels := map[string]string{
+	extLogger := log.With(logger.GoKitLoggerWrapper(logger.V(2)), "service", "memcached", "container_name", service.ContainerName)
+	collector := memcachedExporter.New(address, 5*time.Second, extLogger)
+	lbls := map[string]string{
 		types.LabelMetaServiceName:   service.Name,
 		types.LabelMetaContainerID:   service.ContainerID,
 		types.LabelMetaContainerName: service.ContainerName,
@@ -45,7 +52,19 @@ func (d *Discovery) createPrometheusMemcached(service Service) error {
 		runtime.GC()
 	}
 
-	id, err := d.metricRegistry.RegisterGatherer(reg, stopCallback, labels, d.metricFormat == types.MetricFormatPrometheus)
+	hash := labels.FromMap(lbls).Hash()
+
+	id, err := d.metricRegistry.RegisterGatherer(
+		registry.RegistrationOption{
+			Description:  "memcached exporter",
+			JitterSeed:   hash,
+			Interval:     defaultInterval,
+			StopCallback: stopCallback,
+			ExtraLabels:  lbls,
+		},
+		reg,
+		d.metricFormat == types.MetricFormatPrometheus,
+	)
 	if err != nil {
 		return err
 	}

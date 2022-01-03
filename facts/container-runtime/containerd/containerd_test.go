@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/containerd/containerd"
 	pbEvents "github.com/containerd/containerd/api/events"
 	"github.com/containerd/containerd/events"
 	"github.com/containerd/typeurl"
@@ -61,7 +62,7 @@ func TestContainerd_RuntimeFact(t *testing.T) {
 	}
 }
 
-//nolint:gocyclo,cyclop
+//nolint:cyclop
 func TestContainerd_Containers(t *testing.T) {
 	tests := []struct {
 		name string
@@ -279,6 +280,11 @@ func TestContainerd_Run(t *testing.T) {
 						Pid:         c0.MockTask.MockPID,
 					}),
 				}
+
+				// on tasks exit, containerd will check is the container is really exited.
+				// Update status of the container.
+				cl.Data.Namespaces[0].MockContainers[0].MockTask.MockStatus = containerd.Status{Status: "stopped", ExitStatus: 0, ExitTime: t0}
+
 				ch <- &events.Envelope{
 					Timestamp: t0,
 					Namespace: cl.Data.Namespaces[0].MockNamespace,

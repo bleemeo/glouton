@@ -96,7 +96,7 @@ func (j *JMX) UpdateConfig(services []discovery.Service, metricResolution time.D
 }
 
 // Run configure jmxtrans to send metrics to a local graphite server.
-//nolint:gocyclo,cyclop
+//nolint:cyclop
 func (j *JMX) Run(ctx context.Context) error {
 	j.l.Lock()
 
@@ -187,7 +187,7 @@ func (j *JMX) Run(ctx context.Context) error {
 		serverCancel()
 		serverWaitGroup.Wait()
 
-		serverContext = nil
+		serverContext = nil //nolint:contextcheck // complain about non-inherited NEW context... it not new, it no context.
 	}
 
 	j.l.Lock()
@@ -308,10 +308,10 @@ func (j *JMX) writeConfig(content []byte) error {
 	return err
 }
 
-func (j *JMX) emitPoint(point types.MetricPoint) {
+func (j *JMX) emitPoint(ctx context.Context, point types.MetricPoint) {
 	if j.Pusher == nil {
 		return
 	}
 
-	j.Pusher.PushPoints([]types.MetricPoint{point})
+	j.Pusher.PushPoints(ctx, []types.MetricPoint{point})
 }

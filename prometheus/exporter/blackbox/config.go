@@ -17,7 +17,7 @@
 package blackbox
 
 import (
-	"archive/zip"
+	"context"
 	"errors"
 	"fmt"
 	"glouton/logger"
@@ -27,6 +27,7 @@ import (
 	"time"
 
 	bbConf "github.com/prometheus/blackbox_exporter/config"
+	"github.com/prometheus/common/config"
 	"gopkg.in/yaml.v3"
 )
 
@@ -51,8 +52,10 @@ type yamlConfigTarget struct {
 func defaultModule(userAgent string) bbConf.Module {
 	return bbConf.Module{
 		HTTP: bbConf.HTTPProbe{
-			IPProtocol:         "ip4",
-			IPProtocolFallback: true,
+			IPProtocol: "ip4",
+			HTTPClientConfig: config.HTTPClientConfig{
+				FollowRedirects: true,
+			},
 			Headers: map[string]string{
 				"User-Agent": userAgent,
 			},
@@ -89,16 +92,26 @@ func genCollectorFromDynamicTarget(monitor types.Monitor, userAgent string) (*co
 
 	uri := monitor.URL
 
+	expectedContentRegex, err := bbConf.NewRegexp(monitor.ExpectedContent)
+	if err != nil {
+		return nil, err
+	}
+
+	forbiddenContentRegex, err := bbConf.NewRegexp(monitor.ForbiddenContent)
+	if err != nil {
+		return nil, err
+	}
+
 	switch url.Scheme {
 	case proberNameHTTP, "https":
 		// we default to ipv4, due to blackbox limitations with the protocol fallback
 		mod.Prober = proberNameHTTP
 		if monitor.ExpectedContent != "" {
-			mod.HTTP.FailIfBodyNotMatchesRegexp = []string{monitor.ExpectedContent}
+			mod.HTTP.FailIfBodyNotMatchesRegexp = []bbConf.Regexp{expectedContentRegex}
 		}
 
 		if monitor.ForbiddenContent != "" {
-			mod.HTTP.FailIfBodyMatchesRegexp = []string{monitor.ForbiddenContent}
+			mod.HTTP.FailIfBodyMatchesRegexp = []bbConf.Regexp{forbiddenContentRegex}
 		}
 
 		if monitor.ExpectedResponseCode != 0 {
@@ -119,29 +132,24 @@ func genCollectorFromDynamicTarget(monitor types.Monitor, userAgent string) (*co
 		uri = url.Host
 	}
 
-	creationDate, err := time.Parse(time.RFC3339, monitor.CreationDate)
-	if err != nil {
-		return nil, err
-	}
-
 	confTarget := configTarget{
 		Module:         mod,
 		Name:           monitor.URL,
 		BleemeoAgentID: monitor.BleemeoAgentID,
 		URL:            uri,
-		CreationDate:   creationDate,
+		CreationDate:   monitor.CreationDate,
 	}
 
 	if monitor.MetricMonitorResolution != 0 {
-		confTarget.RefreshRate = time.Duration(monitor.MetricMonitorResolution) * time.Second
+		confTarget.RefreshRate = monitor.MetricMonitorResolution
 	}
 
 	return &collectorWithLabels{
 		collector: confTarget,
 		labels: map[string]string{
-			types.LabelMetaProbeTarget:      confTarget.Name,
-			types.LabelMetaProbeServiceUUID: monitor.ID,
-			types.LabelMetaProbeAgentUUID:   monitor.BleemeoAgentID,
+			types.LabelMetaProbeTarget:            confTarget.Name,
+			types.LabelMetaProbeServiceUUID:       monitor.ID,
+			types.LabelMetaBleemeoTargetAgentUUID: monitor.BleemeoAgentID,
 		},
 	}, nil
 }
@@ -249,13 +257,13 @@ func New(registry *registry.Registry, externalConf interface{}, userAgent string
 	return manager, nil
 }
 
-// DiagnosticZip add diagnostic information.
-func (m *RegisterManager) DiagnosticZip(zipFile *zip.Writer) error {
+// DiagnosticArchive add diagnostic information.
+func (m *RegisterManager) DiagnosticArchive(ctx context.Context, archive types.ArchiveWriter) error {
 	m.l.Lock()
 	targets := m.targets
 	m.l.Unlock()
 
-	file, err := zipFile.Create("blackbox.txt")
+	file, err := archive.Create("blackbox.txt")
 	if err != nil {
 		return err
 	}

@@ -43,10 +43,12 @@ type metricPoint struct {
 
 // GatherContext is the couple Measurement and tags.
 type GatherContext struct {
-	Measurement    string
-	Tags           map[string]string
-	Annotations    types.MetricAnnotations
-	OriginalFields map[string]interface{}
+	Measurement         string
+	OriginalMeasurement string
+	OriginalTags        map[string]string // OriginalTags had to be filled by RenameGlobal callback
+	Tags                map[string]string
+	Annotations         types.MetricAnnotations
+	OriginalFields      map[string]interface{}
 }
 
 // RenameCallback is a function which can mutate labels & annotations.
@@ -72,35 +74,38 @@ type Accumulator struct {
 	// * change the measurement name (prefix of metric name)
 	// * alter tags
 	// * completly drop this base (e.g. blacklisting for disk/network interface/...))
-	RenameGlobal func(originalContext GatherContext) (newContext GatherContext, drop bool)
+	// You should return a modified version of originalContext to kept all non-modified field from originalContext.
+	RenameGlobal func(gatherContext GatherContext) (result GatherContext, drop bool)
 
 	// DerivatedMetrics is the list of metric counter to derive
 	DerivatedMetrics []string
 
 	// ShouldDerivateMetrics indicate if a metric should be derivated. It's an alternate way to DerivatedMetrics.
 	// If both ShouldDerivateMetrics and DerivatedMetrics are set, only metrics not found in DerivatedMetrics are passed to ShouldDerivateMetrics
-	ShouldDerivateMetrics func(originalContext GatherContext, currentContext GatherContext, metricName string) bool
+	ShouldDerivateMetrics func(currentContext GatherContext, metricName string) bool
 
 	// TransformMetrics take a list of metrics and could change the name/value or even add/delete some points.
 	// tags & measurement are given as indication and should not be mutated.
-	TransformMetrics func(originalContext GatherContext, currentContext GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64
+	TransformMetrics func(currentContext GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64
 
 	// RenameMetrics apply a per-metric rename of metric name and measurement. tags can't be mutated
-	RenameMetrics func(originalContext GatherContext, currentContext GatherContext, metricName string) (newMeasurement string, newMetricName string)
+	RenameMetrics func(currentContext GatherContext, metricName string) (newMeasurement string, newMetricName string)
 
 	RenameCallbacks []RenameCallback
 
 	// map a flattened tags to a map[fieldName]value
-	currentValues map[string]map[string]metricPoint
-	pastValues    map[string]map[string]metricPoint
-	now           time.Time
-	l             sync.Mutex
+	currentValues    map[string]map[string]metricPoint
+	pastValues       map[string]map[string]metricPoint
+	workStringBuffer []string
+	workResult       map[string]float64
+	now              time.Time
+	l                sync.Mutex
 }
 
 // PrepareGather should be called before each gather. It's mainly useful for delta computation.
 func (a *Accumulator) PrepareGather() {
 	a.pastValues = a.currentValues
-	a.currentValues = make(map[string]map[string]metricPoint)
+	a.currentValues = nil
 	a.now = time.Now()
 }
 
@@ -165,34 +170,63 @@ func rateAsFloat(pastPoint, currentPoint metricPoint) (value float64, err error)
 	return value, err
 }
 
-func flattenTag(tags map[string]string) string {
-	tagsList := make([]string, 0, len(tags))
+func (a *Accumulator) flattenTag(tags map[string]string) string {
+	if cap(a.workStringBuffer) < len(tags) {
+		a.workStringBuffer = make([]string, 0, len(tags))
+	}
+
+	a.workStringBuffer = a.workStringBuffer[:0]
 
 	for k, v := range tags {
-		tagsList = append(tagsList, fmt.Sprintf("%s=%s", k, v))
+		a.workStringBuffer = append(a.workStringBuffer, fmt.Sprintf("%s=%s", k, v))
 	}
 
-	sort.Strings(tagsList)
+	sort.Strings(a.workStringBuffer)
 
-	return strings.Join(tagsList, ",")
+	return strings.Join(a.workStringBuffer, ",")
 }
 
-// applyDerivate compute the derivated value for metrics in DerivatedMetrics.
-func (a *Accumulator) applyDerivate(originalContext GatherContext, currentContext GatherContext, fields map[string]interface{}, metricTime time.Time) map[string]float64 {
-	a.l.Lock()
-	defer a.l.Unlock()
-
-	result := make(map[string]float64)
-	searchMetrics := make(map[string]bool)
-
-	for _, m := range a.DerivatedMetrics {
-		searchMetrics[m] = true
+// doDerivated compute the derivated value for metrics in DerivatedMetrics (or matching ShouldDerivateMetrics).
+func (a *Accumulator) doDerivated(result map[string]float64, flatTag string, fieldsLength int, metricName string, value interface{}, metricTime time.Time) {
+	if a.currentValues == nil {
+		a.currentValues = make(map[string]map[string]metricPoint)
 	}
 
-	flatTag := flattenTag(currentContext.Tags)
-
 	if _, ok := a.currentValues[flatTag]; !ok {
-		a.currentValues[flatTag] = make(map[string]metricPoint)
+		a.currentValues[flatTag] = make(map[string]metricPoint, fieldsLength)
+	}
+
+	pastMetricPoint, ok := a.pastValues[flatTag][metricName]
+	currentPoint := metricPoint{Time: metricTime, Value: value}
+	a.currentValues[flatTag][metricName] = currentPoint
+
+	if ok {
+		if tmp, ok := a.getDerivativeValue(pastMetricPoint, currentPoint); ok {
+			result[metricName] = tmp
+		}
+	}
+}
+
+func (a *Accumulator) convertToFloatFields(currentContext GatherContext, fields map[string]interface{}, metricTime time.Time) map[string]float64 {
+	var (
+		searchMetrics map[string]bool
+		flatTag       string
+	)
+
+	if a.workResult == nil {
+		a.workResult = make(map[string]float64, len(fields))
+	}
+
+	for k := range a.workResult {
+		delete(a.workResult, k)
+	}
+
+	for _, m := range a.DerivatedMetrics {
+		if searchMetrics == nil {
+			searchMetrics = make(map[string]bool, len(a.DerivatedMetrics))
+		}
+
+		searchMetrics[m] = true
 	}
 
 	for metricName, value := range fields {
@@ -207,14 +241,14 @@ func (a *Accumulator) applyDerivate(originalContext GatherContext, currentContex
 			derive = true
 		}
 
-		if !derive && a.ShouldDerivateMetrics != nil && a.ShouldDerivateMetrics(originalContext, currentContext, metricName) {
+		if !derive && a.ShouldDerivateMetrics != nil && a.ShouldDerivateMetrics(currentContext, metricName) {
 			derive = true
 		}
 
 		if !derive {
 			valueFloat, err := convertToFloat(value)
 			if err == nil {
-				result[metricName] = valueFloat
+				a.workResult[metricName] = valueFloat
 			} else {
 				a.AddError(err)
 			}
@@ -222,20 +256,14 @@ func (a *Accumulator) applyDerivate(originalContext GatherContext, currentContex
 			continue
 		}
 
-		pastMetricPoint, ok := a.pastValues[flatTag][metricName]
-		currentPoint := metricPoint{Time: metricTime, Value: value}
-		a.currentValues[flatTag][metricName] = currentPoint
-
-		if ok {
-			if tmp, ok := a.getDerivativeValue(pastMetricPoint, currentPoint); ok {
-				result[metricName] = tmp
-			}
-		} else {
-			continue
+		if flatTag == "" && len(currentContext.Tags) > 0 {
+			flatTag = a.flattenTag(currentContext.Tags)
 		}
+
+		a.doDerivated(a.workResult, flatTag, len(fields), metricName, value, metricTime)
 	}
 
-	return result
+	return a.workResult
 }
 
 func (a *Accumulator) getDerivativeValue(pastMetricPoint metricPoint, currentPoint metricPoint) (float64, bool) {
@@ -256,16 +284,15 @@ func (a *Accumulator) getDerivativeValue(pastMetricPoint metricPoint, currentPoi
 type accumulatorFunc func(measurement string, fields map[string]interface{}, tags map[string]string, annotations types.MetricAnnotations, t ...time.Time)
 
 func (a *Accumulator) processMetrics(finalFunc accumulatorFunc, measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	originalContext := GatherContext{
-		Measurement:    measurement,
-		Tags:           tags,
-		OriginalFields: fields,
+	if tags == nil {
+		tags = make(map[string]string)
 	}
-	currentContext := originalContext
-	currentContext.Tags = make(map[string]string, len(tags))
 
-	for k, v := range tags {
-		currentContext.Tags[k] = v
+	currentContext := GatherContext{
+		OriginalMeasurement: measurement,
+		Measurement:         measurement,
+		Tags:                tags,
+		OriginalFields:      fields,
 	}
 
 	if a.RenameGlobal != nil {
@@ -285,19 +312,23 @@ func (a *Accumulator) processMetrics(finalFunc accumulatorFunc, measurement stri
 		metricTime = t[0]
 	}
 
-	floatFields := a.applyDerivate(originalContext, currentContext, fields, metricTime)
+	// Lock is needed for convertToFloatFields and for floatFields (which is
+	// a reference to a.workReslt)
+	a.l.Lock()
+
+	floatFields := a.convertToFloatFields(currentContext, fields, metricTime)
 
 	if a.TransformMetrics != nil {
-		floatFields = a.TransformMetrics(originalContext, currentContext, floatFields, fields)
+		floatFields = a.TransformMetrics(currentContext, floatFields, fields)
 	}
 
 	fieldsPerMeasurements := make(map[string]map[string]interface{})
 
 	if a.RenameMetrics != nil {
 		for metricName, value := range floatFields {
-			newMeasurement, newMetricName := a.RenameMetrics(originalContext, currentContext, metricName)
+			newMeasurement, newMetricName := a.RenameMetrics(currentContext, metricName)
 			if _, ok := fieldsPerMeasurements[newMeasurement]; !ok {
-				fieldsPerMeasurements[newMeasurement] = make(map[string]interface{})
+				fieldsPerMeasurements[newMeasurement] = make(map[string]interface{}, len(floatFields))
 			}
 
 			fieldsPerMeasurements[newMeasurement][newMetricName] = value
@@ -309,6 +340,8 @@ func (a *Accumulator) processMetrics(finalFunc accumulatorFunc, measurement stri
 		}
 		fieldsPerMeasurements[currentContext.Measurement] = currentMap
 	}
+
+	a.l.Unlock()
 
 	for _, f := range a.RenameCallbacks {
 		currentContext.Tags, currentContext.Annotations = f(currentContext.Tags, currentContext.Annotations)

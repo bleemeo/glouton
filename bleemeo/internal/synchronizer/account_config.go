@@ -17,45 +17,127 @@
 package synchronizer
 
 import (
-	"fmt"
+	"encoding/json"
+	"glouton/bleemeo/client"
 	"glouton/bleemeo/types"
+	"glouton/logger"
+	"mime"
+	"reflect"
+	"strings"
 )
 
-func (s *Synchronizer) getAccountConfig(uuid string) (config types.AccountConfig, err error) {
-	params := map[string]string{
-		"fields": "id,name,metrics_agent_whitelist,metrics_agent_resolution,metrics_monitor_resolution,live_process_resolution,live_process,docker_integration,",
-	}
+func (s *Synchronizer) syncAccountConfig(fullSync bool, onlyEssential bool) error {
+	if fullSync {
+		currentConfig, _ := s.option.Cache.CurrentAccountConfig()
 
-	config.LiveProcess = true // default value
-
-	_, err = s.client.Do(s.ctx, "GET", fmt.Sprintf("v1/accountconfig/%s/", uuid), params, nil, &config)
-	if err != nil {
-		return
-	}
-
-	return
-}
-
-// We assume the numbers of account configs (<10) to be low enough that it is acceptable to reload
-// every single one when adding/removing a monitor.
-func (s *Synchronizer) updateAccountConfigsFromList(uuids []string) error {
-	configs := make(map[string]types.AccountConfig, 1)
-
-	for _, uuid := range uuids {
-		// We already loaded this config in a previous iteration of this loop, let's not do it again
-		if _, present := configs[uuid]; present {
-			continue
-		}
-
-		ac, err := s.getAccountConfig(uuid)
-		if err != nil {
+		if err := s.agentTypesUpdateList(); err != nil {
 			return err
 		}
 
-		configs[uuid] = ac
+		if err := s.accountConfigUpdateList(); err != nil {
+			return err
+		}
+
+		if err := s.agentConfigUpdateList(); err != nil {
+			return err
+		}
+
+		newConfig, ok := s.option.Cache.CurrentAccountConfig()
+		if ok && !reflect.DeepEqual(currentConfig, newConfig) && s.option.UpdateConfigCallback != nil {
+			s.option.UpdateConfigCallback()
+		}
+	}
+
+	return nil
+}
+
+func (s *Synchronizer) agentTypesUpdateList() error {
+	params := map[string]string{
+		"fields": "id,name,display_name",
+	}
+
+	result, err := s.client.Iter(s.ctx, "agenttype", params)
+	if err != nil {
+		return err
+	}
+
+	agentTypes := make([]types.AgentType, len(result))
+
+	for i, jsonMessage := range result {
+		var agentType types.AgentType
+
+		if err := json.Unmarshal(jsonMessage, &agentType); err != nil {
+			continue
+		}
+
+		agentTypes[i] = agentType
+	}
+
+	s.option.Cache.SetAgentTypes(agentTypes)
+
+	return nil
+}
+
+func (s *Synchronizer) accountConfigUpdateList() error {
+	params := map[string]string{
+		"fields": "id,name,metrics_agent_whitelist,metrics_agent_resolution,metrics_monitor_resolution,live_process_resolution,live_process,docker_integration,snmp_integration",
+	}
+
+	result, err := s.client.Iter(s.ctx, "accountconfig", params)
+	if err != nil {
+		return err
+	}
+
+	configs := make([]types.AccountConfig, len(result))
+
+	for i, jsonMessage := range result {
+		var config types.AccountConfig
+
+		if err := json.Unmarshal(jsonMessage, &config); err != nil {
+			continue
+		}
+
+		configs[i] = config
 	}
 
 	s.option.Cache.SetAccountConfigs(configs)
+
+	return nil
+}
+
+func (s *Synchronizer) agentConfigUpdateList() error {
+	params := map[string]string{
+		"fields": "id,account_config,agent_type,metrics_allowlist,metrics_resolution",
+	}
+
+	result, err := s.client.Iter(s.ctx, "agentconfig", params)
+	if apiErr, ok := err.(client.APIError); ok {
+		mediatype, _, err := mime.ParseMediaType(apiErr.ContentType)
+		if err == nil && mediatype == "text/html" && strings.Contains(apiErr.FinalURL, "login") {
+			logger.V(2).Printf("Bleemeo API don't support AgentConfig")
+			s.option.Cache.SetAgentConfigs(nil)
+
+			return nil
+		}
+	}
+
+	if err != nil {
+		return err
+	}
+
+	configs := make([]types.AgentConfig, len(result))
+
+	for i, jsonMessage := range result {
+		var config types.AgentConfig
+
+		if err := json.Unmarshal(jsonMessage, &config); err != nil {
+			continue
+		}
+
+		configs[i] = config
+	}
+
+	s.option.Cache.SetAgentConfigs(configs)
 
 	return nil
 }

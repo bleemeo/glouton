@@ -47,6 +47,11 @@ type NameContainer struct {
 	ContainerName string
 }
 
+type ServiceOveride struct {
+	IgnoredPorts   []int
+	ExtraAttribute map[string]string
+}
+
 // ServiceName is the name of a supported service.
 type ServiceName string
 
@@ -80,7 +85,7 @@ const (
 	PostgreSQLService    ServiceName = "postgresql"
 	RabbitMQService      ServiceName = "rabbitmq"
 	RedisService         ServiceName = "redis"
-	SaltMasterService    ServiceName = "salt-master"
+	SaltMasterService    ServiceName = "salt_master"
 	SquidService         ServiceName = "squid"
 	UWSGIService         ServiceName = "uwsgi"
 	VarnishService       ServiceName = "varnish"
@@ -206,7 +211,7 @@ func (s Service) AnnotationsOfStatus() types.MetricAnnotations {
 	return annotations
 }
 
-// nolint:gochecknoglobals
+//nolint:gochecknoglobals
 var (
 	servicesDiscoveryInfo = map[ServiceName]discoveryInfo{
 		ApacheService: {

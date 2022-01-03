@@ -17,7 +17,10 @@
 package types
 
 import (
+	"context"
+	"errors"
 	"glouton/logger"
+	"io"
 	"sort"
 	"strings"
 	"time"
@@ -87,30 +90,38 @@ const (
 	LabelName = "__name__"
 
 	// Label starting with "__" are dropped after collections and are only accessible internally (e.g. not present on /metrics, on Bleemeo Cloud or in the local store)
-	// They are actually dropped by the metric registry and/or the.
-	LabelMetaContainerName    = "__meta_container_name"
-	LabelMetaContainerID      = "__meta_container_id"
-	LabelMetaServiceName      = "__meta_service_name"
-	LabelMetaGloutonFQDN      = "__meta__fqdn"
-	LabelMetaGloutonPort      = "__meta_glouton_port"
-	LabelMetaServicePort      = "__meta_service_port"
-	LabelMetaPort             = "__meta_port"
-	LabelMetaScrapeInstance   = "__meta_scrape_instance"
-	LabelMetaScrapeJob        = "__meta_scrape_job"
-	LabelMetaBleemeoUUID      = "__meta_bleemeo_uuid"
-	LabelMetaProbeTarget      = "__meta_probe_target"
-	LabelMetaProbeServiceUUID = "__meta_probe_service_uuid"
-	LabelMetaProbeAgentUUID   = "__meta_probe_agent_uuid"
-	LabelMetaProbeScraperName = "__meta_probe_scraper_name"
-	LabelMetaSendScraperUUID  = "__meta_probe_send_agent_uuid"
-	LabelInstanceUUID         = "instance_uuid"
-	LabelItem                 = "item"
-	LabelScraperUUID          = "scraper_uuid"
-	LabelScraper              = "scraper"
-	LabelInstance             = "instance"
-	LabelContainerName        = "container_name"
-	LabelScrapeJob            = "scrape_job"
-	LabelScrapeInstance       = "scrape_instance"
+	// They are actually dropped by the metric registry.
+	// The label startings with "__" could be used to known from where a metrics come from and unlike label
+	// which don't start by "__", they can only be set by Glouton itself because it not a valid user defined label.
+	LabelMetaContainerName          = "__meta_container_name"
+	LabelMetaContainerID            = "__meta_container_id"
+	LabelMetaServiceName            = "__meta_service_name"
+	LabelMetaGloutonFQDN            = "__meta__fqdn"
+	LabelMetaGloutonPort            = "__meta_glouton_port"
+	LabelMetaServicePort            = "__meta_service_port"
+	LabelMetaPort                   = "__meta_port"
+	LabelMetaScrapeInstance         = "__meta_scrape_instance"
+	LabelMetaScrapeJob              = "__meta_scrape_job"
+	LabelMetaSNMPTarget             = "__meta_snmp_target"
+	LabelMetaBleemeoTargetAgentUUID = "__meta_bleemeo_target_agent_uuid"
+	LabelMetaBleemeoUUID            = "__meta_bleemeo_uuid"
+	LabelMetaProbeTarget            = "__meta_probe_target"
+	LabelMetaProbeServiceUUID       = "__meta_probe_service_uuid"
+	LabelMetaProbeScraperName       = "__meta_probe_scraper_name"
+	LabelMetaSendScraperUUID        = "__meta_probe_send_agent_uuid"
+	LabelMetaCurrentStatus          = "__meta_current_status"
+	LabelMetaCurrentDescription     = "__meta_current_description"
+	LabelK8SPODName                 = "kubernetes_pod_name"
+	LabelK8SNamespace               = "kubernetes_namespace"
+	LabelInstanceUUID               = "instance_uuid"
+	LabelItem                       = "item"
+	LabelScraperUUID                = "scraper_uuid"
+	LabelScraper                    = "scraper"
+	LabelSNMPTarget                 = "snmp_target"
+	LabelInstance                   = "instance"
+	LabelContainerName              = "container_name"
+	LabelScrapeJob                  = "scrape_job"
+	LabelScrapeInstance             = "scrape_instance"
 )
 
 // IsSet return true if the status is set.
@@ -130,6 +141,21 @@ func (s Status) String() string {
 		return "critical"
 	default:
 		return "unknown"
+	}
+}
+
+func FromString(s string) Status {
+	switch strings.ToLower(s) {
+	case "unset":
+		return StatusUnset
+	case "ok":
+		return StatusOk
+	case "warning":
+		return StatusWarning
+	case "critical":
+		return StatusCritical
+	default:
+		return StatusUnknown
 	}
 }
 
@@ -165,7 +191,8 @@ func FromNagios(value int) Status {
 
 // Metric represent a metric object.
 type Metric interface {
-	// Labels returns labels of the metric. A metric is identified by its labels
+	// Labels returns labels of the metric. A metric is identified by its labels.
+	// The returned map must not be modified, copy it if you need mutation.
 	Labels() map[string]string
 
 	// Annotations of this metric. A annotation is similar to a label but do not participate
@@ -182,6 +209,7 @@ type MetricAnnotations struct {
 	ContainerID string
 	ServiceName string
 	StatusOf    string
+	SNMPTarget  string
 	// store the agent for which we want to emit the metric
 	BleemeoAgentID string
 	Status         StatusDescription
@@ -202,13 +230,46 @@ type MetricPoint struct {
 
 // PointPusher push new points. Points must not be mutated after call.
 type PointPusher interface {
-	PushPoints(points []MetricPoint)
+	PushPoints(ctx context.Context, points []MetricPoint)
 }
 
 // StatusDescription store a service/metric status with an optional description.
 type StatusDescription struct {
 	CurrentStatus     Status
 	StatusDescription string
+}
+
+// Merge merge two annotations. Annotations from other when set win.
+func (a MetricAnnotations) Merge(other MetricAnnotations) MetricAnnotations {
+	if other.BleemeoItem != "" {
+		a.BleemeoItem = other.BleemeoItem
+	}
+
+	if other.ContainerID != "" {
+		a.ContainerID = other.ContainerID
+	}
+
+	if other.ServiceName != "" {
+		a.ServiceName = other.ServiceName
+	}
+
+	if other.StatusOf != "" {
+		a.StatusOf = other.StatusOf
+	}
+
+	if other.SNMPTarget != "" {
+		a.SNMPTarget = other.SNMPTarget
+	}
+
+	if other.BleemeoAgentID != "" {
+		a.BleemeoAgentID = other.BleemeoAgentID
+	}
+
+	if other.Status.CurrentStatus.IsSet() {
+		a.Status = other.Status
+	}
+
+	return a
 }
 
 // LabelsToText return a text version of a labels set
@@ -267,11 +328,39 @@ func TextToLabels(text string) map[string]string {
 // Monitor represents a monitor instance.
 type Monitor struct {
 	ID                      string
-	MetricMonitorResolution int
-	CreationDate            string
+	MetricMonitorResolution time.Duration
+	CreationDate            time.Time
 	URL                     string
 	BleemeoAgentID          string
 	ExpectedContent         string
 	ExpectedResponseCode    int
 	ForbiddenContent        string
+}
+
+// MultiErrors is a type containing multiple errors. It implements the error interface.
+type MultiErrors []error
+
+func (errs MultiErrors) Error() string {
+	list := make([]string, len(errs))
+
+	for i, err := range errs {
+		list[i] = err.Error()
+	}
+
+	return strings.Join(list, ", ")
+}
+
+func (errs MultiErrors) Is(target error) bool {
+	for _, err := range errs {
+		if errors.Is(err, target) {
+			return true
+		}
+	}
+
+	return false
+}
+
+type ArchiveWriter interface {
+	Create(filename string) (io.Writer, error)
+	CurrentFileName() string
 }

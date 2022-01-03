@@ -17,19 +17,17 @@
 package discovery
 
 import (
-	"archive/zip"
 	"context"
 	"errors"
 	"fmt"
 	"glouton/facts"
 	"glouton/inputs"
 	"glouton/logger"
+	"glouton/prometheus/registry"
 	"glouton/task"
 	"glouton/types"
 	"os"
 	"sort"
-	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -40,13 +38,6 @@ import (
 var errNoCheckAssociated = errors.New("there is no check associated with the container")
 
 const localhostIP = "127.0.0.1"
-
-// List of common ExtraAttributes supported by all services.
-// This list + ExtraAttributes from discoveryInfo list all overidable settings.
-const (
-	nrpeExposedName = "nagios_nrpe_name"
-	ignoredPorts    = "ignore_ports"
-)
 
 // Discovery implement the full discovery mecanisme. It will take informations
 // from both the dynamic discovery (service currently running) and previously
@@ -70,7 +61,7 @@ type Discovery struct {
 	metricRegistry        GathererRegistry
 	containerInfo         containerInfoProvider
 	state                 State
-	servicesOverride      map[NameContainer]map[string]string
+	servicesOverride      map[NameContainer]ServiceOveride
 	isCheckIgnored        func(NameContainer) bool
 	isInputIgnored        func(NameContainer) bool
 	metricFormat          types.MetricFormat
@@ -90,12 +81,12 @@ type Registry interface {
 
 // GathererRegistry allow to register/unregister prometheus Gatherer.
 type GathererRegistry interface {
-	RegisterGatherer(gatherer prometheus.Gatherer, stopCallback func(), extraLabels map[string]string, pushPoints bool) (int, error)
-	UnregisterGatherer(id int) bool
+	RegisterGatherer(opt registry.RegistrationOption, gatherer prometheus.Gatherer, pushPoints bool) (int, error)
+	Unregister(id int) bool
 }
 
 // New returns a new Discovery.
-func New(dynamicDiscovery Discoverer, coll Collector, metricRegistry GathererRegistry, taskRegistry Registry, state State, acc inputs.AnnotationAccumulator, containerInfo containerInfoProvider, servicesOverride []map[string]string, isCheckIgnored func(NameContainer) bool, isInputIgnored func(NameContainer) bool, metricFormat types.MetricFormat) *Discovery {
+func New(dynamicDiscovery Discoverer, coll Collector, metricRegistry GathererRegistry, taskRegistry Registry, state State, acc inputs.AnnotationAccumulator, containerInfo containerInfoProvider, servicesOverride map[NameContainer]ServiceOveride, isCheckIgnored func(NameContainer) bool, isInputIgnored func(NameContainer) bool, metricFormat types.MetricFormat) *Discovery {
 	initialServices := servicesFromState(state)
 	discoveredServicesMap := make(map[NameContainer]Service, len(initialServices))
 
@@ -105,26 +96,6 @@ func New(dynamicDiscovery Discoverer, coll Collector, metricRegistry GathererReg
 			ContainerName: v.ContainerName,
 		}
 		discoveredServicesMap[key] = v
-	}
-
-	servicesOverrideMap := make(map[NameContainer]map[string]string)
-
-	for _, fragment := range servicesOverride {
-		fragmentCopy := make(map[string]string)
-
-		for k, v := range fragment {
-			if k == "id" || k == "instance" {
-				continue
-			}
-
-			fragmentCopy[k] = v
-		}
-
-		key := NameContainer{
-			fragment["id"],
-			fragment["instance"],
-		}
-		servicesOverrideMap[key] = fragmentCopy
 	}
 
 	return &Discovery{
@@ -138,7 +109,7 @@ func New(dynamicDiscovery Discoverer, coll Collector, metricRegistry GathererReg
 		activeCollector:       make(map[NameContainer]collectorDetails),
 		activeCheck:           make(map[NameContainer]CheckDetails),
 		state:                 state,
-		servicesOverride:      servicesOverrideMap,
+		servicesOverride:      servicesOverride,
 		isCheckIgnored:        isCheckIgnored,
 		isInputIgnored:        isInputIgnored,
 		metricFormat:          metricFormat,
@@ -173,9 +144,9 @@ func (d *Discovery) LastUpdate() time.Time {
 	return d.lastDiscoveryUpdate
 }
 
-// DiagnosticZip add to a zipfile useful diagnostic information.
-//nolint:gocyclo,cyclop
-func (d *Discovery) DiagnosticZip(zipFile *zip.Writer) error {
+// DiagnosticArchive add to a zipfile useful diagnostic information.
+//nolint:cyclop
+func (d *Discovery) DiagnosticArchive(ctx context.Context, zipFile types.ArchiveWriter) error {
 	d.l.Lock()
 	defer d.l.Unlock()
 
@@ -208,7 +179,7 @@ func (d *Discovery) DiagnosticZip(zipFile *zip.Writer) error {
 	}
 
 	if dd, ok := d.dynamicDiscovery.(*DynamicDiscovery); ok {
-		procs, err := dd.ps.Processes(context.Background(), time.Hour)
+		procs, err := dd.ps.Processes(ctx, time.Hour)
 		if err != nil {
 			return err
 		}
@@ -252,7 +223,7 @@ func (d *Discovery) DiagnosticZip(zipFile *zip.Writer) error {
 
 func (d *Discovery) discovery(ctx context.Context, maxAge time.Duration) (services []Service, err error) {
 	if time.Since(d.lastDiscoveryUpdate) >= maxAge {
-		err := d.updateDiscovery(ctx, maxAge)
+		err := d.updateDiscovery(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -311,8 +282,17 @@ func (d *Discovery) reconfigure() {
 	d.lastConfigservicesMap = d.servicesMap
 }
 
-func (d *Discovery) updateDiscovery(ctx context.Context, maxAge time.Duration) error {
-	r, err := d.dynamicDiscovery.Discovery(ctx, maxAge)
+func (d *Discovery) updateDiscovery(ctx context.Context) error {
+	// Make sure we have a container list. This is important for startup, so
+	// that previously known service could get associated with container.
+	// Without this, a service in a stopped container (which should be shown
+	// as critical with "Container Stopped" reason) might disapear.
+	_, err := d.containerInfo.Containers(ctx, 0, false)
+	if err != nil {
+		logger.V(1).Printf("error while updating containers: %v", err)
+	}
+
+	r, err := d.dynamicDiscovery.Discovery(ctx, 0)
 	if err != nil {
 		return err
 	}
@@ -320,17 +300,7 @@ func (d *Discovery) updateDiscovery(ctx context.Context, maxAge time.Duration) e
 	servicesMap := make(map[NameContainer]Service)
 
 	for key, service := range d.discoveredServicesMap {
-		if service.ContainerID != "" {
-			if container, found := d.containerInfo.CachedContainer(service.ContainerID); !found || facts.ContainerIgnored(container) {
-				service.Active = false
-			} else if container.StoppedAndReplaced() {
-				service.Active = false
-			}
-		} else if service.ExePath != "" {
-			if _, err := os.Stat(service.ExePath); os.IsNotExist(err) {
-				service.Active = false
-			}
-		}
+		service = d.setServiceActiveAndContainer(service)
 
 		servicesMap[key] = service
 	}
@@ -352,6 +322,10 @@ func (d *Discovery) updateDiscovery(ctx context.Context, maxAge time.Duration) e
 		servicesMap[key] = service
 	}
 
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+
 	d.discoveredServicesMap = servicesMap
 	d.servicesMap = applyOveride(servicesMap, d.servicesOverride)
 
@@ -360,8 +334,30 @@ func (d *Discovery) updateDiscovery(ctx context.Context, maxAge time.Duration) e
 	return nil
 }
 
-//nolint:gocyclo,cyclop
-func applyOveride(discoveredServicesMap map[NameContainer]Service, servicesOverride map[NameContainer]map[string]string) map[NameContainer]Service {
+func (d *Discovery) setServiceActiveAndContainer(service Service) Service {
+	if service.ContainerID != "" {
+		container, found := d.containerInfo.CachedContainer(service.ContainerID)
+
+		if found {
+			service.container = container
+		}
+
+		if !found || facts.ContainerIgnored(container) {
+			service.Active = false
+		} else if container.StoppedAndReplaced() {
+			service.Active = false
+		}
+	} else if service.ExePath != "" {
+		if _, err := os.Stat(service.ExePath); os.IsNotExist(err) {
+			service.Active = false
+		}
+	}
+
+	return service
+}
+
+//nolint:cyclop
+func applyOveride(discoveredServicesMap map[NameContainer]Service, servicesOverride map[NameContainer]ServiceOveride) map[NameContainer]Service {
 	servicesMap := make(map[NameContainer]Service)
 
 	for k, v := range discoveredServicesMap {
@@ -369,10 +365,10 @@ func applyOveride(discoveredServicesMap map[NameContainer]Service, servicesOverr
 	}
 
 	for serviceKey, override := range servicesOverride {
-		overrideCopy := make(map[string]string, len(override))
+		extraAttributeCopy := make(map[string]string, len(override.ExtraAttribute))
 
-		for k, v := range override {
-			overrideCopy[k] = v
+		for k, v := range override.ExtraAttribute {
+			extraAttributeCopy[k] = v
 		}
 
 		service := servicesMap[serviceKey]
@@ -396,46 +392,30 @@ func applyOveride(discoveredServicesMap map[NameContainer]Service, servicesOverr
 			service.ExtraAttributes = make(map[string]string)
 		}
 
-		if value, ok := overrideCopy[ignoredPorts]; ok {
-			values := strings.Split(value, ",")
-
+		if len(override.IgnoredPorts) > 0 {
 			if service.IgnoredPorts == nil {
-				service.IgnoredPorts = make(map[int]bool)
+				service.IgnoredPorts = make(map[int]bool, len(override.IgnoredPorts))
 			}
 
-			for _, s := range values {
-				port, err := strconv.ParseInt(strings.TrimSpace(s), 10, 0)
-				if err != nil {
-					logger.V(1).Printf(
-						"In %s for service %s: %s", ignoredPorts, serviceKey, err,
-					)
-
-					continue
-				}
-
-				service.IgnoredPorts[int(port)] = true
+			for _, p := range override.IgnoredPorts {
+				service.IgnoredPorts[p] = true
 			}
-
-			delete(overrideCopy, ignoredPorts)
 		}
 
 		di := servicesDiscoveryInfo[service.ServiceType]
 		for _, name := range di.ExtraAttributeNames {
-			if value, ok := overrideCopy[name]; ok {
+			if value, ok := extraAttributeCopy[name]; ok {
 				service.ExtraAttributes[name] = value
 
-				delete(overrideCopy, name)
+				delete(extraAttributeCopy, name)
 			}
 		}
 
-		if len(overrideCopy) > 0 {
-			ignoredNames := make([]string, 0, len(overrideCopy))
+		if len(extraAttributeCopy) > 0 {
+			ignoredNames := make([]string, 0, len(extraAttributeCopy))
 
-			for k := range overrideCopy {
-				// nrpeExposedName is not managed by us. See nrpe/responder.go
-				if k != nrpeExposedName {
-					ignoredNames = append(ignoredNames, k)
-				}
+			for k := range extraAttributeCopy {
+				ignoredNames = append(ignoredNames, k)
 			}
 
 			if len(ignoredNames) != 0 {

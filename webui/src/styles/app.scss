@@ -1,3 +1,5 @@
+@use "sass:math";
+
 $brand-success: #5cb85c;
 $brand-warning: #f0ad4e;
 $brand-danger: #d9534f;
@@ -356,7 +358,7 @@ $small-widget-size: 100px;
     }
 
     .content-row {
-      height: $small-widget-size / 4;
+      height: math.div($small-widget-size, 4);
       font-size: 140%;
     }
   }

@@ -18,13 +18,16 @@ package blackbox
 
 import (
 	"context"
+	"fmt"
 	"glouton/logger"
 	"glouton/prometheus/registry"
 	"reflect"
 	"time"
 
+	"github.com/go-kit/log"
 	"github.com/prometheus/blackbox_exporter/prober"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/prometheus/pkg/labels"
 )
 
 const (
@@ -34,7 +37,7 @@ const (
 	proberNameDNS  string = "dns"
 )
 
-// nolint: gochecknoglobals
+//nolint:gochecknoglobals
 var (
 	probeSuccessDesc = prometheus.NewDesc(
 		prometheus.BuildFQName("", "", "probe_success"),
@@ -100,13 +103,15 @@ func (target configTarget) Collect(ch chan<- prometheus.Metric) {
 
 	registry := prometheus.NewRegistry()
 
-	extLogger := logger.GoKitLoggerWrapper(logger.V(2))
+	extLogger := log.With(logger.GoKitLoggerWrapper(logger.V(2)), "url", target.URL)
 	start := time.Now()
 
 	// do all the actual work
 	success := probeFn(ctx, target.URL, target.Module, registry, extLogger)
 
-	duration := time.Since(start).Seconds()
+	end := time.Now()
+	duration := end.Sub(start)
+	_ = extLogger.Log("msg", fmt.Sprintf("check started at %s, ended at %s (duration %s); success=%v", start, end, duration, success))
 
 	mfs, err := registry.Gather()
 	if err != nil {
@@ -124,13 +129,13 @@ func (target configTarget) Collect(ch chan<- prometheus.Metric) {
 	if success {
 		successVal = 1
 	}
-	ch <- prometheus.MustNewConstMetric(probeDurationDesc, prometheus.GaugeValue, duration, target.Name)
+	ch <- prometheus.MustNewConstMetric(probeDurationDesc, prometheus.GaugeValue, duration.Seconds(), target.Name)
 	ch <- prometheus.MustNewConstMetric(probeSuccessDesc, prometheus.GaugeValue, successVal, target.Name)
 }
 
 // compareConfigTargets returns true if the monitors are identical, and false otherwise.
 func compareConfigTargets(a configTarget, b configTarget) bool {
-	return a.BleemeoAgentID == b.BleemeoAgentID && a.URL == b.URL && reflect.DeepEqual(a.Module, b.Module)
+	return a.BleemeoAgentID == b.BleemeoAgentID && a.URL == b.URL && a.RefreshRate == b.RefreshRate && reflect.DeepEqual(a.Module, b.Module)
 }
 
 func collectorInMap(value collectorWithLabels, iterable map[int]gathererWithConfigTarget) bool {
@@ -167,22 +172,40 @@ func (m *RegisterManager) updateRegistrations() error {
 
 			var g prometheus.Gatherer = reg
 
-			// static targets are always probed, while dynamic targets are probed according to
-			// their refresh rates
-			if collectorFromConfig.collector.RefreshRate != 0 {
-				g = registry.NewTickingGatherer(g, collectorFromConfig.collector.CreationDate, collectorFromConfig.collector.RefreshRate)
-			}
-
 			// wrap our gatherer in ProbeGatherer, to only collect metrics when necessary
-			g = registry.NewProbeGatherer(g)
+			g = registry.NewProbeGatherer(g, collectorFromConfig.collector.RefreshRate > time.Minute)
+
+			hash := labels.FromMap(collectorFromConfig.labels).Hash()
+
+			refreshRate := collectorFromConfig.collector.RefreshRate
+			creationDate := collectorFromConfig.collector.CreationDate
+
+			if refreshRate > 0 {
+				// We want public probe to run at known time
+				hash = uint64(creationDate.UnixNano()) % uint64(refreshRate)
+			}
 
 			// this weird "dance" where we create a registry and add it to the registererGatherer
 			// for each probe is the product of our unability to expose a "__meta_something"
 			// label while doing Collect(). We end up adding the meta labels statically at
 			// registration.
-			id, err := m.registry.RegisterGatherer(g, nil, collectorFromConfig.labels, true)
+			id, err := m.registry.RegisterGatherer(
+				registry.RegistrationOption{
+					Description: "blackbox for " + collectorFromConfig.collector.URL,
+					JitterSeed:  hash,
+					Interval:    collectorFromConfig.collector.RefreshRate,
+					ExtraLabels: collectorFromConfig.labels,
+				},
+				g,
+				true,
+			)
 			if err != nil {
 				return err
+			}
+
+			if refreshRate > 0 && time.Since(creationDate) < refreshRate {
+				// For new monitor, trigger a schedule immediately
+				m.registry.ScheduleScrape(id, time.Now())
 			}
 
 			m.registrations[id] = gathererWithConfigTarget{
@@ -199,13 +222,7 @@ func (m *RegisterManager) updateRegistrations() error {
 		if gatherer.target.BleemeoAgentID != "" && !gathererInArray(gatherer, m.targets) {
 			logger.V(2).Printf("The probe for '%s' is now deactivated", gatherer.target.Name)
 
-			// if this is a ticking gatherer, we need to unregister it (this is breaking the
-			// abstraction, but adding an interface for this particular case seems overkill)
-			if cg, ok := gatherer.gatherer.(*registry.TickingGatherer); ok {
-				cg.Stop()
-			}
-
-			m.registry.UnregisterGatherer(idx)
+			m.registry.Unregister(idx)
 			delete(m.registrations, idx)
 		}
 	}

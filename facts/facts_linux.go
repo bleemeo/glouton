@@ -26,8 +26,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/shirou/gopsutil/load"
-	psutilNet "github.com/shirou/gopsutil/net"
+	"github.com/shirou/gopsutil/v3/load"
+	psutilNet "github.com/shirou/gopsutil/v3/net"
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
 )

@@ -99,17 +99,7 @@ func diagnosticTLS(builder io.Writer, tlsConfig *tls.Config, host string, hostPo
 }
 
 // DiagnosticHTTP return information about the ability to do a HTTP request.
-func DiagnosticHTTP(u string, tlsConfig *tls.Config) string {
-	cl := &http.Client{
-		Transport: &http.Transport{
-			Proxy:           http.ProxyFromEnvironment,
-			TLSClientConfig: tlsConfig,
-		},
-		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			return http.ErrUseLastResponse
-		},
-	}
-
+func DiagnosticHTTP(cl *http.Client, u string) string {
 	req, err := http.NewRequest("GET", u, nil)
 	if err != nil {
 		return fmt.Sprintf("Bad URL %#v: %v\n", u, err)

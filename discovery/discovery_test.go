@@ -215,7 +215,7 @@ func TestDiscoverySingle(t *testing.T) {
 		state := mockState{
 			DiscoveredService: previousService,
 		}
-		disc := New(&MockDiscoverer{result: []Service{c.dynamicResult}}, nil, nil, nil, state, nil, nil, nil, nil, nil, types.MetricFormatBleemeo)
+		disc := New(&MockDiscoverer{result: []Service{c.dynamicResult}}, nil, nil, nil, state, nil, mockContainerInfo{}, nil, nil, nil, types.MetricFormatBleemeo)
 
 		srv, err := disc.Discovery(ctx, 0)
 		if err != nil {
@@ -255,7 +255,7 @@ func TestDiscoverySingle(t *testing.T) {
 func Test_applyOveride(t *testing.T) {
 	type args struct {
 		discoveredServicesMap map[NameContainer]Service
-		servicesOverride      map[NameContainer]map[string]string
+		servicesOverride      map[NameContainer]ServiceOveride
 	}
 
 	tests := []struct {
@@ -302,9 +302,11 @@ func Test_applyOveride(t *testing.T) {
 						ServiceType: ApacheService,
 					},
 				},
-				servicesOverride: map[NameContainer]map[string]string{
+				servicesOverride: map[NameContainer]ServiceOveride{
 					{Name: "apache"}: {
-						"address": "10.0.1.2",
+						ExtraAttribute: map[string]string{
+							"address": "10.0.1.2",
+						},
 					},
 				},
 			},
@@ -327,10 +329,12 @@ func Test_applyOveride(t *testing.T) {
 						ServiceType: ApacheService,
 					},
 				},
-				servicesOverride: map[NameContainer]map[string]string{
+				servicesOverride: map[NameContainer]ServiceOveride{
 					{Name: "apache"}: {
-						"address":         "10.0.1.2",
-						"this-is-unknown": "so-unused",
+						ExtraAttribute: map[string]string{
+							"address":         "10.0.1.2",
+							"this-is-unknown": "so-unused",
+						},
 					},
 				},
 			},
@@ -353,14 +357,18 @@ func Test_applyOveride(t *testing.T) {
 						ServiceType: ApacheService,
 					},
 				},
-				servicesOverride: map[NameContainer]map[string]string{
+				servicesOverride: map[NameContainer]ServiceOveride{
 					{Name: "myapplication"}: {
-						"port":          "8080",
-						"check_type":    customCheckNagios,
-						"check_command": "command-to-run",
+						ExtraAttribute: map[string]string{
+							"port":          "8080",
+							"check_type":    customCheckNagios,
+							"check_command": "command-to-run",
+						},
 					},
 					{Name: "custom_webserver"}: {
-						"port": "8081",
+						ExtraAttribute: map[string]string{
+							"port": "8081",
+						},
 					},
 				},
 			},
@@ -396,13 +404,17 @@ func Test_applyOveride(t *testing.T) {
 			name: "bad custom check",
 			args: args{
 				discoveredServicesMap: nil,
-				servicesOverride: map[NameContainer]map[string]string{
+				servicesOverride: map[NameContainer]ServiceOveride{
 					{Name: "myapplication"}: { // the check_command is missing
-						"port":       "8080",
-						"check_type": customCheckNagios,
+						ExtraAttribute: map[string]string{
+							"port":       "8080",
+							"check_type": customCheckNagios,
+						},
 					},
 					{Name: "custom_webserver"}: { // port is missing
-						"check_type": customCheckHTTP,
+						ExtraAttribute: map[string]string{
+							"check_type": customCheckHTTP,
+						},
 					},
 				},
 			},
@@ -422,9 +434,9 @@ func Test_applyOveride(t *testing.T) {
 						},
 					},
 				},
-				servicesOverride: map[NameContainer]map[string]string{
+				servicesOverride: map[NameContainer]ServiceOveride{
 					{Name: "apache"}: {
-						"ignore_ports": "443,22",
+						IgnoredPorts: []int{443, 22},
 					},
 				},
 			},
@@ -455,9 +467,9 @@ func Test_applyOveride(t *testing.T) {
 						ServiceType: ApacheService,
 					},
 				},
-				servicesOverride: map[NameContainer]map[string]string{
+				servicesOverride: map[NameContainer]ServiceOveride{
 					{Name: "apache"}: {
-						"ignore_ports": "   443  , 22   ",
+						IgnoredPorts: []int{443, 22},
 					},
 				},
 			},

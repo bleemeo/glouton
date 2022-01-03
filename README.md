@@ -29,8 +29,8 @@ The release build will
 
 The build process use Docker and is run by the build script:
 ```
-# Optional, to speed-up subsequent build
-mkdir -p .build-cache
+docker volume create glouton-buildcache  # (optional) enable cache and speed-up build/lint run
+
 ./build.sh
 ```
 
@@ -88,7 +88,8 @@ docker-compose up -d
 To build binary you may use build.sh script. For example to just
 compile Go binary (skip building JS, Docker image and Windows installer):
 ```
-mkdir -p .build-cache
+docker volume create glouton-buildcache  # (optional) enable cache and speed-up build/lint run
+
 ./build.sh go
 ```
 
@@ -99,7 +100,8 @@ Then run Glouton:
 
 Glouton use golangci-lint as linter. You may run it with:
 ```
-mkdir -p .build-cache  # enable cache and speed-up build/lint run
+docker volume create glouton-buildcache  # (optional) enable cache and speed-up build/lint run
+
 ./lint.sh
 ```
 
@@ -114,8 +116,8 @@ For Powershell, you may set it with `$env:CGO_ENABLED = 0`.
 
 ### Developping the local UI JavaScript
 
-When working on the JavaScript rebuilding the Javascript bundle and running go generate could be slow
-and will use minified JavaScript file which are harded to debug.
+When working on the JavaScript rebuilding the Javascript bundle could be slow
+and will use minified JavaScript file which are harder to debug.
 
 To avoid this, you may want to run and use webpack-dev-server which will serve non-minified
 JavaScript file and rebuild the JavaScript bundle on the file. When doing a change in

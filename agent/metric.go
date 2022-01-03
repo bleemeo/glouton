@@ -17,11 +17,10 @@
 package agent
 
 import (
-	"archive/zip"
+	"context"
 	"fmt"
 	"glouton/config"
 	"glouton/discovery"
-	"glouton/facts/container-runtime/merge"
 	"glouton/jmxtrans"
 	"glouton/logger"
 	"glouton/prometheus/matcher"
@@ -41,6 +40,7 @@ var commonDefaultSystemMetrics = []string{
 	"system_pending_updates",
 	"system_pending_security_updates",
 	"time_drift",
+	"agent_config_warning",
 
 	// services metrics that are not classied as a service in common.serviceType
 
@@ -213,6 +213,22 @@ var bleemeoDefaultSystemMetrics = []string{
 	"system_load15",
 	"uptime",
 	"users_logged",
+}
+
+//nolint:gochecknoglobals
+var snmpMetrics = []string{
+	"snmp_scrape_duration_seconds",
+	"snmp_device_status",
+	"sysUpTime",
+	"ifOperStatus",
+	"ifInOctets",
+	"ifOutOctets",
+	"ifInErrors",
+	"ifOutErrors",
+	"total_interfaces",
+	"connected_interfaces",
+	"prtMarkerSuppliesLevel",
+	"temperature",
 }
 
 //nolint:gochecknoglobals
@@ -401,7 +417,7 @@ var defaultServiceMetrics map[discovery.ServiceName][]string = map[discovery.Ser
 	},
 
 	discovery.MosquittoService: {
-		"mosquitto_status", //nolint: misspell
+		"mosquitto_status", //nolint:misspell
 	},
 
 	discovery.MySQLService: {
@@ -749,8 +765,8 @@ func getDefaultMetrics(format types.MetricFormat) []string {
 	return res
 }
 
-func (m *metricFilter) DiagnosticZip(zipFile *zip.Writer) error {
-	file, err := zipFile.Create("metrics-filter.txt")
+func (m *metricFilter) DiagnosticArchive(ctx context.Context, archive types.ArchiveWriter) error {
+	file, err := archive.Create("filter-metrics.txt")
 	if err != nil {
 		return err
 	}
@@ -777,17 +793,23 @@ func (m *metricFilter) DiagnosticZip(zipFile *zip.Writer) error {
 	return nil
 }
 
-func (m *metricFilter) buildList(config *config.Configuration, format types.MetricFormat) error {
+func (m *metricFilter) buildList(config *config.Configuration, hasSNMP bool, format types.MetricFormat) error {
 	m.l.Lock()
 	defer m.l.Unlock()
 
 	m.staticAllowList = buildMatcherList(config, "allow")
-
-	if len(m.staticAllowList) > 0 {
-		logger.V(1).Println("Your allow list may not be compatible with your plan. Please check your allowed metrics for your plan if you encounter any problem.")
-	}
-
 	m.staticDenyList = buildMatcherList(config, "deny")
+
+	if hasSNMP {
+		for _, val := range snmpMetrics {
+			matchers, err := matcher.NormalizeMetric(val)
+			if err != nil {
+				return err
+			}
+
+			addToList(m.staticAllowList, matchers)
+		}
+	}
 
 	_, found := config.Get("metric.include_default_metrics")
 
@@ -832,9 +854,9 @@ func (m *metricFilter) buildList(config *config.Configuration, format types.Metr
 	return nil
 }
 
-func newMetricFilter(config *config.Configuration, metricFormat types.MetricFormat) (*metricFilter, error) {
+func newMetricFilter(config *config.Configuration, hasSNMP bool, metricFormat types.MetricFormat) (*metricFilter, error) {
 	filter := metricFilter{}
-	err := filter.buildList(config, metricFormat)
+	err := filter.buildList(config, hasSNMP, metricFormat)
 
 	return &filter, err
 }
@@ -1076,7 +1098,7 @@ type dynamicScrapper interface {
 	GetContainersLabels() map[string]map[string]string
 }
 
-func (m *metricFilter) rebuildServicesMetrics(allowList map[string]matcher.Matchers, services []discovery.Service, errors merge.MultiError) (map[string]matcher.Matchers, merge.MultiError) {
+func (m *metricFilter) rebuildServicesMetrics(allowList map[string]matcher.Matchers, services []discovery.Service, errors types.MultiErrors) (map[string]matcher.Matchers, types.MultiErrors) {
 	for _, service := range services {
 		if !service.Active {
 			continue
@@ -1139,7 +1161,7 @@ func (m *metricFilter) rebuildDefaultMetrics(services []discovery.Service, list 
 func (m *metricFilter) RebuildDynamicLists(scrapper dynamicScrapper, services []discovery.Service, thresholdMetricNames []string, alertMetrics []string) error {
 	allowList := make(map[string]matcher.Matchers)
 	denyList := make(map[string]matcher.Matchers)
-	errors := merge.MultiError{}
+	errors := types.MultiErrors{}
 
 	m.l.Lock()
 	defer m.l.Unlock()
@@ -1209,7 +1231,7 @@ func (m *metricFilter) RebuildDynamicLists(scrapper dynamicScrapper, services []
 	return errors
 }
 
-func (m *metricFilter) rebuildThresholdsMetric(allowList map[string]matcher.Matchers, thresholdMetricNames []string, alertMetrics []string, errors merge.MultiError) (map[string]matcher.Matchers, merge.MultiError) {
+func (m *metricFilter) rebuildThresholdsMetric(allowList map[string]matcher.Matchers, thresholdMetricNames []string, alertMetrics []string, errors types.MultiErrors) (map[string]matcher.Matchers, types.MultiErrors) {
 	for _, val := range thresholdMetricNames {
 		newMetric, err := matcher.NormalizeMetric(val + "_status")
 		if err != nil {

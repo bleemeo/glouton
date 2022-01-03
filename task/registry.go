@@ -19,8 +19,14 @@ package task
 import (
 	"context"
 	"errors"
+	"fmt"
 	"glouton/logger"
+	"glouton/types"
+	"sort"
 	"sync"
+	"time"
+
+	"github.com/getsentry/sentry-go"
 )
 
 var errAlreadyClosed = errors.New("registry already closed")
@@ -56,6 +62,36 @@ func NewRegistry(ctx context.Context) *Registry {
 		cancel: cancel,
 		tasks:  make(map[int]*taskInfo),
 	}
+}
+
+func (r *Registry) DiagnosticArchive(ctx context.Context, archive types.ArchiveWriter) error {
+	file, err := archive.Create("task-registry.txt")
+	if err != nil {
+		return err
+	}
+
+	r.l.Lock()
+	defer r.l.Unlock()
+
+	ids := make([]int, 0, len(r.tasks))
+
+	for id := range r.tasks {
+		ids = append(ids, id)
+	}
+
+	sort.Ints(ids)
+
+	for _, id := range ids {
+		ti := r.tasks[id]
+
+		ti.l.Lock()
+
+		fmt.Fprintf(file, "task id=%d: name=%s running=%v exitErr=%v\n", id, ti.Name, ti.Running, ti.ExitError)
+
+		ti.l.Unlock()
+	}
+
+	return nil
 }
 
 // Close stops and wait for all currently running tasks.
@@ -116,6 +152,14 @@ func (r *Registry) AddTask(task Runner, shortName string) (int, error) {
 
 	go func() {
 		defer close(waitC)
+		defer func() {
+			err := recover()
+			if err != nil {
+				sentry.CurrentHub().Recover(err)
+				sentry.Flush(time.Second * 5)
+				panic(err)
+			}
+		}()
 
 		err := task(ctx)
 		if err != nil {

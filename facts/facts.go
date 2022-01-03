@@ -33,11 +33,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/shirou/gopsutil/cpu"
-	"github.com/shirou/gopsutil/host"
-	"github.com/shirou/gopsutil/mem"
+	"github.com/shirou/gopsutil/v3/cpu"
+	"github.com/shirou/gopsutil/v3/host"
+	"github.com/shirou/gopsutil/v3/mem"
 	"gopkg.in/yaml.v3"
 )
+
+const virtualTypeKVM = "kvm"
 
 // FactProvider provider information about system. Mostly static facts like OS version, architecture, ...
 //
@@ -106,7 +108,7 @@ func (f *FactProvider) Facts(ctx context.Context, maxAge time.Duration) (facts m
 		logger.V(2).Printf("facts: updateFacts() took %v", time.Since(t))
 	}
 
-	return f.facts, nil
+	return f.facts, ctx.Err()
 }
 
 // FastFacts returns an incomplete list of facts for this system. The slowest facts
@@ -115,10 +117,9 @@ func (f *FactProvider) FastFacts(ctx context.Context) (facts map[string]string, 
 	f.l.Lock()
 	defer f.l.Unlock()
 
-	newFacts := make(map[string]string)
 	t := time.Now()
 
-	f.fastUpdateFacts(ctx)
+	newFacts := f.fastUpdateFacts(ctx)
 
 	logger.V(2).Printf("Fastfacts: FastUpdateFacts() took %v", time.Since(t))
 
@@ -149,13 +150,17 @@ func (f *FactProvider) updateFacts(ctx context.Context) {
 
 	collectCloudProvidersFacts(ctx, newFacts)
 
-	cleanFacts(newFacts)
+	CleanFacts(newFacts)
+
+	if ctx.Err() != nil {
+		return
+	}
 
 	f.facts = newFacts
 	f.lastFactsUpdate = time.Now()
 }
 
-//nolint:gocyclo,cyclop
+//nolint:cyclop
 func (f *FactProvider) fastUpdateFacts(ctx context.Context) map[string]string {
 	newFacts := make(map[string]string)
 
@@ -206,14 +211,21 @@ func (f *FactProvider) fastUpdateFacts(ctx context.Context) map[string]string {
 	}
 
 	vType, vRole, err := host.VirtualizationWithContext(ctx)
-	if err == nil && vRole == "guest" {
+	if err == nil && vRole == "guest" && vType != "" {
 		if vType == "vbox" {
 			vType = "virtualbox"
 		}
 
 		newFacts["virtual"] = vType
 	} else {
-		newFacts["virtual"] = guessVirtual(newFacts)
+		gloutonvType := guessVirtual(newFacts)
+
+		if gloutonvType == "physical" && vType == "" && err == nil && vRole == "guest" {
+			// Let's default to "kvm", we have no clue on what the hypervisor is.
+			gloutonvType = virtualTypeKVM
+		}
+
+		newFacts["virtual"] = gloutonvType
 	}
 
 	if !version.IsWindows() {
@@ -260,14 +272,14 @@ func (f *FactProvider) fastUpdateFacts(ctx context.Context) map[string]string {
 		newFacts[k] = v
 	}
 
-	cleanFacts(newFacts)
+	CleanFacts(newFacts)
 
 	return newFacts
 }
 
-// cleanFacts will remove key with empty values and truncate value
+// CleanFacts will remove key with empty values and truncate value
 // with 100 characters or more.
-func cleanFacts(facts map[string]string) {
+func CleanFacts(facts map[string]string) {
 	for k, v := range facts {
 		if v == "" {
 			delete(facts, k)
@@ -287,7 +299,7 @@ func getFQDN(ctx context.Context) (hostname string, fqdn string) {
 		fqdn = hostname
 	}
 
-	if fqdn == "" {
+	if fqdn == "" || fqdn == hostname {
 		// With pure-Go resolver, it may happen. Perform what C-resolver seems to do
 		if addrs, err := net.DefaultResolver.LookupHost(ctx, hostname); err == nil && len(addrs) > 0 {
 			if names, err := net.DefaultResolver.LookupAddr(ctx, addrs[0]); err == nil && len(names) > 0 {
@@ -301,13 +313,15 @@ func getFQDN(ctx context.Context) (hostname string, fqdn string) {
 	}
 
 	switch fqdn {
-	case "", "localhost", "localhost.local", "localhost.localdomain":
+	case "":
+		fqdn = hostname
+	case "localhost", "localhost.local", "localhost.localdomain":
 		if hostname != "localhost" {
 			fqdn = hostname
 		}
 	}
 
-	return
+	return hostname, fqdn
 }
 
 func decodeOsRelease(data string) (map[string]string, error) {
@@ -348,7 +362,7 @@ func guessVirtual(facts map[string]string) string {
 
 	switch {
 	case strings.Contains(vendorName, "qemu"), strings.Contains(vendorName, "bochs"), strings.Contains(vendorName, "digitalocean"):
-		return "kvm"
+		return virtualTypeKVM
 	case strings.Contains(vendorName, "xen"):
 		if strings.Contains(biosVersion, "amazon") {
 			return "aws"
@@ -368,7 +382,7 @@ func guessVirtual(facts map[string]string) string {
 	case strings.Contains(vendorName, "openstack"):
 		switch {
 		case strings.Contains(biosVendor, "bochs"):
-			return "kvm"
+			return virtualTypeKVM
 		case strings.Contains(strings.ToLower(facts["serial_number"]), "vmware"):
 			return "vmware"
 		default:

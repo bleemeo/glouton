@@ -176,16 +176,16 @@ func (s *Synchronizer) serviceUpdateList() error {
 		return err
 	}
 
-	services := make([]types.Service, len(result))
+	services := make([]types.Service, 0, len(result))
 
-	for i, jsonMessage := range result {
+	for _, jsonMessage := range result {
 		var service types.Service
 
 		if err := json.Unmarshal(jsonMessage, &service); err != nil {
 			continue
 		}
 
-		services[i] = service
+		services = append(services, service)
 	}
 
 	s.option.Cache.SetServices(services)

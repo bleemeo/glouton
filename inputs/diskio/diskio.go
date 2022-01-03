@@ -63,13 +63,13 @@ func New(whitelist []*regexp.Regexp, blacklist []*regexp.Regexp) (i telegraf.Inp
 	return i, err
 }
 
-func (dt diskIOTransformer) renameGlobal(originalContext internal.GatherContext) (newContext internal.GatherContext, drop bool) {
-	newContext.Measurement = "io"
-	newContext.Tags = make(map[string]string)
-	item, ok := originalContext.Tags["name"]
+func (dt diskIOTransformer) renameGlobal(gatherContext internal.GatherContext) (internal.GatherContext, bool) {
+	item, ok := gatherContext.Tags["name"]
+	gatherContext.Measurement = "io"
+	gatherContext.Tags = make(map[string]string)
 
 	if !ok {
-		return newContext, true
+		return gatherContext, true
 	}
 
 	match := false
@@ -95,16 +95,16 @@ func (dt diskIOTransformer) renameGlobal(originalContext internal.GatherContext)
 	}
 
 	if !match {
-		return newContext, true
+		return gatherContext, true
 	}
 
-	newContext.Annotations.BleemeoItem = item
-	newContext.Tags["device"] = item
+	gatherContext.Annotations.BleemeoItem = item
+	gatherContext.Tags["device"] = item
 
-	return newContext, false
+	return gatherContext, false
 }
 
-func (dt diskIOTransformer) transformMetrics(originalContext internal.GatherContext, currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {
+func (dt diskIOTransformer) transformMetrics(currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {
 	if ioTime, ok := fields["io_time"]; ok {
 		delete(fields, "io_time")
 

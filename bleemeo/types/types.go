@@ -20,6 +20,7 @@ import (
 	"context"
 	"glouton/discovery"
 	"glouton/facts"
+	"glouton/prometheus/exporter/snmp"
 	"glouton/threshold"
 	"glouton/types"
 	"time"
@@ -34,15 +35,18 @@ type GlobalOption struct {
 	Facts                   FactProvider
 	Process                 ProcessProvider
 	Docker                  DockerProvider
+	SNMP                    []*snmp.Target
+	SNMPOnlineTarget        func() int
 	Store                   Store
 	Acc                     telegraf.Accumulator
 	Discovery               discovery.PersistentDiscoverer
 	MonitorManager          MonitorManager
 	MetricFormat            types.MetricFormat
 	NotifyFirstRegistration func(ctx context.Context)
+	NotifyLabelsUpdate      func(ctx context.Context)
 	BlackboxScraperName     string
 
-	UpdateMetricResolution func(resolution time.Duration)
+	UpdateMetricResolution func(defaultResolution time.Duration, snmpResolution time.Duration)
 	UpdateThresholds       func(thresholds map[threshold.MetricNameItem]threshold.Threshold, firstUpdate bool)
 	UpdateUnits            func(units map[threshold.MetricNameItem]threshold.Unit)
 	RebuildAlertingRules   func(metrics []Metric) error
@@ -132,4 +136,20 @@ func (r DisableReason) String() string {
 	default:
 		return "unspecified reason"
 	}
+}
+
+type GloutonAccountConfig struct {
+	ID                    string
+	Name                  string
+	LiveProcessResolution time.Duration
+	LiveProcess           bool
+	DockerIntegration     bool
+	SNMPIntergration      bool
+	AgentConfigByName     map[string]GloutonAgentConfig
+	AgentConfigByID       map[string]GloutonAgentConfig
+}
+
+type GloutonAgentConfig struct {
+	MetricsAllowlist map[string]bool
+	MetricResolution time.Duration
 }

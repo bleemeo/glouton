@@ -1,6 +1,7 @@
 package inputs
 
 import (
+	"context"
 	"glouton/types"
 	"reflect"
 	"strings"
@@ -12,7 +13,7 @@ type mockStore struct {
 	points []types.MetricPoint
 }
 
-func (s *mockStore) PushPoints(points []types.MetricPoint) {
+func (s *mockStore) PushPoints(_ context.Context, points []types.MetricPoint) {
 	s.points = append(s.points, points...)
 }
 
@@ -41,7 +42,7 @@ func TestAccumulator(t *testing.T) {
 	}
 
 	db := &mockStore{}
-	acc := &Accumulator{Pusher: db}
+	acc := &Accumulator{Pusher: db, Context: context.Background()}
 
 	if len(db.points) != 0 {
 		t.Errorf("len(db.points) == %v, want %v", len(db.points), 0)
@@ -153,7 +154,7 @@ func TestStoreAccumulatorWithStatus(t *testing.T) {
 	}
 
 	db := &mockStore{}
-	acc := &Accumulator{Pusher: db}
+	acc := &Accumulator{Pusher: db, Context: context.Background()}
 
 	if len(db.points) != 0 {
 		t.Errorf("len(db.metrics) == %v, want %v", len(db.points), 0)

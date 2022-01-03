@@ -22,11 +22,15 @@ package store
 import (
 	"context"
 	"errors"
+	"fmt"
 	"glouton/logger"
 	"glouton/types"
 	"reflect"
+	"sort"
 	"sync"
 	"time"
+
+	"github.com/prometheus/prometheus/pkg/labels"
 )
 
 var errDeletedMetric = errors.New("metric was deleted")
@@ -35,31 +39,73 @@ var errDeletedMetric = errors.New("metric was deleted")
 //
 // See methods GetMetrics and GetMetricPoints.
 type Store struct {
-	metrics           map[int]metric
-	points            map[int][]types.Point
+	metrics           map[uint64]metric
+	points            map[uint64][]types.Point
 	notifyCallbacks   map[int]func([]types.MetricPoint)
 	resetRuleCallback func()
+	maxAge            time.Duration
+	workLabels        labels.Labels
 	lock              sync.Mutex
 	notifeeLock       sync.Mutex
 	resetRuleLock     sync.Mutex
 }
 
 // New create a return a store. Store should be Close()d before leaving.
-func New() *Store {
+func New(maxAge time.Duration) *Store {
 	s := &Store{
-		metrics:           make(map[int]metric),
-		points:            make(map[int][]types.Point),
-		notifyCallbacks:   make(map[int]func([]types.MetricPoint)),
-		resetRuleCallback: nil,
+		metrics:         make(map[uint64]metric),
+		points:          make(map[uint64][]types.Point),
+		notifyCallbacks: make(map[int]func([]types.MetricPoint)),
+		maxAge:          maxAge,
 	}
 
 	return s
 }
 
+func (s *Store) DiagnosticArchive(ctx context.Context, archive types.ArchiveWriter) error {
+	file, err := archive.Create("store.txt")
+	if err != nil {
+		return err
+	}
+
+	s.lock.Lock()
+
+	var (
+		oldestTime   time.Time
+		youngestTime time.Time
+		pointsCount  int
+	)
+
+	for _, pts := range s.points {
+		pointsCount += len(pts)
+
+		for _, p := range pts {
+			if oldestTime.IsZero() || p.Time.Before(oldestTime) {
+				oldestTime = p.Time
+			}
+
+			if youngestTime.IsZero() || p.Time.After(youngestTime) {
+				youngestTime = p.Time
+			}
+		}
+	}
+
+	metricsCount := len(s.metrics)
+
+	s.lock.Unlock()
+
+	fmt.Fprintln(file, "Metric store:")
+	fmt.Fprintf(file, "metrics count: %d\n", metricsCount)
+	fmt.Fprintf(file, "points count: %d\n", pointsCount)
+	fmt.Fprintf(file, "points time range: %v to %v\n", oldestTime, youngestTime)
+
+	return nil
+}
+
 // Run will run the store until context is cancelled.
 func (s *Store) Run(ctx context.Context) error {
 	for {
-		s.run()
+		s.run(time.Now())
 
 		select {
 		case <-time.After(300 * time.Second):
@@ -131,8 +177,8 @@ func (s *Store) DropAllMetrics() {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
-	s.metrics = make(map[int]metric)
-	s.points = make(map[int][]types.Point)
+	s.metrics = make(map[uint64]metric)
+	s.points = make(map[uint64][]types.Point)
 }
 
 // Metrics return a list of Metric matching given labels filter.
@@ -161,13 +207,7 @@ func (s *Store) MetricsCount() int {
 
 // Labels returns all label of the metric.
 func (m metric) Labels() map[string]string {
-	labels := make(map[string]string)
-
-	for k, v := range m.labels {
-		labels[k] = v
-	}
-
-	return labels
+	return m.labels
 }
 
 // Annotations returns all annotations of the metric.
@@ -201,7 +241,7 @@ type metric struct {
 	labels      map[string]string
 	annotations types.MetricAnnotations
 	store       *Store
-	metricID    int
+	metricID    uint64
 	createAt    time.Time
 }
 
@@ -220,20 +260,20 @@ func labelsMatch(labels, filter map[string]string, exact bool) bool {
 	return true
 }
 
-func (s *Store) run() {
+func (s *Store) run(now time.Time) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
 	deletedPoints := 0
 	totalPoints := 0
-	metricToDelete := make([]int, 0)
+	metricToDelete := make([]uint64, 0)
 
 	for metricID := range s.metrics {
 		points := s.points[metricID]
 		newPoints := make([]types.Point, 0)
 
 		for _, p := range points {
-			if time.Since(p.Time) < time.Hour {
+			if now.Sub(p.Time) < s.maxAge {
 				newPoints = append(newPoints, p)
 			}
 		}
@@ -261,45 +301,54 @@ func (s *Store) run() {
 // If the metric does not exists, it's created.
 // The store lock is assumed to be held.
 // Annotations is always updated with value provided as argument.
-func (s *Store) metricGetOrCreate(labels map[string]string, annotations types.MetricAnnotations) (metric, bool) {
-	for id, m := range s.metrics {
-		if labelsMatch(m.labels, labels, true) {
+func (s *Store) metricGetOrCreate(lbls map[string]string, annotations types.MetricAnnotations) (metric, bool) {
+	if cap(s.workLabels) < len(lbls) {
+		s.workLabels = make(labels.Labels, len(lbls))
+	}
+
+	s.workLabels = s.workLabels[:0]
+
+	for k, v := range lbls {
+		s.workLabels = append(s.workLabels, labels.Label{Name: k, Value: v})
+	}
+
+	sort.Sort(s.workLabels)
+
+	hash := s.workLabels.Hash()
+
+	for n := 0; n < 50; n++ {
+		m, ok := s.metrics[hash]
+		if labelsMatch(m.labels, lbls, true) {
 			m.annotations = annotations
-			s.metrics[id] = m
+			s.metrics[hash] = m
 
 			return m, false
 		}
-	}
 
-	newID := 1
-	_, ok := s.metrics[newID]
+		if !ok {
+			m := metric{
+				labels:      lbls,
+				annotations: annotations,
+				store:       s,
+				metricID:    hash,
+				createAt:    time.Now(),
+			}
 
-	for ok {
-		newID++
-		if newID == 0 {
-			panic("too many metric in the store. Unable to find new slot")
+			s.metrics[hash] = m
+
+			return m, true
 		}
 
-		_, ok = s.metrics[newID]
+		hash++
 	}
 
-	m := metric{
-		labels:      labels,
-		annotations: annotations,
-		store:       s,
-		metricID:    newID,
-		createAt:    time.Now(),
-	}
-
-	s.metrics[newID] = m
-
-	return m, true
+	panic("too many metric in the store. Unable to find new slot")
 }
 
 // PushPoints append new metric points to the store, creating new metric
 // if needed.
 // The points must not be mutated after this call.
-func (s *Store) PushPoints(points []types.MetricPoint) {
+func (s *Store) PushPoints(_ context.Context, points []types.MetricPoint) {
 	dedupPoints := make([]types.MetricPoint, 0, len(points))
 	newMetrics := false
 
@@ -343,7 +392,7 @@ type store interface {
 	DropMetrics(labelsList []map[string]string)
 	AddNotifiee(func([]types.MetricPoint)) int
 	RemoveNotifiee(int)
-	PushPoints(points []types.MetricPoint)
+	PushPoints(ctx context.Context, points []types.MetricPoint)
 }
 
 // FilteredStore is a store wrapper that intercepts all call to pushPoints and execute filters on points.
@@ -368,12 +417,12 @@ func NewFilteredStore(store store, fc func([]types.MetricPoint) []types.MetricPo
 }
 
 // PushPoints wraps the store PushPoints function. It precedes the call with filterCallback.
-func (s *FilteredStore) PushPoints(points []types.MetricPoint) {
+func (s *FilteredStore) PushPoints(ctx context.Context, points []types.MetricPoint) {
 	if s.filterCallback != nil && len(points) > 0 {
 		points = s.filterCallback(points)
 	}
 
-	s.store.PushPoints(points)
+	s.store.PushPoints(ctx, points)
 }
 
 func (s *FilteredStore) Metrics(filters map[string]string) (result []types.Metric, err error) {

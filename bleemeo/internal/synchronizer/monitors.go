@@ -24,6 +24,9 @@ import (
 	"glouton/logger"
 	"glouton/prometheus/exporter/blackbox"
 	"glouton/types"
+	"time"
+
+	"github.com/cespare/xxhash"
 )
 
 var (
@@ -63,12 +66,12 @@ func (s *Synchronizer) UpdateMonitor(op string, uuid string) {
 	}
 
 	s.pendingMonitorsUpdate = append(s.pendingMonitorsUpdate, mu)
-	s.forceSync["monitors"] = false
+	s.forceSync[syncMethodMonitor] = false
 }
 
 // syncMonitors updates the list of monitors accessible to the agent.
 func (s *Synchronizer) syncMonitors(fullSync bool, onlyEssential bool) (err error) {
-	if !s.option.Config.Bool("blackbox.enabled") {
+	if !s.option.Config.Bool("blackbox.enable") {
 		// prevent a tiny memory leak
 		s.pendingMonitorsUpdate = nil
 
@@ -84,8 +87,8 @@ func (s *Synchronizer) syncMonitors(fullSync bool, onlyEssential bool) (err erro
 	if len(pendingMonitorsUpdate) > 5 {
 		fullSync = true
 		// force metric synchronization
-		if _, forceSync := s.forceSync["metrics"]; !forceSync {
-			s.forceSync["metrics"] = false
+		if _, forceSync := s.forceSync[syncMethodMetric]; !forceSync {
+			s.forceSync[syncMethodMetric] = false
 		}
 	}
 
@@ -111,12 +114,35 @@ func (s *Synchronizer) syncMonitors(fullSync bool, onlyEssential bool) (err erro
 
 	s.option.Cache.SetMonitors(monitors)
 
-	return s.ApplyMonitorUpdate(true)
+	needConfigUpdate := false
+	configs := s.option.Cache.AccountConfigsByUUID()
+
+	for _, m := range monitors {
+		if cfg, ok := configs[m.AccountConfig]; !ok {
+			needConfigUpdate = true
+
+			break
+		} else if _, ok := cfg.AgentConfigByName[bleemeoTypes.AgentTypeMonitor]; !ok {
+			needConfigUpdate = true
+
+			break
+		}
+	}
+
+	if needConfigUpdate {
+		s.l.Lock()
+
+		s.forceSync[syncMethodAccountConfig] = true
+
+		s.l.Unlock()
+	}
+
+	return s.ApplyMonitorUpdate()
 }
 
 // ApplyMonitorUpdate preprocesses monitors and updates blackbox target list.
 // `forceAccountConfigsReload` determine whether account configurations should be updated via the API.
-func (s *Synchronizer) ApplyMonitorUpdate(forceAccountConfigsReload bool) error {
+func (s *Synchronizer) ApplyMonitorUpdate() error {
 	if s.option.MonitorManager == (*blackbox.RegisterManager)(nil) {
 		logger.V(2).Println("blackbox_exporter is not configured, ApplyMonitorUpdate will not update its config.")
 
@@ -125,21 +151,9 @@ func (s *Synchronizer) ApplyMonitorUpdate(forceAccountConfigsReload bool) error 
 
 	monitors := s.option.Cache.Monitors()
 
-	if forceAccountConfigsReload {
-		// get the list of needed account configurations
-		uuids := make([]string, 0, len(monitors))
-
-		for _, m := range monitors {
-			uuids = append(uuids, m.AccountConfig)
-		}
-
-		if err := s.updateAccountConfigsFromList(uuids); err != nil {
-			return err
-		}
-	}
-
-	accountConfigs := s.option.Cache.AccountConfigs()
+	accountConfigs := s.option.Cache.AccountConfigsByUUID()
 	processedMonitors := make([]types.Monitor, 0, len(monitors))
+	agentIDHash := time.Duration(xxhash.Sum64String(s.agentID)%16000)*time.Millisecond - 8*time.Second
 
 	for _, monitor := range monitors {
 		// try to retrieve the account config associated with this monitor
@@ -148,10 +162,25 @@ func (s *Synchronizer) ApplyMonitorUpdate(forceAccountConfigsReload bool) error 
 			return fmt.Errorf("%w '%s' for probe '%s'", errMissingAccountConf, monitor.AccountConfig, monitor.URL)
 		}
 
+		creationDate, err := time.Parse(time.RFC3339, monitor.CreationDate)
+		if err != nil {
+			logger.V(1).Printf("Ignore monitor %s (id=%s) due to invalid created_at: %s", monitor.URL, monitor.ID, monitor.CreationDate)
+
+			continue
+		}
+
+		jitterCreationDate := creationDate.Add(agentIDHash)
+		if creationDate.Minute() != jitterCreationDate.Minute() {
+			// We want to kept the minute unchanged. This is required for monitor with
+			// resolution of 5 minutes because Bleemeo assume that the monitor metrics are
+			// send at the beginning of the minute after creationDate + N * 5 minutes.
+			jitterCreationDate = creationDate.Add(-agentIDHash)
+		}
+
 		processedMonitors = append(processedMonitors, types.Monitor{
 			ID:                      monitor.ID,
-			MetricMonitorResolution: conf.MetricMonitorResolution,
-			CreationDate:            monitor.CreationDate,
+			MetricMonitorResolution: conf.AgentConfigByName[bleemeoTypes.AgentTypeMonitor].MetricResolution,
+			CreationDate:            jitterCreationDate,
 			URL:                     monitor.URL,
 			BleemeoAgentID:          monitor.AgentID,
 			ExpectedContent:         monitor.ExpectedContent,
@@ -207,7 +236,7 @@ func (s *Synchronizer) getListOfMonitorsFromAPI(pendingMonitorsUpdate []MonitorU
 
 	s.l.Lock()
 
-	_, forceSync := s.forceSync["metrics"]
+	_, forceSync := s.forceSync[syncMethodMetric]
 
 	s.l.Unlock()
 
@@ -252,7 +281,7 @@ OuterBreak:
 					// the added complexity.
 					if !forceSync {
 						s.l.Lock()
-						s.forceSync["metrics"] = false
+						s.forceSync[syncMethodMetric] = false
 						forceSync = true
 						s.l.Unlock()
 					}

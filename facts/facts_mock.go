@@ -27,9 +27,13 @@ type FactProviderMock struct {
 }
 
 // NewMockFacter creates a new lying Fact provider.
-func NewMockFacter() *FactProviderMock {
+func NewMockFacter(facts map[string]string) *FactProviderMock {
+	if facts == nil {
+		facts = make(map[string]string)
+	}
+
 	return &FactProviderMock{
-		facts: map[string]string{},
+		facts: facts,
 	}
 }
 

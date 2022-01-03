@@ -73,7 +73,7 @@ func string2TopBody(input string) containerTypes.ContainerTopOKBody {
 	return procList
 }
 
-//nolint:gocyclo,cyclop
+//nolint:cyclop
 func TestDocker_Containers(t *testing.T) {
 	tests := []struct {
 		name string
@@ -717,7 +717,7 @@ func TestDocker_Processes(t *testing.T) {
 					CmdLineList:   []string{"/usr/local/lib/erlang/erts-11.1.5/bin/epmd", "-daemon"},
 					MemoryRSS:     1444,
 					Name:          "epmd",
-					Status:        "running",
+					Status:        facts.ProcessStatusRunning,
 					Username:      "999",
 					ContainerID:   "33600bb7b4d62f43e87839e514a4235bb72f66dcfca35a7df5c900361a2c4d6e",
 					ContainerName: "testdata_rabbitLabels_1",
@@ -729,7 +729,7 @@ func TestDocker_Processes(t *testing.T) {
 					CmdLine:       "/bin/sh /opt/rabbitmq/sbin/rabbitmq-server",
 					CmdLineList:   []string{"/bin/sh", "/opt/rabbitmq/sbin/rabbitmq-server"},
 					Name:          "sh",
-					Status:        "?",
+					Status:        facts.ProcessStatusUnknown,
 					Username:      "999",
 					ContainerID:   "b59746cf51fa8b08eb228e5f4fc4bc28446a6f7ca19cdc3c23016f932b56003f",
 					ContainerName: "testdata_rabbitmqInternal_1",
@@ -740,7 +740,7 @@ func TestDocker_Processes(t *testing.T) {
 					CmdLine:       "/usr/local/lib/erlang/erts-11.1.5/bin/epmd -daemon",
 					CmdLineList:   []string{"/usr/local/lib/erlang/erts-11.1.5/bin/epmd", "-daemon"},
 					Name:          "epmd",
-					Status:        "?",
+					Status:        facts.ProcessStatusUnknown,
 					Username:      "999",
 					ContainerID:   "b59746cf51fa8b08eb228e5f4fc4bc28446a6f7ca19cdc3c23016f932b56003f",
 					ContainerName: "testdata_rabbitmqInternal_1",

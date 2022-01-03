@@ -1,3 +1,19 @@
 #!/bin/sh
 
+# sleep for a random interval of time (default 5min)
+# (some code taken from cron-apt, thanks)
+random_sleep()
+{
+    RandomSleep=300
+    if [ -z "$RANDOM" ] ; then
+        # A fix for shells that do not have this bash feature.
+        RANDOM=$(( $(dd if=/dev/urandom bs=2 count=1 2> /dev/null | cksum | cut -d' ' -f1) % 32767 ))
+    fi
+    TIME=$(($RANDOM % $RandomSleep))
+    sleep $TIME
+}
+
+# delay the job execution by a random amount of time
+random_sleep
+
 glouton-netstat 2> /dev/null || true

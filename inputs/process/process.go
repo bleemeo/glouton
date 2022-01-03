@@ -45,9 +45,7 @@ func New(ps processProvider, pusher types.PointPusher) Input {
 }
 
 // Gather send metrics to the PointPusher.
-func (i Input) Gather(now time.Time) {
-	ctx := context.Background()
-
+func (i Input) Gather(ctx context.Context, now time.Time) {
 	proc, err := i.ps.Processes(ctx, maxAge)
 	if err != nil {
 		logger.V(1).Printf("unable to gather process metrics: %v", err)
@@ -60,7 +58,6 @@ func (i Input) Gather(now time.Time) {
 		"sleeping": 0,
 		"blocked":  0,
 		"zombies":  0,
-		"paging":   0,
 		"running":  0,
 		"stopped":  0,
 	}
@@ -71,20 +68,27 @@ func (i Input) Gather(now time.Time) {
 		status := p.Status
 
 		switch status {
-		case "idle":
+		case facts.ProcessStatusIdle, facts.ProcessStatusSleeping:
 			// Merge idle & sleeping
-			status = "sleeping"
-		case "disk-sleep":
-			status = "blocked"
-		case "zombie":
-			status = "zombies"
-		case "?":
+			counts["sleeping"]++
+		case facts.ProcessStatusRunning:
+			counts["running"]++
+		case facts.ProcessStatusStopped, facts.ProcessStatusDead, facts.ProcessStatusTracingStop:
+			counts["stopped"]++
+		case facts.ProcessStatusIOWait:
+			counts["blocked"]++
+		case facts.ProcessStatusZombie:
+			counts["zombies"]++
+		case facts.ProcessStatusUnknown:
 			logger.V(2).Printf("Process %v has status unknown, assume sleeping", p)
 
-			status = "sleeping"
+			counts["sleeping"]++
+		default:
+			logger.V(2).Printf("Process %v has status unknown (%#v), assume sleeping", p, status)
+
+			counts["sleeping"]++
 		}
 
-		counts[status]++
 		total++
 
 		totalThreads += p.NumThreads
@@ -123,5 +127,5 @@ func (i Input) Gather(now time.Time) {
 		})
 	}
 
-	i.pusher.PushPoints(points)
+	i.pusher.PushPoints(ctx, points)
 }

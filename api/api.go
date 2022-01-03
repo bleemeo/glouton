@@ -16,10 +16,9 @@
 
 package api
 
-//go:generate go run github.com/go-bindata/go-bindata/v3/go-bindata -o api-bindata.go -pkg api -fs -nocompress -nomemcopy -prefix static static/...
-
 import (
 	"context"
+	"embed"
 	"errors"
 	"fmt"
 	"glouton/discovery"
@@ -30,18 +29,21 @@ import (
 	"glouton/threshold"
 	"glouton/types"
 	"html/template"
-	"io"
 	"io/ioutil"
 	"net/http"
 	"path"
 	"strings"
 	"time"
 
+	_ "github.com/99designs/gqlgen/cmd" // Prevent go mod tidy from removing gqlgen dependencies
 	"github.com/99designs/gqlgen/graphql/handler"
 	"github.com/99designs/gqlgen/graphql/playground"
 	"github.com/go-chi/chi"
 	"github.com/rs/cors"
 )
+
+//go:embed static
+var staticFolder embed.FS
 
 type containerInterface interface {
 	Containers(ctx context.Context, maxAge time.Duration, includeIgnored bool) (containers []facts.Container, err error)
@@ -58,6 +60,7 @@ type agentInterface interface {
 type API struct {
 	BindAddress        string
 	StaticCDNURL       string
+	LocalUIDisabled    bool
 	MetricFormat       types.MetricFormat
 	DB                 *store.Store
 	ContainerRuntime   containerInterface
@@ -67,8 +70,8 @@ type API struct {
 	AgentInfo          agentInterface
 	PrometheurExporter http.Handler
 	Threshold          *threshold.Registry
-	DiagnosticPage     func() string
-	DiagnosticZip      func(w io.Writer) error
+	DiagnosticPage     func(ctx context.Context) string
+	DiagnosticArchive  func(ctx context.Context, w types.ArchiveWriter) error
 
 	router http.Handler
 }
@@ -82,10 +85,10 @@ type assetsFileServer struct {
 }
 
 func (f *assetsFileServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	r.URL.Path = path.Join("assets", r.URL.Path)
+	r.URL.Path = path.Join("static/assets", r.URL.Path)
 
 	// let the client browser decode the gzipped js files
-	if strings.HasPrefix(r.URL.Path, "assets/js/") {
+	if strings.HasPrefix(r.URL.Path, "static/assets/js/") {
 		w.Header().Add("Content-Encoding", "gzip")
 	}
 
@@ -100,18 +103,20 @@ func (api *API) init() {
 		Debug:            false,
 	}).Handler)
 
-	staticFolder := AssetFile()
-
 	fallbackIndex := []byte("Error while initializing local UI. See Glouton logs")
 
 	var indexBody []byte
 
-	indexFile, err := staticFolder.Open("/index.html")
-	if err == nil {
-		indexBody, err = ioutil.ReadAll(indexFile)
+	indexFileName := "static/index.html"
+	if api.LocalUIDisabled {
+		indexFileName = "static/index_disabled.html"
 	}
 
-	indexFile.Close()
+	indexFile, err := staticFolder.Open(indexFileName)
+	if err == nil {
+		indexBody, err = ioutil.ReadAll(indexFile)
+		indexFile.Close()
+	}
 
 	if err != nil {
 		logger.Printf("Error while loading index.html. Local UI will be broken: %v", err)
@@ -128,12 +133,11 @@ func (api *API) init() {
 
 	var diagnosticBody []byte
 
-	diagnosticFile, err := staticFolder.Open("/diagnostic.html")
+	diagnosticFile, err := staticFolder.Open("static/diagnostic.html")
 	if err == nil {
 		diagnosticBody, err = ioutil.ReadAll(diagnosticFile)
+		diagnosticFile.Close()
 	}
-
-	diagnosticFile.Close()
 
 	if err != nil {
 		logger.Printf("Error while loading diagnostic.html: %v", err)
@@ -151,7 +155,7 @@ func (api *API) init() {
 	router.Handle("/playground", playground.Handler("GraphQL playground", "/graphql"))
 	router.Handle("/graphql", handler.NewDefaultServer(NewExecutableSchema(Config{Resolvers: &Resolver{api: api}})))
 	router.HandleFunc("/diagnostic", func(w http.ResponseWriter, r *http.Request) {
-		content := api.DiagnosticPage()
+		content := api.DiagnosticPage(r.Context())
 
 		var err error
 
@@ -171,12 +175,27 @@ func (api *API) init() {
 		hdr := w.Header()
 		hdr.Add("Content-Type", "application/zip")
 
-		if err := api.DiagnosticZip(w); err != nil {
-			logger.V(1).Printf("failed to serve diagnostic.zip: %v", err)
+		zipFile := newZipWriter(w)
+		defer zipFile.Close()
+
+		if err := api.diagnosticArchive(r.Context(), zipFile); err != nil {
+			logger.V(1).Printf("failed to serve diagnostic.zip (current file %s): %v", zipFile.CurrentFileName(), err)
 		}
 	})
 
-	router.Handle("/static/*", http.StripPrefix("/static", &assetsFileServer{fs: http.FileServer(staticFolder)}))
+	router.HandleFunc("/diagnostic.tar", func(w http.ResponseWriter, r *http.Request) {
+		hdr := w.Header()
+		hdr.Add("Content-Type", "application/x-tar")
+
+		archive := newTarWriter(w)
+		defer archive.Close()
+
+		if err := api.diagnosticArchive(r.Context(), archive); err != nil {
+			logger.V(1).Printf("failed to serve diagnostic.tar (current file %s): %v", archive.CurrentFileName(), err)
+		}
+	})
+
+	router.Handle("/static/*", http.StripPrefix("/static", &assetsFileServer{fs: http.FileServer(http.FS(staticFolder))}))
 	router.HandleFunc("/*", func(w http.ResponseWriter, r *http.Request) {
 		var err error
 		if indexTmpl == nil {
@@ -194,9 +213,28 @@ func (api *API) init() {
 	api.router = router
 }
 
+func (api *API) diagnosticArchive(ctx context.Context, archive types.ArchiveWriter) error {
+	if err := api.DiagnosticArchive(ctx, archive); err != nil {
+		currentFile := archive.CurrentFileName()
+
+		file, err2 := archive.Create("diagnostic-error.txt")
+		if err2 != nil {
+			return err
+		}
+
+		errFull := fmt.Errorf("writing file %s: %w", currentFile, err)
+
+		fmt.Fprintf(file, "%s\n", errFull.Error())
+
+		return errFull
+	}
+
+	return nil
+}
+
 // Run starts our API.
 func (api *API) Run(ctx context.Context) error {
-	api.init()
+	api.init() //nolint: contextcheck // no idea why we should pass a context...
 
 	srv := http.Server{
 		Addr:    api.BindAddress,
@@ -211,7 +249,7 @@ func (api *API) Run(ctx context.Context) error {
 		subCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 
-		if err := srv.Shutdown(subCtx); err != nil {
+		if err := srv.Shutdown(subCtx); err != nil { //nolint: contextcheck // its a "shutdown" context. It must outlive the parent context.
 			logger.V(2).Printf("HTTP server Shutdown: %v", err)
 		}
 
@@ -219,7 +257,10 @@ func (api *API) Run(ctx context.Context) error {
 	}()
 
 	logger.Printf("Starting API on %s ✔️", api.BindAddress)
-	logger.Printf("To access the local panel connect to http://%s 🌐", api.BindAddress)
+
+	if !api.LocalUIDisabled {
+		logger.Printf("To access the local panel connect to http://%s 🌐", api.BindAddress)
+	}
 
 	if err := srv.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
 		return err
