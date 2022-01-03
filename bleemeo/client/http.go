@@ -53,10 +53,16 @@ type HTTPClient struct {
 	cl *http.Client
 
 	l                   sync.Mutex
-	jwtToken            string
+	jwt                 JWT
 	throttleDeadline    time.Time
 	throttleConsecutive int
 	requestsCount       int
+}
+
+// JWT used to authenticate with the Bleemeo API.
+type JWT struct {
+	Token   string
+	Refresh string
 }
 
 // APIError are returned when HTTP request got a response but that response is
@@ -328,16 +334,16 @@ func (c *HTTPClient) do(ctx context.Context, req *http.Request, result interface
 	}
 
 	if withAuth {
-		if c.jwtToken == "" {
+		if c.jwt.Token == "" {
 			newToken, err := c.GetJWT(ctx)
 			if err != nil {
 				return 0, err
 			}
 
-			c.jwtToken = newToken
+			c.jwt = newToken
 		}
 
-		req.Header.Set("Authorization", fmt.Sprintf("JWT %s", c.jwtToken))
+		req.Header.Set("Authorization", fmt.Sprintf("JWT %s", c.jwt.Token))
 	}
 
 	for {
@@ -347,7 +353,7 @@ func (c *HTTPClient) do(ctx context.Context, req *http.Request, result interface
 		if withAuth && firstCall && err != nil {
 			if apiError, ok := err.(APIError); ok {
 				if apiError.StatusCode == 401 {
-					c.jwtToken = ""
+					c.jwt.Token = ""
 
 					return c.do(ctx, req, result, false, withAuth, forceInsecure)
 				}
@@ -375,25 +381,50 @@ func (c *HTTPClient) do(ctx context.Context, req *http.Request, result interface
 	}
 }
 
-// GetJWT return a new JWT token for authentication with Bleemeo API.
-func (c *HTTPClient) GetJWT(ctx context.Context) (string, error) {
-	u, _ := c.baseURL.Parse("v1/jwt-auth/")
+// GetJWT for authentication with the Bleemeo API.
+// The access token will be renewed using the refresh token or with
+// the username and password if the refresh token has expired.
+func (c *HTTPClient) GetJWT(ctx context.Context) (JWT, error) {
+	if c.jwt.Refresh != "" {
+		body, _ := json.Marshal(map[string]string{
+			"refresh": c.jwt.Refresh,
+		})
+
+		token, err := c.getJWT(ctx, "v1/jwt-refresh/", body)
+
+		// The refresh token is unchanged.
+		token.Refresh = c.jwt.Refresh
+
+		if err == nil {
+			return token, nil
+		}
+
+		// A 401 response is received if the refresh token has expired, we only want
+		// to try username/password authentication in this case.
+		if apiError, ok := err.(APIError); !(ok && apiError.StatusCode == 401) {
+			return JWT{}, err
+		}
+	}
 
 	body, _ := json.Marshal(map[string]string{
 		"username": c.username,
 		"password": c.password,
 	})
 
+	return c.getJWT(ctx, "v1/jwt-auth/", body)
+}
+
+func (c *HTTPClient) getJWT(ctx context.Context, path string, body []byte) (JWT, error) {
+	u, _ := c.baseURL.Parse(path)
+
 	req, err := http.NewRequest("POST", u.String(), bytes.NewReader(body)) //nolint:noctx
 	if err != nil {
-		return "", err
+		return JWT{}, err
 	}
 
 	req.Header.Add("Content-type", "application/json")
 
-	var token struct {
-		Token string
-	}
+	var token JWT
 
 	statusCode, err := c.sendRequest(ctx, req, &token, false)
 	if err != nil {
@@ -401,29 +432,29 @@ func (c *HTTPClient) GetJWT(ctx context.Context) (string, error) {
 			if apiError.StatusCode < 500 && apiError.StatusCode != 429 {
 				apiError.IsAuthError = true
 
-				return "", apiError
+				return JWT{}, apiError
 			}
 		}
 
-		return "", err
+		return JWT{}, err
 	}
 
 	if statusCode != 200 {
 		if statusCode < 500 && statusCode != 429 {
-			return "", APIError{
+			return JWT{}, APIError{
 				StatusCode:  statusCode,
 				Content:     "Unable to authenticate",
 				IsAuthError: true,
 			}
 		}
 
-		return "", APIError{
+		return JWT{}, APIError{
 			StatusCode: statusCode,
-			Content:    fmt.Sprintf("jwt-auth returned status code == %v, want 200", statusCode),
+			Content:    fmt.Sprintf("%v returned status code == %v, want 200", path, statusCode),
 		}
 	}
 
-	return token.Token, nil
+	return token, nil
 }
 
 // VerifyAndGetJWT is used to get a valid JWT.
