@@ -480,7 +480,7 @@ func (c *HTTPClient) VerifyAndGetJWT(ctx context.Context, agentID string) (strin
 		return "", errInvalidAgentID
 	}
 
-	return c.jwtToken, nil
+	return c.jwt.Token, nil
 }
 
 func (c *HTTPClient) sendRequest(ctx context.Context, req *http.Request, result interface{}, forceInsecure bool) (statusCode int, err error) {
