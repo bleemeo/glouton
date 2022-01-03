@@ -1,0 +1,25 @@
+# HELP dot1dBaseBridgeAddress The MAC address used by this bridge when it must be referred to in a unique fashion - 1.3.6.1.2.1.17.1.1
+# TYPE dot1dBaseBridgeAddress gauge
+dot1dBaseBridgeAddress{dot1dBaseBridgeAddress="78:45:50:60:70:80"} 1
+# HELP ipAdEntAddr The IPv4 address to which this entry's addressing information pertains. - 1.3.6.1.2.1.4.20.1.1
+# TYPE ipAdEntAddr gauge
+ipAdEntAddr{ipAdEntAddr="10.1.2.3"} 1
+ipAdEntAddr{ipAdEntAddr="127.0.0.1"} 1
+# HELP snmp_scrape_duration_seconds Total SNMP time scrape took (walk and processing).
+# TYPE snmp_scrape_duration_seconds gauge
+snmp_scrape_duration_seconds 0.370692459
+# HELP snmp_scrape_pdus_returned PDUs returned from walk.
+# TYPE snmp_scrape_pdus_returned gauge
+snmp_scrape_pdus_returned 6
+# HELP snmp_scrape_walk_duration_seconds Time SNMP walk/bulkwalk took.
+# TYPE snmp_scrape_walk_duration_seconds gauge
+snmp_scrape_walk_duration_seconds 0.370588167
+# HELP sysDescr A textual description of the entity - 1.3.6.1.2.1.1.1
+# TYPE sysDescr gauge
+sysDescr{sysDescr="Linux USW-24-PoE 3.18.24 #0 Thu Aug 30 12:10:54 2018 mips"} 1
+# HELP sysName An administratively-assigned name for this managed node - 1.3.6.1.2.1.1.5
+# TYPE sysName gauge
+sysName{sysName="USW-24-PoE"} 1
+# HELP sysUpTime The time (in hundredths of a second) since the network management portion of the system was last re-initialized. - 1.3.6.1.2.1.1.3
+# TYPE sysUpTime gauge
+sysUpTime 2.6340231e+07
