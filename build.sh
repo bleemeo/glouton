@@ -48,7 +48,7 @@ if [ "${SKIP_JS}" != "1" -a "${ONLY_GO}" != "1" ]; then
       sh -c "(npm install && npm run deploy); result=\$?; chown -R $USER_UID dist ../api/static/assets/js/ ../api/static/assets/css/; exit \$result"
 fi
 
-GORELEASER_VERSION="v1.0.0"
+GORELEASER_VERSION="v1.2.5"
 
 echo "Building Go binary"
 if [ "${ONLY_GO}" = "1" -a "${WITH_RACE}" != "1" ]; then
