@@ -1,5 +1,6 @@
 const path = require("path");
 const webpack = require("webpack");
+const ForkTsCheckerWebpackPlugin = require("fork-ts-checker-webpack-plugin");
 const MiniCssExtractPlugin = require("mini-css-extract-plugin");
 const buildTimestamp = new Date().getTime();
 const src = path.resolve(__dirname, "src");
@@ -19,6 +20,7 @@ module.exports = (env, argv) => {
   }
 
   plugins.push(
+    new ForkTsCheckerWebpackPlugin(),
     new MiniCssExtractPlugin({
       chunkFilename: `css/panel-glouton-main.css?ts=${buildTimestamp}`,
     }),
@@ -44,24 +46,20 @@ module.exports = (env, argv) => {
       chunkFilename: `js/[name].${buildTimestamp}.js`,
     },
     devServer: {
+      hot: false, // Force full-reload on change
       port: 3015,
       devMiddleware: {
         publicPath: "/",
       },
     },
     resolve: {
-      extensions: ['.tsx', '.ts', '.js'],
+      extensions: [".tsx", ".ts", ".jsx", ".js"],
     },
     plugins: plugins,
     module: {
       rules: [
         {
-          test: /\.tsx?$/,
-          use: 'ts-loader',
-          exclude: /node_modules/,
-        },
-        {
-          test: /\.(js|jsx)$/,
+          test: /\.[jt]sx?$/,
           include: [
             src,
             path.join(nodeModule, "d3-array"),
