@@ -39,12 +39,9 @@ import (
 )
 
 const (
-	idAgentTypeAgent = "44aefd1c-29bc-4c67-89cd-197efc1d6650"
-	idAgentTypeSNMP  = "cf1d4e06-1058-4149-864f-82c6b2ba7c7a"
-	idAgentMain      = "1ea3eaa7-3c29-413c-b00e-9dbd7183fb26"
-	idAgentSNMP      = "69956bc0-943f-4125-bb9b-eb4743c83b3c"
-	idAccountConfig  = "553b1cd5-f10a-4f17-87e8-92dc6717a93f"
-	passwordAgent    = "a-secret-password"
+	idAgentMain    = "1ea3eaa7-3c29-413c-b00e-9dbd7183fb26"
+	idAgentSNMP    = "69956bc0-943f-4125-bb9b-eb4743c83b3c"
+	passwordAgent  = "a-secret-password"
 )
 
 type mockMetric struct {
@@ -604,17 +601,17 @@ func newMetricHelper(t *testing.T) *metricTestHelper {
 
 	cache.SetAccountConfigs([]bleemeoTypes.AccountConfig{
 		{
-			ID:   idAccountConfig,
+			ID:   newAccountConfig.ID,
 			Name: "default",
 		},
 	})
 	cache.SetAgentTypes([]bleemeoTypes.AgentType{
 		{
-			ID:   idAgentTypeAgent,
+			ID:   agentTypeAgent.ID,
 			Name: bleemeoTypes.AgentTypeAgent,
 		},
 		{
-			ID:   idAgentTypeSNMP,
+			ID:   agentTypeSNMP.ID,
 			Name: bleemeoTypes.AgentTypeSNMP,
 		},
 	})
@@ -622,29 +619,29 @@ func newMetricHelper(t *testing.T) *metricTestHelper {
 		{
 			MetricsAllowlist: "",
 			MetricResolution: 10,
-			AccountConfig:    idAccountConfig,
-			AgentType:        idAgentTypeAgent,
+			AccountConfig:    newAccountConfig.ID,
+			AgentType:        agentTypeAgent.ID,
 		},
 		{
 			MetricsAllowlist: "",
 			MetricResolution: 60,
-			AccountConfig:    idAccountConfig,
-			AgentType:        idAgentTypeSNMP,
+			AccountConfig:    newAccountConfig.ID,
+			AgentType:        agentTypeSNMP.ID,
 		},
 	})
 
 	mainAgent := bleemeoTypes.Agent{
 		ID:              idAgentMain,
-		CurrentConfigID: idAccountConfig,
-		AgentType:       idAgentTypeAgent,
+		CurrentConfigID: newAccountConfig.ID,
+		AgentType:       agentTypeAgent.ID,
 	}
 
 	cache.SetAgentList([]bleemeoTypes.Agent{
 		mainAgent,
 		{
 			ID:              idAgentSNMP,
-			CurrentConfigID: idAccountConfig,
-			AgentType:       idAgentTypeSNMP,
+			CurrentConfigID: newAccountConfig.ID,
+			AgentType:       agentTypeSNMP.ID,
 		},
 	})
 	cache.SetAgent(mainAgent)
