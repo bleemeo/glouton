@@ -30,7 +30,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/prometheus/prometheus/pkg/labels"
+	"github.com/prometheus/prometheus/model/labels"
 )
 
 const defaultInterval = 0

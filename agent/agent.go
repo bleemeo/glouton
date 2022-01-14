@@ -86,7 +86,7 @@ import (
 	processInput "glouton/inputs/process"
 
 	"github.com/google/uuid"
-	"github.com/prometheus/prometheus/pkg/labels"
+	"github.com/prometheus/prometheus/model/labels"
 	"gopkg.in/yaml.v3"
 )
 

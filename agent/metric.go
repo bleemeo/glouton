@@ -31,7 +31,7 @@ import (
 	"time"
 
 	dto "github.com/prometheus/client_model/go"
-	"github.com/prometheus/prometheus/pkg/labels"
+	"github.com/prometheus/prometheus/model/labels"
 )
 
 //nolint:gochecknoglobals

@@ -30,7 +30,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/prometheus/prometheus/pkg/labels"
+	"github.com/prometheus/prometheus/model/labels"
 )
 
 var errDeletedMetric = errors.New("metric was deleted")

@@ -12,7 +12,7 @@ import (
 	"github.com/go-kit/log"
 	"github.com/prometheus/client_golang/prometheus"
 	memcachedExporter "github.com/prometheus/memcached_exporter/pkg/exporter"
-	"github.com/prometheus/prometheus/pkg/labels"
+	"github.com/prometheus/prometheus/model/labels"
 )
 
 const defaultInterval = 0
