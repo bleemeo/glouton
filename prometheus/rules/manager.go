@@ -153,11 +153,6 @@ func newManager(ctx context.Context, queryable storage.Queryable, app storage.Ap
 		Opts:          mgrOptions,
 	})
 
-	// minResTime is the minimum time before actually sending
-	// any alerting points. Some metrics can a take bit of time before
-	// first points creation; we do not want them to be labelled as unknown on start.
-	minResTime := metricResolution*2 + 10*time.Second
-
 	rm := Manager{
 		appendable:       app,
 		queryable:        queryable,
@@ -166,8 +161,10 @@ func newManager(ctx context.Context, queryable storage.Queryable, app storage.Ap
 		alertingRules:    map[string]*ruleGroup{},
 		logger:           promLogger,
 		agentStarted:     created,
-		metricResolution: minResTime,
+		metricResolution: 0,
 	}
+
+	rm.UpdateMetricResolution(metricResolution)
 
 	return &rm
 }
@@ -177,6 +174,9 @@ func (rm *Manager) UpdateMetricResolution(metricResolution time.Duration) {
 	rm.l.Lock()
 	defer rm.l.Unlock()
 
+	// rm.metricResolution is the minimum time before actually sending
+	// any alerting points. Some metrics can a take bit of time before
+	// first points creation; we do not want them to be labelled as unknown on start.
 	rm.metricResolution = metricResolution*2 + 10*time.Second
 }
 
