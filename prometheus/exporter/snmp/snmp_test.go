@@ -94,6 +94,7 @@ func Test_factFromPoints(t *testing.T) {
 				"agent_version":       "21.11.08.123456",
 				"glouton_version":     "21.11.08.123456",
 				"scraper_fqdn":        "bleemeo-linux01",
+				"device_type":         deviceTypeSwitch,
 			},
 		},
 		{
@@ -109,6 +110,7 @@ func Test_factFromPoints(t *testing.T) {
 				"product_name":        "Cisco NX-OS(tm) n9000",
 				"primary_mac_address": "50:87:01:a0:b0:2c",
 				"fact_updated_at":     "2021-09-28T09:43:04Z",
+				"device_type":         deviceTypeSwitch,
 			},
 		},
 		{
@@ -125,6 +127,23 @@ func Test_factFromPoints(t *testing.T) {
 				"product_name":        "Cisco IOS Software, C2960 Software (C2960-LANLITEK9-M)",
 				"primary_mac_address": "34:6f:01:02:a1:00",
 				"fact_updated_at":     "2021-09-28T09:43:04Z",
+				"device_type":         deviceTypeSwitch,
+			},
+		},
+		{
+			name:       "Cisco ASA",
+			metricFile: "cisco-asa.metrics",
+			want: map[string]string{
+				"fqdn":            "fw.example.com",
+				"domain":          "example.com",
+				"hostname":        "fw",
+				"boot_version":    "2.1(9)8",
+				"version":         "9.4(4)32",
+				"serial_number":   "ABC1234D5EF",
+				"primary_address": "81.123.210.12",
+				"product_name":    "Cisco Adaptive Security Appliance Version 9.4(4)32",
+				"fact_updated_at": "2021-09-28T09:43:04Z",
+				"device_type":     deviceTypeFirewall,
 			},
 		},
 		{
@@ -137,6 +156,47 @@ func Test_factFromPoints(t *testing.T) {
 				"primary_address": "192.168.1.2",
 				"product_name":    "HP Color LaserJet MFP M476dw",
 				"fact_updated_at": "2021-09-28T09:43:04Z",
+				"device_type":     deviceTypePrinter,
+			},
+		},
+		{
+			name:       "VMware ESXi",
+			metricFile: "vmware-esxi-6.5.0.metrics",
+			want: map[string]string{
+				"fqdn":            "localhost.bleemeo.work",
+				"hostname":        "localhost",
+				"domain":          "bleemeo.work",
+				"boot_version":    "2.8",
+				"version":         "6.5.0",
+				"product_name":    "VMware ESXi 6.5.0 build-14320405 VMware, Inc. x86_64",
+				"fact_updated_at": "2021-09-28T09:43:04Z",
+				"device_type":     deviceTypeHypervisor,
+			},
+		},
+		{
+			name:       "Ubiquiti U6",
+			metricFile: "ubiquiti-u6-lite.metrics",
+			want: map[string]string{
+				"fqdn":            "U6-Lite",
+				"hostname":        "U6-Lite",
+				"version":         "5.60.19.13044",
+				"primary_address": "10.1.2.3",
+				"product_name":    "U6-Lite 5.60.19.13044",
+				"fact_updated_at": "2021-09-28T09:43:04Z",
+				"device_type":     deviceTypeAP,
+			},
+		},
+		{
+			name:       "Ubiquiti USW",
+			metricFile: "ubiquiti-usw-24.metrics",
+			want: map[string]string{
+				"fqdn":                "USW-24-PoE",
+				"hostname":            "USW-24-PoE",
+				"primary_address":     "10.1.2.3",
+				"primary_mac_address": "78:45:50:60:70:80",
+				"product_name":        "USW-24-PoE Linux 3.18.24 #0 Thu Aug 30 12:10:54 2018 mips",
+				"fact_updated_at":     "2021-09-28T09:43:04Z",
+				"device_type":         deviceTypeSwitch,
 			},
 		},
 	}
@@ -636,6 +696,60 @@ func TestTarget_Module(t *testing.T) {
 
 			if got != tt.want {
 				t.Errorf("Target.Module() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func Test_addressSelectPublic(t *testing.T) {
+	tests := []struct {
+		name  string
+		addr1 string
+		addr2 string
+		want  string
+	}{
+		{
+			name:  "public-better-than-private",
+			addr1: "1.2.3.4",
+			addr2: "192.168.1.2",
+			want:  "1.2.3.4",
+		},
+		{
+			name:  "public-better-than-private2",
+			addr1: "80.12.66.254",
+			addr2: "10.11.12.24",
+			want:  "80.12.66.254",
+		},
+		{
+			name:  "public-better-than-private3",
+			addr1: "172.16.12.5",
+			addr2: "90.100.110.120",
+			want:  "90.100.110.120",
+		},
+		{
+			name:  "public-better-than-loopback",
+			addr1: "200.250.255.0",
+			addr2: "127.0.0.1",
+			want:  "200.250.255.0",
+		},
+		{
+			name:  "private-better-than-loopback",
+			addr1: "127.0.0.1",
+			addr2: "192.168.1.2",
+			want:  "192.168.1.2",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got1 := addressSelectPublic(tt.addr1, tt.addr2)
+			got2 := addressSelectPublic(tt.addr2, tt.addr1)
+
+			if got1 != tt.want {
+				t.Errorf("addressSelectPublic() = %v, want %v", got1, tt.want)
+			}
+
+			if got2 != tt.want {
+				t.Errorf("addressSelectPublic(reverse) = %v, want %v", got2, tt.want)
 			}
 		})
 	}

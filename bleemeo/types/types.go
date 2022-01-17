@@ -24,8 +24,6 @@ import (
 	"glouton/threshold"
 	"glouton/types"
 	"time"
-
-	"github.com/influxdata/telegraf"
 )
 
 // GlobalOption are option user by most component of bleemeo.Connector.
@@ -38,7 +36,7 @@ type GlobalOption struct {
 	SNMP                    []*snmp.Target
 	SNMPOnlineTarget        func() int
 	Store                   Store
-	Acc                     telegraf.Accumulator
+	PushPoints              types.PointPusher
 	Discovery               discovery.PersistentDiscoverer
 	MonitorManager          MonitorManager
 	MetricFormat            types.MetricFormat

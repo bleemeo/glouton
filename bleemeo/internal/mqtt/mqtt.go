@@ -65,6 +65,8 @@ type Option struct {
 	UpdateMonitor func(op string, uuid string)
 	// UpdateMaintenance requests to check for the maintenance mode again
 	UpdateMaintenance func()
+	// GetJWT returns the JWT used to talk with the Bleemeo API.
+	GetJWT func(ctx context.Context) (string, error)
 
 	InitialPoints []types.MetricPoint
 }
@@ -349,7 +351,7 @@ func (c *Client) HealthCheck() bool {
 	return ok
 }
 
-func (c *Client) setupMQTT() paho.Client {
+func (c *Client) setupMQTT(ctx context.Context) (paho.Client, error) {
 	pahoOptions := paho.NewClientOptions()
 
 	willPayload, _ := json.Marshal(map[string]string{"disconnect-cause": "disconnect-will"})
@@ -373,14 +375,20 @@ func (c *Client) setupMQTT() paho.Client {
 		brokerURL = "tcp://" + brokerURL
 	}
 
-	pahoOptions.SetUsername(fmt.Sprintf("%s@bleemeo.com", c.option.AgentID))
-	pahoOptions.SetPassword(c.option.AgentPassword)
 	pahoOptions.AddBroker(brokerURL)
 	pahoOptions.SetAutoReconnect(false)
 	pahoOptions.SetConnectionLostHandler(c.onConnectionLost)
 	pahoOptions.SetOnConnectHandler(c.onConnect)
+	pahoOptions.SetUsername(fmt.Sprintf("%s@bleemeo.com", c.option.AgentID))
 
-	return paho.NewClient(pahoOptions)
+	password, err := c.option.GetJWT(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("unable to get JWT: %w", err)
+	}
+
+	pahoOptions.SetPassword(password)
+
+	return paho.NewClient(pahoOptions), nil
 }
 
 func (c *Client) tlsConfig() *tls.Config {
@@ -1034,7 +1042,14 @@ mainLoop:
 						_, _ = c.option.Facts.Facts(ctx, time.Minute)
 					}
 				}
-				mqttClient := c.setupMQTT()
+
+				mqttClient, err := c.setupMQTT(ctx)
+				if err != nil {
+					delay := currentConnectDelay - time.Since(lastConnectionTimes[len(lastConnectionTimes)-1])
+					logger.V(1).Printf("Unable to connect to Bleemeo MQTT (retry in %v): %v", delay, err)
+
+					continue
+				}
 
 				optionReader := mqttClient.OptionsReader()
 				logger.V(2).Printf("Connecting to MQTT broker %v", optionReader.Servers()[0])

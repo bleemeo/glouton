@@ -33,8 +33,8 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
-	"github.com/prometheus/prometheus/pkg/exemplar"
-	"github.com/prometheus/prometheus/pkg/labels"
+	"github.com/prometheus/prometheus/model/exemplar"
+	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/storage"
 )
 
@@ -56,7 +56,7 @@ func (app *mockAppendable) Appender(ctx context.Context) storage.Appender {
 	}
 }
 
-func (a *mockAppender) Append(ref uint64, l labels.Labels, t int64, v float64) (uint64, error) {
+func (a *mockAppender) Append(ref storage.SeriesRef, l labels.Labels, t int64, v float64) (storage.SeriesRef, error) {
 	labelsMap := make(map[string]string)
 
 	for _, lblv := range l {
@@ -94,7 +94,7 @@ func (a *mockAppender) Rollback() error {
 	return nil
 }
 
-func (a *mockAppender) AppendExemplar(ref uint64, l labels.Labels, e exemplar.Exemplar) (uint64, error) {
+func (a *mockAppender) AppendExemplar(ref storage.SeriesRef, l labels.Labels, e exemplar.Exemplar) (storage.SeriesRef, error) {
 	return 0, errNotImplemented
 }
 

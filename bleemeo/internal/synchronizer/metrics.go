@@ -641,6 +641,34 @@ func (s *Synchronizer) UpdateUnitsAndThresholds(firstUpdate bool) {
 	}
 }
 
+func (s *Synchronizer) isOwnedMetric(metric metricPayload) bool {
+	if metric.AgentID == s.agentID {
+		return true
+	}
+
+	agentUUID, present := types.TextToLabels(metric.LabelsText)[types.LabelScraperUUID]
+
+	if present && agentUUID == s.agentID {
+		return true
+	}
+
+	scraperName, present := types.TextToLabels(metric.LabelsText)[types.LabelScraper]
+	if present && scraperName == s.option.BlackboxScraperName {
+		return true
+	}
+
+	// Only monitors have metric that are owned by multiple agents
+	agentTypeID, found := s.getAgentType(bleemeoTypes.AgentTypeMonitor)
+	if found {
+		agents := s.option.Cache.AgentsByUUID()
+		if agentTypeID == agents[metric.AgentID].AgentType {
+			return false
+		}
+	}
+
+	return true
+}
+
 // metricsListWithAgentID fetches the list of all metrics for a given agent, and returns a UUID:metric mapping.
 func (s *Synchronizer) metricsListWithAgentID(fetchInactive bool) (map[string]bleemeoTypes.Metric, error) {
 	params := map[string]string{
@@ -673,18 +701,10 @@ func (s *Synchronizer) metricsListWithAgentID(fetchInactive bool) (map[string]bl
 			continue
 		}
 
-		// Do not modify metrics declared by other agents when the target agent is a monitor
-		agentUUID, present := types.TextToLabels(metric.LabelsText)[types.LabelScraperUUID]
-
-		if present && agentUUID != s.agentID {
+		// If the metric is associated with another agent, make sure we "own" the metric.
+		// This may not be the case for monitor because multiple agent will process such metrics.
+		if !s.isOwnedMetric(metric) {
 			continue
-		}
-
-		if !present {
-			scraperName, present := types.TextToLabels(metric.LabelsText)[types.LabelScraper]
-			if present && scraperName != s.option.BlackboxScraperName {
-				continue
-			}
 		}
 
 		metricsByUUID[metric.ID] = metric.metricFromAPI(metricsByUUID[metric.ID].FirstSeenAt)

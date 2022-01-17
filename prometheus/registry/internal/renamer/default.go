@@ -3,7 +3,7 @@ package renamer
 import (
 	"glouton/types"
 
-	"github.com/prometheus/prometheus/pkg/labels"
+	"github.com/prometheus/prometheus/model/labels"
 )
 
 func GetDefaultRules() []Rule {

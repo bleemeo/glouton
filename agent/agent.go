@@ -86,7 +86,7 @@ import (
 	processInput "glouton/inputs/process"
 
 	"github.com/google/uuid"
-	"github.com/prometheus/prometheus/pkg/labels"
+	"github.com/prometheus/prometheus/model/labels"
 	"gopkg.in/yaml.v3"
 )
 
@@ -941,7 +941,7 @@ func (a *agent) run() { //nolint:cyclop
 			Store:                   filteredStore,
 			SNMP:                    a.snmpManager.Targets(),
 			SNMPOnlineTarget:        a.snmpManager.OnlineCount,
-			Acc:                     acc,
+			PushPoints:              a.threshold.WithPusher(a.gathererRegistry.WithTTL(5 * time.Minute)),
 			Discovery:               a.discovery,
 			MonitorManager:          a.monitorManager,
 			UpdateMetricResolution:  a.updateMetricResolution,
@@ -961,6 +961,17 @@ func (a *agent) run() { //nolint:cyclop
 
 		a.gathererRegistry.UpdateRelabelHook(ctx, a.bleemeoConnector.RelabelHook)
 		tasks = append(tasks, taskInfo{a.bleemeoConnector.Run, "Bleemeo SAAS connector"})
+
+		_, err = a.gathererRegistry.RegisterPushPointsCallback(registry.RegistrationOption{
+			Description: "Bleemeo connector",
+			JitterSeed:  baseJitter,
+			Interval:    defaultInterval,
+		},
+			a.bleemeoConnector.EmitInternalMetric,
+		)
+		if err != nil {
+			logger.Printf("unable to add bleemeo connector metrics: %v", err)
+		}
 	}
 
 	sentry.ConfigureScope(func(scope *sentry.Scope) {

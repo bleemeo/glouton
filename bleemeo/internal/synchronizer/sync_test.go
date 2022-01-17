@@ -32,7 +32,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/google/uuid"
-	"github.com/prometheus/prometheus/pkg/labels"
+	"github.com/prometheus/prometheus/model/labels"
 )
 
 const (
@@ -102,9 +102,12 @@ var (
 	}
 	newMetricActiveMonitor = metricPayload{
 		Metric: bleemeoTypes.Metric{
-			ID:          "52b9c46e-00b9-4e80-a852-781426a3a193",
-			AgentID:     newMonitor.AgentID,
-			LabelsText:  "__name__=\"probe_whatever\",instance=\"http://bleemeo.com\"",
+			ID:      "52b9c46e-00b9-4e80-a852-781426a3a193",
+			AgentID: newMonitor.AgentID,
+			LabelsText: fmt.Sprintf(
+				"__name__=\"probe_whatever\",instance=\"http://bleemeo.com\",scraper_uuid=\"%s\"",
+				newAgent.ID,
+			),
 			ServiceID:   newMonitor.ID,
 			FirstSeenAt: time.Unix(0, 0),
 		},
@@ -133,6 +136,11 @@ var (
 		ID:          "823b6a83-d70a-4768-be64-50450b282a30",
 		Name:        "snmp",
 	}
+	agentTypeMonitor bleemeoTypes.AgentType = bleemeoTypes.AgentType{
+		DisplayName: "A website monitored with connection check",
+		ID:          "41afe63c-fa1c-4b84-b92b-028269101fde",
+		Name:        "connection_check",
+	}
 
 	agentConfigAgent = bleemeoTypes.AgentConfig{
 		ID:               "cab64659-a765-4878-84d8-c7b0112aaecb",
@@ -144,6 +152,12 @@ var (
 		ID:               "a89d16c1-55be-4d89-9c9b-489c2d86d3fa",
 		AccountConfig:    newAccountConfig.ID,
 		AgentType:        agentTypeSNMP.ID,
+		MetricResolution: 60,
+	}
+	agentConfigMonitor = bleemeoTypes.AgentConfig{
+		ID:               "135aaa9d-5b73-4c38-b271-d3c98c039aef",
+		AccountConfig:    newAccountConfig.ID,
+		AgentType:        agentTypeMonitor.ID,
 		MetricResolution: 60,
 	}
 
@@ -305,7 +319,7 @@ func newAPI() *mockAPI {
 				case "true":
 					metricPtr.DeactivatedAt = time.Time{}
 				case "false":
-					metricPtr.DeactivatedAt = time.Now()
+					metricPtr.DeactivatedAt = api.now.Now()
 				default:
 					return fmt.Errorf("%w %v", errUnknownBool, boolText)
 				}
@@ -326,6 +340,7 @@ func newAPI() *mockAPI {
 	api.resources["agenttype"].SetStore(
 		agentTypeAgent,
 		agentTypeSNMP,
+		agentTypeMonitor,
 	)
 	api.resources["accountconfig"].SetStore(
 		newAccountConfig,
@@ -333,6 +348,7 @@ func newAPI() *mockAPI {
 	api.resources["agentconfig"].SetStore(
 		agentConfigAgent,
 		agentConfigSNMP,
+		agentConfigMonitor,
 	)
 
 	return api
@@ -1205,6 +1221,65 @@ func TestSyncWithSNMP(t *testing.T) {
 				t.Errorf("metrics mismatch (-want +got)\n%s", diff)
 			}
 		})
+	}
+
+	helper.api.resources["metric"].AddStore(metricPayload{
+		Metric: bleemeoTypes.Metric{
+			ID:         "4",
+			AgentID:    idAgentSNMP,
+			LabelsText: fmt.Sprintf(`__name__="ifInOctets",snmp_target="%s"`, snmpAddress),
+		},
+		Name: "ifInOctets",
+	})
+
+	helper.api.now.Advance(2 * time.Hour)
+
+	if err := helper.runOnce(t); err != nil {
+		t.Fatal(err)
+	}
+
+	helper.api.resources["metric"].Store(&metrics)
+
+	wantMetrics = []metricPayload{
+		{
+			Metric: bleemeoTypes.Metric{
+				ID:         "1",
+				AgentID:    idAgentMain,
+				LabelsText: `__name__="agent_status"`,
+			},
+			Name: "agent_status",
+		},
+		{
+			Metric: bleemeoTypes.Metric{
+				ID:            "2",
+				AgentID:       idAgentMain,
+				LabelsText:    `__name__="cpu_used"`,
+				DeactivatedAt: helper.api.now.Now(),
+			},
+			Name: "cpu_used",
+		},
+		{
+			Metric: bleemeoTypes.Metric{
+				ID:            "3",
+				AgentID:       idAgentSNMP,
+				LabelsText:    fmt.Sprintf(`__name__="ifOutOctets",snmp_target="%s"`, snmpAddress),
+				DeactivatedAt: helper.api.now.Now(),
+			},
+			Name: "ifOutOctets",
+		},
+		{
+			Metric: bleemeoTypes.Metric{
+				ID:            "4",
+				AgentID:       idAgentSNMP,
+				LabelsText:    fmt.Sprintf(`__name__="ifInOctets",snmp_target="%s"`, snmpAddress),
+				DeactivatedAt: helper.api.now.Now(),
+			},
+			Name: "ifInOctets",
+		},
+	}
+
+	if diff := cmp.Diff(wantMetrics, metrics, cmpopts.EquateEmpty(), optMetricSort); diff != "" {
+		t.Errorf("metrics mismatch (-want +got)\n%s", diff)
 	}
 }
 

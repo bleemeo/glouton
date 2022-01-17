@@ -24,7 +24,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/prometheus/prometheus/pkg/labels"
+	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/tsdb/chunkenc"
 )
@@ -86,7 +86,7 @@ func (q querier) LabelValues(name string, matchers ...*labels.Matcher) ([]string
 }
 
 // LabelNames returns all the unique label names present in the block in sorted order.
-func (q querier) LabelNames() ([]string, storage.Warnings, error) {
+func (q querier) LabelNames(...*labels.Matcher) ([]string, storage.Warnings, error) {
 	return nil, nil, errNotImplemented
 }
 

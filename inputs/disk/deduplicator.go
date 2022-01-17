@@ -5,10 +5,11 @@ import (
 	"strings"
 
 	"github.com/influxdata/telegraf"
+	"github.com/influxdata/telegraf/plugins/inputs/disk"
 )
 
 type deduplicator struct {
-	telegraf.Input
+	Input    *disk.DiskStats
 	hostroot string
 }
 
@@ -20,6 +21,20 @@ func (d deduplicator) Gather(acc telegraf.Accumulator) error {
 	tmp.Send(acc)
 
 	return err
+}
+
+// SampleConfig returns the default configuration of the Processor.
+func (d deduplicator) SampleConfig() string {
+	return d.Input.SampleConfig()
+}
+
+// Description returns a one-sentence description on the Processor.
+func (d deduplicator) Description() string {
+	return d.Input.Description()
+}
+
+func (d deduplicator) Init() error {
+	return d.Input.Init()
 }
 
 func deduplicate(acc *internal.StoreAccumulator, hostroot string) {

@@ -34,8 +34,8 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	dto "github.com/prometheus/client_model/go"
-	"github.com/prometheus/prometheus/pkg/labels"
-	"github.com/prometheus/prometheus/pkg/relabel"
+	"github.com/prometheus/prometheus/model/labels"
+	"github.com/prometheus/prometheus/model/relabel"
 )
 
 const testAgentID = "fcdc81a8-5bce-4305-8108-8e1e75439329"

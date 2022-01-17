@@ -55,7 +55,7 @@ func (r *SimpleRuler) ApplyRules(ctx context.Context, now time.Time, points []ty
 	r.st.PushPoints(ctx, points)
 
 	for _, rule := range r.rules {
-		vector, err := rule.Eval(ctx, now, r.query, nil)
+		vector, err := rule.Eval(ctx, now, r.query, nil, 100)
 		if err != nil {
 			logger.V(2).Printf("rule %v failed: %v", rule.Query().String(), err)
 
@@ -89,7 +89,7 @@ func (r *SimpleRuler) ApplyRulesMFS(ctx context.Context, now time.Time, mfs []*d
 	r.st.PushPoints(ctx, points)
 
 	for _, rule := range r.rules {
-		vector, err := rule.Eval(ctx, now, r.query, nil)
+		vector, err := rule.Eval(ctx, now, r.query, nil, 100)
 		if err != nil {
 			logger.V(2).Printf("rule %v failed: %v", rule.Query().String(), err)
 

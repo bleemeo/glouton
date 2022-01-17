@@ -31,7 +31,7 @@ import (
 	"time"
 
 	"github.com/go-kit/log"
-	"github.com/prometheus/prometheus/pkg/labels"
+	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/promql"
 	"github.com/prometheus/prometheus/promql/parser"
 	"github.com/prometheus/prometheus/rules"
@@ -293,7 +293,7 @@ func (agr *ruleGroup) runGroup(ctx context.Context, now time.Time, rm *Manager) 
 		prevState := rule.State()
 		queryable := &store.CountingQueryable{Queryable: rm.queryable}
 
-		_, err := rule.Eval(ctx, now, rules.EngineQueryFunc(rm.engine, queryable), nil)
+		_, err := rule.Eval(ctx, now, rules.EngineQueryFunc(rm.engine, queryable), nil, 100)
 		if err != nil {
 			return types.MetricPoint{}, err
 		}
@@ -591,7 +591,7 @@ func (agr *ruleGroup) newRule(exp string, metricName string, threshold string, s
 
 	newRule := rules.NewAlertingRule(metricName+"_"+threshold,
 		newExp, promAlertTime, nil, labels.Labels{labels.Label{Name: "severity", Value: severity}},
-		labels.Labels{}, true, log.With(logger, "alerting_rule", metricName+"_"+threshold))
+		labels.Labels{}, "", true, log.With(logger, "alerting_rule", metricName+"_"+threshold))
 
 	agr.rules[threshold] = newRule
 
