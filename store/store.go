@@ -372,11 +372,14 @@ func (s *Store) PushPoints(_ context.Context, points []types.MetricPoint) {
 	s.lock.Unlock()
 	s.resetRuleLock.Lock()
 
-	if newMetrics && s.resetRuleCallback != nil {
-		s.resetRuleCallback()
-	}
+	cb := s.resetRuleCallback
 
 	s.resetRuleLock.Unlock()
+
+	if newMetrics && cb != nil {
+		cb()
+	}
+
 	s.notifeeLock.Lock()
 
 	for _, cb := range s.notifyCallbacks {
