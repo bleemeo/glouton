@@ -686,6 +686,8 @@ func (a *agent) run() { //nolint:cyclop
 	// rulesManager := rules.NewManager(ctx, a.store, a.gathererRegistry.Appendable(5*time.Minute))
 	a.rulesManager = rules.NewManager(ctx, a.store, a.gathererRegistry.Appendable(5*time.Minute), a.metricResolution)
 
+	a.store.SetResetRuleCallback(a.rulesManager.ResetInactiveRules)
+
 	_, err = a.gathererRegistry.RegisterPushPointsCallback(
 		registry.RegistrationOption{
 			Description: "rulesManager",
