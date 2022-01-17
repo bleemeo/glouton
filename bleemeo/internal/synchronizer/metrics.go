@@ -37,14 +37,17 @@ import (
 // agentStatusName is the name of the special metrics used to store the agent connection status.
 const agentStatusName = "agent_status"
 
-const stringFalse = "False"
+// Those constant are here to make linter happy. We should likely drop them and use boolean type,
+// they are only used in API call and I'm pretty sure the API accept boolean.
+const (
+	stringFalse = "False"
+	stringTrue  = "True"
+)
 
-const stringTrue = "True"
-
-// GracePeriod is the minimum time for which the agent should not deactivate
+// gracePeriod is the minimum time for which the agent should not deactivate
 // a metric between firstSeen and now. 6 Minutes is the minimum time,
 // as the prometheus alert time is 5 minutes.
-const GracePeriod = 6 * time.Minute
+const gracePeriod = 6 * time.Minute
 
 var (
 	errRetryLater     = errors.New("metric registration should be retried later")
@@ -1409,7 +1412,7 @@ func (s *Synchronizer) metricDeactivate(localMetrics []types.Metric) error {
 
 	registeredMetrics := s.option.Cache.MetricsByUUID()
 	for k, v := range registeredMetrics {
-		if s.now().Sub(v.FirstSeenAt) < GracePeriod {
+		if s.now().Sub(v.FirstSeenAt) < gracePeriod {
 			continue
 		}
 
