@@ -314,14 +314,25 @@ func newAPI() *mockAPI {
 
 			err := json.NewDecoder(bytes.NewReader(body)).Decode(&data)
 
-			if boolText, ok := data["active"].(string); ok {
-				switch strings.ToLower(boolText) {
+			switch value := data["active"].(type) {
+			case string:
+				switch strings.ToLower(value) {
 				case "true":
 					metricPtr.DeactivatedAt = time.Time{}
 				case "false":
 					metricPtr.DeactivatedAt = api.now.Now()
 				default:
-					return fmt.Errorf("%w %v", errUnknownBool, boolText)
+					return fmt.Errorf("%w %v", errUnknownBool, value)
+				}
+			case bool:
+				if value {
+					metricPtr.DeactivatedAt = time.Time{}
+				} else {
+					metricPtr.DeactivatedAt = api.now.Now()
+				}
+			default:
+				if _, ok := data["active"]; ok {
+					return fmt.Errorf("%w type invalid for a bool %v", errUnknownBool, value)
 				}
 			}
 
