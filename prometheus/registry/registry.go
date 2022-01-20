@@ -141,9 +141,13 @@ type RegistrationOption struct {
 	Interval     time.Duration
 	Timeout      time.Duration
 	StopCallback func()
-	ExtraLabels  map[string]string
-	Rules        []SimpleRule
-	rrules       []*rules.RecordingRule
+	// ExtraLabels are labels added. If a labels already exists, extraLabels take precedence.
+	ExtraLabels map[string]string
+	// DisablePeriodicGather skip the periodic calls which forward gathered points to r.PushPoint.
+	// The periodic call use the Interval. When Interval is 0, the dynmaic interval set by UpdateDelay is used.
+	DisablePeriodicGather bool
+	Rules                 []SimpleRule
+	rrules                []*rules.RecordingRule
 }
 
 func (opt *RegistrationOption) buildRules() error {
@@ -369,10 +373,10 @@ func (r *Registry) Run(ctx context.Context) error {
 // This callback will be called for each collection period. It's mostly used to
 // add Telegraf input (using glouton/collector).
 func (r *Registry) RegisterPushPointsCallback(opt RegistrationOption, f func(context.Context, time.Time)) (int, error) {
-	return r.registerPushPointsCallback(opt, f, true)
+	return r.registerPushPointsCallback(opt, f)
 }
 
-func (r *Registry) registerPushPointsCallback(opt RegistrationOption, f func(context.Context, time.Time), startLoop bool) (int, error) {
+func (r *Registry) registerPushPointsCallback(opt RegistrationOption, f func(context.Context, time.Time)) (int, error) {
 	r.init()
 
 	if err := opt.buildRules(); err != nil {
@@ -391,7 +395,7 @@ func (r *Registry) registerPushPointsCallback(opt RegistrationOption, f func(con
 	}
 	r.setupGatherer(ctx, reg, pushGatherer{fun: f})
 
-	return r.addRegistration(reg, startLoop)
+	return r.addRegistration(reg)
 }
 
 // UpdateRelabelHook change the hook used just before relabeling and wait for all pending metrics emission.
@@ -624,12 +628,7 @@ func (r *Registry) scrapeDone() {
 }
 
 // RegisterGatherer add a new gatherer to the list of metric sources.
-//
-// If pushPoints is true, the gathere will be periodic called and points will be forwarded to r.PushPoint.
-// In the case, the period is interval. If interval is 0, the UpdateDelay value is used (default to 10 seconds).
-// stopCallback is called when Unregister() is used.
-// extraLabels add labels added. If a labels already exists, extraLabels take precedence.
-func (r *Registry) RegisterGatherer(opt RegistrationOption, gatherer prometheus.Gatherer, pushPoints bool) (int, error) {
+func (r *Registry) RegisterGatherer(opt RegistrationOption, gatherer prometheus.Gatherer) (int, error) {
 	r.init()
 
 	if err := opt.buildRules(); err != nil {
@@ -647,10 +646,10 @@ func (r *Registry) RegisterGatherer(opt RegistrationOption, gatherer prometheus.
 	}
 	r.setupGatherer(ctx, reg, gatherer)
 
-	return r.addRegistration(reg, pushPoints)
+	return r.addRegistration(reg)
 }
 
-func (r *Registry) addRegistration(reg *registration, startLoop bool) (int, error) {
+func (r *Registry) addRegistration(reg *registration) (int, error) {
 	id := 1
 
 	_, ok := r.registrations[id]
@@ -665,7 +664,7 @@ func (r *Registry) addRegistration(reg *registration, startLoop bool) (int, erro
 
 	r.registrations[id] = reg
 
-	if startLoop {
+	if !reg.option.DisablePeriodicGather {
 		if g, ok := reg.gatherer.source.(GathererWithScheduleUpdate); ok {
 			g.SetScheduleUpdate(func(runAt time.Time) {
 				r.scheduleUpdate(id, reg, runAt)
@@ -945,12 +944,12 @@ func (r *Registry) AddDefaultCollector() {
 
 	_, _ = r.RegisterGatherer(
 		RegistrationOption{
-			Description: "go & process collector",
-			JitterSeed:  baseJitter,
-			Interval:    defaultInterval,
+			Description:           "go & process collector",
+			JitterSeed:            baseJitter,
+			Interval:              defaultInterval,
+			DisablePeriodicGather: r.option.MetricFormat != types.MetricFormatPrometheus,
 		},
 		r.internalRegistry,
-		r.option.MetricFormat == types.MetricFormatPrometheus,
 	)
 }
 
@@ -971,12 +970,12 @@ func (r *Registry) Exporter() http.Handler {
 	}))
 	_, _ = r.RegisterGatherer(
 		RegistrationOption{
-			Description: "/metrics collector",
-			JitterSeed:  baseJitter,
-			Interval:    defaultInterval,
+			Description:           "/metrics collector",
+			JitterSeed:            baseJitter,
+			Interval:              defaultInterval,
+			DisablePeriodicGather: r.option.MetricFormat != types.MetricFormatPrometheus,
 		},
 		reg,
-		r.option.MetricFormat == types.MetricFormatPrometheus,
 	)
 
 	return handler

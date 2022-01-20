@@ -438,7 +438,6 @@ func (a *agent) updateSNMPResolution(resolution time.Duration) {
 				Rules:       registry.DefaultSNMPRules(),
 			},
 			target.Gatherer,
-			true,
 		)
 		if err != nil {
 			logger.Printf("Unable to add SNMP scrapper for target %s: %v", target.Address, err)
@@ -834,7 +833,6 @@ func (a *agent) run() { //nolint:cyclop
 				ExtraLabels: target.ExtraLabels,
 			},
 			target,
-			true,
 		)
 		if err != nil {
 			logger.Printf("Unable to add Prometheus scrapper for target %s: %v", target.URL.String(), err)

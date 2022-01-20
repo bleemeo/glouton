@@ -120,7 +120,7 @@ func TestRegistry_Register(t *testing.T) {
 	}
 	gather2.fillResponse()
 
-	if id1, err = reg.RegisterGatherer(RegistrationOption{}, gather1, false); err != nil {
+	if id1, err = reg.RegisterGatherer(RegistrationOption{DisablePeriodicGather: true}, gather1); err != nil {
 		t.Errorf("reg.RegisterGatherer(gather1) failed: %v", err)
 	}
 
@@ -140,11 +140,11 @@ func TestRegistry_Register(t *testing.T) {
 		t.Errorf("gather1.callCount = %v, want 1", gather1.callCount)
 	}
 
-	if id1, err = reg.RegisterGatherer(RegistrationOption{ExtraLabels: map[string]string{"name": "value"}}, gather1, false); err != nil {
+	if id1, err = reg.RegisterGatherer(RegistrationOption{ExtraLabels: map[string]string{"name": "value"}, DisablePeriodicGather: true}, gather1); err != nil {
 		t.Errorf("re-reg.RegisterGatherer(gather1) failed: %v", err)
 	}
 
-	if id2, err = reg.RegisterGatherer(RegistrationOption{}, gather2, false); err != nil {
+	if id2, err = reg.RegisterGatherer(RegistrationOption{DisablePeriodicGather: true}, gather2); err != nil {
 		t.Errorf("re-reg.RegisterGatherer(gather2) failed: %v", err)
 	}
 
@@ -178,11 +178,11 @@ func TestRegistry_Register(t *testing.T) {
 
 	stopCallCount := 0
 
-	if id1, err = reg.RegisterGatherer(RegistrationOption{StopCallback: func() { stopCallCount++ }, ExtraLabels: map[string]string{"dummy": "value", "empty-value-to-dropped": ""}}, gather1, false); err != nil {
+	if id1, err = reg.RegisterGatherer(RegistrationOption{StopCallback: func() { stopCallCount++ }, ExtraLabels: map[string]string{"dummy": "value", "empty-value-to-dropped": ""}, DisablePeriodicGather: true}, gather1); err != nil {
 		t.Errorf("reg.RegisterGatherer(gather1) failed: %v", err)
 	}
 
-	if _, err = reg.RegisterGatherer(RegistrationOption{}, gather2, false); err != nil {
+	if _, err = reg.RegisterGatherer(RegistrationOption{DisablePeriodicGather: true}, gather2); err != nil {
 		t.Errorf("re-reg.RegisterGatherer(gather2) failed: %v", err)
 	}
 
@@ -630,12 +630,12 @@ func TestRegistry_run(t *testing.T) {
 			// If this occur, the first will run while the other aren't yet registered.
 			time.Sleep(time.Until(time.Now().Truncate(250 * time.Millisecond).Add(250 * time.Millisecond).Add(time.Millisecond)))
 
-			id1, err := reg.RegisterGatherer(RegistrationOption{}, gather1, false)
+			id1, err := reg.RegisterGatherer(RegistrationOption{DisablePeriodicGather: true}, gather1)
 			if err != nil {
 				t.Error(err)
 			}
 
-			id2, err := reg.RegisterGatherer(RegistrationOption{}, gather2, true)
+			id2, err := reg.RegisterGatherer(RegistrationOption{DisablePeriodicGather: false}, gather2)
 			if err != nil {
 				t.Error(err)
 			}
@@ -748,6 +748,9 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint: cyclop
 					},
 				},
 			},
+			opt: RegistrationOption{
+				DisablePeriodicGather: true,
+			},
 			want: []types.MetricPoint{
 				{
 					Labels: map[string]string{
@@ -812,6 +815,9 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint: cyclop
 						BleemeoItem: "/srv",
 					},
 				},
+			},
+			opt: RegistrationOption{
+				DisablePeriodicGather: true,
 			},
 			want: []types.MetricPoint{
 				{
@@ -879,6 +885,9 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint: cyclop
 						BleemeoItem: "/srv",
 					},
 				},
+			},
+			opt: RegistrationOption{
+				DisablePeriodicGather: true,
 			},
 			want: []types.MetricPoint{
 				{
@@ -951,6 +960,9 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint: cyclop
 					},
 				},
 			},
+			opt: RegistrationOption{
+				DisablePeriodicGather: true,
+			},
 			want: []types.MetricPoint{
 				{
 					Labels: map[string]string{
@@ -1017,6 +1029,9 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint: cyclop
 					},
 				},
 			},
+			opt: RegistrationOption{
+				DisablePeriodicGather: true,
+			},
 			want: []types.MetricPoint{
 				{
 					Labels: map[string]string{
@@ -1057,7 +1072,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint: cyclop
 					types.LabelMetaSNMPTarget: "1.2.3.4:8080",
 					"another":                 "value",
 				},
-				Rules: DefaultSNMPRules(),
+				Rules:                 DefaultSNMPRules(),
+				DisablePeriodicGather: true,
 			},
 			want: []types.MetricPoint{
 				{
@@ -1118,7 +1134,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint: cyclop
 				ExtraLabels: map[string]string{
 					types.LabelMetaSNMPTarget: "192.168.1.2",
 				},
-				Rules: DefaultSNMPRules(),
+				Rules:                 DefaultSNMPRules(),
+				DisablePeriodicGather: true,
 			},
 			want: []types.MetricPoint{
 				{
@@ -1228,7 +1245,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint: cyclop
 					types.LabelMetaSNMPTarget: "192.168.1.2",
 					"extranLabels":            "are ignored by pushpoints. So snmp target will be ignored, like rules",
 				},
-				Rules: DefaultSNMPRules(),
+				Rules:                 DefaultSNMPRules(),
+				DisablePeriodicGather: true,
 			},
 			want: []types.MetricPoint{
 				{
@@ -1296,7 +1314,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint: cyclop
 				ExtraLabels: map[string]string{
 					types.LabelMetaSNMPTarget: "192.168.1.2",
 				},
-				Rules: DefaultSNMPRules(),
+				Rules:                 DefaultSNMPRules(),
+				DisablePeriodicGather: true,
 			},
 			want: sortMetricPoints([]types.MetricPoint{
 				{
@@ -1403,7 +1422,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint: cyclop
 				ExtraLabels: map[string]string{
 					types.LabelMetaSNMPTarget: "192.168.1.2",
 				},
-				Rules: DefaultSNMPRules(),
+				Rules:                 DefaultSNMPRules(),
+				DisablePeriodicGather: true,
 			},
 			want: sortMetricPoints([]types.MetricPoint{
 				{
@@ -1503,7 +1523,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint: cyclop
 				ExtraLabels: map[string]string{
 					types.LabelMetaSNMPTarget: "192.168.1.2",
 				},
-				Rules: DefaultSNMPRules(),
+				Rules:                 DefaultSNMPRules(),
+				DisablePeriodicGather: true,
 			},
 			want: sortMetricPoints([]types.MetricPoint{
 				{
@@ -1685,7 +1706,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint: cyclop
 				ExtraLabels: map[string]string{
 					types.LabelMetaSNMPTarget: "192.168.1.2",
 				},
-				Rules: DefaultSNMPRules(),
+				Rules:                 DefaultSNMPRules(),
+				DisablePeriodicGather: true,
 			},
 			want: sortMetricPoints([]types.MetricPoint{
 				{
@@ -1826,7 +1848,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint: cyclop
 					func(c context.Context, t time.Time) {
 						reg.WithTTL(5*time.Minute).PushPoints(c, tt.input)
 					},
-					false,
 				)
 				if err != nil {
 					t.Fatal(err)
@@ -1852,7 +1873,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint: cyclop
 					&fakeGatherer{
 						response: metricPointsToFamilies(tt.input, time.Time{}, nil, nil),
 					},
-					false,
 				)
 				if err != nil {
 					t.Fatal(err)

@@ -42,12 +42,12 @@ func (r *Registry) AddNodeExporter(option node.Option) error {
 
 	_, err = r.RegisterGatherer(
 		RegistrationOption{
-			Description: "node_exporter",
-			JitterSeed:  baseJitter,
-			Interval:    defaultInterval,
+			Description:           "node_exporter",
+			JitterSeed:            baseJitter,
+			Interval:              defaultInterval,
+			DisablePeriodicGather: r.option.MetricFormat != types.MetricFormatPrometheus,
 		},
 		reg,
-		r.option.MetricFormat == types.MetricFormatPrometheus,
 	)
 
 	return err

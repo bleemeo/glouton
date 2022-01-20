@@ -56,14 +56,14 @@ func (d *Discovery) createPrometheusMemcached(service Service) error {
 
 	id, err := d.metricRegistry.RegisterGatherer(
 		registry.RegistrationOption{
-			Description:  "memcached exporter",
-			JitterSeed:   hash,
-			Interval:     defaultInterval,
-			StopCallback: stopCallback,
-			ExtraLabels:  lbls,
+			Description:           "memcached exporter",
+			JitterSeed:            hash,
+			Interval:              defaultInterval,
+			StopCallback:          stopCallback,
+			ExtraLabels:           lbls,
+			DisablePeriodicGather: d.metricFormat != types.MetricFormatPrometheus,
 		},
 		reg,
-		d.metricFormat == types.MetricFormatPrometheus,
 	)
 	if err != nil {
 		return err
