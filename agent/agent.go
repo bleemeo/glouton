@@ -688,8 +688,9 @@ func (a *agent) run() { //nolint:cyclop
 
 	_, err = a.gathererRegistry.RegisterAppenderCallback(
 		registry.RegistrationOption{
-			Description: "rulesManager",
-			JitterSeed:  baseJitterPlus,
+			Description:        "rulesManager",
+			JitterSeed:         baseJitterPlus,
+			NoLabelsAlteration: true,
 		},
 		registry.AppenderRegistrationOption{},
 		a.rulesManager,

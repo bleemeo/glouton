@@ -142,7 +142,8 @@ type RegistrationOption struct {
 	Timeout      time.Duration
 	StopCallback func()
 	// ExtraLabels are labels added. If a labels already exists, extraLabels take precedence.
-	ExtraLabels map[string]string
+	ExtraLabels        map[string]string
+	NoLabelsAlteration bool
 	// DisablePeriodicGather skip the periodic calls which forward gathered points to r.PushPoint.
 	// The periodic call use the Interval. When Interval is 0, the dynmaic interval set by UpdateDelay is used.
 	DisablePeriodicGather bool
@@ -1127,7 +1128,9 @@ func (r *Registry) scrape(ctx context.Context, t0 time.Time, reg *registration) 
 		}
 	}
 
-	points = r.renamer.Rename(points)
+	if !reg.option.NoLabelsAlteration {
+		points = r.renamer.Rename(points)
+	}
 
 	reg.l.Lock()
 	reg.lastScrape = t0
@@ -1301,16 +1304,24 @@ func (r *Registry) applyRelabel(input map[string]string) (labels.Labels, types.M
 }
 
 func (r *Registry) setupGatherer(ctx context.Context, reg *registration, source prometheus.Gatherer) {
-	extraLabels := r.addMetaLabels(reg.option.ExtraLabels)
+	var (
+		promLabels  labels.Labels
+		annotations types.MetricAnnotations
+	)
 
-	reg.relabelHookSkip = false
+	if !reg.option.NoLabelsAlteration {
+		extraLabels := r.addMetaLabels(reg.option.ExtraLabels)
 
-	if r.relabelHook != nil {
-		extraLabels, reg.relabelHookSkip = r.relabelHook(ctx, extraLabels)
-		reg.lastRebalHookRetry = time.Now()
+		reg.relabelHookSkip = false
+
+		if r.relabelHook != nil {
+			extraLabels, reg.relabelHookSkip = r.relabelHook(ctx, extraLabels)
+			reg.lastRebalHookRetry = time.Now()
+		}
+
+		promLabels, annotations = r.applyRelabel(extraLabels)
 	}
 
-	promLabels, annotations := r.applyRelabel(extraLabels)
 	g := newLabeledGatherer(source, promLabels, reg.option.rrules, annotations)
 	reg.gatherer = g
 }

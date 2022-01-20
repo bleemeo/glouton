@@ -690,6 +690,8 @@ func Test_manager(t *testing.T) {
 
 			store := store.New(time.Hour)
 			reg, err := registry.New(registry.Option{
+				FQDN:        "example.com",
+				GloutonPort: "8015",
 				PushPoint: pushFunction(func(ctx context.Context, points []types.MetricPoint) {
 					l.Lock()
 					defer l.Unlock()
@@ -700,6 +702,12 @@ func Test_manager(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+
+			reg.UpdateRelabelHook(ctx, func(ctx context.Context, labels map[string]string) (newLabel map[string]string, retryLater bool) {
+				labels[types.LabelMetaBleemeoUUID] = "801d4698-3a34-474e-b638-81f8a2523d0e"
+
+				return labels, false
+			})
 
 			ruleManager := newManager(ctx, store, defaultLinuxRecordingRules, now.Add(-7*time.Minute), 15*time.Second)
 
@@ -720,6 +728,7 @@ func Test_manager(t *testing.T) {
 
 			id, err := reg.RegisterAppenderCallback(
 				registry.RegistrationOption{
+					NoLabelsAlteration:    true,
 					DisablePeriodicGather: true,
 				},
 				registry.AppenderRegistrationOption{},
@@ -955,6 +964,7 @@ func Test_Rebuild_Rules(t *testing.T) {
 
 	id, err := reg.RegisterAppenderCallback(
 		registry.RegistrationOption{
+			NoLabelsAlteration:    true,
 			DisablePeriodicGather: true,
 		},
 		registry.AppenderRegistrationOption{},
@@ -1177,6 +1187,7 @@ func Test_NotStatutsChangeOnStart(t *testing.T) {
 
 			id, err := reg.RegisterAppenderCallback(
 				registry.RegistrationOption{
+					NoLabelsAlteration:    true,
 					DisablePeriodicGather: true,
 				},
 				registry.AppenderRegistrationOption{},
