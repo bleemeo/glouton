@@ -650,15 +650,11 @@ func (agr *ruleGroup) Query() string {
 
 func statusFromThreshold(s string) types.Status {
 	switch s {
-	case lowWarningState:
-	case highWarningState:
+	case lowWarningState, highWarningState:
 		return types.StatusWarning
-	case lowCriticalState:
-	case highCriticalState:
+	case lowCriticalState, highCriticalState:
 		return types.StatusCritical
 	default:
 		return types.StatusUnknown
 	}
-
-	return types.StatusUnknown
 }
