@@ -10,7 +10,9 @@ import (
 	dto "github.com/prometheus/client_model/go"
 	"github.com/prometheus/common/expfmt"
 	"github.com/prometheus/common/model"
+	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/promql"
+	"github.com/prometheus/prometheus/storage"
 )
 
 var (
@@ -50,11 +52,11 @@ func FamiliesToMetricPoints(now time.Time, families []*dto.MetricFamily) []types
 }
 
 // SamplesToMetricFamily convert a list of sample to a MetricFamilty of given type.
-// The mType could be nil which will use the default of MetricType_GAUGE.
+// The mType could be nil which will use the default of MetricType_UNTYPED.
 // All samples must belong to the same family, that is have the same name.
 func SamplesToMetricFamily(samples []promql.Sample, mType *dto.MetricType) (*dto.MetricFamily, error) {
 	if mType == nil {
-		mType = dto.MetricType_GAUGE.Enum()
+		mType = dto.MetricType_UNTYPED.Enum()
 	}
 
 	if len(samples) == 0 {
@@ -64,6 +66,7 @@ func SamplesToMetricFamily(samples []promql.Sample, mType *dto.MetricType) (*dto
 	mf := &dto.MetricFamily{
 		Name:   proto.String(samples[0].Metric.Get(types.LabelName)),
 		Type:   mType,
+		Help:   proto.String(""),
 		Metric: make([]*dto.Metric, 0, len(samples)),
 	}
 
@@ -73,7 +76,8 @@ func SamplesToMetricFamily(samples []promql.Sample, mType *dto.MetricType) (*dto
 		}
 
 		metric := &dto.Metric{
-			Label: make([]*dto.LabelPair, 0, len(pt.Metric)-1),
+			Label:       make([]*dto.LabelPair, 0, len(pt.Metric)-1),
+			TimestampMs: proto.Int64(pt.T),
 		}
 
 		for _, l := range pt.Metric {
@@ -102,4 +106,23 @@ func SamplesToMetricFamily(samples []promql.Sample, mType *dto.MetricType) (*dto
 	}
 
 	return mf, nil
+}
+
+// SendPointsToAppender append all points to given appender. It will mutate points's labels
+// to include some meta-labels known by Registry for some annotation.
+// This method will not Commit or Rollback on the Appender.
+func SendPointsToAppender(points []types.MetricPoint, app storage.Appender) error {
+	for _, pts := range points {
+		if pts.Annotations.Status.CurrentStatus.IsSet() {
+			pts.Labels[types.LabelMetaCurrentStatus] = pts.Annotations.Status.CurrentStatus.String()
+			pts.Labels[types.LabelMetaCurrentDescription] = pts.Annotations.Status.StatusDescription
+		}
+
+		_, err := app.Append(0, labels.FromMap(pts.Labels), pts.Time.UnixMilli(), pts.Value)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }

@@ -1040,14 +1040,6 @@ func (r *Registry) WithTTL(ttl time.Duration) types.PointPusher {
 	})
 }
 
-// Appendable return a Prometheus appendable. It's the same as WithTTL and push points, but with
-// slightly different interface.
-// Also, unlike WithTTL() which do not kept all labels when metric format is Bleemeo, Appendable will
-// keeps labels (behave as if metric format is Prometheus).
-func (r *Registry) Appendable(ttl time.Duration) Appendable {
-	return Appendable{reg: r, ttl: ttl}
-}
-
 // UpdateDelay change the delay between metric gather.
 func (r *Registry) UpdateDelay(delay time.Duration) {
 	r.init()

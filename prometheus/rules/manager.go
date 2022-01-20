@@ -230,19 +230,12 @@ func (rm *Manager) Collect(ctx context.Context, app storage.Appender) error {
 	if len(res) != 0 {
 		logger.V(2).Printf("Sending %d new alert to the api", len(res))
 
-		for _, pts := range res {
-			if pts.Annotations.Status.CurrentStatus.IsSet() {
-				pts.Labels[types.LabelMetaCurrentStatus] = pts.Annotations.Status.CurrentStatus.String()
-				pts.Labels[types.LabelMetaCurrentDescription] = pts.Annotations.Status.StatusDescription
-			}
-
-			_, err := app.Append(0, labels.FromMap(pts.Labels), pts.Time.UnixMilli(), pts.Value)
-			if err != nil {
-				errs = append(errs, fmt.Errorf("error occurred while appending points: %w", err))
-			}
+		err := model.SendPointsToAppender(res, app)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("error occurred while appending points: %w", err))
 		}
 
-		err := app.Commit()
+		err = app.Commit()
 		if err != nil {
 			errs = append(errs, fmt.Errorf("error occurred while commit the appender: %w", err))
 		}

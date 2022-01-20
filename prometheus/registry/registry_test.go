@@ -23,6 +23,7 @@ package registry
 
 import (
 	"context"
+	"glouton/prometheus/model"
 	"glouton/types"
 	"reflect"
 	"sort"
@@ -36,6 +37,7 @@ import (
 	dto "github.com/prometheus/client_model/go"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/model/relabel"
+	"github.com/prometheus/prometheus/storage"
 )
 
 const testAgentID = "fcdc81a8-5bce-4305-8108-8e1e75439329"
@@ -48,6 +50,10 @@ type fakeGatherer struct {
 }
 
 type fakeFilter struct{}
+
+type fakeAppenderCallback struct {
+	input []types.MetricPoint
+}
 
 func (f *fakeFilter) FilterPoints(points []types.MetricPoint) []types.MetricPoint {
 	return points
@@ -98,6 +104,14 @@ func (g *fakeGatherer) Gather() ([]*dto.MetricFamily, error) {
 	}
 
 	return result, nil
+}
+
+func (cb fakeAppenderCallback) Collect(ctx context.Context, app storage.Appender) error {
+	if err := model.SendPointsToAppender(cb.input, app); err != nil {
+		return err
+	}
+
+	return app.Commit()
 }
 
 //nolint:cyclop
@@ -699,13 +713,13 @@ func TestRegistry_run(t *testing.T) {
 	}
 }
 
-func TestRegistry_pointsAlteration(t *testing.T) { //nolint: cyclop
+func TestRegistry_pointsAlteration(t *testing.T) {
 	type sourceKind string
 
 	const (
 		kindPushPoint         sourceKind = "pushpoint"
 		kindPushPointCallback sourceKind = "pushpointCallback"
-		kindAppender          sourceKind = "appender"
+		kindAppenderCallback  sourceKind = "appenderCallback"
 		kindGatherer          sourceKind = "gatherer"
 	)
 
@@ -932,7 +946,7 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint: cyclop
 		},
 		{
 			name:         "appender",
-			kindToTest:   kindAppender,
+			kindToTest:   kindAppenderCallback,
 			metricFormat: types.MetricFormatBleemeo,
 			input: []types.MetricPoint{
 				{
@@ -1854,19 +1868,19 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint: cyclop
 				}
 
 				reg.InternalRunScape(context.Background(), now, id)
-			case kindAppender:
-				app := reg.Appendable(5 * time.Minute).Appender(context.Background())
-				for _, p := range tt.input {
-					_, err = app.Append(0, labels.FromMap(p.Labels), p.Time.UnixMilli(), p.Value)
-					if err != nil {
-						t.Fatal(err)
-					}
-				}
-
-				err = app.Commit()
+			case kindAppenderCallback:
+				id, err := reg.RegisterAppenderCallback(
+					tt.opt,
+					AppenderRegistrationOption{},
+					fakeAppenderCallback{
+						input: tt.input,
+					},
+				)
 				if err != nil {
 					t.Fatal(err)
 				}
+
+				reg.InternalRunScape(context.Background(), now, id)
 			case kindGatherer:
 				id, err := reg.RegisterGatherer(
 					tt.opt,
