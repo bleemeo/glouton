@@ -671,30 +671,40 @@ func (r *Registry) addRegistration(reg *registration) (int, error) {
 			})
 		}
 
-		interval := reg.option.Interval
-		if interval == 0 {
-			interval = r.currentDelay
-		}
-
-		timeout := interval * 8 / 10
-		if reg.option.Timeout != 0 && reg.option.Timeout < interval {
-			timeout = reg.option.Timeout
-		}
-
-		reg.loop = startScrapeLoop(
-			context.Background(),
-			interval,
-			timeout,
-			reg.option.JitterSeed,
-			func(ctx context.Context, t0 time.Time) {
-				r.scrapeStart()
-				r.scrape(ctx, t0, reg)
-				r.scrapeDone()
-			},
-		)
+		r.restartScrapeLoop(reg)
 	}
 
 	return id, nil
+}
+
+// restartScrapeLoop start a scrapeLoop for this registration after stop previous loop if it exists.
+// r.lock must be hold before calling this method.
+func (r *Registry) restartScrapeLoop(reg *registration) {
+	if reg.loop != nil {
+		r.l.Unlock()
+		reg.loop.stop()
+		r.l.Lock()
+	}
+
+	interval := reg.option.Interval
+	if interval == 0 {
+		interval = r.currentDelay
+	}
+
+	timeout := interval * 8 / 10
+	if reg.option.Timeout != 0 && reg.option.Timeout < interval {
+		timeout = reg.option.Timeout
+	}
+
+	reg.loop = startScrapeLoop(
+		context.Background(),
+		interval,
+		timeout,
+		reg.option.JitterSeed,
+		func(ctx context.Context, t0 time.Time) {
+			r.scrape(ctx, t0, reg)
+		},
+	)
 }
 
 func (r *Registry) ScheduleScrape(id int, runAt time.Time) {
@@ -1019,34 +1029,33 @@ func (r *Registry) UpdateDelay(delay time.Duration) {
 			continue
 		}
 
-		if reg.loop == nil {
+		if reg.option.DisablePeriodicGather {
 			continue
 		}
 
-		r.l.Unlock()
-		reg.loop.stop()
-		r.l.Lock()
+		r.restartScrapeLoop(reg)
+	}
+}
 
-		timeout := r.currentDelay * 8 / 10
-		if reg.option.Timeout != 0 && reg.option.Timeout < r.currentDelay {
-			timeout = reg.option.Timeout
-		}
+// InternalRunScape run a scrape/gathering on given registration id (from RegisterGatherer & co).
+// Points gatherer are processed at if a periodic gather occurred.
+// This should only be used in test.
+func (r *Registry) InternalRunScape(ctx context.Context, t0 time.Time, id int) {
+	r.l.Lock()
 
-		reg.loop = startScrapeLoop(
-			context.Background(),
-			r.currentDelay,
-			timeout,
-			reg.option.JitterSeed,
-			func(ctx context.Context, t0 time.Time) {
-				r.scrapeStart()
-				r.scrape(ctx, t0, reg)
-				r.scrapeDone()
-			},
-		)
+	reg, ok := r.registrations[id]
+
+	r.l.Unlock()
+
+	if ok {
+		r.scrape(ctx, t0, reg)
 	}
 }
 
 func (r *Registry) scrape(ctx context.Context, t0 time.Time, reg *registration) {
+	r.scrapeStart()
+	defer r.scrapeDone()
+
 	r.l.Lock()
 	reg.l.Lock()
 

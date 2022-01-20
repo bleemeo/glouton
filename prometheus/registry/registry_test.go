@@ -1853,7 +1853,7 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint: cyclop
 					t.Fatal(err)
 				}
 
-				reg.scrape(context.Background(), now, reg.registrations[id])
+				reg.InternalRunScape(context.Background(), now, id)
 			case kindAppender:
 				app := reg.Appendable(5 * time.Minute).Appender(context.Background())
 				for _, p := range tt.input {
@@ -1878,7 +1878,7 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint: cyclop
 					t.Fatal(err)
 				}
 
-				reg.scrape(context.Background(), now, reg.registrations[id])
+				reg.InternalRunScape(context.Background(), now, id)
 			}
 
 			gotPoints = sortMetricPoints(gotPoints)
