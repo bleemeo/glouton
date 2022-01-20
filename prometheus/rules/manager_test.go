@@ -41,8 +41,9 @@ import (
 var errNotImplemented = errors.New("not implemented")
 
 type mockAppendable struct {
-	points []types.MetricPoint
-	l      sync.Mutex
+	points  []types.MetricPoint
+	forceTS time.Time
+	l       sync.Mutex
 }
 
 type mockAppender struct {
@@ -70,6 +71,10 @@ func (a *mockAppender) Append(ref storage.SeriesRef, l labels.Labels, t int64, v
 		},
 		Labels:      labelsMap,
 		Annotations: types.MetricAnnotations{},
+	}
+
+	if !a.parent.forceTS.IsZero() {
+		newPoint.Point.Time = a.parent.forceTS
 	}
 
 	a.buffer = append(a.buffer, newPoint)
@@ -176,10 +181,14 @@ func TestManager(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			app := &mockAppendable{}
+			app := &mockAppendable{forceTS: t1}
 
-			mgr := NewManager(context.Background(), tt.queryable, app, 10*time.Second)
-			mgr.Run(context.Background(), t1)
+			mgr := NewManager(context.Background(), tt.queryable, 10*time.Second)
+
+			err := mgr.Collect(context.Background(), app.Appender(context.Background()))
+			if err != nil {
+				t.Error(err)
+			}
 
 			if diff := cmp.Diff(sortPoints(tt.want), sortPoints(app.points)); diff != "" {
 				t.Errorf("points mismatch: (-want +got)\n%s", diff)
@@ -692,7 +701,7 @@ func Test_manager(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			ruleManager := newManager(ctx, store, reg.Appendable(5*time.Minute), defaultLinuxRecordingRules, now.Add(-7*time.Minute), 15*time.Second)
+			ruleManager := newManager(ctx, store, defaultLinuxRecordingRules, now.Add(-7*time.Minute), 15*time.Second)
 
 			store.PushPoints(ctx, test.Points)
 
@@ -709,8 +718,20 @@ func Test_manager(t *testing.T) {
 				}
 			}
 
+			id, err := reg.RegisterAppenderCallback(
+				registry.RegistrationOption{
+					DisablePeriodicGather: true,
+				},
+				registry.AppenderRegistrationOption{},
+				ruleManager,
+			)
+			if err != nil {
+				t.Fatal(err)
+			}
+
 			for i := 0; i < 7; i++ {
-				ruleManager.Run(ctx, now.Add(time.Duration(i)*time.Minute))
+				ruleManager.now = func() time.Time { return now.Add(time.Duration(i) * time.Minute) }
+				reg.InternalRunScape(ctx, now.Add(time.Duration(i)*time.Minute), id)
 			}
 
 			// Description are not fully tested, only the common prefix.
@@ -759,7 +780,7 @@ func Test_Rebuild_Rules(t *testing.T) {
 	ctx := context.Background()
 	t1 := time.Now().Truncate(time.Second)
 	t0 := t1.Add(-7 * time.Minute)
-	ruleManager := newManager(ctx, store, reg.Appendable(5*time.Minute), defaultLinuxRecordingRules, t0, 15*time.Second)
+	ruleManager := newManager(ctx, store, defaultLinuxRecordingRules, t0, 15*time.Second)
 	thresholds := []float64{50, 500}
 
 	store.PushPoints(context.Background(), []types.MetricPoint{
@@ -932,6 +953,17 @@ func Test_Rebuild_Rules(t *testing.T) {
 		// },
 	}
 
+	id, err := reg.RegisterAppenderCallback(
+		registry.RegistrationOption{
+			DisablePeriodicGather: true,
+		},
+		registry.AppenderRegistrationOption{},
+		ruleManager,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	err = ruleManager.RebuildAlertingRules(alertsRules)
 	if err != nil {
 		t.Error(err)
@@ -942,7 +974,9 @@ func Test_Rebuild_Rules(t *testing.T) {
 	logger.V(0).Printf("BASE TIME: %v", t1)
 
 	for i := 0; i < 5; i++ {
-		ruleManager.Run(ctx, t1.Add(time.Duration(i)*time.Minute))
+		ruleManager.now = func() time.Time { return t1.Add(time.Duration(i) * time.Minute) }
+
+		reg.InternalRunScape(ctx, t1.Add(time.Duration(i)*time.Minute), id)
 	}
 
 	err = ruleManager.RebuildAlertingRules(alertsRules)
@@ -954,7 +988,9 @@ func Test_Rebuild_Rules(t *testing.T) {
 
 	// this call to run should create another point.
 	// By doing so we can verify multiple calls to RebuildAlertingRules won't reset rules state.
-	ruleManager.Run(ctx, t1.Add(5*time.Minute))
+	ruleManager.now = func() time.Time { return t1.Add(5 * time.Minute) }
+
+	reg.InternalRunScape(ctx, t1.Add(5*time.Minute), id)
 
 	if len(ruleManager.alertingRules) != len(alertsRules) {
 		t.Errorf("Unexpected number of points: expected %d, got %d\n", len(alertsRules), len(ruleManager.alertingRules))
@@ -979,7 +1015,7 @@ func Test_GloutonStart(t *testing.T) {
 	store := store.New(time.Hour)
 	ctx := context.Background()
 	t0 := time.Now().Truncate(time.Second)
-	ruleManager := newManager(ctx, store, store, defaultLinuxRecordingRules, t0, 15*time.Second)
+	ruleManager := newManager(ctx, store, defaultLinuxRecordingRules, t0, 15*time.Second)
 	thresholds := []float64{50, 500}
 	resPoints := []types.MetricPoint{}
 
@@ -1046,7 +1082,11 @@ func Test_GloutonStart(t *testing.T) {
 	}
 
 	for i := 0; i < 6; i++ {
-		ruleManager.Run(ctx, t0.Add(time.Duration(i)*time.Minute))
+		ruleManager.now = func() time.Time { return t0.Add(time.Duration(i) * time.Minute) }
+
+		if err := ruleManager.Collect(ctx, store.Appender(ctx)); err != nil {
+			t.Error(err)
+		}
 	}
 
 	// Manager should not create ok points for the next 5 minutes after start,
@@ -1057,7 +1097,12 @@ func Test_GloutonStart(t *testing.T) {
 		t.Errorf("Unexpected number of points generated: expected 0, got %d:\n%v", len(resPoints), resPoints)
 	}
 
-	ruleManager.Run(ctx, t0.Add(time.Duration(7)*time.Minute))
+	ruleManager.now = func() time.Time { return t0.Add(time.Duration(7) * time.Minute) }
+
+	err = ruleManager.Collect(ctx, store.Appender(ctx))
+	if err != nil {
+		t.Error(err)
+	}
 
 	if len(resPoints) == 0 {
 		t.Errorf("Unexpected number of points generated: expected >0, got 0:\n%v", resPoints)
@@ -1100,7 +1145,7 @@ func Test_NotStatutsChangeOnStart(t *testing.T) {
 			t0 := time.Now().Truncate(time.Second)
 
 			// we always boot the manager with 10 seconds resolution
-			ruleManager := newManager(ctx, store, reg.Appendable(5*time.Minute), defaultLinuxRecordingRules, t0, 10*time.Second)
+			ruleManager := newManager(ctx, store, defaultLinuxRecordingRules, t0, 10*time.Second)
 
 			// The metric will be warning
 			thresholds := []float64{0, 100}
@@ -1130,6 +1175,17 @@ func Test_NotStatutsChangeOnStart(t *testing.T) {
 
 			ruleManager.UpdateMetricResolution(time.Duration(resolutionSecond) * time.Second)
 
+			id, err := reg.RegisterAppenderCallback(
+				registry.RegistrationOption{
+					DisablePeriodicGather: true,
+				},
+				registry.AppenderRegistrationOption{},
+				ruleManager,
+			)
+			if err != nil {
+				t.Fatal(err)
+			}
+
 			for currentTime := t0; currentTime.Before(t0.Add(7 * time.Minute)); currentTime = currentTime.Add(time.Second * time.Duration(resolutionSecond)) {
 				if !currentTime.Equal(t0) {
 					// cpu_used need two gather to be calculated, skip first point.
@@ -1150,7 +1206,8 @@ func Test_NotStatutsChangeOnStart(t *testing.T) {
 					logger.V(0).Printf("Number of points: %d", len(resPoints))
 				}
 
-				ruleManager.Run(ctx, currentTime)
+				ruleManager.now = func() time.Time { return currentTime }
+				reg.InternalRunScape(ctx, currentTime, id)
 			}
 
 			var hadResult bool

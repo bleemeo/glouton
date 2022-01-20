@@ -22,6 +22,7 @@ import (
 	"fmt"
 	bleemeoTypes "glouton/bleemeo/types"
 	"glouton/logger"
+	"glouton/prometheus/model"
 	"glouton/store"
 	"glouton/threshold"
 	"glouton/types"
@@ -65,12 +66,13 @@ type Manager struct {
 	recordingRules []*rules.Group
 	alertingRules  map[string]*ruleGroup
 
-	appendable storage.Appendable
+	appendable *dynamicAppendable
 	queryable  storage.Queryable
 	engine     *promql.Engine
 	logger     log.Logger
 
 	l                sync.Mutex
+	now              func() time.Time
 	agentStarted     time.Time
 	metricResolution time.Duration
 }
@@ -99,16 +101,16 @@ var (
 	}
 )
 
-func NewManager(ctx context.Context, queryable storage.Queryable, app storage.Appendable, metricResolution time.Duration) *Manager {
+func NewManager(ctx context.Context, queryable storage.Queryable, metricResolution time.Duration) *Manager {
 	defaultRules := defaultLinuxRecordingRules
 	if runtime.GOOS == "windows" {
 		defaultRules = defaultWindowsRecordingRules
 	}
 
-	return newManager(ctx, queryable, app, defaultRules, time.Now(), metricResolution)
+	return newManager(ctx, queryable, defaultRules, time.Now(), metricResolution)
 }
 
-func newManager(ctx context.Context, queryable storage.Queryable, app storage.Appendable, defaultRules map[string]string, created time.Time, metricResolution time.Duration) *Manager {
+func newManager(ctx context.Context, queryable storage.Queryable, defaultRules map[string]string, created time.Time, metricResolution time.Duration) *Manager {
 	promLogger := log.NewLogfmtLogger(log.NewSyncWriter(os.Stderr))
 	engine := promql.NewEngine(promql.EngineOpts{
 		Logger:             log.With(promLogger, "component", "query engine"),
@@ -118,6 +120,8 @@ func newManager(ctx context.Context, queryable storage.Queryable, app storage.Ap
 		ActiveQueryTracker: nil,
 		LookbackDelta:      5 * time.Minute,
 	})
+
+	app := &dynamicAppendable{}
 
 	mgrOptions := &rules.ManagerOptions{
 		Context:    ctx,
@@ -162,6 +166,7 @@ func newManager(ctx context.Context, queryable storage.Queryable, app storage.Ap
 		logger:           promLogger,
 		agentStarted:     created,
 		metricResolution: 0,
+		now:              time.Now,
 	}
 
 	rm.UpdateMetricResolution(metricResolution)
@@ -195,8 +200,14 @@ func (rm *Manager) MetricList() []string {
 	return res
 }
 
-func (rm *Manager) Run(ctx context.Context, now time.Time) {
+func (rm *Manager) Collect(ctx context.Context, app storage.Appender) error {
+	var errs types.MultiErrors
+
 	res := []types.MetricPoint{}
+	now := rm.now()
+
+	rm.appendable.SetAppendable(model.NewFromAppender(app))
+	defer rm.appendable.SetAppendable(nil)
 
 	rm.l.Lock()
 
@@ -208,7 +219,7 @@ func (rm *Manager) Run(ctx context.Context, now time.Time) {
 		point, err := agr.runGroup(ctx, now, rm)
 
 		if err != nil && !errors.Is(err, errSkipPoints) {
-			logger.V(2).Printf("An error occurred while trying to execute rules: %v", err)
+			errs = append(errs, fmt.Errorf("error occurred while trying to execute rules: %w", err))
 		} else if !errors.Is(err, errSkipPoints) {
 			res = append(res, point)
 		}
@@ -219,8 +230,6 @@ func (rm *Manager) Run(ctx context.Context, now time.Time) {
 	if len(res) != 0 {
 		logger.V(2).Printf("Sending %d new alert to the api", len(res))
 
-		app := rm.appendable.Appender(ctx)
-
 		for _, pts := range res {
 			if pts.Annotations.Status.CurrentStatus.IsSet() {
 				pts.Labels[types.LabelMetaCurrentStatus] = pts.Annotations.Status.CurrentStatus.String()
@@ -229,15 +238,21 @@ func (rm *Manager) Run(ctx context.Context, now time.Time) {
 
 			_, err := app.Append(0, labels.FromMap(pts.Labels), pts.Time.UnixMilli(), pts.Value)
 			if err != nil {
-				logger.V(2).Printf("An error occurred while appending points: %v", err)
+				errs = append(errs, fmt.Errorf("error occurred while appending points: %w", err))
 			}
 		}
 
 		err := app.Commit()
 		if err != nil {
-			logger.V(2).Printf("An error occurred while commit the appender: %v", err)
+			errs = append(errs, fmt.Errorf("error occurred while commit the appender: %w", err))
 		}
 	}
+
+	if len(errs) > 0 {
+		return errs
+	}
+
+	return nil
 }
 
 func (agr *ruleGroup) shouldSkip(now time.Time) bool {

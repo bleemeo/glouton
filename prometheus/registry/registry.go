@@ -150,6 +150,21 @@ type RegistrationOption struct {
 	rrules                []*rules.RecordingRule
 }
 
+type AppenderRegistrationOption struct {
+	// CallForMetricsEndpoint indicate whether the callback must be called for /metrics or
+	// cached result from last periodic is used.
+	CallForMetricsEndpoint bool
+	// HonorTimestamp indicate whether timestamp given to Appender are used or if a timestamp
+	// decided by the Registry is used. Using the timestamp of the registry is preferred as its more stable.
+	HonorTimestamp bool
+}
+
+type AppenderCallback interface {
+	// Collect collects point and write them into Appender. The appender must not be used once Collect returned.
+	// If you omit to Commit() on the appender, it will be automatically done when Collect return without error.
+	Collect(ctx context.Context, app storage.Appender) error
+}
+
 func (opt *RegistrationOption) buildRules() error {
 	rrules := make([]*rules.RecordingRule, 0, len(opt.Rules))
 
@@ -372,6 +387,7 @@ func (r *Registry) Run(ctx context.Context) error {
 // RegisterPushPointsCallback add a callback that should push points to the registry.
 // This callback will be called for each collection period. It's mostly used to
 // add Telegraf input (using glouton/collector).
+// Deprecated: use RegisterAppenderCallback.
 func (r *Registry) RegisterPushPointsCallback(opt RegistrationOption, f func(context.Context, time.Time)) (int, error) {
 	return r.registerPushPointsCallback(opt, f)
 }
@@ -394,6 +410,29 @@ func (r *Registry) registerPushPointsCallback(opt RegistrationOption, f func(con
 		includedInMetricsEndpoint: false,
 	}
 	r.setupGatherer(ctx, reg, pushGatherer{fun: f})
+
+	return r.addRegistration(reg)
+}
+
+// RegisterAppenderCallback add a callback that use an Appender to write points to the registry.
+func (r *Registry) RegisterAppenderCallback(opt RegistrationOption, appOpt AppenderRegistrationOption, cb AppenderCallback) (int, error) {
+	r.init()
+
+	if err := opt.buildRules(); err != nil {
+		return 0, err
+	}
+
+	r.l.Lock()
+	defer r.l.Unlock()
+
+	ctx, cancel := context.WithTimeout(context.Background(), relabelTimeout)
+	defer cancel()
+
+	reg := &registration{
+		option:                    opt,
+		includedInMetricsEndpoint: false,
+	}
+	r.setupGatherer(ctx, reg, &appenderGatherer{cb: cb, opt: appOpt})
 
 	return r.addRegistration(reg)
 }

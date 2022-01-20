@@ -682,19 +682,17 @@ func (a *agent) run() { //nolint:cyclop
 		return
 	}
 
-	// rulesManager := rules.NewManager(ctx, a.store, a.gathererRegistry.Appendable(5*time.Minute))
-	a.rulesManager = rules.NewManager(ctx, a.store, a.gathererRegistry.Appendable(5*time.Minute), a.metricResolution)
+	a.rulesManager = rules.NewManager(ctx, a.store, a.metricResolution)
 
 	a.store.SetResetRuleCallback(a.rulesManager.ResetInactiveRules)
 
-	_, err = a.gathererRegistry.RegisterPushPointsCallback(
+	_, err = a.gathererRegistry.RegisterAppenderCallback(
 		registry.RegistrationOption{
 			Description: "rulesManager",
 			JitterSeed:  baseJitterPlus,
 		},
-		func(ctx context.Context, t0 time.Time) {
-			a.rulesManager.Run(ctx, t0)
-		},
+		registry.AppenderRegistrationOption{},
+		a.rulesManager,
 	)
 	if err != nil {
 		logger.Printf("unable to add recording rules metrics: %v", err)
