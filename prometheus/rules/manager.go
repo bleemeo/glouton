@@ -26,7 +26,6 @@ import (
 	"glouton/store"
 	"glouton/threshold"
 	"glouton/types"
-	"os"
 	"runtime"
 	"sync"
 	"time"
@@ -111,7 +110,7 @@ func NewManager(ctx context.Context, queryable storage.Queryable, metricResoluti
 }
 
 func newManager(ctx context.Context, queryable storage.Queryable, defaultRules map[string]string, created time.Time, metricResolution time.Duration) *Manager {
-	promLogger := log.NewLogfmtLogger(log.NewSyncWriter(os.Stderr))
+	promLogger := logger.GoKitLoggerWrapper(logger.V(1))
 	engine := promql.NewEngine(promql.EngineOpts{
 		Logger:             log.With(promLogger, "component", "query engine"),
 		Reg:                nil,
@@ -320,7 +319,7 @@ func (agr *ruleGroup) runGroup(ctx context.Context, now time.Time, rm *Manager) 
 			return types.MetricPoint{}, errSkipPoints
 		}
 
-		logger.V(2).Printf("metric state for %s previous state=%v, new state=%v", rule.Name(), prevState, state)
+		logger.V(2).Printf("metric state for %s previous state=%v, new state=%v", rule.Labels().String(), prevState, state)
 
 		newPoint, err := agr.generateNewPoint(val, rule, state, now)
 		if err != nil {
@@ -394,7 +393,7 @@ func (agr *ruleGroup) generateNewPoint(thresholdType string, rule *rules.Alertin
 	}
 
 	if statusCode == types.StatusUnknown {
-		return types.MetricPoint{}, fmt.Errorf("%w for metric %s", errUnknownState, rule.Labels().String())
+		return types.MetricPoint{}, fmt.Errorf("%w %s", errUnknownState, rule.Labels().String())
 	}
 
 	newPoint := types.MetricPoint{
@@ -463,28 +462,48 @@ func (rm *Manager) addAlertingRule(metric bleemeoTypes.Metric, isError string) e
 	}
 
 	if metric.Threshold.LowWarning != nil {
-		err := newGroup.newRule(fmt.Sprintf("(%s) < %f", metric.PromQLQuery, *metric.Threshold.LowWarning), metric.Labels[types.LabelName], lowWarningState, "warning", rm.logger)
+		err := newGroup.newRule(
+			fmt.Sprintf("(%s) < %f", metric.PromQLQuery, *metric.Threshold.LowWarning),
+			metric.Labels,
+			lowWarningState,
+			rm.logger,
+		)
 		if err != nil {
 			return err
 		}
 	}
 
 	if metric.Threshold.HighWarning != nil {
-		err := newGroup.newRule(fmt.Sprintf("(%s) > %f", metric.PromQLQuery, *metric.Threshold.HighWarning), metric.Labels[types.LabelName], highWarningState, "warning", rm.logger)
+		err := newGroup.newRule(
+			fmt.Sprintf("(%s) > %f", metric.PromQLQuery, *metric.Threshold.HighWarning),
+			metric.Labels,
+			highWarningState,
+			rm.logger,
+		)
 		if err != nil {
 			return err
 		}
 	}
 
 	if metric.Threshold.LowCritical != nil {
-		err := newGroup.newRule(fmt.Sprintf("(%s) < %f", metric.PromQLQuery, *metric.Threshold.LowCritical), metric.Labels[types.LabelName], lowCriticalState, "critical", rm.logger)
+		err := newGroup.newRule(
+			fmt.Sprintf("(%s) < %f", metric.PromQLQuery, *metric.Threshold.LowCritical),
+			metric.Labels,
+			lowCriticalState,
+			rm.logger,
+		)
 		if err != nil {
 			return err
 		}
 	}
 
 	if metric.Threshold.HighCritical != nil {
-		err := newGroup.newRule(fmt.Sprintf("(%s) > %f", metric.PromQLQuery, *metric.Threshold.HighCritical), metric.Labels[types.LabelName], highCriticalState, "critical", rm.logger)
+		err := newGroup.newRule(
+			fmt.Sprintf("(%s) > %f", metric.PromQLQuery, *metric.Threshold.HighCritical),
+			metric.Labels,
+			highCriticalState,
+			rm.logger,
+		)
 		if err != nil {
 			return err
 		}
@@ -591,15 +610,23 @@ func (rm *Manager) DiagnosticArchive(ctx context.Context, archive types.ArchiveW
 	return nil
 }
 
-func (agr *ruleGroup) newRule(exp string, metricName string, threshold string, severity string, logger log.Logger) error {
+func (agr *ruleGroup) newRule(exp string, lbls map[string]string, threshold string, logger log.Logger) error {
 	newExp, err := parser.ParseExpr(exp)
 	if err != nil {
 		return err
 	}
 
-	newRule := rules.NewAlertingRule(metricName+"_"+threshold,
-		newExp, promAlertTime, nil, labels.Labels{labels.Label{Name: "severity", Value: severity}},
-		labels.Labels{}, "", true, log.With(logger, "alerting_rule", metricName+"_"+threshold))
+	newRule := rules.NewAlertingRule(
+		"unused",
+		newExp,
+		promAlertTime,
+		labels.FromMap(lbls),
+		nil,
+		labels.Labels{},
+		"",
+		true,
+		log.With(logger, "component", "alert_rule", "metric", types.LabelsToText(lbls), "theshold", threshold),
+	)
 
 	agr.rules[threshold] = newRule
 
