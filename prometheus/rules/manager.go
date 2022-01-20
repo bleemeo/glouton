@@ -409,7 +409,7 @@ func (agr *ruleGroup) generateNewPoint(thresholdType string, rule *rules.Alertin
 	}
 
 	if state == rules.StatePending || state == rules.StateInactive {
-		statusCode = statusFromThreshold("ok")
+		statusCode = types.StatusOk
 		newPoint.Value = float64(statusCode.NagiosCode())
 		newPoint.Annotations.Status.CurrentStatus = statusCode
 	}
@@ -623,8 +623,6 @@ func (agr *ruleGroup) Query() string {
 
 func statusFromThreshold(s string) types.Status {
 	switch s {
-	case "ok":
-		return types.StatusOk
 	case lowWarningState:
 	case highWarningState:
 		return types.StatusWarning
