@@ -80,6 +80,10 @@ type ruleGroup struct {
 	rules         map[string]*rules.AlertingRule
 	inactiveSince time.Time
 	disabledUntil time.Time
+	pointsRead    int32
+	lastRun       time.Time
+	lastErr       error
+	lastStatus    types.StatusDescription
 
 	labelsText  string
 	promql      string
@@ -290,6 +294,11 @@ func (agr *ruleGroup) runGroup(ctx context.Context, now time.Time, rm *Manager) 
 		}, nil
 	}
 
+	agr.lastRun = time.Now()
+	agr.pointsRead = 0
+	agr.lastStatus = types.StatusDescription{}
+	agr.lastErr = nil
+
 	for _, val := range thresholdOrder {
 		rule := agr.rules[val]
 
@@ -302,12 +311,16 @@ func (agr *ruleGroup) runGroup(ctx context.Context, now time.Time, rm *Manager) 
 
 		_, err := rule.Eval(ctx, now, rules.EngineQueryFunc(rm.engine, queryable), nil, 100)
 		if err != nil {
+			agr.lastErr = err
+
 			return types.MetricPoint{}, err
 		}
 
 		state := rule.State()
 
-		if queryable.Count() == 0 {
+		agr.pointsRead = queryable.Count()
+
+		if agr.pointsRead == 0 {
 			return agr.checkNoPoint(now, rm.agentStarted, rm.metricResolution)
 		}
 
@@ -316,6 +329,8 @@ func (agr *ruleGroup) runGroup(ctx context.Context, now time.Time, rm *Manager) 
 
 		// we add 20 seconds to the promAlert time to compensate the delta between agent startup and first metrics
 		if state != rules.StateInactive && now.Sub(rm.agentStarted) < promAlertTime+20*time.Second {
+			agr.lastErr = err
+
 			return types.MetricPoint{}, errSkipPoints
 		}
 
@@ -323,15 +338,21 @@ func (agr *ruleGroup) runGroup(ctx context.Context, now time.Time, rm *Manager) 
 
 		newPoint, err := agr.generateNewPoint(val, rule, state, now)
 		if err != nil {
+			agr.lastErr = err
+
 			return types.MetricPoint{}, err
 		}
 
 		if state == rules.StateFiring {
+			agr.lastStatus = newPoint.Annotations.Status
+
 			return newPoint, nil
 		} else if generatedPoint.Labels == nil || newPoint.Annotations.Status.CurrentStatus > generatedPoint.Annotations.Status.CurrentStatus {
 			generatedPoint = newPoint
 		}
 	}
+
+	agr.lastStatus = generatedPoint.Annotations.Status
 
 	return generatedPoint, nil
 }
@@ -634,15 +655,15 @@ func (agr *ruleGroup) newRule(exp string, lbls map[string]string, threshold stri
 }
 
 func (agr *ruleGroup) String() string {
-	return fmt.Sprintf("id=%s query=%#v inactive_since=%v disabled_until=%v is_user_promql_alert=%v\n%v",
-		agr.labelsText, agr.promql, agr.inactiveSince, agr.disabledUntil, agr.isUserAlert, agr.Query())
+	return fmt.Sprintf("id=%s query=%#v \n\tinactive_since=%v disabled_until=%v is_user_promql_alert=%v\n\tlastRun=%v pointsRead=%d status=%v err=%v\n%v",
+		agr.labelsText, agr.promql, agr.inactiveSince, agr.disabledUntil, agr.isUserAlert, agr.lastRun, agr.pointsRead, agr.lastStatus, agr.lastErr, agr.query())
 }
 
-func (agr *ruleGroup) Query() string {
+func (agr *ruleGroup) query() string {
 	res := ""
 
 	for key, val := range agr.rules {
-		res += fmt.Sprintf("\tThreshold_%s: %s\n", key, val.Query().String())
+		res += fmt.Sprintf("\tThreshold_%s: %s; current state=%s\n", key, val.Query().String(), val.State())
 	}
 
 	return res
