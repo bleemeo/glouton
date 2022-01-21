@@ -1173,6 +1173,16 @@ func (r *Registry) pushPoint(ctx context.Context, points []types.MetricPoint, tt
 			}
 
 			point.Labels = newLabelsMap
+
+			if r.relabelHook != nil {
+				ctx, cancel := context.WithTimeout(ctx, relabelTimeout)
+				point.Labels, skip = r.relabelHook(ctx, point.Labels)
+
+				cancel()
+			}
+
+			newLabels, _ := r.applyRelabel(point.Labels)
+			point.Labels = newLabels.Map()
 		} else {
 			point.Labels = r.addMetaLabels(point.Labels)
 

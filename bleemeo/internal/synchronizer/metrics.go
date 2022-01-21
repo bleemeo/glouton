@@ -118,10 +118,11 @@ type metricPayload struct {
 }
 
 // metricFromAPI convert a metricPayload received from API to a bleemeoTypes.Metric.
-func (mp metricPayload) metricFromAPI(lastTime time.Time) bleemeoTypes.Metric {
+func (mp metricPayload) metricFromAPI(lastTime time.Time, agentID string) bleemeoTypes.Metric {
 	if mp.LabelsText == "" {
 		mp.Labels = map[string]string{
-			types.LabelName: mp.Name,
+			types.LabelName:         mp.Name,
+			types.LabelInstanceUUID: agentID,
 		}
 
 		if mp.Item != "" {
@@ -390,6 +391,27 @@ func httpResponseToMetricFailureKind(content string) bleemeoTypes.FailureKind {
 	}
 }
 
+func (s *Synchronizer) metricKey(lbls map[string]string, annotations types.MetricAnnotations) string {
+	if lbls[types.LabelInstanceUUID] == "" {
+		// In name+item mode, we treat empty instance_uuid and instance_uuid=s.AgentID as the same.
+		// This reflect in:
+		// * metricFromAPI which fill the instance_uuid when labels_text is empty
+		// * MetricOnlyHasItem that cause instance_uuid to not be sent on registration
+		if common.MetricOnlyHasItem(lbls, s.agentID) {
+			tmp := make(map[string]string, len(lbls)+1)
+
+			for k, v := range lbls {
+				tmp[k] = v
+			}
+
+			tmp[types.LabelInstanceUUID] = s.agentID
+			lbls = tmp
+		}
+	}
+
+	return common.LabelsToText(lbls, annotations, s.option.MetricFormat == types.MetricFormatBleemeo)
+}
+
 // nearly a duplicate of mqtt.filterPoint, but not quite. Alas we cannot easily generalize this as go doesn't have generics (yet).
 func (s *Synchronizer) filterMetrics(input []types.Metric) []types.Metric {
 	result := make([]types.Metric, 0)
@@ -462,7 +484,7 @@ func (s *Synchronizer) findUnregisteredMetrics(metrics []types.Metric) []types.M
 	result := make([]types.Metric, 0)
 
 	for _, v := range metrics {
-		key := common.LabelsToText(v.Labels(), v.Annotations(), s.option.MetricFormat == types.MetricFormatBleemeo)
+		key := s.metricKey(v.Labels(), v.Annotations())
 
 		if _, ok := registeredMetricsByKey[key]; ok {
 			continue
@@ -710,7 +732,7 @@ func (s *Synchronizer) metricsListWithAgentID(fetchInactive bool) (map[string]bl
 			continue
 		}
 
-		metricsByUUID[metric.ID] = metric.metricFromAPI(metricsByUUID[metric.ID].FirstSeenAt)
+		metricsByUUID[metric.ID] = metric.metricFromAPI(metricsByUUID[metric.ID].FirstSeenAt, s.agentID)
 	}
 
 	return metricsByUUID, nil
@@ -791,7 +813,7 @@ func (s *Synchronizer) metricUpdateList(metrics []types.Metric) error {
 			"fields":      "id,agent,label,item,labels_text,unit,unit_text,service,container,deactivated_at,threshold_low_warning,threshold_low_critical,threshold_high_warning,threshold_high_critical,status_of,promql_query,is_user_promql_alert",
 		}
 
-		if s.option.MetricFormat == types.MetricFormatBleemeo && common.MetricOnlyHasItem(metric.Labels()) {
+		if s.option.MetricFormat == types.MetricFormatBleemeo && common.MetricOnlyHasItem(metric.Labels(), s.agentID) {
 			annotations := metric.Annotations()
 			params["label"] = metric.Labels()[types.LabelName]
 			params["item"] = common.TruncateItem(annotations.BleemeoItem, annotations.ServiceName != "")
@@ -824,7 +846,7 @@ func (s *Synchronizer) metricUpdateList(metrics []types.Metric) error {
 				}
 			}
 
-			metricsByUUID[metric.ID] = metric.metricFromAPI(metricsByUUID[metric.ID].FirstSeenAt)
+			metricsByUUID[metric.ID] = metric.metricFromAPI(metricsByUUID[metric.ID].FirstSeenAt, s.agentID)
 		}
 	}
 
@@ -865,7 +887,7 @@ func (s *Synchronizer) metricUpdateListUUID(requests []string) error {
 			return err
 		}
 
-		metricsByUUID[metric.ID] = metric.metricFromAPI(metricsByUUID[metric.ID].FirstSeenAt)
+		metricsByUUID[metric.ID] = metric.metricFromAPI(metricsByUUID[metric.ID].FirstSeenAt, s.agentID)
 	}
 
 	metrics := make([]bleemeoTypes.Metric, 0, len(metricsByUUID))
@@ -895,7 +917,7 @@ func (s *Synchronizer) metricDeleteFromRemote(localMetrics []types.Metric, previ
 
 	for _, m := range localMetrics {
 		labels := m.Labels()
-		key := common.LabelsToText(labels, m.Annotations(), s.option.MetricFormat == types.MetricFormatBleemeo)
+		key := s.metricKey(labels, m.Annotations())
 
 		if _, ok := deletedMetricLabelItem[key]; ok {
 			localMetricToDelete = append(localMetricToDelete, labels)
@@ -1039,7 +1061,7 @@ func (mr *metricRegisterer) doOnePass(currentList []types.Metric, state metricRe
 
 		labels := metric.Labels()
 		annotations := metric.Annotations()
-		key := common.LabelsToText(labels, annotations, mr.s.option.MetricFormat == types.MetricFormatBleemeo)
+		key := mr.s.metricKey(labels, annotations)
 
 		registration, hadPreviousFailure := mr.failedRegistrationByKey[key]
 		if hadPreviousFailure {
@@ -1128,7 +1150,7 @@ func (mr *metricRegisterer) metricRegisterAndUpdateOne(metric types.Metric) erro
 	}
 	labels := metric.Labels()
 	annotations := metric.Annotations()
-	key := common.LabelsToText(labels, annotations, mr.s.option.MetricFormat == types.MetricFormatBleemeo)
+	key := mr.s.metricKey(labels, annotations)
 	remoteMetric, remoteFound := mr.registeredMetricsByKey[key]
 
 	if remoteFound {
@@ -1160,8 +1182,8 @@ func (mr *metricRegisterer) metricRegisterAndUpdateOne(metric types.Metric) erro
 	}
 
 	logger.V(2).Printf("Metric %v registered with UUID %s", key, result.ID)
-	mr.registeredMetricsByKey[key] = result.metricFromAPI(mr.registeredMetricsByKey[result.ID].FirstSeenAt)
-	mr.registeredMetricsByUUID[result.ID] = result.metricFromAPI(mr.registeredMetricsByKey[result.ID].FirstSeenAt)
+	mr.registeredMetricsByKey[key] = result.metricFromAPI(mr.registeredMetricsByKey[result.ID].FirstSeenAt, mr.s.agentID)
+	mr.registeredMetricsByUUID[result.ID] = result.metricFromAPI(mr.registeredMetricsByKey[result.ID].FirstSeenAt, mr.s.agentID)
 
 	return nil
 }
@@ -1169,7 +1191,7 @@ func (mr *metricRegisterer) metricRegisterAndUpdateOne(metric types.Metric) erro
 func (s *Synchronizer) prepareMetricPayload(metric types.Metric, registeredMetricsByKey map[string]bleemeoTypes.Metric, containersByContainerID map[string]bleemeoTypes.Container, servicesByKey map[serviceNameInstance]bleemeoTypes.Service, monitors []bleemeoTypes.Monitor) (metricPayload, error) {
 	labels := metric.Labels()
 	annotations := metric.Annotations()
-	key := common.LabelsToText(labels, annotations, s.option.MetricFormat == types.MetricFormatBleemeo)
+	key := s.metricKey(labels, annotations)
 
 	payload := metricPayload{
 		Metric: bleemeoTypes.Metric{
@@ -1181,7 +1203,7 @@ func (s *Synchronizer) prepareMetricPayload(metric types.Metric, registeredMetri
 
 	if s.option.MetricFormat == types.MetricFormatBleemeo {
 		payload.Item = common.TruncateItem(annotations.BleemeoItem, annotations.ServiceName != "")
-		if common.MetricOnlyHasItem(labels) {
+		if common.MetricOnlyHasItem(labels, s.agentID) {
 			payload.LabelsText = ""
 		}
 	}
@@ -1197,7 +1219,7 @@ func (s *Synchronizer) prepareMetricPayload(metric types.Metric, registeredMetri
 
 		subLabels[types.LabelName] = annotations.StatusOf
 
-		subKey := common.LabelsToText(subLabels, annotations, s.option.MetricFormat == types.MetricFormatBleemeo)
+		subKey := s.metricKey(subLabels, annotations)
 		metricStatusOf, ok := registeredMetricsByKey[subKey]
 
 		if !ok {
@@ -1350,7 +1372,7 @@ func (s *Synchronizer) metricDeleteFromLocal() error {
 		}
 
 		labels := srv.LabelsOfStatus()
-		metricKey := common.LabelsToText(labels, srv.AnnotationsOfStatus(), s.option.MetricFormat == types.MetricFormatBleemeo)
+		metricKey := s.metricKey(labels, srv.AnnotationsOfStatus())
 
 		if metric, ok := registeredMetricsByKey[metricKey]; ok {
 			_, err := s.client.Do(s.ctx, "DELETE", fmt.Sprintf("v1/metric/%s/", metric.ID), nil, nil, nil)
@@ -1398,7 +1420,7 @@ func (s *Synchronizer) localMetricToMap(localMetrics []types.Metric) map[string]
 
 	for _, v := range localMetrics {
 		labels := v.Labels()
-		key := common.LabelsToText(labels, v.Annotations(), s.option.MetricFormat == types.MetricFormatBleemeo)
+		key := s.metricKey(labels, v.Annotations())
 		localByMetricKey[key] = v
 	}
 

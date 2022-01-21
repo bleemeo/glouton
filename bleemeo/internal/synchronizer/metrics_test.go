@@ -862,7 +862,8 @@ func TestMetricSimpleSync(t *testing.T) {
 		{
 			Point: types.Point{Time: helper.mt.Now()},
 			Labels: map[string]string{
-				types.LabelName: "cpu_system",
+				types.LabelName:         "cpu_system",
+				types.LabelInstanceUUID: idAgentMain,
 			},
 		},
 	})
@@ -908,8 +909,9 @@ func TestMetricSimpleSync(t *testing.T) {
 			{
 				Point: types.Point{Time: helper.mt.Now()},
 				Labels: map[string]string{
-					types.LabelName: "metric",
-					"item":          strconv.FormatInt(int64(n), 10),
+					types.LabelName:         "metric",
+					"item":                  strconv.FormatInt(int64(n), 10),
+					types.LabelInstanceUUID: idAgentMain,
 				},
 				Annotations: types.MetricAnnotations{
 					BleemeoItem: strconv.FormatInt(int64(n), 10),
@@ -963,14 +965,16 @@ func TestMetricSimpleSync(t *testing.T) {
 		{
 			Point: types.Point{Time: helper.mt.Now()},
 			Labels: map[string]string{
-				types.LabelName: "cpu_system",
+				types.LabelName:         "cpu_system",
+				types.LabelInstanceUUID: idAgentMain,
 			},
 		},
 		{
 			Point: types.Point{Time: helper.mt.Now()},
 			Labels: map[string]string{
-				types.LabelName: "disk_used",
-				"item":          "/home",
+				types.LabelName:         "disk_used",
+				"item":                  "/home",
+				types.LabelInstanceUUID: idAgentMain,
 			},
 			Annotations: types.MetricAnnotations{BleemeoItem: "/home"},
 		},
@@ -2173,7 +2177,7 @@ func Test_MergeFirstSeenAt(t *testing.T) {
 	metricsByUUID := cache.MetricsByUUID()
 
 	for _, val := range metrics {
-		metricsByUUID[val.ID] = val.metricFromAPI(metricsByUUID[val.ID].FirstSeenAt)
+		metricsByUUID[val.ID] = val.metricFromAPI(metricsByUUID[val.ID].FirstSeenAt, newAgent.ID)
 	}
 
 	for _, val := range metricsByUUID {
