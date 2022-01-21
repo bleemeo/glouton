@@ -23,7 +23,6 @@ import (
 	bleemeoTypes "glouton/bleemeo/types"
 	"glouton/logger"
 	"glouton/prometheus/model"
-	"glouton/store"
 	"glouton/threshold"
 	"glouton/types"
 	"runtime"
@@ -63,7 +62,7 @@ var (
 // and alerting rules.
 type Manager struct {
 	recordingRules []*rules.Group
-	alertingRules  map[string]*ruleGroup
+	alertingRules  map[string]*alertRuleGroup
 
 	appendable *dynamicAppendable
 	queryable  storage.Queryable
@@ -76,8 +75,9 @@ type Manager struct {
 	metricResolution time.Duration
 }
 
-type ruleGroup struct {
+type alertRuleGroup struct {
 	rules         map[string]*rules.AlertingRule
+	instanceID    string
 	inactiveSince time.Time
 	disabledUntil time.Time
 	pointsRead    int32
@@ -126,21 +126,6 @@ func newManager(ctx context.Context, queryable storage.Queryable, defaultRules m
 
 	app := &dynamicAppendable{}
 
-	mgrOptions := &rules.ManagerOptions{
-		Context:    ctx,
-		Logger:     log.With(promLogger, "component", "rules manager"),
-		Appendable: app,
-		Queryable:  queryable,
-		QueryFunc:  rules.EngineQueryFunc(engine, queryable),
-		NotifyFunc: func(ctx context.Context, expr string, alerts ...*rules.Alert) {
-			if len(alerts) == 0 {
-				return
-			}
-
-			logger.V(2).Printf("notification triggered for expression %x with state %v and labels %v", expr, alerts[0].State, alerts[0].Labels)
-		},
-	}
-
 	defaultGroupRules := []rules.Rule{}
 
 	for metricName, val := range defaultRules {
@@ -153,11 +138,28 @@ func newManager(ctx context.Context, queryable storage.Queryable, defaultRules m
 		}
 	}
 
+	// We should use a queryable that limit to a given instance_uuid to avoid cross-agent
+	// recording rules (and thus have multiple rules Group).
+	// But this isn't yet needed because currently rules are only configured by code and
+	// current hard-coded rules will kept the instance_uuid label which avoid cross-agent.
 	defaultGroup := rules.NewGroup(rules.GroupOptions{
 		Name:          "default",
 		Rules:         defaultGroupRules,
 		ShouldRestore: true,
-		Opts:          mgrOptions,
+		Opts: &rules.ManagerOptions{
+			Context:    ctx,
+			Logger:     log.With(promLogger, "component", "rules manager"),
+			Appendable: app,
+			Queryable:  queryable,
+			QueryFunc:  rules.EngineQueryFunc(engine, queryable),
+			NotifyFunc: func(ctx context.Context, expr string, alerts ...*rules.Alert) {
+				if len(alerts) == 0 {
+					return
+				}
+
+				logger.V(2).Printf("notification triggered for expression %x with state %v and labels %v", expr, alerts[0].State, alerts[0].Labels)
+			},
+		},
 	})
 
 	rm := Manager{
@@ -165,7 +167,7 @@ func newManager(ctx context.Context, queryable storage.Queryable, defaultRules m
 		queryable:        queryable,
 		engine:           engine,
 		recordingRules:   []*rules.Group{defaultGroup},
-		alertingRules:    map[string]*ruleGroup{},
+		alertingRules:    map[string]*alertRuleGroup{},
 		logger:           promLogger,
 		agentStarted:     created,
 		metricResolution: 0,
@@ -251,7 +253,7 @@ func (rm *Manager) Collect(ctx context.Context, app storage.Appender) error {
 	return nil
 }
 
-func (agr *ruleGroup) shouldSkip(now time.Time) bool {
+func (agr *alertRuleGroup) shouldSkip(now time.Time) bool {
 	if !agr.inactiveSince.IsZero() && !agr.isUserAlert {
 		if agr.disabledUntil.IsZero() && now.After(agr.inactiveSince.Add(2*time.Minute)) {
 			logger.V(2).Printf("rule %s has been disabled for the last 2 minutes. retrying this metric in 10 minutes", agr.labelsText)
@@ -269,7 +271,7 @@ func (agr *ruleGroup) shouldSkip(now time.Time) bool {
 	return false
 }
 
-func (agr *ruleGroup) runGroup(ctx context.Context, now time.Time, rm *Manager) (types.MetricPoint, error) {
+func (agr *alertRuleGroup) runGroup(ctx context.Context, now time.Time, rm *Manager) (types.MetricPoint, error) {
 	thresholdOrder := []string{highCriticalState, lowCriticalState, highWarningState, lowWarningState}
 
 	var generatedPoint types.MetricPoint
@@ -307,9 +309,22 @@ func (agr *ruleGroup) runGroup(ctx context.Context, now time.Time, rm *Manager) 
 		}
 
 		prevState := rule.State()
-		queryable := &store.CountingQueryable{Queryable: rm.queryable}
 
-		_, err := rule.Eval(ctx, now, rules.EngineQueryFunc(rm.engine, queryable), nil, 100)
+		tmp, err := newFilterQueryable(
+			rm.queryable,
+			map[string]string{
+				types.LabelInstanceUUID: agr.instanceID,
+			},
+		)
+		if err != nil {
+			agr.lastErr = err
+
+			return types.MetricPoint{}, err
+		}
+
+		queryable := newCoutingQueryable(tmp)
+
+		_, err = rule.Eval(ctx, now, rules.EngineQueryFunc(rm.engine, queryable), nil, 100)
 		if err != nil {
 			agr.lastErr = err
 
@@ -357,7 +372,7 @@ func (agr *ruleGroup) runGroup(ctx context.Context, now time.Time, rm *Manager) 
 	return generatedPoint, nil
 }
 
-func (agr *ruleGroup) checkNoPoint(now time.Time, agentStart time.Time, metricRes time.Duration) (types.MetricPoint, error) {
+func (agr *alertRuleGroup) checkNoPoint(now time.Time, agentStart time.Time, metricRes time.Duration) (types.MetricPoint, error) {
 	if agr.isUserAlert && now.Sub(agentStart) > metricRes {
 		return types.MetricPoint{
 			Point: types.Point{
@@ -381,7 +396,7 @@ func (agr *ruleGroup) checkNoPoint(now time.Time, agentStart time.Time, metricRe
 	return types.MetricPoint{}, errSkipPoints
 }
 
-func (agr *ruleGroup) unknownDescription() string {
+func (agr *alertRuleGroup) unknownDescription() string {
 	if agr.isError != "" {
 		return "Invalid PromQL: " + agr.isError
 	}
@@ -389,7 +404,7 @@ func (agr *ruleGroup) unknownDescription() string {
 	return "PromQL read zero points. The PromQL may be incorrect or the source measurement may have disappeared"
 }
 
-func (agr *ruleGroup) generateNewPoint(thresholdType string, rule *rules.AlertingRule, state rules.AlertState, now time.Time) (types.MetricPoint, error) {
+func (agr *alertRuleGroup) generateNewPoint(thresholdType string, rule *rules.AlertingRule, state rules.AlertState, now time.Time) (types.MetricPoint, error) {
 	statusCode := statusFromThreshold(thresholdType)
 	alerts := rule.ActiveAlerts()
 
@@ -437,7 +452,7 @@ func (agr *ruleGroup) generateNewPoint(thresholdType string, rule *rules.Alertin
 	return newPoint, nil
 }
 
-func (agr *ruleGroup) lowestThreshold() float64 {
+func (agr *alertRuleGroup) lowestThreshold() float64 {
 	orderToPrint := []string{lowWarningState, highWarningState, lowCriticalState, highCriticalState}
 
 	for _, thr := range orderToPrint {
@@ -454,7 +469,7 @@ func (agr *ruleGroup) lowestThreshold() float64 {
 	return 0
 }
 
-func (agr *ruleGroup) thresholdFromString(threshold string) float64 {
+func (agr *alertRuleGroup) thresholdFromString(threshold string) float64 {
 	switch threshold {
 	case highCriticalState:
 		return agr.thresholds.HighCritical
@@ -470,14 +485,32 @@ func (agr *ruleGroup) thresholdFromString(threshold string) float64 {
 }
 
 func (rm *Manager) addAlertingRule(metric bleemeoTypes.Metric, isError string) error {
-	newGroup := &ruleGroup{
+	labels := metric.Labels
+
+	if labels[types.LabelInstanceUUID] != metric.AgentID {
+		// We want to force this labels, because alert rule will only run on metric
+		// that belong to this instance_uuid and should only output on metric with this
+		// instance_uuid.
+		// We should not mutate the labels map or it will mutate Bleemeo cache.
+		// The +1 is because we assume than mismatch of instance_uuid happen when it's absent.
+		tmp := make(map[string]string, len(labels)+1)
+		for k, v := range labels {
+			tmp[k] = v
+		}
+
+		tmp[types.LabelInstanceUUID] = metric.AgentID
+		labels = tmp
+	}
+
+	newGroup := &alertRuleGroup{
 		rules:         make(map[string]*rules.AlertingRule, 4),
+		instanceID:    metric.AgentID,
 		inactiveSince: time.Time{},
 		disabledUntil: time.Time{},
 		labelsText:    metric.LabelsText,
 		promql:        metric.PromQLQuery,
 		thresholds:    metric.Threshold.ToInternalThreshold(),
-		labels:        metric.Labels,
+		labels:        labels,
 		isUserAlert:   metric.IsUserPromQLAlert,
 		isError:       isError,
 	}
@@ -535,7 +568,7 @@ func (rm *Manager) addAlertingRule(metric bleemeoTypes.Metric, isError string) e
 	return nil
 }
 
-func (agr *ruleGroup) Equal(threshold threshold.Threshold) bool {
+func (agr *alertRuleGroup) Equal(threshold threshold.Threshold) bool {
 	return agr.thresholds.Equal(threshold)
 }
 
@@ -546,7 +579,7 @@ func (rm *Manager) RebuildAlertingRules(metricsList []bleemeoTypes.Metric) error
 
 	old := rm.alertingRules
 
-	rm.alertingRules = make(map[string]*ruleGroup)
+	rm.alertingRules = make(map[string]*alertRuleGroup)
 
 	for _, val := range metricsList {
 		if len(val.PromQLQuery) == 0 || val.ToInternalThreshold().IsZero() {
@@ -554,6 +587,10 @@ func (rm *Manager) RebuildAlertingRules(metricsList []bleemeoTypes.Metric) error
 		}
 
 		prevInstance, ok := old[val.LabelsText]
+
+		if ok && prevInstance.instanceID != val.AgentID {
+			ok = false
+		}
 
 		if ok && prevInstance.promql == val.PromQLQuery && prevInstance.Equal(val.Threshold.ToInternalThreshold()) {
 			rm.alertingRules[prevInstance.labelsText] = prevInstance
@@ -631,7 +668,7 @@ func (rm *Manager) DiagnosticArchive(ctx context.Context, archive types.ArchiveW
 	return nil
 }
 
-func (agr *ruleGroup) newRule(exp string, lbls map[string]string, threshold string, logger log.Logger) error {
+func (agr *alertRuleGroup) newRule(exp string, lbls map[string]string, threshold string, logger log.Logger) error {
 	newExp, err := parser.ParseExpr(exp)
 	if err != nil {
 		return err
@@ -654,12 +691,12 @@ func (agr *ruleGroup) newRule(exp string, lbls map[string]string, threshold stri
 	return nil
 }
 
-func (agr *ruleGroup) String() string {
+func (agr *alertRuleGroup) String() string {
 	return fmt.Sprintf("id=%s query=%#v \n\tinactive_since=%v disabled_until=%v is_user_promql_alert=%v\n\tlastRun=%v pointsRead=%d status=%v err=%v\n%v",
 		agr.labelsText, agr.promql, agr.inactiveSince, agr.disabledUntil, agr.isUserAlert, agr.lastRun, agr.pointsRead, agr.lastStatus, agr.lastErr, agr.query())
 }
 
-func (agr *ruleGroup) query() string {
+func (agr *alertRuleGroup) query() string {
 	res := ""
 
 	for key, val := range agr.rules {
