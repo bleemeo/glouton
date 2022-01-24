@@ -45,9 +45,9 @@ const (
 	ifOperStatusMetricName = "ifOperStatus"
 	ifTypeInfoMetricName   = "ifType_info"
 	snmpDiscoveryModule    = "discovery"
-	mockFactMetricName     = "__snmp_metric_for_mock_fact"
-	mockFactLabelKey       = "__snmp_fact_key"
-	mockFactLabelValue     = "__snmp_fact_value"
+	mockFactMetricName     = "_mock_snmp_metric_for_mock_fact"
+	mockFactLabelKey       = "_mock_snmp_fact_key"
+	mockFactLabelValue     = "_mock_snmp_fact_value"
 )
 
 const (

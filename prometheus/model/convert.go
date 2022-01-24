@@ -4,6 +4,7 @@ import (
 	"errors"
 	"glouton/logger"
 	"glouton/types"
+	"strings"
 	"time"
 
 	"github.com/gogo/protobuf/proto"
@@ -33,14 +34,19 @@ func FamiliesToMetricPoints(now time.Time, families []*dto.MetricFamily) []types
 	result := make([]types.MetricPoint, len(samples))
 
 	for i, sample := range samples {
-		labels := make(map[string]string, len(sample.Metric))
+		builder := labels.NewBuilder(nil)
 
 		for k, v := range sample.Metric {
-			labels[string(k)] = string(v)
+			builder.Set(string(k), string(v))
 		}
 
+		lbls := builder.Labels()
+		annotations := MetaLabelsToAnnotation(lbls)
+		lbls = DropMetaLabels(lbls)
+
 		result[i] = types.MetricPoint{
-			Labels: labels,
+			Labels:      lbls.Map(),
+			Annotations: annotations,
 			Point: types.Point{
 				Time:  sample.Timestamp.Time(),
 				Value: float64(sample.Value),
@@ -49,6 +55,26 @@ func FamiliesToMetricPoints(now time.Time, families []*dto.MetricFamily) []types
 	}
 
 	return result
+}
+
+// DropMetaLabels delete all labels which start with __ (with exception to __name__).
+func DropMetaLabels(lbls labels.Labels) labels.Labels {
+	i := 0
+
+	for _, l := range lbls {
+		if l.Name != types.LabelName && strings.HasPrefix(l.Name, model.ReservedLabelPrefix) {
+			continue
+		}
+
+		if l.Value == "" {
+			continue
+		}
+
+		lbls[i] = l
+		i++
+	}
+
+	return lbls[:i]
 }
 
 // SamplesToMetricFamily convert a list of sample to a MetricFamilty of given type.
@@ -113,16 +139,60 @@ func SamplesToMetricFamily(samples []promql.Sample, mType *dto.MetricType) (*dto
 // This method will not Commit or Rollback on the Appender.
 func SendPointsToAppender(points []types.MetricPoint, app storage.Appender) error {
 	for _, pts := range points {
-		if pts.Annotations.Status.CurrentStatus.IsSet() {
-			pts.Labels[types.LabelMetaCurrentStatus] = pts.Annotations.Status.CurrentStatus.String()
-			pts.Labels[types.LabelMetaCurrentDescription] = pts.Annotations.Status.StatusDescription
-		}
+		promLabels := AnnotationToMetaLabels(labels.FromMap(pts.Labels), pts.Annotations)
 
-		_, err := app.Append(0, labels.FromMap(pts.Labels), pts.Time.UnixMilli(), pts.Value)
+		_, err := app.Append(0, promLabels, pts.Time.UnixMilli(), pts.Value)
 		if err != nil {
 			return err
 		}
 	}
 
 	return nil
+}
+
+// AnnotationToMetaLabels convert annotation to meta-labels (labels starting with __) and append them to existing labels.
+// It's valid to provide nil for initial labels.
+func AnnotationToMetaLabels(lbls labels.Labels, annotation types.MetricAnnotations) labels.Labels {
+	builder := labels.NewBuilder(lbls)
+
+	if annotation.ServiceName != "" {
+		builder.Set(types.LabelMetaServiceName, annotation.ServiceName)
+	}
+
+	if annotation.ContainerID != "" {
+		builder.Set(types.LabelMetaContainerID, annotation.ContainerID)
+	}
+
+	if annotation.BleemeoAgentID != "" {
+		builder.Set(types.LabelMetaBleemeoTargetAgentUUID, annotation.BleemeoAgentID)
+	}
+
+	if annotation.SNMPTarget != "" {
+		builder.Set(types.LabelMetaSNMPTarget, annotation.SNMPTarget)
+	}
+
+	if annotation.Status.CurrentStatus.IsSet() {
+		builder.Set(types.LabelMetaCurrentStatus, annotation.Status.CurrentStatus.String())
+		builder.Set(types.LabelMetaCurrentDescription, annotation.Status.StatusDescription)
+	}
+
+	return builder.Labels()
+}
+
+// MetaLabelsToAnnotation extract from meta-labels some annotations. It mostly does the opposit of AnnotationToMetaLabels.
+// Labels aren't modified.
+func MetaLabelsToAnnotation(lbls labels.Labels) types.MetricAnnotations {
+	annotations := types.MetricAnnotations{
+		ServiceName:    lbls.Get(types.LabelMetaServiceName),
+		ContainerID:    lbls.Get(types.LabelMetaContainerID),
+		BleemeoAgentID: lbls.Get(types.LabelMetaBleemeoTargetAgentUUID),
+		SNMPTarget:     lbls.Get(types.LabelMetaSNMPTarget),
+	}
+
+	if statusText := lbls.Get(types.LabelMetaCurrentStatus); statusText != "" {
+		annotations.Status.CurrentStatus = types.FromString(statusText)
+		annotations.Status.StatusDescription = lbls.Get(types.LabelMetaCurrentDescription)
+	}
+
+	return annotations
 }

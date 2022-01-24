@@ -26,6 +26,7 @@ import (
 	"errors"
 	"fmt"
 	"glouton/logger"
+	gloutonModel "glouton/prometheus/model"
 	"glouton/prometheus/registry/internal/renamer"
 	"glouton/types"
 	"io"
@@ -142,7 +143,9 @@ type RegistrationOption struct {
 	Timeout      time.Duration
 	StopCallback func()
 	// ExtraLabels are labels added. If a labels already exists, extraLabels take precedence.
-	ExtraLabels        map[string]string
+	ExtraLabels map[string]string
+	// NoLabelsAlteration disable (most) alteration of labels. It don't apply to PushPoints.
+	// Meta labels (starting with __) are still dropped and (if applicable) converted to annotations.
 	NoLabelsAlteration bool
 	// DisablePeriodicGather skip the periodic calls which forward gathered points to r.PushPoint.
 	// The periodic call use the Interval. When Interval is 0, the dynmaic interval set by UpdateDelay is used.
@@ -1260,49 +1263,15 @@ func (r *Registry) addMetaLabels(input map[string]string) map[string]string {
 
 func (r *Registry) applyRelabel(input map[string]string) (labels.Labels, types.MetricAnnotations) {
 	promLabels := labels.FromMap(input)
-
-	annotations := types.MetricAnnotations{
-		ServiceName: promLabels.Get(types.LabelMetaServiceName),
-		ContainerID: promLabels.Get(types.LabelMetaContainerID),
-	}
-
-	// annotate the metric if it comes from a bleemeo target (probe, snmp)
-	agentID := promLabels.Get(types.LabelMetaBleemeoTargetAgentUUID)
-	if agentID != "" {
-		annotations.BleemeoAgentID = agentID
-	}
-
-	if snmpTarget := promLabels.Get(types.LabelMetaSNMPTarget); snmpTarget != "" {
-		annotations.SNMPTarget = snmpTarget
-	}
-
-	if statusText := promLabels.Get(types.LabelMetaCurrentStatus); statusText != "" {
-		annotations.Status.CurrentStatus = types.FromString(statusText)
-		annotations.Status.StatusDescription = promLabels.Get(types.LabelMetaCurrentDescription)
-	}
-
+	annotations := gloutonModel.MetaLabelsToAnnotation(promLabels)
 	promLabels = relabel.Process(
 		promLabels,
 		r.relabelConfigs...,
 	)
 
-	result := make(labels.Labels, 0, len(promLabels))
+	promLabels = gloutonModel.DropMetaLabels(promLabels)
 
-	for _, l := range promLabels {
-		if l.Name != types.LabelName && strings.HasPrefix(l.Name, model.ReservedLabelPrefix) {
-			continue
-		}
-
-		if l.Value == "" {
-			continue
-		}
-
-		result = append(result, l)
-	}
-
-	sort.Sort(result)
-
-	return result, annotations
+	return promLabels, annotations
 }
 
 func (r *Registry) setupGatherer(ctx context.Context, reg *registration, source prometheus.Gatherer) {

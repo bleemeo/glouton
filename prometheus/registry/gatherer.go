@@ -247,15 +247,7 @@ func (g labeledGatherer) GatherPoints(ctx context.Context, now time.Time, state 
 
 	for i := range points {
 		if (g.annotations != types.MetricAnnotations{}) {
-			points[i].Annotations = g.annotations
-		}
-
-		if statusText := points[i].Labels[types.LabelMetaCurrentStatus]; statusText != "" {
-			points[i].Annotations.Status.CurrentStatus = types.FromString(statusText)
-			points[i].Annotations.Status.StatusDescription = points[i].Labels[types.LabelMetaCurrentDescription]
-
-			delete(points[i].Labels, types.LabelMetaCurrentStatus)
-			delete(points[i].Labels, types.LabelMetaCurrentDescription)
+			points[i].Annotations = points[i].Annotations.Merge(g.annotations)
 		}
 	}
 

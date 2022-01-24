@@ -142,6 +142,35 @@ func TestMetricOnlyHasItem(t *testing.T) {
 			agentID: agentID,
 			want:    false,
 		},
+		{
+			name: "instance_uuid ignored",
+			labels: map[string]string{
+				types.LabelName:         "cpu_used",
+				types.LabelInstanceUUID: agentID,
+			},
+			agentID: agentID,
+			want:    true,
+		},
+		{
+			name: "instance_uuid ignored 2",
+			labels: map[string]string{
+				types.LabelName:         "disk_used",
+				types.LabelItem:         "/home",
+				types.LabelInstanceUUID: agentID,
+			},
+			agentID: agentID,
+			want:    true,
+		},
+		{
+			name: "instance_uuid ignored 3",
+			labels: map[string]string{
+				types.LabelName:         "disk_used",
+				types.LabelItem:         "/home",
+				types.LabelInstanceUUID: agentID,
+			},
+			agentID: agentID,
+			want:    true,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
