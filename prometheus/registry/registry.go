@@ -392,6 +392,9 @@ func (r *Registry) Run(ctx context.Context) error {
 // This callback will be called for each collection period. It's mostly used to
 // add Telegraf input (using glouton/collector).
 // Deprecated: use RegisterAppenderCallback.
+// Note: before being able to drop pushpoint & registerpushpoint, we likely need:
+//  * support for "GathererWithScheduleUpdate-like" on RegisterAppenderCallback (needed by service check, when they trigger check on TCP close)
+//  * support for conversion of all annotation to meta-label and vise-vera (model/convert.go)
 func (r *Registry) RegisterPushPointsCallback(opt RegistrationOption, f func(context.Context, time.Time)) (int, error) {
 	return r.registerPushPointsCallback(opt, f)
 }
