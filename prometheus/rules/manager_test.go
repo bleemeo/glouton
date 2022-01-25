@@ -39,6 +39,8 @@ import (
 	"github.com/prometheus/prometheus/storage"
 )
 
+const agentID = "60451941-91d9-40d2-8451-1b79250288d0"
+
 var errNotImplemented = errors.New("not implemented")
 
 type mockAppendable struct {
@@ -962,7 +964,7 @@ func Test_Rebuild_Rules(t *testing.T) {
 				LowWarning:   math.NaN(),
 			},
 			PromQLQuery:       promqlQuery,
-			IsUserPromQLAlert: false,
+			IsUserPromQLAlert: true,
 		},
 		// {
 		// 	ID:         "CPU-ID",
@@ -1093,7 +1095,7 @@ func Test_GloutonStart(t *testing.T) {
 				LowWarning:   math.NaN(),
 			},
 			PromQLQuery:       promqlQuery,
-			IsUserPromQLAlert: false,
+			IsUserPromQLAlert: true,
 		},
 	}
 
@@ -1184,7 +1186,8 @@ func Test_NoStatutsChangeOnStart(t *testing.T) {
 						LowWarning:   math.NaN(),
 					},
 					PromQLQuery:       promqlQuery,
-					IsUserPromQLAlert: false,
+					IsUserPromQLAlert: true,
+					InstanceUUID:      agentID,
 				},
 			}
 
@@ -1217,7 +1220,8 @@ func Test_NoStatutsChangeOnStart(t *testing.T) {
 								Value: 30,
 							},
 							Labels: map[string]string{
-								types.LabelName: sourceMetric,
+								types.LabelName:         sourceMetric,
+								types.LabelInstanceUUID: agentID,
 							},
 						},
 					})
@@ -1256,6 +1260,132 @@ func Test_NoStatutsChangeOnStart(t *testing.T) {
 				t.Errorf("rule never returned any points")
 			}
 		})
+	}
+}
+
+// Test_NoCrossRead checks that we don't read metric from another instance_uuid.
+// Glouton could measure metrics for multiple agent, for example for the normal/"main" agent and for SNMP agents.
+// We want alert to run only on one set of metrics. Since instance_uuid should always be set in such case, we use
+// this label for filtering.
+func Test_NoCrossRead(t *testing.T) {
+	const (
+		resultName   = "copy_of_node_cpu_seconds_global"
+		sourceMetric = "node_cpu_seconds_global"
+		promqlQuery  = "node_cpu_seconds_global"
+	)
+
+	var (
+		resPoints []types.MetricPoint
+		l         sync.Mutex
+	)
+
+	store := store.New(time.Hour)
+
+	reg, err := registry.New(registry.Option{
+		PushPoint: pushFunction(func(ctx context.Context, points []types.MetricPoint) {
+			l.Lock()
+			defer l.Unlock()
+
+			resPoints = append(resPoints, points...)
+		}),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ctx := context.Background()
+	t0 := time.Now().Truncate(time.Second)
+
+	// we always boot the manager with 10 seconds resolution
+	ruleManager := newManager(ctx, store, defaultLinuxRecordingRules, t0, 10*time.Second)
+
+	metricList := []MetricAlertRule{
+		{
+			Labels: labels.FromMap(map[string]string{
+				types.LabelName: resultName,
+			}),
+			Threshold: threshold.Threshold{
+				HighWarning:  0,
+				HighCritical: 100,
+			},
+			PromQLQuery:       promqlQuery,
+			InstanceUUID:      agentID,
+			IsUserPromQLAlert: true,
+		},
+	}
+
+	err = ruleManager.RebuildAlertingRules(metricList)
+	if err != nil {
+		t.Error(err)
+	}
+
+	ruleManager.UpdateMetricResolution(10 * time.Second)
+
+	id, err := reg.RegisterAppenderCallback(
+		registry.RegistrationOption{
+			NoLabelsAlteration:    true,
+			DisablePeriodicGather: true,
+		},
+		registry.AppenderRegistrationOption{},
+		ruleManager,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for currentTime := t0; currentTime.Before(t0.Add(10 * time.Minute)); currentTime = currentTime.Add(10 * time.Second) {
+		if !currentTime.Equal(t0) {
+			// cpu_used need two gather to be calculated, skip first point.
+			store.PushPoints(context.Background(), []types.MetricPoint{
+				{
+					Point: types.Point{
+						Time:  currentTime,
+						Value: 30,
+					},
+					Labels: map[string]string{
+						types.LabelName: sourceMetric,
+					},
+				},
+				{
+					Point: types.Point{
+						Time:  currentTime,
+						Value: 30,
+					},
+					Labels: map[string]string{
+						types.LabelName:         sourceMetric,
+						types.LabelInstanceUUID: "not-agentID",
+					},
+				},
+			})
+		}
+
+		ruleManager.now = func() time.Time { return currentTime }
+
+		reg.InternalRunScape(ctx, currentTime, id)
+	}
+
+	var hadResult bool
+
+	for _, p := range resPoints {
+		if p.Labels[types.LabelName] != resultName {
+			t.Errorf("unexpected point with labels: %v", p.Labels)
+
+			continue
+		}
+
+		if p.Annotations.Status.CurrentStatus == types.StatusUnknown {
+			hadResult = true
+
+			continue
+		}
+
+		if p.Annotations.Status.CurrentStatus != types.StatusUnknown {
+			t.Errorf("point status = %v want %v", p.Annotations.Status.CurrentStatus, types.StatusUnknown)
+		}
+	}
+
+	if !hadResult {
+		t.Errorf("rule never returned any points")
 	}
 }
 
@@ -1305,7 +1435,7 @@ func Test_NoUnknownOnStart(t *testing.T) {
 				HighCritical: 100,
 			},
 			PromQLQuery:       promqlQuery,
-			IsUserPromQLAlert: false,
+			IsUserPromQLAlert: true,
 		},
 	}
 
