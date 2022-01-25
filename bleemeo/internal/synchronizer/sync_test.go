@@ -1046,23 +1046,23 @@ func TestSync(t *testing.T) {
 	// Did we store all the metrics ?
 	syncedMetrics := helper.s.option.Cache.Metrics()
 	want := []bleemeoTypes.Metric{
-		newMetric1.metricFromAPI(time.Time{}, newAgent.ID),
-		newMetric2.metricFromAPI(time.Time{}, newAgent.ID),
-		newMetricActiveMonitor.metricFromAPI(time.Time{}, newAgent.ID),
+		newMetric1.metricFromAPI(time.Time{}),
+		newMetric2.metricFromAPI(time.Time{}),
+		newMetricActiveMonitor.metricFromAPI(time.Time{}),
 		metricPayload{
 			Metric: bleemeoTypes.Metric{
 				ID:      "1",
 				AgentID: newAgent.ID,
 			},
 			Name: "agent_status",
-		}.metricFromAPI(time.Time{}, newAgent.ID),
+		}.metricFromAPI(time.Time{}),
 		metricPayload{
 			Metric: bleemeoTypes.Metric{
 				ID:      "2",
 				AgentID: newAgent.ID,
 			},
 			Name: "cpu_used",
-		}.metricFromAPI(time.Time{}, newAgent.ID),
+		}.metricFromAPI(time.Time{}),
 	}
 
 	optMetricSort := cmpopts.SortSlices(func(x bleemeoTypes.Metric, y bleemeoTypes.Metric) bool { return x.ID < y.ID })

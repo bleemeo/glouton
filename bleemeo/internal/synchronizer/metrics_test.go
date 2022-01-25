@@ -2177,7 +2177,7 @@ func Test_MergeFirstSeenAt(t *testing.T) {
 	metricsByUUID := cache.MetricsByUUID()
 
 	for _, val := range metrics {
-		metricsByUUID[val.ID] = val.metricFromAPI(metricsByUUID[val.ID].FirstSeenAt, newAgent.ID)
+		metricsByUUID[val.ID] = val.metricFromAPI(metricsByUUID[val.ID].FirstSeenAt)
 	}
 
 	for _, val := range metricsByUUID {

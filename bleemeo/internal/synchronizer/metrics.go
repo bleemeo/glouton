@@ -25,6 +25,7 @@ import (
 	"glouton/bleemeo/internal/common"
 	bleemeoTypes "glouton/bleemeo/types"
 	"glouton/logger"
+	"glouton/prometheus/model"
 	"glouton/prometheus/rules"
 	"glouton/threshold"
 	"glouton/types"
@@ -122,11 +123,11 @@ type metricPayload struct {
 }
 
 // metricFromAPI convert a metricPayload received from API to a bleemeoTypes.Metric.
-func (mp metricPayload) metricFromAPI(lastTime time.Time, agentID string) bleemeoTypes.Metric {
+func (mp metricPayload) metricFromAPI(lastTime time.Time) bleemeoTypes.Metric {
 	if mp.LabelsText == "" {
 		mp.Labels = map[string]string{
 			types.LabelName:         mp.Name,
-			types.LabelInstanceUUID: agentID,
+			types.LabelInstanceUUID: mp.AgentID,
 		}
 
 		if mp.Item != "" {
@@ -399,6 +400,7 @@ func metricToMetricAlertRule(cache *cache.Cache) []rules.MetricAlertRule {
 	metrics := cache.Metrics()
 	agents := cache.AgentsByUUID()
 	configs := cache.AccountConfigsByUUID()
+	mainAgent := cache.Agent()
 
 	result := make([]rules.MetricAlertRule, 0)
 
@@ -416,8 +418,16 @@ func metricToMetricAlertRule(cache *cache.Cache) []rules.MetricAlertRule {
 		cfg := configs[agent.CurrentConfigID]
 		resolution := cfg.AgentConfigByID[agent.AgentType].MetricResolution
 
+		lbls := labels.FromMap(metric.Labels)
+
+		if metric.AgentID != mainAgent.ID {
+			lbls = model.AnnotationToMetaLabels(lbls, types.MetricAnnotations{
+				BleemeoAgentID: metric.AgentID,
+			})
+		}
+
 		result = append(result, rules.MetricAlertRule{
-			Labels:            labels.FromMap(metric.Labels),
+			Labels:            lbls,
 			PromQLQuery:       metric.PromQLQuery,
 			Threshold:         threshold,
 			InstanceUUID:      metric.AgentID,
@@ -431,11 +441,17 @@ func metricToMetricAlertRule(cache *cache.Cache) []rules.MetricAlertRule {
 
 func (s *Synchronizer) metricKey(lbls map[string]string, annotations types.MetricAnnotations) string {
 	if lbls[types.LabelInstanceUUID] == "" {
-		// In name+item mode, we treat empty instance_uuid and instance_uuid=s.AgentID as the same.
+		// In name+item mode, we treat empty instance_uuid and instance_uuid=agentID as the same.
 		// This reflect in:
 		// * metricFromAPI which fill the instance_uuid when labels_text is empty
-		// * MetricOnlyHasItem that cause instance_uuid to not be sent on registration
-		if common.MetricOnlyHasItem(lbls, s.agentID) {
+		// * MetricOnlyHasItem that cause instance_uuid to not be sent on registration in name+item mode
+		agentID := s.agentID
+
+		if annotations.BleemeoAgentID != "" {
+			agentID = annotations.BleemeoAgentID
+		}
+
+		if common.MetricOnlyHasItem(lbls, agentID) {
 			tmp := make(map[string]string, len(lbls)+1)
 
 			for k, v := range lbls {
@@ -770,7 +786,7 @@ func (s *Synchronizer) metricsListWithAgentID(fetchInactive bool) (map[string]bl
 			continue
 		}
 
-		metricsByUUID[metric.ID] = metric.metricFromAPI(metricsByUUID[metric.ID].FirstSeenAt, s.agentID)
+		metricsByUUID[metric.ID] = metric.metricFromAPI(metricsByUUID[metric.ID].FirstSeenAt)
 	}
 
 	return metricsByUUID, nil
@@ -851,7 +867,7 @@ func (s *Synchronizer) metricUpdateList(metrics []types.Metric) error {
 			"fields":      "id,agent,label,item,labels_text,unit,unit_text,service,container,deactivated_at,threshold_low_warning,threshold_low_critical,threshold_high_warning,threshold_high_critical,status_of,promql_query,is_user_promql_alert",
 		}
 
-		if s.option.MetricFormat == types.MetricFormatBleemeo && common.MetricOnlyHasItem(metric.Labels(), s.agentID) {
+		if s.option.MetricFormat == types.MetricFormatBleemeo && common.MetricOnlyHasItem(metric.Labels(), agentID) {
 			annotations := metric.Annotations()
 			params["label"] = metric.Labels()[types.LabelName]
 			params["item"] = common.TruncateItem(annotations.BleemeoItem, annotations.ServiceName != "")
@@ -884,7 +900,7 @@ func (s *Synchronizer) metricUpdateList(metrics []types.Metric) error {
 				}
 			}
 
-			metricsByUUID[metric.ID] = metric.metricFromAPI(metricsByUUID[metric.ID].FirstSeenAt, s.agentID)
+			metricsByUUID[metric.ID] = metric.metricFromAPI(metricsByUUID[metric.ID].FirstSeenAt)
 		}
 	}
 
@@ -925,7 +941,7 @@ func (s *Synchronizer) metricUpdateListUUID(requests []string) error {
 			return err
 		}
 
-		metricsByUUID[metric.ID] = metric.metricFromAPI(metricsByUUID[metric.ID].FirstSeenAt, s.agentID)
+		metricsByUUID[metric.ID] = metric.metricFromAPI(metricsByUUID[metric.ID].FirstSeenAt)
 	}
 
 	metrics := make([]bleemeoTypes.Metric, 0, len(metricsByUUID))
@@ -1220,8 +1236,8 @@ func (mr *metricRegisterer) metricRegisterAndUpdateOne(metric types.Metric) erro
 	}
 
 	logger.V(2).Printf("Metric %v registered with UUID %s", key, result.ID)
-	mr.registeredMetricsByKey[key] = result.metricFromAPI(mr.registeredMetricsByKey[result.ID].FirstSeenAt, mr.s.agentID)
-	mr.registeredMetricsByUUID[result.ID] = result.metricFromAPI(mr.registeredMetricsByKey[result.ID].FirstSeenAt, mr.s.agentID)
+	mr.registeredMetricsByKey[key] = result.metricFromAPI(mr.registeredMetricsByKey[result.ID].FirstSeenAt)
+	mr.registeredMetricsByUUID[result.ID] = result.metricFromAPI(mr.registeredMetricsByKey[result.ID].FirstSeenAt)
 
 	return nil
 }
@@ -1240,8 +1256,13 @@ func (s *Synchronizer) prepareMetricPayload(metric types.Metric, registeredMetri
 	}
 
 	if s.option.MetricFormat == types.MetricFormatBleemeo {
+		agentID := s.agentID
+		if metric.Annotations().BleemeoAgentID != "" {
+			agentID = metric.Annotations().BleemeoAgentID
+		}
+
 		payload.Item = common.TruncateItem(annotations.BleemeoItem, annotations.ServiceName != "")
-		if common.MetricOnlyHasItem(labels, s.agentID) {
+		if common.MetricOnlyHasItem(labels, agentID) {
 			payload.LabelsText = ""
 		}
 	}
