@@ -212,25 +212,67 @@ func sortPoints(metrics []types.MetricPoint) []types.MetricPoint {
 		lblsA := labels.FromMap(metrics[i].Labels)
 		lblsB := labels.FromMap(metrics[j].Labels)
 
-		return labels.Compare(lblsA, lblsB) < 0
+		switch {
+		case metrics[i].Point.Time.Before(metrics[j].Point.Time):
+			return true
+		case metrics[i].Point.Time.After(metrics[j].Point.Time):
+			return false
+		default:
+			return labels.Compare(lblsA, lblsB) < 0
+		}
 	})
 
 	return metrics
 }
 
+func filterByDate(points []types.MetricPoint, cutoff time.Time) ([]types.MetricPoint, []types.MetricPoint) {
+	var ready []types.MetricPoint
+
+	i := 0
+
+	for _, p := range points {
+		if !p.Point.Time.After(cutoff) {
+			ready = append(ready, p)
+
+			continue
+		}
+
+		points[i] = p
+		i++
+	}
+
+	points = points[:i]
+
+	return ready, points
+}
+
+func makePoints(start time.Time, end time.Time, step time.Duration, template types.MetricPoint) []types.MetricPoint {
+	result := make([]types.MetricPoint, 0, end.Sub(start)/step)
+
+	for currentTime := start; currentTime.Before(end); currentTime = currentTime.Add(step) {
+		p := template
+		p.Point.Time = currentTime
+
+		result = append(result, p)
+	}
+
+	return result
+}
+
 func Test_manager(t *testing.T) {
 	const (
 		resultName   = "copy_of_node_cpu_seconds_global"
+		resultName2  = "copy_of_node_cpu_seconds_global2"
 		sourceMetric = "node_cpu_seconds_global"
 		promqlQuery  = "node_cpu_seconds_global"
 	)
 
 	ctx := context.Background()
-	now := time.Now().Truncate(time.Second)
+	t0 := time.Now().Truncate(time.Second)
 	okPoints := []types.MetricPoint{
 		{
 			Point: types.Point{
-				Time:  now,
+				Time:  t0,
 				Value: 0,
 			},
 			Labels: map[string]string{
@@ -245,7 +287,7 @@ func Test_manager(t *testing.T) {
 		},
 		{
 			Point: types.Point{
-				Time:  now.Add(1 * time.Minute),
+				Time:  t0.Add(1 * time.Minute),
 				Value: 0,
 			},
 			Labels: map[string]string{
@@ -260,7 +302,7 @@ func Test_manager(t *testing.T) {
 		},
 		{
 			Point: types.Point{
-				Time:  now.Add(2 * time.Minute),
+				Time:  t0.Add(2 * time.Minute),
 				Value: 0,
 			},
 			Labels: map[string]string{
@@ -275,7 +317,7 @@ func Test_manager(t *testing.T) {
 		},
 		{
 			Point: types.Point{
-				Time:  now.Add(3 * time.Minute),
+				Time:  t0.Add(3 * time.Minute),
 				Value: 0,
 			},
 			Labels: map[string]string{
@@ -290,7 +332,7 @@ func Test_manager(t *testing.T) {
 		},
 		{
 			Point: types.Point{
-				Time:  now.Add(4 * time.Minute),
+				Time:  t0.Add(4 * time.Minute),
 				Value: 0,
 			},
 			Labels: map[string]string{
@@ -305,7 +347,7 @@ func Test_manager(t *testing.T) {
 		},
 		{
 			Point: types.Point{
-				Time:  now.Add(5 * time.Minute),
+				Time:  t0.Add(5 * time.Minute),
 				Value: 0,
 			},
 			Labels: map[string]string{
@@ -320,7 +362,7 @@ func Test_manager(t *testing.T) {
 		},
 		{
 			Point: types.Point{
-				Time:  now.Add(6 * time.Minute),
+				Time:  t0.Add(6 * time.Minute),
 				Value: 0,
 			},
 			Labels: map[string]string{
@@ -337,7 +379,7 @@ func Test_manager(t *testing.T) {
 	warningPoints := []types.MetricPoint{
 		{
 			Point: types.Point{
-				Time:  now.Add(5 * time.Minute),
+				Time:  t0.Add(5 * time.Minute),
 				Value: 1,
 			},
 			Labels: map[string]string{
@@ -352,7 +394,7 @@ func Test_manager(t *testing.T) {
 		},
 		{
 			Point: types.Point{
-				Time:  now.Add(6 * time.Minute),
+				Time:  t0.Add(6 * time.Minute),
 				Value: 1,
 			},
 			Labels: map[string]string{
@@ -369,7 +411,7 @@ func Test_manager(t *testing.T) {
 	criticalPoints := []types.MetricPoint{
 		{
 			Point: types.Point{
-				Time:  now.Add(5 * time.Minute),
+				Time:  t0.Add(5 * time.Minute),
 				Value: 2,
 			},
 			Labels: map[string]string{
@@ -384,7 +426,7 @@ func Test_manager(t *testing.T) {
 		},
 		{
 			Point: types.Point{
-				Time:  now.Add(6 * time.Minute),
+				Time:  t0.Add(6 * time.Minute),
 				Value: 2,
 			},
 			Labels: map[string]string{
@@ -403,9 +445,11 @@ func Test_manager(t *testing.T) {
 		Name        string
 		Description string
 
-		Points []types.MetricPoint
-		Rules  []MetricAlertRule
-		Want   []types.MetricPoint
+		ScrapResolution time.Duration
+		RunDuration     time.Duration
+		Points          []types.MetricPoint
+		Rules           []MetricAlertRule
+		Want            []types.MetricPoint
 	}{
 		{
 			Name:        "No points",
@@ -434,7 +478,7 @@ func Test_manager(t *testing.T) {
 			Points: []types.MetricPoint{
 				{
 					Point: types.Point{
-						Time:  now.Add(-1 * time.Minute),
+						Time:  t0.Add(-1 * time.Minute),
 						Value: 25,
 					},
 					Labels: map[string]string{
@@ -443,7 +487,7 @@ func Test_manager(t *testing.T) {
 				},
 				{
 					Point: types.Point{
-						Time:  now.Add(3 * time.Minute),
+						Time:  t0.Add(3 * time.Minute),
 						Value: 25,
 					},
 					Labels: map[string]string{
@@ -474,7 +518,7 @@ func Test_manager(t *testing.T) {
 			Points: []types.MetricPoint{
 				{
 					Point: types.Point{
-						Time:  now.Add(-1 * time.Minute),
+						Time:  t0.Add(-1 * time.Minute),
 						Value: 120,
 					},
 					Labels: map[string]string{
@@ -483,7 +527,7 @@ func Test_manager(t *testing.T) {
 				},
 				{
 					Point: types.Point{
-						Time:  now.Add(4 * time.Minute),
+						Time:  t0.Add(4 * time.Minute),
 						Value: 110,
 					},
 					Labels: map[string]string{
@@ -522,7 +566,7 @@ func Test_manager(t *testing.T) {
 			Points: []types.MetricPoint{
 				{
 					Point: types.Point{
-						Time:  now.Add(-1 * time.Minute),
+						Time:  t0.Add(-1 * time.Minute),
 						Value: 800,
 					},
 					Labels: map[string]string{
@@ -531,7 +575,7 @@ func Test_manager(t *testing.T) {
 				},
 				{
 					Point: types.Point{
-						Time:  now.Add(4 * time.Minute),
+						Time:  t0.Add(4 * time.Minute),
 						Value: 1100,
 					},
 					Labels: map[string]string{
@@ -570,7 +614,7 @@ func Test_manager(t *testing.T) {
 			Points: []types.MetricPoint{
 				{
 					Point: types.Point{
-						Time:  now.Add(-1 * time.Minute),
+						Time:  t0.Add(-1 * time.Minute),
 						Value: 800,
 					},
 					Labels: map[string]string{
@@ -579,7 +623,7 @@ func Test_manager(t *testing.T) {
 				},
 				{
 					Point: types.Point{
-						Time:  now.Add(4 * time.Minute),
+						Time:  t0.Add(4 * time.Minute),
 						Value: 700,
 					},
 					Labels: map[string]string{
@@ -588,7 +632,7 @@ func Test_manager(t *testing.T) {
 				},
 				{
 					Point: types.Point{
-						Time:  now.Add(6 * time.Minute),
+						Time:  t0.Add(6 * time.Minute),
 						Value: 130,
 					},
 					Labels: map[string]string{
@@ -627,7 +671,7 @@ func Test_manager(t *testing.T) {
 			Points: []types.MetricPoint{
 				{
 					Point: types.Point{
-						Time:  now.Add(-1 * time.Minute),
+						Time:  t0.Add(-1 * time.Minute),
 						Value: 20,
 					},
 					Labels: map[string]string{
@@ -636,7 +680,7 @@ func Test_manager(t *testing.T) {
 				},
 				{
 					Point: types.Point{
-						Time:  now.Add(4 * time.Minute),
+						Time:  t0.Add(4 * time.Minute),
 						Value: 120,
 					},
 					Labels: map[string]string{
@@ -662,7 +706,7 @@ func Test_manager(t *testing.T) {
 			Want: okPoints,
 		},
 		{
-			Name:        "",
+			Name:        "unnamed",
 			Description: "",
 			Points:      []types.MetricPoint{},
 			Rules: []MetricAlertRule{
@@ -693,12 +737,218 @@ func Test_manager(t *testing.T) {
 				return res
 			}(),
 		},
+		{
+			Name:            "resolution-10s",
+			Description:     "rule using 10s resolution",
+			ScrapResolution: 10 * time.Second,
+			RunDuration:     10 * time.Minute,
+			Points: makePoints(
+				t0.Add(-10*time.Minute),
+				t0.Add(10*time.Minute),
+				10*time.Second,
+				types.MetricPoint{
+					Point: types.Point{
+						Time:  t0,
+						Value: 20,
+					},
+					Labels: map[string]string{
+						types.LabelName: sourceMetric,
+					},
+				},
+			),
+			Rules: []MetricAlertRule{
+				{
+					Labels: labels.FromMap(map[string]string{
+						types.LabelName: resultName,
+					}),
+					Threshold: threshold.Threshold{
+						HighWarning:  50,
+						HighCritical: 500,
+						LowCritical:  math.NaN(),
+						LowWarning:   math.NaN(),
+					},
+					PromQLQuery:       promqlQuery,
+					IsUserPromQLAlert: false,
+					Resolution:        10 * time.Second,
+				},
+			},
+			Want: makePoints(
+				t0,
+				t0.Add(10*time.Minute),
+				10*time.Second,
+				types.MetricPoint{
+					Point: types.Point{
+						Time:  t0,
+						Value: 0,
+					},
+					Labels: map[string]string{
+						types.LabelName: resultName,
+					},
+					Annotations: types.MetricAnnotations{
+						Status: types.StatusDescription{
+							CurrentStatus:     types.StatusOk,
+							StatusDescription: "",
+						},
+					},
+				},
+			),
+		},
+		{
+			Name:            "resolution-1m",
+			Description:     "rule using 1 minute resolution",
+			ScrapResolution: time.Minute,
+			RunDuration:     10 * time.Minute,
+			Points: makePoints(
+				t0.Add(-10*time.Minute),
+				t0.Add(10*time.Minute),
+				time.Minute,
+				types.MetricPoint{
+					Point: types.Point{
+						Time:  t0,
+						Value: 20,
+					},
+					Labels: map[string]string{
+						types.LabelName: sourceMetric,
+					},
+				},
+			),
+			Rules: []MetricAlertRule{
+				{
+					Labels: labels.FromMap(map[string]string{
+						types.LabelName: resultName,
+					}),
+					Threshold: threshold.Threshold{
+						HighWarning:  50,
+						HighCritical: 500,
+						LowCritical:  math.NaN(),
+						LowWarning:   math.NaN(),
+					},
+					PromQLQuery:       promqlQuery,
+					IsUserPromQLAlert: false,
+					Resolution:        time.Minute,
+				},
+			},
+			Want: makePoints(
+				t0,
+				t0.Add(10*time.Minute),
+				time.Minute,
+				types.MetricPoint{
+					Point: types.Point{
+						Time:  t0,
+						Value: 0,
+					},
+					Labels: map[string]string{
+						types.LabelName: resultName,
+					},
+					Annotations: types.MetricAnnotations{
+						Status: types.StatusDescription{
+							CurrentStatus:     types.StatusOk,
+							StatusDescription: "",
+						},
+					},
+				},
+			),
+		},
+		{
+			Name:            "resolution-both-resolution",
+			Description:     "rule using 10s and 1 minute resolution",
+			ScrapResolution: 10 * time.Second,
+			RunDuration:     10 * time.Minute,
+			Points: makePoints(
+				t0.Add(-10*time.Minute),
+				t0.Add(10*time.Minute),
+				10*time.Second,
+				types.MetricPoint{
+					Point: types.Point{
+						Time:  t0,
+						Value: 20,
+					},
+					Labels: map[string]string{
+						types.LabelName: sourceMetric,
+					},
+				},
+			),
+			Rules: []MetricAlertRule{
+				{
+					Labels: labels.FromMap(map[string]string{
+						types.LabelName: resultName,
+					}),
+					Threshold: threshold.Threshold{
+						HighWarning:  50,
+						HighCritical: 500,
+						LowCritical:  math.NaN(),
+						LowWarning:   math.NaN(),
+					},
+					PromQLQuery:       promqlQuery,
+					IsUserPromQLAlert: false,
+					Resolution:        10 * time.Second,
+				},
+				{
+					Labels: labels.FromMap(map[string]string{
+						types.LabelName: resultName2,
+					}),
+					Threshold: threshold.Threshold{
+						HighWarning:  50,
+						HighCritical: 500,
+						LowCritical:  math.NaN(),
+						LowWarning:   math.NaN(),
+					},
+					PromQLQuery:       promqlQuery,
+					IsUserPromQLAlert: false,
+					Resolution:        time.Minute,
+				},
+			},
+			Want: sortPoints(append(
+				makePoints(
+					t0,
+					t0.Add(10*time.Minute),
+					10*time.Second,
+					types.MetricPoint{
+						Point: types.Point{
+							Time:  t0,
+							Value: 0,
+						},
+						Labels: map[string]string{
+							types.LabelName: resultName,
+						},
+						Annotations: types.MetricAnnotations{
+							Status: types.StatusDescription{
+								CurrentStatus:     types.StatusOk,
+								StatusDescription: "",
+							},
+						},
+					},
+				),
+				makePoints(
+					t0,
+					t0.Add(10*time.Minute),
+					time.Minute,
+					types.MetricPoint{
+						Point: types.Point{
+							Time:  t0,
+							Value: 0,
+						},
+						Labels: map[string]string{
+							types.LabelName: resultName2,
+						},
+						Annotations: types.MetricAnnotations{
+							Status: types.StatusDescription{
+								CurrentStatus:     types.StatusOk,
+								StatusDescription: "",
+							},
+						},
+					},
+				)...,
+			)),
+		},
 	}
 
 	for _, test := range tests {
 		test := test
 
 		t.Run(test.Name, func(t *testing.T) {
+			t.Parallel()
+
 			var (
 				resPoints []types.MetricPoint
 				l         sync.Mutex
@@ -720,27 +970,19 @@ func Test_manager(t *testing.T) {
 			}
 
 			reg.UpdateRelabelHook(ctx, func(ctx context.Context, labels map[string]string) (newLabel map[string]string, retryLater bool) {
-				labels[types.LabelMetaBleemeoUUID] = "801d4698-3a34-474e-b638-81f8a2523d0e"
+				labels[types.LabelMetaBleemeoUUID] = agentID
 
 				return labels, false
 			})
 
-			ruleManager := newManager(ctx, store, defaultLinuxRecordingRules, now.Add(-7*time.Minute), 15*time.Second)
+			ruleManager := newManager(ctx, store, defaultLinuxRecordingRules, t0.Add(-7*time.Minute), 15*time.Second)
 
-			store.PushPoints(ctx, test.Points)
-
-			store.AddNotifiee(func(mp []types.MetricPoint) {
-				resPoints = append(resPoints, mp...)
-			})
-
-			for _, r := range test.Rules {
-				err := ruleManager.addAlertingRule(r, "")
-				if err != nil {
-					t.Error(err)
-
-					return
-				}
+			err = ruleManager.RebuildAlertingRules(test.Rules)
+			if err != nil {
+				t.Error(err)
 			}
+
+			ruleManager.UpdateMetricResolution(10 * time.Second)
 
 			id, err := reg.RegisterAppenderCallback(
 				registry.RegistrationOption{
@@ -754,9 +996,33 @@ func Test_manager(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			for i := 0; i < 7; i++ {
-				ruleManager.now = func() time.Time { return now.Add(time.Duration(i) * time.Minute) }
-				reg.InternalRunScape(ctx, now.Add(time.Duration(i)*time.Minute), id)
+			endAt := t0.Add(test.RunDuration)
+			step := test.ScrapResolution
+
+			if test.RunDuration == 0 {
+				endAt = t0.Add(7 * time.Minute)
+			}
+
+			if test.ScrapResolution == 0 {
+				step = time.Minute
+			}
+
+			pointsToPush := make([]types.MetricPoint, len(test.Points))
+			copy(pointsToPush, test.Points)
+
+			if test.Name != "resolution-both-resolution" {
+				t.Skip()
+			}
+
+			for currentTime := t0; currentTime.Before(endAt); currentTime = currentTime.Add(step) {
+				var ready []types.MetricPoint
+				currentTime := currentTime
+				ruleManager.now = func() time.Time { return currentTime }
+
+				ready, pointsToPush = filterByDate(pointsToPush, currentTime)
+				store.PushPoints(ctx, ready)
+
+				reg.InternalRunScape(ctx, currentTime, id)
 			}
 
 			// Description are not fully tested, only the common prefix.
@@ -1188,6 +1454,7 @@ func Test_NoStatutsChangeOnStart(t *testing.T) {
 					PromQLQuery:       promqlQuery,
 					IsUserPromQLAlert: true,
 					InstanceUUID:      agentID,
+					Resolution:        time.Duration(resolutionSecond) * time.Second,
 				},
 			}
 
@@ -1310,6 +1577,7 @@ func Test_NoCrossRead(t *testing.T) {
 			},
 			PromQLQuery:       promqlQuery,
 			InstanceUUID:      agentID,
+			Resolution:        10 * time.Second,
 			IsUserPromQLAlert: true,
 		},
 	}

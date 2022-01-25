@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"glouton/bleemeo/client"
+	"glouton/bleemeo/internal/cache"
 	"glouton/bleemeo/internal/common"
 	bleemeoTypes "glouton/bleemeo/types"
 	"glouton/logger"
@@ -394,7 +395,11 @@ func httpResponseToMetricFailureKind(content string) bleemeoTypes.FailureKind {
 	}
 }
 
-func metricToMetricAlertRule(metrics []bleemeoTypes.Metric) []rules.MetricAlertRule {
+func metricToMetricAlertRule(cache *cache.Cache) []rules.MetricAlertRule {
+	metrics := cache.Metrics()
+	agents := cache.AgentsByUUID()
+	configs := cache.AccountConfigsByUUID()
+
 	result := make([]rules.MetricAlertRule, 0)
 
 	for _, metric := range metrics {
@@ -407,12 +412,17 @@ func metricToMetricAlertRule(metrics []bleemeoTypes.Metric) []rules.MetricAlertR
 			continue
 		}
 
+		agent := agents[metric.AgentID]
+		cfg := configs[agent.CurrentConfigID]
+		resolution := cfg.AgentConfigByID[agent.AgentType].MetricResolution
+
 		result = append(result, rules.MetricAlertRule{
 			Labels:            labels.FromMap(metric.Labels),
 			PromQLQuery:       metric.PromQLQuery,
 			Threshold:         threshold,
 			InstanceUUID:      metric.AgentID,
 			IsUserPromQLAlert: metric.IsUserPromQLAlert,
+			Resolution:        resolution,
 		})
 	}
 
@@ -679,7 +689,7 @@ func (s *Synchronizer) UpdateUnitsAndThresholds(firstUpdate bool) {
 	// UpdateThresholds as currently thresholds invokes a.rulesManager.MetricList()
 	// resulting in using obsolete values.
 	if s.option.RebuildAlertingRules != nil {
-		err := s.option.RebuildAlertingRules(metricToMetricAlertRule(s.option.Cache.Metrics()))
+		err := s.option.RebuildAlertingRules(metricToMetricAlertRule(s.option.Cache))
 		if err != nil {
 			logger.V(2).Printf("An error occurred while rebuilding alerting rules: %v", err)
 		}

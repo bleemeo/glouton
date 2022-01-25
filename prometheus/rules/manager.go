@@ -83,6 +83,7 @@ type MetricAlertRule struct {
 	Threshold   threshold.Threshold
 	// InstanceUUID is the instance used to execute the query, a matcher instance_uuid=$THIS_VALUE will be applied.
 	InstanceUUID string
+	Resolution   time.Duration
 	// IsUserPromQLAlert tells whether this rule is created by a user or an automatically generated one.
 	IsUserPromQLAlert bool
 }
@@ -276,6 +277,10 @@ func (agr *alertRuleGroup) shouldSkip(now time.Time) bool {
 		}
 	}
 
+	if agr.metric.Resolution != 0 && now.Add(time.Second).Sub(agr.lastRun) < agr.metric.Resolution {
+		return true
+	}
+
 	return false
 }
 
@@ -304,7 +309,7 @@ func (agr *alertRuleGroup) runGroup(ctx context.Context, now time.Time, rm *Mana
 		}, nil
 	}
 
-	agr.lastRun = time.Now()
+	agr.lastRun = rm.now()
 	agr.pointsRead = 0
 	agr.lastStatus = types.StatusDescription{}
 	agr.lastErr = nil
