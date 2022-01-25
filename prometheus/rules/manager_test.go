@@ -1124,7 +1124,7 @@ func Test_GloutonStart(t *testing.T) {
 // start in warning/critical and never send any Ok because the Prometheus rule is in pending 5 minutes
 // after startup.
 // This test mostly do the same as Test_GloutonStart, but with more realistic scenario.
-func Test_NotStatutsChangeOnStart(t *testing.T) {
+func Test_NoStatutsChangeOnStart(t *testing.T) {
 	const (
 		resultName   = "copy_of_node_cpu_seconds_global"
 		sourceMetric = "node_cpu_seconds_global"
@@ -1246,6 +1246,127 @@ func Test_NotStatutsChangeOnStart(t *testing.T) {
 				t.Errorf("rule never returned any points")
 			}
 		})
+	}
+}
+
+// Test_NoUnknownOnStart checks that we don't emit wrong unknown status on Glouton start.
+// On start, if the source of the metrics is not yet gatherer (e.g. it need multiple gather, its period is 60 seconds...)
+// the rule may read zero points and then yield a unknown status with "PromQL reads zero points" message.
+// We don't want this on startup and give an extra-grace time for such error on startup.
+func Test_NoUnknownOnStart(t *testing.T) {
+	const (
+		resultName   = "copy_of_node_cpu_seconds_global"
+		sourceMetric = "node_cpu_seconds_global"
+		promqlQuery  = "node_cpu_seconds_global"
+	)
+	var (
+		resPoints []types.MetricPoint
+		l         sync.Mutex
+	)
+
+	store := store.New(time.Hour)
+	reg, err := registry.New(registry.Option{
+		PushPoint: pushFunction(func(ctx context.Context, points []types.MetricPoint) {
+			l.Lock()
+			defer l.Unlock()
+
+			resPoints = append(resPoints, points...)
+		}),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ctx := context.Background()
+	t0 := time.Now().Truncate(time.Second)
+
+	// we always boot the manager with 10 seconds resolution
+	ruleManager := newManager(ctx, store, defaultLinuxRecordingRules, t0, 10*time.Second)
+
+	// The metric will be warning
+	thresholds := []float64{0, 100}
+
+	metricList := []bleemeoTypes.Metric{
+		{
+			Labels: map[string]string{
+				types.LabelName: resultName,
+			},
+			Threshold: bleemeoTypes.Threshold{
+				HighWarning:  &thresholds[0],
+				HighCritical: &thresholds[1],
+			},
+			PromQLQuery:       promqlQuery,
+			IsUserPromQLAlert: false,
+		},
+	}
+
+	for i, m := range metricList {
+		metricList[i].LabelsText = types.LabelsToText(m.Labels)
+	}
+
+	err = ruleManager.RebuildAlertingRules(metricList)
+	if err != nil {
+		t.Error(err)
+	}
+
+	ruleManager.UpdateMetricResolution(10 * time.Second)
+
+	id, err := reg.RegisterAppenderCallback(
+		registry.RegistrationOption{
+			NoLabelsAlteration:    true,
+			DisablePeriodicGather: true,
+		},
+		registry.AppenderRegistrationOption{},
+		ruleManager,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for currentTime := t0; currentTime.Before(t0.Add(9 * time.Minute)); currentTime = currentTime.Add(10 * time.Second) {
+		if currentTime.After(t0.Add(1 * time.Minute)) {
+			// Took one full minute before first points.
+			store.PushPoints(context.Background(), []types.MetricPoint{
+				{
+					Point: types.Point{
+						Time:  currentTime,
+						Value: 30,
+					},
+					Labels: map[string]string{
+						types.LabelName: sourceMetric,
+					},
+				},
+			})
+		}
+
+		ruleManager.now = func() time.Time { return currentTime }
+		reg.InternalRunScape(ctx, currentTime, id)
+	}
+
+	var hadResult bool
+
+	for _, p := range resPoints {
+		if p.Labels[types.LabelName] != resultName {
+			t.Errorf("unexpected point with labels: %v", p.Labels)
+
+			continue
+		}
+
+		if p.Annotations.Status.CurrentStatus == types.StatusWarning {
+			hadResult = true
+
+			continue
+		}
+
+		if p.Annotations.Status.CurrentStatus == types.StatusUnknown {
+			t.Errorf("point status = %v want %v", p.Annotations.Status.CurrentStatus, types.StatusWarning)
+		}
+
+		// We don't test here whether the rule can emit ok points. Other test cover this case.
+	}
+
+	if !hadResult {
+		t.Errorf("rule never returned any points")
 	}
 }
 

@@ -336,6 +336,10 @@ func (agr *alertRuleGroup) runGroup(ctx context.Context, now time.Time, rm *Mana
 		agr.pointsRead = queryable.Count()
 
 		if agr.pointsRead == 0 {
+			if now.Sub(rm.agentStarted) < 2*time.Minute {
+				return types.MetricPoint{}, errSkipPoints
+			}
+
 			return agr.checkNoPoint(now, rm.agentStarted, rm.metricResolution)
 		}
 
