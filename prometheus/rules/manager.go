@@ -97,11 +97,8 @@ type alertRuleGroup struct {
 	lastErr       error
 	lastStatus    types.StatusDescription
 
-	promql      string
-	thresholds  threshold.Threshold
-	isUserAlert bool
-	labels      labels.Labels
-	isError     string
+	metric  MetricAlertRule
+	isError string
 }
 
 //nolint:gochecknoglobals
@@ -210,7 +207,7 @@ func (rm *Manager) MetricList() []string {
 	defer rm.l.Unlock()
 
 	for _, r := range rm.alertingRules {
-		res = append(res, r.labels.Get(types.LabelName))
+		res = append(res, r.metric.Labels.Get(types.LabelName))
 	}
 
 	return res
@@ -265,14 +262,14 @@ func (rm *Manager) Collect(ctx context.Context, app storage.Appender) error {
 }
 
 func (agr *alertRuleGroup) shouldSkip(now time.Time) bool {
-	if !agr.inactiveSince.IsZero() && !agr.isUserAlert {
+	if !agr.inactiveSince.IsZero() && !agr.metric.IsUserPromQLAlert {
 		if agr.disabledUntil.IsZero() && now.After(agr.inactiveSince.Add(2*time.Minute)) {
-			logger.V(2).Printf("rule %s has been disabled for the last 2 minutes. retrying this metric in 10 minutes", agr.labels.String())
+			logger.V(2).Printf("rule %s has been disabled for the last 2 minutes. retrying this metric in 10 minutes", agr.metric.Labels.String())
 			agr.disabledUntil = now.Add(10 * time.Minute)
 		}
 
 		if now.After(agr.disabledUntil) {
-			logger.V(2).Printf("Inactive rule %s will be re executed. Time since inactive: %s", agr.labels.String(), agr.inactiveSince.Format(time.RFC3339))
+			logger.V(2).Printf("Inactive rule %s will be re executed. Time since inactive: %s", agr.metric.Labels.String(), agr.inactiveSince.Format(time.RFC3339))
 			agr.disabledUntil = now.Add(10 * time.Minute)
 		} else {
 			return true
@@ -297,7 +294,7 @@ func (agr *alertRuleGroup) runGroup(ctx context.Context, now time.Time, rm *Mana
 				Time:  now,
 				Value: float64(types.StatusUnknown.NagiosCode()),
 			},
-			Labels: agr.labels.Map(),
+			Labels: agr.metric.Labels.Map(),
 			Annotations: types.MetricAnnotations{
 				Status: types.StatusDescription{
 					CurrentStatus:     types.StatusUnknown,
@@ -388,13 +385,13 @@ func (agr *alertRuleGroup) runGroup(ctx context.Context, now time.Time, rm *Mana
 }
 
 func (agr *alertRuleGroup) checkNoPoint(now time.Time, agentStart time.Time, metricRes time.Duration) (types.MetricPoint, error) {
-	if agr.isUserAlert && now.Sub(agentStart) > metricRes {
+	if agr.metric.IsUserPromQLAlert && now.Sub(agentStart) > metricRes {
 		return types.MetricPoint{
 			Point: types.Point{
 				Time:  now,
 				Value: float64(types.StatusUnknown.NagiosCode()),
 			},
-			Labels: agr.labels.Map(),
+			Labels: agr.metric.Labels.Map(),
 			Annotations: types.MetricAnnotations{
 				Status: types.StatusDescription{
 					CurrentStatus:     types.StatusUnknown,
@@ -444,7 +441,7 @@ func (agr *alertRuleGroup) generateNewPoint(thresholdType string, rule *rules.Al
 			Time:  now,
 			Value: float64(statusCode.NagiosCode()),
 		},
-		Labels: agr.labels.Map(),
+		Labels: agr.metric.Labels.Map(),
 		Annotations: types.MetricAnnotations{
 			Status: status,
 		},
@@ -471,7 +468,7 @@ func (agr *alertRuleGroup) lowestThreshold() float64 {
 		return agr.thresholdFromString(thr)
 	}
 
-	logger.V(2).Printf("An unknown error occurred: not threshold found for rule %s\n", agr.labels.String())
+	logger.V(2).Printf("An unknown error occurred: not threshold found for rule %s\n", agr.metric.Labels.String())
 
 	return 0
 }
@@ -479,15 +476,15 @@ func (agr *alertRuleGroup) lowestThreshold() float64 {
 func (agr *alertRuleGroup) thresholdFromString(threshold string) float64 {
 	switch threshold {
 	case highCriticalState:
-		return agr.thresholds.HighCritical
+		return agr.metric.Threshold.HighCritical
 	case lowCriticalState:
-		return agr.thresholds.LowCritical
+		return agr.metric.Threshold.LowCritical
 	case highWarningState:
-		return agr.thresholds.HighWarning
+		return agr.metric.Threshold.HighWarning
 	case lowWarningState:
-		return agr.thresholds.LowWarning
+		return agr.metric.Threshold.LowWarning
 	default:
-		return agr.thresholds.HighCritical
+		return agr.metric.Threshold.HighCritical
 	}
 }
 
@@ -506,10 +503,7 @@ func (rm *Manager) addAlertingRule(metric MetricAlertRule, isError string) error
 		instanceID:    metric.InstanceUUID,
 		inactiveSince: time.Time{},
 		disabledUntil: time.Time{},
-		promql:        metric.PromQLQuery,
-		thresholds:    metric.Threshold,
-		labels:        lbls,
-		isUserAlert:   metric.IsUserPromQLAlert,
+		metric:        metric,
 		isError:       isError,
 	}
 
@@ -567,7 +561,7 @@ func (rm *Manager) addAlertingRule(metric MetricAlertRule, isError string) error
 }
 
 func (agr *alertRuleGroup) Equal(threshold threshold.Threshold) bool {
-	return agr.thresholds.Equal(threshold)
+	return agr.metric.Threshold.Equal(threshold)
 }
 
 // RebuildAlertingRules rebuild the alerting rules list from a bleemeo api metric list.
@@ -591,7 +585,7 @@ func (rm *Manager) RebuildAlertingRules(metricsList []MetricAlertRule) error {
 			ok = false
 		}
 
-		if ok && prevInstance.promql == metric.PromQLQuery && prevInstance.Equal(metric.Threshold) {
+		if ok && prevInstance.metric.PromQLQuery == metric.PromQLQuery && prevInstance.Equal(metric.Threshold) {
 			rm.alertingRules[key] = prevInstance
 		} else {
 			err := rm.addAlertingRule(metric, "")
@@ -692,7 +686,7 @@ func (agr *alertRuleGroup) newRule(exp string, lbls labels.Labels, threshold str
 
 func (agr *alertRuleGroup) String() string {
 	return fmt.Sprintf("id=%s query=%#v \n\tinactive_since=%v disabled_until=%v is_user_promql_alert=%v\n\tlastRun=%v pointsRead=%d status=%v err=%v\n%v",
-		agr.labels.String(), agr.promql, agr.inactiveSince, agr.disabledUntil, agr.isUserAlert, agr.lastRun, agr.pointsRead, agr.lastStatus, agr.lastErr, agr.query())
+		agr.metric.Labels.String(), agr.metric.PromQLQuery, agr.inactiveSince, agr.disabledUntil, agr.metric.IsUserPromQLAlert, agr.lastRun, agr.pointsRead, agr.lastStatus, agr.lastErr, agr.query())
 }
 
 func (agr *alertRuleGroup) query() string {
