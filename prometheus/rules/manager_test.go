@@ -20,11 +20,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	bleemeoTypes "glouton/bleemeo/types"
 	"glouton/logger"
 	"glouton/prometheus/registry"
 	"glouton/store"
+	"glouton/threshold"
 	"glouton/types"
+	"math"
 	"sort"
 	"strings"
 	"sync"
@@ -224,7 +225,6 @@ func Test_manager(t *testing.T) {
 
 	ctx := context.Background()
 	now := time.Now().Truncate(time.Second)
-	thresholds := []float64{50, 500}
 	okPoints := []types.MetricPoint{
 		{
 			Point: types.Point{
@@ -402,21 +402,23 @@ func Test_manager(t *testing.T) {
 		Description string
 
 		Points []types.MetricPoint
-		Rules  []bleemeoTypes.Metric
+		Rules  []MetricAlertRule
 		Want   []types.MetricPoint
 	}{
 		{
 			Name:        "No points",
 			Description: "No points in the store should not create any points.",
 			Points:      []types.MetricPoint{},
-			Rules: []bleemeoTypes.Metric{
+			Rules: []MetricAlertRule{
 				{
-					Labels: map[string]string{
+					Labels: labels.FromMap(map[string]string{
 						types.LabelName: resultName,
-					},
-					Threshold: bleemeoTypes.Threshold{
-						HighWarning:  &thresholds[0],
-						HighCritical: &thresholds[1],
+					}),
+					Threshold: threshold.Threshold{
+						HighWarning:  50,
+						HighCritical: 500,
+						LowCritical:  math.NaN(),
+						LowWarning:   math.NaN(),
 					},
 					PromQLQuery:       promqlQuery,
 					IsUserPromQLAlert: false,
@@ -447,14 +449,16 @@ func Test_manager(t *testing.T) {
 					},
 				},
 			},
-			Rules: []bleemeoTypes.Metric{
+			Rules: []MetricAlertRule{
 				{
-					Labels: map[string]string{
+					Labels: labels.FromMap(map[string]string{
 						types.LabelName: resultName,
-					},
-					Threshold: bleemeoTypes.Threshold{
-						HighWarning:  &thresholds[0],
-						HighCritical: &thresholds[1],
+					}),
+					Threshold: threshold.Threshold{
+						HighWarning:  50,
+						HighCritical: 500,
+						LowCritical:  math.NaN(),
+						LowWarning:   math.NaN(),
 					},
 					PromQLQuery:       promqlQuery,
 					IsUserPromQLAlert: false,
@@ -485,14 +489,16 @@ func Test_manager(t *testing.T) {
 					},
 				},
 			},
-			Rules: []bleemeoTypes.Metric{
+			Rules: []MetricAlertRule{
 				{
-					Labels: map[string]string{
+					Labels: labels.FromMap(map[string]string{
 						types.LabelName: resultName,
-					},
-					Threshold: bleemeoTypes.Threshold{
-						HighWarning:  &thresholds[0],
-						HighCritical: &thresholds[1],
+					}),
+					Threshold: threshold.Threshold{
+						HighWarning:  50,
+						HighCritical: 500,
+						LowCritical:  math.NaN(),
+						LowWarning:   math.NaN(),
 					},
 					PromQLQuery:       promqlQuery,
 					IsUserPromQLAlert: true,
@@ -531,14 +537,16 @@ func Test_manager(t *testing.T) {
 					},
 				},
 			},
-			Rules: []bleemeoTypes.Metric{
+			Rules: []MetricAlertRule{
 				{
-					Labels: map[string]string{
+					Labels: labels.FromMap(map[string]string{
 						types.LabelName: resultName,
-					},
-					Threshold: bleemeoTypes.Threshold{
-						HighWarning:  &thresholds[0],
-						HighCritical: &thresholds[1],
+					}),
+					Threshold: threshold.Threshold{
+						HighWarning:  50,
+						HighCritical: 500,
+						LowCritical:  math.NaN(),
+						LowWarning:   math.NaN(),
 					},
 					PromQLQuery:       promqlQuery,
 					IsUserPromQLAlert: true,
@@ -586,14 +594,16 @@ func Test_manager(t *testing.T) {
 					},
 				},
 			},
-			Rules: []bleemeoTypes.Metric{
+			Rules: []MetricAlertRule{
 				{
-					Labels: map[string]string{
+					Labels: labels.FromMap(map[string]string{
 						types.LabelName: resultName,
-					},
-					Threshold: bleemeoTypes.Threshold{
-						HighWarning:  &thresholds[0],
-						HighCritical: &thresholds[1],
+					}),
+					Threshold: threshold.Threshold{
+						HighWarning:  50,
+						HighCritical: 500,
+						LowCritical:  math.NaN(),
+						LowWarning:   math.NaN(),
 					},
 					PromQLQuery:       promqlQuery,
 					IsUserPromQLAlert: true,
@@ -632,14 +642,16 @@ func Test_manager(t *testing.T) {
 					},
 				},
 			},
-			Rules: []bleemeoTypes.Metric{
+			Rules: []MetricAlertRule{
 				{
-					Labels: map[string]string{
+					Labels: labels.FromMap(map[string]string{
 						types.LabelName: resultName,
-					},
-					Threshold: bleemeoTypes.Threshold{
-						HighWarning:  &thresholds[0],
-						HighCritical: &thresholds[1],
+					}),
+					Threshold: threshold.Threshold{
+						HighWarning:  50,
+						HighCritical: 500,
+						LowCritical:  math.NaN(),
+						LowWarning:   math.NaN(),
 					},
 					PromQLQuery:       promqlQuery,
 					IsUserPromQLAlert: false,
@@ -651,14 +663,16 @@ func Test_manager(t *testing.T) {
 			Name:        "",
 			Description: "",
 			Points:      []types.MetricPoint{},
-			Rules: []bleemeoTypes.Metric{
+			Rules: []MetricAlertRule{
 				{
-					Labels: map[string]string{
+					Labels: labels.FromMap(map[string]string{
 						types.LabelName: resultName,
-					},
-					Threshold: bleemeoTypes.Threshold{
-						HighWarning:  &thresholds[0],
-						HighCritical: &thresholds[1],
+					}),
+					Threshold: threshold.Threshold{
+						HighWarning:  50,
+						HighCritical: 500,
+						LowCritical:  math.NaN(),
+						LowWarning:   math.NaN(),
 					},
 					PromQLQuery:       promqlQuery,
 					IsUserPromQLAlert: true,
@@ -790,7 +804,6 @@ func Test_Rebuild_Rules(t *testing.T) {
 	t1 := time.Now().Truncate(time.Second)
 	t0 := t1.Add(-7 * time.Minute)
 	ruleManager := newManager(ctx, store, defaultLinuxRecordingRules, t0, 15*time.Second)
-	thresholds := []float64{50, 500}
 
 	store.PushPoints(context.Background(), []types.MetricPoint{
 		{
@@ -937,15 +950,16 @@ func Test_Rebuild_Rules(t *testing.T) {
 		},
 	}
 
-	alertsRules := []bleemeoTypes.Metric{
+	alertsRules := []MetricAlertRule{
 		{
-			ID: "NODE-ID",
-			Labels: map[string]string{
+			Labels: labels.FromMap(map[string]string{
 				types.LabelName: resultName,
-			},
-			Threshold: bleemeoTypes.Threshold{
-				HighWarning:  &thresholds[0],
-				HighCritical: &thresholds[1],
+			}),
+			Threshold: threshold.Threshold{
+				HighWarning:  50,
+				HighCritical: 500,
+				LowCritical:  math.NaN(),
+				LowWarning:   math.NaN(),
 			},
 			PromQLQuery:       promqlQuery,
 			IsUserPromQLAlert: false,
@@ -1026,7 +1040,6 @@ func Test_GloutonStart(t *testing.T) {
 	ctx := context.Background()
 	t0 := time.Now().Truncate(time.Second)
 	ruleManager := newManager(ctx, store, defaultLinuxRecordingRules, t0, 15*time.Second)
-	thresholds := []float64{50, 500}
 	resPoints := []types.MetricPoint{}
 
 	store.PushPoints(context.Background(), []types.MetricPoint{
@@ -1068,14 +1081,16 @@ func Test_GloutonStart(t *testing.T) {
 		},
 	})
 
-	metricList := []bleemeoTypes.Metric{
+	metricList := []MetricAlertRule{
 		{
-			Labels: map[string]string{
+			Labels: labels.FromMap(map[string]string{
 				types.LabelName: resultName,
-			},
-			Threshold: bleemeoTypes.Threshold{
-				HighWarning:  &thresholds[0],
-				HighCritical: &thresholds[1],
+			}),
+			Threshold: threshold.Threshold{
+				HighWarning:  50,
+				HighCritical: 500,
+				LowCritical:  math.NaN(),
+				LowWarning:   math.NaN(),
 			},
 			PromQLQuery:       promqlQuery,
 			IsUserPromQLAlert: false,
@@ -1157,25 +1172,20 @@ func Test_NoStatutsChangeOnStart(t *testing.T) {
 			// we always boot the manager with 10 seconds resolution
 			ruleManager := newManager(ctx, store, defaultLinuxRecordingRules, t0, 10*time.Second)
 
-			// The metric will be warning
-			thresholds := []float64{0, 100}
-
-			metricList := []bleemeoTypes.Metric{
+			metricList := []MetricAlertRule{
 				{
-					Labels: map[string]string{
+					Labels: labels.FromMap(map[string]string{
 						types.LabelName: resultName,
-					},
-					Threshold: bleemeoTypes.Threshold{
-						HighWarning:  &thresholds[0],
-						HighCritical: &thresholds[1],
+					}),
+					Threshold: threshold.Threshold{
+						HighWarning:  0,
+						HighCritical: 100,
+						LowCritical:  math.NaN(),
+						LowWarning:   math.NaN(),
 					},
 					PromQLQuery:       promqlQuery,
 					IsUserPromQLAlert: false,
 				},
-			}
-
-			for i, m := range metricList {
-				metricList[i].LabelsText = types.LabelsToText(m.Labels)
 			}
 
 			err = ruleManager.RebuildAlertingRules(metricList)
@@ -1285,25 +1295,18 @@ func Test_NoUnknownOnStart(t *testing.T) {
 	// we always boot the manager with 10 seconds resolution
 	ruleManager := newManager(ctx, store, defaultLinuxRecordingRules, t0, 10*time.Second)
 
-	// The metric will be warning
-	thresholds := []float64{0, 100}
-
-	metricList := []bleemeoTypes.Metric{
+	metricList := []MetricAlertRule{
 		{
-			Labels: map[string]string{
+			Labels: labels.FromMap(map[string]string{
 				types.LabelName: resultName,
-			},
-			Threshold: bleemeoTypes.Threshold{
-				HighWarning:  &thresholds[0],
-				HighCritical: &thresholds[1],
+			}),
+			Threshold: threshold.Threshold{
+				HighWarning:  0,
+				HighCritical: 100,
 			},
 			PromQLQuery:       promqlQuery,
 			IsUserPromQLAlert: false,
 		},
-	}
-
-	for i, m := range metricList {
-		metricList[i].LabelsText = types.LabelsToText(m.Labels)
 	}
 
 	err = ruleManager.RebuildAlertingRules(metricList)

@@ -24,6 +24,7 @@ import (
 	"glouton/bleemeo/internal/common"
 	bleemeoTypes "glouton/bleemeo/types"
 	"glouton/logger"
+	"glouton/prometheus/rules"
 	"glouton/threshold"
 	"glouton/types"
 	"math/rand"
@@ -32,6 +33,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/prometheus/prometheus/model/labels"
 )
 
 // agentStatusName is the name of the special metrics used to store the agent connection status.
@@ -391,6 +394,31 @@ func httpResponseToMetricFailureKind(content string) bleemeoTypes.FailureKind {
 	}
 }
 
+func metricToMetricAlertRule(metrics []bleemeoTypes.Metric) []rules.MetricAlertRule {
+	result := make([]rules.MetricAlertRule, 0)
+
+	for _, metric := range metrics {
+		if metric.PromQLQuery == "" || metric.AgentID == "" {
+			continue
+		}
+
+		threshold := metric.Threshold.ToInternalThreshold()
+		if threshold.IsZero() {
+			continue
+		}
+
+		result = append(result, rules.MetricAlertRule{
+			Labels:            labels.FromMap(metric.Labels),
+			PromQLQuery:       metric.PromQLQuery,
+			Threshold:         threshold,
+			InstanceUUID:      metric.AgentID,
+			IsUserPromQLAlert: metric.IsUserPromQLAlert,
+		})
+	}
+
+	return result
+}
+
 func (s *Synchronizer) metricKey(lbls map[string]string, annotations types.MetricAnnotations) string {
 	if lbls[types.LabelInstanceUUID] == "" {
 		// In name+item mode, we treat empty instance_uuid and instance_uuid=s.AgentID as the same.
@@ -651,7 +679,7 @@ func (s *Synchronizer) UpdateUnitsAndThresholds(firstUpdate bool) {
 	// UpdateThresholds as currently thresholds invokes a.rulesManager.MetricList()
 	// resulting in using obsolete values.
 	if s.option.RebuildAlertingRules != nil {
-		err := s.option.RebuildAlertingRules(s.option.Cache.Metrics())
+		err := s.option.RebuildAlertingRules(metricToMetricAlertRule(s.option.Cache.Metrics()))
 		if err != nil {
 			logger.V(2).Printf("An error occurred while rebuilding alerting rules: %v", err)
 		}
