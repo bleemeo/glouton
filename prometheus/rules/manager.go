@@ -290,7 +290,7 @@ func (agr *alertRuleGroup) runGroup(ctx context.Context, now time.Time, rm *Mana
 			Annotations: types.MetricAnnotations{
 				Status: types.StatusDescription{
 					CurrentStatus:     types.StatusUnknown,
-					StatusDescription: agr.unknownDescription(),
+					StatusDescription: "Invalid PromQL: " + agr.isError,
 				},
 			},
 		}, nil
@@ -383,7 +383,7 @@ func (agr *alertRuleGroup) checkNoPoint(now time.Time, agentStart time.Time, met
 			Annotations: types.MetricAnnotations{
 				Status: types.StatusDescription{
 					CurrentStatus:     types.StatusUnknown,
-					StatusDescription: agr.unknownDescription(),
+					StatusDescription: "PromQL read zero points. The PromQL may be incorrect or the source measurement may have disappeared",
 				},
 			},
 		}, nil
@@ -394,14 +394,6 @@ func (agr *alertRuleGroup) checkNoPoint(now time.Time, agentStart time.Time, met
 	}
 
 	return types.MetricPoint{}, errSkipPoints
-}
-
-func (agr *alertRuleGroup) unknownDescription() string {
-	if agr.isError != "" {
-		return "Invalid PromQL: " + agr.isError
-	}
-
-	return "PromQL read zero points. The PromQL may be incorrect or the source measurement may have disappeared"
 }
 
 func (agr *alertRuleGroup) generateNewPoint(thresholdType string, rule *rules.AlertingRule, state rules.AlertState, now time.Time) (types.MetricPoint, error) {
