@@ -1259,12 +1259,14 @@ func Test_NoUnknownOnStart(t *testing.T) {
 		sourceMetric = "node_cpu_seconds_global"
 		promqlQuery  = "node_cpu_seconds_global"
 	)
+
 	var (
 		resPoints []types.MetricPoint
 		l         sync.Mutex
 	)
 
 	store := store.New(time.Hour)
+
 	reg, err := registry.New(registry.Option{
 		PushPoint: pushFunction(func(ctx context.Context, points []types.MetricPoint) {
 			l.Lock()
@@ -1340,6 +1342,7 @@ func Test_NoUnknownOnStart(t *testing.T) {
 		}
 
 		ruleManager.now = func() time.Time { return currentTime }
+
 		reg.InternalRunScape(ctx, currentTime, id)
 	}
 
@@ -1361,8 +1364,6 @@ func Test_NoUnknownOnStart(t *testing.T) {
 		if p.Annotations.Status.CurrentStatus == types.StatusUnknown {
 			t.Errorf("point status = %v want %v", p.Annotations.Status.CurrentStatus, types.StatusWarning)
 		}
-
-		// We don't test here whether the rule can emit ok points. Other test cover this case.
 	}
 
 	if !hadResult {

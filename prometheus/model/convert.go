@@ -152,6 +152,7 @@ func SendPointsToAppender(points []types.MetricPoint, app storage.Appender) erro
 
 // AnnotationToMetaLabels convert annotation to meta-labels (labels starting with __) and append them to existing labels.
 // It's valid to provide nil for initial labels.
+// Currently not all annotation are converted. List of converted annotation may change.
 func AnnotationToMetaLabels(lbls labels.Labels, annotation types.MetricAnnotations) labels.Labels {
 	builder := labels.NewBuilder(lbls)
 

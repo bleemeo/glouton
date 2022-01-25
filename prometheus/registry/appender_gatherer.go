@@ -13,7 +13,7 @@ import (
 type appenderGatherer struct {
 	cb      AppenderCallback
 	opt     AppenderRegistrationOption
-	lastApp *bufferAppender
+	lastApp *model.BufferAppender
 	lastErr error
 	l       sync.Mutex
 }
@@ -30,7 +30,7 @@ func (g *appenderGatherer) GatherWithState(ctx context.Context, state GatherStat
 	var err error
 
 	if state.FromScrapeLoop || g.opt.CallForMetricsEndpoint {
-		app := newBufferAppender()
+		app := model.NewBufferAppender()
 
 		err = g.cb.Collect(ctx, app)
 		if err == nil {
@@ -43,7 +43,7 @@ func (g *appenderGatherer) GatherWithState(ctx context.Context, state GatherStat
 				now = time.Now().Truncate(time.Second)
 			}
 
-			for _, samples := range app.committed {
+			for _, samples := range app.Committed {
 				for i := range samples {
 					samples[i].Point.T = now.UnixMilli()
 				}
@@ -62,7 +62,7 @@ func (g *appenderGatherer) GatherWithState(ctx context.Context, state GatherStat
 	var mfs []*dto.MetricFamily
 
 	if g.lastApp != nil {
-		for _, samples := range g.lastApp.committed {
+		for _, samples := range g.lastApp.Committed {
 			mf, err := model.SamplesToMetricFamily(samples, nil)
 			if err != nil {
 				return nil, err
