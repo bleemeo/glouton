@@ -690,8 +690,12 @@ func (agr *alertRuleGroup) newRule(exp string, lbls labels.Labels, threshold str
 }
 
 func (agr *alertRuleGroup) String() string {
-	return fmt.Sprintf("id=%s query=%#v \n\tinactive_since=%v disabled_until=%v is_user_promql_alert=%v\n\tlastRun=%v pointsRead=%d status=%v err=%v\n%v",
-		agr.metric.Labels.String(), agr.metric.PromQLQuery, agr.inactiveSince, agr.disabledUntil, agr.metric.IsUserPromQLAlert, agr.lastRun, agr.pointsRead, agr.lastStatus, agr.lastErr, agr.query())
+	return fmt.Sprintf("id=%s query=%#v \n\tinactive_since=%v disabled_until=%v is_user_promql_alert=%v\n\tlastRun=%v resolution=%v pointsRead=%d status=%v err=%v\n%v",
+		agr.metric.Labels.String(), agr.metric.PromQLQuery,
+		agr.inactiveSince, agr.disabledUntil, agr.metric.IsUserPromQLAlert,
+		agr.lastRun, agr.metric.Resolution, agr.pointsRead, agr.lastStatus, agr.lastErr,
+		agr.query(),
+	)
 }
 
 func (agr *alertRuleGroup) query() string {
