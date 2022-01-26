@@ -42,7 +42,8 @@ const (
 // please make sure that default values are sensible. For example, NoProbe *must* be the default queryType, as
 // we do not want queries on /metrics to always probe the collectors by default).
 type GatherState struct {
-	QueryType      queryType
+	QueryType queryType
+	// FromScrapeLoop tells whether the gathering is done by the periodic scrape loop or for /metrics endpoint
 	FromScrapeLoop bool
 	T0             time.Time
 	NoFilter       bool
@@ -198,11 +199,11 @@ func (g labeledGatherer) GatherWithState(ctx context.Context, state GatherState)
 		mfs, err = g.source.Gather()
 	}
 
+	mfs = g.ruler.ApplyRulesMFS(ctx, now, mfs)
+
 	if len(g.labels) == 0 {
 		return mfs, err
 	}
-
-	mfs = g.ruler.ApplyRulesMFS(ctx, now, mfs)
 
 	for _, mf := range mfs {
 		for i, m := range mf.Metric {
@@ -246,15 +247,7 @@ func (g labeledGatherer) GatherPoints(ctx context.Context, now time.Time, state 
 
 	for i := range points {
 		if (g.annotations != types.MetricAnnotations{}) {
-			points[i].Annotations = g.annotations
-		}
-
-		if statusText := points[i].Labels[types.LabelMetaCurrentStatus]; statusText != "" {
-			points[i].Annotations.Status.CurrentStatus = types.FromString(statusText)
-			points[i].Annotations.Status.StatusDescription = points[i].Labels[types.LabelMetaCurrentDescription]
-
-			delete(points[i].Labels, types.LabelMetaCurrentStatus)
-			delete(points[i].Labels, types.LabelMetaCurrentDescription)
+			points[i].Annotations = points[i].Annotations.Merge(g.annotations)
 		}
 	}
 

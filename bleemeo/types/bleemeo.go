@@ -118,10 +118,10 @@ type Container struct {
 // Threshold is the threshold of a metrics. We use pointer to float to support
 // null value in JSON.
 type Threshold struct {
-	LowWarning    *float64 `json:"threshold_low_warning"`
-	LowCrictical  *float64 `json:"threshold_low_critical"`
-	HighWarning   *float64 `json:"threshold_high_warning"`
-	HighCrictical *float64 `json:"threshold_high_critical"`
+	LowWarning   *float64 `json:"threshold_low_warning"`
+	LowCritical  *float64 `json:"threshold_low_critical"`
+	HighWarning  *float64 `json:"threshold_high_warning"`
+	HighCritical *float64 `json:"threshold_high_critical"`
 }
 
 // Monitor groups all the informations required to write metrics to a monitor.
@@ -150,7 +150,10 @@ type Metric struct {
 	StatusOf    string            `json:"status_of,omitempty"`
 	Threshold
 	threshold.Unit
-	DeactivatedAt time.Time `json:"deactivated_at,omitempty"`
+	DeactivatedAt     time.Time `json:"deactivated_at,omitempty"`
+	PromQLQuery       string    `json:"promql_query"`
+	IsUserPromQLAlert bool      `json:"is_user_promql_alert"`
+	FirstSeenAt       time.Time `json:"first_seen_at"`
 }
 
 // FailureKind is the kind of failure to register a metric. Used to know if
@@ -223,8 +226,8 @@ func (t Threshold) ToInternalThreshold() (result threshold.Threshold) {
 		result.LowWarning = math.NaN()
 	}
 
-	if t.LowCrictical != nil {
-		result.LowCritical = *t.LowCrictical
+	if t.LowCritical != nil {
+		result.LowCritical = *t.LowCritical
 	} else {
 		result.LowCritical = math.NaN()
 	}
@@ -235,8 +238,8 @@ func (t Threshold) ToInternalThreshold() (result threshold.Threshold) {
 		result.HighWarning = math.NaN()
 	}
 
-	if t.HighCrictical != nil {
-		result.HighCritical = *t.HighCrictical
+	if t.HighCritical != nil {
+		result.HighCritical = *t.HighCritical
 	} else {
 		result.HighCritical = math.NaN()
 	}

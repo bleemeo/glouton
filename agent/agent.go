@@ -131,6 +131,7 @@ type agent struct {
 	watchdogRunAt          []time.Time
 	metricFilter           *metricFilter
 	monitorManager         *blackbox.RegisterManager
+	rulesManager           *rules.Manager
 
 	triggerHandler            *debouncer.Debouncer
 	triggerLock               sync.Mutex
@@ -437,7 +438,6 @@ func (a *agent) updateSNMPResolution(resolution time.Duration) {
 				Rules:       registry.DefaultSNMPRules(),
 			},
 			target.Gatherer,
-			true,
 		)
 		if err != nil {
 			logger.Printf("Unable to add SNMP scrapper for target %s: %v", target.Address, err)
@@ -453,6 +453,7 @@ func (a *agent) updateMetricResolution(defaultResolution time.Duration, snmpReso
 	a.l.Unlock()
 
 	a.gathererRegistry.UpdateDelay(defaultResolution)
+	a.rulesManager.UpdateMetricResolution(defaultResolution)
 
 	services, err := a.discovery.Discovery(a.context, time.Hour)
 	if err != nil {
@@ -529,8 +530,7 @@ func (a *agent) updateThresholds(thresholds map[threshold.MetricNameItem]thresho
 	if err != nil {
 		logger.V(2).Printf("An error occurred while running discoveries for updateThresholds: %v", err)
 	} else {
-		err = a.metricFilter.RebuildDynamicLists(a.dynamicScrapper, services, a.threshold.GetThresholdMetricNames())
-
+		err = a.metricFilter.RebuildDynamicLists(a.dynamicScrapper, services, a.threshold.GetThresholdMetricNames(), a.rulesManager.MetricList())
 		if err != nil {
 			logger.V(2).Printf("An error occurred while rebuilding dynamic list for updateThresholds: %v", err)
 		}
@@ -682,16 +682,18 @@ func (a *agent) run() { //nolint:cyclop
 		return
 	}
 
-	rulesManager := rules.NewManager(ctx, a.store, a.gathererRegistry.Appendable(5*time.Minute))
+	a.rulesManager = rules.NewManager(ctx, a.store, a.metricResolution)
 
-	_, err = a.gathererRegistry.RegisterPushPointsCallback(
+	a.store.SetResetRuleCallback(a.rulesManager.ResetInactiveRules)
+
+	_, err = a.gathererRegistry.RegisterAppenderCallback(
 		registry.RegistrationOption{
-			Description: "rulesManager",
-			JitterSeed:  baseJitterPlus,
+			Description:        "rulesManager",
+			JitterSeed:         baseJitterPlus,
+			NoLabelsAlteration: true,
 		},
-		func(_ context.Context, t0 time.Time) {
-			rulesManager.Run(t0)
-		},
+		registry.AppenderRegistrationOption{},
+		a.rulesManager,
 	)
 	if err != nil {
 		logger.Printf("unable to add recording rules metrics: %v", err)
@@ -830,7 +832,6 @@ func (a *agent) run() { //nolint:cyclop
 				ExtraLabels: target.ExtraLabels,
 			},
 			target,
-			true,
 		)
 		if err != nil {
 			logger.Printf("Unable to add Prometheus scrapper for target %s: %v", target.URL.String(), err)
@@ -949,6 +950,7 @@ func (a *agent) run() { //nolint:cyclop
 			NotifyFirstRegistration: a.notifyBleemeoFirstRegistration,
 			NotifyLabelsUpdate:      a.notifyBleemeoUpdateLabels,
 			BlackboxScraperName:     scaperName,
+			RebuildAlertingRules:    a.rulesManager.RebuildAlertingRules,
 		})
 		if err != nil {
 			logger.Printf("unable to start Bleemeo SAAS connector: %v", err)
@@ -1756,7 +1758,7 @@ func (a *agent) handleTrigger(ctx context.Context) {
 				}
 			}
 
-			err := a.metricFilter.RebuildDynamicLists(a.dynamicScrapper, services, a.threshold.GetThresholdMetricNames())
+			err := a.metricFilter.RebuildDynamicLists(a.dynamicScrapper, services, a.threshold.GetThresholdMetricNames(), a.rulesManager.MetricList())
 			if err != nil {
 				logger.V(2).Printf("Error during dynamic Filter rebuild: %v", err)
 			}
@@ -1927,6 +1929,7 @@ func (a *agent) writeDiagnosticArchive(ctx context.Context, archive types.Archiv
 		a.diagnosticSNMP,
 		a.metricFilter.DiagnosticArchive,
 		a.gathererRegistry.DiagnosticArchive,
+		a.rulesManager.DiagnosticArchive,
 	}
 
 	if a.bleemeoConnector != nil {

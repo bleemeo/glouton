@@ -692,7 +692,7 @@ func (c *Client) preparePoints(registreredMetricByKey map[string]bleemeoTypes.Me
 				Value:       forceDecimalFloat(p.Value),
 			}
 
-			if c.option.MetricFormat == types.MetricFormatBleemeo && common.MetricOnlyHasItem(m.Labels) {
+			if c.option.MetricFormat == types.MetricFormatBleemeo && common.MetricOnlyHasItem(m.Labels, m.AgentID) {
 				value.UUID = m.ID
 				value.LabelsText = ""
 				value.Measurement = m.Labels[types.LabelName]

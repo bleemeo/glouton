@@ -50,12 +50,12 @@ func RegisterExporter(reg *registry.Registry, psLister interface{}, dynamicDisco
 		} else {
 			_, err = reg.RegisterGatherer(
 				registry.RegistrationOption{
-					Description: "process-exporter",
-					Interval:    defaultInterval,
-					JitterSeed:  defaultJitter,
+					Description:           "process-exporter",
+					Interval:              defaultInterval,
+					JitterSeed:            defaultJitter,
+					DisablePeriodicGather: bleemeoFormat,
 				},
 				processGatherer,
-				!bleemeoFormat,
 			)
 			if err != nil {
 				logger.Printf("Failed to register process-exporter: %v", err)

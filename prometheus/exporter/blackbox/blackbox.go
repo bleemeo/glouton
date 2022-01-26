@@ -197,7 +197,6 @@ func (m *RegisterManager) updateRegistrations() error {
 					ExtraLabels: collectorFromConfig.labels,
 				},
 				g,
-				true,
 			)
 			if err != nil {
 				return err

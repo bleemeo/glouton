@@ -160,7 +160,6 @@ func (d *DynamicScrapper) update(containers []facts.Container) {
 				ExtraLabels: t.ExtraLabels,
 			},
 			t,
-			true,
 		)
 		if err != nil {
 			logger.Printf("Failed to register scrapper for %v: %v", t.URL, err)

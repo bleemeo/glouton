@@ -87,14 +87,16 @@ var (
 			AgentID:       newAgent.ID,
 			LabelsText:    "__name__=\"some_metric_1\",label=\"value\"",
 			DeactivatedAt: time.Time{},
+			FirstSeenAt:   time.Unix(0, 0),
 		},
 		Name: "some_metric_1",
 	}
 	newMetric2 = metricPayload{
 		Metric: bleemeoTypes.Metric{
-			ID:         "055af752-5c01-4abc-9bb2-9d64032ef970",
-			AgentID:    newAgent.ID,
-			LabelsText: "__name__=\"some_metric_2\",label=\"another_value !\"",
+			ID:          "055af752-5c01-4abc-9bb2-9d64032ef970",
+			AgentID:     newAgent.ID,
+			LabelsText:  "__name__=\"some_metric_2\",label=\"another_value !\"",
+			FirstSeenAt: time.Unix(0, 0),
 		},
 		Name: "some_metric_2",
 	}
@@ -106,7 +108,8 @@ var (
 				"__name__=\"probe_whatever\",instance=\"http://bleemeo.com\",scraper_uuid=\"%s\"",
 				newAgent.ID,
 			),
-			ServiceID: newMonitor.ID,
+			ServiceID:   newMonitor.ID,
+			FirstSeenAt: time.Unix(0, 0),
 		},
 		Name: "probe_whatever",
 	}
@@ -305,19 +308,31 @@ func newAPI() *mockAPI {
 			},
 		},
 		PatchHook: func(r *http.Request, body []byte, valuePtr interface{}) error {
-			var data map[string]string
+			var data map[string]interface{}
 
 			metricPtr, _ := valuePtr.(*metricPayload)
 
 			err := json.NewDecoder(bytes.NewReader(body)).Decode(&data)
-			if boolText, ok := data["active"]; ok {
-				switch strings.ToLower(boolText) {
+
+			switch value := data["active"].(type) {
+			case string:
+				switch strings.ToLower(value) {
 				case "true":
 					metricPtr.DeactivatedAt = time.Time{}
 				case "false":
 					metricPtr.DeactivatedAt = api.now.Now()
 				default:
-					return fmt.Errorf("%w %v", errUnknownBool, boolText)
+					return fmt.Errorf("%w %v", errUnknownBool, value)
+				}
+			case bool:
+				if value {
+					metricPtr.DeactivatedAt = time.Time{}
+				} else {
+					metricPtr.DeactivatedAt = api.now.Now()
+				}
+			default:
+				if _, ok := data["active"]; ok {
+					return fmt.Errorf("%w type invalid for a bool %v", errUnknownBool, value)
 				}
 			}
 
@@ -1031,23 +1046,23 @@ func TestSync(t *testing.T) {
 	// Did we store all the metrics ?
 	syncedMetrics := helper.s.option.Cache.Metrics()
 	want := []bleemeoTypes.Metric{
-		newMetric1.metricFromAPI(),
-		newMetric2.metricFromAPI(),
-		newMetricActiveMonitor.metricFromAPI(),
+		newMetric1.metricFromAPI(time.Time{}),
+		newMetric2.metricFromAPI(time.Time{}),
+		newMetricActiveMonitor.metricFromAPI(time.Time{}),
 		metricPayload{
 			Metric: bleemeoTypes.Metric{
 				ID:      "1",
 				AgentID: newAgent.ID,
 			},
 			Name: "agent_status",
-		}.metricFromAPI(),
+		}.metricFromAPI(time.Time{}),
 		metricPayload{
 			Metric: bleemeoTypes.Metric{
 				ID:      "2",
 				AgentID: newAgent.ID,
 			},
 			Name: "cpu_used",
-		}.metricFromAPI(),
+		}.metricFromAPI(time.Time{}),
 	}
 
 	optMetricSort := cmpopts.SortSlices(func(x bleemeoTypes.Metric, y bleemeoTypes.Metric) bool { return x.ID < y.ID })
@@ -1160,17 +1175,23 @@ func TestSyncWithSNMP(t *testing.T) {
 	wantMetrics := []metricPayload{
 		{
 			Metric: bleemeoTypes.Metric{
-				ID:         "1",
-				AgentID:    idAgentMain,
-				LabelsText: `__name__="agent_status"`,
+				ID:      "1",
+				AgentID: idAgentMain,
+				LabelsText: fmt.Sprintf(
+					`__name__="agent_status",instance_uuid="%s"`,
+					idAgentMain,
+				),
 			},
 			Name: "agent_status",
 		},
 		{
 			Metric: bleemeoTypes.Metric{
-				ID:         "2",
-				AgentID:    idAgentMain,
-				LabelsText: `__name__="cpu_used"`,
+				ID:      "2",
+				AgentID: idAgentMain,
+				LabelsText: fmt.Sprintf(
+					`__name__="cpu_used",instance_uuid="%s"`,
+					idAgentMain,
+				),
 			},
 			Name: "cpu_used",
 		},
@@ -1239,17 +1260,23 @@ func TestSyncWithSNMP(t *testing.T) {
 	wantMetrics = []metricPayload{
 		{
 			Metric: bleemeoTypes.Metric{
-				ID:         "1",
-				AgentID:    idAgentMain,
-				LabelsText: `__name__="agent_status"`,
+				ID:      "1",
+				AgentID: idAgentMain,
+				LabelsText: fmt.Sprintf(
+					`__name__="agent_status",instance_uuid="%s"`,
+					idAgentMain,
+				),
 			},
 			Name: "agent_status",
 		},
 		{
 			Metric: bleemeoTypes.Metric{
-				ID:            "2",
-				AgentID:       idAgentMain,
-				LabelsText:    `__name__="cpu_used"`,
+				ID:      "2",
+				AgentID: idAgentMain,
+				LabelsText: fmt.Sprintf(
+					`__name__="cpu_used",instance_uuid="%s"`,
+					idAgentMain,
+				),
 				DeactivatedAt: helper.api.now.Now(),
 			},
 			Name: "cpu_used",
@@ -1384,17 +1411,23 @@ func TestSyncWithSNMPDelete(t *testing.T) {
 	wantMetrics := []metricPayload{
 		{
 			Metric: bleemeoTypes.Metric{
-				ID:         "1",
-				AgentID:    idAgentMain,
-				LabelsText: `__name__="agent_status"`,
+				ID:      "1",
+				AgentID: idAgentMain,
+				LabelsText: fmt.Sprintf(
+					`__name__="agent_status",instance_uuid="%s"`,
+					idAgentMain,
+				),
 			},
 			Name: "agent_status",
 		},
 		{
 			Metric: bleemeoTypes.Metric{
-				ID:         "2",
-				AgentID:    idAgentMain,
-				LabelsText: `__name__="cpu_used"`,
+				ID:      "2",
+				AgentID: idAgentMain,
+				LabelsText: fmt.Sprintf(
+					`__name__="cpu_used",instance_uuid="%s"`,
+					idAgentMain,
+				),
 			},
 			Name: "cpu_used",
 		},

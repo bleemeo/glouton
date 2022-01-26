@@ -239,6 +239,39 @@ type StatusDescription struct {
 	StatusDescription string
 }
 
+// Merge merge two annotations. Annotations from other when set win.
+func (a MetricAnnotations) Merge(other MetricAnnotations) MetricAnnotations {
+	if other.BleemeoItem != "" {
+		a.BleemeoItem = other.BleemeoItem
+	}
+
+	if other.ContainerID != "" {
+		a.ContainerID = other.ContainerID
+	}
+
+	if other.ServiceName != "" {
+		a.ServiceName = other.ServiceName
+	}
+
+	if other.StatusOf != "" {
+		a.StatusOf = other.StatusOf
+	}
+
+	if other.SNMPTarget != "" {
+		a.SNMPTarget = other.SNMPTarget
+	}
+
+	if other.BleemeoAgentID != "" {
+		a.BleemeoAgentID = other.BleemeoAgentID
+	}
+
+	if other.Status.CurrentStatus.IsSet() {
+		a.Status = other.Status
+	}
+
+	return a
+}
+
 // LabelsToText return a text version of a labels set
 // The text representation has a one-to-one relation with labels set.
 // It does because:

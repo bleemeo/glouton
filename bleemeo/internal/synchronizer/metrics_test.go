@@ -862,7 +862,8 @@ func TestMetricSimpleSync(t *testing.T) {
 		{
 			Point: types.Point{Time: helper.mt.Now()},
 			Labels: map[string]string{
-				types.LabelName: "cpu_system",
+				types.LabelName:         "cpu_system",
+				types.LabelInstanceUUID: idAgentMain,
 			},
 		},
 	})
@@ -908,8 +909,9 @@ func TestMetricSimpleSync(t *testing.T) {
 			{
 				Point: types.Point{Time: helper.mt.Now()},
 				Labels: map[string]string{
-					types.LabelName: "metric",
-					"item":          strconv.FormatInt(int64(n), 10),
+					types.LabelName:         "metric",
+					"item":                  strconv.FormatInt(int64(n), 10),
+					types.LabelInstanceUUID: idAgentMain,
 				},
 				Annotations: types.MetricAnnotations{
 					BleemeoItem: strconv.FormatInt(int64(n), 10),
@@ -963,14 +965,16 @@ func TestMetricSimpleSync(t *testing.T) {
 		{
 			Point: types.Point{Time: helper.mt.Now()},
 			Labels: map[string]string{
-				types.LabelName: "cpu_system",
+				types.LabelName:         "cpu_system",
+				types.LabelInstanceUUID: idAgentMain,
 			},
 		},
 		{
 			Point: types.Point{Time: helper.mt.Now()},
 			Labels: map[string]string{
-				types.LabelName: "disk_used",
-				"item":          "/home",
+				types.LabelName:         "disk_used",
+				"item":                  "/home",
+				types.LabelInstanceUUID: idAgentMain,
 			},
 			Annotations: types.MetricAnnotations{BleemeoItem: "/home"},
 		},
@@ -2094,4 +2098,119 @@ func Test_httpResponseToMetricFailureKind(t *testing.T) {
 			}
 		})
 	}
+}
+
+func Test_MergeFirstSeenAt(t *testing.T) {
+	state, err := state.Load("not_found")
+	now := time.Now().Add(-10 * time.Minute).Truncate(time.Second)
+
+	if err != nil {
+		t.Errorf("%v", err)
+
+		return
+	}
+
+	cache := cache.Load(state)
+
+	want := []bleemeoTypes.Metric{
+		{
+			ID:          "1",
+			LabelsText:  "2",
+			FirstSeenAt: now,
+		},
+		{
+			ID:          "2",
+			LabelsText:  "1",
+			FirstSeenAt: now,
+		},
+		{
+			ID:          "3",
+			LabelsText:  "4",
+			FirstSeenAt: now,
+		},
+		{
+			ID:          "4",
+			LabelsText:  "3",
+			FirstSeenAt: now,
+		},
+		{
+			ID:          "5",
+			LabelsText:  "6",
+			FirstSeenAt: now,
+		},
+	}
+
+	cache.SetMetrics(want)
+
+	metrics := []metricPayload{
+		{
+			Metric: bleemeoTypes.Metric{
+				ID:          "1",
+				LabelsText:  "2",
+				FirstSeenAt: now.Add(5 * time.Minute),
+			},
+		},
+		{
+			Metric: bleemeoTypes.Metric{
+				ID:          "2",
+				LabelsText:  "1",
+				FirstSeenAt: now.Add(4 * time.Minute),
+			},
+		},
+		{
+			Metric: bleemeoTypes.Metric{
+				ID:          "3",
+				LabelsText:  "4",
+				FirstSeenAt: now.Add(3 * time.Minute),
+			},
+		},
+		{
+			Metric: bleemeoTypes.Metric{
+				ID:          "5",
+				LabelsText:  "6",
+				FirstSeenAt: now.Add(2 * time.Minute),
+			},
+		},
+	}
+
+	got := []bleemeoTypes.Metric{}
+	metricsByUUID := cache.MetricsByUUID()
+
+	for _, val := range metrics {
+		metricsByUUID[val.ID] = val.metricFromAPI(metricsByUUID[val.ID].FirstSeenAt)
+	}
+
+	for _, val := range metricsByUUID {
+		got = append(got, val)
+	}
+
+	got = sortList(got)
+	want = sortList(want)
+
+	if res := cmp.Diff(got, want); res != "" {
+		t.Errorf("FirstSeenAt Merge did not occur correctly:\n%s", res)
+	}
+}
+
+func sortList(list []bleemeoTypes.Metric) []bleemeoTypes.Metric {
+	newList := make([]bleemeoTypes.Metric, 0, len(list))
+	orderedNames := make([]string, 0, len(list))
+
+	for _, val := range list {
+		orderedNames = append(orderedNames, val.LabelsText)
+	}
+
+	sort.Strings(orderedNames)
+
+	for _, name := range orderedNames {
+		for _, val := range list {
+			if val.LabelsText == name {
+				newList = append(newList, val)
+
+				break
+			}
+		}
+	}
+
+	return newList
 }

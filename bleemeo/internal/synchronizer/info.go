@@ -108,7 +108,7 @@ func (s *Synchronizer) syncInfoReal(disableOnTimeDrift bool) error {
 	if globalInfo.IsTimeDriftTooLarge() && !s.lastInfo.IsTimeDriftTooLarge() {
 		// Mark the agent_status as disconnecte with reason being the time drift
 		metricKey := common.LabelsToText(
-			map[string]string{types.LabelName: "agent_status"},
+			map[string]string{types.LabelName: "agent_status", types.LabelInstanceUUID: s.agentID},
 			types.MetricAnnotations{},
 			s.option.MetricFormat == types.MetricFormatBleemeo,
 		)

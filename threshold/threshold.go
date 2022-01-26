@@ -401,7 +401,8 @@ func (r *Registry) run(save bool) {
 	}
 }
 
-func formatValue(value float64, unit Unit) string {
+// FormatValue takes a float value and a unit and transforms it to a standard format.
+func FormatValue(value float64, unit Unit) string {
 	switch unit.UnitType {
 	case UnitTypeUnit:
 		return fmt.Sprintf("%.2f", value)
@@ -532,19 +533,19 @@ func (p *pusher) addPointWithThreshold(points []types.MetricPoint, point types.M
 
 	unit := p.registry.units[key]
 	// Consumer expect status description from threshold to start with "Current value:"
-	statusDescription := fmt.Sprintf("Current value: %s", formatValue(point.Value, unit))
+	statusDescription := fmt.Sprintf("Current value: %s", FormatValue(point.Value, unit))
 
 	if newState.CurrentStatus != types.StatusOk {
 		if period > 0 {
 			statusDescription += fmt.Sprintf(
 				" threshold (%s) exceeded over last %v",
-				formatValue(thresholdLimit, unit),
+				FormatValue(thresholdLimit, unit),
 				formatDuration(period),
 			)
 		} else {
 			statusDescription += fmt.Sprintf(
 				" threshold (%s) exceeded",
-				formatValue(thresholdLimit, unit),
+				FormatValue(thresholdLimit, unit),
 			)
 		}
 	}

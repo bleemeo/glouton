@@ -29,13 +29,18 @@ const (
 
 // MetricOnlyHasItem return true if the metric only has a name and an item (which could be empty).
 // Said otherwise, the metrics don't need to use labels_text on Bleemeo API to store its labels.
-func MetricOnlyHasItem(labels map[string]string) bool {
-	if len(labels) > 2 {
+// instance_uuid is ignore in this check if it match agentID.
+func MetricOnlyHasItem(labels map[string]string, agentID string) bool {
+	if len(labels) > 3 {
 		return false
 	}
 
-	for k := range labels {
-		if k != types.LabelName && k != types.LabelItem {
+	for k, v := range labels {
+		if k != types.LabelName && k != types.LabelItem && k != types.LabelInstanceUUID {
+			return false
+		}
+
+		if k == types.LabelInstanceUUID && v != agentID {
 			return false
 		}
 	}
