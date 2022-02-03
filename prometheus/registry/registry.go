@@ -116,7 +116,6 @@ type Registry struct {
 	reschedules             []reschedule
 	relabelConfigs          []*relabel.Config
 	registrations           map[int]*registration
-	registyPush             *prometheus.Registry
 	internalRegistry        *prometheus.Registry
 	pushedPoints            map[string]types.MetricPoint
 	pushedPointsExpiration  map[string]time.Time
@@ -215,6 +214,7 @@ type registration struct {
 	lastScrape                time.Time
 	lastScrapeDuration        time.Duration
 	gatherer                  labeledGatherer
+	annotations               types.MetricAnnotations
 	relabelHookSkip           bool
 	lastRebalHookRetry        time.Time
 }
@@ -224,9 +224,6 @@ type reschedule struct {
 	Reg   *registration
 	RunAt time.Time
 }
-
-// This type is used to have another Collecto() method private which only return pushed points.
-type pushCollector Registry
 
 var errToManyGatherers = errors.New("too many gatherers in the registry. Unable to find a new slot")
 
@@ -356,7 +353,6 @@ func (r *Registry) init() {
 	r.condition = sync.NewCond(&r.l)
 
 	r.registrations = make(map[int]*registration)
-	r.registyPush = prometheus.NewRegistry()
 	r.internalRegistry = prometheus.NewRegistry()
 	r.pushedPoints = make(map[string]types.MetricPoint)
 	r.pushedPointsExpiration = make(map[string]time.Time)
@@ -365,11 +361,6 @@ func (r *Registry) init() {
 	r.renamer = renamer.LoadRules(renamer.GetDefaultRules())
 
 	r.l.Unlock()
-
-	// Gather & Register shouldn't be done with the lock, as is will call
-	// Describe and/or Collect which may take the lock
-
-	_ = r.registyPush.Register((*pushCollector)(r))
 }
 
 func (r *Registry) Run(ctx context.Context) error {
@@ -748,7 +739,7 @@ func (r *Registry) restartScrapeLoop(reg *registration) {
 		timeout,
 		reg.option.JitterSeed,
 		func(ctx context.Context, t0 time.Time) {
-			r.scrape(ctx, t0, reg)
+			r.scrapeFromLoop(ctx, t0, reg)
 		},
 	)
 }
@@ -808,7 +799,7 @@ func (r *Registry) checkReschedule(ctx context.Context) time.Duration {
 			ctx, cancel := context.WithTimeout(ctx, defaultGatherTimeout)
 			defer cancel()
 
-			r.scrape(ctx, now.Truncate(time.Second), reg)
+			r.scrapeFromLoop(ctx, now.Truncate(time.Second), reg)
 		}()
 	}
 
@@ -892,30 +883,74 @@ func (r *Registry) GatherWithState(ctx context.Context, state GatherState) ([]*d
 
 	r.l.Lock()
 
-	gatherers := make(Gatherers, 0, len(r.registrations)+1)
+	var (
+		mfs   []*dto.MetricFamily
+		errs  prometheus.MultiError
+		mutex sync.Mutex
+	)
+
+	wg := sync.WaitGroup{}
 
 	for _, reg := range r.registrations {
-		reg.l.Lock()
+		reg := reg
 
-		if reg.relabelHookSkip {
-			reg.l.Unlock()
+		wg.Add(1)
 
-			continue
-		}
+		go func() {
+			defer wg.Done()
 
-		gatherers = append(gatherers, reg.gatherer)
+			tmp, _, err := r.scrape(ctx, state, reg)
 
-		reg.l.Unlock()
+			mutex.Lock()
+			defer mutex.Unlock()
+
+			if err != nil {
+				errs = append(errs, err)
+			}
+
+			mfs = append(mfs, tmp...)
+		}()
 	}
-
-	gatherers = append(gatherers, NonProbeGatherer{G: r.registyPush})
 
 	r.l.Unlock()
 
-	mfs, err := gatherers.GatherWithState(ctx, state)
-	mfs = r.renamer.RenameMFS(mfs)
+	if state.QueryType != OnlyProbes {
+		pts := r.getPushedPoints()
+		tmp := gloutonModel.MetricPointsToFamilies(pts)
 
-	return mfs, err
+		mutex.Lock()
+
+		mfs = append(mfs, tmp...)
+
+		mutex.Unlock()
+	}
+
+	wg.Wait()
+
+	mfs, err := mergeMFS(mfs)
+	if err != nil {
+		errs = append(errs, err)
+	}
+
+	// Use prometheus.Gatherers because it will:
+	// * Remove (and complain) about possible duplicate of metric
+	// * sort output
+	// * maybe other sanity check :)
+
+	promGatherers := prometheus.Gatherers{
+		sliceGatherer(mfs),
+	}
+
+	sortedResult, err := promGatherers.Gather()
+	if err != nil {
+		if multiErr, ok := err.(prometheus.MultiError); ok {
+			errs = append(errs, multiErr...)
+		} else {
+			errs = append(errs, err)
+		}
+	}
+
+	return sortedResult, errs.MaybeUnwrap()
 }
 
 func gatherFromQueryable(ctx context.Context, queryable storage.Queryable, filter metricFilter) ([]*dto.MetricFamily, error) {
@@ -1086,14 +1121,44 @@ func (r *Registry) InternalRunScape(ctx context.Context, t0 time.Time, id int) {
 	r.l.Unlock()
 
 	if ok {
-		r.scrape(ctx, t0, reg)
+		r.scrapeFromLoop(ctx, t0, reg)
 	}
 }
 
-func (r *Registry) scrape(ctx context.Context, t0 time.Time, reg *registration) {
+func (r *Registry) scrapeFromLoop(ctx context.Context, t0 time.Time, reg *registration) {
 	r.scrapeStart()
 	defer r.scrapeDone()
 
+	mfs, duration, err := r.scrape(ctx, GatherState{QueryType: All, FromScrapeLoop: true, T0: t0}, reg)
+	if err != nil {
+		if len(mfs) == 0 {
+			logger.V(1).Printf("Gather of metrics failed on %s: %v", reg.option.Description, err)
+		} else {
+			// When there is points, log at lower level because we known that some gatherer always
+			// fail on some setup. node_exporter may sent "node_rapl_package_joules_total" duplicated.
+			logger.V(1).Printf("Gather of metrics failed on %s, some metrics may be missing: %v", reg.option.Description, err)
+		}
+	}
+
+	points := gloutonModel.FamiliesToMetricPoints(t0, mfs)
+
+	if (reg.annotations != types.MetricAnnotations{}) {
+		for i := range points {
+			points[i].Annotations = points[i].Annotations.Merge(reg.annotations)
+		}
+	}
+
+	reg.l.Lock()
+	reg.lastScrape = t0
+	reg.lastScrapeDuration = duration
+	reg.l.Unlock()
+
+	if len(points) > 0 && r.option.PushPoint != nil {
+		r.option.PushPoint.PushPoints(ctx, points)
+	}
+}
+
+func (r *Registry) scrape(ctx context.Context, state GatherState, reg *registration) ([]*dto.MetricFamily, time.Duration, error) {
 	r.l.Lock()
 	reg.l.Lock()
 
@@ -1106,38 +1171,22 @@ func (r *Registry) scrape(ctx context.Context, t0 time.Time, reg *registration) 
 	if reg.relabelHookSkip {
 		reg.l.Unlock()
 
-		return
+		return nil, 0, nil
 	}
 
-	gatherMethod := reg.gatherer.GatherPoints
+	gatherMethod := reg.gatherer.GatherWithState
 
 	reg.l.Unlock()
 
 	start := time.Now()
 
-	points, err := gatherMethod(ctx, t0, GatherState{QueryType: All, FromScrapeLoop: true, T0: t0})
-	if err != nil {
-		if len(points) == 0 {
-			logger.Printf("Gather of metrics failed: %v", err)
-		} else {
-			// When there is points, log at lower level because we known that some gatherer always
-			// fail on some setup. node_exporter may sent "node_rapl_package_joules_total" duplicated.
-			logger.V(1).Printf("Gather of metrics failed, some metrics may be missing: %v", err)
-		}
-	}
+	mfs, err := gatherMethod(ctx, state)
 
 	if !reg.option.NoLabelsAlteration {
-		points = r.renamer.Rename(points)
+		mfs = r.renamer.RenameMFS(mfs)
 	}
 
-	reg.l.Lock()
-	reg.lastScrape = t0
-	reg.lastScrapeDuration = time.Since(start)
-	reg.l.Unlock()
-
-	if len(points) > 0 && r.option.PushPoint != nil {
-		r.option.PushPoint.PushPoints(ctx, points)
-	}
+	return mfs, time.Since(start), err
 }
 
 // pushPoint add a new point to the list of pushed point with a specified TTL.
@@ -1296,56 +1345,35 @@ func (r *Registry) setupGatherer(ctx context.Context, reg *registration, source 
 		promLabels, annotations = r.applyRelabel(extraLabels)
 	}
 
-	g := newLabeledGatherer(source, promLabels, reg.option.rrules, annotations)
+	g := newLabeledGatherer(source, promLabels, reg.option.rrules)
+	reg.annotations = annotations
 	reg.gatherer = g
 }
 
-// Describe implement prometheus.Collector.
-func (c *pushCollector) Describe(chan<- *prometheus.Desc) {
-}
-
 // Collect collect pushed points.
-func (c *pushCollector) Collect(ch chan<- prometheus.Metric) {
-	c.l.Lock()
-	defer c.l.Unlock()
+func (r *Registry) getPushedPoints() []types.MetricPoint {
+	r.l.Lock()
+	defer r.l.Unlock()
 
 	now := time.Now()
 
-	c.lastPushedPointsCleanup = now
+	r.lastPushedPointsCleanup = now
 
-	for key, p := range c.pushedPoints {
-		expiration := c.pushedPointsExpiration[key]
+	pts := make([]types.MetricPoint, 0, len(r.pushedPoints))
+
+	for key, p := range r.pushedPoints {
+		expiration := r.pushedPointsExpiration[key]
 		if now.After(expiration) {
-			delete(c.pushedPoints, key)
-			delete(c.pushedPointsExpiration, key)
+			delete(r.pushedPoints, key)
+			delete(r.pushedPointsExpiration, key)
 
 			continue
 		}
 
-		labelKeys := make([]string, 0)
-		labelValues := make([]string, 0)
-
-		for l, v := range p.Labels {
-			if l != types.LabelName {
-				labelKeys = append(labelKeys, l)
-				labelValues = append(labelValues, v)
-			}
-		}
-
-		promMetric, err := prometheus.NewConstMetric(
-			prometheus.NewDesc(p.Labels[types.LabelName], "", labelKeys, nil),
-			prometheus.UntypedValue,
-			p.Value,
-			labelValues...,
-		)
-		if err != nil {
-			logger.V(2).Printf("Ignoring metric %s due to %v", p.Labels[types.LabelName], err)
-
-			continue
-		}
-
-		ch <- prometheus.NewMetricWithTimestamp(p.Time, promMetric)
+		pts = append(pts, p)
 	}
+
+	return pts
 }
 
 func fixLabels(lbls map[string]string) (map[string]string, error) {

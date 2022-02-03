@@ -95,35 +95,3 @@ func (p *ProbeGatherer) GatherWithState(ctx context.Context, state GatherState) 
 
 	return mfs, err
 }
-
-// NonProbeGatherer Gatherer that wraps gatherers that aren't probe and that are not themselves wrapped by labeledGatherer
-// (labeledGatherer perform roughly the same job w.r.t. probes and and it is thus not necessary to wrap all
-// non-probes gatherers inside this struct).
-type NonProbeGatherer struct {
-	G prometheus.Gatherer
-}
-
-// Gather a set of metrics from a Gatherer that is not probe.
-// While not a critical error, this function should never be called, as callers should know about
-// GatherWithState().
-func (p NonProbeGatherer) Gather() ([]*dto.MetricFamily, error) {
-	logger.V(2).Println("Gather() called directly on a NonProbeGatherer, this is a bug !")
-
-	ctx, cancel := context.WithTimeout(context.Background(), defaultGatherTimeout)
-	defer cancel()
-
-	return p.GatherWithState(ctx, GatherState{})
-}
-
-// GatherWithState uses the specified gather state along the gatherer to retrieve a set of metrics.
-func (p NonProbeGatherer) GatherWithState(ctx context.Context, state GatherState) ([]*dto.MetricFamily, error) {
-	if state.QueryType == OnlyProbes {
-		return nil, nil
-	}
-
-	if cg, ok := p.G.(GathererWithState); ok {
-		return cg.GatherWithState(ctx, state)
-	}
-
-	return p.G.Gather()
-}

@@ -5,11 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"glouton/logger"
-	"glouton/prometheus/model"
 	"glouton/prometheus/registry/internal/ruler"
-	"glouton/types"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -131,13 +128,12 @@ func (w *GathererWithStateWrapper) Gather() ([]*dto.MetricFamily, error) {
 // labeledGatherer provide a gatherer that will add provided labels to all metrics.
 // It also allow to gather to MetricPoints.
 type labeledGatherer struct {
-	source      prometheus.Gatherer
-	labels      []*dto.LabelPair
-	annotations types.MetricAnnotations
-	ruler       *ruler.SimpleRuler
+	source prometheus.Gatherer
+	labels []*dto.LabelPair
+	ruler  *ruler.SimpleRuler
 }
 
-func newLabeledGatherer(g prometheus.Gatherer, extraLabels labels.Labels, rrules []*rules.RecordingRule, annotations types.MetricAnnotations) labeledGatherer {
+func newLabeledGatherer(g prometheus.Gatherer, extraLabels labels.Labels, rrules []*rules.RecordingRule) labeledGatherer {
 	labels := make([]*dto.LabelPair, 0, len(extraLabels))
 
 	for _, l := range extraLabels {
@@ -151,10 +147,9 @@ func newLabeledGatherer(g prometheus.Gatherer, extraLabels labels.Labels, rrules
 	}
 
 	return labeledGatherer{
-		source:      g,
-		labels:      labels,
-		annotations: annotations,
-		ruler:       ruler.New(rrules),
+		source: g,
+		labels: labels,
+		ruler:  ruler.New(rrules),
 	}
 }
 
@@ -241,19 +236,6 @@ func mergeLabels(a []*dto.LabelPair, b []*dto.LabelPair) []*dto.LabelPair {
 	return result
 }
 
-func (g labeledGatherer) GatherPoints(ctx context.Context, now time.Time, state GatherState) ([]types.MetricPoint, error) {
-	mfs, err := g.GatherWithState(ctx, state)
-	points := model.FamiliesToMetricPoints(now, mfs)
-
-	for i := range points {
-		if (g.annotations != types.MetricAnnotations{}) {
-			points[i].Annotations = points[i].Annotations.Merge(g.annotations)
-		}
-	}
-
-	return points, err
-}
-
 type sliceGatherer []*dto.MetricFamily
 
 // Gather implements Gatherer.
@@ -261,75 +243,13 @@ func (s sliceGatherer) Gather() ([]*dto.MetricFamily, error) {
 	return s, nil
 }
 
-// Gatherers do the same as prometheus.Gatherers but allow different gatherer
-// to have different metric help text.
-// The type must still be the same.
-//
-// This is useful when scrapping multiple endpoints which provide the same metric
-// (like "go_gc_duration_seconds") but changed its help_text.
-//
-// The first help_text win.
-type Gatherers []prometheus.Gatherer
-
-// GatherWithState implements GathererWithState.
-func (gs Gatherers) GatherWithState(ctx context.Context, state GatherState) ([]*dto.MetricFamily, error) {
+// mergeMFS take a list of metric families where two entry might be from the same family.
+// When two entry have the same family, the type must be the same.
+// The help text could be different, only the first will be kept.
+func mergeMFS(mfs []*dto.MetricFamily) ([]*dto.MetricFamily, error) {
 	metricFamiliesByName := map[string]*dto.MetricFamily{}
 
 	var errs prometheus.MultiError
-
-	var mfs []*dto.MetricFamily
-
-	wg := sync.WaitGroup{}
-	wg.Add(len(gs))
-
-	mutex := sync.Mutex{}
-
-	// run gather in parallel
-	for _, g := range gs {
-		go func(g prometheus.Gatherer) {
-			defer wg.Done()
-
-			var currentMFs []*dto.MetricFamily
-
-			var err error
-
-			if cg, ok := g.(GathererWithState); ok {
-				currentMFs, err = cg.GatherWithState(ctx, state)
-			} else {
-				currentMFs, err = g.Gather()
-			}
-
-			// Make sure to drop __meta labels
-			for _, mf := range currentMFs {
-				for _, m := range mf.Metric {
-					i := 0
-
-					for _, l := range m.Label {
-						if l.GetName() == types.LabelMetaCurrentStatus || l.GetName() == types.LabelMetaCurrentDescription {
-							continue
-						}
-
-						m.Label[i] = l
-						i++
-					}
-
-					m.Label = m.Label[:i]
-				}
-			}
-
-			mutex.Lock()
-
-			if err != nil {
-				errs = append(errs, err)
-			}
-
-			mfs = append(mfs, currentMFs...)
-
-			mutex.Unlock()
-		}(g)
-	}
-
-	wg.Wait()
 
 	for _, mf := range mfs {
 		existingMF, exists := metricFamiliesByName[mf.GetName()]
@@ -360,31 +280,5 @@ func (gs Gatherers) GatherWithState(ctx context.Context, state GatherState) ([]*
 		result = append(result, f)
 	}
 
-	// Still use prometheus.Gatherers because it will:
-	// * Remove (and complain) about possible duplicate of metric
-	// * sort output
-	// * maybe other sanity check :)
-
-	promGatherers := prometheus.Gatherers{
-		sliceGatherer(result),
-	}
-
-	sortedResult, err := promGatherers.Gather()
-	if err != nil {
-		if multiErr, ok := err.(prometheus.MultiError); ok {
-			errs = append(errs, multiErr...)
-		} else {
-			errs = append(errs, err)
-		}
-	}
-
-	return sortedResult, errs.MaybeUnwrap()
-}
-
-// Gather implements prometheus.Gather.
-func (gs Gatherers) Gather() ([]*dto.MetricFamily, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), defaultGatherTimeout)
-	defer cancel()
-
-	return gs.GatherWithState(ctx, GatherState{})
+	return result, errs.MaybeUnwrap()
 }

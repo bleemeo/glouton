@@ -3,6 +3,7 @@ package registry
 
 import (
 	"context"
+	"glouton/prometheus/model"
 	"glouton/types"
 	"reflect"
 	"testing"
@@ -102,6 +103,7 @@ func Test_mergeLabels(t *testing.T) {
 	}
 }
 
+// Test_labeledGatherer_GatherPoints should be converted to call of registry.scrape.
 func Test_labeledGatherer_GatherPoints(t *testing.T) {
 	var (
 		strMetric     = "up"
@@ -243,13 +245,20 @@ func Test_labeledGatherer_GatherPoints(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			g := newLabeledGatherer(tt.fields.source, tt.fields.labels, nil, tt.fields.annotations)
+			g := newLabeledGatherer(tt.fields.source, tt.fields.labels, nil)
 
-			got, err := g.GatherPoints(context.Background(), time.Now(), GatherState{})
+			mfs, err := g.GatherWithState(context.Background(), GatherState{})
 			if (err != nil) != tt.wantErr {
 				t.Errorf("labeledGatherer.GatherPoints() error = %v, wantErr %v", err, tt.wantErr)
 
 				return
+			}
+
+			got := model.FamiliesToMetricPoints(time.Now(), mfs)
+			if (tt.fields.annotations != types.MetricAnnotations{}) {
+				for i := range got {
+					got[i].Annotations = got[i].Annotations.Merge(tt.fields.annotations)
+				}
 			}
 
 			if !reflect.DeepEqual(got, tt.want) {

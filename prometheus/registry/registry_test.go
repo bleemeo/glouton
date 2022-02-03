@@ -1914,7 +1914,7 @@ func TestRegistry_pointsAlteration(t *testing.T) {
 
 			wantMFs := metricPointsToFamilies(tt.want, mfsTime, tt.wantOverrideMFType, tt.wantOverrideMFHelp)
 
-			if diff := cmp.Diff(wantMFs, got, cmpopts.EquateApprox(0.001, 0)); diff != "" {
+			if diff := cmp.Diff(wantMFs, got, cmpopts.EquateApprox(0.001, 0), cmpopts.EquateEmpty()); diff != "" {
 				t.Errorf("Gather mismatch (-want +got):\n%s", diff)
 			}
 		})

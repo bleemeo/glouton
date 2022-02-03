@@ -4,6 +4,7 @@ import (
 	"errors"
 	"glouton/logger"
 	"glouton/types"
+	"sort"
 	"strings"
 	"time"
 
@@ -55,6 +56,80 @@ func FamiliesToMetricPoints(now time.Time, families []*dto.MetricFamily) []types
 	}
 
 	return result
+}
+
+func MetricPointsToFamilies(points []types.MetricPoint) []*dto.MetricFamily {
+	families := []*dto.MetricFamily{}
+	indexByName := make(map[string]int)
+
+	for _, p := range points {
+		name := p.Labels[types.LabelName]
+		idx, exists := indexByName[name]
+
+		if !exists {
+			tmp := &dto.MetricFamily{
+				Name: proto.String(name),
+				Help: proto.String(""),
+				Type: dto.MetricType_UNTYPED.Enum(),
+			}
+			idx = len(families)
+			indexByName[name] = idx
+
+			families = append(families, tmp)
+		}
+
+		metric := &dto.Metric{
+			Label:       make([]*dto.LabelPair, 0, len(p.Labels)-1),
+			TimestampMs: proto.Int64(p.Time.UnixMilli()),
+			Untyped: &dto.Untyped{
+				Value: proto.Float64(p.Value),
+			},
+		}
+
+		for k, v := range p.Labels {
+			if k == types.LabelName {
+				continue
+			}
+
+			metric.Label = append(metric.Label, &dto.LabelPair{
+				Name:  proto.String(k),
+				Value: proto.String(v),
+			})
+		}
+
+		sort.Slice(metric.Label, func(i, j int) bool {
+			return metric.Label[i].GetName() < metric.Label[j].GetName()
+		})
+
+		families[idx].Metric = append(families[idx].Metric, metric)
+	}
+
+	sort.Slice(families, func(i, j int) bool {
+		return families[i].GetName() < families[j].GetName()
+	})
+
+	for _, fam := range families {
+		sort.Slice(fam.Metric, func(i, j int) bool {
+			builder := labels.NewBuilder(nil)
+
+			for _, pair := range fam.Metric[i].Label {
+				builder.Set(pair.GetName(), pair.GetValue())
+			}
+
+			lblsA := builder.Labels()
+
+			builder.Reset(nil)
+			for _, pair := range fam.Metric[j].Label {
+				builder.Set(pair.GetName(), pair.GetValue())
+			}
+
+			lblsB := builder.Labels()
+
+			return labels.Compare(lblsA, lblsB) < 0
+		})
+	}
+
+	return families
 }
 
 // DropMetaLabels delete all labels which start with __ (with exception to __name__).
