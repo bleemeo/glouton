@@ -82,6 +82,7 @@ var commonDefaultSystemMetrics = []string{
 	"probe_http_status_code",
 	"probe_success",
 	"probe_ssl_earliest_cert_expiry",
+	"probe_ssl_last_chain_expiry_timestamp_seconds",
 }
 
 //nolint:gochecknoglobals
