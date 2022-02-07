@@ -159,6 +159,7 @@ func (c *Connector) initMQTT(previousPoint []gloutonTypes.MetricPoint, first boo
 			UpdateMaintenance:    c.sync.UpdateMaintenance,
 			UpdateMonitor:        c.sync.UpdateMonitor,
 			InitialPoints:        previousPoint,
+			GetJWT:               c.sync.GetJWT,
 		},
 		first,
 	)
@@ -327,17 +328,7 @@ func (c *Connector) Run(ctx context.Context) error {
 			}
 		}()
 
-		ticker := time.NewTicker(10 * time.Second)
-		defer ticker.Stop()
-
-		for subCtx.Err() == nil {
-			c.emitInternalMetric()
-
-			select {
-			case <-ticker.C:
-			case <-subCtx.Done():
-			}
-		}
+		<-subCtx.Done()
 
 		logger.V(2).Printf("Bleemeo connector stopping")
 	}()
@@ -833,12 +824,22 @@ func (c *Connector) HealthCheck() bool {
 	return ok
 }
 
-func (c *Connector) emitInternalMetric() {
+func (c *Connector) EmitInternalMetric(ctx context.Context, now time.Time) {
 	c.l.RLock()
 	defer c.l.RUnlock()
 
 	if c.mqtt != nil && c.mqtt.Connected() {
-		c.option.Acc.AddFields("", map[string]interface{}{"agent_status": 1.0}, nil, time.Now().Truncate(time.Second))
+		c.option.PushPoints.PushPoints(ctx, []gloutonTypes.MetricPoint{
+			{
+				Point: gloutonTypes.Point{
+					Time:  now,
+					Value: 1.0,
+				},
+				Labels: map[string]string{
+					gloutonTypes.LabelName: "agent_status",
+				},
+			},
+		})
 	}
 }
 

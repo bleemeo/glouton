@@ -1,8 +1,10 @@
-import ApolloClient from "apollo-client";
-import { HttpLink } from "apollo-link-http";
-import { ApolloLink } from "apollo-link";
+import {
+  ApolloClient,
+  ApolloLink,
+  HttpLink,
+  InMemoryCache,
+} from "@apollo/client";
 import apolloLogger from "apollo-link-logger";
-import { InMemoryCache } from "apollo-cache-inmemory";
 
 const GRAPHQLURL = "/graphql";
 

@@ -21,11 +21,10 @@ import (
 	"glouton/discovery"
 	"glouton/facts"
 	"glouton/prometheus/exporter/snmp"
+	"glouton/prometheus/rules"
 	"glouton/threshold"
 	"glouton/types"
 	"time"
-
-	"github.com/influxdata/telegraf"
 )
 
 // GlobalOption are option user by most component of bleemeo.Connector.
@@ -38,7 +37,7 @@ type GlobalOption struct {
 	SNMP                    []*snmp.Target
 	SNMPOnlineTarget        func() int
 	Store                   Store
-	Acc                     telegraf.Accumulator
+	PushPoints              types.PointPusher
 	Discovery               discovery.PersistentDiscoverer
 	MonitorManager          MonitorManager
 	MetricFormat            types.MetricFormat
@@ -49,6 +48,7 @@ type GlobalOption struct {
 	UpdateMetricResolution func(defaultResolution time.Duration, snmpResolution time.Duration)
 	UpdateThresholds       func(thresholds map[threshold.MetricNameItem]threshold.Threshold, firstUpdate bool)
 	UpdateUnits            func(units map[threshold.MetricNameItem]threshold.Unit)
+	RebuildAlertingRules   func(metrics []rules.MetricAlertRule) error
 }
 
 // MonitorManager is the interface used by Bleemeo to update the dynamic monitors list.

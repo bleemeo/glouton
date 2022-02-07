@@ -81,7 +81,7 @@ type Registry interface {
 
 // GathererRegistry allow to register/unregister prometheus Gatherer.
 type GathererRegistry interface {
-	RegisterGatherer(opt registry.RegistrationOption, gatherer prometheus.Gatherer, pushPoints bool) (int, error)
+	RegisterGatherer(opt registry.RegistrationOption, gatherer prometheus.Gatherer) (int, error)
 	Unregister(id int) bool
 }
 

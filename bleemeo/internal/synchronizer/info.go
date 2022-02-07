@@ -79,7 +79,17 @@ func (s *Synchronizer) syncInfoReal(disableOnTimeDrift bool) error {
 	if globalInfo.CurrentTime != 0 {
 		delta := globalInfo.TimeDrift()
 
-		s.option.Acc.AddFields("", map[string]interface{}{"time_drift": delta.Seconds()}, nil, globalInfo.BleemeoTime().Truncate(time.Second))
+		s.option.PushPoints.PushPoints(s.ctx, []types.MetricPoint{
+			{
+				Point: types.Point{
+					Time:  globalInfo.BleemeoTime().Truncate(time.Second),
+					Value: delta.Seconds(),
+				},
+				Labels: map[string]string{
+					types.LabelName: "time_drift",
+				},
+			},
+		})
 
 		if disableOnTimeDrift && globalInfo.IsTimeDriftTooLarge() {
 			delay := delay.JitterDelay(30*time.Minute, 0.1)
@@ -98,7 +108,7 @@ func (s *Synchronizer) syncInfoReal(disableOnTimeDrift bool) error {
 	if globalInfo.IsTimeDriftTooLarge() && !s.lastInfo.IsTimeDriftTooLarge() {
 		// Mark the agent_status as disconnecte with reason being the time drift
 		metricKey := common.LabelsToText(
-			map[string]string{types.LabelName: "agent_status"},
+			map[string]string{types.LabelName: "agent_status", types.LabelInstanceUUID: s.agentID},
 			types.MetricAnnotations{},
 			s.option.MetricFormat == types.MetricFormatBleemeo,
 		)

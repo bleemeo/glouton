@@ -29,7 +29,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	dto "github.com/prometheus/client_model/go"
-	"github.com/prometheus/prometheus/pkg/labels"
+	"github.com/prometheus/prometheus/model/labels"
 	promParser "github.com/prometheus/prometheus/promql/parser"
 )
 
@@ -521,7 +521,7 @@ func Test_RebuildDynamicList(t *testing.T) {
 	allowListWant[*m2.Get(types.LabelName)] = append(allowListWant[*m2.Get(types.LabelName)], m2)
 	denyListWant[*m3.Get(types.LabelName)] = append(denyListWant[*m3.Get(types.LabelName)], m3)
 
-	err = mf.RebuildDynamicLists(&d, []discovery.Service{}, []string{})
+	err = mf.RebuildDynamicLists(&d, []discovery.Service{}, []string{}, []string{})
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 	}
@@ -543,7 +543,7 @@ func Test_RebuildDynamicList(t *testing.T) {
 	}
 
 	// Rebuild is done twice to make sure the build is effectively cleared and rebuild
-	err = mf.RebuildDynamicLists(&d, []discovery.Service{}, []string{})
+	err = mf.RebuildDynamicLists(&d, []discovery.Service{}, []string{}, []string{})
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 	}
