@@ -55,6 +55,11 @@ func defaultModule(userAgent string) bbConf.Module {
 			IPProtocol: "ip4",
 			HTTPClientConfig: config.HTTPClientConfig{
 				FollowRedirects: true,
+				TLSConfig: config.TLSConfig{
+					// We manually do the TLS verification after probing.
+					// This allow to gather information on self-signed server.
+					InsecureSkipVerify: true,
+				},
 			},
 			Headers: map[string]string{
 				"User-Agent": userAgent,

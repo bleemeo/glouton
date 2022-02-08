@@ -23,6 +23,22 @@ import (
 	dto "github.com/prometheus/client_model/go"
 )
 
+// filterMFs filter metric families to exclude some family.
+func filterMFs(mfs []*dto.MetricFamily, include func(mf *dto.MetricFamily) bool) []*dto.MetricFamily {
+	i := 0
+
+	for _, mf := range mfs {
+		if !include(mf) {
+			continue
+		}
+
+		mfs[i] = mf
+		i++
+	}
+
+	return mfs[:i]
+}
+
 // writeMFsToChan converts metrics families to new metrics, before writing them on the 'ch' channel.
 func writeMFsToChan(mfs []*dto.MetricFamily, ch chan<- prometheus.Metric) {
 	for _, mf := range mfs {

@@ -18,15 +18,23 @@ package blackbox
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
+	"errors"
 	"fmt"
 	"glouton/logger"
 	"glouton/prometheus/registry"
+	"net"
+	"net/http/httptrace"
+	"net/url"
 	"reflect"
 	"time"
 
 	"github.com/go-kit/log"
 	"github.com/prometheus/blackbox_exporter/prober"
 	"github.com/prometheus/client_golang/prometheus"
+	dto "github.com/prometheus/client_model/go"
+	"github.com/prometheus/common/config"
 	"github.com/prometheus/prometheus/model/labels"
 )
 
@@ -45,6 +53,18 @@ var (
 		[]string{"instance"},
 		nil,
 	)
+	probeTLSExpiry = prometheus.NewDesc(
+		prometheus.BuildFQName("", "", "probe_ssl_last_chain_expiry_timestamp_seconds"),
+		"Returns last SSL chain expiry in timestamp seconds",
+		[]string{"instance"},
+		nil,
+	)
+	probeTLSSuccess = prometheus.NewDesc(
+		prometheus.BuildFQName("", "", "probe_ssl_validation_success"),
+		"Returns whether all SSL connections were valid",
+		[]string{"instance"},
+		nil,
+	)
 	probeDurationDesc = prometheus.NewDesc(
 		prometheus.BuildFQName("", "", "probe_duration_seconds"),
 		"Returns how long the probe took to complete in seconds",
@@ -58,6 +78,46 @@ var (
 		proberNameDNS:  prober.ProbeDNS,
 	}
 )
+
+var errNoCertificates = errors.New("no server certificate")
+
+type roundTrip struct {
+	HostPort string
+	TLSState *tls.ConnectionState
+}
+
+type roundTripTLSVerify struct {
+	hadTLS     bool
+	trustedTLS bool
+	expiry     time.Time
+	err        error
+}
+
+type roundTripTLSVerifyList []roundTripTLSVerify
+
+func (rts roundTripTLSVerifyList) HadTLS() bool {
+	for _, rt := range rts {
+		if rt.hadTLS {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (rts roundTripTLSVerifyList) AllTrusted() bool {
+	for _, rt := range rts {
+		if !rt.hadTLS {
+			continue
+		}
+
+		if !rt.trustedTLS {
+			return false
+		}
+	}
+
+	return true
+}
 
 // Describe implements the prometheus.Collector interface.
 func (target configTarget) Describe(ch chan<- *prometheus.Desc) {
@@ -106,8 +166,30 @@ func (target configTarget) Collect(ch chan<- prometheus.Metric) {
 	extLogger := log.With(logger.GoKitLoggerWrapper(logger.V(2)), "url", target.URL)
 	start := time.Now()
 
+	var (
+		roundTrips       []roundTrip
+		currentRoundTrip roundTrip
+	)
+
+	// This is done to capture the last response TLS handshake state.
+	subCtx := httptrace.WithClientTrace(ctx, &httptrace.ClientTrace{
+		GetConn: func(hostPort string) {
+			if currentRoundTrip.HostPort != "" {
+				roundTrips = append(roundTrips, currentRoundTrip)
+			}
+
+			currentRoundTrip = roundTrip{
+				HostPort: hostPort,
+				TLSState: nil,
+			}
+		},
+		TLSHandshakeDone: func(cs tls.ConnectionState, e error) {
+			currentRoundTrip.TLSState = &cs
+		},
+	})
+
 	// do all the actual work
-	success := probeFn(ctx, target.URL, target.Module, registry, extLogger)
+	success := probeFn(subCtx, target.URL, target.Module, registry, extLogger)
 
 	end := time.Now()
 	duration := end.Sub(start)
@@ -122,8 +204,27 @@ func (target configTarget) Collect(ch chan<- prometheus.Metric) {
 		return
 	}
 
+	if currentRoundTrip.HostPort != "" {
+		roundTrips = append(roundTrips, currentRoundTrip)
+	}
+
 	// write all the gathered metrics to our upper registry
-	writeMFsToChan(mfs, ch)
+	writeMFsToChan(filterMFs(mfs, func(mf *dto.MetricFamily) bool {
+		return mf.GetName() != "probe_ssl_last_chain_expiry_timestamp_seconds"
+	}), ch)
+
+	roundTripsTLS := target.verifyTLS(extLogger, roundTrips)
+	if roundTripsTLS.HadTLS() {
+		if roundTripsTLS.AllTrusted() {
+			ch <- prometheus.MustNewConstMetric(probeTLSSuccess, prometheus.GaugeValue, 1, target.Name)
+		} else {
+			ch <- prometheus.MustNewConstMetric(probeTLSSuccess, prometheus.GaugeValue, 0, target.Name)
+		}
+
+		if roundTripsTLS[len(roundTripsTLS)-1].hadTLS {
+			ch <- prometheus.MustNewConstMetric(probeTLSExpiry, prometheus.GaugeValue, float64(roundTripsTLS[len(roundTripsTLS)-1].expiry.Unix()), target.Name)
+		}
+	}
 
 	successVal := 0.
 	if success {
@@ -131,6 +232,141 @@ func (target configTarget) Collect(ch chan<- prometheus.Metric) {
 	}
 	ch <- prometheus.MustNewConstMetric(probeDurationDesc, prometheus.GaugeValue, duration.Seconds(), target.Name)
 	ch <- prometheus.MustNewConstMetric(probeSuccessDesc, prometheus.GaugeValue, successVal, target.Name)
+}
+
+// verifyTLS returns the last round-trip TLS expiration and whether all TLS round-trip were trusted.
+func (target configTarget) verifyTLS(extLogger log.Logger, roundTrips []roundTrip) roundTripTLSVerifyList {
+	start := time.Now()
+	defer func() {
+		_ = extLogger.Log("verifyTLS took", time.Since(start))
+	}()
+
+	if len(roundTrips) == 0 {
+		return nil
+	}
+
+	firstHost, _, err := net.SplitHostPort(roundTrips[0].HostPort)
+	if err != nil {
+		_ = extLogger.Log("net.SplitHostPort fail", err)
+
+		return nil
+	}
+
+	if target.Module.Prober != proberNameHTTP {
+		return nil
+	}
+
+	result := make([]roundTripTLSVerify, 0, len(roundTrips))
+
+	for _, rt := range roundTrips {
+		if rt.TLSState == nil {
+			result = append(result, roundTripTLSVerify{
+				hadTLS: false,
+			})
+
+			continue
+		}
+
+		if len(rt.TLSState.PeerCertificates) == 0 {
+			result = append(result, roundTripTLSVerify{
+				hadTLS:     true,
+				trustedTLS: false,
+				err:        errNoCertificates,
+			})
+
+			continue
+		}
+
+		httpClientConfig := target.Module.HTTP.HTTPClientConfig
+
+		currentHost, _, err := net.SplitHostPort(rt.HostPort)
+		if err != nil {
+			_ = extLogger.Log("net.SplitHostPort fail", err)
+
+			result = append(result, roundTripTLSVerify{
+				hadTLS: false,
+			})
+
+			continue
+		}
+
+		if firstHost != currentHost {
+			// If there had redirection, use the current hostname
+			httpClientConfig.TLSConfig.ServerName = currentHost
+		} else if len(httpClientConfig.TLSConfig.ServerName) == 0 {
+			// If there is no `server_name` in tls_config, use
+			// the hostname of the target.
+			tmp, err := url.Parse(target.URL)
+			if err != nil {
+				_ = extLogger.Log("url.Parse fail", err)
+
+				result = append(result, roundTripTLSVerify{
+					hadTLS: false,
+				})
+
+				continue
+			}
+
+			httpClientConfig.TLSConfig.ServerName = tmp.Hostname()
+		}
+
+		_ = extLogger.Log("Using ServerName", httpClientConfig.TLSConfig.ServerName, "firstHost", firstHost, "currentHostPort", currentHost)
+
+		cfg, err := config.NewTLSConfig(&httpClientConfig.TLSConfig)
+		if err != nil {
+			_ = extLogger.Log("config.NewTLSConfig fail", err)
+
+			result = append(result, roundTripTLSVerify{
+				hadTLS: false,
+			})
+
+			continue
+		}
+
+		opts := x509.VerifyOptions{
+			Roots:         cfg.RootCAs,
+			CurrentTime:   time.Now(),
+			DNSName:       cfg.ServerName,
+			Intermediates: x509.NewCertPool(),
+		}
+
+		for _, cert := range rt.TLSState.PeerCertificates[1:] {
+			opts.Intermediates.AddCert(cert)
+		}
+
+		verifiedChains, err := rt.TLSState.PeerCertificates[0].Verify(opts)
+		expiry := getLastChainExpiry(verifiedChains)
+		_ = extLogger.Log("numberVerifiedChains", len(verifiedChains), "expiry", expiry, "err", err)
+
+		result = append(result, roundTripTLSVerify{
+			hadTLS:     true,
+			trustedTLS: len(verifiedChains) > 0,
+			expiry:     expiry,
+			err:        err,
+		})
+	}
+
+	return result
+}
+
+func getLastChainExpiry(verifiedChains [][]*x509.Certificate) time.Time {
+	lastChainExpiry := time.Time{}
+
+	for _, chain := range verifiedChains {
+		earliestCertExpiry := time.Time{}
+
+		for _, cert := range chain {
+			if (earliestCertExpiry.IsZero() || cert.NotAfter.Before(earliestCertExpiry)) && !cert.NotAfter.IsZero() {
+				earliestCertExpiry = cert.NotAfter
+			}
+		}
+
+		if lastChainExpiry.IsZero() || lastChainExpiry.Before(earliestCertExpiry) {
+			lastChainExpiry = earliestCertExpiry
+		}
+	}
+
+	return lastChainExpiry
 }
 
 // compareConfigTargets returns true if the monitors are identical, and false otherwise.
