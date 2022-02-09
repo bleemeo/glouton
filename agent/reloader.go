@@ -47,8 +47,6 @@ type agentReloader struct {
 }
 
 func StartReloadManager(watcher *fsnotify.Watcher, configFilesFromFlag []string) {
-	defer watcher.Close()
-
 	a := agentReloader{
 		watcher:             watcher,
 		agentIsRunning:      false,
@@ -136,6 +134,10 @@ func (a *agentReloader) runAgent(ctx context.Context) {
 // watchConfig sends an event to the reload channel when the config has changed
 // and the agent needs to be reloaded.
 func (a *agentReloader) watchConfig(ctx context.Context, reload chan struct{}) {
+	if a.watcher == nil {
+		return
+	}
+
 	myConfigFiles := a.configFilesFromFlag
 	if len(myConfigFiles) == 0 || len(myConfigFiles[0]) == 0 {
 		// Get default config files.

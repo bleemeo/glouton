@@ -17,7 +17,6 @@
 package main
 
 import (
-	"context"
 	"flag"
 	"fmt"
 	"glouton/agent"
@@ -67,12 +66,11 @@ func main() {
 	// Start config file watcher, the agent is reloaded when a change is detected.
 	watcher, err := fsnotify.NewWatcher()
 	if err == nil {
-		agent.StartReloadManager(watcher, configFilesFromFlag)
+		defer watcher.Close()
 	} else {
 		logger.V(0).Printf("Could not watch config, Glouton will not be reloaded automatically on config change: %v", err)
-
-		// TODO: don't pass nil reload state here or it will crash, maybe move
-		// this in reloader.go to use the reloadState private type?
-		agent.Run(context.Background(), nil, configFilesFromFlag)
+		watcher = nil
 	}
+
+	agent.StartReloadManager(watcher, configFilesFromFlag)
 }
