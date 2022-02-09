@@ -41,6 +41,23 @@ import (
 
 var ErrBadOption = errors.New("bad option")
 
+// ReloadState implements the types.BleemeoReloadState interface.
+type ReloadState struct {
+	pahoWrapper types.PahoWrapper
+}
+
+func (rs *ReloadState) PahoWrapper() types.PahoWrapper {
+	return rs.pahoWrapper
+}
+
+func (rs *ReloadState) SetPahoWrapper(client types.PahoWrapper) {
+	rs.pahoWrapper = client
+}
+
+func (rs *ReloadState) Close() {
+	// TODO
+}
+
 // Connector manager the connection between the Agent and Bleemeo.
 type Connector struct {
 	option types.GlobalOption
@@ -59,26 +76,20 @@ type Connector struct {
 	// initialized indicates whether the mqtt connetcor can be started
 	initialized bool
 
-	// stopCtx is used to stop the components that are not stopped when reloading.
-	stopCtx context.Context
+	// ctx is used to stop the components that are restarted during a reload.
+	ctx context.Context
 
-	// wgStop is used to wait for the components that are not stopped when reloading.
-	wgStop *sync.WaitGroup
-
-	// firstRun indicates whether the Connector is run for the first time.
-	// Some components don't need to be started on the next runs when a reload occurs.
-	firstRun bool
+	reloadState types.BleemeoReloadState
 }
 
 // New create a new Connector.
-func New(stopCtx context.Context, wgStop *sync.WaitGroup, firstRun bool, option types.GlobalOption) (c *Connector, err error) {
+func New(ctx context.Context, rs types.BleemeoReloadState, option types.GlobalOption) (c *Connector, err error) {
 	c = &Connector{
 		option:      option,
 		cache:       cache.Load(option.State),
 		mqttRestart: make(chan interface{}, 1),
-		stopCtx:     stopCtx,
-		wgStop:      wgStop,
-		firstRun:    firstRun,
+		ctx:         ctx,
+		reloadState: rs,
 	}
 	c.sync, err = synchronizer.New(synchronizer.Option{
 		GlobalOption:                c.option,
@@ -162,6 +173,7 @@ func (c *Connector) initMQTT(previousPoint []gloutonTypes.MetricPoint, first boo
 			GetJWT:               c.sync.GetJWT,
 		},
 		first,
+		c.reloadState,
 	)
 
 	// if the connector is disabled, disable mqtt for the same period
@@ -333,36 +345,29 @@ func (c *Connector) Run(ctx context.Context) error {
 		logger.V(2).Printf("Bleemeo connector stopping")
 	}()
 
-	if c.firstRun {
-		for c.stopCtx.Err() == nil {
-			if c.AgentID() != "" && c.isInitialized() {
-				c.wgStop.Add(1)
-
-				go func() {
-					defer c.wgStop.Done()
-					defer cancel()
-					defer func() {
-						err := recover()
-						if err != nil {
-							sentry.CurrentHub().Recover(err)
-							sentry.Flush(time.Second * 5)
-							panic(err)
-						}
-					}()
-
-					mqttErr = c.mqttRestarter(c.stopCtx)
+	for c.ctx.Err() == nil {
+		if c.AgentID() != "" && c.isInitialized() {
+			go func() {
+				defer cancel()
+				defer func() {
+					err := recover()
+					if err != nil {
+						sentry.CurrentHub().Recover(err)
+						sentry.Flush(time.Second * 5)
+						panic(err)
+					}
 				}()
 
-				break
-			}
+				mqttErr = c.mqttRestarter(c.ctx)
+			}()
 
-			select {
-			case <-time.After(5 * time.Second):
-			case <-subCtx.Done():
-			}
+			break
 		}
-	} else {
-		logger.V(2).Printf("Bleemeo MQTT connector already started")
+
+		select {
+		case <-time.After(5 * time.Second):
+		case <-subCtx.Done():
+		}
 	}
 
 	wg.Wait()

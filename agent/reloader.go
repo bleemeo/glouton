@@ -2,6 +2,8 @@ package agent
 
 import (
 	"context"
+	"glouton/bleemeo"
+	bleemeoTypes "glouton/bleemeo/types"
 	"glouton/config"
 	"glouton/debouncer"
 	"glouton/logger"
@@ -17,9 +19,28 @@ const (
 	reloadDebouncerPeriod = 10 * time.Second
 )
 
+// ReloadState is used to keep some components alive during reloads.
+type ReloadState interface {
+	Bleemeo() bleemeoTypes.BleemeoReloadState
+	Close()
+}
+
+type reloadState struct {
+	bleemeo bleemeoTypes.BleemeoReloadState
+}
+
+func (rs *reloadState) Bleemeo() bleemeoTypes.BleemeoReloadState {
+	return rs.bleemeo
+}
+
+func (rs *reloadState) Close() {
+	rs.bleemeo.Close()
+}
+
 type agentReloader struct {
 	watcher             *fsnotify.Watcher
 	configFilesFromFlag []string
+	reloadState         ReloadState
 
 	l              sync.Mutex
 	agentIsRunning bool
@@ -32,38 +53,35 @@ func StartReloadManager(watcher *fsnotify.Watcher, configFilesFromFlag []string)
 		watcher:             watcher,
 		agentIsRunning:      false,
 		configFilesFromFlag: configFilesFromFlag,
+		reloadState: &reloadState{
+			bleemeo: &bleemeo.ReloadState{},
+		},
 	}
 
 	a.run()
 }
 
 func (a *agentReloader) run() {
-	// stopCtx is used to stop all the components.
-	stopCtx, stopAll := context.WithCancel(context.Background())
-	defer stopAll()
-
-	// reloadCtx is used to stop all the components needing to be reloaded, some will
-	// not be stopped like the Bleemeo MQTT connector to avoid reconnnecting.
-	reloadCtx, stopReloadingComponents := context.WithCancel(stopCtx)
-	defer stopReloadingComponents()
-
 	// Start watching config files.
+	ctxWatcher, cancelWatcher := context.WithCancel(context.Background())
+	defer cancelWatcher()
+
 	reload := make(chan struct{}, 1)
-	a.watchConfig(stopCtx, reload)
+	a.watchConfig(ctxWatcher, reload)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	// Run the agent for the first time.
 	reload <- struct{}{}
 
 	firstRun := true
 
-	// Ticker used to stop the program if the agent is not running.
+	// Ticker needed to quit when the agent exited for another reason than a reload.
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 
-	var (
-		wgReload sync.WaitGroup
-		wgStop   sync.WaitGroup
-	)
+	var wg sync.WaitGroup
 
 	for {
 		select {
@@ -71,31 +89,35 @@ func (a *agentReloader) run() {
 			if !firstRun {
 				logger.V(0).Printf("The config files have been modified, reloading agent...")
 
-				stopReloadingComponents()
-				wgReload.Wait()
+				cancel()
+				wg.Wait()
 
-				reloadCtx, stopReloadingComponents = context.WithCancel(context.Background())
-				defer stopReloadingComponents()
+				ctx, cancel = context.WithCancel(context.Background())
 			}
-
-			wgReload.Add(1)
 
 			a.l.Lock()
 			a.agentIsRunning = true
 			a.l.Unlock()
 
-			go a.runAgent(stopCtx, reloadCtx, &wgReload, &wgStop, firstRun)
+			wg.Add(1)
+
+			go func() {
+				defer wg.Done()
+				a.runAgent(ctx)
+			}()
 
 			firstRun = false
+
 		case <-ticker.C:
 			a.l.Lock()
 			isRunning := a.agentIsRunning
 			a.l.Unlock()
 
 			if !isRunning {
-				// Wait for all components to stop.
-				stopAll()
-				wgStop.Wait()
+				cancel()
+				wg.Wait()
+
+				a.reloadState.Close()
 
 				return
 			}
@@ -103,8 +125,8 @@ func (a *agentReloader) run() {
 	}
 }
 
-func (a *agentReloader) runAgent(stopCtx, reloadCtx context.Context, wgReload, wgStop *sync.WaitGroup, firstRun bool) {
-	Run(stopCtx, reloadCtx, wgReload, wgStop, firstRun, a.configFilesFromFlag)
+func (a *agentReloader) runAgent(ctx context.Context) {
+	Run(ctx, a.reloadState, a.configFilesFromFlag)
 
 	a.l.Lock()
 	a.agentIsRunning = false

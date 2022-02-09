@@ -25,6 +25,8 @@ import (
 	"glouton/threshold"
 	"glouton/types"
 	"time"
+
+	paho "github.com/eclipse/paho.mqtt.golang"
 )
 
 // GlobalOption are option user by most component of bleemeo.Connector.
@@ -151,4 +153,23 @@ type GloutonAccountConfig struct {
 type GloutonAgentConfig struct {
 	MetricsAllowlist map[string]bool
 	MetricResolution time.Duration
+}
+
+// BleemeoReloadState is used to keep some Bleemeo components alive during reloads.
+type BleemeoReloadState interface {
+	PahoWrapper() PahoWrapper
+	SetPahoWrapper(client PahoWrapper)
+	Close()
+}
+
+// PahoWrapper allows changing some event handlers at runtime.
+type PahoWrapper interface {
+	Client() paho.Client
+	SetClient(cli paho.Client)
+	OnConnectionLost(cli paho.Client, err error)
+	SetOnConnectionLost(f paho.ConnectionLostHandler)
+	OnConnect(cli paho.Client)
+	SetOnConnect(f paho.OnConnectHandler)
+	OnNotification(cli paho.Client, msg paho.Message)
+	SetOnNotification(f paho.MessageHandler)
 }

@@ -82,6 +82,7 @@ type Client struct {
 	lastRegisteredMetricsCount int
 	lastFailedPointsRetry      time.Time
 	encoder                    mqttEncoder
+	reloadState                bleemeoTypes.BleemeoReloadState
 
 	l                   sync.Mutex
 	startedAt           time.Time
@@ -146,16 +147,34 @@ func (f forceDecimalFloat) MarshalJSON() ([]byte, error) {
 }
 
 // New create a new client.
-func New(option Option, first bool) *Client {
+func New(option Option, first bool, reloadState bleemeoTypes.BleemeoReloadState) *Client {
 	if first {
 		paho.ERROR = logger.V(2)
 		paho.CRITICAL = logger.V(2)
 		paho.DEBUG = logger.V(3)
 	}
 
-	return &Client{
-		option: option,
+	// Get the previous MQTT client from the reload state to avoid closing the connection.
+	var mqttClient paho.Client
+
+	pahoWrapper := reloadState.PahoWrapper()
+	if pahoWrapper != nil {
+		mqttClient = pahoWrapper.Client()
 	}
+
+	client := &Client{
+		option:      option,
+		mqttClient:  mqttClient,
+		reloadState: reloadState,
+	}
+
+	if pahoWrapper != nil {
+		pahoWrapper.SetOnConnect(client.onConnect)
+		pahoWrapper.SetOnConnectionLost(client.onConnectionLost)
+		pahoWrapper.SetOnNotification(client.onNotification)
+	}
+
+	return client
 }
 
 // Connected returns true if MQTT connection is established.
@@ -377,8 +396,15 @@ func (c *Client) setupMQTT(ctx context.Context) (paho.Client, error) {
 
 	pahoOptions.AddBroker(brokerURL)
 	pahoOptions.SetAutoReconnect(false)
-	pahoOptions.SetConnectionLostHandler(c.onConnectionLost)
-	pahoOptions.SetOnConnectHandler(c.onConnect)
+
+	pahoWrapper := NewPahoWrapper(PahoWrapperOptions{
+		ConnectionLostHandler: c.onConnectionLost,
+		ConnectHandler:        c.onConnect,
+		NotificationHandler:   c.onNotification,
+	})
+
+	pahoOptions.SetConnectionLostHandler(pahoWrapper.OnConnectionLost)
+	pahoOptions.SetOnConnectHandler(pahoWrapper.OnConnect)
 	pahoOptions.SetUsername(fmt.Sprintf("%s@bleemeo.com", c.option.AgentID))
 
 	password, err := c.option.GetJWT(ctx)
@@ -388,7 +414,12 @@ func (c *Client) setupMQTT(ctx context.Context) (paho.Client, error) {
 
 	pahoOptions.SetPassword(password)
 
-	return paho.NewClient(pahoOptions), nil
+	client := paho.NewClient(pahoOptions)
+
+	pahoWrapper.SetClient(client)
+	c.reloadState.SetPahoWrapper(pahoWrapper)
+
+	return client, nil
 }
 
 func (c *Client) tlsConfig() *tls.Config {
@@ -746,7 +777,7 @@ func (c *Client) onConnect(mqttClient paho.Client) {
 	mqttClient.Subscribe(
 		fmt.Sprintf("v1/agent/%s/notification", c.option.AgentID),
 		0,
-		c.onNotification,
+		c.reloadState.PahoWrapper().OnNotification,
 	)
 }
 
@@ -1106,9 +1137,10 @@ mainLoop:
 		}
 	}
 
-	if err := c.shutdown(); err != nil {
-		logger.V(1).Printf("Unable to perform clean shutdown: %v", err)
-	}
+	// TODO: shutdown manually in the reloader
+	// if err := c.shutdown(); err != nil {
+	// 	logger.V(1).Printf("Unable to perform clean shutdown: %v", err)
+	// }
 
 	// make sure all connectionLost are read
 	for {

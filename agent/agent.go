@@ -299,7 +299,7 @@ func (a *agent) setupLogger() {
 }
 
 // Run runs Glouton.
-func Run(stopCtx, reloadCtx context.Context, wgReload, wgStop *sync.WaitGroup, firstRun bool, configFiles []string) {
+func Run(ctx context.Context, reloadState ReloadState, configFiles []string) {
 	rand.Seed(time.Now().UnixNano())
 
 	agent := &agent{
@@ -315,8 +315,7 @@ func Run(stopCtx, reloadCtx context.Context, wgReload, wgStop *sync.WaitGroup, f
 		return
 	}
 
-	agent.run(stopCtx, reloadCtx, wgStop, firstRun)
-	wgReload.Done()
+	agent.run(ctx, reloadState)
 }
 
 // BleemeoAccountID returns the Account UUID of Bleemeo
@@ -561,14 +560,14 @@ func (a *agent) updateThresholds(thresholds map[threshold.MetricNameItem]thresho
 }
 
 // Run will start the agent. It will terminate when sigquit/sigterm/sigint is received.
-func (a *agent) run(stopCtx context.Context, reloadCtx context.Context, wgStop *sync.WaitGroup, firstRun bool) { //nolint:cyclop
-	ctx, cancel := context.WithCancel(reloadCtx)
+func (a *agent) run(ctx context.Context, reloadState ReloadState) { //nolint:cyclop
+	ctxWithCancel, cancel := context.WithCancel(ctx)
 	defer cancel()
 
 	a.cancel = cancel
 	a.metricResolution = 10 * time.Second
 	a.hostRootPath = "/"
-	a.context = ctx
+	a.context = ctxWithCancel
 
 	if a.oldConfig.String("container.type") != "" {
 		a.hostRootPath = a.oldConfig.String("df.host_mount_point")
@@ -576,7 +575,7 @@ func (a *agent) run(stopCtx context.Context, reloadCtx context.Context, wgStop *
 	}
 
 	a.triggerHandler = debouncer.New(
-		ctx,
+		ctxWithCancel,
 		a.handleTrigger,
 		5*time.Second,
 		10*time.Second,
@@ -587,7 +586,7 @@ func (a *agent) run(stopCtx context.Context, reloadCtx context.Context, wgStop *
 		a.oldConfig.String("agent.public_ip_indicator"),
 	)
 
-	factsMap, err := a.factProvider.FastFacts(ctx)
+	factsMap, err := a.factProvider.FastFacts(ctxWithCancel)
 	if err != nil {
 		logger.Printf("Warning: get facts failed, some information (e.g. name of this server) may be wrong. %v", err)
 	}
@@ -683,7 +682,7 @@ func (a *agent) run(stopCtx context.Context, reloadCtx context.Context, wgStop *
 		return
 	}
 
-	a.rulesManager = rules.NewManager(ctx, a.store, a.metricResolution)
+	a.rulesManager = rules.NewManager(ctxWithCancel, a.store, a.metricResolution)
 
 	a.store.SetResetRuleCallback(a.rulesManager.ResetInactiveRules)
 
@@ -703,7 +702,7 @@ func (a *agent) run(stopCtx context.Context, reloadCtx context.Context, wgStop *
 	a.threshold = threshold.New(a.state)
 	acc := &inputs.Accumulator{
 		Pusher:  a.threshold.WithPusher(a.gathererRegistry.WithTTL(5 * time.Minute)),
-		Context: ctx,
+		Context: ctxWithCancel,
 	}
 
 	a.dockerRuntime = &dockerRuntime.Docker{
@@ -729,7 +728,7 @@ func (a *agent) run(stopCtx context.Context, reloadCtx context.Context, wgStop *
 		}
 		a.containerRuntime = kube
 
-		ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		ctx, cancel := context.WithTimeout(ctxWithCancel, 10*time.Second)
 		if err := kube.Test(ctx); err != nil {
 			logger.Printf("Kubernetes API unreachable, service detection may misbehave: %v", err)
 		}
@@ -932,7 +931,7 @@ func (a *agent) run(stopCtx context.Context, reloadCtx context.Context, wgStop *
 			scaperName = fmt.Sprintf("%s:%d", fqdn, a.oldConfig.Int("web.listener.port"))
 		}
 
-		a.bleemeoConnector, err = bleemeo.New(stopCtx, wgStop, firstRun,
+		a.bleemeoConnector, err = bleemeo.New(ctx, reloadState.Bleemeo(),
 			bleemeoTypes.GlobalOption{
 				Config:                  a.oldConfig,
 				State:                   a.state,
@@ -960,7 +959,7 @@ func (a *agent) run(stopCtx context.Context, reloadCtx context.Context, wgStop *
 			return
 		}
 
-		a.gathererRegistry.UpdateRelabelHook(ctx, a.bleemeoConnector.RelabelHook)
+		a.gathererRegistry.UpdateRelabelHook(ctxWithCancel, a.bleemeoConnector.RelabelHook)
 		tasks = append(tasks, taskInfo{a.bleemeoConnector.Run, "Bleemeo SAAS connector"})
 
 		_, err = a.gathererRegistry.RegisterPushPointsCallback(registry.RegistrationOption{
@@ -1082,11 +1081,11 @@ func (a *agent) run(stopCtx context.Context, reloadCtx context.Context, wgStop *
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM, syscall.SIGINT, syscall.SIGHUP)
 
-	go a.handleSignals(ctx, c, cancel)
+	go a.handleSignals(ctxWithCancel, c, cancel)
 
 	a.startTasks(tasks)
 
-	<-ctx.Done()
+	<-ctxWithCancel.Done()
 	logger.V(2).Printf("Stopping agent...")
 	signal.Stop(c)
 	close(c)

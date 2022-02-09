@@ -24,7 +24,6 @@ import (
 	"glouton/logger"
 	versionPkg "glouton/version"
 	"strings"
-	"sync"
 
 	_ "net/http/pprof" //nolint:gosec
 
@@ -72,10 +71,8 @@ func main() {
 	} else {
 		logger.V(0).Printf("Could not watch config, Glouton will not be reloaded automatically on config change: %v", err)
 
-		ctx := context.Background()
-
-		var wg sync.WaitGroup
-		wg.Add(1)
-		agent.Run(ctx, ctx, &wg, &wg, true, configFilesFromFlag)
+		// TODO: don't pass nil reload state here or it will crash, maybe move
+		// this in reloader.go to use the reloadState private type?
+		agent.Run(context.Background(), nil, configFilesFromFlag)
 	}
 }
