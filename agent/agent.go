@@ -165,12 +165,14 @@ type taskInfo struct {
 	name     string
 }
 
-func (a *agent) init(configFiles []string) (ok bool) {
+func (a *agent) init(ctx context.Context, configFiles []string) (ok bool) {
 	a.l.Lock()
 	a.lastHealCheck = time.Now()
 	a.l.Unlock()
 
-	a.taskRegistry = task.NewRegistry(context.Background())
+	a.taskRegistry = task.NewRegistry(ctx)
+	a.taskIDs = make(map[string]int)
+
 	cfg, oldCfg, warnings, err := loadConfiguration(configFiles, nil)
 	a.oldConfig = oldCfg
 	a.config = cfg
@@ -302,14 +304,10 @@ func (a *agent) setupLogger() {
 func Run(ctx context.Context, reloadState ReloadState, configFiles []string) {
 	rand.Seed(time.Now().UnixNano())
 
-	agent := &agent{
-		taskRegistry: task.NewRegistry(context.Background()),
-		taskIDs:      make(map[string]int),
-	}
-
+	agent := &agent{}
 	agent.initOSSpecificParts()
 
-	if !agent.init(configFiles) {
+	if !agent.init(ctx, configFiles) {
 		os.Exit(1)
 
 		return
@@ -931,7 +929,7 @@ func (a *agent) run(ctx context.Context, reloadState ReloadState) { //nolint:cyc
 			scaperName = fmt.Sprintf("%s:%d", fqdn, a.oldConfig.Int("web.listener.port"))
 		}
 
-		a.bleemeoConnector, err = bleemeo.New(ctx, reloadState.Bleemeo(),
+		a.bleemeoConnector, err = bleemeo.New(reloadState.Bleemeo(),
 			bleemeoTypes.GlobalOption{
 				Config:                  a.oldConfig,
 				State:                   a.state,

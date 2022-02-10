@@ -76,19 +76,15 @@ type Connector struct {
 	// initialized indicates whether the mqtt connetcor can be started
 	initialized bool
 
-	// ctx is used to stop the components that are restarted during a reload.
-	ctx context.Context
-
 	reloadState types.BleemeoReloadState
 }
 
 // New create a new Connector.
-func New(ctx context.Context, rs types.BleemeoReloadState, option types.GlobalOption) (c *Connector, err error) {
+func New(rs types.BleemeoReloadState, option types.GlobalOption) (c *Connector, err error) {
 	c = &Connector{
 		option:      option,
 		cache:       cache.Load(option.State),
 		mqttRestart: make(chan interface{}, 1),
-		ctx:         ctx,
 		reloadState: rs,
 	}
 	c.sync, err = synchronizer.New(synchronizer.Option{
@@ -345,7 +341,7 @@ func (c *Connector) Run(ctx context.Context) error {
 		logger.V(2).Printf("Bleemeo connector stopping")
 	}()
 
-	for c.ctx.Err() == nil {
+	for ctx.Err() == nil {
 		if c.AgentID() != "" && c.isInitialized() {
 			go func() {
 				defer cancel()
@@ -358,7 +354,7 @@ func (c *Connector) Run(ctx context.Context) error {
 					}
 				}()
 
-				mqttErr = c.mqttRestarter(c.ctx)
+				mqttErr = c.mqttRestarter(ctx)
 			}()
 
 			break
