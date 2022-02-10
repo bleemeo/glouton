@@ -149,7 +149,11 @@ func (a *agentReloader) watchConfig(ctx context.Context, reload chan struct{}) {
 	// Use a debouncer because fsnotify events are often duplicated.
 	reloadAgentTarget := func(ctx context.Context) {
 		if ctx.Err() == nil {
-			reload <- struct{}{}
+			// Validate config before reloading.
+			_, _, _, err := loadConfiguration(myConfigFiles, nil)
+			if err == nil {
+				reload <- struct{}{}
+			}
 		}
 	}
 	reloadDebouncer := debouncer.New(ctx, reloadAgentTarget, reloadDebouncerDelay, reloadDebouncerPeriod)
@@ -172,11 +176,7 @@ func (a *agentReloader) watchConfig(ctx context.Context, reload chan struct{}) {
 					continue
 				}
 
-				// Validate config before reloading.
-				_, _, _, err := loadConfiguration(myConfigFiles, nil)
-				if err == nil {
-					reloadDebouncer.Trigger()
-				}
+				reloadDebouncer.Trigger()
 			case err, ok := <-a.watcher.Errors:
 				if !ok {
 					return
