@@ -2,11 +2,14 @@ package agent
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"glouton/bleemeo"
 	bleemeoTypes "glouton/bleemeo/types"
 	"glouton/config"
 	"glouton/debouncer"
 	"glouton/logger"
+	"glouton/types"
 	"strings"
 	"sync"
 	"time"
@@ -19,18 +22,38 @@ const (
 	reloadDebouncerPeriod = 10 * time.Second
 )
 
+var errWatcherNotStarted = errors.New("failed to start")
+
 // ReloadState is used to keep some components alive during reloads.
 type ReloadState interface {
 	Bleemeo() bleemeoTypes.BleemeoReloadState
+	DiagnosticArchive(ctx context.Context, archive types.ArchiveWriter) error
 	Close()
 }
 
 type reloadState struct {
-	bleemeo bleemeoTypes.BleemeoReloadState
+	bleemeo      bleemeoTypes.BleemeoReloadState
+	watcherError error
 }
 
 func (rs *reloadState) Bleemeo() bleemeoTypes.BleemeoReloadState {
 	return rs.bleemeo
+}
+
+func (rs *reloadState) DiagnosticArchive(ctx context.Context, archive types.ArchiveWriter) error {
+	file, err := archive.Create("reload-state.txt")
+	if err != nil {
+		return err
+	}
+
+	if rs.watcherError == nil {
+		fmt.Fprintln(file, "The file watcher is running, Glouton will be reloaded on config changes.")
+	} else {
+		fmt.Fprintf(file, "An error occured with the file watcher: %v\n", rs.watcherError)
+		fmt.Fprintln(file, "Glouton will not be reloaded on config changes.")
+	}
+
+	return nil
 }
 
 func (rs *reloadState) Close() {
@@ -40,7 +63,7 @@ func (rs *reloadState) Close() {
 type agentReloader struct {
 	watcher             *fsnotify.Watcher
 	configFilesFromFlag []string
-	reloadState         ReloadState
+	reloadState         *reloadState
 
 	l              sync.Mutex
 	agentIsRunning bool
@@ -135,6 +158,7 @@ func (a *agentReloader) runAgent(ctx context.Context) {
 // and the agent needs to be reloaded.
 func (a *agentReloader) watchConfig(ctx context.Context, reload chan struct{}) {
 	if a.watcher == nil {
+		a.reloadState.watcherError = errWatcherNotStarted
 		return
 	}
 
@@ -182,6 +206,7 @@ func (a *agentReloader) watchConfig(ctx context.Context, reload chan struct{}) {
 					return
 				}
 
+				a.reloadState.watcherError = err
 				logger.V(0).Printf("File watcher error: %v", err)
 			case <-ctx.Done():
 				return

@@ -132,6 +132,7 @@ type agent struct {
 	metricFilter           *metricFilter
 	monitorManager         *blackbox.RegisterManager
 	rulesManager           *rules.Manager
+	reloadState            ReloadState
 
 	triggerHandler            *debouncer.Debouncer
 	triggerLock               sync.Mutex
@@ -304,7 +305,7 @@ func (a *agent) setupLogger() {
 func Run(ctx context.Context, reloadState ReloadState, configFiles []string) {
 	rand.Seed(time.Now().UnixNano())
 
-	agent := &agent{}
+	agent := &agent{reloadState: reloadState}
 	agent.initOSSpecificParts()
 
 	if !agent.init(ctx, configFiles) {
@@ -313,7 +314,7 @@ func Run(ctx context.Context, reloadState ReloadState, configFiles []string) {
 		return
 	}
 
-	agent.run(ctx, reloadState)
+	agent.run(ctx)
 }
 
 // BleemeoAccountID returns the Account UUID of Bleemeo
@@ -558,7 +559,7 @@ func (a *agent) updateThresholds(thresholds map[threshold.MetricNameItem]thresho
 }
 
 // Run will start the agent. It will terminate when sigquit/sigterm/sigint is received.
-func (a *agent) run(ctx context.Context, reloadState ReloadState) { //nolint:cyclop
+func (a *agent) run(ctx context.Context) { //nolint:cyclop
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -929,7 +930,7 @@ func (a *agent) run(ctx context.Context, reloadState ReloadState) { //nolint:cyc
 			scaperName = fmt.Sprintf("%s:%d", fqdn, a.oldConfig.Int("web.listener.port"))
 		}
 
-		a.bleemeoConnector, err = bleemeo.New(reloadState.Bleemeo(),
+		a.bleemeoConnector, err = bleemeo.New(a.reloadState.Bleemeo(),
 			bleemeoTypes.GlobalOption{
 				Config:                  a.oldConfig,
 				State:                   a.state,
@@ -1890,10 +1891,10 @@ func (a *agent) DiagnosticPage(ctx context.Context) string {
 	if err != nil {
 		fmt.Fprintf(builder, "Unable to query internal metrics store: %v\n", err)
 	} else {
-		fmt.Fprintf(builder, "Glouton measure %d metrics\n", len(allMetrics))
+		fmt.Fprintf(builder, "Glouton measures %d metrics\n", len(allMetrics))
 	}
 
-	fmt.Fprintf(builder, "Glouton was build for %s %s\n", runtime.GOOS, runtime.GOARCH)
+	fmt.Fprintf(builder, "Glouton was built for %s %s\n", runtime.GOOS, runtime.GOARCH)
 
 	facts, err := a.factProvider.Facts(ctx, time.Hour)
 	if err != nil {
@@ -1930,6 +1931,7 @@ func (a *agent) writeDiagnosticArchive(ctx context.Context, archive types.Archiv
 		a.metricFilter.DiagnosticArchive,
 		a.gathererRegistry.DiagnosticArchive,
 		a.rulesManager.DiagnosticArchive,
+		a.reloadState.DiagnosticArchive,
 	}
 
 	if a.bleemeoConnector != nil {
