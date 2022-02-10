@@ -14,6 +14,10 @@ import (
 	paho "github.com/eclipse/paho.mqtt.golang"
 )
 
+// If we get more than notificationChannelSize notifications during a reload,
+// the next notifications will be lost.
+const notificationChannelSize = 1000
+
 // pahoWrapper implements the types.PahoWrapper interface.
 type pahoWrapper struct {
 	client paho.Client
@@ -21,7 +25,7 @@ type pahoWrapper struct {
 	l                     sync.Mutex
 	connectionLostHandler paho.ConnectionLostHandler
 	connectHandler        paho.OnConnectHandler
-	notificationHandler   paho.MessageHandler
+	notificationChannel   chan paho.Message
 
 	upgradeFile   string
 	agentID       types.AgentID
@@ -31,19 +35,20 @@ type pahoWrapper struct {
 type PahoWrapperOptions struct {
 	ConnectionLostHandler paho.ConnectionLostHandler
 	ConnectHandler        paho.OnConnectHandler
-	NotificationHandler   paho.MessageHandler
 	UpgradeFile           string
 	AgentID               types.AgentID
 }
 
 func NewPahoWrapper(opts PahoWrapperOptions) types.PahoWrapper {
-	return &pahoWrapper{
+	wrapper := &pahoWrapper{
 		connectionLostHandler: opts.ConnectionLostHandler,
 		connectHandler:        opts.ConnectHandler,
-		notificationHandler:   opts.NotificationHandler,
+		notificationChannel:   make(chan paho.Message, notificationChannelSize),
 		upgradeFile:           opts.UpgradeFile,
 		agentID:               opts.AgentID,
 	}
+
+	return wrapper
 }
 
 func (c *pahoWrapper) Client() paho.Client {
@@ -97,16 +102,14 @@ func (c *pahoWrapper) OnNotification(cli paho.Client, msg paho.Message) {
 	c.l.Lock()
 	defer c.l.Unlock()
 
-	if c.notificationHandler != nil {
-		c.notificationHandler(cli, msg)
+	select {
+	case c.notificationChannel <- msg:
+	default:
 	}
 }
 
-func (c *pahoWrapper) SetOnNotification(f paho.MessageHandler) {
-	c.l.Lock()
-	defer c.l.Unlock()
-
-	c.notificationHandler = f
+func (c *pahoWrapper) NotificationChannel() chan paho.Message {
+	return c.notificationChannel
 }
 
 func (c *pahoWrapper) PendingPoints() []gloutonTypes.MetricPoint {
@@ -130,6 +133,8 @@ func (c *pahoWrapper) Close() {
 	if c.client == nil {
 		return
 	}
+
+	close(c.notificationChannel)
 
 	deadline := time.Now().Add(5 * time.Second)
 

@@ -175,10 +175,18 @@ func New(option Option, first bool, reloadState bleemeoTypes.BleemeoReloadState)
 		reloadState: reloadState,
 	}
 
-	if pahoWrapper != nil {
+	if pahoWrapper == nil {
+		pahoWrapper = NewPahoWrapper(PahoWrapperOptions{
+			ConnectionLostHandler: client.onConnectionLost,
+			ConnectHandler:        client.onConnect,
+			UpgradeFile:           client.option.Config.String("agent.upgrade_file"),
+			AgentID:               client.option.AgentID,
+		})
+
+		reloadState.SetPahoWrapper(pahoWrapper)
+	} else {
 		pahoWrapper.SetOnConnect(client.onConnect)
 		pahoWrapper.SetOnConnectionLost(client.onConnectionLost)
-		pahoWrapper.SetOnNotification(client.onNotification)
 	}
 
 	return client
@@ -256,6 +264,8 @@ func (c *Client) Run(ctx context.Context) error {
 	c.l.Lock()
 	c.startedAt = time.Now()
 	c.l.Unlock()
+
+	go c.receiveNotifications(ctx)
 
 	err := c.run(ctx)
 
@@ -403,18 +413,11 @@ func (c *Client) setupMQTT(ctx context.Context) (paho.Client, error) {
 
 	pahoOptions.AddBroker(brokerURL)
 	pahoOptions.SetAutoReconnect(false)
+	pahoOptions.SetUsername(fmt.Sprintf("%s@bleemeo.com", c.option.AgentID))
 
-	pahoWrapper := NewPahoWrapper(PahoWrapperOptions{
-		ConnectionLostHandler: c.onConnectionLost,
-		ConnectHandler:        c.onConnect,
-		NotificationHandler:   c.onNotification,
-		UpgradeFile:           c.option.Config.String("agent.upgrade_file"),
-		AgentID:               c.option.AgentID,
-	})
-
+	pahoWrapper := c.reloadState.PahoWrapper()
 	pahoOptions.SetConnectionLostHandler(pahoWrapper.OnConnectionLost)
 	pahoOptions.SetOnConnectHandler(pahoWrapper.OnConnect)
-	pahoOptions.SetUsername(fmt.Sprintf("%s@bleemeo.com", c.option.AgentID))
 
 	password, err := c.option.GetJWT(ctx)
 	if err != nil {
@@ -426,7 +429,6 @@ func (c *Client) setupMQTT(ctx context.Context) (paho.Client, error) {
 	client := paho.NewClient(pahoOptions)
 
 	pahoWrapper.SetClient(client)
-	c.reloadState.SetPahoWrapper(pahoWrapper)
 
 	return client, nil
 }
@@ -1181,5 +1183,14 @@ func (c *Client) onReloadAndShutdown() {
 	// Clear the wrapper hooks as calling them on a shutted down connector is an undefined behavior.
 	pahoWrapper.SetOnConnect(nil)
 	pahoWrapper.SetOnConnectionLost(nil)
-	pahoWrapper.SetOnNotification(nil)
+}
+
+func (c *Client) receiveNotifications(ctx context.Context) {
+	notifChan := c.reloadState.PahoWrapper().NotificationChannel()
+
+	select {
+	case msg := <-notifChan:
+		c.onNotification(c.mqttClient, msg)
+	case <-ctx.Done():
+	}
 }
