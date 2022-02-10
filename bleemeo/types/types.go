@@ -172,5 +172,7 @@ type PahoWrapper interface {
 	SetOnConnect(f paho.OnConnectHandler)
 	OnNotification(cli paho.Client, msg paho.Message)
 	SetOnNotification(f paho.MessageHandler)
+	PendingPoints() []types.MetricPoint
+	SetPendingPoints(points []types.MetricPoint)
 	Close()
 }

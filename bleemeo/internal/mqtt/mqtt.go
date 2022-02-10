@@ -154,13 +154,20 @@ func New(option Option, first bool, reloadState bleemeoTypes.BleemeoReloadState)
 		paho.DEBUG = logger.V(3)
 	}
 
-	// Get the previous MQTT client from the reload state to avoid closing the connection.
-	var mqttClient paho.Client
+	// Get the previous MQTT client from the reload state to avoid closing the connection
+	// and keep the previous pending points.
+	var (
+		mqttClient    paho.Client
+		initialPoints []types.MetricPoint
+	)
 
 	pahoWrapper := reloadState.PahoWrapper()
 	if pahoWrapper != nil {
 		mqttClient = pahoWrapper.Client()
+		initialPoints = pahoWrapper.PendingPoints()
 	}
+
+	option.InitialPoints = append(option.InitialPoints, initialPoints...)
 
 	client := &Client{
 		option:      option,
@@ -1139,16 +1146,7 @@ mainLoop:
 		}
 	}
 
-	// Push the pending points.
-	deadline := time.Now().Add(5 * time.Second)
-
-	c.l.Lock()
-
-	stillPending := c.waitPublishAndResend(c.mqttClient, deadline, true)
-	if stillPending > 0 {
-		logger.V(2).Printf("%d MQTT message were still pending", stillPending)
-	}
-	c.l.Unlock()
+	c.onReloadAndShutdown()
 
 	// make sure all connectionLost are read
 	for {
@@ -1157,5 +1155,24 @@ mainLoop:
 		default:
 			return
 		}
+	}
+}
+
+// onReload is called when reloading or on a graceful shutdown.
+// The pending points are saved in the reload state and we try to push the pending messages.
+func (c *Client) onReloadAndShutdown() {
+	// Save pending points.
+	points := c.PopPoints(true)
+	c.reloadState.PahoWrapper().SetPendingPoints(points)
+
+	// Push the pending messages.
+	deadline := time.Now().Add(5 * time.Second)
+
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	stillPending := c.waitPublishAndResend(c.mqttClient, deadline, true)
+	if stillPending > 0 {
+		logger.V(2).Printf("%d MQTT message were still pending", stillPending)
 	}
 }

@@ -8,10 +8,12 @@ import (
 	"os"
 	"time"
 
+	gloutonTypes "glouton/types"
+
 	paho "github.com/eclipse/paho.mqtt.golang"
 )
 
-// pahoWrapper implements the bleemeoTypes.PahoWrapper interface.
+// pahoWrapper implements the types.PahoWrapper interface.
 type pahoWrapper struct {
 	client paho.Client
 
@@ -19,8 +21,9 @@ type pahoWrapper struct {
 	connectHandler        paho.OnConnectHandler
 	notificationHandler   paho.MessageHandler
 
-	upgradeFile string
-	agentID     types.AgentID
+	upgradeFile   string
+	agentID       types.AgentID
+	pendingPoints []gloutonTypes.MetricPoint
 }
 
 type PahoWrapperOptions struct {
@@ -79,6 +82,17 @@ func (c *pahoWrapper) SetOnNotification(f paho.MessageHandler) {
 	c.notificationHandler = f
 }
 
+func (c *pahoWrapper) PendingPoints() []gloutonTypes.MetricPoint {
+	points := c.pendingPoints
+	c.pendingPoints = nil
+
+	return points
+}
+
+func (c *pahoWrapper) SetPendingPoints(points []gloutonTypes.MetricPoint) {
+	c.pendingPoints = points
+}
+
 func (c *pahoWrapper) Close() {
 	if c.client == nil {
 		return
@@ -96,7 +110,7 @@ func (c *pahoWrapper) Close() {
 		payload, _ := json.Marshal(map[string]string{"disconnect-cause": cause})
 
 		token := c.client.Publish(fmt.Sprintf("v1/agent/%s/disconnect", c.agentID), 1, false, payload)
-		if !token.WaitTimeout(5 * time.Second) {
+		if !token.WaitTimeout(time.Until(deadline)) {
 			logger.V(1).Printf("Failed to send MQTT disconnect message")
 		}
 	}
