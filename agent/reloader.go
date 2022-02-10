@@ -49,7 +49,7 @@ func (rs *reloadState) DiagnosticArchive(ctx context.Context, archive types.Arch
 	if rs.watcherError == nil {
 		fmt.Fprintln(file, "The file watcher is running, Glouton will be reloaded on config changes.")
 	} else {
-		fmt.Fprintf(file, "An error occured with the file watcher: %v\n", rs.watcherError)
+		fmt.Fprintf(file, "An error occurred with the file watcher: %v\n", rs.watcherError)
 		fmt.Fprintln(file, "Glouton will not be reloaded on config changes.")
 	}
 
@@ -159,6 +159,7 @@ func (a *agentReloader) runAgent(ctx context.Context) {
 func (a *agentReloader) watchConfig(ctx context.Context, reload chan struct{}) {
 	if a.watcher == nil {
 		a.reloadState.watcherError = errWatcherNotStarted
+
 		return
 	}
 

@@ -6,6 +6,7 @@ import (
 	"glouton/bleemeo/types"
 	"glouton/logger"
 	"os"
+	"sync"
 	"time"
 
 	gloutonTypes "glouton/types"
@@ -17,6 +18,7 @@ import (
 type pahoWrapper struct {
 	client paho.Client
 
+	l                     sync.Mutex
 	connectionLostHandler paho.ConnectionLostHandler
 	connectHandler        paho.OnConnectHandler
 	notificationHandler   paho.MessageHandler
@@ -45,44 +47,72 @@ func NewPahoWrapper(opts PahoWrapperOptions) types.PahoWrapper {
 }
 
 func (c *pahoWrapper) Client() paho.Client {
-	return c.client
+	c.l.Lock()
+	client := c.client
+	c.l.Unlock()
+
+	return client
 }
 
 func (c *pahoWrapper) SetClient(cli paho.Client) {
+	c.l.Lock()
+	defer c.l.Unlock()
+
 	c.client = cli
 }
 
 func (c *pahoWrapper) OnConnectionLost(cli paho.Client, err error) {
+	c.l.Lock()
+	defer c.l.Unlock()
+
 	if c.connectionLostHandler != nil {
 		c.connectionLostHandler(cli, err)
 	}
 }
 
 func (c *pahoWrapper) SetOnConnectionLost(f paho.ConnectionLostHandler) {
+	c.l.Lock()
+	defer c.l.Unlock()
+
 	c.connectionLostHandler = f
 }
 
 func (c *pahoWrapper) OnConnect(cli paho.Client) {
+	c.l.Lock()
+	defer c.l.Unlock()
+
 	if c.connectHandler != nil {
 		c.connectHandler(cli)
 	}
 }
 
 func (c *pahoWrapper) SetOnConnect(f paho.OnConnectHandler) {
+	c.l.Lock()
+	defer c.l.Unlock()
+
 	c.connectHandler = f
 }
 
 func (c *pahoWrapper) OnNotification(cli paho.Client, msg paho.Message) {
+	c.l.Lock()
+	defer c.l.Unlock()
+
 	if c.notificationHandler != nil {
 		c.notificationHandler(cli, msg)
 	}
 }
 
 func (c *pahoWrapper) SetOnNotification(f paho.MessageHandler) {
+	c.l.Lock()
+	defer c.l.Unlock()
+
 	c.notificationHandler = f
 }
 
 func (c *pahoWrapper) PendingPoints() []gloutonTypes.MetricPoint {
+	c.l.Lock()
+	defer c.l.Unlock()
+
 	points := c.pendingPoints
 	c.pendingPoints = nil
 
@@ -90,6 +120,9 @@ func (c *pahoWrapper) PendingPoints() []gloutonTypes.MetricPoint {
 }
 
 func (c *pahoWrapper) SetPendingPoints(points []gloutonTypes.MetricPoint) {
+	c.l.Lock()
+	defer c.l.Unlock()
+
 	c.pendingPoints = points
 }
 
