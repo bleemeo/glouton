@@ -172,4 +172,5 @@ type PahoWrapper interface {
 	SetOnConnect(f paho.OnConnectHandler)
 	OnNotification(cli paho.Client, msg paho.Message)
 	SetOnNotification(f paho.MessageHandler)
+	Close()
 }

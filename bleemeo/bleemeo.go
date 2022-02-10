@@ -55,7 +55,7 @@ func (rs *ReloadState) SetPahoWrapper(client types.PahoWrapper) {
 }
 
 func (rs *ReloadState) Close() {
-	// TODO
+	rs.pahoWrapper.Close()
 }
 
 // Connector manager the connection between the Agent and Bleemeo.

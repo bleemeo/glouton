@@ -401,6 +401,8 @@ func (c *Client) setupMQTT(ctx context.Context) (paho.Client, error) {
 		ConnectionLostHandler: c.onConnectionLost,
 		ConnectHandler:        c.onConnect,
 		NotificationHandler:   c.onNotification,
+		UpgradeFile:           c.option.Config.String("agent.upgrade_file"),
+		AgentID:               c.option.AgentID,
 	})
 
 	pahoOptions.SetConnectionLostHandler(pahoWrapper.OnConnectionLost)
@@ -1137,10 +1139,16 @@ mainLoop:
 		}
 	}
 
-	// TODO: shutdown manually in the reloader
-	// if err := c.shutdown(); err != nil {
-	// 	logger.V(1).Printf("Unable to perform clean shutdown: %v", err)
-	// }
+	// Push the pending points.
+	deadline := time.Now().Add(5 * time.Second)
+
+	c.l.Lock()
+
+	stillPending := c.waitPublishAndResend(c.mqttClient, deadline, true)
+	if stillPending > 0 {
+		logger.V(2).Printf("%d MQTT message were still pending", stillPending)
+	}
+	c.l.Unlock()
 
 	// make sure all connectionLost are read
 	for {

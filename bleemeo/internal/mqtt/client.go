@@ -1,7 +1,12 @@
 package mqtt
 
 import (
+	"encoding/json"
+	"fmt"
 	"glouton/bleemeo/types"
+	"glouton/logger"
+	"os"
+	"time"
 
 	paho "github.com/eclipse/paho.mqtt.golang"
 )
@@ -13,12 +18,17 @@ type pahoWrapper struct {
 	connectionLostHandler paho.ConnectionLostHandler
 	connectHandler        paho.OnConnectHandler
 	notificationHandler   paho.MessageHandler
+
+	upgradeFile string
+	agentID     types.AgentID
 }
 
 type PahoWrapperOptions struct {
 	ConnectionLostHandler paho.ConnectionLostHandler
 	ConnectHandler        paho.OnConnectHandler
 	NotificationHandler   paho.MessageHandler
+	UpgradeFile           string
+	AgentID               types.AgentID
 }
 
 func NewPahoWrapper(opts PahoWrapperOptions) types.PahoWrapper {
@@ -26,6 +36,8 @@ func NewPahoWrapper(opts PahoWrapperOptions) types.PahoWrapper {
 		connectionLostHandler: opts.ConnectionLostHandler,
 		connectHandler:        opts.ConnectHandler,
 		notificationHandler:   opts.NotificationHandler,
+		upgradeFile:           opts.UpgradeFile,
+		agentID:               opts.AgentID,
 	}
 }
 
@@ -65,4 +77,29 @@ func (c *pahoWrapper) OnNotification(cli paho.Client, msg paho.Message) {
 
 func (c *pahoWrapper) SetOnNotification(f paho.MessageHandler) {
 	c.notificationHandler = f
+}
+
+func (c *pahoWrapper) Close() {
+	if c.client == nil {
+		return
+	}
+
+	deadline := time.Now().Add(5 * time.Second)
+
+	if c.client.IsConnectionOpen() {
+		cause := "Clean shutdown"
+
+		if _, err := os.Stat(c.upgradeFile); err == nil {
+			cause = "Upgrade"
+		}
+
+		payload, _ := json.Marshal(map[string]string{"disconnect-cause": cause})
+
+		token := c.client.Publish(fmt.Sprintf("v1/agent/%s/disconnect", c.agentID), 1, false, payload)
+		if !token.WaitTimeout(5 * time.Second) {
+			logger.V(1).Printf("Failed to send MQTT disconnect message")
+		}
+	}
+
+	c.client.Disconnect(uint(time.Until(deadline).Seconds() * 1000))
 }
