@@ -1161,9 +1161,11 @@ mainLoop:
 // onReload is called when reloading or on a graceful shutdown.
 // The pending points are saved in the reload state and we try to push the pending messages.
 func (c *Client) onReloadAndShutdown() {
+	pahoWrapper := c.reloadState.PahoWrapper()
+
 	// Save pending points.
 	points := c.PopPoints(true)
-	c.reloadState.PahoWrapper().SetPendingPoints(points)
+	pahoWrapper.SetPendingPoints(points)
 
 	// Push the pending messages.
 	deadline := time.Now().Add(5 * time.Second)
@@ -1175,4 +1177,9 @@ func (c *Client) onReloadAndShutdown() {
 	if stillPending > 0 {
 		logger.V(2).Printf("%d MQTT message were still pending", stillPending)
 	}
+
+	// Clear the wrapper hooks as calling them on a shutted down connector is an undefined behavior.
+	pahoWrapper.SetOnConnect(nil)
+	pahoWrapper.SetOnConnectionLost(nil)
+	pahoWrapper.SetOnNotification(nil)
 }
