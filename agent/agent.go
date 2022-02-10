@@ -561,13 +561,13 @@ func (a *agent) updateThresholds(thresholds map[threshold.MetricNameItem]thresho
 
 // Run will start the agent. It will terminate when sigquit/sigterm/sigint is received.
 func (a *agent) run(ctx context.Context, reloadState ReloadState) { //nolint:cyclop
-	ctxWithCancel, cancel := context.WithCancel(ctx)
+	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
 	a.cancel = cancel
 	a.metricResolution = 10 * time.Second
 	a.hostRootPath = "/"
-	a.context = ctxWithCancel
+	a.context = ctx
 
 	if a.oldConfig.String("container.type") != "" {
 		a.hostRootPath = a.oldConfig.String("df.host_mount_point")
@@ -575,7 +575,7 @@ func (a *agent) run(ctx context.Context, reloadState ReloadState) { //nolint:cyc
 	}
 
 	a.triggerHandler = debouncer.New(
-		ctxWithCancel,
+		ctx,
 		a.handleTrigger,
 		5*time.Second,
 		10*time.Second,
@@ -586,7 +586,7 @@ func (a *agent) run(ctx context.Context, reloadState ReloadState) { //nolint:cyc
 		a.oldConfig.String("agent.public_ip_indicator"),
 	)
 
-	factsMap, err := a.factProvider.FastFacts(ctxWithCancel)
+	factsMap, err := a.factProvider.FastFacts(ctx)
 	if err != nil {
 		logger.Printf("Warning: get facts failed, some information (e.g. name of this server) may be wrong. %v", err)
 	}
@@ -682,7 +682,7 @@ func (a *agent) run(ctx context.Context, reloadState ReloadState) { //nolint:cyc
 		return
 	}
 
-	a.rulesManager = rules.NewManager(ctxWithCancel, a.store, a.metricResolution)
+	a.rulesManager = rules.NewManager(ctx, a.store, a.metricResolution)
 
 	a.store.SetResetRuleCallback(a.rulesManager.ResetInactiveRules)
 
@@ -702,7 +702,7 @@ func (a *agent) run(ctx context.Context, reloadState ReloadState) { //nolint:cyc
 	a.threshold = threshold.New(a.state)
 	acc := &inputs.Accumulator{
 		Pusher:  a.threshold.WithPusher(a.gathererRegistry.WithTTL(5 * time.Minute)),
-		Context: ctxWithCancel,
+		Context: ctx,
 	}
 
 	a.dockerRuntime = &dockerRuntime.Docker{
@@ -728,7 +728,7 @@ func (a *agent) run(ctx context.Context, reloadState ReloadState) { //nolint:cyc
 		}
 		a.containerRuntime = kube
 
-		ctx, cancel := context.WithTimeout(ctxWithCancel, 10*time.Second)
+		ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 		if err := kube.Test(ctx); err != nil {
 			logger.Printf("Kubernetes API unreachable, service detection may misbehave: %v", err)
 		}
@@ -959,7 +959,7 @@ func (a *agent) run(ctx context.Context, reloadState ReloadState) { //nolint:cyc
 			return
 		}
 
-		a.gathererRegistry.UpdateRelabelHook(ctxWithCancel, a.bleemeoConnector.RelabelHook)
+		a.gathererRegistry.UpdateRelabelHook(ctx, a.bleemeoConnector.RelabelHook)
 		tasks = append(tasks, taskInfo{a.bleemeoConnector.Run, "Bleemeo SAAS connector"})
 
 		_, err = a.gathererRegistry.RegisterPushPointsCallback(registry.RegistrationOption{
@@ -1081,11 +1081,11 @@ func (a *agent) run(ctx context.Context, reloadState ReloadState) { //nolint:cyc
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM, syscall.SIGINT, syscall.SIGHUP)
 
-	go a.handleSignals(ctxWithCancel, c, cancel)
+	go a.handleSignals(ctx, c, cancel)
 
 	a.startTasks(tasks)
 
-	<-ctxWithCancel.Done()
+	<-ctx.Done()
 	logger.V(2).Printf("Stopping agent...")
 	signal.Stop(c)
 	close(c)
