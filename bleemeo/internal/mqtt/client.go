@@ -24,7 +24,7 @@ type pahoWrapper struct {
 
 	l                     sync.Mutex
 	connectionLostChannel chan error
-	connectHandler        paho.OnConnectHandler
+	connectChannel        chan paho.Client
 	notificationChannel   chan paho.Message
 
 	upgradeFile   string
@@ -41,7 +41,7 @@ type PahoWrapperOptions struct {
 
 func NewPahoWrapper(opts PahoWrapperOptions) types.PahoWrapper {
 	wrapper := &pahoWrapper{
-		connectHandler:        opts.ConnectHandler,
+		connectChannel:        make(chan paho.Client),
 		connectionLostChannel: make(chan error),
 		notificationChannel:   make(chan paho.Message, notificationChannelSize),
 		upgradeFile:           opts.UpgradeFile,
@@ -75,19 +75,11 @@ func (c *pahoWrapper) ConnectionLostChannel() chan error {
 }
 
 func (c *pahoWrapper) OnConnect(cli paho.Client) {
-	c.l.Lock()
-	defer c.l.Unlock()
-
-	if c.connectHandler != nil {
-		c.connectHandler(cli)
-	}
+	c.connectChannel <- cli
 }
 
-func (c *pahoWrapper) SetOnConnect(f paho.OnConnectHandler) {
-	c.l.Lock()
-	defer c.l.Unlock()
-
-	c.connectHandler = f
+func (c *pahoWrapper) ConnectChannel() chan paho.Client {
+	return c.connectChannel
 }
 
 func (c *pahoWrapper) OnNotification(cli paho.Client, msg paho.Message) {

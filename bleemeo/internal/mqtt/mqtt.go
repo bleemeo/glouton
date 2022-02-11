@@ -184,8 +184,6 @@ func New(option Option, first bool, reloadState bleemeoTypes.BleemeoReloadState)
 		})
 
 		reloadState.SetPahoWrapper(pahoWrapper)
-	} else {
-		pahoWrapper.SetOnConnect(client.onConnect)
 	}
 
 	return client
@@ -1178,19 +1176,23 @@ func (c *Client) onReloadAndShutdown() {
 	if stillPending > 0 {
 		logger.V(2).Printf("%d MQTT message were still pending", stillPending)
 	}
-
-	// Clear the wrapper hooks as calling them on a shutted down connector is an undefined behavior.
-	pahoWrapper.SetOnConnect(nil)
 }
 
 func (c *Client) receiveEvents(ctx context.Context) {
 	pahoWrapper := c.reloadState.PahoWrapper()
 
-	select {
-	case msg := <-pahoWrapper.NotificationChannel():
-		c.onNotification(c.mqttClient, msg)
-	case err := <-pahoWrapper.ConnectionLostChannel():
-		c.onConnectionLost(c.mqttClient, err)
-	case <-ctx.Done():
+	for {
+		select {
+		case msg := <-pahoWrapper.NotificationChannel():
+			c.onNotification(c.mqttClient, msg)
+		case err := <-pahoWrapper.ConnectionLostChannel():
+			c.onConnectionLost(c.mqttClient, err)
+		case client := <-pahoWrapper.ConnectChannel():
+			// We can't use c.mqttClient here because it is either nil or outdated,
+			// c.mqttClient is updated only after a successful connection.
+			c.onConnect(client)
+		case <-ctx.Done():
+			return
+		}
 	}
 }

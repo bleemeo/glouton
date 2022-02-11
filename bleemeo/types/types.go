@@ -169,7 +169,7 @@ type PahoWrapper interface {
 	OnConnectionLost(cli paho.Client, err error)
 	ConnectionLostChannel() chan error
 	OnConnect(cli paho.Client)
-	SetOnConnect(f paho.OnConnectHandler)
+	ConnectChannel() chan paho.Client
 	OnNotification(cli paho.Client, msg paho.Message)
 	NotificationChannel() chan paho.Message
 	PendingPoints() []types.MetricPoint
