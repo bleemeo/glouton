@@ -186,6 +186,12 @@ func (a *agent) init(ctx context.Context, configFiles []string) (ok bool) {
 		return false
 	}
 
+	watcherErr := a.reloadState.WatcherError()
+	if watcherErr != nil {
+		logger.Printf("An error occurred with the file watcher: %v.", watcherErr)
+		logger.Printf("The agent might not be able to reload automatically on config change.")
+	}
+
 	if dsn := a.oldConfig.String("bleemeo.sentry.dsn"); dsn != "" {
 		err := sentry.Init(sentry.ClientOptions{
 			Dsn: dsn,
@@ -2174,7 +2180,7 @@ func (a *agent) diagnosticConfig(ctx context.Context, archive types.ArchiveWrite
 
 	enc := yaml.NewEncoder(file)
 
-	fmt.Fprintln(file, "# This file contains in-memory configuration used by Glouton. Value from from default, files and environement.")
+	fmt.Fprintln(file, "# This file contains in-memory configuration used by Glouton. Value from from default, files and environment.")
 	enc.SetIndent(4)
 
 	err = enc.Encode(a.oldConfig.Dump())

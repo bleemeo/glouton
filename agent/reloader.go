@@ -28,6 +28,7 @@ var errWatcherNotStarted = errors.New("failed to start")
 type ReloadState interface {
 	Bleemeo() bleemeoTypes.BleemeoReloadState
 	DiagnosticArchive(ctx context.Context, archive types.ArchiveWriter) error
+	WatcherError() error
 	Close()
 }
 
@@ -102,8 +103,6 @@ func StartReloadManager(configFilesFromFlag []string) {
 	if err == nil {
 		defer watcher.Close()
 	} else {
-		logger.V(0).Printf("Could not watch config, Glouton will not be reloaded automatically on config change: %v", err)
-
 		a.reloadState.SetWatcherError(err)
 	}
 

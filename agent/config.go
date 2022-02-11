@@ -38,7 +38,7 @@ import (
 
 var (
 	errUpdateFromEnv      = errors.New("update from environment variable is not supported")
-	errDeprecatedEnv      = errors.New("environement variable is deprecated")
+	errDeprecatedEnv      = errors.New("environment variable is deprecated")
 	errSettingsDeprecated = errors.New("setting is deprecated")
 	ErrInvalidValue       = errors.New("invalid config value")
 )
