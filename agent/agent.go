@@ -936,28 +936,28 @@ func (a *agent) run(ctx context.Context) { //nolint:cyclop
 			scaperName = fmt.Sprintf("%s:%d", fqdn, a.oldConfig.Int("web.listener.port"))
 		}
 
-		a.bleemeoConnector, err = bleemeo.New(a.reloadState.Bleemeo(),
-			bleemeoTypes.GlobalOption{
-				Config:                  a.oldConfig,
-				State:                   a.state,
-				Facts:                   a.factProvider,
-				Process:                 psFact,
-				Docker:                  a.containerRuntime,
-				Store:                   filteredStore,
-				SNMP:                    a.snmpManager.Targets(),
-				SNMPOnlineTarget:        a.snmpManager.OnlineCount,
-				PushPoints:              a.threshold.WithPusher(a.gathererRegistry.WithTTL(5 * time.Minute)),
-				Discovery:               a.discovery,
-				MonitorManager:          a.monitorManager,
-				UpdateMetricResolution:  a.updateMetricResolution,
-				UpdateThresholds:        a.UpdateThresholds,
-				UpdateUnits:             a.threshold.SetUnits,
-				MetricFormat:            a.metricFormat,
-				NotifyFirstRegistration: a.notifyBleemeoFirstRegistration,
-				NotifyLabelsUpdate:      a.notifyBleemeoUpdateLabels,
-				BlackboxScraperName:     scaperName,
-				RebuildAlertingRules:    a.rulesManager.RebuildAlertingRules,
-			})
+		a.bleemeoConnector, err = bleemeo.New(bleemeoTypes.GlobalOption{
+			Config:                  a.oldConfig,
+			State:                   a.state,
+			Facts:                   a.factProvider,
+			Process:                 psFact,
+			Docker:                  a.containerRuntime,
+			Store:                   filteredStore,
+			SNMP:                    a.snmpManager.Targets(),
+			SNMPOnlineTarget:        a.snmpManager.OnlineCount,
+			PushPoints:              a.threshold.WithPusher(a.gathererRegistry.WithTTL(5 * time.Minute)),
+			Discovery:               a.discovery,
+			MonitorManager:          a.monitorManager,
+			UpdateMetricResolution:  a.updateMetricResolution,
+			UpdateThresholds:        a.UpdateThresholds,
+			UpdateUnits:             a.threshold.SetUnits,
+			MetricFormat:            a.metricFormat,
+			NotifyFirstRegistration: a.notifyBleemeoFirstRegistration,
+			NotifyLabelsUpdate:      a.notifyBleemeoUpdateLabels,
+			BlackboxScraperName:     scaperName,
+			RebuildAlertingRules:    a.rulesManager.RebuildAlertingRules,
+			ReloadState:             a.reloadState.Bleemeo(),
+		})
 		if err != nil {
 			logger.Printf("unable to start Bleemeo SAAS connector: %v", err)
 

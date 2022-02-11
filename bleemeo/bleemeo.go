@@ -43,7 +43,10 @@ var ErrBadOption = errors.New("bad option")
 
 // ReloadState implements the types.BleemeoReloadState interface.
 type ReloadState struct {
-	pahoWrapper types.PahoWrapper
+	pahoWrapper   types.PahoWrapper
+	nextFullSync  time.Time
+	fullSyncCount int
+	jwt           types.JWT
 }
 
 func (rs *ReloadState) PahoWrapper() types.PahoWrapper {
@@ -52,6 +55,30 @@ func (rs *ReloadState) PahoWrapper() types.PahoWrapper {
 
 func (rs *ReloadState) SetPahoWrapper(client types.PahoWrapper) {
 	rs.pahoWrapper = client
+}
+
+func (rs *ReloadState) NextFullSync() time.Time {
+	return rs.nextFullSync
+}
+
+func (rs *ReloadState) SetNextFullSync(t time.Time) {
+	rs.nextFullSync = t
+}
+
+func (rs *ReloadState) FullSyncCount() int {
+	return rs.fullSyncCount
+}
+
+func (rs *ReloadState) SetFullSyncCount(count int) {
+	rs.fullSyncCount = count
+}
+
+func (rs *ReloadState) JWT() types.JWT {
+	return rs.jwt
+}
+
+func (rs *ReloadState) SetJWT(jwt types.JWT) {
+	rs.jwt = jwt
 }
 
 func (rs *ReloadState) Close() {
@@ -75,18 +102,16 @@ type Connector struct {
 
 	// initialized indicates whether the mqtt connetcor can be started
 	initialized bool
-
-	reloadState types.BleemeoReloadState
 }
 
 // New create a new Connector.
-func New(rs types.BleemeoReloadState, option types.GlobalOption) (c *Connector, err error) {
+func New(option types.GlobalOption) (c *Connector, err error) {
 	c = &Connector{
 		option:      option,
 		cache:       cache.Load(option.State),
 		mqttRestart: make(chan interface{}, 1),
-		reloadState: rs,
 	}
+
 	c.sync, err = synchronizer.New(synchronizer.Option{
 		GlobalOption:                c.option,
 		Cache:                       c.cache,
@@ -169,7 +194,6 @@ func (c *Connector) initMQTT(previousPoint []gloutonTypes.MetricPoint, first boo
 			GetJWT:               c.sync.GetJWT,
 		},
 		first,
-		c.reloadState,
 	)
 
 	// if the connector is disabled, disable mqtt for the same period

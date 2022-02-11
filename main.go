@@ -58,7 +58,5 @@ func main() {
 	// Run os-specific initialisation code.
 	OSDependentMain()
 
-	configFilesFromFlag := strings.Split(*configFiles, ",")
-
-	agent.StartReloadManager(configFilesFromFlag)
+	agent.StartReloadManager(strings.Split(*configFiles, ","))
 }

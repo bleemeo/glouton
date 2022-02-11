@@ -82,7 +82,6 @@ type Client struct {
 	lastRegisteredMetricsCount int
 	lastFailedPointsRetry      time.Time
 	encoder                    mqttEncoder
-	reloadState                bleemeoTypes.BleemeoReloadState
 
 	l                   sync.Mutex
 	startedAt           time.Time
@@ -147,7 +146,7 @@ func (f forceDecimalFloat) MarshalJSON() ([]byte, error) {
 }
 
 // New create a new client.
-func New(option Option, first bool, reloadState bleemeoTypes.BleemeoReloadState) *Client {
+func New(option Option, first bool) *Client {
 	if first {
 		paho.ERROR = logger.V(2)
 		paho.CRITICAL = logger.V(2)
@@ -161,7 +160,7 @@ func New(option Option, first bool, reloadState bleemeoTypes.BleemeoReloadState)
 		initialPoints []types.MetricPoint
 	)
 
-	pahoWrapper := reloadState.PahoWrapper()
+	pahoWrapper := option.ReloadState.PahoWrapper()
 	if pahoWrapper != nil {
 		mqttClient = pahoWrapper.Client()
 		initialPoints = pahoWrapper.PendingPoints()
@@ -170,9 +169,8 @@ func New(option Option, first bool, reloadState bleemeoTypes.BleemeoReloadState)
 	option.InitialPoints = append(option.InitialPoints, initialPoints...)
 
 	client := &Client{
-		option:      option,
-		mqttClient:  mqttClient,
-		reloadState: reloadState,
+		option:     option,
+		mqttClient: mqttClient,
 	}
 
 	if pahoWrapper == nil {
@@ -183,7 +181,7 @@ func New(option Option, first bool, reloadState bleemeoTypes.BleemeoReloadState)
 			AgentID:               client.option.AgentID,
 		})
 
-		reloadState.SetPahoWrapper(pahoWrapper)
+		option.ReloadState.SetPahoWrapper(pahoWrapper)
 	}
 
 	return client
@@ -412,7 +410,7 @@ func (c *Client) setupMQTT(ctx context.Context) (paho.Client, error) {
 	pahoOptions.SetAutoReconnect(false)
 	pahoOptions.SetUsername(fmt.Sprintf("%s@bleemeo.com", c.option.AgentID))
 
-	pahoWrapper := c.reloadState.PahoWrapper()
+	pahoWrapper := c.option.ReloadState.PahoWrapper()
 	pahoOptions.SetConnectionLostHandler(pahoWrapper.OnConnectionLost)
 	pahoOptions.SetOnConnectHandler(pahoWrapper.OnConnect)
 
@@ -785,7 +783,7 @@ func (c *Client) onConnect(mqttClient paho.Client) {
 	mqttClient.Subscribe(
 		fmt.Sprintf("v1/agent/%s/notification", c.option.AgentID),
 		0,
-		c.reloadState.PahoWrapper().OnNotification,
+		c.option.ReloadState.PahoWrapper().OnNotification,
 	)
 }
 
@@ -1160,7 +1158,7 @@ mainLoop:
 // onReload is called when reloading or on a graceful shutdown.
 // The pending points are saved in the reload state and we try to push the pending messages.
 func (c *Client) onReloadAndShutdown() {
-	pahoWrapper := c.reloadState.PahoWrapper()
+	pahoWrapper := c.option.ReloadState.PahoWrapper()
 
 	// Save pending points.
 	points := c.PopPoints(true)
@@ -1179,7 +1177,7 @@ func (c *Client) onReloadAndShutdown() {
 }
 
 func (c *Client) receiveEvents(ctx context.Context) {
-	pahoWrapper := c.reloadState.PahoWrapper()
+	pahoWrapper := c.option.ReloadState.PahoWrapper()
 
 	for {
 		select {

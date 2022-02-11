@@ -71,8 +71,10 @@ type Synchronizer struct {
 	realClient       *client.HTTPClient
 	client           *wrapperClient
 	diagnosticClient *http.Client
-	nextFullSync     time.Time
-	fullSyncCount    int
+
+	// These fields should always be set in the reload state after being modified.
+	nextFullSync  time.Time
+	fullSyncCount int
 
 	startedAt               time.Time
 	lastSync                time.Time
@@ -133,12 +135,24 @@ func New(option Option) (*Synchronizer, error) {
 }
 
 func newWithNow(option Option, now func() time.Time) (*Synchronizer, error) {
+	nextFullSync := now()
+	fullSyncCount := 0
+
+	if option.ReloadState != nil {
+		if option.ReloadState.NextFullSync().After(nextFullSync) {
+			nextFullSync = option.ReloadState.NextFullSync()
+		}
+
+		fullSyncCount = option.ReloadState.FullSyncCount()
+	}
+
 	s := &Synchronizer{
 		option: option,
 		now:    now,
 
 		forceSync:              make(map[string]bool),
-		nextFullSync:           now(),
+		nextFullSync:           nextFullSync,
+		fullSyncCount:          fullSyncCount,
 		retryableMetricFailure: make(map[bleemeoTypes.FailureKind]bool),
 	}
 
@@ -586,7 +600,13 @@ func (s *Synchronizer) setClient() error {
 		return err
 	}
 
-	client, err := client.NewClient(s.option.Config.String("bleemeo.api_base"), username, password, s.option.Config.Bool("bleemeo.api_ssl_insecure"))
+	client, err := client.NewClient(
+		s.option.Config.String("bleemeo.api_base"),
+		username,
+		password,
+		s.option.Config.Bool("bleemeo.api_ssl_insecure"),
+		s.option.ReloadState,
+	)
 	if err != nil {
 		return err
 	}
@@ -731,6 +751,12 @@ func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) error {
 			delay.Exponential(time.Hour, 1.75, s.fullSyncCount, 12*time.Hour),
 			0.25,
 		))
+
+		if s.option.ReloadState != nil {
+			s.option.ReloadState.SetFullSyncCount(s.fullSyncCount)
+			s.option.ReloadState.SetNextFullSync(s.nextFullSync)
+		}
+
 		logger.V(1).Printf("New full synchronization scheduled for %s", s.nextFullSync.Format(time.RFC3339))
 	}
 

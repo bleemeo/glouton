@@ -46,6 +46,7 @@ type GlobalOption struct {
 	NotifyFirstRegistration func(ctx context.Context)
 	NotifyLabelsUpdate      func(ctx context.Context)
 	BlackboxScraperName     string
+	ReloadState             BleemeoReloadState
 
 	UpdateMetricResolution func(defaultResolution time.Duration, snmpResolution time.Duration)
 	UpdateThresholds       func(thresholds map[threshold.MetricNameItem]threshold.Threshold, firstUpdate bool)
@@ -159,6 +160,12 @@ type GloutonAgentConfig struct {
 type BleemeoReloadState interface {
 	PahoWrapper() PahoWrapper
 	SetPahoWrapper(client PahoWrapper)
+	NextFullSync() time.Time
+	SetNextFullSync(t time.Time)
+	FullSyncCount() int
+	SetFullSyncCount(count int)
+	JWT() JWT
+	SetJWT(jwt JWT)
 	Close()
 }
 
@@ -175,4 +182,10 @@ type PahoWrapper interface {
 	PendingPoints() []types.MetricPoint
 	SetPendingPoints(points []types.MetricPoint)
 	Close()
+}
+
+// JWT used to authenticate with the Bleemeo API.
+type JWT struct {
+	Token   string
+	Refresh string
 }
