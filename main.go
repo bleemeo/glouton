@@ -20,13 +20,10 @@ import (
 	"flag"
 	"fmt"
 	"glouton/agent"
-	"glouton/logger"
 	versionPkg "glouton/version"
 	"strings"
 
 	_ "net/http/pprof" //nolint:gosec
-
-	"github.com/fsnotify/fsnotify"
 )
 
 //nolint:gochecknoglobals
@@ -63,14 +60,5 @@ func main() {
 
 	configFilesFromFlag := strings.Split(*configFiles, ",")
 
-	// Start config file watcher, the agent is reloaded when a change is detected.
-	watcher, err := fsnotify.NewWatcher()
-	if err == nil {
-		defer watcher.Close()
-	} else {
-		logger.V(0).Printf("Could not watch config, Glouton will not be reloaded automatically on config change: %v", err)
-		watcher = nil
-	}
-
-	agent.StartReloadManager(watcher, configFilesFromFlag)
+	agent.StartReloadManager(configFilesFromFlag)
 }

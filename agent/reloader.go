@@ -32,7 +32,9 @@ type ReloadState interface {
 }
 
 type reloadState struct {
-	bleemeo      bleemeoTypes.BleemeoReloadState
+	bleemeo bleemeoTypes.BleemeoReloadState
+
+	l            sync.Mutex
 	watcherError error
 }
 
@@ -46,14 +48,28 @@ func (rs *reloadState) DiagnosticArchive(ctx context.Context, archive types.Arch
 		return err
 	}
 
-	if rs.watcherError == nil {
+	if rs.WatcherError() == nil {
 		fmt.Fprintln(file, "The file watcher is running, Glouton will be reloaded on config changes.")
 	} else {
 		fmt.Fprintf(file, "An error occurred with the file watcher: %v\n", rs.watcherError)
-		fmt.Fprintln(file, "Glouton will not be reloaded on config changes.")
 	}
 
 	return nil
+}
+
+func (rs *reloadState) WatcherError() error {
+	rs.l.Lock()
+	err := rs.watcherError
+	rs.l.Unlock()
+
+	return err
+}
+
+func (rs *reloadState) SetWatcherError(err error) {
+	rs.l.Lock()
+	defer rs.l.Unlock()
+
+	rs.watcherError = err
 }
 
 func (rs *reloadState) Close() {
@@ -69,7 +85,11 @@ type agentReloader struct {
 	agentIsRunning bool
 }
 
-func StartReloadManager(watcher *fsnotify.Watcher, configFilesFromFlag []string) {
+// StartReloadManager starts the agent with a config file watcher, the agent is
+// reloaded when a change is detected and the config is valid.
+func StartReloadManager(configFilesFromFlag []string) {
+	watcher, err := fsnotify.NewWatcher()
+
 	a := agentReloader{
 		watcher:             watcher,
 		agentIsRunning:      false,
@@ -77,6 +97,14 @@ func StartReloadManager(watcher *fsnotify.Watcher, configFilesFromFlag []string)
 		reloadState: &reloadState{
 			bleemeo: &bleemeo.ReloadState{},
 		},
+	}
+
+	if err == nil {
+		defer watcher.Close()
+	} else {
+		logger.V(0).Printf("Could not watch config, Glouton will not be reloaded automatically on config change: %v", err)
+
+		a.reloadState.SetWatcherError(err)
 	}
 
 	a.run()
@@ -207,7 +235,7 @@ func (a *agentReloader) watchConfig(ctx context.Context, reload chan struct{}) {
 					return
 				}
 
-				a.reloadState.watcherError = err
+				a.reloadState.SetWatcherError(err)
 				logger.V(0).Printf("File watcher error: %v", err)
 			case <-ctx.Done():
 				return
