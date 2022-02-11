@@ -1019,7 +1019,7 @@ func (a *agent) run(ctx context.Context) { //nolint:cyclop
 	}
 
 	if a.bleemeoConnector == nil {
-		a.updateThresholds(nil, true)
+		a.updateThresholds(nil, true) //nolint:contextcheck
 	} else {
 		a.bleemeoConnector.ApplyCachedConfiguration()
 	}
