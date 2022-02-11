@@ -167,7 +167,7 @@ type PahoWrapper interface {
 	Client() paho.Client
 	SetClient(cli paho.Client)
 	OnConnectionLost(cli paho.Client, err error)
-	SetOnConnectionLost(f paho.ConnectionLostHandler)
+	ConnectionLostChannel() chan error
 	OnConnect(cli paho.Client)
 	SetOnConnect(f paho.OnConnectHandler)
 	OnNotification(cli paho.Client, msg paho.Message)

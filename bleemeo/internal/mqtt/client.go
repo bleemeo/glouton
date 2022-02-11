@@ -23,7 +23,7 @@ type pahoWrapper struct {
 	client paho.Client
 
 	l                     sync.Mutex
-	connectionLostHandler paho.ConnectionLostHandler
+	connectionLostChannel chan error
 	connectHandler        paho.OnConnectHandler
 	notificationChannel   chan paho.Message
 
@@ -41,8 +41,8 @@ type PahoWrapperOptions struct {
 
 func NewPahoWrapper(opts PahoWrapperOptions) types.PahoWrapper {
 	wrapper := &pahoWrapper{
-		connectionLostHandler: opts.ConnectionLostHandler,
 		connectHandler:        opts.ConnectHandler,
+		connectionLostChannel: make(chan error),
 		notificationChannel:   make(chan paho.Message, notificationChannelSize),
 		upgradeFile:           opts.UpgradeFile,
 		agentID:               opts.AgentID,
@@ -67,19 +67,11 @@ func (c *pahoWrapper) SetClient(cli paho.Client) {
 }
 
 func (c *pahoWrapper) OnConnectionLost(cli paho.Client, err error) {
-	c.l.Lock()
-	defer c.l.Unlock()
-
-	if c.connectionLostHandler != nil {
-		c.connectionLostHandler(cli, err)
-	}
+	c.connectionLostChannel <- err
 }
 
-func (c *pahoWrapper) SetOnConnectionLost(f paho.ConnectionLostHandler) {
-	c.l.Lock()
-	defer c.l.Unlock()
-
-	c.connectionLostHandler = f
+func (c *pahoWrapper) ConnectionLostChannel() chan error {
+	return c.connectionLostChannel
 }
 
 func (c *pahoWrapper) OnConnect(cli paho.Client) {
@@ -99,9 +91,6 @@ func (c *pahoWrapper) SetOnConnect(f paho.OnConnectHandler) {
 }
 
 func (c *pahoWrapper) OnNotification(cli paho.Client, msg paho.Message) {
-	c.l.Lock()
-	defer c.l.Unlock()
-
 	select {
 	case c.notificationChannel <- msg:
 	default:

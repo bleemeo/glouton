@@ -186,7 +186,6 @@ func New(option Option, first bool, reloadState bleemeoTypes.BleemeoReloadState)
 		reloadState.SetPahoWrapper(pahoWrapper)
 	} else {
 		pahoWrapper.SetOnConnect(client.onConnect)
-		pahoWrapper.SetOnConnectionLost(client.onConnectionLost)
 	}
 
 	return client
@@ -265,7 +264,7 @@ func (c *Client) Run(ctx context.Context) error {
 	c.startedAt = time.Now()
 	c.l.Unlock()
 
-	go c.receiveNotifications(ctx)
+	go c.receiveEvents(ctx)
 
 	err := c.run(ctx)
 
@@ -1182,15 +1181,16 @@ func (c *Client) onReloadAndShutdown() {
 
 	// Clear the wrapper hooks as calling them on a shutted down connector is an undefined behavior.
 	pahoWrapper.SetOnConnect(nil)
-	pahoWrapper.SetOnConnectionLost(nil)
 }
 
-func (c *Client) receiveNotifications(ctx context.Context) {
-	notifChan := c.reloadState.PahoWrapper().NotificationChannel()
+func (c *Client) receiveEvents(ctx context.Context) {
+	pahoWrapper := c.reloadState.PahoWrapper()
 
 	select {
-	case msg := <-notifChan:
+	case msg := <-pahoWrapper.NotificationChannel():
 		c.onNotification(c.mqttClient, msg)
+	case err := <-pahoWrapper.ConnectionLostChannel():
+		c.onConnectionLost(c.mqttClient, err)
 	case <-ctx.Done():
 	}
 }
