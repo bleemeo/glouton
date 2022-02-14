@@ -367,7 +367,10 @@ func (c *Connector) Run(ctx context.Context) error {
 
 	for ctx.Err() == nil {
 		if c.AgentID() != "" && c.isInitialized() {
+			wg.Add(1)
+
 			go func() {
+				defer wg.Done()
 				defer cancel()
 				defer func() {
 					err := recover()
