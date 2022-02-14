@@ -163,7 +163,7 @@ func New(option Option, first bool) *Client {
 	pahoWrapper := option.ReloadState.PahoWrapper()
 	if pahoWrapper != nil {
 		mqttClient = pahoWrapper.Client()
-		initialPoints = pahoWrapper.PendingPoints()
+		initialPoints = pahoWrapper.PopPendingPoints()
 	}
 
 	option.InitialPoints = append(option.InitialPoints, initialPoints...)

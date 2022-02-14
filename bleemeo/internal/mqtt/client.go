@@ -93,7 +93,7 @@ func (c *pahoWrapper) NotificationChannel() <-chan paho.Message {
 	return c.notificationChannel
 }
 
-func (c *pahoWrapper) PendingPoints() []gloutonTypes.MetricPoint {
+func (c *pahoWrapper) PopPendingPoints() []gloutonTypes.MetricPoint {
 	c.l.Lock()
 	defer c.l.Unlock()
 
@@ -116,6 +116,8 @@ func (c *pahoWrapper) Close() {
 	}
 
 	close(c.notificationChannel)
+	close(c.connectChannel)
+	close(c.connectionLostChannel)
 
 	deadline := time.Now().Add(5 * time.Second)
 

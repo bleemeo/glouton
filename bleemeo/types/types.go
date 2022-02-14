@@ -180,7 +180,7 @@ type PahoWrapper interface {
 	ConnectChannel() <-chan paho.Client
 	OnNotification(cli paho.Client, msg paho.Message)
 	NotificationChannel() <-chan paho.Message
-	PendingPoints() []types.MetricPoint
+	PopPendingPoints() []types.MetricPoint
 	SetPendingPoints(points []types.MetricPoint)
 	Close()
 }
