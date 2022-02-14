@@ -113,9 +113,19 @@ func (c *pahoWrapper) Close() {
 		return
 	}
 
-	close(c.notificationChannel)
-	close(c.connectChannel)
-	close(c.connectionLostChannel)
+	// Consume all events on channels to make sure the paho client is not blocked.
+	go func() {
+		for range c.notificationChannel {
+		}
+	}()
+	go func() {
+		for range c.connectChannel {
+		}
+	}()
+	go func() {
+		for range c.connectionLostChannel {
+		}
+	}()
 
 	deadline := time.Now().Add(5 * time.Second)
 
@@ -134,5 +144,9 @@ func (c *pahoWrapper) Close() {
 		}
 	}
 
-	c.client.Disconnect(uint(time.Until(deadline).Seconds() * 1000))
+	c.client.Disconnect(uint(time.Until(deadline).Milliseconds()))
+
+	close(c.notificationChannel)
+	close(c.connectChannel)
+	close(c.connectionLostChannel)
 }
