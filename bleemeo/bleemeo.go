@@ -41,47 +41,64 @@ import (
 
 var ErrBadOption = errors.New("bad option")
 
-// ReloadState implements the types.BleemeoReloadState interface.
-type ReloadState struct {
+// reloadState implements the types.BleemeoReloadState interface.
+type reloadState struct {
 	pahoWrapper   types.PahoWrapper
 	nextFullSync  time.Time
 	fullSyncCount int
 	jwt           types.JWT
+	isFirstRun    bool
 }
 
-func (rs *ReloadState) PahoWrapper() types.PahoWrapper {
+func NewReloadState() types.BleemeoReloadState {
+	return &reloadState{
+		isFirstRun: true,
+	}
+}
+
+func (rs *reloadState) PahoWrapper() types.PahoWrapper {
 	return rs.pahoWrapper
 }
 
-func (rs *ReloadState) SetPahoWrapper(client types.PahoWrapper) {
+func (rs *reloadState) SetPahoWrapper(client types.PahoWrapper) {
 	rs.pahoWrapper = client
 }
 
-func (rs *ReloadState) NextFullSync() time.Time {
+func (rs *reloadState) NextFullSync() time.Time {
 	return rs.nextFullSync
 }
 
-func (rs *ReloadState) SetNextFullSync(t time.Time) {
+func (rs *reloadState) SetNextFullSync(t time.Time) {
 	rs.nextFullSync = t
 }
 
-func (rs *ReloadState) FullSyncCount() int {
+func (rs *reloadState) FullSyncCount() int {
 	return rs.fullSyncCount
 }
 
-func (rs *ReloadState) SetFullSyncCount(count int) {
+func (rs *reloadState) SetFullSyncCount(count int) {
 	rs.fullSyncCount = count
 }
 
-func (rs *ReloadState) JWT() types.JWT {
+func (rs *reloadState) JWT() types.JWT {
 	return rs.jwt
 }
 
-func (rs *ReloadState) SetJWT(jwt types.JWT) {
+func (rs *reloadState) SetJWT(jwt types.JWT) {
 	rs.jwt = jwt
 }
 
-func (rs *ReloadState) Close() {
+func (rs *reloadState) IsFirstRun() bool {
+	if rs.isFirstRun {
+		rs.isFirstRun = false
+
+		return true
+	}
+
+	return false
+}
+
+func (rs *reloadState) Close() {
 	rs.pahoWrapper.Close()
 }
 
@@ -169,7 +186,7 @@ func (c *Connector) ApplyCachedConfiguration() {
 	}
 }
 
-func (c *Connector) initMQTT(previousPoint []gloutonTypes.MetricPoint, first bool) error {
+func (c *Connector) initMQTT(previousPoint []gloutonTypes.MetricPoint) error {
 	c.l.Lock()
 	defer c.l.Unlock()
 
@@ -193,7 +210,7 @@ func (c *Connector) initMQTT(previousPoint []gloutonTypes.MetricPoint, first boo
 			InitialPoints:        previousPoint,
 			GetJWT:               c.sync.GetJWT,
 		},
-		first,
+		c.option.ReloadState.IsFirstRun(),
 	)
 
 	// if the connector is disabled, disable mqtt for the same period
@@ -231,7 +248,6 @@ func (c *Connector) mqttRestarter(ctx context.Context) error {
 		mqttErr        error
 		l              sync.Mutex
 		previousPoints []gloutonTypes.MetricPoint
-		alreadyInit    bool
 	)
 
 	subCtx, cancel := context.WithCancel(ctx)
@@ -276,9 +292,8 @@ func (c *Connector) mqttRestarter(ctx context.Context) error {
 
 			c.l.Unlock()
 
-			err := c.initMQTT(previousPoints, !alreadyInit)
+			err := c.initMQTT(previousPoints)
 			previousPoints = nil
-			alreadyInit = true
 
 			if err != nil {
 				l.Lock()

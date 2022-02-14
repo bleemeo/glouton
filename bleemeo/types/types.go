@@ -166,6 +166,7 @@ type BleemeoReloadState interface {
 	SetFullSyncCount(count int)
 	JWT() JWT
 	SetJWT(jwt JWT)
+	IsFirstRun() bool
 	Close()
 }
 

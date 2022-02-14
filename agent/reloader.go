@@ -97,7 +97,7 @@ func StartReloadManager(configFilesFromFlag []string) {
 		agentIsRunning:      false,
 		configFilesFromFlag: configFilesFromFlag,
 		reloadState: &reloadState{
-			bleemeo: &bleemeo.ReloadState{},
+			bleemeo: bleemeo.NewReloadState(),
 		},
 	}
 
