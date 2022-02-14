@@ -99,7 +99,9 @@ func (rs *reloadState) IsFirstRun() bool {
 }
 
 func (rs *reloadState) Close() {
-	rs.pahoWrapper.Close()
+	if rs.pahoWrapper != nil {
+		rs.pahoWrapper.Close()
+	}
 }
 
 // Connector manager the connection between the Agent and Bleemeo.
