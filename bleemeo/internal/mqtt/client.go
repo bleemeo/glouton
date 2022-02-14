@@ -33,10 +33,8 @@ type pahoWrapper struct {
 }
 
 type PahoWrapperOptions struct {
-	ConnectionLostHandler paho.ConnectionLostHandler
-	ConnectHandler        paho.OnConnectHandler
-	UpgradeFile           string
-	AgentID               types.AgentID
+	UpgradeFile string
+	AgentID     types.AgentID
 }
 
 func NewPahoWrapper(opts PahoWrapperOptions) types.PahoWrapper {

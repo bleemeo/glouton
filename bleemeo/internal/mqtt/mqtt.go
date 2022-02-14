@@ -175,10 +175,8 @@ func New(option Option, first bool) *Client {
 
 	if pahoWrapper == nil {
 		pahoWrapper = NewPahoWrapper(PahoWrapperOptions{
-			ConnectionLostHandler: client.onConnectionLost,
-			ConnectHandler:        client.onConnect,
-			UpgradeFile:           client.option.Config.String("agent.upgrade_file"),
-			AgentID:               client.option.AgentID,
+			UpgradeFile: client.option.Config.String("agent.upgrade_file"),
+			AgentID:     client.option.AgentID,
 		})
 
 		option.ReloadState.SetPahoWrapper(pahoWrapper)
