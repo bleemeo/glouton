@@ -258,9 +258,18 @@ func (c *Client) Run(ctx context.Context) error {
 	c.startedAt = time.Now()
 	c.l.Unlock()
 
-	go c.receiveEvents(ctx)
+	var wg sync.WaitGroup
+
+	wg.Add(1)
+
+	go func() {
+		c.receiveEvents(ctx)
+		wg.Done()
+	}()
 
 	err := c.run(ctx)
+
+	wg.Wait()
 
 	return err
 }
