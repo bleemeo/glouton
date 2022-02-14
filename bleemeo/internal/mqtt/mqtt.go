@@ -428,11 +428,7 @@ func (c *Client) setupMQTT(ctx context.Context) (paho.Client, error) {
 
 	pahoOptions.SetPassword(password)
 
-	client := paho.NewClient(pahoOptions)
-
-	pahoWrapper.SetClient(client)
-
-	return client, nil
+	return paho.NewClient(pahoOptions), nil
 }
 
 func (c *Client) tlsConfig() *tls.Config {
@@ -495,6 +491,8 @@ func (c *Client) shutdown() error {
 
 	c.mqttClient.Disconnect(uint(time.Until(deadline).Seconds() * 1000))
 	c.mqttClient = nil
+
+	c.option.ReloadState.PahoWrapper().SetClient(nil)
 
 	return nil
 }
@@ -1055,6 +1053,8 @@ mainLoop:
 				c.l.Lock()
 				c.mqttClient = nil
 				c.l.Unlock()
+
+				c.option.ReloadState.PahoWrapper().SetClient(nil)
 			}
 		case c.mqttClient == nil:
 			length := len(lastConnectionTimes)
@@ -1117,6 +1117,8 @@ mainLoop:
 					c.waitPublishAndResend(mqttClient, time.Now().Add(10*time.Second), true)
 					c.mqttClient = mqttClient
 					c.l.Unlock()
+
+					c.option.ReloadState.PahoWrapper().SetClient(mqttClient)
 				}
 			}
 		case c.mqttClient != nil && c.mqttClient.IsConnectionOpen() && time.Since(lastResend) > 10*time.Minute:
@@ -1133,6 +1135,8 @@ mainLoop:
 			c.mqttClient.Disconnect(0)
 			c.mqttClient = nil
 			c.l.Unlock()
+
+			c.option.ReloadState.PahoWrapper().SetClient(nil)
 
 			length := len(lastConnectionTimes)
 			if length > 0 && time.Since(lastConnectionTimes[length-1]) > stableConnection {
