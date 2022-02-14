@@ -36,8 +36,10 @@ type ReloadState interface {
 type reloadState struct {
 	bleemeo bleemeoTypes.BleemeoReloadState
 
-	l            sync.Mutex
-	watcherError error
+	l              sync.Mutex
+	watcherError   error
+	reloadCount    int
+	lastReloadDate time.Time
 }
 
 func (rs *reloadState) Bleemeo() bleemeoTypes.BleemeoReloadState {
@@ -56,6 +58,16 @@ func (rs *reloadState) DiagnosticArchive(ctx context.Context, archive types.Arch
 		fmt.Fprintf(file, "An error occurred with the file watcher: %v\n", err)
 	}
 
+	if count := rs.ReloadCount(); count == 0 {
+		fmt.Fprintln(file, "The agent has never been reloaded.")
+	} else {
+		fmt.Fprintf(file, "The agent has been reloaded %v times.\n", count)
+	}
+
+	if lastReload := rs.LastReloadDate(); !lastReload.IsZero() {
+		fmt.Fprintf(file, "The last reload was done on %v.\n", lastReload)
+	}
+
 	return nil
 }
 
@@ -72,6 +84,36 @@ func (rs *reloadState) SetWatcherError(err error) {
 	defer rs.l.Unlock()
 
 	rs.watcherError = err
+}
+
+func (rs *reloadState) ReloadCount() int {
+	rs.l.Lock()
+	count := rs.reloadCount
+	rs.l.Unlock()
+
+	return count
+}
+
+func (rs *reloadState) IncrementReloadCount() {
+	rs.l.Lock()
+	defer rs.l.Unlock()
+
+	rs.reloadCount++
+}
+
+func (rs *reloadState) LastReloadDate() time.Time {
+	rs.l.Lock()
+	lastReload := rs.lastReloadDate
+	rs.l.Unlock()
+
+	return lastReload
+}
+
+func (rs *reloadState) SetLastReloadDate(lastReload time.Time) {
+	rs.l.Lock()
+	defer rs.l.Unlock()
+
+	rs.lastReloadDate = lastReload
 }
 
 func (rs *reloadState) Close() {
@@ -137,6 +179,8 @@ func (a *agentReloader) run() {
 		case <-reload:
 			if !firstRun {
 				logger.V(0).Printf("The config files have been modified, reloading agent...")
+				a.reloadState.IncrementReloadCount()
+				a.reloadState.SetLastReloadDate(time.Now())
 
 				cancel()
 				wg.Wait()
