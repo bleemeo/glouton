@@ -191,12 +191,20 @@ func (a *agentReloader) watchConfig(ctx context.Context, reload chan struct{}) {
 		return
 	}
 
+	// Get config files.
 	myConfigFiles := a.configFilesFromFlag
 	if len(myConfigFiles) == 0 || len(myConfigFiles[0]) == 0 {
-		// Get default config files.
+		const configFileKey = "config_files"
+
 		cfg := config.Configuration{}
-		cfg.Set("config_files", defaultConfig()["config_files"])
-		myConfigFiles = cfg.StringList("config_files")
+		cfg.Set(configFileKey, defaultConfig()[configFileKey])
+
+		_, err := cfg.LoadEnv(configFileKey, config.TypeStringList, keyToEnvironmentName(configFileKey))
+		if err != nil {
+			logger.Printf("Failed to load environment variable: %v", err)
+		}
+
+		myConfigFiles = cfg.StringList(configFileKey)
 	}
 
 	// Use a debouncer because fsnotify events are often duplicated.
