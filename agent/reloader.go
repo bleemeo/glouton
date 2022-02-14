@@ -20,7 +20,7 @@ import (
 
 const (
 	reloadDebouncerDelay  = 5 * time.Second
-	reloadDebouncerPeriod = 10 * time.Second
+	reloadDebouncerPeriod = 30 * time.Second
 )
 
 var errWatcherNotStarted = errors.New("failed to start")
