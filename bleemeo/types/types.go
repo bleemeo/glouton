@@ -175,11 +175,11 @@ type PahoWrapper interface {
 	Client() paho.Client
 	SetClient(cli paho.Client)
 	OnConnectionLost(cli paho.Client, err error)
-	ConnectionLostChannel() chan error
+	ConnectionLostChannel() <-chan error
 	OnConnect(cli paho.Client)
-	ConnectChannel() chan paho.Client
+	ConnectChannel() <-chan paho.Client
 	OnNotification(cli paho.Client, msg paho.Message)
-	NotificationChannel() chan paho.Message
+	NotificationChannel() <-chan paho.Message
 	PendingPoints() []types.MetricPoint
 	SetPendingPoints(points []types.MetricPoint)
 	Close()

@@ -70,7 +70,7 @@ func (c *pahoWrapper) OnConnectionLost(cli paho.Client, err error) {
 	c.connectionLostChannel <- err
 }
 
-func (c *pahoWrapper) ConnectionLostChannel() chan error {
+func (c *pahoWrapper) ConnectionLostChannel() <-chan error {
 	return c.connectionLostChannel
 }
 
@@ -78,7 +78,7 @@ func (c *pahoWrapper) OnConnect(cli paho.Client) {
 	c.connectChannel <- cli
 }
 
-func (c *pahoWrapper) ConnectChannel() chan paho.Client {
+func (c *pahoWrapper) ConnectChannel() <-chan paho.Client {
 	return c.connectChannel
 }
 
@@ -89,7 +89,7 @@ func (c *pahoWrapper) OnNotification(cli paho.Client, msg paho.Message) {
 	}
 }
 
-func (c *pahoWrapper) NotificationChannel() chan paho.Message {
+func (c *pahoWrapper) NotificationChannel() <-chan paho.Message {
 	return c.notificationChannel
 }
 
