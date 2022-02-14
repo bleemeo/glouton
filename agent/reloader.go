@@ -203,9 +203,10 @@ func (a *agentReloader) watchConfig(ctx context.Context, reload chan struct{}) {
 	reloadAgentTarget := func(ctx context.Context) {
 		if ctx.Err() == nil {
 			// Validate config before reloading.
-			_, _, _, err := loadConfiguration(myConfigFiles, nil)
-			if err == nil {
+			if _, _, _, err := loadConfiguration(myConfigFiles, nil); err == nil {
 				reload <- struct{}{}
+			} else {
+				logger.Printf("Error while loading configuration: %v", err)
 			}
 		}
 	}
