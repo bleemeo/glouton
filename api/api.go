@@ -262,9 +262,12 @@ func (api *API) Run(ctx context.Context) error {
 		logger.Printf("To access the local panel connect to http://%s 🌐", api.BindAddress)
 	}
 
-	if err := srv.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
-		return err
+	err := srv.ListenAndServe()
+	if !errors.Is(err, http.ErrServerClosed) {
+		<-idleConnsClosed
+
+		return nil
 	}
 
-	return nil
+	return err
 }
