@@ -293,14 +293,14 @@ func (a *agentReloader) receiveWatcherEvents(ctx context.Context, reload *deboun
 			// new file, so we need to add it again.
 			if event.Op&fsnotify.Remove == fsnotify.Remove {
 				if exist, err := fileExist(event.Name); err != nil {
-					logger.V(0).Printf("Failed to check if file %v exists: %v", event.Name, err)
+					logger.V(1).Printf("Failed to check if file %v exists: %v", event.Name, err)
 				} else if exist {
 					if err := a.watcher.Remove(event.Name); err != nil {
-						logger.V(0).Printf("Failed to remove file in watcher: %v", err)
+						logger.V(1).Printf("Failed to remove file in watcher: %v", err)
 					}
 
 					if err := a.watcher.Add(event.Name); err != nil {
-						logger.V(0).Printf("Failed to add file to watcher: %v", err)
+						logger.V(1).Printf("Failed to add file to watcher: %v", err)
 					}
 				}
 			}
