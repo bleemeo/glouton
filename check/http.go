@@ -47,12 +47,10 @@ type HTTPCheck struct {
 // If expectedStatusCode is 0, StatusCode below 400 will generate Ok, between 400 and 499 => warning and above 500 => critical
 // If expectedStatusCode is not 0, StatusCode must match the value or result will be critical.
 func NewHTTP(urlValue string, httpHost string, persitentAddresses []string, persistentConnection bool, expectedStatusCode int, labels map[string]string, annotations types.MetricAnnotations, acc inputs.AnnotationAccumulator) *HTTPCheck {
-	myTransport := &http.Transport{
-		Proxy: http.ProxyFromEnvironment,
-		TLSClientConfig: &tls.Config{
-			InsecureSkipVerify: true, //nolint:gosec
-		},
+	tlsConfig := &tls.Config{
+		InsecureSkipVerify: true, //nolint:gosec
 	}
+
 	mainTCPAddress := ""
 
 	if u, err := url.Parse(urlValue); err != nil {
@@ -74,7 +72,7 @@ func NewHTTP(urlValue string, httpHost string, persitentAddresses []string, pers
 			CheckRedirect: func(req *http.Request, via []*http.Request) error {
 				return http.ErrUseLastResponse
 			},
-			Transport: myTransport,
+			Transport: types.NewHTTPTransport(tlsConfig),
 		},
 	}
 

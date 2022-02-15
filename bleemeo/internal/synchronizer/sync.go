@@ -376,10 +376,7 @@ func (s *Synchronizer) DiagnosticPage() string {
 
 	if s.diagnosticClient == nil {
 		s.diagnosticClient = &http.Client{
-			Transport: &http.Transport{
-				Proxy:           http.ProxyFromEnvironment,
-				TLSClientConfig: tlsConfig,
-			},
+			Transport: types.NewHTTPTransport(tlsConfig),
 			CheckRedirect: func(req *http.Request, via []*http.Request) error {
 				return http.ErrUseLastResponse
 			},

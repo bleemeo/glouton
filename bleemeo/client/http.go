@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"glouton/bleemeo/types"
 	"glouton/logger"
+	gloutonTypes "glouton/types"
 	"glouton/version"
 	"io"
 	"io/ioutil"
@@ -147,13 +148,12 @@ func NewClient(baseURL string, username string, password string, insecureTLS boo
 		return nil, err
 	}
 
+	tlsConfig := &tls.Config{
+		InsecureSkipVerify: insecureTLS, //nolint:gosec
+	}
+
 	cl := &http.Client{
-		Transport: &http.Transport{
-			Proxy: http.ProxyFromEnvironment,
-			TLSClientConfig: &tls.Config{
-				InsecureSkipVerify: insecureTLS, //nolint:gosec
-			},
-		},
+		Transport: gloutonTypes.NewHTTPTransport(tlsConfig),
 	}
 
 	jwt := types.JWT{}
@@ -507,13 +507,12 @@ func (c *HTTPClient) sendRequest(ctx context.Context, req *http.Request, result 
 	client := c.cl
 
 	if forceInsecure {
+		tlsConfig := &tls.Config{
+			InsecureSkipVerify: true, //nolint:gosec
+		}
+
 		client = &http.Client{
-			Transport: &http.Transport{
-				Proxy: http.ProxyFromEnvironment,
-				TLSClientConfig: &tls.Config{
-					InsecureSkipVerify: true, //nolint:gosec
-				},
-			},
+			Transport: gloutonTypes.NewHTTPTransport(tlsConfig),
 		}
 	}
 
