@@ -49,7 +49,7 @@ type GlobalOption struct {
 	ReloadState             BleemeoReloadState
 
 	UpdateMetricResolution func(ctx context.Context, defaultResolution time.Duration, snmpResolution time.Duration)
-	UpdateThresholds       func(thresholds map[threshold.MetricNameItem]threshold.Threshold, firstUpdate bool)
+	UpdateThresholds       func(ctx context.Context, thresholds map[threshold.MetricNameItem]threshold.Threshold, firstUpdate bool)
 	UpdateUnits            func(units map[threshold.MetricNameItem]threshold.Unit)
 	RebuildAlertingRules   func(metrics []rules.MetricAlertRule) error
 }

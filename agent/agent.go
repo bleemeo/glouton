@@ -398,8 +398,8 @@ func (a *agent) Tags() []string {
 
 // UpdateThresholds update the thresholds definition.
 // This method will merge with threshold definition present in configuration file.
-func (a *agent) UpdateThresholds(thresholds map[threshold.MetricNameItem]threshold.Threshold, firstUpdate bool) {
-	a.updateThresholds(thresholds, firstUpdate)
+func (a *agent) UpdateThresholds(ctx context.Context, thresholds map[threshold.MetricNameItem]threshold.Threshold, firstUpdate bool) {
+	a.updateThresholds(ctx, thresholds, firstUpdate)
 }
 
 // notifyBleemeoFirstRegistration is called when Glouton is registered with Bleemeo Cloud platform for the first time
@@ -516,7 +516,7 @@ func (a *agent) getConfigThreshold(firstUpdate bool) map[string]threshold.Thresh
 	return configThreshold
 }
 
-func (a *agent) updateThresholds(thresholds map[threshold.MetricNameItem]threshold.Threshold, firstUpdate bool) {
+func (a *agent) updateThresholds(ctx context.Context, thresholds map[threshold.MetricNameItem]threshold.Threshold, firstUpdate bool) {
 	configThreshold := a.getConfigThreshold(firstUpdate)
 
 	oldThresholds := map[string]threshold.Threshold{}
@@ -531,7 +531,6 @@ func (a *agent) updateThresholds(thresholds map[threshold.MetricNameItem]thresho
 
 	a.threshold.SetThresholds(thresholds, configThreshold)
 
-	ctx := context.Background()
 	services, err := a.discovery.Discovery(ctx, 1*time.Hour)
 
 	if err != nil {
@@ -1028,7 +1027,7 @@ func (a *agent) run(ctx context.Context) { //nolint:cyclop
 	}
 
 	if a.bleemeoConnector == nil {
-		a.updateThresholds(nil, true) //nolint:contextcheck
+		a.updateThresholds(ctx, nil, true)
 	} else {
 		a.bleemeoConnector.ApplyCachedConfiguration(ctx)
 	}

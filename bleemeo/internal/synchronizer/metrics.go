@@ -612,7 +612,7 @@ func (s *Synchronizer) syncMetrics(ctx context.Context, fullSync bool, onlyEssen
 	}
 
 	if fullSync || len(unregisteredMetrics) > 0 || len(pendingMetricsUpdate) > 0 {
-		s.UpdateUnitsAndThresholds(false)
+		s.UpdateUnitsAndThresholds(ctx, false)
 	}
 
 	if err := s.metricDeleteFromRemote(filteredMetrics, previousMetrics); err != nil {
@@ -685,7 +685,7 @@ func (s *Synchronizer) metricUpdatePendingOrSync(fullSync bool, pendingMetricsUp
 }
 
 // UpdateUnitsAndThresholds update metrics units & threshold (from cache).
-func (s *Synchronizer) UpdateUnitsAndThresholds(firstUpdate bool) {
+func (s *Synchronizer) UpdateUnitsAndThresholds(ctx context.Context, firstUpdate bool) {
 	thresholds := make(map[threshold.MetricNameItem]threshold.Threshold)
 	units := make(map[threshold.MetricNameItem]threshold.Unit)
 
@@ -713,7 +713,7 @@ func (s *Synchronizer) UpdateUnitsAndThresholds(firstUpdate bool) {
 	}
 
 	if s.option.UpdateThresholds != nil {
-		s.option.UpdateThresholds(thresholds, firstUpdate)
+		s.option.UpdateThresholds(ctx, thresholds, firstUpdate)
 	}
 
 	if s.option.UpdateUnits != nil {

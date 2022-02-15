@@ -741,7 +741,7 @@ func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) error {
 	logger.V(2).Printf("Synchronization took %v for %v (and did %d requests)", s.now().Sub(startAt), syncMethods, s.realClient.RequestsCount()-previousCount)
 
 	if wasCreation {
-		s.UpdateUnitsAndThresholds(true)
+		s.UpdateUnitsAndThresholds(ctx, true)
 	}
 
 	if len(syncMethods) == len(syncStep) && firstErr == nil {

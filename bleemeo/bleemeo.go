@@ -172,7 +172,7 @@ func (c *Connector) ApplyCachedConfiguration(ctx context.Context) {
 		return
 	}
 
-	c.sync.UpdateUnitsAndThresholds(true)
+	c.sync.UpdateUnitsAndThresholds(ctx, true)
 
 	if c.option.Config.Bool("blackbox.enable") {
 		if err := c.sync.ApplyMonitorUpdate(ctx); err != nil {
