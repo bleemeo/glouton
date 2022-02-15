@@ -17,6 +17,7 @@
 package synchronizer
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -551,7 +552,7 @@ func (s *Synchronizer) findUnregisteredMetrics(metrics []types.Metric) []types.M
 }
 
 //nolint:cyclop
-func (s *Synchronizer) syncMetrics(fullSync bool, onlyEssential bool) error {
+func (s *Synchronizer) syncMetrics(ctx context.Context, fullSync bool, onlyEssential bool) error {
 	localMetrics, err := s.option.Store.Metrics(nil)
 	if err != nil {
 		return err

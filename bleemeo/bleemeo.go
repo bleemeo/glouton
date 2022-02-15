@@ -163,7 +163,7 @@ func (c *Connector) isInitialized() bool {
 }
 
 // ApplyCachedConfiguration reload metrics units & threshold & monitors from the cache.
-func (c *Connector) ApplyCachedConfiguration() {
+func (c *Connector) ApplyCachedConfiguration(ctx context.Context) {
 	c.l.RLock()
 	disabledUntil := c.disabledUntil
 	defer c.l.RUnlock()
@@ -175,7 +175,7 @@ func (c *Connector) ApplyCachedConfiguration() {
 	c.sync.UpdateUnitsAndThresholds(true)
 
 	if c.option.Config.Bool("blackbox.enable") {
-		if err := c.sync.ApplyMonitorUpdate(); err != nil {
+		if err := c.sync.ApplyMonitorUpdate(ctx); err != nil {
 			// we just log the error, as we will try to run the monitors later anyway
 			logger.V(2).Printf("Couldn't start probes now, will retry later: %v", err)
 		}
@@ -184,7 +184,7 @@ func (c *Connector) ApplyCachedConfiguration() {
 	currentConfig, ok := c.cache.CurrentAccountConfig()
 
 	if ok && c.option.UpdateMetricResolution != nil && currentConfig.AgentConfigByName[types.AgentTypeAgent].MetricResolution != 0 {
-		c.option.UpdateMetricResolution(currentConfig.AgentConfigByName[types.AgentTypeAgent].MetricResolution, currentConfig.AgentConfigByName[types.AgentTypeSNMP].MetricResolution)
+		c.option.UpdateMetricResolution(ctx, currentConfig.AgentConfigByName[types.AgentTypeAgent].MetricResolution, currentConfig.AgentConfigByName[types.AgentTypeSNMP].MetricResolution)
 	}
 }
 
@@ -888,7 +888,7 @@ func (c *Connector) EmitInternalMetric(ctx context.Context, now time.Time) {
 	}
 }
 
-func (c *Connector) updateConfig() {
+func (c *Connector) updateConfig(ctx context.Context) {
 	currentConfig, ok := c.cache.CurrentAccountConfig()
 	if !ok || currentConfig.AgentConfigByName[types.AgentTypeAgent].MetricResolution == 0 {
 		return
@@ -897,7 +897,7 @@ func (c *Connector) updateConfig() {
 	logger.Printf("Changed to configuration %s", currentConfig.Name)
 
 	if c.option.UpdateMetricResolution != nil {
-		c.option.UpdateMetricResolution(currentConfig.AgentConfigByName[types.AgentTypeAgent].MetricResolution, currentConfig.AgentConfigByName[types.AgentTypeSNMP].MetricResolution)
+		c.option.UpdateMetricResolution(ctx, currentConfig.AgentConfigByName[types.AgentTypeAgent].MetricResolution, currentConfig.AgentConfigByName[types.AgentTypeSNMP].MetricResolution)
 	}
 }
 

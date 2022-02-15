@@ -48,7 +48,7 @@ type GlobalOption struct {
 	BlackboxScraperName     string
 	ReloadState             BleemeoReloadState
 
-	UpdateMetricResolution func(defaultResolution time.Duration, snmpResolution time.Duration)
+	UpdateMetricResolution func(ctx context.Context, defaultResolution time.Duration, snmpResolution time.Duration)
 	UpdateThresholds       func(thresholds map[threshold.MetricNameItem]threshold.Threshold, firstUpdate bool)
 	UpdateUnits            func(units map[threshold.MetricNameItem]threshold.Unit)
 	RebuildAlertingRules   func(metrics []rules.MetricAlertRule) error
@@ -57,7 +57,7 @@ type GlobalOption struct {
 // MonitorManager is the interface used by Bleemeo to update the dynamic monitors list.
 type MonitorManager interface {
 	// UpdateDynamicTargets updates the list of dynamic monitors to watch.
-	UpdateDynamicTargets(monitors []types.Monitor) error
+	UpdateDynamicTargets(ctx context.Context, monitors []types.Monitor) error
 }
 
 // Config is the interface used by Bleemeo to access Config.

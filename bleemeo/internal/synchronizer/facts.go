@@ -17,6 +17,7 @@
 package synchronizer
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"glouton/bleemeo/types"
@@ -41,8 +42,8 @@ func getEssentialFacts() map[string]bool {
 	}
 }
 
-func (s *Synchronizer) syncFacts(fullSync bool, onlyEssential bool) error {
-	localFacts, err := s.option.Facts.Facts(s.ctx, 24*time.Hour)
+func (s *Synchronizer) syncFacts(ctx context.Context, fullSync bool, onlyEssential bool) error {
+	localFacts, err := s.option.Facts.Facts(ctx, 24*time.Hour)
 	if err != nil {
 		return err
 	}
@@ -74,8 +75,8 @@ func (s *Synchronizer) syncFacts(fullSync bool, onlyEssential bool) error {
 		remoteAgentList := s.option.Cache.AgentsByUUID()
 
 		for _, t := range s.option.SNMP {
-			if agent, err := s.FindSNMPAgent(s.ctx, t, agentTypeID, remoteAgentList); err == nil {
-				facts, err := t.Facts(s.ctx, 24*time.Hour)
+			if agent, err := s.FindSNMPAgent(ctx, t, agentTypeID, remoteAgentList); err == nil {
+				facts, err := t.Facts(ctx, 24*time.Hour)
 				if err != nil {
 					logger.V(2).Printf("unable to get SNMP facts: %v", err)
 

@@ -414,7 +414,7 @@ func (a *agent) notifyBleemeoUpdateLabels(ctx context.Context) {
 	a.gathererRegistry.UpdateRelabelHook(ctx, a.bleemeoConnector.RelabelHook)
 }
 
-func (a *agent) updateSNMPResolution(resolution time.Duration) {
+func (a *agent) updateSNMPResolution(ctx context.Context, resolution time.Duration) {
 	a.l.Lock()
 	defer a.l.Unlock()
 
@@ -434,6 +434,7 @@ func (a *agent) updateSNMPResolution(resolution time.Duration) {
 		hash := labels.FromMap(target.ExtraLabels).Hash()
 
 		id, err := a.gathererRegistry.RegisterGatherer(
+			ctx,
 			registry.RegistrationOption{
 				Description: "snmp target " + target.Address,
 				JitterSeed:  hash,
@@ -452,15 +453,15 @@ func (a *agent) updateSNMPResolution(resolution time.Duration) {
 	}
 }
 
-func (a *agent) updateMetricResolution(defaultResolution time.Duration, snmpResolution time.Duration) {
+func (a *agent) updateMetricResolution(ctx context.Context, defaultResolution time.Duration, snmpResolution time.Duration) {
 	a.l.Lock()
 	a.metricResolution = defaultResolution
 	a.l.Unlock()
 
-	a.gathererRegistry.UpdateDelay(defaultResolution)
+	a.gathererRegistry.UpdateDelay(ctx, defaultResolution)
 	a.rulesManager.UpdateMetricResolution(defaultResolution)
 
-	services, err := a.discovery.Discovery(a.context, time.Hour)
+	services, err := a.discovery.Discovery(ctx, time.Hour)
 	if err != nil {
 		logger.V(1).Printf("error during discovery: %v", err)
 	} else if a.jmx != nil {
@@ -469,7 +470,7 @@ func (a *agent) updateMetricResolution(defaultResolution time.Duration, snmpReso
 		}
 	}
 
-	a.updateSNMPResolution(snmpResolution)
+	a.updateSNMPResolution(ctx, snmpResolution)
 }
 
 func (a *agent) getConfigThreshold(firstUpdate bool) map[string]threshold.Threshold {
@@ -692,6 +693,7 @@ func (a *agent) run(ctx context.Context) { //nolint:cyclop
 	a.store.SetResetRuleCallback(a.rulesManager.ResetInactiveRules)
 
 	_, err = a.gathererRegistry.RegisterAppenderCallback(
+		ctx,
 		registry.RegistrationOption{
 			Description:        "rulesManager",
 			JitterSeed:         baseJitterPlus,
@@ -769,6 +771,7 @@ func (a *agent) run(ctx context.Context) { //nolint:cyclop
 	a.collector = collector.New(acc)
 
 	_, err = a.gathererRegistry.RegisterPushPointsCallback(
+		ctx,
 		registry.RegistrationOption{
 			Description: "system & services metrics",
 			JitterSeed:  baseJitter,
@@ -781,6 +784,7 @@ func (a *agent) run(ctx context.Context) { //nolint:cyclop
 
 	if a.metricFormat == types.MetricFormatBleemeo {
 		_, err = a.gathererRegistry.RegisterPushPointsCallback(
+			ctx,
 			registry.RegistrationOption{
 				Description: "procces status metrics",
 				JitterSeed:  baseJitter,
@@ -793,6 +797,7 @@ func (a *agent) run(ctx context.Context) { //nolint:cyclop
 	}
 
 	_, err = a.gathererRegistry.RegisterPushPointsCallback(
+		ctx,
 		registry.RegistrationOption{
 			Description: "miscGather",
 			JitterSeed:  baseJitter,
@@ -824,12 +829,13 @@ func (a *agent) run(ctx context.Context) { //nolint:cyclop
 		a.metricFormat,
 	)
 
-	a.updateSNMPResolution(time.Minute)
+	a.updateSNMPResolution(ctx, time.Minute)
 
 	for _, target := range targets {
 		hash := labels.FromMap(target.ExtraLabels).Hash()
 
 		_, err = a.gathererRegistry.RegisterGatherer(
+			ctx,
 			registry.RegistrationOption{
 				Description: "Prom exporter " + target.URL.String(),
 				JitterSeed:  hash,
@@ -843,7 +849,7 @@ func (a *agent) run(ctx context.Context) { //nolint:cyclop
 		}
 	}
 
-	a.gathererRegistry.AddDefaultCollector()
+	a.gathererRegistry.AddDefaultCollector(ctx)
 
 	a.dynamicScrapper = &promexporter.DynamicScrapper{
 		Registry:       a.gathererRegistry,
@@ -860,7 +866,7 @@ func (a *agent) run(ctx context.Context) { //nolint:cyclop
 		// the config is present, otherwise we would not be in this block
 		blackboxConf, _ := a.oldConfig.Get("blackbox")
 
-		a.monitorManager, err = blackbox.New(a.gathererRegistry, blackboxConf, a.oldConfig.String("blackbox.user_agent"), a.metricFormat)
+		a.monitorManager, err = blackbox.New(ctx, a.gathererRegistry, blackboxConf, a.oldConfig.String("blackbox.user_agent"), a.metricFormat)
 		if err != nil {
 			logger.V(0).Printf("Couldn't start blackbox_exporter: %v\nMonitors will not be able to run on this agent.", err)
 		}
@@ -868,10 +874,10 @@ func (a *agent) run(ctx context.Context) { //nolint:cyclop
 		logger.V(1).Println("blackbox_exporter not enabled, will not start...")
 	}
 
-	promExporter := a.gathererRegistry.Exporter()
+	promExporter := a.gathererRegistry.Exporter(ctx)
 
 	if a.oldConfig.Bool("agent.process_exporter.enable") {
-		process.RegisterExporter(a.gathererRegistry, psLister, dynamicDiscovery, a.metricFormat == types.MetricFormatBleemeo)
+		process.RegisterExporter(ctx, a.gathererRegistry, psLister, dynamicDiscovery, a.metricFormat == types.MetricFormatBleemeo)
 	}
 
 	api := &api.API{
@@ -967,11 +973,13 @@ func (a *agent) run(ctx context.Context) { //nolint:cyclop
 		a.gathererRegistry.UpdateRelabelHook(ctx, a.bleemeoConnector.RelabelHook)
 		tasks = append(tasks, taskInfo{a.bleemeoConnector.Run, "Bleemeo SAAS connector"})
 
-		_, err = a.gathererRegistry.RegisterPushPointsCallback(registry.RegistrationOption{
-			Description: "Bleemeo connector",
-			JitterSeed:  baseJitter,
-			Interval:    defaultInterval,
-		},
+		_, err = a.gathererRegistry.RegisterPushPointsCallback(
+			ctx,
+			registry.RegistrationOption{
+				Description: "Bleemeo connector",
+				JitterSeed:  baseJitter,
+				Interval:    defaultInterval,
+			},
 			a.bleemeoConnector.EmitInternalMetric,
 		)
 		if err != nil {
@@ -1021,7 +1029,7 @@ func (a *agent) run(ctx context.Context) { //nolint:cyclop
 	if a.bleemeoConnector == nil {
 		a.updateThresholds(nil, true) //nolint:contextcheck
 	} else {
-		a.bleemeoConnector.ApplyCachedConfiguration()
+		a.bleemeoConnector.ApplyCachedConfiguration(ctx)
 	}
 
 	tmp, _ := a.oldConfig.Get("metric.softstatus_period")
@@ -1055,7 +1063,7 @@ func (a *agent) run(ctx context.Context) { //nolint:cyclop
 	}
 
 	// register components only available on a given system, like node_exporter for unixes
-	a.registerOSSpecificComponents()
+	a.registerOSSpecificComponents(ctx)
 
 	tasks = append(tasks, taskInfo{
 		a.gathererRegistry.Run,
@@ -1095,7 +1103,7 @@ func (a *agent) run(ctx context.Context) { //nolint:cyclop
 	signal.Stop(c)
 	close(c)
 	a.taskRegistry.Close()
-	a.discovery.Close()
+	a.discovery.Close(ctx)
 	a.collector.Close()
 	logger.V(2).Printf("Agent stopped")
 }
@@ -1761,7 +1769,7 @@ func (a *agent) handleTrigger(ctx context.Context) {
 			}
 			if a.dynamicScrapper != nil {
 				if containers, err := a.containerRuntime.Containers(ctx, time.Hour, false); err == nil {
-					a.dynamicScrapper.Update(containers)
+					a.dynamicScrapper.Update(ctx, containers)
 				}
 			}
 
