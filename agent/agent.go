@@ -166,7 +166,7 @@ type taskInfo struct {
 	name     string
 }
 
-func (a *agent) init(ctx context.Context, configFiles []string) (ok bool) {
+func (a *agent) init(ctx context.Context, configFiles []string, firstRun bool) (ok bool) { //nolint:cyclop
 	a.l.Lock()
 	a.lastHealCheck = time.Now()
 	a.l.Unlock()
@@ -192,7 +192,8 @@ func (a *agent) init(ctx context.Context, configFiles []string) (ok bool) {
 		logger.Printf("The agent might not be able to reload automatically on config change.")
 	}
 
-	if dsn := a.oldConfig.String("bleemeo.sentry.dsn"); dsn != "" {
+	// Initialize sentry only on the first run so it doesn't leak goroutines on reload.
+	if dsn := a.oldConfig.String("bleemeo.sentry.dsn"); firstRun && dsn != "" {
 		err := sentry.Init(sentry.ClientOptions{
 			Dsn: dsn,
 		})
@@ -308,13 +309,13 @@ func (a *agent) setupLogger() {
 }
 
 // Run runs Glouton.
-func Run(ctx context.Context, reloadState ReloadState, configFiles []string) {
+func Run(ctx context.Context, reloadState ReloadState, configFiles []string, firstRun bool) {
 	rand.Seed(time.Now().UnixNano())
 
 	agent := &agent{reloadState: reloadState}
 	agent.initOSSpecificParts()
 
-	if !agent.init(ctx, configFiles) {
+	if !agent.init(ctx, configFiles, firstRun) {
 		os.Exit(1)
 
 		return

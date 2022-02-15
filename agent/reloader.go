@@ -194,9 +194,11 @@ func (a *agentReloader) run() {
 
 			wg.Add(1)
 
+			first := firstRun
+
 			go func() {
 				defer wg.Done()
-				a.runAgent(ctx)
+				a.runAgent(ctx, first)
 			}()
 
 			firstRun = false
@@ -218,8 +220,8 @@ func (a *agentReloader) run() {
 	}
 }
 
-func (a *agentReloader) runAgent(ctx context.Context) {
-	Run(ctx, a.reloadState, a.configFilesFromFlag)
+func (a *agentReloader) runAgent(ctx context.Context, firstRun bool) {
+	Run(ctx, a.reloadState, a.configFilesFromFlag, firstRun)
 
 	a.l.Lock()
 	a.agentIsRunning = false
