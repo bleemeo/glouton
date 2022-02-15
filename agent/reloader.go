@@ -36,10 +36,10 @@ type ReloadState interface {
 type reloadState struct {
 	bleemeo bleemeoTypes.BleemeoReloadState
 
-	l              sync.Mutex
-	watcherError   error
-	reloadCount    int
-	lastReloadDate time.Time
+	l             sync.Mutex
+	watcherError  error
+	reloadCounter int
+	lastReload    time.Time
 }
 
 func (rs *reloadState) Bleemeo() bleemeoTypes.BleemeoReloadState {
@@ -58,13 +58,13 @@ func (rs *reloadState) DiagnosticArchive(ctx context.Context, archive types.Arch
 		fmt.Fprintf(file, "An error occurred with the file watcher: %v\n", err)
 	}
 
-	if count := rs.ReloadCount(); count == 0 {
+	if count := rs.reloadCount(); count == 0 {
 		fmt.Fprintln(file, "The agent has never been reloaded.")
 	} else {
 		fmt.Fprintf(file, "The agent has been reloaded %v times.\n", count)
 	}
 
-	if lastReload := rs.LastReloadDate(); !lastReload.IsZero() {
+	if lastReload := rs.lastReloadDate(); !lastReload.IsZero() {
 		fmt.Fprintf(file, "The last reload was done on %v.\n", lastReload)
 	}
 
@@ -79,41 +79,41 @@ func (rs *reloadState) WatcherError() error {
 	return err
 }
 
-func (rs *reloadState) SetWatcherError(err error) {
+func (rs *reloadState) setWatcherError(err error) {
 	rs.l.Lock()
 	defer rs.l.Unlock()
 
 	rs.watcherError = err
 }
 
-func (rs *reloadState) ReloadCount() int {
+func (rs *reloadState) reloadCount() int {
 	rs.l.Lock()
-	count := rs.reloadCount
+	count := rs.reloadCounter
 	rs.l.Unlock()
 
 	return count
 }
 
-func (rs *reloadState) IncrementReloadCount() {
+func (rs *reloadState) incrementReloadCount() {
 	rs.l.Lock()
 	defer rs.l.Unlock()
 
-	rs.reloadCount++
+	rs.reloadCounter++
 }
 
-func (rs *reloadState) LastReloadDate() time.Time {
+func (rs *reloadState) lastReloadDate() time.Time {
 	rs.l.Lock()
-	lastReload := rs.lastReloadDate
+	lastReload := rs.lastReload
 	rs.l.Unlock()
 
 	return lastReload
 }
 
-func (rs *reloadState) SetLastReloadDate(lastReload time.Time) {
+func (rs *reloadState) setLastReloadDate(lastReload time.Time) {
 	rs.l.Lock()
 	defer rs.l.Unlock()
 
-	rs.lastReloadDate = lastReload
+	rs.lastReload = lastReload
 }
 
 func (rs *reloadState) Close() {
@@ -146,7 +146,7 @@ func StartReloadManager(configFilesFromFlag []string) {
 	if err == nil {
 		defer watcher.Close()
 	} else {
-		a.reloadState.SetWatcherError(err)
+		a.reloadState.setWatcherError(err)
 	}
 
 	a.run()
@@ -179,8 +179,8 @@ func (a *agentReloader) run() {
 		case <-reload:
 			if !firstRun {
 				logger.V(0).Printf("The config files have been modified, reloading agent...")
-				a.reloadState.IncrementReloadCount()
-				a.reloadState.SetLastReloadDate(time.Now())
+				a.reloadState.incrementReloadCount()
+				a.reloadState.setLastReloadDate(time.Now())
 
 				cancel()
 				wg.Wait()
@@ -311,7 +311,7 @@ func (a *agentReloader) receiveWatcherEvents(ctx context.Context, reload *deboun
 				return
 			}
 
-			a.reloadState.SetWatcherError(err)
+			a.reloadState.setWatcherError(err)
 			logger.V(0).Printf("File watcher error: %v", err)
 		case <-ctx.Done():
 			return
