@@ -211,7 +211,10 @@ func (d *Docker) Run(ctx context.Context) error {
 		select {
 		case <-time.After(time.Duration(sleepDelay) * time.Second):
 		case <-ctx.Done():
+			d.l.Lock()
 			d.client.Close()
+			d.l.Unlock()
+
 			close(d.notifyC)
 
 			return nil
