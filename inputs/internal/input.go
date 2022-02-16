@@ -18,13 +18,9 @@ package internal
 
 import (
 	"glouton/logger"
-	"reflect"
-	"unsafe"
 
-	goredis "github.com/go-redis/redis"
 	"github.com/influxdata/telegraf"
 	"github.com/influxdata/telegraf/models"
-	"github.com/influxdata/telegraf/plugins/inputs/redis"
 )
 
 // Input is a generic input that use the modifying Accumulator defined in this package.
@@ -70,28 +66,6 @@ func (i *Input) Init() error {
 func (i *Input) Stop() {
 	if si, ok := i.Input.(telegraf.ServiceInput); ok {
 		si.Stop()
-	}
-
-	// The telegraf Redis plugin doesn't implement ServiceInput, so there is no Close function,
-	// the clients have to be manually closed by accessing private struct fields.
-	if redisInput, ok := i.Input.(*redis.Redis); ok {
-		field := reflect.ValueOf(redisInput).Elem().FieldByName("clients")
-		clientsField := reflect.NewAt(field.Type(), unsafe.Pointer(field.UnsafeAddr())).Elem().Interface()
-
-		if clientsInterface, ok := clientsField.([]redis.Client); ok {
-			for _, clientInterface := range clientsInterface {
-				if redisClient, ok := clientInterface.(*redis.RedisClient); ok {
-					field := reflect.ValueOf(redisClient).Elem().FieldByName("client")
-					clientField := reflect.NewAt(field.Type(), unsafe.Pointer(field.UnsafeAddr())).Elem().Interface()
-
-					if client, ok := clientField.(*goredis.Client); ok {
-						if err := client.Close(); err != nil {
-							logger.V(1).Printf("Failed to close Redis client: %v\n", err)
-						}
-					}
-				}
-			}
-		}
 	}
 }
 
