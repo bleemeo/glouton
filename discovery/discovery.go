@@ -117,11 +117,13 @@ func New(dynamicDiscovery Discoverer, coll Collector, metricRegistry GathererReg
 }
 
 // Close stop & cleanup inputs & check created by the discovery.
-func (d *Discovery) Close(ctx context.Context) {
+func (d *Discovery) Close() {
 	d.l.Lock()
 	defer d.l.Unlock()
 
-	_ = d.configureMetricInputs(ctx, d.servicesMap, nil)
+	for key := range d.servicesMap {
+		d.removeInput(key)
+	}
 
 	d.configureChecks(d.servicesMap, nil)
 }
