@@ -11,6 +11,7 @@ import (
 	"glouton/logger"
 	"glouton/types"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -269,8 +270,20 @@ func (a *agentReloader) watchConfig(ctx context.Context, reload chan struct{}) {
 
 	go a.receiveWatcherEvents(ctx, reloadDebouncer)
 
-	for _, file := range myConfigFiles {
-		if err := a.watcher.Add(file); err != nil {
+	for _, dir := range myConfigFiles {
+		fileInfo, err := os.Stat(dir)
+		if err != nil {
+			logger.V(2).Printf("Failed to stat file %v: %v", dir, err)
+
+			continue
+		}
+
+		// Only watch parent dirs, not files to avoid losing notifications when files are renamed.
+		if !fileInfo.IsDir() {
+			dir = filepath.Dir(dir)
+		}
+
+		if err := a.watcher.Add(dir); err != nil {
 			logger.V(2).Printf("Failed to add file to watcher: %v", err)
 		}
 	}
@@ -289,22 +302,6 @@ func (a *agentReloader) receiveWatcherEvents(ctx context.Context, reload *deboun
 				continue
 			}
 
-			// If a file is moved to etc/glouton.conf, the watcher will not watch the
-			// new file, so we need to add it again.
-			if event.Op&fsnotify.Remove == fsnotify.Remove {
-				if exist, err := fileExist(event.Name); err != nil {
-					logger.V(1).Printf("Failed to check if file %v exists: %v", event.Name, err)
-				} else if exist {
-					if err := a.watcher.Remove(event.Name); err != nil {
-						logger.V(1).Printf("Failed to remove file in watcher: %v", err)
-					}
-
-					if err := a.watcher.Add(event.Name); err != nil {
-						logger.V(1).Printf("Failed to add file to watcher: %v", err)
-					}
-				}
-			}
-
 			reload.Trigger()
 		case err, ok := <-a.watcher.Errors:
 			if !ok {
@@ -317,15 +314,4 @@ func (a *agentReloader) receiveWatcherEvents(ctx context.Context, reload *deboun
 			return
 		}
 	}
-}
-
-func fileExist(name string) (bool, error) {
-	_, err := os.Stat(name)
-	if err == nil {
-		return true, nil
-	} else if errors.Is(err, os.ErrNotExist) {
-		return false, nil
-	}
-
-	return false, err
 }
