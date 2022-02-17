@@ -27,6 +27,7 @@ import (
 type Input struct {
 	telegraf.Input
 	Accumulator Accumulator
+	startError  error
 }
 
 // Gather takes in an accumulator and adds the metrics that the Input
@@ -44,7 +45,9 @@ func (i *Input) Gather(acc telegraf.Accumulator) error {
 func (i *Input) Start(acc telegraf.Accumulator) error {
 	i.Accumulator.Accumulator = acc
 	if si, ok := i.Input.(telegraf.ServiceInput); ok {
-		return si.Start(&i.Accumulator)
+		i.startError = si.Start(&i.Accumulator)
+
+		return i.startError
 	}
 
 	return nil
@@ -65,7 +68,10 @@ func (i *Input) Init() error {
 // Stop stops the services and closes any necessary channels and connections.
 func (i *Input) Stop() {
 	if si, ok := i.Input.(telegraf.ServiceInput); ok {
-		si.Stop()
+		// Stop the service only if it started properly to avoid panic.
+		if i.startError == nil {
+			si.Stop()
+		}
 	}
 }
 
