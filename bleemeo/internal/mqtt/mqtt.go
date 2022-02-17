@@ -1181,9 +1181,11 @@ func (c *Client) onReloadAndShutdown() {
 	c.l.Lock()
 	defer c.l.Unlock()
 
-	stillPending := c.waitPublishAndResend(c.mqttClient, deadline, true)
-	if stillPending > 0 {
-		logger.V(2).Printf("%d MQTT message were still pending", stillPending)
+	if c.mqttClient != nil {
+		stillPending := c.waitPublishAndResend(c.mqttClient, deadline, true)
+		if stillPending > 0 {
+			logger.V(2).Printf("%d MQTT message were still pending", stillPending)
+		}
 	}
 }
 
