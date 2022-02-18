@@ -24,7 +24,7 @@ const (
 	reloadDebouncerPeriod = 30 * time.Second
 )
 
-var errWatcherNotStarted = errors.New("failed to start")
+var errWatcherDisabled = errors.New("reload disabled")
 
 // ReloadState is used to keep some components alive during reloads.
 type ReloadState interface {
@@ -53,9 +53,12 @@ func (rs *reloadState) DiagnosticArchive(ctx context.Context, archive types.Arch
 		return err
 	}
 
-	if err := rs.WatcherError(); err == nil {
+	switch err = rs.WatcherError(); {
+	case err == nil:
 		fmt.Fprintln(file, "The file watcher is running, Glouton will be reloaded on config changes.")
-	} else {
+	case errors.Is(err, errWatcherDisabled):
+		fmt.Fprintln(file, "Reloading is disabled.")
+	default:
 		fmt.Fprintf(file, "An error occurred with the file watcher: %v\n", err)
 	}
 
@@ -132,8 +135,17 @@ type agentReloader struct {
 
 // StartReloadManager starts the agent with a config file watcher, the agent is
 // reloaded when a change is detected and the config is valid.
-func StartReloadManager(configFilesFromFlag []string) {
-	watcher, err := fsnotify.NewWatcher()
+func StartReloadManager(configFilesFromFlag []string, reloadDisabled bool) {
+	var (
+		watcher *fsnotify.Watcher
+		err     error
+	)
+
+	if !reloadDisabled {
+		watcher, err = fsnotify.NewWatcher()
+	} else {
+		err = errWatcherDisabled
+	}
 
 	a := agentReloader{
 		watcher:             watcher,
@@ -144,9 +156,9 @@ func StartReloadManager(configFilesFromFlag []string) {
 		},
 	}
 
-	if err == nil {
+	if err == nil && !reloadDisabled {
 		defer watcher.Close()
-	} else {
+	} else if err != nil {
 		a.reloadState.setWatcherError(err)
 	}
 
@@ -233,14 +245,12 @@ func (a *agentReloader) runAgent(ctx context.Context, firstRun bool) {
 // and the agent needs to be reloaded.
 func (a *agentReloader) watchConfig(ctx context.Context, reload chan struct{}) {
 	if a.watcher == nil {
-		a.reloadState.watcherError = errWatcherNotStarted
-
 		return
 	}
 
 	// Get config files.
-	myConfigFiles := a.configFilesFromFlag
-	if len(myConfigFiles) == 0 || len(myConfigFiles[0]) == 0 {
+	configFiles := a.configFilesFromFlag
+	if len(configFiles) == 0 || len(configFiles[0]) == 0 {
 		const configFileKey = "config_files"
 
 		cfg := config.Configuration{}
@@ -251,14 +261,14 @@ func (a *agentReloader) watchConfig(ctx context.Context, reload chan struct{}) {
 			logger.Printf("Failed to load environment variable: %v", err)
 		}
 
-		myConfigFiles = cfg.StringList(configFileKey)
+		configFiles = cfg.StringList(configFileKey)
 	}
 
 	// Use a debouncer because fsnotify events are often duplicated.
 	reloadAgentTarget := func(ctx context.Context) {
 		if ctx.Err() == nil {
 			// Validate config before reloading.
-			if _, _, _, err := loadConfiguration(myConfigFiles, nil); err == nil {
+			if _, _, _, err := loadConfiguration(configFiles, nil); err == nil {
 				reload <- struct{}{}
 			} else {
 				logger.Printf("Error while loading configuration: %v", err)
@@ -270,7 +280,7 @@ func (a *agentReloader) watchConfig(ctx context.Context, reload chan struct{}) {
 
 	go a.receiveWatcherEvents(ctx, reloadDebouncer)
 
-	for _, dir := range myConfigFiles {
+	for _, dir := range configFiles {
 		fileInfo, err := os.Stat(dir)
 		if err != nil {
 			logger.V(2).Printf("Failed to stat file %v: %v", dir, err)

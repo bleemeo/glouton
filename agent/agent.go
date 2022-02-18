@@ -187,7 +187,7 @@ func (a *agent) init(ctx context.Context, configFiles []string, firstRun bool) (
 	}
 
 	watcherErr := a.reloadState.WatcherError()
-	if watcherErr != nil {
+	if watcherErr != nil && !errors.Is(watcherErr, errWatcherDisabled) {
 		logger.Printf("An error occurred with the file watcher: %v.", watcherErr)
 		logger.Printf("The agent might not be able to reload automatically on config change.")
 	}
