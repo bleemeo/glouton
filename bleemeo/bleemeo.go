@@ -41,6 +41,69 @@ import (
 
 var ErrBadOption = errors.New("bad option")
 
+// reloadState implements the types.BleemeoReloadState interface.
+type reloadState struct {
+	pahoWrapper   types.PahoWrapper
+	nextFullSync  time.Time
+	fullSyncCount int
+	jwt           types.JWT
+	isFirstRun    bool
+}
+
+func NewReloadState() types.BleemeoReloadState {
+	return &reloadState{
+		isFirstRun: true,
+	}
+}
+
+func (rs *reloadState) PahoWrapper() types.PahoWrapper {
+	return rs.pahoWrapper
+}
+
+func (rs *reloadState) SetPahoWrapper(client types.PahoWrapper) {
+	rs.pahoWrapper = client
+}
+
+func (rs *reloadState) NextFullSync() time.Time {
+	return rs.nextFullSync
+}
+
+func (rs *reloadState) SetNextFullSync(t time.Time) {
+	rs.nextFullSync = t
+}
+
+func (rs *reloadState) FullSyncCount() int {
+	return rs.fullSyncCount
+}
+
+func (rs *reloadState) SetFullSyncCount(count int) {
+	rs.fullSyncCount = count
+}
+
+func (rs *reloadState) JWT() types.JWT {
+	return rs.jwt
+}
+
+func (rs *reloadState) SetJWT(jwt types.JWT) {
+	rs.jwt = jwt
+}
+
+func (rs *reloadState) IsFirstRun() bool {
+	if rs.isFirstRun {
+		rs.isFirstRun = false
+
+		return true
+	}
+
+	return false
+}
+
+func (rs *reloadState) Close() {
+	if rs.pahoWrapper != nil {
+		rs.pahoWrapper.Close()
+	}
+}
+
 // Connector manager the connection between the Agent and Bleemeo.
 type Connector struct {
 	option types.GlobalOption
@@ -67,6 +130,7 @@ func New(option types.GlobalOption) (c *Connector, err error) {
 		cache:       cache.Load(option.State),
 		mqttRestart: make(chan interface{}, 1),
 	}
+
 	c.sync, err = synchronizer.New(synchronizer.Option{
 		GlobalOption:                c.option,
 		Cache:                       c.cache,
@@ -99,7 +163,7 @@ func (c *Connector) isInitialized() bool {
 }
 
 // ApplyCachedConfiguration reload metrics units & threshold & monitors from the cache.
-func (c *Connector) ApplyCachedConfiguration() {
+func (c *Connector) ApplyCachedConfiguration(ctx context.Context) {
 	c.l.RLock()
 	disabledUntil := c.disabledUntil
 	defer c.l.RUnlock()
@@ -108,10 +172,10 @@ func (c *Connector) ApplyCachedConfiguration() {
 		return
 	}
 
-	c.sync.UpdateUnitsAndThresholds(true)
+	c.sync.UpdateUnitsAndThresholds(ctx, true)
 
 	if c.option.Config.Bool("blackbox.enable") {
-		if err := c.sync.ApplyMonitorUpdate(); err != nil {
+		if err := c.sync.ApplyMonitorUpdate(ctx); err != nil {
 			// we just log the error, as we will try to run the monitors later anyway
 			logger.V(2).Printf("Couldn't start probes now, will retry later: %v", err)
 		}
@@ -120,11 +184,11 @@ func (c *Connector) ApplyCachedConfiguration() {
 	currentConfig, ok := c.cache.CurrentAccountConfig()
 
 	if ok && c.option.UpdateMetricResolution != nil && currentConfig.AgentConfigByName[types.AgentTypeAgent].MetricResolution != 0 {
-		c.option.UpdateMetricResolution(currentConfig.AgentConfigByName[types.AgentTypeAgent].MetricResolution, currentConfig.AgentConfigByName[types.AgentTypeSNMP].MetricResolution)
+		c.option.UpdateMetricResolution(ctx, currentConfig.AgentConfigByName[types.AgentTypeAgent].MetricResolution, currentConfig.AgentConfigByName[types.AgentTypeSNMP].MetricResolution)
 	}
 }
 
-func (c *Connector) initMQTT(previousPoint []gloutonTypes.MetricPoint, first bool) error {
+func (c *Connector) initMQTT(previousPoint []gloutonTypes.MetricPoint) error {
 	c.l.Lock()
 	defer c.l.Unlock()
 
@@ -148,7 +212,7 @@ func (c *Connector) initMQTT(previousPoint []gloutonTypes.MetricPoint, first boo
 			InitialPoints:        previousPoint,
 			GetJWT:               c.sync.GetJWT,
 		},
-		first,
+		c.option.ReloadState.IsFirstRun(),
 	)
 
 	// if the connector is disabled, disable mqtt for the same period
@@ -186,7 +250,6 @@ func (c *Connector) mqttRestarter(ctx context.Context) error {
 		mqttErr        error
 		l              sync.Mutex
 		previousPoints []gloutonTypes.MetricPoint
-		alreadyInit    bool
 	)
 
 	subCtx, cancel := context.WithCancel(ctx)
@@ -204,68 +267,75 @@ func (c *Connector) mqttRestarter(ctx context.Context) error {
 	default:
 	}
 
-	for range mqttRestart {
-		cancel()
+	for {
+		select {
+		case <-mqttRestart:
+			cancel()
 
-		subCtx, cancel = context.WithCancel(ctx)
+			subCtx, cancel = context.WithCancel(ctx)
 
-		c.l.Lock()
+			c.l.Lock()
 
-		if c.mqtt != nil {
-			// Try to retrieve pending points
-			resultChan := make(chan []gloutonTypes.MetricPoint, 1)
+			if c.mqtt != nil {
+				// Try to retrieve pending points
+				resultChan := make(chan []gloutonTypes.MetricPoint, 1)
+
+				go func() {
+					resultChan <- c.mqtt.PopPoints(true)
+				}()
+
+				select {
+				case previousPoints = <-resultChan:
+				case <-time.After(10 * time.Second):
+				}
+			}
+
+			c.mqtt = nil
+
+			c.l.Unlock()
+
+			err := c.initMQTT(previousPoints)
+			previousPoints = nil
+
+			if err != nil {
+				l.Lock()
+
+				if mqttErr == nil {
+					mqttErr = err
+				}
+
+				l.Unlock()
+
+				break
+			}
+
+			wg.Add(1)
 
 			go func() {
-				resultChan <- c.mqtt.PopPoints(true)
+				defer wg.Done()
+
+				err := c.mqtt.Run(subCtx)
+
+				l.Lock()
+
+				if mqttErr == nil {
+					mqttErr = err
+				}
+
+				l.Unlock()
 			}()
+		case <-ctx.Done():
+			c.l.Lock()
+			close(c.mqttRestart)
+			c.mqttRestart = nil
+			c.l.Unlock()
 
-			select {
-			case previousPoints = <-resultChan:
-			case <-time.After(10 * time.Second):
-			}
+			cancel()
+			wg.Wait()
+
+			return mqttErr
 		}
-
-		c.mqtt = nil
-
-		c.l.Unlock()
-
-		err := c.initMQTT(previousPoints, !alreadyInit)
-		previousPoints = nil
-		alreadyInit = true
-
-		if err != nil {
-			l.Lock()
-
-			if mqttErr == nil {
-				mqttErr = err
-			}
-
-			l.Unlock()
-
-			break
-		}
-
-		wg.Add(1)
-
-		go func() {
-			defer wg.Done()
-
-			err := c.mqtt.Run(subCtx)
-
-			l.Lock()
-
-			if mqttErr == nil {
-				mqttErr = err
-			}
-
-			l.Unlock()
-		}()
 	}
-
-	cancel()
-	wg.Wait()
-
-	return mqttErr
 }
 
 // Run run the Connector.
@@ -313,15 +383,10 @@ func (c *Connector) Run(ctx context.Context) error {
 
 		<-subCtx.Done()
 
-		c.l.Lock()
-		close(c.mqttRestart)
-		c.mqttRestart = nil
-		c.l.Unlock()
-
 		logger.V(2).Printf("Bleemeo connector stopping")
 	}()
 
-	for subCtx.Err() == nil {
+	for ctx.Err() == nil {
 		if c.AgentID() != "" && c.isInitialized() {
 			wg.Add(1)
 
@@ -337,7 +402,7 @@ func (c *Connector) Run(ctx context.Context) error {
 					}
 				}()
 
-				mqttErr = c.mqttRestarter(subCtx)
+				mqttErr = c.mqttRestarter(ctx)
 			}()
 
 			break
@@ -827,7 +892,7 @@ func (c *Connector) EmitInternalMetric(ctx context.Context, now time.Time) {
 	}
 }
 
-func (c *Connector) updateConfig() {
+func (c *Connector) updateConfig(ctx context.Context) {
 	currentConfig, ok := c.cache.CurrentAccountConfig()
 	if !ok || currentConfig.AgentConfigByName[types.AgentTypeAgent].MetricResolution == 0 {
 		return
@@ -836,7 +901,7 @@ func (c *Connector) updateConfig() {
 	logger.Printf("Changed to configuration %s", currentConfig.Name)
 
 	if c.option.UpdateMetricResolution != nil {
-		c.option.UpdateMetricResolution(currentConfig.AgentConfigByName[types.AgentTypeAgent].MetricResolution, currentConfig.AgentConfigByName[types.AgentTypeSNMP].MetricResolution)
+		c.option.UpdateMetricResolution(ctx, currentConfig.AgentConfigByName[types.AgentTypeAgent].MetricResolution, currentConfig.AgentConfigByName[types.AgentTypeSNMP].MetricResolution)
 	}
 }
 

@@ -17,6 +17,7 @@
 package discovery
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"glouton/collector"
@@ -145,7 +146,7 @@ func addDefaultFromOS(inputsConfig inputs.CollectorConfig, coll *collector.Colle
 	return nil
 }
 
-func (d *Discovery) configureMetricInputs(oldServices, services map[NameContainer]Service) (err error) {
+func (d *Discovery) configureMetricInputs(ctx context.Context, oldServices, services map[NameContainer]Service) (err error) {
 	for key := range oldServices {
 		if _, ok := services[key]; !ok {
 			d.removeInput(key)
@@ -169,7 +170,7 @@ func (d *Discovery) configureMetricInputs(oldServices, services map[NameContaine
 			d.removeInput(key)
 
 			if serviceState != facts.ContainerStopped {
-				err = d.createInput(service)
+				err = d.createInput(ctx, service)
 				if err != nil {
 					return
 				}
@@ -237,16 +238,16 @@ func (d *Discovery) removeInput(key NameContainer) {
 
 // createPrometheusCollector create a Prometheus collector for given service
 // Return errNotSupported if no Prometheus collector exists for this service.
-func (d *Discovery) createPrometheusCollector(service Service) error {
+func (d *Discovery) createPrometheusCollector(ctx context.Context, service Service) error {
 	if service.ServiceType == MemcachedService {
-		return d.createPrometheusMemcached(service)
+		return d.createPrometheusMemcached(ctx, service)
 	}
 
 	return errNotSupported
 }
 
 //nolint:cyclop
-func (d *Discovery) createInput(service Service) error {
+func (d *Discovery) createInput(ctx context.Context, service Service) error {
 	if !service.Active {
 		return nil
 	}
@@ -258,7 +259,7 @@ func (d *Discovery) createInput(service Service) error {
 	}
 
 	if d.metricFormat == types.MetricFormatPrometheus {
-		err := d.createPrometheusCollector(service)
+		err := d.createPrometheusCollector(ctx, service)
 		if !errors.Is(err, errNotSupported) {
 			logger.V(2).Printf("Add collector for service %v on container %s", service.Name, service.ContainerID)
 

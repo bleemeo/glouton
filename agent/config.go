@@ -38,7 +38,7 @@ import (
 
 var (
 	errUpdateFromEnv      = errors.New("update from environment variable is not supported")
-	errDeprecatedEnv      = errors.New("environement variable is deprecated")
+	errDeprecatedEnv      = errors.New("environment variable is deprecated")
 	errSettingsDeprecated = errors.New("setting is deprecated")
 	ErrInvalidValue       = errors.New("invalid config value")
 )
@@ -490,7 +490,7 @@ func loadEnvironmentVariables(cfg *config.Configuration) (warnings []error, err 
 		}
 
 		if found {
-			warnings = append(warnings, fmt.Errorf("%w: %s, use %s instead", errDeprecatedEnv, oldEnv, keyToEnvironemntName(key)))
+			warnings = append(warnings, fmt.Errorf("%w: %s, use %s instead", errDeprecatedEnv, oldEnv, keyToEnvironmentName(key)))
 		}
 	}
 
@@ -500,13 +500,13 @@ func loadEnvironmentVariables(cfg *config.Configuration) (warnings []error, err 
 		if found, err := loadEnvironmentVariable(cfg, newKey, keyToBleemeoEnvironemntName(oldKey), value); err != nil {
 			return nil, err
 		} else if found {
-			warnings = append(warnings, fmt.Errorf("%w: %s, use %s instead", errDeprecatedEnv, keyToBleemeoEnvironemntName(oldKey), keyToEnvironemntName(newKey)))
+			warnings = append(warnings, fmt.Errorf("%w: %s, use %s instead", errDeprecatedEnv, keyToBleemeoEnvironemntName(oldKey), keyToEnvironmentName(newKey)))
 		}
 
-		if found, err := loadEnvironmentVariable(cfg, newKey, keyToEnvironemntName(oldKey), value); err != nil {
+		if found, err := loadEnvironmentVariable(cfg, newKey, keyToEnvironmentName(oldKey), value); err != nil {
 			return nil, err
 		} else if found {
-			warnings = append(warnings, fmt.Errorf("%w: %s, use %s instead", errDeprecatedEnv, keyToEnvironemntName(oldKey), keyToEnvironemntName(newKey)))
+			warnings = append(warnings, fmt.Errorf("%w: %s, use %s instead", errDeprecatedEnv, keyToEnvironmentName(oldKey), keyToEnvironmentName(newKey)))
 		}
 	}
 
@@ -514,10 +514,10 @@ func loadEnvironmentVariables(cfg *config.Configuration) (warnings []error, err 
 		if found, err := loadEnvironmentVariable(cfg, key, keyToBleemeoEnvironemntName(key), value); err != nil {
 			return nil, err
 		} else if found {
-			warnings = append(warnings, fmt.Errorf("%w: %s, use %s instead", errDeprecatedEnv, keyToBleemeoEnvironemntName(key), keyToEnvironemntName(key)))
+			warnings = append(warnings, fmt.Errorf("%w: %s, use %s instead", errDeprecatedEnv, keyToBleemeoEnvironemntName(key), keyToEnvironmentName(key)))
 		}
 
-		if _, err := loadEnvironmentVariable(cfg, key, keyToEnvironemntName(key), value); err != nil {
+		if _, err := loadEnvironmentVariable(cfg, key, keyToEnvironmentName(key), value); err != nil {
 			return nil, err
 		}
 	}
@@ -529,7 +529,7 @@ func keyToBleemeoEnvironemntName(key string) string {
 	return "BLEEMEO_AGENT_" + strings.ToUpper((strings.ReplaceAll(key, ".", "_")))
 }
 
-func keyToEnvironemntName(key string) string {
+func keyToEnvironmentName(key string) string {
 	return "GLOUTON_" + strings.ToUpper((strings.ReplaceAll(key, ".", "_")))
 }
 
@@ -575,7 +575,7 @@ func loadOldConfiguration(configFiles []string, mockLookupEnv func(string) (stri
 
 	cfg.MockLookupEnv(mockLookupEnv)
 
-	if _, err := loadEnvironmentVariable(cfg, "config_files", keyToEnvironemntName("config_files"), defaultConfig()["config_files"]); err != nil {
+	if _, err := loadEnvironmentVariable(cfg, "config_files", keyToEnvironmentName("config_files"), defaultConfig()["config_files"]); err != nil {
 		return cfg, nil, err
 	}
 

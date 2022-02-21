@@ -18,9 +18,11 @@ package types
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"glouton/logger"
 	"io"
+	"net/http"
 	"sort"
 	"strings"
 	"time"
@@ -363,4 +365,14 @@ func (errs MultiErrors) Is(target error) bool {
 type ArchiveWriter interface {
 	Create(filename string) (io.Writer, error)
 	CurrentFileName() string
+}
+
+// NewHTTPTransport returns a default Transport with a modified TLSClientConfig.
+func NewHTTPTransport(tlsConfig *tls.Config) http.RoundTripper {
+	dt, _ := http.DefaultTransport.(*http.Transport)
+
+	t := dt.Clone()
+	t.TLSClientConfig = tlsConfig
+
+	return t
 }

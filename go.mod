@@ -13,11 +13,13 @@ require (
 	github.com/containerd/typeurl v1.0.2
 	github.com/docker/docker v20.10.12+incompatible
 	github.com/eclipse/paho.mqtt.golang v1.3.5
+	github.com/fsnotify/fsnotify v1.5.1
 	github.com/getsentry/sentry-go v0.12.0
 	github.com/go-chi/chi v4.1.2+incompatible
 	github.com/go-kit/kit v0.12.0 // indirect
 	github.com/go-kit/log v0.2.0
 	github.com/go-ole/go-ole v1.2.6
+	github.com/go-redis/redis v6.15.9+incompatible
 	github.com/gogo/protobuf v1.3.2
 	github.com/google/go-cmp v0.5.7
 	github.com/google/gofuzz v1.2.0 // indirect

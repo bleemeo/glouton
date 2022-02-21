@@ -17,6 +17,7 @@
 package synchronizer
 
 import (
+	"context"
 	"fmt"
 	"glouton/bleemeo/internal/common"
 	bleemeoTypes "glouton/bleemeo/types"
@@ -29,7 +30,7 @@ import (
 )
 
 // syncInfo retrieves the minimum supported glouton version the API supports.
-func (s *Synchronizer) syncInfo(full bool, onlyEssential bool) error {
+func (s *Synchronizer) syncInfo(ctx context.Context, _ bool, onlyEssential bool) error {
 	return s.syncInfoReal(true)
 }
 

@@ -17,6 +17,7 @@
 package synchronizer
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -28,8 +29,8 @@ var errNoConfig = errors.New("agent don't have any configuration on Bleemeo Clou
 
 const apiTagsLength = 100
 
-func (s *Synchronizer) syncAgent(fullSync bool, onlyEssential bool) error {
-	if err := s.syncMainAgent(); err != nil {
+func (s *Synchronizer) syncAgent(ctx context.Context, fullSync bool, onlyEssential bool) error {
+	if err := s.syncMainAgent(ctx); err != nil {
 		return err
 	}
 
@@ -46,7 +47,7 @@ func (s *Synchronizer) syncAgent(fullSync bool, onlyEssential bool) error {
 	return nil
 }
 
-func (s *Synchronizer) syncMainAgent() error {
+func (s *Synchronizer) syncMainAgent(ctx context.Context) error {
 	var agent types.Agent
 
 	params := map[string]string{
@@ -64,7 +65,7 @@ func (s *Synchronizer) syncMainAgent() error {
 
 	previousConfig := s.option.Cache.Agent().CurrentConfigID
 
-	_, err := s.client.Do(s.ctx, "PATCH", fmt.Sprintf("v1/agent/%s/", s.agentID), params, data, &agent)
+	_, err := s.client.Do(ctx, "PATCH", fmt.Sprintf("v1/agent/%s/", s.agentID), params, data, &agent)
 	if err != nil {
 		return err
 	}
@@ -76,7 +77,7 @@ func (s *Synchronizer) syncMainAgent() error {
 	}
 
 	if previousConfig != agent.CurrentConfigID && s.option.UpdateConfigCallback != nil {
-		s.option.UpdateConfigCallback()
+		s.option.UpdateConfigCallback(ctx)
 	}
 
 	s.option.Cache.SetAccountID(agent.AccountID)

@@ -134,7 +134,7 @@ func TestRegistry_Register(t *testing.T) {
 	}
 	gather2.fillResponse()
 
-	if id1, err = reg.RegisterGatherer(RegistrationOption{DisablePeriodicGather: true}, gather1); err != nil {
+	if id1, err = reg.RegisterGatherer(context.Background(), RegistrationOption{DisablePeriodicGather: true}, gather1); err != nil {
 		t.Errorf("reg.RegisterGatherer(gather1) failed: %v", err)
 	}
 
@@ -154,11 +154,11 @@ func TestRegistry_Register(t *testing.T) {
 		t.Errorf("gather1.callCount = %v, want 1", gather1.callCount)
 	}
 
-	if id1, err = reg.RegisterGatherer(RegistrationOption{ExtraLabels: map[string]string{"name": "value"}, DisablePeriodicGather: true}, gather1); err != nil {
+	if id1, err = reg.RegisterGatherer(context.Background(), RegistrationOption{ExtraLabels: map[string]string{"name": "value"}, DisablePeriodicGather: true}, gather1); err != nil {
 		t.Errorf("re-reg.RegisterGatherer(gather1) failed: %v", err)
 	}
 
-	if id2, err = reg.RegisterGatherer(RegistrationOption{DisablePeriodicGather: true}, gather2); err != nil {
+	if id2, err = reg.RegisterGatherer(context.Background(), RegistrationOption{DisablePeriodicGather: true}, gather2); err != nil {
 		t.Errorf("re-reg.RegisterGatherer(gather2) failed: %v", err)
 	}
 
@@ -192,11 +192,11 @@ func TestRegistry_Register(t *testing.T) {
 
 	stopCallCount := 0
 
-	if id1, err = reg.RegisterGatherer(RegistrationOption{StopCallback: func() { stopCallCount++ }, ExtraLabels: map[string]string{"dummy": "value", "empty-value-to-dropped": ""}, DisablePeriodicGather: true}, gather1); err != nil {
+	if id1, err = reg.RegisterGatherer(context.Background(), RegistrationOption{StopCallback: func() { stopCallCount++ }, ExtraLabels: map[string]string{"dummy": "value", "empty-value-to-dropped": ""}, DisablePeriodicGather: true}, gather1); err != nil {
 		t.Errorf("reg.RegisterGatherer(gather1) failed: %v", err)
 	}
 
-	if _, err = reg.RegisterGatherer(RegistrationOption{DisablePeriodicGather: true}, gather2); err != nil {
+	if _, err = reg.RegisterGatherer(context.Background(), RegistrationOption{DisablePeriodicGather: true}, gather2); err != nil {
 		t.Errorf("re-reg.RegisterGatherer(gather2) failed: %v", err)
 	}
 
@@ -623,13 +623,15 @@ func TestRegistry_run(t *testing.T) {
 					Filter:      &fakeFilter{},
 				},
 			}
-			reg.UpdateRelabelHook(context.Background(), func(ctx context.Context, labels map[string]string) (newLabel map[string]string, retryLater bool) {
+
+			ctx := context.Background()
+			reg.UpdateRelabelHook(ctx, func(ctx context.Context, labels map[string]string) (newLabel map[string]string, retryLater bool) {
 				labels[types.LabelMetaBleemeoUUID] = testAgentID
 
 				return labels, false
 			})
 			reg.init()
-			reg.UpdateDelay(250 * time.Millisecond)
+			reg.UpdateDelay(ctx, 250*time.Millisecond)
 
 			gather1 := &fakeGatherer{name: "name1"}
 			gather1.fillResponse()
@@ -644,22 +646,22 @@ func TestRegistry_run(t *testing.T) {
 			// If this occur, the first will run while the other aren't yet registered.
 			time.Sleep(time.Until(time.Now().Truncate(250 * time.Millisecond).Add(250 * time.Millisecond).Add(time.Millisecond)))
 
-			id1, err := reg.RegisterGatherer(RegistrationOption{DisablePeriodicGather: true}, gather1)
+			id1, err := reg.RegisterGatherer(ctx, RegistrationOption{DisablePeriodicGather: true}, gather1)
 			if err != nil {
 				t.Error(err)
 			}
 
-			id2, err := reg.RegisterGatherer(RegistrationOption{DisablePeriodicGather: false}, gather2)
+			id2, err := reg.RegisterGatherer(ctx, RegistrationOption{DisablePeriodicGather: false}, gather2)
 			if err != nil {
 				t.Error(err)
 			}
 
-			id3, err := reg.RegisterPushPointsCallback(RegistrationOption{}, func(_ context.Context, t time.Time) {
+			id3, err := reg.RegisterPushPointsCallback(ctx, RegistrationOption{}, func(_ context.Context, t time.Time) {
 				l.Lock()
 				t0 = t
 				l.Unlock()
 
-				reg.WithTTL(5*time.Minute).PushPoints(context.Background(), []types.MetricPoint{ //nolint: contextcheck
+				reg.WithTTL(5*time.Minute).PushPoints(ctx, []types.MetricPoint{
 					{Point: types.Point{Time: t, Value: 42.0}, Labels: map[string]string{"__name__": "push", "something": "value"}, Annotations: types.MetricAnnotations{BleemeoItem: "/home"}},
 				})
 			})
@@ -1858,6 +1860,7 @@ func TestRegistry_pointsAlteration(t *testing.T) {
 				reg.WithTTL(5*time.Minute).PushPoints(context.Background(), tt.input)
 			case kindPushPointCallback:
 				id, err := reg.registerPushPointsCallback(
+					context.Background(),
 					tt.opt,
 					func(c context.Context, t time.Time) {
 						reg.WithTTL(5*time.Minute).PushPoints(c, tt.input)
@@ -1870,6 +1873,7 @@ func TestRegistry_pointsAlteration(t *testing.T) {
 				reg.InternalRunScape(context.Background(), now, id)
 			case kindAppenderCallback:
 				id, err := reg.RegisterAppenderCallback(
+					context.Background(),
 					tt.opt,
 					AppenderRegistrationOption{},
 					fakeAppenderCallback{
@@ -1883,6 +1887,7 @@ func TestRegistry_pointsAlteration(t *testing.T) {
 				reg.InternalRunScape(context.Background(), now, id)
 			case kindGatherer:
 				id, err := reg.RegisterGatherer(
+					context.Background(),
 					tt.opt,
 					&fakeGatherer{
 						response: metricPointsToFamilies(tt.input, time.Time{}, nil, nil),

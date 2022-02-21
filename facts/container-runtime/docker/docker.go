@@ -211,6 +211,12 @@ func (d *Docker) Run(ctx context.Context) error {
 		select {
 		case <-time.After(time.Duration(sleepDelay) * time.Second):
 		case <-ctx.Done():
+			d.l.Lock()
+			if d.client != nil {
+				d.client.Close()
+			}
+			d.l.Unlock()
+
 			close(d.notifyC)
 
 			return nil
@@ -674,6 +680,7 @@ type dockerClient interface {
 	NetworkList(ctx context.Context, options dockerTypes.NetworkListOptions) ([]dockerTypes.NetworkResource, error)
 	Ping(ctx context.Context) (dockerTypes.Ping, error)
 	ServerVersion(ctx context.Context) (dockerTypes.Version, error)
+	Close() error
 }
 
 func openConnection(ctx context.Context, host string) (cl dockerClient, err error) {

@@ -196,7 +196,13 @@ func setUserAgent(modules map[string]bbConf.Module, userAgent string) {
 
 // New sets the static part of blackbox configuration (aka. targets that must be scrapped no matter what).
 // This completely resets the configuration.
-func New(registry *registry.Registry, externalConf interface{}, userAgent string, metricFormat types.MetricFormat) (*RegisterManager, error) {
+func New(
+	ctx context.Context,
+	registry *registry.Registry,
+	externalConf interface{},
+	userAgent string,
+	metricFormat types.MetricFormat,
+) (*RegisterManager, error) {
 	conf := yamlConfig{}
 
 	// read static config
@@ -255,7 +261,7 @@ func New(registry *registry.Registry, externalConf interface{}, userAgent string
 		userAgent:     userAgent,
 	}
 
-	if err := manager.updateRegistrations(); err != nil {
+	if err := manager.updateRegistrations(ctx); err != nil {
 		return nil, err
 	}
 
@@ -281,7 +287,7 @@ func (m *RegisterManager) DiagnosticArchive(ctx context.Context, archive types.A
 }
 
 // UpdateDynamicTargets generates a config we can ingest into blackbox (from the dynamic probes).
-func (m *RegisterManager) UpdateDynamicTargets(monitors []types.Monitor) error {
+func (m *RegisterManager) UpdateDynamicTargets(ctx context.Context, monitors []types.Monitor) error {
 	// it is easier to keep only the static monitors and rebuild the dynamic config
 	// than to compute the difference between the new and the old configuration.
 	// This is simple because calling UpdateDynamicTargets with the same argument should be idempotent.
@@ -317,5 +323,5 @@ func (m *RegisterManager) UpdateDynamicTargets(monitors []types.Monitor) error {
 
 	logger.V(2).Println("blackbox_exporter: Internal configuration successfully updated.")
 
-	return m.updateRegistrations()
+	return m.updateRegistrations(ctx)
 }

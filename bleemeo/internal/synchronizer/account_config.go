@@ -17,6 +17,7 @@
 package synchronizer
 
 import (
+	"context"
 	"encoding/json"
 	"glouton/bleemeo/client"
 	"glouton/bleemeo/types"
@@ -26,7 +27,7 @@ import (
 	"strings"
 )
 
-func (s *Synchronizer) syncAccountConfig(fullSync bool, onlyEssential bool) error {
+func (s *Synchronizer) syncAccountConfig(ctx context.Context, fullSync bool, onlyEssential bool) error {
 	if fullSync {
 		currentConfig, _ := s.option.Cache.CurrentAccountConfig()
 
@@ -44,7 +45,7 @@ func (s *Synchronizer) syncAccountConfig(fullSync bool, onlyEssential bool) erro
 
 		newConfig, ok := s.option.Cache.CurrentAccountConfig()
 		if ok && !reflect.DeepEqual(currentConfig, newConfig) && s.option.UpdateConfigCallback != nil {
-			s.option.UpdateConfigCallback()
+			s.option.UpdateConfigCallback(ctx)
 		}
 	}
 

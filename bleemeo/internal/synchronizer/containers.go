@@ -18,6 +18,7 @@ package synchronizer
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"glouton/bleemeo/types"
@@ -98,7 +99,7 @@ func (c containerPayload) compatibilityContainer() types.Container {
 	return c.Container
 }
 
-func (s *Synchronizer) syncContainers(fullSync bool, onlyEssential bool) error {
+func (s *Synchronizer) syncContainers(ctx context.Context, fullSync bool, onlyEssential bool) error {
 	var localContainers []facts.Container
 
 	cfg, ok := s.option.Cache.CurrentAccountConfig()
@@ -107,7 +108,7 @@ func (s *Synchronizer) syncContainers(fullSync bool, onlyEssential bool) error {
 		var err error
 
 		// We don't need very fresh information, we sync container after discovery which will update containers anyway.
-		localContainers, err = s.option.Docker.Containers(s.ctx, 2*time.Minute, false)
+		localContainers, err = s.option.Docker.Containers(ctx, 2*time.Minute, false)
 		if err != nil {
 			logger.V(1).Printf("Unable to list containers: %v", err)
 

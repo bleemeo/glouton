@@ -71,8 +71,10 @@ type Synchronizer struct {
 	realClient       *client.HTTPClient
 	client           *wrapperClient
 	diagnosticClient *http.Client
-	nextFullSync     time.Time
-	fullSyncCount    int
+
+	// These fields should always be set in the reload state after being modified.
+	nextFullSync  time.Time
+	fullSyncCount int
 
 	startedAt               time.Time
 	lastSync                time.Time
@@ -113,7 +115,7 @@ type Option struct {
 	DisableCallback func(reason bleemeoTypes.DisableReason, until time.Time)
 
 	// UpdateConfigCallback is a function called when Synchronizer detected a AccountConfiguration change
-	UpdateConfigCallback func()
+	UpdateConfigCallback func(ctx context.Context)
 
 	// SetInitialized tells the bleemeo connector that the MQTT module can be started
 	SetInitialized func()
@@ -133,12 +135,24 @@ func New(option Option) (*Synchronizer, error) {
 }
 
 func newWithNow(option Option, now func() time.Time) (*Synchronizer, error) {
+	nextFullSync := now()
+	fullSyncCount := 0
+
+	if option.ReloadState != nil {
+		if option.ReloadState.NextFullSync().After(nextFullSync) {
+			nextFullSync = option.ReloadState.NextFullSync()
+		}
+
+		fullSyncCount = option.ReloadState.FullSyncCount()
+	}
+
 	s := &Synchronizer{
 		option: option,
 		now:    now,
 
 		forceSync:              make(map[string]bool),
-		nextFullSync:           now(),
+		nextFullSync:           nextFullSync,
+		fullSyncCount:          fullSyncCount,
 		retryableMetricFailure: make(map[bleemeoTypes.FailureKind]bool),
 	}
 
@@ -362,10 +376,7 @@ func (s *Synchronizer) DiagnosticPage() string {
 
 	if s.diagnosticClient == nil {
 		s.diagnosticClient = &http.Client{
-			Transport: &http.Transport{
-				Proxy:           http.ProxyFromEnvironment,
-				TLSClientConfig: tlsConfig,
-			},
+			Transport: types.NewHTTPTransport(tlsConfig),
 			CheckRedirect: func(req *http.Request, via []*http.Request) error {
 				return http.ErrUseLastResponse
 			},
@@ -586,7 +597,13 @@ func (s *Synchronizer) setClient() error {
 		return err
 	}
 
-	client, err := client.NewClient(s.option.Config.String("bleemeo.api_base"), username, password, s.option.Config.Bool("bleemeo.api_ssl_insecure"))
+	client, err := client.NewClient(
+		s.option.Config.String("bleemeo.api_base"),
+		username,
+		password,
+		s.option.Config.Bool("bleemeo.api_ssl_insecure"),
+		s.option.ReloadState,
+	)
 	if err != nil {
 		return err
 	}
@@ -610,10 +627,10 @@ func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) error {
 		s.option.NotifyFirstRegistration(ctx)
 		// Do one pass of metric registration to register agent_status.
 		// MQTT connection require this metric to exists before connecting
-		_ = s.syncMetrics(false, true)
+		_ = s.syncMetrics(ctx, false, true)
 
 		// Also do syncAgent, because agent configuration is also required for MQTT connection
-		_ = s.syncAgent(false, true)
+		_ = s.syncAgent(ctx, false, true)
 
 		// Then wait CPU (which should arrive the all other system metrics)
 		// before continuing to process.
@@ -634,7 +651,7 @@ func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) error {
 
 	syncStep := []struct {
 		name                 string
-		method               func(bool, bool) error
+		method               func(context.Context, bool, bool) error
 		enabledInMaintenance bool
 		skipOnlyEssential    bool // should be true for method that ignore onlyEssential
 	}{
@@ -689,7 +706,7 @@ func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) error {
 		}
 
 		if full, ok := syncMethods[step.name]; ok {
-			err := step.method(full, onlyEssential && !step.skipOnlyEssential)
+			err := step.method(ctx, full, onlyEssential && !step.skipOnlyEssential)
 			if err != nil {
 				logger.V(1).Printf("Synchronization for object %s failed: %v", step.name, err)
 
@@ -721,7 +738,7 @@ func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) error {
 	logger.V(2).Printf("Synchronization took %v for %v (and did %d requests)", s.now().Sub(startAt), syncMethods, s.realClient.RequestsCount()-previousCount)
 
 	if wasCreation {
-		s.UpdateUnitsAndThresholds(true)
+		s.UpdateUnitsAndThresholds(ctx, true)
 	}
 
 	if len(syncMethods) == len(syncStep) && firstErr == nil {
@@ -731,6 +748,12 @@ func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) error {
 			delay.Exponential(time.Hour, 1.75, s.fullSyncCount, 12*time.Hour),
 			0.25,
 		))
+
+		if s.option.ReloadState != nil {
+			s.option.ReloadState.SetFullSyncCount(s.fullSyncCount)
+			s.option.ReloadState.SetNextFullSync(s.nextFullSync)
+		}
+
 		logger.V(1).Printf("New full synchronization scheduled for %s", s.nextFullSync.Format(time.RFC3339))
 	}
 

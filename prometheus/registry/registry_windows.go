@@ -17,6 +17,7 @@
 package registry
 
 import (
+	"context"
 	"glouton/inputs"
 	"glouton/prometheus/exporter/windows"
 	"glouton/types"
@@ -25,7 +26,7 @@ import (
 )
 
 // AddWindowsExporter add a node_exporter to collector.
-func (r *Registry) AddWindowsExporter(collectors []string, options inputs.CollectorConfig) error {
+func (r *Registry) AddWindowsExporter(ctx context.Context, collectors []string, options inputs.CollectorConfig) error {
 	collector, err := windows.NewCollector(collectors, options)
 	if err != nil {
 		return err
@@ -39,6 +40,7 @@ func (r *Registry) AddWindowsExporter(collectors []string, options inputs.Collec
 	}
 
 	_, err = r.RegisterGatherer(
+		ctx,
 		RegistrationOption{
 			Description:           "windows_exporter",
 			JitterSeed:            baseJitter,

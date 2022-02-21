@@ -153,9 +153,36 @@ func New(option Option, first bool) *Client {
 		paho.DEBUG = logger.V(3)
 	}
 
-	return &Client{
-		option: option,
+	// Get the previous MQTT client from the reload state to avoid closing the connection
+	// and keep the previous pending points.
+	var (
+		mqttClient    paho.Client
+		initialPoints []types.MetricPoint
+	)
+
+	pahoWrapper := option.ReloadState.PahoWrapper()
+	if pahoWrapper != nil {
+		mqttClient = pahoWrapper.Client()
+		initialPoints = pahoWrapper.PopPendingPoints()
 	}
+
+	option.InitialPoints = append(option.InitialPoints, initialPoints...)
+
+	client := &Client{
+		option:     option,
+		mqttClient: mqttClient,
+	}
+
+	if pahoWrapper == nil {
+		pahoWrapper = NewPahoWrapper(PahoWrapperOptions{
+			UpgradeFile: client.option.Config.String("agent.upgrade_file"),
+			AgentID:     client.option.AgentID,
+		})
+
+		option.ReloadState.SetPahoWrapper(pahoWrapper)
+	}
+
+	return client
 }
 
 // Connected returns true if MQTT connection is established.
@@ -231,7 +258,18 @@ func (c *Client) Run(ctx context.Context) error {
 	c.startedAt = time.Now()
 	c.l.Unlock()
 
+	var wg sync.WaitGroup
+
+	wg.Add(1)
+
+	go func() {
+		c.receiveEvents(ctx)
+		wg.Done()
+	}()
+
 	err := c.run(ctx)
+
+	wg.Wait()
 
 	return err
 }
@@ -377,9 +415,11 @@ func (c *Client) setupMQTT(ctx context.Context) (paho.Client, error) {
 
 	pahoOptions.AddBroker(brokerURL)
 	pahoOptions.SetAutoReconnect(false)
-	pahoOptions.SetConnectionLostHandler(c.onConnectionLost)
-	pahoOptions.SetOnConnectHandler(c.onConnect)
 	pahoOptions.SetUsername(fmt.Sprintf("%s@bleemeo.com", c.option.AgentID))
+
+	pahoWrapper := c.option.ReloadState.PahoWrapper()
+	pahoOptions.SetConnectionLostHandler(pahoWrapper.OnConnectionLost)
+	pahoOptions.SetOnConnectHandler(pahoWrapper.OnConnect)
 
 	password, err := c.option.GetJWT(ctx)
 	if err != nil {
@@ -451,6 +491,8 @@ func (c *Client) shutdown() error {
 
 	c.mqttClient.Disconnect(uint(time.Until(deadline).Seconds() * 1000))
 	c.mqttClient = nil
+
+	c.option.ReloadState.PahoWrapper().SetClient(nil)
 
 	return nil
 }
@@ -746,7 +788,7 @@ func (c *Client) onConnect(mqttClient paho.Client) {
 	mqttClient.Subscribe(
 		fmt.Sprintf("v1/agent/%s/notification", c.option.AgentID),
 		0,
-		c.onNotification,
+		c.option.ReloadState.PahoWrapper().OnNotification,
 	)
 }
 
@@ -1011,6 +1053,8 @@ mainLoop:
 				c.l.Lock()
 				c.mqttClient = nil
 				c.l.Unlock()
+
+				c.option.ReloadState.PahoWrapper().SetClient(nil)
 			}
 		case c.mqttClient == nil:
 			length := len(lastConnectionTimes)
@@ -1073,6 +1117,8 @@ mainLoop:
 					c.waitPublishAndResend(mqttClient, time.Now().Add(10*time.Second), true)
 					c.mqttClient = mqttClient
 					c.l.Unlock()
+
+					c.option.ReloadState.PahoWrapper().SetClient(mqttClient)
 				}
 			}
 		case c.mqttClient != nil && c.mqttClient.IsConnectionOpen() && time.Since(lastResend) > 10*time.Minute:
@@ -1090,6 +1136,8 @@ mainLoop:
 			c.mqttClient = nil
 			c.l.Unlock()
 
+			c.option.ReloadState.PahoWrapper().SetClient(nil)
+
 			length := len(lastConnectionTimes)
 			if length > 0 && time.Since(lastConnectionTimes[length-1]) > stableConnection {
 				logger.V(2).Printf("MQTT connection was stable, reset delay to %v", minimalDelayBetweenConnect)
@@ -1106,15 +1154,55 @@ mainLoop:
 		}
 	}
 
-	if err := c.shutdown(); err != nil {
-		logger.V(1).Printf("Unable to perform clean shutdown: %v", err)
-	}
+	c.onReloadAndShutdown()
 
 	// make sure all connectionLost are read
 	for {
 		select {
 		case <-c.connectionLost:
 		default:
+			return
+		}
+	}
+}
+
+// onReload is called when reloading or on a graceful shutdown.
+// The pending points are saved in the reload state and we try to push the pending messages.
+func (c *Client) onReloadAndShutdown() {
+	pahoWrapper := c.option.ReloadState.PahoWrapper()
+
+	// Save pending points.
+	points := c.PopPoints(true)
+	pahoWrapper.SetPendingPoints(points)
+
+	// Push the pending messages.
+	deadline := time.Now().Add(5 * time.Second)
+
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	if c.mqttClient != nil {
+		stillPending := c.waitPublishAndResend(c.mqttClient, deadline, true)
+		if stillPending > 0 {
+			logger.V(2).Printf("%d MQTT message were still pending", stillPending)
+		}
+	}
+}
+
+func (c *Client) receiveEvents(ctx context.Context) {
+	pahoWrapper := c.option.ReloadState.PahoWrapper()
+
+	for {
+		select {
+		case msg := <-pahoWrapper.NotificationChannel():
+			c.onNotification(c.mqttClient, msg)
+		case err := <-pahoWrapper.ConnectionLostChannel():
+			c.onConnectionLost(c.mqttClient, err)
+		case client := <-pahoWrapper.ConnectChannel():
+			// We can't use c.mqttClient here because it is either nil or outdated,
+			// c.mqttClient is updated only after a successful connection.
+			c.onConnect(client)
+		case <-ctx.Done():
 			return
 		}
 	}

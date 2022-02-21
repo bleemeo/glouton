@@ -125,6 +125,11 @@ func (cl *MockDockerClient) ServerVersion(ctx context.Context) (dockerTypes.Vers
 	return cl.Version, nil
 }
 
+// Close the docker client.
+func (cl *MockDockerClient) Close() error {
+	return nil
+}
+
 // NewDockerMock create new MockDockerClient from a directory which may contains docker-version & docker-containers.json.
 func NewDockerMock(dirname string) (*MockDockerClient, error) {
 	result := &MockDockerClient{}

@@ -81,7 +81,7 @@ type Registry interface {
 
 // GathererRegistry allow to register/unregister prometheus Gatherer.
 type GathererRegistry interface {
-	RegisterGatherer(opt registry.RegistrationOption, gatherer prometheus.Gatherer) (int, error)
+	RegisterGatherer(ctx context.Context, opt registry.RegistrationOption, gatherer prometheus.Gatherer) (int, error)
 	Unregister(id int) bool
 }
 
@@ -121,7 +121,9 @@ func (d *Discovery) Close() {
 	d.l.Lock()
 	defer d.l.Unlock()
 
-	_ = d.configureMetricInputs(d.servicesMap, nil)
+	for key := range d.servicesMap {
+		d.removeInput(key)
+	}
 
 	d.configureChecks(d.servicesMap, nil)
 }
@@ -230,7 +232,7 @@ func (d *Discovery) discovery(ctx context.Context, maxAge time.Duration) (servic
 
 		if ctx.Err() == nil {
 			saveState(d.state, d.discoveredServicesMap)
-			d.reconfigure()
+			d.reconfigure(ctx)
 
 			d.lastDiscoveryUpdate = time.Now()
 		}
@@ -271,8 +273,8 @@ func (d *Discovery) RemoveIfNonRunning(ctx context.Context, services []Service) 
 	}
 }
 
-func (d *Discovery) reconfigure() {
-	err := d.configureMetricInputs(d.lastConfigservicesMap, d.servicesMap)
+func (d *Discovery) reconfigure(ctx context.Context) {
+	err := d.configureMetricInputs(ctx, d.lastConfigservicesMap, d.servicesMap)
 	if err != nil {
 		logger.Printf("Unable to update metric inputs: %v", err)
 	}

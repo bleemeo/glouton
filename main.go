@@ -20,7 +20,9 @@ import (
 	"flag"
 	"fmt"
 	"glouton/agent"
+	"glouton/config"
 	versionPkg "glouton/version"
+	"os"
 	"strings"
 
 	_ "net/http/pprof" //nolint:gosec
@@ -28,8 +30,9 @@ import (
 
 //nolint:gochecknoglobals
 var (
-	configFiles = flag.String("config", "", "Configuration files/dirs to load.")
-	showVersion = flag.Bool("version", false, "Show version and exit")
+	configFiles   = flag.String("config", "", "Configuration files/dirs to load.")
+	showVersion   = flag.Bool("version", false, "Show version and exit")
+	disableReload = flag.Bool("disable-reload", false, "Disable auto-reload on config changes.")
 )
 
 //nolint:gochecknoglobals
@@ -55,8 +58,12 @@ func main() {
 		return
 	}
 
-	// run os-specific initialisation codd
+	// Run os-specific initialisation code.
 	OSDependentMain()
 
-	agent.Run(strings.Split(*configFiles, ","))
+	if val, ok := os.LookupEnv("GLOUTON_DISABLE_RELOAD"); ok && !*disableReload {
+		*disableReload, _ = config.ConvertBoolean(val)
+	}
+
+	agent.StartReloadManager(strings.Split(*configFiles, ","), *disableReload)
 }

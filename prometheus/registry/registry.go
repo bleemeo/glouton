@@ -386,11 +386,11 @@ func (r *Registry) Run(ctx context.Context) error {
 // Note: before being able to drop pushpoint & registerpushpoint, we likely need:
 //  * support for "GathererWithScheduleUpdate-like" on RegisterAppenderCallback (needed by service check, when they trigger check on TCP close)
 //  * support for conversion of all annotation to meta-label and vise-vera (model/convert.go)
-func (r *Registry) RegisterPushPointsCallback(opt RegistrationOption, f func(context.Context, time.Time)) (int, error) {
-	return r.registerPushPointsCallback(opt, f)
+func (r *Registry) RegisterPushPointsCallback(ctx context.Context, opt RegistrationOption, f func(context.Context, time.Time)) (int, error) {
+	return r.registerPushPointsCallback(ctx, opt, f)
 }
 
-func (r *Registry) registerPushPointsCallback(opt RegistrationOption, f func(context.Context, time.Time)) (int, error) {
+func (r *Registry) registerPushPointsCallback(ctx context.Context, opt RegistrationOption, f func(context.Context, time.Time)) (int, error) {
 	r.init()
 
 	if err := opt.buildRules(); err != nil {
@@ -400,20 +400,20 @@ func (r *Registry) registerPushPointsCallback(opt RegistrationOption, f func(con
 	r.l.Lock()
 	defer r.l.Unlock()
 
-	ctx, cancel := context.WithTimeout(context.Background(), relabelTimeout)
+	ctxTimeout, cancel := context.WithTimeout(ctx, relabelTimeout)
 	defer cancel()
 
 	reg := &registration{
 		option:                    opt,
 		includedInMetricsEndpoint: false,
 	}
-	r.setupGatherer(ctx, reg, pushGatherer{fun: f})
+	r.setupGatherer(ctxTimeout, reg, pushGatherer{fun: f})
 
-	return r.addRegistration(reg)
+	return r.addRegistration(ctx, reg)
 }
 
 // RegisterAppenderCallback add a callback that use an Appender to write points to the registry.
-func (r *Registry) RegisterAppenderCallback(opt RegistrationOption, appOpt AppenderRegistrationOption, cb AppenderCallback) (int, error) {
+func (r *Registry) RegisterAppenderCallback(ctx context.Context, opt RegistrationOption, appOpt AppenderRegistrationOption, cb AppenderCallback) (int, error) {
 	r.init()
 
 	if err := opt.buildRules(); err != nil {
@@ -423,7 +423,7 @@ func (r *Registry) RegisterAppenderCallback(opt RegistrationOption, appOpt Appen
 	r.l.Lock()
 	defer r.l.Unlock()
 
-	ctx, cancel := context.WithTimeout(context.Background(), relabelTimeout)
+	ctx, cancel := context.WithTimeout(ctx, relabelTimeout)
 	defer cancel()
 
 	reg := &registration{
@@ -432,7 +432,7 @@ func (r *Registry) RegisterAppenderCallback(opt RegistrationOption, appOpt Appen
 	}
 	r.setupGatherer(ctx, reg, &appenderGatherer{cb: cb, opt: appOpt})
 
-	return r.addRegistration(reg)
+	return r.addRegistration(ctx, reg)
 }
 
 // UpdateRelabelHook change the hook used just before relabeling and wait for all pending metrics emission.
@@ -665,7 +665,7 @@ func (r *Registry) scrapeDone() {
 }
 
 // RegisterGatherer add a new gatherer to the list of metric sources.
-func (r *Registry) RegisterGatherer(opt RegistrationOption, gatherer prometheus.Gatherer) (int, error) {
+func (r *Registry) RegisterGatherer(ctx context.Context, opt RegistrationOption, gatherer prometheus.Gatherer) (int, error) {
 	r.init()
 
 	if err := opt.buildRules(); err != nil {
@@ -675,18 +675,18 @@ func (r *Registry) RegisterGatherer(opt RegistrationOption, gatherer prometheus.
 	r.l.Lock()
 	defer r.l.Unlock()
 
-	ctx, cancel := context.WithTimeout(context.Background(), relabelTimeout)
+	ctxTimeout, cancel := context.WithTimeout(ctx, relabelTimeout)
 	defer cancel()
 
 	reg := &registration{
 		option: opt,
 	}
-	r.setupGatherer(ctx, reg, gatherer)
+	r.setupGatherer(ctxTimeout, reg, gatherer)
 
-	return r.addRegistration(reg)
+	return r.addRegistration(ctx, reg)
 }
 
-func (r *Registry) addRegistration(reg *registration) (int, error) {
+func (r *Registry) addRegistration(ctx context.Context, reg *registration) (int, error) {
 	id := 1
 
 	_, ok := r.registrations[id]
@@ -708,7 +708,7 @@ func (r *Registry) addRegistration(reg *registration) (int, error) {
 			})
 		}
 
-		r.restartScrapeLoop(reg)
+		r.restartScrapeLoop(ctx, reg)
 	}
 
 	return id, nil
@@ -716,7 +716,7 @@ func (r *Registry) addRegistration(reg *registration) (int, error) {
 
 // restartScrapeLoop start a scrapeLoop for this registration after stop previous loop if it exists.
 // r.lock must be hold before calling this method.
-func (r *Registry) restartScrapeLoop(reg *registration) {
+func (r *Registry) restartScrapeLoop(ctx context.Context, reg *registration) {
 	if reg.loop != nil {
 		r.l.Unlock()
 		reg.loop.stop()
@@ -734,7 +734,7 @@ func (r *Registry) restartScrapeLoop(reg *registration) {
 	}
 
 	reg.loop = startScrapeLoop(
-		context.Background(),
+		ctx,
 		interval,
 		timeout,
 		reg.option.JitterSeed,
@@ -1027,13 +1027,14 @@ func (l prefixLogger) Println(v ...interface{}) {
 // AddDefaultCollector adds the following collectors:
 // GoCollector and ProcessCollector like the prometheus.DefaultRegisterer
 // Internal registry which contains all glouton metrics.
-func (r *Registry) AddDefaultCollector() {
+func (r *Registry) AddDefaultCollector(ctx context.Context) {
 	r.init()
 
 	r.internalRegistry.MustRegister(collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
 	r.internalRegistry.MustRegister(collectors.NewGoCollector())
 
 	_, _ = r.RegisterGatherer(
+		ctx,
 		RegistrationOption{
 			Description:           "go & process collector",
 			JitterSeed:            baseJitter,
@@ -1045,7 +1046,7 @@ func (r *Registry) AddDefaultCollector() {
 }
 
 // Exporter return an HTTP exporter.
-func (r *Registry) Exporter() http.Handler {
+func (r *Registry) Exporter(ctx context.Context) http.Handler {
 	reg := prometheus.NewRegistry()
 	handler := promhttp.InstrumentMetricHandler(reg, http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		wrapper := NewGathererWithStateWrapper(req.Context(), r, r.option.Filter)
@@ -1060,6 +1061,7 @@ func (r *Registry) Exporter() http.Handler {
 		}).ServeHTTP(w, req)
 	}))
 	_, _ = r.RegisterGatherer(
+		ctx,
 		RegistrationOption{
 			Description:           "/metrics collector",
 			JitterSeed:            baseJitter,
@@ -1082,7 +1084,7 @@ func (r *Registry) WithTTL(ttl time.Duration) types.PointPusher {
 }
 
 // UpdateDelay change the delay between metric gather.
-func (r *Registry) UpdateDelay(delay time.Duration) {
+func (r *Registry) UpdateDelay(ctx context.Context, delay time.Duration) {
 	r.init()
 	r.l.Lock()
 	defer r.l.Unlock()
@@ -1106,7 +1108,7 @@ func (r *Registry) UpdateDelay(delay time.Duration) {
 			continue
 		}
 
-		r.restartScrapeLoop(reg)
+		r.restartScrapeLoop(ctx, reg)
 	}
 }
 

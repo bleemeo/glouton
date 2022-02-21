@@ -25,6 +25,8 @@ import (
 	"glouton/threshold"
 	"glouton/types"
 	"time"
+
+	paho "github.com/eclipse/paho.mqtt.golang"
 )
 
 // GlobalOption are option user by most component of bleemeo.Connector.
@@ -44,9 +46,10 @@ type GlobalOption struct {
 	NotifyFirstRegistration func(ctx context.Context)
 	NotifyLabelsUpdate      func(ctx context.Context)
 	BlackboxScraperName     string
+	ReloadState             BleemeoReloadState
 
-	UpdateMetricResolution func(defaultResolution time.Duration, snmpResolution time.Duration)
-	UpdateThresholds       func(thresholds map[threshold.MetricNameItem]threshold.Threshold, firstUpdate bool)
+	UpdateMetricResolution func(ctx context.Context, defaultResolution time.Duration, snmpResolution time.Duration)
+	UpdateThresholds       func(ctx context.Context, thresholds map[threshold.MetricNameItem]threshold.Threshold, firstUpdate bool)
 	UpdateUnits            func(units map[threshold.MetricNameItem]threshold.Unit)
 	RebuildAlertingRules   func(metrics []rules.MetricAlertRule) error
 }
@@ -54,7 +57,7 @@ type GlobalOption struct {
 // MonitorManager is the interface used by Bleemeo to update the dynamic monitors list.
 type MonitorManager interface {
 	// UpdateDynamicTargets updates the list of dynamic monitors to watch.
-	UpdateDynamicTargets(monitors []types.Monitor) error
+	UpdateDynamicTargets(ctx context.Context, monitors []types.Monitor) error
 }
 
 // Config is the interface used by Bleemeo to access Config.
@@ -151,4 +154,39 @@ type GloutonAccountConfig struct {
 type GloutonAgentConfig struct {
 	MetricsAllowlist map[string]bool
 	MetricResolution time.Duration
+}
+
+// BleemeoReloadState is used to keep some Bleemeo components alive during reloads.
+type BleemeoReloadState interface {
+	PahoWrapper() PahoWrapper
+	SetPahoWrapper(client PahoWrapper)
+	NextFullSync() time.Time
+	SetNextFullSync(t time.Time)
+	FullSyncCount() int
+	SetFullSyncCount(count int)
+	JWT() JWT
+	SetJWT(jwt JWT)
+	IsFirstRun() bool
+	Close()
+}
+
+// PahoWrapper allows changing some event handlers at runtime.
+type PahoWrapper interface {
+	Client() paho.Client
+	SetClient(cli paho.Client)
+	OnConnectionLost(cli paho.Client, err error)
+	ConnectionLostChannel() <-chan error
+	OnConnect(cli paho.Client)
+	ConnectChannel() <-chan paho.Client
+	OnNotification(cli paho.Client, msg paho.Message)
+	NotificationChannel() <-chan paho.Message
+	PopPendingPoints() []types.MetricPoint
+	SetPendingPoints(points []types.MetricPoint)
+	Close()
+}
+
+// JWT used to authenticate with the Bleemeo API.
+type JWT struct {
+	Token   string
+	Refresh string
 }
