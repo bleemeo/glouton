@@ -325,7 +325,11 @@ func (c *Connector) mqttRestarter(ctx context.Context) error {
 				l.Unlock()
 			}()
 		case <-ctx.Done():
+			c.l.Lock()
 			close(c.mqttRestart)
+			c.mqttRestart = nil
+			c.l.Unlock()
+
 			cancel()
 			wg.Wait()
 
