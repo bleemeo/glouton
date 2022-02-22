@@ -9,7 +9,7 @@ require (
 	github.com/agnivade/levenshtein v1.1.1 // indirect
 	github.com/cespare/xxhash v1.1.0
 	github.com/containerd/cgroups v1.0.3
-	github.com/containerd/containerd v1.5.9
+	github.com/containerd/containerd v1.6.0
 	github.com/containerd/typeurl v1.0.2
 	github.com/docker/docker v20.10.12+incompatible
 	github.com/eclipse/paho.mqtt.golang v1.3.5
@@ -22,11 +22,10 @@ require (
 	github.com/go-redis/redis v6.15.9+incompatible
 	github.com/gogo/protobuf v1.3.2
 	github.com/google/go-cmp v0.5.7
-	github.com/google/gofuzz v1.2.0 // indirect
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510
 	github.com/google/uuid v1.3.0
 	github.com/influxdata/influxdb1-client v0.0.0-20200827194710-b269163b24ab
-	github.com/influxdata/telegraf v1.21.3
+	github.com/influxdata/telegraf v1.21.4
 	github.com/influxdata/toml v0.0.0-20190415235208-270119a8ce65
 	github.com/json-iterator/go v1.1.12
 	github.com/lufia/iostat v1.2.1 // indirect
@@ -34,7 +33,7 @@ require (
 	github.com/opencontainers/go-digest v1.0.0
 	github.com/opencontainers/image-spec v1.0.2
 	github.com/opencontainers/runtime-spec v1.0.3-0.20210326190908-1c3f411f0417
-	github.com/prometheus-community/windows_exporter v0.18.0
+	github.com/prometheus-community/windows_exporter v0.18.1
 	github.com/prometheus/blackbox_exporter v0.19.0
 	github.com/prometheus/client_golang v1.12.1
 	github.com/prometheus/client_model v0.2.0
@@ -48,14 +47,14 @@ require (
 	github.com/shopspring/decimal v1.3.1 // indirect
 	github.com/stretchr/objx v0.3.0 // indirect
 	github.com/vektah/gqlparser/v2 v2.3.1
-	github.com/vishvananda/netlink v1.1.1-0.20201029203352-d40f9887b852
-	golang.org/x/sys v0.0.0-20220128215802-99c3d69c2c27
+	github.com/vishvananda/netlink v1.1.1-0.20210330154013-f5de75959ad5
+	golang.org/x/sys v0.0.0-20220209214540-3681064d5158
 	golang.org/x/tools v0.1.9 // indirect
 	gopkg.in/alecthomas/kingpin.v2 v2.2.6
-	gopkg.in/ini.v1 v1.66.3
+	gopkg.in/ini.v1 v1.66.4
 	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b
-	k8s.io/api v0.23.3
-	k8s.io/apimachinery v0.23.3
-	k8s.io/client-go v0.23.3
+	k8s.io/api v0.23.4
+	k8s.io/apimachinery v0.23.4
+	k8s.io/client-go v0.23.4
 	sigs.k8s.io/yaml v1.3.0
 )

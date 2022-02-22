@@ -19,6 +19,7 @@ import (
 	"github.com/containerd/containerd/images"
 	"github.com/containerd/containerd/namespaces"
 	"github.com/containerd/containerd/oci"
+	"github.com/containerd/containerd/platforms"
 	prototypes "github.com/gogo/protobuf/types"
 	"github.com/google/go-cmp/cmp"
 	"github.com/opencontainers/go-digest"
@@ -526,6 +527,11 @@ func (i MockImage) ContentStore() content.Store {
 
 // Metadata implement containerd.Image.
 func (i MockImage) Metadata() images.Image {
+	panic(ErrMockNotImplemented)
+}
+
+// Platform implement containerd.Image.
+func (i MockImage) Platform() platforms.MatchComparer {
 	panic(ErrMockNotImplemented)
 }
 
