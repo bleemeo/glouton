@@ -503,7 +503,7 @@ func TestRegistry_applyRelabel(t *testing.T) {
 				BleemeoAgentID: "c571f9cf-6f07-492a-9e86-b8d5f5027557",
 			},
 		},
-		// when LabelMetaProbeScraperName is not provided, the 'scraper' label is the traditional 'instance' label
+		// when LabelMetaProbeScraperName is not provided, the 'scraper' label is the traditional 'instance' label  without port
 		{
 			name:   "blackbox_probe_icmp_no_scraper_name",
 			fields: fields{relabelConfigs: getDefaultRelabelConfig()},
@@ -518,7 +518,7 @@ func TestRegistry_applyRelabel(t *testing.T) {
 			}},
 			want: labels.FromMap(map[string]string{
 				types.LabelInstance:     "icmp://8.8.8.8",
-				types.LabelScraper:      "super-instance:1111",
+				types.LabelScraper:      "super-instance",
 				types.LabelInstanceUUID: "c571f9cf-6f07-492a-9e86-b8d5f5027557",
 				types.LabelScraperUUID:  "a39e5a8e-34cf-4b15-87bd-4b9cdaa59c42",
 			}),
