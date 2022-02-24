@@ -262,11 +262,11 @@ func getDefaultRelabelConfig() []*relabel.Config {
 			TargetLabel:  types.LabelScraperUUID,
 			Replacement:  "$2",
 		},
-		// when the metric comes from a probe, the 'scraper' label is the value we usually put in the 'instance' label
+		// when the metric comes from a probe, the 'scraper' label is the value we usually put in the 'instance' label without port
 		{
 			Action:       relabel.Replace,
 			Separator:    ";",
-			Regex:        relabel.MustNewRegexp("(.+);(.+)"),
+			Regex:        relabel.MustNewRegexp("(.+);([^:]+)(:\\d+)?"),
 			SourceLabels: model.LabelNames{types.LabelMetaProbeServiceUUID, types.LabelInstance},
 			TargetLabel:  types.LabelScraper,
 			Replacement:  "$2",
