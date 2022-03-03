@@ -9,7 +9,7 @@ require (
 	github.com/agnivade/levenshtein v1.1.1 // indirect
 	github.com/cespare/xxhash v1.1.0
 	github.com/containerd/cgroups v1.0.3
-	github.com/containerd/containerd v1.6.0
+	github.com/containerd/containerd v1.6.1
 	github.com/containerd/typeurl v1.0.2
 	github.com/docker/docker v20.10.12+incompatible
 	github.com/eclipse/paho.mqtt.golang v1.3.5
