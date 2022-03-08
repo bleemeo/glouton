@@ -323,6 +323,14 @@ func (target configTarget) verifyTLS(extLogger log.Logger, roundTrips []roundTri
 			continue
 		}
 
+		if target.testInjectCARoot != nil {
+			if cfg.RootCAs == nil {
+				cfg.RootCAs = x509.NewCertPool()
+			}
+
+			cfg.RootCAs.AddCert(target.testInjectCARoot)
+		}
+
 		opts := x509.VerifyOptions{
 			Roots:         cfg.RootCAs,
 			CurrentTime:   time.Now(),
