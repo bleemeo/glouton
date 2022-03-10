@@ -345,11 +345,8 @@ func Test_Collect(t *testing.T) { //nolint: cyclop
 			},
 			trustCert: true,
 			target: &httpTestTarget{
-				TLSCert: []tls.Certificate{certs.CertExpireFar},
-				Handler: http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
-					rw.WriteHeader(404)
-					_, _ = rw.Write([]byte("not found"))
-				}),
+				TLSCert:    []tls.Certificate{certs.CertExpireFar},
+				StatusCode: 404,
 			},
 		},
 		{
@@ -432,11 +429,8 @@ func Test_Collect(t *testing.T) { //nolint: cyclop
 			},
 			trustCert: true,
 			target: &httpTestTarget{
-				TLSCert: []tls.Certificate{certs.CertExpireFar},
-				Handler: http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
-					time.Sleep(11 * time.Second)
-					_, _ = rw.Write([]byte("ok"))
-				}),
+				TLSCert:       []tls.Certificate{certs.CertExpireFar},
+				TimeoutInHTTP: true,
 			},
 			probeDurationIsTimeout: true,
 		},
@@ -980,8 +974,8 @@ func Test_Collect(t *testing.T) { //nolint: cyclop
 			},
 			trustCert: true,
 			target: &httpTestTarget{
-				TLSCert:            []tls.Certificate{certs.CertExpireFar},
-				TimeoutInHandshake: true,
+				TLSCert:               []tls.Certificate{certs.CertExpireFar},
+				TimeoutInTLSHandshake: true,
 			},
 			probeDurationIsTimeout: true,
 		},
@@ -1320,20 +1314,8 @@ func Test_Collect(t *testing.T) { //nolint: cyclop
 			},
 			trustCert: true,
 			target: &httpTestTarget{
-				TLSCert: []tls.Certificate{certs.CertExpireFar},
-				Handler: http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
-					hj, ok := rw.(http.Hijacker)
-					if !ok {
-						panic("can't hijack, so can test broken connection")
-					}
-
-					conn, _, err := hj.Hijack()
-					if err != nil {
-						panic("can't hijack, so can test broken connection")
-					}
-
-					conn.Close()
-				}),
+				TLSCert:     []tls.Certificate{certs.CertExpireFar},
+				CloseInHTTP: true,
 			},
 		},
 		{
@@ -1644,14 +1626,16 @@ func buildCert(notBefore time.Time, notAfter time.Time, useInvalidName bool, org
 }
 
 type httpTestTarget struct {
-	TimeoutInHandshake  bool
-	TimeoutInTCPAccept  bool
-	CloseInTLSHandshake bool
-	ServerStopped       bool
-	UseBrokenCrypto     bool
-	TLSCert             []tls.Certificate
-	Handler             http.Handler
-	srv                 *httptest.Server
+	TimeoutInTCPAccept    bool
+	TimeoutInTLSHandshake bool
+	TimeoutInHTTP         bool
+	ServerStopped         bool
+	CloseInTLSHandshake   bool
+	CloseInHTTP           bool
+	StatusCode            int // StatusCode of 0 will be replaced by the default 200.
+	UseBrokenCrypto       bool
+	TLSCert               []tls.Certificate
+	srv                   *httptest.Server
 }
 
 type wrapListenner struct {
@@ -1668,13 +1652,33 @@ func (w wrapListenner) Accept() (net.Conn, error) {
 }
 
 func (t *httpTestTarget) Start() {
-	if t.Handler == nil {
-		t.Handler = http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
-			_, _ = rw.Write([]byte("ok"))
-		})
-	}
+	t.srv = httptest.NewUnstartedServer(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+		if t.TimeoutInHTTP {
+			time.Sleep(11 * time.Second)
+		}
 
-	t.srv = httptest.NewUnstartedServer(t.Handler)
+		if t.CloseInHTTP {
+			hj, ok := rw.(http.Hijacker)
+			if !ok {
+				panic("can't hijack, so can test broken connection")
+			}
+
+			conn, _, err := hj.Hijack()
+			if err != nil {
+				panic("can't hijack, so can test broken connection")
+			}
+
+			conn.Close()
+
+			return
+		}
+
+		if t.StatusCode != 0 {
+			rw.WriteHeader(t.StatusCode)
+		}
+
+		_, _ = rw.Write([]byte("ok"))
+	}))
 
 	t.srv.Listener = wrapListenner{
 		Listener: t.srv.Listener,
@@ -1687,7 +1691,7 @@ func (t *httpTestTarget) Start() {
 		}
 
 		t.srv.TLS.GetCertificate = func(chi *tls.ClientHelloInfo) (*tls.Certificate, error) {
-			if t.TimeoutInHandshake {
+			if t.TimeoutInTLSHandshake {
 				time.Sleep(11 * time.Second)
 			}
 
