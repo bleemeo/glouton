@@ -28,6 +28,7 @@ import (
 	"net/http/httptrace"
 	"net/url"
 	"reflect"
+	"sync"
 	"time"
 
 	"github.com/go-kit/log"
@@ -167,6 +168,7 @@ func (target configTarget) Collect(ch chan<- prometheus.Metric) {
 	start := time.Now()
 
 	var (
+		l                sync.Mutex
 		roundTrips       []roundTrip
 		currentRoundTrip roundTrip
 	)
@@ -174,6 +176,13 @@ func (target configTarget) Collect(ch chan<- prometheus.Metric) {
 	// This is done to capture the last response TLS handshake state.
 	subCtx := httptrace.WithClientTrace(ctx, &httptrace.ClientTrace{
 		GetConn: func(hostPort string) {
+			l.Lock()
+			defer l.Unlock()
+
+			if ctx.Err() != nil {
+				return
+			}
+
 			if currentRoundTrip.HostPort != "" {
 				roundTrips = append(roundTrips, currentRoundTrip)
 			}
@@ -184,6 +193,13 @@ func (target configTarget) Collect(ch chan<- prometheus.Metric) {
 			}
 		},
 		TLSHandshakeDone: func(cs tls.ConnectionState, e error) {
+			l.Lock()
+			defer l.Unlock()
+
+			if ctx.Err() != nil {
+				return
+			}
+
 			currentRoundTrip.TLSState = &cs
 		},
 	})
@@ -204,9 +220,13 @@ func (target configTarget) Collect(ch chan<- prometheus.Metric) {
 		return
 	}
 
+	l.Lock()
+
 	if currentRoundTrip.HostPort != "" {
 		roundTrips = append(roundTrips, currentRoundTrip)
 	}
+
+	l.Unlock()
 
 	// write all the gathered metrics to our upper registry
 	writeMFsToChan(filterMFs(mfs, func(mf *dto.MetricFamily) bool {
