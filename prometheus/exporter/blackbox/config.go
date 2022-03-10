@@ -143,6 +143,7 @@ func genCollectorFromDynamicTarget(monitor types.Monitor, userAgent string) (*co
 		BleemeoAgentID: monitor.BleemeoAgentID,
 		URL:            uri,
 		CreationDate:   monitor.CreationDate,
+		nowFunc:        time.Now,
 	}
 
 	if monitor.MetricMonitorResolution != 0 {
@@ -249,6 +250,7 @@ func New(
 			URL:        conf.Targets[idx].URL,
 			Module:     module,
 			ModuleName: conf.Targets[idx].ModuleName,
+			nowFunc:    time.Now,
 		}))
 	}
 

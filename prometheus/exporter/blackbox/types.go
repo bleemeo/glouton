@@ -21,6 +21,7 @@ type configTarget struct {
 	CreationDate     time.Time
 	RefreshRate      time.Duration
 	testInjectCARoot *x509.Certificate
+	nowFunc          func() time.Time
 }
 
 // We define labels to apply on a specific collector at registration, as those labels cannot be exposed

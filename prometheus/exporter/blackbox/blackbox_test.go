@@ -848,6 +848,10 @@ func Test_Collect(t *testing.T) { //nolint: cyclop
 				t.Fatal(err)
 			}
 
+			target.Collector.nowFunc = func() time.Time {
+				return t0
+			}
+
 			if tt.trustCert {
 				target.Collector.testInjectCARoot = tt.target.Certificate()
 			}

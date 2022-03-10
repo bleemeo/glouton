@@ -333,7 +333,7 @@ func (target configTarget) verifyTLS(extLogger log.Logger, roundTrips []roundTri
 
 		opts := x509.VerifyOptions{
 			Roots:         cfg.RootCAs,
-			CurrentTime:   time.Now(),
+			CurrentTime:   target.nowFunc(),
 			DNSName:       cfg.ServerName,
 			Intermediates: x509.NewCertPool(),
 		}

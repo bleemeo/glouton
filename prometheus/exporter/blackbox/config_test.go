@@ -101,6 +101,7 @@ func TestConfigParsing(t *testing.T) {
 			},
 			ModuleName: "http_2xx",
 			Name:       "https://google.com",
+			nowFunc:    time.Now,
 		}),
 		genCollectorFromStaticTarget(configTarget{
 			URL: "inpt.fr",
@@ -120,6 +121,7 @@ func TestConfigParsing(t *testing.T) {
 			},
 			ModuleName: "dns",
 			Name:       "inpt.fr",
+			nowFunc:    time.Now,
 		}),
 		genCollectorFromStaticTarget(configTarget{
 			URL: "http://neverssl.com",
@@ -143,6 +145,7 @@ func TestConfigParsing(t *testing.T) {
 			},
 			ModuleName: "http_2xx",
 			Name:       "http://neverssl.com",
+			nowFunc:    time.Now,
 		}),
 	}
 
