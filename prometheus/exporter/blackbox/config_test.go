@@ -25,6 +25,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	bbConf "github.com/prometheus/blackbox_exporter/config"
 )
 
@@ -144,8 +146,8 @@ func TestConfigParsing(t *testing.T) {
 		}),
 	}
 
-	if !reflect.DeepEqual(bbManager.targets, expectedValue) {
-		t.Fatalf("TestConfigParsing() = %#v, want %#v", bbManager.targets, expectedValue)
+	if diff := cmp.Diff(expectedValue, bbManager.targets, cmpopts.IgnoreUnexported(configTarget{})); diff != "" {
+		t.Errorf("bbManager.targets mismatch (-want +got)\n%s", diff)
 	}
 }
 

@@ -384,7 +384,7 @@ func compareConfigTargets(a configTarget, b configTarget) bool {
 
 func collectorInMap(value collectorWithLabels, iterable map[int]gathererWithConfigTarget) bool {
 	for _, mapValue := range iterable {
-		if compareConfigTargets(value.collector, mapValue.target) {
+		if compareConfigTargets(value.Collector, mapValue.target) {
 			return true
 		}
 	}
@@ -395,7 +395,7 @@ func collectorInMap(value collectorWithLabels, iterable map[int]gathererWithConf
 func gathererInArray(value gathererWithConfigTarget, iterable []collectorWithLabels) bool {
 	for _, arrayValue := range iterable {
 		// see inMap() above
-		if compareConfigTargets(value.target, arrayValue.collector) {
+		if compareConfigTargets(value.target, arrayValue.Collector) {
 			return true
 		}
 	}
@@ -410,19 +410,19 @@ func (m *RegisterManager) updateRegistrations(ctx context.Context) error {
 		if !collectorInMap(collectorFromConfig, m.registrations) {
 			reg := prometheus.NewRegistry()
 
-			if err := reg.Register(collectorFromConfig.collector); err != nil {
+			if err := reg.Register(collectorFromConfig.Collector); err != nil {
 				return err
 			}
 
 			var g prometheus.Gatherer = reg
 
 			// wrap our gatherer in ProbeGatherer, to only collect metrics when necessary
-			g = registry.NewProbeGatherer(g, collectorFromConfig.collector.RefreshRate > time.Minute)
+			g = registry.NewProbeGatherer(g, collectorFromConfig.Collector.RefreshRate > time.Minute)
 
-			hash := labels.FromMap(collectorFromConfig.labels).Hash()
+			hash := labels.FromMap(collectorFromConfig.Labels).Hash()
 
-			refreshRate := collectorFromConfig.collector.RefreshRate
-			creationDate := collectorFromConfig.collector.CreationDate
+			refreshRate := collectorFromConfig.Collector.RefreshRate
+			creationDate := collectorFromConfig.Collector.CreationDate
 
 			if refreshRate > 0 {
 				// We want public probe to run at known time
@@ -436,10 +436,10 @@ func (m *RegisterManager) updateRegistrations(ctx context.Context) error {
 			id, err := m.registry.RegisterGatherer(
 				ctx,
 				registry.RegistrationOption{
-					Description: "blackbox for " + collectorFromConfig.collector.URL,
+					Description: "blackbox for " + collectorFromConfig.Collector.URL,
 					JitterSeed:  hash,
-					Interval:    collectorFromConfig.collector.RefreshRate,
-					ExtraLabels: collectorFromConfig.labels,
+					Interval:    collectorFromConfig.Collector.RefreshRate,
+					ExtraLabels: collectorFromConfig.Labels,
 				},
 				g,
 			)
@@ -453,11 +453,11 @@ func (m *RegisterManager) updateRegistrations(ctx context.Context) error {
 			}
 
 			m.registrations[id] = gathererWithConfigTarget{
-				target:   collectorFromConfig.collector,
+				target:   collectorFromConfig.Collector,
 				gatherer: g,
 			}
 
-			logger.V(2).Printf("New probe registered for '%s'", collectorFromConfig.collector.Name)
+			logger.V(2).Printf("New probe registered for '%s'", collectorFromConfig.Collector.Name)
 		}
 	}
 

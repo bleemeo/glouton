@@ -849,17 +849,17 @@ func Test_Collect(t *testing.T) { //nolint: cyclop
 			}
 
 			if tt.trustCert {
-				target.collector.testInjectCARoot = tt.target.Certificate()
+				target.Collector.testInjectCARoot = tt.target.Certificate()
 			}
 
 			promReg := prometheus.NewRegistry()
-			if err := promReg.Register(target.collector); err != nil {
+			if err := promReg.Register(target.Collector); err != nil {
 				t.Fatal(err)
 			}
 
 			id, err := reg.RegisterGatherer(ctx, registry.RegistrationOption{
 				DisablePeriodicGather: true,
-				ExtraLabels:           target.labels,
+				ExtraLabels:           target.Labels,
 			}, promReg)
 			if err != nil {
 				t.Fatal(err)

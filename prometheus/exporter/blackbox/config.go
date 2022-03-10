@@ -150,8 +150,8 @@ func genCollectorFromDynamicTarget(monitor types.Monitor, userAgent string) (*co
 	}
 
 	return &collectorWithLabels{
-		collector: confTarget,
-		labels: map[string]string{
+		Collector: confTarget,
+		Labels: map[string]string{
 			types.LabelMetaProbeTarget:            confTarget.Name,
 			types.LabelMetaProbeServiceUUID:       monitor.ID,
 			types.LabelMetaBleemeoTargetAgentUUID: monitor.BleemeoAgentID,
@@ -166,8 +166,8 @@ func genCollectorFromStaticTarget(ct configTarget) collectorWithLabels {
 	// instead of the local config file) are involved, as those metrics have the 'instance_uuid'
 	// label to distinguish monitors.
 	return collectorWithLabels{
-		collector: ct,
-		labels: map[string]string{
+		Collector: ct,
+		Labels: map[string]string{
 			types.LabelMetaProbeTarget: ct.Name,
 			"module":                   ct.ModuleName,
 		},
@@ -280,7 +280,7 @@ func (m *RegisterManager) DiagnosticArchive(ctx context.Context, archive types.A
 	}
 
 	for _, t := range targets {
-		fmt.Fprintf(file, "url=%s labels=%v\n", t.collector.URL, t.labels)
+		fmt.Fprintf(file, "url=%s labels=%v\n", t.Collector.URL, t.Labels)
 	}
 
 	return nil
@@ -295,7 +295,7 @@ func (m *RegisterManager) UpdateDynamicTargets(ctx context.Context, monitors []t
 
 	// get a list of static monitors
 	for _, currentTarget := range m.targets {
-		if currentTarget.collector.BleemeoAgentID == "" {
+		if currentTarget.Collector.BleemeoAgentID == "" {
 			newTargets = append(newTargets, currentTarget)
 		}
 	}
@@ -313,7 +313,7 @@ func (m *RegisterManager) UpdateDynamicTargets(ctx context.Context, monitors []t
 
 	if m.scraperName != "" {
 		for idx := range newTargets {
-			newTargets[idx].labels[types.LabelMetaProbeScraperName] = m.scraperName
+			newTargets[idx].Labels[types.LabelMetaProbeScraperName] = m.scraperName
 		}
 	}
 

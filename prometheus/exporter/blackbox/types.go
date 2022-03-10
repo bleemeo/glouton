@@ -26,8 +26,8 @@ type configTarget struct {
 // We define labels to apply on a specific collector at registration, as those labels cannot be exposed
 // while gathering (e.g. labels prefixed by '__').
 type collectorWithLabels struct {
-	collector configTarget
-	labels    map[string]string
+	Collector configTarget
+	Labels    map[string]string
 }
 
 // We need to keep a reference to the gatherer, to be able to stop the ticker, if it is a TickingGatherer.
