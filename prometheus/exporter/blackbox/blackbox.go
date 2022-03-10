@@ -129,10 +129,6 @@ func (target configTarget) Describe(ch chan<- *prometheus.Desc) {
 // Collect implements the prometheus.Collector interface.
 // It is where we do the actual "probing".
 func (target configTarget) Collect(ch chan<- prometheus.Metric) {
-	ctx, cancel := context.WithTimeout(context.Background(), target.Module.Timeout)
-	// Let's ensure we don't end up with stray queries running somewhere
-	defer cancel()
-
 	probeFn, present := probers[target.Module.Prober]
 	if !present {
 		logger.V(1).Printf("blackbox_exporter: no prober registered under the name '%s', cannot check '%s'.",
@@ -165,6 +161,11 @@ func (target configTarget) Collect(ch chan<- prometheus.Metric) {
 	registry := prometheus.NewRegistry()
 
 	extLogger := log.With(logger.GoKitLoggerWrapper(logger.V(2)), "url", target.URL)
+
+	ctx, cancel := context.WithTimeout(context.Background(), target.Module.Timeout)
+	// Let's ensure we don't end up with stray queries running somewhere
+	defer cancel()
+
 	start := time.Now()
 
 	var (
