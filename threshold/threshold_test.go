@@ -253,6 +253,18 @@ func TestFormatDuration(t *testing.T) {
 			value: 0,
 			want:  "0 second",
 		},
+		{
+			value: 90 * 24 * time.Hour,
+			want:  "90 days",
+		},
+		{
+			value: 90*24*time.Hour + time.Hour,
+			want:  "90 days",
+		},
+		{
+			value: 365 * 24 * time.Hour,
+			want:  "365 days",
+		},
 	}
 	for _, c := range cases {
 		got := formatDuration(c.value)

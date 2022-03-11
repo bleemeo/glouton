@@ -238,6 +238,7 @@ const (
 	UnitTypeByte   = 2
 	UnitTypeBit    = 3
 	UnitTypeSecond = 6
+	UnitTypeDay    = 8
 )
 
 // FromInterfaceMap convert a map[string]interface{} to Threshold.
@@ -419,6 +420,8 @@ func FormatValue(value float64, unit Unit) string {
 		return fmt.Sprintf("%.2f %s%ss", value, scales[i], unit.UnitText)
 	case UnitTypeSecond:
 		return formatDuration(time.Duration(value) * time.Second)
+	case UnitTypeDay:
+		return formatDuration(time.Duration(value) * 24 * time.Hour)
 	default:
 		return fmt.Sprintf("%.2f %s", value, unit.UnitText)
 	}
