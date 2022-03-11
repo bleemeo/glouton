@@ -33,12 +33,12 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/http/httptrace"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/prometheus/client_golang/prometheus"
 )
 
 type testTarget interface {
@@ -46,6 +46,7 @@ type testTarget interface {
 	Close()
 	URL() string
 	Certificate() *x509.Certificate
+	RequestContext(context.Context) context.Context
 }
 
 type testingCerts struct {
@@ -350,8 +351,15 @@ func Test_Collect(t *testing.T) { //nolint: cyclop
 			},
 		},
 		{
-			name:         "probe-timeout",
-			absentPoints: []map[string]string{},
+			name: "probe-timeout",
+			absentPoints: []map[string]string{
+				{
+					types.LabelName:         "probe_ssl_earliest_cert_expiry",
+					types.LabelInstance:     targetNotYetKnown,
+					types.LabelInstanceUUID: agentID,
+					types.LabelScraper:      agentFQDN,
+				},
+			},
 			wantPoints: []types.MetricPoint{
 				{
 					Point: types.Point{Time: t0, Value: 0},
@@ -431,6 +439,98 @@ func Test_Collect(t *testing.T) { //nolint: cyclop
 			target: &httpTestTarget{
 				TLSCert:       []tls.Certificate{certs.CertExpireFar},
 				TimeoutInHTTP: true,
+			},
+			probeDurationIsTimeout: true,
+		},
+		{
+			name: "probe-timeout2-self-signed",
+			absentPoints: []map[string]string{
+				{
+					types.LabelName:         "probe_ssl_earliest_cert_expiry",
+					types.LabelInstance:     targetNotYetKnown,
+					types.LabelInstanceUUID: agentID,
+					types.LabelScraper:      agentFQDN,
+				},
+			},
+			wantPoints: []types.MetricPoint{
+				{
+					Point: types.Point{Time: t0, Value: 0},
+					Labels: map[string]string{
+						types.LabelName:         "probe_success",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: 0},
+					Labels: map[string]string{
+						types.LabelName:         "probe_http_status_code",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: 0},
+					Labels: map[string]string{
+						types.LabelName:         "probe_http_duration_seconds",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+						"phase":                 "connect",
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: math.NaN()},
+					Labels: map[string]string{
+						types.LabelName:         "probe_duration_seconds",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: float64(time.Time{}.Unix())},
+					Labels: map[string]string{
+						types.LabelName:         "probe_ssl_last_chain_expiry_timestamp_seconds",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: 0},
+					Labels: map[string]string{
+						types.LabelName:         "probe_ssl_validation_success",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+			},
+			trustCert: false,
+			target: &httpTestTarget{
+				TLSCert:               []tls.Certificate{certs.CertExpireFar},
+				TimeoutAfterHandshake: true,
 			},
 			probeDurationIsTimeout: true,
 		},
@@ -1468,20 +1568,20 @@ func Test_Collect(t *testing.T) { //nolint: cyclop
 				target.Collector.testInjectCARoot = tt.target.Certificate()
 			}
 
-			promReg := prometheus.NewRegistry()
-			if err := promReg.Register(target.Collector); err != nil {
+			gatherer, err := newGatherer(target.Collector)
+			if err != nil {
 				t.Fatal(err)
 			}
 
 			id, err := reg.RegisterGatherer(ctx, registry.RegistrationOption{
 				DisablePeriodicGather: true,
 				ExtraLabels:           target.Labels,
-			}, promReg)
+			}, gatherer)
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			reg.InternalRunScape(ctx, t0, id)
+			reg.InternalRunScape(tt.target.RequestContext(ctx), t0, id)
 
 			gotMap := make(map[string]int, len(resPoints))
 			for i, got := range resPoints {
@@ -1628,6 +1728,7 @@ func buildCert(notBefore time.Time, notAfter time.Time, useInvalidName bool, org
 type httpTestTarget struct {
 	TimeoutInTCPAccept    bool
 	TimeoutInTLSHandshake bool
+	TimeoutAfterHandshake bool
 	TimeoutInHTTP         bool
 	ServerStopped         bool
 	CloseInTLSHandshake   bool
@@ -1728,4 +1829,14 @@ func (t *httpTestTarget) Close() {
 
 func (t *httpTestTarget) Certificate() *x509.Certificate {
 	return t.srv.Certificate()
+}
+
+func (t *httpTestTarget) RequestContext(ctx context.Context) context.Context {
+	return httptrace.WithClientTrace(ctx, &httptrace.ClientTrace{
+		TLSHandshakeDone: func(cs tls.ConnectionState, e error) {
+			if t.TimeoutAfterHandshake {
+				time.Sleep(11 * time.Second)
+			}
+		},
+	})
 }

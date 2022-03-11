@@ -128,7 +128,7 @@ func (target configTarget) Describe(ch chan<- *prometheus.Desc) {
 
 // Collect implements the prometheus.Collector interface.
 // It is where we do the actual "probing".
-func (target configTarget) Collect(ch chan<- prometheus.Metric) {
+func (target configTarget) CollectWithContext(ctx context.Context, ch chan<- prometheus.Metric) {
 	probeFn, present := probers[target.Module.Prober]
 	if !present {
 		logger.V(1).Printf("blackbox_exporter: no prober registered under the name '%s', cannot check '%s'.",
@@ -162,7 +162,7 @@ func (target configTarget) Collect(ch chan<- prometheus.Metric) {
 
 	extLogger := log.With(logger.GoKitLoggerWrapper(logger.V(2)), "url", target.URL)
 
-	ctx, cancel := context.WithTimeout(context.Background(), target.Module.Timeout)
+	ctx, cancel := context.WithTimeout(ctx, target.Module.Timeout)
 	// Let's ensure we don't end up with stray queries running somewhere
 	defer cancel()
 
@@ -429,13 +429,12 @@ func (m *RegisterManager) updateRegistrations(ctx context.Context) error {
 	// register new probes
 	for _, collectorFromConfig := range m.targets {
 		if !collectorInMap(collectorFromConfig, m.registrations) {
-			reg := prometheus.NewRegistry()
-
-			if err := reg.Register(collectorFromConfig.Collector); err != nil {
+			gatherer, err := newGatherer(collectorFromConfig.Collector)
+			if err != nil {
 				return err
 			}
 
-			var g prometheus.Gatherer = reg
+			var g prometheus.Gatherer = gatherer
 
 			// wrap our gatherer in ProbeGatherer, to only collect metrics when necessary
 			g = registry.NewProbeGatherer(g, collectorFromConfig.Collector.RefreshRate > time.Minute)
