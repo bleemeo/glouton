@@ -16,7 +16,7 @@ type AppenableOfAppender struct {
 
 type childrenAppender struct {
 	parent *AppenableOfAppender
-	ctx    context.Context
+	ctx    context.Context //nolint:containedctx
 }
 
 // NewFromAppender create an Appenable from an appender.

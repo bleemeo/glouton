@@ -125,7 +125,6 @@ func TestConvertMetricPoint(t *testing.T) {
 	}
 }
 
-//nolint:cyclop
 func TestAddPoints(t *testing.T) {
 	var client Client
 

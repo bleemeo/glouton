@@ -98,7 +98,7 @@ type GathererWithStateWrapper struct {
 	gatherState GatherState
 	gatherer    GathererWithState
 	filter      metricFilter
-	ctx         context.Context
+	ctx         context.Context //nolint:containedctx
 }
 
 // NewGathererWithStateWrapper creates a new wrapper around GathererWithState.

@@ -114,7 +114,6 @@ func (cb fakeAppenderCallback) Collect(ctx context.Context, app storage.Appender
 	return app.Commit()
 }
 
-//nolint:cyclop
 func TestRegistry_Register(t *testing.T) {
 	reg := &Registry{}
 
@@ -715,7 +714,7 @@ func TestRegistry_run(t *testing.T) {
 	}
 }
 
-func TestRegistry_pointsAlteration(t *testing.T) {
+func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 	type sourceKind string
 
 	const (

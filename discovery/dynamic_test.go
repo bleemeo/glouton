@@ -161,7 +161,7 @@ func TestDynamicDiscoverySimple(t *testing.T) {
 // Test dynamic Discovery with single process present
 // To extract cmdLine array from a running process, one can read /proc/PID/cmdline using "less".
 // Less will show the NUL character used to split args.
-func TestDynamicDiscoverySingle(t *testing.T) {
+func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 	cases := []struct {
 		testName           string
 		cmdLine            []string

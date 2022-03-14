@@ -37,6 +37,10 @@ type PahoWrapperOptions struct {
 	AgentID     types.AgentID
 }
 
+type disconnectCause struct {
+	Cause string `json:"disconnect-cause"`
+}
+
 func NewPahoWrapper(opts PahoWrapperOptions) types.PahoWrapper {
 	wrapper := &pahoWrapper{
 		connectChannel:        make(chan paho.Client),
@@ -136,7 +140,7 @@ func (c *pahoWrapper) Close() {
 			cause = "Upgrade"
 		}
 
-		payload, _ := json.Marshal(map[string]string{"disconnect-cause": cause})
+		payload, _ := json.Marshal(disconnectCause{cause}) //nolint:errchkjson // False positive.
 
 		token := c.client.Publish(fmt.Sprintf("v1/agent/%s/disconnect", c.agentID), 1, false, payload)
 		if !token.WaitTimeout(time.Until(deadline)) {

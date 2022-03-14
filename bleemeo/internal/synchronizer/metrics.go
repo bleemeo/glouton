@@ -551,7 +551,6 @@ func (s *Synchronizer) findUnregisteredMetrics(metrics []types.Metric) []types.M
 	return result
 }
 
-//nolint:cyclop
 func (s *Synchronizer) syncMetrics(ctx context.Context, fullSync bool, onlyEssential bool) error {
 	localMetrics, err := s.option.Store.Metrics(nil)
 	if err != nil {

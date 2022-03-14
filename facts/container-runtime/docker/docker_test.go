@@ -73,7 +73,6 @@ func string2TopBody(input string) containerTypes.ContainerTopOKBody {
 	return procList
 }
 
-//nolint:cyclop
 func TestDocker_Containers(t *testing.T) {
 	tests := []struct {
 		name string

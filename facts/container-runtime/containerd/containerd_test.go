@@ -62,7 +62,6 @@ func TestContainerd_RuntimeFact(t *testing.T) {
 	}
 }
 
-//nolint:cyclop
 func TestContainerd_Containers(t *testing.T) {
 	tests := []struct {
 		name string

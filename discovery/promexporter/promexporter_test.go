@@ -33,7 +33,7 @@ const (
 	fakePodNamespace = "default"
 )
 
-func TestListExporters(t *testing.T) {
+func TestListExporters(t *testing.T) { //nolint:maintidx
 	mustParse := func(text string) *url.URL {
 		u, err := url.Parse(text)
 		if err != nil {

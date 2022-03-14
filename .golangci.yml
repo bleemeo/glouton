@@ -1,4 +1,5 @@
 run:
+  timeout: 5m
   skip-dirs:
     - work
 
@@ -32,12 +33,9 @@ linters:
     - interfacer
     - scopelint
     - gocyclo
+    - cyclop # Replaced by maintidx.
 
 linters-settings:
-  cyclop:
-    # The maximal code complexity to report.
-    max-complexity: 15
-
   nolintlint:
     # Ensure that nolint directives don't have a leading space.
     allow-leading-space: false

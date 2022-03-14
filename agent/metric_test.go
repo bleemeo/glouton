@@ -101,7 +101,6 @@ func Test_Basic_Build(t *testing.T) {
 			},
 			*proMatcher[0]: {
 				{
-
 					&labels.Matcher{
 						Name:  types.LabelName,
 						Type:  labels.MatchRegexp,
@@ -588,7 +587,7 @@ metric:
 	}
 }
 
-func Test_newMetricFilter(t *testing.T) {
+func Test_newMetricFilter(t *testing.T) { //nolint:maintidx
 	tests := []struct {
 		name                 string
 		configAllow          []string

@@ -217,7 +217,7 @@ func (rm *Manager) MetricList() []string {
 func (rm *Manager) Collect(ctx context.Context, app storage.Appender) error {
 	var errs types.MultiErrors
 
-	res := []types.MetricPoint{}
+	res := []types.MetricPoint{} //nolint:ifshort // False positive.
 	now := rm.now()
 
 	rm.appendable.SetAppendable(model.NewFromAppender(app))
@@ -415,11 +415,9 @@ func (agr *alertRuleGroup) checkNoPoint(now time.Time, agentStart time.Time, met
 
 func (agr *alertRuleGroup) generateNewPoint(thresholdType string, rule *rules.AlertingRule, state rules.AlertState, now time.Time) (types.MetricPoint, error) {
 	statusCode := statusFromThreshold(thresholdType)
-	alerts := rule.ActiveAlerts()
-
 	desc := "Current value is within the thresholds."
 
-	if len(alerts) != 0 {
+	if alerts := rule.ActiveAlerts(); len(alerts) != 0 {
 		exceeded := ""
 
 		if state != rules.StateFiring {

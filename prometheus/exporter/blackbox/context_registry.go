@@ -13,7 +13,7 @@ type gathererWithContext struct {
 	reg            *prometheus.Registry
 	l              sync.Mutex
 	target         configTarget
-	currentContext context.Context
+	currentContext context.Context //nolint:containedctx
 }
 
 func newGatherer(target configTarget) (*gathererWithContext, error) {

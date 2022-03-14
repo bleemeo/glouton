@@ -59,7 +59,7 @@ type testingCerts struct {
 	NotAfterExpired   time.Time
 }
 
-func Test_Collect(t *testing.T) { //nolint: cyclop
+func Test_Collect(t *testing.T) { //nolint:maintidx
 	monitorID := "7331d6c1-ede1-4483-a3b3-c99f0965f64b"
 	agentID := "1d6a2c82-4579-4f7d-91fe-3d4946aacaf7"
 	targetNotYetKnown := "this-label-value-will-be-remplaced"

@@ -560,7 +560,6 @@ func Test_Matches_Basic_Family(t *testing.T) {
 			name:       "basic metric glob fail missing label",
 			metricName: fn[0],
 			metric: dto.Metric{
-
 				Label: []*dto.LabelPair{
 					{
 						Name:  &lbln[0],

@@ -246,7 +246,6 @@ func (d *Discovery) createPrometheusCollector(ctx context.Context, service Servi
 	return errNotSupported
 }
 
-//nolint:cyclop
 func (d *Discovery) createInput(ctx context.Context, service Service) error {
 	if !service.Active {
 		return nil

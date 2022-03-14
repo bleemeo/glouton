@@ -64,7 +64,7 @@ const (
 
 // Synchronizer synchronize object with Bleemeo.
 type Synchronizer struct {
-	ctx    context.Context
+	ctx    context.Context //nolint:containedctx
 	option Option
 	now    func() time.Time
 
@@ -224,7 +224,6 @@ func (s *Synchronizer) DiagnosticArchive(ctx context.Context, archive types.Arch
 }
 
 // Run run the Connector.
-//nolint:cyclop
 func (s *Synchronizer) Run(ctx context.Context) error {
 	s.ctx = ctx
 	s.startedAt = s.now()
@@ -613,7 +612,6 @@ func (s *Synchronizer) setClient() error {
 	return nil
 }
 
-//nolint:cyclop
 func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) error {
 	var wasCreation bool
 
@@ -764,7 +762,6 @@ func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) error {
 	return firstErr
 }
 
-//nolint:cyclop
 func (s *Synchronizer) syncToPerform(ctx context.Context) map[string]bool {
 	s.l.Lock()
 	defer s.l.Unlock()

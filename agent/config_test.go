@@ -268,7 +268,7 @@ func Test_migrate(t *testing.T) {
 	}
 }
 
-func Test_loadConfiguration(t *testing.T) {
+func Test_loadConfiguration(t *testing.T) { //nolint:maintidx
 	URLMustParse := func(raw string) *url.URL {
 		u, err := url.Parse(raw)
 		if err != nil {

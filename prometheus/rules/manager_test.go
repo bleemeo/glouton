@@ -259,7 +259,7 @@ func makePoints(start time.Time, end time.Time, step time.Duration, template typ
 	return result
 }
 
-func Test_manager(t *testing.T) {
+func Test_manager(t *testing.T) { //nolint:maintidx
 	const (
 		resultName   = "copy_of_node_cpu_seconds_global"
 		resultName2  = "copy_of_node_cpu_seconds_global2"

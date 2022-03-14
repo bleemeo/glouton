@@ -28,7 +28,7 @@ import (
 
 type appender struct {
 	store *Store
-	ctx   context.Context
+	ctx   context.Context //nolint:containedctx
 }
 
 // Appender returns a prometheus appender wrapping the in memory store.

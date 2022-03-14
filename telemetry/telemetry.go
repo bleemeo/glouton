@@ -39,6 +39,22 @@ type Telemetry struct {
 	ID string
 }
 
+type information struct {
+	ID                 string `json:"id"`
+	BleemeoActive      bool   `json:"bleemeo_active"`
+	CPUCores           string `json:"cpu_cores"`
+	CPUModel           string `json:"cpu_model"`
+	Country            string `string:"country"`
+	InstallationFormat string `json:"installation_format"`
+	KernelVersion      string `json:"kernel_version"`
+	Memory             string `json:"memory"`
+	Product            string `json:"product"`
+	OSType             string `json:"os_type"`
+	OSVersion          string `json:"os_version"`
+	SystemArchitecture string `json:"system_architecture"`
+	Version            string `json:"version"`
+}
+
 func FromState(state state) Telemetry {
 	var result Telemetry
 
@@ -65,21 +81,23 @@ func (t Telemetry) PostInformation(ctx context.Context, url string, agentid stri
 		bleemeoActive = true
 	}
 
-	body, _ := json.Marshal(map[string]interface{}{
-		"id":                  t.ID,
-		"bleemeo_active":      bleemeoActive,
-		"cpu_cores":           facts["cpu_cores"],
-		"cpu_model":           facts["cpu_model_name"],
-		"country":             facts["timezone"],
-		"installation_format": facts["installation_format"],
-		"kernel_version":      facts["kernel_major_version"],
-		"memory":              facts["memory"],
-		"product":             "Glouton",
-		"os_type":             facts["os_name"],
-		"os_version":          facts["os_version"],
-		"system_architecture": facts["architecture"],
-		"version":             facts["glouton_version"],
-	})
+	information := information{
+		ID:                 t.ID,
+		BleemeoActive:      bleemeoActive,
+		CPUCores:           facts["cpu_cores"],
+		CPUModel:           facts["cpu_model_name"],
+		Country:            facts["timezone"],
+		InstallationFormat: facts["installation_format"],
+		KernelVersion:      facts["kernel_major_version"],
+		Memory:             facts["memory"],
+		Product:            "Glouton",
+		OSType:             facts["os_name"],
+		OSVersion:          facts["os_version"],
+		SystemArchitecture: facts["architecture"],
+		Version:            facts["glouton_version"],
+	}
+
+	body, _ := json.Marshal(information) //nolint:errchkjson // False positive.
 
 	req, _ := http.NewRequest("POST", url, bytes.NewBuffer(body))
 

@@ -362,7 +362,7 @@ func (c FakeContainer) StoppedAndReplaced() bool {
 	return c.FakeStoppedAndReplaced
 }
 
-func (c FakeContainer) Diff(other Container) string { //nolint:cyclop
+func (c FakeContainer) Diff(other Container) string {
 	diffs := []string{}
 
 	if diff := cmp.Diff(other.Annotations(), c.FakeAnnotations); c.FakeAnnotations != nil && diff != "" {
