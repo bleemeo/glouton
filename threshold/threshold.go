@@ -49,6 +49,7 @@ type Registry struct {
 	thresholds        map[MetricNameItem]Threshold
 	defaultSoftPeriod time.Duration
 	softPeriods       map[string]time.Duration
+	nowFunc           func() time.Time
 }
 
 // New returns a new ThresholdState.
@@ -57,6 +58,7 @@ func New(state State) *Registry {
 		state:             state,
 		states:            make(map[MetricNameItem]statusState),
 		defaultSoftPeriod: 300 * time.Second,
+		nowFunc:           time.Now,
 	}
 
 	var jsonList []jsonState
@@ -155,7 +157,7 @@ func (s statusState) Update(newStatus types.Status, period time.Duration, now ti
 		s.CurrentStatus = types.StatusOk
 	}
 
-	s.LastUpdate = time.Now()
+	s.LastUpdate = now
 
 	return s
 }
@@ -291,25 +293,25 @@ func (t Threshold) IsZero() bool {
 	return t.LowCritical == 0.0 && t.LowWarning == 0.0 && t.HighWarning == 0.0 && t.HighCritical == 0.0
 }
 
-// CurrentStatus returns the current status regarding the threshold and (if not ok) return the exceeded limit.
-func (t Threshold) CurrentStatus(value float64) (types.Status, float64) {
+// CurrentStatus returns the current status regarding the threshold and (if not ok) return a boolean true if the exceeded side the the high threshold.
+func (t Threshold) CurrentStatus(value float64) (types.Status, bool) {
 	if !math.IsNaN(t.LowCritical) && value < t.LowCritical {
-		return types.StatusCritical, t.LowCritical
+		return types.StatusCritical, false
 	}
 
 	if !math.IsNaN(t.LowWarning) && value < t.LowWarning {
-		return types.StatusWarning, t.LowWarning
+		return types.StatusWarning, false
 	}
 
 	if !math.IsNaN(t.HighCritical) && value > t.HighCritical {
-		return types.StatusCritical, t.HighCritical
+		return types.StatusCritical, true
 	}
 
 	if !math.IsNaN(t.HighWarning) && value > t.HighWarning {
-		return types.StatusWarning, t.HighWarning
+		return types.StatusWarning, true
 	}
 
-	return types.StatusOk, math.NaN()
+	return types.StatusOk, false
 }
 
 func (r *Registry) GetThresholdMetricNames() []string {
@@ -355,7 +357,7 @@ func (r *Registry) getThreshold(key MetricNameItem) Threshold {
 
 // Run will periodically save status state and clean it.
 func (r *Registry) Run(ctx context.Context) error {
-	lastSave := time.Now()
+	lastSave := r.nowFunc()
 
 	for ctx.Err() == nil {
 		save := false
@@ -373,7 +375,7 @@ func (r *Registry) Run(ctx context.Context) error {
 		r.run(save)
 
 		if save {
-			lastSave = time.Now()
+			lastSave = r.nowFunc()
 		}
 	}
 
@@ -523,7 +525,7 @@ func (p pusher) PushPoints(ctx context.Context, points []types.MetricPoint) {
 }
 
 func (p *pusher) addPointWithThreshold(points []types.MetricPoint, point types.MetricPoint, threshold Threshold, key MetricNameItem) []types.MetricPoint {
-	softStatus, thresholdLimit := threshold.CurrentStatus(point.Value)
+	softStatus, highThreshold := threshold.CurrentStatus(point.Value)
 	previousState := p.registry.states[key]
 	period := p.registry.defaultSoftPeriod
 
@@ -531,7 +533,7 @@ func (p *pusher) addPointWithThreshold(points []types.MetricPoint, point types.M
 		period = tmp
 	}
 
-	newState := previousState.Update(softStatus, period, time.Now())
+	newState := previousState.Update(softStatus, period, p.registry.nowFunc())
 	p.registry.states[key] = newState
 
 	unit := p.registry.units[key]
@@ -539,6 +541,19 @@ func (p *pusher) addPointWithThreshold(points []types.MetricPoint, point types.M
 	statusDescription := fmt.Sprintf("Current value: %s", FormatValue(point.Value, unit))
 
 	if newState.CurrentStatus != types.StatusOk {
+		thresholdLimit := math.NaN()
+
+		switch {
+		case highThreshold && newState.CurrentStatus == types.StatusCritical:
+			thresholdLimit = threshold.HighCritical
+		case highThreshold && newState.CurrentStatus == types.StatusWarning:
+			thresholdLimit = threshold.HighWarning
+		case !highThreshold && newState.CurrentStatus == types.StatusCritical:
+			thresholdLimit = threshold.LowCritical
+		case !highThreshold && newState.CurrentStatus == types.StatusWarning:
+			thresholdLimit = threshold.LowWarning
+		}
+
 		if period > 0 {
 			statusDescription += fmt.Sprintf(
 				" threshold (%s) exceeded over last %v",
