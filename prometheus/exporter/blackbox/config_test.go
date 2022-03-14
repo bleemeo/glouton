@@ -25,6 +25,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	bbConf "github.com/prometheus/blackbox_exporter/config"
 )
 
@@ -99,6 +101,7 @@ func TestConfigParsing(t *testing.T) {
 			},
 			ModuleName: "http_2xx",
 			Name:       "https://google.com",
+			nowFunc:    time.Now,
 		}),
 		genCollectorFromStaticTarget(configTarget{
 			URL: "inpt.fr",
@@ -118,6 +121,7 @@ func TestConfigParsing(t *testing.T) {
 			},
 			ModuleName: "dns",
 			Name:       "inpt.fr",
+			nowFunc:    time.Now,
 		}),
 		genCollectorFromStaticTarget(configTarget{
 			URL: "http://neverssl.com",
@@ -141,11 +145,12 @@ func TestConfigParsing(t *testing.T) {
 			},
 			ModuleName: "http_2xx",
 			Name:       "http://neverssl.com",
+			nowFunc:    time.Now,
 		}),
 	}
 
-	if !reflect.DeepEqual(bbManager.targets, expectedValue) {
-		t.Fatalf("TestConfigParsing() = %#v, want %#v", bbManager.targets, expectedValue)
+	if diff := cmp.Diff(expectedValue, bbManager.targets, cmpopts.IgnoreUnexported(configTarget{})); diff != "" {
+		t.Errorf("bbManager.targets mismatch (-want +got)\n%s", diff)
 	}
 }
 

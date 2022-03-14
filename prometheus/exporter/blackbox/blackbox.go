@@ -28,6 +28,7 @@ import (
 	"net/http/httptrace"
 	"net/url"
 	"reflect"
+	"sync"
 	"time"
 
 	"github.com/go-kit/log"
@@ -127,11 +128,7 @@ func (target configTarget) Describe(ch chan<- *prometheus.Desc) {
 
 // Collect implements the prometheus.Collector interface.
 // It is where we do the actual "probing".
-func (target configTarget) Collect(ch chan<- prometheus.Metric) {
-	ctx, cancel := context.WithTimeout(context.Background(), target.Module.Timeout)
-	// Let's ensure we don't end up with stray queries running somewhere
-	defer cancel()
-
+func (target configTarget) CollectWithContext(ctx context.Context, ch chan<- prometheus.Metric) {
 	probeFn, present := probers[target.Module.Prober]
 	if !present {
 		logger.V(1).Printf("blackbox_exporter: no prober registered under the name '%s', cannot check '%s'.",
@@ -164,9 +161,15 @@ func (target configTarget) Collect(ch chan<- prometheus.Metric) {
 	registry := prometheus.NewRegistry()
 
 	extLogger := log.With(logger.GoKitLoggerWrapper(logger.V(2)), "url", target.URL)
+
+	ctx, cancel := context.WithTimeout(ctx, target.Module.Timeout)
+	// Let's ensure we don't end up with stray queries running somewhere
+	defer cancel()
+
 	start := time.Now()
 
 	var (
+		l                sync.Mutex
 		roundTrips       []roundTrip
 		currentRoundTrip roundTrip
 	)
@@ -174,6 +177,13 @@ func (target configTarget) Collect(ch chan<- prometheus.Metric) {
 	// This is done to capture the last response TLS handshake state.
 	subCtx := httptrace.WithClientTrace(ctx, &httptrace.ClientTrace{
 		GetConn: func(hostPort string) {
+			l.Lock()
+			defer l.Unlock()
+
+			if ctx.Err() != nil {
+				return
+			}
+
 			if currentRoundTrip.HostPort != "" {
 				roundTrips = append(roundTrips, currentRoundTrip)
 			}
@@ -184,6 +194,13 @@ func (target configTarget) Collect(ch chan<- prometheus.Metric) {
 			}
 		},
 		TLSHandshakeDone: func(cs tls.ConnectionState, e error) {
+			l.Lock()
+			defer l.Unlock()
+
+			if ctx.Err() != nil {
+				return
+			}
+
 			currentRoundTrip.TLSState = &cs
 		},
 	})
@@ -204,9 +221,13 @@ func (target configTarget) Collect(ch chan<- prometheus.Metric) {
 		return
 	}
 
+	l.Lock()
+
 	if currentRoundTrip.HostPort != "" {
 		roundTrips = append(roundTrips, currentRoundTrip)
 	}
+
+	l.Unlock()
 
 	// write all the gathered metrics to our upper registry
 	writeMFsToChan(filterMFs(mfs, func(mf *dto.MetricFamily) bool {
@@ -323,9 +344,17 @@ func (target configTarget) verifyTLS(extLogger log.Logger, roundTrips []roundTri
 			continue
 		}
 
+		if target.testInjectCARoot != nil {
+			if cfg.RootCAs == nil {
+				cfg.RootCAs = x509.NewCertPool()
+			}
+
+			cfg.RootCAs.AddCert(target.testInjectCARoot)
+		}
+
 		opts := x509.VerifyOptions{
 			Roots:         cfg.RootCAs,
-			CurrentTime:   time.Now(),
+			CurrentTime:   target.nowFunc(),
 			DNSName:       cfg.ServerName,
 			Intermediates: x509.NewCertPool(),
 		}
@@ -376,7 +405,7 @@ func compareConfigTargets(a configTarget, b configTarget) bool {
 
 func collectorInMap(value collectorWithLabels, iterable map[int]gathererWithConfigTarget) bool {
 	for _, mapValue := range iterable {
-		if compareConfigTargets(value.collector, mapValue.target) {
+		if compareConfigTargets(value.Collector, mapValue.target) {
 			return true
 		}
 	}
@@ -387,7 +416,7 @@ func collectorInMap(value collectorWithLabels, iterable map[int]gathererWithConf
 func gathererInArray(value gathererWithConfigTarget, iterable []collectorWithLabels) bool {
 	for _, arrayValue := range iterable {
 		// see inMap() above
-		if compareConfigTargets(value.target, arrayValue.collector) {
+		if compareConfigTargets(value.target, arrayValue.Collector) {
 			return true
 		}
 	}
@@ -400,21 +429,20 @@ func (m *RegisterManager) updateRegistrations(ctx context.Context) error {
 	// register new probes
 	for _, collectorFromConfig := range m.targets {
 		if !collectorInMap(collectorFromConfig, m.registrations) {
-			reg := prometheus.NewRegistry()
-
-			if err := reg.Register(collectorFromConfig.collector); err != nil {
+			gatherer, err := newGatherer(collectorFromConfig.Collector)
+			if err != nil {
 				return err
 			}
 
-			var g prometheus.Gatherer = reg
+			var g prometheus.Gatherer = gatherer
 
 			// wrap our gatherer in ProbeGatherer, to only collect metrics when necessary
-			g = registry.NewProbeGatherer(g, collectorFromConfig.collector.RefreshRate > time.Minute)
+			g = registry.NewProbeGatherer(g, collectorFromConfig.Collector.RefreshRate > time.Minute)
 
-			hash := labels.FromMap(collectorFromConfig.labels).Hash()
+			hash := labels.FromMap(collectorFromConfig.Labels).Hash()
 
-			refreshRate := collectorFromConfig.collector.RefreshRate
-			creationDate := collectorFromConfig.collector.CreationDate
+			refreshRate := collectorFromConfig.Collector.RefreshRate
+			creationDate := collectorFromConfig.Collector.CreationDate
 
 			if refreshRate > 0 {
 				// We want public probe to run at known time
@@ -428,10 +456,10 @@ func (m *RegisterManager) updateRegistrations(ctx context.Context) error {
 			id, err := m.registry.RegisterGatherer(
 				ctx,
 				registry.RegistrationOption{
-					Description: "blackbox for " + collectorFromConfig.collector.URL,
+					Description: "blackbox for " + collectorFromConfig.Collector.URL,
 					JitterSeed:  hash,
-					Interval:    collectorFromConfig.collector.RefreshRate,
-					ExtraLabels: collectorFromConfig.labels,
+					Interval:    collectorFromConfig.Collector.RefreshRate,
+					ExtraLabels: collectorFromConfig.Labels,
 				},
 				g,
 			)
@@ -445,11 +473,11 @@ func (m *RegisterManager) updateRegistrations(ctx context.Context) error {
 			}
 
 			m.registrations[id] = gathererWithConfigTarget{
-				target:   collectorFromConfig.collector,
+				target:   collectorFromConfig.Collector,
 				gatherer: g,
 			}
 
-			logger.V(2).Printf("New probe registered for '%s'", collectorFromConfig.collector.Name)
+			logger.V(2).Printf("New probe registered for '%s'", collectorFromConfig.Collector.Name)
 		}
 	}
 
