@@ -213,7 +213,6 @@ type mockResource interface {
 	Store(interface{})
 }
 
-//nolint: cyclop
 func newAPI() *mockAPI {
 	api := &mockAPI{
 		JWTToken:       "random-value",

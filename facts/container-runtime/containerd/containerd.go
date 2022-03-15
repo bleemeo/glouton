@@ -1072,7 +1072,7 @@ func (q *containerdProcessQuerier) getContainerFromCGroupPath(cgroupPath string)
 	return containerObject{}, false
 }
 
-func (q *containerdProcessQuerier) ContainerFromPID(ctx context.Context, parentContainerID string, pid int) (facts.Container, error) { //nolint: cyclop
+func (q *containerdProcessQuerier) ContainerFromPID(ctx context.Context, parentContainerID string, pid int) (facts.Container, error) {
 	q.c.l.Lock()
 	defer q.c.l.Unlock()
 

@@ -252,7 +252,7 @@ func (r Rule) renameMetric(metric *dto.Metric, name string) (*dto.Metric, string
 	return metric, name, true
 }
 
-func fixType(m *dto.Metric, wantType dto.MetricType) *dto.Metric { //nolint: cyclop
+func fixType(m *dto.Metric, wantType dto.MetricType) *dto.Metric {
 	var (
 		value   *float64
 		gotType dto.MetricType
