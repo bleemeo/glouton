@@ -87,6 +87,17 @@ func (c *Containerd) RuntimeFact(ctx context.Context, currentFact map[string]str
 		return nil
 	}
 
+	ns, err := cl.Namespaces(ctx)
+	if err != nil {
+		return nil
+	}
+
+	// If containerD has only moby namespace, ignore it. It likely means this containerD is
+	// only here for Docker and Glouton will provide facts from Docker directly.
+	if len(ns) == 1 && ns[0] == ignoredNamespace {
+		return nil
+	}
+
 	version, err := cl.Version(ctx)
 	if err != nil {
 		if c.client != nil {
