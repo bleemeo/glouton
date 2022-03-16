@@ -213,6 +213,12 @@ func (a *agent) init(ctx context.Context, configFiles []string, firstRun bool) (
 		logger.Printf("Warning while loading configuration: %v", w)
 	}
 
+	a.containerFilter = facts.ContainerFilter{
+		DisabledByDefault: a.config.Container.DisabledByDefault,
+		AllowList:         a.config.Container.AllowPatternList,
+		DenyList:          a.config.Container.DenyPatternList,
+	}
+
 	statePath := a.oldConfig.String("agent.state_file")
 	oldStatePath := a.oldConfig.String("agent.deprecated_state_file")
 

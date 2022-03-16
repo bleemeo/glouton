@@ -87,6 +87,66 @@ func TestContainerEnabled(t *testing.T) {
 			wantEnabled:  true,
 			wantExplicit: true,
 		},
+		{
+			name: "config",
+			container: FakeContainer{
+				FakeContainerName: "does-not-matter",
+			},
+			filter: ContainerFilter{
+				DisabledByDefault: true,
+			},
+			wantEnabled:  false,
+			wantExplicit: false,
+		},
+		{
+			name: "config-allow-list",
+			container: FakeContainer{
+				FakeContainerName: "does-not-matter",
+			},
+			filter: ContainerFilter{
+				DisabledByDefault: true,
+				AllowList:         []string{"does-not-matter"},
+			},
+			wantEnabled:  true,
+			wantExplicit: true,
+		},
+		{
+			name: "config-allow-list-glob",
+			container: FakeContainer{
+				FakeContainerName: "does-not-matter",
+			},
+			filter: ContainerFilter{
+				DisabledByDefault: false,
+				AllowList:         []string{"does*"},
+			},
+			wantEnabled:  true,
+			wantExplicit: true,
+		},
+		{
+			name: "config-allow-list-glob-2",
+			container: FakeContainer{
+				FakeContainerName: "another",
+			},
+			filter: ContainerFilter{
+				DisabledByDefault: false,
+				AllowList:         []string{"does*"},
+			},
+			wantEnabled:  true,
+			wantExplicit: false,
+		},
+		{
+			name: "config-allow-deny-list",
+			container: FakeContainer{
+				FakeContainerName: "does-not-matter",
+			},
+			filter: ContainerFilter{
+				DisabledByDefault: false,
+				AllowList:         []string{"does*"},
+				DenyList:          []string{"does-not-matter"},
+			},
+			wantEnabled:  false,
+			wantExplicit: true,
+		},
 	}
 	for _, tt := range tests {
 		tt := tt

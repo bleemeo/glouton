@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"glouton/logger"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -140,6 +141,8 @@ type ContainerRuntimeProcessQuerier interface {
 
 type ContainerFilter struct {
 	DisabledByDefault bool
+	AllowList         []string
+	DenyList          []string
 }
 
 // ContainerIgnored return true if a container is ignored by Glouton.
@@ -160,6 +163,22 @@ func (cf ContainerFilter) ContainerIgnored(c Container) bool {
 func (cf ContainerFilter) ContainerEnabled(c Container) (enabled bool, explicit bool) {
 	if c.StoppedAndReplaced() {
 		return false, true
+	}
+
+	name := c.ContainerName()
+
+	for _, pattern := range cf.DenyList {
+		matched, err := filepath.Match(pattern, name)
+		if err == nil && matched {
+			return false, true
+		}
+	}
+
+	for _, pattern := range cf.AllowList {
+		matched, err := filepath.Match(pattern, name)
+		if err == nil && matched {
+			return true, true
+		}
 	}
 
 	return containerEnabledFromLabels(LabelsAndAnnotations(c), cf.DisabledByDefault)
