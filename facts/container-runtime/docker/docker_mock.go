@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"glouton/facts"
 	"io/ioutil"
 	"path/filepath"
 	"reflect"
@@ -169,10 +170,11 @@ func NewDockerMockFromFile(filename string) (*MockDockerClient, error) {
 }
 
 // FakeDocker return a Docker runtime connector that use a mock client.
-func FakeDocker(client *MockDockerClient) *Docker {
+func FakeDocker(client *MockDockerClient, isContainerIgnored func(facts.Container) bool) *Docker {
 	return &Docker{
 		openConnection: func(_ context.Context, _ string) (cl dockerClient, err error) {
 			return client, nil
 		},
+		IsContainerIgnored: isContainerIgnored,
 	}
 }

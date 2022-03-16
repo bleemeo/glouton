@@ -276,7 +276,7 @@ func (s *Synchronizer) delayedContainerCheck(newDelayedContainer map[string]time
 	delay := time.Duration(s.option.Config.Int("bleemeo.container_registration_delay_seconds")) * time.Second
 
 	if s.now().Sub(container.CreatedAt()) < delay {
-		enable, explicit := facts.ContainerEnabled(container)
+		enable, explicit := s.option.IsContainerEnabled(container)
 		if !enable || !explicit {
 			newDelayedContainer[container.ID()] = container.CreatedAt().Add(delay)
 

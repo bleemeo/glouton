@@ -138,30 +138,34 @@ type ContainerRuntimeProcessQuerier interface {
 	ContainerFromPID(ctx context.Context, parentContainerID string, pid int) (Container, error)
 }
 
+type ContainerFilter struct {
+	DisabledByDefault bool
+}
+
 // ContainerIgnored return true if a container is ignored by Glouton.
-func ContainerIgnored(c Container) bool {
+func (cf ContainerFilter) ContainerIgnored(c Container) bool {
 	// created container are ignored because there should not stay in this state
 	// a long time. So wait for this container to because started or be deleted.
 	if c.State() == ContainerCreated {
 		return true
 	}
 
-	e, _ := ContainerEnabled(c)
+	e, _ := cf.ContainerEnabled(c)
 
 	return !e
 }
 
 // ContainerEnabled returns true if this container should be monitored by Glouton.
 // Also return a 2nd boolean telling is this container is explicitly enabled or if it's the default.
-func ContainerEnabled(c Container) (enabled bool, explicit bool) {
+func (cf ContainerFilter) ContainerEnabled(c Container) (enabled bool, explicit bool) {
 	if c.StoppedAndReplaced() {
 		return false, true
 	}
 
-	return containerEnabledFromLabels(LabelsAndAnnotations(c))
+	return containerEnabledFromLabels(LabelsAndAnnotations(c), cf.DisabledByDefault)
 }
 
-func containerEnabledFromLabels(labels map[string]string) (enabled bool, explicit bool) {
+func containerEnabledFromLabels(labels map[string]string, disabledByDefault bool) (enabled bool, explicit bool) {
 	label := labels[containerEnableLabel]
 	if label == "" {
 		label = labels[containerEnableLegacyLabel]
@@ -175,7 +179,7 @@ func containerEnabledFromLabels(labels map[string]string) (enabled bool, explici
 		return false, true
 	}
 
-	return string2Boolean(label, true)
+	return string2Boolean(label, !disabledByDefault)
 }
 
 func string2Boolean(s string, defaultValue bool) (bool, bool) {
@@ -187,13 +191,6 @@ func string2Boolean(s string, defaultValue bool) (bool, bool) {
 	default:
 		return defaultValue, false
 	}
-}
-
-// ContainerIgnoredFromLabels return true if a container is ignored by Glouton.
-func ContainerIgnoredFromLabels(labels map[string]string) bool {
-	e, _ := containerEnabledFromLabels(labels)
-
-	return !e
 }
 
 // LabelsAndAnnotations return labels and annotations merged.

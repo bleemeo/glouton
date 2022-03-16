@@ -683,6 +683,7 @@ func newMetricHelper(t *testing.T) *metricTestHelper {
 			MetricFormat:        types.MetricFormatBleemeo,
 			SNMPOnlineTarget:    func() int { return 0 },
 			BlackboxScraperName: cfg.String("blackbox.scraper_name"),
+			IsContainerEnabled:  facts.ContainerFilter{}.ContainerEnabled,
 		},
 	})
 	if err != nil {

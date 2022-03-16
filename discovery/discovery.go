@@ -64,6 +64,7 @@ type Discovery struct {
 	servicesOverride      map[NameContainer]ServiceOveride
 	isCheckIgnored        func(NameContainer) bool
 	isInputIgnored        func(NameContainer) bool
+	isContainerIgnored    func(facts.Container) bool
 	metricFormat          types.MetricFormat
 }
 
@@ -86,7 +87,7 @@ type GathererRegistry interface {
 }
 
 // New returns a new Discovery.
-func New(dynamicDiscovery Discoverer, coll Collector, metricRegistry GathererRegistry, taskRegistry Registry, state State, acc inputs.AnnotationAccumulator, containerInfo containerInfoProvider, servicesOverride map[NameContainer]ServiceOveride, isCheckIgnored func(NameContainer) bool, isInputIgnored func(NameContainer) bool, metricFormat types.MetricFormat) *Discovery {
+func New(dynamicDiscovery Discoverer, coll Collector, metricRegistry GathererRegistry, taskRegistry Registry, state State, acc inputs.AnnotationAccumulator, containerInfo containerInfoProvider, servicesOverride map[NameContainer]ServiceOveride, isCheckIgnored func(NameContainer) bool, isInputIgnored func(NameContainer) bool, isContainerIgnored func(c facts.Container) bool, metricFormat types.MetricFormat) *Discovery {
 	initialServices := servicesFromState(state)
 	discoveredServicesMap := make(map[NameContainer]Service, len(initialServices))
 
@@ -112,6 +113,7 @@ func New(dynamicDiscovery Discoverer, coll Collector, metricRegistry GathererReg
 		servicesOverride:      servicesOverride,
 		isCheckIgnored:        isCheckIgnored,
 		isInputIgnored:        isInputIgnored,
+		isContainerIgnored:    isContainerIgnored,
 		metricFormat:          metricFormat,
 	}
 }
@@ -343,7 +345,7 @@ func (d *Discovery) setServiceActiveAndContainer(service Service) Service {
 			service.container = container
 		}
 
-		if !found || facts.ContainerIgnored(container) {
+		if !found || d.isContainerIgnored(container) {
 			service.Active = false
 		} else if container.StoppedAndReplaced() {
 			service.Active = false

@@ -30,7 +30,7 @@ import (
 )
 
 // New initialise docker.Input.
-func New(dockerAddress string, dockerRuntime crTypes.RuntimeInterface) (i telegraf.Input, err error) {
+func New(dockerAddress string, dockerRuntime crTypes.RuntimeInterface, isContainerIgnored func(facts.Container) bool) (i telegraf.Input, err error) {
 	input, ok := telegraf_inputs.Inputs["docker"]
 	if ok {
 		dockerInput, ok := input().(*docker.Docker)
@@ -39,7 +39,7 @@ func New(dockerAddress string, dockerRuntime crTypes.RuntimeInterface) (i telegr
 				dockerInput.Endpoint = dockerAddress
 			}
 
-			r := renamer{dockerRuntime: dockerRuntime}
+			r := renamer{dockerRuntime: dockerRuntime, isContainerIgnored: isContainerIgnored}
 
 			dockerInput.PerDevice = false
 			dockerInput.Total = true
@@ -63,7 +63,8 @@ func New(dockerAddress string, dockerRuntime crTypes.RuntimeInterface) (i telegr
 }
 
 type renamer struct {
-	dockerRuntime crTypes.RuntimeInterface
+	dockerRuntime      crTypes.RuntimeInterface
+	isContainerIgnored func(facts.Container) bool
 }
 
 func (r renamer) renameGlobal(gatherContext internal.GatherContext) (internal.GatherContext, bool) {
@@ -83,7 +84,7 @@ func (r renamer) renameGlobal(gatherContext internal.GatherContext) (internal.Ga
 	}
 
 	c, ok := r.dockerRuntime.CachedContainer(gatherContext.Annotations.ContainerID)
-	if !ok || facts.ContainerIgnored(c) {
+	if !ok || r.isContainerIgnored(c) {
 		return gatherContext, true
 	}
 

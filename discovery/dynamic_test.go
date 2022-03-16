@@ -132,6 +132,7 @@ func TestDynamicDiscoverySimple(t *testing.T) {
 				{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 11211},
 			},
 		}},
+		isContainerIgnored: facts.ContainerFilter{}.ContainerIgnored,
 	}
 	ctx := context.Background()
 
@@ -777,6 +778,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 			fileReader: mockFileReader{
 				contents: c.filesContent,
 			},
+			isContainerIgnored: facts.ContainerFilter{}.ContainerIgnored,
 		}
 
 		srv, err := dd.Discovery(ctx, 0)

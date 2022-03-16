@@ -112,6 +112,7 @@ type agent struct {
 	hostRootPath           string
 	discovery              *discovery.Discovery
 	dockerRuntime          *dockerRuntime.Docker
+	containerFilter        facts.ContainerFilter
 	containerdRuntime      *containerd.Containerd
 	containerRuntime       crTypes.RuntimeInterface
 	collector              *collector.Collector
@@ -715,23 +716,27 @@ func (a *agent) run(ctx context.Context) { //nolint:maintidx
 	a.dockerRuntime = &dockerRuntime.Docker{
 		DockerSockets:             dockerRuntime.DefaultAddresses(a.hostRootPath),
 		DeletedContainersCallback: a.deletedContainersCallback,
+		IsContainerIgnored:        a.containerFilter.ContainerIgnored,
 	}
 	a.containerdRuntime = &containerd.Containerd{
 		Addresses:                 containerd.DefaultAddresses(a.hostRootPath),
 		DeletedContainersCallback: a.deletedContainersCallback,
+		IsContainerIgnored:        a.containerFilter.ContainerIgnored,
 	}
 	a.containerRuntime = &merge.Runtime{
 		Runtimes: []crTypes.RuntimeInterface{
 			a.dockerRuntime,
 			a.containerdRuntime,
 		},
+		ContainerIgnored: a.containerFilter.ContainerIgnored,
 	}
 
 	if a.oldConfig.Bool("kubernetes.enable") {
 		kube := &kubernetes.Kubernetes{
-			Runtime:    a.containerRuntime,
-			NodeName:   a.oldConfig.String("kubernetes.nodename"),
-			KubeConfig: a.oldConfig.String("kubernetes.kubeconfig"),
+			Runtime:            a.containerRuntime,
+			NodeName:           a.oldConfig.String("kubernetes.nodename"),
+			KubeConfig:         a.oldConfig.String("kubernetes.kubeconfig"),
+			IsContainerIgnored: a.containerFilter.ContainerIgnored,
 		}
 		a.containerRuntime = kube
 
@@ -814,7 +819,7 @@ func (a *agent) run(ctx context.Context) { //nolint:maintidx
 	serviceIgnoreMetrics := confFieldToSliceMap(servicesIgnoreMetrics, "service ignore metrics")
 	isCheckIgnored := discovery.NewIgnoredService(serviceIgnoreCheck).IsServiceIgnored
 	isInputIgnored := discovery.NewIgnoredService(serviceIgnoreMetrics).IsServiceIgnored
-	dynamicDiscovery := discovery.NewDynamic(psFact, netstat, a.containerRuntime, discovery.SudoFileReader{HostRootPath: a.hostRootPath}, a.oldConfig.String("stack"))
+	dynamicDiscovery := discovery.NewDynamic(psFact, netstat, a.containerRuntime, a.containerFilter.ContainerIgnored, discovery.SudoFileReader{HostRootPath: a.hostRootPath}, a.oldConfig.String("stack"))
 	a.discovery = discovery.New(
 		dynamicDiscovery,
 		a.collector,
@@ -826,6 +831,7 @@ func (a *agent) run(ctx context.Context) { //nolint:maintidx
 		a.config.Services.ToDiscoveryMap(),
 		isCheckIgnored,
 		isInputIgnored,
+		a.containerFilter.ContainerIgnored,
 		a.metricFormat,
 	)
 
@@ -963,6 +969,7 @@ func (a *agent) run(ctx context.Context) { //nolint:maintidx
 			BlackboxScraperName:     scaperName,
 			RebuildAlertingRules:    a.rulesManager.RebuildAlertingRules,
 			ReloadState:             a.reloadState.Bleemeo(),
+			IsContainerEnabled:      a.containerFilter.ContainerEnabled,
 		})
 		if err != nil {
 			logger.Printf("unable to start Bleemeo SAAS connector: %v", err)
@@ -1780,7 +1787,7 @@ func (a *agent) handleTrigger(ctx context.Context) {
 
 		hasConnection := a.dockerRuntime.IsRuntimeRunning(ctx)
 		if hasConnection && !a.dockerInputPresent && a.oldConfig.Bool("telegraf.docker_metrics_enable") {
-			i, err := docker.New(a.dockerRuntime.ServerAddress(), a.dockerRuntime)
+			i, err := docker.New(a.dockerRuntime.ServerAddress(), a.dockerRuntime, a.containerFilter.ContainerIgnored)
 			if err != nil {
 				logger.V(1).Printf("error when creating Docker input: %v", err)
 			} else {
@@ -2129,7 +2136,7 @@ func (a *agent) diagnosticContainers(ctx context.Context, archive types.ArchiveW
 				"Name=%s, ID=%s, ignored=%v, IP=%s, listenAddr=%v,\n\tState=%v, CreatedAt=%v, StartedAt=%v, FinishedAt=%v, StoppedAndReplaced=%v\n\tHealth=%v (%s) K8S=%v/%v\n",
 				c.ContainerName(),
 				c.ID(),
-				facts.ContainerIgnored(c),
+				a.containerFilter.ContainerIgnored(c),
 				c.PrimaryAddress(),
 				addr,
 				c.State(),

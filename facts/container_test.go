@@ -8,6 +8,7 @@ import (
 func TestContainerEnabled(t *testing.T) {
 	tests := []struct {
 		name         string
+		filter       ContainerFilter
 		container    FakeContainer
 		wantEnabled  bool
 		wantExplicit bool
@@ -91,7 +92,7 @@ func TestContainerEnabled(t *testing.T) {
 		tt := tt
 
 		t.Run(tt.name, func(t *testing.T) {
-			gotEnabled, gotExplicit := ContainerEnabled(tt.container)
+			gotEnabled, gotExplicit := tt.filter.ContainerEnabled(tt.container)
 			if gotEnabled != tt.wantEnabled {
 				t.Errorf("ContainerEnabled() gotEnabled = %v, want %v", gotEnabled, tt.wantEnabled)
 			}
@@ -99,7 +100,7 @@ func TestContainerEnabled(t *testing.T) {
 				t.Errorf("ContainerEnabled() gotExplicit = %v, want %v", gotExplicit, tt.wantExplicit)
 			}
 
-			got := ContainerIgnored(tt.container)
+			got := tt.filter.ContainerIgnored(tt.container)
 			if got != !tt.wantEnabled {
 				t.Errorf("ContainerIgnored() = %v, want %v", got, !tt.wantEnabled)
 			}
