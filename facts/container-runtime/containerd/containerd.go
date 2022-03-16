@@ -117,7 +117,6 @@ func (c *Containerd) RuntimeFact(ctx context.Context, currentFact map[string]str
 
 // Metrics return metrics in a format similar to the one returned by Telegraf docker input.
 // Note that Metrics will never open the connection to ContainerD and will return empty points if not connected.
-//nolint:cyclop
 func (c *Containerd) Metrics(ctx context.Context) ([]types.MetricPoint, error) {
 	now := time.Now()
 
@@ -460,7 +459,6 @@ func (c *Containerd) ContainerLastKill(containerID string) time.Time {
 	return time.Time{}
 }
 
-//nolint:cyclop
 func (c *Containerd) run(ctx context.Context) error {
 	c.l.Lock()
 
@@ -1085,7 +1083,7 @@ func (q *containerdProcessQuerier) getContainerFromCGroupPath(cgroupPath string)
 	return containerObject{}, false
 }
 
-func (q *containerdProcessQuerier) ContainerFromPID(ctx context.Context, parentContainerID string, pid int) (facts.Container, error) { //nolint: cyclop
+func (q *containerdProcessQuerier) ContainerFromPID(ctx context.Context, parentContainerID string, pid int) (facts.Container, error) {
 	q.c.l.Lock()
 	defer q.c.l.Unlock()
 
@@ -1230,7 +1228,6 @@ type metricValue struct {
 	values             map[string]uint64
 }
 
-//nolint:cyclop
 func rateFromMetricValue(gloutonIDToName map[string]string, pastValues []metricValue, newValues []metricValue) []types.MetricPoint {
 	memUsage, err := mem.VirtualMemory()
 	if err != nil {

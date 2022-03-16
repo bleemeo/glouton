@@ -27,7 +27,7 @@ type Debouncer struct {
 	target func(context.Context)
 	period time.Duration
 	delay  time.Duration
-	ctx    context.Context
+	ctx    context.Context //nolint:containedctx
 
 	l          sync.Mutex
 	runPending bool

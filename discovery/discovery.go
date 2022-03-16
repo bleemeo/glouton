@@ -147,7 +147,6 @@ func (d *Discovery) LastUpdate() time.Time {
 }
 
 // DiagnosticArchive add to a zipfile useful diagnostic information.
-//nolint:cyclop
 func (d *Discovery) DiagnosticArchive(ctx context.Context, zipFile types.ArchiveWriter) error {
 	d.l.Lock()
 	defer d.l.Unlock()
@@ -358,7 +357,6 @@ func (d *Discovery) setServiceActiveAndContainer(service Service) Service {
 	return service
 }
 
-//nolint:cyclop
 func applyOveride(discoveredServicesMap map[NameContainer]Service, servicesOverride map[NameContainer]ServiceOveride) map[NameContainer]Service {
 	servicesMap := make(map[NameContainer]Service)
 

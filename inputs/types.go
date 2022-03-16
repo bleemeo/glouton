@@ -28,7 +28,7 @@ type AnnotationAccumulator interface {
 // Accumulator implement telegraf.Accumulator (+AddFieldsWithAnnotations) and emit the metric points.
 type Accumulator struct {
 	Pusher  types.PointPusher
-	Context context.Context
+	Context context.Context //nolint:containedctx
 }
 
 // AddFields adds a metric to the accumulator with the given measurement

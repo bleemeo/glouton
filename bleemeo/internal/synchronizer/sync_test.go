@@ -213,7 +213,6 @@ type mockResource interface {
 	Store(interface{})
 }
 
-//nolint: cyclop
 func newAPI() *mockAPI {
 	api := &mockAPI{
 		JWTToken:       "random-value",
@@ -521,7 +520,6 @@ func (api *mockAPI) Server() *httptest.Server {
 	return httptest.NewServer(api.serveMux)
 }
 
-//nolint:cyclop
 func (api *mockAPI) defaultHandler(r *http.Request) (interface{}, int, error) {
 	if api.AuthCallback != nil {
 		response, status, err := api.AuthCallback(api, r)
@@ -1029,7 +1027,8 @@ func TestSync(t *testing.T) {
 	helper.api.resources["metric"].AddStore(newMetric1, newMetric2, newMetricActiveMonitor)
 	helper.api.resources["service"].AddStore(newMonitor)
 
-	helper.api.resources["agent"].(*genericResource).CreateHook = func(r *http.Request, body []byte, valuePtr interface{}) error {
+	agentResource, _ := helper.api.resources["agent"].(*genericResource)
+	agentResource.CreateHook = func(r *http.Request, body []byte, valuePtr interface{}) error {
 		return fmt.Errorf("%w: agent is already registered, shouldn't re-register", errUnexpectedOperation)
 	}
 

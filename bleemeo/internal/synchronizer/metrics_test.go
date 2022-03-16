@@ -826,7 +826,6 @@ func (res runResult) CheckAllowError(name string, wantFull bool) {
 // Agent start and register metrics
 // Some metrics disapear => mark inative
 // Some re-appear and some new => mark active & register.
-//nolint:cyclop
 func TestMetricSimpleSync(t *testing.T) {
 	helper := newMetricHelper(t)
 	defer helper.Close()
@@ -1016,7 +1015,6 @@ func TestMetricSimpleSync(t *testing.T) {
 }
 
 // TestMetricDeleted test that Glouton can update metrics deleted on Bleemeo.
-//nolint:cyclop
 func TestMetricDeleted(t *testing.T) {
 	helper := newMetricHelper(t)
 	defer helper.Close()
@@ -1225,8 +1223,7 @@ func TestMetricError(t *testing.T) {
 		t.Errorf("We should have some error, had %d", helper.api.ServerErrorCount)
 	}
 
-	metrics := helper.Metrics()
-	if len(metrics) != 4 { // 3 + agent_status
+	if metrics := helper.Metrics(); len(metrics) != 4 { // 3 + agent_status
 		t.Errorf("len(metrics) = %d, want 4", len(metrics))
 	}
 }
@@ -1237,7 +1234,8 @@ func TestMetricUnknownError(t *testing.T) {
 	defer helper.Close()
 
 	// API always reject registering "deny-me" metric
-	helper.api.resources["metric"].(*genericResource).CreateHook = func(r *http.Request, body []byte, valuePtr interface{}) error {
+	metricResource, _ := helper.api.resources["metric"].(*genericResource)
+	metricResource.CreateHook = func(r *http.Request, body []byte, valuePtr interface{}) error {
 		metric, _ := valuePtr.(*metricPayload)
 		if metric.Name == "deny-me" {
 			return clientError{
@@ -1335,7 +1333,6 @@ func TestMetricUnknownError(t *testing.T) {
 }
 
 // TestMetricPermanentError test that Glouton handle permanent failure metric from Bleemeo correctly.
-//nolint:cyclop
 func TestMetricPermanentError(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -1356,7 +1353,8 @@ func TestMetricPermanentError(t *testing.T) {
 			defer helper.Close()
 
 			// API always reject registering "deny-me" metric
-			helper.api.resources["metric"].(*genericResource).CreateHook = func(r *http.Request, body []byte, valuePtr interface{}) error {
+			metricResource, _ := helper.api.resources["metric"].(*genericResource)
+			metricResource.CreateHook = func(r *http.Request, body []byte, valuePtr interface{}) error {
 				metric, _ := valuePtr.(*metricPayload)
 				if metric.Name == "deny-me" || metric.Name == "deny-me-also" {
 					return clientError{
@@ -1469,7 +1467,7 @@ func TestMetricPermanentError(t *testing.T) {
 			}
 
 			// Now metric registration will succeeds and retry all
-			helper.api.resources["metric"].(*genericResource).CreateHook = nil
+			metricResource.CreateHook = nil
 			helper.AddTime(70 * time.Minute)
 			helper.store.PushPoints(context.Background(), []types.MetricPoint{
 				{
@@ -1513,14 +1511,15 @@ func TestMetricPermanentError(t *testing.T) {
 }
 
 // TestMetricTooMany test that Glouton handle too many non-standard metric correctly.
-func TestMetricTooMany(t *testing.T) { //nolint:cyclop
+func TestMetricTooMany(t *testing.T) { //nolint:maintidx
 	helper := newMetricHelper(t)
 	defer helper.Close()
 
-	defaultPatchHook := helper.api.resources["metric"].(*genericResource).PatchHook
+	metricResource, _ := helper.api.resources["metric"].(*genericResource)
+	defaultPatchHook := metricResource.PatchHook
 
 	// API always reject more than 3 active metrics
-	helper.api.resources["metric"].(*genericResource).CreateHook = func(r *http.Request, body []byte, valuePtr interface{}) error {
+	metricResource.CreateHook = func(r *http.Request, body []byte, valuePtr interface{}) error {
 		if defaultPatchHook != nil {
 			err := defaultPatchHook(r, body, valuePtr)
 			if err != nil {
@@ -1550,7 +1549,8 @@ func TestMetricTooMany(t *testing.T) { //nolint:cyclop
 
 		return nil
 	}
-	helper.api.resources["metric"].(*genericResource).PatchHook = helper.api.resources["metric"].(*genericResource).CreateHook
+
+	metricResource.PatchHook = metricResource.CreateHook
 
 	helper.AddTime(time.Minute)
 

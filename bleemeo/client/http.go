@@ -239,7 +239,11 @@ func (c *HTTPClient) prepareRequest(method string, path string, params map[strin
 	var bodyReader io.Reader
 
 	if data != nil {
-		body, _ := json.Marshal(data)
+		body, err := json.Marshal(data)
+		if err != nil {
+			return nil, err
+		}
+
 		bodyReader = bytes.NewReader(body)
 	}
 
@@ -331,7 +335,7 @@ func (c *HTTPClient) Iter(ctx context.Context, resource string, params map[strin
 	return result, ctx.Err()
 }
 
-func (c *HTTPClient) do(ctx context.Context, req *http.Request, result interface{}, firstCall bool, withAuth bool, forceInsecure bool) (int, error) { //nolint:cyclop
+func (c *HTTPClient) do(ctx context.Context, req *http.Request, result interface{}, firstCall bool, withAuth bool, forceInsecure bool) (int, error) {
 	if forceInsecure {
 		withAuth = false
 	}
@@ -392,9 +396,12 @@ func (c *HTTPClient) do(ctx context.Context, req *http.Request, result interface
 // the username and password if the refresh token has expired.
 func (c *HTTPClient) GetJWT(ctx context.Context) (types.JWT, error) {
 	if c.jwt.Refresh != "" {
-		body, _ := json.Marshal(map[string]string{
+		body, err := json.Marshal(map[string]string{
 			"refresh": c.jwt.Refresh,
 		})
+		if err != nil {
+			return types.JWT{}, fmt.Errorf("marshal body: %w", err)
+		}
 
 		token, err := c.getJWT(ctx, "v1/jwt-refresh/", body)
 
@@ -412,10 +419,13 @@ func (c *HTTPClient) GetJWT(ctx context.Context) (types.JWT, error) {
 		}
 	}
 
-	body, _ := json.Marshal(map[string]string{
+	body, err := json.Marshal(map[string]string{
 		"username": c.username,
 		"password": c.password,
 	})
+	if err != nil {
+		return types.JWT{}, fmt.Errorf("marshal body: %w", err)
+	}
 
 	return c.getJWT(ctx, "v1/jwt-auth/", body)
 }

@@ -1,4 +1,5 @@
 run:
+  timeout: 5m
   skip-dirs:
     - work
 
@@ -11,13 +12,21 @@ linters:
     - exhaustivestruct # This linter is meant to be used only for special cases. It is not recommended to use it for all files in a project.
     - gci # Conflicts with gofumpt.
     - ireturn # Complain that interface A implementation method return an interface B... it's a requirement of interface A that is unavoidable.
-    
+    # Deprecated and replaced linter.
+    - maligned
+    - golint
+    - interfacer
+    - scopelint
+    # We use maintidx to lint function complexity.
+    - gocyclo
+    - cyclop
+    - gocognit
+
     # Project specific disable.
     - lll
     - varnamelen # I think there is too many false-positive.
     - godox # too many TODO in code, but should be removed and TODO fixed :)
     - nestif # Too many error for now, which would require significant refactor.
-    - gocognit
     - tagliatelle # Check struct tags. Too many errors we can't fix.
     - wrapcheck # Too many errors, which would require to refactor most returned errors.
     - errorlint # Should be enabled, but it's difficult to test that we keep the same behavior with errors.As.
@@ -26,18 +35,7 @@ linters:
     - tparallel
     - testpackage
 
-    # Disable deprecated and replaced linter.
-    - maligned
-    - golint
-    - interfacer
-    - scopelint
-    - gocyclo
-
 linters-settings:
-  cyclop:
-    # The maximal code complexity to report.
-    max-complexity: 15
-
   nolintlint:
     # Ensure that nolint directives don't have a leading space.
     allow-leading-space: false

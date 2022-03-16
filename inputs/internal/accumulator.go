@@ -148,9 +148,11 @@ func rateAsFloat(pastPoint, currentPoint metricPoint) (value float64, err error)
 			value = float64(currentValue - pastValue)
 		}
 	case int:
-		value = float64(currentPoint.Value.(int) - pastValue)
+		currentValue, _ := currentPoint.Value.(int)
+		value = float64(currentValue - pastValue)
 	case int64:
-		value = float64(currentPoint.Value.(int64) - pastValue)
+		currentValue, _ := currentPoint.Value.(int64)
+		value = float64(currentValue - pastValue)
 	default:
 		pastValueFloat, err := convertToFloat(pastPoint.Value)
 		if err != nil {

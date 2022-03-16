@@ -1,4 +1,3 @@
-//nolint:scopelint,cyclop
 package logger
 
 import (

@@ -99,9 +99,7 @@ func Test_jmxtransConfig_cassandra_Config(t *testing.T) {
 	cfg.UpdateTarget("127.5.4.3", 4242)
 	_ = cfg.UpdateConfig(services, 11*time.Second)
 
-	content := cfg.CurrentConfig()
-
-	if len(content) < len(`{"servers": []}`) {
+	if content := cfg.CurrentConfig(); len(content) < len(`{"servers": []}`) {
 		t.Errorf("cfg.CurrentConfig() = %#v, want non-empty", string(content))
 	}
 

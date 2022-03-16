@@ -339,7 +339,10 @@ func migrateScrapper(cfg *config.Configuration, deprecatedPath string, correctPa
 		warnings = append(warnings, fmt.Errorf("%w: %s. Please use %s", errSettingsDeprecated, deprecatedPath, correctPath))
 
 		for _, val := range vTab {
-			migratedTargets = append(migratedTargets, val.(string))
+			s, _ := val.(string)
+			if s != "" {
+				migratedTargets = append(migratedTargets, s)
+			}
 		}
 	}
 
@@ -835,7 +838,12 @@ func convertToString(rawValue interface{}) string {
 	case int:
 		return strconv.FormatInt(int64(value), 10)
 	case []interface{}, []string, map[string]interface{}, map[interface{}]interface{}, []map[string]interface{}:
-		b, _ := json.Marshal(rawValue)
+		b, err := json.Marshal(rawValue)
+		if err != nil {
+			logger.V(1).Printf("Failed to marshal raw value: %v", err)
+
+			return ""
+		}
 
 		return string(b)
 	default:

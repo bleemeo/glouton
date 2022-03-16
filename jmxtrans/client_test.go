@@ -81,7 +81,7 @@ type serviceKey struct {
 	Attr          string
 }
 
-func Test_jmxtransClient_processLine(t *testing.T) {
+func Test_jmxtransClient_processLine(t *testing.T) { //nolint:maintidx
 	logger.SetLevel(2)
 
 	tests := []struct {

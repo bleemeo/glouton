@@ -197,7 +197,7 @@ func TestReadNRPEConfFile(t *testing.T) {
 	}
 }
 
-func TestReturnCommand(t *testing.T) {
+func TestReturnCommand(t *testing.T) { //nolint:maintidx
 	type Entries struct {
 		Responder Responder
 		Args      []string

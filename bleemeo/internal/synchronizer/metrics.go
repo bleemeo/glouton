@@ -296,7 +296,7 @@ func (m *metricComparator) IsSignificantItem(item string) bool {
 
 // importanceFactor return a weight to indicate how important the metric is.
 // The lowest the more important the metric is.
-func (m *metricComparator) importanceWeight(metric map[string]string) int { //nolint: cyclop
+func (m *metricComparator) importanceWeight(metric map[string]string) int {
 	name := metric[types.LabelName]
 	item := getItem(metric)
 	essential := m.isEssentials[name]
@@ -551,7 +551,6 @@ func (s *Synchronizer) findUnregisteredMetrics(metrics []types.Metric) []types.M
 	return result
 }
 
-//nolint:cyclop
 func (s *Synchronizer) syncMetrics(ctx context.Context, fullSync bool, onlyEssential bool) error {
 	localMetrics, err := s.option.Store.Metrics(nil)
 	if err != nil {
@@ -1106,7 +1105,7 @@ func (mr *metricRegisterer) do(localMetrics []types.Metric) error {
 	return mr.pendingErr
 }
 
-func (mr *metricRegisterer) doOnePass(currentList []types.Metric, state metricRegisterPass) error { //nolint: cyclop
+func (mr *metricRegisterer) doOnePass(currentList []types.Metric, state metricRegisterPass) error {
 	logger.V(3).Printf("Metric registration phase %v start with %d metrics to process", state, len(currentList))
 
 	for _, metric := range currentList {

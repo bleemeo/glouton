@@ -456,7 +456,7 @@ func TestUpdateProcessesWithTerminated(t *testing.T) {
 
 // TestUpdateProcessesOptimization check that ContainerRuntime is not called too much
 // In case of Processes updates, reuse as much as existing information as possible.
-func TestUpdateProcessesOptimization(t *testing.T) { //nolint:cyclop
+func TestUpdateProcessesOptimization(t *testing.T) { //nolint:maintidx
 	now := time.Now()
 	t0 := now.Add(-time.Hour)
 	t1 := now.Add(time.Minute)

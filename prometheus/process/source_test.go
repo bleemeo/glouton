@@ -101,7 +101,6 @@ func testProcessses(t *testing.T, source facts.ProcessLister, maxAge time.Durati
 	}
 }
 
-//nolint:cyclop
 func testProc(t *testing.T, procs proc.Iter) {
 	t.Helper()
 

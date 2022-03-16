@@ -76,7 +76,7 @@ type Client struct {
 	option Option
 
 	// Those variable are only written once or read/written exclusively from the Run() goroutine. No lock needed
-	ctx                        context.Context
+	ctx                        context.Context //nolint:containedctx
 	mqttClient                 paho.Client
 	failedPoints               []types.MetricPoint
 	lastRegisteredMetricsCount int
@@ -392,7 +392,7 @@ func (c *Client) HealthCheck() bool {
 func (c *Client) setupMQTT(ctx context.Context) (paho.Client, error) {
 	pahoOptions := paho.NewClientOptions()
 
-	willPayload, _ := json.Marshal(map[string]string{"disconnect-cause": "disconnect-will"})
+	willPayload, _ := json.Marshal(disconnectCause{"disconnect-will"}) //nolint:errchkjson // False positive.
 
 	pahoOptions.SetBinaryWill(
 		fmt.Sprintf("v1/agent/%s/disconnect", c.option.AgentID),
@@ -1017,7 +1017,7 @@ func (c *Client) ready() bool {
 	return false
 }
 
-func (c *Client) connectionManager(ctx context.Context) { //nolint:cyclop
+func (c *Client) connectionManager(ctx context.Context) {
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 

@@ -261,7 +261,7 @@ func convertPSStatusOneChar(letter byte) ProcessStatus {
 	}
 }
 
-func (pp *ProcessProvider) updateProcesses(ctx context.Context, now time.Time, maxAge time.Duration) error { //nolint:cyclop
+func (pp *ProcessProvider) updateProcesses(ctx context.Context, now time.Time, maxAge time.Duration) error { //nolint:maintidx
 	// Process creation time is accurate up to 1/SC_CLK_TCK seconds,
 	// usually 1/100th of seconds.
 	// Process must be started at least 1/100th before t0.

@@ -107,7 +107,7 @@ type agent struct {
 	config       Config
 	state        *state.State
 	cancel       context.CancelFunc
-	context      context.Context
+	context      context.Context //nolint:containedctx
 
 	hostRootPath           string
 	discovery              *discovery.Discovery
@@ -166,7 +166,7 @@ type taskInfo struct {
 	name     string
 }
 
-func (a *agent) init(ctx context.Context, configFiles []string, firstRun bool) (ok bool) { //nolint:cyclop
+func (a *agent) init(ctx context.Context, configFiles []string, firstRun bool) (ok bool) {
 	a.l.Lock()
 	a.lastHealCheck = time.Now()
 	a.l.Unlock()
@@ -566,7 +566,7 @@ func (a *agent) updateThresholds(ctx context.Context, thresholds map[threshold.M
 }
 
 // Run will start the agent. It will terminate when sigquit/sigterm/sigint is received.
-func (a *agent) run(ctx context.Context) { //nolint:cyclop
+func (a *agent) run(ctx context.Context) { //nolint:maintidx
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -1750,7 +1750,6 @@ func (a *agent) cleanTrigger() (discovery bool, sendFacts bool, systemUpdateMetr
 	return
 }
 
-//nolint:cyclop
 func (a *agent) handleTrigger(ctx context.Context) {
 	runDiscovery, runFact, runSystemUpdateMetric := a.cleanTrigger()
 	if runDiscovery {
@@ -2373,7 +2372,7 @@ func prometheusConfigToURLs(cfg interface{}) (result []*scrapper.Target) {
 			for _, x := range allow {
 				s, _ := x.(string)
 				if s != "" {
-					target.AllowList = append(target.AllowList, x.(string))
+					target.AllowList = append(target.AllowList, s)
 				}
 			}
 		}
@@ -2392,7 +2391,7 @@ func denyMetricsConfig(vMap map[string]interface{}, target *scrapper.Target) {
 		for _, x := range deny {
 			s, _ := x.(string)
 			if s != "" {
-				target.DenyList = append(target.DenyList, x.(string))
+				target.DenyList = append(target.DenyList, s)
 			}
 		}
 	}
