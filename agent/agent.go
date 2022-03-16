@@ -241,6 +241,18 @@ func (a *agent) init(ctx context.Context, configFiles []string, firstRun bool) (
 		}
 	}
 
+	resetStateFile := a.oldConfig.String("agent.state_reset_file")
+
+	if _, err := os.Stat(resetStateFile); err == nil {
+		// No error means that file exists.
+		if err := os.Remove(resetStateFile); err != nil {
+			logger.Printf("Unable to remote state reset marked: %v", err)
+			logger.Printf("Skipping state reset due to previous error")
+		} else {
+			a.state.KeptOnlyPersistent()
+		}
+	}
+
 	a.migrateState()
 
 	if err := a.state.SaveTo(statePath); err != nil {
