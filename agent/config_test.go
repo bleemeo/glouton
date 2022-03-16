@@ -483,6 +483,26 @@ func Test_loadConfiguration(t *testing.T) { //nolint:maintidx
 				SNMP: SNMP{ExporterURL: URLMustParse("http://localhost:9116/snmp")},
 			},
 		},
+		{
+			name: "config-1",
+			configFiles: []string{
+				"testdata/config1.conf",
+			},
+			warnings: nil,
+			wantCfg: Config{
+				SNMP: SNMP{ExporterURL: URLMustParse("http://localhost:9116/snmp")},
+				Container: Container{
+					DisabledByDefault: true,
+					AllowPatternList: []string{
+						"bleemeo_*",
+					},
+					DenyPatternList: []string{
+						"bleemeo_ephemeral",
+						"bleemeo_builder",
+					},
+				},
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

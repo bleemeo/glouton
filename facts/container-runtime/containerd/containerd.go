@@ -52,6 +52,7 @@ func DefaultAddresses(hostRoot string) []string {
 type Containerd struct {
 	Addresses                 []string
 	DeletedContainersCallback func(containersID []string)
+	IsContainerIgnored        func(facts.Container) bool
 
 	l                sync.Mutex
 	workedOnce       bool
@@ -142,7 +143,7 @@ func (c *Containerd) Metrics(ctx context.Context) ([]types.MetricPoint, error) {
 	c.l.Lock()
 
 	for _, cont := range c.containers {
-		if !facts.ContainerIgnored(cont) {
+		if !c.IsContainerIgnored(cont) {
 			idPerNamespace[cont.namespace] = append(idPerNamespace[cont.namespace], "id=="+cont.info.ID)
 
 			gloutonIDToName[cont.ID()] = cont.ContainerName()
@@ -253,9 +254,9 @@ func (c *Containerd) Containers(ctx context.Context, maxAge time.Duration, inclu
 	}
 
 	containers = make([]facts.Container, 0, len(c.containers))
-	for _, c := range c.containers {
-		if includeIgnored || !facts.ContainerIgnored(c) {
-			containers = append(containers, c)
+	for _, cont := range c.containers {
+		if includeIgnored || !c.IsContainerIgnored(cont) {
+			containers = append(containers, cont)
 		}
 	}
 
@@ -609,7 +610,7 @@ func (c *Containerd) updateContainers(ctx context.Context) error {
 
 		ctx := namespaces.WithNamespace(ctx, ns)
 
-		err := addContainersInfo(ctx, containers, cl, ns, ignoredID)
+		err := c.addContainersInfo(ctx, containers, cl, ns, ignoredID)
 		if err != nil {
 			return err
 		}
@@ -692,7 +693,7 @@ func convertToContainerObject(ctx context.Context, ns string, cont containerd.Co
 	return obj, nil
 }
 
-func addContainersInfo(ctx context.Context, containers map[string]containerObject, cl containerdClient, ns string, ignoredID map[string]bool) error {
+func (c *Containerd) addContainersInfo(ctx context.Context, containers map[string]containerObject, cl containerdClient, ns string, ignoredID map[string]bool) error {
 	list, err := cl.Containers(ctx)
 	if err != nil {
 		return fmt.Errorf("listing containers failed: %w", err)
@@ -710,7 +711,7 @@ func addContainersInfo(ctx context.Context, containers map[string]containerObjec
 
 		containers[obj.ID()] = obj
 
-		if facts.ContainerIgnored(obj) {
+		if c.IsContainerIgnored(obj) {
 			ignoredID[obj.ID()] = true
 		}
 	}

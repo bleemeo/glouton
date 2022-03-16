@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"glouton/facts"
 	"io/ioutil"
 	"reflect"
 	"syscall"
@@ -235,11 +236,12 @@ func NewMockFromFile(filename string) (*MockClient, error) {
 }
 
 // FakeContainerd return a Containerd runtime connector that use a mock client.
-func FakeContainerd(client *MockClient) *Containerd {
+func FakeContainerd(client *MockClient, isContainerIgnored func(facts.Container) bool) *Containerd {
 	return &Containerd{
 		openConnection: func(_ context.Context, _ string) (cl containerdClient, err error) {
 			return client, nil
 		},
+		IsContainerIgnored: isContainerIgnored,
 	}
 }
 

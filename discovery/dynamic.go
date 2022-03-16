@@ -39,11 +39,12 @@ import (
 type DynamicDiscovery struct {
 	l sync.Mutex
 
-	ps            processFact
-	netstat       netstatProvider
-	containerInfo containerInfoProvider
-	fileReader    fileReader
-	defaultStack  string
+	ps                 processFact
+	netstat            netstatProvider
+	containerInfo      containerInfoProvider
+	fileReader         fileReader
+	defaultStack       string
+	isContainerIgnored func(facts.Container) bool
 
 	lastDiscoveryUpdate time.Time
 	services            []Service
@@ -60,13 +61,14 @@ type fileReader interface {
 
 // NewDynamic create a new dynamic service discovery which use information from
 // processess and netstat to discovery services.
-func NewDynamic(ps processFact, netstat netstatProvider, containerInfo containerInfoProvider, fileReader fileReader, defaultStack string) *DynamicDiscovery {
+func NewDynamic(ps processFact, netstat netstatProvider, containerInfo containerInfoProvider, isContainerIgnored func(facts.Container) bool, fileReader fileReader, defaultStack string) *DynamicDiscovery {
 	return &DynamicDiscovery{
-		ps:            ps,
-		netstat:       netstat,
-		containerInfo: containerInfo,
-		fileReader:    fileReader,
-		defaultStack:  defaultStack,
+		ps:                 ps,
+		netstat:            netstat,
+		containerInfo:      containerInfo,
+		fileReader:         fileReader,
+		defaultStack:       defaultStack,
+		isContainerIgnored: isContainerIgnored,
 	}
 }
 
@@ -119,7 +121,7 @@ func (dd *DynamicDiscovery) ProcessServiceInfo(cmdLine []string, pid int, create
 		if p.PID == pid && p.CreateTime.Truncate(time.Second).Equal(createTime) {
 			if p.ContainerID != "" {
 				container, ok := dd.containerInfo.CachedContainer(p.ContainerID)
-				if !ok || facts.ContainerIgnored(container) {
+				if !ok || dd.isContainerIgnored(container) {
 					return "", ""
 				}
 			}
@@ -324,7 +326,7 @@ func (dd *DynamicDiscovery) serviceFromProcess(process facts.Process, servicesMa
 
 	if service.ContainerID != "" {
 		service.container, ok = dd.containerInfo.CachedContainer(service.ContainerID)
-		if !ok || facts.ContainerIgnored(service.container) {
+		if !ok || dd.isContainerIgnored(service.container) {
 			return Service{}, false
 		}
 

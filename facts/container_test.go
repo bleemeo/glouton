@@ -8,6 +8,7 @@ import (
 func TestContainerEnabled(t *testing.T) {
 	tests := []struct {
 		name         string
+		filter       ContainerFilter
 		container    FakeContainer
 		wantEnabled  bool
 		wantExplicit bool
@@ -86,12 +87,72 @@ func TestContainerEnabled(t *testing.T) {
 			wantEnabled:  true,
 			wantExplicit: true,
 		},
+		{
+			name: "config",
+			container: FakeContainer{
+				FakeContainerName: "does-not-matter",
+			},
+			filter: ContainerFilter{
+				DisabledByDefault: true,
+			},
+			wantEnabled:  false,
+			wantExplicit: false,
+		},
+		{
+			name: "config-allow-list",
+			container: FakeContainer{
+				FakeContainerName: "does-not-matter",
+			},
+			filter: ContainerFilter{
+				DisabledByDefault: true,
+				AllowList:         []string{"does-not-matter"},
+			},
+			wantEnabled:  true,
+			wantExplicit: true,
+		},
+		{
+			name: "config-allow-list-glob",
+			container: FakeContainer{
+				FakeContainerName: "does-not-matter",
+			},
+			filter: ContainerFilter{
+				DisabledByDefault: false,
+				AllowList:         []string{"does*"},
+			},
+			wantEnabled:  true,
+			wantExplicit: true,
+		},
+		{
+			name: "config-allow-list-glob-2",
+			container: FakeContainer{
+				FakeContainerName: "another",
+			},
+			filter: ContainerFilter{
+				DisabledByDefault: false,
+				AllowList:         []string{"does*"},
+			},
+			wantEnabled:  true,
+			wantExplicit: false,
+		},
+		{
+			name: "config-allow-deny-list",
+			container: FakeContainer{
+				FakeContainerName: "does-not-matter",
+			},
+			filter: ContainerFilter{
+				DisabledByDefault: false,
+				AllowList:         []string{"does*"},
+				DenyList:          []string{"does-not-matter"},
+			},
+			wantEnabled:  false,
+			wantExplicit: true,
+		},
 	}
 	for _, tt := range tests {
 		tt := tt
 
 		t.Run(tt.name, func(t *testing.T) {
-			gotEnabled, gotExplicit := ContainerEnabled(tt.container)
+			gotEnabled, gotExplicit := tt.filter.ContainerEnabled(tt.container)
 			if gotEnabled != tt.wantEnabled {
 				t.Errorf("ContainerEnabled() gotEnabled = %v, want %v", gotEnabled, tt.wantEnabled)
 			}
@@ -99,7 +160,7 @@ func TestContainerEnabled(t *testing.T) {
 				t.Errorf("ContainerEnabled() gotExplicit = %v, want %v", gotExplicit, tt.wantExplicit)
 			}
 
-			got := ContainerIgnored(tt.container)
+			got := tt.filter.ContainerIgnored(tt.container)
 			if got != !tt.wantEnabled {
 				t.Errorf("ContainerIgnored() = %v, want %v", got, !tt.wantEnabled)
 			}

@@ -47,8 +47,9 @@ var (
 // Currently not all settings are converted (and some still use old config.Get() method).
 // New settings should use Config.
 type Config struct {
-	Services Services
-	SNMP     SNMP
+	Services  Services
+	SNMP      SNMP
+	Container Container
 }
 
 type Services []Service
@@ -71,6 +72,12 @@ type SNMPTargets []SNMPTarget
 type SNMPTarget struct {
 	Address     string
 	InitialName string
+}
+
+type Container struct {
+	DisabledByDefault bool
+	AllowPatternList  []string
+	DenyPatternList   []string
 }
 
 func (srvs Services) ToDiscoveryMap() map[discovery.NameContainer]discovery.ServiceOveride {
@@ -193,9 +200,12 @@ func defaultConfig() map[string]interface{} {
 			"C:\\ProgramData\\glouton\\glouton.conf",
 			"C:\\ProgramData\\glouton\\conf.d",
 		},
-		"container.pid_namespace_host": false,
-		"container.type":               "",
-		"df.host_mount_point":          "",
+		"container.pid_namespace_host":      false,
+		"container.type":                    "",
+		"container.filter.allow_by_default": true,
+		"container.filter.allow_list":       []string{},
+		"container.filter.deny_list":        []string{},
+		"df.host_mount_point":               "",
 		"df.ignore_fs_type": []string{
 			"^(autofs|binfmt_misc|bpf|cgroup2?|configfs|debugfs|devpts|devtmpfs|fusectl|hugetlbfs|iso9660|mqueue|nsfs|overlay|proc|procfs|pstore|rpc_pipefs|securityfs|selinuxfs|squashfs|sysfs|tracefs)$",
 			"tmpfs",
@@ -662,6 +672,8 @@ func convertConfig(cfg *config.Configuration) (agentConfig Config, warnings []er
 		agentConfig.Services = append(agentConfig.Services, srv)
 	}
 
+	agentConfig.parseContainer(cfg)
+
 	warnings = append(warnings, agentConfig.parseSNMP(cfg)...)
 	warnings = append(warnings, agentConfig.validate()...)
 
@@ -728,6 +740,14 @@ func (cfg *Config) parseSNMP(oldCfg *config.Configuration) []error {
 	}
 
 	return errs
+}
+
+func (cfg *Config) parseContainer(oldCfg *config.Configuration) {
+	enable := oldCfg.Bool("container.filter.allow_by_default")
+
+	cfg.Container.DisabledByDefault = !enable
+	cfg.Container.AllowPatternList = oldCfg.StringList("container.filter.allow_list")
+	cfg.Container.DenyPatternList = oldCfg.StringList("container.filter.deny_list")
 }
 
 func (cfg *Config) validate() []error {

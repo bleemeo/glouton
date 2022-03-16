@@ -53,6 +53,7 @@ func DefaultAddresses(hostRoot string) []string {
 type Docker struct {
 	DockerSockets             []string
 	DeletedContainersCallback func(containersID []string)
+	IsContainerIgnored        func(facts.Container) bool
 
 	l                sync.Mutex
 	workedOnce       bool
@@ -146,7 +147,7 @@ func (d *Docker) Containers(ctx context.Context, maxAge time.Duration, includeIg
 
 	containers = make([]facts.Container, 0, len(d.containers))
 	for _, c := range d.containers {
-		if includeIgnored || !facts.ContainerIgnored(c) {
+		if includeIgnored || !d.IsContainerIgnored(c) {
 			containers = append(containers, c)
 		}
 	}
@@ -513,7 +514,7 @@ func (d *Docker) updateContainers(ctx context.Context) error {
 
 		containers[c.ID] = container
 
-		if facts.ContainerIgnored(container) {
+		if d.IsContainerIgnored(container) {
 			ignoredID[c.ID] = true
 		}
 	}
@@ -567,7 +568,7 @@ func (d *Docker) updateContainer(ctx context.Context, cl dockerClient, container
 
 	d.containers[containerID] = container
 
-	if facts.ContainerIgnored(container) {
+	if d.IsContainerIgnored(container) {
 		d.ignoredID[containerID] = true
 	} else {
 		delete(d.ignoredID, containerID)
