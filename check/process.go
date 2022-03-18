@@ -11,6 +11,9 @@ import (
 	"time"
 )
 
+// Processes are updated only if they are older than processMaxAge.
+const processMaxAge = 10 * time.Second
+
 type processProvider interface {
 	Processes(ctx context.Context, maxAge time.Duration) (processes map[int]facts.Process, err error)
 }
@@ -41,7 +44,7 @@ func NewProcess(
 // processMainCheck returns StatusOk if at least one of the process that matched wasn't in
 // a zombie state, else it returns StatusCritical.
 func (pc *ProcessCheck) processMainCheck(ctx context.Context) types.StatusDescription {
-	procs, err := pc.ps.Processes(ctx, time.Second)
+	procs, err := pc.ps.Processes(ctx, processMaxAge)
 	if err != nil {
 		logger.V(1).Printf("Failed to get processes: %v", err)
 	}
