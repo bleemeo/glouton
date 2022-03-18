@@ -25,13 +25,15 @@ import (
 	"glouton/types"
 	"net"
 	"net/url"
+	"regexp"
 	"strconv"
 )
 
 const (
-	customCheckTCP    = "tcp"
-	customCheckHTTP   = "http"
-	customCheckNagios = "nagios"
+	customCheckTCP     = "tcp"
+	customCheckHTTP    = "http"
+	customCheckNagios  = "nagios"
+	customCheckProcess = "process"
 )
 
 // Check is an interface which specify a check.
@@ -168,6 +170,8 @@ func createCheckType(service Service, d *Discovery, di discoveryInfo, primaryAdd
 		d.createHTTPCheck(service, di, primaryAddress, tcpAddresses, labels, annotations)
 	case customCheckNagios:
 		d.createNagiosCheck(service, primaryAddress, labels, annotations)
+	case customCheckProcess:
+		d.createProcessCheck(service, labels, annotations)
 	default:
 		logger.V(1).Printf("Unknown check type %#v on custom service %#v", service.ExtraAttributes["check_type"], service.Name)
 	}
@@ -291,6 +295,19 @@ func (d *Discovery) createNagiosCheck(service Service, primaryAddress string, la
 	)
 
 	d.addCheck(httpCheck, service)
+}
+
+func (d *Discovery) createProcessCheck(service Service, labels map[string]string, annotations types.MetricAnnotations) {
+	processRegex, err := regexp.Compile(service.ExtraAttributes["match_process"])
+	if err != nil {
+		logger.V(0).Printf("Invalid regex for custom service %s: %v", service.Name, err)
+
+		return
+	}
+
+	processCheck := check.NewProcess(processRegex, labels, annotations, d.acc, d.processFact)
+
+	d.addCheck(processCheck, service)
 }
 
 func (d *Discovery) addCheck(check Check, service Service) {

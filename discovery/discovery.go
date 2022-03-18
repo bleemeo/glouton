@@ -66,6 +66,7 @@ type Discovery struct {
 	isInputIgnored        func(NameContainer) bool
 	isContainerIgnored    func(facts.Container) bool
 	metricFormat          types.MetricFormat
+	processFact           processFact
 }
 
 // Collector will gather metrics for added inputs.
@@ -87,7 +88,7 @@ type GathererRegistry interface {
 }
 
 // New returns a new Discovery.
-func New(dynamicDiscovery Discoverer, coll Collector, metricRegistry GathererRegistry, taskRegistry Registry, state State, acc inputs.AnnotationAccumulator, containerInfo containerInfoProvider, servicesOverride map[NameContainer]ServiceOveride, isCheckIgnored func(NameContainer) bool, isInputIgnored func(NameContainer) bool, isContainerIgnored func(c facts.Container) bool, metricFormat types.MetricFormat) *Discovery {
+func New(dynamicDiscovery Discoverer, coll Collector, metricRegistry GathererRegistry, taskRegistry Registry, state State, acc inputs.AnnotationAccumulator, containerInfo containerInfoProvider, servicesOverride map[NameContainer]ServiceOveride, isCheckIgnored func(NameContainer) bool, isInputIgnored func(NameContainer) bool, isContainerIgnored func(c facts.Container) bool, metricFormat types.MetricFormat, processFact processFact) *Discovery {
 	initialServices := servicesFromState(state)
 	discoveredServicesMap := make(map[NameContainer]Service, len(initialServices))
 
@@ -115,6 +116,7 @@ func New(dynamicDiscovery Discoverer, coll Collector, metricRegistry GathererReg
 		isInputIgnored:        isInputIgnored,
 		isContainerIgnored:    isContainerIgnored,
 		metricFormat:          metricFormat,
+		processFact:           processFact,
 	}
 }
 
@@ -376,7 +378,7 @@ func applyOveride(discoveredServicesMap map[NameContainer]Service, servicesOverr
 		service := servicesMap[serviceKey]
 		if service.ServiceType == "" {
 			if serviceKey.ContainerName != "" {
-				logger.V(1).Printf(
+				logger.V(0).Printf(
 					"Custom check for service %#v with a container (%#v) is not supported. Please unset the container",
 					serviceKey.Name,
 					serviceKey.ContainerName,
@@ -432,7 +434,7 @@ func applyOveride(discoveredServicesMap map[NameContainer]Service, servicesOverr
 				}
 
 				if _, port := service.AddressPort(); port == 0 {
-					logger.V(1).Printf("Bad custom service definition for service %s, port %#v is invalid", service.Name)
+					logger.V(0).Printf("Bad custom service definition for service %s, port %#v is invalid", service.Name)
 
 					continue
 				}
@@ -443,13 +445,19 @@ func applyOveride(discoveredServicesMap map[NameContainer]Service, servicesOverr
 			}
 
 			if service.ExtraAttributes["check_type"] == customCheckNagios && service.ExtraAttributes["check_command"] == "" {
-				logger.V(1).Printf("Bad custom service definition for service %s, check_type is nagios but no check_command set", service.Name)
+				logger.V(0).Printf("Bad custom service definition for service %s, check_type is nagios but no check_command set", service.Name)
 
 				continue
 			}
 
-			if service.ExtraAttributes["check_type"] != customCheckNagios && service.ExtraAttributes["port"] == "" {
-				logger.V(1).Printf("Bad custom service definition for service %s, port is unknown so I don't known how to check it", service.Name)
+			if service.ExtraAttributes["check_type"] == customCheckProcess && service.ExtraAttributes["match_process"] == "" {
+				logger.V(0).Printf("Bad custom service definition for service %s, check_type is process but no match_process set", service.Name)
+
+				continue
+			}
+
+			if service.ExtraAttributes["check_type"] != customCheckNagios && service.ExtraAttributes["check_type"] != customCheckProcess && service.ExtraAttributes["port"] == "" {
+				logger.V(0).Printf("Bad custom service definition for service %s, port is unknown so I don't known how to check it", service.Name)
 
 				continue
 			}
