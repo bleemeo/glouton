@@ -25,12 +25,17 @@ type ProcessCheck struct {
 }
 
 func NewProcess(
-	processRegex *regexp.Regexp,
+	matchProcess string,
 	labels map[string]string,
 	annotations types.MetricAnnotations,
 	acc inputs.AnnotationAccumulator,
 	ps processProvider,
-) *ProcessCheck {
+) (*ProcessCheck, error) {
+	processRegex, err := regexp.Compile(matchProcess)
+	if err != nil {
+		return nil, fmt.Errorf("failed to compile regex %s: %w", matchProcess, err)
+	}
+
 	pc := ProcessCheck{
 		ps:           ps,
 		processRegex: processRegex,
@@ -38,7 +43,7 @@ func NewProcess(
 
 	pc.baseCheck = newBase("", nil, false, pc.processMainCheck, labels, annotations, acc)
 
-	return &pc
+	return &pc, nil
 }
 
 // processMainCheck returns StatusOk if at least one of the process that matched wasn't in

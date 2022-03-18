@@ -4,7 +4,6 @@ import (
 	"context"
 	"glouton/facts"
 	"glouton/types"
-	"regexp"
 	"testing"
 	"time"
 )
@@ -53,12 +52,14 @@ func Test_processMainCheck(t *testing.T) {
 		t.Run(test.matchProcess, func(t *testing.T) {
 			t.Parallel()
 
-			reg := regexp.MustCompile(test.matchProcess)
-			pc := NewProcess(reg, nil, types.MetricAnnotations{}, nil, mockProcessProvider{})
+			pc, err := NewProcess(test.matchProcess, nil, types.MetricAnnotations{}, nil, mockProcessProvider{})
+			if err != nil {
+				t.Errorf("Failed to create process: %v", err)
+			}
 
 			statusDesc := pc.processMainCheck(context.Background())
 			if statusDesc.CurrentStatus != test.expectedStatus {
-				t.Errorf("expected status %v, got %v", test.expectedStatus, statusDesc.CurrentStatus)
+				t.Errorf("Expected status %v, got %v", test.expectedStatus, statusDesc.CurrentStatus)
 			}
 		})
 	}

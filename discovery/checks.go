@@ -25,7 +25,6 @@ import (
 	"glouton/types"
 	"net"
 	"net/url"
-	"regexp"
 	"strconv"
 )
 
@@ -298,14 +297,10 @@ func (d *Discovery) createNagiosCheck(service Service, primaryAddress string, la
 }
 
 func (d *Discovery) createProcessCheck(service Service, labels map[string]string, annotations types.MetricAnnotations) {
-	processRegex, err := regexp.Compile(service.ExtraAttributes["match_process"])
+	processCheck, err := check.NewProcess(service.ExtraAttributes["match_process"], labels, annotations, d.acc, d.processFact)
 	if err != nil {
-		logger.V(0).Printf("Invalid regex for custom service %s: %v", service.Name, err)
-
-		return
+		logger.V(0).Printf("Invalid custom service %s: %v", service.Name, err)
 	}
-
-	processCheck := check.NewProcess(processRegex, labels, annotations, d.acc, d.processFact)
 
 	d.addCheck(processCheck, service)
 }
