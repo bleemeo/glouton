@@ -271,6 +271,10 @@ func (s *Synchronizer) containerDeleteFromLocal(localContainers []facts.Containe
 
 	registeredContainers := s.option.Cache.ContainersByUUID()
 	for _, v := range registeredContainers {
+		if !time.Time(v.DeletedAt).IsZero() {
+			continue
+		}
+
 		if _, ok := localByContainerID[v.ContainerID]; ok && !duplicatedKey[v.ContainerID] {
 			duplicatedKey[v.ContainerID] = true
 
