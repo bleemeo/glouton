@@ -851,6 +851,7 @@ func (a *agent) run(ctx context.Context) { //nolint:maintidx
 		isInputIgnored,
 		a.containerFilter.ContainerIgnored,
 		a.metricFormat,
+		psFact,
 	)
 
 	a.updateSNMPResolution(ctx, time.Minute)

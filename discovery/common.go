@@ -368,7 +368,7 @@ var (
 		},
 
 		CustomService: {
-			ExtraAttributeNames: []string{"address", "port", "check_type", "check_command", "http_host", "http_path", "http_status_code"},
+			ExtraAttributeNames: []string{"address", "port", "check_type", "check_command", "http_host", "http_path", "http_status_code", "match_process"},
 		},
 	}
 )
