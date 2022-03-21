@@ -1645,9 +1645,7 @@ func TestContainerSync(t *testing.T) {
 				Runtime:     "fake",
 				Name:        "my_redis_1",
 			},
-			Host:         newAgent.ID,
-			DockerID:     containerID,
-			DockerStatus: "running",
+			Host: newAgent.ID,
 		},
 	}
 
@@ -1705,9 +1703,7 @@ func TestContainerSync(t *testing.T) {
 				Name:        "my_redis_1",
 				DeletedAt:   bleemeoTypes.NullTime(helper.s.now()),
 			},
-			Host:         newAgent.ID,
-			DockerID:     containerID,
-			DockerStatus: "running",
+			Host: newAgent.ID,
 		},
 	}
 
@@ -1776,9 +1772,7 @@ func TestContainerSync(t *testing.T) {
 				Runtime:     "fake",
 				Name:        "my_redis_1",
 			},
-			Host:         newAgent.ID,
-			DockerID:     containerID2,
-			DockerStatus: "running",
+			Host: newAgent.ID,
 		},
 	}
 
