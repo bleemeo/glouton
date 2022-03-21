@@ -39,6 +39,8 @@ const (
 	// fixed "random" values are enought for tests.
 	accountID        string = "9da59f53-1d90-4441-ae58-42c661cfea83"
 	registrationKey  string = "e2c22e59-0621-49e6-b5dd-bdb02cbac9f1"
+	containerID      string = "f21b2ac5-2173-42c2-a26a-db5ce53490cf"
+	containerID2     string = "ce2ee1b5-6445-47a4-835e-9a001ec55c69"
 	activeMonitorURL string = "http://bleemeo.com"
 	snmpAddress      string = "127.0.0.1"
 )
@@ -76,9 +78,10 @@ var (
 	}
 
 	newAccountConfig bleemeoTypes.AccountConfig = bleemeoTypes.AccountConfig{
-		ID:               "02eb5b38-d4a0-4db4-9b43-06f63594a515",
-		Name:             "the-default",
-		SNMPIntergration: true,
+		ID:                "02eb5b38-d4a0-4db4-9b43-06f63594a515",
+		Name:              "the-default",
+		SNMPIntergration:  true,
+		DockerIntegration: true,
 	}
 
 	newMetric1 = metricPayload{
@@ -306,7 +309,7 @@ func newAPI() *mockAPI {
 				return active == m.DeactivatedAt.IsZero(), nil
 			},
 		},
-		PatchHook: func(r *http.Request, body []byte, valuePtr interface{}) error {
+		PatchHook: func(r *http.Request, body []byte, valuePtr interface{}, oldValue interface{}) error {
 			var data map[string]interface{}
 
 			metricPtr, _ := valuePtr.(*metricPayload)
@@ -340,7 +343,32 @@ func newAPI() *mockAPI {
 	})
 	api.AddResource("container", &genericResource{
 		Type:        containerPayload{},
-		ValidFilter: []string{"agent"},
+		ValidFilter: []string{"host"},
+		PatchHook: func(r *http.Request, body []byte, valuePtr interface{}, oldValue interface{}) error {
+			containerPtr, _ := valuePtr.(*containerPayload)
+			oldContainer, _ := oldValue.(containerPayload)
+
+			if !time.Time(containerPtr.DeletedAt).IsZero() && time.Time(oldContainer.DeletedAt).IsZero() {
+				// The container was deactivated. Do what API does, it deactivate all metrics associated.
+				var metrics []metricPayload
+
+				api.resources["metric"].Store(&metrics)
+
+				tmp := make([]interface{}, 0, len(metrics))
+
+				for _, m := range metrics {
+					if m.ContainerID == oldContainer.ID {
+						m.DeactivatedAt = time.Time(containerPtr.DeletedAt)
+					}
+
+					tmp = append(tmp, m)
+				}
+
+				api.resources["metric"].SetStore(tmp...)
+			}
+
+			return nil
+		},
 	})
 	api.AddResource("service", &genericResource{
 		Type:        serviceMonitor{},
@@ -559,7 +587,7 @@ func (api *mockAPI) defaultHandler(r *http.Request) (interface{}, int, error) {
 		}
 
 		return response, http.StatusCreated, nil
-	case id != "" && r.Method == http.MethodPatch:
+	case id != "" && (r.Method == http.MethodPatch || r.Method == http.MethodPut):
 		response, err := resource.Patch(id, r)
 		if errors.Is(err, errNotFound) {
 			return nil, http.StatusNotFound, nil
@@ -583,7 +611,7 @@ type genericResource struct {
 	autoinc      int
 
 	ReadOnly   bool
-	PatchHook  func(r *http.Request, body []byte, valuePtr interface{}) error
+	PatchHook  func(r *http.Request, body []byte, valuePtr interface{}, oldValue interface{}) error
 	CreateHook func(r *http.Request, body []byte, valuePtr interface{}) error
 	FilterHook map[string]func(x interface{}, value string) (bool, error)
 }
@@ -829,7 +857,15 @@ func (res *genericResource) Patch(id string, r *http.Request) (interface{}, erro
 
 	id2 := valueReflect.Elem().FieldByName("ID").String()
 	if id2 != id {
-		return nil, fmt.Errorf("%w, ID = %v, want %v", errIncorrectID, id2, id)
+		if id2 == "" {
+			// Our mock API are issue, update are not really working.
+			// Example: PUT or PATCH on containerPayload. The ID is in the embedded types.Container.
+			// When decoding the whole types.Container is replaced, losing fields like ID.
+			// Try fixing field ID
+			valueReflect.Elem().FieldByName("ID").Set(currentValue.FieldByName("ID"))
+		} else {
+			return nil, fmt.Errorf("%w, ID = %v, want %v", errIncorrectID, id2, id)
+		}
 	}
 
 	if res.store == nil {
@@ -837,7 +873,7 @@ func (res *genericResource) Patch(id string, r *http.Request) (interface{}, erro
 	}
 
 	if res.PatchHook != nil {
-		err := res.PatchHook(r, body, valueReflect.Interface())
+		err := res.PatchHook(r, body, valueReflect.Interface(), currentValue.Interface())
 		if err != nil {
 			return nil, err
 		}
@@ -848,13 +884,31 @@ func (res *genericResource) Patch(id string, r *http.Request) (interface{}, erro
 	return res.store[id], nil
 }
 
+type mockDocker struct {
+	helper *syncTestHelper
+}
+
+func (d mockDocker) Containers(ctx context.Context, maxAge time.Duration, includeIgnored bool) (containers []facts.Container, err error) {
+	return d.helper.containers, nil
+}
+
+func (d mockDocker) ContainerLastKill(containerID string) time.Time {
+	return time.Time{}
+}
+
+func (d mockDocker) LastUpdate() time.Time {
+	return d.helper.s.now()
+}
+
 type syncTestHelper struct {
 	api        *mockAPI
 	s          *Synchronizer
 	cfg        *config.Configuration
 	facts      *facts.FactProviderMock
+	containers []facts.Container
 	cache      *cache.Cache
 	state      *state.Mock
+	discovery  *discovery.MockDiscoverer
 	store      *store.Store
 	httpServer *httptest.Server
 
@@ -869,12 +923,17 @@ type syncTestHelper struct {
 func newHelper(t *testing.T) *syncTestHelper {
 	t.Helper()
 
+	api := newAPI()
+
 	helper := &syncTestHelper{
-		api:   newAPI(),
+		api:   api,
 		cfg:   &config.Configuration{},
 		facts: facts.NewMockFacter(nil),
 		cache: &cache.Cache{},
 		state: state.NewMock(),
+		discovery: &discovery.MockDiscoverer{
+			UpdatedAt: api.now.Now(),
+		},
 
 		MetricFormat: types.MetricFormatBleemeo,
 	}
@@ -913,8 +972,10 @@ func (helper *syncTestHelper) initSynchronizer(t *testing.T) {
 	t.Helper()
 
 	helper.store = store.New(time.Hour)
-	discovery := &discovery.MockDiscoverer{
-		UpdatedAt: helper.api.now.Now(),
+
+	var docker bleemeoTypes.DockerProvider
+	if helper.containers != nil {
+		docker = &mockDocker{helper: helper}
 	}
 
 	s, err := newWithNow(Option{
@@ -923,7 +984,8 @@ func (helper *syncTestHelper) initSynchronizer(t *testing.T) {
 			Config:                  helper.cfg,
 			Facts:                   helper.facts,
 			State:                   helper.state,
-			Discovery:               discovery,
+			Docker:                  docker,
+			Discovery:               helper.discovery,
 			Store:                   helper.store,
 			MonitorManager:          (*blackbox.RegisterManager)(nil),
 			NotifyFirstRegistration: func(ctx context.Context) {},
@@ -967,6 +1029,16 @@ func (helper *syncTestHelper) pushPoints(t *testing.T, metrics []labels.Labels) 
 			delete(lblsMap, types.LabelMetaBleemeoTargetAgentUUID)
 
 			annotations.BleemeoAgentID = id
+		}
+
+		if id := lblsMap[types.LabelMetaContainerID]; id != "" {
+			delete(lblsMap, types.LabelMetaContainerID)
+
+			annotations.ContainerID = id
+		}
+
+		if item := lblsMap[types.LabelItem]; item != "" {
+			annotations.BleemeoItem = item
 		}
 
 		points = append(points, types.MetricPoint{
@@ -1527,5 +1599,211 @@ func TestSyncWithSNMPDelete(t *testing.T) {
 
 	if callCountBefore == updateLabelsCallCount {
 		t.Errorf("updateLabelsCallCount = %d, want > %d", updateLabelsCallCount, callCountBefore)
+	}
+}
+
+// TestContainerSync will create a container with one metric. Delete the container. And finally re-created it with the metric.
+func TestContainerSync(t *testing.T) {
+	helper := newHelper(t)
+	defer helper.Close()
+
+	helper.preregisterAgent(t)
+
+	helper.containers = []facts.Container{
+		facts.FakeContainer{
+			FakeContainerName: "my_redis_1",
+			FakeState:         facts.ContainerRunning,
+			FakeID:            containerID,
+		},
+	}
+
+	helper.initSynchronizer(t)
+
+	helper.pushPoints(t, []labels.Labels{
+		labels.New(
+			labels.Label{Name: types.LabelName, Value: "redis_status"},
+			labels.Label{Name: types.LabelItem, Value: "my_redis_1"},
+			labels.Label{Name: types.LabelMetaContainerID, Value: containerID},
+		),
+	})
+
+	if err := helper.runOnce(t); err != nil {
+		t.Fatal(err)
+	}
+
+	// Did we store container & metrics?
+	var containers []containerPayload
+
+	helper.api.resources["container"].Store(&containers)
+
+	wantContainer := []containerPayload{
+		{
+			Container: bleemeoTypes.Container{
+				ID:          "1",
+				ContainerID: containerID,
+				Status:      "running",
+				Runtime:     "fake",
+				Name:        "my_redis_1",
+			},
+			Host: newAgent.ID,
+		},
+	}
+
+	if diff := cmp.Diff(wantContainer, containers); diff != "" {
+		t.Errorf("container mistmatch (-want +got)\n%s", diff)
+	}
+
+	var metrics []metricPayload
+
+	helper.api.resources["metric"].Store(&metrics)
+
+	wantMetrics := []metricPayload{
+		{
+			Metric: bleemeoTypes.Metric{
+				ID:         "1",
+				AgentID:    newAgent.ID,
+				LabelsText: "",
+			},
+			Name: "agent_status",
+		},
+		{
+			Metric: bleemeoTypes.Metric{
+				ID:          "2",
+				AgentID:     newAgent.ID,
+				LabelsText:  "",
+				ContainerID: "1",
+			},
+			Name: "redis_status",
+			Item: "my_redis_1",
+		},
+	}
+
+	optMetricSort := cmpopts.SortSlices(func(x metricPayload, y metricPayload) bool { return x.ID < y.ID })
+	if diff := cmp.Diff(wantMetrics, metrics, cmpopts.EquateEmpty(), optMetricSort); diff != "" {
+		t.Errorf("metrics mismatch (-want +got)\n%s", diff)
+	}
+
+	helper.api.now.Advance(time.Minute)
+	helper.containers = []facts.Container{}
+	helper.discovery.UpdatedAt = helper.s.now()
+
+	if err := helper.runOnce(t); err != nil {
+		t.Fatal(err)
+	}
+
+	helper.api.resources["container"].Store(&containers)
+
+	wantContainer = []containerPayload{
+		{
+			Container: bleemeoTypes.Container{
+				ID:          "1",
+				ContainerID: containerID,
+				Status:      "running",
+				Runtime:     "fake",
+				Name:        "my_redis_1",
+				DeletedAt:   bleemeoTypes.NullTime(helper.s.now()),
+			},
+			Host: newAgent.ID,
+		},
+	}
+
+	if diff := cmp.Diff(wantContainer, containers); diff != "" {
+		t.Errorf("container mistmatch (-want +got)\n%s", diff)
+	}
+
+	helper.api.resources["metric"].Store(&metrics)
+
+	wantMetrics = []metricPayload{
+		{
+			Metric: bleemeoTypes.Metric{
+				ID:         "1",
+				AgentID:    newAgent.ID,
+				LabelsText: "",
+			},
+			Name: "agent_status",
+		},
+		{
+			Metric: bleemeoTypes.Metric{
+				ID:            "2",
+				AgentID:       newAgent.ID,
+				LabelsText:    "",
+				ContainerID:   "1",
+				DeactivatedAt: helper.s.now(),
+			},
+			Name: "redis_status",
+			Item: "my_redis_1",
+		},
+	}
+
+	if diff := cmp.Diff(wantMetrics, metrics, cmpopts.EquateEmpty(), optMetricSort); diff != "" {
+		t.Errorf("metrics mismatch (-want +got)\n%s", diff)
+	}
+
+	helper.api.now.Advance(2 * time.Hour)
+	helper.containers = []facts.Container{
+		facts.FakeContainer{
+			FakeContainerName: "my_redis_1",
+			FakeState:         facts.ContainerRunning,
+			FakeID:            containerID2,
+		},
+	}
+	helper.discovery.UpdatedAt = helper.s.now()
+
+	helper.pushPoints(t, []labels.Labels{
+		labels.New(
+			labels.Label{Name: types.LabelName, Value: "redis_status"},
+			labels.Label{Name: types.LabelItem, Value: "my_redis_1"},
+			labels.Label{Name: types.LabelMetaContainerID, Value: containerID2},
+		),
+	})
+
+	if err := helper.runOnce(t); err != nil {
+		t.Fatal(err)
+	}
+
+	helper.api.resources["container"].Store(&containers)
+
+	wantContainer = []containerPayload{
+		{
+			Container: bleemeoTypes.Container{
+				ID:          "1",
+				ContainerID: containerID2,
+				Status:      "running",
+				Runtime:     "fake",
+				Name:        "my_redis_1",
+			},
+			Host: newAgent.ID,
+		},
+	}
+
+	if diff := cmp.Diff(wantContainer, containers); diff != "" {
+		t.Errorf("container mistmatch (-want +got)\n%s", diff)
+	}
+
+	helper.api.resources["metric"].Store(&metrics)
+
+	wantMetrics = []metricPayload{
+		{
+			Metric: bleemeoTypes.Metric{
+				ID:         "1",
+				AgentID:    newAgent.ID,
+				LabelsText: "",
+			},
+			Name: "agent_status",
+		},
+		{
+			Metric: bleemeoTypes.Metric{
+				ID:          "2",
+				AgentID:     newAgent.ID,
+				LabelsText:  "",
+				ContainerID: "1",
+			},
+			Name: "redis_status",
+			Item: "my_redis_1",
+		},
+	}
+
+	if diff := cmp.Diff(wantMetrics, metrics, cmpopts.EquateEmpty(), optMetricSort); diff != "" {
+		t.Errorf("metrics mismatch (-want +got)\n%s", diff)
 	}
 }

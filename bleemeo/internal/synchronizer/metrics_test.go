@@ -1520,9 +1520,9 @@ func TestMetricTooMany(t *testing.T) { //nolint:maintidx
 	defaultPatchHook := metricResource.PatchHook
 
 	// API always reject more than 3 active metrics
-	metricResource.CreateHook = func(r *http.Request, body []byte, valuePtr interface{}) error {
+	metricResource.PatchHook = func(r *http.Request, body []byte, valuePtr interface{}, oldValue interface{}) error {
 		if defaultPatchHook != nil {
-			err := defaultPatchHook(r, body, valuePtr)
+			err := defaultPatchHook(r, body, valuePtr, oldValue)
 			if err != nil {
 				return err
 			}
@@ -1551,7 +1551,9 @@ func TestMetricTooMany(t *testing.T) { //nolint:maintidx
 		return nil
 	}
 
-	metricResource.PatchHook = metricResource.CreateHook
+	metricResource.CreateHook = func(r *http.Request, body []byte, valuePtr interface{}) error {
+		return metricResource.PatchHook(r, body, valuePtr, nil)
+	}
 
 	helper.AddTime(time.Minute)
 

@@ -1297,9 +1297,6 @@ func (s *Synchronizer) prepareMetricPayload(metric types.Metric, registeredMetri
 
 		containerName = container.Name
 		payload.ContainerID = container.ID
-		// TODO: For now all metrics are created no-associated with a container.
-		// PRODUCT-970 track the progress on this point
-		payload.ContainerID = ""
 	}
 
 	if annotations.ServiceName != "" {

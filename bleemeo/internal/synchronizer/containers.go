@@ -17,7 +17,6 @@
 package synchronizer
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -34,69 +33,15 @@ const apiContainerNameLength = 100
 // other that status (likely healthcheck log).
 const containerUpdateDelay = 30 * time.Minute
 
-type nullTime time.Time
-
-// MarshalJSON marshall the time.Time as usual BUT zero time is sent as "null".
-func (t nullTime) MarshalJSON() ([]byte, error) {
-	if time.Time(t).IsZero() {
-		return []byte("null"), nil
-	}
-
-	return json.Marshal(time.Time(t))
-}
-
-// UnmarshalJSON the time.Time as usual BUT zero time is read as "null".
-func (t *nullTime) UnmarshalJSON(b []byte) error {
-	if bytes.Equal(b, []byte("null")) {
-		*t = nullTime{}
-
-		return nil
-	}
-
-	return json.Unmarshal(b, (*time.Time)(t))
-}
-
 type containerPayload struct {
 	types.Container
-	Host             string   `json:"host"`
-	Command          string   `json:"command"`
-	StartedAt        nullTime `json:"container_started_at"`
-	FinishedAt       nullTime `json:"container_finished_at"`
-	ImageID          string   `json:"container_image_id"`
-	ImageName        string   `json:"container_image_name"`
-	DockerAPIVersion string   `json:"docker_api_version"`
-
-	// TODO: Older fields name, to remove when API is updated
-	DockerID         string   `json:"docker_id,omitempty"`
-	DockerInspect    string   `json:"docker_inspect,omitempty"`
-	DockerStatus     string   `json:"docker_status,omitempty"`
-	DockerCreatedAt  nullTime `json:"docker_created_at,omitempty"`
-	DockerStartedAt  nullTime `json:"docker_started_at,omitempty"`
-	DockerFinishedAt nullTime `json:"docker_finished_at,omitempty"`
-	DockerImageID    string   `json:"docker_image_id,omitempty"`
-	DockerImageName  string   `json:"docker_image_name,omitempty"`
-}
-
-// compatibilityContainer return a types.Container... applying compatibility with older
-// API. Once updated, this could just be "return c.Container".
-func (c containerPayload) compatibilityContainer() types.Container {
-	if c.ContainerID == "" {
-		c.ContainerID = c.DockerID
-	}
-
-	if c.ContainerInspect == "" {
-		c.ContainerInspect = c.DockerInspect
-	}
-
-	if c.CreatedAt.IsZero() {
-		c.CreatedAt = time.Time(c.DockerCreatedAt)
-	}
-
-	if c.Status == "" {
-		c.Status = c.DockerStatus
-	}
-
-	return c.Container
+	Host             string         `json:"host"`
+	Command          string         `json:"command"`
+	StartedAt        types.NullTime `json:"container_started_at"`
+	FinishedAt       types.NullTime `json:"container_finished_at"`
+	ImageID          string         `json:"container_image_id"`
+	ImageName        string         `json:"container_image_name"`
+	DockerAPIVersion string         `json:"docker_api_version"`
 }
 
 func (s *Synchronizer) syncContainers(ctx context.Context, fullSync bool, onlyEssential bool) error {
@@ -104,7 +49,7 @@ func (s *Synchronizer) syncContainers(ctx context.Context, fullSync bool, onlyEs
 
 	cfg, ok := s.option.Cache.CurrentAccountConfig()
 
-	if ok && cfg.DockerIntegration {
+	if ok && cfg.DockerIntegration && s.option.Docker != nil {
 		var err error
 
 		// We don't need very fresh information, we sync container after discovery which will update containers anyway.
@@ -145,8 +90,8 @@ func (s *Synchronizer) syncContainers(ctx context.Context, fullSync bool, onlyEs
 
 func (s *Synchronizer) containerUpdateList() error {
 	params := map[string]string{
-		"agent":  s.agentID,
-		"fields": "id,name,container_id,docker_id,docker_inspect,container_inspect,status,docker_status,docker_created_at,container_created_at",
+		"host":   s.agentID,
+		"fields": "id,name,container_id,container_inspect,status,container_created_at,deleted_at",
 	}
 
 	result, err := s.client.Iter(s.ctx, "container", params)
@@ -168,7 +113,7 @@ func (s *Synchronizer) containerUpdateList() error {
 		container.FillInspectHash()
 		container.ContainerInspect = ""
 		container.GloutonLastUpdatedAt = containersByUUID[container.ID].GloutonLastUpdatedAt
-		containers = append(containers, container.compatibilityContainer())
+		containers = append(containers, container.Container)
 	}
 
 	s.option.Cache.SetContainers(containers)
@@ -190,9 +135,9 @@ func (s *Synchronizer) containerRegisterAndUpdate(localContainers []facts.Contai
 	}
 
 	params := map[string]string{
-		"fields": "id,name,docker_id,docker_inspect,host,command,docker_status,docker_created_at,docker_started_at,docker_finished_at," +
-			"docker_api_version,docker_image_id,docker_image_name,container_id,container_inspect,container_status,container_created_at," +
-			"container_finished_at,container_image_id,container_image_name,container_runtime",
+		"fields": "id,name,host,command," +
+			"container_id,container_inspect,container_status,container_created_at," +
+			"container_finished_at,container_image_id,container_image_name,container_runtime,deleted_at",
 	}
 
 	newDelayedContainer := make(map[string]time.Time, len(s.delayedContainer))
@@ -226,7 +171,13 @@ func (s *Synchronizer) containerRegisterAndUpdate(localContainers []facts.Contai
 
 		payloadContainer.FillInspectHash()
 
-		if remoteFound && payloadContainer.Status == remoteContainer.Status && payloadContainer.CreatedAt.Truncate(time.Second).Equal(remoteContainer.CreatedAt.Truncate(time.Second)) {
+		var remoteDelete bool
+
+		if remoteFound {
+			remoteDelete = !time.Time(remoteContainer.DeletedAt).IsZero()
+		}
+
+		if remoteFound && payloadContainer.Status == remoteContainer.Status && payloadContainer.CreatedAt.Truncate(time.Second).Equal(remoteContainer.CreatedAt.Truncate(time.Second)) && !remoteDelete {
 			if payloadContainer.InspectHash == remoteContainer.InspectHash {
 				continue
 			}
@@ -239,21 +190,13 @@ func (s *Synchronizer) containerRegisterAndUpdate(localContainers []facts.Contai
 		payloadContainer.InspectHash = ""                   // we don't send inspect hash to API
 		payloadContainer.GloutonLastUpdatedAt = time.Time{} // we don't send this time, only used internally
 		payload := containerPayload{
-			Container:        payloadContainer,
-			Host:             s.agentID,
-			Command:          strings.Join(container.Command(), " "),
-			StartedAt:        nullTime(container.StartedAt()),
-			FinishedAt:       nullTime(container.FinishedAt()),
-			ImageID:          container.ImageID(),
-			ImageName:        container.ImageName(),
-			DockerID:         container.ID(),
-			DockerInspect:    container.ContainerJSON(),
-			DockerStatus:     container.State().String(),
-			DockerCreatedAt:  nullTime(container.CreatedAt()),
-			DockerStartedAt:  nullTime(container.StartedAt()),
-			DockerFinishedAt: nullTime(container.FinishedAt()),
-			DockerImageID:    container.ImageID(),
-			DockerImageName:  container.ImageName(),
+			Container:  payloadContainer,
+			Host:       s.agentID,
+			Command:    strings.Join(container.Command(), " "),
+			StartedAt:  types.NullTime(container.StartedAt()),
+			FinishedAt: types.NullTime(container.FinishedAt()),
+			ImageID:    container.ImageID(),
+			ImageName:  container.ImageName(),
 		}
 
 		if container.RuntimeName() == "docker" {
@@ -300,7 +243,7 @@ func (s *Synchronizer) remoteRegister(remoteFound bool, remoteContainer *types.C
 		result.FillInspectHash()
 		result.GloutonLastUpdatedAt = time.Now()
 		logger.V(2).Printf("Container %v updated with UUID %s", result.Name, result.ID)
-		(*remoteContainers)[remoteIndex] = result.compatibilityContainer()
+		(*remoteContainers)[remoteIndex] = result.Container
 	} else {
 		_, err := s.client.Do(s.ctx, "POST", "v1/container/", params, payload, &result)
 		if err != nil {
@@ -310,14 +253,15 @@ func (s *Synchronizer) remoteRegister(remoteFound bool, remoteContainer *types.C
 		result.FillInspectHash()
 		result.GloutonLastUpdatedAt = time.Now()
 		logger.V(2).Printf("Container %v registered with UUID %s", result.Name, result.ID)
-		*remoteContainers = append(*remoteContainers, result.compatibilityContainer())
+		*remoteContainers = append(*remoteContainers, result.Container)
 	}
 
 	return nil
 }
 
 func (s *Synchronizer) containerDeleteFromLocal(localContainers []facts.Container) error {
-	deletedPerformed := false
+	var deletedIDs []string //nolint: prealloc // we don't know the size. empty is the most likely size.
+
 	duplicatedKey := make(map[string]bool)
 	localByContainerID := make(map[string]facts.Container, len(localContainers))
 
@@ -326,14 +270,27 @@ func (s *Synchronizer) containerDeleteFromLocal(localContainers []facts.Containe
 	}
 
 	registeredContainers := s.option.Cache.ContainersByUUID()
-	for k, v := range registeredContainers {
+	for _, v := range registeredContainers {
+		if !time.Time(v.DeletedAt).IsZero() {
+			continue
+		}
+
 		if _, ok := localByContainerID[v.ContainerID]; ok && !duplicatedKey[v.ContainerID] {
 			duplicatedKey[v.ContainerID] = true
 
 			continue
 		}
 
-		_, err := s.client.Do(s.ctx, "DELETE", fmt.Sprintf("v1/container/%s/", v.ID), nil, nil, nil)
+		_, err := s.client.Do(
+			s.ctx,
+			"PATCH",
+			fmt.Sprintf("v1/container/%s/", v.ID),
+			nil,
+			struct {
+				DeletedAt types.NullTime `json:"deleted_at"`
+			}{types.NullTime(s.now())},
+			nil,
+		)
 		if err != nil {
 			logger.V(1).Printf("Failed to delete container %v on Bleemeo API: %v", v.Name, err)
 
@@ -341,9 +298,11 @@ func (s *Synchronizer) containerDeleteFromLocal(localContainers []facts.Containe
 		}
 
 		logger.V(2).Printf("Container %v deleted (UUID %s)", v.Name, v.ID)
-		delete(registeredContainers, k)
+		v.DeletedAt = types.NullTime(s.now())
 
-		deletedPerformed = true
+		registeredContainers[v.ID] = v
+
+		deletedIDs = append(deletedIDs, v.ID)
 	}
 
 	containers := make([]types.Container, 0, len(registeredContainers))
@@ -354,7 +313,29 @@ func (s *Synchronizer) containerDeleteFromLocal(localContainers []facts.Containe
 
 	s.option.Cache.SetContainers(containers)
 
-	if deletedPerformed {
+	if len(deletedIDs) > 0 {
+		// API will update all associated metrics and update their active status. Apply the same rule on local cache
+		metrics := s.option.Cache.Metrics()
+		for i, m := range metrics {
+			match := false
+
+			for _, id := range deletedIDs {
+				if m.ContainerID == id {
+					match = true
+
+					break
+				}
+			}
+
+			if !match {
+				continue
+			}
+
+			metrics[i].DeactivatedAt = time.Time(registeredContainers[m.ContainerID].DeletedAt)
+		}
+
+		s.option.Cache.SetMetrics(metrics)
+
 		s.l.Lock()
 		defer s.l.Unlock()
 

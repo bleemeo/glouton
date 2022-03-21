@@ -17,7 +17,9 @@
 package types
 
 import (
+	"bytes"
 	"crypto/sha256"
+	"encoding/json"
 	"fmt"
 	"glouton/threshold"
 	"math"
@@ -29,6 +31,32 @@ const (
 	AgentTypeAgent   = "agent"
 	AgentTypeMonitor = "connection_check"
 )
+
+type NullTime time.Time
+
+// MarshalJSON marshall the time.Time as usual BUT zero time is sent as "null".
+func (t NullTime) MarshalJSON() ([]byte, error) {
+	if time.Time(t).IsZero() {
+		return []byte("null"), nil
+	}
+
+	return json.Marshal(time.Time(t))
+}
+
+// UnmarshalJSON the time.Time as usual BUT zero time is read as "null".
+func (t *NullTime) UnmarshalJSON(b []byte) error {
+	if bytes.Equal(b, []byte("null")) {
+		*t = NullTime{}
+
+		return nil
+	}
+
+	return json.Unmarshal(b, (*time.Time)(t))
+}
+
+func (t NullTime) Equal(b NullTime) bool {
+	return time.Time(t).Equal(time.Time(b))
+}
 
 // AgentFact is an agent facts.
 type AgentFact struct {
@@ -109,6 +137,7 @@ type Container struct {
 	ContainerInspect string    `json:"container_inspect"`
 	Status           string    `json:"container_status"`
 	CreatedAt        time.Time `json:"container_created_at"`
+	DeletedAt        NullTime  `json:"deleted_at"`
 	Runtime          string    `json:"container_runtime"`
 
 	InspectHash          string    `json:",omitempty"`
