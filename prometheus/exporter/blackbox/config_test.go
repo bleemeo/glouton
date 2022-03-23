@@ -17,6 +17,7 @@
 package blackbox
 
 import (
+	"context"
 	gloutonConfig "glouton/config"
 	"glouton/prometheus/registry"
 	"glouton/types"
@@ -24,6 +25,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	bbConf "github.com/prometheus/blackbox_exporter/config"
 )
 
@@ -67,7 +70,7 @@ func TestConfigParsing(t *testing.T) {
 
 	registry := &registry.Registry{}
 
-	bbManager, err := New(registry, blackboxConf, "dummy-user-agent", types.MetricFormatPrometheus)
+	bbManager, err := New(context.Background(), registry, blackboxConf, "dummy-user-agent", types.MetricFormatPrometheus)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -98,6 +101,7 @@ func TestConfigParsing(t *testing.T) {
 			},
 			ModuleName: "http_2xx",
 			Name:       "https://google.com",
+			nowFunc:    time.Now,
 		}),
 		genCollectorFromStaticTarget(configTarget{
 			URL: "inpt.fr",
@@ -117,6 +121,7 @@ func TestConfigParsing(t *testing.T) {
 			},
 			ModuleName: "dns",
 			Name:       "inpt.fr",
+			nowFunc:    time.Now,
 		}),
 		genCollectorFromStaticTarget(configTarget{
 			URL: "http://neverssl.com",
@@ -140,11 +145,12 @@ func TestConfigParsing(t *testing.T) {
 			},
 			ModuleName: "http_2xx",
 			Name:       "http://neverssl.com",
+			nowFunc:    time.Now,
 		}),
 	}
 
-	if !reflect.DeepEqual(bbManager.targets, expectedValue) {
-		t.Fatalf("TestConfigParsing() = %#v, want %#v", bbManager.targets, expectedValue)
+	if diff := cmp.Diff(expectedValue, bbManager.targets, cmpopts.IgnoreUnexported(configTarget{})); diff != "" {
+		t.Errorf("bbManager.targets mismatch (-want +got)\n%s", diff)
 	}
 }
 
@@ -168,7 +174,7 @@ func TestNoTargetsConfigParsing(t *testing.T) {
 		t.Fatalf("Couldn't parse the yaml configuration")
 	}
 
-	bbManager, err := New(nil, blackboxConf, "dummy-user-agent", types.MetricFormatPrometheus)
+	bbManager, err := New(context.Background(), nil, blackboxConf, "dummy-user-agent", types.MetricFormatPrometheus)
 	if err != nil {
 		t.Fatal(err)
 	}

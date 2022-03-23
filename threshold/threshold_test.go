@@ -23,6 +23,8 @@ import (
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/google/go-cmp/cmp"
 )
 
 type mockState struct{}
@@ -189,7 +191,7 @@ func TestFormatValue(t *testing.T) {
 		},
 	}
 	for _, c := range cases {
-		got := formatValue(c.value, c.unit)
+		got := FormatValue(c.value, c.unit)
 		if got != c.want {
 			t.Errorf("formatValue(%v, %v) == %v, want %v", c.value, c.unit, got, c.want)
 		}
@@ -252,6 +254,18 @@ func TestFormatDuration(t *testing.T) {
 		{
 			value: 0,
 			want:  "0 second",
+		},
+		{
+			value: 90 * 24 * time.Hour,
+			want:  "90 days",
+		},
+		{
+			value: 90*24*time.Hour + time.Hour,
+			want:  "90 days",
+		},
+		{
+			value: 365 * 24 * time.Hour,
+			want:  "365 days",
 		},
 	}
 	for _, c := range cases {
@@ -402,5 +416,211 @@ func TestAccumulatorThreshold(t *testing.T) {
 		if !reflect.DeepEqual(got, want) {
 			t.Errorf("points[%d] = %v, want %v", i, got, want)
 		}
+	}
+}
+
+func TestThreshold(t *testing.T) {
+	db := &mockStore{}
+	threshold := New(mockState{})
+	threshold.defaultSoftPeriod = 60 * time.Second
+
+	threshold.SetThresholds(
+		map[MetricNameItem]Threshold{
+			{Name: "disk_used_perc", Item: "/home"}: {
+				HighWarning:  80,
+				HighCritical: math.NaN(),
+				LowCritical:  math.NaN(),
+				LowWarning:   math.NaN(),
+			},
+		},
+		map[string]Threshold{"cpu_used": {
+			HighWarning:  80,
+			HighCritical: 90,
+			LowCritical:  math.NaN(),
+			LowWarning:   math.NaN(),
+		}},
+	)
+
+	t0 := time.Date(2020, 2, 24, 15, 1, 0, 0, time.UTC)
+	stepDelay := 10 * time.Second
+
+	steps := []struct {
+		AddedToT0   time.Duration
+		PushedValue map[string]float64
+		// WantedPoints will be processed to add an _status version of any points with CurrentStatus != StatusUnset
+		WantedPoints map[string]types.StatusDescription
+	}{
+		{
+			AddedToT0: 0 * stepDelay,
+			PushedValue: map[string]float64{
+				`__name__="cpu_used"`:                    20,
+				`__name__="disk_used_perc",item="/home"`: 60,
+				`__name__="disk_used_perc",item="/srv"`:  60,
+			},
+			WantedPoints: map[string]types.StatusDescription{
+				`__name__="cpu_used"`:                    {CurrentStatus: types.StatusOk, StatusDescription: "Current value: 20.00"},
+				`__name__="disk_used_perc",item="/home"`: {CurrentStatus: types.StatusOk, StatusDescription: "Current value: 60.00"},
+				`__name__="disk_used_perc",item="/srv"`:  {CurrentStatus: types.StatusUnset},
+			},
+		},
+		{
+			AddedToT0: 1 * stepDelay,
+			PushedValue: map[string]float64{
+				`__name__="cpu_used"`:                    99,
+				`__name__="disk_used_perc",item="/home"`: 99,
+				`__name__="disk_used_perc",item="/srv"`:  99,
+			},
+			WantedPoints: map[string]types.StatusDescription{
+				`__name__="cpu_used"`:                    {CurrentStatus: types.StatusOk, StatusDescription: "Current value: 99.00"},
+				`__name__="disk_used_perc",item="/home"`: {CurrentStatus: types.StatusOk, StatusDescription: "Current value: 99.00"},
+				`__name__="disk_used_perc",item="/srv"`:  {CurrentStatus: types.StatusUnset},
+			},
+		},
+		{
+			AddedToT0: 6 * stepDelay,
+			PushedValue: map[string]float64{
+				`__name__="cpu_used"`:                    91,
+				`__name__="disk_used_perc",item="/home"`: 91,
+				`__name__="disk_used_perc",item="/srv"`:  91,
+			},
+			WantedPoints: map[string]types.StatusDescription{
+				`__name__="cpu_used"`:                    {CurrentStatus: types.StatusOk, StatusDescription: "Current value: 91.00"},
+				`__name__="disk_used_perc",item="/home"`: {CurrentStatus: types.StatusOk, StatusDescription: "Current value: 91.00"},
+				`__name__="disk_used_perc",item="/srv"`:  {CurrentStatus: types.StatusUnset},
+			},
+		},
+		{
+			AddedToT0: 7 * stepDelay,
+			PushedValue: map[string]float64{
+				`__name__="cpu_used"`:                    97,
+				`__name__="disk_used_perc",item="/home"`: 97,
+				`__name__="disk_used_perc",item="/srv"`:  97,
+			},
+			WantedPoints: map[string]types.StatusDescription{
+				`__name__="cpu_used"`:                    {CurrentStatus: types.StatusCritical, StatusDescription: "Current value: 97.00 threshold (90.00) exceeded over last 1 minute"},
+				`__name__="disk_used_perc",item="/home"`: {CurrentStatus: types.StatusWarning, StatusDescription: "Current value: 97.00 threshold (80.00) exceeded over last 1 minute"},
+				`__name__="disk_used_perc",item="/srv"`:  {CurrentStatus: types.StatusUnset},
+			},
+		},
+		{
+			AddedToT0: 8 * stepDelay,
+			PushedValue: map[string]float64{
+				`__name__="cpu_used"`: 5,
+			},
+			WantedPoints: map[string]types.StatusDescription{
+				`__name__="cpu_used"`: {CurrentStatus: types.StatusOk, StatusDescription: "Current value: 5.00"},
+			},
+		},
+		{
+			AddedToT0: 10 * stepDelay,
+			PushedValue: map[string]float64{
+				`__name__="cpu_used"`: 5,
+			},
+			WantedPoints: map[string]types.StatusDescription{
+				`__name__="cpu_used"`: {CurrentStatus: types.StatusOk, StatusDescription: "Current value: 5.00"},
+			},
+		},
+		{
+			AddedToT0: 11 * stepDelay,
+			PushedValue: map[string]float64{
+				`__name__="cpu_used"`: 85,
+			},
+			WantedPoints: map[string]types.StatusDescription{
+				`__name__="cpu_used"`: {CurrentStatus: types.StatusOk, StatusDescription: "Current value: 85.00"},
+			},
+		},
+		{
+			AddedToT0: 12 * stepDelay,
+			PushedValue: map[string]float64{
+				`__name__="cpu_used"`: 95,
+			},
+			WantedPoints: map[string]types.StatusDescription{
+				`__name__="cpu_used"`: {CurrentStatus: types.StatusOk, StatusDescription: "Current value: 95.00"},
+			},
+		},
+		{
+			AddedToT0: 16 * stepDelay,
+			PushedValue: map[string]float64{
+				`__name__="cpu_used"`: 95,
+			},
+			WantedPoints: map[string]types.StatusDescription{
+				`__name__="cpu_used"`: {CurrentStatus: types.StatusOk, StatusDescription: "Current value: 95.00"},
+			},
+		},
+		{
+			AddedToT0: 17 * stepDelay,
+			PushedValue: map[string]float64{
+				`__name__="cpu_used"`: 95,
+			},
+			WantedPoints: map[string]types.StatusDescription{
+				`__name__="cpu_used"`: {CurrentStatus: types.StatusWarning, StatusDescription: "Current value: 95.00 threshold (80.00) exceeded over last 1 minute"},
+			},
+		},
+		{
+			AddedToT0: 18 * stepDelay,
+			PushedValue: map[string]float64{
+				`__name__="cpu_used"`: 95,
+			},
+			WantedPoints: map[string]types.StatusDescription{
+				`__name__="cpu_used"`: {CurrentStatus: types.StatusCritical, StatusDescription: "Current value: 95.00 threshold (90.00) exceeded over last 1 minute"},
+			},
+		},
+	}
+
+	ctx := context.Background()
+	pusher := threshold.WithPusher(db)
+
+	for _, step := range steps {
+		currentTime := t0.Add(step.AddedToT0)
+		threshold.nowFunc = func() time.Time { return currentTime }
+
+		points := make([]types.MetricPoint, 0, len(step.PushedValue))
+
+		for name, value := range step.PushedValue {
+			lbls := types.TextToLabels(name)
+
+			points = append(points, types.MetricPoint{
+				Labels: lbls,
+				Point:  types.Point{Time: currentTime, Value: value},
+				Annotations: types.MetricAnnotations{
+					BleemeoItem: lbls[types.LabelItem],
+				},
+			})
+		}
+
+		pusher.PushPoints(ctx, points)
+
+		moreWant := make(map[string]types.StatusDescription)
+		for name, pts := range step.WantedPoints {
+			moreWant[name] = pts
+
+			if !pts.CurrentStatus.IsSet() {
+				continue
+			}
+
+			lbls := types.TextToLabels(name)
+			lbls[types.LabelName] += "_status"
+
+			moreWant[types.LabelsToText(lbls)] = pts
+		}
+
+		for _, pts := range db.points {
+			want, ok := moreWant[types.LabelsToText(pts.Labels)]
+			if !ok {
+				t.Errorf("At %v got point %v, expected not present", step.AddedToT0, pts.Labels)
+
+				continue
+			}
+
+			if diff := cmp.Diff(want, pts.Annotations.Status); diff != "" {
+				t.Errorf("At %v points %v mismatch: (-want +got)\n%s", step.AddedToT0, pts.Labels, diff)
+			}
+		}
+
+		if len(db.points) != len(moreWant) {
+			t.Errorf("At %v got %d points, want %d", step.AddedToT0, len(db.points), len(moreWant))
+		}
+
+		db.points = db.points[:0]
 	}
 }

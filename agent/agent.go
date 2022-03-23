@@ -86,7 +86,7 @@ import (
 	processInput "glouton/inputs/process"
 
 	"github.com/google/uuid"
-	"github.com/prometheus/prometheus/pkg/labels"
+	"github.com/prometheus/prometheus/model/labels"
 	"gopkg.in/yaml.v3"
 )
 
@@ -107,11 +107,12 @@ type agent struct {
 	config       Config
 	state        *state.State
 	cancel       context.CancelFunc
-	context      context.Context
+	context      context.Context //nolint:containedctx
 
 	hostRootPath           string
 	discovery              *discovery.Discovery
 	dockerRuntime          *dockerRuntime.Docker
+	containerFilter        facts.ContainerFilter
 	containerdRuntime      *containerd.Containerd
 	containerRuntime       crTypes.RuntimeInterface
 	collector              *collector.Collector
@@ -131,6 +132,8 @@ type agent struct {
 	watchdogRunAt          []time.Time
 	metricFilter           *metricFilter
 	monitorManager         *blackbox.RegisterManager
+	rulesManager           *rules.Manager
+	reloadState            ReloadState
 
 	triggerHandler            *debouncer.Debouncer
 	triggerLock               sync.Mutex
@@ -164,12 +167,14 @@ type taskInfo struct {
 	name     string
 }
 
-func (a *agent) init(configFiles []string) (ok bool) {
+func (a *agent) init(ctx context.Context, configFiles []string, firstRun bool) (ok bool) {
 	a.l.Lock()
 	a.lastHealCheck = time.Now()
 	a.l.Unlock()
 
-	a.taskRegistry = task.NewRegistry(context.Background())
+	a.taskRegistry = task.NewRegistry(ctx)
+	a.taskIDs = make(map[string]int)
+
 	cfg, oldCfg, warnings, err := loadConfiguration(configFiles, nil)
 	a.oldConfig = oldCfg
 	a.config = cfg
@@ -182,7 +187,14 @@ func (a *agent) init(configFiles []string) (ok bool) {
 		return false
 	}
 
-	if dsn := a.oldConfig.String("bleemeo.sentry.dsn"); dsn != "" {
+	watcherErr := a.reloadState.WatcherError()
+	if watcherErr != nil && !errors.Is(watcherErr, errWatcherDisabled) {
+		logger.Printf("An error occurred with the file watcher: %v.", watcherErr)
+		logger.Printf("The agent might not be able to reload automatically on config change.")
+	}
+
+	// Initialize sentry only on the first run so it doesn't leak goroutines on reload.
+	if dsn := a.oldConfig.String("bleemeo.sentry.dsn"); firstRun && dsn != "" {
 		err := sentry.Init(sentry.ClientOptions{
 			Dsn: dsn,
 		})
@@ -199,6 +211,12 @@ func (a *agent) init(configFiles []string) (ok bool) {
 
 	for _, w := range warnings {
 		logger.Printf("Warning while loading configuration: %v", w)
+	}
+
+	a.containerFilter = facts.ContainerFilter{
+		DisabledByDefault: a.config.Container.DisabledByDefault,
+		AllowList:         a.config.Container.AllowPatternList,
+		DenyList:          a.config.Container.DenyPatternList,
 	}
 
 	statePath := a.oldConfig.String("agent.state_file")
@@ -227,6 +245,18 @@ func (a *agent) init(configFiles []string) (ok bool) {
 			oldStatePath = ""
 		} else {
 			a.state = oldState
+		}
+	}
+
+	resetStateFile := a.oldConfig.String("agent.state_reset_file")
+
+	if _, err := os.Stat(resetStateFile); err == nil {
+		// No error means that file exists.
+		if err := os.Remove(resetStateFile); err != nil {
+			logger.Printf("Unable to remote state reset marked: %v", err)
+			logger.Printf("Skipping state reset due to previous error")
+		} else {
+			a.state.KeptOnlyPersistent()
 		}
 	}
 
@@ -298,23 +328,19 @@ func (a *agent) setupLogger() {
 }
 
 // Run runs Glouton.
-func Run(configFiles []string) {
+func Run(ctx context.Context, reloadState ReloadState, configFiles []string, firstRun bool) {
 	rand.Seed(time.Now().UnixNano())
 
-	agent := &agent{
-		taskRegistry: task.NewRegistry(context.Background()),
-		taskIDs:      make(map[string]int),
-	}
-
+	agent := &agent{reloadState: reloadState}
 	agent.initOSSpecificParts()
 
-	if !agent.init(configFiles) {
+	if !agent.init(ctx, configFiles, firstRun) {
 		os.Exit(1)
 
 		return
 	}
 
-	agent.run()
+	agent.run(ctx)
 }
 
 // BleemeoAccountID returns the Account UUID of Bleemeo
@@ -391,8 +417,8 @@ func (a *agent) Tags() []string {
 
 // UpdateThresholds update the thresholds definition.
 // This method will merge with threshold definition present in configuration file.
-func (a *agent) UpdateThresholds(thresholds map[threshold.MetricNameItem]threshold.Threshold, firstUpdate bool) {
-	a.updateThresholds(thresholds, firstUpdate)
+func (a *agent) UpdateThresholds(ctx context.Context, thresholds map[threshold.MetricNameItem]threshold.Threshold, firstUpdate bool) {
+	a.updateThresholds(ctx, thresholds, firstUpdate)
 }
 
 // notifyBleemeoFirstRegistration is called when Glouton is registered with Bleemeo Cloud platform for the first time
@@ -408,7 +434,7 @@ func (a *agent) notifyBleemeoUpdateLabels(ctx context.Context) {
 	a.gathererRegistry.UpdateRelabelHook(ctx, a.bleemeoConnector.RelabelHook)
 }
 
-func (a *agent) updateSNMPResolution(resolution time.Duration) {
+func (a *agent) updateSNMPResolution(ctx context.Context, resolution time.Duration) {
 	a.l.Lock()
 	defer a.l.Unlock()
 
@@ -428,15 +454,16 @@ func (a *agent) updateSNMPResolution(resolution time.Duration) {
 		hash := labels.FromMap(target.ExtraLabels).Hash()
 
 		id, err := a.gathererRegistry.RegisterGatherer(
+			ctx,
 			registry.RegistrationOption{
 				Description: "snmp target " + target.Address,
 				JitterSeed:  hash,
 				Interval:    resolution,
 				Timeout:     40 * time.Second,
 				ExtraLabels: target.ExtraLabels,
+				Rules:       registry.DefaultSNMPRules(),
 			},
 			target.Gatherer,
-			true,
 		)
 		if err != nil {
 			logger.Printf("Unable to add SNMP scrapper for target %s: %v", target.Address, err)
@@ -446,14 +473,15 @@ func (a *agent) updateSNMPResolution(resolution time.Duration) {
 	}
 }
 
-func (a *agent) updateMetricResolution(defaultResolution time.Duration, snmpResolution time.Duration) {
+func (a *agent) updateMetricResolution(ctx context.Context, defaultResolution time.Duration, snmpResolution time.Duration) {
 	a.l.Lock()
 	a.metricResolution = defaultResolution
 	a.l.Unlock()
 
-	a.gathererRegistry.UpdateDelay(defaultResolution)
+	a.gathererRegistry.UpdateDelay(ctx, defaultResolution)
+	a.rulesManager.UpdateMetricResolution(defaultResolution)
 
-	services, err := a.discovery.Discovery(a.context, time.Hour)
+	services, err := a.discovery.Discovery(ctx, time.Hour)
 	if err != nil {
 		logger.V(1).Printf("error during discovery: %v", err)
 	} else if a.jmx != nil {
@@ -462,7 +490,7 @@ func (a *agent) updateMetricResolution(defaultResolution time.Duration, snmpReso
 		}
 	}
 
-	a.updateSNMPResolution(snmpResolution)
+	a.updateSNMPResolution(ctx, snmpResolution)
 }
 
 func (a *agent) getConfigThreshold(firstUpdate bool) map[string]threshold.Threshold {
@@ -507,7 +535,7 @@ func (a *agent) getConfigThreshold(firstUpdate bool) map[string]threshold.Thresh
 	return configThreshold
 }
 
-func (a *agent) updateThresholds(thresholds map[threshold.MetricNameItem]threshold.Threshold, firstUpdate bool) {
+func (a *agent) updateThresholds(ctx context.Context, thresholds map[threshold.MetricNameItem]threshold.Threshold, firstUpdate bool) {
 	configThreshold := a.getConfigThreshold(firstUpdate)
 
 	oldThresholds := map[string]threshold.Threshold{}
@@ -522,14 +550,12 @@ func (a *agent) updateThresholds(thresholds map[threshold.MetricNameItem]thresho
 
 	a.threshold.SetThresholds(thresholds, configThreshold)
 
-	ctx := context.Background()
 	services, err := a.discovery.Discovery(ctx, 1*time.Hour)
 
 	if err != nil {
 		logger.V(2).Printf("An error occurred while running discoveries for updateThresholds: %v", err)
 	} else {
-		err = a.metricFilter.RebuildDynamicLists(a.dynamicScrapper, services, a.threshold.GetThresholdMetricNames())
-
+		err = a.metricFilter.RebuildDynamicLists(a.dynamicScrapper, services, a.threshold.GetThresholdMetricNames(), a.rulesManager.MetricList())
 		if err != nil {
 			logger.V(2).Printf("An error occurred while rebuilding dynamic list for updateThresholds: %v", err)
 		}
@@ -559,8 +585,8 @@ func (a *agent) updateThresholds(thresholds map[threshold.MetricNameItem]thresho
 }
 
 // Run will start the agent. It will terminate when sigquit/sigterm/sigint is received.
-func (a *agent) run() { //nolint:cyclop
-	ctx, cancel := context.WithCancel(context.Background())
+func (a *agent) run(ctx context.Context) { //nolint:maintidx
+	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
 	a.cancel = cancel
@@ -662,8 +688,6 @@ func (a *agent) run() { //nolint:cyclop
 		a.store = store.New(2 * time.Minute)
 	}
 
-	rulesManager := rules.NewManager(ctx, a.store)
-
 	filteredStore := store.NewFilteredStore(a.store, mFilter.FilterPoints, mFilter.filterMetrics)
 
 	a.gathererRegistry, err = registry.New(
@@ -683,14 +707,19 @@ func (a *agent) run() { //nolint:cyclop
 		return
 	}
 
-	_, err = a.gathererRegistry.RegisterPushPointsCallback(
+	a.rulesManager = rules.NewManager(ctx, a.store, a.metricResolution)
+
+	a.store.SetResetRuleCallback(a.rulesManager.ResetInactiveRules)
+
+	_, err = a.gathererRegistry.RegisterAppenderCallback(
+		ctx,
 		registry.RegistrationOption{
-			Description: "rulesManager",
-			JitterSeed:  baseJitterPlus,
+			Description:        "rulesManager",
+			JitterSeed:         baseJitterPlus,
+			NoLabelsAlteration: true,
 		},
-		func(context.Context, time.Time) {
-			rulesManager.Run()
-		},
+		registry.AppenderRegistrationOption{},
+		a.rulesManager,
 	)
 	if err != nil {
 		logger.Printf("unable to add recording rules metrics: %v", err)
@@ -705,23 +734,27 @@ func (a *agent) run() { //nolint:cyclop
 	a.dockerRuntime = &dockerRuntime.Docker{
 		DockerSockets:             dockerRuntime.DefaultAddresses(a.hostRootPath),
 		DeletedContainersCallback: a.deletedContainersCallback,
+		IsContainerIgnored:        a.containerFilter.ContainerIgnored,
 	}
 	a.containerdRuntime = &containerd.Containerd{
 		Addresses:                 containerd.DefaultAddresses(a.hostRootPath),
 		DeletedContainersCallback: a.deletedContainersCallback,
+		IsContainerIgnored:        a.containerFilter.ContainerIgnored,
 	}
 	a.containerRuntime = &merge.Runtime{
 		Runtimes: []crTypes.RuntimeInterface{
 			a.dockerRuntime,
 			a.containerdRuntime,
 		},
+		ContainerIgnored: a.containerFilter.ContainerIgnored,
 	}
 
 	if a.oldConfig.Bool("kubernetes.enable") {
 		kube := &kubernetes.Kubernetes{
-			Runtime:    a.containerRuntime,
-			NodeName:   a.oldConfig.String("kubernetes.nodename"),
-			KubeConfig: a.oldConfig.String("kubernetes.kubeconfig"),
+			Runtime:            a.containerRuntime,
+			NodeName:           a.oldConfig.String("kubernetes.nodename"),
+			KubeConfig:         a.oldConfig.String("kubernetes.kubeconfig"),
+			IsContainerIgnored: a.containerFilter.ContainerIgnored,
 		}
 		a.containerRuntime = kube
 
@@ -761,6 +794,7 @@ func (a *agent) run() { //nolint:cyclop
 	a.collector = collector.New(acc)
 
 	_, err = a.gathererRegistry.RegisterPushPointsCallback(
+		ctx,
 		registry.RegistrationOption{
 			Description: "system & services metrics",
 			JitterSeed:  baseJitter,
@@ -773,6 +807,7 @@ func (a *agent) run() { //nolint:cyclop
 
 	if a.metricFormat == types.MetricFormatBleemeo {
 		_, err = a.gathererRegistry.RegisterPushPointsCallback(
+			ctx,
 			registry.RegistrationOption{
 				Description: "procces status metrics",
 				JitterSeed:  baseJitter,
@@ -785,6 +820,7 @@ func (a *agent) run() { //nolint:cyclop
 	}
 
 	_, err = a.gathererRegistry.RegisterPushPointsCallback(
+		ctx,
 		registry.RegistrationOption{
 			Description: "miscGather",
 			JitterSeed:  baseJitter,
@@ -801,7 +837,7 @@ func (a *agent) run() { //nolint:cyclop
 	serviceIgnoreMetrics := confFieldToSliceMap(servicesIgnoreMetrics, "service ignore metrics")
 	isCheckIgnored := discovery.NewIgnoredService(serviceIgnoreCheck).IsServiceIgnored
 	isInputIgnored := discovery.NewIgnoredService(serviceIgnoreMetrics).IsServiceIgnored
-	dynamicDiscovery := discovery.NewDynamic(psFact, netstat, a.containerRuntime, discovery.SudoFileReader{HostRootPath: a.hostRootPath}, a.oldConfig.String("stack"))
+	dynamicDiscovery := discovery.NewDynamic(psFact, netstat, a.containerRuntime, a.containerFilter.ContainerIgnored, discovery.SudoFileReader{HostRootPath: a.hostRootPath}, a.oldConfig.String("stack"))
 	a.discovery = discovery.New(
 		dynamicDiscovery,
 		a.collector,
@@ -813,15 +849,18 @@ func (a *agent) run() { //nolint:cyclop
 		a.config.Services.ToDiscoveryMap(),
 		isCheckIgnored,
 		isInputIgnored,
+		a.containerFilter.ContainerIgnored,
 		a.metricFormat,
+		psFact,
 	)
 
-	a.updateSNMPResolution(time.Minute)
+	a.updateSNMPResolution(ctx, time.Minute)
 
 	for _, target := range targets {
 		hash := labels.FromMap(target.ExtraLabels).Hash()
 
 		_, err = a.gathererRegistry.RegisterGatherer(
+			ctx,
 			registry.RegistrationOption{
 				Description: "Prom exporter " + target.URL.String(),
 				JitterSeed:  hash,
@@ -829,14 +868,13 @@ func (a *agent) run() { //nolint:cyclop
 				ExtraLabels: target.ExtraLabels,
 			},
 			target,
-			true,
 		)
 		if err != nil {
 			logger.Printf("Unable to add Prometheus scrapper for target %s: %v", target.URL.String(), err)
 		}
 	}
 
-	a.gathererRegistry.AddDefaultCollector()
+	a.gathererRegistry.AddDefaultCollector(ctx)
 
 	a.dynamicScrapper = &promexporter.DynamicScrapper{
 		Registry:       a.gathererRegistry,
@@ -853,7 +891,7 @@ func (a *agent) run() { //nolint:cyclop
 		// the config is present, otherwise we would not be in this block
 		blackboxConf, _ := a.oldConfig.Get("blackbox")
 
-		a.monitorManager, err = blackbox.New(a.gathererRegistry, blackboxConf, a.oldConfig.String("blackbox.user_agent"), a.metricFormat)
+		a.monitorManager, err = blackbox.New(ctx, a.gathererRegistry, blackboxConf, a.oldConfig.String("blackbox.user_agent"), a.metricFormat)
 		if err != nil {
 			logger.V(0).Printf("Couldn't start blackbox_exporter: %v\nMonitors will not be able to run on this agent.", err)
 		}
@@ -861,10 +899,10 @@ func (a *agent) run() { //nolint:cyclop
 		logger.V(1).Println("blackbox_exporter not enabled, will not start...")
 	}
 
-	promExporter := a.gathererRegistry.Exporter()
+	promExporter := a.gathererRegistry.Exporter(ctx)
 
 	if a.oldConfig.Bool("agent.process_exporter.enable") {
-		process.RegisterExporter(a.gathererRegistry, psLister, dynamicDiscovery, a.metricFormat == types.MetricFormatBleemeo)
+		process.RegisterExporter(ctx, a.gathererRegistry, psLister, dynamicDiscovery, a.metricFormat == types.MetricFormatBleemeo)
 	}
 
 	api := &api.API{
@@ -938,7 +976,7 @@ func (a *agent) run() { //nolint:cyclop
 			Store:                   filteredStore,
 			SNMP:                    a.snmpManager.Targets(),
 			SNMPOnlineTarget:        a.snmpManager.OnlineCount,
-			Acc:                     acc,
+			PushPoints:              a.threshold.WithPusher(a.gathererRegistry.WithTTL(5 * time.Minute)),
 			Discovery:               a.discovery,
 			MonitorManager:          a.monitorManager,
 			UpdateMetricResolution:  a.updateMetricResolution,
@@ -948,6 +986,9 @@ func (a *agent) run() { //nolint:cyclop
 			NotifyFirstRegistration: a.notifyBleemeoFirstRegistration,
 			NotifyLabelsUpdate:      a.notifyBleemeoUpdateLabels,
 			BlackboxScraperName:     scaperName,
+			RebuildAlertingRules:    a.rulesManager.RebuildAlertingRules,
+			ReloadState:             a.reloadState.Bleemeo(),
+			IsContainerEnabled:      a.containerFilter.ContainerEnabled,
 		})
 		if err != nil {
 			logger.Printf("unable to start Bleemeo SAAS connector: %v", err)
@@ -957,6 +998,19 @@ func (a *agent) run() { //nolint:cyclop
 
 		a.gathererRegistry.UpdateRelabelHook(ctx, a.bleemeoConnector.RelabelHook)
 		tasks = append(tasks, taskInfo{a.bleemeoConnector.Run, "Bleemeo SAAS connector"})
+
+		_, err = a.gathererRegistry.RegisterPushPointsCallback(
+			ctx,
+			registry.RegistrationOption{
+				Description: "Bleemeo connector",
+				JitterSeed:  baseJitter,
+				Interval:    defaultInterval,
+			},
+			a.bleemeoConnector.EmitInternalMetric,
+		)
+		if err != nil {
+			logger.Printf("unable to add bleemeo connector metrics: %v", err)
+		}
 	}
 
 	sentry.ConfigureScope(func(scope *sentry.Scope) {
@@ -999,9 +1053,9 @@ func (a *agent) run() { //nolint:cyclop
 	}
 
 	if a.bleemeoConnector == nil {
-		a.updateThresholds(nil, true)
+		a.updateThresholds(ctx, nil, true)
 	} else {
-		a.bleemeoConnector.ApplyCachedConfiguration()
+		a.bleemeoConnector.ApplyCachedConfiguration(ctx)
 	}
 
 	tmp, _ := a.oldConfig.Get("metric.softstatus_period")
@@ -1035,7 +1089,7 @@ func (a *agent) run() { //nolint:cyclop
 	}
 
 	// register components only available on a given system, like node_exporter for unixes
-	a.registerOSSpecificComponents()
+	a.registerOSSpecificComponents(ctx)
 
 	tasks = append(tasks, taskInfo{
 		a.gathererRegistry.Run,
@@ -1076,6 +1130,7 @@ func (a *agent) run() { //nolint:cyclop
 	close(c)
 	a.taskRegistry.Close()
 	a.discovery.Close()
+	a.collector.Close()
 	logger.V(2).Printf("Agent stopped")
 }
 
@@ -1721,7 +1776,6 @@ func (a *agent) cleanTrigger() (discovery bool, sendFacts bool, systemUpdateMetr
 	return
 }
 
-//nolint:cyclop
 func (a *agent) handleTrigger(ctx context.Context) {
 	runDiscovery, runFact, runSystemUpdateMetric := a.cleanTrigger()
 	if runDiscovery {
@@ -1740,11 +1794,11 @@ func (a *agent) handleTrigger(ctx context.Context) {
 			}
 			if a.dynamicScrapper != nil {
 				if containers, err := a.containerRuntime.Containers(ctx, time.Hour, false); err == nil {
-					a.dynamicScrapper.Update(containers)
+					a.dynamicScrapper.Update(ctx, containers)
 				}
 			}
 
-			err := a.metricFilter.RebuildDynamicLists(a.dynamicScrapper, services, a.threshold.GetThresholdMetricNames())
+			err := a.metricFilter.RebuildDynamicLists(a.dynamicScrapper, services, a.threshold.GetThresholdMetricNames(), a.rulesManager.MetricList())
 			if err != nil {
 				logger.V(2).Printf("Error during dynamic Filter rebuild: %v", err)
 			}
@@ -1752,7 +1806,7 @@ func (a *agent) handleTrigger(ctx context.Context) {
 
 		hasConnection := a.dockerRuntime.IsRuntimeRunning(ctx)
 		if hasConnection && !a.dockerInputPresent && a.oldConfig.Bool("telegraf.docker_metrics_enable") {
-			i, err := docker.New(a.dockerRuntime.ServerAddress(), a.dockerRuntime)
+			i, err := docker.New(a.dockerRuntime.ServerAddress(), a.dockerRuntime, a.containerFilter.ContainerIgnored)
 			if err != nil {
 				logger.V(1).Printf("error when creating Docker input: %v", err)
 			} else {
@@ -1876,10 +1930,10 @@ func (a *agent) DiagnosticPage(ctx context.Context) string {
 	if err != nil {
 		fmt.Fprintf(builder, "Unable to query internal metrics store: %v\n", err)
 	} else {
-		fmt.Fprintf(builder, "Glouton measure %d metrics\n", len(allMetrics))
+		fmt.Fprintf(builder, "Glouton measures %d metrics\n", len(allMetrics))
 	}
 
-	fmt.Fprintf(builder, "Glouton was build for %s %s\n", runtime.GOOS, runtime.GOARCH)
+	fmt.Fprintf(builder, "Glouton was built for %s %s\n", runtime.GOOS, runtime.GOARCH)
 
 	facts, err := a.factProvider.Facts(ctx, time.Hour)
 	if err != nil {
@@ -1915,6 +1969,8 @@ func (a *agent) writeDiagnosticArchive(ctx context.Context, archive types.Archiv
 		a.diagnosticSNMP,
 		a.metricFilter.DiagnosticArchive,
 		a.gathererRegistry.DiagnosticArchive,
+		a.rulesManager.DiagnosticArchive,
+		a.reloadState.DiagnosticArchive,
 	}
 
 	if a.bleemeoConnector != nil {
@@ -2099,7 +2155,7 @@ func (a *agent) diagnosticContainers(ctx context.Context, archive types.ArchiveW
 				"Name=%s, ID=%s, ignored=%v, IP=%s, listenAddr=%v,\n\tState=%v, CreatedAt=%v, StartedAt=%v, FinishedAt=%v, StoppedAndReplaced=%v\n\tHealth=%v (%s) K8S=%v/%v\n",
 				c.ContainerName(),
 				c.ID(),
-				facts.ContainerIgnored(c),
+				a.containerFilter.ContainerIgnored(c),
 				c.PrimaryAddress(),
 				addr,
 				c.State(),
@@ -2130,7 +2186,7 @@ func (a *agent) diagnosticSNMP(ctx context.Context, archive types.ArchiveWriter)
 	fmt.Fprintf(file, "# %d SNMP target configured\n", len(a.snmpManager.Targets()))
 
 	for _, t := range a.snmpManager.Targets() {
-		fmt.Fprintf(file, "\n%s\n", t.String())
+		fmt.Fprintf(file, "\n%s\n", t.String(ctx))
 		facts, err := t.Facts(ctx, 48*time.Hour)
 
 		if err != nil {
@@ -2157,7 +2213,7 @@ func (a *agent) diagnosticConfig(ctx context.Context, archive types.ArchiveWrite
 
 	enc := yaml.NewEncoder(file)
 
-	fmt.Fprintln(file, "# This file contains in-memory configuration used by Glouton. Value from from default, files and environement.")
+	fmt.Fprintln(file, "# This file contains in-memory configuration used by Glouton. Value from from default, files and environment.")
 	enc.SetIndent(4)
 
 	err = enc.Encode(a.oldConfig.Dump())
@@ -2342,7 +2398,7 @@ func prometheusConfigToURLs(cfg interface{}) (result []*scrapper.Target) {
 			for _, x := range allow {
 				s, _ := x.(string)
 				if s != "" {
-					target.AllowList = append(target.AllowList, x.(string))
+					target.AllowList = append(target.AllowList, s)
 				}
 			}
 		}
@@ -2361,7 +2417,7 @@ func denyMetricsConfig(vMap map[string]interface{}, target *scrapper.Target) {
 		for _, x := range deny {
 			s, _ := x.(string)
 			if s != "" {
-				target.DenyList = append(target.DenyList, x.(string))
+				target.DenyList = append(target.DenyList, s)
 			}
 		}
 	}

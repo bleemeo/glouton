@@ -55,6 +55,11 @@ func defaultModule(userAgent string) bbConf.Module {
 			IPProtocol: "ip4",
 			HTTPClientConfig: config.HTTPClientConfig{
 				FollowRedirects: true,
+				TLSConfig: config.TLSConfig{
+					// We manually do the TLS verification after probing.
+					// This allow to gather information on self-signed server.
+					InsecureSkipVerify: true,
+				},
 			},
 			Headers: map[string]string{
 				"User-Agent": userAgent,
@@ -138,6 +143,7 @@ func genCollectorFromDynamicTarget(monitor types.Monitor, userAgent string) (*co
 		BleemeoAgentID: monitor.BleemeoAgentID,
 		URL:            uri,
 		CreationDate:   monitor.CreationDate,
+		nowFunc:        time.Now,
 	}
 
 	if monitor.MetricMonitorResolution != 0 {
@@ -145,8 +151,8 @@ func genCollectorFromDynamicTarget(monitor types.Monitor, userAgent string) (*co
 	}
 
 	return &collectorWithLabels{
-		collector: confTarget,
-		labels: map[string]string{
+		Collector: confTarget,
+		Labels: map[string]string{
 			types.LabelMetaProbeTarget:            confTarget.Name,
 			types.LabelMetaProbeServiceUUID:       monitor.ID,
 			types.LabelMetaBleemeoTargetAgentUUID: monitor.BleemeoAgentID,
@@ -161,8 +167,8 @@ func genCollectorFromStaticTarget(ct configTarget) collectorWithLabels {
 	// instead of the local config file) are involved, as those metrics have the 'instance_uuid'
 	// label to distinguish monitors.
 	return collectorWithLabels{
-		collector: ct,
-		labels: map[string]string{
+		Collector: ct,
+		Labels: map[string]string{
 			types.LabelMetaProbeTarget: ct.Name,
 			"module":                   ct.ModuleName,
 		},
@@ -191,7 +197,13 @@ func setUserAgent(modules map[string]bbConf.Module, userAgent string) {
 
 // New sets the static part of blackbox configuration (aka. targets that must be scrapped no matter what).
 // This completely resets the configuration.
-func New(registry *registry.Registry, externalConf interface{}, userAgent string, metricFormat types.MetricFormat) (*RegisterManager, error) {
+func New(
+	ctx context.Context,
+	registry *registry.Registry,
+	externalConf interface{},
+	userAgent string,
+	metricFormat types.MetricFormat,
+) (*RegisterManager, error) {
 	conf := yamlConfig{}
 
 	// read static config
@@ -238,6 +250,7 @@ func New(registry *registry.Registry, externalConf interface{}, userAgent string
 			URL:        conf.Targets[idx].URL,
 			Module:     module,
 			ModuleName: conf.Targets[idx].ModuleName,
+			nowFunc:    time.Now,
 		}))
 	}
 
@@ -250,7 +263,7 @@ func New(registry *registry.Registry, externalConf interface{}, userAgent string
 		userAgent:     userAgent,
 	}
 
-	if err := manager.updateRegistrations(); err != nil {
+	if err := manager.updateRegistrations(ctx); err != nil {
 		return nil, err
 	}
 
@@ -269,14 +282,14 @@ func (m *RegisterManager) DiagnosticArchive(ctx context.Context, archive types.A
 	}
 
 	for _, t := range targets {
-		fmt.Fprintf(file, "url=%s labels=%v\n", t.collector.URL, t.labels)
+		fmt.Fprintf(file, "url=%s labels=%v\n", t.Collector.URL, t.Labels)
 	}
 
 	return nil
 }
 
 // UpdateDynamicTargets generates a config we can ingest into blackbox (from the dynamic probes).
-func (m *RegisterManager) UpdateDynamicTargets(monitors []types.Monitor) error {
+func (m *RegisterManager) UpdateDynamicTargets(ctx context.Context, monitors []types.Monitor) error {
 	// it is easier to keep only the static monitors and rebuild the dynamic config
 	// than to compute the difference between the new and the old configuration.
 	// This is simple because calling UpdateDynamicTargets with the same argument should be idempotent.
@@ -284,7 +297,7 @@ func (m *RegisterManager) UpdateDynamicTargets(monitors []types.Monitor) error {
 
 	// get a list of static monitors
 	for _, currentTarget := range m.targets {
-		if currentTarget.collector.BleemeoAgentID == "" {
+		if currentTarget.Collector.BleemeoAgentID == "" {
 			newTargets = append(newTargets, currentTarget)
 		}
 	}
@@ -302,7 +315,7 @@ func (m *RegisterManager) UpdateDynamicTargets(monitors []types.Monitor) error {
 
 	if m.scraperName != "" {
 		for idx := range newTargets {
-			newTargets[idx].labels[types.LabelMetaProbeScraperName] = m.scraperName
+			newTargets[idx].Labels[types.LabelMetaProbeScraperName] = m.scraperName
 		}
 	}
 
@@ -312,5 +325,5 @@ func (m *RegisterManager) UpdateDynamicTargets(monitors []types.Monitor) error {
 
 	logger.V(2).Println("blackbox_exporter: Internal configuration successfully updated.")
 
-	return m.updateRegistrations()
+	return m.updateRegistrations(ctx)
 }

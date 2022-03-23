@@ -1,6 +1,7 @@
 package blackbox
 
 import (
+	"crypto/x509"
 	"glouton/prometheus/registry"
 	"glouton/types"
 	"sync"
@@ -12,20 +13,22 @@ import (
 
 // configTarget is the information we will supply to the probe() function.
 type configTarget struct {
-	Name           string
-	URL            string
-	Module         bbConf.Module
-	ModuleName     string
-	BleemeoAgentID string
-	CreationDate   time.Time
-	RefreshRate    time.Duration
+	Name             string
+	URL              string
+	Module           bbConf.Module
+	ModuleName       string
+	BleemeoAgentID   string
+	CreationDate     time.Time
+	RefreshRate      time.Duration
+	testInjectCARoot *x509.Certificate
+	nowFunc          func() time.Time
 }
 
 // We define labels to apply on a specific collector at registration, as those labels cannot be exposed
 // while gathering (e.g. labels prefixed by '__').
 type collectorWithLabels struct {
-	collector configTarget
-	labels    map[string]string
+	Collector configTarget
+	Labels    map[string]string
 }
 
 // We need to keep a reference to the gatherer, to be able to stop the ticker, if it is a TickingGatherer.

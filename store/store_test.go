@@ -177,7 +177,7 @@ func TestMetricsSimple(t *testing.T) {
 		types.LabelName: "measurement_fieldFloat",
 	}
 	db := New(time.Hour)
-	m := db.metricGetOrCreate(labels, types.MetricAnnotations{})
+	m, _ := db.metricGetOrCreate(labels, types.MetricAnnotations{})
 
 	if _, ok := db.metrics[m.metricID]; !ok {
 		t.Errorf("db.metrics[%v] == nil, want it to exists", m.metricID)
@@ -262,7 +262,7 @@ func TestPoints(t *testing.T) {
 		types.LabelName: "cpu_used",
 	}
 	db := New(time.Hour)
-	m := db.metricGetOrCreate(labels, types.MetricAnnotations{})
+	m, _ := db.metricGetOrCreate(labels, types.MetricAnnotations{})
 
 	t0 := time.Now().Add(-60 * time.Second)
 	t1 := t0.Add(10 * time.Second)

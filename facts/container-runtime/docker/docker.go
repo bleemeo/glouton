@@ -26,7 +26,7 @@ import (
 	docker "github.com/docker/docker/client"
 	"github.com/docker/docker/errdefs"
 	"github.com/docker/docker/pkg/stdcopy"
-	"github.com/shirou/gopsutil/process"
+	"github.com/shirou/gopsutil/v3/process"
 )
 
 // errors of Docker runtime.
@@ -53,6 +53,7 @@ func DefaultAddresses(hostRoot string) []string {
 type Docker struct {
 	DockerSockets             []string
 	DeletedContainersCallback func(containersID []string)
+	IsContainerIgnored        func(facts.Container) bool
 
 	l                sync.Mutex
 	workedOnce       bool
@@ -146,7 +147,7 @@ func (d *Docker) Containers(ctx context.Context, maxAge time.Duration, includeIg
 
 	containers = make([]facts.Container, 0, len(d.containers))
 	for _, c := range d.containers {
-		if includeIgnored || !facts.ContainerIgnored(c) {
+		if includeIgnored || !d.IsContainerIgnored(c) {
 			containers = append(containers, c)
 		}
 	}
@@ -211,6 +212,12 @@ func (d *Docker) Run(ctx context.Context) error {
 		select {
 		case <-time.After(time.Duration(sleepDelay) * time.Second):
 		case <-ctx.Done():
+			d.l.Lock()
+			if d.client != nil {
+				d.client.Close()
+			}
+			d.l.Unlock()
+
 			close(d.notifyC)
 
 			return nil
@@ -313,7 +320,6 @@ func (d *Docker) ensureClient(ctx context.Context) (cl dockerClient, err error) 
 	return cl, nil
 }
 
-//nolint:cyclop
 func (d *Docker) run(ctx context.Context) error {
 	d.l.Lock()
 
@@ -446,7 +452,6 @@ func (d *Docker) run(ctx context.Context) error {
 	}
 }
 
-//nolint:cyclop
 func (d *Docker) updateContainers(ctx context.Context) error {
 	cl, err := d.getClient(ctx)
 	if err != nil {
@@ -509,7 +514,7 @@ func (d *Docker) updateContainers(ctx context.Context) error {
 
 		containers[c.ID] = container
 
-		if facts.ContainerIgnored(container) {
+		if d.IsContainerIgnored(container) {
 			ignoredID[c.ID] = true
 		}
 	}
@@ -563,7 +568,7 @@ func (d *Docker) updateContainer(ctx context.Context, cl dockerClient, container
 
 	d.containers[containerID] = container
 
-	if facts.ContainerIgnored(container) {
+	if d.IsContainerIgnored(container) {
 		d.ignoredID[containerID] = true
 	} else {
 		delete(d.ignoredID, containerID)
@@ -674,6 +679,7 @@ type dockerClient interface {
 	NetworkList(ctx context.Context, options dockerTypes.NetworkListOptions) ([]dockerTypes.NetworkResource, error)
 	Ping(ctx context.Context) (dockerTypes.Ping, error)
 	ServerVersion(ctx context.Context) (dockerTypes.Version, error)
+	Close() error
 }
 
 func openConnection(ctx context.Context, host string) (cl dockerClient, err error) {
@@ -1152,7 +1158,6 @@ func (d *dockerProcessQuerier) top(ctx context.Context, c facts.Container) (cont
 	return top, topWaux, err
 }
 
-//nolint:cyclop
 func decodeDocker(top container.ContainerTopOKBody, c facts.Container) []facts.Process {
 	userIndex := -1
 	pidIndex := -1
@@ -1250,7 +1255,6 @@ func decodeDocker(top container.ContainerTopOKBody, c facts.Container) []facts.P
 	return processes
 }
 
-//nolint:cyclop
 func psTime2Second(psTime string) (int, error) {
 	if strings.Count(psTime, ":") == 1 {
 		// format is MM:SS

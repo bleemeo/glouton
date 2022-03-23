@@ -1,6 +1,7 @@
 package discovery
 
 import (
+	"context"
 	"fmt"
 	"glouton/logger"
 	"glouton/prometheus/registry"
@@ -12,12 +13,12 @@ import (
 	"github.com/go-kit/log"
 	"github.com/prometheus/client_golang/prometheus"
 	memcachedExporter "github.com/prometheus/memcached_exporter/pkg/exporter"
-	"github.com/prometheus/prometheus/pkg/labels"
+	"github.com/prometheus/prometheus/model/labels"
 )
 
 const defaultInterval = 0
 
-func (d *Discovery) createPrometheusMemcached(service Service) error {
+func (d *Discovery) createPrometheusMemcached(ctx context.Context, service Service) error {
 	ip, port := service.AddressPort()
 
 	if ip == "" || port == 0 {
@@ -55,15 +56,16 @@ func (d *Discovery) createPrometheusMemcached(service Service) error {
 	hash := labels.FromMap(lbls).Hash()
 
 	id, err := d.metricRegistry.RegisterGatherer(
+		ctx,
 		registry.RegistrationOption{
-			Description:  "memcached exporter",
-			JitterSeed:   hash,
-			Interval:     defaultInterval,
-			StopCallback: stopCallback,
-			ExtraLabels:  lbls,
+			Description:           "memcached exporter",
+			JitterSeed:            hash,
+			Interval:              defaultInterval,
+			StopCallback:          stopCallback,
+			ExtraLabels:           lbls,
+			DisablePeriodicGather: d.metricFormat != types.MetricFormatPrometheus,
 		},
 		reg,
-		d.metricFormat == types.MetricFormatPrometheus,
 	)
 	if err != nil {
 		return err

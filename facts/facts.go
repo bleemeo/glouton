@@ -33,11 +33,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/shirou/gopsutil/cpu"
-	"github.com/shirou/gopsutil/host"
-	"github.com/shirou/gopsutil/mem"
+	"github.com/shirou/gopsutil/v3/cpu"
+	"github.com/shirou/gopsutil/v3/host"
+	"github.com/shirou/gopsutil/v3/mem"
 	"gopkg.in/yaml.v3"
 )
+
+const virtualTypeKVM = "kvm"
 
 // FactProvider provider information about system. Mostly static facts like OS version, architecture, ...
 //
@@ -115,10 +117,9 @@ func (f *FactProvider) FastFacts(ctx context.Context) (facts map[string]string, 
 	f.l.Lock()
 	defer f.l.Unlock()
 
-	newFacts := make(map[string]string)
 	t := time.Now()
 
-	f.fastUpdateFacts(ctx)
+	newFacts := f.fastUpdateFacts(ctx)
 
 	logger.V(2).Printf("Fastfacts: FastUpdateFacts() took %v", time.Since(t))
 
@@ -159,7 +160,6 @@ func (f *FactProvider) updateFacts(ctx context.Context) {
 	f.lastFactsUpdate = time.Now()
 }
 
-//nolint:cyclop
 func (f *FactProvider) fastUpdateFacts(ctx context.Context) map[string]string {
 	newFacts := make(map[string]string)
 
@@ -221,7 +221,7 @@ func (f *FactProvider) fastUpdateFacts(ctx context.Context) map[string]string {
 
 		if gloutonvType == "physical" && vType == "" && err == nil && vRole == "guest" {
 			// Let's default to "kvm", we have no clue on what the hypervisor is.
-			gloutonvType = "kvm"
+			gloutonvType = virtualTypeKVM
 		}
 
 		newFacts["virtual"] = gloutonvType
@@ -361,7 +361,7 @@ func guessVirtual(facts map[string]string) string {
 
 	switch {
 	case strings.Contains(vendorName, "qemu"), strings.Contains(vendorName, "bochs"), strings.Contains(vendorName, "digitalocean"):
-		return "kvm"
+		return virtualTypeKVM
 	case strings.Contains(vendorName, "xen"):
 		if strings.Contains(biosVersion, "amazon") {
 			return "aws"
@@ -381,7 +381,7 @@ func guessVirtual(facts map[string]string) string {
 	case strings.Contains(vendorName, "openstack"):
 		switch {
 		case strings.Contains(biosVendor, "bochs"):
-			return "kvm"
+			return virtualTypeKVM
 		case strings.Contains(strings.ToLower(facts["serial_number"]), "vmware"):
 			return "vmware"
 		default:

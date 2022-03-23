@@ -268,7 +268,7 @@ func Test_migrate(t *testing.T) {
 	}
 }
 
-func Test_loadConfiguration(t *testing.T) {
+func Test_loadConfiguration(t *testing.T) { //nolint:maintidx
 	URLMustParse := func(raw string) *url.URL {
 		u, err := url.Parse(raw)
 		if err != nil {
@@ -436,8 +436,8 @@ func Test_loadConfiguration(t *testing.T) {
 				"kubernetes.enable":  true,
 			},
 			warnings: []string{
-				"environement variable is deprecated: BLEEMEO_AGENT_ACCOUNT, use GLOUTON_BLEEMEO_ACCOUNT_ID instead",
-				"environement variable is deprecated: GLOUTON_KUBERNETES_ENABLED, use GLOUTON_KUBERNETES_ENABLE instead",
+				"environment variable is deprecated: BLEEMEO_AGENT_ACCOUNT, use GLOUTON_BLEEMEO_ACCOUNT_ID instead",
+				"environment variable is deprecated: GLOUTON_KUBERNETES_ENABLED, use GLOUTON_KUBERNETES_ENABLE instead",
 			},
 			wantCfg: Config{
 				SNMP: SNMP{ExporterURL: URLMustParse("http://localhost:9116/snmp")},
@@ -458,8 +458,8 @@ func Test_loadConfiguration(t *testing.T) {
 				"kubernetes.enable": true,
 			},
 			warnings: []string{
-				"environement variable is deprecated: BLEEMEO_AGENT_KUBERNETES_ENABLE, use GLOUTON_KUBERNETES_ENABLE instead",
-				"environement variable is deprecated: BLEEMEO_AGENT_BLEEMEO_ENABLED, use GLOUTON_BLEEMEO_ENABLE instead",
+				"environment variable is deprecated: BLEEMEO_AGENT_KUBERNETES_ENABLE, use GLOUTON_KUBERNETES_ENABLE instead",
+				"environment variable is deprecated: BLEEMEO_AGENT_BLEEMEO_ENABLED, use GLOUTON_BLEEMEO_ENABLE instead",
 			},
 			wantCfg: Config{
 				SNMP: SNMP{ExporterURL: URLMustParse("http://localhost:9116/snmp")},
@@ -481,6 +481,26 @@ func Test_loadConfiguration(t *testing.T) {
 			},
 			wantCfg: Config{
 				SNMP: SNMP{ExporterURL: URLMustParse("http://localhost:9116/snmp")},
+			},
+		},
+		{
+			name: "config-1",
+			configFiles: []string{
+				"testdata/config1.conf",
+			},
+			warnings: nil,
+			wantCfg: Config{
+				SNMP: SNMP{ExporterURL: URLMustParse("http://localhost:9116/snmp")},
+				Container: Container{
+					DisabledByDefault: true,
+					AllowPatternList: []string{
+						"bleemeo_*",
+					},
+					DenyPatternList: []string{
+						"bleemeo_ephemeral",
+						"bleemeo_builder",
+					},
+				},
 			},
 		},
 	}

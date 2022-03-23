@@ -17,13 +17,93 @@
 package redis
 
 import (
+	"errors"
+	"fmt"
 	"glouton/inputs"
 	"glouton/inputs/internal"
+	"glouton/logger"
+	"reflect"
+	"unsafe"
 
+	goredis "github.com/go-redis/redis"
 	"github.com/influxdata/telegraf"
 	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"
 	"github.com/influxdata/telegraf/plugins/inputs/redis"
 )
+
+var (
+	errTypeAssertion      = errors.New("failed type assertion")
+	errGetUnexportedField = errors.New("failed to get unexported field")
+)
+
+// The telegraf Redis plugin doesn't implement ServiceInput, so there is no Close function,
+// the clients have to be manually closed by accessing private struct fields.
+type redisServiceInput struct {
+	telegraf.Input
+}
+
+func (r redisServiceInput) Start(_ telegraf.Accumulator) error {
+	return nil
+}
+
+func (r redisServiceInput) Stop() {
+	if err := r.stop(); err != nil {
+		logger.V(1).Printf("Failed to close Redis client: %v\n", err)
+	}
+}
+
+func (r redisServiceInput) stop() error {
+	redisInput, ok := r.Input.(*redis.Redis)
+	if !ok {
+		return errTypeAssertion
+	}
+
+	clientsField, err := getUnexportedField(redisInput, "clients")
+	if err != nil {
+		return errTypeAssertion
+	}
+
+	clientsInterface, ok := clientsField.([]redis.Client)
+	if !ok {
+		return errTypeAssertion
+	}
+
+	for _, clientInterface := range clientsInterface {
+		redisClient, ok := clientInterface.(*redis.RedisClient)
+		if !ok {
+			return errTypeAssertion
+		}
+
+		clientField, err := getUnexportedField(redisClient, "client")
+		if err != nil {
+			return err
+		}
+
+		client, ok := clientField.(*goredis.Client)
+		if !ok {
+			return errTypeAssertion
+		}
+
+		if err := client.Close(); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func getUnexportedField(object interface{}, fieldName string) (field interface{}, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("%w: %v", errGetUnexportedField, r)
+		}
+	}()
+
+	val := reflect.ValueOf(object).Elem().FieldByName(fieldName)
+	field = reflect.NewAt(val.Type(), unsafe.Pointer(val.UnsafeAddr())).Elem().Interface()
+
+	return
+}
 
 // New initialise redis.Input.
 func New(url string) (i telegraf.Input, err error) {
@@ -35,7 +115,7 @@ func New(url string) (i telegraf.Input, err error) {
 			redisInput.Servers = slice
 			redisInput.Log = internal.Logger{}
 			i = &internal.Input{
-				Input: redisInput,
+				Input: redisServiceInput{redisInput},
 				Accumulator: internal.Accumulator{
 					DerivatedMetrics: []string{"evicted_keys", "expired_keys", "keyspace_hits", "keyspace_misses", "total_commands_processed", "total_connections_received"},
 					TransformMetrics: transformMetrics,

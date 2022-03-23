@@ -7,7 +7,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
-func Test_deduplicate(t *testing.T) {
+func Test_deduplicate(t *testing.T) { //nolint:maintidx
 	tests := []struct {
 		name     string
 		hostroot string

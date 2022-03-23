@@ -18,9 +18,11 @@ package types
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"glouton/logger"
 	"io"
+	"net/http"
 	"sort"
 	"strings"
 	"time"
@@ -239,6 +241,39 @@ type StatusDescription struct {
 	StatusDescription string
 }
 
+// Merge merge two annotations. Annotations from other when set win.
+func (a MetricAnnotations) Merge(other MetricAnnotations) MetricAnnotations {
+	if other.BleemeoItem != "" {
+		a.BleemeoItem = other.BleemeoItem
+	}
+
+	if other.ContainerID != "" {
+		a.ContainerID = other.ContainerID
+	}
+
+	if other.ServiceName != "" {
+		a.ServiceName = other.ServiceName
+	}
+
+	if other.StatusOf != "" {
+		a.StatusOf = other.StatusOf
+	}
+
+	if other.SNMPTarget != "" {
+		a.SNMPTarget = other.SNMPTarget
+	}
+
+	if other.BleemeoAgentID != "" {
+		a.BleemeoAgentID = other.BleemeoAgentID
+	}
+
+	if other.Status.CurrentStatus.IsSet() {
+		a.Status = other.Status
+	}
+
+	return a
+}
+
 // LabelsToText return a text version of a labels set
 // The text representation has a one-to-one relation with labels set.
 // It does because:
@@ -330,4 +365,14 @@ func (errs MultiErrors) Is(target error) bool {
 type ArchiveWriter interface {
 	Create(filename string) (io.Writer, error)
 	CurrentFileName() string
+}
+
+// NewHTTPTransport returns a default Transport with a modified TLSClientConfig.
+func NewHTTPTransport(tlsConfig *tls.Config) http.RoundTripper {
+	dt, _ := http.DefaultTransport.(*http.Transport)
+
+	t := dt.Clone()
+	t.TLSClientConfig = tlsConfig
+
+	return t
 }

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"glouton/facts"
 	"io/ioutil"
 	"path/filepath"
 	"reflect"
@@ -125,6 +126,11 @@ func (cl *MockDockerClient) ServerVersion(ctx context.Context) (dockerTypes.Vers
 	return cl.Version, nil
 }
 
+// Close the docker client.
+func (cl *MockDockerClient) Close() error {
+	return nil
+}
+
 // NewDockerMock create new MockDockerClient from a directory which may contains docker-version & docker-containers.json.
 func NewDockerMock(dirname string) (*MockDockerClient, error) {
 	result := &MockDockerClient{}
@@ -164,10 +170,11 @@ func NewDockerMockFromFile(filename string) (*MockDockerClient, error) {
 }
 
 // FakeDocker return a Docker runtime connector that use a mock client.
-func FakeDocker(client *MockDockerClient) *Docker {
+func FakeDocker(client *MockDockerClient, isContainerIgnored func(facts.Container) bool) *Docker {
 	return &Docker{
 		openConnection: func(_ context.Context, _ string) (cl dockerClient, err error) {
 			return client, nil
 		},
+		IsContainerIgnored: isContainerIgnored,
 	}
 }

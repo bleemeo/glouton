@@ -63,6 +63,24 @@ type Target struct {
 	DenyList        []string
 	ExtraLabels     map[string]string
 	ContainerLabels map[string]string
+	mockResponse    []byte
+}
+
+func NewMock(content []byte, extraLabels map[string]string) *Target {
+	return &Target{
+		ExtraLabels:  extraLabels,
+		mockResponse: content,
+		URL: &url.URL{
+			Scheme: "mock",
+		},
+	}
+}
+
+func New(u *url.URL, extraLabels map[string]string) *Target {
+	return &Target{
+		ExtraLabels: extraLabels,
+		URL:         u,
+	}
 }
 
 // HostPort return host:port.
@@ -118,6 +136,10 @@ func (t *Target) GatherWithState(ctx context.Context, state registry.GatherState
 func (t *Target) readAll(ctx context.Context) ([]byte, error) {
 	if t.URL.Scheme == "file" || t.URL.Scheme == "" {
 		return ioutil.ReadFile(t.URL.Path)
+	}
+
+	if t.URL.Scheme == "mock" {
+		return t.mockResponse, nil
 	}
 
 	req, err := http.NewRequest("GET", t.URL.String(), nil)

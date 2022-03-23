@@ -48,7 +48,7 @@ if [ "${SKIP_JS}" != "1" -a "${ONLY_GO}" != "1" ]; then
       sh -c "(npm install && npm run deploy); result=\$?; chown -R $USER_UID dist ../api/static/assets/js/ ../api/static/assets/css/; exit \$result"
 fi
 
-GORELEASER_VERSION="v1.0.0"
+GORELEASER_VERSION="v1.6.3"
 
 if [ -z "${VERSION}" ]; then
    VERSION=$(date -u +%y.%m.%d.%H%M%S)
@@ -75,7 +75,10 @@ else
    docker run --rm -e HOME=/go/pkg -e CGO_ENABLED=0 \
       -v $(pwd):/src -w /src ${GO_MOUNT_CACHE} \
       -v /var/run/docker.sock:/var/run/docker.sock \
-      --entrypoint '' -e VERSION \
+      --entrypoint '' \
+      -e VERSION \
+      -e GORELEASER_PREVIOUS_TAG=0.1.0 \
+      -e GORELEASER_CURRENT_TAG=0.1.1 \
       goreleaser/goreleaser:${GORELEASER_VERSION} sh -c "(goreleaser check && go generate ./... && go test ./... && goreleaser --rm-dist --snapshot --parallelism 2); result=\$?;chown -R $USER_UID dist coverage.html coverage.out api/models_gen.go; exit \$result"
 
    echo $VERSION > dist/VERSION

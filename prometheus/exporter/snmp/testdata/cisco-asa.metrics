@@ -1,0 +1,111 @@
+# HELP entPhysicalFirmwareRev The vendor-specific firmware revision string for the physical entity - 1.3.6.1.2.1.47.1.1.1.1.9
+# TYPE entPhysicalFirmwareRev gauge
+entPhysicalFirmwareRev{entPhysicalFirmwareRev="",entPhysicalIndex="10"} 1
+entPhysicalFirmwareRev{entPhysicalFirmwareRev="",entPhysicalIndex="11"} 1
+entPhysicalFirmwareRev{entPhysicalFirmwareRev="",entPhysicalIndex="12"} 1
+entPhysicalFirmwareRev{entPhysicalFirmwareRev="",entPhysicalIndex="13"} 1
+entPhysicalFirmwareRev{entPhysicalFirmwareRev="",entPhysicalIndex="14"} 1
+entPhysicalFirmwareRev{entPhysicalFirmwareRev="",entPhysicalIndex="15"} 1
+entPhysicalFirmwareRev{entPhysicalFirmwareRev="",entPhysicalIndex="16"} 1
+entPhysicalFirmwareRev{entPhysicalFirmwareRev="",entPhysicalIndex="17"} 1
+entPhysicalFirmwareRev{entPhysicalFirmwareRev="",entPhysicalIndex="18"} 1
+entPhysicalFirmwareRev{entPhysicalFirmwareRev="",entPhysicalIndex="19"} 1
+entPhysicalFirmwareRev{entPhysicalFirmwareRev="",entPhysicalIndex="2"} 1
+entPhysicalFirmwareRev{entPhysicalFirmwareRev="",entPhysicalIndex="20"} 1
+entPhysicalFirmwareRev{entPhysicalFirmwareRev="",entPhysicalIndex="21"} 1
+entPhysicalFirmwareRev{entPhysicalFirmwareRev="",entPhysicalIndex="22"} 1
+entPhysicalFirmwareRev{entPhysicalFirmwareRev="",entPhysicalIndex="23"} 1
+entPhysicalFirmwareRev{entPhysicalFirmwareRev="",entPhysicalIndex="24"} 1
+entPhysicalFirmwareRev{entPhysicalFirmwareRev="",entPhysicalIndex="25"} 1
+entPhysicalFirmwareRev{entPhysicalFirmwareRev="",entPhysicalIndex="26"} 1
+entPhysicalFirmwareRev{entPhysicalFirmwareRev="",entPhysicalIndex="27"} 1
+entPhysicalFirmwareRev{entPhysicalFirmwareRev="",entPhysicalIndex="3"} 1
+entPhysicalFirmwareRev{entPhysicalFirmwareRev="",entPhysicalIndex="4"} 1
+entPhysicalFirmwareRev{entPhysicalFirmwareRev="",entPhysicalIndex="5"} 1
+entPhysicalFirmwareRev{entPhysicalFirmwareRev="",entPhysicalIndex="6"} 1
+entPhysicalFirmwareRev{entPhysicalFirmwareRev="",entPhysicalIndex="7"} 1
+entPhysicalFirmwareRev{entPhysicalFirmwareRev="",entPhysicalIndex="8"} 1
+entPhysicalFirmwareRev{entPhysicalFirmwareRev="",entPhysicalIndex="9"} 1
+entPhysicalFirmwareRev{entPhysicalFirmwareRev="2.1(9)8",entPhysicalIndex="1"} 1
+# HELP entPhysicalSerialNum The vendor-specific serial number string for the physical entity - 1.3.6.1.2.1.47.1.1.1.1.11
+# TYPE entPhysicalSerialNum gauge
+entPhysicalSerialNum{entPhysicalIndex="1",entPhysicalSerialNum="ABC1234D5EF"} 1
+entPhysicalSerialNum{entPhysicalIndex="10",entPhysicalSerialNum=""} 1
+entPhysicalSerialNum{entPhysicalIndex="11",entPhysicalSerialNum=""} 1
+entPhysicalSerialNum{entPhysicalIndex="12",entPhysicalSerialNum=""} 1
+entPhysicalSerialNum{entPhysicalIndex="13",entPhysicalSerialNum=""} 1
+entPhysicalSerialNum{entPhysicalIndex="14",entPhysicalSerialNum=""} 1
+entPhysicalSerialNum{entPhysicalIndex="15",entPhysicalSerialNum=""} 1
+entPhysicalSerialNum{entPhysicalIndex="16",entPhysicalSerialNum=""} 1
+entPhysicalSerialNum{entPhysicalIndex="17",entPhysicalSerialNum=""} 1
+entPhysicalSerialNum{entPhysicalIndex="18",entPhysicalSerialNum=""} 1
+entPhysicalSerialNum{entPhysicalIndex="19",entPhysicalSerialNum=""} 1
+entPhysicalSerialNum{entPhysicalIndex="2",entPhysicalSerialNum=""} 1
+entPhysicalSerialNum{entPhysicalIndex="20",entPhysicalSerialNum=""} 1
+entPhysicalSerialNum{entPhysicalIndex="21",entPhysicalSerialNum=""} 1
+entPhysicalSerialNum{entPhysicalIndex="22",entPhysicalSerialNum=""} 1
+entPhysicalSerialNum{entPhysicalIndex="23",entPhysicalSerialNum=""} 1
+entPhysicalSerialNum{entPhysicalIndex="24",entPhysicalSerialNum=""} 1
+entPhysicalSerialNum{entPhysicalIndex="25",entPhysicalSerialNum=""} 1
+entPhysicalSerialNum{entPhysicalIndex="26",entPhysicalSerialNum=""} 1
+entPhysicalSerialNum{entPhysicalIndex="27",entPhysicalSerialNum=""} 1
+entPhysicalSerialNum{entPhysicalIndex="3",entPhysicalSerialNum=""} 1
+entPhysicalSerialNum{entPhysicalIndex="4",entPhysicalSerialNum=""} 1
+entPhysicalSerialNum{entPhysicalIndex="5",entPhysicalSerialNum=""} 1
+entPhysicalSerialNum{entPhysicalIndex="6",entPhysicalSerialNum=""} 1
+entPhysicalSerialNum{entPhysicalIndex="7",entPhysicalSerialNum=""} 1
+entPhysicalSerialNum{entPhysicalIndex="8",entPhysicalSerialNum=""} 1
+entPhysicalSerialNum{entPhysicalIndex="9",entPhysicalSerialNum=""} 1
+# HELP entPhysicalSoftwareRev The vendor-specific software revision string for the physical entity - 1.3.6.1.2.1.47.1.1.1.1.10
+# TYPE entPhysicalSoftwareRev gauge
+entPhysicalSoftwareRev{entPhysicalIndex="1",entPhysicalSoftwareRev="9.4(4)32"} 1
+entPhysicalSoftwareRev{entPhysicalIndex="10",entPhysicalSoftwareRev=""} 1
+entPhysicalSoftwareRev{entPhysicalIndex="11",entPhysicalSoftwareRev=""} 1
+entPhysicalSoftwareRev{entPhysicalIndex="12",entPhysicalSoftwareRev=""} 1
+entPhysicalSoftwareRev{entPhysicalIndex="13",entPhysicalSoftwareRev=""} 1
+entPhysicalSoftwareRev{entPhysicalIndex="14",entPhysicalSoftwareRev=""} 1
+entPhysicalSoftwareRev{entPhysicalIndex="15",entPhysicalSoftwareRev=""} 1
+entPhysicalSoftwareRev{entPhysicalIndex="16",entPhysicalSoftwareRev=""} 1
+entPhysicalSoftwareRev{entPhysicalIndex="17",entPhysicalSoftwareRev=""} 1
+entPhysicalSoftwareRev{entPhysicalIndex="18",entPhysicalSoftwareRev=""} 1
+entPhysicalSoftwareRev{entPhysicalIndex="19",entPhysicalSoftwareRev=""} 1
+entPhysicalSoftwareRev{entPhysicalIndex="2",entPhysicalSoftwareRev=""} 1
+entPhysicalSoftwareRev{entPhysicalIndex="20",entPhysicalSoftwareRev=""} 1
+entPhysicalSoftwareRev{entPhysicalIndex="21",entPhysicalSoftwareRev=""} 1
+entPhysicalSoftwareRev{entPhysicalIndex="22",entPhysicalSoftwareRev=""} 1
+entPhysicalSoftwareRev{entPhysicalIndex="23",entPhysicalSoftwareRev=""} 1
+entPhysicalSoftwareRev{entPhysicalIndex="24",entPhysicalSoftwareRev=""} 1
+entPhysicalSoftwareRev{entPhysicalIndex="25",entPhysicalSoftwareRev=""} 1
+entPhysicalSoftwareRev{entPhysicalIndex="26",entPhysicalSoftwareRev=""} 1
+entPhysicalSoftwareRev{entPhysicalIndex="27",entPhysicalSoftwareRev=""} 1
+entPhysicalSoftwareRev{entPhysicalIndex="3",entPhysicalSoftwareRev=""} 1
+entPhysicalSoftwareRev{entPhysicalIndex="4",entPhysicalSoftwareRev=""} 1
+entPhysicalSoftwareRev{entPhysicalIndex="5",entPhysicalSoftwareRev=""} 1
+entPhysicalSoftwareRev{entPhysicalIndex="6",entPhysicalSoftwareRev=""} 1
+entPhysicalSoftwareRev{entPhysicalIndex="7",entPhysicalSoftwareRev=""} 1
+entPhysicalSoftwareRev{entPhysicalIndex="8",entPhysicalSoftwareRev=""} 1
+entPhysicalSoftwareRev{entPhysicalIndex="9",entPhysicalSoftwareRev=""} 1
+# HELP ipAdEntAddr The IPv4 address to which this entry's addressing information pertains. - 1.3.6.1.2.1.4.20.1.1
+# TYPE ipAdEntAddr gauge
+ipAdEntAddr{ipAdEntAddr="10.1.2.3"} 1
+ipAdEntAddr{ipAdEntAddr="192.168.1.1"} 1
+ipAdEntAddr{ipAdEntAddr="192.168.2.1"} 1
+ipAdEntAddr{ipAdEntAddr="81.123.210.12"} 1
+# HELP snmp_scrape_duration_seconds Total SNMP time scrape took (walk and processing).
+# TYPE snmp_scrape_duration_seconds gauge
+snmp_scrape_duration_seconds 0.035330542
+# HELP snmp_scrape_pdus_returned PDUs returned from walk.
+# TYPE snmp_scrape_pdus_returned gauge
+snmp_scrape_pdus_returned 88
+# HELP snmp_scrape_walk_duration_seconds Time SNMP walk/bulkwalk took.
+# TYPE snmp_scrape_walk_duration_seconds gauge
+snmp_scrape_walk_duration_seconds 0.0351035
+# HELP sysDescr A textual description of the entity - 1.3.6.1.2.1.1.1
+# TYPE sysDescr gauge
+sysDescr{sysDescr="Cisco Adaptive Security Appliance Version 9.4(4)32"} 1
+# HELP sysName An administratively-assigned name for this managed node - 1.3.6.1.2.1.1.5
+# TYPE sysName gauge
+sysName{sysName="fw.example.com"} 1
+# HELP sysUpTime The time (in hundredths of a second) since the network management portion of the system was last re-initialized. - 1.3.6.1.2.1.1.3
+# TYPE sysUpTime gauge
+sysUpTime 3.747592904e+09

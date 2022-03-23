@@ -20,6 +20,7 @@
 package process
 
 import (
+	"context"
 	"glouton/discovery"
 	"glouton/facts"
 	"glouton/prometheus/registry"
@@ -27,7 +28,7 @@ import (
 )
 
 // RegisterExporter does nothing, process_exporter is not supported on this platform.
-func RegisterExporter(reg *registry.Registry, psLister interface{}, processQuerier *discovery.DynamicDiscovery, bleemeoFormat bool) {
+func RegisterExporter(ctx context.Context, reg *registry.Registry, psLister interface{}, processQuerier *discovery.DynamicDiscovery, bleemeoFormat bool) {
 }
 
 func NewProcessLister(hostRootPath string, defaultValidity time.Duration) facts.ProcessLister {

@@ -18,6 +18,7 @@
 package promexporter
 
 import (
+	"context"
 	"fmt"
 	"glouton/facts"
 	"glouton/logger"
@@ -30,7 +31,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/prometheus/prometheus/pkg/labels"
+	"github.com/prometheus/prometheus/model/labels"
 )
 
 const defaultInterval = 0
@@ -123,14 +124,14 @@ type DynamicScrapper struct {
 }
 
 // Update updates the scrappers targets using new containers informations.
-func (d *DynamicScrapper) Update(containers []facts.Container) {
+func (d *DynamicScrapper) Update(ctx context.Context, containers []facts.Container) {
 	d.l.Lock()
 	defer d.l.Unlock()
 
-	d.update(containers)
+	d.update(ctx, containers)
 }
 
-func (d *DynamicScrapper) update(containers []facts.Container) {
+func (d *DynamicScrapper) update(ctx context.Context, containers []facts.Container) {
 	dynamicTargets := d.listExporters(containers)
 
 	logger.V(3).Printf("Found the following dynamic Prometheus exporter: %v", dynamicTargets)
@@ -153,6 +154,7 @@ func (d *DynamicScrapper) update(containers []facts.Container) {
 		hash := labels.FromMap(t.ExtraLabels).Hash()
 
 		id, err := d.Registry.RegisterGatherer(
+			ctx,
 			registry.RegistrationOption{
 				Description: "Prometheus exporter " + t.URL.String(),
 				JitterSeed:  hash,
@@ -160,7 +162,6 @@ func (d *DynamicScrapper) update(containers []facts.Container) {
 				ExtraLabels: t.ExtraLabels,
 			},
 			t,
-			true,
 		)
 		if err != nil {
 			logger.Printf("Failed to register scrapper for %v: %v", t.URL, err)

@@ -19,7 +19,8 @@ var errNoRuntimeAvailable = errors.New("no container-runtime available")
 // It assume that container ID are unique across all runtimes.
 // Runtimes could NOT be changed after creation.
 type Runtime struct {
-	Runtimes []crTypes.RuntimeInterface
+	Runtimes         []crTypes.RuntimeInterface
+	ContainerIgnored func(facts.Container) bool
 
 	l           sync.Mutex
 	idToRuntime map[string]int
@@ -109,7 +110,7 @@ func (r *Runtime) Containers(ctx context.Context, maxAge time.Duration, includeI
 		for _, c := range list {
 			idToRuntime[c.ID()] = i
 
-			if includeIgnored || !facts.ContainerIgnored(c) {
+			if includeIgnored || !r.ContainerIgnored(c) {
 				containers = append(containers, c)
 			}
 		}

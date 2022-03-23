@@ -18,16 +18,25 @@ package blackbox
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
+	"errors"
 	"fmt"
 	"glouton/logger"
 	"glouton/prometheus/registry"
+	"net"
+	"net/http/httptrace"
+	"net/url"
 	"reflect"
+	"sync"
 	"time"
 
 	"github.com/go-kit/log"
 	"github.com/prometheus/blackbox_exporter/prober"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/prometheus/pkg/labels"
+	dto "github.com/prometheus/client_model/go"
+	"github.com/prometheus/common/config"
+	"github.com/prometheus/prometheus/model/labels"
 )
 
 const (
@@ -45,6 +54,18 @@ var (
 		[]string{"instance"},
 		nil,
 	)
+	probeTLSExpiry = prometheus.NewDesc(
+		prometheus.BuildFQName("", "", "probe_ssl_last_chain_expiry_timestamp_seconds"),
+		"Returns last SSL chain expiry in timestamp seconds",
+		[]string{"instance"},
+		nil,
+	)
+	probeTLSSuccess = prometheus.NewDesc(
+		prometheus.BuildFQName("", "", "probe_ssl_validation_success"),
+		"Returns whether all SSL connections were valid",
+		[]string{"instance"},
+		nil,
+	)
 	probeDurationDesc = prometheus.NewDesc(
 		prometheus.BuildFQName("", "", "probe_duration_seconds"),
 		"Returns how long the probe took to complete in seconds",
@@ -59,6 +80,46 @@ var (
 	}
 )
 
+var errNoCertificates = errors.New("no server certificate")
+
+type roundTrip struct {
+	HostPort string
+	TLSState *tls.ConnectionState
+}
+
+type roundTripTLSVerify struct {
+	hadTLS     bool
+	trustedTLS bool
+	expiry     time.Time
+	err        error
+}
+
+type roundTripTLSVerifyList []roundTripTLSVerify
+
+func (rts roundTripTLSVerifyList) HadTLS() bool {
+	for _, rt := range rts {
+		if rt.hadTLS {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (rts roundTripTLSVerifyList) AllTrusted() bool {
+	for _, rt := range rts {
+		if !rt.hadTLS {
+			continue
+		}
+
+		if !rt.trustedTLS {
+			return false
+		}
+	}
+
+	return true
+}
+
 // Describe implements the prometheus.Collector interface.
 func (target configTarget) Describe(ch chan<- *prometheus.Desc) {
 	ch <- probeSuccessDesc
@@ -67,11 +128,7 @@ func (target configTarget) Describe(ch chan<- *prometheus.Desc) {
 
 // Collect implements the prometheus.Collector interface.
 // It is where we do the actual "probing".
-func (target configTarget) Collect(ch chan<- prometheus.Metric) {
-	ctx, cancel := context.WithTimeout(context.Background(), target.Module.Timeout)
-	// Let's ensure we don't end up with stray queries running somewhere
-	defer cancel()
-
+func (target configTarget) CollectWithContext(ctx context.Context, ch chan<- prometheus.Metric) {
 	probeFn, present := probers[target.Module.Prober]
 	if !present {
 		logger.V(1).Printf("blackbox_exporter: no prober registered under the name '%s', cannot check '%s'.",
@@ -104,10 +161,52 @@ func (target configTarget) Collect(ch chan<- prometheus.Metric) {
 	registry := prometheus.NewRegistry()
 
 	extLogger := log.With(logger.GoKitLoggerWrapper(logger.V(2)), "url", target.URL)
+
+	ctx, cancel := context.WithTimeout(ctx, target.Module.Timeout)
+	// Let's ensure we don't end up with stray queries running somewhere
+	defer cancel()
+
 	start := time.Now()
 
+	var (
+		l                sync.Mutex
+		roundTrips       []roundTrip
+		currentRoundTrip roundTrip
+	)
+
+	// This is done to capture the last response TLS handshake state.
+	subCtx := httptrace.WithClientTrace(ctx, &httptrace.ClientTrace{
+		GetConn: func(hostPort string) {
+			l.Lock()
+			defer l.Unlock()
+
+			if ctx.Err() != nil {
+				return
+			}
+
+			if currentRoundTrip.HostPort != "" {
+				roundTrips = append(roundTrips, currentRoundTrip)
+			}
+
+			currentRoundTrip = roundTrip{
+				HostPort: hostPort,
+				TLSState: nil,
+			}
+		},
+		TLSHandshakeDone: func(cs tls.ConnectionState, e error) {
+			l.Lock()
+			defer l.Unlock()
+
+			if ctx.Err() != nil {
+				return
+			}
+
+			currentRoundTrip.TLSState = &cs
+		},
+	})
+
 	// do all the actual work
-	success := probeFn(ctx, target.URL, target.Module, registry, extLogger)
+	success := probeFn(subCtx, target.URL, target.Module, registry, extLogger)
 
 	end := time.Now()
 	duration := end.Sub(start)
@@ -122,8 +221,31 @@ func (target configTarget) Collect(ch chan<- prometheus.Metric) {
 		return
 	}
 
+	l.Lock()
+
+	if currentRoundTrip.HostPort != "" {
+		roundTrips = append(roundTrips, currentRoundTrip)
+	}
+
+	l.Unlock()
+
 	// write all the gathered metrics to our upper registry
-	writeMFsToChan(mfs, ch)
+	writeMFsToChan(filterMFs(mfs, func(mf *dto.MetricFamily) bool {
+		return mf.GetName() != "probe_ssl_last_chain_expiry_timestamp_seconds"
+	}), ch)
+
+	roundTripsTLS := target.verifyTLS(extLogger, roundTrips)
+	if roundTripsTLS.HadTLS() {
+		if roundTripsTLS.AllTrusted() {
+			ch <- prometheus.MustNewConstMetric(probeTLSSuccess, prometheus.GaugeValue, 1, target.Name)
+		} else {
+			ch <- prometheus.MustNewConstMetric(probeTLSSuccess, prometheus.GaugeValue, 0, target.Name)
+		}
+
+		if roundTripsTLS[len(roundTripsTLS)-1].hadTLS {
+			ch <- prometheus.MustNewConstMetric(probeTLSExpiry, prometheus.GaugeValue, float64(roundTripsTLS[len(roundTripsTLS)-1].expiry.Unix()), target.Name)
+		}
+	}
 
 	successVal := 0.
 	if success {
@@ -133,6 +255,149 @@ func (target configTarget) Collect(ch chan<- prometheus.Metric) {
 	ch <- prometheus.MustNewConstMetric(probeSuccessDesc, prometheus.GaugeValue, successVal, target.Name)
 }
 
+// verifyTLS returns the last round-trip TLS expiration and whether all TLS round-trip were trusted.
+func (target configTarget) verifyTLS(extLogger log.Logger, roundTrips []roundTrip) roundTripTLSVerifyList {
+	start := time.Now()
+	defer func() {
+		_ = extLogger.Log("verifyTLS took", time.Since(start))
+	}()
+
+	if len(roundTrips) == 0 {
+		return nil
+	}
+
+	firstHost, _, err := net.SplitHostPort(roundTrips[0].HostPort)
+	if err != nil {
+		_ = extLogger.Log("net.SplitHostPort fail", err)
+
+		return nil
+	}
+
+	if target.Module.Prober != proberNameHTTP {
+		return nil
+	}
+
+	result := make([]roundTripTLSVerify, 0, len(roundTrips))
+
+	for _, rt := range roundTrips {
+		if rt.TLSState == nil {
+			result = append(result, roundTripTLSVerify{
+				hadTLS: false,
+			})
+
+			continue
+		}
+
+		if len(rt.TLSState.PeerCertificates) == 0 {
+			result = append(result, roundTripTLSVerify{
+				hadTLS:     true,
+				trustedTLS: false,
+				err:        errNoCertificates,
+			})
+
+			continue
+		}
+
+		httpClientConfig := target.Module.HTTP.HTTPClientConfig
+
+		currentHost, _, err := net.SplitHostPort(rt.HostPort)
+		if err != nil {
+			_ = extLogger.Log("net.SplitHostPort fail", err)
+
+			result = append(result, roundTripTLSVerify{
+				hadTLS: false,
+			})
+
+			continue
+		}
+
+		if firstHost != currentHost {
+			// If there had redirection, use the current hostname
+			httpClientConfig.TLSConfig.ServerName = currentHost
+		} else if len(httpClientConfig.TLSConfig.ServerName) == 0 {
+			// If there is no `server_name` in tls_config, use
+			// the hostname of the target.
+			tmp, err := url.Parse(target.URL)
+			if err != nil {
+				_ = extLogger.Log("url.Parse fail", err)
+
+				result = append(result, roundTripTLSVerify{
+					hadTLS: false,
+				})
+
+				continue
+			}
+
+			httpClientConfig.TLSConfig.ServerName = tmp.Hostname()
+		}
+
+		_ = extLogger.Log("Using ServerName", httpClientConfig.TLSConfig.ServerName, "firstHost", firstHost, "currentHostPort", currentHost)
+
+		cfg, err := config.NewTLSConfig(&httpClientConfig.TLSConfig)
+		if err != nil {
+			_ = extLogger.Log("config.NewTLSConfig fail", err)
+
+			result = append(result, roundTripTLSVerify{
+				hadTLS: false,
+			})
+
+			continue
+		}
+
+		if target.testInjectCARoot != nil {
+			if cfg.RootCAs == nil {
+				cfg.RootCAs = x509.NewCertPool()
+			}
+
+			cfg.RootCAs.AddCert(target.testInjectCARoot)
+		}
+
+		opts := x509.VerifyOptions{
+			Roots:         cfg.RootCAs,
+			CurrentTime:   target.nowFunc(),
+			DNSName:       cfg.ServerName,
+			Intermediates: x509.NewCertPool(),
+		}
+
+		for _, cert := range rt.TLSState.PeerCertificates[1:] {
+			opts.Intermediates.AddCert(cert)
+		}
+
+		verifiedChains, err := rt.TLSState.PeerCertificates[0].Verify(opts)
+		expiry := getLastChainExpiry(verifiedChains)
+		_ = extLogger.Log("numberVerifiedChains", len(verifiedChains), "expiry", expiry, "err", err)
+
+		result = append(result, roundTripTLSVerify{
+			hadTLS:     true,
+			trustedTLS: len(verifiedChains) > 0,
+			expiry:     expiry,
+			err:        err,
+		})
+	}
+
+	return result
+}
+
+func getLastChainExpiry(verifiedChains [][]*x509.Certificate) time.Time {
+	lastChainExpiry := time.Time{}
+
+	for _, chain := range verifiedChains {
+		earliestCertExpiry := time.Time{}
+
+		for _, cert := range chain {
+			if (earliestCertExpiry.IsZero() || cert.NotAfter.Before(earliestCertExpiry)) && !cert.NotAfter.IsZero() {
+				earliestCertExpiry = cert.NotAfter
+			}
+		}
+
+		if lastChainExpiry.IsZero() || lastChainExpiry.Before(earliestCertExpiry) {
+			lastChainExpiry = earliestCertExpiry
+		}
+	}
+
+	return lastChainExpiry
+}
+
 // compareConfigTargets returns true if the monitors are identical, and false otherwise.
 func compareConfigTargets(a configTarget, b configTarget) bool {
 	return a.BleemeoAgentID == b.BleemeoAgentID && a.URL == b.URL && a.RefreshRate == b.RefreshRate && reflect.DeepEqual(a.Module, b.Module)
@@ -140,7 +405,7 @@ func compareConfigTargets(a configTarget, b configTarget) bool {
 
 func collectorInMap(value collectorWithLabels, iterable map[int]gathererWithConfigTarget) bool {
 	for _, mapValue := range iterable {
-		if compareConfigTargets(value.collector, mapValue.target) {
+		if compareConfigTargets(value.Collector, mapValue.target) {
 			return true
 		}
 	}
@@ -151,7 +416,7 @@ func collectorInMap(value collectorWithLabels, iterable map[int]gathererWithConf
 func gathererInArray(value gathererWithConfigTarget, iterable []collectorWithLabels) bool {
 	for _, arrayValue := range iterable {
 		// see inMap() above
-		if compareConfigTargets(value.target, arrayValue.collector) {
+		if compareConfigTargets(value.target, arrayValue.Collector) {
 			return true
 		}
 	}
@@ -160,25 +425,24 @@ func gathererInArray(value gathererWithConfigTarget, iterable []collectorWithLab
 }
 
 // updateRegistrations registers and deregisters collectors to sync the internal state with the configuration.
-func (m *RegisterManager) updateRegistrations() error {
+func (m *RegisterManager) updateRegistrations(ctx context.Context) error {
 	// register new probes
 	for _, collectorFromConfig := range m.targets {
 		if !collectorInMap(collectorFromConfig, m.registrations) {
-			reg := prometheus.NewRegistry()
-
-			if err := reg.Register(collectorFromConfig.collector); err != nil {
+			gatherer, err := newGatherer(collectorFromConfig.Collector)
+			if err != nil {
 				return err
 			}
 
-			var g prometheus.Gatherer = reg
+			var g prometheus.Gatherer = gatherer
 
 			// wrap our gatherer in ProbeGatherer, to only collect metrics when necessary
-			g = registry.NewProbeGatherer(g, collectorFromConfig.collector.RefreshRate > time.Minute)
+			g = registry.NewProbeGatherer(g, collectorFromConfig.Collector.RefreshRate > time.Minute)
 
-			hash := labels.FromMap(collectorFromConfig.labels).Hash()
+			hash := labels.FromMap(collectorFromConfig.Labels).Hash()
 
-			refreshRate := collectorFromConfig.collector.RefreshRate
-			creationDate := collectorFromConfig.collector.CreationDate
+			refreshRate := collectorFromConfig.Collector.RefreshRate
+			creationDate := collectorFromConfig.Collector.CreationDate
 
 			if refreshRate > 0 {
 				// We want public probe to run at known time
@@ -190,14 +454,14 @@ func (m *RegisterManager) updateRegistrations() error {
 			// label while doing Collect(). We end up adding the meta labels statically at
 			// registration.
 			id, err := m.registry.RegisterGatherer(
+				ctx,
 				registry.RegistrationOption{
-					Description: "blackbox for " + collectorFromConfig.collector.URL,
+					Description: "blackbox for " + collectorFromConfig.Collector.URL,
 					JitterSeed:  hash,
-					Interval:    collectorFromConfig.collector.RefreshRate,
-					ExtraLabels: collectorFromConfig.labels,
+					Interval:    collectorFromConfig.Collector.RefreshRate,
+					ExtraLabels: collectorFromConfig.Labels,
 				},
 				g,
-				true,
 			)
 			if err != nil {
 				return err
@@ -209,11 +473,11 @@ func (m *RegisterManager) updateRegistrations() error {
 			}
 
 			m.registrations[id] = gathererWithConfigTarget{
-				target:   collectorFromConfig.collector,
+				target:   collectorFromConfig.Collector,
 				gatherer: g,
 			}
 
-			logger.V(2).Printf("New probe registered for '%s'", collectorFromConfig.collector.Name)
+			logger.V(2).Printf("New probe registered for '%s'", collectorFromConfig.Collector.Name)
 		}
 	}
 

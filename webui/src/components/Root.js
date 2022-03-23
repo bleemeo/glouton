@@ -1,5 +1,5 @@
 import React from "react";
-import { ApolloProvider } from "@apollo/react-hooks";
+import { ApolloProvider } from "@apollo/client/react";
 import Routes from "./Routes";
 import TopNavBar from "./App/TopNavBar";
 import client from "../utils/API";

@@ -35,11 +35,11 @@ import (
 	"strings"
 	"time"
 
-	_ "github.com/99designs/gqlgen/cmd" // Prevent go mod tidy from removing gqlgen dependencies
 	"github.com/99designs/gqlgen/graphql/handler"
 	"github.com/99designs/gqlgen/graphql/playground"
 	"github.com/go-chi/chi"
 	"github.com/rs/cors"
+	_ "github.com/urfave/cli/v2" // Prevent go mod tidy from removing gqlgen dependencies
 )
 
 //go:embed static
@@ -262,9 +262,12 @@ func (api *API) Run(ctx context.Context) error {
 		logger.Printf("To access the local panel connect to http://%s 🌐", api.BindAddress)
 	}
 
-	if err := srv.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
-		return err
+	err := srv.ListenAndServe()
+	if !errors.Is(err, http.ErrServerClosed) {
+		<-idleConnsClosed
+
+		return nil
 	}
 
-	return nil
+	return err
 }

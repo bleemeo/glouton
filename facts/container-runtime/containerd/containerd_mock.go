@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"glouton/facts"
 	"io/ioutil"
 	"reflect"
 	"syscall"
@@ -19,6 +20,7 @@ import (
 	"github.com/containerd/containerd/images"
 	"github.com/containerd/containerd/namespaces"
 	"github.com/containerd/containerd/oci"
+	"github.com/containerd/containerd/platforms"
 	prototypes "github.com/gogo/protobuf/types"
 	"github.com/google/go-cmp/cmp"
 	"github.com/opencontainers/go-digest"
@@ -234,11 +236,12 @@ func NewMockFromFile(filename string) (*MockClient, error) {
 }
 
 // FakeContainerd return a Containerd runtime connector that use a mock client.
-func FakeContainerd(client *MockClient) *Containerd {
+func FakeContainerd(client *MockClient, isContainerIgnored func(facts.Container) bool) *Containerd {
 	return &Containerd{
 		openConnection: func(_ context.Context, _ string) (cl containerdClient, err error) {
 			return client, nil
 		},
+		IsContainerIgnored: isContainerIgnored,
 	}
 }
 
@@ -526,6 +529,11 @@ func (i MockImage) ContentStore() content.Store {
 
 // Metadata implement containerd.Image.
 func (i MockImage) Metadata() images.Image {
+	panic(ErrMockNotImplemented)
+}
+
+// Platform implement containerd.Image.
+func (i MockImage) Platform() platforms.MatchComparer {
 	panic(ErrMockNotImplemented)
 }
 

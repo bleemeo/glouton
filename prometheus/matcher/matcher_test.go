@@ -23,7 +23,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	dto "github.com/prometheus/client_model/go"
-	"github.com/prometheus/prometheus/pkg/labels"
+	"github.com/prometheus/prometheus/model/labels"
 )
 
 func Test_NormalizeMetric(t *testing.T) {
@@ -560,7 +560,6 @@ func Test_Matches_Basic_Family(t *testing.T) {
 			name:       "basic metric glob fail missing label",
 			metricName: fn[0],
 			metric: dto.Metric{
-
 				Label: []*dto.LabelPair{
 					{
 						Name:  &lbln[0],

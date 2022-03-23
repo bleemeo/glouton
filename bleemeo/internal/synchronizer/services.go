@@ -17,6 +17,7 @@
 package synchronizer
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"glouton/bleemeo/types"
@@ -122,8 +123,8 @@ func getListenAddress(addresses []facts.ListenAddress) string {
 	return strings.Join(stringList, ",")
 }
 
-func (s *Synchronizer) syncServices(fullSync bool, onlyEssential bool) error {
-	localServices, err := s.option.Discovery.Discovery(s.ctx, 24*time.Hour)
+func (s *Synchronizer) syncServices(ctx context.Context, fullSync bool, onlyEssential bool) error {
+	localServices, err := s.option.Discovery.Discovery(ctx, 24*time.Hour)
 	if err != nil {
 		return err
 	}
@@ -151,7 +152,7 @@ func (s *Synchronizer) syncServices(fullSync bool, onlyEssential bool) error {
 		return nil
 	}
 
-	localServices, err = s.option.Discovery.Discovery(s.ctx, 24*time.Hour)
+	localServices, err = s.option.Discovery.Discovery(ctx, 24*time.Hour)
 	if err != nil {
 		return err
 	}

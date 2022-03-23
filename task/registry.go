@@ -36,7 +36,7 @@ type Runner func(context.Context) error
 
 // Registry contains running tasks. It allow to add/remove tasks.
 type Registry struct {
-	ctx    context.Context
+	ctx    context.Context //nolint:containedctx
 	cancel func()
 	tasks  map[int]*taskInfo
 	closed bool

@@ -20,6 +20,7 @@
 package agent
 
 import (
+	"context"
 	"glouton/logger"
 	"glouton/prometheus/exporter/node"
 )
@@ -27,7 +28,7 @@ import (
 func (a *agent) initOSSpecificParts() {
 }
 
-func (a *agent) registerOSSpecificComponents() {
+func (a *agent) registerOSSpecificComponents(ctx context.Context) {
 	if a.oldConfig.Bool("agent.node_exporter.enable") {
 		nodeOption := node.Option{
 			RootFS:            a.hostRootPath,
@@ -39,7 +40,7 @@ func (a *agent) registerOSSpecificComponents() {
 		nodeOption.WithDiskIgnore(a.oldConfig.StringList("disk_ignore"))
 		nodeOption.WithPathIgnoreFSType(a.oldConfig.StringList("df.ignore_fs_type"))
 
-		if err := a.gathererRegistry.AddNodeExporter(nodeOption); err != nil {
+		if err := a.gathererRegistry.AddNodeExporter(ctx, nodeOption); err != nil {
 			logger.Printf("Unable to start node_exporter, system metrics will be missing: %v", err)
 		}
 	}

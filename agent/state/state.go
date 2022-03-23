@@ -62,6 +62,44 @@ func (s *State) IsEmpty() bool {
 	return len(s.data) == 0
 }
 
+// KeptOnlyPersistent will delete everything from state but persistent information.
+func (s *State) KeptOnlyPersistent() {
+	s.l.Lock()
+	defer s.l.Unlock()
+
+	keysToKeep := []string{
+		"agent_uuid",
+		"password",
+		"Telemetry",
+	}
+
+	newData := make(map[string]json.RawMessage)
+
+	for k, v := range s.data {
+		found := false
+
+		for _, name := range keysToKeep {
+			if k == name {
+				found = true
+
+				break
+			}
+		}
+
+		if !found {
+			continue
+		}
+
+		newData[k] = v
+	}
+
+	s.data = newData
+
+	if err := s.saveIfPossible(); err != nil {
+		logger.Printf("Unable to save state.json: %v", err)
+	}
+}
+
 // SaveTo will write back the State to specified filename and following Save() will use the same file.
 //
 // Note that Save() will use the new filename even if this function fail.

@@ -259,7 +259,7 @@ func (p *PromQL) queryRange(r *http.Request, st *store.Store) (result apiFuncRes
 
 	ctx = httputil.ContextFromRequest(ctx, r)
 
-	res := qry.Exec(ctx) //nolint:ifshort // false positive
+	res := qry.Exec(ctx)
 	if res.Err != nil {
 		return apiFuncResult{nil, returnAPIError(res.Err), res.Warnings, qry.Close}
 	}

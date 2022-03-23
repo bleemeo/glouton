@@ -53,7 +53,7 @@ func TestContainerd_RuntimeFact(t *testing.T) {
 				return
 			}
 
-			c := FakeContainerd(cl)
+			c := FakeContainerd(cl, facts.ContainerFilter{}.ContainerIgnored)
 
 			if got := c.RuntimeFact(context.Background(), nil); !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("Containerd.RuntimeFact() = %v, want %v", got, tt.want)
@@ -62,13 +62,13 @@ func TestContainerd_RuntimeFact(t *testing.T) {
 	}
 }
 
-//nolint:cyclop
 func TestContainerd_Containers(t *testing.T) {
 	tests := []struct {
-		name string
-		dir  string
-		now  time.Time
-		want []facts.FakeContainer
+		name   string
+		dir    string
+		now    time.Time
+		want   []facts.FakeContainer
+		filter facts.ContainerFilter
 	}{
 		{
 			name: "minikube-1.20.0",
@@ -140,7 +140,7 @@ func TestContainerd_Containers(t *testing.T) {
 				return
 			}
 
-			c := FakeContainerd(cl)
+			c := FakeContainerd(cl, facts.ContainerFilter{}.ContainerIgnored)
 
 			containers, err := c.Containers(context.Background(), 0, true)
 			if err != nil {
@@ -187,7 +187,7 @@ func TestContainerd_Containers(t *testing.T) {
 						t.Errorf("container %s is listed by Containers()", want.FakeID)
 					}
 
-					if !facts.ContainerIgnored(got) {
+					if !tt.filter.ContainerIgnored(got) {
 						t.Errorf("ContainerIgnored(%s) = false, want true", want.FakeID)
 					}
 				} else {
@@ -311,7 +311,7 @@ func TestContainerd_Run(t *testing.T) {
 
 			eventSeen := 0
 
-			c := FakeContainerd(cl)
+			c := FakeContainerd(cl, facts.ContainerFilter{}.ContainerIgnored)
 
 			var (
 				wg     sync.WaitGroup
@@ -480,7 +480,7 @@ func TestContainerd_ContainerFromCGroup(t *testing.T) {
 				return
 			}
 
-			c := FakeContainerd(cl)
+			c := FakeContainerd(cl, facts.ContainerFilter{}.ContainerIgnored)
 
 			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 			defer cancel()
@@ -567,7 +567,7 @@ func TestContainerd_ContainerFromPID(t *testing.T) {
 				return
 			}
 
-			c := FakeContainerd(cl)
+			c := FakeContainerd(cl, facts.ContainerFilter{}.ContainerIgnored)
 
 			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 			defer cancel()

@@ -31,7 +31,7 @@ import (
 	"time"
 
 	dto "github.com/prometheus/client_model/go"
-	"github.com/prometheus/prometheus/pkg/labels"
+	"github.com/prometheus/prometheus/model/labels"
 )
 
 //nolint:gochecknoglobals
@@ -82,6 +82,9 @@ var commonDefaultSystemMetrics = []string{
 	"probe_http_status_code",
 	"probe_success",
 	"probe_ssl_earliest_cert_expiry",
+	"probe_ssl_last_chain_expiry_timestamp_seconds",
+	"probe_ssl_validation_success",
+	"probe_http_duration_seconds",
 }
 
 //nolint:gochecknoglobals
@@ -217,6 +220,7 @@ var bleemeoDefaultSystemMetrics = []string{
 
 //nolint:gochecknoglobals
 var snmpMetrics = []string{
+	"snmp_scrape_duration_seconds",
 	"snmp_device_status",
 	"sysUpTime",
 	"ifOperStatus",
@@ -226,6 +230,8 @@ var snmpMetrics = []string{
 	"ifOutErrors",
 	"total_interfaces",
 	"connected_interfaces",
+	"prtMarkerSuppliesLevel",
+	"temperature",
 }
 
 //nolint:gochecknoglobals
@@ -771,7 +777,7 @@ func (m *metricFilter) DiagnosticArchive(ctx context.Context, archive types.Arch
 	m.l.Lock()
 	defer m.l.Unlock()
 
-	fmt.Fprintf(file, "# Allow list (%d entry)\n", len(m.allowList))
+	fmt.Fprintf(file, "# Allow list (%d entries)\n", len(m.allowList))
 
 	for _, r := range m.allowList {
 		for _, val := range r {
@@ -779,7 +785,7 @@ func (m *metricFilter) DiagnosticArchive(ctx context.Context, archive types.Arch
 		}
 	}
 
-	fmt.Fprintf(file, "\n# Deny list (%d entry)\n", len(m.denyList))
+	fmt.Fprintf(file, "\n# Deny list (%d entries)\n", len(m.denyList))
 
 	for _, r := range m.denyList {
 		for _, val := range r {
@@ -1155,7 +1161,7 @@ func (m *metricFilter) rebuildDefaultMetrics(services []discovery.Service, list 
 	return nil
 }
 
-func (m *metricFilter) RebuildDynamicLists(scrapper dynamicScrapper, services []discovery.Service, thresholdMetricNames []string) error {
+func (m *metricFilter) RebuildDynamicLists(scrapper dynamicScrapper, services []discovery.Service, thresholdMetricNames []string, alertMetrics []string) error {
 	allowList := make(map[string]matcher.Matchers)
 	denyList := make(map[string]matcher.Matchers)
 	errors := types.MultiErrors{}
@@ -1191,18 +1197,9 @@ func (m *metricFilter) RebuildDynamicLists(scrapper dynamicScrapper, services []
 
 	allowList, errors = m.rebuildServicesMetrics(allowList, services, errors)
 
-	for _, val := range thresholdMetricNames {
-		matchers, err := matcher.NormalizeMetric(val + "_status")
-		if err != nil {
-			errors = append(errors, err)
-
-			continue
-		}
-
-		allowList[val+"_status"] = matchers
-	}
-
 	m.allowList = map[labels.Matcher][]matcher.Matchers{}
+
+	allowList, errors = m.rebuildThresholdsMetric(allowList, thresholdMetricNames, alertMetrics, errors)
 
 	for key, val := range m.staticAllowList {
 		m.allowList[key] = make([]matcher.Matchers, len(val))
@@ -1235,6 +1232,32 @@ func (m *metricFilter) RebuildDynamicLists(scrapper dynamicScrapper, services []
 	}
 
 	return errors
+}
+
+func (m *metricFilter) rebuildThresholdsMetric(allowList map[string]matcher.Matchers, thresholdMetricNames []string, alertMetrics []string, errors types.MultiErrors) (map[string]matcher.Matchers, types.MultiErrors) {
+	for _, val := range thresholdMetricNames {
+		newMetric, err := matcher.NormalizeMetric(val + "_status")
+		if err != nil {
+			errors = append(errors, err)
+
+			continue
+		}
+
+		allowList[val+"_status"] = newMetric
+	}
+
+	for _, val := range alertMetrics {
+		newMetric, err := matcher.NormalizeMetric(val)
+		if err != nil {
+			errors = append(errors, err)
+
+			continue
+		}
+
+		allowList[val] = newMetric
+	}
+
+	return allowList, errors
 }
 
 func addNewSource(cLabels map[string]string, extraLabels map[string]string) (map[string]matcher.Matchers, map[string]matcher.Matchers, error) {

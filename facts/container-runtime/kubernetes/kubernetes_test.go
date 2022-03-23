@@ -75,24 +75,25 @@ func (k *mockKubernetesClient) GetServerVersion(ctx context.Context) (*version.I
 	return k.versions.ServerVersion, nil
 }
 
-func TestKubernetes_Containers(t *testing.T) { //nolint:cyclop
+func TestKubernetes_Containers(t *testing.T) { //nolint:maintidx
 	tests := []struct {
 		name          string
 		dir           string
-		createRuntime func(dirname string) (crTypes.RuntimeInterface, error)
+		createRuntime func(dirname string, filter facts.ContainerFilter) (crTypes.RuntimeInterface, error)
 		wantContainer []facts.FakeContainer
 		wantFacts     map[string]string
+		filter        facts.ContainerFilter
 	}{
 		{
 			name: "with-docker",
 			dir:  "testdata/with-docker-v1.20.0",
-			createRuntime: func(dirname string) (crTypes.RuntimeInterface, error) {
+			createRuntime: func(dirname string, filter facts.ContainerFilter) (crTypes.RuntimeInterface, error) {
 				dockerClient, err := docker.NewDockerMock(dirname)
 				if err != nil {
 					return nil, err
 				}
 
-				return docker.FakeDocker(dockerClient), nil
+				return docker.FakeDocker(dockerClient, filter.ContainerIgnored), nil
 			},
 			wantContainer: []facts.FakeContainer{
 				{
@@ -261,7 +262,7 @@ func TestKubernetes_Containers(t *testing.T) { //nolint:cyclop
 		{
 			name: "with-docker-labels-stripped",
 			dir:  "testdata/with-docker-v1.20.0",
-			createRuntime: func(dirname string) (crTypes.RuntimeInterface, error) {
+			createRuntime: func(dirname string, filter facts.ContainerFilter) (crTypes.RuntimeInterface, error) {
 				dockerClient, err := docker.NewDockerMock(dirname)
 				if err != nil {
 					return nil, err
@@ -271,7 +272,7 @@ func TestKubernetes_Containers(t *testing.T) { //nolint:cyclop
 					dockerClient.Containers[i].Config.Labels = nil
 				}
 
-				return docker.FakeDocker(dockerClient), nil
+				return docker.FakeDocker(dockerClient, filter.ContainerIgnored), nil
 			},
 			wantContainer: []facts.FakeContainer{
 				{
@@ -437,13 +438,13 @@ func TestKubernetes_Containers(t *testing.T) { //nolint:cyclop
 		{
 			name: "In virtualbox",
 			dir:  "testdata/with-docker-in-vbox-v1.18.0",
-			createRuntime: func(dirname string) (crTypes.RuntimeInterface, error) {
+			createRuntime: func(dirname string, filter facts.ContainerFilter) (crTypes.RuntimeInterface, error) {
 				dockerClient, err := docker.NewDockerMock(dirname)
 				if err != nil {
 					return nil, err
 				}
 
-				return docker.FakeDocker(dockerClient), nil
+				return docker.FakeDocker(dockerClient, filter.ContainerIgnored), nil
 			},
 			wantContainer: []facts.FakeContainer{
 				{
@@ -611,13 +612,13 @@ func TestKubernetes_Containers(t *testing.T) { //nolint:cyclop
 		{
 			name: "with-containerd",
 			dir:  "testdata/containerd-in-vbox-v1.19.0",
-			createRuntime: func(dirname string) (crTypes.RuntimeInterface, error) {
+			createRuntime: func(dirname string, filter facts.ContainerFilter) (crTypes.RuntimeInterface, error) {
 				client, err := containerd.NewMockFromFile(filepath.Join(dirname, "containerd.json"))
 				if err != nil {
 					return nil, err
 				}
 
-				return containerd.FakeContainerd(client), nil
+				return containerd.FakeContainerd(client, filter.ContainerIgnored), nil
 			},
 			wantContainer: []facts.FakeContainer{
 				{
@@ -745,7 +746,7 @@ func TestKubernetes_Containers(t *testing.T) { //nolint:cyclop
 				return
 			}
 
-			runtime, err := tt.createRuntime(tt.dir)
+			runtime, err := tt.createRuntime(tt.dir, tt.filter)
 			if err != nil {
 				t.Error(err)
 
@@ -758,6 +759,7 @@ func TestKubernetes_Containers(t *testing.T) { //nolint:cyclop
 				openConnection: func(_ context.Context, kubeConfig string) (kubeClient, error) {
 					return mockClient, nil
 				},
+				IsContainerIgnored: facts.ContainerFilter{}.ContainerIgnored,
 			}
 
 			containers, err := k.Containers(context.Background(), 0, true)
@@ -805,7 +807,7 @@ func TestKubernetes_Containers(t *testing.T) { //nolint:cyclop
 						t.Errorf("container %s is listed by Containers()", want.FakeID)
 					}
 
-					if !facts.ContainerIgnored(got) {
+					if !tt.filter.ContainerIgnored(got) {
 						t.Errorf("ContainerIgnored(%s) = false, want true", want.FakeID)
 					}
 				} else {

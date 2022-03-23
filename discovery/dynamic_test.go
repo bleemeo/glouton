@@ -132,6 +132,7 @@ func TestDynamicDiscoverySimple(t *testing.T) {
 				{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 11211},
 			},
 		}},
+		isContainerIgnored: facts.ContainerFilter{}.ContainerIgnored,
 	}
 	ctx := context.Background()
 
@@ -161,7 +162,7 @@ func TestDynamicDiscoverySimple(t *testing.T) {
 // Test dynamic Discovery with single process present
 // To extract cmdLine array from a running process, one can read /proc/PID/cmdline using "less".
 // Less will show the NUL character used to split args.
-func TestDynamicDiscoverySingle(t *testing.T) {
+func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 	cases := []struct {
 		testName           string
 		cmdLine            []string
@@ -777,6 +778,7 @@ func TestDynamicDiscoverySingle(t *testing.T) {
 			fileReader: mockFileReader{
 				contents: c.filesContent,
 			},
+			isContainerIgnored: facts.ContainerFilter{}.ContainerIgnored,
 		}
 
 		srv, err := dd.Discovery(ctx, 0)

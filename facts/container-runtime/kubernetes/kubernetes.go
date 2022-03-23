@@ -36,7 +36,8 @@ type Kubernetes struct {
 	// NodeName is the node Glouton is running on. Allow to fetch only relevant PODs (running on the same node) instead of all PODs.
 	NodeName string
 	// KubecConfig is a kubeconfig file to use for communication with Kubernetes. If not provided, use in-cluster auto-configuration.
-	KubeConfig string
+	KubeConfig         string
+	IsContainerIgnored func(facts.Container) bool
 
 	l              sync.Mutex
 	openConnection func(ctx context.Context, kubeConfig string) (kubeClient, error)
@@ -132,7 +133,7 @@ func (k *Kubernetes) Containers(ctx context.Context, maxAge time.Duration, inclu
 			pod:       pod,
 		}
 
-		if !includeIgnored && facts.ContainerIgnored(c) {
+		if !includeIgnored && k.IsContainerIgnored(c) {
 			continue
 		}
 

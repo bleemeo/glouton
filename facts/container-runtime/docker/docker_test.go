@@ -44,7 +44,7 @@ func TestDocker_RuntimeFact(t *testing.T) {
 				return
 			}
 
-			d := FakeDocker(cl)
+			d := FakeDocker(cl, facts.ContainerFilter{}.ContainerIgnored)
 
 			if got := d.RuntimeFact(context.Background(), nil); !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("Docker.RuntimeFact() = %v, want %v", got, tt.want)
@@ -73,13 +73,13 @@ func string2TopBody(input string) containerTypes.ContainerTopOKBody {
 	return procList
 }
 
-//nolint:cyclop
 func TestDocker_Containers(t *testing.T) {
 	tests := []struct {
-		name string
-		dir  string
-		now  time.Time
-		want []facts.FakeContainer
+		name   string
+		dir    string
+		now    time.Time
+		want   []facts.FakeContainer
+		filter facts.ContainerFilter
 	}{
 		{
 			name: "docker-20.10",
@@ -198,7 +198,7 @@ func TestDocker_Containers(t *testing.T) {
 				return
 			}
 
-			d := FakeDocker(cl)
+			d := FakeDocker(cl, facts.ContainerFilter{}.ContainerIgnored)
 
 			containers, err := d.Containers(context.Background(), 0, true)
 			if err != nil {
@@ -245,7 +245,7 @@ func TestDocker_Containers(t *testing.T) {
 						t.Errorf("container %s is listed by Containers()", want.FakeID)
 					}
 
-					if !facts.ContainerIgnored(got) {
+					if !tt.filter.ContainerIgnored(got) {
 						t.Errorf("ContainerIgnored(%s) = false, want true", want.FakeID)
 					}
 				} else {
@@ -334,7 +334,7 @@ func TestDocker_Run(t *testing.T) {
 
 			eventSeen := 0
 
-			d := FakeDocker(cl)
+			d := FakeDocker(cl, facts.ContainerFilter{}.ContainerIgnored)
 
 			var (
 				wg     sync.WaitGroup
@@ -614,7 +614,7 @@ func TestDocker_ContainerFromCGroup(t *testing.T) {
 				return
 			}
 
-			d := FakeDocker(cl)
+			d := FakeDocker(cl, facts.ContainerFilter{}.ContainerIgnored)
 
 			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 			defer cancel()
@@ -717,7 +717,7 @@ func TestDocker_Processes(t *testing.T) {
 					CmdLineList:   []string{"/usr/local/lib/erlang/erts-11.1.5/bin/epmd", "-daemon"},
 					MemoryRSS:     1444,
 					Name:          "epmd",
-					Status:        "running",
+					Status:        facts.ProcessStatusRunning,
 					Username:      "999",
 					ContainerID:   "33600bb7b4d62f43e87839e514a4235bb72f66dcfca35a7df5c900361a2c4d6e",
 					ContainerName: "testdata_rabbitLabels_1",
@@ -729,7 +729,7 @@ func TestDocker_Processes(t *testing.T) {
 					CmdLine:       "/bin/sh /opt/rabbitmq/sbin/rabbitmq-server",
 					CmdLineList:   []string{"/bin/sh", "/opt/rabbitmq/sbin/rabbitmq-server"},
 					Name:          "sh",
-					Status:        "?",
+					Status:        facts.ProcessStatusUnknown,
 					Username:      "999",
 					ContainerID:   "b59746cf51fa8b08eb228e5f4fc4bc28446a6f7ca19cdc3c23016f932b56003f",
 					ContainerName: "testdata_rabbitmqInternal_1",
@@ -740,7 +740,7 @@ func TestDocker_Processes(t *testing.T) {
 					CmdLine:       "/usr/local/lib/erlang/erts-11.1.5/bin/epmd -daemon",
 					CmdLineList:   []string{"/usr/local/lib/erlang/erts-11.1.5/bin/epmd", "-daemon"},
 					Name:          "epmd",
-					Status:        "?",
+					Status:        facts.ProcessStatusUnknown,
 					Username:      "999",
 					ContainerID:   "b59746cf51fa8b08eb228e5f4fc4bc28446a6f7ca19cdc3c23016f932b56003f",
 					ContainerName: "testdata_rabbitmqInternal_1",
@@ -786,7 +786,7 @@ func TestDocker_Processes(t *testing.T) {
 				cl.TopWaux[id] = string2TopBody(s)
 			}
 
-			d := FakeDocker(cl)
+			d := FakeDocker(cl, facts.ContainerFilter{}.ContainerIgnored)
 
 			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 			defer cancel()
@@ -947,7 +947,7 @@ func TestContainer_ListenAddresses(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 			defer cancel()
 
-			d := FakeDocker(tt.dockerClient)
+			d := FakeDocker(tt.dockerClient, facts.ContainerFilter{}.ContainerIgnored)
 
 			containers, err := d.Containers(ctx, 0, false)
 			if err != nil {

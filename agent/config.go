@@ -38,7 +38,7 @@ import (
 
 var (
 	errUpdateFromEnv      = errors.New("update from environment variable is not supported")
-	errDeprecatedEnv      = errors.New("environement variable is deprecated")
+	errDeprecatedEnv      = errors.New("environment variable is deprecated")
 	errSettingsDeprecated = errors.New("setting is deprecated")
 	ErrInvalidValue       = errors.New("invalid config value")
 )
@@ -47,8 +47,9 @@ var (
 // Currently not all settings are converted (and some still use old config.Get() method).
 // New settings should use Config.
 type Config struct {
-	Services Services
-	SNMP     SNMP
+	Services  Services
+	SNMP      SNMP
+	Container Container
 }
 
 type Services []Service
@@ -71,6 +72,12 @@ type SNMPTargets []SNMPTarget
 type SNMPTarget struct {
 	Address     string
 	InitialName string
+}
+
+type Container struct {
+	DisabledByDefault bool
+	AllowPatternList  []string
+	DenyPatternList   []string
 }
 
 func (srvs Services) ToDiscoveryMap() map[discovery.NameContainer]discovery.ServiceOveride {
@@ -160,6 +167,7 @@ func defaultConfig() map[string]interface{} {
 		"agent.process_exporter.enable":  true,
 		"agent.public_ip_indicator":      "https://myip.bleemeo.com",
 		"agent.state_file":               "state.json",
+		"agent.state_reset_file":         "state.reset",
 		"agent.deprecated_state_file":    "",
 		"agent.upgrade_file":             "upgrade",
 		"agent.metrics_format":           "Bleemeo",
@@ -192,9 +200,12 @@ func defaultConfig() map[string]interface{} {
 			"C:\\ProgramData\\glouton\\glouton.conf",
 			"C:\\ProgramData\\glouton\\conf.d",
 		},
-		"container.pid_namespace_host": false,
-		"container.type":               "",
-		"df.host_mount_point":          "",
+		"container.pid_namespace_host":      false,
+		"container.type":                    "",
+		"container.filter.allow_by_default": true,
+		"container.filter.allow_list":       []string{},
+		"container.filter.deny_list":        []string{},
+		"df.host_mount_point":               "",
 		"df.ignore_fs_type": []string{
 			"^(autofs|binfmt_misc|bpf|cgroup2?|configfs|debugfs|devpts|devtmpfs|fusectl|hugetlbfs|iso9660|mqueue|nsfs|overlay|proc|procfs|pstore|rpc_pipefs|securityfs|selinuxfs|squashfs|sysfs|tracefs)$",
 			"tmpfs",
@@ -249,6 +260,7 @@ func defaultConfig() map[string]interface{} {
 		"logging.buffer.tail_size_bytes":   500000,
 		"logging.level":                    "INFO",
 		"logging.output":                   "console",
+		"logging.filename":                 "",
 		"logging.package_levels":           "",
 		"metric.prometheus.targets":        []interface{}{},
 		"metric.snmp.exporter_address":     "http://localhost:9116",
@@ -338,7 +350,10 @@ func migrateScrapper(cfg *config.Configuration, deprecatedPath string, correctPa
 		warnings = append(warnings, fmt.Errorf("%w: %s. Please use %s", errSettingsDeprecated, deprecatedPath, correctPath))
 
 		for _, val := range vTab {
-			migratedTargets = append(migratedTargets, val.(string))
+			s, _ := val.(string)
+			if s != "" {
+				migratedTargets = append(migratedTargets, s)
+			}
 		}
 	}
 
@@ -489,7 +504,7 @@ func loadEnvironmentVariables(cfg *config.Configuration) (warnings []error, err 
 		}
 
 		if found {
-			warnings = append(warnings, fmt.Errorf("%w: %s, use %s instead", errDeprecatedEnv, oldEnv, keyToEnvironemntName(key)))
+			warnings = append(warnings, fmt.Errorf("%w: %s, use %s instead", errDeprecatedEnv, oldEnv, keyToEnvironmentName(key)))
 		}
 	}
 
@@ -499,13 +514,13 @@ func loadEnvironmentVariables(cfg *config.Configuration) (warnings []error, err 
 		if found, err := loadEnvironmentVariable(cfg, newKey, keyToBleemeoEnvironemntName(oldKey), value); err != nil {
 			return nil, err
 		} else if found {
-			warnings = append(warnings, fmt.Errorf("%w: %s, use %s instead", errDeprecatedEnv, keyToBleemeoEnvironemntName(oldKey), keyToEnvironemntName(newKey)))
+			warnings = append(warnings, fmt.Errorf("%w: %s, use %s instead", errDeprecatedEnv, keyToBleemeoEnvironemntName(oldKey), keyToEnvironmentName(newKey)))
 		}
 
-		if found, err := loadEnvironmentVariable(cfg, newKey, keyToEnvironemntName(oldKey), value); err != nil {
+		if found, err := loadEnvironmentVariable(cfg, newKey, keyToEnvironmentName(oldKey), value); err != nil {
 			return nil, err
 		} else if found {
-			warnings = append(warnings, fmt.Errorf("%w: %s, use %s instead", errDeprecatedEnv, keyToEnvironemntName(oldKey), keyToEnvironemntName(newKey)))
+			warnings = append(warnings, fmt.Errorf("%w: %s, use %s instead", errDeprecatedEnv, keyToEnvironmentName(oldKey), keyToEnvironmentName(newKey)))
 		}
 	}
 
@@ -513,10 +528,10 @@ func loadEnvironmentVariables(cfg *config.Configuration) (warnings []error, err 
 		if found, err := loadEnvironmentVariable(cfg, key, keyToBleemeoEnvironemntName(key), value); err != nil {
 			return nil, err
 		} else if found {
-			warnings = append(warnings, fmt.Errorf("%w: %s, use %s instead", errDeprecatedEnv, keyToBleemeoEnvironemntName(key), keyToEnvironemntName(key)))
+			warnings = append(warnings, fmt.Errorf("%w: %s, use %s instead", errDeprecatedEnv, keyToBleemeoEnvironemntName(key), keyToEnvironmentName(key)))
 		}
 
-		if _, err := loadEnvironmentVariable(cfg, key, keyToEnvironemntName(key), value); err != nil {
+		if _, err := loadEnvironmentVariable(cfg, key, keyToEnvironmentName(key), value); err != nil {
 			return nil, err
 		}
 	}
@@ -528,7 +543,7 @@ func keyToBleemeoEnvironemntName(key string) string {
 	return "BLEEMEO_AGENT_" + strings.ToUpper((strings.ReplaceAll(key, ".", "_")))
 }
 
-func keyToEnvironemntName(key string) string {
+func keyToEnvironmentName(key string) string {
 	return "GLOUTON_" + strings.ToUpper((strings.ReplaceAll(key, ".", "_")))
 }
 
@@ -574,7 +589,7 @@ func loadOldConfiguration(configFiles []string, mockLookupEnv func(string) (stri
 
 	cfg.MockLookupEnv(mockLookupEnv)
 
-	if _, err := loadEnvironmentVariable(cfg, "config_files", keyToEnvironemntName("config_files"), defaultConfig()["config_files"]); err != nil {
+	if _, err := loadEnvironmentVariable(cfg, "config_files", keyToEnvironmentName("config_files"), defaultConfig()["config_files"]); err != nil {
 		return cfg, nil, err
 	}
 
@@ -657,6 +672,8 @@ func convertConfig(cfg *config.Configuration) (agentConfig Config, warnings []er
 		agentConfig.Services = append(agentConfig.Services, srv)
 	}
 
+	agentConfig.parseContainer(cfg)
+
 	warnings = append(warnings, agentConfig.parseSNMP(cfg)...)
 	warnings = append(warnings, agentConfig.validate()...)
 
@@ -723,6 +740,14 @@ func (cfg *Config) parseSNMP(oldCfg *config.Configuration) []error {
 	}
 
 	return errs
+}
+
+func (cfg *Config) parseContainer(oldCfg *config.Configuration) {
+	enable := oldCfg.Bool("container.filter.allow_by_default")
+
+	cfg.Container.DisabledByDefault = !enable
+	cfg.Container.AllowPatternList = oldCfg.StringList("container.filter.allow_list")
+	cfg.Container.DenyPatternList = oldCfg.StringList("container.filter.deny_list")
 }
 
 func (cfg *Config) validate() []error {
@@ -834,7 +859,12 @@ func convertToString(rawValue interface{}) string {
 	case int:
 		return strconv.FormatInt(int64(value), 10)
 	case []interface{}, []string, map[string]interface{}, map[interface{}]interface{}, []map[string]interface{}:
-		b, _ := json.Marshal(rawValue)
+		b, err := json.Marshal(rawValue)
+		if err != nil {
+			logger.V(1).Printf("Failed to marshal raw value: %v", err)
+
+			return ""
+		}
 
 		return string(b)
 	default:

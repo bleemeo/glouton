@@ -133,7 +133,6 @@ func (c *jmxtransClient) Run(ctx context.Context) {
 	c.Connection.Close()
 }
 
-//nolint:cyclop
 func (c *jmxtransClient) processLine(ctx context.Context, line string) {
 	parts := strings.Split(line, " ")
 	if len(parts) != 3 {

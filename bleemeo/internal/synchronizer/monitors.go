@@ -17,6 +17,7 @@
 package synchronizer
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -70,7 +71,7 @@ func (s *Synchronizer) UpdateMonitor(op string, uuid string) {
 }
 
 // syncMonitors updates the list of monitors accessible to the agent.
-func (s *Synchronizer) syncMonitors(fullSync bool, onlyEssential bool) (err error) {
+func (s *Synchronizer) syncMonitors(ctx context.Context, fullSync bool, onlyEssential bool) (err error) {
 	if !s.option.Config.Bool("blackbox.enable") {
 		// prevent a tiny memory leak
 		s.pendingMonitorsUpdate = nil
@@ -137,12 +138,12 @@ func (s *Synchronizer) syncMonitors(fullSync bool, onlyEssential bool) (err erro
 		s.l.Unlock()
 	}
 
-	return s.ApplyMonitorUpdate()
+	return s.ApplyMonitorUpdate(ctx)
 }
 
 // ApplyMonitorUpdate preprocesses monitors and updates blackbox target list.
 // `forceAccountConfigsReload` determine whether account configurations should be updated via the API.
-func (s *Synchronizer) ApplyMonitorUpdate() error {
+func (s *Synchronizer) ApplyMonitorUpdate(ctx context.Context) error {
 	if s.option.MonitorManager == (*blackbox.RegisterManager)(nil) {
 		logger.V(2).Println("blackbox_exporter is not configured, ApplyMonitorUpdate will not update its config.")
 
@@ -190,7 +191,7 @@ func (s *Synchronizer) ApplyMonitorUpdate() error {
 	}
 
 	// refresh blackbox collectors to meet the new configuration
-	if err := s.option.MonitorManager.UpdateDynamicTargets(processedMonitors); err != nil {
+	if err := s.option.MonitorManager.UpdateDynamicTargets(ctx, processedMonitors); err != nil {
 		logger.V(1).Printf("Could not update blackbox_exporter")
 
 		return err

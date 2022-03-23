@@ -30,7 +30,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/prometheus/prometheus/pkg/labels"
+	"github.com/prometheus/prometheus/model/labels"
 )
 
 var errDeletedMetric = errors.New("metric was deleted")
@@ -39,13 +39,15 @@ var errDeletedMetric = errors.New("metric was deleted")
 //
 // See methods GetMetrics and GetMetricPoints.
 type Store struct {
-	metrics         map[uint64]metric
-	points          map[uint64][]types.Point
-	notifyCallbacks map[int]func([]types.MetricPoint)
-	maxAge          time.Duration
-	workLabels      labels.Labels
-	lock            sync.Mutex
-	notifeeLock     sync.Mutex
+	metrics           map[uint64]metric
+	points            map[uint64][]types.Point
+	notifyCallbacks   map[int]func([]types.MetricPoint)
+	resetRuleCallback func()
+	maxAge            time.Duration
+	workLabels        labels.Labels
+	lock              sync.Mutex
+	notifeeLock       sync.Mutex
+	resetRuleLock     sync.Mutex
 }
 
 // New create a return a store. Store should be Close()d before leaving.
@@ -144,6 +146,14 @@ func (s *Store) RemoveNotifiee(id int) {
 	defer s.notifeeLock.Unlock()
 
 	delete(s.notifyCallbacks, id)
+}
+
+// SetResetRuleCallback sets the resetRuleCallbacks.
+func (s *Store) SetResetRuleCallback(fc func()) {
+	s.resetRuleLock.Lock()
+	defer s.resetRuleLock.Unlock()
+
+	s.resetRuleCallback = fc
 }
 
 // DropMetrics delete metrics and they points.
@@ -291,7 +301,7 @@ func (s *Store) run(now time.Time) {
 // If the metric does not exists, it's created.
 // The store lock is assumed to be held.
 // Annotations is always updated with value provided as argument.
-func (s *Store) metricGetOrCreate(lbls map[string]string, annotations types.MetricAnnotations) metric {
+func (s *Store) metricGetOrCreate(lbls map[string]string, annotations types.MetricAnnotations) (metric, bool) {
 	if cap(s.workLabels) < len(lbls) {
 		s.workLabels = make(labels.Labels, len(lbls))
 	}
@@ -312,7 +322,7 @@ func (s *Store) metricGetOrCreate(lbls map[string]string, annotations types.Metr
 			m.annotations = annotations
 			s.metrics[hash] = m
 
-			return m
+			return m, false
 		}
 
 		if !ok {
@@ -326,7 +336,7 @@ func (s *Store) metricGetOrCreate(lbls map[string]string, annotations types.Metr
 
 			s.metrics[hash] = m
 
-			return m
+			return m, true
 		}
 
 		hash++
@@ -340,11 +350,16 @@ func (s *Store) metricGetOrCreate(lbls map[string]string, annotations types.Metr
 // The points must not be mutated after this call.
 func (s *Store) PushPoints(_ context.Context, points []types.MetricPoint) {
 	dedupPoints := make([]types.MetricPoint, 0, len(points))
+	newMetrics := false
 
 	s.lock.Lock()
 	for _, point := range points {
-		metric := s.metricGetOrCreate(point.Labels, point.Annotations)
+		metric, created := s.metricGetOrCreate(point.Labels, point.Annotations)
 		length := len(s.points[metric.metricID])
+
+		if created {
+			newMetrics = true
+		}
 
 		if length > 0 && s.points[metric.metricID][length-1].Time.Equal(point.Time) {
 			continue
@@ -353,7 +368,17 @@ func (s *Store) PushPoints(_ context.Context, points []types.MetricPoint) {
 		s.points[metric.metricID] = append(s.points[metric.metricID], point.Point)
 		dedupPoints = append(dedupPoints, point)
 	}
+
 	s.lock.Unlock()
+	s.resetRuleLock.Lock()
+
+	cb := s.resetRuleCallback
+
+	s.resetRuleLock.Unlock()
+
+	if newMetrics && cb != nil {
+		cb()
+	}
 
 	s.notifeeLock.Lock()
 

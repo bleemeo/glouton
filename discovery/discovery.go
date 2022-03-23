@@ -64,7 +64,9 @@ type Discovery struct {
 	servicesOverride      map[NameContainer]ServiceOveride
 	isCheckIgnored        func(NameContainer) bool
 	isInputIgnored        func(NameContainer) bool
+	isContainerIgnored    func(facts.Container) bool
 	metricFormat          types.MetricFormat
+	processFact           processFact
 }
 
 // Collector will gather metrics for added inputs.
@@ -81,12 +83,12 @@ type Registry interface {
 
 // GathererRegistry allow to register/unregister prometheus Gatherer.
 type GathererRegistry interface {
-	RegisterGatherer(opt registry.RegistrationOption, gatherer prometheus.Gatherer, pushPoints bool) (int, error)
+	RegisterGatherer(ctx context.Context, opt registry.RegistrationOption, gatherer prometheus.Gatherer) (int, error)
 	Unregister(id int) bool
 }
 
 // New returns a new Discovery.
-func New(dynamicDiscovery Discoverer, coll Collector, metricRegistry GathererRegistry, taskRegistry Registry, state State, acc inputs.AnnotationAccumulator, containerInfo containerInfoProvider, servicesOverride map[NameContainer]ServiceOveride, isCheckIgnored func(NameContainer) bool, isInputIgnored func(NameContainer) bool, metricFormat types.MetricFormat) *Discovery {
+func New(dynamicDiscovery Discoverer, coll Collector, metricRegistry GathererRegistry, taskRegistry Registry, state State, acc inputs.AnnotationAccumulator, containerInfo containerInfoProvider, servicesOverride map[NameContainer]ServiceOveride, isCheckIgnored func(NameContainer) bool, isInputIgnored func(NameContainer) bool, isContainerIgnored func(c facts.Container) bool, metricFormat types.MetricFormat, processFact processFact) *Discovery {
 	initialServices := servicesFromState(state)
 	discoveredServicesMap := make(map[NameContainer]Service, len(initialServices))
 
@@ -112,7 +114,9 @@ func New(dynamicDiscovery Discoverer, coll Collector, metricRegistry GathererReg
 		servicesOverride:      servicesOverride,
 		isCheckIgnored:        isCheckIgnored,
 		isInputIgnored:        isInputIgnored,
+		isContainerIgnored:    isContainerIgnored,
 		metricFormat:          metricFormat,
+		processFact:           processFact,
 	}
 }
 
@@ -121,7 +125,9 @@ func (d *Discovery) Close() {
 	d.l.Lock()
 	defer d.l.Unlock()
 
-	_ = d.configureMetricInputs(d.servicesMap, nil)
+	for key := range d.servicesMap {
+		d.removeInput(key)
+	}
 
 	d.configureChecks(d.servicesMap, nil)
 }
@@ -145,7 +151,6 @@ func (d *Discovery) LastUpdate() time.Time {
 }
 
 // DiagnosticArchive add to a zipfile useful diagnostic information.
-//nolint:cyclop
 func (d *Discovery) DiagnosticArchive(ctx context.Context, zipFile types.ArchiveWriter) error {
 	d.l.Lock()
 	defer d.l.Unlock()
@@ -230,7 +235,7 @@ func (d *Discovery) discovery(ctx context.Context, maxAge time.Duration) (servic
 
 		if ctx.Err() == nil {
 			saveState(d.state, d.discoveredServicesMap)
-			d.reconfigure()
+			d.reconfigure(ctx)
 
 			d.lastDiscoveryUpdate = time.Now()
 		}
@@ -271,8 +276,8 @@ func (d *Discovery) RemoveIfNonRunning(ctx context.Context, services []Service) 
 	}
 }
 
-func (d *Discovery) reconfigure() {
-	err := d.configureMetricInputs(d.lastConfigservicesMap, d.servicesMap)
+func (d *Discovery) reconfigure(ctx context.Context) {
+	err := d.configureMetricInputs(ctx, d.lastConfigservicesMap, d.servicesMap)
 	if err != nil {
 		logger.Printf("Unable to update metric inputs: %v", err)
 	}
@@ -342,7 +347,7 @@ func (d *Discovery) setServiceActiveAndContainer(service Service) Service {
 			service.container = container
 		}
 
-		if !found || facts.ContainerIgnored(container) {
+		if !found || d.isContainerIgnored(container) {
 			service.Active = false
 		} else if container.StoppedAndReplaced() {
 			service.Active = false
@@ -356,7 +361,6 @@ func (d *Discovery) setServiceActiveAndContainer(service Service) Service {
 	return service
 }
 
-//nolint:cyclop
 func applyOveride(discoveredServicesMap map[NameContainer]Service, servicesOverride map[NameContainer]ServiceOveride) map[NameContainer]Service {
 	servicesMap := make(map[NameContainer]Service)
 
@@ -374,7 +378,7 @@ func applyOveride(discoveredServicesMap map[NameContainer]Service, servicesOverr
 		service := servicesMap[serviceKey]
 		if service.ServiceType == "" {
 			if serviceKey.ContainerName != "" {
-				logger.V(1).Printf(
+				logger.V(0).Printf(
 					"Custom check for service %#v with a container (%#v) is not supported. Please unset the container",
 					serviceKey.Name,
 					serviceKey.ContainerName,
@@ -430,7 +434,7 @@ func applyOveride(discoveredServicesMap map[NameContainer]Service, servicesOverr
 				}
 
 				if _, port := service.AddressPort(); port == 0 {
-					logger.V(1).Printf("Bad custom service definition for service %s, port %#v is invalid", service.Name)
+					logger.V(0).Printf("Bad custom service definition for service %s, port %#v is invalid", service.Name)
 
 					continue
 				}
@@ -441,13 +445,19 @@ func applyOveride(discoveredServicesMap map[NameContainer]Service, servicesOverr
 			}
 
 			if service.ExtraAttributes["check_type"] == customCheckNagios && service.ExtraAttributes["check_command"] == "" {
-				logger.V(1).Printf("Bad custom service definition for service %s, check_type is nagios but no check_command set", service.Name)
+				logger.V(0).Printf("Bad custom service definition for service %s, check_type is nagios but no check_command set", service.Name)
 
 				continue
 			}
 
-			if service.ExtraAttributes["check_type"] != customCheckNagios && service.ExtraAttributes["port"] == "" {
-				logger.V(1).Printf("Bad custom service definition for service %s, port is unknown so I don't known how to check it", service.Name)
+			if service.ExtraAttributes["check_type"] == customCheckProcess && service.ExtraAttributes["match_process"] == "" {
+				logger.V(0).Printf("Bad custom service definition for service %s, check_type is process but no match_process set", service.Name)
+
+				continue
+			}
+
+			if service.ExtraAttributes["check_type"] != customCheckNagios && service.ExtraAttributes["check_type"] != customCheckProcess && service.ExtraAttributes["port"] == "" {
+				logger.V(0).Printf("Bad custom service definition for service %s, port is unknown so I don't known how to check it", service.Name)
 
 				continue
 			}

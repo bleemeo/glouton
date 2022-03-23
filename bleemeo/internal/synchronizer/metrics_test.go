@@ -19,6 +19,7 @@ package synchronizer
 
 import (
 	"context"
+	"fmt"
 	"glouton/agent/state"
 	"glouton/bleemeo/internal/cache"
 	bleemeoTypes "glouton/bleemeo/types"
@@ -39,12 +40,10 @@ import (
 )
 
 const (
-	idAgentTypeAgent = "44aefd1c-29bc-4c67-89cd-197efc1d6650"
-	idAgentTypeSNMP  = "cf1d4e06-1058-4149-864f-82c6b2ba7c7a"
-	idAgentMain      = "1ea3eaa7-3c29-413c-b00e-9dbd7183fb26"
-	idAgentSNMP      = "69956bc0-943f-4125-bb9b-eb4743c83b3c"
-	idAccountConfig  = "553b1cd5-f10a-4f17-87e8-92dc6717a93f"
-	passwordAgent    = "a-secret-password"
+	idAgentMain    = "1ea3eaa7-3c29-413c-b00e-9dbd7183fb26"
+	idAgentSNMP    = "69956bc0-943f-4125-bb9b-eb4743c83b3c"
+	idAgentMonitor = "bd50acd0-433f-4f0b-a8ce-937d914b8a4d"
+	passwordAgent  = "a-secret-password"
 )
 
 type mockMetric struct {
@@ -599,52 +598,68 @@ func newMetricHelper(t *testing.T) *metricTestHelper {
 	cfg.Set("bleemeo.account_id", accountID)
 	cfg.Set("bleemeo.registration_key", registrationKey)
 	cfg.Set("blackbox.enable", true)
+	cfg.Set("blackbox.scraper_name", "paris")
 
 	cache := cache.Cache{}
 
 	cache.SetAccountConfigs([]bleemeoTypes.AccountConfig{
 		{
-			ID:   idAccountConfig,
+			ID:   newAccountConfig.ID,
 			Name: "default",
 		},
 	})
 	cache.SetAgentTypes([]bleemeoTypes.AgentType{
 		{
-			ID:   idAgentTypeAgent,
+			ID:   agentTypeAgent.ID,
 			Name: bleemeoTypes.AgentTypeAgent,
 		},
 		{
-			ID:   idAgentTypeSNMP,
+			ID:   agentTypeSNMP.ID,
 			Name: bleemeoTypes.AgentTypeSNMP,
+		},
+		{
+			ID:   agentTypeMonitor.ID,
+			Name: bleemeoTypes.AgentTypeMonitor,
 		},
 	})
 	cache.SetAgentConfigs([]bleemeoTypes.AgentConfig{
 		{
 			MetricsAllowlist: "",
 			MetricResolution: 10,
-			AccountConfig:    idAccountConfig,
-			AgentType:        idAgentTypeAgent,
+			AccountConfig:    newAccountConfig.ID,
+			AgentType:        agentTypeAgent.ID,
 		},
 		{
 			MetricsAllowlist: "",
 			MetricResolution: 60,
-			AccountConfig:    idAccountConfig,
-			AgentType:        idAgentTypeSNMP,
+			AccountConfig:    newAccountConfig.ID,
+			AgentType:        agentTypeSNMP.ID,
+		},
+		{
+			MetricsAllowlist: "",
+			MetricResolution: 60,
+			AccountConfig:    newAccountConfig.ID,
+			AgentType:        agentTypeMonitor.ID,
 		},
 	})
 
 	mainAgent := bleemeoTypes.Agent{
 		ID:              idAgentMain,
-		CurrentConfigID: idAccountConfig,
-		AgentType:       idAgentTypeAgent,
+		CurrentConfigID: newAccountConfig.ID,
+		AgentType:       agentTypeAgent.ID,
 	}
 
 	cache.SetAgentList([]bleemeoTypes.Agent{
 		mainAgent,
 		{
 			ID:              idAgentSNMP,
-			CurrentConfigID: idAccountConfig,
-			AgentType:       idAgentTypeSNMP,
+			CurrentConfigID: newAccountConfig.ID,
+			AgentType:       agentTypeSNMP.ID,
+		},
+		{
+			ID:              idAgentMonitor,
+			CurrentConfigID: newAccountConfig.ID,
+			AgentType:       agentTypeMonitor.ID,
 		},
 	})
 	cache.SetAgent(mainAgent)
@@ -660,13 +675,15 @@ func newMetricHelper(t *testing.T) *metricTestHelper {
 	helper.s, err = New(Option{
 		Cache: &cache,
 		GlobalOption: bleemeoTypes.GlobalOption{
-			Config:           cfg,
-			Facts:            facts.NewMockFacter(),
-			State:            state,
-			Discovery:        discovery,
-			Store:            helper.store,
-			MetricFormat:     types.MetricFormatBleemeo,
-			SNMPOnlineTarget: func() int { return 0 },
+			Config:              cfg,
+			Facts:               facts.NewMockFacter(nil),
+			State:               state,
+			Discovery:           discovery,
+			Store:               helper.store,
+			MetricFormat:        types.MetricFormatBleemeo,
+			SNMPOnlineTarget:    func() int { return 0 },
+			BlackboxScraperName: cfg.String("blackbox.scraper_name"),
+			IsContainerEnabled:  facts.ContainerFilter{}.ContainerEnabled,
 		},
 	})
 	if err != nil {
@@ -702,6 +719,16 @@ func (h *metricTestHelper) Close() {
 	h.httpServer = nil
 }
 
+func (h *metricTestHelper) SetMetrics(metrics ...metricPayload) {
+	tmp := make([]interface{}, 0, len(metrics))
+
+	for _, m := range metrics {
+		tmp = append(tmp, m)
+	}
+
+	h.api.resources["metric"].SetStore(tmp...)
+}
+
 func (h *metricTestHelper) Metrics() []metricPayload {
 	var metrics []metricPayload
 
@@ -715,6 +742,7 @@ func (h *metricTestHelper) Metrics() []metricPayload {
 
 func (h *metricTestHelper) AddTime(d time.Duration) {
 	h.mt.now = h.mt.now.Add(d)
+	h.api.now.now = h.mt.now
 }
 
 func (h *metricTestHelper) RunSync(maxLoop int, timeStep time.Duration, forceFirst bool) runResult {
@@ -735,7 +763,7 @@ func (h *metricTestHelper) RunSync(maxLoop int, timeStep time.Duration, forceFir
 			result.didFull = true
 		}
 
-		err := h.s.syncMetrics(methods[syncMethodMetric], false)
+		err := h.s.syncMetrics(context.Background(), methods[syncMethodMetric], false)
 		result.lastErr = err
 
 		if err == nil {
@@ -799,7 +827,6 @@ func (res runResult) CheckAllowError(name string, wantFull bool) {
 // Agent start and register metrics
 // Some metrics disapear => mark inative
 // Some re-appear and some new => mark active & register.
-//nolint:cyclop
 func TestMetricSimpleSync(t *testing.T) {
 	helper := newMetricHelper(t)
 	defer helper.Close()
@@ -835,7 +862,8 @@ func TestMetricSimpleSync(t *testing.T) {
 		{
 			Point: types.Point{Time: helper.mt.Now()},
 			Labels: map[string]string{
-				types.LabelName: "cpu_system",
+				types.LabelName:         "cpu_system",
+				types.LabelInstanceUUID: idAgentMain,
 			},
 		},
 	})
@@ -881,8 +909,9 @@ func TestMetricSimpleSync(t *testing.T) {
 			{
 				Point: types.Point{Time: helper.mt.Now()},
 				Labels: map[string]string{
-					types.LabelName: "metric",
-					"item":          strconv.FormatInt(int64(n), 10),
+					types.LabelName:         "metric",
+					"item":                  strconv.FormatInt(int64(n), 10),
+					types.LabelInstanceUUID: idAgentMain,
 				},
 				Annotations: types.MetricAnnotations{
 					BleemeoItem: strconv.FormatInt(int64(n), 10),
@@ -936,14 +965,16 @@ func TestMetricSimpleSync(t *testing.T) {
 		{
 			Point: types.Point{Time: helper.mt.Now()},
 			Labels: map[string]string{
-				types.LabelName: "cpu_system",
+				types.LabelName:         "cpu_system",
+				types.LabelInstanceUUID: idAgentMain,
 			},
 		},
 		{
 			Point: types.Point{Time: helper.mt.Now()},
 			Labels: map[string]string{
-				types.LabelName: "disk_used",
-				"item":          "/home",
+				types.LabelName:         "disk_used",
+				"item":                  "/home",
+				types.LabelInstanceUUID: idAgentMain,
 			},
 			Annotations: types.MetricAnnotations{BleemeoItem: "/home"},
 		},
@@ -985,7 +1016,6 @@ func TestMetricSimpleSync(t *testing.T) {
 }
 
 // TestMetricDeleted test that Glouton can update metrics deleted on Bleemeo.
-//nolint:cyclop
 func TestMetricDeleted(t *testing.T) {
 	helper := newMetricHelper(t)
 	defer helper.Close()
@@ -1194,8 +1224,7 @@ func TestMetricError(t *testing.T) {
 		t.Errorf("We should have some error, had %d", helper.api.ServerErrorCount)
 	}
 
-	metrics := helper.Metrics()
-	if len(metrics) != 4 { // 3 + agent_status
+	if metrics := helper.Metrics(); len(metrics) != 4 { // 3 + agent_status
 		t.Errorf("len(metrics) = %d, want 4", len(metrics))
 	}
 }
@@ -1206,7 +1235,8 @@ func TestMetricUnknownError(t *testing.T) {
 	defer helper.Close()
 
 	// API always reject registering "deny-me" metric
-	helper.api.resources["metric"].(*genericResource).CreateHook = func(r *http.Request, body []byte, valuePtr interface{}) error {
+	metricResource, _ := helper.api.resources["metric"].(*genericResource)
+	metricResource.CreateHook = func(r *http.Request, body []byte, valuePtr interface{}) error {
 		metric, _ := valuePtr.(*metricPayload)
 		if metric.Name == "deny-me" {
 			return clientError{
@@ -1304,7 +1334,6 @@ func TestMetricUnknownError(t *testing.T) {
 }
 
 // TestMetricPermanentError test that Glouton handle permanent failure metric from Bleemeo correctly.
-//nolint:cyclop
 func TestMetricPermanentError(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -1325,7 +1354,8 @@ func TestMetricPermanentError(t *testing.T) {
 			defer helper.Close()
 
 			// API always reject registering "deny-me" metric
-			helper.api.resources["metric"].(*genericResource).CreateHook = func(r *http.Request, body []byte, valuePtr interface{}) error {
+			metricResource, _ := helper.api.resources["metric"].(*genericResource)
+			metricResource.CreateHook = func(r *http.Request, body []byte, valuePtr interface{}) error {
 				metric, _ := valuePtr.(*metricPayload)
 				if metric.Name == "deny-me" || metric.Name == "deny-me-also" {
 					return clientError{
@@ -1438,7 +1468,7 @@ func TestMetricPermanentError(t *testing.T) {
 			}
 
 			// Now metric registration will succeeds and retry all
-			helper.api.resources["metric"].(*genericResource).CreateHook = nil
+			metricResource.CreateHook = nil
 			helper.AddTime(70 * time.Minute)
 			helper.store.PushPoints(context.Background(), []types.MetricPoint{
 				{
@@ -1482,16 +1512,17 @@ func TestMetricPermanentError(t *testing.T) {
 }
 
 // TestMetricTooMany test that Glouton handle too many non-standard metric correctly.
-func TestMetricTooMany(t *testing.T) { //nolint:cyclop
+func TestMetricTooMany(t *testing.T) { //nolint:maintidx
 	helper := newMetricHelper(t)
 	defer helper.Close()
 
-	defaultPatchHook := helper.api.resources["metric"].(*genericResource).PatchHook
+	metricResource, _ := helper.api.resources["metric"].(*genericResource)
+	defaultPatchHook := metricResource.PatchHook
 
 	// API always reject more than 3 active metrics
-	helper.api.resources["metric"].(*genericResource).CreateHook = func(r *http.Request, body []byte, valuePtr interface{}) error {
+	metricResource.PatchHook = func(r *http.Request, body []byte, valuePtr interface{}, oldValue interface{}) error {
 		if defaultPatchHook != nil {
-			err := defaultPatchHook(r, body, valuePtr)
+			err := defaultPatchHook(r, body, valuePtr, oldValue)
 			if err != nil {
 				return err
 			}
@@ -1519,7 +1550,10 @@ func TestMetricTooMany(t *testing.T) { //nolint:cyclop
 
 		return nil
 	}
-	helper.api.resources["metric"].(*genericResource).PatchHook = helper.api.resources["metric"].(*genericResource).CreateHook
+
+	metricResource.CreateHook = func(r *http.Request, body []byte, valuePtr interface{}) error {
+		return metricResource.PatchHook(r, body, valuePtr, nil)
+	}
 
 	helper.AddTime(time.Minute)
 
@@ -1863,6 +1897,169 @@ func TestWithSNMP(t *testing.T) {
 	}
 }
 
+// Test for monitor metric deactivation.
+func TestMonitorDeactivation(t *testing.T) {
+	helper := newMetricHelper(t)
+	defer helper.Close()
+
+	helper.AddTime(time.Minute)
+
+	initialMetrics := []metricPayload{
+		{
+			Metric: bleemeoTypes.Metric{
+				ID:      "90c6459c-851d-4bb4-957c-afbc695c2201",
+				AgentID: idAgentMonitor,
+				LabelsText: fmt.Sprintf(
+					"__name__=\"probe_success\",instance=\"http://localhost:8000/\",instance_uuid=\"%s\",scraper=\"paris\"",
+					idAgentMonitor,
+				),
+			},
+			Name: "probe_success",
+		},
+		{
+			Metric: bleemeoTypes.Metric{
+				ID:      "9149d491-3a6e-4f46-abf9-c1ea9b9f7227",
+				AgentID: idAgentMonitor,
+				LabelsText: fmt.Sprintf(
+					"__name__=\"probe_success\",instance=\"http://localhost:8000/\",instance_uuid=\"%s\",scraper=\"milan\"",
+					idAgentMonitor,
+				),
+			},
+			Name: "probe_success",
+		},
+		{
+			Metric: bleemeoTypes.Metric{
+				ID:      "92c0b336-6e5a-4960-94cc-b606db8a581f",
+				AgentID: idAgentMonitor,
+				LabelsText: fmt.Sprintf(
+					"__name__=\"probe_status\",instance=\"http://localhost:8000/\",instance_uuid=\"%s\"",
+					idAgentMonitor,
+				),
+			},
+			Name: "probe_status",
+		},
+	}
+
+	pushPoints := func() {
+		helper.store.PushPoints(context.Background(), []types.MetricPoint{
+			{
+				Point: types.Point{Time: helper.mt.Now()},
+				Labels: map[string]string{
+					types.LabelName:         "probe_success",
+					types.LabelScraper:      "paris",
+					types.LabelInstance:     "http://localhost:8000/",
+					types.LabelInstanceUUID: idAgentMonitor,
+				},
+				Annotations: types.MetricAnnotations{
+					BleemeoAgentID: idAgentMonitor,
+				},
+			},
+			{
+				Point: types.Point{Time: helper.mt.Now()},
+				Labels: map[string]string{
+					types.LabelName:         "probe_duration",
+					types.LabelScraper:      "paris",
+					types.LabelInstance:     "http://localhost:8000/",
+					types.LabelInstanceUUID: idAgentMonitor,
+				},
+				Annotations: types.MetricAnnotations{
+					BleemeoAgentID: idAgentMonitor,
+				},
+			},
+		})
+	}
+
+	helper.SetMetrics(initialMetrics...)
+	pushPoints()
+
+	helper.RunSync(1, 0, false).CheckNoError("first sync", true)
+
+	metrics := helper.Metrics()
+	want := []metricPayload{
+		{
+			Metric: bleemeoTypes.Metric{
+				ID:         "1",
+				AgentID:    idAgentMain,
+				LabelsText: "",
+			},
+			Name: agentStatusName,
+		},
+		{
+			Metric: bleemeoTypes.Metric{
+				ID:      "2",
+				AgentID: idAgentMonitor,
+				LabelsText: fmt.Sprintf(
+					"__name__=\"probe_duration\",instance=\"http://localhost:8000/\",instance_uuid=\"%s\",scraper=\"paris\"",
+					idAgentMonitor,
+				),
+			},
+			Name: "probe_duration",
+		},
+	}
+
+	want = append(want, initialMetrics...)
+
+	if diff := cmp.Diff(want, metrics); diff != "" {
+		t.Errorf("metrics mismatch (-want +got):\n%s", diff)
+	}
+
+	helper.AddTime(90 * time.Minute)
+	pushPoints()
+	helper.RunSync(1, 0, false).CheckNoError("next full sync", true)
+
+	metrics = helper.Metrics()
+
+	if diff := cmp.Diff(want, metrics); diff != "" {
+		t.Errorf("metrics mismatch (-want +got):\n%s", diff)
+	}
+
+	helper.AddTime(120 * time.Minute)
+	helper.RunSync(1, 0, false).CheckNoError("next next full sync", true)
+
+	metrics = helper.Metrics()
+
+	want = []metricPayload{
+		{
+			Metric: bleemeoTypes.Metric{
+				ID:         "1",
+				AgentID:    idAgentMain,
+				LabelsText: "",
+			},
+			Name: agentStatusName,
+		},
+		{
+			Metric: bleemeoTypes.Metric{
+				ID:      "2",
+				AgentID: idAgentMonitor,
+				LabelsText: fmt.Sprintf(
+					"__name__=\"probe_duration\",instance=\"http://localhost:8000/\",instance_uuid=\"%s\",scraper=\"paris\"",
+					idAgentMonitor,
+				),
+				DeactivatedAt: helper.s.now(),
+			},
+			Name: "probe_duration",
+		},
+		{
+			Metric: bleemeoTypes.Metric{
+				ID:      "90c6459c-851d-4bb4-957c-afbc695c2201",
+				AgentID: idAgentMonitor,
+				LabelsText: fmt.Sprintf(
+					"__name__=\"probe_success\",instance=\"http://localhost:8000/\",instance_uuid=\"%s\",scraper=\"paris\"",
+					idAgentMonitor,
+				),
+				DeactivatedAt: helper.s.now(),
+			},
+			Name: "probe_success",
+		},
+		initialMetrics[1],
+		initialMetrics[2],
+	}
+
+	if diff := cmp.Diff(want, metrics); diff != "" {
+		t.Errorf("metrics mismatch (-want +got):\n%s", diff)
+	}
+}
+
 // inactive and MQTT
 
 func Test_httpResponseToMetricFailureKind(t *testing.T) {
@@ -1904,4 +2101,119 @@ func Test_httpResponseToMetricFailureKind(t *testing.T) {
 			}
 		})
 	}
+}
+
+func Test_MergeFirstSeenAt(t *testing.T) {
+	state, err := state.Load("not_found")
+	now := time.Now().Add(-10 * time.Minute).Truncate(time.Second)
+
+	if err != nil {
+		t.Errorf("%v", err)
+
+		return
+	}
+
+	cache := cache.Load(state)
+
+	want := []bleemeoTypes.Metric{
+		{
+			ID:          "1",
+			LabelsText:  "2",
+			FirstSeenAt: now,
+		},
+		{
+			ID:          "2",
+			LabelsText:  "1",
+			FirstSeenAt: now,
+		},
+		{
+			ID:          "3",
+			LabelsText:  "4",
+			FirstSeenAt: now,
+		},
+		{
+			ID:          "4",
+			LabelsText:  "3",
+			FirstSeenAt: now,
+		},
+		{
+			ID:          "5",
+			LabelsText:  "6",
+			FirstSeenAt: now,
+		},
+	}
+
+	cache.SetMetrics(want)
+
+	metrics := []metricPayload{
+		{
+			Metric: bleemeoTypes.Metric{
+				ID:          "1",
+				LabelsText:  "2",
+				FirstSeenAt: now.Add(5 * time.Minute),
+			},
+		},
+		{
+			Metric: bleemeoTypes.Metric{
+				ID:          "2",
+				LabelsText:  "1",
+				FirstSeenAt: now.Add(4 * time.Minute),
+			},
+		},
+		{
+			Metric: bleemeoTypes.Metric{
+				ID:          "3",
+				LabelsText:  "4",
+				FirstSeenAt: now.Add(3 * time.Minute),
+			},
+		},
+		{
+			Metric: bleemeoTypes.Metric{
+				ID:          "5",
+				LabelsText:  "6",
+				FirstSeenAt: now.Add(2 * time.Minute),
+			},
+		},
+	}
+
+	got := []bleemeoTypes.Metric{}
+	metricsByUUID := cache.MetricsByUUID()
+
+	for _, val := range metrics {
+		metricsByUUID[val.ID] = val.metricFromAPI(metricsByUUID[val.ID].FirstSeenAt)
+	}
+
+	for _, val := range metricsByUUID {
+		got = append(got, val)
+	}
+
+	got = sortList(got)
+	want = sortList(want)
+
+	if res := cmp.Diff(got, want); res != "" {
+		t.Errorf("FirstSeenAt Merge did not occur correctly:\n%s", res)
+	}
+}
+
+func sortList(list []bleemeoTypes.Metric) []bleemeoTypes.Metric {
+	newList := make([]bleemeoTypes.Metric, 0, len(list))
+	orderedNames := make([]string, 0, len(list))
+
+	for _, val := range list {
+		orderedNames = append(orderedNames, val.LabelsText)
+	}
+
+	sort.Strings(orderedNames)
+
+	for _, name := range orderedNames {
+		for _, val := range list {
+			if val.LabelsText == name {
+				newList = append(newList, val)
+
+				break
+			}
+		}
+	}
+
+	return newList
 }

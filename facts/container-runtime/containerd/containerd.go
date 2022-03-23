@@ -28,8 +28,8 @@ import (
 	"github.com/containerd/containerd/oci"
 	"github.com/containerd/typeurl"
 	"github.com/opencontainers/runtime-spec/specs-go"
-	"github.com/shirou/gopsutil/mem"
-	"github.com/shirou/gopsutil/process"
+	"github.com/shirou/gopsutil/v3/mem"
+	"github.com/shirou/gopsutil/v3/process"
 )
 
 var (
@@ -52,6 +52,7 @@ func DefaultAddresses(hostRoot string) []string {
 type Containerd struct {
 	Addresses                 []string
 	DeletedContainersCallback func(containersID []string)
+	IsContainerIgnored        func(facts.Container) bool
 
 	l                sync.Mutex
 	workedOnce       bool
@@ -87,6 +88,17 @@ func (c *Containerd) RuntimeFact(ctx context.Context, currentFact map[string]str
 		return nil
 	}
 
+	ns, err := cl.Namespaces(ctx)
+	if err != nil {
+		return nil
+	}
+
+	// If containerD has only moby namespace, ignore it. It likely means this containerD is
+	// only here for Docker and Glouton will provide facts from Docker directly.
+	if len(ns) == 1 && ns[0] == ignoredNamespace {
+		return nil
+	}
+
 	version, err := cl.Version(ctx)
 	if err != nil {
 		if c.client != nil {
@@ -106,7 +118,6 @@ func (c *Containerd) RuntimeFact(ctx context.Context, currentFact map[string]str
 
 // Metrics return metrics in a format similar to the one returned by Telegraf docker input.
 // Note that Metrics will never open the connection to ContainerD and will return empty points if not connected.
-//nolint:cyclop
 func (c *Containerd) Metrics(ctx context.Context) ([]types.MetricPoint, error) {
 	now := time.Now()
 
@@ -132,7 +143,7 @@ func (c *Containerd) Metrics(ctx context.Context) ([]types.MetricPoint, error) {
 	c.l.Lock()
 
 	for _, cont := range c.containers {
-		if !facts.ContainerIgnored(cont) {
+		if !c.IsContainerIgnored(cont) {
 			idPerNamespace[cont.namespace] = append(idPerNamespace[cont.namespace], "id=="+cont.info.ID)
 
 			gloutonIDToName[cont.ID()] = cont.ContainerName()
@@ -243,9 +254,9 @@ func (c *Containerd) Containers(ctx context.Context, maxAge time.Duration, inclu
 	}
 
 	containers = make([]facts.Container, 0, len(c.containers))
-	for _, c := range c.containers {
-		if includeIgnored || !facts.ContainerIgnored(c) {
-			containers = append(containers, c)
+	for _, cont := range c.containers {
+		if includeIgnored || !c.IsContainerIgnored(cont) {
+			containers = append(containers, cont)
 		}
 	}
 
@@ -449,7 +460,6 @@ func (c *Containerd) ContainerLastKill(containerID string) time.Time {
 	return time.Time{}
 }
 
-//nolint:cyclop
 func (c *Containerd) run(ctx context.Context) error {
 	c.l.Lock()
 
@@ -600,7 +610,7 @@ func (c *Containerd) updateContainers(ctx context.Context) error {
 
 		ctx := namespaces.WithNamespace(ctx, ns)
 
-		err := addContainersInfo(ctx, containers, cl, ns, ignoredID)
+		err := c.addContainersInfo(ctx, containers, cl, ns, ignoredID)
 		if err != nil {
 			return err
 		}
@@ -683,7 +693,7 @@ func convertToContainerObject(ctx context.Context, ns string, cont containerd.Co
 	return obj, nil
 }
 
-func addContainersInfo(ctx context.Context, containers map[string]containerObject, cl containerdClient, ns string, ignoredID map[string]bool) error {
+func (c *Containerd) addContainersInfo(ctx context.Context, containers map[string]containerObject, cl containerdClient, ns string, ignoredID map[string]bool) error {
 	list, err := cl.Containers(ctx)
 	if err != nil {
 		return fmt.Errorf("listing containers failed: %w", err)
@@ -701,7 +711,7 @@ func addContainersInfo(ctx context.Context, containers map[string]containerObjec
 
 		containers[obj.ID()] = obj
 
-		if facts.ContainerIgnored(obj) {
+		if c.IsContainerIgnored(obj) {
 			ignoredID[obj.ID()] = true
 		}
 	}
@@ -1074,7 +1084,7 @@ func (q *containerdProcessQuerier) getContainerFromCGroupPath(cgroupPath string)
 	return containerObject{}, false
 }
 
-func (q *containerdProcessQuerier) ContainerFromPID(ctx context.Context, parentContainerID string, pid int) (facts.Container, error) { //nolint: cyclop
+func (q *containerdProcessQuerier) ContainerFromPID(ctx context.Context, parentContainerID string, pid int) (facts.Container, error) {
 	q.c.l.Lock()
 	defer q.c.l.Unlock()
 
@@ -1219,7 +1229,6 @@ type metricValue struct {
 	values             map[string]uint64
 }
 
-//nolint:cyclop
 func rateFromMetricValue(gloutonIDToName map[string]string, pastValues []metricValue, newValues []metricValue) []types.MetricPoint {
 	memUsage, err := mem.VirtualMemory()
 	if err != nil {

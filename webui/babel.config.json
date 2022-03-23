@@ -4,20 +4,16 @@
       "@babel/preset-env",
       {
         "useBuiltIns": "usage",
-        "corejs": "3.8"
+        "corejs": "3.20"
       }
     ],
-    "@babel/preset-react"
-  ],
-  "plugins": [
-    "@babel/plugin-proposal-class-properties",
-    "@babel/plugin-syntax-dynamic-import"
+    "@babel/preset-react",
+    "@babel/preset-typescript"
   ],
   "env": {
     "development": {
       "plugins": [
-        "lodash",
-        "react-hot-loader/babel"
+        "lodash"
       ]
     },
     "production": {

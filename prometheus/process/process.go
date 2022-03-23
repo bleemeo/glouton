@@ -39,7 +39,7 @@ const (
 )
 
 // RegisterExporter will create a new prometheus exporter using the specified parameters and adds it to the registry.
-func RegisterExporter(reg *registry.Registry, psLister interface{}, dynamicDiscovery *discovery.DynamicDiscovery, bleemeoFormat bool) {
+func RegisterExporter(ctx context.Context, reg *registry.Registry, psLister interface{}, dynamicDiscovery *discovery.DynamicDiscovery, bleemeoFormat bool) {
 	if processExporter := NewExporter(psLister, dynamicDiscovery); processExporter != nil {
 		processGatherer := prometheus.NewRegistry()
 
@@ -49,13 +49,14 @@ func RegisterExporter(reg *registry.Registry, psLister interface{}, dynamicDisco
 			logger.Printf("Processes metrics won't be available on /metrics endpoints")
 		} else {
 			_, err = reg.RegisterGatherer(
+				ctx,
 				registry.RegistrationOption{
-					Description: "process-exporter",
-					Interval:    defaultInterval,
-					JitterSeed:  defaultJitter,
+					Description:           "process-exporter",
+					Interval:              defaultInterval,
+					JitterSeed:            defaultJitter,
+					DisablePeriodicGather: bleemeoFormat,
 				},
 				processGatherer,
-				!bleemeoFormat,
 			)
 			if err != nil {
 				logger.Printf("Failed to register process-exporter: %v", err)
@@ -65,6 +66,7 @@ func RegisterExporter(reg *registry.Registry, psLister interface{}, dynamicDisco
 
 		if bleemeoFormat {
 			_, err := reg.RegisterPushPointsCallback(
+				ctx,
 				registry.RegistrationOption{
 					Description: "process-exporter",
 					Interval:    defaultInterval,
