@@ -50,38 +50,38 @@ fi
 
 GORELEASER_VERSION="v1.6.3"
 
-if [ -z "${VERSION}" ]; then
-   VERSION=$(date -u +%y.%m.%d.%H%M%S)
+if [ -z "${GLOUTON_VERSION}" ]; then
+   GLOUTON_VERSION=$(date -u +%y.%m.%d.%H%M%S)
 fi
 
-if [ -z "${BUILX_OPTION}" ]; then
-   BUILX_OPTION="--platform linux/amd64,linux/arm64/v8,linux/arm/v7 -t glouton:latest -t glouton:${VERSION}"
+if [ -z "${GLOUTON_BUILX_OPTION}" ]; then
+   GLOUTON_BUILX_OPTION="-t glouton:latest --load"
 fi
 
-export VERSION
+export GLOUTON_VERSION
 
 echo "Building Go binary"
 if [ "${ONLY_GO}" = "1" -a "${WITH_RACE}" != "1" ]; then
    docker run --rm -e HOME=/go/pkg -e CGO_ENABLED=0 \
       -v $(pwd):/src -w /src ${GO_MOUNT_CACHE} \
       --entrypoint '' \
-      goreleaser/goreleaser:${GORELEASER_VERSION} sh -c "go build -ldflags='-X main.version=${VERSION}' . && chown $USER_UID glouton"
+      goreleaser/goreleaser:${GORELEASER_VERSION} sh -c "go build -ldflags='-X main.version=${GLOUTON_VERSION}' . && chown $USER_UID glouton"
 elif [ "${ONLY_GO}" = "1" -a "${WITH_RACE}" = "1" ]; then
    docker run --rm -e HOME=/go/pkg -e CGO_ENABLED=1 \
       -v $(pwd):/src -w /src ${GO_MOUNT_CACHE} \
       --entrypoint '' \
-      goreleaser/goreleaser:${GORELEASER_VERSION} sh -c "go build -ldflags='-X main.version=${VERSION} -linkmode external -extldflags=-static' -race . && chown $USER_UID glouton"
+      goreleaser/goreleaser:${GORELEASER_VERSION} sh -c "go build -ldflags='-X main.version=${GLOUTON_VERSION} -linkmode external -extldflags=-static' -race . && chown $USER_UID glouton"
 else
    docker run --rm -e HOME=/go/pkg -e CGO_ENABLED=0 \
       -v $(pwd):/src -w /src ${GO_MOUNT_CACHE} \
       -v /var/run/docker.sock:/var/run/docker.sock \
       --entrypoint '' \
-      -e VERSION \
+      -e GLOUTON_VERSION \
       -e GORELEASER_PREVIOUS_TAG=0.1.0 \
       -e GORELEASER_CURRENT_TAG=0.1.1 \
       goreleaser/goreleaser:${GORELEASER_VERSION} sh -c "(goreleaser check && go generate ./... && go test ./... && goreleaser --rm-dist --snapshot --parallelism 2); result=\$?;chown -R $USER_UID dist coverage.html coverage.out api/models_gen.go; exit \$result"
 
-   echo $VERSION > dist/VERSION
+   echo $GLOUTON_VERSION > dist/VERSION
 
    ./packaging/windows/generate_installer.sh
 
@@ -89,7 +89,7 @@ else
    # goreleaser use "docker manifest" which require to push image to a registry. This means we ends with 4 tags:
    # 3 for each of the 3 supported architectures and 1 for the multi-architecture image.
    # Using buildx only generate 1 tag on the Docker Hub.
-   docker buildx build ${BUILX_OPTION} .
+   docker buildx build ${GLOUTON_BUILX_OPTION} .
 
-   sed "s@image: bleemeo/bleemeo-agent:latest@image: bleemeo/bleemeo-agent:${VERSION}@" k8s.yaml > dist/k8s.yaml
+   sed "s@image: bleemeo/bleemeo-agent:latest@image: bleemeo/bleemeo-agent:${GLOUTON_VERSION}@" k8s.yaml > dist/k8s.yaml
 fi
