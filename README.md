@@ -20,21 +20,46 @@ If you want to use the Bleemeo Cloud solution see https://docs.bleemeo.com/agent
 
 ## Build a release
 
-Our release version will be set by goreleaser from the current date.
+Our release version will be set from the current date.
 
 The release build will
 * Build the local UI written in ReactJS using npm and webpack.
 * Compile the Go binary for supported systems
+* Build Docker image using Docker buildx
 * Build an Windows installer using NSIS
 
 The build process use Docker and is run by the build script:
+
+* The first time, create resource:
 ```
 docker volume create glouton-buildcache  # (optional) enable cache and speed-up build/lint run
 
-./build.sh
+docker buildx create --name glouton-builder  # Needed to building multi-arch images
 ```
 
-Release files are present in dist/ folder and a Docker image is build (glouton:latest).
+* Then for each release:
+```
+export GLOUTON_VERSION="$(date -u +%y.%m.%d.%H%M%S)"
+export GLOUTON_BUILX_OPTION="--builder glouton-builder -t glouton:latest --load"
+
+./build.sh
+unset GLOUTON_VERSION GLOUTON_BUILX_OPTION
+```
+
+Release files are present in dist/ folder and a Docker image is build (glouton:latest) and loaded in
+your Docker images.
+
+
+For real release, you will want to build the Docker image for multiple architecture, which require to
+push image into a registry. Set image tags ("-t" options) to the wanted destination and ensure you
+are authorized to push in destination registry:
+```
+export GLOUTON_VERSION="$(date -u +%y.%m.%d.%H%M%S)"
+export GLOUTON_BUILX_OPTION="--builder glouton-builder --platform linux/amd64,linux/arm64/v8,linux/arm/v7 -t glouton:latest -t glouton:${GLOUTON_VERSION} --push"
+
+./build.sh
+unset GLOUTON_VERSION GLOUTON_BUILX_OPTION
+```
 
 ## Run Glouton
 
