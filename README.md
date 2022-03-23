@@ -40,10 +40,10 @@ docker buildx create --name glouton-builder  # Needed to building multi-arch ima
 * Then for each release:
 ```
 export GLOUTON_VERSION="$(date -u +%y.%m.%d.%H%M%S)"
-export GLOUTON_BUILX_OPTION="--builder glouton-builder -t glouton:latest --load"
+export GLOUTON_BUILDX_OPTION="--builder glouton-builder -t glouton:latest --load"
 
 ./build.sh
-unset GLOUTON_VERSION GLOUTON_BUILX_OPTION
+unset GLOUTON_VERSION GLOUTON_BUILDX_OPTION
 ```
 
 Release files are present in dist/ folder and a Docker image is build (glouton:latest) and loaded in
@@ -55,10 +55,10 @@ push image into a registry. Set image tags ("-t" options) to the wanted destinat
 are authorized to push in destination registry:
 ```
 export GLOUTON_VERSION="$(date -u +%y.%m.%d.%H%M%S)"
-export GLOUTON_BUILX_OPTION="--builder glouton-builder --platform linux/amd64,linux/arm64/v8,linux/arm/v7 -t glouton:latest -t glouton:${GLOUTON_VERSION} --push"
+export GLOUTON_BUILDX_OPTION="--builder glouton-builder --platform linux/amd64,linux/arm64/v8,linux/arm/v7 -t glouton:latest -t glouton:${GLOUTON_VERSION} --push"
 
 ./build.sh
-unset GLOUTON_VERSION GLOUTON_BUILX_OPTION
+unset GLOUTON_VERSION GLOUTON_BUILDX_OPTION
 ```
 
 ## Run Glouton

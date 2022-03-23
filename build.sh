@@ -54,8 +54,8 @@ if [ -z "${GLOUTON_VERSION}" ]; then
    GLOUTON_VERSION=$(date -u +%y.%m.%d.%H%M%S)
 fi
 
-if [ -z "${GLOUTON_BUILX_OPTION}" ]; then
-   GLOUTON_BUILX_OPTION="-t glouton:latest --load"
+if [ -z "${GLOUTON_BUILDX_OPTION}" ]; then
+   GLOUTON_BUILDX_OPTION="-t glouton:latest --load"
 fi
 
 export GLOUTON_VERSION
@@ -89,7 +89,7 @@ else
    # goreleaser use "docker manifest" which require to push image to a registry. This means we ends with 4 tags:
    # 3 for each of the 3 supported architectures and 1 for the multi-architecture image.
    # Using buildx only generate 1 tag on the Docker Hub.
-   docker buildx build ${GLOUTON_BUILX_OPTION} .
+   docker buildx build ${GLOUTON_BUILDX_OPTION} .
 
    sed "s@image: bleemeo/bleemeo-agent:latest@image: bleemeo/bleemeo-agent:${GLOUTON_VERSION}@" k8s.yaml > dist/k8s.yaml
 fi
