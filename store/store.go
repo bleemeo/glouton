@@ -316,33 +316,25 @@ func (s *Store) metricGetOrCreate(lbls map[string]string, annotations types.Metr
 
 	hash := s.workLabels.Hash()
 
-	for n := 0; n < 50; n++ {
-		m, ok := s.metrics[hash]
-		if labelsMatch(m.labels, lbls, true) {
-			m.annotations = annotations
-			s.metrics[hash] = m
+	m, ok := s.metrics[hash]
+	if ok {
+		m.annotations = annotations
+		s.metrics[hash] = m
 
-			return m, false
-		}
-
-		if !ok {
-			m := metric{
-				labels:      lbls,
-				annotations: annotations,
-				store:       s,
-				metricID:    hash,
-				createAt:    time.Now(),
-			}
-
-			s.metrics[hash] = m
-
-			return m, true
-		}
-
-		hash++
+		return m, false
 	}
 
-	panic("too many metric in the store. Unable to find new slot")
+	m = metric{
+		labels:      lbls,
+		annotations: annotations,
+		store:       s,
+		metricID:    hash,
+		createAt:    s.nowFunc(),
+	}
+
+	s.metrics[hash] = m
+
+	return m, true
 }
 
 // PushPoints append new metric points to the store, creating new metric
