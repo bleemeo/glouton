@@ -593,6 +593,8 @@ func newMetricHelper(t *testing.T) *metricTestHelper {
 	cfg := &config.Configuration{}
 	helper.httpServer = helper.api.Server()
 
+	helper.store.InternalSetNowAndRunOnce(context.Background(), helper.mt.Now)
+
 	if err := cfg.LoadByte([]byte("")); err != nil {
 		panic(err)
 	}

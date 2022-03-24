@@ -403,6 +403,14 @@ func (s *Store) PushPoints(_ context.Context, points []types.MetricPoint) {
 	s.notifeeLock.Unlock()
 }
 
+// InternalSetNowAndRunOnce is used for testing.
+// It will set the Now() function used by the store and will call one loop of Run() method
+// which does purge of older metrics.
+func (s *Store) InternalSetNowAndRunOnce(ctx context.Context, nowFunc func() time.Time) {
+	s.nowFunc = nowFunc
+	s.run(s.nowFunc())
+}
+
 type store interface {
 	Metrics(filters map[string]string) (result []types.Metric, err error)
 	MetricsCount() int
