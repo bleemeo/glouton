@@ -842,6 +842,13 @@ func (s *Synchronizer) syncToPerform(ctx context.Context) map[string]bool {
 		delete(s.forceSync, k)
 	}
 
+	if len(syncMethods) > 0 && s.now().Sub(s.lastInfo.FetchedAt) > 30*time.Minute {
+		// Ensure lastInfo is enough up-to-date.
+		// This will help detection quickly a change on /v1/info/ and will ensure the
+		// metric time_dirft is updated recently to avoid unwanted deactivation.
+		syncMethods[syncMethodInfo] = false || syncMethods[syncMethodInfo]
+	}
+
 	return syncMethods
 }
 
