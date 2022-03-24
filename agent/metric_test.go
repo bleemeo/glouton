@@ -965,6 +965,11 @@ func (m fakeMetric) Points(start, end time.Time) (result []types.Point, err erro
 	return nil, nil
 }
 
+// LastPointReceivedAt returns points between the two given time range (boundary are included).
+func (m fakeMetric) LastPointReceivedAt() time.Time {
+	return time.Time{}
+}
+
 func labelstoDtolabels(lb labels.Labels) []*dto.LabelPair {
 	labelPair := []*dto.LabelPair{}
 

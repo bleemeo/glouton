@@ -683,9 +683,9 @@ func (a *agent) run(ctx context.Context) { //nolint:maintidx
 	a.metricFilter = mFilter
 
 	if a.oldConfig.Bool("web.local_ui.enable") {
-		a.store = store.New(time.Hour)
+		a.store = store.New(time.Hour, 2*time.Hour)
 	} else {
-		a.store = store.New(2 * time.Minute)
+		a.store = store.New(2*time.Minute, 2*time.Hour)
 	}
 
 	filteredStore := store.NewFilteredStore(a.store, mFilter.FilterPoints, mFilter.filterMetrics)

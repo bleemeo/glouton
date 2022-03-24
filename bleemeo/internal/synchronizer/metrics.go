@@ -107,6 +107,10 @@ func (m fakeMetric) Points(time.Time, time.Time) ([]types.Point, error) {
 	return nil, errNotImplemented
 }
 
+func (m fakeMetric) LastPointReceivedAt() time.Time {
+	return time.Now()
+}
+
 func (m fakeMetric) Annotations() types.MetricAnnotations {
 	return types.MetricAnnotations{}
 }

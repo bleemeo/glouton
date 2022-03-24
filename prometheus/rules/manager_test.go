@@ -201,7 +201,7 @@ func TestManager(t *testing.T) {
 }
 
 func storeFromPoints(pts []types.MetricPoint) *store.Store {
-	st := store.New(time.Hour)
+	st := store.New(time.Hour, time.Hour)
 	st.PushPoints(context.Background(), pts)
 
 	return st
@@ -954,7 +954,7 @@ func Test_manager(t *testing.T) { //nolint:maintidx
 				l         sync.Mutex
 			)
 
-			store := store.New(time.Hour)
+			store := store.New(time.Hour, time.Hour)
 			reg, err := registry.New(registry.Option{
 				FQDN:        "example.com",
 				GloutonPort: "8015",
@@ -1068,7 +1068,7 @@ func Test_Rebuild_Rules(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	store := store.New(time.Hour)
+	store := store.New(time.Hour, time.Hour)
 	ctx := context.Background()
 	t1 := time.Now().Truncate(time.Second)
 	t0 := t1.Add(-7 * time.Minute)
@@ -1306,7 +1306,7 @@ func Test_GloutonStart(t *testing.T) {
 		promqlQuery  = "cpu_used"
 	)
 
-	store := store.New(time.Hour)
+	store := store.New(time.Hour, time.Hour)
 	ctx := context.Background()
 	t0 := time.Now().Truncate(time.Second)
 	ruleManager := newManager(ctx, store, defaultLinuxRecordingRules, t0, 15*time.Second)
@@ -1423,7 +1423,7 @@ func Test_NoStatutsChangeOnStart(t *testing.T) {
 				l         sync.Mutex
 			)
 
-			store := store.New(time.Hour)
+			store := store.New(time.Hour, time.Hour)
 			reg, err := registry.New(registry.Option{
 				PushPoint: pushFunction(func(ctx context.Context, points []types.MetricPoint) {
 					l.Lock()
@@ -1549,7 +1549,7 @@ func Test_NoCrossRead(t *testing.T) {
 		l         sync.Mutex
 	)
 
-	store := store.New(time.Hour)
+	store := store.New(time.Hour, time.Hour)
 
 	reg, err := registry.New(registry.Option{
 		PushPoint: pushFunction(func(ctx context.Context, points []types.MetricPoint) {
@@ -1677,7 +1677,7 @@ func Test_NoUnknownOnStart(t *testing.T) {
 		l         sync.Mutex
 	)
 
-	store := store.New(time.Hour)
+	store := store.New(time.Hour, time.Hour)
 
 	reg, err := registry.New(registry.Option{
 		PushPoint: pushFunction(func(ctx context.Context, points []types.MetricPoint) {
