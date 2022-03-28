@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"glouton/agent/state"
 	"glouton/bleemeo/internal/cache"
 	bleemeoTypes "glouton/bleemeo/types"
 	"glouton/config"
@@ -900,6 +899,58 @@ func (d mockDocker) LastUpdate() time.Time {
 	return d.helper.s.now()
 }
 
+type stateMock struct {
+	data      map[string]interface{}
+	agentUUID string
+	password  string
+}
+
+func newStateMock() *stateMock {
+	return &stateMock{
+		data: map[string]interface{}{},
+	}
+}
+
+// Set updates an object.
+// No json or anything there, just stupid objects.
+func (s *stateMock) Set(key string, object interface{}) error {
+	s.data[key] = object
+
+	return nil
+}
+
+// Delete an key from state.
+func (s *stateMock) Delete(key string) error {
+	if _, ok := s.data[key]; !ok {
+		return nil
+	}
+
+	delete(s.data, key)
+
+	return nil
+}
+
+func (s *stateMock) BleemeoCredentials() (string, string) {
+	return s.agentUUID, s.password
+}
+
+func (s *stateMock) SetBleemeoCredentials(agentUUID string, password string) error {
+	s.agentUUID = agentUUID
+	s.password = password
+
+	return nil
+}
+
+// Get returns an object.
+func (s *stateMock) Get(key string, result interface{}) error {
+	val, ok := s.data[key]
+	if ok {
+		reflect.ValueOf(result).Elem().Set(reflect.ValueOf(val))
+	}
+
+	return nil
+}
+
 type syncTestHelper struct {
 	api        *mockAPI
 	s          *Synchronizer
@@ -907,7 +958,7 @@ type syncTestHelper struct {
 	facts      *facts.FactProviderMock
 	containers []facts.Container
 	cache      *cache.Cache
-	state      *state.Mock
+	state      *stateMock
 	discovery  *discovery.MockDiscoverer
 	store      *store.Store
 	httpServer *httptest.Server
@@ -930,7 +981,7 @@ func newHelper(t *testing.T) *syncTestHelper {
 		cfg:   &config.Configuration{},
 		facts: facts.NewMockFacter(nil),
 		cache: &cache.Cache{},
-		state: state.NewMock(),
+		state: newStateMock(),
 		discovery: &discovery.MockDiscoverer{
 			UpdatedAt: api.now.Now(),
 		},
@@ -958,8 +1009,7 @@ func (helper *syncTestHelper) preregisterAgent(t *testing.T) {
 
 	const password = "the initial password"
 
-	_ = helper.state.Set("password", password)
-	_ = helper.state.Set("agent_uuid", newAgent.ID)
+	_ = helper.state.SetBleemeoCredentials(newAgent.ID, password)
 
 	helper.api.JWTPassword = password
 	helper.api.JWTUsername = newAgent.ID + "@bleemeo.com"

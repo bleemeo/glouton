@@ -20,7 +20,6 @@ package synchronizer
 import (
 	"context"
 	"fmt"
-	"glouton/agent/state"
 	"glouton/bleemeo/internal/cache"
 	bleemeoTypes "glouton/bleemeo/types"
 	"glouton/config"
@@ -664,7 +663,7 @@ func newMetricHelper(t *testing.T) *metricTestHelper {
 	})
 	cache.SetAgent(mainAgent)
 
-	state := state.NewMock()
+	state := newStateMock()
 
 	discovery := &discovery.MockDiscoverer{
 		UpdatedAt: helper.mt.Now(),
@@ -697,7 +696,7 @@ func newMetricHelper(t *testing.T) *metricTestHelper {
 	helper.s.agentID = idAgentMain
 	helper.api.JWTUsername = idAgentMain + "@bleemeo.com"
 	helper.api.JWTPassword = passwordAgent
-	_ = helper.s.option.State.Set("password", passwordAgent)
+	_ = helper.s.option.State.SetBleemeoCredentials(idAgentMain, passwordAgent)
 
 	if err := helper.s.setClient(); err != nil {
 		panic(err)
@@ -2104,14 +2103,8 @@ func Test_httpResponseToMetricFailureKind(t *testing.T) {
 }
 
 func Test_MergeFirstSeenAt(t *testing.T) {
-	state, err := state.Load("not_found")
+	state := newStateMock()
 	now := time.Now().Add(-10 * time.Minute).Truncate(time.Second)
-
-	if err != nil {
-		t.Errorf("%v", err)
-
-		return
-	}
 
 	cache := cache.Load(state)
 

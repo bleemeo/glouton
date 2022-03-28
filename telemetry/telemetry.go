@@ -27,18 +27,6 @@ import (
 	"time"
 )
 
-const telemetryKey = "Telemetry"
-
-// State allow to persite object.
-type state interface {
-	Get(key string, result interface{}) error
-	Set(key string, object interface{}) error
-}
-
-type Telemetry struct {
-	ID string
-}
-
 type information struct {
 	ID                 string `json:"id"`
 	BleemeoActive      bool   `json:"bleemeo_active"`
@@ -55,24 +43,7 @@ type information struct {
 	Version            string `json:"version"`
 }
 
-func FromState(state state) Telemetry {
-	var result Telemetry
-
-	if err := state.Get(telemetryKey, &result); err != nil {
-		logger.V(1).Printf("Unable to load new telemetry, try using old format: %v", err)
-	}
-
-	return result
-}
-
-func (t Telemetry) SaveState(state state) {
-	err := state.Set(telemetryKey, t)
-	if err != nil {
-		logger.V(1).Printf("Unable to persist discovered Telemetry id: %v", err)
-	}
-}
-
-func (t Telemetry) PostInformation(ctx context.Context, url string, agentid string, facts map[string]string) {
+func PostInformation(ctx context.Context, telemetryID string, url string, agentid string, facts map[string]string) {
 	var bleemeoActive bool
 
 	if agentid == "" {
@@ -82,7 +53,7 @@ func (t Telemetry) PostInformation(ctx context.Context, url string, agentid stri
 	}
 
 	information := information{
-		ID:                 t.ID,
+		ID:                 telemetryID,
 		BleemeoActive:      bleemeoActive,
 		CPUCores:           facts["cpu_cores"],
 		CPUModel:           facts["cpu_model_name"],

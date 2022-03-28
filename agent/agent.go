@@ -85,7 +85,6 @@ import (
 
 	processInput "glouton/inputs/process"
 
-	"github.com/google/uuid"
 	"github.com/prometheus/prometheus/model/labels"
 	"gopkg.in/yaml.v3"
 )
@@ -220,9 +219,14 @@ func (a *agent) init(ctx context.Context, configFiles []string, firstRun bool) (
 	}
 
 	statePath := a.oldConfig.String("agent.state_file")
+	cachePath := a.oldConfig.String("agent.state_cache_file")
 	oldStatePath := a.oldConfig.String("agent.deprecated_state_file")
 
-	a.state, err = state.Load(statePath)
+	if cachePath == "" {
+		cachePath = state.DefaultCachePath(statePath)
+	}
+
+	a.state, err = state.Load(statePath, cachePath)
 	if err != nil {
 		logger.Printf("Error while loading state file: %v", err)
 
@@ -234,7 +238,7 @@ func (a *agent) init(ctx context.Context, configFiles []string, firstRun bool) (
 	}
 
 	if oldStatePath != "" {
-		oldState, err := state.Load(oldStatePath)
+		oldState, err := state.Load(oldStatePath, state.DefaultCachePath(statePath))
 		if err != nil {
 			logger.Printf("Error while loading state file: %v", err)
 
@@ -262,7 +266,7 @@ func (a *agent) init(ctx context.Context, configFiles []string, firstRun bool) (
 
 	a.migrateState()
 
-	if err := a.state.SaveTo(statePath); err != nil {
+	if err := a.state.SaveTo(statePath, cachePath); err != nil {
 		if oldStatePath != "" {
 			stateDir := filepath.Dir(statePath)
 			logger.Printf("State file can't we wrote at new path (%s): %v", statePath, err)
@@ -274,7 +278,7 @@ func (a *agent) init(ctx context.Context, configFiles []string, firstRun bool) (
 				statePath,
 			)
 
-			err = a.state.SaveTo(oldStatePath)
+			err = a.state.SaveTo(oldStatePath, state.DefaultCachePath(oldStatePath))
 		}
 
 		if err != nil {
@@ -1262,6 +1266,8 @@ func (a *agent) sendToTelemetry(ctx context.Context) error {
 			return nil
 		}
 
+		telemetryID := a.state.TelemetryID()
+
 		for {
 			facts, err := a.factProvider.Facts(ctx, time.Hour)
 			if err != nil {
@@ -1270,16 +1276,7 @@ func (a *agent) sendToTelemetry(ctx context.Context) error {
 				continue
 			}
 
-			tlm := telemetry.FromState(a.state)
-
-			if tlm.ID == "" {
-				var t telemetry.Telemetry
-				t.ID = uuid.New().String()
-				t.SaveState(a.state)
-				tlm = t
-			}
-
-			tlm.PostInformation(ctx, a.oldConfig.String("agent.telemetry.address"), a.BleemeoAgentID(), facts)
+			telemetry.PostInformation(ctx, telemetryID, a.oldConfig.String("agent.telemetry.address"), a.BleemeoAgentID(), facts)
 
 			select {
 			case <-time.After(delay.JitterDelay(24*time.Hour, 0.05)):
