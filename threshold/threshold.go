@@ -83,8 +83,35 @@ func (r *Registry) SetThresholds(thresholdWithItem map[MetricNameItem]Threshold,
 	r.l.Lock()
 	defer r.l.Unlock()
 
+	// When threshold is *updated*, we want to immediately apply the new threshold
+	changedName := make(map[string]bool)
+	changedItem := make(map[MetricNameItem]bool)
+
+	for k, v := range thresholdAllItem {
+		old, ok := r.thresholdsAllItem[k]
+		if ok && !v.Equal(old) {
+			changedName[k] = true
+		}
+	}
+
+	for k, v := range thresholdWithItem {
+		old, ok := r.thresholds[k]
+		if ok && !v.Equal(old) {
+			changedItem[k] = true
+		}
+	}
+
 	r.thresholdsAllItem = thresholdAllItem
 	r.thresholds = thresholdWithItem
+
+	for k, state := range r.states {
+		if changedItem[k] || changedName[k.Name] {
+			state.CurrentStatus = types.StatusUnset
+			state.CriticalSince = time.Time{}
+			state.WarningSince = time.Time{}
+			r.states[k] = state
+		}
+	}
 
 	logger.V(2).Printf("Thresholds contains %d definitions for specific item and %d definitions for any item", len(thresholdWithItem), len(thresholdAllItem))
 }
