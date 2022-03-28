@@ -29,7 +29,10 @@ import (
 
 var errIncorrectType = errors.New("incorrect variable type")
 
-const statusCacheKey = "CacheStatusState"
+const (
+	statusCacheKey     = "CacheStatusState"
+	statusMetricSuffix = "_status"
+)
 
 // State store information about current firing threshold.
 type State interface {
@@ -64,7 +67,7 @@ func New(state State) *Registry {
 	var jsonList []jsonState
 
 	err := state.Get(statusCacheKey, &jsonList)
-	if err != nil {
+	if err == nil {
 		for _, v := range jsonList {
 			self.states[v.MetricNameItem] = v.statusState
 		}
@@ -587,7 +590,7 @@ func (p *pusher) addPointWithThreshold(points []types.MetricPoint, point types.M
 		labelsCopy[k] = v
 	}
 
-	labelsCopy[types.LabelName] += "_status"
+	labelsCopy[types.LabelName] += statusMetricSuffix
 
 	annotationsCopy.StatusOf = point.Labels[types.LabelName]
 

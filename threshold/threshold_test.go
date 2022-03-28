@@ -27,9 +27,18 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
-type mockState struct{}
+type mockState struct {
+	jsonList []jsonState
+}
 
 func (m mockState) Get(key string, result interface{}) error {
+	if key == statusCacheKey {
+		res, ok := result.(*[]jsonState)
+		if ok && res != nil {
+			*res = m.jsonList
+		}
+	}
+
 	return nil
 }
 
@@ -599,7 +608,7 @@ func TestThreshold(t *testing.T) {
 			}
 
 			lbls := types.TextToLabels(name)
-			lbls[types.LabelName] += "_status"
+			lbls[types.LabelName] += statusMetricSuffix
 
 			moreWant[types.LabelsToText(lbls)] = pts
 		}
@@ -619,6 +628,245 @@ func TestThreshold(t *testing.T) {
 
 		if len(db.points) != len(moreWant) {
 			t.Errorf("At %v got %d points, want %d", step.AddedToT0, len(db.points), len(moreWant))
+		}
+
+		db.points = db.points[:0]
+	}
+}
+
+// TestThresholdRestart test behavior of threshold after a Glouton restart.
+func TestThresholdRestart(t *testing.T) {
+	t0 := time.Date(2020, 2, 24, 15, 1, 0, 0, time.UTC)
+
+	db := &mockStore{}
+	threshold := New(mockState{
+		jsonList: []jsonState{
+			{
+				statusState: statusState{
+					CurrentStatus: types.StatusOk,
+					CriticalSince: t0.Add(-30 * time.Second),
+					WarningSince:  t0.Add(-40 * time.Second),
+					LastUpdate:    t0.Add(-30 * time.Second),
+				},
+				MetricNameItem: MetricNameItem{
+					Name: "cpu_used",
+					Item: "",
+				},
+			},
+			{
+				statusState: statusState{
+					CurrentStatus: types.StatusWarning,
+					CriticalSince: t0.Add(-80 * time.Second),
+					WarningSince:  t0.Add(-90 * time.Second),
+					LastUpdate:    t0.Add(-80 * time.Second),
+				},
+				MetricNameItem: MetricNameItem{
+					Name: "disk_used_perc",
+					Item: "/home",
+				},
+			},
+			{
+				statusState: statusState{
+					CurrentStatus: types.StatusWarning,
+					CriticalSince: t0.Add(-30 * time.Second),
+					WarningSince:  t0.Add(-70 * time.Second),
+					LastUpdate:    t0.Add(-30 * time.Second),
+				},
+				MetricNameItem: MetricNameItem{
+					Name: "mem_used",
+					Item: "",
+				},
+			},
+		},
+	})
+	threshold.defaultSoftPeriod = 60 * time.Second
+
+	stepDelay := 10 * time.Second
+
+	type setThresholdsArgs struct {
+		thresholdWithItem map[MetricNameItem]Threshold
+		thresholdAllItem  map[string]Threshold
+	}
+
+	steps := []struct {
+		AddedToT0   time.Duration
+		PushedValue map[string]float64
+		// WantedPoints will be processed to add an _status version of any points with CurrentStatus != StatusUnset
+		WantedPoints  map[string]types.StatusDescription
+		SetThresholds *setThresholdsArgs
+	}{
+		{
+			AddedToT0: 0 * stepDelay,
+			SetThresholds: &setThresholdsArgs{
+				thresholdWithItem: map[MetricNameItem]Threshold{
+					{Name: "disk_used_perc", Item: "/home"}: {
+						HighWarning:  80,
+						HighCritical: 90,
+						LowCritical:  math.NaN(),
+						LowWarning:   math.NaN(),
+					},
+				},
+				thresholdAllItem: map[string]Threshold{"cpu_used": {
+					HighWarning:  80,
+					HighCritical: 90,
+					LowCritical:  math.NaN(),
+					LowWarning:   math.NaN(),
+				}},
+			},
+			PushedValue: map[string]float64{
+				`__name__="cpu_used"`:                    95,
+				`__name__="mem_used"`:                    95,
+				`__name__="disk_used_perc",item="/home"`: 95,
+				`__name__="disk_used_perc",item="/srv"`:  95,
+			},
+			WantedPoints: map[string]types.StatusDescription{
+				`__name__="cpu_used"`:                    {CurrentStatus: types.StatusOk, StatusDescription: "Current value: 95.00"},
+				`__name__="disk_used_perc",item="/home"`: {CurrentStatus: types.StatusCritical, StatusDescription: "Current value: 95.00 threshold (90.00) exceeded over last 1 minute"},
+				`__name__="disk_used_perc",item="/srv"`:  {CurrentStatus: types.StatusUnset},
+				`__name__="mem_used"`:                    {CurrentStatus: types.StatusUnset},
+			},
+		},
+		{
+			AddedToT0: 1 * stepDelay,
+			SetThresholds: &setThresholdsArgs{
+				thresholdWithItem: map[MetricNameItem]Threshold{
+					{Name: "disk_used_perc", Item: "/home"}: {
+						HighWarning:  80,
+						HighCritical: 90,
+						LowCritical:  math.NaN(),
+						LowWarning:   math.NaN(),
+					},
+					{Name: "mem_used", Item: ""}: {
+						HighWarning:  80,
+						HighCritical: 90,
+						LowCritical:  math.NaN(),
+						LowWarning:   math.NaN(),
+					},
+				},
+				thresholdAllItem: map[string]Threshold{"cpu_used": {
+					HighWarning:  80,
+					HighCritical: 90,
+					LowCritical:  math.NaN(),
+					LowWarning:   math.NaN(),
+				}},
+			},
+			PushedValue: map[string]float64{
+				`__name__="cpu_used"`:                    95,
+				`__name__="mem_used"`:                    95,
+				`__name__="disk_used_perc",item="/home"`: 95,
+				`__name__="disk_used_perc",item="/srv"`:  95,
+			},
+			WantedPoints: map[string]types.StatusDescription{
+				`__name__="cpu_used"`:                    {CurrentStatus: types.StatusOk, StatusDescription: "Current value: 95.00"},
+				`__name__="disk_used_perc",item="/home"`: {CurrentStatus: types.StatusCritical, StatusDescription: "Current value: 95.00 threshold (90.00) exceeded over last 1 minute"},
+				`__name__="disk_used_perc",item="/srv"`:  {CurrentStatus: types.StatusUnset},
+				`__name__="mem_used"`:                    {CurrentStatus: types.StatusWarning, StatusDescription: "Current value: 95.00 threshold (80.00) exceeded over last 1 minute"},
+			},
+		},
+		{
+			AddedToT0: 2 * stepDelay,
+			PushedValue: map[string]float64{
+				`__name__="cpu_used"`:                    95,
+				`__name__="mem_used"`:                    95,
+				`__name__="disk_used_perc",item="/home"`: 95,
+				`__name__="disk_used_perc",item="/srv"`:  95,
+			},
+			WantedPoints: map[string]types.StatusDescription{
+				`__name__="cpu_used"`:                    {CurrentStatus: types.StatusWarning, StatusDescription: "Current value: 95.00 threshold (80.00) exceeded over last 1 minute"},
+				`__name__="disk_used_perc",item="/home"`: {CurrentStatus: types.StatusCritical, StatusDescription: "Current value: 95.00 threshold (90.00) exceeded over last 1 minute"},
+				`__name__="disk_used_perc",item="/srv"`:  {CurrentStatus: types.StatusUnset},
+				`__name__="mem_used"`:                    {CurrentStatus: types.StatusWarning, StatusDescription: "Current value: 95.00 threshold (80.00) exceeded over last 1 minute"},
+			},
+		},
+		{
+			AddedToT0: 3 * stepDelay,
+			PushedValue: map[string]float64{
+				`__name__="cpu_used"`:                    95,
+				`__name__="mem_used"`:                    95,
+				`__name__="disk_used_perc",item="/home"`: 95,
+				`__name__="disk_used_perc",item="/srv"`:  95,
+			},
+			WantedPoints: map[string]types.StatusDescription{
+				`__name__="cpu_used"`:                    {CurrentStatus: types.StatusCritical, StatusDescription: "Current value: 95.00 threshold (90.00) exceeded over last 1 minute"},
+				`__name__="disk_used_perc",item="/home"`: {CurrentStatus: types.StatusCritical, StatusDescription: "Current value: 95.00 threshold (90.00) exceeded over last 1 minute"},
+				`__name__="disk_used_perc",item="/srv"`:  {CurrentStatus: types.StatusUnset},
+				`__name__="mem_used"`:                    {CurrentStatus: types.StatusCritical, StatusDescription: "Current value: 95.00 threshold (90.00) exceeded over last 1 minute"},
+			},
+		},
+		{
+			AddedToT0: 30 * stepDelay,
+			PushedValue: map[string]float64{
+				`__name__="cpu_used"`:                    95,
+				`__name__="mem_used"`:                    95,
+				`__name__="disk_used_perc",item="/home"`: 95,
+				`__name__="disk_used_perc",item="/srv"`:  95,
+			},
+			WantedPoints: map[string]types.StatusDescription{
+				`__name__="cpu_used"`:                    {CurrentStatus: types.StatusCritical, StatusDescription: "Current value: 95.00 threshold (90.00) exceeded over last 1 minute"},
+				`__name__="disk_used_perc",item="/home"`: {CurrentStatus: types.StatusCritical, StatusDescription: "Current value: 95.00 threshold (90.00) exceeded over last 1 minute"},
+				`__name__="disk_used_perc",item="/srv"`:  {CurrentStatus: types.StatusUnset},
+				`__name__="mem_used"`:                    {CurrentStatus: types.StatusCritical, StatusDescription: "Current value: 95.00 threshold (90.00) exceeded over last 1 minute"},
+			},
+		},
+	}
+
+	ctx := context.Background()
+	pusher := threshold.WithPusher(db)
+
+	for _, step := range steps {
+		currentTime := t0.Add(step.AddedToT0)
+
+		if step.SetThresholds != nil {
+			threshold.SetThresholds(step.SetThresholds.thresholdWithItem, step.SetThresholds.thresholdAllItem)
+		}
+
+		threshold.nowFunc = func() time.Time { return currentTime }
+
+		points := make([]types.MetricPoint, 0, len(step.PushedValue))
+
+		for name, value := range step.PushedValue {
+			lbls := types.TextToLabels(name)
+
+			points = append(points, types.MetricPoint{
+				Labels: lbls,
+				Point:  types.Point{Time: currentTime, Value: value},
+				Annotations: types.MetricAnnotations{
+					BleemeoItem: lbls[types.LabelItem],
+				},
+			})
+		}
+
+		pusher.PushPoints(ctx, points)
+
+		moreWant := make(map[string]types.StatusDescription)
+		for name, pts := range step.WantedPoints {
+			moreWant[name] = pts
+
+			if !pts.CurrentStatus.IsSet() {
+				continue
+			}
+
+			lbls := types.TextToLabels(name)
+			lbls[types.LabelName] += statusMetricSuffix
+
+			moreWant[types.LabelsToText(lbls)] = pts
+		}
+
+		for _, pts := range db.points {
+			want, ok := moreWant[types.LabelsToText(pts.Labels)]
+			if !ok {
+				t.Errorf("At %d * stepDelay: got point %v, expected not present", step.AddedToT0/stepDelay, pts.Labels)
+
+				continue
+			}
+
+			if diff := cmp.Diff(want, pts.Annotations.Status); diff != "" {
+				t.Errorf("At %d * stepDelay: points %v mismatch: (-want +got)\n%s", step.AddedToT0/stepDelay, pts.Labels, diff)
+			}
+		}
+
+		if len(db.points) != len(moreWant) {
+			t.Errorf("At %d * stepDelay: got %d points, want %d", step.AddedToT0/stepDelay, len(db.points), len(moreWant))
 		}
 
 		db.points = db.points[:0]
