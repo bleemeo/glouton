@@ -32,6 +32,7 @@ var errIncorrectType = errors.New("incorrect variable type")
 const (
 	statusCacheKey     = "CacheStatusState"
 	statusMetricSuffix = "_status"
+	statesTTL          = 25 * time.Hour // some metrics are send once per day (like system_pending_security_updates)
 )
 
 // State store information about current firing threshold.
@@ -419,7 +420,7 @@ func (r *Registry) run(save bool) {
 	jsonList := make([]jsonState, 0, len(r.states))
 
 	for k, v := range r.states {
-		if time.Since(v.LastUpdate) > 60*time.Minute {
+		if time.Since(v.LastUpdate) > statesTTL {
 			delete(r.states, k)
 		} else {
 			jsonList = append(jsonList, jsonState{
