@@ -29,7 +29,11 @@ import (
 
 var errIncorrectType = errors.New("incorrect variable type")
 
-const statusCacheKey = "CacheStatusState"
+const (
+	statusCacheKey     = "CacheStatusState"
+	statusMetricSuffix = "_status"
+	statesTTL          = 25 * time.Hour // some metrics are send once per day (like system_pending_security_updates)
+)
 
 // State store information about current firing threshold.
 type State interface {
@@ -64,7 +68,7 @@ func New(state State) *Registry {
 	var jsonList []jsonState
 
 	err := state.Get(statusCacheKey, &jsonList)
-	if err != nil {
+	if err == nil {
 		for _, v := range jsonList {
 			self.states[v.MetricNameItem] = v.statusState
 		}
@@ -80,8 +84,35 @@ func (r *Registry) SetThresholds(thresholdWithItem map[MetricNameItem]Threshold,
 	r.l.Lock()
 	defer r.l.Unlock()
 
+	// When threshold is *updated*, we want to immediately apply the new threshold
+	changedName := make(map[string]bool)
+	changedItem := make(map[MetricNameItem]bool)
+
+	for k, v := range thresholdAllItem {
+		old, ok := r.thresholdsAllItem[k]
+		if ok && !v.Equal(old) {
+			changedName[k] = true
+		}
+	}
+
+	for k, v := range thresholdWithItem {
+		old, ok := r.thresholds[k]
+		if ok && !v.Equal(old) {
+			changedItem[k] = true
+		}
+	}
+
 	r.thresholdsAllItem = thresholdAllItem
 	r.thresholds = thresholdWithItem
+
+	for k, state := range r.states {
+		if changedItem[k] || changedName[k.Name] {
+			state.CurrentStatus = types.StatusUnset
+			state.CriticalSince = time.Time{}
+			state.WarningSince = time.Time{}
+			r.states[k] = state
+		}
+	}
 
 	logger.V(2).Printf("Thresholds contains %d definitions for specific item and %d definitions for any item", len(thresholdWithItem), len(thresholdAllItem))
 }
@@ -389,7 +420,7 @@ func (r *Registry) run(save bool) {
 	jsonList := make([]jsonState, 0, len(r.states))
 
 	for k, v := range r.states {
-		if time.Since(v.LastUpdate) > 60*time.Minute {
+		if time.Since(v.LastUpdate) > statesTTL {
 			delete(r.states, k)
 		} else {
 			jsonList = append(jsonList, jsonState{
@@ -587,7 +618,7 @@ func (p *pusher) addPointWithThreshold(points []types.MetricPoint, point types.M
 		labelsCopy[k] = v
 	}
 
-	labelsCopy[types.LabelName] += "_status"
+	labelsCopy[types.LabelName] += statusMetricSuffix
 
 	annotationsCopy.StatusOf = point.Labels[types.LabelName]
 

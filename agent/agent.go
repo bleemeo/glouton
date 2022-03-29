@@ -940,6 +940,7 @@ func (a *agent) run(ctx context.Context) { //nolint:maintidx
 		{a.miscTasks, "Miscelanous tasks"},
 		{a.minuteMetric, "Metrics every minute"},
 		{a.sendToTelemetry, "Send Facts information to our telemetry tool"},
+		{a.threshold.Run, "Threshold state"},
 	}
 
 	if a.oldConfig.Bool("web.enable") {
