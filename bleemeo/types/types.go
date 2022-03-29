@@ -73,6 +73,8 @@ type Config interface {
 type State interface {
 	Set(key string, object interface{}) error
 	Get(key string, result interface{}) error
+	BleemeoCredentials() (string, string)
+	SetBleemeoCredentials(agentUUID string, password string) error
 }
 
 // FactProvider is the interface used by Bleemeo to access facts.

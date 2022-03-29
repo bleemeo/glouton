@@ -156,9 +156,7 @@ func newWithNow(option Option, now func() time.Time) (*Synchronizer, error) {
 		retryableMetricFailure: make(map[bleemeoTypes.FailureKind]bool),
 	}
 
-	if err := s.option.State.Get("agent_uuid", &s.agentID); err != nil {
-		return nil, err
-	}
+	s.agentID, _ = s.option.State.BleemeoCredentials()
 
 	return s, nil
 }
@@ -590,11 +588,7 @@ func (s *Synchronizer) GetJWT(ctx context.Context) (string, error) {
 func (s *Synchronizer) setClient() error {
 	username := fmt.Sprintf("%s@bleemeo.com", s.agentID)
 
-	var password string
-
-	if err := s.option.State.Get("password", &password); err != nil {
-		return err
-	}
+	_, password := s.option.State.BleemeoCredentials()
 
 	client, err := client.NewClient(
 		s.option.Config.String("bleemeo.api_base"),
@@ -927,7 +921,7 @@ func (s *Synchronizer) register(ctx context.Context) error {
 	}
 	// We save an empty agent_uuid before doing the API POST to validate that
 	// State can save value.
-	if err := s.option.State.Set("agent_uuid", ""); err != nil {
+	if err := s.option.State.SetBleemeoCredentials("", ""); err != nil {
 		return err
 	}
 
@@ -963,12 +957,8 @@ func (s *Synchronizer) register(ctx context.Context) error {
 		})
 	})
 
-	if err := s.option.State.Set("agent_uuid", objectID.ID); err != nil {
-		return err
-	}
-
-	if err := s.option.State.Set("password", password); err != nil {
-		return err
+	if err := s.option.State.SetBleemeoCredentials(objectID.ID, password); err != nil {
+		logger.Printf("failed to persist Bleemeo credentials. The agent may register itself multiple-time: %v", err)
 	}
 
 	logger.V(1).Printf("registration successful with UUID %v", objectID.ID)

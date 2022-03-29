@@ -188,16 +188,11 @@ func (c *Connector) ApplyCachedConfiguration(ctx context.Context) {
 	}
 }
 
-func (c *Connector) initMQTT(previousPoint []gloutonTypes.MetricPoint) error {
+func (c *Connector) initMQTT(previousPoint []gloutonTypes.MetricPoint) {
 	c.l.Lock()
 	defer c.l.Unlock()
 
-	var password string
-
-	err := c.option.State.Get("password", &password)
-	if err != nil {
-		return err
-	}
+	_, password := c.option.State.BleemeoCredentials()
 
 	c.mqtt = mqtt.New(
 		mqtt.Option{
@@ -223,8 +218,6 @@ func (c *Connector) initMQTT(previousPoint []gloutonTypes.MetricPoint) error {
 	if c.sync.IsMaintenance() {
 		c.mqtt.SuspendSending(true)
 	}
-
-	return nil
 }
 
 func (c *Connector) setMaintenance(maintenance bool) {
@@ -294,20 +287,8 @@ func (c *Connector) mqttRestarter(ctx context.Context) error {
 
 			c.l.Unlock()
 
-			err := c.initMQTT(previousPoints)
+			c.initMQTT(previousPoints)
 			previousPoints = nil
-
-			if err != nil {
-				l.Lock()
-
-				if mqttErr == nil {
-					mqttErr = err
-				}
-
-				l.Unlock()
-
-				break
-			}
 
 			wg.Add(1)
 
@@ -772,12 +753,7 @@ func (c *Connector) AccountID() string {
 // AgentID returns the Agent UUID of Bleemeo
 // It return the empty string if the Account UUID is not available.
 func (c *Connector) AgentID() string {
-	var agentID string
-
-	err := c.option.State.Get("agent_uuid", &agentID)
-	if err != nil {
-		return ""
-	}
+	agentID, _ := c.option.State.BleemeoCredentials()
 
 	return agentID
 }

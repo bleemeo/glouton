@@ -167,6 +167,7 @@ func defaultConfig() map[string]interface{} {
 		"agent.process_exporter.enable":  true,
 		"agent.public_ip_indicator":      "https://myip.bleemeo.com",
 		"agent.state_file":               "state.json",
+		"agent.state_cache_file":         "", // by default is based on state_file. It add ".cache" before the extension.
 		"agent.state_reset_file":         "state.reset",
 		"agent.deprecated_state_file":    "",
 		"agent.upgrade_file":             "upgrade",

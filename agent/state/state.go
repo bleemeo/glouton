@@ -19,39 +19,102 @@ package state
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"glouton/logger"
+	"io"
 	"os"
+	"path/filepath"
 	"sync"
+
+	"github.com/google/uuid"
 )
 
-// State is state.json.
-type State struct {
-	data map[string]json.RawMessage
+const (
+	stateVersion       = 1
+	discardFileForTest = "/this/path/does/not/exists"
+)
 
-	l    sync.Mutex
-	path string
+var errVersionIncompatible = errors.New("state.json is incompatible with this glouton")
+
+type persistedState struct {
+	Version         int    `json:"version"`
+	BleemeoAgentID  string `json:"agent_uuid"`
+	BleemeoPassword string `json:"password"`
+	TelemetryID     string `json:"telemery_id"`
+	dirty           bool   `json:"-"`
+}
+
+// State is both state.json and state.cache.json.
+type State struct {
+	persistent persistedState
+	cache      map[string]json.RawMessage
+
+	l              sync.Mutex
+	persistentPath string
+	cachePath      string
+}
+
+func DefaultCachePath(persistentPath string) string {
+	ext := filepath.Ext(persistentPath)
+
+	return fmt.Sprintf("%s.cache%s", persistentPath[0:len(persistentPath)-len(ext)], ext)
 }
 
 // Load load state.json file.
-func Load(path string) (*State, error) {
+func Load(persistentPath string, cachePath string) (*State, error) {
 	state := State{
-		path: path,
-		data: make(map[string]json.RawMessage),
+		persistentPath: persistentPath,
+		cachePath:      cachePath,
+		cache:          make(map[string]json.RawMessage),
 	}
 
-	f, err := os.Open(path)
+	f, err := os.Open(persistentPath)
 	if err != nil && os.IsNotExist(err) {
+		state.persistent.Version = stateVersion
+		state.persistent.dirty = true
+
 		return &state, nil
 	} else if err != nil {
 		return nil, err
 	}
 
-	defer f.Close()
-
 	decoder := json.NewDecoder(f)
-	err = decoder.Decode(&state.data)
+	err = decoder.Decode(&state.persistent)
 
-	return &state, err
+	f.Close()
+
+	if err != nil {
+		return nil, err
+	}
+
+	f, err = os.Open(cachePath)
+	if err == nil {
+		decoder = json.NewDecoder(f)
+		err = decoder.Decode(&state.cache)
+
+		if err != nil {
+			logger.V(1).Printf("unable to load state cache: %v", err)
+		}
+
+		f.Close()
+	} else {
+		logger.V(1).Printf("unable to load state cache: %v", err)
+	}
+
+	upgradeCount := 0
+	for state.persistent.Version != stateVersion {
+		if upgradeCount > stateVersion+1 {
+			return nil, fmt.Errorf("%w: too many try to upgrade state version", errVersionIncompatible)
+		}
+
+		upgradeCount++
+
+		if err := state.loadFromV0(); err != nil {
+			return nil, err
+		}
+	}
+
+	return &state, nil
 }
 
 // IsEmpty return true is the state is empty. This usually only happen when the state file does not exists.
@@ -59,7 +122,7 @@ func (s *State) IsEmpty() bool {
 	s.l.Lock()
 	defer s.l.Unlock()
 
-	return len(s.data) == 0
+	return len(s.cache) == 0
 }
 
 // KeptOnlyPersistent will delete everything from state but persistent information.
@@ -67,33 +130,7 @@ func (s *State) KeptOnlyPersistent() {
 	s.l.Lock()
 	defer s.l.Unlock()
 
-	keysToKeep := []string{
-		"agent_uuid",
-		"password",
-		"Telemetry",
-	}
-
-	newData := make(map[string]json.RawMessage)
-
-	for k, v := range s.data {
-		found := false
-
-		for _, name := range keysToKeep {
-			if k == name {
-				found = true
-
-				break
-			}
-		}
-
-		if !found {
-			continue
-		}
-
-		newData[k] = v
-	}
-
-	s.data = newData
+	s.cache = make(map[string]json.RawMessage)
 
 	if err := s.saveIfPossible(); err != nil {
 		logger.Printf("Unable to save state.json: %v", err)
@@ -103,11 +140,12 @@ func (s *State) KeptOnlyPersistent() {
 // SaveTo will write back the State to specified filename and following Save() will use the same file.
 //
 // Note that Save() will use the new filename even if this function fail.
-func (s *State) SaveTo(filename string) error {
+func (s *State) SaveTo(persistentPath string, cachePath string) error {
 	s.l.Lock()
 	defer s.l.Unlock()
 
-	s.path = filename
+	s.persistentPath = persistentPath
+	s.cachePath = cachePath
 
 	return s.save()
 }
@@ -121,9 +159,9 @@ func (s *State) Save() error {
 }
 
 func (s *State) saveIfPossible() error {
-	file, err := os.Open(s.path)
+	file, err := os.Open(s.cachePath)
 	if errors.Is(err, os.ErrNotExist) {
-		// This case happens when the state.json is deleted at runtime.
+		// This case happens when the state.cache.json is deleted at runtime.
 		// While this is not a regular use case it is checked in order to prevent
 		// recreating the state on shutdown.
 		return nil
@@ -139,32 +177,71 @@ func (s *State) saveIfPossible() error {
 }
 
 func (s *State) save() error {
-	err := s.saveTo(s.path + ".tmp")
+	if s.persistentPath == discardFileForTest {
+		return nil
+	}
+
+	if s.persistent.dirty {
+		w, err := os.OpenFile(s.persistentPath+".tmp", os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
+		if err != nil {
+			return err
+		}
+
+		err = s.savePersistentTo(w)
+		if err != nil {
+			w.Close()
+
+			return err
+		}
+
+		_ = w.Sync()
+		w.Close()
+
+		err = os.Rename(s.persistentPath+".tmp", s.persistentPath)
+		if err != nil {
+			return err
+		}
+
+		s.persistent.dirty = false
+	}
+
+	w, err := os.OpenFile(s.cachePath+".tmp", os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
 	if err != nil {
 		return err
 	}
 
-	err = os.Rename(s.path+".tmp", s.path)
-
-	return err
-}
-
-func (s *State) saveTo(path string) error {
-	w, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
+	err = s.saveCacheTo(w)
 	if err != nil {
-		return err
-	}
+		w.Close()
 
-	defer w.Close()
-
-	encoder := json.NewEncoder(w)
-
-	err = encoder.Encode(s.data)
-	if err != nil {
 		return err
 	}
 
 	_ = w.Sync()
+	w.Close()
+
+	err = os.Rename(s.cachePath+".tmp", s.cachePath)
+
+	return err
+}
+
+func (s *State) saveCacheTo(w io.Writer) error {
+	encoder := json.NewEncoder(w)
+
+	if err := encoder.Encode(s.cache); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (s *State) savePersistentTo(w io.Writer) error {
+	encoder := json.NewEncoder(w)
+
+	err := encoder.Encode(s.persistent)
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -179,7 +256,7 @@ func (s *State) Set(key string, object interface{}) error {
 		return err
 	}
 
-	s.data[key] = json.RawMessage(buffer)
+	s.cache[key] = json.RawMessage(buffer)
 
 	err = s.saveIfPossible()
 	if err != nil {
@@ -194,11 +271,11 @@ func (s *State) Delete(key string) error {
 	s.l.Lock()
 	defer s.l.Unlock()
 
-	if _, ok := s.data[key]; !ok {
+	if _, ok := s.cache[key]; !ok {
 		return nil
 	}
 
-	delete(s.data, key)
+	delete(s.cache, key)
 
 	if err := s.saveIfPossible(); err != nil {
 		logger.Printf("Unable to save state.json: %v", err)
@@ -212,7 +289,7 @@ func (s *State) Get(key string, result interface{}) error {
 	s.l.Lock()
 	defer s.l.Unlock()
 
-	buffer, ok := s.data[key]
+	buffer, ok := s.cache[key]
 	if !ok {
 		return nil
 	}
@@ -220,4 +297,72 @@ func (s *State) Get(key string, result interface{}) error {
 	err := json.Unmarshal(buffer, &result)
 
 	return err
+}
+
+// BleemeoCredentials return the Bleemeo agent_uuid and password.
+// They may be empty if unset.
+func (s *State) BleemeoCredentials() (string, string) {
+	return s.persistent.BleemeoAgentID, s.persistent.BleemeoPassword
+}
+
+// TelemetryID return a stable ID for the telemetry.
+func (s *State) TelemetryID() string {
+	if s.persistent.TelemetryID == "" {
+		s.persistent.TelemetryID = uuid.New().String()
+		s.persistent.dirty = true
+
+		_ = s.saveIfPossible()
+	}
+
+	return s.persistent.TelemetryID
+}
+
+// SetBleemeoCredentials sets the Bleemeo agent_uuid and password.
+func (s *State) SetBleemeoCredentials(agentUUID string, password string) error {
+	s.persistent.BleemeoAgentID = agentUUID
+	s.persistent.BleemeoPassword = password
+	s.persistent.dirty = true
+
+	return s.saveIfPossible()
+}
+
+func (s *State) loadFromV0() error {
+	f, err := os.Open(s.persistentPath)
+	if err != nil {
+		return err
+	}
+
+	defer f.Close()
+
+	decoder := json.NewDecoder(f)
+	err = decoder.Decode(&s.cache)
+
+	if err != nil {
+		return err
+	}
+
+	if err := s.Get("agent_uuid", &s.persistent.BleemeoAgentID); err != nil {
+		return err
+	}
+
+	if err := s.Get("password", &s.persistent.BleemeoPassword); err != nil {
+		return err
+	}
+
+	var tmp struct{ ID string }
+
+	if err := s.Get("Telemetry", &tmp); err != nil {
+		logger.V(2).Printf("failed to load telemery ID from V0 state: %v", err)
+	} else {
+		s.persistent.TelemetryID = tmp.ID
+	}
+
+	delete(s.cache, "agent_uuid")
+	delete(s.cache, "password")
+	delete(s.cache, "Telemetry")
+
+	s.persistent.Version = 1
+	s.persistent.dirty = true
+
+	return nil
 }
