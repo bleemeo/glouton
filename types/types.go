@@ -203,6 +203,9 @@ type Metric interface {
 
 	// Points returns points between the two given time range (boundary are included).
 	Points(start, end time.Time) ([]Point, error)
+
+	// LastPointReceivedAt return the last time a point was received
+	LastPointReceivedAt() time.Time
 }
 
 // MetricAnnotations contains additional information about a metrics.

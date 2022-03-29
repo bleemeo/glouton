@@ -20,13 +20,27 @@ import (
 	"context"
 	"fmt"
 	"glouton/types"
+	"math"
 	"math/rand"
 	"reflect"
 	"testing"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/prometheus/prometheus/model/value"
 )
+
+// metricGetOrCreate will return the metric that exactly match given labels.
+//
+// It just metricGet followed by update to s.metrics in case of creation.
+func (s *Store) metricGetOrCreate(lbls map[string]string, annotations types.MetricAnnotations) metric {
+	m, ok := s.metricGet(lbls, annotations)
+	if !ok {
+		s.metrics[m.metricID] = m
+	}
+
+	return m
+}
 
 func TestLabelsMatchNotExact(t *testing.T) {
 	cases := []struct {
@@ -176,8 +190,8 @@ func TestMetricsSimple(t *testing.T) {
 	labels := map[string]string{
 		types.LabelName: "measurement_fieldFloat",
 	}
-	db := New(time.Hour)
-	m, _ := db.metricGetOrCreate(labels, types.MetricAnnotations{})
+	db := New(time.Hour, time.Hour)
+	m := db.metricGetOrCreate(labels, types.MetricAnnotations{})
 
 	if _, ok := db.metrics[m.metricID]; !ok {
 		t.Errorf("db.metrics[%v] == nil, want it to exists", m.metricID)
@@ -210,7 +224,7 @@ func TestMetricsMultiple(t *testing.T) {
 		"mountpoint":    "/srv",
 		"fstype":        "ext4",
 	}
-	db := New(time.Hour)
+	db := New(time.Hour, time.Hour)
 	db.metricGetOrCreate(labels1, types.MetricAnnotations{})
 	db.metricGetOrCreate(labels2, types.MetricAnnotations{})
 	db.metricGetOrCreate(labels3, types.MetricAnnotations{})
@@ -261,8 +275,8 @@ func TestPoints(t *testing.T) {
 	labels := map[string]string{
 		types.LabelName: "cpu_used",
 	}
-	db := New(time.Hour)
-	m, _ := db.metricGetOrCreate(labels, types.MetricAnnotations{})
+	db := New(time.Hour, time.Hour)
+	m := db.metricGetOrCreate(labels, types.MetricAnnotations{})
 
 	t0 := time.Now().Add(-60 * time.Second)
 	t1 := t0.Add(10 * time.Second)
@@ -481,7 +495,7 @@ func Benchmark_metricGetOrCreate(b *testing.B) {
 		tt := tt
 
 		b.Run(tt.name, func(b *testing.B) {
-			db := New(time.Hour)
+			db := New(time.Hour, time.Hour)
 
 			rnd := rand.New(rand.NewSource(42)) //nolint: gosec
 			metricsLabels := makeMetrics(b, rnd, tt.metricCount, tt.labelsCount)
@@ -580,6 +594,10 @@ func TestStore_run(t *testing.T) {
 			now: t0.Add(24 * time.Hour),
 			want: []metricWant{
 				{
+					labels: map[string]string{types.LabelName: "metric1"},
+					points: []types.Point{},
+				},
+				{
 					labels: map[string]string{types.LabelName: "metric2"},
 					points: []types.Point{
 						{Time: t0.Add(time.Hour), Value: 6},
@@ -649,7 +667,7 @@ func TestStore_run(t *testing.T) {
 					Labels: map[string]string{types.LabelName: "metric1"},
 				},
 			},
-			now: t0,
+			now: t0.Add(51 * time.Hour),
 			want: []metricWant{
 				{
 					labels: map[string]string{types.LabelName: "metric1"},
@@ -657,12 +675,25 @@ func TestStore_run(t *testing.T) {
 				},
 			},
 		},
+		{
+			pushPoints: []types.MetricPoint{
+				{
+					Point:  types.Point{Time: t0.Add(51 * time.Hour).Add(time.Second), Value: math.Float64frombits(value.StaleNaN)},
+					Labels: map[string]string{types.LabelName: "metric1"},
+				},
+			},
+			now:  t0.Add(51 * time.Hour).Add(time.Second),
+			want: []metricWant{},
+		},
 	}
 
-	store := New(24 * time.Hour)
+	store := New(24*time.Hour, 25*time.Hour)
 
 	for i, tt := range steps {
 		t.Run(fmt.Sprintf("step-%d", i), func(t *testing.T) {
+			store.nowFunc = func() time.Time {
+				return tt.now
+			}
 			store.PushPoints(context.Background(), tt.pushPoints)
 			store.run(tt.now)
 

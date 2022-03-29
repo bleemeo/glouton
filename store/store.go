@@ -25,12 +25,14 @@ import (
 	"fmt"
 	"glouton/logger"
 	"glouton/types"
+	"math"
 	"reflect"
 	"sort"
 	"sync"
 	"time"
 
 	"github.com/prometheus/prometheus/model/labels"
+	"github.com/prometheus/prometheus/model/value"
 )
 
 var errDeletedMetric = errors.New("metric was deleted")
@@ -43,20 +45,24 @@ type Store struct {
 	points            map[uint64][]types.Point
 	notifyCallbacks   map[int]func([]types.MetricPoint)
 	resetRuleCallback func()
-	maxAge            time.Duration
+	maxPointsAge      time.Duration
+	maxMetricsAge     time.Duration
 	workLabels        labels.Labels
 	lock              sync.Mutex
 	notifeeLock       sync.Mutex
 	resetRuleLock     sync.Mutex
+	nowFunc           func() time.Time
 }
 
 // New create a return a store. Store should be Close()d before leaving.
-func New(maxAge time.Duration) *Store {
+func New(maxPointsAge time.Duration, maxMetricsAge time.Duration) *Store {
 	s := &Store{
 		metrics:         make(map[uint64]metric),
 		points:          make(map[uint64][]types.Point),
 		notifyCallbacks: make(map[int]func([]types.MetricPoint)),
-		maxAge:          maxAge,
+		maxPointsAge:    maxPointsAge,
+		maxMetricsAge:   maxMetricsAge,
+		nowFunc:         time.Now,
 	}
 
 	return s
@@ -105,7 +111,7 @@ func (s *Store) DiagnosticArchive(ctx context.Context, archive types.ArchiveWrit
 // Run will run the store until context is cancelled.
 func (s *Store) Run(ctx context.Context) error {
 	for {
-		s.run(time.Now())
+		s.run(s.nowFunc())
 
 		select {
 		case <-time.After(300 * time.Second):
@@ -237,12 +243,18 @@ func (m metric) Points(start, end time.Time) (result []types.Point, err error) {
 	return
 }
 
+// LastPointReceivedAt return the last time a point was received.
+func (m metric) LastPointReceivedAt() time.Time {
+	return m.lastPoint
+}
+
 type metric struct {
 	labels      map[string]string
 	annotations types.MetricAnnotations
 	store       *Store
 	metricID    uint64
 	createAt    time.Time
+	lastPoint   time.Time
 }
 
 // Return true if filter match given labels.
@@ -268,17 +280,17 @@ func (s *Store) run(now time.Time) {
 	totalPoints := 0
 	metricToDelete := make([]uint64, 0)
 
-	for metricID := range s.metrics {
+	for metricID, metric := range s.metrics {
 		points := s.points[metricID]
 		newPoints := make([]types.Point, 0)
 
 		for _, p := range points {
-			if now.Sub(p.Time) < s.maxAge {
+			if now.Sub(p.Time) < s.maxPointsAge {
 				newPoints = append(newPoints, p)
 			}
 		}
 
-		if len(newPoints) == 0 {
+		if len(newPoints) == 0 && now.Sub(metric.lastPoint) >= s.maxMetricsAge {
 			metricToDelete = append(metricToDelete, metricID)
 		} else {
 			s.points[metricID] = newPoints
@@ -296,12 +308,12 @@ func (s *Store) run(now time.Time) {
 	logger.V(2).Printf("deleted %d points. Total point: %d", deletedPoints, totalPoints)
 }
 
-// metricGetOrCreate will return the metric that exactly match given labels.
+// metricGet will return the metric that exactly match given labels.
 //
-// If the metric does not exists, it's created.
+// If won't create the metric if it does not exists but it return the metric ready to be added to s.metrics.
 // The store lock is assumed to be held.
-// Annotations is always updated with value provided as argument.
-func (s *Store) metricGetOrCreate(lbls map[string]string, annotations types.MetricAnnotations) (metric, bool) {
+// Annotations is always updated with value provided as argument if the metric exists.
+func (s *Store) metricGet(lbls map[string]string, annotations types.MetricAnnotations) (metric, bool) {
 	if cap(s.workLabels) < len(lbls) {
 		s.workLabels = make(labels.Labels, len(lbls))
 	}
@@ -316,55 +328,57 @@ func (s *Store) metricGetOrCreate(lbls map[string]string, annotations types.Metr
 
 	hash := s.workLabels.Hash()
 
-	for n := 0; n < 50; n++ {
-		m, ok := s.metrics[hash]
-		if labelsMatch(m.labels, lbls, true) {
-			m.annotations = annotations
-			s.metrics[hash] = m
+	m, ok := s.metrics[hash]
+	if ok {
+		m.annotations = annotations
+		s.metrics[hash] = m
 
-			return m, false
-		}
-
-		if !ok {
-			m := metric{
-				labels:      lbls,
-				annotations: annotations,
-				store:       s,
-				metricID:    hash,
-				createAt:    time.Now(),
-			}
-
-			s.metrics[hash] = m
-
-			return m, true
-		}
-
-		hash++
+		return m, true
 	}
 
-	panic("too many metric in the store. Unable to find new slot")
+	m = metric{
+		labels:      lbls,
+		annotations: annotations,
+		store:       s,
+		metricID:    hash,
+		createAt:    s.nowFunc(),
+	}
+
+	return m, false
 }
 
 // PushPoints append new metric points to the store, creating new metric
 // if needed.
 // The points must not be mutated after this call.
+//
+// Writing the value StaleNaN is used to mark the metric as inactive.
 func (s *Store) PushPoints(_ context.Context, points []types.MetricPoint) {
 	dedupPoints := make([]types.MetricPoint, 0, len(points))
 	newMetrics := false
 
 	s.lock.Lock()
 	for _, point := range points {
-		metric, created := s.metricGetOrCreate(point.Labels, point.Annotations)
+		metric, found := s.metricGet(point.Labels, point.Annotations)
 		length := len(s.points[metric.metricID])
-
-		if created {
-			newMetrics = true
-		}
 
 		if length > 0 && s.points[metric.metricID][length-1].Time.Equal(point.Time) {
 			continue
 		}
 
+		if math.Float64bits(point.Value) == value.StaleNaN {
+			// Metric is inactive, delete it
+			delete(s.metrics, metric.metricID)
+			delete(s.points, metric.metricID)
+
+			continue
+		}
+
+		if !found {
+			newMetrics = true
+		}
+
+		metric.lastPoint = s.nowFunc()
+		s.metrics[metric.metricID] = metric
 		s.points[metric.metricID] = append(s.points[metric.metricID], point.Point)
 		dedupPoints = append(dedupPoints, point)
 	}
@@ -387,6 +401,14 @@ func (s *Store) PushPoints(_ context.Context, points []types.MetricPoint) {
 	}
 
 	s.notifeeLock.Unlock()
+}
+
+// InternalSetNowAndRunOnce is used for testing.
+// It will set the Now() function used by the store and will call one loop of Run() method
+// which does purge of older metrics.
+func (s *Store) InternalSetNowAndRunOnce(ctx context.Context, nowFunc func() time.Time) {
+	s.nowFunc = nowFunc
+	s.run(s.nowFunc())
 }
 
 type store interface {

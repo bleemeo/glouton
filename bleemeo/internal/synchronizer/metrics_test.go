@@ -66,6 +66,10 @@ func (m mockMetric) Points(start, end time.Time) ([]types.Point, error) {
 	return nil, errNotImplemented
 }
 
+func (m mockMetric) LastPointReceivedAt() time.Time {
+	return time.Now()
+}
+
 type mockTime struct {
 	now time.Time
 }
@@ -583,10 +587,12 @@ func newMetricHelper(t *testing.T) *metricTestHelper {
 		t:     t,
 		api:   newAPI(),
 		mt:    &mockTime{now: time.Now()},
-		store: store.New(time.Hour),
+		store: store.New(time.Hour, time.Hour),
 	}
 	cfg := &config.Configuration{}
 	helper.httpServer = helper.api.Server()
+
+	helper.store.InternalSetNowAndRunOnce(context.Background(), helper.mt.Now)
 
 	if err := cfg.LoadByte([]byte("")); err != nil {
 		panic(err)

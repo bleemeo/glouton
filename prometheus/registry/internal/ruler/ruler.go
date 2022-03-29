@@ -38,7 +38,7 @@ func New(input []*rules.RecordingRule) *SimpleRuler {
 		LookbackDelta:      5 * time.Minute,
 	})
 
-	st := store.New(10 * time.Minute)
+	st := store.New(10*time.Minute, 10*time.Minute)
 
 	return &SimpleRuler{
 		st:    st,

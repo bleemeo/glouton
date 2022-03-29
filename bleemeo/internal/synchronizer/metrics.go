@@ -107,6 +107,10 @@ func (m fakeMetric) Points(time.Time, time.Time) ([]types.Point, error) {
 	return nil, errNotImplemented
 }
 
+func (m fakeMetric) LastPointReceivedAt() time.Time {
+	return time.Now()
+}
+
 func (m fakeMetric) Annotations() types.MetricAnnotations {
 	return types.MetricAnnotations{}
 }
@@ -1512,8 +1516,7 @@ func (s *Synchronizer) metricDeactivate(localMetrics []types.Metric) error {
 		if ok && !duplicatedKey[key] {
 			duplicatedKey[key] = true
 
-			points, _ := metric.Points(s.now().Add(-70*time.Minute), s.now())
-			if len(points) > 0 {
+			if s.now().Sub(metric.LastPointReceivedAt()) < 70*time.Minute {
 				continue
 			}
 		}

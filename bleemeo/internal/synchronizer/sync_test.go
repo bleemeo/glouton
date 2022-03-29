@@ -1021,7 +1021,9 @@ func (helper *syncTestHelper) preregisterAgent(t *testing.T) {
 func (helper *syncTestHelper) initSynchronizer(t *testing.T) {
 	t.Helper()
 
-	helper.store = store.New(time.Hour)
+	helper.store = store.New(time.Hour, 2*time.Hour)
+
+	helper.store.InternalSetNowAndRunOnce(context.Background(), helper.api.now.Now)
 
 	var docker bleemeoTypes.DockerProvider
 	if helper.containers != nil {
