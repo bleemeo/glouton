@@ -1,0 +1,11 @@
+[Unit]
+Description=Glouton auto-upgrade
+Documentation=https://bleemeo.com
+ConditionACPower=true
+After=network.target network-online.target systemd-networkd.service NetworkManager.service connman.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/glouton/glouton-auto-upgrade
+KillMode=process
+TimeoutStopSec=900

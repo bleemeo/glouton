@@ -43,8 +43,14 @@ nfpms:
   # Files
   - src: packaging/common/glouton.service
     dst: /lib/systemd/system/glouton.service
+  - src: packaging/common/glouton-auto-upgrade.service
+    dst: /lib/systemd/system/glouton-auto-upgrade.service
+  - src: packaging/common/glouton-auto-upgrade.timer
+    dst: /lib/systemd/system/glouton-auto-upgrade.timer
   - src: packaging/common/glouton-hook-package-modified
     dst: /usr/lib/glouton/glouton-hook-package-modified
+  - src: packaging/common/glouton-auto-upgrade
+    dst: /usr/lib/glouton/glouton-auto-upgrade
   - src: bin/glouton-netstat
     dst: /usr/sbin/glouton-netstat
   - src: bin/glouton-gather-facts
