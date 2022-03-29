@@ -1098,14 +1098,24 @@ mainLoop:
 				optionReader := mqttClient.OptionsReader()
 				logger.V(2).Printf("Connecting to MQTT broker %v", optionReader.Servers()[0])
 
+				var connectionTimeout bool
+
+				deadline := time.Now().Add(time.Minute)
 				token := mqttClient.Connect()
+
 				for !token.WaitTimeout(1 * time.Second) {
 					if ctx.Err() != nil {
 						break mainLoop
 					}
+
+					if time.Now().After(deadline) {
+						connectionTimeout = true
+
+						break
+					}
 				}
 
-				if token.Error() != nil {
+				if token.Error() != nil || connectionTimeout {
 					delay := currentConnectDelay - time.Since(lastConnectionTimes[len(lastConnectionTimes)-1])
 					logger.V(1).Printf("Unable to connect to Bleemeo MQTT (retry in %v): %v", delay, token.Error())
 
