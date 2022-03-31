@@ -186,6 +186,8 @@ func defaultConfig() map[string]interface{} {
 		"bleemeo.container_registration_delay_seconds": 30,
 		"bleemeo.enable":                               true,
 		"bleemeo.initial_agent_name":                   "",
+		"bleemeo.initial_server_group_name":            "",
+		"bleemeo.initial_server_group_name_for_snmp":   "",
 		"bleemeo.mqtt.cafile":                          "",
 		"bleemeo.mqtt.host":                            "mqtt.bleemeo.com",
 		"bleemeo.mqtt.port":                            8883,

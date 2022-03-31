@@ -29,8 +29,9 @@ import (
 
 type payloadAgent struct {
 	types.Agent
-	Abstracted      bool   `json:"abstracted"`
-	InitialPassword string `json:"initial_password"`
+	Abstracted         bool   `json:"abstracted"`
+	InitialPassword    string `json:"initial_password"`
+	InitialServerGroup string `json:"initial_server_group_name,omitempty"`
 }
 
 // TODO the deletion need to be done
@@ -114,7 +115,7 @@ func (s *Synchronizer) snmpRegisterAndUpdate(localTargets []*snmp.Target) error 
 	}
 
 	params := map[string]string{
-		"fields": "id,display_name,account,agent_type,abstracted,fqdn,initial_password,created_at,next_config_at,current_config,tags",
+		"fields": "id,display_name,account,agent_type,abstracted,fqdn,initial_password,created_at,next_config_at,current_config,tags,initial_server_group_name",
 	}
 
 	for _, snmp := range localTargets {
@@ -143,6 +144,11 @@ func (s *Synchronizer) snmpRegisterAndUpdate(localTargets []*snmp.Target) error 
 			fqdn = snmp.Address()
 		}
 
+		serverGroup := s.option.Config.String("bleemeo.initial_server_group_name_for_snmp")
+		if serverGroup == "" {
+			serverGroup = s.option.Config.String("bleemeo.initial_server_group_name")
+		}
+
 		payload := payloadAgent{
 			Agent: types.Agent{
 				FQDN:        fqdn,
@@ -150,8 +156,9 @@ func (s *Synchronizer) snmpRegisterAndUpdate(localTargets []*snmp.Target) error 
 				AgentType:   agentTypeID,
 				Tags:        []types.Tag{},
 			},
-			Abstracted:      true,
-			InitialPassword: uuid.New().String(),
+			Abstracted:         true,
+			InitialPassword:    uuid.New().String(),
+			InitialServerGroup: serverGroup,
 		}
 
 		tmp, err := s.remoteRegisterSNMP(params, payload)

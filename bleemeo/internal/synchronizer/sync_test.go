@@ -42,6 +42,7 @@ const (
 	containerID2     string = "ce2ee1b5-6445-47a4-835e-9a001ec55c69"
 	activeMonitorURL string = "http://bleemeo.com"
 	snmpAddress      string = "127.0.0.1"
+	testAgentFQDN    string = "test.bleemeo.com"
 )
 
 var (
@@ -997,7 +998,7 @@ func newHelper(t *testing.T) *syncTestHelper {
 	helper.cfg.Set("bleemeo.registration_key", registrationKey)
 	helper.cfg.Set("blackbox.enable", true)
 
-	helper.facts.SetFact("fqdn", "test.bleemeo.com")
+	helper.facts.SetFact("fqdn", testAgentFQDN)
 
 	return helper
 }
@@ -1234,7 +1235,7 @@ func TestSyncWithSNMP(t *testing.T) {
 	)
 
 	for _, a := range agents {
-		if a.FQDN == "test.bleemeo.com" {
+		if a.FQDN == testAgentFQDN {
 			idAgentMain = a.ID
 		}
 
@@ -1251,8 +1252,8 @@ func TestSyncWithSNMP(t *testing.T) {
 				AccountID:       accountID,
 				CurrentConfigID: newAccountConfig.ID,
 				AgentType:       agentTypeAgent.ID,
-				FQDN:            "test.bleemeo.com",
-				DisplayName:     "test.bleemeo.com",
+				FQDN:            testAgentFQDN,
+				DisplayName:     testAgentFQDN,
 			},
 			Abstracted:      false,
 			InitialPassword: "password already set",
@@ -1470,7 +1471,7 @@ func TestSyncWithSNMPDelete(t *testing.T) {
 	)
 
 	for _, a := range agents {
-		if a.FQDN == "test.bleemeo.com" {
+		if a.FQDN == testAgentFQDN {
 			idAgentMain = a.ID
 		}
 
@@ -1487,8 +1488,8 @@ func TestSyncWithSNMPDelete(t *testing.T) {
 				AccountID:       accountID,
 				CurrentConfigID: newAccountConfig.ID,
 				AgentType:       agentTypeAgent.ID,
-				FQDN:            "test.bleemeo.com",
-				DisplayName:     "test.bleemeo.com",
+				FQDN:            testAgentFQDN,
+				DisplayName:     testAgentFQDN,
 			},
 			Abstracted:      false,
 			InitialPassword: "password already set",
@@ -1857,5 +1858,129 @@ func TestContainerSync(t *testing.T) {
 
 	if diff := cmp.Diff(wantMetrics, metrics, cmpopts.EquateEmpty(), optMetricSort); diff != "" {
 		t.Errorf("metrics mismatch (-want +got)\n%s", diff)
+	}
+}
+
+func TestSyncServerGroup(t *testing.T) {
+	tests := []struct {
+		name                  string
+		cfgSet                map[string]string
+		wantGroupForMainAgent string
+		wantGroupForSNMPAgent string
+	}{
+		{
+			name:                  "no config",
+			cfgSet:                map[string]string{},
+			wantGroupForMainAgent: "",
+			wantGroupForSNMPAgent: "",
+		},
+		{
+			name: "both set",
+			cfgSet: map[string]string{
+				"bleemeo.initial_server_group_name":          "group1",
+				"bleemeo.initial_server_group_name_for_snmp": "group2",
+			},
+			wantGroupForMainAgent: "group1",
+			wantGroupForSNMPAgent: "group2",
+		},
+		{
+			name: "only main set",
+			cfgSet: map[string]string{
+				"bleemeo.initial_server_group_name": "group3",
+			},
+			wantGroupForMainAgent: "group3",
+			wantGroupForSNMPAgent: "group3",
+		},
+		{
+			name: "only SNMP set",
+			cfgSet: map[string]string{
+				"bleemeo.initial_server_group_name_for_snmp": "group4",
+			},
+			wantGroupForMainAgent: "",
+			wantGroupForSNMPAgent: "group4",
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			helper := newHelper(t)
+			defer helper.Close()
+
+			for k, v := range tt.cfgSet {
+				helper.cfg.Set(k, v)
+			}
+
+			helper.SNMP = []*snmp.Target{
+				snmp.NewMock(snmp.TargetOptions{InitialName: "Z-The-Initial-Name", Address: snmpAddress}, map[string]string{}),
+			}
+
+			helper.initSynchronizer(t)
+
+			helper.pushPoints(t, []labels.Labels{
+				labels.New(labels.Label{Name: types.LabelName, Value: "cpu_used"}),
+			})
+
+			if err := helper.runOnce(t); err != nil {
+				t.Fatal(err)
+			}
+
+			var agents []payloadAgent
+
+			helper.api.resources["agent"].Store(&agents)
+
+			var (
+				idAgentMain string
+				idAgentSNMP string
+			)
+
+			for _, a := range agents {
+				if a.FQDN == testAgentFQDN {
+					idAgentMain = a.ID
+				}
+
+				if a.FQDN == snmpAddress {
+					idAgentSNMP = a.ID
+				}
+			}
+
+			wantAgents := []payloadAgent{
+				{
+					Agent: bleemeoTypes.Agent{
+						ID:              idAgentMain,
+						CreatedAt:       helper.api.now.Now(),
+						AccountID:       accountID,
+						CurrentConfigID: newAccountConfig.ID,
+						AgentType:       agentTypeAgent.ID,
+						FQDN:            testAgentFQDN,
+						DisplayName:     testAgentFQDN,
+					},
+					Abstracted:         false,
+					InitialPassword:    "password already set",
+					InitialServerGroup: tt.wantGroupForMainAgent,
+				},
+				{
+					Agent: bleemeoTypes.Agent{
+						ID:              idAgentSNMP,
+						CreatedAt:       helper.api.now.Now(),
+						AccountID:       accountID,
+						CurrentConfigID: newAccountConfig.ID,
+						AgentType:       agentTypeSNMP.ID,
+						FQDN:            snmpAddress,
+						DisplayName:     "Z-The-Initial-Name",
+					},
+					Abstracted:         true,
+					InitialPassword:    "password already set",
+					InitialServerGroup: tt.wantGroupForSNMPAgent,
+				},
+			}
+
+			optAgentSort := cmpopts.SortSlices(func(x payloadAgent, y payloadAgent) bool { return x.ID < y.ID })
+			if diff := cmp.Diff(wantAgents, agents, cmpopts.EquateEmpty(), optAgentSort); diff != "" {
+				t.Errorf("agents mismatch (-want +got)\n%s", diff)
+			}
+		})
 	}
 }
