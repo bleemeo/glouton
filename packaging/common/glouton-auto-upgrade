@@ -1,0 +1,27 @@
+#!/bin/sh
+# Hook called by a SystemD timer which will upgrade Glouton
+
+set -e
+
+# All our supported system have os-release file.
+if [ -e /usr/lib/os-release ]; then
+    . /usr/lib/os-release
+    os_name=$ID
+    os_version=$VERSION_ID
+    os_codename=$VERSION_CODENAME
+elif [ -e /etc/os-release ]; then
+    . /etc/os-release
+    os_name=$ID
+    os_version=$VERSION_ID
+    os_codename=$VERSION_CODENAME
+fi
+
+case "$os_name" in
+    ubuntu|debian)
+        apt-get update || true
+        apt-get install --assume-yes bleemeo-agent glouton
+        ;;
+    centos|almalinux|rocky)
+        yum update --assumeyes bleemeo-agent glouton
+        ;;
+esac

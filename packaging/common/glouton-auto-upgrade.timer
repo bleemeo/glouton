@@ -1,0 +1,9 @@
+[Unit]
+Description=Glouton auto-upgrade
+
+[Timer]
+OnCalendar=Mon..Fri 7:00
+RandomizedDelaySec=12h
+
+[Install]
+WantedBy=timers.target
