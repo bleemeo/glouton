@@ -46,6 +46,7 @@ import (
 	"glouton/inputs/zookeeper"
 	"glouton/logger"
 	"glouton/types"
+	"os"
 	"runtime"
 	"strconv"
 
@@ -299,14 +300,7 @@ func (d *Discovery) createInput(ctx context.Context, service Service) error {
 			input, err = mongodb.New(fmt.Sprintf("mongodb://%s:%d", ip, port))
 		}
 	case MySQLService:
-		if ip, port := service.AddressPort(); ip != "" && service.ExtraAttributes["password"] != "" {
-			username := service.ExtraAttributes["username"]
-			if username == "" {
-				username = "root"
-			}
-
-			input, err = mysql.New(fmt.Sprintf("%s:%s@tcp(%s:%d)/", username, service.ExtraAttributes["password"], ip, port))
-		}
+		input, err = createMySQLInput(service)
 	case NginxService:
 		if ip, port := service.AddressPort(); ip != "" {
 			input, err = nginx.New(fmt.Sprintf("http://%s:%d/nginx_status", ip, port))
@@ -405,6 +399,28 @@ func (d *Discovery) createInput(ctx context.Context, service Service) error {
 	return nil
 }
 
+func createMySQLInput(service Service) (telegraf.Input, error) {
+	if unixSocket := getMySQLSocket(service); unixSocket != "" && service.ExtraAttributes["password"] != "" {
+		username := service.ExtraAttributes["username"]
+		if username == "" {
+			username = "root"
+		}
+
+		return mysql.New(fmt.Sprintf("%s:%s@unix(%s)/", username, service.ExtraAttributes["password"], unixSocket))
+	}
+
+	if ip, port := service.AddressPort(); ip != "" && service.ExtraAttributes["password"] != "" {
+		username := service.ExtraAttributes["username"]
+		if username == "" {
+			username = "root"
+		}
+
+		return mysql.New(fmt.Sprintf("%s:%s@tcp(%s:%d)/", username, service.ExtraAttributes["password"], ip, port))
+	}
+
+	return nil, nil
+}
+
 func (d *Discovery) addInput(input telegraf.Input, service Service) error {
 	if d.coll == nil {
 		return nil
@@ -445,4 +461,18 @@ func urlForPHPFPM(service Service) string {
 	}
 
 	return ""
+}
+
+func getMySQLSocket(service Service) string {
+	socket := service.ExtraAttributes["metrics_unix_socket"]
+
+	if socket == "" {
+		return ""
+	}
+
+	if _, err := os.Stat(socket); err != nil {
+		return ""
+	}
+
+	return socket
 }

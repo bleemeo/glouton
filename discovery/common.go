@@ -300,7 +300,7 @@ var (
 		MySQLService: {
 			ServicePort:         3306,
 			ServiceProtocol:     "tcp",
-			ExtraAttributeNames: []string{"address", "port", "username", "password"},
+			ExtraAttributeNames: []string{"address", "port", "username", "password", "metrics_unix_socket"},
 		},
 		NginxService: {
 			ServicePort:         80,
