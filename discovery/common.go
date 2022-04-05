@@ -211,6 +211,40 @@ func (s Service) AnnotationsOfStatus() types.MetricAnnotations {
 	return annotations
 }
 
+// merge updates existing service with update.
+// Value from existing Service are preferred, but "list" value are merged.
+func (s Service) merge(update Service) Service {
+	for _, v := range update.ListenAddresses {
+		alreadyExist := false
+
+		for _, existing := range s.ListenAddresses {
+			if v == existing {
+				alreadyExist = true
+
+				break
+			}
+		}
+
+		if !alreadyExist {
+			s.ListenAddresses = append(s.ListenAddresses, v)
+		}
+	}
+
+	for k, v := range update.IgnoredPorts {
+		if _, ok := s.IgnoredPorts[k]; !ok {
+			s.IgnoredPorts[k] = v
+		}
+	}
+
+	for k, v := range update.ExtraAttributes {
+		if _, ok := s.ExtraAttributes[k]; !ok {
+			s.ExtraAttributes[k] = v
+		}
+	}
+
+	return s
+}
+
 //nolint:gochecknoglobals
 var (
 	servicesDiscoveryInfo = map[ServiceName]discoveryInfo{

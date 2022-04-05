@@ -25,6 +25,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -259,6 +260,22 @@ func (dd *DynamicDiscovery) updateDiscovery(ctx context.Context, maxAge time.Dur
 		allPids = append(allPids, p)
 	}
 
+	sort.Slice(allPids, func(i, j int) bool {
+		// Kept netstat PID first, then sort by PID value
+		pidI := allPids[i]
+		pidJ := allPids[j]
+
+		_, inNetstatI := netstat[pidI]
+		_, inNetstatJ := netstat[pidJ]
+
+		switch {
+		case inNetstatI == inNetstatJ:
+			return pidI < pidJ
+		default:
+			return inNetstatI
+		}
+	})
+
 	servicesMap := make(map[NameContainer]Service)
 
 	for _, pid := range allPids {
@@ -267,7 +284,7 @@ func (dd *DynamicDiscovery) updateDiscovery(ctx context.Context, maxAge time.Dur
 			continue
 		}
 
-		service, ok := dd.serviceFromProcess(process, servicesMap, netstat)
+		service, ok := dd.serviceFromProcess(process, netstat)
 		if !ok {
 			continue
 		}
@@ -277,7 +294,29 @@ func (dd *DynamicDiscovery) updateDiscovery(ctx context.Context, maxAge time.Dur
 			ContainerName: service.ContainerName,
 		}
 
-		servicesMap[key] = service
+		if existingService, ok := servicesMap[key]; ok {
+			service = existingService.merge(service)
+
+			servicesMap[key] = service
+
+			logger.V(2).Printf(
+				"Update discovered service %v from PID %d (%s) with IP %s",
+				service,
+				process.PID,
+				process.Name,
+				service.IPAddress,
+			)
+		} else {
+			servicesMap[key] = service
+
+			logger.V(2).Printf(
+				"Discovered service %v from PID %d (%s) with IP %s",
+				service,
+				process.PID,
+				process.Name,
+				service.IPAddress,
+			)
+		}
 	}
 
 	if ctx.Err() != nil {
@@ -296,7 +335,7 @@ func (dd *DynamicDiscovery) updateDiscovery(ctx context.Context, maxAge time.Dur
 	return nil
 }
 
-func (dd *DynamicDiscovery) serviceFromProcess(process facts.Process, servicesMap map[NameContainer]Service, netstat map[int][]facts.ListenAddress) (Service, bool) {
+func (dd *DynamicDiscovery) serviceFromProcess(process facts.Process, netstat map[int][]facts.ListenAddress) (Service, bool) {
 	if process.Status == "zombie" {
 		return Service{}, false
 	}
@@ -316,14 +355,6 @@ func (dd *DynamicDiscovery) serviceFromProcess(process facts.Process, servicesMa
 		Stack:         dd.defaultStack,
 	}
 
-	key := NameContainer{
-		Name:          service.Name,
-		ContainerName: service.ContainerName,
-	}
-	if _, ok := servicesMap[key]; ok {
-		return Service{}, false
-	}
-
 	if service.ContainerID != "" {
 		service.container, ok = dd.containerInfo.CachedContainer(service.ContainerID)
 		if !ok || dd.isContainerIgnored(service.container) {
@@ -340,14 +371,6 @@ func (dd *DynamicDiscovery) serviceFromProcess(process facts.Process, servicesMa
 	dd.fillExtraAttributes(&service)
 	dd.fillGenericExtraAttributes(&service, di)
 	dd.guessJMX(&service, process.CmdLineList)
-
-	logger.V(2).Printf(
-		"Discovered service %v from PID %d (%s) with IP %s",
-		service,
-		process.PID,
-		process.Name,
-		service.IPAddress,
-	)
 
 	return service, true
 }
