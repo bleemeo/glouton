@@ -377,7 +377,7 @@ var (
 		RedisService: {
 			ServicePort:         6379,
 			ServiceProtocol:     "tcp",
-			ExtraAttributeNames: []string{"address", "port"},
+			ExtraAttributeNames: []string{"address", "port", "password"},
 		},
 		SaltMasterService: {
 			ServicePort:         4505,

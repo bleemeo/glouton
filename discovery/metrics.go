@@ -356,7 +356,7 @@ func (d *Discovery) createInput(ctx context.Context, service Service) error {
 		}
 	case RedisService:
 		if ip, port := service.AddressPort(); ip != "" {
-			input, err = redis.New(fmt.Sprintf("tcp://%s:%d", ip, port))
+			input, err = redis.New(fmt.Sprintf("tcp://%s:%d", ip, port), service.ExtraAttributes["password"])
 		}
 	case ZookeeperService:
 		if ip, port := service.AddressPort(); ip != "" {
