@@ -192,6 +192,11 @@ func (d *Discovery) createTCPCheck(service Service, di discoveryInfo, primaryAdd
 		tcpExpect = []byte("AMQP")
 	case RedisService:
 		tcpSend = []byte("PING\n")
+
+		if service.ExtraAttributes["password"] != "" {
+			tcpSend = []byte(fmt.Sprintf("AUTH %s\nPING\n", service.ExtraAttributes["password"]))
+		}
+
 		tcpExpect = []byte("+PONG")
 	case ZookeeperService:
 		tcpSend = []byte("ruok\n")

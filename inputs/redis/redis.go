@@ -106,7 +106,7 @@ func getUnexportedField(object interface{}, fieldName string) (field interface{}
 }
 
 // New initialise redis.Input.
-func New(url string) (i telegraf.Input, err error) {
+func New(url string, password string) (i telegraf.Input, err error) {
 	input, ok := telegraf_inputs.Inputs["redis"]
 	if ok {
 		redisInput, ok := input().(*redis.Redis)
@@ -114,6 +114,7 @@ func New(url string) (i telegraf.Input, err error) {
 			slice := append(make([]string, 0), url)
 			redisInput.Servers = slice
 			redisInput.Log = internal.Logger{}
+			redisInput.Password = password
 			i = &internal.Input{
 				Input: redisServiceInput{redisInput},
 				Accumulator: internal.Accumulator{
