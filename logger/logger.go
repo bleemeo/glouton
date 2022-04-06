@@ -182,6 +182,10 @@ func SetBufferCapacity(headSizeBytes int, tailSizeBytes int) {
 	logBuffer.SetCapacity(headSizeBytes, tailSizeBytes)
 }
 
+func CompressedSize() int {
+	return logBuffer.CompressedSize()
+}
+
 // SetLevel configure the log level.
 func SetLevel(level int) {
 	cfg.l.Lock()

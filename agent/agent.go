@@ -2008,10 +2008,15 @@ func (a *agent) diagnosticGlobalInfo(ctx context.Context, archive types.ArchiveW
 		return err
 	}
 
-	_, err = file.Write(logger.Buffer())
+	tmp := logger.Buffer()
+	_, err = file.Write(tmp)
 	if err != nil {
 		return err
 	}
+
+	compressedSize := logger.CompressedSize()
+
+	fmt.Fprintf(file, "-- Log size = %d, compressed = %d (ratio: %.2f)\n", len(tmp), compressedSize, float64(compressedSize)/float64(len(tmp)))
 
 	file, err = archive.Create("goroutines.txt")
 	if err != nil {
