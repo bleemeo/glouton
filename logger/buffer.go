@@ -58,7 +58,6 @@ func (b *buffer) SetCapacity(headSizeBytes int, tailSizeBytes int) {
 
 	b.headMaxSize = headSizeBytes
 	b.tailMaxSize = tailSizeBytes / tailsCount
-	b.state = stateUninitilized
 }
 
 func (b *buffer) reset() {
