@@ -44,7 +44,7 @@ type Store struct {
 	metrics           map[uint64]metric
 	points            map[uint64][]types.Point
 	notifyCallbacks   map[int]func([]types.MetricPoint)
-	resetRuleCallback func()
+	newMetricCallback func([]map[string]string)
 	maxPointsAge      time.Duration
 	maxMetricsAge     time.Duration
 	workLabels        labels.Labels
@@ -154,12 +154,12 @@ func (s *Store) RemoveNotifiee(id int) {
 	delete(s.notifyCallbacks, id)
 }
 
-// SetResetRuleCallback sets the resetRuleCallbacks.
-func (s *Store) SetResetRuleCallback(fc func()) {
+// SetNewMetricCallback sets the callback used when a new metrics is seen the first time.
+func (s *Store) SetNewMetricCallback(fc func([]map[string]string)) {
 	s.resetRuleLock.Lock()
 	defer s.resetRuleLock.Unlock()
 
-	s.resetRuleCallback = fc
+	s.newMetricCallback = fc
 }
 
 // DropMetrics delete metrics and they points.
@@ -354,7 +354,7 @@ func (s *Store) metricGet(lbls map[string]string, annotations types.MetricAnnota
 // Writing the value StaleNaN is used to mark the metric as inactive.
 func (s *Store) PushPoints(_ context.Context, points []types.MetricPoint) {
 	dedupPoints := make([]types.MetricPoint, 0, len(points))
-	newMetrics := false
+	var newMetrics []map[string]string
 
 	s.lock.Lock()
 	for _, point := range points {
@@ -374,7 +374,7 @@ func (s *Store) PushPoints(_ context.Context, points []types.MetricPoint) {
 		}
 
 		if !found {
-			newMetrics = true
+			newMetrics = append(newMetrics, point.Labels)
 		}
 
 		metric.lastPoint = s.nowFunc()
@@ -386,12 +386,12 @@ func (s *Store) PushPoints(_ context.Context, points []types.MetricPoint) {
 	s.lock.Unlock()
 	s.resetRuleLock.Lock()
 
-	cb := s.resetRuleCallback
+	cb := s.newMetricCallback
 
 	s.resetRuleLock.Unlock()
 
-	if newMetrics && cb != nil {
-		cb()
+	if len(newMetrics) > 0 && cb != nil {
+		cb(newMetrics)
 	}
 
 	s.notifeeLock.Lock()

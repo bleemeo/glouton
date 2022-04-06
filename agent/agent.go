@@ -539,6 +539,10 @@ func (a *agent) getConfigThreshold(firstUpdate bool) map[string]threshold.Thresh
 	return configThreshold
 }
 
+func (a *agent) newMetricsCallback(newMetrics []map[string]string) {
+	a.rulesManager.ResetInactiveRules()
+}
+
 func (a *agent) updateThresholds(ctx context.Context, thresholds map[threshold.MetricNameItem]threshold.Threshold, firstUpdate bool) {
 	configThreshold := a.getConfigThreshold(firstUpdate)
 
@@ -713,7 +717,7 @@ func (a *agent) run(ctx context.Context) { //nolint:maintidx
 
 	a.rulesManager = rules.NewManager(ctx, a.store, a.metricResolution)
 
-	a.store.SetResetRuleCallback(a.rulesManager.ResetInactiveRules)
+	a.store.SetNewMetricCallback(a.newMetricsCallback)
 
 	_, err = a.gathererRegistry.RegisterAppenderCallback(
 		ctx,
