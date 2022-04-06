@@ -266,7 +266,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ContainerID:     "1234",
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "172.17.0.49", Port: 3306}},
 				IPAddress:       "172.17.0.49",
-				ExtraAttributes: map[string]string{"username": "root", "password": "secret"},
+				ExtraAttributes: map[string]string{"username": mysqlDefaultUser, "password": "secret"},
 				IgnoredPorts:    map[int]bool{},
 			},
 		},
@@ -281,7 +281,21 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ServiceType:     MySQLService,
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 3306}},
 				IPAddress:       "127.0.0.1",
-				ExtraAttributes: map[string]string{"username": "root", "password": "secret"},
+				ExtraAttributes: map[string]string{"username": "root", "password": "secret", "metrics_unix_socket": ""},
+			},
+		},
+		{
+			testName: "mysql-host2",
+			cmdLine:  []string{"mysqld"},
+			filesContent: map[string]string{
+				"/etc/mysql/debian.cnf": "[client]\nuser   = root\npassword    = secret\nsocket = /tmp/file.sock\n",
+			},
+			want: Service{
+				Name:            "mysql",
+				ServiceType:     MySQLService,
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 3306}},
+				IPAddress:       "127.0.0.1",
+				ExtraAttributes: map[string]string{"username": "root", "password": "secret", "metrics_unix_socket": "/tmp/file.sock"},
 			},
 		},
 		{

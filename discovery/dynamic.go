@@ -34,6 +34,10 @@ import (
 	"gopkg.in/ini.v1"
 )
 
+const (
+	mysqlDefaultUser = "root"
+)
+
 // DynamicDiscovery implement the dynamic discovery. It will only return
 // service dynamically discovery from processes list, containers running, ...
 // It don't include manually configured service or previously detected services.
@@ -484,15 +488,19 @@ func (dd *DynamicDiscovery) fillExtraAttributes(service *Service) {
 		if service.container != nil {
 			for k, v := range service.container.Environment() {
 				if k == "MYSQL_ROOT_PASSWORD" {
-					service.ExtraAttributes["username"] = "root"
+					service.ExtraAttributes["username"] = mysqlDefaultUser
 					service.ExtraAttributes["password"] = v
 				}
 			}
 		} else if dd.fileReader != nil {
 			if debianCnfRaw, err := dd.fileReader.ReadFile("/etc/mysql/debian.cnf"); err == nil {
 				if debianCnf, err := ini.Load(debianCnfRaw); err == nil {
-					service.ExtraAttributes["username"] = debianCnf.Section("client").Key("user").String()
-					service.ExtraAttributes["password"] = debianCnf.Section("client").Key("password").String()
+					section := debianCnf.Section("client")
+					if section != nil {
+						service.ExtraAttributes["username"] = iniSafeString(section.Key("user"))
+						service.ExtraAttributes["password"] = iniSafeString(section.Key("password"))
+						service.ExtraAttributes["metrics_unix_socket"] = iniSafeString(section.Key("socket"))
+					}
 				}
 			}
 		}
@@ -654,4 +662,12 @@ func excludeEmptyAddress(addresses []facts.ListenAddress) []facts.ListenAddress 
 	addresses = addresses[:n]
 
 	return addresses
+}
+
+func iniSafeString(key *ini.Key) string {
+	if key == nil {
+		return ""
+	}
+
+	return key.String()
 }
