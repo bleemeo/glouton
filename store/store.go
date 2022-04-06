@@ -44,7 +44,7 @@ type Store struct {
 	metrics           map[uint64]metric
 	points            map[uint64][]types.Point
 	notifyCallbacks   map[int]func([]types.MetricPoint)
-	newMetricCallback func([]map[string]string)
+	newMetricCallback func([]types.LabelsAndAnnotation)
 	maxPointsAge      time.Duration
 	maxMetricsAge     time.Duration
 	workLabels        labels.Labels
@@ -155,7 +155,7 @@ func (s *Store) RemoveNotifiee(id int) {
 }
 
 // SetNewMetricCallback sets the callback used when a new metrics is seen the first time.
-func (s *Store) SetNewMetricCallback(fc func([]map[string]string)) {
+func (s *Store) SetNewMetricCallback(fc func([]types.LabelsAndAnnotation)) {
 	s.resetRuleLock.Lock()
 	defer s.resetRuleLock.Unlock()
 
@@ -354,7 +354,8 @@ func (s *Store) metricGet(lbls map[string]string, annotations types.MetricAnnota
 // Writing the value StaleNaN is used to mark the metric as inactive.
 func (s *Store) PushPoints(_ context.Context, points []types.MetricPoint) {
 	dedupPoints := make([]types.MetricPoint, 0, len(points))
-	var newMetrics []map[string]string
+
+	var newMetrics []types.LabelsAndAnnotation
 
 	s.lock.Lock()
 	for _, point := range points {
@@ -374,7 +375,7 @@ func (s *Store) PushPoints(_ context.Context, points []types.MetricPoint) {
 		}
 
 		if !found {
-			newMetrics = append(newMetrics, point.Labels)
+			newMetrics = append(newMetrics, types.LabelsAndAnnotation{Labels: point.Labels, Annotations: point.Annotations})
 		}
 
 		metric.lastPoint = s.nowFunc()

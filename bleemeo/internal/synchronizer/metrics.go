@@ -24,6 +24,7 @@ import (
 	"glouton/bleemeo/client"
 	"glouton/bleemeo/internal/cache"
 	"glouton/bleemeo/internal/common"
+	"glouton/bleemeo/internal/filter"
 	bleemeoTypes "glouton/bleemeo/types"
 	"glouton/logger"
 	"glouton/prometheus/model"
@@ -475,20 +476,17 @@ func (s *Synchronizer) metricKey(lbls map[string]string, annotations types.Metri
 func (s *Synchronizer) filterMetrics(input []types.Metric) []types.Metric {
 	result := make([]types.Metric, 0)
 
-	defaultConfigID := s.option.Cache.Agent().CurrentConfigID
-	accountConfigs := s.option.Cache.AccountConfigsByUUID()
-	agents := s.option.Cache.AgentsByUUID()
-	monitors := s.option.Cache.MonitorsByAgentUUID()
+	f := filter.NewFilter(s.option.Cache)
 
 	for _, m := range input {
-		allowlist, err := common.AllowListForMetric(accountConfigs, defaultConfigID, m.Annotations(), monitors, agents)
+		allow, err := f.IsAllowed(m.Labels(), m.Annotations())
 		if err != nil {
 			logger.V(2).Printf("sync: %s", err)
 
 			continue
 		}
 
-		if common.AllowMetric(m.Labels(), m.Annotations(), allowlist) {
+		if allow {
 			result = append(result, m)
 		}
 	}
