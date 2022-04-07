@@ -2009,6 +2009,7 @@ func (a *agent) diagnosticGlobalInfo(ctx context.Context, archive types.ArchiveW
 	}
 
 	tmp := logger.Buffer()
+
 	_, err = file.Write(tmp)
 	if err != nil {
 		return err
