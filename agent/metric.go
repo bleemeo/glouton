@@ -47,6 +47,7 @@ var commonDefaultSystemMetrics = []string{
 	// Kubernetes
 	"kubernetes_ca_day_left",
 	"kubernetes_certificate_day_left",
+	"kubernetes_kubelet_status",
 
 	// Key Processes
 	"process_context_switch",

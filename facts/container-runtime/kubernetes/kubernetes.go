@@ -56,7 +56,10 @@ const (
 	certExpLabel = "kubernetes_certificate_day_left"
 )
 
-var errNoDecodedData = errors.New("no data decoded in raw certificate")
+var (
+	errNoDecodedData = errors.New("no data decoded in raw certificate")
+	errMissingConfig = errors.New("missing configuration")
+)
 
 // LastUpdate return the last time containers list was updated.
 func (k *Kubernetes) LastUpdate() time.Time {
@@ -242,16 +245,22 @@ func (k *Kubernetes) Metrics(ctx context.Context) ([]types.MetricPoint, error) {
 	certificatePoint, err := k.getCertificateExpiration(config, now)
 	if err != nil {
 		multiErr = append(multiErr, err)
+	} else {
+		points = append(points, certificatePoint)
 	}
-
-	points = append(points, certificatePoint)
 
 	caCertificatePoint, err := k.getCACertificateExpiration(config, now)
 	if err != nil {
 		multiErr = append(multiErr, err)
+	} else {
+		points = append(points, caCertificatePoint)
 	}
 
-	points = append(points, caCertificatePoint)
+	if kubeletPoint, err := k.getKubeletPoint(ctx, now); err != nil {
+		multiErr = append(multiErr, err)
+	} else {
+		points = append(points, kubeletPoint)
+	}
 
 	return points, multiErr
 }
@@ -318,6 +327,79 @@ func (k *Kubernetes) getCertificateExpiration(config *rest.Config, now time.Time
 	expiry := tlsConn.ConnectionState().PeerCertificates[0]
 
 	return createPointFromCertTime(expiry.NotAfter, certExpLabel, now)
+}
+
+func (k *Kubernetes) getKubeletPoint(ctx context.Context, now time.Time) (types.MetricPoint, error) {
+	if k.NodeName == "" {
+		return types.MetricPoint{}, fmt.Errorf("%w: kubernetes.nodename is missing", errMissingConfig)
+	}
+
+	cl, err := k.getClient(ctx)
+	if err != nil {
+		return types.MetricPoint{}, err
+	}
+
+	node, err := cl.GetNode(ctx, k.NodeName)
+	if err != nil {
+		return types.MetricPoint{}, err
+	}
+
+	point := types.MetricPoint{
+		Point: types.Point{Time: now, Value: 3.0},
+		Labels: map[string]string{
+			types.LabelName: "kubernetes_kubelet_status",
+		},
+		Annotations: types.MetricAnnotations{
+			Status: types.StatusDescription{
+				CurrentStatus:     types.StatusOk,
+				StatusDescription: "no known issue",
+			},
+		},
+	}
+
+	var resourceWarning []string
+
+	for _, cond := range node.Status.Conditions {
+		switch cond.Type {
+		case corev1.NodeReady:
+			if cond.Status != corev1.ConditionTrue {
+				point.Annotations.Status = types.StatusDescription{
+					CurrentStatus:     types.StatusCritical,
+					StatusDescription: fmt.Sprintf("node is not ready: %s", cond.Message),
+				}
+			}
+		case corev1.NodeDiskPressure, corev1.NodeMemoryPressure, corev1.NodePIDPressure:
+			if cond.Status == corev1.ConditionTrue {
+				typeText := map[corev1.NodeConditionType]string{
+					corev1.NodeDiskPressure:   "disk",
+					corev1.NodeMemoryPressure: "memory",
+					corev1.NodePIDPressure:    "PID",
+				}[cond.Type]
+				resourceWarning = append(
+					resourceWarning,
+					fmt.Sprintf("node has %s pressure: %s", typeText, cond.Message),
+				)
+			}
+		case corev1.NodeNetworkUnavailable:
+			if cond.Status == corev1.ConditionTrue {
+				resourceWarning = append(
+					resourceWarning,
+					fmt.Sprintf("node has networking issue: %s", cond.Message),
+				)
+			}
+		}
+	}
+
+	if len(resourceWarning) > 0 && point.Annotations.Status.CurrentStatus == types.StatusOk {
+		point.Annotations.Status = types.StatusDescription{
+			CurrentStatus:     types.StatusWarning,
+			StatusDescription: strings.Join(resourceWarning, ", "),
+		}
+	}
+
+	point.Point.Value = float64(point.Annotations.Status.CurrentStatus.NagiosCode())
+
+	return point, nil
 }
 
 func (k *Kubernetes) getCACertificateExpiration(config *rest.Config, now time.Time) (types.MetricPoint, error) {
