@@ -16,7 +16,12 @@ metadata:
   name: glouton-config
 data:
   99-local.conf: |
-    # Add Glouton customization here
+    # We recommend using another Kubernetes YAML file to make change of glouton-config.
+    # This will allow to use latest version of this k8s.yaml file without needs to merge your
+    # local change in the newer version.
+    # Example: have another file "glouton-custom.yaml" which only contains a glouton-config ConfigMap
+    # then apply with:
+    # curl -s https://packages.bleemeo.com/bleemeo-agent/kubernetes/k8s.yaml | envsubst | kubectl apply -f -,glouton-custom.yaml
 ---
 apiVersion: v1
 kind: ServiceAccount
@@ -43,6 +48,12 @@ rules:
     verbs:
       - get
       - list
+  - apiGroups:
+      - ""
+    resources:
+      - endpoints
+    verbs:
+      - get
 ---
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
