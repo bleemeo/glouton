@@ -332,7 +332,29 @@ func (k *Kubernetes) getCertificateExpiration(ctx context.Context, config *rest.
 func (k *Kubernetes) getMasterPoints(ctx context.Context, cl kubeClient, now time.Time) ([]types.MetricPoint, []error) {
 	var err types.MultiErrors
 
-	points := make([]types.MetricPoint, 0, 2)
+	points := make([]types.MetricPoint, 0, 3)
+
+	apiStatus := types.MetricPoint{
+		Point: types.Point{Time: now, Value: 0.0},
+		Labels: map[string]string{
+			types.LabelName: "kubernetes_api_status",
+		},
+	}
+
+	_, errTmp := cl.GetServerVersion(ctx)
+	if errTmp != nil {
+		apiStatus.Annotations.Status = types.StatusDescription{
+			CurrentStatus:     types.StatusCritical,
+			StatusDescription: fmt.Sprintf("failed to contact Kubernetes API: %s", errTmp),
+		}
+	} else {
+		apiStatus.Annotations.Status = types.StatusDescription{
+			CurrentStatus:     types.StatusOk,
+			StatusDescription: "Kubernetes API is alive",
+		}
+	}
+
+	points = append(points, apiStatus)
 
 	config := cl.Config()
 	if config == nil {
