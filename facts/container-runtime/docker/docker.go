@@ -155,7 +155,11 @@ func (d *Docker) Containers(ctx context.Context, maxAge time.Duration, includeIg
 	return
 }
 
-func (d *Docker) Metrics(ctx context.Context) ([]types.MetricPoint, error) {
+func (d *Docker) Metrics(ctx context.Context, now time.Time) ([]types.MetricPoint, error) {
+	return []types.MetricPoint{}, nil
+}
+
+func (d *Docker) MetricsMinute(ctx context.Context, now time.Time) ([]types.MetricPoint, error) {
 	return []types.MetricPoint{}, nil
 }
 

@@ -226,21 +226,20 @@ func (k *Kubernetes) Test(ctx context.Context) error {
 	return k.updatePods(ctx)
 }
 
-func (k *Kubernetes) Metrics(ctx context.Context) ([]types.MetricPoint, error) {
+func (k *Kubernetes) Metrics(ctx context.Context, now time.Time) ([]types.MetricPoint, error) {
+	return k.Runtime.Metrics(ctx, now)
+}
+
+func (k *Kubernetes) MetricsMinute(ctx context.Context, now time.Time) ([]types.MetricPoint, error) {
 	var multiErr types.MultiErrors
 
-	points, errMetrics := k.Runtime.Metrics(ctx)
-	now := time.Now()
+	points, errMetrics := k.Runtime.MetricsMinute(ctx, now)
 
 	if errMetrics != nil {
 		multiErr = append(multiErr, errMetrics)
 	}
 
 	cl, err := k.getClient(ctx)
-	if err != nil {
-		return points, err
-	}
-
 	if err != nil {
 		multiErr = append(multiErr, err)
 

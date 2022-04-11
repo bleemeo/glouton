@@ -139,6 +139,7 @@ type RegistrationOption struct {
 	Description  string
 	JitterSeed   uint64
 	Interval     time.Duration
+	MinInterval  time.Duration
 	Timeout      time.Duration
 	StopCallback func()
 	// ExtraLabels are labels added. If a labels already exists, extraLabels take precedence.
@@ -726,6 +727,10 @@ func (r *Registry) restartScrapeLoop(ctx context.Context, reg *registration) {
 	interval := reg.option.Interval
 	if interval == 0 {
 		interval = r.currentDelay
+	}
+
+	if reg.option.MinInterval != 0 && interval < reg.option.MinInterval {
+		interval = reg.option.MinInterval
 	}
 
 	timeout := interval * 8 / 10
