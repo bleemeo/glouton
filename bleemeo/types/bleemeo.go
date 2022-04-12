@@ -315,3 +315,15 @@ func (i GlobalInfo) IsTimeDriftTooLarge() bool {
 
 	return math.Abs(i.TimeDrift().Seconds()) >= i.MaxTimeDrift
 }
+
+// AlertingRule object on the Bleemeo API.
+type AlertingRule struct {
+	ID                  string `json:"id"`
+	Account             string `json:"account"`
+	Name                string `json:"name"`
+	WarningQuery        string `json:"warning_query"`
+	WarningDelaySecond  int    `json:"warning_delay_second"`
+	CriticalQuery       string `json:"critical_query"`
+	CriticalDelaySecond int    `json:"critical_delay_second"`
+	Active              bool   `json:"active"`
+}

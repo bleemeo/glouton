@@ -1,5 +1,6 @@
 .*.swp
 /state.json
+/state.cache.json
 /facts.yaml
 /netstat.out
 /generated_values.json

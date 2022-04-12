@@ -2,6 +2,7 @@ package registry
 
 import (
 	"context"
+	"fmt"
 	"glouton/prometheus/model"
 	"sync"
 	"time"
@@ -27,6 +28,7 @@ func (g *appenderGatherer) Gather() ([]*dto.MetricFamily, error) {
 }
 
 func (g *appenderGatherer) GatherWithState(ctx context.Context, state GatherState) ([]*dto.MetricFamily, error) {
+	fmt.Printf("!!! GatherWithState\n")
 	var err error
 
 	if state.FromScrapeLoop || g.opt.CallForMetricsEndpoint {

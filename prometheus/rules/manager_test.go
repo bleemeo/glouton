@@ -977,7 +977,7 @@ func Test_manager(t *testing.T) { //nolint:maintidx
 
 			ruleManager := newManager(ctx, store, defaultLinuxRecordingRules, t0.Add(-7*time.Minute), 15*time.Second)
 
-			err = ruleManager.RebuildAlertingRules(test.Rules)
+			err = ruleManager.RebuildPromQLRules(test.Rules)
 			if err != nil {
 				t.Error(err)
 			}
@@ -1258,7 +1258,7 @@ func Test_Rebuild_Rules(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = ruleManager.RebuildAlertingRules(alertsRules)
+	err = ruleManager.RebuildPromQLRules(alertsRules)
 	if err != nil {
 		t.Error(err)
 
@@ -1273,7 +1273,7 @@ func Test_Rebuild_Rules(t *testing.T) {
 		reg.InternalRunScape(ctx, t1.Add(time.Duration(i)*time.Minute), id)
 	}
 
-	err = ruleManager.RebuildAlertingRules(alertsRules)
+	err = ruleManager.RebuildPromQLRules(alertsRules)
 	if err != nil {
 		t.Error(err)
 
@@ -1286,8 +1286,8 @@ func Test_Rebuild_Rules(t *testing.T) {
 
 	reg.InternalRunScape(ctx, t1.Add(5*time.Minute), id)
 
-	if len(ruleManager.alertingRules) != len(alertsRules) {
-		t.Errorf("Unexpected number of points: expected %d, got %d\n", len(alertsRules), len(ruleManager.alertingRules))
+	if len(ruleManager.ruleGroups) != len(alertsRules) {
+		t.Errorf("Unexpected number of points: expected %d, got %d\n", len(alertsRules), len(ruleManager.ruleGroups))
 	}
 
 	if diff := cmp.Diff(want, resPoints); diff != "" {
@@ -1371,7 +1371,7 @@ func Test_GloutonStart(t *testing.T) {
 		resPoints = append(resPoints, mp...)
 	})
 
-	err := ruleManager.RebuildAlertingRules(metricList)
+	err := ruleManager.RebuildPromQLRules(metricList)
 	if err != nil {
 		t.Error(err)
 	}
@@ -1460,7 +1460,7 @@ func Test_NoStatutsChangeOnStart(t *testing.T) {
 				},
 			}
 
-			err = ruleManager.RebuildAlertingRules(metricList)
+			err = ruleManager.RebuildPromQLRules(metricList)
 			if err != nil {
 				t.Error(err)
 			}
@@ -1585,7 +1585,7 @@ func Test_NoCrossRead(t *testing.T) {
 		},
 	}
 
-	err = ruleManager.RebuildAlertingRules(metricList)
+	err = ruleManager.RebuildPromQLRules(metricList)
 	if err != nil {
 		t.Error(err)
 	}
@@ -1711,7 +1711,7 @@ func Test_NoUnknownOnStart(t *testing.T) {
 		},
 	}
 
-	err = ruleManager.RebuildAlertingRules(metricList)
+	err = ruleManager.RebuildPromQLRules(metricList)
 	if err != nil {
 		t.Error(err)
 	}

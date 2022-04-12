@@ -708,10 +708,15 @@ func (s *Synchronizer) UpdateUnitsAndThresholds(ctx context.Context, firstUpdate
 	// RebuildAlertingRule can change Metrics list. We need to execute it before
 	// UpdateThresholds as currently thresholds invokes a.rulesManager.MetricList()
 	// resulting in using obsolete values.
-	if s.option.RebuildAlertingRules != nil {
-		err := s.option.RebuildAlertingRules(metricToMetricAlertRule(s.option.Cache))
+	if s.option.RebuildPromQLRules != nil {
+		alertingRules, resolution, err := s.alertingRules()
 		if err != nil {
-			logger.V(2).Printf("An error occurred while rebuilding alerting rules: %v", err)
+			logger.V(2).Printf("Failed to get PromQL rules: %v", err)
+		} else {
+			err := s.option.RebuildPromQLRules(alertingRules, resolution)
+			if err != nil {
+				logger.V(2).Printf("An error occurred while rebuilding alerting rules: %v", err)
+			}
 		}
 	}
 

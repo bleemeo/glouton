@@ -991,7 +991,7 @@ func (a *agent) run(ctx context.Context) { //nolint:maintidx
 			NotifyFirstRegistration: a.notifyBleemeoFirstRegistration,
 			NotifyLabelsUpdate:      a.notifyBleemeoUpdateLabels,
 			BlackboxScraperName:     scaperName,
-			RebuildAlertingRules:    a.rulesManager.RebuildAlertingRules,
+			RebuildPromQLRules:      a.rulesManager.RebuildPromQLRules,
 			ReloadState:             a.reloadState.Bleemeo(),
 			IsContainerEnabled:      a.containerFilter.ContainerEnabled,
 		})

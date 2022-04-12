@@ -21,7 +21,6 @@ import (
 	"glouton/discovery"
 	"glouton/facts"
 	"glouton/prometheus/exporter/snmp"
-	"glouton/prometheus/rules"
 	"glouton/threshold"
 	"glouton/types"
 	"time"
@@ -51,7 +50,7 @@ type GlobalOption struct {
 	UpdateMetricResolution func(ctx context.Context, defaultResolution time.Duration, snmpResolution time.Duration)
 	UpdateThresholds       func(ctx context.Context, thresholds map[threshold.MetricNameItem]threshold.Threshold, firstUpdate bool)
 	UpdateUnits            func(units map[threshold.MetricNameItem]threshold.Unit)
-	RebuildAlertingRules   func(metrics []rules.MetricAlertRule) error
+	RebuildPromQLRules     func(alertingRules []AlertingRule, resolution time.Duration) error
 	IsContainerEnabled     func(facts.Container) (bool, bool)
 }
 

@@ -20,11 +20,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	bleemeoTypes "glouton/bleemeo/types"
 	"glouton/logger"
 	"glouton/prometheus/model"
 	"glouton/threshold"
 	"glouton/types"
-	"math"
 	"runtime"
 	"sync"
 	"time"
@@ -62,7 +62,7 @@ var (
 // and alerting rules.
 type Manager struct {
 	recordingRules []*rules.Group
-	alertingRules  map[string]*alertRuleGroup
+	ruleGroups     map[string]*alertRuleGroup
 
 	appendable *dynamicAppendable
 	queryable  storage.Queryable
@@ -89,7 +89,9 @@ type MetricAlertRule struct {
 }
 
 type alertRuleGroup struct {
-	rules         map[string]*rules.AlertingRule
+	warningRule  *rules.AlertingRule
+	criticalRule *rules.AlertingRule
+
 	instanceID    string
 	inactiveSince time.Time
 	disabledUntil time.Time
@@ -98,8 +100,9 @@ type alertRuleGroup struct {
 	lastErr       error
 	lastStatus    types.StatusDescription
 
-	metric  MetricAlertRule
-	isError string
+	alertingRule bleemeoTypes.AlertingRule
+	resolution   time.Duration
+	isError      string
 }
 
 //nolint:gochecknoglobals
@@ -176,7 +179,7 @@ func newManager(ctx context.Context, queryable storage.Queryable, defaultRules m
 		queryable:        queryable,
 		engine:           engine,
 		recordingRules:   []*rules.Group{defaultGroup},
-		alertingRules:    map[string]*alertRuleGroup{},
+		ruleGroups:       map[string]*alertRuleGroup{},
 		logger:           promLogger,
 		agentStarted:     created,
 		metricResolution: 0,
@@ -202,19 +205,21 @@ func (rm *Manager) UpdateMetricResolution(metricResolution time.Duration) {
 // MetricList returns a list of all alerting rules metric names.
 // This is used for dynamic generation of filters.
 func (rm *Manager) MetricList() []string {
-	res := make([]string, 0, len(rm.alertingRules))
+	// TODO:
+	// res := make([]string, 0, len(rm.ruleGroups))
 
-	rm.l.Lock()
-	defer rm.l.Unlock()
+	// rm.l.Lock()
+	// defer rm.l.Unlock()
 
-	for _, r := range rm.alertingRules {
-		res = append(res, r.metric.Labels.Get(types.LabelName))
-	}
+	// for _, r := range rm.ruleGroups {
+	// 	res = append(res, r.metric.Labels.Get(types.LabelName))
+	// }
 
-	return res
+	return nil
 }
 
 func (rm *Manager) Collect(ctx context.Context, app storage.Appender) error {
+	fmt.Printf("!!! Collect \n")
 	var errs types.MultiErrors
 
 	res := []types.MetricPoint{} //nolint:ifshort // False positive.
@@ -229,7 +234,7 @@ func (rm *Manager) Collect(ctx context.Context, app storage.Appender) error {
 		rgr.Eval(ctx, now)
 	}
 
-	for _, agr := range rm.alertingRules {
+	for _, agr := range rm.ruleGroups {
 		point, err := agr.runGroup(ctx, now, rm)
 
 		if err != nil && !errors.Is(err, errSkipPoints) {
@@ -263,21 +268,22 @@ func (rm *Manager) Collect(ctx context.Context, app storage.Appender) error {
 }
 
 func (agr *alertRuleGroup) shouldSkip(now time.Time) bool {
-	if !agr.inactiveSince.IsZero() && !agr.metric.IsUserPromQLAlert {
+	if !agr.inactiveSince.IsZero() {
 		if agr.disabledUntil.IsZero() && now.After(agr.inactiveSince.Add(2*time.Minute)) {
-			logger.V(2).Printf("rule %s has been disabled for the last 2 minutes. retrying this metric in 10 minutes", agr.metric.Labels.String())
+			logger.V(2).Printf("rule %s has been disabled for the last 2 minutes. retrying this metric in 10 minutes", agr.alertingRule.ID)
 			agr.disabledUntil = now.Add(10 * time.Minute)
 		}
 
 		if now.After(agr.disabledUntil) {
-			logger.V(2).Printf("Inactive rule %s will be re executed. Time since inactive: %s", agr.metric.Labels.String(), agr.inactiveSince.Format(time.RFC3339))
+			logger.V(2).Printf("Inactive rule %s will be re executed. Time since inactive: %s", agr.alertingRule.ID, agr.inactiveSince.Format(time.RFC3339))
 			agr.disabledUntil = now.Add(10 * time.Minute)
 		} else {
 			return true
 		}
 	}
 
-	if agr.metric.Resolution != 0 && now.Add(time.Second).Sub(agr.lastRun) < agr.metric.Resolution {
+	// TODO: Why time.Second?
+	if agr.resolution != 0 && now.Add(time.Second).Sub(agr.lastRun) < agr.resolution {
 		return true
 	}
 
@@ -285,8 +291,6 @@ func (agr *alertRuleGroup) shouldSkip(now time.Time) bool {
 }
 
 func (agr *alertRuleGroup) runGroup(ctx context.Context, now time.Time, rm *Manager) (types.MetricPoint, error) {
-	thresholdOrder := []string{highCriticalState, lowCriticalState, highWarningState, lowWarningState}
-
 	var generatedPoint types.MetricPoint
 
 	if agr.shouldSkip(now) {
@@ -299,7 +303,7 @@ func (agr *alertRuleGroup) runGroup(ctx context.Context, now time.Time, rm *Mana
 				Time:  now,
 				Value: float64(types.StatusUnknown.NagiosCode()),
 			},
-			Labels: agr.metric.Labels.Map(),
+			Labels: nil, // TODO
 			Annotations: types.MetricAnnotations{
 				Status: types.StatusDescription{
 					CurrentStatus:     types.StatusUnknown,
@@ -314,9 +318,7 @@ func (agr *alertRuleGroup) runGroup(ctx context.Context, now time.Time, rm *Mana
 	agr.lastStatus = types.StatusDescription{}
 	agr.lastErr = nil
 
-	for _, val := range thresholdOrder {
-		rule := agr.rules[val]
-
+	for _, rule := range []*rules.AlertingRule{agr.warningRule, agr.criticalRule} {
 		if rule == nil {
 			continue
 		}
@@ -368,7 +370,7 @@ func (agr *alertRuleGroup) runGroup(ctx context.Context, now time.Time, rm *Mana
 
 		logger.V(2).Printf("metric state for %s previous state=%v, new state=%v", rule.Labels().String(), prevState, state)
 
-		newPoint, err := agr.generateNewPoint(val, rule, state, now)
+		newPoint, err := agr.generateNewPoint(rule, state, now)
 		if err != nil {
 			agr.lastErr = err
 
@@ -390,13 +392,13 @@ func (agr *alertRuleGroup) runGroup(ctx context.Context, now time.Time, rm *Mana
 }
 
 func (agr *alertRuleGroup) checkNoPoint(now time.Time, agentStart time.Time, metricRes time.Duration) (types.MetricPoint, error) {
-	if agr.metric.IsUserPromQLAlert && now.Sub(agentStart) > metricRes {
+	if now.Sub(agentStart) > metricRes {
 		return types.MetricPoint{
 			Point: types.Point{
 				Time:  now,
 				Value: float64(types.StatusUnknown.NagiosCode()),
 			},
-			Labels: agr.metric.Labels.Map(),
+			Labels: nil, // TODO
 			Annotations: types.MetricAnnotations{
 				Status: types.StatusDescription{
 					CurrentStatus:     types.StatusUnknown,
@@ -413,191 +415,108 @@ func (agr *alertRuleGroup) checkNoPoint(now time.Time, agentStart time.Time, met
 	return types.MetricPoint{}, errSkipPoints
 }
 
-func (agr *alertRuleGroup) generateNewPoint(thresholdType string, rule *rules.AlertingRule, state rules.AlertState, now time.Time) (types.MetricPoint, error) {
-	statusCode := statusFromThreshold(thresholdType)
-	desc := "Current value is within the thresholds."
-
-	if alerts := rule.ActiveAlerts(); len(alerts) != 0 {
-		exceeded := ""
-
-		if state != rules.StateFiring {
-			exceeded = "not "
-		}
-
-		desc = fmt.Sprintf("Current value: %s. Threshold (%s) %sexceeded for the last %s",
-			threshold.FormatValue(alerts[0].Value, threshold.Unit{}),
-			threshold.FormatValue(agr.lowestThreshold(), threshold.Unit{}),
-			exceeded, promAlertTime.String())
-	}
-
-	status := types.StatusDescription{
-		CurrentStatus:     statusCode,
-		StatusDescription: desc,
-	}
-
-	if statusCode == types.StatusUnknown {
-		return types.MetricPoint{}, fmt.Errorf("%w %s", errUnknownState, rule.Labels().String())
-	}
-
+func (agr *alertRuleGroup) generateNewPoint(rule *rules.AlertingRule, state rules.AlertState, now time.Time) (types.MetricPoint, error) {
+	statusCode := types.StatusUnknown
 	newPoint := types.MetricPoint{
 		Point: types.Point{
 			Time:  now,
 			Value: float64(statusCode.NagiosCode()),
 		},
-		Labels: agr.metric.Labels.Map(),
+		Labels: nil, // TODO
 		Annotations: types.MetricAnnotations{
-			Status: status,
+			Status: types.StatusDescription{
+				CurrentStatus:     statusCode,
+				StatusDescription: "TODO description",
+			},
 		},
-	}
-
-	if state == rules.StatePending || state == rules.StateInactive {
-		statusCode = types.StatusOk
-		newPoint.Value = float64(statusCode.NagiosCode())
-		newPoint.Annotations.Status.CurrentStatus = statusCode
 	}
 
 	return newPoint, nil
 }
 
-func (agr *alertRuleGroup) lowestThreshold() float64 {
-	orderToPrint := []string{lowWarningState, highWarningState, lowCriticalState, highCriticalState}
+func (rm *Manager) addAlertingRule(
+	alertingRule bleemeoTypes.AlertingRule,
+	resolution time.Duration,
+	isError string,
+) error {
+	// TODO:
+	// lbls := rule.Labels
+	// if lbls.Get(types.LabelInstanceUUID) != rule.InstanceUUID {
+	// 	builder := labels.NewBuilder(lbls)
+	// 	builder.Set(types.LabelInstanceUUID, rule.InstanceUUID)
+	// 	lbls = builder.Labels()
+	// }
 
-	for _, thr := range orderToPrint {
-		_, ok := agr.rules[thr]
-		if !ok {
-			continue
+	var (
+		warningRule, criticalRule *rules.AlertingRule
+		err                       error
+	)
+
+	if alertingRule.WarningQuery != "" {
+		warningRule, err = newRule(
+			alertingRule.WarningQuery,
+			time.Duration(alertingRule.WarningDelaySecond)*time.Second,
+			nil, // TODO; Add label __name__.
+			alertingRule.ID,
+			rm.logger,
+		)
+		if err != nil {
+			return err
 		}
-
-		return agr.thresholdFromString(thr)
 	}
 
-	logger.V(2).Printf("An unknown error occurred: not threshold found for rule %s\n", agr.metric.Labels.String())
-
-	return 0
-}
-
-func (agr *alertRuleGroup) thresholdFromString(threshold string) float64 {
-	switch threshold {
-	case highCriticalState:
-		return agr.metric.Threshold.HighCritical
-	case lowCriticalState:
-		return agr.metric.Threshold.LowCritical
-	case highWarningState:
-		return agr.metric.Threshold.HighWarning
-	case lowWarningState:
-		return agr.metric.Threshold.LowWarning
-	default:
-		return agr.metric.Threshold.HighCritical
-	}
-}
-
-func (rm *Manager) addAlertingRule(metric MetricAlertRule, isError string) error {
-	lbls := metric.Labels
-
-	if lbls.Get(types.LabelInstanceUUID) != metric.InstanceUUID {
-		builder := labels.NewBuilder(lbls)
-
-		builder.Set(types.LabelInstanceUUID, metric.InstanceUUID)
-		lbls = builder.Labels()
+	if alertingRule.CriticalQuery != "" {
+		criticalRule, err = newRule(
+			alertingRule.CriticalQuery,
+			time.Duration(alertingRule.CriticalDelaySecond)*time.Second,
+			nil, // TODO; Add label __name__.
+			alertingRule.ID,
+			rm.logger,
+		)
+		if err != nil {
+			return err
+		}
 	}
 
 	newGroup := &alertRuleGroup{
-		rules:         make(map[string]*rules.AlertingRule, 4),
-		instanceID:    metric.InstanceUUID,
-		inactiveSince: time.Time{},
-		disabledUntil: time.Time{},
-		metric:        metric,
-		isError:       isError,
+		// instanceID:    rule.InstanceUUID,
+		alertingRule: alertingRule,
+		isError:      isError,
+		resolution:   resolution,
+		warningRule:  warningRule,
+		criticalRule: criticalRule,
 	}
 
-	if !math.IsNaN(metric.Threshold.LowWarning) {
-		err := newGroup.newRule(
-			fmt.Sprintf("(%s) < %f", metric.PromQLQuery, metric.Threshold.LowWarning),
-			metric.Labels,
-			lowWarningState,
-			rm.logger,
-		)
-		if err != nil {
-			return err
-		}
-	}
-
-	if !math.IsNaN(metric.Threshold.HighWarning) {
-		err := newGroup.newRule(
-			fmt.Sprintf("(%s) > %f", metric.PromQLQuery, metric.Threshold.HighWarning),
-			metric.Labels,
-			highWarningState,
-			rm.logger,
-		)
-		if err != nil {
-			return err
-		}
-	}
-
-	if !math.IsNaN(metric.Threshold.LowCritical) {
-		err := newGroup.newRule(
-			fmt.Sprintf("(%s) < %f", metric.PromQLQuery, metric.Threshold.LowCritical),
-			metric.Labels,
-			lowCriticalState,
-			rm.logger,
-		)
-		if err != nil {
-			return err
-		}
-	}
-
-	if !math.IsNaN(metric.Threshold.HighCritical) {
-		err := newGroup.newRule(
-			fmt.Sprintf("(%s) > %f", metric.PromQLQuery, metric.Threshold.HighCritical),
-			metric.Labels,
-			highCriticalState,
-			rm.logger,
-		)
-		if err != nil {
-			return err
-		}
-	}
-
-	rm.alertingRules[lbls.String()] = newGroup
+	rm.ruleGroups[alertingRule.ID] = newGroup
 
 	return nil
 }
 
-func (agr *alertRuleGroup) Equal(threshold threshold.Threshold) bool {
-	return agr.metric.Threshold.Equal(threshold)
-}
-
-// RebuildAlertingRules rebuild the alerting rules list from a bleemeo api metric list.
-func (rm *Manager) RebuildAlertingRules(metricsList []MetricAlertRule) error {
+// RebuildPromQLRules rebuild the PromQL rules list.
+func (rm *Manager) RebuildPromQLRules(alertingRules []bleemeoTypes.AlertingRule, resolution time.Duration) error {
 	rm.l.Lock()
 	defer rm.l.Unlock()
 
-	old := rm.alertingRules
+	old := rm.ruleGroups
+	rm.ruleGroups = make(map[string]*alertRuleGroup)
 
-	rm.alertingRules = make(map[string]*alertRuleGroup)
+	for _, rule := range alertingRules {
+		// Keep the previous group if it hasn't changed.
+		// TODO : && prevInstance.instanceID == rule.InstanceUUID
+		if prevInstance, ok := old[rule.ID]; ok {
+			if prevRule := prevInstance.alertingRule; prevRule.WarningQuery == rule.WarningQuery &&
+				prevRule.WarningDelaySecond == rule.WarningDelaySecond &&
+				prevRule.CriticalQuery == rule.CriticalQuery &&
+				prevRule.CriticalDelaySecond == rule.CriticalDelaySecond {
+				rm.ruleGroups[rule.ID] = prevInstance
+			}
 
-	for _, metric := range metricsList {
-		if len(metric.PromQLQuery) == 0 || metric.Threshold.IsZero() {
 			continue
 		}
 
-		key := metric.Labels.String()
-		prevInstance, ok := old[key]
-
-		if ok && prevInstance.instanceID != metric.InstanceUUID {
-			ok = false
-		}
-
-		if ok && prevInstance.metric.PromQLQuery == metric.PromQLQuery && prevInstance.Equal(metric.Threshold) {
-			rm.alertingRules[key] = prevInstance
-		} else {
-			err := rm.addAlertingRule(metric, "")
-			if err != nil {
-				metric.PromQLQuery = "not_used"
-				metric.IsUserPromQLAlert = true
-
-				_ = rm.addAlertingRule(metric, err.Error())
-			}
+		err := rm.addAlertingRule(rule, resolution, "")
+		if err != nil {
+			_ = rm.addAlertingRule(rule, resolution, err.Error())
 		}
 	}
 
@@ -607,7 +526,7 @@ func (rm *Manager) RebuildAlertingRules(metricsList []MetricAlertRule) error {
 func (rm *Manager) ResetInactiveRules() {
 	now := time.Now().Truncate(time.Second)
 
-	for _, val := range rm.alertingRules {
+	for _, val := range rm.ruleGroups {
 		if val.disabledUntil.IsZero() {
 			continue
 		}
@@ -639,7 +558,7 @@ func (rm *Manager) DiagnosticArchive(ctx context.Context, archive types.ArchiveW
 
 	activeAlertingRules := 0
 
-	for _, r := range rm.alertingRules {
+	for _, r := range rm.ruleGroups {
 		if r.inactiveSince.IsZero() {
 			activeAlertingRules++
 		}
@@ -647,15 +566,15 @@ func (rm *Manager) DiagnosticArchive(ctx context.Context, archive types.ArchiveW
 
 	fmt.Fprintf(file, "# Active Alerting rules (%d entries)\n", activeAlertingRules)
 
-	for _, r := range rm.alertingRules {
+	for _, r := range rm.ruleGroups {
 		if r.inactiveSince.IsZero() {
 			fmt.Fprintf(file, "%s\n", r.String())
 		}
 	}
 
-	fmt.Fprintf(file, "\n# Inactive Alerting Rules (%d entries)\n", len(rm.alertingRules)-activeAlertingRules)
+	fmt.Fprintf(file, "\n# Inactive Alerting Rules (%d entries)\n", len(rm.ruleGroups)-activeAlertingRules)
 
-	for _, r := range rm.alertingRules {
+	for _, r := range rm.ruleGroups {
 		if !r.inactiveSince.IsZero() {
 			fmt.Fprintf(file, "%s\n", r.String())
 		}
@@ -664,46 +583,35 @@ func (rm *Manager) DiagnosticArchive(ctx context.Context, archive types.ArchiveW
 	return nil
 }
 
-func (agr *alertRuleGroup) newRule(exp string, lbls labels.Labels, threshold string, logger log.Logger) error {
+func newRule(
+	exp string,
+	holdDuration time.Duration,
+	lbls labels.Labels,
+	alertingRuleID string,
+	logger log.Logger,
+) (*rules.AlertingRule, error) {
 	newExp, err := parser.ParseExpr(exp)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	newRule := rules.NewAlertingRule(
 		"unused",
 		newExp,
-		promAlertTime,
+		holdDuration,
 		lbls,
 		nil,
 		labels.Labels{},
 		"",
 		true,
-		log.With(logger, "component", "alert_rule", "metric", lbls.String(), "theshold", threshold),
+		log.With(logger, "component", "alert_rule", "alerting_rule", alertingRuleID),
 	)
 
-	agr.rules[threshold] = newRule
-
-	return nil
+	return newRule, nil
 }
 
 func (agr *alertRuleGroup) String() string {
-	return fmt.Sprintf("id=%s query=%#v \n\tinactive_since=%v disabled_until=%v is_user_promql_alert=%v\n\tlastRun=%v resolution=%v pointsRead=%d status=%v err=%v\n%v",
-		agr.metric.Labels.String(), agr.metric.PromQLQuery,
-		agr.inactiveSince, agr.disabledUntil, agr.metric.IsUserPromQLAlert,
-		agr.lastRun, agr.metric.Resolution, agr.pointsRead, agr.lastStatus, agr.lastErr,
-		agr.query(),
-	)
-}
-
-func (agr *alertRuleGroup) query() string {
-	res := ""
-
-	for key, val := range agr.rules {
-		res += fmt.Sprintf("\tThreshold_%s: %s; current state=%s\n", key, val.Query().String(), val.State())
-	}
-
-	return res
+	return fmt.Sprintf("%#v\n", agr)
 }
 
 func statusFromThreshold(s string) types.Status {

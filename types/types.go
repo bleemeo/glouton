@@ -113,6 +113,8 @@ const (
 	LabelMetaSendScraperUUID        = "__meta_probe_send_agent_uuid"
 	LabelMetaCurrentStatus          = "__meta_current_status"
 	LabelMetaCurrentDescription     = "__meta_current_description"
+	LabelSeverity                   = "__severity"
+	LabelAlertingRuleUUID           = "__alerting_rule_uuid"
 	LabelK8SPODName                 = "kubernetes_pod_name"
 	LabelK8SNamespace               = "kubernetes_namespace"
 	LabelInstanceUUID               = "instance_uuid"
@@ -124,6 +126,9 @@ const (
 	LabelContainerName              = "container_name"
 	LabelScrapeJob                  = "scrape_job"
 	LabelScrapeInstance             = "scrape_instance"
+
+	LabelWarning  = "warning"
+	LabelCritical = "critical"
 )
 
 // IsSet return true if the status is set.
