@@ -353,6 +353,7 @@ func (k *Kubernetes) getMasterPoints(ctx context.Context, cl kubeClient, now tim
 		}
 	}
 
+	apiStatus.Point.Value = float64(apiStatus.Annotations.Status.CurrentStatus.NagiosCode())
 	points = append(points, apiStatus)
 
 	config := cl.Config()
