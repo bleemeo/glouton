@@ -23,7 +23,9 @@ import (
 	"glouton/logger"
 	"glouton/prometheus/registry"
 	"glouton/types"
+	"net"
 	"net/url"
+	"os"
 	"time"
 
 	bbConf "github.com/prometheus/blackbox_exporter/config"
@@ -122,6 +124,8 @@ func genCollectorFromDynamicTarget(monitor types.Monitor, userAgent string) (*co
 		if monitor.ExpectedResponseCode != 0 {
 			mod.HTTP.ValidStatusCodes = []int{monitor.ExpectedResponseCode}
 		}
+
+		uri, mod = preprocessHTTPTarget(url, mod)
 	case proberNameDNS:
 		mod.Prober = proberNameDNS
 		// TODO: user some better defaults - or even better: use the local resolver
@@ -158,6 +162,21 @@ func genCollectorFromDynamicTarget(monitor types.Monitor, userAgent string) (*co
 			types.LabelMetaBleemeoTargetAgentUUID: monitor.BleemeoAgentID,
 		},
 	}, nil
+}
+
+func preprocessHTTPTarget(targetURL *url.URL, module bbConf.Module) (string, bbConf.Module) {
+	// For the host "kubernetes.default.svc", we will likely be unable to resolve it using DNS
+	// (because Glouton with with hostNetwork=true so it won't use Kubernetes DNS).
+	// Use environment for the name resolution.
+	if targetURL.Hostname() == "kubernetes.default.svc" {
+		host, port := os.Getenv("KUBERNETES_SERVICE_HOST"), os.Getenv("KUBERNETES_SERVICE_PORT")
+		if len(host) != 0 && len(port) != 0 {
+			module.HTTP.HTTPClientConfig.TLSConfig.ServerName = "kubernetes.default.svc"
+			targetURL.Host = net.JoinHostPort(host, port)
+		}
+	}
+
+	return targetURL.String(), module
 }
 
 func genCollectorFromStaticTarget(ct configTarget) collectorWithLabels {
