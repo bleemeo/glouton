@@ -762,6 +762,34 @@ func (a *agent) run(ctx context.Context) { //nolint:maintidx
 		}
 		a.containerRuntime = kube
 
+		var clusterNameState string
+
+		clusterName := a.oldConfig.String("kubernetes.clustername")
+
+		err = a.state.Get("kubernestes_cluster_name", &clusterNameState)
+		if err != nil {
+			logger.V(2).Printf("failed to get kubernestes_cluster_name: %v", err)
+		}
+
+		if clusterName == "" && clusterNameState != "" {
+			logger.V(1).Printf("kubernetes.clustername is unset, using previous value of %s", clusterNameState)
+			clusterName = clusterNameState
+		}
+
+		if clusterName != "" && clusterNameState != clusterName {
+			err = a.state.Set("kubernestes_cluster_name", clusterNameState)
+			if err != nil {
+				logger.V(2).Printf("failed to set kubernestes_cluster_name: %v", err)
+			}
+		}
+
+		if clusterName != "" {
+			a.factProvider.SetFact("kubernetes_cluster_name", clusterName)
+		} else {
+			logger.V(0).Printf("kubernetes.clustername config is missing, some feature are unavailable. See https://docs.bleemeo.com/agent/installation#installation-on-kubernetes")
+			a.oldConfig.AddWarning("kubernetes.clustername is missing, some feature are unavailable")
+		}
+
 		ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 		if err := kube.Test(ctx); err != nil {
 			logger.Printf("Kubernetes API unreachable, service detection may misbehave: %v", err)
