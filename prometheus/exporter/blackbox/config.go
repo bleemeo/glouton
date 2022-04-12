@@ -125,6 +125,8 @@ func genCollectorFromDynamicTarget(monitor types.Monitor, userAgent string) (*co
 			mod.HTTP.ValidStatusCodes = []int{monitor.ExpectedResponseCode}
 		}
 
+		mod.HTTP.HTTPClientConfig.TLSConfig.CAFile = monitor.CAFile
+
 		uri, mod = preprocessHTTPTarget(url, mod)
 	case proberNameDNS:
 		mod.Prober = proberNameDNS
