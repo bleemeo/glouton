@@ -128,6 +128,10 @@ spec:
         envFrom:
         - secretRef:
             name: glouton-credentials
+        resources:
+          requests:
+            cpu: 0.05
+            memory: 100Mi
       volumes:
       - name: lib-glouton
         hostPath:
