@@ -539,6 +539,33 @@ func (a *agent) getConfigThreshold(firstUpdate bool) map[string]threshold.Thresh
 	return configThreshold
 }
 
+func (a *agent) newMetricsCallback(newMetrics []types.LabelsAndAnnotation) {
+	for _, m := range newMetrics {
+		isAllowed := a.metricFilter.IsAllowed(m.Labels)
+		isDenied := a.metricFilter.IsDenied(m.Labels)
+		isBleemeoAllowed := true
+
+		if a.bleemeoConnector != nil {
+			isBleemeoAllowed, _ = a.bleemeoConnector.IsMetricAllowed(m)
+		}
+
+		name := types.LabelsToText(m.Labels)
+
+		switch {
+		case !isAllowed:
+			logger.V(2).Printf("The metric %s is not in configured allow list", name)
+		case isDenied && !isBleemeoAllowed:
+			logger.V(1).Printf("The metric %s is blocked by configured deny list and is not available in current Bleemeo Plan", name)
+		case isDenied:
+			logger.V(1).Printf("The metric %s is blocked by configured deny list", name)
+		case !isBleemeoAllowed:
+			logger.V(1).Printf("The metric %s is not available in current Bleemeo Plan", name)
+		}
+	}
+
+	a.rulesManager.ResetInactiveRules()
+}
+
 func (a *agent) updateThresholds(ctx context.Context, thresholds map[threshold.MetricNameItem]threshold.Threshold, firstUpdate bool) {
 	configThreshold := a.getConfigThreshold(firstUpdate)
 
@@ -713,7 +740,7 @@ func (a *agent) run(ctx context.Context) { //nolint:maintidx
 
 	a.rulesManager = rules.NewManager(ctx, a.store, a.metricResolution)
 
-	a.store.SetResetRuleCallback(a.rulesManager.ResetInactiveRules)
+	a.store.SetNewMetricCallback(a.newMetricsCallback)
 
 	_, err = a.gathererRegistry.RegisterAppenderCallback(
 		ctx,
@@ -1965,6 +1992,7 @@ func (a *agent) writeDiagnosticArchive(ctx context.Context, archive types.Archiv
 		a.discovery.DiagnosticArchive,
 		a.diagnosticContainers,
 		a.diagnosticSNMP,
+		a.diagnosticFilterResult,
 		a.metricFilter.DiagnosticArchive,
 		a.gathererRegistry.DiagnosticArchive,
 		a.rulesManager.DiagnosticArchive,
@@ -2248,6 +2276,55 @@ func (a *agent) diagnosticConfig(ctx context.Context, archive types.ArchiveWrite
 	err = enc.Close()
 	if err != nil {
 		fmt.Fprintf(file, "# error: %v\n", err)
+	}
+
+	return nil
+}
+
+func (a *agent) diagnosticFilterResult(ctx context.Context, archive types.ArchiveWriter) error {
+	file, err := archive.Create("metric-filter-result.txt")
+	if err != nil {
+		return err
+	}
+
+	localMetrics, err := a.store.Metrics(nil)
+	if err != nil {
+		return err
+	}
+
+	sort.Slice(localMetrics, func(i, j int) bool {
+		lblsA := labels.FromMap(localMetrics[i].Labels())
+		lblsB := labels.FromMap(localMetrics[j].Labels())
+
+		return labels.Compare(lblsA, lblsB) < 0
+	})
+
+	for _, m := range localMetrics {
+		isAllowed := a.metricFilter.IsAllowed(m.Labels())
+		isDenied := a.metricFilter.IsDenied(m.Labels())
+		isBleemeoAllowed := true
+
+		if a.bleemeoConnector != nil {
+			isBleemeoAllowed, _ = a.bleemeoConnector.IsMetricAllowed(types.LabelsAndAnnotation{
+				Labels:      m.Labels(),
+				Annotations: m.Annotations(),
+			})
+		}
+
+		name := types.LabelsToText(m.Labels())
+
+		switch {
+		case !isAllowed:
+			fmt.Fprintf(file, "The metric %s is not in configured allow list\n", name)
+		case isDenied && !isBleemeoAllowed:
+			fmt.Fprintf(file, "The metric %s is blocked by configured deny list and is not available in current Bleemeo Plan\n", name)
+		case isDenied:
+			fmt.Fprintf(file, "The metric %s is blocked by configured deny list\n", name)
+		case !isBleemeoAllowed:
+			fmt.Fprintf(file, "The metric %s is not available in current Bleemeo Plan\n", name)
+		default:
+			fmt.Fprintf(file, "The metric %s is allowed\n", name)
+		}
 	}
 
 	return nil

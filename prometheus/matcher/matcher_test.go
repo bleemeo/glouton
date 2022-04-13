@@ -17,6 +17,7 @@
 package matcher
 
 import (
+	"glouton/prometheus/model"
 	"glouton/types"
 	"testing"
 
@@ -438,7 +439,7 @@ func Test_Matches_Basic_Point(t *testing.T) {
 		test := test
 
 		t.Run(test.name, func(t *testing.T) {
-			got := test.matchers.MatchesPoint(test.point)
+			got := test.matchers.Matches(test.point.Labels)
 
 			if got != test.want {
 				t.Errorf("Incorrect result expected %v, got %v", test.want, got)
@@ -672,7 +673,7 @@ func Test_Matches_Basic_Family(t *testing.T) {
 		test := test
 
 		t.Run(test.name, func(t *testing.T) {
-			got := test.matchers.MatchesMetric(test.metricName, &test.metric)
+			got := test.matchers.Matches(model.DTO2Labels(test.metricName, &test.metric))
 
 			if got != test.want {
 				t.Errorf("An error occurred: expected %v, got %v", test.want, got)

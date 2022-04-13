@@ -233,6 +233,11 @@ type MetricPoint struct {
 	Annotations MetricAnnotations
 }
 
+type LabelsAndAnnotation struct {
+	Labels      map[string]string
+	Annotations MetricAnnotations
+}
+
 // PointPusher push new points. Points must not be mutated after call.
 type PointPusher interface {
 	PushPoints(ctx context.Context, points []MetricPoint)
