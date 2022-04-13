@@ -195,6 +195,18 @@ func (api *API) init() {
 		}
 	})
 
+	router.HandleFunc("/diagnostic.txt", func(w http.ResponseWriter, r *http.Request) {
+		hdr := w.Header()
+		hdr.Add("Content-Type", "text/plain")
+
+		archive := newTextArchive(w)
+		defer archive.Close()
+
+		if err := api.diagnosticArchive(r.Context(), archive); err != nil {
+			logger.V(1).Printf("failed to serve diagnostic.txt (current file %s): %v", archive.CurrentFileName(), err)
+		}
+	})
+
 	router.Handle("/static/*", http.StripPrefix("/static", &assetsFileServer{fs: http.FileServer(http.FS(staticFolder))}))
 	router.HandleFunc("/*", func(w http.ResponseWriter, r *http.Request) {
 		var err error
