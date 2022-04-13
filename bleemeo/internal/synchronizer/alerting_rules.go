@@ -19,6 +19,8 @@ func (s *Synchronizer) syncAlertingRules(ctx context.Context, fullSync bool, onl
 		return fmt.Errorf("failed to get PromQL rules: %w", err)
 	}
 
+	s.option.Cache.SetAlertingRules(alertingRules)
+
 	if err := s.option.RebuildPromQLRules(alertingRules, resolution); err != nil {
 		return fmt.Errorf("failed to rebuild PromQL rules: %v", err)
 	}
@@ -45,10 +47,8 @@ func (s *Synchronizer) alertingRules(ctx context.Context) (
 		"active": "true",
 	}
 
-	// TODO: The client is always uninitialized the first time this function is called.
 	result, err := s.client.Iter(ctx, "alertingrule", params)
 	if err != nil {
-		fmt.Printf("!!! client iter: %v\n", err)
 		return nil, 0, fmt.Errorf("client iter: %w", err)
 	}
 
