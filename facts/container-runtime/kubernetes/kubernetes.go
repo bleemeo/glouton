@@ -17,6 +17,7 @@ import (
 	"net"
 	"net/url"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -40,7 +41,7 @@ type Kubernetes struct {
 	IsContainerIgnored func(facts.Container) bool
 
 	l              sync.Mutex
-	openConnection func(ctx context.Context, kubeConfig string) (kubeClient, error)
+	openConnection func(ctx context.Context, kubeConfig string, localNode string) (kubeClient, error)
 	client         kubeClient
 	lastPodsUpdate time.Time
 	pods           []corev1.Pod
@@ -56,7 +57,10 @@ const (
 	certExpLabel = "kubernetes_certificate_day_left"
 )
 
-var errNoDecodedData = errors.New("no data decoded in raw certificate")
+var (
+	errNoDecodedData = errors.New("no data decoded in raw certificate")
+	errMissingConfig = errors.New("missing configuration")
+)
 
 // LastUpdate return the last time containers list was updated.
 func (k *Kubernetes) LastUpdate() time.Time {
@@ -222,41 +226,45 @@ func (k *Kubernetes) Test(ctx context.Context) error {
 	return k.updatePods(ctx)
 }
 
-func (k *Kubernetes) Metrics(ctx context.Context) ([]types.MetricPoint, error) {
+func (k *Kubernetes) Metrics(ctx context.Context, now time.Time) ([]types.MetricPoint, error) {
+	return k.Runtime.Metrics(ctx, now)
+}
+
+func (k *Kubernetes) MetricsMinute(ctx context.Context, now time.Time) ([]types.MetricPoint, error) {
 	var multiErr types.MultiErrors
 
-	points, errors := k.Runtime.Metrics(ctx)
-	now := time.Now()
-	config, err := getRestConfig(k.KubeConfig)
+	points, errMetrics := k.Runtime.MetricsMinute(ctx, now)
 
-	if errors != nil {
-		multiErr = append(multiErr, errors)
+	if errMetrics != nil {
+		multiErr = append(multiErr, errMetrics)
 	}
 
+	cl, err := k.getClient(ctx)
 	if err != nil {
 		multiErr = append(multiErr, err)
 
 		return points, multiErr
 	}
 
-	certificatePoint, err := k.getCertificateExpiration(config, now)
-	if err != nil {
-		multiErr = append(multiErr, err)
+	if cl.IsUsingLocalAPI() {
+		morePoints, errors := k.getMasterPoints(ctx, cl, now)
+
+		points = append(points, morePoints...)
+		multiErr = append(multiErr, errors...)
 	}
 
-	points = append(points, certificatePoint)
+	morePoints, errors := k.getKubeletPoint(ctx, cl, now)
 
-	caCertificatePoint, err := k.getCACertificateExpiration(config, now)
-	if err != nil {
-		multiErr = append(multiErr, err)
-	}
-
-	points = append(points, caCertificatePoint)
+	points = append(points, morePoints...)
+	multiErr = append(multiErr, errors...)
 
 	return points, multiErr
 }
 
-func (k *Kubernetes) getCertificateExpiration(config *rest.Config, now time.Time) (types.MetricPoint, error) {
+func (k *Kubernetes) getCertificateExpiration(ctx context.Context, config *rest.Config, now time.Time) (types.MetricPoint, error) {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
 	caPool := x509.NewCertPool()
 	tlsConfig := &tls.Config{MinVersion: tls.VersionTLS12}
 	caData := config.TLSClientConfig.CAData
@@ -291,7 +299,7 @@ func (k *Kubernetes) getCertificateExpiration(config *rest.Config, now time.Time
 
 	tlsConfig.ServerName = addr.Hostname()
 
-	conn, err := net.DialTimeout("tcp", addr.Host, 5*time.Second)
+	conn, err := (&net.Dialer{}).DialContext(ctx, "tcp", addr.Host)
 	if err != nil {
 		// Something went wrong with the connection, but it is not related to TLS
 		return types.MetricPoint{}, err
@@ -300,7 +308,7 @@ func (k *Kubernetes) getCertificateExpiration(config *rest.Config, now time.Time
 	defer conn.Close()
 
 	tlsConn := tls.Client(conn, tlsConfig)
-	err = tlsConn.Handshake()
+	err = tlsConn.HandshakeContext(ctx)
 
 	if err != nil {
 		// Something went wrong with the TLS handshake, we consider the certificate as expired
@@ -318,6 +326,124 @@ func (k *Kubernetes) getCertificateExpiration(config *rest.Config, now time.Time
 	expiry := tlsConn.ConnectionState().PeerCertificates[0]
 
 	return createPointFromCertTime(expiry.NotAfter, certExpLabel, now)
+}
+
+func (k *Kubernetes) getMasterPoints(ctx context.Context, cl kubeClient, now time.Time) ([]types.MetricPoint, []error) {
+	var err types.MultiErrors
+
+	points := make([]types.MetricPoint, 0, 3)
+
+	apiStatus := types.MetricPoint{
+		Point: types.Point{Time: now, Value: 0.0},
+		Labels: map[string]string{
+			types.LabelName: "kubernetes_api_status",
+		},
+	}
+
+	_, errTmp := cl.GetServerVersion(ctx)
+	if errTmp != nil {
+		apiStatus.Annotations.Status = types.StatusDescription{
+			CurrentStatus:     types.StatusCritical,
+			StatusDescription: fmt.Sprintf("failed to contact Kubernetes API: %s", errTmp),
+		}
+	} else {
+		apiStatus.Annotations.Status = types.StatusDescription{
+			CurrentStatus:     types.StatusOk,
+			StatusDescription: "Kubernetes API is alive",
+		}
+	}
+
+	apiStatus.Point.Value = float64(apiStatus.Annotations.Status.CurrentStatus.NagiosCode())
+	points = append(points, apiStatus)
+
+	config := cl.Config()
+	if config == nil {
+		return nil, []error{fmt.Errorf("%w: Kubernetes client config is unset", errMissingConfig)}
+	}
+
+	certificatePoint, errTmp := k.getCertificateExpiration(ctx, config, now)
+	if errTmp != nil {
+		err = append(err, errTmp)
+	} else {
+		points = append(points, certificatePoint)
+	}
+
+	caCertificatePoint, errTmp := k.getCACertificateExpiration(config, now)
+	if errTmp != nil {
+		err = append(err, errTmp)
+	} else {
+		points = append(points, caCertificatePoint)
+	}
+
+	return points, err
+}
+
+func (k *Kubernetes) getKubeletPoint(ctx context.Context, cl kubeClient, now time.Time) ([]types.MetricPoint, []error) {
+	if k.NodeName == "" {
+		return nil, []error{fmt.Errorf("%w: kubernetes.nodename is missing", errMissingConfig)}
+	}
+
+	node, err := cl.GetNode(ctx, k.NodeName)
+	if err != nil {
+		return nil, []error{err}
+	}
+
+	point := types.MetricPoint{
+		Point: types.Point{Time: now, Value: 3.0},
+		Labels: map[string]string{
+			types.LabelName: "kubernetes_kubelet_status",
+		},
+		Annotations: types.MetricAnnotations{
+			Status: types.StatusDescription{
+				CurrentStatus:     types.StatusOk,
+				StatusDescription: "no known issue",
+			},
+		},
+	}
+
+	var resourceWarning []string
+
+	for _, cond := range node.Status.Conditions {
+		switch cond.Type {
+		case corev1.NodeReady:
+			if cond.Status != corev1.ConditionTrue {
+				point.Annotations.Status = types.StatusDescription{
+					CurrentStatus:     types.StatusCritical,
+					StatusDescription: fmt.Sprintf("node is not ready: %s", cond.Message),
+				}
+			}
+		case corev1.NodeDiskPressure, corev1.NodeMemoryPressure, corev1.NodePIDPressure:
+			if cond.Status == corev1.ConditionTrue {
+				typeText := map[corev1.NodeConditionType]string{
+					corev1.NodeDiskPressure:   "disk",
+					corev1.NodeMemoryPressure: "memory",
+					corev1.NodePIDPressure:    "PID",
+				}[cond.Type]
+				resourceWarning = append(
+					resourceWarning,
+					fmt.Sprintf("node has %s pressure: %s", typeText, cond.Message),
+				)
+			}
+		case corev1.NodeNetworkUnavailable:
+			if cond.Status == corev1.ConditionTrue {
+				resourceWarning = append(
+					resourceWarning,
+					fmt.Sprintf("node has networking issue: %s", cond.Message),
+				)
+			}
+		}
+	}
+
+	if len(resourceWarning) > 0 && point.Annotations.Status.CurrentStatus == types.StatusOk {
+		point.Annotations.Status = types.StatusDescription{
+			CurrentStatus:     types.StatusWarning,
+			StatusDescription: strings.Join(resourceWarning, ", "),
+		}
+	}
+
+	point.Point.Value = float64(point.Annotations.Status.CurrentStatus.NagiosCode())
+
+	return []types.MetricPoint{point}, nil
 }
 
 func (k *Kubernetes) getCACertificateExpiration(config *rest.Config, now time.Time) (types.MetricPoint, error) {
@@ -391,7 +517,7 @@ func (k *Kubernetes) getClient(ctx context.Context) (cl kubeClient, err error) {
 	}
 
 	if k.client == nil {
-		cl, err := k.openConnection(ctx, k.KubeConfig)
+		cl, err := k.openConnection(ctx, k.KubeConfig, k.NodeName)
 		if err != nil {
 			return nil, err
 		}
@@ -460,10 +586,14 @@ type kubeClient interface {
 	// GetPODs returns POD on given nodeName or all POD is nodeName is empty.
 	GetPODs(ctx context.Context, nodeName string) ([]corev1.Pod, error)
 	GetServerVersion(ctx context.Context) (*version.Info, error)
+	IsUsingLocalAPI() bool
+	Config() *rest.Config
 }
 
 type realClient struct {
-	client *kubernetes.Clientset
+	client      *kubernetes.Clientset
+	config      *rest.Config
+	useLocalAPI bool
 }
 
 func (cl realClient) GetNode(ctx context.Context, nodeName string) (*corev1.Node, error) {
@@ -505,6 +635,14 @@ func (cl realClient) GetServerVersion(ctx context.Context) (*version.Info, error
 	return &info, nil
 }
 
+func (cl realClient) IsUsingLocalAPI() bool {
+	return cl.useLocalAPI
+}
+
+func (cl realClient) Config() *rest.Config {
+	return cl.config
+}
+
 func getRestConfig(kubeConfig string) (*rest.Config, error) {
 	var (
 		config *rest.Config
@@ -520,7 +658,7 @@ func getRestConfig(kubeConfig string) (*rest.Config, error) {
 	return config, err
 }
 
-func openConnection(ctx context.Context, kubeConfig string) (kubeClient, error) {
+func openConnection(ctx context.Context, kubeConfig string, localNode string) (kubeClient, error) {
 	config, err := getRestConfig(kubeConfig)
 	if err != nil {
 		return nil, err
@@ -531,7 +669,79 @@ func openConnection(ctx context.Context, kubeConfig string) (kubeClient, error) 
 		return nil, err
 	}
 
-	return realClient{client: clientset}, nil
+	client := realClient{client: clientset, config: config, useLocalAPI: false}
+
+	switched, err := client.switchToLocalAPI(ctx, localNode)
+
+	switch {
+	case err != nil:
+		logger.V(1).Printf("Glouton is not able to communicate with local API. It will assume running on a worker node")
+		logger.V(1).Printf("The error while trying to use local API: %v", err)
+	case switched:
+		logger.V(1).Printf("Glouton is running on a Kubernetes master, it will only use the local API server")
+	default:
+		logger.V(1).Printf("Glouton is running on a Kubernetes worker node")
+	}
+
+	return client, nil
+}
+
+func (cl *realClient) switchToLocalAPI(ctx context.Context, localNode string) (bool, error) {
+	if localNode == "" {
+		return false, fmt.Errorf("%w: kubernetes.nodename is missing", errMissingConfig)
+	}
+
+	ep, err := cl.client.CoreV1().Endpoints("default").Get(ctx, "kubernetes", metav1.GetOptions{})
+	if err != nil {
+		return false, fmt.Errorf("failed to list endpoints: %w", err)
+	}
+
+	pods, err := cl.client.CoreV1().Pods("kube-system").List(ctx, metav1.ListOptions{FieldSelector: "spec.nodeName=" + localNode})
+	if err != nil {
+		return false, fmt.Errorf("failed to list PODs: %w", err)
+	}
+
+	podsIP := make(map[string]corev1.Pod, len(pods.Items))
+	for _, pod := range pods.Items {
+		podsIP[pod.Status.PodIP] = pod
+	}
+
+	for _, subset := range ep.Subsets {
+		httpsPort := 8443
+
+		for _, p := range subset.Ports {
+			if p.Name == "https" {
+				httpsPort = int(p.Port)
+			}
+		}
+
+		for _, ip := range subset.Addresses {
+			if pod, ok := podsIP[ip.IP]; ok {
+				logger.V(2).Printf("found the POD running Kubernetes API on local node: %s", pod.Name)
+
+				shallowCopy := *cl.config
+				shallowCopy.Host = "https://" + net.JoinHostPort(ip.IP, strconv.FormatInt(int64(httpsPort), 10))
+
+				newClient, err := kubernetes.NewForConfig(&shallowCopy)
+				if err != nil {
+					return false, fmt.Errorf("failed create client: %w", err)
+				}
+
+				_, err = newClient.CoreV1().Endpoints("default").Get(ctx, "kubernetes", metav1.GetOptions{})
+				if err != nil {
+					return false, fmt.Errorf("failed list endpoints with new client: %w", err)
+				}
+
+				cl.client = newClient
+				cl.config = &shallowCopy
+				cl.useLocalAPI = true
+
+				return true, nil
+			}
+		}
+	}
+
+	return false, nil
 }
 
 type wrappedContainer struct {

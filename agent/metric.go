@@ -24,6 +24,7 @@ import (
 	"glouton/jmxtrans"
 	"glouton/logger"
 	"glouton/prometheus/matcher"
+	"glouton/prometheus/model"
 	"glouton/types"
 	"runtime"
 	"strings"
@@ -47,6 +48,8 @@ var commonDefaultSystemMetrics = []string{
 	// Kubernetes
 	"kubernetes_ca_day_left",
 	"kubernetes_certificate_day_left",
+	"kubernetes_kubelet_status",
+	"kubernetes_api_status",
 
 	// Key Processes
 	"process_context_switch",
@@ -890,28 +893,7 @@ func (m *metricFilter) FilterPoints(points []types.MetricPoint) []types.MetricPo
 
 	if len(m.denyList) != 0 {
 		for _, point := range points {
-			didMatch := false
-
-			for key, denyVals := range m.denyList {
-				if !key.Matches(point.Labels[types.LabelName]) {
-					continue
-				}
-
-				for _, denyVal := range denyVals {
-					matched := denyVal.MatchesPoint(point)
-					if matched {
-						didMatch = true
-
-						break
-					}
-				}
-
-				if didMatch {
-					break
-				}
-			}
-
-			if !didMatch {
+			if !m.IsDenied(point.Labels) {
 				points[i] = point
 				i++
 			}
@@ -922,27 +904,9 @@ func (m *metricFilter) FilterPoints(points []types.MetricPoint) []types.MetricPo
 	}
 
 	for _, point := range points {
-		didMatch := false
-
-		for key, allowVals := range m.allowList {
-			if !key.Matches(point.Labels[types.LabelName]) {
-				continue
-			}
-
-			for _, allowVal := range allowVals {
-				if allowVal.MatchesPoint(point) {
-					points[i] = point
-					didMatch = true
-
-					i++
-
-					break
-				}
-			}
-
-			if didMatch {
-				break
-			}
+		if m.IsAllowed(point.Labels) {
+			points[i] = point
+			i++
 		}
 	}
 
@@ -959,6 +923,39 @@ func checkMaxDuration(start time.Time, points []types.MetricPoint, i int) {
 	}
 }
 
+func (m *metricFilter) IsDenied(lbls map[string]string) bool {
+	for key, denyVals := range m.denyList {
+		if !key.Matches(lbls[types.LabelName]) {
+			continue
+		}
+
+		for _, denyVal := range denyVals {
+			matched := denyVal.Matches(lbls)
+			if matched {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
+func (m *metricFilter) IsAllowed(lbls map[string]string) bool {
+	for key, allowVals := range m.allowList {
+		if !key.Matches(lbls[types.LabelName]) {
+			continue
+		}
+
+		for _, allowVal := range allowVals {
+			if allowVal.Matches(lbls) {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
 func (m *metricFilter) filterMetrics(mt []types.Metric) []types.Metric {
 	i := 0
 
@@ -967,23 +964,7 @@ func (m *metricFilter) filterMetrics(mt []types.Metric) []types.Metric {
 
 	if len(m.denyList) > 0 {
 		for _, metric := range mt {
-			didMatch := false
-
-			for key, denyVals := range m.denyList {
-				if !key.Matches(metric.Labels()[types.LabelName]) {
-					continue
-				}
-
-				for _, denyVal := range denyVals {
-					if denyVal.MatchesLabels(metric.Labels()) {
-						didMatch = true
-
-						break
-					}
-				}
-			}
-
-			if !didMatch {
+			if !m.IsDenied(metric.Labels()) {
 				mt[i] = metric
 				i++
 			}
@@ -994,26 +975,9 @@ func (m *metricFilter) filterMetrics(mt []types.Metric) []types.Metric {
 	}
 
 	for _, metric := range mt {
-		didMatch := false
-
-		for key, allowVals := range m.allowList {
-			if !key.Matches(metric.Labels()[types.LabelName]) {
-				continue
-			}
-
-			for _, allowVal := range allowVals {
-				if allowVal.MatchesLabels(metric.Labels()) {
-					mt[i] = metric
-					didMatch = true
-					i++
-
-					break
-				}
-			}
-
-			if didMatch {
-				break
-			}
+		if m.IsAllowed(metric.Labels()) {
+			mt[i] = metric
+			i++
 		}
 	}
 
@@ -1031,7 +995,7 @@ func (m *metricFilter) filterFamily(f *dto.MetricFamily) {
 			didMatch := false
 
 			for _, denyVal := range denyVals {
-				if denyVal.MatchesMetric(*f.Name, metric) {
+				if denyVal.Matches(model.DTO2Labels(*f.Name, metric)) {
 					didMatch = true
 
 					break
@@ -1052,7 +1016,7 @@ func (m *metricFilter) filterFamily(f *dto.MetricFamily) {
 
 	for _, metric := range f.Metric {
 		for _, allowVal := range allowVals {
-			if allowVal.MatchesMetric(*f.Name, metric) {
+			if allowVal.Matches(model.DTO2Labels(*f.Name, metric)) {
 				f.Metric[i] = metric
 				i++
 

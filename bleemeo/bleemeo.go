@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"glouton/bleemeo/internal/cache"
+	"glouton/bleemeo/internal/filter"
 	"glouton/bleemeo/internal/mqtt"
 	"glouton/bleemeo/internal/synchronizer"
 	"glouton/bleemeo/types"
@@ -866,6 +867,12 @@ func (c *Connector) EmitInternalMetric(ctx context.Context, now time.Time) {
 			},
 		})
 	}
+}
+
+func (c *Connector) IsMetricAllowed(metric gloutonTypes.LabelsAndAnnotation) (bool, error) {
+	f := filter.NewFilter(c.cache)
+
+	return f.IsAllowed(metric.Labels, metric.Annotations)
 }
 
 func (c *Connector) updateConfig(ctx context.Context) {

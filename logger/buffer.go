@@ -58,7 +58,22 @@ func (b *buffer) SetCapacity(headSizeBytes int, tailSizeBytes int) {
 
 	b.headMaxSize = headSizeBytes
 	b.tailMaxSize = tailSizeBytes / tailsCount
-	b.state = stateUninitilized
+}
+
+func (b *buffer) CompressedSize() int {
+	b.l.Lock()
+	defer b.l.Unlock()
+
+	if b.state == stateUninitilized {
+		return 0
+	}
+
+	compressedSize := b.head.Len()
+	for i := range b.tails {
+		compressedSize += b.tails[i].Len()
+	}
+
+	return compressedSize
 }
 
 func (b *buffer) reset() {

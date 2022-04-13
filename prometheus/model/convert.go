@@ -272,3 +272,14 @@ func MetaLabelsToAnnotation(lbls labels.Labels) types.MetricAnnotations {
 
 	return annotations
 }
+
+func DTO2Labels(name string, input *dto.Metric) map[string]string {
+	lbls := make(map[string]string, len(input.Label)+1)
+	for _, lp := range input.Label {
+		lbls[*lp.Name] = *lp.Value
+	}
+
+	lbls["__name__"] = name
+
+	return lbls
+}

@@ -15,6 +15,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/version"
+	"k8s.io/client-go/rest"
 	"sigs.k8s.io/yaml"
 )
 
@@ -73,6 +74,14 @@ func (k *mockKubernetesClient) GetPODs(ctx context.Context, nodeName string) ([]
 
 func (k *mockKubernetesClient) GetServerVersion(ctx context.Context) (*version.Info, error) {
 	return k.versions.ServerVersion, nil
+}
+
+func (k *mockKubernetesClient) IsUsingLocalAPI() bool {
+	return true
+}
+
+func (k *mockKubernetesClient) Config() *rest.Config {
+	return nil
 }
 
 func TestKubernetes_Containers(t *testing.T) { //nolint:maintidx
@@ -756,7 +765,7 @@ func TestKubernetes_Containers(t *testing.T) { //nolint:maintidx
 			k := &Kubernetes{
 				Runtime:  runtime,
 				NodeName: "minikube",
-				openConnection: func(_ context.Context, kubeConfig string) (kubeClient, error) {
+				openConnection: func(_ context.Context, kubeConfig string, localNode string) (kubeClient, error) {
 					return mockClient, nil
 				},
 				IsContainerIgnored: facts.ContainerFilter{}.ContainerIgnored,

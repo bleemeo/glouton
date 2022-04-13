@@ -186,122 +186,229 @@ func Test_bufferSize(t *testing.T) {
 	}
 }
 
-func Test_bufferOrder(t *testing.T) {
+func Test_bufferOrder(t *testing.T) { //nolint: maintidx
+	t.Parallel()
+
 	re := regexp.MustCompile(`this is line #(\d+)`)
-	b := &buffer{}
 
 	const (
-		headSize = 10000
-		tailSize = 20000
+		headSize             = 10000
+		tailSize             = 20000
+		elispseExpectedAfter = 250
 	)
 
-	b.SetCapacity(headSize, tailSize)
+	type change struct {
+		changeAt    int
+		newHeadSize int
+		newTailSize int
+	}
 
-	writeSize := []int{10, 100, 150, 200, 250, 1000, 10000, 100000}
+	cases := []struct {
+		name    string
+		changes []change // must be ordred by changeAt
+	}{
+		{
+			name: "no change",
+			changes: []change{
+				{
+					changeAt:    0,
+					newHeadSize: headSize,
+					newTailSize: tailSize,
+				},
+			},
+		},
+		{
+			name: "increase early",
+			changes: []change{
+				{
+					changeAt:    0,
+					newHeadSize: headSize,
+					newTailSize: tailSize,
+				},
+				{
+					changeAt:    5,
+					newHeadSize: headSize + 5,
+					newTailSize: tailSize + 10,
+				},
+			},
+		},
+		{
+			name: "no change early",
+			changes: []change{
+				{
+					changeAt:    0,
+					newHeadSize: headSize,
+					newTailSize: tailSize,
+				},
+				{
+					changeAt:    5,
+					newHeadSize: headSize,
+					newTailSize: tailSize,
+				},
+			},
+		},
+		{
+			name: "increase late",
+			changes: []change{
+				{
+					changeAt:    0,
+					newHeadSize: headSize,
+					newTailSize: tailSize,
+				},
+				{
+					changeAt:    2500,
+					newHeadSize: headSize + 5,
+					newTailSize: tailSize + 10,
+				},
+			},
+		},
+		{
+			name: "multiple changes",
+			changes: []change{
+				{
+					changeAt:    0,
+					newHeadSize: headSize,
+					newTailSize: tailSize,
+				},
+				{
+					changeAt:    100,
+					newHeadSize: headSize + 5,
+					newTailSize: tailSize + 10,
+				},
+				{
+					changeAt:    1000,
+					newHeadSize: headSize - 5,
+					newTailSize: tailSize - 10,
+				},
+			},
+		},
+	}
 
-	var (
-		lineNumber             int
-		elispseAfterCountLines int
-	)
+	for _, tt := range cases {
+		tt := tt
 
-	rnd := rand.New(rand.NewSource(42)) //nolint: gosec
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 
-	for _, maxLine := range writeSize {
-		t.Run(fmt.Sprintf("maxLine=%d", maxLine), func(t *testing.T) {
-			for ; lineNumber < maxLine; lineNumber++ {
-				line := fmt.Sprintf("this is line #%d. This random is to reduce compression %d%d%d\n", lineNumber, rnd.Int(), rnd.Int(), rnd.Int())
+			b := &buffer{}
 
-				n, err := b.write(time.Now(), []byte(line))
-				if err != nil {
-					t.Fatal(err)
-				}
-
-				if n != len([]byte(line)) {
-					t.Fatalf("Write() = %d, want %d", n, len([]byte(line)))
-				}
-			}
-
-			t.Logf("tailIndex=%d, droppedFirstTail=%v", b.tailIndex, b.droppedFirstTail)
-
-			seenNumber := make(map[int]int)
-			content := b.Content()
+			// We should have biggest writeSize big enough, such as we cycled tail enough time.
+			// 10*elispseExpectedAfter should be enough.
+			writeSize := []int{10, 100, 150, 200, 250, 1000, 10000, 100000}
 
 			var (
-				hadError         bool
-				hadElipsisMarker bool
-				elipsisMarkerAt  int
-				lastNumber       int64
+				lineNumber             int
+				changeIndex            int
+				elispseAfterCountLines int
 			)
 
-			for i, line := range strings.Split(string(content), "\n") {
-				if line == "" {
-					continue
-				}
+			rnd := rand.New(rand.NewSource(42)) //nolint: gosec
 
-				if line == "[...]" {
-					hadElipsisMarker = true
-					elipsisMarkerAt = i
-					t.Logf("Elipsis at line #%d, lastNumber=%d", i, lastNumber)
+			for _, maxLine := range writeSize {
+				t.Run(fmt.Sprintf("maxLine=%d", maxLine), func(t *testing.T) {
+					for ; lineNumber < maxLine; lineNumber++ {
+						if len(tt.changes) > changeIndex && lineNumber == tt.changes[changeIndex].changeAt {
+							b.SetCapacity(tt.changes[changeIndex].newHeadSize, tt.changes[changeIndex].newTailSize)
 
-					continue
-				}
+							changeIndex++
+						}
 
-				match := re.FindStringSubmatch(line)
-				if match == nil {
-					t.Errorf("line %#v (#%d) don't match RE", line, i)
+						line := fmt.Sprintf("this is line #%d. This random is to reduce compression %d%d%d\n", lineNumber, rnd.Int(), rnd.Int(), rnd.Int())
 
-					hadError = true
+						n, err := b.write(time.Now(), []byte(line))
+						if err != nil {
+							t.Fatal(err)
+						}
 
-					continue
-				}
+						if n != len([]byte(line)) {
+							t.Fatalf("Write() = %d, want %d", n, len([]byte(line)))
+						}
+					}
 
-				n, err := strconv.ParseInt(match[1], 10, 0)
-				if err != nil {
-					t.Error(err)
+					seenNumber := make(map[int]int)
+					content := b.Content()
 
-					hadError = true
+					var (
+						hadError         bool
+						hadElipsisMarker bool
+						elipsisMarkerAt  int
+						lastNumber       int64
+					)
 
-					continue
-				}
+					for i, line := range strings.Split(string(content), "\n") {
+						if line == "" {
+							continue
+						}
 
-				if n < lastNumber {
-					t.Errorf("line #%d has number %d but previous number was bigger (%d)", i, n, lastNumber)
-				}
+						if line == "[...]" {
+							hadElipsisMarker = true
+							elipsisMarkerAt = i
 
-				if n != lastNumber+1 && !hadElipsisMarker && i != 0 {
-					t.Errorf("line #%d has number %d but expected %d", i, n, lastNumber+1)
-				}
+							continue
+						}
 
-				if n != lastNumber+1 && hadElipsisMarker && elipsisMarkerAt != i-1 {
-					t.Errorf("line #%d has number %d but expected %d", i, n, lastNumber+1)
-				}
+						match := re.FindStringSubmatch(line)
+						if match == nil {
+							t.Errorf("line %#v (#%d) don't match RE", line, i)
 
-				if hadElipsisMarker && i == elipsisMarkerAt+1 {
-					t.Logf("line #%d is number %d (just after elipsis)", i, n)
-				}
+							hadError = true
 
-				lastNumber = n
+							continue
+						}
 
-				if _, ok := seenNumber[int(n)]; ok {
-					t.Errorf("line #%d has number %d which was already seen at line %d", i, n, seenNumber[int(n)])
-				}
+						n, err := strconv.ParseInt(match[1], 10, 0)
+						if err != nil {
+							t.Error(err)
 
-				seenNumber[int(n)] = i
+							hadError = true
+
+							continue
+						}
+
+						if n < lastNumber {
+							t.Errorf("line #%d has number %d but previous number was bigger (%d)", i, n, lastNumber)
+						}
+
+						if n != lastNumber+1 && !hadElipsisMarker && i != 0 {
+							t.Errorf("line #%d has number %d but expected %d", i, n, lastNumber+1)
+						}
+
+						if n != lastNumber+1 && hadElipsisMarker && elipsisMarkerAt != i-1 {
+							t.Errorf("line #%d has number %d but expected %d", i, n, lastNumber+1)
+						}
+
+						lastNumber = n
+
+						if _, ok := seenNumber[int(n)]; ok {
+							t.Errorf("line #%d has number %d which was already seen at line %d", i, n, seenNumber[int(n)])
+						}
+
+						seenNumber[int(n)] = i
+					}
+
+					if _, ok := seenNumber[0]; !ok {
+						t.Error("Line #0 isn't seen")
+					}
+
+					if elispseAfterCountLines == 0 && hadElipsisMarker {
+						elispseAfterCountLines = elipsisMarkerAt
+					} else if hadElipsisMarker && elispseAfterCountLines != elipsisMarkerAt {
+						t.Errorf("elipsisMarkerAt=%d want %d", elipsisMarkerAt, elispseAfterCountLines)
+					}
+
+					if hadError {
+						if len(content) < 150 {
+							t.Logf("content is %#v", string(content))
+						} else {
+							t.Logf("content[:150] is %#v", string(content[:150]))
+							t.Logf("content[-150:] is %#v", string(content[len(content)-150:]))
+						}
+					}
+				})
 			}
 
-			if elispseAfterCountLines == 0 && hadElipsisMarker {
-				elispseAfterCountLines = maxLine
-			}
-
-			t.Logf("hadElipsisMarker=%v, elispseAfterCountLines=%d", hadElipsisMarker, elispseAfterCountLines)
-
-			if hadError {
-				if len(content) < 150 {
-					t.Logf("content is %#v", string(content))
-				} else {
-					t.Logf("content[:150] is %#v", string(content[:150]))
-					t.Logf("content[-150:] is %#v", string(content[len(content)-150:]))
-				}
+			if elispseAfterCountLines > elispseExpectedAfter {
+				t.Errorf("elispseAfterCountLines = %d, want less than %d", elispseAfterCountLines, elispseExpectedAfter)
 			}
 		})
 	}

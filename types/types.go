@@ -235,6 +235,11 @@ type MetricPoint struct {
 	Annotations MetricAnnotations
 }
 
+type LabelsAndAnnotation struct {
+	Labels      map[string]string
+	Annotations MetricAnnotations
+}
+
 // PointPusher push new points. Points must not be mutated after call.
 type PointPusher interface {
 	PushPoints(ctx context.Context, points []MetricPoint)
@@ -342,6 +347,7 @@ type Monitor struct {
 	ExpectedContent         string
 	ExpectedResponseCode    int
 	ForbiddenContent        string
+	CAFile                  string
 }
 
 // MultiErrors is a type containing multiple errors. It implements the error interface.

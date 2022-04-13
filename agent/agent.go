@@ -539,6 +539,33 @@ func (a *agent) getConfigThreshold(firstUpdate bool) map[string]threshold.Thresh
 	return configThreshold
 }
 
+func (a *agent) newMetricsCallback(newMetrics []types.LabelsAndAnnotation) {
+	for _, m := range newMetrics {
+		isAllowed := a.metricFilter.IsAllowed(m.Labels)
+		isDenied := a.metricFilter.IsDenied(m.Labels)
+		isBleemeoAllowed := true
+
+		if a.bleemeoConnector != nil {
+			isBleemeoAllowed, _ = a.bleemeoConnector.IsMetricAllowed(m)
+		}
+
+		name := types.LabelsToText(m.Labels)
+
+		switch {
+		case !isAllowed:
+			logger.V(2).Printf("The metric %s is not in configured allow list", name)
+		case isDenied && !isBleemeoAllowed:
+			logger.V(1).Printf("The metric %s is blocked by configured deny list and is not available in current Bleemeo Plan", name)
+		case isDenied:
+			logger.V(1).Printf("The metric %s is blocked by configured deny list", name)
+		case !isBleemeoAllowed:
+			logger.V(1).Printf("The metric %s is not available in current Bleemeo Plan", name)
+		}
+	}
+
+	a.rulesManager.ResetInactiveRules()
+}
+
 func (a *agent) updateThresholds(ctx context.Context, thresholds map[threshold.MetricNameItem]threshold.Threshold, firstUpdate bool) {
 	configThreshold := a.getConfigThreshold(firstUpdate)
 
@@ -713,7 +740,7 @@ func (a *agent) run(ctx context.Context) { //nolint:maintidx
 
 	a.rulesManager = rules.NewManager(ctx, a.store, a.metricResolution)
 
-	a.store.SetResetRuleCallback(a.rulesManager.ResetInactiveRules)
+	a.store.SetNewMetricCallback(a.newMetricsCallback)
 
 	_, err = a.gathererRegistry.RegisterAppenderCallback(
 		ctx,
@@ -761,6 +788,34 @@ func (a *agent) run(ctx context.Context) { //nolint:maintidx
 			IsContainerIgnored: a.containerFilter.ContainerIgnored,
 		}
 		a.containerRuntime = kube
+
+		var clusterNameState string
+
+		clusterName := a.oldConfig.String("kubernetes.clustername")
+
+		err = a.state.Get("kubernestes_cluster_name", &clusterNameState)
+		if err != nil {
+			logger.V(2).Printf("failed to get kubernestes_cluster_name: %v", err)
+		}
+
+		if clusterName == "" && clusterNameState != "" {
+			logger.V(1).Printf("kubernetes.clustername is unset, using previous value of %s", clusterNameState)
+			clusterName = clusterNameState
+		}
+
+		if clusterName != "" && clusterNameState != clusterName {
+			err = a.state.Set("kubernestes_cluster_name", clusterNameState)
+			if err != nil {
+				logger.V(2).Printf("failed to set kubernestes_cluster_name: %v", err)
+			}
+		}
+
+		if clusterName != "" {
+			a.factProvider.SetFact("kubernetes_cluster_name", clusterName)
+		} else {
+			logger.V(0).Printf("kubernetes.clustername config is missing, some feature are unavailable. See https://docs.bleemeo.com/agent/installation#installation-on-kubernetes")
+			a.oldConfig.AddWarning("kubernetes.clustername is missing, some feature are unavailable")
+		}
 
 		ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 		if err := kube.Test(ctx); err != nil {
@@ -830,6 +885,19 @@ func (a *agent) run(ctx context.Context) { //nolint:maintidx
 			JitterSeed:  baseJitter,
 		},
 		a.miscGather(a.threshold.WithPusher(a.gathererRegistry.WithTTL(5*time.Minute))),
+	)
+	if err != nil {
+		logger.Printf("unable to add miscGathere metrics: %v", err)
+	}
+
+	_, err = a.gathererRegistry.RegisterPushPointsCallback(
+		ctx,
+		registry.RegistrationOption{
+			Description: "miscGatherMinute",
+			JitterSeed:  baseJitter,
+			MinInterval: time.Minute,
+		},
+		a.miscGatherMinute(a.threshold.WithPusher(a.gathererRegistry.WithTTL(5*time.Minute))),
 	)
 	if err != nil {
 		logger.Printf("unable to add miscGathere metrics: %v", err)
@@ -938,7 +1006,6 @@ func (a *agent) run(ctx context.Context) { //nolint:maintidx
 		{a.dockerWatcher, "Docker event watcher"},
 		{a.netstatWatcher, "Netstat file watcher"},
 		{a.miscTasks, "Miscelanous tasks"},
-		{a.minuteMetric, "Metrics every minute"},
 		{a.sendToTelemetry, "Send Facts information to our telemetry tool"},
 		{a.threshold.Run, "Threshold state"},
 	}
@@ -1226,7 +1293,7 @@ func (a *agent) buildCollectorsConfig() (conf inputs.CollectorConfig, err error)
 
 func (a *agent) miscGather(pusher types.PointPusher) func(context.Context, time.Time) {
 	return func(ctx context.Context, t0 time.Time) {
-		points, err := a.containerRuntime.Metrics(ctx)
+		points, err := a.containerRuntime.Metrics(ctx, t0)
 		if err != nil {
 			logger.V(2).Printf("container Runtime metrics gather failed: %v", err)
 		}
@@ -1290,19 +1357,18 @@ func (a *agent) sendToTelemetry(ctx context.Context) error {
 	return nil
 }
 
-func (a *agent) minuteMetric(ctx context.Context) error {
-	for {
-		select {
-		case <-time.After(time.Minute):
-		case <-ctx.Done():
-			return nil
+func (a *agent) miscGatherMinute(pusher types.PointPusher) func(context.Context, time.Time) {
+	return func(ctx context.Context, t0 time.Time) {
+		points, err := a.containerRuntime.MetricsMinute(ctx, t0)
+		if err != nil {
+			logger.V(2).Printf("container Runtime metrics gather failed: %v", err)
 		}
 
 		service, err := a.discovery.Discovery(ctx, 2*time.Hour)
 		if err != nil {
 			logger.V(1).Printf("get service failed to every-minute metrics: %v", err)
 
-			continue
+			service = nil
 		}
 
 		for _, srv := range service {
@@ -1332,14 +1398,12 @@ func (a *agent) minuteMetric(ctx context.Context) error {
 					ServiceName: srv.Name,
 				}
 
-				a.threshold.WithPusher(a.gathererRegistry.WithTTL(5*time.Minute)).PushPoints(ctx, []types.MetricPoint{
-					{
-						Labels:      labels,
-						Annotations: annotations,
-						Point: types.Point{
-							Time:  time.Now(),
-							Value: n,
-						},
+				points = append(points, types.MetricPoint{
+					Labels:      labels,
+					Annotations: annotations,
+					Point: types.Point{
+						Time:  time.Now(),
+						Value: n,
 					},
 				})
 			case discovery.EximService:
@@ -1363,14 +1427,12 @@ func (a *agent) minuteMetric(ctx context.Context) error {
 					ServiceName: srv.Name,
 				}
 
-				a.threshold.WithPusher(a.gathererRegistry.WithTTL(5*time.Minute)).PushPoints(ctx, []types.MetricPoint{
-					{
-						Labels:      labels,
-						Annotations: annotations,
-						Point: types.Point{
-							Time:  time.Now(),
-							Value: n,
-						},
+				points = append(points, types.MetricPoint{
+					Labels:      labels,
+					Annotations: annotations,
+					Point: types.Point{
+						Time:  time.Now(),
+						Value: n,
 					},
 				})
 			}
@@ -1378,30 +1440,29 @@ func (a *agent) minuteMetric(ctx context.Context) error {
 
 		desc := strings.Join(a.oldConfig.GetWarnings(), "\n")
 		status := types.StatusWarning
-		t0 := time.Now().Truncate(time.Second)
 
 		if len(desc) == 0 {
 			status = types.StatusOk
 			desc = "configuration returned no warnings."
 		}
 
-		a.gathererRegistry.WithTTL(5*time.Minute).PushPoints(ctx, []types.MetricPoint{
-			{
-				Point: types.Point{
-					Value: float64(status.NagiosCode()),
-					Time:  t0,
-				},
-				Labels: map[string]string{
-					types.LabelName: "agent_config_warning",
-				},
-				Annotations: types.MetricAnnotations{
-					Status: types.StatusDescription{
-						StatusDescription: desc,
-						CurrentStatus:     status,
-					},
+		points = append(points, types.MetricPoint{
+			Point: types.Point{
+				Value: float64(status.NagiosCode()),
+				Time:  t0,
+			},
+			Labels: map[string]string{
+				types.LabelName: "agent_config_warning",
+			},
+			Annotations: types.MetricAnnotations{
+				Status: types.StatusDescription{
+					StatusDescription: desc,
+					CurrentStatus:     status,
 				},
 			},
 		})
+
+		pusher.PushPoints(ctx, points)
 	}
 }
 
@@ -1965,6 +2026,7 @@ func (a *agent) writeDiagnosticArchive(ctx context.Context, archive types.Archiv
 		a.discovery.DiagnosticArchive,
 		a.diagnosticContainers,
 		a.diagnosticSNMP,
+		a.diagnosticFilterResult,
 		a.metricFilter.DiagnosticArchive,
 		a.gathererRegistry.DiagnosticArchive,
 		a.rulesManager.DiagnosticArchive,
@@ -2008,10 +2070,16 @@ func (a *agent) diagnosticGlobalInfo(ctx context.Context, archive types.ArchiveW
 		return err
 	}
 
-	_, err = file.Write(logger.Buffer())
+	tmp := logger.Buffer()
+
+	_, err = file.Write(tmp)
 	if err != nil {
 		return err
 	}
+
+	compressedSize := logger.CompressedSize()
+
+	fmt.Fprintf(file, "-- Log size = %d, compressed = %d (ratio: %.2f)\n", len(tmp), compressedSize, float64(compressedSize)/float64(len(tmp)))
 
 	file, err = archive.Create("goroutines.txt")
 	if err != nil {
@@ -2242,6 +2310,55 @@ func (a *agent) diagnosticConfig(ctx context.Context, archive types.ArchiveWrite
 	err = enc.Close()
 	if err != nil {
 		fmt.Fprintf(file, "# error: %v\n", err)
+	}
+
+	return nil
+}
+
+func (a *agent) diagnosticFilterResult(ctx context.Context, archive types.ArchiveWriter) error {
+	file, err := archive.Create("metric-filter-result.txt")
+	if err != nil {
+		return err
+	}
+
+	localMetrics, err := a.store.Metrics(nil)
+	if err != nil {
+		return err
+	}
+
+	sort.Slice(localMetrics, func(i, j int) bool {
+		lblsA := labels.FromMap(localMetrics[i].Labels())
+		lblsB := labels.FromMap(localMetrics[j].Labels())
+
+		return labels.Compare(lblsA, lblsB) < 0
+	})
+
+	for _, m := range localMetrics {
+		isAllowed := a.metricFilter.IsAllowed(m.Labels())
+		isDenied := a.metricFilter.IsDenied(m.Labels())
+		isBleemeoAllowed := true
+
+		if a.bleemeoConnector != nil {
+			isBleemeoAllowed, _ = a.bleemeoConnector.IsMetricAllowed(types.LabelsAndAnnotation{
+				Labels:      m.Labels(),
+				Annotations: m.Annotations(),
+			})
+		}
+
+		name := types.LabelsToText(m.Labels())
+
+		switch {
+		case !isAllowed:
+			fmt.Fprintf(file, "The metric %s is not in configured allow list\n", name)
+		case isDenied && !isBleemeoAllowed:
+			fmt.Fprintf(file, "The metric %s is blocked by configured deny list and is not available in current Bleemeo Plan\n", name)
+		case isDenied:
+			fmt.Fprintf(file, "The metric %s is blocked by configured deny list\n", name)
+		case !isBleemeoAllowed:
+			fmt.Fprintf(file, "The metric %s is not available in current Bleemeo Plan\n", name)
+		default:
+			fmt.Fprintf(file, "The metric %s is allowed\n", name)
+		}
 	}
 
 	return nil
