@@ -118,9 +118,7 @@ func (c *Containerd) RuntimeFact(ctx context.Context, currentFact map[string]str
 
 // Metrics return metrics in a format similar to the one returned by Telegraf docker input.
 // Note that Metrics will never open the connection to ContainerD and will return empty points if not connected.
-func (c *Containerd) Metrics(ctx context.Context) ([]types.MetricPoint, error) {
-	now := time.Now()
-
+func (c *Containerd) Metrics(ctx context.Context, now time.Time) ([]types.MetricPoint, error) {
 	c.l.Lock()
 
 	cl := c.client
@@ -225,6 +223,10 @@ func (c *Containerd) Metrics(ctx context.Context) ([]types.MetricPoint, error) {
 	c.pastMetricValues = newValues
 
 	return points, nil
+}
+
+func (c *Containerd) MetricsMinute(ctx context.Context, now time.Time) ([]types.MetricPoint, error) {
+	return nil, nil
 }
 
 // CachedContainer return a container without querying ContainerD, it use in-memory cache which must have been filled by a call to Continers().

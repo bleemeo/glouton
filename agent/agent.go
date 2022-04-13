@@ -862,6 +862,19 @@ func (a *agent) run(ctx context.Context) { //nolint:maintidx
 		logger.Printf("unable to add miscGathere metrics: %v", err)
 	}
 
+	_, err = a.gathererRegistry.RegisterPushPointsCallback(
+		ctx,
+		registry.RegistrationOption{
+			Description: "miscGatherMinute",
+			JitterSeed:  baseJitter,
+			MinInterval: time.Minute,
+		},
+		a.miscGatherMinute(a.threshold.WithPusher(a.gathererRegistry.WithTTL(5*time.Minute))),
+	)
+	if err != nil {
+		logger.Printf("unable to add miscGathere metrics: %v", err)
+	}
+
 	servicesIgnoreCheck, _ := a.oldConfig.Get("service_ignore_check")
 	servicesIgnoreMetrics, _ := a.oldConfig.Get("service_ignore_metrics")
 	serviceIgnoreCheck := confFieldToSliceMap(servicesIgnoreCheck, "service ignore check")
@@ -965,7 +978,6 @@ func (a *agent) run(ctx context.Context) { //nolint:maintidx
 		{a.dockerWatcher, "Docker event watcher"},
 		{a.netstatWatcher, "Netstat file watcher"},
 		{a.miscTasks, "Miscelanous tasks"},
-		{a.minuteMetric, "Metrics every minute"},
 		{a.sendToTelemetry, "Send Facts information to our telemetry tool"},
 		{a.threshold.Run, "Threshold state"},
 	}
@@ -1253,7 +1265,7 @@ func (a *agent) buildCollectorsConfig() (conf inputs.CollectorConfig, err error)
 
 func (a *agent) miscGather(pusher types.PointPusher) func(context.Context, time.Time) {
 	return func(ctx context.Context, t0 time.Time) {
-		points, err := a.containerRuntime.Metrics(ctx)
+		points, err := a.containerRuntime.Metrics(ctx, t0)
 		if err != nil {
 			logger.V(2).Printf("container Runtime metrics gather failed: %v", err)
 		}
@@ -1317,19 +1329,18 @@ func (a *agent) sendToTelemetry(ctx context.Context) error {
 	return nil
 }
 
-func (a *agent) minuteMetric(ctx context.Context) error {
-	for {
-		select {
-		case <-time.After(time.Minute):
-		case <-ctx.Done():
-			return nil
+func (a *agent) miscGatherMinute(pusher types.PointPusher) func(context.Context, time.Time) {
+	return func(ctx context.Context, t0 time.Time) {
+		points, err := a.containerRuntime.MetricsMinute(ctx, t0)
+		if err != nil {
+			logger.V(2).Printf("container Runtime metrics gather failed: %v", err)
 		}
 
 		service, err := a.discovery.Discovery(ctx, 2*time.Hour)
 		if err != nil {
 			logger.V(1).Printf("get service failed to every-minute metrics: %v", err)
 
-			continue
+			service = nil
 		}
 
 		for _, srv := range service {
@@ -1359,14 +1370,12 @@ func (a *agent) minuteMetric(ctx context.Context) error {
 					ServiceName: srv.Name,
 				}
 
-				a.threshold.WithPusher(a.gathererRegistry.WithTTL(5*time.Minute)).PushPoints(ctx, []types.MetricPoint{
-					{
-						Labels:      labels,
-						Annotations: annotations,
-						Point: types.Point{
-							Time:  time.Now(),
-							Value: n,
-						},
+				points = append(points, types.MetricPoint{
+					Labels:      labels,
+					Annotations: annotations,
+					Point: types.Point{
+						Time:  time.Now(),
+						Value: n,
 					},
 				})
 			case discovery.EximService:
@@ -1390,14 +1399,12 @@ func (a *agent) minuteMetric(ctx context.Context) error {
 					ServiceName: srv.Name,
 				}
 
-				a.threshold.WithPusher(a.gathererRegistry.WithTTL(5*time.Minute)).PushPoints(ctx, []types.MetricPoint{
-					{
-						Labels:      labels,
-						Annotations: annotations,
-						Point: types.Point{
-							Time:  time.Now(),
-							Value: n,
-						},
+				points = append(points, types.MetricPoint{
+					Labels:      labels,
+					Annotations: annotations,
+					Point: types.Point{
+						Time:  time.Now(),
+						Value: n,
 					},
 				})
 			}
@@ -1405,30 +1412,29 @@ func (a *agent) minuteMetric(ctx context.Context) error {
 
 		desc := strings.Join(a.oldConfig.GetWarnings(), "\n")
 		status := types.StatusWarning
-		t0 := time.Now().Truncate(time.Second)
 
 		if len(desc) == 0 {
 			status = types.StatusOk
 			desc = "configuration returned no warnings."
 		}
 
-		a.gathererRegistry.WithTTL(5*time.Minute).PushPoints(ctx, []types.MetricPoint{
-			{
-				Point: types.Point{
-					Value: float64(status.NagiosCode()),
-					Time:  t0,
-				},
-				Labels: map[string]string{
-					types.LabelName: "agent_config_warning",
-				},
-				Annotations: types.MetricAnnotations{
-					Status: types.StatusDescription{
-						StatusDescription: desc,
-						CurrentStatus:     status,
-					},
+		points = append(points, types.MetricPoint{
+			Point: types.Point{
+				Value: float64(status.NagiosCode()),
+				Time:  t0,
+			},
+			Labels: map[string]string{
+				types.LabelName: "agent_config_warning",
+			},
+			Annotations: types.MetricAnnotations{
+				Status: types.StatusDescription{
+					StatusDescription: desc,
+					CurrentStatus:     status,
 				},
 			},
 		})
+
+		pusher.PushPoints(ctx, points)
 	}
 }
 

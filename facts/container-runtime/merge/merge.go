@@ -285,13 +285,30 @@ func (r *Runtime) RuntimeFact(ctx context.Context, currentFact map[string]string
 	return newFacts
 }
 
-func (r *Runtime) Metrics(ctx context.Context) ([]types.MetricPoint, error) {
+func (r *Runtime) Metrics(ctx context.Context, now time.Time) ([]types.MetricPoint, error) {
 	points := make([]types.MetricPoint, 0)
 
 	var errors types.MultiErrors
 
 	for _, runtime := range r.Runtimes {
-		runtimePoints, err := runtime.Metrics(ctx)
+		runtimePoints, err := runtime.Metrics(ctx, now)
+		if err != nil {
+			errors = append(errors, err)
+		}
+
+		points = append(points, runtimePoints...)
+	}
+
+	return points, errors
+}
+
+func (r *Runtime) MetricsMinute(ctx context.Context, now time.Time) ([]types.MetricPoint, error) {
+	points := make([]types.MetricPoint, 0)
+
+	var errors types.MultiErrors
+
+	for _, runtime := range r.Runtimes {
+		runtimePoints, err := runtime.MetricsMinute(ctx, now)
 		if err != nil {
 			errors = append(errors, err)
 		}

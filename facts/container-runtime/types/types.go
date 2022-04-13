@@ -19,5 +19,6 @@ type RuntimeInterface interface {
 	Run(ctx context.Context) error
 	RuntimeFact(ctx context.Context, currentFact map[string]string) map[string]string
 	LastUpdate() time.Time
-	Metrics(ctx context.Context) ([]types.MetricPoint, error)
+	Metrics(ctx context.Context, now time.Time) ([]types.MetricPoint, error)
+	MetricsMinute(ctx context.Context, now time.Time) ([]types.MetricPoint, error)
 }
