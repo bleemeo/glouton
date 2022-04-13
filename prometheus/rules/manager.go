@@ -205,20 +205,19 @@ func (rm *Manager) UpdateMetricResolution(metricResolution time.Duration) {
 // MetricList returns a list of all alerting rules metric names.
 // This is used for dynamic generation of filters.
 func (rm *Manager) MetricList() []string {
-	// TODO:
-	// res := make([]string, 0, len(rm.ruleGroups))
+	res := make([]string, 0, len(rm.ruleGroups))
 
-	// rm.l.Lock()
-	// defer rm.l.Unlock()
+	rm.l.Lock()
+	defer rm.l.Unlock()
 
-	// for _, r := range rm.ruleGroups {
-	// 	res = append(res, r.metric.Labels.Get(types.LabelName))
-	// }
-
+	for _, r := range rm.ruleGroups {
+		res = append(res, r.alertingRule.Name)
+	}
 	return nil
 }
 
 func (rm *Manager) Collect(ctx context.Context, app storage.Appender) error {
+	fmt.Println("!!! Collect")
 	var errs types.MultiErrors
 
 	res := []types.MetricPoint{} //nolint:ifshort // False positive.
@@ -301,7 +300,7 @@ func (agr *alertRuleGroup) runGroup(ctx context.Context, now time.Time, rm *Mana
 				Time:  now,
 				Value: float64(types.StatusUnknown.NagiosCode()),
 			},
-			Labels: nil, // TODO
+			Labels: labelsMap(agr.alertingRule),
 			Annotations: types.MetricAnnotations{
 				Status: types.StatusDescription{
 					CurrentStatus:     types.StatusUnknown,
@@ -396,7 +395,7 @@ func (agr *alertRuleGroup) checkNoPoint(now time.Time, agentStart time.Time, met
 				Time:  now,
 				Value: float64(types.StatusUnknown.NagiosCode()),
 			},
-			Labels: nil, // TODO
+			Labels: labelsMap(agr.alertingRule),
 			Annotations: types.MetricAnnotations{
 				Status: types.StatusDescription{
 					CurrentStatus:     types.StatusUnknown,
@@ -420,7 +419,7 @@ func (agr *alertRuleGroup) generateNewPoint(rule *rules.AlertingRule, state rule
 			Time:  now,
 			Value: float64(statusCode.NagiosCode()),
 		},
-		Labels: nil, // TODO
+		Labels: rule.Labels().Map(),
 		Annotations: types.MetricAnnotations{
 			Status: types.StatusDescription{
 				CurrentStatus:     statusCode,
@@ -438,12 +437,13 @@ func (rm *Manager) addAlertingRule(
 	isError string,
 ) error {
 	// TODO:
-	// lbls := rule.Labels
 	// if lbls.Get(types.LabelInstanceUUID) != rule.InstanceUUID {
 	// 	builder := labels.NewBuilder(lbls)
 	// 	builder.Set(types.LabelInstanceUUID, rule.InstanceUUID)
 	// 	lbls = builder.Labels()
 	// }
+
+	lbls := labels.FromMap(labelsMap(alertingRule))
 
 	var (
 		warningRule, criticalRule *rules.AlertingRule
@@ -454,7 +454,7 @@ func (rm *Manager) addAlertingRule(
 		warningRule, err = newRule(
 			alertingRule.WarningQuery,
 			time.Duration(alertingRule.WarningDelaySecond)*time.Second,
-			nil, // TODO; Add label __name__.
+			lbls,
 			alertingRule.ID,
 			rm.logger,
 		)
@@ -467,7 +467,7 @@ func (rm *Manager) addAlertingRule(
 		criticalRule, err = newRule(
 			alertingRule.CriticalQuery,
 			time.Duration(alertingRule.CriticalDelaySecond)*time.Second,
-			nil, // TODO; Add label __name__.
+			lbls,
 			alertingRule.ID,
 			rm.logger,
 		)
@@ -621,4 +621,8 @@ func statusFromThreshold(s string) types.Status {
 	default:
 		return types.StatusUnknown
 	}
+}
+
+func labelsMap(alertingRule bleemeoTypes.AlertingRule) map[string]string {
+	return map[string]string{types.LabelName: alertingRule.Name}
 }
