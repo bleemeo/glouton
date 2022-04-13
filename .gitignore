@@ -21,3 +21,4 @@ api/static/assets/css
 .build-cache
 coverage.html
 coverage.out
+__debug_bin

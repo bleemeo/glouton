@@ -282,7 +282,6 @@ func (agr *alertRuleGroup) shouldSkip(now time.Time) bool {
 		}
 	}
 
-	// TODO: Why time.Second?
 	if agr.resolution != 0 && now.Add(time.Second).Sub(agr.lastRun) < agr.resolution {
 		return true
 	}

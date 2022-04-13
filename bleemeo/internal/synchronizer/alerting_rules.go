@@ -1,6 +1,7 @@
 package synchronizer
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	bleemeoTypes "glouton/bleemeo/types"
@@ -8,8 +9,25 @@ import (
 	"time"
 )
 
+func (s *Synchronizer) syncAlertingRules(ctx context.Context, fullSync bool, onlyEssential bool) error {
+	if s.option.RebuildPromQLRules == nil {
+		return nil
+	}
+
+	alertingRules, resolution, err := s.alertingRules(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get PromQL rules: %w", err)
+	}
+
+	if err := s.option.RebuildPromQLRules(alertingRules, resolution); err != nil {
+		return fmt.Errorf("failed to rebuild PromQL rules: %v", err)
+	}
+
+	return nil
+}
+
 // alertingRules returns the alerting rules from the API.
-func (s *Synchronizer) alertingRules() (
+func (s *Synchronizer) alertingRules(ctx context.Context) (
 	alertingRules []bleemeoTypes.AlertingRule,
 	resolution time.Duration,
 	err error,
@@ -28,8 +46,9 @@ func (s *Synchronizer) alertingRules() (
 	}
 
 	// TODO: The client is always uninitialized the first time this function is called.
-	result, err := s.client.Iter(s.ctx, "alertingrule", params)
+	result, err := s.client.Iter(ctx, "alertingrule", params)
 	if err != nil {
+		fmt.Printf("!!! client iter: %v\n", err)
 		return nil, 0, fmt.Errorf("client iter: %w", err)
 	}
 

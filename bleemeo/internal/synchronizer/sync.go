@@ -60,6 +60,7 @@ const (
 	syncMethodService       = "service"
 	syncMethodContainer     = "container"
 	syncMethodMetric        = "metric"
+	syncMethodAlertingRules = "alertingrules"
 )
 
 // Synchronizer synchronize object with Bleemeo.
@@ -656,6 +657,7 @@ func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) error {
 		{name: syncMethodService, method: s.syncServices},
 		{name: syncMethodMonitor, method: s.syncMonitors, skipOnlyEssential: true},
 		{name: syncMethodMetric, method: s.syncMetrics},
+		{name: syncMethodAlertingRules, method: s.syncAlertingRules},
 	}
 	startAt := s.now()
 
@@ -780,6 +782,7 @@ func (s *Synchronizer) syncToPerform(ctx context.Context) map[string]bool {
 		syncMethods[syncMethodAccountConfig] = fullSync
 		syncMethods[syncMethodMonitor] = fullSync
 		syncMethods[syncMethodSNMP] = fullSync
+		syncMethods[syncMethodAlertingRules] = fullSync
 	}
 
 	if fullSync || s.lastFactUpdatedAt != localFacts["fact_updated_at"] {
@@ -839,7 +842,7 @@ func (s *Synchronizer) syncToPerform(ctx context.Context) map[string]bool {
 	if len(syncMethods) > 0 && s.now().Sub(s.lastInfo.FetchedAt) > 30*time.Minute {
 		// Ensure lastInfo is enough up-to-date.
 		// This will help detection quickly a change on /v1/info/ and will ensure the
-		// metric time_dirft is updated recently to avoid unwanted deactivation.
+		// metric time_drift is updated recently to avoid unwanted deactivation.
 		syncMethods[syncMethodInfo] = false || syncMethods[syncMethodInfo]
 	}
 
