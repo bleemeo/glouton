@@ -113,7 +113,6 @@ func (w *GathererWithStateWrapper) SetState(state GatherState) {
 
 // Gather implements prometheus.Gatherer for GathererWithStateWrapper.
 func (w *GathererWithStateWrapper) Gather() ([]*dto.MetricFamily, error) {
-	fmt.Printf("!!! Gather\n")
 	res, err := w.gatherer.GatherWithState(w.ctx, w.gatherState)
 	if err != nil {
 		logger.V(2).Printf("Error during gather on /metrics: %v", err)

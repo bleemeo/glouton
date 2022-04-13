@@ -423,14 +423,14 @@ func (r *Registry) RegisterAppenderCallback(ctx context.Context, opt Registratio
 	r.l.Lock()
 	defer r.l.Unlock()
 
-	ctx, cancel := context.WithTimeout(ctx, relabelTimeout)
+	ctxTimeout, cancel := context.WithTimeout(ctx, relabelTimeout)
 	defer cancel()
 
 	reg := &registration{
 		option:                    opt,
 		includedInMetricsEndpoint: false,
 	}
-	r.setupGatherer(ctx, reg, &appenderGatherer{cb: cb, opt: appOpt})
+	r.setupGatherer(ctxTimeout, reg, &appenderGatherer{cb: cb, opt: appOpt})
 
 	return r.addRegistration(ctx, reg)
 }

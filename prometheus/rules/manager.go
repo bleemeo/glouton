@@ -219,7 +219,6 @@ func (rm *Manager) MetricList() []string {
 }
 
 func (rm *Manager) Collect(ctx context.Context, app storage.Appender) error {
-	fmt.Printf("!!! Collect \n")
 	var errs types.MultiErrors
 
 	res := []types.MetricPoint{} //nolint:ifshort // False positive.

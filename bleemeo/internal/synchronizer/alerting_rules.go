@@ -41,8 +41,6 @@ func (s *Synchronizer) alertingRules(ctx context.Context) (
 	cfg := configs[agent.CurrentConfigID]
 	resolution = cfg.AgentConfigByID[agent.AgentType].MetricResolution
 
-	fmt.Printf("!!! resolution: %v\n", resolution)
-
 	params := map[string]string{
 		"active": "true",
 	}
