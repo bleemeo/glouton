@@ -657,7 +657,6 @@ func (c *Client) sendPoints() {
 
 				return
 			}
-
 			c.publishNoLock(fmt.Sprintf("v1/agent/%s/data", agentID), buffer, true)
 		}
 	}

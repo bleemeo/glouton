@@ -690,6 +690,10 @@ func (r *Registry) RegisterGatherer(ctx context.Context, opt RegistrationOption,
 func (r *Registry) addRegistration(ctx context.Context, reg *registration) (int, error) {
 	id := 1
 
+	if reg.option.Description != "rulesManager" { // TODO: remove
+		return 0, errIncorrectType
+	}
+
 	_, ok := r.registrations[id]
 	for ok {
 		id++
