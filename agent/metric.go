@@ -893,7 +893,7 @@ func (m *metricFilter) FilterPoints(points []types.MetricPoint) []types.MetricPo
 
 	if len(m.denyList) != 0 {
 		for _, point := range points {
-			if !m.IsDenied(point.Labels) {
+			if !m.isDenied(point.Labels) {
 				points[i] = point
 				i++
 			}
@@ -904,7 +904,7 @@ func (m *metricFilter) FilterPoints(points []types.MetricPoint) []types.MetricPo
 	}
 
 	for _, point := range points {
-		if m.IsAllowed(point.Labels) {
+		if m.isAllowed(point.Labels) {
 			points[i] = point
 			i++
 		}
@@ -924,6 +924,13 @@ func checkMaxDuration(start time.Time, points []types.MetricPoint, i int) {
 }
 
 func (m *metricFilter) IsDenied(lbls map[string]string) bool {
+	m.l.Lock()
+	defer m.l.Unlock()
+
+	return m.isDenied(lbls)
+}
+
+func (m *metricFilter) isDenied(lbls map[string]string) bool {
 	for key, denyVals := range m.denyList {
 		if !key.Matches(lbls[types.LabelName]) {
 			continue
@@ -941,6 +948,13 @@ func (m *metricFilter) IsDenied(lbls map[string]string) bool {
 }
 
 func (m *metricFilter) IsAllowed(lbls map[string]string) bool {
+	m.l.Lock()
+	defer m.l.Unlock()
+
+	return m.isAllowed(lbls)
+}
+
+func (m *metricFilter) isAllowed(lbls map[string]string) bool {
 	for key, allowVals := range m.allowList {
 		if !key.Matches(lbls[types.LabelName]) {
 			continue
@@ -964,7 +978,7 @@ func (m *metricFilter) filterMetrics(mt []types.Metric) []types.Metric {
 
 	if len(m.denyList) > 0 {
 		for _, metric := range mt {
-			if !m.IsDenied(metric.Labels()) {
+			if !m.isDenied(metric.Labels()) {
 				mt[i] = metric
 				i++
 			}
@@ -975,7 +989,7 @@ func (m *metricFilter) filterMetrics(mt []types.Metric) []types.Metric {
 	}
 
 	for _, metric := range mt {
-		if m.IsAllowed(metric.Labels()) {
+		if m.isAllowed(metric.Labels()) {
 			mt[i] = metric
 			i++
 		}
