@@ -44,7 +44,7 @@ const (
 	Delete
 )
 
-const fieldList string = "id,account_config,agent,created_at,monitor_url,monitor_expected_content,monitor_expected_response_code,monitor_unexpected_content"
+const fieldList string = "id,account_config,agent,created_at,monitor_url,monitor_expected_content,monitor_expected_response_code,monitor_unexpected_content,monitor_ca_file"
 
 // MonitorUpdate represents an operation to execute on a monitor.
 type MonitorUpdate struct {
@@ -187,6 +187,7 @@ func (s *Synchronizer) ApplyMonitorUpdate(ctx context.Context) error {
 			ExpectedContent:         monitor.ExpectedContent,
 			ExpectedResponseCode:    monitor.ExpectedResponseCode,
 			ForbiddenContent:        monitor.ForbiddenContent,
+			CAFile:                  monitor.CAFile,
 		})
 	}
 

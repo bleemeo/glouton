@@ -258,6 +258,7 @@ func defaultConfig() map[string]interface{} {
 		"jmxtrans.graphite_port":           2004,
 		"kubernetes.enable":                false,
 		"kubernetes.nodename":              "",
+		"kubernetes.clustername":           "",
 		"kubernetes.kubeconfig":            "",
 		"logging.buffer.head_size_bytes":   500000,
 		"logging.buffer.tail_size_bytes":   500000,

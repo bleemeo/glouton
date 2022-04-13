@@ -119,6 +119,8 @@ spec:
           value: "/etc/glouton/glouton.conf,/etc/glouton/glouton-k8s-default.conf,/etc/glouton/conf.d,/etc/glouton/conf-k8s.d"
         - name: GLOUTON_KUBERNETES_ENABLE
           value: "True"
+        - name: GLOUTON_KUBERNETES_CLUSTERNAME
+          value: "${GLOUTON_KUBERNETES_CLUSTERNAME}"
         - name: GLOUTON_KUBERNETES_NODENAME
           valueFrom:
             fieldRef:

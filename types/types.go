@@ -345,6 +345,7 @@ type Monitor struct {
 	ExpectedContent         string
 	ExpectedResponseCode    int
 	ForbiddenContent        string
+	CAFile                  string
 }
 
 // MultiErrors is a type containing multiple errors. It implements the error interface.
