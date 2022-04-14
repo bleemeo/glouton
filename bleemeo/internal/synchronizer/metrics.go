@@ -1190,7 +1190,9 @@ func (mr *metricRegisterer) doOnePass(currentList []types.Metric, state metricRe
 
 func (mr *metricRegisterer) metricRegisterAndUpdateOne(metric types.Metric) error {
 	params := map[string]string{
-		"fields": "id,label,item,labels_text,unit,unit_text,service,container,deactivated_at,threshold_low_warning,threshold_low_critical,threshold_high_warning,threshold_high_critical,status_of,agent,promql_query,is_user_promql_alert",
+		"fields": "id,label,item,labels_text,unit,unit_text,service,container,deactivated_at," +
+			"threshold_low_warning,threshold_low_critical,threshold_high_warning,threshold_high_critical," +
+			"status_of,agent,promql_query,is_user_promql_alert,alerting_rule",
 	}
 	labels := metric.Labels()
 	annotations := metric.Annotations()
@@ -1300,6 +1302,10 @@ func (s *Synchronizer) prepareMetricPayload(metric types.Metric, registeredMetri
 		}
 
 		payload.ServiceID = service.ID
+	}
+
+	if annotations.AlertingRuleID != "" {
+		payload.AlertingRuleID = annotations.AlertingRuleID
 	}
 
 	// override the agent and service UUIDs when the metric is a probe's

@@ -114,7 +114,7 @@ const (
 	LabelMetaCurrentStatus          = "__meta_current_status"
 	LabelMetaCurrentDescription     = "__meta_current_description"
 	LabelMetaSeverity               = "__meta_severity"
-	LabelAlertingRuleUUID           = "__alerting_rule_uuid"
+	LabelMetaAlertingRuleUUID       = "__meta_alerting_rule_uuid"
 	LabelK8SPODName                 = "kubernetes_pod_name"
 	LabelK8SNamespace               = "kubernetes_namespace"
 	LabelInstanceUUID               = "instance_uuid"
@@ -212,11 +212,12 @@ type Metric interface {
 
 // MetricAnnotations contains additional information about a metrics.
 type MetricAnnotations struct {
-	BleemeoItem string
-	ContainerID string
-	ServiceName string
-	StatusOf    string
-	SNMPTarget  string
+	BleemeoItem    string
+	ContainerID    string
+	ServiceName    string
+	StatusOf       string
+	SNMPTarget     string
+	AlertingRuleID string
 	// store the agent for which we want to emit the metric
 	BleemeoAgentID string
 	Status         StatusDescription

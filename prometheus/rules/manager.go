@@ -288,17 +288,22 @@ func (agr *alertRuleGroup) shouldSkip(now time.Time) bool {
 }
 
 func (agr *alertRuleGroup) runGroup(ctx context.Context, now time.Time, rm *Manager) (types.MetricPoint, error) {
+	// TODO: remove this
+	lbls := labelsMap(agr.alertingRule)
+	lbls[types.LabelInstanceUUID] = "fdfedf2a-9441-4b9d-8d6f-e82ce8a820d5"
+
 	return types.MetricPoint{
 		Point: types.Point{
 			Time:  now,
 			Value: float64(types.StatusCritical.NagiosCode()),
 		},
-		Labels: labelsMap(agr.alertingRule),
+		Labels: lbls,
 		Annotations: types.MetricAnnotations{
 			Status: types.StatusDescription{
 				CurrentStatus:     types.StatusCritical,
 				StatusDescription: "test critical",
 			},
+			AlertingRuleID: agr.alertingRule.ID,
 		},
 	}, nil
 
@@ -320,6 +325,7 @@ func (agr *alertRuleGroup) runGroup(ctx context.Context, now time.Time, rm *Mana
 					CurrentStatus:     types.StatusUnknown,
 					StatusDescription: "Invalid PromQL: " + agr.isError,
 				},
+				AlertingRuleID: agr.alertingRule.ID,
 			},
 		}, nil
 	}
