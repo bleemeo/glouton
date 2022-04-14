@@ -23,6 +23,9 @@ import (
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 )
 
 type mockProcess struct {
@@ -845,5 +848,248 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 		if !reflect.DeepEqual(srv[0].ExtraAttributes, c.want.ExtraAttributes) {
 			t.Errorf("Case %s: ExtraAttributes == %v, want %v", c.testName, srv[0].ExtraAttributes, c.want.ExtraAttributes)
 		}
+	}
+}
+
+func TestDynamicDiscovery(t *testing.T) {
+	cases := []struct {
+		name                   string
+		processes              []facts.Process
+		filesContent           map[string]string
+		containers             map[string]facts.FakeContainer
+		netstatAddressesPerPID map[int][]facts.ListenAddress
+		want                   []Service
+	}{
+		{
+			name: "redis-single",
+			processes: []facts.Process{
+				{
+					PID:         1,
+					CmdLineList: []string{"init"},
+				},
+				{
+					PID:         2,
+					CmdLineList: []string{"bash", "/srv/start-service.sh", "redis"},
+				},
+				{
+					PID:         3,
+					CmdLineList: []string{"redis-server *:6379"},
+				},
+			},
+			netstatAddressesPerPID: map[int][]facts.ListenAddress{
+				2: {
+					{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 1234},
+				},
+				3: {
+					{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 6379},
+				},
+			},
+			want: []Service{
+				{
+					Name:            "redis",
+					ServiceType:     RedisService,
+					ContainerID:     "",
+					ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 6379}},
+					IPAddress:       "127.0.0.1",
+					IgnoredPorts:    map[int]bool{},
+					HasNetstatInfo:  true,
+					Active:          true,
+				},
+			},
+		},
+		{
+			name: "redis-single-no-netstat",
+			processes: []facts.Process{
+				{
+					PID:         1,
+					CmdLineList: []string{"init"},
+				},
+				{
+					PID:         2,
+					CmdLineList: []string{"bash", "/srv/start-service.sh", "redis"},
+				},
+				{
+					PID:         3,
+					CmdLineList: []string{"redis-server *:6379"},
+				},
+			},
+			netstatAddressesPerPID: map[int][]facts.ListenAddress{},
+			want: []Service{
+				{
+					Name:            "redis",
+					ServiceType:     RedisService,
+					ContainerID:     "",
+					ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 6379}},
+					IPAddress:       "127.0.0.1",
+					IgnoredPorts:    map[int]bool{},
+					HasNetstatInfo:  false,
+					Active:          true,
+				},
+			},
+		},
+		{
+			name: "redis-multiple",
+			processes: []facts.Process{
+				{
+					PID:         1,
+					CmdLineList: []string{"init"},
+				},
+				{
+					PID:         2,
+					CmdLineList: []string{"bash", "/srv/start-service.sh", "redis"},
+				},
+				{
+					PID:         3,
+					CmdLineList: []string{"redis-server *:6379"},
+				},
+				{
+					PID:         4,
+					CmdLineList: []string{"redis-server *:6379"}, // this is the process that dump to RDB file
+				},
+				{
+					PID:         5,
+					CmdLineList: []string{"redis-server *:6380"},
+				},
+			},
+			netstatAddressesPerPID: map[int][]facts.ListenAddress{
+				2: {
+					{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 1234},
+				},
+				3: {
+					{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 6379},
+				},
+				4: {
+					// This will likely not happen, because:
+					// 1) the process that does RDB dump may not actually listen on this port.
+					// 2) Glouton netstat does NOT provided list all PID that listen on the same port. (netstat neither).
+					{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 6379},
+				},
+				5: {
+					{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 6380},
+				},
+			},
+			want: []Service{
+				{
+					Name:        "redis",
+					ServiceType: RedisService,
+					ContainerID: "",
+					ListenAddresses: []facts.ListenAddress{
+						{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 6379},
+						{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 6380},
+					},
+					IPAddress:      "127.0.0.1",
+					IgnoredPorts:   map[int]bool{},
+					HasNetstatInfo: true,
+					Active:         true,
+				},
+			},
+		},
+		{
+			name: "nginx-not-default-port",
+			processes: []facts.Process{
+				{
+					PID:         3,
+					CmdLineList: []string{"nginx: master process nginx -g daemon off;"},
+				},
+				{
+					PID:         4,
+					CmdLineList: []string{"nginx: worker process"},
+				},
+			},
+			netstatAddressesPerPID: map[int][]facts.ListenAddress{
+				3: {
+					{NetworkFamily: "tcp", Address: "10.2.0.1", Port: 6443},
+				},
+				// We aren't guarantee to have netstat information for PID 4:
+				// netstat only show one PID per listening socket
+				// internal netstat (using gopsutil) also show one PID per listening socket
+			},
+			want: []Service{
+				{
+					Name:        "nginx",
+					ServiceType: NginxService,
+					ContainerID: "",
+					ListenAddresses: []facts.ListenAddress{
+						{NetworkFamily: "tcp", Address: "10.2.0.1", Port: 6443},
+					},
+					IPAddress:      "127.0.0.1",
+					IgnoredPorts:   map[int]bool{},
+					HasNetstatInfo: true,
+					Active:         true,
+				},
+			},
+		},
+		{
+			name: "nginx-not-default-port-2",
+			processes: []facts.Process{
+				{
+					PID:         3,
+					CmdLineList: []string{"nginx: master process nginx -g daemon off;"},
+				},
+				{
+					PID:         4,
+					CmdLineList: []string{"nginx: worker process"},
+				},
+			},
+			netstatAddressesPerPID: map[int][]facts.ListenAddress{
+				// We aren't guarantee to have netstat information for PID 3:
+				// netstat only show one PID per listening socket
+				// internal netstat (using gopsutil) also show one PID per listening socket
+				4: {
+					{NetworkFamily: "tcp", Address: "10.0.2.1", Port: 6443},
+				},
+			},
+			want: []Service{
+				{
+					Name:        "nginx",
+					ServiceType: NginxService,
+					ContainerID: "",
+					ListenAddresses: []facts.ListenAddress{
+						{NetworkFamily: "tcp", Address: "10.0.2.1", Port: 6443},
+					},
+					IPAddress:      "127.0.0.1",
+					IgnoredPorts:   map[int]bool{},
+					HasNetstatInfo: true,
+					Active:         true,
+				},
+			},
+		},
+	}
+
+	for _, c := range cases {
+		c := c
+
+		t.Run(c.name, func(t *testing.T) {
+			ctx := context.Background()
+
+			t.Parallel()
+
+			dd := &DynamicDiscovery{
+				ps: mockProcess{
+					result: c.processes,
+				},
+				netstat: mockNetstat{result: c.netstatAddressesPerPID},
+				containerInfo: mockContainerInfo{
+					containers: c.containers,
+				},
+				fileReader: mockFileReader{
+					contents: c.filesContent,
+				},
+				isContainerIgnored: facts.ContainerFilter{}.ContainerIgnored,
+			}
+
+			srv, err := dd.Discovery(ctx, 0)
+			if err != nil {
+				t.Error(err)
+			}
+
+			sorter := cmpopts.SortSlices(func(x Service, y Service) bool {
+				return x.String() < y.String()
+			})
+
+			if diff := cmp.Diff(c.want, srv, cmpopts.IgnoreUnexported(Service{}), cmpopts.EquateEmpty(), sorter); diff != "" {
+				t.Errorf("services mismatch (-want +got)\n%s", diff)
+			}
+		})
 	}
 }

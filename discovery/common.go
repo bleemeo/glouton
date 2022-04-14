@@ -214,19 +214,25 @@ func (s Service) AnnotationsOfStatus() types.MetricAnnotations {
 // merge updates existing service with update.
 // Value from existing Service are preferred, but "list" value are merged.
 func (s Service) merge(update Service) Service {
-	for _, v := range update.ListenAddresses {
-		alreadyExist := false
+	switch {
+	case update.HasNetstatInfo && !s.HasNetstatInfo:
+		s.ListenAddresses = update.ListenAddresses
+		s.HasNetstatInfo = true
+	case update.HasNetstatInfo:
+		for _, v := range update.ListenAddresses {
+			alreadyExist := false
 
-		for _, existing := range s.ListenAddresses {
-			if v == existing {
-				alreadyExist = true
+			for _, existing := range s.ListenAddresses {
+				if v == existing {
+					alreadyExist = true
 
-				break
+					break
+				}
 			}
-		}
 
-		if !alreadyExist {
-			s.ListenAddresses = append(s.ListenAddresses, v)
+			if !alreadyExist {
+				s.ListenAddresses = append(s.ListenAddresses, v)
+			}
 		}
 	}
 
