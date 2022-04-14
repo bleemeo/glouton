@@ -29,22 +29,22 @@ var errNoConfig = errors.New("agent don't have any configuration on Bleemeo Clou
 
 const apiTagsLength = 100
 
-func (s *Synchronizer) syncAgent(ctx context.Context, fullSync bool, onlyEssential bool) error {
+func (s *Synchronizer) syncAgent(ctx context.Context, fullSync bool, onlyEssential bool) (updateThresholds bool, err error) {
 	if err := s.syncMainAgent(ctx); err != nil {
-		return err
+		return false, err
 	}
 
 	if onlyEssential {
-		return nil
+		return false, nil
 	}
 
 	if fullSync {
 		if err := s.agentsUpdateList(); err != nil {
-			return err
+			return false, err
 		}
 	}
 
-	return nil
+	return false, nil
 }
 
 func (s *Synchronizer) syncMainAgent(ctx context.Context) error {

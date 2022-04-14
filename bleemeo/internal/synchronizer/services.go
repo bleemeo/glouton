@@ -123,10 +123,10 @@ func getListenAddress(addresses []facts.ListenAddress) string {
 	return strings.Join(stringList, ",")
 }
 
-func (s *Synchronizer) syncServices(ctx context.Context, fullSync bool, onlyEssential bool) error {
+func (s *Synchronizer) syncServices(ctx context.Context, fullSync bool, onlyEssential bool) (updateThresholds bool, err error) {
 	localServices, err := s.option.Discovery.Discovery(ctx, 24*time.Hour)
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	if s.successiveErrors == 3 {
@@ -139,31 +139,31 @@ func (s *Synchronizer) syncServices(ctx context.Context, fullSync bool, onlyEsse
 	if fullSync {
 		err := s.serviceUpdateList()
 		if err != nil {
-			return err
+			return false, err
 		}
 	}
 
 	if err := s.serviceDeleteFromRemote(localServices, previousServices); err != nil {
-		return err
+		return false, err
 	}
 
 	if onlyEssential {
 		// no essential services, skip registering.
-		return nil
+		return false, nil
 	}
 
 	localServices, err = s.option.Discovery.Discovery(ctx, 24*time.Hour)
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	if err := s.serviceRegisterAndUpdate(localServices); err != nil {
-		return err
+		return false, err
 	}
 
 	err = s.serviceDeleteFromLocal(localServices)
 
-	return err
+	return false, err
 }
 
 func (s *Synchronizer) serviceUpdateList() error {

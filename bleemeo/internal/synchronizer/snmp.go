@@ -36,18 +36,18 @@ type payloadAgent struct {
 
 // TODO the deletion need to be done
 
-func (s *Synchronizer) syncSNMP(ctx context.Context, fullSync bool, onlyEssential bool) error {
+func (s *Synchronizer) syncSNMP(ctx context.Context, fullSync bool, onlyEssential bool) (updateThresholds bool, err error) {
 	cfg, ok := s.option.Cache.CurrentAccountConfig()
 	if !ok || !cfg.SNMPIntergration {
-		return nil
+		return false, nil
 	}
 
 	if onlyEssential {
 		// no essential snmp, skip registering.
-		return nil
+		return false, nil
 	}
 
-	return s.snmpRegisterAndUpdate(s.option.SNMP)
+	return false, s.snmpRegisterAndUpdate(s.option.SNMP)
 }
 
 type snmpAssociation struct {

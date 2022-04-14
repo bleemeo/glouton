@@ -586,7 +586,7 @@ func (a *agent) updateThresholds(ctx context.Context, thresholds map[threshold.M
 	if err != nil {
 		logger.V(2).Printf("An error occurred while running discoveries for updateThresholds: %v", err)
 	} else {
-		err = a.metricFilter.RebuildDynamicLists(a.dynamicScrapper, services, a.threshold.GetThresholdMetricNames(), a.rulesManager.MetricList())
+		err = a.metricFilter.RebuildDynamicLists(a.dynamicScrapper, services, a.threshold.GetThresholdMetricNames(), a.rulesManager.MetricNames())
 		if err != nil {
 			logger.V(2).Printf("An error occurred while rebuilding dynamic list for updateThresholds: %v", err)
 		}
@@ -1857,7 +1857,7 @@ func (a *agent) handleTrigger(ctx context.Context) {
 				}
 			}
 
-			err := a.metricFilter.RebuildDynamicLists(a.dynamicScrapper, services, a.threshold.GetThresholdMetricNames(), a.rulesManager.MetricList())
+			err := a.metricFilter.RebuildDynamicLists(a.dynamicScrapper, services, a.threshold.GetThresholdMetricNames(), a.rulesManager.MetricNames())
 			if err != nil {
 				logger.V(2).Printf("Error during dynamic Filter rebuild: %v", err)
 			}

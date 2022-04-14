@@ -202,22 +202,22 @@ func (rm *Manager) UpdateMetricResolution(metricResolution time.Duration) {
 	rm.metricResolution = metricResolution*2 + 10*time.Second
 }
 
-// MetricList returns a list of all alerting rules metric names.
+// MetricNames returns a list of all alerting rules metric names.
 // This is used for dynamic generation of filters.
-func (rm *Manager) MetricList() []string {
-	res := make([]string, 0, len(rm.ruleGroups))
+func (rm *Manager) MetricNames() []string {
+	names := make([]string, 0, len(rm.ruleGroups))
 
 	rm.l.Lock()
 	defer rm.l.Unlock()
 
 	for _, r := range rm.ruleGroups {
-		res = append(res, r.alertingRule.Name)
+		names = append(names, r.alertingRule.Name)
 	}
-	return nil
+
+	return names
 }
 
 func (rm *Manager) Collect(ctx context.Context, app storage.Appender) error {
-	fmt.Println("!!! Collect")
 	var errs types.MultiErrors
 
 	res := []types.MetricPoint{} //nolint:ifshort // False positive.
@@ -288,6 +288,20 @@ func (agr *alertRuleGroup) shouldSkip(now time.Time) bool {
 }
 
 func (agr *alertRuleGroup) runGroup(ctx context.Context, now time.Time, rm *Manager) (types.MetricPoint, error) {
+	return types.MetricPoint{
+		Point: types.Point{
+			Time:  now,
+			Value: float64(types.StatusCritical.NagiosCode()),
+		},
+		Labels: labelsMap(agr.alertingRule),
+		Annotations: types.MetricAnnotations{
+			Status: types.StatusDescription{
+				CurrentStatus:     types.StatusCritical,
+				StatusDescription: "test critical",
+			},
+		},
+	}, nil
+
 	var generatedPoint types.MetricPoint
 
 	if agr.shouldSkip(now) {

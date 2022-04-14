@@ -71,12 +71,12 @@ func (s *Synchronizer) UpdateMonitor(op string, uuid string) {
 }
 
 // syncMonitors updates the list of monitors accessible to the agent.
-func (s *Synchronizer) syncMonitors(ctx context.Context, fullSync bool, onlyEssential bool) (err error) {
+func (s *Synchronizer) syncMonitors(ctx context.Context, fullSync bool, onlyEssential bool) (updateThresholds bool, err error) {
 	if !s.option.Config.Bool("blackbox.enable") {
 		// prevent a tiny memory leak
 		s.pendingMonitorsUpdate = nil
 
-		return nil
+		return false, nil
 	}
 
 	s.l.Lock()
@@ -96,7 +96,7 @@ func (s *Synchronizer) syncMonitors(ctx context.Context, fullSync bool, onlyEsse
 	s.l.Unlock()
 
 	if !fullSync && len(pendingMonitorsUpdate) == 0 {
-		return nil
+		return false, nil
 	}
 
 	var monitors []bleemeoTypes.Monitor
@@ -104,12 +104,12 @@ func (s *Synchronizer) syncMonitors(ctx context.Context, fullSync bool, onlyEsse
 	if fullSync {
 		monitors, err = s.getMonitorsFromAPI()
 		if err != nil {
-			return err
+			return false, err
 		}
 	} else {
 		monitors, err = s.getListOfMonitorsFromAPI(pendingMonitorsUpdate)
 		if err != nil {
-			return err
+			return false, err
 		}
 	}
 
@@ -138,7 +138,7 @@ func (s *Synchronizer) syncMonitors(ctx context.Context, fullSync bool, onlyEsse
 		s.l.Unlock()
 	}
 
-	return s.ApplyMonitorUpdate(ctx)
+	return false, s.ApplyMonitorUpdate(ctx)
 }
 
 // ApplyMonitorUpdate preprocesses monitors and updates blackbox target list.

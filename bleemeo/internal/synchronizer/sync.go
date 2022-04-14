@@ -242,7 +242,7 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 	// syncInfo early because MQTT connection will establish or not depending on it (maintenance & outdated agent).
 	// syncInfo also disable if time drift is too big. We don't do this disable now for a new agent, because
 	// we want it to perform registration and creation of agent_status in order to mark this agent as "bad time" on Bleemeo.
-	err := s.syncInfoReal(!firstSync)
+	_, err := s.syncInfoReal(!firstSync)
 	if err != nil {
 		logger.V(1).Printf("bleemeo: pre-run checks: couldn't sync the global config: %v", err)
 	}
@@ -608,7 +608,7 @@ func (s *Synchronizer) setClient() error {
 }
 
 func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) error {
-	var wasCreation bool
+	var wasCreation, updateThresholds bool
 
 	if s.agentID == "" {
 		if err := s.register(ctx); err != nil {
@@ -620,10 +620,10 @@ func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) error {
 		s.option.NotifyFirstRegistration(ctx)
 		// Do one pass of metric registration to register agent_status.
 		// MQTT connection require this metric to exists before connecting
-		_ = s.syncMetrics(ctx, false, true)
+		_, _ = s.syncMetrics(ctx, false, true)
 
 		// Also do syncAgent, because agent configuration is also required for MQTT connection
-		_ = s.syncAgent(ctx, false, true)
+		_, _ = s.syncAgent(ctx, false, true)
 
 		// Then wait CPU (which should arrive the all other system metrics)
 		// before continuing to process.
@@ -644,7 +644,7 @@ func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) error {
 
 	syncStep := []struct {
 		name                 string
-		method               func(context.Context, bool, bool) error
+		method               func(context.Context, bool, bool) (updateThresholds bool, err error)
 		enabledInMaintenance bool
 		skipOnlyEssential    bool // should be true for method that ignore onlyEssential
 	}{
@@ -700,7 +700,7 @@ func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) error {
 		}
 
 		if full, ok := syncMethods[step.name]; ok {
-			err := step.method(ctx, full, onlyEssential && !step.skipOnlyEssential)
+			updateThresholdsTmp, err := step.method(ctx, full, onlyEssential && !step.skipOnlyEssential)
 			if err != nil {
 				logger.V(1).Printf("Synchronization for object %s failed: %v", step.name, err)
 
@@ -711,6 +711,8 @@ func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) error {
 					firstErr = err
 				}
 			}
+
+			updateThresholds = updateThresholds || updateThresholdsTmp
 
 			if onlyEssential && !step.skipOnlyEssential {
 				// We registered only essential object. Make sure all other
@@ -733,6 +735,8 @@ func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) error {
 
 	if wasCreation {
 		s.UpdateUnitsAndThresholds(ctx, true)
+	} else if updateThresholds {
+		s.UpdateUnitsAndThresholds(ctx, false)
 	}
 
 	if len(syncMethods) == len(syncStep) && firstErr == nil {

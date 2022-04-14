@@ -44,7 +44,7 @@ type containerPayload struct {
 	DockerAPIVersion string         `json:"docker_api_version"`
 }
 
-func (s *Synchronizer) syncContainers(ctx context.Context, fullSync bool, onlyEssential bool) error {
+func (s *Synchronizer) syncContainers(ctx context.Context, fullSync bool, onlyEssential bool) (updateThresholds bool, err error) {
 	var localContainers []facts.Container
 
 	cfg, ok := s.option.Cache.CurrentAccountConfig()
@@ -57,7 +57,7 @@ func (s *Synchronizer) syncContainers(ctx context.Context, fullSync bool, onlyEs
 		if err != nil {
 			logger.V(1).Printf("Unable to list containers: %v", err)
 
-			return nil
+			return false, nil
 		}
 	}
 
@@ -69,23 +69,23 @@ func (s *Synchronizer) syncContainers(ctx context.Context, fullSync bool, onlyEs
 	if fullSync {
 		err := s.containerUpdateList()
 		if err != nil {
-			return err
+			return false, err
 		}
 	}
 
 	if onlyEssential {
 		// no essential containers, skip registering.
-		return nil
+		return false, nil
 	}
 
 	// s.containerDeleteFromRemote(): API don't delete containers
 	if err := s.containerRegisterAndUpdate(localContainers); err != nil {
-		return err
+		return false, err
 	}
 
-	err := s.containerDeleteFromLocal(localContainers)
+	err = s.containerDeleteFromLocal(localContainers)
 
-	return err
+	return false, err
 }
 
 func (s *Synchronizer) containerUpdateList() error {

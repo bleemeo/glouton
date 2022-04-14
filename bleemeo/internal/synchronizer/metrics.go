@@ -553,10 +553,10 @@ func (s *Synchronizer) findUnregisteredMetrics(metrics []types.Metric) []types.M
 	return result
 }
 
-func (s *Synchronizer) syncMetrics(ctx context.Context, fullSync bool, onlyEssential bool) error {
+func (s *Synchronizer) syncMetrics(ctx context.Context, fullSync bool, onlyEssential bool) (updateThresholds bool, err error) {
 	localMetrics, err := s.option.Store.Metrics(nil)
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	filteredMetrics := s.filterMetrics(localMetrics)
@@ -599,7 +599,7 @@ func (s *Synchronizer) syncMetrics(ctx context.Context, fullSync bool, onlyEssen
 	err = s.metricUpdatePendingOrSync(fullSync, &pendingMetricsUpdate)
 
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	unregisteredMetrics = s.findUnregisteredMetrics(filteredMetrics)
@@ -609,20 +609,18 @@ func (s *Synchronizer) syncMetrics(ctx context.Context, fullSync bool, onlyEssen
 
 	err = s.metricUpdateInactiveList(unregisteredMetrics, fullSync)
 	if err != nil {
-		return err
+		return false, err
 	}
 
-	if fullSync || len(unregisteredMetrics) > 0 || len(pendingMetricsUpdate) > 0 {
-		s.UpdateUnitsAndThresholds(ctx, false)
-	}
+	updateThresholds = fullSync || len(unregisteredMetrics) > 0 || len(pendingMetricsUpdate) > 0
 
 	if err := s.metricDeleteFromRemote(filteredMetrics, previousMetrics); err != nil {
-		return err
+		return updateThresholds, err
 	}
 
 	localMetrics, err = s.option.Store.Metrics(nil)
 	if err != nil {
-		return err
+		return updateThresholds, err
 	}
 
 	filteredMetrics = s.filterMetrics(localMetrics)
@@ -637,20 +635,20 @@ func (s *Synchronizer) syncMetrics(ctx context.Context, fullSync bool, onlyEssen
 	filteredMetrics = prioritizeAndFilterMetrics(s.option.MetricFormat, filteredMetrics, onlyEssential)
 
 	if err := newMetricRegisterer(s).registerMetrics(filteredMetrics); err != nil {
-		return err
+		return updateThresholds, err
 	}
 
 	if onlyEssential {
-		return nil
+		return updateThresholds, nil
 	}
 
 	if err := s.metricDeleteFromLocal(); err != nil {
-		return err
+		return updateThresholds, err
 	}
 
 	if s.now().Sub(s.startedAt) > 5*time.Minute {
 		if err := s.metricDeactivate(filteredMetrics); err != nil {
-			return err
+			return updateThresholds, err
 		}
 	}
 
@@ -659,7 +657,7 @@ func (s *Synchronizer) syncMetrics(ctx context.Context, fullSync bool, onlyEssen
 
 	s.lastMetricCount = len(localMetrics)
 
-	return nil
+	return updateThresholds, nil
 }
 
 func (s *Synchronizer) metricUpdatePendingOrSync(fullSync bool, pendingMetricsUpdate *[]string) error {

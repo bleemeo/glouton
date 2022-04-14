@@ -9,23 +9,23 @@ import (
 	"time"
 )
 
-func (s *Synchronizer) syncAlertingRules(ctx context.Context, fullSync bool, onlyEssential bool) error {
+func (s *Synchronizer) syncAlertingRules(ctx context.Context, fullSync bool, onlyEssential bool) (updateThresholds bool, err error) {
 	if s.option.RebuildPromQLRules == nil {
-		return nil
+		return false, nil
 	}
 
 	alertingRules, resolution, err := s.alertingRules(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to get PromQL rules: %w", err)
+		return false, fmt.Errorf("failed to get PromQL rules: %w", err)
 	}
 
 	s.option.Cache.SetAlertingRules(alertingRules)
 
 	if err := s.option.RebuildPromQLRules(alertingRules, resolution); err != nil {
-		return fmt.Errorf("failed to rebuild PromQL rules: %v", err)
+		return false, fmt.Errorf("failed to rebuild PromQL rules: %v", err)
 	}
 
-	return nil
+	return true, nil
 }
 
 // alertingRules returns the alerting rules from the API.
