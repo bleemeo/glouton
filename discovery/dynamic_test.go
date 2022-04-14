@@ -1054,6 +1054,53 @@ func TestDynamicDiscovery(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "nginx-not-default-in-container",
+			processes: []facts.Process{
+				{
+					PID:           3,
+					ContainerID:   "1234",
+					ContainerName: "mynginx",
+					CmdLineList:   []string{"nginx: master process nginx -g daemon off;"},
+				},
+				{
+					PID:           4,
+					ContainerID:   "1234",
+					ContainerName: "mynginx",
+					CmdLineList:   []string{"nginx: worker process"},
+				},
+			},
+			netstatAddressesPerPID: map[int][]facts.ListenAddress{
+				// We aren't guarantee to have netstat information for PID 3:
+				// netstat only show one PID per listening socket
+				// internal netstat (using gopsutil) also show one PID per listening socket
+				4: {
+					{NetworkFamily: "tcp", Address: "0.0.0.0", Port: 6443},
+				},
+			},
+			containers: map[string]facts.FakeContainer{
+				"1234": {
+					FakePrimaryAddress:          "127.0.0.1", // network=host
+					FakeListenAddresses:         []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 80}},
+					FakeListenAddressesExplicit: false, // the listen address come from Dockerfile EXPOSE. Not "docker run -p"
+				},
+			},
+			want: []Service{
+				{
+					Name:          "nginx",
+					ServiceType:   NginxService,
+					ContainerID:   "1234",
+					ContainerName: "mynginx",
+					ListenAddresses: []facts.ListenAddress{
+						{NetworkFamily: "tcp", Address: "0.0.0.0", Port: 6443},
+					},
+					IPAddress:      "127.0.0.1",
+					IgnoredPorts:   map[int]bool{},
+					HasNetstatInfo: true,
+					Active:         true,
+				},
+			},
+		},
 	}
 
 	for _, c := range cases {

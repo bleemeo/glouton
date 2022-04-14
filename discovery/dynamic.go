@@ -390,10 +390,12 @@ func getContainerStack(service *Service) {
 }
 
 func getDiscoveryInfo(service *Service, netstat map[int][]facts.ListenAddress, pid int) discoveryInfo {
+	var explicit bool
+
 	if service.ContainerID == "" {
 		service.ListenAddresses = netstat[pid]
+		explicit = true
 	} else {
-		var explicit bool
 
 		service.ListenAddresses, explicit = service.container.ListenAddresses()
 		service.IgnoredPorts = facts.ContainerIgnoredPorts(service.container)
@@ -402,10 +404,11 @@ func getDiscoveryInfo(service *Service, netstat map[int][]facts.ListenAddress, p
 
 		if len(service.ListenAddresses) == 0 || (len(netstat[pid]) > 0 && !explicit) {
 			service.ListenAddresses = netstat[pid]
+			explicit = true
 		}
 	}
 
-	if len(service.ListenAddresses) > 0 {
+	if len(service.ListenAddresses) > 0 && explicit {
 		service.HasNetstatInfo = true
 	}
 
