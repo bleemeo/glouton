@@ -6,7 +6,6 @@ import (
 	"fmt"
 	bleemeoTypes "glouton/bleemeo/types"
 	"glouton/logger"
-	"time"
 )
 
 func (s *Synchronizer) syncAlertingRules(ctx context.Context, fullSync bool, onlyEssential bool) (updateThresholds bool, err error) {
@@ -14,40 +13,27 @@ func (s *Synchronizer) syncAlertingRules(ctx context.Context, fullSync bool, onl
 		return false, nil
 	}
 
-	alertingRules, resolution, err := s.alertingRules(ctx)
+	alertingRules, err := s.alertingRules(ctx)
 	if err != nil {
 		return false, fmt.Errorf("failed to get PromQL rules: %w", err)
 	}
 
 	s.option.Cache.SetAlertingRules(alertingRules)
 
-	if err := s.option.RebuildPromQLRules(alertingRules, resolution); err != nil {
-		return false, fmt.Errorf("failed to rebuild PromQL rules: %v", err)
-	}
+	err = s.UpdateAlertingRules()
 
-	return true, nil
+	return true, err
 }
 
 // alertingRules returns the alerting rules from the API.
-func (s *Synchronizer) alertingRules(ctx context.Context) (
-	alertingRules []bleemeoTypes.AlertingRule,
-	resolution time.Duration,
-	err error,
-) {
-	agents := s.option.Cache.AgentsByUUID()
-	configs := s.option.Cache.AccountConfigsByUUID()
-
-	agent := agents[s.agentID]
-	cfg := configs[agent.CurrentConfigID]
-	resolution = cfg.AgentConfigByID[agent.AgentType].MetricResolution
-
+func (s *Synchronizer) alertingRules(ctx context.Context) (alertingRules []bleemeoTypes.AlertingRule, err error) {
 	params := map[string]string{
 		"active": "true",
 	}
 
 	result, err := s.client.Iter(ctx, "alertingrule", params)
 	if err != nil {
-		return nil, 0, fmt.Errorf("client iter: %w", err)
+		return nil, fmt.Errorf("client iter: %w", err)
 	}
 
 	alertingRules = make([]bleemeoTypes.AlertingRule, 0, len(result))
@@ -64,5 +50,23 @@ func (s *Synchronizer) alertingRules(ctx context.Context) (
 		alertingRules = append(alertingRules, alertingRule)
 	}
 
-	return alertingRules, resolution, nil
+	return alertingRules, nil
+}
+
+// UpdateAlertingRules updates the alerting rules from the cache.
+func (s *Synchronizer) UpdateAlertingRules() error {
+	agents := s.option.Cache.AgentsByUUID()
+	configs := s.option.Cache.AccountConfigsByUUID()
+
+	agent := agents[s.agentID]
+	cfg := configs[agent.CurrentConfigID]
+	resolution := cfg.AgentConfigByID[agent.AgentType].MetricResolution
+
+	alertingRules := s.option.Cache.AlertingRules()
+
+	if err := s.option.RebuildPromQLRules(alertingRules, resolution); err != nil {
+		return fmt.Errorf("failed to rebuild PromQL rules: %v", err)
+	}
+
+	return nil
 }
