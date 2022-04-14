@@ -288,27 +288,6 @@ func (agr *alertRuleGroup) shouldSkip(now time.Time) bool {
 }
 
 func (agr *alertRuleGroup) runGroup(ctx context.Context, now time.Time, rm *Manager) (types.MetricPoint, error) {
-	// TODO: remove this
-	lbls := labelsMap(agr.alertingRule)
-	lbls[types.LabelInstanceUUID] = "fdfedf2a-9441-4b9d-8d6f-e82ce8a820d5"
-
-	return types.MetricPoint{
-		Point: types.Point{
-			Time:  now,
-			Value: float64(types.StatusCritical.NagiosCode()),
-		},
-		Labels: lbls,
-		Annotations: types.MetricAnnotations{
-			Status: types.StatusDescription{
-				CurrentStatus:     types.StatusCritical,
-				StatusDescription: "test critical",
-			},
-			AlertingRuleID: agr.alertingRule.ID,
-		},
-	}, nil
-
-	var generatedPoint types.MetricPoint
-
 	if agr.shouldSkip(now) {
 		return types.MetricPoint{}, errSkipPoints
 	}
@@ -334,18 +313,19 @@ func (agr *alertRuleGroup) runGroup(ctx context.Context, now time.Time, rm *Mana
 	agr.pointsRead = 0
 	agr.lastStatus = types.StatusDescription{}
 	agr.lastErr = nil
+	agr.inactiveSince = time.Time{}
+	agr.disabledUntil = time.Time{}
 
 	for _, rule := range []*rules.AlertingRule{agr.warningRule, agr.criticalRule} {
 		if rule == nil {
 			continue
 		}
 
-		prevState := rule.State()
-
 		tmp, err := newFilterQueryable(
 			rm.queryable,
 			map[string]string{
-				types.LabelInstanceUUID: agr.instanceID,
+				// TODO: Don't hardcode this.
+				types.LabelInstanceUUID: "fdfedf2a-9441-4b9d-8d6f-e82ce8a820d5",
 			},
 		)
 		if err != nil {
@@ -363,49 +343,48 @@ func (agr *alertRuleGroup) runGroup(ctx context.Context, now time.Time, rm *Mana
 			return types.MetricPoint{}, err
 		}
 
-		state := rule.State()
+		agr.pointsRead += queryable.Count()
+	}
 
-		agr.pointsRead = queryable.Count()
-
-		if agr.pointsRead == 0 {
-			if now.Sub(rm.agentStarted) < 2*time.Minute {
-				return types.MetricPoint{}, errSkipPoints
-			}
-
-			return agr.checkNoPoint(now, rm.agentStarted, rm.metricResolution)
-		}
-
-		agr.inactiveSince = time.Time{}
-		agr.disabledUntil = time.Time{}
-
-		// we add 20 seconds to the promAlert time to compensate the delta between agent startup and first metrics
-		if state != rules.StateInactive && now.Sub(rm.agentStarted) < promAlertTime+20*time.Second {
-			agr.lastErr = err
-
+	if agr.pointsRead == 0 {
+		if now.Sub(rm.agentStarted) < 2*time.Minute {
 			return types.MetricPoint{}, errSkipPoints
 		}
 
-		logger.V(2).Printf("metric state for %s previous state=%v, new state=%v", rule.Labels().String(), prevState, state)
-
-		newPoint, err := agr.generateNewPoint(rule, state, now)
-		if err != nil {
-			agr.lastErr = err
-
-			return types.MetricPoint{}, err
-		}
-
-		if state == rules.StateFiring {
-			agr.lastStatus = newPoint.Annotations.Status
-
-			return newPoint, nil
-		} else if generatedPoint.Labels == nil || newPoint.Annotations.Status.CurrentStatus > generatedPoint.Annotations.Status.CurrentStatus {
-			generatedPoint = newPoint
-		}
+		return agr.checkNoPoint(now, rm.agentStarted, rm.metricResolution)
 	}
 
-	agr.lastStatus = generatedPoint.Annotations.Status
+	var warningState, criticalState rules.AlertState
+	if agr.warningRule != nil {
+		warningState = agr.warningRule.State()
+	}
+	if agr.criticalRule != nil {
+		criticalState = agr.criticalRule.State()
+	}
 
-	return generatedPoint, nil
+	// we add 20 seconds to the promAlert time to compensate the delta between agent startup and first metrics
+	if now.Sub(rm.agentStarted) < promAlertTime+20*time.Second &&
+		warningState != rules.StateInactive && criticalState != rules.StateInactive {
+		return types.MetricPoint{}, errSkipPoints
+	}
+
+	newPoint, err := agr.generateNewPoint(warningState, criticalState, now)
+	if err != nil {
+		agr.lastErr = err
+
+		return types.MetricPoint{}, err
+	}
+
+	agr.lastStatus = newPoint.Annotations.Status
+
+	// Be careful not to send an OK point if one of the rules is pending,
+	// otherwise we might send wrong OK points at the start of the agent.
+	if newPoint.Annotations.Status.CurrentStatus == types.StatusOk &&
+		(warningState == rules.StatePending || criticalState == rules.StatePending) {
+		return types.MetricPoint{}, fmt.Errorf("%w: status ok with a pending rule", errSkipPoints)
+	}
+
+	return newPoint, nil
 }
 
 func (agr *alertRuleGroup) checkNoPoint(now time.Time, agentStart time.Time, metricRes time.Duration) (types.MetricPoint, error) {
@@ -421,6 +400,7 @@ func (agr *alertRuleGroup) checkNoPoint(now time.Time, agentStart time.Time, met
 					CurrentStatus:     types.StatusUnknown,
 					StatusDescription: "PromQL read zero points. The PromQL may be incorrect or the source measurement may have disappeared",
 				},
+				AlertingRuleID: agr.alertingRule.ID,
 			},
 		}, nil
 	}
@@ -432,23 +412,48 @@ func (agr *alertRuleGroup) checkNoPoint(now time.Time, agentStart time.Time, met
 	return types.MetricPoint{}, errSkipPoints
 }
 
-func (agr *alertRuleGroup) generateNewPoint(rule *rules.AlertingRule, state rules.AlertState, now time.Time) (types.MetricPoint, error) {
-	statusCode := types.StatusUnknown
+func (agr *alertRuleGroup) generateNewPoint(
+	warningState, criticalState rules.AlertState,
+	now time.Time,
+) (types.MetricPoint, error) {
+	warningStatus := statusFromAlertState(warningState, types.StatusWarning)
+	criticalStatus := statusFromAlertState(criticalState, types.StatusCritical)
+
+	lbls := agr.criticalRule.Labels()
+	status := criticalStatus
+	if warningStatus > criticalStatus {
+		lbls = agr.warningRule.Labels()
+		status = warningStatus
+	}
+
 	newPoint := types.MetricPoint{
 		Point: types.Point{
 			Time:  now,
-			Value: float64(statusCode.NagiosCode()),
+			Value: float64(status.NagiosCode()),
 		},
-		Labels: rule.Labels().Map(),
+		Labels: lbls.Map(),
 		Annotations: types.MetricAnnotations{
 			Status: types.StatusDescription{
-				CurrentStatus:     statusCode,
+				CurrentStatus:     status,
 				StatusDescription: "TODO description",
 			},
+			AlertingRuleID: agr.alertingRule.ID,
 		},
 	}
 
 	return newPoint, nil
+}
+
+// We send an OK status if the rule is inactive or pending, else a
+// warning or critical status depending on the rule severity.
+func statusFromAlertState(state rules.AlertState, severity types.Status) types.Status {
+	status := types.StatusOk
+
+	if state == rules.StateFiring {
+		status = severity
+	}
+
+	return status
 }
 
 func (rm *Manager) addAlertingRule(
@@ -644,5 +649,9 @@ func statusFromThreshold(s string) types.Status {
 }
 
 func labelsMap(alertingRule bleemeoTypes.AlertingRule) map[string]string {
-	return map[string]string{types.LabelName: alertingRule.Name}
+	return map[string]string{
+		types.LabelName: alertingRule.Name,
+		// TODO: This shouldn't be hardcoded.
+		types.LabelInstanceUUID: "fdfedf2a-9441-4b9d-8d6f-e82ce8a820d5",
+	}
 }
