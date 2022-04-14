@@ -26,6 +26,8 @@ import (
 	"glouton/threshold"
 	"glouton/types"
 	"runtime"
+	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -103,6 +105,12 @@ type alertRuleGroup struct {
 	alertingRule bleemeoTypes.AlertingRule
 	resolution   time.Duration
 	isError      string
+}
+
+type alertMinimal struct {
+	Labels labels.Labels
+	Value  float64
+	Status types.Status
 }
 
 //nolint:gochecknoglobals
@@ -435,13 +443,133 @@ func (agr *alertRuleGroup) generateNewPoint(
 		Annotations: types.MetricAnnotations{
 			Status: types.StatusDescription{
 				CurrentStatus:     status,
-				StatusDescription: "TODO description",
+				StatusDescription: agr.ruleDescription(),
 			},
 			AlertingRuleID: agr.alertingRule.ID,
 		},
 	}
 
 	return newPoint, nil
+}
+
+// ruleDescription returns the description for a rule.
+//
+// The description is formatted as follows:
+// Current value:
+// instance="myserver:8015",item="/": 71.67,
+// instance="myserver:8015",item="/boot": 39.61,
+// instance="myserver:8015",item="/home": 29.39.
+func (agr *alertRuleGroup) ruleDescription() string {
+	alertsMap := agr.deduplicateAlerts()
+	if len(alertsMap) == 0 {
+		return "Everything is running fine"
+	}
+
+	points := make([]alertMinimal, 0, len(alertsMap))
+	for _, point := range alertsMap {
+		points = append(points, point)
+	}
+
+	// Sort the points to put the critical alerts first in the description.
+	sort.Slice(points, func(i, j int) bool {
+		if points[i].Status != points[j].Status {
+			return points[i].Status > points[j].Status
+		}
+
+		return labels.Compare(points[i].Labels, points[j].Labels) < 0
+	})
+
+	// Build the status description.
+	var desc strings.Builder
+
+	desc.WriteString("Current value: ")
+
+	if len(points) > 1 {
+		desc.WriteRune('\n')
+	}
+
+	for i, point := range points {
+		if i > 0 {
+			desc.WriteString(", \n")
+		}
+
+		// It's possible for a PromQL to generate no other label than the alertname (which was removed here).
+		if len(point.Labels) > 0 {
+			desc.WriteString(fmt.Sprintf("%s: ", formatLabels(point.Labels)))
+		}
+
+		desc.WriteString(fmt.Sprintf("%.2f", point.Value))
+	}
+
+	return desc.String()
+}
+
+// Deduplicate the alerts (an alert can appear both in the warning and the critical rule).
+func (agr *alertRuleGroup) deduplicateAlerts() map[uint64]alertMinimal {
+	var warningAlerts, criticalAlerts []*rules.Alert
+
+	if agr.warningRule != nil {
+		warningAlerts = append(warningAlerts, agr.warningRule.ActiveAlerts()...)
+	}
+
+	if agr.criticalRule != nil {
+		criticalAlerts = append(warningAlerts, agr.criticalRule.ActiveAlerts()...)
+	}
+
+	alertsMap := make(map[uint64]alertMinimal)
+
+	for _, alert := range warningAlerts {
+		newAlert := alertMinimal{
+			Labels: alertLabels(alert.Labels),
+			Value:  alert.Value,
+			Status: statusFromAlertState(alert.State, types.StatusWarning),
+		}
+
+		alertsMap[alert.Labels.Hash()] = newAlert
+	}
+
+	for _, alert := range criticalAlerts {
+		newAlert := alertMinimal{
+			Labels: alertLabels(alert.Labels),
+			Value:  alert.Value,
+			Status: statusFromAlertState(alert.State, types.StatusWarning),
+		}
+
+		alertKey := alert.Labels.Hash()
+		if prevAlert, ok := alertsMap[alertKey]; (ok && newAlert.Status > prevAlert.Status) || !ok {
+			alertsMap[alertKey] = newAlert
+		}
+	}
+
+	return alertsMap
+}
+
+// formatLabels converts labels to a human readable string.
+// {instance="localhost", severity="warning"} -> instance=localhost, severity=warning.
+func formatLabels(ls labels.Labels) string {
+	var s strings.Builder
+
+	for i, l := range ls {
+		if i > 0 {
+			s.WriteString(", ")
+		}
+
+		s.WriteString(l.Name)
+		s.WriteByte('=')
+		s.WriteString(l.Value)
+	}
+
+	return s.String()
+}
+
+// alertLabels returns the labels that should appear in the status description for an alert.
+func alertLabels(lbls labels.Labels) labels.Labels {
+	builder := labels.NewBuilder(lbls)
+	builder.Del(types.LabelName)
+	builder.Del(types.LabelAlertname)
+	builder.Del(types.LabelInstanceUUID)
+
+	return builder.Labels()
 }
 
 // We send an OK status if the rule is inactive or pending, else a

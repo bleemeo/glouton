@@ -126,6 +126,7 @@ const (
 	LabelContainerName              = "container_name"
 	LabelScrapeJob                  = "scrape_job"
 	LabelScrapeInstance             = "scrape_instance"
+	LabelAlertname                  = "alertname"
 )
 
 // IsSet return true if the status is set.
