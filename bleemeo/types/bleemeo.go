@@ -320,12 +320,13 @@ func (i GlobalInfo) IsTimeDriftTooLarge() bool {
 
 // AlertingRule object on the Bleemeo API.
 type AlertingRule struct {
-	ID                  string `json:"id"`
-	Account             string `json:"account"`
-	Name                string `json:"name"`
-	WarningQuery        string `json:"warning_query"`
-	WarningDelaySecond  int    `json:"warning_delay_second"`
-	CriticalQuery       string `json:"critical_query"`
-	CriticalDelaySecond int    `json:"critical_delay_second"`
-	Active              bool   `json:"active"`
+	ID                  string   `json:"id"`
+	Account             string   `json:"account"`
+	Name                string   `json:"name"`
+	WarningQuery        string   `json:"warning_query"`
+	WarningDelaySecond  int      `json:"warning_delay_second"`
+	CriticalQuery       string   `json:"critical_query"`
+	CriticalDelaySecond int      `json:"critical_delay_second"`
+	Active              bool     `json:"active"`
+	Agents              []string `json:"agents"`
 }

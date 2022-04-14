@@ -20,10 +20,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	bleemeoTypes "glouton/bleemeo/types"
 	"glouton/logger"
 	"glouton/prometheus/model"
-	"glouton/threshold"
 	"glouton/types"
 	"runtime"
 	"sort"
@@ -77,17 +75,16 @@ type Manager struct {
 	metricResolution time.Duration
 }
 
-// MetricAlertRule is a metric that will execute a PromQL to generate a status.
-type MetricAlertRule struct {
-	// Labels of the resulting metric
-	Labels      labels.Labels
-	PromQLQuery string
-	Threshold   threshold.Threshold
-	// InstanceUUID is the instance used to execute the query, a matcher instance_uuid=$THIS_VALUE will be applied.
-	InstanceUUID string
-	Resolution   time.Duration
-	// IsUserPromQLAlert tells whether this rule is created by a user or an automatically generated one.
-	IsUserPromQLAlert bool
+// PromQLRule is a rule that runs on a single agent.
+type PromQLRule struct {
+	ID                  string
+	Name                string
+	WarningQuery        string
+	WarningDelaySecond  int
+	CriticalQuery       string
+	CriticalDelaySecond int
+	InstanceID          string
+	Resolution          time.Duration
 }
 
 type alertRuleGroup struct {
@@ -102,9 +99,9 @@ type alertRuleGroup struct {
 	lastErr       error
 	lastStatus    types.StatusDescription
 
-	alertingRule bleemeoTypes.AlertingRule
-	resolution   time.Duration
-	isError      string
+	promqlRule PromQLRule
+	resolution time.Duration
+	isError    string
 }
 
 type alertMinimal struct {
@@ -219,7 +216,7 @@ func (rm *Manager) MetricNames() []string {
 	defer rm.l.Unlock()
 
 	for _, r := range rm.ruleGroups {
-		names = append(names, r.alertingRule.Name)
+		names = append(names, r.promqlRule.Name)
 	}
 
 	return names
@@ -276,12 +273,12 @@ func (rm *Manager) Collect(ctx context.Context, app storage.Appender) error {
 func (agr *alertRuleGroup) shouldSkip(now time.Time) bool {
 	if !agr.inactiveSince.IsZero() {
 		if agr.disabledUntil.IsZero() && now.After(agr.inactiveSince.Add(2*time.Minute)) {
-			logger.V(2).Printf("rule %s has been disabled for the last 2 minutes. retrying this metric in 10 minutes", agr.alertingRule.ID)
+			logger.V(2).Printf("rule %s has been disabled for the last 2 minutes. retrying this metric in 10 minutes", agr.promqlRule.ID)
 			agr.disabledUntil = now.Add(10 * time.Minute)
 		}
 
 		if now.After(agr.disabledUntil) {
-			logger.V(2).Printf("Inactive rule %s will be re executed. Time since inactive: %s", agr.alertingRule.ID, agr.inactiveSince.Format(time.RFC3339))
+			logger.V(2).Printf("Inactive rule %s will be re executed. Time since inactive: %s", agr.promqlRule.ID, agr.inactiveSince.Format(time.RFC3339))
 			agr.disabledUntil = now.Add(10 * time.Minute)
 		} else {
 			return true
@@ -306,13 +303,13 @@ func (agr *alertRuleGroup) runGroup(ctx context.Context, now time.Time, rm *Mana
 				Time:  now,
 				Value: float64(types.StatusUnknown.NagiosCode()),
 			},
-			Labels: labelsMap(agr.alertingRule),
+			Labels: labelsMap(agr.promqlRule),
 			Annotations: types.MetricAnnotations{
 				Status: types.StatusDescription{
 					CurrentStatus:     types.StatusUnknown,
 					StatusDescription: "Invalid PromQL: " + agr.isError,
 				},
-				AlertingRuleID: agr.alertingRule.ID,
+				AlertingRuleID: agr.promqlRule.ID,
 			},
 		}, nil
 	}
@@ -402,13 +399,13 @@ func (agr *alertRuleGroup) checkNoPoint(now time.Time, agentStart time.Time, met
 				Time:  now,
 				Value: float64(types.StatusUnknown.NagiosCode()),
 			},
-			Labels: labelsMap(agr.alertingRule),
+			Labels: labelsMap(agr.promqlRule),
 			Annotations: types.MetricAnnotations{
 				Status: types.StatusDescription{
 					CurrentStatus:     types.StatusUnknown,
 					StatusDescription: "PromQL read zero points. The PromQL may be incorrect or the source measurement may have disappeared",
 				},
-				AlertingRuleID: agr.alertingRule.ID,
+				AlertingRuleID: agr.promqlRule.ID,
 			},
 		}, nil
 	}
@@ -445,7 +442,7 @@ func (agr *alertRuleGroup) generateNewPoint(
 				CurrentStatus:     status,
 				StatusDescription: agr.ruleDescription(),
 			},
-			AlertingRuleID: agr.alertingRule.ID,
+			AlertingRuleID: agr.promqlRule.ID,
 		},
 	}
 
@@ -584,8 +581,8 @@ func statusFromAlertState(state rules.AlertState, severity types.Status) types.S
 	return status
 }
 
-func (rm *Manager) addAlertingRule(
-	alertingRule bleemeoTypes.AlertingRule,
+func (rm *Manager) addRule(
+	promqlRule PromQLRule,
 	resolution time.Duration,
 	isError string,
 ) error {
@@ -596,19 +593,19 @@ func (rm *Manager) addAlertingRule(
 	// 	lbls = builder.Labels()
 	// }
 
-	lbls := labels.FromMap(labelsMap(alertingRule))
+	lbls := labels.FromMap(labelsMap(promqlRule))
 
 	var (
 		warningRule, criticalRule *rules.AlertingRule
 		err                       error
 	)
 
-	if alertingRule.WarningQuery != "" {
+	if promqlRule.WarningQuery != "" {
 		warningRule, err = newRule(
-			alertingRule.WarningQuery,
-			time.Duration(alertingRule.WarningDelaySecond)*time.Second,
+			promqlRule.WarningQuery,
+			time.Duration(promqlRule.WarningDelaySecond)*time.Second,
 			lbls,
-			alertingRule.ID,
+			promqlRule.ID,
 			rm.logger,
 		)
 		if err != nil {
@@ -616,12 +613,12 @@ func (rm *Manager) addAlertingRule(
 		}
 	}
 
-	if alertingRule.CriticalQuery != "" {
+	if promqlRule.CriticalQuery != "" {
 		criticalRule, err = newRule(
-			alertingRule.CriticalQuery,
-			time.Duration(alertingRule.CriticalDelaySecond)*time.Second,
+			promqlRule.CriticalQuery,
+			time.Duration(promqlRule.CriticalDelaySecond)*time.Second,
 			lbls,
-			alertingRule.ID,
+			promqlRule.ID,
 			rm.logger,
 		)
 		if err != nil {
@@ -631,31 +628,31 @@ func (rm *Manager) addAlertingRule(
 
 	newGroup := &alertRuleGroup{
 		// instanceID:    rule.InstanceUUID,
-		alertingRule: alertingRule,
+		promqlRule:   promqlRule,
 		isError:      isError,
 		resolution:   resolution,
 		warningRule:  warningRule,
 		criticalRule: criticalRule,
 	}
 
-	rm.ruleGroups[alertingRule.ID] = newGroup
+	rm.ruleGroups[promqlRule.ID] = newGroup
 
 	return nil
 }
 
 // RebuildPromQLRules rebuild the PromQL rules list.
-func (rm *Manager) RebuildPromQLRules(alertingRules []bleemeoTypes.AlertingRule, resolution time.Duration) error {
+func (rm *Manager) RebuildPromQLRules(promqlRules []PromQLRule) error {
 	rm.l.Lock()
 	defer rm.l.Unlock()
 
 	old := rm.ruleGroups
 	rm.ruleGroups = make(map[string]*alertRuleGroup)
 
-	for _, rule := range alertingRules {
+	for _, rule := range promqlRules {
 		// Keep the previous group if it hasn't changed.
 		// TODO : && prevInstance.instanceID == rule.InstanceUUID
 		if prevInstance, ok := old[rule.ID]; ok {
-			if prevRule := prevInstance.alertingRule; prevRule.WarningQuery == rule.WarningQuery &&
+			if prevRule := prevInstance.promqlRule; prevRule.WarningQuery == rule.WarningQuery &&
 				prevRule.WarningDelaySecond == rule.WarningDelaySecond &&
 				prevRule.CriticalQuery == rule.CriticalQuery &&
 				prevRule.CriticalDelaySecond == rule.CriticalDelaySecond {
@@ -665,9 +662,9 @@ func (rm *Manager) RebuildPromQLRules(alertingRules []bleemeoTypes.AlertingRule,
 			continue
 		}
 
-		err := rm.addAlertingRule(rule, resolution, "")
+		err := rm.addRule(rule, rule.Resolution, "")
 		if err != nil {
-			_ = rm.addAlertingRule(rule, resolution, err.Error())
+			_ = rm.addRule(rule, rule.Resolution, err.Error())
 		}
 	}
 
@@ -776,9 +773,9 @@ func statusFromThreshold(s string) types.Status {
 	}
 }
 
-func labelsMap(alertingRule bleemeoTypes.AlertingRule) map[string]string {
+func labelsMap(rule PromQLRule) map[string]string {
 	return map[string]string{
-		types.LabelName: alertingRule.Name,
+		types.LabelName: rule.Name,
 		// TODO: This shouldn't be hardcoded.
 		types.LabelInstanceUUID: "fdfedf2a-9441-4b9d-8d6f-e82ce8a820d5",
 	}

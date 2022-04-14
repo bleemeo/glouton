@@ -113,7 +113,6 @@ const (
 	LabelMetaSendScraperUUID        = "__meta_probe_send_agent_uuid"
 	LabelMetaCurrentStatus          = "__meta_current_status"
 	LabelMetaCurrentDescription     = "__meta_current_description"
-	LabelMetaSeverity               = "__meta_severity"
 	LabelMetaAlertingRuleUUID       = "__meta_alerting_rule_uuid"
 	LabelK8SPODName                 = "kubernetes_pod_name"
 	LabelK8SNamespace               = "kubernetes_namespace"
