@@ -396,7 +396,6 @@ func getDiscoveryInfo(service *Service, netstat map[int][]facts.ListenAddress, p
 		service.ListenAddresses = netstat[pid]
 		explicit = true
 	} else {
-
 		service.ListenAddresses, explicit = service.container.ListenAddresses()
 		service.IgnoredPorts = facts.ContainerIgnoredPorts(service.container)
 

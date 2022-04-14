@@ -851,7 +851,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 	}
 }
 
-func TestDynamicDiscovery(t *testing.T) {
+func TestDynamicDiscovery(t *testing.T) { //nolint: maintidx
 	cases := []struct {
 		name                   string
 		processes              []facts.Process
