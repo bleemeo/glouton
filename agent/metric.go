@@ -1139,7 +1139,7 @@ func (m *metricFilter) rebuildDefaultMetrics(services []discovery.Service, list 
 	return nil
 }
 
-func (m *metricFilter) RebuildDynamicLists(scrapper dynamicScrapper, services []discovery.Service, thresholdMetricNames []string) error {
+func (m *metricFilter) RebuildDynamicLists(scrapper dynamicScrapper, services []discovery.Service, thresholdMetricNames []string, alertMetrics []string) error {
 	allowList := make(map[string]matcher.Matchers)
 	denyList := make(map[string]matcher.Matchers)
 	errors := types.MultiErrors{}
@@ -1177,7 +1177,7 @@ func (m *metricFilter) RebuildDynamicLists(scrapper dynamicScrapper, services []
 
 	m.allowList = map[labels.Matcher][]matcher.Matchers{}
 
-	allowList, errors = m.rebuildThresholdsMetric(allowList, thresholdMetricNames, errors)
+	allowList, errors = m.rebuildThresholdsMetric(allowList, thresholdMetricNames, alertMetrics, errors)
 
 	for key, val := range m.staticAllowList {
 		m.allowList[key] = make([]matcher.Matchers, len(val))
@@ -1212,7 +1212,7 @@ func (m *metricFilter) RebuildDynamicLists(scrapper dynamicScrapper, services []
 	return errors
 }
 
-func (m *metricFilter) rebuildThresholdsMetric(allowList map[string]matcher.Matchers, thresholdMetricNames []string, errors types.MultiErrors) (map[string]matcher.Matchers, types.MultiErrors) {
+func (m *metricFilter) rebuildThresholdsMetric(allowList map[string]matcher.Matchers, thresholdMetricNames []string, alertMetrics []string, errors types.MultiErrors) (map[string]matcher.Matchers, types.MultiErrors) {
 	for _, val := range thresholdMetricNames {
 		newMetric, err := matcher.NormalizeMetric(val + "_status")
 		if err != nil {
@@ -1224,28 +1224,18 @@ func (m *metricFilter) rebuildThresholdsMetric(allowList map[string]matcher.Matc
 		allowList[val+"_status"] = newMetric
 	}
 
-	return allowList, errors
-}
-
-// AllowMetrics adds metrics to the allow list.
-func (m *metricFilter) AllowMetrics(metrics []string) error {
-	m.l.Lock()
-	defer m.l.Unlock()
-
-	var errors types.MultiErrors
-
-	for _, metric := range metrics {
-		newMetric, err := matcher.NormalizeMetric(metric)
+	for _, val := range alertMetrics {
+		newMetric, err := matcher.NormalizeMetric(val)
 		if err != nil {
 			errors = append(errors, err)
 
 			continue
 		}
 
-		addToList(m.allowList, newMetric)
+		allowList[val] = newMetric
 	}
 
-	return errors
+	return allowList, errors
 }
 
 func addNewSource(cLabels map[string]string, extraLabels map[string]string) (map[string]matcher.Matchers, map[string]matcher.Matchers, error) {

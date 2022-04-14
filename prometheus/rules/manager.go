@@ -202,7 +202,22 @@ func (rm *Manager) UpdateMetricResolution(metricResolution time.Duration) {
 	rm.metricResolution = metricResolution*2 + 10*time.Second
 }
 
+// MetricList returns a list of all alerting rules metric names.
+// This is used for dynamic generation of filters.
+func (rm *Manager) MetricList() []string {
+	res := make([]string, 0, len(rm.ruleGroups))
+
+	rm.l.Lock()
+	defer rm.l.Unlock()
+
+	for _, r := range rm.ruleGroups {
+		res = append(res, r.alertingRule.Name)
+	}
+	return nil
+}
+
 func (rm *Manager) Collect(ctx context.Context, app storage.Appender) error {
+	fmt.Println("!!! Collect")
 	var errs types.MultiErrors
 
 	res := []types.MetricPoint{} //nolint:ifshort // False positive.

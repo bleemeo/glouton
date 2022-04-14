@@ -51,7 +51,6 @@ type GlobalOption struct {
 	UpdateThresholds       func(ctx context.Context, thresholds map[threshold.MetricNameItem]threshold.Threshold, firstUpdate bool)
 	UpdateUnits            func(units map[threshold.MetricNameItem]threshold.Unit)
 	RebuildPromQLRules     func(alertingRules []AlertingRule, resolution time.Duration) error
-	AllowMetrics           func(metrics []string) error
 	IsContainerEnabled     func(facts.Container) (bool, bool)
 }
 

@@ -25,18 +25,6 @@ func (s *Synchronizer) syncAlertingRules(ctx context.Context, fullSync bool, onl
 		return fmt.Errorf("failed to rebuild PromQL rules: %v", err)
 	}
 
-	// Add the new rules to the metric allow list.
-	metricsToAllow := make([]string, 0, len(alertingRules))
-
-	for _, rule := range alertingRules {
-		metricsToAllow = append(metricsToAllow, rule.Name)
-	}
-
-	// TODO: The metrics can be removed from the allow list if the metric sync calls UpdateThreshold after.
-	if s.option.AllowMetrics != nil {
-		s.option.AllowMetrics(metricsToAllow)
-	}
-
 	return nil
 }
 
