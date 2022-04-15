@@ -328,11 +328,26 @@ func (agr *alertRuleGroup) runGroup(ctx context.Context, now time.Time, rm *Mana
 	}
 
 	if agr.pointsRead == 0 {
+		// Some metrics can a take bit of time before first points creation,
+		// we don't want them to be labeled as unknown on start.
 		if now.Sub(rm.agentStarted) < 2*time.Minute {
 			return types.MetricPoint{}, errSkipPoints
 		}
 
-		return agr.checkNoPoint(now, rm.agentStarted)
+		return types.MetricPoint{
+			Point: types.Point{
+				Time:  now,
+				Value: float64(types.StatusUnknown.NagiosCode()),
+			},
+			Labels: labelsMap(agr.promqlRule),
+			Annotations: types.MetricAnnotations{
+				Status: types.StatusDescription{
+					CurrentStatus:     types.StatusUnknown,
+					StatusDescription: "PromQL read zero points. The PromQL may be incorrect or the source measurement may have disappeared",
+				},
+				AlertingRuleID: agr.promqlRule.ID,
+			},
+		}, nil
 	}
 
 	var warningState, criticalState rules.AlertState
@@ -364,36 +379,6 @@ func (agr *alertRuleGroup) runGroup(ctx context.Context, now time.Time, rm *Mana
 	}
 
 	return newPoint, nil
-}
-
-func (agr *alertRuleGroup) checkNoPoint(now time.Time, agentStart time.Time) (types.MetricPoint, error) {
-	// TODO: isn't that redundant with the now.Sub(rm.agentStarted) < 2*time.Minute check done before calling this function?
-	// Some metrics can a take bit of time before first points creation,
-	// we don't want them to be labeled as unknown on start.
-	minTimeSinceStart := agr.promqlRule.Resolution*2 + 10*time.Second
-
-	if now.Sub(agentStart) > minTimeSinceStart {
-		return types.MetricPoint{
-			Point: types.Point{
-				Time:  now,
-				Value: float64(types.StatusUnknown.NagiosCode()),
-			},
-			Labels: labelsMap(agr.promqlRule),
-			Annotations: types.MetricAnnotations{
-				Status: types.StatusDescription{
-					CurrentStatus:     types.StatusUnknown,
-					StatusDescription: "PromQL read zero points. The PromQL may be incorrect or the source measurement may have disappeared",
-				},
-				AlertingRuleID: agr.promqlRule.ID,
-			},
-		}, nil
-	}
-
-	if agr.inactiveSince.IsZero() {
-		agr.inactiveSince = now
-	}
-
-	return types.MetricPoint{}, errSkipPoints
 }
 
 func (agr *alertRuleGroup) generateNewPoint(
