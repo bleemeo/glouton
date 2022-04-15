@@ -51,6 +51,12 @@ const (
 // as the prometheus alert time is 5 minutes.
 const gracePeriod = 6 * time.Minute
 
+// metricFields is the fields used on the API for a metric, we always use all fields to
+// make sure no Metric object is returned with some empty fields which could create bugs.
+const metricFields = "id,label,item,labels_text,unit,unit_text,service,container,deactivated_at," +
+	"threshold_low_warning,threshold_low_critical,threshold_high_warning,threshold_high_critical," +
+	"status_of,agent,promql_query,is_user_promql_alert,alerting_rule"
+
 var (
 	errRetryLater     = errors.New("metric registration should be retried later")
 	errIgnore         = errors.New("metric registration fail but can be ignored (because it registration will be retried automatically)")
@@ -693,7 +699,7 @@ func (s *Synchronizer) isOwnedMetric(metric metricPayload) bool {
 // metricsListWithAgentID fetches the list of all metrics for a given agent, and returns a UUID:metric mapping.
 func (s *Synchronizer) metricsListWithAgentID(fetchInactive bool) (map[string]bleemeoTypes.Metric, error) {
 	params := map[string]string{
-		"fields": "id,agent,item,label,labels_text,unit,unit_text,deactivated_at,threshold_low_warning,threshold_low_critical,threshold_high_warning,threshold_high_critical,service,container,status_of,promql_query,is_user_promql_alert",
+		"fields": metricFields,
 	}
 
 	if fetchInactive {
@@ -864,7 +870,7 @@ func (s *Synchronizer) metricUpdateListUUID(requests []string) error {
 		var metric metricPayload
 
 		params := map[string]string{
-			"fields": "id,agent,label,item,labels_text,unit,unit_text,service,container,deactivated_at,threshold_low_warning,threshold_low_critical,threshold_high_warning,threshold_high_critical,status_of,promql_query,is_user_promql_alert",
+			"fields": metricFields,
 		}
 
 		_, err := s.client.Do(
@@ -1142,9 +1148,7 @@ func (mr *metricRegisterer) doOnePass(currentList []types.Metric, state metricRe
 
 func (mr *metricRegisterer) metricRegisterAndUpdateOne(metric types.Metric) error {
 	params := map[string]string{
-		"fields": "id,label,item,labels_text,unit,unit_text,service,container,deactivated_at," +
-			"threshold_low_warning,threshold_low_critical,threshold_high_warning,threshold_high_critical," +
-			"status_of,agent,promql_query,is_user_promql_alert,alerting_rule",
+		"fields": metricFields,
 	}
 	labels := metric.Labels()
 	annotations := metric.Annotations()
