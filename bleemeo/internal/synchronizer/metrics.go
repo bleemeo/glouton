@@ -572,9 +572,7 @@ func (s *Synchronizer) syncMetrics(ctx context.Context, fullSync bool, onlyEssen
 
 	updateThresholds = fullSync || len(unregisteredMetrics) > 0 || len(pendingMetricsUpdate) > 0
 
-	if err := s.metricDeleteFromRemote(filteredMetrics, previousMetrics); err != nil {
-		return updateThresholds, err
-	}
+	s.metricDeleteFromRemote(filteredMetrics, previousMetrics)
 
 	localMetrics, err = s.option.Store.Metrics(nil)
 	if err != nil {
@@ -903,7 +901,7 @@ func (s *Synchronizer) metricUpdateListUUID(requests []string) error {
 	return nil
 }
 
-func (s *Synchronizer) metricDeleteFromRemote(localMetrics []types.Metric, previousMetrics map[string]bleemeoTypes.Metric) error {
+func (s *Synchronizer) metricDeleteFromRemote(localMetrics []types.Metric, previousMetrics map[string]bleemeoTypes.Metric) {
 	newMetrics := s.option.Cache.MetricsByUUID()
 
 	deletedMetricLabelItem := make(map[string]bool)
@@ -927,8 +925,6 @@ func (s *Synchronizer) metricDeleteFromRemote(localMetrics []types.Metric, previ
 	}
 
 	s.option.Store.DropMetrics(localMetricToDelete)
-
-	return nil
 }
 
 type metricRegisterer struct {

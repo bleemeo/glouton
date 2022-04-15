@@ -143,9 +143,7 @@ func (s *Synchronizer) syncServices(ctx context.Context, fullSync bool, onlyEsse
 		}
 	}
 
-	if err := s.serviceDeleteFromRemote(localServices, previousServices); err != nil {
-		return false, err
-	}
+	s.serviceDeleteFromRemote(localServices, previousServices)
 
 	if onlyEssential {
 		// no essential services, skip registering.
@@ -161,9 +159,9 @@ func (s *Synchronizer) syncServices(ctx context.Context, fullSync bool, onlyEsse
 		return false, err
 	}
 
-	err = s.serviceDeleteFromLocal(localServices)
+	s.serviceDeleteFromLocal(localServices)
 
-	return false, err
+	return false, nil
 }
 
 func (s *Synchronizer) serviceUpdateList() error {
@@ -194,7 +192,7 @@ func (s *Synchronizer) serviceUpdateList() error {
 	return nil
 }
 
-func (s *Synchronizer) serviceDeleteFromRemote(localServices []discovery.Service, previousServices map[string]types.Service) error {
+func (s *Synchronizer) serviceDeleteFromRemote(localServices []discovery.Service, previousServices map[string]types.Service) {
 	newServices := s.option.Cache.ServicesByUUID()
 
 	deletedServiceNameInstance := make(map[serviceNameInstance]bool)
@@ -219,8 +217,6 @@ func (s *Synchronizer) serviceDeleteFromRemote(localServices []discovery.Service
 	}
 
 	s.option.Discovery.RemoveIfNonRunning(s.ctx, localServiceToDelete)
-
-	return nil
 }
 
 func (s *Synchronizer) serviceRegisterAndUpdate(localServices []discovery.Service) error {
@@ -332,7 +328,7 @@ func checkRemoteName(remoteFound bool, remoteSrv types.Service, srv discovery.Se
 	return false
 }
 
-func (s *Synchronizer) serviceDeleteFromLocal(localServices []discovery.Service) error {
+func (s *Synchronizer) serviceDeleteFromLocal(localServices []discovery.Service) {
 	duplicatedKey := make(map[serviceNameInstance]bool)
 	longToShortLookup := longToShortKey(localServices)
 	shortToLongLookup := make(map[serviceNameInstance]serviceNameInstance, len(longToShortLookup))
@@ -369,6 +365,4 @@ func (s *Synchronizer) serviceDeleteFromLocal(localServices []discovery.Service)
 	}
 
 	s.option.Cache.SetServices(services)
-
-	return nil
 }

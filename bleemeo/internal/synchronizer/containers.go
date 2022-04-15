@@ -83,7 +83,7 @@ func (s *Synchronizer) syncContainers(ctx context.Context, fullSync bool, onlyEs
 		return false, err
 	}
 
-	err = s.containerDeleteFromLocal(localContainers)
+	s.containerDeleteFromLocal(localContainers)
 
 	return false, err
 }
@@ -259,7 +259,7 @@ func (s *Synchronizer) remoteRegister(remoteFound bool, remoteContainer *types.C
 	return nil
 }
 
-func (s *Synchronizer) containerDeleteFromLocal(localContainers []facts.Container) error {
+func (s *Synchronizer) containerDeleteFromLocal(localContainers []facts.Container) {
 	var deletedIDs []string //nolint: prealloc // we don't know the size. empty is the most likely size.
 
 	duplicatedKey := make(map[string]bool)
@@ -341,6 +341,4 @@ func (s *Synchronizer) containerDeleteFromLocal(localContainers []facts.Containe
 
 		s.forceSync[syncMethodService] = true
 	}
-
-	return nil
 }

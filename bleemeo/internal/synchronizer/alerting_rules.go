@@ -77,7 +77,7 @@ func (s *Synchronizer) UpdateAlertingRules() error {
 	}
 
 	if err := s.option.RebuildPromQLRules(promqlRules); err != nil {
-		return fmt.Errorf("failed to rebuild PromQL rules: %v", err)
+		return fmt.Errorf("failed to rebuild PromQL rules: %w", err)
 	}
 
 	return nil
@@ -102,6 +102,7 @@ func (s *Synchronizer) alertingRuleToPromQLRules(
 		cfg, ok := configs[agent.CurrentConfigID]
 		if !ok {
 			logger.V(1).Printf("Config for agent %s not found", agent.CurrentConfigID)
+
 			needConfigUpdate = true
 
 			continue
@@ -110,6 +111,7 @@ func (s *Synchronizer) alertingRuleToPromQLRules(
 		agentConfig, ok := cfg.AgentConfigByID[agent.AgentType]
 		if !ok {
 			logger.V(1).Printf("Agent config for agent %s and type %s not found", agent.CurrentConfigID, agent.AgentType)
+
 			needConfigUpdate = true
 
 			continue

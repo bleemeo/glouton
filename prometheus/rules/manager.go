@@ -37,26 +37,12 @@ import (
 	"github.com/prometheus/prometheus/storage"
 )
 
-// promAlertTime represents the duration for which the alerting rule
-// should exceed the threshold to be considered fired.
-const promAlertTime = 5 * time.Minute
-
 // minResetTime is the minimum time used by the inactive checks.
 // The bleemeo connector uses 15 seconds as a synchronization time,
 // thus we add a bit a leeway in the disabled countdown.
 const minResetTime = 17 * time.Second
 
-const (
-	lowWarningState   = "low_warning"
-	highWarningState  = "high_warning"
-	lowCriticalState  = "low_critical"
-	highCriticalState = "high_critical"
-)
-
-var (
-	errUnknownState = errors.New("unknown state for metric")
-	errSkipPoints   = errors.New("skip points")
-)
+var errSkipPoints = errors.New("skip points")
 
 // Manager is a wrapper handling everything related to prometheus recording
 // and alerting rules.
@@ -349,22 +335,17 @@ func (agr *alertRuleGroup) runGroup(ctx context.Context, now time.Time, rm *Mana
 		return agr.checkNoPoint(now, rm.agentStarted)
 	}
 
-	var (
-		warningState, criticalState rules.AlertState
-	)
+	var warningState, criticalState rules.AlertState
+
 	if agr.warningRule != nil {
 		warningState = agr.warningRule.State()
 	}
+
 	if agr.criticalRule != nil {
 		criticalState = agr.criticalRule.State()
 	}
 
-	newPoint, err := agr.generateNewPoint(warningState, criticalState, now)
-	if err != nil {
-		agr.lastErr = err
-
-		return types.MetricPoint{}, err
-	}
+	newPoint := agr.generateNewPoint(warningState, criticalState, now)
 
 	agr.lastStatus = newPoint.Annotations.Status
 
@@ -418,13 +399,13 @@ func (agr *alertRuleGroup) checkNoPoint(now time.Time, agentStart time.Time) (ty
 func (agr *alertRuleGroup) generateNewPoint(
 	warningState, criticalState rules.AlertState,
 	now time.Time,
-) (types.MetricPoint, error) {
+) types.MetricPoint {
 	warningStatus := statusFromAlertState(warningState, types.StatusWarning)
 	criticalStatus := statusFromAlertState(criticalState, types.StatusCritical)
-
 	lbls := agr.criticalRule.Labels()
+
 	status := criticalStatus
-	if warningStatus > criticalStatus {
+	if warningStatus > status {
 		lbls = agr.warningRule.Labels()
 		status = warningStatus
 	}
@@ -444,7 +425,7 @@ func (agr *alertRuleGroup) generateNewPoint(
 		},
 	}
 
-	return newPoint, nil
+	return newPoint
 }
 
 // ruleDescription returns the description for a rule.
@@ -509,7 +490,7 @@ func (agr *alertRuleGroup) deduplicateAlerts() map[uint64]alertMinimal {
 	}
 
 	if agr.criticalRule != nil {
-		criticalAlerts = append(warningAlerts, agr.criticalRule.ActiveAlerts()...)
+		criticalAlerts = append(criticalAlerts, agr.criticalRule.ActiveAlerts()...)
 	}
 
 	alertsMap := make(map[uint64]alertMinimal)
@@ -584,13 +565,6 @@ func (rm *Manager) addRule(
 	promqlRule PromQLRule,
 	isError string,
 ) error {
-	// TODO:
-	// if lbls.Get(types.LabelInstanceUUID) != rule.InstanceUUID {
-	// 	builder := labels.NewBuilder(lbls)
-	// 	builder.Set(types.LabelInstanceUUID, rule.InstanceUUID)
-	// 	lbls = builder.Labels()
-	// }
-
 	lbls := labels.FromMap(labelsMap(promqlRule))
 
 	var (
@@ -750,17 +724,6 @@ func newRule(
 
 func (agr *alertRuleGroup) String() string {
 	return fmt.Sprintf("%#v\n", agr)
-}
-
-func statusFromThreshold(s string) types.Status {
-	switch s {
-	case lowWarningState, highWarningState:
-		return types.StatusWarning
-	case lowCriticalState, highCriticalState:
-		return types.StatusCritical
-	default:
-		return types.StatusUnknown
-	}
 }
 
 func labelsMap(rule PromQLRule) map[string]string {
