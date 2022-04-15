@@ -22,13 +22,10 @@ import (
 	"errors"
 	"fmt"
 	"glouton/bleemeo/client"
-	"glouton/bleemeo/internal/cache"
 	"glouton/bleemeo/internal/common"
 	"glouton/bleemeo/internal/filter"
 	bleemeoTypes "glouton/bleemeo/types"
 	"glouton/logger"
-	"glouton/prometheus/model"
-	"glouton/prometheus/rules"
 	"glouton/threshold"
 	"glouton/types"
 	"math/rand"
@@ -37,8 +34,6 @@ import (
 	"sort"
 	"strings"
 	"time"
-
-	"github.com/prometheus/prometheus/model/labels"
 )
 
 // agentStatusName is the name of the special metrics used to store the agent connection status.
@@ -400,49 +395,6 @@ func httpResponseToMetricFailureKind(content string) bleemeoTypes.FailureKind {
 	default:
 		return bleemeoTypes.FailureUnknown
 	}
-}
-
-func metricToMetricAlertRule(cache *cache.Cache) []rules.MetricAlertRule {
-	metrics := cache.Metrics()
-	agents := cache.AgentsByUUID()
-	configs := cache.AccountConfigsByUUID()
-	mainAgent := cache.Agent()
-
-	result := make([]rules.MetricAlertRule, 0)
-
-	for _, metric := range metrics {
-		if metric.PromQLQuery == "" || metric.AgentID == "" {
-			continue
-		}
-
-		threshold := metric.Threshold.ToInternalThreshold()
-		if threshold.IsZero() {
-			continue
-		}
-
-		agent := agents[metric.AgentID]
-		cfg := configs[agent.CurrentConfigID]
-		resolution := cfg.AgentConfigByID[agent.AgentType].MetricResolution
-
-		lbls := labels.FromMap(metric.Labels)
-
-		if metric.AgentID != mainAgent.ID {
-			lbls = model.AnnotationToMetaLabels(lbls, types.MetricAnnotations{
-				BleemeoAgentID: metric.AgentID,
-			})
-		}
-
-		result = append(result, rules.MetricAlertRule{
-			Labels:            lbls,
-			PromQLQuery:       metric.PromQLQuery,
-			Threshold:         threshold,
-			InstanceUUID:      metric.AgentID,
-			IsUserPromQLAlert: metric.IsUserPromQLAlert,
-			Resolution:        resolution,
-		})
-	}
-
-	return result
 }
 
 func (s *Synchronizer) metricKey(lbls map[string]string, annotations types.MetricAnnotations) string {

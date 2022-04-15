@@ -69,29 +69,27 @@ type Manager struct {
 	engine     *promql.Engine
 	logger     log.Logger
 
-	l                sync.Mutex
-	now              func() time.Time
-	agentStarted     time.Time
-	metricResolution time.Duration
+	l            sync.Mutex
+	now          func() time.Time
+	agentStarted time.Time
 }
 
 // PromQLRule is a rule that runs on a single agent.
 type PromQLRule struct {
-	ID                  string
-	Name                string
-	WarningQuery        string
-	WarningDelaySecond  int
-	CriticalQuery       string
-	CriticalDelaySecond int
-	InstanceID          string
-	Resolution          time.Duration
+	ID            string
+	Name          string
+	WarningQuery  string
+	WarningDelay  time.Duration
+	CriticalQuery string
+	CriticalDelay time.Duration
+	InstanceID    string
+	Resolution    time.Duration
 }
 
 type alertRuleGroup struct {
 	warningRule  *rules.AlertingRule
 	criticalRule *rules.AlertingRule
 
-	instanceID    string
 	inactiveSince time.Time
 	disabledUntil time.Time
 	pointsRead    int32
@@ -100,7 +98,6 @@ type alertRuleGroup struct {
 	lastStatus    types.StatusDescription
 
 	promqlRule PromQLRule
-	resolution time.Duration
 	isError    string
 }
 
@@ -180,31 +177,17 @@ func newManager(ctx context.Context, queryable storage.Queryable, defaultRules m
 	})
 
 	rm := Manager{
-		appendable:       app,
-		queryable:        queryable,
-		engine:           engine,
-		recordingRules:   []*rules.Group{defaultGroup},
-		ruleGroups:       map[string]*alertRuleGroup{},
-		logger:           promLogger,
-		agentStarted:     created,
-		metricResolution: 0,
-		now:              time.Now,
+		appendable:     app,
+		queryable:      queryable,
+		engine:         engine,
+		recordingRules: []*rules.Group{defaultGroup},
+		ruleGroups:     map[string]*alertRuleGroup{},
+		logger:         promLogger,
+		agentStarted:   created,
+		now:            time.Now,
 	}
 
-	rm.UpdateMetricResolution(metricResolution)
-
 	return &rm
-}
-
-// UpdateMetricResolution updates the metric resolution time.
-func (rm *Manager) UpdateMetricResolution(metricResolution time.Duration) {
-	rm.l.Lock()
-	defer rm.l.Unlock()
-
-	// rm.metricResolution is the minimum time before actually sending
-	// any alerting points. Some metrics can a take bit of time before
-	// first points creation; we do not want them to be labelled as unknown on start.
-	rm.metricResolution = metricResolution*2 + 10*time.Second
 }
 
 // MetricNames returns a list of all alerting rules metric names.
@@ -285,7 +268,7 @@ func (agr *alertRuleGroup) shouldSkip(now time.Time) bool {
 		}
 	}
 
-	if agr.resolution != 0 && now.Add(time.Second).Sub(agr.lastRun) < agr.resolution {
+	if agr.promqlRule.Resolution != 0 && now.Add(time.Second).Sub(agr.lastRun) < agr.promqlRule.Resolution {
 		return true
 	}
 
@@ -329,8 +312,7 @@ func (agr *alertRuleGroup) runGroup(ctx context.Context, now time.Time, rm *Mana
 		tmp, err := newFilterQueryable(
 			rm.queryable,
 			map[string]string{
-				// TODO: Don't hardcode this.
-				types.LabelInstanceUUID: "fdfedf2a-9441-4b9d-8d6f-e82ce8a820d5",
+				types.LabelInstanceUUID: agr.promqlRule.InstanceID,
 			},
 		)
 		if err != nil {
@@ -356,7 +338,7 @@ func (agr *alertRuleGroup) runGroup(ctx context.Context, now time.Time, rm *Mana
 			return types.MetricPoint{}, errSkipPoints
 		}
 
-		return agr.checkNoPoint(now, rm.agentStarted, rm.metricResolution)
+		return agr.checkNoPoint(now, rm.agentStarted)
 	}
 
 	var warningState, criticalState rules.AlertState
@@ -392,8 +374,13 @@ func (agr *alertRuleGroup) runGroup(ctx context.Context, now time.Time, rm *Mana
 	return newPoint, nil
 }
 
-func (agr *alertRuleGroup) checkNoPoint(now time.Time, agentStart time.Time, metricRes time.Duration) (types.MetricPoint, error) {
-	if now.Sub(agentStart) > metricRes {
+func (agr *alertRuleGroup) checkNoPoint(now time.Time, agentStart time.Time) (types.MetricPoint, error) {
+	// TODO: isn't that redundant with the now.Sub(rm.agentStarted) < 2*time.Minute check done before calling this function?
+	// Some metrics can a take bit of time before first points creation,
+	// we don't want them to be labeled as unknown on start.
+	minTimeSinceStart := agr.promqlRule.Resolution*2 + 10*time.Second
+
+	if now.Sub(agentStart) > minTimeSinceStart {
 		return types.MetricPoint{
 			Point: types.Point{
 				Time:  now,
@@ -583,7 +570,6 @@ func statusFromAlertState(state rules.AlertState, severity types.Status) types.S
 
 func (rm *Manager) addRule(
 	promqlRule PromQLRule,
-	resolution time.Duration,
 	isError string,
 ) error {
 	// TODO:
@@ -603,7 +589,7 @@ func (rm *Manager) addRule(
 	if promqlRule.WarningQuery != "" {
 		warningRule, err = newRule(
 			promqlRule.WarningQuery,
-			time.Duration(promqlRule.WarningDelaySecond)*time.Second,
+			promqlRule.WarningDelay,
 			lbls,
 			promqlRule.ID,
 			rm.logger,
@@ -616,7 +602,7 @@ func (rm *Manager) addRule(
 	if promqlRule.CriticalQuery != "" {
 		criticalRule, err = newRule(
 			promqlRule.CriticalQuery,
-			time.Duration(promqlRule.CriticalDelaySecond)*time.Second,
+			promqlRule.CriticalDelay,
 			lbls,
 			promqlRule.ID,
 			rm.logger,
@@ -627,10 +613,8 @@ func (rm *Manager) addRule(
 	}
 
 	newGroup := &alertRuleGroup{
-		// instanceID:    rule.InstanceUUID,
 		promqlRule:   promqlRule,
 		isError:      isError,
-		resolution:   resolution,
 		warningRule:  warningRule,
 		criticalRule: criticalRule,
 	}
@@ -653,18 +637,18 @@ func (rm *Manager) RebuildPromQLRules(promqlRules []PromQLRule) error {
 		// TODO : && prevInstance.instanceID == rule.InstanceUUID
 		if prevInstance, ok := old[rule.ID]; ok {
 			if prevRule := prevInstance.promqlRule; prevRule.WarningQuery == rule.WarningQuery &&
-				prevRule.WarningDelaySecond == rule.WarningDelaySecond &&
+				prevRule.WarningDelay == rule.WarningDelay &&
 				prevRule.CriticalQuery == rule.CriticalQuery &&
-				prevRule.CriticalDelaySecond == rule.CriticalDelaySecond {
+				prevRule.CriticalDelay == rule.CriticalDelay {
 				rm.ruleGroups[rule.ID] = prevInstance
 			}
 
 			continue
 		}
 
-		err := rm.addRule(rule, rule.Resolution, "")
+		err := rm.addRule(rule, "")
 		if err != nil {
-			_ = rm.addRule(rule, rule.Resolution, err.Error())
+			_ = rm.addRule(rule, err.Error())
 		}
 	}
 
@@ -775,8 +759,7 @@ func statusFromThreshold(s string) types.Status {
 
 func labelsMap(rule PromQLRule) map[string]string {
 	return map[string]string{
-		types.LabelName: rule.Name,
-		// TODO: This shouldn't be hardcoded.
-		types.LabelInstanceUUID: "fdfedf2a-9441-4b9d-8d6f-e82ce8a820d5",
+		types.LabelName:         rule.Name,
+		types.LabelInstanceUUID: rule.InstanceID,
 	}
 }

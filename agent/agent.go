@@ -483,7 +483,6 @@ func (a *agent) updateMetricResolution(ctx context.Context, defaultResolution ti
 	a.l.Unlock()
 
 	a.gathererRegistry.UpdateDelay(ctx, defaultResolution)
-	a.rulesManager.UpdateMetricResolution(defaultResolution)
 
 	services, err := a.discovery.Discovery(ctx, time.Hour)
 	if err != nil {

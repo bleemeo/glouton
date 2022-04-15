@@ -1117,10 +1117,10 @@ func (r *Registry) UpdateDelay(ctx context.Context, delay time.Duration) {
 	}
 }
 
-// InternalRunScape run a scrape/gathering on given registration id (from RegisterGatherer & co).
+// InternalRunScrape run a scrape/gathering on given registration id (from RegisterGatherer & co).
 // Points gatherer are processed at if a periodic gather occurred.
 // This should only be used in test.
-func (r *Registry) InternalRunScape(ctx context.Context, t0 time.Time, id int) {
+func (r *Registry) InternalRunScrape(ctx context.Context, t0 time.Time, id int) {
 	r.l.Lock()
 
 	reg, ok := r.registrations[id]
