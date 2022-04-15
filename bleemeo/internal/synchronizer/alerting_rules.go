@@ -115,10 +115,8 @@ func (s *Synchronizer) filterAgents(agents []string, knownAgentsByUUID map[strin
 	var filteredAgents []string
 
 	for _, agent := range agents {
-		for knownAgentID := range knownAgentsByUUID {
-			if agent == knownAgentID {
-				filteredAgents = append(filteredAgents, agent)
-			}
+		if _, ok := knownAgentsByUUID[agent]; ok {
+			filteredAgents = append(filteredAgents, agent)
 		}
 	}
 
