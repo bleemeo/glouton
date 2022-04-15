@@ -723,7 +723,22 @@ func newRule(
 }
 
 func (agr *alertRuleGroup) String() string {
-	return fmt.Sprintf("%#v\n", agr)
+	str := fmt.Sprintf(`# %s (%s)
+	Warning: %s (delay %s) / Critical: %s (delay %s): %s
+	Runs on agent %s with a resolution of %s.
+	Last run at %s, read %d points.
+	Inactive since %s and disabled until %s.
+	Last error: %v (isError=%s)
+	`, agr.promqlRule.Name, agr.promqlRule.ID,
+		agr.promqlRule.WarningQuery, agr.promqlRule.WarningDelay,
+		agr.promqlRule.CriticalQuery, agr.promqlRule.CriticalDelay, agr.lastStatus,
+		agr.promqlRule.InstanceID, agr.promqlRule.Resolution,
+		agr.lastRun, agr.pointsRead,
+		agr.inactiveSince, agr.disabledUntil,
+		agr.lastErr, agr.isError,
+	)
+
+	return str
 }
 
 func labelsMap(rule PromQLRule) map[string]string {
