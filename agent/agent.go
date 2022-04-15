@@ -737,7 +737,7 @@ func (a *agent) run(ctx context.Context) { //nolint:maintidx
 		return
 	}
 
-	a.rulesManager = rules.NewManager(ctx, a.store, a.metricResolution)
+	a.rulesManager = rules.NewManager(ctx, a.store)
 
 	a.store.SetNewMetricCallback(a.newMetricsCallback)
 

@@ -126,16 +126,16 @@ var (
 	}
 )
 
-func NewManager(ctx context.Context, queryable storage.Queryable, metricResolution time.Duration) *Manager {
+func NewManager(ctx context.Context, queryable storage.Queryable) *Manager {
 	defaultRules := defaultLinuxRecordingRules
 	if runtime.GOOS == "windows" {
 		defaultRules = defaultWindowsRecordingRules
 	}
 
-	return newManager(ctx, queryable, defaultRules, time.Now(), metricResolution)
+	return newManager(ctx, queryable, defaultRules, time.Now())
 }
 
-func newManager(ctx context.Context, queryable storage.Queryable, defaultRules map[string]string, created time.Time, metricResolution time.Duration) *Manager {
+func newManager(ctx context.Context, queryable storage.Queryable, defaultRules map[string]string, created time.Time) *Manager {
 	promLogger := logger.GoKitLoggerWrapper(logger.V(1))
 	engine := promql.NewEngine(promql.EngineOpts{
 		Logger:             log.With(promLogger, "component", "query engine"),
@@ -349,18 +349,14 @@ func (agr *alertRuleGroup) runGroup(ctx context.Context, now time.Time, rm *Mana
 		return agr.checkNoPoint(now, rm.agentStarted)
 	}
 
-	var warningState, criticalState rules.AlertState
+	var (
+		warningState, criticalState rules.AlertState
+	)
 	if agr.warningRule != nil {
 		warningState = agr.warningRule.State()
 	}
 	if agr.criticalRule != nil {
 		criticalState = agr.criticalRule.State()
-	}
-
-	// we add 20 seconds to the promAlert time to compensate the delta between agent startup and first metrics
-	if now.Sub(rm.agentStarted) < promAlertTime+20*time.Second &&
-		warningState != rules.StateInactive && criticalState != rules.StateInactive {
-		return types.MetricPoint{}, errSkipPoints
 	}
 
 	newPoint, err := agr.generateNewPoint(warningState, criticalState, now)
@@ -372,10 +368,17 @@ func (agr *alertRuleGroup) runGroup(ctx context.Context, now time.Time, rm *Mana
 
 	agr.lastStatus = newPoint.Annotations.Status
 
-	// Be careful not to send an OK point if one of the rules is pending,
-	// otherwise we might send wrong OK points at the start of the agent.
-	if newPoint.Annotations.Status.CurrentStatus == types.StatusOk &&
-		(warningState == rules.StatePending || criticalState == rules.StatePending) {
+	// Don't send any point at the start of the agent, as we do not provide a way for prometheus
+	// to know previous values before the start. This avoids sending an OK point if one of the
+	// rules is pending when the agent starts.
+	maxDelay := agr.promqlRule.WarningDelay
+	if agr.promqlRule.CriticalDelay > maxDelay {
+		maxDelay = agr.promqlRule.CriticalDelay
+	}
+
+	// We remove 20 seconds to the start time to compensate the delta between agent startup and first metrics.
+	startedFor := now.Sub(rm.agentStarted) - 20*time.Second
+	if startedFor < maxDelay && (warningState != rules.StateInactive || criticalState != rules.StateInactive) {
 		return types.MetricPoint{}, fmt.Errorf("%w: status ok with a pending rule", errSkipPoints)
 	}
 
@@ -435,7 +438,7 @@ func (agr *alertRuleGroup) generateNewPoint(
 		Annotations: types.MetricAnnotations{
 			Status: types.StatusDescription{
 				CurrentStatus:     status,
-				StatusDescription: agr.ruleDescription(),
+				StatusDescription: agr.ruleDescription(status),
 			},
 			AlertingRuleID: agr.promqlRule.ID,
 		},
@@ -451,13 +454,14 @@ func (agr *alertRuleGroup) generateNewPoint(
 // instance="myserver:8015",item="/": 71.67,
 // instance="myserver:8015",item="/boot": 39.61,
 // instance="myserver:8015",item="/home": 29.39.
-func (agr *alertRuleGroup) ruleDescription() string {
-	alertsMap := agr.deduplicateAlerts()
-	if len(alertsMap) == 0 {
+func (agr *alertRuleGroup) ruleDescription(ruleStatus types.Status) string {
+	if ruleStatus == types.StatusOk {
 		return "Everything is running fine"
 	}
 
+	alertsMap := agr.deduplicateAlerts()
 	points := make([]alertMinimal, 0, len(alertsMap))
+
 	for _, point := range alertsMap {
 		points = append(points, point)
 	}
