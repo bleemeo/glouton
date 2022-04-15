@@ -86,6 +86,14 @@ type PromQLRule struct {
 	Resolution    time.Duration
 }
 
+func (rule PromQLRule) Equal(other PromQLRule) bool {
+	return rule.WarningQuery == other.WarningQuery &&
+		rule.WarningDelay == other.WarningDelay &&
+		rule.CriticalQuery == other.CriticalQuery &&
+		rule.CriticalDelay == other.CriticalDelay &&
+		rule.InstanceID == other.InstanceID
+}
+
 type alertRuleGroup struct {
 	warningRule  *rules.AlertingRule
 	criticalRule *rules.AlertingRule
@@ -634,14 +642,8 @@ func (rm *Manager) RebuildPromQLRules(promqlRules []PromQLRule) error {
 
 	for _, rule := range promqlRules {
 		// Keep the previous group if it hasn't changed.
-		// TODO : && prevInstance.instanceID == rule.InstanceUUID
-		if prevInstance, ok := old[rule.ID]; ok {
-			if prevRule := prevInstance.promqlRule; prevRule.WarningQuery == rule.WarningQuery &&
-				prevRule.WarningDelay == rule.WarningDelay &&
-				prevRule.CriticalQuery == rule.CriticalQuery &&
-				prevRule.CriticalDelay == rule.CriticalDelay {
-				rm.ruleGroups[rule.ID] = prevInstance
-			}
+		if prevInstance, ok := old[rule.ID]; ok && prevInstance.promqlRule.Equal(rule) {
+			rm.ruleGroups[rule.ID] = prevInstance
 
 			continue
 		}
