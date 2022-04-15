@@ -89,9 +89,6 @@ func (s *Synchronizer) alertingRuleToPromQLRules(
 	agents map[string]bleemeoTypes.Agent,
 	configs map[string]bleemeoTypes.GloutonAccountConfig,
 ) (promqlRules []rules.PromQLRule, needConfigUpdate bool) {
-	// TODO: Remove this hardcoded value once the API support the "agents" field.
-	alertingRule.Agents = []string{"fdfedf2a-9441-4b9d-8d6f-e82ce8a820d5"}
-
 	agentIDs := s.filterAgents(alertingRule.Agents, agents)
 	promqlRules = make([]rules.PromQLRule, 0, len(agentIDs))
 
