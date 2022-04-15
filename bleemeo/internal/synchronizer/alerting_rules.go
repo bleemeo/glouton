@@ -59,13 +59,21 @@ func (s *Synchronizer) alertingRules(ctx context.Context) (alertingRules []bleem
 func (s *Synchronizer) UpdateAlertingRules() error {
 	agents := s.option.Cache.AgentsByUUID()
 	configs := s.option.Cache.AccountConfigsByUUID()
-
-	alertingRules := s.option.Cache.AlertingRules()
+	needConfigUpdate := false
 
 	var promqlRules []rules.PromQLRule
+
+	alertingRules := s.option.Cache.AlertingRules()
 	for _, rule := range alertingRules {
-		newPromQLRules := s.alertingRuleToPromQLRules(rule, agents, configs)
+		newPromQLRules, needConfigUpdateTmp := s.alertingRuleToPromQLRules(rule, agents, configs)
 		promqlRules = append(promqlRules, newPromQLRules...)
+		needConfigUpdate = needConfigUpdate || needConfigUpdateTmp
+	}
+
+	if needConfigUpdate {
+		s.l.Lock()
+		s.forceSync[syncMethodAccountConfig] = true
+		s.l.Unlock()
 	}
 
 	if err := s.option.RebuildPromQLRules(promqlRules); err != nil {
@@ -80,18 +88,42 @@ func (s *Synchronizer) alertingRuleToPromQLRules(
 	alertingRule bleemeoTypes.AlertingRule,
 	agents map[string]bleemeoTypes.Agent,
 	configs map[string]bleemeoTypes.GloutonAccountConfig,
-) []rules.PromQLRule {
+) (promqlRules []rules.PromQLRule, needConfigUpdate bool) {
 	// TODO: Remove this hardcoded value once the API support the "agents" field.
 	alertingRule.Agents = []string{"fdfedf2a-9441-4b9d-8d6f-e82ce8a820d5"}
 
 	agentIDs := s.filterAgents(alertingRule.Agents, agents)
-	promqlRules := make([]rules.PromQLRule, 0, len(agentIDs))
+	promqlRules = make([]rules.PromQLRule, 0, len(agentIDs))
 
 	for _, agentID := range agentIDs {
 		// Find the resolution of this agent from the config.
 		agent := agents[agentID]
-		cfg := configs[agent.CurrentConfigID]
-		resolution := cfg.AgentConfigByID[agent.AgentType].MetricResolution
+
+		cfg, ok := configs[agent.CurrentConfigID]
+		if !ok {
+			logger.V(1).Printf("Config for agent %s not found", agent.CurrentConfigID)
+			needConfigUpdate = true
+
+			continue
+		}
+
+		agentConfig, ok := cfg.AgentConfigByID[agent.AgentType]
+		if !ok {
+			logger.V(1).Printf("Agent config for agent %s and type %s not found", agent.CurrentConfigID, agent.AgentType)
+			needConfigUpdate = true
+
+			continue
+		}
+
+		if agentConfig.MetricResolution == 0 {
+			logger.V(1).Printf(
+				"Empty metric resolution for agent config of agent %s and type %s",
+				agent.CurrentConfigID,
+				agent.AgentType,
+			)
+
+			continue
+		}
 
 		promqlRule := rules.PromQLRule{
 			Name:          alertingRule.Name,
@@ -101,13 +133,13 @@ func (s *Synchronizer) alertingRuleToPromQLRules(
 			WarningDelay:  time.Duration(alertingRule.WarningDelaySecond) * time.Second,
 			CriticalQuery: alertingRule.CriticalQuery,
 			CriticalDelay: time.Duration(alertingRule.CriticalDelaySecond) * time.Second,
-			Resolution:    resolution,
+			Resolution:    agentConfig.MetricResolution,
 		}
 
 		promqlRules = append(promqlRules, promqlRule)
 	}
 
-	return promqlRules
+	return promqlRules, needConfigUpdate
 }
 
 // filterAgents removes the agents this Glouton doesn't manage.
