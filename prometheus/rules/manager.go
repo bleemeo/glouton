@@ -606,6 +606,10 @@ func (rm *Manager) RebuildPromQLRules(promqlRules []PromQLRule) error {
 	rm.ruleGroups = make(map[string]*alertRuleGroup)
 
 	for _, rule := range promqlRules {
+		if rule.CriticalQuery == "" && rule.WarningQuery == "" {
+			continue
+		}
+
 		// Keep the previous group if it hasn't changed.
 		if prevInstance, ok := old[rule.ID]; ok && prevInstance.promqlRule.Equal(rule) {
 			rm.ruleGroups[rule.ID] = prevInstance
