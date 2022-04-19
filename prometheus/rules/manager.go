@@ -42,7 +42,10 @@ import (
 // thus we add a bit a leeway in the disabled countdown.
 const minResetTime = 17 * time.Second
 
-var errSkipPoints = errors.New("skip points")
+var (
+	errSkipPoints = errors.New("skip points")
+	errNilRules   = errors.New("both the warning and the critical rule are nil")
+)
 
 // Manager is a wrapper handling everything related to prometheus recording
 // and alerting rules.
@@ -360,7 +363,10 @@ func (agr *alertRuleGroup) runGroup(ctx context.Context, now time.Time, rm *Mana
 		criticalState = agr.criticalRule.State()
 	}
 
-	newPoint := agr.generateNewPoint(warningState, criticalState, now)
+	newPoint, err := agr.generateNewPoint(warningState, criticalState, now)
+	if err != nil {
+		return types.MetricPoint{}, err
+	}
 
 	agr.lastStatus = newPoint.Annotations.Status
 
@@ -384,15 +390,23 @@ func (agr *alertRuleGroup) runGroup(ctx context.Context, now time.Time, rm *Mana
 func (agr *alertRuleGroup) generateNewPoint(
 	warningState, criticalState rules.AlertState,
 	now time.Time,
-) types.MetricPoint {
+) (types.MetricPoint, error) {
 	warningStatus := statusFromAlertState(warningState, types.StatusWarning)
 	criticalStatus := statusFromAlertState(criticalState, types.StatusCritical)
-	lbls := agr.criticalRule.Labels()
 
-	status := criticalStatus
-	if warningStatus > status {
+	var (
+		lbls   labels.Labels
+		status types.Status
+	)
+
+	if agr.criticalRule != nil && criticalStatus >= warningStatus {
+		lbls = agr.criticalRule.Labels()
+		status = criticalStatus
+	} else if agr.warningRule != nil {
 		lbls = agr.warningRule.Labels()
 		status = warningStatus
+	} else {
+		return types.MetricPoint{}, errNilRules
 	}
 
 	newPoint := types.MetricPoint{
@@ -410,7 +424,7 @@ func (agr *alertRuleGroup) generateNewPoint(
 		},
 	}
 
-	return newPoint
+	return newPoint, nil
 }
 
 // ruleDescription returns the description for a rule.
