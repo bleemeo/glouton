@@ -87,7 +87,6 @@ type alertRuleGroup struct {
 	warningRule  *rules.AlertingRule
 	criticalRule *rules.AlertingRule
 
-	inactiveSince time.Time
 	disabledUntil time.Time
 	pointsRead    int32
 	lastRun       time.Time
@@ -251,18 +250,8 @@ func (rm *Manager) Collect(ctx context.Context, app storage.Appender) error {
 }
 
 func (agr *alertRuleGroup) shouldSkip(now time.Time) bool {
-	if !agr.inactiveSince.IsZero() {
-		if agr.disabledUntil.IsZero() && now.After(agr.inactiveSince.Add(2*time.Minute)) {
-			logger.V(2).Printf("rule %s has been disabled for the last 2 minutes. retrying this metric in 10 minutes", agr.promqlRule.ID)
-			agr.disabledUntil = now.Add(10 * time.Minute)
-		}
-
-		if now.After(agr.disabledUntil) {
-			logger.V(2).Printf("Inactive rule %s will be re executed. Time since inactive: %s", agr.promqlRule.ID, agr.inactiveSince.Format(time.RFC3339))
-			agr.disabledUntil = now.Add(10 * time.Minute)
-		} else {
-			return true
-		}
+	if now.Before(agr.disabledUntil) {
+		return true
 	}
 
 	if agr.promqlRule.Resolution != 0 && now.Add(time.Second).Sub(agr.lastRun) < agr.promqlRule.Resolution {
@@ -298,7 +287,6 @@ func (agr *alertRuleGroup) runGroup(ctx context.Context, now time.Time, rm *Mana
 	agr.pointsRead = 0
 	agr.lastStatus = types.StatusDescription{}
 	agr.lastErr = nil
-	agr.inactiveSince = time.Time{}
 	agr.disabledUntil = time.Time{}
 
 	for _, rule := range []*rules.AlertingRule{agr.warningRule, agr.criticalRule} {
@@ -667,28 +655,10 @@ func (rm *Manager) DiagnosticArchive(ctx context.Context, archive types.ArchiveW
 		}
 	}
 
-	activeAlertingRules := 0
+	fmt.Fprintf(file, "# Active Alerting rules (%d entries)\n", len(rm.ruleGroups))
 
 	for _, r := range rm.ruleGroups {
-		if r.inactiveSince.IsZero() {
-			activeAlertingRules++
-		}
-	}
-
-	fmt.Fprintf(file, "# Active Alerting rules (%d entries)\n", activeAlertingRules)
-
-	for _, r := range rm.ruleGroups {
-		if r.inactiveSince.IsZero() {
-			fmt.Fprintf(file, "%s\n", r.String())
-		}
-	}
-
-	fmt.Fprintf(file, "\n# Inactive Alerting Rules (%d entries)\n", len(rm.ruleGroups)-activeAlertingRules)
-
-	for _, r := range rm.ruleGroups {
-		if !r.inactiveSince.IsZero() {
-			fmt.Fprintf(file, "%s\n", r.String())
-		}
+		fmt.Fprintf(file, "%s\n", r.String())
 	}
 
 	return nil
@@ -726,14 +696,14 @@ func (agr *alertRuleGroup) String() string {
 	Warning: %s (delay %s) / Critical: %s (delay %s): %s
 	Runs on agent %s with a resolution of %s.
 	Last run at %s, read %d points.
-	Inactive since %s and disabled until %s.
+	Disabled until %s.
 	Last error: %v (isError=%s)
 	`, agr.promqlRule.Name, agr.promqlRule.ID,
 		agr.promqlRule.WarningQuery, agr.promqlRule.WarningDelay,
 		agr.promqlRule.CriticalQuery, agr.promqlRule.CriticalDelay, agr.lastStatus,
 		agr.promqlRule.InstanceID, agr.promqlRule.Resolution,
 		agr.lastRun, agr.pointsRead,
-		agr.inactiveSince, agr.disabledUntil,
+		agr.disabledUntil,
 		agr.lastErr, agr.isError,
 	)
 
