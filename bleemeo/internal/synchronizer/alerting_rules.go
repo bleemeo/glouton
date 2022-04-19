@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"glouton/bleemeo/client"
 	bleemeoTypes "glouton/bleemeo/types"
 	"glouton/logger"
 	"glouton/prometheus/rules"
@@ -42,7 +43,18 @@ func (s *Synchronizer) syncAlertingRules(ctx context.Context, fullSync bool, onl
 		for _, alertingRuleID := range pendingUpdates {
 			alertingRule, err := s.fetchAlertingRule(ctx, alertingRuleID)
 			if err != nil {
-				return false, fmt.Errorf("failed to fetch alerting rule: %w", err)
+				// Delete the alerting rule if it's no longer present on the API.
+				if client.IsNotFound(err) {
+					delete(alertingRulesByID, alertingRuleID)
+
+					continue
+				}
+
+				// Add the alerting rule to the pending update list to retry it later.
+				s.UpdateAlertingRule(alertingRuleID)
+				logger.V(1).Printf("Failed to fetch alerting rule %s", alertingRuleID)
+
+				continue
 			}
 
 			alertingRulesByID[alertingRule.ID] = alertingRule
