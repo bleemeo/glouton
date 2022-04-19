@@ -15,20 +15,64 @@ func (s *Synchronizer) syncAlertingRules(ctx context.Context, fullSync bool, onl
 		return false, nil
 	}
 
-	alertingRules, err := s.alertingRules(ctx)
-	if err != nil {
-		return false, fmt.Errorf("failed to get PromQL rules: %w", err)
+	previousAlertingRules := s.option.Cache.AlertingRules()
+	pendingUpdates := s.popPendingAlertingRulesUpdate()
+
+	if len(pendingUpdates) > len(previousAlertingRules)*3/100 {
+		// If more than 3% of known alerting rules needs update, do a full
+		// update. 3% is arbitrarily chosen, based on assumption request for
+		// one page is cheaper than 3 request for one metric.
+		fullSync = true
 	}
 
-	s.option.Cache.SetAlertingRules(alertingRules)
+	if fullSync {
+		alertingRules, err := s.fetchAllAlertingRules(ctx)
+		if err != nil {
+			return false, fmt.Errorf("failed to fetch alerting rules: %w", err)
+		}
+
+		s.option.Cache.SetAlertingRules(alertingRules)
+	} else {
+		// Use a map to remove the previous alerting rules that are updated.
+		alertingRulesByID := make(map[string]bleemeoTypes.AlertingRule)
+		for _, previousRule := range previousAlertingRules {
+			alertingRulesByID[previousRule.ID] = previousRule
+		}
+
+		for _, alertingRuleID := range pendingUpdates {
+			alertingRule, err := s.fetchAlertingRule(ctx, alertingRuleID)
+			if err != nil {
+				return false, fmt.Errorf("failed to fetch alerting rule: %w", err)
+			}
+
+			alertingRulesByID[alertingRule.ID] = alertingRule
+		}
+
+		alertingRules := make([]bleemeoTypes.AlertingRule, 0, len(alertingRulesByID))
+		for _, rule := range alertingRulesByID {
+			alertingRules = append(alertingRules, rule)
+		}
+
+		s.option.Cache.SetAlertingRules(alertingRules)
+	}
 
 	err = s.UpdateAlertingRules()
 
 	return true, err
 }
 
-// alertingRules returns the alerting rules from the API.
-func (s *Synchronizer) alertingRules(ctx context.Context) (alertingRules []bleemeoTypes.AlertingRule, err error) {
+// fetchAlertingRule fetches a single alerting rule from the API.
+func (s *Synchronizer) fetchAlertingRule(ctx context.Context, id string) (alertingRule bleemeoTypes.AlertingRule, err error) {
+	_, err = s.client.Do(ctx, "GET", fmt.Sprintf("v1/alertingrule/%s/", id), nil, nil, &alertingRule)
+	if err != nil {
+		return bleemeoTypes.AlertingRule{}, fmt.Errorf("client do: %w", err)
+	}
+
+	return alertingRule, nil
+}
+
+// fetchAllAlertingRules fetches all the alerting rules from the API.
+func (s *Synchronizer) fetchAllAlertingRules(ctx context.Context) (alertingRules []bleemeoTypes.AlertingRule, err error) {
 	params := map[string]string{
 		"active": "true",
 	}
@@ -152,4 +196,32 @@ func (s *Synchronizer) filterAgents(agents []string, knownAgentsByUUID map[strin
 	}
 
 	return filteredAgents
+}
+
+// UpdateAlertingRule requests an update for the given alerting rule UUID.
+func (s *Synchronizer) UpdateAlertingRule(alertingRuleID string) {
+	s.l.Lock()
+	defer s.l.Unlock()
+
+	s.pendingAlertingRulesUpdate = append(s.pendingAlertingRulesUpdate, alertingRuleID)
+}
+
+func (s *Synchronizer) popPendingAlertingRulesUpdate() []string {
+	s.l.Lock()
+	defer s.l.Unlock()
+
+	set := make(map[string]bool, len(s.pendingAlertingRulesUpdate))
+
+	for _, id := range s.pendingAlertingRulesUpdate {
+		set[id] = true
+	}
+
+	s.pendingAlertingRulesUpdate = nil
+	result := make([]string, 0, len(set))
+
+	for id := range set {
+		result = append(result, id)
+	}
+
+	return result
 }

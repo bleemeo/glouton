@@ -94,16 +94,17 @@ type Synchronizer struct {
 	// minutes to check whether we are still in maintenance of not.
 	lastMaintenanceSync time.Time
 
-	l                      sync.Mutex
-	disabledUntil          time.Time
-	disableReason          bleemeoTypes.DisableReason
-	forceSync              map[string]bool
-	pendingMetricsUpdate   []string
-	pendingMonitorsUpdate  []MonitorUpdate
-	delayedContainer       map[string]time.Time
-	retryableMetricFailure map[bleemeoTypes.FailureKind]bool
-	metricRetryAt          time.Time
-	lastInfo               bleemeoTypes.GlobalInfo
+	l                          sync.Mutex
+	disabledUntil              time.Time
+	disableReason              bleemeoTypes.DisableReason
+	forceSync                  map[string]bool
+	pendingMetricsUpdate       []string
+	pendingMonitorsUpdate      []MonitorUpdate
+	pendingAlertingRulesUpdate []string
+	delayedContainer           map[string]time.Time
+	retryableMetricFailure     map[bleemeoTypes.FailureKind]bool
+	metricRetryAt              time.Time
+	lastInfo                   bleemeoTypes.GlobalInfo
 }
 
 // Option are parameters for the synchronizer.

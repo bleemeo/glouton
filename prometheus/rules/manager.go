@@ -387,13 +387,14 @@ func (agr *alertRuleGroup) generateNewPoint(
 		status types.Status
 	)
 
-	if agr.criticalRule != nil && criticalStatus >= warningStatus {
+	switch {
+	case agr.criticalRule != nil && criticalStatus >= warningStatus:
 		lbls = agr.criticalRule.Labels()
 		status = criticalStatus
-	} else if agr.warningRule != nil {
+	case agr.warningRule != nil:
 		lbls = agr.warningRule.Labels()
 		status = warningStatus
-	} else {
+	default:
 		return types.MetricPoint{}, errNilRules
 	}
 
@@ -611,8 +612,8 @@ func (rm *Manager) RebuildPromQLRules(promqlRules []PromQLRule) error {
 		}
 
 		// Keep the previous group if it hasn't changed.
-		if prevInstance, ok := old[rule.ID]; ok && prevInstance.promqlRule.Equal(rule) {
-			rm.ruleGroups[rule.ID] = prevInstance
+		if previousRule, ok := old[rule.ID]; ok && previousRule.promqlRule.Equal(rule) {
+			rm.ruleGroups[rule.ID] = previousRule
 
 			continue
 		}
