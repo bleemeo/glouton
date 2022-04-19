@@ -204,6 +204,7 @@ func (s *Synchronizer) UpdateAlertingRule(alertingRuleID string) {
 	defer s.l.Unlock()
 
 	s.pendingAlertingRulesUpdate = append(s.pendingAlertingRulesUpdate, alertingRuleID)
+	s.forceSync[syncMethodAlertingRules] = false
 }
 
 func (s *Synchronizer) popPendingAlertingRulesUpdate() []string {
