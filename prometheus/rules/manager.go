@@ -279,6 +279,7 @@ func (agr *alertRuleGroup) runGroup(ctx context.Context, now time.Time, rm *Mana
 					StatusDescription: "Invalid PromQL: " + agr.isError,
 				},
 				AlertingRuleID: agr.promqlRule.ID,
+				BleemeoAgentID: agr.promqlRule.InstanceID,
 			},
 		}, nil
 	}
@@ -387,6 +388,7 @@ func (agr *alertRuleGroup) generateNewPoint(
 				StatusDescription: agr.ruleDescription(status),
 			},
 			AlertingRuleID: agr.promqlRule.ID,
+			BleemeoAgentID: agr.promqlRule.InstanceID,
 		},
 	}
 
