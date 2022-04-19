@@ -435,6 +435,9 @@ func (t *Target) Facts(ctx context.Context, maxAge time.Duration) (facts map[str
 }
 
 func (t *Target) facts(ctx context.Context, maxAge time.Duration) (facts map[string]string, err error) {
+	ctx, cancel := context.WithTimeout(ctx, time.Minute)
+	defer cancel()
+
 	if time.Since(t.lastFactUpdate) < maxAge {
 		return t.lastFacts, nil
 	}
