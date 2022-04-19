@@ -1625,13 +1625,11 @@ func Test_NoCrossRead(t *testing.T) {
 			continue
 		}
 
-		if p.Annotations.Status.CurrentStatus == types.StatusUnknown {
+		if p.Annotations.Status.CurrentStatus == types.StatusOk {
 			hadResult = true
 
 			continue
-		}
-
-		if p.Annotations.Status.CurrentStatus != types.StatusUnknown {
+		} else {
 			t.Errorf("point status = %v want %v", p.Annotations.Status.CurrentStatus, types.StatusUnknown)
 		}
 	}

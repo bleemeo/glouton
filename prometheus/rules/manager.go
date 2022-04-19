@@ -318,29 +318,6 @@ func (agr *alertRuleGroup) runGroup(ctx context.Context, now time.Time, rm *Mana
 		agr.pointsRead += queryable.Count()
 	}
 
-	if agr.pointsRead == 0 {
-		// Some metrics can a take bit of time before first points creation,
-		// we don't want them to be labeled as unknown on start.
-		if now.Sub(rm.agentStarted) < 2*time.Minute {
-			return types.MetricPoint{}, errSkipPoints
-		}
-
-		return types.MetricPoint{
-			Point: types.Point{
-				Time:  now,
-				Value: float64(types.StatusUnknown.NagiosCode()),
-			},
-			Labels: labelsMap(agr.promqlRule),
-			Annotations: types.MetricAnnotations{
-				Status: types.StatusDescription{
-					CurrentStatus:     types.StatusUnknown,
-					StatusDescription: "PromQL read zero points. The PromQL may be incorrect or the source measurement may have disappeared",
-				},
-				AlertingRuleID: agr.promqlRule.ID,
-			},
-		}, nil
-	}
-
 	var warningState, criticalState rules.AlertState
 
 	if agr.warningRule != nil {
@@ -368,7 +345,7 @@ func (agr *alertRuleGroup) runGroup(ctx context.Context, now time.Time, rm *Mana
 
 	// We remove 20 seconds to the start time to compensate the delta between agent startup and first metrics.
 	startedFor := now.Sub(rm.agentStarted) - 20*time.Second
-	if startedFor < maxDelay && (warningState != rules.StateInactive || criticalState != rules.StateInactive) {
+	if startedFor < maxDelay {
 		return types.MetricPoint{}, fmt.Errorf("%w: status ok with a pending rule", errSkipPoints)
 	}
 
