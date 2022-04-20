@@ -8,8 +8,20 @@ import (
 	bleemeoTypes "glouton/bleemeo/types"
 	"glouton/logger"
 	"glouton/prometheus/rules"
+	"glouton/threshold"
+	"glouton/types"
+	"math"
 	"time"
+
+	"github.com/prometheus/prometheus/model/labels"
+	"github.com/prometheus/prometheus/promql/parser"
 )
+
+type minimalThreshold struct {
+	high       float64
+	low        float64
+	metricName string
+}
 
 func (s *Synchronizer) syncAlertingRules(ctx context.Context, fullSync bool, onlyEssential bool) (updateThresholds bool, err error) {
 	if s.option.RebuildPromQLRules == nil {
@@ -121,6 +133,11 @@ func (s *Synchronizer) UpdateAlertingRules() error {
 
 	alertingRules := s.option.Cache.AlertingRules()
 	for _, rule := range alertingRules {
+		// Check if the alerting rule can be converted to a threshold.
+		if s.alertingRuleToThreshold(rule) {
+			continue
+		}
+
 		newPromQLRules, needConfigUpdateTmp := s.alertingRuleToPromQLRules(rule, agents, configs)
 		promqlRules = append(promqlRules, newPromQLRules...)
 		needConfigUpdate = needConfigUpdate || needConfigUpdateTmp
@@ -237,4 +254,137 @@ func (s *Synchronizer) popPendingAlertingRulesUpdate() []string {
 	}
 
 	return result
+}
+
+// alertingRuleToThreshold tries to convert an alerting rule to a threshold, and
+// updates the corresponding metric threshold.
+func (s *Synchronizer) alertingRuleToThreshold(rule bleemeoTypes.AlertingRule) (success bool) {
+	warningThreshold, ok := queryToThreshold(rule.WarningQuery)
+	if !ok {
+		return false
+	}
+
+	criticalThreshold, ok := queryToThreshold(rule.CriticalQuery)
+	if !ok {
+		return false
+	}
+
+	if warningThreshold.metricName != criticalThreshold.metricName {
+		return false
+	}
+
+	metricName := warningThreshold.metricName
+	thresh := threshold.Threshold{
+		LowWarning:   warningThreshold.low,
+		HighWarning:  warningThreshold.high,
+		LowCritical:  criticalThreshold.low,
+		HighCritical: criticalThreshold.high,
+	}
+
+	// Check that the metric exists.
+	for _, cachedMetric := range s.option.Cache.Metrics() {
+		// TODO: What to do if there is multiple metric with this name ? Like disk_used or multiple instance IDs.
+		if metricName == cachedMetric.Labels[types.LabelName] {
+			// The threshold is unchanged.
+			if cachedMetric.Threshold.ToInternalThreshold().Equal(thresh) {
+				return true
+			}
+
+			// Update the metric threshold on the API.
+			newThresh := bleemeoTypes.FromInternalThreshold(thresh)
+
+			const fields = "threshold_low_warning,threshold_high_warning," +
+				"threshold_low_critical,threshold_high_critical"
+
+			// TODO: Threshold doesn't seem to be updated?
+			_, err := s.client.Do(
+				s.ctx,
+				"PATCH",
+				fmt.Sprintf("v1/metric/%s/", cachedMetric.ID),
+				map[string]string{"fields": fields},
+				newThresh,
+				nil,
+			)
+
+			if err != nil {
+				logger.V(1).Printf("Failed to update metric %s threshold: %v", cachedMetric.ID, err)
+
+				// TODO: Retry on next sync?
+				return true
+			}
+
+			s.UpdateMetrics(cachedMetric.ID)
+			logger.V(1).Printf("The alerting rule %s has been converted to a threshold", rule.ID)
+
+			return true
+		}
+	}
+
+	return false
+}
+
+// queryToThreshold tries to convert a simple PromQL query to a threshold.
+// For instance, "cpu_used > 80" -> metric = cpu_used, high threshold = 80.
+func queryToThreshold(query string) (threshold minimalThreshold, success bool) {
+	expr, err := parser.ParseExpr(query)
+	if err != nil {
+		return threshold, false
+	}
+
+	threshold = minimalThreshold{
+		low:  math.NaN(),
+		high: math.NaN(),
+	}
+
+	binaryExpr, ok := expr.(*parser.BinaryExpr)
+	if !ok {
+		return threshold, false
+	}
+
+	// Check if the query is like "cpu_used > 80".
+	vectorFirst := true
+	vectorExpr, ok1 := binaryExpr.LHS.(*parser.VectorSelector)
+	numberExpr, ok2 := binaryExpr.RHS.(*parser.NumberLiteral)
+
+	// Else try "80 < cpu_used".
+	if !(ok1 && ok2) {
+		vectorFirst = false
+		numberExpr, ok1 = binaryExpr.LHS.(*parser.NumberLiteral)
+		vectorExpr, ok2 = binaryExpr.RHS.(*parser.VectorSelector)
+	}
+
+	if !(ok1 && ok2) {
+		return threshold, false
+	}
+
+	// A simple query must not contain any other matcher than the metric name.
+	if len(vectorExpr.LabelMatchers) != 1 {
+		return threshold, false
+	}
+
+	matcher := vectorExpr.LabelMatchers[0]
+	if !(matcher.Type == labels.MatchEqual && matcher.Name == types.LabelName) {
+		return threshold, false
+	}
+
+	threshold.metricName = matcher.Value
+
+	switch op := binaryExpr.Op; true {
+	case vectorFirst && op == parser.GTR || !vectorFirst && op == parser.LSS:
+		threshold.high = numberExpr.Val
+	case vectorFirst && op == parser.GTE || !vectorFirst && op == parser.LTE:
+		// The threshold current implementation only supports strict inequalities,
+		// so we convert a non strict inequality to a strict one.
+		// The idea is to change the value by the smallest possible amount:
+		// "cpu_used >= 80" becomes "cpu_used > 79.99999999999999".
+		threshold.high = math.Nextafter(numberExpr.Val, numberExpr.Val-1)
+	case vectorFirst && op == parser.LSS || !vectorFirst && op == parser.GTR:
+		threshold.low = numberExpr.Val
+	case vectorFirst && op == parser.LTE || !vectorFirst && op == parser.GTE:
+		threshold.low = math.Nextafter(numberExpr.Val, numberExpr.Val+1)
+	default:
+		return threshold, false
+	}
+
+	return threshold, true
 }

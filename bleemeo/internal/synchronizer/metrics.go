@@ -646,7 +646,7 @@ func (s *Synchronizer) UpdateUnitsAndThresholds(ctx context.Context, firstUpdate
 
 	for _, m := range s.option.Cache.Metrics() {
 		// Old treshold behavior, useless with the new alerting rule functionality.
-		// While this is not a problem per say, adding alertin rules to old thresholds
+		// While this is not a problem per say, adding alerting rules to old thresholds
 		// create more filters for nothing (${rule}_status).
 		if m.PromQLQuery != "" {
 			continue
