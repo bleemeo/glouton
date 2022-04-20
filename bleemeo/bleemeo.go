@@ -173,7 +173,7 @@ func (c *Connector) ApplyCachedConfiguration(ctx context.Context) {
 		return
 	}
 
-	_ = c.sync.UpdateAlertingRules(ctx)
+	_ = c.sync.UpdateAlertingRules()
 	c.sync.UpdateUnitsAndThresholds(ctx, true)
 
 	if c.option.Config.Bool("blackbox.enable") {

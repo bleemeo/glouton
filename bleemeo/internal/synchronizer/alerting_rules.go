@@ -80,7 +80,7 @@ func (s *Synchronizer) syncAlertingRules(ctx context.Context, fullSync bool, onl
 		s.option.Cache.SetAlertingRules(alertingRules)
 	}
 
-	err = s.UpdateAlertingRules(ctx)
+	err = s.UpdateAlertingRules()
 
 	return true, err
 }
@@ -124,7 +124,7 @@ func (s *Synchronizer) fetchAllAlertingRules(ctx context.Context) (alertingRules
 }
 
 // UpdateAlertingRules updates the alerting rules from the cache.
-func (s *Synchronizer) UpdateAlertingRules(ctx context.Context) error {
+func (s *Synchronizer) UpdateAlertingRules() error {
 	agents := s.option.Cache.AgentsByUUID()
 	configs := s.option.Cache.AccountConfigsByUUID()
 	needConfigUpdate := false
@@ -137,7 +137,7 @@ func (s *Synchronizer) UpdateAlertingRules(ctx context.Context) error {
 	alertingRules := s.option.Cache.AlertingRules()
 	for _, rule := range alertingRules {
 		// Convert the alerting rule to a threshold override when the queries are simple.
-		if s.alertingRuleToThresholdOverride(ctx, rule) {
+		if s.alertingRuleToThresholdOverride(rule) {
 			logger.V(1).Printf("The alerting rule %s has been converted to a threshold override", rule.ID)
 
 			continue
@@ -263,7 +263,7 @@ func (s *Synchronizer) popPendingAlertingRulesUpdate() []string {
 
 // alertingRuleToThresholdOverride tries to convert an alerting rule to a threshold override.
 // The thresholds should be updated with UpdateUnitsAndThresholds() after this function is called.
-func (s *Synchronizer) alertingRuleToThresholdOverride(ctx context.Context, rule bleemeoTypes.AlertingRule) (success bool) {
+func (s *Synchronizer) alertingRuleToThresholdOverride(rule bleemeoTypes.AlertingRule) (success bool) {
 	warningThreshold, ok := queryToThreshold(rule.WarningQuery)
 	if !ok {
 		return false
@@ -342,7 +342,7 @@ func queryToThreshold(query string) (threshold minimalThreshold, success bool) {
 
 	threshold.metricName = matcher.Value
 
-	switch op := binaryExpr.Op; true {
+	switch op := binaryExpr.Op; {
 	case vectorFirst && op == parser.GTR || !vectorFirst && op == parser.LSS:
 		threshold.high = numberExpr.Val
 	case vectorFirst && op == parser.GTE || !vectorFirst && op == parser.LTE:

@@ -284,6 +284,7 @@ func Test_manager(t *testing.T) { //nolint:maintidx
 					StatusDescription: "",
 				},
 				AlertingRuleID: alertingRuleID1,
+				BleemeoAgentID: agentID,
 			},
 		},
 		{
@@ -301,6 +302,7 @@ func Test_manager(t *testing.T) { //nolint:maintidx
 					StatusDescription: "",
 				},
 				AlertingRuleID: alertingRuleID1,
+				BleemeoAgentID: agentID,
 			},
 		},
 		{
@@ -318,6 +320,7 @@ func Test_manager(t *testing.T) { //nolint:maintidx
 					StatusDescription: "",
 				},
 				AlertingRuleID: alertingRuleID1,
+				BleemeoAgentID: agentID,
 			},
 		},
 		{
@@ -335,6 +338,7 @@ func Test_manager(t *testing.T) { //nolint:maintidx
 					StatusDescription: "",
 				},
 				AlertingRuleID: alertingRuleID1,
+				BleemeoAgentID: agentID,
 			},
 		},
 		{
@@ -352,6 +356,7 @@ func Test_manager(t *testing.T) { //nolint:maintidx
 					StatusDescription: "",
 				},
 				AlertingRuleID: alertingRuleID1,
+				BleemeoAgentID: agentID,
 			},
 		},
 		{
@@ -369,6 +374,7 @@ func Test_manager(t *testing.T) { //nolint:maintidx
 					StatusDescription: "",
 				},
 				AlertingRuleID: alertingRuleID1,
+				BleemeoAgentID: agentID,
 			},
 		},
 		{
@@ -386,6 +392,7 @@ func Test_manager(t *testing.T) { //nolint:maintidx
 					StatusDescription: "",
 				},
 				AlertingRuleID: alertingRuleID1,
+				BleemeoAgentID: agentID,
 			},
 		},
 	}
@@ -405,6 +412,7 @@ func Test_manager(t *testing.T) { //nolint:maintidx
 					StatusDescription: "",
 				},
 				AlertingRuleID: alertingRuleID1,
+				BleemeoAgentID: agentID,
 			},
 		},
 		{
@@ -422,6 +430,7 @@ func Test_manager(t *testing.T) { //nolint:maintidx
 					StatusDescription: "",
 				},
 				AlertingRuleID: alertingRuleID1,
+				BleemeoAgentID: agentID,
 			},
 		},
 	}
@@ -441,6 +450,7 @@ func Test_manager(t *testing.T) { //nolint:maintidx
 					StatusDescription: "",
 				},
 				AlertingRuleID: alertingRuleID1,
+				BleemeoAgentID: agentID,
 			},
 		},
 		{
@@ -458,6 +468,7 @@ func Test_manager(t *testing.T) { //nolint:maintidx
 					StatusDescription: "",
 				},
 				AlertingRuleID: alertingRuleID1,
+				BleemeoAgentID: agentID,
 			},
 		},
 	}
@@ -799,6 +810,7 @@ func Test_manager(t *testing.T) { //nolint:maintidx
 							StatusDescription: "",
 						},
 						AlertingRuleID: alertingRuleID1,
+						BleemeoAgentID: agentID,
 					},
 				},
 			),
@@ -854,6 +866,7 @@ func Test_manager(t *testing.T) { //nolint:maintidx
 							StatusDescription: "",
 						},
 						AlertingRuleID: alertingRuleID1,
+						BleemeoAgentID: agentID,
 					},
 				},
 			),
@@ -920,6 +933,7 @@ func Test_manager(t *testing.T) { //nolint:maintidx
 								StatusDescription: "",
 							},
 							AlertingRuleID: alertingRuleID1,
+							BleemeoAgentID: agentID,
 						},
 					},
 				),
@@ -942,6 +956,7 @@ func Test_manager(t *testing.T) { //nolint:maintidx
 								StatusDescription: "",
 							},
 							AlertingRuleID: alertingRuleID2,
+							BleemeoAgentID: agentID,
 						},
 					},
 				)...,
@@ -1137,6 +1152,7 @@ func Test_Rebuild_Rules(t *testing.T) {
 					StatusDescription: "Everything is running fine",
 				},
 				AlertingRuleID: alertingRuleID,
+				BleemeoAgentID: agentID,
 			},
 		},
 		{
@@ -1154,6 +1170,7 @@ func Test_Rebuild_Rules(t *testing.T) {
 					StatusDescription: "Everything is running fine",
 				},
 				AlertingRuleID: alertingRuleID,
+				BleemeoAgentID: agentID,
 			},
 		},
 		{
@@ -1171,6 +1188,7 @@ func Test_Rebuild_Rules(t *testing.T) {
 					StatusDescription: "Everything is running fine",
 				},
 				AlertingRuleID: alertingRuleID,
+				BleemeoAgentID: agentID,
 			},
 		},
 
@@ -1189,6 +1207,7 @@ func Test_Rebuild_Rules(t *testing.T) {
 					StatusDescription: "Everything is running fine",
 				},
 				AlertingRuleID: alertingRuleID,
+				BleemeoAgentID: agentID,
 			},
 		},
 		{
@@ -1206,6 +1225,7 @@ func Test_Rebuild_Rules(t *testing.T) {
 					StatusDescription: "Everything is running fine",
 				},
 				AlertingRuleID: alertingRuleID,
+				BleemeoAgentID: agentID,
 			},
 		},
 		{
@@ -1223,6 +1243,7 @@ func Test_Rebuild_Rules(t *testing.T) {
 					StatusDescription: "Current value: 700.00",
 				},
 				AlertingRuleID: alertingRuleID,
+				BleemeoAgentID: agentID,
 			},
 		},
 	}
