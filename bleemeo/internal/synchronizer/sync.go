@@ -199,6 +199,7 @@ func (s *Synchronizer) DiagnosticArchive(ctx context.Context, archive types.Arch
 		RetryableMetricFailure     map[bleemeoTypes.FailureKind]bool
 		MetricRetryAt              time.Time
 		LastInfo                   bleemeoTypes.GlobalInfo
+		ThresholdOverrides         string
 	}{
 		NextFullSync:               s.nextFullSync,
 		FullSyncCount:              s.fullSyncCount,
@@ -220,6 +221,7 @@ func (s *Synchronizer) DiagnosticArchive(ctx context.Context, archive types.Arch
 		RetryableMetricFailure:     s.retryableMetricFailure,
 		MetricRetryAt:              s.metricRetryAt,
 		LastInfo:                   s.lastInfo,
+		ThresholdOverrides:         fmt.Sprintf("%v", s.thresholdOverrides),
 	}
 
 	defer s.l.Unlock()
