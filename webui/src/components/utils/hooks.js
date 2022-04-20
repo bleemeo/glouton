@@ -28,33 +28,36 @@ export const useHTTPFetch = (urls, delay = 3000) => {
   const [delayState, setIsDelayState] = useState(false);
   let time;
 
-  useEffect(async () => {
-    time = setTimeout(() => setIsDelayState(true), delay);
-    const res = await Promise.all(urls).then(async (values) => {
-      const fetchData = async (url) => {
-        setIsError(null);
+  useEffect(() => {
+    async function fetchData() {
+      time = setTimeout(() => setIsDelayState(true), delay);
+      const res = await Promise.all(urls).then(async (values) => {
+        const fetchData = async (url) => {
+          setIsError(null);
 
-        try {
-          const result = await axios(url);
+          try {
+            const result = await axios(url);
 
-          setIsLoading(false);
-          return result.data["data"]["result"];
-        } catch (error) {
-          setIsError(error);
+            setIsLoading(false);
+            return result.data["data"]["result"];
+          } catch (error) {
+            setIsError(error);
+          }
+        };
+        let array_tmp = [];
+        for (let idx in values) {
+          const arrayData = await fetchData(values[idx]);
+          for (let value in arrayData) {
+            arrayData[value].metric.legendId = idx;
+            array_tmp.push(arrayData[value]);
+          }
         }
-      };
-      let array_tmp = [];
-      for (let idx in values) {
-        const arrayData = await fetchData(values[idx]);
-        for (let value in arrayData) {
-          arrayData[value].metric.legendId = idx;
-          array_tmp.push(arrayData[value]);
-        }
-      }
-      setIsDelayState(false);
-      return array_tmp;
-    });
-    await setData(res);
+        setIsDelayState(false);
+        return array_tmp;
+      });
+      await setData(res);
+    }
+    fetchData();
   }, [delayState]);
 
   clearTimeout(time);

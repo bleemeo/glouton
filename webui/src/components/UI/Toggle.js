@@ -15,6 +15,10 @@ const Toggle = ({
   const flap = useRef(null);
 
   const navFlipStyle = (firstSpanOpacity, secondSpanOpacity) => {
+    if (firstSpan.current === null || secondSpan.current === null) {
+      return;
+    }
+
     firstSpan.current.style.opacity = firstSpanOpacity;
     secondSpan.current.style.opacity = secondSpanOpacity;
   };

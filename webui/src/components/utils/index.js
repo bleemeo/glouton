@@ -189,7 +189,7 @@ export const fillEmptyPoints = (data, period) => {
     }
     data.splice(0, 0, [new Date(start).toISOString(), null]);
   }
-  if (new Date(lastData[0])) {
+  if (new Date(lastData[0]).getTime() !== 0) {
     for (
       let iDate = new Date(lastData[0]);
       iDate < new Date(end);

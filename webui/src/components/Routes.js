@@ -2,10 +2,10 @@ import React, { lazy, Suspense, useEffect } from "react";
 import {
   BrowserRouter as Router,
   Route,
-  Switch,
-  Redirect,
+  Routes,
+  Navigate,
 } from "react-router-dom";
-import { withRouter } from "react-router";
+import { useLocation } from "react-router";
 
 import PanelErrorBoundary from "./UI/PanelErrorBoundary";
 import "rc-switch/assets/index.css";
@@ -16,17 +16,18 @@ import { FACTS } from "./utils/gqlRequests";
 import SideNavBar from "./App/SideNavbar";
 
 const ScrollToTopComponent = (props) => {
+  let location = useLocation();
   useEffect(() => {
     window.scroll({
       top: 0,
       left: 0,
     });
-  }, [props.location.pathname]);
+  }, [location.pathname]);
 
   return props.children;
 };
 
-const ScrollToTop = withRouter(ScrollToTopComponent);
+const ScrollToTop = ScrollToTopComponent;
 
 const AgentSystemDashboard = lazy(() => import("./Agent/AgentSystemDashboard"));
 const AgentDockerListContainer = lazy(() =>
@@ -37,7 +38,7 @@ const AgentProcessesContainer = lazy(() =>
 );
 const AgentDetails = lazy(() => import("./Agent/AgentDetails"));
 
-const Routes = () => {
+const MyRoutes = () => {
   const { isLoading, error, facts } = useFetch(FACTS);
   return (
     <Router>
@@ -48,31 +49,35 @@ const Routes = () => {
               {({ facts }) => (
                 <>
                   <SideNavBar />
-                  <Switch>
+                  <Routes>
                     <Route
                       exact
                       path="/dashboard"
-                      render={() => <AgentSystemDashboard facts={facts} />}
+                      element={<AgentSystemDashboard facts={facts} />}
                     />
                     {facts.some((f) => f.name === "container_runtime") ? (
                       <Route
                         exact
                         path="/docker"
-                        component={AgentDockerListContainer}
+                        element={<AgentDockerListContainer />}
                       />
                     ) : null}
                     <Route
                       exact
                       path="/processes"
-                      component={AgentProcessesContainer}
+                      element={<AgentProcessesContainer />}
                     />
                     <Route
                       exact
                       path="/informations"
-                      render={() => <AgentDetails facts={facts} />}
+                      element={<AgentDetails facts={facts} />}
                     />
-                    <Redirect to="/dashboard" />
-                  </Switch>
+                    <Route
+                      exact
+                      path="/"
+                      element={<Navigate to="/dashboard" />}
+                    />
+                  </Routes>
                 </>
               )}
             </FetchSuspense>
@@ -83,4 +88,4 @@ const Routes = () => {
   );
 };
 
-export default Routes;
+export default MyRoutes;
