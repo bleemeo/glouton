@@ -561,8 +561,6 @@ func (a *agent) newMetricsCallback(newMetrics []types.LabelsAndAnnotation) {
 			logger.V(1).Printf("The metric %s is not available in current Bleemeo Plan", name)
 		}
 	}
-
-	a.rulesManager.ResetInactiveRules()
 }
 
 func (a *agent) updateThresholds(ctx context.Context, thresholds map[threshold.MetricNameItem]threshold.Threshold, firstUpdate bool) {

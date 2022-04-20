@@ -37,11 +37,6 @@ import (
 	"github.com/prometheus/prometheus/storage"
 )
 
-// minResetTime is the minimum time used by the inactive checks.
-// The bleemeo connector uses 15 seconds as a synchronization time,
-// thus we add a bit a leeway in the disabled countdown.
-const minResetTime = 17 * time.Second
-
 var (
 	errSkipPoints = errors.New("skip points")
 	errNilRules   = errors.New("both the warning and the critical rule are nil")
@@ -92,11 +87,10 @@ type alertRuleGroup struct {
 	warningRule  *rules.AlertingRule
 	criticalRule *rules.AlertingRule
 
-	disabledUntil time.Time
-	pointsRead    int32
-	lastRun       time.Time
-	lastErr       error
-	lastStatus    types.StatusDescription
+	pointsRead int32
+	lastRun    time.Time
+	lastErr    error
+	lastStatus types.StatusDescription
 
 	promqlRule PromQLRule
 	isError    string
@@ -255,15 +249,7 @@ func (rm *Manager) Collect(ctx context.Context, app storage.Appender) error {
 }
 
 func (agr *alertRuleGroup) shouldSkip(now time.Time) bool {
-	if now.Before(agr.disabledUntil) {
-		return true
-	}
-
-	if agr.promqlRule.Resolution != 0 && now.Add(time.Second).Sub(agr.lastRun) < agr.promqlRule.Resolution {
-		return true
-	}
-
-	return false
+	return agr.promqlRule.Resolution != 0 && now.Add(time.Second).Sub(agr.lastRun) < agr.promqlRule.Resolution
 }
 
 func (agr *alertRuleGroup) runGroup(ctx context.Context, now time.Time, rm *Manager) (types.MetricPoint, error) {
@@ -293,7 +279,6 @@ func (agr *alertRuleGroup) runGroup(ctx context.Context, now time.Time, rm *Mana
 	agr.pointsRead = 0
 	agr.lastStatus = types.StatusDescription{}
 	agr.lastErr = nil
-	agr.disabledUntil = time.Time{}
 
 	for _, rule := range []*rules.AlertingRule{agr.warningRule, agr.criticalRule} {
 		if rule == nil {
@@ -611,20 +596,6 @@ func (rm *Manager) RebuildPromQLRules(promqlRules []PromQLRule) error {
 	return nil
 }
 
-func (rm *Manager) ResetInactiveRules() {
-	now := time.Now().Truncate(time.Second)
-
-	for _, val := range rm.ruleGroups {
-		if val.disabledUntil.IsZero() {
-			continue
-		}
-
-		if now.Add(minResetTime).Before(val.disabledUntil) {
-			val.disabledUntil = now.Add(minResetTime)
-		}
-	}
-}
-
 func (rm *Manager) DiagnosticArchive(ctx context.Context, archive types.ArchiveWriter) error {
 	file, err := archive.Create("alertings-recording-rules.txt")
 	if err != nil {
@@ -682,17 +653,18 @@ func newRule(
 
 func (agr *alertRuleGroup) String() string {
 	str := fmt.Sprintf(`# %s (%s)
-	Warning: %s (delay %s) / Critical: %s (delay %s): %s
+	Warning: '%s' (delay %s)
+	Critical: '%s' (delay %s)
+	Status %s: %s
 	Runs on agent %s with a resolution of %s.
 	Last run at %s, read %d points.
-	Disabled until %s.
 	Last error: %v (isError=%s)
 	`, agr.promqlRule.Name, agr.promqlRule.AlertingRuleID,
 		agr.promqlRule.WarningQuery, agr.promqlRule.WarningDelay,
-		agr.promqlRule.CriticalQuery, agr.promqlRule.CriticalDelay, agr.lastStatus,
+		agr.promqlRule.CriticalQuery, agr.promqlRule.CriticalDelay,
+		agr.lastStatus.CurrentStatus, agr.lastStatus.StatusDescription,
 		agr.promqlRule.InstanceID, agr.promqlRule.Resolution,
 		agr.lastRun, agr.pointsRead,
-		agr.disabledUntil,
 		agr.lastErr, agr.isError,
 	)
 
