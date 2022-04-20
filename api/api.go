@@ -213,8 +213,13 @@ func (api *API) init() {
 		if indexTmpl == nil {
 			_, err = w.Write(fallbackIndex)
 		} else {
+			staticURL := api.StaticCDNURL
+			if !strings.HasSuffix(staticURL, "/") {
+				staticURL += "/"
+			}
+
 			err = indexTmpl.Execute(w, gloutonUIConfig{
-				StaticCDNURL: api.StaticCDNURL,
+				StaticCDNURL: staticURL,
 			})
 		}
 		if err != nil {

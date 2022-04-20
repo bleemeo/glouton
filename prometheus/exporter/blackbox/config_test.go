@@ -28,6 +28,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	bbConf "github.com/prometheus/blackbox_exporter/config"
+	"github.com/prometheus/common/config"
 )
 
 func TestConfigParsing(t *testing.T) {
@@ -94,6 +95,9 @@ func TestConfigParsing(t *testing.T) {
 					Headers: map[string]string{
 						"User-Agent": "dummy-user-agent",
 					},
+					HTTPClientConfig: config.HTTPClientConfig{
+						EnableHTTP2: true,
+					},
 				},
 				DNS:  bbConf.DefaultDNSProbe,
 				ICMP: bbConf.DefaultICMPProbe,
@@ -114,6 +118,7 @@ func TestConfigParsing(t *testing.T) {
 					QueryType:  "A",
 					// by default, this is set to true
 					IPProtocolFallback: true,
+					Recursion:          true,
 				},
 				HTTP: bbConf.DefaultHTTPProbe,
 				ICMP: bbConf.DefaultICMPProbe,
@@ -137,6 +142,9 @@ func TestConfigParsing(t *testing.T) {
 					IPProtocolFallback: false,
 					Headers: map[string]string{
 						"User-Agent": "dummy-user-agent",
+					},
+					HTTPClientConfig: config.HTTPClientConfig{
+						EnableHTTP2: true,
 					},
 				},
 				DNS:  bbConf.DefaultDNSProbe,
