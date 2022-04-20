@@ -29,6 +29,7 @@ import (
 	bleemeoTypes "glouton/bleemeo/types"
 	"glouton/delay"
 	"glouton/logger"
+	"glouton/threshold"
 	"glouton/types"
 	"math/big"
 	"net/http"
@@ -101,10 +102,16 @@ type Synchronizer struct {
 	pendingMetricsUpdate       []string
 	pendingMonitorsUpdate      []MonitorUpdate
 	pendingAlertingRulesUpdate []string
+	thresholdOverrides         map[thresholdOverrideKey]threshold.Threshold
 	delayedContainer           map[string]time.Time
 	retryableMetricFailure     map[bleemeoTypes.FailureKind]bool
 	metricRetryAt              time.Time
 	lastInfo                   bleemeoTypes.GlobalInfo
+}
+
+type thresholdOverrideKey struct {
+	MetricName string
+	AgentID    string
 }
 
 // Option are parameters for the synchronizer.

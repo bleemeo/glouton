@@ -80,7 +80,7 @@ func (s *Synchronizer) syncAlertingRules(ctx context.Context, fullSync bool, onl
 		s.option.Cache.SetAlertingRules(alertingRules)
 	}
 
-	err = s.UpdateAlertingRules()
+	err = s.UpdateAlertingRules(ctx)
 
 	return true, err
 }
@@ -124,17 +124,22 @@ func (s *Synchronizer) fetchAllAlertingRules(ctx context.Context) (alertingRules
 }
 
 // UpdateAlertingRules updates the alerting rules from the cache.
-func (s *Synchronizer) UpdateAlertingRules() error {
+func (s *Synchronizer) UpdateAlertingRules(ctx context.Context) error {
 	agents := s.option.Cache.AgentsByUUID()
 	configs := s.option.Cache.AccountConfigsByUUID()
 	needConfigUpdate := false
+
+	// Reset the threshold overrides.
+	s.thresholdOverrides = make(map[thresholdOverrideKey]threshold.Threshold)
 
 	var promqlRules []rules.PromQLRule
 
 	alertingRules := s.option.Cache.AlertingRules()
 	for _, rule := range alertingRules {
-		// Check if the alerting rule can be converted to a threshold.
-		if s.alertingRuleToThreshold(rule) {
+		// Convert the alerting rule to a threshold override when the queries are simple.
+		if s.alertingRuleToThresholdOverride(ctx, rule) {
+			logger.V(1).Printf("The alerting rule %s has been converted to a threshold override", rule.ID)
+
 			continue
 		}
 
@@ -256,9 +261,9 @@ func (s *Synchronizer) popPendingAlertingRulesUpdate() []string {
 	return result
 }
 
-// alertingRuleToThreshold tries to convert an alerting rule to a threshold, and
-// updates the corresponding metric threshold.
-func (s *Synchronizer) alertingRuleToThreshold(rule bleemeoTypes.AlertingRule) (success bool) {
+// alertingRuleToThresholdOverride tries to convert an alerting rule to a threshold override.
+// The thresholds should be updated with UpdateUnitsAndThresholds() after this function is called.
+func (s *Synchronizer) alertingRuleToThresholdOverride(ctx context.Context, rule bleemeoTypes.AlertingRule) (success bool) {
 	warningThreshold, ok := queryToThreshold(rule.WarningQuery)
 	if !ok {
 		return false
@@ -273,54 +278,22 @@ func (s *Synchronizer) alertingRuleToThreshold(rule bleemeoTypes.AlertingRule) (
 		return false
 	}
 
-	metricName := warningThreshold.metricName
-	thresh := threshold.Threshold{
-		LowWarning:   warningThreshold.low,
-		HighWarning:  warningThreshold.high,
-		LowCritical:  criticalThreshold.low,
-		HighCritical: criticalThreshold.high,
-	}
+	// Create a threshold override for each agent this rule applies to.
+	for _, agentID := range rule.Agents {
+		key := thresholdOverrideKey{
+			MetricName: warningThreshold.metricName,
+			AgentID:    agentID,
+		}
 
-	// Check that the metric exists.
-	for _, cachedMetric := range s.option.Cache.Metrics() {
-		// TODO: What to do if there is multiple metric with this name ? Like disk_used or multiple instance IDs.
-		if metricName == cachedMetric.Labels[types.LabelName] {
-			// The threshold is unchanged.
-			if cachedMetric.Threshold.ToInternalThreshold().Equal(thresh) {
-				return true
-			}
-
-			// Update the metric threshold on the API.
-			newThresh := bleemeoTypes.FromInternalThreshold(thresh)
-
-			const fields = "threshold_low_warning,threshold_high_warning," +
-				"threshold_low_critical,threshold_high_critical"
-
-			// TODO: Threshold doesn't seem to be updated?
-			_, err := s.client.Do(
-				s.ctx,
-				"PATCH",
-				fmt.Sprintf("v1/metric/%s/", cachedMetric.ID),
-				map[string]string{"fields": fields},
-				newThresh,
-				nil,
-			)
-
-			if err != nil {
-				logger.V(1).Printf("Failed to update metric %s threshold: %v", cachedMetric.ID, err)
-
-				// TODO: Retry on next sync?
-				return true
-			}
-
-			s.UpdateMetrics(cachedMetric.ID)
-			logger.V(1).Printf("The alerting rule %s has been converted to a threshold", rule.ID)
-
-			return true
+		s.thresholdOverrides[key] = threshold.Threshold{
+			LowWarning:   warningThreshold.low,
+			HighWarning:  warningThreshold.high,
+			LowCritical:  criticalThreshold.low,
+			HighCritical: criticalThreshold.high,
 		}
 	}
 
-	return false
+	return true
 }
 
 // queryToThreshold tries to convert a simple PromQL query to a threshold.

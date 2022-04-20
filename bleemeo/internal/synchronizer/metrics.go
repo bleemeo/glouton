@@ -652,9 +652,26 @@ func (s *Synchronizer) UpdateUnitsAndThresholds(ctx context.Context, firstUpdate
 			continue
 		}
 
+		// TODO: We need to add the agent ID in the key to avoid conflicts between agents.
 		key := threshold.MetricNameItem{Name: m.Labels[types.LabelName], Item: m.Labels[types.LabelItem]}
 		thresholds[key] = m.Threshold.ToInternalThreshold()
 		units[key] = m.Unit
+	}
+
+	// Apply the threshold overrides.
+	for key := range thresholds {
+		// TODO: Currently the thresholds are only applied to the main agent, so the alerting rules
+		// on another agent that are converted to a threshold override will never run.
+		overrideKey := thresholdOverrideKey{
+			MetricName: key.Name,
+			AgentID:    s.agentID,
+		}
+
+		if override, ok := s.thresholdOverrides[overrideKey]; ok {
+			logger.V(1).Printf("Overriding threshold for metric %s on agent %s", key.Name, s.agentID)
+
+			thresholds[key] = override
+		}
 	}
 
 	if s.option.UpdateThresholds != nil {

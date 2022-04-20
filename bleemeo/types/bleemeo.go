@@ -278,27 +278,6 @@ func (t Threshold) ToInternalThreshold() (result threshold.Threshold) {
 	return result
 }
 
-// FromInternalThreshold converts a threshold.Threshold to a bleemeo threshold (use null pointer instead of NaN for unset thresholds).
-func FromInternalThreshold(t threshold.Threshold) (result Threshold) {
-	if !math.IsNaN(t.LowWarning) {
-		result.LowWarning = &t.LowWarning
-	}
-
-	if !math.IsNaN(t.LowCritical) {
-		result.LowCritical = &t.LowCritical
-	}
-
-	if !math.IsNaN(t.HighWarning) {
-		result.HighWarning = &t.HighWarning
-	}
-
-	if !math.IsNaN(t.HighCritical) {
-		result.HighCritical = &t.HighCritical
-	}
-
-	return result
-}
-
 type minimumSupportedVersions struct {
 	Glouton string `json:"glouton_version"`
 }
