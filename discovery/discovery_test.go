@@ -24,6 +24,7 @@ import (
 	"glouton/types"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/influxdata/telegraf"
 )
@@ -99,6 +100,8 @@ func (m *mockCollector) ExpectationFullified() error {
 
 // Test dynamic Discovery with single service present.
 func TestDiscoverySingle(t *testing.T) {
+	t0 := time.Now()
+
 	cases := []struct {
 		dynamicResult   Service
 		previousService Service
@@ -113,6 +116,7 @@ func TestDiscoverySingle(t *testing.T) {
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 11211}},
 				IPAddress:       "127.0.0.1",
 				HasNetstatInfo:  true,
+				LastNetstatInfo: t0,
 			},
 			want: Service{
 				Name:            "memcached",
@@ -121,6 +125,7 @@ func TestDiscoverySingle(t *testing.T) {
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 11211}},
 				IPAddress:       "127.0.0.1",
 				HasNetstatInfo:  true,
+				LastNetstatInfo: t0,
 			},
 		},
 		{
@@ -131,6 +136,7 @@ func TestDiscoverySingle(t *testing.T) {
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 11211}},
 				IPAddress:       "127.0.0.1",
 				HasNetstatInfo:  true,
+				LastNetstatInfo: t0,
 			},
 			dynamicResult: Service{
 				Name:            "memcached",
@@ -139,6 +145,7 @@ func TestDiscoverySingle(t *testing.T) {
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 11211}},
 				IPAddress:       "127.0.0.1",
 				HasNetstatInfo:  true,
+				LastNetstatInfo: t0,
 			},
 			want: Service{
 				Name:            "memcached",
@@ -147,6 +154,7 @@ func TestDiscoverySingle(t *testing.T) {
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 11211}},
 				IPAddress:       "127.0.0.1",
 				HasNetstatInfo:  true,
+				LastNetstatInfo: t0,
 			},
 		},
 		{
@@ -157,6 +165,7 @@ func TestDiscoverySingle(t *testing.T) {
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "10.0.0.5", Port: 11211}},
 				IPAddress:       "10.0.0.5",
 				HasNetstatInfo:  true,
+				LastNetstatInfo: t0,
 			},
 			dynamicResult: Service{
 				Name:            "memcached",
@@ -173,6 +182,7 @@ func TestDiscoverySingle(t *testing.T) {
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "10.0.0.5", Port: 11211}},
 				IPAddress:       "10.0.0.5",
 				HasNetstatInfo:  true,
+				LastNetstatInfo: t0,
 			},
 		},
 		{
@@ -183,6 +193,7 @@ func TestDiscoverySingle(t *testing.T) {
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "10.0.0.5", Port: 11211}},
 				IPAddress:       "10.0.0.5",
 				HasNetstatInfo:  true,
+				LastNetstatInfo: t0,
 			},
 			dynamicResult: Service{
 				Name:            "memcached",
@@ -199,6 +210,7 @@ func TestDiscoverySingle(t *testing.T) {
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 11211}},
 				IPAddress:       "127.0.0.1",
 				HasNetstatInfo:  true,
+				LastNetstatInfo: t0,
 			},
 		},
 	}
@@ -591,5 +603,80 @@ func TestUpdateMetricsAndCheck(t *testing.T) {
 
 	if err := fakeCollector.ExpectationFullified(); err != nil {
 		t.Error(err)
+	}
+}
+
+func Test_usePreviousNetstat(t *testing.T) {
+	t0 := time.Now()
+
+	tests := []struct {
+		name            string
+		now             time.Time
+		previousService Service
+		newService      Service
+		want            bool
+	}{
+		{
+			name: "service restarted",
+			now:  t0,
+			previousService: Service{
+				Name:            "nginx",
+				ContainerID:     "",
+				HasNetstatInfo:  true,
+				LastNetstatInfo: t0.Add(-30 * time.Minute),
+			},
+			newService: Service{
+				Name:            "nginx",
+				ContainerID:     "",
+				HasNetstatInfo:  false,
+				LastNetstatInfo: time.Time{},
+			},
+			want: true,
+		},
+		{
+			name: "service restarted, netstat available",
+			now:  t0,
+			previousService: Service{
+				Name:            "nginx",
+				ContainerID:     "",
+				HasNetstatInfo:  true,
+				LastNetstatInfo: t0.Add(-30 * time.Minute),
+			},
+			newService: Service{
+				Name:            "nginx",
+				ContainerID:     "",
+				HasNetstatInfo:  true,
+				LastNetstatInfo: t0,
+			},
+			want: false,
+		},
+		{
+			name: "missing LastNetstatInfo on previous",
+			now:  t0,
+			previousService: Service{
+				Name:            "nginx",
+				ContainerID:     "",
+				HasNetstatInfo:  true,
+				LastNetstatInfo: time.Time{},
+			},
+			newService: Service{
+				Name:            "nginx",
+				ContainerID:     "",
+				HasNetstatInfo:  false,
+				LastNetstatInfo: time.Time{},
+			},
+			want: false,
+		},
+	}
+	for _, tt := range tests {
+		tt := tt
+
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := usePreviousNetstat(tt.now, tt.previousService, tt.newService); got != tt.want {
+				t.Errorf("usePreviousNetstat() = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }

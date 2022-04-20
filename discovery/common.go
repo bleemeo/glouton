@@ -112,8 +112,9 @@ type Service struct {
 	CheckIgnored    bool
 	MetricsIgnored  bool
 
-	HasNetstatInfo bool
-	container      facts.Container
+	HasNetstatInfo  bool
+	LastNetstatInfo time.Time
+	container       facts.Container
 }
 
 func (s Service) String() string {
@@ -218,6 +219,7 @@ func (s Service) merge(update Service) Service {
 	case update.HasNetstatInfo && !s.HasNetstatInfo:
 		s.ListenAddresses = update.ListenAddresses
 		s.HasNetstatInfo = true
+		s.LastNetstatInfo = update.LastNetstatInfo
 	case update.HasNetstatInfo:
 		for _, v := range update.ListenAddresses {
 			alreadyExist := false
@@ -233,6 +235,10 @@ func (s Service) merge(update Service) Service {
 			if !alreadyExist {
 				s.ListenAddresses = append(s.ListenAddresses, v)
 			}
+		}
+
+		if s.LastNetstatInfo.Before(update.LastNetstatInfo) {
+			s.LastNetstatInfo = update.LastNetstatInfo
 		}
 	}
 

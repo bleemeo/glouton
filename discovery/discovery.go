@@ -228,7 +228,7 @@ func (d *Discovery) DiagnosticArchive(ctx context.Context, zipFile types.Archive
 
 func (d *Discovery) discovery(ctx context.Context, maxAge time.Duration) (services []Service, err error) {
 	if time.Since(d.lastDiscoveryUpdate) >= maxAge {
-		err := d.updateDiscovery(ctx)
+		err := d.updateDiscovery(ctx, time.Now())
 		if err != nil {
 			return nil, err
 		}
@@ -287,7 +287,7 @@ func (d *Discovery) reconfigure(ctx context.Context) {
 	d.lastConfigservicesMap = d.servicesMap
 }
 
-func (d *Discovery) updateDiscovery(ctx context.Context) error {
+func (d *Discovery) updateDiscovery(ctx context.Context, now time.Time) error {
 	// Make sure we have a container list. This is important for startup, so
 	// that previously known service could get associated with container.
 	// Without this, a service in a stopped container (which should be shown
@@ -317,10 +317,11 @@ func (d *Discovery) updateDiscovery(ctx context.Context) error {
 		}
 
 		if previousService, ok := servicesMap[key]; ok {
-			if previousService.HasNetstatInfo && !service.HasNetstatInfo {
+			if usePreviousNetstat(now, previousService, service) {
 				service.ListenAddresses = previousService.ListenAddresses
 				service.IPAddress = previousService.IPAddress
 				service.HasNetstatInfo = previousService.HasNetstatInfo
+				service.LastNetstatInfo = previousService.LastNetstatInfo
 			}
 		}
 
@@ -337,6 +338,28 @@ func (d *Discovery) updateDiscovery(ctx context.Context) error {
 	d.ignoreServicesAndPorts()
 
 	return nil
+}
+
+func usePreviousNetstat(now time.Time, previousService Service, newService Service) bool {
+	// We want to use previous discovered information to cover case where the service restarted and
+	// netstat information isn't yet up-to-date.
+	// But we stop using old information in the following cases:
+	// * The new service has netstat (or old didn't had netstat)
+	// * the associated container changed its IP
+	// * the previous discovered netstat is too old (more than 1 hour, netstat is gathered every hour)
+	if newService.HasNetstatInfo || !previousService.HasNetstatInfo {
+		return false
+	}
+
+	if newService.ContainerID != "" && newService.IPAddress != previousService.IPAddress {
+		return false
+	}
+
+	if now.Sub(previousService.LastNetstatInfo) > time.Hour {
+		return false
+	}
+
+	return true
 }
 
 func (d *Discovery) setServiceActiveAndContainer(service Service) Service {
