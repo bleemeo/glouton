@@ -111,7 +111,10 @@ func TestServiceByCommand(t *testing.T) {
 }
 
 func TestDynamicDiscoverySimple(t *testing.T) {
+	t0 := time.Now()
+
 	dd := &DynamicDiscovery{
+		now: func() time.Time { return t0 },
 		ps: mockProcess{
 			[]facts.Process{
 				{
@@ -166,6 +169,8 @@ func TestDynamicDiscoverySimple(t *testing.T) {
 // To extract cmdLine array from a running process, one can read /proc/PID/cmdline using "less".
 // Less will show the NUL character used to split args.
 func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
+	t0 := time.Now()
+
 	cases := []struct {
 		testName           string
 		cmdLine            []string
@@ -770,6 +775,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 
 	for _, c := range cases {
 		dd := &DynamicDiscovery{
+			now: func() time.Time { return t0 },
 			ps: mockProcess{
 				[]facts.Process{
 					{
@@ -852,6 +858,8 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 }
 
 func TestDynamicDiscovery(t *testing.T) { //nolint: maintidx
+	t0 := time.Now()
+
 	cases := []struct {
 		name                   string
 		processes              []facts.Process
@@ -893,6 +901,7 @@ func TestDynamicDiscovery(t *testing.T) { //nolint: maintidx
 					IPAddress:       "127.0.0.1",
 					IgnoredPorts:    map[int]bool{},
 					HasNetstatInfo:  true,
+					LastNetstatInfo: t0,
 					Active:          true,
 				},
 			},
@@ -977,10 +986,11 @@ func TestDynamicDiscovery(t *testing.T) { //nolint: maintidx
 						{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 6379},
 						{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 6380},
 					},
-					IPAddress:      "127.0.0.1",
-					IgnoredPorts:   map[int]bool{},
-					HasNetstatInfo: true,
-					Active:         true,
+					IPAddress:       "127.0.0.1",
+					IgnoredPorts:    map[int]bool{},
+					HasNetstatInfo:  true,
+					LastNetstatInfo: t0,
+					Active:          true,
 				},
 			},
 		},
@@ -1012,10 +1022,11 @@ func TestDynamicDiscovery(t *testing.T) { //nolint: maintidx
 					ListenAddresses: []facts.ListenAddress{
 						{NetworkFamily: "tcp", Address: "10.2.0.1", Port: 6443},
 					},
-					IPAddress:      "127.0.0.1",
-					IgnoredPorts:   map[int]bool{},
-					HasNetstatInfo: true,
-					Active:         true,
+					IPAddress:       "127.0.0.1",
+					IgnoredPorts:    map[int]bool{},
+					HasNetstatInfo:  true,
+					LastNetstatInfo: t0,
+					Active:          true,
 				},
 			},
 		},
@@ -1047,10 +1058,11 @@ func TestDynamicDiscovery(t *testing.T) { //nolint: maintidx
 					ListenAddresses: []facts.ListenAddress{
 						{NetworkFamily: "tcp", Address: "10.0.2.1", Port: 6443},
 					},
-					IPAddress:      "127.0.0.1",
-					IgnoredPorts:   map[int]bool{},
-					HasNetstatInfo: true,
-					Active:         true,
+					IPAddress:       "127.0.0.1",
+					IgnoredPorts:    map[int]bool{},
+					HasNetstatInfo:  true,
+					LastNetstatInfo: t0,
+					Active:          true,
 				},
 			},
 		},
@@ -1094,10 +1106,11 @@ func TestDynamicDiscovery(t *testing.T) { //nolint: maintidx
 					ListenAddresses: []facts.ListenAddress{
 						{NetworkFamily: "tcp", Address: "0.0.0.0", Port: 6443},
 					},
-					IPAddress:      "127.0.0.1",
-					IgnoredPorts:   map[int]bool{},
-					HasNetstatInfo: true,
-					Active:         true,
+					IPAddress:       "127.0.0.1",
+					IgnoredPorts:    map[int]bool{},
+					HasNetstatInfo:  true,
+					LastNetstatInfo: t0,
+					Active:          true,
 				},
 			},
 		},
@@ -1112,6 +1125,7 @@ func TestDynamicDiscovery(t *testing.T) { //nolint: maintidx
 			t.Parallel()
 
 			dd := &DynamicDiscovery{
+				now: func() time.Time { return t0 },
 				ps: mockProcess{
 					result: c.processes,
 				},

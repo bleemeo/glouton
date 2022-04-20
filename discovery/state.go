@@ -24,6 +24,7 @@ import (
 	"glouton/logger"
 	"strconv"
 	"strings"
+	"time"
 )
 
 var (
@@ -139,6 +140,12 @@ func servicesFromState(state State) []Service {
 			}
 
 			result[i] = srv
+		}
+	}
+
+	for i := range result {
+		if result[i].HasNetstatInfo && result[i].LastNetstatInfo.IsZero() {
+			result[i].LastNetstatInfo = time.Now()
 		}
 	}
 

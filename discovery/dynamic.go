@@ -44,6 +44,7 @@ const (
 type DynamicDiscovery struct {
 	l sync.Mutex
 
+	now                func() time.Time
 	ps                 processFact
 	netstat            netstatProvider
 	containerInfo      containerInfoProvider
@@ -68,6 +69,7 @@ type fileReader interface {
 // processess and netstat to discovery services.
 func NewDynamic(ps processFact, netstat netstatProvider, containerInfo containerInfoProvider, isContainerIgnored func(facts.Container) bool, fileReader fileReader, defaultStack string) *DynamicDiscovery {
 	return &DynamicDiscovery{
+		now:                time.Now,
 		ps:                 ps,
 		netstat:            netstat,
 		containerInfo:      containerInfo,
@@ -368,7 +370,7 @@ func (dd *DynamicDiscovery) serviceFromProcess(process facts.Process, netstat ma
 		getContainerStack(&service)
 	}
 
-	di := getDiscoveryInfo(&service, netstat, process.PID)
+	di := getDiscoveryInfo(dd.now(), &service, netstat, process.PID)
 
 	dd.updateListenAddresses(&service, di)
 
@@ -389,7 +391,7 @@ func getContainerStack(service *Service) {
 	}
 }
 
-func getDiscoveryInfo(service *Service, netstat map[int][]facts.ListenAddress, pid int) discoveryInfo {
+func getDiscoveryInfo(now time.Time, service *Service, netstat map[int][]facts.ListenAddress, pid int) discoveryInfo {
 	var explicit bool
 
 	if service.ContainerID == "" {
@@ -409,6 +411,7 @@ func getDiscoveryInfo(service *Service, netstat map[int][]facts.ListenAddress, p
 
 	if len(service.ListenAddresses) > 0 && explicit {
 		service.HasNetstatInfo = true
+		service.LastNetstatInfo = now
 	}
 
 	di := servicesDiscoveryInfo[service.ServiceType]
