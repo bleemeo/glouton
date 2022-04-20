@@ -149,7 +149,7 @@ type GloutonAccountConfig struct {
 	LiveProcessResolution time.Duration
 	LiveProcess           bool
 	DockerIntegration     bool
-	SNMPIntergration      bool
+	SNMPIntegration       bool
 	AgentConfigByName     map[string]GloutonAgentConfig
 	AgentConfigByID       map[string]GloutonAgentConfig
 }

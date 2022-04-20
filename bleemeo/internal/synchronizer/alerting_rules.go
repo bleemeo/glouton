@@ -203,14 +203,14 @@ func (s *Synchronizer) alertingRuleToPromQLRules(
 		}
 
 		promqlRule := rules.PromQLRule{
-			Name:          alertingRule.Name,
-			ID:            alertingRule.ID,
-			InstanceID:    agentID,
-			WarningQuery:  alertingRule.WarningQuery,
-			WarningDelay:  time.Duration(alertingRule.WarningDelaySecond) * time.Second,
-			CriticalQuery: alertingRule.CriticalQuery,
-			CriticalDelay: time.Duration(alertingRule.CriticalDelaySecond) * time.Second,
-			Resolution:    agentConfig.MetricResolution,
+			Name:           alertingRule.Name,
+			AlertingRuleID: alertingRule.ID,
+			InstanceID:     agentID,
+			WarningQuery:   alertingRule.WarningQuery,
+			WarningDelay:   time.Duration(alertingRule.WarningDelaySecond) * time.Second,
+			CriticalQuery:  alertingRule.CriticalQuery,
+			CriticalDelay:  time.Duration(alertingRule.CriticalDelaySecond) * time.Second,
+			Resolution:     agentConfig.MetricResolution,
 		}
 
 		promqlRules = append(promqlRules, promqlRule)

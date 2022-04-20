@@ -38,7 +38,7 @@ type payloadAgent struct {
 
 func (s *Synchronizer) syncSNMP(ctx context.Context, fullSync bool, onlyEssential bool) (updateThresholds bool, err error) {
 	cfg, ok := s.option.Cache.CurrentAccountConfig()
-	if !ok || !cfg.SNMPIntergration {
+	if !ok || !cfg.SNMPIntegration {
 		return false, nil
 	}
 

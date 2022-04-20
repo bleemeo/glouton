@@ -235,7 +235,7 @@ func (c *Cache) AccountConfigsByUUID() map[string]bleemeoTypes.GloutonAccountCon
 			LiveProcessResolution: time.Duration(accountConfig.LiveProcessResolution) * time.Second,
 			LiveProcess:           accountConfig.LiveProcess,
 			DockerIntegration:     accountConfig.DockerIntegration,
-			SNMPIntergration:      accountConfig.SNMPIntergration,
+			SNMPIntegration:       accountConfig.SNMPIntegration,
 			AgentConfigByName:     make(map[string]bleemeoTypes.GloutonAgentConfig),
 			AgentConfigByID:       make(map[string]bleemeoTypes.GloutonAgentConfig),
 		}
@@ -289,7 +289,7 @@ func (c *Cache) AccountConfigsByUUID() map[string]bleemeoTypes.GloutonAccountCon
 		}
 
 		if _, ok := config.AgentConfigByName[bleemeoTypes.AgentTypeSNMP]; !ok {
-			config.SNMPIntergration = false
+			config.SNMPIntegration = false
 		}
 
 		if len(config.AgentConfigByName) > 0 {

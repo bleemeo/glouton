@@ -80,7 +80,7 @@ var (
 	newAccountConfig bleemeoTypes.AccountConfig = bleemeoTypes.AccountConfig{
 		ID:                "02eb5b38-d4a0-4db4-9b43-06f63594a515",
 		Name:              "the-default",
-		SNMPIntergration:  true,
+		SNMPIntegration:   true,
 		DockerIntegration: true,
 	}
 

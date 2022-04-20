@@ -104,7 +104,7 @@ type AccountConfig struct {
 	LiveProcessResolution   int    `json:"live_process_resolution"`
 	LiveProcess             bool   `json:"live_process"`
 	DockerIntegration       bool   `json:"docker_integration"`
-	SNMPIntergration        bool   `json:"snmp_integration"`
+	SNMPIntegration         bool   `json:"snmp_integration"`
 }
 
 // AgentConfig is a configuration for one kind of agent.

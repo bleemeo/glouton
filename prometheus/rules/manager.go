@@ -65,14 +65,14 @@ type Manager struct {
 
 // PromQLRule is a rule that runs on a single agent.
 type PromQLRule struct {
-	ID            string
-	Name          string
-	WarningQuery  string
-	WarningDelay  time.Duration
-	CriticalQuery string
-	CriticalDelay time.Duration
-	InstanceID    string
-	Resolution    time.Duration
+	AlertingRuleID string
+	InstanceID     string
+	Name           string
+	WarningQuery   string
+	WarningDelay   time.Duration
+	CriticalQuery  string
+	CriticalDelay  time.Duration
+	Resolution     time.Duration
 }
 
 func (rule PromQLRule) Equal(other PromQLRule) bool {
@@ -81,6 +81,11 @@ func (rule PromQLRule) Equal(other PromQLRule) bool {
 		rule.CriticalQuery == other.CriticalQuery &&
 		rule.CriticalDelay == other.CriticalDelay &&
 		rule.InstanceID == other.InstanceID
+}
+
+func (rule PromQLRule) RuleGroupKey() string {
+	// An alerting rule can generate multiple PromQLRules on different agents.
+	return fmt.Sprintf("%s-%s", rule.AlertingRuleID, rule.InstanceID)
 }
 
 type alertRuleGroup struct {
@@ -278,7 +283,7 @@ func (agr *alertRuleGroup) runGroup(ctx context.Context, now time.Time, rm *Mana
 					CurrentStatus:     types.StatusUnknown,
 					StatusDescription: "Invalid PromQL: " + agr.isError,
 				},
-				AlertingRuleID: agr.promqlRule.ID,
+				AlertingRuleID: agr.promqlRule.AlertingRuleID,
 				BleemeoAgentID: agr.promqlRule.InstanceID,
 			},
 		}, nil
@@ -387,7 +392,7 @@ func (agr *alertRuleGroup) generateNewPoint(
 				CurrentStatus:     status,
 				StatusDescription: agr.ruleDescription(status),
 			},
-			AlertingRuleID: agr.promqlRule.ID,
+			AlertingRuleID: agr.promqlRule.AlertingRuleID,
 			BleemeoAgentID: agr.promqlRule.InstanceID,
 		},
 	}
@@ -544,7 +549,7 @@ func (rm *Manager) addRule(
 			promqlRule.WarningQuery,
 			promqlRule.WarningDelay,
 			lbls,
-			promqlRule.ID,
+			promqlRule.AlertingRuleID,
 			rm.logger,
 		)
 		if err != nil {
@@ -557,7 +562,7 @@ func (rm *Manager) addRule(
 			promqlRule.CriticalQuery,
 			promqlRule.CriticalDelay,
 			lbls,
-			promqlRule.ID,
+			promqlRule.AlertingRuleID,
 			rm.logger,
 		)
 		if err != nil {
@@ -572,7 +577,7 @@ func (rm *Manager) addRule(
 		criticalRule: criticalRule,
 	}
 
-	rm.ruleGroups[promqlRule.ID] = newGroup
+	rm.ruleGroups[promqlRule.RuleGroupKey()] = newGroup
 
 	return nil
 }
@@ -591,8 +596,8 @@ func (rm *Manager) RebuildPromQLRules(promqlRules []PromQLRule) error {
 		}
 
 		// Keep the previous group if it hasn't changed.
-		if previousRule, ok := old[rule.ID]; ok && previousRule.promqlRule.Equal(rule) {
-			rm.ruleGroups[rule.ID] = previousRule
+		if previousRule, ok := old[rule.RuleGroupKey()]; ok && previousRule.promqlRule.Equal(rule) {
+			rm.ruleGroups[rule.RuleGroupKey()] = previousRule
 
 			continue
 		}
@@ -682,7 +687,7 @@ func (agr *alertRuleGroup) String() string {
 	Last run at %s, read %d points.
 	Disabled until %s.
 	Last error: %v (isError=%s)
-	`, agr.promqlRule.Name, agr.promqlRule.ID,
+	`, agr.promqlRule.Name, agr.promqlRule.AlertingRuleID,
 		agr.promqlRule.WarningQuery, agr.promqlRule.WarningDelay,
 		agr.promqlRule.CriticalQuery, agr.promqlRule.CriticalDelay, agr.lastStatus,
 		agr.promqlRule.InstanceID, agr.promqlRule.Resolution,
