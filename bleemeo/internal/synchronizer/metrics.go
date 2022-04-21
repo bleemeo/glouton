@@ -652,6 +652,10 @@ func (s *Synchronizer) UpdateUnitsAndThresholds(ctx context.Context, firstUpdate
 	}
 
 	// Apply the threshold overrides.
+	s.l.Lock()
+	thresholdOverrides := s.thresholdOverrides
+	s.l.Unlock()
+
 	for key := range thresholds {
 		// TODO: Currently the thresholds are only applied to the main agent, so the alerting rules
 		// on another agent that are converted to a threshold override will never run.
@@ -660,7 +664,7 @@ func (s *Synchronizer) UpdateUnitsAndThresholds(ctx context.Context, firstUpdate
 			AgentID:    s.agentID,
 		}
 
-		if override, ok := s.thresholdOverrides[overrideKey]; ok {
+		if override, ok := thresholdOverrides[overrideKey]; ok {
 			logger.V(1).Printf("Overriding threshold for metric %s on agent %s", key.Name, s.agentID)
 
 			thresholds[key] = override

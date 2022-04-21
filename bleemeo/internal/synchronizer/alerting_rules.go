@@ -130,7 +130,9 @@ func (s *Synchronizer) UpdateAlertingRules() error {
 	needConfigUpdate := false
 
 	// Reset the threshold overrides.
+	s.l.Lock()
 	s.thresholdOverrides = make(map[thresholdOverrideKey]threshold.Threshold)
+	s.l.Unlock()
 
 	var promqlRules []rules.PromQLRule
 
@@ -279,6 +281,9 @@ func (s *Synchronizer) alertingRuleToThresholdOverride(rule bleemeoTypes.Alertin
 	}
 
 	// Create a threshold override for each agent this rule applies to.
+	s.l.Lock()
+	defer s.l.Unlock()
+
 	for _, agentID := range rule.Agents {
 		key := thresholdOverrideKey{
 			MetricName: warningThreshold.metricName,
