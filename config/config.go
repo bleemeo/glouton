@@ -344,7 +344,7 @@ func (c *Configuration) DurationMap(key string) map[string]time.Duration {
 		case int:
 			duration = time.Duration(value) * time.Second
 		case float64:
-			duration = time.Duration(int(value/1000)) * time.Millisecond
+			duration = time.Duration(value) * time.Second
 		case string:
 			var err error
 
