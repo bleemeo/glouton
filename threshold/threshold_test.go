@@ -19,7 +19,6 @@ package threshold
 
 import (
 	"context"
-	"fmt"
 	"glouton/types"
 	"math"
 	"reflect"
@@ -94,7 +93,6 @@ func TestStateUpdate(t *testing.T) {
 		state := statusState{}
 
 		for _, step := range c {
-			fmt.Println(step.timeOffsetSecond)
 			state = state.Update(step.status, 300*time.Second, 300*time.Second, now.Add(time.Duration(step.timeOffsetSecond)*time.Second))
 			if state.CurrentStatus != step.want {
 				t.Errorf("case #%d offset %d: state.CurrentStatus == %v, want %v", i, step.timeOffsetSecond, state.CurrentStatus, step.want)
@@ -773,7 +771,7 @@ func TestThreshold(t *testing.T) { //nolint: maintidx
 }
 
 // TestThresholdRestart test behavior of threshold after a Glouton restart.
-func TestThresholdRestart(t *testing.T) {
+func TestThresholdRestart(t *testing.T) { //nolint:maintidx
 	t0 := time.Date(2020, 2, 24, 15, 1, 0, 0, time.UTC)
 
 	db := &mockStore{}

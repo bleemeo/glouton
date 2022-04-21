@@ -161,7 +161,6 @@ func (s statusState) Update(
 	}
 
 	criticalDuration, warningDuration := s.setNewStatus(newStatus, now)
-	fmt.Printf("!!! warn %v, crit %v\n", warningDuration, criticalDuration)
 
 	switch {
 	case newStatus == types.StatusOk:
@@ -595,19 +594,20 @@ func (p *pusher) addPointWithThreshold(points []types.MetricPoint, point types.M
 			thresholdLimit = threshold.LowWarning
 		}
 
-		if newState.CurrentStatus == types.StatusWarning && threshold.WarningDelay > 0 {
+		switch {
+		case newState.CurrentStatus == types.StatusWarning && threshold.WarningDelay > 0:
 			statusDescription += fmt.Sprintf(
 				" threshold (%s) exceeded over last %v",
 				FormatValue(thresholdLimit, unit),
 				formatDuration(threshold.WarningDelay),
 			)
-		} else if newState.CurrentStatus == types.StatusCritical && threshold.CriticalDelay > 0 {
+		case newState.CurrentStatus == types.StatusCritical && threshold.CriticalDelay > 0:
 			statusDescription += fmt.Sprintf(
 				" threshold (%s) exceeded over last %v",
 				FormatValue(thresholdLimit, unit),
 				formatDuration(threshold.CriticalDelay),
 			)
-		} else {
+		default:
 			statusDescription += fmt.Sprintf(
 				" threshold (%s) exceeded",
 				FormatValue(thresholdLimit, unit),
