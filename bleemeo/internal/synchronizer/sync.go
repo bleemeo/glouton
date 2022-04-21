@@ -171,12 +171,12 @@ func newWithNow(option Option, now func() time.Time) (*Synchronizer, error) {
 }
 
 func (s *Synchronizer) DiagnosticArchive(ctx context.Context, archive types.ArchiveWriter) error {
-	s.l.Lock()
-
 	file, err := archive.Create("bleemeo-sync-state.json")
 	if err != nil {
 		return err
 	}
+
+	s.l.Lock()
 
 	obj := struct {
 		NextFullSync               time.Time
@@ -224,7 +224,7 @@ func (s *Synchronizer) DiagnosticArchive(ctx context.Context, archive types.Arch
 		ThresholdOverrides:         fmt.Sprintf("%v", s.thresholdOverrides),
 	}
 
-	defer s.l.Unlock()
+	s.l.Unlock()
 
 	enc := json.NewEncoder(file)
 	enc.SetIndent("", "  ")
