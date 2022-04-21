@@ -512,6 +512,8 @@ func (a *agent) getConfigThreshold(firstUpdate bool) map[string]threshold.Thresh
 	}
 
 	configThreshold := make(map[string]threshold.Threshold, len(rawThreshold))
+	defaultSoftPeriod := time.Duration(a.oldConfig.Int("metric.softstatus_period_default")) * time.Second
+	softPeriods := a.oldConfig.DurationMap("metric.softstatus_period")
 
 	for k, v := range rawThreshold {
 		v2, ok := v.(map[string]interface{})
@@ -523,7 +525,7 @@ func (a *agent) getConfigThreshold(firstUpdate bool) map[string]threshold.Thresh
 			continue
 		}
 
-		t, err := threshold.FromInterfaceMap(v2)
+		t, err := threshold.FromInterfaceMap(v2, k, softPeriods, defaultSoftPeriod)
 		if err != nil {
 			if firstUpdate {
 				logger.V(1).Printf("Threshold in configuration file is not well-formated: %v", err)

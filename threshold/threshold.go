@@ -290,8 +290,13 @@ const (
 
 // FromInterfaceMap convert a map[string]interface{} to Threshold.
 // It expect the key "low_critical", "low_warning", "high_critical" and "high_warning".
-func FromInterfaceMap(input map[string]interface{}) (Threshold, error) {
-	result := Threshold{
+func FromInterfaceMap(
+	input map[string]interface{},
+	metricName string,
+	softPeriods map[string]time.Duration,
+	defaultSoftPeriod time.Duration,
+) (Threshold, error) {
+	thresh := Threshold{
 		LowCritical:  math.NaN(),
 		LowWarning:   math.NaN(),
 		HighWarning:  math.NaN(),
@@ -308,23 +313,32 @@ func FromInterfaceMap(input map[string]interface{}) (Threshold, error) {
 			case int:
 				value = float64(v)
 			default:
-				return result, fmt.Errorf("%w: %v is not a float", errIncorrectType, raw)
+				return thresh, fmt.Errorf("%w: %v is not a float", errIncorrectType, raw)
 			}
 
 			switch name {
 			case "low_critical":
-				result.LowCritical = value
+				thresh.LowCritical = value
 			case "low_warning":
-				result.LowWarning = value
+				thresh.LowWarning = value
 			case "high_warning":
-				result.HighWarning = value
+				thresh.HighWarning = value
 			case "high_critical":
-				result.HighCritical = value
+				thresh.HighCritical = value
 			}
 		}
 	}
 
-	return result, nil
+	// Apply delays from config or default delay.
+	thresh.WarningDelay = defaultSoftPeriod
+	thresh.CriticalDelay = defaultSoftPeriod
+
+	if softPeriod, ok := softPeriods[metricName]; ok {
+		thresh.WarningDelay = softPeriod
+		thresh.CriticalDelay = softPeriod
+	}
+
+	return thresh, nil
 }
 
 // IsZero returns true is all threshold limit are unset (NaN).
