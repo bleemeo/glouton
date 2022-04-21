@@ -66,6 +66,7 @@ type Config interface {
 	String(string) string
 	StringList(string) []string
 	Int(string) int
+	DurationMap(string) map[string]time.Duration
 	Bool(string) bool
 }
 

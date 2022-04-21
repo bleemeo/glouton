@@ -292,10 +292,12 @@ func (s *Synchronizer) alertingRuleToThresholdOverride(rule bleemeoTypes.Alertin
 		}
 
 		newThreshold := threshold.Threshold{
-			LowWarning:   warningThreshold.low,
-			HighWarning:  warningThreshold.high,
-			LowCritical:  criticalThreshold.low,
-			HighCritical: criticalThreshold.high,
+			LowWarning:    warningThreshold.low,
+			HighWarning:   warningThreshold.high,
+			WarningDelay:  time.Duration(rule.WarningDelaySecond) * time.Second,
+			LowCritical:   criticalThreshold.low,
+			HighCritical:  criticalThreshold.high,
+			CriticalDelay: time.Duration(rule.CriticalDelaySecond) * time.Second,
 		}
 
 		// If multiple threshold apply on the same metric and agent, we merge them.

@@ -17,7 +17,6 @@
 package agent
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"glouton/config"
@@ -31,7 +30,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/prometheus/common/model"
 )
@@ -834,48 +832,6 @@ func (srv *Service) fromMap(fragment map[string]string) (warning error) {
 	return nil
 }
 
-func convertToMap(input interface{}) (result map[string]interface{}, ok bool) {
-	result, ok = input.(map[string]interface{})
-	if ok {
-		return
-	}
-
-	tmp, ok := input.(map[interface{}]interface{})
-	if !ok {
-		return nil, false
-	}
-
-	result = make(map[string]interface{}, len(tmp))
-
-	for k, v := range tmp {
-		result[convertToString(k)] = v
-	}
-
-	return result, true
-}
-
-func convertToString(rawValue interface{}) string {
-	switch value := rawValue.(type) {
-	case string:
-		return value
-	case fmt.Stringer:
-		return value.String()
-	case int:
-		return strconv.FormatInt(int64(value), 10)
-	case []interface{}, []string, map[string]interface{}, map[interface{}]interface{}, []map[string]interface{}:
-		b, err := json.Marshal(rawValue)
-		if err != nil {
-			logger.V(1).Printf("Failed to marshal raw value: %v", err)
-
-			return ""
-		}
-
-		return string(b)
-	default:
-		return fmt.Sprintf("%v", rawValue)
-	}
-}
-
 func confFieldToSliceMap(input interface{}, confType string) []map[string]string {
 	if input == nil {
 		return nil
@@ -891,7 +847,7 @@ func confFieldToSliceMap(input interface{}, confType string) []map[string]string
 	result := make([]map[string]string, 0, len(inputMap))
 
 	for i, v := range inputMap {
-		vMap, ok := convertToMap(v)
+		vMap, ok := config.ConvertToMap(v)
 		if !ok {
 			logger.Printf("%s entry #%d is not a map, ignoring, %#v", confType, i, v)
 
@@ -901,48 +857,10 @@ func confFieldToSliceMap(input interface{}, confType string) []map[string]string
 		override := make(map[string]string, len(vMap))
 
 		for k, v := range vMap {
-			override[k] = convertToString(v)
+			override[k] = config.ConvertToString(v)
 		}
 
 		result = append(result, override)
-	}
-
-	return result
-}
-
-func softPeriodsFromInterface(input interface{}) map[string]time.Duration {
-	if input == nil {
-		return nil
-	}
-
-	inputMap, ok := convertToMap(input)
-	if !ok {
-		logger.Printf("softstatus period in configuration file is not a map")
-
-		return nil
-	}
-
-	result := make(map[string]time.Duration, len(inputMap))
-
-	for k, rawValue := range inputMap {
-		var duration time.Duration
-		switch value := rawValue.(type) {
-		case int:
-			duration = time.Duration(value) * time.Second
-		case float64:
-			duration = time.Duration(int(value/1000)) * time.Millisecond
-		case string:
-			var err error
-
-			duration, err = time.ParseDuration(value)
-			if err != nil {
-				continue
-			}
-		default:
-			continue
-		}
-
-		result[k] = duration
 	}
 
 	return result

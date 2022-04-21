@@ -1127,13 +1127,6 @@ func (a *agent) run(ctx context.Context) { //nolint:maintidx
 		a.bleemeoConnector.ApplyCachedConfiguration(ctx)
 	}
 
-	tmp, _ := a.oldConfig.Get("metric.softstatus_period")
-
-	a.threshold.SetSoftPeriod(
-		time.Duration(a.oldConfig.Int("metric.softstatus_period_default"))*time.Second,
-		softPeriodsFromInterface(tmp),
-	)
-
 	if !reflect.DeepEqual(a.oldConfig.StringList("disk_monitor"), defaultConfig()["disk_monitor"]) {
 		if a.metricFormat == types.MetricFormatBleemeo && len(a.oldConfig.StringList("disk_ignore")) > 0 {
 			logger.Printf("Warning: both \"disk_monitor\" and \"disk_ignore\" are set. Only \"disk_ignore\" will be used")

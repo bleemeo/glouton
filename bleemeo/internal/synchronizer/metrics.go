@@ -644,11 +644,26 @@ func (s *Synchronizer) UpdateUnitsAndThresholds(ctx context.Context, firstUpdate
 	thresholds := make(map[threshold.MetricNameItem]threshold.Threshold)
 	units := make(map[threshold.MetricNameItem]threshold.Unit)
 
+	// TODO: Parse once and make them synchronizer fields.
+	defaultSoftPeriod := time.Duration(s.option.Config.Int("metric.softstatus_period_default")) * time.Second
+	softPeriods := s.option.Config.DurationMap("metric.softstatus_period")
+
 	for _, m := range s.option.Cache.Metrics() {
 		// TODO: We need to add the agent ID in the key to avoid conflicts between agents.
 		key := threshold.MetricNameItem{Name: m.Labels[types.LabelName], Item: m.Labels[types.LabelItem]}
-		thresholds[key] = m.Threshold.ToInternalThreshold()
 		units[key] = m.Unit
+
+		thresh := m.Threshold.ToInternalThreshold()
+		// Apply delays from config or default delay.
+		thresh.WarningDelay = defaultSoftPeriod
+		thresh.CriticalDelay = defaultSoftPeriod
+
+		if softPeriod, ok := softPeriods[key.Name]; ok {
+			thresh.WarningDelay = softPeriod
+			thresh.CriticalDelay = softPeriod
+		}
+
+		thresholds[key] = thresh
 	}
 
 	// Apply the threshold overrides.

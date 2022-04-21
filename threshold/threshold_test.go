@@ -19,6 +19,7 @@ package threshold
 
 import (
 	"context"
+	"fmt"
 	"glouton/types"
 	"math"
 	"reflect"
@@ -93,7 +94,8 @@ func TestStateUpdate(t *testing.T) {
 		state := statusState{}
 
 		for _, step := range c {
-			state = state.Update(step.status, 300*time.Second, now.Add(time.Duration(step.timeOffsetSecond)*time.Second))
+			fmt.Println(step.timeOffsetSecond)
+			state = state.Update(step.status, 300*time.Second, 300*time.Second, now.Add(time.Duration(step.timeOffsetSecond)*time.Second))
 			if state.CurrentStatus != step.want {
 				t.Errorf("case #%d offset %d: state.CurrentStatus == %v, want %v", i, step.timeOffsetSecond, state.CurrentStatus, step.want)
 
@@ -126,7 +128,7 @@ func TestStateUpdatePeriodChange(t *testing.T) {
 		state := statusState{}
 
 		for _, step := range c {
-			state = state.Update(step.status, time.Duration(step.period)*time.Second, now.Add(time.Duration(step.timeOffsetSecond)*time.Second))
+			state = state.Update(step.status, time.Duration(step.period)*time.Second, time.Duration(step.period)*time.Second, now.Add(time.Duration(step.timeOffsetSecond)*time.Second))
 			if state.CurrentStatus != step.want {
 				t.Errorf("case #%d offset %d: state.CurrentStatus == %v, want %v", i, step.timeOffsetSecond, state.CurrentStatus, step.want)
 
@@ -347,8 +349,10 @@ func TestAccumulatorThreshold(t *testing.T) {
 	threshold.SetThresholds(
 		nil,
 		map[string]Threshold{"cpu_used": {
-			HighWarning:  80,
-			HighCritical: 90,
+			HighWarning:   80,
+			HighCritical:  90,
+			WarningDelay:  5 * time.Minute,
+			CriticalDelay: 5 * time.Minute,
 		}},
 	)
 
@@ -432,7 +436,6 @@ func TestAccumulatorThreshold(t *testing.T) {
 func TestThreshold(t *testing.T) { //nolint: maintidx
 	db := &mockStore{}
 	threshold := New(mockState{})
-	threshold.defaultSoftPeriod = 60 * time.Second
 
 	t0 := time.Date(2020, 2, 24, 15, 1, 0, 0, time.UTC)
 	stepDelay := 10 * time.Second
@@ -454,17 +457,21 @@ func TestThreshold(t *testing.T) { //nolint: maintidx
 			SetThresholds: &setThresholdsArgs{
 				thresholdWithItem: map[MetricNameItem]Threshold{
 					{Name: "disk_used_perc", Item: "/home"}: {
-						HighWarning:  80,
-						HighCritical: math.NaN(),
-						LowCritical:  math.NaN(),
-						LowWarning:   math.NaN(),
+						HighWarning:   80,
+						HighCritical:  math.NaN(),
+						LowCritical:   math.NaN(),
+						LowWarning:    math.NaN(),
+						WarningDelay:  60 * time.Second,
+						CriticalDelay: 60 * time.Second,
 					},
 				},
 				thresholdAllItem: map[string]Threshold{"cpu_used": {
-					HighWarning:  80,
-					HighCritical: 90,
-					LowCritical:  math.NaN(),
-					LowWarning:   math.NaN(),
+					HighWarning:   80,
+					HighCritical:  90,
+					LowCritical:   math.NaN(),
+					LowWarning:    math.NaN(),
+					WarningDelay:  60 * time.Second,
+					CriticalDelay: 60 * time.Second,
 				}},
 			},
 			PushedValue: map[string]float64{
@@ -619,24 +626,30 @@ func TestThreshold(t *testing.T) { //nolint: maintidx
 			SetThresholds: &setThresholdsArgs{
 				thresholdWithItem: map[MetricNameItem]Threshold{
 					{Name: "disk_used_perc", Item: "/home"}: {
-						HighWarning:  80,
-						HighCritical: 90,
-						LowCritical:  math.NaN(),
-						LowWarning:   math.NaN(),
+						HighWarning:   80,
+						HighCritical:  90,
+						LowCritical:   math.NaN(),
+						LowWarning:    math.NaN(),
+						WarningDelay:  60 * time.Second,
+						CriticalDelay: 60 * time.Second,
 					},
 				},
 				thresholdAllItem: map[string]Threshold{
 					"cpu_used": {
-						HighWarning:  80,
-						HighCritical: 99,
-						LowCritical:  math.NaN(),
-						LowWarning:   math.NaN(),
+						HighWarning:   80,
+						HighCritical:  99,
+						LowCritical:   math.NaN(),
+						LowWarning:    math.NaN(),
+						WarningDelay:  60 * time.Second,
+						CriticalDelay: 60 * time.Second,
 					},
 					"net_used": {
-						HighWarning:  80,
-						HighCritical: 99,
-						LowCritical:  math.NaN(),
-						LowWarning:   math.NaN(),
+						HighWarning:   80,
+						HighCritical:  99,
+						LowCritical:   math.NaN(),
+						LowWarning:    math.NaN(),
+						WarningDelay:  60 * time.Second,
+						CriticalDelay: 60 * time.Second,
 					},
 				},
 			},
@@ -660,18 +673,22 @@ func TestThreshold(t *testing.T) { //nolint: maintidx
 			SetThresholds: &setThresholdsArgs{
 				thresholdWithItem: map[MetricNameItem]Threshold{
 					{Name: "disk_used_perc", Item: "/home"}: {
-						HighWarning:  80,
-						HighCritical: 97,
-						LowCritical:  math.NaN(),
-						LowWarning:   math.NaN(),
+						HighWarning:   80,
+						HighCritical:  97,
+						LowCritical:   math.NaN(),
+						LowWarning:    math.NaN(),
+						WarningDelay:  60 * time.Second,
+						CriticalDelay: 60 * time.Second,
 					},
 				},
 				thresholdAllItem: map[string]Threshold{
 					"net_used": {
-						HighWarning:  math.NaN(),
-						HighCritical: 99,
-						LowCritical:  math.NaN(),
-						LowWarning:   math.NaN(),
+						HighWarning:   math.NaN(),
+						HighCritical:  99,
+						LowCritical:   math.NaN(),
+						LowWarning:    math.NaN(),
+						WarningDelay:  60 * time.Second,
+						CriticalDelay: 60 * time.Second,
 					},
 				},
 			},
@@ -800,7 +817,6 @@ func TestThresholdRestart(t *testing.T) {
 			},
 		},
 	})
-	threshold.defaultSoftPeriod = 60 * time.Second
 
 	stepDelay := 10 * time.Second
 
@@ -821,17 +837,21 @@ func TestThresholdRestart(t *testing.T) {
 			SetThresholds: &setThresholdsArgs{
 				thresholdWithItem: map[MetricNameItem]Threshold{
 					{Name: "disk_used_perc", Item: "/home"}: {
-						HighWarning:  80,
-						HighCritical: 90,
-						LowCritical:  math.NaN(),
-						LowWarning:   math.NaN(),
+						HighWarning:   80,
+						HighCritical:  90,
+						LowCritical:   math.NaN(),
+						LowWarning:    math.NaN(),
+						WarningDelay:  60 * time.Second,
+						CriticalDelay: 60 * time.Second,
 					},
 				},
 				thresholdAllItem: map[string]Threshold{"cpu_used": {
-					HighWarning:  80,
-					HighCritical: 90,
-					LowCritical:  math.NaN(),
-					LowWarning:   math.NaN(),
+					HighWarning:   80,
+					HighCritical:  90,
+					LowCritical:   math.NaN(),
+					LowWarning:    math.NaN(),
+					WarningDelay:  60 * time.Second,
+					CriticalDelay: 60 * time.Second,
 				}},
 			},
 			PushedValue: map[string]float64{
@@ -852,23 +872,29 @@ func TestThresholdRestart(t *testing.T) {
 			SetThresholds: &setThresholdsArgs{
 				thresholdWithItem: map[MetricNameItem]Threshold{
 					{Name: "disk_used_perc", Item: "/home"}: {
-						HighWarning:  80,
-						HighCritical: 90,
-						LowCritical:  math.NaN(),
-						LowWarning:   math.NaN(),
+						HighWarning:   80,
+						HighCritical:  90,
+						LowCritical:   math.NaN(),
+						LowWarning:    math.NaN(),
+						WarningDelay:  60 * time.Second,
+						CriticalDelay: 60 * time.Second,
 					},
 					{Name: "mem_used", Item: ""}: {
-						HighWarning:  80,
-						HighCritical: 90,
-						LowCritical:  math.NaN(),
-						LowWarning:   math.NaN(),
+						HighWarning:   80,
+						HighCritical:  90,
+						LowCritical:   math.NaN(),
+						LowWarning:    math.NaN(),
+						WarningDelay:  60 * time.Second,
+						CriticalDelay: 60 * time.Second,
 					},
 				},
 				thresholdAllItem: map[string]Threshold{"cpu_used": {
-					HighWarning:  80,
-					HighCritical: 90,
-					LowCritical:  math.NaN(),
-					LowWarning:   math.NaN(),
+					HighWarning:   80,
+					HighCritical:  90,
+					LowCritical:   math.NaN(),
+					LowWarning:    math.NaN(),
+					WarningDelay:  60 * time.Second,
+					CriticalDelay: 60 * time.Second,
 				}},
 			},
 			PushedValue: map[string]float64{
@@ -991,5 +1017,83 @@ func TestThresholdRestart(t *testing.T) {
 		}
 
 		db.points = db.points[:0]
+	}
+}
+
+func TestMergeThresholds(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		t1     Threshold
+		t2     Threshold
+		expect Threshold
+	}{
+		{
+			name: "different-delays",
+			t1: Threshold{
+				LowCritical:   15,
+				LowWarning:    20,
+				WarningDelay:  2 * time.Minute,
+				HighWarning:   80,
+				HighCritical:  90,
+				CriticalDelay: 2 * time.Minute,
+			},
+			t2: Threshold{
+				LowCritical:   5,
+				LowWarning:    10,
+				WarningDelay:  1 * time.Minute,
+				HighWarning:   50,
+				HighCritical:  60,
+				CriticalDelay: 1 * time.Minute,
+			},
+			expect: Threshold{
+				LowCritical:   15,
+				LowWarning:    20,
+				WarningDelay:  1 * time.Minute,
+				HighWarning:   50,
+				HighCritical:  60,
+				CriticalDelay: 1 * time.Minute,
+			},
+		},
+		{
+			name: "different-delays-2",
+			t1: Threshold{
+				LowCritical:   15,
+				LowWarning:    20,
+				WarningDelay:  10 * time.Minute,
+				HighWarning:   80,
+				HighCritical:  90,
+				CriticalDelay: 20 * time.Minute,
+			},
+			t2: Threshold{
+				LowCritical:   5,
+				LowWarning:    10,
+				WarningDelay:  5 * time.Minute,
+				HighWarning:   81,
+				HighCritical:  82,
+				CriticalDelay: 2 * time.Minute,
+			},
+			expect: Threshold{
+				LowCritical:   15,
+				LowWarning:    20,
+				WarningDelay:  10 * time.Minute,
+				HighWarning:   80,
+				HighCritical:  82,
+				CriticalDelay: 2 * time.Minute,
+			},
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := test.t1.Merge(test.t2); !reflect.DeepEqual(got, test.expect) {
+				t.Fatalf("Merge\n%#v\nwith\n%#v\nexpected\n%#v\ngot\n%#v\n", test.t1, test.t2, test.expect, got)
+			}
+		})
 	}
 }

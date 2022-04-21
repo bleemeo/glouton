@@ -17,13 +17,16 @@
 package config
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
+	"glouton/logger"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -236,7 +239,7 @@ func (c *Configuration) StringList(key string) []string {
 
 // StringMap return the given key as a string map.
 //
-// Return an empty map if the key does not existor could not be converted to a string map.
+// Return an empty map if the key does not exist or could not be converted to a string map.
 func (c *Configuration) StringMap(key string) map[string]string {
 	rawValue, ok := c.Get(key)
 	if !ok {
@@ -316,6 +319,89 @@ func (c *Configuration) Get(key string) (result interface{}, found bool) {
 	keyPart := strings.Split(key, ".")
 
 	return get(c.rawValues, keyPart)
+}
+
+// DurationMap returns the given key as a duration map, it assumes values are given in seconds.
+// Supports durations as int, float, and string.
+func (c *Configuration) DurationMap(key string) map[string]time.Duration {
+	input, ok := c.Get(key)
+	if !ok {
+		return make(map[string]time.Duration)
+	}
+
+	inputMap, ok := ConvertToMap(input)
+	if !ok {
+		logger.Printf("Could not convert config key %s to map", key)
+
+		return make(map[string]time.Duration)
+	}
+
+	durationMap := make(map[string]time.Duration, len(inputMap))
+
+	for k, rawValue := range inputMap {
+		var duration time.Duration
+		switch value := rawValue.(type) {
+		case int:
+			duration = time.Duration(value) * time.Second
+		case float64:
+			duration = time.Duration(int(value/1000)) * time.Millisecond
+		case string:
+			var err error
+
+			duration, err = time.ParseDuration(value)
+			if err != nil {
+				continue
+			}
+		default:
+			continue
+		}
+
+		durationMap[k] = duration
+	}
+
+	return durationMap
+}
+
+func ConvertToMap(input interface{}) (result map[string]interface{}, ok bool) {
+	result, ok = input.(map[string]interface{})
+	if ok {
+		return
+	}
+
+	tmp, ok := input.(map[interface{}]interface{})
+	if !ok {
+		return nil, false
+	}
+
+	result = make(map[string]interface{}, len(tmp))
+
+	for k, v := range tmp {
+		result[ConvertToString(k)] = v
+	}
+
+	return result, true
+}
+
+func ConvertToString(rawValue interface{}) string {
+	switch value := rawValue.(type) {
+	case string:
+		return value
+	case fmt.Stringer:
+		return value.String()
+	case int:
+		return strconv.FormatInt(int64(value), 10)
+	case []interface{}, []string, map[string]interface{}, map[interface{}]interface{}, []map[string]interface{}:
+		b, err := json.Marshal(rawValue)
+		if err != nil {
+			logger.V(1).Printf("Failed to marshal raw value: %v", err)
+
+			return ""
+		}
+
+		return string(b)
+	default:
+		return fmt.Sprintf("%v", rawValue)
+	}
 }
 
 // Dump return a copy of the whole configuration, with "secret" retracted.
