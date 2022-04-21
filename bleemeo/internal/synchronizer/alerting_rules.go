@@ -276,7 +276,8 @@ func (s *Synchronizer) alertingRuleToThresholdOverride(rule bleemeoTypes.Alertin
 		return false
 	}
 
-	if warningThreshold.metricName != criticalThreshold.metricName {
+	if rule.WarningQuery != "" && rule.CriticalQuery != "" &&
+		warningThreshold.metricName != criticalThreshold.metricName {
 		return false
 	}
 
@@ -311,14 +312,18 @@ func (s *Synchronizer) alertingRuleToThresholdOverride(rule bleemeoTypes.Alertin
 // queryToThreshold tries to convert a simple PromQL query to a threshold.
 // For instance, "cpu_used > 80" -> metric = cpu_used, high threshold = 80.
 func queryToThreshold(query string) (threshold minimalThreshold, success bool) {
-	expr, err := parser.ParseExpr(query)
-	if err != nil {
-		return threshold, false
-	}
-
 	threshold = minimalThreshold{
 		low:  math.NaN(),
 		high: math.NaN(),
+	}
+
+	if query == "" {
+		return threshold, true
+	}
+
+	expr, err := parser.ParseExpr(query)
+	if err != nil {
+		return threshold, false
 	}
 
 	binaryExpr, ok := expr.(*parser.BinaryExpr)
