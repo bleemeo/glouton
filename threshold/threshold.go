@@ -259,6 +259,27 @@ func (t Threshold) Equal(other Threshold) bool {
 	return true
 }
 
+// Merge two thresholds, keep the stricter conditions.
+func (t Threshold) Merge(other Threshold) Threshold {
+	if math.IsNaN(t.LowWarning) || !math.IsNaN(other.LowWarning) && other.LowWarning > t.LowWarning {
+		t.LowWarning = other.LowWarning
+	}
+
+	if math.IsNaN(t.LowCritical) || !math.IsNaN(other.LowCritical) && other.LowCritical > t.LowCritical {
+		t.LowCritical = other.LowCritical
+	}
+
+	if math.IsNaN(t.HighWarning) || !math.IsNaN(other.HighWarning) && other.HighWarning < t.HighWarning {
+		t.HighWarning = other.HighWarning
+	}
+
+	if math.IsNaN(t.HighCritical) || !math.IsNaN(other.HighCritical) && other.HighCritical < t.HighCritical {
+		t.HighCritical = other.HighCritical
+	}
+
+	return t
+}
+
 // Unit represent the unit of a metric.
 type Unit struct {
 	UnitType int    `json:"unit,omitempty"`
