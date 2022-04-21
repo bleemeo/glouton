@@ -645,13 +645,6 @@ func (s *Synchronizer) UpdateUnitsAndThresholds(ctx context.Context, firstUpdate
 	units := make(map[threshold.MetricNameItem]threshold.Unit)
 
 	for _, m := range s.option.Cache.Metrics() {
-		// Old treshold behavior, useless with the new alerting rule functionality.
-		// While this is not a problem per say, adding alerting rules to old thresholds
-		// create more filters for nothing (${rule}_status).
-		if m.PromQLQuery != "" {
-			continue
-		}
-
 		// TODO: We need to add the agent ID in the key to avoid conflicts between agents.
 		key := threshold.MetricNameItem{Name: m.Labels[types.LabelName], Item: m.Labels[types.LabelItem]}
 		thresholds[key] = m.Threshold.ToInternalThreshold()

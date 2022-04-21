@@ -180,11 +180,9 @@ type Metric struct {
 	StatusOf    string            `json:"status_of,omitempty"`
 	Threshold
 	threshold.Unit
-	DeactivatedAt     time.Time `json:"deactivated_at,omitempty"`
-	PromQLQuery       string    `json:"promql_query"`
-	IsUserPromQLAlert bool      `json:"is_user_promql_alert"`
-	FirstSeenAt       time.Time `json:"first_seen_at"`
-	AlertingRuleID    string    `json:"alerting_rule,omitempty"`
+	DeactivatedAt  time.Time `json:"deactivated_at,omitempty"`
+	FirstSeenAt    time.Time `json:"first_seen_at"`
+	AlertingRuleID string    `json:"alerting_rule,omitempty"`
 }
 
 // FailureKind is the kind of failure to register a metric. Used to know if
