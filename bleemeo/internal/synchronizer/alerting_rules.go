@@ -286,9 +286,18 @@ func (s *Synchronizer) alertingRuleToThresholdOverride(rule bleemeoTypes.Alertin
 	defer s.l.Unlock()
 
 	for _, agentID := range rule.Agents {
-		key := thresholdOverrideKey{
-			MetricName: warningThreshold.metricName,
-			AgentID:    agentID,
+		var key thresholdOverrideKey
+
+		if warningThreshold.metricName != "" {
+			key = thresholdOverrideKey{
+				MetricName: warningThreshold.metricName,
+				AgentID:    agentID,
+			}
+		} else {
+			key = thresholdOverrideKey{
+				MetricName: criticalThreshold.metricName,
+				AgentID:    agentID,
+			}
 		}
 
 		newThreshold := threshold.Threshold{

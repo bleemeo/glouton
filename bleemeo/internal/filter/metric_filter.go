@@ -23,11 +23,11 @@ func NewFilter(cache *cache.Cache) *Filter {
 	}
 }
 
-func (f Filter) IsAllowed(lbls map[string]string, annoation types.MetricAnnotations) (bool, error) {
-	allowlist, err := common.AllowListForMetric(f.accountConfigs, f.defaultConfigID, annoation, f.monitors, f.agents)
+func (f Filter) IsAllowed(lbls map[string]string, annotations types.MetricAnnotations) (bool, error) {
+	allowlist, err := common.AllowListForMetric(f.accountConfigs, f.defaultConfigID, annotations, f.monitors, f.agents)
 	if err != nil {
 		return false, err
 	}
 
-	return common.AllowMetric(lbls, annoation, allowlist), nil
+	return common.AllowMetric(lbls, annotations, allowlist), nil
 }
