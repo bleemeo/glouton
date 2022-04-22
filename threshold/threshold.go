@@ -544,13 +544,14 @@ func formatDuration(period time.Duration) string {
 	return result
 }
 
-// ApplyThresholds applies the thresholds and adds the new generated points.
-// Returns the new points appended to the input points.
-func (r *Registry) ApplyThresholds(points []types.MetricPoint) []types.MetricPoint {
+// ApplyThresholds applies the thresholds. It returns input points with their status modified by the thresholds,
+// and the new status points generated.
+func (r *Registry) ApplyThresholds(points []types.MetricPoint) ([]types.MetricPoint, []types.MetricPoint) {
 	r.l.Lock()
 	defer r.l.Unlock()
 
 	newPoints := make([]types.MetricPoint, 0, len(points))
+	statusPoints := make([]types.MetricPoint, 0, len(points))
 	mainAgentID, _ := r.state.BleemeoCredentials()
 
 	for _, point := range points {
@@ -569,7 +570,7 @@ func (r *Registry) ApplyThresholds(points []types.MetricPoint) []types.MetricPoi
 
 			threshold := r.getThreshold(key)
 			if !threshold.IsZero() {
-				newPoints = r.addPointWithThreshold(newPoints, point, threshold, key)
+				newPoints, statusPoints = r.addPointWithThreshold(newPoints, statusPoints, point, threshold, key)
 
 				continue
 			}
@@ -578,10 +579,15 @@ func (r *Registry) ApplyThresholds(points []types.MetricPoint) []types.MetricPoi
 		newPoints = append(newPoints, point)
 	}
 
-	return newPoints
+	return newPoints, statusPoints
 }
 
-func (r *Registry) addPointWithThreshold(points []types.MetricPoint, point types.MetricPoint, threshold Threshold, key MetricKey) []types.MetricPoint {
+func (r *Registry) addPointWithThreshold(
+	points, statusPoints []types.MetricPoint,
+	point types.MetricPoint,
+	threshold Threshold,
+	key MetricKey,
+) ([]types.MetricPoint, []types.MetricPoint) {
 	softStatus, highThreshold := threshold.CurrentStatus(point.Value)
 	previousState := r.states[key]
 
@@ -627,6 +633,7 @@ func (r *Registry) addPointWithThreshold(points []types.MetricPoint, point types
 		}
 	}
 
+	//
 	status := types.StatusDescription{
 		CurrentStatus:     newState.CurrentStatus,
 		StatusDescription: statusDescription,
@@ -640,6 +647,7 @@ func (r *Registry) addPointWithThreshold(points []types.MetricPoint, point types
 		Annotations: annotationsCopy,
 	})
 
+	// Create status point.
 	labelsCopy := make(map[string]string, len(point.Labels))
 
 	for k, v := range point.Labels {
@@ -650,11 +658,11 @@ func (r *Registry) addPointWithThreshold(points []types.MetricPoint, point types
 
 	annotationsCopy.StatusOf = point.Labels[types.LabelName]
 
-	points = append(points, types.MetricPoint{
+	statusPoints = append(statusPoints, types.MetricPoint{
 		Point:       types.Point{Time: point.Time, Value: float64(status.CurrentStatus.NagiosCode())},
 		Labels:      labelsCopy,
 		Annotations: annotationsCopy,
 	})
 
-	return points
+	return points, statusPoints
 }

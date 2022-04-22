@@ -127,7 +127,7 @@ type Registry struct {
 
 type Option struct {
 	PushPoint             types.PointPusher
-	ThresholdHandler      ThresholdAdder
+	ThresholdHandler      ThresholdHandler
 	Queryable             storage.Queryable
 	FQDN                  string
 	GloutonPort           string
@@ -170,8 +170,8 @@ type AppenderCallback interface {
 	Collect(ctx context.Context, app storage.Appender) error
 }
 
-type ThresholdAdder interface {
-	ApplyThresholds(points []types.MetricPoint) []types.MetricPoint
+type ThresholdHandler interface {
+	ApplyThresholds(points []types.MetricPoint) (newPoints []types.MetricPoint, statusPoints []types.MetricPoint)
 }
 
 func (opt *RegistrationOption) buildRules() error {
@@ -909,7 +909,18 @@ func (r *Registry) GatherWithState(ctx context.Context, state GatherState) ([]*d
 		go func() {
 			defer wg.Done()
 
-			tmp, _, err := r.scrape(ctx, state, reg)
+			scrapedMFS, _, err := r.scrape(ctx, state, reg)
+
+			// Apply thresholds.
+			scrapedPoints := gloutonModel.FamiliesToMetricPoints(time.Time{}, mfs)
+
+			var statusPoints []types.MetricPoint
+
+			if r.option.ThresholdHandler != nil {
+				_, statusPoints = r.option.ThresholdHandler.ApplyThresholds(scrapedPoints)
+			}
+
+			statusMFS := gloutonModel.MetricPointsToFamilies(statusPoints)
 
 			mutex.Lock()
 			defer mutex.Unlock()
@@ -918,7 +929,8 @@ func (r *Registry) GatherWithState(ctx context.Context, state GatherState) ([]*d
 				errs = append(errs, err)
 			}
 
-			mfs = append(mfs, tmp...)
+			mfs = append(mfs, scrapedMFS...)
+			mfs = append(mfs, statusMFS...)
 		}()
 	}
 
@@ -959,8 +971,6 @@ func (r *Registry) GatherWithState(ctx context.Context, state GatherState) ([]*d
 			errs = append(errs, err)
 		}
 	}
-
-	// TODO: Apply thresholds.
 
 	return sortedResult, errs.MaybeUnwrap()
 }
@@ -1169,7 +1179,8 @@ func (r *Registry) scrapeFromLoop(ctx context.Context, t0 time.Time, reg *regist
 
 	if len(points) > 0 && r.option.PushPoint != nil {
 		if r.option.ThresholdHandler != nil {
-			points = r.option.ThresholdHandler.ApplyThresholds(points)
+			points, statusPoints := r.option.ThresholdHandler.ApplyThresholds(points)
+			points = append(points, statusPoints...)
 		}
 
 		r.option.PushPoint.PushPoints(ctx, points)
@@ -1211,7 +1222,8 @@ func (r *Registry) scrape(ctx context.Context, state GatherState, reg *registrat
 // As for AddMetricPointFunction, points should not be mutated after the call.
 func (r *Registry) pushPoint(ctx context.Context, points []types.MetricPoint, ttl time.Duration, format types.MetricFormat) {
 	if r.option.ThresholdHandler != nil {
-		points = r.option.ThresholdHandler.ApplyThresholds(points)
+		points, statusPoints := r.option.ThresholdHandler.ApplyThresholds(points)
+		points = append(points, statusPoints...)
 	}
 
 	r.l.Lock()

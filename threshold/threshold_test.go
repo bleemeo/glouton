@@ -408,7 +408,8 @@ func TestAccumulatorThreshold(t *testing.T) {
 		},
 	}
 
-	newPoints := threshold.ApplyThresholds(points)
+	newPoints, statusPoints := threshold.ApplyThresholds(points)
+	newPoints = append(newPoints, statusPoints...)
 
 	if len(newPoints) != 3 {
 		t.Errorf("len(points) == %d, want 3", len(newPoints))
@@ -724,7 +725,8 @@ func TestThreshold(t *testing.T) { //nolint: maintidx
 			})
 		}
 
-		newPoints := threshold.ApplyThresholds(points)
+		newPoints, statusPoints := threshold.ApplyThresholds(points)
+		newPoints = append(newPoints, statusPoints...)
 
 		moreWant := make(map[string]types.StatusDescription)
 		for name, pts := range step.WantedPoints {
@@ -966,7 +968,8 @@ func TestThresholdRestart(t *testing.T) { //nolint:maintidx
 			})
 		}
 
-		newPoints := threshold.ApplyThresholds(points)
+		newPoints, statusPoints := threshold.ApplyThresholds(points)
+		newPoints = append(newPoints, statusPoints...)
 
 		moreWant := make(map[string]types.StatusDescription)
 		for name, pts := range step.WantedPoints {
