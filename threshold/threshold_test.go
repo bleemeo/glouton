@@ -18,7 +18,6 @@
 package threshold
 
 import (
-	"context"
 	"glouton/types"
 	"math"
 	"reflect"
@@ -49,14 +48,6 @@ func (m mockState) Set(key string, object interface{}) error {
 
 func (m mockState) BleemeoCredentials() (string, string) {
 	return "", ""
-}
-
-type mockStore struct {
-	points []types.MetricPoint
-}
-
-func (s *mockStore) PushPoints(_ context.Context, points []types.MetricPoint) {
-	s.points = append(s.points, points...)
 }
 
 func TestStateUpdate(t *testing.T) {
@@ -346,7 +337,6 @@ func TestThresholdEqual(t *testing.T) {
 }
 
 func TestAccumulatorThreshold(t *testing.T) {
-	db := &mockStore{}
 	threshold := New(mockState{})
 	threshold.SetThresholds(
 		nil,
@@ -401,8 +391,7 @@ func TestAccumulatorThreshold(t *testing.T) {
 		},
 	}
 
-	pusher := threshold.WithPusher(db)
-	pusher.PushPoints(context.Background(), []types.MetricPoint{
+	points := []types.MetricPoint{
 		{
 			Labels: map[string]string{
 				"__name__": "cpu_used",
@@ -417,13 +406,15 @@ func TestAccumulatorThreshold(t *testing.T) {
 			Annotations: types.MetricAnnotations{BleemeoItem: "some-item"},
 			Point:       types.Point{Time: t0, Value: 20.0},
 		},
-	})
-
-	if len(db.points) != 3 {
-		t.Errorf("len(points) == %d, want 3", len(db.points))
 	}
 
-	for i, got := range db.points {
+	newPoints := threshold.ApplyThresholds(points)
+
+	if len(newPoints) != 3 {
+		t.Errorf("len(points) == %d, want 3", len(newPoints))
+	}
+
+	for i, got := range newPoints {
 		labelsText := types.LabelsToText(got.Labels)
 		want := wantPoints[labelsText]
 
@@ -436,7 +427,6 @@ func TestAccumulatorThreshold(t *testing.T) {
 }
 
 func TestThreshold(t *testing.T) { //nolint: maintidx
-	db := &mockStore{}
 	threshold := New(mockState{})
 
 	t0 := time.Date(2020, 2, 24, 15, 1, 0, 0, time.UTC)
@@ -711,9 +701,6 @@ func TestThreshold(t *testing.T) { //nolint: maintidx
 		},
 	}
 
-	ctx := context.Background()
-	pusher := threshold.WithPusher(db)
-
 	for _, step := range steps {
 		currentTime := t0.Add(step.AddedToT0)
 
@@ -737,7 +724,7 @@ func TestThreshold(t *testing.T) { //nolint: maintidx
 			})
 		}
 
-		pusher.PushPoints(ctx, points)
+		newPoints := threshold.ApplyThresholds(points)
 
 		moreWant := make(map[string]types.StatusDescription)
 		for name, pts := range step.WantedPoints {
@@ -753,7 +740,7 @@ func TestThreshold(t *testing.T) { //nolint: maintidx
 			moreWant[types.LabelsToText(lbls)] = pts
 		}
 
-		for _, pts := range db.points {
+		for _, pts := range newPoints {
 			want, ok := moreWant[types.LabelsToText(pts.Labels)]
 			if !ok {
 				t.Errorf("At %d * stepDelay: got point %v, expected not present", step.AddedToT0/stepDelay, pts.Labels)
@@ -766,11 +753,9 @@ func TestThreshold(t *testing.T) { //nolint: maintidx
 			}
 		}
 
-		if len(db.points) != len(moreWant) {
-			t.Errorf("At %v * stepDelay: got %d points, want %d", step.AddedToT0/stepDelay, len(db.points), len(moreWant))
+		if len(newPoints) != len(moreWant) {
+			t.Errorf("At %v * stepDelay: got %d points, want %d", step.AddedToT0/stepDelay, len(newPoints), len(moreWant))
 		}
-
-		db.points = db.points[:0]
 	}
 }
 
@@ -778,7 +763,6 @@ func TestThreshold(t *testing.T) { //nolint: maintidx
 func TestThresholdRestart(t *testing.T) { //nolint:maintidx
 	t0 := time.Date(2020, 2, 24, 15, 1, 0, 0, time.UTC)
 
-	db := &mockStore{}
 	threshold := New(mockState{
 		jsonList: []jsonState{
 			{
@@ -959,9 +943,6 @@ func TestThresholdRestart(t *testing.T) { //nolint:maintidx
 		},
 	}
 
-	ctx := context.Background()
-	pusher := threshold.WithPusher(db)
-
 	for _, step := range steps {
 		currentTime := t0.Add(step.AddedToT0)
 
@@ -985,7 +966,7 @@ func TestThresholdRestart(t *testing.T) { //nolint:maintidx
 			})
 		}
 
-		pusher.PushPoints(ctx, points)
+		newPoints := threshold.ApplyThresholds(points)
 
 		moreWant := make(map[string]types.StatusDescription)
 		for name, pts := range step.WantedPoints {
@@ -1001,7 +982,7 @@ func TestThresholdRestart(t *testing.T) { //nolint:maintidx
 			moreWant[types.LabelsToText(lbls)] = pts
 		}
 
-		for _, pts := range db.points {
+		for _, pts := range newPoints {
 			want, ok := moreWant[types.LabelsToText(pts.Labels)]
 			if !ok {
 				t.Errorf("At %d * stepDelay: got point %v, expected not present", step.AddedToT0/stepDelay, pts.Labels)
@@ -1014,11 +995,9 @@ func TestThresholdRestart(t *testing.T) { //nolint:maintidx
 			}
 		}
 
-		if len(db.points) != len(moreWant) {
-			t.Errorf("At %d * stepDelay: got %d points, want %d", step.AddedToT0/stepDelay, len(db.points), len(moreWant))
+		if len(newPoints) != len(moreWant) {
+			t.Errorf("At %d * stepDelay: got %d points, want %d", step.AddedToT0/stepDelay, len(newPoints), len(moreWant))
 		}
-
-		db.points = db.points[:0]
 	}
 }
 

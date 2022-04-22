@@ -127,6 +127,7 @@ type Registry struct {
 
 type Option struct {
 	PushPoint             types.PointPusher
+	ThresholdHandler      ThresholdAdder
 	Queryable             storage.Queryable
 	FQDN                  string
 	GloutonPort           string
@@ -167,6 +168,10 @@ type AppenderCallback interface {
 	// Collect collects point and write them into Appender. The appender must not be used once Collect returned.
 	// If you omit to Commit() on the appender, it will be automatically done when Collect return without error.
 	Collect(ctx context.Context, app storage.Appender) error
+}
+
+type ThresholdAdder interface {
+	ApplyThresholds(points []types.MetricPoint) []types.MetricPoint
 }
 
 func (opt *RegistrationOption) buildRules() error {
@@ -955,6 +960,8 @@ func (r *Registry) GatherWithState(ctx context.Context, state GatherState) ([]*d
 		}
 	}
 
+	// TODO: Apply thresholds.
+
 	return sortedResult, errs.MaybeUnwrap()
 }
 
@@ -1161,10 +1168,12 @@ func (r *Registry) scrapeFromLoop(ctx context.Context, t0 time.Time, reg *regist
 	reg.l.Unlock()
 
 	if len(points) > 0 && r.option.PushPoint != nil {
+		if r.option.ThresholdHandler != nil {
+			points = r.option.ThresholdHandler.ApplyThresholds(points)
+		}
+
 		r.option.PushPoint.PushPoints(ctx, points)
 	}
-
-	// TODO: Apply thresholds
 }
 
 func (r *Registry) scrape(ctx context.Context, state GatherState, reg *registration) ([]*dto.MetricFamily, time.Duration, error) {
@@ -1201,6 +1210,10 @@ func (r *Registry) scrape(ctx context.Context, state GatherState, reg *registrat
 // pushPoint add a new point to the list of pushed point with a specified TTL.
 // As for AddMetricPointFunction, points should not be mutated after the call.
 func (r *Registry) pushPoint(ctx context.Context, points []types.MetricPoint, ttl time.Duration, format types.MetricFormat) {
+	if r.option.ThresholdHandler != nil {
+		points = r.option.ThresholdHandler.ApplyThresholds(points)
+	}
+
 	r.l.Lock()
 
 	for r.blockPushPoint {
@@ -1297,8 +1310,6 @@ func (r *Registry) pushPoint(ctx context.Context, points []types.MetricPoint, tt
 	r.countPushPoints--
 	r.condition.Broadcast()
 	r.l.Unlock()
-
-	// TODO: Apply thresholds
 }
 
 func (r *Registry) addMetaLabels(input map[string]string) map[string]string {

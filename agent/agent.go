@@ -720,10 +720,12 @@ func (a *agent) run(ctx context.Context) { //nolint:maintidx
 	}
 
 	filteredStore := store.NewFilteredStore(a.store, mFilter.FilterPoints, mFilter.filterMetrics)
+	a.threshold = threshold.New(a.state)
 
 	a.gathererRegistry, err = registry.New(
 		registry.Option{
 			PushPoint:             a.store,
+			ThresholdHandler:      a.threshold,
 			FQDN:                  fqdn,
 			GloutonPort:           strconv.FormatInt(int64(a.oldConfig.Int("web.listener.port")), 10),
 			MetricFormat:          a.metricFormat,
@@ -756,9 +758,8 @@ func (a *agent) run(ctx context.Context) { //nolint:maintidx
 		logger.Printf("unable to add recording rules metrics: %v", err)
 	}
 
-	a.threshold = threshold.New(a.state)
 	acc := &inputs.Accumulator{
-		Pusher:  a.threshold.WithPusher(a.gathererRegistry.WithTTL(5 * time.Minute)),
+		Pusher:  a.gathererRegistry.WithTTL(5 * time.Minute),
 		Context: ctx,
 	}
 
@@ -848,7 +849,7 @@ func (a *agent) run(ctx context.Context) { //nolint:maintidx
 	a.factProvider.AddCallback(a.containerRuntime.RuntimeFact)
 	a.factProvider.SetFact("installation_format", a.oldConfig.String("agent.installation_format"))
 
-	processInput := processInput.New(psFact, a.threshold.WithPusher(a.gathererRegistry.WithTTL(5*time.Minute)))
+	processInput := processInput.New(psFact, a.gathererRegistry.WithTTL(5*time.Minute))
 
 	a.collector = collector.New(acc)
 
@@ -884,7 +885,7 @@ func (a *agent) run(ctx context.Context) { //nolint:maintidx
 			Description: "miscGather",
 			JitterSeed:  baseJitter,
 		},
-		a.miscGather(a.threshold.WithPusher(a.gathererRegistry.WithTTL(5*time.Minute))),
+		a.miscGather(a.gathererRegistry.WithTTL(5*time.Minute)),
 	)
 	if err != nil {
 		logger.Printf("unable to add miscGathere metrics: %v", err)
@@ -897,7 +898,7 @@ func (a *agent) run(ctx context.Context) { //nolint:maintidx
 			JitterSeed:  baseJitter,
 			MinInterval: time.Minute,
 		},
-		a.miscGatherMinute(a.threshold.WithPusher(a.gathererRegistry.WithTTL(5*time.Minute))),
+		a.miscGatherMinute(a.gathererRegistry.WithTTL(5*time.Minute)),
 	)
 	if err != nil {
 		logger.Printf("unable to add miscGathere metrics: %v", err)
@@ -1027,7 +1028,7 @@ func (a *agent) run(ctx context.Context) { //nolint:maintidx
 			OutputConfigurationFile:       a.oldConfig.String("jmxtrans.config_file"),
 			OutputConfigurationPermission: os.FileMode(perm),
 			ContactPort:                   a.oldConfig.Int("jmxtrans.graphite_port"),
-			Pusher:                        a.threshold.WithPusher(a.gathererRegistry.WithTTL(5 * time.Minute)),
+			Pusher:                        a.gathererRegistry.WithTTL(5 * time.Minute),
 		}
 
 		tasks = append(tasks, taskInfo{a.jmx.Run, "jmxtrans"})
@@ -1048,7 +1049,7 @@ func (a *agent) run(ctx context.Context) { //nolint:maintidx
 			Store:                   filteredStore,
 			SNMP:                    a.snmpManager.Targets(),
 			SNMPOnlineTarget:        a.snmpManager.OnlineCount,
-			PushPoints:              a.threshold.WithPusher(a.gathererRegistry.WithTTL(5 * time.Minute)),
+			PushPoints:              a.gathererRegistry.WithTTL(5 * time.Minute),
 			Discovery:               a.discovery,
 			MonitorManager:          a.monitorManager,
 			UpdateMetricResolution:  a.updateMetricResolution,
@@ -1917,7 +1918,7 @@ func systemUpdateMetric(ctx context.Context, a *agent) {
 		})
 	}
 
-	a.threshold.WithPusher(a.gathererRegistry.WithTTL(time.Hour)).PushPoints(ctx, points)
+	a.gathererRegistry.WithTTL(time.Hour).PushPoints(ctx, points)
 }
 
 func (a *agent) deletedContainersCallback(containersID []string) {

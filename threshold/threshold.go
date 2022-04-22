@@ -530,25 +530,14 @@ func formatDuration(period time.Duration) string {
 	return result
 }
 
-type pusher struct {
-	registry *Registry
-	pusher   types.PointPusher
-}
+// ApplyThresholds applies the thresholds and adds the new generated points.
+// Returns the new points appended to the input points.
+func (r *Registry) ApplyThresholds(points []types.MetricPoint) []types.MetricPoint {
+	r.l.Lock()
+	defer r.l.Unlock()
 
-// WithPusher return the same threshold instance with specified point pusher.
-func (r *Registry) WithPusher(p types.PointPusher) types.PointPusher {
-	return pusher{
-		registry: r,
-		pusher:   p,
-	}
-}
-
-// PushPoints implement PointPusher and do threshold.
-func (p pusher) PushPoints(ctx context.Context, points []types.MetricPoint) {
-	p.registry.l.Lock()
-
-	result := make([]types.MetricPoint, 0, len(points))
-	mainAgentID, _ := p.registry.state.BleemeoCredentials()
+	newPoints := make([]types.MetricPoint, 0, len(points))
+	mainAgentID, _ := r.state.BleemeoCredentials()
 
 	for _, point := range points {
 		if !point.Annotations.Status.CurrentStatus.IsSet() {
@@ -564,29 +553,28 @@ func (p pusher) PushPoints(ctx context.Context, points []types.MetricPoint) {
 				Agent: agentID,
 			}
 
-			threshold := p.registry.getThreshold(key)
+			threshold := r.getThreshold(key)
 			if !threshold.IsZero() {
-				result = p.addPointWithThreshold(result, point, threshold, key)
+				newPoints = r.addPointWithThreshold(newPoints, point, threshold, key)
 
 				continue
 			}
 		}
 
-		result = append(result, point)
+		newPoints = append(newPoints, point)
 	}
 
-	p.registry.l.Unlock()
-	p.pusher.PushPoints(ctx, result)
+	return newPoints
 }
 
-func (p *pusher) addPointWithThreshold(points []types.MetricPoint, point types.MetricPoint, threshold Threshold, key MetricKey) []types.MetricPoint {
+func (r *Registry) addPointWithThreshold(points []types.MetricPoint, point types.MetricPoint, threshold Threshold, key MetricKey) []types.MetricPoint {
 	softStatus, highThreshold := threshold.CurrentStatus(point.Value)
-	previousState := p.registry.states[key]
+	previousState := r.states[key]
 
-	newState := previousState.Update(softStatus, threshold.WarningDelay, threshold.CriticalDelay, p.registry.nowFunc())
-	p.registry.states[key] = newState
+	newState := previousState.Update(softStatus, threshold.WarningDelay, threshold.CriticalDelay, r.nowFunc())
+	r.states[key] = newState
 
-	unit := p.registry.units[key]
+	unit := r.units[key]
 	// Consumer expect status description from threshold to start with "Current value:"
 	statusDescription := fmt.Sprintf("Current value: %s", FormatValue(point.Value, unit))
 
