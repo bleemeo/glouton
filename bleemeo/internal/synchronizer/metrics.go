@@ -641,16 +641,18 @@ func (s *Synchronizer) metricUpdatePendingOrSync(fullSync bool, pendingMetricsUp
 
 // UpdateUnitsAndThresholds update metrics units & threshold (from cache).
 func (s *Synchronizer) UpdateUnitsAndThresholds(ctx context.Context, firstUpdate bool) {
-	thresholds := make(map[threshold.MetricNameItem]threshold.Threshold)
-	units := make(map[threshold.MetricNameItem]threshold.Unit)
-
-	// TODO: Parse once and make them synchronizer fields.
+	thresholds := make(map[threshold.MetricKey]threshold.Threshold)
+	units := make(map[threshold.MetricKey]threshold.Unit)
 	defaultSoftPeriod := time.Duration(s.option.Config.Int("metric.softstatus_period_default")) * time.Second
 	softPeriods := s.option.Config.DurationMap("metric.softstatus_period")
 
 	for _, m := range s.option.Cache.Metrics() {
-		// TODO: We need to add the agent ID in the key to avoid conflicts between agents.
-		key := threshold.MetricNameItem{Name: m.Labels[types.LabelName], Item: m.Labels[types.LabelItem]}
+		key := threshold.MetricKey{
+			Name:  m.Labels[types.LabelName],
+			Item:  m.Labels[types.LabelItem],
+			Agent: m.AgentID,
+		}
+
 		units[key] = m.Unit
 
 		thresh := m.Threshold.ToInternalThreshold()
@@ -672,11 +674,9 @@ func (s *Synchronizer) UpdateUnitsAndThresholds(ctx context.Context, firstUpdate
 	s.l.Unlock()
 
 	for key := range thresholds {
-		// TODO: Currently the thresholds are only applied to the main agent, so the alerting rules
-		// on another agent that are converted to a threshold override will never run.
 		overrideKey := thresholdOverrideKey{
 			MetricName: key.Name,
-			AgentID:    s.agentID,
+			AgentID:    key.Agent,
 		}
 
 		if override, ok := thresholdOverrides[overrideKey]; ok {

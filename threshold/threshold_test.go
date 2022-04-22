@@ -47,6 +47,10 @@ func (m mockState) Set(key string, object interface{}) error {
 	return nil
 }
 
+func (m mockState) BleemeoCredentials() (string, string) {
+	return "", ""
+}
+
 type mockStore struct {
 	points []types.MetricPoint
 }
@@ -439,7 +443,7 @@ func TestThreshold(t *testing.T) { //nolint: maintidx
 	stepDelay := 10 * time.Second
 
 	type setThresholdsArgs struct {
-		thresholdWithItem map[MetricNameItem]Threshold
+		thresholdWithItem map[MetricKey]Threshold
 		thresholdAllItem  map[string]Threshold
 	}
 
@@ -453,7 +457,7 @@ func TestThreshold(t *testing.T) { //nolint: maintidx
 		{
 			AddedToT0: 0 * stepDelay,
 			SetThresholds: &setThresholdsArgs{
-				thresholdWithItem: map[MetricNameItem]Threshold{
+				thresholdWithItem: map[MetricKey]Threshold{
 					{Name: "disk_used_perc", Item: "/home"}: {
 						HighWarning:   80,
 						HighCritical:  math.NaN(),
@@ -622,7 +626,7 @@ func TestThreshold(t *testing.T) { //nolint: maintidx
 		{
 			AddedToT0: 41 * stepDelay,
 			SetThresholds: &setThresholdsArgs{
-				thresholdWithItem: map[MetricNameItem]Threshold{
+				thresholdWithItem: map[MetricKey]Threshold{
 					{Name: "disk_used_perc", Item: "/home"}: {
 						HighWarning:   80,
 						HighCritical:  90,
@@ -669,7 +673,7 @@ func TestThreshold(t *testing.T) { //nolint: maintidx
 		{
 			AddedToT0: 42 * stepDelay,
 			SetThresholds: &setThresholdsArgs{
-				thresholdWithItem: map[MetricNameItem]Threshold{
+				thresholdWithItem: map[MetricKey]Threshold{
 					{Name: "disk_used_perc", Item: "/home"}: {
 						HighWarning:   80,
 						HighCritical:  97,
@@ -784,7 +788,7 @@ func TestThresholdRestart(t *testing.T) { //nolint:maintidx
 					WarningSince:  t0.Add(-40 * time.Second),
 					LastUpdate:    t0.Add(-30 * time.Second),
 				},
-				MetricNameItem: MetricNameItem{
+				MetricKey: MetricKey{
 					Name: "cpu_used",
 					Item: "",
 				},
@@ -796,7 +800,7 @@ func TestThresholdRestart(t *testing.T) { //nolint:maintidx
 					WarningSince:  t0.Add(-90 * time.Second),
 					LastUpdate:    t0.Add(-80 * time.Second),
 				},
-				MetricNameItem: MetricNameItem{
+				MetricKey: MetricKey{
 					Name: "disk_used_perc",
 					Item: "/home",
 				},
@@ -808,7 +812,7 @@ func TestThresholdRestart(t *testing.T) { //nolint:maintidx
 					WarningSince:  t0.Add(-70 * time.Second),
 					LastUpdate:    t0.Add(-30 * time.Second),
 				},
-				MetricNameItem: MetricNameItem{
+				MetricKey: MetricKey{
 					Name: "mem_used",
 					Item: "",
 				},
@@ -819,7 +823,7 @@ func TestThresholdRestart(t *testing.T) { //nolint:maintidx
 	stepDelay := 10 * time.Second
 
 	type setThresholdsArgs struct {
-		thresholdWithItem map[MetricNameItem]Threshold
+		thresholdWithItem map[MetricKey]Threshold
 		thresholdAllItem  map[string]Threshold
 	}
 
@@ -833,7 +837,7 @@ func TestThresholdRestart(t *testing.T) { //nolint:maintidx
 		{
 			AddedToT0: 0 * stepDelay,
 			SetThresholds: &setThresholdsArgs{
-				thresholdWithItem: map[MetricNameItem]Threshold{
+				thresholdWithItem: map[MetricKey]Threshold{
 					{Name: "disk_used_perc", Item: "/home"}: {
 						HighWarning:   80,
 						HighCritical:  90,
@@ -868,7 +872,7 @@ func TestThresholdRestart(t *testing.T) { //nolint:maintidx
 		{
 			AddedToT0: 1 * stepDelay,
 			SetThresholds: &setThresholdsArgs{
-				thresholdWithItem: map[MetricNameItem]Threshold{
+				thresholdWithItem: map[MetricKey]Threshold{
 					{Name: "disk_used_perc", Item: "/home"}: {
 						HighWarning:   80,
 						HighCritical:  90,

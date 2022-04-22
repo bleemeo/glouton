@@ -170,7 +170,12 @@ func (r *queryResolver) Points(ctx context.Context, metricsFilter []*MetricInput
 			metricRes.Points = append(metricRes.Points, pointRes)
 		}
 
-		thresholds := r.api.Threshold.GetThreshold(threshold.MetricNameItem{Item: annotations.BleemeoItem, Name: labels[types.LabelName]})
+		key := threshold.MetricKey{
+			Item:  annotations.BleemeoItem,
+			Name:  labels[types.LabelName],
+			Agent: annotations.BleemeoAgentID,
+		}
+		thresholds := r.api.Threshold.GetThreshold(key)
 		threshold := &Threshold{
 			LowCritical:  &thresholds.LowCritical,
 			LowWarning:   &thresholds.LowWarning,

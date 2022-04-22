@@ -1163,6 +1163,8 @@ func (r *Registry) scrapeFromLoop(ctx context.Context, t0 time.Time, reg *regist
 	if len(points) > 0 && r.option.PushPoint != nil {
 		r.option.PushPoint.PushPoints(ctx, points)
 	}
+
+	// TODO: Apply thresholds
 }
 
 func (r *Registry) scrape(ctx context.Context, state GatherState, reg *registration) ([]*dto.MetricFamily, time.Duration, error) {
@@ -1295,6 +1297,8 @@ func (r *Registry) pushPoint(ctx context.Context, points []types.MetricPoint, tt
 	r.countPushPoints--
 	r.condition.Broadcast()
 	r.l.Unlock()
+
+	// TODO: Apply thresholds
 }
 
 func (r *Registry) addMetaLabels(input map[string]string) map[string]string {

@@ -39,6 +39,7 @@ const (
 type State interface {
 	Get(key string, result interface{}) error
 	Set(key string, object interface{}) error
+	BleemeoCredentials() (string, string)
 }
 
 // Registry keep track of threshold states to update metrics if the exceed a threshold for a period
@@ -47,10 +48,10 @@ type Registry struct {
 	state State
 
 	l                 sync.Mutex
-	states            map[MetricNameItem]statusState
-	units             map[MetricNameItem]Unit
+	states            map[MetricKey]statusState
+	units             map[MetricKey]Unit
 	thresholdsAllItem map[string]Threshold
-	thresholds        map[MetricNameItem]Threshold
+	thresholds        map[MetricKey]Threshold
 	nowFunc           func() time.Time
 }
 
@@ -58,7 +59,7 @@ type Registry struct {
 func New(state State) *Registry {
 	self := &Registry{
 		state:   state,
-		states:  make(map[MetricNameItem]statusState),
+		states:  make(map[MetricKey]statusState),
 		nowFunc: time.Now,
 	}
 
@@ -67,7 +68,7 @@ func New(state State) *Registry {
 	err := state.Get(statusCacheKey, &jsonList)
 	if err == nil {
 		for _, v := range jsonList {
-			self.states[v.MetricNameItem] = v.statusState
+			self.states[v.MetricKey] = v.statusState
 		}
 	}
 
@@ -77,13 +78,13 @@ func New(state State) *Registry {
 // SetThresholds configure thresholds.
 // The thresholdWithItem is searched first and only match if both the metric name and item match
 // Then thresholdAllItem is searched and match is the metric name match regardless of the metric item.
-func (r *Registry) SetThresholds(thresholdWithItem map[MetricNameItem]Threshold, thresholdAllItem map[string]Threshold) {
+func (r *Registry) SetThresholds(thresholdWithItem map[MetricKey]Threshold, thresholdAllItem map[string]Threshold) {
 	r.l.Lock()
 	defer r.l.Unlock()
 
 	// When threshold is *updated*, we want to immediately apply the new threshold
 	changedName := make(map[string]bool)
-	changedItem := make(map[MetricNameItem]bool)
+	changedItem := make(map[MetricKey]bool)
 
 	for k, v := range thresholdAllItem {
 		old, ok := r.thresholdsAllItem[k]
@@ -115,7 +116,7 @@ func (r *Registry) SetThresholds(thresholdWithItem map[MetricNameItem]Threshold,
 }
 
 // SetUnits configure the units.
-func (r *Registry) SetUnits(units map[MetricNameItem]Unit) {
+func (r *Registry) SetUnits(units map[MetricKey]Unit) {
 	r.l.Lock()
 	defer r.l.Unlock()
 
@@ -124,10 +125,11 @@ func (r *Registry) SetUnits(units map[MetricNameItem]Unit) {
 	logger.V(2).Printf("Units contains %d definitions", len(units))
 }
 
-// MetricNameItem is the couple Name and Item.
-type MetricNameItem struct {
-	Name string
-	Item string
+// MetricKey uniquely identifies a metric.
+type MetricKey struct {
+	Name  string
+	Item  string
+	Agent string
 }
 
 type statusState struct {
@@ -138,7 +140,7 @@ type statusState struct {
 }
 
 type jsonState struct {
-	MetricNameItem
+	MetricKey
 	statusState
 }
 
@@ -375,14 +377,14 @@ func (r *Registry) GetThresholdMetricNames() []string {
 }
 
 // GetThreshold return the current threshold for given Metric.
-func (r *Registry) GetThreshold(key MetricNameItem) Threshold {
+func (r *Registry) GetThreshold(key MetricKey) Threshold {
 	r.l.Lock()
 	defer r.l.Unlock()
 
 	return r.getThreshold(key)
 }
 
-func (r *Registry) getThreshold(key MetricNameItem) Threshold {
+func (r *Registry) getThreshold(key MetricKey) Threshold {
 	if threshold, ok := r.thresholds[key]; ok {
 		return threshold
 	}
@@ -438,8 +440,8 @@ func (r *Registry) run(save bool) {
 			delete(r.states, k)
 		} else {
 			jsonList = append(jsonList, jsonState{
-				MetricNameItem: k,
-				statusState:    v,
+				MetricKey:   k,
+				statusState: v,
 			})
 		}
 	}
@@ -546,12 +548,20 @@ func (p pusher) PushPoints(ctx context.Context, points []types.MetricPoint) {
 	p.registry.l.Lock()
 
 	result := make([]types.MetricPoint, 0, len(points))
+	mainAgentID, _ := p.registry.state.BleemeoCredentials()
 
 	for _, point := range points {
 		if !point.Annotations.Status.CurrentStatus.IsSet() {
-			key := MetricNameItem{
-				Name: point.Labels[types.LabelName],
-				Item: point.Annotations.BleemeoItem,
+			// The BleemeoAgentID annotation is not filled for metrics on the main agent, so we add it here.
+			agentID := point.Annotations.BleemeoAgentID
+			if agentID == "" {
+				agentID = mainAgentID
+			}
+
+			key := MetricKey{
+				Name:  point.Labels[types.LabelName],
+				Item:  point.Annotations.BleemeoItem,
+				Agent: agentID,
 			}
 
 			threshold := p.registry.getThreshold(key)
@@ -569,7 +579,7 @@ func (p pusher) PushPoints(ctx context.Context, points []types.MetricPoint) {
 	p.pusher.PushPoints(ctx, result)
 }
 
-func (p *pusher) addPointWithThreshold(points []types.MetricPoint, point types.MetricPoint, threshold Threshold, key MetricNameItem) []types.MetricPoint {
+func (p *pusher) addPointWithThreshold(points []types.MetricPoint, point types.MetricPoint, threshold Threshold, key MetricKey) []types.MetricPoint {
 	softStatus, highThreshold := threshold.CurrentStatus(point.Value)
 	previousState := p.registry.states[key]
 

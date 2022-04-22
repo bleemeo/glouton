@@ -421,7 +421,7 @@ func (a *agent) Tags() []string {
 
 // UpdateThresholds update the thresholds definition.
 // This method will merge with threshold definition present in configuration file.
-func (a *agent) UpdateThresholds(ctx context.Context, thresholds map[threshold.MetricNameItem]threshold.Threshold, firstUpdate bool) {
+func (a *agent) UpdateThresholds(ctx context.Context, thresholds map[threshold.MetricKey]threshold.Threshold, firstUpdate bool) {
 	a.updateThresholds(ctx, thresholds, firstUpdate)
 }
 
@@ -563,15 +563,16 @@ func (a *agent) newMetricsCallback(newMetrics []types.LabelsAndAnnotation) {
 	}
 }
 
-func (a *agent) updateThresholds(ctx context.Context, thresholds map[threshold.MetricNameItem]threshold.Threshold, firstUpdate bool) {
+func (a *agent) updateThresholds(ctx context.Context, thresholds map[threshold.MetricKey]threshold.Threshold, firstUpdate bool) {
 	configThreshold := a.getConfigThreshold(firstUpdate)
 
 	oldThresholds := map[string]threshold.Threshold{}
 
 	for _, name := range []string{"system_pending_updates", "system_pending_security_updates", "time_drift"} {
-		key := threshold.MetricNameItem{
-			Name: name,
-			Item: "",
+		key := threshold.MetricKey{
+			Name:  name,
+			Item:  "",
+			Agent: a.BleemeoAgentID(),
 		}
 		oldThresholds[name] = a.threshold.GetThreshold(key)
 	}
@@ -590,9 +591,10 @@ func (a *agent) updateThresholds(ctx context.Context, thresholds map[threshold.M
 	}
 
 	for _, name := range []string{"system_pending_updates", "system_pending_security_updates"} {
-		key := threshold.MetricNameItem{
-			Name: name,
-			Item: "",
+		key := threshold.MetricKey{
+			Name:  name,
+			Item:  "",
+			Agent: a.BleemeoAgentID(),
 		}
 		newThreshold := a.threshold.GetThreshold(key)
 
@@ -601,9 +603,10 @@ func (a *agent) updateThresholds(ctx context.Context, thresholds map[threshold.M
 		}
 	}
 
-	key := threshold.MetricNameItem{
-		Name: "time_drift",
-		Item: "",
+	key := threshold.MetricKey{
+		Name:  "time_drift",
+		Item:  "",
+		Agent: a.BleemeoAgentID(),
 	}
 	newThreshold := a.threshold.GetThreshold(key)
 
