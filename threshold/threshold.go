@@ -633,7 +633,6 @@ func (r *Registry) addPointWithThreshold(
 		}
 	}
 
-	//
 	status := types.StatusDescription{
 		CurrentStatus:     newState.CurrentStatus,
 		StatusDescription: statusDescription,

@@ -912,7 +912,7 @@ func (r *Registry) GatherWithState(ctx context.Context, state GatherState) ([]*d
 			scrapedMFS, _, err := r.scrape(ctx, state, reg)
 
 			// Apply thresholds.
-			scrapedPoints := gloutonModel.FamiliesToMetricPoints(time.Time{}, mfs)
+			scrapedPoints := gloutonModel.FamiliesToMetricPoints(time.Time{}, scrapedMFS)
 
 			var statusPoints []types.MetricPoint
 
@@ -1179,7 +1179,9 @@ func (r *Registry) scrapeFromLoop(ctx context.Context, t0 time.Time, reg *regist
 
 	if len(points) > 0 && r.option.PushPoint != nil {
 		if r.option.ThresholdHandler != nil {
-			points, statusPoints := r.option.ThresholdHandler.ApplyThresholds(points)
+			var statusPoints []types.MetricPoint
+
+			points, statusPoints = r.option.ThresholdHandler.ApplyThresholds(points)
 			points = append(points, statusPoints...)
 		}
 
@@ -1222,7 +1224,9 @@ func (r *Registry) scrape(ctx context.Context, state GatherState, reg *registrat
 // As for AddMetricPointFunction, points should not be mutated after the call.
 func (r *Registry) pushPoint(ctx context.Context, points []types.MetricPoint, ttl time.Duration, format types.MetricFormat) {
 	if r.option.ThresholdHandler != nil {
-		points, statusPoints := r.option.ThresholdHandler.ApplyThresholds(points)
+		var statusPoints []types.MetricPoint
+
+		points, statusPoints = r.option.ThresholdHandler.ApplyThresholds(points)
 		points = append(points, statusPoints...)
 	}
 
