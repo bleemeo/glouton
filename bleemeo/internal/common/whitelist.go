@@ -32,7 +32,9 @@ func AllowMetric(labels map[string]string, annotations types.MetricAnnotations, 
 		return true
 	}
 
-	if annotations.ServiceName != "" && strings.HasSuffix(labels[types.LabelName], "_status") {
+	// Service status and alerting rules metrics are always allowed.
+	if annotations.ServiceName != "" && strings.HasSuffix(labels[types.LabelName], "_status") ||
+		annotations.AlertingRuleID != "" {
 		return true
 	}
 
