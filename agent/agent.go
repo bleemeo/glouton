@@ -421,7 +421,7 @@ func (a *agent) Tags() []string {
 
 // UpdateThresholds update the thresholds definition.
 // This method will merge with threshold definition present in configuration file.
-func (a *agent) UpdateThresholds(ctx context.Context, thresholds map[threshold.MetricKey]threshold.Threshold, firstUpdate bool) {
+func (a *agent) UpdateThresholds(ctx context.Context, thresholds map[string]threshold.Threshold, firstUpdate bool) {
 	a.updateThresholds(ctx, thresholds, firstUpdate)
 }
 
@@ -565,18 +565,17 @@ func (a *agent) newMetricsCallback(newMetrics []types.LabelsAndAnnotation) {
 	}
 }
 
-func (a *agent) updateThresholds(ctx context.Context, thresholds map[threshold.MetricKey]threshold.Threshold, firstUpdate bool) {
+func (a *agent) updateThresholds(ctx context.Context, thresholds map[string]threshold.Threshold, firstUpdate bool) {
 	configThreshold := a.getConfigThreshold(firstUpdate)
 
 	oldThresholds := map[string]threshold.Threshold{}
 
 	for _, name := range []string{"system_pending_updates", "system_pending_security_updates", "time_drift"} {
-		key := threshold.MetricKey{
-			Name:  name,
-			Item:  "",
-			Agent: a.BleemeoAgentID(),
+		lbls := map[string]string{
+			types.LabelName:         name,
+			types.LabelInstanceUUID: a.BleemeoAgentID(),
 		}
-		oldThresholds[name] = a.threshold.GetThreshold(key)
+		oldThresholds[name] = a.threshold.GetThreshold(types.LabelsToText(lbls))
 	}
 
 	a.threshold.SetThresholds(thresholds, configThreshold)
@@ -592,28 +591,20 @@ func (a *agent) updateThresholds(ctx context.Context, thresholds map[threshold.M
 		}
 	}
 
-	for _, name := range []string{"system_pending_updates", "system_pending_security_updates"} {
-		key := threshold.MetricKey{
-			Name:  name,
-			Item:  "",
-			Agent: a.BleemeoAgentID(),
+	for _, name := range []string{"system_pending_updates", "system_pending_security_updates", "time_drift"} {
+		lbls := map[string]string{
+			types.LabelName:         name,
+			types.LabelInstanceUUID: a.BleemeoAgentID(),
 		}
-		newThreshold := a.threshold.GetThreshold(key)
+		newThreshold := a.threshold.GetThreshold(types.LabelsToText(lbls))
 
-		if !firstUpdate && !oldThresholds[key.Name].Equal(newThreshold) {
-			a.FireTrigger(false, false, true, false)
+		if !firstUpdate && !oldThresholds[name].Equal(newThreshold) {
+			if name == "time_drift" && a.bleemeoConnector != nil {
+				a.bleemeoConnector.UpdateInfo()
+			} else {
+				a.FireTrigger(false, false, true, false)
+			}
 		}
-	}
-
-	key := threshold.MetricKey{
-		Name:  "time_drift",
-		Item:  "",
-		Agent: a.BleemeoAgentID(),
-	}
-	newThreshold := a.threshold.GetThreshold(key)
-
-	if !firstUpdate && !oldThresholds[key.Name].Equal(newThreshold) && a.bleemeoConnector != nil {
-		a.bleemeoConnector.UpdateInfo()
 	}
 }
 
@@ -796,9 +787,9 @@ func (a *agent) run(ctx context.Context) { //nolint:maintidx
 
 		clusterName := a.oldConfig.String("kubernetes.clustername")
 
-		err = a.state.Get("kubernestes_cluster_name", &clusterNameState)
+		err = a.state.Get("kubernetes_cluster_name", &clusterNameState)
 		if err != nil {
-			logger.V(2).Printf("failed to get kubernestes_cluster_name: %v", err)
+			logger.V(2).Printf("failed to get kubernetes_cluster_name: %v", err)
 		}
 
 		if clusterName == "" && clusterNameState != "" {
@@ -807,9 +798,9 @@ func (a *agent) run(ctx context.Context) { //nolint:maintidx
 		}
 
 		if clusterName != "" && clusterNameState != clusterName {
-			err = a.state.Set("kubernestes_cluster_name", clusterNameState)
+			err = a.state.Set("kubernetes_cluster_name", clusterNameState)
 			if err != nil {
-				logger.V(2).Printf("failed to set kubernestes_cluster_name: %v", err)
+				logger.V(2).Printf("failed to set kubernetes_cluster_name: %v", err)
 			}
 		}
 

@@ -22,7 +22,6 @@ import (
 	"context"
 	"glouton/facts"
 	"glouton/logger"
-	"glouton/threshold"
 	"glouton/types"
 	"math"
 	"sort"
@@ -151,7 +150,6 @@ func (r *queryResolver) Points(ctx context.Context, metricsFilter []*MetricInput
 		metricRes := &Metric{}
 
 		labels := metric.Labels()
-		annotations := metric.Annotations()
 
 		for key, value := range labels {
 			label := &Label{Key: key, Value: value}
@@ -170,29 +168,26 @@ func (r *queryResolver) Points(ctx context.Context, metricsFilter []*MetricInput
 			metricRes.Points = append(metricRes.Points, pointRes)
 		}
 
-		key := threshold.MetricKey{
-			Item:  annotations.BleemeoItem,
-			Name:  labels[types.LabelName],
-			Agent: annotations.BleemeoAgentID,
-		}
-		thresholds := r.api.Threshold.GetThreshold(key)
-		threshold := &Threshold{
-			LowCritical:  &thresholds.LowCritical,
-			LowWarning:   &thresholds.LowWarning,
-			HighWarning:  &thresholds.HighWarning,
-			HighCritical: &thresholds.HighCritical,
+		// TODO: Need testing, do the labels contain an agent uuid here?
+		labelsText := types.LabelsToText(metric.Labels())
+		threshold := r.api.Threshold.GetThreshold(labelsText)
+		apiThreshold := &Threshold{
+			LowCritical:  &threshold.LowCritical,
+			LowWarning:   &threshold.LowWarning,
+			HighWarning:  &threshold.HighWarning,
+			HighCritical: &threshold.HighCritical,
 		}
 
-		threshold.converNan2Nil()
+		apiThreshold.convertNan2Nil()
 
-		metricRes.Thresholds = threshold
+		metricRes.Thresholds = apiThreshold
 		metricsRes = append(metricsRes, metricRes)
 	}
 
 	return metricsRes, nil
 }
 
-func (threshold *Threshold) converNan2Nil() {
+func (threshold *Threshold) convertNan2Nil() {
 	if math.IsNaN(*threshold.LowCritical) {
 		threshold.LowCritical = nil
 	}

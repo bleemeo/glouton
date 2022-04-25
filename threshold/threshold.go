@@ -47,11 +47,15 @@ type State interface {
 type Registry struct {
 	state State
 
-	l                 sync.Mutex
-	states            map[MetricKey]statusState
-	units             map[MetricKey]Unit
+	l sync.Mutex
+	// Threshold states by labels text.
+	states map[string]statusState
+	// Units by labels text.
+	units map[string]Unit
+	// Thresholds by labels text.
+	thresholds map[string]Threshold
+	// Thresholds that apply to multiple metrics, by metric name.
 	thresholdsAllItem map[string]Threshold
-	thresholds        map[MetricKey]Threshold
 	nowFunc           func() time.Time
 }
 
@@ -59,7 +63,7 @@ type Registry struct {
 func New(state State) *Registry {
 	self := &Registry{
 		state:   state,
-		states:  make(map[MetricKey]statusState),
+		states:  make(map[string]statusState),
 		nowFunc: time.Now,
 	}
 
@@ -68,7 +72,7 @@ func New(state State) *Registry {
 	err := state.Get(statusCacheKey, &jsonList)
 	if err == nil {
 		for _, v := range jsonList {
-			self.states[v.MetricKey] = v.statusState
+			self.states[v.LabelsText] = v.statusState
 		}
 	}
 
@@ -78,37 +82,39 @@ func New(state State) *Registry {
 // SetThresholds configure thresholds.
 // The thresholdWithItem is searched first and only match if both the metric name and item match
 // Then thresholdAllItem is searched and match is the metric name match regardless of the metric item.
-func (r *Registry) SetThresholds(thresholdWithItem map[MetricKey]Threshold, thresholdAllItem map[string]Threshold) {
+func (r *Registry) SetThresholds(thresholdWithItem map[string]Threshold, thresholdAllItem map[string]Threshold) {
 	r.l.Lock()
 	defer r.l.Unlock()
 
 	// When threshold is *updated*, we want to immediately apply the new threshold
 	changedName := make(map[string]bool)
-	changedItem := make(map[MetricKey]bool)
+	changedItem := make(map[string]bool)
 
-	for k, v := range thresholdAllItem {
-		old, ok := r.thresholdsAllItem[k]
-		if ok && !v.Equal(old) {
-			changedName[k] = true
+	for metricName, threshold := range thresholdAllItem {
+		old, ok := r.thresholdsAllItem[metricName]
+		if ok && !threshold.Equal(old) {
+			changedName[metricName] = true
 		}
 	}
 
-	for k, v := range thresholdWithItem {
-		old, ok := r.thresholds[k]
-		if ok && !v.Equal(old) {
-			changedItem[k] = true
+	for labelsText, threshold := range thresholdWithItem {
+		old, ok := r.thresholds[labelsText]
+		if ok && !threshold.Equal(old) {
+			changedItem[labelsText] = true
 		}
 	}
 
 	r.thresholdsAllItem = thresholdAllItem
 	r.thresholds = thresholdWithItem
 
-	for k, state := range r.states {
-		if changedItem[k] || changedName[k.Name] {
+	for labelsText, state := range r.states {
+		lbls := types.TextToLabels(labelsText)
+
+		if changedItem[labelsText] || changedName[lbls[types.LabelName]] {
 			state.CurrentStatus = types.StatusUnset
 			state.CriticalSince = time.Time{}
 			state.WarningSince = time.Time{}
-			r.states[k] = state
+			r.states[labelsText] = state
 		}
 	}
 
@@ -116,20 +122,13 @@ func (r *Registry) SetThresholds(thresholdWithItem map[MetricKey]Threshold, thre
 }
 
 // SetUnits configure the units.
-func (r *Registry) SetUnits(units map[MetricKey]Unit) {
+func (r *Registry) SetUnits(units map[string]Unit) {
 	r.l.Lock()
 	defer r.l.Unlock()
 
 	r.units = units
 
 	logger.V(2).Printf("Units contains %d definitions", len(units))
-}
-
-// MetricKey uniquely identifies a metric.
-type MetricKey struct {
-	Name  string
-	Item  string
-	Agent string
 }
 
 type statusState struct {
@@ -140,7 +139,7 @@ type statusState struct {
 }
 
 type jsonState struct {
-	MetricKey
+	LabelsText string
 	statusState
 }
 
@@ -381,30 +380,34 @@ func (r *Registry) GetThresholdMetricNames() []string {
 	r.l.Lock()
 	defer r.l.Unlock()
 
-	for key, val := range r.thresholds {
-		if !val.IsZero() {
-			res = append(res, key.Name)
+	for labelsText, threshold := range r.thresholds {
+		if !threshold.IsZero() {
+			lbls := types.TextToLabels(labelsText)
+
+			res = append(res, lbls[types.LabelName])
 		}
 	}
 
 	return res
 }
 
-// GetThreshold return the current threshold for given Metric.
-func (r *Registry) GetThreshold(key MetricKey) Threshold {
+// GetThreshold returns the current threshold for a Metric by labels text.
+func (r *Registry) GetThreshold(labelsText string) Threshold {
 	r.l.Lock()
 	defer r.l.Unlock()
 
-	return r.getThreshold(key)
+	return r.getThreshold(labelsText)
 }
 
-func (r *Registry) getThreshold(key MetricKey) Threshold {
-	if threshold, ok := r.thresholds[key]; ok {
+func (r *Registry) getThreshold(labelsText string) Threshold {
+	if threshold, ok := r.thresholds[labelsText]; ok {
 		return threshold
 	}
 
-	v := r.thresholdsAllItem[key.Name]
-	if v.IsZero() {
+	metricName := types.TextToLabels(labelsText)[types.LabelName]
+	threshold := r.thresholdsAllItem[metricName]
+
+	if threshold.IsZero() {
 		return Threshold{
 			LowCritical:  math.NaN(),
 			LowWarning:   math.NaN(),
@@ -413,7 +416,7 @@ func (r *Registry) getThreshold(key MetricKey) Threshold {
 		}
 	}
 
-	return v
+	return threshold
 }
 
 // Run will periodically save status state and clean it.
@@ -454,7 +457,7 @@ func (r *Registry) run(save bool) {
 			delete(r.states, k)
 		} else {
 			jsonList = append(jsonList, jsonState{
-				MetricKey:   k,
+				LabelsText:  k,
 				statusState: v,
 			})
 		}
@@ -562,15 +565,12 @@ func (r *Registry) ApplyThresholds(points []types.MetricPoint) ([]types.MetricPo
 				agentID = mainAgentID
 			}
 
-			key := MetricKey{
-				Name:  point.Labels[types.LabelName],
-				Item:  point.Annotations.BleemeoItem,
-				Agent: agentID,
-			}
+			// TODO: Add the agent in the labels if there is none?
+			labelsText := types.LabelsToText(point.Labels)
+			threshold := r.getThreshold(labelsText)
 
-			threshold := r.getThreshold(key)
 			if !threshold.IsZero() {
-				newPoints, statusPoints = r.addPointWithThreshold(newPoints, statusPoints, point, threshold, key)
+				newPoints, statusPoints = r.addPointWithThreshold(newPoints, statusPoints, point, threshold, labelsText)
 
 				continue
 			}
@@ -586,15 +586,15 @@ func (r *Registry) addPointWithThreshold(
 	points, statusPoints []types.MetricPoint,
 	point types.MetricPoint,
 	threshold Threshold,
-	key MetricKey,
+	labelsText string,
 ) ([]types.MetricPoint, []types.MetricPoint) {
 	softStatus, highThreshold := threshold.CurrentStatus(point.Value)
-	previousState := r.states[key]
+	previousState := r.states[labelsText]
 
 	newState := previousState.Update(softStatus, threshold.WarningDelay, threshold.CriticalDelay, r.nowFunc())
-	r.states[key] = newState
+	r.states[labelsText] = newState
 
-	unit := r.units[key]
+	unit := r.units[labelsText]
 	// Consumer expect status description from threshold to start with "Current value:"
 	statusDescription := fmt.Sprintf("Current value: %s", FormatValue(point.Value, unit))
 

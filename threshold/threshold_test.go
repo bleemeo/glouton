@@ -434,7 +434,7 @@ func TestThreshold(t *testing.T) { //nolint: maintidx
 	stepDelay := 10 * time.Second
 
 	type setThresholdsArgs struct {
-		thresholdWithItem map[MetricKey]Threshold
+		thresholdWithItem map[string]Threshold
 		thresholdAllItem  map[string]Threshold
 	}
 
@@ -448,8 +448,8 @@ func TestThreshold(t *testing.T) { //nolint: maintidx
 		{
 			AddedToT0: 0 * stepDelay,
 			SetThresholds: &setThresholdsArgs{
-				thresholdWithItem: map[MetricKey]Threshold{
-					{Name: "disk_used_perc", Item: "/home"}: {
+				thresholdWithItem: map[string]Threshold{
+					`__name__="disk_used_perc",item="/home"`: {
 						HighWarning:   80,
 						HighCritical:  math.NaN(),
 						LowCritical:   math.NaN(),
@@ -617,8 +617,8 @@ func TestThreshold(t *testing.T) { //nolint: maintidx
 		{
 			AddedToT0: 41 * stepDelay,
 			SetThresholds: &setThresholdsArgs{
-				thresholdWithItem: map[MetricKey]Threshold{
-					{Name: "disk_used_perc", Item: "/home"}: {
+				thresholdWithItem: map[string]Threshold{
+					`__name__="disk_used_perc",item="/home"`: {
 						HighWarning:   80,
 						HighCritical:  90,
 						LowCritical:   math.NaN(),
@@ -664,8 +664,8 @@ func TestThreshold(t *testing.T) { //nolint: maintidx
 		{
 			AddedToT0: 42 * stepDelay,
 			SetThresholds: &setThresholdsArgs{
-				thresholdWithItem: map[MetricKey]Threshold{
-					{Name: "disk_used_perc", Item: "/home"}: {
+				thresholdWithItem: map[string]Threshold{
+					`__name__="disk_used_perc",item="/home"`: {
 						HighWarning:   80,
 						HighCritical:  97,
 						LowCritical:   math.NaN(),
@@ -762,7 +762,7 @@ func TestThreshold(t *testing.T) { //nolint: maintidx
 }
 
 // TestThresholdRestart test behavior of threshold after a Glouton restart.
-func TestThresholdRestart(t *testing.T) { //nolint:maintidx
+func TestThresholdRestart(t *testing.T) {
 	t0 := time.Date(2020, 2, 24, 15, 1, 0, 0, time.UTC)
 
 	threshold := New(mockState{
@@ -774,10 +774,7 @@ func TestThresholdRestart(t *testing.T) { //nolint:maintidx
 					WarningSince:  t0.Add(-40 * time.Second),
 					LastUpdate:    t0.Add(-30 * time.Second),
 				},
-				MetricKey: MetricKey{
-					Name: "cpu_used",
-					Item: "",
-				},
+				LabelsText: `__name__="cpu_used"`,
 			},
 			{
 				statusState: statusState{
@@ -786,10 +783,7 @@ func TestThresholdRestart(t *testing.T) { //nolint:maintidx
 					WarningSince:  t0.Add(-90 * time.Second),
 					LastUpdate:    t0.Add(-80 * time.Second),
 				},
-				MetricKey: MetricKey{
-					Name: "disk_used_perc",
-					Item: "/home",
-				},
+				LabelsText: `__name__="disk_used_perc",item="/home"`,
 			},
 			{
 				statusState: statusState{
@@ -798,10 +792,7 @@ func TestThresholdRestart(t *testing.T) { //nolint:maintidx
 					WarningSince:  t0.Add(-70 * time.Second),
 					LastUpdate:    t0.Add(-30 * time.Second),
 				},
-				MetricKey: MetricKey{
-					Name: "mem_used",
-					Item: "",
-				},
+				LabelsText: `__name__="mem_used"`,
 			},
 		},
 	})
@@ -809,7 +800,7 @@ func TestThresholdRestart(t *testing.T) { //nolint:maintidx
 	stepDelay := 10 * time.Second
 
 	type setThresholdsArgs struct {
-		thresholdWithItem map[MetricKey]Threshold
+		thresholdWithItem map[string]Threshold
 		thresholdAllItem  map[string]Threshold
 	}
 
@@ -823,8 +814,8 @@ func TestThresholdRestart(t *testing.T) { //nolint:maintidx
 		{
 			AddedToT0: 0 * stepDelay,
 			SetThresholds: &setThresholdsArgs{
-				thresholdWithItem: map[MetricKey]Threshold{
-					{Name: "disk_used_perc", Item: "/home"}: {
+				thresholdWithItem: map[string]Threshold{
+					`__name__="disk_used_perc",item="/home"`: {
 						HighWarning:   80,
 						HighCritical:  90,
 						LowCritical:   math.NaN(),
@@ -858,8 +849,8 @@ func TestThresholdRestart(t *testing.T) { //nolint:maintidx
 		{
 			AddedToT0: 1 * stepDelay,
 			SetThresholds: &setThresholdsArgs{
-				thresholdWithItem: map[MetricKey]Threshold{
-					{Name: "disk_used_perc", Item: "/home"}: {
+				thresholdWithItem: map[string]Threshold{
+					`__name__="disk_used_perc",item="/home"`: {
 						HighWarning:   80,
 						HighCritical:  90,
 						LowCritical:   math.NaN(),
@@ -867,7 +858,7 @@ func TestThresholdRestart(t *testing.T) { //nolint:maintidx
 						WarningDelay:  60 * time.Second,
 						CriticalDelay: 60 * time.Second,
 					},
-					{Name: "mem_used", Item: ""}: {
+					`__name__="mem_used"`: {
 						HighWarning:   80,
 						HighCritical:  90,
 						LowCritical:   math.NaN(),

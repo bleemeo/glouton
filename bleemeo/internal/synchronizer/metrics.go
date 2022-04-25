@@ -641,49 +641,45 @@ func (s *Synchronizer) metricUpdatePendingOrSync(fullSync bool, pendingMetricsUp
 
 // UpdateUnitsAndThresholds update metrics units & threshold (from cache).
 func (s *Synchronizer) UpdateUnitsAndThresholds(ctx context.Context, firstUpdate bool) {
-	thresholds := make(map[threshold.MetricKey]threshold.Threshold)
-	units := make(map[threshold.MetricKey]threshold.Unit)
+	thresholds := make(map[string]threshold.Threshold)
+	units := make(map[string]threshold.Unit)
 	defaultSoftPeriod := time.Duration(s.option.Config.Int("metric.softstatus_period_default")) * time.Second
 	softPeriods := s.option.Config.DurationMap("metric.softstatus_period")
 
+	s.l.Lock()
+	thresholdOverrides := s.thresholdOverrides
+	s.l.Unlock()
+
 	for _, m := range s.option.Cache.Metrics() {
-		key := threshold.MetricKey{
-			Name:  m.Labels[types.LabelName],
-			Item:  m.Labels[types.LabelItem],
-			Agent: m.AgentID,
+		units[m.LabelsText] = m.Unit
+
+		metricName := m.Labels[types.LabelName]
+
+		// Apply the threshold overrides.
+		overrideKey := thresholdOverrideKey{
+			MetricName: metricName,
+			AgentID:    m.AgentID,
 		}
 
-		units[key] = m.Unit
+		if override, ok := thresholdOverrides[overrideKey]; ok {
+			logger.V(1).Printf("Overriding threshold for metric %s on agent %s", metricName, m.AgentID)
+
+			thresholds[m.LabelsText] = override
+
+			continue
+		}
 
 		thresh := m.Threshold.ToInternalThreshold()
 		// Apply delays from config or default delay.
 		thresh.WarningDelay = defaultSoftPeriod
 		thresh.CriticalDelay = defaultSoftPeriod
 
-		if softPeriod, ok := softPeriods[key.Name]; ok {
+		if softPeriod, ok := softPeriods[metricName]; ok {
 			thresh.WarningDelay = softPeriod
 			thresh.CriticalDelay = softPeriod
 		}
 
-		thresholds[key] = thresh
-	}
-
-	// Apply the threshold overrides.
-	s.l.Lock()
-	thresholdOverrides := s.thresholdOverrides
-	s.l.Unlock()
-
-	for key := range thresholds {
-		overrideKey := thresholdOverrideKey{
-			MetricName: key.Name,
-			AgentID:    key.Agent,
-		}
-
-		if override, ok := thresholdOverrides[overrideKey]; ok {
-			logger.V(1).Printf("Overriding threshold for metric %s on agent %s", key.Name, s.agentID)
-
-			thresholds[key] = override
-		}
+		thresholds[m.LabelsText] = thresh
 	}
 
 	if s.option.UpdateThresholds != nil {
