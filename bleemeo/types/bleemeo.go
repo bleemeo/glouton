@@ -104,7 +104,7 @@ type AccountConfig struct {
 	LiveProcessResolution   int    `json:"live_process_resolution"`
 	LiveProcess             bool   `json:"live_process"`
 	DockerIntegration       bool   `json:"docker_integration"`
-	SNMPIntergration        bool   `json:"snmp_integration"`
+	SNMPIntegration         bool   `json:"snmp_integration"`
 }
 
 // AgentConfig is a configuration for one kind of agent.
@@ -180,10 +180,9 @@ type Metric struct {
 	StatusOf    string            `json:"status_of,omitempty"`
 	Threshold
 	threshold.Unit
-	DeactivatedAt     time.Time `json:"deactivated_at,omitempty"`
-	PromQLQuery       string    `json:"promql_query"`
-	IsUserPromQLAlert bool      `json:"is_user_promql_alert"`
-	FirstSeenAt       time.Time `json:"first_seen_at"`
+	DeactivatedAt  time.Time `json:"deactivated_at,omitempty"`
+	FirstSeenAt    time.Time `json:"first_seen_at"`
+	AlertingRuleID string    `json:"alerting_rule,omitempty"`
 }
 
 // FailureKind is the kind of failure to register a metric. Used to know if
@@ -248,7 +247,7 @@ func (c *Container) FillInspectHash() {
 	c.InspectHash = fmt.Sprintf("%x", bin)
 }
 
-// ToInternalThreshold convert to a threshold.Threshold (use NaN instead of null pointer for unset threshold).
+// ToInternalThreshold convert to a threshold.Threshold (use NaN instead of null pointer for unset thresholds).
 func (t Threshold) ToInternalThreshold() (result threshold.Threshold) {
 	if t.LowWarning != nil {
 		result.LowWarning = *t.LowWarning
@@ -315,4 +314,17 @@ func (i GlobalInfo) IsTimeDriftTooLarge() bool {
 	}
 
 	return math.Abs(i.TimeDrift().Seconds()) >= i.MaxTimeDrift
+}
+
+// AlertingRule object on the Bleemeo API.
+type AlertingRule struct {
+	ID                  string   `json:"id"`
+	Account             string   `json:"account"`
+	Name                string   `json:"name"`
+	WarningQuery        string   `json:"warning_query"`
+	WarningDelaySecond  int      `json:"warning_delay_second"`
+	CriticalQuery       string   `json:"critical_query"`
+	CriticalDelaySecond int      `json:"critical_delay_second"`
+	Active              bool     `json:"active"`
+	Agents              []string `json:"agents"`
 }

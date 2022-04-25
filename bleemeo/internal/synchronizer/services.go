@@ -123,10 +123,10 @@ func getListenAddress(addresses []facts.ListenAddress) string {
 	return strings.Join(stringList, ",")
 }
 
-func (s *Synchronizer) syncServices(ctx context.Context, fullSync bool, onlyEssential bool) error {
+func (s *Synchronizer) syncServices(ctx context.Context, fullSync bool, onlyEssential bool) (updateThresholds bool, err error) {
 	localServices, err := s.option.Discovery.Discovery(ctx, 24*time.Hour)
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	if s.successiveErrors == 3 {
@@ -139,31 +139,29 @@ func (s *Synchronizer) syncServices(ctx context.Context, fullSync bool, onlyEsse
 	if fullSync {
 		err := s.serviceUpdateList()
 		if err != nil {
-			return err
+			return false, err
 		}
 	}
 
-	if err := s.serviceDeleteFromRemote(localServices, previousServices); err != nil {
-		return err
-	}
+	s.serviceDeleteFromRemote(localServices, previousServices)
 
 	if onlyEssential {
 		// no essential services, skip registering.
-		return nil
+		return false, nil
 	}
 
 	localServices, err = s.option.Discovery.Discovery(ctx, 24*time.Hour)
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	if err := s.serviceRegisterAndUpdate(localServices); err != nil {
-		return err
+		return false, err
 	}
 
-	err = s.serviceDeleteFromLocal(localServices)
+	s.serviceDeleteFromLocal(localServices)
 
-	return err
+	return false, nil
 }
 
 func (s *Synchronizer) serviceUpdateList() error {
@@ -194,7 +192,7 @@ func (s *Synchronizer) serviceUpdateList() error {
 	return nil
 }
 
-func (s *Synchronizer) serviceDeleteFromRemote(localServices []discovery.Service, previousServices map[string]types.Service) error {
+func (s *Synchronizer) serviceDeleteFromRemote(localServices []discovery.Service, previousServices map[string]types.Service) {
 	newServices := s.option.Cache.ServicesByUUID()
 
 	deletedServiceNameInstance := make(map[serviceNameInstance]bool)
@@ -219,8 +217,6 @@ func (s *Synchronizer) serviceDeleteFromRemote(localServices []discovery.Service
 	}
 
 	s.option.Discovery.RemoveIfNonRunning(s.ctx, localServiceToDelete)
-
-	return nil
 }
 
 func (s *Synchronizer) serviceRegisterAndUpdate(localServices []discovery.Service) error {
@@ -332,7 +328,7 @@ func checkRemoteName(remoteFound bool, remoteSrv types.Service, srv discovery.Se
 	return false
 }
 
-func (s *Synchronizer) serviceDeleteFromLocal(localServices []discovery.Service) error {
+func (s *Synchronizer) serviceDeleteFromLocal(localServices []discovery.Service) {
 	duplicatedKey := make(map[serviceNameInstance]bool)
 	longToShortLookup := longToShortKey(localServices)
 	shortToLongLookup := make(map[serviceNameInstance]serviceNameInstance, len(longToShortLookup))
@@ -369,6 +365,4 @@ func (s *Synchronizer) serviceDeleteFromLocal(localServices []discovery.Service)
 	}
 
 	s.option.Cache.SetServices(services)
-
-	return nil
 }

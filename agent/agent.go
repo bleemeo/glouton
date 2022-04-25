@@ -483,7 +483,6 @@ func (a *agent) updateMetricResolution(ctx context.Context, defaultResolution ti
 	a.l.Unlock()
 
 	a.gathererRegistry.UpdateDelay(ctx, defaultResolution)
-	a.rulesManager.UpdateMetricResolution(defaultResolution)
 
 	services, err := a.discovery.Discovery(ctx, time.Hour)
 	if err != nil {
@@ -513,6 +512,8 @@ func (a *agent) getConfigThreshold(firstUpdate bool) map[string]threshold.Thresh
 	}
 
 	configThreshold := make(map[string]threshold.Threshold, len(rawThreshold))
+	defaultSoftPeriod := time.Duration(a.oldConfig.Int("metric.softstatus_period_default")) * time.Second
+	softPeriods := a.oldConfig.DurationMap("metric.softstatus_period")
 
 	for k, v := range rawThreshold {
 		v2, ok := v.(map[string]interface{})
@@ -524,7 +525,7 @@ func (a *agent) getConfigThreshold(firstUpdate bool) map[string]threshold.Thresh
 			continue
 		}
 
-		t, err := threshold.FromInterfaceMap(v2)
+		t, err := threshold.FromInterfaceMap(v2, k, softPeriods, defaultSoftPeriod)
 		if err != nil {
 			if firstUpdate {
 				logger.V(1).Printf("Threshold in configuration file is not well-formated: %v", err)
@@ -562,8 +563,6 @@ func (a *agent) newMetricsCallback(newMetrics []types.LabelsAndAnnotation) {
 			logger.V(1).Printf("The metric %s is not available in current Bleemeo Plan", name)
 		}
 	}
-
-	a.rulesManager.ResetInactiveRules()
 }
 
 func (a *agent) updateThresholds(ctx context.Context, thresholds map[threshold.MetricNameItem]threshold.Threshold, firstUpdate bool) {
@@ -586,7 +585,7 @@ func (a *agent) updateThresholds(ctx context.Context, thresholds map[threshold.M
 	if err != nil {
 		logger.V(2).Printf("An error occurred while running discoveries for updateThresholds: %v", err)
 	} else {
-		err = a.metricFilter.RebuildDynamicLists(a.dynamicScrapper, services, a.threshold.GetThresholdMetricNames(), a.rulesManager.MetricList())
+		err = a.metricFilter.RebuildDynamicLists(a.dynamicScrapper, services, a.threshold.GetThresholdMetricNames(), a.rulesManager.MetricNames())
 		if err != nil {
 			logger.V(2).Printf("An error occurred while rebuilding dynamic list for updateThresholds: %v", err)
 		}
@@ -738,7 +737,7 @@ func (a *agent) run(ctx context.Context) { //nolint:maintidx
 		return
 	}
 
-	a.rulesManager = rules.NewManager(ctx, a.store, a.metricResolution)
+	a.rulesManager = rules.NewManager(ctx, a.store)
 
 	a.store.SetNewMetricCallback(a.newMetricsCallback)
 
@@ -1058,7 +1057,7 @@ func (a *agent) run(ctx context.Context) { //nolint:maintidx
 			NotifyFirstRegistration: a.notifyBleemeoFirstRegistration,
 			NotifyLabelsUpdate:      a.notifyBleemeoUpdateLabels,
 			BlackboxScraperName:     scaperName,
-			RebuildAlertingRules:    a.rulesManager.RebuildAlertingRules,
+			RebuildPromQLRules:      a.rulesManager.RebuildPromQLRules,
 			ReloadState:             a.reloadState.Bleemeo(),
 			IsContainerEnabled:      a.containerFilter.ContainerEnabled,
 		})
@@ -1129,13 +1128,6 @@ func (a *agent) run(ctx context.Context) { //nolint:maintidx
 	} else {
 		a.bleemeoConnector.ApplyCachedConfiguration(ctx)
 	}
-
-	tmp, _ := a.oldConfig.Get("metric.softstatus_period")
-
-	a.threshold.SetSoftPeriod(
-		time.Duration(a.oldConfig.Int("metric.softstatus_period_default"))*time.Second,
-		softPeriodsFromInterface(tmp),
-	)
 
 	if !reflect.DeepEqual(a.oldConfig.StringList("disk_monitor"), defaultConfig()["disk_monitor"]) {
 		if a.metricFormat == types.MetricFormatBleemeo && len(a.oldConfig.StringList("disk_ignore")) > 0 {
@@ -1857,7 +1849,7 @@ func (a *agent) handleTrigger(ctx context.Context) {
 				}
 			}
 
-			err := a.metricFilter.RebuildDynamicLists(a.dynamicScrapper, services, a.threshold.GetThresholdMetricNames(), a.rulesManager.MetricList())
+			err := a.metricFilter.RebuildDynamicLists(a.dynamicScrapper, services, a.threshold.GetThresholdMetricNames(), a.rulesManager.MetricNames())
 			if err != nil {
 				logger.V(2).Printf("Error during dynamic Filter rebuild: %v", err)
 			}

@@ -22,13 +22,10 @@ import (
 	"errors"
 	"fmt"
 	"glouton/bleemeo/client"
-	"glouton/bleemeo/internal/cache"
 	"glouton/bleemeo/internal/common"
 	"glouton/bleemeo/internal/filter"
 	bleemeoTypes "glouton/bleemeo/types"
 	"glouton/logger"
-	"glouton/prometheus/model"
-	"glouton/prometheus/rules"
 	"glouton/threshold"
 	"glouton/types"
 	"math/rand"
@@ -37,8 +34,6 @@ import (
 	"sort"
 	"strings"
 	"time"
-
-	"github.com/prometheus/prometheus/model/labels"
 )
 
 // agentStatusName is the name of the special metrics used to store the agent connection status.
@@ -55,6 +50,12 @@ const (
 // a metric between firstSeen and now. 6 Minutes is the minimum time,
 // as the prometheus alert time is 5 minutes.
 const gracePeriod = 6 * time.Minute
+
+// metricFields is the fields used on the API for a metric, we always use all fields to
+// make sure no Metric object is returned with some empty fields which could create bugs.
+const metricFields = "id,label,item,labels_text,unit,unit_text,service,container,deactivated_at," +
+	"threshold_low_warning,threshold_low_critical,threshold_high_warning,threshold_high_critical," +
+	"status_of,agent,promql_query,is_user_promql_alert,alerting_rule"
 
 var (
 	errRetryLater     = errors.New("metric registration should be retried later")
@@ -402,49 +403,6 @@ func httpResponseToMetricFailureKind(content string) bleemeoTypes.FailureKind {
 	}
 }
 
-func metricToMetricAlertRule(cache *cache.Cache) []rules.MetricAlertRule {
-	metrics := cache.Metrics()
-	agents := cache.AgentsByUUID()
-	configs := cache.AccountConfigsByUUID()
-	mainAgent := cache.Agent()
-
-	result := make([]rules.MetricAlertRule, 0)
-
-	for _, metric := range metrics {
-		if metric.PromQLQuery == "" || metric.AgentID == "" {
-			continue
-		}
-
-		threshold := metric.Threshold.ToInternalThreshold()
-		if threshold.IsZero() {
-			continue
-		}
-
-		agent := agents[metric.AgentID]
-		cfg := configs[agent.CurrentConfigID]
-		resolution := cfg.AgentConfigByID[agent.AgentType].MetricResolution
-
-		lbls := labels.FromMap(metric.Labels)
-
-		if metric.AgentID != mainAgent.ID {
-			lbls = model.AnnotationToMetaLabels(lbls, types.MetricAnnotations{
-				BleemeoAgentID: metric.AgentID,
-			})
-		}
-
-		result = append(result, rules.MetricAlertRule{
-			Labels:            lbls,
-			PromQLQuery:       metric.PromQLQuery,
-			Threshold:         threshold,
-			InstanceUUID:      metric.AgentID,
-			IsUserPromQLAlert: metric.IsUserPromQLAlert,
-			Resolution:        resolution,
-		})
-	}
-
-	return result
-}
-
 func (s *Synchronizer) metricKey(lbls map[string]string, annotations types.MetricAnnotations) string {
 	if lbls[types.LabelInstanceUUID] == "" {
 		// In name+item mode, we treat empty instance_uuid and instance_uuid=agentID as the same.
@@ -553,10 +511,10 @@ func (s *Synchronizer) findUnregisteredMetrics(metrics []types.Metric) []types.M
 	return result
 }
 
-func (s *Synchronizer) syncMetrics(ctx context.Context, fullSync bool, onlyEssential bool) error {
+func (s *Synchronizer) syncMetrics(ctx context.Context, fullSync bool, onlyEssential bool) (updateThresholds bool, err error) {
 	localMetrics, err := s.option.Store.Metrics(nil)
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	filteredMetrics := s.filterMetrics(localMetrics)
@@ -599,7 +557,7 @@ func (s *Synchronizer) syncMetrics(ctx context.Context, fullSync bool, onlyEssen
 	err = s.metricUpdatePendingOrSync(fullSync, &pendingMetricsUpdate)
 
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	unregisteredMetrics = s.findUnregisteredMetrics(filteredMetrics)
@@ -609,20 +567,16 @@ func (s *Synchronizer) syncMetrics(ctx context.Context, fullSync bool, onlyEssen
 
 	err = s.metricUpdateInactiveList(unregisteredMetrics, fullSync)
 	if err != nil {
-		return err
+		return false, err
 	}
 
-	if fullSync || len(unregisteredMetrics) > 0 || len(pendingMetricsUpdate) > 0 {
-		s.UpdateUnitsAndThresholds(ctx, false)
-	}
+	updateThresholds = fullSync || len(unregisteredMetrics) > 0 || len(pendingMetricsUpdate) > 0
 
-	if err := s.metricDeleteFromRemote(filteredMetrics, previousMetrics); err != nil {
-		return err
-	}
+	s.metricDeleteFromRemote(filteredMetrics, previousMetrics)
 
 	localMetrics, err = s.option.Store.Metrics(nil)
 	if err != nil {
-		return err
+		return updateThresholds, err
 	}
 
 	filteredMetrics = s.filterMetrics(localMetrics)
@@ -637,20 +591,20 @@ func (s *Synchronizer) syncMetrics(ctx context.Context, fullSync bool, onlyEssen
 	filteredMetrics = prioritizeAndFilterMetrics(s.option.MetricFormat, filteredMetrics, onlyEssential)
 
 	if err := newMetricRegisterer(s).registerMetrics(filteredMetrics); err != nil {
-		return err
+		return updateThresholds, err
 	}
 
 	if onlyEssential {
-		return nil
+		return updateThresholds, nil
 	}
 
 	if err := s.metricDeleteFromLocal(); err != nil {
-		return err
+		return updateThresholds, err
 	}
 
 	if s.now().Sub(s.startedAt) > 5*time.Minute {
 		if err := s.metricDeactivate(filteredMetrics); err != nil {
-			return err
+			return updateThresholds, err
 		}
 	}
 
@@ -659,7 +613,7 @@ func (s *Synchronizer) syncMetrics(ctx context.Context, fullSync bool, onlyEssen
 
 	s.lastMetricCount = len(localMetrics)
 
-	return nil
+	return updateThresholds, nil
 }
 
 func (s *Synchronizer) metricUpdatePendingOrSync(fullSync bool, pendingMetricsUpdate *[]string) error {
@@ -689,27 +643,44 @@ func (s *Synchronizer) metricUpdatePendingOrSync(fullSync bool, pendingMetricsUp
 func (s *Synchronizer) UpdateUnitsAndThresholds(ctx context.Context, firstUpdate bool) {
 	thresholds := make(map[threshold.MetricNameItem]threshold.Threshold)
 	units := make(map[threshold.MetricNameItem]threshold.Unit)
+	defaultSoftPeriod := time.Duration(s.option.Config.Int("metric.softstatus_period_default")) * time.Second
+	softPeriods := s.option.Config.DurationMap("metric.softstatus_period")
 
 	for _, m := range s.option.Cache.Metrics() {
-		// Old treshold behavior, useless with the new alerting rule functionality.
-		// While this is not a problem per say, adding alertin rules to old thresholds
-		// create more filters for nothing (${rule}_status).
-		if m.PromQLQuery != "" {
-			continue
+		// TODO: We need to add the agent ID in the key to avoid conflicts between agents.
+		key := threshold.MetricNameItem{Name: m.Labels[types.LabelName], Item: m.Labels[types.LabelItem]}
+		units[key] = m.Unit
+
+		thresh := m.Threshold.ToInternalThreshold()
+		// Apply delays from config or default delay.
+		thresh.WarningDelay = defaultSoftPeriod
+		thresh.CriticalDelay = defaultSoftPeriod
+
+		if softPeriod, ok := softPeriods[key.Name]; ok {
+			thresh.WarningDelay = softPeriod
+			thresh.CriticalDelay = softPeriod
 		}
 
-		key := threshold.MetricNameItem{Name: m.Labels[types.LabelName], Item: m.Labels[types.LabelItem]}
-		thresholds[key] = m.Threshold.ToInternalThreshold()
-		units[key] = m.Unit
+		thresholds[key] = thresh
 	}
 
-	// RebuildAlertingRule can change Metrics list. We need to execute it before
-	// UpdateThresholds as currently thresholds invokes a.rulesManager.MetricList()
-	// resulting in using obsolete values.
-	if s.option.RebuildAlertingRules != nil {
-		err := s.option.RebuildAlertingRules(metricToMetricAlertRule(s.option.Cache))
-		if err != nil {
-			logger.V(2).Printf("An error occurred while rebuilding alerting rules: %v", err)
+	// Apply the threshold overrides.
+	s.l.Lock()
+	thresholdOverrides := s.thresholdOverrides
+	s.l.Unlock()
+
+	for key := range thresholds {
+		// TODO: Currently the thresholds are only applied to the main agent, so the alerting rules
+		// on another agent that are converted to a threshold override will never run.
+		overrideKey := thresholdOverrideKey{
+			MetricName: key.Name,
+			AgentID:    s.agentID,
+		}
+
+		if override, ok := thresholdOverrides[overrideKey]; ok {
+			logger.V(1).Printf("Overriding threshold for metric %s on agent %s", key.Name, s.agentID)
+
+			thresholds[key] = override
 		}
 	}
 
@@ -753,7 +724,7 @@ func (s *Synchronizer) isOwnedMetric(metric metricPayload) bool {
 // metricsListWithAgentID fetches the list of all metrics for a given agent, and returns a UUID:metric mapping.
 func (s *Synchronizer) metricsListWithAgentID(fetchInactive bool) (map[string]bleemeoTypes.Metric, error) {
 	params := map[string]string{
-		"fields": "id,agent,item,label,labels_text,unit,unit_text,deactivated_at,threshold_low_warning,threshold_low_critical,threshold_high_warning,threshold_high_critical,service,container,status_of,promql_query,is_user_promql_alert",
+		"fields": metricFields,
 	}
 
 	if fetchInactive {
@@ -924,7 +895,7 @@ func (s *Synchronizer) metricUpdateListUUID(requests []string) error {
 		var metric metricPayload
 
 		params := map[string]string{
-			"fields": "id,agent,label,item,labels_text,unit,unit_text,service,container,deactivated_at,threshold_low_warning,threshold_low_critical,threshold_high_warning,threshold_high_critical,status_of,promql_query,is_user_promql_alert",
+			"fields": metricFields,
 		}
 
 		_, err := s.client.Do(
@@ -957,7 +928,7 @@ func (s *Synchronizer) metricUpdateListUUID(requests []string) error {
 	return nil
 }
 
-func (s *Synchronizer) metricDeleteFromRemote(localMetrics []types.Metric, previousMetrics map[string]bleemeoTypes.Metric) error {
+func (s *Synchronizer) metricDeleteFromRemote(localMetrics []types.Metric, previousMetrics map[string]bleemeoTypes.Metric) {
 	newMetrics := s.option.Cache.MetricsByUUID()
 
 	deletedMetricLabelItem := make(map[string]bool)
@@ -981,8 +952,6 @@ func (s *Synchronizer) metricDeleteFromRemote(localMetrics []types.Metric, previ
 	}
 
 	s.option.Store.DropMetrics(localMetricToDelete)
-
-	return nil
 }
 
 type metricRegisterer struct {
@@ -1202,7 +1171,7 @@ func (mr *metricRegisterer) doOnePass(currentList []types.Metric, state metricRe
 
 func (mr *metricRegisterer) metricRegisterAndUpdateOne(metric types.Metric) error {
 	params := map[string]string{
-		"fields": "id,label,item,labels_text,unit,unit_text,service,container,deactivated_at,threshold_low_warning,threshold_low_critical,threshold_high_warning,threshold_high_critical,status_of,agent,promql_query,is_user_promql_alert",
+		"fields": metricFields,
 	}
 	labels := metric.Labels()
 	annotations := metric.Annotations()
@@ -1312,6 +1281,10 @@ func (s *Synchronizer) prepareMetricPayload(metric types.Metric, registeredMetri
 		}
 
 		payload.ServiceID = service.ID
+	}
+
+	if annotations.AlertingRuleID != "" {
+		payload.AlertingRuleID = annotations.AlertingRuleID
 	}
 
 	// override the agent and service UUIDs when the metric is a probe's

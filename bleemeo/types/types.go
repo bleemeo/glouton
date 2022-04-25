@@ -51,7 +51,7 @@ type GlobalOption struct {
 	UpdateMetricResolution func(ctx context.Context, defaultResolution time.Duration, snmpResolution time.Duration)
 	UpdateThresholds       func(ctx context.Context, thresholds map[threshold.MetricNameItem]threshold.Threshold, firstUpdate bool)
 	UpdateUnits            func(units map[threshold.MetricNameItem]threshold.Unit)
-	RebuildAlertingRules   func(metrics []rules.MetricAlertRule) error
+	RebuildPromQLRules     func(promqlRules []rules.PromQLRule) error
 	IsContainerEnabled     func(facts.Container) (bool, bool)
 }
 
@@ -66,6 +66,7 @@ type Config interface {
 	String(string) string
 	StringList(string) []string
 	Int(string) int
+	DurationMap(string) map[string]time.Duration
 	Bool(string) bool
 }
 
@@ -149,7 +150,7 @@ type GloutonAccountConfig struct {
 	LiveProcessResolution time.Duration
 	LiveProcess           bool
 	DockerIntegration     bool
-	SNMPIntergration      bool
+	SNMPIntegration       bool
 	AgentConfigByName     map[string]GloutonAgentConfig
 	AgentConfigByID       map[string]GloutonAgentConfig
 }

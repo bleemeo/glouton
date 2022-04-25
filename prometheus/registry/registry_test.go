@@ -1869,7 +1869,7 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 					t.Fatal(err)
 				}
 
-				reg.InternalRunScape(context.Background(), now, id)
+				reg.InternalRunScrape(context.Background(), now, id)
 			case kindAppenderCallback:
 				id, err := reg.RegisterAppenderCallback(
 					context.Background(),
@@ -1883,7 +1883,7 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 					t.Fatal(err)
 				}
 
-				reg.InternalRunScape(context.Background(), now, id)
+				reg.InternalRunScrape(context.Background(), now, id)
 			case kindGatherer:
 				id, err := reg.RegisterGatherer(
 					context.Background(),
@@ -1896,7 +1896,7 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 					t.Fatal(err)
 				}
 
-				reg.InternalRunScape(context.Background(), now, id)
+				reg.InternalRunScrape(context.Background(), now, id)
 			}
 
 			gotPoints = sortMetricPoints(gotPoints)

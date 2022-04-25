@@ -173,6 +173,7 @@ func (c *Connector) ApplyCachedConfiguration(ctx context.Context) {
 		return
 	}
 
+	_ = c.sync.UpdateAlertingRules()
 	c.sync.UpdateUnitsAndThresholds(ctx, true)
 
 	if c.option.Config.Bool("blackbox.enable") {
@@ -205,6 +206,7 @@ func (c *Connector) initMQTT(previousPoint []gloutonTypes.MetricPoint) {
 			UpdateMetrics:        c.sync.UpdateMetrics,
 			UpdateMaintenance:    c.sync.UpdateMaintenance,
 			UpdateMonitor:        c.sync.UpdateMonitor,
+			UpdateAlertingRule:   c.sync.UpdateAlertingRule,
 			InitialPoints:        previousPoint,
 			GetJWT:               c.sync.GetJWT,
 		},

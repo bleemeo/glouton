@@ -23,9 +23,7 @@ import (
 	"glouton/logger"
 	"glouton/prometheus/registry"
 	"glouton/store"
-	"glouton/threshold"
 	"glouton/types"
-	"math"
 	"sort"
 	"strings"
 	"sync"
@@ -186,7 +184,7 @@ func TestManager(t *testing.T) {
 
 			app := &mockAppendable{forceTS: t1}
 
-			mgr := NewManager(context.Background(), tt.queryable, 10*time.Second)
+			mgr := NewManager(context.Background(), tt.queryable)
 
 			err := mgr.Collect(context.Background(), app.Appender(context.Background()))
 			if err != nil {
@@ -261,10 +259,11 @@ func makePoints(start time.Time, end time.Time, step time.Duration, template typ
 
 func Test_manager(t *testing.T) { //nolint:maintidx
 	const (
-		resultName   = "copy_of_node_cpu_seconds_global"
-		resultName2  = "copy_of_node_cpu_seconds_global2"
-		sourceMetric = "node_cpu_seconds_global"
-		promqlQuery  = "node_cpu_seconds_global"
+		resultName      = "copy_of_node_cpu_seconds_global"
+		resultName2     = "copy_of_node_cpu_seconds_global2"
+		sourceMetric    = "node_cpu_seconds_global"
+		alertingRuleID1 = "509701d5-3cb0-449b-a858-0290f4dc3cff"
+		alertingRuleID2 = "af5fd77e-ff18-47de-b1d2-8b9964c6c9f7"
 	)
 
 	ctx := context.Background()
@@ -276,13 +275,16 @@ func Test_manager(t *testing.T) { //nolint:maintidx
 				Value: 0,
 			},
 			Labels: map[string]string{
-				types.LabelName: resultName,
+				types.LabelName:         resultName,
+				types.LabelInstanceUUID: agentID,
 			},
 			Annotations: types.MetricAnnotations{
 				Status: types.StatusDescription{
 					CurrentStatus:     types.StatusOk,
 					StatusDescription: "",
 				},
+				AlertingRuleID: alertingRuleID1,
+				BleemeoAgentID: agentID,
 			},
 		},
 		{
@@ -291,13 +293,16 @@ func Test_manager(t *testing.T) { //nolint:maintidx
 				Value: 0,
 			},
 			Labels: map[string]string{
-				types.LabelName: resultName,
+				types.LabelName:         resultName,
+				types.LabelInstanceUUID: agentID,
 			},
 			Annotations: types.MetricAnnotations{
 				Status: types.StatusDescription{
 					CurrentStatus:     types.StatusOk,
 					StatusDescription: "",
 				},
+				AlertingRuleID: alertingRuleID1,
+				BleemeoAgentID: agentID,
 			},
 		},
 		{
@@ -306,13 +311,16 @@ func Test_manager(t *testing.T) { //nolint:maintidx
 				Value: 0,
 			},
 			Labels: map[string]string{
-				types.LabelName: resultName,
+				types.LabelName:         resultName,
+				types.LabelInstanceUUID: agentID,
 			},
 			Annotations: types.MetricAnnotations{
 				Status: types.StatusDescription{
 					CurrentStatus:     types.StatusOk,
 					StatusDescription: "",
 				},
+				AlertingRuleID: alertingRuleID1,
+				BleemeoAgentID: agentID,
 			},
 		},
 		{
@@ -321,13 +329,16 @@ func Test_manager(t *testing.T) { //nolint:maintidx
 				Value: 0,
 			},
 			Labels: map[string]string{
-				types.LabelName: resultName,
+				types.LabelName:         resultName,
+				types.LabelInstanceUUID: agentID,
 			},
 			Annotations: types.MetricAnnotations{
 				Status: types.StatusDescription{
 					CurrentStatus:     types.StatusOk,
 					StatusDescription: "",
 				},
+				AlertingRuleID: alertingRuleID1,
+				BleemeoAgentID: agentID,
 			},
 		},
 		{
@@ -336,13 +347,16 @@ func Test_manager(t *testing.T) { //nolint:maintidx
 				Value: 0,
 			},
 			Labels: map[string]string{
-				types.LabelName: resultName,
+				types.LabelName:         resultName,
+				types.LabelInstanceUUID: agentID,
 			},
 			Annotations: types.MetricAnnotations{
 				Status: types.StatusDescription{
 					CurrentStatus:     types.StatusOk,
 					StatusDescription: "",
 				},
+				AlertingRuleID: alertingRuleID1,
+				BleemeoAgentID: agentID,
 			},
 		},
 		{
@@ -351,13 +365,16 @@ func Test_manager(t *testing.T) { //nolint:maintidx
 				Value: 0,
 			},
 			Labels: map[string]string{
-				types.LabelName: resultName,
+				types.LabelName:         resultName,
+				types.LabelInstanceUUID: agentID,
 			},
 			Annotations: types.MetricAnnotations{
 				Status: types.StatusDescription{
 					CurrentStatus:     types.StatusOk,
 					StatusDescription: "",
 				},
+				AlertingRuleID: alertingRuleID1,
+				BleemeoAgentID: agentID,
 			},
 		},
 		{
@@ -366,13 +383,16 @@ func Test_manager(t *testing.T) { //nolint:maintidx
 				Value: 0,
 			},
 			Labels: map[string]string{
-				types.LabelName: resultName,
+				types.LabelName:         resultName,
+				types.LabelInstanceUUID: agentID,
 			},
 			Annotations: types.MetricAnnotations{
 				Status: types.StatusDescription{
 					CurrentStatus:     types.StatusOk,
 					StatusDescription: "",
 				},
+				AlertingRuleID: alertingRuleID1,
+				BleemeoAgentID: agentID,
 			},
 		},
 	}
@@ -383,13 +403,16 @@ func Test_manager(t *testing.T) { //nolint:maintidx
 				Value: 1,
 			},
 			Labels: map[string]string{
-				types.LabelName: resultName,
+				types.LabelName:         resultName,
+				types.LabelInstanceUUID: agentID,
 			},
 			Annotations: types.MetricAnnotations{
 				Status: types.StatusDescription{
 					CurrentStatus:     types.StatusWarning,
 					StatusDescription: "",
 				},
+				AlertingRuleID: alertingRuleID1,
+				BleemeoAgentID: agentID,
 			},
 		},
 		{
@@ -398,13 +421,16 @@ func Test_manager(t *testing.T) { //nolint:maintidx
 				Value: 1,
 			},
 			Labels: map[string]string{
-				types.LabelName: resultName,
+				types.LabelName:         resultName,
+				types.LabelInstanceUUID: agentID,
 			},
 			Annotations: types.MetricAnnotations{
 				Status: types.StatusDescription{
 					CurrentStatus:     types.StatusWarning,
 					StatusDescription: "",
 				},
+				AlertingRuleID: alertingRuleID1,
+				BleemeoAgentID: agentID,
 			},
 		},
 	}
@@ -415,13 +441,16 @@ func Test_manager(t *testing.T) { //nolint:maintidx
 				Value: 2,
 			},
 			Labels: map[string]string{
-				types.LabelName: resultName,
+				types.LabelName:         resultName,
+				types.LabelInstanceUUID: agentID,
 			},
 			Annotations: types.MetricAnnotations{
 				Status: types.StatusDescription{
 					CurrentStatus:     types.StatusCritical,
 					StatusDescription: "",
 				},
+				AlertingRuleID: alertingRuleID1,
+				BleemeoAgentID: agentID,
 			},
 		},
 		{
@@ -430,13 +459,16 @@ func Test_manager(t *testing.T) { //nolint:maintidx
 				Value: 2,
 			},
 			Labels: map[string]string{
-				types.LabelName: resultName,
+				types.LabelName:         resultName,
+				types.LabelInstanceUUID: agentID,
 			},
 			Annotations: types.MetricAnnotations{
 				Status: types.StatusDescription{
 					CurrentStatus:     types.StatusCritical,
 					StatusDescription: "",
 				},
+				AlertingRuleID: alertingRuleID1,
+				BleemeoAgentID: agentID,
 			},
 		},
 	}
@@ -448,26 +480,23 @@ func Test_manager(t *testing.T) { //nolint:maintidx
 		ScrapResolution time.Duration
 		RunDuration     time.Duration
 		Points          []types.MetricPoint
-		Rules           []MetricAlertRule
+		Rules           []PromQLRule
 		Want            []types.MetricPoint
 	}{
 		{
 			Name:        "No points",
 			Description: "No points in the store should not create any points.",
 			Points:      []types.MetricPoint{},
-			Rules: []MetricAlertRule{
+			Rules: []PromQLRule{
 				{
-					Labels: labels.FromMap(map[string]string{
-						types.LabelName: resultName,
-					}),
-					Threshold: threshold.Threshold{
-						HighWarning:  50,
-						HighCritical: 500,
-						LowCritical:  math.NaN(),
-						LowWarning:   math.NaN(),
-					},
-					PromQLQuery:       promqlQuery,
-					IsUserPromQLAlert: false,
+					AlertingRuleID: alertingRuleID1,
+					Name:           resultName,
+					WarningQuery:   fmt.Sprintf("%s > 50", sourceMetric),
+					WarningDelay:   5 * time.Minute,
+					CriticalQuery:  fmt.Sprintf("%s > 500", sourceMetric),
+					CriticalDelay:  5 * time.Minute,
+					Resolution:     10 * time.Second,
+					InstanceID:     agentID,
 				},
 			},
 			Want: []types.MetricPoint{},
@@ -482,7 +511,8 @@ func Test_manager(t *testing.T) { //nolint:maintidx
 						Value: 25,
 					},
 					Labels: map[string]string{
-						types.LabelName: sourceMetric,
+						types.LabelName:         sourceMetric,
+						types.LabelInstanceUUID: agentID,
 					},
 				},
 				{
@@ -491,23 +521,21 @@ func Test_manager(t *testing.T) { //nolint:maintidx
 						Value: 25,
 					},
 					Labels: map[string]string{
-						types.LabelName: sourceMetric,
+						types.LabelName:         sourceMetric,
+						types.LabelInstanceUUID: agentID,
 					},
 				},
 			},
-			Rules: []MetricAlertRule{
+			Rules: []PromQLRule{
 				{
-					Labels: labels.FromMap(map[string]string{
-						types.LabelName: resultName,
-					}),
-					Threshold: threshold.Threshold{
-						HighWarning:  50,
-						HighCritical: 500,
-						LowCritical:  math.NaN(),
-						LowWarning:   math.NaN(),
-					},
-					PromQLQuery:       promqlQuery,
-					IsUserPromQLAlert: false,
+					AlertingRuleID: alertingRuleID1,
+					Name:           resultName,
+					WarningQuery:   fmt.Sprintf("%s > 50", sourceMetric),
+					WarningDelay:   5 * time.Minute,
+					CriticalQuery:  fmt.Sprintf("%s > 500", sourceMetric),
+					CriticalDelay:  5 * time.Minute,
+					Resolution:     10 * time.Second,
+					InstanceID:     agentID,
 				},
 			},
 			Want: okPoints,
@@ -522,7 +550,8 @@ func Test_manager(t *testing.T) { //nolint:maintidx
 						Value: 120,
 					},
 					Labels: map[string]string{
-						types.LabelName: sourceMetric,
+						types.LabelName:         sourceMetric,
+						types.LabelInstanceUUID: agentID,
 					},
 				},
 				{
@@ -531,23 +560,21 @@ func Test_manager(t *testing.T) { //nolint:maintidx
 						Value: 110,
 					},
 					Labels: map[string]string{
-						types.LabelName: sourceMetric,
+						types.LabelName:         sourceMetric,
+						types.LabelInstanceUUID: agentID,
 					},
 				},
 			},
-			Rules: []MetricAlertRule{
+			Rules: []PromQLRule{
 				{
-					Labels: labels.FromMap(map[string]string{
-						types.LabelName: resultName,
-					}),
-					Threshold: threshold.Threshold{
-						HighWarning:  50,
-						HighCritical: 500,
-						LowCritical:  math.NaN(),
-						LowWarning:   math.NaN(),
-					},
-					PromQLQuery:       promqlQuery,
-					IsUserPromQLAlert: true,
+					AlertingRuleID: alertingRuleID1,
+					Name:           resultName,
+					WarningQuery:   fmt.Sprintf("%s > 50", sourceMetric),
+					WarningDelay:   5 * time.Minute,
+					CriticalQuery:  fmt.Sprintf("%s > 500", sourceMetric),
+					CriticalDelay:  5 * time.Minute,
+					Resolution:     10 * time.Second,
+					InstanceID:     agentID,
 				},
 			},
 			Want: func() []types.MetricPoint {
@@ -570,7 +597,8 @@ func Test_manager(t *testing.T) { //nolint:maintidx
 						Value: 800,
 					},
 					Labels: map[string]string{
-						types.LabelName: sourceMetric,
+						types.LabelName:         sourceMetric,
+						types.LabelInstanceUUID: agentID,
 					},
 				},
 				{
@@ -579,23 +607,21 @@ func Test_manager(t *testing.T) { //nolint:maintidx
 						Value: 1100,
 					},
 					Labels: map[string]string{
-						types.LabelName: sourceMetric,
+						types.LabelName:         sourceMetric,
+						types.LabelInstanceUUID: agentID,
 					},
 				},
 			},
-			Rules: []MetricAlertRule{
+			Rules: []PromQLRule{
 				{
-					Labels: labels.FromMap(map[string]string{
-						types.LabelName: resultName,
-					}),
-					Threshold: threshold.Threshold{
-						HighWarning:  50,
-						HighCritical: 500,
-						LowCritical:  math.NaN(),
-						LowWarning:   math.NaN(),
-					},
-					PromQLQuery:       promqlQuery,
-					IsUserPromQLAlert: true,
+					AlertingRuleID: alertingRuleID1,
+					Name:           resultName,
+					WarningQuery:   fmt.Sprintf("%s > 50", sourceMetric),
+					WarningDelay:   5 * time.Minute,
+					CriticalQuery:  fmt.Sprintf("%s > 500", sourceMetric),
+					CriticalDelay:  5 * time.Minute,
+					Resolution:     10 * time.Second,
+					InstanceID:     agentID,
 				},
 			},
 			Want: func() []types.MetricPoint {
@@ -618,7 +644,8 @@ func Test_manager(t *testing.T) { //nolint:maintidx
 						Value: 800,
 					},
 					Labels: map[string]string{
-						types.LabelName: sourceMetric,
+						types.LabelName:         sourceMetric,
+						types.LabelInstanceUUID: agentID,
 					},
 				},
 				{
@@ -627,7 +654,8 @@ func Test_manager(t *testing.T) { //nolint:maintidx
 						Value: 700,
 					},
 					Labels: map[string]string{
-						types.LabelName: sourceMetric,
+						types.LabelName:         sourceMetric,
+						types.LabelInstanceUUID: agentID,
 					},
 				},
 				{
@@ -636,23 +664,21 @@ func Test_manager(t *testing.T) { //nolint:maintidx
 						Value: 130,
 					},
 					Labels: map[string]string{
-						types.LabelName: sourceMetric,
+						types.LabelName:         sourceMetric,
+						types.LabelInstanceUUID: agentID,
 					},
 				},
 			},
-			Rules: []MetricAlertRule{
+			Rules: []PromQLRule{
 				{
-					Labels: labels.FromMap(map[string]string{
-						types.LabelName: resultName,
-					}),
-					Threshold: threshold.Threshold{
-						HighWarning:  50,
-						HighCritical: 500,
-						LowCritical:  math.NaN(),
-						LowWarning:   math.NaN(),
-					},
-					PromQLQuery:       promqlQuery,
-					IsUserPromQLAlert: true,
+					AlertingRuleID: alertingRuleID1,
+					Name:           resultName,
+					WarningQuery:   fmt.Sprintf("%s > 50", sourceMetric),
+					WarningDelay:   5 * time.Minute,
+					CriticalQuery:  fmt.Sprintf("%s > 500", sourceMetric),
+					CriticalDelay:  5 * time.Minute,
+					Resolution:     10 * time.Second,
+					InstanceID:     agentID,
 				},
 			},
 			Want: func() []types.MetricPoint {
@@ -675,7 +701,8 @@ func Test_manager(t *testing.T) { //nolint:maintidx
 						Value: 20,
 					},
 					Labels: map[string]string{
-						types.LabelName: sourceMetric,
+						types.LabelName:         sourceMetric,
+						types.LabelInstanceUUID: agentID,
 					},
 				},
 				{
@@ -684,23 +711,21 @@ func Test_manager(t *testing.T) { //nolint:maintidx
 						Value: 120,
 					},
 					Labels: map[string]string{
-						types.LabelName: sourceMetric,
+						types.LabelName:         sourceMetric,
+						types.LabelInstanceUUID: agentID,
 					},
 				},
 			},
-			Rules: []MetricAlertRule{
+			Rules: []PromQLRule{
 				{
-					Labels: labels.FromMap(map[string]string{
-						types.LabelName: resultName,
-					}),
-					Threshold: threshold.Threshold{
-						HighWarning:  50,
-						HighCritical: 500,
-						LowCritical:  math.NaN(),
-						LowWarning:   math.NaN(),
-					},
-					PromQLQuery:       promqlQuery,
-					IsUserPromQLAlert: false,
+					AlertingRuleID: alertingRuleID1,
+					Name:           resultName,
+					WarningQuery:   fmt.Sprintf("%s > 50", sourceMetric),
+					WarningDelay:   5 * time.Minute,
+					CriticalQuery:  fmt.Sprintf("%s > 500", sourceMetric),
+					CriticalDelay:  5 * time.Minute,
+					Resolution:     10 * time.Second,
+					InstanceID:     agentID,
 				},
 			},
 			Want: okPoints,
@@ -709,19 +734,16 @@ func Test_manager(t *testing.T) { //nolint:maintidx
 			Name:        "unnamed",
 			Description: "",
 			Points:      []types.MetricPoint{},
-			Rules: []MetricAlertRule{
+			Rules: []PromQLRule{
 				{
-					Labels: labels.FromMap(map[string]string{
-						types.LabelName: resultName,
-					}),
-					Threshold: threshold.Threshold{
-						HighWarning:  50,
-						HighCritical: 500,
-						LowCritical:  math.NaN(),
-						LowWarning:   math.NaN(),
-					},
-					PromQLQuery:       promqlQuery,
-					IsUserPromQLAlert: true,
+					AlertingRuleID: alertingRuleID1,
+					Name:           resultName,
+					WarningQuery:   fmt.Sprintf("%s > 50", sourceMetric),
+					WarningDelay:   5 * time.Minute,
+					CriticalQuery:  fmt.Sprintf("%s > 500", sourceMetric),
+					CriticalDelay:  5 * time.Minute,
+					Resolution:     10 * time.Second,
+					InstanceID:     agentID,
 				},
 			},
 			Want: func() []types.MetricPoint {
@@ -752,24 +774,21 @@ func Test_manager(t *testing.T) { //nolint:maintidx
 						Value: 20,
 					},
 					Labels: map[string]string{
-						types.LabelName: sourceMetric,
+						types.LabelName:         sourceMetric,
+						types.LabelInstanceUUID: agentID,
 					},
 				},
 			),
-			Rules: []MetricAlertRule{
+			Rules: []PromQLRule{
 				{
-					Labels: labels.FromMap(map[string]string{
-						types.LabelName: resultName,
-					}),
-					Threshold: threshold.Threshold{
-						HighWarning:  50,
-						HighCritical: 500,
-						LowCritical:  math.NaN(),
-						LowWarning:   math.NaN(),
-					},
-					PromQLQuery:       promqlQuery,
-					IsUserPromQLAlert: false,
-					Resolution:        10 * time.Second,
+					AlertingRuleID: alertingRuleID1,
+					Name:           resultName,
+					WarningQuery:   fmt.Sprintf("%s > 50", sourceMetric),
+					WarningDelay:   5 * time.Minute,
+					CriticalQuery:  fmt.Sprintf("%s > 500", sourceMetric),
+					CriticalDelay:  5 * time.Minute,
+					Resolution:     10 * time.Second,
+					InstanceID:     agentID,
 				},
 			},
 			Want: makePoints(
@@ -782,13 +801,16 @@ func Test_manager(t *testing.T) { //nolint:maintidx
 						Value: 0,
 					},
 					Labels: map[string]string{
-						types.LabelName: resultName,
+						types.LabelName:         resultName,
+						types.LabelInstanceUUID: agentID,
 					},
 					Annotations: types.MetricAnnotations{
 						Status: types.StatusDescription{
 							CurrentStatus:     types.StatusOk,
 							StatusDescription: "",
 						},
+						AlertingRuleID: alertingRuleID1,
+						BleemeoAgentID: agentID,
 					},
 				},
 			),
@@ -808,24 +830,21 @@ func Test_manager(t *testing.T) { //nolint:maintidx
 						Value: 20,
 					},
 					Labels: map[string]string{
-						types.LabelName: sourceMetric,
+						types.LabelName:         sourceMetric,
+						types.LabelInstanceUUID: agentID,
 					},
 				},
 			),
-			Rules: []MetricAlertRule{
+			Rules: []PromQLRule{
 				{
-					Labels: labels.FromMap(map[string]string{
-						types.LabelName: resultName,
-					}),
-					Threshold: threshold.Threshold{
-						HighWarning:  50,
-						HighCritical: 500,
-						LowCritical:  math.NaN(),
-						LowWarning:   math.NaN(),
-					},
-					PromQLQuery:       promqlQuery,
-					IsUserPromQLAlert: false,
-					Resolution:        time.Minute,
+					AlertingRuleID: alertingRuleID1,
+					Name:           resultName,
+					WarningQuery:   fmt.Sprintf("%s > 50", sourceMetric),
+					WarningDelay:   5 * time.Minute,
+					CriticalQuery:  fmt.Sprintf("%s > 500", sourceMetric),
+					CriticalDelay:  5 * time.Minute,
+					Resolution:     time.Minute,
+					InstanceID:     agentID,
 				},
 			},
 			Want: makePoints(
@@ -838,13 +857,16 @@ func Test_manager(t *testing.T) { //nolint:maintidx
 						Value: 0,
 					},
 					Labels: map[string]string{
-						types.LabelName: resultName,
+						types.LabelName:         resultName,
+						types.LabelInstanceUUID: agentID,
 					},
 					Annotations: types.MetricAnnotations{
 						Status: types.StatusDescription{
 							CurrentStatus:     types.StatusOk,
 							StatusDescription: "",
 						},
+						AlertingRuleID: alertingRuleID1,
+						BleemeoAgentID: agentID,
 					},
 				},
 			),
@@ -864,38 +886,31 @@ func Test_manager(t *testing.T) { //nolint:maintidx
 						Value: 20,
 					},
 					Labels: map[string]string{
-						types.LabelName: sourceMetric,
+						types.LabelName:         sourceMetric,
+						types.LabelInstanceUUID: agentID,
 					},
 				},
 			),
-			Rules: []MetricAlertRule{
+			Rules: []PromQLRule{
 				{
-					Labels: labels.FromMap(map[string]string{
-						types.LabelName: resultName,
-					}),
-					Threshold: threshold.Threshold{
-						HighWarning:  50,
-						HighCritical: 500,
-						LowCritical:  math.NaN(),
-						LowWarning:   math.NaN(),
-					},
-					PromQLQuery:       promqlQuery,
-					IsUserPromQLAlert: false,
-					Resolution:        10 * time.Second,
+					AlertingRuleID: alertingRuleID1,
+					Name:           resultName,
+					WarningQuery:   fmt.Sprintf("%s > 50", sourceMetric),
+					WarningDelay:   5 * time.Minute,
+					CriticalQuery:  fmt.Sprintf("%s > 500", sourceMetric),
+					CriticalDelay:  5 * time.Minute,
+					Resolution:     10 * time.Second,
+					InstanceID:     agentID,
 				},
 				{
-					Labels: labels.FromMap(map[string]string{
-						types.LabelName: resultName2,
-					}),
-					Threshold: threshold.Threshold{
-						HighWarning:  50,
-						HighCritical: 500,
-						LowCritical:  math.NaN(),
-						LowWarning:   math.NaN(),
-					},
-					PromQLQuery:       promqlQuery,
-					IsUserPromQLAlert: false,
-					Resolution:        time.Minute,
+					AlertingRuleID: alertingRuleID2,
+					Name:           resultName2,
+					WarningQuery:   fmt.Sprintf("%s > 50", sourceMetric),
+					WarningDelay:   5 * time.Minute,
+					CriticalQuery:  fmt.Sprintf("%s > 500", sourceMetric),
+					CriticalDelay:  5 * time.Minute,
+					Resolution:     time.Minute,
+					InstanceID:     agentID,
 				},
 			},
 			Want: sortPoints(append(
@@ -909,13 +924,16 @@ func Test_manager(t *testing.T) { //nolint:maintidx
 							Value: 0,
 						},
 						Labels: map[string]string{
-							types.LabelName: resultName,
+							types.LabelName:         resultName,
+							types.LabelInstanceUUID: agentID,
 						},
 						Annotations: types.MetricAnnotations{
 							Status: types.StatusDescription{
 								CurrentStatus:     types.StatusOk,
 								StatusDescription: "",
 							},
+							AlertingRuleID: alertingRuleID1,
+							BleemeoAgentID: agentID,
 						},
 					},
 				),
@@ -929,13 +947,16 @@ func Test_manager(t *testing.T) { //nolint:maintidx
 							Value: 0,
 						},
 						Labels: map[string]string{
-							types.LabelName: resultName2,
+							types.LabelName:         resultName2,
+							types.LabelInstanceUUID: agentID,
 						},
 						Annotations: types.MetricAnnotations{
 							Status: types.StatusDescription{
 								CurrentStatus:     types.StatusOk,
 								StatusDescription: "",
 							},
+							AlertingRuleID: alertingRuleID2,
+							BleemeoAgentID: agentID,
 						},
 					},
 				)...,
@@ -975,14 +996,12 @@ func Test_manager(t *testing.T) { //nolint:maintidx
 				return labels, false
 			})
 
-			ruleManager := newManager(ctx, store, defaultLinuxRecordingRules, t0.Add(-7*time.Minute), 15*time.Second)
+			ruleManager := newManager(ctx, store, defaultLinuxRecordingRules, t0.Add(-7*time.Minute))
 
-			err = ruleManager.RebuildAlertingRules(test.Rules)
+			err = ruleManager.RebuildPromQLRules(test.Rules)
 			if err != nil {
 				t.Error(err)
 			}
-
-			ruleManager.UpdateMetricResolution(10 * time.Second)
 
 			id, err := reg.RegisterAppenderCallback(
 				ctx,
@@ -1023,14 +1042,14 @@ func Test_manager(t *testing.T) { //nolint:maintidx
 				ready, pointsToPush = filterByDate(pointsToPush, currentTime)
 				store.PushPoints(ctx, ready)
 
-				reg.InternalRunScape(ctx, currentTime, id)
+				reg.InternalRunScrape(ctx, currentTime, id)
 			}
 
 			// Description are not fully tested, only the common prefix.
 			// Completely testing them would require too much copy/paste in test.
 			for i := range resPoints {
 				if !strings.HasPrefix(resPoints[i].Annotations.Status.StatusDescription, "Current value:") &&
-					resPoints[i].Annotations.Status.StatusDescription != "Current value is within the thresholds." &&
+					resPoints[i].Annotations.Status.StatusDescription != "Everything is running fine" &&
 					!strings.HasPrefix(resPoints[i].Annotations.Status.StatusDescription, "PromQL read zero point") {
 					t.Errorf("Got point was not formatted correctly: got %s, expected start with \"Current value:\"", resPoints[i].Annotations.Status.StatusDescription)
 				}
@@ -1046,9 +1065,9 @@ func Test_manager(t *testing.T) { //nolint:maintidx
 
 func Test_Rebuild_Rules(t *testing.T) {
 	const (
-		resultName   = "my_rule_metric"
-		sourceMetric = "node_cpu_seconds_global"
-		promqlQuery  = "node_cpu_seconds_global"
+		resultName     = "my_rule_metric"
+		sourceMetric   = "node_cpu_seconds_global"
+		alertingRuleID = "509701d5-3cb0-449b-a858-0290f4dc3cff"
 	)
 
 	var (
@@ -1072,7 +1091,7 @@ func Test_Rebuild_Rules(t *testing.T) {
 	ctx := context.Background()
 	t1 := time.Now().Truncate(time.Second)
 	t0 := t1.Add(-7 * time.Minute)
-	ruleManager := newManager(ctx, store, defaultLinuxRecordingRules, t0, 15*time.Second)
+	ruleManager := newManager(ctx, store, defaultLinuxRecordingRules, t0)
 
 	store.PushPoints(context.Background(), []types.MetricPoint{
 		{
@@ -1081,7 +1100,8 @@ func Test_Rebuild_Rules(t *testing.T) {
 				Value: 700,
 			},
 			Labels: map[string]string{
-				types.LabelName: sourceMetric,
+				types.LabelName:         sourceMetric,
+				types.LabelInstanceUUID: agentID,
 			},
 		},
 		{
@@ -1090,7 +1110,8 @@ func Test_Rebuild_Rules(t *testing.T) {
 				Value: 700,
 			},
 			Labels: map[string]string{
-				types.LabelName: sourceMetric,
+				types.LabelName:         sourceMetric,
+				types.LabelInstanceUUID: agentID,
 			},
 		},
 		{
@@ -1099,7 +1120,8 @@ func Test_Rebuild_Rules(t *testing.T) {
 				Value: 700,
 			},
 			Labels: map[string]string{
-				types.LabelName: sourceMetric,
+				types.LabelName:         sourceMetric,
+				types.LabelInstanceUUID: agentID,
 			},
 		},
 		{
@@ -1108,7 +1130,8 @@ func Test_Rebuild_Rules(t *testing.T) {
 				Value: 700,
 			},
 			Labels: map[string]string{
-				types.LabelName: sourceMetric,
+				types.LabelName:         sourceMetric,
+				types.LabelInstanceUUID: agentID,
 			},
 		},
 	})
@@ -1120,13 +1143,16 @@ func Test_Rebuild_Rules(t *testing.T) {
 				Value: 0,
 			},
 			Labels: map[string]string{
-				types.LabelName: resultName,
+				types.LabelName:         resultName,
+				types.LabelInstanceUUID: agentID,
 			},
 			Annotations: types.MetricAnnotations{
 				Status: types.StatusDescription{
 					CurrentStatus:     types.StatusOk,
-					StatusDescription: "Current value: 700.00. Threshold (50.00) not exceeded for the last " + promAlertTime.String(),
+					StatusDescription: "Everything is running fine",
 				},
+				AlertingRuleID: alertingRuleID,
+				BleemeoAgentID: agentID,
 			},
 		},
 		{
@@ -1135,13 +1161,16 @@ func Test_Rebuild_Rules(t *testing.T) {
 				Value: 0,
 			},
 			Labels: map[string]string{
-				types.LabelName: resultName,
+				types.LabelName:         resultName,
+				types.LabelInstanceUUID: agentID,
 			},
 			Annotations: types.MetricAnnotations{
 				Status: types.StatusDescription{
 					CurrentStatus:     types.StatusOk,
-					StatusDescription: "Current value: 700.00. Threshold (50.00) not exceeded for the last " + promAlertTime.String(),
+					StatusDescription: "Everything is running fine",
 				},
+				AlertingRuleID: alertingRuleID,
+				BleemeoAgentID: agentID,
 			},
 		},
 		{
@@ -1150,13 +1179,16 @@ func Test_Rebuild_Rules(t *testing.T) {
 				Value: 0,
 			},
 			Labels: map[string]string{
-				types.LabelName: resultName,
+				types.LabelName:         resultName,
+				types.LabelInstanceUUID: agentID,
 			},
 			Annotations: types.MetricAnnotations{
 				Status: types.StatusDescription{
 					CurrentStatus:     types.StatusOk,
-					StatusDescription: "Current value: 700.00. Threshold (50.00) not exceeded for the last " + promAlertTime.String(),
+					StatusDescription: "Everything is running fine",
 				},
+				AlertingRuleID: alertingRuleID,
+				BleemeoAgentID: agentID,
 			},
 		},
 
@@ -1166,13 +1198,16 @@ func Test_Rebuild_Rules(t *testing.T) {
 				Value: 0,
 			},
 			Labels: map[string]string{
-				types.LabelName: resultName,
+				types.LabelName:         resultName,
+				types.LabelInstanceUUID: agentID,
 			},
 			Annotations: types.MetricAnnotations{
 				Status: types.StatusDescription{
 					CurrentStatus:     types.StatusOk,
-					StatusDescription: "Current value: 700.00. Threshold (50.00) not exceeded for the last " + promAlertTime.String(),
+					StatusDescription: "Everything is running fine",
 				},
+				AlertingRuleID: alertingRuleID,
+				BleemeoAgentID: agentID,
 			},
 		},
 		{
@@ -1181,68 +1216,49 @@ func Test_Rebuild_Rules(t *testing.T) {
 				Value: 0,
 			},
 			Labels: map[string]string{
-				types.LabelName: resultName,
+				types.LabelName:         resultName,
+				types.LabelInstanceUUID: agentID,
 			},
 			Annotations: types.MetricAnnotations{
 				Status: types.StatusDescription{
 					CurrentStatus:     types.StatusOk,
-					StatusDescription: "Current value: 700.00. Threshold (50.00) not exceeded for the last " + promAlertTime.String(),
+					StatusDescription: "Everything is running fine",
 				},
+				AlertingRuleID: alertingRuleID,
+				BleemeoAgentID: agentID,
 			},
 		},
-		// {
-		// 	Point: types.Point{
-		// 		Time:  t1.Add(5 * time.Minute),
-		// 		Value: 0,
-		// 	},
-		// 	Annotations: types.MetricAnnotations{
-		// 		Status: types.StatusDescription{
-		// 			CurrentStatus:     types.StatusOk,
-		// 			StatusDescription: "Current value: 700.00. Threshold (50.00) not exceeded for the last " + promAlertTime.String(),
-		// 		},
-		// 	},
-		// },
 		{
 			Point: types.Point{
 				Time:  t1.Add(5 * time.Minute),
 				Value: 2,
 			},
 			Labels: map[string]string{
-				types.LabelName: resultName,
+				types.LabelName:         resultName,
+				types.LabelInstanceUUID: agentID,
 			},
 			Annotations: types.MetricAnnotations{
 				Status: types.StatusDescription{
 					CurrentStatus:     types.StatusCritical,
-					StatusDescription: "Current value: 700.00. Threshold (50.00) exceeded for the last " + promAlertTime.String(),
+					StatusDescription: "Current value: 700.00",
 				},
+				AlertingRuleID: alertingRuleID,
+				BleemeoAgentID: agentID,
 			},
 		},
 	}
 
-	alertsRules := []MetricAlertRule{
+	promqlRules := []PromQLRule{
 		{
-			Labels: labels.FromMap(map[string]string{
-				types.LabelName: resultName,
-			}),
-			Threshold: threshold.Threshold{
-				HighWarning:  50,
-				HighCritical: 500,
-				LowCritical:  math.NaN(),
-				LowWarning:   math.NaN(),
-			},
-			PromQLQuery:       promqlQuery,
-			IsUserPromQLAlert: true,
+			AlertingRuleID: alertingRuleID,
+			Name:           resultName,
+			WarningQuery:   fmt.Sprintf("%s > 50", sourceMetric),
+			WarningDelay:   5 * time.Minute,
+			CriticalQuery:  fmt.Sprintf("%s > 500", sourceMetric),
+			CriticalDelay:  5 * time.Minute,
+			Resolution:     10 * time.Second,
+			InstanceID:     agentID,
 		},
-		// {
-		// 	ID:         "CPU-ID",
-		// 	LabelsText: "cpu_counter",
-		// 	Threshold: bleemeoTypes.Threshold{
-		// 		HighWarning:  &thresholds[0],
-		// 		HighCritical: &thresholds[1],
-		// 	},
-		// 	PromQLQuery:       "cpu_counter",
-		// 	IsUserPromQLAlert: false,
-		// },
 	}
 
 	id, err := reg.RegisterAppenderCallback(
@@ -1258,7 +1274,7 @@ func Test_Rebuild_Rules(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = ruleManager.RebuildAlertingRules(alertsRules)
+	err = ruleManager.RebuildPromQLRules(promqlRules)
 	if err != nil {
 		t.Error(err)
 
@@ -1270,10 +1286,10 @@ func Test_Rebuild_Rules(t *testing.T) {
 	for i := 0; i < 5; i++ {
 		ruleManager.now = func() time.Time { return t1.Add(time.Duration(i) * time.Minute) }
 
-		reg.InternalRunScape(ctx, t1.Add(time.Duration(i)*time.Minute), id)
+		reg.InternalRunScrape(ctx, t1.Add(time.Duration(i)*time.Minute), id)
 	}
 
-	err = ruleManager.RebuildAlertingRules(alertsRules)
+	err = ruleManager.RebuildPromQLRules(promqlRules)
 	if err != nil {
 		t.Error(err)
 
@@ -1284,10 +1300,10 @@ func Test_Rebuild_Rules(t *testing.T) {
 	// By doing so we can verify multiple calls to RebuildAlertingRules won't reset rules state.
 	ruleManager.now = func() time.Time { return t1.Add(5 * time.Minute) }
 
-	reg.InternalRunScape(ctx, t1.Add(5*time.Minute), id)
+	reg.InternalRunScrape(ctx, t1.Add(5*time.Minute), id)
 
-	if len(ruleManager.alertingRules) != len(alertsRules) {
-		t.Errorf("Unexpected number of points: expected %d, got %d\n", len(alertsRules), len(ruleManager.alertingRules))
+	if len(ruleManager.ruleGroups) != len(promqlRules) {
+		t.Errorf("Unexpected number of points: expected %d, got %d\n", len(promqlRules), len(ruleManager.ruleGroups))
 	}
 
 	if diff := cmp.Diff(want, resPoints); diff != "" {
@@ -1303,13 +1319,12 @@ func Test_GloutonStart(t *testing.T) {
 	const (
 		resultName   = "my_rule_metric"
 		sourceMetric = "cpu_used"
-		promqlQuery  = "cpu_used"
 	)
 
 	store := store.New(time.Hour, time.Hour)
 	ctx := context.Background()
 	t0 := time.Now().Truncate(time.Second)
-	ruleManager := newManager(ctx, store, defaultLinuxRecordingRules, t0, 15*time.Second)
+	ruleManager := newManager(ctx, store, defaultLinuxRecordingRules, t0)
 	resPoints := []types.MetricPoint{}
 
 	store.PushPoints(context.Background(), []types.MetricPoint{
@@ -1319,7 +1334,8 @@ func Test_GloutonStart(t *testing.T) {
 				Value: 700,
 			},
 			Labels: map[string]string{
-				types.LabelName: sourceMetric,
+				types.LabelName:         sourceMetric,
+				types.LabelInstanceUUID: agentID,
 			},
 		},
 		{
@@ -1328,7 +1344,8 @@ func Test_GloutonStart(t *testing.T) {
 				Value: 800,
 			},
 			Labels: map[string]string{
-				types.LabelName: sourceMetric,
+				types.LabelName:         sourceMetric,
+				types.LabelInstanceUUID: agentID,
 			},
 		},
 		{
@@ -1337,7 +1354,8 @@ func Test_GloutonStart(t *testing.T) {
 				Value: 800,
 			},
 			Labels: map[string]string{
-				types.LabelName: sourceMetric,
+				types.LabelName:         sourceMetric,
+				types.LabelInstanceUUID: agentID,
 			},
 		},
 		{
@@ -1346,24 +1364,22 @@ func Test_GloutonStart(t *testing.T) {
 				Value: 800,
 			},
 			Labels: map[string]string{
-				types.LabelName: sourceMetric,
+				types.LabelName:         sourceMetric,
+				types.LabelInstanceUUID: agentID,
 			},
 		},
 	})
 
-	metricList := []MetricAlertRule{
+	metricList := []PromQLRule{
 		{
-			Labels: labels.FromMap(map[string]string{
-				types.LabelName: resultName,
-			}),
-			Threshold: threshold.Threshold{
-				HighWarning:  50,
-				HighCritical: 500,
-				LowCritical:  math.NaN(),
-				LowWarning:   math.NaN(),
-			},
-			PromQLQuery:       promqlQuery,
-			IsUserPromQLAlert: true,
+			AlertingRuleID: "509701d5-3cb0-449b-a858-0290f4dc3cff",
+			Name:           resultName,
+			WarningQuery:   fmt.Sprintf("%s > 50", sourceMetric),
+			WarningDelay:   5 * time.Minute,
+			CriticalQuery:  fmt.Sprintf("%s > 500", sourceMetric),
+			CriticalDelay:  5 * time.Minute,
+			Resolution:     10 * time.Second,
+			InstanceID:     agentID,
 		},
 	}
 
@@ -1371,7 +1387,7 @@ func Test_GloutonStart(t *testing.T) {
 		resPoints = append(resPoints, mp...)
 	})
 
-	err := ruleManager.RebuildAlertingRules(metricList)
+	err := ruleManager.RebuildPromQLRules(metricList)
 	if err != nil {
 		t.Error(err)
 	}
@@ -1406,14 +1422,13 @@ func Test_GloutonStart(t *testing.T) {
 
 // Test that metrics won't temporary change status on Glouton restart.
 // This test verify that a alert on metric like "cpu_used > 1" (assuming cpu_used is always more than 1%)
-// start in warning/critical and never send any Ok because the Prometheus rule is in pending 5 minutes
+// start in warning/critical and never send any Ok because the Prometheus rule is in pending state for 5 minutes
 // after startup.
-// This test mostly do the same as Test_GloutonStart, but with more realistic scenario.
-func Test_NoStatutsChangeOnStart(t *testing.T) {
+// This test mostly do the same as Test_GloutonStart, but with a more realistic scenario.
+func Test_NoStatusChangeOnStart(t *testing.T) {
 	const (
 		resultName   = "copy_of_node_cpu_seconds_global"
 		sourceMetric = "node_cpu_seconds_global"
-		promqlQuery  = "node_cpu_seconds_global"
 	)
 
 	for _, resolutionSecond := range []int{10, 30, 60} {
@@ -1439,33 +1454,25 @@ func Test_NoStatutsChangeOnStart(t *testing.T) {
 			ctx := context.Background()
 			t0 := time.Now().Truncate(time.Second)
 
-			// we always boot the manager with 10 seconds resolution
-			ruleManager := newManager(ctx, store, defaultLinuxRecordingRules, t0, 10*time.Second)
+			ruleManager := newManager(ctx, store, defaultLinuxRecordingRules, t0)
 
-			metricList := []MetricAlertRule{
+			promqlRules := []PromQLRule{
 				{
-					Labels: labels.FromMap(map[string]string{
-						types.LabelName: resultName,
-					}),
-					Threshold: threshold.Threshold{
-						HighWarning:  0,
-						HighCritical: 100,
-						LowCritical:  math.NaN(),
-						LowWarning:   math.NaN(),
-					},
-					PromQLQuery:       promqlQuery,
-					IsUserPromQLAlert: true,
-					InstanceUUID:      agentID,
-					Resolution:        time.Duration(resolutionSecond) * time.Second,
+					AlertingRuleID: "509701d5-3cb0-449b-a858-0290f4dc3cff",
+					Name:           resultName,
+					WarningQuery:   fmt.Sprintf("%s > 0", sourceMetric),
+					WarningDelay:   5 * time.Minute,
+					CriticalQuery:  fmt.Sprintf("%s > 100", sourceMetric),
+					CriticalDelay:  5 * time.Minute,
+					Resolution:     time.Duration(resolutionSecond) * time.Second,
+					InstanceID:     agentID,
 				},
 			}
 
-			err = ruleManager.RebuildAlertingRules(metricList)
+			err = ruleManager.RebuildPromQLRules(promqlRules)
 			if err != nil {
 				t.Error(err)
 			}
-
-			ruleManager.UpdateMetricResolution(time.Duration(resolutionSecond) * time.Second)
 
 			id, err := reg.RegisterAppenderCallback(
 				context.Background(),
@@ -1502,7 +1509,7 @@ func Test_NoStatutsChangeOnStart(t *testing.T) {
 				}
 
 				ruleManager.now = func() time.Time { return currentTime }
-				reg.InternalRunScape(ctx, currentTime, id)
+				reg.InternalRunScrape(ctx, currentTime, id)
 			}
 
 			var hadResult bool
@@ -1541,7 +1548,6 @@ func Test_NoCrossRead(t *testing.T) {
 	const (
 		resultName   = "copy_of_node_cpu_seconds_global"
 		sourceMetric = "node_cpu_seconds_global"
-		promqlQuery  = "node_cpu_seconds_global"
 	)
 
 	var (
@@ -1567,30 +1573,25 @@ func Test_NoCrossRead(t *testing.T) {
 	t0 := time.Now().Truncate(time.Second)
 
 	// we always boot the manager with 10 seconds resolution
-	ruleManager := newManager(ctx, store, defaultLinuxRecordingRules, t0, 10*time.Second)
+	ruleManager := newManager(ctx, store, defaultLinuxRecordingRules, t0)
 
-	metricList := []MetricAlertRule{
+	promqlRules := []PromQLRule{
 		{
-			Labels: labels.FromMap(map[string]string{
-				types.LabelName: resultName,
-			}),
-			Threshold: threshold.Threshold{
-				HighWarning:  0,
-				HighCritical: 100,
-			},
-			PromQLQuery:       promqlQuery,
-			InstanceUUID:      agentID,
-			Resolution:        10 * time.Second,
-			IsUserPromQLAlert: true,
+			AlertingRuleID: "509701d5-3cb0-449b-a858-0290f4dc3cff",
+			Name:           resultName,
+			WarningQuery:   fmt.Sprintf("%s > 0", sourceMetric),
+			WarningDelay:   5 * time.Minute,
+			CriticalQuery:  fmt.Sprintf("%s > 100", sourceMetric),
+			CriticalDelay:  5 * time.Minute,
+			Resolution:     10 * time.Second,
+			InstanceID:     agentID,
 		},
 	}
 
-	err = ruleManager.RebuildAlertingRules(metricList)
+	err = ruleManager.RebuildPromQLRules(promqlRules)
 	if err != nil {
 		t.Error(err)
 	}
-
-	ruleManager.UpdateMetricResolution(10 * time.Second)
 
 	id, err := reg.RegisterAppenderCallback(
 		context.Background(),
@@ -1633,7 +1634,7 @@ func Test_NoCrossRead(t *testing.T) {
 
 		ruleManager.now = func() time.Time { return currentTime }
 
-		reg.InternalRunScape(ctx, currentTime, id)
+		reg.InternalRunScrape(ctx, currentTime, id)
 	}
 
 	var hadResult bool
@@ -1645,13 +1646,11 @@ func Test_NoCrossRead(t *testing.T) {
 			continue
 		}
 
-		if p.Annotations.Status.CurrentStatus == types.StatusUnknown {
+		if p.Annotations.Status.CurrentStatus == types.StatusOk {
 			hadResult = true
 
 			continue
-		}
-
-		if p.Annotations.Status.CurrentStatus != types.StatusUnknown {
+		} else {
 			t.Errorf("point status = %v want %v", p.Annotations.Status.CurrentStatus, types.StatusUnknown)
 		}
 	}
@@ -1669,7 +1668,6 @@ func Test_NoUnknownOnStart(t *testing.T) {
 	const (
 		resultName   = "copy_of_node_cpu_seconds_global"
 		sourceMetric = "node_cpu_seconds_global"
-		promqlQuery  = "node_cpu_seconds_global"
 	)
 
 	var (
@@ -1695,28 +1693,25 @@ func Test_NoUnknownOnStart(t *testing.T) {
 	t0 := time.Now().Truncate(time.Second)
 
 	// we always boot the manager with 10 seconds resolution
-	ruleManager := newManager(ctx, store, defaultLinuxRecordingRules, t0, 10*time.Second)
+	ruleManager := newManager(ctx, store, defaultLinuxRecordingRules, t0)
 
-	metricList := []MetricAlertRule{
+	promqlRules := []PromQLRule{
 		{
-			Labels: labels.FromMap(map[string]string{
-				types.LabelName: resultName,
-			}),
-			Threshold: threshold.Threshold{
-				HighWarning:  0,
-				HighCritical: 100,
-			},
-			PromQLQuery:       promqlQuery,
-			IsUserPromQLAlert: true,
+			AlertingRuleID: "509701d5-3cb0-449b-a858-0290f4dc3cff",
+			Name:           resultName,
+			WarningQuery:   fmt.Sprintf("%s > 0", sourceMetric),
+			WarningDelay:   5 * time.Minute,
+			CriticalQuery:  fmt.Sprintf("%s > 100", sourceMetric),
+			CriticalDelay:  5 * time.Minute,
+			Resolution:     10 * time.Second,
+			InstanceID:     agentID,
 		},
 	}
 
-	err = ruleManager.RebuildAlertingRules(metricList)
+	err = ruleManager.RebuildPromQLRules(promqlRules)
 	if err != nil {
 		t.Error(err)
 	}
-
-	ruleManager.UpdateMetricResolution(10 * time.Second)
 
 	id, err := reg.RegisterAppenderCallback(
 		context.Background(),
@@ -1741,7 +1736,8 @@ func Test_NoUnknownOnStart(t *testing.T) {
 						Value: 30,
 					},
 					Labels: map[string]string{
-						types.LabelName: sourceMetric,
+						types.LabelName:         sourceMetric,
+						types.LabelInstanceUUID: agentID,
 					},
 				},
 			})
@@ -1749,7 +1745,7 @@ func Test_NoUnknownOnStart(t *testing.T) {
 
 		ruleManager.now = func() time.Time { return currentTime }
 
-		reg.InternalRunScape(ctx, currentTime, id)
+		reg.InternalRunScrape(ctx, currentTime, id)
 	}
 
 	var hadResult bool

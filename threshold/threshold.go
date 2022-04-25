@@ -51,18 +51,15 @@ type Registry struct {
 	units             map[MetricNameItem]Unit
 	thresholdsAllItem map[string]Threshold
 	thresholds        map[MetricNameItem]Threshold
-	defaultSoftPeriod time.Duration
-	softPeriods       map[string]time.Duration
 	nowFunc           func() time.Time
 }
 
 // New returns a new ThresholdState.
 func New(state State) *Registry {
 	self := &Registry{
-		state:             state,
-		states:            make(map[MetricNameItem]statusState),
-		defaultSoftPeriod: 300 * time.Second,
-		nowFunc:           time.Now,
+		state:   state,
+		states:  make(map[MetricNameItem]statusState),
+		nowFunc: time.Now,
 	}
 
 	var jsonList []jsonState
@@ -117,18 +114,6 @@ func (r *Registry) SetThresholds(thresholdWithItem map[MetricNameItem]Threshold,
 	logger.V(2).Printf("Thresholds contains %d definitions for specific item and %d definitions for any item", len(thresholdWithItem), len(thresholdAllItem))
 }
 
-// SetSoftPeriod configure soft status period. A metric must stay in higher status for at least this period before its status actually change.
-// For example, CPU usage must be above 80% for at least 5 minutes before being alerted. The term soft-status is taken from Nagios.
-func (r *Registry) SetSoftPeriod(defaultPeriod time.Duration, periodPerMetrics map[string]time.Duration) {
-	r.l.Lock()
-	defer r.l.Unlock()
-
-	r.softPeriods = periodPerMetrics
-	r.defaultSoftPeriod = defaultPeriod
-
-	logger.V(2).Printf("SoftPeriod contains %d definitions", len(periodPerMetrics))
-}
-
 // SetUnits configure the units.
 func (r *Registry) SetUnits(units map[MetricNameItem]Unit) {
 	r.l.Lock()
@@ -157,7 +142,11 @@ type jsonState struct {
 	statusState
 }
 
-func (s statusState) Update(newStatus types.Status, period time.Duration, now time.Time) statusState {
+func (s statusState) Update(
+	newStatus types.Status,
+	warningDelay, criticalDelay time.Duration,
+	now time.Time,
+) statusState {
 	if s.CurrentStatus == types.StatusUnset {
 		s.CurrentStatus = newStatus
 	}
@@ -174,18 +163,16 @@ func (s statusState) Update(newStatus types.Status, period time.Duration, now ti
 	criticalDuration, warningDuration := s.setNewStatus(newStatus, now)
 
 	switch {
-	case period == 0:
-		s.CurrentStatus = newStatus
-	case criticalDuration >= period:
+	case newStatus == types.StatusOk:
+		// downgrade status immediately
+		s.CurrentStatus = types.StatusOk
+	case (criticalDuration != 0 || newStatus == types.StatusCritical) && criticalDuration >= criticalDelay:
 		s.CurrentStatus = types.StatusCritical
-	case warningDuration >= period:
+	case (warningDuration != 0 || newStatus == types.StatusWarning) && warningDuration >= warningDelay:
 		s.CurrentStatus = types.StatusWarning
 	case s.CurrentStatus == types.StatusCritical && newStatus == types.StatusWarning:
 		// downgrade status immediately
 		s.CurrentStatus = types.StatusWarning
-	case newStatus == types.StatusOk:
-		// downgrade status immediately
-		s.CurrentStatus = types.StatusOk
 	}
 
 	s.LastUpdate = now
@@ -228,10 +215,12 @@ func (s *statusState) setNewStatus(newStatus types.Status, now time.Time) (time.
 // Threshold define a min/max thresholds.
 // Use NaN to mark the limit as unset.
 type Threshold struct {
-	LowCritical  float64
-	LowWarning   float64
-	HighWarning  float64
-	HighCritical float64
+	LowCritical   float64
+	LowWarning    float64
+	WarningDelay  time.Duration
+	HighWarning   float64
+	HighCritical  float64
+	CriticalDelay time.Duration
 }
 
 // Equal test equality of threhold object.
@@ -259,6 +248,31 @@ func (t Threshold) Equal(other Threshold) bool {
 	return true
 }
 
+// Merge two thresholds, keep the stricter conditions.
+func (t Threshold) Merge(other Threshold) Threshold {
+	if math.IsNaN(t.LowWarning) || !math.IsNaN(other.LowWarning) && other.LowWarning > t.LowWarning {
+		t.LowWarning = other.LowWarning
+		t.WarningDelay = other.WarningDelay
+	}
+
+	if math.IsNaN(t.LowCritical) || !math.IsNaN(other.LowCritical) && other.LowCritical > t.LowCritical {
+		t.LowCritical = other.LowCritical
+		t.CriticalDelay = other.CriticalDelay
+	}
+
+	if math.IsNaN(t.HighWarning) || !math.IsNaN(other.HighWarning) && other.HighWarning < t.HighWarning {
+		t.HighWarning = other.HighWarning
+		t.WarningDelay = other.WarningDelay
+	}
+
+	if math.IsNaN(t.HighCritical) || !math.IsNaN(other.HighCritical) && other.HighCritical < t.HighCritical {
+		t.HighCritical = other.HighCritical
+		t.CriticalDelay = other.CriticalDelay
+	}
+
+	return t
+}
+
 // Unit represent the unit of a metric.
 type Unit struct {
 	UnitType int    `json:"unit,omitempty"`
@@ -276,8 +290,13 @@ const (
 
 // FromInterfaceMap convert a map[string]interface{} to Threshold.
 // It expect the key "low_critical", "low_warning", "high_critical" and "high_warning".
-func FromInterfaceMap(input map[string]interface{}) (Threshold, error) {
-	result := Threshold{
+func FromInterfaceMap(
+	input map[string]interface{},
+	metricName string,
+	softPeriods map[string]time.Duration,
+	defaultSoftPeriod time.Duration,
+) (Threshold, error) {
+	thresh := Threshold{
 		LowCritical:  math.NaN(),
 		LowWarning:   math.NaN(),
 		HighWarning:  math.NaN(),
@@ -294,23 +313,32 @@ func FromInterfaceMap(input map[string]interface{}) (Threshold, error) {
 			case int:
 				value = float64(v)
 			default:
-				return result, fmt.Errorf("%w: %v is not a float", errIncorrectType, raw)
+				return thresh, fmt.Errorf("%w: %v is not a float", errIncorrectType, raw)
 			}
 
 			switch name {
 			case "low_critical":
-				result.LowCritical = value
+				thresh.LowCritical = value
 			case "low_warning":
-				result.LowWarning = value
+				thresh.LowWarning = value
 			case "high_warning":
-				result.HighWarning = value
+				thresh.HighWarning = value
 			case "high_critical":
-				result.HighCritical = value
+				thresh.HighCritical = value
 			}
 		}
 	}
 
-	return result, nil
+	// Apply delays from config or default delay.
+	thresh.WarningDelay = defaultSoftPeriod
+	thresh.CriticalDelay = defaultSoftPeriod
+
+	if softPeriod, ok := softPeriods[metricName]; ok {
+		thresh.WarningDelay = softPeriod
+		thresh.CriticalDelay = softPeriod
+	}
+
+	return thresh, nil
 }
 
 // IsZero returns true is all threshold limit are unset (NaN).
@@ -558,13 +586,8 @@ func (p pusher) PushPoints(ctx context.Context, points []types.MetricPoint) {
 func (p *pusher) addPointWithThreshold(points []types.MetricPoint, point types.MetricPoint, threshold Threshold, key MetricNameItem) []types.MetricPoint {
 	softStatus, highThreshold := threshold.CurrentStatus(point.Value)
 	previousState := p.registry.states[key]
-	period := p.registry.defaultSoftPeriod
 
-	if tmp, ok := p.registry.softPeriods[key.Name]; ok {
-		period = tmp
-	}
-
-	newState := previousState.Update(softStatus, period, p.registry.nowFunc())
+	newState := previousState.Update(softStatus, threshold.WarningDelay, threshold.CriticalDelay, p.registry.nowFunc())
 	p.registry.states[key] = newState
 
 	unit := p.registry.units[key]
@@ -585,13 +608,20 @@ func (p *pusher) addPointWithThreshold(points []types.MetricPoint, point types.M
 			thresholdLimit = threshold.LowWarning
 		}
 
-		if period > 0 {
+		switch {
+		case newState.CurrentStatus == types.StatusWarning && threshold.WarningDelay > 0:
 			statusDescription += fmt.Sprintf(
 				" threshold (%s) exceeded over last %v",
 				FormatValue(thresholdLimit, unit),
-				formatDuration(period),
+				formatDuration(threshold.WarningDelay),
 			)
-		} else {
+		case newState.CurrentStatus == types.StatusCritical && threshold.CriticalDelay > 0:
+			statusDescription += fmt.Sprintf(
+				" threshold (%s) exceeded over last %v",
+				FormatValue(thresholdLimit, unit),
+				formatDuration(threshold.CriticalDelay),
+			)
+		default:
 			statusDescription += fmt.Sprintf(
 				" threshold (%s) exceeded",
 				FormatValue(thresholdLimit, unit),

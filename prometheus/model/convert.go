@@ -247,6 +247,10 @@ func AnnotationToMetaLabels(lbls labels.Labels, annotation types.MetricAnnotatio
 		builder.Set(types.LabelMetaSNMPTarget, annotation.SNMPTarget)
 	}
 
+	if annotation.AlertingRuleID != "" {
+		builder.Set(types.LabelMetaAlertingRuleUUID, annotation.AlertingRuleID)
+	}
+
 	if annotation.Status.CurrentStatus.IsSet() {
 		builder.Set(types.LabelMetaCurrentStatus, annotation.Status.CurrentStatus.String())
 		builder.Set(types.LabelMetaCurrentDescription, annotation.Status.StatusDescription)
@@ -263,6 +267,7 @@ func MetaLabelsToAnnotation(lbls labels.Labels) types.MetricAnnotations {
 		ContainerID:    lbls.Get(types.LabelMetaContainerID),
 		BleemeoAgentID: lbls.Get(types.LabelMetaBleemeoTargetAgentUUID),
 		SNMPTarget:     lbls.Get(types.LabelMetaSNMPTarget),
+		AlertingRuleID: lbls.Get(types.LabelMetaAlertingRuleUUID),
 	}
 
 	if statusText := lbls.Get(types.LabelMetaCurrentStatus); statusText != "" {

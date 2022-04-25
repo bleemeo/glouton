@@ -27,20 +27,20 @@ import (
 	"strings"
 )
 
-func (s *Synchronizer) syncAccountConfig(ctx context.Context, fullSync bool, onlyEssential bool) error {
+func (s *Synchronizer) syncAccountConfig(ctx context.Context, fullSync bool, onlyEssential bool) (updateThresholds bool, err error) {
 	if fullSync {
 		currentConfig, _ := s.option.Cache.CurrentAccountConfig()
 
 		if err := s.agentTypesUpdateList(); err != nil {
-			return err
+			return false, err
 		}
 
 		if err := s.accountConfigUpdateList(); err != nil {
-			return err
+			return false, err
 		}
 
 		if err := s.agentConfigUpdateList(); err != nil {
-			return err
+			return false, err
 		}
 
 		newConfig, ok := s.option.Cache.CurrentAccountConfig()
@@ -49,7 +49,7 @@ func (s *Synchronizer) syncAccountConfig(ctx context.Context, fullSync bool, onl
 		}
 	}
 
-	return nil
+	return false, nil
 }
 
 func (s *Synchronizer) agentTypesUpdateList() error {

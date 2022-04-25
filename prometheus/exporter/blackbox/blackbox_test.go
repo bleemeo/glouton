@@ -1581,7 +1581,7 @@ func Test_Collect(t *testing.T) { //nolint:maintidx
 				t.Fatal(err)
 			}
 
-			reg.InternalRunScape(tt.target.RequestContext(ctx), t0, id)
+			reg.InternalRunScrape(tt.target.RequestContext(ctx), t0, id)
 
 			gotMap := make(map[string]int, len(resPoints))
 			for i, got := range resPoints {

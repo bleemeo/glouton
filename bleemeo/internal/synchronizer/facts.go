@@ -42,10 +42,10 @@ func getEssentialFacts() map[string]bool {
 	}
 }
 
-func (s *Synchronizer) syncFacts(ctx context.Context, fullSync bool, onlyEssential bool) error {
+func (s *Synchronizer) syncFacts(ctx context.Context, fullSync bool, onlyEssential bool) (updateThresholds bool, err error) {
 	localFacts, err := s.option.Facts.Facts(ctx, 24*time.Hour)
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	if onlyEssential {
@@ -69,7 +69,7 @@ func (s *Synchronizer) syncFacts(ctx context.Context, fullSync bool, onlyEssenti
 	if !onlyEssential {
 		agentTypeID, found := s.getAgentType(types.AgentTypeSNMP)
 		if !found {
-			return errRetryLater
+			return false, errRetryLater
 		}
 
 		remoteAgentList := s.option.Cache.AgentsByUUID()
@@ -98,21 +98,21 @@ func (s *Synchronizer) syncFacts(ctx context.Context, fullSync bool, onlyEssenti
 	// s.serviceDeleteFromRemote() is uneeded, API don't delete facts
 
 	if err := s.factRegister(allAgentFacts); err != nil {
-		return err
+		return false, err
 	}
 
 	if onlyEssential {
 		// localFacts was filtered, can't delete
-		return nil
+		return false, nil
 	}
 
 	if err := s.factDeleteFromLocal(allAgentFacts); err != nil {
-		return err
+		return false, err
 	}
 
 	s.lastFactUpdatedAt = localFacts["fact_updated_at"]
 
-	return nil
+	return false, nil
 }
 
 func (s *Synchronizer) factsUpdateList() error {

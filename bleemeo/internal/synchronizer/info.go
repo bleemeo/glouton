@@ -30,12 +30,12 @@ import (
 )
 
 // syncInfo retrieves the minimum supported glouton version the API supports.
-func (s *Synchronizer) syncInfo(ctx context.Context, _ bool, onlyEssential bool) error {
+func (s *Synchronizer) syncInfo(ctx context.Context, _ bool, onlyEssential bool) (updateThresholds bool, err error) {
 	return s.syncInfoReal(true)
 }
 
 // syncInfoReal retrieves the minimum supported glouton version the API supports.
-func (s *Synchronizer) syncInfoReal(disableOnTimeDrift bool) error {
+func (s *Synchronizer) syncInfoReal(disableOnTimeDrift bool) (updateThresholds bool, err error) {
 	var globalInfo bleemeoTypes.GlobalInfo
 
 	statusCode, err := s.realClient.DoUnauthenticated(s.ctx, "GET", "v1/info/", nil, nil, &globalInfo)
@@ -48,13 +48,13 @@ func (s *Synchronizer) syncInfoReal(disableOnTimeDrift bool) error {
 	if err != nil {
 		logger.V(2).Printf("Couldn't retrieve global informations, got '%v'", err)
 
-		return nil
+		return false, nil
 	}
 
 	if statusCode >= 300 {
 		logger.V(2).Printf("Couldn't retrieve global informations, got HTTP status code %d", statusCode)
 
-		return nil
+		return false, nil
 	}
 
 	globalInfo.FetchedAt = s.now()
@@ -131,14 +131,14 @@ func (s *Synchronizer) syncInfoReal(disableOnTimeDrift bool) error {
 				nil,
 			)
 			if err != nil {
-				return err
+				return false, err
 			}
 		}
 	}
 
 	s.lastInfo = globalInfo
 
-	return nil
+	return false, nil
 }
 
 // IsMaintenance returns whether the synchronizer is currently in maintenance mode (not making any request except info/agent).

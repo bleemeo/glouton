@@ -56,6 +56,7 @@ type data struct {
 	AgentConfigs            []bleemeoTypes.AgentConfig
 	Services                []bleemeoTypes.Service
 	Monitors                []bleemeoTypes.Monitor
+	AlertingRules           []bleemeoTypes.AlertingRule
 }
 
 // dataVersion1 contains fields that have been deleted since the version 1 of the state file, but that we
@@ -234,7 +235,7 @@ func (c *Cache) AccountConfigsByUUID() map[string]bleemeoTypes.GloutonAccountCon
 			LiveProcessResolution: time.Duration(accountConfig.LiveProcessResolution) * time.Second,
 			LiveProcess:           accountConfig.LiveProcess,
 			DockerIntegration:     accountConfig.DockerIntegration,
-			SNMPIntergration:      accountConfig.SNMPIntergration,
+			SNMPIntegration:       accountConfig.SNMPIntegration,
 			AgentConfigByName:     make(map[string]bleemeoTypes.GloutonAgentConfig),
 			AgentConfigByID:       make(map[string]bleemeoTypes.GloutonAgentConfig),
 		}
@@ -288,7 +289,7 @@ func (c *Cache) AccountConfigsByUUID() map[string]bleemeoTypes.GloutonAccountCon
 		}
 
 		if _, ok := config.AgentConfigByName[bleemeoTypes.AgentTypeSNMP]; !ok {
-			config.SNMPIntergration = false
+			config.SNMPIntegration = false
 		}
 
 		if len(config.AgentConfigByName) > 0 {
@@ -570,6 +571,26 @@ func (c *Cache) MetricsByUUID() map[string]bleemeoTypes.Metric {
 	for _, v := range c.data.Metrics {
 		result[v.ID] = v
 	}
+
+	return result
+}
+
+// SetAlertingRules update the alerting rules list.
+func (c *Cache) SetAlertingRules(alertingRules []bleemeoTypes.AlertingRule) {
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	c.data.AlertingRules = alertingRules
+	c.dirty = true
+}
+
+// AlertingRules returns a copy of the alerting rules.
+func (c *Cache) AlertingRules() []bleemeoTypes.AlertingRule {
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	result := make([]bleemeoTypes.AlertingRule, len(c.data.AlertingRules))
+	copy(result, c.data.AlertingRules)
 
 	return result
 }

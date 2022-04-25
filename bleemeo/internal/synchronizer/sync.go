@@ -29,6 +29,7 @@ import (
 	bleemeoTypes "glouton/bleemeo/types"
 	"glouton/delay"
 	"glouton/logger"
+	"glouton/threshold"
 	"glouton/types"
 	"math/big"
 	"net/http"
@@ -60,6 +61,7 @@ const (
 	syncMethodService       = "service"
 	syncMethodContainer     = "container"
 	syncMethodMetric        = "metric"
+	syncMethodAlertingRules = "alertingrules"
 )
 
 // Synchronizer synchronize object with Bleemeo.
@@ -93,16 +95,23 @@ type Synchronizer struct {
 	// minutes to check whether we are still in maintenance of not.
 	lastMaintenanceSync time.Time
 
-	l                      sync.Mutex
-	disabledUntil          time.Time
-	disableReason          bleemeoTypes.DisableReason
-	forceSync              map[string]bool
-	pendingMetricsUpdate   []string
-	pendingMonitorsUpdate  []MonitorUpdate
-	delayedContainer       map[string]time.Time
-	retryableMetricFailure map[bleemeoTypes.FailureKind]bool
-	metricRetryAt          time.Time
-	lastInfo               bleemeoTypes.GlobalInfo
+	l                          sync.Mutex
+	disabledUntil              time.Time
+	disableReason              bleemeoTypes.DisableReason
+	forceSync                  map[string]bool
+	pendingMetricsUpdate       []string
+	pendingMonitorsUpdate      []MonitorUpdate
+	pendingAlertingRulesUpdate []string
+	thresholdOverrides         map[thresholdOverrideKey]threshold.Threshold
+	delayedContainer           map[string]time.Time
+	retryableMetricFailure     map[bleemeoTypes.FailureKind]bool
+	metricRetryAt              time.Time
+	lastInfo                   bleemeoTypes.GlobalInfo
+}
+
+type thresholdOverrideKey struct {
+	MetricName string
+	AgentID    string
 }
 
 // Option are parameters for the synchronizer.
@@ -162,12 +171,12 @@ func newWithNow(option Option, now func() time.Time) (*Synchronizer, error) {
 }
 
 func (s *Synchronizer) DiagnosticArchive(ctx context.Context, archive types.ArchiveWriter) error {
-	s.l.Lock()
-
 	file, err := archive.Create("bleemeo-sync-state.json")
 	if err != nil {
 		return err
 	}
+
+	s.l.Lock()
 
 	obj := struct {
 		NextFullSync               time.Time
@@ -190,6 +199,7 @@ func (s *Synchronizer) DiagnosticArchive(ctx context.Context, archive types.Arch
 		RetryableMetricFailure     map[bleemeoTypes.FailureKind]bool
 		MetricRetryAt              time.Time
 		LastInfo                   bleemeoTypes.GlobalInfo
+		ThresholdOverrides         string
 	}{
 		NextFullSync:               s.nextFullSync,
 		FullSyncCount:              s.fullSyncCount,
@@ -211,9 +221,10 @@ func (s *Synchronizer) DiagnosticArchive(ctx context.Context, archive types.Arch
 		RetryableMetricFailure:     s.retryableMetricFailure,
 		MetricRetryAt:              s.metricRetryAt,
 		LastInfo:                   s.lastInfo,
+		ThresholdOverrides:         fmt.Sprintf("%v", s.thresholdOverrides),
 	}
 
-	defer s.l.Unlock()
+	s.l.Unlock()
 
 	enc := json.NewEncoder(file)
 	enc.SetIndent("", "  ")
@@ -241,7 +252,7 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 	// syncInfo early because MQTT connection will establish or not depending on it (maintenance & outdated agent).
 	// syncInfo also disable if time drift is too big. We don't do this disable now for a new agent, because
 	// we want it to perform registration and creation of agent_status in order to mark this agent as "bad time" on Bleemeo.
-	err := s.syncInfoReal(!firstSync)
+	_, err := s.syncInfoReal(!firstSync)
 	if err != nil {
 		logger.V(1).Printf("bleemeo: pre-run checks: couldn't sync the global config: %v", err)
 	}
@@ -607,7 +618,7 @@ func (s *Synchronizer) setClient() error {
 }
 
 func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) error {
-	var wasCreation bool
+	var wasCreation, updateThresholds bool
 
 	if s.agentID == "" {
 		if err := s.register(ctx); err != nil {
@@ -619,10 +630,10 @@ func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) error {
 		s.option.NotifyFirstRegistration(ctx)
 		// Do one pass of metric registration to register agent_status.
 		// MQTT connection require this metric to exists before connecting
-		_ = s.syncMetrics(ctx, false, true)
+		_, _ = s.syncMetrics(ctx, false, true)
 
 		// Also do syncAgent, because agent configuration is also required for MQTT connection
-		_ = s.syncAgent(ctx, false, true)
+		_, _ = s.syncAgent(ctx, false, true)
 
 		// Then wait CPU (which should arrive the all other system metrics)
 		// before continuing to process.
@@ -643,7 +654,7 @@ func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) error {
 
 	syncStep := []struct {
 		name                 string
-		method               func(context.Context, bool, bool) error
+		method               func(context.Context, bool, bool) (updateThresholds bool, err error)
 		enabledInMaintenance bool
 		skipOnlyEssential    bool // should be true for method that ignore onlyEssential
 	}{
@@ -656,6 +667,7 @@ func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) error {
 		{name: syncMethodService, method: s.syncServices},
 		{name: syncMethodMonitor, method: s.syncMonitors, skipOnlyEssential: true},
 		{name: syncMethodMetric, method: s.syncMetrics},
+		{name: syncMethodAlertingRules, method: s.syncAlertingRules},
 	}
 	startAt := s.now()
 
@@ -698,7 +710,7 @@ func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) error {
 		}
 
 		if full, ok := syncMethods[step.name]; ok {
-			err := step.method(ctx, full, onlyEssential && !step.skipOnlyEssential)
+			updateThresholdsTmp, err := step.method(ctx, full, onlyEssential && !step.skipOnlyEssential)
 			if err != nil {
 				logger.V(1).Printf("Synchronization for object %s failed: %v", step.name, err)
 
@@ -709,6 +721,8 @@ func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) error {
 					firstErr = err
 				}
 			}
+
+			updateThresholds = updateThresholds || updateThresholdsTmp
 
 			if onlyEssential && !step.skipOnlyEssential {
 				// We registered only essential object. Make sure all other
@@ -731,6 +745,8 @@ func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) error {
 
 	if wasCreation {
 		s.UpdateUnitsAndThresholds(ctx, true)
+	} else if updateThresholds {
+		s.UpdateUnitsAndThresholds(ctx, false)
 	}
 
 	if len(syncMethods) == len(syncStep) && firstErr == nil {
@@ -780,6 +796,7 @@ func (s *Synchronizer) syncToPerform(ctx context.Context) map[string]bool {
 		syncMethods[syncMethodAccountConfig] = fullSync
 		syncMethods[syncMethodMonitor] = fullSync
 		syncMethods[syncMethodSNMP] = fullSync
+		syncMethods[syncMethodAlertingRules] = fullSync
 	}
 
 	if fullSync || s.lastFactUpdatedAt != localFacts["fact_updated_at"] {
@@ -839,7 +856,7 @@ func (s *Synchronizer) syncToPerform(ctx context.Context) map[string]bool {
 	if len(syncMethods) > 0 && s.now().Sub(s.lastInfo.FetchedAt) > 30*time.Minute {
 		// Ensure lastInfo is enough up-to-date.
 		// This will help detection quickly a change on /v1/info/ and will ensure the
-		// metric time_dirft is updated recently to avoid unwanted deactivation.
+		// metric time_drift is updated recently to avoid unwanted deactivation.
 		syncMethods[syncMethodInfo] = false || syncMethods[syncMethodInfo]
 	}
 

@@ -113,6 +113,7 @@ const (
 	LabelMetaSendScraperUUID        = "__meta_probe_send_agent_uuid"
 	LabelMetaCurrentStatus          = "__meta_current_status"
 	LabelMetaCurrentDescription     = "__meta_current_description"
+	LabelMetaAlertingRuleUUID       = "__meta_alerting_rule_uuid"
 	LabelK8SPODName                 = "kubernetes_pod_name"
 	LabelK8SNamespace               = "kubernetes_namespace"
 	LabelInstanceUUID               = "instance_uuid"
@@ -124,6 +125,7 @@ const (
 	LabelContainerName              = "container_name"
 	LabelScrapeJob                  = "scrape_job"
 	LabelScrapeInstance             = "scrape_instance"
+	LabelAlertname                  = "alertname"
 )
 
 // IsSet return true if the status is set.
@@ -210,11 +212,12 @@ type Metric interface {
 
 // MetricAnnotations contains additional information about a metrics.
 type MetricAnnotations struct {
-	BleemeoItem string
-	ContainerID string
-	ServiceName string
-	StatusOf    string
-	SNMPTarget  string
+	BleemeoItem    string
+	ContainerID    string
+	ServiceName    string
+	StatusOf       string
+	SNMPTarget     string
+	AlertingRuleID string
 	// store the agent for which we want to emit the metric
 	BleemeoAgentID string
 	Status         StatusDescription

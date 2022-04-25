@@ -768,7 +768,7 @@ func (h *metricTestHelper) RunSync(maxLoop int, timeStep time.Duration, forceFir
 			result.didFull = true
 		}
 
-		err := h.s.syncMetrics(context.Background(), methods[syncMethodMetric], false)
+		_, err := h.s.syncMetrics(context.Background(), methods[syncMethodMetric], false)
 		result.lastErr = err
 
 		if err == nil {
