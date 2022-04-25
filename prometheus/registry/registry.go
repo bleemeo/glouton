@@ -1223,13 +1223,6 @@ func (r *Registry) scrape(ctx context.Context, state GatherState, reg *registrat
 // pushPoint add a new point to the list of pushed point with a specified TTL.
 // As for AddMetricPointFunction, points should not be mutated after the call.
 func (r *Registry) pushPoint(ctx context.Context, points []types.MetricPoint, ttl time.Duration, format types.MetricFormat) {
-	if r.option.ThresholdHandler != nil {
-		var statusPoints []types.MetricPoint
-
-		points, statusPoints = r.option.ThresholdHandler.ApplyThresholds(points)
-		points = append(points, statusPoints...)
-	}
-
 	r.l.Lock()
 
 	for r.blockPushPoint {
@@ -1295,6 +1288,14 @@ func (r *Registry) pushPoint(ctx context.Context, points []types.MetricPoint, tt
 			points[n] = point
 			n++
 		}
+	}
+
+	// Apply the thresholds after the relabel hook to get the instance UUID in the labels.
+	if r.option.ThresholdHandler != nil {
+		var statusPoints []types.MetricPoint
+
+		points, statusPoints = r.option.ThresholdHandler.ApplyThresholds(points)
+		points = append(points, statusPoints...)
 	}
 
 	points = points[:n]

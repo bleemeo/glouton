@@ -39,7 +39,6 @@ const (
 type State interface {
 	Get(key string, result interface{}) error
 	Set(key string, object interface{}) error
-	BleemeoCredentials() (string, string)
 }
 
 // Registry keep track of threshold states to update metrics if the exceed a threshold for a period
@@ -555,17 +554,9 @@ func (r *Registry) ApplyThresholds(points []types.MetricPoint) ([]types.MetricPo
 
 	newPoints := make([]types.MetricPoint, 0, len(points))
 	statusPoints := make([]types.MetricPoint, 0, len(points))
-	mainAgentID, _ := r.state.BleemeoCredentials()
 
 	for _, point := range points {
 		if !point.Annotations.Status.CurrentStatus.IsSet() {
-			// The BleemeoAgentID annotation is not filled for metrics on the main agent, so we add it here.
-			agentID := point.Annotations.BleemeoAgentID
-			if agentID == "" {
-				agentID = mainAgentID
-			}
-
-			// TODO: Add the agent in the labels if there is none?
 			labelsText := types.LabelsToText(point.Labels)
 			threshold := r.getThreshold(labelsText)
 
@@ -598,6 +589,7 @@ func (r *Registry) addPointWithThreshold(
 	// Consumer expect status description from threshold to start with "Current value:"
 	statusDescription := fmt.Sprintf("Current value: %s", FormatValue(point.Value, unit))
 
+	// TODO: Skip NaN
 	if newState.CurrentStatus != types.StatusOk {
 		thresholdLimit := math.NaN()
 
