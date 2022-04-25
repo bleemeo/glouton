@@ -1,27 +1,3 @@
-type Label {
-  key: String!
-  value: String!
-}
-
-type Point {
-  time: Time!
-  value: Float!
-}
-
-type Metric {
-  name: String!
-  labels: [Label!]!
-  points: [Point!]
-  thresholds: Threshold!
-}
-
-type Threshold {
-  lowCritical: Float
-  lowWarning: Float
-  highCritical: Float
-  highWarning: Float
-}
-
 type Container {
   command: String!
   createdAt: Time
@@ -146,8 +122,6 @@ input Pagination {
 }
 
 type Query {
-  metrics(metricsFilter: [MetricInput!]!): [Metric!]!
-  points(metricsFilter: [MetricInput!]!, start: String!, end: String!, minutes: Int!): [Metric!]!
   containers(input: Pagination, allContainers: Boolean!, search: String!): Containers!
   processes(containerId: String): Topinfo!
   facts: [Fact!]!

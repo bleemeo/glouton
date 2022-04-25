@@ -95,29 +95,12 @@ type ComplexityRoot struct {
 		Value func(childComplexity int) int
 	}
 
-	Label struct {
-		Key   func(childComplexity int) int
-		Value func(childComplexity int) int
-	}
-
 	MemoryUsage struct {
 		Buffers func(childComplexity int) int
 		Cached  func(childComplexity int) int
 		Free    func(childComplexity int) int
 		Total   func(childComplexity int) int
 		Used    func(childComplexity int) int
-	}
-
-	Metric struct {
-		Labels     func(childComplexity int) int
-		Name       func(childComplexity int) int
-		Points     func(childComplexity int) int
-		Thresholds func(childComplexity int) int
-	}
-
-	Point struct {
-		Time  func(childComplexity int) int
-		Value func(childComplexity int) int
 	}
 
 	Process struct {
@@ -140,8 +123,6 @@ type ComplexityRoot struct {
 		AgentStatus      func(childComplexity int) int
 		Containers       func(childComplexity int, input *Pagination, allContainers bool, search string) int
 		Facts            func(childComplexity int) int
-		Metrics          func(childComplexity int, metricsFilter []*MetricInput) int
-		Points           func(childComplexity int, metricsFilter []*MetricInput, start string, end string, minutes int) int
 		Processes        func(childComplexity int, containerID *string) int
 		Services         func(childComplexity int, isActive bool) int
 		Tags             func(childComplexity int) int
@@ -168,13 +149,6 @@ type ComplexityRoot struct {
 		TagName func(childComplexity int) int
 	}
 
-	Threshold struct {
-		HighCritical func(childComplexity int) int
-		HighWarning  func(childComplexity int) int
-		LowCritical  func(childComplexity int) int
-		LowWarning   func(childComplexity int) int
-	}
-
 	Topinfo struct {
 		CPU       func(childComplexity int) int
 		Loads     func(childComplexity int) int
@@ -188,8 +162,6 @@ type ComplexityRoot struct {
 }
 
 type QueryResolver interface {
-	Metrics(ctx context.Context, metricsFilter []*MetricInput) ([]*Metric, error)
-	Points(ctx context.Context, metricsFilter []*MetricInput, start string, end string, minutes int) ([]*Metric, error)
 	Containers(ctx context.Context, input *Pagination, allContainers bool, search string) (*Containers, error)
 	Processes(ctx context.Context, containerID *string) (*Topinfo, error)
 	Facts(ctx context.Context) ([]*Fact, error)
@@ -459,20 +431,6 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.Fact.Value(childComplexity), true
 
-	case "Label.key":
-		if e.complexity.Label.Key == nil {
-			break
-		}
-
-		return e.complexity.Label.Key(childComplexity), true
-
-	case "Label.value":
-		if e.complexity.Label.Value == nil {
-			break
-		}
-
-		return e.complexity.Label.Value(childComplexity), true
-
 	case "MemoryUsage.Buffers":
 		if e.complexity.MemoryUsage.Buffers == nil {
 			break
@@ -507,48 +465,6 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.MemoryUsage.Used(childComplexity), true
-
-	case "Metric.labels":
-		if e.complexity.Metric.Labels == nil {
-			break
-		}
-
-		return e.complexity.Metric.Labels(childComplexity), true
-
-	case "Metric.name":
-		if e.complexity.Metric.Name == nil {
-			break
-		}
-
-		return e.complexity.Metric.Name(childComplexity), true
-
-	case "Metric.points":
-		if e.complexity.Metric.Points == nil {
-			break
-		}
-
-		return e.complexity.Metric.Points(childComplexity), true
-
-	case "Metric.thresholds":
-		if e.complexity.Metric.Thresholds == nil {
-			break
-		}
-
-		return e.complexity.Metric.Thresholds(childComplexity), true
-
-	case "Point.time":
-		if e.complexity.Point.Time == nil {
-			break
-		}
-
-		return e.complexity.Point.Time(childComplexity), true
-
-	case "Point.value":
-		if e.complexity.Point.Value == nil {
-			break
-		}
-
-		return e.complexity.Point.Value(childComplexity), true
 
 	case "Process.cpu_percent":
 		if e.complexity.Process.CPUPercent == nil {
@@ -667,30 +583,6 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.Query.Facts(childComplexity), true
 
-	case "Query.metrics":
-		if e.complexity.Query.Metrics == nil {
-			break
-		}
-
-		args, err := ec.field_Query_metrics_args(context.TODO(), rawArgs)
-		if err != nil {
-			return 0, false
-		}
-
-		return e.complexity.Query.Metrics(childComplexity, args["metricsFilter"].([]*MetricInput)), true
-
-	case "Query.points":
-		if e.complexity.Query.Points == nil {
-			break
-		}
-
-		args, err := ec.field_Query_points_args(context.TODO(), rawArgs)
-		if err != nil {
-			return 0, false
-		}
-
-		return e.complexity.Query.Points(childComplexity, args["metricsFilter"].([]*MetricInput), args["start"].(string), args["end"].(string), args["minutes"].(int)), true
-
 	case "Query.processes":
 		if e.complexity.Query.Processes == nil {
 			break
@@ -806,34 +698,6 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.Tag.TagName(childComplexity), true
 
-	case "Threshold.highCritical":
-		if e.complexity.Threshold.HighCritical == nil {
-			break
-		}
-
-		return e.complexity.Threshold.HighCritical(childComplexity), true
-
-	case "Threshold.highWarning":
-		if e.complexity.Threshold.HighWarning == nil {
-			break
-		}
-
-		return e.complexity.Threshold.HighWarning(childComplexity), true
-
-	case "Threshold.lowCritical":
-		if e.complexity.Threshold.LowCritical == nil {
-			break
-		}
-
-		return e.complexity.Threshold.LowCritical(childComplexity), true
-
-	case "Threshold.lowWarning":
-		if e.complexity.Threshold.LowWarning == nil {
-			break
-		}
-
-		return e.complexity.Threshold.LowWarning(childComplexity), true
-
 	case "Topinfo.CPU":
 		if e.complexity.Topinfo.CPU == nil {
 			break
@@ -940,31 +804,7 @@ func (ec *executionContext) introspectType(name string) (*introspection.Type, er
 }
 
 var sources = []*ast.Source{
-	{Name: "schema.graphql", Input: `type Label {
-  key: String!
-  value: String!
-}
-
-type Point {
-  time: Time!
-  value: Float!
-}
-
-type Metric {
-  name: String!
-  labels: [Label!]!
-  points: [Point!]
-  thresholds: Threshold!
-}
-
-type Threshold {
-  lowCritical: Float
-  lowWarning: Float
-  highCritical: Float
-  highWarning: Float
-}
-
-type Container {
+	{Name: "schema.graphql", Input: `type Container {
   command: String!
   createdAt: Time
   id: String!
@@ -1088,8 +928,6 @@ input Pagination {
 }
 
 type Query {
-  metrics(metricsFilter: [MetricInput!]!): [Metric!]!
-  points(metricsFilter: [MetricInput!]!, start: String!, end: String!, minutes: Int!): [Metric!]!
   containers(input: Pagination, allContainers: Boolean!, search: String!): Containers!
   processes(containerId: String): Topinfo!
   facts: [Fact!]!
@@ -1153,63 +991,6 @@ func (ec *executionContext) field_Query_containers_args(ctx context.Context, raw
 		}
 	}
 	args["search"] = arg2
-	return args, nil
-}
-
-func (ec *executionContext) field_Query_metrics_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
-	var err error
-	args := map[string]interface{}{}
-	var arg0 []*MetricInput
-	if tmp, ok := rawArgs["metricsFilter"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("metricsFilter"))
-		arg0, err = ec.unmarshalNMetricInput2ᚕᚖgloutonᚋapiᚐMetricInputᚄ(ctx, tmp)
-		if err != nil {
-			return nil, err
-		}
-	}
-	args["metricsFilter"] = arg0
-	return args, nil
-}
-
-func (ec *executionContext) field_Query_points_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
-	var err error
-	args := map[string]interface{}{}
-	var arg0 []*MetricInput
-	if tmp, ok := rawArgs["metricsFilter"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("metricsFilter"))
-		arg0, err = ec.unmarshalNMetricInput2ᚕᚖgloutonᚋapiᚐMetricInputᚄ(ctx, tmp)
-		if err != nil {
-			return nil, err
-		}
-	}
-	args["metricsFilter"] = arg0
-	var arg1 string
-	if tmp, ok := rawArgs["start"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("start"))
-		arg1, err = ec.unmarshalNString2string(ctx, tmp)
-		if err != nil {
-			return nil, err
-		}
-	}
-	args["start"] = arg1
-	var arg2 string
-	if tmp, ok := rawArgs["end"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("end"))
-		arg2, err = ec.unmarshalNString2string(ctx, tmp)
-		if err != nil {
-			return nil, err
-		}
-	}
-	args["end"] = arg2
-	var arg3 int
-	if tmp, ok := rawArgs["minutes"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("minutes"))
-		arg3, err = ec.unmarshalNInt2int(ctx, tmp)
-		if err != nil {
-			return nil, err
-		}
-	}
-	args["minutes"] = arg3
 	return args, nil
 }
 
@@ -2491,76 +2272,6 @@ func (ec *executionContext) _Fact_value(ctx context.Context, field graphql.Colle
 	return ec.marshalNString2string(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) _Label_key(ctx context.Context, field graphql.CollectedField, obj *Label) (ret graphql.Marshaler) {
-	defer func() {
-		if r := recover(); r != nil {
-			ec.Error(ctx, ec.Recover(ctx, r))
-			ret = graphql.Null
-		}
-	}()
-	fc := &graphql.FieldContext{
-		Object:     "Label",
-		Field:      field,
-		Args:       nil,
-		IsMethod:   false,
-		IsResolver: false,
-	}
-
-	ctx = graphql.WithFieldContext(ctx, fc)
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
-		ctx = rctx // use context from middleware stack in children
-		return obj.Key, nil
-	})
-	if err != nil {
-		ec.Error(ctx, err)
-		return graphql.Null
-	}
-	if resTmp == nil {
-		if !graphql.HasFieldError(ctx, fc) {
-			ec.Errorf(ctx, "must not be null")
-		}
-		return graphql.Null
-	}
-	res := resTmp.(string)
-	fc.Result = res
-	return ec.marshalNString2string(ctx, field.Selections, res)
-}
-
-func (ec *executionContext) _Label_value(ctx context.Context, field graphql.CollectedField, obj *Label) (ret graphql.Marshaler) {
-	defer func() {
-		if r := recover(); r != nil {
-			ec.Error(ctx, ec.Recover(ctx, r))
-			ret = graphql.Null
-		}
-	}()
-	fc := &graphql.FieldContext{
-		Object:     "Label",
-		Field:      field,
-		Args:       nil,
-		IsMethod:   false,
-		IsResolver: false,
-	}
-
-	ctx = graphql.WithFieldContext(ctx, fc)
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
-		ctx = rctx // use context from middleware stack in children
-		return obj.Value, nil
-	})
-	if err != nil {
-		ec.Error(ctx, err)
-		return graphql.Null
-	}
-	if resTmp == nil {
-		if !graphql.HasFieldError(ctx, fc) {
-			ec.Errorf(ctx, "must not be null")
-		}
-		return graphql.Null
-	}
-	res := resTmp.(string)
-	fc.Result = res
-	return ec.marshalNString2string(ctx, field.Selections, res)
-}
-
 func (ec *executionContext) _MemoryUsage_Total(ctx context.Context, field graphql.CollectedField, obj *MemoryUsage) (ret graphql.Marshaler) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -2720,213 +2431,6 @@ func (ec *executionContext) _MemoryUsage_Cached(ctx context.Context, field graph
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Cached, nil
-	})
-	if err != nil {
-		ec.Error(ctx, err)
-		return graphql.Null
-	}
-	if resTmp == nil {
-		if !graphql.HasFieldError(ctx, fc) {
-			ec.Errorf(ctx, "must not be null")
-		}
-		return graphql.Null
-	}
-	res := resTmp.(float64)
-	fc.Result = res
-	return ec.marshalNFloat2float64(ctx, field.Selections, res)
-}
-
-func (ec *executionContext) _Metric_name(ctx context.Context, field graphql.CollectedField, obj *Metric) (ret graphql.Marshaler) {
-	defer func() {
-		if r := recover(); r != nil {
-			ec.Error(ctx, ec.Recover(ctx, r))
-			ret = graphql.Null
-		}
-	}()
-	fc := &graphql.FieldContext{
-		Object:     "Metric",
-		Field:      field,
-		Args:       nil,
-		IsMethod:   false,
-		IsResolver: false,
-	}
-
-	ctx = graphql.WithFieldContext(ctx, fc)
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
-		ctx = rctx // use context from middleware stack in children
-		return obj.Name, nil
-	})
-	if err != nil {
-		ec.Error(ctx, err)
-		return graphql.Null
-	}
-	if resTmp == nil {
-		if !graphql.HasFieldError(ctx, fc) {
-			ec.Errorf(ctx, "must not be null")
-		}
-		return graphql.Null
-	}
-	res := resTmp.(string)
-	fc.Result = res
-	return ec.marshalNString2string(ctx, field.Selections, res)
-}
-
-func (ec *executionContext) _Metric_labels(ctx context.Context, field graphql.CollectedField, obj *Metric) (ret graphql.Marshaler) {
-	defer func() {
-		if r := recover(); r != nil {
-			ec.Error(ctx, ec.Recover(ctx, r))
-			ret = graphql.Null
-		}
-	}()
-	fc := &graphql.FieldContext{
-		Object:     "Metric",
-		Field:      field,
-		Args:       nil,
-		IsMethod:   false,
-		IsResolver: false,
-	}
-
-	ctx = graphql.WithFieldContext(ctx, fc)
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
-		ctx = rctx // use context from middleware stack in children
-		return obj.Labels, nil
-	})
-	if err != nil {
-		ec.Error(ctx, err)
-		return graphql.Null
-	}
-	if resTmp == nil {
-		if !graphql.HasFieldError(ctx, fc) {
-			ec.Errorf(ctx, "must not be null")
-		}
-		return graphql.Null
-	}
-	res := resTmp.([]*Label)
-	fc.Result = res
-	return ec.marshalNLabel2ᚕᚖgloutonᚋapiᚐLabelᚄ(ctx, field.Selections, res)
-}
-
-func (ec *executionContext) _Metric_points(ctx context.Context, field graphql.CollectedField, obj *Metric) (ret graphql.Marshaler) {
-	defer func() {
-		if r := recover(); r != nil {
-			ec.Error(ctx, ec.Recover(ctx, r))
-			ret = graphql.Null
-		}
-	}()
-	fc := &graphql.FieldContext{
-		Object:     "Metric",
-		Field:      field,
-		Args:       nil,
-		IsMethod:   false,
-		IsResolver: false,
-	}
-
-	ctx = graphql.WithFieldContext(ctx, fc)
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
-		ctx = rctx // use context from middleware stack in children
-		return obj.Points, nil
-	})
-	if err != nil {
-		ec.Error(ctx, err)
-		return graphql.Null
-	}
-	if resTmp == nil {
-		return graphql.Null
-	}
-	res := resTmp.([]*Point)
-	fc.Result = res
-	return ec.marshalOPoint2ᚕᚖgloutonᚋapiᚐPointᚄ(ctx, field.Selections, res)
-}
-
-func (ec *executionContext) _Metric_thresholds(ctx context.Context, field graphql.CollectedField, obj *Metric) (ret graphql.Marshaler) {
-	defer func() {
-		if r := recover(); r != nil {
-			ec.Error(ctx, ec.Recover(ctx, r))
-			ret = graphql.Null
-		}
-	}()
-	fc := &graphql.FieldContext{
-		Object:     "Metric",
-		Field:      field,
-		Args:       nil,
-		IsMethod:   false,
-		IsResolver: false,
-	}
-
-	ctx = graphql.WithFieldContext(ctx, fc)
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
-		ctx = rctx // use context from middleware stack in children
-		return obj.Thresholds, nil
-	})
-	if err != nil {
-		ec.Error(ctx, err)
-		return graphql.Null
-	}
-	if resTmp == nil {
-		if !graphql.HasFieldError(ctx, fc) {
-			ec.Errorf(ctx, "must not be null")
-		}
-		return graphql.Null
-	}
-	res := resTmp.(*Threshold)
-	fc.Result = res
-	return ec.marshalNThreshold2ᚖgloutonᚋapiᚐThreshold(ctx, field.Selections, res)
-}
-
-func (ec *executionContext) _Point_time(ctx context.Context, field graphql.CollectedField, obj *Point) (ret graphql.Marshaler) {
-	defer func() {
-		if r := recover(); r != nil {
-			ec.Error(ctx, ec.Recover(ctx, r))
-			ret = graphql.Null
-		}
-	}()
-	fc := &graphql.FieldContext{
-		Object:     "Point",
-		Field:      field,
-		Args:       nil,
-		IsMethod:   false,
-		IsResolver: false,
-	}
-
-	ctx = graphql.WithFieldContext(ctx, fc)
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
-		ctx = rctx // use context from middleware stack in children
-		return obj.Time, nil
-	})
-	if err != nil {
-		ec.Error(ctx, err)
-		return graphql.Null
-	}
-	if resTmp == nil {
-		if !graphql.HasFieldError(ctx, fc) {
-			ec.Errorf(ctx, "must not be null")
-		}
-		return graphql.Null
-	}
-	res := resTmp.(time.Time)
-	fc.Result = res
-	return ec.marshalNTime2timeᚐTime(ctx, field.Selections, res)
-}
-
-func (ec *executionContext) _Point_value(ctx context.Context, field graphql.CollectedField, obj *Point) (ret graphql.Marshaler) {
-	defer func() {
-		if r := recover(); r != nil {
-			ec.Error(ctx, ec.Recover(ctx, r))
-			ret = graphql.Null
-		}
-	}()
-	fc := &graphql.FieldContext{
-		Object:     "Point",
-		Field:      field,
-		Args:       nil,
-		IsMethod:   false,
-		IsResolver: false,
-	}
-
-	ctx = graphql.WithFieldContext(ctx, fc)
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
-		ctx = rctx // use context from middleware stack in children
-		return obj.Value, nil
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -3361,90 +2865,6 @@ func (ec *executionContext) _Process_container_id(ctx context.Context, field gra
 	res := resTmp.(string)
 	fc.Result = res
 	return ec.marshalNString2string(ctx, field.Selections, res)
-}
-
-func (ec *executionContext) _Query_metrics(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
-	defer func() {
-		if r := recover(); r != nil {
-			ec.Error(ctx, ec.Recover(ctx, r))
-			ret = graphql.Null
-		}
-	}()
-	fc := &graphql.FieldContext{
-		Object:     "Query",
-		Field:      field,
-		Args:       nil,
-		IsMethod:   true,
-		IsResolver: true,
-	}
-
-	ctx = graphql.WithFieldContext(ctx, fc)
-	rawArgs := field.ArgumentMap(ec.Variables)
-	args, err := ec.field_Query_metrics_args(ctx, rawArgs)
-	if err != nil {
-		ec.Error(ctx, err)
-		return graphql.Null
-	}
-	fc.Args = args
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
-		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Query().Metrics(rctx, args["metricsFilter"].([]*MetricInput))
-	})
-	if err != nil {
-		ec.Error(ctx, err)
-		return graphql.Null
-	}
-	if resTmp == nil {
-		if !graphql.HasFieldError(ctx, fc) {
-			ec.Errorf(ctx, "must not be null")
-		}
-		return graphql.Null
-	}
-	res := resTmp.([]*Metric)
-	fc.Result = res
-	return ec.marshalNMetric2ᚕᚖgloutonᚋapiᚐMetricᚄ(ctx, field.Selections, res)
-}
-
-func (ec *executionContext) _Query_points(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
-	defer func() {
-		if r := recover(); r != nil {
-			ec.Error(ctx, ec.Recover(ctx, r))
-			ret = graphql.Null
-		}
-	}()
-	fc := &graphql.FieldContext{
-		Object:     "Query",
-		Field:      field,
-		Args:       nil,
-		IsMethod:   true,
-		IsResolver: true,
-	}
-
-	ctx = graphql.WithFieldContext(ctx, fc)
-	rawArgs := field.ArgumentMap(ec.Variables)
-	args, err := ec.field_Query_points_args(ctx, rawArgs)
-	if err != nil {
-		ec.Error(ctx, err)
-		return graphql.Null
-	}
-	fc.Args = args
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
-		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Query().Points(rctx, args["metricsFilter"].([]*MetricInput), args["start"].(string), args["end"].(string), args["minutes"].(int))
-	})
-	if err != nil {
-		ec.Error(ctx, err)
-		return graphql.Null
-	}
-	if resTmp == nil {
-		if !graphql.HasFieldError(ctx, fc) {
-			ec.Errorf(ctx, "must not be null")
-		}
-		return graphql.Null
-	}
-	res := resTmp.([]*Metric)
-	fc.Result = res
-	return ec.marshalNMetric2ᚕᚖgloutonᚋapiᚐMetricᚄ(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) _Query_containers(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
@@ -4199,134 +3619,6 @@ func (ec *executionContext) _Tag_tagName(ctx context.Context, field graphql.Coll
 	res := resTmp.(string)
 	fc.Result = res
 	return ec.marshalNString2string(ctx, field.Selections, res)
-}
-
-func (ec *executionContext) _Threshold_lowCritical(ctx context.Context, field graphql.CollectedField, obj *Threshold) (ret graphql.Marshaler) {
-	defer func() {
-		if r := recover(); r != nil {
-			ec.Error(ctx, ec.Recover(ctx, r))
-			ret = graphql.Null
-		}
-	}()
-	fc := &graphql.FieldContext{
-		Object:     "Threshold",
-		Field:      field,
-		Args:       nil,
-		IsMethod:   false,
-		IsResolver: false,
-	}
-
-	ctx = graphql.WithFieldContext(ctx, fc)
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
-		ctx = rctx // use context from middleware stack in children
-		return obj.LowCritical, nil
-	})
-	if err != nil {
-		ec.Error(ctx, err)
-		return graphql.Null
-	}
-	if resTmp == nil {
-		return graphql.Null
-	}
-	res := resTmp.(*float64)
-	fc.Result = res
-	return ec.marshalOFloat2ᚖfloat64(ctx, field.Selections, res)
-}
-
-func (ec *executionContext) _Threshold_lowWarning(ctx context.Context, field graphql.CollectedField, obj *Threshold) (ret graphql.Marshaler) {
-	defer func() {
-		if r := recover(); r != nil {
-			ec.Error(ctx, ec.Recover(ctx, r))
-			ret = graphql.Null
-		}
-	}()
-	fc := &graphql.FieldContext{
-		Object:     "Threshold",
-		Field:      field,
-		Args:       nil,
-		IsMethod:   false,
-		IsResolver: false,
-	}
-
-	ctx = graphql.WithFieldContext(ctx, fc)
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
-		ctx = rctx // use context from middleware stack in children
-		return obj.LowWarning, nil
-	})
-	if err != nil {
-		ec.Error(ctx, err)
-		return graphql.Null
-	}
-	if resTmp == nil {
-		return graphql.Null
-	}
-	res := resTmp.(*float64)
-	fc.Result = res
-	return ec.marshalOFloat2ᚖfloat64(ctx, field.Selections, res)
-}
-
-func (ec *executionContext) _Threshold_highCritical(ctx context.Context, field graphql.CollectedField, obj *Threshold) (ret graphql.Marshaler) {
-	defer func() {
-		if r := recover(); r != nil {
-			ec.Error(ctx, ec.Recover(ctx, r))
-			ret = graphql.Null
-		}
-	}()
-	fc := &graphql.FieldContext{
-		Object:     "Threshold",
-		Field:      field,
-		Args:       nil,
-		IsMethod:   false,
-		IsResolver: false,
-	}
-
-	ctx = graphql.WithFieldContext(ctx, fc)
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
-		ctx = rctx // use context from middleware stack in children
-		return obj.HighCritical, nil
-	})
-	if err != nil {
-		ec.Error(ctx, err)
-		return graphql.Null
-	}
-	if resTmp == nil {
-		return graphql.Null
-	}
-	res := resTmp.(*float64)
-	fc.Result = res
-	return ec.marshalOFloat2ᚖfloat64(ctx, field.Selections, res)
-}
-
-func (ec *executionContext) _Threshold_highWarning(ctx context.Context, field graphql.CollectedField, obj *Threshold) (ret graphql.Marshaler) {
-	defer func() {
-		if r := recover(); r != nil {
-			ec.Error(ctx, ec.Recover(ctx, r))
-			ret = graphql.Null
-		}
-	}()
-	fc := &graphql.FieldContext{
-		Object:     "Threshold",
-		Field:      field,
-		Args:       nil,
-		IsMethod:   false,
-		IsResolver: false,
-	}
-
-	ctx = graphql.WithFieldContext(ctx, fc)
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
-		ctx = rctx // use context from middleware stack in children
-		return obj.HighWarning, nil
-	})
-	if err != nil {
-		ec.Error(ctx, err)
-		return graphql.Null
-	}
-	if resTmp == nil {
-		return graphql.Null
-	}
-	res := resTmp.(*float64)
-	fc.Result = res
-	return ec.marshalOFloat2ᚖfloat64(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) _Topinfo_Time(ctx context.Context, field graphql.CollectedField, obj *Topinfo) (ret graphql.Marshaler) {
@@ -6340,47 +5632,6 @@ func (ec *executionContext) _Fact(ctx context.Context, sel ast.SelectionSet, obj
 	return out
 }
 
-var labelImplementors = []string{"Label"}
-
-func (ec *executionContext) _Label(ctx context.Context, sel ast.SelectionSet, obj *Label) graphql.Marshaler {
-	fields := graphql.CollectFields(ec.OperationContext, sel, labelImplementors)
-	out := graphql.NewFieldSet(fields)
-	var invalids uint32
-	for i, field := range fields {
-		switch field.Name {
-		case "__typename":
-			out.Values[i] = graphql.MarshalString("Label")
-		case "key":
-			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
-				return ec._Label_key(ctx, field, obj)
-			}
-
-			out.Values[i] = innerFunc(ctx)
-
-			if out.Values[i] == graphql.Null {
-				invalids++
-			}
-		case "value":
-			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
-				return ec._Label_value(ctx, field, obj)
-			}
-
-			out.Values[i] = innerFunc(ctx)
-
-			if out.Values[i] == graphql.Null {
-				invalids++
-			}
-		default:
-			panic("unknown field " + strconv.Quote(field.Name))
-		}
-	}
-	out.Dispatch()
-	if invalids > 0 {
-		return graphql.Null
-	}
-	return out
-}
-
 var memoryUsageImplementors = []string{"MemoryUsage"}
 
 func (ec *executionContext) _MemoryUsage(ctx context.Context, sel ast.SelectionSet, obj *MemoryUsage) graphql.Marshaler {
@@ -6434,105 +5685,6 @@ func (ec *executionContext) _MemoryUsage(ctx context.Context, sel ast.SelectionS
 		case "Cached":
 			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._MemoryUsage_Cached(ctx, field, obj)
-			}
-
-			out.Values[i] = innerFunc(ctx)
-
-			if out.Values[i] == graphql.Null {
-				invalids++
-			}
-		default:
-			panic("unknown field " + strconv.Quote(field.Name))
-		}
-	}
-	out.Dispatch()
-	if invalids > 0 {
-		return graphql.Null
-	}
-	return out
-}
-
-var metricImplementors = []string{"Metric"}
-
-func (ec *executionContext) _Metric(ctx context.Context, sel ast.SelectionSet, obj *Metric) graphql.Marshaler {
-	fields := graphql.CollectFields(ec.OperationContext, sel, metricImplementors)
-	out := graphql.NewFieldSet(fields)
-	var invalids uint32
-	for i, field := range fields {
-		switch field.Name {
-		case "__typename":
-			out.Values[i] = graphql.MarshalString("Metric")
-		case "name":
-			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
-				return ec._Metric_name(ctx, field, obj)
-			}
-
-			out.Values[i] = innerFunc(ctx)
-
-			if out.Values[i] == graphql.Null {
-				invalids++
-			}
-		case "labels":
-			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
-				return ec._Metric_labels(ctx, field, obj)
-			}
-
-			out.Values[i] = innerFunc(ctx)
-
-			if out.Values[i] == graphql.Null {
-				invalids++
-			}
-		case "points":
-			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
-				return ec._Metric_points(ctx, field, obj)
-			}
-
-			out.Values[i] = innerFunc(ctx)
-
-		case "thresholds":
-			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
-				return ec._Metric_thresholds(ctx, field, obj)
-			}
-
-			out.Values[i] = innerFunc(ctx)
-
-			if out.Values[i] == graphql.Null {
-				invalids++
-			}
-		default:
-			panic("unknown field " + strconv.Quote(field.Name))
-		}
-	}
-	out.Dispatch()
-	if invalids > 0 {
-		return graphql.Null
-	}
-	return out
-}
-
-var pointImplementors = []string{"Point"}
-
-func (ec *executionContext) _Point(ctx context.Context, sel ast.SelectionSet, obj *Point) graphql.Marshaler {
-	fields := graphql.CollectFields(ec.OperationContext, sel, pointImplementors)
-	out := graphql.NewFieldSet(fields)
-	var invalids uint32
-	for i, field := range fields {
-		switch field.Name {
-		case "__typename":
-			out.Values[i] = graphql.MarshalString("Point")
-		case "time":
-			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
-				return ec._Point_time(ctx, field, obj)
-			}
-
-			out.Values[i] = innerFunc(ctx)
-
-			if out.Values[i] == graphql.Null {
-				invalids++
-			}
-		case "value":
-			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
-				return ec._Point_value(ctx, field, obj)
 			}
 
 			out.Values[i] = innerFunc(ctx)
@@ -6711,52 +5863,6 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 		switch field.Name {
 		case "__typename":
 			out.Values[i] = graphql.MarshalString("Query")
-		case "metrics":
-			field := field
-
-			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
-				defer func() {
-					if r := recover(); r != nil {
-						ec.Error(ctx, ec.Recover(ctx, r))
-					}
-				}()
-				res = ec._Query_metrics(ctx, field)
-				if res == graphql.Null {
-					atomic.AddUint32(&invalids, 1)
-				}
-				return res
-			}
-
-			rrm := func(ctx context.Context) graphql.Marshaler {
-				return ec.OperationContext.RootResolverMiddleware(ctx, innerFunc)
-			}
-
-			out.Concurrently(i, func() graphql.Marshaler {
-				return rrm(innerCtx)
-			})
-		case "points":
-			field := field
-
-			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
-				defer func() {
-					if r := recover(); r != nil {
-						ec.Error(ctx, ec.Recover(ctx, r))
-					}
-				}()
-				res = ec._Query_points(ctx, field)
-				if res == graphql.Null {
-					atomic.AddUint32(&invalids, 1)
-				}
-				return res
-			}
-
-			rrm := func(ctx context.Context) graphql.Marshaler {
-				return ec.OperationContext.RootResolverMiddleware(ctx, innerFunc)
-			}
-
-			out.Concurrently(i, func() graphql.Marshaler {
-				return rrm(innerCtx)
-			})
 		case "containers":
 			field := field
 
@@ -7112,55 +6218,6 @@ func (ec *executionContext) _Tag(ctx context.Context, sel ast.SelectionSet, obj 
 			if out.Values[i] == graphql.Null {
 				invalids++
 			}
-		default:
-			panic("unknown field " + strconv.Quote(field.Name))
-		}
-	}
-	out.Dispatch()
-	if invalids > 0 {
-		return graphql.Null
-	}
-	return out
-}
-
-var thresholdImplementors = []string{"Threshold"}
-
-func (ec *executionContext) _Threshold(ctx context.Context, sel ast.SelectionSet, obj *Threshold) graphql.Marshaler {
-	fields := graphql.CollectFields(ec.OperationContext, sel, thresholdImplementors)
-	out := graphql.NewFieldSet(fields)
-	var invalids uint32
-	for i, field := range fields {
-		switch field.Name {
-		case "__typename":
-			out.Values[i] = graphql.MarshalString("Threshold")
-		case "lowCritical":
-			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
-				return ec._Threshold_lowCritical(ctx, field, obj)
-			}
-
-			out.Values[i] = innerFunc(ctx)
-
-		case "lowWarning":
-			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
-				return ec._Threshold_lowWarning(ctx, field, obj)
-			}
-
-			out.Values[i] = innerFunc(ctx)
-
-		case "highCritical":
-			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
-				return ec._Threshold_highCritical(ctx, field, obj)
-			}
-
-			out.Values[i] = innerFunc(ctx)
-
-		case "highWarning":
-			innerFunc := func(ctx context.Context) (res graphql.Marshaler) {
-				return ec._Threshold_highWarning(ctx, field, obj)
-			}
-
-			out.Values[i] = innerFunc(ctx)
-
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -7914,60 +6971,6 @@ func (ec *executionContext) marshalNInt2int(ctx context.Context, sel ast.Selecti
 	return res
 }
 
-func (ec *executionContext) marshalNLabel2ᚕᚖgloutonᚋapiᚐLabelᚄ(ctx context.Context, sel ast.SelectionSet, v []*Label) graphql.Marshaler {
-	ret := make(graphql.Array, len(v))
-	var wg sync.WaitGroup
-	isLen1 := len(v) == 1
-	if !isLen1 {
-		wg.Add(len(v))
-	}
-	for i := range v {
-		i := i
-		fc := &graphql.FieldContext{
-			Index:  &i,
-			Result: &v[i],
-		}
-		ctx := graphql.WithFieldContext(ctx, fc)
-		f := func(i int) {
-			defer func() {
-				if r := recover(); r != nil {
-					ec.Error(ctx, ec.Recover(ctx, r))
-					ret = nil
-				}
-			}()
-			if !isLen1 {
-				defer wg.Done()
-			}
-			ret[i] = ec.marshalNLabel2ᚖgloutonᚋapiᚐLabel(ctx, sel, v[i])
-		}
-		if isLen1 {
-			f(i)
-		} else {
-			go f(i)
-		}
-
-	}
-	wg.Wait()
-
-	for _, e := range ret {
-		if e == graphql.Null {
-			return graphql.Null
-		}
-	}
-
-	return ret
-}
-
-func (ec *executionContext) marshalNLabel2ᚖgloutonᚋapiᚐLabel(ctx context.Context, sel ast.SelectionSet, v *Label) graphql.Marshaler {
-	if v == nil {
-		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
-			ec.Errorf(ctx, "must not be null")
-		}
-		return graphql.Null
-	}
-	return ec._Label(ctx, sel, v)
-}
-
 func (ec *executionContext) unmarshalNLabelInput2ᚕᚖgloutonᚋapiᚐLabelInputᚄ(ctx context.Context, v interface{}) ([]*LabelInput, error) {
 	var vSlice []interface{}
 	if v != nil {
@@ -7988,92 +6991,6 @@ func (ec *executionContext) unmarshalNLabelInput2ᚕᚖgloutonᚋapiᚐLabelInpu
 func (ec *executionContext) unmarshalNLabelInput2ᚖgloutonᚋapiᚐLabelInput(ctx context.Context, v interface{}) (*LabelInput, error) {
 	res, err := ec.unmarshalInputLabelInput(ctx, v)
 	return &res, graphql.ErrorOnPath(ctx, err)
-}
-
-func (ec *executionContext) marshalNMetric2ᚕᚖgloutonᚋapiᚐMetricᚄ(ctx context.Context, sel ast.SelectionSet, v []*Metric) graphql.Marshaler {
-	ret := make(graphql.Array, len(v))
-	var wg sync.WaitGroup
-	isLen1 := len(v) == 1
-	if !isLen1 {
-		wg.Add(len(v))
-	}
-	for i := range v {
-		i := i
-		fc := &graphql.FieldContext{
-			Index:  &i,
-			Result: &v[i],
-		}
-		ctx := graphql.WithFieldContext(ctx, fc)
-		f := func(i int) {
-			defer func() {
-				if r := recover(); r != nil {
-					ec.Error(ctx, ec.Recover(ctx, r))
-					ret = nil
-				}
-			}()
-			if !isLen1 {
-				defer wg.Done()
-			}
-			ret[i] = ec.marshalNMetric2ᚖgloutonᚋapiᚐMetric(ctx, sel, v[i])
-		}
-		if isLen1 {
-			f(i)
-		} else {
-			go f(i)
-		}
-
-	}
-	wg.Wait()
-
-	for _, e := range ret {
-		if e == graphql.Null {
-			return graphql.Null
-		}
-	}
-
-	return ret
-}
-
-func (ec *executionContext) marshalNMetric2ᚖgloutonᚋapiᚐMetric(ctx context.Context, sel ast.SelectionSet, v *Metric) graphql.Marshaler {
-	if v == nil {
-		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
-			ec.Errorf(ctx, "must not be null")
-		}
-		return graphql.Null
-	}
-	return ec._Metric(ctx, sel, v)
-}
-
-func (ec *executionContext) unmarshalNMetricInput2ᚕᚖgloutonᚋapiᚐMetricInputᚄ(ctx context.Context, v interface{}) ([]*MetricInput, error) {
-	var vSlice []interface{}
-	if v != nil {
-		vSlice = graphql.CoerceList(v)
-	}
-	var err error
-	res := make([]*MetricInput, len(vSlice))
-	for i := range vSlice {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
-		res[i], err = ec.unmarshalNMetricInput2ᚖgloutonᚋapiᚐMetricInput(ctx, vSlice[i])
-		if err != nil {
-			return nil, err
-		}
-	}
-	return res, nil
-}
-
-func (ec *executionContext) unmarshalNMetricInput2ᚖgloutonᚋapiᚐMetricInput(ctx context.Context, v interface{}) (*MetricInput, error) {
-	res, err := ec.unmarshalInputMetricInput(ctx, v)
-	return &res, graphql.ErrorOnPath(ctx, err)
-}
-
-func (ec *executionContext) marshalNPoint2ᚖgloutonᚋapiᚐPoint(ctx context.Context, sel ast.SelectionSet, v *Point) graphql.Marshaler {
-	if v == nil {
-		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
-			ec.Errorf(ctx, "must not be null")
-		}
-		return graphql.Null
-	}
-	return ec._Point(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalNProcess2ᚕᚖgloutonᚋapiᚐProcessᚄ(ctx context.Context, sel ast.SelectionSet, v []*Process) graphql.Marshaler {
@@ -8283,16 +7200,6 @@ func (ec *executionContext) marshalNTag2ᚖgloutonᚋapiᚐTag(ctx context.Conte
 		return graphql.Null
 	}
 	return ec._Tag(ctx, sel, v)
-}
-
-func (ec *executionContext) marshalNThreshold2ᚖgloutonᚋapiᚐThreshold(ctx context.Context, sel ast.SelectionSet, v *Threshold) graphql.Marshaler {
-	if v == nil {
-		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
-			ec.Errorf(ctx, "must not be null")
-		}
-		return graphql.Null
-	}
-	return ec._Threshold(ctx, sel, v)
 }
 
 func (ec *executionContext) unmarshalNTime2timeᚐTime(ctx context.Context, v interface{}) (time.Time, error) {
@@ -8610,22 +7517,6 @@ func (ec *executionContext) marshalOCPUUsage2ᚖgloutonᚋapiᚐCPUUsage(ctx con
 	return ec._CPUUsage(ctx, sel, v)
 }
 
-func (ec *executionContext) unmarshalOFloat2ᚖfloat64(ctx context.Context, v interface{}) (*float64, error) {
-	if v == nil {
-		return nil, nil
-	}
-	res, err := graphql.UnmarshalFloatContext(ctx, v)
-	return &res, graphql.ErrorOnPath(ctx, err)
-}
-
-func (ec *executionContext) marshalOFloat2ᚖfloat64(ctx context.Context, sel ast.SelectionSet, v *float64) graphql.Marshaler {
-	if v == nil {
-		return graphql.Null
-	}
-	res := graphql.MarshalFloatContext(*v)
-	return graphql.WrapContextMarshaler(ctx, res)
-}
-
 func (ec *executionContext) marshalOMemoryUsage2ᚖgloutonᚋapiᚐMemoryUsage(ctx context.Context, sel ast.SelectionSet, v *MemoryUsage) graphql.Marshaler {
 	if v == nil {
 		return graphql.Null
@@ -8639,53 +7530,6 @@ func (ec *executionContext) unmarshalOPagination2ᚖgloutonᚋapiᚐPagination(c
 	}
 	res, err := ec.unmarshalInputPagination(ctx, v)
 	return &res, graphql.ErrorOnPath(ctx, err)
-}
-
-func (ec *executionContext) marshalOPoint2ᚕᚖgloutonᚋapiᚐPointᚄ(ctx context.Context, sel ast.SelectionSet, v []*Point) graphql.Marshaler {
-	if v == nil {
-		return graphql.Null
-	}
-	ret := make(graphql.Array, len(v))
-	var wg sync.WaitGroup
-	isLen1 := len(v) == 1
-	if !isLen1 {
-		wg.Add(len(v))
-	}
-	for i := range v {
-		i := i
-		fc := &graphql.FieldContext{
-			Index:  &i,
-			Result: &v[i],
-		}
-		ctx := graphql.WithFieldContext(ctx, fc)
-		f := func(i int) {
-			defer func() {
-				if r := recover(); r != nil {
-					ec.Error(ctx, ec.Recover(ctx, r))
-					ret = nil
-				}
-			}()
-			if !isLen1 {
-				defer wg.Done()
-			}
-			ret[i] = ec.marshalNPoint2ᚖgloutonᚋapiᚐPoint(ctx, sel, v[i])
-		}
-		if isLen1 {
-			f(i)
-		} else {
-			go f(i)
-		}
-
-	}
-	wg.Wait()
-
-	for _, e := range ret {
-		if e == graphql.Null {
-			return graphql.Null
-		}
-	}
-
-	return ret
 }
 
 func (ec *executionContext) unmarshalOString2ᚖstring(ctx context.Context, v interface{}) (*string, error) {
