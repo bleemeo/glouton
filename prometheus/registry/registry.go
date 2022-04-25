@@ -1290,6 +1290,9 @@ func (r *Registry) pushPoint(ctx context.Context, points []types.MetricPoint, tt
 		}
 	}
 
+	points = points[:n]
+	points = r.renamer.Rename(points)
+
 	// Apply the thresholds after the relabel hook to get the instance UUID in the labels.
 	if r.option.ThresholdHandler != nil {
 		var statusPoints []types.MetricPoint
@@ -1297,9 +1300,6 @@ func (r *Registry) pushPoint(ctx context.Context, points []types.MetricPoint, tt
 		points, statusPoints = r.option.ThresholdHandler.ApplyThresholds(points)
 		points = append(points, statusPoints...)
 	}
-
-	points = points[:n]
-	points = r.renamer.Rename(points)
 
 	for _, point := range points {
 		key := types.LabelsToText(point.Labels)
