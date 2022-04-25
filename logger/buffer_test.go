@@ -306,6 +306,10 @@ func Test_bufferOrder(t *testing.T) { //nolint: maintidx
 
 			for _, maxLine := range writeSize {
 				t.Run(fmt.Sprintf("maxLine=%d", maxLine), func(t *testing.T) {
+					if testing.Short() && maxLine >= 10000 {
+						t.SkipNow()
+					}
+
 					for ; lineNumber < maxLine; lineNumber++ {
 						if len(tt.changes) > changeIndex && lineNumber == tt.changes[changeIndex].changeAt {
 							b.SetCapacity(tt.changes[changeIndex].newHeadSize, tt.changes[changeIndex].newTailSize)
