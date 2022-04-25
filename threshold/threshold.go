@@ -560,7 +560,7 @@ func (r *Registry) ApplyThresholds(points []types.MetricPoint) ([]types.MetricPo
 			labelsText := types.LabelsToText(point.Labels)
 			threshold := r.getThreshold(labelsText)
 
-			if !threshold.IsZero() {
+			if !threshold.IsZero() && !math.IsNaN(point.Value) {
 				newPoints, statusPoints = r.addPointWithThreshold(newPoints, statusPoints, point, threshold, labelsText)
 
 				continue
@@ -589,7 +589,6 @@ func (r *Registry) addPointWithThreshold(
 	// Consumer expect status description from threshold to start with "Current value:"
 	statusDescription := fmt.Sprintf("Current value: %s", FormatValue(point.Value, unit))
 
-	// TODO: Skip NaN
 	if newState.CurrentStatus != types.StatusOk {
 		thresholdLimit := math.NaN()
 
