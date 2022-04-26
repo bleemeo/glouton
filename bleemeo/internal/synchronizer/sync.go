@@ -177,6 +177,7 @@ func (s *Synchronizer) DiagnosticArchive(ctx context.Context, archive types.Arch
 	}
 
 	s.l.Lock()
+	defer s.l.Unlock()
 
 	obj := struct {
 		NextFullSync               time.Time
@@ -223,8 +224,6 @@ func (s *Synchronizer) DiagnosticArchive(ctx context.Context, archive types.Arch
 		LastInfo:                   s.lastInfo,
 		ThresholdOverrides:         fmt.Sprintf("%v", s.thresholdOverrides),
 	}
-
-	s.l.Unlock()
 
 	enc := json.NewEncoder(file)
 	enc.SetIndent("", "  ")

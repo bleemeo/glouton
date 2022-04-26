@@ -302,11 +302,17 @@ func (s *State) Get(key string, result interface{}) error {
 // BleemeoCredentials return the Bleemeo agent_uuid and password.
 // They may be empty if unset.
 func (s *State) BleemeoCredentials() (string, string) {
+	s.l.Lock()
+	defer s.l.Unlock()
+
 	return s.persistent.BleemeoAgentID, s.persistent.BleemeoPassword
 }
 
 // TelemetryID return a stable ID for the telemetry.
 func (s *State) TelemetryID() string {
+	s.l.Lock()
+	defer s.l.Unlock()
+
 	if s.persistent.TelemetryID == "" {
 		s.persistent.TelemetryID = uuid.New().String()
 		s.persistent.dirty = true
@@ -319,6 +325,9 @@ func (s *State) TelemetryID() string {
 
 // SetBleemeoCredentials sets the Bleemeo agent_uuid and password.
 func (s *State) SetBleemeoCredentials(agentUUID string, password string) error {
+	s.l.Lock()
+	defer s.l.Unlock()
+
 	s.persistent.BleemeoAgentID = agentUUID
 	s.persistent.BleemeoPassword = password
 	s.persistent.dirty = true
