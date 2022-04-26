@@ -46,10 +46,6 @@ func (m mockState) Set(key string, object interface{}) error {
 	return nil
 }
 
-func (m mockState) BleemeoCredentials() (string, string) {
-	return "", ""
-}
-
 func TestStateUpdate(t *testing.T) {
 	cases := [][]struct {
 		timeOffsetSecond int
