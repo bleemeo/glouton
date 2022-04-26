@@ -155,34 +155,3 @@ export const PROCESSES = gql`
     }
   }
 `;
-
-// GRAPHS
-
-export const GET_POINTS = gql`
-  query Points(
-    $metricsFilter: [MetricInput!]!
-    $start: String!
-    $end: String!
-    $minutes: Int!
-  ) {
-    points(
-      metricsFilter: $metricsFilter
-      start: $start
-      end: $end
-      minutes: $minutes
-    ) {
-      labels {
-        key
-        value
-      }
-      points {
-        time
-        value
-      }
-      thresholds {
-        highWarning
-        highCritical
-      }
-    }
-  }
-`;

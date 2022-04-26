@@ -13,7 +13,7 @@ fi
 
 docker run --rm -v "$(pwd)":/app ${GO_MOUNT_CACHE} -e HOME=/go/pkg \
    -w /app golangci/golangci-lint:${LINTER_VERSION} \
-   sh -c 'go test ./... --coverprofile=coverage.out -count 1 && go tool cover -html=coverage.out -o coverage.html && go test -race ./... -count 1'
+   sh -c 'go test ./... --coverprofile=coverage.out -count 1 && go tool cover -html=coverage.out -o coverage.html && go test -race ./... -count 1 -short'
 
 docker run --rm -v "$(pwd)":/app ${GO_MOUNT_CACHE} -e HOME=/go/pkg \
    -e GOOS=linux -e GOARCH=amd64 --tmpfs /app/webui/node_modules:exec -w /app golangci/golangci-lint:${LINTER_VERSION} \

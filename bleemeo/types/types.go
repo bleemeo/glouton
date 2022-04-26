@@ -49,8 +49,8 @@ type GlobalOption struct {
 	ReloadState             BleemeoReloadState
 
 	UpdateMetricResolution func(ctx context.Context, defaultResolution time.Duration, snmpResolution time.Duration)
-	UpdateThresholds       func(ctx context.Context, thresholds map[threshold.MetricNameItem]threshold.Threshold, firstUpdate bool)
-	UpdateUnits            func(units map[threshold.MetricNameItem]threshold.Unit)
+	UpdateThresholds       func(ctx context.Context, thresholds map[string]threshold.Threshold, firstUpdate bool)
+	UpdateUnits            func(units map[string]threshold.Unit)
 	RebuildPromQLRules     func(promqlRules []rules.PromQLRule) error
 	IsContainerEnabled     func(facts.Container) (bool, bool)
 }

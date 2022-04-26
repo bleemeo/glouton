@@ -59,11 +59,6 @@ type Fact struct {
 	Value string `json:"value"`
 }
 
-type Label struct {
-	Key   string `json:"key"`
-	Value string `json:"value"`
-}
-
 type LabelInput struct {
 	Key   string `json:"key"`
 	Value string `json:"value"`
@@ -77,13 +72,6 @@ type MemoryUsage struct {
 	Cached  float64 `json:"Cached"`
 }
 
-type Metric struct {
-	Name       string     `json:"name"`
-	Labels     []*Label   `json:"labels"`
-	Points     []*Point   `json:"points"`
-	Thresholds *Threshold `json:"thresholds"`
-}
-
 type MetricInput struct {
 	Labels []*LabelInput `json:"labels"`
 }
@@ -91,11 +79,6 @@ type MetricInput struct {
 type Pagination struct {
 	Offset int `json:"offset"`
 	Limit  int `json:"limit"`
-}
-
-type Point struct {
-	Time  time.Time `json:"time"`
-	Value float64   `json:"value"`
 }
 
 type Process struct {
@@ -132,13 +115,6 @@ type SwapUsage struct {
 
 type Tag struct {
 	TagName string `json:"tagName"`
-}
-
-type Threshold struct {
-	LowCritical  *float64 `json:"lowCritical"`
-	LowWarning   *float64 `json:"lowWarning"`
-	HighCritical *float64 `json:"highCritical"`
-	HighWarning  *float64 `json:"highWarning"`
 }
 
 type Topinfo struct {

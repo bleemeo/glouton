@@ -127,6 +127,7 @@ type Registry struct {
 
 type Option struct {
 	PushPoint             types.PointPusher
+	ThresholdHandler      ThresholdHandler
 	Queryable             storage.Queryable
 	FQDN                  string
 	GloutonPort           string
@@ -167,6 +168,10 @@ type AppenderCallback interface {
 	// Collect collects point and write them into Appender. The appender must not be used once Collect returned.
 	// If you omit to Commit() on the appender, it will be automatically done when Collect return without error.
 	Collect(ctx context.Context, app storage.Appender) error
+}
+
+type ThresholdHandler interface {
+	ApplyThresholds(points []types.MetricPoint) (newPoints []types.MetricPoint, statusPoints []types.MetricPoint)
 }
 
 func (opt *RegistrationOption) buildRules() error {
@@ -904,7 +909,18 @@ func (r *Registry) GatherWithState(ctx context.Context, state GatherState) ([]*d
 		go func() {
 			defer wg.Done()
 
-			tmp, _, err := r.scrape(ctx, state, reg)
+			scrapedMFS, _, err := r.scrape(ctx, state, reg)
+
+			// Apply thresholds.
+			scrapedPoints := gloutonModel.FamiliesToMetricPoints(time.Time{}, scrapedMFS)
+
+			var statusPoints []types.MetricPoint
+
+			if r.option.ThresholdHandler != nil {
+				_, statusPoints = r.option.ThresholdHandler.ApplyThresholds(scrapedPoints)
+			}
+
+			statusMFS := gloutonModel.MetricPointsToFamilies(statusPoints)
 
 			mutex.Lock()
 			defer mutex.Unlock()
@@ -913,7 +929,8 @@ func (r *Registry) GatherWithState(ctx context.Context, state GatherState) ([]*d
 				errs = append(errs, err)
 			}
 
-			mfs = append(mfs, tmp...)
+			mfs = append(mfs, scrapedMFS...)
+			mfs = append(mfs, statusMFS...)
 		}()
 	}
 
@@ -1161,6 +1178,13 @@ func (r *Registry) scrapeFromLoop(ctx context.Context, t0 time.Time, reg *regist
 	reg.l.Unlock()
 
 	if len(points) > 0 && r.option.PushPoint != nil {
+		if r.option.ThresholdHandler != nil {
+			var statusPoints []types.MetricPoint
+
+			points, statusPoints = r.option.ThresholdHandler.ApplyThresholds(points)
+			points = append(points, statusPoints...)
+		}
+
 		r.option.PushPoint.PushPoints(ctx, points)
 	}
 }
@@ -1268,6 +1292,14 @@ func (r *Registry) pushPoint(ctx context.Context, points []types.MetricPoint, tt
 
 	points = points[:n]
 	points = r.renamer.Rename(points)
+
+	// Apply the thresholds after the relabel hook to get the instance UUID in the labels.
+	if r.option.ThresholdHandler != nil {
+		var statusPoints []types.MetricPoint
+
+		points, statusPoints = r.option.ThresholdHandler.ApplyThresholds(points)
+		points = append(points, statusPoints...)
+	}
 
 	for _, point := range points {
 		key := types.LabelsToText(point.Labels)

@@ -421,7 +421,7 @@ func (a *agent) Tags() []string {
 
 // UpdateThresholds update the thresholds definition.
 // This method will merge with threshold definition present in configuration file.
-func (a *agent) UpdateThresholds(ctx context.Context, thresholds map[threshold.MetricNameItem]threshold.Threshold, firstUpdate bool) {
+func (a *agent) UpdateThresholds(ctx context.Context, thresholds map[string]threshold.Threshold, firstUpdate bool) {
 	a.updateThresholds(ctx, thresholds, firstUpdate)
 }
 
@@ -565,17 +565,17 @@ func (a *agent) newMetricsCallback(newMetrics []types.LabelsAndAnnotation) {
 	}
 }
 
-func (a *agent) updateThresholds(ctx context.Context, thresholds map[threshold.MetricNameItem]threshold.Threshold, firstUpdate bool) {
+func (a *agent) updateThresholds(ctx context.Context, thresholds map[string]threshold.Threshold, firstUpdate bool) {
 	configThreshold := a.getConfigThreshold(firstUpdate)
 
 	oldThresholds := map[string]threshold.Threshold{}
 
 	for _, name := range []string{"system_pending_updates", "system_pending_security_updates", "time_drift"} {
-		key := threshold.MetricNameItem{
-			Name: name,
-			Item: "",
+		lbls := map[string]string{
+			types.LabelName:         name,
+			types.LabelInstanceUUID: a.BleemeoAgentID(),
 		}
-		oldThresholds[name] = a.threshold.GetThreshold(key)
+		oldThresholds[name] = a.threshold.GetThreshold(types.LabelsToText(lbls))
 	}
 
 	a.threshold.SetThresholds(thresholds, configThreshold)
@@ -591,26 +591,20 @@ func (a *agent) updateThresholds(ctx context.Context, thresholds map[threshold.M
 		}
 	}
 
-	for _, name := range []string{"system_pending_updates", "system_pending_security_updates"} {
-		key := threshold.MetricNameItem{
-			Name: name,
-			Item: "",
+	for _, name := range []string{"system_pending_updates", "system_pending_security_updates", "time_drift"} {
+		lbls := map[string]string{
+			types.LabelName:         name,
+			types.LabelInstanceUUID: a.BleemeoAgentID(),
 		}
-		newThreshold := a.threshold.GetThreshold(key)
+		newThreshold := a.threshold.GetThreshold(types.LabelsToText(lbls))
 
-		if !firstUpdate && !oldThresholds[key.Name].Equal(newThreshold) {
-			a.FireTrigger(false, false, true, false)
+		if !firstUpdate && !oldThresholds[name].Equal(newThreshold) {
+			if name == "time_drift" && a.bleemeoConnector != nil {
+				a.bleemeoConnector.UpdateInfo()
+			} else {
+				a.FireTrigger(false, false, true, false)
+			}
 		}
-	}
-
-	key := threshold.MetricNameItem{
-		Name: "time_drift",
-		Item: "",
-	}
-	newThreshold := a.threshold.GetThreshold(key)
-
-	if !firstUpdate && !oldThresholds[key.Name].Equal(newThreshold) && a.bleemeoConnector != nil {
-		a.bleemeoConnector.UpdateInfo()
 	}
 }
 
@@ -719,10 +713,12 @@ func (a *agent) run(ctx context.Context) { //nolint:maintidx
 	}
 
 	filteredStore := store.NewFilteredStore(a.store, mFilter.FilterPoints, mFilter.filterMetrics)
+	a.threshold = threshold.New(a.state)
 
 	a.gathererRegistry, err = registry.New(
 		registry.Option{
 			PushPoint:             a.store,
+			ThresholdHandler:      a.threshold,
 			FQDN:                  fqdn,
 			GloutonPort:           strconv.FormatInt(int64(a.oldConfig.Int("web.listener.port")), 10),
 			MetricFormat:          a.metricFormat,
@@ -755,9 +751,8 @@ func (a *agent) run(ctx context.Context) { //nolint:maintidx
 		logger.Printf("unable to add recording rules metrics: %v", err)
 	}
 
-	a.threshold = threshold.New(a.state)
 	acc := &inputs.Accumulator{
-		Pusher:  a.threshold.WithPusher(a.gathererRegistry.WithTTL(5 * time.Minute)),
+		Pusher:  a.gathererRegistry.WithTTL(5 * time.Minute),
 		Context: ctx,
 	}
 
@@ -792,9 +787,9 @@ func (a *agent) run(ctx context.Context) { //nolint:maintidx
 
 		clusterName := a.oldConfig.String("kubernetes.clustername")
 
-		err = a.state.Get("kubernestes_cluster_name", &clusterNameState)
+		err = a.state.Get("kubernetes_cluster_name", &clusterNameState)
 		if err != nil {
-			logger.V(2).Printf("failed to get kubernestes_cluster_name: %v", err)
+			logger.V(2).Printf("failed to get kubernetes_cluster_name: %v", err)
 		}
 
 		if clusterName == "" && clusterNameState != "" {
@@ -803,9 +798,9 @@ func (a *agent) run(ctx context.Context) { //nolint:maintidx
 		}
 
 		if clusterName != "" && clusterNameState != clusterName {
-			err = a.state.Set("kubernestes_cluster_name", clusterNameState)
+			err = a.state.Set("kubernetes_cluster_name", clusterNameState)
 			if err != nil {
-				logger.V(2).Printf("failed to set kubernestes_cluster_name: %v", err)
+				logger.V(2).Printf("failed to set kubernetes_cluster_name: %v", err)
 			}
 		}
 
@@ -847,7 +842,7 @@ func (a *agent) run(ctx context.Context) { //nolint:maintidx
 	a.factProvider.AddCallback(a.containerRuntime.RuntimeFact)
 	a.factProvider.SetFact("installation_format", a.oldConfig.String("agent.installation_format"))
 
-	processInput := processInput.New(psFact, a.threshold.WithPusher(a.gathererRegistry.WithTTL(5*time.Minute)))
+	processInput := processInput.New(psFact, a.gathererRegistry.WithTTL(5*time.Minute))
 
 	a.collector = collector.New(acc)
 
@@ -883,7 +878,7 @@ func (a *agent) run(ctx context.Context) { //nolint:maintidx
 			Description: "miscGather",
 			JitterSeed:  baseJitter,
 		},
-		a.miscGather(a.threshold.WithPusher(a.gathererRegistry.WithTTL(5*time.Minute))),
+		a.miscGather(a.gathererRegistry.WithTTL(5*time.Minute)),
 	)
 	if err != nil {
 		logger.Printf("unable to add miscGathere metrics: %v", err)
@@ -896,7 +891,7 @@ func (a *agent) run(ctx context.Context) { //nolint:maintidx
 			JitterSeed:  baseJitter,
 			MinInterval: time.Minute,
 		},
-		a.miscGatherMinute(a.threshold.WithPusher(a.gathererRegistry.WithTTL(5*time.Minute))),
+		a.miscGatherMinute(a.gathererRegistry.WithTTL(5*time.Minute)),
 	)
 	if err != nil {
 		logger.Printf("unable to add miscGathere metrics: %v", err)
@@ -1026,7 +1021,7 @@ func (a *agent) run(ctx context.Context) { //nolint:maintidx
 			OutputConfigurationFile:       a.oldConfig.String("jmxtrans.config_file"),
 			OutputConfigurationPermission: os.FileMode(perm),
 			ContactPort:                   a.oldConfig.Int("jmxtrans.graphite_port"),
-			Pusher:                        a.threshold.WithPusher(a.gathererRegistry.WithTTL(5 * time.Minute)),
+			Pusher:                        a.gathererRegistry.WithTTL(5 * time.Minute),
 		}
 
 		tasks = append(tasks, taskInfo{a.jmx.Run, "jmxtrans"})
@@ -1047,7 +1042,7 @@ func (a *agent) run(ctx context.Context) { //nolint:maintidx
 			Store:                   filteredStore,
 			SNMP:                    a.snmpManager.Targets(),
 			SNMPOnlineTarget:        a.snmpManager.OnlineCount,
-			PushPoints:              a.threshold.WithPusher(a.gathererRegistry.WithTTL(5 * time.Minute)),
+			PushPoints:              a.gathererRegistry.WithTTL(5 * time.Minute),
 			Discovery:               a.discovery,
 			MonitorManager:          a.monitorManager,
 			UpdateMetricResolution:  a.updateMetricResolution,
@@ -1916,7 +1911,7 @@ func systemUpdateMetric(ctx context.Context, a *agent) {
 		})
 	}
 
-	a.threshold.WithPusher(a.gathererRegistry.WithTTL(time.Hour)).PushPoints(ctx, points)
+	a.gathererRegistry.WithTTL(time.Hour).PushPoints(ctx, points)
 }
 
 func (a *agent) deletedContainersCallback(containersID []string) {

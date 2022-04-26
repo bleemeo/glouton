@@ -18,7 +18,6 @@
 package threshold
 
 import (
-	"context"
 	"glouton/types"
 	"math"
 	"reflect"
@@ -45,14 +44,6 @@ func (m mockState) Get(key string, result interface{}) error {
 
 func (m mockState) Set(key string, object interface{}) error {
 	return nil
-}
-
-type mockStore struct {
-	points []types.MetricPoint
-}
-
-func (s *mockStore) PushPoints(_ context.Context, points []types.MetricPoint) {
-	s.points = append(s.points, points...)
 }
 
 func TestStateUpdate(t *testing.T) {
@@ -342,7 +333,6 @@ func TestThresholdEqual(t *testing.T) {
 }
 
 func TestAccumulatorThreshold(t *testing.T) {
-	db := &mockStore{}
 	threshold := New(mockState{})
 	threshold.SetThresholds(
 		nil,
@@ -397,8 +387,7 @@ func TestAccumulatorThreshold(t *testing.T) {
 		},
 	}
 
-	pusher := threshold.WithPusher(db)
-	pusher.PushPoints(context.Background(), []types.MetricPoint{
+	points := []types.MetricPoint{
 		{
 			Labels: map[string]string{
 				"__name__": "cpu_used",
@@ -413,13 +402,16 @@ func TestAccumulatorThreshold(t *testing.T) {
 			Annotations: types.MetricAnnotations{BleemeoItem: "some-item"},
 			Point:       types.Point{Time: t0, Value: 20.0},
 		},
-	})
-
-	if len(db.points) != 3 {
-		t.Errorf("len(points) == %d, want 3", len(db.points))
 	}
 
-	for i, got := range db.points {
+	newPoints, statusPoints := threshold.ApplyThresholds(points)
+	newPoints = append(newPoints, statusPoints...)
+
+	if len(newPoints) != 3 {
+		t.Errorf("len(points) == %d, want 3", len(newPoints))
+	}
+
+	for i, got := range newPoints {
 		labelsText := types.LabelsToText(got.Labels)
 		want := wantPoints[labelsText]
 
@@ -432,14 +424,13 @@ func TestAccumulatorThreshold(t *testing.T) {
 }
 
 func TestThreshold(t *testing.T) { //nolint: maintidx
-	db := &mockStore{}
 	threshold := New(mockState{})
 
 	t0 := time.Date(2020, 2, 24, 15, 1, 0, 0, time.UTC)
 	stepDelay := 10 * time.Second
 
 	type setThresholdsArgs struct {
-		thresholdWithItem map[MetricNameItem]Threshold
+		thresholdWithItem map[string]Threshold
 		thresholdAllItem  map[string]Threshold
 	}
 
@@ -453,8 +444,8 @@ func TestThreshold(t *testing.T) { //nolint: maintidx
 		{
 			AddedToT0: 0 * stepDelay,
 			SetThresholds: &setThresholdsArgs{
-				thresholdWithItem: map[MetricNameItem]Threshold{
-					{Name: "disk_used_perc", Item: "/home"}: {
+				thresholdWithItem: map[string]Threshold{
+					`__name__="disk_used_perc",item="/home"`: {
 						HighWarning:   80,
 						HighCritical:  math.NaN(),
 						LowCritical:   math.NaN(),
@@ -622,8 +613,8 @@ func TestThreshold(t *testing.T) { //nolint: maintidx
 		{
 			AddedToT0: 41 * stepDelay,
 			SetThresholds: &setThresholdsArgs{
-				thresholdWithItem: map[MetricNameItem]Threshold{
-					{Name: "disk_used_perc", Item: "/home"}: {
+				thresholdWithItem: map[string]Threshold{
+					`__name__="disk_used_perc",item="/home"`: {
 						HighWarning:   80,
 						HighCritical:  90,
 						LowCritical:   math.NaN(),
@@ -669,8 +660,8 @@ func TestThreshold(t *testing.T) { //nolint: maintidx
 		{
 			AddedToT0: 42 * stepDelay,
 			SetThresholds: &setThresholdsArgs{
-				thresholdWithItem: map[MetricNameItem]Threshold{
-					{Name: "disk_used_perc", Item: "/home"}: {
+				thresholdWithItem: map[string]Threshold{
+					`__name__="disk_used_perc",item="/home"`: {
 						HighWarning:   80,
 						HighCritical:  97,
 						LowCritical:   math.NaN(),
@@ -707,9 +698,6 @@ func TestThreshold(t *testing.T) { //nolint: maintidx
 		},
 	}
 
-	ctx := context.Background()
-	pusher := threshold.WithPusher(db)
-
 	for _, step := range steps {
 		currentTime := t0.Add(step.AddedToT0)
 
@@ -733,7 +721,8 @@ func TestThreshold(t *testing.T) { //nolint: maintidx
 			})
 		}
 
-		pusher.PushPoints(ctx, points)
+		newPoints, statusPoints := threshold.ApplyThresholds(points)
+		newPoints = append(newPoints, statusPoints...)
 
 		moreWant := make(map[string]types.StatusDescription)
 		for name, pts := range step.WantedPoints {
@@ -749,7 +738,7 @@ func TestThreshold(t *testing.T) { //nolint: maintidx
 			moreWant[types.LabelsToText(lbls)] = pts
 		}
 
-		for _, pts := range db.points {
+		for _, pts := range newPoints {
 			want, ok := moreWant[types.LabelsToText(pts.Labels)]
 			if !ok {
 				t.Errorf("At %d * stepDelay: got point %v, expected not present", step.AddedToT0/stepDelay, pts.Labels)
@@ -762,19 +751,16 @@ func TestThreshold(t *testing.T) { //nolint: maintidx
 			}
 		}
 
-		if len(db.points) != len(moreWant) {
-			t.Errorf("At %v * stepDelay: got %d points, want %d", step.AddedToT0/stepDelay, len(db.points), len(moreWant))
+		if len(newPoints) != len(moreWant) {
+			t.Errorf("At %v * stepDelay: got %d points, want %d", step.AddedToT0/stepDelay, len(newPoints), len(moreWant))
 		}
-
-		db.points = db.points[:0]
 	}
 }
 
 // TestThresholdRestart test behavior of threshold after a Glouton restart.
-func TestThresholdRestart(t *testing.T) { //nolint:maintidx
+func TestThresholdRestart(t *testing.T) {
 	t0 := time.Date(2020, 2, 24, 15, 1, 0, 0, time.UTC)
 
-	db := &mockStore{}
 	threshold := New(mockState{
 		jsonList: []jsonState{
 			{
@@ -784,10 +770,7 @@ func TestThresholdRestart(t *testing.T) { //nolint:maintidx
 					WarningSince:  t0.Add(-40 * time.Second),
 					LastUpdate:    t0.Add(-30 * time.Second),
 				},
-				MetricNameItem: MetricNameItem{
-					Name: "cpu_used",
-					Item: "",
-				},
+				LabelsText: `__name__="cpu_used"`,
 			},
 			{
 				statusState: statusState{
@@ -796,10 +779,7 @@ func TestThresholdRestart(t *testing.T) { //nolint:maintidx
 					WarningSince:  t0.Add(-90 * time.Second),
 					LastUpdate:    t0.Add(-80 * time.Second),
 				},
-				MetricNameItem: MetricNameItem{
-					Name: "disk_used_perc",
-					Item: "/home",
-				},
+				LabelsText: `__name__="disk_used_perc",item="/home"`,
 			},
 			{
 				statusState: statusState{
@@ -808,10 +788,7 @@ func TestThresholdRestart(t *testing.T) { //nolint:maintidx
 					WarningSince:  t0.Add(-70 * time.Second),
 					LastUpdate:    t0.Add(-30 * time.Second),
 				},
-				MetricNameItem: MetricNameItem{
-					Name: "mem_used",
-					Item: "",
-				},
+				LabelsText: `__name__="mem_used"`,
 			},
 		},
 	})
@@ -819,7 +796,7 @@ func TestThresholdRestart(t *testing.T) { //nolint:maintidx
 	stepDelay := 10 * time.Second
 
 	type setThresholdsArgs struct {
-		thresholdWithItem map[MetricNameItem]Threshold
+		thresholdWithItem map[string]Threshold
 		thresholdAllItem  map[string]Threshold
 	}
 
@@ -833,8 +810,8 @@ func TestThresholdRestart(t *testing.T) { //nolint:maintidx
 		{
 			AddedToT0: 0 * stepDelay,
 			SetThresholds: &setThresholdsArgs{
-				thresholdWithItem: map[MetricNameItem]Threshold{
-					{Name: "disk_used_perc", Item: "/home"}: {
+				thresholdWithItem: map[string]Threshold{
+					`__name__="disk_used_perc",item="/home"`: {
 						HighWarning:   80,
 						HighCritical:  90,
 						LowCritical:   math.NaN(),
@@ -868,8 +845,8 @@ func TestThresholdRestart(t *testing.T) { //nolint:maintidx
 		{
 			AddedToT0: 1 * stepDelay,
 			SetThresholds: &setThresholdsArgs{
-				thresholdWithItem: map[MetricNameItem]Threshold{
-					{Name: "disk_used_perc", Item: "/home"}: {
+				thresholdWithItem: map[string]Threshold{
+					`__name__="disk_used_perc",item="/home"`: {
 						HighWarning:   80,
 						HighCritical:  90,
 						LowCritical:   math.NaN(),
@@ -877,7 +854,7 @@ func TestThresholdRestart(t *testing.T) { //nolint:maintidx
 						WarningDelay:  60 * time.Second,
 						CriticalDelay: 60 * time.Second,
 					},
-					{Name: "mem_used", Item: ""}: {
+					`__name__="mem_used"`: {
 						HighWarning:   80,
 						HighCritical:  90,
 						LowCritical:   math.NaN(),
@@ -955,9 +932,6 @@ func TestThresholdRestart(t *testing.T) { //nolint:maintidx
 		},
 	}
 
-	ctx := context.Background()
-	pusher := threshold.WithPusher(db)
-
 	for _, step := range steps {
 		currentTime := t0.Add(step.AddedToT0)
 
@@ -981,7 +955,8 @@ func TestThresholdRestart(t *testing.T) { //nolint:maintidx
 			})
 		}
 
-		pusher.PushPoints(ctx, points)
+		newPoints, statusPoints := threshold.ApplyThresholds(points)
+		newPoints = append(newPoints, statusPoints...)
 
 		moreWant := make(map[string]types.StatusDescription)
 		for name, pts := range step.WantedPoints {
@@ -997,7 +972,7 @@ func TestThresholdRestart(t *testing.T) { //nolint:maintidx
 			moreWant[types.LabelsToText(lbls)] = pts
 		}
 
-		for _, pts := range db.points {
+		for _, pts := range newPoints {
 			want, ok := moreWant[types.LabelsToText(pts.Labels)]
 			if !ok {
 				t.Errorf("At %d * stepDelay: got point %v, expected not present", step.AddedToT0/stepDelay, pts.Labels)
@@ -1010,11 +985,9 @@ func TestThresholdRestart(t *testing.T) { //nolint:maintidx
 			}
 		}
 
-		if len(db.points) != len(moreWant) {
-			t.Errorf("At %d * stepDelay: got %d points, want %d", step.AddedToT0/stepDelay, len(db.points), len(moreWant))
+		if len(newPoints) != len(moreWant) {
+			t.Errorf("At %d * stepDelay: got %d points, want %d", step.AddedToT0/stepDelay, len(newPoints), len(moreWant))
 		}
-
-		db.points = db.points[:0]
 	}
 }
 
