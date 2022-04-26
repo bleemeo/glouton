@@ -3,6 +3,10 @@
 
 set -e
 
+# Glouton detects that auto-upgrade is enabled by checking if this file exists.
+touch /var/lib/glouton/auto_upgrade
+chown glouton:glouton /var/lib/glouton/auto_upgrade
+
 # All our supported system have os-release file.
 if [ -e /usr/lib/os-release ]; then
     . /usr/lib/os-release

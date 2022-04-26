@@ -247,6 +247,7 @@ func (f *FactProvider) fastUpdateFacts(ctx context.Context) map[string]string {
 	// TODO: drop agent_version. It's deprecated and is replaced by glouton_version
 	newFacts["agent_version"] = version.Version
 	newFacts["fact_updated_at"] = time.Now().UTC().Format(time.RFC3339)
+	newFacts["auto_upgrade_enabled"] = fmt.Sprint(autoUpgradeIsEnabled())
 
 	cpu, err := cpu.Info()
 
@@ -446,4 +447,10 @@ func byteCountDecimal(b uint64) string {
 	}
 
 	return fmt.Sprintf("%.2f %cB", float64(b)/float64(div), "KMGTPE"[exp])
+}
+
+func autoUpgradeIsEnabled() bool {
+	_, err := os.Stat("/var/lib/glouton/auto_upgrade")
+
+	return err == nil
 }
