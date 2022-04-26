@@ -18,6 +18,7 @@ package facts
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"glouton/logger"
 	"glouton/version"
@@ -26,6 +27,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -247,7 +249,13 @@ func (f *FactProvider) fastUpdateFacts(ctx context.Context) map[string]string {
 	// TODO: drop agent_version. It's deprecated and is replaced by glouton_version
 	newFacts["agent_version"] = version.Version
 	newFacts["fact_updated_at"] = time.Now().UTC().Format(time.RFC3339)
-	newFacts["auto_upgrade_enabled"] = fmt.Sprint(autoUpgradeIsEnabled())
+
+	autoUpgradeEnabled, err := autoUpgradeIsEnabled(ctx)
+	if err != nil {
+		logger.V(1).Printf("Failed to check auto-upgrade status: %v", err)
+	}
+
+	newFacts["auto_upgrade_enabled"] = fmt.Sprint(autoUpgradeEnabled)
 
 	cpu, err := cpu.Info()
 
@@ -449,8 +457,29 @@ func byteCountDecimal(b uint64) string {
 	return fmt.Sprintf("%.2f %cB", float64(b)/float64(div), "KMGTPE"[exp])
 }
 
-func autoUpgradeIsEnabled() bool {
-	_, err := os.Stat("/var/lib/glouton/auto_upgrade")
+func autoUpgradeIsEnabled(ctx context.Context) (bool, error) {
+	c1 := exec.CommandContext(ctx, "systemctl", "list-timers", "glouton-auto-upgrade.timer")
+	c2 := exec.CommandContext(ctx, "grep", "-Fq", "glouton-auto-upgrade.timer")
+	c2.Stdin, _ = c1.StdoutPipe()
+	c2.Stdout = os.Stdout
 
-	return err == nil
+	if err := c2.Start(); err != nil {
+		return false, fmt.Errorf("start list timers: %w", err)
+	}
+
+	if err := c1.Run(); err != nil {
+		return false, fmt.Errorf("run grep: %w", err)
+	}
+
+	if err := c2.Wait(); err != nil {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
+			// The command executed successfully and grep didn't find any match.
+			return false, nil
+		}
+
+		return false, fmt.Errorf("wait list timers: %w", err)
+	}
+
+	return true, nil
 }
