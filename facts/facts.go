@@ -18,6 +18,7 @@ package facts
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"glouton/logger"
 	"glouton/version"
@@ -42,6 +43,13 @@ import (
 )
 
 const virtualTypeKVM = "kvm"
+
+var (
+	errAutoUpgradeNotSupported = errors.New("auto upgrade is not supported on this operating system")
+
+	autoUpgradeTimerRegex = regexp.MustCompile("glouton-auto-upgrade.timer")
+	commandNotFoundRegex  = regexp.MustCompile("not found")
+)
 
 // FactProvider provider information about system. Mostly static facts like OS version, architecture, ...
 //
@@ -251,11 +259,13 @@ func (f *FactProvider) fastUpdateFacts(ctx context.Context) map[string]string {
 	newFacts["fact_updated_at"] = time.Now().UTC().Format(time.RFC3339)
 
 	autoUpgradeEnabled, err := autoUpgradeIsEnabled(ctx)
-	if err != nil {
-		logger.V(1).Printf("Failed to check auto-upgrade status: %v", err)
-	}
+	if !errors.Is(err, errAutoUpgradeNotSupported) {
+		if err != nil {
+			logger.V(1).Printf("Failed to check auto-upgrade status: %v", err)
+		}
 
-	newFacts["auto_upgrade_enabled"] = fmt.Sprint(autoUpgradeEnabled)
+		newFacts["auto_upgrade_enabled"] = fmt.Sprint(autoUpgradeEnabled)
+	}
 
 	cpu, err := cpu.Info()
 
@@ -457,15 +467,22 @@ func byteCountDecimal(b uint64) string {
 	return fmt.Sprintf("%.2f %cB", float64(b)/float64(div), "KMGTPE"[exp])
 }
 
-var timerIsPresentRegex = regexp.MustCompile("glouton-auto-upgrade.timer")
-
 func autoUpgradeIsEnabled(ctx context.Context) (bool, error) {
+	if version.IsWindows() || version.IsMacOS() {
+		return false, errAutoUpgradeNotSupported
+	}
+
 	out, err := exec.CommandContext(ctx, "systemctl", "list-timers", "glouton-auto-upgrade.timer").Output()
 	if err != nil {
+		// The auto upgrade is not supported on systems without systemctl (this includes containers).
+		if commandNotFoundRegex.MatchString(err.Error()) {
+			return false, errAutoUpgradeNotSupported
+		}
+
 		return false, fmt.Errorf("systemctl list-timers: %w", err)
 	}
 
-	if timerIsPresentRegex.Match(out) {
+	if autoUpgradeTimerRegex.Match(out) {
 		return true, nil
 	}
 
