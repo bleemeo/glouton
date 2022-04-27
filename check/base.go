@@ -120,7 +120,11 @@ func (bc *baseCheck) Run(ctx context.Context) error {
 			return nil
 		case replyChannel := <-bc.triggerC:
 			if !bc.timer.Stop() {
-				<-bc.timer.C
+				// Drain the channel.
+				select {
+				case <-bc.timer.C:
+				default:
+				}
 			}
 
 			result := bc.check(ctx, false)
