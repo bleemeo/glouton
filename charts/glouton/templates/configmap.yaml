@@ -1,0 +1,17 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: glouton-config
+  namespace: {{ .Values.namespace}}
+data:
+  99-local.conf: |
+    # Add Glouton customization here
+    df:
+      path_ignore:
+      # some ignore usefull for minikube. Anyway on minikube data are stored
+      # in /mnt/sda1 which is not exlucded
+      - /mnt/sda1/var/lib  # minikube real path for /var/lib
+      - /var/lib  # minikube bind-mount lots of /var/lib sub-path
+      - /etc/     # minikube bind-mount path in /etc
+      - /tmp      # minikube bind-mount path in /tmp

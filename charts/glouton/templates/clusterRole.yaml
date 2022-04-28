@@ -1,0 +1,28 @@
+---
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1beta1
+metadata:
+  name: glouton
+  namespace: {{ .Values.namespace}}
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - pods
+    verbs:
+      - get
+      - list
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1beta1
+metadata:
+  name: glouton
+  namespace: {{ .Values.namespace}}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: glouton
+subjects:
+- kind: ServiceAccount
+  name: glouton
+  namespace: {{ .Values.namespace}}
