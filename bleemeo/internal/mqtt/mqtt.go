@@ -32,7 +32,6 @@ import (
 	"io/ioutil"
 	"math"
 	"math/rand"
-	"os"
 	"strings"
 	"sync"
 	"time"
@@ -177,8 +176,9 @@ func New(option Option, first bool) *Client {
 
 	if pahoWrapper == nil {
 		pahoWrapper = NewPahoWrapper(PahoWrapperOptions{
-			UpgradeFile: client.option.Config.String("agent.upgrade_file"),
-			AgentID:     client.option.AgentID,
+			UpgradeFile:     client.option.Config.String("agent.upgrade_file"),
+			AutoUpgradeFile: client.option.Config.String("agent.auto_upgrade_file"),
+			AgentID:         client.option.AgentID,
 		})
 
 		option.ReloadState.SetPahoWrapper(pahoWrapper)
@@ -456,7 +456,7 @@ func (c *Client) tlsConfig() *tls.Config {
 	return tlsConfig
 }
 
-func (c *Client) shutdown() error {
+func (c *Client) shutdownTimeDrift() error {
 	if c.mqttClient == nil {
 		return nil
 	}
@@ -464,18 +464,7 @@ func (c *Client) shutdown() error {
 	deadline := time.Now().Add(5 * time.Second)
 
 	if c.mqttClient.IsConnectionOpen() {
-		cause := "Clean shutdown"
-
-		if _, err := os.Stat(c.option.Config.String("agent.upgrade_file")); err == nil {
-			cause = "Upgrade"
-		}
-
-		disableUntil, disableReason := c.getDisableUntil()
-		if time.Now().Before(disableUntil) && disableReason == bleemeoTypes.DisableTimeDrift {
-			cause = "Clean shutdown, time drift"
-		}
-
-		payload, err := json.Marshal(map[string]string{"disconnect-cause": cause})
+		payload, err := json.Marshal(map[string]string{"disconnect-cause": "Clean shutdown, time drift"})
 		if err != nil {
 			return err
 		}
@@ -1049,7 +1038,7 @@ mainLoop:
 		switch {
 		case time.Now().Before(disableUntil):
 			if disableReason == bleemeoTypes.DisableTimeDrift {
-				_ = c.shutdown()
+				_ = c.shutdownTimeDrift()
 			}
 			if c.mqttClient != nil {
 				logger.V(2).Printf("Disconnecting from MQTT due to '%v'", disableReason)
