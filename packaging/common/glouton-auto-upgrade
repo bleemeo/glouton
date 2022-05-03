@@ -28,6 +28,7 @@ chown glouton:glouton $AUTO_UPGRADE_FILE
 case "$os_name" in
     ubuntu|debian)
         apt-get update || true
+        export DEBIAN_FRONTEND=noninteractive
         apt-get install --assume-yes bleemeo-agent glouton
         ;;
     centos|almalinux|rocky)
