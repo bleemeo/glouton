@@ -36,14 +36,19 @@ func UserAgent() string {
 	return fmt.Sprintf("Glouton %s", Version)
 }
 
-// IsWindows returns true when the current operating system is windows.
+// IsWindows returns true when the current operating system is Windows.
 func IsWindows() bool {
 	return runtime.GOOS == "windows"
 }
 
-// IsLinux returns true when the current operating system is windows.
+// IsLinux returns true when the current operating system is Linux.
 func IsLinux() bool {
 	return runtime.GOOS == "linux"
+}
+
+// IsMacOS returns true when the current operating system is MacOS.
+func IsMacOS() bool {
+	return runtime.GOOS == "darwin"
 }
 
 type version struct {
