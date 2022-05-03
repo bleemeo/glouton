@@ -669,6 +669,7 @@ func (a *agent) run(ctx context.Context) { //nolint:maintidx
 	logger.Printf("Starting agent version %v (commit %v)", version.Version, version.BuildHash)
 
 	_ = os.Remove(a.oldConfig.String("agent.upgrade_file"))
+	_ = os.Remove(a.oldConfig.String("agent.auto_upgrade_file"))
 
 	a.metricFormat = types.StringToMetricFormat(a.oldConfig.String("agent.metrics_format"))
 	if a.metricFormat == types.MetricFormatUnknown {

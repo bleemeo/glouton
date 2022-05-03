@@ -27,14 +27,16 @@ type pahoWrapper struct {
 	connectChannel        chan paho.Client
 	notificationChannel   chan paho.Message
 
-	upgradeFile   string
-	agentID       types.AgentID
-	pendingPoints []gloutonTypes.MetricPoint
+	upgradeFile     string
+	autoUpgradeFile string
+	agentID         types.AgentID
+	pendingPoints   []gloutonTypes.MetricPoint
 }
 
 type PahoWrapperOptions struct {
-	UpgradeFile string
-	AgentID     types.AgentID
+	UpgradeFile     string
+	AutoUpgradeFile string
+	AgentID         types.AgentID
 }
 
 type disconnectCause struct {
@@ -47,6 +49,7 @@ func NewPahoWrapper(opts PahoWrapperOptions) types.PahoWrapper {
 		connectionLostChannel: make(chan error),
 		notificationChannel:   make(chan paho.Message, notificationChannelSize),
 		upgradeFile:           opts.UpgradeFile,
+		autoUpgradeFile:       opts.AutoUpgradeFile,
 		agentID:               opts.AgentID,
 	}
 
@@ -138,6 +141,10 @@ func (c *pahoWrapper) Close() {
 
 		if _, err := os.Stat(c.upgradeFile); err == nil {
 			cause = "Upgrade"
+		}
+
+		if _, err := os.Stat(c.autoUpgradeFile); err == nil {
+			cause = "Auto upgrade"
 		}
 
 		payload, _ := json.Marshal(disconnectCause{cause}) //nolint:errchkjson // False positive.

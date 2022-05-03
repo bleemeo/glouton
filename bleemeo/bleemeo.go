@@ -903,7 +903,7 @@ func (c *Connector) clearDisable(reasonToClear types.DisableReason) {
 	if mqtt := c.mqtt; mqtt != nil {
 		var mqttDisableDelay time.Duration
 
-		switch reasonToClear { //nolint:exhaustive
+		switch reasonToClear { //nolint:exhaustive,nolintlint
 		case types.DisableTooManyErrors:
 			mqttDisableDelay = 20 * time.Second
 		case types.DisableAgentTooOld, types.DisableDuplicatedAgent, types.DisableAuthenticationError, types.DisableTimeDrift:
@@ -945,7 +945,7 @@ func (c *Connector) disableMqtt(mqtt *mqtt.Client, reason types.DisableReason, u
 		// the synchronizer to disable mqtt again before mqtt have time to reconnect or send metrics.
 		var mqttDisableDelay time.Duration
 
-		switch reason { //nolint:exhaustive
+		switch reason { //nolint:exhaustive,nolintlint
 		case types.DisableTooManyErrors:
 			mqttDisableDelay = 20 * time.Second
 		case types.DisableAgentTooOld, types.DisableDuplicatedAgent, types.DisableAuthenticationError, types.DisableTimeDrift:

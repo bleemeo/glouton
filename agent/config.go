@@ -169,6 +169,7 @@ func defaultConfig() map[string]interface{} {
 		"agent.state_reset_file":         "state.reset",
 		"agent.deprecated_state_file":    "",
 		"agent.upgrade_file":             "upgrade",
+		"agent.auto_upgrade_file":        "auto_upgrade",
 		"agent.metrics_format":           "Bleemeo",
 		"agent.node_exporter.enable":     true,
 		"agent.node_exporter.collectors": []string{
