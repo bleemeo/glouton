@@ -19,6 +19,9 @@ fi
 # When Glouton is gracefully shutdown, it checks for the presence of 
 # this file to send the appropriate MQTT disconnect will.
 AUTO_UPGRADE_FILE=/var/lib/glouton/auto_upgrade
+
+trap "rm -f $AUTO_UPGRADE_FILE || true" EXIT
+
 touch $AUTO_UPGRADE_FILE
 chown glouton:glouton $AUTO_UPGRADE_FILE
 
@@ -31,5 +34,3 @@ case "$os_name" in
         yum update --assumeyes bleemeo-agent glouton
         ;;
 esac
-
-rm $AUTO_UPGRADE_FILE
