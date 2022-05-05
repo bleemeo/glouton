@@ -72,7 +72,8 @@ func TestUpgradeFromV1(t *testing.T) {
 
 	cache := Load(state)
 
-	checkCache(t, cache, false)
+	checkMetrics(t, cache)
+	checkAccountConfigs(t, cache, false)
 }
 
 func TestUpgradeFromV2(t *testing.T) {
@@ -83,13 +84,27 @@ func TestUpgradeFromV2(t *testing.T) {
 
 	cache := Load(state)
 
-	checkCache(t, cache, true)
+	checkMetrics(t, cache)
+	checkAccountConfigs(t, cache, true)
+	checkMonitors(t, cache)
 }
 
-func checkCache(t *testing.T, cache *Cache, withMonitors bool) {
+func TestUpgradeFromV6(t *testing.T) {
+	state, err := state.Load("testdata/state-v6.json", "testdata/state-v6.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cache := Load(state)
+
+	checkMetrics(t, cache)
+	checkAccountConfigs(t, cache, true)
+	checkMonitors(t, cache)
+}
+
+func checkMetrics(t *testing.T, cache *Cache) {
 	t.Helper()
 
-	// Check that metric are kept as they represent the highest cost if they are lost.
 	wantMetrics := []types.Metric{
 		{
 			ID:         "8e930d86-8c51-4b3a-8601-cf6a2b1b4997",
@@ -136,40 +151,41 @@ func checkCache(t *testing.T, cache *Cache, withMonitors bool) {
 			t.Errorf("want %#v, got %#v", wantMetrics[i], gotMetric)
 		}
 	}
+}
 
-	// Check that the account config was kept during the upgrade 1 -> 2.
+func checkAccountConfigs(t *testing.T, cache *Cache, liveProcess bool) {
+	t.Helper()
+
 	wantAccountConfig := types.AccountConfig{
 		ID:                    "d7b022ba-e230-4776-8018-465e681e096e",
 		Name:                  "default",
 		MetricAgentResolution: 10,
 		LiveProcessResolution: 10,
+		LiveProcess:           liveProcess,
 		DockerIntegration:     true,
 	}
 
 	gotAccountConfigs := cache.AccountConfigs()
 
 	if len(gotAccountConfigs) != 1 {
-		t.Errorf("want 1 account, got %d", len(gotAccountConfigs))
+		t.Fatalf("want 1 account config, got %d", len(gotAccountConfigs))
 	}
 
 	if gotAccountConfigs[0] != wantAccountConfig {
 		t.Errorf("want %#v, got %#v", wantAccountConfig, gotAccountConfigs[0])
 	}
+}
 
-	// Check that the containers were dropped during the upgrade 2 -> 3.
-	if len(cache.Containers()) != 0 {
-		t.Errorf("Containers were not dropped, got %d containers", len(cache.Containers()))
+func checkMonitors(t *testing.T, cache *Cache) {
+	t.Helper()
+
+	gotMonitors := cache.Monitors()
+	if len(gotMonitors) != 1 {
+		t.Errorf("want 1 monitor, got %d", len(gotMonitors))
 	}
 
-	if withMonitors {
-		gotMonitors := cache.Monitors()
-		if len(gotMonitors) != 1 {
-			t.Errorf("want 1 monitor, got %d", len(gotMonitors))
-		}
-
-		if gotMonitors[0].URL != "example.com" {
-			t.Errorf("want monitor url 'example.com', got '%s'", gotMonitors[0].URL)
-		}
+	if gotMonitors[0].URL != "example.com" {
+		t.Errorf("want monitor url 'example.com', got '%s'", gotMonitors[0].URL)
 	}
 }
 
