@@ -761,7 +761,7 @@ func upgradeV5(state bleemeoTypes.State, newData data) data {
 			}
 		}
 
-		if !found {
+		if !found && oldCache.CurrentAccountConfig.ID != "" {
 			newData.AccountConfigs = append(newData.AccountConfigs, oldCache.CurrentAccountConfig)
 		}
 	}
