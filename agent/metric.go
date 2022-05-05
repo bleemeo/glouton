@@ -655,7 +655,6 @@ const (
 
 // metricFilter is a thread-safe holder of an allow / deny metrics list.
 type metricFilter struct {
-
 	// staticList contains the matchers generated from static source (config file).
 	// They won't change at runtime, and don't need to be rebuilt
 	staticAllowList map[labels.Matcher][]matcher.Matchers
@@ -719,8 +718,11 @@ func addToList(metricList map[labels.Matcher][]matcher.Matchers, metrics matcher
 	metricList[*newName] = []matcher.Matchers{metrics}
 }
 
-func addScrappersList(config *config.Configuration, metricList map[labels.Matcher][]matcher.Matchers,
-	metricListType string) {
+func addScrappersList(
+	config *config.Configuration,
+	metricList map[labels.Matcher][]matcher.Matchers,
+	metricListType string,
+) {
 	promTargets, _ := config.Get("metric.prometheus.targets")
 	targetList := prometheusConfigToURLs(promTargets)
 
