@@ -700,7 +700,9 @@ func (a *agent) run(ctx context.Context) { //nolint:maintidx
 		targets = prometheusConfigToURLs(promCfg)
 	}
 
-	mFilter, err := newMetricFilter(a.oldConfig, len(a.snmpManager.Targets()) > 0, a.metricFormat)
+	hasSwap := factsMap["swap_present"] == "true"
+
+	mFilter, err := newMetricFilter(a.oldConfig, len(a.snmpManager.Targets()) > 0, hasSwap, a.metricFormat)
 	if err != nil {
 		logger.Printf("An error occurred while building the metric filter, allow/deny list may be partial: %v", err)
 	}
