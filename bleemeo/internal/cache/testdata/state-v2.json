@@ -1,0 +1,93 @@
+{
+    "CacheBleemeoConnector": {
+        "Version": 2,
+        "AccountID": "ca60bcac-4c49-436e-a0b8-ffdbf1f8eaf2",
+        "Facts": [
+            {
+                "ID": "c5a1cbb4-ceb4-4fb9-8162-b05dfbe8b512",
+                "Key": "architecture",
+                "Value": "amd64"
+            },
+            {
+                "ID": "f7bfad42-9779-4330-a758-b4f0ccdada8a",
+                "Key": "kernel_version",
+                "Value": "5.15.0"
+            }
+        ],
+        "Containers": [
+            {
+                "id": "3743d76e-1351-40e9-a5f4-09429be6e4eb",
+                "name": "bleemeo_minimal_redis_1",
+                "docker_id": "be551b02aba31518c63f61ac153aaa064c47b1ea109c2b2b658eb2c1b023c1d8",
+                "docker_inspect": "{\"Id\":\"be551b02aba31518c63f61ac153aaa064c47b1ea109c2b2b658eb2c1b023c1d8\",\"Created\":\"2022-05-02T15:37:51.932010588Z\",\"Path\":\"docker-entrypoint.sh\",\"Args\":[\"redis-server\"],\"State\":{\"Status\":\"running\",\"Running\":true,\"Paused\":false,\"Restarting\":false,\"OOMKilled\":false,\"Dead\":false,\"Pid\":2816,\"ExitCode\":0,\"Error\":\"\",\"StartedAt\":\"2022-05-05T07:31:52.291896048Z\",\"FinishedAt\":\"2022-05-04T09:49:09.988275797Z\"},\"Image\":\"sha256:a10f849e15406d538b9ce78699e32fe72140cac70569e3fbee56f734b1a62d69\",\"ResolvConfPath\":\"/var/lib/docker/containers/be551b02aba31518c63f61ac153aaa064c47b1ea109c2b2b658eb2c1b023c1d8/resolv.conf\",\"HostnamePath\":\"/var/lib/docker/containers/be551b02aba31518c63f61ac153aaa064c47b1ea109c2b2b658eb2c1b023c1d8/hostname\",\"HostsPath\":\"/var/lib/docker/containers/be551b02aba31518c63f61ac153aaa064c47b1ea109c2b2b658eb2c1b023c1d8/hosts\",\"LogPath\":\"/var/lib/docker/containers/be551b02aba31518c63f61ac153aaa064c47b1ea109c2b2b658eb2c1b023c1d8/be551b02aba31518c63f61ac153aaa064c47b1ea109c2b2b658eb2c1b023c1d8-json.log\",\"Name\":\"/bleemeo_minimal_redis_1\",\"RestartCount\":0,\"Driver\":\"overlay2\",\"Platform\":\"linux\",\"MountLabel\":\"\",\"ProcessLabel\":\"\",\"AppArmorProfile\":\"docker-default\",\"ExecIDs\":null,\"HostConfig\":{\"Binds\":[\"db8e27c203fd9d8d53b47ba03638248096cbf1992f5226b5a916891eda21ff94:/data:rw\"],\"ContainerIDFile\":\"\",\"LogConfig\":{\"Type\":\"json-file\",\"Config\":{}},\"NetworkMode\":\"bleemeo_minimal_default\",\"PortBindings\":{\"6379/tcp\":[{\"HostIp\":\"127.0.0.1\",\"HostPort\":\"6379\"}]},\"RestartPolicy\":{\"Name\":\"unless-stopped\",\"MaximumRetryCount\":0},\"AutoRemove\":false,\"VolumeDriver\":\"\",\"VolumesFrom\":[],\"CapAdd\":null,\"CapDrop\":null,\"Capabilities\":null,\"Dns\":[],\"DnsOptions\":[],\"DnsSearch\":[],\"ExtraHosts\":null,\"GroupAdd\":null,\"IpcMode\":\"private\",\"Cgroup\":\"\",\"Links\":null,\"OomScoreAdj\":0,\"PidMode\":\"\",\"Privileged\":false,\"PublishAllPorts\":false,\"ReadonlyRootfs\":false,\"SecurityOpt\":null,\"UTSMode\":\"\",\"UsernsMode\":\"\",\"ShmSize\":67108864,\"Runtime\":\"runc\",\"ConsoleSize\":[0,0],\"Isolation\":\"\",\"CpuShares\":0,\"Memory\":0,\"NanoCpus\":0,\"CgroupParent\":\"\",\"BlkioWeight\":0,\"BlkioWeightDevice\":null,\"BlkioDeviceReadBps\":null,\"BlkioDeviceWriteBps\":null,\"BlkioDeviceReadIOps\":null,\"BlkioDeviceWriteIOps\":null,\"CpuPeriod\":0,\"CpuQuota\":0,\"CpuRealtimePeriod\":0,\"CpuRealtimeRuntime\":0,\"CpusetCpus\":\"\",\"CpusetMems\":\"\",\"Devices\":null,\"DeviceCgroupRules\":null,\"DeviceRequests\":null,\"KernelMemory\":0,\"KernelMemoryTCP\":0,\"MemoryReservation\":0,\"MemorySwap\":0,\"MemorySwappiness\":null,\"OomKillDisable\":null,\"PidsLimit\":null,\"Ulimits\":null,\"CpuCount\":0,\"CpuPercent\":0,\"IOMaximumIOps\":0,\"IOMaximumBandwidth\":0,\"MaskedPaths\":[\"/proc/asound\",\"/proc/acpi\",\"/proc/kcore\",\"/proc/keys\",\"/proc/latency_stats\",\"/proc/timer_list\",\"/proc/timer_stats\",\"/proc/sched_debug\",\"/proc/scsi\",\"/sys/firmware\"],\"ReadonlyPaths\":[\"/proc/bus\",\"/proc/fs\",\"/proc/irq\",\"/proc/sys\",\"/proc/sysrq-trigger\"]},\"GraphDriver\":{\"Data\":{\"LowerDir\":\"/var/lib/docker/overlay2/6469e43385fb7f12784d6614f62cc0a8bc28b4bd22d807866e2b0051167b7165-init/diff:/var/lib/docker/overlay2/0b6425e5245284aa9617cf7ac544d4d55da9df64471340349ac3e1f064b8aa6b/diff:/var/lib/docker/overlay2/750baca01f2137dc5cfc54b3ab031894a30511c3816ebc116017abd36b701c69/diff:/var/lib/docker/overlay2/4ececdb5b32ae9ba0d8b8ae0e56eedb5212f8a6ee7b74df62fa122702d542584/diff:/var/lib/docker/overlay2/45738671b136e4741d468692cfff77e6544fb71e8bdd94ee77965a1f28f1eefb/diff:/var/lib/docker/overlay2/1f3086bc9eed11e94d1b40659ed36e60e18fc56f330775fb42e5ffd82dd96257/diff:/var/lib/docker/overlay2/b41223ba8342af03493b36cb7e5e39124e004d99b959a2ea00fe1de3c86d3140/diff\",\"MergedDir\":\"/var/lib/docker/overlay2/6469e43385fb7f12784d6614f62cc0a8bc28b4bd22d807866e2b0051167b7165/merged\",\"UpperDir\":\"/var/lib/docker/overlay2/6469e43385fb7f12784d6614f62cc0a8bc28b4bd22d807866e2b0051167b7165/diff\",\"WorkDir\":\"/var/lib/docker/overlay2/6469e43385fb7f12784d6614f62cc0a8bc28b4bd22d807866e2b0051167b7165/work\"},\"Name\":\"overlay2\"},\"Mounts\":[{\"Type\":\"volume\",\"Name\":\"db8e27c203fd9d8d53b47ba03638248096cbf1992f5226b5a916891eda21ff94\",\"Source\":\"/var/lib/docker/volumes/db8e27c203fd9d8d53b47ba03638248096cbf1992f5226b5a916891eda21ff94/_data\",\"Destination\":\"/data\",\"Driver\":\"local\",\"Mode\":\"rw\",\"RW\":true,\"Propagation\":\"\"}],\"Config\":{\"Hostname\":\"be551b02aba3\",\"Domainname\":\"\",\"User\":\"\",\"AttachStdin\":false,\"AttachStdout\":false,\"AttachStderr\":false,\"ExposedPorts\":{\"6379/tcp\":{}},\"Tty\":false,\"OpenStdin\":false,\"StdinOnce\":false,\"Env\":[\"affinity:container==3fda2df2dd9ecc17bdcebb641d85eee6397886a215a6bf2c47be48c1ef89c9ae\",\"PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\",\"GOSU_VERSION=1.14\",\"REDIS_VERSION=7.0.0\",\"REDIS_DOWNLOAD_URL=http://download.redis.io/releases/redis-7.0.0.tar.gz\",\"REDIS_DOWNLOAD_SHA=284d8bd1fd85d6a55a05ee4e7c31c31977ad56cbf344ed83790beeb148baa720\"],\"Cmd\":[\"redis-server\"],\"Image\":\"redis\",\"Volumes\":{\"/data\":{}},\"WorkingDir\":\"/data\",\"Entrypoint\":[\"docker-entrypoint.sh\"],\"OnBuild\":null,\"Labels\":{\"com.docker.compose.config-hash\":\"4d0a83c4b5397bc7aad8dd046aeb162c6a975f954f02b49eca4d9a90e379deb3\",\"com.docker.compose.container-number\":\"1\",\"com.docker.compose.oneoff\":\"False\",\"com.docker.compose.project\":\"bleemeo_minimal\",\"com.docker.compose.project.config_files\":\"docker-compose.yml\",\"com.docker.compose.project.working_dir\":\"/home/tpillot/dev/bleemeo-api/examples/bleemeo_minimal\",\"com.docker.compose.service\":\"redis\",\"com.docker.compose.version\":\"1.29.2\"}},\"NetworkSettings\":{\"Bridge\":\"\",\"SandboxID\":\"646d7d8afcba6b64f2dc3f4b760ff2ea0a9f19a52cfc3b647e042a99953dd854\",\"HairpinMode\":false,\"LinkLocalIPv6Address\":\"\",\"LinkLocalIPv6PrefixLen\":0,\"Ports\":{\"6379/tcp\":[{\"HostIp\":\"127.0.0.1\",\"HostPort\":\"6379\"}]},\"SandboxKey\":\"/var/run/docker/netns/646d7d8afcba\",\"SecondaryIPAddresses\":null,\"SecondaryIPv6Addresses\":null,\"EndpointID\":\"\",\"Gateway\":\"\",\"GlobalIPv6Address\":\"\",\"GlobalIPv6PrefixLen\":0,\"IPAddress\":\"\",\"IPPrefixLen\":0,\"IPv6Gateway\":\"\",\"MacAddress\":\"\",\"Networks\":{\"bleemeo_minimal_default\":{\"IPAMConfig\":null,\"Links\":null,\"Aliases\":[\"redis\",\"be551b02aba3\"],\"NetworkID\":\"b30bcbe126c338159ed115012334433c1c8697bf7ec8730055509ba7b98e0f50\",\"EndpointID\":\"6a93aa462b2c2b2bdab95f45615d8ba8b1292c8f730f25b36364424e6410146b\",\"Gateway\":\"172.19.0.1\",\"IPAddress\":\"172.19.0.5\",\"IPPrefixLen\":16,\"IPv6Gateway\":\"\",\"GlobalIPv6Address\":\"\",\"GlobalIPv6PrefixLen\":0,\"MacAddress\":\"02:42:ac:13:00:05\",\"DriverOpts\":null}}}}"
+            }
+        ],
+        "Metrics": [
+            {
+                "id": "8e930d86-8c51-4b3a-8601-cf6a2b1b4997",
+                "labels_text": "__name__=\"agent_status\"",
+                "threshold_low_warning": null,
+                "threshold_low_critical": null,
+                "threshold_high_warning": null,
+                "threshold_high_critical": 80,
+                "unit_text": "No unit",
+                "deactivated_at": "0001-01-01T00:00:00Z"
+            },
+            {
+                "id": "1c412097-e83b-4afa-99a1-7503bc712b70",
+                "labels_text": "__name__=\"agent_sent_message\",_item=\"my_item\"",
+                "threshold_low_warning": null,
+                "threshold_low_critical": 20,
+                "threshold_high_warning": null,
+                "threshold_high_critical": null,
+                "unit_text": "No unit",
+                "deactivated_at": "0001-01-01T00:00:00Z"
+            }
+        ],
+        "MetricRegistrationsFail": [],
+        "Agent": {
+            "id": "d5732833-fc1b-43c7-b253-565b56701651",
+            "created_at": "2022-05-05T12:25:31.354466Z",
+            "account": "ca60bcac-4c49-436e-a0b8-ffdbf1f8eaf2",
+            "next_config_at": "0001-01-01T00:00:00Z",
+            "current_config": "d7b022ba-e230-4776-8018-465e681e096e",
+            "tags": [
+                {
+                    "id": "3fc4f3ad-ddbc-4100-aecd-524a85fac7a5",
+                    "name": "Group: Default",
+                    "is_automatic": true
+                }
+            ]
+        },
+        "AccountConfigs": {},
+        "CurrentAccountConfig": {
+            "id": "d7b022ba-e230-4776-8018-465e681e096e",
+            "name": "default",
+            "metrics_agent_whitelist": "",
+            "metrics_agent_resolution": 10,
+            "metrics_monitor_resolution": 0,
+            "live_process_resolution": 10,
+            "docker_integration": true
+        },
+        "Services": [
+            {
+                "id": "4f382f37-51b2-486c-8f84-68370d1e6ebd",
+                "account_config": "",
+                "label": "redis",
+                "instance": "bleemeo_minimal_redis_1",
+                "listen_addresses": "172.19.0.5:6379/tcp",
+                "exe_path": "",
+                "stack": "",
+                "active": true,
+                "created_at": ""
+            }
+        ],
+        "Monitors": [
+            {
+                "monitor_url": "example.com"
+            }
+        ]
+    },
+    "agent_uuid": "5296db2f-cbf1-4a18-8dd6-f1e428eebce8",
+    "password": "password"
+}

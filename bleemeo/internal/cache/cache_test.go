@@ -72,6 +72,23 @@ func TestUpgradeFromV1(t *testing.T) {
 
 	cache := Load(state)
 
+	checkCache(t, cache, false)
+}
+
+func TestUpgradeFromV2(t *testing.T) {
+	state, err := state.Load("testdata/state-v2.json", "testdata/state-v2.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cache := Load(state)
+
+	checkCache(t, cache, true)
+}
+
+func checkCache(t *testing.T, cache *Cache, withMonitors bool) {
+	t.Helper()
+
 	// Check that metric are kept as they represent the highest cost if they are lost.
 	wantMetrics := []types.Metric{
 		{
@@ -142,6 +159,17 @@ func TestUpgradeFromV1(t *testing.T) {
 	// Check that the containers were dropped during the upgrade 2 -> 3.
 	if len(cache.Containers()) != 0 {
 		t.Errorf("Containers were not dropped, got %d containers", len(cache.Containers()))
+	}
+
+	if withMonitors {
+		gotMonitors := cache.Monitors()
+		if len(gotMonitors) != 1 {
+			t.Errorf("want 1 monitor, got %d", len(gotMonitors))
+		}
+
+		if gotMonitors[0].URL != "example.com" {
+			t.Errorf("want monitor url 'example.com', got '%s'", gotMonitors[0].URL)
+		}
 	}
 }
 
