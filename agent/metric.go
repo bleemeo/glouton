@@ -101,8 +101,6 @@ var promLinuxDefaultSystemMetrics = []string{
 	"node_memory_MemFree_bytes",
 	"node_memory_Buffers_bytes",
 	"node_memory_Cached_bytes",
-	"node_memory_SwapFree_bytes",
-	"node_memory_SwapTotal_bytes",
 	"node_disk_io_time_seconds_total",
 	"node_disk_read_bytes_total",
 	"node_disk_written_bytes_total",
@@ -117,6 +115,12 @@ var promLinuxDefaultSystemMetrics = []string{
 	"node_network_receive_errs_total",
 	"node_network_transmit_errs_total",
 	"node_uname_info",
+}
+
+//nolint:gochecknoglobals
+var promLinuxSwapMetrics = []string{
+	"node_memory_SwapFree_bytes",
+	"node_memory_SwapTotal_bytes",
 }
 
 //nolint:gochecknoglobals
@@ -207,6 +211,15 @@ var bleemeoDefaultSystemMetrics = []string{
 	"process_status_zombies",
 	"process_total",
 	"process_total_threads",
+	"system_load1",
+	"system_load5",
+	"system_load15",
+	"uptime",
+	"users_logged",
+}
+
+//nolint:gochecknoglobals
+var bleemeoSwapMetrics = []string{
 	"swap_free",
 	"swap_in",
 	"swap_out",
@@ -214,11 +227,6 @@ var bleemeoDefaultSystemMetrics = []string{
 	"swap_used",
 	"swap_used_perc",
 	"swap_used_perc_status",
-	"system_load1",
-	"system_load5",
-	"system_load15",
-	"uptime",
-	"users_logged",
 }
 
 //nolint:gochecknoglobals
@@ -647,7 +655,6 @@ const (
 
 // metricFilter is a thread-safe holder of an allow / deny metrics list.
 type metricFilter struct {
-
 	// staticList contains the matchers generated from static source (config file).
 	// They won't change at runtime, and don't need to be rebuilt
 	staticAllowList map[labels.Matcher][]matcher.Matchers
@@ -711,8 +718,11 @@ func addToList(metricList map[labels.Matcher][]matcher.Matchers, metrics matcher
 	metricList[*newName] = []matcher.Matchers{metrics}
 }
 
-func addScrappersList(config *config.Configuration, metricList map[labels.Matcher][]matcher.Matchers,
-	metricListType string) {
+func addScrappersList(
+	config *config.Configuration,
+	metricList map[labels.Matcher][]matcher.Matchers,
+	metricListType string,
+) {
 	promTargets, _ := config.Get("metric.prometheus.targets")
 	targetList := prometheusConfigToURLs(promTargets)
 
@@ -756,16 +766,22 @@ func addScrappersList(config *config.Configuration, metricList map[labels.Matche
 	}
 }
 
-func getDefaultMetrics(format types.MetricFormat) []string {
+func getDefaultMetrics(format types.MetricFormat, hasSwap bool) []string {
 	res := commonDefaultSystemMetrics
 
 	switch {
 	case format == types.MetricFormatBleemeo:
 		res = append(res, bleemeoDefaultSystemMetrics...)
+		if hasSwap {
+			res = append(res, bleemeoSwapMetrics...)
+		}
 	case runtime.GOOS == "windows":
 		res = append(res, promWindowsDefaultSystemMetrics...)
 	default:
 		res = append(res, promLinuxDefaultSystemMetrics...)
+		if hasSwap {
+			res = append(res, promLinuxSwapMetrics...)
+		}
 	}
 
 	return res
@@ -799,7 +815,7 @@ func (m *metricFilter) DiagnosticArchive(ctx context.Context, archive types.Arch
 	return nil
 }
 
-func (m *metricFilter) buildList(config *config.Configuration, hasSNMP bool, format types.MetricFormat) error {
+func (m *metricFilter) buildList(config *config.Configuration, hasSNMP, hasSwap bool, format types.MetricFormat) error {
 	m.l.Lock()
 	defer m.l.Unlock()
 
@@ -826,7 +842,7 @@ func (m *metricFilter) buildList(config *config.Configuration, hasSNMP bool, for
 	}
 
 	if m.includeDefaultMetrics {
-		defaultMetricsList := getDefaultMetrics(format)
+		defaultMetricsList := getDefaultMetrics(format, hasSwap)
 		for _, val := range defaultMetricsList {
 			matchers, err := matcher.NormalizeMetric(val)
 			if err != nil {
@@ -860,9 +876,13 @@ func (m *metricFilter) buildList(config *config.Configuration, hasSNMP bool, for
 	return nil
 }
 
-func newMetricFilter(config *config.Configuration, hasSNMP bool, metricFormat types.MetricFormat) (*metricFilter, error) {
+func newMetricFilter(
+	config *config.Configuration,
+	hasSNMP, hasSwap bool,
+	metricFormat types.MetricFormat,
+) (*metricFilter, error) {
 	filter := metricFilter{}
-	err := filter.buildList(config, hasSNMP, metricFormat)
+	err := filter.buildList(config, hasSNMP, hasSwap, metricFormat)
 
 	return &filter, err
 }
