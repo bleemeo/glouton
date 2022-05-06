@@ -1011,21 +1011,47 @@ func (mr *metricRegisterer) registerMetrics(localMetrics []types.Metric) error {
 
 	minRetryAt := mr.s.now().Add(time.Hour)
 
-	registrations := make([]bleemeoTypes.MetricRegistration, 0, len(mr.failedRegistrationByKey))
+	failedRegistrations := make([]bleemeoTypes.MetricRegistration, 0, len(mr.failedRegistrationByKey))
+	nbFailedTooManyMetrics := 0
+	cachedMetrics := mr.s.option.Cache.MetricLookupFromList()
 
-	for _, v := range mr.failedRegistrationByKey {
-		if !v.LastFailKind.IsPermanentFailure() && minRetryAt.After(v.RetryAfter()) {
-			minRetryAt = v.RetryAfter()
+	for _, failedRegistration := range mr.failedRegistrationByKey {
+		if !failedRegistration.LastFailKind.IsPermanentFailure() && minRetryAt.After(failedRegistration.RetryAfter()) {
+			minRetryAt = failedRegistration.RetryAfter()
 		}
 
-		registrations = append(registrations, v)
+		// The failed registrations can contain inactive metrics, we don't want to count them.
+		// TODO: Differentiate too many metrics and too many **custom** metrics.
+		if failedRegistration.LastFailKind == bleemeoTypes.FailureTooManyMetric &&
+			cachedMetrics[failedRegistration.LabelsText].DeactivatedAt.IsZero() {
+			nbFailedTooManyMetrics++
+		}
+
+		failedRegistrations = append(failedRegistrations, failedRegistration)
 	}
 
 	mr.s.l.Lock()
 	mr.s.metricRetryAt = minRetryAt
 	mr.s.l.Unlock()
 
-	mr.s.option.Cache.SetMetricRegistrationsFail(registrations)
+	if nbFailedTooManyMetrics > 0 {
+		mr.s.logOnce.Do(func() {
+			config, ok := mr.s.option.Cache.CurrentAccountConfig()
+
+			maxCustomMetricsStr := ""
+			if ok {
+				maxCustomMetricsStr = fmt.Sprintf(" (%d)", config.MaxCustomMetrics)
+			}
+
+			const msg = "Failed to register %d metrics because you reached the maximum number of custom metrics%s. " +
+				"Consider removing some metrics from your allowlist, see the documentation for more details " +
+				"(https://docs.bleemeo.com/metrics-sources/filtering)."
+
+			logger.V(0).Printf(msg, nbFailedTooManyMetrics, maxCustomMetricsStr)
+		})
+	}
+
+	mr.s.option.Cache.SetMetricRegistrationsFail(failedRegistrations)
 
 	return err
 }

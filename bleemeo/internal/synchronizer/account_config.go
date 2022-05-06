@@ -81,7 +81,7 @@ func (s *Synchronizer) agentTypesUpdateList() error {
 
 func (s *Synchronizer) accountConfigUpdateList() error {
 	params := map[string]string{
-		"fields": "id,name,metrics_agent_whitelist,metrics_agent_resolution,metrics_monitor_resolution,live_process_resolution,live_process,docker_integration,snmp_integration",
+		"fields": "id,name,metrics_agent_whitelist,metrics_agent_resolution,metrics_monitor_resolution,live_process_resolution,live_process,docker_integration,snmp_integration,number_of_custom_metrics",
 	}
 
 	result, err := s.client.Iter(s.ctx, "accountconfig", params)

@@ -99,6 +99,7 @@ type AccountConfig struct {
 	ID                      string `json:"id"`
 	Name                    string `json:"name"`
 	MetricsAgentWhitelist   string `json:"metrics_agent_whitelist"`
+	MaxCustomMetrics        int    `json:"number_of_custom_metrics"`
 	MetricAgentResolution   int    `json:"metrics_agent_resolution"`
 	MetricMonitorResolution int    `json:"metrics_monitor_resolution"`
 	LiveProcessResolution   int    `json:"live_process_resolution"`
