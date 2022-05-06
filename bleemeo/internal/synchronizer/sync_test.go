@@ -1047,6 +1047,7 @@ func (helper *syncTestHelper) initSynchronizer(t *testing.T) {
 			SNMPOnlineTarget:        func() int { return len(helper.SNMP) },
 			NotifyLabelsUpdate:      helper.NotifyLabelsUpdate,
 			IsContainerEnabled:      facts.ContainerFilter{}.ContainerEnabled,
+			IsMetricAllowed:         func(_ map[string]string) bool { return true },
 		},
 	}, helper.api.now.Now)
 	if err != nil {

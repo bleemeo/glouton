@@ -53,6 +53,8 @@ type GlobalOption struct {
 	UpdateUnits            func(units map[string]threshold.Unit)
 	RebuildPromQLRules     func(promqlRules []rules.PromQLRule) error
 	IsContainerEnabled     func(facts.Container) (bool, bool)
+	// IsMetricAllowed returns whether a metric is allowed or not in the config files.
+	IsMetricAllowed func(lbls map[string]string) bool
 }
 
 // MonitorManager is the interface used by Bleemeo to update the dynamic monitors list.
