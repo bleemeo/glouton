@@ -689,6 +689,7 @@ func newMetricHelper(t *testing.T) *metricTestHelper {
 			SNMPOnlineTarget:    func() int { return 0 },
 			BlackboxScraperName: cfg.String("blackbox.scraper_name"),
 			IsContainerEnabled:  facts.ContainerFilter{}.ContainerEnabled,
+			IsMetricAllowed:     func(_ map[string]string) bool { return true },
 		},
 	})
 	if err != nil {

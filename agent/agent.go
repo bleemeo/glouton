@@ -1058,6 +1058,7 @@ func (a *agent) run(ctx context.Context) { //nolint:maintidx
 			RebuildPromQLRules:      a.rulesManager.RebuildPromQLRules,
 			ReloadState:             a.reloadState.Bleemeo(),
 			IsContainerEnabled:      a.containerFilter.ContainerEnabled,
+			IsMetricAllowed:         a.metricFilter.isAllowedAndNotDenied,
 		})
 		if err != nil {
 			logger.Printf("unable to start Bleemeo SAAS connector: %v", err)

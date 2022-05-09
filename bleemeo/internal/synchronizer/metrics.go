@@ -47,7 +47,7 @@ const (
 )
 
 // gracePeriod is the minimum time for which the agent should not deactivate
-// a metric between firstSeen and now. 6 Minutes is the minimum time,
+// an allowed metric between firstSeen and now. 6 Minutes is the minimum time,
 // as the prometheus alert time is 5 minutes.
 const gracePeriod = 6 * time.Minute
 
@@ -598,14 +598,12 @@ func (s *Synchronizer) syncMetrics(ctx context.Context, fullSync bool, onlyEssen
 		return updateThresholds, nil
 	}
 
-	if err := s.metricDeleteFromLocal(); err != nil {
+	if err := s.metricDeleteIgnoredServices(); err != nil {
 		return updateThresholds, err
 	}
 
-	if s.now().Sub(s.startedAt) > 5*time.Minute {
-		if err := s.metricDeactivate(filteredMetrics); err != nil {
-			return updateThresholds, err
-		}
+	if err := s.metricDeactivate(filteredMetrics); err != nil {
+		return updateThresholds, err
 	}
 
 	s.l.Lock()
@@ -1376,8 +1374,8 @@ func (s *Synchronizer) metricUpdateOne(metric types.Metric, remoteMetric bleemeo
 	return remoteMetric, nil
 }
 
-func (s *Synchronizer) metricDeleteFromLocal() error {
-	// We only delete metric $SERVICE_NAME_status from service with ignore_check=True
+// metricDeleteIgnoredServices deletes the metrics $SERVICE_NAME_status from services in service_ignore_check.
+func (s *Synchronizer) metricDeleteIgnoredServices() error {
 	localServices, err := s.option.Discovery.Discovery(s.ctx, 24*time.Hour)
 	if err != nil {
 		return err
@@ -1456,6 +1454,7 @@ func (s *Synchronizer) localMetricToMap(localMetrics []types.Metric) map[string]
 	return localByMetricKey
 }
 
+// metricDeactivate deactivates the registered metrics that didn't receive any points for some time.
 func (s *Synchronizer) metricDeactivate(localMetrics []types.Metric) error {
 	duplicatedKey := make(map[string]bool)
 	localByMetricKey := s.localMetricToMap(localMetrics)
@@ -1463,7 +1462,15 @@ func (s *Synchronizer) metricDeactivate(localMetrics []types.Metric) error {
 
 	registeredMetrics := s.option.Cache.MetricsByUUID()
 	for k, v := range registeredMetrics {
-		if s.now().Sub(v.FirstSeenAt) < gracePeriod {
+		// Wait some time to receive points from the allowed metrics before deactivating them.
+		//
+		// Deactivate the registered custom metrics that are no longer allowed in the config.
+		// When a user has reached the maximum number of custom metrics and removes a metric
+		// from the allowlist (or add one to the denylist), we want to deactivate it quickly
+		// so the number of custom metrics goes under the limit.
+		now := s.now()
+		if s.option.IsMetricAllowed(v.Labels) &&
+			(now.Sub(s.startedAt) < 5*time.Minute || now.Sub(v.FirstSeenAt) < gracePeriod) {
 			continue
 		}
 

@@ -990,6 +990,14 @@ func (m *metricFilter) isAllowed(lbls map[string]string) bool {
 	return false
 }
 
+// Returns whether this metric is in the allow list and not in the deny list.
+func (m *metricFilter) isAllowedAndNotDenied(lbls map[string]string) bool {
+	m.l.Lock()
+	defer m.l.Unlock()
+
+	return m.isAllowed(lbls) && !m.isDenied(lbls)
+}
+
 func (m *metricFilter) filterMetrics(mt []types.Metric) []types.Metric {
 	i := 0
 

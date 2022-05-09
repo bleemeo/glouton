@@ -23,6 +23,7 @@ func NewFilter(cache *cache.Cache) *Filter {
 	}
 }
 
+// IsAllowed returns whether a metric is allowed or not depending on the current plan.
 func (f Filter) IsAllowed(lbls map[string]string, annotations types.MetricAnnotations) (bool, error) {
 	allowlist, err := common.AllowListForMetric(f.accountConfigs, f.defaultConfigID, annotations, f.monitors, f.agents)
 	if err != nil {
