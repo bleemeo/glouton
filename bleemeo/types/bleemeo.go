@@ -194,7 +194,8 @@ type FailureKind int
 const (
 	FailureUnknown FailureKind = iota
 	FailureAllowList
-	FailureTooManyMetric
+	FailureTooManyStandardMetrics
+	FailureTooManyCustomMetrics
 )
 
 // MetricRegistration contains information about a metric registration failure.
@@ -208,7 +209,7 @@ type MetricRegistration struct {
 // IsPermanentFailure tells whether the error is permanent and there is no need to quickly retry.
 func (kind FailureKind) IsPermanentFailure() bool {
 	switch kind {
-	case FailureAllowList, FailureTooManyMetric:
+	case FailureAllowList, FailureTooManyStandardMetrics, FailureTooManyCustomMetrics:
 		return true
 	case FailureUnknown:
 		return false
@@ -221,8 +222,10 @@ func (kind FailureKind) String() string {
 	switch kind {
 	case FailureAllowList:
 		return "not-allowed"
-	case FailureTooManyMetric:
-		return "too-many-metric"
+	case FailureTooManyStandardMetrics:
+		return "too-many-standard-metrics"
+	case FailureTooManyCustomMetrics:
+		return "too-many-custom-metrics"
 	case FailureUnknown:
 		return "unknown"
 	default:

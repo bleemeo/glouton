@@ -95,7 +95,7 @@ type Synchronizer struct {
 	// minutes to check whether we are still in maintenance of not.
 	lastMaintenanceSync time.Time
 
-	// logOnce is used to log that the limit of custom metrics has been reached.
+	// logOnce is used to log that the limit of metrics has been reached.
 	logOnce sync.Once
 
 	l                          sync.Mutex

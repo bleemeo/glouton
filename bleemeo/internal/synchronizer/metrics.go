@@ -395,9 +395,9 @@ func httpResponseToMetricFailureKind(content string) bleemeoTypes.FailureKind {
 	case strings.Contains(content, "metric is not in allow-list"):
 		return bleemeoTypes.FailureAllowList
 	case strings.Contains(content, "Too many non standard metrics"):
-		return bleemeoTypes.FailureTooManyMetric
+		return bleemeoTypes.FailureTooManyCustomMetrics
 	case strings.Contains(content, "Too many metrics"):
-		return bleemeoTypes.FailureTooManyMetric
+		return bleemeoTypes.FailureTooManyStandardMetrics
 	default:
 		return bleemeoTypes.FailureUnknown
 	}
@@ -538,7 +538,8 @@ func (s *Synchronizer) syncMetrics(ctx context.Context, fullSync bool, onlyEssen
 	if fullSync {
 		s.retryableMetricFailure[bleemeoTypes.FailureUnknown] = true
 		s.retryableMetricFailure[bleemeoTypes.FailureAllowList] = true
-		s.retryableMetricFailure[bleemeoTypes.FailureTooManyMetric] = true
+		s.retryableMetricFailure[bleemeoTypes.FailureTooManyCustomMetrics] = true
+		s.retryableMetricFailure[bleemeoTypes.FailureTooManyStandardMetrics] = true
 	}
 
 	pendingMetricsUpdate := s.popPendingMetricsUpdate()
@@ -1012,7 +1013,7 @@ func (mr *metricRegisterer) registerMetrics(localMetrics []types.Metric) error {
 	minRetryAt := mr.s.now().Add(time.Hour)
 
 	failedRegistrations := make([]bleemeoTypes.MetricRegistration, 0, len(mr.failedRegistrationByKey))
-	nbFailedTooManyMetrics := 0
+	nbTooManyMetrics := make(map[bleemeoTypes.FailureKind]int, 2)
 	cachedMetrics := mr.s.option.Cache.MetricLookupFromList()
 
 	for _, failedRegistration := range mr.failedRegistrationByKey {
@@ -1021,10 +1022,10 @@ func (mr *metricRegisterer) registerMetrics(localMetrics []types.Metric) error {
 		}
 
 		// The failed registrations can contain inactive metrics, we don't want to count them.
-		// TODO: Differentiate too many metrics and too many **custom** metrics.
-		if failedRegistration.LastFailKind == bleemeoTypes.FailureTooManyMetric &&
+		if (failedRegistration.LastFailKind == bleemeoTypes.FailureTooManyCustomMetrics ||
+			failedRegistration.LastFailKind == bleemeoTypes.FailureTooManyStandardMetrics) &&
 			cachedMetrics[failedRegistration.LabelsText].DeactivatedAt.IsZero() {
-			nbFailedTooManyMetrics++
+			nbTooManyMetrics[failedRegistration.LastFailKind]++
 		}
 
 		failedRegistrations = append(failedRegistrations, failedRegistration)
@@ -1034,7 +1035,18 @@ func (mr *metricRegisterer) registerMetrics(localMetrics []types.Metric) error {
 	mr.s.metricRetryAt = minRetryAt
 	mr.s.l.Unlock()
 
-	if nbFailedTooManyMetrics > 0 {
+	mr.s.option.Cache.SetMetricRegistrationsFail(failedRegistrations)
+
+	mr.logTooManyMetrics(
+		nbTooManyMetrics[bleemeoTypes.FailureTooManyStandardMetrics],
+		nbTooManyMetrics[bleemeoTypes.FailureTooManyCustomMetrics],
+	)
+
+	return err
+}
+
+func (mr *metricRegisterer) logTooManyMetrics(nbFailedStandardMetrics, nbFailedCustomMetrics int) {
+	if nbFailedCustomMetrics > 0 {
 		mr.s.logOnce.Do(func() {
 			config, ok := mr.s.option.Cache.CurrentAccountConfig()
 
@@ -1047,13 +1059,19 @@ func (mr *metricRegisterer) registerMetrics(localMetrics []types.Metric) error {
 				"Consider removing some metrics from your allowlist, see the documentation for more details " +
 				"(https://docs.bleemeo.com/metrics-sources/filtering)."
 
-			logger.V(0).Printf(msg, nbFailedTooManyMetrics, maxCustomMetricsStr)
+			logger.V(0).Printf(msg, nbFailedCustomMetrics, maxCustomMetricsStr)
 		})
 	}
 
-	mr.s.option.Cache.SetMetricRegistrationsFail(failedRegistrations)
+	if nbFailedStandardMetrics > 0 {
+		mr.s.logOnce.Do(func() {
+			const msg = "Failed to register %d metrics because you reached the maximum number of metrics. " +
+				"Consider removing some metrics from your allowlist, see the documentation for more details " +
+				"(https://docs.bleemeo.com/metrics-sources/filtering)."
 
-	return err
+			logger.V(0).Printf(msg, nbFailedStandardMetrics)
+		})
+	}
 }
 
 func (mr *metricRegisterer) do(localMetrics []types.Metric) error {
@@ -1545,7 +1563,8 @@ func (s *Synchronizer) metricDeactivate(localMetrics []types.Metric) error {
 
 		v.DeactivatedAt = s.now()
 		registeredMetrics[k] = v
-		s.retryableMetricFailure[bleemeoTypes.FailureTooManyMetric] = true
+		s.retryableMetricFailure[bleemeoTypes.FailureTooManyCustomMetrics] = true
+		s.retryableMetricFailure[bleemeoTypes.FailureTooManyStandardMetrics] = true
 
 		if len(s.option.Cache.MetricRegistrationsFail()) > 0 {
 			s.l.Lock()

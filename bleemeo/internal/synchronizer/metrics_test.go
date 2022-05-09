@@ -2092,12 +2092,12 @@ func Test_httpResponseToMetricFailureKind(t *testing.T) {
 		{
 			name:    "too many custom metrics",
 			content: `{"label":["Too many non standard metrics"]}`,
-			want:    bleemeoTypes.FailureTooManyMetric,
+			want:    bleemeoTypes.FailureTooManyCustomMetrics,
 		},
 		{
 			name:    "too many metrics",
 			content: `{"label":["Too many metrics"]}`,
-			want:    bleemeoTypes.FailureTooManyMetric,
+			want:    bleemeoTypes.FailureTooManyStandardMetrics,
 		},
 	}
 	for _, tt := range tests {
