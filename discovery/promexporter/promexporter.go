@@ -134,7 +134,14 @@ func (d *DynamicScrapper) Update(ctx context.Context, containers []facts.Contain
 func (d *DynamicScrapper) update(ctx context.Context, containers []facts.Container) {
 	dynamicTargets := d.listExporters(containers)
 
-	logger.V(3).Printf("Found the following dynamic Prometheus exporter: %v", dynamicTargets)
+	if len(dynamicTargets) > 0 {
+		dynamicTargetsStr := make([]string, 0, len(dynamicTargets))
+		for _, target := range dynamicTargets {
+			dynamicTargetsStr = append(dynamicTargetsStr, target.URL.String())
+		}
+
+		logger.V(3).Printf("Found the following dynamic Prometheus exporter: %v", dynamicTargetsStr)
+	}
 
 	currentURLs := make(map[string]bool, len(dynamicTargets))
 

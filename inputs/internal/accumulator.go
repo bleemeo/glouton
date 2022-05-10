@@ -232,6 +232,13 @@ func (a *Accumulator) convertToFloatFields(currentContext GatherContext, fields 
 	}
 
 	for metricName, value := range fields {
+		// Some Telegraf inputs return nil values, we just remove them.
+		if value == nil {
+			delete(fields, metricName)
+
+			continue
+		}
+
 		if _, ok := value.(string); ok {
 			// we ignore string without error
 			continue
@@ -252,7 +259,7 @@ func (a *Accumulator) convertToFloatFields(currentContext GatherContext, fields 
 			if err == nil {
 				a.workResult[metricName] = valueFloat
 			} else {
-				a.AddError(err)
+				a.AddError(fmt.Errorf("convert %s to float: %w", metricName, err))
 			}
 
 			continue

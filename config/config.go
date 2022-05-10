@@ -68,13 +68,15 @@ func (c *Configuration) LoadDirectory(dirPath string) error {
 			continue
 		}
 
-		data, err := ioutil.ReadFile(filepath.Join(dirPath, f.Name()))
+		path := filepath.Join(dirPath, f.Name())
+
+		data, err := ioutil.ReadFile(path)
 		if err != nil && firstError == nil {
-			firstError = fmt.Errorf("%#v: %w", f, err)
+			firstError = fmt.Errorf("%s: %w", path, err)
 		} else if err == nil {
 			err = c.LoadByte(data)
 			if err != nil && firstError == nil {
-				firstError = fmt.Errorf("%#v: %w", f, err)
+				firstError = fmt.Errorf("%s: %w", path, err)
 			}
 		}
 	}

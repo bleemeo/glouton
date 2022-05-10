@@ -654,11 +654,11 @@ func humanError(err error) string {
 	if errors.As(err, &targetErr) {
 		switch {
 		case targetErr.StatusCode >= 400 && bytes.Contains(targetErr.PartialBody, []byte("read: connection refused")):
-			return "SNMP device didn't responded"
+			return "SNMP device didn't respond"
 		case targetErr.StatusCode >= 400 && bytes.Contains(targetErr.PartialBody, []byte("request timeout")):
 			return "SNMP device request timeout"
 		case targetErr.ConnectErr != nil:
-			return "snmp_exporter didn't responded"
+			return "snmp_exporter didn't respond"
 		}
 	}
 
