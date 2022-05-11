@@ -37,6 +37,7 @@ func AddRenameCallback(input telegraf.Input, f RenameCallback) telegraf.Input {
 			Accumulator: internal.Accumulator{
 				RenameCallbacks: []internal.RenameCallback{internal.RenameCallback(f)},
 			},
+			Name: input.Description(),
 		}
 	}
 

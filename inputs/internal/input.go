@@ -27,6 +27,7 @@ import (
 type Input struct {
 	telegraf.Input
 	Accumulator Accumulator
+	Name        string
 	startError  error
 }
 
@@ -78,5 +79,5 @@ func (i *Input) Stop() {
 // fixTelegrafInput do some fix to make Telegraf input working.
 // It try to initialize all fields that must be initialized like Log.
 func (i *Input) fixTelegrafInput() {
-	models.SetLoggerOnPlugin(i.Input, logger.NewTelegrafLog(i.Description()))
+	models.SetLoggerOnPlugin(i.Input, logger.NewTelegrafLog(i.Name))
 }

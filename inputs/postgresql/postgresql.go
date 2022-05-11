@@ -43,6 +43,7 @@ func New(url string) (i telegraf.Input, err error) {
 					},
 					TransformMetrics: transformMetrics,
 				},
+				Name: "postgresql",
 			}
 		} else {
 			err = inputs.ErrUnexpectedType

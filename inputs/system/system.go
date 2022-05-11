@@ -37,6 +37,7 @@ func New() (i telegraf.Input, err error) {
 				TransformMetrics: transformMetrics,
 				RenameMetrics:    renameMetrics,
 			},
+			Name: "system",
 		}
 	} else {
 		err = inputs.ErrDisabledInput

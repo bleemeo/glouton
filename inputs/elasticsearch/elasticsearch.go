@@ -41,6 +41,7 @@ func New(url string) (i telegraf.Input, err error) {
 					DerivatedMetrics: []string{"search_query_total", "search_query_time_in_millis", "gc_collectors_old_collection_count", "gc_collectors_young_collection_count", "gc_collectors_old_collection_time_in_millis", "gc_collectors_young_collection_time_in_millis"},
 					TransformMetrics: transformMetrics,
 				},
+				Name: "elasticsearch",
 			}
 		} else {
 			err = inputs.ErrUnexpectedType

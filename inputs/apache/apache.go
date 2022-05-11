@@ -41,6 +41,7 @@ func New(url string) (i telegraf.Input, err error) {
 					DerivatedMetrics: []string{"TotalAccesses", "TotalkBytes", "handled"},
 					TransformMetrics: transformMetrics,
 				},
+				Name: "apache",
 			}
 		} else {
 			err = inputs.ErrUnexpectedType

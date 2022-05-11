@@ -72,6 +72,7 @@ func New(bindAddress string) (i telegraf.Input, err error) {
 					ShouldDerivateMetrics: shouldDerivateMetrics,
 					TransformMetrics:      transformMetrics,
 				},
+				Name: "statsd",
 			}
 		} else {
 			err = inputs.ErrUnexpectedType

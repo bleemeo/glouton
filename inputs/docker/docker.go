@@ -51,6 +51,7 @@ func New(dockerAddress string, dockerRuntime crTypes.RuntimeInterface, isContain
 					DerivatedMetrics: []string{"usage_total", "rx_bytes", "tx_bytes", "io_service_bytes_recursive_read", "io_service_bytes_recursive_write"},
 					TransformMetrics: transformMetrics,
 				},
+				Name: "docker",
 			}
 		} else {
 			err = inputs.ErrUnexpectedType

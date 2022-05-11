@@ -64,6 +64,7 @@ func New(url string) (i telegraf.Input, err error) {
 				DerivatedMetrics: []string{"stot", "bin", "bout", "dreq", "dresp", "ereq", "econ", "eresp", "req_tot"},
 				TransformMetrics: transformMetrics,
 			},
+			Name: "haproxy",
 		}
 	} else {
 		err = inputs.ErrDisabledInput

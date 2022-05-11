@@ -39,6 +39,7 @@ func New(url string) (i telegraf.Input, err error) {
 					DerivatedMetrics: []string{"packets_received", "packets_sent"},
 					TransformMetrics: transformMetrics,
 				},
+				Name: "zookeeper",
 			}
 		} else {
 			err = inputs.ErrUnexpectedType
