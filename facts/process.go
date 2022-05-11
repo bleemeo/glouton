@@ -379,10 +379,13 @@ func (pp *ProcessProvider) updateProcesses(ctx context.Context, now time.Time, m
 					}
 
 					if parentCGroupData != "" && parentCGroupData == cgroupData {
-						logger.V(2).Printf("Based on parent %d, process %d (%s) belong to container %s", p.PPID, p.PID, p.Name, parent.ContainerName)
+						if parent.ContainerName != "" && parent.ContainerID != "" {
+							logger.V(2).Printf("Based on parent %d, process %d (%s) belong to container %s", p.PPID, p.PID, p.Name, parent.ContainerName)
 
-						p.ContainerID = parent.ContainerID
-						p.ContainerName = parent.ContainerName
+							p.ContainerID = parent.ContainerID
+							p.ContainerName = parent.ContainerName
+						}
+
 						newProcessesMap[p.PID] = p
 						newProcessesDiscoveryInfoMap[p.PID] = processDiscoveryInfo{cgroupHash: cgroupHash, hadError: newProcessesDiscoveryInfoMap[parent.PID].hadError}
 

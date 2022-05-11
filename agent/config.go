@@ -572,7 +572,7 @@ func loadEnvironmentVariable(cfg *config.Configuration, key string, envName stri
 	}
 
 	if err != nil && varType != config.TypeUnknown {
-		return false, fmt.Errorf("bad environ variable %s: %w", envName, err)
+		return false, fmt.Errorf("bad environment variable %s: %w", envName, err)
 	}
 
 	return found, nil

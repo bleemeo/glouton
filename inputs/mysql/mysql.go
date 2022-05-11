@@ -45,6 +45,7 @@ func New(server string) (i telegraf.Input, err error) {
 					ShouldDerivateMetrics: shouldDerivateMetrics,
 					TransformMetrics:      transformMetrics,
 				},
+				Name: "mysql",
 			}
 		} else {
 			err = inputs.ErrUnexpectedType

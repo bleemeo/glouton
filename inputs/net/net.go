@@ -48,6 +48,7 @@ func New(blacklist []string) (i telegraf.Input, err error) {
 				DerivatedMetrics: []string{"bytes_sent", "bytes_recv", "drop_in", "drop_out", "packets_recv", "packets_sent", "err_out", "err_in"},
 				TransformMetrics: nt.transformMetrics,
 			},
+			Name: "net",
 		}
 	} else {
 		err = inputs.ErrDisabledInput

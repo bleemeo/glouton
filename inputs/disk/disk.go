@@ -63,12 +63,13 @@ func New(mountPoint string, blacklist []string) (i telegraf.Input, err error) {
 				RenameGlobal:     dt.renameGlobal,
 				TransformMetrics: dt.transformMetrics,
 			},
+			Name: "disk",
 		}
 	} else {
 		err = inputs.ErrDisabledInput
 	}
 
-	return
+	return i, err
 }
 
 func (dt diskTransformer) renameGlobal(gatherContext internal.GatherContext) (internal.GatherContext, bool) {

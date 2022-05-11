@@ -55,6 +55,7 @@ func New(whitelist []*regexp.Regexp, blacklist []*regexp.Regexp) (i telegraf.Inp
 				DerivatedMetrics: []string{"merged_reads", "read_bytes", "read_time", "reads", "merged_writes", "write_bytes", "writes", "write_time", "io_time"},
 				TransformMetrics: dt.transformMetrics,
 			},
+			Name: "diskio",
 		}
 	} else {
 		err = inputs.ErrDisabledInput

@@ -41,6 +41,7 @@ func New(url string) (i telegraf.Input, err error) {
 					ShouldDerivateMetrics: shouldDerivateMetrics,
 					TransformMetrics:      transformMetrics,
 				},
+				Name: "memcached",
 			}
 		} else {
 			err = inputs.ErrUnexpectedType

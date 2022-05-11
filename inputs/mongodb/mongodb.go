@@ -40,6 +40,7 @@ func New(url string) (i telegraf.Input, err error) {
 					DerivatedMetrics: []string{"net_out_bytes", "net_in_bytes"},
 					TransformMetrics: transformMetrics,
 				},
+				Name: "mongodb",
 			}
 		} else {
 			err = inputs.ErrUnexpectedType

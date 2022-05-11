@@ -121,6 +121,7 @@ func New(url string, password string) (i telegraf.Input, err error) {
 					DerivatedMetrics: []string{"evicted_keys", "expired_keys", "keyspace_hits", "keyspace_misses", "total_commands_processed", "total_connections_received"},
 					TransformMetrics: transformMetrics,
 				},
+				Name: "redis",
 			}
 		} else {
 			err = inputs.ErrUnexpectedType

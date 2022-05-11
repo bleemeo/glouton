@@ -35,6 +35,7 @@ func New() (i telegraf.Input, err error) {
 			Accumulator: internal.Accumulator{
 				TransformMetrics: transformMetrics,
 			},
+			Name: "swap",
 		}
 	} else {
 		err = inputs.ErrDisabledInput

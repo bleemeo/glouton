@@ -41,6 +41,7 @@ func New(url string, username string, password string) (i telegraf.Input, err er
 					DerivatedMetrics: []string{"messages_published", "messages_delivered", "messages_acked"},
 					TransformMetrics: transformMetrics,
 				},
+				Name: "rabbitmq",
 			}
 		} else {
 			err = inputs.ErrUnexpectedType

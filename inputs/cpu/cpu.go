@@ -42,6 +42,7 @@ func New() (i telegraf.Input, err error) {
 				RenameGlobal:     renameGlobal,
 				TransformMetrics: transformMetrics,
 			},
+			Name: "cpu",
 		}
 	} else {
 		err = inputs.ErrDisabledInput
