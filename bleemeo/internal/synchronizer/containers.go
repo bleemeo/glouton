@@ -230,8 +230,14 @@ func (s *Synchronizer) delayedContainerCheck(newDelayedContainer map[string]time
 	return false
 }
 
-func (s *Synchronizer) remoteRegister(remoteFound bool, remoteContainer *types.Container,
-	remoteContainers *[]types.Container, params map[string]string, payload containerPayload, remoteIndex int) error {
+func (s *Synchronizer) remoteRegister(
+	remoteFound bool,
+	remoteContainer *types.Container,
+	remoteContainers *[]types.Container,
+	params map[string]string,
+	payload containerPayload,
+	remoteIndex int,
+) error {
 	var result containerPayload
 
 	if remoteFound {

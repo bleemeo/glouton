@@ -688,17 +688,11 @@ func (a *agent) run(ctx context.Context) { //nolint:maintidx
 		}()
 	}
 
-	var targets []*scrapper.Target
-
 	a.snmpManager = snmp.NewManager(
 		a.config.SNMP.ExporterURL,
 		a.factProvider,
 		a.config.SNMP.Targets.ToTargetOptions()...,
 	)
-
-	if promCfg, found := a.oldConfig.Get("metric.prometheus.targets"); found {
-		targets = prometheusConfigToURLs(promCfg)
-	}
 
 	hasSwap := factsMap["swap_present"] == "true"
 
@@ -736,28 +730,7 @@ func (a *agent) run(ctx context.Context) { //nolint:maintidx
 		return
 	}
 
-	a.rulesManager = rules.NewManager(ctx, a.store)
-
 	a.store.SetNewMetricCallback(a.newMetricsCallback)
-
-	_, err = a.gathererRegistry.RegisterAppenderCallback(
-		ctx,
-		registry.RegistrationOption{
-			Description:        "rulesManager",
-			JitterSeed:         baseJitterPlus,
-			NoLabelsAlteration: true,
-		},
-		registry.AppenderRegistrationOption{},
-		a.rulesManager,
-	)
-	if err != nil {
-		logger.Printf("unable to add recording rules metrics: %v", err)
-	}
-
-	acc := &inputs.Accumulator{
-		Pusher:  a.gathererRegistry.WithTTL(5 * time.Minute),
-		Context: ctx,
-	}
 
 	a.dockerRuntime = &dockerRuntime.Docker{
 		DockerSockets:             dockerRuntime.DefaultAddresses(a.hostRootPath),
@@ -845,60 +818,11 @@ func (a *agent) run(ctx context.Context) { //nolint:maintidx
 	a.factProvider.AddCallback(a.containerRuntime.RuntimeFact)
 	a.factProvider.SetFact("installation_format", a.oldConfig.String("agent.installation_format"))
 
-	processInput := processInput.New(psFact, a.gathererRegistry.WithTTL(5*time.Minute))
-
+	acc := &inputs.Accumulator{
+		Pusher:  a.gathererRegistry.WithTTL(5 * time.Minute),
+		Context: ctx,
+	}
 	a.collector = collector.New(acc)
-
-	_, err = a.gathererRegistry.RegisterPushPointsCallback(
-		ctx,
-		registry.RegistrationOption{
-			Description: "system & services metrics",
-			JitterSeed:  baseJitter,
-		},
-		a.collector.RunGather,
-	)
-	if err != nil {
-		logger.Printf("unable to add system metrics: %v", err)
-	}
-
-	if a.metricFormat == types.MetricFormatBleemeo {
-		_, err = a.gathererRegistry.RegisterPushPointsCallback(
-			ctx,
-			registry.RegistrationOption{
-				Description: "procces status metrics",
-				JitterSeed:  baseJitter,
-			},
-			processInput.Gather,
-		)
-		if err != nil {
-			logger.Printf("unable to add processes metrics: %v", err)
-		}
-	}
-
-	_, err = a.gathererRegistry.RegisterPushPointsCallback(
-		ctx,
-		registry.RegistrationOption{
-			Description: "miscGather",
-			JitterSeed:  baseJitter,
-		},
-		a.miscGather(a.gathererRegistry.WithTTL(5*time.Minute)),
-	)
-	if err != nil {
-		logger.Printf("unable to add miscGathere metrics: %v", err)
-	}
-
-	_, err = a.gathererRegistry.RegisterPushPointsCallback(
-		ctx,
-		registry.RegistrationOption{
-			Description: "miscGatherMinute",
-			JitterSeed:  baseJitter,
-			MinInterval: time.Minute,
-		},
-		a.miscGatherMinute(a.gathererRegistry.WithTTL(5*time.Minute)),
-	)
-	if err != nil {
-		logger.Printf("unable to add miscGathere metrics: %v", err)
-	}
 
 	servicesIgnoreCheck, _ := a.oldConfig.Get("service_ignore_check")
 	servicesIgnoreMetrics, _ := a.oldConfig.Get("service_ignore_metrics")
@@ -922,28 +846,6 @@ func (a *agent) run(ctx context.Context) { //nolint:maintidx
 		a.metricFormat,
 		psFact,
 	)
-
-	a.updateSNMPResolution(ctx, time.Minute)
-
-	for _, target := range targets {
-		hash := labels.FromMap(target.ExtraLabels).Hash()
-
-		_, err = a.gathererRegistry.RegisterGatherer(
-			ctx,
-			registry.RegistrationOption{
-				Description: "Prom exporter " + target.URL.String(),
-				JitterSeed:  hash,
-				Interval:    defaultInterval,
-				ExtraLabels: target.ExtraLabels,
-			},
-			target,
-		)
-		if err != nil {
-			logger.Printf("Unable to add Prometheus scrapper for target %s: %v", target.URL.String(), err)
-		}
-	}
-
-	a.gathererRegistry.AddDefaultCollector(ctx)
 
 	a.dynamicScrapper = &promexporter.DynamicScrapper{
 		Registry:       a.gathererRegistry,
@@ -970,10 +872,6 @@ func (a *agent) run(ctx context.Context) { //nolint:maintidx
 
 	promExporter := a.gathererRegistry.Exporter(ctx)
 
-	if a.oldConfig.Bool("agent.process_exporter.enable") {
-		process.RegisterExporter(ctx, a.gathererRegistry, psLister, dynamicDiscovery, a.metricFormat == types.MetricFormatBleemeo)
-	}
-
 	api := &api.API{
 		DB:                 a.store,
 		ContainerRuntime:   a.containerRuntime,
@@ -990,8 +888,6 @@ func (a *agent) run(ctx context.Context) { //nolint:maintidx
 		MetricFormat:       a.metricFormat,
 		LocalUIDisabled:    !a.oldConfig.Bool("web.local_ui.enable"),
 	}
-
-	a.FireTrigger(true, true, false, false)
 
 	tasks := []taskInfo{
 		{a.watchdog, "Agent Watchdog"},
@@ -1029,6 +925,8 @@ func (a *agent) run(ctx context.Context) { //nolint:maintidx
 
 		tasks = append(tasks, taskInfo{a.jmx.Run, "jmxtrans"})
 	}
+
+	a.rulesManager = rules.NewManager(ctx, a.store)
 
 	if a.oldConfig.Bool("bleemeo.enable") {
 		scaperName := a.oldConfig.String("blackbox.scraper_name")
@@ -1082,6 +980,109 @@ func (a *agent) run(ctx context.Context) { //nolint:maintidx
 			logger.Printf("unable to add bleemeo connector metrics: %v", err)
 		}
 	}
+
+	a.FireTrigger(true, true, false, false)
+
+	// Only start gatherers after the relabel hook is set to avoid sending metrics without
+	// instance uuid to the bleemeo connector.
+	a.updateSNMPResolution(ctx, time.Minute)
+
+	_, err = a.gathererRegistry.RegisterPushPointsCallback(
+		ctx,
+		registry.RegistrationOption{
+			Description: "system & services metrics",
+			JitterSeed:  baseJitter,
+		},
+		a.collector.RunGather,
+	)
+	if err != nil {
+		logger.Printf("unable to add system metrics: %v", err)
+	}
+
+	if a.metricFormat == types.MetricFormatBleemeo {
+		processInput := processInput.New(psFact, a.gathererRegistry.WithTTL(5*time.Minute))
+
+		_, err = a.gathererRegistry.RegisterPushPointsCallback(
+			ctx,
+			registry.RegistrationOption{
+				Description: "process status metrics",
+				JitterSeed:  baseJitter,
+			},
+			processInput.Gather,
+		)
+		if err != nil {
+			logger.Printf("unable to add processes metrics: %v", err)
+		}
+	}
+
+	_, err = a.gathererRegistry.RegisterPushPointsCallback(
+		ctx,
+		registry.RegistrationOption{
+			Description: "miscGather",
+			JitterSeed:  baseJitter,
+		},
+		a.miscGather(a.gathererRegistry.WithTTL(5*time.Minute)),
+	)
+	if err != nil {
+		logger.Printf("unable to add miscGathere metrics: %v", err)
+	}
+
+	_, err = a.gathererRegistry.RegisterPushPointsCallback(
+		ctx,
+		registry.RegistrationOption{
+			Description: "miscGatherMinute",
+			JitterSeed:  baseJitter,
+			MinInterval: time.Minute,
+		},
+		a.miscGatherMinute(a.gathererRegistry.WithTTL(5*time.Minute)),
+	)
+	if err != nil {
+		logger.Printf("unable to add miscGathere metrics: %v", err)
+	}
+
+	_, err = a.gathererRegistry.RegisterAppenderCallback(
+		ctx,
+		registry.RegistrationOption{
+			Description:        "rulesManager",
+			JitterSeed:         baseJitterPlus,
+			NoLabelsAlteration: true,
+		},
+		registry.AppenderRegistrationOption{},
+		a.rulesManager,
+	)
+	if err != nil {
+		logger.Printf("unable to add recording rules metrics: %v", err)
+	}
+
+	if a.oldConfig.Bool("agent.process_exporter.enable") {
+		process.RegisterExporter(ctx, a.gathererRegistry, psLister, dynamicDiscovery, a.metricFormat == types.MetricFormatBleemeo)
+	}
+
+	var targets []*scrapper.Target
+
+	if promCfg, found := a.oldConfig.Get("metric.prometheus.targets"); found {
+		targets = prometheusConfigToURLs(promCfg)
+	}
+
+	for _, target := range targets {
+		hash := labels.FromMap(target.ExtraLabels).Hash()
+
+		_, err = a.gathererRegistry.RegisterGatherer(
+			ctx,
+			registry.RegistrationOption{
+				Description: "Prom exporter " + target.URL.String(),
+				JitterSeed:  hash,
+				Interval:    defaultInterval,
+				ExtraLabels: target.ExtraLabels,
+			},
+			target,
+		)
+		if err != nil {
+			logger.Printf("Unable to add Prometheus scrapper for target %s: %v", target.URL.String(), err)
+		}
+	}
+
+	a.gathererRegistry.AddDefaultCollector(ctx)
 
 	sentry.ConfigureScope(func(scope *sentry.Scope) {
 		scope.SetContext("agent", map[string]interface{}{
