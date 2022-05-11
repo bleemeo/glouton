@@ -238,6 +238,7 @@ func (c *Cache) AccountConfigsByUUID() map[string]bleemeoTypes.GloutonAccountCon
 			SNMPIntegration:       accountConfig.SNMPIntegration,
 			AgentConfigByName:     make(map[string]bleemeoTypes.GloutonAgentConfig),
 			AgentConfigByID:       make(map[string]bleemeoTypes.GloutonAgentConfig),
+			MaxCustomMetrics:      accountConfig.MaxCustomMetrics,
 		}
 
 		var (

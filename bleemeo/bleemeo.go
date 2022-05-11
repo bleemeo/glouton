@@ -877,13 +877,15 @@ func (c *Connector) IsMetricAllowed(metric gloutonTypes.LabelsAndAnnotation) (bo
 	return f.IsAllowed(metric.Labels, metric.Annotations)
 }
 
-func (c *Connector) updateConfig(ctx context.Context) {
+func (c *Connector) updateConfig(ctx context.Context, nameChanged bool) {
 	currentConfig, ok := c.cache.CurrentAccountConfig()
 	if !ok || currentConfig.AgentConfigByName[types.AgentTypeAgent].MetricResolution == 0 {
 		return
 	}
 
-	logger.Printf("Changed to configuration %s", currentConfig.Name)
+	if nameChanged {
+		logger.Printf("Changed to configuration %s", currentConfig.Name)
+	}
 
 	if c.option.UpdateMetricResolution != nil {
 		c.option.UpdateMetricResolution(ctx, currentConfig.AgentConfigByName[types.AgentTypeAgent].MetricResolution, currentConfig.AgentConfigByName[types.AgentTypeSNMP].MetricResolution)

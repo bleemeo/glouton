@@ -155,6 +155,7 @@ type GloutonAccountConfig struct {
 	SNMPIntegration       bool
 	AgentConfigByName     map[string]GloutonAgentConfig
 	AgentConfigByID       map[string]GloutonAgentConfig
+	MaxCustomMetrics      int
 }
 
 type GloutonAgentConfig struct {

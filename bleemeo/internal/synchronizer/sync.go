@@ -95,6 +95,9 @@ type Synchronizer struct {
 	// minutes to check whether we are still in maintenance of not.
 	lastMaintenanceSync time.Time
 
+	// logOnce is used to log that the limit of metrics has been reached.
+	logOnce sync.Once
+
 	l                          sync.Mutex
 	disabledUntil              time.Time
 	disableReason              bleemeoTypes.DisableReason
@@ -124,7 +127,7 @@ type Option struct {
 	DisableCallback func(reason bleemeoTypes.DisableReason, until time.Time)
 
 	// UpdateConfigCallback is a function called when Synchronizer detected a AccountConfiguration change
-	UpdateConfigCallback func(ctx context.Context)
+	UpdateConfigCallback func(ctx context.Context, nameChanged bool)
 
 	// SetInitialized tells the bleemeo connector that the MQTT module can be started
 	SetInitialized func()

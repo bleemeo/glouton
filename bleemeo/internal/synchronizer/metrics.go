@@ -51,6 +51,9 @@ const (
 // as the prometheus alert time is 5 minutes.
 const gracePeriod = 6 * time.Minute
 
+// Registrations that haven't been retried for failedRegistrationExpiration will removed.
+const failedRegistrationExpiration = 24 * time.Hour
+
 // metricFields is the fields used on the API for a metric, we always use all fields to
 // make sure no Metric object is returned with some empty fields which could create bugs.
 const metricFields = "id,label,item,labels_text,unit,unit_text,service,container,deactivated_at," +
@@ -395,9 +398,9 @@ func httpResponseToMetricFailureKind(content string) bleemeoTypes.FailureKind {
 	case strings.Contains(content, "metric is not in allow-list"):
 		return bleemeoTypes.FailureAllowList
 	case strings.Contains(content, "Too many non standard metrics"):
-		return bleemeoTypes.FailureTooManyMetric
+		return bleemeoTypes.FailureTooManyCustomMetrics
 	case strings.Contains(content, "Too many metrics"):
-		return bleemeoTypes.FailureTooManyMetric
+		return bleemeoTypes.FailureTooManyStandardMetrics
 	default:
 		return bleemeoTypes.FailureUnknown
 	}
@@ -538,7 +541,8 @@ func (s *Synchronizer) syncMetrics(ctx context.Context, fullSync bool, onlyEssen
 	if fullSync {
 		s.retryableMetricFailure[bleemeoTypes.FailureUnknown] = true
 		s.retryableMetricFailure[bleemeoTypes.FailureAllowList] = true
-		s.retryableMetricFailure[bleemeoTypes.FailureTooManyMetric] = true
+		s.retryableMetricFailure[bleemeoTypes.FailureTooManyCustomMetrics] = true
+		s.retryableMetricFailure[bleemeoTypes.FailureTooManyStandardMetrics] = true
 	}
 
 	pendingMetricsUpdate := s.popPendingMetricsUpdate()
@@ -1009,25 +1013,74 @@ func (mr *metricRegisterer) registerMetrics(localMetrics []types.Metric) error {
 
 	mr.s.option.Cache.SetMetrics(metrics)
 
-	minRetryAt := mr.s.now().Add(time.Hour)
+	now := mr.s.now()
+	minRetryAt := now.Add(time.Hour)
 
-	registrations := make([]bleemeoTypes.MetricRegistration, 0, len(mr.failedRegistrationByKey))
+	failedRegistrations := make([]bleemeoTypes.MetricRegistration, 0, len(mr.failedRegistrationByKey))
+	nbTooManyMetrics := make(map[bleemeoTypes.FailureKind]int, 2)
 
-	for _, v := range mr.failedRegistrationByKey {
-		if !v.LastFailKind.IsPermanentFailure() && minRetryAt.After(v.RetryAfter()) {
-			minRetryAt = v.RetryAfter()
+	for key, failedRegistration := range mr.failedRegistrationByKey {
+		// Registration that haven't been retried for a long time correspond to metrics
+		// that are no longer in the store, we can remove them.
+		if now.Sub(failedRegistration.LastFailAt) > failedRegistrationExpiration {
+			delete(mr.failedRegistrationByKey, key)
+
+			continue
 		}
 
-		registrations = append(registrations, v)
+		if !failedRegistration.LastFailKind.IsPermanentFailure() && minRetryAt.After(failedRegistration.RetryAfter()) {
+			minRetryAt = failedRegistration.RetryAfter()
+		}
+
+		if failedRegistration.LastFailKind == bleemeoTypes.FailureTooManyCustomMetrics ||
+			failedRegistration.LastFailKind == bleemeoTypes.FailureTooManyStandardMetrics {
+			nbTooManyMetrics[failedRegistration.LastFailKind]++
+		}
+
+		failedRegistrations = append(failedRegistrations, failedRegistration)
 	}
 
 	mr.s.l.Lock()
 	mr.s.metricRetryAt = minRetryAt
 	mr.s.l.Unlock()
 
-	mr.s.option.Cache.SetMetricRegistrationsFail(registrations)
+	mr.s.option.Cache.SetMetricRegistrationsFail(failedRegistrations)
+
+	mr.logTooManyMetrics(
+		nbTooManyMetrics[bleemeoTypes.FailureTooManyStandardMetrics],
+		nbTooManyMetrics[bleemeoTypes.FailureTooManyCustomMetrics],
+	)
 
 	return err
+}
+
+func (mr *metricRegisterer) logTooManyMetrics(nbFailedStandardMetrics, nbFailedCustomMetrics int) {
+	if nbFailedCustomMetrics > 0 {
+		mr.s.logOnce.Do(func() {
+			config, ok := mr.s.option.Cache.CurrentAccountConfig()
+
+			maxCustomMetricsStr := ""
+			if ok {
+				maxCustomMetricsStr = fmt.Sprintf(" (%d)", config.MaxCustomMetrics)
+			}
+
+			const msg = "Failed to register %d metrics because you reached the maximum number of custom metrics%s. " +
+				"Consider removing some metrics from your allowlist, see the documentation for more details " +
+				"(https://docs.bleemeo.com/metrics-sources/filtering)."
+
+			logger.V(0).Printf(msg, nbFailedCustomMetrics, maxCustomMetricsStr)
+		})
+	}
+
+	if nbFailedStandardMetrics > 0 {
+		mr.s.logOnce.Do(func() {
+			const msg = "Failed to register %d metrics because you reached the maximum number of metrics. " +
+				"Consider removing some metrics from your allowlist, see the documentation for more details " +
+				"(https://docs.bleemeo.com/metrics-sources/filtering)."
+
+			logger.V(0).Printf(msg, nbFailedStandardMetrics)
+		})
+	}
 }
 
 func (mr *metricRegisterer) do(localMetrics []types.Metric) error {
@@ -1519,7 +1572,8 @@ func (s *Synchronizer) metricDeactivate(localMetrics []types.Metric) error {
 
 		v.DeactivatedAt = s.now()
 		registeredMetrics[k] = v
-		s.retryableMetricFailure[bleemeoTypes.FailureTooManyMetric] = true
+		s.retryableMetricFailure[bleemeoTypes.FailureTooManyCustomMetrics] = true
+		s.retryableMetricFailure[bleemeoTypes.FailureTooManyStandardMetrics] = true
 
 		if len(s.option.Cache.MetricRegistrationsFail()) > 0 {
 			s.l.Lock()
