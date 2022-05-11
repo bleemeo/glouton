@@ -194,8 +194,8 @@ type FailureKind int
 const (
 	FailureUnknown FailureKind = iota
 	FailureAllowList
-	FailureTooManyStandardMetrics
 	FailureTooManyCustomMetrics
+	FailureTooManyStandardMetrics
 )
 
 // MetricRegistration contains information about a metric registration failure.

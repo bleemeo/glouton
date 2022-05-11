@@ -23,7 +23,6 @@ import (
 	"glouton/bleemeo/types"
 	"glouton/logger"
 	"mime"
-	"reflect"
 	"strings"
 )
 
@@ -44,7 +43,7 @@ func (s *Synchronizer) syncAccountConfig(ctx context.Context, fullSync bool, onl
 		}
 
 		newConfig, ok := s.option.Cache.CurrentAccountConfig()
-		if ok && !reflect.DeepEqual(currentConfig, newConfig) && s.option.UpdateConfigCallback != nil {
+		if ok && currentConfig.Name != newConfig.Name && s.option.UpdateConfigCallback != nil {
 			s.option.UpdateConfigCallback(ctx)
 		}
 	}
