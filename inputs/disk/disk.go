@@ -69,7 +69,7 @@ func New(mountPoint string, blacklist []string) (i telegraf.Input, err error) {
 		err = inputs.ErrDisabledInput
 	}
 
-	return
+	return i, err
 }
 
 func (dt diskTransformer) renameGlobal(gatherContext internal.GatherContext) (internal.GatherContext, bool) {

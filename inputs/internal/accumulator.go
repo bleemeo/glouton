@@ -232,10 +232,8 @@ func (a *Accumulator) convertToFloatFields(currentContext GatherContext, fields 
 	}
 
 	for metricName, value := range fields {
-		// Some Telegraf inputs return nil values, we just remove them.
+		// Some Telegraf inputs return nil values, we just ignore them.
 		if value == nil {
-			delete(fields, metricName)
-
 			continue
 		}
 

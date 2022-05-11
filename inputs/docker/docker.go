@@ -60,7 +60,7 @@ func New(dockerAddress string, dockerRuntime crTypes.RuntimeInterface, isContain
 		err = inputs.ErrDisabledInput
 	}
 
-	return
+	return i, err
 }
 
 type renamer struct {
