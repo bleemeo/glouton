@@ -7,7 +7,6 @@ import (
 	"glouton/store"
 	"glouton/types"
 	"os"
-	"sort"
 	"sync"
 	"time"
 
@@ -49,6 +48,8 @@ func New(input []*rules.RecordingRule) *SimpleRuler {
 	}
 }
 
+// ApplyRulesMFS applies the rules of this ruler and returns the input metric families with the new points.
+// The returns metric families are not sorted.
 func (r *SimpleRuler) ApplyRulesMFS(ctx context.Context, now time.Time, mfs []*dto.MetricFamily) []*dto.MetricFamily {
 	if len(r.rules) == 0 {
 		return mfs
@@ -110,10 +111,6 @@ func (r *SimpleRuler) ApplyRulesMFS(ctx context.Context, now time.Time, mfs []*d
 			})
 		}
 	}
-
-	sort.Slice(mfs, func(i, j int) bool {
-		return mfs[i].GetName() < mfs[j].GetName()
-	})
 
 	return mfs
 }

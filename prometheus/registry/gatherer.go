@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"glouton/logger"
 	"glouton/prometheus/registry/internal/ruler"
+	"sort"
 	"strings"
 	"time"
 
@@ -195,6 +196,9 @@ func (g labeledGatherer) GatherWithState(ctx context.Context, state GatherState)
 	}
 
 	mfs = g.ruler.ApplyRulesMFS(ctx, now, mfs)
+	sort.Slice(mfs, func(i, j int) bool {
+		return mfs[i].GetName() < mfs[j].GetName()
+	})
 
 	if len(g.labels) == 0 {
 		return mfs, err
