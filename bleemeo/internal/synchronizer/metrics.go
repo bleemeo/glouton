@@ -1020,20 +1020,20 @@ func (mr *metricRegisterer) registerMetrics(localMetrics []types.Metric) error {
 	nbTooManyMetrics := make(map[bleemeoTypes.FailureKind]int, 2)
 
 	for key, failedRegistration := range mr.failedRegistrationByKey {
+		// Registration that haven't been retried for a long time correspond to metrics
+		// that are no longer in the store, we can remove them.
+		if now.Sub(failedRegistration.LastFailAt) > failedRegistrationExpiration {
+			delete(mr.failedRegistrationByKey, key)
+
+			continue
+		}
+
 		if !failedRegistration.LastFailKind.IsPermanentFailure() && minRetryAt.After(failedRegistration.RetryAfter()) {
 			minRetryAt = failedRegistration.RetryAfter()
 		}
 
 		if failedRegistration.LastFailKind == bleemeoTypes.FailureTooManyCustomMetrics ||
 			failedRegistration.LastFailKind == bleemeoTypes.FailureTooManyStandardMetrics {
-			// Registration that haven't been retried for a long time correspond to metrics
-			// that are no longer in the store, we can remove them.
-			if now.Sub(failedRegistration.LastFailAt) > failedRegistrationExpiration {
-				delete(mr.failedRegistrationByKey, key)
-
-				continue
-			}
-
 			nbTooManyMetrics[failedRegistration.LastFailKind]++
 		}
 
