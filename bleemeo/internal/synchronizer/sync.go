@@ -127,7 +127,7 @@ type Option struct {
 	DisableCallback func(reason bleemeoTypes.DisableReason, until time.Time)
 
 	// UpdateConfigCallback is a function called when Synchronizer detected a AccountConfiguration change
-	UpdateConfigCallback func(ctx context.Context)
+	UpdateConfigCallback func(ctx context.Context, nameChanged bool)
 
 	// SetInitialized tells the bleemeo connector that the MQTT module can be started
 	SetInitialized func()
