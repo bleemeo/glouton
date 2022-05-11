@@ -187,6 +187,41 @@ func (s *Store) DropAllMetrics() {
 	s.points = make(map[uint64][]types.Point)
 }
 
+// DropOldMetrics delete points older than maxAge in the store.
+func (s *Store) DropOldMetrics(maxAge time.Duration) {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
+	now := s.nowFunc()
+
+	for i := range s.metrics {
+		// Sort the points in increasing order of their time.
+		points := s.points[i]
+		sort.Slice(points, func(j, k int) bool {
+			return points[j].Time.Before(points[k].Time)
+		})
+
+		// Remove points older than maxAge.
+		for j := len(points) - 1; j >= 0; j-- {
+			if now.Sub(points[j].Time) > maxAge {
+				// Because the points are sorted we can only keep the previous points we looped through:
+				// points=[9:58, 10:00, 10:02], now=10:02, maxAge=1m
+				// j = 2 ->  now - points[2] = 0m <= maxAge
+				// j = 1 -> now - points[1] = 2m > maxAge
+				// We only keep points[j+1:] = points[2:] = [10:02]
+				s.points[i] = points[j+1:]
+
+				break
+			}
+		}
+
+		if len(s.points[i]) == 0 {
+			delete(s.metrics, i)
+			delete(s.points, i)
+		}
+	}
+}
+
 // Metrics return a list of Metric matching given labels filter.
 func (s *Store) Metrics(filters map[string]string) (result []types.Metric, err error) {
 	result = make([]types.Metric, 0)

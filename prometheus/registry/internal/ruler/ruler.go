@@ -18,8 +18,10 @@ import (
 	"github.com/prometheus/prometheus/rules"
 )
 
-// SimpleRuler is a ruler that run Prometheus rules but only on one vector.
-// This means we can't use any function working over time (like rate, avg_over_time, ...).
+// Points older than pointsMaxAge are removed from the store.
+const pointsMaxAge = 5 * time.Minute
+
+// SimpleRuler is a ruler that run Prometheus rules.
 type SimpleRuler struct {
 	l     sync.Mutex
 	st    *store.Store
@@ -47,33 +49,11 @@ func New(input []*rules.RecordingRule) *SimpleRuler {
 	}
 }
 
-func (r *SimpleRuler) ApplyRules(ctx context.Context, now time.Time, points []types.MetricPoint) []types.MetricPoint {
-	r.l.Lock()
-	defer r.l.Unlock()
-
-	r.st.DropAllMetrics()
-	r.st.PushPoints(ctx, points)
-
-	for _, rule := range r.rules {
-		vector, err := rule.Eval(ctx, now, r.query, nil, 100)
-		if err != nil {
-			logger.V(2).Printf("rule %v failed: %v", rule.Query().String(), err)
-
-			continue
-		}
-
-		for _, sample := range vector {
-			points = append(points, types.MetricPoint{
-				Point:  types.Point{Value: sample.V, Time: time.UnixMilli(sample.T)},
-				Labels: sample.Metric.Map(),
-			})
-		}
+func (r *SimpleRuler) ApplyRulesMFS(ctx context.Context, now time.Time, mfs []*dto.MetricFamily) []*dto.MetricFamily {
+	if len(r.rules) == 0 {
+		return mfs
 	}
 
-	return points
-}
-
-func (r *SimpleRuler) ApplyRulesMFS(ctx context.Context, now time.Time, mfs []*dto.MetricFamily) []*dto.MetricFamily {
 	nameToIndex := make(map[string]int, len(mfs))
 
 	for i, mf := range mfs {
@@ -85,7 +65,7 @@ func (r *SimpleRuler) ApplyRulesMFS(ctx context.Context, now time.Time, mfs []*d
 	r.l.Lock()
 	defer r.l.Unlock()
 
-	r.st.DropAllMetrics()
+	r.st.DropOldMetrics(pointsMaxAge)
 	r.st.PushPoints(ctx, points)
 
 	for _, rule := range r.rules {

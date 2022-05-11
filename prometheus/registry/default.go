@@ -30,5 +30,21 @@ func DefaultSNMPRules() []SimpleRule {
 			TargetName:  "mem_used_perc",
 			PromQLQuery: `sum without (ciscoMemoryPoolName, ciscoMemoryPoolType) (ciscoMemoryPoolUsed{ciscoMemoryPoolName=~"(Processor|System memory)"}/(ciscoMemoryPoolUsed+ciscoMemoryPoolFree)) * 100`,
 		},
+		{
+			TargetName:  "net_bits_recv",
+			PromQLQuery: "irate(ifInOctets[5m]) * 8",
+		},
+		{
+			TargetName:  "net_bits_sent",
+			PromQLQuery: "irate(ifOutOctets[5m]) * 8",
+		},
+		{
+			TargetName:  "net_err_in",
+			PromQLQuery: "irate(ifInErrors[5m])",
+		},
+		{
+			TargetName:  "net_err_out",
+			PromQLQuery: "irate(ifOutErrors[5m])",
+		},
 	}
 }
