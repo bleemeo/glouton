@@ -889,8 +889,6 @@ func (a *agent) run(ctx context.Context) { //nolint:maintidx
 		LocalUIDisabled:    !a.oldConfig.Bool("web.local_ui.enable"),
 	}
 
-	a.FireTrigger(true, true, false, false)
-
 	tasks := []taskInfo{
 		{a.watchdog, "Agent Watchdog"},
 		{a.store.Run, "Metric store"},
@@ -981,6 +979,8 @@ func (a *agent) run(ctx context.Context) { //nolint:maintidx
 			logger.Printf("unable to add bleemeo connector metrics: %v", err)
 		}
 	}
+
+	a.FireTrigger(true, true, false, false)
 
 	// Only start gatherers after the relabel hook is set to avoid sending metrics without
 	// instance uuid to the bleemeo connector.
