@@ -196,6 +196,8 @@ func (g labeledGatherer) GatherWithState(ctx context.Context, state GatherState)
 	}
 
 	mfs = g.ruler.ApplyRulesMFS(ctx, now, mfs)
+
+	// Sort the results for easier testing.
 	sort.Slice(mfs, func(i, j int) bool {
 		return mfs[i].GetName() < mfs[j].GetName()
 	})
