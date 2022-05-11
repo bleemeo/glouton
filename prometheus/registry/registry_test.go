@@ -1087,7 +1087,7 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 					types.LabelMetaSNMPTarget: "1.2.3.4:8080",
 					"another":                 "value",
 				},
-				Rules:                 DefaultSNMPRules(),
+				Rules:                 DefaultSNMPRules(time.Minute),
 				DisablePeriodicGather: true,
 			},
 			want: []types.MetricPoint{
@@ -1106,7 +1106,7 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 			},
 		},
 		{
-			name:         "metric-rename-simple-gathere",
+			name:         "metric-rename-simple-gatherer",
 			kindToTest:   kindGatherer,
 			metricFormat: types.MetricFormatBleemeo,
 			input: []types.MetricPoint{
@@ -1149,7 +1149,7 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 				ExtraLabels: map[string]string{
 					types.LabelMetaSNMPTarget: "192.168.1.2",
 				},
-				Rules:                 DefaultSNMPRules(),
+				Rules:                 DefaultSNMPRules(time.Minute),
 				DisablePeriodicGather: true,
 			},
 			want: []types.MetricPoint{
@@ -1260,7 +1260,7 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 					types.LabelMetaSNMPTarget: "192.168.1.2",
 					"extranLabels":            "are ignored by pushpoints. So snmp target will be ignored, like rules",
 				},
-				Rules:                 DefaultSNMPRules(),
+				Rules:                 DefaultSNMPRules(time.Minute),
 				DisablePeriodicGather: true,
 			},
 			want: []types.MetricPoint{
@@ -1329,7 +1329,7 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 				ExtraLabels: map[string]string{
 					types.LabelMetaSNMPTarget: "192.168.1.2",
 				},
-				Rules:                 DefaultSNMPRules(),
+				Rules:                 DefaultSNMPRules(time.Minute),
 				DisablePeriodicGather: true,
 			},
 			want: sortMetricPoints([]types.MetricPoint{
@@ -1437,7 +1437,7 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 				ExtraLabels: map[string]string{
 					types.LabelMetaSNMPTarget: "192.168.1.2",
 				},
-				Rules:                 DefaultSNMPRules(),
+				Rules:                 DefaultSNMPRules(time.Minute),
 				DisablePeriodicGather: true,
 			},
 			want: sortMetricPoints([]types.MetricPoint{
@@ -1538,7 +1538,7 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 				ExtraLabels: map[string]string{
 					types.LabelMetaSNMPTarget: "192.168.1.2",
 				},
-				Rules:                 DefaultSNMPRules(),
+				Rules:                 DefaultSNMPRules(time.Minute),
 				DisablePeriodicGather: true,
 			},
 			want: sortMetricPoints([]types.MetricPoint{
@@ -1721,7 +1721,7 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 				ExtraLabels: map[string]string{
 					types.LabelMetaSNMPTarget: "192.168.1.2",
 				},
-				Rules:                 DefaultSNMPRules(),
+				Rules:                 DefaultSNMPRules(time.Minute),
 				DisablePeriodicGather: true,
 			},
 			want: sortMetricPoints([]types.MetricPoint{

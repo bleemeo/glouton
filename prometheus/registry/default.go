@@ -1,7 +1,13 @@
 package registry
 
-func DefaultSNMPRules() []SimpleRule {
-	return []SimpleRule{
+import (
+	"fmt"
+	"strings"
+	"time"
+)
+
+func DefaultSNMPRules(resolution time.Duration) []SimpleRule {
+	defaultRules := []SimpleRule{
 		{
 			TargetName:  "mem_used",
 			PromQLQuery: `sum without (hrStorageDescr, hrStorageIndex) (hrStorageUsed{hrStorageDescr="Real Memory"} * hrStorageAllocationUnits)`,
@@ -32,19 +38,28 @@ func DefaultSNMPRules() []SimpleRule {
 		},
 		{
 			TargetName:  "net_bits_recv",
-			PromQLQuery: "irate(ifInOctets[5m]) * 8",
+			PromQLQuery: "rate(ifInOctets[$__rate_interval]) * 8",
 		},
 		{
 			TargetName:  "net_bits_sent",
-			PromQLQuery: "irate(ifOutOctets[5m]) * 8",
+			PromQLQuery: "rate(ifOutOctets[$__rate_interval]) * 8",
 		},
 		{
 			TargetName:  "net_err_in",
-			PromQLQuery: "irate(ifInErrors[5m])",
+			PromQLQuery: "rate(ifInErrors[$__rate_interval])",
 		},
 		{
 			TargetName:  "net_err_out",
-			PromQLQuery: "irate(ifOutErrors[5m])",
+			PromQLQuery: "rate(ifOutErrors[$__rate_interval])",
 		},
 	}
+
+	rateInterval := 4 * int(resolution.Seconds())
+
+	replacer := strings.NewReplacer("$__rate_interval", fmt.Sprintf("%ds", rateInterval))
+	for i, rule := range defaultRules {
+		defaultRules[i].PromQLQuery = replacer.Replace(rule.PromQLQuery)
+	}
+
+	return defaultRules
 }
