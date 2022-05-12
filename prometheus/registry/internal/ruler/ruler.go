@@ -7,6 +7,7 @@ import (
 	"glouton/store"
 	"glouton/types"
 	"os"
+	"sort"
 	"sync"
 	"time"
 
@@ -111,6 +112,10 @@ func (r *SimpleRuler) ApplyRulesMFS(ctx context.Context, now time.Time, mfs []*d
 			})
 		}
 	}
+
+	sort.Slice(mfs, func(i, j int) bool {
+		return mfs[i].GetName() < mfs[j].GetName()
+	})
 
 	return mfs
 }
