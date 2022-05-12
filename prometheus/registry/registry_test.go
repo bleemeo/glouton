@@ -1224,7 +1224,7 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 				},
 			},
 			wantOverrideMFType: map[string]*dto.MetricType{
-				"mem_used": dto.MetricType_GAUGE.Enum(),
+				"mem_used": dto.MetricType_UNTYPED.Enum(),
 			},
 			wantOverrideMFHelp: map[string]string{
 				"mem_used": "",
@@ -1403,9 +1403,9 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 				},
 			}),
 			wantOverrideMFType: map[string]*dto.MetricType{
-				"mem_used":      dto.MetricType_GAUGE.Enum().Enum(),
-				"mem_free":      dto.MetricType_GAUGE.Enum().Enum(),
-				"mem_used_perc": dto.MetricType_GAUGE.Enum().Enum(),
+				"mem_used":      dto.MetricType_UNTYPED.Enum().Enum(),
+				"mem_free":      dto.MetricType_UNTYPED.Enum().Enum(),
+				"mem_used_perc": dto.MetricType_UNTYPED.Enum().Enum(),
 			},
 			wantOverrideMFHelp: map[string]string{
 				"mem_used":      "",
@@ -1673,8 +1673,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 				},
 			}),
 			wantOverrideMFType: map[string]*dto.MetricType{
-				"mem_free":      dto.MetricType_GAUGE.Enum().Enum(),
-				"mem_used_perc": dto.MetricType_GAUGE.Enum(),
+				"mem_free":      dto.MetricType_UNTYPED.Enum(),
+				"mem_used_perc": dto.MetricType_UNTYPED.Enum(),
 			},
 			wantOverrideMFHelp: map[string]string{
 				"mem_free":      "",
@@ -1811,9 +1811,9 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 				},
 			}),
 			wantOverrideMFType: map[string]*dto.MetricType{
-				"mem_used":      dto.MetricType_GAUGE.Enum(),
-				"mem_used_perc": dto.MetricType_GAUGE.Enum(),
-				"mem_free":      dto.MetricType_GAUGE.Enum(),
+				"mem_used":      dto.MetricType_UNTYPED.Enum(),
+				"mem_used_perc": dto.MetricType_UNTYPED.Enum(),
+				"mem_free":      dto.MetricType_UNTYPED.Enum(),
 			},
 			wantOverrideMFHelp: map[string]string{
 				"mem_used":      "",

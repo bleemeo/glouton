@@ -84,7 +84,7 @@ func (r *SimpleRuler) ApplyRulesMFS(ctx context.Context, now time.Time, mfs []*d
 			if !ok {
 				mfs = append(mfs, &dto.MetricFamily{
 					Name: proto.String(name),
-					Type: dto.MetricType_GAUGE.Enum(),
+					Type: dto.MetricType_UNTYPED.Enum(),
 					Help: proto.String(""),
 				})
 				idx = len(mfs) - 1
@@ -106,8 +106,8 @@ func (r *SimpleRuler) ApplyRulesMFS(ctx context.Context, now time.Time, mfs []*d
 			}
 
 			mfs[idx].Metric = append(mfs[idx].Metric, &dto.Metric{
-				Label: lbls,
-				Gauge: &dto.Gauge{Value: proto.Float64(sample.V)},
+				Label:   lbls,
+				Untyped: &dto.Untyped{Value: proto.Float64(sample.V)},
 			})
 		}
 	}
