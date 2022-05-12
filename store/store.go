@@ -111,7 +111,7 @@ func (s *Store) DiagnosticArchive(ctx context.Context, archive types.ArchiveWrit
 // Run will run the store until context is cancelled.
 func (s *Store) Run(ctx context.Context) error {
 	for {
-		s.run(s.nowFunc())
+		s.RunOnce()
 
 		select {
 		case <-time.After(300 * time.Second):
@@ -119,6 +119,11 @@ func (s *Store) Run(ctx context.Context) error {
 			return nil
 		}
 	}
+}
+
+// RunOnce runs the store once to remove old points and metrics.
+func (s *Store) RunOnce() {
+	s.run(s.nowFunc())
 }
 
 // AddNotifiee add a callback that will be notified of all points received
@@ -185,41 +190,6 @@ func (s *Store) DropAllMetrics() {
 
 	s.metrics = make(map[uint64]metric)
 	s.points = make(map[uint64][]types.Point)
-}
-
-// DropOldMetrics delete points older than maxAge in the store.
-func (s *Store) DropOldMetrics(maxAge time.Duration) {
-	s.lock.Lock()
-	defer s.lock.Unlock()
-
-	now := s.nowFunc()
-
-	for i := range s.metrics {
-		// Sort the points in increasing order of their time.
-		points := s.points[i]
-		sort.Slice(points, func(j, k int) bool {
-			return points[j].Time.Before(points[k].Time)
-		})
-
-		// Remove points older than maxAge.
-		for j := len(points) - 1; j >= 0; j-- {
-			if now.Sub(points[j].Time) > maxAge {
-				// Because the points are sorted we can only keep the previous points we looped through:
-				// points=[9:58, 10:00, 10:02], now=10:02, maxAge=1m
-				// j = 2 ->  now - points[2] = 0m <= maxAge
-				// j = 1 -> now - points[1] = 2m > maxAge
-				// We only keep points[j+1:] = points[2:] = [10:02]
-				s.points[i] = points[j+1:]
-
-				break
-			}
-		}
-
-		if len(s.points[i]) == 0 {
-			delete(s.metrics, i)
-			delete(s.points, i)
-		}
-	}
 }
 
 // Metrics return a list of Metric matching given labels filter.
@@ -444,7 +414,7 @@ func (s *Store) PushPoints(_ context.Context, points []types.MetricPoint) {
 // which does purge of older metrics.
 func (s *Store) InternalSetNowAndRunOnce(ctx context.Context, nowFunc func() time.Time) {
 	s.nowFunc = nowFunc
-	s.run(s.nowFunc())
+	s.RunOnce()
 }
 
 type store interface {

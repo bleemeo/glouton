@@ -39,7 +39,7 @@ func New(input []*rules.RecordingRule) *SimpleRuler {
 		LookbackDelta:      5 * time.Minute,
 	})
 
-	st := store.New(10*time.Minute, 10*time.Minute)
+	st := store.New(pointsMaxAge, pointsMaxAge)
 
 	return &SimpleRuler{
 		st:    st,
@@ -66,7 +66,7 @@ func (r *SimpleRuler) ApplyRulesMFS(ctx context.Context, now time.Time, mfs []*d
 	r.l.Lock()
 	defer r.l.Unlock()
 
-	r.st.DropOldMetrics(pointsMaxAge)
+	r.st.RunOnce()
 	r.st.PushPoints(ctx, points)
 
 	for _, rule := range r.rules {
