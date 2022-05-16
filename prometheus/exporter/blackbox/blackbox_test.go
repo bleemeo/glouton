@@ -1529,10 +1529,6 @@ func runTest(t *testing.T, test testCase, isSSL bool, monitorID, agentID, agentF
 
 	targetURL := test.target.URL()
 	if isSSL {
-		if strings.Contains(targetURL, "http://") {
-			t.Skip()
-		}
-
 		targetURL = strings.Replace(targetURL, "https://", "ssl://", 1)
 	}
 
