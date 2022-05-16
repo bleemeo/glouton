@@ -72,9 +72,9 @@ func ProbeTCP(ctx context.Context, target string, module config.Module, registry
 		Name: "probe_failed_due_to_regex",
 		Help: "Indicates if probe failed due to regex",
 	})
-	probeFailedDueToHandshakeOrTimeout := prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: "probe_failed_due_to_handshake_or_timeout",
-		Help: "Indicates if probe failed due to an handshake failure or a timeout.",
+	probeFailedDueToTLSError := prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "probe_failed_due_to_tls_error",
+		Help: "Indicates if probe failed due to a TLS error",
 	})
 
 	registry.MustRegister(probeFailedDueToRegex)
@@ -83,14 +83,15 @@ func ProbeTCP(ctx context.Context, target string, module config.Module, registry
 
 	conn, err := dialTCP(ctx, target, module, registry, logger)
 	if err != nil {
-		registry.MustRegister(probeFailedDueToHandshakeOrTimeout)
+		registry.MustRegister(probeFailedDueToTLSError)
 
 		var netErr net.Error
 
-		if errors.As(err, &netErr) && netErr.Timeout() || strings.Contains(err.Error(), "handshake failure") {
-			probeFailedDueToHandshakeOrTimeout.Set(1)
+		if errors.As(err, &netErr) && netErr.Timeout() ||
+			strings.Contains(err.Error(), "tls:") || err.Error() == "EOF" {
+			probeFailedDueToTLSError.Set(1)
 		} else {
-			probeFailedDueToHandshakeOrTimeout.Set(0)
+			probeFailedDueToTLSError.Set(0)
 		}
 
 		_ = level.Error(logger).Log("msg", "Error dialing TCP", "err", err)
@@ -117,7 +118,7 @@ func ProbeTCP(ctx context.Context, target string, module config.Module, registry
 		registry.MustRegister(probeSSLEarliestCertExpiry, probeTLSVersion, probeSSLLastChainExpiryTimestampSeconds, probeSSLLastInformation)
 		probeSSLEarliestCertExpiry.Set(float64(getEarliestCertExpiry(&state).Unix()))
 		probeTLSVersion.WithLabelValues(getTLSVersion(&state)).Set(1)
-		probeSSLLastChainExpiryTimestampSeconds.Set(float64(getLastChainExpiry(getVerifiedChains(state)).Unix()))
+		probeSSLLastChainExpiryTimestampSeconds.Set(float64(getLastChainExpiry(getVerifiedChains(ctx, state)).Unix()))
 		probeSSLLastInformation.WithLabelValues(getFingerprint(&state)).Set(1)
 	}
 
@@ -132,7 +133,7 @@ func ProbeTCP(ctx context.Context, target string, module config.Module, registry
 			var match []int
 			// Read lines until one of them matches the configured regexp.
 			for scanner.Scan() {
-				level.Debug(logger).Log("msg", "Read line", "line", scanner.Text())
+				_ = level.Debug(logger).Log("msg", "Read line", "line", scanner.Text())
 
 				match = qr.Expect.Regexp.FindSubmatchIndex(scanner.Bytes())
 				if match != nil {
@@ -162,7 +163,7 @@ func ProbeTCP(ctx context.Context, target string, module config.Module, registry
 		}
 
 		if send != "" {
-			level.Debug(logger).Log("msg", "Sending line", "line", send)
+			_ = level.Debug(logger).Log("msg", "Sending line", "line", send)
 
 			if _, err := fmt.Fprintf(conn, "%s\n", send); err != nil {
 				_ = level.Error(logger).Log("msg", "Failed to send", "err", err)
@@ -207,7 +208,7 @@ func ProbeTCP(ctx context.Context, target string, module config.Module, registry
 			registry.MustRegister(probeSSLEarliestCertExpiry, probeSSLLastChainExpiryTimestampSeconds)
 			probeSSLEarliestCertExpiry.Set(float64(getEarliestCertExpiry(&state).Unix()))
 			probeTLSVersion.WithLabelValues(getTLSVersion(&state)).Set(1)
-			probeSSLLastChainExpiryTimestampSeconds.Set(float64(getLastChainExpiry(getVerifiedChains(state)).Unix()))
+			probeSSLLastChainExpiryTimestampSeconds.Set(float64(getLastChainExpiry(getVerifiedChains(ctx, state)).Unix()))
 			probeSSLLastInformation.WithLabelValues(getFingerprint(&state)).Set(1)
 		}
 	}
@@ -215,10 +216,20 @@ func ProbeTCP(ctx context.Context, target string, module config.Module, registry
 	return true
 }
 
-func getVerifiedChains(state tls.ConnectionState) [][]*x509.Certificate {
+func getVerifiedChains(ctx context.Context, state tls.ConnectionState) [][]*x509.Certificate {
+	var rootCAS *x509.CertPool
+
+	testInjectCARoot, _ := ctx.Value(contextKeyTestInjectCARoot).(*x509.Certificate)
+	if testInjectCARoot != nil {
+		rootCAS = x509.NewCertPool()
+		rootCAS.AddCert(testInjectCARoot)
+	}
+
+	now, _ := ctx.Value(contextKeyNowFunc).(func() time.Time)
+
 	opts := x509.VerifyOptions{
-		Roots:         nil,
-		CurrentTime:   time.Now(),
+		Roots:         rootCAS,
+		CurrentTime:   now(),
 		DNSName:       state.ServerName,
 		Intermediates: x509.NewCertPool(),
 	}

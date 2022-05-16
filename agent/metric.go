@@ -88,7 +88,7 @@ var commonDefaultSystemMetrics = []string{
 	"probe_ssl_last_chain_expiry_timestamp_seconds",
 	"probe_ssl_validation_success",
 	"probe_http_duration_seconds",
-	"probe_failed_due_to_handshake_or_timeout",
+	"probe_failed_due_to_tls_error",
 }
 
 //nolint:gochecknoglobals

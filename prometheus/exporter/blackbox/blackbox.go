@@ -39,12 +39,19 @@ import (
 	"github.com/prometheus/prometheus/model/labels"
 )
 
+type contextKey int
+
 const (
 	proberNameHTTP string = "http"
 	proberNameTCP  string = "tcp"
 	proberNameSSL  string = "ssl"
 	proberNameICMP string = "icmp"
 	proberNameDNS  string = "dns"
+
+	// Context key to get the CA Root, used only in tests.
+	contextKeyTestInjectCARoot contextKey = iota
+	// Context key to get the time function.
+	contextKeyNowFunc contextKey = iota
 )
 
 //nolint:gochecknoglobals
@@ -205,6 +212,11 @@ func (target configTarget) CollectWithContext(ctx context.Context, ch chan<- pro
 			currentRoundTrip.TLSState = &cs
 		},
 	})
+
+	// ProbeTCP needs the test CA Root and the current time, to keep using the
+	// ProbeFn type we pass these values inside the context.
+	subCtx = context.WithValue(subCtx, contextKeyTestInjectCARoot, target.testInjectCARoot)
+	subCtx = context.WithValue(subCtx, contextKeyNowFunc, target.nowFunc)
 
 	// do all the actual work
 	success := probeFn(subCtx, target.URL, target.Module, registry, extLogger)

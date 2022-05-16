@@ -34,6 +34,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/http/httptrace"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -59,10 +60,24 @@ type testingCerts struct {
 	NotAfterExpired   time.Time
 }
 
-func Test_Collect(t *testing.T) { //nolint:maintidx
+type testCase struct {
+	name string
+	// wantPoints is a subset of result points, that is extra points in result don't result in error.
+	// Use absentPoints to check for absence of points.
+	// In wantPoints & absentPoints, the value of "instance" label will be replaced by target URL.
+	// In wantPoints, value NaN will be remplaced with value from result point. Use NaN when you don't
+	// care about value. However NaN will NOT be replaced with the value 0.
+	wantPoints             []types.MetricPoint
+	absentPoints           []map[string]string
+	target                 testTarget
+	trustCert              bool
+	probeDurationIsTimeout bool
+}
+
+func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 	monitorID := "7331d6c1-ede1-4483-a3b3-c99f0965f64b"
 	agentID := "1d6a2c82-4579-4f7d-91fe-3d4946aacaf7"
-	targetNotYetKnown := "this-label-value-will-be-remplaced"
+	targetNotYetKnown := "this-label-value-will-be-replaced"
 	agentFQDN := "example.com"
 	t0 := time.Date(2022, 3, 8, 10, 27, 50, 0, time.UTC)
 
@@ -73,19 +88,7 @@ func Test_Collect(t *testing.T) { //nolint:maintidx
 
 	httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {}))
 
-	tests := []struct {
-		name string
-		// wantPoints is a subset of result points, that is extra points in result don't result in error.
-		// Use absentPoints to check for absence of points.
-		// In wantPoints & absentPoints, the value of "instance" label will be remplace by target URL.
-		// In wantPoints, value NaN will be remplaced with value from result point. Use NaN when you don't
-		// care about value. However NaN will NOT be remplaced with the value 0.
-		wantPoints             []types.MetricPoint
-		absentPoints           []map[string]string
-		target                 testTarget
-		trustCert              bool
-		probeDurationIsTimeout bool
-	}{
+	tests := []testCase{
 		{
 			name: "http-only-success-200",
 			absentPoints: []map[string]string{
@@ -1507,125 +1510,159 @@ func Test_Collect(t *testing.T) { //nolint:maintidx
 			target:    &httpTestTarget{TLSCert: []tls.Certificate{certs.CertExpireFar}, CloseInTLSHandshake: true},
 		},
 	}
+
 	for _, tt := range tests {
 		tt := tt
 
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			tt.target.Start()
-			defer tt.target.Close()
-
-			monitor := types.Monitor{
-				ID:             monitorID,
-				BleemeoAgentID: agentID,
-				URL:            tt.target.URL(),
-			}
-
-			for _, lbls := range tt.absentPoints {
-				if _, ok := lbls[types.LabelInstance]; ok {
-					lbls[types.LabelInstance] = tt.target.URL()
-				}
-			}
-
-			for _, want := range tt.wantPoints {
-				if _, ok := want.Labels[types.LabelInstance]; ok {
-					want.Labels[types.LabelInstance] = tt.target.URL()
-				}
-			}
-
-			ctx := context.Background()
-
-			var (
-				resPoints []types.MetricPoint
-				l         sync.Mutex
-			)
-
-			reg, err := registry.New(registry.Option{
-				FQDN:        agentFQDN,
-				GloutonPort: "8015",
-				PushPoint: pushFunction(func(ctx context.Context, points []types.MetricPoint) {
-					l.Lock()
-					defer l.Unlock()
-
-					resPoints = append(resPoints, points...)
-				}),
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			target, err := genCollectorFromDynamicTarget(monitor, "Glouton unittest")
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			target.Collector.nowFunc = func() time.Time {
-				return t0
-			}
-
-			if tt.trustCert {
-				target.Collector.testInjectCARoot = tt.target.Certificate()
-			}
-
-			gatherer, err := newGatherer(target.Collector)
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			id, err := reg.RegisterGatherer(ctx, registry.RegistrationOption{
-				DisablePeriodicGather: true,
-				ExtraLabels:           target.Labels,
-			}, gatherer)
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			reg.InternalRunScrape(tt.target.RequestContext(ctx), t0, id)
-
-			gotMap := make(map[string]int, len(resPoints))
-			for i, got := range resPoints {
-				gotMap[types.LabelsToText(got.Labels)] = i
-			}
-
-			for _, lbls := range tt.absentPoints {
-				if _, ok := gotMap[types.LabelsToText(lbls)]; ok {
-					t.Errorf("got labels %v, expected not present", lbls)
-				}
-			}
-
-			for _, want := range tt.wantPoints {
-				idx, ok := gotMap[types.LabelsToText(want.Labels)]
-				if !ok {
-					t.Errorf("got not labels %v, expected present", want.Labels)
-
-					for _, got := range resPoints {
-						if got.Labels[types.LabelName] == want.Labels[types.LabelName] {
-							t.Logf("Similar labels in resPoints include: %v", got.Labels)
-						}
-					}
-
-					continue
-				}
-
-				got := resPoints[idx]
-				if math.IsNaN(want.Value) && got.Value != 0 {
-					want.Value = got.Value
-				}
-
-				if diff := cmp.Diff(want, got); diff != "" {
-					t.Errorf("points missmatch: (-want +got)\n%s", diff)
-				}
-
-				if want.Labels[types.LabelName] == "probe_duration_seconds" {
-					if tt.probeDurationIsTimeout && got.Value < 9.5 {
-						t.Errorf("probe_duration_seconds = %v, want >= 9.5", got.Value)
-					} else if !tt.probeDurationIsTimeout && got.Value > 5 {
-						t.Errorf("probe_duration_seconds = %v, want <= 5", got.Value)
-					}
-				}
-			}
+			runTest(t, tt, false, monitorID, agentID, agentFQDN, t0)
 		})
+	}
+}
+
+func runTest(t *testing.T, test testCase, isSSL bool, monitorID, agentID, agentFQDN string, t0 time.Time) {
+	t.Helper()
+	t.Parallel()
+
+	test.target.Start()
+	defer test.target.Close()
+
+	targetURL := test.target.URL()
+	if isSSL {
+		if strings.Contains(targetURL, "http://") {
+			t.Skip()
+		}
+
+		targetURL = strings.Replace(targetURL, "https://", "ssl://", 1)
+	}
+
+	monitor := types.Monitor{
+		ID:             monitorID,
+		BleemeoAgentID: agentID,
+		URL:            targetURL,
+	}
+
+	// To avoid conflicts between tests that use the same test case (HTTPS and SSL), we need
+	// to make a copy of the absentPoints map and the wantPoints labels map before modifying them.
+	absentPoints := make([]map[string]string, len(test.absentPoints))
+	for k, v := range test.absentPoints {
+		absentPoints[k] = v
+	}
+
+	for _, lbls := range absentPoints {
+		if _, ok := lbls[types.LabelInstance]; ok {
+			lbls[types.LabelInstance] = targetURL
+		}
+	}
+
+	wantPoints := make([]types.MetricPoint, 0, len(test.wantPoints))
+	for _, point := range test.wantPoints {
+		lbls := make(map[string]string, len(point.Labels))
+		for name, value := range point.Labels {
+			lbls[name] = value
+		}
+
+		lbls[types.LabelInstance] = targetURL
+
+		newPoint := types.MetricPoint{
+			Point:       point.Point,
+			Labels:      lbls,
+			Annotations: point.Annotations,
+		}
+
+		wantPoints = append(wantPoints, newPoint)
+	}
+
+	ctx := context.Background()
+
+	var (
+		resPoints []types.MetricPoint
+		l         sync.Mutex
+	)
+
+	reg, err := registry.New(registry.Option{
+		FQDN:        agentFQDN,
+		GloutonPort: "8015",
+		PushPoint: pushFunction(func(ctx context.Context, points []types.MetricPoint) {
+			l.Lock()
+			defer l.Unlock()
+
+			resPoints = append(resPoints, points...)
+		}),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	target, err := genCollectorFromDynamicTarget(monitor, "Glouton unittest")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	target.Collector.nowFunc = func() time.Time {
+		return t0
+	}
+
+	if test.trustCert {
+		target.Collector.testInjectCARoot = test.target.Certificate()
+	}
+
+	gatherer, err := newGatherer(target.Collector)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	id, err := reg.RegisterGatherer(ctx, registry.RegistrationOption{
+		DisablePeriodicGather: true,
+		ExtraLabels:           target.Labels,
+	}, gatherer)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	reg.InternalRunScrape(test.target.RequestContext(ctx), t0, id)
+
+	gotMap := make(map[string]int, len(resPoints))
+	for i, got := range resPoints {
+		gotMap[types.LabelsToText(got.Labels)] = i
+	}
+
+	for _, lbls := range absentPoints {
+		if _, ok := gotMap[types.LabelsToText(lbls)]; ok {
+			t.Errorf("got labels %v, expected not present", lbls)
+		}
+	}
+
+	for _, want := range wantPoints {
+		idx, ok := gotMap[types.LabelsToText(want.Labels)]
+		if !ok {
+			t.Errorf("got no labels %v, expected present", want.Labels)
+
+			for _, got := range resPoints {
+				if got.Labels[types.LabelName] == want.Labels[types.LabelName] {
+					t.Logf("Similar labels in resPoints include: %v", got.Labels)
+				}
+			}
+
+			continue
+		}
+
+		got := resPoints[idx]
+		if math.IsNaN(want.Value) && got.Value != 0 {
+			want.Value = got.Value
+		}
+
+		if diff := cmp.Diff(want, got); diff != "" {
+			t.Errorf("points mismatch: (-want +got)\n%s", diff)
+		}
+
+		if want.Labels[types.LabelName] == "probe_duration_seconds" {
+			if test.probeDurationIsTimeout && got.Value < 9.5 {
+				t.Errorf("probe_duration_seconds = %v, want >= 9.5", got.Value)
+			} else if !test.probeDurationIsTimeout && got.Value > 5 {
+				t.Errorf("probe_duration_seconds = %v, want <= 5", got.Value)
+			}
+		}
 	}
 }
 
@@ -1839,4 +1876,837 @@ func (t *httpTestTarget) RequestContext(ctx context.Context) context.Context {
 			}
 		},
 	})
+}
+
+func Test_Collect_SSL(t *testing.T) { //nolint:maintidx
+	monitorID := "7331d6c1-ede1-4483-a3b3-c99f0965f64b"
+	agentID := "1d6a2c82-4579-4f7d-91fe-3d4946aacaf7"
+	targetNotYetKnown := "this-label-value-will-be-replaced"
+	agentFQDN := "example.com"
+	t0 := time.Date(2022, 3, 8, 10, 27, 50, 0, time.UTC)
+
+	certs, err := generateCerts(t0)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {}))
+
+	tests := []testCase{
+		{
+			name: "success-200",
+			absentPoints: []map[string]string{
+				{
+					types.LabelName:         "probe_failed_due_to_tls_error",
+					types.LabelInstance:     targetNotYetKnown,
+					types.LabelInstanceUUID: agentID,
+					types.LabelScraper:      agentFQDN,
+				},
+			},
+			wantPoints: []types.MetricPoint{
+				{
+					Point: types.Point{Time: t0, Value: 1},
+					Labels: map[string]string{
+						types.LabelName:         "probe_success",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: math.NaN()},
+					Labels: map[string]string{
+						types.LabelName:         "probe_duration_seconds",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: float64(certs.NotAfterFar.Unix())},
+					Labels: map[string]string{
+						types.LabelName:         "probe_ssl_last_chain_expiry_timestamp_seconds",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: float64(certs.NotAfterFar.Unix())},
+					Labels: map[string]string{
+						types.LabelName:         "probe_ssl_earliest_cert_expiry",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: 1},
+					Labels: map[string]string{
+						types.LabelName:         "probe_ssl_validation_success",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+			},
+			trustCert: true,
+			target:    &httpTestTarget{TLSCert: []tls.Certificate{certs.CertExpireFar}},
+		},
+		{
+			name: "ssl-expire-soon",
+			absentPoints: []map[string]string{
+				{
+					types.LabelName:         "probe_failed_due_to_tls_error",
+					types.LabelInstance:     targetNotYetKnown,
+					types.LabelInstanceUUID: agentID,
+					types.LabelScraper:      agentFQDN,
+				},
+			},
+			wantPoints: []types.MetricPoint{
+				{
+					Point: types.Point{Time: t0, Value: 1},
+					Labels: map[string]string{
+						types.LabelName:         "probe_success",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: math.NaN()},
+					Labels: map[string]string{
+						types.LabelName:         "probe_duration_seconds",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: float64(certs.NotAfterSoon.Unix())},
+					Labels: map[string]string{
+						types.LabelName:         "probe_ssl_last_chain_expiry_timestamp_seconds",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: float64(certs.NotAfterSoon.Unix())},
+					Labels: map[string]string{
+						types.LabelName:         "probe_ssl_earliest_cert_expiry",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: 1},
+					Labels: map[string]string{
+						types.LabelName:         "probe_ssl_validation_success",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+			},
+			trustCert: true,
+			target:    &httpTestTarget{TLSCert: []tls.Certificate{certs.CertExpireSoon}},
+		},
+		{
+			name: "expired-unneeded-certs",
+			absentPoints: []map[string]string{
+				{
+					types.LabelName:         "probe_failed_due_to_tls_error",
+					types.LabelInstance:     targetNotYetKnown,
+					types.LabelInstanceUUID: agentID,
+					types.LabelScraper:      agentFQDN,
+				},
+			},
+			wantPoints: []types.MetricPoint{
+				{
+					Point: types.Point{Time: t0, Value: 1},
+					Labels: map[string]string{
+						types.LabelName:         "probe_success",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: math.NaN()},
+					Labels: map[string]string{
+						types.LabelName:         "probe_duration_seconds",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: float64(certs.NotAfterFar.Unix())},
+					Labels: map[string]string{
+						types.LabelName:         "probe_ssl_last_chain_expiry_timestamp_seconds",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: float64(certs.NotAfterExpired.Unix())},
+					Labels: map[string]string{
+						types.LabelName:         "probe_ssl_earliest_cert_expiry",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: 1},
+					Labels: map[string]string{
+						types.LabelName:         "probe_ssl_validation_success",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+			},
+			trustCert: true,
+			target:    &httpTestTarget{TLSCert: []tls.Certificate{certs.CertFarAndExpired}},
+		},
+		{
+			name: "tls-self-signed",
+			absentPoints: []map[string]string{
+				{
+					types.LabelName:         "probe_failed_due_to_tls_error",
+					types.LabelInstance:     targetNotYetKnown,
+					types.LabelInstanceUUID: agentID,
+					types.LabelScraper:      agentFQDN,
+				},
+			},
+			wantPoints: []types.MetricPoint{
+				{
+					Point: types.Point{Time: t0, Value: 1},
+					Labels: map[string]string{
+						types.LabelName:         "probe_success",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: math.NaN()},
+					Labels: map[string]string{
+						types.LabelName:         "probe_duration_seconds",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: float64(time.Time{}.Unix())},
+					Labels: map[string]string{
+						types.LabelName:         "probe_ssl_last_chain_expiry_timestamp_seconds",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: float64(certs.NotAfterFar.Unix())},
+					Labels: map[string]string{
+						types.LabelName:         "probe_ssl_earliest_cert_expiry",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: 0},
+					Labels: map[string]string{
+						types.LabelName:         "probe_ssl_validation_success",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+			},
+			trustCert: false,
+			target:    &httpTestTarget{TLSCert: []tls.Certificate{certs.CertExpireFar}},
+		},
+		{
+			name: "tls-self-signed-expiring",
+			absentPoints: []map[string]string{
+				{
+					types.LabelName:         "probe_failed_due_to_tls_error",
+					types.LabelInstance:     targetNotYetKnown,
+					types.LabelInstanceUUID: agentID,
+					types.LabelScraper:      agentFQDN,
+				},
+			},
+			wantPoints: []types.MetricPoint{
+				{
+					Point: types.Point{Time: t0, Value: 1},
+					Labels: map[string]string{
+						types.LabelName:         "probe_success",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: math.NaN()},
+					Labels: map[string]string{
+						types.LabelName:         "probe_duration_seconds",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: float64(time.Time{}.Unix())},
+					Labels: map[string]string{
+						types.LabelName:         "probe_ssl_last_chain_expiry_timestamp_seconds",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: float64(certs.NotAfterExpired.Unix())},
+					Labels: map[string]string{
+						types.LabelName:         "probe_ssl_earliest_cert_expiry",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: 0},
+					Labels: map[string]string{
+						types.LabelName:         "probe_ssl_validation_success",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+			},
+			trustCert: false,
+			target:    &httpTestTarget{TLSCert: []tls.Certificate{certs.CertExpired}},
+		},
+		{
+			name: "tls-expired",
+			absentPoints: []map[string]string{
+				{
+					types.LabelName:         "probe_failed_due_to_tls_error",
+					types.LabelInstance:     targetNotYetKnown,
+					types.LabelInstanceUUID: agentID,
+					types.LabelScraper:      agentFQDN,
+				},
+			},
+			wantPoints: []types.MetricPoint{
+				{
+					Point: types.Point{Time: t0, Value: 1},
+					Labels: map[string]string{
+						types.LabelName:         "probe_success",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: math.NaN()},
+					Labels: map[string]string{
+						types.LabelName:         "probe_duration_seconds",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: float64(time.Time{}.Unix())},
+					Labels: map[string]string{
+						types.LabelName:         "probe_ssl_last_chain_expiry_timestamp_seconds",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: float64(certs.NotAfterExpired.Unix())},
+					Labels: map[string]string{
+						types.LabelName:         "probe_ssl_earliest_cert_expiry",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: 0},
+					Labels: map[string]string{
+						types.LabelName:         "probe_ssl_validation_success",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+			},
+			trustCert: true,
+			target:    &httpTestTarget{TLSCert: []tls.Certificate{certs.CertExpired}},
+		},
+		{
+			name: "timeout-tls-handshake",
+			absentPoints: []map[string]string{
+				{
+					types.LabelName:         "probe_ssl_earliest_cert_expiry",
+					types.LabelInstance:     targetNotYetKnown,
+					types.LabelInstanceUUID: agentID,
+					types.LabelScraper:      agentFQDN,
+				},
+				{
+					types.LabelName:         "probe_ssl_last_chain_expiry_timestamp_seconds",
+					types.LabelInstance:     targetNotYetKnown,
+					types.LabelInstanceUUID: agentID,
+					types.LabelScraper:      agentFQDN,
+				},
+			},
+			wantPoints: []types.MetricPoint{
+				{
+					Point: types.Point{Time: t0, Value: 0},
+					Labels: map[string]string{
+						types.LabelName:         "probe_success",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: math.NaN()},
+					Labels: map[string]string{
+						types.LabelName:         "probe_duration_seconds",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: 1},
+					Labels: map[string]string{
+						types.LabelName:         "probe_failed_due_to_tls_error",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: 0},
+					Labels: map[string]string{
+						types.LabelName:         "probe_ssl_validation_success",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+			},
+			trustCert: true,
+			target: &httpTestTarget{
+				TLSCert:               []tls.Certificate{certs.CertExpireFar},
+				TimeoutInTLSHandshake: true,
+			},
+			probeDurationIsTimeout: true,
+		},
+		{
+			name: "timeout-in-tcp-accept",
+			absentPoints: []map[string]string{
+				{
+					types.LabelName:         "probe_ssl_earliest_cert_expiry",
+					types.LabelInstance:     targetNotYetKnown,
+					types.LabelInstanceUUID: agentID,
+					types.LabelScraper:      agentFQDN,
+				},
+				{
+					types.LabelName:         "probe_ssl_last_chain_expiry_timestamp_seconds",
+					types.LabelInstance:     targetNotYetKnown,
+					types.LabelInstanceUUID: agentID,
+					types.LabelScraper:      agentFQDN,
+				},
+			},
+			wantPoints: []types.MetricPoint{
+				{
+					Point: types.Point{Time: t0, Value: 0},
+					Labels: map[string]string{
+						types.LabelName:         "probe_success",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: math.NaN()},
+					Labels: map[string]string{
+						types.LabelName:         "probe_duration_seconds",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: 1},
+					Labels: map[string]string{
+						types.LabelName:         "probe_failed_due_to_tls_error",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: 0},
+					Labels: map[string]string{
+						types.LabelName:         "probe_ssl_validation_success",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+			},
+			trustCert: true,
+			target: &httpTestTarget{
+				TLSCert:            []tls.Certificate{certs.CertExpireFar},
+				TimeoutInTCPAccept: true,
+			},
+			probeDurationIsTimeout: true,
+		},
+		{
+			name: "connection-refused",
+			absentPoints: []map[string]string{
+				{
+					types.LabelName:         "probe_ssl_earliest_cert_expiry",
+					types.LabelInstance:     targetNotYetKnown,
+					types.LabelInstanceUUID: agentID,
+					types.LabelScraper:      agentFQDN,
+				},
+				{
+					types.LabelName:         "probe_ssl_last_chain_expiry_timestamp_seconds",
+					types.LabelInstance:     targetNotYetKnown,
+					types.LabelInstanceUUID: agentID,
+					types.LabelScraper:      agentFQDN,
+				},
+			},
+			wantPoints: []types.MetricPoint{
+				{
+					Point: types.Point{Time: t0, Value: 0},
+					Labels: map[string]string{
+						types.LabelName:         "probe_success",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: math.NaN()},
+					Labels: map[string]string{
+						types.LabelName:         "probe_duration_seconds",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: 0},
+					Labels: map[string]string{
+						types.LabelName:         "probe_failed_due_to_tls_error",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: 0},
+					Labels: map[string]string{
+						types.LabelName:         "probe_ssl_validation_success",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+			},
+			trustCert: true,
+			target: &httpTestTarget{
+				TLSCert:       []tls.Certificate{certs.CertExpireFar},
+				ServerStopped: true,
+			},
+			probeDurationIsTimeout: false,
+		},
+		{
+			name: "broken-crypto",
+			absentPoints: []map[string]string{
+				{
+					types.LabelName:         "probe_ssl_earliest_cert_expiry",
+					types.LabelInstance:     targetNotYetKnown,
+					types.LabelInstanceUUID: agentID,
+					types.LabelScraper:      agentFQDN,
+				},
+				{
+					types.LabelName:         "probe_ssl_last_chain_expiry_timestamp_seconds",
+					types.LabelInstance:     targetNotYetKnown,
+					types.LabelInstanceUUID: agentID,
+					types.LabelScraper:      agentFQDN,
+				},
+			},
+			wantPoints: []types.MetricPoint{
+				{
+					Point: types.Point{Time: t0, Value: 0},
+					Labels: map[string]string{
+						types.LabelName:         "probe_success",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: math.NaN()},
+					Labels: map[string]string{
+						types.LabelName:         "probe_duration_seconds",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: 0},
+					Labels: map[string]string{
+						types.LabelName:         "probe_ssl_validation_success",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: 1},
+					Labels: map[string]string{
+						types.LabelName:         "probe_failed_due_to_tls_error",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+			},
+			trustCert: true,
+			target:    &httpTestTarget{TLSCert: []tls.Certificate{certs.CertExpireFar}, UseBrokenCrypto: true},
+		},
+		{
+			name: "break-connection-in-tls",
+			absentPoints: []map[string]string{
+				{
+					types.LabelName:         "probe_ssl_earliest_cert_expiry",
+					types.LabelInstance:     targetNotYetKnown,
+					types.LabelInstanceUUID: agentID,
+					types.LabelScraper:      agentFQDN,
+				},
+				{
+					types.LabelName:         "probe_ssl_last_chain_expiry_timestamp_seconds",
+					types.LabelInstance:     targetNotYetKnown,
+					types.LabelInstanceUUID: agentID,
+					types.LabelScraper:      agentFQDN,
+				},
+			},
+			wantPoints: []types.MetricPoint{
+				{
+					Point: types.Point{Time: t0, Value: 0},
+					Labels: map[string]string{
+						types.LabelName:         "probe_success",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: math.NaN()},
+					Labels: map[string]string{
+						types.LabelName:         "probe_duration_seconds",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: 0},
+					Labels: map[string]string{
+						types.LabelName:         "probe_ssl_validation_success",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: 1},
+					Labels: map[string]string{
+						types.LabelName:         "probe_failed_due_to_tls_error",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+			},
+			trustCert: true,
+			target:    &httpTestTarget{TLSCert: []tls.Certificate{certs.CertExpireFar}, CloseInTLSHandshake: true},
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+
+		t.Run(tt.name, func(t *testing.T) {
+			runTest(t, tt, true, monitorID, agentID, agentFQDN, t0)
+		})
+	}
 }
