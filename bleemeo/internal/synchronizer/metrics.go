@@ -653,6 +653,10 @@ func (s *Synchronizer) UpdateUnitsAndThresholds(ctx context.Context, firstUpdate
 	s.l.Unlock()
 
 	for _, m := range s.option.Cache.Metrics() {
+		if !m.DeactivatedAt.IsZero() {
+			continue
+		}
+
 		units[m.LabelsText] = m.Unit
 
 		metricName := m.Labels[types.LabelName]
@@ -681,7 +685,9 @@ func (s *Synchronizer) UpdateUnitsAndThresholds(ctx context.Context, firstUpdate
 			thresh.CriticalDelay = softPeriod
 		}
 
-		thresholds[m.LabelsText] = thresh
+		if !thresh.IsZero() {
+			thresholds[m.LabelsText] = thresh
+		}
 	}
 
 	if s.option.UpdateThresholds != nil {
