@@ -141,6 +141,16 @@ func genCollectorFromDynamicTarget(monitor types.Monitor, userAgent string) (*co
 	case proberNameICMP:
 		mod.Prober = proberNameICMP
 		uri = url.Host
+	case proberNameSSL:
+		mod.Prober = proberNameTCP
+		uri = url.Host
+		mod.TCP.TLS = true
+		mod.TCP.TLSConfig = config.TLSConfig{
+			CAFile: monitor.CAFile,
+			// We manually do the TLS verification after probing.
+			// This allow to gather information on self-signed server.
+			InsecureSkipVerify: true,
+		}
 	}
 
 	confTarget := configTarget{

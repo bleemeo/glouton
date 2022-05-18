@@ -110,7 +110,7 @@ func (d *Docker) RuntimeFact(ctx context.Context, currentFact map[string]string)
 	}
 }
 
-// ServerAddress will return the last server address for which connection sucessed.
+// ServerAddress will return the last server address for which connection succeeded.
 // Note that empty string could be "docker default" or no valid connection. You should use this after call to IsRuntimeRunning().
 func (d *Docker) ServerAddress() string {
 	d.l.Lock()

@@ -39,11 +39,19 @@ import (
 	"github.com/prometheus/prometheus/model/labels"
 )
 
+type contextKey int
+
 const (
 	proberNameHTTP string = "http"
 	proberNameTCP  string = "tcp"
+	proberNameSSL  string = "ssl"
 	proberNameICMP string = "icmp"
 	proberNameDNS  string = "dns"
+
+	// Context key to get the CA Root, used only in tests.
+	contextKeyTestInjectCARoot contextKey = iota
+	// Context key to get the time function.
+	contextKeyNowFunc contextKey = iota
 )
 
 //nolint:gochecknoglobals
@@ -74,7 +82,7 @@ var (
 	)
 	probers = map[string]prober.ProbeFn{
 		proberNameHTTP: prober.ProbeHTTP,
-		proberNameTCP:  prober.ProbeTCP,
+		proberNameTCP:  ProbeTCP,
 		proberNameICMP: prober.ProbeICMP,
 		proberNameDNS:  prober.ProbeDNS,
 	}
@@ -205,6 +213,11 @@ func (target configTarget) CollectWithContext(ctx context.Context, ch chan<- pro
 		},
 	})
 
+	// ProbeTCP needs the test CA Root and the current time, to keep using the
+	// ProbeFn type we pass these values inside the context.
+	subCtx = context.WithValue(subCtx, contextKeyTestInjectCARoot, target.testInjectCARoot)
+	subCtx = context.WithValue(subCtx, contextKeyNowFunc, target.nowFunc)
+
 	// do all the actual work
 	success := probeFn(subCtx, target.URL, target.Module, registry, extLogger)
 
@@ -229,13 +242,33 @@ func (target configTarget) CollectWithContext(ctx context.Context, ch chan<- pro
 
 	l.Unlock()
 
-	// write all the gathered metrics to our upper registry
-	writeMFsToChan(filterMFs(mfs, func(mf *dto.MetricFamily) bool {
-		return mf.GetName() != "probe_ssl_last_chain_expiry_timestamp_seconds"
-	}), ch)
+	if target.Module.TCP.TLS { // ssl check
+		tlsSuccess := false
 
-	roundTripsTLS := target.verifyTLS(extLogger, roundTrips)
-	if roundTripsTLS.HadTLS() {
+		for _, mf := range mfs {
+			if mf.GetName() == "probe_ssl_last_chain_expiry_timestamp_seconds" {
+				if metrics := mf.GetMetric(); len(metrics) > 0 && metrics[0].GetGauge() != nil {
+					// When the ssl connection failed, we have no verified chain, so the last chain expiry
+					// is a zero time.Time, which is then converted to a unix timestamp and to a float64.
+					tlsSuccess = mf.GetMetric()[0].GetGauge().GetValue() != float64(time.Time{}.Unix())
+				}
+
+				break
+			}
+		}
+
+		if tlsSuccess {
+			ch <- prometheus.MustNewConstMetric(probeTLSSuccess, prometheus.GaugeValue, 1, target.Name)
+		} else {
+			ch <- prometheus.MustNewConstMetric(probeTLSSuccess, prometheus.GaugeValue, 0, target.Name)
+		}
+	} else if roundTripsTLS := target.verifyTLS(extLogger, roundTrips); roundTripsTLS.HadTLS() {
+		// We implement our own probe_ssl_last_chain_expiry_timestamp_seconds for
+		// https checks to support self-signed and expired certificates.
+		mfs = filterMFs(mfs, func(mf *dto.MetricFamily) bool {
+			return mf.GetName() != "probe_ssl_last_chain_expiry_timestamp_seconds"
+		})
+
 		if roundTripsTLS.AllTrusted() {
 			ch <- prometheus.MustNewConstMetric(probeTLSSuccess, prometheus.GaugeValue, 1, target.Name)
 		} else {
@@ -246,6 +279,9 @@ func (target configTarget) CollectWithContext(ctx context.Context, ch chan<- pro
 			ch <- prometheus.MustNewConstMetric(probeTLSExpiry, prometheus.GaugeValue, float64(roundTripsTLS[len(roundTripsTLS)-1].expiry.Unix()), target.Name)
 		}
 	}
+
+	// Write all the gathered metrics to our upper registry.
+	writeMFsToChan(mfs, ch)
 
 	successVal := 0.
 	if success {
