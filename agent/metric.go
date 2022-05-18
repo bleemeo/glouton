@@ -991,6 +991,10 @@ func (m *metricFilter) isAllowedAndNotDenied(lbls map[string]string) bool {
 	m.l.Lock()
 	defer m.l.Unlock()
 
+	return m.isAllowedAndNotDeniedNoLock(lbls)
+}
+
+func (m *metricFilter) isAllowedAndNotDeniedNoLock(lbls map[string]string) bool {
 	return m.isAllowed(lbls) && !m.isDenied(lbls)
 }
 
@@ -1201,8 +1205,6 @@ func (m *metricFilter) RebuildDynamicLists(scrapper dynamicScrapper, services []
 
 	m.allowList = map[labels.Matcher][]matcher.Matchers{}
 
-	allowList, errors = m.rebuildThresholdsMetric(allowList, thresholdMetricNames, alertMetrics, errors)
-
 	for key, val := range m.staticAllowList {
 		m.allowList[key] = make([]matcher.Matchers, len(val))
 
@@ -1229,6 +1231,14 @@ func (m *metricFilter) RebuildDynamicLists(scrapper dynamicScrapper, services []
 		addToList(m.denyList, val)
 	}
 
+	// Adding the threshold metrics needs to be done after the allowlist is filled with non threshold metrics
+	// because we need to check if the base metrics are allowed before allowing the status metrics.
+	allowList, errors = m.rebuildThresholdsMetric(thresholdMetricNames, alertMetrics, errors)
+
+	for _, val := range allowList {
+		addToList(m.allowList, val)
+	}
+
 	if len(errors) == 0 {
 		return nil
 	}
@@ -1236,7 +1246,9 @@ func (m *metricFilter) RebuildDynamicLists(scrapper dynamicScrapper, services []
 	return errors
 }
 
-func (m *metricFilter) rebuildThresholdsMetric(allowList map[string]matcher.Matchers, thresholdMetricNames []string, alertMetrics []string, errors types.MultiErrors) (map[string]matcher.Matchers, types.MultiErrors) {
+func (m *metricFilter) rebuildThresholdsMetric(thresholdMetricNames []string, alertMetrics []string, errors types.MultiErrors) (map[string]matcher.Matchers, types.MultiErrors) {
+	allowList := make(map[string]matcher.Matchers, len(thresholdMetricNames)+len(alertMetrics))
+
 	for _, val := range thresholdMetricNames {
 		newMetric, err := matcher.NormalizeMetric(val + "_status")
 		if err != nil {
@@ -1245,7 +1257,13 @@ func (m *metricFilter) rebuildThresholdsMetric(allowList map[string]matcher.Matc
 			continue
 		}
 
-		allowList[val+"_status"] = newMetric
+		// Check if the base metric is allowed.
+		baseMetric := map[string]string{types.LabelName: val}
+		if m.isAllowedAndNotDeniedNoLock(baseMetric) {
+			allowList[val+"_status"] = newMetric
+		} else {
+			logger.V(1).Printf("Denied status metric for %s", val)
+		}
 	}
 
 	for _, val := range alertMetrics {
