@@ -252,6 +252,8 @@ func (target configTarget) CollectWithContext(ctx context.Context, ch chan<- pro
 					// is a zero time.Time, which is then converted to a unix timestamp and to a float64.
 					tlsSuccess = mf.GetMetric()[0].GetGauge().GetValue() != float64(time.Time{}.Unix())
 				}
+
+				break
 			}
 		}
 

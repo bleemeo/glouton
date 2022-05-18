@@ -42,9 +42,7 @@ func getTLSVersion(state *tls.ConnectionState) string
 // We had to modify this function to fill the verified chains of the TLS connection state
 // by ourselves because it's empty when we set insecure_skip_verify to true.
 //
-// We also need to distinguish between more cases when the probe fails:
-// - Failed to establish the TCP connection,
-// - Failed the TLS handshake or time out.
+// We also added a way to distinguish TLS errors from TCP errors with the metric "probe_failed_due_to_tls_error".
 func ProbeTCP(ctx context.Context, target string, module config.Module, registry *prometheus.Registry, logger log.Logger) bool {
 	probeSSLEarliestCertExpiry := prometheus.NewGauge(prometheus.GaugeOpts{
 		Name: "probe_ssl_earliest_cert_expiry",
@@ -118,7 +116,9 @@ func ProbeTCP(ctx context.Context, target string, module config.Module, registry
 		registry.MustRegister(probeSSLEarliestCertExpiry, probeTLSVersion, probeSSLLastChainExpiryTimestampSeconds, probeSSLLastInformation)
 		probeSSLEarliestCertExpiry.Set(float64(getEarliestCertExpiry(&state).Unix()))
 		probeTLSVersion.WithLabelValues(getTLSVersion(&state)).Set(1)
-		probeSSLLastChainExpiryTimestampSeconds.Set(float64(getLastChainExpiry(getVerifiedChains(ctx, state)).Unix()))
+
+		verifiedChains := getVerifiedChains(ctx, state, module.TCP.TLSConfig)
+		probeSSLLastChainExpiryTimestampSeconds.Set(float64(getLastChainExpiry(verifiedChains).Unix()))
 		probeSSLLastInformation.WithLabelValues(getFingerprint(&state)).Set(1)
 	}
 
@@ -208,7 +208,9 @@ func ProbeTCP(ctx context.Context, target string, module config.Module, registry
 			registry.MustRegister(probeSSLEarliestCertExpiry, probeSSLLastChainExpiryTimestampSeconds)
 			probeSSLEarliestCertExpiry.Set(float64(getEarliestCertExpiry(&state).Unix()))
 			probeTLSVersion.WithLabelValues(getTLSVersion(&state)).Set(1)
-			probeSSLLastChainExpiryTimestampSeconds.Set(float64(getLastChainExpiry(getVerifiedChains(ctx, state)).Unix()))
+
+			verifiedChains := getVerifiedChains(ctx, state, module.TCP.TLSConfig)
+			probeSSLLastChainExpiryTimestampSeconds.Set(float64(getLastChainExpiry(verifiedChains).Unix()))
 			probeSSLLastInformation.WithLabelValues(getFingerprint(&state)).Set(1)
 		}
 	}
@@ -216,19 +218,26 @@ func ProbeTCP(ctx context.Context, target string, module config.Module, registry
 	return true
 }
 
-func getVerifiedChains(ctx context.Context, state tls.ConnectionState) [][]*x509.Certificate {
-	var rootCAS *x509.CertPool
+func getVerifiedChains(ctx context.Context, state tls.ConnectionState, tlsConfig pconfig.TLSConfig) [][]*x509.Certificate {
+	cfg, err := pconfig.NewTLSConfig(&tlsConfig)
+	if err != nil {
+		logger.V(2).Printf("config.NewTLSConfig failed: %v", err)
+
+		return nil
+	}
 
 	testInjectCARoot, _ := ctx.Value(contextKeyTestInjectCARoot).(*x509.Certificate)
 	if testInjectCARoot != nil {
-		rootCAS = x509.NewCertPool()
-		rootCAS.AddCert(testInjectCARoot)
+		if cfg.RootCAs == nil {
+			cfg.RootCAs = x509.NewCertPool()
+		}
+
+		cfg.RootCAs.AddCert(testInjectCARoot)
 	}
 
 	now, _ := ctx.Value(contextKeyNowFunc).(func() time.Time)
-
 	opts := x509.VerifyOptions{
-		Roots:         rootCAS,
+		Roots:         cfg.RootCAs,
 		CurrentTime:   now(),
 		DNSName:       state.ServerName,
 		Intermediates: x509.NewCertPool(),
