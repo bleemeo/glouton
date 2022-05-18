@@ -3,6 +3,7 @@ package registry
 import (
 	"context"
 	"glouton/prometheus/model"
+	"sort"
 	"sync"
 	"time"
 
@@ -71,6 +72,10 @@ func (g *appenderGatherer) GatherWithState(ctx context.Context, state GatherStat
 			mfs = append(mfs, mf)
 		}
 	}
+
+	sort.Slice(mfs, func(i, j int) bool {
+		return mfs[i].GetName() < mfs[j].GetName()
+	})
 
 	return mfs, g.lastErr
 }

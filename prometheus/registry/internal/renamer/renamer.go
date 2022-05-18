@@ -1,6 +1,7 @@
 package renamer
 
 import (
+	"glouton/prometheus/model"
 	"glouton/types"
 	"sort"
 
@@ -104,7 +105,7 @@ func (r *Renamer) RenameMFS(mfs []*dto.MetricFamily) []*dto.MetricFamily {
 
 					nameToIndex[name] = idx
 				} else {
-					m = fixType(m, mfs[idx].GetType())
+					m = model.FixType(m, mfs[idx].GetType())
 				}
 
 				mfs[idx].Metric = append(mfs[idx].Metric, m)
@@ -250,61 +251,4 @@ func (r Rule) renameMetric(metric *dto.Metric, name string) (*dto.Metric, string
 	})
 
 	return metric, name, true
-}
-
-func fixType(m *dto.Metric, wantType dto.MetricType) *dto.Metric {
-	var (
-		value   *float64
-		gotType dto.MetricType
-	)
-
-	switch {
-	case m.Counter != nil:
-		value = m.Counter.Value
-		gotType = dto.MetricType_COUNTER
-	case m.Gauge != nil:
-		value = m.Gauge.Value
-		gotType = dto.MetricType_GAUGE
-	case m.Histogram != nil:
-		value = m.Histogram.SampleSum
-		gotType = dto.MetricType_HISTOGRAM
-	case m.Summary != nil:
-		value = m.Summary.SampleSum
-		gotType = dto.MetricType_SUMMARY
-	case m.Untyped != nil:
-		value = m.Counter.Value
-		gotType = dto.MetricType_UNTYPED
-	}
-
-	if gotType == wantType {
-		return m
-	}
-
-	switch wantType {
-	case dto.MetricType_COUNTER:
-		m.Counter = &dto.Counter{Value: value}
-	case dto.MetricType_GAUGE:
-		m.Gauge = &dto.Gauge{Value: value}
-	case dto.MetricType_HISTOGRAM:
-		m.Histogram = &dto.Histogram{SampleCount: proto.Uint64(1), SampleSum: value}
-	case dto.MetricType_SUMMARY:
-		m.Summary = &dto.Summary{SampleCount: proto.Uint64(1), SampleSum: value}
-	case dto.MetricType_UNTYPED:
-		m.Untyped = &dto.Untyped{Value: value}
-	}
-
-	switch gotType {
-	case dto.MetricType_COUNTER:
-		m.Counter = nil
-	case dto.MetricType_GAUGE:
-		m.Gauge = nil
-	case dto.MetricType_HISTOGRAM:
-		m.Histogram = nil
-	case dto.MetricType_SUMMARY:
-		m.Summary = nil
-	case dto.MetricType_UNTYPED:
-		m.Untyped = nil
-	}
-
-	return m
 }

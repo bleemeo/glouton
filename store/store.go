@@ -111,7 +111,7 @@ func (s *Store) DiagnosticArchive(ctx context.Context, archive types.ArchiveWrit
 // Run will run the store until context is cancelled.
 func (s *Store) Run(ctx context.Context) error {
 	for {
-		s.run(s.nowFunc())
+		s.RunOnce()
 
 		select {
 		case <-time.After(300 * time.Second):
@@ -119,6 +119,11 @@ func (s *Store) Run(ctx context.Context) error {
 			return nil
 		}
 	}
+}
+
+// RunOnce runs the store once to remove old points and metrics.
+func (s *Store) RunOnce() {
+	s.run(s.nowFunc())
 }
 
 // AddNotifiee add a callback that will be notified of all points received
@@ -409,7 +414,7 @@ func (s *Store) PushPoints(_ context.Context, points []types.MetricPoint) {
 // which does purge of older metrics.
 func (s *Store) InternalSetNowAndRunOnce(ctx context.Context, nowFunc func() time.Time) {
 	s.nowFunc = nowFunc
-	s.run(s.nowFunc())
+	s.RunOnce()
 }
 
 type store interface {

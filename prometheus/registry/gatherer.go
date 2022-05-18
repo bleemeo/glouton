@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"glouton/logger"
+	"glouton/prometheus/model"
 	"glouton/prometheus/registry/internal/ruler"
 	"strings"
 	"time"
@@ -255,7 +256,20 @@ func mergeMFS(mfs []*dto.MetricFamily) ([]*dto.MetricFamily, error) {
 		existingMF, exists := metricFamiliesByName[mf.GetName()]
 
 		if exists {
-			if existingMF.GetType() != mf.GetType() {
+			switch {
+			case existingMF.GetType() == mf.GetType():
+				// Nothing to do.
+			case existingMF.GetType() == dto.MetricType_UNTYPED:
+				existingMF.Type = mf.Type
+				for i, metric := range existingMF.GetMetric() {
+					existingMF.Metric[i] = model.FixType(metric, *mf.GetType().Enum())
+				}
+			case mf.GetType() == dto.MetricType_UNTYPED:
+				mf.Type = existingMF.Type
+				for i, metric := range mf.GetMetric() {
+					mf.Metric[i] = model.FixType(metric, *existingMF.GetType().Enum())
+				}
+			case existingMF.GetType() != mf.GetType():
 				errs = append(errs, fmt.Errorf(
 					"%w: %s has type %s but should have %s", errIncorrectType,
 					mf.GetName(), mf.GetType(), existingMF.GetType(),

@@ -713,7 +713,7 @@ func TestStore_run(t *testing.T) {
 				}
 
 				if diff := cmp.Diff(want.points, got); diff != "" {
-					t.Errorf("Points of %v missmatch: (-want +got):\n%s", result[0].Labels(), diff)
+					t.Errorf("Points of %v mismatch: (-want +got):\n%s", result[0].Labels(), diff)
 				}
 			}
 
