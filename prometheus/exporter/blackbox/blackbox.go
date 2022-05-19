@@ -24,7 +24,6 @@ import (
 	"fmt"
 	"glouton/logger"
 	"glouton/prometheus/registry"
-	"glouton/types"
 	"net"
 	"net/http/httptrace"
 	"net/url"
@@ -489,19 +488,10 @@ func (m *RegisterManager) updateRegistrations(ctx context.Context) error {
 			// The API task to compute quorum of probes starts at the beginning of every minute,
 			// if we run the probe too late in the minute (e.g. 8h20m55s), the new points may
 			// not be received by the API on the next quorum (e.g. 8h21m00s). This means the API
-			// could use points from the last run (e.g. 8h19m55s), which can be up to 2 minutes old.
+			// could use points from the last run (e.g. 8h15m55s), which are more than 5 minutes old.
 			// To avoid this problem, we don't run the probes on the last 15 seconds of every minute.
-			var initialDelay time.Duration
-
-			offset := time.Now().Second()
-			if offset >= 45 {
-				initialDelay = time.Duration(60-offset) * time.Second
-
-				logger.V(2).Printf(
-					"Probe %s: setting an initial delay of %v",
-					collectorFromConfig.Labels[types.LabelMetaProbeTarget],
-					initialDelay,
-				)
+			if hash >= 45e9 {
+				hash -= 15e9
 			}
 
 			// this weird "dance" where we create a registry and add it to the registererGatherer
@@ -511,11 +501,10 @@ func (m *RegisterManager) updateRegistrations(ctx context.Context) error {
 			id, err := m.registry.RegisterGatherer(
 				ctx,
 				registry.RegistrationOption{
-					Description:  "blackbox for " + collectorFromConfig.Collector.URL,
-					JitterSeed:   hash,
-					Interval:     collectorFromConfig.Collector.RefreshRate,
-					ExtraLabels:  collectorFromConfig.Labels,
-					InitialDelay: initialDelay,
+					Description: "blackbox for " + collectorFromConfig.Collector.URL,
+					JitterSeed:  hash,
+					Interval:    collectorFromConfig.Collector.RefreshRate,
+					ExtraLabels: collectorFromConfig.Labels,
 				},
 				g,
 			)
