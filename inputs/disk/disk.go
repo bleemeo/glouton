@@ -45,7 +45,9 @@ func New(mountPoint string, blacklist []string) (i telegraf.Input, err error) {
 	if ok {
 		diskInput, _ := input().(*disk.DiskStats)
 		diskInput.IgnoreFS = []string{
-			"tmpfs", "devtmpfs", "devfs", "overlay", "aufs", "squashfs",
+			"autofs", "binfmt_misc", "bpf", "cgroup", "cgroup2", "configfs", "debugfs", "devpts", "devtmpfs",
+			"fusectl", "hugetlbfs", "iso9660", "mqueue", "nsfs", "overlay", "proc", "procfs", "pstore", "rpc_pipefs",
+			"securityfs", "selinuxfs", "squashfs", "sysfs", "sysfs", "tracefs", "tmpfs", "devfs", "aufs", "efivarfs",
 		}
 
 		diskDeduplicateInput := deduplicator{
