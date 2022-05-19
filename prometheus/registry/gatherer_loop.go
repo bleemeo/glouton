@@ -16,7 +16,12 @@ type scrapeLoop struct {
 	interval time.Duration
 }
 
-func startScrapeLoop(ctx context.Context, interval time.Duration, timeout time.Duration, jitterSeed uint64, callback func(ctx context.Context, t0 time.Time)) *scrapeLoop {
+func startScrapeLoop(
+	ctx context.Context,
+	interval, timeout, initialDelay time.Duration,
+	jitterSeed uint64,
+	callback func(ctx context.Context, t0 time.Time),
+) *scrapeLoop {
 	ctx, cancel := context.WithCancel(ctx)
 
 	sl := &scrapeLoop{
@@ -26,13 +31,21 @@ func startScrapeLoop(ctx context.Context, interval time.Duration, timeout time.D
 		stopped:  make(chan struct{}),
 	}
 
-	go sl.run(ctx, interval, timeout, jitterSeed)
+	go sl.run(ctx, interval, timeout, initialDelay, jitterSeed)
 
 	return sl
 }
 
-func (sl *scrapeLoop) run(ctx context.Context, interval time.Duration, timeout time.Duration, jitterSeed uint64) {
+func (sl *scrapeLoop) run(
+	ctx context.Context,
+	interval, timeout, initialDelay time.Duration,
+	jitterSeed uint64,
+) {
 	defer close(sl.stopped)
+
+	if initialDelay != 0 {
+		time.Sleep(initialDelay)
+	}
 
 	alignedScrapeTime := sl.offset(interval, jitterSeed).Round(0)
 

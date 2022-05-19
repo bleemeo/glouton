@@ -67,7 +67,7 @@ func Test_startScrapeLoop(t *testing.T) {
 				l.Unlock()
 			}
 
-			loop := startScrapeLoop(ctx, tt.interval, tt.interval, 0, callback)
+			loop := startScrapeLoop(ctx, tt.interval, tt.interval, 0, 0, callback)
 
 			<-deadlineCtx.Done()
 

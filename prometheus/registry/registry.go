@@ -142,6 +142,7 @@ type RegistrationOption struct {
 	Interval     time.Duration
 	MinInterval  time.Duration
 	Timeout      time.Duration
+	InitialDelay time.Duration
 	StopCallback func()
 	// ExtraLabels are labels added. If a labels already exists, extraLabels take precedence.
 	ExtraLabels map[string]string
@@ -747,6 +748,7 @@ func (r *Registry) restartScrapeLoop(ctx context.Context, reg *registration) {
 		ctx,
 		interval,
 		timeout,
+		reg.option.InitialDelay,
 		reg.option.JitterSeed,
 		func(ctx context.Context, t0 time.Time) {
 			r.scrapeFromLoop(ctx, t0, reg)
