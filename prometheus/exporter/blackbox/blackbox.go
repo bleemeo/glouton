@@ -490,7 +490,7 @@ func (m *RegisterManager) updateRegistrations(ctx context.Context) error {
 			// not be received by the API on the next quorum (e.g. 8h21m00s). This means the API
 			// could use points from the last run (e.g. 8h15m55s), which are more than 5 minutes old.
 			// To avoid this problem, we don't run the probes on the last 15 seconds of every minute.
-			if hash >= 45e9 {
+			if hash%60e9 >= 45e9 {
 				hash -= 15e9
 			}
 
