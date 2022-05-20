@@ -51,6 +51,8 @@ const (
 	ProcessStatusUnknown     ProcessStatus = "?"
 )
 
+var errNotAvailable = errors.New("feature not available on this system")
+
 // ProcessProvider provider information about processes.
 type ProcessProvider struct {
 	l sync.Mutex
@@ -338,9 +340,9 @@ func (pp *ProcessProvider) updateProcesses(ctx context.Context, now time.Time, m
 			}
 
 			cgroupData, err := pp.ps.CGroupFromPID(p.PID)
-			if err != nil {
+			if err != nil && !errors.Is(err, errNotAvailable) {
 				logger.V(2).Printf("No cgroup data for process %d (%s): can't read cgroup data: %v", p.PID, p.Name, err)
-			} else {
+			} else if err == nil {
 				pid2Cgroup[p.PID] = cgroupData
 			}
 
@@ -370,7 +372,9 @@ func (pp *ProcessProvider) updateProcesses(ctx context.Context, now time.Time, m
 					if parentCGroupData == "" {
 						parentCGroupData, err = pp.ps.CGroupFromPID(parent.PID)
 						if err != nil {
-							logger.V(2).Printf("No cgroup data for parent of process %d (%s): can't read cgroup data: %v", p.PID, p.Name, err)
+							if !errors.Is(err, errNotAvailable) {
+								logger.V(2).Printf("No cgroup data for parent of process %d (%s): can't read cgroup data: %v", p.PID, p.Name, err)
+							}
 
 							parentCGroupData = ""
 						} else {
@@ -714,6 +718,10 @@ type psListerWrapper struct {
 }
 
 func (p psListerWrapper) CGroupFromPID(pid int) (string, error) {
+	if !version.IsLinux() {
+		return "", errNotAvailable
+	}
+
 	path := filepath.Join("/proc", fmt.Sprintf("%d", pid), "cgroup")
 
 	data, err := ioutil.ReadFile(path)
