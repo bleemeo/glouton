@@ -209,7 +209,7 @@ func defaultConfig() map[string]interface{} {
 		"container.filter.deny_list":        []string{},
 		"df.host_mount_point":               "",
 		"df.ignore_fs_type": []string{
-			"^(autofs|binfmt_misc|bpf|cgroup2?|configfs|debugfs|devpts|devtmpfs|fusectl|hugetlbfs|iso9660|mqueue|nsfs|overlay|proc|procfs|pstore|rpc_pipefs|securityfs|selinuxfs|squashfs|sysfs|tracefs)$",
+			"^(autofs|binfmt_misc|bpf|cgroup2?|configfs|debugfs|devpts|devtmpfs|fusectl|hugetlbfs|iso9660|mqueue|nsfs|overlay|proc|procfs|pstore|rpc_pipefs|securityfs|selinuxfs|squashfs|sysfs|tracefs|devfs|aufs)$",
 			"tmpfs",
 			"efivarfs",
 			".*gvfs.*",
@@ -225,6 +225,7 @@ func defaultConfig() map[string]interface{} {
 			"/var/lib/docker/plugins",
 			"/var/lib/docker/containers",
 			"/snap",
+			"/run/snapd",
 			"/run/docker/runtime-runc",
 		},
 		"disk_ignore": []string{
