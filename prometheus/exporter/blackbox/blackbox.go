@@ -485,6 +485,15 @@ func (m *RegisterManager) updateRegistrations(ctx context.Context) error {
 				hash = uint64(creationDate.UnixNano()) % uint64(refreshRate)
 			}
 
+			// The API task to compute quorum of probes starts at the beginning of every minute,
+			// if we run the probe too late in the minute (e.g. 8h20m55s), the new points may
+			// not be received by the API on the next quorum (e.g. 8h21m00s). This means the API
+			// could use points from the last run (e.g. 8h15m55s), which are more than 5 minutes old.
+			// To avoid this problem, we don't run the probes on the last 15 seconds of every minute.
+			if hash%60e9 >= 45e9 {
+				hash -= 15e9
+			}
+
 			// this weird "dance" where we create a registry and add it to the registererGatherer
 			// for each probe is the product of our unability to expose a "__meta_something"
 			// label while doing Collect(). We end up adding the meta labels statically at
