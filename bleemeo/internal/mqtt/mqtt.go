@@ -394,6 +394,11 @@ func (c *Client) HealthCheck() bool {
 func (c *Client) setupMQTT(ctx context.Context) (paho.Client, error) {
 	pahoOptions := paho.NewClientOptions()
 
+	// Allow for slightly larger timeout value, just avoid disconnection
+	// with bad network connection.
+	pahoOptions.SetPingTimeout(20 * time.Second)
+	pahoOptions.SetKeepAlive(45 * time.Second)
+
 	willPayload, _ := json.Marshal(disconnectCause{"disconnect-will"}) //nolint:errchkjson // False positive.
 
 	pahoOptions.SetBinaryWill(
