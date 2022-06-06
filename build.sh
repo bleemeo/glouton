@@ -48,7 +48,7 @@ if [ "${SKIP_JS}" != "1" -a "${ONLY_GO}" != "1" ]; then
       sh -c "(npm install && npm run deploy); result=\$?; chown -R $USER_UID dist ../api/static/assets/js/ ../api/static/assets/css/; exit \$result"
 fi
 
-GORELEASER_VERSION="v1.6.3"
+GORELEASER_VERSION="v1.9.2"
 
 if [ -z "${GLOUTON_VERSION}" ]; then
    GLOUTON_VERSION=$(date -u +%y.%m.%d.%H%M%S)
