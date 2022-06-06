@@ -1541,9 +1541,7 @@ func runTest(t *testing.T, test testCase, isSSL bool, monitorID, agentID, agentF
 	// To avoid conflicts between tests that use the same test case (HTTPS and SSL), we need
 	// to make a copy of the absentPoints map and the wantPoints labels map before modifying them.
 	absentPoints := make([]map[string]string, len(test.absentPoints))
-	for k, v := range test.absentPoints {
-		absentPoints[k] = v
-	}
+	copy(absentPoints, test.absentPoints)
 
 	for _, lbls := range absentPoints {
 		if _, ok := lbls[types.LabelInstance]; ok {

@@ -60,6 +60,7 @@ import (
 	"log"
 	"math"
 	"math/rand"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -1112,7 +1113,7 @@ func (a *agent) run(ctx context.Context) { //nolint:maintidx
 
 	if a.oldConfig.Bool("influxdb.enable") {
 		server := influxdb.New(
-			fmt.Sprintf("http://%s:%s", a.oldConfig.String("influxdb.host"), a.oldConfig.String("influxdb.port")),
+			fmt.Sprintf("http://%s", net.JoinHostPort(a.oldConfig.String("influxdb.host"), a.oldConfig.String("influxdb.port"))),
 			a.oldConfig.String("influxdb.db_name"),
 			a.store,
 			a.oldConfig.StringMap("influxdb.tags"),

@@ -46,6 +46,7 @@ import (
 	"glouton/inputs/zookeeper"
 	"glouton/logger"
 	"glouton/types"
+	"net"
 	"os"
 	"runtime"
 	"strconv"
@@ -275,7 +276,7 @@ func (d *Discovery) createInput(ctx context.Context, service Service) error {
 	switch service.ServiceType { //nolint:exhaustive
 	case ApacheService:
 		if ip, port := service.AddressPort(); ip != "" {
-			statusURL := fmt.Sprintf("http://%s:%d/server-status?auto", ip, port)
+			statusURL := fmt.Sprintf("http://%s/server-status?auto", net.JoinHostPort(ip, strconv.Itoa(port)))
 
 			if port == 80 {
 				statusURL = fmt.Sprintf("http://%s/server-status?auto", ip)
@@ -285,7 +286,7 @@ func (d *Discovery) createInput(ctx context.Context, service Service) error {
 		}
 	case ElasticSearchService:
 		if ip, port := service.AddressPort(); ip != "" {
-			input, err = elasticsearch.New(fmt.Sprintf("http://%s:%d", ip, port))
+			input, err = elasticsearch.New(fmt.Sprintf("http://%s", net.JoinHostPort(ip, strconv.Itoa(port))))
 		}
 	case HAProxyService:
 		if service.ExtraAttributes["stats_url"] != "" {
@@ -297,13 +298,13 @@ func (d *Discovery) createInput(ctx context.Context, service Service) error {
 		}
 	case MongoDBService:
 		if ip, port := service.AddressPort(); ip != "" {
-			input, err = mongodb.New(fmt.Sprintf("mongodb://%s:%d", ip, port))
+			input, err = mongodb.New(fmt.Sprintf("mongodb://%s", net.JoinHostPort(ip, strconv.Itoa(port))))
 		}
 	case MySQLService:
 		input, err = createMySQLInput(service)
 	case NginxService:
 		if ip, port := service.AddressPort(); ip != "" {
-			input, err = nginx.New(fmt.Sprintf("http://%s:%d/nginx_status", ip, port))
+			input, err = nginx.New(fmt.Sprintf("http://%s/nginx_status", net.JoinHostPort(ip, strconv.Itoa(port))))
 		}
 	case PHPFPMService:
 		statsURL := urlForPHPFPM(service)
@@ -345,12 +346,12 @@ func (d *Discovery) createInput(ctx context.Context, service Service) error {
 				password = "guest"
 			}
 
-			url := fmt.Sprintf("http://%s:%d", ip, mgmtPort)
+			url := fmt.Sprintf("http://%s", net.JoinHostPort(ip, strconv.Itoa(mgmtPort)))
 			input, err = rabbitmq.New(url, username, password)
 		}
 	case RedisService:
 		if ip, port := service.AddressPort(); ip != "" {
-			input, err = redis.New(fmt.Sprintf("tcp://%s:%d", ip, port), service.ExtraAttributes["password"])
+			input, err = redis.New(fmt.Sprintf("tcp://%s", net.JoinHostPort(ip, strconv.Itoa(port))), service.ExtraAttributes["password"])
 		}
 	case ZookeeperService:
 		if ip, port := service.AddressPort(); ip != "" {
@@ -449,7 +450,7 @@ func urlForPHPFPM(service Service) string {
 	}
 
 	if service.ExtraAttributes["port"] != "" && service.IPAddress != "" {
-		return fmt.Sprintf("fcgi://%s:%s/status", service.IPAddress, service.ExtraAttributes["port"])
+		return fmt.Sprintf("fcgi://%s/status", net.JoinHostPort(service.IPAddress, service.ExtraAttributes["port"]))
 	}
 
 	for _, v := range service.ListenAddresses {
