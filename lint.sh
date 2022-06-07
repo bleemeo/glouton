@@ -4,7 +4,7 @@ set -e
 
 USER_UID=$(id -u)
 
-LINTER_VERSION=v1.44.2
+LINTER_VERSION=v1.46.2
 
 
 if docker volume ls | grep -q glouton-buildcache; then

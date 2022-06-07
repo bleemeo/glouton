@@ -25,6 +25,7 @@ import (
 	"glouton/prometheus/registry"
 	"glouton/prometheus/scrapper"
 	"glouton/types"
+	"net"
 	"net/url"
 	"reflect"
 	"strconv"
@@ -110,7 +111,7 @@ func urlFromLabels(labels map[string]string, address string) string {
 		path = "/" + path
 	}
 
-	return fmt.Sprintf("http://%s:%d%s", address, port, path)
+	return fmt.Sprintf("http://%s%s", net.JoinHostPort(address, strconv.FormatInt(port, 10)), path)
 }
 
 // DynamicScrapper is a Prometheus scrapper that will update its target based on ListExporters.

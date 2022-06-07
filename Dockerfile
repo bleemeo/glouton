@@ -8,7 +8,7 @@ FROM --platform=$BUILDPLATFORM busybox as build
 
 ARG TARGETARCH
 
-ADD dist/glouton_linux_amd64/glouton /glouton.amd64
+ADD dist/glouton_linux_amd64_v1/glouton /glouton.amd64
 ADD dist/glouton_linux_arm64/glouton /glouton.arm64
 ADD dist/glouton_linux_arm_6/glouton /glouton.arm6
 

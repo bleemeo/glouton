@@ -86,7 +86,7 @@ old_agent_not_present:
   #### INSTALLATION ####
 
   ${If} ${RunningX64}
-    File ../../dist/${PRODUCT_NAME}_windows_amd64/${PRODUCT_NAME}.exe
+    File ../../dist/${PRODUCT_NAME}_windows_amd64_v1/${PRODUCT_NAME}.exe
   ${Else}
     File ../../dist/${PRODUCT_NAME}_windows_386/${PRODUCT_NAME}.exe
   ${EndIf}

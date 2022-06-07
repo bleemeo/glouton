@@ -202,9 +202,8 @@ func (c *Cache) AgentConfigs() []bleemeoTypes.AgentConfig {
 	defer c.l.Unlock()
 
 	result := make([]bleemeoTypes.AgentConfig, len(c.data.AgentConfigs))
-	for i, v := range c.data.AgentConfigs {
-		result[i] = v
-	}
+
+	copy(result, c.data.AgentConfigs)
 
 	return result
 }
@@ -215,9 +214,7 @@ func (c *Cache) AccountConfigs() []bleemeoTypes.AccountConfig {
 	defer c.l.Unlock()
 
 	result := make([]bleemeoTypes.AccountConfig, len(c.data.AccountConfigs))
-	for i, v := range c.data.AccountConfigs {
-		result[i] = v
-	}
+	copy(result, c.data.AccountConfigs)
 
 	return result
 }

@@ -48,7 +48,7 @@ if [ "${SKIP_JS}" != "1" -a "${ONLY_GO}" != "1" ]; then
       sh -c "(npm install && npm run deploy); result=\$?; chown -R $USER_UID dist ../api/static/assets/js/ ../api/static/assets/css/; exit \$result"
 fi
 
-GORELEASER_VERSION="v1.6.3"
+GORELEASER_VERSION="v1.9.2"
 
 if [ -z "${GLOUTON_VERSION}" ]; then
    GLOUTON_VERSION=$(date -u +%y.%m.%d.%H%M%S)
@@ -79,7 +79,7 @@ else
       -e GLOUTON_VERSION \
       -e GORELEASER_PREVIOUS_TAG=0.1.0 \
       -e GORELEASER_CURRENT_TAG=0.1.1 \
-      goreleaser/goreleaser:${GORELEASER_VERSION} sh -c "(goreleaser check && go generate ./... && go test ./... && goreleaser --rm-dist --snapshot --parallelism 2); result=\$?;chown -R $USER_UID dist coverage.html coverage.out api/models_gen.go; exit \$result"
+      goreleaser/goreleaser:${GORELEASER_VERSION} sh -c "(git config --global --add safe.directory /src && goreleaser check && go generate ./... && go test ./... && goreleaser --rm-dist --snapshot --parallelism 2); result=\$?;chown -R $USER_UID dist coverage.html coverage.out api/models_gen.go; exit \$result"
 
    echo $GLOUTON_VERSION > dist/VERSION
 
