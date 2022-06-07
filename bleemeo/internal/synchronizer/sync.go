@@ -677,7 +677,7 @@ func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) error {
 
 	for _, step := range syncStep {
 		if ctx.Err() != nil {
-			break
+			return ctx.Err()
 		}
 
 		until, reason := s.getDisabledUntil()
