@@ -613,6 +613,13 @@ func (a *agent) run(ctx context.Context) { //nolint:maintidx
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
+	// The signal handler needs to be set up very early to catch the SIGHUP signal
+	// received from apt post-update hook.
+	signalChan := make(chan os.Signal, 1)
+	signal.Notify(signalChan, os.Interrupt, syscall.SIGTERM, syscall.SIGINT, syscall.SIGHUP)
+
+	go a.handleSignals(ctx, signalChan, cancel)
+
 	a.cancel = cancel
 	a.metricResolution = 10 * time.Second
 	a.hostRootPath = "/"
@@ -1181,17 +1188,12 @@ func (a *agent) run(ctx context.Context) { //nolint:maintidx
 	a.factProvider.SetFact("statsd_enable", a.oldConfig.String("telegraf.statsd.enable"))
 	a.factProvider.SetFact("metrics_format", a.metricFormat.String())
 
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt, syscall.SIGTERM, syscall.SIGINT, syscall.SIGHUP)
-
-	go a.handleSignals(ctx, c, cancel)
-
 	a.startTasks(tasks)
 
 	<-ctx.Done()
 	logger.V(2).Printf("Stopping agent...")
-	signal.Stop(c)
-	close(c)
+	signal.Stop(signalChan)
+	close(signalChan)
 	a.taskRegistry.Close()
 	a.discovery.Close()
 	a.collector.Close()
@@ -1221,27 +1223,10 @@ func (a *agent) handleSignals(ctx context.Context, c chan os.Signal, cancel cont
 				systemUpdateMetricPending = true
 
 				go func() {
-					t0 := time.Now()
-
-					for n := 0; n < 10; n++ {
-						time.Sleep(time.Second)
-
-						updatedAt := facts.PendingSystemUpdateFreshness(
-							ctx,
-							a.oldConfig.String("container.type") != "",
-							a.hostRootPath,
-						)
-						if updatedAt.IsZero() || updatedAt.After(t0) {
-							break
-						}
-					}
-
-					a.FireTrigger(false, false, true, false)
+					a.waitAndRefreshPendingUpdates(ctx)
 
 					l.Lock()
-
 					systemUpdateMetricPending = false
-
 					l.Unlock()
 				}()
 			}
@@ -1250,6 +1235,29 @@ func (a *agent) handleSignals(ctx context.Context, c chan os.Signal, cancel cont
 			a.FireTrigger(true, true, false, true)
 		}
 	}
+}
+
+// Wait for the pending system updates to be refreshed and update the system metrics.
+func (a *agent) waitAndRefreshPendingUpdates(ctx context.Context) {
+	const maxWaitPendingUpdates = 90 * time.Second
+
+	t0 := time.Now()
+
+	// Wait for the pending updates file to be updated.
+	for ctx.Err() == nil && time.Since(t0) < maxWaitPendingUpdates {
+		time.Sleep(time.Second)
+
+		updatedAt := facts.PendingSystemUpdateFreshness(
+			ctx,
+			a.oldConfig.String("container.type") != "",
+			a.hostRootPath,
+		)
+		if updatedAt.IsZero() || updatedAt.After(t0) {
+			break
+		}
+	}
+
+	a.FireTrigger(false, false, true, false)
 }
 
 func (a *agent) buildCollectorsConfig() (conf inputs.CollectorConfig, err error) {
@@ -1607,13 +1615,7 @@ func (a *agent) doesTaskCrashed(ctx context.Context, name string) (bool, error) 
 }
 
 func (a *agent) hourlyDiscovery(ctx context.Context) error {
-	select {
-	case <-ctx.Done():
-		return nil
-	case <-time.After(15 * time.Second):
-	}
-
-	a.FireTrigger(false, false, true, false)
+	a.waitAndRefreshPendingUpdates(ctx)
 
 	for {
 		select {
