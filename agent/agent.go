@@ -874,7 +874,7 @@ func (a *agent) run(ctx context.Context) { //nolint:maintidx
 	promExporter := a.gathererRegistry.Exporter(ctx)
 
 	api := &api.API{
-		DB:                 a.store,
+		DB:                 api.NewQueryable(a.store, a.BleemeoAgentID),
 		ContainerRuntime:   a.containerRuntime,
 		PsFact:             psFact,
 		FactProvider:       a.factProvider,
