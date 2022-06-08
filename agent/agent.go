@@ -63,7 +63,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"os/signal"
 	"path/filepath"
 	"reflect"
 	"regexp"
@@ -332,7 +331,7 @@ func (a *agent) setupLogger() {
 }
 
 // Run runs Glouton.
-func Run(ctx context.Context, reloadState ReloadState, configFiles []string, firstRun bool) {
+func Run(ctx context.Context, reloadState ReloadState, configFiles []string, signalChan chan os.Signal, firstRun bool) {
 	rand.Seed(time.Now().UnixNano())
 
 	agent := &agent{reloadState: reloadState}
@@ -344,7 +343,7 @@ func Run(ctx context.Context, reloadState ReloadState, configFiles []string, fir
 		return
 	}
 
-	agent.run(ctx)
+	agent.run(ctx, signalChan)
 }
 
 // BleemeoAccountID returns the Account UUID of Bleemeo
@@ -609,14 +608,9 @@ func (a *agent) updateThresholds(ctx context.Context, thresholds map[string]thre
 }
 
 // Run will start the agent. It will terminate when sigquit/sigterm/sigint is received.
-func (a *agent) run(ctx context.Context) { //nolint:maintidx
+func (a *agent) run(ctx context.Context, signalChan chan os.Signal) { //nolint:maintidx
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-
-	// The signal handler needs to be set up very early to catch the SIGHUP signal
-	// received from apt post-update hook.
-	signalChan := make(chan os.Signal, 1)
-	signal.Notify(signalChan, os.Interrupt, syscall.SIGTERM, syscall.SIGINT, syscall.SIGHUP)
 
 	go a.handleSignals(ctx, signalChan, cancel)
 
@@ -1192,47 +1186,50 @@ func (a *agent) run(ctx context.Context) { //nolint:maintidx
 
 	<-ctx.Done()
 	logger.V(2).Printf("Stopping agent...")
-	signal.Stop(signalChan)
-	close(signalChan)
 	a.taskRegistry.Close()
 	a.discovery.Close()
 	a.collector.Close()
 	logger.V(2).Printf("Agent stopped")
 }
 
-func (a *agent) handleSignals(ctx context.Context, c chan os.Signal, cancel context.CancelFunc) {
+func (a *agent) handleSignals(ctx context.Context, signalChan chan os.Signal, cancel context.CancelFunc) {
 	var (
 		l                         sync.Mutex
 		systemUpdateMetricPending bool
 	)
 
-	for s := range c {
-		if s == syscall.SIGTERM || s == syscall.SIGINT || s == os.Interrupt {
-			cancel()
+	for ctx.Err() == nil {
+		select {
+		case sig := <-signalChan:
+			if sig == syscall.SIGTERM || sig == syscall.SIGINT || sig == os.Interrupt {
+				cancel()
 
-			break
-		}
-
-		if s == syscall.SIGHUP {
-			if a.bleemeoConnector != nil {
-				a.bleemeoConnector.UpdateMonitors()
+				break
 			}
 
-			l.Lock()
-			if !systemUpdateMetricPending {
-				systemUpdateMetricPending = true
+			if sig == syscall.SIGHUP {
+				if a.bleemeoConnector != nil {
+					a.bleemeoConnector.UpdateMonitors()
+				}
 
-				go func() {
-					a.waitAndRefreshPendingUpdates(ctx)
+				l.Lock()
+				if !systemUpdateMetricPending {
+					systemUpdateMetricPending = true
 
-					l.Lock()
-					systemUpdateMetricPending = false
-					l.Unlock()
-				}()
+					go func() {
+						a.waitAndRefreshPendingUpdates(ctx)
+
+						l.Lock()
+						systemUpdateMetricPending = false
+						l.Unlock()
+					}()
+				}
+				l.Unlock()
+
+				a.FireTrigger(true, true, false, true)
 			}
-			l.Unlock()
-
-			a.FireTrigger(true, true, false, true)
+		case <-ctx.Done():
+			return
 		}
 	}
 }
