@@ -44,8 +44,8 @@ if [ "${SKIP_JS}" != "1" -a "${ONLY_GO}" != "1" ]; then
    mkdir -p api/static/assets/css/ api/static/assets/js/ webui/node_modules
    docker run --rm -e HOME=/go/pkg/node \
       -v $(pwd):/src --tmpfs /src/webui/node_modules:exec -w /src/webui ${NODE_MOUNT_CACHE} \
-      node:14 \
-      sh -c "(npm install && npm run deploy); result=\$?; chown -R $USER_UID dist ../api/static/assets/js/ ../api/static/assets/css/; exit \$result"
+      node:16 \
+      sh -c "(chown node -R /go/pkg/node && npm install --legacy-peer-deps && npm run deploy); result=\$?; chown -R $USER_UID dist ../api/static/assets/js/ ../api/static/assets/css/; exit \$result"
 fi
 
 GORELEASER_VERSION="v1.9.2"
