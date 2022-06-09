@@ -64,7 +64,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"os/signal"
 	"path/filepath"
 	"reflect"
 	"regexp"
@@ -333,7 +332,7 @@ func (a *agent) setupLogger() {
 }
 
 // Run runs Glouton.
-func Run(ctx context.Context, reloadState ReloadState, configFiles []string, firstRun bool) {
+func Run(ctx context.Context, reloadState ReloadState, configFiles []string, signalChan chan os.Signal, firstRun bool) {
 	rand.Seed(time.Now().UnixNano())
 
 	agent := &agent{reloadState: reloadState}
@@ -345,7 +344,7 @@ func Run(ctx context.Context, reloadState ReloadState, configFiles []string, fir
 		return
 	}
 
-	agent.run(ctx)
+	agent.run(ctx, signalChan)
 }
 
 // BleemeoAccountID returns the Account UUID of Bleemeo
@@ -610,9 +609,11 @@ func (a *agent) updateThresholds(ctx context.Context, thresholds map[string]thre
 }
 
 // Run will start the agent. It will terminate when sigquit/sigterm/sigint is received.
-func (a *agent) run(ctx context.Context) { //nolint:maintidx
+func (a *agent) run(ctx context.Context, signalChan chan os.Signal) { //nolint:maintidx
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
+
+	go a.handleSignals(ctx, signalChan, cancel)
 
 	a.cancel = cancel
 	a.metricResolution = 10 * time.Second
@@ -1182,75 +1183,79 @@ func (a *agent) run(ctx context.Context) { //nolint:maintidx
 	a.factProvider.SetFact("statsd_enable", a.oldConfig.String("telegraf.statsd.enable"))
 	a.factProvider.SetFact("metrics_format", a.metricFormat.String())
 
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt, syscall.SIGTERM, syscall.SIGINT, syscall.SIGHUP)
-
-	go a.handleSignals(ctx, c, cancel)
-
 	a.startTasks(tasks)
 
 	<-ctx.Done()
 	logger.V(2).Printf("Stopping agent...")
-	signal.Stop(c)
-	close(c)
 	a.taskRegistry.Close()
 	a.discovery.Close()
 	a.collector.Close()
 	logger.V(2).Printf("Agent stopped")
 }
 
-func (a *agent) handleSignals(ctx context.Context, c chan os.Signal, cancel context.CancelFunc) {
+func (a *agent) handleSignals(ctx context.Context, signalChan chan os.Signal, cancel context.CancelFunc) {
 	var (
 		l                         sync.Mutex
 		systemUpdateMetricPending bool
 	)
 
-	for s := range c {
-		if s == syscall.SIGTERM || s == syscall.SIGINT || s == os.Interrupt {
-			cancel()
+	for ctx.Err() == nil {
+		select {
+		case sig := <-signalChan:
+			if sig == syscall.SIGTERM || sig == syscall.SIGINT || sig == os.Interrupt {
+				cancel()
 
-			break
-		}
-
-		if s == syscall.SIGHUP {
-			if a.bleemeoConnector != nil {
-				a.bleemeoConnector.UpdateMonitors()
+				break
 			}
 
-			l.Lock()
-			if !systemUpdateMetricPending {
-				systemUpdateMetricPending = true
+			if sig == syscall.SIGHUP {
+				if a.bleemeoConnector != nil {
+					a.bleemeoConnector.UpdateMonitors()
+				}
 
-				go func() {
-					t0 := time.Now()
+				l.Lock()
+				if !systemUpdateMetricPending {
+					systemUpdateMetricPending = true
 
-					for n := 0; n < 10; n++ {
-						time.Sleep(time.Second)
+					go func() {
+						a.waitAndRefreshPendingUpdates(ctx)
 
-						updatedAt := facts.PendingSystemUpdateFreshness(
-							ctx,
-							a.oldConfig.String("container.type") != "",
-							a.hostRootPath,
-						)
-						if updatedAt.IsZero() || updatedAt.After(t0) {
-							break
-						}
-					}
+						l.Lock()
+						systemUpdateMetricPending = false
+						l.Unlock()
+					}()
+				}
+				l.Unlock()
 
-					a.FireTrigger(false, false, true, false)
-
-					l.Lock()
-
-					systemUpdateMetricPending = false
-
-					l.Unlock()
-				}()
+				a.FireTrigger(true, true, false, true)
 			}
-			l.Unlock()
-
-			a.FireTrigger(true, true, false, true)
+		case <-ctx.Done():
+			return
 		}
 	}
+}
+
+// Wait for the pending system updates to be refreshed and update the system metrics.
+func (a *agent) waitAndRefreshPendingUpdates(ctx context.Context) {
+	const maxWaitPendingUpdates = 90 * time.Second
+
+	t0 := time.Now()
+
+	// Wait for the pending updates file to be updated.
+	for ctx.Err() == nil && time.Since(t0) < maxWaitPendingUpdates {
+		time.Sleep(time.Second)
+
+		updatedAt := facts.PendingSystemUpdateFreshness(
+			ctx,
+			a.oldConfig.String("container.type") != "",
+			a.hostRootPath,
+		)
+		if updatedAt.IsZero() || updatedAt.After(t0) {
+			break
+		}
+	}
+
+	a.FireTrigger(false, false, true, false)
 }
 
 func (a *agent) buildCollectorsConfig() (conf inputs.CollectorConfig, err error) {
@@ -1608,13 +1613,7 @@ func (a *agent) doesTaskCrashed(ctx context.Context, name string) (bool, error) 
 }
 
 func (a *agent) hourlyDiscovery(ctx context.Context) error {
-	select {
-	case <-ctx.Done():
-		return nil
-	case <-time.After(15 * time.Second):
-	}
-
-	a.FireTrigger(false, false, true, false)
+	a.waitAndRefreshPendingUpdates(ctx)
 
 	for {
 		select {

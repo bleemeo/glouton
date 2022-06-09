@@ -11,9 +11,11 @@ import (
 	"glouton/logger"
 	"glouton/types"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"regexp"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
@@ -166,6 +168,11 @@ func StartReloadManager(configFilesFromFlag []string, reloadDisabled bool) {
 }
 
 func (a *agentReloader) run() {
+	// The signal handler needs to be set up very early to catch the SIGHUP signal
+	// received from apt post-update hook.
+	signalChan := make(chan os.Signal, 1)
+	signal.Notify(signalChan, os.Interrupt, syscall.SIGTERM, syscall.SIGINT, syscall.SIGHUP)
+
 	// Start watching config files.
 	ctxWatcher, cancelWatcher := context.WithCancel(context.Background())
 	defer cancelWatcher()
@@ -211,7 +218,7 @@ func (a *agentReloader) run() {
 
 			go func() {
 				defer wg.Done()
-				a.runAgent(ctx, first)
+				a.runAgent(ctx, signalChan, first)
 			}()
 
 			firstRun = false
@@ -225,6 +232,8 @@ func (a *agentReloader) run() {
 				cancel()
 				wg.Wait()
 
+				signal.Stop(signalChan)
+				close(signalChan)
 				a.reloadState.Close()
 
 				return
@@ -233,8 +242,8 @@ func (a *agentReloader) run() {
 	}
 }
 
-func (a *agentReloader) runAgent(ctx context.Context, firstRun bool) {
-	Run(ctx, a.reloadState, a.configFilesFromFlag, firstRun)
+func (a *agentReloader) runAgent(ctx context.Context, signalChan chan os.Signal, firstRun bool) {
+	Run(ctx, a.reloadState, a.configFilesFromFlag, signalChan, firstRun)
 
 	a.l.Lock()
 	a.agentIsRunning = false
