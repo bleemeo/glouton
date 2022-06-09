@@ -79,7 +79,7 @@ else
       -e GLOUTON_VERSION \
       -e GORELEASER_PREVIOUS_TAG=0.1.0 \
       -e GORELEASER_CURRENT_TAG=0.1.1 \
-      goreleaser/goreleaser:${GORELEASER_VERSION} sh -c "(git config --global --add safe.directory /src && goreleaser check && go generate ./... && go test ./... && goreleaser --rm-dist --snapshot --parallelism 2); result=\$?;chown -R $USER_UID dist coverage.html coverage.out api/models_gen.go; exit \$result"
+      goreleaser/goreleaser:${GORELEASER_VERSION} sh -c "(mkdir -p /go/pkg && git config --global --add safe.directory /src && goreleaser check && go generate ./... && go test ./... && goreleaser --rm-dist --snapshot --parallelism 2); result=\$?;chown -R $USER_UID dist coverage.html coverage.out api/models_gen.go; exit \$result"
 
    echo $GLOUTON_VERSION > dist/VERSION
 
