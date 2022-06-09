@@ -7,7 +7,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"glouton/store"
 	"math"
 	"net/http"
 	"os"
@@ -67,10 +66,10 @@ type PromQL struct {
 	queryEngine *promql.Engine
 }
 
-type apiFunc func(r *http.Request, st *store.Store) apiFuncResult
+type apiFunc func(r *http.Request, st storage.Queryable) apiFuncResult
 
 // Register the API's endpoints in the given router.
-func (p *PromQL) Register(st *store.Store) http.Handler {
+func (p *PromQL) Register(st storage.Queryable) http.Handler {
 	r := chi.NewRouter()
 
 	p.init()
@@ -192,7 +191,7 @@ func returnAPIError(err error) *apiError {
 	return &apiError{errorExec, err}
 }
 
-func (p *PromQL) queryRange(r *http.Request, st *store.Store) (result apiFuncResult) {
+func (p *PromQL) queryRange(r *http.Request, st storage.Queryable) (result apiFuncResult) {
 	start, err := parseTime(r.FormValue("start"))
 	if err != nil {
 		err = fmt.Errorf("invalid parameter 'start': %w", err)

@@ -25,7 +25,6 @@ import (
 	"glouton/facts"
 	"glouton/logger"
 	"glouton/prometheus/promql"
-	"glouton/store"
 	"glouton/threshold"
 	"glouton/types"
 	"html/template"
@@ -62,7 +61,7 @@ type API struct {
 	StaticCDNURL       string
 	LocalUIDisabled    bool
 	MetricFormat       types.MetricFormat
-	DB                 *store.Store
+	DB                 metricQueryable
 	ContainerRuntime   containerInterface
 	PsFact             *facts.ProcessProvider
 	FactProvider       *facts.FactProvider
