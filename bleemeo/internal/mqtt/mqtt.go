@@ -86,6 +86,7 @@ type Client struct {
 	lastRegisteredMetricsCount int
 	lastFailedPointsRetry      time.Time
 	encoder                    mqttEncoder
+	stats                      *mqttStats
 
 	l                   sync.Mutex
 	startedAt           time.Time
@@ -174,6 +175,7 @@ func New(option Option, first bool) *Client {
 	client := &Client{
 		option:          option,
 		mqttClient:      mqttClient,
+		stats:           newMQTTStats(),
 		pendingMessages: make(chan message, maxPendingMessages),
 	}
 
@@ -321,7 +323,14 @@ func (c *Client) DiagnosticArchive(ctx context.Context, archive types.ArchiveWri
 		}
 	}
 
-	file, err := archive.Create("bleemeo-mqtt-state.json")
+	file, err := archive.Create("bleemeo-mqtt-stats.txt")
+	if err != nil {
+		return err
+	}
+
+	fmt.Fprintf(file, "%s", c.stats)
+
+	file, err = archive.Create("bleemeo-mqtt-state.json")
 	if err != nil {
 		return err
 	}
@@ -875,6 +884,7 @@ func (c *Client) publishNoLock(topic string, payload []byte, retry bool) {
 
 	if c.mqttClient != nil {
 		msg.token = c.mqttClient.Publish(topic, 1, false, payload)
+		c.stats.messagePublished(msg.token, time.Now())
 	}
 
 	c.pendingMessages <- msg
@@ -1184,6 +1194,7 @@ func (c *Client) ackOne(msg message, timeout time.Duration) {
 	if shouldWaitAgain || msg.token.Error() != nil {
 		// Retry publishing the message if there was an error.
 		if msg.token.Error() != nil {
+			c.stats.ackFailed(msg.token)
 			logger.V(2).Printf("MQTT publish on %s failed: %v", msg.topic, msg.token.Error())
 
 			c.l.Lock()
@@ -1203,5 +1214,10 @@ func (c *Client) ackOne(msg message, timeout time.Duration) {
 	}
 
 	now := time.Now()
+	c.stats.ackReceived(msg.token, now)
+
+	c.l.Lock()
+	defer c.l.Unlock()
+
 	c.lastReport = now
 }
