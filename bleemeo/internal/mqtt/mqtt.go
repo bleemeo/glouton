@@ -43,10 +43,13 @@ var errNotPem = errors.New("not a PEM file")
 
 const (
 	maxPendingPoints           = 100000
+	maxPendingMessages         = 1000
 	pointsBatchSize            = 1000
 	minimalDelayBetweenConnect = 5 * time.Second
 	maximalDelayBetweenConnect = 10 * time.Minute
 	stableConnection           = 5 * time.Minute
+	// The maximum duration the messages sent to MQTT will be retried for when shutting down.
+	shutdownTimeout = 5 * time.Second
 )
 
 // Option are parameter for the MQTT client.
@@ -86,7 +89,7 @@ type Client struct {
 
 	l                   sync.Mutex
 	startedAt           time.Time
-	pendingMessage      []message
+	pendingMessages     chan message
 	pendingPoints       []types.MetricPoint
 	lastReport          time.Time
 	maxPointCount       int
@@ -96,7 +99,6 @@ type Client struct {
 	connectionLost      chan interface{}
 	disableNotify       chan interface{}
 	lastConnectionTimes []time.Time
-	lastResend          time.Time
 	currentConnectDelay time.Duration
 	consecutiveError    int
 }
@@ -170,8 +172,9 @@ func New(option Option, first bool) *Client {
 	option.InitialPoints = append(option.InitialPoints, initialPoints...)
 
 	client := &Client{
-		option:     option,
-		mqttClient: mqttClient,
+		option:          option,
+		mqttClient:      mqttClient,
+		pendingMessages: make(chan message, maxPendingMessages),
 	}
 
 	if pahoWrapper == nil {
@@ -340,7 +343,7 @@ func (c *Client) DiagnosticArchive(ctx context.Context, archive types.ArchiveWri
 		StartedAt:                  c.startedAt,
 		LastRegisteredMetricsCount: c.lastRegisteredMetricsCount,
 		LastFailedPointsRetry:      c.lastFailedPointsRetry,
-		PendingMessageCount:        len(c.pendingMessage),
+		PendingMessageCount:        len(c.pendingMessages),
 		PendingPointsCount:         len(c.pendingPoints),
 		LastReport:                 c.lastReport,
 		MaxPointCount:              c.maxPointCount,
@@ -348,7 +351,6 @@ func (c *Client) DiagnosticArchive(ctx context.Context, archive types.ArchiveWri
 		DisabledUntil:              c.disabledUntil,
 		DisableReason:              c.disableReason,
 		LastConnectionTimes:        c.lastConnectionTimes,
-		LastResend:                 c.lastResend,
 	}
 
 	c.l.Unlock()
@@ -480,11 +482,6 @@ func (c *Client) shutdownTimeDrift() error {
 	c.l.Lock()
 	defer c.l.Unlock()
 
-	stillPending := c.waitPublishAndResend(c.mqttClient, deadline, true)
-	if stillPending > 0 {
-		logger.V(2).Printf("%d MQTT message were still pending", stillPending)
-	}
-
 	c.mqttClient.Disconnect(uint(time.Until(deadline).Seconds() * 1000))
 	c.mqttClient = nil
 
@@ -534,6 +531,14 @@ func (c *Client) run(ctx context.Context) error {
 		c.connectionManager(ctx)
 	}()
 
+	wg.Add(1)
+
+	go func() {
+		defer wg.Done()
+		c.ackManager(ctx)
+		logger.V(2).Printf("Ack manager stopped with %d messages still pending", len(c.pendingMessages))
+	}()
+
 	storeNotifieeID := c.option.Store.AddNotifiee(c.addPoints)
 
 	var topinfoSendAt time.Time
@@ -553,8 +558,6 @@ func (c *Client) run(ctx context.Context) error {
 
 			c.sendTopinfo(ctx, cfg)
 		}
-
-		c.waitPublish(time.Now().Add(5 * time.Second))
 
 		select {
 		case <-ticker.C:
@@ -874,7 +877,7 @@ func (c *Client) publishNoLock(topic string, payload []byte, retry bool) {
 		msg.token = c.mqttClient.Publish(topic, 1, false, payload)
 	}
 
-	c.pendingMessage = append(c.pendingMessage, msg)
+	c.pendingMessages <- msg
 }
 
 func (c *Client) sendTopinfo(ctx context.Context, cfg bleemeoTypes.GloutonAccountConfig) {
@@ -895,51 +898,6 @@ func (c *Client) sendTopinfo(ctx context.Context, cfg bleemeoTypes.GloutonAccoun
 	}
 
 	c.publish(topic, compressed, false)
-}
-
-func (c *Client) waitPublish(deadline time.Time) (stillPendingCount int) {
-	c.l.Lock()
-	defer c.l.Unlock()
-
-	if c.mqttClient == nil {
-		return len(c.pendingMessage)
-	}
-
-	return c.waitPublishAndResend(c.mqttClient, deadline, false)
-}
-
-func (c *Client) waitPublishAndResend(mqttClient paho.Client, deadline time.Time, resend bool) (stillPendingCount int) {
-	stillPending := make([]message, 0)
-
-	for _, m := range c.pendingMessage {
-		if m.token != nil && m.token.WaitTimeout(time.Until(deadline)) {
-			if m.token.Error() != nil {
-				logger.V(2).Printf("MQTT publish on %s failed: %v", m.topic, m.token.Error())
-			} else {
-				c.lastReport = time.Now()
-
-				continue
-			}
-
-			m.token = nil
-		}
-
-		if m.token == nil && !m.retry {
-			continue
-		}
-
-		if m.token == nil && resend {
-			m.token = mqttClient.Publish(m.topic, 1, false, m.payload)
-		}
-
-		stillPending = append(stillPending, m)
-	}
-
-	c.pendingMessage = stillPending
-
-	logger.V(3).Printf("%d messages are still pending", len(c.pendingMessage))
-
-	return len(c.pendingMessage)
 }
 
 func loadRootCAs(caFile string) (*x509.CertPool, error) {
@@ -1020,10 +978,7 @@ func (c *Client) connectionManager(ctx context.Context) {
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 
-	var (
-		lastConnectionTimes []time.Time
-		lastResend          time.Time
-	)
+	var lastConnectionTimes []time.Time
 
 	currentConnectDelay := minimalDelayBetweenConnect / 2
 	consecutiveError := 0
@@ -1033,7 +988,6 @@ mainLoop:
 		c.l.Lock()
 
 		c.lastConnectionTimes = lastConnectionTimes
-		c.lastResend = lastResend
 		c.currentConnectDelay = currentConnectDelay
 		c.consecutiveError = consecutiveError
 
@@ -1123,18 +1077,12 @@ mainLoop:
 					mqttClient.Disconnect(0)
 				} else {
 					c.l.Lock()
-					c.waitPublishAndResend(mqttClient, time.Now().Add(10*time.Second), true)
 					c.mqttClient = mqttClient
 					c.l.Unlock()
 
 					c.option.ReloadState.PahoWrapper().SetClient(mqttClient)
 				}
 			}
-		case c.mqttClient != nil && c.mqttClient.IsConnectionOpen() && time.Since(lastResend) > 10*time.Minute:
-			lastResend = time.Now()
-			c.l.Lock()
-			c.waitPublishAndResend(c.mqttClient, time.Now().Add(10*time.Second), true)
-			c.l.Unlock()
 		}
 
 		select {
@@ -1183,19 +1131,6 @@ func (c *Client) onReloadAndShutdown() {
 	// Save pending points.
 	points := c.PopPoints(true)
 	pahoWrapper.SetPendingPoints(points)
-
-	// Push the pending messages.
-	deadline := time.Now().Add(5 * time.Second)
-
-	c.l.Lock()
-	defer c.l.Unlock()
-
-	if c.mqttClient != nil {
-		stillPending := c.waitPublishAndResend(c.mqttClient, deadline, true)
-		if stillPending > 0 {
-			logger.V(2).Printf("%d MQTT message were still pending", stillPending)
-		}
-	}
 }
 
 func (c *Client) receiveEvents(ctx context.Context) {
@@ -1215,4 +1150,58 @@ func (c *Client) receiveEvents(ctx context.Context) {
 			return
 		}
 	}
+}
+
+func (c *Client) ackManager(ctx context.Context) {
+	for ctx.Err() == nil {
+		select {
+		case msg := <-c.pendingMessages:
+			c.ackOne(msg, time.Second)
+		case <-ctx.Done():
+		}
+	}
+
+	// When the context is canceled, we keep trying to send the last pending messages for shutdownTimeout.
+	deadline := time.Now().Add(shutdownTimeout)
+
+	for timeLeft := shutdownTimeout; timeLeft > 0; timeLeft = time.Until(deadline) {
+		select {
+		case msg := <-c.pendingMessages:
+			c.ackOne(msg, timeLeft)
+		default:
+			// All messages have been acked.
+			return
+		}
+	}
+}
+
+func (c *Client) ackOne(msg message, timeout time.Duration) {
+	if msg.token == nil {
+		return
+	}
+
+	shouldWaitAgain := !msg.token.WaitTimeout(timeout)
+	if shouldWaitAgain || msg.token.Error() != nil {
+		// Retry publishing the message if there was an error.
+		if msg.token.Error() != nil {
+			logger.V(2).Printf("MQTT publish on %s failed: %v", msg.topic, msg.token.Error())
+
+			c.l.Lock()
+			if msg.retry && c.mqttClient != nil {
+				msg.token = c.mqttClient.Publish(msg.topic, 1, false, msg.payload)
+			}
+			c.l.Unlock()
+		}
+
+		// Add the message back to the pending messages if there is enough space in the channel.
+		select {
+		case c.pendingMessages <- msg:
+		default:
+		}
+
+		return
+	}
+
+	now := time.Now()
+	c.lastReport = now
 }
