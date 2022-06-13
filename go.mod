@@ -8,7 +8,7 @@ require (
 	github.com/StackExchange/wmi v1.2.1
 	github.com/cespare/xxhash v1.1.0
 	github.com/containerd/cgroups v1.0.4
-	github.com/containerd/containerd v1.6.5
+	github.com/containerd/containerd v1.6.6
 	github.com/containerd/typeurl v1.0.2
 	github.com/docker/docker v20.10.16+incompatible
 	github.com/eclipse/paho.mqtt.golang v1.4.1
