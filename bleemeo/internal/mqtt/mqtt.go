@@ -277,6 +277,7 @@ func (c *Client) Run(ctx context.Context) error {
 	err := c.run(ctx)
 
 	wg.Wait()
+	close(c.pendingMessages)
 
 	return err
 }
