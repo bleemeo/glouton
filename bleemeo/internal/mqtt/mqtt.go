@@ -1183,6 +1183,12 @@ func (c *Client) ackManager(ctx context.Context) {
 			return
 		}
 	}
+
+	// We were not able to process all messages before the timeout.
+	// Drain the pending messages channel to avoid a dead-lock when publishing messages.
+	for len(c.pendingMessages) > 0 {
+		<-c.pendingMessages
+	}
 }
 
 func (c *Client) ackOne(msg message, timeout time.Duration) {
