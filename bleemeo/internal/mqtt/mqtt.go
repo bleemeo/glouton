@@ -1197,8 +1197,12 @@ func (c *Client) ackOne(msg message, timeout time.Duration) {
 			c.stats.ackFailed(msg.token)
 			logger.V(2).Printf("MQTT publish on %s failed: %v", msg.topic, msg.token.Error())
 
+			if !msg.retry {
+				return
+			}
+
 			c.l.Lock()
-			if msg.retry && c.mqttClient != nil {
+			if c.mqttClient != nil {
 				msg.token = c.mqttClient.Publish(msg.topic, 1, false, msg.payload)
 			}
 			c.l.Unlock()
