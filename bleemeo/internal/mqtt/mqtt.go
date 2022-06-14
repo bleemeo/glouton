@@ -1176,10 +1176,6 @@ func (c *Client) ackManager(ctx context.Context) {
 
 					lastErrShowed = time.Now()
 				}
-
-				// It's possible for token.WaitTimeout to return instantly with an error,
-				// in this case we need to wait a bit to avoid consuming too much resources.
-				time.Sleep(time.Second)
 			}
 
 		case <-ctx.Done():
@@ -1227,7 +1223,15 @@ func (c *Client) ackOne(msg message, timeout time.Duration) {
 			if c.mqttClient != nil {
 				msg.token = c.mqttClient.Publish(msg.topic, 1, false, msg.payload)
 			}
+
+			publishFailed := c.mqttClient == nil || msg.token.Error() == nil
 			c.l.Unlock()
+
+			// It's possible for Publish to return instantly with an error,
+			// in this case we need to wait a bit to avoid consuming too much resources.
+			if publishFailed {
+				time.Sleep(time.Second)
+			}
 		}
 
 		// Add the message back to the pending messages if there is enough space in the channel.
