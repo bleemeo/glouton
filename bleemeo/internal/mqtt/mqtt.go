@@ -546,7 +546,6 @@ func (c *Client) run(ctx context.Context) error {
 	go func() {
 		defer wg.Done()
 		c.ackManager(ctx)
-		logger.V(2).Printf("Ack manager stopped with %d messages still pending", len(c.pendingMessages))
 	}()
 
 	storeNotifieeID := c.option.Store.AddNotifiee(c.addPoints)
@@ -1164,10 +1163,23 @@ func (c *Client) receiveEvents(ctx context.Context) {
 }
 
 func (c *Client) ackManager(ctx context.Context) {
+	var lastErrShowed time.Time
+
 	for ctx.Err() == nil {
 		select {
 		case msg := <-c.pendingMessages:
 			c.ackOne(msg, time.Second)
+			if msg.token != nil && msg.token.Error() != nil {
+				if time.Since(lastErrShowed) > time.Minute {
+					logger.V(2).Printf("MQTT publish on %s failed: %v", msg.topic, msg.token.Error())
+					lastErrShowed = time.Now()
+				}
+
+				// It's possible for token.WaitTimeout to return instantly with an error,
+				// in this case we need to wait a bit to avoid consuming too much resources.
+				time.Sleep(time.Second)
+			}
+
 		case <-ctx.Done():
 		}
 	}
@@ -1184,6 +1196,8 @@ func (c *Client) ackManager(ctx context.Context) {
 			return
 		}
 	}
+
+	logger.V(2).Printf("Ack manager stopped with %d messages still pending", len(c.pendingMessages))
 
 	// We were not able to process all messages before the timeout.
 	// Drain the pending messages channel to avoid a dead-lock when publishing messages.
@@ -1202,7 +1216,6 @@ func (c *Client) ackOne(msg message, timeout time.Duration) {
 		// Retry publishing the message if there was an error.
 		if msg.token.Error() != nil {
 			c.stats.ackFailed(msg.token)
-			logger.V(2).Printf("MQTT publish on %s failed: %v", msg.topic, msg.token.Error())
 
 			if !msg.retry {
 				return
