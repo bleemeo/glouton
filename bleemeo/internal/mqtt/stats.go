@@ -61,6 +61,7 @@ func (s *mqttStats) ackReceived(token paho.Token, now time.Time) {
 	publishDate, ok := s.publishDates[msgID]
 	if !ok {
 		s.l.Unlock()
+
 		return
 	}
 

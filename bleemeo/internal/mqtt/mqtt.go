@@ -1169,9 +1169,11 @@ func (c *Client) ackManager(ctx context.Context) {
 		select {
 		case msg := <-c.pendingMessages:
 			c.ackOne(msg, time.Second)
+
 			if msg.token != nil && msg.token.Error() != nil {
 				if time.Since(lastErrShowed) > time.Minute {
 					logger.V(2).Printf("MQTT publish on %s failed: %v", msg.topic, msg.token.Error())
+
 					lastErrShowed = time.Now()
 				}
 
