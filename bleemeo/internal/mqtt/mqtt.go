@@ -1168,11 +1168,13 @@ func (c *Client) ackManager(ctx context.Context) {
 	for ctx.Err() == nil {
 		select {
 		case msg := <-c.pendingMessages:
-			c.ackOne(msg, time.Second)
-
-			if msg.token != nil && msg.token.Error() != nil {
+			err := c.ackOne(msg, 10*time.Second)
+			if err != nil {
 				if time.Since(lastErrShowed) > time.Minute {
-					logger.V(2).Printf("MQTT publish on %s failed: %v", msg.topic, msg.token.Error())
+					logger.V(2).Printf(
+						"MQTT publish on %s failed: %v (%d pending messages)",
+						msg.topic, err, len(c.pendingMessages),
+					)
 
 					lastErrShowed = time.Now()
 				}
@@ -1188,7 +1190,7 @@ func (c *Client) ackManager(ctx context.Context) {
 	for timeLeft := shutdownTimeout; timeLeft > 0; timeLeft = time.Until(deadline) {
 		select {
 		case msg := <-c.pendingMessages:
-			c.ackOne(msg, timeLeft)
+			_ = c.ackOne(msg, timeLeft)
 		default:
 			// All messages have been acked.
 			return
@@ -1204,43 +1206,51 @@ func (c *Client) ackManager(ctx context.Context) {
 	}
 }
 
-func (c *Client) ackOne(msg message, timeout time.Duration) {
-	if msg.token == nil {
-		return
+func (c *Client) ackOne(msg message, timeout time.Duration) error {
+	var err error
+
+	// The token is nil when publishing failed.
+	shouldWaitAgain := false
+	if msg.token != nil {
+		shouldWaitAgain = !msg.token.WaitTimeout(timeout)
+
+		err = msg.token.Error()
+		if err != nil {
+			c.stats.ackFailed(msg.token)
+		}
 	}
 
-	shouldWaitAgain := !msg.token.WaitTimeout(timeout)
-	if shouldWaitAgain || msg.token.Error() != nil {
-		// Retry publishing the message if there was an error.
-		if msg.token.Error() != nil {
-			c.stats.ackFailed(msg.token)
-
-			if !msg.retry {
-				return
-			}
-
-			c.l.Lock()
-			if c.mqttClient != nil {
-				msg.token = c.mqttClient.Publish(msg.topic, 1, false, msg.payload)
-			}
-
-			publishFailed := c.mqttClient == nil || msg.token.Error() == nil
-			c.l.Unlock()
-
-			// It's possible for Publish to return instantly with an error,
-			// in this case we need to wait a bit to avoid consuming too much resources.
-			if publishFailed {
-				time.Sleep(time.Second)
-			}
+	// Retry publishing the message if there was an error.
+	if msg.token == nil || msg.token.Error() != nil {
+		if !msg.retry {
+			return err
 		}
 
+		c.l.Lock()
+		if c.mqttClient != nil {
+			msg.token = c.mqttClient.Publish(msg.topic, 1, false, msg.payload)
+		}
+
+		publishFailed := c.mqttClient == nil || msg.token.Error() != nil
+		c.l.Unlock()
+
+		// It's possible for Publish to return instantly with an error,
+		// in this case we need to wait a bit to avoid consuming too much resources.
+		if publishFailed {
+			msg.token = nil
+
+			time.Sleep(time.Second)
+		}
+	}
+
+	if msg.token == nil || shouldWaitAgain {
 		// Add the message back to the pending messages if there is enough space in the channel.
 		select {
 		case c.pendingMessages <- msg:
 		default:
 		}
 
-		return
+		return err
 	}
 
 	now := time.Now()
@@ -1250,4 +1260,6 @@ func (c *Client) ackOne(msg message, timeout time.Duration) {
 	defer c.l.Unlock()
 
 	c.lastReport = now
+
+	return nil
 }
