@@ -40,6 +40,7 @@ type Container interface {
 	State() ContainerState
 	StoppedAndReplaced() bool
 	RuntimeName() string
+	PID() int
 }
 
 // ContainerState is the container lifecycle state.
@@ -288,6 +289,7 @@ type FakeContainer struct {
 	FakeState                   ContainerState
 	FakeListenAddressesExplicit bool
 	FakeStoppedAndReplaced      bool
+	FakePID                     int
 
 	// Test* flags are only used by tests
 	TestIgnored bool
@@ -376,6 +378,10 @@ func (c FakeContainer) State() ContainerState {
 
 func (c FakeContainer) StoppedAndReplaced() bool {
 	return c.FakeStoppedAndReplaced
+}
+
+func (c FakeContainer) PID() int {
+	return c.FakePID
 }
 
 func (c FakeContainer) Diff(other Container) string {
