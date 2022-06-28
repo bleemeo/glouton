@@ -43,11 +43,6 @@ var (
 	errContainerNotRunning = errors.New("not running")
 )
 
-type veth struct {
-	Name        string
-	ContainerID string
-}
-
 // getContainers returns all running containers.
 func getContainers(ctx context.Context) ([]facts.Container, error) {
 	hostRootPath := "/"
@@ -124,7 +119,7 @@ func getContainerIfIndex(container facts.Container) (int, error) {
 
 // getContainersInterfaces returns a list of container IDs with their
 // associated interface on the host.
-func getContainersInterfaces(ctx context.Context) ([]veth, error) {
+func getContainersInterfaces(ctx context.Context) ([]facts.Veth, error) {
 	interfaces, err := net.Interfaces()
 	if err != nil {
 		return nil, fmt.Errorf("failed to list interfaces: %w", err)
@@ -140,7 +135,7 @@ func getContainersInterfaces(ctx context.Context) ([]veth, error) {
 		return nil, err
 	}
 
-	veths := make([]veth, 0, len(containers))
+	veths := make([]facts.Veth, 0, len(containers))
 
 	for _, container := range containers {
 		ifIndex, err := getContainerIfIndex(container)
@@ -156,7 +151,7 @@ func getContainersInterfaces(ctx context.Context) ([]veth, error) {
 			logger.Printf("Failed to get interface name for %s: %s", container.ContainerName(), err)
 		}
 
-		newVeth := veth{
+		newVeth := facts.Veth{
 			Name:        interfaceName,
 			ContainerID: container.ID(),
 		}

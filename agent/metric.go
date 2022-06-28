@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"glouton/config"
 	"glouton/discovery"
+	"glouton/facts"
 	"glouton/jmxtrans"
 	"glouton/logger"
 	"glouton/prometheus/matcher"
@@ -1199,6 +1200,7 @@ func (m *metricFilter) RebuildDynamicLists(scrapper dynamicScrapper, services []
 	}
 
 	allowList, errors = m.rebuildServicesMetrics(allowList, services, errors)
+	denyList, errors = m.rebuildNetworkMetrics(denyList, errors)
 
 	m.allowList = map[labels.Matcher][]matcher.Matchers{}
 
@@ -1336,4 +1338,48 @@ func newMatcherSource(allowList []string, denyList []string, scrapeInstance stri
 	}
 
 	return allowMatchers, denyMatchers, nil
+}
+
+func (m *metricFilter) rebuildNetworkMetrics(
+	denyList map[string]matcher.Matchers,
+	errors types.MultiErrors,
+) (map[string]matcher.Matchers, types.MultiErrors) {
+	// TODO: Add all net metrics
+	const netMetric = "net_bits_recv"
+
+	// TODO: Get AccountConfig.DockerIntegration.
+	dockerEnabled := false
+	if dockerEnabled {
+		return denyList, errors
+	}
+
+	vethProvider := facts.VethProvider{
+		FilePath: "/var/lib/glouton/veth.out",
+	}
+
+	veths, err := vethProvider.Veths()
+	if err != nil {
+		errors = append(errors, err)
+	}
+
+	for _, interfaceName := range veths {
+		matchersList, err := matcher.NormalizeMetric(netMetric)
+		if err != nil {
+			errors = append(errors, err)
+
+			continue
+		}
+
+		interfaceMatcher, err := labels.NewMatcher(labels.MatchEqual, types.LabelItem, interfaceName)
+		if err != nil {
+			errors = append(errors, err)
+
+			continue
+		}
+
+		matchersList = append(matchersList, interfaceMatcher)
+		denyList[netMetric] = matchersList
+	}
+
+	return denyList, errors
 }
