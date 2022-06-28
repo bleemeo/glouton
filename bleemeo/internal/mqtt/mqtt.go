@@ -1234,6 +1234,9 @@ func (c *Client) ackOne(msg message, timeout time.Duration) error {
 		publishFailed := c.mqttClient == nil || msg.token.Error() != nil
 		c.l.Unlock()
 
+		// The token will be awaited later.
+		shouldWaitAgain = true
+
 		// It's possible for Publish to return instantly with an error,
 		// in this case we need to wait a bit to avoid consuming too much resources.
 		if publishFailed {
@@ -1243,7 +1246,7 @@ func (c *Client) ackOne(msg message, timeout time.Duration) error {
 		}
 	}
 
-	if msg.token == nil || shouldWaitAgain {
+	if shouldWaitAgain {
 		// Add the message back to the pending messages if there is enough space in the channel.
 		select {
 		case c.pendingMessages <- msg:
