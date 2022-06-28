@@ -14,7 +14,8 @@ ADD dist/glouton_linux_arm_6/glouton /glouton.arm6
 
 RUN if [ "$TARGETARCH" = "arm" ]; then cp -p /glouton.arm6 /glouton; else cp -p /glouton.$TARGETARCH /glouton; fi
 
-FROM gcr.io/distroless/base
+# We use busybox because we need nsenter and ip commands.
+FROM busybox
 
 LABEL MAINTAINER="Bleemeo Docker Maintainers <packaging-team@bleemeo.com>"
 

@@ -87,7 +87,7 @@ func getContainerIfIndex(container facts.Container) (int, error) {
 		return 0, errContainerNotRunning
 	}
 
-	cmd := fmt.Sprintf("sudo nsenter -t %d -n ip link show type veth", container.PID())
+	cmd := fmt.Sprintf("nsenter -t %d -n ip link show", container.PID())
 	args := strings.Fields(cmd)
 
 	res := exec.Command(args[0], args[1:]...) //nolint:gosec
