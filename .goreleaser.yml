@@ -29,6 +29,8 @@ nfpms:
   - ca-certificates
   - net-tools
   - cron
+  - util-linux
+  - iproute2
   description: |
     Bleemeo agent
       Bleemeo is a solution of Monitoring as a Service.
@@ -105,6 +107,8 @@ nfpms:
       - ca-certificates
       - net-tools
       - cron
+      - util-linux
+      - iproute2
       - yum-plugin-post-transaction-actions
 checksum:
   name_template: 'checksums.txt'
