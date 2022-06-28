@@ -8,7 +8,7 @@
 // 14: eth0@if15: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP mode DEFAULT group default
 // link/ether 02:42:ac:12:00:06 brd ff:ff:ff:ff:ff:ff link-netns ns-2622
 //
-// - Get the correponding interface on the host.
+// - Get the corresponding interface on the host.
 // eth0@if15 means the container uses the interface with index 15 on the host.
 // 15: veth95e9c75@if14: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue master br-48eb47945400 state UP group default
 // -> this container is linked to the interface veth95e9c75.
@@ -25,6 +25,7 @@ import (
 	"glouton/facts/container-runtime/docker"
 	"glouton/facts/container-runtime/merge"
 	"glouton/facts/container-runtime/types"
+	"glouton/logger"
 	"net"
 	"os"
 	"os/exec"
@@ -37,7 +38,10 @@ import (
 
 const vethFile = "/var/lib/glouton/veth.out"
 
-var errNoInterfaceMatched = errors.New("no interface index matched")
+var (
+	errNoInterfaceMatched  = errors.New("no interface index matched")
+	errContainerNotRunning = errors.New("not running")
+)
 
 type veth struct {
 	Name        string
@@ -47,6 +51,7 @@ type veth struct {
 // getContainers returns all running containers.
 func getContainers(ctx context.Context) ([]facts.Container, error) {
 	hostRootPath := "/"
+
 	cfg := &config.Configuration{}
 	if cfg.String("container.type") != "" {
 		hostRootPath = cfg.String("df.host_mount_point")
@@ -82,12 +87,17 @@ func getContainers(ctx context.Context) ([]facts.Container, error) {
 
 // getContainerIfIndex returns the interface index inside a container.
 func getContainerIfIndex(container facts.Container) (int, error) {
+	if container.PID() == 0 {
+		// The container is not running, skip it.
+		return 0, errContainerNotRunning
+	}
+
 	cmd := fmt.Sprintf("sudo nsenter -t %d -n ip link show type veth", container.PID())
 	args := strings.Fields(cmd)
 
-	res := exec.Command(args[0], args[1:]...)
-	stdout, err := res.Output()
+	res := exec.Command(args[0], args[1:]...) //nolint:gosec
 
+	stdout, err := res.Output()
 	if err != nil {
 		stderr := ""
 		if exitErr := &(exec.ExitError{}); errors.As(err, &exitErr) {
@@ -98,6 +108,7 @@ func getContainerIfIndex(container facts.Container) (int, error) {
 	}
 
 	ifRegex := regexp.MustCompile(`.*eth0@if(\d+).*`)
+
 	matches := ifRegex.FindSubmatch(stdout)
 	if len(matches) < 2 {
 		return 0, errNoInterfaceMatched
@@ -135,15 +146,18 @@ func getContainersInterfaces(ctx context.Context) ([]veth, error) {
 		ifIndex, err := getContainerIfIndex(container)
 		if err != nil {
 			// The container may be running with the host network.
-			fmt.Printf("Failed to get interface index for %s: %s\n", container.ContainerName(), err)
+			logger.Printf("Failed to get interface index for %s: %s", container.ContainerName(), err)
 
 			continue
 		}
 
-		fmt.Println(container.ContainerName(), interfaceNameByIndex[ifIndex])
+		interfaceName, ok := interfaceNameByIndex[ifIndex]
+		if !ok {
+			logger.Printf("Failed to get interface name for %s: %s", container.ContainerName(), err)
+		}
 
 		newVeth := veth{
-			Name:        interfaceNameByIndex[ifIndex],
+			Name:        interfaceName,
 			ContainerID: container.ID(),
 		}
 		veths = append(veths, newVeth)
@@ -158,9 +172,12 @@ func run(ctx context.Context) error {
 		return err
 	}
 
-	marshaled, _ := json.Marshal(veths)
+	marshaled, err := json.Marshal(veths)
+	if err != nil {
+		return fmt.Errorf("failed to marshal interfaces: %w", err)
+	}
 
-	err = os.WriteFile(vethFile, marshaled, 0600)
+	err = os.WriteFile(vethFile, marshaled, 0o600)
 	if err != nil {
 		return fmt.Errorf("failed to write file: %w", err)
 	}
@@ -190,6 +207,6 @@ func run(ctx context.Context) error {
 func main() {
 	ctx := context.Background()
 	if err := run(ctx); err != nil {
-		fmt.Printf("Failed to run: %s\n", err)
+		logger.Printf("Failed to run: %s", err)
 	}
 }
