@@ -35,6 +35,7 @@ import (
 	"glouton/facts/container-runtime/containerd"
 	"glouton/facts/container-runtime/kubernetes"
 	"glouton/facts/container-runtime/merge"
+	"glouton/facts/container-runtime/veth"
 	"glouton/influxdb"
 	"glouton/inputs"
 	"glouton/inputs/docker"
@@ -698,6 +699,7 @@ func (a *agent) run(ctx context.Context, signalChan chan os.Signal) { //nolint:m
 
 	hasSwap := factsMap["swap_present"] == "true"
 
+	vethProvider := veth.VethProvider{HostRootPath: a.hostRootPath}
 	mFilter, err := newMetricFilter(a.oldConfig, len(a.snmpManager.Targets()) > 0, hasSwap, a.metricFormat)
 	if err != nil {
 		logger.Printf("An error occurred while building the metric filter, allow/deny list may be partial: %v", err)
@@ -1147,7 +1149,7 @@ func (a *agent) run(ctx context.Context, signalChan chan os.Signal) { //nolint:m
 			return
 		}
 
-		if err = discovery.AddDefaultInputs(a.collector, conf, a.hostRootPath); err != nil {
+		if err = discovery.AddDefaultInputs(a.collector, conf, vethProvider); err != nil {
 			logger.Printf("Unable to initialize system collector: %v", err)
 
 			return
@@ -1155,7 +1157,7 @@ func (a *agent) run(ctx context.Context, signalChan chan os.Signal) { //nolint:m
 	}
 
 	// register components only available on a given system, like node_exporter for unixes
-	a.registerOSSpecificComponents(ctx)
+	a.registerOSSpecificComponents(ctx, vethProvider)
 
 	tasks = append(tasks, taskInfo{
 		a.gathererRegistry.Run,

@@ -88,7 +88,7 @@ func (a *agent) initOSSpecificParts() {
 	wmi.DefaultClient.SWbemServicesClient = s
 }
 
-func (a *agent) registerOSSpecificComponents(ctx context.Context) {
+func (a *agent) registerOSSpecificComponents(ctx context.Context, vethProvider veth.VethProvider) {
 	if a.oldConfig.Bool("agent.windows_exporter.enable") {
 		conf, err := a.buildCollectorsConfig()
 		if err != nil {

@@ -37,14 +37,14 @@ type netTransformer struct {
 // New initialise net.Input
 //
 // blacklist contains a list of interface name prefix to ignore.
-func New(blacklist []string, hostRootPath string) (i telegraf.Input, err error) {
+func New(blacklist []string, vethProvider veth.VethProvider) (i telegraf.Input, err error) {
 	input, ok := telegraf_inputs.Inputs["net"]
 	if ok {
 		netInput, _ := input().(*net.NetIOStats)
 		netInput.IgnoreProtocolStats = true
 		nt := netTransformer{
 			blacklist:    blacklist,
-			vethProvider: veth.VethProvider{HostRootPath: hostRootPath},
+			vethProvider: vethProvider,
 		}
 		i = &internal.Input{
 			Input: netInput,
