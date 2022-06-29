@@ -81,7 +81,8 @@ func (vp VethProvider) parseOutput(output string) map[int]int {
 }
 
 // Veths returns a map of containerIDs indexed by interface name.
-func (vp VethProvider) Veths(ctx context.Context) (map[string]string, error) {
+// TODO: Add maxAge and keep veths in cache.
+func (vp VethProvider) Veths() (map[string]string, error) {
 	interfaces, err := net.Interfaces()
 	if err != nil {
 		return nil, fmt.Errorf("failed to list interfaces: %w", err)
@@ -91,6 +92,9 @@ func (vp VethProvider) Veths(ctx context.Context) (map[string]string, error) {
 	for _, iface := range interfaces {
 		interfaceNameByIndex[iface.Index] = iface.Name
 	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 
 	containers, err := vp.getContainers(ctx)
 	if err != nil {
@@ -109,7 +113,7 @@ func (vp VethProvider) Veths(ctx context.Context) (map[string]string, error) {
 
 	args := strings.Fields(fmt.Sprintf("sudo -n glouton-veths %s", pids))
 
-	cmd := exec.Command(args[0], args[1:]...)
+	cmd := exec.CommandContext(ctx, args[0], args[1:]...)
 
 	stdout, err := cmd.Output()
 	if err != nil {

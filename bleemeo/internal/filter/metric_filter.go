@@ -1,6 +1,7 @@
 package filter
 
 import (
+	"fmt"
 	"glouton/bleemeo/internal/cache"
 	"glouton/bleemeo/internal/common"
 	bleemeoTypes "glouton/bleemeo/types"
@@ -30,5 +31,12 @@ func (f Filter) IsAllowed(lbls map[string]string, annotations types.MetricAnnota
 		return false, err
 	}
 
-	return common.AllowMetric(lbls, annotations, allowlist), nil
+	isAllowed := common.AllowMetric(lbls, annotations, allowlist)
+
+	if annotations.ContainerID != "" {
+		// TODO: Ignore depending on accountConfig
+		fmt.Println("!!! container metric allowed", lbls)
+	}
+
+	return isAllowed, nil
 }

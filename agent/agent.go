@@ -698,7 +698,7 @@ func (a *agent) run(ctx context.Context, signalChan chan os.Signal) { //nolint:m
 
 	hasSwap := factsMap["swap_present"] == "true"
 
-	mFilter, err := newMetricFilter(a.oldConfig, len(a.snmpManager.Targets()) > 0, hasSwap, a.metricFormat, a.hostRootPath)
+	mFilter, err := newMetricFilter(a.oldConfig, len(a.snmpManager.Targets()) > 0, hasSwap, a.metricFormat)
 	if err != nil {
 		logger.Printf("An error occurred while building the metric filter, allow/deny list may be partial: %v", err)
 	}
@@ -1147,7 +1147,7 @@ func (a *agent) run(ctx context.Context, signalChan chan os.Signal) { //nolint:m
 			return
 		}
 
-		if err = discovery.AddDefaultInputs(a.collector, conf); err != nil {
+		if err = discovery.AddDefaultInputs(a.collector, conf, a.hostRootPath); err != nil {
 			logger.Printf("Unable to initialize system collector: %v", err)
 
 			return

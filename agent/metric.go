@@ -880,13 +880,8 @@ func newMetricFilter(
 	config *config.Configuration,
 	hasSNMP, hasSwap bool,
 	metricFormat types.MetricFormat,
-	hostRootPath string,
 ) (*metricFilter, error) {
-	filter := metricFilter{
-		vethProvider: veth.VethProvider{
-			HostRootPath: hostRootPath,
-		},
-	}
+	filter := metricFilter{}
 	err := filter.buildList(config, hasSNMP, hasSwap, metricFormat)
 
 	return &filter, err
@@ -1217,7 +1212,6 @@ func (m *metricFilter) RebuildDynamicLists(
 	}
 
 	allowList, errors = m.rebuildServicesMetrics(allowList, services, errors)
-	denyList, errors = m.rebuildNetworkMetrics(ctx, denyList, errors)
 
 	m.allowList = map[labels.Matcher][]matcher.Matchers{}
 
@@ -1355,46 +1349,4 @@ func newMatcherSource(allowList []string, denyList []string, scrapeInstance stri
 	}
 
 	return allowMatchers, denyMatchers, nil
-}
-
-func (m *metricFilter) rebuildNetworkMetrics(
-	ctx context.Context,
-	denyList map[string]matcher.Matchers,
-	errors types.MultiErrors,
-) (map[string]matcher.Matchers, types.MultiErrors) {
-	// TODO: Add all net metrics
-	const netMetric = "net_bits_recv"
-
-	// TODO: Get AccountConfig.DockerIntegration.
-	dockerEnabled := false
-	if dockerEnabled {
-		return denyList, errors
-	}
-
-	veths, err := m.vethProvider.Veths(ctx)
-	if err != nil {
-		errors = append(errors, err)
-	}
-
-	for interfaceName := range veths {
-		matchersList, err := matcher.NormalizeMetric(netMetric)
-		if err != nil {
-			errors = append(errors, err)
-
-			continue
-		}
-
-		interfaceMatcher, err := labels.NewMatcher(labels.MatchEqual, types.LabelItem, interfaceName)
-		if err != nil {
-			errors = append(errors, err)
-
-			continue
-		}
-
-		matchersList = append(matchersList, interfaceMatcher)
-		// TODO: This rewrites the interface ignored in the previous loop
-		denyList[netMetric] = matchersList
-	}
-
-	return denyList, errors
 }

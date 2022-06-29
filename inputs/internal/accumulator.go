@@ -290,7 +290,13 @@ func (a *Accumulator) getDerivativeValue(pastMetricPoint metricPoint, currentPoi
 
 type accumulatorFunc func(measurement string, fields map[string]interface{}, tags map[string]string, annotations types.MetricAnnotations, t ...time.Time)
 
-func (a *Accumulator) processMetrics(finalFunc accumulatorFunc, measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+func (a *Accumulator) processMetrics(
+	finalFunc accumulatorFunc,
+	measurement string,
+	fields map[string]interface{},
+	tags map[string]string,
+	t ...time.Time,
+) {
 	if tags == nil {
 		tags = make(map[string]string)
 	}

@@ -57,7 +57,7 @@ import (
 var errNotSupported = errors.New("service not supported by Prometheus collector")
 
 // AddDefaultInputs adds system inputs to a collector.
-func AddDefaultInputs(coll *collector.Collector, inputsConfig inputs.CollectorConfig) error {
+func AddDefaultInputs(coll *collector.Collector, inputsConfig inputs.CollectorConfig, hostRootPath string) error {
 	input, err := system.New()
 	if err != nil {
 		return err
@@ -76,7 +76,7 @@ func AddDefaultInputs(coll *collector.Collector, inputsConfig inputs.CollectorCo
 		return err
 	}
 
-	input, err = netInput.New(inputsConfig.NetIfBlacklist)
+	input, err = netInput.New(inputsConfig.NetIfBlacklist, hostRootPath)
 	if err != nil {
 		return err
 	}
