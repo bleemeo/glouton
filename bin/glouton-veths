@@ -1,0 +1,26 @@
+#!/bin/sh
+
+# This script lists the containers with their associated virtual interface index on the host.
+# It takes the containers pids in input.
+# Example:
+# $ sudo glouton-veth 3281 3042 350
+# 3281: 17
+# 3042: 13
+# 3508: 21
+
+for pid in "$@"
+do
+    # Sanitize input: pid must be an integer.
+    if echo "$pid" | grep -qE '^[0-9]+$'; then
+        output=`nsenter -t "$pid" -n ip link show type veth`
+        
+        # Get the interface index on the host.
+        # Output example:
+        #1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN mode DEFAULT group default qlen 1000
+        #     link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+        # 18: eth0@if19: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP mode DEFAULT group default 
+        #     link/ether 02:42:ac:12:00:08 brd ff:ff:ff:ff:ff:ff link-netnsid 0
+        if_index=`echo $output| sed -n 's/^[0-9]\+: eth0@if\([0-9]\+\).*$/\1/p'| head -1`
+        printf "$pid: $if_index\n"
+    fi
+done

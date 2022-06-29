@@ -585,7 +585,7 @@ func (a *agent) updateThresholds(ctx context.Context, thresholds map[string]thre
 	if err != nil {
 		logger.V(2).Printf("An error occurred while running discoveries for updateThresholds: %v", err)
 	} else {
-		err = a.metricFilter.RebuildDynamicLists(a.dynamicScrapper, services, a.threshold.GetThresholdMetricNames(), a.rulesManager.MetricNames())
+		err = a.metricFilter.RebuildDynamicLists(ctx, a.dynamicScrapper, services, a.threshold.GetThresholdMetricNames(), a.rulesManager.MetricNames())
 		if err != nil {
 			logger.V(2).Printf("An error occurred while rebuilding dynamic list for updateThresholds: %v", err)
 		}
@@ -698,7 +698,7 @@ func (a *agent) run(ctx context.Context, signalChan chan os.Signal) { //nolint:m
 
 	hasSwap := factsMap["swap_present"] == "true"
 
-	mFilter, err := newMetricFilter(a.oldConfig, len(a.snmpManager.Targets()) > 0, hasSwap, a.metricFormat)
+	mFilter, err := newMetricFilter(a.oldConfig, len(a.snmpManager.Targets()) > 0, hasSwap, a.metricFormat, a.hostRootPath)
 	if err != nil {
 		logger.Printf("An error occurred while building the metric filter, allow/deny list may be partial: %v", err)
 	}
@@ -1849,7 +1849,7 @@ func (a *agent) handleTrigger(ctx context.Context) {
 				}
 			}
 
-			err := a.metricFilter.RebuildDynamicLists(a.dynamicScrapper, services, a.threshold.GetThresholdMetricNames(), a.rulesManager.MetricNames())
+			err := a.metricFilter.RebuildDynamicLists(ctx, a.dynamicScrapper, services, a.threshold.GetThresholdMetricNames(), a.rulesManager.MetricNames())
 			if err != nil {
 				logger.V(2).Printf("Error during dynamic Filter rebuild: %v", err)
 			}

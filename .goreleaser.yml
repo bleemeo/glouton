@@ -57,6 +57,8 @@ nfpms:
     dst: /usr/sbin/glouton-netstat
   - src: bin/glouton-gather-facts
     dst: /usr/sbin/glouton-gather-facts
+  - src: bin/glouton-veths
+    dst: /usr/sbin/glouton-veths
   - type: dir
     dst: /etc/glouton/conf.d
   - type: dir

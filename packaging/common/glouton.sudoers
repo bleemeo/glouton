@@ -1,2 +1,3 @@
 Defaults:glouton !requiretty
 glouton     ALL=(root) NOPASSWD: /bin/cat /etc/mysql/debian.cnf
+glouton     ALL=(root) NOPASSWD: /usr/sbin/glouton-veths

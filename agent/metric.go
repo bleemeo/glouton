@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"glouton/config"
 	"glouton/discovery"
-	"glouton/facts"
+	"glouton/facts/container-runtime/veth"
 	"glouton/jmxtrans"
 	"glouton/logger"
 	"glouton/prometheus/matcher"
@@ -651,6 +651,11 @@ const (
 	filterLogDuration = 50 * time.Millisecond
 )
 
+type vethProvider interface {
+	// Veths returns a map of containerIDs indexed by interface name.
+	Veths(ctx context.Context) (map[string]string, error)
+}
+
 // metricFilter is a thread-safe holder of an allow / deny metrics list.
 type metricFilter struct {
 	// staticList contains the matchers generated from static source (config file).
@@ -663,6 +668,7 @@ type metricFilter struct {
 	denyList  map[labels.Matcher][]matcher.Matchers
 
 	includeDefaultMetrics bool
+	vethProvider          veth.VethProvider
 
 	l sync.Mutex
 }
@@ -874,8 +880,13 @@ func newMetricFilter(
 	config *config.Configuration,
 	hasSNMP, hasSwap bool,
 	metricFormat types.MetricFormat,
+	hostRootPath string,
 ) (*metricFilter, error) {
-	filter := metricFilter{}
+	filter := metricFilter{
+		vethProvider: veth.VethProvider{
+			HostRootPath: hostRootPath,
+		},
+	}
 	err := filter.buildList(config, hasSNMP, hasSwap, metricFormat)
 
 	return &filter, err
@@ -1165,7 +1176,13 @@ func (m *metricFilter) rebuildDefaultMetrics(services []discovery.Service, list 
 	return nil
 }
 
-func (m *metricFilter) RebuildDynamicLists(scrapper dynamicScrapper, services []discovery.Service, thresholdMetricNames []string, alertMetrics []string) error {
+func (m *metricFilter) RebuildDynamicLists(
+	ctx context.Context,
+	scrapper dynamicScrapper,
+	services []discovery.Service,
+	thresholdMetricNames []string,
+	alertMetrics []string,
+) error {
 	allowList := make(map[string]matcher.Matchers)
 	denyList := make(map[string]matcher.Matchers)
 	errors := types.MultiErrors{}
@@ -1200,7 +1217,7 @@ func (m *metricFilter) RebuildDynamicLists(scrapper dynamicScrapper, services []
 	}
 
 	allowList, errors = m.rebuildServicesMetrics(allowList, services, errors)
-	denyList, errors = m.rebuildNetworkMetrics(denyList, errors)
+	denyList, errors = m.rebuildNetworkMetrics(ctx, denyList, errors)
 
 	m.allowList = map[labels.Matcher][]matcher.Matchers{}
 
@@ -1341,6 +1358,7 @@ func newMatcherSource(allowList []string, denyList []string, scrapeInstance stri
 }
 
 func (m *metricFilter) rebuildNetworkMetrics(
+	ctx context.Context,
 	denyList map[string]matcher.Matchers,
 	errors types.MultiErrors,
 ) (map[string]matcher.Matchers, types.MultiErrors) {
@@ -1353,16 +1371,12 @@ func (m *metricFilter) rebuildNetworkMetrics(
 		return denyList, errors
 	}
 
-	vethProvider := facts.VethProvider{
-		FilePath: "/var/lib/glouton/veth.out",
-	}
-
-	veths, err := vethProvider.Veths()
+	veths, err := m.vethProvider.Veths(ctx)
 	if err != nil {
 		errors = append(errors, err)
 	}
 
-	for _, interfaceName := range veths {
+	for interfaceName := range veths {
 		matchersList, err := matcher.NormalizeMetric(netMetric)
 		if err != nil {
 			errors = append(errors, err)
@@ -1378,6 +1392,7 @@ func (m *metricFilter) rebuildNetworkMetrics(
 		}
 
 		matchersList = append(matchersList, interfaceMatcher)
+		// TODO: This rewrites the interface ignored in the previous loop
 		denyList[netMetric] = matchersList
 	}
 
