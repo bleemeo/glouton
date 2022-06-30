@@ -1172,7 +1172,6 @@ func (m *metricFilter) rebuildDefaultMetrics(services []discovery.Service, list 
 }
 
 func (m *metricFilter) RebuildDynamicLists(
-	ctx context.Context,
 	scrapper dynamicScrapper,
 	services []discovery.Service,
 	thresholdMetricNames []string,

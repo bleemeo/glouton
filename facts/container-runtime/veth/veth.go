@@ -136,7 +136,6 @@ func (vp *VethProvider) Veths(maxAge time.Duration) (map[string]string, error) {
 			stderr = string(exitErr.Stderr)
 		}
 
-		fmt.Printf("!!!!!!!!%s: %s\n", err, stderr)
 		return nil, fmt.Errorf("%w: %s", err, stderr)
 	}
 

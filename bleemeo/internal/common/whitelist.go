@@ -44,7 +44,6 @@ func AllowMetric(
 
 	// Deny metrics associated to a container if the docker integration is disabled.
 	if !hasDockerIntegration && annotations.ContainerID != "" {
-		// fmt.Println("!!! deny", labels)
 		return false
 	}
 
