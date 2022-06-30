@@ -1268,7 +1268,13 @@ func (mr *metricRegisterer) metricRegisterAndUpdateOne(metric types.Metric) erro
 	return nil
 }
 
-func (s *Synchronizer) prepareMetricPayload(metric types.Metric, registeredMetricsByKey map[string]bleemeoTypes.Metric, containersByContainerID map[string]bleemeoTypes.Container, servicesByKey map[serviceNameInstance]bleemeoTypes.Service, monitors []bleemeoTypes.Monitor) (metricPayload, error) {
+func (s *Synchronizer) prepareMetricPayload(
+	metric types.Metric,
+	registeredMetricsByKey map[string]bleemeoTypes.Metric,
+	containersByContainerID map[string]bleemeoTypes.Container,
+	servicesByKey map[serviceNameInstance]bleemeoTypes.Service,
+	monitors []bleemeoTypes.Monitor,
+) (metricPayload, error) {
 	labels := metric.Labels()
 	annotations := metric.Annotations()
 	key := s.metricKey(labels, annotations)
@@ -1314,7 +1320,13 @@ func (s *Synchronizer) prepareMetricPayload(metric types.Metric, registeredMetri
 		payload.StatusOf = metricStatusOf.ID
 	}
 
-	if annotations.ContainerID != "" {
+	cfg, ok := s.option.Cache.CurrentAccountConfig()
+	if !ok {
+		return payload, errRetryLater
+	}
+
+	skipContainer := !cfg.DockerIntegration && common.IsServiceCheckMetric(metric.Labels(), metric.Annotations())
+	if annotations.ContainerID != "" && !skipContainer {
 		container, ok := containersByContainerID[annotations.ContainerID]
 		if !ok {
 			// No error. When container get registered we trigger a metric synchronization
@@ -1326,6 +1338,8 @@ func (s *Synchronizer) prepareMetricPayload(metric types.Metric, registeredMetri
 	}
 
 	if annotations.ServiceName != "" {
+		fmt.Println("!!! add service ID to payload", metric.Labels())
+		// TODO: containerName is empty if skipContainer
 		srvKey := serviceNameInstance{name: annotations.ServiceName, instance: containerName}
 		srvKey.truncateInstance()
 
