@@ -23,6 +23,7 @@ import (
 	"glouton/logger"
 	"glouton/types"
 	"strings"
+	"time"
 
 	"github.com/influxdata/telegraf"
 	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"
@@ -101,7 +102,7 @@ func (nt netTransformer) renameCallback(
 	labels map[string]string,
 	annotations types.MetricAnnotations,
 ) (map[string]string, types.MetricAnnotations) {
-	veths, err := nt.vethProvider.Veths()
+	veths, err := nt.vethProvider.Veths(time.Minute)
 	if err != nil {
 		logger.V(1).Printf("Failed to get container interfaces: %s", err)
 

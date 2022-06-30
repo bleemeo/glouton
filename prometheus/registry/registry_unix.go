@@ -26,6 +26,7 @@ import (
 	"glouton/prometheus/exporter/node"
 	"glouton/types"
 	"strings"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
@@ -78,7 +79,7 @@ func (rg relabelGatherer) Gather() ([]*dto.MetricFamily, error) {
 		return nil, err
 	}
 
-	veths, err := rg.vethProvider.Veths()
+	veths, err := rg.vethProvider.Veths(time.Minute)
 	if err != nil {
 		logger.V(1).Printf("Failed to get container interfaces: %s", err)
 

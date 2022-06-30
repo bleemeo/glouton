@@ -9,6 +9,7 @@ import (
 	"glouton/facts/container-runtime/docker"
 	"glouton/facts/container-runtime/merge"
 	"glouton/facts/container-runtime/types"
+	"log"
 	"net"
 	"os/exec"
 	"strconv"
@@ -19,10 +20,14 @@ import (
 // VethProvider provides a mapping between containers and host network interfaces.
 type VethProvider struct {
 	HostRootPath string
+
+	// Keep container and interface mapping in cache.
+	containerIDByInterfaceName map[string]string
+	lastRefreshAt              time.Time
 }
 
 // getContainers returns all running containers PIDs.
-func (vp VethProvider) getContainers(ctx context.Context) ([]facts.Container, error) {
+func (vp VethProvider) getContainers(ctx context.Context, maxAge time.Duration) ([]facts.Container, error) {
 	isContainerIgnored := func(c facts.Container) bool { return false }
 
 	dockerRuntime := &docker.Docker{
@@ -43,7 +48,7 @@ func (vp VethProvider) getContainers(ctx context.Context) ([]facts.Container, er
 		ContainerIgnored: isContainerIgnored,
 	}
 
-	containers, err := containerRuntime.Containers(ctx, time.Minute, false)
+	containers, err := containerRuntime.Containers(ctx, maxAge, false)
 	if err != nil {
 		return nil, err
 	}
@@ -81,8 +86,15 @@ func (vp VethProvider) parseOutput(output string) map[int]int {
 }
 
 // Veths returns a map of containerIDs indexed by interface name.
-// TODO: Add maxAge and keep veths in cache.
-func (vp VethProvider) Veths() (map[string]string, error) {
+// The interfaces are refreshed only if the cache is older than maxAge.
+func (vp VethProvider) Veths(maxAge time.Duration) (map[string]string, error) {
+	if time.Since(vp.lastRefreshAt) < maxAge {
+		log.Println("!!! veths from cache")
+
+		return vp.containerIDByInterfaceName, nil
+	}
+	log.Printf("!!! veths refresh: %s\n", time.Since(vp.lastRefreshAt))
+
 	interfaces, err := net.Interfaces()
 	if err != nil {
 		return nil, fmt.Errorf("failed to list interfaces: %w", err)
@@ -96,7 +108,7 @@ func (vp VethProvider) Veths() (map[string]string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	containers, err := vp.getContainers(ctx)
+	containers, err := vp.getContainers(ctx, maxAge)
 	if err != nil {
 		return nil, err
 	}
@@ -122,6 +134,7 @@ func (vp VethProvider) Veths() (map[string]string, error) {
 			stderr = string(exitErr.Stderr)
 		}
 
+		fmt.Printf("!!!!!!!!%s: %s\n", err, stderr)
 		return nil, fmt.Errorf("%w: %s", err, stderr)
 	}
 
@@ -141,6 +154,10 @@ func (vp VethProvider) Veths() (map[string]string, error) {
 
 		containerIDByInterfaceName[name] = container.ID()
 	}
+
+	// Refresh cache.
+	vp.containerIDByInterfaceName = containerIDByInterfaceName
+	vp.lastRefreshAt = time.Now()
 
 	return containerIDByInterfaceName, nil
 }
