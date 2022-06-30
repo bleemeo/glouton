@@ -21,7 +21,6 @@ package registry
 
 import (
 	"context"
-	"fmt"
 	"glouton/facts/container-runtime/veth"
 	"glouton/logger"
 	"glouton/prometheus/exporter/node"
@@ -110,7 +109,6 @@ func (rg relabelGatherer) Gather() ([]*dto.MetricFamily, error) {
 					Value: &containerID,
 				}
 
-				fmt.Println("!!! containerID set for", label.GetValue())
 				mf.Metric[i].Label = append(mf.Metric[i].Label, containerLabel)
 			}
 		}

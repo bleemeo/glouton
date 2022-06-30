@@ -978,7 +978,8 @@ func (c *Client) filterPoints(input []types.MetricPoint) []types.MetricPoint {
 			continue
 		}
 
-		if common.AllowMetric(mp.Labels, mp.Annotations, whitelist) {
+		hasDockerIntegration := accountConfigs[defaultConfigID].DockerIntegration
+		if common.AllowMetric(mp.Labels, mp.Annotations, whitelist, hasDockerIntegration) {
 			result = append(result, mp)
 		}
 	}

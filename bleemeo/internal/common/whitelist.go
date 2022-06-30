@@ -27,18 +27,33 @@ import (
 var ErrConfigNotFound = errors.New("configuration not found")
 
 // AllowMetric return True if current configuration allow this metrics.
-func AllowMetric(labels map[string]string, annotations types.MetricAnnotations, whitelist map[string]bool) bool {
+func AllowMetric(
+	labels map[string]string,
+	annotations types.MetricAnnotations,
+	whitelist map[string]bool,
+	hasDockerIntegration bool,
+) bool {
 	if len(whitelist) == 0 {
 		return true
 	}
 
 	// Service status and alerting rules metrics are always allowed.
-	if annotations.ServiceName != "" && strings.HasSuffix(labels[types.LabelName], "_status") ||
-		annotations.AlertingRuleID != "" {
+	if IsServiceCheckMetric(labels, annotations) || annotations.AlertingRuleID != "" {
 		return true
 	}
 
+	// Deny metrics associated to a container if the docker integration is disabled.
+	if !hasDockerIntegration && annotations.ContainerID != "" {
+		// fmt.Println("!!! deny", labels)
+		return false
+	}
+
 	return whitelist[labels[types.LabelName]]
+}
+
+// IsServiceCheckMetric returns whether this metric is a service check and should always be allowed.
+func IsServiceCheckMetric(labels map[string]string, annotations types.MetricAnnotations) bool {
+	return annotations.ServiceName != "" && strings.HasSuffix(labels[types.LabelName], "_status")
 }
 
 func AllowListForMetric(configs map[string]bleemeoTypes.GloutonAccountConfig, defaultConfigID string, annotations types.MetricAnnotations, monitors map[bleemeoTypes.AgentID]bleemeoTypes.Monitor, agents map[string]bleemeoTypes.Agent) (map[string]bool, error) {
