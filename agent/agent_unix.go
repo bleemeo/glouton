@@ -29,7 +29,7 @@ import (
 func (a *agent) initOSSpecificParts() {
 }
 
-func (a *agent) registerOSSpecificComponents(ctx context.Context, vethProvider veth.VethProvider) {
+func (a *agent) registerOSSpecificComponents(ctx context.Context, vethProvider *veth.VethProvider) {
 	if a.oldConfig.Bool("agent.node_exporter.enable") {
 		nodeOption := node.Option{
 			RootFS:            a.hostRootPath,

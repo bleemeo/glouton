@@ -9,11 +9,11 @@ import (
 	"glouton/facts/container-runtime/docker"
 	"glouton/facts/container-runtime/merge"
 	"glouton/facts/container-runtime/types"
-	"log"
 	"net"
 	"os/exec"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -22,12 +22,13 @@ type VethProvider struct {
 	HostRootPath string
 
 	// Keep container and interface mapping in cache.
+	l                          sync.Mutex
 	containerIDByInterfaceName map[string]string
 	lastRefreshAt              time.Time
 }
 
 // getContainers returns all running containers PIDs.
-func (vp VethProvider) getContainers(ctx context.Context, maxAge time.Duration) ([]facts.Container, error) {
+func (vp *VethProvider) getContainers(ctx context.Context, maxAge time.Duration) ([]facts.Container, error) {
 	isContainerIgnored := func(c facts.Container) bool { return false }
 
 	dockerRuntime := &docker.Docker{
@@ -59,7 +60,7 @@ func (vp VethProvider) getContainers(ctx context.Context, maxAge time.Duration) 
 // parseOutput parses the output of glouton-veths.
 // The output is expected with the format "pid: index" on each line.
 // It returns a map of interface indexes on the host indexed by the containers PIDs.
-func (vp VethProvider) parseOutput(output string) map[int]int {
+func (vp *VethProvider) parseOutput(output string) map[int]int {
 	lines := strings.Split(output, "\n")
 	interfaceIndexByPID := make(map[int]int, len(lines))
 
@@ -87,13 +88,15 @@ func (vp VethProvider) parseOutput(output string) map[int]int {
 
 // Veths returns a map of containerIDs indexed by interface name.
 // The interfaces are refreshed only if the cache is older than maxAge.
-func (vp VethProvider) Veths(maxAge time.Duration) (map[string]string, error) {
-	if time.Since(vp.lastRefreshAt) < maxAge {
-		log.Println("!!! veths from cache")
+func (vp *VethProvider) Veths(maxAge time.Duration) (map[string]string, error) {
+	vp.l.Lock()
+	timeSinceRefresh := time.Since(vp.lastRefreshAt)
+	cache := vp.containerIDByInterfaceName
+	vp.l.Unlock()
 
-		return vp.containerIDByInterfaceName, nil
+	if timeSinceRefresh < maxAge {
+		return cache, nil
 	}
-	log.Printf("!!! veths refresh: %s\n", time.Since(vp.lastRefreshAt))
 
 	interfaces, err := net.Interfaces()
 	if err != nil {
@@ -123,8 +126,7 @@ func (vp VethProvider) Veths(maxAge time.Duration) (map[string]string, error) {
 		pids = append(pids, strconv.Itoa(container.PID()))
 	}
 
-	args := strings.Fields(fmt.Sprintf("sudo -n glouton-veths %s", pids))
-
+	args := append([]string{"sudo", "-n", "glouton-veths"}, pids...)
 	cmd := exec.CommandContext(ctx, args[0], args[1:]...)
 
 	stdout, err := cmd.Output()
@@ -156,8 +158,10 @@ func (vp VethProvider) Veths(maxAge time.Duration) (map[string]string, error) {
 	}
 
 	// Refresh cache.
+	vp.l.Lock()
 	vp.containerIDByInterfaceName = containerIDByInterfaceName
 	vp.lastRefreshAt = time.Now()
+	vp.l.Unlock()
 
 	return containerIDByInterfaceName, nil
 }

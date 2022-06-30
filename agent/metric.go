@@ -668,7 +668,7 @@ type metricFilter struct {
 	denyList  map[labels.Matcher][]matcher.Matchers
 
 	includeDefaultMetrics bool
-	vethProvider          veth.VethProvider
+	vethProvider          *veth.VethProvider
 
 	l sync.Mutex
 }
