@@ -61,7 +61,7 @@ var errNotSupported = errors.New("service not supported by Prometheus collector"
 func AddDefaultInputs(
 	coll *collector.Collector,
 	inputsConfig inputs.CollectorConfig,
-	vethProvider *veth.VethProvider,
+	vethProvider *veth.Provider,
 ) error {
 	input, err := system.New()
 	if err != nil {

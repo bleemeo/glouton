@@ -17,8 +17,8 @@ import (
 	"time"
 )
 
-// VethProvider provides a mapping between containers and host network interfaces.
-type VethProvider struct {
+// Provider provides a mapping between containers and host network interfaces.
+type Provider struct {
 	HostRootPath string
 
 	// Keep container and interface mapping in cache.
@@ -28,7 +28,7 @@ type VethProvider struct {
 }
 
 // getContainers returns all running containers PIDs.
-func (vp *VethProvider) getContainers(ctx context.Context, maxAge time.Duration) ([]facts.Container, error) {
+func (vp *Provider) getContainers(ctx context.Context, maxAge time.Duration) ([]facts.Container, error) {
 	isContainerIgnored := func(c facts.Container) bool { return false }
 
 	dockerRuntime := &docker.Docker{
@@ -60,7 +60,7 @@ func (vp *VethProvider) getContainers(ctx context.Context, maxAge time.Duration)
 // parseOutput parses the output of glouton-veths.
 // The output is expected with the format "pid: index" on each line.
 // It returns a map of interface indexes on the host indexed by the containers PIDs.
-func (vp *VethProvider) parseOutput(output string) map[int]int {
+func (vp *Provider) parseOutput(output string) map[int]int {
 	lines := strings.Split(output, "\n")
 	interfaceIndexByPID := make(map[int]int, len(lines))
 
@@ -88,7 +88,7 @@ func (vp *VethProvider) parseOutput(output string) map[int]int {
 
 // Veths returns a map of containerIDs indexed by interface name.
 // The interfaces are refreshed only if the cache is older than maxAge.
-func (vp *VethProvider) Veths(maxAge time.Duration) (map[string]string, error) {
+func (vp *Provider) Veths(maxAge time.Duration) (map[string]string, error) {
 	vp.l.Lock()
 	timeSinceRefresh := time.Since(vp.lastRefreshAt)
 	cache := vp.containerIDByInterfaceName
@@ -117,6 +117,7 @@ func (vp *VethProvider) Veths(maxAge time.Duration) (map[string]string, error) {
 	}
 
 	pids := make([]string, 0, len(containers))
+
 	for _, container := range containers {
 		if container.PID() == 0 {
 			// The container is not running, skip it.
@@ -127,7 +128,7 @@ func (vp *VethProvider) Veths(maxAge time.Duration) (map[string]string, error) {
 	}
 
 	args := append([]string{"sudo", "-n", "glouton-veths"}, pids...)
-	cmd := exec.CommandContext(ctx, args[0], args[1:]...)
+	cmd := exec.CommandContext(ctx, args[0], args[1:]...) //nolint:gosec
 
 	stdout, err := cmd.Output()
 	if err != nil {
@@ -140,8 +141,8 @@ func (vp *VethProvider) Veths(maxAge time.Duration) (map[string]string, error) {
 	}
 
 	interfaceIndexByPID := vp.parseOutput(string(stdout))
-
 	containerIDByInterfaceName := make(map[string]string, len(interfaceIndexByPID))
+
 	for _, container := range containers {
 		index, ok := interfaceIndexByPID[container.PID()]
 		if !ok {

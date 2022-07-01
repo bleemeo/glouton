@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"glouton/config"
 	"glouton/discovery"
-	"glouton/facts/container-runtime/veth"
 	"glouton/jmxtrans"
 	"glouton/logger"
 	"glouton/prometheus/matcher"
@@ -651,11 +650,6 @@ const (
 	filterLogDuration = 50 * time.Millisecond
 )
 
-type vethProvider interface {
-	// Veths returns a map of containerIDs indexed by interface name.
-	Veths(ctx context.Context) (map[string]string, error)
-}
-
 // metricFilter is a thread-safe holder of an allow / deny metrics list.
 type metricFilter struct {
 	// staticList contains the matchers generated from static source (config file).
@@ -668,7 +662,6 @@ type metricFilter struct {
 	denyList  map[labels.Matcher][]matcher.Matchers
 
 	includeDefaultMetrics bool
-	vethProvider          *veth.VethProvider
 
 	l sync.Mutex
 }

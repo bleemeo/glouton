@@ -36,7 +36,7 @@ import (
 func (r *Registry) AddNodeExporter(
 	ctx context.Context,
 	option node.Option,
-	vethProvider *veth.VethProvider,
+	vethProvider *veth.Provider,
 ) error {
 	collector, err := node.NewCollector(option)
 	if err != nil {
@@ -70,7 +70,7 @@ func (r *Registry) AddNodeExporter(
 // relabelGatherer adds containerID label to container interfaces.
 type relabelGatherer struct {
 	gatherer     prometheus.Gatherer
-	vethProvider *veth.VethProvider
+	vethProvider *veth.Provider
 }
 
 func (rg relabelGatherer) Gather() ([]*dto.MetricFamily, error) {
