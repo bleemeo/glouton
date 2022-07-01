@@ -29,6 +29,7 @@ services:
     pid: "host"
     cap_add:
     - CAP_SYS_PTRACE # This permission is needed to monitor processes IO and memory used per processes.
+    - CAP_SYS_ADMIN # This permission is needed to retrieve the network interface names of containers.
   jmxtrans:
     image: jmxtrans/jmxtrans
     volumes:
