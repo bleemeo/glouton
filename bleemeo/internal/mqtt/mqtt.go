@@ -756,7 +756,6 @@ func (c *Client) preparePoints(registreredMetricByKey map[string]bleemeoTypes.Me
 
 			payload[bleemeoAgentID] = append(payload[bleemeoAgentID], value)
 		} else {
-			fmt.Println("!!! add failed point", p.Labels)
 			c.addFailedPoints(p)
 		}
 	}
