@@ -10,6 +10,7 @@ import (
 	"glouton/facts/container-runtime/merge"
 	"glouton/facts/container-runtime/types"
 	"net"
+	"os"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -127,7 +128,14 @@ func (vp *Provider) Veths(maxAge time.Duration) (map[string]string, error) {
 		pids = append(pids, strconv.Itoa(container.PID()))
 	}
 
-	args := append([]string{"sudo", "-n", "glouton-veths"}, pids...)
+	// Use sudo only if not currently running as root.
+	// The Glouton docker container uses busybox which doesn't have sudo.
+	var args []string
+	if os.Getuid() != 0 {
+		args = append(args, "sudo", "-n")
+	}
+
+	args = append(args, append([]string{"glouton-veths"}, pids...)...)
 	cmd := exec.CommandContext(ctx, args[0], args[1:]...) //nolint:gosec
 
 	stdout, err := cmd.Output()
