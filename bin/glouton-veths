@@ -12,7 +12,7 @@ for pid in "$@"
 do
     # Sanitize input: pid must be an integer.
     if echo "$pid" | grep -qE '^[0-9]+$'; then
-        output=`nsenter -t "$pid" -n ip link show type veth`
+        output=`nsenter -t "$pid" -n ip link show`
         
         # Get the interface index on the host.
         # Output example:
@@ -20,7 +20,7 @@ do
         #     link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
         # 18: eth0@if19: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP mode DEFAULT group default 
         #     link/ether 02:42:ac:12:00:08 brd ff:ff:ff:ff:ff:ff link-netnsid 0
-        if_index=`echo $output| sed -n 's/^[0-9]\+: eth0@if\([0-9]\+\).*$/\1/p'| head -1`
+        if_index=`echo $output| sed -n 's/.*eth0@if\([0-9]\+\).*/\1/p'| head -1`
         printf "$pid: $if_index\n"
     fi
 done
