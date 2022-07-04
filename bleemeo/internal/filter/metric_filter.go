@@ -1,17 +1,27 @@
 package filter
 
 import (
+	"errors"
+	"fmt"
 	"glouton/bleemeo/internal/cache"
 	"glouton/bleemeo/internal/common"
 	bleemeoTypes "glouton/bleemeo/types"
+	"glouton/logger"
 	"glouton/types"
+	"strings"
+
+	"github.com/vishvananda/netlink"
 )
+
+var ErrConfigNotFound = errors.New("configuration not found")
 
 type Filter struct {
 	defaultConfigID string
 	accountConfigs  map[string]bleemeoTypes.GloutonAccountConfig
 	agents          map[string]bleemeoTypes.Agent
 	monitors        map[bleemeoTypes.AgentID]bleemeoTypes.Monitor
+	// isVethByInterface contains true for an interface name if it is a virtual interface.
+	isVethByInterface map[string]bool
 }
 
 func NewFilter(cache *cache.Cache) *Filter {
@@ -24,13 +34,110 @@ func NewFilter(cache *cache.Cache) *Filter {
 }
 
 // IsAllowed returns whether a metric is allowed or not depending on the current plan.
-func (f Filter) IsAllowed(lbls map[string]string, annotations types.MetricAnnotations) (bool, error) {
-	allowlist, err := common.AllowListForMetric(f.accountConfigs, f.defaultConfigID, annotations, f.monitors, f.agents)
+func (f *Filter) IsAllowed(lbls map[string]string, annotations types.MetricAnnotations) (bool, error) {
+	allowlist, err := allowListForMetric(f.accountConfigs, f.defaultConfigID, annotations, f.monitors, f.agents)
 	if err != nil {
 		return false, err
 	}
 
-	hasDockerIntegration := f.accountConfigs[f.defaultConfigID].DockerIntegration
+	// Service status and alerting rules metrics are always allowed.
+	if common.IsServiceCheckMetric(lbls, annotations) || annotations.AlertingRuleID != "" {
+		return true, nil
+	}
 
-	return common.AllowMetric(lbls, annotations, allowlist, hasDockerIntegration), nil
+	// Deny metrics associated to a container if the docker integration is disabled.
+	if !f.accountConfigs[f.defaultConfigID].DockerIntegration && annotations.ContainerID != "" {
+		return false, nil
+	}
+
+	// Wait for network metrics from virtual interfaces to be associated with a container.
+	if annotations.ContainerID == "" && f.isVethNetworkMetric(lbls) {
+		return false, nil
+	}
+
+	if len(allowlist) == 0 {
+		return true, nil
+	}
+
+	return allowlist[lbls[types.LabelName]], nil
+}
+
+// isVethNetworkMetric returns whether this metric is a network metric on a virtual interface.
+func (f *Filter) isVethNetworkMetric(labels map[string]string) bool {
+	// Network metrics can come from the "net" telegraf input or from node exporter.
+	if !(strings.HasPrefix(labels[types.LabelName], "net") || strings.HasPrefix(labels[types.LabelName], "node_network")) {
+		return false
+	}
+
+	isVeth, ok := f.isVethByInterface[labels[types.LabelItem]]
+	if ok {
+		return isVeth
+	}
+
+	// Update cache.
+	links, err := netlink.LinkList()
+	if err != nil {
+		logger.V(2).Printf("Failed to get link by name: %s", err)
+
+		// If we failed to query netlink, fallback on a simpler veth detection.
+		return strings.HasPrefix(labels[types.LabelItem], "veth")
+	}
+
+	isVethByInterface := make(map[string]bool, len(links))
+	for _, link := range links {
+		isVethByInterface[link.Attrs().Name] = link.Attrs().NetNsID >= 0
+	}
+
+	f.isVethByInterface = isVethByInterface
+
+	return f.isVethByInterface[labels[types.LabelItem]]
+}
+
+func allowListForMetric(
+	configs map[string]bleemeoTypes.GloutonAccountConfig,
+	defaultConfigID string,
+	annotations types.MetricAnnotations,
+	monitors map[bleemeoTypes.AgentID]bleemeoTypes.Monitor,
+	agents map[string]bleemeoTypes.Agent,
+) (map[string]bool, error) {
+	// TODO: snmp metric should use the correct AgentConfig
+	if annotations.BleemeoAgentID != "" {
+		var whitelist map[string]bool
+
+		monitor, present := monitors[bleemeoTypes.AgentID(annotations.BleemeoAgentID)]
+		if present {
+			accountConfig, present := configs[monitor.AccountConfig]
+			if !present {
+				return nil, fmt.Errorf("%w for monitor with config ID=%s", ErrConfigNotFound, monitor.AccountConfig)
+			}
+
+			whitelist = accountConfig.AgentConfigByName[bleemeoTypes.AgentTypeMonitor].MetricsAllowlist
+		} else {
+			agent, present := agents[annotations.BleemeoAgentID]
+			if !present {
+				return nil, fmt.Errorf("%w: missing agent ID=%s", ErrConfigNotFound, annotations.BleemeoAgentID)
+			}
+
+			accountConfig, present := configs[agent.CurrentConfigID]
+			if !present {
+				return nil, fmt.Errorf("%w for agent with config ID=%s", ErrConfigNotFound, agent.CurrentConfigID)
+			}
+
+			ac, ok := accountConfig.AgentConfigByID[agent.AgentType]
+			if !ok {
+				return nil, fmt.Errorf("%w: missing agent config for type ID=%s", ErrConfigNotFound, agent.AgentType)
+			}
+
+			whitelist = ac.MetricsAllowlist
+		}
+
+		return whitelist, nil
+	}
+
+	tmp, ok := configs[defaultConfigID].AgentConfigByName[bleemeoTypes.AgentTypeAgent]
+	if !ok {
+		return nil, fmt.Errorf("%w: missing agent config for type Name=%s", ErrConfigNotFound, bleemeoTypes.AgentTypeAgent)
+	}
+
+	return tmp.MetricsAllowlist, nil
 }

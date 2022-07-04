@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"glouton/bleemeo/internal/cache"
 	"glouton/bleemeo/internal/common"
+	"glouton/bleemeo/internal/filter"
 	bleemeoTypes "glouton/bleemeo/types"
 	"glouton/delay"
 	"glouton/logger"
@@ -961,41 +962,28 @@ func loadRootCAs(caFile string) (*x509.CertPool, error) {
 func (c *Client) filterPoints(input []types.MetricPoint) []types.MetricPoint {
 	result := make([]types.MetricPoint, 0, len(input))
 
-	defaultConfigID := c.option.Cache.Agent().CurrentConfigID
-	accountConfigs := c.option.Cache.AccountConfigsByUUID()
-	monitors := c.option.Cache.MonitorsByAgentUUID()
-	agents := c.option.Cache.AgentsByUUID()
+	f := filter.NewFilter(c.option.Cache)
 
 	for _, mp := range input {
-		whitelist, found := c.whitelistForMetricPoint(mp, defaultConfigID, accountConfigs, monitors, agents)
-		if !found {
-			continue
-		}
-
 		// json encoder can't encode NaN (JSON standard don't allow it).
 		// There isn't huge value in storing NaN anyway (it's the default when no value).
 		if math.IsNaN(mp.Value) {
 			continue
 		}
 
-		hasDockerIntegration := accountConfigs[defaultConfigID].DockerIntegration
-		if common.AllowMetric(mp.Labels, mp.Annotations, whitelist, hasDockerIntegration) {
+		isAllowed, err := f.IsAllowed(mp.Labels, mp.Annotations)
+		if err != nil {
+			logger.V(2).Printf("mqtt: %s", err)
+
+			continue
+		}
+
+		if isAllowed {
 			result = append(result, mp)
 		}
 	}
 
 	return result
-}
-
-func (c *Client) whitelistForMetricPoint(mp types.MetricPoint, defaultConfigID string, accountConfigs map[string]bleemeoTypes.GloutonAccountConfig, monitors map[bleemeoTypes.AgentID]bleemeoTypes.Monitor, agents map[string]bleemeoTypes.Agent) (map[string]bool, bool) {
-	allowList, err := common.AllowListForMetric(accountConfigs, defaultConfigID, mp.Annotations, monitors, agents)
-	if err != nil {
-		logger.V(2).Printf("mqtt: %s", err)
-
-		return nil, false
-	}
-
-	return allowList, true
 }
 
 func (c *Client) ready() bool {
