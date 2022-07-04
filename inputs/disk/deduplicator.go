@@ -28,11 +28,6 @@ func (d deduplicator) SampleConfig() string {
 	return d.Input.SampleConfig()
 }
 
-// Description returns a one-sentence description on the Processor.
-func (d deduplicator) Description() string {
-	return d.Input.Description()
-}
-
 func (d deduplicator) Init() error {
 	return d.Input.Init()
 }

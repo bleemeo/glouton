@@ -28,10 +28,6 @@ type mockInput struct {
 	GatherCallCount int
 }
 
-func (m *mockInput) Description() string {
-	return m.Name
-}
-
 func (m *mockInput) Gather(acc telegraf.Accumulator) error {
 	m.GatherCallCount++
 
@@ -39,7 +35,7 @@ func (m *mockInput) Gather(acc telegraf.Accumulator) error {
 }
 
 func (m *mockInput) SampleConfig() string {
-	return ""
+	return m.Name
 }
 
 func TestAddRemove(t *testing.T) {
@@ -59,8 +55,8 @@ func TestAddRemove(t *testing.T) {
 
 	if input, ok := c.inputs[id2]; !ok {
 		t.Errorf("c.inputs[id2=%v] == nil, want input2", id2)
-	} else if input.Description() != "input2" {
-		t.Errorf("c.inputs[id2=%v].Description() == %v, want %v", id2, input.Description(), "input2")
+	} else if input.SampleConfig() != "input2" {
+		t.Errorf("c.inputs[id2=%v].Description() == %v, want %v", id2, input.SampleConfig(), "input2")
 	}
 }
 
