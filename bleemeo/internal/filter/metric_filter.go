@@ -16,8 +16,6 @@ type Filter struct {
 	accountConfigs  map[string]bleemeoTypes.GloutonAccountConfig
 	agents          map[string]bleemeoTypes.Agent
 	monitors        map[bleemeoTypes.AgentID]bleemeoTypes.Monitor
-	// isVethByInterface contains true for an interface name if it is a virtual interface.
-	isVethByInterface map[string]bool
 }
 
 func NewFilter(cache *cache.Cache) *Filter {
@@ -47,7 +45,7 @@ func (f *Filter) IsAllowed(lbls map[string]string, annotations types.MetricAnnot
 	}
 
 	// Wait for network metrics from virtual interfaces to be associated with a container.
-	if annotations.ContainerID == "" && f.isVethNetworkMetric(lbls) {
+	if annotations.ContainerID == types.MissingContainerID {
 		return false, nil
 	}
 

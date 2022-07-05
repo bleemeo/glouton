@@ -326,7 +326,7 @@ func (a *Accumulator) processMetrics(
 	}
 
 	// Lock is needed for convertToFloatFields and for floatFields (which is
-	// a reference to a.workReslt)
+	// a reference to a.workResult)
 	a.l.Lock()
 
 	floatFields := a.convertToFloatFields(currentContext, fields, metricTime)
