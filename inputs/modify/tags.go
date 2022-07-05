@@ -19,6 +19,7 @@ package modify
 import (
 	"glouton/inputs/internal"
 	"glouton/types"
+	"strings"
 
 	"github.com/influxdata/telegraf"
 )
@@ -32,12 +33,16 @@ func AddRenameCallback(input telegraf.Input, f RenameCallback) telegraf.Input {
 	if ourInput, ok := input.(*internal.Input); ok {
 		ourInput.Accumulator.RenameCallbacks = append(ourInput.Accumulator.RenameCallbacks, internal.RenameCallback(f))
 	} else {
+		// The first line of the sample config contains a comment with the input description.
+		configLines := strings.Split(input.SampleConfig(), "\n")
+		description := strings.TrimPrefix(configLines[0], "# ")
+
 		input = &internal.Input{
 			Input: input,
 			Accumulator: internal.Accumulator{
 				RenameCallbacks: []internal.RenameCallback{internal.RenameCallback(f)},
 			},
-			Name: input.Description(),
+			Name: description,
 		}
 	}
 
