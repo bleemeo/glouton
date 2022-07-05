@@ -26,9 +26,9 @@ type Provider struct {
 }
 
 type link struct {
-	Name      string
-	Index     int
-	isVirtual bool
+	name      string
+	index     int
+	hasNSPeer bool
 }
 
 // ContainerID returns the ID of the container that owns the given interface.
@@ -73,18 +73,18 @@ func (p *Provider) updateCache() error {
 		return err
 	}
 
-	// Initialize the cache with MissingContainerID for virtual interfaces.
+	// Initialize the cache with MissingContainerID for interfaces with a peer in another namespace.
 	containerIDByInterfaceName := make(map[string]string, len(links))
 	interfaceNameByIndex := make(map[int]string, len(links))
 
 	for _, link := range links {
-		if link.isVirtual {
-			containerIDByInterfaceName[link.Name] = types.MissingContainerID
+		if link.hasNSPeer {
+			containerIDByInterfaceName[link.name] = types.MissingContainerID
 		} else {
-			containerIDByInterfaceName[link.Name] = ""
+			containerIDByInterfaceName[link.name] = ""
 		}
 
-		interfaceNameByIndex[link.Index] = link.Name
+		interfaceNameByIndex[link.index] = link.name
 	}
 
 	// List container PIDs.

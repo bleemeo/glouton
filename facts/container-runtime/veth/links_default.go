@@ -17,9 +17,9 @@ func linkList() ([]link, error) {
 	links := make([]link, len(interfaces))
 	for i, iface := range interfaces {
 		links[i] = link{
-			Name:      iface.Name,
-			Index:     iface.Index,
-			isVirtual: strings.HasPrefix(iface.Name, "veth"),
+			name:      iface.Name,
+			index:     iface.Index,
+			hasNSPeer: strings.HasPrefix(iface.Name, "veth"),
 		}
 	}
 
