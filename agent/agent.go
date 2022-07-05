@@ -699,8 +699,6 @@ func (a *agent) run(ctx context.Context, signalChan chan os.Signal) { //nolint:m
 
 	hasSwap := factsMap["swap_present"] == "true"
 
-	vethProvider := &veth.Provider{HostRootPath: a.hostRootPath}
-
 	mFilter, err := newMetricFilter(a.oldConfig, len(a.snmpManager.Targets()) > 0, hasSwap, a.metricFormat)
 	if err != nil {
 		logger.Printf("An error occurred while building the metric filter, allow/deny list may be partial: %v", err)
@@ -1140,6 +1138,11 @@ func (a *agent) run(ctx context.Context, signalChan chan os.Signal) { //nolint:m
 		} else if a.metricFormat != types.MetricFormatBleemeo {
 			logger.Printf("Warning: configuration \"disk_monitor\" is not used in Prometheus mode. Use \"disk_ignore\"")
 		}
+	}
+
+	vethProvider := &veth.Provider{
+		HostRootPath: a.hostRootPath,
+		Runtime:      a.containerRuntime,
 	}
 
 	if a.metricFormat == types.MetricFormatBleemeo {

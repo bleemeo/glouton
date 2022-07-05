@@ -4,10 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"glouton/facts"
-	"glouton/facts/container-runtime/containerd"
-	"glouton/facts/container-runtime/docker"
-	"glouton/facts/container-runtime/merge"
 	"glouton/facts/container-runtime/types"
 	"net"
 	"os"
@@ -21,6 +17,7 @@ import (
 // Provider provides a mapping between containers and host network interfaces.
 type Provider struct {
 	HostRootPath string
+	Runtime      types.RuntimeInterface
 
 	// Keep container and interface mapping in cache.
 	l                          sync.Mutex
@@ -28,40 +25,10 @@ type Provider struct {
 	lastRefreshAt              time.Time
 }
 
-// getContainers returns all running containers PIDs.
-func (vp *Provider) getContainers(ctx context.Context, maxAge time.Duration) ([]facts.Container, error) {
-	isContainerIgnored := func(c facts.Container) bool { return false }
-
-	dockerRuntime := &docker.Docker{
-		DockerSockets:      docker.DefaultAddresses(vp.HostRootPath),
-		IsContainerIgnored: isContainerIgnored,
-	}
-
-	containerdRuntime := &containerd.Containerd{
-		Addresses:          containerd.DefaultAddresses(vp.HostRootPath),
-		IsContainerIgnored: isContainerIgnored,
-	}
-
-	containerRuntime := &merge.Runtime{
-		Runtimes: []types.RuntimeInterface{
-			dockerRuntime,
-			containerdRuntime,
-		},
-		ContainerIgnored: isContainerIgnored,
-	}
-
-	containers, err := containerRuntime.Containers(ctx, maxAge, false)
-	if err != nil {
-		return nil, err
-	}
-
-	return containers, nil
-}
-
 // parseOutput parses the output of glouton-veths.
 // The output is expected with the format "pid: index" on each line.
 // It returns a map of interface indexes on the host indexed by the containers PIDs.
-func (vp *Provider) parseOutput(output string) map[int]int {
+func parseOutput(output string) map[int]int {
 	lines := strings.Split(output, "\n")
 	interfaceIndexByPID := make(map[int]int, len(lines))
 
@@ -90,6 +57,7 @@ func (vp *Provider) parseOutput(output string) map[int]int {
 // Veths returns a map of containerIDs indexed by interface name.
 // The interfaces are refreshed only if the cache is older than maxAge.
 func (vp *Provider) Veths(maxAge time.Duration) (map[string]string, error) {
+	// Try to get veths from cache.
 	vp.l.Lock()
 	timeSinceRefresh := time.Since(vp.lastRefreshAt)
 	cache := vp.containerIDByInterfaceName
@@ -112,7 +80,7 @@ func (vp *Provider) Veths(maxAge time.Duration) (map[string]string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	containers, err := vp.getContainers(ctx, maxAge)
+	containers, err := vp.Runtime.Containers(ctx, maxAge, true)
 	if err != nil {
 		return nil, err
 	}
@@ -148,7 +116,7 @@ func (vp *Provider) Veths(maxAge time.Duration) (map[string]string, error) {
 		return nil, fmt.Errorf("%w: %s", err, stderr)
 	}
 
-	interfaceIndexByPID := vp.parseOutput(string(stdout))
+	interfaceIndexByPID := parseOutput(string(stdout))
 	containerIDByInterfaceName := make(map[string]string, len(interfaceIndexByPID))
 
 	for _, container := range containers {

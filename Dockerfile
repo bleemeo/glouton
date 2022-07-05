@@ -23,7 +23,7 @@ COPY etc/glouton.conf /etc/glouton/glouton.conf
 COPY packaging/kubernetes/glouton-k8s-default.conf /etc/glouton/glouton-k8s-default.conf
 COPY packaging/common/glouton-05-system.conf /etc/glouton/conf.d/05-system.conf
 COPY packaging/docker/60-glouton.conf /etc/glouton/conf.d/
-COPY bin/ /usr/sbin
+COPY bin/glouton-veths /usr/lib/glouton/glouton-veths
 COPY --from=build /glouton /usr/sbin/glouton
 
 CMD ["/usr/sbin/glouton", "--yes-run-as-root"]
