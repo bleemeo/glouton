@@ -135,7 +135,7 @@ func (vp *Provider) Veths(maxAge time.Duration) (map[string]string, error) {
 		args = append(args, "sudo", "-n")
 	}
 
-	args = append(args, append([]string{"glouton-veths"}, pids...)...)
+	args = append(args, append([]string{"/usr/lib/glouton/glouton-veths"}, pids...)...)
 	cmd := exec.CommandContext(ctx, args[0], args[1:]...) //nolint:gosec
 
 	stdout, err := cmd.Output()
