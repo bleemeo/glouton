@@ -132,17 +132,19 @@ func (p *Provider) updateCache() error {
 
 	// Update the cache with the container IDs found.
 	for _, container := range containers {
-		index, ok := interfaceIndexByPID[container.PID()]
+		indexes, ok := interfaceIndexByPID[container.PID()]
 		if !ok {
 			continue
 		}
 
-		name, ok := interfaceNameByIndex[index]
-		if !ok {
-			continue
-		}
+		for _, index := range indexes {
+			name, ok := interfaceNameByIndex[index]
+			if !ok {
+				continue
+			}
 
-		containerIDByInterfaceName[name] = container.ID()
+			containerIDByInterfaceName[name] = container.ID()
+		}
 	}
 
 	p.containerIDByInterfaceName = containerIDByInterfaceName
@@ -151,29 +153,33 @@ func (p *Provider) updateCache() error {
 }
 
 // parseOutput parses the output of glouton-veths.
-// The output is expected with the format "pid: index" on each line.
+// The output is expected with the format "pid: index1 [index2]..." on each line.
 // It returns a map of interface indexes on the host indexed by the containers PIDs.
-func parseOutput(output string) map[int]int {
+func parseOutput(output string) map[int][]int {
 	lines := strings.Split(output, "\n")
-	interfaceIndexByPID := make(map[int]int, len(lines))
+	interfaceIndexByPID := make(map[int][]int, len(lines))
 
 	for _, line := range lines {
+		// line = "pid: index1 index2 ..."
 		res := strings.Split(line, ": ")
 		if len(res) < 2 {
 			continue
 		}
 
+		// res = [pid, index1, index2, ...]
 		pid, err := strconv.Atoi(res[0])
 		if err != nil {
 			continue
 		}
 
-		interfaceIndex, err := strconv.Atoi(res[1])
-		if err != nil {
-			continue
-		}
+		for _, strIndex := range strings.Fields(res[1]) {
+			index, err := strconv.Atoi(strIndex)
+			if err != nil {
+				continue
+			}
 
-		interfaceIndexByPID[pid] = interfaceIndex
+			interfaceIndexByPID[pid] = append(interfaceIndexByPID[pid], index)
+		}
 	}
 
 	return interfaceIndexByPID
