@@ -16,6 +16,8 @@ import (
 	"time"
 )
 
+const cacheUpdateInterval = 10 * time.Minute
+
 // Provider provides a mapping between containers and host network interfaces.
 type Provider struct {
 	HostRootPath string
@@ -24,6 +26,7 @@ type Provider struct {
 	// Keep container and interface mapping in cache.
 	l                          sync.Mutex
 	containerIDByInterfaceName map[string]string
+	lastUpdateAt               time.Time
 }
 
 type link struct {
@@ -38,39 +41,52 @@ func (p *Provider) ContainerID(interfaceName string) (string, error) {
 	p.l.Lock()
 	defer p.l.Unlock()
 
-	// Try to get the container ID from the cache.
+	// The cache is refreshed periodically to recover from temporary errors.
+	if time.Since(p.lastUpdateAt) < cacheUpdateInterval {
+		// Try to get the container ID from the cache.
+		containerID, ok := p.containerIDByInterfaceName[interfaceName]
+		if ok {
+			return containerID, nil
+		}
+	}
+
+	p.lastUpdateAt = time.Now()
+
+	if err := p.updateCache(); err != nil {
+		// The cache might still have been initialized with MissingContainerID
+		// for interfaces with a peer in another namespace.
+		logger.V(1).Printf("Failed to update the veth cache: %s", err)
+	}
+
 	containerID, ok := p.containerIDByInterfaceName[interfaceName]
 	if ok {
 		return containerID, nil
 	}
 
-	if err := p.updateCache(); err != nil {
-		logger.V(2).Printf("Failed to update veth cache: %s", err)
-
-		// If we failed to update the cache, fallback on a simpler veth detection.
-		// This can happen if glouton doesn't have the the permission to run glouton-veths as root.
-		if strings.HasPrefix(interfaceName, "veth") {
-			return types.MissingContainerID, nil
-		}
-
-		return "", nil
+	// If we fail to get the interface after a cache update, fallback on a simpler veth detection.
+	if strings.HasPrefix(interfaceName, "veth") {
+		containerID = types.MissingContainerID
+	} else {
+		containerID = ""
 	}
 
-	containerID, ok = p.containerIDByInterfaceName[interfaceName]
-	if ok {
-		return containerID, nil
+	if p.containerIDByInterfaceName == nil {
+		p.containerIDByInterfaceName = make(map[string]string)
 	}
 
-	// The interface is not in the cache after a refresh, this should not happen.
-	logger.V(2).Printf("Could not find interface %s in cache", interfaceName)
+	// Save container ID in cache, even if it might be wrong.
+	// The cache is refreshed periodically so this is not a problem.
+	p.containerIDByInterfaceName[interfaceName] = containerID
 
-	p.containerIDByInterfaceName[interfaceName] = ""
-
-	return "", nil
+	return containerID, nil
 }
 
 // updateCache updates the veth cache.
 func (p *Provider) updateCache() error {
+	logger.V(2).Println("Updating the veth cache")
+
+	p.containerIDByInterfaceName = nil
+
 	links, err := linkList()
 	if err != nil {
 		return err
@@ -89,6 +105,8 @@ func (p *Provider) updateCache() error {
 
 		interfaceNameByIndex[link.index] = link.name
 	}
+
+	p.containerIDByInterfaceName = containerIDByInterfaceName
 
 	// List container PIDs.
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
