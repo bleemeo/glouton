@@ -9,6 +9,7 @@ import (
 	"glouton/types"
 	"os"
 	"os/exec"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -129,6 +130,14 @@ func (p *Provider) updateCache() error {
 	}
 
 	interfaceIndexByPID := parseOutput(string(stdout))
+
+	// Multiple containers can have the same interface (for example using
+	// --network container:another-container). We need to sort the containers
+	// by creation date in descending order to make sure an interface is always
+	// associated with the oldest container.
+	sort.Slice(containers, func(i, j int) bool {
+		return containers[i].CreatedAt().After(containers[j].CreatedAt())
+	})
 
 	// Update the cache with the container IDs found.
 	for _, container := range containers {
