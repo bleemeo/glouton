@@ -48,10 +48,12 @@ func (p *Provider) ContainerID(interfaceName string) (string, error) {
 		logger.V(2).Printf("Failed to update veth cache: %s", err)
 
 		// If we failed to update the cache, fallback on a simpler veth detection.
-		// This can happen glouton doesn't have the the permission to run glouton-veths as root.
+		// This can happen if glouton doesn't have the the permission to run glouton-veths as root.
 		if strings.HasPrefix(interfaceName, "veth") {
 			return types.MissingContainerID, nil
 		}
+
+		return "", nil
 	}
 
 	containerID, ok = p.containerIDByInterfaceName[interfaceName]
