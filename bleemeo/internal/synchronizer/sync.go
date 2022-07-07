@@ -908,6 +908,20 @@ func (s *Synchronizer) checkDuplicated() error {
 				"and https://docs.bleemeo.com/agent/installation#install-agent-with-cloud-image-creation ",
 		)
 
+		// Update last duplication date on the API.
+		params := map[string]string{
+			"fields": "last_duplication_date",
+		}
+
+		data := map[string]time.Time{
+			"last_duplication_date": time.Now(),
+		}
+
+		_, err := s.client.Do(s.ctx, "PATCH", fmt.Sprintf("v1/agent/%s/", s.agentID), params, data, nil)
+		if err != nil {
+			logger.V(1).Printf("Failed to update duplication date: %s", err)
+		}
+
 		return errConnectorTemporaryDisabled
 	}
 
