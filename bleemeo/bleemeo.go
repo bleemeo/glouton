@@ -830,7 +830,7 @@ func (c *Connector) HealthCheck() bool {
 			logger.Printf("MQTT connection fail to re-establish since %s. This may be a long network issue or a Glouton bug", lastReport.Format(time.RFC3339))
 
 			if time.Since(lastReport) > 36*time.Hour {
-				logger.Printf("Restarting MQTT is not enough. Glouton seems unhealthy, killing mysel")
+				logger.Printf("Restarting MQTT is not enough. Glouton seems unhealthy, killing myself")
 
 				// We don't know how big the buffer needs to be to collect
 				// all the goroutines. Use 2MB buffer which hopefully is enough
@@ -838,7 +838,7 @@ func (c *Connector) HealthCheck() bool {
 
 				runtime.Stack(buffer, true)
 				logger.Printf("%s", string(buffer))
-				panic("Glouton seems unhealthy, killing myself")
+				panic(fmt.Sprint("Glouton seems unhealthy (last report too old), killing myself\n", c.DiagnosticPage()))
 			}
 
 			logger.Printf("Trying to restart the MQTT connection from scratch")
