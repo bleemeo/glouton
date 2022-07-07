@@ -10,6 +10,7 @@ func linkList() ([]link, error) {
 	}
 
 	links := make([]link, len(interfaces))
+
 	for i, iface := range interfaces {
 		// NetNsID identifies the namespace holding the link, it is only set when the
 		// interface is associated with another network namespace (-1 is the default value).
