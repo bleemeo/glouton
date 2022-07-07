@@ -113,7 +113,7 @@ func (p *Provider) updateCache() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	containers, err := p.Runtime.Containers(ctx, time.Minute, true)
+	containers, err := p.Runtime.Containers(ctx, time.Minute, false)
 	if err != nil {
 		return err
 	}
