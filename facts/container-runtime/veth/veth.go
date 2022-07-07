@@ -2,6 +2,7 @@ package veth
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	ctypes "glouton/facts/container-runtime/types"
@@ -212,4 +213,24 @@ func parseOutput(output string) map[int][]int {
 	}
 
 	return interfaceIndexByPID
+}
+
+func (p *Provider) DiagnosticArchive(ctx context.Context, archive types.ArchiveWriter) error {
+	p.l.Lock()
+	defer p.l.Unlock()
+
+	file, err := archive.Create("interface-container-association.txt")
+	if err != nil {
+		return err
+	}
+
+	cacheIndent, err := json.MarshalIndent(p.containerIDByInterfaceName, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	fmt.Fprintf(file, "Last update at %v\n", p.lastUpdateAt)
+	fmt.Fprintln(file, string(cacheIndent))
+
+	return nil
 }
