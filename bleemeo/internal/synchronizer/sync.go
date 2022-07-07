@@ -905,7 +905,7 @@ func (s *Synchronizer) checkDuplicated() error {
 		)
 		logger.Printf(
 			"The following links may be relevant to solve the issue: https://docs.bleemeo.com/agent/upgrade " +
-				"and https://docs.bleemeo.com/agent/installation#install-agent-with-cloud-image-creation ",
+				"and https://docs.bleemeo.com/agent/installation/#installation-for-cloud-image-creation ",
 		)
 
 		// Update last duplication date on the API.
