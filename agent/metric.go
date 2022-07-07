@@ -347,6 +347,8 @@ var defaultServiceMetrics map[discovery.ServiceName][]string = map[discovery.Ser
 		"elasticsearch_size",
 		"elasticsearch_search",
 		"elasticsearch_search_time",
+		"elasticsearch_cluster_docs_count",
+		"elasticsearch_cluster_size",
 	},
 
 	discovery.EximService: {
