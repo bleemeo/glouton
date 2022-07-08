@@ -1000,6 +1000,10 @@ func (c dockerContainer) StoppedAndReplaced() bool {
 }
 
 func (c dockerContainer) PID() int {
+	if c.inspect.State == nil {
+		return 0
+	}
+
 	return c.inspect.State.Pid
 }
 
