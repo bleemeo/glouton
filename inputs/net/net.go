@@ -17,8 +17,11 @@
 package net
 
 import (
+	"glouton/facts/container-runtime/veth"
 	"glouton/inputs"
 	"glouton/inputs/internal"
+	"glouton/logger"
+	"glouton/types"
 	"strings"
 
 	"github.com/influxdata/telegraf"
@@ -27,19 +30,21 @@ import (
 )
 
 type netTransformer struct {
-	blacklist []string
+	blacklist    []string
+	vethProvider *veth.Provider
 }
 
 // New initialise net.Input
 //
 // blacklist contains a list of interface name prefix to ignore.
-func New(blacklist []string) (i telegraf.Input, err error) {
+func New(blacklist []string, vethProvider *veth.Provider) (i telegraf.Input, err error) {
 	input, ok := telegraf_inputs.Inputs["net"]
 	if ok {
 		netInput, _ := input().(*net.NetIOStats)
 		netInput.IgnoreProtocolStats = true
 		nt := netTransformer{
-			blacklist,
+			blacklist:    blacklist,
+			vethProvider: vethProvider,
 		}
 		i = &internal.Input{
 			Input: netInput,
@@ -47,6 +52,7 @@ func New(blacklist []string) (i telegraf.Input, err error) {
 				RenameGlobal:     nt.renameGlobal,
 				DerivatedMetrics: []string{"bytes_sent", "bytes_recv", "drop_in", "drop_out", "packets_recv", "packets_sent", "err_out", "err_in"},
 				TransformMetrics: nt.transformMetrics,
+				RenameCallbacks:  []internal.RenameCallback{nt.renameCallback},
 			},
 			Name: "net",
 		}
@@ -89,4 +95,20 @@ func (nt netTransformer) transformMetrics(currentContext internal.GatherContext,
 	}
 
 	return fields
+}
+
+func (nt netTransformer) renameCallback(
+	labels map[string]string,
+	annotations types.MetricAnnotations,
+) (map[string]string, types.MetricAnnotations) {
+	containerID, err := nt.vethProvider.ContainerID(annotations.BleemeoItem)
+	if err != nil {
+		logger.V(1).Printf("Failed to get container interfaces: %s", err)
+
+		return labels, annotations
+	}
+
+	annotations.ContainerID = containerID
+
+	return labels, annotations
 }

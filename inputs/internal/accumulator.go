@@ -290,7 +290,13 @@ func (a *Accumulator) getDerivativeValue(pastMetricPoint metricPoint, currentPoi
 
 type accumulatorFunc func(measurement string, fields map[string]interface{}, tags map[string]string, annotations types.MetricAnnotations, t ...time.Time)
 
-func (a *Accumulator) processMetrics(finalFunc accumulatorFunc, measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+func (a *Accumulator) processMetrics(
+	finalFunc accumulatorFunc,
+	measurement string,
+	fields map[string]interface{},
+	tags map[string]string,
+	t ...time.Time,
+) {
 	if tags == nil {
 		tags = make(map[string]string)
 	}
@@ -320,7 +326,7 @@ func (a *Accumulator) processMetrics(finalFunc accumulatorFunc, measurement stri
 	}
 
 	// Lock is needed for convertToFloatFields and for floatFields (which is
-	// a reference to a.workReslt)
+	// a reference to a.workResult)
 	a.l.Lock()
 
 	floatFields := a.convertToFloatFields(currentContext, fields, metricTime)

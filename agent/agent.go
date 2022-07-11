@@ -35,6 +35,7 @@ import (
 	"glouton/facts/container-runtime/containerd"
 	"glouton/facts/container-runtime/kubernetes"
 	"glouton/facts/container-runtime/merge"
+	"glouton/facts/container-runtime/veth"
 	"glouton/influxdb"
 	"glouton/inputs"
 	"glouton/inputs/docker"
@@ -133,6 +134,7 @@ type agent struct {
 	monitorManager         *blackbox.RegisterManager
 	rulesManager           *rules.Manager
 	reloadState            ReloadState
+	vethProvider           *veth.Provider
 
 	triggerHandler            *debouncer.Debouncer
 	triggerLock               sync.Mutex
@@ -1139,6 +1141,11 @@ func (a *agent) run(ctx context.Context, signalChan chan os.Signal) { //nolint:m
 		}
 	}
 
+	a.vethProvider = &veth.Provider{
+		HostRootPath: a.hostRootPath,
+		Runtime:      a.containerRuntime,
+	}
+
 	if a.metricFormat == types.MetricFormatBleemeo {
 		conf, err := a.buildCollectorsConfig()
 		if err != nil {
@@ -1147,7 +1154,7 @@ func (a *agent) run(ctx context.Context, signalChan chan os.Signal) { //nolint:m
 			return
 		}
 
-		if err = discovery.AddDefaultInputs(a.collector, conf); err != nil {
+		if err = discovery.AddDefaultInputs(a.collector, conf, a.vethProvider); err != nil {
 			logger.Printf("Unable to initialize system collector: %v", err)
 
 			return
@@ -1155,7 +1162,7 @@ func (a *agent) run(ctx context.Context, signalChan chan os.Signal) { //nolint:m
 	}
 
 	// register components only available on a given system, like node_exporter for unixes
-	a.registerOSSpecificComponents(ctx)
+	a.registerOSSpecificComponents(ctx, a.vethProvider)
 
 	tasks = append(tasks, taskInfo{
 		a.gathererRegistry.Run,
@@ -2023,6 +2030,7 @@ func (a *agent) writeDiagnosticArchive(ctx context.Context, archive types.Archiv
 		a.gathererRegistry.DiagnosticArchive,
 		a.rulesManager.DiagnosticArchive,
 		a.reloadState.DiagnosticArchive,
+		a.vethProvider.DiagnosticArchive,
 	}
 
 	if a.bleemeoConnector != nil {

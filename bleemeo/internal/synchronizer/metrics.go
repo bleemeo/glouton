@@ -1268,7 +1268,13 @@ func (mr *metricRegisterer) metricRegisterAndUpdateOne(metric types.Metric) erro
 	return nil
 }
 
-func (s *Synchronizer) prepareMetricPayload(metric types.Metric, registeredMetricsByKey map[string]bleemeoTypes.Metric, containersByContainerID map[string]bleemeoTypes.Container, servicesByKey map[serviceNameInstance]bleemeoTypes.Service, monitors []bleemeoTypes.Monitor) (metricPayload, error) {
+func (s *Synchronizer) prepareMetricPayload(
+	metric types.Metric,
+	registeredMetricsByKey map[string]bleemeoTypes.Metric,
+	containersByContainerID map[string]bleemeoTypes.Container,
+	servicesByKey map[serviceNameInstance]bleemeoTypes.Service,
+	monitors []bleemeoTypes.Monitor,
+) (metricPayload, error) {
 	labels := metric.Labels()
 	annotations := metric.Annotations()
 	key := s.metricKey(labels, annotations)
@@ -1314,15 +1320,40 @@ func (s *Synchronizer) prepareMetricPayload(metric types.Metric, registeredMetri
 		payload.StatusOf = metricStatusOf.ID
 	}
 
-	if annotations.ContainerID != "" {
-		container, ok := containersByContainerID[annotations.ContainerID]
-		if !ok {
-			// No error. When container get registered we trigger a metric synchronization
-			return payload, errIgnore
-		}
+	cfg, ok := s.option.Cache.CurrentAccountConfig()
+	if !ok {
+		return payload, errRetryLater
+	}
 
-		containerName = container.Name
-		payload.ContainerID = container.ID
+	if annotations.ContainerID != "" {
+		// For service metrics, when the docker integration is disabled, we register the
+		// metrics but we don't associate them with a container.
+		if !cfg.DockerIntegration && common.IsServiceCheckMetric(metric.Labels(), metric.Annotations()) {
+			// In this case we still want to fill the payload serviceID. We need
+			// to retrieve the container name to get the service and we can't use
+			// containersByContainerID since the containers are not registered.
+			containers, err := s.option.Docker.Containers(s.ctx, time.Minute, false)
+			if err != nil {
+				return payload, errRetryLater
+			}
+
+			for _, container := range containers {
+				if annotations.ContainerID == container.ID() {
+					containerName = container.ContainerName()
+
+					break
+				}
+			}
+		} else {
+			container, ok := containersByContainerID[annotations.ContainerID]
+			if !ok {
+				// No error. When container get registered we trigger a metric synchronization.
+				return payload, errIgnore
+			}
+
+			containerName = container.Name
+			payload.ContainerID = container.ID
+		}
 	}
 
 	if annotations.ServiceName != "" {

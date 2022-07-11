@@ -999,6 +999,14 @@ func (c dockerContainer) StoppedAndReplaced() bool {
 	return false
 }
 
+func (c dockerContainer) PID() int {
+	if c.inspect.State == nil {
+		return 0
+	}
+
+	return c.inspect.State.Pid
+}
+
 var dockerCGroupRE = regexp.MustCompile(
 	`(?m:^\d+:[^:]+:(/kubepods/.*pod[0-9a-fA-F-]+/|.*/docker[-/])([0-9a-fA-F]+)(\.scope)?$)`,
 )

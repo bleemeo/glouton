@@ -1166,7 +1166,12 @@ func (m *metricFilter) rebuildDefaultMetrics(services []discovery.Service, list 
 	return nil
 }
 
-func (m *metricFilter) RebuildDynamicLists(scrapper dynamicScrapper, services []discovery.Service, thresholdMetricNames []string, alertMetrics []string) error {
+func (m *metricFilter) RebuildDynamicLists(
+	scrapper dynamicScrapper,
+	services []discovery.Service,
+	thresholdMetricNames []string,
+	alertMetrics []string,
+) error {
 	allowList := make(map[string]matcher.Matchers)
 	denyList := make(map[string]matcher.Matchers)
 	errors := types.MultiErrors{}

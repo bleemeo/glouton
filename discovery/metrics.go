@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"glouton/collector"
 	"glouton/facts"
+	"glouton/facts/container-runtime/veth"
 	"glouton/inputs"
 	"glouton/inputs/apache"
 	"glouton/inputs/cpu"
@@ -57,7 +58,11 @@ import (
 var errNotSupported = errors.New("service not supported by Prometheus collector")
 
 // AddDefaultInputs adds system inputs to a collector.
-func AddDefaultInputs(coll *collector.Collector, inputsConfig inputs.CollectorConfig) error {
+func AddDefaultInputs(
+	coll *collector.Collector,
+	inputsConfig inputs.CollectorConfig,
+	vethProvider *veth.Provider,
+) error {
 	input, err := system.New()
 	if err != nil {
 		return err
@@ -76,7 +81,7 @@ func AddDefaultInputs(coll *collector.Collector, inputsConfig inputs.CollectorCo
 		return err
 	}
 
-	input, err = netInput.New(inputsConfig.NetIfBlacklist)
+	input, err = netInput.New(inputsConfig.NetIfBlacklist, vethProvider)
 	if err != nil {
 		return err
 	}
