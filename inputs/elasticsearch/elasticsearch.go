@@ -59,7 +59,7 @@ func New(url string) (i telegraf.Input, err error) {
 		err = inputs.ErrDisabledInput
 	}
 
-	return
+	return i, err
 }
 
 func renameGlobal(gatherContext internal.GatherContext) (internal.GatherContext, bool) {
