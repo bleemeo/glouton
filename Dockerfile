@@ -14,10 +14,13 @@ COPY dist/glouton_linux_arm_6/glouton /glouton.arm
 
 RUN cp -p /glouton.$TARGETARCH /glouton
 
-# We use busybox because we need nsenter and ip commands.
-FROM busybox:1.34
+# We use alpine because glouton-veths needs nsenter and ip commands.
+FROM alpine:3.16 as certs
 
 LABEL maintainer="Bleemeo Docker Maintainers <packaging-team@bleemeo.com>"
+
+RUN apk update && \
+    apk add --no-cache ca-certificates
 
 COPY etc/glouton.conf /etc/glouton/glouton.conf
 COPY packaging/kubernetes/glouton-k8s-default.conf /etc/glouton/glouton-k8s-default.conf
