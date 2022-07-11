@@ -126,7 +126,7 @@ type agent struct {
 	gathererRegistry       *registry.Registry
 	metricFormat           types.MetricFormat
 	dynamicScrapper        *promexporter.DynamicScrapper
-	lastHealCheck          time.Time
+	lastHealthCheck        time.Time
 	lastContainerEventTime time.Time
 	watchdogRunAt          []time.Time
 	metricFilter           *metricFilter
@@ -168,7 +168,7 @@ type taskInfo struct {
 
 func (a *agent) init(ctx context.Context, configFiles []string, firstRun bool) (ok bool) {
 	a.l.Lock()
-	a.lastHealCheck = time.Now()
+	a.lastHealthCheck = time.Now()
 	a.l.Unlock()
 
 	a.taskRegistry = task.NewRegistry(ctx)
@@ -1530,7 +1530,7 @@ func (a *agent) watchdog(ctx context.Context) error {
 
 		a.l.Lock()
 
-		lastHealCheck := a.lastHealCheck
+		lastHealthCheck := a.lastHealthCheck
 		a.watchdogRunAt = append(a.watchdogRunAt, now)
 
 		if len(a.watchdogRunAt) > 90 {
@@ -1541,12 +1541,12 @@ func (a *agent) watchdog(ctx context.Context) error {
 		a.l.Unlock()
 
 		switch {
-		case time.Since(lastHealCheck) > 15*time.Minute && !failing:
-			logger.V(2).Printf("Healcheck are no longer running. Last run was at %s", lastHealCheck.Format(time.RFC3339))
+		case time.Since(lastHealthCheck) > 15*time.Minute && !failing:
+			logger.V(2).Printf("Healthcheck are no longer running. Last run was at %s", lastHealthCheck.Format(time.RFC3339))
 
 			failing = true
-		case time.Since(lastHealCheck) > 15*time.Minute && failing:
-			logger.Printf("Healcheck are no longer running. Last run was at %s", lastHealCheck.Format(time.RFC3339))
+		case time.Since(lastHealthCheck) > 15*time.Minute && failing:
+			logger.Printf("Healthcheck are no longer running. Last run was at %s", lastHealthCheck.Format(time.RFC3339))
 			// We don't know how big the buffer needs to be to collect
 			// all the goroutines. Use 2MB buffer which hopefully is enough
 			buffer := make([]byte, 1<<21)
@@ -1554,7 +1554,7 @@ func (a *agent) watchdog(ctx context.Context) error {
 			runtime.Stack(buffer, true)
 			logger.Printf("%s", string(buffer))
 			logger.Printf("Glouton seems unhealthy, killing myself")
-			panic("Glouton seems unhealthy, killing myself")
+			panic("Glouton seems unhealthy (health check is no longer running), killing myself")
 		default:
 			failing = false
 		}
@@ -1590,7 +1590,7 @@ func (a *agent) healthCheck(ctx context.Context) error {
 		}
 
 		a.l.Lock()
-		a.lastHealCheck = time.Now()
+		a.lastHealthCheck = time.Now()
 		a.l.Unlock()
 	}
 }
@@ -2104,7 +2104,7 @@ func (a *agent) diagnosticGloutonState(ctx context.Context, archive types.Archiv
 
 	obj := struct {
 		HostRootPath              string
-		LastHealCheck             time.Time
+		LastHealthCheck           time.Time
 		LastContainerEventTime    time.Time
 		TriggerDiscAt             time.Time
 		TriggerDiscImmediate      bool
@@ -2115,7 +2115,7 @@ func (a *agent) diagnosticGloutonState(ctx context.Context, archive types.Archiv
 		MetricResolutionSeconds   float64
 	}{
 		HostRootPath:              a.hostRootPath,
-		LastHealCheck:             a.lastHealCheck,
+		LastHealthCheck:           a.lastHealthCheck,
 		LastContainerEventTime:    a.lastContainerEventTime,
 		TriggerDiscAt:             a.triggerDiscAt,
 		TriggerDiscImmediate:      a.triggerDiscImmediate,
