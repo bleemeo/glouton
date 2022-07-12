@@ -40,9 +40,30 @@ Then go to the Grafana dashboard at http://localhost:3000, log with the user is 
 
 ## Install
 
-TODO: deb/rpm installation / docker / windows
+Glouton can be installed with Docker, Kubernetes, on Windows or as a native Linux package.
 
-If you want to use the Bleemeo Cloud solution, see https://docs.bleemeo.com/agent/installation.
+### Docker
+
+A docker image is provided to install Glouton easily.
+
+```sh
+export GLOUTON_BLEEMEO_ENABLE=false
+
+docker run -d --name="bleemeo-agent" \
+    -v /var/lib/glouton:/var/lib/glouton -v /var/run/docker.sock:/var/run/docker.sock -v /:/hostroot:ro \
+    -e  GLOUTON_BLEEMEO_ENABLE='false' --pid=host --net=host \
+    --cap-add SYS_PTRACE --cap-add SYS_ADMIN bleemeo/bleemeo-agent
+```
+
+### Other platforms
+
+If you are not a Bleemeo user, disable the Bleemeo connector in `/etc/glouton/conf.d/30-install.conf`:
+```
+bleemeo:
+   enable: false
+```
+
+To install Glouton as a native package on Linux, or to install it on Windows or Kubernetes, check out the [documentation](https://docs.bleemeo.com/agent/installation). Note that this documentation is made for users of the Bleemeo Cloud solution, but it should also work without a Bleemeo account if you skip adding the credentials to the config.
 
 ## Configuration
 

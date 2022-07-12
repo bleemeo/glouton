@@ -119,7 +119,7 @@ If you updated GraphQL schema or JS files, rebuild JS files by running build.sh:
 Note: on Windows, you should consider setting an environment variable to disable CGO when building/testing, lest you get funny messages like 'exec: "gcc": executable file not found in %PATH%'.
 For Powershell, you may set it with `$env:CGO_ENABLED = 0`.
 
-### Developping the local UI JavaScript
+### Developping the local UI
 
 When working on the JavaScript rebuilding the Javascript bundle could be slow
 and will use minified JavaScript file which are harder to debug.
