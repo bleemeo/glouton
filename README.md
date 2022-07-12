@@ -9,7 +9,7 @@
 
 **Glouton** is a monitoring agent that makes observing your infrasture easy. Glouton retrieves metrics from **node exporter** and multiple **telegraf inputs** and expose them through a **Prometheus endpoint** and a **dashboard**. It also automatically discovers your [services](#automatically-discovered-services) to retrieve relevant metrics.
 
-TODO: Introduce Bleemeo?
+Glouton is the agent used in the **Bleemeo cloud monitoring solution**. Deploying a **robust, scalable monitoring solution** can be time consuming. At Bleemeo, we focus on making users life **easier**. Check out the solution we offer on our [website](https://bleemeo.com) and try it now for free!
 
 <img src="webui/preview/dashboard.png" alt="Dashboard"/>
 
