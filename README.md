@@ -30,14 +30,13 @@ Glouton automatically detects and generates metrics for your services. Supported
 
 A metrics endpoint is available on port http://localhost:8015/metrics by default (this can be connfigured [here](https://docs.bleemeo.com/agent/configuration#weblisteneraddress)). This is endpoint can be scrapped by Prometheus for example to retrieve the metrics and show them on graphs in Grafana.
 
-## Docker compose example
-
 A docker compose file is available to quickly setup a full monitoring stack. It includes Grafana, Glouton and a Prometheus configured to scrap Glouton's metrics endpoint.
+```sh
+cd examples/prometheus
+docker-compose up
+```
 
-```
-TODO: Setup compose file.
-docker-compose up -d
-```
+Then go to the Grafana dashboard at http://localhost:3000, log with the user is "admin" and the password "password".
 
 ## Install
 
