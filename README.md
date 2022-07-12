@@ -5,7 +5,8 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/bleemeo/glouton)](https://goreportcard.com/report/github.com/bleemeo/glouton)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](https://github.com/bleemeo/glouton/blob/master/LICENSE)
 ![Platform](https://img.shields.io/badge/platform-linux%20%7C%20windows%20%7C%20macos-informational)
-[![Docker Image Size](https://img.shields.io/docker/image-size/bleemeo/glouton)](https://hub.docker.com/r/bleemeo/glouton/tags)
+[![Docker Image Version](https://img.shields.io/docker/v/bleemeo/glouton)](https://hub.docker.com/r/bleemeo/glouton/tags)
+[![Docker Image Size](https://img.shields.io/docker/image-size/bleemeo/glouton)](https://hub.docker.com/r/bleemeo/glouton)
 
 **Glouton** is a monitoring agent that makes observing your infrasture easy. Glouton retrieves metrics from **node exporter** and multiple **telegraf inputs** and expose them through a **Prometheus endpoint** and a **dashboard**. It also automatically discovers your [services](#automatically-discovered-services) to retrieve relevant metrics.
 
@@ -18,7 +19,7 @@ Glouton is the agent used in the **Bleemeo cloud monitoring solution**. Deployin
 - [**Automatic discovery and configuration of services**](#automatically-discovered-services) to generate checks and metrics
 - Can be used as the main **[Prometheus endpoint](#metrics-endpoint)** for another scrapper
 - Support **[Nagios checks](https://docs.bleemeo.com/metrics-sources/custom/#reference-for-custom-check), [NRPE](https://docs.bleemeo.com/agent/configuration/#nrpeaddress) and [StatsD](https://docs.bleemeo.com/metrics-sources/statsd)** metrics ingester
-- **Kubernetes native support** creating metrics and checks for pods
+- **Kubernetes native:** create metrics and checks for pods
 - Monitor your printers and network devices with [**SNMP**](https://docs.bleemeo.com/agent/snmp)
 - **[JMX support](https://docs.bleemeo.com/metrics-sources/java)** to monitor your Java applications.
 
