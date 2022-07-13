@@ -37,7 +37,7 @@ cd examples/prometheus
 docker-compose up -d
 ```
 
-Then go to the Grafana dashboard at http://localhost:3000, log with the user is "admin" and the password "password".
+Then go to the Grafana dashboard at http://localhost:3000, and log in with the user "admin" and the password "password".
 
 ## Install
 
