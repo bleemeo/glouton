@@ -31,14 +31,23 @@ func New(url string) (i telegraf.Input, err error) {
 	if ok {
 		elasticsearchInput, ok := input().(*elasticsearch.Elasticsearch)
 		if ok {
-			elasticsearchInput.Servers = append(make([]string, 0), url)
+			elasticsearchInput.Servers = []string{url}
 			elasticsearchInput.Local = true
+			elasticsearchInput.ClusterStats = true
+			elasticsearchInput.ClusterStatsOnlyFromMaster = false
 			elasticsearchInput.ClusterHealth = false
 			i = &internal.Input{
 				Input: elasticsearchInput,
 				Accumulator: internal.Accumulator{
-					RenameGlobal:     renameGlobal,
-					DerivatedMetrics: []string{"search_query_total", "search_query_time_in_millis", "gc_collectors_old_collection_count", "gc_collectors_young_collection_count", "gc_collectors_old_collection_time_in_millis", "gc_collectors_young_collection_time_in_millis"},
+					RenameGlobal: renameGlobal,
+					DerivatedMetrics: []string{
+						"search_query_total",
+						"search_query_time_in_millis",
+						"gc_collectors_old_collection_count",
+						"gc_collectors_young_collection_count",
+						"gc_collectors_old_collection_time_in_millis",
+						"gc_collectors_young_collection_time_in_millis",
+					},
 					TransformMetrics: transformMetrics,
 				},
 				Name: "elasticsearch",
@@ -98,6 +107,14 @@ func transformMetrics(currentContext internal.GatherContext, fields map[string]f
 		newFields["jvm_gc_time"] = jvmGcTime
 		newFields["jvm_gc_utilization"] = jvmGcTime / 10.
 		newFields["jvm_gc"] = jvmGCCount
+	case "elasticsearch_clusterstats_indices":
+		if value, ok := fields["docs_count"]; ok {
+			newFields["cluster_docs_count"] = value
+		}
+
+		if value, ok := fields["store_size_in_bytes"]; ok {
+			newFields["cluster_size"] = value
+		}
 	}
 
 	return newFields

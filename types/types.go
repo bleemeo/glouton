@@ -128,6 +128,10 @@ const (
 	LabelAlertname                  = "alertname"
 )
 
+// MissingContainerID is the container ID annotation set on metrics that belong
+// to a container when the container is not known yet.
+const MissingContainerID = "missing-container-id"
+
 // IsSet return true if the status is set.
 func (s Status) IsSet() bool {
 	return s != StatusUnset

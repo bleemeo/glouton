@@ -21,14 +21,22 @@ package registry
 
 import (
 	"context"
+	"glouton/facts/container-runtime/veth"
+	"glouton/logger"
 	"glouton/prometheus/exporter/node"
 	"glouton/types"
+	"strings"
 
 	"github.com/prometheus/client_golang/prometheus"
+	dto "github.com/prometheus/client_model/go"
 )
 
 // AddNodeExporter add a node_exporter to collector.
-func (r *Registry) AddNodeExporter(ctx context.Context, option node.Option) error {
+func (r *Registry) AddNodeExporter(
+	ctx context.Context,
+	option node.Option,
+	vethProvider *veth.Provider,
+) error {
 	collector, err := node.NewCollector(option)
 	if err != nil {
 		return err
@@ -49,8 +57,56 @@ func (r *Registry) AddNodeExporter(ctx context.Context, option node.Option) erro
 			Interval:              defaultInterval,
 			DisablePeriodicGather: r.option.MetricFormat != types.MetricFormatPrometheus,
 		},
-		reg,
+		relabelGatherer{
+			gatherer:     reg,
+			vethProvider: vethProvider,
+		},
 	)
 
 	return err
+}
+
+// relabelGatherer adds containerID label to container interfaces.
+type relabelGatherer struct {
+	gatherer     prometheus.Gatherer
+	vethProvider *veth.Provider
+}
+
+func (rg relabelGatherer) Gather() ([]*dto.MetricFamily, error) {
+	mfs, err := rg.gatherer.Gather()
+	if err != nil {
+		return nil, err
+	}
+
+	labelMetaContainerID := types.LabelMetaContainerID
+
+	for _, mf := range mfs {
+		if !strings.HasPrefix(mf.GetName(), "node_network") {
+			continue
+		}
+
+		for i, metric := range mf.GetMetric() {
+			for _, label := range metric.GetLabel() {
+				if label.GetName() != "device" {
+					continue
+				}
+
+				containerID, err := rg.vethProvider.ContainerID(label.GetValue())
+				if err != nil {
+					logger.V(1).Printf("Failed to get container interfaces: %s", err)
+
+					continue
+				}
+
+				containerLabel := &dto.LabelPair{
+					Name:  &labelMetaContainerID,
+					Value: &containerID,
+				}
+
+				mf.Metric[i].Label = append(mf.Metric[i].Label, containerLabel)
+			}
+		}
+	}
+
+	return mfs, err
 }

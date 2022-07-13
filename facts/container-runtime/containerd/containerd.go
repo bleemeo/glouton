@@ -977,6 +977,10 @@ func (c containerObject) StoppedAndReplaced() bool {
 	return false
 }
 
+func (c containerObject) PID() int {
+	return c.pid
+}
+
 func isContainerdRunning() bool {
 	pids, err := process.Pids()
 	if err != nil {

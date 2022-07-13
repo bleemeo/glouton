@@ -4,24 +4,29 @@
 # docker run --name="glouton" --net=host --pid=host -v /var/lib/glouton:/var/lib/glouton -v /var/run/docker.sock:/var/run/docker.sock -v /:/hostroot:ro glouton
 #
 
-FROM --platform=$BUILDPLATFORM busybox as build
+FROM --platform=$BUILDPLATFORM alpine:3.16 as build
 
 ARG TARGETARCH
 
-ADD dist/glouton_linux_amd64_v1/glouton /glouton.amd64
-ADD dist/glouton_linux_arm64/glouton /glouton.arm64
-ADD dist/glouton_linux_arm_6/glouton /glouton.arm6
+COPY dist/glouton_linux_amd64_v1/glouton /glouton.amd64
+COPY dist/glouton_linux_arm64/glouton /glouton.arm64
+COPY dist/glouton_linux_arm_6/glouton /glouton.arm
 
-RUN if [ "$TARGETARCH" = "arm" ]; then cp -p /glouton.arm6 /glouton; else cp -p /glouton.$TARGETARCH /glouton; fi
+RUN cp -p /glouton.$TARGETARCH /glouton
 
-FROM gcr.io/distroless/base
+# We use alpine because glouton-veths needs nsenter and ip commands.
+FROM alpine:3.16
 
-LABEL MAINTAINER="Bleemeo Docker Maintainers <packaging-team@bleemeo.com>"
+LABEL maintainer="Bleemeo Docker Maintainers <packaging-team@bleemeo.com>"
 
-ADD etc/glouton.conf /etc/glouton/glouton.conf
-ADD packaging/kubernetes/glouton-k8s-default.conf /etc/glouton/glouton-k8s-default.conf
-ADD packaging/common/glouton-05-system.conf /etc/glouton/conf.d/05-system.conf
-ADD packaging/docker/60-glouton.conf /etc/glouton/conf.d/
+RUN apk update && \
+    apk add --no-cache ca-certificates
+
+COPY etc/glouton.conf /etc/glouton/glouton.conf
+COPY packaging/kubernetes/glouton-k8s-default.conf /etc/glouton/glouton-k8s-default.conf
+COPY packaging/common/glouton-05-system.conf /etc/glouton/conf.d/05-system.conf
+COPY packaging/docker/60-glouton.conf /etc/glouton/conf.d/
+COPY bin/glouton-veths /usr/lib/glouton/glouton-veths
 COPY --from=build /glouton /usr/sbin/glouton
 
 CMD ["/usr/sbin/glouton", "--yes-run-as-root"]

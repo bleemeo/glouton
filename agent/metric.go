@@ -347,6 +347,8 @@ var defaultServiceMetrics map[discovery.ServiceName][]string = map[discovery.Ser
 		"elasticsearch_size",
 		"elasticsearch_search",
 		"elasticsearch_search_time",
+		"elasticsearch_cluster_docs_count",
+		"elasticsearch_cluster_size",
 	},
 
 	discovery.EximService: {
@@ -1164,7 +1166,12 @@ func (m *metricFilter) rebuildDefaultMetrics(services []discovery.Service, list 
 	return nil
 }
 
-func (m *metricFilter) RebuildDynamicLists(scrapper dynamicScrapper, services []discovery.Service, thresholdMetricNames []string, alertMetrics []string) error {
+func (m *metricFilter) RebuildDynamicLists(
+	scrapper dynamicScrapper,
+	services []discovery.Service,
+	thresholdMetricNames []string,
+	alertMetrics []string,
+) error {
 	allowList := make(map[string]matcher.Matchers)
 	denyList := make(map[string]matcher.Matchers)
 	errors := types.MultiErrors{}
