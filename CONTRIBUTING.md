@@ -75,14 +75,14 @@ The release build will
 * Build Docker image using Docker buildx
 * Build an Windows installer using NSIS
 
-The build process use Docker and is run by the build script:
-
-* The first time, create resource:
+A builder needs to be created to build multi-arch images if it doesn't exist.
 ```sh
-docker buildx create --name glouton-builder  # Needed to building multi-arch images
+docker buildx create --name glouton-builder
 ```
 
-* Then for each release:
+### Test release
+
+To do a test release, run:
 ```sh
 export GLOUTON_VERSION="$(date -u +%y.%m.%d.%H%M%S)"
 export GLOUTON_BUILDX_OPTION="--builder glouton-builder -t glouton:latest --load"
@@ -91,13 +91,14 @@ export GLOUTON_BUILDX_OPTION="--builder glouton-builder -t glouton:latest --load
 unset GLOUTON_VERSION GLOUTON_BUILDX_OPTION
 ```
 
-Release files are present in dist/ folder and a Docker image is build (glouton:latest) and loaded in
+Release files are present in dist/ folder and a Docker image is build (glouton:latest) and loaded to
 your Docker images.
 
+### Production release
 
-For real release, you will want to build the Docker image for multiple architecture, which require to
-push image into a registry. Set image tags ("-t" options) to the wanted destination and ensure you
-are authorized to push in destination registry:
+For production releases, you will want to build the Docker image for multiple architecture, which requires to
+push the image into a registry. Set image tags ("-t" options) to the wanted destination and ensure you
+are authorized to push to the destination registry:
 ```sh
 export GLOUTON_VERSION="$(date -u +%y.%m.%d.%H%M%S)"
 export GLOUTON_BUILDX_OPTION="--builder glouton-builder --platform linux/amd64,linux/arm64/v8,linux/arm/v7 -t glouton:latest -t glouton:${GLOUTON_VERSION} --push"
