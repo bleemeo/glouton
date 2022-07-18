@@ -64,7 +64,6 @@ To use jmxtrans, two containers will be run, one with Glouton and one with jmxtr
 them will allow Glouton to write the jmxtrans configuration file.
 
 ```sh
-cd examples/jmxtrans
 docker-compose up -d
 ```
 
