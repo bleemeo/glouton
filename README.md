@@ -33,11 +33,12 @@ A metrics endpoint is available on port http://localhost:8015/metrics by default
 
 A docker compose file is available to quickly setup a full monitoring stack. It includes Grafana, Glouton and a Prometheus configured to scrap Glouton's metrics endpoint.
 ```sh
-cd examples/prometheus
+cd examples/prometheus # Use prometheus_mac for MacOS
 docker-compose up -d
 ```
 
 Then go to the Grafana dashboard at http://localhost:3000, and log in with the user "admin" and the password "password".
+A default dashboard is available in Dashboards > Manage > Glouton.
 
 ## Install
 
