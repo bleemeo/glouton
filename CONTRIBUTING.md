@@ -30,7 +30,7 @@ If you updated GraphQL schema or JS files, rebuild JS files by running build.sh:
 ```
 
 **Note:** on Windows, if you are using the Go compiler without the `build.sh` script and 
-get `"gcc": executable file not found"` error, try setting environment `CGO_ENABLED` to 0.
+get `"gcc": executable file not found"` error, try setting the environment variable `CGO_ENABLED` to 0.
 
 ### Developping the local UI
 
