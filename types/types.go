@@ -91,10 +91,13 @@ func (f MetricFormat) String() string {
 const (
 	LabelName = "__name__"
 
-	// Label starting with "__" are dropped after collections and are only accessible internally (e.g. not present on /metrics, on Bleemeo Cloud or in the local store)
-	// They are actually dropped by the metric registry.
-	// The label startings with "__" could be used to known from where a metrics come from and unlike label
-	// which don't start by "__", they can only be set by Glouton itself because it not a valid user defined label.
+	// ReservedLabelPrefix is a prefix which is not legal in user-supplied label names.
+	ReservedLabelPrefix = "__"
+	// Label starting with "__" are dropped after collections and are only accessible
+	// internally (e.g. not present on /metrics, on Bleemeo Cloud or in the local store),
+	// they are dropped by the metric registry.
+	// They can be used to know the origin of a metric. Unlike label which don't start by "__",
+	// they can only be set by Glouton itself because it's not a valid user defined label.
 	LabelMetaContainerName          = "__meta_container_name"
 	LabelMetaContainerID            = "__meta_container_id"
 	LabelMetaServiceName            = "__meta_service_name"

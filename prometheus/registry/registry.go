@@ -931,6 +931,10 @@ func (r *Registry) GatherWithState(ctx context.Context, state GatherState) ([]*d
 
 			mfs = append(mfs, scrapedMFS...)
 			mfs = append(mfs, statusMFS...)
+
+			// Remove meta labels to prevent the Prometheus gatherer
+			// from deleting metrics using reserved labels.
+			mfs = removeMetaLabels(mfs)
 		}()
 	}
 
@@ -1034,6 +1038,32 @@ func gatherFromQueryable(ctx context.Context, queryable storage.Queryable, filte
 	}
 
 	return result, series.Err()
+}
+
+// removeMetaLabels removes all meta labels from the metric family.
+func removeMetaLabels(mfs []*dto.MetricFamily) []*dto.MetricFamily {
+	for _, mf := range mfs {
+		for _, metric := range mf.GetMetric() {
+			nextFreeIndex := 0
+
+			for _, label := range metric.GetLabel() {
+				// Keep only non reserved labels. The deletion is done in place.
+				if !strings.HasPrefix(label.GetName(), types.ReservedLabelPrefix) {
+					metric.Label[nextFreeIndex] = label
+					nextFreeIndex++
+				}
+			}
+
+			// Prevent memory leak by erasing truncated values.
+			for j := nextFreeIndex; j < len(metric.Label); j++ {
+				metric.Label[j] = nil
+			}
+
+			metric.Label = metric.Label[:nextFreeIndex]
+		}
+	}
+
+	return mfs
 }
 
 type prefixLogger string
