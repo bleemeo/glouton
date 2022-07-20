@@ -91,8 +91,7 @@ export GLOUTON_BUILDX_OPTION="--builder glouton-builder -t glouton:latest --load
 unset GLOUTON_VERSION GLOUTON_BUILDX_OPTION
 ```
 
-Release files are present in dist/ folder and a Docker image is build (glouton:latest) and loaded to
-your Docker images.
+The release files are created in the `dist/` folder and a Docker image named `glouton:latest` is built.
 
 ### Production release
 
