@@ -34,11 +34,12 @@ services:
       - prometheus
     volumes:
       - grafana-data:/var/lib/grafana
-      - ./provisioning/:/etc/grafana/provisioning/
+      - ./provisioning/dashboards:/etc/grafana/provisioning/dashboards
+      - ./provisioning/datasources:/etc/grafana/provisioning/datasources
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=password
-    ports:
-      - 127.0.0.1:3000:3000
+      - GF_SERVER_HTTP_ADDR=localhost
+    network_mode: "host"
 
 volumes:
   glouton-data: {}
