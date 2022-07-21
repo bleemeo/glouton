@@ -1,5 +1,5 @@
 <p align="center">
-   <img src="logo_glouton.svg" alt="Glouton" height="300"/>
+   <img src="assets/logo_glouton.svg" alt="Glouton" height="300"/>
 </p>
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/bleemeo/glouton)](https://goreportcard.com/report/github.com/bleemeo/glouton)
@@ -12,7 +12,7 @@
 
 Glouton is the agent used in the **Bleemeo cloud monitoring solution**. Deploying a **robust, scalable monitoring solution** can be time consuming. At Bleemeo, we focus on making users life **easier**. Check out the solution we offer on our [website](https://bleemeo.com) and try it now for free!
 
-<img src="webui/preview/dashboard.png" alt="Dashboard"/>
+<img src="assets/diagram.png" alt="Architecture"/>
 
 ## Features
 
@@ -22,6 +22,9 @@ Glouton is the agent used in the **Bleemeo cloud monitoring solution**. Deployin
 - **Kubernetes native:** create metrics and checks for pods
 - Monitor your printers and network devices with [**SNMP**](https://docs.bleemeo.com/agent/snmp)
 - **[JMX support](https://docs.bleemeo.com/metrics-sources/java)** to monitor your Java applications.
+- Integrated **web dashboard**
+
+<img src="assets/dashboard.png" alt="Dashboard"/>
 
 ### Automatically discovered services
 
