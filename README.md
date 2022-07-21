@@ -12,7 +12,9 @@
 
 Glouton is the agent used in the **Bleemeo cloud monitoring solution**. Deploying a **robust, scalable monitoring solution** can be time consuming. At Bleemeo, we focus on making users life **easier**. Check out the solution we offer on our [website](https://bleemeo.com) and try it now for free!
 
-<img src="assets/diagram.png" alt="Architecture"/>
+<p align="center">
+   <img src="assets/diagram.png" alt="Architecture"/>
+</p>
 
 ## Features
 
@@ -24,7 +26,9 @@ Glouton is the agent used in the **Bleemeo cloud monitoring solution**. Deployin
 - **[JMX support](https://docs.bleemeo.com/metrics-sources/java)** to monitor your Java applications.
 - Integrated **web dashboard**
 
-<img src="assets/dashboard.png" alt="Dashboard"/>
+<p align="center">
+   <img src="assets/dashboard.png" alt="Dashboard" style="max-height: 500px"/>
+</p>
 
 ### Automatically discovered services
 
