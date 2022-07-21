@@ -34,8 +34,8 @@ services:
       - prometheus
     volumes:
       - grafana-data:/var/lib/grafana
-      - ./provisioning/dashboards:/etc/grafana/provisioning/dashboards
-      - ./provisioning/datasources:/etc/grafana/provisioning/datasources
+      - ../common/dashboards:/etc/grafana/provisioning/dashboards
+      - ./datasource.yml:/etc/grafana/provisioning/datasources/datasource.yml
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=password
       - GF_SERVER_HTTP_ADDR=localhost

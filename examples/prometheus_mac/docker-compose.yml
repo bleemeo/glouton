@@ -28,7 +28,7 @@ services:
   prometheus:
     image: prom/prometheus
     volumes:
-      - ../prometheus/prometheus.yml/:/etc/prometheus/prometheus.yml
+      - ./prometheus.yml/:/etc/prometheus/prometheus.yml
       - prometheus-data:/prometheus
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
@@ -44,8 +44,8 @@ services:
       - prometheus
     volumes:
       - grafana-data:/var/lib/grafana
-      - ../prometheus/provisioning/dashboards:/etc/grafana/provisioning/dashboards
-      - ./provisioning/datasources:/etc/grafana/provisioning/datasources
+      - ../common/dashboards:/etc/grafana/provisioning/dashboards
+      - ./datasource.yml:/etc/grafana/provisioning/datasources/datasource.yml
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=password
     ports:
