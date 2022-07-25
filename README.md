@@ -27,7 +27,7 @@ Glouton is the agent used in the **Bleemeo cloud monitoring solution**. Deployin
 - Integrated **web dashboard**
 
 <p align="center">
-   <img src="assets/dashboard.png" alt="Dashboard" style="max-height: 500px"/>
+   <img src="assets/dashboard.png" alt="Dashboard"/>
 </p>
 
 ### Automatically discovered services
