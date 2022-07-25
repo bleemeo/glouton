@@ -47,8 +47,8 @@ A docker compose file is available to quickly setup a full monitoring stack. It 
 (cd examples/prometheus_mac; docker-compose up -d)
 ```
 
-Then go to the Grafana dashboard at http://localhost:3000, and log in with the user "admin" and the password "password".
-A default dashboard is available in Dashboards > Browse > Glouton.
+Then go to the Grafana dashboard at http://localhost:3000/d/83ceCuenk/, and log 
+in with the user "admin" and the password "password".
 
 ## Install
 
