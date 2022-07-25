@@ -13,7 +13,7 @@
 Glouton is the agent used in the **Bleemeo cloud monitoring solution**. Deploying a **robust, scalable monitoring solution** can be time consuming. At Bleemeo, we focus on making users life **easier**. Check out the solution we offer on our [website](https://bleemeo.com) and try it now for free!
 
 <p align="center">
-   <img src="assets/diagram.png" alt="Architecture"/>
+   <img src="assets/diagram.drawio.png" alt="Architecture"/>
 </p>
 
 ## Features
