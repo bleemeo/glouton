@@ -1,4 +1,4 @@
-## Build cache
+## Build cache (optional)
 
 Enable the cache to speed-up build and lint.
 ```sh
@@ -49,20 +49,20 @@ docker run --net host --rm -ti -u $UID -e HOME=/tmp/home \
    sh -c 'npm install && npm start'
 ```
 
-Glouton use eslint as linter. You may run it with:
-```sh
-(cd webui; npm run lint)
-```
-
-Glouton use prettier too. You may run it with:
-```sh
-(cd webui; npm run pretify)
-```
-
 Then tell Glouton to use JavaScript file from webpack-dev-server:
 ```sh
 export GLOUTON_WEB_STATIC_CDN_URL=http://localhost:3015
 ./glouton
+```
+
+Glouton uses eslint as linter. You may run it with:
+```sh
+(cd webui; npm run lint)
+```
+
+Glouton uses prettier too. You may run it with:
+```sh
+(cd webui; npm run pretify)
 ```
 
 ## Build a release
