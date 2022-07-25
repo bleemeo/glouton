@@ -66,9 +66,9 @@ docker run -d --name="bleemeo-agent" \
     --cap-add SYS_PTRACE --cap-add SYS_ADMIN bleemeo/bleemeo-agent
 ```
 
-### Docker (with JMX)
+### Docker compose
 
-Glouton supports JMX metrics using jmxtrans (a JMX proxy which queries the JVM over JMX and sends 
+The docker compose will run Glouton with jmxtrans (a JMX proxy which queries the JVM over JMX and sends 
 metrics over the graphite protocol to Glouton).
 
 To use jmxtrans, two containers will be run, one with Glouton and one with jmxtrans and a shared volume between
