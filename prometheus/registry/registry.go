@@ -743,15 +743,19 @@ func (r *Registry) restartScrapeLoop(ctx context.Context, reg *registration) {
 		timeout = reg.option.Timeout
 	}
 
-	reg.loop = startScrapeLoop(
-		ctx,
-		interval,
-		timeout,
-		reg.option.JitterSeed,
-		func(ctx context.Context, t0 time.Time) {
-			r.scrapeFromLoop(ctx, t0, reg)
-		},
-	)
+	if strings.HasPrefix(reg.option.Description, "check for nagios_test_service") { // TODO: remove
+		fmt.Println("!!! Start scrape loop", reg.option.Description)
+
+		reg.loop = startScrapeLoop(
+			ctx,
+			interval,
+			timeout,
+			reg.option.JitterSeed,
+			func(ctx context.Context, t0 time.Time) {
+				r.scrapeFromLoop(ctx, t0, reg)
+			},
+		)
+	}
 }
 
 func (r *Registry) ScheduleScrape(id int, runAt time.Time) {

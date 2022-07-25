@@ -18,14 +18,19 @@ package check
 
 import (
 	"context"
-	"glouton/inputs"
 	"glouton/types"
 )
 
-func NewContainerStopped(address string, tcpAddresses []string, persistenConnection bool, labels map[string]string, annotations types.MetricAnnotations, acc inputs.AnnotationAccumulator) *ContainerCheck {
+func NewContainerStopped(
+	address string,
+	tcpAddresses []string,
+	persistenConnection bool,
+	labels map[string]string,
+	annotations types.MetricAnnotations,
+) *ContainerCheck {
 	newCheck := &ContainerCheck{}
 
-	newCheck.baseCheck = newBase(address, tcpAddresses, persistenConnection, newCheck.containerStoppedCheck, labels, annotations, acc)
+	newCheck.baseCheck = newBase(address, tcpAddresses, persistenConnection, newCheck.containerStoppedCheck, labels, annotations)
 
 	return newCheck
 }

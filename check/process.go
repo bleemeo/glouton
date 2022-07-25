@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"glouton/facts"
-	"glouton/inputs"
 	"glouton/logger"
 	"glouton/types"
 	"regexp"
@@ -28,7 +27,6 @@ func NewProcess(
 	matchProcess string,
 	labels map[string]string,
 	annotations types.MetricAnnotations,
-	acc inputs.AnnotationAccumulator,
 	ps processProvider,
 ) (*ProcessCheck, error) {
 	processRegex, err := regexp.Compile(matchProcess)
@@ -41,7 +39,7 @@ func NewProcess(
 		processRegex: processRegex,
 	}
 
-	pc.baseCheck = newBase("", nil, false, pc.processMainCheck, labels, annotations, acc)
+	pc.baseCheck = newBase("", nil, false, pc.processMainCheck, labels, annotations)
 
 	return &pc, nil
 }

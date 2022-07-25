@@ -52,12 +52,10 @@ type Discovery struct {
 	servicesMap           map[NameContainer]Service
 	lastDiscoveryUpdate   time.Time
 
-	acc                   inputs.AnnotationAccumulator
 	lastConfigservicesMap map[NameContainer]Service
 	activeCollector       map[NameContainer]collectorDetails
 	activeCheck           map[NameContainer]CheckDetails
 	coll                  Collector
-	taskRegistry          Registry
 	metricRegistry        GathererRegistry
 	containerInfo         containerInfoProvider
 	state                 State
@@ -105,9 +103,7 @@ func New(dynamicDiscovery Discoverer, coll Collector, metricRegistry GathererReg
 		discoveredServicesMap: discoveredServicesMap,
 		coll:                  coll,
 		metricRegistry:        metricRegistry,
-		taskRegistry:          taskRegistry,
 		containerInfo:         containerInfo,
-		acc:                   acc,
 		activeCollector:       make(map[NameContainer]collectorDetails),
 		activeCheck:           make(map[NameContainer]CheckDetails),
 		state:                 state,
@@ -525,10 +521,11 @@ type CheckNow func(ctx context.Context) types.StatusDescription
 
 // GetCheckNow returns the GetCheckNow function associated to a NameContainer.
 func (d *Discovery) GetCheckNow(nameContainer NameContainer) (CheckNow, error) {
-	CheckDetails, ok := d.activeCheck[nameContainer]
-	if !ok {
-		return nil, fmt.Errorf("%w %s", errNoCheckAssociated, nameContainer.Name)
-	}
+	// CheckDetails, ok := d.activeCheck[nameContainer]
+	// if !ok {
+	// 	return nil, fmt.Errorf("%w %s", errNoCheckAssociated, nameContainer.Name)
+	// }
 
-	return CheckDetails.check.CheckNow, nil
+	// return CheckDetails.check.CheckNow, nil // TODO
+	panic("not implemented")
 }

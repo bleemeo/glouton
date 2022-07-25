@@ -18,7 +18,6 @@ package check
 
 import (
 	"context"
-	"glouton/inputs"
 	"glouton/logger"
 	"glouton/types"
 	"net"
@@ -46,7 +45,6 @@ type baseCheck struct {
 	mainTCPAddress string
 	tcpAddresses   []string
 	mainCheck      func(ctx context.Context) types.StatusDescription
-	acc            inputs.AnnotationAccumulator
 
 	timer    *time.Timer
 	dialer   *net.Dialer
@@ -61,7 +59,7 @@ type baseCheck struct {
 	disabledPerstistent map[string]bool
 }
 
-func newBase(mainTCPAddress string, tcpAddresses []string, persistentConnection bool, mainCheck func(context.Context) types.StatusDescription, labels map[string]string, annotations types.MetricAnnotations, acc inputs.AnnotationAccumulator) *baseCheck {
+func newBase(mainTCPAddress string, tcpAddresses []string, persistentConnection bool, mainCheck func(context.Context) types.StatusDescription, labels map[string]string, annotations types.MetricAnnotations) *baseCheck {
 	if mainTCPAddress != "" {
 		found := false
 
@@ -82,7 +80,6 @@ func newBase(mainTCPAddress string, tcpAddresses []string, persistentConnection 
 	}
 
 	metricName := labels[types.LabelName]
-	delete(labels, types.LabelName)
 
 	return &baseCheck{
 		metricName:           metricName,
@@ -92,7 +89,6 @@ func newBase(mainTCPAddress string, tcpAddresses []string, persistentConnection 
 		tcpAddresses:         tcpAddresses,
 		persistentConnection: persistentConnection,
 		mainCheck:            mainCheck,
-		acc:                  acc,
 
 		dialer:   &net.Dialer{},
 		timer:    time.NewTimer(0),
@@ -118,7 +114,7 @@ func (bc *baseCheck) Run(ctx context.Context) error {
 			bc.wg.Wait()
 
 			return nil
-		case replyChannel := <-bc.triggerC:
+		case _ = <-bc.triggerC:
 			if !bc.timer.Stop() {
 				// Drain the channel.
 				select {
@@ -127,29 +123,30 @@ func (bc *baseCheck) Run(ctx context.Context) error {
 				}
 			}
 
-			result := bc.check(ctx, false)
+			// result := bc.check(ctx, false)
 
-			if replyChannel != nil {
-				replyChannel <- result
-			}
+			// if replyChannel != nil {
+			// 	replyChannel <- result
+			// }
 		case <-bc.timer.C:
-			bc.check(ctx, true)
+			bc.Check(ctx, true)
 		}
 	}
 }
 
-// check does the check and add the metric depends of addMetric
-// if successful, ensure sockets are openned
-// if fail, ensure sockets are closed
-// if just fail (ok -> critical), does a fast check and add the metric to the accumulator if the status has changed.
-func (bc *baseCheck) check(ctx context.Context, callFromSchedule bool) types.StatusDescription {
+// Check runs the Check and returns the resulting point.
+// If the Check is successful, it ensures the sockets are opened.
+// If the fails, it ensures the sockets are closed.
+// If it fails for the first time (ok -> critical), a new Check will be scheduled sooner.
+func (bc *baseCheck) Check(ctx context.Context, callFromSchedule bool) types.MetricPoint {
 	bc.l.Lock()
 	defer bc.l.Unlock()
 
 	result := bc.doCheck(ctx)
+	bc.previousStatus = result
 
 	if ctx.Err() != nil {
-		return result
+		return types.MetricPoint{}
 	}
 
 	timerDone := false
@@ -163,8 +160,8 @@ func (bc *baseCheck) check(ctx context.Context, callFromSchedule bool) types.Sta
 		}
 
 		if bc.previousStatus.CurrentStatus == types.StatusOk {
+			// TODO: SetSchedule
 			bc.timer.Reset(30 * time.Second)
-
 			timerDone = true
 		}
 	} else {
@@ -172,38 +169,33 @@ func (bc *baseCheck) check(ctx context.Context, callFromSchedule bool) types.Sta
 	}
 
 	if !timerDone && callFromSchedule {
-		bc.timer.Reset(time.Minute)
+		bc.timer.Reset(time.Minute) // TODO
 	}
 
-	if callFromSchedule || (bc.previousStatus.CurrentStatus != result.CurrentStatus) {
-		annotations := bc.annotations
-		annotations.Status = result
+	annotations := bc.annotations
+	annotations.Status = result
 
-		bc.acc.AddFieldsWithAnnotations(
-			"",
-			map[string]interface{}{
-				bc.metricName: result.CurrentStatus.NagiosCode(),
-			},
-			bc.labels,
-			annotations,
-			time.Now().Truncate(time.Second),
-		)
+	point := types.MetricPoint{
+		Point: types.Point{
+			Time:  time.Now().Truncate(time.Second),
+			Value: float64(result.CurrentStatus.NagiosCode()),
+		},
+		Labels:      bc.labels,
+		Annotations: annotations,
 	}
 
-	logger.V(2).Printf("check for %#v %#v: %v", bc.metricName, bc.labels, result)
-
-	bc.previousStatus = result
-
-	return result
+	return point
 }
 
-// ChechNow runs the check now without waiting the timer.
+// TODO: This function should be removed.
+// CheckNow runs the check now without waiting the timer.
 func (bc *baseCheck) CheckNow(ctx context.Context) types.StatusDescription {
-	replyChan := make(chan types.StatusDescription)
-	bc.triggerC <- replyChan
-	response := <-replyChan
+	// replyChan := make(chan types.StatusDescription)
+	// bc.triggerC <- replyChan
+	// response := <-replyChan
 
-	return response
+	// return response
+	return types.StatusDescription{}
 }
 
 func (bc *baseCheck) doCheck(ctx context.Context) (result types.StatusDescription) {
@@ -225,6 +217,7 @@ func (bc *baseCheck) doCheck(ctx context.Context) (result types.StatusDescriptio
 		}
 	}
 
+	// TODO: Why do we return a status ok in this case?
 	if !result.CurrentStatus.IsSet() {
 		return types.StatusDescription{
 			CurrentStatus: types.StatusOk,

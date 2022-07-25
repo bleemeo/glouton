@@ -447,7 +447,7 @@ func migrateLogging(cfg *config.Configuration) (warnings []error) {
 }
 
 func migrateMetricsPrometheus(cfg *config.Configuration) (warnings []error) {
-	// metrics.prometheus was renamed metrics.prometheus.scrapper
+	// metrics.prometheus was renamed metrics.prometheus.targets
 	// We guess that old path was used when metrics.prometheus.*.url exist and is a string
 	v, ok := cfg.Get("metric.prometheus")
 	if ok {

@@ -3,6 +3,8 @@ package registry
 import (
 	"context"
 	"time"
+
+	"github.com/getsentry/sentry-go"
 )
 
 // scrapeLoop allow to run metric scraping at regular interval.
@@ -31,7 +33,18 @@ func startScrapeLoop(
 		stopped:  make(chan struct{}),
 	}
 
-	go sl.run(ctx, interval, timeout, jitterSeed)
+	go func() {
+		defer func() {
+			err := recover()
+			if err != nil {
+				sentry.CurrentHub().Recover(err)
+				sentry.Flush(time.Second * 5)
+				panic(err)
+			}
+		}()
+
+		sl.run(ctx, interval, timeout, jitterSeed)
+	}()
 
 	return sl
 }
