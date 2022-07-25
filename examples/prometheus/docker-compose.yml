@@ -1,0 +1,47 @@
+version: '3'
+
+services:
+  glouton:
+    image: bleemeo/bleemeo-agent
+    environment:
+      - GLOUTON_BLEEMEO_ENABLE=false
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /:/hostroot:ro
+      - glouton-data:/var/lib/glouton
+    network_mode: "host"
+    pid: "host"
+    cap_add:
+      - SYS_PTRACE # This permission is needed to monitor processes IO and memory used per process.
+      - SYS_ADMIN # This permission is needed to retrieve the network interface names of containers.
+
+  prometheus:
+    image: prom/prometheus
+    volumes:
+      - ./prometheus.yml/:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+      - '--web.listen-address=localhost:9090'
+    network_mode: "host"
+
+  grafana:
+    image: grafana/grafana
+    depends_on:
+      - prometheus
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ../common/dashboards:/etc/grafana/provisioning/dashboards
+      - ./datasource.yml:/etc/grafana/provisioning/datasources/datasource.yml
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=password
+      - GF_SERVER_HTTP_ADDR=localhost
+    network_mode: "host"
+
+volumes:
+  glouton-data: {}
+  prometheus-data: {}
+  grafana-data: {}

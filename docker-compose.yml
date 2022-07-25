@@ -4,36 +4,36 @@ services:
   glouton:
     image: bleemeo/bleemeo-agent
     environment:
-    # use environment variable from shell running docker-compose. Allow
-    # to easily overide them.
-    - GLOUTON_BLEEMEO_ACCOUNT_ID
-    - GLOUTON_BLEEMEO_REGISTRATION_KEY
-    - GLOUTON_BLEEMEO_API_BASE
-    - GLOUTON_BLEEMEO_MQTT_HOST
-    - GLOUTON_BLEEMEO_MQTT_PORT
-    - GLOUTON_BLEEMEO_MQTT_SSL
-    - GLOUTON_BLEEMEO_MQTT_SSL_INSECURE
-    - GLOUTON_BLEEMEO_API_SSL_INSECURE
-    - GLOUTON_WEB_LISTENER_PORT
-    - GLOUTON_JMXTRANS_GRAPHITE_PORT
-    - GLOUTON_LOGGING_LEVEL
-    - GLOUTON_LOGGING_PACKAGE_LEVELS
-    - GLOUTON_CONFIG_FILES
-    - GLOUTON_JMXTRANS_FILE_PERMISSION=644 # this file may contains password but it written in a Docker volume only accessible to jmxtrans and Glouton
+      # Use environment variable from shell running docker-compose to easily override them.
+      - GLOUTON_BLEEMEO_ACCOUNT_ID
+      - GLOUTON_BLEEMEO_REGISTRATION_KEY
+      - GLOUTON_BLEEMEO_API_BASE
+      - GLOUTON_BLEEMEO_MQTT_HOST
+      - GLOUTON_BLEEMEO_MQTT_PORT
+      - GLOUTON_BLEEMEO_MQTT_SSL
+      - GLOUTON_BLEEMEO_MQTT_SSL_INSECURE
+      - GLOUTON_BLEEMEO_API_SSL_INSECURE
+      - GLOUTON_WEB_LISTENER_PORT
+      - GLOUTON_JMXTRANS_GRAPHITE_PORT
+      - GLOUTON_LOGGING_LEVEL
+      - GLOUTON_LOGGING_PACKAGE_LEVELS
+      - GLOUTON_CONFIG_FILES
+       # This file may contain a password but is written in a Docker volume only accessible by jmxtrans and Glouton.
+      - GLOUTON_JMXTRANS_FILE_PERMISSION=644
     volumes:
-    - /var/run/docker.sock:/var/run/docker.sock
-    - /:/hostroot:ro
-    - glouton-data:/var/lib/glouton
-    - jmxtrans-config:/var/lib/jmxtrans
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /:/hostroot:ro
+      - glouton-data:/var/lib/glouton
+      - jmxtrans-config:/var/lib/jmxtrans
     network_mode: "host"
     pid: "host"
     cap_add:
-    - SYS_PTRACE # This permission is needed to monitor processes IO and memory used per processes.
-    - SYS_ADMIN # This permission is needed to retrieve the network interface names of containers.
+      - SYS_PTRACE # This permission is needed to monitor processes IO and memory used per process.
+      - SYS_ADMIN # This permission is needed to retrieve the network interface names of containers.
   jmxtrans:
     image: jmxtrans/jmxtrans
     volumes:
-    - jmxtrans-config:/var/lib/jmxtrans
+      - jmxtrans-config:/var/lib/jmxtrans
     network_mode: "host"
 
 volumes:

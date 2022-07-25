@@ -1,208 +1,98 @@
-# Glouton Monitoring Agent
-
-![Glouton Logo](logo_glouton.svg)
+<p align="center">
+   <img src="assets/logo_glouton.svg" alt="Glouton" height="300"/>
+</p>
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/bleemeo/glouton)](https://goreportcard.com/report/github.com/bleemeo/glouton)
-![Docker Image Version (latest by date)](https://img.shields.io/docker/v/bleemeo/glouton)
-![Docker Image Size (latest by date)](https://img.shields.io/docker/image-size/bleemeo/glouton)
-[![Open Source? Yes!](https://badgen.net/badge/Open%20Source%20%3F/Yes%21/blue?icon=github)](https://github.com/bleemeo/glouton/)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](https://github.com/bleemeo/glouton/blob/master/LICENSE)
+![Platform](https://img.shields.io/badge/platform-linux%20%7C%20windows%20%7C%20macos-informational)
+[![Docker Image Version](https://img.shields.io/docker/v/bleemeo/glouton)](https://hub.docker.com/r/bleemeo/glouton/tags)
+[![Docker Image Size](https://img.shields.io/docker/image-size/bleemeo/glouton)](https://hub.docker.com/r/bleemeo/glouton)
 
+**Glouton** is a monitoring agent that makes observing your infrastructure easy. Glouton retrieves metrics from **node_exporter** and multiple **telegraf inputs** and expose them through a **Prometheus endpoint** and a **dashboard**. It also automatically discovers your [services](#automatically-discovered-services) to retrieve relevant metrics.
 
-Glouton have been designed to be a central piece of
-a monitoring infrastructure. It gather all information and
-send it to... something. We provide drivers for storing in
-an InfluxDB database directly or a secure connection (MQTT over SSL) to
-Bleemeo Cloud platform.
+Glouton is the agent used in the **Bleemeo cloud monitoring solution**. Deploying a **robust, scalable monitoring solution** can be time consuming. At Bleemeo, we focus on making users life **easier**. Check out the solution we offer on our [website](https://bleemeo.com) and try it now for free!
+
+<p align="center">
+   <img src="assets/diagram.drawio.png" alt="Architecture"/>
+</p>
+
+## Features
+
+- [**Automatic discovery and configuration of services**](#automatically-discovered-services) to generate checks and metrics
+- Can be used as the main **[Prometheus endpoint](#metrics-endpoint)** for another scrapper
+- Support **[Nagios checks](https://docs.bleemeo.com/metrics-sources/custom/#reference-for-custom-check), [NRPE](https://docs.bleemeo.com/agent/configuration/#nrpeaddress) and [StatsD](https://docs.bleemeo.com/metrics-sources/statsd)** metrics ingester
+- **Kubernetes native:** create metrics and checks for pods
+- Monitor your printers and network devices with [**SNMP**](https://docs.bleemeo.com/agent/snmp)
+- **[JMX support](https://docs.bleemeo.com/metrics-sources/java)** to monitor your Java applications.
+- Integrated **web dashboard**
+
+<p align="center">
+   <img src="assets/dashboard.png" alt="Dashboard"/>
+</p>
+
+### Automatically discovered services
+
+Glouton automatically detects and generates metrics for your services. Supported services include **Apache**, **Cassandra**, **Redis**, **Elasticsearch**, **Nginx**, **PostgreSQL**, and many others. The full list of services and generated metrics can be found [here](https://docs.bleemeo.com/metrics-sources/services-metrics).
+
+### Metrics endpoint
+
+A metrics endpoint is available on port http://localhost:8015/metrics by default (this can be configured [here](https://docs.bleemeo.com/agent/configuration#weblisteneraddress)). This endpoint can be scrapped by Prometheus for example to retrieve the metrics and show them in Grafana.
+
+A docker compose file is available to quickly setup a full monitoring stack. It includes Grafana, Glouton and a Prometheus configured to scrap Glouton's metrics endpoint.
+
+```sh
+# For Linux
+(cd examples/prometheus; docker-compose up -d)
+# For MacOS
+(cd examples/prometheus_mac; docker-compose up -d)
+```
+
+Then go to the Grafana dashboard at http://localhost:3000/d/83ceCuenk/, and log 
+in with the user "admin" and the password "password".
 
 ## Install
 
-If you want to use the Bleemeo Cloud solution see https://docs.bleemeo.com/agent/installation.
+Glouton can be installed with Docker, Kubernetes, on Windows or as a native Linux package.
+If you use Glouton with the Bleemeo solution, you should follow the [documentation](https://docs.bleemeo.com/agent/installation/).
 
-## Build a release
+### Docker
 
-Our release version will be set from the current date.
+A docker image is provided to install Glouton easily.
 
-The release build will
-* Build the local UI written in ReactJS using npm and webpack.
-* Compile the Go binary for supported systems
-* Build Docker image using Docker buildx
-* Build an Windows installer using NSIS
-
-The build process use Docker and is run by the build script:
-
-* The first time, create resource:
-```
-docker volume create glouton-buildcache  # (optional) enable cache and speed-up build/lint run
-
-docker buildx create --name glouton-builder  # Needed to building multi-arch images
+```sh
+docker run -d --name="bleemeo-agent" \
+    -v /var/lib/glouton:/var/lib/glouton -v /var/run/docker.sock:/var/run/docker.sock -v /:/hostroot:ro \
+    -e  GLOUTON_BLEEMEO_ENABLE='false' --pid=host --net=host \
+    --cap-add SYS_PTRACE --cap-add SYS_ADMIN bleemeo/bleemeo-agent
 ```
 
-* Then for each release:
-```
-export GLOUTON_VERSION="$(date -u +%y.%m.%d.%H%M%S)"
-export GLOUTON_BUILDX_OPTION="--builder glouton-builder -t glouton:latest --load"
+### Docker compose
 
-./build.sh
-unset GLOUTON_VERSION GLOUTON_BUILDX_OPTION
-```
-
-Release files are present in dist/ folder and a Docker image is build (glouton:latest) and loaded in
-your Docker images.
-
-
-For real release, you will want to build the Docker image for multiple architecture, which require to
-push image into a registry. Set image tags ("-t" options) to the wanted destination and ensure you
-are authorized to push in destination registry:
-```
-export GLOUTON_VERSION="$(date -u +%y.%m.%d.%H%M%S)"
-export GLOUTON_BUILDX_OPTION="--builder glouton-builder --platform linux/amd64,linux/arm64/v8,linux/arm/v7 -t glouton:latest -t glouton:${GLOUTON_VERSION} --push"
-
-./build.sh
-unset GLOUTON_VERSION GLOUTON_BUILDX_OPTION
-```
-
-## Run Glouton
-
-On Linux amd64, after building the release you may run it with:
-
-```
-./dist/glouton_linux_amd64/glouton
-```
-
-Before running the binary, you may want to configure it with:
-
-- (optional) Configure your credentials for Bleemeo Cloud platform:
-
-```
-export GLOUTON_BLEEMEO_ACCOUNT_ID=YOUR_ACCOUNT_ID
-export GLOUTON_BLEEMEO_REGISTRATION_KEY=YOUR_REGISTRATION_KEY
-```
-
-- (optional) If the Bleemeo Cloud platform is running locally:
-
-```
-export GLOUTON_BLEEMEO_API_BASE=http://localhost:8000
-export GLOUTON_BLEEMEO_MQTT_HOST=localhost
-export GLOUTON_BLEEMEO_MQTT_PORT=1883
-export GLOUTON_BLEEMEO_MQTT_SSL=False
-```
-
-## Run on Docker (with JMX)
-
-Glouton could be run using Docker, optionally with JMX metrics using jmxtrans (a JMX proxy which
-query JVM over JMX and send metrics over the graphite protocol to Glouton).
+The docker compose will run Glouton with jmxtrans (a JMX proxy which queries the JVM over JMX and sends 
+metrics over the graphite protocol to Glouton).
 
 To use jmxtrans, two containers will be run, one with Glouton and one with jmxtrans and a shared volume between
-them will allow Glouton to write jmxtrans configuration file.
+them will allow Glouton to write the jmxtrans configuration file.
 
-Like when running Glouton without docker, you may optionally configure your Bleemeo credentials:
-
-```
-export GLOUTON_BLEEMEO_ACCOUNT_ID=YOUR_ACCOUNT_ID
-export GLOUTON_BLEEMEO_REGISTRATION_KEY=YOUR_REGISTRATION_KEY
-```
-
-Then using docker-compose, start Glouton and jmxtrans:
-
-```
+```sh
 docker-compose up -d
 ```
 
-## Test and Develop
+### Other platforms
 
-To build binary you may use build.sh script. For example to just
-compile Go binary (skip building JS, Docker image and Windows installer):
-```
-docker volume create glouton-buildcache  # (optional) enable cache and speed-up build/lint run
-
-./build.sh go
+If you are not a Bleemeo user, disable the Bleemeo connector in `/etc/glouton/conf.d/30-install.conf`:
+```yaml
+bleemeo:
+   enable: false
 ```
 
-Then run Glouton:
-```
-./glouton
-```
+To install Glouton as a native package on Linux, or to install it on Windows or Kubernetes, check out the [documentation](https://docs.bleemeo.com/agent/installation). Note that this documentation is made for users of the Bleemeo Cloud solution, but it also works without a Bleemeo account if you skip adding the credentials to the config.
 
-Glouton use golangci-lint as linter. You may run it with:
-```
-docker volume create glouton-buildcache  # (optional) enable cache and speed-up build/lint run
 
-./lint.sh
-```
+## Configuration
 
-If you updated GraphQL schema or JS files, rebuild JS files by running build.sh:
+The full configuration file with all available options is available [here](https://docs.bleemeo.com/agent/configuration).
 
-```
-./build.sh
-```
+## Contributing
 
-Note: on Windows, you should consider setting an environment variable to disable CGO when building/testing, lest you get funny messages like 'exec: "gcc": executable file not found in %PATH%'.
-For Powershell, you may set it with `$env:CGO_ENABLED = 0`.
-
-### Developping the local UI JavaScript
-
-When working on the JavaScript rebuilding the Javascript bundle could be slow
-and will use minified JavaScript file which are harder to debug.
-
-To avoid this, you may want to run and use webpack-dev-server which will serve non-minified
-JavaScript file and rebuild the JavaScript bundle on the file. When doing a change in
-any JavaScript files, you will only need to refresh the page on your browser.
-
-To run with this configuration, start webpack-dev-server:
-```
-docker run --net host --rm -ti -u $UID -e HOME=/tmp/home \
-   -v $(pwd):/src -w /src/webui \
-   node:lts \
-   sh -c 'npm install && npm start'
-```
-
-Glouton use eslint as linter. You may run it with:
-```
-(cd webui; npm run lint)
-```
-
-Glouton use prettier too. You may run it with:
-```
-(cd webui; npm run pretify)
-```
-
-Then tell Glouton to use JavaScript file from webpack-dev-server:
-```
-export GLOUTON_WEB_STATIC_CDN_URL=http://localhost:3015
-go run glouton
-```
-
-### Updating dependencies
-
-To update dependencies, you can run:
-
-```
-go get -u ./...
-```
-
-This should only update to latest minor or patch version. For major version, you need to specify the dependency explicitly,
-possible with the version or commit hash. For example:
-
-```
-go get github.com/influxdata/telegraf@1.12.1
-```
-
-Finally, it may worse removing all "// indirect" and running go mod tidy, to ensure
-only needed indirect dependencies are present.
-
-Running go mod tidy & test before commiting the updated go.mod is recommended:
-```
-go mod tidy
-go test ./...
-```
-
-### Note on VS code
-
-Glouton use Go module. VS code support for Go module require usage of gppls.
-Enable "Use Language Server" in VS code option for Go.
-
-To install or update gopls, use:
-
-```
-(cd /tmp; GO111MODULE=on go get golang.org/x/tools/gopls@latest)
-```
+See [CONTRIBUTING.md](CONTRIBUTING.md).
