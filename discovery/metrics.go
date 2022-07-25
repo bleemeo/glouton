@@ -380,8 +380,6 @@ func (d *Discovery) createInput(ctx context.Context, service Service) error {
 			annotations.ContainerID = service.ContainerID
 
 			labels[types.LabelMetaContainerName] = service.ContainerName
-			labels[types.LabelMetaServiceName] = service.ContainerName
-			labels[types.LabelMetaContainerID] = service.ContainerName
 
 			_, port := service.AddressPort()
 			if port != 0 {
