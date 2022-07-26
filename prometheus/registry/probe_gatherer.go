@@ -37,7 +37,7 @@ func (p *ProbeGatherer) SetScheduleUpdate(fun func(runAt time.Time)) {
 // While not a critical error, this function should never be called, as callers should know about
 // GatherWithState().
 func (p *ProbeGatherer) Gather() ([]*dto.MetricFamily, error) {
-	logger.V(2).Println("Gather() called directly on a ProbeGatherer, this is a bug !")
+	logger.V(2).Println("Gather() called directly on a ProbeGatherer, this is a bug!")
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultGatherTimeout)
 	defer cancel()
