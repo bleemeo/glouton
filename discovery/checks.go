@@ -28,6 +28,8 @@ import (
 	"net/url"
 	"strconv"
 	"time"
+
+	"github.com/prometheus/prometheus/model/labels"
 )
 
 const (
@@ -323,9 +325,15 @@ func (d *Discovery) createProcessCheck(service Service, labels map[string]string
 
 func (d *Discovery) addCheck(serviceCheck Check, service Service) {
 	checkGatherer := check.NewCheckGatherer(serviceCheck)
+	nameLabel := labels.Label{
+		Name:  types.LabelName,
+		Value: service.Name,
+	}
+	hash := labels.New(nameLabel).Hash()
 	options := registry.RegistrationOption{
 		Description: fmt.Sprintf("check for %s", service.Name),
 		Interval:    service.Interval,
+		JitterSeed:  hash,
 		MinInterval: time.Minute,
 	}
 
