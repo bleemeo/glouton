@@ -39,13 +39,13 @@ const (
 
 // Check is an interface which specifies a check.
 type Check interface {
-	Check(ctx context.Context, callFromSchedule bool) types.MetricPoint
+	Check(ctx context.Context, scheduleUpdate func(runAt time.Time)) types.MetricPoint
 }
 
 // CheckDetails is used to save a check and his id.
 type CheckDetails struct {
 	id    int
-	check check.CheckGatherer
+	check *check.CheckGatherer
 }
 
 // collectorDetails contains information about a collector.

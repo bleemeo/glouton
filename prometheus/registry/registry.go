@@ -744,8 +744,6 @@ func (r *Registry) restartScrapeLoop(ctx context.Context, reg *registration) {
 	}
 
 	if strings.HasPrefix(reg.option.Description, "check for nagios_test_service") { // TODO: remove
-		fmt.Println("!!! Start scrape loop", reg.option.Description)
-
 		reg.loop = startScrapeLoop(
 			ctx,
 			interval,
