@@ -20,7 +20,6 @@
 package agent
 
 import (
-	"context"
 	"glouton/facts/container-runtime/veth"
 	"glouton/logger"
 	"glouton/prometheus/exporter/node"
@@ -29,7 +28,7 @@ import (
 func (a *agent) initOSSpecificParts() {
 }
 
-func (a *agent) registerOSSpecificComponents(ctx context.Context, vethProvider *veth.Provider) {
+func (a *agent) registerOSSpecificComponents(vethProvider *veth.Provider) {
 	if a.oldConfig.Bool("agent.node_exporter.enable") {
 		nodeOption := node.Option{
 			RootFS:            a.hostRootPath,

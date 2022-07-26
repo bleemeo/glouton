@@ -461,7 +461,7 @@ func gathererInArray(value gathererWithConfigTarget, iterable []collectorWithLab
 }
 
 // updateRegistrations registers and deregisters collectors to sync the internal state with the configuration.
-func (m *RegisterManager) updateRegistrations(ctx context.Context) error {
+func (m *RegisterManager) updateRegistrations() error {
 	// register new probes
 	for _, collectorFromConfig := range m.targets {
 		if !collectorInMap(collectorFromConfig, m.registrations) {

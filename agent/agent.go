@@ -865,7 +865,7 @@ func (a *agent) run(ctx context.Context, signalChan chan os.Signal) { //nolint:m
 		// the config is present, otherwise we would not be in this block
 		blackboxConf, _ := a.oldConfig.Get("blackbox")
 
-		a.monitorManager, err = blackbox.New(ctx, a.gathererRegistry, blackboxConf, a.oldConfig.String("blackbox.user_agent"), a.metricFormat)
+		a.monitorManager, err = blackbox.New(a.gathererRegistry, blackboxConf, a.oldConfig.String("blackbox.user_agent"), a.metricFormat)
 		if err != nil {
 			logger.V(0).Printf("Couldn't start blackbox_exporter: %v\nMonitors will not be able to run on this agent.", err)
 		}
@@ -1154,7 +1154,7 @@ func (a *agent) run(ctx context.Context, signalChan chan os.Signal) { //nolint:m
 	}
 
 	// register components only available on a given system, like node_exporter for unixes
-	a.registerOSSpecificComponents(ctx, a.vethProvider)
+	a.registerOSSpecificComponents(a.vethProvider)
 
 	tasks = append(tasks, taskInfo{
 		a.gathererRegistry.Run,
@@ -1844,7 +1844,7 @@ func (a *agent) handleTrigger(ctx context.Context) {
 			}
 			if a.dynamicScrapper != nil {
 				if containers, err := a.containerRuntime.Containers(ctx, time.Hour, false); err == nil {
-					a.dynamicScrapper.Update(ctx, containers)
+					a.dynamicScrapper.Update(containers)
 				}
 			}
 

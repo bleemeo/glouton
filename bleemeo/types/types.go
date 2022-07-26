@@ -60,7 +60,7 @@ type GlobalOption struct {
 // MonitorManager is the interface used by Bleemeo to update the dynamic monitors list.
 type MonitorManager interface {
 	// UpdateDynamicTargets updates the list of dynamic monitors to watch.
-	UpdateDynamicTargets(ctx context.Context, monitors []types.Monitor) error
+	UpdateDynamicTargets(monitors []types.Monitor) error
 }
 
 // Config is the interface used by Bleemeo to access Config.

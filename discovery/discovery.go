@@ -231,7 +231,7 @@ func (d *Discovery) discovery(ctx context.Context, maxAge time.Duration) (servic
 
 		if ctx.Err() == nil {
 			saveState(d.state, d.discoveredServicesMap)
-			d.reconfigure(ctx)
+			d.reconfigure()
 
 			d.lastDiscoveryUpdate = time.Now()
 		}
@@ -272,8 +272,8 @@ func (d *Discovery) RemoveIfNonRunning(ctx context.Context, services []Service) 
 	}
 }
 
-func (d *Discovery) reconfigure(ctx context.Context) {
-	err := d.configureMetricInputs(ctx, d.lastConfigservicesMap, d.servicesMap)
+func (d *Discovery) reconfigure() {
+	err := d.configureMetricInputs(d.lastConfigservicesMap, d.servicesMap)
 	if err != nil {
 		logger.Printf("Unable to update metric inputs: %v", err)
 	}
