@@ -521,11 +521,10 @@ type CheckNow func(ctx context.Context) types.StatusDescription
 
 // GetCheckNow returns the GetCheckNow function associated to a NameContainer.
 func (d *Discovery) GetCheckNow(nameContainer NameContainer) (CheckNow, error) {
-	// CheckDetails, ok := d.activeCheck[nameContainer]
-	// if !ok {
-	// 	return nil, fmt.Errorf("%w %s", errNoCheckAssociated, nameContainer.Name)
-	// }
+	checkDetails, ok := d.activeCheck[nameContainer]
+	if !ok {
+		return nil, fmt.Errorf("%w %s", errNoCheckAssociated, nameContainer.Name)
+	}
 
-	// return CheckDetails.check.CheckNow, nil // TODO
-	panic("not implemented")
+	return checkDetails.check.CheckNow, nil
 }

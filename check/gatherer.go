@@ -9,6 +9,8 @@ import (
 	dto "github.com/prometheus/client_model/go"
 )
 
+const gatherTimeout = 10 * time.Second
+
 // CheckGatherer is the gatherer used for service checks.
 type CheckGatherer struct {
 	check          Check
@@ -22,17 +24,15 @@ type Check interface {
 
 // NewCheckGatherer returns a new check gatherer.
 func NewCheckGatherer(check Check) *CheckGatherer {
-	gatherer := CheckGatherer{
-		check:          check,
-		scheduleUpdate: func(time.Time) {},
-	}
-
-	return &gatherer
+	return &CheckGatherer{check: check}
 }
 
 // Gather runs the check and returns the result as metric families.
 func (cg *CheckGatherer) Gather() ([]*dto.MetricFamily, error) {
-	point := cg.check.Check(context.TODO(), cg.scheduleUpdate) // TODO: context
+	ctx, cancel := context.WithTimeout(context.Background(), gatherTimeout)
+	defer cancel()
+
+	point := cg.check.Check(ctx, cg.scheduleUpdate)
 	mfs := model.MetricPointsToFamilies([]types.MetricPoint{point})
 
 	return mfs, nil
@@ -41,4 +41,14 @@ func (cg *CheckGatherer) Gather() ([]*dto.MetricFamily, error) {
 // SetScheduleUpdate implements GathererWithScheduleUpdate.
 func (cg *CheckGatherer) SetScheduleUpdate(scheduleUpdate func(runAt time.Time)) {
 	cg.scheduleUpdate = scheduleUpdate
+}
+
+// CheckNow runs the check and returns its status.
+func (cg *CheckGatherer) CheckNow(ctx context.Context) types.StatusDescription {
+	ctx, cancel := context.WithTimeout(context.Background(), gatherTimeout)
+	defer cancel()
+
+	point := cg.check.Check(ctx, cg.scheduleUpdate)
+
+	return point.Annotations.Status
 }

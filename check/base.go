@@ -124,7 +124,7 @@ func (bc *baseCheck) Check(ctx context.Context, scheduleUpdate func(runAt time.T
 			bc.cancel = nil
 		}
 
-		if bc.previousStatus.CurrentStatus == types.StatusOk {
+		if bc.previousStatus.CurrentStatus == types.StatusOk && scheduleUpdate != nil {
 			// The check just started failing, schedule another check sooner.
 			scheduleUpdate(time.Now().Add(30 * time.Second))
 		}
@@ -149,7 +149,7 @@ func (bc *baseCheck) Check(ctx context.Context, scheduleUpdate func(runAt time.T
 	return point
 }
 
-// doCheck runs the check and returns its status and when it should be run next.
+// doCheck runs the check and returns its status.
 func (bc *baseCheck) doCheck(ctx context.Context) types.StatusDescription {
 	var status types.StatusDescription
 
@@ -261,7 +261,9 @@ func (bc *baseCheck) openSocketOnce(ctx context.Context, addr string, scheduleUp
 		logger.V(2).Printf("fail to open TCP connection to %#v: %v", addr, err)
 
 		// Connection failed, trigger a check.
-		scheduleUpdate(time.Now())
+		if scheduleUpdate != nil {
+			scheduleUpdate(time.Now())
+		}
 
 		return true
 	}

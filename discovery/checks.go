@@ -37,11 +37,6 @@ const (
 	customCheckProcess = "process"
 )
 
-// Check is an interface which specifies a check.
-type Check interface {
-	Check(ctx context.Context, scheduleUpdate func(runAt time.Time)) types.MetricPoint
-}
-
 // CheckDetails is used to save a check and his id.
 type CheckDetails struct {
 	id    int
@@ -53,6 +48,11 @@ type CheckDetails struct {
 type collectorDetails struct {
 	inputID    int
 	gathererID int
+}
+
+// Check is an interface which specifies a check.
+type Check interface {
+	Check(ctx context.Context, scheduleUpdate func(runAt time.Time)) types.MetricPoint
 }
 
 func (d *Discovery) configureChecks(oldServices, services map[NameContainer]Service) {
@@ -318,7 +318,7 @@ func (d *Discovery) addCheck(serviceCheck Check, service Service) {
 		MinInterval: time.Minute,
 	}
 
-	id, err := d.metricRegistry.RegisterGatherer(context.TODO(), options, checkGatherer)
+	id, err := d.metricRegistry.RegisterGatherer(context.Background(), options, checkGatherer)
 	if err != nil {
 		logger.V(1).Printf("Unable to add check: %v", err)
 	}
