@@ -40,7 +40,7 @@ const (
 // CheckDetails is used to save a check and his id.
 type CheckDetails struct {
 	id    int
-	check *check.CheckGatherer
+	check *check.Gatherer
 }
 
 // collectorDetails contains information about a collector.
@@ -277,13 +277,24 @@ func (d *Discovery) createHTTPCheck(
 	d.addCheck(httpCheck, service)
 }
 
-func (d *Discovery) createContainerStoppedCheck(service Service, primaryAddress string, tcpAddresses []string, labels map[string]string, annotations types.MetricAnnotations) {
+func (d *Discovery) createContainerStoppedCheck(
+	service Service,
+	primaryAddress string,
+	tcpAddresses []string,
+	labels map[string]string,
+	annotations types.MetricAnnotations,
+) {
 	containerCheck := check.NewContainerStopped(primaryAddress, tcpAddresses, false, labels, annotations)
 
 	d.addCheck(containerCheck, service)
 }
 
-func (d *Discovery) createNagiosCheck(service Service, primaryAddress string, labels map[string]string, annotations types.MetricAnnotations) {
+func (d *Discovery) createNagiosCheck(
+	service Service,
+	primaryAddress string,
+	labels map[string]string,
+	annotations types.MetricAnnotations,
+) {
 	var tcpAddress []string
 
 	if primaryAddress != "" {
@@ -314,10 +325,13 @@ func (d *Discovery) addCheck(serviceCheck Check, service Service) {
 	checkGatherer := check.NewCheckGatherer(serviceCheck)
 	options := registry.RegistrationOption{
 		Description: fmt.Sprintf("check for %s", service.Name),
-		Interval:    time.Minute, // TODO: Get from service check config
+		Interval:    service.Interval,
 		MinInterval: time.Minute,
 	}
 
+	// TODO: The context given to RegisterGatherer is kept in the scrape loop, this will
+	// probably lead to bugs as the scrape loop will be stopped sooner than expected if a context
+	// with a timeout is used.
 	id, err := d.metricRegistry.RegisterGatherer(context.Background(), options, checkGatherer)
 	if err != nil {
 		logger.V(1).Printf("Unable to add check: %v", err)

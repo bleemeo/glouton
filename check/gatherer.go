@@ -11,8 +11,8 @@ import (
 
 const gatherTimeout = 10 * time.Second
 
-// CheckGatherer is the gatherer used for service checks.
-type CheckGatherer struct {
+// Gatherer is the gatherer used for service checks.
+type Gatherer struct {
 	check          Check
 	scheduleUpdate func(runAt time.Time)
 }
@@ -23,12 +23,12 @@ type Check interface {
 }
 
 // NewCheckGatherer returns a new check gatherer.
-func NewCheckGatherer(check Check) *CheckGatherer {
-	return &CheckGatherer{check: check}
+func NewCheckGatherer(check Check) *Gatherer {
+	return &Gatherer{check: check}
 }
 
 // Gather runs the check and returns the result as metric families.
-func (cg *CheckGatherer) Gather() ([]*dto.MetricFamily, error) {
+func (cg *Gatherer) Gather() ([]*dto.MetricFamily, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), gatherTimeout)
 	defer cancel()
 
@@ -39,15 +39,12 @@ func (cg *CheckGatherer) Gather() ([]*dto.MetricFamily, error) {
 }
 
 // SetScheduleUpdate implements GathererWithScheduleUpdate.
-func (cg *CheckGatherer) SetScheduleUpdate(scheduleUpdate func(runAt time.Time)) {
+func (cg *Gatherer) SetScheduleUpdate(scheduleUpdate func(runAt time.Time)) {
 	cg.scheduleUpdate = scheduleUpdate
 }
 
 // CheckNow runs the check and returns its status.
-func (cg *CheckGatherer) CheckNow(ctx context.Context) types.StatusDescription {
-	ctx, cancel := context.WithTimeout(context.Background(), gatherTimeout)
-	defer cancel()
-
+func (cg *Gatherer) CheckNow(ctx context.Context) types.StatusDescription {
 	point := cg.check.Check(ctx, cg.scheduleUpdate)
 
 	return point.Annotations.Status

@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"glouton/types"
-	"log"
 	"os/exec"
 
 	"github.com/google/shlex"
@@ -60,7 +59,6 @@ func NewNagios(
 }
 
 func (nc *NagiosCheck) nagiosMainCheck(ctx context.Context) types.StatusDescription {
-	log.Println("!!! Nagios check")
 	part, err := shlex.Split(nc.nagiosCommand)
 	if err != nil {
 		return types.StatusDescription{

@@ -49,6 +49,7 @@ type NameContainer struct {
 
 type ServiceOveride struct {
 	IgnoredPorts   []int
+	Interval       time.Duration
 	ExtraAttribute map[string]string
 }
 
@@ -111,6 +112,8 @@ type Service struct {
 	Active          bool
 	CheckIgnored    bool
 	MetricsIgnored  bool
+	// The interval of the check, used only for custom checks.
+	Interval time.Duration
 
 	HasNetstatInfo  bool
 	LastNetstatInfo time.Time

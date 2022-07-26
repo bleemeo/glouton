@@ -248,7 +248,7 @@ func (d *Discovery) discovery(ctx context.Context, maxAge time.Duration) (servic
 
 // RemoveIfNonRunning remove a service if the service is not running
 //
-// This is useful to remove persited service that no longer run.
+// This is useful to remove persisted service that no longer run.
 func (d *Discovery) RemoveIfNonRunning(ctx context.Context, services []Service) {
 	d.l.Lock()
 	defer d.l.Unlock()
@@ -329,7 +329,7 @@ func (d *Discovery) updateDiscovery(ctx context.Context, now time.Time) error {
 	}
 
 	d.discoveredServicesMap = servicesMap
-	d.servicesMap = applyOveride(servicesMap, d.servicesOverride)
+	d.servicesMap = applyOverride(servicesMap, d.servicesOverride)
 
 	d.ignoreServicesAndPorts()
 
@@ -380,7 +380,7 @@ func (d *Discovery) setServiceActiveAndContainer(service Service) Service {
 	return service
 }
 
-func applyOveride(discoveredServicesMap map[NameContainer]Service, servicesOverride map[NameContainer]ServiceOveride) map[NameContainer]Service {
+func applyOverride(discoveredServicesMap map[NameContainer]Service, servicesOverride map[NameContainer]ServiceOveride) map[NameContainer]Service {
 	servicesMap := make(map[NameContainer]Service)
 
 	for k, v := range discoveredServicesMap {
@@ -479,6 +479,14 @@ func applyOveride(discoveredServicesMap map[NameContainer]Service, servicesOverr
 				logger.V(0).Printf("Bad custom service definition for service %s, port is unknown so I don't known how to check it", service.Name)
 
 				continue
+			}
+		}
+
+		if override.Interval != 0 {
+			service.Interval = override.Interval
+
+			if service.ServiceType != CustomService {
+				logger.V(0).Printf("Bad service definition for service %s, interval is not supported", service.Name)
 			}
 		}
 
