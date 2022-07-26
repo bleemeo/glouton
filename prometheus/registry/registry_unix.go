@@ -20,7 +20,6 @@
 package registry
 
 import (
-	"context"
 	"glouton/facts/container-runtime/veth"
 	"glouton/logger"
 	"glouton/prometheus/exporter/node"
@@ -32,11 +31,7 @@ import (
 )
 
 // AddNodeExporter add a node_exporter to collector.
-func (r *Registry) AddNodeExporter(
-	ctx context.Context,
-	option node.Option,
-	vethProvider *veth.Provider,
-) error {
+func (r *Registry) AddNodeExporter(option node.Option, vethProvider *veth.Provider) error {
 	collector, err := node.NewCollector(option)
 	if err != nil {
 		return err
@@ -50,7 +45,6 @@ func (r *Registry) AddNodeExporter(
 	}
 
 	_, err = r.RegisterGatherer(
-		ctx,
 		RegistrationOption{
 			Description:           "node_exporter",
 			JitterSeed:            baseJitter,

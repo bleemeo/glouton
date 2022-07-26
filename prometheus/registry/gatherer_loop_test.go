@@ -2,7 +2,6 @@ package registry
 
 import (
 	"context"
-	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -20,30 +19,19 @@ func Test_startScrapeLoop(t *testing.T) {
 	const testDuration = 5 * time.Second
 
 	tests := []struct {
-		interval      time.Duration
-		cancelContext bool
+		interval time.Duration
 	}{
 		{
 			// 201 is the minimal interval for Prometheus to align timestamp.
 			// Value below this limit aren't aligned.
-			interval:      201 * time.Millisecond,
-			cancelContext: false,
+			interval: 201 * time.Millisecond,
 		},
-		{interval: 500 * time.Millisecond, cancelContext: true},
-		{interval: 1 * time.Second, cancelContext: false},
+		{interval: 500 * time.Millisecond},
+		{interval: 1 * time.Second},
 	}
 	for _, tt := range tests {
 		tt := tt
-
-		var name string
-
-		if tt.cancelContext {
-			name = fmt.Sprintf("%s-with-cancel", tt.interval.String())
-		} else {
-			name = fmt.Sprintf("%s-without-cancel", tt.interval.String())
-		}
-
-		t.Run(name, func(t *testing.T) {
+		t.Run(tt.interval.String(), func(t *testing.T) {
 			t.Parallel()
 
 			var (
@@ -53,13 +41,8 @@ func Test_startScrapeLoop(t *testing.T) {
 				l           sync.Mutex
 			)
 
-			ctx := context.Background()
 			deadlineCtx, cancel := context.WithTimeout(context.Background(), testDuration)
 			defer cancel()
-
-			if tt.cancelContext {
-				ctx = deadlineCtx
-			}
 
 			callback := func(_ context.Context, t0 time.Time) {
 				l.Lock()
@@ -67,27 +50,16 @@ func Test_startScrapeLoop(t *testing.T) {
 				l.Unlock()
 			}
 
-			loop := startScrapeLoop(ctx, tt.interval, tt.interval, 0, callback)
+			loop := startScrapeLoop(tt.interval, tt.interval, 0, callback, "")
 
 			<-deadlineCtx.Done()
 
-			if tt.cancelContext {
-				// Give few time for scrapeLoop to shutdown
-				time.Sleep(200 * time.Millisecond)
-				notAfter = time.Now()
-				l.Lock()
-				lengthAtEnd = len(result)
-				l.Unlock()
-			}
-
 			loop.stop()
 
-			if !tt.cancelContext {
-				notAfter = time.Now()
-				l.Lock()
-				lengthAtEnd = len(result)
-				l.Unlock()
-			}
+			notAfter = time.Now()
+			l.Lock()
+			lengthAtEnd = len(result)
+			l.Unlock()
 
 			// More time to ensure loop is shutdown.
 			time.Sleep(300 * time.Millisecond)

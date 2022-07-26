@@ -162,7 +162,6 @@ func (d *DynamicScrapper) update(ctx context.Context, containers []facts.Contain
 		hash := labels.FromMap(t.ExtraLabels).Hash()
 
 		id, err := d.Registry.RegisterGatherer(
-			ctx,
 			registry.RegistrationOption{
 				Description: "Prometheus exporter " + t.URL.String(),
 				JitterSeed:  hash,

@@ -337,10 +337,7 @@ func (d *Discovery) addCheck(serviceCheck Check, service Service) {
 		MinInterval: time.Minute,
 	}
 
-	// TODO: The context given to RegisterGatherer is kept in the scrape loop, this will
-	// probably lead to bugs as the scrape loop will be stopped sooner than expected if a context
-	// with a timeout is used.
-	id, err := d.metricRegistry.RegisterGatherer(context.Background(), options, checkGatherer)
+	id, err := d.metricRegistry.RegisterGatherer(options, checkGatherer)
 	if err != nil {
 		logger.V(1).Printf("Unable to add check: %v", err)
 	}

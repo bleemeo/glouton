@@ -499,7 +499,6 @@ func (m *RegisterManager) updateRegistrations(ctx context.Context) error {
 			// label while doing Collect(). We end up adding the meta labels statically at
 			// registration.
 			id, err := m.registry.RegisterGatherer(
-				ctx,
 				registry.RegistrationOption{
 					Description: "blackbox for " + collectorFromConfig.Collector.URL,
 					JitterSeed:  hash,

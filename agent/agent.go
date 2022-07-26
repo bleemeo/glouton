@@ -440,7 +440,7 @@ func (a *agent) notifyBleemeoUpdateLabels(ctx context.Context) {
 	a.gathererRegistry.UpdateRelabelHook(ctx, a.bleemeoConnector.RelabelHook)
 }
 
-func (a *agent) updateSNMPResolution(ctx context.Context, resolution time.Duration) {
+func (a *agent) updateSNMPResolution(resolution time.Duration) {
 	a.l.Lock()
 	defer a.l.Unlock()
 
@@ -460,7 +460,6 @@ func (a *agent) updateSNMPResolution(ctx context.Context, resolution time.Durati
 		hash := labels.FromMap(target.ExtraLabels).Hash()
 
 		id, err := a.gathererRegistry.RegisterGatherer(
-			ctx,
 			registry.RegistrationOption{
 				Description: "snmp target " + target.Address,
 				JitterSeed:  hash,
@@ -484,7 +483,7 @@ func (a *agent) updateMetricResolution(ctx context.Context, defaultResolution ti
 	a.metricResolution = defaultResolution
 	a.l.Unlock()
 
-	a.gathererRegistry.UpdateDelay(ctx, defaultResolution)
+	a.gathererRegistry.UpdateDelay(defaultResolution)
 
 	services, err := a.discovery.Discovery(ctx, time.Hour)
 	if err != nil {
@@ -495,7 +494,7 @@ func (a *agent) updateMetricResolution(ctx context.Context, defaultResolution ti
 		}
 	}
 
-	a.updateSNMPResolution(ctx, snmpResolution)
+	a.updateSNMPResolution(snmpResolution)
 }
 
 func (a *agent) getConfigThreshold(firstUpdate bool) map[string]threshold.Threshold {
@@ -874,7 +873,7 @@ func (a *agent) run(ctx context.Context, signalChan chan os.Signal) { //nolint:m
 		logger.V(1).Println("blackbox_exporter not enabled, will not start...")
 	}
 
-	promExporter := a.gathererRegistry.Exporter(ctx)
+	promExporter := a.gathererRegistry.Exporter()
 
 	api := &api.API{
 		DB:                 api.NewQueryable(a.store, a.BleemeoAgentID),
@@ -972,7 +971,6 @@ func (a *agent) run(ctx context.Context, signalChan chan os.Signal) { //nolint:m
 		tasks = append(tasks, taskInfo{a.bleemeoConnector.Run, "Bleemeo SAAS connector"})
 
 		_, err = a.gathererRegistry.RegisterPushPointsCallback(
-			ctx,
 			registry.RegistrationOption{
 				Description: "Bleemeo connector",
 				JitterSeed:  baseJitter,
@@ -989,10 +987,9 @@ func (a *agent) run(ctx context.Context, signalChan chan os.Signal) { //nolint:m
 
 	// Only start gatherers after the relabel hook is set to avoid sending metrics without
 	// instance uuid to the bleemeo connector.
-	a.updateSNMPResolution(ctx, time.Minute)
+	a.updateSNMPResolution(time.Minute)
 
 	_, err = a.gathererRegistry.RegisterPushPointsCallback(
-		ctx,
 		registry.RegistrationOption{
 			Description: "system & services metrics",
 			JitterSeed:  baseJitter,
@@ -1007,7 +1004,6 @@ func (a *agent) run(ctx context.Context, signalChan chan os.Signal) { //nolint:m
 		processInput := processInput.New(psFact, a.gathererRegistry.WithTTL(5*time.Minute))
 
 		_, err = a.gathererRegistry.RegisterPushPointsCallback(
-			ctx,
 			registry.RegistrationOption{
 				Description: "process status metrics",
 				JitterSeed:  baseJitter,
@@ -1020,7 +1016,6 @@ func (a *agent) run(ctx context.Context, signalChan chan os.Signal) { //nolint:m
 	}
 
 	_, err = a.gathererRegistry.RegisterPushPointsCallback(
-		ctx,
 		registry.RegistrationOption{
 			Description: "miscGather",
 			JitterSeed:  baseJitter,
@@ -1032,7 +1027,6 @@ func (a *agent) run(ctx context.Context, signalChan chan os.Signal) { //nolint:m
 	}
 
 	_, err = a.gathererRegistry.RegisterPushPointsCallback(
-		ctx,
 		registry.RegistrationOption{
 			Description: "miscGatherMinute",
 			JitterSeed:  baseJitter,
@@ -1045,7 +1039,6 @@ func (a *agent) run(ctx context.Context, signalChan chan os.Signal) { //nolint:m
 	}
 
 	_, err = a.gathererRegistry.RegisterAppenderCallback(
-		ctx,
 		registry.RegistrationOption{
 			Description:        "rulesManager",
 			JitterSeed:         baseJitterPlus,
@@ -1072,7 +1065,6 @@ func (a *agent) run(ctx context.Context, signalChan chan os.Signal) { //nolint:m
 		hash := labels.FromMap(target.ExtraLabels).Hash()
 
 		_, err = a.gathererRegistry.RegisterGatherer(
-			ctx,
 			registry.RegistrationOption{
 				Description: "Prom exporter " + target.URL.String(),
 				JitterSeed:  hash,
@@ -1086,7 +1078,7 @@ func (a *agent) run(ctx context.Context, signalChan chan os.Signal) { //nolint:m
 		}
 	}
 
-	a.gathererRegistry.AddDefaultCollector(ctx)
+	a.gathererRegistry.AddDefaultCollector()
 
 	sentry.ConfigureScope(func(scope *sentry.Scope) {
 		scope.SetContext("agent", map[string]interface{}{

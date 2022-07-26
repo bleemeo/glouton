@@ -56,7 +56,6 @@ func (d *Discovery) createPrometheusMemcached(ctx context.Context, service Servi
 	hash := labels.FromMap(lbls).Hash()
 
 	id, err := d.metricRegistry.RegisterGatherer(
-		ctx,
 		registry.RegistrationOption{
 			Description:           "memcached exporter",
 			JitterSeed:            hash,
