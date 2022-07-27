@@ -11,7 +11,7 @@ import (
 	dto "github.com/prometheus/client_model/go"
 )
 
-const gatherTimeout = 10 * time.Second
+const defaultGatherTimeout = 10 * time.Second
 
 // Gatherer is the gatherer used for service checks.
 type Gatherer struct {
@@ -25,6 +25,7 @@ type Gatherer struct {
 // Check is an interface which specifies a check.
 type Check interface {
 	Check(ctx context.Context, scheduleUpdate func(runAt time.Time)) types.MetricPoint
+	Close()
 }
 
 // NewCheckGatherer returns a new check gatherer.
@@ -50,7 +51,7 @@ func (cg *Gatherer) GatherWithState(ctx context.Context, state registry.GatherSt
 func (cg *Gatherer) Gather() ([]*dto.MetricFamily, error) {
 	logger.V(2).Println("Gather() called directly on a check gatherer, this is a bug!")
 
-	ctx, cancel := context.WithTimeout(context.Background(), gatherTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultGatherTimeout)
 	defer cancel()
 
 	return cg.GatherWithState(ctx, registry.GatherState{})
@@ -66,4 +67,8 @@ func (cg *Gatherer) CheckNow(ctx context.Context) types.StatusDescription {
 	point := cg.check.Check(ctx, cg.scheduleUpdate)
 
 	return point.Annotations.Status
+}
+
+func (cg *Gatherer) Close() {
+	cg.check.Close()
 }

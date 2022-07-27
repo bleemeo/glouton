@@ -97,9 +97,7 @@ func newBase(mainTCPAddress string, tcpAddresses []string, persistentConnection 
 	}
 }
 
-// Check runs the Check.*
-// Returns the resulting point, the next run time if another check should
-// be done outside of the schedule, and an error.
+// Check runs the Check and returns the resulting point.
 // If the Check is successful, it ensures the sockets are opened.
 // If the fails, it ensures the sockets are closed.
 // If it fails for the first time (ok -> critical), a new Check will be scheduled sooner.
@@ -129,7 +127,9 @@ func (bc *baseCheck) Check(ctx context.Context, scheduleUpdate func(runAt time.T
 			scheduleUpdate(time.Now().Add(30 * time.Second))
 		}
 	} else {
-		bc.openSockets(ctx, scheduleUpdate)
+		// The context used in openSockets must outlive the Check() since
+		// it's used to maintain the persistent connection.
+		bc.openSockets(scheduleUpdate) //nolint:contextcheck
 	}
 
 	bc.previousStatus = status
@@ -180,7 +180,7 @@ func (bc *baseCheck) doCheck(ctx context.Context) types.StatusDescription {
 	return status
 }
 
-func (bc *baseCheck) openSockets(ctx context.Context, scheduleUpdate func(runAt time.Time)) {
+func (bc *baseCheck) openSockets(scheduleUpdate func(runAt time.Time)) {
 	if bc.cancel != nil {
 		// socket are already open
 		return
@@ -190,7 +190,7 @@ func (bc *baseCheck) openSockets(ctx context.Context, scheduleUpdate func(runAt 
 		return
 	}
 
-	ctx2, cancel := context.WithCancel(ctx)
+	ctx, cancel := context.WithCancel(context.Background())
 	bc.cancel = cancel
 
 	for _, addr := range bc.tcpAddresses {
@@ -204,7 +204,7 @@ func (bc *baseCheck) openSockets(ctx context.Context, scheduleUpdate func(runAt 
 
 		go func() {
 			defer bc.wg.Done()
-			bc.openSocket(ctx2, addr, scheduleUpdate)
+			bc.openSocket(ctx, addr, scheduleUpdate)
 		}()
 	}
 }
@@ -293,4 +293,11 @@ func (bc *baseCheck) openSocketOnce(ctx context.Context, addr string, scheduleUp
 	}
 
 	return false
+}
+
+func (bc *baseCheck) Close() {
+	// Close open TCP connections.
+	if bc.cancel != nil {
+		bc.cancel()
+	}
 }

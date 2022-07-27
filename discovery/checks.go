@@ -55,6 +55,7 @@ type collectorDetails struct {
 // Check is an interface which specifies a check.
 type Check interface {
 	Check(ctx context.Context, scheduleUpdate func(runAt time.Time)) types.MetricPoint
+	Close()
 }
 
 func (d *Discovery) configureChecks(oldServices, services map[NameContainer]Service) {
@@ -331,10 +332,11 @@ func (d *Discovery) addCheck(serviceCheck Check, service Service) {
 	}
 	hash := labels.New(nameLabel).Hash()
 	options := registry.RegistrationOption{
-		Description: fmt.Sprintf("check for %s", service.Name),
-		Interval:    service.Interval,
-		JitterSeed:  hash,
-		MinInterval: time.Minute,
+		Description:  fmt.Sprintf("check for %s", service.Name),
+		Interval:     service.Interval,
+		JitterSeed:   hash,
+		StopCallback: checkGatherer.Close,
+		MinInterval:  time.Minute,
 	}
 
 	id, err := d.metricRegistry.RegisterGatherer(options, checkGatherer)
