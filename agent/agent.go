@@ -197,7 +197,8 @@ func (a *agent) init(ctx context.Context, configFiles []string, firstRun bool) (
 	// Initialize sentry only on the first run so it doesn't leak goroutines on reload.
 	if dsn := a.oldConfig.String("bleemeo.sentry.dsn"); firstRun && dsn != "" {
 		err := sentry.Init(sentry.ClientOptions{
-			Dsn: dsn,
+			Dsn:              dsn,
+			AttachStacktrace: true,
 		})
 		if err != nil {
 			logger.V(1).Printf("sentry.Init failed: %s", err)
