@@ -59,7 +59,7 @@ type Discovery struct {
 	metricRegistry        GathererRegistry
 	containerInfo         containerInfoProvider
 	state                 State
-	servicesOverride      map[NameContainer]ServiceOveride
+	servicesOverride      map[NameContainer]ServiceOverride
 	isCheckIgnored        func(NameContainer) bool
 	isInputIgnored        func(NameContainer) bool
 	isContainerIgnored    func(facts.Container) bool
@@ -86,7 +86,7 @@ type GathererRegistry interface {
 }
 
 // New returns a new Discovery.
-func New(dynamicDiscovery Discoverer, coll Collector, metricRegistry GathererRegistry, taskRegistry Registry, state State, acc inputs.AnnotationAccumulator, containerInfo containerInfoProvider, servicesOverride map[NameContainer]ServiceOveride, isCheckIgnored func(NameContainer) bool, isInputIgnored func(NameContainer) bool, isContainerIgnored func(c facts.Container) bool, metricFormat types.MetricFormat, processFact processFact) *Discovery {
+func New(dynamicDiscovery Discoverer, coll Collector, metricRegistry GathererRegistry, taskRegistry Registry, state State, acc inputs.AnnotationAccumulator, containerInfo containerInfoProvider, servicesOverride map[NameContainer]ServiceOverride, isCheckIgnored func(NameContainer) bool, isInputIgnored func(NameContainer) bool, isContainerIgnored func(c facts.Container) bool, metricFormat types.MetricFormat, processFact processFact) *Discovery {
 	initialServices := servicesFromState(state)
 	discoveredServicesMap := make(map[NameContainer]Service, len(initialServices))
 
@@ -380,7 +380,7 @@ func (d *Discovery) setServiceActiveAndContainer(service Service) Service {
 	return service
 }
 
-func applyOverride(discoveredServicesMap map[NameContainer]Service, servicesOverride map[NameContainer]ServiceOveride) map[NameContainer]Service {
+func applyOverride(discoveredServicesMap map[NameContainer]Service, servicesOverride map[NameContainer]ServiceOverride) map[NameContainer]Service {
 	servicesMap := make(map[NameContainer]Service)
 
 	for k, v := range discoveredServicesMap {

@@ -80,15 +80,15 @@ type Container struct {
 	DenyPatternList   []string
 }
 
-func (srvs Services) ToDiscoveryMap() map[discovery.NameContainer]discovery.ServiceOveride {
-	result := make(map[discovery.NameContainer]discovery.ServiceOveride, len(srvs))
+func (srvs Services) ToDiscoveryMap() map[discovery.NameContainer]discovery.ServiceOverride {
+	result := make(map[discovery.NameContainer]discovery.ServiceOverride, len(srvs))
 
 	for _, v := range srvs {
 		key := discovery.NameContainer{
 			Name:          v.ID,
 			ContainerName: v.Instance,
 		}
-		result[key] = discovery.ServiceOveride{
+		result[key] = discovery.ServiceOverride{
 			IgnoredPorts:   v.IgnoredPorts,
 			Interval:       v.Interval,
 			ExtraAttribute: v.ExtraAttribute,

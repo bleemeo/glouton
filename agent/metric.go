@@ -328,7 +328,7 @@ var defaultServiceMetrics map[discovery.ServiceName][]string = map[discovery.Ser
 		"bind_status",
 	},
 
-	discovery.DovecoteService: {
+	discovery.DovecotService: {
 		"dovecot_status",
 	},
 
