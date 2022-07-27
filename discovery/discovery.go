@@ -411,6 +411,8 @@ func applyOverride(discoveredServicesMap map[NameContainer]Service, servicesOver
 			service.Active = true
 		}
 
+		service.Interval = override.Interval
+
 		if service.ExtraAttributes == nil {
 			service.ExtraAttributes = make(map[string]string)
 		}
@@ -479,14 +481,6 @@ func applyOverride(discoveredServicesMap map[NameContainer]Service, servicesOver
 				logger.V(0).Printf("Bad custom service definition for service %s, port is unknown so I don't known how to check it", service.Name)
 
 				continue
-			}
-		}
-
-		if override.Interval != 0 {
-			service.Interval = override.Interval
-
-			if service.ServiceType != CustomService {
-				logger.V(0).Printf("Bad service definition for service %s, interval is not supported", service.Name)
 			}
 		}
 
