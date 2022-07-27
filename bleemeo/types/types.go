@@ -43,8 +43,8 @@ type GlobalOption struct {
 	Discovery               discovery.PersistentDiscoverer
 	MonitorManager          MonitorManager
 	MetricFormat            types.MetricFormat
-	NotifyFirstRegistration func(ctx context.Context)
-	NotifyLabelsUpdate      func(ctx context.Context)
+	NotifyFirstRegistration func()
+	NotifyLabelsUpdate      func()
 	BlackboxScraperName     string
 	ReloadState             BleemeoReloadState
 

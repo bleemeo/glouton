@@ -990,7 +990,7 @@ func Test_manager(t *testing.T) { //nolint:maintidx
 				t.Fatal(err)
 			}
 
-			reg.UpdateRelabelHook(ctx, func(ctx context.Context, labels map[string]string) (newLabel map[string]string, retryLater bool) {
+			reg.UpdateRelabelHook(func(ctx context.Context, labels map[string]string) (newLabel map[string]string, retryLater bool) {
 				labels[types.LabelMetaBleemeoUUID] = agentID
 
 				return labels, false

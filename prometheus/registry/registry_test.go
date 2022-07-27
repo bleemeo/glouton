@@ -199,7 +199,7 @@ func TestRegistry_Register(t *testing.T) {
 		t.Errorf("re-reg.RegisterGatherer(gather2) failed: %v", err)
 	}
 
-	reg.UpdateRelabelHook(context.Background(), func(_ context.Context, labels map[string]string) (newLabel map[string]string, retryLater bool) {
+	reg.UpdateRelabelHook(func(_ context.Context, labels map[string]string) (newLabel map[string]string, retryLater bool) {
 		labels[types.LabelMetaBleemeoUUID] = testAgentID
 
 		return labels, false
@@ -358,7 +358,7 @@ func TestRegistry_pushPoint(t *testing.T) {
 		t.Error(diff)
 	}
 
-	reg.UpdateRelabelHook(context.Background(), func(_ context.Context, labels map[string]string) (newLabel map[string]string, retryLater bool) {
+	reg.UpdateRelabelHook(func(_ context.Context, labels map[string]string) (newLabel map[string]string, retryLater bool) {
 		labels[types.LabelMetaBleemeoUUID] = testAgentID
 
 		return labels, false
@@ -624,7 +624,7 @@ func TestRegistry_run(t *testing.T) {
 			}
 
 			ctx := context.Background()
-			reg.UpdateRelabelHook(ctx, func(ctx context.Context, labels map[string]string) (newLabel map[string]string, retryLater bool) {
+			reg.UpdateRelabelHook(func(ctx context.Context, labels map[string]string) (newLabel map[string]string, retryLater bool) {
 				labels[types.LabelMetaBleemeoUUID] = testAgentID
 
 				return labels, false

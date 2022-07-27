@@ -411,14 +411,11 @@ func (r *Registry) registerPushPointsCallback(opt RegistrationOption, f func(con
 	r.l.Lock()
 	defer r.l.Unlock()
 
-	ctxTimeout, cancel := context.WithTimeout(context.Background(), relabelTimeout)
-	defer cancel()
-
 	reg := &registration{
 		option:                    opt,
 		includedInMetricsEndpoint: false,
 	}
-	r.setupGatherer(ctxTimeout, reg, pushGatherer{fun: f})
+	r.setupGatherer(reg, pushGatherer{fun: f})
 
 	return r.addRegistration(reg)
 }
@@ -438,14 +435,11 @@ func (r *Registry) RegisterAppenderCallback(
 	r.l.Lock()
 	defer r.l.Unlock()
 
-	ctxTimeout, cancel := context.WithTimeout(context.Background(), relabelTimeout)
-	defer cancel()
-
 	reg := &registration{
 		option:                    opt,
 		includedInMetricsEndpoint: false,
 	}
-	r.setupGatherer(ctxTimeout, reg, &appenderGatherer{cb: cb, opt: appOpt})
+	r.setupGatherer(reg, &appenderGatherer{cb: cb, opt: appOpt})
 
 	return r.addRegistration(reg)
 }
@@ -454,7 +448,7 @@ func (r *Registry) RegisterAppenderCallback(
 // When this function return, it's guaratee that all call to Option.PushPoint will use new labels.
 // The hook is assumed to be idempotent, that is for a given labels input the result is the same.
 // If the hook want break this idempotence, UpdateRelabelHook() should be re-called to force update of existings Gatherer.
-func (r *Registry) UpdateRelabelHook(ctx context.Context, hook RelabelHook) {
+func (r *Registry) UpdateRelabelHook(hook RelabelHook) {
 	r.init()
 
 	r.l.Lock()
@@ -486,7 +480,7 @@ func (r *Registry) UpdateRelabelHook(ctx context.Context, hook RelabelHook) {
 	// Update labels of all gatherers
 	for _, reg := range r.registrations {
 		reg.l.Lock()
-		r.setupGatherer(ctx, reg, reg.gatherer.source)
+		r.setupGatherer(reg, reg.gatherer.source)
 		reg.l.Unlock()
 	}
 
@@ -690,13 +684,10 @@ func (r *Registry) RegisterGatherer(opt RegistrationOption, gatherer prometheus.
 	r.l.Lock()
 	defer r.l.Unlock()
 
-	ctxTimeout, cancel := context.WithTimeout(context.Background(), relabelTimeout)
-	defer cancel()
-
 	reg := &registration{
 		option: opt,
 	}
-	r.setupGatherer(ctxTimeout, reg, gatherer)
+	r.setupGatherer(reg, gatherer)
 
 	return r.addRegistration(reg)
 }
@@ -1231,7 +1222,7 @@ func (r *Registry) scrape(ctx context.Context, state GatherState, reg *registrat
 	reg.l.Lock()
 
 	if reg.relabelHookSkip && time.Since(reg.lastRebalHookRetry) > hookRetryDelay {
-		r.setupGatherer(ctx, reg, reg.gatherer.source)
+		r.setupGatherer(reg, reg.gatherer.source) //nolint:contextcheck
 	}
 
 	r.l.Unlock()
@@ -1402,7 +1393,7 @@ func (r *Registry) applyRelabel(input map[string]string) (labels.Labels, types.M
 	return promLabels, annotations
 }
 
-func (r *Registry) setupGatherer(ctx context.Context, reg *registration, source prometheus.Gatherer) {
+func (r *Registry) setupGatherer(reg *registration, source prometheus.Gatherer) {
 	var (
 		promLabels  labels.Labels
 		annotations types.MetricAnnotations
@@ -1414,7 +1405,10 @@ func (r *Registry) setupGatherer(ctx context.Context, reg *registration, source 
 		reg.relabelHookSkip = false
 
 		if r.relabelHook != nil {
-			extraLabels, reg.relabelHookSkip = r.relabelHook(ctx, extraLabels)
+			ctxTimeout, cancel := context.WithTimeout(context.Background(), relabelTimeout)
+			defer cancel()
+
+			extraLabels, reg.relabelHookSkip = r.relabelHook(ctxTimeout, extraLabels)
 			reg.lastRebalHookRetry = time.Now()
 		}
 
