@@ -6,6 +6,7 @@ import (
 	"glouton/prometheus/model"
 	"glouton/prometheus/registry"
 	"glouton/types"
+	"sync"
 	"time"
 
 	dto "github.com/prometheus/client_model/go"
@@ -15,11 +16,13 @@ const defaultGatherTimeout = 10 * time.Second
 
 // Gatherer is the gatherer used for service checks.
 type Gatherer struct {
-	check checker
+	check          checker
+	scheduleUpdate func(runAt time.Time)
+
+	l sync.Mutex
 	// The metrics produced by the check are kept to be returned when
 	// the gatherer is called from /metrics.
 	lastMetricFamilies []*dto.MetricFamily
-	scheduleUpdate     func(runAt time.Time)
 }
 
 // checker is an interface which specifies a check.
@@ -37,12 +40,19 @@ func NewCheckGatherer(check checker) *Gatherer {
 func (cg *Gatherer) GatherWithState(ctx context.Context, state registry.GatherState) ([]*dto.MetricFamily, error) {
 	// Return the metrics from the last check on /metrics.
 	if !state.FromScrapeLoop {
-		return cg.lastMetricFamilies, nil
+		cg.l.Lock()
+		mfs := cg.lastMetricFamilies
+		cg.l.Unlock()
+
+		return mfs, nil
 	}
 
 	point := cg.check.Check(ctx, cg.scheduleUpdate)
 	mfs := model.MetricPointsToFamilies([]types.MetricPoint{point})
+
+	cg.l.Lock()
 	cg.lastMetricFamilies = mfs
+	cg.l.Unlock()
 
 	return mfs, nil
 }
