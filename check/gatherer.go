@@ -15,21 +15,21 @@ const defaultGatherTimeout = 10 * time.Second
 
 // Gatherer is the gatherer used for service checks.
 type Gatherer struct {
-	check Check
+	check checker
 	// The metrics produced by the check are kept to be returned when
 	// the gatherer is called from /metrics.
 	lastMetricFamilies []*dto.MetricFamily
 	scheduleUpdate     func(runAt time.Time)
 }
 
-// Check is an interface which specifies a check.
-type Check interface {
+// checker is an interface which specifies a check.
+type checker interface {
 	Check(ctx context.Context, scheduleUpdate func(runAt time.Time)) types.MetricPoint
 	Close()
 }
 
 // NewCheckGatherer returns a new check gatherer.
-func NewCheckGatherer(check Check) *Gatherer {
+func NewCheckGatherer(check checker) *Gatherer {
 	return &Gatherer{check: check}
 }
 

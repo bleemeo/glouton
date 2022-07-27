@@ -19,7 +19,6 @@ package check
 import (
 	"context"
 	"fmt"
-	"glouton/inputs"
 	"glouton/logger"
 	"glouton/types"
 	"net"
@@ -45,7 +44,6 @@ func NewSMTP(
 	persistentConnection bool,
 	labels map[string]string,
 	annotations types.MetricAnnotations,
-	acc inputs.AnnotationAccumulator,
 ) *SMTPCheck {
 	sc := &SMTPCheck{
 		mainAddress: address,

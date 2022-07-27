@@ -52,8 +52,8 @@ type collectorDetails struct {
 	gathererID int
 }
 
-// Check is an interface which specifies a check.
-type Check interface {
+// checker is an interface which specifies a check.
+type checker interface {
 	Check(ctx context.Context, scheduleUpdate func(runAt time.Time)) types.MetricPoint
 	Close()
 }
@@ -324,7 +324,7 @@ func (d *Discovery) createProcessCheck(service Service, labels map[string]string
 	d.addCheck(processCheck, service)
 }
 
-func (d *Discovery) addCheck(serviceCheck Check, service Service) {
+func (d *Discovery) addCheck(serviceCheck checker, service Service) {
 	checkGatherer := check.NewCheckGatherer(serviceCheck)
 	nameLabel := labels.Label{
 		Name:  types.LabelName,
