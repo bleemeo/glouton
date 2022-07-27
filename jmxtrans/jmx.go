@@ -171,6 +171,7 @@ func (j *JMX) Run(ctx context.Context) error {
 			serverWaitGroup.Add(1)
 
 			go func() {
+				defer types.ProcessPanic()
 				defer serverWaitGroup.Done()
 
 				if err := j.runServer(serverContext); err != nil {
@@ -255,6 +256,7 @@ func (j *JMX) runServer(ctx context.Context) error {
 		wg.Add(1)
 
 		go func() {
+			defer types.ProcessPanic()
 			defer wg.Done()
 
 			client := jmxtransClient{

@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"glouton/logger"
+	"glouton/types"
 	"net"
 	"sort"
 	"strconv"
@@ -394,15 +395,21 @@ func collectCloudProvidersFacts(ctx context.Context, facts map[string]string) {
 	wg.Add(3)
 
 	go func() {
+		defer types.ProcessPanic()
 		defer wg.Done()
+
 		awsFacts(ctx, awsFactMap)
 	}()
 	go func() {
+		defer types.ProcessPanic()
 		defer wg.Done()
+
 		azureFacts(ctx, azureFactMap)
 	}()
 	go func() {
+		defer types.ProcessPanic()
 		defer wg.Done()
+
 		gceFacts(ctx, gceFactMap)
 	}()
 	wg.Wait()

@@ -24,9 +24,6 @@ import (
 	"glouton/types"
 	"sort"
 	"sync"
-	"time"
-
-	"github.com/getsentry/sentry-go"
 )
 
 var errAlreadyClosed = errors.New("registry already closed")
@@ -151,15 +148,8 @@ func (r *Registry) AddTask(task Runner, shortName string) (int, error) {
 	}
 
 	go func() {
+		defer types.ProcessPanic()
 		defer close(waitC)
-		defer func() {
-			err := recover()
-			if err != nil {
-				sentry.CurrentHub().Recover(err)
-				sentry.Flush(time.Second * 5)
-				panic(err)
-			}
-		}()
 
 		err := task(ctx)
 		if err != nil {

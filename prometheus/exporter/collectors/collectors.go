@@ -1,6 +1,7 @@
 package collectors
 
 import (
+	"glouton/types"
 	"sync"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -23,6 +24,8 @@ func (cs Collectors) Collect(ch chan<- prometheus.Metric) {
 
 	for _, c := range cs {
 		go func(c prometheus.Collector) {
+			defer types.ProcessPanic()
+
 			c.Collect(ch)
 			wg.Done()
 		}(c)

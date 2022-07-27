@@ -615,7 +615,11 @@ func (a *agent) run(ctx context.Context, signalChan chan os.Signal) { //nolint:m
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	go a.handleSignals(ctx, signalChan, cancel)
+	go func() {
+		defer types.ProcessPanic()
+
+		a.handleSignals(ctx, signalChan, cancel)
+	}()
 
 	a.cancel = cancel
 	a.metricResolution = 10 * time.Second
@@ -685,6 +689,8 @@ func (a *agent) run(ctx context.Context, signalChan chan os.Signal) { //nolint:m
 
 	if a.oldConfig.Bool("agent.http_debug.enable") {
 		go func() {
+			defer types.ProcessPanic()
+
 			debugAddress := a.oldConfig.String("agent.http_debug.bind_address")
 
 			logger.Printf("Starting debug server on http://%s/debug/pprof/", debugAddress)
@@ -1225,6 +1231,8 @@ func (a *agent) handleSignals(ctx context.Context, signalChan chan os.Signal, ca
 					systemUpdateMetricPending = true
 
 					go func() {
+						defer types.ProcessPanic()
+
 						a.waitAndRefreshPendingUpdates(ctx)
 
 						l.Lock()
@@ -1649,7 +1657,9 @@ func (a *agent) dockerWatcher(ctx context.Context) error {
 	wg.Add(1)
 
 	go func() {
+		defer types.ProcessPanic()
 		defer wg.Done()
+
 		a.dockerWatcherContainerHealth(ctx)
 	}()
 

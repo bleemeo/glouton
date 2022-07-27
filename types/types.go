@@ -27,6 +27,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/getsentry/sentry-go"
 	"github.com/prometheus/prometheus/promql/parser"
 )
 
@@ -394,4 +395,14 @@ func NewHTTPTransport(tlsConfig *tls.Config) http.RoundTripper {
 	t.TLSClientConfig = tlsConfig
 
 	return t
+}
+
+// ProcessPanic logs panics to Sentry.
+// It should be defered at the beginning of every new goroutines.
+func ProcessPanic() {
+	if err := recover(); err != nil {
+		sentry.CurrentHub().Recover(err)
+		sentry.Flush(time.Second * 5)
+		panic(err)
+	}
 }
