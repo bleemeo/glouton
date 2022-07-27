@@ -36,11 +36,11 @@ type SMTPCheck struct {
 //
 // All addresses use the format "IP:port".
 //
-// For each persitentAddresses this checker will maintain a TCP connection open, if broken (and unable to re-open), the check will
+// For each persistentAddresses this checker will maintain a TCP connection open, if broken (and unable to re-open), the check will
 // be immediately run.
 func NewSMTP(
 	address string,
-	persitentAddresses []string,
+	persistentAddresses []string,
 	persistentConnection bool,
 	labels map[string]string,
 	annotations types.MetricAnnotations,
@@ -49,7 +49,7 @@ func NewSMTP(
 		mainAddress: address,
 	}
 
-	sc.baseCheck = newBase("", persitentAddresses, persistentConnection, sc.smtpMainCheck, labels, annotations)
+	sc.baseCheck = newBase("", persistentAddresses, persistentConnection, sc.smtpMainCheck, labels, annotations)
 
 	return sc
 }

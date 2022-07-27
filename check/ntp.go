@@ -38,11 +38,11 @@ type NTPCheck struct {
 //
 // All addresses use the format "IP:port".
 //
-// For each persitentAddresses this checker will maintain a TCP connection open, if broken (and unable to re-open), the check will
+// For each persistentAddresses this checker will maintain a TCP connection open, if broken (and unable to re-open), the check will
 // be immediately run.
 func NewNTP(
 	address string,
-	persitentAddresses []string,
+	persistentAddresses []string,
 	persistentConnection bool,
 	labels map[string]string,
 	annotations types.MetricAnnotations,
@@ -51,7 +51,7 @@ func NewNTP(
 		mainAddress: address,
 	}
 
-	nc.baseCheck = newBase("", persitentAddresses, persistentConnection, nc.ntpMainCheck, labels, annotations)
+	nc.baseCheck = newBase("", persistentAddresses, persistentConnection, nc.ntpMainCheck, labels, annotations)
 
 	return nc
 }
