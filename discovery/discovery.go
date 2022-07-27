@@ -28,6 +28,7 @@ import (
 	"glouton/types"
 	"os"
 	"sort"
+	"strconv"
 	"sync"
 	"time"
 
@@ -86,7 +87,21 @@ type GathererRegistry interface {
 }
 
 // New returns a new Discovery.
-func New(dynamicDiscovery Discoverer, coll Collector, metricRegistry GathererRegistry, taskRegistry Registry, state State, acc inputs.AnnotationAccumulator, containerInfo containerInfoProvider, servicesOverride map[NameContainer]ServiceOverride, isCheckIgnored func(NameContainer) bool, isInputIgnored func(NameContainer) bool, isContainerIgnored func(c facts.Container) bool, metricFormat types.MetricFormat, processFact processFact) *Discovery {
+func New(
+	dynamicDiscovery Discoverer,
+	coll Collector,
+	metricRegistry GathererRegistry,
+	taskRegistry Registry,
+	state State,
+	acc inputs.AnnotationAccumulator,
+	containerInfo containerInfoProvider,
+	servicesOverride map[NameContainer]ServiceOverride,
+	isCheckIgnored func(NameContainer) bool,
+	isInputIgnored func(NameContainer) bool,
+	isContainerIgnored func(c facts.Container) bool,
+	metricFormat types.MetricFormat,
+	processFact processFact,
+) *Discovery {
 	initialServices := servicesFromState(state)
 	discoveredServicesMap := make(map[NameContainer]Service, len(initialServices))
 
@@ -380,7 +395,10 @@ func (d *Discovery) setServiceActiveAndContainer(service Service) Service {
 	return service
 }
 
-func applyOverride(discoveredServicesMap map[NameContainer]Service, servicesOverride map[NameContainer]ServiceOverride) map[NameContainer]Service {
+func applyOverride(
+	discoveredServicesMap map[NameContainer]Service,
+	servicesOverride map[NameContainer]ServiceOverride,
+) map[NameContainer]Service {
 	servicesMap := make(map[NameContainer]Service)
 
 	for k, v := range discoveredServicesMap {
@@ -409,6 +427,33 @@ func applyOverride(discoveredServicesMap map[NameContainer]Service, servicesOver
 			service.ServiceType = CustomService
 			service.Name = serviceKey.Name
 			service.Active = true
+		}
+
+		// If the address or the port is set explicitly in the config, override the listen address.
+		if len(service.ListenAddresses) > 0 &&
+			(override.ExtraAttribute["port"] != "" || override.ExtraAttribute["address"] != "") {
+			address, port := service.AddressPort()
+
+			if override.ExtraAttribute["address"] != "" {
+				address = override.ExtraAttribute["address"]
+			}
+
+			if override.ExtraAttribute["port"] != "" {
+				parsedPort, err := strconv.Atoi(override.ExtraAttribute["port"])
+				if err != nil {
+					logger.V(0).Printf("Bad port for service %v: %v", service.Name, err)
+				} else {
+					port = parsedPort
+				}
+			}
+
+			listenAddress := facts.ListenAddress{
+				NetworkFamily: "tcp",
+				Address:       address,
+				Port:          port,
+			}
+
+			service.ListenAddresses = []facts.ListenAddress{listenAddress}
 		}
 
 		service.Interval = override.Interval

@@ -27,6 +27,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/influxdata/telegraf"
 )
 
@@ -502,8 +504,9 @@ func Test_applyOverride(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			if got := applyOverride(tt.args.discoveredServicesMap, tt.args.servicesOverride); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("applyOverride() = %#v, want %#v", got, tt.want)
+			got := applyOverride(tt.args.discoveredServicesMap, tt.args.servicesOverride)
+			if diff := cmp.Diff(tt.want, got, cmpopts.IgnoreUnexported(Service{})); diff != "" {
+				t.Errorf("applyOverride diff:\n %s", diff)
 			}
 		})
 	}
