@@ -430,8 +430,7 @@ func applyOverride(
 		}
 
 		// If the address or the port is set explicitly in the config, override the listen address.
-		if len(service.ListenAddresses) > 0 &&
-			(override.ExtraAttribute["port"] != "" || override.ExtraAttribute["address"] != "") {
+		if override.ExtraAttribute["port"] != "" || override.ExtraAttribute["address"] != "" {
 			address, port := service.AddressPort()
 
 			if override.ExtraAttribute["address"] != "" {
@@ -447,13 +446,15 @@ func applyOverride(
 				}
 			}
 
-			listenAddress := facts.ListenAddress{
-				NetworkFamily: "tcp",
-				Address:       address,
-				Port:          port,
-			}
+			if address != "" && port != 0 {
+				listenAddress := facts.ListenAddress{
+					NetworkFamily: "tcp",
+					Address:       address,
+					Port:          port,
+				}
 
-			service.ListenAddresses = []facts.ListenAddress{listenAddress}
+				service.ListenAddresses = []facts.ListenAddress{listenAddress}
+			}
 		}
 
 		service.Interval = override.Interval

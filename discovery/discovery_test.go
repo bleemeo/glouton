@@ -332,6 +332,13 @@ func Test_applyOverride(t *testing.T) {
 					ExtraAttributes: map[string]string{
 						"address": "10.0.1.2",
 					},
+					ListenAddresses: []facts.ListenAddress{
+						{
+							NetworkFamily: "tcp",
+							Address:       "10.0.1.2",
+							Port:          80,
+						},
+					},
 				},
 			},
 		},
@@ -359,6 +366,13 @@ func Test_applyOverride(t *testing.T) {
 					ServiceType: ApacheService,
 					ExtraAttributes: map[string]string{
 						"address": "10.0.1.2",
+					},
+					ListenAddresses: []facts.ListenAddress{
+						{
+							NetworkFamily: "tcp",
+							Address:       "10.0.1.2",
+							Port:          80,
+						},
 					},
 				},
 			},
