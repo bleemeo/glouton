@@ -296,6 +296,9 @@ func (bc *baseCheck) openSocketOnce(ctx context.Context, addr string, scheduleUp
 }
 
 func (bc *baseCheck) Close() {
+	bc.l.Lock()
+	defer bc.l.Unlock()
+
 	// Close open TCP connections.
 	if bc.cancel != nil {
 		bc.cancel()
