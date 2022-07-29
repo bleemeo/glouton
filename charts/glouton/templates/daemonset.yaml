@@ -17,9 +17,11 @@ spec:
       labels:
         app: glouton
     spec:
+      {{- if eq .Values.run_on_master true }}
       tolerations:
         - key: node-role.kubernetes.io/master
           effect: NoSchedule
+      {{- end }}
       serviceAccountName: {{ .Release.Name }}-serviceaccount
       terminationGracePeriodSeconds: 60
       hostNetwork: true
