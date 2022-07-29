@@ -25,7 +25,7 @@ spec:
       hostNetwork: true
       hostPID: true
       containers:
-      - image: bleemeo/glouton:{{ .Chart.AppVersion }}
+      - image: bleemeo/bleemeo-agent:{{ .Chart.AppVersion }}
         name: glouton
         ports:
         - name: http
