@@ -68,13 +68,23 @@ func longToShortKey(services []discovery.Service) map[serviceNameInstance]servic
 
 		shortKey.truncateInstance()
 
-		if otherSrv, ok := revertLookup[shortKey]; !ok {
+		switch otherSrv, ok := revertLookup[shortKey]; {
+		case !ok || (srv.Active && !otherSrv.Active):
+			// Keep the active service.
 			revertLookup[shortKey] = srv
-		} else {
-			if srv.Active && !otherSrv.Active {
-				revertLookup[shortKey] = srv
-			} else if strings.Compare(srv.ContainerID, otherSrv.ContainerID) > 0 {
-				// Completly arbitrary condition that will hopefully keep a consistent result whatever the services order is.
+		case !srv.Active && otherSrv.Active:
+			// Keep the other active service.
+		default:
+			// Both service are active, there is a conflict.
+			if srv.Active && otherSrv.Active {
+				logger.V(1).Printf(
+					"Two active services are in conflict on container %s and %s\n",
+					srv.ContainerName, otherSrv.ContainerName,
+				)
+			}
+
+			// Keep a consistent result whatever the services order is.
+			if strings.Compare(srv.ContainerID, otherSrv.ContainerID) > 0 {
 				revertLookup[shortKey] = srv
 			}
 		}
