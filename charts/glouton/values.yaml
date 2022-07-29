@@ -1,6 +1,13 @@
+namespace: default
 
 bleemeo:
   account_id: 
   registration_key:
 
-namespace: default
+# Add your custom configuration here.
+# https://docs.bleemeo.com/agent/configuration
+config:
+  bleemeo:
+    enable: true
+  kubernetes:
+    clustername: my_k8s_cluster_name
