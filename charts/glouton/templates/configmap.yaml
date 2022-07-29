@@ -2,8 +2,8 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: glouton-config
-  namespace: {{ .Values.namespace}}
+  name: {{ .Release.Name }}-config
+  namespace: {{ .Values.namespace }}
 data:
   99-local.conf: |
     # Add Glouton customization here
