@@ -1,6 +1,7 @@
 namespace: default
 
-account_id: 
+# Add your bleemeo credentials.
+account_id:
 registration_key:
 
 # Add your custom configuration here.
