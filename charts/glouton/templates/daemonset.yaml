@@ -51,9 +51,11 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: spec.nodeName
+        {{- if eq .Values.config.bleemeo.enable true }}
         envFrom:
         - secretRef:
             name: {{ .Release.Name }}-credentials
+        {{- end }}
         resources:
           requests:
             cpu: 0.05
