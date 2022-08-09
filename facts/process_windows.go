@@ -50,6 +50,8 @@ const (
 	StatusInfoLengthMismatch = 0xC0000004
 	StatusBufferTooSmall     = 0xC0000023
 	StatusBufferOverflow     = 0x80000005
+
+	initialBufferSize = 0x4000
 )
 
 // windows uses the amount of 100ns increments since Jan 1, 1601 instead of unix time.
@@ -61,39 +63,46 @@ func windowsTimeToTime(t int64) time.Time {
 	return time.Unix(t/10000000, (t%10000000)*100)
 }
 
-func (z PsutilLister) Processes(ctx context.Context, maxAge time.Duration) (processes []Process, err error) {
+func (z PsutilLister) Processes(ctx context.Context, maxAge time.Duration) ([]Process, error) {
 	// In order to retrieve process information on windows, given the fact that LocalService has limited privileges,
 	// we prefer to iterate over processes via the NtQuerySystemInformation syscall
-	var bufLen uint32
-
-	ret, _, err := procNtQuerySystemInformation.Call(
-		uintptr(SystemProcessInformation),
-		uintptr(0),
-		uintptr(0),
-		uintptr(unsafe.Pointer(&bufLen)),
+	var (
+		bufLen uint32
+		ret    uintptr
+		err    error
 	)
 
-	if ret >= 0x80000000 && ret != StatusInfoLengthMismatch && ret != StatusBufferTooSmall && ret != StatusBufferOverflow {
-		logger.V(1).Printf("facts/process: NtQuerySystemInformation failed (error code %d): %v", ret, err)
-
-		return nil, nil
-	}
-
-	if bufLen == 0 {
-		logger.V(1).Printf("facts/process: NtQuerySystemInformation failed: empty buffer requested")
-
-		return nil, nil
-	}
-
+	bufLen = initialBufferSize
 	buf := make([]byte, bufLen)
-	r, _, err := procNtQuerySystemInformation.Call(
-		uintptr(SystemProcessInformation),
-		uintptr(unsafe.Pointer(&buf[0])),
-		uintptr(bufLen),
-		uintptr(unsafe.Pointer(&bufLen)),
-	)
-	// the return value isn't a success type or an informational type (according to https://docs.microsoft.com/en-us/windows-hardware/drivers/kernel/using-ntstatus-values)
-	if r >= 0x80000000 && ret != StatusInfoLengthMismatch && ret != StatusBufferTooSmall && ret != StatusBufferOverflow {
+
+	for {
+		ret, _, err := procNtQuerySystemInformation.Call(
+			uintptr(SystemProcessInformation),
+			uintptr(unsafe.Pointer(&buf[0])),
+			uintptr(bufLen),
+			uintptr(unsafe.Pointer(&bufLen)),
+		)
+
+		if ret >= 0x80000000 && ret != StatusInfoLengthMismatch && ret != StatusBufferTooSmall {
+			logger.V(1).Printf("facts/process: NtQuerySystemInformation failed (error code %d): %v", ret, err)
+
+			return nil, nil
+		}
+
+		if bufLen == 0 {
+			logger.V(1).Printf("facts/process: NtQuerySystemInformation failed: empty buffer requested")
+
+			return nil, nil
+		}
+
+		if ret == StatusInfoLengthMismatch || ret == StatusBufferTooSmall {
+			buf = make([]byte, bufLen)
+		} else {
+			break
+		}
+	}
+
+	if ret >= 0x80000000 {
 		logger.V(1).Printf("facts/process: NtQuerySystemInformation failed (error code %d): %v", ret, err)
 
 		return nil, nil
@@ -101,7 +110,7 @@ func (z PsutilLister) Processes(ctx context.Context, maxAge time.Duration) (proc
 
 	// We use the maximum theoretical number of processes that could be contained in a buffer of size 'bufLen'
 	// to reduce reallocations.
-	processes = make([]Process, 0, uintptr(len(buf))/unsafe.Sizeof(SystemProcessInformationStruct{}))
+	processes := make([]Process, 0, uintptr(len(buf))/unsafe.Sizeof(SystemProcessInformationStruct{}))
 
 	for {
 		process := (*SystemProcessInformationStruct)(unsafe.Pointer(&buf[0]))
