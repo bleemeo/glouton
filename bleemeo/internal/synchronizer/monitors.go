@@ -138,12 +138,12 @@ func (s *Synchronizer) syncMonitors(ctx context.Context, fullSync bool, onlyEsse
 		s.l.Unlock()
 	}
 
-	return false, s.ApplyMonitorUpdate(ctx)
+	return false, s.ApplyMonitorUpdate()
 }
 
 // ApplyMonitorUpdate preprocesses monitors and updates blackbox target list.
 // `forceAccountConfigsReload` determine whether account configurations should be updated via the API.
-func (s *Synchronizer) ApplyMonitorUpdate(ctx context.Context) error {
+func (s *Synchronizer) ApplyMonitorUpdate() error {
 	if s.option.MonitorManager == (*blackbox.RegisterManager)(nil) {
 		logger.V(2).Println("blackbox_exporter is not configured, ApplyMonitorUpdate will not update its config.")
 
@@ -192,7 +192,7 @@ func (s *Synchronizer) ApplyMonitorUpdate(ctx context.Context) error {
 	}
 
 	// refresh blackbox collectors to meet the new configuration
-	if err := s.option.MonitorManager.UpdateDynamicTargets(ctx, processedMonitors); err != nil {
+	if err := s.option.MonitorManager.UpdateDynamicTargets(processedMonitors); err != nil {
 		logger.V(1).Printf("Could not update blackbox_exporter")
 
 		return err

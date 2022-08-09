@@ -1606,7 +1606,7 @@ func runTest(t *testing.T, test testCase, isSSL bool, monitorID, agentID, agentF
 		t.Fatal(err)
 	}
 
-	id, err := reg.RegisterGatherer(ctx, registry.RegistrationOption{
+	id, err := reg.RegisterGatherer(registry.RegistrationOption{
 		DisablePeriodicGather: true,
 		ExtraLabels:           target.Labels,
 	}, gatherer)

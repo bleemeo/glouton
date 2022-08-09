@@ -101,7 +101,7 @@ func Test_processMainCheck(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
-			pc, err := NewProcess(test.matchProcess, nil, types.MetricAnnotations{}, nil, mockProcessProvider{})
+			pc, err := NewProcess(test.matchProcess, nil, types.MetricAnnotations{}, mockProcessProvider{})
 			if err != nil {
 				t.Errorf("Failed to create process: %v", err)
 			}

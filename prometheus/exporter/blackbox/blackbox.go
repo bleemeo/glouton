@@ -461,7 +461,7 @@ func gathererInArray(value gathererWithConfigTarget, iterable []collectorWithLab
 }
 
 // updateRegistrations registers and deregisters collectors to sync the internal state with the configuration.
-func (m *RegisterManager) updateRegistrations(ctx context.Context) error {
+func (m *RegisterManager) updateRegistrations() error {
 	// register new probes
 	for _, collectorFromConfig := range m.targets {
 		if !collectorInMap(collectorFromConfig, m.registrations) {
@@ -499,7 +499,6 @@ func (m *RegisterManager) updateRegistrations(ctx context.Context) error {
 			// label while doing Collect(). We end up adding the meta labels statically at
 			// registration.
 			id, err := m.registry.RegisterGatherer(
-				ctx,
 				registry.RegistrationOption{
 					Description: "blackbox for " + collectorFromConfig.Collector.URL,
 					JitterSeed:  hash,

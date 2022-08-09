@@ -19,7 +19,6 @@ package check
 import (
 	"context"
 	"fmt"
-	"glouton/inputs"
 	"glouton/types"
 	"os/exec"
 
@@ -37,7 +36,13 @@ type NagiosCheck struct {
 //
 // For each persitentAddresses (in the format "IP:port") this checker will maintain a TCP connection open, if broken (and unable to re-open),
 // the check will be immediately run.
-func NewNagios(nagiosCommand string, persitentAddresses []string, persistentConnection bool, labels map[string]string, annotations types.MetricAnnotations, acc inputs.AnnotationAccumulator) *NagiosCheck {
+func NewNagios(
+	nagiosCommand string,
+	persitentAddresses []string,
+	persistentConnection bool,
+	labels map[string]string,
+	annotations types.MetricAnnotations,
+) *NagiosCheck {
 	nc := &NagiosCheck{
 		nagiosCommand: nagiosCommand,
 	}
@@ -48,7 +53,7 @@ func NewNagios(nagiosCommand string, persitentAddresses []string, persistentConn
 		mainTCPAddress = persitentAddresses[0]
 	}
 
-	nc.baseCheck = newBase(mainTCPAddress, persitentAddresses, persistentConnection, nc.nagiosMainCheck, labels, annotations, acc)
+	nc.baseCheck = newBase(mainTCPAddress, persitentAddresses, persistentConnection, nc.nagiosMainCheck, labels, annotations)
 
 	return nc
 }

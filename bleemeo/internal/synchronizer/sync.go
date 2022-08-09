@@ -633,7 +633,7 @@ func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) error {
 
 		wasCreation = true
 
-		s.option.NotifyFirstRegistration(ctx)
+		s.option.NotifyFirstRegistration()
 		// Do one pass of metric registration to register agent_status.
 		// MQTT connection require this metric to exists before connecting
 		_, _ = s.syncMetrics(ctx, false, true)
@@ -743,7 +743,7 @@ func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) error {
 	if s.callUpdateLabels {
 		s.callUpdateLabels = false
 		if s.option.NotifyLabelsUpdate != nil {
-			s.option.NotifyLabelsUpdate(ctx)
+			s.option.NotifyLabelsUpdate()
 		}
 	}
 

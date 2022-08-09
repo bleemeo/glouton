@@ -18,7 +18,6 @@
 package promexporter
 
 import (
-	"context"
 	"fmt"
 	"glouton/facts"
 	"glouton/logger"
@@ -125,14 +124,14 @@ type DynamicScrapper struct {
 }
 
 // Update updates the scrappers targets using new containers informations.
-func (d *DynamicScrapper) Update(ctx context.Context, containers []facts.Container) {
+func (d *DynamicScrapper) Update(containers []facts.Container) {
 	d.l.Lock()
 	defer d.l.Unlock()
 
-	d.update(ctx, containers)
+	d.update(containers)
 }
 
-func (d *DynamicScrapper) update(ctx context.Context, containers []facts.Container) {
+func (d *DynamicScrapper) update(containers []facts.Container) {
 	dynamicTargets := d.listExporters(containers)
 
 	if len(dynamicTargets) > 0 {
@@ -162,7 +161,6 @@ func (d *DynamicScrapper) update(ctx context.Context, containers []facts.Contain
 		hash := labels.FromMap(t.ExtraLabels).Hash()
 
 		id, err := d.Registry.RegisterGatherer(
-			ctx,
 			registry.RegistrationOption{
 				Description: "Prometheus exporter " + t.URL.String(),
 				JitterSeed:  hash,

@@ -1,7 +1,6 @@
 package discovery
 
 import (
-	"context"
 	"fmt"
 	"glouton/logger"
 	"glouton/prometheus/registry"
@@ -18,7 +17,7 @@ import (
 
 const defaultInterval = 0
 
-func (d *Discovery) createPrometheusMemcached(ctx context.Context, service Service) error {
+func (d *Discovery) createPrometheusMemcached(service Service) error {
 	ip, port := service.AddressPort()
 
 	if ip == "" || port == 0 {
@@ -56,7 +55,6 @@ func (d *Discovery) createPrometheusMemcached(ctx context.Context, service Servi
 	hash := labels.FromMap(lbls).Hash()
 
 	id, err := d.metricRegistry.RegisterGatherer(
-		ctx,
 		registry.RegistrationOption{
 			Description:           "memcached exporter",
 			JitterSeed:            hash,

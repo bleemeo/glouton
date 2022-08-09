@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"glouton/inputs"
 	"glouton/logger"
 	"glouton/types"
 	"io"
@@ -48,7 +47,16 @@ type TCPCheck struct {
 // On tcpAddresses (which are supposed to contains addresse) a TCP connection is openned and closed on each check.
 //
 // If persistentConnection is set, a persistent TCP connection will be openned to detect service incident quickyl.
-func NewTCP(address string, tcpAddresses []string, persistentConnection bool, send []byte, expect []byte, closeMsg []byte, labels map[string]string, annotations types.MetricAnnotations, acc inputs.AnnotationAccumulator) *TCPCheck {
+func NewTCP(
+	address string,
+	tcpAddresses []string,
+	persistentConnection bool,
+	send []byte,
+	expect []byte,
+	closeMsg []byte,
+	labels map[string]string,
+	annotations types.MetricAnnotations,
+) *TCPCheck {
 	tc := &TCPCheck{
 		mainAddress: address,
 		send:        send,
@@ -61,7 +69,7 @@ func NewTCP(address string, tcpAddresses []string, persistentConnection bool, se
 		mainCheck = nil
 	}
 
-	tc.baseCheck = newBase(address, tcpAddresses, persistentConnection, mainCheck, labels, annotations, acc)
+	tc.baseCheck = newBase(address, tcpAddresses, persistentConnection, mainCheck, labels, annotations)
 
 	return tc
 }

@@ -175,7 +175,7 @@ func (c *Connector) ApplyCachedConfiguration(ctx context.Context) {
 	c.sync.UpdateUnitsAndThresholds(ctx, true)
 
 	if c.option.Config.Bool("blackbox.enable") {
-		if err := c.sync.ApplyMonitorUpdate(ctx); err != nil {
+		if err := c.sync.ApplyMonitorUpdate(); err != nil {
 			// we just log the error, as we will try to run the monitors later anyway
 			logger.V(2).Printf("Couldn't start probes now, will retry later: %v", err)
 		}

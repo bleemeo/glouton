@@ -18,7 +18,6 @@ package check
 
 import (
 	"context"
-	"glouton/inputs"
 	"glouton/logger"
 	"glouton/types"
 	"net"
@@ -46,22 +45,19 @@ type baseCheck struct {
 	mainTCPAddress string
 	tcpAddresses   []string
 	mainCheck      func(ctx context.Context) types.StatusDescription
-	acc            inputs.AnnotationAccumulator
 
-	timer    *time.Timer
-	dialer   *net.Dialer
-	triggerC chan chan<- types.StatusDescription
-	wg       sync.WaitGroup
+	dialer *net.Dialer
+	wg     sync.WaitGroup
 
 	persistentConnection bool
 
-	l                   sync.Mutex
-	cancel              func()
-	previousStatus      types.StatusDescription
-	disabledPerstistent map[string]bool
+	l                  sync.Mutex
+	cancel             func()
+	previousStatus     types.StatusDescription
+	disabledPersistent map[string]bool
 }
 
-func newBase(mainTCPAddress string, tcpAddresses []string, persistentConnection bool, mainCheck func(context.Context) types.StatusDescription, labels map[string]string, annotations types.MetricAnnotations, acc inputs.AnnotationAccumulator) *baseCheck {
+func newBase(mainTCPAddress string, tcpAddresses []string, persistentConnection bool, mainCheck func(context.Context) types.StatusDescription, labels map[string]string, annotations types.MetricAnnotations) *baseCheck {
 	if mainTCPAddress != "" {
 		found := false
 
@@ -82,7 +78,6 @@ func newBase(mainTCPAddress string, tcpAddresses []string, persistentConnection 
 	}
 
 	metricName := labels[types.LabelName]
-	delete(labels, types.LabelName)
 
 	return &baseCheck{
 		metricName:           metricName,
@@ -92,69 +87,34 @@ func newBase(mainTCPAddress string, tcpAddresses []string, persistentConnection 
 		tcpAddresses:         tcpAddresses,
 		persistentConnection: persistentConnection,
 		mainCheck:            mainCheck,
-		acc:                  acc,
 
-		dialer:   &net.Dialer{},
-		timer:    time.NewTimer(0),
-		triggerC: make(chan chan<- types.StatusDescription),
+		dialer: &net.Dialer{},
 		previousStatus: types.StatusDescription{
 			CurrentStatus:     types.StatusOk,
 			StatusDescription: "initial status - description is ignored",
 		},
-		disabledPerstistent: make(map[string]bool),
+		disabledPersistent: make(map[string]bool),
 	}
 }
 
-// Run execute the service check. See structure comments for details.
-func (bc *baseCheck) Run(ctx context.Context) error {
-	for {
-		select {
-		case <-ctx.Done():
-			if bc.cancel != nil {
-				bc.cancel()
-				bc.cancel = nil
-			}
-
-			bc.wg.Wait()
-
-			return nil
-		case replyChannel := <-bc.triggerC:
-			if !bc.timer.Stop() {
-				// Drain the channel.
-				select {
-				case <-bc.timer.C:
-				default:
-				}
-			}
-
-			result := bc.check(ctx, false)
-
-			if replyChannel != nil {
-				replyChannel <- result
-			}
-		case <-bc.timer.C:
-			bc.check(ctx, true)
-		}
-	}
-}
-
-// check does the check and add the metric depends of addMetric
-// if successful, ensure sockets are openned
-// if fail, ensure sockets are closed
-// if just fail (ok -> critical), does a fast check and add the metric to the accumulator if the status has changed.
-func (bc *baseCheck) check(ctx context.Context, callFromSchedule bool) types.StatusDescription {
+// Check runs the Check and returns the resulting point.
+// If the Check is successful, it ensures the sockets are opened.
+// If the fails, it ensures the sockets are closed.
+// If it fails for the first time (ok -> critical), a new Check will be scheduled sooner.
+func (bc *baseCheck) Check(ctx context.Context, scheduleUpdate func(runAt time.Time)) types.MetricPoint {
 	bc.l.Lock()
 	defer bc.l.Unlock()
 
-	result := bc.doCheck(ctx)
+	status := bc.doCheck(ctx)
 
 	if ctx.Err() != nil {
-		return result
+		status = types.StatusDescription{
+			CurrentStatus:     types.StatusUnknown,
+			StatusDescription: "Check has timed out",
+		}
 	}
 
-	timerDone := false
-
-	if result.CurrentStatus != types.StatusOk {
+	if status.CurrentStatus != types.StatusOk {
 		if bc.cancel != nil {
 			bc.cancel()
 			bc.wg.Wait()
@@ -162,55 +122,49 @@ func (bc *baseCheck) check(ctx context.Context, callFromSchedule bool) types.Sta
 			bc.cancel = nil
 		}
 
-		if bc.previousStatus.CurrentStatus == types.StatusOk {
-			bc.timer.Reset(30 * time.Second)
-
-			timerDone = true
+		if bc.previousStatus.CurrentStatus == types.StatusOk && scheduleUpdate != nil {
+			// The check just started failing, schedule another check sooner.
+			scheduleUpdate(time.Now().Add(30 * time.Second))
 		}
 	} else {
-		bc.openSockets(ctx)
+		// The context used in openSockets must outlive the Check() since
+		// it's used to maintain the persistent connection.
+		bc.openSockets(scheduleUpdate) //nolint:contextcheck
 	}
 
-	if !timerDone && callFromSchedule {
-		bc.timer.Reset(time.Minute)
+	bc.previousStatus = status
+
+	annotations := bc.annotations
+	annotations.Status = status
+
+	point := types.MetricPoint{
+		Point: types.Point{
+			Time:  time.Now().Truncate(time.Second),
+			Value: float64(status.CurrentStatus.NagiosCode()),
+		},
+		Labels:      bc.labels,
+		Annotations: annotations,
 	}
 
-	if callFromSchedule || (bc.previousStatus.CurrentStatus != result.CurrentStatus) {
-		annotations := bc.annotations
-		annotations.Status = result
-
-		bc.acc.AddFieldsWithAnnotations(
-			"",
-			map[string]interface{}{
-				bc.metricName: result.CurrentStatus.NagiosCode(),
-			},
-			bc.labels,
-			annotations,
-			time.Now().Truncate(time.Second),
-		)
-	}
-
-	logger.V(2).Printf("check for %#v %#v: %v", bc.metricName, bc.labels, result)
-
-	bc.previousStatus = result
-
-	return result
+	return point
 }
 
-// ChechNow runs the check now without waiting the timer.
-func (bc *baseCheck) CheckNow(ctx context.Context) types.StatusDescription {
-	replyChan := make(chan types.StatusDescription)
-	bc.triggerC <- replyChan
-	response := <-replyChan
+// doCheck runs the check and returns its status.
+func (bc *baseCheck) doCheck(ctx context.Context) types.StatusDescription {
+	var status types.StatusDescription
 
-	return response
-}
-
-func (bc *baseCheck) doCheck(ctx context.Context) (result types.StatusDescription) {
 	if bc.mainCheck != nil {
-		if result = bc.mainCheck(ctx); result.CurrentStatus != types.StatusOk {
-			return result
+		if status = bc.mainCheck(ctx); status.CurrentStatus != types.StatusOk {
+			return status
 		}
+	}
+
+	if len(bc.tcpAddresses) == 0 {
+		statusOK := types.StatusDescription{
+			CurrentStatus: types.StatusOk,
+		}
+
+		return statusOK
 	}
 
 	for _, addr := range bc.tcpAddresses {
@@ -218,23 +172,15 @@ func (bc *baseCheck) doCheck(ctx context.Context) (result types.StatusDescriptio
 			continue
 		}
 
-		if subResult := checkTCP(ctx, addr, nil, nil, nil); subResult.CurrentStatus != types.StatusOk {
-			return subResult
-		} else if !result.CurrentStatus.IsSet() {
-			result = subResult
+		if status = checkTCP(ctx, addr, nil, nil, nil); status.CurrentStatus != types.StatusOk {
+			return status
 		}
 	}
 
-	if !result.CurrentStatus.IsSet() {
-		return types.StatusDescription{
-			CurrentStatus: types.StatusOk,
-		}
-	}
-
-	return result
+	return status
 }
 
-func (bc *baseCheck) openSockets(ctx context.Context) {
+func (bc *baseCheck) openSockets(scheduleUpdate func(runAt time.Time)) {
 	if bc.cancel != nil {
 		// socket are already open
 		return
@@ -244,13 +190,13 @@ func (bc *baseCheck) openSockets(ctx context.Context) {
 		return
 	}
 
-	ctx2, cancel := context.WithCancel(ctx)
+	ctx, cancel := context.WithCancel(context.Background())
 	bc.cancel = cancel
 
 	for _, addr := range bc.tcpAddresses {
 		addr := addr
 
-		if bc.disabledPerstistent[addr] {
+		if bc.disabledPersistent[addr] {
 			continue
 		}
 
@@ -260,18 +206,18 @@ func (bc *baseCheck) openSockets(ctx context.Context) {
 			defer types.ProcessPanic()
 			defer bc.wg.Done()
 
-			bc.openSocket(ctx2, addr)
+			bc.openSocket(ctx, addr, scheduleUpdate)
 		}()
 	}
 }
 
-func (bc *baseCheck) openSocket(ctx context.Context, addr string) {
+func (bc *baseCheck) openSocket(ctx context.Context, addr string, scheduleUpdate func(runAt time.Time)) {
 	delay := 1 * time.Second / 2
 	consecutiveFailure := 0
 
 	for ctx.Err() == nil {
 		lastConnect := time.Now()
-		longSleep := bc.openSocketOnce(ctx, addr)
+		longSleep := bc.openSocketOnce(ctx, addr, scheduleUpdate)
 
 		if time.Since(lastConnect) < time.Minute {
 			consecutiveFailure++
@@ -280,7 +226,7 @@ func (bc *baseCheck) openSocket(ctx context.Context, addr string) {
 		if consecutiveFailure > 12 {
 			logger.V(1).Printf("persitent connection to check %s keep getting closed quickly. Disabled persistent connection for this port", addr)
 			bc.l.Lock()
-			bc.disabledPerstistent[addr] = true
+			bc.disabledPersistent[addr] = true
 			bc.l.Unlock()
 
 			return
@@ -308,7 +254,7 @@ func (bc *baseCheck) openSocket(ctx context.Context, addr string) {
 	}
 }
 
-func (bc *baseCheck) openSocketOnce(ctx context.Context, addr string) (longSleep bool) {
+func (bc *baseCheck) openSocketOnce(ctx context.Context, addr string, scheduleUpdate func(runAt time.Time)) (longSleep bool) {
 	ctx2, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
@@ -316,9 +262,9 @@ func (bc *baseCheck) openSocketOnce(ctx context.Context, addr string) (longSleep
 	if err != nil {
 		logger.V(2).Printf("fail to open TCP connection to %#v: %v", addr, err)
 
-		select {
-		case bc.triggerC <- nil:
-		default:
+		// Connection failed, trigger a check.
+		if scheduleUpdate != nil {
+			scheduleUpdate(time.Now())
 		}
 
 		return true
@@ -349,4 +295,14 @@ func (bc *baseCheck) openSocketOnce(ctx context.Context, addr string) (longSleep
 	}
 
 	return false
+}
+
+func (bc *baseCheck) Close() {
+	bc.l.Lock()
+	defer bc.l.Unlock()
+
+	// Close open TCP connections.
+	if bc.cancel != nil {
+		bc.cancel()
+	}
 }

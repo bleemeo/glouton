@@ -43,8 +43,8 @@ type GlobalOption struct {
 	Discovery               discovery.PersistentDiscoverer
 	MonitorManager          MonitorManager
 	MetricFormat            types.MetricFormat
-	NotifyFirstRegistration func(ctx context.Context)
-	NotifyLabelsUpdate      func(ctx context.Context)
+	NotifyFirstRegistration func()
+	NotifyLabelsUpdate      func()
 	BlackboxScraperName     string
 	ReloadState             BleemeoReloadState
 
@@ -60,7 +60,7 @@ type GlobalOption struct {
 // MonitorManager is the interface used by Bleemeo to update the dynamic monitors list.
 type MonitorManager interface {
 	// UpdateDynamicTargets updates the list of dynamic monitors to watch.
-	UpdateDynamicTargets(ctx context.Context, monitors []types.Monitor) error
+	UpdateDynamicTargets(monitors []types.Monitor) error
 }
 
 // Config is the interface used by Bleemeo to access Config.

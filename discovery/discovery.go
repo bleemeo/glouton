@@ -52,12 +52,10 @@ type Discovery struct {
 	servicesMap           map[NameContainer]Service
 	lastDiscoveryUpdate   time.Time
 
-	acc                   inputs.AnnotationAccumulator
 	lastConfigservicesMap map[NameContainer]Service
 	activeCollector       map[NameContainer]collectorDetails
 	activeCheck           map[NameContainer]CheckDetails
 	coll                  Collector
-	taskRegistry          Registry
 	metricRegistry        GathererRegistry
 	containerInfo         containerInfoProvider
 	state                 State
@@ -83,7 +81,7 @@ type Registry interface {
 
 // GathererRegistry allow to register/unregister prometheus Gatherer.
 type GathererRegistry interface {
-	RegisterGatherer(ctx context.Context, opt registry.RegistrationOption, gatherer prometheus.Gatherer) (int, error)
+	RegisterGatherer(opt registry.RegistrationOption, gatherer prometheus.Gatherer) (int, error)
 	Unregister(id int) bool
 }
 
@@ -105,9 +103,7 @@ func New(dynamicDiscovery Discoverer, coll Collector, metricRegistry GathererReg
 		discoveredServicesMap: discoveredServicesMap,
 		coll:                  coll,
 		metricRegistry:        metricRegistry,
-		taskRegistry:          taskRegistry,
 		containerInfo:         containerInfo,
-		acc:                   acc,
 		activeCollector:       make(map[NameContainer]collectorDetails),
 		activeCheck:           make(map[NameContainer]CheckDetails),
 		state:                 state,
@@ -235,7 +231,7 @@ func (d *Discovery) discovery(ctx context.Context, maxAge time.Duration) (servic
 
 		if ctx.Err() == nil {
 			saveState(d.state, d.discoveredServicesMap)
-			d.reconfigure(ctx)
+			d.reconfigure()
 
 			d.lastDiscoveryUpdate = time.Now()
 		}
@@ -252,7 +248,7 @@ func (d *Discovery) discovery(ctx context.Context, maxAge time.Duration) (servic
 
 // RemoveIfNonRunning remove a service if the service is not running
 //
-// This is useful to remove persited service that no longer run.
+// This is useful to remove persisted service that no longer run.
 func (d *Discovery) RemoveIfNonRunning(ctx context.Context, services []Service) {
 	d.l.Lock()
 	defer d.l.Unlock()
@@ -276,8 +272,8 @@ func (d *Discovery) RemoveIfNonRunning(ctx context.Context, services []Service) 
 	}
 }
 
-func (d *Discovery) reconfigure(ctx context.Context) {
-	err := d.configureMetricInputs(ctx, d.lastConfigservicesMap, d.servicesMap)
+func (d *Discovery) reconfigure() {
+	err := d.configureMetricInputs(d.lastConfigservicesMap, d.servicesMap)
 	if err != nil {
 		logger.Printf("Unable to update metric inputs: %v", err)
 	}
@@ -333,7 +329,7 @@ func (d *Discovery) updateDiscovery(ctx context.Context, now time.Time) error {
 	}
 
 	d.discoveredServicesMap = servicesMap
-	d.servicesMap = applyOveride(servicesMap, d.servicesOverride)
+	d.servicesMap = applyOverride(servicesMap, d.servicesOverride)
 
 	d.ignoreServicesAndPorts()
 
@@ -384,7 +380,7 @@ func (d *Discovery) setServiceActiveAndContainer(service Service) Service {
 	return service
 }
 
-func applyOveride(discoveredServicesMap map[NameContainer]Service, servicesOverride map[NameContainer]ServiceOveride) map[NameContainer]Service {
+func applyOverride(discoveredServicesMap map[NameContainer]Service, servicesOverride map[NameContainer]ServiceOveride) map[NameContainer]Service {
 	servicesMap := make(map[NameContainer]Service)
 
 	for k, v := range discoveredServicesMap {
@@ -414,6 +410,8 @@ func applyOveride(discoveredServicesMap map[NameContainer]Service, servicesOverr
 			service.Name = serviceKey.Name
 			service.Active = true
 		}
+
+		service.Interval = override.Interval
 
 		if service.ExtraAttributes == nil {
 			service.ExtraAttributes = make(map[string]string)
@@ -525,10 +523,10 @@ type CheckNow func(ctx context.Context) types.StatusDescription
 
 // GetCheckNow returns the GetCheckNow function associated to a NameContainer.
 func (d *Discovery) GetCheckNow(nameContainer NameContainer) (CheckNow, error) {
-	CheckDetails, ok := d.activeCheck[nameContainer]
+	checkDetails, ok := d.activeCheck[nameContainer]
 	if !ok {
 		return nil, fmt.Errorf("%w %s", errNoCheckAssociated, nameContainer.Name)
 	}
 
-	return CheckDetails.check.CheckNow, nil
+	return checkDetails.check.CheckNow, nil
 }

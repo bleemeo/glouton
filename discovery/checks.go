@@ -22,10 +22,14 @@ import (
 	"glouton/check"
 	"glouton/facts"
 	"glouton/logger"
+	"glouton/prometheus/registry"
 	"glouton/types"
 	"net"
 	"net/url"
 	"strconv"
+	"time"
+
+	"github.com/prometheus/prometheus/model/labels"
 )
 
 const (
@@ -35,16 +39,10 @@ const (
 	customCheckProcess = "process"
 )
 
-// Check is an interface which specify a check.
-type Check interface {
-	CheckNow(ctx context.Context) types.StatusDescription
-	Run(ctx context.Context) error
-}
-
 // CheckDetails is used to save a check and his id.
 type CheckDetails struct {
 	id    int
-	check Check
+	check *check.Gatherer
 }
 
 // collectorDetails contains information about a collector.
@@ -52,6 +50,12 @@ type CheckDetails struct {
 type collectorDetails struct {
 	inputID    int
 	gathererID int
+}
+
+// checker is an interface which specifies a check.
+type checker interface {
+	Check(ctx context.Context, scheduleUpdate func(runAt time.Time)) types.MetricPoint
+	Close()
 }
 
 func (d *Discovery) configureChecks(oldServices, services map[NameContainer]Service) {
@@ -79,14 +83,10 @@ func (d *Discovery) configureChecks(oldServices, services map[NameContainer]Serv
 }
 
 func (d *Discovery) removeCheck(key NameContainer) {
-	if d.taskRegistry == nil {
-		return
-	}
-
 	if check, ok := d.activeCheck[key]; ok {
 		logger.V(2).Printf("Remove check for service %v on container %s", key.Name, key.ContainerName)
 		delete(d.activeCheck, key)
-		d.taskRegistry.RemoveTask(check.id)
+		d.metricRegistry.Unregister(check.id)
 	}
 }
 
@@ -148,7 +148,6 @@ func (d *Discovery) createCheck(service Service) {
 				!di.DisablePersistentConnection,
 				labels,
 				annotations,
-				d.acc,
 			)
 			d.addCheck(check, service)
 		} else {
@@ -212,13 +211,19 @@ func (d *Discovery) createTCPCheck(service Service, di discoveryInfo, primaryAdd
 		tcpClose,
 		labels,
 		annotations,
-		d.acc,
 	)
 
 	d.addCheck(tcpCheck, service)
 }
 
-func (d *Discovery) createHTTPCheck(service Service, di discoveryInfo, primaryAddress string, tcpAddresses []string, labels map[string]string, annotations types.MetricAnnotations) {
+func (d *Discovery) createHTTPCheck(
+	service Service,
+	di discoveryInfo,
+	primaryAddress string,
+	tcpAddresses []string,
+	labels map[string]string,
+	annotations types.MetricAnnotations,
+) {
 	if primaryAddress == "" {
 		d.createTCPCheck(service, di, primaryAddress, tcpAddresses, labels, annotations)
 
@@ -270,39 +275,48 @@ func (d *Discovery) createHTTPCheck(service Service, di discoveryInfo, primaryAd
 		expectedStatusCode,
 		labels,
 		annotations,
-		d.acc,
 	)
 
 	d.addCheck(httpCheck, service)
 }
 
-func (d *Discovery) createContainerStoppedCheck(service Service, primaryAddress string, tcpAddresses []string, labels map[string]string, annotations types.MetricAnnotations) {
-	containerCheck := check.NewContainerStopped(primaryAddress, tcpAddresses, false, labels, annotations, d.acc)
+func (d *Discovery) createContainerStoppedCheck(
+	service Service,
+	primaryAddress string,
+	tcpAddresses []string,
+	labels map[string]string,
+	annotations types.MetricAnnotations,
+) {
+	containerCheck := check.NewContainerStopped(primaryAddress, tcpAddresses, false, labels, annotations)
 
 	d.addCheck(containerCheck, service)
 }
 
-func (d *Discovery) createNagiosCheck(service Service, primaryAddress string, labels map[string]string, annotations types.MetricAnnotations) {
+func (d *Discovery) createNagiosCheck(
+	service Service,
+	primaryAddress string,
+	labels map[string]string,
+	annotations types.MetricAnnotations,
+) {
 	var tcpAddress []string
 
 	if primaryAddress != "" {
 		tcpAddress = []string{primaryAddress}
 	}
 
-	httpCheck := check.NewNagios(
+	nagiosCheck := check.NewNagios(
 		service.ExtraAttributes["check_command"],
 		tcpAddress,
 		true,
 		labels,
 		annotations,
-		d.acc,
 	)
 
-	d.addCheck(httpCheck, service)
+	d.addCheck(nagiosCheck, service)
 }
 
 func (d *Discovery) createProcessCheck(service Service, labels map[string]string, annotations types.MetricAnnotations) {
-	processCheck, err := check.NewProcess(service.ExtraAttributes["match_process"], labels, annotations, d.acc, d.processFact)
+	processCheck, err := check.NewProcess(service.ExtraAttributes["match_process"], labels, annotations, d.processFact)
 	if err != nil {
 		logger.V(0).Printf("Invalid custom service %s: %v", service.Name, err)
 	}
@@ -310,9 +324,23 @@ func (d *Discovery) createProcessCheck(service Service, labels map[string]string
 	d.addCheck(processCheck, service)
 }
 
-func (d *Discovery) addCheck(check Check, service Service) {
-	if d.acc == nil || d.taskRegistry == nil {
-		return
+func (d *Discovery) addCheck(serviceCheck checker, service Service) {
+	checkGatherer := check.NewCheckGatherer(serviceCheck)
+	lbls := labels.FromStrings(
+		types.LabelName, service.Name,
+		types.LabelContainerName, service.ContainerName,
+	)
+	options := registry.RegistrationOption{
+		Description:  fmt.Sprintf("check for %s", service.Name),
+		Interval:     service.Interval,
+		JitterSeed:   lbls.Hash(),
+		StopCallback: checkGatherer.Close,
+		MinInterval:  time.Minute,
+	}
+
+	id, err := d.metricRegistry.RegisterGatherer(options, checkGatherer)
+	if err != nil {
+		logger.V(1).Printf("Unable to add check: %v", err)
 	}
 
 	key := NameContainer{
@@ -320,13 +348,8 @@ func (d *Discovery) addCheck(check Check, service Service) {
 		ContainerName: service.ContainerName,
 	}
 
-	id, err := d.taskRegistry.AddTask(check.Run, fmt.Sprintf("check for %s", service.Name))
-	if err != nil {
-		logger.V(1).Printf("Unable to add check: %v", err)
-	}
-
 	savedCheck := CheckDetails{
-		check: check,
+		check: checkGatherer,
 		id:    id,
 	}
 	d.activeCheck[key] = savedCheck

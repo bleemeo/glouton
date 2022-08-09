@@ -21,7 +21,6 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
-	"glouton/inputs"
 	"glouton/logger"
 	"glouton/types"
 	"math"
@@ -41,12 +40,18 @@ type NTPCheck struct {
 //
 // For each persitentAddresses this checker will maintain a TCP connection open, if broken (and unable to re-open), the check will
 // be immediately run.
-func NewNTP(address string, persitentAddresses []string, persistentConnection bool, labels map[string]string, annotations types.MetricAnnotations, acc inputs.AnnotationAccumulator) *NTPCheck {
+func NewNTP(
+	address string,
+	persitentAddresses []string,
+	persistentConnection bool,
+	labels map[string]string,
+	annotations types.MetricAnnotations,
+) *NTPCheck {
 	nc := &NTPCheck{
 		mainAddress: address,
 	}
 
-	nc.baseCheck = newBase("", persitentAddresses, persistentConnection, nc.ntpMainCheck, labels, annotations, acc)
+	nc.baseCheck = newBase("", persitentAddresses, persistentConnection, nc.ntpMainCheck, labels, annotations)
 
 	return nc
 }

@@ -967,7 +967,7 @@ type syncTestHelper struct {
 	// Following fields are options used by some method
 	SNMP               []*snmp.Target
 	MetricFormat       types.MetricFormat
-	NotifyLabelsUpdate func(ctx context.Context)
+	NotifyLabelsUpdate func()
 }
 
 // newHelper create an helper with all permanent resource: API, cache, state.
@@ -1041,7 +1041,7 @@ func (helper *syncTestHelper) initSynchronizer(t *testing.T) {
 			Discovery:               helper.discovery,
 			Store:                   helper.store,
 			MonitorManager:          (*blackbox.RegisterManager)(nil),
-			NotifyFirstRegistration: func(ctx context.Context) {},
+			NotifyFirstRegistration: func() {},
 			MetricFormat:            helper.MetricFormat,
 			SNMP:                    helper.SNMP,
 			SNMPOnlineTarget:        func() int { return len(helper.SNMP) },
@@ -1445,7 +1445,7 @@ func TestSyncWithSNMPDelete(t *testing.T) {
 		snmp.NewMock(snmp.TargetOptions{InitialName: "Z-The-Initial-Name", Address: snmpAddress}, map[string]string{}),
 	}
 	helper.MetricFormat = types.MetricFormatPrometheus
-	helper.NotifyLabelsUpdate = func(_ context.Context) {
+	helper.NotifyLabelsUpdate = func() {
 		l.Lock()
 		defer l.Unlock()
 

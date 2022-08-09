@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"glouton/facts"
+	"glouton/prometheus/registry"
 	"glouton/types"
 	"reflect"
 	"testing"
@@ -501,7 +502,7 @@ func Test_applyOveride(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			if got := applyOveride(tt.args.discoveredServicesMap, tt.args.servicesOverride); !reflect.DeepEqual(got, tt.want) {
+			if got := applyOverride(tt.args.discoveredServicesMap, tt.args.servicesOverride); !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("applyOveride() = %#v, want %#v", got, tt.want)
 			}
 		})
@@ -520,7 +521,13 @@ func TestUpdateMetricsAndCheck(t *testing.T) {
 		},
 	}
 	state := mockState{}
-	disc := New(mockDynamic, fakeCollector, nil, nil, state, nil, nil, nil, nil, nil, facts.ContainerFilter{}.ContainerIgnored, types.MetricFormatBleemeo, nil)
+
+	reg, err := registry.New(registry.Option{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	disc := New(mockDynamic, fakeCollector, reg, nil, state, nil, nil, nil, nil, nil, facts.ContainerFilter{}.ContainerIgnored, types.MetricFormatBleemeo, nil)
 	disc.containerInfo = docker
 
 	mockDynamic.result = []Service{

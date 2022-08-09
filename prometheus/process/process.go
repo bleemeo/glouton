@@ -49,7 +49,6 @@ func RegisterExporter(ctx context.Context, reg *registry.Registry, psLister inte
 			logger.Printf("Processes metrics won't be available on /metrics endpoints")
 		} else {
 			_, err = reg.RegisterGatherer(
-				ctx,
 				registry.RegistrationOption{
 					Description:           "process-exporter",
 					Interval:              defaultInterval,
@@ -66,7 +65,6 @@ func RegisterExporter(ctx context.Context, reg *registry.Registry, psLister inte
 
 		if bleemeoFormat {
 			_, err := reg.RegisterPushPointsCallback(
-				ctx,
 				registry.RegistrationOption{
 					Description: "process-exporter",
 					Interval:    defaultInterval,

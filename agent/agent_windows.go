@@ -92,7 +92,7 @@ func (a *agent) initOSSpecificParts() {
 	wmi.DefaultClient.SWbemServicesClient = s
 }
 
-func (a *agent) registerOSSpecificComponents(ctx context.Context, vethProvider *veth.Provider) {
+func (a *agent) registerOSSpecificComponents(vethProvider *veth.Provider) {
 	if a.oldConfig.Bool("agent.windows_exporter.enable") {
 		conf, err := a.buildCollectorsConfig()
 		if err != nil {
@@ -102,7 +102,7 @@ func (a *agent) registerOSSpecificComponents(ctx context.Context, vethProvider *
 		}
 
 		collectors := a.oldConfig.StringList("agent.windows_exporter.collectors")
-		if err := a.gathererRegistry.AddWindowsExporter(ctx, collectors, conf); err != nil {
+		if err := a.gathererRegistry.AddWindowsExporter(collectors, conf); err != nil {
 			logger.Printf("Unable to start windows_exporter, system metrics will be missing: %v", err)
 		}
 	}

@@ -30,6 +30,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/prometheus/common/model"
 )
@@ -57,6 +58,7 @@ type Service struct {
 	Instance       string
 	NagiosNRPEName string
 	IgnoredPorts   []int
+	Interval       time.Duration
 	ExtraAttribute map[string]string
 }
 
@@ -88,6 +90,7 @@ func (srvs Services) ToDiscoveryMap() map[discovery.NameContainer]discovery.Serv
 		}
 		result[key] = discovery.ServiceOveride{
 			IgnoredPorts:   v.IgnoredPorts,
+			Interval:       v.Interval,
 			ExtraAttribute: v.ExtraAttribute,
 		}
 	}
@@ -447,7 +450,7 @@ func migrateLogging(cfg *config.Configuration) (warnings []error) {
 }
 
 func migrateMetricsPrometheus(cfg *config.Configuration) (warnings []error) {
-	// metrics.prometheus was renamed metrics.prometheus.scrapper
+	// metrics.prometheus was renamed metrics.prometheus.targets
 	// We guess that old path was used when metrics.prometheus.*.url exist and is a string
 	v, ok := cfg.Get("metric.prometheus")
 	if ok {
@@ -815,7 +818,7 @@ func (srv *Service) fromMap(fragment map[string]string) (warning error) {
 			values := strings.Split(v, ",")
 
 			for _, s := range values {
-				port, err := strconv.ParseInt(strings.TrimSpace(s), 10, 0)
+				port, err := strconv.Atoi(strings.TrimSpace(s))
 				if err != nil {
 					errs = append(errs, fmt.Errorf("ignore_ports \"%s\": %w", s, err))
 
@@ -826,8 +829,17 @@ func (srv *Service) fromMap(fragment map[string]string) (warning error) {
 					errs = append(errs, fmt.Errorf("%w: ignore_ports %d is larger than 65535", ErrInvalidValue, port))
 				}
 
-				srv.IgnoredPorts = append(srv.IgnoredPorts, int(port))
+				srv.IgnoredPorts = append(srv.IgnoredPorts, port)
 			}
+		case "interval":
+			interval, err := strconv.Atoi(v)
+			if err != nil {
+				errs = append(errs, fmt.Errorf("interval \"%s\": %w", v, err))
+
+				continue
+			}
+
+			srv.Interval = time.Duration(interval) * time.Second
 		default:
 			if srv.ExtraAttribute == nil {
 				srv.ExtraAttribute = make(map[string]string)
