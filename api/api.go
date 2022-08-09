@@ -260,6 +260,8 @@ func (api *API) Run(ctx context.Context) error {
 	idleConnsClosed := make(chan struct{})
 
 	go func() {
+		defer types.ProcessPanic()
+
 		<-ctx.Done()
 
 		subCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

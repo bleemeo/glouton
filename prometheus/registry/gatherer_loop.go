@@ -2,6 +2,7 @@ package registry
 
 import (
 	"context"
+	"glouton/types"
 	"time"
 )
 
@@ -31,7 +32,10 @@ func startScrapeLoop(
 		stopped:  make(chan struct{}),
 	}
 
-	go sl.run(ctx, interval, timeout, jitterSeed)
+	go func() {
+		defer types.ProcessPanic()
+		sl.run(ctx, interval, timeout, jitterSeed)
+	}()
 
 	return sl
 }

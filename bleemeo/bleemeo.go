@@ -35,8 +35,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/getsentry/sentry-go"
-
 	gloutonTypes "glouton/types"
 )
 
@@ -277,6 +275,8 @@ func (c *Connector) mqttRestarter(ctx context.Context) error {
 				resultChan := make(chan []gloutonTypes.MetricPoint, 1)
 
 				go func() {
+					defer gloutonTypes.ProcessPanic()
+
 					resultChan <- c.mqtt.PopPoints(true)
 				}()
 
@@ -296,6 +296,7 @@ func (c *Connector) mqttRestarter(ctx context.Context) error {
 			wg.Add(1)
 
 			go func() {
+				defer gloutonTypes.ProcessPanic()
 				defer wg.Done()
 
 				err := c.mqtt.Run(subCtx)
@@ -337,16 +338,9 @@ func (c *Connector) Run(ctx context.Context) error {
 	wg.Add(1)
 
 	go func() {
+		defer gloutonTypes.ProcessPanic()
 		defer wg.Done()
 		defer cancel()
-		defer func() {
-			err := recover()
-			if err != nil {
-				sentry.CurrentHub().Recover(err)
-				sentry.Flush(time.Second * 5)
-				panic(err)
-			}
-		}()
 
 		syncErr = c.sync.Run(subCtx)
 	}()
@@ -354,16 +348,9 @@ func (c *Connector) Run(ctx context.Context) error {
 	wg.Add(1)
 
 	go func() {
+		defer gloutonTypes.ProcessPanic()
 		defer wg.Done()
 		defer cancel()
-		defer func() {
-			err := recover()
-			if err != nil {
-				sentry.CurrentHub().Recover(err)
-				sentry.Flush(time.Second * 5)
-				panic(err)
-			}
-		}()
 
 		<-subCtx.Done()
 
@@ -375,16 +362,9 @@ func (c *Connector) Run(ctx context.Context) error {
 			wg.Add(1)
 
 			go func() {
+				defer gloutonTypes.ProcessPanic()
 				defer wg.Done()
 				defer cancel()
-				defer func() {
-					err := recover()
-					if err != nil {
-						sentry.CurrentHub().Recover(err)
-						sentry.Flush(time.Second * 5)
-						panic(err)
-					}
-				}()
 
 				mqttErr = c.mqttRestarter(ctx)
 			}()
@@ -554,10 +534,14 @@ func (c *Connector) DiagnosticPage() string {
 	mqttPage := make(chan string)
 
 	go func() {
+		defer gloutonTypes.ProcessPanic()
+
 		syncPage <- c.sync.DiagnosticPage()
 	}()
 
 	go func() {
+		defer gloutonTypes.ProcessPanic()
+
 		if mqtt == nil {
 			mqttPage <- "MQTT connector is not (yet) initialized\n"
 		} else {

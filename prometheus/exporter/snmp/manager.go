@@ -3,6 +3,7 @@ package snmp
 import (
 	"context"
 	"glouton/logger"
+	"glouton/types"
 	"net/url"
 	"sync"
 	"time"
@@ -70,6 +71,8 @@ func (m *Manager) OnlineCount() int {
 			m.checkOnlinePending = true
 
 			go func() {
+				defer types.ProcessPanic()
+
 				m.checkTargets(needCheck)
 
 				m.l.Lock()

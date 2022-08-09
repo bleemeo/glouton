@@ -257,7 +257,9 @@ func (bc *baseCheck) openSockets(ctx context.Context) {
 		bc.wg.Add(1)
 
 		go func() {
+			defer types.ProcessPanic()
 			defer bc.wg.Done()
+
 			bc.openSocket(ctx2, addr)
 		}()
 	}
