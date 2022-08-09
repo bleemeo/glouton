@@ -47,7 +47,7 @@ type NameContainer struct {
 	ContainerName string
 }
 
-type ServiceOveride struct {
+type ServiceOverride struct {
 	IgnoredPorts   []int
 	Interval       time.Duration
 	ExtraAttribute map[string]string
@@ -64,7 +64,7 @@ const (
 	BitBucketService     ServiceName = "bitbucket"
 	CassandraService     ServiceName = "cassandra"
 	ConfluenceService    ServiceName = "confluence"
-	DovecoteService      ServiceName = "dovecot"
+	DovecotService       ServiceName = "dovecot"
 	EjabberService       ServiceName = "ejabberd"
 	ElasticSearchService ServiceName = "elasticsearch"
 	EximService          ServiceName = "exim"
@@ -144,7 +144,7 @@ func (s Service) AddressForPort(port int, network string, force bool) string {
 			continue
 		}
 
-		p, err := strconv.ParseInt(portStr, 10, 0)
+		p, err := strconv.Atoi(portStr)
 		if err != nil {
 			continue
 		}
@@ -153,7 +153,7 @@ func (s Service) AddressForPort(port int, network string, force bool) string {
 			address = s.IPAddress
 		}
 
-		if int(p) == port {
+		if p == port {
 			return address
 		}
 	}
@@ -172,11 +172,11 @@ func (s Service) AddressPort() (string, int) {
 	force := false
 
 	if s.ExtraAttributes["port"] != "" {
-		tmp, err := strconv.ParseInt(s.ExtraAttributes["port"], 10, 0)
+		tmp, err := strconv.Atoi(s.ExtraAttributes["port"])
 		if err != nil {
 			logger.V(1).Printf("Invalid port %#v: %v", s.ExtraAttributes["port"], err)
 		} else {
-			port = int(tmp)
+			port = tmp
 			force = true
 		}
 	}
@@ -294,7 +294,7 @@ var (
 			IgnoreHighPort:      true,
 			ExtraAttributeNames: []string{"address", "port", "jmx_port", "jmx_username", "jmx_password", "jmx_metrics"},
 		},
-		DovecoteService: {
+		DovecotService: {
 			ServicePort:         143,
 			ServiceProtocol:     "tcp",
 			ExtraAttributeNames: []string{"address", "port"},

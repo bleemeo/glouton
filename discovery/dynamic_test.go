@@ -392,7 +392,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 			cmdLine:  []string{"/usr/sbin/dovecot", "-F", "-c", "/etc/dovecot/dovecot.conf"},
 			want: Service{
 				Name:            "dovecot",
-				ServiceType:     DovecoteService,
+				ServiceType:     DovecotService,
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 143}},
 				IPAddress:       "127.0.0.1",
 			},

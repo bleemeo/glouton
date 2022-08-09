@@ -145,7 +145,7 @@ var (
 	knownProcesses = map[string]ServiceName{
 		"apache2":      ApacheService,
 		"asterisk":     AsteriskService,
-		"dovecot":      DovecoteService,
+		"dovecot":      DovecotService,
 		"exim4":        EximService,
 		"exim":         EximService,
 		"freeradius":   FreeradiusService,

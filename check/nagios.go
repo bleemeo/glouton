@@ -34,11 +34,11 @@ type NagiosCheck struct {
 
 // NewNagios create a new Nagios check.
 //
-// For each persitentAddresses (in the format "IP:port") this checker will maintain a TCP connection open, if broken (and unable to re-open),
+// For each persistentAddresses (in the format "IP:port") this checker will maintain a TCP connection open, if broken (and unable to re-open),
 // the check will be immediately run.
 func NewNagios(
 	nagiosCommand string,
-	persitentAddresses []string,
+	persistentAddresses []string,
 	persistentConnection bool,
 	labels map[string]string,
 	annotations types.MetricAnnotations,
@@ -49,11 +49,11 @@ func NewNagios(
 
 	var mainTCPAddress string
 
-	if len(persitentAddresses) > 0 {
-		mainTCPAddress = persitentAddresses[0]
+	if len(persistentAddresses) > 0 {
+		mainTCPAddress = persistentAddresses[0]
 	}
 
-	nc.baseCheck = newBase(mainTCPAddress, persitentAddresses, persistentConnection, nc.nagiosMainCheck, labels, annotations)
+	nc.baseCheck = newBase(mainTCPAddress, persistentAddresses, persistentConnection, nc.nagiosMainCheck, labels, annotations)
 
 	return nc
 }

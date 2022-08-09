@@ -136,7 +136,7 @@ func (d *Discovery) createCheck(service Service) {
 	}
 
 	switch service.ServiceType { //nolint:exhaustive
-	case DovecoteService, MemcachedService, RabbitMQService, RedisService, ZookeeperService:
+	case DovecotService, MemcachedService, RabbitMQService, RedisService, ZookeeperService:
 		d.createTCPCheck(service, di, primaryAddress, tcpAddresses, labels, annotations)
 	case ApacheService, InfluxDBService, NginxService, SquidService:
 		d.createHTTPCheck(service, di, primaryAddress, tcpAddresses, labels, annotations)
@@ -153,6 +153,15 @@ func (d *Discovery) createCheck(service Service) {
 		} else {
 			d.createTCPCheck(service, di, "", tcpAddresses, labels, annotations)
 		}
+	case PostfixService, EximService:
+		check := check.NewSMTP(
+			primaryAddress,
+			tcpAddresses,
+			!di.DisablePersistentConnection,
+			labels,
+			annotations,
+		)
+		d.addCheck(check, service)
 	case CustomService:
 		createCheckType(service, d, di, primaryAddress, tcpAddresses, labels, annotations)
 	default:
@@ -179,7 +188,7 @@ func (d *Discovery) createTCPCheck(service Service, di discoveryInfo, primaryAdd
 	var tcpSend, tcpExpect, tcpClose []byte
 
 	switch service.ServiceType { //nolint:exhaustive
-	case DovecoteService:
+	case DovecotService:
 		tcpSend = []byte("001 NOOP\n")
 		tcpExpect = []byte("001 OK")
 		tcpClose = []byte("002 LOGOUT\n")

@@ -40,7 +40,7 @@ type HTTPCheck struct {
 
 // NewHTTP create a new HTTP check.
 //
-// For each persitentAddresses (in the format "IP:port") this checker will maintain a TCP connection open, if broken (and unable to re-open),
+// For each persistentAddresses (in the format "IP:port") this checker will maintain a TCP connection open, if broken (and unable to re-open),
 // the check will be immediately run.
 //
 // If expectedStatusCode is 0, StatusCode below 400 will generate Ok, between 400 and 499 => warning and above 500 => critical
@@ -48,7 +48,7 @@ type HTTPCheck struct {
 func NewHTTP(
 	urlValue string,
 	httpHost string,
-	persitentAddresses []string,
+	persistentAddresses []string,
 	persistentConnection bool,
 	expectedStatusCode int,
 	labels map[string]string,
@@ -83,7 +83,7 @@ func NewHTTP(
 		},
 	}
 
-	hc.baseCheck = newBase(mainTCPAddress, persitentAddresses, persistentConnection, hc.httpMainCheck, labels, annotations)
+	hc.baseCheck = newBase(mainTCPAddress, persistentAddresses, persistentConnection, hc.httpMainCheck, labels, annotations)
 
 	return hc
 }

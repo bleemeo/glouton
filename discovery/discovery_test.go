@@ -27,6 +27,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/influxdata/telegraf"
 )
 
@@ -265,10 +267,10 @@ func TestDiscoverySingle(t *testing.T) {
 	}
 }
 
-func Test_applyOveride(t *testing.T) {
+func Test_applyOverride(t *testing.T) {
 	type args struct {
 		discoveredServicesMap map[NameContainer]Service
-		servicesOverride      map[NameContainer]ServiceOveride
+		servicesOverride      map[NameContainer]ServiceOverride
 	}
 
 	tests := []struct {
@@ -315,7 +317,7 @@ func Test_applyOveride(t *testing.T) {
 						ServiceType: ApacheService,
 					},
 				},
-				servicesOverride: map[NameContainer]ServiceOveride{
+				servicesOverride: map[NameContainer]ServiceOverride{
 					{Name: "apache"}: {
 						ExtraAttribute: map[string]string{
 							"address": "10.0.1.2",
@@ -330,6 +332,13 @@ func Test_applyOveride(t *testing.T) {
 					ExtraAttributes: map[string]string{
 						"address": "10.0.1.2",
 					},
+					ListenAddresses: []facts.ListenAddress{
+						{
+							NetworkFamily: "tcp",
+							Address:       "10.0.1.2",
+							Port:          80,
+						},
+					},
 				},
 			},
 		},
@@ -342,7 +351,7 @@ func Test_applyOveride(t *testing.T) {
 						ServiceType: ApacheService,
 					},
 				},
-				servicesOverride: map[NameContainer]ServiceOveride{
+				servicesOverride: map[NameContainer]ServiceOverride{
 					{Name: "apache"}: {
 						ExtraAttribute: map[string]string{
 							"address":         "10.0.1.2",
@@ -358,6 +367,13 @@ func Test_applyOveride(t *testing.T) {
 					ExtraAttributes: map[string]string{
 						"address": "10.0.1.2",
 					},
+					ListenAddresses: []facts.ListenAddress{
+						{
+							NetworkFamily: "tcp",
+							Address:       "10.0.1.2",
+							Port:          80,
+						},
+					},
 				},
 			},
 		},
@@ -370,7 +386,7 @@ func Test_applyOveride(t *testing.T) {
 						ServiceType: ApacheService,
 					},
 				},
-				servicesOverride: map[NameContainer]ServiceOveride{
+				servicesOverride: map[NameContainer]ServiceOverride{
 					{Name: "myapplication"}: {
 						ExtraAttribute: map[string]string{
 							"port":          "8080",
@@ -417,7 +433,7 @@ func Test_applyOveride(t *testing.T) {
 			name: "bad custom check",
 			args: args{
 				discoveredServicesMap: nil,
-				servicesOverride: map[NameContainer]ServiceOveride{
+				servicesOverride: map[NameContainer]ServiceOverride{
 					{Name: "myapplication"}: { // the check_command is missing
 						ExtraAttribute: map[string]string{
 							"port":       "8080",
@@ -447,7 +463,7 @@ func Test_applyOveride(t *testing.T) {
 						},
 					},
 				},
-				servicesOverride: map[NameContainer]ServiceOveride{
+				servicesOverride: map[NameContainer]ServiceOverride{
 					{Name: "apache"}: {
 						IgnoredPorts: []int{443, 22},
 					},
@@ -460,7 +476,7 @@ func Test_applyOveride(t *testing.T) {
 					IPAddress:   "127.0.0.1",
 					ListenAddresses: []facts.ListenAddress{
 						{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 80},
-						// It's not applyOveride which remove ignored ports
+						// It's not applyOverride which remove ignored ports
 						{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 443},
 					},
 					IgnoredPorts: map[int]bool{
@@ -480,7 +496,7 @@ func Test_applyOveride(t *testing.T) {
 						ServiceType: ApacheService,
 					},
 				},
-				servicesOverride: map[NameContainer]ServiceOveride{
+				servicesOverride: map[NameContainer]ServiceOverride{
 					{Name: "apache"}: {
 						IgnoredPorts: []int{443, 22},
 					},
@@ -502,8 +518,9 @@ func Test_applyOveride(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			if got := applyOverride(tt.args.discoveredServicesMap, tt.args.servicesOverride); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("applyOveride() = %#v, want %#v", got, tt.want)
+			got := applyOverride(tt.args.discoveredServicesMap, tt.args.servicesOverride)
+			if diff := cmp.Diff(tt.want, got, cmpopts.IgnoreUnexported(Service{})); diff != "" {
+				t.Errorf("applyOverride diff:\n %s", diff)
 			}
 		})
 	}

@@ -224,7 +224,7 @@ func (bc *baseCheck) openSocket(ctx context.Context, addr string, scheduleUpdate
 		}
 
 		if consecutiveFailure > 12 {
-			logger.V(1).Printf("persitent connection to check %s keep getting closed quickly. Disabled persistent connection for this port", addr)
+			logger.V(1).Printf("persistent connection to check %s keep getting closed quickly. Disabled persistent connection for this port", addr)
 			bc.l.Lock()
 			bc.disabledPersistent[addr] = true
 			bc.l.Unlock()
