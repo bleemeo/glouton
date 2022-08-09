@@ -2,9 +2,8 @@ package registry
 
 import (
 	"context"
+	"glouton/types"
 	"time"
-
-	"github.com/getsentry/sentry-go"
 )
 
 // scrapeLoop allow to run metric scraping at regular interval.
@@ -37,15 +36,7 @@ func startScrapeLoop(
 	}
 
 	go func() {
-		defer func() {
-			err := recover()
-			if err != nil {
-				sentry.CurrentHub().Recover(err)
-				sentry.Flush(time.Second * 5)
-				panic(err)
-			}
-		}()
-
+		defer types.ProcessPanic()
 		sl.run(ctx, interval, timeout, jitterSeed)
 	}()
 

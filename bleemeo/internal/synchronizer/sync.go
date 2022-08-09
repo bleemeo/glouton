@@ -410,10 +410,14 @@ func (s *Synchronizer) DiagnosticPage() string {
 	httpMessage := make(chan string)
 
 	go func() {
+		defer types.ProcessPanic()
+
 		tcpMessage <- common.DiagnosticTCP(u.Hostname(), port, tlsConfig)
 	}()
 
 	go func() {
+		defer types.ProcessPanic()
+
 		httpMessage <- common.DiagnosticHTTP(s.diagnosticClient, u.String())
 	}()
 

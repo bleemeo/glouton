@@ -22,6 +22,7 @@ import (
 	"errors"
 	"glouton/inputs"
 	"glouton/logger"
+	"glouton/types"
 	"sync"
 	"time"
 
@@ -156,6 +157,7 @@ func (c *Collector) runOnce(t0 time.Time) {
 		wg.Add(1)
 
 		go func() {
+			defer types.ProcessPanic()
 			defer wg.Done()
 
 			err := input.Gather(acc)

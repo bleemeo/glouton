@@ -806,6 +806,8 @@ func (r *Registry) checkReschedule(ctx context.Context) time.Duration {
 		reg := value.Reg
 
 		go func() {
+			defer types.ProcessPanic()
+
 			ctx, cancel := context.WithTimeout(ctx, defaultGatherTimeout)
 			defer cancel()
 
@@ -907,6 +909,7 @@ func (r *Registry) GatherWithState(ctx context.Context, state GatherState) ([]*d
 		wg.Add(1)
 
 		go func() {
+			defer types.ProcessPanic()
 			defer wg.Done()
 
 			scrapedMFS, _, err := r.scrape(ctx, state, reg)

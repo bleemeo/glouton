@@ -217,7 +217,9 @@ func (a *agentReloader) run() {
 			first := firstRun
 
 			go func() {
+				defer types.ProcessPanic()
 				defer wg.Done()
+
 				a.runAgent(ctx, signalChan, first)
 			}()
 
@@ -287,7 +289,11 @@ func (a *agentReloader) watchConfig(ctx context.Context, reload chan struct{}) {
 
 	reloadDebouncer := debouncer.New(ctx, reloadAgentTarget, reloadDebouncerDelay, reloadDebouncerPeriod)
 
-	go a.receiveWatcherEvents(ctx, reloadDebouncer)
+	go func() {
+		defer types.ProcessPanic()
+
+		a.receiveWatcherEvents(ctx, reloadDebouncer)
+	}()
 
 	for _, dir := range configFiles {
 		fileInfo, err := os.Stat(dir)

@@ -18,6 +18,7 @@ package debouncer
 
 import (
 	"context"
+	"glouton/types"
 	"sync"
 	"time"
 )
@@ -68,6 +69,8 @@ func (dd *Debouncer) Trigger() {
 	}
 
 	go func() {
+		defer types.ProcessPanic()
+
 		time.Sleep(startDelay)
 
 		dd.l.Lock()

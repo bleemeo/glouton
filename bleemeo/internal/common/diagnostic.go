@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"glouton/types"
 	"glouton/version"
 	"io"
 	"io/ioutil"
@@ -75,6 +76,8 @@ func diagnosticTLS(builder io.Writer, tlsConfig *tls.Config, host string, hostPo
 	tlsConn := tls.Client(rawConn, tlsConfig)
 
 	go func() {
+		defer types.ProcessPanic()
+
 		errChannel <- tlsConn.Handshake()
 	}()
 

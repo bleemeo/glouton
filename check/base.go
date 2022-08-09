@@ -203,7 +203,9 @@ func (bc *baseCheck) openSockets(scheduleUpdate func(runAt time.Time)) {
 		bc.wg.Add(1)
 
 		go func() {
+			defer types.ProcessPanic()
 			defer bc.wg.Done()
+
 			bc.openSocket(ctx, addr, scheduleUpdate)
 		}()
 	}

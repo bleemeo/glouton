@@ -17,12 +17,14 @@
 package types
 
 import (
+	"errors"
 	"fmt"
-	"glouton/facts"
 	"os"
 	"reflect"
 	"testing"
 )
+
+var errTest = errors.New("test error")
 
 func TestLabelsToText(t *testing.T) {
 	type args struct {
@@ -129,43 +131,43 @@ func Test_MultiError_Is(t *testing.T) {
 		{
 			name:   "nil",
 			errs:   nil,
-			target: facts.ErrContainerDoesNotExists,
+			target: errTest,
 			want:   false,
 		},
 		{
 			name:   "empty",
 			errs:   MultiErrors{},
-			target: facts.ErrContainerDoesNotExists,
+			target: errTest,
 			want:   false,
 		},
 		{
 			name:   "unrelated error",
 			errs:   MultiErrors([]error{os.ErrClosed}),
-			target: facts.ErrContainerDoesNotExists,
+			target: errTest,
 			want:   false,
 		},
 		{
 			name:   "matching error",
-			errs:   MultiErrors([]error{facts.ErrContainerDoesNotExists}),
-			target: facts.ErrContainerDoesNotExists,
+			errs:   MultiErrors([]error{errTest}),
+			target: errTest,
 			want:   true,
 		},
 		{
 			name:   "multiple error",
-			errs:   MultiErrors([]error{os.ErrClosed, facts.ErrContainerDoesNotExists}),
-			target: facts.ErrContainerDoesNotExists,
+			errs:   MultiErrors([]error{os.ErrClosed, errTest}),
+			target: errTest,
 			want:   true,
 		},
 		{
 			name:   "multiple error2",
-			errs:   MultiErrors([]error{facts.ErrContainerDoesNotExists, os.ErrClosed}),
-			target: facts.ErrContainerDoesNotExists,
+			errs:   MultiErrors([]error{errTest, os.ErrClosed}),
+			target: errTest,
 			want:   true,
 		},
 		{
 			name:   "multiple wrapped error",
-			errs:   MultiErrors([]error{os.ErrInvalid, fmt.Errorf("wrapped %w", facts.ErrContainerDoesNotExists), os.ErrClosed}),
-			target: facts.ErrContainerDoesNotExists,
+			errs:   MultiErrors([]error{os.ErrInvalid, fmt.Errorf("wrapped %w", errTest), os.ErrClosed}),
+			target: errTest,
 			want:   true,
 		},
 	}

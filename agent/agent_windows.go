@@ -23,6 +23,7 @@ import (
 	"context"
 	"glouton/facts/container-runtime/veth"
 	"glouton/logger"
+	"glouton/types"
 	"os"
 
 	"github.com/StackExchange/wmi"
@@ -69,6 +70,8 @@ func (a *agent) initOSSpecificParts() {
 
 	if !isInteractive {
 		go func() {
+			defer types.ProcessPanic()
+
 			err = svc.Run(serviceName, &winService{cancelFunc: &a.cancel})
 			if err != nil {
 				logger.V(0).Printf("Failed to start the windows service: %v", err)

@@ -29,6 +29,7 @@ import (
 	"errors"
 	"fmt"
 	"glouton/logger"
+	"glouton/types"
 	"glouton/version"
 	"hash/crc32"
 	"io"
@@ -477,6 +478,7 @@ func (s Server) Run(ctx context.Context) error {
 		wg.Add(1)
 
 		go func() {
+			defer types.ProcessPanic()
 			defer wg.Done()
 
 			logger.V(2).Printf("new NRPE connection from %v", c.RemoteAddr())

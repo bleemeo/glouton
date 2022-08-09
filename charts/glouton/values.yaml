@@ -1,0 +1,17 @@
+namespace: default
+
+# Add your bleemeo credentials.
+account_id:
+registration_key:
+
+# Add your custom configuration here.
+# https://docs.bleemeo.com/agent/configuration
+config:
+  bleemeo:
+    enable: true
+  kubernetes:
+    clustername: my_k8s_cluster_name
+
+# A toleration is added to run Glouton on master nodes,
+# disable this if Glouton should not run on your master nodes.
+run_on_master: true

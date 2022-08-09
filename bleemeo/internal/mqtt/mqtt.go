@@ -271,6 +271,8 @@ func (c *Client) Run(ctx context.Context) error {
 	wg.Add(1)
 
 	go func() {
+		defer types.ProcessPanic()
+
 		c.receiveEvents(ctx)
 		wg.Done()
 	}()
@@ -538,14 +540,18 @@ func (c *Client) run(ctx context.Context) error {
 	wg.Add(1)
 
 	go func() {
+		defer types.ProcessPanic()
 		defer wg.Done()
+
 		c.connectionManager(ctx)
 	}()
 
 	wg.Add(1)
 
 	go func() {
+		defer types.ProcessPanic()
 		defer wg.Done()
+
 		c.ackManager(ctx)
 	}()
 
