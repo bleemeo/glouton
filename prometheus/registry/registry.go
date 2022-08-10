@@ -840,11 +840,12 @@ func (r *Registry) checkReschedule(ctx context.Context) time.Duration {
 func (r *Registry) Unregister(id int) bool {
 	r.init()
 	r.l.Lock()
-	defer r.l.Unlock()
 
 	reg, ok := r.registrations[id]
 
 	if !ok {
+		r.l.Unlock()
+
 		return false
 	}
 
@@ -859,6 +860,8 @@ func (r *Registry) Unregister(id int) bool {
 	delete(r.registrations, id)
 
 	reg.gatherer.source = nil
+
+	r.l.Unlock()
 
 	if reg.option.StopCallback != nil {
 		reg.option.StopCallback()
