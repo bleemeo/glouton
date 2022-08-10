@@ -424,7 +424,11 @@ func (c *Connector) UpdateInfo() {
 
 // UpdateMonitors trigger a reload of the monitors.
 func (c *Connector) UpdateMonitors() {
-	c.sync.UpdateMonitors()
+	c.l.Lock()
+	sync := c.sync
+	c.l.Unlock()
+
+	sync.UpdateMonitors()
 }
 
 func (c *Connector) RelabelHook(ctx context.Context, labels map[string]string) (newLabel map[string]string, retryLater bool) {

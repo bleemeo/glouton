@@ -944,7 +944,7 @@ func (a *agent) run(ctx context.Context, signalChan chan os.Signal) { //nolint:m
 			scaperName = fmt.Sprintf("%s:%d", fqdn, a.oldConfig.Int("web.listener.port"))
 		}
 
-		a.bleemeoConnector, err = bleemeo.New(bleemeoTypes.GlobalOption{
+		connector, err := bleemeo.New(bleemeoTypes.GlobalOption{
 			Config:                  a.oldConfig,
 			State:                   a.state,
 			Facts:                   a.factProvider,
@@ -973,6 +973,10 @@ func (a *agent) run(ctx context.Context, signalChan chan os.Signal) { //nolint:m
 
 			return
 		}
+
+		a.l.Lock()
+		a.bleemeoConnector = connector
+		a.l.Unlock()
 
 		a.gathererRegistry.UpdateRelabelHook(a.bleemeoConnector.RelabelHook)
 		tasks = append(tasks, taskInfo{a.bleemeoConnector.Run, "Bleemeo SAAS connector"})
@@ -1215,8 +1219,12 @@ func (a *agent) handleSignals(ctx context.Context, signalChan chan os.Signal, ca
 			}
 
 			if sig == syscall.SIGHUP {
-				if a.bleemeoConnector != nil {
-					a.bleemeoConnector.UpdateMonitors()
+				a.l.Lock()
+				connector := a.bleemeoConnector
+				a.l.Unlock()
+
+				if connector != nil {
+					connector.UpdateMonitors()
 				}
 
 				l.Lock()
