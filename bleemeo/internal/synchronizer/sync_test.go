@@ -64,6 +64,7 @@ type serviceMonitor struct {
 }
 
 // this is a go limitation, these are constants but we have to treat them as variables
+//
 //nolint:gochecknoglobals
 var (
 	newAgent = payloadAgent{

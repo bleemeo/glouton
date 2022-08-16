@@ -483,7 +483,6 @@ func (s *Synchronizer) excludeUnregistrableMetrics(metrics []types.Metric) []typ
 
 		if annotations.ServiceName != "" {
 			srvKey := serviceNameInstance{name: annotations.ServiceName, instance: containerName}
-			srvKey.truncateInstance()
 
 			if _, ok := servicesByKey[srvKey]; !ok {
 				continue
@@ -1358,7 +1357,6 @@ func (s *Synchronizer) prepareMetricPayload(
 
 	if annotations.ServiceName != "" {
 		srvKey := serviceNameInstance{name: annotations.ServiceName, instance: containerName}
-		srvKey.truncateInstance()
 
 		service, ok := servicesByKey[srvKey]
 		if !ok {
@@ -1471,20 +1469,13 @@ func (s *Synchronizer) metricDeleteIgnoredServices() error {
 		return err
 	}
 
-	longToShortKeyLookup := longToShortKey(localServices)
+	localServices = excludeUnregistrableServices(localServices)
 
 	registeredMetrics := s.option.Cache.MetricsByUUID()
 	registeredMetricsByKey := s.option.Cache.MetricLookupFromList()
 
 	for _, srv := range localServices {
 		if !srv.CheckIgnored {
-			continue
-		}
-
-		key := serviceNameInstance{name: srv.Name, instance: srv.ContainerName}
-
-		_, ok := longToShortKeyLookup[key]
-		if !ok {
 			continue
 		}
 
