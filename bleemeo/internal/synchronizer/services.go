@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"glouton/bleemeo/internal/common"
 	"glouton/bleemeo/types"
 	"glouton/discovery"
 	"glouton/facts"
@@ -28,8 +29,6 @@ import (
 	"strings"
 	"time"
 )
-
-const apiServiceInstanceLength = 50
 
 type serviceNameInstance struct {
 	name     string
@@ -45,8 +44,8 @@ func (sni serviceNameInstance) String() string {
 }
 
 func (sni *serviceNameInstance) truncateInstance() {
-	if len(sni.instance) > apiServiceInstanceLength {
-		sni.instance = sni.instance[:apiServiceInstanceLength]
+	if len(sni.instance) > common.APIServiceInstanceLength {
+		sni.instance = sni.instance[:common.APIServiceInstanceLength]
 	}
 }
 
@@ -266,10 +265,9 @@ func (s *Synchronizer) serviceRegisterAndUpdate(localServices []discovery.Servic
 			remoteSrv = remoteServices[remoteIndex]
 		}
 
+		// Skip updating the remote service if the service is already up to date.
 		listenAddresses := getListenAddress(srv.ListenAddresses)
-		cont := checkRemoteName(remoteFound, remoteSrv, srv, listenAddresses)
-
-		if cont {
+		if skipUpdate(remoteFound, remoteSrv, srv, listenAddresses) {
 			continue
 		}
 
@@ -330,12 +328,14 @@ func (s *Synchronizer) serviceRegisterAndUpdate(localServices []discovery.Servic
 	return nil
 }
 
-func checkRemoteName(remoteFound bool, remoteSrv types.Service, srv discovery.Service, listenAddresses string) bool {
-	if remoteFound && remoteSrv.Label == srv.Name && remoteSrv.ListenAddresses == listenAddresses && remoteSrv.ExePath == srv.ExePath && remoteSrv.Active == srv.Active && remoteSrv.Stack == srv.Stack {
-		return true
-	}
-
-	return false
+// skipUpdate returns true if the service found by the discovery is up to date with the remote service on the API.
+func skipUpdate(remoteFound bool, remoteSrv types.Service, srv discovery.Service, listenAddresses string) bool {
+	return remoteFound &&
+		remoteSrv.Label == srv.Name &&
+		remoteSrv.ListenAddresses == listenAddresses &&
+		remoteSrv.ExePath == srv.ExePath &&
+		remoteSrv.Active == srv.Active &&
+		remoteSrv.Stack == srv.Stack
 }
 
 func (s *Synchronizer) serviceDeleteFromLocal(localServices []discovery.Service) {

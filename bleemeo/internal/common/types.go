@@ -24,8 +24,8 @@ import (
 
 // Maximal length of fields on Bleemeo API.
 const (
-	APIMetricItemLength          int = 100
-	APIMetricItemLengthIfService int = 50
+	APIMetricItemLength      int = 250
+	APIServiceInstanceLength int = 250
 )
 
 // MetricOnlyHasItem return true if the metric only has a name and an item (which could be empty).
@@ -72,8 +72,8 @@ func TruncateItem(item string, isService bool) string {
 		item = item[:APIMetricItemLength]
 	}
 
-	if isService && len(item) > APIMetricItemLengthIfService {
-		item = item[:APIMetricItemLengthIfService]
+	if isService && len(item) > APIServiceInstanceLength {
+		item = item[:APIServiceInstanceLength]
 	}
 
 	return item
