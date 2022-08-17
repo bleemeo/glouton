@@ -108,7 +108,7 @@ func (z PsutilLister) Processes(ctx context.Context, maxAge time.Duration) (proc
 
 		cpuTimes, err := p.TimesWithContext(ctx)
 		if err == nil {
-			res.CPUTime = cpuTimes.Total()
+			res.CPUTime = timeStatTotal(*cpuTimes)
 		}
 
 		status, err := p.StatusWithContext(ctx)
