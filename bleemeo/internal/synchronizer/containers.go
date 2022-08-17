@@ -148,7 +148,7 @@ func (s *Synchronizer) containerRegisterAndUpdate(localContainers []facts.Contai
 
 		name := container.ContainerName()
 		if len(name) > common.APIContainerNameLength {
-			name = name[:common.APIContainerNameLength]
+			continue
 		}
 
 		remoteIndex, remoteFound := remoteIndexByName[name]
