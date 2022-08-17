@@ -34,6 +34,12 @@ func (f *Filter) IsAllowed(lbls map[string]string, annotations types.MetricAnnot
 		return false, err
 	}
 
+	// Deny metrics with an item too long for the API.
+	if len(annotations.BleemeoItem) > common.APIMetricItemLength ||
+		annotations.ServiceName != "" && len(annotations.BleemeoItem) > common.APIServiceInstanceLength {
+		return false, nil
+	}
+
 	// Service status and alerting rules metrics are always allowed.
 	if common.IsServiceCheckMetric(lbls, annotations) || annotations.AlertingRuleID != "" {
 		return true, nil

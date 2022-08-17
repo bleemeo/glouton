@@ -285,7 +285,7 @@ func excludeUnregistrableServices(services []discovery.Service) []discovery.Serv
 		// Remove services with an instance too long.
 		if len(service.ContainerName) > common.APIServiceInstanceLength {
 			logger.V(1).Printf(
-				"!!! Service %s will be ignored because the container name '%s' is too long (> %d characters)",
+				"Service %s will be ignored because the container name '%s' is too long (> %d characters)",
 				service.Name, service.ContainerName, common.APIServiceInstanceLength,
 			)
 

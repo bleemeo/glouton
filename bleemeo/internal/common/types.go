@@ -49,36 +49,6 @@ func MetricOnlyHasItem(labels map[string]string, agentID string) bool {
 	return true
 }
 
-// LabelsToText convert labels & annotation to a string version.
-// When using the Bleemeo Mode, result is the name + the item annotation.
-func LabelsToText(labels map[string]string, annotations types.MetricAnnotations, bleemeoMode bool) string {
-	if bleemeoMode && labels[types.LabelItem] != TruncateItem(labels[types.LabelItem], annotations.ServiceName != "") {
-		labelsCopy := make(map[string]string, len(labels)+1)
-		for k, v := range labels {
-			labelsCopy[k] = v
-		}
-
-		labelsCopy[types.LabelItem] = TruncateItem(labels[types.LabelItem], annotations.ServiceName != "")
-
-		return types.LabelsToText(labelsCopy)
-	}
-
-	return types.LabelsToText(labels)
-}
-
-// TruncateItem truncate the item to match maximal length allowed by Bleemeo API.
-func TruncateItem(item string, isService bool) string {
-	if len(item) > APIMetricItemLength {
-		item = item[:APIMetricItemLength]
-	}
-
-	if isService && len(item) > APIServiceInstanceLength {
-		item = item[:APIServiceInstanceLength]
-	}
-
-	return item
-}
-
 // MetricLookupFromList return a map[MetricLabelItem]Metric.
 func MetricLookupFromList(registeredMetrics []bleemeoTypes.Metric) map[string]bleemeoTypes.Metric {
 	registeredMetricsByKey := make(map[string]bleemeoTypes.Metric, len(registeredMetrics))

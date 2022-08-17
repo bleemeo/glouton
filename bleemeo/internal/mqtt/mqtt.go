@@ -675,7 +675,7 @@ func (c *Client) sendPoints() {
 // addFailedPoints add given points to list of failed points.
 func (c *Client) addFailedPoints(points ...types.MetricPoint) {
 	for _, p := range points {
-		key := common.LabelsToText(p.Labels, p.Annotations, c.option.MetricFormat == types.MetricFormatBleemeo)
+		key := types.LabelsToText(p.Labels)
 		if reg := c.option.Cache.MetricRegistrationsFailByKey()[key]; reg.FailCounter > 5 || reg.LastFailKind.IsPermanentFailure() {
 			continue
 		}
@@ -713,14 +713,14 @@ func (c *Client) cleanupFailedPoints() {
 	localExistsByKey := make(map[string]bool, len(localMetrics))
 
 	for _, m := range localMetrics {
-		key := common.LabelsToText(m.Labels(), m.Annotations(), c.option.MetricFormat == types.MetricFormatBleemeo)
+		key := types.LabelsToText(m.Labels())
 		localExistsByKey[key] = true
 	}
 
 	newPoints := make([]types.MetricPoint, 0, len(c.failedPoints))
 
 	for _, p := range c.failedPoints {
-		key := common.LabelsToText(p.Labels, p.Annotations, c.option.MetricFormat == types.MetricFormatBleemeo)
+		key := types.LabelsToText(p.Labels)
 		if localExistsByKey[key] {
 			newPoints = append(newPoints, p)
 		}
@@ -734,7 +734,7 @@ func (c *Client) preparePoints(registreredMetricByKey map[string]bleemeoTypes.Me
 	payload := make(map[bleemeoTypes.AgentID][]metricPayload, 1)
 
 	for _, p := range points {
-		key := common.LabelsToText(p.Labels, p.Annotations, c.option.MetricFormat == types.MetricFormatBleemeo)
+		key := types.LabelsToText(p.Labels)
 		if m, ok := registreredMetricByKey[key]; ok && m.DeactivatedAt.IsZero() {
 			value := metricPayload{
 				LabelsText:  m.LabelsText,
