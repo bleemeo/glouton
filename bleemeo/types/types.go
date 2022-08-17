@@ -146,6 +146,37 @@ func (r DisableReason) String() string {
 	}
 }
 
+// DenyReason is the reason why a metric was denied.
+type DenyReason int
+
+const (
+	NotDenied DenyReason = iota
+	DenyNotAvailableInCurrentPlan
+	DenyErrorOccurred
+	DenyNoDockerIntegration
+	DenyItemTooLong
+	DenyMissingContainerID
+)
+
+func (d DenyReason) String() string {
+	switch d {
+	case DenyNotAvailableInCurrentPlan:
+		return "not available in the current plan"
+	case DenyErrorOccurred:
+		return "an unexpected error occurred"
+	case DenyNoDockerIntegration:
+		return "docker integration is disabled in the current plan"
+	case DenyItemTooLong:
+		return "item too long"
+	case DenyMissingContainerID:
+		return "temporarily denied, waiting to detect the associated container"
+	case NotDenied:
+		return "not denied"
+	default:
+		return "unspecified reason"
+	}
+}
+
 type GloutonAccountConfig struct {
 	ID                    string
 	Name                  string

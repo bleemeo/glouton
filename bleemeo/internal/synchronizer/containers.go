@@ -148,6 +148,13 @@ func (s *Synchronizer) containerRegisterAndUpdate(localContainers []facts.Contai
 
 		name := container.ContainerName()
 		if len(name) > common.APIContainerNameLength {
+			msg := fmt.Sprintf(
+				"Container %s will be ignored because its name is too long (> %d characters)",
+				name, common.APIContainerNameLength,
+			)
+
+			s.logThrottle(msg)
+
 			continue
 		}
 

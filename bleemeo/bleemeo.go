@@ -871,7 +871,7 @@ func (c *Connector) EmitInternalMetric(ctx context.Context, now time.Time) {
 	}
 }
 
-func (c *Connector) IsMetricAllowed(metric gloutonTypes.LabelsAndAnnotation) (bool, error) {
+func (c *Connector) IsMetricAllowed(metric gloutonTypes.LabelsAndAnnotation) (bool, types.DenyReason, error) {
 	f := filter.NewFilter(c.cache)
 
 	return f.IsAllowed(metric.Labels, metric.Annotations)

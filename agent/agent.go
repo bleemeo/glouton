@@ -549,7 +549,7 @@ func (a *agent) newMetricsCallback(newMetrics []types.LabelsAndAnnotation) {
 		isBleemeoAllowed := true
 
 		if a.bleemeoConnector != nil {
-			isBleemeoAllowed, _ = a.bleemeoConnector.IsMetricAllowed(m)
+			isBleemeoAllowed, _, _ = a.bleemeoConnector.IsMetricAllowed(m)
 		}
 
 		name := types.LabelsToText(m.Labels)
@@ -2338,8 +2338,10 @@ func (a *agent) diagnosticFilterResult(ctx context.Context, archive types.Archiv
 		isDenied := a.metricFilter.IsDenied(m.Labels())
 		isBleemeoAllowed := true
 
+		var denyReason bleemeoTypes.DenyReason
+
 		if a.bleemeoConnector != nil {
-			isBleemeoAllowed, _ = a.bleemeoConnector.IsMetricAllowed(types.LabelsAndAnnotation{
+			isBleemeoAllowed, denyReason, _ = a.bleemeoConnector.IsMetricAllowed(types.LabelsAndAnnotation{
 				Labels:      m.Labels(),
 				Annotations: m.Annotations(),
 			})
@@ -2355,7 +2357,7 @@ func (a *agent) diagnosticFilterResult(ctx context.Context, archive types.Archiv
 		case isDenied:
 			fmt.Fprintf(file, "The metric %s is blocked by configured deny list\n", name)
 		case !isBleemeoAllowed:
-			fmt.Fprintf(file, "The metric %s is not available in current Bleemeo Plan\n", name)
+			fmt.Fprintf(file, "The metric %s is not allowed: %s\n", name, denyReason)
 		default:
 			fmt.Fprintf(file, "The metric %s is allowed\n", name)
 		}

@@ -939,7 +939,7 @@ func (c *Client) filterPoints(input []types.MetricPoint) []types.MetricPoint {
 			continue
 		}
 
-		isAllowed, err := f.IsAllowed(mp.Labels, mp.Annotations)
+		isAllowed, _, err := f.IsAllowed(mp.Labels, mp.Annotations)
 		if err != nil {
 			logger.V(2).Printf("mqtt: %s", err)
 

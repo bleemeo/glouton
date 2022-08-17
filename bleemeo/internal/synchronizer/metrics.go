@@ -429,14 +429,14 @@ func (s *Synchronizer) metricKey(lbls map[string]string, annotations types.Metri
 	return types.LabelsToText(lbls)
 }
 
-// nearly a duplicate of mqtt.filterPoint, but not quite. Alas we cannot easily generalize this as go doesn't have generics (yet).
+// filterMetrics only keeps the points that can be registered.
 func (s *Synchronizer) filterMetrics(input []types.Metric) []types.Metric {
 	result := make([]types.Metric, 0)
 
 	f := filter.NewFilter(s.option.Cache)
 
 	for _, m := range input {
-		allow, err := f.IsAllowed(m.Labels(), m.Annotations())
+		allow, denyReason, err := f.IsAllowed(m.Labels(), m.Annotations())
 		if err != nil {
 			logger.V(2).Printf("sync: %s", err)
 
@@ -445,6 +445,13 @@ func (s *Synchronizer) filterMetrics(input []types.Metric) []types.Metric {
 
 		if allow {
 			result = append(result, m)
+		} else if denyReason == bleemeoTypes.DenyItemTooLong {
+			msg := fmt.Sprintf(
+				"Metric %s will be ignored because the item '%s' is too long (> %d characters)",
+				m.Labels()[types.LabelName], m.Labels()[types.LabelItem], common.APIMetricItemLength,
+			)
+
+			s.logThrottle(msg)
 		}
 	}
 
@@ -1463,7 +1470,7 @@ func (s *Synchronizer) metricDeleteIgnoredServices() error {
 		return err
 	}
 
-	localServices = excludeUnregistrableServices(localServices)
+	localServices = s.excludeUnregistrableServices(localServices)
 
 	registeredMetrics := s.option.Cache.MetricsByUUID()
 	registeredMetricsByKey := s.option.Cache.MetricLookupFromList()

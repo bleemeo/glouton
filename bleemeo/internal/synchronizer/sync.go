@@ -96,7 +96,8 @@ type Synchronizer struct {
 	lastMaintenanceSync time.Time
 
 	// logOnce is used to log that the limit of metrics has been reached.
-	logOnce sync.Once
+	logOnce             sync.Once
+	lastDenyReasonLogAt time.Time
 
 	l                          sync.Mutex
 	disabledUntil              time.Time
@@ -1025,4 +1026,13 @@ func generatePassword(length int) (string, error) {
 	}
 
 	return string(b), nil
+}
+
+// logThrottle logs a message at most once per hour, all other logs are dropped to prevent spam.
+func (s *Synchronizer) logThrottle(msg string) {
+	if time.Since(s.lastDenyReasonLogAt) > time.Hour {
+		logger.V(1).Println(msg)
+
+		s.lastDenyReasonLogAt = time.Now()
+	}
 }

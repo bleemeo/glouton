@@ -85,7 +85,7 @@ func (s *Synchronizer) syncServices(ctx context.Context, fullSync bool, onlyEsse
 		return false, err
 	}
 
-	localServices = excludeUnregistrableServices(localServices)
+	localServices = s.excludeUnregistrableServices(localServices)
 
 	if s.successiveErrors == 3 {
 		// After 3 error, try to force a full synchronization to see if it solve the issue.
@@ -113,7 +113,7 @@ func (s *Synchronizer) syncServices(ctx context.Context, fullSync bool, onlyEsse
 		return false, err
 	}
 
-	localServices = excludeUnregistrableServices(localServices)
+	localServices = s.excludeUnregistrableServices(localServices)
 
 	if err := s.serviceRegisterAndUpdate(localServices); err != nil {
 		return false, err
@@ -278,16 +278,18 @@ func skipUpdate(remoteFound bool, remoteSrv types.Service, srv discovery.Service
 }
 
 // excludeUnregistrableServices removes the services that cannot be registered.
-func excludeUnregistrableServices(services []discovery.Service) []discovery.Service {
+func (s *Synchronizer) excludeUnregistrableServices(services []discovery.Service) []discovery.Service {
 	i := 0
 
 	for _, service := range services {
 		// Remove services with an instance too long.
 		if len(service.ContainerName) > common.APIServiceInstanceLength {
-			logger.V(1).Printf(
+			msg := fmt.Sprintf(
 				"Service %s will be ignored because the container name '%s' is too long (> %d characters)",
 				service.Name, service.ContainerName, common.APIServiceInstanceLength,
 			)
+
+			s.logThrottle(msg)
 
 			continue
 		}
