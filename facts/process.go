@@ -612,8 +612,8 @@ func (pp *ProcessProvider) baseTopinfo() (result TopInfo, err error) {
 
 	cpuTimes := cpusTimes[0]
 
-	total1 := pp.lastCPUtimes.Total()
-	total2 := cpuTimes.Total()
+	total1 := timeStatTotal(pp.lastCPUtimes)
+	total2 := timeStatTotal(cpuTimes)
 
 	if delta := total2 - total1; delta >= 0 {
 		between0and100 := func(input float64) float64 {
@@ -643,6 +643,11 @@ func (pp *ProcessProvider) baseTopinfo() (result TopInfo, err error) {
 	pp.lastCPUtimes = cpuTimes
 
 	return result, nil
+}
+
+// timeStatTotal returns the total number of seconds in a CPUTimesStat.
+func timeStatTotal(c cpu.TimesStat) float64 {
+	return c.User + c.System + c.Idle + c.Nice + c.Iowait + c.Irq + c.Softirq + c.Steal
 }
 
 // Update update self taking any non-zero fields from other.
@@ -742,6 +747,7 @@ type PsutilLister struct {
 }
 
 // SystemProcessInformationStruct is windows-specific, necessary for running assertions on its size
+//
 //nolint:maligned
 type SystemProcessInformationStruct struct {
 	NextEntryOffset              uint32

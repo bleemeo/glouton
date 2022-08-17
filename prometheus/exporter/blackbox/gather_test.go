@@ -116,12 +116,20 @@ func TestWriteMFsToChan(t *testing.T) {
 
 			// verify the value of the metric, and the label values.
 			// This code is brittle as we are acting directly on prometheus internals: prometheus/value.go/constMetric
-			writtenMetricVal := reflect.ValueOf(writtenMetric).Elem().FieldByName("val").Float()
+			metricField := reflect.ValueOf(writtenMetric).Elem().FieldByName("metric")
+			writtenMetricDtoInterface := reflect.NewAt(metricField.Type(), unsafe.Pointer(metricField.UnsafeAddr())).Elem().Interface()
+
+			writtenMetricDto, ok := writtenMetricDtoInterface.(*dto.Metric)
+			if !ok {
+				t.Fatalf("Failed to convert metric %T to *dto.Metric", writtenMetricDtoInterface)
+			}
+
+			writtenMetricVal := writtenMetricDto.GetGauge().GetValue()
 			if writtenMetricVal != metric.gauge {
 				t.Fatalf("TestWriteMFsToChan() failed checking metrics values, got %f, want %f", writtenMetricVal, metric.gauge)
 			}
 
-			writtenMetricLabels := (*dtoLabelPairs)(unsafe.Pointer(reflect.ValueOf(writtenMetric).Elem().FieldByName("labelPairs").Addr().Pointer())).toLocalLabelPairs()
+			writtenMetricLabels := (dtoLabelPairs)(writtenMetricDto.GetLabel()).toLocalLabelPairs()
 			if !reflect.DeepEqual(writtenMetricLabels, metric.labels) {
 				t.Fatalf("TestWriteMFsToChan() failed checking labels values, got %v, want %v", writtenMetricLabels, metric.labels)
 			}
