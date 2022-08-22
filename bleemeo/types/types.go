@@ -165,7 +165,7 @@ func (d DenyReason) String() string {
 	case DenyErrorOccurred:
 		return "an unexpected error occurred"
 	case DenyNoDockerIntegration:
-		return "docker integration is disabled in the current plan"
+		return "docker integration is not available in the current plan"
 	case DenyItemTooLong:
 		return "item too long"
 	case DenyMissingContainerID:
