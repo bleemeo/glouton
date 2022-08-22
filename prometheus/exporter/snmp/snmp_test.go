@@ -24,7 +24,6 @@ import (
 	"glouton/prometheus/registry"
 	"glouton/prometheus/scrapper"
 	"glouton/types"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"sort"
@@ -204,7 +203,7 @@ func Test_factFromPoints(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			body, err := ioutil.ReadFile(filepath.Join("testdata", tt.metricFile))
+			body, err := os.ReadFile(filepath.Join("testdata", tt.metricFile))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -679,7 +678,7 @@ func TestTarget_Module(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			body, err := ioutil.ReadFile(filepath.Join("testdata", tt.metricFile))
+			body, err := os.ReadFile(filepath.Join("testdata", tt.metricFile))
 			if err != nil {
 				t.Fatal(err)
 			}

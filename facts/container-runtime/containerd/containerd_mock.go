@@ -6,7 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"glouton/facts"
-	"io/ioutil"
+	"os"
 	"reflect"
 	"syscall"
 
@@ -224,7 +224,7 @@ func getTaskInfo(ctx context.Context, err error, task containerd.Task, mi MockTa
 func NewMockFromFile(filename string) (*MockClient, error) {
 	result := &MockClient{}
 
-	data, err := ioutil.ReadFile(filename)
+	data, err := os.ReadFile(filename)
 	if err == nil {
 		err = json.Unmarshal(data, &result.Data)
 		if err != nil {

@@ -56,7 +56,7 @@ func (t TelegrafLogger) Info(args ...interface{}) {
 
 // addNameToArgs adds the input name to the log, should be used with Print.
 func (t TelegrafLogger) addNameToArgs(args ...interface{}) interface{} {
-	return append([]interface{}{fmt.Sprintf("%s: ", t.name)}, args)
+	return append([]interface{}{fmt.Sprintf("%s: ", t.name)}, args...)
 }
 
 // addDescriptionToArgs adds the input name to the log, should be used with Printf.

@@ -23,7 +23,6 @@ import (
 	"glouton/logger"
 	"glouton/version"
 	"io"
-	"io/ioutil"
 	"net"
 	"net/http"
 	"os"
@@ -178,7 +177,7 @@ func (f *FactProvider) fastUpdateFacts(ctx context.Context) map[string]string {
 	copy(callbacks, f.callbacks)
 
 	if f.factPath != "" {
-		if data, err := ioutil.ReadFile(f.factPath); err != nil {
+		if data, err := os.ReadFile(f.factPath); err != nil {
 			logger.V(1).Printf("unable to read fact file: %v", err)
 		} else {
 			var fileFacts map[string]string
@@ -248,7 +247,7 @@ func (f *FactProvider) fastUpdateFacts(ctx context.Context) map[string]string {
 	}
 
 	if f.hostRootPath != "" {
-		if v, err := ioutil.ReadFile(filepath.Join(f.hostRootPath, "etc/timezone")); err == nil {
+		if v, err := os.ReadFile(filepath.Join(f.hostRootPath, "etc/timezone")); err == nil {
 			newFacts["timezone"] = strings.TrimSpace(string(v))
 		}
 	}
@@ -416,7 +415,7 @@ func urlContent(ctx context.Context, url string) string {
 }
 
 func httpQuery(ctx context.Context, url string, headers []string) string {
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return ""
 	}
@@ -443,7 +442,7 @@ func httpQuery(ctx context.Context, url string, headers []string) string {
 	}
 
 	// limit the amount of data to 1mb
-	body, err := ioutil.ReadAll(&io.LimitedReader{R: resp.Body, N: 2 << 20})
+	body, err := io.ReadAll(&io.LimitedReader{R: resp.Body, N: 2 << 20})
 	if err != nil {
 		return ""
 	}

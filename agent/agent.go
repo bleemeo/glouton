@@ -57,7 +57,6 @@ import (
 	"glouton/types"
 	"glouton/version"
 	"glouton/zabbix"
-	"io/ioutil"
 	"log"
 	"math"
 	"math/rand"
@@ -655,7 +654,7 @@ func (a *agent) run(ctx context.Context, signalChan chan os.Signal) { //nolint:m
 
 	cloudImageFile := a.oldConfig.String("agent.cloudimage_creation_file")
 
-	content, err := ioutil.ReadFile(cloudImageFile)
+	content, err := os.ReadFile(cloudImageFile)
 	if err != nil && !os.IsNotExist(err) {
 		logger.Printf("Unable to read content of %#v file: %v", cloudImageFile, err)
 	}

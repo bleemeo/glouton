@@ -6,7 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"glouton/facts"
-	"io/ioutil"
+	"os"
 	"path/filepath"
 	"reflect"
 
@@ -135,7 +135,7 @@ func (cl *MockDockerClient) Close() error {
 func NewDockerMock(dirname string) (*MockDockerClient, error) {
 	result := &MockDockerClient{}
 
-	data, err := ioutil.ReadFile(filepath.Join(dirname, "docker-version.json"))
+	data, err := os.ReadFile(filepath.Join(dirname, "docker-version.json"))
 	if err == nil {
 		err = json.Unmarshal(data, &result.Version)
 		if err != nil {
@@ -143,7 +143,7 @@ func NewDockerMock(dirname string) (*MockDockerClient, error) {
 		}
 	}
 
-	data, err = ioutil.ReadFile(filepath.Join(dirname, "docker-containers.json"))
+	data, err = os.ReadFile(filepath.Join(dirname, "docker-containers.json"))
 	if err == nil {
 		err = json.Unmarshal(data, &result.Containers)
 		if err != nil {
@@ -158,7 +158,7 @@ func NewDockerMock(dirname string) (*MockDockerClient, error) {
 func NewDockerMockFromFile(filename string) (*MockDockerClient, error) {
 	result := &MockDockerClient{}
 
-	data, err := ioutil.ReadFile(filename)
+	data, err := os.ReadFile(filename)
 	if err == nil {
 		err = json.Unmarshal(data, &result.Containers)
 		if err != nil {

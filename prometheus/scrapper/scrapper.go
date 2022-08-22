@@ -24,9 +24,9 @@ import (
 	"glouton/prometheus/registry"
 	"glouton/version"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
+	"os"
 	"time"
 
 	dto "github.com/prometheus/client_model/go"
@@ -135,14 +135,14 @@ func (t *Target) GatherWithState(ctx context.Context, state registry.GatherState
 
 func (t *Target) readAll(ctx context.Context) ([]byte, error) {
 	if t.URL.Scheme == "file" || t.URL.Scheme == "" {
-		return ioutil.ReadFile(t.URL.Path)
+		return os.ReadFile(t.URL.Path)
 	}
 
 	if t.URL.Scheme == "mock" {
 		return t.mockResponse, nil
 	}
 
-	req, err := http.NewRequest("GET", t.URL.String(), nil)
+	req, err := http.NewRequest(http.MethodGet, t.URL.String(), nil)
 	if err != nil {
 		return nil, fmt.Errorf("prepare request to Prometheus exporter %s: %w", t.URL.String(), err)
 	}
@@ -163,7 +163,7 @@ func (t *Target) readAll(ctx context.Context) ([]byte, error) {
 		buffer, err := io.ReadAll(io.LimitReader(resp.Body, 32*1024))
 
 		// Ensure response body is read to allow HTTP keep-alive to works
-		_, _ = io.Copy(ioutil.Discard, resp.Body)
+		_, _ = io.Copy(io.Discard, resp.Body)
 
 		return nil, TargetError{
 			PartialBody: buffer,
@@ -172,7 +172,7 @@ func (t *Target) readAll(ctx context.Context) ([]byte, error) {
 		}
 	}
 
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		err = TargetError{
 			ReadErr: err,

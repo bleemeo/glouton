@@ -86,22 +86,22 @@ type metricFilter interface {
 // It also support pushed metrics.
 //
 // It is used by Glouton for two main purpose:
-// * provide metrics on /metrics endpoints. For this gather of metrics is
-//   (mostly) done when an HTTP query reach /metrics.
-// * provide metrics to be sent to stored in local store + sent to Bleemeo. Here
-//   gather of metrics is done periodically.
+//   - provide metrics on /metrics endpoints. For this gather of metrics is
+//     (mostly) done when an HTTP query reach /metrics.
+//   - provide metrics to be sent to stored in local store + sent to Bleemeo. Here
+//     gather of metrics is done periodically.
 //
 // It may contains two kind of metrics source:
-// * Prometheus Gatherer. When adding a Gatherer additional labels could be added
-// * "push" callback, which are function that use PushPoints() to add points to
-//   the registry buffer. Points in this buffer are send when /metrics is queried.
-//   Push callbacks are only called periodically by RunCollection, they are NOT called
-//   on query to /metrics.
+//   - Prometheus Gatherer. When adding a Gatherer additional labels could be added
+//   - "push" callback, which are function that use PushPoints() to add points to
+//     the registry buffer. Points in this buffer are send when /metrics is queried.
+//     Push callbacks are only called periodically by RunCollection, they are NOT called
+//     on query to /metrics.
 //
 // Points send to local store (which forward them to Bleemeo) are:
-// * any point pushed using PushPoints()
-// * any points returned by a registered Gatherer when pushPoint option was set
-//   when gatherer was registered.
+//   - any point pushed using PushPoints()
+//   - any points returned by a registered Gatherer when pushPoint option was set
+//     when gatherer was registered.
 type Registry struct {
 	option Option
 
@@ -395,8 +395,8 @@ func (r *Registry) Run(ctx context.Context) error {
 // add Telegraf input (using glouton/collector).
 // Deprecated: use RegisterAppenderCallback.
 // Note: before being able to drop pushpoint & registerpushpoint, we likely need:
-//  * support for "GathererWithScheduleUpdate-like" on RegisterAppenderCallback (needed by service check, when they trigger check on TCP close)
-//  * support for conversion of all annotation to meta-label and vise-vera (model/convert.go)
+//   - support for "GathererWithScheduleUpdate-like" on RegisterAppenderCallback (needed by service check, when they trigger check on TCP close)
+//   - support for conversion of all annotation to meta-label and vise-vera (model/convert.go)
 func (r *Registry) RegisterPushPointsCallback(opt RegistrationOption, f func(context.Context, time.Time)) (int, error) {
 	return r.registerPushPointsCallback(opt, f)
 }

@@ -20,7 +20,7 @@ package config
 import (
 	"bytes"
 	"encoding/json"
-	"io/ioutil"
+	"os"
 	"reflect"
 	"testing"
 )
@@ -189,7 +189,7 @@ func TestMerge(t *testing.T) {
 func TestData(t *testing.T) {
 	cfg := Configuration{}
 
-	data, err := ioutil.ReadFile("testdata/main.conf")
+	data, err := os.ReadFile("testdata/main.conf")
 	if err != nil {
 		t.Error(err)
 	}
@@ -605,7 +605,7 @@ func TestDelete(t *testing.T) {
 func TestDump(t *testing.T) {
 	cfg := Configuration{}
 
-	data, err := ioutil.ReadFile("testdata/secret.conf")
+	data, err := os.ReadFile("testdata/secret.conf")
 	if err != nil {
 		t.Error(err)
 	}
