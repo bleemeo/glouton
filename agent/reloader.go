@@ -168,20 +168,24 @@ func StartReloadManager(configFilesFromFlag []string, reloadDisabled bool) {
 }
 
 func (a *agentReloader) run() {
-	// The signal handler needs to be set up very early to catch the SIGHUP signal
+	// The sighup handler needs to be set up very early to catch the SIGHUP signal
 	// received from apt post-update hook.
-	signalChan := make(chan os.Signal, 1)
-	signal.Notify(signalChan, os.Interrupt, syscall.SIGTERM, syscall.SIGINT, syscall.SIGHUP)
+	sighupChan := make(chan os.Signal, 1)
+	signal.Notify(sighupChan, syscall.SIGHUP)
 
 	// Start watching config files.
 	ctxWatcher, cancelWatcher := context.WithCancel(context.Background())
 	defer cancelWatcher()
 
-	reload := make(chan struct{}, 1)
-	a.watchConfig(ctxWatcher, reload)
-
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
+	// Stop Glouton when one of these signals is received.
+	stopChan := make(chan os.Signal, 1)
+	signal.Notify(stopChan, os.Interrupt, syscall.SIGTERM, syscall.SIGINT)
+
+	reload := make(chan struct{}, 1)
+	a.watchConfig(ctxWatcher, reload)
 
 	// Run the agent for the first time.
 	reload <- struct{}{}
@@ -189,11 +193,12 @@ func (a *agentReloader) run() {
 	firstRun := true
 
 	// Ticker needed to quit when the agent exited for another reason than a reload.
-	ticker := time.NewTicker(5 * time.Second)
+	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 
 	var wg sync.WaitGroup
 
+out:
 	for {
 		select {
 		case <-reload:
@@ -220,7 +225,7 @@ func (a *agentReloader) run() {
 				defer types.ProcessPanic()
 				defer wg.Done()
 
-				a.runAgent(ctx, signalChan, first)
+				a.runAgent(ctx, sighupChan, first)
 			}()
 
 			firstRun = false
@@ -231,17 +236,24 @@ func (a *agentReloader) run() {
 			a.l.Unlock()
 
 			if !isRunning {
-				cancel()
-				wg.Wait()
-
-				signal.Stop(signalChan)
-				close(signalChan)
-				a.reloadState.Close()
-
-				return
+				break out
 			}
+		case sig := <-stopChan:
+			logger.Printf("Received signal %s, stopping...", sig)
+
+			break out
 		}
 	}
+
+	// Stop Glouton.
+	cancel()
+	wg.Wait()
+
+	signal.Stop(sighupChan)
+	close(sighupChan)
+	signal.Stop(stopChan)
+	close(stopChan)
+	a.reloadState.Close()
 }
 
 func (a *agentReloader) runAgent(ctx context.Context, signalChan chan os.Signal, firstRun bool) {

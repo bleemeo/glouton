@@ -73,7 +73,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/getsentry/sentry-go"
@@ -611,14 +610,14 @@ func (a *agent) updateThresholds(ctx context.Context, thresholds map[string]thre
 }
 
 // Run will start the agent. It will terminate when sigquit/sigterm/sigint is received.
-func (a *agent) run(ctx context.Context, signalChan chan os.Signal) { //nolint:maintidx
+func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:maintidx
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
 	go func() {
 		defer types.ProcessPanic()
 
-		a.handleSignals(ctx, signalChan, cancel)
+		a.handleSighup(ctx, sighupChan)
 	}()
 
 	a.cancel = cancel
@@ -1203,7 +1202,7 @@ func (a *agent) run(ctx context.Context, signalChan chan os.Signal) { //nolint:m
 	logger.V(2).Printf("Agent stopped")
 }
 
-func (a *agent) handleSignals(ctx context.Context, signalChan chan os.Signal, cancel context.CancelFunc) {
+func (a *agent) handleSighup(ctx context.Context, sighupChan chan os.Signal) {
 	var (
 		l                         sync.Mutex
 		systemUpdateMetricPending bool
@@ -1211,40 +1210,32 @@ func (a *agent) handleSignals(ctx context.Context, signalChan chan os.Signal, ca
 
 	for ctx.Err() == nil {
 		select {
-		case sig := <-signalChan:
-			if sig == syscall.SIGTERM || sig == syscall.SIGINT || sig == os.Interrupt {
-				cancel()
+		case <-sighupChan:
+			a.l.Lock()
+			connector := a.bleemeoConnector
+			a.l.Unlock()
 
-				break
+			if connector != nil {
+				connector.UpdateMonitors()
 			}
 
-			if sig == syscall.SIGHUP {
-				a.l.Lock()
-				connector := a.bleemeoConnector
-				a.l.Unlock()
+			l.Lock()
+			if !systemUpdateMetricPending {
+				systemUpdateMetricPending = true
 
-				if connector != nil {
-					connector.UpdateMonitors()
-				}
+				go func() {
+					defer types.ProcessPanic()
 
-				l.Lock()
-				if !systemUpdateMetricPending {
-					systemUpdateMetricPending = true
+					a.waitAndRefreshPendingUpdates(ctx)
 
-					go func() {
-						defer types.ProcessPanic()
-
-						a.waitAndRefreshPendingUpdates(ctx)
-
-						l.Lock()
-						systemUpdateMetricPending = false
-						l.Unlock()
-					}()
-				}
-				l.Unlock()
-
-				a.FireTrigger(true, true, false, true)
+					l.Lock()
+					systemUpdateMetricPending = false
+					l.Unlock()
+				}()
 			}
+			l.Unlock()
+
+			a.FireTrigger(true, true, false, true)
 		case <-ctx.Done():
 			return
 		}
