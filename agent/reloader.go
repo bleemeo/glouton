@@ -184,6 +184,9 @@ func (a *agentReloader) run() {
 	stopChan := make(chan os.Signal, 1)
 	signal.Notify(stopChan, os.Interrupt, syscall.SIGTERM, syscall.SIGINT)
 
+	// Start Windows service.
+	initOSSpecificParts(stopChan)
+
 	reload := make(chan struct{}, 1)
 	a.watchConfig(ctxWatcher, reload)
 

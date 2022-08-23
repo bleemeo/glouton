@@ -338,7 +338,6 @@ func Run(ctx context.Context, reloadState ReloadState, configFiles []string, sig
 	rand.Seed(time.Now().UnixNano())
 
 	agent := &agent{reloadState: reloadState}
-	agent.initOSSpecificParts()
 
 	if !agent.init(ctx, configFiles, firstRun) {
 		os.Exit(1)

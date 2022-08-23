@@ -963,7 +963,7 @@ func (c *Client) filterPoints(input []types.MetricPoint) []types.MetricPoint {
 func (c *Client) ready() bool {
 	cfg, ok := c.option.Cache.CurrentAccountConfig()
 	if !ok || cfg.LiveProcessResolution == 0 || cfg.AgentConfigByName[bleemeoTypes.AgentTypeAgent].MetricResolution == 0 {
-		logger.V(2).Printf("MQTT not ready, Agent as no configuration")
+		logger.V(2).Printf("MQTT not ready, Agent has no configuration")
 
 		return false
 	}

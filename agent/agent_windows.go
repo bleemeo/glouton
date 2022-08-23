@@ -20,7 +20,6 @@
 package agent
 
 import (
-	"context"
 	"glouton/facts/container-runtime/veth"
 	"glouton/logger"
 	"glouton/types"
@@ -33,11 +32,15 @@ import (
 const serviceName string = "glouton"
 
 type winService struct {
-	cancelFunc *context.CancelFunc
+	stop chan<- os.Signal
 }
 
 // Execute implements svc.Handler.
-func (ws *winService) Execute(args []string, req <-chan svc.ChangeRequest, status chan<- svc.Status) (svcSpecificEC bool, exitCode uint32) {
+func (ws winService) Execute(
+	args []string,
+	req <-chan svc.ChangeRequest,
+	status chan<- svc.Status,
+) (svcSpecificEC bool, exitCode uint32) {
 	const cmdsAccepted = svc.AcceptStop | svc.AcceptShutdown
 	status <- svc.Status{State: svc.StartPending}
 	status <- svc.Status{State: svc.Running, Accepts: cmdsAccepted}
@@ -47,7 +50,7 @@ loop:
 		case svc.Interrogate:
 			status <- c.CurrentStatus
 		case svc.Stop, svc.Shutdown:
-			(*ws.cancelFunc)()
+			ws.stop <- os.Interrupt
 
 			break loop
 		default:
@@ -59,7 +62,7 @@ loop:
 	return
 }
 
-func (a *agent) initOSSpecificParts() {
+func initOSSpecificParts(stop chan<- os.Signal) {
 	// IsAnInteractiveSession is deprecated but its remplacement (IsWindowsService)
 	// does not works and fail with an access denied error.
 	isInteractive, err := svc.IsAnInteractiveSession() //nolint:staticcheck
@@ -72,7 +75,7 @@ func (a *agent) initOSSpecificParts() {
 		go func() {
 			defer types.ProcessPanic()
 
-			err = svc.Run(serviceName, &winService{cancelFunc: &a.cancel})
+			err = svc.Run(serviceName, winService{stop})
 			if err != nil {
 				logger.V(0).Printf("Failed to start the windows service: %v", err)
 			}
