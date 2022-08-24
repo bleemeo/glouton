@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+	<Product Id="*" Name="Glouton" Language="1033" Version="1.0.0.0" Manufacturer="Bleemeo" UpgradeCode="2237ae31-e258-49f7-a508-33256efaa574">
+		<Package InstallerVersion="200" Compressed="yes" InstallScope="perMachine" />
+
+		<MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
+		<MediaTemplate />
+
+		<!-- Include app icon in shortcuts and uninstall menu -->
+		<Icon Id="Icon.ico" SourceFile="Z:\packaging\windows\bleemeo.ico"/>
+		<Property Id="ARPPRODUCTICON" Value="Icon.ico"></Property>
+
+		<Directory Id="TARGETDIR" Name="SourceDir">
+			<Directory Id="ProgramFilesFolder">
+				<Directory Id="INSTALLFOLDER" Name="Glouton" />
+			</Directory>
+
+			<Directory Id="CommonAppDataFolder">
+				<Directory Id="ConfigFolder" Name="Glouton" />
+			</Directory>
+		</Directory>
+
+		<ComponentGroup Id="Files" Directory="INSTALLFOLDER">
+			<Component Id="ProductComponent">
+				<!--TODO: icon, uninstaller, windows update checker-->
+				<File Source="Z:\dist\glouton_windows_amd64_v1\glouton.exe" />
+			</Component>
+		</ComponentGroup>
+
+		<ComponentGroup Id="Config" Directory="ConfigFolder">
+			<Component Id="ProgramData">
+				<!--TODO: conf.d, 05-system.conf, 30-install.conf, logs-->
+				<File Source="Z:\packaging\windows\glouton.conf" Name="05-system.conf" />
+			</Component>
+		</ComponentGroup>
+
+		<Feature Id="DefaultFeature" Title="Glouton" Level="1">
+			<ComponentGroupRef Id="Files" />
+			<ComponentGroupRef Id="Config" />
+		</Feature>
+	</Product>
+</Wix>

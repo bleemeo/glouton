@@ -15,6 +15,9 @@
 /agentgo*
 /glouton*
 /dist*
+/packaging/windows/installer/.vs
+/packaging/windows/installer/bin
+/packaging/windows/installer/obj
 api/static/assets/js
 api/static/assets/css
 *-bindata.go
