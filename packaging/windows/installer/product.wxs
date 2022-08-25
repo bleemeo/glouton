@@ -1,42 +1,56 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi" xmlns:util="http://schemas.microsoft.com/wix/UtilExtension">
 	<Product Id="*" Name="Glouton" Language="1033" Version="1.0.0.0" Manufacturer="Bleemeo" UpgradeCode="2237ae31-e258-49f7-a508-33256efaa574">
 		<Package InstallerVersion="200" Compressed="yes" InstallScope="perMachine" />
 
 		<MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
-		<MediaTemplate />
+		
+		<!-- Embed the executable and config files in the installer -->
+		<Media Id="1" Cabinet="simple.cab" EmbedCab="yes" />
 
 		<!-- Include app icon in shortcuts and uninstall menu -->
 		<Icon Id="Icon.ico" SourceFile="Z:\packaging\windows\bleemeo.ico"/>
-		<Property Id="ARPPRODUCTICON" Value="Icon.ico"></Property>
+		<Property Id="ARPPRODUCTICON" Value="Icon.ico" />
 
+		<Property Id="BLEEMEO_ACCOUNT_ID" />
+
+		<!-- Directory layout -->
 		<Directory Id="TARGETDIR" Name="SourceDir">
 			<Directory Id="ProgramFilesFolder">
 				<Directory Id="INSTALLFOLDER" Name="Glouton" />
 			</Directory>
 
 			<Directory Id="CommonAppDataFolder">
-				<Directory Id="ConfigFolder" Name="Glouton" />
+				<Directory Id="ProgramDataFolder" Name="glouton">
+					<Directory Id="ConfigFolder" Name="conf.d" />
+					<Directory Id="LogsFolder" Name="logs" />
+				</Directory>
 			</Directory>
 		</Directory>
 
-		<ComponentGroup Id="Files" Directory="INSTALLFOLDER">
-			<Component Id="ProductComponent">
-				<!--TODO: icon, uninstaller, windows update checker-->
+		<!-- Let the user choose a directory where Glouton will be installed -->
+		<Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
+		<UIRef Id="WixUI_Custom_InstallDir" />
+
+		<ComponentGroup Id="Files">
+			<Component Id="ProgramFiles" Directory="INSTALLFOLDER" Guid="F70F7265-938F-4E81-958E-B96B90997B6B">
+				<!--TODO: uninstaller, windows update checker-->
 				<File Source="Z:\dist\glouton_windows_amd64_v1\glouton.exe" />
 			</Component>
-		</ComponentGroup>
 
-		<ComponentGroup Id="Config" Directory="ConfigFolder">
-			<Component Id="ProgramData">
+			<Component Id="ProgramData" Directory="ConfigFolder" Guid="741C2E8E-C3D3-4105-A40A-FF144FC41540">
 				<!--TODO: conf.d, 05-system.conf, 30-install.conf, logs-->
 				<File Source="Z:\packaging\windows\glouton.conf" Name="05-system.conf" />
 			</Component>
+
+			<Component Id="CreateLogsFolder" Directory="LogsFolder" Guid="095B9638-D1B6-46EF-B73B-0E7D0951A261">
+				<CreateFolder />
+			</Component>
 		</ComponentGroup>
 
+		<!-- List components to install -->
 		<Feature Id="DefaultFeature" Title="Glouton" Level="1">
 			<ComponentGroupRef Id="Files" />
-			<ComponentGroupRef Id="Config" />
 		</Feature>
 	</Product>
 </Wix>
