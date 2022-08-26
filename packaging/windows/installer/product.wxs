@@ -1,9 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi" xmlns:util="http://schemas.microsoft.com/wix/UtilExtension">
-	<Product Id="*" Name="Glouton" Language="1033" Version="1.0.0.0" Manufacturer="Bleemeo" UpgradeCode="2237ae31-e258-49f7-a508-33256efaa574">
+	<Product Id="*" Name="Glouton" Language="1033" Version="1.0.7.0" Manufacturer="Bleemeo" UpgradeCode="9A2085DA-6D2E-4D89-938C-625F94EEE312">
 		<Package InstallerVersion="200" Compressed="yes" InstallScope="perMachine" />
-
-		<MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
+		
+		<MajorUpgrade
+			AllowDowngrades="no"
+			AllowSameVersionUpgrades="no"
+			DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
 		
 		<!-- Embed the executable and config files in the installer -->
 		<Media Id="1" Cabinet="simple.cab" EmbedCab="yes" />
@@ -14,6 +17,16 @@
 
 		<Property Id="BLEEMEO_ACCOUNT_ID" Secure="yes" />
 		<Property Id="BLEEMEO_REGISTRATION_KEY" Secure="yes"/>
+
+		<!-- Let the user choose a directory where Glouton will be installed -->
+		<Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
+		<UIRef Id="WixUI_Custom_InstallDir" />
+
+		<!-- Retrieve the install folder used during the installation from the registry -->
+		<Property Id="INSTALLFOLDER">
+			<RegistrySearch Id='SearchRegInstallDir' Type='raw'
+			  Root='HKLM' Key='Software\Bleemeo\Glouton' Name='InstallDir' />
+		</Property>
 		
 		<!-- Directory layout -->
 		<Directory Id="TARGETDIR" Name="SourceDir">
@@ -29,14 +42,19 @@
 			</Directory>
 		</Directory>
 
-		<!-- Let the user choose a directory where Glouton will be installed -->
-		<Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
-		<UIRef Id="WixUI_Custom_InstallDir" />
-
 		<ComponentGroup Id="Files">
 			<Component Id="ProgramFiles" Directory="INSTALLFOLDER" Guid="F70F7265-938F-4E81-958E-B96B90997B6B">
-				<!--TODO: uninstaller, windows update checker-->
+				<!-- TODO: windows update checker -->
 				<File Source="Z:\dist\glouton_windows_amd64_v1\glouton.exe" />
+
+				<!-- Keep the chosen install folder in the registry to use it on the next upgrade -->
+				<RegistryValue
+				  Root="HKLM"
+				  Key="Software\Bleemeo\Glouton"
+				  Name="InstallDir"
+				  Type="string"
+				  Value="[INSTALLFOLDER]"
+				  KeyPath="yes" />
 			</Component>
 
 			<Component Id="ProgramData" Directory="ConfigFolder" Guid="741C2E8E-C3D3-4105-A40A-FF144FC41540">
@@ -44,11 +62,24 @@
 				<File Source="Z:\packaging\windows\credentials.xml" />
 				
 				<!-- Update credentials.xml with the user input -->
-				<util:XmlFile Id='XmlAccountID' File='[ConfigFolder]credentials.xml' Action='setValue'
-							 Name='account_id' Value='[BLEEMEO_ACCOUNT_ID]' ElementPath='//credentials' Sequence='1' />
+				<!-- TODO: skip on upgrade -->
+				<util:XmlFile 
+					Id='XmlAccountID' 
+					File='[ConfigFolder]credentials.xml' 
+					Action='setValue'
+					Name='account_id' 
+					Value='[BLEEMEO_ACCOUNT_ID]' 
+					ElementPath='//credentials' 
+					Sequence='1' />
 				
-				<util:XmlFile Id='XmlRegistrationKey' File='[ConfigFolder]credentials.xml' Action='setValue'
-							  Name='registration_key' Value='[BLEEMEO_REGISTRATION_KEY]' ElementPath='//credentials' Sequence='2' />
+				<util:XmlFile 
+					Id='XmlRegistrationKey' 
+					File='[ConfigFolder]credentials.xml' 
+					Action='setValue'
+					Name='registration_key' 
+					Value='[BLEEMEO_REGISTRATION_KEY]' 
+					ElementPath='//credentials' 
+					Sequence='2' />
 			</Component>
 
 			<Component Id="CreateLogsFolder" Directory="LogsFolder" Guid="095B9638-D1B6-46EF-B73B-0E7D0951A261">
