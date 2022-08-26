@@ -12,8 +12,9 @@
 		<Icon Id="Icon.ico" SourceFile="Z:\packaging\windows\bleemeo.ico"/>
 		<Property Id="ARPPRODUCTICON" Value="Icon.ico" />
 
-		<Property Id="BLEEMEO_ACCOUNT_ID" />
-
+		<Property Id="BLEEMEO_ACCOUNT_ID" Secure="yes" />
+		<Property Id="BLEEMEO_REGISTRATION_KEY" Secure="yes"/>
+		
 		<!-- Directory layout -->
 		<Directory Id="TARGETDIR" Name="SourceDir">
 			<Directory Id="ProgramFilesFolder">
@@ -39,8 +40,15 @@
 			</Component>
 
 			<Component Id="ProgramData" Directory="ConfigFolder" Guid="741C2E8E-C3D3-4105-A40A-FF144FC41540">
-				<!--TODO: conf.d, 05-system.conf, 30-install.conf, logs-->
 				<File Source="Z:\packaging\windows\glouton.conf" Name="05-system.conf" />
+				<File Source="Z:\packaging\windows\credentials.xml" />
+				
+				<!-- Update credentials.xml with the user input -->
+				<util:XmlFile Id='XmlAccountID' File='[ConfigFolder]credentials.xml' Action='setValue'
+							 Name='account_id' Value='[BLEEMEO_ACCOUNT_ID]' ElementPath='//credentials' Sequence='1' />
+				
+				<util:XmlFile Id='XmlRegistrationKey' File='[ConfigFolder]credentials.xml' Action='setValue'
+							  Name='registration_key' Value='[BLEEMEO_REGISTRATION_KEY]' ElementPath='//credentials' Sequence='2' />
 			</Component>
 
 			<Component Id="CreateLogsFolder" Directory="LogsFolder" Guid="095B9638-D1B6-46EF-B73B-0E7D0951A261">

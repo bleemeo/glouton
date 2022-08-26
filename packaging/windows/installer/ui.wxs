@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
-	<!-- Customized version of C:\Program Files (x86)\WiX Toolset v3.11\SDK\wixui\WixUI_InstallDit.wxs to add user credentials input -->
+	<!-- Customized version of C:\Program Files (x86)\WiX Toolset v3.11\SDK\wixui\WixUI_InstallDir.wxs to add user credentials input -->
     <Fragment>
         <UI Id="WixUI_Custom_InstallDir">
             <TextStyle Id="WixUI_Font_Normal" FaceName="Tahoma" Size="8" />
