@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi" xmlns:util="http://schemas.microsoft.com/wix/UtilExtension">
-	<Product Id="*" Name="Glouton" Language="1033" Version="1.0.7.0" Manufacturer="Bleemeo" UpgradeCode="9A2085DA-6D2E-4D89-938C-625F94EEE312">
+	<Product Id="*" Name="Glouton" Language="1033" Version="1.0.13.0" Manufacturer="Bleemeo" UpgradeCode="9A2085DA-6D2E-4D89-938C-625F94EEE312">
 		<Package InstallerVersion="200" Compressed="yes" InstallScope="perMachine" />
 		
 		<MajorUpgrade
@@ -59,26 +59,31 @@
 
 			<Component Id="ProgramData" Directory="ConfigFolder" Guid="741C2E8E-C3D3-4105-A40A-FF144FC41540">
 				<File Source="Z:\packaging\windows\glouton.conf" Name="05-system.conf" />
-				<File Source="Z:\packaging\windows\credentials.xml" />
+			</Component>
+
+			<Component Id="SetCredentials" Directory="ConfigFolder" Permanent="yes" Guid="748B2FFD-5461-4F7E-A93B-6903FE029CEB">
+				<!-- Update credentials.xml with the user input during installation -->
+				<!-- Skip this component on upgrades because we don't ask users for their credentials on upgrades -->
+				<Condition>NOT WIX_UPGRADE_DETECTED</Condition>
+
+				<File Id="CredentialsFile" Source="Z:\packaging\windows\credentials.xml" KeyPath="yes" />
 				
-				<!-- Update credentials.xml with the user input -->
-				<!-- TODO: skip on upgrade -->
-				<util:XmlFile 
-					Id='XmlAccountID' 
-					File='[ConfigFolder]credentials.xml' 
+				<util:XmlFile
+				Id='XmlAccountID'
+				File='[#CredentialsFile]'
+				Action='setValue'
+				Name='account_id'
+				Value='[BLEEMEO_ACCOUNT_ID]'
+				ElementPath='//credentials'
+				Sequence='1' />
+
+				<util:XmlFile
+					Id='XmlRegistrationKey'
+					File='[#CredentialsFile]'
 					Action='setValue'
-					Name='account_id' 
-					Value='[BLEEMEO_ACCOUNT_ID]' 
-					ElementPath='//credentials' 
-					Sequence='1' />
-				
-				<util:XmlFile 
-					Id='XmlRegistrationKey' 
-					File='[ConfigFolder]credentials.xml' 
-					Action='setValue'
-					Name='registration_key' 
-					Value='[BLEEMEO_REGISTRATION_KEY]' 
-					ElementPath='//credentials' 
+					Name='registration_key'
+					Value='[BLEEMEO_REGISTRATION_KEY]'
+					ElementPath='//credentials'
 					Sequence='2' />
 			</Component>
 
