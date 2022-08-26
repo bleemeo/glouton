@@ -21,28 +21,30 @@
             <DialogRef Id="ResumeDlg" />
             <DialogRef Id="UserExit" />
             
-			<Publish Dialog="CredentialsDlg" Control="Back" Event="NewDialog" Value="WelcomeDlg">1</Publish>
-            <Publish Dialog="CredentialsDlg" Control="Next" Event="NewDialog" Value="LicenseAgreementDlg">1</Publish>
-            
 			<Publish Dialog="BrowseDlg" Control="OK" Event="DoAction" Value="WixUIValidatePath" Order="3">1</Publish>
             <Publish Dialog="BrowseDlg" Control="OK" Event="SpawnDialog" Value="InvalidDirDlg" Order="4"><![CDATA[NOT WIXUI_DONTVALIDATEPATH AND WIXUI_INSTALLDIR_VALID<>"1"]]></Publish>
             
 			<Publish Dialog="ExitDialog" Control="Finish" Event="EndDialog" Value="Return" Order="999">1</Publish>
             
-			<Publish Dialog="WelcomeDlg" Control="Next" Event="NewDialog" Value="CredentialsDlg">NOT Installed</Publish>
-            <!--<Publish Dialog="WelcomeDlg" Control="Next" Event="NewDialog" Value="LicenseAgreementDlg">NOT Installed</Publish>
-		<Publish Dialog="WelcomeDlg" Control="Next" Event="NewDialog" Value="VerifyReadyDlg">Installed AND PATCH</Publish>-->
+			<Publish Dialog="WelcomeDlg" Control="Next" Event="NewDialog" Value="InstallDirDlg">1</Publish>
             
-			<Publish Dialog="LicenseAgreementDlg" Control="Back" Event="NewDialog" Value="CredentialsDlg">1</Publish>
-            <Publish Dialog="LicenseAgreementDlg" Control="Next" Event="NewDialog" Value="InstallDirDlg">LicenseAccepted = "1"</Publish>
-            
-			<Publish Dialog="InstallDirDlg" Control="Back" Event="NewDialog" Value="LicenseAgreementDlg">1</Publish>
+			<!-- TODO: Do we want to add a license agreement dialog? -->
+			<!--<Publish Dialog="LicenseAgreementDlg" Control="Back" Event="NewDialog" Value="CredentialsDlg">1</Publish>
+            <Publish Dialog="LicenseAgreementDlg" Control="Next" Event="NewDialog" Value="InstallDirDlg">LicenseAccepted = "1"</Publish>-->
+
+			<Publish Dialog="InstallDirDlg" Control="ChangeFolder" Property="_BrowseProperty" Value="[WIXUI_INSTALLDIR]" Order="1">1</Publish>
+			<Publish Dialog="InstallDirDlg" Control="ChangeFolder" Event="SpawnDialog" Value="BrowseDlg" Order="2">1</Publish>
+			<Publish Dialog="InstallDirDlg" Control="Back" Event="NewDialog" Value="WelcomeDlg">1</Publish>
             <Publish Dialog="InstallDirDlg" Control="Next" Event="SetTargetPath" Value="[WIXUI_INSTALLDIR]" Order="1">1</Publish>
             <Publish Dialog="InstallDirDlg" Control="Next" Event="DoAction" Value="WixUIValidatePath" Order="2">NOT WIXUI_DONTVALIDATEPATH</Publish>
             <Publish Dialog="InstallDirDlg" Control="Next" Event="SpawnDialog" Value="InvalidDirDlg" Order="3"><![CDATA[NOT WIXUI_DONTVALIDATEPATH AND WIXUI_INSTALLDIR_VALID<>"1"]]></Publish>
-            <Publish Dialog="InstallDirDlg" Control="Next" Event="NewDialog" Value="VerifyReadyDlg" Order="4">WIXUI_DONTVALIDATEPATH OR WIXUI_INSTALLDIR_VALID="1"</Publish>
-            <Publish Dialog="InstallDirDlg" Control="ChangeFolder" Property="_BrowseProperty" Value="[WIXUI_INSTALLDIR]" Order="1">1</Publish>
-            <Publish Dialog="InstallDirDlg" Control="ChangeFolder" Event="SpawnDialog" Value="BrowseDlg" Order="2">1</Publish>
+
+			<!-- Skip the credentials input on upgrades -->
+			<Publish Dialog="InstallDirDlg" Control="Next" Event="NewDialog" Value="CredentialsDlg" Order="4">WIXUI_INSTALLDIR_VALID="1" AND NOT WIX_UPGRADE_DETECTED</Publish>
+			<Publish Dialog="InstallDirDlg" Control="Next" Event="NewDialog" Value="VerifyReadyDlg" Order="4">WIXUI_INSTALLDIR_VALID="1" AND WIX_UPGRADE_DETECTED</Publish>
+			
+			<Publish Dialog="CredentialsDlg" Control="Back" Event="NewDialog" Value="InstallDirDlg">1</Publish>
+			<Publish Dialog="CredentialsDlg" Control="Next" Event="NewDialog" Value="VerifyReadyDlg">1</Publish>
             
 			<Publish Dialog="VerifyReadyDlg" Control="Back" Event="NewDialog" Value="InstallDirDlg" Order="1">NOT Installed</Publish>
             <Publish Dialog="VerifyReadyDlg" Control="Back" Event="NewDialog" Value="MaintenanceTypeDlg" Order="2">Installed AND NOT PATCH</Publish>
