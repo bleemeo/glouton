@@ -76,7 +76,7 @@ func (uf updateFacter) pendingUpdates(ctx context.Context) (pendingUpdates int, 
 	pendingUpdates = -1
 	pendingSecurityUpdates = -1
 
-	// when running under the LocalService account, we do not have enought permissions to call into the COM object,
+	// when running under the LocalService account, we do not have enough permissions to call into the COM object,
 	// so we try to read a file that a scheduled task is updating periodically
 	user, err := user.Current()
 	if err == nil && user.Username == `NT AUTHORITY\LOCAL SERVICE` {

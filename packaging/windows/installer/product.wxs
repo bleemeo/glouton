@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi" xmlns:util="http://schemas.microsoft.com/wix/UtilExtension">
-	<Product Id="*" Name="Glouton" Language="1033" Version="1.0.13.0" Manufacturer="Bleemeo" UpgradeCode="9A2085DA-6D2E-4D89-938C-625F94EEE312">
+	<Product Id="*" Name="Glouton" Language="1033" Version="1.0.16.0" Manufacturer="Bleemeo" UpgradeCode="9A2085DA-6D2E-4D89-938C-625F94EEE312">
 		<Package InstallerVersion="200" Compressed="yes" InstallScope="perMachine" />
 		
 		<MajorUpgrade
@@ -45,7 +45,7 @@
 		<ComponentGroup Id="Files">
 			<Component Id="ProgramFiles" Directory="INSTALLFOLDER" Guid="F70F7265-938F-4E81-958E-B96B90997B6B">
 				<!-- TODO: windows update checker -->
-				<File Source="Z:\dist\glouton_windows_amd64_v1\glouton.exe" />
+				<File Source="Z:\dist\glouton_windows_amd64_v1\glouton.exe" KeyPath="yes" />
 
 				<!-- Keep the chosen install folder in the registry to use it on the next upgrade -->
 				<RegistryValue
@@ -53,8 +53,32 @@
 				  Key="Software\Bleemeo\Glouton"
 				  Name="InstallDir"
 				  Type="string"
-				  Value="[INSTALLFOLDER]"
-				  KeyPath="yes" />
+				  Value="[INSTALLFOLDER]" />
+
+				<!-- Create the Glouton service -->
+				<ServiceInstall
+					Id="InstallGloutonService" 
+					Name="glouton" 
+					DisplayName="Glouton monitoring agent" 
+					Description="Bleemeo monitoring agent for servers, containers, and applications"
+					Vital="yes"
+					Account="NT AUTHORITY\LocalService"
+					Interactive="no"
+					ErrorControl="normal" 
+					Start="auto" 
+					Type="ownProcess">
+
+					<util:ServiceConfig 
+						FirstFailureActionType="restart" 
+						SecondFailureActionType="restart" 
+						ThirdFailureActionType="restart" 
+						RestartServiceDelayInSeconds="60" />
+					
+						<!-- windows_exporter depends on Windows Management Instrumentation Service Provider -->
+					<ServiceDependency Id="wmiApSrv" />
+				</ServiceInstall>
+				
+				<ServiceControl Id="ServiceStateControl" Name="glouton" Remove="uninstall" Start="install" Stop="both" />
 			</Component>
 
 			<Component Id="ProgramData" Directory="ConfigFolder" Guid="741C2E8E-C3D3-4105-A40A-FF144FC41540">
