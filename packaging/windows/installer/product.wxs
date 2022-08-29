@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi" xmlns:util="http://schemas.microsoft.com/wix/UtilExtension">
-	<Product Id="*" Name="Glouton" Language="1033" Version="1.0.27.0" Manufacturer="Bleemeo" UpgradeCode="9A2085DA-6D2E-4D89-938C-625F94EEE312">
+	<Product Id="*" Name="Glouton" Language="1033" Version="1.0.30.0" Manufacturer="Bleemeo" UpgradeCode="9A2085DA-6D2E-4D89-938C-625F94EEE312">
 		<Package InstallerVersion="200" Compressed="yes" InstallScope="perMachine" />
 		
 		<MajorUpgrade
@@ -120,7 +120,6 @@
 			</Component>
 		</ComponentGroup>
 
-		<!-- TODO: Make sure it is uninstalled when Glouton is uninstalled. -->
 		<CustomAction Id="CreateWindowsUpdateCheckerTask"
 			Return="check"
 			Impersonate="no"
@@ -133,11 +132,23 @@
 			Impersonate="no"
 			Execute="deferred"
 			Directory="TARGETDIR"
-			ExeCommand="&quot;[SystemFolder]SCHTASKS.EXE&quot; /RUN /I /TN &quot;Bleemeo\Glouton\Windows Update Checker&quot;" />
+			ExeCommand="&quot;[SystemFolder]SCHTASKS.EXE&quot; /Run /I /TN &quot;Bleemeo\Glouton\Windows Update Checker&quot;" />
+
+		<CustomAction Id="DeleteWindowsUpdateCheckerTask"
+			Return="check"
+			Impersonate="no"
+			Execute="deferred"
+			Directory="TARGETDIR"
+			ExeCommand="&quot;[SystemFolder]SCHTASKS.EXE&quot; /Delete /F /TN &quot;Bleemeo\Glouton\Windows Update Checker&quot;" />
+
+		<!-- _UNINSTALL is only true during uninstallation: https://stackoverflow.com/a/731700 -->
+		<SetProperty Id="_UNINSTALL" After="FindRelatedProducts" Value="1"><![CDATA[(NOT UPGRADINGPRODUCTCODE) AND (REMOVE="ALL")]]></SetProperty>
 		
 		<InstallExecuteSequence>
-			<Custom Action="CreateWindowsUpdateCheckerTask" After="InstallFiles" />
-			<Custom Action="RunWindowsUpdateCheckerTask" After="CreateWindowsUpdateCheckerTask" />
+			<Custom Action="CreateWindowsUpdateCheckerTask" After="InstallFiles">NOT _UNINSTALL</Custom>
+			<Custom Action="RunWindowsUpdateCheckerTask" After="CreateWindowsUpdateCheckerTask">NOT _UNINSTALL</Custom>
+			<!-- Delete the Windows Update Checker task on uninstall -->
+			<Custom Action="DeleteWindowsUpdateCheckerTask" After="RunWindowsUpdateCheckerTask">_UNINSTALL</Custom>
 		</InstallExecuteSequence>
 
 		<!-- List components to install -->
