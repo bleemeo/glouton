@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi" xmlns:util="http://schemas.microsoft.com/wix/UtilExtension">
-	<Product Id="*" Name="Glouton" Language="1033" Version="1.0.16.0" Manufacturer="Bleemeo" UpgradeCode="9A2085DA-6D2E-4D89-938C-625F94EEE312">
+	<Product Id="*" Name="Glouton" Language="1033" Version="1.0.17.0" Manufacturer="Bleemeo" UpgradeCode="9A2085DA-6D2E-4D89-938C-625F94EEE312">
 		<Package InstallerVersion="200" Compressed="yes" InstallScope="perMachine" />
 		
 		<MajorUpgrade
@@ -87,7 +87,7 @@
 
 			<Component Id="SetCredentials" Directory="ConfigFolder" Permanent="yes" Guid="748B2FFD-5461-4F7E-A93B-6903FE029CEB">
 				<!-- Update credentials.xml with the user input during installation -->
-				<!-- Skip this component on upgrades because we don't ask users for their credentials on upgrades -->
+				<!-- Skip this component on upgrades because we don't ask users for their credentials -->
 				<Condition>NOT WIX_UPGRADE_DETECTED</Condition>
 
 				<File Id="CredentialsFile" Source="Z:\packaging\windows\credentials.xml" KeyPath="yes" />
