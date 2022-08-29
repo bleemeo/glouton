@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi" xmlns:util="http://schemas.microsoft.com/wix/UtilExtension">
-	<Product Id="*" Name="Glouton" Language="1033" Version="1.0.17.0" Manufacturer="Bleemeo" UpgradeCode="9A2085DA-6D2E-4D89-938C-625F94EEE312">
+	<Product Id="*" Name="Glouton" Language="1033" Version="1.0.18.0" Manufacturer="Bleemeo" UpgradeCode="9A2085DA-6D2E-4D89-938C-625F94EEE312">
 		<Package InstallerVersion="200" Compressed="yes" InstallScope="perMachine" />
 		
 		<MajorUpgrade
@@ -14,6 +14,7 @@
 		<!-- Include app icon in shortcuts and uninstall menu -->
 		<Icon Id="Icon.ico" SourceFile="Z:\packaging\windows\bleemeo.ico"/>
 		<Property Id="ARPPRODUCTICON" Value="Icon.ico" />
+		<Property Id="ARPHELPLINK" Value="https://docs.bleemeo.com/" />
 
 		<Property Id="BLEEMEO_ACCOUNT_ID" Secure="yes" />
 		<Property Id="BLEEMEO_REGISTRATION_KEY" Secure="yes"/>
@@ -43,8 +44,7 @@
 		</Directory>
 
 		<ComponentGroup Id="Files">
-			<Component Id="ProgramFiles" Directory="INSTALLFOLDER" Guid="F70F7265-938F-4E81-958E-B96B90997B6B">
-				<!-- TODO: windows update checker -->
+			<Component Id="GloutonExecutable" Directory="INSTALLFOLDER" Guid="F70F7265-938F-4E81-958E-B96B90997B6B">
 				<File Source="Z:\dist\glouton_windows_amd64_v1\glouton.exe" KeyPath="yes" />
 
 				<!-- Keep the chosen install folder in the registry to use it on the next upgrade -->
@@ -81,7 +81,11 @@
 				<ServiceControl Id="ServiceStateControl" Name="glouton" Remove="uninstall" Start="install" Stop="both" />
 			</Component>
 
-			<Component Id="ProgramData" Directory="ConfigFolder" Guid="741C2E8E-C3D3-4105-A40A-FF144FC41540">
+			<Component Id="WindowsUpdateChecker" Directory="INSTALLFOLDER" Guid="C995B88F-3D0F-4363-A83A-5BC7CB5CB82D">
+				<File Source="Z:\packaging\windows\windows_update_checker.ps1" KeyPath="yes" />
+			</Component>
+
+			<Component Id="SystemConfig" Directory="ConfigFolder" Guid="741C2E8E-C3D3-4105-A40A-FF144FC41540">
 				<File Source="Z:\packaging\windows\glouton.conf" Name="05-system.conf" />
 			</Component>
 
@@ -115,6 +119,26 @@
 				<CreateFolder />
 			</Component>
 		</ComponentGroup>
+
+		<!-- TODO: Run the task on install and make sure it is uninstalled when Glouton is uninstalled. -->
+		<CustomAction Id="CreateWindowsUpdateCheckerTask"
+			Return="check"
+			Impersonate="no"
+			Execute="deferred"
+			Directory="TARGETDIR"
+			ExeCommand="&quot;[SystemFolder]SCHTASKS.EXE&quot; /Create /F /RU System /SC HOURLY /TN &quot;Bleemeo\Glouton\Windows Update Checker&quot; /TR &quot;powershell.exe -NonInteractive -File `&quot;[INSTALLFOLDER]\windows_update_checker.ps1`&quot;&quot;" />
+
+		<CustomAction Id="RunWindowsUpdateCheckerTask"
+			Return="check"
+			Impersonate="no"
+			Execute="deferred"
+			Directory="TARGETDIR"
+			ExeCommand="&quot;[SystemFolder]SCHTASKS.EXE&quot; /RUN /I /TN &quot;Bleemeo\Glouton\Windows Update Checker&quot;" />
+		
+		<InstallExecuteSequence>
+			<Custom Action="CreateWindowsUpdateCheckerTask" After="InstallFiles" />
+			<Custom Action="RunWindowsUpdateCheckerTask" After="CreateWindowsUpdateCheckerTask" />
+		</InstallExecuteSequence>
 
 		<!-- List components to install -->
 		<Feature Id="DefaultFeature" Title="Glouton" Level="1">
