@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi" xmlns:util="http://schemas.microsoft.com/wix/UtilExtension">
-	<Product Id="*" Name="Glouton" Language="1033" Version="1.0.18.0" Manufacturer="Bleemeo" UpgradeCode="9A2085DA-6D2E-4D89-938C-625F94EEE312">
+	<Product Id="*" Name="Glouton" Language="1033" Version="1.0.27.0" Manufacturer="Bleemeo" UpgradeCode="9A2085DA-6D2E-4D89-938C-625F94EEE312">
 		<Package InstallerVersion="200" Compressed="yes" InstallScope="perMachine" />
 		
 		<MajorUpgrade
@@ -120,13 +120,13 @@
 			</Component>
 		</ComponentGroup>
 
-		<!-- TODO: Run the task on install and make sure it is uninstalled when Glouton is uninstalled. -->
+		<!-- TODO: Make sure it is uninstalled when Glouton is uninstalled. -->
 		<CustomAction Id="CreateWindowsUpdateCheckerTask"
 			Return="check"
 			Impersonate="no"
 			Execute="deferred"
 			Directory="TARGETDIR"
-			ExeCommand="&quot;[SystemFolder]SCHTASKS.EXE&quot; /Create /F /RU System /SC HOURLY /TN &quot;Bleemeo\Glouton\Windows Update Checker&quot; /TR &quot;powershell.exe -NonInteractive -File `&quot;[INSTALLFOLDER]\windows_update_checker.ps1`&quot;&quot;" />
+			ExeCommand="&quot;[SystemFolder]SCHTASKS.EXE&quot; /Create /F /RU System /SC HOURLY /TN &quot;Bleemeo\Glouton\Windows Update Checker&quot; /TR &quot;powershell.exe  -ExecutionPolicy Bypass -NonInteractive -File '[INSTALLFOLDER]windows_update_checker.ps1'&quot;" />
 
 		<CustomAction Id="RunWindowsUpdateCheckerTask"
 			Return="check"
