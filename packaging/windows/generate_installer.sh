@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-set -e
+set -ex
 
 [ ! -f "dist/glouton_windows_amd64_v1/glouton.exe" -o ! -f "dist/glouton_windows_386/glouton.exe" ] && (echo "Source executables  not found. Please run goreleaser on the project prior to launching this script"; exit 1)
 
@@ -8,13 +8,14 @@ VERSION=$(cat dist/VERSION)
 
 mkdir -p work
 
-cp -r packaging/windows work
+cp -r packaging/windows/installer/* work
+cp dist/glouton_windows_amd64_v1/glouton.exe work/assets
 
-sed -i -e "s/^!define PRODUCT_VERSION \"0.1\"$/!define PRODUCT_VERSION \"${VERSION}\"/" "work/windows/bleemeo.nsi"
+sed -i "s/Version=\"1.2.3.4\"/Version=\"${VERSION}\"/" work/product.wxs
 
-# This docker image is built from https://github.com/bleemeolabs/bleemeo-nsis-docker
-docker run --rm -v "$(pwd):/work" bleemeolabs/bleemeo-nsis makensis work/windows/bleemeo.nsi
+docker run --rm -v "$(pwd)/work:/wix" dactiv/wix candle -ext WixUtilExtension.dll -ext WixUIExtension -dAssetsPath=/wix/assets/ -dExePath=/wix/assets/ -arch x86 -out 'obj\' *.wxs
+docker run --rm -v "$(pwd)/work:/wix" dactiv/wix light -sval -ext WixUtilExtension.dll -ext WixUIExtension -out glouton.msi obj/*.wixobj
 
-cp "work/windows/glouton-installer.exe" "dist/glouton_${VERSION}_windows_installer.exe"
+cp work/glouton.msi "dist/glouton_${VERSION}.msi"
 
 rm -rf work

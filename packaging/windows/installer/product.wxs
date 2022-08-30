@@ -12,13 +12,13 @@
 		<Media Id="1" Cabinet="glouton.cab" EmbedCab="yes" />
 
 		<!-- Include app icon in shortcuts and uninstall menu -->
-		<Icon Id="Icon.ico" SourceFile="Z:\packaging\windows\installer\images\bleemeo.ico"/>
+		<Icon Id="Icon.ico" SourceFile="$(var.AssetsPath)bleemeo.ico"/>
 		<Property Id="ARPPRODUCTICON" Value="Icon.ico" />
 		<Property Id="ARPHELPLINK" Value="https://docs.bleemeo.com/" />
 
 		<!-- Customize dialog and banner with the Bleemeo logo -->
-		<WixVariable Id="WixUIBannerBmp" Value="Z:\packaging\windows\installer\images\banner.bmp" />
-		<WixVariable Id="WixUIDialogBmp" Value="Z:\packaging\windows\installer\images\dialog.bmp" />
+		<WixVariable Id="WixUIBannerBmp" Value="$(var.AssetsPath)banner.bmp" />
+		<WixVariable Id="WixUIDialogBmp" Value="$(var.AssetsPath)dialog.bmp" />
 
 		<!-- Properties for user credentials that can be set on command line -->
 		<Property Id="ACCOUNT" Secure="yes" />
@@ -50,7 +50,7 @@
 
 		<ComponentGroup Id="Files">
 			<Component Id="GloutonExecutable" Directory="INSTALLFOLDER" Guid="F70F7265-938F-4E81-958E-B96B90997B6B">
-				<File Source="Z:\dist\glouton_windows_amd64_v1\glouton.exe" KeyPath="yes" />
+				<File Source="$(var.AssetsPath)glouton.exe" KeyPath="yes" />
 
 				<!-- Keep the chosen install folder in the registry to use it on the next upgrade -->
 				<RegistryValue
@@ -87,11 +87,11 @@
 			</Component>
 
 			<Component Id="WindowsUpdateChecker" Directory="INSTALLFOLDER" Guid="C995B88F-3D0F-4363-A83A-5BC7CB5CB82D">
-				<File Source="Z:\packaging\windows\windows_update_checker.ps1" KeyPath="yes" />
+				<File Source="$(var.AssetsPath)windows_update_checker.ps1" KeyPath="yes" />
 			</Component>
 
 			<Component Id="SystemConfig" Directory="ConfigFolder" Guid="741C2E8E-C3D3-4105-A40A-FF144FC41540">
-				<File Source="Z:\packaging\windows\glouton.conf" Name="05-system.conf" />
+				<File Source="$(var.AssetsPath)glouton.conf" Name="05-system.conf" />
 			</Component>
 
 			<Component Id="SetCredentials" Directory="ConfigFolder" Permanent="yes" Guid="748B2FFD-5461-4F7E-A93B-6903FE029CEB">
@@ -99,7 +99,7 @@
 				<!-- Skip this component on upgrades because we don't ask users for their credentials -->
 				<Condition>NOT WIX_UPGRADE_DETECTED</Condition>
 
-				<File Id="CredentialsFile" Source="Z:\packaging\windows\credentials.xml" KeyPath="yes" />
+				<File Id="CredentialsFile" Source="$(var.AssetsPath)credentials.xml" KeyPath="yes" />
 				
 				<util:XmlFile
 				Id='XmlAccountID'

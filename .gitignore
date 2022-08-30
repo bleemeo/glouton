@@ -18,6 +18,7 @@
 /packaging/windows/installer/.vs
 /packaging/windows/installer/bin
 /packaging/windows/installer/obj
+/packaging/windows/installer/assets/glouton.exe
 api/static/assets/js
 api/static/assets/css
 *-bindata.go
