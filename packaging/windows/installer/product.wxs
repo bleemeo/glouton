@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi" xmlns:util="http://schemas.microsoft.com/wix/UtilExtension">
-	<Product Id="*" Name="Glouton" Language="1033" Version="1.0.31.0" Manufacturer="Bleemeo" UpgradeCode="9A2085DA-6D2E-4D89-938C-625F94EEE312">
+	<Product Id="*" Name="Glouton" Language="1033" Version="1.0.33.0" Manufacturer="Bleemeo" UpgradeCode="9A2085DA-6D2E-4D89-938C-625F94EEE312">
 		<Package InstallerVersion="200" Compressed="yes" InstallScope="perMachine" />
 		
 		<MajorUpgrade
@@ -9,13 +9,18 @@
 			DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
 		
 		<!-- Embed the executable and config files in the installer -->
-		<Media Id="1" Cabinet="simple.cab" EmbedCab="yes" />
+		<Media Id="1" Cabinet="glouton.cab" EmbedCab="yes" />
 
 		<!-- Include app icon in shortcuts and uninstall menu -->
 		<Icon Id="Icon.ico" SourceFile="Z:\packaging\windows\bleemeo.ico"/>
 		<Property Id="ARPPRODUCTICON" Value="Icon.ico" />
 		<Property Id="ARPHELPLINK" Value="https://docs.bleemeo.com/" />
 
+		<!-- Customize dialog and banner with the Bleemeo logo -->
+		<WixVariable Id="WixUIBannerBmp" Value="Z:\packaging\windows\banner.bmp" />
+		<WixVariable Id="WixUIDialogBmp" Value="z:\packaging\windows\dialog.bmp" />
+
+		<!-- Properties for user credentials that can be set on command line -->
 		<Property Id="ACCOUNT" Secure="yes" />
 		<Property Id="REGKEY" Secure="yes"/>
 
