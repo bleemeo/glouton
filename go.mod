@@ -16,7 +16,7 @@ require (
 	github.com/getsentry/sentry-go v0.13.0
 	github.com/go-chi/chi v4.1.2+incompatible
 	github.com/go-kit/log v0.2.1
-	github.com/go-ole/go-ole v1.2.6
+	github.com/go-ole/go-ole v1.2.6 // indirect
 	github.com/go-redis/redis v6.15.9+incompatible
 	github.com/gogo/protobuf v1.3.2
 	github.com/google/go-cmp v0.5.8
