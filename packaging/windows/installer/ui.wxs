@@ -25,7 +25,10 @@
             <Publish Dialog="BrowseDlg" Control="OK" Event="SpawnDialog" Value="InvalidDirDlg" Order="4"><![CDATA[NOT WIXUI_DONTVALIDATEPATH AND WIXUI_INSTALLDIR_VALID<>"1"]]></Publish>
             
 			<Publish Dialog="ExitDialog" Control="Finish" Event="EndDialog" Value="Return" Order="999">1</Publish>
-            
+            <!-- Open the local web dashboard after the installation -->
+			<Publish Dialog="ExitDialog" Control="Finish" Event="DoAction" Value="OpenDashboard">WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1</Publish>
+
+
 			<Publish Dialog="WelcomeDlg" Control="Next" Event="NewDialog" Value="InstallDirDlg">1</Publish>
             
 			<!-- TODO: Do we want to add a license agreement dialog? -->

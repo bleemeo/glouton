@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi" xmlns:util="http://schemas.microsoft.com/wix/UtilExtension">
-	<Product Id="*" Name="Glouton" Language="1033" Version="1.0.33.0" Manufacturer="Bleemeo" UpgradeCode="9A2085DA-6D2E-4D89-938C-625F94EEE312">
+	<Product Id="*" Name="Glouton" Language="1033" Version="1.0.37.0" Manufacturer="Bleemeo" UpgradeCode="9A2085DA-6D2E-4D89-938C-625F94EEE312">
 		<Package InstallerVersion="200" Compressed="yes" InstallScope="perMachine" />
 		
 		<MajorUpgrade
@@ -18,7 +18,7 @@
 
 		<!-- Customize dialog and banner with the Bleemeo logo -->
 		<WixVariable Id="WixUIBannerBmp" Value="Z:\packaging\windows\banner.bmp" />
-		<WixVariable Id="WixUIDialogBmp" Value="z:\packaging\windows\dialog.bmp" />
+		<WixVariable Id="WixUIDialogBmp" Value="Z:\packaging\windows\dialog.bmp" />
 
 		<!-- Properties for user credentials that can be set on command line -->
 		<Property Id="ACCOUNT" Secure="yes" />
@@ -125,21 +125,35 @@
 			</Component>
 		</ComponentGroup>
 
-		<CustomAction Id="CreateWindowsUpdateCheckerTask"
+		<!-- Add checkbox to open the local web dashboard after the installation -->
+		<Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT" Value="Open Glouton local web dashboard" />
+		<CustomAction 
+			Id="OpenDashboard" 
+			Directory="TARGETDIR" 
+			Execute="immediate" 
+			Impersonate="yes" 
+			Return="asyncNoWait" 
+			ExeCommand="explorer.exe http://localhost:8015" />
+
+		<!-- Windows Update Checker task -->
+		<CustomAction 
+			Id="CreateWindowsUpdateCheckerTask"
 			Return="check"
 			Impersonate="no"
 			Execute="deferred"
 			Directory="TARGETDIR"
 			ExeCommand="&quot;[SystemFolder]SCHTASKS.EXE&quot; /Create /F /RU System /SC HOURLY /TN &quot;Bleemeo\Glouton\Windows Update Checker&quot; /TR &quot;powershell.exe  -ExecutionPolicy Bypass -NonInteractive -File '[INSTALLFOLDER]windows_update_checker.ps1'&quot;" />
 
-		<CustomAction Id="RunWindowsUpdateCheckerTask"
+		<CustomAction
+			Id="RunWindowsUpdateCheckerTask"
 			Return="check"
 			Impersonate="no"
 			Execute="deferred"
 			Directory="TARGETDIR"
 			ExeCommand="&quot;[SystemFolder]SCHTASKS.EXE&quot; /Run /I /TN &quot;Bleemeo\Glouton\Windows Update Checker&quot;" />
 
-		<CustomAction Id="DeleteWindowsUpdateCheckerTask"
+		<CustomAction
+			Id="DeleteWindowsUpdateCheckerTask"
 			Return="check"
 			Impersonate="no"
 			Execute="deferred"
