@@ -1295,6 +1295,7 @@ func rateFromMetricValue(gloutonIDToName map[string]string, pastValues []metricV
 				Labels: map[string]string{
 					types.LabelName:              k,
 					types.LabelMetaContainerName: name,
+					types.LabelMetaContainerID:   id,
 				},
 				Annotations: types.MetricAnnotations{
 					BleemeoItem: name,
@@ -1321,6 +1322,7 @@ func rateFromMetricValue(gloutonIDToName map[string]string, pastValues []metricV
 						Labels: map[string]string{
 							types.LabelName:              "container_mem_used_perc",
 							types.LabelMetaContainerName: name,
+							types.LabelMetaContainerID:   id,
 						},
 						Annotations: types.MetricAnnotations{
 							BleemeoItem: name,

@@ -1393,7 +1393,7 @@ func (a *agent) miscGatherMinute(pusher types.PointPusher) func(context.Context,
 					types.LabelName:              "postfix_queue_size",
 					types.LabelMetaContainerName: srv.ContainerName,
 					types.LabelMetaContainerID:   srv.ContainerID,
-					types.LabelMetaServiceName:   srv.ContainerName,
+					types.LabelMetaServiceName:   srv.Name,
 				}
 
 				annotations := types.MetricAnnotations{
@@ -1422,7 +1422,7 @@ func (a *agent) miscGatherMinute(pusher types.PointPusher) func(context.Context,
 					types.LabelName:              "exim_queue_size",
 					types.LabelMetaContainerName: srv.ContainerName,
 					types.LabelMetaContainerID:   srv.ContainerID,
-					types.LabelMetaServiceName:   srv.ContainerName,
+					types.LabelMetaServiceName:   srv.Name,
 				}
 
 				annotations := types.MetricAnnotations{
@@ -1758,6 +1758,7 @@ func (a *agent) sendDockerContainerHealth(ctx context.Context, container facts.C
 			Labels: map[string]string{
 				types.LabelName:              "container_health_status",
 				types.LabelMetaContainerName: container.ContainerName(),
+				types.LabelMetaContainerID:   container.ID(),
 			},
 			Annotations: types.MetricAnnotations{
 				Status:      status,
