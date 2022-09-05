@@ -972,7 +972,7 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelItem: "/srv",
 					},
 					Annotations: types.MetricAnnotations{
-						BleemeoItem: "annotation are not used in appender mode",
+						BleemeoItem: "annotation are kept in appender mode",
 					},
 				},
 			},
@@ -993,7 +993,9 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelItem:     "/home",
 						types.LabelInstance: "server.bleemeo.com:8016",
 					},
-					Annotations: types.MetricAnnotations{},
+					Annotations: types.MetricAnnotations{
+						BleemeoItem: "/home",
+					},
 				},
 				{
 					Labels: map[string]string{
@@ -1001,7 +1003,9 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelItem:     "/srv",
 						types.LabelInstance: "server.bleemeo.com:8016",
 					},
-					Annotations: types.MetricAnnotations{},
+					Annotations: types.MetricAnnotations{
+						BleemeoItem: "annotation are kept in appender mode",
+					},
 				},
 			},
 			metricFamiliesUseTime: true,
