@@ -24,8 +24,9 @@ import (
 
 // Maximal length of fields on Bleemeo API.
 const (
-	APIMetricItemLength          int = 100
-	APIMetricItemLengthIfService int = 50
+	APIMetricItemLength      int = 250
+	APIServiceInstanceLength int = 250
+	APIContainerNameLength   int = 250
 )
 
 // MetricOnlyHasItem return true if the metric only has a name and an item (which could be empty).
@@ -47,36 +48,6 @@ func MetricOnlyHasItem(labels map[string]string, agentID string) bool {
 	}
 
 	return true
-}
-
-// LabelsToText convert labels & annotation to a string version.
-// When using the Bleemeo Mode, result is the name + the item annotation.
-func LabelsToText(labels map[string]string, annotations types.MetricAnnotations, bleemeoMode bool) string {
-	if bleemeoMode && labels[types.LabelItem] != TruncateItem(labels[types.LabelItem], annotations.ServiceName != "") {
-		labelsCopy := make(map[string]string, len(labels)+1)
-		for k, v := range labels {
-			labelsCopy[k] = v
-		}
-
-		labelsCopy[types.LabelItem] = TruncateItem(labels[types.LabelItem], annotations.ServiceName != "")
-
-		return types.LabelsToText(labelsCopy)
-	}
-
-	return types.LabelsToText(labels)
-}
-
-// TruncateItem truncate the item to match maximal length allowed by Bleemeo API.
-func TruncateItem(item string, isService bool) string {
-	if len(item) > APIMetricItemLength {
-		item = item[:APIMetricItemLength]
-	}
-
-	if isService && len(item) > APIMetricItemLengthIfService {
-		item = item[:APIMetricItemLengthIfService]
-	}
-
-	return item
 }
 
 // MetricLookupFromList return a map[MetricLabelItem]Metric.

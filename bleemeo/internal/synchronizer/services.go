@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"glouton/bleemeo/internal/common"
 	"glouton/bleemeo/types"
 	"glouton/discovery"
 	"glouton/facts"
@@ -28,8 +29,6 @@ import (
 	"strings"
 	"time"
 )
-
-const apiServiceInstanceLength = 50
 
 type serviceNameInstance struct {
 	name     string
@@ -44,63 +43,10 @@ func (sni serviceNameInstance) String() string {
 	return sni.name
 }
 
-func (sni *serviceNameInstance) truncateInstance() {
-	if len(sni.instance) > apiServiceInstanceLength {
-		sni.instance = sni.instance[:apiServiceInstanceLength]
-	}
-}
-
 type servicePayload struct {
 	types.Service
 	Account string `json:"account"`
 	Agent   string `json:"agent"`
-}
-
-// Bleemeo API only support limited service instance name. Truncate internal container name to match limitation of the API.
-func longToShortKey(services []discovery.Service) map[serviceNameInstance]serviceNameInstance {
-	revertLookup := make(map[serviceNameInstance]discovery.Service)
-
-	for _, srv := range services {
-		shortKey := serviceNameInstance{
-			name:     srv.Name,
-			instance: srv.ContainerName,
-		}
-
-		shortKey.truncateInstance()
-
-		switch otherSrv, ok := revertLookup[shortKey]; {
-		case !ok || (srv.Active && !otherSrv.Active):
-			// Keep the active service.
-			revertLookup[shortKey] = srv
-		case !srv.Active && otherSrv.Active:
-			// Keep the other active service.
-		default:
-			// Both service are active, there is a conflict.
-			if srv.Active && otherSrv.Active {
-				logger.V(1).Printf(
-					"Two active services are in conflict on container %s and %s\n",
-					srv.ContainerName, otherSrv.ContainerName,
-				)
-			}
-
-			// Keep a consistent result whatever the services order is.
-			if strings.Compare(srv.ContainerID, otherSrv.ContainerID) > 0 {
-				revertLookup[shortKey] = srv
-			}
-		}
-	}
-
-	result := make(map[serviceNameInstance]serviceNameInstance, len(revertLookup))
-
-	for shortKey, srv := range revertLookup {
-		key := serviceNameInstance{
-			name:     srv.Name,
-			instance: srv.ContainerName,
-		}
-		result[key] = shortKey
-	}
-
-	return result
 }
 
 func serviceIndexByKey(services []types.Service) map[serviceNameInstance]int {
@@ -139,6 +85,8 @@ func (s *Synchronizer) syncServices(ctx context.Context, fullSync bool, onlyEsse
 		return false, err
 	}
 
+	localServices = s.serviceExcludeUnregistrable(localServices)
+
 	if s.successiveErrors == 3 {
 		// After 3 error, try to force a full synchronization to see if it solve the issue.
 		fullSync = true
@@ -153,7 +101,7 @@ func (s *Synchronizer) syncServices(ctx context.Context, fullSync bool, onlyEsse
 		}
 	}
 
-	s.serviceDeleteFromRemote(localServices, previousServices)
+	s.serviceRemoveDeletedFromRemote(localServices, previousServices)
 
 	if onlyEssential {
 		// no essential services, skip registering.
@@ -165,11 +113,13 @@ func (s *Synchronizer) syncServices(ctx context.Context, fullSync bool, onlyEsse
 		return false, err
 	}
 
+	localServices = s.serviceExcludeUnregistrable(localServices)
+
 	if err := s.serviceRegisterAndUpdate(localServices); err != nil {
 		return false, err
 	}
 
-	s.serviceDeleteFromLocal(localServices)
+	s.serviceDeactivateNonLocal(localServices)
 
 	return false, nil
 }
@@ -202,7 +152,8 @@ func (s *Synchronizer) serviceUpdateList() error {
 	return nil
 }
 
-func (s *Synchronizer) serviceDeleteFromRemote(localServices []discovery.Service, previousServices map[string]types.Service) {
+// serviceRemoveDeletedFromRemote removes the local services that were deleted on the API.
+func (s *Synchronizer) serviceRemoveDeletedFromRemote(localServices []discovery.Service, previousServices map[string]types.Service) {
 	newServices := s.option.Cache.ServicesByUUID()
 
 	deletedServiceNameInstance := make(map[serviceNameInstance]bool)
@@ -232,7 +183,6 @@ func (s *Synchronizer) serviceDeleteFromRemote(localServices []discovery.Service
 func (s *Synchronizer) serviceRegisterAndUpdate(localServices []discovery.Service) error {
 	remoteServices := s.option.Cache.Services()
 	remoteIndexByKey := serviceIndexByKey(remoteServices)
-	longToShortLookup := longToShortKey(localServices)
 	params := map[string]string{
 		"fields": "id,label,instance,listen_addresses,exe_path,stack,active,account,agent",
 	}
@@ -249,16 +199,7 @@ func (s *Synchronizer) serviceRegisterAndUpdate(localServices []discovery.Servic
 			instance: srv.ContainerName,
 		}
 
-		var (
-			shortKey serviceNameInstance
-			ok       bool
-		)
-
-		if shortKey, ok = longToShortLookup[key]; !ok {
-			continue
-		}
-
-		remoteIndex, remoteFound := remoteIndexByKey[shortKey]
+		remoteIndex, remoteFound := remoteIndexByKey[key]
 
 		var remoteSrv types.Service
 
@@ -266,17 +207,16 @@ func (s *Synchronizer) serviceRegisterAndUpdate(localServices []discovery.Servic
 			remoteSrv = remoteServices[remoteIndex]
 		}
 
+		// Skip updating the remote service if the service is already up to date.
 		listenAddresses := getListenAddress(srv.ListenAddresses)
-		cont := checkRemoteName(remoteFound, remoteSrv, srv, listenAddresses)
-
-		if cont {
+		if skipUpdate(remoteFound, remoteSrv, srv, listenAddresses) {
 			continue
 		}
 
 		payload := servicePayload{
 			Service: types.Service{
 				Label:           srv.Name,
-				Instance:        shortKey.instance,
+				Instance:        key.instance,
 				ListenAddresses: listenAddresses,
 				ExePath:         srv.ExePath,
 				Stack:           srv.Stack,
@@ -330,49 +270,88 @@ func (s *Synchronizer) serviceRegisterAndUpdate(localServices []discovery.Servic
 	return nil
 }
 
-func checkRemoteName(remoteFound bool, remoteSrv types.Service, srv discovery.Service, listenAddresses string) bool {
-	if remoteFound && remoteSrv.Label == srv.Name && remoteSrv.ListenAddresses == listenAddresses && remoteSrv.ExePath == srv.ExePath && remoteSrv.Active == srv.Active && remoteSrv.Stack == srv.Stack {
-		return true
-	}
-
-	return false
+// skipUpdate returns true if the service found by the discovery is up to date with the remote service on the API.
+func skipUpdate(remoteFound bool, remoteSrv types.Service, srv discovery.Service, listenAddresses string) bool {
+	return remoteFound &&
+		remoteSrv.Label == srv.Name &&
+		remoteSrv.ListenAddresses == listenAddresses &&
+		remoteSrv.ExePath == srv.ExePath &&
+		remoteSrv.Active == srv.Active &&
+		remoteSrv.Stack == srv.Stack
 }
 
-func (s *Synchronizer) serviceDeleteFromLocal(localServices []discovery.Service) {
-	duplicatedKey := make(map[serviceNameInstance]bool)
-	longToShortLookup := longToShortKey(localServices)
-	shortToLongLookup := make(map[serviceNameInstance]serviceNameInstance, len(longToShortLookup))
+// serviceExcludeUnregistrable removes the services that cannot be registered.
+func (s *Synchronizer) serviceExcludeUnregistrable(services []discovery.Service) []discovery.Service {
+	i := 0
 
-	for k, v := range longToShortLookup {
-		shortToLongLookup[v] = k
-	}
+	for _, service := range services {
+		// Remove services with an instance too long.
+		if len(service.ContainerName) > common.APIServiceInstanceLength {
+			msg := fmt.Sprintf(
+				"Service %s will be ignored because the container name '%s' is too long (> %d characters)",
+				service.Name, service.ContainerName, common.APIServiceInstanceLength,
+			)
 
-	registeredServices := s.option.Cache.ServicesByUUID()
-	for k, v := range registeredServices {
-		shortKey := serviceNameInstance{name: v.Label, instance: v.Instance}
-		if _, ok := shortToLongLookup[shortKey]; ok && !duplicatedKey[shortKey] {
-			duplicatedKey[shortKey] = true
+			s.logThrottle(msg)
 
 			continue
 		}
 
-		key := serviceNameInstance{name: v.Label, instance: v.Instance}
+		// Copy and increment index.
+		services[i] = service
+		i++
+	}
 
-		_, err := s.client.Do(s.ctx, "DELETE", fmt.Sprintf("v1/service/%s/", v.ID), nil, nil, nil)
+	return services
+}
+
+// serviceDeactivateNonLocal marks inactive the registered services that were not found in the discovery.
+func (s *Synchronizer) serviceDeactivateNonLocal(localServices []discovery.Service) {
+	localServiceExists := make(map[serviceNameInstance]bool, len(localServices))
+
+	for _, srv := range localServices {
+		key := serviceNameInstance{
+			name:     srv.Name,
+			instance: srv.ContainerName,
+		}
+
+		localServiceExists[key] = true
+	}
+
+	registeredServices := s.option.Cache.Services()
+	for _, remoteSrv := range registeredServices {
+		key := serviceNameInstance{name: remoteSrv.Label, instance: remoteSrv.Instance}
+		if localServiceExists[key] {
+			continue
+		}
+
+		if !remoteSrv.Active {
+			continue
+		}
+
+		// Deactivate the remote service that is not present locally.
+		params := map[string]string{
+			"fields": "id,label,instance,listen_addresses,exe_path,stack,active,account,agent",
+		}
+
+		payload := servicePayload{
+			Service: types.Service{
+				Active:          false,
+				Label:           remoteSrv.Label,
+				Instance:        remoteSrv.Instance,
+				ListenAddresses: remoteSrv.ListenAddresses,
+				ExePath:         remoteSrv.ExePath,
+				Stack:           remoteSrv.Stack,
+			},
+			Account: s.option.Cache.AccountID(),
+			Agent:   s.agentID,
+		}
+
+		_, err := s.client.Do(s.ctx, "PUT", fmt.Sprintf("v1/service/%s/", remoteSrv.ID), params, payload, nil)
 		if err != nil {
-			logger.V(1).Printf("Failed to delete service %v on Bleemeo API: %v", key, err)
+			logger.V(1).Printf("Failed to deactivate service %v on Bleemeo API: %v", key, err)
 
 			continue
 		}
-
-		logger.V(2).Printf("Service %v deleted (UUID %s)", key, v.ID)
-		delete(registeredServices, k)
 	}
-
-	services := make([]types.Service, 0, len(registeredServices))
-	for _, v := range registeredServices {
-		services = append(services, v)
-	}
-
-	s.option.Cache.SetServices(services)
 }
