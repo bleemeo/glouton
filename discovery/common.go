@@ -195,7 +195,9 @@ func (s Service) LabelsOfStatus() map[string]string {
 	}
 
 	if s.ContainerName != "" {
-		labels[types.LabelMetaContainerName] = s.ContainerName
+		// We set the label "item" instead of container name (or MetaContainerName), because checks only work
+		// in "Bleemeo" metric format, which will only have a name & (optionally) an item
+		labels[types.LabelItem] = s.ContainerName
 	}
 
 	return labels
