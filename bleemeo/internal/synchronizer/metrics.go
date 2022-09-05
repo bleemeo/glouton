@@ -403,30 +403,7 @@ func httpResponseToMetricFailureKind(content string) bleemeoTypes.FailureKind {
 }
 
 func (s *Synchronizer) metricKey(lbls map[string]string, annotations types.MetricAnnotations) string {
-	if lbls[types.LabelInstanceUUID] == "" {
-		// In name+item mode, we treat empty instance_uuid and instance_uuid=agentID as the same.
-		// This reflect in:
-		// * metricFromAPI which fill the instance_uuid when labels_text is empty
-		// * MetricOnlyHasItem that cause instance_uuid to not be sent on registration in name+item mode
-		agentID := s.agentID
-
-		if annotations.BleemeoAgentID != "" {
-			agentID = annotations.BleemeoAgentID
-		}
-
-		if common.MetricOnlyHasItem(lbls, agentID) {
-			tmp := make(map[string]string, len(lbls)+1)
-
-			for k, v := range lbls {
-				tmp[k] = v
-			}
-
-			tmp[types.LabelInstanceUUID] = s.agentID
-			lbls = tmp
-		}
-	}
-
-	return types.LabelsToText(lbls)
+	return common.MetricKey(lbls, annotations, s.agentID)
 }
 
 // filterMetrics only keeps the points that can be registered.

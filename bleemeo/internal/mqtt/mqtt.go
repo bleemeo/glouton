@@ -740,7 +740,7 @@ func (c *Client) preparePoints(registreredMetricByKey map[string]bleemeoTypes.Me
 	payload := make(map[bleemeoTypes.AgentID][]metricPayload, 1)
 
 	for _, p := range points {
-		key := types.LabelsToText(p.Labels)
+		key := common.MetricKey(p.Labels, p.Annotations, string(c.option.AgentID))
 		if m, ok := registreredMetricByKey[key]; ok && m.DeactivatedAt.IsZero() {
 			value := metricPayload{
 				LabelsText:  m.LabelsText,
