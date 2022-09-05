@@ -335,14 +335,13 @@ func (d *Discovery) createProcessCheck(service Service, labels map[string]string
 
 func (d *Discovery) addCheck(serviceCheck checker, service Service) {
 	checkGatherer := check.NewCheckGatherer(serviceCheck)
-	lbls := labels.FromStrings(
-		types.LabelName, service.Name,
-		types.LabelContainerName, service.ContainerName,
-	)
+	lbls := service.LabelsOfStatus()
+
 	options := registry.RegistrationOption{
 		Description:  fmt.Sprintf("check for %s", service.Name),
 		Interval:     service.Interval,
-		JitterSeed:   lbls.Hash(),
+		ExtraLabels:  lbls,
+		JitterSeed:   labels.FromMap(lbls).Hash(),
 		StopCallback: checkGatherer.Close,
 		MinInterval:  time.Minute,
 	}

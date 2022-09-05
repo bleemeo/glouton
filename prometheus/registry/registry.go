@@ -937,10 +937,6 @@ func (r *Registry) GatherWithState(ctx context.Context, state GatherState) ([]*d
 
 			mfs = append(mfs, scrapedMFS...)
 			mfs = append(mfs, statusMFS...)
-
-			// Remove meta labels to prevent the Prometheus gatherer
-			// from deleting metrics using reserved labels.
-			mfs = removeMetaLabels(mfs)
 		}()
 	}
 
@@ -963,6 +959,10 @@ func (r *Registry) GatherWithState(ctx context.Context, state GatherState) ([]*d
 	if err != nil {
 		errs = append(errs, err)
 	}
+
+	// Remove meta labels to prevent the Prometheus gatherer
+	// from deleting metrics using reserved labels.
+	mfs = removeMetaLabels(mfs)
 
 	// Use prometheus.Gatherers because it will:
 	// * Remove (and complain) about possible duplicate of metric
