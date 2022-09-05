@@ -8,7 +8,6 @@ import (
 	"glouton/types"
 	"glouton/version"
 	"io"
-	"io/ioutil"
 	"net"
 	"net/http"
 	"strings"
@@ -103,7 +102,7 @@ func diagnosticTLS(builder io.Writer, tlsConfig *tls.Config, host string, hostPo
 
 // DiagnosticHTTP return information about the ability to do a HTTP request.
 func DiagnosticHTTP(cl *http.Client, u string) string {
-	req, err := http.NewRequest("GET", u, nil)
+	req, err := http.NewRequest(http.MethodGet, u, nil)
 	if err != nil {
 		return fmt.Sprintf("Bad URL %#v: %v\n", u, err)
 	}
@@ -121,7 +120,7 @@ func DiagnosticHTTP(cl *http.Client, u string) string {
 		return fmt.Sprintf("Glouton is NOT able to perform HTTP request to %#v: %v\n", u, err)
 	}
 
-	_, _ = io.Copy(ioutil.Discard, resp.Body)
+	_, _ = io.Copy(io.Discard, resp.Body)
 	defer resp.Body.Close()
 
 	return fmt.Sprintf("Glouton is able to perform HTTP request to %#v\n", u)

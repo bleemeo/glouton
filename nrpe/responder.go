@@ -22,7 +22,7 @@ import (
 	"fmt"
 	"glouton/discovery"
 	"glouton/logger"
-	"io/ioutil"
+	"os"
 	"os/exec"
 	"regexp"
 	"strconv"
@@ -163,7 +163,7 @@ func readNRPEConf(nrpeConfPath []string) (map[string]string, bool) {
 	allowArguments := false
 
 	for _, nrpeConfFile := range nrpeConfPath {
-		confBytes, err := ioutil.ReadFile(nrpeConfFile)
+		confBytes, err := os.ReadFile(nrpeConfFile)
 		if err != nil {
 			logger.V(1).Printf("Impossible to read '%s' : %s", nrpeConfFile, err)
 

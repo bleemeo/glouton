@@ -15,11 +15,13 @@ linters:
     - gci # Conflicts with gofumpt.
     - ireturn # Complain that interface A implementation method return an interface B... it's a requirement of interface A that is unavoidable.
     - nonamedreturns # Warn for every named return, not useful.
+    - nosnakecase # Unusable because it reports problems on variable from other packages: https://github.com/sivchari/nosnakecase/issues/21.
     # Deprecated and replaced linter.
     - maligned
     - golint
     - interfacer
     - scopelint
+    - ifshort
     # We use maintidx to lint function complexity.
     - gocyclo
     - cyclop

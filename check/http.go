@@ -89,7 +89,7 @@ func NewHTTP(
 }
 
 func (hc *HTTPCheck) httpMainCheck(ctx context.Context) types.StatusDescription {
-	req, err := http.NewRequest("GET", hc.url, nil)
+	req, err := http.NewRequest(http.MethodGet, hc.url, nil)
 	req.Header.Add("User-Agent", version.UserAgent())
 	req.Host = hc.httpHost
 

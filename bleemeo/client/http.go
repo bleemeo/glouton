@@ -28,7 +28,6 @@ import (
 	gloutonTypes "glouton/types"
 	"glouton/version"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -433,7 +432,7 @@ func (c *HTTPClient) GetJWT(ctx context.Context) (types.JWT, error) {
 func (c *HTTPClient) getJWT(ctx context.Context, path string, body []byte) (types.JWT, error) {
 	u, _ := c.baseURL.Parse(path)
 
-	req, err := http.NewRequest("POST", u.String(), bytes.NewReader(body)) //nolint:noctx
+	req, err := http.NewRequest(http.MethodPost, u.String(), bytes.NewReader(body)) //nolint:noctx
 	if err != nil {
 		return types.JWT{}, err
 	}
@@ -536,7 +535,7 @@ func (c *HTTPClient) sendRequest(ctx context.Context, req *http.Request, result 
 	defer func() {
 		// Ensure we read the whole response to avoid "Connection reset by peer" on server
 		// and ensure HTTP connection can be resused
-		_, _ = io.Copy(ioutil.Discard, resp.Body)
+		_, _ = io.Copy(io.Discard, resp.Body)
 		resp.Body.Close()
 	}()
 

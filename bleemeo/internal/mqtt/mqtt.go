@@ -30,9 +30,9 @@ import (
 	"glouton/delay"
 	"glouton/logger"
 	"glouton/types"
-	"io/ioutil"
 	"math"
 	"math/rand"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -920,7 +920,7 @@ func (c *Client) sendTopinfo(ctx context.Context, cfg bleemeoTypes.GloutonAccoun
 func loadRootCAs(caFile string) (*x509.CertPool, error) {
 	rootCAs := x509.NewCertPool()
 
-	certs, err := ioutil.ReadFile(caFile)
+	certs, err := os.ReadFile(caFile)
 	if err != nil {
 		return nil, err
 	}

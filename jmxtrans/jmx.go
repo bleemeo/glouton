@@ -23,7 +23,6 @@ import (
 	"glouton/discovery"
 	"glouton/logger"
 	"glouton/types"
-	"io/ioutil"
 	"net"
 	"os"
 	"sync"
@@ -285,7 +284,7 @@ func (j *JMX) writeConfig(content []byte) error {
 		return nil
 	}
 
-	currentContent, err := ioutil.ReadFile(j.OutputConfigurationFile)
+	currentContent, err := os.ReadFile(j.OutputConfigurationFile)
 	if os.IsNotExist(err) {
 		currentContent = []byte("{\"servers\":[]}")
 	}
@@ -301,7 +300,7 @@ func (j *JMX) writeConfig(content []byte) error {
 		perm = 0o640
 	}
 
-	err = ioutil.WriteFile(j.OutputConfigurationFile, content, perm)
+	err = os.WriteFile(j.OutputConfigurationFile, content, perm)
 	if err != nil {
 		logger.V(2).Printf("unable to write jmxtrans configuration, is glouton-jmx installed ? %v", err)
 	}

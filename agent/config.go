@@ -25,7 +25,6 @@ import (
 	"glouton/prometheus/exporter/snmp"
 	"glouton/types"
 	"glouton/version"
-	"io/ioutil"
 	"net/url"
 	"os"
 	"strconv"
@@ -320,7 +319,7 @@ func defaultConfig() map[string]interface{} {
 }
 
 func configLoadFile(filePath string, cfg *config.Configuration) error {
-	buffer, err := ioutil.ReadFile(filePath)
+	buffer, err := os.ReadFile(filePath)
 	if err != nil {
 		return err
 	}

@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"glouton/logger"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -58,7 +57,7 @@ func (c *Configuration) MockLookupEnv(fun func(string) (string, bool)) {
 func (c *Configuration) LoadDirectory(dirPath string) error {
 	var firstError error
 
-	files, err := ioutil.ReadDir(dirPath)
+	files, err := os.ReadDir(dirPath)
 	if err != nil {
 		return err
 	}
@@ -70,7 +69,7 @@ func (c *Configuration) LoadDirectory(dirPath string) error {
 
 		path := filepath.Join(dirPath, f.Name())
 
-		data, err := ioutil.ReadFile(path)
+		data, err := os.ReadFile(path)
 		if err != nil && firstError == nil {
 			firstError = fmt.Errorf("%s: %w", path, err)
 		} else if err == nil {

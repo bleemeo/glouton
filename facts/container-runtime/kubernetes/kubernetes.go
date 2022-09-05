@@ -13,9 +13,9 @@ import (
 	crTypes "glouton/facts/container-runtime/types"
 	"glouton/logger"
 	"glouton/types"
-	"io/ioutil"
 	"net"
 	"net/url"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -276,7 +276,7 @@ func (k *Kubernetes) getCertificateExpiration(ctx context.Context, config *rest.
 	}
 
 	if caData == nil {
-		caData, err = ioutil.ReadFile(config.TLSClientConfig.CAFile)
+		caData, err = os.ReadFile(config.TLSClientConfig.CAFile)
 		if err != nil {
 			// We set the CertPool to nil in order to fallback to system CAs.
 			caPool = nil
@@ -453,7 +453,7 @@ func (k *Kubernetes) getCACertificateExpiration(config *rest.Config, now time.Ti
 
 	if caData == nil && config.TLSClientConfig.CAFile != "" {
 		// CAData takes precedence over CAFile, thus we only check CAFile if there is no CAData
-		caData, err = ioutil.ReadFile(config.TLSClientConfig.CAFile)
+		caData, err = os.ReadFile(config.TLSClientConfig.CAFile)
 		if err != nil {
 			return types.MetricPoint{}, err
 		}

@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"glouton/logger"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -151,7 +150,7 @@ func (uf updateFacter) fromUpdateNotifierFile(context.Context) (pendingUpdates i
 		return -1, -1, fmt.Errorf("unable to stat file %v: %w", updateFile, err)
 	}
 
-	content, err := ioutil.ReadFile(updateFile)
+	content, err := os.ReadFile(updateFile)
 	if err != nil {
 		return -1, -1, fmt.Errorf("unable to read file %v: %w", updateFile, err)
 	}

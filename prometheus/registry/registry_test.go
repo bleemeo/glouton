@@ -18,6 +18,7 @@
 //
 // It support both pushed metrics (using AddMetricPointFunction) and pulled
 // metrics thought Collector or Gatherer
+//
 //nolint:scopelint,dupl
 package registry
 

@@ -20,8 +20,8 @@ import (
 	"bytes"
 	"context"
 	"glouton/logger"
-	"io/ioutil"
 	"net"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -39,7 +39,7 @@ func (f *FactProvider) platformFacts() map[string]string {
 
 	if f.hostRootPath != "" {
 		osReleasePath := filepath.Join(f.hostRootPath, "etc/os-release")
-		if osReleaseData, err := ioutil.ReadFile(osReleasePath); err != nil {
+		if osReleaseData, err := os.ReadFile(osReleasePath); err != nil {
 			logger.V(1).Printf("unable to read os-release file: %v", err)
 		} else {
 			osRelease, err := decodeOsRelease(string(osReleaseData))
@@ -77,27 +77,27 @@ func (f *FactProvider) platformFacts() map[string]string {
 		facts["kernel_major_version"] = strings.Join(l[0:2], ".")
 	}
 
-	v, err := ioutil.ReadFile(filepath.Join(dmiDir, "bios_date"))
+	v, err := os.ReadFile(filepath.Join(dmiDir, "bios_date"))
 	if err == nil {
 		facts["bios_released_at"] = strings.TrimSpace(string(v))
 	}
 
-	v, err = ioutil.ReadFile(filepath.Join(dmiDir, "bios_vendor"))
+	v, err = os.ReadFile(filepath.Join(dmiDir, "bios_vendor"))
 	if err == nil {
 		facts["bios_vendor"] = strings.TrimSpace(string(v))
 	}
 
-	v, err = ioutil.ReadFile(filepath.Join(dmiDir, "bios_version"))
+	v, err = os.ReadFile(filepath.Join(dmiDir, "bios_version"))
 	if err == nil {
 		facts["bios_version"] = strings.TrimSpace(string(v))
 	}
 
-	v, err = ioutil.ReadFile(filepath.Join(dmiDir, "product_name"))
+	v, err = os.ReadFile(filepath.Join(dmiDir, "product_name"))
 	if err == nil {
 		facts["product_name"] = strings.TrimSpace(string(v))
 	}
 
-	v, err = ioutil.ReadFile(filepath.Join(dmiDir, "sys_vendor"))
+	v, err = os.ReadFile(filepath.Join(dmiDir, "sys_vendor"))
 	if err == nil {
 		facts["system_vendor"] = strings.TrimSpace(string(v))
 	}

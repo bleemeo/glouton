@@ -22,7 +22,7 @@ import (
 	"fmt"
 	"glouton/logger"
 	"glouton/version"
-	"io/ioutil"
+	"os"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -729,7 +729,7 @@ func (p psListerWrapper) CGroupFromPID(pid int) (string, error) {
 
 	path := filepath.Join("/proc", fmt.Sprintf("%d", pid), "cgroup")
 
-	data, err := ioutil.ReadFile(path)
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return "", err
 	}

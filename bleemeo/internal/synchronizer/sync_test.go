@@ -16,7 +16,7 @@ import (
 	"glouton/prometheus/exporter/snmp"
 	"glouton/store"
 	"glouton/types"
-	"io/ioutil"
+	"io"
 	"log"
 	"net/http"
 	"net/http/httptest"
@@ -64,6 +64,7 @@ type serviceMonitor struct {
 }
 
 // this is a go limitation, these are constants but we have to treat them as variables
+//
 //nolint:gochecknoglobals
 var (
 	newAgent = payloadAgent{
@@ -787,7 +788,7 @@ func (res *genericResource) Create(r *http.Request) (interface{}, error) {
 		}
 	}
 
-	body, err := ioutil.ReadAll(r.Body)
+	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		return nil, err
 	}
@@ -829,7 +830,7 @@ func (res *genericResource) Patch(id string, r *http.Request) (interface{}, erro
 		}
 	}
 
-	body, err := ioutil.ReadAll(r.Body)
+	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		return nil, err
 	}
