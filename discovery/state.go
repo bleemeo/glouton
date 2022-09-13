@@ -106,6 +106,7 @@ func (o oldService) toService(instance string) (srv Service, err error) {
 	return Service{
 		ServiceType:     ServiceName(o.Service),
 		Name:            o.Service,
+		Instance:        instance,
 		ContainerID:     o.ContainerID,
 		ContainerName:   instance,
 		IPAddress:       o.Address,
@@ -147,12 +148,17 @@ func servicesFromState(state State) []Service {
 		if result[i].HasNetstatInfo && result[i].LastNetstatInfo.IsZero() {
 			result[i].LastNetstatInfo = time.Now()
 		}
+
+		// Conversion of old Service before introduction of Instance field
+		if result[i].ContainerName != "" && result[i].Instance == "" {
+			result[i].Instance = result[i].ContainerName
+		}
 	}
 
 	return result
 }
 
-func saveState(state State, servicesMap map[NameContainer]Service) {
+func saveState(state State, servicesMap map[NameInstance]Service) {
 	services := make([]Service, 0, len(servicesMap))
 
 	for _, srv := range servicesMap {

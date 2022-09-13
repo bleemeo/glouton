@@ -40,10 +40,11 @@ func TestConvertionLoop(t *testing.T) {
 					Point:  types.Point{Time: now, Value: 0.42},
 					Labels: map[string]string{types.LabelName: "disk_used"},
 					Annotations: types.MetricAnnotations{
-						ContainerID:    "a container id",
-						ServiceName:    "some service name",
-						SNMPTarget:     "a SNMP target",
-						BleemeoAgentID: "some id of agent",
+						ContainerID:     "a container id",
+						ServiceName:     "some service name",
+						ServiceInstance: "some instance",
+						SNMPTarget:      "a SNMP target",
+						BleemeoAgentID:  "some id of agent",
 						Status: types.StatusDescription{
 							CurrentStatus:     types.StatusWarning,
 							StatusDescription: "some description for the status",
@@ -124,7 +125,8 @@ func TestConvertionLoop(t *testing.T) {
 					Point:  types.Point{Time: now, Value: 110},
 					Labels: map[string]string{types.LabelName: "another_name", "other": "label"},
 					Annotations: types.MetricAnnotations{
-						ServiceName: "ok",
+						ServiceName:     "ok",
+						ServiceInstance: "",
 					},
 				},
 			},

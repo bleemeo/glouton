@@ -282,7 +282,7 @@ func (dd *DynamicDiscovery) updateDiscovery(ctx context.Context, maxAge time.Dur
 		}
 	})
 
-	servicesMap := make(map[NameContainer]Service)
+	servicesMap := make(map[NameInstance]Service)
 
 	for _, pid := range allPids {
 		process, ok := processes[pid]
@@ -295,9 +295,9 @@ func (dd *DynamicDiscovery) updateDiscovery(ctx context.Context, maxAge time.Dur
 			continue
 		}
 
-		key := NameContainer{
-			Name:          service.Name,
-			ContainerName: service.ContainerName,
+		key := NameInstance{
+			Name:     service.Name,
+			Instance: service.Instance,
 		}
 
 		if existingService, ok := servicesMap[key]; ok {
@@ -356,6 +356,7 @@ func (dd *DynamicDiscovery) serviceFromProcess(process facts.Process, netstat ma
 		Name:          string(serviceType),
 		ContainerID:   process.ContainerID,
 		ContainerName: process.ContainerName,
+		Instance:      process.ContainerName,
 		ExePath:       process.Executable,
 		Active:        true,
 		Stack:         dd.defaultStack,

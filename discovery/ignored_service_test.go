@@ -18,7 +18,7 @@ package discovery
 
 import "testing"
 
-func TestIsCheckIgnored(t *testing.T) {
+func TestIsCheckIgnored(t *testing.T) { //nolint:maintidx
 	checksIgnored := []map[string]string{
 		{
 			"name": "mysql",
@@ -68,243 +68,277 @@ func TestIsCheckIgnored(t *testing.T) {
 	ignoredChecks := NewIgnoredService(checksIgnored)
 
 	cases := []struct {
-		nameContainer  NameContainer
+		service        Service
 		expectedResult bool
 	}{
 		{
-			nameContainer: NameContainer{
+			service: Service{
 				Name:          "rabbitmq",
+				Instance:      "",
 				ContainerName: "",
 			},
 			expectedResult: false,
 		},
 		{
-			nameContainer: NameContainer{
+			service: Service{
 				Name:          "rabbitmq",
+				Instance:      "random-value",
 				ContainerName: "random-value",
 			},
 			expectedResult: false,
 		},
 		{
-			nameContainer: NameContainer{
+			service: Service{
 				Name:          "mysql",
+				Instance:      "",
 				ContainerName: "",
 			},
 			expectedResult: true,
 		},
 		{
-			nameContainer: NameContainer{
+			service: Service{
 				Name:          "mysql",
+				Instance:      "container-name",
 				ContainerName: "container-name",
 			},
 			expectedResult: true,
 		},
 		{
-			nameContainer: NameContainer{
+			service: Service{
 				Name:          "mysql",
+				Instance:      "something",
 				ContainerName: "something",
 			},
 			expectedResult: true,
 		},
 		{
-			nameContainer: NameContainer{
+			service: Service{
 				Name:          "postgres",
+				Instance:      "",
 				ContainerName: "",
 			},
 			expectedResult: true,
 		},
 		{
-			nameContainer: NameContainer{
+			service: Service{
 				Name:          "postgres",
+				Instance:      "random-value",
 				ContainerName: "random-value",
 			},
 			expectedResult: true,
 		},
 		{
-			nameContainer: NameContainer{
+			service: Service{
 				Name:          "apache",
+				Instance:      "",
 				ContainerName: "",
 			},
 			expectedResult: false,
 		},
 		{
-			nameContainer: NameContainer{
+			service: Service{
 				Name:          "apache",
+				Instance:      "container-name",
 				ContainerName: "container-name",
 			},
 			expectedResult: false,
 		},
 		{
-			nameContainer: NameContainer{
+			service: Service{
 				Name:          "apache",
+				Instance:      "container-integration",
 				ContainerName: "container-integration",
 			},
 			expectedResult: true,
 		},
 		{
-			nameContainer: NameContainer{
+			service: Service{
 				Name:          "apache",
+				Instance:      "integration-container",
 				ContainerName: "integration-container",
 			},
 			expectedResult: true,
 		},
 		{
-			nameContainer: NameContainer{
+			service: Service{
 				Name:          "apache",
+				Instance:      "test-integration-container",
 				ContainerName: "test-integration-container",
 			},
 			expectedResult: true,
 		},
 		{
-			nameContainer: NameContainer{
+			service: Service{
 				Name:          "nginx",
+				Instance:      "",
 				ContainerName: "",
 			},
 			expectedResult: false,
 		},
 		{
-			nameContainer: NameContainer{
+			service: Service{
 				Name:          "nginx",
+				Instance:      "random-value",
 				ContainerName: "random-value",
 			},
 			expectedResult: true,
 		},
 		{
-			nameContainer: NameContainer{
+			service: Service{
 				Name:          "redis",
+				Instance:      "",
 				ContainerName: "",
 			},
 			expectedResult: true,
 		},
 		{
-			nameContainer: NameContainer{
+			service: Service{
 				Name:          "redis",
+				Instance:      "random-value",
 				ContainerName: "random-value",
 			},
 			expectedResult: false,
 		},
 		{
-			nameContainer: NameContainer{
+			service: Service{
 				Name:          "influxdb",
+				Instance:      "influxdb",
 				ContainerName: "influxdb",
 			},
 			expectedResult: false,
 		},
 		{
-			nameContainer: NameContainer{
+			service: Service{
 				Name:          "prefix",
+				Instance:      "name-prefix",
 				ContainerName: "name-prefix",
 			},
 			expectedResult: true,
 		},
 		{
-			nameContainer: NameContainer{
+			service: Service{
 				Name:          "prefix",
+				Instance:      "name-prefixSomething",
 				ContainerName: "name-prefixSomething",
 			},
 			expectedResult: true,
 		},
 		{
-			nameContainer: NameContainer{
+			service: Service{
 				Name:          "prefix",
+				Instance:      "Something-name-prefix",
 				ContainerName: "Something-name-prefix",
 			},
 			expectedResult: false,
 		},
 		{
-			nameContainer: NameContainer{
+			service: Service{
 				Name:          "suffix",
+				Instance:      "123-name-suffix",
 				ContainerName: "123-name-suffix",
 			},
 			expectedResult: true,
 		},
 		{
-			nameContainer: NameContainer{
+			service: Service{
 				Name:          "suffix",
+				Instance:      "name-suffix",
 				ContainerName: "name-suffix",
 			},
 			expectedResult: true,
 		},
 		{
-			nameContainer: NameContainer{
+			service: Service{
 				Name:          "suffix",
+				Instance:      "name-suffix123",
 				ContainerName: "name-suffix123",
 			},
 			expectedResult: false,
 		},
 		{
-			nameContainer: NameContainer{
+			service: Service{
 				Name:          "prefix-suffix",
+				Instance:      "starts-with-###-end-withs",
 				ContainerName: "starts-with-###-end-withs",
 			},
 			expectedResult: true,
 		},
 		{
-			nameContainer: NameContainer{
+			service: Service{
 				Name:          "prefix-suffix",
+				Instance:      "starts-with--end-withs",
 				ContainerName: "starts-with--end-withs",
 			},
 			expectedResult: true,
 		},
 		{
-			nameContainer: NameContainer{
+			service: Service{
 				Name:          "prefix-suffix",
+				Instance:      "Astarts-with-###-end-withs",
 				ContainerName: "Astarts-with-###-end-withs",
 			},
 			expectedResult: false,
 		},
 		{
-			nameContainer: NameContainer{
+			service: Service{
 				Name:          "prefix-suffix",
+				Instance:      "starts-with-###-end-withsB",
 				ContainerName: "starts-with-###-end-withsB",
 			},
 			expectedResult: false,
 		},
 		{
-			nameContainer: NameContainer{
+			service: Service{
 				Name:          "two-placeholder",
+				Instance:      "web-",
 				ContainerName: "web-",
 			},
 			expectedResult: false,
 		},
 		{
-			nameContainer: NameContainer{
+			service: Service{
 				Name:          "two-placeholder",
+				Instance:      "web-1",
 				ContainerName: "web-1",
 			},
 			expectedResult: false,
 		},
 		{
-			nameContainer: NameContainer{
+			service: Service{
 				Name:          "two-placeholder",
+				Instance:      "web-01",
 				ContainerName: "web-01",
 			},
 			expectedResult: true,
 		},
 		{
-			nameContainer: NameContainer{
+			service: Service{
 				Name:          "two-placeholder",
+				Instance:      "web-001",
 				ContainerName: "web-001",
 			},
 			expectedResult: false,
 		},
 		{
-			nameContainer: NameContainer{
+			service: Service{
 				Name:          "not-in-the-list",
+				Instance:      "does-matter",
 				ContainerName: "does-matter",
 			},
 			expectedResult: false,
 		},
 		{
-			nameContainer: NameContainer{
+			service: Service{
 				Name:          "fixed-hostname",
+				Instance:      "web.example.com",
 				ContainerName: "web.example.com",
 			},
 			expectedResult: true,
 		},
 		{
-			nameContainer: NameContainer{
+			service: Service{
 				Name:          "fixed-hostname",
+				Instance:      "web-example-com",
 				ContainerName: "web-example-com",
 			},
 			expectedResult: false,
@@ -312,9 +346,9 @@ func TestIsCheckIgnored(t *testing.T) {
 	}
 
 	for i, c := range cases {
-		result := ignoredChecks.IsServiceIgnored(c.nameContainer)
+		result := ignoredChecks.IsServiceIgnored(c.service)
 		if result != c.expectedResult {
-			t.Errorf("%v ignoredChecks.IsCheckIgnored(%v) == '%v', want '%v'", i, c.nameContainer, result, c.expectedResult)
+			t.Errorf("%v ignoredChecks.IsCheckIgnored(%v) == '%v', want '%v'", i, c.service, result, c.expectedResult)
 		}
 	}
 }

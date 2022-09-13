@@ -139,8 +139,8 @@ func (cfg *jmxtransConfig) CurrentConfig() []byte {
 		hash := sha256.New()
 		_, _ = hash.Write([]byte(service.ServiceType))
 
-		if service.ContainerName != "" {
-			_, _ = hash.Write([]byte(service.ContainerName))
+		if service.Instance != "" {
+			_, _ = hash.Write([]byte(service.Instance))
 		}
 
 		sha256Service := hex.EncodeToString(hash.Sum(nil))

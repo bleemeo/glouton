@@ -79,13 +79,13 @@ type Container struct {
 	DenyPatternList   []string
 }
 
-func (srvs Services) ToDiscoveryMap() map[discovery.NameContainer]discovery.ServiceOverride {
-	result := make(map[discovery.NameContainer]discovery.ServiceOverride, len(srvs))
+func (srvs Services) ToDiscoveryMap() map[discovery.NameInstance]discovery.ServiceOverride {
+	result := make(map[discovery.NameInstance]discovery.ServiceOverride, len(srvs))
 
 	for _, v := range srvs {
-		key := discovery.NameContainer{
-			Name:          v.ID,
-			ContainerName: v.Instance,
+		key := discovery.NameInstance{
+			Name:     v.ID,
+			Instance: v.Instance,
 		}
 		result[key] = discovery.ServiceOverride{
 			IgnoredPorts:   v.IgnoredPorts,
@@ -97,17 +97,17 @@ func (srvs Services) ToDiscoveryMap() map[discovery.NameContainer]discovery.Serv
 	return result
 }
 
-func (srvs Services) ToNRPEMap() map[string]discovery.NameContainer {
-	result := make(map[string]discovery.NameContainer)
+func (srvs Services) ToNRPEMap() map[string]discovery.NameInstance {
+	result := make(map[string]discovery.NameInstance)
 
 	for _, v := range srvs {
 		if v.NagiosNRPEName == "" {
 			continue
 		}
 
-		result[v.NagiosNRPEName] = discovery.NameContainer{
-			Name:          v.ID,
-			ContainerName: v.Instance,
+		result[v.NagiosNRPEName] = discovery.NameInstance{
+			Name:     v.ID,
+			Instance: v.Instance,
 		}
 	}
 

@@ -170,7 +170,7 @@ func (s *Synchronizer) serviceRemoveDeletedFromRemote(localServices []discovery.
 	for _, srv := range localServices {
 		key := serviceNameInstance{
 			name:     srv.Name,
-			instance: srv.ContainerName,
+			instance: srv.Instance,
 		}
 		if _, ok := deletedServiceNameInstance[key]; ok {
 			localServiceToDelete = append(localServiceToDelete, srv)
@@ -196,7 +196,7 @@ func (s *Synchronizer) serviceRegisterAndUpdate(localServices []discovery.Servic
 
 		key := serviceNameInstance{
 			name:     srv.Name,
-			instance: srv.ContainerName,
+			instance: srv.Instance,
 		}
 
 		remoteIndex, remoteFound := remoteIndexByKey[key]
@@ -286,10 +286,10 @@ func (s *Synchronizer) serviceExcludeUnregistrable(services []discovery.Service)
 
 	for _, service := range services {
 		// Remove services with an instance too long.
-		if len(service.ContainerName) > common.APIServiceInstanceLength {
+		if len(service.Instance) > common.APIServiceInstanceLength {
 			msg := fmt.Sprintf(
-				"Service %s will be ignored because the container name '%s' is too long (> %d characters)",
-				service.Name, service.ContainerName, common.APIServiceInstanceLength,
+				"Service %s will be ignored because the instance name '%s' is too long (> %d characters)",
+				service.Name, service.Instance, common.APIServiceInstanceLength,
 			)
 
 			s.logThrottle(msg)
@@ -312,7 +312,7 @@ func (s *Synchronizer) serviceDeactivateNonLocal(localServices []discovery.Servi
 	for _, srv := range localServices {
 		key := serviceNameInstance{
 			name:     srv.Name,
-			instance: srv.ContainerName,
+			instance: srv.Instance,
 		}
 
 		localServiceExists[key] = true

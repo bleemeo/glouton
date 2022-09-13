@@ -269,14 +269,14 @@ func TestDiscoverySingle(t *testing.T) {
 
 func Test_applyOverride(t *testing.T) {
 	type args struct {
-		discoveredServicesMap map[NameContainer]Service
-		servicesOverride      map[NameContainer]ServiceOverride
+		discoveredServicesMap map[NameInstance]Service
+		servicesOverride      map[NameInstance]ServiceOverride
 	}
 
 	tests := []struct {
 		name string
 		args args
-		want map[NameContainer]Service
+		want map[NameInstance]Service
 	}{
 		{
 			name: "empty",
@@ -284,12 +284,12 @@ func Test_applyOverride(t *testing.T) {
 				discoveredServicesMap: nil,
 				servicesOverride:      nil,
 			},
-			want: make(map[NameContainer]Service),
+			want: make(map[NameInstance]Service),
 		},
 		{
 			name: "no override",
 			args: args{
-				discoveredServicesMap: map[NameContainer]Service{
+				discoveredServicesMap: map[NameInstance]Service{
 					{Name: "apache"}: {
 						Name:            "apache",
 						ServiceType:     ApacheService,
@@ -299,7 +299,7 @@ func Test_applyOverride(t *testing.T) {
 				},
 				servicesOverride: nil,
 			},
-			want: map[NameContainer]Service{
+			want: map[NameInstance]Service{
 				{Name: "apache"}: {
 					Name:            "apache",
 					ServiceType:     ApacheService,
@@ -311,13 +311,13 @@ func Test_applyOverride(t *testing.T) {
 		{
 			name: "address override",
 			args: args{
-				discoveredServicesMap: map[NameContainer]Service{
+				discoveredServicesMap: map[NameInstance]Service{
 					{Name: "apache"}: {
 						Name:        "apache",
 						ServiceType: ApacheService,
 					},
 				},
-				servicesOverride: map[NameContainer]ServiceOverride{
+				servicesOverride: map[NameInstance]ServiceOverride{
 					{Name: "apache"}: {
 						ExtraAttribute: map[string]string{
 							"address": "10.0.1.2",
@@ -325,7 +325,7 @@ func Test_applyOverride(t *testing.T) {
 					},
 				},
 			},
-			want: map[NameContainer]Service{
+			want: map[NameInstance]Service{
 				{Name: "apache"}: {
 					Name:        "apache",
 					ServiceType: ApacheService,
@@ -345,13 +345,13 @@ func Test_applyOverride(t *testing.T) {
 		{
 			name: "address override & ignore unknown override",
 			args: args{
-				discoveredServicesMap: map[NameContainer]Service{
+				discoveredServicesMap: map[NameInstance]Service{
 					{Name: "apache"}: {
 						Name:        "apache",
 						ServiceType: ApacheService,
 					},
 				},
-				servicesOverride: map[NameContainer]ServiceOverride{
+				servicesOverride: map[NameInstance]ServiceOverride{
 					{Name: "apache"}: {
 						ExtraAttribute: map[string]string{
 							"address":         "10.0.1.2",
@@ -360,7 +360,7 @@ func Test_applyOverride(t *testing.T) {
 					},
 				},
 			},
-			want: map[NameContainer]Service{
+			want: map[NameInstance]Service{
 				{Name: "apache"}: {
 					Name:        "apache",
 					ServiceType: ApacheService,
@@ -380,13 +380,13 @@ func Test_applyOverride(t *testing.T) {
 		{
 			name: "add custom check",
 			args: args{
-				discoveredServicesMap: map[NameContainer]Service{
+				discoveredServicesMap: map[NameInstance]Service{
 					{Name: "apache"}: {
 						Name:        "apache",
 						ServiceType: ApacheService,
 					},
 				},
-				servicesOverride: map[NameContainer]ServiceOverride{
+				servicesOverride: map[NameInstance]ServiceOverride{
 					{Name: "myapplication"}: {
 						ExtraAttribute: map[string]string{
 							"port":          "8080",
@@ -401,7 +401,7 @@ func Test_applyOverride(t *testing.T) {
 					},
 				},
 			},
-			want: map[NameContainer]Service{
+			want: map[NameInstance]Service{
 				{Name: "apache"}: {
 					Name:        "apache",
 					ServiceType: ApacheService,
@@ -433,7 +433,7 @@ func Test_applyOverride(t *testing.T) {
 			name: "bad custom check",
 			args: args{
 				discoveredServicesMap: nil,
-				servicesOverride: map[NameContainer]ServiceOverride{
+				servicesOverride: map[NameInstance]ServiceOverride{
 					{Name: "myapplication"}: { // the check_command is missing
 						ExtraAttribute: map[string]string{
 							"port":       "8080",
@@ -447,12 +447,12 @@ func Test_applyOverride(t *testing.T) {
 					},
 				},
 			},
-			want: map[NameContainer]Service{},
+			want: map[NameInstance]Service{},
 		},
 		{
 			name: "ignore ports",
 			args: args{
-				discoveredServicesMap: map[NameContainer]Service{
+				discoveredServicesMap: map[NameInstance]Service{
 					{Name: "apache"}: {
 						Name:        "apache",
 						ServiceType: ApacheService,
@@ -463,13 +463,13 @@ func Test_applyOverride(t *testing.T) {
 						},
 					},
 				},
-				servicesOverride: map[NameContainer]ServiceOverride{
+				servicesOverride: map[NameInstance]ServiceOverride{
 					{Name: "apache"}: {
 						IgnoredPorts: []int{443, 22},
 					},
 				},
 			},
-			want: map[NameContainer]Service{
+			want: map[NameInstance]Service{
 				{Name: "apache"}: {
 					Name:        "apache",
 					ServiceType: ApacheService,
@@ -490,19 +490,19 @@ func Test_applyOverride(t *testing.T) {
 		{
 			name: "ignore ports with space",
 			args: args{
-				discoveredServicesMap: map[NameContainer]Service{
+				discoveredServicesMap: map[NameInstance]Service{
 					{Name: "apache"}: {
 						Name:        "apache",
 						ServiceType: ApacheService,
 					},
 				},
-				servicesOverride: map[NameContainer]ServiceOverride{
+				servicesOverride: map[NameInstance]ServiceOverride{
 					{Name: "apache"}: {
 						IgnoredPorts: []int{443, 22},
 					},
 				},
 			},
-			want: map[NameContainer]Service{
+			want: map[NameInstance]Service{
 				{Name: "apache"}: {
 					Name:        "apache",
 					ServiceType: ApacheService,
@@ -550,6 +550,7 @@ func TestUpdateMetricsAndCheck(t *testing.T) {
 	mockDynamic.result = []Service{
 		{
 			Name:            "nginx",
+			Instance:        "nginx1",
 			ServiceType:     NginxService,
 			Active:          true,
 			ContainerID:     "1234",
@@ -570,6 +571,7 @@ func TestUpdateMetricsAndCheck(t *testing.T) {
 	mockDynamic.result = []Service{
 		{
 			Name:            "nginx",
+			Instance:        "nginx1",
 			ServiceType:     NginxService,
 			Active:          true,
 			ContainerID:     "1234",
@@ -579,6 +581,7 @@ func TestUpdateMetricsAndCheck(t *testing.T) {
 		},
 		{
 			Name:            "memcached",
+			Instance:        "",
 			ServiceType:     MemcachedService,
 			Active:          true,
 			IPAddress:       "127.0.0.1",
@@ -602,6 +605,7 @@ func TestUpdateMetricsAndCheck(t *testing.T) {
 	mockDynamic.result = []Service{
 		{
 			Name:            "nginx",
+			Instance:        "nginx1",
 			ServiceType:     NginxService,
 			Active:          true,
 			ContainerID:     "1239",
@@ -611,6 +615,7 @@ func TestUpdateMetricsAndCheck(t *testing.T) {
 		},
 		{
 			Name:            "memcached",
+			Instance:        "",
 			ServiceType:     MemcachedService,
 			Active:          true,
 			IPAddress:       "127.0.0.1",

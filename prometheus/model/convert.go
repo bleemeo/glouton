@@ -236,6 +236,10 @@ func AnnotationToMetaLabels(lbls labels.Labels, annotation types.MetricAnnotatio
 		builder.Set(types.LabelMetaServiceName, annotation.ServiceName)
 	}
 
+	if annotation.ServiceInstance != "" {
+		builder.Set(types.LabelMetaServiceInstance, annotation.ServiceInstance)
+	}
+
 	if annotation.ContainerID != "" {
 		builder.Set(types.LabelMetaContainerID, annotation.ContainerID)
 	}
@@ -272,13 +276,14 @@ func AnnotationToMetaLabels(lbls labels.Labels, annotation types.MetricAnnotatio
 // Labels aren't modified.
 func MetaLabelsToAnnotation(lbls labels.Labels) types.MetricAnnotations {
 	annotations := types.MetricAnnotations{
-		ServiceName:    lbls.Get(types.LabelMetaServiceName),
-		ContainerID:    lbls.Get(types.LabelMetaContainerID),
-		BleemeoAgentID: lbls.Get(types.LabelMetaBleemeoTargetAgentUUID),
-		SNMPTarget:     lbls.Get(types.LabelMetaSNMPTarget),
-		AlertingRuleID: lbls.Get(types.LabelMetaAlertingRuleUUID),
-		BleemeoItem:    lbls.Get(types.LabelMetaBleemeoItem),
-		StatusOf:       lbls.Get(types.LabelMetaStatusOf),
+		ServiceName:     lbls.Get(types.LabelMetaServiceName),
+		ServiceInstance: lbls.Get(types.LabelMetaServiceInstance),
+		ContainerID:     lbls.Get(types.LabelMetaContainerID),
+		BleemeoAgentID:  lbls.Get(types.LabelMetaBleemeoTargetAgentUUID),
+		SNMPTarget:      lbls.Get(types.LabelMetaSNMPTarget),
+		AlertingRuleID:  lbls.Get(types.LabelMetaAlertingRuleUUID),
+		BleemeoItem:     lbls.Get(types.LabelMetaBleemeoItem),
+		StatusOf:        lbls.Get(types.LabelMetaStatusOf),
 	}
 
 	if statusText := lbls.Get(types.LabelMetaCurrentStatus); statusText != "" {

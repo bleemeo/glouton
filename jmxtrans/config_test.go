@@ -74,6 +74,7 @@ func Test_jmxtransConfig_cassandra_Config(t *testing.T) {
 	services := []discovery.Service{
 		{
 			Name:        "cassandra",
+			Instance:    "",
 			ServiceType: discovery.CassandraService,
 			Active:      true,
 			ExtraAttributes: map[string]string{
@@ -84,6 +85,7 @@ func Test_jmxtransConfig_cassandra_Config(t *testing.T) {
 		},
 		{
 			Name:        "cassandra",
+			Instance:    "squirreldb-cassandra",
 			ServiceType: discovery.CassandraService,
 			Active:      true,
 			ExtraAttributes: map[string]string{

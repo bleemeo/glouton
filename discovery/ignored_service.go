@@ -34,16 +34,16 @@ func NewIgnoredService(ignoredChecks []map[string]string) IgnoredService {
 }
 
 // IsServiceIgnored returns if the check or the metrics are ignored or not.
-func (ic IgnoredService) IsServiceIgnored(nameContainer NameContainer) bool {
+func (ic IgnoredService) IsServiceIgnored(srv Service) bool {
 	for _, ignoredCheck := range ic.ignoredChecks {
-		if ignoredCheck["name"] == nameContainer.Name {
+		if ignoredCheck["name"] == srv.Name {
 			instances := strings.Split(ignoredCheck["instance"], " ")
 			if len(instances) == 1 && instances[0] == "" {
 				return true
 			}
 
 			for _, instance := range instances {
-				hasMatched := matchInstance(instance, nameContainer.ContainerName)
+				hasMatched := matchInstance(instance, srv.ContainerName)
 				if hasMatched {
 					return true
 				}

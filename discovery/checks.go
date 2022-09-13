@@ -58,7 +58,7 @@ type checker interface {
 	Close()
 }
 
-func (d *Discovery) configureChecks(oldServices, services map[NameContainer]Service) {
+func (d *Discovery) configureChecks(oldServices, services map[NameInstance]Service) {
 	for key := range oldServices {
 		if _, ok := services[key]; !ok {
 			d.removeCheck(key)
@@ -82,9 +82,9 @@ func (d *Discovery) configureChecks(oldServices, services map[NameContainer]Serv
 	}
 }
 
-func (d *Discovery) removeCheck(key NameContainer) {
+func (d *Discovery) removeCheck(key NameInstance) {
 	if check, ok := d.activeCheck[key]; ok {
-		logger.V(2).Printf("Remove check for service %v on container %s", key.Name, key.ContainerName)
+		logger.V(2).Printf("Remove check for service %v on instance %s", key.Name, key.Instance)
 		delete(d.activeCheck, key)
 		d.metricRegistry.Unregister(check.id)
 	}
@@ -101,7 +101,7 @@ func (d *Discovery) createCheck(service Service) {
 		return
 	}
 
-	logger.V(2).Printf("Add check for service %v on container %s", service.Name, service.ContainerID)
+	logger.V(2).Printf("Add check for service %v instance %s", service.Name, service.Instance)
 
 	di := servicesDiscoveryInfo[service.ServiceType]
 
@@ -351,9 +351,9 @@ func (d *Discovery) addCheck(serviceCheck checker, service Service) {
 		logger.V(1).Printf("Unable to add check: %v", err)
 	}
 
-	key := NameContainer{
-		Name:          service.Name,
-		ContainerName: service.ContainerName,
+	key := NameInstance{
+		Name:     service.Name,
+		Instance: service.Instance,
 	}
 
 	savedCheck := CheckDetails{
