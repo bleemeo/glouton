@@ -208,20 +208,21 @@ func (c *jmxtransClient) processLine(ctx context.Context, line string) {
 		var item string
 
 		switch {
-		case service.ContainerName != "" && typeNames != "":
-			item = service.ContainerName + "_" + typeNames
+		case service.Instance != "" && typeNames != "":
+			item = service.Instance + "_" + typeNames
 		case typeNames != "":
 			item = typeNames
 		default:
-			item = service.ContainerName
+			item = service.Instance
 		}
 
 		labels := map[string]string{
-			types.LabelName:            name,
-			types.LabelMetaServiceName: service.Name,
+			types.LabelName:                name,
+			types.LabelMetaServiceName:     service.Name,
+			types.LabelMetaServiceInstance: service.Instance,
 		}
-		if service.ContainerID != "" {
-			labels[types.LabelMetaContainerName] = service.ContainerName
+		if item != "" {
+			labels[types.LabelItem] = item
 		}
 
 		if typeNames != "" {
@@ -229,9 +230,10 @@ func (c *jmxtransClient) processLine(ctx context.Context, line string) {
 		}
 
 		annotations := types.MetricAnnotations{
-			BleemeoItem: item,
-			ServiceName: service.Name,
-			ContainerID: service.ContainerID,
+			BleemeoItem:     item,
+			ServiceName:     service.Name,
+			ServiceInstance: service.Instance,
+			ContainerID:     service.ContainerID,
 		}
 
 		if metric.Derive {
@@ -248,7 +250,7 @@ func (c *jmxtransClient) processLine(ctx context.Context, line string) {
 		switch {
 		case metric.Sum:
 			// we are summing over typesName, drop them from item
-			item = service.ContainerName
+			item = service.Instance
 			annotations.BleemeoItem = item
 			key := nameItem{
 				Name: name,

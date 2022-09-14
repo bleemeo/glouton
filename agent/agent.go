@@ -1389,16 +1389,15 @@ func (a *agent) miscGatherMinute(pusher types.PointPusher) func(context.Context,
 				}
 
 				labels := map[string]string{
-					types.LabelName:              "postfix_queue_size",
-					types.LabelMetaContainerName: srv.ContainerName,
-					types.LabelMetaContainerID:   srv.ContainerID,
-					types.LabelMetaServiceName:   srv.Name,
+					types.LabelName: "postfix_queue_size",
+					types.LabelItem: srv.Instance,
 				}
 
 				annotations := types.MetricAnnotations{
-					BleemeoItem: srv.ContainerName,
-					ContainerID: srv.ContainerID,
-					ServiceName: srv.Name,
+					BleemeoItem:     srv.Instance,
+					ContainerID:     srv.ContainerID,
+					ServiceName:     srv.Name,
+					ServiceInstance: srv.Instance,
 				}
 
 				points = append(points, types.MetricPoint{
@@ -1418,16 +1417,15 @@ func (a *agent) miscGatherMinute(pusher types.PointPusher) func(context.Context,
 				}
 
 				labels := map[string]string{
-					types.LabelName:              "exim_queue_size",
-					types.LabelMetaContainerName: srv.ContainerName,
-					types.LabelMetaContainerID:   srv.ContainerID,
-					types.LabelMetaServiceName:   srv.Name,
+					types.LabelName: "exim_queue_size",
+					types.LabelItem: srv.Instance,
 				}
 
 				annotations := types.MetricAnnotations{
-					BleemeoItem: srv.ContainerName,
-					ContainerID: srv.ContainerID,
-					ServiceName: srv.Name,
+					BleemeoItem:     srv.Instance,
+					ContainerID:     srv.ContainerID,
+					ServiceName:     srv.Name,
+					ServiceInstance: srv.Instance,
 				}
 
 				points = append(points, types.MetricPoint{

@@ -49,20 +49,20 @@ type Discovery struct {
 
 	dynamicDiscovery Discoverer
 
-	discoveredServicesMap map[NameContainer]Service
-	servicesMap           map[NameContainer]Service
+	discoveredServicesMap map[NameInstance]Service
+	servicesMap           map[NameInstance]Service
 	lastDiscoveryUpdate   time.Time
 
-	lastConfigservicesMap map[NameContainer]Service
-	activeCollector       map[NameContainer]collectorDetails
-	activeCheck           map[NameContainer]CheckDetails
+	lastConfigservicesMap map[NameInstance]Service
+	activeCollector       map[NameInstance]collectorDetails
+	activeCheck           map[NameInstance]CheckDetails
 	coll                  Collector
 	metricRegistry        GathererRegistry
 	containerInfo         containerInfoProvider
 	state                 State
-	servicesOverride      map[NameContainer]ServiceOverride
-	isCheckIgnored        func(NameContainer) bool
-	isInputIgnored        func(NameContainer) bool
+	servicesOverride      map[NameInstance]ServiceOverride
+	isCheckIgnored        func(Service) bool
+	isInputIgnored        func(Service) bool
 	isContainerIgnored    func(facts.Container) bool
 	metricFormat          types.MetricFormat
 	processFact           processFact
@@ -95,20 +95,20 @@ func New(
 	state State,
 	acc inputs.AnnotationAccumulator,
 	containerInfo containerInfoProvider,
-	servicesOverride map[NameContainer]ServiceOverride,
-	isCheckIgnored func(NameContainer) bool,
-	isInputIgnored func(NameContainer) bool,
+	servicesOverride map[NameInstance]ServiceOverride,
+	isCheckIgnored func(Service) bool,
+	isInputIgnored func(Service) bool,
 	isContainerIgnored func(c facts.Container) bool,
 	metricFormat types.MetricFormat,
 	processFact processFact,
 ) *Discovery {
 	initialServices := servicesFromState(state)
-	discoveredServicesMap := make(map[NameContainer]Service, len(initialServices))
+	discoveredServicesMap := make(map[NameInstance]Service, len(initialServices))
 
 	for _, v := range initialServices {
-		key := NameContainer{
-			Name:          v.Name,
-			ContainerName: v.ContainerName,
+		key := NameInstance{
+			Name:     v.Name,
+			Instance: v.Instance,
 		}
 		discoveredServicesMap[key] = v
 	}
@@ -119,8 +119,8 @@ func New(
 		coll:                  coll,
 		metricRegistry:        metricRegistry,
 		containerInfo:         containerInfo,
-		activeCollector:       make(map[NameContainer]collectorDetails),
-		activeCheck:           make(map[NameContainer]CheckDetails),
+		activeCollector:       make(map[NameInstance]collectorDetails),
+		activeCheck:           make(map[NameInstance]CheckDetails),
 		state:                 state,
 		servicesOverride:      servicesOverride,
 		isCheckIgnored:        isCheckIgnored,
@@ -187,11 +187,11 @@ func (d *Discovery) DiagnosticArchive(ctx context.Context, zipFile types.Archive
 			return false
 		}
 
-		return services[i].Name < services[j].Name || (services[i].Name == services[j].Name && services[i].ContainerName < services[j].ContainerName)
+		return services[i].Name < services[j].Name || (services[i].Name == services[j].Name && services[i].Instance < services[j].Instance)
 	})
 
 	for _, v := range services {
-		fmt.Fprintf(file, "%s on IP %s, active=%v, containerName=%s, listenning on %v\n", v.Name, v.IPAddress, v.Active, v.ContainerName, v.ListenAddresses)
+		fmt.Fprintf(file, "%s on IP %s, active=%v, instance=%s, container=%s, listenning on %v, type=%s\n", v.Name, v.IPAddress, v.Active, v.Instance, v.ContainerName, v.ListenAddresses, v.ServiceType)
 	}
 
 	if dd, ok := d.dynamicDiscovery.(*DynamicDiscovery); ok {
@@ -226,11 +226,11 @@ func (d *Discovery) DiagnosticArchive(ctx context.Context, zipFile types.Archive
 				return false
 			}
 
-			return services[i].Name < services[j].Name || (services[i].Name == services[j].Name && services[i].ContainerName < services[j].ContainerName)
+			return services[i].Name < services[j].Name || (services[i].Name == services[j].Name && services[i].Instance < services[j].Instance)
 		})
 
 		for _, v := range services {
-			fmt.Fprintf(file, "%s on IP %s, active=%v, containerName=%s, listenning on %v\n", v.Name, v.IPAddress, v.Active, v.ContainerName, v.ListenAddresses)
+			fmt.Fprintf(file, "%s on IP %s, active=%v, instance=%s, container=%s, listenning on %v\n", v.Name, v.IPAddress, v.Active, v.Instance, v.ContainerName, v.ListenAddresses)
 		}
 	}
 
@@ -271,7 +271,7 @@ func (d *Discovery) RemoveIfNonRunning(ctx context.Context, services []Service) 
 	deleted := false
 
 	for _, v := range services {
-		key := NameContainer{Name: v.Name, ContainerName: v.ContainerName}
+		key := NameInstance{Name: v.Name, Instance: v.Instance}
 		if _, ok := d.servicesMap[key]; ok {
 			deleted = true
 		}
@@ -313,7 +313,7 @@ func (d *Discovery) updateDiscovery(ctx context.Context, now time.Time) error {
 		return err
 	}
 
-	servicesMap := make(map[NameContainer]Service)
+	servicesMap := make(map[NameInstance]Service)
 
 	for key, service := range d.discoveredServicesMap {
 		service = d.setServiceActiveAndContainer(service)
@@ -322,9 +322,9 @@ func (d *Discovery) updateDiscovery(ctx context.Context, now time.Time) error {
 	}
 
 	for _, service := range r {
-		key := NameContainer{
-			Name:          service.Name,
-			ContainerName: service.ContainerName,
+		key := NameInstance{
+			Name:     service.Name,
+			Instance: service.Instance,
 		}
 
 		if previousService, ok := servicesMap[key]; ok {
@@ -396,10 +396,10 @@ func (d *Discovery) setServiceActiveAndContainer(service Service) Service {
 }
 
 func applyOverride(
-	discoveredServicesMap map[NameContainer]Service,
-	servicesOverride map[NameContainer]ServiceOverride,
-) map[NameContainer]Service {
-	servicesMap := make(map[NameContainer]Service)
+	discoveredServicesMap map[NameInstance]Service,
+	servicesOverride map[NameInstance]ServiceOverride,
+) map[NameInstance]Service {
+	servicesMap := make(map[NameInstance]Service)
 
 	for k, v := range discoveredServicesMap {
 		servicesMap[k] = v
@@ -414,18 +414,14 @@ func applyOverride(
 
 		service := servicesMap[serviceKey]
 		if service.ServiceType == "" {
-			if serviceKey.ContainerName != "" {
-				logger.V(0).Printf(
-					"Custom check for service %#v with a container (%#v) is not supported. Please unset the container",
-					serviceKey.Name,
-					serviceKey.ContainerName,
-				)
-
-				continue
+			if _, ok := servicesDiscoveryInfo[ServiceName(serviceKey.Name)]; ok {
+				service.ServiceType = ServiceName(serviceKey.Name)
+			} else {
+				service.ServiceType = CustomService
 			}
 
-			service.ServiceType = CustomService
 			service.Name = serviceKey.Name
+			service.Instance = serviceKey.Instance
 			service.Active = true
 		}
 
@@ -454,6 +450,14 @@ func applyOverride(
 				}
 
 				service.ListenAddresses = []facts.ListenAddress{listenAddress}
+
+				// If an override set the port on a service, make sure this listenAddress isn't used on another service with
+				// another instance (except if this would remove the last listen address).
+				for _, other := range servicesMap {
+					if other.Name == service.Name && other.Instance != service.Instance && len(other.ListenAddresses) > 1 {
+						other.ListenAddresses = filterListenAddress(other.ListenAddresses, listenAddress)
+					}
+				}
 			}
 		}
 
@@ -536,15 +540,28 @@ func applyOverride(
 	return servicesMap
 }
 
+func filterListenAddress(list []facts.ListenAddress, drop facts.ListenAddress) []facts.ListenAddress {
+	i := 0
+
+	for _, x := range list {
+		if x != drop {
+			list[i] = x
+			i++
+		}
+	}
+
+	return list[:i]
+}
+
 func (d *Discovery) ignoreServicesAndPorts() {
 	servicesMap := d.servicesMap
 	for nameContainer, service := range servicesMap {
 		if d.isCheckIgnored != nil {
-			service.CheckIgnored = d.isCheckIgnored(nameContainer)
+			service.CheckIgnored = d.isCheckIgnored(service)
 		}
 
 		if d.isInputIgnored != nil {
-			service.MetricsIgnored = d.isInputIgnored(nameContainer)
+			service.MetricsIgnored = d.isInputIgnored(service)
 		}
 
 		if len(service.IgnoredPorts) > 0 {
@@ -567,11 +584,11 @@ func (d *Discovery) ignoreServicesAndPorts() {
 // CheckNow is type of check function.
 type CheckNow func(ctx context.Context) types.StatusDescription
 
-// GetCheckNow returns the GetCheckNow function associated to a NameContainer.
-func (d *Discovery) GetCheckNow(nameContainer NameContainer) (CheckNow, error) {
-	checkDetails, ok := d.activeCheck[nameContainer]
+// GetCheckNow returns the GetCheckNow function associated to a NameInstance.
+func (d *Discovery) GetCheckNow(nameInstance NameInstance) (CheckNow, error) {
+	checkDetails, ok := d.activeCheck[nameInstance]
 	if !ok {
-		return nil, fmt.Errorf("%w %s", errNoCheckAssociated, nameContainer.Name)
+		return nil, fmt.Errorf("%w %s", errNoCheckAssociated, nameInstance.Name)
 	}
 
 	return checkDetails.check.CheckNow, nil

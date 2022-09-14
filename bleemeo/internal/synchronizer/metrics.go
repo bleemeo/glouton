@@ -452,20 +452,16 @@ func (s *Synchronizer) excludeUnregistrableMetrics(metrics []types.Metric) []typ
 		annotations := metric.Annotations()
 
 		// Exclude metrics with a missing container dependency.
-		containerName := ""
-
 		if annotations.ContainerID != "" {
-			container, ok := containersByContainerID[annotations.ContainerID]
+			_, ok := containersByContainerID[annotations.ContainerID]
 			if !ok {
 				continue
 			}
-
-			containerName = container.Name
 		}
 
 		// Exclude metrics with a missing service dependency.
 		if annotations.ServiceName != "" {
-			srvKey := serviceNameInstance{name: annotations.ServiceName, instance: containerName}
+			srvKey := serviceNameInstance{name: annotations.ServiceName, instance: annotations.ServiceInstance}
 
 			if _, ok := servicesByKey[srvKey]; !ok {
 				continue
@@ -1276,8 +1272,6 @@ func (s *Synchronizer) prepareMetricPayload(
 		}
 	}
 
-	var containerName string
-
 	if annotations.StatusOf != "" {
 		subLabels := make(map[string]string, len(labels))
 
@@ -1316,8 +1310,6 @@ func (s *Synchronizer) prepareMetricPayload(
 
 			for _, container := range containers {
 				if annotations.ContainerID == container.ID() {
-					containerName = container.ContainerName()
-
 					break
 				}
 			}
@@ -1328,13 +1320,12 @@ func (s *Synchronizer) prepareMetricPayload(
 				return payload, errIgnore
 			}
 
-			containerName = container.Name
 			payload.ContainerID = container.ID
 		}
 	}
 
 	if annotations.ServiceName != "" {
-		srvKey := serviceNameInstance{name: annotations.ServiceName, instance: containerName}
+		srvKey := serviceNameInstance{name: annotations.ServiceName, instance: annotations.ServiceInstance}
 
 		service, ok := servicesByKey[srvKey]
 		if !ok {

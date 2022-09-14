@@ -1100,6 +1100,7 @@ func TestDynamicDiscovery(t *testing.T) { //nolint: maintidx
 			want: []Service{
 				{
 					Name:          "nginx",
+					Instance:      "mynginx",
 					ServiceType:   NginxService,
 					ContainerID:   "1234",
 					ContainerName: "mynginx",

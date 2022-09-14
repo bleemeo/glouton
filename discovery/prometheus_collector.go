@@ -26,13 +26,15 @@ func (d *Discovery) createPrometheusMemcached(service Service) error {
 
 	address := fmt.Sprintf("%s:%d", ip, port)
 
-	extLogger := log.With(logger.GoKitLoggerWrapper(logger.V(2)), "service", "memcached", "container_name", service.ContainerName)
+	extLogger := log.With(logger.GoKitLoggerWrapper(logger.V(2)), "service", "memcached", "instance", service.Instance)
 	collector := memcachedExporter.New(address, 5*time.Second, extLogger)
 	lbls := map[string]string{
-		types.LabelMetaServiceName:   service.Name,
-		types.LabelMetaContainerID:   service.ContainerID,
-		types.LabelMetaContainerName: service.ContainerName,
-		types.LabelMetaServicePort:   strconv.FormatInt(int64(port), 10),
+		types.LabelMetaServiceName:    service.Name,
+		types.LabelMetaScrapeInstance: service.Instance,
+		types.LabelMetaContainerID:    service.ContainerID,
+		types.LabelMetaContainerName:  service.ContainerName,
+		types.LabelMetaBleemeoItem:    service.Instance,
+		types.LabelMetaServicePort:    strconv.FormatInt(int64(port), 10),
 	}
 
 	if d.metricRegistry == nil {
@@ -69,9 +71,9 @@ func (d *Discovery) createPrometheusMemcached(service Service) error {
 		return err
 	}
 
-	key := NameContainer{
-		Name:          service.Name,
-		ContainerName: service.ContainerName,
+	key := NameInstance{
+		Name:     service.Name,
+		Instance: service.Instance,
 	}
 	d.activeCollector[key] = collectorDetails{
 		gathererID: id,

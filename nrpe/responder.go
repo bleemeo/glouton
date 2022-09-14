@@ -38,19 +38,19 @@ var (
 )
 
 type checkRegistry interface {
-	GetCheckNow(discovery.NameContainer) (discovery.CheckNow, error)
+	GetCheckNow(discovery.NameInstance) (discovery.CheckNow, error)
 }
 
 // Responder is used to build the NRPE answer.
 type Responder struct {
 	discovery      checkRegistry
-	customCheck    map[string]discovery.NameContainer
+	customCheck    map[string]discovery.NameInstance
 	nrpeCommands   map[string]string
 	allowArguments bool
 }
 
 // NewResponse returns a Response.
-func NewResponse(customChecks map[string]discovery.NameContainer, checkRegistry checkRegistry, nrpeConfPath []string) Responder {
+func NewResponse(customChecks map[string]discovery.NameInstance, checkRegistry checkRegistry, nrpeConfPath []string) Responder {
 	nrpeCommands, allowArguments := readNRPEConf(nrpeConfPath)
 
 	return Responder{
