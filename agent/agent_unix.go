@@ -23,9 +23,10 @@ import (
 	"glouton/facts/container-runtime/veth"
 	"glouton/logger"
 	"glouton/prometheus/exporter/node"
+	"os"
 )
 
-func (a *agent) initOSSpecificParts() {
+func initOSSpecificParts(stop chan<- os.Signal) {
 }
 
 func (a *agent) registerOSSpecificComponents(vethProvider *veth.Provider) {
