@@ -142,7 +142,7 @@
 			Impersonate="no"
 			Execute="deferred"
 			Directory="TARGETDIR"
-			ExeCommand="&quot;[SystemFolder]SCHTASKS.EXE&quot; /Create /F /RU System /SC HOURLY /TN &quot;Bleemeo\Glouton\Windows Update Checker&quot; /TR &quot;powershell.exe  -ExecutionPolicy Bypass -NonInteractive -File '[INSTALLFOLDER]windows_update_checker.ps1'&quot;" />
+			ExeCommand="schtasks.exe /Create /F /RU System /SC HOURLY /TN &quot;Bleemeo\Glouton\Windows Update Checker&quot; /TR &quot;powershell.exe  -ExecutionPolicy Bypass -NonInteractive -File '[INSTALLFOLDER]windows_update_checker.ps1'&quot;" />
 
 		<CustomAction
 			Id="RunWindowsUpdateCheckerTask"
@@ -150,7 +150,7 @@
 			Impersonate="no"
 			Execute="deferred"
 			Directory="TARGETDIR"
-			ExeCommand="&quot;[SystemFolder]SCHTASKS.EXE&quot; /Run /I /TN &quot;Bleemeo\Glouton\Windows Update Checker&quot;" />
+			ExeCommand="schtasks.exe /Run /I /TN &quot;Bleemeo\Glouton\Windows Update Checker&quot;" />
 
 		<CustomAction
 			Id="DeleteWindowsUpdateCheckerTask"
@@ -158,7 +158,32 @@
 			Impersonate="no"
 			Execute="deferred"
 			Directory="TARGETDIR"
-			ExeCommand="&quot;[SystemFolder]SCHTASKS.EXE&quot; /Delete /F /TN &quot;Bleemeo\Glouton\Windows Update Checker&quot;" />
+			ExeCommand="schtasks.exe /Delete /F /TN &quot;Bleemeo\Glouton\Windows Update Checker&quot;" />
+
+		<!-- Fix file permissions -->
+		<CustomAction
+			Id="FixStatePermission"
+			Return="check"
+			Impersonate="no"
+			Execute="deferred"
+			Directory="TARGETDIR"
+			ExeCommand="icacls.exe &quot;[ProgramDataFolder]\state.json&quot; /grant &quot;NT AUTHORITY\LocalService&quot;:F" />
+
+		<CustomAction
+			Id="FixStateCachePermission"
+			Return="check"
+			Impersonate="no"
+			Execute="deferred"
+			Directory="TARGETDIR"
+			ExeCommand="icacls.exe &quot;[ProgramDataFolder]\state.cache.json&quot; /grant &quot;NT AUTHORITY\LocalService&quot;:F" />
+
+		<CustomAction
+			Id="FixLogPermission"
+			Return="check"
+			Impersonate="no"
+			Execute="deferred"
+			Directory="TARGETDIR"
+			ExeCommand="icacls.exe &quot;[LogsFolder]\glouton.log&quot; /grant &quot;NT AUTHORITY\LocalService&quot;:F" />
 
 		<!-- _UNINSTALL is only true during uninstallation: https://stackoverflow.com/a/731700 -->
 		<SetProperty Id="_UNINSTALL" After="FindRelatedProducts" Value="1"><![CDATA[(NOT UPGRADINGPRODUCTCODE) AND (REMOVE="ALL")]]></SetProperty>
@@ -168,6 +193,10 @@
 			<Custom Action="RunWindowsUpdateCheckerTask" After="CreateWindowsUpdateCheckerTask">NOT _UNINSTALL</Custom>
 			<!-- Delete the Windows Update Checker task on uninstall -->
 			<Custom Action="DeleteWindowsUpdateCheckerTask" After="RunWindowsUpdateCheckerTask">_UNINSTALL</Custom>
+
+			<Custom Action="FixStatePermission" After="DeleteWindowsUpdateCheckerTask">NOT _UNINSTALL</Custom>
+			<Custom Action="FixStateCachePermission" After="DeleteWindowsUpdateCheckerTask">NOT _UNINSTALL</Custom>
+			<Custom Action="FixLogPermission" After="DeleteWindowsUpdateCheckerTask">NOT _UNINSTALL</Custom>
 		</InstallExecuteSequence>
 
 		<!-- List components to install -->
