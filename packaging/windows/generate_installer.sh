@@ -11,7 +11,7 @@ mkdir -p work
 cp -r packaging/windows/installer/* work
 cp dist/glouton_windows_amd64_v1/glouton.exe work/assets
 
-sed -i "s/Version=\"1.2.3.4\"/Version=\"${VERSION}\"/" work/product.wxs
+sed -i -e "s/Version=\"1.2.3.4\"/Version=\"${VERSION}\"/" work/product.wxs
 
 docker run --rm -v "$(pwd)/work:/wix" dactiv/wix candle -ext WixUtilExtension.dll -ext WixUIExtension -dAssetsPath=/wix/assets/ -dExePath=/wix/assets/ -arch x86 -out 'obj\' *.wxs
 docker run --rm -v "$(pwd)/work:/wix" dactiv/wix light -sval -ext WixUtilExtension.dll -ext WixUIExtension -out glouton.msi obj/*.wixobj
