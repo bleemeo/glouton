@@ -8,7 +8,7 @@ import (
 	"glouton/facts/container-runtime/docker"
 	"glouton/facts/container-runtime/internal/testutil"
 	crTypes "glouton/facts/container-runtime/types"
-	"io/ioutil"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -33,7 +33,7 @@ type mockKubernetesClient struct {
 func newKubernetesMock(dirname string) (*mockKubernetesClient, error) {
 	result := &mockKubernetesClient{}
 
-	data, err := ioutil.ReadFile(filepath.Join(dirname, "node.yaml"))
+	data, err := os.ReadFile(filepath.Join(dirname, "node.yaml"))
 	if err == nil {
 		err = yaml.Unmarshal(data, &result.node)
 		if err != nil {
@@ -41,7 +41,7 @@ func newKubernetesMock(dirname string) (*mockKubernetesClient, error) {
 		}
 	}
 
-	data, err = ioutil.ReadFile(filepath.Join(dirname, "version.yaml"))
+	data, err = os.ReadFile(filepath.Join(dirname, "version.yaml"))
 	if err == nil {
 		err = yaml.Unmarshal(data, &result.versions)
 		if err != nil {
@@ -49,7 +49,7 @@ func newKubernetesMock(dirname string) (*mockKubernetesClient, error) {
 		}
 	}
 
-	data, err = ioutil.ReadFile(filepath.Join(dirname, "pods.yaml"))
+	data, err = os.ReadFile(filepath.Join(dirname, "pods.yaml"))
 	if err == nil {
 		err = yaml.Unmarshal(data, &result.pods)
 		if err != nil {

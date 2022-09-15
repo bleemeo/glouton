@@ -22,7 +22,6 @@ import (
 	"encoding/json"
 	"glouton/logger"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"time"
 )
@@ -70,7 +69,7 @@ func PostInformation(ctx context.Context, telemetryID string, url string, agenti
 
 	body, _ := json.Marshal(information) //nolint:errchkjson // False positive.
 
-	req, _ := http.NewRequest("POST", url, bytes.NewBuffer(body))
+	req, _ := http.NewRequest(http.MethodPost, url, bytes.NewBuffer(body))
 
 	req.Header.Set("Content-Type", "application/json")
 
@@ -89,7 +88,7 @@ func PostInformation(ctx context.Context, telemetryID string, url string, agenti
 	defer func() {
 		// Ensure we read the whole response to avoid "Connection reset by peer" on server
 		// and ensure HTTP connection can be resused
-		_, _ = io.Copy(ioutil.Discard, resp.Body)
+		_, _ = io.Copy(io.Discard, resp.Body)
 		resp.Body.Close()
 	}()
 }

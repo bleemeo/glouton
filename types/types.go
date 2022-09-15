@@ -102,9 +102,12 @@ const (
 	LabelMetaContainerName          = "__meta_container_name"
 	LabelMetaContainerID            = "__meta_container_id"
 	LabelMetaServiceName            = "__meta_service_name"
+	LabelMetaServiceInstance        = "__meta_service_instance"
 	LabelMetaGloutonFQDN            = "__meta__fqdn"
 	LabelMetaGloutonPort            = "__meta_glouton_port"
+	LabelMetaBleemeoItem            = "__meta_bleemeo_item"
 	LabelMetaServicePort            = "__meta_service_port"
+	LabelMetaStatusOf               = "__meta_status_of"
 	LabelMetaPort                   = "__meta_port"
 	LabelMetaScrapeInstance         = "__meta_scrape_instance"
 	LabelMetaScrapeJob              = "__meta_scrape_job"
@@ -220,12 +223,13 @@ type Metric interface {
 
 // MetricAnnotations contains additional information about a metrics.
 type MetricAnnotations struct {
-	BleemeoItem    string
-	ContainerID    string
-	ServiceName    string
-	StatusOf       string
-	SNMPTarget     string
-	AlertingRuleID string
+	BleemeoItem     string
+	ContainerID     string
+	ServiceName     string
+	ServiceInstance string
+	StatusOf        string
+	SNMPTarget      string
+	AlertingRuleID  string
 	// store the agent for which we want to emit the metric
 	BleemeoAgentID string
 	Status         StatusDescription
@@ -272,6 +276,10 @@ func (a MetricAnnotations) Merge(other MetricAnnotations) MetricAnnotations {
 
 	if other.ServiceName != "" {
 		a.ServiceName = other.ServiceName
+	}
+
+	if other.ServiceInstance != "" {
+		a.ServiceInstance = other.ServiceInstance
 	}
 
 	if other.StatusOf != "" {

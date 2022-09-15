@@ -78,22 +78,24 @@ func MetricPointsToFamilies(points []types.MetricPoint) []*dto.MetricFamily {
 			families = append(families, tmp)
 		}
 
+		lbls := AnnotationToMetaLabels(labels.FromMap(p.Labels), p.Annotations)
+
 		metric := &dto.Metric{
-			Label:       make([]*dto.LabelPair, 0, len(p.Labels)-1),
+			Label:       make([]*dto.LabelPair, 0, len(lbls)-1),
 			TimestampMs: proto.Int64(p.Time.UnixMilli()),
 			Untyped: &dto.Untyped{
 				Value: proto.Float64(p.Value),
 			},
 		}
 
-		for k, v := range p.Labels {
-			if k == types.LabelName {
+		for _, v := range lbls {
+			if v.Name == types.LabelName {
 				continue
 			}
 
 			metric.Label = append(metric.Label, &dto.LabelPair{
-				Name:  proto.String(k),
-				Value: proto.String(v),
+				Name:  proto.String(v.Name),
+				Value: proto.String(v.Value),
 			})
 		}
 
@@ -227,12 +229,15 @@ func SendPointsToAppender(points []types.MetricPoint, app storage.Appender) erro
 
 // AnnotationToMetaLabels convert annotation to meta-labels (labels starting with __) and append them to existing labels.
 // It's valid to provide nil for initial labels.
-// Currently not all annotation are converted. List of converted annotation may change.
 func AnnotationToMetaLabels(lbls labels.Labels, annotation types.MetricAnnotations) labels.Labels {
 	builder := labels.NewBuilder(lbls)
 
 	if annotation.ServiceName != "" {
 		builder.Set(types.LabelMetaServiceName, annotation.ServiceName)
+	}
+
+	if annotation.ServiceInstance != "" {
+		builder.Set(types.LabelMetaServiceInstance, annotation.ServiceInstance)
 	}
 
 	if annotation.ContainerID != "" {
@@ -251,6 +256,14 @@ func AnnotationToMetaLabels(lbls labels.Labels, annotation types.MetricAnnotatio
 		builder.Set(types.LabelMetaAlertingRuleUUID, annotation.AlertingRuleID)
 	}
 
+	if annotation.BleemeoItem != "" {
+		builder.Set(types.LabelMetaBleemeoItem, annotation.BleemeoItem)
+	}
+
+	if annotation.StatusOf != "" {
+		builder.Set(types.LabelMetaStatusOf, annotation.StatusOf)
+	}
+
 	if annotation.Status.CurrentStatus.IsSet() {
 		builder.Set(types.LabelMetaCurrentStatus, annotation.Status.CurrentStatus.String())
 		builder.Set(types.LabelMetaCurrentDescription, annotation.Status.StatusDescription)
@@ -263,11 +276,14 @@ func AnnotationToMetaLabels(lbls labels.Labels, annotation types.MetricAnnotatio
 // Labels aren't modified.
 func MetaLabelsToAnnotation(lbls labels.Labels) types.MetricAnnotations {
 	annotations := types.MetricAnnotations{
-		ServiceName:    lbls.Get(types.LabelMetaServiceName),
-		ContainerID:    lbls.Get(types.LabelMetaContainerID),
-		BleemeoAgentID: lbls.Get(types.LabelMetaBleemeoTargetAgentUUID),
-		SNMPTarget:     lbls.Get(types.LabelMetaSNMPTarget),
-		AlertingRuleID: lbls.Get(types.LabelMetaAlertingRuleUUID),
+		ServiceName:     lbls.Get(types.LabelMetaServiceName),
+		ServiceInstance: lbls.Get(types.LabelMetaServiceInstance),
+		ContainerID:     lbls.Get(types.LabelMetaContainerID),
+		BleemeoAgentID:  lbls.Get(types.LabelMetaBleemeoTargetAgentUUID),
+		SNMPTarget:      lbls.Get(types.LabelMetaSNMPTarget),
+		AlertingRuleID:  lbls.Get(types.LabelMetaAlertingRuleUUID),
+		BleemeoItem:     lbls.Get(types.LabelMetaBleemeoItem),
+		StatusOf:        lbls.Get(types.LabelMetaStatusOf),
 	}
 
 	if statusText := lbls.Get(types.LabelMetaCurrentStatus); statusText != "" {

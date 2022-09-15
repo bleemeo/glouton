@@ -28,32 +28,42 @@ func NewFilter(cache *cache.Cache) *Filter {
 }
 
 // IsAllowed returns whether a metric is allowed or not depending on the current plan.
-func (f *Filter) IsAllowed(lbls map[string]string, annotations types.MetricAnnotations) (bool, error) {
+func (f *Filter) IsAllowed(lbls map[string]string, annotations types.MetricAnnotations) (bool, bleemeoTypes.DenyReason, error) {
 	allowlist, err := allowListForMetric(f.accountConfigs, f.defaultConfigID, annotations, f.monitors, f.agents)
 	if err != nil {
-		return false, err
+		return false, bleemeoTypes.DenyErrorOccurred, err
+	}
+
+	// Deny metrics with an item too long for the API.
+	if len(annotations.BleemeoItem) > common.APIMetricItemLength ||
+		annotations.ServiceName != "" && len(annotations.ServiceInstance) > common.APIServiceInstanceLength {
+		return false, bleemeoTypes.DenyItemTooLong, nil
 	}
 
 	// Service status and alerting rules metrics are always allowed.
 	if common.IsServiceCheckMetric(lbls, annotations) || annotations.AlertingRuleID != "" {
-		return true, nil
+		return true, bleemeoTypes.NotDenied, nil
 	}
 
 	// Deny metrics associated to a container if the docker integration is disabled.
 	if !f.accountConfigs[f.defaultConfigID].DockerIntegration && annotations.ContainerID != "" {
-		return false, nil
+		return false, bleemeoTypes.DenyNoDockerIntegration, nil
 	}
 
 	// Wait for network metrics from virtual interfaces to be associated with a container.
 	if annotations.ContainerID == types.MissingContainerID {
-		return false, nil
+		return false, bleemeoTypes.DenyMissingContainerID, nil
 	}
 
 	if len(allowlist) == 0 {
-		return true, nil
+		return true, bleemeoTypes.NotDenied, nil
 	}
 
-	return allowlist[lbls[types.LabelName]], nil
+	if allowlist[lbls[types.LabelName]] {
+		return true, bleemeoTypes.NotDenied, nil
+	}
+
+	return false, bleemeoTypes.DenyNotAvailableInCurrentPlan, nil
 }
 
 func allowListForMetric(

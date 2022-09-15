@@ -123,6 +123,7 @@ func Test_jmxtransClient_processLine(t *testing.T) { //nolint:maintidx
 				Services: map[string]discovery.Service{
 					"sha256-of-service": {
 						Name:          "cassandra",
+						Instance:      "squirreldb-cassandra",
 						ContainerName: "squirreldb-cassandra",
 					},
 				},

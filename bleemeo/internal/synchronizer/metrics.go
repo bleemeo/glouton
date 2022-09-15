@@ -28,7 +28,6 @@ import (
 	"glouton/logger"
 	"glouton/threshold"
 	"glouton/types"
-	"math/rand"
 	"regexp"
 	"runtime"
 	"sort"
@@ -144,10 +143,7 @@ func (mp metricPayload) metricFromAPI(lastTime time.Time) bleemeoTypes.Metric {
 			mp.Labels[types.LabelItem] = mp.Item
 		}
 
-		annotations := types.MetricAnnotations{
-			BleemeoItem: mp.Item,
-		}
-		mp.LabelsText = common.LabelsToText(mp.Labels, annotations, true)
+		mp.LabelsText = types.LabelsToText(mp.Labels)
 	} else {
 		mp.Labels = types.TextToLabels(mp.LabelsText)
 	}
@@ -407,40 +403,17 @@ func httpResponseToMetricFailureKind(content string) bleemeoTypes.FailureKind {
 }
 
 func (s *Synchronizer) metricKey(lbls map[string]string, annotations types.MetricAnnotations) string {
-	if lbls[types.LabelInstanceUUID] == "" {
-		// In name+item mode, we treat empty instance_uuid and instance_uuid=agentID as the same.
-		// This reflect in:
-		// * metricFromAPI which fill the instance_uuid when labels_text is empty
-		// * MetricOnlyHasItem that cause instance_uuid to not be sent on registration in name+item mode
-		agentID := s.agentID
-
-		if annotations.BleemeoAgentID != "" {
-			agentID = annotations.BleemeoAgentID
-		}
-
-		if common.MetricOnlyHasItem(lbls, agentID) {
-			tmp := make(map[string]string, len(lbls)+1)
-
-			for k, v := range lbls {
-				tmp[k] = v
-			}
-
-			tmp[types.LabelInstanceUUID] = s.agentID
-			lbls = tmp
-		}
-	}
-
-	return common.LabelsToText(lbls, annotations, s.option.MetricFormat == types.MetricFormatBleemeo)
+	return common.MetricKey(lbls, annotations, s.agentID)
 }
 
-// nearly a duplicate of mqtt.filterPoint, but not quite. Alas we cannot easily generalize this as go doesn't have generics (yet).
+// filterMetrics only keeps the points that can be registered.
 func (s *Synchronizer) filterMetrics(input []types.Metric) []types.Metric {
 	result := make([]types.Metric, 0)
 
 	f := filter.NewFilter(s.option.Cache)
 
 	for _, m := range input {
-		allow, err := f.IsAllowed(m.Labels(), m.Annotations())
+		allow, denyReason, err := f.IsAllowed(m.Labels(), m.Annotations())
 		if err != nil {
 			logger.V(2).Printf("sync: %s", err)
 
@@ -449,14 +422,21 @@ func (s *Synchronizer) filterMetrics(input []types.Metric) []types.Metric {
 
 		if allow {
 			result = append(result, m)
+		} else if denyReason == bleemeoTypes.DenyItemTooLong {
+			msg := fmt.Sprintf(
+				"Metric %s will be ignored because the item '%s' is too long (> %d characters)",
+				m.Labels()[types.LabelName], m.Labels()[types.LabelItem], common.APIMetricItemLength,
+			)
+
+			s.logThrottle(msg)
 		}
 	}
 
-	return result
+	return s.excludeUnregistrableMetrics(result)
 }
 
-// excludeUnregistrableMetrics remove metrics that cannot be registered, due to missing
-// dependency (like a container that must be registered before).
+// excludeUnregistrableMetrics remove metrics that cannot be registered, due to either
+// a missing dependency (like a container that must be registered before) or an item too long.
 func (s *Synchronizer) excludeUnregistrableMetrics(metrics []types.Metric) []types.Metric {
 	result := make([]types.Metric, 0, len(metrics))
 	containersByContainerID := s.option.Cache.ContainersByContainerID()
@@ -470,20 +450,18 @@ func (s *Synchronizer) excludeUnregistrableMetrics(metrics []types.Metric) []typ
 
 	for _, metric := range metrics {
 		annotations := metric.Annotations()
-		containerName := ""
 
+		// Exclude metrics with a missing container dependency.
 		if annotations.ContainerID != "" {
-			container, ok := containersByContainerID[annotations.ContainerID]
+			_, ok := containersByContainerID[annotations.ContainerID]
 			if !ok {
 				continue
 			}
-
-			containerName = container.Name
 		}
 
+		// Exclude metrics with a missing service dependency.
 		if annotations.ServiceName != "" {
-			srvKey := serviceNameInstance{name: annotations.ServiceName, instance: containerName}
-			srvKey.truncateInstance()
+			srvKey := serviceNameInstance{name: annotations.ServiceName, instance: annotations.ServiceInstance}
 
 			if _, ok := servicesByKey[srvKey]; !ok {
 				continue
@@ -520,10 +498,6 @@ func (s *Synchronizer) syncMetrics(ctx context.Context, fullSync bool, onlyEssen
 		return false, err
 	}
 
-	filteredMetrics := s.filterMetrics(localMetrics)
-	unregisteredMetrics := s.findUnregisteredMetrics(filteredMetrics)
-	unregisteredMetrics = s.excludeUnregistrableMetrics(unregisteredMetrics)
-
 	if s.successiveErrors == 3 {
 		// After 3 error, try to force a full synchronization to see if it solve the issue.
 		fullSync = true
@@ -554,18 +528,20 @@ func (s *Synchronizer) syncMetrics(ctx context.Context, fullSync bool, onlyEssen
 		fullSync = true
 	}
 
+	filteredMetrics := s.filterMetrics(localMetrics)
+	unregisteredMetrics := s.findUnregisteredMetrics(filteredMetrics)
+
 	if len(unregisteredMetrics) > 3*len(previousMetrics)/100 {
 		fullSync = true
 	}
 
 	err = s.metricUpdatePendingOrSync(fullSync, &pendingMetricsUpdate)
-
 	if err != nil {
 		return false, err
 	}
 
+	// Update the unregistered metrics as metricUpdatePendingOrSync may have changed them.
 	unregisteredMetrics = s.findUnregisteredMetrics(filteredMetrics)
-	unregisteredMetrics = s.excludeUnregistrableMetrics(unregisteredMetrics)
 
 	logger.V(2).Printf("Searching %d metrics that may be inactive", len(unregisteredMetrics))
 
@@ -576,22 +552,15 @@ func (s *Synchronizer) syncMetrics(ctx context.Context, fullSync bool, onlyEssen
 
 	updateThresholds = fullSync || len(unregisteredMetrics) > 0 || len(pendingMetricsUpdate) > 0
 
-	s.metricDeleteFromRemote(filteredMetrics, previousMetrics)
+	s.metricRemoveDeletedFromRemote(filteredMetrics, previousMetrics)
 
+	// Update local metrics as metricRemoveDeletedFromRemote may have dropped some metrics in the store.
 	localMetrics, err = s.option.Store.Metrics(nil)
 	if err != nil {
 		return updateThresholds, err
 	}
 
 	filteredMetrics = s.filterMetrics(localMetrics)
-
-	// If one metric fail to register, it may block other metric that would register correctly.
-	// To reduce this risk, randomize the list, so on next run, the metric that failed to register
-	// may no longer block other.
-	rand.Shuffle(len(filteredMetrics), func(i, j int) {
-		filteredMetrics[i], filteredMetrics[j] = filteredMetrics[j], filteredMetrics[i]
-	})
-
 	filteredMetrics = prioritizeAndFilterMetrics(s.option.MetricFormat, filteredMetrics, onlyEssential)
 
 	if err := newMetricRegisterer(s).registerMetrics(filteredMetrics); err != nil {
@@ -841,7 +810,7 @@ func (s *Synchronizer) metricUpdateList(metrics []types.Metric) error {
 		}
 
 		params := map[string]string{
-			"labels_text": common.LabelsToText(metric.Labels(), metric.Annotations(), s.option.MetricFormat == types.MetricFormatBleemeo),
+			"labels_text": types.LabelsToText(metric.Labels()),
 			"agent":       agentID,
 			"fields":      "id,agent,label,item,labels_text,unit,unit_text,service,container,deactivated_at,threshold_low_warning,threshold_low_critical,threshold_high_warning,threshold_high_critical,status_of,promql_query,is_user_promql_alert",
 		}
@@ -849,7 +818,7 @@ func (s *Synchronizer) metricUpdateList(metrics []types.Metric) error {
 		if s.option.MetricFormat == types.MetricFormatBleemeo && common.MetricOnlyHasItem(metric.Labels(), agentID) {
 			annotations := metric.Annotations()
 			params["label"] = metric.Labels()[types.LabelName]
-			params["item"] = common.TruncateItem(annotations.BleemeoItem, annotations.ServiceName != "")
+			params["item"] = annotations.BleemeoItem
 			delete(params, "labels_text")
 		}
 
@@ -934,7 +903,11 @@ func (s *Synchronizer) metricUpdateListUUID(requests []string) error {
 	return nil
 }
 
-func (s *Synchronizer) metricDeleteFromRemote(localMetrics []types.Metric, previousMetrics map[string]bleemeoTypes.Metric) {
+// metricRemoveDeletedFromRemote removes the local metrics that were deleted on the API.
+func (s *Synchronizer) metricRemoveDeletedFromRemote(
+	localMetrics []types.Metric,
+	previousMetrics map[string]bleemeoTypes.Metric,
+) {
 	newMetrics := s.option.Cache.MetricsByUUID()
 
 	deletedMetricLabelItem := make(map[string]bool)
@@ -1293,13 +1266,11 @@ func (s *Synchronizer) prepareMetricPayload(
 			agentID = metric.Annotations().BleemeoAgentID
 		}
 
-		payload.Item = common.TruncateItem(annotations.BleemeoItem, annotations.ServiceName != "")
+		payload.Item = annotations.BleemeoItem
 		if common.MetricOnlyHasItem(labels, agentID) {
 			payload.LabelsText = ""
 		}
 	}
-
-	var containerName string
 
 	if annotations.StatusOf != "" {
 		subLabels := make(map[string]string, len(labels))
@@ -1339,8 +1310,6 @@ func (s *Synchronizer) prepareMetricPayload(
 
 			for _, container := range containers {
 				if annotations.ContainerID == container.ID() {
-					containerName = container.ContainerName()
-
 					break
 				}
 			}
@@ -1351,14 +1320,12 @@ func (s *Synchronizer) prepareMetricPayload(
 				return payload, errIgnore
 			}
 
-			containerName = container.Name
 			payload.ContainerID = container.ID
 		}
 	}
 
 	if annotations.ServiceName != "" {
-		srvKey := serviceNameInstance{name: annotations.ServiceName, instance: containerName}
-		srvKey.truncateInstance()
+		srvKey := serviceNameInstance{name: annotations.ServiceName, instance: annotations.ServiceInstance}
 
 		service, ok := servicesByKey[srvKey]
 		if !ok {
@@ -1471,20 +1438,13 @@ func (s *Synchronizer) metricDeleteIgnoredServices() error {
 		return err
 	}
 
-	longToShortKeyLookup := longToShortKey(localServices)
+	localServices = s.serviceExcludeUnregistrable(localServices)
 
 	registeredMetrics := s.option.Cache.MetricsByUUID()
 	registeredMetricsByKey := s.option.Cache.MetricLookupFromList()
 
 	for _, srv := range localServices {
 		if !srv.CheckIgnored {
-			continue
-		}
-
-		key := serviceNameInstance{name: srv.Name, instance: srv.ContainerName}
-
-		_, ok := longToShortKeyLookup[key]
-		if !ok {
 			continue
 		}
 

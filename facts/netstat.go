@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"glouton/logger"
-	"io/ioutil"
 	"net"
 	"os"
 	"regexp"
@@ -50,7 +49,7 @@ func (np NetstatProvider) Netstat(ctx context.Context, processes map[int]Process
 	if errFile == nil {
 		var netstatData []byte
 
-		netstatData, errFile = ioutil.ReadFile(np.FilePath)
+		netstatData, errFile = os.ReadFile(np.FilePath)
 		if errFile == nil {
 			netstat = decodeNetstatFile(string(netstatData))
 

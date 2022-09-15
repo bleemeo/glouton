@@ -58,7 +58,6 @@ import (
 	"glouton/types"
 	"glouton/version"
 	"glouton/zabbix"
-	"io/ioutil"
 	"log"
 	"math"
 	"math/rand"
@@ -591,7 +590,7 @@ func (a *agent) newMetricsCallback(newMetrics []types.LabelsAndAnnotation) {
 		isBleemeoAllowed := true
 
 		if a.bleemeoConnector != nil {
-			isBleemeoAllowed, _ = a.bleemeoConnector.IsMetricAllowed(m)
+			isBleemeoAllowed, _, _ = a.bleemeoConnector.IsMetricAllowed(m)
 		}
 
 		name := types.LabelsToText(m.Labels)
@@ -697,7 +696,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 
 	cloudImageFile := a.oldConfig.String("agent.cloudimage_creation_file")
 
-	content, err := ioutil.ReadFile(cloudImageFile)
+	content, err := os.ReadFile(cloudImageFile)
 	if err != nil && !os.IsNotExist(err) {
 		logger.Printf("Unable to read content of %#v file: %v", cloudImageFile, err)
 	}
@@ -1434,16 +1433,15 @@ func (a *agent) miscGatherMinute(pusher types.PointPusher) func(context.Context,
 				}
 
 				labels := map[string]string{
-					types.LabelName:              "postfix_queue_size",
-					types.LabelMetaContainerName: srv.ContainerName,
-					types.LabelMetaContainerID:   srv.ContainerID,
-					types.LabelMetaServiceName:   srv.ContainerName,
+					types.LabelName: "postfix_queue_size",
+					types.LabelItem: srv.Instance,
 				}
 
 				annotations := types.MetricAnnotations{
-					BleemeoItem: srv.ContainerName,
-					ContainerID: srv.ContainerID,
-					ServiceName: srv.Name,
+					BleemeoItem:     srv.Instance,
+					ContainerID:     srv.ContainerID,
+					ServiceName:     srv.Name,
+					ServiceInstance: srv.Instance,
 				}
 
 				points = append(points, types.MetricPoint{
@@ -1463,16 +1461,15 @@ func (a *agent) miscGatherMinute(pusher types.PointPusher) func(context.Context,
 				}
 
 				labels := map[string]string{
-					types.LabelName:              "exim_queue_size",
-					types.LabelMetaContainerName: srv.ContainerName,
-					types.LabelMetaContainerID:   srv.ContainerID,
-					types.LabelMetaServiceName:   srv.ContainerName,
+					types.LabelName: "exim_queue_size",
+					types.LabelItem: srv.Instance,
 				}
 
 				annotations := types.MetricAnnotations{
-					BleemeoItem: srv.ContainerName,
-					ContainerID: srv.ContainerID,
-					ServiceName: srv.Name,
+					BleemeoItem:     srv.Instance,
+					ContainerID:     srv.ContainerID,
+					ServiceName:     srv.Name,
+					ServiceInstance: srv.Instance,
 				}
 
 				points = append(points, types.MetricPoint{
@@ -1802,6 +1799,7 @@ func (a *agent) sendDockerContainerHealth(ctx context.Context, container facts.C
 			Labels: map[string]string{
 				types.LabelName:              "container_health_status",
 				types.LabelMetaContainerName: container.ContainerName(),
+				types.LabelMetaContainerID:   container.ID(),
 			},
 			Annotations: types.MetricAnnotations{
 				Status:      status,
@@ -2383,8 +2381,10 @@ func (a *agent) diagnosticFilterResult(ctx context.Context, archive types.Archiv
 		isDenied := a.metricFilter.IsDenied(m.Labels())
 		isBleemeoAllowed := true
 
+		var denyReason bleemeoTypes.DenyReason
+
 		if a.bleemeoConnector != nil {
-			isBleemeoAllowed, _ = a.bleemeoConnector.IsMetricAllowed(types.LabelsAndAnnotation{
+			isBleemeoAllowed, denyReason, _ = a.bleemeoConnector.IsMetricAllowed(types.LabelsAndAnnotation{
 				Labels:      m.Labels(),
 				Annotations: m.Annotations(),
 			})
@@ -2400,7 +2400,7 @@ func (a *agent) diagnosticFilterResult(ctx context.Context, archive types.Archiv
 		case isDenied:
 			fmt.Fprintf(file, "The metric %s is blocked by configured deny list\n", name)
 		case !isBleemeoAllowed:
-			fmt.Fprintf(file, "The metric %s is not available in current Bleemeo Plan\n", name)
+			fmt.Fprintf(file, "The metric %s is not allowed: %s\n", name, denyReason)
 		default:
 			fmt.Fprintf(file, "The metric %s is allowed\n", name)
 		}

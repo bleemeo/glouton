@@ -28,7 +28,7 @@ import (
 	"glouton/threshold"
 	"glouton/types"
 	"html/template"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"path"
 	"strings"
@@ -113,7 +113,7 @@ func (api *API) init() {
 
 	indexFile, err := staticFolder.Open(indexFileName)
 	if err == nil {
-		indexBody, err = ioutil.ReadAll(indexFile)
+		indexBody, err = io.ReadAll(indexFile)
 		indexFile.Close()
 	}
 
@@ -134,7 +134,7 @@ func (api *API) init() {
 
 	diagnosticFile, err := staticFolder.Open("static/diagnostic.html")
 	if err == nil {
-		diagnosticBody, err = ioutil.ReadAll(diagnosticFile)
+		diagnosticBody, err = io.ReadAll(diagnosticFile)
 		diagnosticFile.Close()
 	}
 
@@ -253,8 +253,9 @@ func (api *API) Run(ctx context.Context) error {
 	api.init() //nolint: contextcheck // no idea why we should pass a context...
 
 	srv := http.Server{
-		Addr:    api.BindAddress,
-		Handler: api.router,
+		Addr:              api.BindAddress,
+		Handler:           api.router,
+		ReadHeaderTimeout: 10 * time.Second,
 	}
 
 	idleConnsClosed := make(chan struct{})

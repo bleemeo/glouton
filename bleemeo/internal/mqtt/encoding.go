@@ -21,7 +21,6 @@ import (
 	"compress/zlib"
 	"encoding/json"
 	"io"
-	"io/ioutil"
 )
 
 type mqttEncoder struct {
@@ -65,7 +64,7 @@ func (enc *mqttEncoder) Decode(input []byte, obj interface{}) error {
 		return err
 	}
 
-	_, err = io.Copy(ioutil.Discard, decoder) //nolint:gosec
+	_, err = io.Copy(io.Discard, decoder) //nolint:gosec
 	if err != nil {
 		return err
 	}

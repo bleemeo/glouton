@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"sync"
 	"time"
 )
@@ -189,7 +188,7 @@ func (b *buffer) Content() []byte {
 	case stateWriteHead:
 		r := flate.NewReader(bytes.NewReader(b.head.Bytes()))
 
-		data, err := ioutil.ReadAll(r)
+		data, err := io.ReadAll(r)
 		if err != nil && !errors.Is(err, io.ErrUnexpectedEOF) {
 			data = append(data, []byte(fmt.Sprintf("\ndecode err in head: %v\n", err))...)
 		}

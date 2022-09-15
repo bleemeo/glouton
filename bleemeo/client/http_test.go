@@ -97,7 +97,7 @@ Content-Length: 68
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			req, err := http.NewRequestWithContext(context.Background(), "GET", tt.reqURL, nil)
+			req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, tt.reqURL, nil)
 			if err != nil {
 				t.Fatal(err)
 			}

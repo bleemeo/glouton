@@ -19,7 +19,6 @@ package synchronizer
 import (
 	"context"
 	"fmt"
-	"glouton/bleemeo/internal/common"
 	bleemeoTypes "glouton/bleemeo/types"
 	"glouton/delay"
 	"glouton/logger"
@@ -107,11 +106,9 @@ func (s *Synchronizer) syncInfoReal(disableOnTimeDrift bool) (updateThresholds b
 	defer s.l.Unlock()
 
 	if globalInfo.IsTimeDriftTooLarge() && !s.lastInfo.IsTimeDriftTooLarge() {
-		// Mark the agent_status as disconnecte with reason being the time drift
-		metricKey := common.LabelsToText(
+		// Mark the agent_status as disconnected with reason being the time drift.
+		metricKey := types.LabelsToText(
 			map[string]string{types.LabelName: "agent_status", types.LabelInstanceUUID: s.agentID},
-			types.MetricAnnotations{},
-			s.option.MetricFormat == types.MetricFormatBleemeo,
 		)
 		if metric, ok := s.option.Cache.MetricLookupFromList()[metricKey]; ok {
 			type payloadType struct {

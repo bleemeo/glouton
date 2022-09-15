@@ -41,10 +41,12 @@ type PersistentDiscoverer interface {
 	RemoveIfNonRunning(ctx context.Context, services []Service)
 }
 
-// NameContainer contains the service and container names.
-type NameContainer struct {
-	Name          string
-	ContainerName string
+// NameInstance contains the service and instance names.
+//
+// The instance could be either a container name OR simply a arbitrary value.
+type NameInstance struct {
+	Name     string
+	Instance string
 }
 
 type ServiceOverride struct {
@@ -98,9 +100,10 @@ const (
 // Service is the information found about a given service.
 type Service struct {
 	Name            string
+	Instance        string
 	ServiceType     ServiceName
 	ContainerID     string
-	ContainerName   string
+	ContainerName   string // If ContainerName is set, Instance must be the same value.
 	IPAddress       string // IPAddress is the IPv4 address to reach service for metrics gathering. If empty, it means IP was not found
 	ListenAddresses []facts.ListenAddress
 	ExePath         string
@@ -122,7 +125,11 @@ type Service struct {
 
 func (s Service) String() string {
 	if s.ContainerName != "" {
-		return fmt.Sprintf("%s (on %s)", s.Name, s.ContainerName)
+		return fmt.Sprintf("%s (on container %s)", s.Name, s.Instance)
+	}
+
+	if s.Instance != "" {
+		return fmt.Sprintf("%s (instance %s)", s.Name, s.Instance)
 	}
 
 	return s.Name
@@ -194,8 +201,8 @@ func (s Service) LabelsOfStatus() map[string]string {
 		types.LabelName: fmt.Sprintf("%s_status", s.Name),
 	}
 
-	if s.ContainerName != "" {
-		labels[types.LabelMetaContainerName] = s.ContainerName
+	if s.Instance != "" {
+		labels[types.LabelItem] = s.Instance
 	}
 
 	return labels
@@ -204,11 +211,15 @@ func (s Service) LabelsOfStatus() map[string]string {
 // AnnotationsOfStatus returns the annotations for the status metrics of this service.
 func (s Service) AnnotationsOfStatus() types.MetricAnnotations {
 	annotations := types.MetricAnnotations{
-		ServiceName: s.Name,
+		ServiceName:     s.Name,
+		ServiceInstance: s.Instance,
 	}
 
-	if s.ContainerName != "" {
-		annotations.BleemeoItem = s.ContainerName
+	if s.Instance != "" {
+		annotations.BleemeoItem = s.Instance
+	}
+
+	if s.ContainerID != "" {
 		annotations.ContainerID = s.ContainerID
 	}
 

@@ -18,7 +18,6 @@ package discovery
 
 import (
 	"glouton/logger"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -29,7 +28,7 @@ type SudoFileReader struct {
 	HostRootPath string
 }
 
-// ReadFile does the same as ioutil.ReadFile but use sudo cat.
+// ReadFile does the same as os.ReadFile but use sudo cat.
 func (s SudoFileReader) ReadFile(path string) ([]byte, error) {
 	path = filepath.Join(s.HostRootPath, path)
 
@@ -38,7 +37,7 @@ func (s SudoFileReader) ReadFile(path string) ([]byte, error) {
 	}
 
 	if os.Getuid() == 0 {
-		return ioutil.ReadFile(path)
+		return os.ReadFile(path)
 	}
 
 	logger.V(1).Printf("Running sudo -n cat %#v", path)

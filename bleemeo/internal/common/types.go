@@ -24,20 +24,21 @@ import (
 
 // Maximal length of fields on Bleemeo API.
 const (
-	APIMetricItemLength          int = 100
-	APIMetricItemLengthIfService int = 50
+	APIMetricItemLength      int = 250
+	APIServiceInstanceLength int = 250
+	APIContainerNameLength   int = 250
 )
 
 // MetricOnlyHasItem return true if the metric only has a name and an item (which could be empty).
 // Said otherwise, the metrics don't need to use labels_text on Bleemeo API to store its labels.
-// instance_uuid is ignore in this check if it match agentID.
+// instance_uuid and instance are ignored in this check if instance_uuid match agentID.
 func MetricOnlyHasItem(labels map[string]string, agentID string) bool {
-	if len(labels) > 3 {
+	if len(labels) > 4 {
 		return false
 	}
 
 	for k, v := range labels {
-		if k != types.LabelName && k != types.LabelItem && k != types.LabelInstanceUUID {
+		if k != types.LabelName && k != types.LabelItem && k != types.LabelInstanceUUID && k != types.LabelInstance {
 			return false
 		}
 
@@ -49,34 +50,42 @@ func MetricOnlyHasItem(labels map[string]string, agentID string) bool {
 	return true
 }
 
-// LabelsToText convert labels & annotation to a string version.
-// When using the Bleemeo Mode, result is the name + the item annotation.
-func LabelsToText(labels map[string]string, annotations types.MetricAnnotations, bleemeoMode bool) string {
-	if bleemeoMode && labels[types.LabelItem] != TruncateItem(labels[types.LabelItem], annotations.ServiceName != "") {
-		labelsCopy := make(map[string]string, len(labels)+1)
-		for k, v := range labels {
-			labelsCopy[k] = v
+// MetricKey return a unique key that could be used in for lookup in cache.MetricLookupFromList
+//
+// This is working correctly because metricFromAPI generate the correct format before adding them to the cache.
+func MetricKey(lbls map[string]string, annotations types.MetricAnnotations, agentID string) string {
+	if lbls[types.LabelInstanceUUID] == "" || lbls[types.LabelInstanceUUID] == annotations.BleemeoAgentID || (annotations.BleemeoAgentID == "" && lbls[types.LabelInstanceUUID] == agentID) {
+		// In name+item mode, we treat empty instance_uuid and instance_uuid=agentID as the same.
+		// This reflect in:
+		// * metricFromAPI which fill the instance_uuid when labels_text is empty
+		// * MetricOnlyHasItem that cause instance_uuid to not be sent on registration in name+item mode
+		//
+		// Also in this mode, we ignore instance when instance_uuid=agentID. This reflect in:
+		// * MetricOnlyHasItem that cause instance to not be sent on registration in name+item mode
+		// * instance being dropped here in metricKey
+		agentID := agentID
+
+		if annotations.BleemeoAgentID != "" {
+			agentID = annotations.BleemeoAgentID
 		}
 
-		labelsCopy[types.LabelItem] = TruncateItem(labels[types.LabelItem], annotations.ServiceName != "")
+		if MetricOnlyHasItem(lbls, agentID) {
+			tmp := make(map[string]string, len(lbls)+1)
 
-		return types.LabelsToText(labelsCopy)
+			for k, v := range lbls {
+				if k == types.LabelInstance {
+					continue
+				}
+
+				tmp[k] = v
+			}
+
+			tmp[types.LabelInstanceUUID] = agentID
+			lbls = tmp
+		}
 	}
 
-	return types.LabelsToText(labels)
-}
-
-// TruncateItem truncate the item to match maximal length allowed by Bleemeo API.
-func TruncateItem(item string, isService bool) string {
-	if len(item) > APIMetricItemLength {
-		item = item[:APIMetricItemLength]
-	}
-
-	if isService && len(item) > APIMetricItemLengthIfService {
-		item = item[:APIMetricItemLengthIfService]
-	}
-
-	return item
+	return types.LabelsToText(lbls)
 }
 
 // MetricLookupFromList return a map[MetricLabelItem]Metric.

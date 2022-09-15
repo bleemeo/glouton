@@ -18,6 +18,7 @@
 //
 // It support both pushed metrics (using AddMetricPointFunction) and pulled
 // metrics thought Collector or Gatherer
+//
 //nolint:scopelint,dupl
 package registry
 
@@ -463,21 +464,23 @@ func TestRegistry_applyRelabel(t *testing.T) {
 			name:   "mysql container",
 			fields: fields{relabelConfigs: getDefaultRelabelConfig()},
 			args: args{map[string]string{
-				types.LabelMetaServiceName:   "mysql",
-				types.LabelMetaContainerName: "mysql_1",
-				types.LabelMetaContainerID:   "1234",
-				types.LabelMetaGloutonFQDN:   "hostname",
-				types.LabelMetaGloutonPort:   "8015",
-				types.LabelMetaServicePort:   "3306",
-				types.LabelMetaPort:          "3306",
+				types.LabelMetaServiceName:     "mysql",
+				types.LabelMetaServiceInstance: "mysql_1",
+				types.LabelMetaContainerName:   "mysql_1",
+				types.LabelMetaContainerID:     "1234",
+				types.LabelMetaGloutonFQDN:     "hostname",
+				types.LabelMetaGloutonPort:     "8015",
+				types.LabelMetaServicePort:     "3306",
+				types.LabelMetaPort:            "3306",
 			}},
 			want: labels.FromMap(map[string]string{
 				types.LabelContainerName: "mysql_1",
 				types.LabelInstance:      "hostname-mysql_1:3306",
 			}),
 			wantAnnotations: types.MetricAnnotations{
-				ServiceName: "mysql",
-				ContainerID: "1234",
+				ServiceName:     "mysql",
+				ServiceInstance: "mysql_1",
+				ContainerID:     "1234",
 			},
 		},
 		{
@@ -570,14 +573,15 @@ func BenchmarkRegistry_applyRelabel(b *testing.B) {
 		{
 			name: "mysql",
 			labels: map[string]string{
-				types.LabelName:              "mysql_command_select",
-				types.LabelMetaServiceName:   "mysql",
-				types.LabelMetaContainerName: "mysql_1",
-				types.LabelMetaContainerID:   "1234",
-				types.LabelMetaGloutonFQDN:   "hostname",
-				types.LabelMetaGloutonPort:   "8015",
-				types.LabelMetaServicePort:   "3306",
-				types.LabelMetaPort:          "3306",
+				types.LabelName:                "mysql_command_select",
+				types.LabelMetaServiceName:     "mysql",
+				types.LabelMetaServiceInstance: "mysql_1",
+				types.LabelMetaContainerName:   "mysql_1",
+				types.LabelMetaContainerID:     "1234",
+				types.LabelMetaGloutonFQDN:     "hostname",
+				types.LabelMetaGloutonPort:     "8015",
+				types.LabelMetaServicePort:     "3306",
+				types.LabelMetaPort:            "3306",
 			},
 		},
 	}
@@ -971,7 +975,7 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelItem: "/srv",
 					},
 					Annotations: types.MetricAnnotations{
-						BleemeoItem: "annotation are not used in appender mode",
+						BleemeoItem: "annotation are kept in appender mode",
 					},
 				},
 			},
@@ -992,7 +996,9 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelItem:     "/home",
 						types.LabelInstance: "server.bleemeo.com:8016",
 					},
-					Annotations: types.MetricAnnotations{},
+					Annotations: types.MetricAnnotations{
+						BleemeoItem: "/home",
+					},
 				},
 				{
 					Labels: map[string]string{
@@ -1000,7 +1006,9 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelItem:     "/srv",
 						types.LabelInstance: "server.bleemeo.com:8016",
 					},
-					Annotations: types.MetricAnnotations{},
+					Annotations: types.MetricAnnotations{
+						BleemeoItem: "annotation are kept in appender mode",
+					},
 				},
 			},
 			metricFamiliesUseTime: true,

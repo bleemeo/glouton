@@ -20,14 +20,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"glouton/bleemeo/internal/common"
 	"glouton/bleemeo/types"
 	"glouton/facts"
 	"glouton/logger"
 	"strings"
 	"time"
 )
-
-const apiContainerNameLength = 100
 
 // containerUpdateDelay is minimal the delay between container update for change
 // other that status (likely healthcheck log).
@@ -148,8 +147,15 @@ func (s *Synchronizer) containerRegisterAndUpdate(localContainers []facts.Contai
 		}
 
 		name := container.ContainerName()
-		if len(name) > apiContainerNameLength {
-			name = name[:apiContainerNameLength]
+		if len(name) > common.APIContainerNameLength {
+			msg := fmt.Sprintf(
+				"Container %s will be ignored because its name is too long (> %d characters)",
+				name, common.APIContainerNameLength,
+			)
+
+			s.logThrottle(msg)
+
+			continue
 		}
 
 		remoteIndex, remoteFound := remoteIndexByName[name]

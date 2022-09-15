@@ -152,7 +152,7 @@ func addDefaultFromOS(inputsConfig inputs.CollectorConfig, coll *collector.Colle
 	return nil
 }
 
-func (d *Discovery) configureMetricInputs(oldServices, services map[NameContainer]Service) (err error) {
+func (d *Discovery) configureMetricInputs(oldServices, services map[NameInstance]Service) (err error) {
 	for key := range oldServices {
 		if _, ok := services[key]; !ok {
 			d.removeInput(key)
@@ -190,6 +190,7 @@ func (d *Discovery) configureMetricInputs(oldServices, services map[NameContaine
 func serviceNeedUpdate(oldService, service Service, oldServiceState facts.ContainerState, serviceState facts.ContainerState) bool {
 	switch {
 	case oldService.Name != service.Name,
+		oldService.Instance != service.Instance,
 		oldService.ServiceType != service.ServiceType,
 		oldService.ContainerID != service.ContainerID,
 		oldService.ContainerName != service.ContainerName,
@@ -225,13 +226,13 @@ func serviceNeedUpdate(oldService, service Service, oldServiceState facts.Contai
 	return false
 }
 
-func (d *Discovery) removeInput(key NameContainer) {
+func (d *Discovery) removeInput(key NameInstance) {
 	if d.coll == nil {
 		return
 	}
 
 	if collector, ok := d.activeCollector[key]; ok {
-		logger.V(2).Printf("Remove input for service %v on container %s", key.Name, key.ContainerName)
+		logger.V(2).Printf("Remove input for service %v on instance %s", key.Name, key.Instance)
 		delete(d.activeCollector, key)
 
 		if collector.gathererID == 0 {
@@ -372,25 +373,28 @@ func (d *Discovery) createInput(service Service) error {
 	}
 
 	if input != nil {
-		logger.V(2).Printf("Add input for service %v on container %s", service.Name, service.ContainerID)
+		logger.V(2).Printf("Add input for service %v instance %s", service.Name, service.Instance)
 
 		input = modify.AddRenameCallback(input, func(labels map[string]string, annotations types.MetricAnnotations) (map[string]string, types.MetricAnnotations) {
 			annotations.ServiceName = service.Name
+			annotations.ServiceInstance = service.Instance
 			annotations.ContainerID = service.ContainerID
-
-			labels[types.LabelMetaContainerName] = service.ContainerName
 
 			_, port := service.AddressPort()
 			if port != 0 {
 				labels[types.LabelMetaServicePort] = strconv.FormatInt(int64(port), 10)
 			}
 
-			if service.ContainerName != "" {
+			if service.Instance != "" {
 				if annotations.BleemeoItem != "" {
-					annotations.BleemeoItem = service.ContainerName + "_" + annotations.BleemeoItem
+					annotations.BleemeoItem = service.Instance + "_" + annotations.BleemeoItem
 				} else {
-					annotations.BleemeoItem = service.ContainerName
+					annotations.BleemeoItem = service.Instance
 				}
+			}
+
+			if annotations.BleemeoItem != "" {
+				labels[types.LabelItem] = annotations.BleemeoItem
 			}
 
 			return labels, annotations
@@ -434,9 +438,9 @@ func (d *Discovery) addInput(input telegraf.Input, service Service) error {
 		return err
 	}
 
-	key := NameContainer{
-		Name:          service.Name,
-		ContainerName: service.ContainerName,
+	key := NameInstance{
+		Name:     service.Name,
+		Instance: service.Instance,
 	}
 	d.activeCollector[key] = collectorDetails{
 		inputID: inputID,

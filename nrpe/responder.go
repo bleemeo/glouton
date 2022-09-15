@@ -22,7 +22,7 @@ import (
 	"fmt"
 	"glouton/discovery"
 	"glouton/logger"
-	"io/ioutil"
+	"os"
 	"os/exec"
 	"regexp"
 	"strconv"
@@ -38,19 +38,19 @@ var (
 )
 
 type checkRegistry interface {
-	GetCheckNow(discovery.NameContainer) (discovery.CheckNow, error)
+	GetCheckNow(discovery.NameInstance) (discovery.CheckNow, error)
 }
 
 // Responder is used to build the NRPE answer.
 type Responder struct {
 	discovery      checkRegistry
-	customCheck    map[string]discovery.NameContainer
+	customCheck    map[string]discovery.NameInstance
 	nrpeCommands   map[string]string
 	allowArguments bool
 }
 
 // NewResponse returns a Response.
-func NewResponse(customChecks map[string]discovery.NameContainer, checkRegistry checkRegistry, nrpeConfPath []string) Responder {
+func NewResponse(customChecks map[string]discovery.NameInstance, checkRegistry checkRegistry, nrpeConfPath []string) Responder {
 	nrpeCommands, allowArguments := readNRPEConf(nrpeConfPath)
 
 	return Responder{
@@ -163,7 +163,7 @@ func readNRPEConf(nrpeConfPath []string) (map[string]string, bool) {
 	allowArguments := false
 
 	for _, nrpeConfFile := range nrpeConfPath {
-		confBytes, err := ioutil.ReadFile(nrpeConfFile)
+		confBytes, err := os.ReadFile(nrpeConfFile)
 		if err != nil {
 			logger.V(1).Printf("Impossible to read '%s' : %s", nrpeConfFile, err)
 
