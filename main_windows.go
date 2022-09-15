@@ -20,51 +20,31 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"path/filepath"
+	"os/user"
 )
 
 //nolint:gochecknoglobals
-var (
-	// flags related to the installation.
-	postInstall       = flag.Bool("post-install", false, "Run the post-install step")
-	basedir           = flag.String("basedir", "", "Base directory of configuration, state file and logs")
-	configFileSubpath = flag.String("config-file-subpath", "", "Path of the config file used to store the account id and registration key, relative to basedir")
-	account           = flag.String("account-id", "", "Account ID")
-	registration      = flag.String("registration-key", "", "Registration key of your account")
-)
+var runWithoutLocalService = flag.Bool("yes-run-without-local-service", false, "Allows Glouton to run as another user than 'NT AUTHORITY\\LocalService'")
 
 // OSDependentMain is the main function used on Windows.
 //
 //nolint:forbidigo
 func OSDependentMain() {
-	if !*postInstall {
-		return
-	}
+	// NT Authority (LocalService) Security Identifier.
+	// https://docs.microsoft.com/en-us/windows-server/identity/ad-ds/manage/understand-security-identifiers
+	const localServiceSID = "S-1-5-19"
 
-	defer os.Exit(0)
-
-	if *configFileSubpath == "" || *basedir == "" {
-		fmt.Println("No config file specified, cannot install the agent configuration")
-
-		return
-	}
-
-	configFilePath := filepath.Join(*basedir, *configFileSubpath)
-
-	if _, err := os.Stat(configFilePath); err == nil {
-		fmt.Println("The config file already exists, doing nothing")
-
-		return
-	}
-
-	fd, err := os.Create(configFilePath)
+	user, err := user.Current()
 	if err != nil {
-		fmt.Printf("Couldn't open the config file: %v.\n", err)
+		fmt.Printf("Failed to get current user: %s, Glouton may be started with the wrong user.\n", err)
 
 		return
 	}
 
-	fmt.Fprintf(fd, "bleemeo:\n  account_id: %s\n  registration_key: %s", *account, *registration)
-
-	fd.Close()
+	if user.Uid != localServiceSID && !*runWithoutLocalService {
+		fmt.Printf("Error: trying to run Glouton as %s without \"--yes-run-without-local-service\" option.\n", user.Username)
+		fmt.Println("Running Glouton with another user may break file permissions for the service created by the installer.")
+		fmt.Println("")
+		os.Exit(1)
+	}
 }
