@@ -19,7 +19,7 @@ package facts
 import (
 	"context"
 	"glouton/logger"
-	"io/ioutil"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -35,7 +35,7 @@ func (uf updateFacter) pendingUpdates(ctx context.Context) (pendingUpdates int, 
 
 	// Glouton runs under the LocalService account, so we do not have enough permissions to call into
 	// the COM object, instead we read a file that a scheduled task is updating periodically.
-	content, err := ioutil.ReadFile(`C:\ProgramData\glouton\windowsupdate.txt`)
+	content, err := os.ReadFile(`C:\ProgramData\glouton\windowsupdate.txt`)
 	if err != nil {
 		logger.V(2).Printf("Couldn't retrieve Windows Update information: %v", err)
 	}
