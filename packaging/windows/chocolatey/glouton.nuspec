@@ -21,7 +21,7 @@
 
     <!-- == SOFTWARE SPECIFIC SECTION == -->
     <!-- This section is about the software itself -->
-    <title>Glouton (Install)</title>
+    <title>Glouton</title>
     <authors>Bleemeo</authors>
     <!-- projectUrl is required for the community feed -->
     <projectUrl>https://bleemeo.com</projectUrl>
@@ -35,9 +35,9 @@
     <!--<mailingListUrl></mailingListUrl>-->
     <bugTrackerUrl>https://github.com/bleemeo/glouton/issues</bugTrackerUrl>
     <tags>glouton monitoring bleemeo agent</tags>
-    <summary>__REPLACE__</summary>
+    <summary>Monitoring agent for servers, containers, and applications</summary>
     <description>Glouton is a monitoring agent that makes observing your infrastructure easy.</description>
-    <!-- <releaseNotes>__REPLACE_OR_REMOVE__MarkDown_Okay</releaseNotes> -->
+    <releaseNotes>https://github.com/bleemeo/glouton/releases</releaseNotes>
     <!-- =============================== -->      
 
     <!-- Specifying dependencies and version ranges? https://docs.nuget.org/create/versioning#specifying-version-ranges-in-.nuspec-files -->
