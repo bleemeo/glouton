@@ -19,6 +19,7 @@
 /packaging/windows/installer/bin
 /packaging/windows/installer/obj
 /packaging/windows/installer/assets/glouton.exe
+/packaging/windows/chocolatey/*.nupkg
 api/static/assets/js
 api/static/assets/css
 *-bindata.go

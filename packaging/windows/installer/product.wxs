@@ -142,7 +142,7 @@
 			Impersonate="no"
 			Execute="deferred"
 			Directory="TARGETDIR"
-			ExeCommand="schtasks.exe /Create /F /RU System /SC HOURLY /TN &quot;Bleemeo\Glouton\Windows Update Checker&quot; /TR &quot;powershell.exe  -ExecutionPolicy Bypass -NonInteractive -File '[INSTALLFOLDER]windows_update_checker.ps1'&quot;" />
+			ExeCommand="schtasks.exe /Create /F /RU System /SC HOURLY /TN &quot;Bleemeo\Glouton\Windows Update Checker&quot; /TR &quot;powershell.exe -ExecutionPolicy Bypass -NonInteractive -File '[INSTALLFOLDER]windows_update_checker.ps1'&quot;" />
 
 		<CustomAction
 			Id="RunWindowsUpdateCheckerTask"
@@ -185,10 +185,22 @@
 			Directory="TARGETDIR"
 			ExeCommand="icacls.exe &quot;[LogsFolder]\glouton.log&quot; /grant &quot;NT AUTHORITY\LocalService&quot;:F" />
 
+		<!-- Uninstall Glouton if it was install using the old NSIS installer. -->
+		<!-- This is needed because otherwise there will be two Glouton listed in the installed applications. -->
+		<CustomAction
+			Id="UninstallOldInstaller"
+			Return="ignore"
+			Impersonate="no"
+			Execute="deferred"
+			Directory="TARGETDIR"
+			ExeCommand="&quot;[ProgramFilesFolder]\glouton\Uninstall.exe&quot; /S &amp;&amp; timeout /t 10" />
+
 		<!-- _UNINSTALL is only true during uninstallation: https://stackoverflow.com/a/731700 -->
 		<SetProperty Id="_UNINSTALL" After="FindRelatedProducts" Value="1"><![CDATA[(NOT UPGRADINGPRODUCTCODE) AND (REMOVE="ALL")]]></SetProperty>
 		
 		<InstallExecuteSequence>
+			<Custom Action="UninstallOldInstaller" Before="InstallFiles">NOT _UNINSTALL</Custom>
+
 			<Custom Action="CreateWindowsUpdateCheckerTask" After="InstallFiles">NOT _UNINSTALL</Custom>
 			<Custom Action="RunWindowsUpdateCheckerTask" After="CreateWindowsUpdateCheckerTask">NOT _UNINSTALL</Custom>
 			<!-- Delete the Windows Update Checker task on uninstall -->
