@@ -1,7 +1,7 @@
 ﻿$ErrorActionPreference = 'Stop'; # stop on all errors
 
 $packageName = 'glouton'
-$softwareName = 'glouton*' #part or all of the Display Name as you see it in Programs and Features. It should be enough to be unique
+$softwareName = 'Glouton*' #part or all of the Display Name as you see it in Programs and Features. It should be enough to be unique
 $installerType = 'MSI'
 $silentArgs = '/qn /norestart'
 # https://msdn.microsoft.com/en-us/library/aa376931(v=vs.85).aspx
