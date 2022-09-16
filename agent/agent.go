@@ -741,12 +741,12 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 	a.store.SetNewMetricCallback(a.newMetricsCallback)
 
 	a.dockerRuntime = &dockerRuntime.Docker{
-		DockerSockets:             dockerRuntime.DefaultAddresses(a.hostRootPath),
+		DockerSockets:             a.config.Container.Runtime.Docker.ExpandAddresses(a.hostRootPath),
 		DeletedContainersCallback: a.deletedContainersCallback,
 		IsContainerIgnored:        a.containerFilter.ContainerIgnored,
 	}
 	a.containerdRuntime = &containerd.Containerd{
-		Addresses:                 containerd.DefaultAddresses(a.hostRootPath),
+		Addresses:                 a.config.Container.Runtime.ContainerD.ExpandAddresses(a.hostRootPath),
 		DeletedContainersCallback: a.deletedContainersCallback,
 		IsContainerIgnored:        a.containerFilter.ContainerIgnored,
 	}

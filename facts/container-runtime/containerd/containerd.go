@@ -11,7 +11,6 @@ import (
 	"glouton/types"
 	"math"
 	"os"
-	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
@@ -35,18 +34,8 @@ import (
 var (
 	errNotFound         = errors.New("not found")
 	errIgnoredContainer = errors.New("container ignored")
+	errNoAddresses      = errors.New("not addressed given")
 )
-
-// DefaultAddresses returns default address for the Docker socket. If hostroot is set (and not "/") ALSO add
-// socket path prefixed by hostRoot.
-func DefaultAddresses(hostRoot string) []string {
-	list := []string{"/run/containerd/containerd.sock"}
-	if hostRoot != "" && hostRoot != "/" {
-		list = append(list, filepath.Join(hostRoot, "run/containerd/containerd.sock"))
-	}
-
-	return list
-}
 
 // Containerd implement connector to containerd.
 type Containerd struct {
@@ -730,7 +719,7 @@ func (c *Containerd) getClient(ctx context.Context) (containerdClient, error) {
 		var firstErr error
 
 		if len(c.Addresses) == 0 {
-			c.Addresses = DefaultAddresses("")
+			firstErr = errNoAddresses
 		}
 
 		for _, addr := range c.Addresses {

@@ -241,6 +241,7 @@ func FakeContainerd(client *MockClient, isContainerIgnored func(facts.Container)
 		openConnection: func(_ context.Context, _ string) (cl containerdClient, err error) {
 			return client, nil
 		},
+		Addresses:          []string{"unused"},
 		IsContainerIgnored: isContainerIgnored,
 	}
 }
