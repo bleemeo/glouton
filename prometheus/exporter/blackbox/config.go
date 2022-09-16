@@ -186,6 +186,12 @@ func preprocessHTTPTarget(targetURL *url.URL, module bbConf.Module) (string, bbC
 			module.HTTP.HTTPClientConfig.TLSConfig.ServerName = "kubernetes.default.svc"
 			targetURL.Host = net.JoinHostPort(host, port)
 		}
+
+		// In addition, some API implementation require to always provide the certificate (e.g. k3s).
+		// We should do something better. It's possible to pass credentials using kubernetes.kubeconfig config.
+		if _, err := os.Stat("/run/secrets/kubernetes.io/serviceaccount/token"); err == nil {
+			module.HTTP.HTTPClientConfig.BearerTokenFile = "/run/secrets/kubernetes.io/serviceaccount/token"
+		}
 	}
 
 	return targetURL.String(), module

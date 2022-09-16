@@ -27,6 +27,7 @@ import (
 	"glouton/version"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -77,6 +78,17 @@ type Container struct {
 	DisabledByDefault bool
 	AllowPatternList  []string
 	DenyPatternList   []string
+	Runtime           ContainerRuntime
+}
+
+type ContainerRuntime struct {
+	Docker     ContainerRuntimeAddresses
+	ContainerD ContainerRuntimeAddresses
+}
+
+type ContainerRuntimeAddresses struct {
+	Addresses             []string
+	DisablePrefixHostRoot bool
 }
 
 func (srvs Services) ToDiscoveryMap() map[discovery.NameInstance]discovery.ServiceOverride {
@@ -135,6 +147,38 @@ func (snmps SNMPTargets) ToTargetOptions() []snmp.TargetOptions {
 			Address:     t.Address,
 			InitialName: t.InitialName,
 		})
+	}
+
+	return result
+}
+
+func (a ContainerRuntimeAddresses) ExpandAddresses(hostRoot string) []string {
+	if a.DisablePrefixHostRoot {
+		return a.Addresses
+	}
+
+	if hostRoot == "" || hostRoot == "/" {
+		return a.Addresses
+	}
+
+	result := make([]string, 0, len(a.Addresses)*2)
+
+	for _, path := range a.Addresses {
+		result = append(result, path)
+
+		if path == "" {
+			// This is a special value that means "use default of the runtime".
+			// Prefixing with the hostRoot don't make sense.
+			continue
+		}
+
+		switch {
+		case strings.HasPrefix(path, "unix://"):
+			path = strings.TrimPrefix(path, "unix://")
+			result = append(result, "unix://"+filepath.Join(hostRoot, path))
+		case strings.HasPrefix(path, "/"): // ignore non-absolute path. This will also ignore URL (like http://localhost:3000)
+			result = append(result, filepath.Join(hostRoot, path))
+		}
 	}
 
 	return result
@@ -209,7 +253,18 @@ func defaultConfig() map[string]interface{} {
 		"container.filter.allow_by_default": true,
 		"container.filter.allow_list":       []string{},
 		"container.filter.deny_list":        []string{},
-		"df.host_mount_point":               "",
+		"container.runtime.docker.addresses": []string{
+			"",
+			"unix:///run/docker.sock",
+			"unix:///var/run/docker.sock",
+		},
+		"container.runtime.docker.prefix_hostroot": true,
+		"container.runtime.containerd.addresses": []string{
+			"/run/containerd/containerd.sock",
+			"/run/k3s/containerd/containerd.sock",
+		},
+		"container.runtime.containerd.prefix_hostroot": true,
+		"df.host_mount_point":                          "",
 		"df.ignore_fs_type": []string{
 			"^(autofs|binfmt_misc|bpf|cgroup2?|configfs|debugfs|devpts|devtmpfs|fusectl|hugetlbfs|iso9660|mqueue|nsfs|overlay|proc|procfs|pstore|rpc_pipefs|securityfs|selinuxfs|squashfs|sysfs|tracefs|devfs|aufs)$",
 			"tmpfs",
@@ -764,6 +819,11 @@ func (cfg *Config) parseContainer(oldCfg *config.Configuration) {
 	cfg.Container.DisabledByDefault = !enable
 	cfg.Container.AllowPatternList = oldCfg.StringList("container.filter.allow_list")
 	cfg.Container.DenyPatternList = oldCfg.StringList("container.filter.deny_list")
+
+	cfg.Container.Runtime.Docker.Addresses = oldCfg.StringList("container.runtime.docker.addresses")
+	cfg.Container.Runtime.Docker.DisablePrefixHostRoot = !oldCfg.Bool("container.runtime.docker.prefix_hostroot")
+	cfg.Container.Runtime.ContainerD.Addresses = oldCfg.StringList("container.runtime.containerd.addresses")
+	cfg.Container.Runtime.ContainerD.DisablePrefixHostRoot = !oldCfg.Bool("container.runtime.containerd.prefix_hostroot")
 }
 
 func (cfg *Config) validate() []error {

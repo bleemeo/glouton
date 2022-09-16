@@ -11,18 +11,19 @@ import (
 	"glouton/types"
 	"math"
 	"os"
-	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
 	"time"
 
 	v1 "github.com/containerd/cgroups/stats/v1"
+	v2 "github.com/containerd/cgroups/v2/stats"
 	"github.com/containerd/containerd"
 	pbEvents "github.com/containerd/containerd/api/events"
 	"github.com/containerd/containerd/api/services/tasks/v1"
 	"github.com/containerd/containerd/cio"
 	"github.com/containerd/containerd/containers"
+	"github.com/containerd/containerd/errdefs"
 	"github.com/containerd/containerd/events"
 	"github.com/containerd/containerd/namespaces"
 	"github.com/containerd/containerd/oci"
@@ -35,18 +36,8 @@ import (
 var (
 	errNotFound         = errors.New("not found")
 	errIgnoredContainer = errors.New("container ignored")
+	errNoAddresses      = errors.New("not addressed given")
 )
-
-// DefaultAddresses returns default address for the Docker socket. If hostroot is set (and not "/") ALSO add
-// socket path prefixed by hostRoot.
-func DefaultAddresses(hostRoot string) []string {
-	list := []string{"/run/containerd/containerd.sock"}
-	if hostRoot != "" && hostRoot != "/" {
-		list = append(list, filepath.Join(hostRoot, "run/containerd/containerd.sock"))
-	}
-
-	return list
-}
 
 // Containerd implement connector to containerd.
 type Containerd struct {
@@ -172,39 +163,11 @@ func (c *Containerd) Metrics(ctx context.Context, now time.Time) ([]types.Metric
 				continue
 			}
 
-			value, ok := data.(*v1.Metrics)
-			if !ok {
+			valueMap, err := convertMetric(data)
+			if errors.Is(err, errNotImplemented) {
 				logger.V(2).Printf("unexpected type for metric: %s", metric.Data.TypeUrl)
 
 				continue
-			}
-
-			valueMap := make(map[string]uint64)
-
-			for _, row := range value.Network {
-				if row != nil {
-					valueMap["container_net_bits_sent"] += row.TxBytes * 8
-					valueMap["container_net_bits_recv"] += row.RxBytes * 8
-				}
-			}
-
-			if value.CPU != nil && value.CPU.Usage != nil {
-				valueMap["container_cpu_used"] = value.CPU.Usage.Total
-			}
-
-			if value.Blkio != nil {
-				for _, row := range value.Blkio.IoServiceBytesRecursive {
-					if row != nil && row.Op == "Read" {
-						valueMap["container_io_read_bytes"] += row.Value
-					} else if row != nil && row.Op == "Write" {
-						valueMap["container_io_write_bytes"] += row.Value
-					}
-				}
-			}
-
-			if value.Memory != nil && value.Memory.Usage != nil {
-				valueMap["container_mem_used"] = value.Memory.Usage.Usage
-				valueMap["container_mem_limit"] = value.Memory.Usage.Limit
 			}
 
 			newValues = append(newValues, metricValue{
@@ -223,6 +186,62 @@ func (c *Containerd) Metrics(ctx context.Context, now time.Time) ([]types.Metric
 	c.pastMetricValues = newValues
 
 	return points, nil
+}
+
+func convertMetric(data interface{}) (map[string]uint64, error) {
+	valueMap := make(map[string]uint64)
+
+	switch value := data.(type) {
+	case *v1.Metrics:
+		for _, row := range value.Network {
+			if row != nil {
+				valueMap["container_net_bits_sent"] += row.TxBytes * 8
+				valueMap["container_net_bits_recv"] += row.RxBytes * 8
+			}
+		}
+
+		if value.CPU != nil && value.CPU.Usage != nil {
+			// Convert value from nano-seconds to micro-second
+			valueMap["container_cpu_used"] = value.CPU.Usage.Total / 1e3
+		}
+
+		if value.Blkio != nil {
+			for _, row := range value.Blkio.IoServiceBytesRecursive {
+				if row != nil && row.Op == "Read" {
+					valueMap["container_io_read_bytes"] += row.Value
+				} else if row != nil && row.Op == "Write" {
+					valueMap["container_io_write_bytes"] += row.Value
+				}
+			}
+		}
+
+		if value.Memory != nil && value.Memory.Usage != nil {
+			valueMap["container_mem_used"] = value.Memory.Usage.Usage
+			valueMap["container_mem_limit"] = value.Memory.Usage.Limit
+		}
+	case *v2.Metrics:
+		if value.CPU != nil {
+			valueMap["container_cpu_used"] = value.CPU.UsageUsec
+		}
+
+		if value.Io != nil {
+			for _, row := range value.Io.Usage {
+				if row != nil {
+					valueMap["container_io_read_bytes"] += row.Rbytes
+					valueMap["container_io_write_bytes"] += row.Wbytes
+				}
+			}
+		}
+
+		if value.Memory != nil {
+			valueMap["container_mem_used"] = value.Memory.Usage
+			valueMap["container_mem_limit"] = value.Memory.UsageLimit
+		}
+	default:
+		return nil, errNotImplemented
+	}
+
+	return valueMap, nil
 }
 
 func (c *Containerd) MetricsMinute(ctx context.Context, now time.Time) ([]types.MetricPoint, error) {
@@ -730,7 +749,7 @@ func (c *Containerd) getClient(ctx context.Context) (containerdClient, error) {
 		var firstErr error
 
 		if len(c.Addresses) == 0 {
-			c.Addresses = DefaultAddresses("")
+			firstErr = errNoAddresses
 		}
 
 		for _, addr := range c.Addresses {
@@ -1138,6 +1157,10 @@ func (q *containerdProcessQuerier) ContainerFromPID(ctx context.Context, parentC
 		ctx := namespaces.WithNamespace(ctx, cont.namespace)
 
 		task, err := obj.container.Task(ctx, nil)
+		if errors.Is(err, errdefs.ErrNotFound) {
+			continue
+		}
+
 		if err != nil {
 			q.containersToQueryErr = err
 
@@ -1287,7 +1310,7 @@ func rateFromMetricValue(gloutonIDToName map[string]string, pastValues []metricV
 
 			if k == "container_cpu_used" {
 				// value is in nano-seconds, convert to %
-				floatValue = floatValue / 1e9 * 100
+				floatValue = floatValue / 1e6 * 100
 			}
 
 			points = append(points, types.MetricPoint{

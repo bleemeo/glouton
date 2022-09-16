@@ -307,6 +307,25 @@ func Test_loadConfiguration(t *testing.T) { //nolint:maintidx
 			},
 			wantCfg: Config{
 				SNMP: SNMP{ExporterURL: URLMustParse("http://localhost:9116/snmp")},
+				Container: Container{
+					Runtime: ContainerRuntime{
+						Docker: ContainerRuntimeAddresses{
+							Addresses: []string{
+								"",
+								"unix:///run/docker.sock",
+								"unix:///var/run/docker.sock",
+							},
+							DisablePrefixHostRoot: false,
+						},
+						ContainerD: ContainerRuntimeAddresses{
+							Addresses: []string{
+								"/run/containerd/containerd.sock",
+								"/run/k3s/containerd/containerd.sock",
+							},
+							DisablePrefixHostRoot: false,
+						},
+					},
+				},
 			},
 		},
 		{
@@ -326,6 +345,25 @@ func Test_loadConfiguration(t *testing.T) { //nolint:maintidx
 			warnings: nil,
 			wantCfg: Config{
 				SNMP: SNMP{ExporterURL: URLMustParse("http://localhost:9116/snmp")},
+				Container: Container{
+					Runtime: ContainerRuntime{
+						Docker: ContainerRuntimeAddresses{
+							Addresses: []string{
+								"",
+								"unix:///run/docker.sock",
+								"unix:///var/run/docker.sock",
+							},
+							DisablePrefixHostRoot: false,
+						},
+						ContainerD: ContainerRuntimeAddresses{
+							Addresses: []string{
+								"/run/containerd/containerd.sock",
+								"/run/k3s/containerd/containerd.sock",
+							},
+							DisablePrefixHostRoot: false,
+						},
+					},
+				},
 			},
 		},
 		{
@@ -384,6 +422,25 @@ func Test_loadConfiguration(t *testing.T) { //nolint:maintidx
 					},
 				},
 				SNMP: SNMP{ExporterURL: URLMustParse("http://localhost:9116/snmp")},
+				Container: Container{
+					Runtime: ContainerRuntime{
+						Docker: ContainerRuntimeAddresses{
+							Addresses: []string{
+								"",
+								"unix:///run/docker.sock",
+								"unix:///var/run/docker.sock",
+							},
+							DisablePrefixHostRoot: false,
+						},
+						ContainerD: ContainerRuntimeAddresses{
+							Addresses: []string{
+								"/run/containerd/containerd.sock",
+								"/run/k3s/containerd/containerd.sock",
+							},
+							DisablePrefixHostRoot: false,
+						},
+					},
+				},
 			},
 		},
 		{
@@ -402,6 +459,25 @@ func Test_loadConfiguration(t *testing.T) { //nolint:maintidx
 			},
 			wantCfg: Config{
 				SNMP: SNMP{ExporterURL: URLMustParse("http://localhost:9116/snmp")},
+				Container: Container{
+					Runtime: ContainerRuntime{
+						Docker: ContainerRuntimeAddresses{
+							Addresses: []string{
+								"",
+								"unix:///run/docker.sock",
+								"unix:///var/run/docker.sock",
+							},
+							DisablePrefixHostRoot: false,
+						},
+						ContainerD: ContainerRuntimeAddresses{
+							Addresses: []string{
+								"/run/containerd/containerd.sock",
+								"/run/k3s/containerd/containerd.sock",
+							},
+							DisablePrefixHostRoot: false,
+						},
+					},
+				},
 			},
 		},
 		{
@@ -419,6 +495,25 @@ func Test_loadConfiguration(t *testing.T) { //nolint:maintidx
 			},
 			wantCfg: Config{
 				SNMP: SNMP{ExporterURL: URLMustParse("http://localhost:9116/snmp")},
+				Container: Container{
+					Runtime: ContainerRuntime{
+						Docker: ContainerRuntimeAddresses{
+							Addresses: []string{
+								"",
+								"unix:///run/docker.sock",
+								"unix:///var/run/docker.sock",
+							},
+							DisablePrefixHostRoot: false,
+						},
+						ContainerD: ContainerRuntimeAddresses{
+							Addresses: []string{
+								"/run/containerd/containerd.sock",
+								"/run/k3s/containerd/containerd.sock",
+							},
+							DisablePrefixHostRoot: false,
+						},
+					},
+				},
 			},
 		},
 		{
@@ -441,6 +536,25 @@ func Test_loadConfiguration(t *testing.T) { //nolint:maintidx
 			},
 			wantCfg: Config{
 				SNMP: SNMP{ExporterURL: URLMustParse("http://localhost:9116/snmp")},
+				Container: Container{
+					Runtime: ContainerRuntime{
+						Docker: ContainerRuntimeAddresses{
+							Addresses: []string{
+								"",
+								"unix:///run/docker.sock",
+								"unix:///var/run/docker.sock",
+							},
+							DisablePrefixHostRoot: false,
+						},
+						ContainerD: ContainerRuntimeAddresses{
+							Addresses: []string{
+								"/run/containerd/containerd.sock",
+								"/run/k3s/containerd/containerd.sock",
+							},
+							DisablePrefixHostRoot: false,
+						},
+					},
+				},
 			},
 		},
 		{
@@ -463,6 +577,25 @@ func Test_loadConfiguration(t *testing.T) { //nolint:maintidx
 			},
 			wantCfg: Config{
 				SNMP: SNMP{ExporterURL: URLMustParse("http://localhost:9116/snmp")},
+				Container: Container{
+					Runtime: ContainerRuntime{
+						Docker: ContainerRuntimeAddresses{
+							Addresses: []string{
+								"",
+								"unix:///run/docker.sock",
+								"unix:///var/run/docker.sock",
+							},
+							DisablePrefixHostRoot: false,
+						},
+						ContainerD: ContainerRuntimeAddresses{
+							Addresses: []string{
+								"/run/containerd/containerd.sock",
+								"/run/k3s/containerd/containerd.sock",
+							},
+							DisablePrefixHostRoot: false,
+						},
+					},
+				},
 			},
 		},
 		{
@@ -481,6 +614,25 @@ func Test_loadConfiguration(t *testing.T) { //nolint:maintidx
 			},
 			wantCfg: Config{
 				SNMP: SNMP{ExporterURL: URLMustParse("http://localhost:9116/snmp")},
+				Container: Container{
+					Runtime: ContainerRuntime{
+						Docker: ContainerRuntimeAddresses{
+							Addresses: []string{
+								"",
+								"unix:///run/docker.sock",
+								"unix:///var/run/docker.sock",
+							},
+							DisablePrefixHostRoot: false,
+						},
+						ContainerD: ContainerRuntimeAddresses{
+							Addresses: []string{
+								"/run/containerd/containerd.sock",
+								"/run/k3s/containerd/containerd.sock",
+							},
+							DisablePrefixHostRoot: false,
+						},
+					},
+				},
 			},
 		},
 		{
@@ -499,6 +651,23 @@ func Test_loadConfiguration(t *testing.T) { //nolint:maintidx
 					DenyPatternList: []string{
 						"bleemeo_ephemeral",
 						"bleemeo_builder",
+					},
+					Runtime: ContainerRuntime{
+						Docker: ContainerRuntimeAddresses{
+							Addresses: []string{
+								"",
+								"unix:///run/docker.sock",
+								"unix:///var/run/docker.sock",
+							},
+							DisablePrefixHostRoot: false,
+						},
+						ContainerD: ContainerRuntimeAddresses{
+							Addresses: []string{
+								"/run/containerd/containerd.sock",
+								"/run/k3s/containerd/containerd.sock",
+							},
+							DisablePrefixHostRoot: false,
+						},
 					},
 				},
 			},
@@ -548,7 +717,133 @@ func Test_loadConfiguration(t *testing.T) { //nolint:maintidx
 			}
 
 			if diff := cmp.Diff(tt.wantCfg, cfg, cmpopts.EquateEmpty()); diff != "" {
-				t.Error(diff)
+				t.Errorf("config mismatch (-want +got)\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestContainerRuntimeAddresses_ExpandAddresses(t *testing.T) {
+	tests := []struct {
+		name                    string
+		containerRuntimeAddress ContainerRuntimeAddresses
+		hostRoot                string
+		want                    []string
+	}{
+		{
+			name: "default contianerd on host",
+			containerRuntimeAddress: ContainerRuntimeAddresses{
+				Addresses: []string{
+					"/run/containerd/containerd.sock",
+					"/run/k3s/containerd/containerd.sock",
+				},
+				DisablePrefixHostRoot: false,
+			},
+			hostRoot: "/",
+			want: []string{
+				"/run/containerd/containerd.sock",
+				"/run/k3s/containerd/containerd.sock",
+			},
+		},
+		{
+			name: "default contianerd on container",
+			containerRuntimeAddress: ContainerRuntimeAddresses{
+				Addresses: []string{
+					"/run/containerd/containerd.sock",
+					"/run/k3s/containerd/containerd.sock",
+				},
+				DisablePrefixHostRoot: false,
+			},
+			hostRoot: "/hostroot",
+			want: []string{
+				"/run/containerd/containerd.sock",
+				"/hostroot/run/containerd/containerd.sock",
+				"/run/k3s/containerd/containerd.sock",
+				"/hostroot/run/k3s/containerd/containerd.sock",
+			},
+		},
+		{
+			name: "default docker on host",
+			containerRuntimeAddress: ContainerRuntimeAddresses{
+				Addresses: []string{
+					"",
+					"unix:///run/docker.sock",
+					"unix:///var/run/docker.sock",
+				},
+				DisablePrefixHostRoot: false,
+			},
+			hostRoot: "/",
+			want: []string{
+				"",
+				"unix:///run/docker.sock",
+				"unix:///var/run/docker.sock",
+			},
+		},
+		{
+			name: "default docker on container",
+			containerRuntimeAddress: ContainerRuntimeAddresses{
+				Addresses: []string{
+					"",
+					"unix:///run/docker.sock",
+					"unix:///var/run/docker.sock",
+				},
+				DisablePrefixHostRoot: false,
+			},
+			hostRoot: "/hostroot",
+			want: []string{
+				"",
+				"unix:///run/docker.sock",
+				"unix:///hostroot/run/docker.sock",
+				"unix:///var/run/docker.sock",
+				"unix:///hostroot/var/run/docker.sock",
+			},
+		},
+		{
+			name: "docker on container prefix disabled",
+			containerRuntimeAddress: ContainerRuntimeAddresses{
+				Addresses: []string{
+					"",
+					"unix:///run/docker.sock",
+					"unix:///var/run/docker.sock",
+				},
+				DisablePrefixHostRoot: true,
+			},
+			hostRoot: "/hostroot",
+			want: []string{
+				"",
+				"unix:///run/docker.sock",
+				"unix:///var/run/docker.sock",
+			},
+		},
+		{
+			name: "docker custom",
+			containerRuntimeAddress: ContainerRuntimeAddresses{
+				Addresses: []string{
+					"unix:///run/docker.sock",
+					"",
+					"https://localhost:8080",
+					"unix://tmp/test",
+					"relative/path.sock",
+				},
+				DisablePrefixHostRoot: false,
+			},
+			hostRoot: "/hostroot",
+			want: []string{
+				"unix:///run/docker.sock",
+				"unix:///hostroot/run/docker.sock",
+				"",
+				"https://localhost:8080",
+				"unix://tmp/test",
+				"unix:///hostroot/tmp/test",
+				"relative/path.sock",
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.containerRuntimeAddress.ExpandAddresses(tt.hostRoot)
+			if diff := cmp.Diff(tt.want, got); diff != "" {
+				t.Errorf("ContainerRuntimeAddresses.ExpandAddresses() mismatch (-want +got)\n%s", diff)
 			}
 		})
 	}

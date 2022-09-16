@@ -36,17 +36,6 @@ var (
 	errNilJSON          = errors.New("ContainerJSONBase is nil. Assume container is deleted")
 )
 
-// DefaultAddresses returns default address for the Docker socket. If hostroot is set (and not "/") ALSO add
-// socket path prefixed by hostRoot.
-func DefaultAddresses(hostRoot string) []string {
-	list := []string{""}
-	if hostRoot != "" && hostRoot != "/" {
-		list = append(list, "unix://"+filepath.Join(hostRoot, "run/docker.sock"), "unix://"+filepath.Join(hostRoot, "var/run/docker.sock"))
-	}
-
-	return list
-}
-
 // Docker implement a method to query Docker runtime.
 // It try to connect to the first valid DockerSockets. Empty string is a special
 // value: it means use default.
@@ -628,7 +617,7 @@ func (d *Docker) getClient(ctx context.Context) (cl dockerClient, err error) {
 		var firstErr error
 
 		if len(d.DockerSockets) == 0 {
-			d.DockerSockets = DefaultAddresses("")
+			d.DockerSockets = []string{""}
 		}
 
 		for _, addr := range d.DockerSockets {
