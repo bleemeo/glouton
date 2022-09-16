@@ -22,6 +22,7 @@ import (
 	"github.com/containerd/containerd/api/services/tasks/v1"
 	"github.com/containerd/containerd/cio"
 	"github.com/containerd/containerd/containers"
+	"github.com/containerd/containerd/errdefs"
 	"github.com/containerd/containerd/events"
 	"github.com/containerd/containerd/namespaces"
 	"github.com/containerd/containerd/oci"
@@ -1127,6 +1128,10 @@ func (q *containerdProcessQuerier) ContainerFromPID(ctx context.Context, parentC
 		ctx := namespaces.WithNamespace(ctx, cont.namespace)
 
 		task, err := obj.container.Task(ctx, nil)
+		if errors.Is(err, errdefs.ErrNotFound) {
+			continue
+		}
+
 		if err != nil {
 			q.containersToQueryErr = err
 
