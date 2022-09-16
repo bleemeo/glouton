@@ -44,6 +44,8 @@ func OSDependentMain() {
 	if user.Uid != localServiceSID && !*runWithoutLocalService {
 		fmt.Printf("Error: trying to run Glouton as %s without \"--yes-run-without-local-service\" option.\n", user.Username)
 		fmt.Println("Running Glouton with another user may break file permissions for the service created by the installer.")
+		fmt.Println("You should be able to start the Glouton service with:")
+		fmt.Println("    net start glouton")
 		fmt.Println("")
 		os.Exit(1)
 	}
