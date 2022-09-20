@@ -74,10 +74,9 @@ func (c *pahoWrapper) SetClient(cli paho.Client) {
 
 func (c *pahoWrapper) OnConnectionLost(cli paho.Client, err error) {
 	c.l.Lock()
-	isClosed := c.isClosed //nolint:ifshort
-	c.l.Unlock()
+	defer c.l.Unlock()
 
-	if isClosed {
+	if c.isClosed {
 		return
 	}
 
@@ -90,10 +89,9 @@ func (c *pahoWrapper) ConnectionLostChannel() <-chan error {
 
 func (c *pahoWrapper) OnConnect(cli paho.Client) {
 	c.l.Lock()
-	isClosed := c.isClosed //nolint:ifshort
-	c.l.Unlock()
+	defer c.l.Unlock()
 
-	if isClosed {
+	if c.isClosed {
 		return
 	}
 
@@ -106,10 +104,9 @@ func (c *pahoWrapper) ConnectChannel() <-chan paho.Client {
 
 func (c *pahoWrapper) OnNotification(cli paho.Client, msg paho.Message) {
 	c.l.Lock()
-	isClosed := c.isClosed //nolint:ifshort
-	c.l.Unlock()
+	defer c.l.Unlock()
 
-	if isClosed {
+	if c.isClosed {
 		return
 	}
 
@@ -185,8 +182,9 @@ func (c *pahoWrapper) Close() {
 	// The callbacks need to know when the channel are closed
 	// so they don't send on a closed channel.
 	c.l.Lock()
+	defer c.l.Unlock()
+
 	c.isClosed = true
-	c.l.Unlock()
 
 	close(c.notificationChannel)
 	close(c.connectChannel)
