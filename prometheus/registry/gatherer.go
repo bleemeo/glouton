@@ -8,6 +8,7 @@ import (
 	"glouton/prometheus/model"
 	"glouton/prometheus/registry/internal/ruler"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -19,7 +20,10 @@ import (
 
 const defaultGatherTimeout = 10 * time.Second
 
-var errIncorrectType = errors.New("incorrect type for gathered metric family")
+var (
+	errIncorrectType       = errors.New("incorrect type for gathered metric family")
+	errGatherOnNilGatherer = errors.New("GatherWithState called on nil gatherer")
+)
 
 type queryType int
 
@@ -126,15 +130,17 @@ func (w *GathererWithStateWrapper) Gather() ([]*dto.MetricFamily, error) {
 	return res, err
 }
 
-// labeledGatherer provide a gatherer that will add provided labels to all metrics.
-// It also allow to gather to MetricPoints.
+// labeledGatherer provides a gatherer that will add provided labels to all metrics.
+// It also allows to gather to MetricPoints.
 type labeledGatherer struct {
-	source prometheus.Gatherer
 	labels []*dto.LabelPair
 	ruler  *ruler.SimpleRuler
+
+	l      sync.Mutex
+	source prometheus.Gatherer
 }
 
-func newLabeledGatherer(g prometheus.Gatherer, extraLabels labels.Labels, rrules []*rules.RecordingRule) labeledGatherer {
+func newLabeledGatherer(g prometheus.Gatherer, extraLabels labels.Labels, rrules []*rules.RecordingRule) *labeledGatherer {
 	labels := make([]*dto.LabelPair, 0, len(extraLabels))
 
 	for _, l := range extraLabels {
@@ -147,7 +153,7 @@ func newLabeledGatherer(g prometheus.Gatherer, extraLabels labels.Labels, rrules
 		}
 	}
 
-	return labeledGatherer{
+	return &labeledGatherer{
 		source: g,
 		labels: labels,
 		ruler:  ruler.New(rrules),
@@ -164,7 +170,7 @@ func dtoLabelToMap(lbls []*dto.LabelPair) map[string]string {
 }
 
 // Gather implements prometheus.Gather.
-func (g labeledGatherer) Gather() ([]*dto.MetricFamily, error) {
+func (g *labeledGatherer) Gather() ([]*dto.MetricFamily, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultGatherTimeout)
 	defer cancel()
 
@@ -172,7 +178,14 @@ func (g labeledGatherer) Gather() ([]*dto.MetricFamily, error) {
 }
 
 // GatherWithState implements GathererWithState.
-func (g labeledGatherer) GatherWithState(ctx context.Context, state GatherState) ([]*dto.MetricFamily, error) {
+func (g *labeledGatherer) GatherWithState(ctx context.Context, state GatherState) ([]*dto.MetricFamily, error) {
+	g.l.Lock()
+	defer g.l.Unlock()
+
+	if g.source == nil {
+		return nil, errGatherOnNilGatherer
+	}
+
 	// do not collect non-probes metrics when the user only wants probes
 	if _, probe := g.source.(*ProbeGatherer); !probe && state.QueryType == OnlyProbes {
 		return nil, nil
@@ -209,6 +222,14 @@ func (g labeledGatherer) GatherWithState(ctx context.Context, state GatherState)
 	}
 
 	return mfs, err
+}
+
+// Close waits for the current gather to finish and deletes the gatherer.
+func (g *labeledGatherer) Close() {
+	g.l.Lock()
+	defer g.l.Unlock()
+
+	g.source = nil
 }
 
 // mergeLabels merge two sorted list of labels. In case of name conflict, value from b wins.

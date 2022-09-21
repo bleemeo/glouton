@@ -219,7 +219,7 @@ type registration struct {
 	loop                      *scrapeLoop
 	lastScrape                time.Time
 	lastScrapeDuration        time.Duration
-	gatherer                  labeledGatherer
+	gatherer                  *labeledGatherer
 	annotations               types.MetricAnnotations
 	relabelHookSkip           bool
 	lastRebalHookRetry        time.Time
@@ -859,9 +859,9 @@ func (r *Registry) Unregister(id int) bool {
 	// stopCallback will rely on runtime.GC() to cleanup resource.
 	delete(r.registrations, id)
 
-	reg.gatherer.source = nil
-
 	r.l.Unlock()
+
+	reg.gatherer.Close()
 
 	if reg.option.StopCallback != nil {
 		reg.option.StopCallback()
