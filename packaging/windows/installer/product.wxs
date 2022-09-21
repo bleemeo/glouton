@@ -154,7 +154,7 @@
 
 		<CustomAction
 			Id="DeleteWindowsUpdateCheckerTask"
-			Return="check"
+			Return="ignore"
 			Impersonate="no"
 			Execute="deferred"
 			Directory="TARGETDIR"
@@ -163,7 +163,7 @@
 		<!-- Fix file permissions -->
 		<CustomAction
 			Id="FixStatePermission"
-			Return="check"
+			Return="ignore"
 			Impersonate="no"
 			Execute="deferred"
 			Directory="TARGETDIR"
@@ -171,7 +171,7 @@
 
 		<CustomAction
 			Id="FixStateCachePermission"
-			Return="check"
+			Return="ignore"
 			Impersonate="no"
 			Execute="deferred"
 			Directory="TARGETDIR"
@@ -179,7 +179,7 @@
 
 		<CustomAction
 			Id="FixLogPermission"
-			Return="check"
+			Return="ignore"
 			Impersonate="no"
 			Execute="deferred"
 			Directory="TARGETDIR"
