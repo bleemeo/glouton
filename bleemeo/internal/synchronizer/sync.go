@@ -1004,10 +1004,10 @@ func (s *Synchronizer) register(ctx context.Context) error {
 	})
 
 	if err := s.option.State.SetBleemeoCredentials(objectID.ID, password); err != nil {
-		logger.Printf("failed to persist Bleemeo credentials. The agent may register itself multiple-time: %v", err)
+		logger.Printf("Failed to persist Bleemeo credentials. The agent may register itself multiple-time: %v", err)
 	}
 
-	logger.V(1).Printf("registration successful with UUID %v", objectID.ID)
+	logger.V(1).Printf("Registration successful with UUID %v", objectID.ID)
 
 	_ = s.setClient()
 

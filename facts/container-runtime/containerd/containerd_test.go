@@ -92,8 +92,7 @@ func TestContainerd_Containers(t *testing.T) {
 						"glouton.check.ignore.port.4369":         "TrUe",
 						"io.containerd.image.config.stop-signal": "SIGTERM",
 					},
-					FakePrimaryAddress:          "", // yes... containerd don't give IP address
-					FakeListenAddressesExplicit: false,
+					FakePrimaryAddress: "", // yes... containerd don't give IP address
 				},
 				{
 					FakeID:            "default/rabbitmqInternal",

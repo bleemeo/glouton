@@ -777,7 +777,7 @@ func (c wrappedContainer) PodNamespace() string {
 	return c.Container.PodNamespace()
 }
 
-func (c wrappedContainer) ListenAddresses() (addresses []facts.ListenAddress, explicit bool) {
+func (c wrappedContainer) ListenAddresses() []facts.ListenAddress {
 	var kubeContainer corev1.Container
 
 	name := c.Labels()["io.kubernetes.container.name"]
@@ -816,10 +816,10 @@ func (c wrappedContainer) ListenAddresses() (addresses []facts.ListenAddress, ex
 			return exposedPorts[i].Port < exposedPorts[j].Port
 		})
 
-		return exposedPorts, true
+		return exposedPorts
 	}
 
-	addresses, explicit = c.Container.ListenAddresses()
+	addresses := c.Container.ListenAddresses()
 
 	if primaryAddress != "" {
 		for i, addr := range addresses {
@@ -831,7 +831,7 @@ func (c wrappedContainer) ListenAddresses() (addresses []facts.ListenAddress, ex
 		}
 	}
 
-	return addresses, explicit
+	return addresses
 }
 
 func (c wrappedContainer) StoppedAndReplaced() bool {
