@@ -610,10 +610,17 @@ func (pp *ProcessProvider) baseTopinfo() (result TopInfo, err error) {
 		return result, err
 	}
 
-	cpuTimes := cpusTimes[0]
+	// cpu.Times may return an empty list and no error, so we need to check the list length.
+	var timesStat cpu.TimesStat
+
+	if len(cpusTimes) > 0 {
+		timesStat = cpusTimes[0]
+	} else {
+		logger.V(1).Println("Failed to get cpu times: got empty result and no error")
+	}
 
 	total1 := timeStatTotal(pp.lastCPUtimes)
-	total2 := timeStatTotal(cpuTimes)
+	total2 := timeStatTotal(timesStat)
 
 	if delta := total2 - total1; delta >= 0 {
 		between0and100 := func(input float64) float64 {
@@ -628,19 +635,19 @@ func (pp *ProcessProvider) baseTopinfo() (result TopInfo, err error) {
 			return input
 		}
 
-		result.CPU.User = between0and100((cpuTimes.User - pp.lastCPUtimes.User) / delta * 100)
-		result.CPU.Nice = between0and100((cpuTimes.Nice - pp.lastCPUtimes.Nice) / delta * 100)
-		result.CPU.System = between0and100((cpuTimes.System - pp.lastCPUtimes.System) / delta * 100)
-		result.CPU.Idle = between0and100((cpuTimes.Idle - pp.lastCPUtimes.Idle) / delta * 100)
-		result.CPU.IOWait = between0and100((cpuTimes.Iowait - pp.lastCPUtimes.Iowait) / delta * 100)
-		result.CPU.Guest = between0and100((cpuTimes.Guest - pp.lastCPUtimes.Guest) / delta * 100)
-		result.CPU.GuestNice = between0and100((cpuTimes.GuestNice - pp.lastCPUtimes.GuestNice) / delta * 100)
-		result.CPU.IRQ = between0and100((cpuTimes.Irq - pp.lastCPUtimes.Irq) / delta * 100)
-		result.CPU.SoftIRQ = between0and100((cpuTimes.Softirq - pp.lastCPUtimes.Softirq) / delta * 100)
-		result.CPU.Steal = between0and100((cpuTimes.Steal - pp.lastCPUtimes.Steal) / delta * 100)
+		result.CPU.User = between0and100((timesStat.User - pp.lastCPUtimes.User) / delta * 100)
+		result.CPU.Nice = between0and100((timesStat.Nice - pp.lastCPUtimes.Nice) / delta * 100)
+		result.CPU.System = between0and100((timesStat.System - pp.lastCPUtimes.System) / delta * 100)
+		result.CPU.Idle = between0and100((timesStat.Idle - pp.lastCPUtimes.Idle) / delta * 100)
+		result.CPU.IOWait = between0and100((timesStat.Iowait - pp.lastCPUtimes.Iowait) / delta * 100)
+		result.CPU.Guest = between0and100((timesStat.Guest - pp.lastCPUtimes.Guest) / delta * 100)
+		result.CPU.GuestNice = between0and100((timesStat.GuestNice - pp.lastCPUtimes.GuestNice) / delta * 100)
+		result.CPU.IRQ = between0and100((timesStat.Irq - pp.lastCPUtimes.Irq) / delta * 100)
+		result.CPU.SoftIRQ = between0and100((timesStat.Softirq - pp.lastCPUtimes.Softirq) / delta * 100)
+		result.CPU.Steal = between0and100((timesStat.Steal - pp.lastCPUtimes.Steal) / delta * 100)
 	}
 
-	pp.lastCPUtimes = cpuTimes
+	pp.lastCPUtimes = timesStat
 
 	return result, nil
 }
