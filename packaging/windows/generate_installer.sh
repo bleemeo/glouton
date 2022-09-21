@@ -9,6 +9,8 @@ VERSION=$(cat dist/VERSION)
 mkdir -p work
 cp -r packaging/windows/* work
 
+chmod 777 -R work
+
 INSTALLER_PATH="work/installer"
 CHOCOLATEY_PATH="work/chocolatey"
 
