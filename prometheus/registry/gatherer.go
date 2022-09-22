@@ -224,12 +224,19 @@ func (g *labeledGatherer) GatherWithState(ctx context.Context, state GatherState
 	return mfs, err
 }
 
-// Close waits for the current gather to finish and deletes the gatherer.
-func (g *labeledGatherer) Close() {
+// close waits for the current gather to finish and deletes the gatherer.
+func (g *labeledGatherer) close() {
 	g.l.Lock()
 	defer g.l.Unlock()
 
 	g.source = nil
+}
+
+func (g *labeledGatherer) getSource() prometheus.Gatherer {
+	g.l.Lock()
+	defer g.l.Unlock()
+
+	return g.source
 }
 
 // mergeLabels merge two sorted list of labels. In case of name conflict, value from b wins.

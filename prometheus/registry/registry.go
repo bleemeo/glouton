@@ -480,7 +480,7 @@ func (r *Registry) UpdateRelabelHook(hook RelabelHook) {
 	// Update labels of all gatherers
 	for _, reg := range r.registrations {
 		reg.l.Lock()
-		r.setupGatherer(reg, reg.gatherer.source)
+		r.setupGatherer(reg, reg.gatherer.getSource())
 		reg.l.Unlock()
 	}
 
@@ -708,7 +708,7 @@ func (r *Registry) addRegistration(reg *registration) (int, error) {
 	r.registrations[id] = reg
 
 	if !reg.option.DisablePeriodicGather {
-		if g, ok := reg.gatherer.source.(GathererWithScheduleUpdate); ok {
+		if g, ok := reg.gatherer.getSource().(GathererWithScheduleUpdate); ok {
 			g.SetScheduleUpdate(func(runAt time.Time) {
 				r.scheduleUpdate(id, reg, runAt)
 			})
@@ -861,7 +861,7 @@ func (r *Registry) Unregister(id int) bool {
 
 	r.l.Unlock()
 
-	reg.gatherer.Close()
+	reg.gatherer.close()
 
 	if reg.option.StopCallback != nil {
 		reg.option.StopCallback()
@@ -1228,7 +1228,7 @@ func (r *Registry) scrape(ctx context.Context, state GatherState, reg *registrat
 	reg.l.Lock()
 
 	if reg.relabelHookSkip && time.Since(reg.lastRebalHookRetry) > hookRetryDelay {
-		r.setupGatherer(reg, reg.gatherer.source) //nolint:contextcheck
+		r.setupGatherer(reg, reg.gatherer.getSource()) //nolint:contextcheck
 	}
 
 	r.l.Unlock()
