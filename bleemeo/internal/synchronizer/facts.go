@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"glouton/bleemeo/client"
 	"glouton/bleemeo/types"
 	"glouton/logger"
 	"time"
@@ -192,7 +193,8 @@ func (s *Synchronizer) factDeleteFromLocal(allAgentFacts map[string]map[string]s
 		}
 
 		_, err := s.client.Do(s.ctx, "DELETE", fmt.Sprintf("v1/agentfact/%s/", v.ID), nil, nil, nil)
-		if err != nil {
+		// If the fact was not found it has already been deleted.
+		if err != nil && !client.IsNotFound(err) {
 			return err
 		}
 
