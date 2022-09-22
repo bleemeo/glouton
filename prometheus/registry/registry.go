@@ -766,23 +766,30 @@ func (r *Registry) ScheduleScrape(id int, runAt time.Time) {
 	r.scheduleUpdate(id, reg, runAt)
 }
 
+// scheduleUpdate updates the next run of the gatherer.
 func (r *Registry) scheduleUpdate(id int, reg *registration, runAt time.Time) {
-	r.l.Lock()
-	defer r.l.Unlock()
+	// Run the actual update in another goroutine and return instantly to make
+	// sure taking the registry lock doesn't cause a deadlock.
+	go func() {
+		defer types.ProcessPanic()
 
-	if reg2, ok := r.registrations[id]; !ok || reg2 != reg {
-		return
-	}
+		r.l.Lock()
+		defer r.l.Unlock()
 
-	r.reschedules = append(r.reschedules, reschedule{
-		ID:    id,
-		Reg:   reg,
-		RunAt: runAt,
-	})
+		if reg2, ok := r.registrations[id]; !ok || reg2 != reg {
+			return
+		}
 
-	sort.Slice(r.reschedules, func(i, j int) bool {
-		return r.reschedules[i].RunAt.Before(r.reschedules[j].RunAt)
-	})
+		r.reschedules = append(r.reschedules, reschedule{
+			ID:    id,
+			Reg:   reg,
+			RunAt: runAt,
+		})
+
+		sort.Slice(r.reschedules, func(i, j int) bool {
+			return r.reschedules[i].RunAt.Before(r.reschedules[j].RunAt)
+		})
+	}()
 }
 
 func (r *Registry) checkReschedule(ctx context.Context) time.Duration {
