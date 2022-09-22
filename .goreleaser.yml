@@ -31,6 +31,7 @@ nfpms:
   - cron
   - util-linux
   - iproute2
+  - procps-ng
   description: |
     Bleemeo agent
       Bleemeo is a solution of Monitoring as a Service.
@@ -111,6 +112,7 @@ nfpms:
       - cron
       - util-linux
       - iproute2
+      - procps-ng
       - yum-plugin-post-transaction-actions
 checksum:
   name_template: 'checksums.txt'
