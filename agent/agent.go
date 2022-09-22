@@ -612,12 +612,6 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	go func() {
-		defer types.ProcessPanic()
-
-		a.handleSighup(ctx, sighupChan)
-	}()
-
 	a.cancel = cancel
 	a.metricResolution = 10 * time.Second
 	a.hostRootPath = "/"
@@ -634,6 +628,13 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		5*time.Second,
 		10*time.Second,
 	)
+
+	go func() {
+		defer types.ProcessPanic()
+
+		a.handleSighup(ctx, sighupChan)
+	}()
+
 	a.factProvider = facts.NewFacter(
 		a.oldConfig.String("agent.facts_file"),
 		a.hostRootPath,
