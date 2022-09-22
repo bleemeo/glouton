@@ -20,9 +20,10 @@ const notificationChannelSize = 1000
 
 // pahoWrapper implements the types.PahoWrapper interface.
 type pahoWrapper struct {
-	client paho.Client
+	clientLock sync.Mutex
+	client     paho.Client
 
-	l                     sync.Mutex
+	chanLock              sync.Mutex
 	isClosed              bool
 	connectionLostChannel chan error
 	connectChannel        chan paho.Client
@@ -58,26 +59,25 @@ func NewPahoWrapper(opts PahoWrapperOptions) types.PahoWrapper {
 }
 
 func (c *pahoWrapper) Client() paho.Client {
-	c.l.Lock()
+	c.clientLock.Lock()
 	client := c.client
-	c.l.Unlock()
+	c.clientLock.Unlock()
 
 	return client
 }
 
 func (c *pahoWrapper) SetClient(cli paho.Client) {
-	c.l.Lock()
-	defer c.l.Unlock()
+	c.clientLock.Lock()
+	defer c.clientLock.Unlock()
 
 	c.client = cli
 }
 
 func (c *pahoWrapper) OnConnectionLost(cli paho.Client, err error) {
-	c.l.Lock()
-	isClosed := c.isClosed //nolint:ifshort
-	c.l.Unlock()
+	c.chanLock.Lock()
+	defer c.chanLock.Unlock()
 
-	if isClosed {
+	if c.isClosed {
 		return
 	}
 
@@ -89,11 +89,10 @@ func (c *pahoWrapper) ConnectionLostChannel() <-chan error {
 }
 
 func (c *pahoWrapper) OnConnect(cli paho.Client) {
-	c.l.Lock()
-	isClosed := c.isClosed //nolint:ifshort
-	c.l.Unlock()
+	c.chanLock.Lock()
+	defer c.chanLock.Unlock()
 
-	if isClosed {
+	if c.isClosed {
 		return
 	}
 
@@ -105,11 +104,10 @@ func (c *pahoWrapper) ConnectChannel() <-chan paho.Client {
 }
 
 func (c *pahoWrapper) OnNotification(cli paho.Client, msg paho.Message) {
-	c.l.Lock()
-	isClosed := c.isClosed //nolint:ifshort
-	c.l.Unlock()
+	c.chanLock.Lock()
+	defer c.chanLock.Unlock()
 
-	if isClosed {
+	if c.isClosed {
 		return
 	}
 
@@ -124,8 +122,8 @@ func (c *pahoWrapper) NotificationChannel() <-chan paho.Message {
 }
 
 func (c *pahoWrapper) PopPendingPoints() []gloutonTypes.MetricPoint {
-	c.l.Lock()
-	defer c.l.Unlock()
+	c.clientLock.Lock()
+	defer c.clientLock.Unlock()
 
 	points := c.pendingPoints
 	c.pendingPoints = nil
@@ -134,8 +132,8 @@ func (c *pahoWrapper) PopPendingPoints() []gloutonTypes.MetricPoint {
 }
 
 func (c *pahoWrapper) SetPendingPoints(points []gloutonTypes.MetricPoint) {
-	c.l.Lock()
-	defer c.l.Unlock()
+	c.clientLock.Lock()
+	defer c.clientLock.Unlock()
 
 	c.pendingPoints = points
 }
@@ -184,9 +182,10 @@ func (c *pahoWrapper) Close() {
 
 	// The callbacks need to know when the channel are closed
 	// so they don't send on a closed channel.
-	c.l.Lock()
+	c.chanLock.Lock()
+	defer c.chanLock.Unlock()
+
 	c.isClosed = true
-	c.l.Unlock()
 
 	close(c.notificationChannel)
 	close(c.connectChannel)
