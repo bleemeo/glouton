@@ -953,8 +953,8 @@ func (c containerObject) Labels() map[string]string {
 	return c.info.Labels
 }
 
-func (c containerObject) ListenAddresses() (addresses []facts.ListenAddress, explicit bool) {
-	return nil, false
+func (c containerObject) ListenAddresses() []facts.ListenAddress {
+	return nil
 }
 
 func (c containerObject) PodName() string {

@@ -32,7 +32,7 @@ type Container interface {
 	ImageID() string
 	ImageName() string
 	Labels() map[string]string
-	ListenAddresses() (addresses []ListenAddress, explicit bool)
+	ListenAddresses() []ListenAddress
 	PodName() string
 	PodNamespace() string
 	PrimaryAddress() string
@@ -267,29 +267,28 @@ func ContainerIgnoredPorts(c Container) map[int]bool {
 // It is defined in this file instead of the test file because it is used
 // by multiples tests files.
 type FakeContainer struct {
-	FakeRuntimeName             string
-	FakeAnnotations             map[string]string
-	FakeCommand                 []string
-	FakeContainerJSON           string
-	FakeContainerName           string
-	FakeCreatedAt               time.Time
-	FakeEnvironment             map[string]string
-	FakeFinishedAt              time.Time
-	FakeHealth                  ContainerHealth
-	FakeHealthMessage           string
-	FakeID                      string
-	FakeImageID                 string
-	FakeImageName               string
-	FakeLabels                  map[string]string
-	FakeListenAddresses         []ListenAddress
-	FakePodName                 string
-	FakePodNamespace            string
-	FakePrimaryAddress          string
-	FakeStartedAt               time.Time
-	FakeState                   ContainerState
-	FakeListenAddressesExplicit bool
-	FakeStoppedAndReplaced      bool
-	FakePID                     int
+	FakeRuntimeName        string
+	FakeAnnotations        map[string]string
+	FakeCommand            []string
+	FakeContainerJSON      string
+	FakeContainerName      string
+	FakeCreatedAt          time.Time
+	FakeEnvironment        map[string]string
+	FakeFinishedAt         time.Time
+	FakeHealth             ContainerHealth
+	FakeHealthMessage      string
+	FakeID                 string
+	FakeImageID            string
+	FakeImageName          string
+	FakeLabels             map[string]string
+	FakeListenAddresses    []ListenAddress
+	FakePodName            string
+	FakePodNamespace       string
+	FakePrimaryAddress     string
+	FakeStartedAt          time.Time
+	FakeState              ContainerState
+	FakeStoppedAndReplaced bool
+	FakePID                int
 
 	// Test* flags are only used by tests
 	TestIgnored bool
@@ -352,8 +351,8 @@ func (c FakeContainer) Labels() map[string]string {
 	return c.FakeLabels
 }
 
-func (c FakeContainer) ListenAddresses() (addresses []ListenAddress, explicit bool) {
-	return c.FakeListenAddresses, c.FakeListenAddressesExplicit
+func (c FakeContainer) ListenAddresses() []ListenAddress {
+	return c.FakeListenAddresses
 }
 
 func (c FakeContainer) PodName() string {
@@ -443,13 +442,9 @@ func (c FakeContainer) Diff(other Container) string {
 	}
 
 	if c.FakeListenAddresses != nil {
-		addresses, explicit := other.ListenAddresses()
+		addresses := other.ListenAddresses()
 		if diff := cmp.Diff(addresses, c.FakeListenAddresses); diff != "" {
 			diffs = append(diffs, "ListenAddresses: "+diff)
-		}
-
-		if diff := cmp.Diff(explicit, c.FakeListenAddressesExplicit); diff != "" {
-			diffs = append(diffs, "ListenAddresses, explicit: "+diff)
 		}
 	}
 

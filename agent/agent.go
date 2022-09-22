@@ -2214,7 +2214,6 @@ func (a *agent) diagnosticContainers(ctx context.Context, archive types.ArchiveW
 		fmt.Fprintf(file, "# Containers (count=%d, last update=%s, last event=%s)\n", len(containers), a.containerRuntime.LastUpdate().Format(time.RFC3339), lastEvent.Format(time.RFC3339))
 
 		for _, c := range containers {
-			addr, _ := c.ListenAddresses()
 			health, healthMsg := c.Health()
 			fmt.Fprintf(
 				file,
@@ -2223,7 +2222,7 @@ func (a *agent) diagnosticContainers(ctx context.Context, archive types.ArchiveW
 				c.ID(),
 				a.containerFilter.ContainerIgnored(c),
 				c.PrimaryAddress(),
-				addr,
+				c.ListenAddresses(),
 				c.State(),
 				c.CreatedAt(),
 				c.StartedAt(),

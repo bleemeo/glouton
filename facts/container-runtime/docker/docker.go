@@ -902,41 +902,32 @@ func (c dockerContainer) Labels() map[string]string {
 	return c.inspect.Config.Labels
 }
 
-func (c dockerContainer) ListenAddresses() (addresses []facts.ListenAddress, explicit bool) {
-	exposedPorts := make([]facts.ListenAddress, 0)
-
-	if len(exposedPorts) == 0 && c.inspect.NetworkSettings != nil && len(c.inspect.NetworkSettings.Ports) > 0 {
-		for k, v := range c.inspect.NetworkSettings.Ports {
-			if len(v) == 0 {
-				continue
-			}
-
-			exposedPorts = append(exposedPorts, facts.ListenAddress{
-				NetworkFamily: k.Proto(),
-				Address:       c.PrimaryAddress(),
-				Port:          k.Int(),
-			})
-
-			explicit = true
-		}
+func (c dockerContainer) ListenAddresses() []facts.ListenAddress {
+	if c.inspect.NetworkSettings == nil {
+		return nil
 	}
 
-	if len(exposedPorts) == 0 && c.inspect.Config != nil {
-		for v := range c.inspect.Config.ExposedPorts {
-			exposedPorts = append(exposedPorts, facts.ListenAddress{NetworkFamily: v.Proto(), Address: c.PrimaryAddress(), Port: v.Int()})
+	// We only get the ports which are really exposed, not the ports in
+	// the EXPOSE line of the Dockerfile because they are often wrong.
+	addresses := make([]facts.ListenAddress, 0, len(c.inspect.NetworkSettings.Ports))
+
+	for port, portBindings := range c.inspect.NetworkSettings.Ports {
+		if len(portBindings) == 0 {
+			continue
 		}
 
-		// The information come from "EXPOSE" from Dockerfile. It's easy to have configuration of the service
-		// which make is listen on another port, but user can't override EXPOSE without building it own Docker image.
-		// So this information is likely to be wrong.
-		explicit = false
+		addresses = append(addresses, facts.ListenAddress{
+			NetworkFamily: port.Proto(),
+			Address:       c.PrimaryAddress(),
+			Port:          port.Int(),
+		})
 	}
 
-	sort.Slice(exposedPorts, func(i, j int) bool {
-		return exposedPorts[i].Port < exposedPorts[j].Port
+	sort.Slice(addresses, func(i, j int) bool {
+		return addresses[i].Port < addresses[j].Port
 	})
 
-	return exposedPorts, explicit
+	return addresses
 }
 
 func (c dockerContainer) PodName() string {

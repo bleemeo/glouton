@@ -106,8 +106,7 @@ func TestDocker_Containers(t *testing.T) {
 							NetworkFamily: "tcp",
 						},
 					},
-					FakeListenAddressesExplicit: true,
-					FakeHealth:                  facts.ContainerNoHealthCheck,
+					FakeHealth: facts.ContainerNoHealthCheck,
 				},
 				{
 					FakeID:            "33600bb7b4d62f43e87839e514a4235bb72f66dcfca35a7df5c900361a2c4d6e",
@@ -125,40 +124,8 @@ func TestDocker_Containers(t *testing.T) {
 						"glouton.check.ignore.port.4369":      "true",
 						"glouton.check.ignore.port.25672":     "TrUe",
 					},
-					FakeListenAddresses: []facts.ListenAddress{
-						{
-							Address:       "172.18.0.4",
-							Port:          4369,
-							NetworkFamily: "tcp",
-						},
-						{
-							Address:       "172.18.0.4",
-							Port:          5671,
-							NetworkFamily: "tcp",
-						},
-						{
-							Address:       "172.18.0.4",
-							Port:          5672,
-							NetworkFamily: "tcp",
-						},
-						{
-							Address:       "172.18.0.4",
-							Port:          15691,
-							NetworkFamily: "tcp",
-						},
-						{
-							Address:       "172.18.0.4",
-							Port:          15692,
-							NetworkFamily: "tcp",
-						},
-						{
-							Address:       "172.18.0.4",
-							Port:          25672,
-							NetworkFamily: "tcp",
-						},
-					},
-					FakeListenAddressesExplicit: false,
-					FakeHealth:                  facts.ContainerNoHealthCheck,
+					FakeListenAddresses: nil,
+					FakeHealth:          facts.ContainerNoHealthCheck,
 				},
 				{
 					FakeID:            "b59746cf51fa8b08eb228e5f4fc4bc28446a6f7ca19cdc3c23016f932b56003f",
@@ -874,7 +841,6 @@ func TestContainer_ListenAddresses(t *testing.T) {
 		dockerClient  *MockDockerClient
 		containerName string
 		want          []facts.ListenAddress
-		wantExplicit  bool
 	}{
 		{
 			name:          "docker-noport",
@@ -886,9 +852,7 @@ func TestContainer_ListenAddresses(t *testing.T) {
 			name:          "docker-oneport",
 			dockerClient:  docker19_03,
 			containerName: "my_redis",
-			want: []facts.ListenAddress{
-				{Address: "172.17.0.3", NetworkFamily: "tcp", Port: 6379},
-			},
+			want:          []facts.ListenAddress{},
 		},
 		{
 			name:          "docker-oneport-exposed",
@@ -897,7 +861,6 @@ func TestContainer_ListenAddresses(t *testing.T) {
 			want: []facts.ListenAddress{
 				{Address: "172.17.0.2", NetworkFamily: "tcp", Port: 80},
 			},
-			wantExplicit: true,
 		},
 		{
 			name:          "docker-multiple-port-one-exposed",
@@ -906,19 +869,12 @@ func TestContainer_ListenAddresses(t *testing.T) {
 			want: []facts.ListenAddress{
 				{Address: "172.17.0.5", NetworkFamily: "tcp", Port: 5672},
 			},
-			wantExplicit: true,
 		},
 		{
 			name:          "docker-multiple-port-none-exposed",
 			dockerClient:  docker19_03,
 			containerName: "multiple-port2",
-			want: []facts.ListenAddress{
-				{Address: "172.17.0.6", NetworkFamily: "tcp", Port: 4369},
-				{Address: "172.17.0.6", NetworkFamily: "tcp", Port: 5671},
-				{Address: "172.17.0.6", NetworkFamily: "tcp", Port: 5672},
-				{Address: "172.17.0.6", NetworkFamily: "tcp", Port: 25672},
-			},
-			wantExplicit: false,
+			want:          []facts.ListenAddress{},
 		},
 		{
 			name:          "docker-multiple-port-other-exposed",
@@ -928,7 +884,6 @@ func TestContainer_ListenAddresses(t *testing.T) {
 				{Address: "172.17.0.7", NetworkFamily: "tcp", Port: 1234},
 				{Address: "172.17.0.7", NetworkFamily: "tcp", Port: 4343},
 			},
-			wantExplicit: true,
 		},
 		{
 			name:          "docker-multiple-port-one-exposed",
@@ -937,7 +892,6 @@ func TestContainer_ListenAddresses(t *testing.T) {
 			want: []facts.ListenAddress{
 				{Address: "172.17.0.3", NetworkFamily: "tcp", Port: 5672},
 			},
-			wantExplicit: true,
 		},
 	}
 	for _, tt := range tests {
@@ -970,10 +924,8 @@ func TestContainer_ListenAddresses(t *testing.T) {
 				return
 			}
 
-			if got, explicit := container.ListenAddresses(); !reflect.DeepEqual(got, tt.want) {
+			if got := container.ListenAddresses(); !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("Container.ListenAddresses() = %v, want %v", got, tt.want)
-			} else if explicit != tt.wantExplicit {
-				t.Errorf("Container.ListenAddresses() explicit = %v, want %v", explicit, tt.wantExplicit)
 			}
 		})
 	}
