@@ -219,7 +219,7 @@ type registration struct {
 	loop                      *scrapeLoop
 	lastScrape                time.Time
 	lastScrapeDuration        time.Duration
-	gatherer                  labeledGatherer
+	gatherer                  *labeledGatherer
 	annotations               types.MetricAnnotations
 	relabelHookSkip           bool
 	lastRebalHookRetry        time.Time
@@ -480,7 +480,7 @@ func (r *Registry) UpdateRelabelHook(hook RelabelHook) {
 	// Update labels of all gatherers
 	for _, reg := range r.registrations {
 		reg.l.Lock()
-		r.setupGatherer(reg, reg.gatherer.source)
+		r.setupGatherer(reg, reg.gatherer.getSource())
 		reg.l.Unlock()
 	}
 
@@ -708,7 +708,7 @@ func (r *Registry) addRegistration(reg *registration) (int, error) {
 	r.registrations[id] = reg
 
 	if !reg.option.DisablePeriodicGather {
-		if g, ok := reg.gatherer.source.(GathererWithScheduleUpdate); ok {
+		if g, ok := reg.gatherer.getSource().(GathererWithScheduleUpdate); ok {
 			g.SetScheduleUpdate(func(runAt time.Time) {
 				r.scheduleUpdate(id, reg, runAt)
 			})
@@ -766,23 +766,30 @@ func (r *Registry) ScheduleScrape(id int, runAt time.Time) {
 	r.scheduleUpdate(id, reg, runAt)
 }
 
+// scheduleUpdate updates the next run of the gatherer.
 func (r *Registry) scheduleUpdate(id int, reg *registration, runAt time.Time) {
-	r.l.Lock()
-	defer r.l.Unlock()
+	// Run the actual update in another goroutine and return instantly to make
+	// sure taking the registry lock doesn't cause a deadlock.
+	go func() {
+		defer types.ProcessPanic()
 
-	if reg2, ok := r.registrations[id]; !ok || reg2 != reg {
-		return
-	}
+		r.l.Lock()
+		defer r.l.Unlock()
 
-	r.reschedules = append(r.reschedules, reschedule{
-		ID:    id,
-		Reg:   reg,
-		RunAt: runAt,
-	})
+		if reg2, ok := r.registrations[id]; !ok || reg2 != reg {
+			return
+		}
 
-	sort.Slice(r.reschedules, func(i, j int) bool {
-		return r.reschedules[i].RunAt.Before(r.reschedules[j].RunAt)
-	})
+		r.reschedules = append(r.reschedules, reschedule{
+			ID:    id,
+			Reg:   reg,
+			RunAt: runAt,
+		})
+
+		sort.Slice(r.reschedules, func(i, j int) bool {
+			return r.reschedules[i].RunAt.Before(r.reschedules[j].RunAt)
+		})
+	}()
 }
 
 func (r *Registry) checkReschedule(ctx context.Context) time.Duration {
@@ -859,9 +866,9 @@ func (r *Registry) Unregister(id int) bool {
 	// stopCallback will rely on runtime.GC() to cleanup resource.
 	delete(r.registrations, id)
 
-	reg.gatherer.source = nil
-
 	r.l.Unlock()
+
+	reg.gatherer.close()
 
 	if reg.option.StopCallback != nil {
 		reg.option.StopCallback()
@@ -1228,7 +1235,7 @@ func (r *Registry) scrape(ctx context.Context, state GatherState, reg *registrat
 	reg.l.Lock()
 
 	if reg.relabelHookSkip && time.Since(reg.lastRebalHookRetry) > hookRetryDelay {
-		r.setupGatherer(reg, reg.gatherer.source) //nolint:contextcheck
+		r.setupGatherer(reg, reg.gatherer.getSource()) //nolint:contextcheck
 	}
 
 	r.l.Unlock()
