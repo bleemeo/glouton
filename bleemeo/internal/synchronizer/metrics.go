@@ -1453,7 +1453,9 @@ func (s *Synchronizer) metricDeleteIgnoredServices() error {
 
 		if metric, ok := registeredMetricsByKey[metricKey]; ok {
 			_, err := s.client.Do(s.ctx, "DELETE", fmt.Sprintf("v1/metric/%s/", metric.ID), nil, nil, nil)
-			if err != nil {
+
+			// If the metric was not found it has already been deleted.
+			if err != nil && !client.IsNotFound(err) {
 				return err
 			}
 

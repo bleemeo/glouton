@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"glouton/bleemeo/client"
 	"glouton/bleemeo/internal/common"
 	"glouton/bleemeo/types"
 	"glouton/facts"
@@ -282,13 +283,13 @@ func (s *Synchronizer) containerDeleteFromLocal(localContainers []facts.Containe
 	}
 
 	registeredContainers := s.option.Cache.ContainersByUUID()
-	for _, v := range registeredContainers {
-		if !time.Time(v.DeletedAt).IsZero() {
+	for _, container := range registeredContainers {
+		if !time.Time(container.DeletedAt).IsZero() {
 			continue
 		}
 
-		if _, ok := localByContainerID[v.ContainerID]; ok && !duplicatedKey[v.ContainerID] {
-			duplicatedKey[v.ContainerID] = true
+		if _, ok := localByContainerID[container.ContainerID]; ok && !duplicatedKey[container.ContainerID] {
+			duplicatedKey[container.ContainerID] = true
 
 			continue
 		}
@@ -296,7 +297,7 @@ func (s *Synchronizer) containerDeleteFromLocal(localContainers []facts.Containe
 		_, err := s.client.Do(
 			s.ctx,
 			"PATCH",
-			fmt.Sprintf("v1/container/%s/", v.ID),
+			fmt.Sprintf("v1/container/%s/", container.ID),
 			nil,
 			struct {
 				DeletedAt types.NullTime `json:"deleted_at"`
@@ -304,17 +305,24 @@ func (s *Synchronizer) containerDeleteFromLocal(localContainers []facts.Containe
 			nil,
 		)
 		if err != nil {
-			logger.V(1).Printf("Failed to delete container %v on Bleemeo API: %v", v.Name, err)
+			// If the container was not found it has already been deleted.
+			if client.IsNotFound(err) {
+				delete(registeredContainers, container.ID)
+
+				deletedIDs = append(deletedIDs, container.ID)
+			}
+
+			logger.V(1).Printf("Failed to delete container %v on Bleemeo API: %v", container.Name, err)
 
 			continue
 		}
 
-		logger.V(2).Printf("Container %v deleted (UUID %s)", v.Name, v.ID)
-		v.DeletedAt = types.NullTime(s.now())
+		logger.V(2).Printf("Container %v deleted (UUID %s)", container.Name, container.ID)
+		container.DeletedAt = types.NullTime(s.now())
 
-		registeredContainers[v.ID] = v
+		registeredContainers[container.ID] = container
 
-		deletedIDs = append(deletedIDs, v.ID)
+		deletedIDs = append(deletedIDs, container.ID)
 	}
 
 	containers := make([]types.Container, 0, len(registeredContainers))

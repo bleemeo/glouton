@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"glouton/bleemeo/client"
 	bleemeoTypes "glouton/bleemeo/types"
 	"glouton/logger"
 	"glouton/prometheus/exporter/blackbox"
@@ -245,24 +246,21 @@ func (s *Synchronizer) getListOfMonitorsFromAPI(pendingMonitorsUpdate []MonitorU
 OuterBreak:
 	for _, m := range pendingMonitorsUpdate {
 		if m.op == Delete {
-			for k, v := range currentMonitors {
-				if v.ID == m.uuid {
-					// the order doesn't matter, so we perform a "fast" (no reallocation
-					// nor moving numerous elements) deletion
-					currentMonitors[k] = currentMonitors[len(currentMonitors)-1]
-					currentMonitors = currentMonitors[:len(currentMonitors)-1]
+			currentMonitors = deleteMonitorByUUID(currentMonitors, m.uuid)
 
-					continue OuterBreak
-				}
-			}
-			// not found, but that's not really an issue, we have the desired state: this monitor
-			// is not probed
 			continue
 		}
 
 		var result bleemeoTypes.Monitor
 		statusCode, err := s.client.Do(s.ctx, "GET", fmt.Sprintf("v1/service/%s/", m.uuid), params, nil, &result)
 		if err != nil {
+			// Delete the monitor locally if it was not found on the API.
+			if client.IsNotFound(err) {
+				currentMonitors = deleteMonitorByUUID(currentMonitors, m.uuid)
+
+				continue
+			}
+
 			return nil, err
 		}
 
@@ -300,4 +298,19 @@ OuterBreak:
 	}
 
 	return currentMonitors, nil
+}
+
+func deleteMonitorByUUID(monitors []bleemeoTypes.Monitor, uuid string) []bleemeoTypes.Monitor {
+	for i, monitor := range monitors {
+		if monitor.ID == uuid {
+			// The order doesn't matter, so we perform a "fast" (no reallocation
+			// nor moving numerous elements) deletion.
+			monitors[i] = monitors[len(monitors)-1]
+			monitors = monitors[:len(monitors)-1]
+
+			break
+		}
+	}
+
+	return monitors
 }
