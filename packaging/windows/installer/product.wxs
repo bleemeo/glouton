@@ -94,6 +94,10 @@
 				<File Source="$(var.AssetsPath)post_install.ps1" KeyPath="yes" />
 			</Component>
 
+			<Component Id="PreInstallScript" Directory="INSTALLFOLDER" Guid="96665693-905F-4F25-94DF-06830B02DAAE">
+				<File Source="$(var.AssetsPath)pre_uninstall.ps1" KeyPath="yes" />
+			</Component>
+
 			<Component Id="SystemConfig" Directory="ConfigFolder" Guid="741C2E8E-C3D3-4105-A40A-FF144FC41540">
 				<File Source="$(var.AssetsPath)glouton.conf" Name="05-system.conf" />
 			</Component>
@@ -139,15 +143,6 @@
 			Return="asyncNoWait" 
 			ExeCommand="explorer.exe http://localhost:8015" />
 
-		<!-- Delete the Windows Update Checker task on uninstall -->
-		<CustomAction
-			Id="DeleteWindowsUpdateCheckerTask"
-			Return="ignore"
-			Impersonate="no"
-			Execute="deferred"
-			Directory="TARGETDIR"
-			ExeCommand="schtasks.exe /Delete /F /TN &quot;Bleemeo\Glouton\Windows Update Checker&quot;" />
-
 		<!-- Post install script -->
 		<SetProperty 
 			Id="PostInstall" 
@@ -156,6 +151,20 @@
 			Before="PostInstall" />
 		<CustomAction
 			Id="PostInstall"
+			Return="ignore"
+			Impersonate="no"
+			Execute="deferred"
+			BinaryKey="WixCA"
+			DllEntry="WixQuietExec" />
+
+		<!-- Pre uninstall script -->
+		<SetProperty 
+			Id="PreUninstall" 
+			Value='"powershell.exe" -ExecutionPolicy Bypass -NonInteractive -File "[INSTALLFOLDER]pre_uninstall.ps1"'
+            Sequence="execute" 
+			Before="PreUninstall" />
+		<CustomAction
+			Id="PreUninstall"
 			Return="ignore"
 			Impersonate="no"
 			Execute="deferred"
@@ -186,7 +195,7 @@
 			<Custom Action="UninstallOldInstaller" Before="InstallFiles">NOT WIX_UPGRADE_DETECTED</Custom>
 
 			<Custom Action="PostInstall" After="InstallFiles">NOT _UNINSTALL</Custom>
-			<Custom Action="DeleteWindowsUpdateCheckerTask" After="PostInstall">_UNINSTALL</Custom>
+			<Custom Action="PreUninstall" After="InstallInitialize">_UNINSTALL</Custom>
 		</InstallExecuteSequence>
 
 		<!-- List components to install -->
