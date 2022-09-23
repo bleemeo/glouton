@@ -187,19 +187,26 @@
 
 		<!-- Uninstall Glouton if it was install using the old NSIS installer. -->
 		<!-- This is needed because otherwise there will be two Glouton listed in the installed applications. -->
+		<!-- The installer is executed asynchronously so we wait 10 seconds to let it finish the uninstallation. -->
+		<!-- We use "ping" to wait because the alternative to sleep on windows is "timeout" which opens a command prompt. -->
+		<SetProperty 
+			Id="UninstallOldInstaller" 
+			Value='"cmd.exe" /C "[ProgramFilesFolder]\glouton\Uninstall.exe" /S &amp;&amp; ping -n 10 127.0.0.1 > nul'
+            Sequence="execute" 
+			Before="UninstallOldInstaller" />
 		<CustomAction
 			Id="UninstallOldInstaller"
 			Return="ignore"
 			Impersonate="no"
 			Execute="deferred"
-			Directory="TARGETDIR"
-			ExeCommand="&quot;[ProgramFilesFolder]\glouton\Uninstall.exe&quot; /S &amp;&amp; timeout /t 10" />
+			BinaryKey="WixCA"
+			DllEntry="WixQuietExec" />
 
 		<!-- _UNINSTALL is only true during uninstallation: https://stackoverflow.com/a/731700 -->
 		<SetProperty Id="_UNINSTALL" After="FindRelatedProducts" Value="1"><![CDATA[(NOT UPGRADINGPRODUCTCODE) AND (REMOVE="ALL")]]></SetProperty>
 		
 		<InstallExecuteSequence>
-			<Custom Action="UninstallOldInstaller" Before="InstallFiles">NOT _UNINSTALL</Custom>
+			<Custom Action="UninstallOldInstaller" Before="InstallFiles">NOT WIX_UPGRADE_DETECTED</Custom>
 
 			<Custom Action="CreateWindowsUpdateCheckerTask" After="InstallFiles">NOT _UNINSTALL</Custom>
 			<Custom Action="RunWindowsUpdateCheckerTask" After="CreateWindowsUpdateCheckerTask">NOT _UNINSTALL</Custom>
