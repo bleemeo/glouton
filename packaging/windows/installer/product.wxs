@@ -90,6 +90,10 @@
 				<File Source="$(var.AssetsPath)windows_update_checker.ps1" KeyPath="yes" />
 			</Component>
 
+			<Component Id="PostInstallScript" Directory="INSTALLFOLDER" Guid="9DBECD11-6909-45FA-914B-D04BF9C855C2">
+				<File Source="$(var.AssetsPath)post_install.ps1" KeyPath="yes" />
+			</Component>
+
 			<Component Id="SystemConfig" Directory="ConfigFolder" Guid="741C2E8E-C3D3-4105-A40A-FF144FC41540">
 				<File Source="$(var.AssetsPath)glouton.conf" Name="05-system.conf" />
 			</Component>
@@ -135,23 +139,7 @@
 			Return="asyncNoWait" 
 			ExeCommand="explorer.exe http://localhost:8015" />
 
-		<!-- Windows Update Checker task -->
-		<CustomAction 
-			Id="CreateWindowsUpdateCheckerTask"
-			Return="check"
-			Impersonate="no"
-			Execute="deferred"
-			Directory="TARGETDIR"
-			ExeCommand="schtasks.exe /Create /F /RU System /SC HOURLY /TN &quot;Bleemeo\Glouton\Windows Update Checker&quot; /TR &quot;powershell.exe -ExecutionPolicy Bypass -NonInteractive -File '[INSTALLFOLDER]windows_update_checker.ps1'&quot;" />
-
-		<CustomAction
-			Id="RunWindowsUpdateCheckerTask"
-			Return="check"
-			Impersonate="no"
-			Execute="deferred"
-			Directory="TARGETDIR"
-			ExeCommand="schtasks.exe /Run /I /TN &quot;Bleemeo\Glouton\Windows Update Checker&quot;" />
-
+		<!-- Delete the Windows Update Checker task on uninstall -->
 		<CustomAction
 			Id="DeleteWindowsUpdateCheckerTask"
 			Return="ignore"
@@ -160,30 +148,19 @@
 			Directory="TARGETDIR"
 			ExeCommand="schtasks.exe /Delete /F /TN &quot;Bleemeo\Glouton\Windows Update Checker&quot;" />
 
-		<!-- Fix file permissions -->
+		<!-- Post install script -->
+		<SetProperty 
+			Id="PostInstall" 
+			Value='"powershell.exe" -ExecutionPolicy Bypass -NonInteractive -File "[INSTALLFOLDER]post_install.ps1" "[INSTALLFOLDER]"'
+            Sequence="execute" 
+			Before="PostInstall" />
 		<CustomAction
-			Id="FixStatePermission"
+			Id="PostInstall"
 			Return="ignore"
 			Impersonate="no"
 			Execute="deferred"
-			Directory="TARGETDIR"
-			ExeCommand="icacls.exe &quot;[ProgramDataFolder]\state.json&quot; /grant &quot;NT AUTHORITY\LocalService&quot;:F" />
-
-		<CustomAction
-			Id="FixStateCachePermission"
-			Return="ignore"
-			Impersonate="no"
-			Execute="deferred"
-			Directory="TARGETDIR"
-			ExeCommand="icacls.exe &quot;[ProgramDataFolder]\state.cache.json&quot; /grant &quot;NT AUTHORITY\LocalService&quot;:F" />
-
-		<CustomAction
-			Id="FixLogPermission"
-			Return="ignore"
-			Impersonate="no"
-			Execute="deferred"
-			Directory="TARGETDIR"
-			ExeCommand="icacls.exe &quot;[LogsFolder]\glouton.log&quot; /grant &quot;NT AUTHORITY\LocalService&quot;:F" />
+			BinaryKey="WixCA"
+			DllEntry="WixQuietExec" />
 
 		<!-- Uninstall Glouton if it was install using the old NSIS installer. -->
 		<!-- This is needed because otherwise there will be two Glouton listed in the installed applications. -->
@@ -208,14 +185,8 @@
 		<InstallExecuteSequence>
 			<Custom Action="UninstallOldInstaller" Before="InstallFiles">NOT WIX_UPGRADE_DETECTED</Custom>
 
-			<Custom Action="CreateWindowsUpdateCheckerTask" After="InstallFiles">NOT _UNINSTALL</Custom>
-			<Custom Action="RunWindowsUpdateCheckerTask" After="CreateWindowsUpdateCheckerTask">NOT _UNINSTALL</Custom>
-			<!-- Delete the Windows Update Checker task on uninstall -->
-			<Custom Action="DeleteWindowsUpdateCheckerTask" After="RunWindowsUpdateCheckerTask">_UNINSTALL</Custom>
-
-			<Custom Action="FixStatePermission" After="DeleteWindowsUpdateCheckerTask">NOT _UNINSTALL</Custom>
-			<Custom Action="FixStateCachePermission" After="DeleteWindowsUpdateCheckerTask">NOT _UNINSTALL</Custom>
-			<Custom Action="FixLogPermission" After="DeleteWindowsUpdateCheckerTask">NOT _UNINSTALL</Custom>
+			<Custom Action="PostInstall" After="InstallFiles">NOT _UNINSTALL</Custom>
+			<Custom Action="DeleteWindowsUpdateCheckerTask" After="PostInstall">_UNINSTALL</Custom>
 		</InstallExecuteSequence>
 
 		<!-- List components to install -->
