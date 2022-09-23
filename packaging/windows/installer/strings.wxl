@@ -3,5 +3,5 @@
 	<!-- This file can be used to override default texts in C:\Program Files (x86)\WiX Toolset v3.11\SDK\wixui\WixUI_en-us.wxl -->
 	<String Id="ExitDialogDescription">Glouton has been successfully installed.</String>
 	
-	<String Id="ProgressDlgTextInstalling"> Please wait while the Setup Wizard installs Glouton. Note that some previous versions of Glouton had a bug which prevents the service to be stopped gracefully, so the installer may take more than 30 seconds to stop it.</String>
+	<String Id="ProgressDlgTextInstalling">Please wait while the Setup Wizard installs Glouton. This operation may take a minute.</String>
 </WixLocalization>
