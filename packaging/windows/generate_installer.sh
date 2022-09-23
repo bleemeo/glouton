@@ -27,7 +27,7 @@ cp dist/glouton_windows_amd64_v1/glouton.exe ${INSTALLER_PATH}/assets
 sed -i -e "s/Version=\"1.2.3.4\"/Version=\"${VERSION}\"/" ${INSTALLER_PATH}/product.wxs
 
 docker run --rm -v "${INSTALLER_PATH}:/wix" dactiv/wix candle -ext WixUtilExtension.dll -ext WixUIExtension -dAssetsPath=/wix/assets/ -dExePath=/wix/assets/ -arch x86 -out 'obj\' *.wxs
-docker run --rm -v "${INSTALLER_PATH}:/wix" dactiv/wix light -sval -ext WixUtilExtension.dll -ext WixUIExtension -out obj/glouton.msi obj/*.wixobj
+docker run --rm -v "${INSTALLER_PATH}:/wix" dactiv/wix light -sval -ext WixUtilExtension.dll -ext WixUIExtension -cultures:en-US -loc strings.wxl -out obj/glouton.msi obj/*.wixobj
 
 cp ${INSTALLER_PATH}/obj/glouton.msi "dist/glouton_${VERSION}.msi"
 
