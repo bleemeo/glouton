@@ -585,7 +585,7 @@ func Test_processMFS(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			got := processMFS(input, tt.state, tt.status, tt.msg)
+			got := processMFS(input, tt.state, tt.status, types.StatusOk, tt.msg)
 
 			if diff := cmp.Diff(want, got); diff != "" {
 				t.Errorf("processMFS() mismatch (-want +got):\n%s", diff)
