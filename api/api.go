@@ -65,7 +65,7 @@ type API struct {
 	ContainerRuntime   containerInterface
 	PsFact             *facts.ProcessProvider
 	FactProvider       *facts.FactProvider
-	Disccovery         *discovery.Discovery
+	Discovery          *discovery.Discovery
 	AgentInfo          agentInterface
 	PrometheurExporter http.Handler
 	Threshold          *threshold.Registry
