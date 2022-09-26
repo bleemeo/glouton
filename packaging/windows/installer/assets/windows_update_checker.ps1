@@ -1,3 +1,5 @@
+# Write the number of pending upgrades to a file.
+
 $UpdateSession = New-Object -ComObject "Microsoft.Update.Session"
 $UpdateSearcher = $UpdateSession.CreateUpdateSearcher()
 

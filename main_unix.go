@@ -36,7 +36,7 @@ var (
 func OSDependentMain() {
 	if os.Getuid() == 0 && !*runAsRoot {
 		fmt.Println("Error: trying to run Glouton as root without \"--yes-run-as-root\" option.")
-		fmt.Println("If Glouton is installed using standard method, start it with:")
+		fmt.Println("If Glouton was installed using the standard method, start it with:")
 		fmt.Println("    service glouton start")
 		fmt.Println("")
 		os.Exit(1)

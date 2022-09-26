@@ -65,6 +65,23 @@ Glouton uses prettier too. You may run it with:
 (cd webui; npm run pretify)
 ```
 
+### Developping the Windows installer
+
+`packaging/windows` contains two folders:
+- `installer` contains a [WiX](https://wixtoolset.org/) project
+to build the MSI installer.
+- `chocolatey` contains a [Chocolatey](https://docs.chocolatey.org/en-us/) project.
+
+If you are working on Windows, the folder `packaging/windows/installer` contains a Visual Studio project.
+Visual Studio has a WiX extension that brings auto-completion and WiX templates for easier development. 
+For the extension you will need to install [.NET 3.5](https://www.microsoft.com/fr-fr/download/details.aspx?id=21)
+and [WiX toolset](https://wixtoolset.org/releases/).
+
+If you want to edit the UI to add or modify a dialog, you can use [WiXEdit](https://github.com/WixEdit/WixEdit)
+on Windows.
+
+On Linux, the `build.sh` script will build the MSI and the chocolatey package.
+
 ## Build a release
 
 Our release version will be set from the current date.

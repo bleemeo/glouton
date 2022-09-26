@@ -1,0 +1,206 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi" xmlns:util="http://schemas.microsoft.com/wix/UtilExtension">
+	<Product Id="*" Name="Glouton" Language="1033" Version="1.2.3.4" Manufacturer="Bleemeo" UpgradeCode="9A2085DA-6D2E-4D89-938C-625F94EEE312">
+		<Package InstallerVersion="200" Compressed="yes" InstallScope="perMachine" />
+		
+		<MajorUpgrade
+			AllowDowngrades="no"
+			AllowSameVersionUpgrades="no"
+			DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
+		
+		<!-- Embed the executable and config files in the installer -->
+		<Media Id="1" Cabinet="glouton.cab" EmbedCab="yes" />
+
+		<!-- Include app icon in shortcuts and uninstall menu -->
+		<Icon Id="Icon.ico" SourceFile="$(var.AssetsPath)bleemeo.ico"/>
+		<Property Id="ARPPRODUCTICON" Value="Icon.ico" />
+		<Property Id="ARPHELPLINK" Value="https://docs.bleemeo.com/" />
+
+		<!-- Customize dialog and banner with the Bleemeo logo -->
+		<WixVariable Id="WixUIBannerBmp" Value="$(var.AssetsPath)banner.bmp" />
+		<WixVariable Id="WixUIDialogBmp" Value="$(var.AssetsPath)dialog.bmp" />
+
+		<!-- Properties for user credentials that can be set on command line -->
+		<Property Id="ACCOUNT" Secure="yes" />
+		<Property Id="REGKEY" Secure="yes"/>
+
+		<!-- Let the user choose a directory where Glouton will be installed -->
+		<Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
+		<UIRef Id="WixUI_Custom_InstallDir" />
+
+		<!-- Retrieve the install folder used during the installation from the registry -->
+		<Property Id="INSTALLFOLDER">
+			<RegistrySearch Id='SearchRegInstallDir' Type='raw'
+			  Root='HKLM' Key='Software\Bleemeo\Glouton' Name='InstallDir' />
+		</Property>
+		
+		<!-- Directory layout -->
+		<Directory Id="TARGETDIR" Name="SourceDir">
+			<Directory Id="ProgramFilesFolder">
+				<Directory Id="INSTALLFOLDER" Name="Glouton" />
+			</Directory>
+
+			<Directory Id="CommonAppDataFolder">
+				<Directory Id="ProgramDataFolder" Name="glouton">
+					<Directory Id="ConfigFolder" Name="conf.d" />
+					<Directory Id="LogsFolder" Name="logs" />
+				</Directory>
+			</Directory>
+		</Directory>
+
+		<ComponentGroup Id="Files">
+			<Component Id="GloutonExecutable" Directory="INSTALLFOLDER" Guid="F70F7265-938F-4E81-958E-B96B90997B6B">
+				<File Source="$(var.AssetsPath)glouton.exe" KeyPath="yes" />
+
+				<!-- Keep the chosen install folder in the registry to use it on the next upgrade -->
+				<RegistryValue
+				  Root="HKLM"
+				  Key="Software\Bleemeo\Glouton"
+				  Name="InstallDir"
+				  Type="string"
+				  Value="[INSTALLFOLDER]" />
+
+				<!-- Create the Glouton service -->
+				<ServiceInstall
+					Id="InstallGloutonService" 
+					Name="glouton" 
+					DisplayName="Glouton monitoring agent" 
+					Description="Bleemeo monitoring agent for servers, containers, and applications"
+					Vital="yes"
+					Account="NT AUTHORITY\LocalService"
+					Interactive="no"
+					ErrorControl="normal" 
+					Start="auto" 
+					Type="ownProcess">
+
+					<util:ServiceConfig 
+						FirstFailureActionType="restart" 
+						SecondFailureActionType="restart" 
+						ThirdFailureActionType="restart" 
+						RestartServiceDelayInSeconds="60" />
+					
+						<!-- windows_exporter depends on Windows Management Instrumentation Service Provider -->
+					<ServiceDependency Id="wmiApSrv" />
+				</ServiceInstall>
+				
+				<ServiceControl Id="ServiceStateControl" Name="glouton" Remove="uninstall" Start="install" Stop="both" />
+			</Component>
+
+			<Component Id="WindowsUpdateChecker" Directory="INSTALLFOLDER" Guid="C995B88F-3D0F-4363-A83A-5BC7CB5CB82D">
+				<File Source="$(var.AssetsPath)windows_update_checker.ps1" KeyPath="yes" />
+			</Component>
+
+			<Component Id="PostInstallScript" Directory="INSTALLFOLDER" Guid="9DBECD11-6909-45FA-914B-D04BF9C855C2">
+				<File Source="$(var.AssetsPath)post_install.ps1" KeyPath="yes" />
+			</Component>
+
+			<Component Id="PreInstallScript" Directory="INSTALLFOLDER" Guid="96665693-905F-4F25-94DF-06830B02DAAE">
+				<File Source="$(var.AssetsPath)pre_uninstall.ps1" KeyPath="yes" />
+			</Component>
+
+			<Component Id="SystemConfig" Directory="ConfigFolder" Guid="741C2E8E-C3D3-4105-A40A-FF144FC41540">
+				<File Source="$(var.AssetsPath)glouton.conf" Name="05-system.conf" />
+			</Component>
+
+			<Component Id="SetCredentials" Directory="ConfigFolder" Permanent="yes" Guid="748B2FFD-5461-4F7E-A93B-6903FE029CEB">
+				<!-- Update credentials.xml with the user input during installation -->
+				<!-- Skip this component on upgrades because we don't ask users for their credentials -->
+				<Condition>NOT WIX_UPGRADE_DETECTED</Condition>
+
+				<File Id="CredentialsFile" Source="$(var.AssetsPath)credentials.xml" KeyPath="yes" />
+				
+				<util:XmlFile
+				Id='XmlAccountID'
+				File='[#CredentialsFile]'
+				Action='setValue'
+				Name='account_id'
+				Value='[ACCOUNT]'
+				ElementPath='//credentials'
+				Sequence='1' />
+
+				<util:XmlFile
+					Id='XmlRegistrationKey'
+					File='[#CredentialsFile]'
+					Action='setValue'
+					Name='registration_key'
+					Value='[REGKEY]'
+					ElementPath='//credentials'
+					Sequence='2' />
+			</Component>
+
+			<Component Id="CreateLogsFolder" Directory="LogsFolder" Guid="095B9638-D1B6-46EF-B73B-0E7D0951A261">
+				<CreateFolder />
+			</Component>
+		</ComponentGroup>
+
+		<!-- Add checkbox to open the local web dashboard after the installation -->
+		<Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT" Value="Open Glouton local web dashboard" />
+		<CustomAction 
+			Id="OpenDashboard" 
+			Directory="TARGETDIR" 
+			Execute="immediate" 
+			Impersonate="yes" 
+			Return="asyncNoWait" 
+			ExeCommand="explorer.exe http://localhost:8015" />
+
+		<!-- Post install script -->
+		<SetProperty 
+			Id="PostInstall" 
+			Value='"powershell.exe" -ExecutionPolicy Bypass -NonInteractive -File "[INSTALLFOLDER]post_install.ps1" "[INSTALLFOLDER]"'
+            Sequence="execute" 
+			Before="PostInstall" />
+		<CustomAction
+			Id="PostInstall"
+			Return="ignore"
+			Impersonate="no"
+			Execute="deferred"
+			BinaryKey="WixCA"
+			DllEntry="WixQuietExec" />
+
+		<!-- Pre uninstall script -->
+		<SetProperty 
+			Id="PreUninstall" 
+			Value='"powershell.exe" -ExecutionPolicy Bypass -NonInteractive -File "[INSTALLFOLDER]pre_uninstall.ps1"'
+            Sequence="execute" 
+			Before="PreUninstall" />
+		<CustomAction
+			Id="PreUninstall"
+			Return="ignore"
+			Impersonate="no"
+			Execute="deferred"
+			BinaryKey="WixCA"
+			DllEntry="WixQuietExec" />
+
+		<!-- Uninstall Glouton if it was install using the old NSIS installer. -->
+		<!-- This is needed because otherwise there will be two Glouton listed in the installed applications. -->
+		<!-- The installer is executed asynchronously so we wait 10 seconds to let it finish the uninstallation. -->
+		<!-- We use "ping" to wait because the alternative to sleep on windows is "timeout" which opens a command prompt. -->
+		<SetProperty 
+			Id="UninstallOldInstaller" 
+			Value='"cmd.exe" /C "[ProgramFilesFolder]\glouton\Uninstall.exe" /S &amp;&amp; ping -n 10 127.0.0.1 > nul'
+            Sequence="execute" 
+			Before="UninstallOldInstaller" />
+		<CustomAction
+			Id="UninstallOldInstaller"
+			Return="ignore"
+			Impersonate="no"
+			Execute="deferred"
+			BinaryKey="WixCA"
+			DllEntry="WixQuietExec" />
+
+		<!-- _UNINSTALL is only true during uninstallation: https://stackoverflow.com/a/731700 -->
+		<SetProperty Id="_UNINSTALL" After="FindRelatedProducts" Value="1"><![CDATA[(NOT UPGRADINGPRODUCTCODE) AND (REMOVE="ALL")]]></SetProperty>
+		
+		<InstallExecuteSequence>
+			<Custom Action="UninstallOldInstaller" Before="InstallFiles">NOT WIX_UPGRADE_DETECTED</Custom>
+
+			<Custom Action="PostInstall" After="InstallFiles">NOT _UNINSTALL</Custom>
+			<Custom Action="PreUninstall" After="InstallInitialize">_UNINSTALL</Custom>
+		</InstallExecuteSequence>
+
+		<!-- List components to install -->
+		<Feature Id="DefaultFeature" Title="Glouton" Level="1">
+			<ComponentGroupRef Id="Files" />
+		</Feature>
+	</Product>
+</Wix>
