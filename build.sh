@@ -2,6 +2,7 @@
 
 set -e
 
+GORELEASER_VERSION="v1.11.4"
 USER_UID=$(id -u)
 
 rm -fr work
@@ -47,8 +48,6 @@ if [ "${SKIP_JS}" != "1" -a "${ONLY_GO}" != "1" ]; then
       node:16 \
       sh -c "(mkdir -p /go/pkg/node && chown node -R /go/pkg/node && npm install --legacy-peer-deps && npm run deploy); result=\$?; chown -R $USER_UID dist ../api/static/assets/js/ ../api/static/assets/css/; exit \$result"
 fi
-
-GORELEASER_VERSION="v1.10.3"
 
 if [ -z "${GLOUTON_VERSION}" ]; then
    GLOUTON_VERSION=$(date -u +%y.%m.%d.%H%M%S)
