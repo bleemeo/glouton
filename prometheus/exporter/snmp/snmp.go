@@ -186,7 +186,9 @@ func (t *Target) GatherWithState(ctx context.Context, state registry.GatherState
 	status, msg := t.getStatus()
 	mfs := processMFS(result, state, status, t.lastStatus, msg)
 
-	t.lastStatus = status
+	if state.FromScrapeLoop {
+		t.lastStatus = status
+	}
 
 	return mfs, err
 }
@@ -300,8 +302,9 @@ func processMFS(
 		}
 	}
 
-	// Send the snmp_device_status metric when the agent status is ok or when the agent has just become unreachable.
-	if status == types.StatusOk || status == types.StatusCritical && lastStatus != types.StatusCritical {
+	// Send the snmp_device_status metric when the agent status is ok, when
+	// the agent has just become unreachable or when called from /metrics.
+	if status == types.StatusOk || status == types.StatusCritical && lastStatus != types.StatusCritical || !state.FromScrapeLoop {
 		snmpDeviceStatus := &dto.MetricFamily{
 			Name: proto.String("snmp_device_status"),
 			Type: dto.MetricType_GAUGE.Enum(),
