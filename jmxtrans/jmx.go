@@ -186,7 +186,7 @@ func (j *JMX) Run(ctx context.Context) error {
 		serverCancel()
 		serverWaitGroup.Wait()
 
-		serverContext = nil //nolint:contextcheck // complain about non-inherited NEW context... it not new, it no context.
+		serverContext = nil
 	}
 
 	j.l.Lock()

@@ -129,7 +129,7 @@ func (bc *baseCheck) Check(ctx context.Context, scheduleUpdate func(runAt time.T
 	} else {
 		// The context used in openSockets must outlive the Check() since
 		// it's used to maintain the persistent connection.
-		bc.openSockets(scheduleUpdate) //nolint:contextcheck
+		bc.openSockets(scheduleUpdate)
 	}
 
 	bc.previousStatus = status

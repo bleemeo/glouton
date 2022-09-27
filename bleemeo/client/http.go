@@ -361,7 +361,7 @@ func (c *HTTPClient) do(ctx context.Context, req *http.Request, result interface
 		// reset the JWT token if the call wasn't authorized, the JWT token may have expired
 		if withAuth && firstCall && err != nil {
 			if apiError, ok := err.(APIError); ok {
-				if apiError.StatusCode == 401 {
+				if apiError.StatusCode == http.StatusUnauthorized {
 					c.jwt.Token = ""
 
 					return c.do(ctx, req, result, false, withAuth, forceInsecure)
@@ -539,14 +539,14 @@ func (c *HTTPClient) sendRequest(ctx context.Context, req *http.Request, result 
 		resp.Body.Close()
 	}()
 
-	if resp.StatusCode != 429 && resp.StatusCode < 500 {
+	if resp.StatusCode != http.StatusTooManyRequests && resp.StatusCode < http.StatusInternalServerError {
 		c.throttleConsecutive = 0
 	}
 
-	if resp.StatusCode >= 400 {
+	if resp.StatusCode >= http.StatusBadRequest {
 		err := fieldsFromResponse(resp, decodeError(resp))
 
-		if resp.StatusCode == 429 {
+		if resp.StatusCode == http.StatusTooManyRequests {
 			c.throttleConsecutive++
 
 			delay := minimalThrottle + time.Duration(10*c.throttleConsecutive)*time.Second
