@@ -83,8 +83,6 @@ else
 
    echo $GLOUTON_VERSION > dist/VERSION
 
-   ./packaging/windows/generate_installer.sh
-
    # Build Docker image using buildx. We use docker buildx instead of goreleaser because
    # goreleaser use "docker manifest" which require to push image to a registry. This means we ends with 4 tags:
    # 3 for each of the 3 supported architectures and 1 for the multi-architecture image.
@@ -92,4 +90,6 @@ else
    docker buildx build ${GLOUTON_BUILDX_OPTION} .
 
    sed "s@image: bleemeo/bleemeo-agent:latest@image: bleemeo/bleemeo-agent:${GLOUTON_VERSION}@" k8s.yaml > dist/k8s.yaml
+
+   ./packaging/windows/generate_installer.sh
 fi
