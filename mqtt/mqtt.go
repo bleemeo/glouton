@@ -50,6 +50,7 @@ type Client struct {
 	pendingMessages chan message
 	connectionLost  chan interface{}
 	stats           *mqttStats
+	disableNotify   chan interface{}
 
 	l       sync.Mutex
 	mqtt    paho.Client
@@ -59,6 +60,7 @@ type Client struct {
 	currentConnectDelay time.Duration
 	consecutiveErrors   int
 	lastReport          time.Time
+	disabledUntil       time.Time
 }
 
 type Options struct {
@@ -70,6 +72,8 @@ type Options struct {
 	FirstClient bool
 	// Keep a state between reloads.
 	ReloadState types.MQTTReloadState
+	// Function called when too many errors happened .
+	TooManyErrorsHandler func(ctx context.Context)
 }
 
 type message struct {
@@ -93,6 +97,7 @@ func New(opts Options) *Client {
 		mqtt:            opts.ReloadState.Client(),
 		stats:           newMQTTStats(),
 		pendingMessages: make(chan message, maxPendingMessages),
+		disableNotify:   make(chan interface{}),
 		connectionLost:  make(chan interface{}),
 	}
 
@@ -202,36 +207,32 @@ mainLoop:
 		c.lastConnectionTimes = lastConnectionTimes
 		c.currentConnectDelay = currentConnectDelay
 		c.consecutiveErrors = consecutiveError
+
+		disabledUntil := c.disabledUntil
 		c.l.Unlock()
 
-		// disableUntil, disableReason := c.getDisableUntil()
 		switch {
-		// TODO
-		// case time.Now().Before(disableUntil):
-		// 	if disableReason == bleemeoTypes.DisableTimeDrift {
-		// 		_ = c.shutdownTimeDrift()
-		// 	}
-		// 	if c.mqttClient != nil {
-		// 		logger.V(2).Printf("Disconnecting from MQTT due to '%v'", disableReason)
-		// 		c.mqttClient.Disconnect(0)
+		case time.Now().Before(disabledUntil):
+			c.l.Lock()
+			if c.mqtt != nil {
+				c.mqtt.Disconnect(0)
 
-		// 		c.l.Lock()
-		// 		c.mqttClient = nil
-		// 		c.l.Unlock()
-
-		// 	}
+				c.mqtt = nil
+			}
+			c.l.Unlock()
 		case c.mqtt == nil:
 			length := len(lastConnectionTimes)
 
-			// TODO
-			// if length >= 7 && time.Since(lastConnectionTimes[length-7]) < 10*time.Minute {
-			// 	delay := delay.JitterDelay(5*time.Minute, 0.25).Round(time.Second)
+			if length >= 7 && time.Since(lastConnectionTimes[length-7]) < 10*time.Minute {
+				delay := delay.JitterDelay(5*time.Minute, 0.25).Round(time.Second)
 
-			// 	c.Disable(time.Now().Add(delay), bleemeoTypes.DisableTooManyErrors)
-			// 	logger.Printf("Too many attempts to connect to MQTT were made in the last 10 minutes. Disabling MQTT for %v", delay)
+				c.Disable(time.Now().Add(delay))
+				logger.Printf("Too many attempts to connect to MQTT were made in the last 10 minutes. Disabling MQTT for %v", delay)
 
-			// 	continue
-			// }
+				c.opts.TooManyErrorsHandler(ctx)
+
+				continue
+			}
 
 			if length == 0 || time.Since(lastConnectionTimes[length-1]) > currentConnectDelay {
 				lastConnectionTimes = append(lastConnectionTimes, time.Now())
@@ -247,9 +248,7 @@ mainLoop:
 						0.1,
 					)
 					if consecutiveError == 5 {
-						// TODO
-						// Trigger facts synchronization to check for duplicate agent
-						// _, _ = c.option.Facts.Facts(ctx, time.Minute)
+						c.opts.TooManyErrorsHandler(ctx)
 					}
 				}
 
@@ -316,6 +315,7 @@ mainLoop:
 					logger.V(1).Printf("Retry to connection to MQTT in %v", delay)
 				}
 			}
+		case <-c.disableNotify:
 		case <-ticker.C:
 		}
 	}
@@ -477,12 +477,14 @@ func (c *Client) DiagnosticArchive(ctx context.Context, archive types.ArchiveWri
 		CurrentConnectDelay time.Duration
 		ConsecutiveErrors   int
 		LastReport          time.Time
+		DisabledUntil       time.Time
 	}{
 		PendingMessageCount: len(c.pendingMessages),
 		LastConnectionTimes: c.lastConnectionTimes,
 		CurrentConnectDelay: c.currentConnectDelay,
 		ConsecutiveErrors:   c.consecutiveErrors,
 		LastReport:          c.lastReport,
+		DisabledUntil:       c.disabledUntil,
 	}
 
 	enc := json.NewEncoder(file)
@@ -497,4 +499,35 @@ func (c *Client) LastReport() time.Time {
 	defer c.l.Unlock()
 
 	return c.lastReport
+}
+
+// Disable will disable the MQTT connection until given time.
+// To re-enable use ClearDisable().
+func (c *Client) Disable(until time.Time) {
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	c.disabledUntil = until
+
+	if c.disableNotify != nil {
+		select {
+		case c.disableNotify <- nil:
+		default:
+		}
+	}
+}
+
+func (c *Client) DisabledUntil() time.Time {
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	return c.disabledUntil
+}
+
+func (c *Client) Disconnect(timeout time.Duration) {
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	c.mqtt.Disconnect(uint(timeout.Milliseconds()))
+	c.mqtt = nil
 }

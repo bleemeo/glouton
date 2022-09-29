@@ -929,21 +929,19 @@ func (c *Connector) disableCallback(reason types.DisableReason, until time.Time)
 }
 
 func (c *Connector) disableMqtt(mqtt *mqtt.Client, reason types.DisableReason, until time.Time) {
-	if mqtt != nil {
-		// delay to apply between re-enabling the synchronizer and the mqtt client. The goal is to allow for
-		// the synchronizer to disable mqtt again before mqtt have time to reconnect or send metrics.
-		var mqttDisableDelay time.Duration
+	// Delay to apply between re-enabling the synchronizer and the mqtt client. The goal is to allow for
+	// the synchronizer to disable mqtt again before mqtt have time to reconnect or send metrics.
+	var mqttDisableDelay time.Duration
 
-		switch reason { //nolint:exhaustive,nolintlint
-		case types.DisableTooManyErrors:
-			mqttDisableDelay = 20 * time.Second
-		case types.DisableAgentTooOld, types.DisableDuplicatedAgent, types.DisableAuthenticationError, types.DisableTimeDrift:
-			// give time to the synchronizer check if the error is solved
-			mqttDisableDelay = 80 * time.Second
-		default:
-			mqttDisableDelay = 20 * time.Second
-		}
-
-		mqtt.Disable(until.Add(mqttDisableDelay), reason)
+	switch reason { //nolint:exhaustive,nolintlint
+	case types.DisableTooManyErrors:
+		mqttDisableDelay = 20 * time.Second
+	case types.DisableAgentTooOld, types.DisableDuplicatedAgent, types.DisableAuthenticationError, types.DisableTimeDrift:
+		// Give time to the synchronizer check if the error is solved.
+		mqttDisableDelay = 80 * time.Second
+	default:
+		mqttDisableDelay = 20 * time.Second
 	}
+
+	mqtt.Disable(until.Add(mqttDisableDelay), reason)
 }

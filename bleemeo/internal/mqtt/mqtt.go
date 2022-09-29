@@ -87,9 +87,8 @@ type Client struct {
 	pendingPoints    []types.MetricPoint
 	maxPointCount    int
 	sendingSuspended bool // stop sending points, used when the user is is read-only mode
-	disabledUntil    time.Time
-	disableReason    bleemeoTypes.DisableReason
 	consecutiveError int
+	disableReason    bleemeoTypes.DisableReason
 }
 
 type metricPayload struct {
@@ -145,10 +144,16 @@ func New(opts Option) *Client {
 		opts: opts,
 	}
 
+	checkDuplicate := func(ctx context.Context) {
+		// Trigger facts synchronization to check for duplicate agent.
+		_, _ = opts.Facts.Facts(ctx, 0)
+	}
+
 	client.mqtt = mqtt.New(mqtt.Options{
-		OptionsFunc: client.pahoOptions,
-		FirstClient: opts.ReloadState.IsFirstRun(),
-		ReloadState: opts.MQTTReloadState,
+		OptionsFunc:          client.pahoOptions,
+		FirstClient:          opts.ReloadState.IsFirstRun(),
+		ReloadState:          opts.MQTTReloadState,
+		TooManyErrorsHandler: checkDuplicate,
 	})
 
 	if reloadState == nil {
@@ -186,24 +191,25 @@ func (c *Client) Disable(until time.Time, reason bleemeoTypes.DisableReason) {
 	c.l.Lock()
 	defer c.l.Unlock()
 
-	if c.disabledUntil.Before(until) {
-		c.disabledUntil = until
-		c.disableReason = reason
+	if c.mqtt.DisabledUntil().Before(until) {
+		logger.V(2).Printf("Disconnecting from MQTT due to '%v'", reason)
+		c.mqtt.Disable(until)
 
-		if reason == bleemeoTypes.DisableTooManyErrors {
-			// Trigger facts synchronization to check for duplicate agent
-			_, _ = c.opts.Facts.Facts(c.ctx, 0)
+		if reason == bleemeoTypes.DisableTimeDrift {
+			_ = c.shutdownTimeDrift()
 		}
+
+		c.disableReason = reason
 	}
 }
 
-// ClearDisable remove disabling if reason match reasonToClear. It remove the disabling only after delay.
+// ClearDisable enables MQTT if reason match reasonToClear after delay.
 func (c *Client) ClearDisable(reasonToClear bleemeoTypes.DisableReason, delay time.Duration) {
 	c.l.Lock()
 	defer c.l.Unlock()
 
-	if time.Now().Before(c.disabledUntil) && c.disableReason == reasonToClear {
-		c.disabledUntil = time.Now().Add(delay)
+	if time.Now().Before(c.mqtt.DisabledUntil()) && c.disableReason == reasonToClear {
+		c.mqtt.Disable(time.Now().Add(delay))
 	}
 }
 
@@ -319,9 +325,7 @@ func (c *Client) DiagnosticArchive(ctx context.Context, archive types.ArchiveWri
 		PendingPointsCount         int
 		MaxPointCount              int
 		SendingSuspended           bool
-		DisabledUntil              time.Time
 		DisableReason              bleemeoTypes.DisableReason
-		LastResend                 time.Time
 	}{
 		StartedAt:                  c.startedAt,
 		LastRegisteredMetricsCount: c.lastRegisteredMetricsCount,
@@ -329,7 +333,6 @@ func (c *Client) DiagnosticArchive(ctx context.Context, archive types.ArchiveWri
 		PendingPointsCount:         len(c.pendingPoints),
 		MaxPointCount:              c.maxPointCount,
 		SendingSuspended:           c.sendingSuspended,
-		DisabledUntil:              c.disabledUntil,
 		DisableReason:              c.disableReason,
 	}
 
@@ -437,12 +440,7 @@ func (c *Client) tlsConfig() *tls.Config {
 }
 
 func (c *Client) shutdownTimeDrift() error {
-	if c.mqtt == nil {
-		return nil
-	}
-
-	// TODO
-	// deadline := time.Now().Add(5 * time.Second)
+	deadline := time.Now().Add(5 * time.Second)
 
 	if c.mqtt.IsConnectionOpen() {
 		payload, err := json.Marshal(map[string]string{"disconnect-cause": "Clean shutdown, time drift"})
@@ -453,12 +451,7 @@ func (c *Client) shutdownTimeDrift() error {
 		c.mqtt.Publish(fmt.Sprintf("v1/agent/%s/disconnect", c.opts.AgentID), payload, true)
 	}
 
-	c.l.Lock()
-	defer c.l.Unlock()
-
-	// TODO
-	// c.mqttClient.Disconnect(uint(time.Until(deadline).Seconds() * 1000))
-	// c.mqttClient = nil
+	c.mqtt.Disconnect(time.Until(deadline))
 
 	return nil
 }
@@ -527,11 +520,13 @@ func (c *Client) addPoints(points []types.MetricPoint) {
 	c.l.Lock()
 	defer c.l.Unlock()
 
-	if time.Now().Before(c.disabledUntil) && c.disableReason == bleemeoTypes.DisableDuplicatedAgent {
+	disabledUntil := c.mqtt.DisabledUntil()
+
+	if time.Now().Before(disabledUntil) && c.disableReason == bleemeoTypes.DisableDuplicatedAgent {
 		return
 	}
 
-	if time.Now().Before(c.disabledUntil) && c.disableReason == bleemeoTypes.DisableTimeDrift {
+	if time.Now().Before(disabledUntil) && c.disableReason == bleemeoTypes.DisableTimeDrift {
 		return
 	}
 
@@ -715,13 +710,6 @@ func (c *Client) preparePoints(registreredMetricByKey map[string]bleemeoTypes.Me
 	}
 
 	return payload
-}
-
-func (c *Client) getDisableUntil() (time.Time, bleemeoTypes.DisableReason) {
-	c.l.Lock()
-	defer c.l.Unlock()
-
-	return c.disabledUntil, c.disableReason
 }
 
 func (c *Client) onConnect(mqttClient paho.Client) {

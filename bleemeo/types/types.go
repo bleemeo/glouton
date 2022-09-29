@@ -227,6 +227,9 @@ type MQTTClient interface {
 	IsConnectionOpen() bool
 	DiagnosticArchive(ctx context.Context, archive types.ArchiveWriter) error
 	LastReport() time.Time
+	Disable(until time.Time)
+	DisabledUntil() time.Time
+	Disconnect(timeout time.Duration)
 }
 
 // JWT used to authenticate with the Bleemeo API.
