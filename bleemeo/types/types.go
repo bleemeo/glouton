@@ -47,6 +47,7 @@ type GlobalOption struct {
 	NotifyLabelsUpdate      func()
 	BlackboxScraperName     string
 	ReloadState             BleemeoReloadState
+	MQTTReloadState         types.MQTTReloadState
 
 	UpdateMetricResolution func(ctx context.Context, defaultResolution time.Duration, snmpResolution time.Duration)
 	UpdateThresholds       func(ctx context.Context, thresholds map[string]threshold.Threshold, firstUpdate bool)
@@ -196,8 +197,8 @@ type GloutonAgentConfig struct {
 
 // BleemeoReloadState is used to keep some Bleemeo components alive during reloads.
 type BleemeoReloadState interface {
-	PahoWrapper() PahoWrapper
-	SetPahoWrapper(client PahoWrapper)
+	MQTTReloadState() MQTTReloadState
+	SetMQTTReloadState(client MQTTReloadState)
 	NextFullSync() time.Time
 	SetNextFullSync(t time.Time)
 	FullSyncCount() int
@@ -208,12 +209,9 @@ type BleemeoReloadState interface {
 	Close()
 }
 
-// PahoWrapper allows changing some event handlers at runtime.
-type PahoWrapper interface {
-	Client() paho.Client
-	SetClient(cli paho.Client)
-	OnConnectionLost(cli paho.Client, err error)
-	ConnectionLostChannel() <-chan error
+// MQTTReloadState allows changing some event handlers at runtime.
+type MQTTReloadState interface {
+	SetMQTT(mqtt MQTTClient)
 	OnConnect(cli paho.Client)
 	ConnectChannel() <-chan paho.Client
 	OnNotification(cli paho.Client, msg paho.Message)
@@ -221,6 +219,14 @@ type PahoWrapper interface {
 	PopPendingPoints() []types.MetricPoint
 	SetPendingPoints(points []types.MetricPoint)
 	Close()
+}
+
+type MQTTClient interface {
+	Publish(topic string, payload interface{}, retry bool)
+	Run(ctx context.Context)
+	IsConnectionOpen() bool
+	DiagnosticArchive(ctx context.Context, archive types.ArchiveWriter) error
+	LastReport() time.Time
 }
 
 // JWT used to authenticate with the Bleemeo API.

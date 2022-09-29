@@ -42,7 +42,7 @@ var ErrBadOption = errors.New("bad option")
 
 // reloadState implements the types.BleemeoReloadState interface.
 type reloadState struct {
-	pahoWrapper   types.PahoWrapper
+	mqtt          types.MQTTReloadState
 	nextFullSync  time.Time
 	fullSyncCount int
 	jwt           types.JWT
@@ -55,12 +55,12 @@ func NewReloadState() types.BleemeoReloadState {
 	}
 }
 
-func (rs *reloadState) PahoWrapper() types.PahoWrapper {
-	return rs.pahoWrapper
+func (rs *reloadState) MQTTReloadState() types.MQTTReloadState {
+	return rs.mqtt
 }
 
-func (rs *reloadState) SetPahoWrapper(client types.PahoWrapper) {
-	rs.pahoWrapper = client
+func (rs *reloadState) SetMQTTReloadState(client types.MQTTReloadState) {
+	rs.mqtt = client
 }
 
 func (rs *reloadState) NextFullSync() time.Time {
@@ -98,8 +98,8 @@ func (rs *reloadState) IsFirstRun() bool {
 }
 
 func (rs *reloadState) Close() {
-	if rs.pahoWrapper != nil {
-		rs.pahoWrapper.Close()
+	if rs.mqtt != nil {
+		rs.mqtt.Close()
 	}
 }
 
@@ -208,7 +208,6 @@ func (c *Connector) initMQTT(previousPoint []gloutonTypes.MetricPoint) {
 			InitialPoints:        previousPoint,
 			GetJWT:               c.sync.GetJWT,
 		},
-		c.option.ReloadState.IsFirstRun(),
 	)
 
 	// if the connector is disabled, disable mqtt for the same period

@@ -70,34 +70,26 @@ type Option struct {
 	InitialPoints []types.MetricPoint
 }
 
-type mqttClient interface {
-	Publish(topic string, payload interface{}, retry bool)
-}
-
 // Client is an MQTT client for Bleemeo Cloud platform.
 type Client struct {
 	opts Option
 
 	// Those variable are only written once or read/written exclusively from the Run() goroutine. No lock needed
 	ctx                        context.Context //nolint:containedctx
-	mqtt                       mqttClient
+	mqtt                       bleemeoTypes.MQTTClient
 	encoder                    mqttEncoder
 	failedPoints               []types.MetricPoint
 	lastRegisteredMetricsCount int
 	lastFailedPointsRetry      time.Time
 
-	l                   sync.Mutex
-	startedAt           time.Time
-	pendingPoints       []types.MetricPoint
-	lastReport          time.Time
-	maxPointCount       int
-	sendingSuspended    bool // stop sending points, used when the user is is read-only mode
-	disabledUntil       time.Time
-	disableReason       bleemeoTypes.DisableReason
-	connectionLost      chan interface{}
-	lastConnectionTimes []time.Time
-	currentConnectDelay time.Duration
-	consecutiveError    int
+	l                sync.Mutex
+	startedAt        time.Time
+	pendingPoints    []types.MetricPoint
+	maxPointCount    int
+	sendingSuspended bool // stop sending points, used when the user is is read-only mode
+	disabledUntil    time.Time
+	disableReason    bleemeoTypes.DisableReason
+	consecutiveError int
 }
 
 type metricPayload struct {
@@ -139,18 +131,15 @@ func (f forceDecimalFloat) MarshalJSON() ([]byte, error) {
 }
 
 // New create a new client.
-func New(opts Option, first bool) *Client {
-	// TODO: Get the previous pending points.
-	// var (
-	// 	initialPoints []types.MetricPoint
-	// )
+func New(opts Option) *Client {
+	var initialPoints []types.MetricPoint
 
-	// pahoWrapper := option.ReloadState.PahoWrapper()
-	// if pahoWrapper != nil {
-	// 	initialPoints = pahoWrapper.PopPendingPoints()
-	// }
+	reloadState := opts.ReloadState.MQTTReloadState()
+	if reloadState != nil {
+		initialPoints = reloadState.PopPendingPoints()
+	}
 
-	// option.InitialPoints = append(option.InitialPoints, initialPoints...)
+	opts.InitialPoints = append(opts.InitialPoints, initialPoints...)
 
 	client := &Client{
 		opts: opts,
@@ -158,20 +147,19 @@ func New(opts Option, first bool) *Client {
 
 	client.mqtt = mqtt.New(mqtt.Options{
 		OptionsFunc: client.pahoOptions,
-		FirstClient: first,
-		ReloadState: opts.ReloadState,
+		FirstClient: opts.ReloadState.IsFirstRun(),
+		ReloadState: opts.MQTTReloadState,
 	})
 
-	// TODO
-	// if pahoWrapper == nil {
-	// 	pahoWrapper = NewPahoWrapper(PahoWrapperOptions{
-	// 		UpgradeFile:     client.options.Config.String("agent.upgrade_file"),
-	// 		AutoUpgradeFile: client.options.Config.String("agent.auto_upgrade_file"),
-	// 		AgentID:         client.options.AgentID,
-	// 	})
+	if reloadState == nil {
+		reloadState = NewReloadState(ReloadStateOptions{
+			UpgradeFile:     opts.Config.String("agent.upgrade_file"),
+			AutoUpgradeFile: opts.Config.String("agent.auto_upgrade_file"),
+			AgentID:         opts.AgentID,
+		})
 
-	// 	options.ReloadState.SetPahoWrapper(pahoWrapper)
-	// }
+		opts.ReloadState.SetMQTTReloadState(reloadState)
+	}
 
 	return client
 }
@@ -189,13 +177,11 @@ func (c *Client) connected() bool {
 		return false
 	}
 
-	// TODO
-	// return c.mqttClient.IsConnectionOpen()
-	return true
+	return c.mqtt.IsConnectionOpen()
 }
 
 // Disable will disable the MQTT connection until given time.
-// To re-enable use the (not yet implemented) Enable().
+// To re-enable use ClearDisable().
 func (c *Client) Disable(until time.Time, reason bleemeoTypes.DisableReason) {
 	c.l.Lock()
 	defer c.l.Unlock()
@@ -226,7 +212,6 @@ func (c *Client) Run(ctx context.Context) error {
 	c.ctx = ctx
 
 	c.l.Lock()
-	c.connectionLost = make(chan interface{})
 	c.pendingPoints = c.opts.InitialPoints
 	c.opts.InitialPoints = nil
 	c.l.Unlock()
@@ -243,7 +228,35 @@ func (c *Client) Run(ctx context.Context) error {
 	c.startedAt = time.Now()
 	c.l.Unlock()
 
+	var wg sync.WaitGroup
+
+	wg.Add(1)
+
+	go func() {
+		defer types.ProcessPanic()
+
+		c.receiveEvents(ctx)
+		wg.Done()
+	}()
+
+	wg.Add(1)
+
+	go func() {
+		c.mqtt.Run(ctx)
+
+		wg.Done()
+	}()
+
 	err := c.run(ctx)
+
+	wg.Wait()
+
+	rs := c.opts.ReloadState.MQTTReloadState()
+	rs.SetMQTT(c.mqtt)
+
+	// Save the pending points.
+	points := c.PopPoints(true)
+	rs.SetPendingPoints(points)
 
 	return err
 }
@@ -263,6 +276,8 @@ func (c *Client) DiagnosticPage() string {
 // DiagnosticArchive add to a zipfile useful diagnostic information.
 func (c *Client) DiagnosticArchive(ctx context.Context, archive types.ArchiveWriter) error {
 	c.l.Lock()
+	defer c.l.Unlock()
+
 	if len(c.failedPoints) > 100 {
 		file, err := archive.Create("mqtt-failed-metric-points.txt")
 		if err != nil {
@@ -290,15 +305,9 @@ func (c *Client) DiagnosticArchive(ctx context.Context, archive types.ArchiveWri
 		}
 	}
 
-	file, err := archive.Create("bleemeo-mqtt-stats.txt")
-	if err != nil {
-		return err
-	}
+	c.mqtt.DiagnosticArchive(ctx, archive)
 
-	// TODO:
-	// fmt.Fprintf(file, "%s", c.stats)
-
-	file, err = archive.Create("bleemeo-mqtt-state.json")
+	file, err := archive.Create("bleemeo-mqtt-state.json")
 	if err != nil {
 		return err
 	}
@@ -307,31 +316,22 @@ func (c *Client) DiagnosticArchive(ctx context.Context, archive types.ArchiveWri
 		StartedAt                  time.Time
 		LastRegisteredMetricsCount int
 		LastFailedPointsRetry      time.Time
-		PendingMessageCount        int
 		PendingPointsCount         int
-		LastReport                 time.Time
 		MaxPointCount              int
 		SendingSuspended           bool
 		DisabledUntil              time.Time
 		DisableReason              bleemeoTypes.DisableReason
-		LastConnectionTimes        []time.Time
 		LastResend                 time.Time
 	}{
 		StartedAt:                  c.startedAt,
 		LastRegisteredMetricsCount: c.lastRegisteredMetricsCount,
 		LastFailedPointsRetry:      c.lastFailedPointsRetry,
-		// TODO
-		// PendingMessageCount:        len(c.pendingMessages),
-		PendingPointsCount:  len(c.pendingPoints),
-		LastReport:          c.lastReport,
-		MaxPointCount:       c.maxPointCount,
-		SendingSuspended:    c.sendingSuspended,
-		DisabledUntil:       c.disabledUntil,
-		DisableReason:       c.disableReason,
-		LastConnectionTimes: c.lastConnectionTimes,
+		PendingPointsCount:         len(c.pendingPoints),
+		MaxPointCount:              c.maxPointCount,
+		SendingSuspended:           c.sendingSuspended,
+		DisabledUntil:              c.disabledUntil,
+		DisableReason:              c.disableReason,
 	}
-
-	c.l.Unlock()
 
 	enc := json.NewEncoder(file)
 	enc.SetIndent("", "  ")
@@ -341,10 +341,7 @@ func (c *Client) DiagnosticArchive(ctx context.Context, archive types.ArchiveWri
 
 // LastReport returns the date of last report with Bleemeo API.
 func (c *Client) LastReport() time.Time {
-	c.l.Lock()
-	defer c.l.Unlock()
-
-	return c.lastReport
+	return c.mqtt.LastReport()
 }
 
 // HealthCheck perform some health check and logger any issue found.
@@ -379,15 +376,14 @@ func (c *Client) pahoOptions(ctx context.Context) (*paho.ClientOptions, error) {
 	pahoOptions.SetPingTimeout(20 * time.Second)
 	pahoOptions.SetKeepAlive(45 * time.Second)
 
-	// TODO
-	// willPayload, _ := json.Marshal(disconnectCause{"disconnect-will"}) //nolint:errchkjson // False positive.
+	willPayload, _ := json.Marshal(disconnectCause{"disconnect-will"}) //nolint:errchkjson // False positive.
 
-	// pahoOptions.SetBinaryWill(
-	// 	fmt.Sprintf("v1/agent/%s/disconnect", c.option.AgentID),
-	// 	willPayload,
-	// 	1,
-	// 	false,
-	// )
+	pahoOptions.SetBinaryWill(
+		fmt.Sprintf("v1/agent/%s/disconnect", c.opts.AgentID),
+		willPayload,
+		1,
+		false,
+	)
 
 	brokerURL := fmt.Sprintf("%s:%d", c.opts.Config.String("bleemeo.mqtt.host"), c.opts.Config.Int("bleemeo.mqtt.port"))
 
@@ -402,11 +398,10 @@ func (c *Client) pahoOptions(ctx context.Context) (*paho.ClientOptions, error) {
 	}
 
 	pahoOptions.AddBroker(brokerURL)
-	pahoOptions.SetAutoReconnect(false)
 	pahoOptions.SetUsername(fmt.Sprintf("%s@bleemeo.com", c.opts.AgentID))
 
-	pahoWrapper := c.opts.ReloadState.PahoWrapper()
-	pahoOptions.SetOnConnectHandler(pahoWrapper.OnConnect)
+	rs := c.opts.ReloadState.MQTTReloadState()
+	pahoOptions.SetOnConnectHandler(rs.OnConnect)
 
 	password, err := c.opts.GetJWT(ctx)
 	if err != nil {
@@ -448,15 +443,15 @@ func (c *Client) shutdownTimeDrift() error {
 
 	// TODO
 	// deadline := time.Now().Add(5 * time.Second)
-	//
-	// if c.mqttClient.IsConnectionOpen() {
-	// 	payload, err := json.Marshal(map[string]string{"disconnect-cause": "Clean shutdown, time drift"})
-	// 	if err != nil {
-	// 		return err
-	// 	}
 
-	// 	c.publish(fmt.Sprintf("v1/agent/%s/disconnect", c.options.AgentID), payload, true)
-	// }
+	if c.mqtt.IsConnectionOpen() {
+		payload, err := json.Marshal(map[string]string{"disconnect-cause": "Clean shutdown, time drift"})
+		if err != nil {
+			return err
+		}
+
+		c.mqtt.Publish(fmt.Sprintf("v1/agent/%s/disconnect", c.opts.AgentID), payload, true)
+	}
 
 	c.l.Lock()
 	defer c.l.Unlock()
@@ -464,8 +459,6 @@ func (c *Client) shutdownTimeDrift() error {
 	// TODO
 	// c.mqttClient.Disconnect(uint(time.Until(deadline).Seconds() * 1000))
 	// c.mqttClient = nil
-
-	c.opts.ReloadState.PahoWrapper().SetClient(nil)
 
 	return nil
 }
@@ -475,16 +468,11 @@ func (c *Client) SuspendSending(suspended bool) {
 	c.l.Lock()
 	defer c.l.Unlock()
 
-	// send a message on /connect when reconnecting after being in maintenance mode
+	// Send a message on /connect when reconnecting after being in maintenance mode.
 	if c.sendingSuspended && !suspended {
-		// TODO
-		// if c.mqttClient != nil && c.mqttClient.IsConnectionOpen() {
-		// 	// we need to unlock/relock() as sendConnectMessage calls publish() which locks
-		// 	// the mutex too
-		// 	c.l.Unlock()
-		// 	c.sendConnectMessage()
-		// 	c.l.Lock()
-		// }
+		if c.mqtt.IsConnectionOpen() {
+			c.sendConnectMessage()
+		}
 	}
 
 	c.sendingSuspended = suspended
@@ -750,7 +738,7 @@ func (c *Client) onConnect(mqttClient paho.Client) {
 	mqttClient.Subscribe(
 		fmt.Sprintf("v1/agent/%s/notification", c.opts.AgentID),
 		0,
-		c.opts.ReloadState.PahoWrapper().OnNotification,
+		c.opts.ReloadState.MQTTReloadState().OnNotification,
 	)
 }
 
@@ -780,7 +768,7 @@ type notificationPayload struct {
 	MonitorOperationType string `json:"monitor_operation_type,omitempty"`
 }
 
-func (c *Client) onNotification(_ paho.Client, msg paho.Message) {
+func (c *Client) onNotification(msg paho.Message) {
 	if len(msg.Payload()) > 1024*60 {
 		logger.V(1).Printf("Ignoring abnormally big MQTT message")
 
@@ -895,12 +883,19 @@ func (c *Client) ready() bool {
 	return false
 }
 
-// onReload is called when reloading or on a graceful shutdown.
-// The pending points are saved in the reload state and we try to push the pending messages.
-func (c *Client) onReloadAndShutdown() {
-	pahoWrapper := c.opts.ReloadState.PahoWrapper()
+func (c *Client) receiveEvents(ctx context.Context) {
+	rs := c.opts.ReloadState.MQTTReloadState()
 
-	// Save pending points.
-	points := c.PopPoints(true)
-	pahoWrapper.SetPendingPoints(points)
+	for {
+		select {
+		case msg := <-rs.NotificationChannel():
+			c.onNotification(msg)
+		case client := <-rs.ConnectChannel():
+			// We can't use c.mqtt here because it is either nil or outdated,
+			// c.mqtt is updated only after a successful connection.
+			c.onConnect(client)
+		case <-ctx.Done():
+			return
+		}
+	}
 }

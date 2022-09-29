@@ -18,6 +18,8 @@ package mqtt
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	bleemeoTypes "glouton/bleemeo/types"
 	"glouton/delay"
 	"glouton/logger"
@@ -44,22 +46,30 @@ const (
 
 // TODO: Add the connector mqttRestarter.
 type Client struct {
-	l sync.Mutex
-
 	opts            Options
-	mqtt            paho.Client
-	stats           *mqttStats
 	pendingMessages chan message
 	connectionLost  chan interface{}
+	stats           *mqttStats
+
+	l       sync.Mutex
+	mqtt    paho.Client
+	stopped bool
+
+	lastConnectionTimes []time.Time
+	currentConnectDelay time.Duration
+	consecutiveErrors   int
+	lastReport          time.Time
 }
 
 type Options struct {
+	// A unique identifier for this agent.
+	AgentID bleemeoTypes.AgentID
 	// OptionsFunc returns the options to use when connecting to MQTT.
 	OptionsFunc func(ctx context.Context) (*paho.ClientOptions, error)
 	// Whether the client is created for the first time.
 	FirstClient bool
 	// Keep a state between reloads.
-	ReloadState bleemeoTypes.BleemeoReloadState
+	ReloadState types.MQTTReloadState
 }
 
 type message struct {
@@ -80,25 +90,16 @@ func New(opts Options) *Client {
 
 	client := &Client{
 		opts:            opts,
+		mqtt:            opts.ReloadState.Client(),
 		stats:           newMQTTStats(),
 		pendingMessages: make(chan message, maxPendingMessages),
 		connectionLost:  make(chan interface{}),
 	}
 
-	// TODO: Get the previous MQTT client from the reload state to avoid closing the connection.
-	// var (
-	// 	mqttClient    paho.Client
-	// )
-
-	// pahoWrapper := option.ReloadState.PahoWrapper()
-	// if pahoWrapper != nil {
-	// 	mqttClient = pahoWrapper.Client()
-	// }
-
 	return client
 }
 
-func (c *Client) run(ctx context.Context) {
+func (c *Client) Run(ctx context.Context) {
 	var wg sync.WaitGroup
 
 	wg.Add(1)
@@ -130,7 +131,14 @@ func (c *Client) run(ctx context.Context) {
 
 	wg.Wait()
 
+	c.l.Lock()
+	c.stopped = true
+	c.l.Unlock()
+
 	close(c.pendingMessages)
+
+	// Keep the client during reloads to avoid closing the connection.
+	c.opts.ReloadState.SetClient(c.mqtt)
 }
 
 func (c *Client) setupMQTT(ctx context.Context) (paho.Client, error) {
@@ -139,9 +147,10 @@ func (c *Client) setupMQTT(ctx context.Context) (paho.Client, error) {
 		return nil, err
 	}
 
-	// TODO
-	// opts.SetConnectionLostHandler(pahoWrapper.OnConnectionLost)
-	opts.SetConnectionLostHandler(c.onConnectionLost)
+	opts.SetConnectionLostHandler(c.opts.ReloadState.OnConnectionLost)
+
+	// We use our own automatic reconnection logic which is more reliable.
+	opts.SetAutoReconnect(false)
 
 	return paho.NewClient(opts), err
 }
@@ -150,6 +159,9 @@ func (c *Client) setupMQTT(ctx context.Context) (paho.Client, error) {
 // If retry is set to true and MQTT is currently unreachable, the client will
 // retry to send the message later, else it will be dropped.
 func (c *Client) Publish(topic string, payload interface{}, retry bool) {
+	c.l.Lock()
+	defer c.l.Unlock()
+
 	msg := message{
 		retry:   retry,
 		payload: payload,
@@ -165,7 +177,9 @@ func (c *Client) Publish(topic string, payload interface{}, retry bool) {
 		c.stats.messagePublished(msg.token, time.Now())
 	}
 
-	c.pendingMessages <- msg
+	if !c.stopped {
+		c.pendingMessages <- msg
+	}
 }
 
 func (c *Client) onConnectionLost(_ paho.Client, err error) {
@@ -184,12 +198,11 @@ func (c *Client) connectionManager(ctx context.Context) {
 
 mainLoop:
 	for ctx.Err() == nil {
-		// TODO: Diagnostic
-		// c.l.Lock()
-		// c.lastConnectionTimes = lastConnectionTimes
-		// c.currentConnectDelay = currentConnectDelay
-		// c.consecutiveError = consecutiveError
-		// c.l.Unlock()
+		c.l.Lock()
+		c.lastConnectionTimes = lastConnectionTimes
+		c.currentConnectDelay = currentConnectDelay
+		c.consecutiveErrors = consecutiveError
+		c.l.Unlock()
 
 		// disableUntil, disableReason := c.getDisableUntil()
 		switch {
@@ -206,7 +219,6 @@ mainLoop:
 		// 		c.mqttClient = nil
 		// 		c.l.Unlock()
 
-		// 		c.option.ReloadState.PahoWrapper().SetClient(nil)
 		// 	}
 		case c.mqtt == nil:
 			length := len(lastConnectionTimes)
@@ -241,7 +253,7 @@ mainLoop:
 					}
 				}
 
-				mqttClient, err := c.setupMQTT(ctx)
+				mqtt, err := c.setupMQTT(ctx)
 				if err != nil {
 					delay := currentConnectDelay - time.Since(lastConnectionTimes[len(lastConnectionTimes)-1])
 					logger.V(1).Printf("Unable to connect to MQTT (retry in %v): %v", delay, err)
@@ -249,13 +261,13 @@ mainLoop:
 					continue
 				}
 
-				optionReader := mqttClient.OptionsReader()
+				optionReader := mqtt.OptionsReader()
 				logger.V(2).Printf("Connecting to MQTT broker %v", optionReader.Servers()[0])
 
 				var connectionTimeout bool
 
 				deadline := time.Now().Add(time.Minute)
-				token := mqttClient.Connect()
+				token := mqtt.Connect()
 
 				for !token.WaitTimeout(1 * time.Second) {
 					if ctx.Err() != nil {
@@ -271,18 +283,16 @@ mainLoop:
 
 				if token.Error() != nil || connectionTimeout {
 					delay := currentConnectDelay - time.Since(lastConnectionTimes[len(lastConnectionTimes)-1])
+
 					logger.V(1).Printf("Unable to connect to Bleemeo MQTT (retry in %v): %v", delay, token.Error())
 
 					// we must disconnect to stop paho gorouting that otherwise will be
 					// started multiple time for each Connect()
-					mqttClient.Disconnect(0)
+					mqtt.Disconnect(0)
 				} else {
 					c.l.Lock()
-					c.mqtt = mqttClient
+					c.mqtt = mqtt
 					c.l.Unlock()
-
-					// TODO
-					// c.option.ReloadState.PahoWrapper().SetClient(mqttClient)
 				}
 			}
 		}
@@ -294,9 +304,6 @@ mainLoop:
 			c.mqtt.Disconnect(0)
 			c.mqtt = nil
 			c.l.Unlock()
-
-			// TODO
-			// c.option.ReloadState.PahoWrapper().SetClient(nil)
 
 			length := len(lastConnectionTimes)
 			if length > 0 && time.Since(lastConnectionTimes[length-1]) > stableConnection {
@@ -313,10 +320,7 @@ mainLoop:
 		}
 	}
 
-	// TODO
-	// c.onReloadAndShutdown()
-
-	// make sure all connectionLost are read
+	// Make sure all connection lost events are read.
 	for {
 		select {
 		case <-c.connectionLost:
@@ -426,29 +430,71 @@ func (c *Client) ackOne(msg message, timeout time.Duration) error {
 	c.l.Lock()
 	defer c.l.Unlock()
 
-	// TODO
-	// c.lastReport = now
+	c.lastReport = now
 
 	return nil
 }
 
 func (c *Client) receiveEvents(ctx context.Context) {
-	pahoWrapper := c.opts.ReloadState.PahoWrapper()
-
 	for {
 		select {
-		case <-pahoWrapper.NotificationChannel():
-			// TODO
-			// c.onNotification(c.mqtt, msg)
-		case err := <-pahoWrapper.ConnectionLostChannel():
+		case err := <-c.opts.ReloadState.ConnectionLostChannel():
 			c.onConnectionLost(c.mqtt, err)
-		case <-pahoWrapper.ConnectChannel():
-			// We can't use c.mqtt here because it is either nil or outdated,
-			// c.mqtt is updated only after a successful connection.
-			// TODO
-			// c.onConnect(client)
 		case <-ctx.Done():
 			return
 		}
 	}
+}
+
+func (c *Client) IsConnectionOpen() bool {
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	if c.mqtt == nil {
+		return false
+	}
+
+	return c.mqtt.IsConnectionOpen()
+}
+
+// DiagnosticArchive add to a zipfile useful diagnostic information.
+func (c *Client) DiagnosticArchive(ctx context.Context, archive types.ArchiveWriter) error {
+	file, err := archive.Create("mqtt-stats.txt")
+	if err != nil {
+		return err
+	}
+
+	fmt.Fprintf(file, "%s", c.stats)
+
+	file, err = archive.Create("mqtt-state.json")
+	if err != nil {
+		return err
+	}
+
+	obj := struct {
+		PendingMessageCount int
+		LastConnectionTimes []time.Time
+		CurrentConnectDelay time.Duration
+		ConsecutiveErrors   int
+		LastReport          time.Time
+	}{
+		PendingMessageCount: len(c.pendingMessages),
+		LastConnectionTimes: c.lastConnectionTimes,
+		CurrentConnectDelay: c.currentConnectDelay,
+		ConsecutiveErrors:   c.consecutiveErrors,
+		LastReport:          c.lastReport,
+	}
+
+	enc := json.NewEncoder(file)
+	enc.SetIndent("", "  ")
+
+	return enc.Encode(obj)
+}
+
+// LastReport returns the date of last acknowlegment received.
+func (c *Client) LastReport() time.Time {
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	return c.lastReport
 }

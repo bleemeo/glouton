@@ -1008,6 +1008,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 			BlackboxScraperName:     scaperName,
 			RebuildPromQLRules:      a.rulesManager.RebuildPromQLRules,
 			ReloadState:             a.reloadState.Bleemeo(),
+			MQTTReloadState:         a.reloadState.MQTT(),
 			IsContainerEnabled:      a.containerFilter.ContainerEnabled,
 			IsMetricAllowed:         a.metricFilter.isAllowedAndNotDenied,
 		})

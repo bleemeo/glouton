@@ -9,6 +9,7 @@ import (
 	"glouton/config"
 	"glouton/debouncer"
 	"glouton/logger"
+	"glouton/mqtt"
 	"glouton/types"
 	"os"
 	"os/signal"
@@ -31,6 +32,7 @@ var errWatcherDisabled = errors.New("reload disabled")
 // ReloadState is used to keep some components alive during reloads.
 type ReloadState interface {
 	Bleemeo() bleemeoTypes.BleemeoReloadState
+	MQTT() *mqtt.ReloadState
 	DiagnosticArchive(ctx context.Context, archive types.ArchiveWriter) error
 	WatcherError() error
 	Close()
@@ -38,6 +40,7 @@ type ReloadState interface {
 
 type reloadState struct {
 	bleemeo bleemeoTypes.BleemeoReloadState
+	mqtt    *mqtt.ReloadState
 
 	l             sync.Mutex
 	watcherError  error
@@ -47,6 +50,10 @@ type reloadState struct {
 
 func (rs *reloadState) Bleemeo() bleemeoTypes.BleemeoReloadState {
 	return rs.bleemeo
+}
+
+func (rs *reloadState) MQTT() *mqtt.ReloadState {
+	return rs.mqtt
 }
 
 func (rs *reloadState) DiagnosticArchive(ctx context.Context, archive types.ArchiveWriter) error {
@@ -124,6 +131,7 @@ func (rs *reloadState) setLastReloadDate(lastReload time.Time) {
 
 func (rs *reloadState) Close() {
 	rs.bleemeo.Close()
+	rs.mqtt.Close()
 }
 
 type agentReloader struct {
@@ -155,6 +163,7 @@ func StartReloadManager(configFilesFromFlag []string, reloadDisabled bool) {
 		configFilesFromFlag: configFilesFromFlag,
 		reloadState: &reloadState{
 			bleemeo: bleemeo.NewReloadState(),
+			mqtt:    mqtt.NewReloadState(),
 		},
 	}
 
