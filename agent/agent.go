@@ -737,7 +737,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 			debugAddress := a.oldConfig.String("agent.http_debug.bind_address")
 
 			logger.Printf("Starting debug server on http://%s/debug/pprof/", debugAddress)
-			log.Println(http.ListenAndServe(debugAddress, nil))
+			log.Println(http.ListenAndServe(debugAddress, nil)) //nolint:gosec
 		}()
 	}
 

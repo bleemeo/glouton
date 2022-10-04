@@ -437,7 +437,7 @@ func httpQuery(ctx context.Context, url string, headers []string) string {
 	defer resp.Body.Close()
 
 	// We refuse to decode messages when the request triggered an error
-	if resp.StatusCode >= 400 {
+	if resp.StatusCode >= http.StatusBadRequest {
 		return ""
 	}
 

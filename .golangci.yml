@@ -15,13 +15,17 @@ linters:
     - gci # Conflicts with gofumpt.
     - ireturn # Complain that interface A implementation method return an interface B... it's a requirement of interface A that is unavoidable.
     - nonamedreturns # Warn for every named return, not useful.
-    - nosnakecase # Unusable because it reports problems on variable from other packages: https://github.com/sivchari/nosnakecase/issues/21.
+    - interfacebloat # Warn when an interface has too many methods, not useful.
     # Deprecated and replaced linter.
     - maligned
     - golint
     - interfacer
     - scopelint
     - ifshort
+    - deadcode
+    - structcheck
+    - varcheck
+    - nosnakecase
     # We use maintidx to lint function complexity.
     - gocyclo
     - cyclop
@@ -35,7 +39,8 @@ linters:
     - tagliatelle # Check struct tags. Too many errors we can't fix.
     - wrapcheck # Too many errors, which would require to refactor most returned errors.
     - errorlint # Should be enabled, but it's difficult to test that we keep the same behavior with errors.As.
-    # Requires to review all our tests. Should be done
+    - contextcheck # Requires to change a lot of code to pass a context everywhere.
+    # Requires to review all our tests. Should be done.
     - paralleltest
     - tparallel
     - testpackage
@@ -54,6 +59,12 @@ linters-settings:
       rules:
         json: snake
         yaml: snake
+
+  # Project specific settings.
+  gomoddirectives:
+    # List of allowed `replace` directives. Needed because go.mod doesn't support nolint comments.
+    replace-allow-list:
+      - github.com/prometheus/node_exporter
 
 issues:
   include: # the list of ids of default excludes to include

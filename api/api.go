@@ -250,7 +250,7 @@ func (api *API) diagnosticArchive(ctx context.Context, archive types.ArchiveWrit
 
 // Run starts our API.
 func (api *API) Run(ctx context.Context) error {
-	api.init() //nolint: contextcheck // no idea why we should pass a context...
+	api.init()
 
 	srv := http.Server{
 		Addr:              api.BindAddress,
@@ -265,10 +265,11 @@ func (api *API) Run(ctx context.Context) error {
 
 		<-ctx.Done()
 
+		// Shutdown context. It must outlive the parent context.
 		subCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 
-		if err := srv.Shutdown(subCtx); err != nil { //nolint: contextcheck // its a "shutdown" context. It must outlive the parent context.
+		if err := srv.Shutdown(subCtx); err != nil {
 			logger.V(2).Printf("HTTP server Shutdown: %v", err)
 		}
 

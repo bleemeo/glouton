@@ -1235,7 +1235,7 @@ func (r *Registry) scrape(ctx context.Context, state GatherState, reg *registrat
 	reg.l.Lock()
 
 	if reg.relabelHookSkip && time.Since(reg.lastRebalHookRetry) > hookRetryDelay {
-		r.setupGatherer(reg, reg.gatherer.getSource()) //nolint:contextcheck
+		r.setupGatherer(reg, reg.gatherer.getSource())
 	}
 
 	r.l.Unlock()
