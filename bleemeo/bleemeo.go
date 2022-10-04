@@ -46,13 +46,10 @@ type reloadState struct {
 	nextFullSync  time.Time
 	fullSyncCount int
 	jwt           types.JWT
-	isFirstRun    bool
 }
 
 func NewReloadState() types.BleemeoReloadState {
-	return &reloadState{
-		isFirstRun: true,
-	}
+	return &reloadState{}
 }
 
 func (rs *reloadState) MQTTReloadState() types.MQTTReloadState {
@@ -85,16 +82,6 @@ func (rs *reloadState) JWT() types.JWT {
 
 func (rs *reloadState) SetJWT(jwt types.JWT) {
 	rs.jwt = jwt
-}
-
-func (rs *reloadState) IsFirstRun() bool {
-	if rs.isFirstRun {
-		rs.isFirstRun = false
-
-		return true
-	}
-
-	return false
 }
 
 func (rs *reloadState) Close() {

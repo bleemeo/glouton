@@ -19,9 +19,7 @@ package mqtt
 import (
 	"context"
 	"crypto/tls"
-	"crypto/x509"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"glouton/bleemeo/internal/cache"
 	"glouton/bleemeo/internal/common"
@@ -29,18 +27,17 @@ import (
 	bleemeoTypes "glouton/bleemeo/types"
 	"glouton/logger"
 	"glouton/mqtt"
+	"glouton/mqtt/client"
 	"glouton/types"
 	"math"
 	"math/rand"
-	"os"
+	"net"
 	"strings"
 	"sync"
 	"time"
 
 	paho "github.com/eclipse/paho.mqtt.golang"
 )
-
-var errNotPem = errors.New("not a PEM file")
 
 const (
 	maxPendingPoints = 100000
@@ -77,7 +74,7 @@ type Client struct {
 	// Those variable are only written once or read/written exclusively from the Run() goroutine. No lock needed
 	ctx                        context.Context //nolint:containedctx
 	mqtt                       bleemeoTypes.MQTTClient
-	encoder                    mqttEncoder
+	encoder                    mqtt.Encoder
 	failedPoints               []types.MetricPoint
 	lastRegisteredMetricsCount int
 	lastFailedPointsRetry      time.Time
@@ -140,7 +137,7 @@ func New(opts Option) *Client {
 
 	opts.InitialPoints = append(opts.InitialPoints, initialPoints...)
 
-	client := &Client{
+	c := &Client{
 		opts: opts,
 	}
 
@@ -149,9 +146,8 @@ func New(opts Option) *Client {
 		_, _ = opts.Facts.Facts(ctx, 0)
 	}
 
-	client.mqtt = mqtt.New(mqtt.Options{
-		OptionsFunc:          client.pahoOptions,
-		FirstClient:          opts.ReloadState.IsFirstRun(),
+	c.mqtt = client.New(client.Options{
+		OptionsFunc:          c.pahoOptions,
 		ReloadState:          opts.MQTTReloadState,
 		TooManyErrorsHandler: checkDuplicate,
 	})
@@ -166,7 +162,7 @@ func New(opts Option) *Client {
 		opts.ReloadState.SetMQTTReloadState(reloadState)
 	}
 
-	return client
+	return c
 }
 
 // Connected returns true if MQTT connection is established.
@@ -274,7 +270,16 @@ func (c *Client) DiagnosticPage() string {
 	host := c.opts.Config.String("bleemeo.mqtt.host")
 	port := c.opts.Config.Int("bleemeo.mqtt.port")
 
-	builder.WriteString(common.DiagnosticTCP(host, port, c.tlsConfig()))
+	var tlsConfig *tls.Config
+
+	if c.opts.Config.Bool("bleemeo.mqtt.ssl") {
+		tlsConfig = mqtt.TLSConfig(
+			c.opts.Config.Bool("bleemeo.mqtt.ssl_insecure"),
+			c.opts.Config.String("bleemeo.mqtt.cafile"),
+		)
+	}
+
+	builder.WriteString(common.DiagnosticTCP(host, port, tlsConfig))
 
 	return builder.String()
 }
@@ -311,7 +316,9 @@ func (c *Client) DiagnosticArchive(ctx context.Context, archive types.ArchiveWri
 		}
 	}
 
-	c.mqtt.DiagnosticArchive(ctx, archive)
+	if err := c.mqtt.DiagnosticArchive(ctx, archive); err != nil {
+		return err
+	}
 
 	file, err := archive.Create("bleemeo-mqtt-state.json")
 	if err != nil {
@@ -374,11 +381,6 @@ func (c *Client) HealthCheck() bool {
 func (c *Client) pahoOptions(ctx context.Context) (*paho.ClientOptions, error) {
 	pahoOptions := paho.NewClientOptions()
 
-	// Allow for slightly larger timeout value, just avoid disconnection
-	// with bad network connection.
-	pahoOptions.SetPingTimeout(20 * time.Second)
-	pahoOptions.SetKeepAlive(45 * time.Second)
-
 	willPayload, _ := json.Marshal(disconnectCause{"disconnect-will"}) //nolint:errchkjson // False positive.
 
 	pahoOptions.SetBinaryWill(
@@ -388,10 +390,13 @@ func (c *Client) pahoOptions(ctx context.Context) (*paho.ClientOptions, error) {
 		false,
 	)
 
-	brokerURL := fmt.Sprintf("%s:%d", c.opts.Config.String("bleemeo.mqtt.host"), c.opts.Config.Int("bleemeo.mqtt.port"))
+	brokerURL := net.JoinHostPort(c.opts.Config.String("bleemeo.mqtt.host"), fmt.Sprint(c.opts.Config.Int("bleemeo.mqtt.port")))
 
 	if c.opts.Config.Bool("bleemeo.mqtt.ssl") {
-		tlsConfig := c.tlsConfig()
+		tlsConfig := mqtt.TLSConfig(
+			c.opts.Config.Bool("bleemeo.mqtt.ssl_insecure"),
+			c.opts.Config.String("bleemeo.mqtt.cafile"),
+		)
 
 		pahoOptions.SetTLSConfig(tlsConfig)
 
@@ -414,29 +419,6 @@ func (c *Client) pahoOptions(ctx context.Context) (*paho.ClientOptions, error) {
 	pahoOptions.SetPassword(password)
 
 	return pahoOptions, nil
-}
-
-func (c *Client) tlsConfig() *tls.Config {
-	if !c.opts.Config.Bool("bleemeo.mqtt.ssl") {
-		return nil
-	}
-
-	tlsConfig := &tls.Config{MinVersion: tls.VersionTLS12}
-
-	caFile := c.opts.Config.String("bleemeo.mqtt.cafile")
-	if caFile != "" {
-		if rootCAs, err := loadRootCAs(caFile); err != nil {
-			logger.Printf("Unable to load CAs from %#v", caFile)
-		} else {
-			tlsConfig.RootCAs = rootCAs
-		}
-	}
-
-	if c.opts.Config.Bool("bleemeo.mqtt.ssl_insecure") {
-		tlsConfig.InsecureSkipVerify = true
-	}
-
-	return tlsConfig
 }
 
 func (c *Client) shutdownTimeDrift() error {
@@ -807,22 +789,6 @@ func (c *Client) sendTopinfo(ctx context.Context, cfg bleemeoTypes.GloutonAccoun
 	}
 
 	c.mqtt.Publish(topic, compressed, false)
-}
-
-func loadRootCAs(caFile string) (*x509.CertPool, error) {
-	rootCAs := x509.NewCertPool()
-
-	certs, err := os.ReadFile(caFile)
-	if err != nil {
-		return nil, err
-	}
-
-	ok := rootCAs.AppendCertsFromPEM(certs)
-	if !ok {
-		return nil, errNotPem
-	}
-
-	return rootCAs, nil
 }
 
 func (c *Client) filterPoints(input []types.MetricPoint) []types.MetricPoint {

@@ -19,6 +19,7 @@ package agent
 
 import (
 	"glouton/config"
+	"glouton/mqtt"
 	"net/url"
 	"reflect"
 	"testing"
@@ -278,6 +279,36 @@ func Test_loadConfiguration(t *testing.T) { //nolint:maintidx
 		return u
 	}
 
+	defaultMQTTconfig := mqtt.Config{
+		Host: "localhost",
+		Port: 1883,
+		SSL:  false,
+	}
+
+	defaultSNMPConfig := SNMP{
+		ExporterURL: URLMustParse("http://localhost:9116/snmp"),
+	}
+
+	defaultContainersConfig := Container{
+		Runtime: ContainerRuntime{
+			ContainerD: ContainerRuntimeAddresses{
+				Addresses:             []string{"/run/containerd/containerd.sock", "/run/k3s/containerd/containerd.sock"},
+				DisablePrefixHostRoot: false,
+			},
+			Docker: ContainerRuntimeAddresses{
+				Addresses:             []string{"", "unix:///run/docker.sock", "unix:///var/run/docker.sock"},
+				DisablePrefixHostRoot: false,
+			},
+		},
+		DisabledByDefault: false,
+	}
+
+	defaultConfig := Config{
+		SNMP:      defaultSNMPConfig,
+		Container: defaultContainersConfig,
+		MQTT:      defaultMQTTconfig,
+	}
+
 	tests := []struct {
 		name        string
 		configFiles []string
@@ -305,28 +336,7 @@ func Test_loadConfiguration(t *testing.T) { //nolint:maintidx
 			warnings: []string{
 				"setting is deprecated: metrics.prometheus. See https://docs.bleemeo.com/metrics-sources/prometheus",
 			},
-			wantCfg: Config{
-				SNMP: SNMP{ExporterURL: URLMustParse("http://localhost:9116/snmp")},
-				Container: Container{
-					Runtime: ContainerRuntime{
-						Docker: ContainerRuntimeAddresses{
-							Addresses: []string{
-								"",
-								"unix:///run/docker.sock",
-								"unix:///var/run/docker.sock",
-							},
-							DisablePrefixHostRoot: false,
-						},
-						ContainerD: ContainerRuntimeAddresses{
-							Addresses: []string{
-								"/run/containerd/containerd.sock",
-								"/run/k3s/containerd/containerd.sock",
-							},
-							DisablePrefixHostRoot: false,
-						},
-					},
-				},
-			},
+			wantCfg: defaultConfig,
 		},
 		{
 			name: "new file",
@@ -343,28 +353,7 @@ func Test_loadConfiguration(t *testing.T) { //nolint:maintidx
 				},
 			},
 			warnings: nil,
-			wantCfg: Config{
-				SNMP: SNMP{ExporterURL: URLMustParse("http://localhost:9116/snmp")},
-				Container: Container{
-					Runtime: ContainerRuntime{
-						Docker: ContainerRuntimeAddresses{
-							Addresses: []string{
-								"",
-								"unix:///run/docker.sock",
-								"unix:///var/run/docker.sock",
-							},
-							DisablePrefixHostRoot: false,
-						},
-						ContainerD: ContainerRuntimeAddresses{
-							Addresses: []string{
-								"/run/containerd/containerd.sock",
-								"/run/k3s/containerd/containerd.sock",
-							},
-							DisablePrefixHostRoot: false,
-						},
-					},
-				},
-			},
+			wantCfg:  defaultConfig,
 		},
 		{
 			name: "services",
@@ -421,26 +410,9 @@ func Test_loadConfiguration(t *testing.T) { //nolint:maintidx
 						},
 					},
 				},
-				SNMP: SNMP{ExporterURL: URLMustParse("http://localhost:9116/snmp")},
-				Container: Container{
-					Runtime: ContainerRuntime{
-						Docker: ContainerRuntimeAddresses{
-							Addresses: []string{
-								"",
-								"unix:///run/docker.sock",
-								"unix:///var/run/docker.sock",
-							},
-							DisablePrefixHostRoot: false,
-						},
-						ContainerD: ContainerRuntimeAddresses{
-							Addresses: []string{
-								"/run/containerd/containerd.sock",
-								"/run/k3s/containerd/containerd.sock",
-							},
-							DisablePrefixHostRoot: false,
-						},
-					},
-				},
+				SNMP:      defaultSNMPConfig,
+				Container: defaultContainersConfig,
+				MQTT:      defaultMQTTconfig,
 			},
 		},
 		{
@@ -457,28 +429,7 @@ func Test_loadConfiguration(t *testing.T) { //nolint:maintidx
 				"setting is deprecated: agent.windows_exporter.enabled. Please use agent.windows_exporter.enable",
 				"setting is deprecated: telegraf.docker_metrics_enabled. Please use telegraf.docker_metrics_enable",
 			},
-			wantCfg: Config{
-				SNMP: SNMP{ExporterURL: URLMustParse("http://localhost:9116/snmp")},
-				Container: Container{
-					Runtime: ContainerRuntime{
-						Docker: ContainerRuntimeAddresses{
-							Addresses: []string{
-								"",
-								"unix:///run/docker.sock",
-								"unix:///var/run/docker.sock",
-							},
-							DisablePrefixHostRoot: false,
-						},
-						ContainerD: ContainerRuntimeAddresses{
-							Addresses: []string{
-								"/run/containerd/containerd.sock",
-								"/run/k3s/containerd/containerd.sock",
-							},
-							DisablePrefixHostRoot: false,
-						},
-					},
-				},
-			},
+			wantCfg: defaultConfig,
 		},
 		{
 			name: "folder",
@@ -493,28 +444,7 @@ func Test_loadConfiguration(t *testing.T) { //nolint:maintidx
 			warnings: []string{
 				"setting is deprecated: bleemeo.enabled. Please use bleemeo.enable",
 			},
-			wantCfg: Config{
-				SNMP: SNMP{ExporterURL: URLMustParse("http://localhost:9116/snmp")},
-				Container: Container{
-					Runtime: ContainerRuntime{
-						Docker: ContainerRuntimeAddresses{
-							Addresses: []string{
-								"",
-								"unix:///run/docker.sock",
-								"unix:///var/run/docker.sock",
-							},
-							DisablePrefixHostRoot: false,
-						},
-						ContainerD: ContainerRuntimeAddresses{
-							Addresses: []string{
-								"/run/containerd/containerd.sock",
-								"/run/k3s/containerd/containerd.sock",
-							},
-							DisablePrefixHostRoot: false,
-						},
-					},
-				},
-			},
+			wantCfg: defaultConfig,
 		},
 		{
 			name: "deprecated envs",
@@ -534,28 +464,7 @@ func Test_loadConfiguration(t *testing.T) { //nolint:maintidx
 				"environment variable is deprecated: BLEEMEO_AGENT_ACCOUNT, use GLOUTON_BLEEMEO_ACCOUNT_ID instead",
 				"environment variable is deprecated: GLOUTON_KUBERNETES_ENABLED, use GLOUTON_KUBERNETES_ENABLE instead",
 			},
-			wantCfg: Config{
-				SNMP: SNMP{ExporterURL: URLMustParse("http://localhost:9116/snmp")},
-				Container: Container{
-					Runtime: ContainerRuntime{
-						Docker: ContainerRuntimeAddresses{
-							Addresses: []string{
-								"",
-								"unix:///run/docker.sock",
-								"unix:///var/run/docker.sock",
-							},
-							DisablePrefixHostRoot: false,
-						},
-						ContainerD: ContainerRuntimeAddresses{
-							Addresses: []string{
-								"/run/containerd/containerd.sock",
-								"/run/k3s/containerd/containerd.sock",
-							},
-							DisablePrefixHostRoot: false,
-						},
-					},
-				},
-			},
+			wantCfg: defaultConfig,
 		},
 		{
 			name: "bleemeo-agent envs",
@@ -575,28 +484,7 @@ func Test_loadConfiguration(t *testing.T) { //nolint:maintidx
 				"environment variable is deprecated: BLEEMEO_AGENT_KUBERNETES_ENABLE, use GLOUTON_KUBERNETES_ENABLE instead",
 				"environment variable is deprecated: BLEEMEO_AGENT_BLEEMEO_ENABLED, use GLOUTON_BLEEMEO_ENABLE instead",
 			},
-			wantCfg: Config{
-				SNMP: SNMP{ExporterURL: URLMustParse("http://localhost:9116/snmp")},
-				Container: Container{
-					Runtime: ContainerRuntime{
-						Docker: ContainerRuntimeAddresses{
-							Addresses: []string{
-								"",
-								"unix:///run/docker.sock",
-								"unix:///var/run/docker.sock",
-							},
-							DisablePrefixHostRoot: false,
-						},
-						ContainerD: ContainerRuntimeAddresses{
-							Addresses: []string{
-								"/run/containerd/containerd.sock",
-								"/run/k3s/containerd/containerd.sock",
-							},
-							DisablePrefixHostRoot: false,
-						},
-					},
-				},
-			},
+			wantCfg: defaultConfig,
 		},
 		{
 			name: "old-logging",
@@ -612,28 +500,7 @@ func Test_loadConfiguration(t *testing.T) { //nolint:maintidx
 				"setting is deprecated: logging.buffer.head_size. Please use logging.buffer.head_size_bytes",
 				"setting is deprecated: logging.buffer.tail_size. Please use logging.buffer.tail_size_bytes",
 			},
-			wantCfg: Config{
-				SNMP: SNMP{ExporterURL: URLMustParse("http://localhost:9116/snmp")},
-				Container: Container{
-					Runtime: ContainerRuntime{
-						Docker: ContainerRuntimeAddresses{
-							Addresses: []string{
-								"",
-								"unix:///run/docker.sock",
-								"unix:///var/run/docker.sock",
-							},
-							DisablePrefixHostRoot: false,
-						},
-						ContainerD: ContainerRuntimeAddresses{
-							Addresses: []string{
-								"/run/containerd/containerd.sock",
-								"/run/k3s/containerd/containerd.sock",
-							},
-							DisablePrefixHostRoot: false,
-						},
-					},
-				},
-			},
+			wantCfg: defaultConfig,
 		},
 		{
 			name: "config-1",
@@ -642,7 +509,7 @@ func Test_loadConfiguration(t *testing.T) { //nolint:maintidx
 			},
 			warnings: nil,
 			wantCfg: Config{
-				SNMP: SNMP{ExporterURL: URLMustParse("http://localhost:9116/snmp")},
+				SNMP: defaultSNMPConfig,
 				Container: Container{
 					DisabledByDefault: true,
 					AllowPatternList: []string{
@@ -669,6 +536,27 @@ func Test_loadConfiguration(t *testing.T) { //nolint:maintidx
 							DisablePrefixHostRoot: false,
 						},
 					},
+				},
+				MQTT: defaultMQTTconfig,
+			},
+		},
+		{
+			name: "mqtt",
+			configFiles: []string{
+				"testdata/mqtt.conf",
+			},
+			warnings: nil,
+			wantCfg: Config{
+				SNMP:      defaultSNMPConfig,
+				Container: defaultContainersConfig,
+				MQTT: mqtt.Config{
+					Host:        "192.168.0.1",
+					Port:        3000,
+					SSL:         true,
+					SSLInsecure: true,
+					CAFile:      "/tmp/cert",
+					Username:    "user1",
+					Password:    "password1",
 				},
 			},
 		},
