@@ -284,11 +284,11 @@ func (r *queryResolver) Facts(ctx context.Context) ([]*Fact, error) {
 // Services returns a list services discovered by agent
 // They can be filtered by active flag.
 func (r *queryResolver) Services(ctx context.Context, isActive bool) ([]*Service, error) {
-	if r.api.Disccovery == nil {
+	if r.api.Discovery == nil {
 		return nil, gqlerror.Errorf("Can not retrieve services at this moment. Please try later")
 	}
 
-	services, err := r.api.Disccovery.Discovery(ctx, time.Hour)
+	services, err := r.api.Discovery.Discovery(ctx, time.Hour)
 	if err != nil {
 		logger.V(2).Printf("Can not retrieve facts: %v", err)
 

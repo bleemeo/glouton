@@ -931,7 +931,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		PsFact:             psFact,
 		FactProvider:       a.factProvider,
 		BindAddress:        apiBindAddress,
-		Disccovery:         a.discovery,
+		Discovery:          a.discovery,
 		AgentInfo:          a,
 		PrometheurExporter: promExporter,
 		Threshold:          a.threshold,

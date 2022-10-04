@@ -36,6 +36,9 @@ var (
 	errNilJSON          = errors.New("ContainerJSONBase is nil. Assume container is deleted")
 )
 
+// dockerTimeout is the time limit for requests made by the docker client.
+const dockerTimeout = 10 * time.Second
+
 // Docker implement a method to query Docker runtime.
 // It try to connect to the first valid DockerSockets. Empty string is a special
 // value: it means use default.
@@ -228,6 +231,9 @@ func (d *Docker) ContainerLastKill(containerID string) time.Time {
 
 // Exec run a command in a container and return stdout+stderr.
 func (d *Docker) Exec(ctx context.Context, containerID string, cmd []string) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(ctx, dockerTimeout)
+	defer cancel()
+
 	d.l.Lock()
 	cl, err := d.getClient(ctx)
 	d.l.Unlock()
@@ -290,6 +296,9 @@ func (d *Docker) IsRuntimeRunning(ctx context.Context) bool {
 
 // similar to getClient but also check that connection works.
 func (d *Docker) ensureClient(ctx context.Context) (cl dockerClient, err error) {
+	ctx, cancel := context.WithTimeout(ctx, dockerTimeout)
+	defer cancel()
+
 	cl = d.client
 
 	if cl == nil {
@@ -446,6 +455,9 @@ func (d *Docker) run(ctx context.Context) error {
 }
 
 func (d *Docker) updateContainers(ctx context.Context) error {
+	ctx, cancel := context.WithTimeout(ctx, dockerTimeout)
+	defer cancel()
+
 	cl, err := d.getClient(ctx)
 	if err != nil {
 		return err
@@ -538,6 +550,9 @@ func (d *Docker) updateContainers(ctx context.Context) error {
 }
 
 func (d *Docker) updateContainer(ctx context.Context, cl dockerClient, containerID string) (dockerContainer, error) {
+	ctx, cancel := context.WithTimeout(ctx, dockerTimeout)
+	defer cancel()
+
 	var result dockerContainer
 
 	inspect, err := cl.ContainerInspect(ctx, containerID)
@@ -1126,6 +1141,9 @@ func (d *dockerProcessQuerier) processesContainerMap(ctx context.Context, c fact
 }
 
 func (d *dockerProcessQuerier) top(ctx context.Context, c facts.Container) (container.ContainerTopOKBody, container.ContainerTopOKBody, error) {
+	ctx, cancel := context.WithTimeout(ctx, dockerTimeout)
+	defer cancel()
+
 	d.d.l.Lock()
 	cl, err := d.d.getClient(ctx)
 

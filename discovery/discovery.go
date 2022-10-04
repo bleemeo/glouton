@@ -40,6 +40,9 @@ var errNoCheckAssociated = errors.New("there is no check associated with the con
 
 const localhostIP = "127.0.0.1"
 
+// discoveryTimeout is the time limit for a discovery.
+const discoveryTimeout = time.Minute
+
 // Discovery implement the full discovery mecanisme. It will take informations
 // from both the dynamic discovery (service currently running) and previously
 // detected services.
@@ -238,6 +241,9 @@ func (d *Discovery) DiagnosticArchive(ctx context.Context, zipFile types.Archive
 }
 
 func (d *Discovery) discovery(ctx context.Context, maxAge time.Duration) (services []Service, err error) {
+	ctx, cancel := context.WithTimeout(ctx, discoveryTimeout)
+	defer cancel()
+
 	if time.Since(d.lastDiscoveryUpdate) >= maxAge {
 		err := d.updateDiscovery(ctx, time.Now())
 		if err != nil {

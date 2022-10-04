@@ -84,6 +84,9 @@ func (dd *DynamicDiscovery) Discovery(ctx context.Context, maxAge time.Duration)
 	dd.l.Lock()
 	defer dd.l.Unlock()
 
+	ctx, cancel := context.WithTimeout(ctx, discoveryTimeout)
+	defer cancel()
+
 	if time.Since(dd.lastDiscoveryUpdate) >= maxAge {
 		err = dd.updateDiscovery(ctx, maxAge)
 		if err != nil {
