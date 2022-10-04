@@ -44,15 +44,13 @@ const (
 )
 
 type Client struct {
-	opts            Options
-	pendingMessages chan message
-	connectionLost  chan interface{}
-	stats           *mqttStats
-	disableNotify   chan interface{}
+	opts           Options
+	connectionLost chan interface{}
+	stats          *mqttStats
+	disableNotify  chan interface{}
 
-	l       sync.Mutex
-	mqtt    paho.Client
-	stopped bool
+	l    sync.Mutex
+	mqtt paho.Client
 
 	lastConnectionTimes []time.Time
 	currentConnectDelay time.Duration
@@ -70,22 +68,14 @@ type Options struct {
 	TooManyErrorsHandler func(ctx context.Context)
 }
 
-type message struct {
-	token   paho.Token
-	retry   bool
-	topic   string
-	payload interface{}
-}
-
-// NewClient create a new client.
+// New creates a new client.
 func New(opts Options) *Client {
 	client := &Client{
-		opts:            opts,
-		mqtt:            opts.ReloadState.Client(),
-		stats:           newMQTTStats(),
-		pendingMessages: make(chan message, maxPendingMessages),
-		disableNotify:   make(chan interface{}),
-		connectionLost:  make(chan interface{}),
+		opts:           opts,
+		mqtt:           opts.ReloadState.Client(),
+		stats:          newMQTTStats(),
+		disableNotify:  make(chan interface{}),
+		connectionLost: make(chan interface{}),
 	}
 
 	return client
@@ -123,12 +113,6 @@ func (c *Client) Run(ctx context.Context) {
 
 	wg.Wait()
 
-	c.l.Lock()
-	c.stopped = true
-	c.l.Unlock()
-
-	close(c.pendingMessages)
-
 	// Keep the client during reloads to avoid closing the connection.
 	c.opts.ReloadState.SetClient(c.mqtt)
 }
@@ -158,10 +142,10 @@ func (c *Client) Publish(topic string, payload interface{}, retry bool) {
 	c.l.Lock()
 	defer c.l.Unlock()
 
-	msg := message{
-		retry:   retry,
-		payload: payload,
-		topic:   topic,
+	msg := types.Message{
+		Retry:   retry,
+		Payload: payload,
+		Topic:   topic,
 	}
 
 	if c.mqtt == nil && !retry {
@@ -169,13 +153,11 @@ func (c *Client) Publish(topic string, payload interface{}, retry bool) {
 	}
 
 	if c.mqtt != nil {
-		msg.token = c.mqtt.Publish(topic, 1, false, payload)
-		c.stats.messagePublished(msg.token, time.Now())
+		msg.Token = c.mqtt.Publish(topic, 1, false, payload)
+		c.stats.messagePublished(msg.Token, time.Now())
 	}
 
-	if !c.stopped {
-		c.pendingMessages <- msg
-	}
+	c.opts.ReloadState.AddPendingMessage(msg, true)
 }
 
 func (c *Client) onConnectionLost(_ paho.Client, err error) {
@@ -283,6 +265,8 @@ mainLoop:
 					c.l.Lock()
 					c.mqtt = mqtt
 					c.l.Unlock()
+
+					logger.Printf("MQTT connection established")
 				}
 			}
 		}
@@ -326,13 +310,13 @@ func (c *Client) ackManager(ctx context.Context) {
 
 	for ctx.Err() == nil {
 		select {
-		case msg := <-c.pendingMessages:
+		case msg := <-c.opts.ReloadState.PendingMessages():
 			err := c.ackOne(msg, 10*time.Second)
 			if err != nil {
 				if time.Since(lastErrShowed) > time.Minute {
 					logger.V(2).Printf(
 						"MQTT publish on %s failed: %v (%d pending messages)",
-						msg.topic, err, len(c.pendingMessages),
+						msg.Topic, err, len(c.opts.ReloadState.PendingMessages()),
 					)
 
 					lastErrShowed = time.Now()
@@ -342,81 +326,56 @@ func (c *Client) ackManager(ctx context.Context) {
 		case <-ctx.Done():
 		}
 	}
-
-	// When the context is canceled, we keep trying to send the last pending messages for shutdownTimeout.
-	deadline := time.Now().Add(shutdownTimeout)
-
-	for timeLeft := shutdownTimeout; timeLeft > 0; timeLeft = time.Until(deadline) {
-		select {
-		case msg := <-c.pendingMessages:
-			_ = c.ackOne(msg, timeLeft)
-		default:
-			// All messages have been acked.
-			return
-		}
-	}
-
-	logger.V(2).Printf("Ack manager stopped with %d messages still pending", len(c.pendingMessages))
-
-	// We were not able to process all messages before the timeout.
-	// Drain the pending messages channel to avoid a dead-lock when publishing messages.
-	for len(c.pendingMessages) > 0 {
-		<-c.pendingMessages
-	}
 }
 
-func (c *Client) ackOne(msg message, timeout time.Duration) error {
+func (c *Client) ackOne(msg types.Message, timeout time.Duration) error {
 	var err error
 
 	// The token is nil when publishing failed.
 	shouldWaitAgain := false
-	if msg.token != nil {
-		shouldWaitAgain = !msg.token.WaitTimeout(timeout)
+	if msg.Token != nil {
+		shouldWaitAgain = !msg.Token.WaitTimeout(timeout)
 
-		err = msg.token.Error()
+		err = msg.Token.Error()
 		if err != nil {
-			c.stats.ackFailed(msg.token)
+			c.stats.ackFailed(msg.Token)
 		}
 	}
 
 	// Retry publishing the message if there was an error.
-	if msg.token == nil || msg.token.Error() != nil {
-		if !msg.retry {
+	if msg.Token == nil || msg.Token.Error() != nil {
+		if !msg.Retry {
 			return err
 		}
 
 		c.l.Lock()
 		if c.mqtt != nil {
-			msg.token = c.mqtt.Publish(msg.topic, 1, false, msg.payload)
+			msg.Token = c.mqtt.Publish(msg.Topic, 1, false, msg.Payload)
 		}
 
-		publishFailed := c.mqtt == nil || msg.token.Error() != nil
+		publishFailed := c.mqtt == nil || msg.Token.Error() != nil
 		c.l.Unlock()
 
-		// The token will be awaited later.
+		// The Token will be awaited later.
 		shouldWaitAgain = true
 
 		// It's possible for Publish to return instantly with an error,
 		// in this case we need to wait a bit to avoid consuming too much resources.
 		if publishFailed {
-			msg.token = nil
+			msg.Token = nil
 
 			time.Sleep(time.Second)
 		}
 	}
 
 	if shouldWaitAgain {
-		// Add the message back to the pending messages if there is enough space in the channel.
-		select {
-		case c.pendingMessages <- msg:
-		default:
-		}
+		c.opts.ReloadState.AddPendingMessage(msg, false)
 
 		return err
 	}
 
 	now := time.Now()
-	c.stats.ackReceived(msg.token, now)
+	c.stats.ackReceived(msg.Token, now)
 
 	c.l.Lock()
 	defer c.l.Unlock()
@@ -470,7 +429,7 @@ func (c *Client) DiagnosticArchive(ctx context.Context, archive types.ArchiveWri
 		LastReport          time.Time
 		DisabledUntil       time.Time
 	}{
-		PendingMessageCount: len(c.pendingMessages),
+		PendingMessageCount: len(c.opts.ReloadState.PendingMessages()),
 		LastConnectionTimes: c.lastConnectionTimes,
 		CurrentConnectDelay: c.currentConnectDelay,
 		ConsecutiveErrors:   c.consecutiveErrors,

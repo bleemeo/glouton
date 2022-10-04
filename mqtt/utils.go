@@ -13,7 +13,7 @@ var errNotPem = errors.New("not a PEM file")
 func TLSConfig(skipVerify bool, caFile string) *tls.Config {
 	tlsConfig := &tls.Config{
 		MinVersion:         tls.VersionTLS12,
-		InsecureSkipVerify: skipVerify,
+		InsecureSkipVerify: skipVerify, //nolint:gosec // G402: TLS InsecureSkipVerify set true.
 	}
 
 	if caFile != "" {

@@ -7,21 +7,20 @@ import (
 	"glouton/mqtt/client"
 	"glouton/types"
 	"net"
+	"os"
 	"sync"
 	"time"
 
 	paho "github.com/eclipse/paho.mqtt.golang"
 )
 
-const (
-	maxPendingPoints = 100000
-	pointsBatchSize  = 1000
-)
+const pointsBatchSize = 1000
 
 // MQTT sends points from the store to a MQTT server.
 type MQTT struct {
 	opts    Options
 	client  *client.Client
+	agentID string
 	encoder Encoder
 
 	l             sync.Mutex
@@ -59,8 +58,16 @@ type metricPayload struct {
 }
 
 func New(opts Options) *MQTT {
+	hostname, err := os.Hostname()
+	if err != nil {
+		logger.Printf("Failed to start MQTT: could not get hostname: ", err)
+
+		os.Exit(1)
+	}
+
 	m := MQTT{
-		opts: opts,
+		opts:    opts,
+		agentID: hostname,
 	}
 
 	m.client = client.New(client.Options{
@@ -136,7 +143,7 @@ func (m *MQTT) run(ctx context.Context) {
 }
 
 func (m *MQTT) sendPoints() {
-	points := m.PopPoints(false)
+	points := m.PopPoints()
 
 	// Convert points to metric payloads.
 	payload := make([]metricPayload, 0, len(points))
@@ -163,8 +170,7 @@ func (m *MQTT) sendPoints() {
 			return
 		}
 
-		// TODO: Agent ID from hostname?
-		m.client.Publish(fmt.Sprintf("v1/agent/%s/data", "todo-agent-id"), buffer, true)
+		m.client.Publish(fmt.Sprintf("v1/agent/%s/data", m.agentID), buffer, true)
 	}
 }
 
@@ -181,26 +187,15 @@ func (m *MQTT) addPoints(points []types.MetricPoint) {
 	m.l.Lock()
 	defer m.l.Unlock()
 
-	// TODO: pending points in reload state
 	m.pendingPoints = append(m.pendingPoints, points...)
 }
 
-// PopPoints returns the list of metrics to be sent. When 'includeFailedPoints' is set to true, the returned
-// data will not only include all pending points, but also all the points whose submission failed previously.
-func (m *MQTT) PopPoints(includeFailedPoints bool) []types.MetricPoint {
+// PopPoints returns the list of metrics to be sent.
+func (m *MQTT) PopPoints() []types.MetricPoint {
 	m.l.Lock()
 	defer m.l.Unlock()
 
-	var points []types.MetricPoint
-
-	// TODO: Handle failed points?
-	// if includeFailedPoints {
-	// 	points = m.failedPoints
-	// 	m.failedPoints = nil
-	// }
-
-	points = append(points, m.pendingPoints...)
-
+	points := m.pendingPoints
 	m.pendingPoints = nil
 
 	return points

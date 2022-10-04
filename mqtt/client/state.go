@@ -1,6 +1,8 @@
 package client
 
 import (
+	"glouton/logger"
+	"glouton/types"
 	"sync"
 	"time"
 
@@ -13,11 +15,13 @@ type ReloadState struct {
 	client                paho.Client
 	isClosed              bool
 	connectionLostChannel chan error
+	pendingMessages       chan types.Message
 }
 
 func NewReloadState() *ReloadState {
 	return &ReloadState{
 		connectionLostChannel: make(chan error),
+		pendingMessages:       make(chan types.Message, maxPendingMessages),
 	}
 }
 
@@ -52,6 +56,31 @@ func (rs *ReloadState) ConnectionLostChannel() <-chan error {
 	return rs.connectionLostChannel
 }
 
+func (rs *ReloadState) AddPendingMessage(m types.Message, shouldWait bool) {
+	rs.l.Lock()
+	defer rs.l.Unlock()
+
+	if rs.isClosed {
+		return
+	}
+
+	if shouldWait {
+		rs.pendingMessages <- m
+
+		return
+	}
+
+	// Add the message back to the pending messages if there is enough space in the channel.
+	select {
+	case rs.pendingMessages <- m:
+	default:
+	}
+}
+
+func (rs *ReloadState) PendingMessages() <-chan types.Message {
+	return rs.pendingMessages
+}
+
 func (rs *ReloadState) Close() {
 	if rs.client == nil {
 		return
@@ -65,6 +94,8 @@ func (rs *ReloadState) Close() {
 
 	rs.client.Disconnect(uint(5 * time.Second.Milliseconds()))
 
+	logger.V(2).Printf("Stopped MQTT with %d messages still pending", len(rs.pendingMessages))
+
 	// The callbacks need to know when the channel are closed
 	// so they don't send on a closed channel.
 	rs.l.Lock()
@@ -73,4 +104,5 @@ func (rs *ReloadState) Close() {
 	rs.isClosed = true
 
 	close(rs.connectionLostChannel)
+	close(rs.pendingMessages)
 }

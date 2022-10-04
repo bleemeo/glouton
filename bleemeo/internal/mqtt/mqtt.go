@@ -84,7 +84,6 @@ type Client struct {
 	pendingPoints    []types.MetricPoint
 	maxPointCount    int
 	sendingSuspended bool // stop sending points, used when the user is is read-only mode
-	consecutiveError int
 	disableReason    bleemeoTypes.DisableReason
 }
 
@@ -695,8 +694,6 @@ func (c *Client) preparePoints(registreredMetricByKey map[string]bleemeoTypes.Me
 }
 
 func (c *Client) onConnect(mqttClient paho.Client) {
-	logger.Printf("MQTT connection established")
-
 	// refresh 'info' to check the maintenance mode (for which we normally are notified by MQTT message)
 	c.opts.UpdateMaintenance()
 

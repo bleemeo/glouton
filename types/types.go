@@ -423,4 +423,14 @@ type MQTTReloadState interface {
 	OnConnectionLost(cli paho.Client, err error)
 	ConnectionLostChannel() <-chan error
 	Close()
+	AddPendingMessage(m Message, shouldWait bool)
+	PendingMessages() <-chan Message
+}
+
+// Message contains all information to send a message to MQTT.
+type Message struct {
+	Token   paho.Token
+	Retry   bool
+	Topic   string
+	Payload interface{}
 }
