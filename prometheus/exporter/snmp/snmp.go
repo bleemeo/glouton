@@ -72,6 +72,7 @@ type Target struct {
 	lastFactErr      error
 	lastSuccess      time.Time
 	lastErrorMessage string
+	lastStatus       types.Status
 	consecutiveErr   int
 
 	mockPerModule map[string][]byte
@@ -167,9 +168,10 @@ func (t *Target) GatherWithState(ctx context.Context, state registry.GatherState
 
 	result, err := t.scraper.GatherWithState(ctx, state)
 
-	if state.FromScrapeLoop {
-		t.l.Lock()
+	t.l.Lock()
+	defer t.l.Unlock()
 
+	if state.FromScrapeLoop {
 		if err == nil {
 			t.lastSuccess = t.now()
 			t.consecutiveErr = 0
@@ -179,16 +181,21 @@ func (t *Target) GatherWithState(ctx context.Context, state registry.GatherState
 		}
 
 		err = nil
-
-		t.l.Unlock()
 	}
 
 	status, msg := t.getStatus()
+	mfs := processMFS(result, state, status, t.lastStatus, msg)
 
-	return processMFS(result, state, status, msg), err
+	if state.FromScrapeLoop {
+		t.lastStatus = status
+	}
+
+	return mfs, err
 }
 
-func buildInformationMap(result []*dto.MetricFamily) (interfaceUp map[string]bool, indexToType map[string]string, totalInterfaces int, connectedInterfaces int) {
+func buildInformationMap(
+	result []*dto.MetricFamily,
+) (interfaceUp map[string]bool, indexToType map[string]string, totalInterfaces int, connectedInterfaces int) {
 	if len(result) > 0 {
 		indexToType = make(map[string]string, len(result[0].Metric))
 	}
@@ -241,7 +248,13 @@ func buildInformationMap(result []*dto.MetricFamily) (interfaceUp map[string]boo
 	return interfaceUp, indexToType, totalInterfaces, connectedInterfaces
 }
 
-func processMFS(result []*dto.MetricFamily, state registry.GatherState, status types.Status, msg string) []*dto.MetricFamily {
+func processMFS(
+	result []*dto.MetricFamily,
+	state registry.GatherState,
+	status types.Status,
+	lastStatus types.Status,
+	msg string,
+) []*dto.MetricFamily {
 	interfaceUp, indexToType, totalInterfaces, connectedInterfaces := buildInformationMap(result)
 
 	if totalInterfaces > 0 {
@@ -289,8 +302,10 @@ func processMFS(result []*dto.MetricFamily, state registry.GatherState, status t
 		}
 	}
 
-	if status != types.StatusUnset {
-		result = append(result, &dto.MetricFamily{
+	// Send the snmp_device_status metric when the agent status is ok, when
+	// the agent has just become unreachable or when called from /metrics.
+	if status == types.StatusOk || status == types.StatusCritical && lastStatus != types.StatusCritical || !state.FromScrapeLoop {
+		snmpDeviceStatus := &dto.MetricFamily{
 			Name: proto.String("snmp_device_status"),
 			Type: dto.MetricType_GAUGE.Enum(),
 			Metric: []*dto.Metric{
@@ -304,7 +319,9 @@ func processMFS(result []*dto.MetricFamily, state registry.GatherState, status t
 					},
 				},
 			},
-		})
+		}
+
+		result = append(result, snmpDeviceStatus)
 	}
 
 	sort.Slice(result, func(i, j int) bool {
@@ -388,12 +405,11 @@ func (t *Target) buildScraper(module string) registry.GathererWithState {
 	return target
 }
 
+// getStatus returns the current status of the SNMP device.
+// t.l must be held before calling this method.
 func (t *Target) getStatus() (types.Status, string) {
-	t.l.Lock()
-	defer t.l.Unlock()
-
 	if t.lastSuccess.IsZero() && t.consecutiveErr == 0 {
-		// never scrapper, status is not yet available.
+		// Never scraped, status is not yet available.
 		return types.StatusUnset, ""
 	}
 
