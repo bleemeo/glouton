@@ -202,7 +202,9 @@ mainLoop:
 				c.Disable(time.Now().Add(delay))
 				logger.Printf("Too many attempts to connect to MQTT were made in the last 10 minutes. Disabling MQTT for %v", delay)
 
-				c.opts.TooManyErrorsHandler(ctx)
+				if c.opts.TooManyErrorsHandler != nil {
+					c.opts.TooManyErrorsHandler(ctx)
+				}
 
 				continue
 			}
@@ -221,7 +223,9 @@ mainLoop:
 						0.1,
 					)
 					if consecutiveError == 5 {
-						c.opts.TooManyErrorsHandler(ctx)
+						if c.opts.TooManyErrorsHandler != nil {
+							c.opts.TooManyErrorsHandler(ctx)
+						}
 					}
 				}
 

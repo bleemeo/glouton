@@ -7,7 +7,6 @@ import (
 	"glouton/mqtt/client"
 	"glouton/types"
 	"net"
-	"os"
 	"sync"
 	"time"
 
@@ -20,7 +19,6 @@ const pointsBatchSize = 1000
 type MQTT struct {
 	opts    Options
 	client  *client.Client
-	agentID string
 	encoder Encoder
 
 	l             sync.Mutex
@@ -29,6 +27,7 @@ type MQTT struct {
 
 type Options struct {
 	Config Config
+	FQDN   string
 	// State kept between reloads.
 	ReloadState *client.ReloadState
 	// The store provides the metrics to send to MQTT.
@@ -58,17 +57,7 @@ type metricPayload struct {
 }
 
 func New(opts Options) *MQTT {
-	hostname, err := os.Hostname()
-	if err != nil {
-		logger.Printf("Failed to start MQTT: could not get hostname: ", err)
-
-		os.Exit(1)
-	}
-
-	m := MQTT{
-		opts:    opts,
-		agentID: hostname,
-	}
+	m := MQTT{opts: opts}
 
 	m.client = client.New(client.Options{
 		OptionsFunc: m.pahoOptions,
@@ -170,7 +159,7 @@ func (m *MQTT) sendPoints() {
 			return
 		}
 
-		m.client.Publish(fmt.Sprintf("v1/agent/%s/data", m.agentID), buffer, true)
+		m.client.Publish(fmt.Sprintf("v1/agent/%s/data", m.opts.FQDN), buffer, true)
 	}
 }
 

@@ -1253,6 +1253,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 			ReloadState: a.reloadState.MQTT(),
 			Config:      a.config.MQTT,
 			Store:       filteredStore,
+			FQDN:        fqdn,
 		})
 
 		tasks = append(tasks, taskInfo{
