@@ -7,6 +7,7 @@ import (
 	"glouton/mqtt/client"
 	"glouton/types"
 	"net"
+	"strings"
 	"sync"
 	"time"
 
@@ -57,6 +58,8 @@ type metricPayload struct {
 }
 
 func New(opts Options) *MQTT {
+	opts.FQDN = safeFQDN(opts.FQDN)
+
 	m := MQTT{opts: opts}
 
 	m.client = client.New(client.Options{
@@ -65,6 +68,14 @@ func New(opts Options) *MQTT {
 	})
 
 	return &m
+}
+
+// safeFQDN returns a safe version of a FQDN that doesn't
+// contain any special characters used by MQTT.
+func safeFQDN(fqdn string) string {
+	replacer := strings.NewReplacer("#", "", "+", "", "/", "")
+
+	return replacer.Replace(fqdn)
 }
 
 func (m *MQTT) pahoOptions(_ context.Context) (*paho.ClientOptions, error) {
