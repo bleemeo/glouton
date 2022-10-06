@@ -23,6 +23,7 @@ import (
 	"glouton/delay"
 	"glouton/logger"
 	"glouton/types"
+	"strings"
 	"sync"
 	"time"
 
@@ -161,7 +162,7 @@ func (c *Client) Publish(topic string, payload interface{}, retry bool) {
 }
 
 func (c *Client) onConnectionLost(_ paho.Client, err error) {
-	logger.Printf("MQTT connection lost: %v", err)
+	logger.Printf("%s MQTT connection lost: %v", c.opts.ID, err)
 	c.connectionLost <- nil
 }
 
@@ -200,7 +201,7 @@ mainLoop:
 				delay := delay.JitterDelay(5*time.Minute, 0.25).Round(time.Second)
 
 				c.Disable(time.Now().Add(delay))
-				logger.Printf("Too many attempts to connect to MQTT were made in the last 10 minutes. Disabling MQTT for %v", delay)
+				logger.Printf("Too many attempts to connect to %s MQTT were made in the last 10 minutes. Disabling MQTT for %v", c.opts.ID, delay)
 
 				if c.opts.TooManyErrorsHandler != nil {
 					c.opts.TooManyErrorsHandler(ctx)
@@ -232,13 +233,13 @@ mainLoop:
 				mqtt, err := c.setupMQTT(ctx)
 				if err != nil {
 					delay := currentConnectDelay - time.Since(lastConnectionTimes[len(lastConnectionTimes)-1])
-					logger.V(1).Printf("Unable to connect to MQTT (retry in %v): %v", delay, err)
+					logger.V(1).Printf("Unable to connect to %s MQTT (retry in %v): %v", c.opts.ID, delay, err)
 
 					continue
 				}
 
 				optionReader := mqtt.OptionsReader()
-				logger.V(2).Printf("Connecting to MQTT broker %v", optionReader.Servers()[0])
+				logger.V(2).Printf("Connecting to %s MQTT broker %v", c.opts.ID, optionReader.Servers()[0])
 
 				var connectionTimeout bool
 
@@ -260,7 +261,7 @@ mainLoop:
 				if token.Error() != nil || connectionTimeout {
 					delay := currentConnectDelay - time.Since(lastConnectionTimes[len(lastConnectionTimes)-1])
 
-					logger.V(1).Printf("Unable to connect to Bleemeo MQTT (retry in %v): %v", delay, token.Error())
+					logger.V(1).Printf("Unable to connect to %s MQTT (retry in %v): %v", c.opts.ID, delay, token.Error())
 
 					// we must disconnect to stop paho gorouting that otherwise will be
 					// started multiple time for each Connect()
@@ -270,7 +271,7 @@ mainLoop:
 					c.mqtt = mqtt
 					c.l.Unlock()
 
-					logger.Printf("MQTT connection established")
+					logger.Printf("%s MQTT connection established", c.opts.ID)
 				}
 			}
 		}
@@ -285,13 +286,13 @@ mainLoop:
 
 			length := len(lastConnectionTimes)
 			if length > 0 && time.Since(lastConnectionTimes[length-1]) > stableConnection {
-				logger.V(2).Printf("MQTT connection was stable, reset delay to %v", minimalDelayBetweenConnect)
+				logger.V(2).Printf("%s MQTT connection was stable, reset delay to %v", c.opts.ID, minimalDelayBetweenConnect)
 				currentConnectDelay = minimalDelayBetweenConnect
 				consecutiveError = 0
 			} else if length > 0 {
 				delay := currentConnectDelay - time.Since(lastConnectionTimes[len(lastConnectionTimes)-1])
 				if delay > 0 {
-					logger.V(1).Printf("Retry to connection to MQTT in %v", delay)
+					logger.V(1).Printf("Retry to connection to %s MQTT in %v", c.opts.ID, delay)
 				}
 			}
 		case <-c.disableNotify:
@@ -319,8 +320,8 @@ func (c *Client) ackManager(ctx context.Context) {
 			if err != nil {
 				if time.Since(lastErrShowed) > time.Minute {
 					logger.V(2).Printf(
-						"MQTT publish on %s failed: %v (%d pending messages)",
-						msg.Topic, err, len(c.opts.ReloadState.PendingMessages()),
+						"%s MQTT publish on %s failed: %v (%d pending messages)",
+						c.opts.ID, msg.Topic, err, len(c.opts.ReloadState.PendingMessages()),
 					)
 
 					lastErrShowed = time.Now()
@@ -416,14 +417,16 @@ func (c *Client) DiagnosticArchive(ctx context.Context, archive types.ArchiveWri
 	c.l.Lock()
 	defer c.l.Unlock()
 
-	file, err := archive.Create(fmt.Sprintf("%s-mqtt-stats.txt", c.opts.ID))
+	fileID := strings.ToLower(strings.ReplaceAll(c.opts.ID, " ", "-"))
+
+	file, err := archive.Create(fmt.Sprintf("%s-mqtt-stats.txt", fileID))
 	if err != nil {
 		return err
 	}
 
 	fmt.Fprintf(file, "%s", c.stats)
 
-	file, err = archive.Create(fmt.Sprintf("%s-mqtt-state.json", c.opts.ID))
+	file, err = archive.Create(fmt.Sprintf("%s-mqtt-state.json", fileID))
 	if err != nil {
 		return err
 	}

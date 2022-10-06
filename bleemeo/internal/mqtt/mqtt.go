@@ -159,7 +159,7 @@ func New(opts Option) *Client {
 		OptionsFunc:          c.pahoOptions,
 		ReloadState:          reloadState.ClientState(),
 		TooManyErrorsHandler: checkDuplicate,
-		ID:                   "bleemeo",
+		ID:                   "Bleemeo",
 	})
 
 	return c

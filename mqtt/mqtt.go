@@ -65,7 +65,7 @@ func New(opts Options) *MQTT {
 	m.client = client.New(client.Options{
 		OptionsFunc: m.pahoOptions,
 		ReloadState: opts.ReloadState,
-		ID:          "open-source",
+		ID:          "Open Source",
 	})
 
 	return &m
