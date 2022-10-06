@@ -30,7 +30,7 @@ type Options struct {
 	Config Config
 	FQDN   string
 	// State kept between reloads.
-	ReloadState *client.ReloadState
+	ReloadState types.MQTTReloadState
 	// The store provides the metrics to send to MQTT.
 	Store Store
 }
@@ -65,6 +65,7 @@ func New(opts Options) *MQTT {
 	m.client = client.New(client.Options{
 		OptionsFunc: m.pahoOptions,
 		ReloadState: opts.ReloadState,
+		ID:          "open-source",
 	})
 
 	return &m

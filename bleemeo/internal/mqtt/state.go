@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"glouton/bleemeo/types"
+	"glouton/mqtt/client"
 	"os"
 	"sync"
 
@@ -16,7 +17,7 @@ import (
 // the next notifications will be lost.
 const notificationChannelSize = 1000
 
-// reloadState implements the types.PahoWrapper interface.
+// reloadState implements the types.MQTTReloadState interface.
 type reloadState struct {
 	l                   sync.Mutex
 	isClosed            bool
@@ -28,6 +29,7 @@ type reloadState struct {
 	autoUpgradeFile string
 	agentID         types.AgentID
 	pendingPoints   []gloutonTypes.MetricPoint
+	clientState     gloutonTypes.MQTTReloadState
 }
 
 type ReloadStateOptions struct {
@@ -47,6 +49,7 @@ func NewReloadState(opts ReloadStateOptions) types.MQTTReloadState {
 		upgradeFile:         opts.UpgradeFile,
 		autoUpgradeFile:     opts.AutoUpgradeFile,
 		agentID:             opts.AgentID,
+		clientState:         client.NewReloadState(),
 	}
 
 	return rs
@@ -142,4 +145,9 @@ func (rs *reloadState) Close() {
 
 	close(rs.notificationChannel)
 	close(rs.connectChannel)
+}
+
+// ClientState returns the reload state of the mqtt client.
+func (rs *reloadState) ClientState() gloutonTypes.MQTTReloadState {
+	return rs.clientState
 }

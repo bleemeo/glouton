@@ -145,12 +145,6 @@ func New(opts Option) *Client {
 		_, _ = opts.Facts.Facts(ctx, 0)
 	}
 
-	c.mqtt = client.New(client.Options{
-		OptionsFunc:          c.pahoOptions,
-		ReloadState:          opts.MQTTReloadState,
-		TooManyErrorsHandler: checkDuplicate,
-	})
-
 	if reloadState == nil {
 		reloadState = NewReloadState(ReloadStateOptions{
 			UpgradeFile:     opts.Config.String("agent.upgrade_file"),
@@ -160,6 +154,13 @@ func New(opts Option) *Client {
 
 		opts.ReloadState.SetMQTTReloadState(reloadState)
 	}
+
+	c.mqtt = client.New(client.Options{
+		OptionsFunc:          c.pahoOptions,
+		ReloadState:          reloadState.ClientState(),
+		TooManyErrorsHandler: checkDuplicate,
+		ID:                   "bleemeo",
+	})
 
 	return c
 }

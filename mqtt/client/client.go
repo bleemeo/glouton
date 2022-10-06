@@ -36,8 +36,6 @@ const (
 	maximalDelayBetweenConnect = 10 * time.Minute
 	// The maximum number of messages to keep while MQTT is unreachable.
 	maxPendingMessages = 1000
-	// The maximum duration the messages sent to MQTT will be retried for when shutting down.
-	shutdownTimeout = 5 * time.Second
 	// If we stayed connected to MQTT for more stableConnection, the connection is considered stable,
 	// and we won't wait long to reconnect in case of a disconnection.
 	stableConnection = 5 * time.Minute
@@ -64,8 +62,10 @@ type Options struct {
 	OptionsFunc func(ctx context.Context) (*paho.ClientOptions, error)
 	// Keep a state between reloads.
 	ReloadState types.MQTTReloadState
-	// Function called when too many errors happened .
+	// Function called when too many errors happened.
 	TooManyErrorsHandler func(ctx context.Context)
+	// A unique identifier for this client.
+	ID string
 }
 
 // New creates a new client.
@@ -413,14 +413,14 @@ func (c *Client) IsConnectionOpen() bool {
 
 // DiagnosticArchive add to a zipfile useful diagnostic information.
 func (c *Client) DiagnosticArchive(ctx context.Context, archive types.ArchiveWriter) error {
-	file, err := archive.Create("mqtt-stats.txt")
+	file, err := archive.Create(fmt.Sprintf("%s-mqtt-stats.txt", c.opts.ID))
 	if err != nil {
 		return err
 	}
 
 	fmt.Fprintf(file, "%s", c.stats)
 
-	file, err = archive.Create("mqtt-state.json")
+	file, err = archive.Create(fmt.Sprintf("%s-mqtt-state.json", c.opts.ID))
 	if err != nil {
 		return err
 	}

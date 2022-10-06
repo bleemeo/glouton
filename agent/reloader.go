@@ -32,7 +32,7 @@ var errWatcherDisabled = errors.New("reload disabled")
 // ReloadState is used to keep some components alive during reloads.
 type ReloadState interface {
 	Bleemeo() bleemeoTypes.BleemeoReloadState
-	MQTT() *client.ReloadState
+	MQTT() types.MQTTReloadState
 	DiagnosticArchive(ctx context.Context, archive types.ArchiveWriter) error
 	WatcherError() error
 	Close()
@@ -40,7 +40,7 @@ type ReloadState interface {
 
 type reloadState struct {
 	bleemeo bleemeoTypes.BleemeoReloadState
-	mqtt    *client.ReloadState
+	mqtt    types.MQTTReloadState
 
 	l             sync.Mutex
 	watcherError  error
@@ -52,7 +52,10 @@ func (rs *reloadState) Bleemeo() bleemeoTypes.BleemeoReloadState {
 	return rs.bleemeo
 }
 
-func (rs *reloadState) MQTT() *client.ReloadState {
+// MQTT returns the MQTT reload state used by the client with the open source MQTT mode.
+// Note that this is not the reload state used by the Bleemeo MQTT client as it includes its
+// own so both MQTT modes can be used at the same time.
+func (rs *reloadState) MQTT() types.MQTTReloadState {
 	return rs.mqtt
 }
 

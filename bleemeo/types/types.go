@@ -47,7 +47,6 @@ type GlobalOption struct {
 	NotifyLabelsUpdate      func()
 	BlackboxScraperName     string
 	ReloadState             BleemeoReloadState
-	MQTTReloadState         types.MQTTReloadState
 
 	UpdateMetricResolution func(ctx context.Context, defaultResolution time.Duration, snmpResolution time.Duration)
 	UpdateThresholds       func(ctx context.Context, thresholds map[string]threshold.Threshold, firstUpdate bool)
@@ -217,6 +216,7 @@ type MQTTReloadState interface {
 	NotificationChannel() <-chan paho.Message
 	PopPendingPoints() []types.MetricPoint
 	SetPendingPoints(points []types.MetricPoint)
+	ClientState() types.MQTTReloadState
 	Close()
 }
 
