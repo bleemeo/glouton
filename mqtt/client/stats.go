@@ -129,22 +129,20 @@ func (s *mqttStats) cleanOldBuckets(now time.Time) {
 // String returns a table containing the statistics.
 func (s *mqttStats) String() string {
 	s.l.Lock()
-	buckets := s.buckets
-	global := s.globalStats
-	s.l.Unlock()
+	defer s.l.Unlock()
 
 	var builder strings.Builder
 
 	_, _ = builder.WriteString(
 		fmt.Sprintf(
 			"Global stats (min/avg/max): %v/%v/%v on %d messages\n\n",
-			global.min, global.avg, global.max, global.nbMessages,
+			s.globalStats.min, s.globalStats.avg, s.globalStats.max, s.globalStats.nbMessages,
 		),
 	)
 
 	_, _ = builder.WriteString("start, min, avg, max, messages\n")
 
-	for bucket, stats := range buckets {
+	for bucket, stats := range s.buckets {
 		_, _ = builder.WriteString(
 			fmt.Sprintf("%v, %v, %v, %v, %v\n", bucket, stats.min, stats.avg, stats.max, stats.nbMessages),
 		)
