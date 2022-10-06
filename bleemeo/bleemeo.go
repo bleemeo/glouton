@@ -916,6 +916,11 @@ func (c *Connector) disableCallback(reason types.DisableReason, until time.Time)
 }
 
 func (c *Connector) disableMqtt(mqtt *mqtt.Client, reason types.DisableReason, until time.Time) {
+	if mqtt == nil {
+		// MQTT is already disabled.
+		return
+	}
+
 	// Delay to apply between re-enabling the synchronizer and the mqtt client. The goal is to allow for
 	// the synchronizer to disable mqtt again before mqtt have time to reconnect or send metrics.
 	var mqttDisableDelay time.Duration
