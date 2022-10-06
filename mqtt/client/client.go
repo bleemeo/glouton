@@ -413,6 +413,9 @@ func (c *Client) IsConnectionOpen() bool {
 
 // DiagnosticArchive add to a zipfile useful diagnostic information.
 func (c *Client) DiagnosticArchive(ctx context.Context, archive types.ArchiveWriter) error {
+	c.l.Lock()
+	defer c.l.Unlock()
+
 	file, err := archive.Create(fmt.Sprintf("%s-mqtt-stats.txt", c.opts.ID))
 	if err != nil {
 		return err
