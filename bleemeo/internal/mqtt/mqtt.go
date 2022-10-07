@@ -244,8 +244,9 @@ func (c *Client) Run(ctx context.Context) error {
 	wg.Add(1)
 
 	go func() {
-		c.mqtt.Run(ctx)
+		defer types.ProcessPanic()
 
+		c.mqtt.Run(ctx)
 		wg.Done()
 	}()
 
