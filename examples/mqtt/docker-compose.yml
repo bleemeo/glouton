@@ -6,7 +6,7 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - /:/hostroot:ro
-      - ./glouton.conf:/etc/glouton/conf.d/:ro
+      - ./glouton.conf:/etc/glouton/conf.d/glouton.conf:ro
       - glouton-data:/var/lib/glouton
     network_mode: "host"
     pid: "host"
@@ -30,7 +30,7 @@ services:
 
   squirreldb:
     image: bleemeo/squirreldb
-    restart: on-failure
+    restart: unless-stopped
     environment:
     - SQUIRRELDB_CASSANDRA_ADDRESSES=cassandra:9042
     - SQUIRRELDB_REDIS_ADDRESSES=redis:6379

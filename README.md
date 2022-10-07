@@ -64,6 +64,10 @@ uses [NATS](https://nats.io/) as the broker, any other broker will work but we p
 (cd examples/mqtt; docker-compose up -d)
 ```
 
+Then go to the Grafana dashboard at http://localhost:3000/d/83ceCuenk/, and log 
+in with the user "admin" and the password "password". You might have to wait a 
+little before seeing data on the graph.
+
 More details are available on [SquirrelDB Ingestor](#TODO) on how to use authenticated MQTT
 connections and how this setup can be scaled for high availability.
 
