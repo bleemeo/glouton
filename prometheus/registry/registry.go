@@ -149,7 +149,7 @@ type RegistrationOption struct {
 	// Meta labels (starting with __) are still dropped and (if applicable) converted to annotations.
 	NoLabelsAlteration bool
 	// DisablePeriodicGather skip the periodic calls which forward gathered points to r.PushPoint.
-	// The periodic call use the Interval. When Interval is 0, the dynmaic interval set by UpdateDelay is used.
+	// The periodic call use the Interval. When Interval is 0, the dynamic interval set by UpdateDelay is used.
 	DisablePeriodicGather bool
 	Rules                 []SimpleRule
 	rrules                []*rules.RecordingRule

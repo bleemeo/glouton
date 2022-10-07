@@ -2101,7 +2101,6 @@ func (a *agent) writeDiagnosticArchive(ctx context.Context, archive types.Archiv
 		a.rulesManager.DiagnosticArchive,
 		a.reloadState.DiagnosticArchive,
 		a.vethProvider.DiagnosticArchive,
-		a.mqtt.DiagnosticArchive,
 	}
 
 	if a.bleemeoConnector != nil {
@@ -2110,6 +2109,10 @@ func (a *agent) writeDiagnosticArchive(ctx context.Context, archive types.Archiv
 
 	if a.monitorManager != nil {
 		modules = append(modules, a.monitorManager.DiagnosticArchive)
+	}
+
+	if a.mqtt != nil {
+		modules = append(modules, a.mqtt.DiagnosticArchive)
 	}
 
 	for _, f := range modules {
