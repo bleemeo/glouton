@@ -88,41 +88,13 @@ type Client struct {
 }
 
 type metricPayload struct {
-	UUID              string            `json:"uuid,omitempty"`
-	Measurement       string            `json:"measurement"`    // TODO: this could be dropped once consumer is updated to only use UUID or LabelsText
-	BleemeoItem       string            `json:"item,omitempty"` // TODO: this could be dropped once consumer is updated to only use UUID or LabelsText
-	LabelsText        string            `json:"labels_text"`
-	Timestamp         int64             `json:"time"` // TODO: could drop this field once consumer is updated to support time_ms
-	TimestampMS       int64             `json:"time_ms"`
-	Value             forceDecimalFloat `json:"value"`
-	Status            string            `json:"status,omitempty"`
-	StatusDescription string            `json:"status_description,omitempty"`
-	CheckOutput       string            `json:"check_output,omitempty"` // TODO: drop this field once consumer is updated to support status_description
-	EventGracePeriod  int               `json:"event_grace_period,omitempty"`
-}
-
-// This type is only used because the Bleemeo consumer require Value to be a float,
-// and assume that the JSON "5" is not a float but an int.
-// So this this guarantee that the Go float value 5.0 is encoded as "5.0" and not "5".
-// This should disapear when Bleemeo consumer is upgraded to support int as float.
-type forceDecimalFloat float64
-
-// MarshalJSON do what comment on forceDecimalFloat say.
-func (f forceDecimalFloat) MarshalJSON() ([]byte, error) {
-	buffer, err := json.Marshal(float64(f))
-	if err != nil {
-		return buffer, err
-	}
-
-	for _, b := range buffer {
-		if b == '.' || b == 'e' {
-			return buffer, err
-		}
-	}
-
-	buffer = append(buffer, '.', '0')
-
-	return buffer, err
+	UUID              string  `json:"uuid,omitempty"`
+	LabelsText        string  `json:"labels_text"`
+	TimestampMS       int64   `json:"time_ms"`
+	Value             float64 `json:"value"`
+	Status            string  `json:"status,omitempty"`
+	StatusDescription string  `json:"status_description,omitempty"`
+	EventGracePeriod  int     `json:"event_grace_period,omitempty"`
 }
 
 // New create a new client.
@@ -657,22 +629,18 @@ func (c *Client) preparePoints(registreredMetricByKey map[string]bleemeoTypes.Me
 		if m, ok := registreredMetricByKey[key]; ok && m.DeactivatedAt.IsZero() {
 			value := metricPayload{
 				LabelsText:  m.LabelsText,
-				Timestamp:   p.Time.Unix(),
 				TimestampMS: p.Time.UnixNano() / 1e6,
-				Value:       forceDecimalFloat(p.Value),
+				Value:       p.Value,
 			}
 
 			if c.opts.MetricFormat == types.MetricFormatBleemeo && common.MetricOnlyHasItem(m.Labels, m.AgentID) {
 				value.UUID = m.ID
 				value.LabelsText = ""
-				value.Measurement = m.Labels[types.LabelName]
-				value.BleemeoItem = m.Labels[types.LabelItem]
 			}
 
 			if p.Annotations.Status.CurrentStatus.IsSet() {
 				value.Status = p.Annotations.Status.CurrentStatus.String()
 				value.StatusDescription = p.Annotations.Status.StatusDescription
-				value.CheckOutput = value.StatusDescription
 
 				if p.Annotations.ContainerID != "" {
 					lastKilledAt := c.opts.Docker.ContainerLastKill(p.Annotations.ContainerID)
