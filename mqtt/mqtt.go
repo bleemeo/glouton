@@ -52,9 +52,9 @@ type Config struct {
 }
 
 type metricPayload struct {
-	LabelsText string  `json:"labels_text"`
-	Timestamp  int64   `json:"time"`
-	Value      float64 `json:"value"`
+	LabelsText  string  `json:"labels_text"`
+	TimestampMS int64   `json:"time_ms"`
+	Value       float64 `json:"value"`
 }
 
 func New(opts Options) *MQTT {
@@ -151,9 +151,9 @@ func (m *MQTT) sendPoints() {
 
 	for _, p := range points {
 		payload = append(payload, metricPayload{
-			Timestamp:  p.Time.Unix(),
-			Value:      p.Value,
-			LabelsText: types.LabelsToText(p.Labels),
+			TimestampMS: p.Time.UnixMilli(),
+			Value:       p.Value,
+			LabelsText:  types.LabelsToText(p.Labels),
 		})
 	}
 
