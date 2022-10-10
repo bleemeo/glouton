@@ -672,11 +672,17 @@ func (c *Client) onConnect(mqttClient paho.Client) {
 		c.sendConnectMessage()
 	}
 
-	mqttClient.Subscribe(
+	token := mqttClient.Subscribe(
 		fmt.Sprintf("v1/agent/%s/notification", c.opts.AgentID),
 		0,
 		c.opts.ReloadState.MQTTReloadState().OnNotification,
 	)
+	token.Wait()
+
+	// If there is an error, the client should reconnect so the subscription will be retried.
+	if token.Error() != nil {
+		logger.V(1).Printf("Failed to subscribe to notifications: %s", token.Error())
+	}
 }
 
 func (c *Client) sendConnectMessage() {
