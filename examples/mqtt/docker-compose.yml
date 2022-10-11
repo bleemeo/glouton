@@ -22,7 +22,7 @@ services:
     volumes:
     - ./nats.conf:/etc/nats/config.conf:ro
 
-  consumer:
+  squirreldb-ingestor:
     image: bleemeo/squirreldb-ingestor
     environment:
       - INGESTOR_REMOTE_WRITE_URL=http://squirreldb:9201/api/v1/write
