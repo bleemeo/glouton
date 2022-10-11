@@ -71,6 +71,19 @@ little before seeing data on the graph.
 More details are available on [SquirrelDB Ingestor](#TODO) on how to use authenticated MQTT
 connections and how this setup can be scaled for high availability.
 
+You can use your own ingestor if you want, the messages sent to MQTT are encoded in JSON and
+compressed with zlib. Glouton sends its messages to the topic `v1/agent/fqdn/data` with `fqdn` replaced by the host FQDN.
+Here is an example of a MQTT message:
+```json
+[
+   {
+      "labels_text": "__name__=cpu_used",
+      "time_ms": 1665479613948,
+      "value": 46.8,
+   }
+]
+```
+
 ## Install
 
 Glouton can be installed with Docker, Kubernetes, on Windows or as a native Linux package.
