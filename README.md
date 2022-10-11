@@ -72,8 +72,9 @@ More details are available on [SquirrelDB Ingestor](#TODO) on how to use authent
 connections and how this setup can be scaled for high availability.
 
 You can use your own ingestor if you want, the messages sent to MQTT are encoded in JSON and
-compressed with zlib. Glouton sends its messages to the topic `v1/agent/fqdn/data` with `fqdn` replaced by the host FQDN.
-Here is an example of a MQTT message:
+compressed with zlib. Glouton sends its messages to the topic `v1/agent/fqdn/data` with `fqdn` 
+replaced by the host FQDN (`.` are replaced by `,` in the FQDN because NATS doesn't support `.` 
+in MQTT topics). Here is an example of a MQTT message:
 ```json
 [
    {
