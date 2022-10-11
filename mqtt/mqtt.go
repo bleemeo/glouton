@@ -72,9 +72,9 @@ func New(opts Options) *MQTT {
 }
 
 // safeFQDN returns a safe version of a FQDN that doesn't
-// contain any special characters used by MQTT.
+// contain any special characters used by MQTT and NATS.
 func safeFQDN(fqdn string) string {
-	replacer := strings.NewReplacer("#", "", "+", "", "/", "")
+	replacer := strings.NewReplacer("#", "", "+", "", "/", "", ">", "", "*", "", ".", ",")
 
 	return replacer.Replace(fqdn)
 }
