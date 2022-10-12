@@ -42,7 +42,7 @@ type Store interface {
 }
 
 type Config struct {
-	Host        string
+	Hosts       []string
 	Port        int
 	SSL         bool
 	SSLInsecure bool
@@ -82,7 +82,17 @@ func safeFQDN(fqdn string) string {
 func (m *MQTT) pahoOptions(_ context.Context) (*paho.ClientOptions, error) {
 	pahoOptions := paho.NewClientOptions()
 
-	brokerURL := net.JoinHostPort(m.opts.Config.Host, fmt.Sprint(m.opts.Config.Port))
+	for _, host := range m.opts.Config.Hosts {
+		brokerURL := net.JoinHostPort(host, fmt.Sprint(m.opts.Config.Port))
+
+		if m.opts.Config.SSL {
+			brokerURL = "ssl://" + brokerURL
+		} else {
+			brokerURL = "tcp://" + brokerURL
+		}
+
+		pahoOptions.AddBroker(brokerURL)
+	}
 
 	if m.opts.Config.SSL {
 		tlsConfig := TLSConfig(
@@ -91,13 +101,7 @@ func (m *MQTT) pahoOptions(_ context.Context) (*paho.ClientOptions, error) {
 		)
 
 		pahoOptions.SetTLSConfig(tlsConfig)
-
-		brokerURL = "ssl://" + brokerURL
-	} else {
-		brokerURL = "tcp://" + brokerURL
 	}
-
-	pahoOptions.AddBroker(brokerURL)
 
 	pahoOptions.SetUsername(m.opts.Config.Username)
 	pahoOptions.SetPassword(m.opts.Config.Password)

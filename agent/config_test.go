@@ -280,9 +280,9 @@ func Test_loadConfiguration(t *testing.T) { //nolint:maintidx
 	}
 
 	defaultMQTTconfig := mqtt.Config{
-		Host: "localhost",
-		Port: 1883,
-		SSL:  false,
+		Hosts: []string{"localhost"},
+		Port:  1883,
+		SSL:   false,
 	}
 
 	defaultSNMPConfig := SNMP{
@@ -550,7 +550,7 @@ func Test_loadConfiguration(t *testing.T) { //nolint:maintidx
 				SNMP:      defaultSNMPConfig,
 				Container: defaultContainersConfig,
 				MQTT: mqtt.Config{
-					Host:        "192.168.0.1",
+					Hosts:       []string{"192.168.0.1", "192.168.0.2"},
 					Port:        3000,
 					SSL:         true,
 					SSLInsecure: true,

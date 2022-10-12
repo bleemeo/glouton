@@ -339,7 +339,7 @@ func defaultConfig() map[string]interface{} {
 			"time_drift":                      0,
 		},
 		"mqtt.enable":       false,
-		"mqtt.host":         "localhost",
+		"mqtt.hosts":        []interface{}{"localhost"},
 		"mqtt.port":         1883,
 		"mqtt.ssl":          false,
 		"mqtt.ssl_insecure": false,
@@ -865,7 +865,7 @@ func (cfg *Config) parseServices(oldCfg *config.Configuration) []error {
 
 func (cfg *Config) parseMQTT(oldCfg *config.Configuration) {
 	cfg.MQTT = mqtt.Config{
-		Host:        oldCfg.String("mqtt.host"),
+		Hosts:       oldCfg.StringList("mqtt.hosts"),
 		Port:        oldCfg.Int("mqtt.port"),
 		SSL:         oldCfg.Bool("mqtt.ssl"),
 		SSLInsecure: oldCfg.Bool("mqtt.ssl_insecure"),
