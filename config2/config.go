@@ -21,6 +21,16 @@ const (
 	delimiter = "."
 )
 
+//nolint:gochecknoglobals
+var defaultConfigFiles = []string{
+	"/etc/glouton/glouton.conf",
+	"/etc/glouton/conf.d",
+	"etc/glouton.conf",
+	"etc/conf.d",
+	"C:\\ProgramData\\glouton\\glouton.conf",
+	"C:\\ProgramData\\glouton\\conf.d",
+}
+
 // Config is the structured configuration of the agent.
 type Config struct {
 	Services                  []Service `koanf:"service"`
@@ -122,10 +132,22 @@ type ContainerRuntimeAddresses struct {
 type Warnings []error
 
 // Load loads the configuration from files and directories to a struct.
-func Load(withDefault bool, confPaths ...string) (Config, error) {
-	k, err := load(withDefault, confPaths...)
+func Load(withDefault bool, paths ...string) (Config, *koanf.Koanf, error) {
+	// Add config envFiles from env.
+	envFiles := os.Getenv("GLOUTON_CONFIG_FILES")
+
+	if len(paths) == 0 && envFiles != "" {
+		paths = strings.Split(envFiles, ",")
+	}
+
+	// If no config was given with flags or env variables, fallback on the default files.
+	if len(paths) == 0 {
+		paths = defaultConfigFiles
+	}
+
+	k, err := load(withDefault, paths...)
 	if err != nil {
-		return Config{}, err
+		return Config{}, k, err
 	}
 
 	var config Config
@@ -135,15 +157,15 @@ func Load(withDefault bool, confPaths ...string) (Config, error) {
 		logger.Printf("Error loading config: %s", err)
 	}
 
-	return config, nil
+	return config, k, nil
 }
 
 // load the configuration from files and directories.
-func load(withDefault bool, confPaths ...string) (*koanf.Koanf, error) {
+func load(withDefault bool, paths ...string) (*koanf.Koanf, error) {
 	k := koanf.New(delimiter)
 
 	// TODO: Handle error.
-	warnings, _ := loadPaths(k, confPaths)
+	warnings, _ := loadPaths(k, paths)
 	for _, warning := range warnings {
 		logger.Printf("Error loading config: %s", warning)
 	}
@@ -202,20 +224,6 @@ func envToKeyFunc() func(string) string {
 }
 
 func loadPaths(k *koanf.Koanf, paths []string) (Warnings, error) {
-	// TODO
-	// Get config files from env.
-	// if _, err := loadEnvironmentVariable(cfg, "config_files", keyToEnvironmentName("config_files"), defaultConfig()["config_files"]); err != nil {
-	// 	return cfg, nil, err
-	// }
-
-	// if len(configFiles) > 0 && len(configFiles[0]) > 0 {
-	// 	cfg.Set("config_files", configFiles)
-	// }
-
-	// if _, ok := cfg.Get("config_files"); !ok {
-	// 	cfg.Set("config_files", defaultConfig()["config_files"])
-	// }
-
 	var (
 		finalError error
 		warnings   Warnings

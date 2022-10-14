@@ -124,7 +124,7 @@ func TestStructuredConfig(t *testing.T) {
 		},
 	}
 
-	config, err := Load(false, "testdata/full.conf")
+	config, _, err := Load(false, "testdata/full.conf")
 	if err != nil {
 		t.Fatalf("Failed to load config: %s", err)
 	}
@@ -144,7 +144,7 @@ func TestConfigFromEnv(t *testing.T) {
 	// More complex test, underscores can't be converted to YAML indentation directly.
 	t.Setenv("GLOUTON_WEB_STATIC_CDN_URL", cdnUrl)
 
-	config, err := Load(false, "testdata/structured.conf")
+	config, _, err := Load(false)
 	if err != nil {
 		t.Fatalf("Failed to load config: %s", err)
 	}
@@ -158,9 +158,23 @@ func TestConfigFromEnv(t *testing.T) {
 	}
 }
 
+// Test that config files can be passed with environment variables.
+func TestConfigFilesFromEnv(t *testing.T) {
+	t.Setenv("GLOUTON_CONFIG_FILES", "testdata/simple.conf")
+
+	config, _, err := Load(false)
+	if err != nil {
+		t.Fatalf("Failed to load config: %s", err)
+	}
+
+	if config.Web.StaticCDNURL != "/simple" {
+		t.Fatal("File given with GLOUTON_CONFIG_FILES not loaded")
+	}
+}
+
 // Test that users are able to override default settings.
 func TestOverrideDefault(t *testing.T) {
-	config, err := Load(true, "testdata/override_default.conf")
+	config, _, err := Load(true, "testdata/override_default.conf")
 	if err != nil {
 		t.Fatalf("Failed to load config: %s", err)
 	}
@@ -182,7 +196,7 @@ func TestOverrideDefault(t *testing.T) {
 
 // Test that the config loaded with no config file has default values.
 func TestDefaultNoFile(t *testing.T) {
-	config, err := Load(true)
+	config, _, err := Load(true)
 	if err != nil {
 		t.Fatalf("Failed to load config: %s", err)
 	}
