@@ -43,7 +43,7 @@ var commonDefaultSystemMetrics = []string{
 	"time_drift",
 	"agent_config_warning",
 
-	// services metrics that are not classied as a service in common.serviceType
+	// Services metrics that are not classified as a service in common.serviceType
 
 	// Kubernetes
 	"kubernetes_ca_day_left",

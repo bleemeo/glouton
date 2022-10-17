@@ -22,6 +22,7 @@ import (
 	"glouton/config"
 	"glouton/discovery"
 	"glouton/logger"
+	"glouton/mqtt"
 	"glouton/prometheus/exporter/snmp"
 	"glouton/types"
 	"glouton/version"
@@ -49,6 +50,7 @@ type Config struct {
 	Services  Services
 	SNMP      SNMP
 	Container Container
+	MQTT      mqtt.Config
 }
 
 type Services []Service
@@ -336,6 +338,14 @@ func defaultConfig() map[string]interface{} {
 			"time_elapsed_since_last_data":    0,
 			"time_drift":                      0,
 		},
+		"mqtt.enable":       false,
+		"mqtt.hosts":        []interface{}{"localhost"},
+		"mqtt.port":         1883,
+		"mqtt.ssl":          false,
+		"mqtt.ssl_insecure": false,
+		"mqtt.cafile":       "",
+		"mqtt.username":     "",
+		"mqtt.password":     "",
 		"network_interface_blacklist": []interface{}{
 			"docker",
 			"lo",
@@ -728,25 +738,11 @@ func loadOldConfiguration(configFiles []string, mockLookupEnv func(string) (stri
 }
 
 func convertConfig(cfg *config.Configuration) (agentConfig Config, warnings []error) {
-	services, _ := cfg.Get("service")
-	overrideServices := confFieldToSliceMap(services, "service override")
-	agentConfig.Services = make([]Service, 0, len(overrideServices))
-
-	for _, fragment := range overrideServices {
-		srv := Service{}
-
-		moreWarning := srv.fromMap(fragment)
-		if moreWarning != nil {
-			warnings = append(warnings, fmt.Errorf("service %s: %w", srv.Name(), moreWarning))
-		}
-
-		agentConfig.Services = append(agentConfig.Services, srv)
-	}
-
 	agentConfig.parseContainer(cfg)
+	agentConfig.parseMQTT(cfg)
 
 	warnings = append(warnings, agentConfig.parseSNMP(cfg)...)
-	warnings = append(warnings, agentConfig.validate()...)
+	warnings = append(warnings, agentConfig.parseServices(cfg)...)
 
 	return agentConfig, warnings
 }
@@ -826,14 +822,22 @@ func (cfg *Config) parseContainer(oldCfg *config.Configuration) {
 	cfg.Container.Runtime.ContainerD.DisablePrefixHostRoot = !oldCfg.Bool("container.runtime.containerd.prefix_hostroot")
 }
 
-func (cfg *Config) validate() []error {
+func (cfg *Config) parseServices(oldCfg *config.Configuration) []error {
 	var warnings []error
 
+	services, _ := oldCfg.Get("service")
+	overrideServices := confFieldToSliceMap(services, "service override")
+	cfg.Services = make([]Service, 0, len(overrideServices))
 	replacer := strings.NewReplacer(".", "_", "-", "_")
 
-	i := 0
+	for _, fragment := range overrideServices {
+		srv := Service{}
 
-	for _, srv := range cfg.Services {
+		moreWarning := srv.fromMap(fragment)
+		if moreWarning != nil {
+			warnings = append(warnings, fmt.Errorf("service %s: %w", srv.Name(), moreWarning))
+		}
+
 		if srv.ID == "" {
 			warnings = append(warnings, fmt.Errorf("%w: a key \"id\" is missing in one of your service override", ErrInvalidValue))
 
@@ -853,13 +857,22 @@ func (cfg *Config) validate() []error {
 			srv.ID = newID
 		}
 
-		cfg.Services[i] = srv
-		i++
+		cfg.Services = append(cfg.Services, srv)
 	}
 
-	cfg.Services = cfg.Services[:i]
-
 	return warnings
+}
+
+func (cfg *Config) parseMQTT(oldCfg *config.Configuration) {
+	cfg.MQTT = mqtt.Config{
+		Hosts:       oldCfg.StringList("mqtt.hosts"),
+		Port:        oldCfg.Int("mqtt.port"),
+		SSL:         oldCfg.Bool("mqtt.ssl"),
+		SSLInsecure: oldCfg.Bool("mqtt.ssl_insecure"),
+		CAFile:      oldCfg.String("mqtt.ca_file"),
+		Username:    oldCfg.String("mqtt.username"),
+		Password:    oldCfg.String("mqtt.password"),
+	}
 }
 
 func (srv *Service) fromMap(fragment map[string]string) (warning error) {

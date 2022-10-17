@@ -27,6 +27,7 @@ import (
 	"strings"
 	"time"
 
+	paho "github.com/eclipse/paho.mqtt.golang"
 	"github.com/getsentry/sentry-go"
 	"github.com/prometheus/prometheus/promql/parser"
 )
@@ -413,4 +414,23 @@ func ProcessPanic() {
 		sentry.Flush(time.Second * 5)
 		panic(err)
 	}
+}
+
+// MQTTReloadState is the state kept between reloads for MQTT.
+type MQTTReloadState interface {
+	Client() paho.Client
+	SetClient(cli paho.Client)
+	OnConnectionLost(cli paho.Client, err error)
+	ConnectionLostChannel() <-chan error
+	Close()
+	AddPendingMessage(m Message, shouldWait bool)
+	PendingMessages() <-chan Message
+}
+
+// Message contains all information to send a message to MQTT.
+type Message struct {
+	Token   paho.Token
+	Retry   bool
+	Topic   string
+	Payload interface{}
 }

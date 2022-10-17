@@ -43,6 +43,7 @@ import (
 	"glouton/inputs/statsd"
 	"glouton/jmxtrans"
 	"glouton/logger"
+	"glouton/mqtt"
 	"glouton/nrpe"
 	"glouton/prometheus/exporter/blackbox"
 	"glouton/prometheus/exporter/common"
@@ -86,6 +87,7 @@ import (
 
 	processInput "glouton/inputs/process"
 
+	paho "github.com/eclipse/paho.mqtt.golang"
 	"github.com/prometheus/prometheus/model/labels"
 	"gopkg.in/yaml.v3"
 )
@@ -135,6 +137,7 @@ type agent struct {
 	rulesManager           *rules.Manager
 	reloadState            ReloadState
 	vethProvider           *veth.Provider
+	mqtt                   *mqtt.MQTT
 
 	triggerHandler            *debouncer.Debouncer
 	triggerLock               sync.Mutex
@@ -203,6 +206,14 @@ func (a *agent) init(ctx context.Context, configFiles []string, firstRun bool) (
 		if err != nil {
 			logger.V(1).Printf("sentry.Init failed: %s", err)
 		}
+	}
+
+	// Initialize paho loggers, this need to be done only once to prevent data races.
+	if firstRun {
+		paho.ERROR = logger.V(2)
+		paho.CRITICAL = logger.V(2)
+		paho.WARN = logger.V(2)
+		paho.DEBUG = logger.V(3)
 	}
 
 	sentry.ConfigureScope(func(scope *sentry.Scope) {
@@ -1236,6 +1247,20 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 	a.factProvider.SetFact("statsd_enable", a.oldConfig.String("telegraf.statsd.enable"))
 	a.factProvider.SetFact("metrics_format", a.metricFormat.String())
 
+	if a.oldConfig.Bool("mqtt.enable") {
+		a.mqtt = mqtt.New(mqtt.Options{
+			ReloadState: a.reloadState.MQTT(),
+			Config:      a.config.MQTT,
+			Store:       filteredStore,
+			FQDN:        fqdn,
+		})
+
+		tasks = append(tasks, taskInfo{
+			a.mqtt.Run,
+			"MQTT connector",
+		})
+	}
+
 	a.startTasks(tasks)
 
 	<-ctx.Done()
@@ -2084,6 +2109,10 @@ func (a *agent) writeDiagnosticArchive(ctx context.Context, archive types.Archiv
 
 	if a.monitorManager != nil {
 		modules = append(modules, a.monitorManager.DiagnosticArchive)
+	}
+
+	if a.mqtt != nil {
+		modules = append(modules, a.mqtt.DiagnosticArchive)
 	}
 
 	for _, f := range modules {

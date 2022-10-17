@@ -54,7 +54,7 @@ func getTopinfo() facts.TopInfo {
 
 func TestTopinfoEncoding(t *testing.T) {
 	topinfo := getTopinfo()
-	encoder := &mqttEncoder{}
+	encoder := &Encoder{}
 
 	var (
 		decoded  facts.TopInfo
@@ -105,7 +105,7 @@ func TestTopinfoEncoding(t *testing.T) {
 
 func BenchmarkTopinfoEncoding(b *testing.B) {
 	topinfo := getTopinfo()
-	encoder := &mqttEncoder{}
+	encoder := &Encoder{}
 
 	b.ResetTimer()
 
@@ -119,7 +119,7 @@ func BenchmarkTopinfoEncoding(b *testing.B) {
 
 func BenchmarkTopinfoDecoding(b *testing.B) {
 	topinfo := getTopinfo()
-	encoder := &mqttEncoder{}
+	encoder := &Encoder{}
 
 	encoded, err := encoder.Encode(topinfo)
 	if err != nil {

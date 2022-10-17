@@ -42,25 +42,22 @@ var ErrBadOption = errors.New("bad option")
 
 // reloadState implements the types.BleemeoReloadState interface.
 type reloadState struct {
-	pahoWrapper   types.PahoWrapper
+	mqtt          types.MQTTReloadState
 	nextFullSync  time.Time
 	fullSyncCount int
 	jwt           types.JWT
-	isFirstRun    bool
 }
 
 func NewReloadState() types.BleemeoReloadState {
-	return &reloadState{
-		isFirstRun: true,
-	}
+	return &reloadState{}
 }
 
-func (rs *reloadState) PahoWrapper() types.PahoWrapper {
-	return rs.pahoWrapper
+func (rs *reloadState) MQTTReloadState() types.MQTTReloadState {
+	return rs.mqtt
 }
 
-func (rs *reloadState) SetPahoWrapper(client types.PahoWrapper) {
-	rs.pahoWrapper = client
+func (rs *reloadState) SetMQTTReloadState(client types.MQTTReloadState) {
+	rs.mqtt = client
 }
 
 func (rs *reloadState) NextFullSync() time.Time {
@@ -87,19 +84,9 @@ func (rs *reloadState) SetJWT(jwt types.JWT) {
 	rs.jwt = jwt
 }
 
-func (rs *reloadState) IsFirstRun() bool {
-	if rs.isFirstRun {
-		rs.isFirstRun = false
-
-		return true
-	}
-
-	return false
-}
-
 func (rs *reloadState) Close() {
-	if rs.pahoWrapper != nil {
-		rs.pahoWrapper.Close()
+	if rs.mqtt != nil {
+		rs.mqtt.Close()
 	}
 }
 
@@ -208,7 +195,6 @@ func (c *Connector) initMQTT(previousPoint []gloutonTypes.MetricPoint) {
 			InitialPoints:        previousPoint,
 			GetJWT:               c.sync.GetJWT,
 		},
-		c.option.ReloadState.IsFirstRun(),
 	)
 
 	// if the connector is disabled, disable mqtt for the same period
@@ -930,21 +916,24 @@ func (c *Connector) disableCallback(reason types.DisableReason, until time.Time)
 }
 
 func (c *Connector) disableMqtt(mqtt *mqtt.Client, reason types.DisableReason, until time.Time) {
-	if mqtt != nil {
-		// delay to apply between re-enabling the synchronizer and the mqtt client. The goal is to allow for
-		// the synchronizer to disable mqtt again before mqtt have time to reconnect or send metrics.
-		var mqttDisableDelay time.Duration
-
-		switch reason { //nolint:exhaustive,nolintlint
-		case types.DisableTooManyErrors:
-			mqttDisableDelay = 20 * time.Second
-		case types.DisableAgentTooOld, types.DisableDuplicatedAgent, types.DisableAuthenticationError, types.DisableTimeDrift:
-			// give time to the synchronizer check if the error is solved
-			mqttDisableDelay = 80 * time.Second
-		default:
-			mqttDisableDelay = 20 * time.Second
-		}
-
-		mqtt.Disable(until.Add(mqttDisableDelay), reason)
+	if mqtt == nil {
+		// MQTT is already disabled.
+		return
 	}
+
+	// Delay to apply between re-enabling the synchronizer and the mqtt client. The goal is to allow for
+	// the synchronizer to disable mqtt again before mqtt have time to reconnect or send metrics.
+	var mqttDisableDelay time.Duration
+
+	switch reason { //nolint:exhaustive,nolintlint
+	case types.DisableTooManyErrors:
+		mqttDisableDelay = 20 * time.Second
+	case types.DisableAgentTooOld, types.DisableDuplicatedAgent, types.DisableAuthenticationError, types.DisableTimeDrift:
+		// Give time to the synchronizer check if the error is solved.
+		mqttDisableDelay = 80 * time.Second
+	default:
+		mqttDisableDelay = 20 * time.Second
+	}
+
+	mqtt.Disable(until.Add(mqttDisableDelay), reason)
 }

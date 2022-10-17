@@ -196,31 +196,39 @@ type GloutonAgentConfig struct {
 
 // BleemeoReloadState is used to keep some Bleemeo components alive during reloads.
 type BleemeoReloadState interface {
-	PahoWrapper() PahoWrapper
-	SetPahoWrapper(client PahoWrapper)
+	MQTTReloadState() MQTTReloadState
+	SetMQTTReloadState(client MQTTReloadState)
 	NextFullSync() time.Time
 	SetNextFullSync(t time.Time)
 	FullSyncCount() int
 	SetFullSyncCount(count int)
 	JWT() JWT
 	SetJWT(jwt JWT)
-	IsFirstRun() bool
 	Close()
 }
 
-// PahoWrapper allows changing some event handlers at runtime.
-type PahoWrapper interface {
-	Client() paho.Client
-	SetClient(cli paho.Client)
-	OnConnectionLost(cli paho.Client, err error)
-	ConnectionLostChannel() <-chan error
+// MQTTReloadState allows changing some event handlers at runtime.
+type MQTTReloadState interface {
+	SetMQTT(mqtt MQTTClient)
 	OnConnect(cli paho.Client)
 	ConnectChannel() <-chan paho.Client
 	OnNotification(cli paho.Client, msg paho.Message)
 	NotificationChannel() <-chan paho.Message
 	PopPendingPoints() []types.MetricPoint
 	SetPendingPoints(points []types.MetricPoint)
+	ClientState() types.MQTTReloadState
 	Close()
+}
+
+type MQTTClient interface {
+	Publish(topic string, payload interface{}, retry bool)
+	Run(ctx context.Context)
+	IsConnectionOpen() bool
+	DiagnosticArchive(ctx context.Context, archive types.ArchiveWriter) error
+	LastReport() time.Time
+	Disable(until time.Time)
+	DisabledUntil() time.Time
+	Disconnect(timeout time.Duration)
 }
 
 // JWT used to authenticate with the Bleemeo API.
