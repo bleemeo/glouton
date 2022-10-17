@@ -56,7 +56,7 @@ in with the user "admin" and the password "password".
 Glouton can periodically push metrics to an external MQTT broker.
 
 A docker compose file is available to show a working monitoring setup with a Glouton pushing points
-to MQTT. [SquirrelDB Ingestor](#TODO) is used to receive the metrics from MQTT and to write them to 
+to MQTT. [SquirrelDB Ingestor](https://github.com/bleemeo/squirreldb-ingestor) is used to receive the metrics from MQTT and to write them to
 [SquirrelDB](https://github.com/bleemeo/squirreldb), a scalable timeseries database. This setup 
 uses [NATS](https://nats.io/) as the broker, any other broker will work but we prefer NATS for its scalability.  
 
@@ -68,7 +68,7 @@ Then go to the Grafana dashboard at http://localhost:3000/d/83ceCuenk/, and log
 in with the user "admin" and the password "password". You might have to wait a 
 little before seeing data on the graph.
 
-More details are available on [SquirrelDB Ingestor](#TODO) on how to use authenticated MQTT
+More details are available on [SquirrelDB Ingestor](https://github.com/bleemeo/squirreldb-ingestor) on how to use authenticated MQTT
 connections and how this setup can be scaled for high availability.
 
 You can use your own ingestor if you want, the messages sent to MQTT are encoded in JSON and
