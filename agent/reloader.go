@@ -293,6 +293,7 @@ func (a *agentReloader) watchConfig(ctx context.Context, reload chan struct{}) {
 	// Use a debouncer because fsnotify events are often duplicated.
 	reloadAgentTarget := func(ctx context.Context) {
 		if ctx.Err() == nil {
+			// TODO
 			// Validate config before reloading.
 			if _, _, _, err := loadConfiguration(configFiles, nil); err == nil {
 				reload <- struct{}{}

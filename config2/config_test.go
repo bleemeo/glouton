@@ -1,16 +1,23 @@
 package config2
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"github.com/mitchellh/mapstructure"
+	"gopkg.in/yaml.v3"
 )
 
 // TestMerge tests that config files are merged correctly.
 // Merge should override existing values, merge maps and concatenate arrays.
 func TestMerge(t *testing.T) {
-	k, err := load(false, "testdata/merge1.conf", "testdata/merge2.conf")
+	k, warnings, err := load(false, "testdata/merge1.conf", "testdata/merge2.conf")
+	if warnings != nil {
+		t.Fatalf("Warning while loading config: %s", err)
+	}
+
 	if err != nil {
 		t.Error(err)
 	}
@@ -124,7 +131,11 @@ func TestStructuredConfig(t *testing.T) {
 		},
 	}
 
-	config, _, err := Load(false, "testdata/full.conf")
+	config, warnings, err := Load(false, "testdata/full.conf")
+	if warnings != nil {
+		t.Fatalf("Warning while loading config: %s", err)
+	}
+
 	if err != nil {
 		t.Fatalf("Failed to load config: %s", err)
 	}
@@ -144,7 +155,11 @@ func TestConfigFromEnv(t *testing.T) {
 	// More complex test, underscores can't be converted to YAML indentation directly.
 	t.Setenv("GLOUTON_WEB_STATIC_CDN_URL", cdnUrl)
 
-	config, _, err := Load(false)
+	config, warnings, err := Load(false)
+	if warnings != nil {
+		t.Fatalf("Warning while loading config: %s", err)
+	}
+
 	if err != nil {
 		t.Fatalf("Failed to load config: %s", err)
 	}
@@ -162,7 +177,11 @@ func TestConfigFromEnv(t *testing.T) {
 func TestConfigFilesFromEnv(t *testing.T) {
 	t.Setenv("GLOUTON_CONFIG_FILES", "testdata/simple.conf")
 
-	config, _, err := Load(false)
+	config, warnings, err := Load(false)
+	if warnings != nil {
+		t.Fatalf("Warning while loading config: %s", err)
+	}
+
 	if err != nil {
 		t.Fatalf("Failed to load config: %s", err)
 	}
@@ -174,7 +193,11 @@ func TestConfigFilesFromEnv(t *testing.T) {
 
 // Test that users are able to override default settings.
 func TestOverrideDefault(t *testing.T) {
-	config, _, err := Load(true, "testdata/override_default.conf")
+	config, warnings, err := Load(true, "testdata/override_default.conf")
+	if warnings != nil {
+		t.Fatalf("Warning while loading config: %s", err)
+	}
+
 	if err != nil {
 		t.Fatalf("Failed to load config: %s", err)
 	}
@@ -196,12 +219,82 @@ func TestOverrideDefault(t *testing.T) {
 
 // Test that the config loaded with no config file has default values.
 func TestDefaultNoFile(t *testing.T) {
-	config, _, err := Load(true)
+	config, warnings, err := Load(true)
+	if warnings != nil {
+		t.Fatalf("Warning while loading config: %s", err)
+	}
+
 	if err != nil {
 		t.Fatalf("Failed to load config: %s", err)
 	}
 
 	if diff := cmp.Diff(defaultConfig(), config, cmpopts.EquateEmpty()); diff != "" {
 		t.Fatalf("Default value modified:\n%s", diff)
+	}
+}
+
+// Test warnings and errors returned when loading the configuration.
+func TestWarningsAndErrors(t *testing.T) {
+	tests := []struct {
+		Files        []string
+		WantConfig   Config
+		WantWarnings []string
+		WantError    error
+	}{
+		{
+			Files: []string{"testdata/bad_wrong_type.conf"},
+			WantWarnings: []string{
+				`cannot parse 'metric.softstatus_period_default' as int: strconv.ParseInt: parsing "string": invalid syntax`,
+			},
+		},
+		{
+			Files: []string{"testdata/bad_yaml.conf"},
+			WantWarnings: []string{
+				"line 1: cannot unmarshal !!str `bad:bad` into map[string]interface {}",
+			},
+		},
+	}
+
+	for _, test := range tests {
+		config, warnings, err := Load(false, test.Files...)
+		if diff := cmp.Diff(test.WantError, err); diff != "" {
+			t.Fatalf("Unexpected error for files %s\n%s", test.Files, diff)
+		}
+
+		// Convert warnings to strings and flatten warnings that contain multiple errors.
+		var strWarnings []string
+
+		for _, warning := range warnings {
+			var (
+				mapErr  *mapstructure.Error
+				yamlErr *yaml.TypeError
+			)
+
+			if ok := errors.As(warning, &mapErr); ok {
+				for _, wrappedErr := range mapErr.WrappedErrors() {
+					strWarnings = append(strWarnings, wrappedErr.Error())
+				}
+
+				continue
+			}
+
+			if ok := errors.As(warning, &yamlErr); ok {
+				for _, wrappedErr := range yamlErr.Errors {
+					strWarnings = append(strWarnings, wrappedErr)
+				}
+
+				continue
+			}
+
+			strWarnings = append(strWarnings, warning.Error())
+		}
+
+		if diff := cmp.Diff(test.WantWarnings, strWarnings); diff != "" {
+			t.Fatalf("Unexpected warnings for files %s\n%s", test.Files, diff)
+		}
+
+		if diff := cmp.Diff(test.WantConfig, config); diff != "" {
+			t.Fatalf("Unexpected config for files %s\n%s", test.Files, diff)
+		}
 	}
 }

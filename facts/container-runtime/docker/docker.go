@@ -6,7 +6,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"glouton/config2"
 	"glouton/facts"
+	containerTypes "glouton/facts/container-runtime/types"
 	"glouton/logger"
 	"glouton/types"
 	"math"
@@ -64,6 +66,20 @@ type Docker struct {
 	lastUpdate                     time.Time
 	bridgeNetworks                 map[string]interface{}
 	containerAddressOnDockerBridge map[string]string
+}
+
+// New returns a new Docker runtime.
+func New(
+	runtime config2.ContainerRuntimeAddresses,
+	hostRoot string,
+	deletedContainersCallback func(containersID []string),
+	isContainerIgnored func(facts.Container) bool,
+) *Docker {
+	return &Docker{
+		DockerSockets:             containerTypes.ExpandRuntimeAddresses(runtime, hostRoot),
+		DeletedContainersCallback: deletedContainersCallback,
+		IsContainerIgnored:        isContainerIgnored,
+	}
 }
 
 // LastUpdate return the last time containers list was updated.

@@ -28,6 +28,7 @@ import (
 	"glouton/bleemeo"
 	"glouton/collector"
 	"glouton/config"
+	"glouton/config2"
 	"glouton/debouncer"
 	"glouton/delay"
 	"glouton/discovery"
@@ -104,7 +105,7 @@ var errUnsupportedKey = errors.New("Unsupported item key") //nolint:stylecheck
 type agent struct {
 	taskRegistry *task.Registry
 	oldConfig    *config.Configuration
-	config       Config
+	config       config2.Config
 	state        *state.State
 	cancel       context.CancelFunc
 	context      context.Context //nolint:containedctx
@@ -149,6 +150,7 @@ type agent struct {
 	l                sync.Mutex
 	taskIDs          map[string]int
 	metricResolution time.Duration
+	configWarnings   []error
 }
 
 func zabbixResponse(key string, args []string) (string, error) {
@@ -216,9 +218,9 @@ func (a *agent) init(ctx context.Context, configFiles []string, firstRun bool) (
 	}
 
 	a.containerFilter = facts.ContainerFilter{
-		DisabledByDefault: a.config.Container.DisabledByDefault,
-		AllowList:         a.config.Container.AllowPatternList,
-		DenyList:          a.config.Container.DenyPatternList,
+		DisabledByDefault: !a.config.Container.Filter.AllowByDefault,
+		AllowList:         a.config.Container.Filter.AllowList,
+		DenyList:          a.config.Container.Filter.DenyList,
 	}
 
 	statePath := a.oldConfig.String("agent.state_file")
@@ -741,11 +743,15 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		}()
 	}
 
-	a.snmpManager = snmp.NewManager(
-		a.config.SNMP.ExporterURL,
+	var warning error
+
+	a.snmpManager, warning = snmp.NewManager(
+		a.config.Metric.SNMP.ExporterAddress,
 		a.factProvider,
-		a.config.SNMP.Targets.ToTargetOptions()...,
+		a.config.Metric.SNMP.Targets,
 	)
+
+	a.configWarnings = append(a.configWarnings, warning)
 
 	hasSwap := factsMap["swap_present"] == "true"
 
@@ -785,16 +791,18 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 
 	a.store.SetNewMetricCallback(a.newMetricsCallback)
 
-	a.dockerRuntime = &dockerRuntime.Docker{
-		DockerSockets:             a.config.Container.Runtime.Docker.ExpandAddresses(a.hostRootPath),
-		DeletedContainersCallback: a.deletedContainersCallback,
-		IsContainerIgnored:        a.containerFilter.ContainerIgnored,
-	}
-	a.containerdRuntime = &containerd.Containerd{
-		Addresses:                 a.config.Container.Runtime.ContainerD.ExpandAddresses(a.hostRootPath),
-		DeletedContainersCallback: a.deletedContainersCallback,
-		IsContainerIgnored:        a.containerFilter.ContainerIgnored,
-	}
+	a.dockerRuntime = dockerRuntime.New(
+		a.config.Container.Runtime.Docker,
+		a.hostRootPath,
+		a.deletedContainersCallback,
+		a.containerFilter.ContainerIgnored,
+	)
+	a.containerdRuntime = containerd.New(
+		a.config.Container.Runtime.ContainerD,
+		a.hostRootPath,
+		a.deletedContainersCallback,
+		a.containerFilter.ContainerIgnored,
+	)
 	a.containerRuntime = &merge.Runtime{
 		Runtimes: []crTypes.RuntimeInterface{
 			a.dockerRuntime,
@@ -892,7 +900,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		a.state,
 		acc,
 		a.containerRuntime,
-		a.config.Services.ToDiscoveryMap(),
+		a.config.Services,
 		isCheckIgnored,
 		isInputIgnored,
 		a.containerFilter.ContainerIgnored,
@@ -1485,6 +1493,7 @@ func (a *agent) miscGatherMinute(pusher types.PointPusher) func(context.Context,
 			}
 		}
 
+		// TODO: Get warnings for the new config.
 		desc := strings.Join(a.oldConfig.GetWarnings(), "\n")
 		status := types.StatusWarning
 

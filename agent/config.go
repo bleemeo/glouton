@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"glouton/config"
+	"glouton/config2"
 	"glouton/discovery"
 	"glouton/logger"
 	"glouton/prometheus/exporter/snmp"
@@ -646,9 +647,13 @@ func loadEnvironmentVariable(cfg *config.Configuration, key string, envName stri
 	return found, nil
 }
 
-func loadConfiguration(configFiles []string, mockLookupEnv func(string) (string, bool)) (cfg Config, oldCfg *config.Configuration, warnings []error, finalError error) {
+func loadConfiguration(configFiles []string, mockLookupEnv func(string) (string, bool)) (cfg config2.Config, oldCfg *config.Configuration, warnings []error, finalError error) {
 	oldCfg, warnings, finalError = loadOldConfiguration(configFiles, mockLookupEnv)
-	cfg, moreWarnings := convertConfig(oldCfg)
+
+	cfg, moreWarnings, err := config2.Load(true, configFiles...)
+	if err != nil {
+		finalError = err
+	}
 
 	warnings = append(warnings, moreWarnings...)
 

@@ -6,7 +6,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"glouton/config2"
 	"glouton/facts"
+	containerTypes "glouton/facts/container-runtime/types"
 	"glouton/logger"
 	"glouton/types"
 	"math"
@@ -60,6 +62,20 @@ type Containerd struct {
 // Docker connector must be used.
 // Thought containerd we will be missing important information like name and IP address.
 const ignoredNamespace = "moby"
+
+// New returns a new Docker runtime.
+func New(
+	runtime config2.ContainerRuntimeAddresses,
+	hostRoot string,
+	deletedContainersCallback func(containersID []string),
+	isContainerIgnored func(facts.Container) bool,
+) *Containerd {
+	return &Containerd{
+		Addresses:                 containerTypes.ExpandRuntimeAddresses(runtime, hostRoot),
+		DeletedContainersCallback: deletedContainersCallback,
+		IsContainerIgnored:        isContainerIgnored,
+	}
+}
 
 // LastUpdate return the last time containers list was updated.
 func (c *Containerd) LastUpdate() time.Time {

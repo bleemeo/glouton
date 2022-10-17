@@ -3,7 +3,6 @@ package config2
 import (
 	"fmt"
 	"glouton/logger"
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -39,7 +38,6 @@ type Config struct {
 	DF                        DF        `koanf:"df"`
 	Container                 Container `koanf:"container"`
 	Metric                    Metric    `koanf:"metric"`
-	// TODO: metric
 }
 
 type Metric struct {
@@ -132,7 +130,7 @@ type ContainerRuntimeAddresses struct {
 type Warnings []error
 
 // Load loads the configuration from files and directories to a struct.
-func Load(withDefault bool, paths ...string) (Config, *koanf.Koanf, error) {
+func Load(withDefault bool, paths ...string) (Config, Warnings, error) {
 	// Add config envFiles from env.
 	envFiles := os.Getenv("GLOUTON_CONFIG_FILES")
 
@@ -145,55 +143,46 @@ func Load(withDefault bool, paths ...string) (Config, *koanf.Koanf, error) {
 		paths = defaultConfigFiles
 	}
 
-	k, err := load(withDefault, paths...)
-	if err != nil {
-		return Config{}, k, err
-	}
+	k, warnings, err := load(withDefault, paths...)
 
 	var config Config
 
-	err = k.Unmarshal("", &config)
-	if err != nil {
-		logger.Printf("Error loading config: %s", err)
+	if warning := k.Unmarshal("", &config); warning != nil {
+		warnings = append(warnings, warning)
 	}
 
-	return config, k, nil
+	return config, warnings, err
 }
 
 // load the configuration from files and directories.
-func load(withDefault bool, paths ...string) (*koanf.Koanf, error) {
+func load(withDefault bool, paths ...string) (*koanf.Koanf, Warnings, error) {
 	k := koanf.New(delimiter)
-
-	// TODO: Handle error.
-	warnings, _ := loadPaths(k, paths)
-	for _, warning := range warnings {
-		logger.Printf("Error loading config: %s", warning)
-	}
+	warnings, finalErr := loadPaths(k, paths)
 
 	// TODO: Load old env prefix?
 	if err := k.Load(env.Provider(envPrefix, delimiter, envToKeyFunc()), nil); err != nil {
-		log.Println("env", err)
-	}
-
-	mergeFunc := func(src, dest map[string]interface{}) error {
-		// Merge without overwriting, defaults are only applied
-		// when the setting has not been modified.
-		err := mergo.Merge(&dest, src)
-		if err != nil {
-			logger.Printf("Error merging config: %s", err)
-		}
-
-		return err
+		warnings = append(warnings, err)
 	}
 
 	if withDefault {
+		mergeFunc := func(src, dest map[string]interface{}) error {
+			// Merge without overwriting, defaults are only applied
+			// when the setting has not been modified.
+			err := mergo.Merge(&dest, src)
+			if err != nil {
+				logger.Printf("Error merging config: %s", err)
+			}
+
+			return err
+		}
+
 		err := k.Load(structsProvider(defaultConfig(), "koanf"), nil, koanf.WithMergeFunc(mergeFunc))
 		if err != nil {
-			return nil, err
+			finalErr = err
 		}
 	}
 
-	return k, nil
+	return k, warnings, finalErr
 }
 
 // envToKeyFunc returns a function that converts an environment variable to a configuration key.
@@ -255,9 +244,9 @@ func loadPaths(k *koanf.Koanf, paths []string) (Warnings, error) {
 				logger.V(2).Printf("config file: directory %s have ignored some files due to %v", path, err)
 			}
 		} else {
-			warning := loadFile(k, path)
+			err := loadFile(k, path)
 			if err != nil {
-				warnings = append(warnings, warning)
+				warnings = append(warnings, err)
 			}
 		}
 
@@ -314,4 +303,36 @@ func loadFile(k *koanf.Koanf, path string) error {
 	}
 
 	return nil
+}
+
+func expandContainerRuntimeAddresses(runtime ContainerRuntimeAddresses, hostRoot string) []string {
+	if !runtime.PrefixHostRoot {
+		return runtime.Addresses
+	}
+
+	if hostRoot == "" || hostRoot == "/" {
+		return runtime.Addresses
+	}
+
+	result := make([]string, 0, len(runtime.Addresses)*2)
+
+	for _, path := range runtime.Addresses {
+		result = append(result, path)
+
+		if path == "" {
+			// This is a special value that means "use default of the runtime".
+			// Prefixing with the hostRoot don't make sense.
+			continue
+		}
+
+		switch {
+		case strings.HasPrefix(path, "unix://"):
+			path = strings.TrimPrefix(path, "unix://")
+			result = append(result, "unix://"+filepath.Join(hostRoot, path))
+		case strings.HasPrefix(path, "/"): // ignore non-absolute path. This will also ignore URL (like http://localhost:3000)
+			result = append(result, filepath.Join(hostRoot, path))
+		}
+	}
+
+	return result
 }

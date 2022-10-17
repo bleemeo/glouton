@@ -10,6 +10,7 @@ import (
 	"glouton/bleemeo/internal/cache"
 	bleemeoTypes "glouton/bleemeo/types"
 	"glouton/config"
+	"glouton/config2"
 	"glouton/discovery"
 	"glouton/facts"
 	"glouton/prometheus/exporter/blackbox"
@@ -1213,7 +1214,7 @@ func TestSyncWithSNMP(t *testing.T) {
 	defer helper.Close()
 
 	helper.SNMP = []*snmp.Target{
-		snmp.NewMock(snmp.TargetOptions{InitialName: "Z-The-Initial-Name", Address: snmpAddress}, map[string]string{}),
+		snmp.NewMock(config2.SNMPTarget{InitialName: "Z-The-Initial-Name", Target: snmpAddress}, map[string]string{}),
 	}
 	helper.MetricFormat = types.MetricFormatPrometheus
 
@@ -1443,7 +1444,7 @@ func TestSyncWithSNMPDelete(t *testing.T) {
 	)
 
 	helper.SNMP = []*snmp.Target{
-		snmp.NewMock(snmp.TargetOptions{InitialName: "Z-The-Initial-Name", Address: snmpAddress}, map[string]string{}),
+		snmp.NewMock(config2.SNMPTarget{InitialName: "Z-The-Initial-Name", Target: snmpAddress}, map[string]string{}),
 	}
 	helper.MetricFormat = types.MetricFormatPrometheus
 	helper.NotifyLabelsUpdate = func() {
@@ -1916,7 +1917,7 @@ func TestSyncServerGroup(t *testing.T) {
 			}
 
 			helper.SNMP = []*snmp.Target{
-				snmp.NewMock(snmp.TargetOptions{InitialName: "Z-The-Initial-Name", Address: snmpAddress}, map[string]string{}),
+				snmp.NewMock(config2.SNMPTarget{InitialName: "Z-The-Initial-Name", Target: snmpAddress}, map[string]string{}),
 			}
 
 			helper.initSynchronizer(t)

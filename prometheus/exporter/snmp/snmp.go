@@ -21,6 +21,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"glouton/config2"
 	"glouton/facts"
 	"glouton/prometheus/model"
 	"glouton/prometheus/registry"
@@ -60,7 +61,7 @@ const (
 
 // Target represents a snmp config instance.
 type Target struct {
-	opt             TargetOptions
+	opt             config2.SNMPTarget
 	exporterAddress *url.URL
 	scraperFacts    FactProvider
 
@@ -84,14 +85,14 @@ type TargetOptions struct {
 	InitialName string
 }
 
-func NewMock(opt TargetOptions, mockFacts map[string]string) *Target {
+func NewMock(opt config2.SNMPTarget, mockFacts map[string]string) *Target {
 	r := newTarget(opt, nil, nil)
 	r.mockPerModule = mockFromFacts(mockFacts)
 
 	return r
 }
 
-func newTarget(opt TargetOptions, scraperFact FactProvider, exporterAddress *url.URL) *Target {
+func newTarget(opt config2.SNMPTarget, scraperFact FactProvider, exporterAddress *url.URL) *Target {
 	return &Target{
 		opt:             opt,
 		exporterAddress: exporterAddress,
@@ -101,7 +102,7 @@ func newTarget(opt TargetOptions, scraperFact FactProvider, exporterAddress *url
 }
 
 func (t *Target) Address() string {
-	return t.opt.Address
+	return t.opt.Target
 }
 
 func (t *Target) module(ctx context.Context) (string, error) {
@@ -139,7 +140,7 @@ func (t *Target) Name(ctx context.Context) (string, error) {
 		return facts["fqdn"], nil
 	}
 
-	return t.opt.Address, nil
+	return t.opt.Target, nil
 }
 
 // Gather implement prometheus.Gatherer.
@@ -376,7 +377,7 @@ func mfFilterInterface(mf *dto.MetricFamily, interfaceUp map[string]bool) {
 
 func (t *Target) extraLabels() map[string]string {
 	return map[string]string{
-		types.LabelMetaSNMPTarget: t.opt.Address,
+		types.LabelMetaSNMPTarget: t.opt.Target,
 	}
 }
 
@@ -397,7 +398,7 @@ func (t *Target) buildScraper(module string) registry.GathererWithState {
 	u := t.exporterAddress.ResolveReference(&url.URL{}) // clone URL
 	qs := u.Query()
 	qs.Set("module", module)
-	qs.Set("target", t.opt.Address)
+	qs.Set("target", t.opt.Target)
 	u.RawQuery = qs.Encode()
 
 	target := scrapper.New(u, t.extraLabels())
@@ -440,7 +441,7 @@ func (t *Target) String(ctx context.Context) string {
 		mod = "!ERR: " + err.Error()
 	}
 
-	return fmt.Sprintf("initial_name=%s target=%s module=%s lastSuccess=%s (consecutive err=%d)", t.opt.InitialName, t.opt.Address, mod, t.lastSuccess, t.consecutiveErr)
+	return fmt.Sprintf("initial_name=%s target=%s module=%s lastSuccess=%s (consecutive err=%d)", t.opt.InitialName, t.opt.Target, mod, t.lastSuccess, t.consecutiveErr)
 }
 
 func (t *Target) Facts(ctx context.Context, maxAge time.Duration) (facts map[string]string, err error) {

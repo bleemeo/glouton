@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"glouton/config2"
 	"glouton/facts"
 	"glouton/inputs"
 	"glouton/logger"
@@ -98,7 +99,7 @@ func New(
 	state State,
 	acc inputs.AnnotationAccumulator,
 	containerInfo containerInfoProvider,
-	servicesOverride map[NameInstance]ServiceOverride,
+	servicesOverride []config2.Service,
 	isCheckIgnored func(Service) bool,
 	isInputIgnored func(Service) bool,
 	isContainerIgnored func(c facts.Container) bool,
@@ -114,6 +115,21 @@ func New(
 			Instance: v.Instance,
 		}
 		discoveredServicesMap[key] = v
+	}
+
+	// Convert service overrides to a map.
+	overridesMap := make(map[NameInstance]ServiceOverride, len(servicesOverride))
+
+	for _, v := range servicesOverride {
+		key := NameInstance{
+			Name:     v.ID,
+			Instance: v.Instance,
+		}
+		overridesMap[key] = ServiceOverride{
+			IgnoredPorts:   v.IgnoredPorts,
+			Interval:       v.Interval,
+			ExtraAttribute: v.ExtraAttribute,
+		}
 	}
 
 	return &Discovery{

@@ -2,6 +2,7 @@ package snmp
 
 import (
 	"context"
+	"glouton/config2"
 	"glouton/logger"
 	"glouton/types"
 	"net/url"
@@ -30,23 +31,37 @@ type GathererWithInfo struct {
 }
 
 // NewManager return a new SNMP manager.
-func NewManager(exporterAddress *url.URL, scaperFact FactProvider, targets ...TargetOptions) *Manager {
+func NewManager(exporterAddress string, scaperFact FactProvider, targets []config2.SNMPTarget) (*Manager, error) {
+	exporterURL, err := url.Parse(exporterAddress)
+	if err != nil {
+		return nil, err
+	}
+
+	exporterURL, err = exporterURL.Parse("snmp")
+	if err != nil {
+		return nil, err
+	}
+
 	mgr := &Manager{
-		exporterAddress: exporterAddress,
+		exporterAddress: exporterURL,
 		targets:         make([]*Target, 0, len(targets)),
 	}
 
 	for _, t := range targets {
-		mgr.targets = append(mgr.targets, newTarget(t, scaperFact, exporterAddress))
+		mgr.targets = append(mgr.targets, newTarget(t, scaperFact, exporterURL))
 	}
 
-	return mgr
+	return mgr, nil
 }
 
 // OnlineCount return the number of target that are available (e.g. for which Facts worked).
 // To have accurate value, Facts should be used, else the value will be updated
 // by OnlineCount in *background* (meaning value will be available on later call to OnlineCount).
 func (m *Manager) OnlineCount() int {
+	if m == nil {
+		return 0
+	}
+
 	count := 0
 
 	var needCheck []*Target

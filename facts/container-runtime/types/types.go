@@ -2,8 +2,11 @@ package types
 
 import (
 	"context"
+	"glouton/config2"
 	"glouton/facts"
 	"glouton/types"
+	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -21,4 +24,37 @@ type RuntimeInterface interface {
 	LastUpdate() time.Time
 	Metrics(ctx context.Context, now time.Time) ([]types.MetricPoint, error)
 	MetricsMinute(ctx context.Context, now time.Time) ([]types.MetricPoint, error)
+}
+
+// ExpandRuntimeAddresses adds the host root to the socket addresses if PrefixHostRoot is true.
+func ExpandRuntimeAddresses(runtime config2.ContainerRuntimeAddresses, hostRoot string) []string {
+	if !runtime.PrefixHostRoot {
+		return runtime.Addresses
+	}
+
+	if hostRoot == "" || hostRoot == "/" {
+		return runtime.Addresses
+	}
+
+	addresses := make([]string, 0, len(runtime.Addresses)*2)
+
+	for _, path := range runtime.Addresses {
+		addresses = append(addresses, path)
+
+		if path == "" {
+			// This is a special value that means "use default of the runtime".
+			// Prefixing with the hostRoot don't make sense.
+			continue
+		}
+
+		switch {
+		case strings.HasPrefix(path, "unix://"):
+			path = strings.TrimPrefix(path, "unix://")
+			addresses = append(addresses, "unix://"+filepath.Join(hostRoot, path))
+		case strings.HasPrefix(path, "/"): // ignore non-absolute path. This will also ignore URL (like http://localhost:3000)
+			addresses = append(addresses, filepath.Join(hostRoot, path))
+		}
+	}
+
+	return addresses
 }
