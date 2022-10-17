@@ -40,6 +40,7 @@ import (
 	"glouton/influxdb"
 	"glouton/inputs"
 	"glouton/inputs/docker"
+	nvidia "glouton/inputs/nvidia_smi"
 	"glouton/inputs/statsd"
 	"glouton/jmxtrans"
 	"glouton/logger"
@@ -1204,6 +1205,17 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 			logger.Printf("Unable to initialize system collector: %v", err)
 
 			return
+		}
+	}
+
+	if a.oldConfig.Bool("nvidia_smi.enable") {
+		err := nvidia.AddSMIInput(
+			a.collector,
+			a.oldConfig.String("nvidia_smi.bin_path"),
+			a.oldConfig.Int("nvidia_smi.bin_path"),
+		)
+		if err != nil {
+			logger.Printf("Failed to initialize NVIDIA SMI collector: %v", err)
 		}
 	}
 

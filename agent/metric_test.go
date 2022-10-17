@@ -204,7 +204,7 @@ func Test_basic_build_default(t *testing.T) {
 		t.Error(err)
 	}
 
-	wantLen := len(bleemeoDefaultSystemMetrics) + len(bleemeoSwapMetrics) + len(commonDefaultSystemMetrics)
+	wantLen := len(bleemeoDefaultSystemMetrics) + len(bleemeoSwapMetrics) + len(commonDefaultSystemMetrics) + len(nvidiaSMIMetrics)
 
 	if len(filter.allowList) != wantLen {
 		t.Errorf("Unexpected number of matcher: expected %d, got %d", wantLen, len(filter.allowList))
