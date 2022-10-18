@@ -59,17 +59,19 @@ fi
 
 export GLOUTON_VERSION
 
+COMMIT=`git rev-parse --short HEAD || echo "unknown"`
+
 echo "Building Go binary"
 if [ "${ONLY_GO}" = "1" -a "${WITH_RACE}" != "1" ]; then
    docker run --rm -e HOME=/go/pkg -e CGO_ENABLED=0 \
       -v $(pwd):/src -w /src ${GO_MOUNT_CACHE} \
       --entrypoint '' \
-      goreleaser/goreleaser:${GORELEASER_VERSION} sh -c "go build -ldflags='-X main.version=${GLOUTON_VERSION}' . && chown $USER_UID glouton"
+      goreleaser/goreleaser:${GORELEASER_VERSION} sh -c "go build -ldflags='-X main.version=${GLOUTON_VERSION} -X main.commit=${COMMIT}' . && chown $USER_UID glouton"
 elif [ "${ONLY_GO}" = "1" -a "${WITH_RACE}" = "1" ]; then
    docker run --rm -e HOME=/go/pkg -e CGO_ENABLED=1 \
       -v $(pwd):/src -w /src ${GO_MOUNT_CACHE} \
       --entrypoint '' \
-      goreleaser/goreleaser:${GORELEASER_VERSION} sh -c "go build -ldflags='-X main.version=${GLOUTON_VERSION} -linkmode external -extldflags=-static' -race . && chown $USER_UID glouton"
+      goreleaser/goreleaser:${GORELEASER_VERSION} sh -c "go build -ldflags='-X main.version=${GLOUTON_VERSION} -X main.commit=${COMMIT} -linkmode external -extldflags=-static' -race . && chown $USER_UID glouton"
 else
    docker run --rm -e HOME=/go/pkg -e CGO_ENABLED=0 \
       -v $(pwd):/src -w /src ${GO_MOUNT_CACHE} \
