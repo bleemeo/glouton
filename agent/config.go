@@ -373,7 +373,7 @@ func defaultConfig() map[string]interface{} {
 		"telegraf.statsd.port":           8125,
 		"nvidia_smi.enable":              false,
 		"nvidia_smi.bin_path":            "/usr/bin/nvidia-smi",
-		"nvidia_smi.timeout":             5 * time.Second,
+		"nvidia_smi.timeout":             5,
 		"thresholds":                     map[string]interface{}{},
 		"web.enable":                     true,
 		"web.listener.address":           "127.0.0.1",
