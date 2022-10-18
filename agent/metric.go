@@ -260,8 +260,6 @@ var (
 		"nvidia_smi_clocks_current_sm",
 		"nvidia_smi_clocks_current_memory",
 		"nvidia_smi_clocks_current_video",
-		"nvidia_smi_driver_version",
-		"nvidia_smi_cuda_version",
 	}
 
 	defaultServiceMetrics map[discovery.ServiceName][]string = map[discovery.ServiceName][]string{
