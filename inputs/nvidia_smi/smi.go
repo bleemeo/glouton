@@ -30,9 +30,11 @@ func AddSMIInput(coll *collector.Collector, binPath string, timeout int) error {
 	}
 
 	internalInput := &internal.Input{
-		Input:       nvidiaInput,
-		Accumulator: internal.Accumulator{},
-		Name:        "nvidia-smi",
+		Input: nvidiaInput,
+		Accumulator: internal.Accumulator{
+			RenameGlobal: renameGlobal,
+		},
+		Name: "nvidia-smi",
 	}
 
 	if _, err := coll.AddInput(internalInput, internalInput.Name); err != nil {
@@ -40,4 +42,11 @@ func AddSMIInput(coll *collector.Collector, binPath string, timeout int) error {
 	}
 
 	return nil
+}
+
+func renameGlobal(gatherContext internal.GatherContext) (result internal.GatherContext, drop bool) {
+	// Remove overclocking state label as it's not stable.
+	delete(gatherContext.Tags, "pstate")
+
+	return gatherContext, false
 }
