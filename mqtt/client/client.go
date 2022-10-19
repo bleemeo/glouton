@@ -161,7 +161,7 @@ func (c *Client) Publish(topic string, payload interface{}, retry bool) {
 	c.opts.ReloadState.AddPendingMessage(msg, true)
 }
 
-func (c *Client) onConnectionLost(_ paho.Client, err error) {
+func (c *Client) onConnectionLost(err error) {
 	logger.Printf("%s MQTT connection lost: %v", c.opts.ID, err)
 	c.connectionLost <- nil
 }
@@ -280,7 +280,10 @@ mainLoop:
 		case <-ctx.Done():
 		case <-c.connectionLost:
 			c.l.Lock()
-			c.mqtt.Disconnect(0)
+			if c.mqtt != nil {
+				c.mqtt.Disconnect(0)
+			}
+
 			c.mqtt = nil
 			c.l.Unlock()
 
@@ -394,7 +397,7 @@ func (c *Client) receiveEvents(ctx context.Context) {
 	for {
 		select {
 		case err := <-c.opts.ReloadState.ConnectionLostChannel():
-			c.onConnectionLost(c.mqtt, err)
+			c.onConnectionLost(err)
 		case <-ctx.Done():
 			return
 		}
@@ -488,6 +491,9 @@ func (c *Client) Disconnect(timeout time.Duration) {
 	c.l.Lock()
 	defer c.l.Unlock()
 
-	c.mqtt.Disconnect(uint(timeout.Milliseconds()))
+	if c.mqtt != nil {
+		c.mqtt.Disconnect(uint(timeout.Milliseconds()))
+	}
+
 	c.mqtt = nil
 }
