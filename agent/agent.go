@@ -40,6 +40,7 @@ import (
 	"glouton/influxdb"
 	"glouton/inputs"
 	"glouton/inputs/docker"
+	nvidia "glouton/inputs/nvidia_smi"
 	"glouton/inputs/statsd"
 	"glouton/jmxtrans"
 	"glouton/logger"
@@ -1215,6 +1216,35 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 			logger.Printf("Unable to initialize system collector: %v", err)
 
 			return
+		}
+	}
+
+	if a.oldConfig.Bool("nvidia_smi.enable") {
+		// Force Prometheus format for NVIDIA SMI metrics as we want to keep the labels.
+		acc := &inputs.Accumulator{
+			Pusher:  a.gathererRegistry.WithTTLAndFormat(5*time.Minute, types.MetricFormatPrometheus),
+			Context: ctx,
+		}
+		promCollector := collector.New(acc)
+
+		_, err = a.gathererRegistry.RegisterPushPointsCallback(
+			registry.RegistrationOption{
+				Description: "Prometheus collector",
+				JitterSeed:  baseJitter,
+			},
+			promCollector.RunGather,
+		)
+		if err != nil {
+			logger.Printf("Unable to add Prometheus collector: %v", err)
+		}
+
+		err := nvidia.AddSMIInput(
+			promCollector,
+			a.oldConfig.String("nvidia_smi.bin_path"),
+			a.oldConfig.Int("nvidia_smi.timeout"),
+		)
+		if err != nil {
+			logger.Printf("Failed to initialize NVIDIA SMI collector: %v", err)
 		}
 	}
 
