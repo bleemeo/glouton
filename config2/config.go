@@ -1,6 +1,7 @@
 package config2
 
 import (
+	"errors"
 	"fmt"
 	"glouton/logger"
 	"os"
@@ -9,16 +10,21 @@ import (
 
 	"github.com/imdario/mergo"
 	"github.com/knadh/koanf"
-	"github.com/knadh/koanf/parsers/yaml"
+	yamlParser "github.com/knadh/koanf/parsers/yaml"
 	"github.com/knadh/koanf/providers/env"
 	"github.com/knadh/koanf/providers/file"
 	"github.com/knadh/koanf/providers/structs"
+	"github.com/mitchellh/mapstructure"
+	"gopkg.in/yaml.v3"
 )
 
 const (
-	envPrefix = "GLOUTON_"
-	delimiter = "."
+	envPrefix           = "GLOUTON_"
+	deprecatedEnvPrefix = "BLEEMEO_AGENT_"
+	delimiter           = "."
 )
+
+var errDeprecatedEnv = errors.New("environment variable is deprecated")
 
 //nolint:gochecknoglobals
 var defaultConfigFiles = []string{
@@ -118,7 +124,7 @@ type Service struct {
 	MatchProcess string `koanf:"match_process"`
 	// Command used for a Nagios check.
 	CheckCommand string `koanf:"check_command"`
-	// TODO: not in the doc, remove or add to doc?
+	// TODO: Not documented.
 	NagiosNRPEName string `koanf:"nagios_nrpe_name"`
 	// Unix socket to connect and gather metric from MySQL.
 	MetricsUnixSocket string `koanf:"metrics_unix_socket"`
@@ -145,7 +151,7 @@ type JmxMetric struct {
 	Path      string  `koanf:"path"`
 	Scale     float64 `koanf:"scale"`
 	Derive    bool    `koanf:"derive"`
-	// TODO: Values not in doc.
+	// TODO: Not documented.
 	Sum       bool     `koanf:"sum"`
 	TypeNames []string `koanf:"type_names"`
 	Ratio     string   `koanf:"ratio"`
@@ -186,7 +192,7 @@ func Load(withDefault bool, paths ...string) (Config, Warnings, error) {
 	}
 
 	// If no config was given with flags or env variables, fallback on the default files.
-	if len(paths) == 0 {
+	if len(paths) == 0 || len(paths) == 1 && paths[0] == "" {
 		paths = defaultConfigFiles
 	}
 
@@ -198,7 +204,7 @@ func Load(withDefault bool, paths ...string) (Config, Warnings, error) {
 		warnings = append(warnings, warning)
 	}
 
-	return config, warnings, err
+	return config, unwrapErrors(warnings), err
 }
 
 // load the configuration from files and directories.
@@ -206,9 +212,20 @@ func load(withDefault bool, paths ...string) (*koanf.Koanf, Warnings, error) {
 	k := koanf.New(delimiter)
 	warnings, finalErr := loadPaths(k, paths)
 
-	// TODO: Load old env prefix?
-	if err := k.Load(env.Provider(envPrefix, delimiter, envToKeyFunc()), nil); err != nil {
+	// The warnings are filled only after k.Load is called.
+	envToKey, envWarnings := envToKeyFunc()
+
+	// Load config from environment variables.
+	if err := k.Load(env.Provider(deprecatedEnvPrefix, delimiter, envToKey), nil); err != nil {
 		warnings = append(warnings, err)
+	}
+
+	if err := k.Load(env.Provider(envPrefix, delimiter, envToKey), nil); err != nil {
+		warnings = append(warnings, err)
+	}
+
+	if len(*envWarnings) > 0 {
+		warnings = append(warnings, *envWarnings...)
 	}
 
 	if withDefault {
@@ -232,9 +249,10 @@ func load(withDefault bool, paths ...string) (*koanf.Koanf, Warnings, error) {
 	return k, warnings, finalErr
 }
 
-// envToKeyFunc returns a function that converts an environment variable to a configuration key.
+// envToKeyFunc returns a function that converts an environment variable to a configuration key
+// and a pointer to Warnings, the warnings are filled only after koanf.Load has been called.
 // Panics if two config keys correspond to the same environment variable.
-func envToKeyFunc() func(string) string {
+func envToKeyFunc() (func(string) string, *Warnings) {
 	// Get all config keys from an empty config.
 	k := koanf.New(delimiter)
 	k.Load(structs.Provider(Config{}, "koanf"), nil)
@@ -244,8 +262,7 @@ func envToKeyFunc() func(string) string {
 	envToKey := make(map[string]string, len(allKeys))
 
 	for key := range allKeys {
-		envKey := strings.ToUpper(key)
-		envKey = envPrefix + strings.ReplaceAll(envKey, ".", "_")
+		envKey := toEnvKey(key)
 
 		if oldKey, exists := envToKey[envKey]; exists {
 			panic(fmt.Sprintf("Conflict between config keys, %s and %s both corresponds to the variable %s", oldKey, key, envKey))
@@ -254,9 +271,41 @@ func envToKeyFunc() func(string) string {
 		envToKey[envKey] = key
 	}
 
-	return func(s string) string {
+	// Build a map of the deprecated environment variables with their corresponding new variable.
+	movedEnvKeys := make(map[string]string, len(movedKeys()))
+	for k, v := range movedKeys() {
+		movedEnvKeys[toEnvKey(k)] = toEnvKey(v)
+	}
+
+	warnings := make(Warnings, 0)
+	envFunc := func(s string) string {
+		// Migrate environment variables with the deprecated "BLEEMEO_AGENT_" prefix.
+		if strings.HasPrefix(s, deprecatedEnvPrefix) {
+			deprecated := s
+			s = strings.Replace(deprecated, deprecatedEnvPrefix, envPrefix, 1)
+
+			warnings = append(warnings, fmt.Errorf("%w: %s, use %s instead", errDeprecatedEnv, deprecated, s))
+		}
+
+		// Migrate other deprecated keys.
+		if newKey, ok := movedEnvKeys[s]; ok {
+			warnings = append(warnings, fmt.Errorf("%w: %s, use %s instead", errDeprecatedEnv, s, newKey))
+			s = newKey
+		}
+
 		return envToKey[s]
 	}
+
+	return envFunc, &warnings
+}
+
+// toEnvKey returns the environment variable corresponding to a configuration key.
+// For instance: toEnvKey("web.enable") -> GLOUTON_WEB_ENABLE
+func toEnvKey(key string) string {
+	envKey := strings.ToUpper(key)
+	envKey = envPrefix + strings.ReplaceAll(envKey, ".", "_")
+
+	return envKey
 }
 
 func loadPaths(k *koanf.Koanf, paths []string) (Warnings, error) {
@@ -337,10 +386,64 @@ func loadFile(k *koanf.Koanf, path string) error {
 		return err
 	}
 
-	err := k.Load(file.Provider(path), yaml.Parser(), koanf.WithMergeFunc(mergeFunc))
+	err := k.Load(file.Provider(path), yamlParser.Parser(), koanf.WithMergeFunc(mergeFunc))
 	if err != nil {
 		return err
 	}
 
 	return nil
+}
+
+// unwrapErrors unwrap all errors in the list than contain multiple errors.
+func unwrapErrors(errs []error) []error {
+	if len(errs) == 0 {
+		return nil
+	}
+
+	unwrapped := make([]error, 0, len(errs))
+
+	for _, err := range errs {
+		var (
+			mapErr  *mapstructure.Error
+			yamlErr *yaml.TypeError
+		)
+
+		switch {
+		case errors.As(err, &mapErr):
+			for _, wrappedErr := range mapErr.WrappedErrors() {
+				unwrapped = append(unwrapped, wrappedErr)
+			}
+		case errors.As(err, &yamlErr):
+			for _, wrappedErr := range yamlErr.Errors {
+				unwrapped = append(unwrapped, errors.New(wrappedErr))
+			}
+		default:
+			unwrapped = append(unwrapped, err)
+		}
+	}
+
+	return unwrapped
+}
+
+// movedKeys return all keys that were moved. The map is old key => new key.
+func movedKeys() map[string]string {
+	keys := map[string]string{
+		"agent.windows_exporter.enabled":  "agent.windows_exporter.enable",
+		"agent.http_debug.enabled":        "agent.http_debug.enable",
+		"kubernetes.enabled":              "kubernetes.enable",
+		"blackbox.enabled":                "blackbox.enable",
+		"agent.process_exporter.enabled":  "agent.process_exporter.enable",
+		"web.enabled":                     "web.enable",
+		"bleemeo.enabled":                 "bleemeo.enable",
+		"jmx.enabled":                     "jmx.enable",
+		"nrpe.enabled":                    "nrpe.enable",
+		"zabbix.enabled":                  "zabbix.enable",
+		"influxdb.enabled":                "influxdb.enable",
+		"telegraf.statsd.enabled":         "telegraf.statsd.enable",
+		"agent.telemetry.enabled":         "agent.telemetry.enable",
+		"agent.node_exporter.enabled":     "agent.node_exporter.enable",
+		"telegraf.docker_metrics_enabled": "telegraf.docker_metrics_enable",
+	}
+
+	return keys
 }

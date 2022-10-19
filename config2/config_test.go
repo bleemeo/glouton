@@ -1,13 +1,10 @@
 package config2
 
 import (
-	"errors"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
-	"github.com/mitchellh/mapstructure"
-	"gopkg.in/yaml.v3"
 )
 
 // TestMerge tests that config files are merged correctly.
@@ -150,7 +147,7 @@ func TestStructuredConfig(t *testing.T) {
 
 	config, warnings, err := Load(false, "testdata/full.conf")
 	if warnings != nil {
-		t.Fatalf("Warning while loading config: %s", err)
+		t.Fatalf("Warning while loading config: %s", warnings)
 	}
 
 	if err != nil {
@@ -159,34 +156,6 @@ func TestStructuredConfig(t *testing.T) {
 
 	if diff := cmp.Diff(expectedConfig, config); diff != "" {
 		t.Fatalf("Unexpected config loaded:\n%s", diff)
-	}
-}
-
-// Test the config can be modified with environment variable.
-func TestConfigFromEnv(t *testing.T) {
-	const cdnUrl = "/static2/"
-
-	// Simple test
-	t.Setenv("GLOUTON_WEB_ENABLE", "false")
-
-	// More complex test, underscores can't be converted to YAML indentation directly.
-	t.Setenv("GLOUTON_WEB_STATIC_CDN_URL", cdnUrl)
-
-	config, warnings, err := Load(false)
-	if warnings != nil {
-		t.Fatalf("Warning while loading config: %s", err)
-	}
-
-	if err != nil {
-		t.Fatalf("Failed to load config: %s", err)
-	}
-
-	if config.Web.Enable {
-		t.Fatal("Expected web.enable=false, got true")
-	}
-
-	if config.Web.StaticCDNURL != cdnUrl {
-		t.Fatalf("Expected web.static_web_url=%s, got %s", cdnUrl, config.Web.StaticCDNURL)
 	}
 }
 
@@ -253,65 +222,76 @@ func TestDefaultNoFile(t *testing.T) {
 // Test warnings and errors returned when loading the configuration.
 func TestWarningsAndErrors(t *testing.T) {
 	tests := []struct {
+		Name         string
 		Files        []string
+		Environment  map[string]string
 		WantConfig   Config
 		WantWarnings []string
 		WantError    error
 	}{
 		{
+			Name:  "wrong-type",
 			Files: []string{"testdata/bad_wrong_type.conf"},
 			WantWarnings: []string{
 				`cannot parse 'metric.softstatus_period_default' as int: strconv.ParseInt: parsing "string": invalid syntax`,
+				`cannot parse 'metric.softstatus_period[1][system_pending_security_updates]' as int: strconv.ParseInt: parsing "bad": invalid syntax`,
+			},
+			WantConfig: Config{
+				Metric: Metric{
+					SoftStatusPeriod: map[string]int{"system_pending_updates": 100},
+				},
 			},
 		},
 		{
+			Name:  "invalid-yaml",
 			Files: []string{"testdata/bad_yaml.conf"},
 			WantWarnings: []string{
 				"line 1: cannot unmarshal !!str `bad:bad` into map[string]interface {}",
 			},
 		},
+		{
+			Name: "deprecated-env",
+			Environment: map[string]string{
+				"BLEEMEO_AGENT_WEB_STATIC_CDN_URL": "/my-url",
+				"GLOUTON_WEB_ENABLED":              "true",
+			},
+			WantWarnings: []string{
+				"environment variable is deprecated: BLEEMEO_AGENT_WEB_STATIC_CDN_URL, use GLOUTON_WEB_STATIC_CDN_URL instead",
+				"environment variable is deprecated: GLOUTON_WEB_ENABLED, use GLOUTON_WEB_ENABLE instead",
+			},
+			WantConfig: Config{
+				Web: Web{
+					StaticCDNURL: "/my-url",
+					Enable:       true,
+				},
+			},
+		},
 	}
 
 	for _, test := range tests {
-		config, warnings, err := Load(false, test.Files...)
-		if diff := cmp.Diff(test.WantError, err); diff != "" {
-			t.Fatalf("Unexpected error for files %s\n%s", test.Files, diff)
-		}
-
-		// Convert warnings to strings and flatten warnings that contain multiple errors.
-		var strWarnings []string
-
-		for _, warning := range warnings {
-			var (
-				mapErr  *mapstructure.Error
-				yamlErr *yaml.TypeError
-			)
-
-			if ok := errors.As(warning, &mapErr); ok {
-				for _, wrappedErr := range mapErr.WrappedErrors() {
-					strWarnings = append(strWarnings, wrappedErr.Error())
-				}
-
-				continue
+		t.Run(test.Name, func(t *testing.T) {
+			for k, v := range test.Environment {
+				t.Setenv(k, v)
 			}
 
-			if ok := errors.As(warning, &yamlErr); ok {
-				for _, wrappedErr := range yamlErr.Errors {
-					strWarnings = append(strWarnings, wrappedErr)
-				}
-
-				continue
+			config, warnings, err := Load(false, test.Files...)
+			if diff := cmp.Diff(test.WantError, err); diff != "" {
+				t.Fatalf("Unexpected error for files %s\n%s", test.Files, diff)
 			}
 
-			strWarnings = append(strWarnings, warning.Error())
-		}
+			var strWarnings []string
 
-		if diff := cmp.Diff(test.WantWarnings, strWarnings); diff != "" {
-			t.Fatalf("Unexpected warnings for files %s\n%s", test.Files, diff)
-		}
+			for _, warning := range warnings {
+				strWarnings = append(strWarnings, warning.Error())
+			}
 
-		if diff := cmp.Diff(test.WantConfig, config); diff != "" {
-			t.Fatalf("Unexpected config for files %s\n%s", test.Files, diff)
-		}
+			if diff := cmp.Diff(test.WantWarnings, strWarnings); diff != "" {
+				t.Fatalf("Unexpected warnings:\n%s", diff)
+			}
+
+			if diff := cmp.Diff(test.WantConfig, config); diff != "" {
+				t.Fatalf("Unexpected config:\n%s", diff)
+			}
+		})
 	}
 }

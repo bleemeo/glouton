@@ -218,10 +218,6 @@ func (a *agent) init(ctx context.Context, configFiles []string, firstRun bool) (
 		})
 	})
 
-	for _, w := range warnings {
-		logger.Printf("Warning while loading configuration: %v", w)
-	}
-
 	a.containerFilter = facts.ContainerFilter{
 		DisabledByDefault: !a.config.Container.Filter.AllowByDefault,
 		AllowList:         a.config.Container.Filter.AllowList,
@@ -2427,6 +2423,14 @@ func (a *agent) diagnosticFilterResult(ctx context.Context, archive types.Archiv
 
 // Add a warning for the configuration.
 func (a *agent) addWarnings(warnings ...error) {
+	var warningsStr strings.Builder
+	for _, w := range warnings {
+		warningsStr.WriteByte('\n')
+		warningsStr.WriteString(w.Error())
+	}
+
+	logger.Printf("Warning while loading configuration:%s", warningsStr.String())
+
 	a.l.Lock()
 	defer a.l.Unlock()
 

@@ -515,7 +515,7 @@ func (dd *DynamicDiscovery) fillExtraAttributes(service *Service) {
 				}
 
 				if k == "POSTGRES_USER" {
-					service.Config.Password = v
+					service.Config.Username = v
 				}
 			}
 		}
