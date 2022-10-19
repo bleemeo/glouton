@@ -11,6 +11,7 @@ import (
 	"github.com/imdario/mergo"
 	"github.com/knadh/koanf"
 	yamlParser "github.com/knadh/koanf/parsers/yaml"
+	"github.com/knadh/koanf/providers/confmap"
 	"github.com/knadh/koanf/providers/env"
 	"github.com/knadh/koanf/providers/file"
 	"github.com/knadh/koanf/providers/structs"
@@ -24,7 +25,10 @@ const (
 	delimiter           = "."
 )
 
-var errDeprecatedEnv = errors.New("environment variable is deprecated")
+var (
+	errDeprecatedEnv      = errors.New("environment variable is deprecated")
+	errSettingsDeprecated = errors.New("setting is deprecated")
+)
 
 //nolint:gochecknoglobals
 var defaultConfigFiles = []string{
@@ -212,10 +216,15 @@ func load(withDefault bool, paths ...string) (*koanf.Koanf, Warnings, error) {
 	k := koanf.New(delimiter)
 	warnings, finalErr := loadPaths(k, paths)
 
+	moreWarnings := migrateMovedKeys(k)
+	if moreWarnings != nil {
+		warnings = append(warnings, moreWarnings...)
+	}
+
+	// Load config from environment variables.
 	// The warnings are filled only after k.Load is called.
 	envToKey, envWarnings := envToKeyFunc()
 
-	// Load config from environment variables.
 	if err := k.Load(env.Provider(deprecatedEnvPrefix, delimiter, envToKey), nil); err != nil {
 		warnings = append(warnings, err)
 	}
@@ -228,6 +237,7 @@ func load(withDefault bool, paths ...string) (*koanf.Koanf, Warnings, error) {
 		warnings = append(warnings, *envWarnings...)
 	}
 
+	// Load default values.
 	if withDefault {
 		mergeFunc := func(src, dest map[string]interface{}) error {
 			// Merge without overwriting, defaults are only applied
@@ -272,22 +282,22 @@ func envToKeyFunc() (func(string) string, *Warnings) {
 	}
 
 	// Build a map of the deprecated environment variables with their corresponding new variable.
-	movedEnvKeys := make(map[string]string, len(movedKeys()))
+	movedEnvKeys := map[string]string{
+		"BLEEMEO_AGENT_ACCOUNT":          "GLOUTON_BLEEMEO_ACCOUNT_ID",
+		"BLEEMEO_AGENT_REGISTRATION_KEY": "GLOUTON_BLEEMEO_REGISTRATION_KEY",
+		"BLEEMEO_AGENT_API_BASE":         "GLOUTON_BLEEMEO_API_BASE",
+		"BLEEMEO_AGENT_MQTT_HOST":        "GLOUTON_BLEEMEO_MQTT_HOST",
+		"BLEEMEO_AGENT_MQTT_PORT":        "GLOUTON_BLEEMEO_MQTT_PORT",
+		"BLEEMEO_AGENT_MQTT_SSL":         "GLOUTON_BLEEMEO_MQTT_SSL",
+	}
+
 	for k, v := range movedKeys() {
 		movedEnvKeys[toEnvKey(k)] = toEnvKey(v)
 	}
 
 	warnings := make(Warnings, 0)
 	envFunc := func(s string) string {
-		// Migrate environment variables with the deprecated "BLEEMEO_AGENT_" prefix.
-		if strings.HasPrefix(s, deprecatedEnvPrefix) {
-			deprecated := s
-			s = strings.Replace(deprecated, deprecatedEnvPrefix, envPrefix, 1)
-
-			warnings = append(warnings, fmt.Errorf("%w: %s, use %s instead", errDeprecatedEnv, deprecated, s))
-		}
-
-		// Migrate other deprecated keys.
+		// Migrate deprecated keys.
 		if newKey, ok := movedEnvKeys[s]; ok {
 			warnings = append(warnings, fmt.Errorf("%w: %s, use %s instead", errDeprecatedEnv, s, newKey))
 			s = newKey
@@ -446,4 +456,29 @@ func movedKeys() map[string]string {
 	}
 
 	return keys
+}
+
+func migrateMovedKeys(k *koanf.Koanf) Warnings {
+	var warnings Warnings
+
+	keys := movedKeys()
+	movedConfig := make(map[string]interface{})
+
+	for oldKey, newKey := range keys {
+		val := k.Get(oldKey)
+		if val == nil {
+			continue
+		}
+
+		movedConfig[newKey] = val
+
+		warnings = append(warnings, fmt.Errorf("%w: %s, use %s instead", errSettingsDeprecated, oldKey, newKey))
+	}
+
+	err := k.Load(confmap.Provider(movedConfig, "."), nil)
+	if err != nil {
+		warnings = append(warnings, err)
+	}
+
+	return warnings
 }

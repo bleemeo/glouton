@@ -252,17 +252,29 @@ func TestWarningsAndErrors(t *testing.T) {
 		{
 			Name: "deprecated-env",
 			Environment: map[string]string{
-				"BLEEMEO_AGENT_WEB_STATIC_CDN_URL": "/my-url",
-				"GLOUTON_WEB_ENABLED":              "true",
+				"BLEEMEO_AGENT_ACCOUNT": "my-account",
+				"GLOUTON_WEB_ENABLED":   "true",
 			},
 			WantWarnings: []string{
-				"environment variable is deprecated: BLEEMEO_AGENT_WEB_STATIC_CDN_URL, use GLOUTON_WEB_STATIC_CDN_URL instead",
+				"environment variable is deprecated: BLEEMEO_AGENT_ACCOUNT, use GLOUTON_BLEEMEO_ACCOUNT_ID instead",
 				"environment variable is deprecated: GLOUTON_WEB_ENABLED, use GLOUTON_WEB_ENABLE instead",
 			},
 			WantConfig: Config{
 				Web: Web{
-					StaticCDNURL: "/my-url",
-					Enable:       true,
+					// TODO Bleemeo.AccountID = "my-account"
+					Enable: true,
+				},
+			},
+		},
+		{
+			Name:  "deprecated-config",
+			Files: []string{"testdata/deprecated.conf"},
+			WantWarnings: []string{
+				"setting is deprecated: web.enabled, use web.enable instead",
+			},
+			WantConfig: Config{
+				Web: Web{
+					Enable: true,
 				},
 			},
 		},

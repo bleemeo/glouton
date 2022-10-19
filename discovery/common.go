@@ -21,10 +21,13 @@ import (
 	"fmt"
 	"glouton/config2"
 	"glouton/facts"
+	"glouton/logger"
 	"glouton/types"
 	"net"
 	"strconv"
 	"time"
+
+	"github.com/imdario/mergo"
 )
 
 const tcpPortocol = "tcp"
@@ -99,8 +102,7 @@ const (
 
 // Service is the information found about a given service.
 type Service struct {
-	Config config2.Service
-	// TODO: use
+	Config          config2.Service
 	Name            string
 	Instance        string
 	ServiceType     ServiceName
@@ -255,12 +257,10 @@ func (s Service) merge(update Service) Service {
 		}
 	}
 
-	// TODO: merge new fields
-	// for k, v := range update.ExtraAttributes {
-	// 	if _, ok := s.ExtraAttributes[k]; !ok {
-	// 		s.ExtraAttributes[k] = v
-	// 	}
-	// }
+	// Merge configs, existing values are preferred.
+	if err := mergo.Merge(&s.Config, update.Config); err != nil {
+		logger.V(1).Printf("Failed to merge service configs: %s", err)
+	}
 
 	return s
 }
