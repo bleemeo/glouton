@@ -5,7 +5,7 @@ account_id:
 registration_key:
 
 # Add your custom configuration here.
-# https://docs.bleemeo.com/agent/configuration
+# https://go.bleemeo.com/l/agent-configuration
 config:
   bleemeo:
     enable: true

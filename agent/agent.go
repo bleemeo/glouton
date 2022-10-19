@@ -848,7 +848,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		if clusterName != "" {
 			a.factProvider.SetFact("kubernetes_cluster_name", clusterName)
 		} else {
-			logger.V(0).Printf("kubernetes.clustername config is missing, some feature are unavailable. See https://docs.bleemeo.com/agent/installation#installation-on-kubernetes")
+			logger.V(0).Printf("kubernetes.clustername config is missing, some feature are unavailable. See https://go.bleemeo.com/l/agent-installation-kubernetes")
 			a.oldConfig.AddWarning("kubernetes.clustername is missing, some feature are unavailable")
 		}
 
@@ -1265,7 +1265,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 			if strings.Contains(err.Error(), "address already in use") {
 				logger.Printf("Unable to listen on StatsD port because another program already use it")
 				logger.Printf("The StatsD integration is now disabled. Restart the agent to try re-enabling it.")
-				logger.Printf("See https://docs.bleemeo.com/agent/configuration#telegrafstatsdenable to permanently disable StatsD integration or using an alternate port")
+				logger.Printf("See https://go.bleemeo.com/l/agent-configuration-statsd to permanently disable StatsD integration or using an alternate port")
 			} else {
 				logger.Printf("Unable to create StatsD input: %v", err)
 			}
