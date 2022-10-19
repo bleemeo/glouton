@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"glouton/config"
 	"glouton/config2"
-	"glouton/discovery"
 	"glouton/logger"
 	"glouton/prometheus/exporter/snmp"
 	"glouton/types"
@@ -90,41 +89,6 @@ type ContainerRuntime struct {
 type ContainerRuntimeAddresses struct {
 	Addresses             []string
 	DisablePrefixHostRoot bool
-}
-
-func (srvs Services) ToDiscoveryMap() map[discovery.NameInstance]discovery.ServiceOverride {
-	result := make(map[discovery.NameInstance]discovery.ServiceOverride, len(srvs))
-
-	for _, v := range srvs {
-		key := discovery.NameInstance{
-			Name:     v.ID,
-			Instance: v.Instance,
-		}
-		result[key] = discovery.ServiceOverride{
-			IgnoredPorts:   v.IgnoredPorts,
-			Interval:       v.Interval,
-			ExtraAttribute: v.ExtraAttribute,
-		}
-	}
-
-	return result
-}
-
-func (srvs Services) ToNRPEMap() map[string]discovery.NameInstance {
-	result := make(map[string]discovery.NameInstance)
-
-	for _, v := range srvs {
-		if v.NagiosNRPEName == "" {
-			continue
-		}
-
-		result[v.NagiosNRPEName] = discovery.NameInstance{
-			Name:     v.ID,
-			Instance: v.Instance,
-		}
-	}
-
-	return result
 }
 
 // Name return a human name of this service.

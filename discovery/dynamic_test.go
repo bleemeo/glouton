@@ -18,6 +18,7 @@ package discovery
 
 import (
 	"context"
+	"glouton/config2"
 	"glouton/facts"
 	"os"
 	"reflect"
@@ -274,8 +275,11 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ContainerID:     "1234",
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "172.17.0.49", Port: 3306}},
 				IPAddress:       "172.17.0.49",
-				ExtraAttributes: map[string]string{"username": mysqlDefaultUser, "password": "secret"},
-				IgnoredPorts:    map[int]bool{},
+				Config: config2.Service{
+					Username: mysqlDefaultUser,
+					Password: "secret",
+				},
+				IgnoredPorts: map[int]bool{},
 			},
 		},
 		{
@@ -289,7 +293,11 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ServiceType:     MySQLService,
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 3306}},
 				IPAddress:       "127.0.0.1",
-				ExtraAttributes: map[string]string{"username": "root", "password": "secret", "metrics_unix_socket": ""},
+				Config: config2.Service{
+					Username:          "root",
+					Password:          "secret",
+					MetricsUnixSocket: "",
+				},
 			},
 		},
 		{
@@ -303,7 +311,11 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ServiceType:     MySQLService,
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 3306}},
 				IPAddress:       "127.0.0.1",
-				ExtraAttributes: map[string]string{"username": "root", "password": "secret", "metrics_unix_socket": "/tmp/file.sock"},
+				Config: config2.Service{
+					Username:          "root",
+					Password:          "secret",
+					MetricsUnixSocket: "/tmp/file.sock",
+				},
 			},
 		},
 		{
@@ -847,12 +859,8 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 			t.Errorf("Case %s: IgnoredPorts == %v, want %v", c.testName, srv[0].IgnoredPorts, c.want.IgnoredPorts)
 		}
 
-		if c.want.ExtraAttributes == nil {
-			c.want.ExtraAttributes = make(map[string]string)
-		}
-
-		if !reflect.DeepEqual(srv[0].ExtraAttributes, c.want.ExtraAttributes) {
-			t.Errorf("Case %s: ExtraAttributes == %v, want %v", c.testName, srv[0].ExtraAttributes, c.want.ExtraAttributes)
+		if diff := cmp.Diff(srv[0].Config, c.want.Config); diff != "" {
+			t.Errorf("Case %s: unexpected config:\n%s", c.testName, diff)
 		}
 	}
 }

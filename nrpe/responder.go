@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"glouton/config2"
 	"glouton/discovery"
 	"glouton/logger"
 	"os"
@@ -50,7 +51,20 @@ type Responder struct {
 }
 
 // NewResponse returns a Response.
-func NewResponse(customChecks map[string]discovery.NameInstance, checkRegistry checkRegistry, nrpeConfPath []string) Responder {
+func NewResponse(services []config2.Service, checkRegistry checkRegistry, nrpeConfPath []string) Responder {
+	customChecks := make(map[string]discovery.NameInstance)
+
+	for _, service := range services {
+		if service.NagiosNRPEName == "" {
+			continue
+		}
+
+		customChecks[service.NagiosNRPEName] = discovery.NameInstance{
+			Name:     service.ID,
+			Instance: service.Instance,
+		}
+	}
+
 	nrpeCommands, allowArguments := readNRPEConf(nrpeConfPath)
 
 	return Responder{

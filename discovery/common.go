@@ -19,8 +19,8 @@ package discovery
 import (
 	"context"
 	"fmt"
+	"glouton/config2"
 	"glouton/facts"
-	"glouton/logger"
 	"glouton/types"
 	"net"
 	"strconv"
@@ -99,6 +99,8 @@ const (
 
 // Service is the information found about a given service.
 type Service struct {
+	Config config2.Service
+	// TODO: use
 	Name            string
 	Instance        string
 	ServiceType     ServiceName
@@ -108,9 +110,6 @@ type Service struct {
 	ListenAddresses []facts.ListenAddress
 	ExePath         string
 	Stack           string
-	// ExtraAttributes contains additional service-dependant attribute. It may be password for MySQL, URL for HAProxy, ...
-	// Both configuration and dynamic discovery may set value here.
-	ExtraAttributes map[string]string
 	IgnoredPorts    map[int]bool
 	Active          bool
 	CheckIgnored    bool
@@ -137,8 +136,8 @@ func (s Service) String() string {
 
 // AddressForPort return the IP address for given port & network (tcp, udp).
 func (s Service) AddressForPort(port int, network string, force bool) string {
-	if s.ExtraAttributes["address"] != "" {
-		return s.ExtraAttributes["address"]
+	if s.Config.Address != "" {
+		return s.Config.Address
 	}
 
 	for _, a := range s.ListenAddresses {
@@ -178,14 +177,8 @@ func (s Service) AddressPort() (string, int) {
 	port := di.ServicePort
 	force := false
 
-	if s.ExtraAttributes["port"] != "" {
-		tmp, err := strconv.Atoi(s.ExtraAttributes["port"])
-		if err != nil {
-			logger.V(1).Printf("Invalid port %#v: %v", s.ExtraAttributes["port"], err)
-		} else {
-			port = tmp
-			force = true
-		}
+	if s.Config.Port != 0 {
+		port = s.Config.Port
 	}
 
 	if port == 0 {
@@ -262,11 +255,12 @@ func (s Service) merge(update Service) Service {
 		}
 	}
 
-	for k, v := range update.ExtraAttributes {
-		if _, ok := s.ExtraAttributes[k]; !ok {
-			s.ExtraAttributes[k] = v
-		}
-	}
+	// TODO: merge new fields
+	// for k, v := range update.ExtraAttributes {
+	// 	if _, ok := s.ExtraAttributes[k]; !ok {
+	// 		s.ExtraAttributes[k] = v
+	// 	}
+	// }
 
 	return s
 }

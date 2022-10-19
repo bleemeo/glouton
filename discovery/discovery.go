@@ -29,7 +29,6 @@ import (
 	"glouton/types"
 	"os"
 	"sort"
-	"strconv"
 	"sync"
 	"time"
 
@@ -64,7 +63,7 @@ type Discovery struct {
 	metricRegistry        GathererRegistry
 	containerInfo         containerInfoProvider
 	state                 State
-	servicesOverride      map[NameInstance]ServiceOverride
+	servicesOverride      map[NameInstance]config2.Service
 	isCheckIgnored        func(Service) bool
 	isInputIgnored        func(Service) bool
 	isContainerIgnored    func(facts.Container) bool
@@ -118,18 +117,14 @@ func New(
 	}
 
 	// Convert service overrides to a map.
-	overridesMap := make(map[NameInstance]ServiceOverride, len(servicesOverride))
+	serviceMap := make(map[NameInstance]config2.Service, len(servicesOverride))
 
 	for _, v := range servicesOverride {
 		key := NameInstance{
 			Name:     v.ID,
 			Instance: v.Instance,
 		}
-		overridesMap[key] = ServiceOverride{
-			IgnoredPorts:   v.IgnoredPorts,
-			Interval:       v.Interval,
-			ExtraAttribute: v.ExtraAttribute,
-		}
+		serviceMap[key] = v
 	}
 
 	return &Discovery{
@@ -141,7 +136,7 @@ func New(
 		activeCollector:       make(map[NameInstance]collectorDetails),
 		activeCheck:           make(map[NameInstance]CheckDetails),
 		state:                 state,
-		servicesOverride:      servicesOverride,
+		servicesOverride:      serviceMap,
 		isCheckIgnored:        isCheckIgnored,
 		isInputIgnored:        isInputIgnored,
 		isContainerIgnored:    isContainerIgnored,
@@ -419,7 +414,7 @@ func (d *Discovery) setServiceActiveAndContainer(service Service) Service {
 
 func applyOverride(
 	discoveredServicesMap map[NameInstance]Service,
-	servicesOverride map[NameInstance]ServiceOverride,
+	servicesOverride map[NameInstance]config2.Service,
 ) map[NameInstance]Service {
 	servicesMap := make(map[NameInstance]Service)
 
@@ -428,12 +423,6 @@ func applyOverride(
 	}
 
 	for serviceKey, override := range servicesOverride {
-		extraAttributeCopy := make(map[string]string, len(override.ExtraAttribute))
-
-		for k, v := range override.ExtraAttribute {
-			extraAttributeCopy[k] = v
-		}
-
 		service := servicesMap[serviceKey]
 		if service.ServiceType == "" {
 			if _, ok := servicesDiscoveryInfo[ServiceName(serviceKey.Name)]; ok {
@@ -447,21 +436,18 @@ func applyOverride(
 			service.Active = true
 		}
 
+		service.Config = override
+
 		// If the address or the port is set explicitly in the config, override the listen address.
-		if override.ExtraAttribute["port"] != "" || override.ExtraAttribute["address"] != "" {
+		if override.Port != 0 || override.Address != "" {
 			address, port := service.AddressPort()
 
-			if override.ExtraAttribute["address"] != "" {
-				address = override.ExtraAttribute["address"]
+			if override.Address != "" {
+				address = override.Address
 			}
 
-			if override.ExtraAttribute["port"] != "" {
-				parsedPort, err := strconv.Atoi(override.ExtraAttribute["port"])
-				if err != nil {
-					logger.V(0).Printf("Bad port for service %v: %v", service.Name, err)
-				} else {
-					port = parsedPort
-				}
+			if override.Port != 0 {
+				port = override.Port
 			}
 
 			if address != "" && port != 0 {
@@ -483,47 +469,44 @@ func applyOverride(
 			}
 		}
 
-		service.Interval = override.Interval
+		service.Interval = time.Duration(override.Interval) * time.Second
 
-		if service.ExtraAttributes == nil {
-			service.ExtraAttributes = make(map[string]string)
-		}
-
-		if len(override.IgnoredPorts) > 0 {
+		if len(override.IgnorePorts) > 0 {
 			if service.IgnoredPorts == nil {
-				service.IgnoredPorts = make(map[int]bool, len(override.IgnoredPorts))
+				service.IgnoredPorts = make(map[int]bool, len(override.IgnorePorts))
 			}
 
-			for _, p := range override.IgnoredPorts {
+			for _, p := range override.IgnorePorts {
 				service.IgnoredPorts[p] = true
 			}
 		}
 
-		di := servicesDiscoveryInfo[service.ServiceType]
-		for _, name := range di.ExtraAttributeNames {
-			if value, ok := extraAttributeCopy[name]; ok {
-				service.ExtraAttributes[name] = value
+		// TODO: Log unknown fields
+		// di := servicesDiscoveryInfo[service.ServiceType]
+		// for _, name := range di.ExtraAttributeNames {
+		// 	if value, ok := extraAttributeCopy[name]; ok {
+		// 		service.ExtraAttributes[name] = value
 
-				delete(extraAttributeCopy, name)
-			}
-		}
+		// 		delete(extraAttributeCopy, name)
+		// 	}
+		// }
 
-		if len(extraAttributeCopy) > 0 {
-			ignoredNames := make([]string, 0, len(extraAttributeCopy))
+		// if len(extraAttributeCopy) > 0 {
+		// 	ignoredNames := make([]string, 0, len(extraAttributeCopy))
 
-			for k := range extraAttributeCopy {
-				ignoredNames = append(ignoredNames, k)
-			}
+		// 	for k := range extraAttributeCopy {
+		// 		ignoredNames = append(ignoredNames, k)
+		// 	}
 
-			if len(ignoredNames) != 0 {
-				logger.V(1).Printf("Unknown field for service override on %v: %v", serviceKey, ignoredNames)
-			}
-		}
+		// 	if len(ignoredNames) != 0 {
+		// 		logger.V(1).Printf("Unknown field for service override on %v: %v", serviceKey, ignoredNames)
+		// 	}
+		// }
 
 		if service.ServiceType == CustomService {
-			if service.ExtraAttributes["port"] != "" {
-				if service.ExtraAttributes["address"] == "" {
-					service.ExtraAttributes["address"] = localhostIP
+			if service.Config.Port != 0 {
+				if service.Config.Address == "" {
+					service.Config.Address = localhostIP
 				}
 
 				if _, port := service.AddressPort(); port == 0 {
@@ -533,23 +516,23 @@ func applyOverride(
 				}
 			}
 
-			if service.ExtraAttributes["check_type"] == "" {
-				service.ExtraAttributes["check_type"] = customCheckTCP
+			if service.Config.CheckType == "" {
+				service.Config.CheckType = customCheckTCP
 			}
 
-			if service.ExtraAttributes["check_type"] == customCheckNagios && service.ExtraAttributes["check_command"] == "" {
+			if service.Config.CheckType == customCheckNagios && service.Config.CheckCommand == "" {
 				logger.V(0).Printf("Bad custom service definition for service %s, check_type is nagios but no check_command set", service.Name)
 
 				continue
 			}
 
-			if service.ExtraAttributes["check_type"] == customCheckProcess && service.ExtraAttributes["match_process"] == "" {
+			if service.Config.CheckType == customCheckProcess && service.Config.MatchProcess == "" {
 				logger.V(0).Printf("Bad custom service definition for service %s, check_type is process but no match_process set", service.Name)
 
 				continue
 			}
 
-			if service.ExtraAttributes["check_type"] != customCheckNagios && service.ExtraAttributes["check_type"] != customCheckProcess && service.ExtraAttributes["port"] == "" {
+			if service.Config.CheckType != customCheckNagios && service.Config.CheckType != customCheckProcess && service.Config.Port == 0 {
 				logger.V(0).Printf("Bad custom service definition for service %s, port is unknown so I don't known how to check it", service.Name)
 
 				continue

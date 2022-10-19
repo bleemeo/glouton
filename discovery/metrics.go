@@ -204,8 +204,6 @@ func serviceNeedUpdate(oldService, service Service, oldServiceState facts.Contai
 		return true
 	case len(oldService.ListenAddresses) != len(service.ListenAddresses):
 		return true
-	case len(oldService.ExtraAttributes) != len(service.ExtraAttributes):
-		return true
 	}
 
 	// We assume order of ListenAddresses is mostly stable. serviceEqual may return
@@ -217,11 +215,12 @@ func serviceNeedUpdate(oldService, service Service, oldServiceState facts.Contai
 		}
 	}
 
-	for k, v := range oldService.ExtraAttributes {
-		if v != service.ExtraAttributes[k] {
-			return true
-		}
-	}
+	// TODO:
+	// for k, v := range oldService.ExtraAttributes {
+	// 	if v != service.ExtraAttributes[k] {
+	// 		return true
+	// 	}
+	// }
 
 	return false
 }
@@ -294,8 +293,8 @@ func (d *Discovery) createInput(service Service) error {
 			input, err = elasticsearch.New(fmt.Sprintf("http://%s", net.JoinHostPort(ip, strconv.Itoa(port))))
 		}
 	case HAProxyService:
-		if service.ExtraAttributes["stats_url"] != "" {
-			input, err = haproxy.New(service.ExtraAttributes["stats_url"])
+		if service.Config.StatsURL != "" {
+			input, err = haproxy.New(service.Config.StatsURL)
 		}
 	case MemcachedService:
 		if ip, port := service.AddressPort(); ip != "" {
@@ -317,36 +316,30 @@ func (d *Discovery) createInput(service Service) error {
 			input, err = phpfpm.New(statsURL)
 		}
 	case PostgreSQLService:
-		if ip, port := service.AddressPort(); ip != "" && service.ExtraAttributes["password"] != "" {
-			username := service.ExtraAttributes["username"]
+		if ip, port := service.AddressPort(); ip != "" && service.Config.Password != "" {
+			username := service.Config.Username
 			if username == "" {
 				username = "postgres"
 			}
 
-			input, err = postgresql.New(fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=postgres sslmode=disable", ip, port, username, service.ExtraAttributes["password"]))
+			input, err = postgresql.New(fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=postgres sslmode=disable", ip, port, username, service.Config.Password))
 		}
 	case RabbitMQService:
-		mgmtPortStr := service.ExtraAttributes["mgmt_port"]
 		mgmtPort := 15672
 		force := false
 
-		if mgmtPortStr != "" {
-			tmp, err := strconv.ParseInt(mgmtPortStr, 10, 0)
-			if err != nil {
-				mgmtPort = int(tmp)
-				force = true
-			} else {
-				logger.V(1).Printf("%#v is not a valid port number for service RabbitMQ", mgmtPortStr)
-			}
+		if service.Config.ManagementPort != 0 {
+			mgmtPort = service.Config.ManagementPort
+			force = true
 		}
 
 		if ip := service.AddressForPort(mgmtPort, "tcp", force); ip != "" {
-			username := service.ExtraAttributes["username"]
+			username := service.Config.Username
 			if username == "" {
 				username = "guest"
 			}
 
-			password := service.ExtraAttributes["password"]
+			password := service.Config.Password
 			if password == "" {
 				password = "guest"
 			}
@@ -356,7 +349,7 @@ func (d *Discovery) createInput(service Service) error {
 		}
 	case RedisService:
 		if ip, port := service.AddressPort(); ip != "" {
-			input, err = redis.New(fmt.Sprintf("tcp://%s", net.JoinHostPort(ip, strconv.Itoa(port))), service.ExtraAttributes["password"])
+			input, err = redis.New(fmt.Sprintf("tcp://%s", net.JoinHostPort(ip, strconv.Itoa(port))), service.Config.Password)
 		}
 	case ZookeeperService:
 		if ip, port := service.AddressPort(); ip != "" {
@@ -407,22 +400,22 @@ func (d *Discovery) createInput(service Service) error {
 }
 
 func createMySQLInput(service Service) (telegraf.Input, error) {
-	if unixSocket := getMySQLSocket(service); unixSocket != "" && service.ExtraAttributes["password"] != "" {
-		username := service.ExtraAttributes["username"]
+	if unixSocket := getMySQLSocket(service); unixSocket != "" && service.Config.Password != "" {
+		username := service.Config.Username
 		if username == "" {
 			username = "root"
 		}
 
-		return mysql.New(fmt.Sprintf("%s:%s@unix(%s)/", username, service.ExtraAttributes["password"], unixSocket))
+		return mysql.New(fmt.Sprintf("%s:%s@unix(%s)/", username, service.Config.Password, unixSocket))
 	}
 
-	if ip, port := service.AddressPort(); ip != "" && service.ExtraAttributes["password"] != "" {
-		username := service.ExtraAttributes["username"]
+	if ip, port := service.AddressPort(); ip != "" && service.Config.Password != "" {
+		username := service.Config.Username
 		if username == "" {
 			username = "root"
 		}
 
-		return mysql.New(fmt.Sprintf("%s:%s@tcp(%s:%d)/", username, service.ExtraAttributes["password"], ip, port))
+		return mysql.New(fmt.Sprintf("%s:%s@tcp(%s:%d)/", username, service.Config.Password, ip, port))
 	}
 
 	return nil, nil
@@ -450,13 +443,13 @@ func (d *Discovery) addInput(input telegraf.Input, service Service) error {
 }
 
 func urlForPHPFPM(service Service) string {
-	url := service.ExtraAttributes["stats_url"]
+	url := service.Config.StatsURL
 	if url != "" {
 		return url
 	}
 
-	if service.ExtraAttributes["port"] != "" && service.IPAddress != "" {
-		return fmt.Sprintf("fcgi://%s/status", net.JoinHostPort(service.IPAddress, service.ExtraAttributes["port"]))
+	if service.Config.Port != 0 && service.IPAddress != "" {
+		return fmt.Sprintf("fcgi://%s/status", net.JoinHostPort(service.IPAddress, fmt.Sprint(service.Config.Port)))
 	}
 
 	for _, v := range service.ListenAddresses {
@@ -471,7 +464,7 @@ func urlForPHPFPM(service Service) string {
 }
 
 func getMySQLSocket(service Service) string {
-	socket := service.ExtraAttributes["metrics_unix_socket"]
+	socket := service.Config.MetricsUnixSocket
 
 	if socket == "" {
 		return ""

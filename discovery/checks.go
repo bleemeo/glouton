@@ -26,7 +26,6 @@ import (
 	"glouton/types"
 	"net"
 	"net/url"
-	"strconv"
 	"time"
 
 	"github.com/prometheus/prometheus/model/labels"
@@ -170,7 +169,7 @@ func (d *Discovery) createCheck(service Service) {
 }
 
 func createCheckType(service Service, d *Discovery, di discoveryInfo, primaryAddress string, tcpAddresses []string, labels map[string]string, annotations types.MetricAnnotations) {
-	switch service.ExtraAttributes["check_type"] {
+	switch service.Config.CheckType {
 	case customCheckTCP:
 		d.createTCPCheck(service, di, primaryAddress, tcpAddresses, labels, annotations)
 	case customCheckHTTP:
@@ -180,7 +179,7 @@ func createCheckType(service Service, d *Discovery, di discoveryInfo, primaryAdd
 	case customCheckProcess:
 		d.createProcessCheck(service, labels, annotations)
 	default:
-		logger.V(1).Printf("Unknown check type %#v on custom service %#v", service.ExtraAttributes["check_type"], service.Name)
+		logger.V(1).Printf("Unknown check type %#v on custom service %#v", service.Config.CheckType, service.Name)
 	}
 }
 
@@ -201,8 +200,8 @@ func (d *Discovery) createTCPCheck(service Service, di discoveryInfo, primaryAdd
 	case RedisService:
 		tcpSend = []byte("PING\n")
 
-		if service.ExtraAttributes["password"] != "" {
-			tcpSend = []byte(fmt.Sprintf("AUTH %s\nPING\n", service.ExtraAttributes["password"]))
+		if service.Config.Password != "" {
+			tcpSend = []byte(fmt.Sprintf("AUTH %s\nPING\n", service.Config.Password))
 		}
 
 		tcpExpect = []byte("+PONG")
@@ -258,22 +257,17 @@ func (d *Discovery) createHTTPCheck(
 		u.Path = "/ping"
 	}
 
-	if service.ExtraAttributes["http_path"] != "" {
-		u.Path = service.ExtraAttributes["http_path"]
+	if service.Config.HTTPPath != "" {
+		u.Path = service.Config.HTTPPath
 	}
 
-	if service.ExtraAttributes["http_status_code"] != "" {
-		tmp, err := strconv.ParseInt(service.ExtraAttributes["http_status_code"], 10, 0)
-		if err != nil {
-			logger.V(1).Printf("Invalid http_status_code %#v on service %s. Ignoring this option", service.Name, service.ExtraAttributes["http_status_code"])
-		} else {
-			expectedStatusCode = int(tmp)
-		}
+	if service.Config.HTTPStatusCode != 0 {
+		expectedStatusCode = service.Config.HTTPStatusCode
 	}
 
 	httpHost := u.Host
-	if service.ExtraAttributes["http_host"] != "" {
-		httpHost = service.ExtraAttributes["http_host"]
+	if service.Config.HTTPHost != "" {
+		httpHost = service.Config.HTTPHost
 	}
 
 	httpCheck := check.NewHTTP(
@@ -314,7 +308,7 @@ func (d *Discovery) createNagiosCheck(
 	}
 
 	nagiosCheck := check.NewNagios(
-		service.ExtraAttributes["check_command"],
+		service.Config.CheckCommand,
 		tcpAddress,
 		true,
 		labels,
@@ -325,7 +319,7 @@ func (d *Discovery) createNagiosCheck(
 }
 
 func (d *Discovery) createProcessCheck(service Service, labels map[string]string, annotations types.MetricAnnotations) {
-	processCheck, err := check.NewProcess(service.ExtraAttributes["match_process"], labels, annotations, d.processFact)
+	processCheck, err := check.NewProcess(service.Config.MatchProcess, labels, annotations, d.processFact)
 	if err != nil {
 		logger.V(0).Printf("Invalid custom service %s: %v", service.Name, err)
 	}

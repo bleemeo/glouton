@@ -179,6 +179,11 @@ func (a *agent) init(ctx context.Context, configFiles []string, firstRun bool) (
 	a.taskIDs = make(map[string]int)
 
 	cfg, oldCfg, warnings, err := loadConfiguration(configFiles, nil)
+
+	if warnings != nil {
+		a.addWarnings(warnings...)
+	}
+
 	a.oldConfig = oldCfg
 	a.config = cfg
 
@@ -751,7 +756,9 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		a.config.Metric.SNMP.Targets,
 	)
 
-	a.configWarnings = append(a.configWarnings, warning)
+	if warning != nil {
+		a.addWarnings(warning)
+	}
 
 	hasSwap := factsMap["swap_present"] == "true"
 
@@ -1151,7 +1158,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 
 	if a.oldConfig.Bool("nrpe.enable") {
 		nrpeConfFile := a.oldConfig.StringList("nrpe.conf_paths")
-		nrperesponse := nrpe.NewResponse(a.config.Services.ToNRPEMap(), a.discovery, nrpeConfFile)
+		nrperesponse := nrpe.NewResponse(a.config.Services, a.discovery, nrpeConfFile)
 		server := nrpe.New(
 			fmt.Sprintf("%s:%d", a.oldConfig.String("nrpe.address"), a.oldConfig.Int("nrpe.port")),
 			a.oldConfig.Bool("nrpe.ssl"),
@@ -1493,8 +1500,7 @@ func (a *agent) miscGatherMinute(pusher types.PointPusher) func(context.Context,
 			}
 		}
 
-		// TODO: Get warnings for the new config.
-		desc := strings.Join(a.oldConfig.GetWarnings(), "\n")
+		desc := a.getWarnings().Error()
 		status := types.StatusWarning
 
 		if len(desc) == 0 {
@@ -2417,6 +2423,22 @@ func (a *agent) diagnosticFilterResult(ctx context.Context, archive types.Archiv
 	}
 
 	return nil
+}
+
+// Add a warning for the configuration.
+func (a *agent) addWarnings(warnings ...error) {
+	a.l.Lock()
+	defer a.l.Unlock()
+
+	a.configWarnings = append(a.configWarnings, warnings...)
+}
+
+// Get configuration warnings.
+func (a *agent) getWarnings() types.MultiErrors {
+	a.l.Lock()
+	defer a.l.Unlock()
+
+	return a.configWarnings
 }
 
 func parseIPOutput(content []byte) string {

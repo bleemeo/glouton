@@ -51,6 +51,7 @@ type Metric struct {
 }
 
 type SNMP struct {
+	// TODO: Not documented.
 	ExporterAddress string       `koanf:"exporter_address"`
 	Targets         []SNMPTarget `koanf:"targets"`
 }
@@ -76,7 +77,8 @@ type DF struct {
 }
 
 type Web struct {
-	Enable       bool     `koanf:"enable"`
+	Enable bool `koanf:"enable"`
+	// TODO: Not documented.
 	LocalUI      LocalUI  `koanf:"local_ui"`
 	Listener     Listener `koanf:"listener"`
 	StaticCDNURL string   `koanf:"static_cdn_url"`
@@ -92,16 +94,61 @@ type Listener struct {
 }
 
 type Service struct {
-	ID       string `koanf:"id"`
-	Port     int    `koanf:"port"`
-	Address  string `koanf:"address"`
-	Interval int    `koanf:"interval"`
-	// TODO: Use an enum?
-	CheckType      string `koanf:"check_type"`
-	HTTPPath       string `koanf:"http_path"`
-	HTTPStatusCode int    `koanf:"http_status_code"`
-	CheckCommand   string `koanf:"check_command"`
-	MatchProcess   string `koanf:"match_process"`
+	// The name of the service.
+	ID string `koanf:"id"`
+	// Instance of the service, used to differentiate between services with the same ID.
+	Instance string `koanf:"instance"`
+	// The port the service is running on.
+	Port int `koanf:"port"`
+	// Ports that should be ignored.
+	IgnorePorts []int `koanf:"ignore_ports"`
+	// The address of the service.
+	Address string `koanf:"address"`
+	// The delay between two consecutive checks in seconds.
+	Interval int `koanf:"interval"`
+	// Check type used for custom checks.
+	CheckType string `koanf:"check_type"`
+	// The path used for HTTP checks.
+	HTTPPath string `koanf:"http_path"`
+	// The expected status code for HTTP checks.
+	HTTPStatusCode int `koanf:"http_status_code"`
+	// Host header sent with HTTP checks.
+	HTTPHost string `koanf:"http_host"`
+	// Regex to match in a process check.
+	MatchProcess string `koanf:"match_process"`
+	// Command used for a Nagios check.
+	CheckCommand string `koanf:"check_command"`
+	// TODO: not in the doc, remove or add to doc?
+	NagiosNRPEName string `koanf:"nagios_nrpe_name"`
+	// Unix socket to connect and gather metric from MySQL.
+	MetricsUnixSocket string `koanf:"metrics_unix_socket"`
+	// Credentials for services that require authentication.
+	Username string `koanf:"username"`
+	Password string `koanf:"password"`
+	// HAProxy and PHP-FMP stats URL.
+	StatsURL string `koanf:"stats_url"`
+	// Port of RabbitMQ management interface.
+	ManagementPort int `koanf:"mgmt_port"`
+	// Detailed monitoring of specific Cassandra tables.
+	CassandraDetailedTables []string `koanf:"cassandra_detailed_tables"`
+	// JMX services.
+	JMXPort     int         `koanf:"jmx_port"`
+	JMXUsername string      `koanf:"jmx_username"`
+	JMXPassword string      `koanf:"jmx_password"`
+	JMXMetrics  []JmxMetric `koanf:"jmx_metrics"`
+}
+
+type JmxMetric struct {
+	Name      string  `koanf:"name"`
+	MBean     string  `koanf:"mbean"`
+	Attribute string  `koanf:"attribute"`
+	Path      string  `koanf:"path"`
+	Scale     float64 `koanf:"scale"`
+	Derive    bool    `koanf:"derive"`
+	// TODO: Values not in doc.
+	Sum       bool     `koanf:"sum"`
+	TypeNames []string `koanf:"type_names"`
+	Ratio     string   `koanf:"ratio"`
 }
 
 type Container struct {
@@ -235,8 +282,12 @@ func loadPaths(k *koanf.Koanf, paths []string) (Warnings, error) {
 		}
 
 		if stat.IsDir() {
-			err, warning := loadDirectory(k, path)
+			warning, err := loadDirectory(k, path)
 			if err != nil {
+				finalError = err
+			}
+
+			if warning != nil {
 				warnings = append(warnings, warning)
 			}
 
@@ -244,34 +295,25 @@ func loadPaths(k *koanf.Koanf, paths []string) (Warnings, error) {
 				logger.V(2).Printf("config file: directory %s have ignored some files due to %v", path, err)
 			}
 		} else {
-			err := loadFile(k, path)
-			if err != nil {
-				warnings = append(warnings, err)
+			warning := loadFile(k, path)
+			if warning != nil {
+				warnings = append(warnings, warning)
 			}
 		}
 
-		if err != nil {
-			finalError = err
-		} else {
+		if err == nil {
 			logger.V(2).Printf("config file: %s loaded", path)
 		}
 	}
 
-	// TODO: warnings
-	// for _, warning := range warnings {
-	// 	cfg.AddWarning(warning.Error())
-	// }
-
 	return warnings, finalError
 }
 
-func loadDirectory(k *koanf.Koanf, dirPath string) (Warnings, error) {
+func loadDirectory(k *koanf.Koanf, dirPath string) (warning error, err error) {
 	files, err := os.ReadDir(dirPath)
 	if err != nil {
 		return nil, err
 	}
-
-	var warn Warnings
 
 	for _, f := range files {
 		if !strings.HasSuffix(f.Name(), ".conf") {
@@ -279,12 +321,10 @@ func loadDirectory(k *koanf.Koanf, dirPath string) (Warnings, error) {
 		}
 
 		path := filepath.Join(dirPath, f.Name())
-
-		warning := loadFile(k, path)
-		warn = append(warn, warning)
+		warning = loadFile(k, path)
 	}
 
-	return warn, nil
+	return warning, nil
 }
 
 func loadFile(k *koanf.Koanf, path string) error {
@@ -303,36 +343,4 @@ func loadFile(k *koanf.Koanf, path string) error {
 	}
 
 	return nil
-}
-
-func expandContainerRuntimeAddresses(runtime ContainerRuntimeAddresses, hostRoot string) []string {
-	if !runtime.PrefixHostRoot {
-		return runtime.Addresses
-	}
-
-	if hostRoot == "" || hostRoot == "/" {
-		return runtime.Addresses
-	}
-
-	result := make([]string, 0, len(runtime.Addresses)*2)
-
-	for _, path := range runtime.Addresses {
-		result = append(result, path)
-
-		if path == "" {
-			// This is a special value that means "use default of the runtime".
-			// Prefixing with the hostRoot don't make sense.
-			continue
-		}
-
-		switch {
-		case strings.HasPrefix(path, "unix://"):
-			path = strings.TrimPrefix(path, "unix://")
-			result = append(result, "unix://"+filepath.Join(hostRoot, path))
-		case strings.HasPrefix(path, "/"): // ignore non-absolute path. This will also ignore URL (like http://localhost:3000)
-			result = append(result, filepath.Join(hostRoot, path))
-		}
-	}
-
-	return result
 }

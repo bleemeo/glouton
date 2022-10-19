@@ -17,28 +17,13 @@
 package jmxtrans
 
 import (
-	"encoding/json"
+	"glouton/config2"
 	"glouton/discovery"
-	"glouton/logger"
-	"strconv"
 	"strings"
 )
 
-// JmxMetric represents a jmx Metric.
-type JmxMetric struct {
-	Name      string
-	MBean     string
-	Attribute string
-	Path      string
-	Derive    bool
-	Sum       bool
-	TypeNames []string
-	Scale     float64
-	Ratio     string
-}
-
 //nolint:gochecknoglobals
-var defaultGenericMetrics = []JmxMetric{
+var defaultGenericMetrics = []config2.JmxMetric{
 	{
 		Name:      "jvm_heap_used",
 		MBean:     "java.lang:type=Memory",
@@ -79,7 +64,7 @@ var defaultGenericMetrics = []JmxMetric{
 }
 
 //nolint:gochecknoglobals
-var defaultServiceMetrics = map[discovery.ServiceName][]JmxMetric{
+var defaultServiceMetrics = map[discovery.ServiceName][]config2.JmxMetric{
 	discovery.CassandraService: {
 		{
 			Name:      "read_requests",
@@ -272,7 +257,7 @@ var defaultServiceMetrics = map[discovery.ServiceName][]JmxMetric{
 }
 
 //nolint:gochecknoglobals
-var cassandraDetailedTableMetrics = []JmxMetric{
+var cassandraDetailedTableMetrics = []config2.JmxMetric{
 	{
 		Name:      "bloom_filter_false_ratio",
 		MBean:     "org.apache.cassandra.metrics:type=Table,keyspace={keyspace},scope={table},name=BloomFilterFalseRatio",
@@ -317,43 +302,26 @@ var cassandraDetailedTableMetrics = []JmxMetric{
 }
 
 // GetJMXMetrics parses the jmx info and returns a list of JmxMetric struct.
-func GetJMXMetrics(service discovery.Service) []JmxMetric {
-	var result []JmxMetric
-
+func GetJMXMetrics(service discovery.Service) []config2.JmxMetric {
 	if !service.Active {
-		return result
+		return nil
 	}
 
-	if service.ExtraAttributes["jmx_port"] == "" {
-		return result
-	}
-
-	_, err := strconv.ParseInt(service.ExtraAttributes["jmx_port"], 10, 0)
-	if err != nil {
-		return result
+	if service.Config.JMXPort == 0 {
+		return nil
 	}
 
 	if service.IPAddress == "" {
-		return result
+		return nil
 	}
 
-	if service.ExtraAttributes["jmx_metrics"] != "" {
-		err := json.Unmarshal([]byte(service.ExtraAttributes["jmx_metrics"]), &result)
-		if err != nil {
-			logger.V(1).Printf("unable to read \"jmx_metrics\" for service %s", err, service.String())
-
-			result = nil
-		}
-	}
-
-	result = append(result, defaultGenericMetrics...)
-	result = append(result, defaultServiceMetrics[service.ServiceType]...)
+	metrics := service.Config.JMXMetrics
+	metrics = append(metrics, defaultGenericMetrics...)
+	metrics = append(metrics, defaultServiceMetrics[service.ServiceType]...)
 
 	if service.ServiceType == discovery.CassandraService {
-		var detailedTables []string
-
-		err := json.Unmarshal([]byte(service.ExtraAttributes["cassandra_detailed_tables"]), &detailedTables)
-		if err == nil && len(detailedTables) > 0 {
+		detailedTables := service.Config.CassandraDetailedTables
+		if len(detailedTables) > 0 {
 			for _, name := range detailedTables {
 				part := strings.Split(name, ".")
 				if len(part) == 2 {
@@ -364,12 +332,12 @@ func GetJMXMetrics(service discovery.Service) []JmxMetric {
 
 					for _, metric := range cassandraDetailedTableMetrics {
 						metric.MBean = replacer.Replace(metric.MBean)
-						result = append(result, metric)
+						metrics = append(metrics, metric)
 					}
 				}
 			}
 		}
 	}
 
-	return result
+	return metrics
 }

@@ -485,16 +485,12 @@ func (dd *DynamicDiscovery) updateListenAddresses(service *Service, di discovery
 }
 
 func (dd *DynamicDiscovery) fillExtraAttributes(service *Service) {
-	if service.ExtraAttributes == nil {
-		service.ExtraAttributes = make(map[string]string)
-	}
-
 	if service.ServiceType == MySQLService {
 		if service.container != nil {
 			for k, v := range service.container.Environment() {
 				if k == "MYSQL_ROOT_PASSWORD" {
-					service.ExtraAttributes["username"] = mysqlDefaultUser
-					service.ExtraAttributes["password"] = v
+					service.Config.Username = mysqlDefaultUser
+					service.Config.Password = v
 				}
 			}
 		} else if dd.fileReader != nil {
@@ -502,9 +498,9 @@ func (dd *DynamicDiscovery) fillExtraAttributes(service *Service) {
 				if debianCnf, err := ini.Load(debianCnfRaw); err == nil {
 					section := debianCnf.Section("client")
 					if section != nil {
-						service.ExtraAttributes["username"] = iniSafeString(section.Key("user"))
-						service.ExtraAttributes["password"] = iniSafeString(section.Key("password"))
-						service.ExtraAttributes["metrics_unix_socket"] = iniSafeString(section.Key("socket"))
+						service.Config.Username = iniSafeString(section.Key("user"))
+						service.Config.Password = iniSafeString(section.Key("password"))
+						service.Config.MetricsUnixSocket = iniSafeString(section.Key("socket"))
 					}
 				}
 			}
@@ -515,11 +511,11 @@ func (dd *DynamicDiscovery) fillExtraAttributes(service *Service) {
 		if service.container != nil {
 			for k, v := range service.container.Environment() {
 				if k == "POSTGRES_PASSWORD" {
-					service.ExtraAttributes["password"] = v
+					service.Config.Password = v
 				}
 
 				if k == "POSTGRES_USER" {
-					service.ExtraAttributes["username"] = v
+					service.Config.Password = v
 				}
 			}
 		}
@@ -527,19 +523,20 @@ func (dd *DynamicDiscovery) fillExtraAttributes(service *Service) {
 }
 
 func (dd *DynamicDiscovery) fillGenericExtraAttributes(service *Service, di discoveryInfo) {
-	if service.ExtraAttributes == nil {
-		service.ExtraAttributes = make(map[string]string)
-	}
+	// TODO: I don't know what this is supposed to do.
+	// if service.ExtraAttributes == nil {
+	// 	service.ExtraAttributes = make(map[string]string)
+	// }
 
-	if service.container != nil {
-		for k, v := range facts.LabelsAndAnnotations(service.container) {
-			for _, n := range di.ExtraAttributeNames {
-				if "glouton."+n == k {
-					service.ExtraAttributes[n] = v
-				}
-			}
-		}
-	}
+	// if service.container != nil {
+	// 	for k, v := range facts.LabelsAndAnnotations(service.container) {
+	// 		for _, n := range di.ExtraAttributeNames {
+	// 			if "glouton."+n == k {
+	// 				service.ExtraAttributes[n] = v
+	// 			}
+	// 		}
+	// 	}
+	// }
 }
 
 func (dd *DynamicDiscovery) guessJMX(service *Service, cmdLine []string) {
@@ -562,12 +559,12 @@ func (dd *DynamicDiscovery) guessJMX(service *Service, cmdLine []string) {
 
 				portStr := strings.TrimPrefix(arg, opt)
 
-				_, err := strconv.ParseInt(portStr, 10, 0)
+				port, err := strconv.ParseInt(portStr, 10, 0)
 				if err != nil {
 					continue
 				}
 
-				service.ExtraAttributes["jmx_port"] = portStr
+				service.Config.JMXPort = int(port)
 
 				return
 			}
