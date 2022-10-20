@@ -559,8 +559,12 @@ func (a *agent) getConfigThreshold(firstUpdate bool) map[string]threshold.Thresh
 	}
 
 	configThreshold := make(map[string]threshold.Threshold, len(rawThreshold))
-	defaultSoftPeriod := time.Duration(a.oldConfig.Int("metric.softstatus_period_default")) * time.Second
-	softPeriods := a.oldConfig.DurationMap("metric.softstatus_period")
+	defaultSoftPeriod := time.Duration(a.config.Metric.SoftStatusPeriodDefault) * time.Second
+
+	softPeriods := make(map[string]time.Duration, len(a.config.Metric.SoftStatusPeriod))
+	for metric, period := range a.config.Metric.SoftStatusPeriod {
+		softPeriods[metric] = time.Duration(period) * time.Second
+	}
 
 	for k, v := range rawThreshold {
 		v2, ok := v.(map[string]interface{})
@@ -758,7 +762,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 
 	hasSwap := factsMap["swap_present"] == "true"
 
-	mFilter, err := newMetricFilter(a.oldConfig, len(a.snmpManager.Targets()) > 0, hasSwap, a.metricFormat)
+	mFilter, err := newMetricFilter(a.config, len(a.snmpManager.Targets()) > 0, hasSwap, a.metricFormat)
 	if err != nil {
 		logger.Printf("An error occurred while building the metric filter, allow/deny list may be partial: %v", err)
 	}
@@ -918,11 +922,6 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 	a.dynamicScrapper = &promexporter.DynamicScrapper{
 		Registry:       a.gathererRegistry,
 		DynamicJobName: "discovered-exporters",
-	}
-
-	if _, found := a.oldConfig.Get("metric.pull"); found {
-		logger.Printf("metric.pull is deprecated and not supported by Glouton.")
-		logger.Printf("For your custom metrics, please use Prometheus exporter & metric.prometheus")
 	}
 
 	if a.oldConfig.Bool("blackbox.enable") {
@@ -1124,26 +1123,23 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		process.RegisterExporter(ctx, a.gathererRegistry, psLister, dynamicDiscovery, a.metricFormat == types.MetricFormatBleemeo)
 	}
 
-	var targets []*scrapper.Target
-
-	if promCfg, found := a.oldConfig.Get("metric.prometheus.targets"); found {
-		targets = prometheusConfigToURLs(promCfg)
+	prometheusTargets, warnings := prometheusConfigToURLs(a.config.Metric.Prometheus.Targets)
+	if warnings != nil {
+		a.addWarnings(warnings...)
 	}
 
-	for _, target := range targets {
-		hash := labels.FromMap(target.ExtraLabels).Hash()
-
+	for _, target := range prometheusTargets {
 		_, err = a.gathererRegistry.RegisterGatherer(
 			registry.RegistrationOption{
 				Description: "Prom exporter " + target.URL.String(),
-				JitterSeed:  hash,
+				JitterSeed:  labels.FromMap(target.ExtraLabels).Hash(),
 				Interval:    defaultInterval,
 				ExtraLabels: target.ExtraLabels,
 			},
 			target,
 		)
 		if err != nil {
-			logger.Printf("Unable to add Prometheus scrapper for target %s: %v", target.URL.String(), err)
+			logger.Printf("Unable to add Prometheus scrapper for target %s: %v", target.URL, err)
 		}
 	}
 
@@ -2554,71 +2550,33 @@ func setupContainer(hostRootPath string) {
 // prometheusConfigToURLs convert metric.prometheus.targets config to a map of target name to URL
 //
 // See tests for the expected config.
-func prometheusConfigToURLs(cfg interface{}) (result []*scrapper.Target) {
-	configList, ok := cfg.([]interface{})
-	if !ok {
-		return nil
-	}
+func prometheusConfigToURLs(configTargets []config2.PrometheusTarget) ([]*scrapper.Target, config2.Warnings) {
+	var warnings config2.Warnings
 
-	for _, v := range configList {
-		vMap, ok := v.(map[string]interface{})
-		if !ok {
-			continue
-		}
+	targets := make([]*scrapper.Target, 0, len(configTargets))
 
-		uText, ok := vMap["url"].(string)
-		if !ok {
-			continue
-		}
-
-		u, err := url.Parse(uText)
+	for _, config := range configTargets {
+		targetURL, err := url.Parse(config.URL)
 		if err != nil {
-			logger.Printf("ignoring invalid exporter config: %v", err)
+			warnings = append(warnings, fmt.Errorf("%w: invalid prometheus target URL: %s", config2.ErrInvalidValue, err))
 
 			continue
 		}
-
-		name, _ := vMap["name"].(string)
 
 		target := &scrapper.Target{
 			ExtraLabels: map[string]string{
-				types.LabelMetaScrapeJob: name,
+				types.LabelMetaScrapeJob: config.Name,
 				// HostPort could be empty, but this ExtraLabels is used by Registry which
 				// correctly handle empty value value (drop the label).
-				types.LabelMetaScrapeInstance: scrapper.HostPort(u),
+				types.LabelMetaScrapeInstance: scrapper.HostPort(targetURL),
 			},
-			URL:       u,
-			AllowList: []string{},
-			DenyList:  []string{},
+			URL:       targetURL,
+			AllowList: config.AllowMetrics,
+			DenyList:  config.DenyMetrics,
 		}
 
-		if allow, ok := vMap["allow_metrics"].([]interface{}); ok {
-			target.AllowList = make([]string, 0, len(allow))
-
-			for _, x := range allow {
-				s, _ := x.(string)
-				if s != "" {
-					target.AllowList = append(target.AllowList, s)
-				}
-			}
-		}
-
-		denyMetricsConfig(vMap, target)
-		result = append(result, target)
+		targets = append(targets, target)
 	}
 
-	return result
-}
-
-func denyMetricsConfig(vMap map[string]interface{}, target *scrapper.Target) {
-	if deny, ok := vMap["deny_metrics"].([]interface{}); ok {
-		target.DenyList = make([]string, 0, len(deny))
-
-		for _, x := range deny {
-			s, _ := x.(string)
-			if s != "" {
-				target.DenyList = append(target.DenyList, s)
-			}
-		}
-	}
+	return targets, warnings
 }

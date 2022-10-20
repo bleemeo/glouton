@@ -19,7 +19,7 @@ package agent
 import (
 	"context"
 	"fmt"
-	"glouton/config"
+	"glouton/config2"
 	"glouton/discovery"
 	"glouton/jmxtrans"
 	"glouton/logger"
@@ -668,12 +668,10 @@ type metricFilter struct {
 	l sync.Mutex
 }
 
-func buildMatcherList(config *config.Configuration, listType string) map[labels.Matcher][]matcher.Matchers {
-	metricListType := listType + "_metrics"
+func buildMatcherList(config config2.Config, metrics []string) map[labels.Matcher][]matcher.Matchers {
 	metricList := make(map[labels.Matcher][]matcher.Matchers)
-	globalList := config.StringList("metric." + metricListType)
 
-	for _, str := range globalList {
+	for _, str := range metrics {
 		matchers, err := matcher.NormalizeMetric(str)
 		if err != nil {
 			logger.V(2).Printf("An error occurred while normalizing metric: %w", err)
@@ -683,8 +681,6 @@ func buildMatcherList(config *config.Configuration, listType string) map[labels.
 
 		addToList(metricList, matchers)
 	}
-
-	addScrappersList(config, metricList, listType)
 
 	return metricList
 }
@@ -718,12 +714,11 @@ func addToList(metricList map[labels.Matcher][]matcher.Matchers, metrics matcher
 }
 
 func addScrappersList(
-	config *config.Configuration,
+	config config2.Config,
 	metricList map[labels.Matcher][]matcher.Matchers,
 	metricListType string,
 ) {
-	promTargets, _ := config.Get("metric.prometheus.targets")
-	targetList := prometheusConfigToURLs(promTargets)
+	targetList, _ := prometheusConfigToURLs(config.Metric.Prometheus.Targets)
 
 	for _, t := range targetList {
 		var list []string
@@ -814,12 +809,15 @@ func (m *metricFilter) DiagnosticArchive(ctx context.Context, archive types.Arch
 	return nil
 }
 
-func (m *metricFilter) buildList(config *config.Configuration, hasSNMP, hasSwap bool, format types.MetricFormat) error {
+func (m *metricFilter) buildList(config config2.Config, hasSNMP, hasSwap bool, format types.MetricFormat) error {
 	m.l.Lock()
 	defer m.l.Unlock()
 
-	m.staticAllowList = buildMatcherList(config, "allow")
-	m.staticDenyList = buildMatcherList(config, "deny")
+	m.staticAllowList = buildMatcherList(config, config.Metric.AllowMetrics)
+	addScrappersList(config, m.staticAllowList, "allow")
+
+	m.staticDenyList = buildMatcherList(config, config.Metric.DenyMetrics)
+	addScrappersList(config, m.staticDenyList, "deny")
 
 	if hasSNMP {
 		for _, val := range snmpMetrics {
@@ -832,13 +830,7 @@ func (m *metricFilter) buildList(config *config.Configuration, hasSNMP, hasSwap 
 		}
 	}
 
-	_, found := config.Get("metric.include_default_metrics")
-
-	if !found {
-		m.includeDefaultMetrics = true
-	} else {
-		m.includeDefaultMetrics = config.Bool("metric.include_default_metrics")
-	}
+	m.includeDefaultMetrics = config.Metric.IncludeDefaultMetrics
 
 	if m.includeDefaultMetrics {
 		defaultMetricsList := getDefaultMetrics(format, hasSwap)
@@ -872,7 +864,7 @@ func (m *metricFilter) buildList(config *config.Configuration, hasSNMP, hasSwap 
 }
 
 func newMetricFilter(
-	config *config.Configuration,
+	config config2.Config,
 	hasSNMP, hasSwap bool,
 	metricFormat types.MetricFormat,
 ) (*metricFilter, error) {

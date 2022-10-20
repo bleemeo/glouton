@@ -249,8 +249,6 @@ func Test_migrate(t *testing.T) {
 				}
 			}
 
-			_ = migrate(cfg)
-
 			for _, key := range tt.absentKeys {
 				if v, ok := cfg.Get(key); ok {
 					t.Errorf("Get(%v) = %v, want absent", key, v)

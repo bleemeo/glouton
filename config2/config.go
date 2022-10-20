@@ -77,8 +77,10 @@ type Prometheus struct {
 }
 
 type PrometheusTarget struct {
-	URL  string `koanf:"url"`
-	Name string `koanf:"name"`
+	URL          string   `koanf:"url"`
+	Name         string   `koanf:"name"`
+	AllowMetrics []string `koanf:"allow_metrics"`
+	DenyMetrics  []string `koanf:"deny_metrics"`
 }
 
 type DF struct {

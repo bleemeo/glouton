@@ -72,8 +72,10 @@ func TestStructuredConfig(t *testing.T) {
 			Prometheus: Prometheus{
 				Targets: []PrometheusTarget{
 					{
-						URL:  "http://localhost:8080/metrics",
-						Name: "my_app",
+						URL:          "http://localhost:8080/metrics",
+						Name:         "my_app",
+						AllowMetrics: []string{"metric1"},
+						DenyMetrics:  []string{"metric2"},
 					},
 				},
 			},
