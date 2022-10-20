@@ -744,16 +744,16 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		}()
 	}
 
-	var warning error
+	var warnings config2.Warnings
 
-	a.snmpManager, warning = snmp.NewManager(
+	a.snmpManager, warnings = snmp.NewManager(
 		a.config.Metric.SNMP.ExporterAddress,
 		a.factProvider,
 		a.config.Metric.SNMP.Targets,
 	)
 
-	if warning != nil {
-		a.addWarnings(warning)
+	if warnings != nil {
+		a.addWarnings(warnings...)
 	}
 
 	hasSwap := factsMap["swap_present"] == "true"
@@ -895,7 +895,8 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 	isCheckIgnored := discovery.NewIgnoredService(serviceIgnoreCheck).IsServiceIgnored
 	isInputIgnored := discovery.NewIgnoredService(serviceIgnoreMetrics).IsServiceIgnored
 	dynamicDiscovery := discovery.NewDynamic(psFact, netstat, a.containerRuntime, a.containerFilter.ContainerIgnored, discovery.SudoFileReader{HostRootPath: a.hostRootPath}, a.oldConfig.String("stack"))
-	a.discovery = discovery.New(
+
+	a.discovery, warnings = discovery.New(
 		dynamicDiscovery,
 		a.collector,
 		a.gathererRegistry,
@@ -910,6 +911,9 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		a.metricFormat,
 		psFact,
 	)
+	if warnings != nil {
+		a.addWarnings(warnings...)
+	}
 
 	a.dynamicScrapper = &promexporter.DynamicScrapper{
 		Registry:       a.gathererRegistry,

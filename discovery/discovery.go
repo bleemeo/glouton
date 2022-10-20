@@ -29,12 +29,14 @@ import (
 	"glouton/types"
 	"os"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/imdario/mergo"
 	"github.com/influxdata/telegraf"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/common/model"
 )
 
 var errNoCheckAssociated = errors.New("there is no check associated with the container")
@@ -105,7 +107,7 @@ func New(
 	isContainerIgnored func(c facts.Container) bool,
 	metricFormat types.MetricFormat,
 	processFact processFact,
-) *Discovery {
+) (*Discovery, config2.Warnings) {
 	initialServices := servicesFromState(state)
 	discoveredServicesMap := make(map[NameInstance]Service, len(initialServices))
 
@@ -116,6 +118,8 @@ func New(
 		}
 		discoveredServicesMap[key] = v
 	}
+
+	servicesOverride, warnings := validateServices(servicesOverride)
 
 	// Convert service overrides to a map.
 	serviceMap := make(map[NameInstance]config2.Service, len(servicesOverride))
@@ -128,7 +132,7 @@ func New(
 		serviceMap[key] = v
 	}
 
-	return &Discovery{
+	discovery := &Discovery{
 		dynamicDiscovery:      dynamicDiscovery,
 		discoveredServicesMap: discoveredServicesMap,
 		coll:                  coll,
@@ -144,6 +148,50 @@ func New(
 		metricFormat:          metricFormat,
 		processFact:           processFact,
 	}
+
+	return discovery, warnings
+}
+
+// validateServies validates the service config.
+func validateServices(services []config2.Service) ([]config2.Service, config2.Warnings) {
+	var warnings config2.Warnings
+
+	newServices := make([]config2.Service, 0, len(services))
+	replacer := strings.NewReplacer(".", "_", "-", "_")
+
+	for _, srv := range services {
+		if srv.ID == "" {
+			warning := fmt.Errorf("%w: a key \"id\" is missing in one of your service override", config2.ErrInvalidValue)
+			warnings = append(warnings, warning)
+
+			continue
+		}
+
+		if !model.IsValidMetricName(model.LabelValue(srv.ID)) {
+			newID := replacer.Replace(srv.ID)
+			if !model.IsValidMetricName(model.LabelValue(newID)) {
+				warning := fmt.Errorf(
+					"%w: service id \"%s\" can only contains letters, digits and underscore",
+					config2.ErrInvalidValue, srv.ID,
+				)
+				warnings = append(warnings, warning)
+
+				continue
+			}
+
+			warning := fmt.Errorf(
+				"%w: service id \"%s\" can not contains dot (.) or dash (-). Changed to \"%s\"",
+				config2.ErrInvalidValue, srv.ID, newID,
+			)
+			warnings = append(warnings, warning)
+
+			srv.ID = newID
+		}
+
+		newServices = append(newServices, srv)
+	}
+
+	return newServices, warnings
 }
 
 // Close stop & cleanup inputs & check created by the discovery.

@@ -23,16 +23,12 @@ import (
 	"glouton/config2"
 	"glouton/logger"
 	"glouton/prometheus/exporter/snmp"
-	"glouton/types"
 	"glouton/version"
 	"net/url"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
-
-	"github.com/prometheus/common/model"
 )
 
 var (
@@ -360,54 +356,6 @@ func loadDefault(cfg *config.Configuration) {
 	}
 }
 
-func migrateScrapperMetrics(cfg *config.Configuration) (warnings []error) {
-	warnings = append(warnings, migrateScrapper(cfg, "metric.prometheus.allow_metrics", "metric.allow_metrics")...)
-	warnings = append(warnings, migrateScrapper(cfg, "metric.prometheus.deny_metrics", "metric.deny_metrics")...)
-	warnings = append(warnings, migrateScrapper(cfg, "metric.prometheus.allow", "metric.allow_metrics")...)
-	warnings = append(warnings, migrateScrapper(cfg, "metric.prometheus.deny", "metric.deny_metrics")...)
-
-	return warnings
-}
-
-func migrateScrapper(cfg *config.Configuration, deprecatedPath string, correctPath string) (warnings []error) {
-	migratedTargets := []string{}
-	v, ok := cfg.Get(deprecatedPath)
-
-	if !ok {
-		return warnings
-	}
-
-	vTab, ok := v.([]interface{})
-	if !ok {
-		return warnings
-	}
-
-	if len(vTab) > 0 {
-		warnings = append(warnings, fmt.Errorf("%w: %s. Please use %s", errSettingsDeprecated, deprecatedPath, correctPath))
-
-		for _, val := range vTab {
-			s, _ := val.(string)
-			if s != "" {
-				migratedTargets = append(migratedTargets, s)
-			}
-		}
-	}
-
-	if len(migratedTargets) > 0 {
-		existing, _ := cfg.Get(correctPath)
-		targets, _ := existing.([]interface{})
-
-		for _, val := range migratedTargets {
-			targets = append(targets, val)
-		}
-
-		cfg.Set(correctPath, targets)
-		cfg.Delete(deprecatedPath)
-	}
-
-	return warnings
-}
-
 // movedKeys return all keys that are migration. The map is old key => new key.
 func movedKeys() map[string]string {
 	keys := map[string]string{
@@ -431,95 +379,6 @@ func movedKeys() map[string]string {
 	return keys
 }
 
-func migrateMovedKeys(cfg *config.Configuration) (warnings []error) {
-	keys := movedKeys()
-
-	for oldKey, newKey := range keys {
-		val, found := cfg.Get(oldKey)
-		if !found {
-			continue
-		}
-
-		cfg.Set(newKey, val)
-		cfg.Delete(oldKey)
-
-		warnings = append(warnings, fmt.Errorf("%w: %s. Please use %s", errSettingsDeprecated, oldKey, newKey))
-	}
-
-	return warnings
-}
-
-func migrateLogging(cfg *config.Configuration) (warnings []error) {
-	for _, name := range []string{"tail_size", "head_size"} {
-		oldKey := "logging.buffer." + name
-		newKey := "logging.buffer." + name + "_bytes"
-
-		value := cfg.Int(oldKey)
-		if value == 0 {
-			continue
-		}
-
-		cfg.Set(newKey, value*100)
-		cfg.Delete(oldKey)
-
-		warnings = append(warnings, fmt.Errorf("%w: %s. Please use %s", errSettingsDeprecated, oldKey, newKey))
-	}
-
-	return warnings
-}
-
-func migrateMetricsPrometheus(cfg *config.Configuration) (warnings []error) {
-	// metrics.prometheus was renamed metrics.prometheus.targets
-	// We guess that old path was used when metrics.prometheus.*.url exist and is a string
-	v, ok := cfg.Get("metric.prometheus")
-	if ok {
-		var migratedTargets []interface{}
-
-		if vMap, ok := v.(map[string]interface{}); ok {
-			for key, dict := range vMap {
-				if tmp, ok := dict.(map[string]interface{}); ok {
-					if u, ok := tmp["url"].(string); ok {
-						warnings = append(warnings, fmt.Errorf("%w: metrics.prometheus. See https://docs.bleemeo.com/metrics-sources/prometheus", errSettingsDeprecated))
-
-						migratedTargets = append(migratedTargets, map[string]interface{}{
-							"url":  u,
-							"name": key,
-						})
-
-						cfg.Delete(fmt.Sprintf("metric.prometheus.%s", key))
-					}
-				}
-			}
-		}
-
-		if len(migratedTargets) > 0 {
-			existing, _ := cfg.Get("metric.prometheus.targets")
-			targets, _ := existing.([]interface{})
-			targets = append(targets, migratedTargets...)
-
-			cfg.Set("metric.prometheus.targets", targets)
-		}
-	}
-
-	_, found := cfg.Get("metric.prometheus.targets.include_default_metrics")
-	if found {
-		warnings = append(warnings, fmt.Errorf("%w: metrics.prometheus.targets.include_default_metrics. This option does not exists anymore and has not effects", errSettingsDeprecated))
-	}
-
-	return warnings
-}
-
-// migrate upgrade the configuration when Glouton change it settings
-// The list returned are actually warnings, not errors.
-func migrate(cfg *config.Configuration) (warnings []error) {
-	warnings = append(warnings, migrateMovedKeys(cfg)...)
-	warnings = append(warnings, migrateLogging(cfg)...)
-	warnings = append(warnings, migrateMetricsPrometheus(cfg)...)
-	warnings = append(warnings, migrateScrapperMetrics(cfg)...)
-
-	return warnings
-}
-
 func loadEnvironmentVariables(cfg *config.Configuration) (warnings []error, err error) {
 	warnings = make([]error, 0)
 
@@ -534,37 +393,27 @@ func loadEnvironmentVariables(cfg *config.Configuration) (warnings []error, err 
 	for oldEnv, key := range deprecatedEnvNames {
 		value := defaultConfig()[key]
 
-		found, err := loadEnvironmentVariable(cfg, key, oldEnv, value)
+		_, err := loadEnvironmentVariable(cfg, key, oldEnv, value)
 		if err != nil {
 			return nil, err
-		}
-
-		if found {
-			warnings = append(warnings, fmt.Errorf("%w: %s, use %s instead", errDeprecatedEnv, oldEnv, keyToEnvironmentName(key)))
 		}
 	}
 
 	for oldKey, newKey := range movedKeys() {
 		value := defaultConfig()[newKey]
 
-		if found, err := loadEnvironmentVariable(cfg, newKey, keyToBleemeoEnvironemntName(oldKey), value); err != nil {
+		if _, err := loadEnvironmentVariable(cfg, newKey, keyToBleemeoEnvironemntName(oldKey), value); err != nil {
 			return nil, err
-		} else if found {
-			warnings = append(warnings, fmt.Errorf("%w: %s, use %s instead", errDeprecatedEnv, keyToBleemeoEnvironemntName(oldKey), keyToEnvironmentName(newKey)))
 		}
 
-		if found, err := loadEnvironmentVariable(cfg, newKey, keyToEnvironmentName(oldKey), value); err != nil {
+		if _, err := loadEnvironmentVariable(cfg, newKey, keyToEnvironmentName(oldKey), value); err != nil {
 			return nil, err
-		} else if found {
-			warnings = append(warnings, fmt.Errorf("%w: %s, use %s instead", errDeprecatedEnv, keyToEnvironmentName(oldKey), keyToEnvironmentName(newKey)))
 		}
 	}
 
 	for key, value := range defaultConfig() {
-		if found, err := loadEnvironmentVariable(cfg, key, keyToBleemeoEnvironemntName(key), value); err != nil {
+		if _, err := loadEnvironmentVariable(cfg, key, keyToBleemeoEnvironemntName(key), value); err != nil {
 			return nil, err
-		} else if found {
-			warnings = append(warnings, fmt.Errorf("%w: %s, use %s instead", errDeprecatedEnv, keyToBleemeoEnvironemntName(key), keyToEnvironmentName(key)))
 		}
 
 		if _, err := loadEnvironmentVariable(cfg, key, keyToEnvironmentName(key), value); err != nil {
@@ -684,8 +533,6 @@ func loadOldConfiguration(configFiles []string, mockLookupEnv func(string) (stri
 	}
 
 	warnings = append(warnings, moreWarnings...)
-	moreWarnings = migrate(cfg)
-	warnings = append(warnings, moreWarnings...)
 
 	loadDefault(cfg)
 
@@ -694,194 +541,6 @@ func loadOldConfiguration(configFiles []string, mockLookupEnv func(string) (stri
 	}
 
 	return cfg, warnings, finalError
-}
-
-func convertConfig(cfg *config.Configuration) (agentConfig Config, warnings []error) {
-	services, _ := cfg.Get("service")
-	overrideServices := confFieldToSliceMap(services, "service override")
-	agentConfig.Services = make([]Service, 0, len(overrideServices))
-
-	for _, fragment := range overrideServices {
-		srv := Service{}
-
-		moreWarning := srv.fromMap(fragment)
-		if moreWarning != nil {
-			warnings = append(warnings, fmt.Errorf("service %s: %w", srv.Name(), moreWarning))
-		}
-
-		agentConfig.Services = append(agentConfig.Services, srv)
-	}
-
-	agentConfig.parseContainer(cfg)
-
-	warnings = append(warnings, agentConfig.parseSNMP(cfg)...)
-	warnings = append(warnings, agentConfig.validate()...)
-
-	return agentConfig, warnings
-}
-
-func (cfg *Config) parseSNMP(oldCfg *config.Configuration) []error {
-	u, err := url.Parse(oldCfg.String("metric.snmp.exporter_address"))
-	if err != nil {
-		return []error{err}
-	}
-
-	u, err = u.Parse("snmp")
-	if err != nil {
-		return []error{err}
-	}
-
-	cfg.SNMP.ExporterURL = u
-
-	tmp, ok := oldCfg.Get("metric.snmp.targets")
-	if !ok {
-		return nil
-	}
-
-	confList, ok := tmp.([]interface{})
-	if !ok {
-		return []error{fmt.Errorf("%w: metric.snmp.targets should be a list", ErrInvalidValue)}
-	}
-
-	var errs []error
-
-	seenAddress := make(map[string]bool, len(confList))
-
-	for i, iMap := range confList {
-		tmp, ok := iMap.(map[string]interface{})
-
-		if !ok {
-			errs = append(errs, fmt.Errorf("%w: metric.snmp.targets[%d] should be a map", ErrInvalidValue, i))
-
-			continue
-		}
-
-		target, ok := tmp["target"].(string)
-		if !ok {
-			errs = append(errs, fmt.Errorf("%w: metric.snmp.targets[%d] must have a target value", ErrInvalidValue, i))
-
-			continue
-		}
-
-		if seenAddress[target] {
-			errs = append(errs, fmt.Errorf("%w: the SNMP target %s is duplicated", ErrInvalidValue, target))
-
-			continue
-		}
-
-		seenAddress[target] = true
-
-		initialName, _ := tmp["initial_name"].(string)
-
-		cfg.SNMP.Targets = append(cfg.SNMP.Targets, SNMPTarget{
-			Address:     target,
-			InitialName: initialName,
-		})
-	}
-
-	return errs
-}
-
-func (cfg *Config) parseContainer(oldCfg *config.Configuration) {
-	enable := oldCfg.Bool("container.filter.allow_by_default")
-
-	cfg.Container.DisabledByDefault = !enable
-	cfg.Container.AllowPatternList = oldCfg.StringList("container.filter.allow_list")
-	cfg.Container.DenyPatternList = oldCfg.StringList("container.filter.deny_list")
-
-	cfg.Container.Runtime.Docker.Addresses = oldCfg.StringList("container.runtime.docker.addresses")
-	cfg.Container.Runtime.Docker.DisablePrefixHostRoot = !oldCfg.Bool("container.runtime.docker.prefix_hostroot")
-	cfg.Container.Runtime.ContainerD.Addresses = oldCfg.StringList("container.runtime.containerd.addresses")
-	cfg.Container.Runtime.ContainerD.DisablePrefixHostRoot = !oldCfg.Bool("container.runtime.containerd.prefix_hostroot")
-}
-
-func (cfg *Config) validate() []error {
-	var warnings []error
-
-	replacer := strings.NewReplacer(".", "_", "-", "_")
-
-	i := 0
-
-	for _, srv := range cfg.Services {
-		if srv.ID == "" {
-			warnings = append(warnings, fmt.Errorf("%w: a key \"id\" is missing in one of your service override", ErrInvalidValue))
-
-			continue
-		}
-
-		if !model.IsValidMetricName(model.LabelValue(srv.ID)) {
-			newID := replacer.Replace(srv.ID)
-			if !model.IsValidMetricName(model.LabelValue(newID)) {
-				warnings = append(warnings, fmt.Errorf("%w: service id \"%s\" can only contains letters, digits and underscore", ErrInvalidValue, srv.ID))
-
-				continue
-			}
-
-			warnings = append(warnings, fmt.Errorf("%w: service id \"%s\" can not contains dot (.) or dash (-). Changed to \"%s\"", ErrInvalidValue, srv.ID, newID))
-
-			srv.ID = newID
-		}
-
-		cfg.Services[i] = srv
-		i++
-	}
-
-	cfg.Services = cfg.Services[:i]
-
-	return warnings
-}
-
-func (srv *Service) fromMap(fragment map[string]string) (warning error) {
-	var errs types.MultiErrors
-
-	for k, v := range fragment {
-		switch k {
-		case "id":
-			srv.ID = v
-		case "instance":
-			srv.Instance = v
-		case "nagios_nrpe_name":
-			srv.NagiosNRPEName = v
-		case "ignore_ports":
-			values := strings.Split(v, ",")
-
-			for _, s := range values {
-				port, err := strconv.Atoi(strings.TrimSpace(s))
-				if err != nil {
-					errs = append(errs, fmt.Errorf("ignore_ports \"%s\": %w", s, err))
-
-					continue
-				}
-
-				if port > 65535 {
-					errs = append(errs, fmt.Errorf("%w: ignore_ports %d is larger than 65535", ErrInvalidValue, port))
-				}
-
-				srv.IgnoredPorts = append(srv.IgnoredPorts, port)
-			}
-		case "interval":
-			interval, err := strconv.Atoi(v)
-			if err != nil {
-				errs = append(errs, fmt.Errorf("interval \"%s\": %w", v, err))
-
-				continue
-			}
-
-			srv.Interval = time.Duration(interval) * time.Second
-		default:
-			if srv.ExtraAttribute == nil {
-				srv.ExtraAttribute = make(map[string]string)
-			}
-
-			srv.ExtraAttribute[k] = v
-		}
-	}
-
-	if len(errs) > 0 {
-		return errs
-	}
-
-	return nil
 }
 
 func confFieldToSliceMap(input interface{}, confType string) []map[string]string {

@@ -28,6 +28,7 @@ const (
 var (
 	errDeprecatedEnv      = errors.New("environment variable is deprecated")
 	errSettingsDeprecated = errors.New("setting is deprecated")
+	ErrInvalidValue       = errors.New("invalid config value")
 )
 
 //nolint:gochecknoglobals
@@ -216,7 +217,7 @@ func load(withDefault bool, paths ...string) (*koanf.Koanf, Warnings, error) {
 	k := koanf.New(delimiter)
 	warnings, finalErr := loadPaths(k, paths)
 
-	moreWarnings := migrateMovedKeys(k)
+	moreWarnings := migrate(k)
 	if moreWarnings != nil {
 		warnings = append(warnings, moreWarnings...)
 	}
@@ -458,11 +459,34 @@ func movedKeys() map[string]string {
 	return keys
 }
 
-func migrateMovedKeys(k *koanf.Koanf) Warnings {
+// migrate upgrade the configuration when Glouton changes its settings.
+func migrate(k *koanf.Koanf) Warnings {
+	var warnings Warnings
+
+	movedConfig := make(map[string]interface{})
+
+	warnings = append(warnings, migrateMovedKeys(k, movedConfig)...)
+	warnings = append(warnings, migrateLogging(k, movedConfig)...)
+	warnings = append(warnings, migrateMetricsPrometheus(k, movedConfig)...)
+	warnings = append(warnings, migrateScrapperMetrics(k, movedConfig)...)
+
+	if len(movedConfig) == 0 {
+		return nil
+	}
+
+	err := k.Load(confmap.Provider(movedConfig, "."), nil)
+	if err != nil {
+		warnings = append(warnings, err)
+	}
+
+	return warnings
+}
+
+// migrateMovedKeys migrate the config settings that were simply moved.
+func migrateMovedKeys(k *koanf.Koanf, config map[string]interface{}) Warnings {
 	var warnings Warnings
 
 	keys := movedKeys()
-	movedConfig := make(map[string]interface{})
 
 	for oldKey, newKey := range keys {
 		val := k.Get(oldKey)
@@ -470,14 +494,132 @@ func migrateMovedKeys(k *koanf.Koanf) Warnings {
 			continue
 		}
 
-		movedConfig[newKey] = val
+		config[newKey] = val
 
 		warnings = append(warnings, fmt.Errorf("%w: %s, use %s instead", errSettingsDeprecated, oldKey, newKey))
 	}
 
-	err := k.Load(confmap.Provider(movedConfig, "."), nil)
-	if err != nil {
-		warnings = append(warnings, err)
+	return warnings
+}
+
+// migrateLogging migrates the logging settings.
+func migrateLogging(k *koanf.Koanf, config map[string]interface{}) (warnings []error) {
+	for _, name := range []string{"tail_size", "head_size"} {
+		oldKey := "logging.buffer." + name
+		newKey := "logging.buffer." + name + "_bytes"
+
+		value := k.Int(oldKey)
+		if value == 0 {
+			continue
+		}
+
+		config[newKey] = value * 100
+
+		warnings = append(warnings, fmt.Errorf("%w: %s, use %s instead", errSettingsDeprecated, oldKey, newKey))
+	}
+
+	return warnings
+}
+
+// migrateMetricsPrometheus migrates Prometheus settings.
+func migrateMetricsPrometheus(k *koanf.Koanf, config map[string]interface{}) Warnings {
+	// metrics.prometheus was renamed metrics.prometheus.targets
+	// We guess that old path was used when metrics.prometheus.*.url exist and is a string
+	v := k.Get("metric.prometheus")
+	if v == nil {
+		return nil
+	}
+
+	var (
+		migratedTargets []interface{}
+		warnings        Warnings
+	)
+
+	vMap, ok := v.(map[string]interface{})
+	if !ok {
+		return nil
+	}
+
+	for key, dict := range vMap {
+		tmp, ok := dict.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		u, ok := tmp["url"].(string)
+		if !ok {
+			continue
+		}
+
+		warnings = append(warnings, fmt.Errorf("%w: metrics.prometheus. See https://docs.bleemeo.com/metrics-sources/prometheus", errSettingsDeprecated))
+
+		migratedTargets = append(migratedTargets, map[string]interface{}{
+			"url":  u,
+			"name": key,
+		})
+	}
+
+	if len(migratedTargets) > 0 {
+		existing := k.Get("metric.prometheus.targets")
+		targets, _ := existing.([]interface{})
+		targets = append(targets, migratedTargets...)
+
+		config["metric.prometheus.targets"] = targets
+	}
+
+	if k.Bool("metric.prometheus.targets.include_default_metrics") {
+		warnings = append(warnings, fmt.Errorf("%w: metrics.prometheus.targets.include_default_metrics. This option does not exists anymore and has no effect", errSettingsDeprecated))
+	}
+
+	return warnings
+}
+
+func migrateScrapperMetrics(k *koanf.Koanf, config map[string]interface{}) Warnings {
+	var warnings Warnings
+
+	warnings = append(warnings, migrateScrapper(k, config, "metric.prometheus.allow_metrics", "metric.allow_metrics")...)
+	warnings = append(warnings, migrateScrapper(k, config, "metric.prometheus.deny_metrics", "metric.deny_metrics")...)
+	warnings = append(warnings, migrateScrapper(k, config, "metric.prometheus.allow", "metric.allow_metrics")...)
+	warnings = append(warnings, migrateScrapper(k, config, "metric.prometheus.deny", "metric.deny_metrics")...)
+
+	return warnings
+}
+
+func migrateScrapper(k *koanf.Koanf, config map[string]interface{}, deprecatedPath string, correctPath string) Warnings {
+	migratedTargets := []string{}
+	v := k.Get(deprecatedPath)
+
+	if v == nil {
+		return nil
+	}
+
+	vTab, ok := v.([]interface{})
+	if !ok {
+		return nil
+	}
+
+	var warnings Warnings
+
+	if len(vTab) > 0 {
+		warnings = append(warnings, fmt.Errorf("%w: %s. Please use %s", errSettingsDeprecated, deprecatedPath, correctPath))
+
+		for _, val := range vTab {
+			s, _ := val.(string)
+			if s != "" {
+				migratedTargets = append(migratedTargets, s)
+			}
+		}
+	}
+
+	if len(migratedTargets) > 0 {
+		existing := k.Get(correctPath)
+		targets, _ := existing.([]interface{})
+
+		for _, val := range migratedTargets {
+			targets = append(targets, val)
+		}
+
+		config[correctPath] = targets
 	}
 
 	return warnings

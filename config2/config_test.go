@@ -278,6 +278,25 @@ func TestWarningsAndErrors(t *testing.T) {
 				},
 			},
 		},
+		{
+			Name:  "migration file",
+			Files: []string{"testdata/old-prometheus-targets.conf"},
+			WantWarnings: []string{
+				"setting is deprecated: metrics.prometheus. See https://docs.bleemeo.com/metrics-sources/prometheus",
+			},
+			WantConfig: Config{
+				Metric: Metric{
+					Prometheus: Prometheus{
+						Targets: []PrometheusTarget{
+							{
+								Name: "test1",
+								URL:  "http://localhost:9090/metrics",
+							},
+						},
+					},
+				},
+			},
+		},
 	}
 
 	for _, test := range tests {

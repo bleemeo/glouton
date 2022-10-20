@@ -48,6 +48,7 @@ import (
 	"glouton/types"
 	"net"
 	"os"
+	"reflect"
 	"runtime"
 	"strconv"
 
@@ -202,6 +203,8 @@ func serviceNeedUpdate(oldService, service Service, oldServiceState facts.Contai
 		oldService.MetricsIgnored != service.MetricsIgnored,
 		oldServiceState != serviceState:
 		return true
+	case !reflect.DeepEqual(oldService.Config, service.Config):
+		return true
 	case len(oldService.ListenAddresses) != len(service.ListenAddresses):
 		return true
 	}
@@ -214,13 +217,6 @@ func serviceNeedUpdate(oldService, service Service, oldServiceState facts.Contai
 			return true
 		}
 	}
-
-	// TODO:
-	// for k, v := range oldService.ExtraAttributes {
-	// 	if v != service.ExtraAttributes[k] {
-	// 		return true
-	// 	}
-	// }
 
 	return false
 }
