@@ -32,6 +32,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/imdario/mergo"
 	"github.com/influxdata/telegraf"
 	"github.com/prometheus/client_golang/prometheus"
 )
@@ -436,8 +437,6 @@ func applyOverride(
 			service.Active = true
 		}
 
-		service.Config = override
-
 		// If the address or the port is set explicitly in the config, override the listen address.
 		if override.Port != 0 || override.Address != "" {
 			address, port := service.AddressPort()
@@ -481,27 +480,8 @@ func applyOverride(
 			}
 		}
 
-		// TODO: Log unknown fields
-		// di := servicesDiscoveryInfo[service.ServiceType]
-		// for _, name := range di.ExtraAttributeNames {
-		// 	if value, ok := extraAttributeCopy[name]; ok {
-		// 		service.ExtraAttributes[name] = value
-
-		// 		delete(extraAttributeCopy, name)
-		// 	}
-		// }
-
-		// if len(extraAttributeCopy) > 0 {
-		// 	ignoredNames := make([]string, 0, len(extraAttributeCopy))
-
-		// 	for k := range extraAttributeCopy {
-		// 		ignoredNames = append(ignoredNames, k)
-		// 	}
-
-		// 	if len(ignoredNames) != 0 {
-		// 		logger.V(1).Printf("Unknown field for service override on %v: %v", serviceKey, ignoredNames)
-		// 	}
-		// }
+		// Override config.
+		mergo.Merge(&service.Config, override, mergo.WithOverride)
 
 		if service.ServiceType == CustomService {
 			if service.Config.Port != 0 {

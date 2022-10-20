@@ -1114,3 +1114,36 @@ func TestDynamicDiscovery(t *testing.T) {
 		})
 	}
 }
+
+func Test_fillGenericExtraAttributes(t *testing.T) {
+	service := Service{
+		container: facts.FakeContainer{
+			FakeLabels: map[string]string{
+				"glouton.port":         "8080",
+				"glouton.ignore_ports": "9090,9091",
+				"glouton.http_path":    "/path",
+			},
+		},
+		Config: config2.Service{
+			// HTTP Path should be overwritten.
+			HTTPPath: "/other",
+			// Address should be kept.
+			Address: "192.168.0.1",
+		},
+	}
+
+	expectedConfig := config2.Service{
+		HTTPPath:    "/path",
+		Port:        8080,
+		IgnorePorts: []int{9090, 9091},
+		Address:     "192.168.0.1",
+	}
+
+	dd := &DynamicDiscovery{}
+
+	dd.fillConfigFromLabels(&service)
+
+	if diff := cmp.Diff(expectedConfig, service.Config); diff != "" {
+		t.Fatalf("Unexpected config:\n%s", diff)
+	}
+}

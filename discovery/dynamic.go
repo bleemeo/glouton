@@ -19,6 +19,7 @@ package discovery
 
 import (
 	"context"
+	"glouton/config2"
 	"glouton/facts"
 	"glouton/logger"
 	"net"
@@ -31,11 +32,14 @@ import (
 	"sync"
 	"time"
 
+	"github.com/imdario/mergo"
+	"github.com/mitchellh/mapstructure"
 	"gopkg.in/ini.v1"
 )
 
 const (
-	mysqlDefaultUser = "root"
+	mysqlDefaultUser            = "root"
+	gloutonContainerLabelPrefix = "glouton."
 )
 
 // DynamicDiscovery implement the dynamic discovery. It will only return
@@ -378,8 +382,8 @@ func (dd *DynamicDiscovery) serviceFromProcess(process facts.Process, netstat ma
 
 	dd.updateListenAddresses(&service, di)
 
-	dd.fillExtraAttributes(&service)
-	dd.fillGenericExtraAttributes(&service, di)
+	dd.fillConfig(&service)
+	dd.fillConfigFromLabels(&service)
 	dd.guessJMX(&service, process.CmdLineList)
 
 	return service, true
@@ -484,7 +488,8 @@ func (dd *DynamicDiscovery) updateListenAddresses(service *Service, di discovery
 	}
 }
 
-func (dd *DynamicDiscovery) fillExtraAttributes(service *Service) {
+// fillConfig fills the service config with information found inside the container.
+func (dd *DynamicDiscovery) fillConfig(service *Service) {
 	if service.ServiceType == MySQLService {
 		if service.container != nil {
 			for k, v := range service.container.Environment() {
@@ -522,21 +527,53 @@ func (dd *DynamicDiscovery) fillExtraAttributes(service *Service) {
 	}
 }
 
-func (dd *DynamicDiscovery) fillGenericExtraAttributes(service *Service, di discoveryInfo) {
-	// TODO: I don't know what this is supposed to do.
-	// if service.ExtraAttributes == nil {
-	// 	service.ExtraAttributes = make(map[string]string)
-	// }
+// fillConfigFromLabels look for "glouton.*" labels on containers to override the service configuration.
+func (dd *DynamicDiscovery) fillConfigFromLabels(service *Service) {
+	if service.container == nil {
+		return
+	}
 
-	// if service.container != nil {
-	// 	for k, v := range facts.LabelsAndAnnotations(service.container) {
-	// 		for _, n := range di.ExtraAttributeNames {
-	// 			if "glouton."+n == k {
-	// 				service.ExtraAttributes[n] = v
-	// 			}
-	// 		}
-	// 	}
-	// }
+	// Make a map of container labels and values with the "glouton." prefix trimmed.
+	labels := make(map[string]string)
+	for k, v := range facts.LabelsAndAnnotations(service.container) {
+		if !strings.HasPrefix(k, gloutonContainerLabelPrefix) {
+			continue
+		}
+
+		k = strings.TrimPrefix(k, gloutonContainerLabelPrefix)
+
+		labels[k] = v
+	}
+
+	if len(labels) == 0 {
+		return
+	}
+
+	// Decode the map in the service struct.
+	var override config2.Service
+
+	decoderConfig := &mapstructure.DecoderConfig{
+		DecodeHook: mapstructure.ComposeDecodeHookFunc(
+			mapstructure.StringToSliceHookFunc(","),
+		),
+		Result:           &override,
+		WeaklyTypedInput: true,
+		TagName:          "koanf",
+	}
+
+	d, err := mapstructure.NewDecoder(decoderConfig)
+	if err != nil {
+		logger.V(1).Printf("Failed to create decoder for container labels: %s", err)
+
+		return
+	}
+
+	if err := d.Decode(labels); err != nil {
+		logger.Printf("Labels on container %s could not be decoded: %s", service.ContainerName, err)
+	}
+
+	// Override the current config with the labels from the container.
+	mergo.Merge(&service.Config, override, mergo.WithOverride)
 }
 
 func (dd *DynamicDiscovery) guessJMX(service *Service, cmdLine []string) {
