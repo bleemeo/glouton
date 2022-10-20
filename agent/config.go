@@ -527,7 +527,7 @@ func migrateMetricsPrometheus(cfg *config.Configuration) (warnings []error) {
 			for key, dict := range vMap {
 				if tmp, ok := dict.(map[string]interface{}); ok {
 					if u, ok := tmp["url"].(string); ok {
-						warnings = append(warnings, fmt.Errorf("%w: metrics.prometheus. See https://docs.bleemeo.com/metrics-sources/prometheus", errSettingsDeprecated))
+						warnings = append(warnings, fmt.Errorf("%w: metrics.prometheus. See https://go.bleemeo.com/l/doc-prometheus", errSettingsDeprecated))
 
 						migratedTargets = append(migratedTargets, map[string]interface{}{
 							"url":  u,

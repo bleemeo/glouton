@@ -334,7 +334,7 @@ func Test_loadConfiguration(t *testing.T) { //nolint:maintidx
 				},
 			},
 			warnings: []string{
-				"setting is deprecated: metrics.prometheus. See https://docs.bleemeo.com/metrics-sources/prometheus",
+				"setting is deprecated: metrics.prometheus. See https://go.bleemeo.com/l/doc-prometheus",
 			},
 			wantCfg: defaultConfig,
 		},
