@@ -558,7 +558,7 @@ func (dd *DynamicDiscovery) fillConfigFromLabels(service *Service) {
 		),
 		Result:           &override,
 		WeaklyTypedInput: true,
-		TagName:          "koanf",
+		TagName:          "yaml",
 	}
 
 	d, err := mapstructure.NewDecoder(decoderConfig)

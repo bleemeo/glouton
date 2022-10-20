@@ -5,6 +5,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	bbConf "github.com/prometheus/blackbox_exporter/config"
 )
 
 // TestMerge tests that config files are merged correctly.
@@ -41,6 +42,67 @@ func TestMerge(t *testing.T) {
 
 func TestStructuredConfig(t *testing.T) {
 	expectedConfig := Config{
+		Agent: Agent{
+			CloudImageCreationFile: "cloudimage_creation",
+			FactsFile:              "facts.yaml",
+			HTTPDebug: HTTPDebug{
+				Enable:      true,
+				BindAddress: "localhost:6060",
+			},
+			InstallationFormat: "manual",
+			NetstatFile:        "netstat.out",
+			NodeExporter: NodeExporter{
+				Enable:     true,
+				Collectors: []string{"disk"},
+			},
+			ProcessExporter: ProcessExporter{
+				Enable: true,
+			},
+			PublicIPIndicator: "https://myip.bleemeo.com",
+			StateFile:         "state.json",
+			UpgradeFile:       "upgrade",
+			WindowsExporter: NodeExporter{
+				Enable:     true,
+				Collectors: []string{"cpu"},
+			},
+		},
+		Blackbox: Blackbox{
+			Enable:      true,
+			ScraperName: "name",
+			Targets: []BlackboxTarget{
+				{
+					URL:    "https://bleemeo.com",
+					Module: "mymodule",
+				},
+			},
+			Modules: map[string]bbConf.Module{
+				"mymodule": {
+					Prober: "http",
+					HTTP: bbConf.HTTPProbe{
+						IPProtocol:       "ip4",
+						ValidStatusCodes: []int{200},
+					},
+				},
+			},
+		},
+		Bleemeo: Bleemeo{
+			AccountID:                         "myid",
+			APIBase:                           "https://api.bleemeo.com/",
+			APISSLInsecure:                    true,
+			ContainerRegistrationDelaySeconds: 30,
+			Enable:                            true,
+			InitialAgentName:                  "name1",
+			InitialServerGroupName:            "name2",
+			InitialServerGroupNameForSNMP:     "name3",
+			MQTT: BleemeoMQTT{
+				CAFile:      "/myca",
+				Host:        "mqtt.bleemeo.com",
+				Port:        8883,
+				SSLInsecure: true,
+				SSL:         true,
+			},
+			RegistrationKey: "mykey",
+		},
 		Container: Container{
 			Filter: Filter{
 				AllowByDefault: true,
@@ -64,6 +126,37 @@ func TestStructuredConfig(t *testing.T) {
 			HostMountPoint: "/host-root",
 			PathIgnore:     []string{"/"},
 			IgnoreFSType:   []string{"tmpfs"},
+		},
+		DiskIgnore: []string{"^(ram|loop|fd|(h|s|v|xv)d[a-z]|nvme\\d+n\\d+p)\\d+$"},
+		InfluxDB: InfluxDB{
+			Enable: true,
+			Host:   "localhost",
+			Port:   8086,
+			DBName: "metrics",
+			Tags:   map[string]string{"mytag": "myvalue"},
+		},
+		JMX: JMX{
+			Enable: true,
+		},
+		JMXTrans: JMXTrans{
+			ConfigFile:     "/var/lib/jmxtrans/glouton-generated.json",
+			FilePermission: "0640",
+			GraphitePort:   2004,
+		},
+		Kubernetes: Kubernetes{
+			Enable:     true,
+			NodeName:   "mynode",
+			KubeConfig: "/config",
+		},
+		Logging: Logging{
+			Buffer: LoggingBuffer{
+				HeadSizeBytes: 500000,
+				TailSizeBytes: 500000,
+			},
+			Level:         "INFO",
+			Output:        "console",
+			FileName:      "name",
+			PackageLevels: "bleemeo=1",
 		},
 		Metric: Metric{
 			AllowMetrics:          []string{"allowed"},
@@ -94,7 +187,29 @@ func TestStructuredConfig(t *testing.T) {
 				},
 			},
 		},
+		MQTT: OpenSourceMQTT{
+			Enable:      true,
+			Host:        "localhost",
+			Port:        1883,
+			Username:    "user",
+			Password:    "pass",
+			SSL:         true,
+			SSLInsecure: true,
+			CAFile:      "/myca",
+		},
 		NetworkInterfaceBlacklist: []string{"lo", "veth"},
+		NRPE: NRPE{
+			Enable:    true,
+			Address:   "0.0.0.0",
+			Port:      5666,
+			SSL:       true,
+			ConfPaths: []string{"/etc/nagios/nrpe.cfg"},
+		},
+		NvidiaSMI: NvidiaSMI{
+			Enable:  true,
+			BinPath: "/usr/bin/nvidia-smi",
+			Timeout: 5,
+		},
 		Services: []Service{
 			{
 				ID:                      "service1",
@@ -132,6 +247,36 @@ func TestStructuredConfig(t *testing.T) {
 						TypeNames: []string{"name"},
 					},
 				},
+			},
+		},
+		ServiceIgnoreMetrics: []NameInstance{
+			{
+				Name:     "redis",
+				Instance: "host:*",
+			},
+		},
+		ServiceIgnoreCheck: []NameInstance{
+			{
+				Name:     "postgresql",
+				Instance: "host:* container:*",
+			},
+		},
+		Stack: "mystack",
+		Tags:  []string{"mytag"},
+		Telegraf: Telegraf{
+			DockerMetricsEnable: true,
+			StatsD: StatsD{
+				Enable:  true,
+				Address: "127.0.0.1",
+				Port:    8125,
+			},
+		},
+		Thresholds: map[string]Threshold{
+			"cpu_used": {
+				LowWarning:   2,
+				LowCritical:  1,
+				HighWarning:  80,
+				HighCritical: 90,
 			},
 		},
 		Web: Web{
@@ -296,6 +441,19 @@ func TestWarningsAndErrors(t *testing.T) {
 							},
 						},
 					},
+				},
+			},
+		},
+		{
+			Name: "slice-from-env",
+			Environment: map[string]string{
+				"GLOUTON_METRIC_ALLOW_METRICS": "metric1,metric2",
+				"GLOUTON_METRIC_DENY_METRICS":  "metric3",
+			},
+			WantConfig: Config{
+				Metric: Metric{
+					AllowMetrics: []string{"metric1", "metric2"},
+					DenyMetrics:  []string{"metric3"},
 				},
 			},
 		},

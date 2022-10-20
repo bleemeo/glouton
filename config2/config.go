@@ -41,152 +41,6 @@ var defaultConfigFiles = []string{
 	"C:\\ProgramData\\glouton\\conf.d",
 }
 
-// Config is the structured configuration of the agent.
-type Config struct {
-	Services                  []Service `koanf:"service"`
-	Web                       Web       `koanf:"web"`
-	NetworkInterfaceBlacklist []string  `koanf:"network_interface_blacklist"`
-	DF                        DF        `koanf:"df"`
-	Container                 Container `koanf:"container"`
-	Metric                    Metric    `koanf:"metric"`
-}
-
-type Metric struct {
-	AllowMetrics            []string       `koanf:"allow_metrics"`
-	DenyMetrics             []string       `koanf:"deny_metrics"`
-	IncludeDefaultMetrics   bool           `koanf:"include_default_metrics"`
-	Prometheus              Prometheus     `koanf:"prometheus"`
-	SoftStatusPeriodDefault int            `koanf:"softstatus_period_default"`
-	SoftStatusPeriod        map[string]int `koanf:"softstatus_period"`
-	SNMP                    SNMP           `koanf:"snmp"`
-}
-
-type SNMP struct {
-	// TODO: Not documented.
-	ExporterAddress string       `koanf:"exporter_address"`
-	Targets         []SNMPTarget `koanf:"targets"`
-}
-
-type SNMPTarget struct {
-	InitialName string `koanf:"initial_name"`
-	Target      string `koanf:"target"`
-}
-
-type Prometheus struct {
-	Targets []PrometheusTarget `koanf:"targets"`
-}
-
-type PrometheusTarget struct {
-	URL          string   `koanf:"url"`
-	Name         string   `koanf:"name"`
-	AllowMetrics []string `koanf:"allow_metrics"`
-	DenyMetrics  []string `koanf:"deny_metrics"`
-}
-
-type DF struct {
-	HostMountPoint string   `koanf:"host_mount_point"`
-	PathIgnore     []string `koanf:"path_ignore"`
-	IgnoreFSType   []string `koanf:"ignore_fs_type"`
-}
-
-type Web struct {
-	Enable bool `koanf:"enable"`
-	// TODO: Not documented.
-	LocalUI      LocalUI  `koanf:"local_ui"`
-	Listener     Listener `koanf:"listener"`
-	StaticCDNURL string   `koanf:"static_cdn_url"`
-}
-
-type LocalUI struct {
-	Enable bool `koanf:"enable"`
-}
-
-type Listener struct {
-	Address string `koanf:"address"`
-	Port    int    `koanf:"port"`
-}
-
-type Service struct {
-	// The name of the service.
-	ID string `koanf:"id"`
-	// Instance of the service, used to differentiate between services with the same ID.
-	Instance string `koanf:"instance"`
-	// The port the service is running on.
-	Port int `koanf:"port"`
-	// Ports that should be ignored.
-	IgnorePorts []int `koanf:"ignore_ports"`
-	// The address of the service.
-	Address string `koanf:"address"`
-	// The delay between two consecutive checks in seconds.
-	Interval int `koanf:"interval"`
-	// Check type used for custom checks.
-	CheckType string `koanf:"check_type"`
-	// The path used for HTTP checks.
-	HTTPPath string `koanf:"http_path"`
-	// The expected status code for HTTP checks.
-	HTTPStatusCode int `koanf:"http_status_code"`
-	// Host header sent with HTTP checks.
-	HTTPHost string `koanf:"http_host"`
-	// Regex to match in a process check.
-	MatchProcess string `koanf:"match_process"`
-	// Command used for a Nagios check.
-	CheckCommand string `koanf:"check_command"`
-	// TODO: Not documented.
-	NagiosNRPEName string `koanf:"nagios_nrpe_name"`
-	// Unix socket to connect and gather metric from MySQL.
-	MetricsUnixSocket string `koanf:"metrics_unix_socket"`
-	// Credentials for services that require authentication.
-	Username string `koanf:"username"`
-	Password string `koanf:"password"`
-	// HAProxy and PHP-FMP stats URL.
-	StatsURL string `koanf:"stats_url"`
-	// Port of RabbitMQ management interface.
-	ManagementPort int `koanf:"mgmt_port"`
-	// Detailed monitoring of specific Cassandra tables.
-	CassandraDetailedTables []string `koanf:"cassandra_detailed_tables"`
-	// JMX services.
-	JMXPort     int         `koanf:"jmx_port"`
-	JMXUsername string      `koanf:"jmx_username"`
-	JMXPassword string      `koanf:"jmx_password"`
-	JMXMetrics  []JmxMetric `koanf:"jmx_metrics"`
-}
-
-type JmxMetric struct {
-	Name      string  `koanf:"name"`
-	MBean     string  `koanf:"mbean"`
-	Attribute string  `koanf:"attribute"`
-	Path      string  `koanf:"path"`
-	Scale     float64 `koanf:"scale"`
-	Derive    bool    `koanf:"derive"`
-	// TODO: Not documented.
-	Sum       bool     `koanf:"sum"`
-	TypeNames []string `koanf:"type_names"`
-	Ratio     string   `koanf:"ratio"`
-}
-
-type Container struct {
-	Filter           Filter           `koanf:"filter"`
-	Type             string           `koanf:"type"`
-	PIDNamespaceHost bool             `koanf:"pid_namespace_host"`
-	Runtime          ContainerRuntime `koanf:"runtime"`
-}
-
-type Filter struct {
-	AllowByDefault bool     `koanf:"allow_by_default"`
-	AllowList      []string `koanf:"allow_list"`
-	DenyList       []string `koanf:"deny_list"`
-}
-
-type ContainerRuntime struct {
-	Docker     ContainerRuntimeAddresses `koanf:"docker"`
-	ContainerD ContainerRuntimeAddresses `koanf:"containerd"`
-}
-
-type ContainerRuntimeAddresses struct {
-	Addresses      []string `koanf:"addresses"`
-	PrefixHostRoot bool     `koanf:"prefix_hostroot"`
-}
-
 type Warnings []error
 
 // Load loads the configuration from files and directories to a struct.
@@ -205,9 +59,13 @@ func Load(withDefault bool, paths ...string) (Config, Warnings, error) {
 
 	k, warnings, err := load(withDefault, paths...)
 
+	unmarshalConf := koanf.UnmarshalConf{
+		Tag: "yaml",
+	}
+
 	var config Config
 
-	if warning := k.Unmarshal("", &config); warning != nil {
+	if warning := k.UnmarshalWithConf("", &config, unmarshalConf); warning != nil {
 		warnings = append(warnings, warning)
 	}
 
@@ -253,7 +111,7 @@ func load(withDefault bool, paths ...string) (*koanf.Koanf, Warnings, error) {
 			return err
 		}
 
-		err := k.Load(structsProvider(defaultConfig(), "koanf"), nil, koanf.WithMergeFunc(mergeFunc))
+		err := k.Load(structsProvider(defaultConfig(), "yaml"), nil, koanf.WithMergeFunc(mergeFunc))
 		if err != nil {
 			finalErr = err
 		}
@@ -268,7 +126,7 @@ func load(withDefault bool, paths ...string) (*koanf.Koanf, Warnings, error) {
 func envToKeyFunc() (func(string) string, *Warnings) {
 	// Get all config keys from an empty config.
 	k := koanf.New(delimiter)
-	k.Load(structs.Provider(Config{}, "koanf"), nil)
+	k.Load(structs.Provider(Config{}, "yaml"), nil)
 	allKeys := k.All()
 
 	// Build a map of the environment variables with their corresponding config keys.
