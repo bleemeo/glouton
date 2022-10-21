@@ -399,8 +399,8 @@ func TestDefaultNoFile(t *testing.T) {
 	}
 }
 
-// Test warnings and errors returned when loading the configuration.
-func TestWarningsAndErrors(t *testing.T) {
+// TestLoad tests loadinf the config and the warnings and errors returned.
+func TestLoad(t *testing.T) {
 	tests := []struct {
 		Name         string
 		Files        []string
@@ -441,8 +441,10 @@ func TestWarningsAndErrors(t *testing.T) {
 			},
 			WantConfig: Config{
 				Web: Web{
-					// TODO Bleemeo.AccountID = "my-account"
 					Enable: true,
+				},
+				Bleemeo: Bleemeo{
+					AccountID: "my-account",
 				},
 			},
 		},
@@ -488,6 +490,29 @@ func TestWarningsAndErrors(t *testing.T) {
 					AllowMetrics: []string{"metric1", "metric2"},
 					DenyMetrics:  []string{"metric3"},
 				},
+			},
+		},
+		{
+			Name: "map-from-env",
+			Environment: map[string]string{
+				"GLOUTON_METRIC_SOFTSTATUS_PERIOD": "cpu_used=10,disk_used=20",
+			},
+			WantConfig: Config{
+				Metric: Metric{
+					SoftStatusPeriod: map[string]int{
+						"cpu_used":  10,
+						"disk_used": 20,
+					},
+				},
+			},
+		},
+		{
+			Name: "map-from-env-invalid",
+			Environment: map[string]string{
+				"GLOUTON_METRIC_SOFTSTATUS_PERIOD": "cpu_used=10,disk_used",
+			},
+			WantWarnings: []string{
+				`error decoding 'metric.softstatus_period': could not parse map from string: 'cpu_used=10,disk_used'`,
 			},
 		},
 		// TODO: Migrate test cases.

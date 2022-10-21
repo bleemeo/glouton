@@ -28,6 +28,7 @@ const (
 var (
 	errDeprecatedEnv      = errors.New("environment variable is deprecated")
 	errSettingsDeprecated = errors.New("setting is deprecated")
+	errWrongMapFormat     = errors.New("could not parse map from string")
 	ErrInvalidValue       = errors.New("invalid config value")
 )
 
@@ -69,7 +70,9 @@ func Load(withDefault bool, paths ...string) (Config, Warnings, error) {
 				mapstructure.StringToTimeDurationHookFunc(),
 				mapstructure.StringToSliceHookFunc(","),
 				mapstructure.TextUnmarshallerHookFunc(),
-				BlackboxModuleUnmarshallerHookFunc()),
+				blackboxModuleHookFunc(),
+				stringToMapHookFunc(),
+			),
 			Metadata:         nil,
 			Result:           &config,
 			WeaklyTypedInput: true,

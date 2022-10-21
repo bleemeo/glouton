@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"glouton/bleemeo/internal/cache"
 	bleemeoTypes "glouton/bleemeo/types"
-	"glouton/config"
 	"glouton/config2"
 	"glouton/discovery"
 	"glouton/facts"
@@ -32,6 +31,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/google/uuid"
+	"github.com/imdario/mergo"
 	"github.com/prometheus/prometheus/model/labels"
 )
 
@@ -957,7 +957,7 @@ func (s *stateMock) Get(key string, result interface{}) error {
 type syncTestHelper struct {
 	api        *mockAPI
 	s          *Synchronizer
-	cfg        *config.Configuration
+	cfg        config2.Config
 	facts      *facts.FactProviderMock
 	containers []facts.Container
 	cache      *cache.Cache
@@ -981,7 +981,6 @@ func newHelper(t *testing.T) *syncTestHelper {
 
 	helper := &syncTestHelper{
 		api:   api,
-		cfg:   &config.Configuration{},
 		facts: facts.NewMockFacter(nil),
 		cache: &cache.Cache{},
 		state: newStateMock(),
@@ -994,11 +993,19 @@ func newHelper(t *testing.T) *syncTestHelper {
 
 	helper.httpServer = helper.api.Server()
 
-	helper.cfg.Set("logging.level", "debug")
-	helper.cfg.Set("bleemeo.api_base", helper.httpServer.URL)
-	helper.cfg.Set("bleemeo.account_id", accountID)
-	helper.cfg.Set("bleemeo.registration_key", registrationKey)
-	helper.cfg.Set("blackbox.enable", true)
+	helper.cfg = config2.Config{
+		Logging: config2.Logging{
+			Level: "debug",
+		},
+		Bleemeo: config2.Bleemeo{
+			APIBase:         helper.httpServer.URL,
+			AccountID:       accountID,
+			RegistrationKey: registrationKey,
+		},
+		Blackbox: config2.Blackbox{
+			Enable: true,
+		},
+	}
 
 	helper.facts.SetFact("fqdn", testAgentFQDN)
 
@@ -1867,37 +1874,43 @@ func TestContainerSync(t *testing.T) {
 func TestSyncServerGroup(t *testing.T) {
 	tests := []struct {
 		name                  string
-		cfgSet                map[string]string
+		cfg                   config2.Config
 		wantGroupForMainAgent string
 		wantGroupForSNMPAgent string
 	}{
 		{
 			name:                  "no config",
-			cfgSet:                map[string]string{},
+			cfg:                   config2.Config{},
 			wantGroupForMainAgent: "",
 			wantGroupForSNMPAgent: "",
 		},
 		{
 			name: "both set",
-			cfgSet: map[string]string{
-				"bleemeo.initial_server_group_name":          "group1",
-				"bleemeo.initial_server_group_name_for_snmp": "group2",
+			cfg: config2.Config{
+				Bleemeo: config2.Bleemeo{
+					InitialServerGroupName:        "group1",
+					InitialServerGroupNameForSNMP: "group2",
+				},
 			},
 			wantGroupForMainAgent: "group1",
 			wantGroupForSNMPAgent: "group2",
 		},
 		{
 			name: "only main set",
-			cfgSet: map[string]string{
-				"bleemeo.initial_server_group_name": "group3",
+			cfg: config2.Config{
+				Bleemeo: config2.Bleemeo{
+					InitialServerGroupName: "group3",
+				},
 			},
 			wantGroupForMainAgent: "group3",
 			wantGroupForSNMPAgent: "group3",
 		},
 		{
 			name: "only SNMP set",
-			cfgSet: map[string]string{
-				"bleemeo.initial_server_group_name_for_snmp": "group4",
+			cfg: config2.Config{
+				Bleemeo: config2.Bleemeo{
+					InitialServerGroupNameForSNMP: "group4",
+				},
 			},
 			wantGroupForMainAgent: "",
 			wantGroupForSNMPAgent: "group4",
@@ -1912,9 +1925,7 @@ func TestSyncServerGroup(t *testing.T) {
 			helper := newHelper(t)
 			defer helper.Close()
 
-			for k, v := range tt.cfgSet {
-				helper.cfg.Set(k, v)
-			}
+			mergo.Merge(&helper.cfg, tt.cfg)
 
 			helper.SNMP = []*snmp.Target{
 				snmp.NewMock(config2.SNMPTarget{InitialName: "Z-The-Initial-Name", Target: snmpAddress}, map[string]string{}),

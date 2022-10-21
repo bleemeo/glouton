@@ -174,7 +174,7 @@ func (c *Connector) ApplyCachedConfiguration(ctx context.Context) {
 	_ = c.sync.UpdateAlertingRules()
 	c.sync.UpdateUnitsAndThresholds(ctx, true)
 
-	if c.option.Config.Bool("blackbox.enable") {
+	if c.option.Config.Blackbox.Enable {
 		if err := c.sync.ApplyMonitorUpdate(); err != nil {
 			// we just log the error, as we will try to run the monitors later anyway
 			logger.V(2).Printf("Couldn't start probes now, will retry later: %v", err)
@@ -485,7 +485,7 @@ func (c *Connector) RelabelHook(ctx context.Context, labels map[string]string) (
 func (c *Connector) DiagnosticPage() string {
 	builder := &strings.Builder{}
 
-	registrationKey := []rune(c.option.Config.String("bleemeo.registration_key"))
+	registrationKey := []rune(c.option.Config.Bleemeo.RegistrationKey)
 	for i := range registrationKey {
 		if i >= 6 && i < len(registrationKey)-4 {
 			registrationKey[i] = '*'
@@ -738,7 +738,7 @@ func (c *Connector) AccountID() string {
 		return accountID
 	}
 
-	return c.option.Config.String("bleemeo.account_id")
+	return c.option.Config.Bleemeo.AccountID
 }
 
 // AgentID returns the Agent UUID of Bleemeo

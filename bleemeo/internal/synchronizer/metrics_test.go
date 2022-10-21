@@ -22,7 +22,7 @@ import (
 	"fmt"
 	"glouton/bleemeo/internal/cache"
 	bleemeoTypes "glouton/bleemeo/types"
-	"glouton/config"
+	"glouton/config2"
 	"glouton/discovery"
 	"glouton/facts"
 	"glouton/store"
@@ -589,21 +589,25 @@ func newMetricHelper(t *testing.T) *metricTestHelper {
 		mt:    &mockTime{now: time.Now()},
 		store: store.New(time.Hour, time.Hour),
 	}
-	cfg := &config.Configuration{}
+
 	helper.httpServer = helper.api.Server()
 
 	helper.store.InternalSetNowAndRunOnce(context.Background(), helper.mt.Now)
 
-	if err := cfg.LoadByte([]byte("")); err != nil {
-		panic(err)
+	cfg := config2.Config{
+		Logging: config2.Logging{
+			Level: "debug",
+		},
+		Bleemeo: config2.Bleemeo{
+			APIBase:         helper.httpServer.URL,
+			AccountID:       accountID,
+			RegistrationKey: registrationKey,
+		},
+		Blackbox: config2.Blackbox{
+			Enable:      true,
+			ScraperName: "paris",
+		},
 	}
-
-	cfg.Set("logging.level", "debug")
-	cfg.Set("bleemeo.api_base", helper.httpServer.URL)
-	cfg.Set("bleemeo.account_id", accountID)
-	cfg.Set("bleemeo.registration_key", registrationKey)
-	cfg.Set("blackbox.enable", true)
-	cfg.Set("blackbox.scraper_name", "paris")
 
 	cache := cache.Cache{}
 
@@ -687,7 +691,7 @@ func newMetricHelper(t *testing.T) *metricTestHelper {
 			Store:               helper.store,
 			MetricFormat:        types.MetricFormatBleemeo,
 			SNMPOnlineTarget:    func() int { return 0 },
-			BlackboxScraperName: cfg.String("blackbox.scraper_name"),
+			BlackboxScraperName: cfg.Blackbox.ScraperName,
 			IsContainerEnabled:  facts.ContainerFilter{}.ContainerEnabled,
 			IsMetricAllowed:     func(_ map[string]string) bool { return true },
 		},
