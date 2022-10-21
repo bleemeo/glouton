@@ -206,13 +206,13 @@ func loadPaths(k *koanf.Koanf, paths []string) (Warnings, error) {
 		}
 
 		if stat.IsDir() {
-			warning, err := loadDirectory(k, path)
+			moreWarnings, err := loadDirectory(k, path)
 			if err != nil {
 				finalError = err
 			}
 
-			if warning != nil {
-				warnings = append(warnings, warning)
+			if moreWarnings != nil {
+				warnings = append(warnings, moreWarnings...)
 			}
 
 			if err != nil {
@@ -233,11 +233,13 @@ func loadPaths(k *koanf.Koanf, paths []string) (Warnings, error) {
 	return warnings, finalError
 }
 
-func loadDirectory(k *koanf.Koanf, dirPath string) (warning error, err error) {
+func loadDirectory(k *koanf.Koanf, dirPath string) (Warnings, error) {
 	files, err := os.ReadDir(dirPath)
 	if err != nil {
 		return nil, err
 	}
+
+	var warnings Warnings
 
 	for _, f := range files {
 		if !strings.HasSuffix(f.Name(), ".conf") {
@@ -245,10 +247,14 @@ func loadDirectory(k *koanf.Koanf, dirPath string) (warning error, err error) {
 		}
 
 		path := filepath.Join(dirPath, f.Name())
-		warning = loadFile(k, path)
+
+		warning := loadFile(k, path)
+		if warning != nil {
+			warnings = append(warnings, warning)
+		}
 	}
 
-	return warning, nil
+	return warnings, nil
 }
 
 func loadFile(k *koanf.Koanf, path string) error {
@@ -263,7 +269,7 @@ func loadFile(k *koanf.Koanf, path string) error {
 
 	err := k.Load(file.Provider(path), yamlParser.Parser(), koanf.WithMergeFunc(mergeFunc))
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to load '%s': %w", path, err)
 	}
 
 	return nil

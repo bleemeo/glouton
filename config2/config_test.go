@@ -399,7 +399,7 @@ func TestDefaultNoFile(t *testing.T) {
 	}
 }
 
-// TestLoad tests loadinf the config and the warnings and errors returned.
+// TestLoad tests loading the config and the warnings and errors returned.
 func TestLoad(t *testing.T) {
 	tests := []struct {
 		Name         string
@@ -427,6 +427,21 @@ func TestLoad(t *testing.T) {
 			Files: []string{"testdata/bad_yaml.conf"},
 			WantWarnings: []string{
 				"line 1: cannot unmarshal !!str `bad:bad` into map[string]interface {}",
+			},
+		},
+		{
+			Name:  "invalid-yaml-multiple-files",
+			Files: []string{"testdata/invalid"},
+			WantWarnings: []string{
+				"failed to load 'testdata/invalid/10-invalid.conf': yaml: line 2: found character that cannot start any token",
+			},
+			WantConfig: Config{
+				Agent: Agent{
+					MetricsFormat: "prometheus",
+				},
+				Bleemeo: Bleemeo{
+					APIBase: "base",
+				},
 			},
 		},
 		{
