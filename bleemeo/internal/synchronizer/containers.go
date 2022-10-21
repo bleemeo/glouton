@@ -223,7 +223,7 @@ func (s *Synchronizer) containerRegisterAndUpdate(localContainers []facts.Contai
 }
 
 func (s *Synchronizer) delayedContainerCheck(newDelayedContainer map[string]time.Time, container facts.Container) bool {
-	delay := time.Duration(s.option.Config.Int("bleemeo.container_registration_delay_seconds")) * time.Second
+	delay := time.Duration(s.option.Config.Bleemeo.ContainerRegistrationDelaySeconds) * time.Second
 
 	if s.now().Sub(container.CreatedAt()) < delay {
 		enable, explicit := s.option.IsContainerEnabled(container)

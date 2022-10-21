@@ -30,16 +30,16 @@ func initOSSpecificParts(stop chan<- os.Signal) {
 }
 
 func (a *agent) registerOSSpecificComponents(vethProvider *veth.Provider) {
-	if a.oldConfig.Bool("agent.node_exporter.enable") {
+	if a.config.Agent.NodeExporter.Enable {
 		nodeOption := node.Option{
 			RootFS:            a.hostRootPath,
-			EnabledCollectors: a.oldConfig.StringList("agent.node_exporter.collectors"),
+			EnabledCollectors: a.config.Agent.NodeExporter.Collectors,
 		}
 
-		nodeOption.WithPathIgnore(a.oldConfig.StringList("df.path_ignore"))
-		nodeOption.WithNetworkIgnore(a.oldConfig.StringList("network_interface_blacklist"))
-		nodeOption.WithDiskIgnore(a.oldConfig.StringList("disk_ignore"))
-		nodeOption.WithPathIgnoreFSType(a.oldConfig.StringList("df.ignore_fs_type"))
+		nodeOption.WithPathIgnore(a.config.DF.PathIgnore)
+		nodeOption.WithNetworkIgnore(a.config.NetworkInterfaceBlacklist)
+		nodeOption.WithDiskIgnore(a.config.DiskIgnore)
+		nodeOption.WithPathIgnoreFSType(a.config.DF.IgnoreFSType)
 
 		if err := a.gathererRegistry.AddNodeExporter(nodeOption, vethProvider); err != nil {
 			logger.Printf("Unable to start node_exporter, system metrics will be missing: %v", err)

@@ -182,8 +182,8 @@ func New(option Option, first bool) *Client {
 
 	if pahoWrapper == nil {
 		pahoWrapper = NewPahoWrapper(PahoWrapperOptions{
-			UpgradeFile:     client.option.Config.String("agent.upgrade_file"),
-			AutoUpgradeFile: client.option.Config.String("agent.auto_upgrade_file"),
+			UpgradeFile:     client.option.Config.Agent.UpgradeFile,
+			AutoUpgradeFile: client.option.Config.Agent.AutoUpgradeFile,
 			AgentID:         client.option.AgentID,
 		})
 
@@ -289,8 +289,8 @@ func (c *Client) Run(ctx context.Context) error {
 func (c *Client) DiagnosticPage() string {
 	builder := &strings.Builder{}
 
-	host := c.option.Config.String("bleemeo.mqtt.host")
-	port := c.option.Config.Int("bleemeo.mqtt.port")
+	host := c.option.Config.Bleemeo.MQTT.Host
+	port := c.option.Config.Bleemeo.MQTT.Port
 
 	builder.WriteString(common.DiagnosticTCP(host, port, c.tlsConfig()))
 
@@ -423,9 +423,9 @@ func (c *Client) setupMQTT(ctx context.Context) (paho.Client, error) {
 		false,
 	)
 
-	brokerURL := fmt.Sprintf("%s:%d", c.option.Config.String("bleemeo.mqtt.host"), c.option.Config.Int("bleemeo.mqtt.port"))
+	brokerURL := fmt.Sprintf("%s:%d", c.option.Config.Bleemeo.MQTT.Host, c.option.Config.Bleemeo.MQTT.Port)
 
-	if c.option.Config.Bool("bleemeo.mqtt.ssl") {
+	if c.option.Config.Bleemeo.MQTT.SSL {
 		tlsConfig := c.tlsConfig()
 
 		pahoOptions.SetTLSConfig(tlsConfig)
@@ -454,13 +454,13 @@ func (c *Client) setupMQTT(ctx context.Context) (paho.Client, error) {
 }
 
 func (c *Client) tlsConfig() *tls.Config {
-	if !c.option.Config.Bool("bleemeo.mqtt.ssl") {
+	if !c.option.Config.Bleemeo.MQTT.SSL {
 		return nil
 	}
 
 	tlsConfig := &tls.Config{MinVersion: tls.VersionTLS12}
 
-	caFile := c.option.Config.String("bleemeo.mqtt.cafile")
+	caFile := c.option.Config.Bleemeo.MQTT.CAFile
 	if caFile != "" {
 		if rootCAs, err := loadRootCAs(caFile); err != nil {
 			logger.Printf("Unable to load CAs from %#v", caFile)
@@ -469,7 +469,7 @@ func (c *Client) tlsConfig() *tls.Config {
 		}
 	}
 
-	if c.option.Config.Bool("bleemeo.mqtt.ssl_insecure") {
+	if c.option.Config.Bleemeo.MQTT.SSLInsecure {
 		tlsConfig.InsecureSkipVerify = true
 	}
 

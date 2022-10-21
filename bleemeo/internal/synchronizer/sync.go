@@ -31,6 +31,7 @@ import (
 	"glouton/logger"
 	"glouton/threshold"
 	"glouton/types"
+	"glouton/version"
 	"math/big"
 	"net/http"
 	"net/url"
@@ -327,7 +328,7 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 					fqdnMessage,
 				)
 			case client.IsAuthError(err):
-				registrationKey := []rune(s.option.Config.String("bleemeo.registration_key"))
+				registrationKey := []rune(s.option.Config.Bleemeo.RegistrationKey)
 				for i := range registrationKey {
 					if i >= 6 && i < len(registrationKey)-4 {
 						registrationKey[i] = '*'
@@ -336,7 +337,7 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 
 				logger.Printf(
 					"Wrong credential for registration. Configuration contains account_id %s and registration_key %s",
-					s.option.Config.String("bleemeo.account_id"),
+					s.option.Config.Bleemeo.AccountID,
 					string(registrationKey),
 				)
 			default:
@@ -369,16 +370,16 @@ func (s *Synchronizer) DiagnosticPage() string {
 
 	port := 80
 
-	u, err := url.Parse(s.option.Config.String("bleemeo.api_base"))
+	u, err := url.Parse(s.option.Config.Bleemeo.APIBase)
 	if err != nil {
-		fmt.Fprintf(builder, "Bad URL %#v: %v\n", s.option.Config.String("bleemeo.api_base"), err)
+		fmt.Fprintf(builder, "Bad URL %#v: %v\n", s.option.Config.Bleemeo.APIBase, err)
 
 		return builder.String()
 	}
 
 	if u.Scheme == "https" {
 		tlsConfig = &tls.Config{
-			InsecureSkipVerify: s.option.Config.Bool("bleemeo.api_ssl_insecure"), //nolint:gosec
+			InsecureSkipVerify: s.option.Config.Bleemeo.APISSLInsecure, //nolint:gosec
 		}
 		port = 443
 	}
@@ -399,7 +400,7 @@ func (s *Synchronizer) DiagnosticPage() string {
 	if u.Port() != "" {
 		tmp, err := strconv.ParseInt(u.Port(), 10, 0)
 		if err != nil {
-			fmt.Fprintf(builder, "Bad URL %#v, invalid port: %v\n", s.option.Config.String("bleemeo.api_base"), err)
+			fmt.Fprintf(builder, "Bad URL %#v, invalid port: %v\n", s.option.Config.Bleemeo.APIBase, err)
 
 			return builder.String()
 		}
@@ -609,10 +610,10 @@ func (s *Synchronizer) setClient() error {
 	_, password := s.option.State.BleemeoCredentials()
 
 	client, err := client.NewClient(
-		s.option.Config.String("bleemeo.api_base"),
+		s.option.Config.Bleemeo.APIBase,
 		username,
 		password,
-		s.option.Config.Bool("bleemeo.api_ssl_insecure"),
+		s.option.Config.Bleemeo.APISSLInsecure,
 		s.option.ReloadState,
 	)
 	if err != nil {
@@ -944,13 +945,13 @@ func (s *Synchronizer) register(ctx context.Context) error {
 		return errFQDNNotSet
 	}
 
-	name := s.option.Config.String("bleemeo.initial_agent_name")
+	name := s.option.Config.Bleemeo.InitialAgentName
 	if name == "" {
 		name = fqdn
 	}
 
-	accountID := s.option.Config.String("bleemeo.account_id")
-	registrationKey := s.option.Config.String("bleemeo.registration_key")
+	accountID := s.option.Config.Bleemeo.AccountID
+	registrationKey := s.option.Config.Bleemeo.RegistrationKey
 
 	for accountID == "" || registrationKey == "" {
 		return errBleemeoUndefined
@@ -976,7 +977,7 @@ func (s *Synchronizer) register(ctx context.Context) error {
 		map[string]string{
 			"account":                   accountID,
 			"initial_password":          password,
-			"initial_server_group_name": s.option.Config.String("bleemeo.initial_server_group_name"),
+			"initial_server_group_name": s.option.Config.Bleemeo.InitialServerGroupName,
 			"display_name":              name,
 			"fqdn":                      fqdn,
 		},
@@ -994,12 +995,10 @@ func (s *Synchronizer) register(ctx context.Context) error {
 
 	s.agentID = objectID.ID
 
-	version := s.option.Config.String("bleemeo.glouton_version")
-
 	sentry.ConfigureScope(func(scope *sentry.Scope) {
 		scope.SetContext("agent", map[string]interface{}{
 			"agent_id":        s.agentID,
-			"glouton_version": version,
+			"glouton_version": version.Version,
 		})
 	})
 

@@ -94,6 +94,7 @@ func TestStructuredConfig(t *testing.T) {
 					HTTP: bbConf.HTTPProbe{
 						IPProtocol:       "ip4",
 						ValidStatusCodes: []int{200},
+						FailIfSSL:        true,
 					},
 				},
 			},
@@ -481,6 +482,199 @@ func TestWarningsAndErrors(t *testing.T) {
 				},
 			},
 		},
+		// TODO: Migrate test cases.
+		// {
+		// 	name: "enabled renamed",
+		// 	configFiles: []string{
+		// 		"testdata/enabled.conf",
+		// 	},
+		// 	absentKeys: []string{"agent.windows_exporter.enabled", "telegraf.docker_metrics_enabled", "web.enabled"},
+		// 	wantKeys: map[string]interface{}{
+		// 		"agent.windows_exporter.enable":  true,
+		// 		"telegraf.docker_metrics_enable": true,
+		// 	},
+		// 	warnings: []string{
+		// 		"setting is deprecated: agent.windows_exporter.enabled. Please use agent.windows_exporter.enable",
+		// 		"setting is deprecated: telegraf.docker_metrics_enabled. Please use telegraf.docker_metrics_enable",
+		// 	},
+		// 	wantCfg: Config{
+		// 		SNMP: SNMP{ExporterURL: URLMustParse("http://localhost:9116/snmp")},
+		// 		Container: Container{
+		// 			Runtime: ContainerRuntime{
+		// 				Docker: ContainerRuntimeAddresses{
+		// 					Addresses: []string{
+		// 						"",
+		// 						"unix:///run/docker.sock",
+		// 						"unix:///var/run/docker.sock",
+		// 					},
+		// 					DisablePrefixHostRoot: false,
+		// 				},
+		// 				ContainerD: ContainerRuntimeAddresses{
+		// 					Addresses: []string{
+		// 						"/run/containerd/containerd.sock",
+		// 						"/run/k3s/containerd/containerd.sock",
+		// 					},
+		// 					DisablePrefixHostRoot: false,
+		// 				},
+		// 			},
+		// 		},
+		// 	},
+		// },
+		// {
+		// 	name: "folder",
+		// 	configFiles: []string{
+		// 		"testdata/folder1",
+		// 	},
+		// 	absentKeys: []string{"bleemeo.enabled"},
+		// 	wantKeys: map[string]interface{}{
+		// 		"bleemeo.enable":     false,
+		// 		"bleemeo.account_id": "second",
+		// 	},
+		// 	warnings: []string{
+		// 		"setting is deprecated: bleemeo.enabled. Please use bleemeo.enable",
+		// 	},
+		// 	wantCfg: Config{
+		// 		SNMP: SNMP{ExporterURL: URLMustParse("http://localhost:9116/snmp")},
+		// 		Container: Container{
+		// 			Runtime: ContainerRuntime{
+		// 				Docker: ContainerRuntimeAddresses{
+		// 					Addresses: []string{
+		// 						"",
+		// 						"unix:///run/docker.sock",
+		// 						"unix:///var/run/docker.sock",
+		// 					},
+		// 					DisablePrefixHostRoot: false,
+		// 				},
+		// 				ContainerD: ContainerRuntimeAddresses{
+		// 					Addresses: []string{
+		// 						"/run/containerd/containerd.sock",
+		// 						"/run/k3s/containerd/containerd.sock",
+		// 					},
+		// 					DisablePrefixHostRoot: false,
+		// 				},
+		// 			},
+		// 		},
+		// 	},
+		// },
+		// {
+		// 	name: "deprecated envs",
+		// 	configFiles: []string{
+		// 		"testdata/empty.conf",
+		// 	},
+		// 	envs: map[string]string{
+		// 		"BLEEMEO_AGENT_ACCOUNT":      "the-account-id",
+		// 		"GLOUTON_KUBERNETES_ENABLED": "true",
+		// 	},
+		// 	absentKeys: []string{"kubernetes.enabled"},
+		// 	wantKeys: map[string]interface{}{
+		// 		"bleemeo.account_id": "the-account-id",
+		// 		"kubernetes.enable":  true,
+		// 	},
+		// 	warnings: []string{
+		// 		"environment variable is deprecated: BLEEMEO_AGENT_ACCOUNT, use GLOUTON_BLEEMEO_ACCOUNT_ID instead",
+		// 		"environment variable is deprecated: GLOUTON_KUBERNETES_ENABLED, use GLOUTON_KUBERNETES_ENABLE instead",
+		// 	},
+		// 	wantCfg: Config{
+		// 		SNMP: SNMP{ExporterURL: URLMustParse("http://localhost:9116/snmp")},
+		// 		Container: Container{
+		// 			Runtime: ContainerRuntime{
+		// 				Docker: ContainerRuntimeAddresses{
+		// 					Addresses: []string{
+		// 						"",
+		// 						"unix:///run/docker.sock",
+		// 						"unix:///var/run/docker.sock",
+		// 					},
+		// 					DisablePrefixHostRoot: false,
+		// 				},
+		// 				ContainerD: ContainerRuntimeAddresses{
+		// 					Addresses: []string{
+		// 						"/run/containerd/containerd.sock",
+		// 						"/run/k3s/containerd/containerd.sock",
+		// 					},
+		// 					DisablePrefixHostRoot: false,
+		// 				},
+		// 			},
+		// 		},
+		// 	},
+		// },
+		// {
+		// 	name: "bleemeo-agent envs",
+		// 	configFiles: []string{
+		// 		"testdata/empty.conf",
+		// 	},
+		// 	envs: map[string]string{
+		// 		"BLEEMEO_AGENT_KUBERNETES_ENABLE": "true",
+		// 		"BLEEMEO_AGENT_BLEEMEO_ENABLED":   "true",
+		// 	},
+		// 	absentKeys: []string{"kubernetes.enabled", "bleemeo.enabled"},
+		// 	wantKeys: map[string]interface{}{
+		// 		"bleemeo.enable":    true,
+		// 		"kubernetes.enable": true,
+		// 	},
+		// 	warnings: []string{
+		// 		"environment variable is deprecated: BLEEMEO_AGENT_KUBERNETES_ENABLE, use GLOUTON_KUBERNETES_ENABLE instead",
+		// 		"environment variable is deprecated: BLEEMEO_AGENT_BLEEMEO_ENABLED, use GLOUTON_BLEEMEO_ENABLE instead",
+		// 	},
+		// 	wantCfg: Config{
+		// 		SNMP: SNMP{ExporterURL: URLMustParse("http://localhost:9116/snmp")},
+		// 		Container: Container{
+		// 			Runtime: ContainerRuntime{
+		// 				Docker: ContainerRuntimeAddresses{
+		// 					Addresses: []string{
+		// 						"",
+		// 						"unix:///run/docker.sock",
+		// 						"unix:///var/run/docker.sock",
+		// 					},
+		// 					DisablePrefixHostRoot: false,
+		// 				},
+		// 				ContainerD: ContainerRuntimeAddresses{
+		// 					Addresses: []string{
+		// 						"/run/containerd/containerd.sock",
+		// 						"/run/k3s/containerd/containerd.sock",
+		// 					},
+		// 					DisablePrefixHostRoot: false,
+		// 				},
+		// 			},
+		// 		},
+		// 	},
+		// },
+		// {
+		// 	name: "old-logging",
+		// 	configFiles: []string{
+		// 		"testdata/old-logging.conf",
+		// 	},
+		// 	wantKeys: map[string]interface{}{
+		// 		"logging.buffer.head_size_bytes": 4200,
+		// 		"logging.buffer.tail_size_bytes": 4800,
+		// 	},
+		// 	absentKeys: []string{"logging.buffer.head_size", "logging.buffer.tail_size"},
+		// 	warnings: []string{
+		// 		"setting is deprecated: logging.buffer.head_size. Please use logging.buffer.head_size_bytes",
+		// 		"setting is deprecated: logging.buffer.tail_size. Please use logging.buffer.tail_size_bytes",
+		// 	},
+		// 	wantCfg: Config{
+		// 		SNMP: SNMP{ExporterURL: URLMustParse("http://localhost:9116/snmp")},
+		// 		Container: Container{
+		// 			Runtime: ContainerRuntime{
+		// 				Docker: ContainerRuntimeAddresses{
+		// 					Addresses: []string{
+		// 						"",
+		// 						"unix:///run/docker.sock",
+		// 						"unix:///var/run/docker.sock",
+		// 					},
+		// 					DisablePrefixHostRoot: false,
+		// 				},
+		// 				ContainerD: ContainerRuntimeAddresses{
+		// 					Addresses: []string{
+		// 						"/run/containerd/containerd.sock",
+		// 						"/run/k3s/containerd/containerd.sock",
+		// 					},
+		// 					DisablePrefixHostRoot: false,
+		// 				},
+		// 			},
+		// 		},
+		// 	},
+		// },
 	}
 
 	for _, test := range tests {

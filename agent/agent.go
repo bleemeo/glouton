@@ -27,7 +27,6 @@ import (
 	"glouton/api"
 	"glouton/bleemeo"
 	"glouton/collector"
-	"glouton/config"
 	"glouton/config2"
 	"glouton/debouncer"
 	"glouton/delay"
@@ -104,7 +103,6 @@ var errUnsupportedKey = errors.New("Unsupported item key") //nolint:stylecheck
 
 type agent struct {
 	taskRegistry *task.Registry
-	oldConfig    *config.Configuration
 	config       config2.Config
 	state        *state.State
 	cancel       context.CancelFunc
@@ -178,13 +176,12 @@ func (a *agent) init(ctx context.Context, configFiles []string, firstRun bool) (
 	a.taskRegistry = task.NewRegistry(ctx)
 	a.taskIDs = make(map[string]int)
 
-	cfg, oldCfg, warnings, err := loadConfiguration(configFiles, nil)
+	cfg, warnings, err := loadConfiguration(configFiles, nil)
 
 	if warnings != nil {
 		a.addWarnings(warnings...)
 	}
 
-	a.oldConfig = oldCfg
 	a.config = cfg
 
 	a.setupLogger()
@@ -963,7 +960,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		}
 
 		connector, err := bleemeo.New(bleemeoTypes.GlobalOption{
-			Config:                  a.oldConfig,
+			Config:                  a.config,
 			State:                   a.state,
 			Facts:                   a.factProvider,
 			Process:                 psFact,

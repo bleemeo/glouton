@@ -460,9 +460,7 @@ func loadEnvironmentVariable(cfg *config.Configuration, key string, envName stri
 	return found, nil
 }
 
-func loadConfiguration(configFiles []string, mockLookupEnv func(string) (string, bool)) (cfg config2.Config, oldCfg *config.Configuration, warnings []error, finalError error) {
-	oldCfg, warnings, finalError = loadOldConfiguration(configFiles, mockLookupEnv)
-
+func loadConfiguration(configFiles []string, mockLookupEnv func(string) (string, bool)) (cfg config2.Config, warnings []error, finalError error) {
 	cfg, moreWarnings, err := config2.Load(true, configFiles...)
 	if err != nil {
 		finalError = err
@@ -470,7 +468,7 @@ func loadConfiguration(configFiles []string, mockLookupEnv func(string) (string,
 
 	warnings = append(warnings, moreWarnings...)
 
-	return cfg, oldCfg, warnings, finalError
+	return cfg, warnings, finalError
 }
 
 func loadOldConfiguration(configFiles []string, mockLookupEnv func(string) (string, bool)) (cfg *config.Configuration, warnings []error, finalError error) {

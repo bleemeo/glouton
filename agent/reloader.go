@@ -7,6 +7,7 @@ import (
 	"glouton/bleemeo"
 	bleemeoTypes "glouton/bleemeo/types"
 	"glouton/config"
+	"glouton/config2"
 	"glouton/debouncer"
 	"glouton/logger"
 	"glouton/types"
@@ -293,12 +294,11 @@ func (a *agentReloader) watchConfig(ctx context.Context, reload chan struct{}) {
 	// Use a debouncer because fsnotify events are often duplicated.
 	reloadAgentTarget := func(ctx context.Context) {
 		if ctx.Err() == nil {
-			// TODO
 			// Validate config before reloading.
-			if _, _, _, err := loadConfiguration(configFiles, nil); err == nil {
+			if _, _, err := config2.Load(true, configFiles...); err == nil {
 				reload <- struct{}{}
 			} else {
-				logger.Printf("Error while loading configuration: %v", err)
+				logger.Printf("Error while loading configuration, keeping previous configuration: %v", err)
 			}
 		}
 	}

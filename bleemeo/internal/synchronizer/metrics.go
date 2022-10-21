@@ -614,8 +614,12 @@ func (s *Synchronizer) metricUpdatePendingOrSync(fullSync bool, pendingMetricsUp
 func (s *Synchronizer) UpdateUnitsAndThresholds(ctx context.Context, firstUpdate bool) {
 	thresholds := make(map[string]threshold.Threshold)
 	units := make(map[string]threshold.Unit)
-	defaultSoftPeriod := time.Duration(s.option.Config.Int("metric.softstatus_period_default")) * time.Second
-	softPeriods := s.option.Config.DurationMap("metric.softstatus_period")
+	defaultSoftPeriod := time.Duration(s.option.Config.Metric.SoftStatusPeriodDefault) * time.Second
+
+	softPeriods := make(map[string]time.Duration, len(s.option.Config.Metric.SoftStatusPeriod))
+	for metric, period := range s.option.Config.Metric.SoftStatusPeriod {
+		softPeriods[metric] = time.Duration(period) * time.Second
+	}
 
 	s.l.Lock()
 	thresholdOverrides := s.thresholdOverrides

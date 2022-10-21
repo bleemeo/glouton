@@ -17,7 +17,7 @@
 package blackbox
 
 import (
-	gloutonConfig "glouton/config"
+	"glouton/config2"
 	"glouton/prometheus/registry"
 	"glouton/types"
 	"reflect"
@@ -27,50 +27,22 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	bbConf "github.com/prometheus/blackbox_exporter/config"
-	"github.com/prometheus/common/config"
+	promConfig "github.com/prometheus/common/config"
 )
 
 func TestConfigParsing(t *testing.T) {
-	cfg := &gloutonConfig.Configuration{}
-
-	conf := `
-    blackbox:
-      targets:
-        - {url: "https://google.com", module: "http_2xx"}
-        - {url: "inpt.fr", module: "dns", timeout: 5}
-        - url: "http://neverssl.com"
-          module: "http_2xx"
-          timeout: 2
-      modules:
-        http_2xx:
-          prober: http
-          timeout: 5s
-          http:
-            valid_http_versions: ["HTTP/1.1", "HTTP/2.0"]
-            valid_status_codes: []  # Defaults to 2xx
-            method: GET
-            no_follow_redirects: true
-            preferred_ip_protocol: "ip4" # defaults to "ip6"
-            ip_protocol_fallback: false  # no fallback to "ip6"
-        dns:
-          prober: dns
-          dns:
-            preferred_ip_protocol: "ip4"
-            query_name: "nightmared.fr"
-            query_type: "A"`
-
-	if err := cfg.LoadByte([]byte(conf)); err != nil {
+	config, warnings, err := config2.Load(false, "testdata/blackbox.conf")
+	if err != nil {
 		t.Fatal(err)
 	}
 
-	blackboxConf, present := cfg.Get("blackbox")
-	if !present {
-		t.Fatalf("Couldn't parse the yaml configuration")
+	if warnings != nil {
+		t.Fatalf("Got warnings loading config: %v", warnings)
 	}
 
 	registry := &registry.Registry{}
 
-	bbManager, err := New(registry, blackboxConf, "dummy-user-agent", types.MetricFormatPrometheus)
+	bbManager, err := New(registry, config.Blackbox, types.MetricFormatPrometheus)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -94,13 +66,10 @@ func TestConfigParsing(t *testing.T) {
 					Headers: map[string]string{
 						"User-Agent": "dummy-user-agent",
 					},
-					HTTPClientConfig: config.HTTPClientConfig{
-						EnableHTTP2: true,
-					},
 				},
-				DNS:  bbConf.DefaultDNSProbe,
-				ICMP: bbConf.DefaultICMPProbe,
-				TCP:  bbConf.DefaultTCPProbe,
+				DNS:  bbConf.DNSProbe{},
+				ICMP: bbConf.ICMPProbe{},
+				TCP:  bbConf.TCPProbe{},
 			},
 			ModuleName: "http_2xx",
 			Name:       "https://google.com",
@@ -119,9 +88,9 @@ func TestConfigParsing(t *testing.T) {
 					IPProtocolFallback: true,
 					Recursion:          true,
 				},
-				HTTP: bbConf.DefaultHTTPProbe,
-				ICMP: bbConf.DefaultICMPProbe,
-				TCP:  bbConf.DefaultTCPProbe,
+				HTTP: bbConf.HTTPProbe{},
+				ICMP: bbConf.ICMPProbe{},
+				TCP:  bbConf.TCPProbe{},
 			},
 			ModuleName: "dns",
 			Name:       "inpt.fr",
@@ -142,13 +111,13 @@ func TestConfigParsing(t *testing.T) {
 					Headers: map[string]string{
 						"User-Agent": "dummy-user-agent",
 					},
-					HTTPClientConfig: config.HTTPClientConfig{
+					HTTPClientConfig: promConfig.HTTPClientConfig{
 						EnableHTTP2: true,
 					},
 				},
-				DNS:  bbConf.DefaultDNSProbe,
-				ICMP: bbConf.DefaultICMPProbe,
-				TCP:  bbConf.DefaultTCPProbe,
+				DNS:  bbConf.DNSProbe{},
+				ICMP: bbConf.ICMPProbe{},
+				TCP:  bbConf.TCPProbe{},
 			},
 			ModuleName: "http_2xx",
 			Name:       "http://neverssl.com",
@@ -162,26 +131,16 @@ func TestConfigParsing(t *testing.T) {
 }
 
 func TestNoTargetsConfigParsing(t *testing.T) {
-	cfg := &gloutonConfig.Configuration{}
-
-	conf := `
-    blackbox:
-      modules:
-        http_2xx:
-          prober: http
-          http:
-            valid_http_versions: ["HTTP/1.1", "HTTP/2.0"]`
-
-	if err := cfg.LoadByte([]byte(conf)); err != nil {
+	config, warnings, err := config2.Load(false, "testdata/no-target.conf")
+	if err != nil {
 		t.Fatal(err)
 	}
 
-	blackboxConf, present := cfg.Get("blackbox")
-	if !present {
-		t.Fatalf("Couldn't parse the yaml configuration")
+	if warnings != nil {
+		t.Fatalf("Got warnings loading config: %v", warnings)
 	}
 
-	bbManager, err := New(nil, blackboxConf, "dummy-user-agent", types.MetricFormatPrometheus)
+	bbManager, err := New(nil, config.Blackbox, types.MetricFormatPrometheus)
 	if err != nil {
 		t.Fatal(err)
 	}

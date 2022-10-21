@@ -669,3 +669,105 @@ func Test_usePreviousNetstat(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateServices(t *testing.T) {
+	services := []config2.Service{
+		{
+			ID:       "apache",
+			Instance: "",
+			Port:     80,
+			Address:  "127.0.0.1",
+			HTTPPath: "/",
+			HTTPHost: "127.0.0.1:80",
+		},
+		{
+			ID:       "apache",
+			Instance: "CONTAINER_NAME",
+			Port:     80,
+			Address:  "127.17.0.2",
+			HTTPPath: "/",
+			HTTPHost: "127.0.0.1:80",
+		},
+		{
+			CheckType:    "nagios",
+			CheckCommand: "azerty",
+		},
+		{
+			ID:           "myapplication",
+			Port:         80,
+			CheckType:    "nagios",
+			CheckCommand: "command-to-run",
+		},
+		{
+			ID:           " not fixable@",
+			CheckType:    "nagios",
+			CheckCommand: "azerty",
+		},
+		{
+			ID:        "custom_webserver",
+			Port:      8181,
+			CheckType: "http",
+		},
+		{
+			ID:           "custom-bad.name",
+			CheckType:    "nagios",
+			CheckCommand: "azerty",
+		},
+	}
+
+	wantWarnings := []string{
+		"invalid config value: a key \"id\" is missing in one of your service override",
+		"invalid config value: service id \" not fixable@\" can only contains letters, digits and underscore",
+		"invalid config value: service id \"custom-bad.name\" can not contains dot (.) or dash (-). Changed to \"custom_bad_name\"",
+	}
+
+	wantServices := []config2.Service{
+		{
+			ID:       "apache",
+			Instance: "",
+			Port:     80,
+			Address:  "127.0.0.1",
+			HTTPPath: "/",
+			HTTPHost: "127.0.0.1:80",
+		},
+		{
+			ID:       "apache",
+			Instance: "CONTAINER_NAME",
+			Port:     80,
+			Address:  "127.17.0.2",
+			HTTPPath: "/",
+			HTTPHost: "127.0.0.1:80",
+		},
+		{
+			ID:           "myapplication",
+			Port:         80,
+			CheckType:    "nagios",
+			CheckCommand: "command-to-run",
+		},
+		{
+			ID:        "custom_webserver",
+			Port:      8181,
+			CheckType: "http",
+		},
+		{
+			ID:           "custom_bad_name",
+			CheckType:    "nagios",
+			CheckCommand: "azerty",
+		},
+	}
+
+	gotServices, gotWarnings := validateServices(services)
+
+	if diff := cmp.Diff(gotServices, wantServices); diff != "" {
+		t.Fatalf("Validate returned unexpected services:\n%s", diff)
+	}
+
+	gotWarningsStr := make([]string, 0, len(gotWarnings))
+	for _, warning := range gotWarnings {
+		gotWarningsStr = append(gotWarningsStr, warning.Error())
+	}
+
+	if diff := cmp.Diff(gotWarningsStr, wantWarnings); diff != "" {
+		t.Fatalf("Validate returned unexpected warnings:\n%s", diff)
+	}
+}

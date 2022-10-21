@@ -18,6 +18,7 @@ package types
 
 import (
 	"context"
+	"glouton/config2"
 	"glouton/discovery"
 	"glouton/facts"
 	"glouton/prometheus/exporter/snmp"
@@ -31,7 +32,7 @@ import (
 
 // GlobalOption are option user by most component of bleemeo.Connector.
 type GlobalOption struct {
-	Config                  Config
+	Config                  config2.Config
 	State                   State
 	Facts                   FactProvider
 	Process                 ProcessProvider

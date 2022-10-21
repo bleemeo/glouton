@@ -144,9 +144,9 @@ func (s *Synchronizer) snmpRegisterAndUpdate(localTargets []*snmp.Target) error 
 			fqdn = snmp.Address()
 		}
 
-		serverGroup := s.option.Config.String("bleemeo.initial_server_group_name_for_snmp")
+		serverGroup := s.option.Config.Bleemeo.InitialServerGroupNameForSNMP
 		if serverGroup == "" {
-			serverGroup = s.option.Config.String("bleemeo.initial_server_group_name")
+			serverGroup = s.option.Config.Bleemeo.InitialServerGroupName
 		}
 
 		payload := payloadAgent{
