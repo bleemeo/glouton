@@ -125,8 +125,8 @@ func (s *State) IsEmpty() bool {
 	return len(s.cache) == 0
 }
 
-// KeptOnlyPersistent will delete everything from state but persistent information.
-func (s *State) KeptOnlyPersistent() {
+// KeepOnlyPersistent will delete everything from state but persistent information.
+func (s *State) KeepOnlyPersistent() {
 	s.l.Lock()
 	defer s.l.Unlock()
 

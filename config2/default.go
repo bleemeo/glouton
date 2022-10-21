@@ -1,6 +1,6 @@
 package config2
 
-func defaultConfig() Config {
+func DefaultConfig() Config {
 	return Config{
 		Container: Container{
 			PIDNamespaceHost: false,

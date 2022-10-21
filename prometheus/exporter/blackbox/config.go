@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"glouton/config2"
 	"glouton/logger"
 	"glouton/prometheus/registry"
 	"glouton/types"
@@ -30,7 +31,6 @@ import (
 
 	bbConf "github.com/prometheus/blackbox_exporter/config"
 	"github.com/prometheus/common/config"
-	"gopkg.in/yaml.v3"
 )
 
 var errUnknownModule = errors.New("unknown blackbox module found in your configuration")
@@ -236,67 +236,49 @@ func setUserAgent(modules map[string]bbConf.Module, userAgent string) {
 // This completely resets the configuration.
 func New(
 	registry *registry.Registry,
-	externalConf interface{},
-	userAgent string,
+	config config2.Blackbox,
 	metricFormat types.MetricFormat,
 ) (*RegisterManager, error) {
-	conf := yamlConfig{}
+	setUserAgent(config.Modules, config.UserAgent)
 
-	// read static config
-	// the conf cannot be missing here as it have been checked prior to calling InitConfig()
-	marshalled, err := yaml.Marshal(externalConf)
-	if err != nil {
-		logger.V(1).Printf("blackbox_exporter: Couldn't marshal blackbox_exporter configuration")
-
-		return nil, err
-	}
-
-	if err = yaml.Unmarshal(marshalled, &conf); err != nil {
-		logger.V(1).Printf("blackbox_exporter: Cannot parse blackbox_exporter config: %v", err)
-
-		return nil, err
-	}
-
-	setUserAgent(conf.Modules, userAgent)
-
-	for idx, v := range conf.Modules {
+	for idx, v := range config.Modules {
 		// override user timeouts when too high or undefined. This is important !
 		if v.Timeout > maxTimeout || v.Timeout == 0 {
 			v.Timeout = maxTimeout
-			conf.Modules[idx] = v
+			config.Modules[idx] = v
 		}
 	}
 
-	targets := make([]collectorWithLabels, 0, len(conf.Targets))
+	targets := make([]collectorWithLabels, 0, len(config.Targets))
 
-	for idx := range conf.Targets {
-		if conf.Targets[idx].Name == "" {
-			conf.Targets[idx].Name = conf.Targets[idx].URL
+	for idx := range config.Targets {
+		if config.Targets[idx].Name == "" {
+			config.Targets[idx].Name = config.Targets[idx].URL
 		}
 
-		module, present := conf.Modules[conf.Targets[idx].ModuleName]
+		module, present := config.Modules[config.Targets[idx].Module]
 		// if the module is unknown, add it to the list
 		if !present {
 			return nil, fmt.Errorf("%w for %s (module '%v'). "+
-				"This is a probably bug, please contact us", errUnknownModule, conf.Targets[idx].Name, conf.Targets[idx].ModuleName)
+				"This is a probably bug, please contact us", errUnknownModule, config.Targets[idx].Name, config.Targets[idx].Module)
 		}
 
 		targets = append(targets, genCollectorFromStaticTarget(configTarget{
-			Name:       conf.Targets[idx].Name,
-			URL:        conf.Targets[idx].URL,
+			Name:       config.Targets[idx].Name,
+			URL:        config.Targets[idx].URL,
 			Module:     module,
-			ModuleName: conf.Targets[idx].ModuleName,
+			ModuleName: config.Targets[idx].Module,
 			nowFunc:    time.Now,
 		}))
 	}
 
 	manager := &RegisterManager{
 		targets:       targets,
-		registrations: make(map[int]gathererWithConfigTarget, len(conf.Targets)),
+		registrations: make(map[int]gathererWithConfigTarget, len(config.Targets)),
 		registry:      registry,
-		scraperName:   conf.ScraperName,
+		scraperName:   config.ScraperName,
 		metricFormat:  metricFormat,
-		userAgent:     userAgent,
+		userAgent:     config.UserAgent,
 	}
 
 	if err := manager.updateRegistrations(); err != nil {

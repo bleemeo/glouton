@@ -49,8 +49,14 @@ func TestStructuredConfig(t *testing.T) {
 				Enable:      true,
 				BindAddress: "localhost:6060",
 			},
-			InstallationFormat: "manual",
-			NetstatFile:        "netstat.out",
+			InstallationFormat:  "manual",
+			NetstatFile:         "netstat.out",
+			StateFile:           "state.json",
+			StateCacheFile:      "state.cache.json",
+			StateResetFile:      "state.reset",
+			DeprecatedStateFile: "state.deprecated",
+			UpgradeFile:         "upgrade",
+			AutoUpgradeFile:     "auto-upgrade",
 			NodeExporter: NodeExporter{
 				Enable:     true,
 				Collectors: []string{"disk"},
@@ -59,18 +65,23 @@ func TestStructuredConfig(t *testing.T) {
 				Enable: true,
 			},
 			PublicIPIndicator: "https://myip.bleemeo.com",
-			StateFile:         "state.json",
-			UpgradeFile:       "upgrade",
 			WindowsExporter: NodeExporter{
 				Enable:     true,
 				Collectors: []string{"cpu"},
 			},
+			Telemetry: Telemetry{
+				Enable:  true,
+				Address: "http://example.com",
+			},
+			MetricsFormat: "prometheus",
 		},
 		Blackbox: Blackbox{
-			Enable:      true,
-			ScraperName: "name",
+			Enable:          true,
+			ScraperName:     "name",
+			ScraperSendUUID: true,
 			Targets: []BlackboxTarget{
 				{
+					Name:   "myname",
 					URL:    "https://bleemeo.com",
 					Module: "mymodule",
 				},
@@ -84,6 +95,7 @@ func TestStructuredConfig(t *testing.T) {
 					},
 				},
 			},
+			UserAgent: "my-user-agent",
 		},
 		Bleemeo: Bleemeo{
 			AccountID:                         "myid",
@@ -102,6 +114,9 @@ func TestStructuredConfig(t *testing.T) {
 				SSL:         true,
 			},
 			RegistrationKey: "mykey",
+			Sentry: Sentry{
+				DSN: "my-dsn",
+			},
 		},
 		Container: Container{
 			Filter: Filter{
@@ -127,7 +142,8 @@ func TestStructuredConfig(t *testing.T) {
 			PathIgnore:     []string{"/"},
 			IgnoreFSType:   []string{"tmpfs"},
 		},
-		DiskIgnore: []string{"^(ram|loop|fd|(h|s|v|xv)d[a-z]|nvme\\d+n\\d+p)\\d+$"},
+		DiskIgnore:  []string{"^(ram|loop|fd|(h|s|v|xv)d[a-z]|nvme\\d+n\\d+p)\\d+$"},
+		DiskMonitor: []string{"sda"},
 		InfluxDB: InfluxDB{
 			Enable: true,
 			Host:   "localhost",
@@ -144,9 +160,10 @@ func TestStructuredConfig(t *testing.T) {
 			GraphitePort:   2004,
 		},
 		Kubernetes: Kubernetes{
-			Enable:     true,
-			NodeName:   "mynode",
-			KubeConfig: "/config",
+			Enable:      true,
+			NodeName:    "mynode",
+			ClusterName: "mycluster",
+			KubeConfig:  "/config",
 		},
 		Logging: Logging{
 			Buffer: LoggingBuffer{
@@ -274,8 +291,8 @@ func TestStructuredConfig(t *testing.T) {
 		Thresholds: map[string]Threshold{
 			"cpu_used": {
 				LowWarning:   2,
-				LowCritical:  1,
-				HighWarning:  80,
+				LowCritical:  1.5,
+				HighWarning:  80.2,
 				HighCritical: 90,
 			},
 		},
@@ -289,6 +306,11 @@ func TestStructuredConfig(t *testing.T) {
 				Port:    8016,
 			},
 			StaticCDNURL: "/",
+		},
+		Zabbix: Zabbix{
+			Enable:  true,
+			Address: "zabbix",
+			Port:    7000,
 		},
 	}
 
@@ -345,7 +367,7 @@ func TestOverrideDefault(t *testing.T) {
 	}
 
 	// Test that default not set in the config file hasn't changed.
-	if diff := cmp.Diff(defaultConfig().DF.IgnoreFSType, config.DF.IgnoreFSType); diff != "" {
+	if diff := cmp.Diff(DefaultConfig().DF.IgnoreFSType, config.DF.IgnoreFSType); diff != "" {
 		t.Fatalf("Default value modified:\n%s", diff)
 	}
 }
@@ -361,7 +383,7 @@ func TestDefaultNoFile(t *testing.T) {
 		t.Fatalf("Failed to load config: %s", err)
 	}
 
-	if diff := cmp.Diff(defaultConfig(), config, cmpopts.EquateEmpty()); diff != "" {
+	if diff := cmp.Diff(DefaultConfig(), config, cmpopts.EquateEmpty()); diff != "" {
 		t.Fatalf("Default value modified:\n%s", diff)
 	}
 }

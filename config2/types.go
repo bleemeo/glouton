@@ -4,12 +4,14 @@ import bbConf "github.com/prometheus/blackbox_exporter/config"
 
 // Config is the structured configuration of the agent.
 type Config struct {
-	Agent                     Agent                `yaml:"agent"`
-	Blackbox                  Blackbox             `yaml:"blackbox"`
-	Bleemeo                   Bleemeo              `yaml:"bleemeo"`
-	Container                 Container            `yaml:"container"`
-	DF                        DF                   `yaml:"df"`
-	DiskIgnore                []string             `yaml:"disk_ignore"`
+	Agent      Agent     `yaml:"agent"`
+	Blackbox   Blackbox  `yaml:"blackbox"`
+	Bleemeo    Bleemeo   `yaml:"bleemeo"`
+	Container  Container `yaml:"container"`
+	DF         DF        `yaml:"df"`
+	DiskIgnore []string  `yaml:"disk_ignore"`
+	// TODO: Not documented.
+	DiskMonitor               []string             `yaml:"disk_monitor"`
 	InfluxDB                  InfluxDB             `yaml:"influxdb"`
 	JMX                       JMX                  `yaml:"jmx"`
 	JMXTrans                  JMXTrans             `yaml:"jmxtrans"`
@@ -28,13 +30,21 @@ type Config struct {
 	Telegraf                  Telegraf             `yaml:"telegraf"`
 	Thresholds                map[string]Threshold `yaml:"thresholds"`
 	Web                       Web                  `yaml:"web"`
+	// TODO: Not documented.
+	Zabbix Zabbix `yaml:"zabbix"`
+}
+
+type Zabbix struct {
+	Enable  bool   `yaml:"enable"`
+	Address string `yaml:"address"`
+	Port    int    `yaml:"port"`
 }
 
 type Threshold struct {
-	LowWarning   int `yaml:"low_warning"`
-	LowCritical  int `yaml:"low_critical"`
-	HighWarning  int `yaml:"high_warning"`
-	HighCritical int `yaml:"high_critical"`
+	LowWarning   float64 `yaml:"low_warning"`
+	LowCritical  float64 `yaml:"low_critical"`
+	HighWarning  float64 `yaml:"high_warning"`
+	HighCritical float64 `yaml:"high_critical"`
 }
 
 type Telegraf struct {
@@ -92,9 +102,11 @@ type LoggingBuffer struct {
 }
 
 type Kubernetes struct {
-	Enable     bool   `yaml:"enable"`
-	NodeName   string `yaml:"nodename"`
-	KubeConfig string `yaml:"kubeconfig"`
+	Enable   bool   `yaml:"enable"`
+	NodeName string `yaml:"nodename"`
+	// TODO: Not documented.
+	ClusterName string `yaml:"clustername"`
+	KubeConfig  string `yaml:"kubeconfig"`
 }
 
 type JMXTrans struct {
@@ -126,6 +138,12 @@ type Bleemeo struct {
 	InitialServerGroupNameForSNMP     string      `yaml:"initial_server_group_name_for_snmp"`
 	MQTT                              BleemeoMQTT `yaml:"mqtt"`
 	RegistrationKey                   string      `yaml:"registration_key"`
+	// TODO: Not documented.
+	Sentry Sentry `yaml:"sentry"`
+}
+
+type Sentry struct {
+	DSN string `yaml:"dsn"`
 }
 
 type BleemeoMQTT struct {
@@ -137,29 +155,47 @@ type BleemeoMQTT struct {
 }
 
 type Blackbox struct {
-	Enable      bool                     `yaml:"enable"`
-	ScraperName string                   `yaml:"scraper_name"`
-	Targets     []BlackboxTarget         `yaml:"targets"`
-	Modules     map[string]bbConf.Module `yaml:"modules"`
+	Enable      bool   `yaml:"enable"`
+	ScraperName string `yaml:"scraper_name"`
+	// TODO: Not documented.
+	ScraperSendUUID bool                     `yaml:"scraper_send_uuid"`
+	UserAgent       string                   `yaml:"user_agent"`
+	Targets         []BlackboxTarget         `yaml:"targets"`
+	Modules         map[string]bbConf.Module `yaml:"modules"`
 }
 
 type BlackboxTarget struct {
+	// TODO: Not documented.
+	Name   string `yaml:"name"`
 	URL    string `yaml:"url"`
 	Module string `yaml:"module"`
 }
 
 type Agent struct {
-	CloudImageCreationFile string          `yaml:"cloudimage_creation_file"`
-	FactsFile              string          `yaml:"facts_file"`
-	HTTPDebug              HTTPDebug       `yaml:"http_debug"`
-	InstallationFormat     string          `yaml:"installation_format"`
-	NetstatFile            string          `yaml:"netstat_file"`
-	NodeExporter           NodeExporter    `yaml:"node_exporter"`
-	ProcessExporter        ProcessExporter `yaml:"process_exporter"`
-	PublicIPIndicator      string          `yaml:"public_ip_indicator"`
-	StateFile              string          `yaml:"state_file"`
-	UpgradeFile            string          `yaml:"upgrade_file"`
-	WindowsExporter        NodeExporter    `yaml:"windows_exporter"`
+	CloudImageCreationFile string    `yaml:"cloudimage_creation_file"`
+	HTTPDebug              HTTPDebug `yaml:"http_debug"`
+	InstallationFormat     string    `yaml:"installation_format"`
+	FactsFile              string    `yaml:"facts_file"`
+	NetstatFile            string    `yaml:"netstat_file"`
+	StateFile              string    `yaml:"state_file"`
+	// TODO: Not documented.
+	StateCacheFile      string          `yaml:"state_cache_file"`
+	StateResetFile      string          `yaml:"state_reset_file"`
+	DeprecatedStateFile string          `yaml:"deprecated_state_file"`
+	UpgradeFile         string          `yaml:"upgrade_file"`
+	AutoUpgradeFile     string          `yaml:"auto_upgrade_file"`
+	ProcessExporter     ProcessExporter `yaml:"process_exporter"`
+	PublicIPIndicator   string          `yaml:"public_ip_indicator"`
+	NodeExporter        NodeExporter    `yaml:"node_exporter"`
+	WindowsExporter     NodeExporter    `yaml:"windows_exporter"`
+	// TODO: Not documented.
+	Telemetry     Telemetry `yaml:"telemetry"`
+	MetricsFormat string    `yaml:"metrics_format"`
+}
+
+type Telemetry struct {
+	Enable  bool   `yaml:"enable"`
+	Address string `yaml:"address"`
 }
 
 type ProcessExporter struct {

@@ -59,6 +59,8 @@ func Load(withDefault bool, paths ...string) (Config, Warnings, error) {
 
 	k, warnings, err := load(withDefault, paths...)
 
+	// We use the "yaml" tag instead of the default "koanf" tag because our config
+	// embed the blackbox module config which uses YAML.
 	unmarshalConf := koanf.UnmarshalConf{
 		Tag: "yaml",
 	}
@@ -111,7 +113,7 @@ func load(withDefault bool, paths ...string) (*koanf.Koanf, Warnings, error) {
 			return err
 		}
 
-		err := k.Load(structsProvider(defaultConfig(), "yaml"), nil, koanf.WithMergeFunc(mergeFunc))
+		err := k.Load(structsProvider(DefaultConfig(), "yaml"), nil, koanf.WithMergeFunc(mergeFunc))
 		if err != nil {
 			finalErr = err
 		}

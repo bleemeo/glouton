@@ -202,10 +202,9 @@ func (a *agent) init(ctx context.Context, configFiles []string, firstRun bool) (
 	}
 
 	// Initialize sentry only on the first run so it doesn't leak goroutines on reload.
-	// TODO: not documented
-	if dsn := a.oldConfig.String("bleemeo.sentry.dsn"); firstRun && dsn != "" {
+	if firstRun && a.config.Bleemeo.Sentry.DSN != "" {
 		err := sentry.Init(sentry.ClientOptions{
-			Dsn:              dsn,
+			Dsn:              a.config.Bleemeo.Sentry.DSN,
 			AttachStacktrace: true,
 		})
 		if err != nil {
@@ -226,9 +225,8 @@ func (a *agent) init(ctx context.Context, configFiles []string, firstRun bool) (
 	}
 
 	statePath := a.config.Agent.StateFile
-	// TODO: Not documented.
-	cachePath := a.oldConfig.String("agent.state_cache_file")
-	oldStatePath := a.oldConfig.String("agent.deprecated_state_file")
+	cachePath := a.config.Agent.StateCacheFile
+	oldStatePath := a.config.Agent.DeprecatedStateFile
 
 	if cachePath == "" {
 		cachePath = state.DefaultCachePath(statePath)
@@ -260,8 +258,7 @@ func (a *agent) init(ctx context.Context, configFiles []string, firstRun bool) (
 		}
 	}
 
-	// TODO: Not documented.
-	resetStateFile := a.oldConfig.String("agent.state_reset_file")
+	resetStateFile := a.config.Agent.StateResetFile
 
 	if _, err := os.Stat(resetStateFile); err == nil {
 		// No error means that file exists.
@@ -269,7 +266,7 @@ func (a *agent) init(ctx context.Context, configFiles []string, firstRun bool) (
 			logger.Printf("Unable to remote state reset marked: %v", err)
 			logger.Printf("Skipping state reset due to previous error")
 		} else {
-			a.state.KeptOnlyPersistent()
+			a.state.KeepOnlyPersistent()
 		}
 	}
 
@@ -341,14 +338,14 @@ func (a *agent) readXMLCredentials() {
 		return
 	}
 
-	a.oldConfig.Set("bleemeo.account_id", credentials.AccountID)
-	a.oldConfig.Set("bleemeo.registration_key", credentials.RegistrationKey)
+	a.config.Bleemeo.AccountID = credentials.AccountID
+	a.config.Bleemeo.RegistrationKey = credentials.RegistrationKey
 }
 
 func (a *agent) setupLogger() {
 	logger.SetBufferCapacity(
-		a.oldConfig.Int("logging.buffer.head_size_bytes"),
-		a.oldConfig.Int("logging.buffer.tail_size_bytes"),
+		a.config.Logging.Buffer.HeadSizeBytes,
+		a.config.Logging.Buffer.TailSizeBytes,
 	)
 
 	var err error
@@ -543,21 +540,7 @@ func (a *agent) updateMetricResolution(ctx context.Context, defaultResolution ti
 }
 
 func (a *agent) getConfigThreshold(firstUpdate bool) map[string]threshold.Threshold {
-	rawValue, ok := a.oldConfig.Get("thresholds")
-	if !ok {
-		rawValue = map[string]interface{}{}
-	}
-
-	rawThreshold, ok := rawValue.(map[string]interface{})
-	if !ok {
-		if firstUpdate {
-			logger.V(1).Printf("Threshold in configuration file is not map")
-		}
-
-		return make(map[string]threshold.Threshold)
-	}
-
-	configThreshold := make(map[string]threshold.Threshold, len(rawThreshold))
+	configThresholds := make(map[string]threshold.Threshold, len(a.config.Thresholds))
 	defaultSoftPeriod := time.Duration(a.config.Metric.SoftStatusPeriodDefault) * time.Second
 
 	softPeriods := make(map[string]time.Duration, len(a.config.Metric.SoftStatusPeriod))
@@ -565,29 +548,11 @@ func (a *agent) getConfigThreshold(firstUpdate bool) map[string]threshold.Thresh
 		softPeriods[metric] = time.Duration(period) * time.Second
 	}
 
-	for k, v := range rawThreshold {
-		v2, ok := v.(map[string]interface{})
-		if !ok {
-			if firstUpdate {
-				logger.V(1).Printf("Threshold in configuration file is not well-formated: %v value is not a map", k)
-			}
-
-			continue
-		}
-
-		t, err := threshold.FromInterfaceMap(v2, k, softPeriods, defaultSoftPeriod)
-		if err != nil {
-			if firstUpdate {
-				logger.V(1).Printf("Threshold in configuration file is not well-formated: %v", err)
-			}
-
-			continue
-		}
-
-		configThreshold[k] = t
+	for metric, configThreshold := range a.config.Thresholds {
+		configThresholds[metric] = threshold.FromConfig(configThreshold, metric, softPeriods, defaultSoftPeriod)
 	}
 
-	return configThreshold
+	return configThresholds
 }
 
 func (a *agent) newMetricsCallback(newMetrics []types.LabelsAndAnnotation) {
@@ -728,13 +693,11 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 	logger.Printf("Starting agent version %v (commit %v)", version.Version, version.BuildHash)
 
 	_ = os.Remove(a.config.Agent.UpgradeFile)
-	// TODO: Not documented.
-	_ = os.Remove(a.oldConfig.String("agent.auto_upgrade_file"))
+	_ = os.Remove(a.config.Agent.AutoUpgradeFile)
 
-	// TODO: Not documented.
-	a.metricFormat = types.StringToMetricFormat(a.oldConfig.String("agent.metrics_format"))
+	a.metricFormat = types.StringToMetricFormat(a.config.Agent.MetricsFormat)
 	if a.metricFormat == types.MetricFormatUnknown {
-		logger.Printf("Invalid metric format %#v. Supported option are \"Bleemeo\" and \"Prometheus\". Falling back to Bleemeo", a.oldConfig.String("agent.metrics_format"))
+		logger.Printf("Invalid metric format %#v. Supported option are \"Bleemeo\" and \"Prometheus\". Falling back to Bleemeo", a.config.Agent.MetricsFormat)
 		a.metricFormat = types.MetricFormatBleemeo
 	}
 
@@ -786,9 +749,9 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 			PushPoint:             a.store,
 			ThresholdHandler:      a.threshold,
 			FQDN:                  fqdn,
-			GloutonPort:           strconv.FormatInt(int64(a.oldConfig.Int("web.listener.port")), 10),
+			GloutonPort:           fmt.Sprint(a.config.Web.Listener.Port),
 			MetricFormat:          a.metricFormat,
-			BlackboxSentScraperID: a.oldConfig.Bool("blackbox.scraper_send_uuid"), // TODO: Not documented
+			BlackboxSentScraperID: a.config.Blackbox.ScraperSendUUID,
 			Filter:                mFilter,
 			Queryable:             a.store,
 		})
@@ -832,8 +795,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 
 		var clusterNameState string
 
-		// TODO: Not documented.
-		clusterName := a.oldConfig.String("kubernetes.clustername")
+		clusterName := a.config.Kubernetes.ClusterName
 
 		err = a.state.Get("kubernetes_cluster_name", &clusterNameState)
 		if err != nil {
@@ -855,8 +817,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		if clusterName != "" {
 			a.factProvider.SetFact("kubernetes_cluster_name", clusterName)
 		} else {
-			logger.V(0).Printf("kubernetes.clustername config is missing, some feature are unavailable. See https://docs.bleemeo.com/agent/installation#installation-on-kubernetes")
-			a.oldConfig.AddWarning("kubernetes.clustername is missing, some feature are unavailable")
+			a.addWarnings(fmt.Errorf("kubernetes.clustername is missing, some feature are unavailable. See https://docs.bleemeo.com/agent/installation#installation-on-kubernetes"))
 		}
 
 		ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
@@ -896,12 +857,8 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 	}
 	a.collector = collector.New(acc)
 
-	servicesIgnoreCheck, _ := a.oldConfig.Get("service_ignore_check")
-	servicesIgnoreMetrics, _ := a.oldConfig.Get("service_ignore_metrics")
-	serviceIgnoreCheck := confFieldToSliceMap(servicesIgnoreCheck, "service ignore check")
-	serviceIgnoreMetrics := confFieldToSliceMap(servicesIgnoreMetrics, "service ignore metrics")
-	isCheckIgnored := discovery.NewIgnoredService(serviceIgnoreCheck).IsServiceIgnored
-	isInputIgnored := discovery.NewIgnoredService(serviceIgnoreMetrics).IsServiceIgnored
+	isCheckIgnored := discovery.NewIgnoredService(a.config.ServiceIgnoreCheck).IsServiceIgnored
+	isInputIgnored := discovery.NewIgnoredService(a.config.ServiceIgnoreMetrics).IsServiceIgnored
 	dynamicDiscovery := discovery.NewDynamic(psFact, netstat, a.containerRuntime, a.containerFilter.ContainerIgnored, discovery.SudoFileReader{HostRootPath: a.hostRootPath}, a.config.Stack)
 
 	a.discovery, warnings = discovery.New(
@@ -930,11 +887,8 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 
 	if a.config.Blackbox.Enable {
 		logger.V(1).Println("Starting blackbox_exporter...")
-		// the config is present, otherwise we would not be in this block
-		blackboxConf, _ := a.oldConfig.Get("blackbox")
 
-		// TODO: Not documented. Is this really somethin to have in the config?
-		a.monitorManager, err = blackbox.New(a.gathererRegistry, blackboxConf, a.oldConfig.String("blackbox.user_agent"), a.metricFormat)
+		a.monitorManager, err = blackbox.New(a.gathererRegistry, a.config.Blackbox, a.metricFormat)
 		if err != nil {
 			logger.V(0).Printf("Couldn't start blackbox_exporter: %v\nMonitors will not be able to run on this agent.", err)
 		}
@@ -980,11 +934,12 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 	}
 
 	if a.config.JMX.Enable {
-		// TODO: maybe we should keep parsing since its base 8?
-		perm, err := strconv.ParseInt(a.oldConfig.String("jmxtrans.file_permission"), 8, 0)
+		perm, err := strconv.ParseInt(a.config.JMXTrans.FilePermission, 8, 0)
 		if err != nil {
-			logger.Printf("invalid permission %#v: %v", a.oldConfig.String("jmxtrans.file_permission"), err)
-			logger.Printf("using the default 0640")
+			a.addWarnings(fmt.Errorf(
+				"%w: failed to parse jmxtrans.file_permission '%s': %s, using the default 0640",
+				config2.ErrInvalidValue, a.config.JMXTrans.FilePermission, err,
+			))
 
 			perm = 0o640
 		}
@@ -1004,7 +959,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 	if a.config.Bleemeo.Enable {
 		scaperName := a.config.Blackbox.ScraperName
 		if scaperName == "" {
-			scaperName = fmt.Sprintf("%s:%d", fqdn, a.oldConfig.Int("web.listener.port"))
+			scaperName = fmt.Sprintf("%s:%d", fqdn, a.config.Web.Listener.Port)
 		}
 
 		connector, err := bleemeo.New(bleemeoTypes.GlobalOption{
@@ -1169,10 +1124,9 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		tasks = append(tasks, taskInfo{server.Run, "NRPE server"})
 	}
 
-	// TODO: Not documented.
-	if a.oldConfig.Bool("zabbix.enable") {
+	if a.config.Zabbix.Enable {
 		server := zabbix.New(
-			fmt.Sprintf("%s:%d", a.oldConfig.String("zabbix.address"), a.oldConfig.Int("zabbix.port")),
+			net.JoinHostPort(a.config.Zabbix.Address, fmt.Sprint(a.config.Zabbix.Port)),
 			zabbixResponse,
 		)
 		tasks = append(tasks, taskInfo{server.Run, "Zabbix server"})
@@ -1197,9 +1151,8 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		a.bleemeoConnector.ApplyCachedConfiguration(ctx)
 	}
 
-	// TODO: disk_monitor and ignore not in doc full config.
-	if !reflect.DeepEqual(a.oldConfig.StringList("disk_monitor"), defaultConfig()["disk_monitor"]) {
-		if a.metricFormat == types.MetricFormatBleemeo && len(a.oldConfig.StringList("disk_ignore")) > 0 {
+	if !reflect.DeepEqual(a.config.DiskMonitor, config2.DefaultConfig().DiskMonitor) {
+		if a.metricFormat == types.MetricFormatBleemeo && len(a.config.DiskIgnore) > 0 {
 			logger.Printf("Warning: both \"disk_monitor\" and \"disk_ignore\" are set. Only \"disk_ignore\" will be used")
 		} else if a.metricFormat != types.MetricFormatBleemeo {
 			logger.Printf("Warning: configuration \"disk_monitor\" is not used in Prometheus mode. Use \"disk_ignore\"")
@@ -1238,7 +1191,8 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		input, err := statsd.New(fmt.Sprintf("%s:%d", a.config.Telegraf.StatsD.Address, a.config.Telegraf.StatsD.Port))
 		if err != nil {
 			logger.Printf("Unable to create StatsD input: %v", err)
-			a.oldConfig.Set("telegraf.statsd.enable", false)
+
+			a.config.Telegraf.StatsD.Enable = false
 		} else if _, err = a.collector.AddInput(input, "statsd"); err != nil {
 			if strings.Contains(err.Error(), "address already in use") {
 				logger.Printf("Unable to listen on StatsD port because another program already use it")
@@ -1248,7 +1202,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 				logger.Printf("Unable to create StatsD input: %v", err)
 			}
 
-			a.oldConfig.Set("telegraf.statsd.enable", false)
+			a.config.Telegraf.StatsD.Enable = false
 		}
 	}
 
@@ -1329,16 +1283,16 @@ func (a *agent) waitAndRefreshPendingUpdates(ctx context.Context) {
 }
 
 func (a *agent) buildCollectorsConfig() (conf inputs.CollectorConfig, err error) {
-	whitelistRE, err := common.CompileREs(a.oldConfig.StringList("disk_monitor"))
+	whitelistRE, err := common.CompileREs(a.config.DiskMonitor)
 	if err != nil {
-		logger.V(1).Printf("the whitelist for diskio regexp couldn't compile: %s", err)
+		a.addWarnings(fmt.Errorf("%w: failed to compile regexp in disk_monitor: %s", config2.ErrInvalidValue, err))
 
 		return
 	}
 
-	blacklistRE, err := common.CompileREs(a.oldConfig.StringList("disk_ignore"))
+	blacklistRE, err := common.CompileREs(a.config.DiskIgnore)
 	if err != nil {
-		logger.V(1).Printf("the blacklist for diskio regexp couldn't compile: %s", err)
+		a.addWarnings(fmt.Errorf("%w: failed to compile regexp in disk_ignore: %s", config2.ErrInvalidValue, err))
 
 		return
 	}
@@ -1394,8 +1348,7 @@ func (a *agent) miscGather(pusher types.PointPusher) func(context.Context, time.
 }
 
 func (a *agent) sendToTelemetry(ctx context.Context) error {
-	// TODO: Not documented
-	if a.oldConfig.Bool("agent.telemetry.enable") {
+	if a.config.Agent.Telemetry.Enable {
 		select {
 		case <-time.After(delay.JitterDelay(5*time.Minute, 0.2)):
 		case <-ctx.Done():
@@ -1412,7 +1365,7 @@ func (a *agent) sendToTelemetry(ctx context.Context) error {
 				continue
 			}
 
-			telemetry.PostInformation(ctx, telemetryID, a.oldConfig.String("agent.telemetry.address"), a.BleemeoAgentID(), facts)
+			telemetry.PostInformation(ctx, telemetryID, a.config.Agent.Telemetry.Address, a.BleemeoAgentID(), facts)
 
 			select {
 			case <-time.After(delay.JitterDelay(24*time.Hour, 0.05)):
