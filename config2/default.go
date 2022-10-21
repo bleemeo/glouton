@@ -6,6 +6,18 @@ import (
 	bbConf "github.com/prometheus/blackbox_exporter/config"
 )
 
+// DefaultPaths returns the default paths used to search for config files.
+func DefaultPaths() []string {
+	return []string{
+		"/etc/glouton/glouton.conf",
+		"/etc/glouton/conf.d",
+		"etc/glouton.conf",
+		"etc/conf.d",
+		"C:\\ProgramData\\glouton\\glouton.conf",
+		"C:\\ProgramData\\glouton\\conf.d",
+	}
+}
+
 func DefaultConfig() Config {
 	return Config{
 		Agent: Agent{

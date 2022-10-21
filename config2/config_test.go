@@ -784,3 +784,94 @@ func TestDump(t *testing.T) {
 		t.Fatalf("Config dump didn't redact secrets correctly:\n%s", diff)
 	}
 }
+
+func Test_migrate(t *testing.T) {
+	tests := []struct {
+		Name       string
+		ConfigFile string
+		WantConfig Config
+	}{
+		{
+			Name:       "new-prometheus-targets",
+			ConfigFile: "testdata/new-prometheus-targets.conf",
+			WantConfig: Config{
+				Metric: Metric{
+					Prometheus: Prometheus{
+						Targets: []PrometheusTarget{
+							{
+								Name: "test1",
+								URL:  "http://localhost:9090/metrics",
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			Name:       "old-prometheus-targets",
+			ConfigFile: "testdata/old-prometheus-targets.conf",
+			WantConfig: Config{
+				Metric: Metric{
+					Prometheus: Prometheus{
+						Targets: []PrometheusTarget{
+							{
+								Name: "test1",
+								URL:  "http://localhost:9090/metrics",
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			Name:       "both-prometheus-targets",
+			ConfigFile: "testdata/both-prometheus-targets.conf",
+			WantConfig: Config{
+				Metric: Metric{
+					Prometheus: Prometheus{
+						Targets: []PrometheusTarget{
+							{
+								Name: "new",
+								URL:  "http://new:9090/metrics",
+							},
+							{
+								Name: "old",
+								URL:  "http://old:9090/metrics",
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			Name:       "old-prometheus-allow/deny_metrics",
+			ConfigFile: "testdata/old-prometheus-metrics.conf",
+			WantConfig: Config{
+				Metric: Metric{
+					AllowMetrics: []string{
+						"test4",
+						"test1",
+						"test2",
+					},
+					DenyMetrics: []string{
+						"test5",
+						"test3",
+					},
+				},
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.Name, func(t *testing.T) {
+			config, _, err := Load(false, test.ConfigFile)
+			if err != nil {
+				t.Fatalf("Failed to load config: %s", err)
+			}
+
+			if diff := cmp.Diff(test.WantConfig, config); diff != "" {
+				t.Fatalf("Unexpected config:\n%s", diff)
+			}
+		})
+	}
+}

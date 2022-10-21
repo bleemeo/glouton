@@ -32,16 +32,6 @@ var (
 	ErrInvalidValue       = errors.New("invalid config value")
 )
 
-//nolint:gochecknoglobals
-var defaultConfigFiles = []string{
-	"/etc/glouton/glouton.conf",
-	"/etc/glouton/conf.d",
-	"etc/glouton.conf",
-	"etc/conf.d",
-	"C:\\ProgramData\\glouton\\glouton.conf",
-	"C:\\ProgramData\\glouton\\conf.d",
-}
-
 type Warnings []error
 
 // Load loads the configuration from files and directories to a struct.
@@ -49,13 +39,13 @@ func Load(withDefault bool, paths ...string) (Config, Warnings, error) {
 	// Add config envFiles from env.
 	envFiles := os.Getenv("GLOUTON_CONFIG_FILES")
 
-	if len(paths) == 0 && envFiles != "" {
+	if len(paths) == 0 || len(paths) == 1 && paths[0] == "" && envFiles != "" {
 		paths = strings.Split(envFiles, ",")
 	}
 
 	// If no config was given with flags or env variables, fallback on the default files.
 	if len(paths) == 0 || len(paths) == 1 && paths[0] == "" {
-		paths = defaultConfigFiles
+		paths = DefaultPaths()
 	}
 
 	k, warnings, err := load(withDefault, paths...)
