@@ -14,7 +14,7 @@ import (
 // TestMerge tests that config files are merged correctly.
 // Merge should override existing values, merge maps and concatenate arrays.
 func TestMerge(t *testing.T) {
-	k, warnings, err := load(false, "testdata/merge1.conf", "testdata/merge2.conf")
+	k, warnings, err := load(false, "testdata/merge")
 	if warnings != nil {
 		t.Fatalf("Warning while loading config: %s", err)
 	}
