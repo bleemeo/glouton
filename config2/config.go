@@ -486,3 +486,60 @@ func migrateScrapper(k *koanf.Koanf, config map[string]interface{}, deprecatedPa
 
 	return warnings
 }
+
+// Dump return a copy of the whole configuration, with secrets retracted.
+// secret is any key containing "key", "secret", "password" or "passwd".
+func Dump(config Config) map[string]interface{} {
+	k := koanf.New(delimiter)
+	k.Load(structs.Provider(config, "yaml"), nil)
+
+	return dump(k.All())
+}
+
+func dump(root map[string]interface{}) map[string]interface{} {
+	secretKey := []string{"key", "secret", "password", "passwd"}
+
+	for k, v := range root {
+		isSecret := false
+
+		for _, name := range secretKey {
+			if strings.Contains(k, name) {
+				isSecret = true
+
+				break
+			}
+		}
+
+		if isSecret {
+			root[k] = "*****"
+
+			continue
+		}
+
+		switch v := v.(type) {
+		case map[string]interface{}:
+			root[k] = dump(v)
+		case []interface{}:
+			root[k] = dumpList(v)
+		default:
+			root[k] = v
+		}
+	}
+
+	return root
+}
+
+func dumpList(root []interface{}) []interface{} {
+	for i, v := range root {
+		switch v := v.(type) {
+		case map[string]interface{}:
+			root[i] = dump(v)
+		case []interface{}:
+			root[i] = dumpList(v)
+		default:
+			root[i] = v
+		}
+	}
+
+	return root
+}

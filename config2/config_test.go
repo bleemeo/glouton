@@ -5,6 +5,8 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"github.com/knadh/koanf"
+	"github.com/knadh/koanf/providers/structs"
 	bbConf "github.com/prometheus/blackbox_exporter/config"
 )
 
@@ -506,5 +508,52 @@ func TestWarningsAndErrors(t *testing.T) {
 				t.Fatalf("Unexpected config:\n%s", diff)
 			}
 		})
+	}
+}
+
+// TestDump tests that secrets are redacted when the config is dumped.
+func TestDump(t *testing.T) {
+	config := Config{
+		Bleemeo: Bleemeo{
+			AccountID:       "in-dump",
+			RegistrationKey: "not-in-dump",
+		},
+		MQTT: OpenSourceMQTT{
+			Password: "not-in-dump",
+		},
+		Services: []Service{
+			{
+				ID:          "in-dump",
+				Password:    "not-in-dump",
+				JMXPassword: "not-in-dump",
+			},
+		},
+	}
+
+	wantConfig := Config{
+		Bleemeo: Bleemeo{
+			AccountID:       "in-dump",
+			RegistrationKey: "*****",
+		},
+		MQTT: OpenSourceMQTT{
+			Password: "*****",
+		},
+		Services: []Service{
+			{
+				ID:          "in-dump",
+				Password:    "*****",
+				JMXPassword: "*****",
+			},
+		},
+	}
+
+	k := koanf.New(delimiter)
+	k.Load(structs.Provider(wantConfig, "yaml"), nil)
+	wantMap := k.All()
+
+	dump := Dump(config)
+
+	if diff := cmp.Diff(wantMap, dump); diff != "" {
+		t.Fatalf("Config dump didn't redact secrets correctly:\n%s", diff)
 	}
 }

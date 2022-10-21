@@ -2297,27 +2297,7 @@ func (a *agent) diagnosticConfig(ctx context.Context, archive types.ArchiveWrite
 	fmt.Fprintln(file, "# This file contains in-memory configuration used by Glouton. Value from from default, files and environment.")
 	enc.SetIndent(4)
 
-	err = enc.Encode(a.oldConfig.Dump())
-	if err != nil {
-		fmt.Fprintf(file, "# error: %v\n", err)
-	}
-
-	err = enc.Close()
-	if err != nil {
-		fmt.Fprintf(file, "# error: %v\n", err)
-	}
-
-	file, err = archive.Create("config-new.yaml")
-	if err != nil {
-		return err
-	}
-
-	enc = yaml.NewEncoder(file)
-
-	fmt.Fprintln(file, "# This file parsed configuration used by Glouton. Currently this config is incomplet.")
-	enc.SetIndent(4)
-
-	err = enc.Encode(a.config)
+	err = enc.Encode(config2.Dump(a.config))
 	if err != nil {
 		fmt.Fprintf(file, "# error: %v\n", err)
 	}

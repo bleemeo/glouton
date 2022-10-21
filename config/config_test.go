@@ -18,8 +18,6 @@
 package config
 
 import (
-	"bytes"
-	"encoding/json"
 	"os"
 	"reflect"
 	"testing"
@@ -599,34 +597,5 @@ func TestDelete(t *testing.T) {
 				}
 			}
 		})
-	}
-}
-
-func TestDump(t *testing.T) {
-	cfg := Configuration{}
-
-	data, err := os.ReadFile("testdata/secret.conf")
-	if err != nil {
-		t.Error(err)
-	}
-
-	err = cfg.LoadByte(data)
-	if err != nil {
-		t.Error(err)
-	}
-
-	result := cfg.Dump()
-
-	jsonByte, err := json.Marshal(result)
-	if err != nil {
-		t.Error(err)
-	}
-
-	if bytes.Contains(jsonByte, []byte("not_in_dump")) {
-		t.Error("Dump() contains the secret \"not_in_dump\"")
-	}
-
-	if !bytes.Contains(jsonByte, []byte("this_is_in_dump")) {
-		t.Error("Dump() does NOT contains  \"this_is_in_dump\"")
 	}
 }
