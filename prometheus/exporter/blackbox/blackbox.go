@@ -32,6 +32,7 @@ import (
 	"time"
 
 	"github.com/go-kit/log"
+	bbConf "github.com/prometheus/blackbox_exporter/config"
 	"github.com/prometheus/blackbox_exporter/prober"
 	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
@@ -219,7 +220,7 @@ func (target configTarget) CollectWithContext(ctx context.Context, ch chan<- pro
 	subCtx = context.WithValue(subCtx, contextKeyNowFunc, target.nowFunc)
 
 	// do all the actual work
-	success := probeFn(subCtx, target.URL, target.Module, registry, extLogger)
+	success := probeFn(subCtx, target.URL, bbConf.Module(target.Module), registry, extLogger)
 
 	end := time.Now()
 	duration := end.Sub(start)

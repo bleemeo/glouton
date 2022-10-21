@@ -59,13 +59,22 @@ func Load(withDefault bool, paths ...string) (Config, Warnings, error) {
 
 	k, warnings, err := load(withDefault, paths...)
 
+	var config Config
+
 	// We use the "yaml" tag instead of the default "koanf" tag because our config
 	// embed the blackbox module config which uses YAML.
 	unmarshalConf := koanf.UnmarshalConf{
-		Tag: "yaml",
+		DecoderConfig: &mapstructure.DecoderConfig{
+			DecodeHook: mapstructure.ComposeDecodeHookFunc(
+				mapstructure.StringToTimeDurationHookFunc(),
+				mapstructure.StringToSliceHookFunc(","),
+				mapstructure.TextUnmarshallerHookFunc(),
+				BlackboxModuleUnmarshallerHookFunc()),
+			Metadata:         nil,
+			Result:           &config,
+			WeaklyTypedInput: true,
+		},
 	}
-
-	var config Config
 
 	if warning := k.UnmarshalWithConf("", &config, unmarshalConf); warning != nil {
 		warnings = append(warnings, warning)
@@ -113,7 +122,7 @@ func load(withDefault bool, paths ...string) (*koanf.Koanf, Warnings, error) {
 			return err
 		}
 
-		err := k.Load(structsProvider(DefaultConfig(), "yaml"), nil, koanf.WithMergeFunc(mergeFunc))
+		err := k.Load(structsProvider(DefaultConfig(), "koanf"), nil, koanf.WithMergeFunc(mergeFunc))
 		if err != nil {
 			finalErr = err
 		}
@@ -128,7 +137,7 @@ func load(withDefault bool, paths ...string) (*koanf.Koanf, Warnings, error) {
 func envToKeyFunc() (func(string) string, *Warnings) {
 	// Get all config keys from an empty config.
 	k := koanf.New(delimiter)
-	k.Load(structs.Provider(Config{}, "yaml"), nil)
+	k.Load(structs.Provider(Config{}, "koanf"), nil)
 	allKeys := k.All()
 
 	// Build a map of the environment variables with their corresponding config keys.
@@ -491,7 +500,7 @@ func migrateScrapper(k *koanf.Koanf, config map[string]interface{}, deprecatedPa
 // secret is any key containing "key", "secret", "password" or "passwd".
 func Dump(config Config) map[string]interface{} {
 	k := koanf.New(delimiter)
-	k.Load(structs.Provider(config, "yaml"), nil)
+	k.Load(structs.Provider(config, "koanf"), nil)
 
 	return dump(k.All())
 }

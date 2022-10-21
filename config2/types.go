@@ -1,348 +1,350 @@
 package config2
 
-import bbConf "github.com/prometheus/blackbox_exporter/config"
+import (
+	bbConf "github.com/prometheus/blackbox_exporter/config"
+)
 
 // Config is the structured configuration of the agent.
 type Config struct {
-	Agent      Agent     `yaml:"agent"`
-	Blackbox   Blackbox  `yaml:"blackbox"`
-	Bleemeo    Bleemeo   `yaml:"bleemeo"`
-	Container  Container `yaml:"container"`
-	DF         DF        `yaml:"df"`
-	DiskIgnore []string  `yaml:"disk_ignore"`
+	Agent      Agent     `koanf:"agent"`
+	Blackbox   Blackbox  `koanf:"blackbox"`
+	Bleemeo    Bleemeo   `koanf:"bleemeo"`
+	Container  Container `koanf:"container"`
+	DF         DF        `koanf:"df"`
+	DiskIgnore []string  `koanf:"disk_ignore"`
 	// TODO: Not documented.
-	DiskMonitor               []string             `yaml:"disk_monitor"`
-	InfluxDB                  InfluxDB             `yaml:"influxdb"`
-	JMX                       JMX                  `yaml:"jmx"`
-	JMXTrans                  JMXTrans             `yaml:"jmxtrans"`
-	Kubernetes                Kubernetes           `yaml:"kubernetes"`
-	Logging                   Logging              `yaml:"logging"`
-	Metric                    Metric               `yaml:"metric"`
-	MQTT                      OpenSourceMQTT       `yaml:"mqtt"`
-	NetworkInterfaceBlacklist []string             `yaml:"network_interface_blacklist"`
-	NRPE                      NRPE                 `yaml:"nrpe"`
-	NvidiaSMI                 NvidiaSMI            `yaml:"nvidia_smi"`
-	Services                  []Service            `yaml:"service"`
-	ServiceIgnoreMetrics      []NameInstance       `yaml:"service_ignore_metrics"`
-	ServiceIgnoreCheck        []NameInstance       `yaml:"service_ignore_check"`
-	Stack                     string               `yaml:"stack"`
-	Tags                      []string             `yaml:"tags"`
-	Telegraf                  Telegraf             `yaml:"telegraf"`
-	Thresholds                map[string]Threshold `yaml:"thresholds"`
-	Web                       Web                  `yaml:"web"`
+	DiskMonitor               []string             `koanf:"disk_monitor"`
+	InfluxDB                  InfluxDB             `koanf:"influxdb"`
+	JMX                       JMX                  `koanf:"jmx"`
+	JMXTrans                  JMXTrans             `koanf:"jmxtrans"`
+	Kubernetes                Kubernetes           `koanf:"kubernetes"`
+	Logging                   Logging              `koanf:"logging"`
+	Metric                    Metric               `koanf:"metric"`
+	MQTT                      OpenSourceMQTT       `koanf:"mqtt"`
+	NetworkInterfaceBlacklist []string             `koanf:"network_interface_blacklist"`
+	NRPE                      NRPE                 `koanf:"nrpe"`
+	NvidiaSMI                 NvidiaSMI            `koanf:"nvidia_smi"`
+	Services                  []Service            `koanf:"service"`
+	ServiceIgnoreMetrics      []NameInstance       `koanf:"service_ignore_metrics"`
+	ServiceIgnoreCheck        []NameInstance       `koanf:"service_ignore_check"`
+	Stack                     string               `koanf:"stack"`
+	Tags                      []string             `koanf:"tags"`
+	Telegraf                  Telegraf             `koanf:"telegraf"`
+	Thresholds                map[string]Threshold `koanf:"thresholds"`
+	Web                       Web                  `koanf:"web"`
 	// TODO: Not documented.
-	Zabbix Zabbix `yaml:"zabbix"`
+	Zabbix Zabbix `koanf:"zabbix"`
 }
 
 type Zabbix struct {
-	Enable  bool   `yaml:"enable"`
-	Address string `yaml:"address"`
-	Port    int    `yaml:"port"`
+	Enable  bool   `koanf:"enable"`
+	Address string `koanf:"address"`
+	Port    int    `koanf:"port"`
 }
 
 type Threshold struct {
-	LowWarning   float64 `yaml:"low_warning"`
-	LowCritical  float64 `yaml:"low_critical"`
-	HighWarning  float64 `yaml:"high_warning"`
-	HighCritical float64 `yaml:"high_critical"`
+	LowWarning   float64 `koanf:"low_warning"`
+	LowCritical  float64 `koanf:"low_critical"`
+	HighWarning  float64 `koanf:"high_warning"`
+	HighCritical float64 `koanf:"high_critical"`
 }
 
 type Telegraf struct {
-	DockerMetricsEnable bool   `yaml:"docker_metrics_enable"`
-	StatsD              StatsD `yaml:"statsd"`
+	DockerMetricsEnable bool   `koanf:"docker_metrics_enable"`
+	StatsD              StatsD `koanf:"statsd"`
 }
 
 type StatsD struct {
-	Enable  bool   `yaml:"enable"`
-	Address string `yaml:"address"`
-	Port    int    `yaml:"port"`
+	Enable  bool   `koanf:"enable"`
+	Address string `koanf:"address"`
+	Port    int    `koanf:"port"`
 }
 
 type NameInstance struct {
-	Name     string `yaml:"name"`
-	Instance string `yaml:"instance"`
+	Name     string `koanf:"name"`
+	Instance string `koanf:"instance"`
 }
 
 type NvidiaSMI struct {
-	Enable  bool   `yaml:"enable"`
-	BinPath string `yaml:"bin_path"`
-	Timeout int    `yaml:"timeout"`
+	Enable  bool   `koanf:"enable"`
+	BinPath string `koanf:"bin_path"`
+	Timeout int    `koanf:"timeout"`
 }
 
 type NRPE struct {
-	Enable    bool     `yaml:"enable"`
-	Address   string   `yaml:"address"`
-	Port      int      `yaml:"port"`
-	SSL       bool     `yaml:"ssl"`
-	ConfPaths []string `yaml:"conf_paths"`
+	Enable    bool     `koanf:"enable"`
+	Address   string   `koanf:"address"`
+	Port      int      `koanf:"port"`
+	SSL       bool     `koanf:"ssl"`
+	ConfPaths []string `koanf:"conf_paths"`
 }
 
 type OpenSourceMQTT struct {
-	Enable      bool   `yaml:"enable"`
-	Username    string `yaml:"username"`
-	Password    string `yaml:"password"`
-	CAFile      string `yaml:"ca_file"`
-	Host        string `yaml:"host"`
-	Port        int    `yaml:"port"`
-	SSLInsecure bool   `yaml:"ssl_insecure"`
-	SSL         bool   `yaml:"ssl"`
+	Enable      bool   `koanf:"enable"`
+	Username    string `koanf:"username"`
+	Password    string `koanf:"password"`
+	CAFile      string `koanf:"ca_file"`
+	Host        string `koanf:"host"`
+	Port        int    `koanf:"port"`
+	SSLInsecure bool   `koanf:"ssl_insecure"`
+	SSL         bool   `koanf:"ssl"`
 }
 
 type Logging struct {
-	Buffer        LoggingBuffer `yaml:"buffer"`
-	Level         string        `yaml:"level"`
-	Output        string        `yaml:"output"`
-	FileName      string        `yaml:"filename"`
-	PackageLevels string        `yaml:"package_levels"`
+	Buffer        LoggingBuffer `koanf:"buffer"`
+	Level         string        `koanf:"level"`
+	Output        string        `koanf:"output"`
+	FileName      string        `koanf:"filename"`
+	PackageLevels string        `koanf:"package_levels"`
 }
 
 type LoggingBuffer struct {
-	HeadSizeBytes int `yaml:"head_size_bytes"`
-	TailSizeBytes int `yaml:"tail_size_bytes"`
+	HeadSizeBytes int `koanf:"head_size_bytes"`
+	TailSizeBytes int `koanf:"tail_size_bytes"`
 }
 
 type Kubernetes struct {
-	Enable   bool   `yaml:"enable"`
-	NodeName string `yaml:"nodename"`
+	Enable   bool   `koanf:"enable"`
+	NodeName string `koanf:"nodename"`
 	// TODO: Not documented.
-	ClusterName string `yaml:"clustername"`
-	KubeConfig  string `yaml:"kubeconfig"`
+	ClusterName string `koanf:"clustername"`
+	KubeConfig  string `koanf:"kubeconfig"`
 }
 
 type JMXTrans struct {
-	ConfigFile     string `yaml:"config_file"`
-	FilePermission string `yaml:"file_permission"`
-	GraphitePort   int    `yaml:"graphite_port"`
+	ConfigFile     string `koanf:"config_file"`
+	FilePermission string `koanf:"file_permission"`
+	GraphitePort   int    `koanf:"graphite_port"`
 }
 
 type JMX struct {
-	Enable bool `yaml:"enable"`
+	Enable bool `koanf:"enable"`
 }
 
 type InfluxDB struct {
-	Enable bool              `yaml:"enable"`
-	Host   string            `yaml:"host"`
-	Port   int               `yaml:"port"`
-	DBName string            `yaml:"db_name"`
-	Tags   map[string]string `yaml:"tags"`
+	Enable bool              `koanf:"enable"`
+	Host   string            `koanf:"host"`
+	Port   int               `koanf:"port"`
+	DBName string            `koanf:"db_name"`
+	Tags   map[string]string `koanf:"tags"`
 }
 
 type Bleemeo struct {
-	AccountID                         string      `yaml:"account_id"`
-	APIBase                           string      `yaml:"api_base"`
-	APISSLInsecure                    bool        `yaml:"api_ssl_insecure"`
-	ContainerRegistrationDelaySeconds int         `yaml:"container_registration_delay_seconds"`
-	Enable                            bool        `yaml:"enable"`
-	InitialAgentName                  string      `yaml:"initial_agent_name"`
-	InitialServerGroupName            string      `yaml:"initial_server_group_name"`
-	InitialServerGroupNameForSNMP     string      `yaml:"initial_server_group_name_for_snmp"`
-	MQTT                              BleemeoMQTT `yaml:"mqtt"`
-	RegistrationKey                   string      `yaml:"registration_key"`
+	AccountID                         string      `koanf:"account_id"`
+	APIBase                           string      `koanf:"api_base"`
+	APISSLInsecure                    bool        `koanf:"api_ssl_insecure"`
+	ContainerRegistrationDelaySeconds int         `koanf:"container_registration_delay_seconds"`
+	Enable                            bool        `koanf:"enable"`
+	InitialAgentName                  string      `koanf:"initial_agent_name"`
+	InitialServerGroupName            string      `koanf:"initial_server_group_name"`
+	InitialServerGroupNameForSNMP     string      `koanf:"initial_server_group_name_for_snmp"`
+	MQTT                              BleemeoMQTT `koanf:"mqtt"`
+	RegistrationKey                   string      `koanf:"registration_key"`
 	// TODO: Not documented.
-	Sentry Sentry `yaml:"sentry"`
+	Sentry Sentry `koanf:"sentry"`
 }
 
 type Sentry struct {
-	DSN string `yaml:"dsn"`
+	DSN string `koanf:"dsn"`
 }
 
 type BleemeoMQTT struct {
-	CAFile      string `yaml:"cafile"`
-	Host        string `yaml:"host"`
-	Port        int    `yaml:"port"`
-	SSLInsecure bool   `yaml:"ssl_insecure"`
-	SSL         bool   `yaml:"ssl"`
+	CAFile      string `koanf:"cafile"`
+	Host        string `koanf:"host"`
+	Port        int    `koanf:"port"`
+	SSLInsecure bool   `koanf:"ssl_insecure"`
+	SSL         bool   `koanf:"ssl"`
 }
 
 type Blackbox struct {
-	Enable      bool   `yaml:"enable"`
-	ScraperName string `yaml:"scraper_name"`
+	Enable      bool   `koanf:"enable"`
+	ScraperName string `koanf:"scraper_name"`
 	// TODO: Not documented.
-	ScraperSendUUID bool                     `yaml:"scraper_send_uuid"`
-	UserAgent       string                   `yaml:"user_agent"`
-	Targets         []BlackboxTarget         `yaml:"targets"`
-	Modules         map[string]bbConf.Module `yaml:"modules"`
+	ScraperSendUUID bool                     `koanf:"scraper_send_uuid"`
+	UserAgent       string                   `koanf:"user_agent"`
+	Targets         []BlackboxTarget         `koanf:"targets"`
+	Modules         map[string]bbConf.Module `koanf:"modules"`
 }
 
 type BlackboxTarget struct {
 	// TODO: Not documented.
-	Name   string `yaml:"name"`
-	URL    string `yaml:"url"`
-	Module string `yaml:"module"`
+	Name   string `koanf:"name"`
+	URL    string `koanf:"url"`
+	Module string `koanf:"module"`
 }
 
 type Agent struct {
-	CloudImageCreationFile string    `yaml:"cloudimage_creation_file"`
-	HTTPDebug              HTTPDebug `yaml:"http_debug"`
-	InstallationFormat     string    `yaml:"installation_format"`
-	FactsFile              string    `yaml:"facts_file"`
-	NetstatFile            string    `yaml:"netstat_file"`
-	StateFile              string    `yaml:"state_file"`
+	CloudImageCreationFile string    `koanf:"cloudimage_creation_file"`
+	HTTPDebug              HTTPDebug `koanf:"http_debug"`
+	InstallationFormat     string    `koanf:"installation_format"`
+	FactsFile              string    `koanf:"facts_file"`
+	NetstatFile            string    `koanf:"netstat_file"`
+	StateFile              string    `koanf:"state_file"`
 	// TODO: Not documented.
-	StateCacheFile      string          `yaml:"state_cache_file"`
-	StateResetFile      string          `yaml:"state_reset_file"`
-	DeprecatedStateFile string          `yaml:"deprecated_state_file"`
-	UpgradeFile         string          `yaml:"upgrade_file"`
-	AutoUpgradeFile     string          `yaml:"auto_upgrade_file"`
-	ProcessExporter     ProcessExporter `yaml:"process_exporter"`
-	PublicIPIndicator   string          `yaml:"public_ip_indicator"`
-	NodeExporter        NodeExporter    `yaml:"node_exporter"`
-	WindowsExporter     NodeExporter    `yaml:"windows_exporter"`
+	StateCacheFile      string          `koanf:"state_cache_file"`
+	StateResetFile      string          `koanf:"state_reset_file"`
+	DeprecatedStateFile string          `koanf:"deprecated_state_file"`
+	UpgradeFile         string          `koanf:"upgrade_file"`
+	AutoUpgradeFile     string          `koanf:"auto_upgrade_file"`
+	ProcessExporter     ProcessExporter `koanf:"process_exporter"`
+	PublicIPIndicator   string          `koanf:"public_ip_indicator"`
+	NodeExporter        NodeExporter    `koanf:"node_exporter"`
+	WindowsExporter     NodeExporter    `koanf:"windows_exporter"`
 	// TODO: Not documented.
-	Telemetry     Telemetry `yaml:"telemetry"`
-	MetricsFormat string    `yaml:"metrics_format"`
+	Telemetry     Telemetry `koanf:"telemetry"`
+	MetricsFormat string    `koanf:"metrics_format"`
 }
 
 type Telemetry struct {
-	Enable  bool   `yaml:"enable"`
-	Address string `yaml:"address"`
+	Enable  bool   `koanf:"enable"`
+	Address string `koanf:"address"`
 }
 
 type ProcessExporter struct {
-	Enable bool `yaml:"enable"`
+	Enable bool `koanf:"enable"`
 }
 
 type NodeExporter struct {
-	Enable     bool     `yaml:"enable"`
-	Collectors []string `yaml:"collectors"`
+	Enable     bool     `koanf:"enable"`
+	Collectors []string `koanf:"collectors"`
 }
 type HTTPDebug struct {
-	Enable      bool   `yaml:"enable"`
-	BindAddress string `yaml:"bind_address"`
+	Enable      bool   `koanf:"enable"`
+	BindAddress string `koanf:"bind_address"`
 }
 
 type Metric struct {
-	AllowMetrics            []string       `yaml:"allow_metrics"`
-	DenyMetrics             []string       `yaml:"deny_metrics"`
-	IncludeDefaultMetrics   bool           `yaml:"include_default_metrics"`
-	Prometheus              Prometheus     `yaml:"prometheus"`
-	SoftStatusPeriodDefault int            `yaml:"softstatus_period_default"`
-	SoftStatusPeriod        map[string]int `yaml:"softstatus_period"`
-	SNMP                    SNMP           `yaml:"snmp"`
+	AllowMetrics            []string       `koanf:"allow_metrics"`
+	DenyMetrics             []string       `koanf:"deny_metrics"`
+	IncludeDefaultMetrics   bool           `koanf:"include_default_metrics"`
+	Prometheus              Prometheus     `koanf:"prometheus"`
+	SoftStatusPeriodDefault int            `koanf:"softstatus_period_default"`
+	SoftStatusPeriod        map[string]int `koanf:"softstatus_period"`
+	SNMP                    SNMP           `koanf:"snmp"`
 }
 
 type SNMP struct {
 	// TODO: Not documented.
-	ExporterAddress string       `yaml:"exporter_address"`
-	Targets         []SNMPTarget `yaml:"targets"`
+	ExporterAddress string       `koanf:"exporter_address"`
+	Targets         []SNMPTarget `koanf:"targets"`
 }
 
 type SNMPTarget struct {
-	InitialName string `yaml:"initial_name"`
-	Target      string `yaml:"target"`
+	InitialName string `koanf:"initial_name"`
+	Target      string `koanf:"target"`
 }
 
 type Prometheus struct {
-	Targets []PrometheusTarget `yaml:"targets"`
+	Targets []PrometheusTarget `koanf:"targets"`
 }
 
 type PrometheusTarget struct {
-	URL          string   `yaml:"url"`
-	Name         string   `yaml:"name"`
-	AllowMetrics []string `yaml:"allow_metrics"`
-	DenyMetrics  []string `yaml:"deny_metrics"`
+	URL          string   `koanf:"url"`
+	Name         string   `koanf:"name"`
+	AllowMetrics []string `koanf:"allow_metrics"`
+	DenyMetrics  []string `koanf:"deny_metrics"`
 }
 
 type DF struct {
-	HostMountPoint string   `yaml:"host_mount_point"`
-	PathIgnore     []string `yaml:"path_ignore"`
-	IgnoreFSType   []string `yaml:"ignore_fs_type"`
+	HostMountPoint string   `koanf:"host_mount_point"`
+	PathIgnore     []string `koanf:"path_ignore"`
+	IgnoreFSType   []string `koanf:"ignore_fs_type"`
 }
 
 type Web struct {
-	Enable bool `yaml:"enable"`
+	Enable bool `koanf:"enable"`
 	// TODO: Not documented.
-	LocalUI      LocalUI  `yaml:"local_ui"`
-	Listener     Listener `yaml:"listener"`
-	StaticCDNURL string   `yaml:"static_cdn_url"`
+	LocalUI      LocalUI  `koanf:"local_ui"`
+	Listener     Listener `koanf:"listener"`
+	StaticCDNURL string   `koanf:"static_cdn_url"`
 }
 
 type LocalUI struct {
-	Enable bool `yaml:"enable"`
+	Enable bool `koanf:"enable"`
 }
 
 type Listener struct {
-	Address string `yaml:"address"`
-	Port    int    `yaml:"port"`
+	Address string `koanf:"address"`
+	Port    int    `koanf:"port"`
 }
 
 type Service struct {
 	// The name of the service.
-	ID string `yaml:"id"`
+	ID string `koanf:"id"`
 	// Instance of the service, used to differentiate between services with the same ID.
-	Instance string `yaml:"instance"`
+	Instance string `koanf:"instance"`
 	// The port the service is running on.
-	Port int `yaml:"port"`
+	Port int `koanf:"port"`
 	// Ports that should be ignored.
-	IgnorePorts []int `yaml:"ignore_ports"`
+	IgnorePorts []int `koanf:"ignore_ports"`
 	// The address of the service.
-	Address string `yaml:"address"`
+	Address string `koanf:"address"`
 	// The delay between two consecutive checks in seconds.
-	Interval int `yaml:"interval"`
+	Interval int `koanf:"interval"`
 	// Check type used for custom checks.
-	CheckType string `yaml:"check_type"`
+	CheckType string `koanf:"check_type"`
 	// The path used for HTTP checks.
-	HTTPPath string `yaml:"http_path"`
+	HTTPPath string `koanf:"http_path"`
 	// The expected status code for HTTP checks.
-	HTTPStatusCode int `yaml:"http_status_code"`
+	HTTPStatusCode int `koanf:"http_status_code"`
 	// Host header sent with HTTP checks.
-	HTTPHost string `yaml:"http_host"`
+	HTTPHost string `koanf:"http_host"`
 	// Regex to match in a process check.
-	MatchProcess string `yaml:"match_process"`
+	MatchProcess string `koanf:"match_process"`
 	// Command used for a Nagios check.
-	CheckCommand string `yaml:"check_command"`
+	CheckCommand string `koanf:"check_command"`
 	// TODO: Not documented.
-	NagiosNRPEName string `yaml:"nagios_nrpe_name"`
+	NagiosNRPEName string `koanf:"nagios_nrpe_name"`
 	// Unix socket to connect and gather metric from MySQL.
-	MetricsUnixSocket string `yaml:"metrics_unix_socket"`
+	MetricsUnixSocket string `koanf:"metrics_unix_socket"`
 	// Credentials for services that require authentication.
-	Username string `yaml:"username"`
-	Password string `yaml:"password"`
+	Username string `koanf:"username"`
+	Password string `koanf:"password"`
 	// HAProxy and PHP-FMP stats URL.
-	StatsURL string `yaml:"stats_url"`
+	StatsURL string `koanf:"stats_url"`
 	// Port of RabbitMQ management interface.
-	ManagementPort int `yaml:"mgmt_port"`
+	ManagementPort int `koanf:"mgmt_port"`
 	// Detailed monitoring of specific Cassandra tables.
-	CassandraDetailedTables []string `yaml:"cassandra_detailed_tables"`
+	CassandraDetailedTables []string `koanf:"cassandra_detailed_tables"`
 	// JMX services.
-	JMXPort     int         `yaml:"jmx_port"`
-	JMXUsername string      `yaml:"jmx_username"`
-	JMXPassword string      `yaml:"jmx_password"`
-	JMXMetrics  []JmxMetric `yaml:"jmx_metrics"`
+	JMXPort     int         `koanf:"jmx_port"`
+	JMXUsername string      `koanf:"jmx_username"`
+	JMXPassword string      `koanf:"jmx_password"`
+	JMXMetrics  []JmxMetric `koanf:"jmx_metrics"`
 }
 
 type JmxMetric struct {
-	Name      string  `yaml:"name"`
-	MBean     string  `yaml:"mbean"`
-	Attribute string  `yaml:"attribute"`
-	Path      string  `yaml:"path"`
-	Scale     float64 `yaml:"scale"`
-	Derive    bool    `yaml:"derive"`
+	Name      string  `koanf:"name"`
+	MBean     string  `koanf:"mbean"`
+	Attribute string  `koanf:"attribute"`
+	Path      string  `koanf:"path"`
+	Scale     float64 `koanf:"scale"`
+	Derive    bool    `koanf:"derive"`
 	// TODO: Not documented.
-	Sum       bool     `yaml:"sum"`
-	TypeNames []string `yaml:"type_names"`
-	Ratio     string   `yaml:"ratio"`
+	Sum       bool     `koanf:"sum"`
+	TypeNames []string `koanf:"type_names"`
+	Ratio     string   `koanf:"ratio"`
 }
 
 type Container struct {
-	Filter           Filter           `yaml:"filter"`
-	Type             string           `yaml:"type"`
-	PIDNamespaceHost bool             `yaml:"pid_namespace_host"`
-	Runtime          ContainerRuntime `yaml:"runtime"`
+	Filter           Filter           `koanf:"filter"`
+	Type             string           `koanf:"type"`
+	PIDNamespaceHost bool             `koanf:"pid_namespace_host"`
+	Runtime          ContainerRuntime `koanf:"runtime"`
 }
 
 type Filter struct {
-	AllowByDefault bool     `yaml:"allow_by_default"`
-	AllowList      []string `yaml:"allow_list"`
-	DenyList       []string `yaml:"deny_list"`
+	AllowByDefault bool     `koanf:"allow_by_default"`
+	AllowList      []string `koanf:"allow_list"`
+	DenyList       []string `koanf:"deny_list"`
 }
 
 type ContainerRuntime struct {
-	Docker     ContainerRuntimeAddresses `yaml:"docker"`
-	ContainerD ContainerRuntimeAddresses `yaml:"containerd"`
+	Docker     ContainerRuntimeAddresses `koanf:"docker"`
+	ContainerD ContainerRuntimeAddresses `koanf:"containerd"`
 }
 
 type ContainerRuntimeAddresses struct {
-	Addresses      []string `yaml:"addresses"`
-	PrefixHostRoot bool     `yaml:"prefix_hostroot"`
+	Addresses      []string `koanf:"addresses"`
+	PrefixHostRoot bool     `koanf:"prefix_hostroot"`
 }

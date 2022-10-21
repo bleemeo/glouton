@@ -8,6 +8,7 @@ import (
 	"github.com/knadh/koanf"
 	"github.com/knadh/koanf/providers/structs"
 	bbConf "github.com/prometheus/blackbox_exporter/config"
+	"github.com/prometheus/common/config"
 )
 
 // TestMerge tests that config files are merged correctly.
@@ -95,7 +96,14 @@ func TestStructuredConfig(t *testing.T) {
 						IPProtocol:       "ip4",
 						ValidStatusCodes: []int{200},
 						FailIfSSL:        true,
+						// Default values assigned by blackbox YAML unmarshaller.
+						IPProtocolFallback: true,
+						HTTPClientConfig:   config.DefaultHTTPClientConfig,
 					},
+					TCP:  bbConf.DefaultTCPProbe,
+					ICMP: bbConf.DefaultICMPProbe,
+					DNS:  bbConf.DefaultModule.DNS,
+					GRPC: bbConf.DefaultModule.GRPC,
 				},
 			},
 			UserAgent: "my-user-agent",
