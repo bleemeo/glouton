@@ -6,13 +6,12 @@ import (
 
 // Config is the structured configuration of the agent.
 type Config struct {
-	Agent      Agent     `yaml:"agent"`
-	Blackbox   Blackbox  `yaml:"blackbox"`
-	Bleemeo    Bleemeo   `yaml:"bleemeo"`
-	Container  Container `yaml:"container"`
-	DF         DF        `yaml:"df"`
-	DiskIgnore []string  `yaml:"disk_ignore"`
-	// TODO: Not documented.
+	Agent                     Agent                `yaml:"agent"`
+	Blackbox                  Blackbox             `yaml:"blackbox"`
+	Bleemeo                   Bleemeo              `yaml:"bleemeo"`
+	Container                 Container            `yaml:"container"`
+	DF                        DF                   `yaml:"df"`
+	DiskIgnore                []string             `yaml:"disk_ignore"`
 	DiskMonitor               []string             `yaml:"disk_monitor"`
 	InfluxDB                  InfluxDB             `yaml:"influxdb"`
 	JMX                       JMX                  `yaml:"jmx"`
@@ -32,8 +31,7 @@ type Config struct {
 	Telegraf                  Telegraf             `yaml:"telegraf"`
 	Thresholds                map[string]Threshold `yaml:"thresholds"`
 	Web                       Web                  `yaml:"web"`
-	// TODO: Not documented.
-	Zabbix Zabbix `yaml:"zabbix"`
+	Zabbix                    Zabbix               `yaml:"zabbix"`
 }
 
 type Zabbix struct {
@@ -104,9 +102,8 @@ type LoggingBuffer struct {
 }
 
 type Kubernetes struct {
-	Enable   bool   `yaml:"enable"`
-	NodeName string `yaml:"nodename"`
-	// TODO: Not documented.
+	Enable      bool   `yaml:"enable"`
+	NodeName    string `yaml:"nodename"`
 	ClusterName string `yaml:"clustername"`
 	KubeConfig  string `yaml:"kubeconfig"`
 }
@@ -140,8 +137,7 @@ type Bleemeo struct {
 	InitialServerGroupNameForSNMP     string      `yaml:"initial_server_group_name_for_snmp"`
 	MQTT                              BleemeoMQTT `yaml:"mqtt"`
 	RegistrationKey                   string      `yaml:"registration_key"`
-	// TODO: Not documented.
-	Sentry Sentry `yaml:"sentry"`
+	Sentry                            Sentry      `yaml:"sentry"`
 }
 
 type Sentry struct {
@@ -157,9 +153,8 @@ type BleemeoMQTT struct {
 }
 
 type Blackbox struct {
-	Enable      bool   `yaml:"enable"`
-	ScraperName string `yaml:"scraper_name"`
-	// TODO: Not documented.
+	Enable          bool                     `yaml:"enable"`
+	ScraperName     string                   `yaml:"scraper_name"`
 	ScraperSendUUID bool                     `yaml:"scraper_send_uuid"`
 	UserAgent       string                   `yaml:"user_agent"`
 	Targets         []BlackboxTarget         `yaml:"targets"`
@@ -167,32 +162,29 @@ type Blackbox struct {
 }
 
 type BlackboxTarget struct {
-	// TODO: Not documented.
 	Name   string `yaml:"name"`
 	URL    string `yaml:"url"`
 	Module string `yaml:"module"`
 }
 
 type Agent struct {
-	CloudImageCreationFile string    `yaml:"cloudimage_creation_file"`
-	HTTPDebug              HTTPDebug `yaml:"http_debug"`
-	InstallationFormat     string    `yaml:"installation_format"`
-	FactsFile              string    `yaml:"facts_file"`
-	NetstatFile            string    `yaml:"netstat_file"`
-	StateFile              string    `yaml:"state_file"`
-	// TODO: Not documented.
-	StateCacheFile      string          `yaml:"state_cache_file"`
-	StateResetFile      string          `yaml:"state_reset_file"`
-	DeprecatedStateFile string          `yaml:"deprecated_state_file"`
-	UpgradeFile         string          `yaml:"upgrade_file"`
-	AutoUpgradeFile     string          `yaml:"auto_upgrade_file"`
-	ProcessExporter     ProcessExporter `yaml:"process_exporter"`
-	PublicIPIndicator   string          `yaml:"public_ip_indicator"`
-	NodeExporter        NodeExporter    `yaml:"node_exporter"`
-	WindowsExporter     NodeExporter    `yaml:"windows_exporter"`
-	// TODO: Not documented.
-	Telemetry     Telemetry `yaml:"telemetry"`
-	MetricsFormat string    `yaml:"metrics_format"`
+	CloudImageCreationFile string          `yaml:"cloudimage_creation_file"`
+	HTTPDebug              HTTPDebug       `yaml:"http_debug"`
+	InstallationFormat     string          `yaml:"installation_format"`
+	FactsFile              string          `yaml:"facts_file"`
+	NetstatFile            string          `yaml:"netstat_file"`
+	StateFile              string          `yaml:"state_file"`
+	StateCacheFile         string          `yaml:"state_cache_file"`
+	StateResetFile         string          `yaml:"state_reset_file"`
+	DeprecatedStateFile    string          `yaml:"deprecated_state_file"`
+	UpgradeFile            string          `yaml:"upgrade_file"`
+	AutoUpgradeFile        string          `yaml:"auto_upgrade_file"`
+	ProcessExporter        ProcessExporter `yaml:"process_exporter"`
+	PublicIPIndicator      string          `yaml:"public_ip_indicator"`
+	NodeExporter           NodeExporter    `yaml:"node_exporter"`
+	WindowsExporter        NodeExporter    `yaml:"windows_exporter"`
+	Telemetry              Telemetry       `yaml:"telemetry"`
+	MetricsFormat          string          `yaml:"metrics_format"`
 }
 
 type Telemetry struct {
@@ -224,7 +216,6 @@ type Metric struct {
 }
 
 type SNMP struct {
-	// TODO: Not documented.
 	ExporterAddress string       `yaml:"exporter_address"`
 	Targets         []SNMPTarget `yaml:"targets"`
 }
@@ -252,8 +243,7 @@ type DF struct {
 }
 
 type Web struct {
-	Enable bool `yaml:"enable"`
-	// TODO: Not documented.
+	Enable       bool     `yaml:"enable"`
 	LocalUI      LocalUI  `yaml:"local_ui"`
 	Listener     Listener `yaml:"listener"`
 	StaticCDNURL string   `yaml:"static_cdn_url"`
@@ -292,8 +282,7 @@ type Service struct {
 	// Regex to match in a process check.
 	MatchProcess string `yaml:"match_process"`
 	// Command used for a Nagios check.
-	CheckCommand string `yaml:"check_command"`
-	// TODO: Not documented.
+	CheckCommand   string `yaml:"check_command"`
 	NagiosNRPEName string `yaml:"nagios_nrpe_name"`
 	// Unix socket to connect and gather metric from MySQL.
 	MetricsUnixSocket string `yaml:"metrics_unix_socket"`
@@ -314,13 +303,12 @@ type Service struct {
 }
 
 type JmxMetric struct {
-	Name      string  `yaml:"name"`
-	MBean     string  `yaml:"mbean"`
-	Attribute string  `yaml:"attribute"`
-	Path      string  `yaml:"path"`
-	Scale     float64 `yaml:"scale"`
-	Derive    bool    `yaml:"derive"`
-	// TODO: Not documented.
+	Name      string   `yaml:"name"`
+	MBean     string   `yaml:"mbean"`
+	Attribute string   `yaml:"attribute"`
+	Path      string   `yaml:"path"`
+	Scale     float64  `yaml:"scale"`
+	Derive    bool     `yaml:"derive"`
 	Sum       bool     `yaml:"sum"`
 	TypeNames []string `yaml:"type_names"`
 	Ratio     string   `yaml:"ratio"`
