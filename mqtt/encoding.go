@@ -23,13 +23,13 @@ import (
 	"io"
 )
 
-type mqttEncoder struct {
+type Encoder struct {
 	encoder *zlib.Writer
 	buffer  bytes.Buffer
 }
 
 // Encode is NOT thread-safe.
-func (enc *mqttEncoder) Encode(obj interface{}) ([]byte, error) {
+func (enc *Encoder) Encode(obj interface{}) ([]byte, error) {
 	if enc.encoder == nil {
 		enc.encoder = zlib.NewWriter(&enc.buffer)
 	}
@@ -53,7 +53,7 @@ func (enc *mqttEncoder) Encode(obj interface{}) ([]byte, error) {
 	return clone, nil
 }
 
-func (enc *mqttEncoder) Decode(input []byte, obj interface{}) error {
+func (enc *Encoder) Decode(input []byte, obj interface{}) error {
 	decoder, err := zlib.NewReader(bytes.NewReader(input))
 	if err != nil {
 		return err

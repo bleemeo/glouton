@@ -20,11 +20,12 @@ Glouton is the agent used in the **Bleemeo cloud monitoring solution**. Deployin
 
 - [**Automatic discovery and configuration of services**](#automatically-discovered-services) to generate checks and metrics
 - Can be used as the main **[Prometheus endpoint](#metrics-endpoint)** for another scrapper
-- Support **[Nagios checks](https://docs.bleemeo.com/metrics-sources/custom/#reference-for-custom-check), [NRPE](https://docs.bleemeo.com/agent/configuration/#nrpeaddress) and [StatsD](https://docs.bleemeo.com/metrics-sources/statsd)** metrics ingester
+- Support **[Nagios checks](https://go.bleemeo.com/l/custom-service-check), [NRPE](https://go.bleemeo.com/l/agent-configuration-nagios-nrpe) and [StatsD](https://go.bleemeo.com/l/doc-statsd)** metrics ingester
 - **Kubernetes native:** create metrics and checks for pods
-- Monitor your printers and network devices with [**SNMP**](https://docs.bleemeo.com/agent/snmp)
-- **[JMX support](https://docs.bleemeo.com/metrics-sources/java)** to monitor your Java applications.
+- Monitor your printers and network devices with [**SNMP**](https://go.bleemeo.com/l/network-monitoring-installation)
+- **[JMX support](https://go.bleemeo.com/l/java)** to monitor your Java applications.
 - Integrated **web dashboard**
+- Support [pushing metrics](#mqtt) to an external **[MQTT](https://mqtt.org/) broker**
 
 <p align="center">
    <img src="assets/dashboard.png" alt="Dashboard"/>
@@ -32,11 +33,11 @@ Glouton is the agent used in the **Bleemeo cloud monitoring solution**. Deployin
 
 ### Automatically discovered services
 
-Glouton automatically detects and generates metrics for your services. Supported services include **Apache**, **Cassandra**, **Redis**, **Elasticsearch**, **Nginx**, **PostgreSQL**, and many others. The full list of services and generated metrics can be found [here](https://docs.bleemeo.com/metrics-sources/services-metrics).
+Glouton automatically detects and generates metrics for your services. Supported services include **Apache**, **Cassandra**, **Redis**, **Elasticsearch**, **Nginx**, **PostgreSQL**, and many others. The full list of services and generated metrics can be found [here](https://go.bleemeo.com/l/services-metrics).
 
 ### Metrics endpoint
 
-A metrics endpoint is available on port http://localhost:8015/metrics by default (this can be configured [here](https://docs.bleemeo.com/agent/configuration#weblisteneraddress)). This endpoint can be scrapped by Prometheus for example to retrieve the metrics and show them in Grafana.
+A metrics endpoint is available on port http://localhost:8015/metrics by default (this can be configured [here](https://go.bleemeo.com/l/agent-configuration-web-server)). This endpoint can be scrapped by Prometheus for example to retrieve the metrics and show them in Grafana.
 
 A docker compose file is available to quickly setup a full monitoring stack. It includes Grafana, Glouton and a Prometheus configured to scrap Glouton's metrics endpoint.
 
@@ -50,10 +51,44 @@ A docker compose file is available to quickly setup a full monitoring stack. It 
 Then go to the Grafana dashboard at http://localhost:3000/d/83ceCuenk/, and log 
 in with the user "admin" and the password "password".
 
+### Push metrics to MQTT
+
+Glouton can periodically push metrics to an external MQTT broker.
+
+A docker compose file is available to show a working monitoring setup with a Glouton pushing points
+to MQTT. [SquirrelDB Ingestor](https://github.com/bleemeo/squirreldb-ingestor) is used to receive the metrics from MQTT and to write them to
+[SquirrelDB](https://github.com/bleemeo/squirreldb), a scalable timeseries database. This setup 
+uses [NATS](https://nats.io/) as the broker, any other broker will work but we prefer NATS for its scalability.  
+
+```sh
+(cd examples/mqtt; docker-compose up -d)
+```
+
+Then go to the Grafana dashboard at http://localhost:3000/d/83ceCuenk/, and log 
+in with the user "admin" and the password "password". You might have to wait a 
+little before seeing data on the graph.
+
+More details are available on [SquirrelDB Ingestor](https://github.com/bleemeo/squirreldb-ingestor) on how to use authenticated MQTT
+connections and how this setup can be scaled for high availability.
+
+You can use your own ingestor if you want, the messages sent to MQTT are encoded in JSON and
+compressed with zlib. Glouton sends its messages to the topic `v1/agent/fqdn/data` with `fqdn` 
+replaced by the host FQDN (`.` are replaced by `,` in the FQDN because NATS doesn't support `.` 
+in MQTT topics). Here is an example of a MQTT message:
+```json
+[
+   {
+      "labels_text": "__name__=cpu_used",
+      "time_ms": 1665479613948,
+      "value": 46.8,
+   }
+]
+```
+
 ## Install
 
 Glouton can be installed with Docker, Kubernetes, on Windows or as a native Linux package.
-If you use Glouton with the Bleemeo solution, you should follow the [documentation](https://docs.bleemeo.com/agent/installation/).
+If you use Glouton with the Bleemeo solution, you should follow the [documentation](https://go.bleemeo.com/l/agent-installation).
 
 ### Docker
 
@@ -86,12 +121,12 @@ bleemeo:
    enable: false
 ```
 
-To install Glouton as a native package on Linux, or to install it on Windows or Kubernetes, check out the [documentation](https://docs.bleemeo.com/agent/installation). Note that this documentation is made for users of the Bleemeo Cloud solution, but it also works without a Bleemeo account if you skip adding the credentials to the config.
+To install Glouton as a native package on Linux, or to install it on Windows or Kubernetes, check out the [documentation](https://go.bleemeo.com/l/agent-installation). Note that this documentation is made for users of the Bleemeo Cloud solution, but it also works without a Bleemeo account if you skip adding the credentials to the config.
 
 
 ## Configuration
 
-The full configuration file with all available options is available [here](https://docs.bleemeo.com/agent/configuration).
+The full configuration file with all available options is available [here](https://go.bleemeo.com/l/agent-configuration).
 
 ## Contributing
 

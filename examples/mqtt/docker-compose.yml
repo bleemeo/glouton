@@ -1,0 +1,66 @@
+version: '3'
+
+services:
+  glouton:
+    image: bleemeo/bleemeo-agent
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /:/hostroot:ro
+      - ./glouton.conf:/etc/glouton/conf.d/glouton.conf:ro
+      - glouton-data:/var/lib/glouton
+    network_mode: "host"
+    pid: "host"
+    cap_add:
+      - SYS_PTRACE # This permission is needed to monitor processes IO and memory used per process.
+      - SYS_ADMIN # This permission is needed to retrieve the network interface names of containers.
+
+  nats:
+    image: nats
+    command: -c /etc/nats/config.conf --name nats
+    ports:
+    - 127.0.0.1:1883:1883
+    volumes:
+    - ./nats.conf:/etc/nats/config.conf:ro
+
+  squirreldb-ingestor:
+    image: bleemeo/squirreldb-ingestor
+    environment:
+      - INGESTOR_REMOTE_WRITE_URL=http://squirreldb:9201/api/v1/write
+      - INGESTOR_MQTT_BROKER_URL=tcp://nats:1883
+
+  squirreldb:
+    image: bleemeo/squirreldb
+    restart: unless-stopped
+    environment:
+    - SQUIRRELDB_CASSANDRA_ADDRESSES=cassandra:9042
+    - SQUIRRELDB_REDIS_ADDRESSES=redis:6379
+
+  redis:
+    image: redis
+
+  cassandra:
+    image: cassandra
+    cap_add:
+    - SYS_NICE # Cassandra use mbind on NUMA system
+    environment:
+    # Limit memory usage.
+    - MAX_HEAP_SIZE=128M
+    - HEAP_NEWSIZE=24M
+    volumes:
+    - cassandra-data:/var/lib/cassandra
+
+  grafana:
+    image: grafana/grafana
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ../common/dashboards:/etc/grafana/provisioning/dashboards
+      - ./datasource.yml:/etc/grafana/provisioning/datasources/datasource.yml
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=password
+    ports:
+      - 127.0.0.1:3000:3000
+
+volumes:
+  glouton-data: {}
+  grafana-data: {}
+  cassandra-data: {}

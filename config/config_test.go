@@ -218,7 +218,7 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 		},
 		MQTT: OpenSourceMQTT{
 			Enable:      true,
-			Host:        "localhost",
+			Hosts:       []string{"localhost"},
 			Port:        1883,
 			Username:    "user",
 			Password:    "pass",

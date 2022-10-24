@@ -3,6 +3,7 @@ version: '3'
 services:
   glouton:
     image: bleemeo/bleemeo-agent
+    restart: unless-stopped
     environment:
       # Use environment variable from shell running docker-compose to easily override them.
       - GLOUTON_BLEEMEO_ACCOUNT_ID

@@ -214,7 +214,7 @@ func DefaultConfig() Config {
 		},
 		MQTT: OpenSourceMQTT{
 			Enable:      false,
-			Host:        "127.0.0.1",
+			Hosts:       []string{"127.0.0.1"},
 			Port:        1883,
 			Username:    "",
 			Password:    "",

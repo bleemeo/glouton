@@ -1651,7 +1651,7 @@ func runTest(t *testing.T, test testCase, isSSL bool, monitorID, agentID, agentF
 		}
 
 		if want.Labels[types.LabelName] == "probe_duration_seconds" {
-			if test.probeDurationIsTimeout && got.Value < 9.5 {
+			if test.probeDurationIsTimeout && got.Value < 9.49 {
 				t.Errorf("probe_duration_seconds = %v, want >= 9.5", got.Value)
 			} else if !test.probeDurationIsTimeout && got.Value > 5 {
 				t.Errorf("probe_duration_seconds = %v, want <= 5", got.Value)

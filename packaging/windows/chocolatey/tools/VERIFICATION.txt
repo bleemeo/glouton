@@ -3,5 +3,8 @@ Verification is intended to assist the Chocolatey moderators and community
 in verifying that this package's contents are trustworthy.
 
 This package is published by Bleemeo. The MSI installer contained
-in this package is the same as the one in the Glouton installation
-instructions https://docs.bleemeo.com/agent/installation/#running-with-installer.
+in this package is the same as the one proposed by Bleemeo in its latest release
+https://github.com/bleemeo/glouton/releases/. The installer is also available on
+https://packages.bleemeo.com/bleemeo-agent/windows/.
+
+The license comes from https://github.com/bleemeo/glouton/blob/master/LICENSE.

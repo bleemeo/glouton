@@ -40,9 +40,11 @@ import (
 	"glouton/influxdb"
 	"glouton/inputs"
 	"glouton/inputs/docker"
+	nvidia "glouton/inputs/nvidia_smi"
 	"glouton/inputs/statsd"
 	"glouton/jmxtrans"
 	"glouton/logger"
+	"glouton/mqtt"
 	"glouton/nrpe"
 	"glouton/prometheus/exporter/blackbox"
 	"glouton/prometheus/exporter/common"
@@ -86,6 +88,7 @@ import (
 
 	processInput "glouton/inputs/process"
 
+	paho "github.com/eclipse/paho.mqtt.golang"
 	"github.com/prometheus/prometheus/model/labels"
 	"gopkg.in/yaml.v3"
 )
@@ -137,6 +140,7 @@ type agent struct {
 	rulesManager           *rules.Manager
 	reloadState            ReloadState
 	vethProvider           *veth.Provider
+	mqtt                   *mqtt.MQTT
 
 	triggerHandler            *debouncer.Debouncer
 	triggerLock               sync.Mutex
@@ -209,6 +213,14 @@ func (a *agent) init(ctx context.Context, configFiles []string, firstRun bool) (
 		if err != nil {
 			logger.V(1).Printf("sentry.Init failed: %s", err)
 		}
+	}
+
+	// Initialize paho loggers, this need to be done only once to prevent data races.
+	if firstRun {
+		paho.ERROR = logger.V(2)
+		paho.CRITICAL = logger.V(2)
+		paho.WARN = logger.V(2)
+		paho.DEBUG = logger.V(3)
 	}
 
 	sentry.ConfigureScope(func(scope *sentry.Scope) {
@@ -1181,6 +1193,35 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		}
 	}
 
+	if a.config.NvidiaSMI.Enable {
+		// Force Prometheus format for NVIDIA SMI metrics as we want to keep the labels.
+		acc := &inputs.Accumulator{
+			Pusher:  a.gathererRegistry.WithTTLAndFormat(5*time.Minute, types.MetricFormatPrometheus),
+			Context: ctx,
+		}
+		promCollector := collector.New(acc)
+
+		_, err = a.gathererRegistry.RegisterPushPointsCallback(
+			registry.RegistrationOption{
+				Description: "Prometheus collector",
+				JitterSeed:  baseJitter,
+			},
+			promCollector.RunGather,
+		)
+		if err != nil {
+			logger.Printf("Unable to add Prometheus collector: %v", err)
+		}
+
+		err := nvidia.AddSMIInput(
+			promCollector,
+			a.config.NvidiaSMI.BinPath,
+			a.config.NvidiaSMI.Timeout,
+		)
+		if err != nil {
+			logger.Printf("Failed to initialize NVIDIA SMI collector: %v", err)
+		}
+	}
+
 	// register components only available on a given system, like node_exporter for unixes
 	a.registerOSSpecificComponents(a.vethProvider)
 
@@ -1199,7 +1240,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 			if strings.Contains(err.Error(), "address already in use") {
 				logger.Printf("Unable to listen on StatsD port because another program already use it")
 				logger.Printf("The StatsD integration is now disabled. Restart the agent to try re-enabling it.")
-				logger.Printf("See https://docs.bleemeo.com/agent/configuration#telegrafstatsdenable to permanently disable StatsD integration or using an alternate port")
+				logger.Printf("See https://go.bleemeo.com/l/agent-configuration-statsd to permanently disable StatsD integration or using an alternate port")
 			} else {
 				logger.Printf("Unable to create StatsD input: %v", err)
 			}
@@ -1210,6 +1251,20 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 
 	a.factProvider.SetFact("statsd_enable", fmt.Sprint(a.config.Telegraf.StatsD.Enable))
 	a.factProvider.SetFact("metrics_format", a.metricFormat.String())
+
+	if a.config.MQTT.Enable {
+		a.mqtt = mqtt.New(mqtt.Options{
+			ReloadState: a.reloadState.MQTT(),
+			Config:      a.config.MQTT,
+			Store:       filteredStore,
+			FQDN:        fqdn,
+		})
+
+		tasks = append(tasks, taskInfo{
+			a.mqtt.Run,
+			"MQTT connector",
+		})
+	}
 
 	a.startTasks(tasks)
 
@@ -2057,6 +2112,10 @@ func (a *agent) writeDiagnosticArchive(ctx context.Context, archive types.Archiv
 
 	if a.monitorManager != nil {
 		modules = append(modules, a.monitorManager.DiagnosticArchive)
+	}
+
+	if a.mqtt != nil {
+		modules = append(modules, a.mqtt.DiagnosticArchive)
 	}
 
 	for _, f := range modules {

@@ -46,7 +46,7 @@ import (
 var (
 	errFQDNNotSet                 = errors.New("unable to register, fqdn is not set")
 	errConnectorTemporaryDisabled = errors.New("bleemeo connector temporary disabled")
-	errBleemeoUndefined           = errors.New("bleemeo.account_id and/or bleemeo.registration_key is undefined. Please see  https://docs.bleemeo.com/agent/configuration#bleemeoaccount_id ")
+	errBleemeoUndefined           = errors.New("bleemeo.account_id and/or bleemeo.registration_key is undefined. Please see  https://go.bleemeo.com/l/agent-configuration-bleemeo-account ")
 	errIncorrectStatusCode        = errors.New("registration status code is")
 	errUninitialized              = errors.New("uninitialized")
 	errNotExist                   = errors.New("does not exist")
@@ -910,8 +910,8 @@ func (s *Synchronizer) checkDuplicated() error {
 			new.Value,
 		)
 		logger.Printf(
-			"The following links may be relevant to solve the issue: https://docs.bleemeo.com/agent/upgrade " +
-				"and https://docs.bleemeo.com/agent/installation/#installation-for-cloud-image-creation ",
+			"The following links may be relevant to solve the issue: https://go.bleemeo.com/l/agent-upgrade " +
+				"and https://go.bleemeo.com/l/agent-installation-cloud-image ",
 		)
 
 		// Update last duplication date on the API.

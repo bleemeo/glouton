@@ -149,7 +149,7 @@ type RegistrationOption struct {
 	// Meta labels (starting with __) are still dropped and (if applicable) converted to annotations.
 	NoLabelsAlteration bool
 	// DisablePeriodicGather skip the periodic calls which forward gathered points to r.PushPoint.
-	// The periodic call use the Interval. When Interval is 0, the dynmaic interval set by UpdateDelay is used.
+	// The periodic call use the Interval. When Interval is 0, the dynamic interval set by UpdateDelay is used.
 	DisablePeriodicGather bool
 	Rules                 []SimpleRule
 	rrules                []*rules.RecordingRule
@@ -1143,6 +1143,16 @@ func (r *Registry) WithTTL(ttl time.Duration) types.PointPusher {
 
 	return pushFunction(func(ctx context.Context, points []types.MetricPoint) {
 		r.pushPoint(ctx, points, ttl, r.option.MetricFormat)
+	})
+}
+
+// WithTTLAndFormat return a AddMetricPointFunction with TTL on pushed points and a metric format.
+// The returned function bypasses the metric format contained in the registry options.
+func (r *Registry) WithTTLAndFormat(ttl time.Duration, format types.MetricFormat) types.PointPusher {
+	r.init()
+
+	return pushFunction(func(ctx context.Context, points []types.MetricPoint) {
+		r.pushPoint(ctx, points, ttl, format)
 	})
 }
 

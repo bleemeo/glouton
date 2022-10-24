@@ -80,14 +80,14 @@ type NRPE struct {
 }
 
 type OpenSourceMQTT struct {
-	Enable      bool   `yaml:"enable"`
-	Username    string `yaml:"username"`
-	Password    string `yaml:"password"`
-	CAFile      string `yaml:"ca_file"`
-	Host        string `yaml:"host"`
-	Port        int    `yaml:"port"`
-	SSLInsecure bool   `yaml:"ssl_insecure"`
-	SSL         bool   `yaml:"ssl"`
+	Enable      bool     `yaml:"enable"`
+	Username    string   `yaml:"username"`
+	Password    string   `yaml:"password"`
+	CAFile      string   `yaml:"ca_file"`
+	Hosts       []string `yaml:"hosts"`
+	Port        int      `yaml:"port"`
+	SSLInsecure bool     `yaml:"ssl_insecure"`
+	SSL         bool     `yaml:"ssl"`
 }
 
 type Logging struct {
