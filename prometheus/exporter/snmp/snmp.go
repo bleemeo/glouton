@@ -21,7 +21,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"glouton/config2"
+	"glouton/config"
 	"glouton/facts"
 	"glouton/prometheus/model"
 	"glouton/prometheus/registry"
@@ -61,7 +61,7 @@ const (
 
 // Target represents a snmp config instance.
 type Target struct {
-	opt             config2.SNMPTarget
+	opt             config.SNMPTarget
 	exporterAddress *url.URL
 	scraperFacts    FactProvider
 
@@ -85,14 +85,14 @@ type TargetOptions struct {
 	InitialName string
 }
 
-func NewMock(opt config2.SNMPTarget, mockFacts map[string]string) *Target {
+func NewMock(opt config.SNMPTarget, mockFacts map[string]string) *Target {
 	r := newTarget(opt, nil, nil)
 	r.mockPerModule = mockFromFacts(mockFacts)
 
 	return r
 }
 
-func newTarget(opt config2.SNMPTarget, scraperFact FactProvider, exporterAddress *url.URL) *Target {
+func newTarget(opt config.SNMPTarget, scraperFact FactProvider, exporterAddress *url.URL) *Target {
 	return &Target{
 		opt:             opt,
 		exporterAddress: exporterAddress,

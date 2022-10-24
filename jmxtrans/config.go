@@ -22,7 +22,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"glouton/config2"
+	"glouton/config"
 	"glouton/discovery"
 	"glouton/logger"
 	"sync"
@@ -36,7 +36,7 @@ type jmxtransConfig struct {
 	targetAddress   string
 	targetPort      int
 	sha256ToService map[string]discovery.Service
-	knownMetrics    map[metricKey][]config2.JmxMetric
+	knownMetrics    map[metricKey][]config.JmxMetric
 	isDivisor       map[string]bool
 }
 
@@ -110,7 +110,7 @@ func (cfg *jmxtransConfig) CurrentConfig() []byte {
 	}
 
 	cfg.sha256ToService = make(map[string]discovery.Service)
-	cfg.knownMetrics = make(map[metricKey][]config2.JmxMetric)
+	cfg.knownMetrics = make(map[metricKey][]config.JmxMetric)
 	cfg.isDivisor = make(map[string]bool)
 
 	outputConfig := configWriter{
@@ -203,7 +203,7 @@ func (cfg *jmxtransConfig) GetService(sha256Service string) (discovery.Service, 
 	return service, found
 }
 
-func (cfg *jmxtransConfig) GetMetrics(sha256Service string, sha256Bean string, attr string) (metrics []config2.JmxMetric, usedInRatio bool) {
+func (cfg *jmxtransConfig) GetMetrics(sha256Service string, sha256Bean string, attr string) (metrics []config.JmxMetric, usedInRatio bool) {
 	cfg.l.Lock()
 	defer cfg.l.Unlock()
 

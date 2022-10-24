@@ -22,7 +22,7 @@ import (
 	"fmt"
 	"glouton/bleemeo/internal/cache"
 	bleemeoTypes "glouton/bleemeo/types"
-	"glouton/config2"
+	"glouton/config"
 	"glouton/discovery"
 	"glouton/facts"
 	"glouton/store"
@@ -594,16 +594,16 @@ func newMetricHelper(t *testing.T) *metricTestHelper {
 
 	helper.store.InternalSetNowAndRunOnce(context.Background(), helper.mt.Now)
 
-	cfg := config2.Config{
-		Logging: config2.Logging{
+	cfg := config.Config{
+		Logging: config.Logging{
 			Level: "debug",
 		},
-		Bleemeo: config2.Bleemeo{
+		Bleemeo: config.Bleemeo{
 			APIBase:         helper.httpServer.URL,
 			AccountID:       accountID,
 			RegistrationKey: registrationKey,
 		},
-		Blackbox: config2.Blackbox{
+		Blackbox: config.Blackbox{
 			Enable:      true,
 			ScraperName: "paris",
 		},

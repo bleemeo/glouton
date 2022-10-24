@@ -17,7 +17,7 @@
 package agent
 
 import (
-	"glouton/config2"
+	"glouton/config"
 	"glouton/discovery"
 	"glouton/prometheus/matcher"
 	"glouton/types"
@@ -33,13 +33,13 @@ import (
 	promParser "github.com/prometheus/prometheus/promql/parser"
 )
 
-var basicConf = config2.Config{
-	Metric: config2.Metric{
+var basicConf = config.Config{
+	Metric: config.Metric{
 		IncludeDefaultMetrics: false,
 		AllowMetrics:          []string{"cpu*", "pro*"},
 		DenyMetrics:           []string{`process_cpu_seconds_total{scrape_job="my_application123"}`, "whatever"},
-		Prometheus: config2.Prometheus{
-			Targets: []config2.PrometheusTarget{
+		Prometheus: config.Prometheus{
+			Targets: []config.PrometheusTarget{
 				{
 					URL:          "http://localhost:2113/metrics",
 					Name:         "my_application123",
@@ -48,11 +48,11 @@ var basicConf = config2.Config{
 			},
 		},
 	},
-	Services: []config2.Service{
+	Services: []config.Service{
 		{
 			ID:      "myapplication",
 			JMXPort: 1234,
-			JMXMetrics: []config2.JmxMetric{
+			JMXMetrics: []config.JmxMetric{
 				{
 					Name:      "heap_size_mb",
 					MBean:     "java.lang:type=Memory",
@@ -78,8 +78,8 @@ var basicConf = config2.Config{
 	},
 }
 
-var defaultConf = config2.Config{
-	Metric: config2.Metric{
+var defaultConf = config.Config{
+	Metric: config.Metric{
 		IncludeDefaultMetrics: true,
 	},
 }
@@ -533,8 +533,8 @@ func Test_RebuildDynamicList(t *testing.T) {
 }
 
 func TestDontDuplicateKeys(t *testing.T) {
-	cfg := config2.Config{
-		Metric: config2.Metric{
+	cfg := config.Config{
+		Metric: config.Metric{
 			IncludeDefaultMetrics: false,
 			AllowMetrics: []string{
 				"cpu*",
@@ -797,8 +797,8 @@ func Test_newMetricFilter(t *testing.T) { //nolint:maintidx
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			cfg := config2.Config{
-				Metric: config2.Metric{
+			cfg := config.Config{
+				Metric: config.Metric{
 					AllowMetrics:          tt.configAllow,
 					DenyMetrics:           tt.configDeny,
 					IncludeDefaultMetrics: tt.configIncludeDefault,
@@ -1282,8 +1282,8 @@ func Benchmark_filters_all(b *testing.B) {
 }
 
 func Test_RebuildDefaultMetrics(t *testing.T) {
-	cfg := config2.Config{
-		Metric: config2.Metric{
+	cfg := config.Config{
+		Metric: config.Metric{
 			IncludeDefaultMetrics: false,
 		},
 	}

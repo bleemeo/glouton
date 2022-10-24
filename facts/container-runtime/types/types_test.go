@@ -1,7 +1,7 @@
 package types_test
 
 import (
-	"glouton/config2"
+	"glouton/config"
 	"glouton/facts/container-runtime/types"
 	"testing"
 
@@ -11,13 +11,13 @@ import (
 func TestContainerRuntimeAddresses_ExpandAddresses(t *testing.T) {
 	tests := []struct {
 		name                    string
-		containerRuntimeAddress config2.ContainerRuntimeAddresses
+		containerRuntimeAddress config.ContainerRuntimeAddresses
 		hostRoot                string
 		want                    []string
 	}{
 		{
 			name: "default containerd on host",
-			containerRuntimeAddress: config2.ContainerRuntimeAddresses{
+			containerRuntimeAddress: config.ContainerRuntimeAddresses{
 				Addresses: []string{
 					"/run/containerd/containerd.sock",
 					"/run/k3s/containerd/containerd.sock",
@@ -32,7 +32,7 @@ func TestContainerRuntimeAddresses_ExpandAddresses(t *testing.T) {
 		},
 		{
 			name: "default containerd on container",
-			containerRuntimeAddress: config2.ContainerRuntimeAddresses{
+			containerRuntimeAddress: config.ContainerRuntimeAddresses{
 				Addresses: []string{
 					"/run/containerd/containerd.sock",
 					"/run/k3s/containerd/containerd.sock",
@@ -49,7 +49,7 @@ func TestContainerRuntimeAddresses_ExpandAddresses(t *testing.T) {
 		},
 		{
 			name: "default docker on host",
-			containerRuntimeAddress: config2.ContainerRuntimeAddresses{
+			containerRuntimeAddress: config.ContainerRuntimeAddresses{
 				Addresses: []string{
 					"",
 					"unix:///run/docker.sock",
@@ -66,7 +66,7 @@ func TestContainerRuntimeAddresses_ExpandAddresses(t *testing.T) {
 		},
 		{
 			name: "default docker on container",
-			containerRuntimeAddress: config2.ContainerRuntimeAddresses{
+			containerRuntimeAddress: config.ContainerRuntimeAddresses{
 				Addresses: []string{
 					"",
 					"unix:///run/docker.sock",
@@ -85,7 +85,7 @@ func TestContainerRuntimeAddresses_ExpandAddresses(t *testing.T) {
 		},
 		{
 			name: "docker on container prefix disabled",
-			containerRuntimeAddress: config2.ContainerRuntimeAddresses{
+			containerRuntimeAddress: config.ContainerRuntimeAddresses{
 				Addresses: []string{
 					"",
 					"unix:///run/docker.sock",
@@ -102,7 +102,7 @@ func TestContainerRuntimeAddresses_ExpandAddresses(t *testing.T) {
 		},
 		{
 			name: "docker custom",
-			containerRuntimeAddress: config2.ContainerRuntimeAddresses{
+			containerRuntimeAddress: config.ContainerRuntimeAddresses{
 				Addresses: []string{
 					"unix:///run/docker.sock",
 					"",

@@ -19,7 +19,7 @@ package agent
 import (
 	"context"
 	"fmt"
-	"glouton/config2"
+	"glouton/config"
 	"glouton/discovery"
 	"glouton/jmxtrans"
 	"glouton/logger"
@@ -668,7 +668,7 @@ type metricFilter struct {
 	l sync.Mutex
 }
 
-func buildMatcherList(config config2.Config, metrics []string) map[labels.Matcher][]matcher.Matchers {
+func buildMatcherList(config config.Config, metrics []string) map[labels.Matcher][]matcher.Matchers {
 	metricList := make(map[labels.Matcher][]matcher.Matchers)
 
 	for _, str := range metrics {
@@ -714,7 +714,7 @@ func addToList(metricList map[labels.Matcher][]matcher.Matchers, metrics matcher
 }
 
 func addScrappersList(
-	config config2.Config,
+	config config.Config,
 	metricList map[labels.Matcher][]matcher.Matchers,
 	metricListType string,
 ) {
@@ -809,7 +809,7 @@ func (m *metricFilter) DiagnosticArchive(ctx context.Context, archive types.Arch
 	return nil
 }
 
-func (m *metricFilter) buildList(config config2.Config, hasSNMP, hasSwap bool, format types.MetricFormat) error {
+func (m *metricFilter) buildList(config config.Config, hasSNMP, hasSwap bool, format types.MetricFormat) error {
 	m.l.Lock()
 	defer m.l.Unlock()
 
@@ -864,7 +864,7 @@ func (m *metricFilter) buildList(config config2.Config, hasSNMP, hasSwap bool, f
 }
 
 func newMetricFilter(
-	config config2.Config,
+	config config.Config,
 	hasSNMP, hasSwap bool,
 	metricFormat types.MetricFormat,
 ) (*metricFilter, error) {

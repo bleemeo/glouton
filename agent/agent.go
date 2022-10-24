@@ -27,7 +27,7 @@ import (
 	"glouton/api"
 	"glouton/bleemeo"
 	"glouton/collector"
-	"glouton/config2"
+	"glouton/config"
 	"glouton/debouncer"
 	"glouton/delay"
 	"glouton/discovery"
@@ -103,7 +103,7 @@ var errUnsupportedKey = errors.New("Unsupported item key") //nolint:stylecheck
 
 type agent struct {
 	taskRegistry *task.Registry
-	config       config2.Config
+	config       config.Config
 	state        *state.State
 	cancel       context.CancelFunc
 	context      context.Context //nolint:containedctx
@@ -176,7 +176,7 @@ func (a *agent) init(ctx context.Context, configFiles []string, firstRun bool) (
 	a.taskRegistry = task.NewRegistry(ctx)
 	a.taskIDs = make(map[string]int)
 
-	cfg, warnings, err := config2.Load(true, configFiles...)
+	cfg, warnings, err := config.Load(true, configFiles...)
 	if warnings != nil {
 		a.addWarnings(warnings...)
 	}
@@ -366,7 +366,7 @@ func (a *agent) setupLogger() {
 		logger.SetLevel(2)
 	default:
 		logger.SetLevel(0)
-		a.addWarnings(fmt.Errorf(`%w: unknown logging.level "%s". Using "INFO".`, config2.ErrInvalidValue, a.config.Logging.Level))
+		a.addWarnings(fmt.Errorf(`%w: unknown logging.level "%s". Using "INFO".`, config.ErrInvalidValue, a.config.Logging.Level))
 	}
 
 	logger.SetPkgLevels(a.config.Logging.PackageLevels)
@@ -667,7 +667,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 	if err != nil && !os.IsNotExist(err) {
 		warning := fmt.Errorf(
 			"%w: unable to read agent.cloudimage_creation_file %s: %v",
-			config2.ErrInvalidValue, a.config.Agent.CloudImageCreationFile, err,
+			config.ErrInvalidValue, a.config.Agent.CloudImageCreationFile, err,
 		)
 		a.addWarnings(warning)
 	}
@@ -710,7 +710,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		}()
 	}
 
-	var warnings config2.Warnings
+	var warnings config.Warnings
 
 	a.snmpManager, warnings = snmp.NewManager(
 		a.config.Metric.SNMP.ExporterAddress,
@@ -934,7 +934,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		if err != nil {
 			a.addWarnings(fmt.Errorf(
 				"%w: failed to parse jmxtrans.file_permission '%s': %s, using the default 0640",
-				config2.ErrInvalidValue, a.config.JMXTrans.FilePermission, err,
+				config.ErrInvalidValue, a.config.JMXTrans.FilePermission, err,
 			))
 
 			perm = 0o640
@@ -1147,7 +1147,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		a.bleemeoConnector.ApplyCachedConfiguration(ctx)
 	}
 
-	if !reflect.DeepEqual(a.config.DiskMonitor, config2.DefaultConfig().DiskMonitor) {
+	if !reflect.DeepEqual(a.config.DiskMonitor, config.DefaultConfig().DiskMonitor) {
 		if a.metricFormat == types.MetricFormatBleemeo && len(a.config.DiskIgnore) > 0 {
 			logger.Printf("Warning: both \"disk_monitor\" and \"disk_ignore\" are set. Only \"disk_ignore\" will be used")
 		} else if a.metricFormat != types.MetricFormatBleemeo {
@@ -1281,14 +1281,14 @@ func (a *agent) waitAndRefreshPendingUpdates(ctx context.Context) {
 func (a *agent) buildCollectorsConfig() (conf inputs.CollectorConfig, err error) {
 	whitelistRE, err := common.CompileREs(a.config.DiskMonitor)
 	if err != nil {
-		a.addWarnings(fmt.Errorf("%w: failed to compile regexp in disk_monitor: %s", config2.ErrInvalidValue, err))
+		a.addWarnings(fmt.Errorf("%w: failed to compile regexp in disk_monitor: %s", config.ErrInvalidValue, err))
 
 		return
 	}
 
 	blacklistRE, err := common.CompileREs(a.config.DiskIgnore)
 	if err != nil {
-		a.addWarnings(fmt.Errorf("%w: failed to compile regexp in disk_ignore: %s", config2.ErrInvalidValue, err))
+		a.addWarnings(fmt.Errorf("%w: failed to compile regexp in disk_ignore: %s", config.ErrInvalidValue, err))
 
 		return
 	}
@@ -2293,7 +2293,7 @@ func (a *agent) diagnosticConfig(ctx context.Context, archive types.ArchiveWrite
 	fmt.Fprintln(file, "# This file contains in-memory configuration used by Glouton. Value from from default, files and environment.")
 	enc.SetIndent(4)
 
-	err = enc.Encode(config2.Dump(a.config))
+	err = enc.Encode(config.Dump(a.config))
 	if err != nil {
 		fmt.Fprintf(file, "# error: %v\n", err)
 	}
@@ -2486,29 +2486,29 @@ func setupContainer(hostRootPath string) {
 // prometheusConfigToURLs convert metric.prometheus.targets config to a map of target name to URL
 //
 // See tests for the expected config.
-func prometheusConfigToURLs(configTargets []config2.PrometheusTarget) ([]*scrapper.Target, config2.Warnings) {
-	var warnings config2.Warnings
+func prometheusConfigToURLs(configTargets []config.PrometheusTarget) ([]*scrapper.Target, config.Warnings) {
+	var warnings config.Warnings
 
 	targets := make([]*scrapper.Target, 0, len(configTargets))
 
-	for _, config := range configTargets {
-		targetURL, err := url.Parse(config.URL)
+	for _, configTarget := range configTargets {
+		targetURL, err := url.Parse(configTarget.URL)
 		if err != nil {
-			warnings = append(warnings, fmt.Errorf("%w: invalid prometheus target URL: %s", config2.ErrInvalidValue, err))
+			warnings = append(warnings, fmt.Errorf("%w: invalid prometheus target URL: %s", config.ErrInvalidValue, err))
 
 			continue
 		}
 
 		target := &scrapper.Target{
 			ExtraLabels: map[string]string{
-				types.LabelMetaScrapeJob: config.Name,
+				types.LabelMetaScrapeJob: configTarget.Name,
 				// HostPort could be empty, but this ExtraLabels is used by Registry which
 				// correctly handle empty value value (drop the label).
 				types.LabelMetaScrapeInstance: scrapper.HostPort(targetURL),
 			},
 			URL:       targetURL,
-			AllowList: config.AllowMetrics,
-			DenyList:  config.DenyMetrics,
+			AllowList: configTarget.AllowMetrics,
+			DenyList:  configTarget.DenyMetrics,
 		}
 
 		targets = append(targets, target)

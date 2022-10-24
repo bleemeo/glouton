@@ -19,7 +19,7 @@ package snmp
 import (
 	"context"
 	"fmt"
-	"glouton/config2"
+	"glouton/config"
 	"glouton/facts"
 	"glouton/prometheus/model"
 	"glouton/prometheus/registry"
@@ -209,7 +209,7 @@ func Test_factFromPoints(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			tgt := newTarget(config2.SNMPTarget{}, facts.NewMockFacter(tt.scraperFacts), nil)
+			tgt := newTarget(config.SNMPTarget{}, facts.NewMockFacter(tt.scraperFacts), nil)
 			tgt.mockPerModule = map[string][]byte{
 				snmpDiscoveryModule: body,
 			}
@@ -598,7 +598,7 @@ func Test_processMFS(t *testing.T) {
 func TestNewMock(t *testing.T) {
 	tests := []struct {
 		name      string
-		opt       config2.SNMPTarget
+		opt       config.SNMPTarget
 		mockFacts map[string]string
 	}{
 		{
@@ -684,7 +684,7 @@ func TestTarget_Module(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			tr := newTarget(config2.SNMPTarget{}, nil, nil)
+			tr := newTarget(config.SNMPTarget{}, nil, nil)
 			tr.mockPerModule = map[string][]byte{
 				snmpDiscoveryModule: body,
 			}

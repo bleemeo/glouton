@@ -17,7 +17,7 @@
 package blackbox
 
 import (
-	"glouton/config2"
+	"glouton/config"
 	"glouton/prometheus/registry"
 	"glouton/types"
 	"reflect"
@@ -31,7 +31,7 @@ import (
 )
 
 func TestConfigParsing(t *testing.T) {
-	config, warnings, err := config2.Load(false, "testdata/blackbox.conf")
+	config, warnings, err := config.Load(false, "testdata/blackbox.conf")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -134,7 +134,7 @@ func TestConfigParsing(t *testing.T) {
 }
 
 func TestNoTargetsConfigParsing(t *testing.T) {
-	config, warnings, err := config2.Load(false, "testdata/no-target.conf")
+	config, warnings, err := config.Load(false, "testdata/no-target.conf")
 	if err != nil {
 		t.Fatal(err)
 	}

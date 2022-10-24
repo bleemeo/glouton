@@ -18,7 +18,7 @@ package discovery
 
 import (
 	"context"
-	"glouton/config2"
+	"glouton/config"
 	"glouton/facts"
 	"os"
 	"reflect"
@@ -275,7 +275,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ContainerID:     "1234",
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "172.17.0.49", Port: 3306}},
 				IPAddress:       "172.17.0.49",
-				Config: config2.Service{
+				Config: config.Service{
 					Username: mysqlDefaultUser,
 					Password: "secret",
 				},
@@ -293,7 +293,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ServiceType:     MySQLService,
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 3306}},
 				IPAddress:       "127.0.0.1",
-				Config: config2.Service{
+				Config: config.Service{
 					Username:          "root",
 					Password:          "secret",
 					MetricsUnixSocket: "",
@@ -311,7 +311,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ServiceType:     MySQLService,
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 3306}},
 				IPAddress:       "127.0.0.1",
-				Config: config2.Service{
+				Config: config.Service{
 					Username:          "root",
 					Password:          "secret",
 					MetricsUnixSocket: "/tmp/file.sock",
@@ -1124,7 +1124,7 @@ func Test_fillGenericExtraAttributes(t *testing.T) {
 				"glouton.http_path":    "/path",
 			},
 		},
-		Config: config2.Service{
+		Config: config.Service{
 			// HTTP Path should be overwritten.
 			HTTPPath: "/other",
 			// Address should be kept.
@@ -1132,7 +1132,7 @@ func Test_fillGenericExtraAttributes(t *testing.T) {
 		},
 	}
 
-	expectedConfig := config2.Service{
+	expectedConfig := config.Service{
 		HTTPPath:    "/path",
 		Port:        8080,
 		IgnorePorts: []int{9090, 9091},

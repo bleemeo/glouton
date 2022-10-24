@@ -20,7 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"glouton/config2"
+	"glouton/config"
 	"glouton/logger"
 	"glouton/prometheus/registry"
 	"glouton/types"
@@ -30,7 +30,7 @@ import (
 	"time"
 
 	bbConf "github.com/prometheus/blackbox_exporter/config"
-	"github.com/prometheus/common/config"
+	promConfig "github.com/prometheus/common/config"
 )
 
 var errUnknownModule = errors.New("unknown blackbox module found in your configuration")
@@ -55,9 +55,9 @@ func defaultModule(userAgent string) bbConf.Module {
 	return bbConf.Module{
 		HTTP: bbConf.HTTPProbe{
 			IPProtocol: "ip4",
-			HTTPClientConfig: config.HTTPClientConfig{
+			HTTPClientConfig: promConfig.HTTPClientConfig{
 				FollowRedirects: true,
-				TLSConfig: config.TLSConfig{
+				TLSConfig: promConfig.TLSConfig{
 					// We manually do the TLS verification after probing.
 					// This allow to gather information on self-signed server.
 					InsecureSkipVerify: true,
@@ -145,7 +145,7 @@ func genCollectorFromDynamicTarget(monitor types.Monitor, userAgent string) (*co
 		mod.Prober = proberNameTCP
 		uri = url.Host
 		mod.TCP.TLS = true
-		mod.TCP.TLSConfig = config.TLSConfig{
+		mod.TCP.TLSConfig = promConfig.TLSConfig{
 			CAFile: monitor.CAFile,
 			// We manually do the TLS verification after probing.
 			// This allow to gather information on self-signed server.
@@ -236,7 +236,7 @@ func setUserAgent(modules map[string]bbConf.Module, userAgent string) {
 // This completely resets the configuration.
 func New(
 	registry *registry.Registry,
-	config config2.Blackbox,
+	config config.Blackbox,
 	metricFormat types.MetricFormat,
 ) (*RegisterManager, error) {
 	setUserAgent(config.Modules, config.UserAgent)

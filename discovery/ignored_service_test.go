@@ -17,12 +17,12 @@
 package discovery
 
 import (
-	"glouton/config2"
+	"glouton/config"
 	"testing"
 )
 
 func TestIsCheckIgnored(t *testing.T) { //nolint:maintidx
-	checksIgnored := []config2.NameInstance{
+	checksIgnored := []config.NameInstance{
 		{
 			Name: "mysql",
 		},

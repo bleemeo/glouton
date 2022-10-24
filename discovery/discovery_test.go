@@ -20,7 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"glouton/config2"
+	"glouton/config"
 	"glouton/facts"
 	"glouton/prometheus/registry"
 	"glouton/types"
@@ -271,7 +271,7 @@ func TestDiscoverySingle(t *testing.T) {
 func Test_applyOverride(t *testing.T) {
 	type args struct {
 		discoveredServicesMap map[NameInstance]Service
-		servicesOverride      map[NameInstance]config2.Service
+		servicesOverride      map[NameInstance]config.Service
 	}
 
 	tests := []struct {
@@ -318,7 +318,7 @@ func Test_applyOverride(t *testing.T) {
 						ServiceType: ApacheService,
 					},
 				},
-				servicesOverride: map[NameInstance]config2.Service{
+				servicesOverride: map[NameInstance]config.Service{
 					{Name: "apache"}: {
 						Address: "10.0.1.2",
 					},
@@ -328,7 +328,7 @@ func Test_applyOverride(t *testing.T) {
 				{Name: "apache"}: {
 					Name:        "apache",
 					ServiceType: ApacheService,
-					Config: config2.Service{
+					Config: config.Service{
 						Address: "10.0.1.2",
 					},
 					ListenAddresses: []facts.ListenAddress{
@@ -350,7 +350,7 @@ func Test_applyOverride(t *testing.T) {
 						ServiceType: ApacheService,
 					},
 				},
-				servicesOverride: map[NameInstance]config2.Service{
+				servicesOverride: map[NameInstance]config.Service{
 					{Name: "myapplication"}: {
 						Port:         8080,
 						CheckType:    customCheckNagios,
@@ -368,7 +368,7 @@ func Test_applyOverride(t *testing.T) {
 				},
 				{Name: "myapplication"}: {
 					ServiceType: CustomService,
-					Config: config2.Service{
+					Config: config.Service{
 						Address:      "127.0.0.1", // default as soon as port is set
 						Port:         8080,
 						CheckType:    customCheckNagios,
@@ -379,7 +379,7 @@ func Test_applyOverride(t *testing.T) {
 				},
 				{Name: "custom_webserver"}: {
 					ServiceType: CustomService,
-					Config: config2.Service{
+					Config: config.Service{
 						Address:   "127.0.0.1", // default as soon as port is set
 						Port:      8081,
 						CheckType: customCheckTCP, // default as soon as port is set,
@@ -393,7 +393,7 @@ func Test_applyOverride(t *testing.T) {
 			name: "bad custom check",
 			args: args{
 				discoveredServicesMap: nil,
-				servicesOverride: map[NameInstance]config2.Service{
+				servicesOverride: map[NameInstance]config.Service{
 					{Name: "myapplication"}: { // the check_command is missing
 						Port:      8080,
 						CheckType: customCheckNagios,
@@ -419,7 +419,7 @@ func Test_applyOverride(t *testing.T) {
 						},
 					},
 				},
-				servicesOverride: map[NameInstance]config2.Service{
+				servicesOverride: map[NameInstance]config.Service{
 					{Name: "apache"}: {
 						IgnorePorts: []int{443, 22},
 					},
@@ -439,7 +439,7 @@ func Test_applyOverride(t *testing.T) {
 						22:  true,
 						443: true,
 					},
-					Config: config2.Service{
+					Config: config.Service{
 						IgnorePorts: []int{443, 22},
 					},
 				},
@@ -454,7 +454,7 @@ func Test_applyOverride(t *testing.T) {
 						ServiceType: ApacheService,
 					},
 				},
-				servicesOverride: map[NameInstance]config2.Service{
+				servicesOverride: map[NameInstance]config.Service{
 					{Name: "apache"}: {
 						IgnorePorts: []int{443, 22},
 					},
@@ -468,7 +468,7 @@ func Test_applyOverride(t *testing.T) {
 						22:  true,
 						443: true,
 					},
-					Config: config2.Service{
+					Config: config.Service{
 						IgnorePorts: []int{443, 22},
 					},
 				},
@@ -671,7 +671,7 @@ func Test_usePreviousNetstat(t *testing.T) {
 }
 
 func TestValidateServices(t *testing.T) {
-	services := []config2.Service{
+	services := []config.Service{
 		{
 			ID:       "apache",
 			Instance: "",
@@ -721,7 +721,7 @@ func TestValidateServices(t *testing.T) {
 		"invalid config value: service id \"custom-bad.name\" can not contains dot (.) or dash (-). Changed to \"custom_bad_name\"",
 	}
 
-	wantServices := []config2.Service{
+	wantServices := []config.Service{
 		{
 			ID:       "apache",
 			Instance: "",

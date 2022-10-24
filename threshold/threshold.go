@@ -20,7 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"glouton/config2"
+	"glouton/config"
 	"glouton/logger"
 	"glouton/types"
 	"math"
@@ -291,7 +291,7 @@ const (
 
 // FromConfig converts the threshold config to thresholds.
 func FromConfig(
-	config config2.Threshold,
+	config config.Threshold,
 	metricName string,
 	softPeriods map[string]time.Duration,
 	defaultSoftPeriod time.Duration,

@@ -20,9 +20,9 @@ import (
 	"flag"
 	"fmt"
 	"glouton/agent"
-	"glouton/config"
 	versionPkg "glouton/version"
 	"os"
+	"strconv"
 	"strings"
 
 	_ "net/http/pprof" //nolint:gosec
@@ -61,8 +61,8 @@ func main() {
 	// Run os-specific initialisation code.
 	OSDependentMain()
 
-	if val, ok := os.LookupEnv("GLOUTON_DISABLE_RELOAD"); ok && !*disableReload {
-		*disableReload, _ = config.ConvertBoolean(val)
+	if envDisableReload, ok := os.LookupEnv("GLOUTON_DISABLE_RELOAD"); ok && !*disableReload {
+		*disableReload, _ = strconv.ParseBool(envDisableReload)
 	}
 
 	agent.StartReloadManager(strings.Split(*configFiles, ","), *disableReload)

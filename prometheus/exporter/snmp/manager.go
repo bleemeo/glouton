@@ -3,7 +3,7 @@ package snmp
 import (
 	"context"
 	"fmt"
-	"glouton/config2"
+	"glouton/config"
 	"glouton/logger"
 	"glouton/types"
 	"net/url"
@@ -32,15 +32,15 @@ type GathererWithInfo struct {
 }
 
 // NewManager return a new SNMP manager.
-func NewManager(exporterAddress string, scaperFact FactProvider, targets []config2.SNMPTarget) (*Manager, config2.Warnings) {
+func NewManager(exporterAddress string, scaperFact FactProvider, targets []config.SNMPTarget) (*Manager, config.Warnings) {
 	exporterURL, err := url.Parse(exporterAddress)
 	if err != nil {
-		return nil, config2.Warnings{err}
+		return nil, config.Warnings{err}
 	}
 
 	exporterURL, err = exporterURL.Parse("snmp")
 	if err != nil {
-		return nil, config2.Warnings{err}
+		return nil, config.Warnings{err}
 	}
 
 	mgr := &Manager{
@@ -48,20 +48,20 @@ func NewManager(exporterAddress string, scaperFact FactProvider, targets []confi
 		targets:         make([]*Target, 0, len(targets)),
 	}
 
-	var warnings config2.Warnings
+	var warnings config.Warnings
 
 	targetExists := make(map[string]bool)
 
 	for i, t := range targets {
 		if t.Target == "" {
-			warning := fmt.Errorf("%w: metric.snmp.targets[%d] must have a target value", config2.ErrInvalidValue, i)
+			warning := fmt.Errorf("%w: metric.snmp.targets[%d] must have a target value", config.ErrInvalidValue, i)
 			warnings = append(warnings, warning)
 
 			continue
 		}
 
 		if targetExists[t.Target] {
-			warnings = append(warnings, fmt.Errorf("%w: the SNMP target %s is duplicated", config2.ErrInvalidValue, t.Target))
+			warnings = append(warnings, fmt.Errorf("%w: the SNMP target %s is duplicated", config.ErrInvalidValue, t.Target))
 
 			continue
 		}

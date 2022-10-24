@@ -17,18 +17,18 @@
 package discovery
 
 import (
-	"glouton/config2"
+	"glouton/config"
 	"path/filepath"
 	"strings"
 )
 
 // IgnoredService saves the ignored checks or metrics imported from the configuration file.
 type IgnoredService struct {
-	ignoredChecks []config2.NameInstance
+	ignoredChecks []config.NameInstance
 }
 
 // NewIgnoredService initializes IgnoredCheckOrMetrics struct.
-func NewIgnoredService(ignoredChecks []config2.NameInstance) IgnoredService {
+func NewIgnoredService(ignoredChecks []config.NameInstance) IgnoredService {
 	return IgnoredService{
 		ignoredChecks: ignoredChecks,
 	}

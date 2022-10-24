@@ -1,4 +1,4 @@
-package config2
+package config
 
 import (
 	bbConf "github.com/prometheus/blackbox_exporter/config"

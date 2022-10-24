@@ -2,7 +2,7 @@ package types
 
 import (
 	"context"
-	"glouton/config2"
+	"glouton/config"
 	"glouton/facts"
 	"glouton/types"
 	"path/filepath"
@@ -27,7 +27,7 @@ type RuntimeInterface interface {
 }
 
 // ExpandRuntimeAddresses adds the host root to the socket addresses if PrefixHostRoot is true.
-func ExpandRuntimeAddresses(runtime config2.ContainerRuntimeAddresses, hostRoot string) []string {
+func ExpandRuntimeAddresses(runtime config.ContainerRuntimeAddresses, hostRoot string) []string {
 	if !runtime.PrefixHostRoot {
 		return runtime.Addresses
 	}

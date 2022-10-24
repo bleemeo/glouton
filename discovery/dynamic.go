@@ -19,7 +19,7 @@ package discovery
 
 import (
 	"context"
-	"glouton/config2"
+	"glouton/config"
 	"glouton/facts"
 	"glouton/logger"
 	"net"
@@ -550,7 +550,7 @@ func (dd *DynamicDiscovery) fillConfigFromLabels(service *Service) {
 	}
 
 	// Decode the map in the service struct.
-	var override config2.Service
+	var override config.Service
 
 	decoderConfig := &mapstructure.DecoderConfig{
 		DecodeHook: mapstructure.ComposeDecodeHookFunc(

@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"glouton/config2"
+	"glouton/config"
 	"glouton/facts"
 	containerTypes "glouton/facts/container-runtime/types"
 	"glouton/logger"
@@ -65,7 +65,7 @@ const ignoredNamespace = "moby"
 
 // New returns a new Docker runtime.
 func New(
-	runtime config2.ContainerRuntimeAddresses,
+	runtime config.ContainerRuntimeAddresses,
 	hostRoot string,
 	deletedContainersCallback func(containersID []string),
 	isContainerIgnored func(facts.Container) bool,

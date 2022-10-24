@@ -17,13 +17,13 @@
 package jmxtrans
 
 import (
-	"glouton/config2"
+	"glouton/config"
 	"glouton/discovery"
 	"strings"
 )
 
 //nolint:gochecknoglobals
-var defaultGenericMetrics = []config2.JmxMetric{
+var defaultGenericMetrics = []config.JmxMetric{
 	{
 		Name:      "jvm_heap_used",
 		MBean:     "java.lang:type=Memory",
@@ -64,7 +64,7 @@ var defaultGenericMetrics = []config2.JmxMetric{
 }
 
 //nolint:gochecknoglobals
-var defaultServiceMetrics = map[discovery.ServiceName][]config2.JmxMetric{
+var defaultServiceMetrics = map[discovery.ServiceName][]config.JmxMetric{
 	discovery.CassandraService: {
 		{
 			Name:      "read_requests",
@@ -257,7 +257,7 @@ var defaultServiceMetrics = map[discovery.ServiceName][]config2.JmxMetric{
 }
 
 //nolint:gochecknoglobals
-var cassandraDetailedTableMetrics = []config2.JmxMetric{
+var cassandraDetailedTableMetrics = []config.JmxMetric{
 	{
 		Name:      "bloom_filter_false_ratio",
 		MBean:     "org.apache.cassandra.metrics:type=Table,keyspace={keyspace},scope={table},name=BloomFilterFalseRatio",
@@ -302,7 +302,7 @@ var cassandraDetailedTableMetrics = []config2.JmxMetric{
 }
 
 // GetJMXMetrics parses the jmx info and returns a list of JmxMetric struct.
-func GetJMXMetrics(service discovery.Service) []config2.JmxMetric {
+func GetJMXMetrics(service discovery.Service) []config.JmxMetric {
 	if !service.Active {
 		return nil
 	}

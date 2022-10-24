@@ -20,7 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"glouton/config2"
+	"glouton/config"
 	"glouton/facts"
 	"glouton/inputs"
 	"glouton/logger"
@@ -66,7 +66,7 @@ type Discovery struct {
 	metricRegistry        GathererRegistry
 	containerInfo         containerInfoProvider
 	state                 State
-	servicesOverride      map[NameInstance]config2.Service
+	servicesOverride      map[NameInstance]config.Service
 	isCheckIgnored        func(Service) bool
 	isInputIgnored        func(Service) bool
 	isContainerIgnored    func(facts.Container) bool
@@ -101,13 +101,13 @@ func New(
 	state State,
 	acc inputs.AnnotationAccumulator,
 	containerInfo containerInfoProvider,
-	servicesOverride []config2.Service,
+	servicesOverride []config.Service,
 	isCheckIgnored func(Service) bool,
 	isInputIgnored func(Service) bool,
 	isContainerIgnored func(c facts.Container) bool,
 	metricFormat types.MetricFormat,
 	processFact processFact,
-) (*Discovery, config2.Warnings) {
+) (*Discovery, config.Warnings) {
 	initialServices := servicesFromState(state)
 	discoveredServicesMap := make(map[NameInstance]Service, len(initialServices))
 
@@ -122,7 +122,7 @@ func New(
 	servicesOverride, warnings := validateServices(servicesOverride)
 
 	// Convert service overrides to a map.
-	serviceMap := make(map[NameInstance]config2.Service, len(servicesOverride))
+	serviceMap := make(map[NameInstance]config.Service, len(servicesOverride))
 
 	for _, v := range servicesOverride {
 		key := NameInstance{
@@ -153,15 +153,15 @@ func New(
 }
 
 // validateServies validates the service config.
-func validateServices(services []config2.Service) ([]config2.Service, config2.Warnings) {
-	var warnings config2.Warnings
+func validateServices(services []config.Service) ([]config.Service, config.Warnings) {
+	var warnings config.Warnings
 
-	newServices := make([]config2.Service, 0, len(services))
+	newServices := make([]config.Service, 0, len(services))
 	replacer := strings.NewReplacer(".", "_", "-", "_")
 
 	for _, srv := range services {
 		if srv.ID == "" {
-			warning := fmt.Errorf("%w: a key \"id\" is missing in one of your service override", config2.ErrInvalidValue)
+			warning := fmt.Errorf("%w: a key \"id\" is missing in one of your service override", config.ErrInvalidValue)
 			warnings = append(warnings, warning)
 
 			continue
@@ -172,7 +172,7 @@ func validateServices(services []config2.Service) ([]config2.Service, config2.Wa
 			if !model.IsValidMetricName(model.LabelValue(newID)) {
 				warning := fmt.Errorf(
 					"%w: service id \"%s\" can only contains letters, digits and underscore",
-					config2.ErrInvalidValue, srv.ID,
+					config.ErrInvalidValue, srv.ID,
 				)
 				warnings = append(warnings, warning)
 
@@ -181,7 +181,7 @@ func validateServices(services []config2.Service) ([]config2.Service, config2.Wa
 
 			warning := fmt.Errorf(
 				"%w: service id \"%s\" can not contains dot (.) or dash (-). Changed to \"%s\"",
-				config2.ErrInvalidValue, srv.ID, newID,
+				config.ErrInvalidValue, srv.ID, newID,
 			)
 			warnings = append(warnings, warning)
 
@@ -463,7 +463,7 @@ func (d *Discovery) setServiceActiveAndContainer(service Service) Service {
 
 func applyOverride(
 	discoveredServicesMap map[NameInstance]Service,
-	servicesOverride map[NameInstance]config2.Service,
+	servicesOverride map[NameInstance]config.Service,
 ) map[NameInstance]Service {
 	servicesMap := make(map[NameInstance]Service)
 

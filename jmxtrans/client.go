@@ -21,7 +21,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"glouton/config2"
+	"glouton/config"
 	"glouton/discovery"
 	"glouton/logger"
 	"glouton/types"
@@ -55,7 +55,7 @@ type nameItem struct {
 
 type metricInfo struct {
 	Service     discovery.Service
-	Metric      config2.JmxMetric
+	Metric      config.JmxMetric
 	Labels      map[string]string
 	Annotations types.MetricAnnotations
 	Timestamp   time.Time
@@ -65,7 +65,7 @@ type metricInfo struct {
 
 type configInterface interface {
 	GetService(md5Service string) (discovery.Service, bool)
-	GetMetrics(md5Service string, md5Bean string, attr string) (metrics []config2.JmxMetric, usedInRatio bool)
+	GetMetrics(md5Service string, md5Bean string, attr string) (metrics []config.JmxMetric, usedInRatio bool)
 }
 
 func (c *jmxtransClient) init() {

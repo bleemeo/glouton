@@ -20,7 +20,7 @@ package jmxtrans
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"glouton/config2"
+	"glouton/config"
 	"glouton/discovery"
 	"reflect"
 	"testing"
@@ -78,7 +78,7 @@ func Test_jmxtransConfig_cassandra_Config(t *testing.T) {
 			Instance:    "",
 			ServiceType: discovery.CassandraService,
 			Active:      true,
-			Config: config2.Service{
+			Config: config.Service{
 				JMXPort:                 1212,
 				CassandraDetailedTables: []string{"squirreldb.data"},
 			},
@@ -89,7 +89,7 @@ func Test_jmxtransConfig_cassandra_Config(t *testing.T) {
 			Instance:    "squirreldb-cassandra",
 			ServiceType: discovery.CassandraService,
 			Active:      true,
-			Config: config2.Service{
+			Config: config.Service{
 				JMXPort: 1217,
 			},
 			IPAddress:     "10.1.2.3",

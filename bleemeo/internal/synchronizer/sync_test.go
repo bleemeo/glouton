@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"glouton/bleemeo/internal/cache"
 	bleemeoTypes "glouton/bleemeo/types"
-	"glouton/config2"
+	"glouton/config"
 	"glouton/discovery"
 	"glouton/facts"
 	"glouton/prometheus/exporter/blackbox"
@@ -957,7 +957,7 @@ func (s *stateMock) Get(key string, result interface{}) error {
 type syncTestHelper struct {
 	api        *mockAPI
 	s          *Synchronizer
-	cfg        config2.Config
+	cfg        config.Config
 	facts      *facts.FactProviderMock
 	containers []facts.Container
 	cache      *cache.Cache
@@ -993,16 +993,16 @@ func newHelper(t *testing.T) *syncTestHelper {
 
 	helper.httpServer = helper.api.Server()
 
-	helper.cfg = config2.Config{
-		Logging: config2.Logging{
+	helper.cfg = config.Config{
+		Logging: config.Logging{
 			Level: "debug",
 		},
-		Bleemeo: config2.Bleemeo{
+		Bleemeo: config.Bleemeo{
 			APIBase:         helper.httpServer.URL,
 			AccountID:       accountID,
 			RegistrationKey: registrationKey,
 		},
-		Blackbox: config2.Blackbox{
+		Blackbox: config.Blackbox{
 			Enable: true,
 		},
 	}
@@ -1221,7 +1221,7 @@ func TestSyncWithSNMP(t *testing.T) {
 	defer helper.Close()
 
 	helper.SNMP = []*snmp.Target{
-		snmp.NewMock(config2.SNMPTarget{InitialName: "Z-The-Initial-Name", Target: snmpAddress}, map[string]string{}),
+		snmp.NewMock(config.SNMPTarget{InitialName: "Z-The-Initial-Name", Target: snmpAddress}, map[string]string{}),
 	}
 	helper.MetricFormat = types.MetricFormatPrometheus
 
@@ -1451,7 +1451,7 @@ func TestSyncWithSNMPDelete(t *testing.T) {
 	)
 
 	helper.SNMP = []*snmp.Target{
-		snmp.NewMock(config2.SNMPTarget{InitialName: "Z-The-Initial-Name", Target: snmpAddress}, map[string]string{}),
+		snmp.NewMock(config.SNMPTarget{InitialName: "Z-The-Initial-Name", Target: snmpAddress}, map[string]string{}),
 	}
 	helper.MetricFormat = types.MetricFormatPrometheus
 	helper.NotifyLabelsUpdate = func() {
@@ -1874,20 +1874,20 @@ func TestContainerSync(t *testing.T) {
 func TestSyncServerGroup(t *testing.T) {
 	tests := []struct {
 		name                  string
-		cfg                   config2.Config
+		cfg                   config.Config
 		wantGroupForMainAgent string
 		wantGroupForSNMPAgent string
 	}{
 		{
 			name:                  "no config",
-			cfg:                   config2.Config{},
+			cfg:                   config.Config{},
 			wantGroupForMainAgent: "",
 			wantGroupForSNMPAgent: "",
 		},
 		{
 			name: "both set",
-			cfg: config2.Config{
-				Bleemeo: config2.Bleemeo{
+			cfg: config.Config{
+				Bleemeo: config.Bleemeo{
 					InitialServerGroupName:        "group1",
 					InitialServerGroupNameForSNMP: "group2",
 				},
@@ -1897,8 +1897,8 @@ func TestSyncServerGroup(t *testing.T) {
 		},
 		{
 			name: "only main set",
-			cfg: config2.Config{
-				Bleemeo: config2.Bleemeo{
+			cfg: config.Config{
+				Bleemeo: config.Bleemeo{
 					InitialServerGroupName: "group3",
 				},
 			},
@@ -1907,8 +1907,8 @@ func TestSyncServerGroup(t *testing.T) {
 		},
 		{
 			name: "only SNMP set",
-			cfg: config2.Config{
-				Bleemeo: config2.Bleemeo{
+			cfg: config.Config{
+				Bleemeo: config.Bleemeo{
 					InitialServerGroupNameForSNMP: "group4",
 				},
 			},
@@ -1928,7 +1928,7 @@ func TestSyncServerGroup(t *testing.T) {
 			mergo.Merge(&helper.cfg, tt.cfg)
 
 			helper.SNMP = []*snmp.Target{
-				snmp.NewMock(config2.SNMPTarget{InitialName: "Z-The-Initial-Name", Target: snmpAddress}, map[string]string{}),
+				snmp.NewMock(config.SNMPTarget{InitialName: "Z-The-Initial-Name", Target: snmpAddress}, map[string]string{}),
 			}
 
 			helper.initSynchronizer(t)

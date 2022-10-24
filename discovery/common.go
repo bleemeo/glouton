@@ -19,7 +19,7 @@ package discovery
 import (
 	"context"
 	"fmt"
-	"glouton/config2"
+	"glouton/config"
 	"glouton/facts"
 	"glouton/logger"
 	"glouton/types"
@@ -102,7 +102,7 @@ const (
 
 // Service is the information found about a given service.
 type Service struct {
-	Config          config2.Service
+	Config          config.Service
 	Name            string
 	Instance        string
 	ServiceType     ServiceName

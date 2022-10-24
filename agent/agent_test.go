@@ -2,7 +2,7 @@
 package agent
 
 import (
-	"glouton/config2"
+	"glouton/config"
 	"glouton/prometheus/scrapper"
 	"glouton/types"
 	"net/url"
@@ -235,7 +235,7 @@ func Test_prometheusConfigToURLs(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Ignore warnings, they are already tested in the config package.
-			config, _, err := config2.Load(false, tt.cfgFilename)
+			config, _, err := config.Load(false, tt.cfgFilename)
 			if err != nil {
 				t.Fatalf("Failed to load config: %v", err)
 			}
