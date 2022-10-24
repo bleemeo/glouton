@@ -7,6 +7,8 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+var errNotSupported = errors.New("structs provider does not support this method")
+
 // provider implements a structs provider.
 type provider struct {
 	s   interface{}
@@ -46,10 +48,10 @@ func (s *provider) Read() (map[string]interface{}, error) {
 
 // ReadBytes is not supported by the structs provider.
 func (s *provider) ReadBytes() ([]byte, error) {
-	return nil, errors.New("structs provider does not support this method")
+	return nil, errNotSupported
 }
 
 // Watch is not supported by the structs provider.
 func (s *provider) Watch(cb func(event interface{}, err error)) error {
-	return errors.New("structs provider does not support this method")
+	return errNotSupported
 }

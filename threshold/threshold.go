@@ -18,7 +18,6 @@ package threshold
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"glouton/config"
 	"glouton/logger"
@@ -27,8 +26,6 @@ import (
 	"sync"
 	"time"
 )
-
-var errIncorrectType = errors.New("incorrect variable type")
 
 const (
 	statusCacheKey     = "CacheStatusState"

@@ -668,7 +668,7 @@ type metricFilter struct {
 	l sync.Mutex
 }
 
-func buildMatcherList(config config.Config, metrics []string) map[labels.Matcher][]matcher.Matchers {
+func buildMatcherList(metrics []string) map[labels.Matcher][]matcher.Matchers {
 	metricList := make(map[labels.Matcher][]matcher.Matchers)
 
 	for _, str := range metrics {
@@ -813,10 +813,10 @@ func (m *metricFilter) buildList(config config.Config, hasSNMP, hasSwap bool, fo
 	m.l.Lock()
 	defer m.l.Unlock()
 
-	m.staticAllowList = buildMatcherList(config, config.Metric.AllowMetrics)
+	m.staticAllowList = buildMatcherList(config.Metric.AllowMetrics)
 	addScrappersList(config, m.staticAllowList, "allow")
 
-	m.staticDenyList = buildMatcherList(config, config.Metric.DenyMetrics)
+	m.staticDenyList = buildMatcherList(config.Metric.DenyMetrics)
 	addScrappersList(config, m.staticDenyList, "deny")
 
 	if hasSNMP {

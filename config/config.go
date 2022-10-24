@@ -131,7 +131,7 @@ func load(withDefault bool, paths ...string) (*koanf.Koanf, Warnings, error) {
 func envToKeyFunc() (func(string) string, *Warnings) {
 	// Get all config keys from an empty config.
 	k := koanf.New(delimiter)
-	k.Load(structs.Provider(Config{}, "yaml"), nil)
+	_ = k.Load(structs.Provider(Config{}, "yaml"), nil)
 	allKeys := k.All()
 
 	// Build a map of the environment variables with their corresponding config keys.
@@ -159,12 +159,19 @@ func envToKeyFunc() (func(string) string, *Warnings) {
 
 	for k, v := range movedKeys() {
 		movedEnvKeys[toEnvKey(k)] = toEnvKey(v)
+		movedEnvKeys[toDeprecatedEnvKey(k)] = toEnvKey(v)
 	}
 
 	warnings := make(Warnings, 0)
 	envFunc := func(s string) string {
 		// Migrate deprecated keys.
 		if newKey, ok := movedEnvKeys[s]; ok {
+			warnings = append(warnings, fmt.Errorf("%w: %s, use %s instead", errDeprecatedEnv, s, newKey))
+			s = newKey
+		}
+
+		if strings.HasPrefix(s, deprecatedEnvPrefix) {
+			newKey := strings.Replace(s, deprecatedEnvPrefix, envPrefix, 1)
 			warnings = append(warnings, fmt.Errorf("%w: %s, use %s instead", errDeprecatedEnv, s, newKey))
 			s = newKey
 		}
@@ -176,10 +183,19 @@ func envToKeyFunc() (func(string) string, *Warnings) {
 }
 
 // toEnvKey returns the environment variable corresponding to a configuration key.
-// For instance: toEnvKey("web.enable") -> GLOUTON_WEB_ENABLE
+// For instance: toEnvKey("web.enable") -> GLOUTON_WEB_ENABLE.
 func toEnvKey(key string) string {
 	envKey := strings.ToUpper(key)
 	envKey = envPrefix + strings.ReplaceAll(envKey, ".", "_")
+
+	return envKey
+}
+
+// toDeprecatedEnvKey returns the environment variable corresponding to a configuration key
+// with the deprecated prefix. For instance: toEnvKey("web.enable") -> BLEEMEO_AGENT_WEB_ENABLE.
+func toDeprecatedEnvKey(key string) string {
+	envKey := strings.ToUpper(key)
+	envKey = deprecatedEnvPrefix + strings.ReplaceAll(envKey, ".", "_")
 
 	return envKey
 }
@@ -292,12 +308,10 @@ func unwrapErrors(errs []error) []error {
 
 		switch {
 		case errors.As(err, &mapErr):
-			for _, wrappedErr := range mapErr.WrappedErrors() {
-				unwrapped = append(unwrapped, wrappedErr)
-			}
+			unwrapped = append(unwrapped, mapErr.WrappedErrors()...)
 		case errors.As(err, &yamlErr):
 			for _, wrappedErr := range yamlErr.Errors {
-				unwrapped = append(unwrapped, errors.New(wrappedErr))
+				unwrapped = append(unwrapped, errors.New(wrappedErr)) //nolint:goerr113
 			}
 		default:
 			unwrapped = append(unwrapped, err)
@@ -355,7 +369,7 @@ func migrate(k *koanf.Koanf) Warnings {
 
 // migrateMovedKeys migrate the config settings that were simply moved.
 func migrateMovedKeys(k *koanf.Koanf, config map[string]interface{}) Warnings {
-	var warnings Warnings
+	var warnings Warnings //nolint:prealloc // False positive.
 
 	keys := movedKeys()
 
@@ -401,9 +415,9 @@ func migrateMetricsPrometheus(k *koanf.Koanf, config map[string]interface{}) War
 		return nil
 	}
 
-	var (
-		migratedTargets []interface{}
+	var ( //nolint:prealloc // False positive.
 		warnings        Warnings
+		migratedTargets []interface{}
 	)
 
 	vMap, ok := v.(map[string]interface{})
@@ -500,7 +514,7 @@ func migrateScrapper(k *koanf.Koanf, config map[string]interface{}, deprecatedPa
 // secret is any key containing "key", "secret", "password" or "passwd".
 func Dump(config Config) map[string]interface{} {
 	k := koanf.New(delimiter)
-	k.Load(structs.Provider(config, "yaml"), nil)
+	_ = k.Load(structs.Provider(config, "yaml"), nil)
 
 	return dump(k.All())
 }

@@ -1925,7 +1925,10 @@ func TestSyncServerGroup(t *testing.T) {
 			helper := newHelper(t)
 			defer helper.Close()
 
-			mergo.Merge(&helper.cfg, tt.cfg)
+			err := mergo.Merge(&helper.cfg, tt.cfg)
+			if err != nil {
+				t.Fatalf("Failed to merge configs: %s", err)
+			}
 
 			helper.SNMP = []*snmp.Target{
 				snmp.NewMock(config.SNMPTarget{InitialName: "Z-The-Initial-Name", Target: snmpAddress}, map[string]string{}),

@@ -99,7 +99,10 @@ const (
 	defaultInterval = 0
 )
 
-var errUnsupportedKey = errors.New("Unsupported item key") //nolint:stylecheck
+var (
+	errUnsupportedKey     = errors.New("unsupported item key")
+	errFeatureUnavailable = errors.New("some features are unavailable")
+)
 
 type agent struct {
 	taskRegistry *task.Registry
@@ -366,7 +369,7 @@ func (a *agent) setupLogger() {
 		logger.SetLevel(2)
 	default:
 		logger.SetLevel(0)
-		a.addWarnings(fmt.Errorf(`%w: unknown logging.level "%s". Using "INFO".`, config.ErrInvalidValue, a.config.Logging.Level))
+		a.addWarnings(fmt.Errorf(`%w: unknown logging.level "%s", using "INFO"`, config.ErrInvalidValue, a.config.Logging.Level))
 	}
 
 	logger.SetPkgLevels(a.config.Logging.PackageLevels)
@@ -535,7 +538,7 @@ func (a *agent) updateMetricResolution(ctx context.Context, defaultResolution ti
 	a.updateSNMPResolution(snmpResolution)
 }
 
-func (a *agent) getConfigThreshold(firstUpdate bool) map[string]threshold.Threshold {
+func (a *agent) getConfigThreshold() map[string]threshold.Threshold {
 	configThresholds := make(map[string]threshold.Threshold, len(a.config.Thresholds))
 	defaultSoftPeriod := time.Duration(a.config.Metric.SoftStatusPeriodDefault) * time.Second
 
@@ -577,7 +580,7 @@ func (a *agent) newMetricsCallback(newMetrics []types.LabelsAndAnnotation) {
 }
 
 func (a *agent) updateThresholds(ctx context.Context, thresholds map[string]threshold.Threshold, firstUpdate bool) {
-	configThreshold := a.getConfigThreshold(firstUpdate)
+	configThreshold := a.getConfigThreshold()
 
 	oldThresholds := map[string]threshold.Threshold{}
 
@@ -813,7 +816,10 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		if clusterName != "" {
 			a.factProvider.SetFact("kubernetes_cluster_name", clusterName)
 		} else {
-			a.addWarnings(fmt.Errorf("kubernetes.clustername is missing, some feature are unavailable. See https://docs.bleemeo.com/agent/installation#installation-on-kubernetes"))
+			a.addWarnings(fmt.Errorf(
+				"%w because kubernetes.clustername is missing, see https://docs.bleemeo.com/agent/installation#installation-on-kubernetes",
+				errFeatureUnavailable,
+			))
 		}
 
 		ctx, cancel := context.WithTimeout(ctx, 10*time.Second)

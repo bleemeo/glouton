@@ -529,7 +529,10 @@ func applyOverride(
 		}
 
 		// Override config.
-		mergo.Merge(&service.Config, override, mergo.WithOverride)
+		err := mergo.Merge(&service.Config, override, mergo.WithOverride)
+		if err != nil {
+			logger.V(1).Printf("Failed to merge service and override: %s", err)
+		}
 
 		if service.ServiceType == CustomService {
 			if service.Config.Port != 0 {

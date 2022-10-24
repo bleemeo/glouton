@@ -22,11 +22,11 @@ func blackboxModuleHookFunc() mapstructure.DecodeHookFuncType {
 		// The data is a map[string]interface{}.
 		marshalled, err := yaml.Marshal(data)
 		if err != nil {
-			return nil, fmt.Errorf("cannot marshal blackbox_exporter module configuration: %s", err)
+			return nil, fmt.Errorf("%w: cannot marshal blackbox_exporter module configuration: %s", ErrInvalidValue, err)
 		}
 
 		if err := yaml.Unmarshal(marshalled, &module); err != nil {
-			return nil, fmt.Errorf("cannot parse blackbox_exporter module configuration: %s", err)
+			return nil, fmt.Errorf("%w: cannot parse blackbox_exporter module configuration: %s", ErrInvalidValue, err)
 		}
 
 		return module, nil

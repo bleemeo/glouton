@@ -33,56 +33,59 @@ import (
 	promParser "github.com/prometheus/prometheus/promql/parser"
 )
 
-var basicConf = config.Config{
-	Metric: config.Metric{
-		IncludeDefaultMetrics: false,
-		AllowMetrics:          []string{"cpu*", "pro*"},
-		DenyMetrics:           []string{`process_cpu_seconds_total{scrape_job="my_application123"}`, "whatever"},
-		Prometheus: config.Prometheus{
-			Targets: []config.PrometheusTarget{
-				{
-					URL:          "http://localhost:2113/metrics",
-					Name:         "my_application123",
-					AllowMetrics: []string{"process_cpu_seconds_total"},
+//nolint:gochecknoglobals
+var (
+	basicConf = config.Config{
+		Metric: config.Metric{
+			IncludeDefaultMetrics: false,
+			AllowMetrics:          []string{"cpu*", "pro*"},
+			DenyMetrics:           []string{`process_cpu_seconds_total{scrape_job="my_application123"}`, "whatever"},
+			Prometheus: config.Prometheus{
+				Targets: []config.PrometheusTarget{
+					{
+						URL:          "http://localhost:2113/metrics",
+						Name:         "my_application123",
+						AllowMetrics: []string{"process_cpu_seconds_total"},
+					},
 				},
 			},
 		},
-	},
-	Services: []config.Service{
-		{
-			ID:      "myapplication",
-			JMXPort: 1234,
-			JMXMetrics: []config.JmxMetric{
-				{
-					Name:      "heap_size_mb",
-					MBean:     "java.lang:type=Memory",
-					Attribute: "HeapMemoryUsage",
-					Path:      "used",
-					Scale:     0.000000954, // 1 / 1024 / 1024
-				},
-				{
-					Name:      "request",
-					MBean:     "com.bleemeo.myapplication:type=ClientRequest",
-					Attribute: "Count",
-					Derive:    true,
+		Services: []config.Service{
+			{
+				ID:      "myapplication",
+				JMXPort: 1234,
+				JMXMetrics: []config.JmxMetric{
+					{
+						Name:      "heap_size_mb",
+						MBean:     "java.lang:type=Memory",
+						Attribute: "HeapMemoryUsage",
+						Path:      "used",
+						Scale:     0.000000954, // 1 / 1024 / 1024
+					},
+					{
+						Name:      "request",
+						MBean:     "com.bleemeo.myapplication:type=ClientRequest",
+						Attribute: "Count",
+						Derive:    true,
+					},
 				},
 			},
+			{
+				ID:       "apache",
+				Address:  "127.0.0.1",
+				Port:     80,
+				HTTPPath: "/",
+				HTTPHost: "127.0.0.1:80",
+			},
 		},
-		{
-			ID:       "apache",
-			Address:  "127.0.0.1",
-			Port:     80,
-			HTTPPath: "/",
-			HTTPHost: "127.0.0.1:80",
-		},
-	},
-}
+	}
 
-var defaultConf = config.Config{
-	Metric: config.Metric{
-		IncludeDefaultMetrics: true,
-	},
-}
+	defaultConf = config.Config{
+		Metric: config.Metric{
+			IncludeDefaultMetrics: true,
+		},
+	}
+)
 
 func Test_Basic_Build(t *testing.T) {
 	cpuMatcher, _ := promParser.ParseMetricSelector("{__name__=~\"cpu.*\"}")

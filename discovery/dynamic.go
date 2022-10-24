@@ -535,6 +535,7 @@ func (dd *DynamicDiscovery) fillConfigFromLabels(service *Service) {
 
 	// Make a map of container labels and values with the "glouton." prefix trimmed.
 	labels := make(map[string]string)
+
 	for k, v := range facts.LabelsAndAnnotations(service.container) {
 		if !strings.HasPrefix(k, gloutonContainerLabelPrefix) {
 			continue
@@ -573,7 +574,10 @@ func (dd *DynamicDiscovery) fillConfigFromLabels(service *Service) {
 	}
 
 	// Override the current config with the labels from the container.
-	mergo.Merge(&service.Config, override, mergo.WithOverride)
+	err = mergo.Merge(&service.Config, override, mergo.WithOverride)
+	if err != nil {
+		logger.V(1).Printf("Failed to merge service and override: %s", err)
+	}
 }
 
 func (dd *DynamicDiscovery) guessJMX(service *Service, cmdLine []string) {

@@ -43,7 +43,8 @@ func TestMerge(t *testing.T) {
 	}
 }
 
-func TestStructuredConfig(t *testing.T) {
+// TestStructuredConfig tests loading the full configuration file.
+func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 	expectedConfig := Config{
 		Agent: Agent{
 			CloudImageCreationFile: "cloudimage_creation",
@@ -410,7 +411,7 @@ func TestLoad(t *testing.T) {
 		WantError    error
 	}{
 		{
-			Name:  "wrong-type",
+			Name:  "wrong type",
 			Files: []string{"testdata/bad_wrong_type.conf"},
 			WantWarnings: []string{
 				`cannot parse 'metric.softstatus_period_default' as int: strconv.ParseInt: parsing "string": invalid syntax`,
@@ -423,14 +424,14 @@ func TestLoad(t *testing.T) {
 			},
 		},
 		{
-			Name:  "invalid-yaml",
+			Name:  "invalid yaml",
 			Files: []string{"testdata/bad_yaml.conf"},
 			WantWarnings: []string{
 				"line 1: cannot unmarshal !!str `bad:bad` into map[string]interface {}",
 			},
 		},
 		{
-			Name:  "invalid-yaml-multiple-files",
+			Name:  "invalid yaml multiple files",
 			Files: []string{"testdata/invalid"},
 			WantWarnings: []string{
 				"failed to load 'testdata/invalid/10-invalid.conf': yaml: line 2: found character that cannot start any token",
@@ -445,7 +446,7 @@ func TestLoad(t *testing.T) {
 			},
 		},
 		{
-			Name: "deprecated-env",
+			Name: "deprecated env",
 			Environment: map[string]string{
 				"BLEEMEO_AGENT_ACCOUNT": "my-account",
 				"GLOUTON_WEB_ENABLED":   "true",
@@ -464,7 +465,7 @@ func TestLoad(t *testing.T) {
 			},
 		},
 		{
-			Name:  "deprecated-config",
+			Name:  "deprecated config",
 			Files: []string{"testdata/deprecated.conf"},
 			WantWarnings: []string{
 				"setting is deprecated: web.enabled, use web.enable instead",
@@ -495,7 +496,7 @@ func TestLoad(t *testing.T) {
 			},
 		},
 		{
-			Name: "slice-from-env",
+			Name: "slice from env",
 			Environment: map[string]string{
 				"GLOUTON_METRIC_ALLOW_METRICS": "metric1,metric2",
 				"GLOUTON_METRIC_DENY_METRICS":  "metric3",
@@ -508,7 +509,7 @@ func TestLoad(t *testing.T) {
 			},
 		},
 		{
-			Name: "map-from-env",
+			Name: "map from env",
 			Environment: map[string]string{
 				"GLOUTON_METRIC_SOFTSTATUS_PERIOD": "cpu_used=10,disk_used=20",
 				"GLOUTON_METRIC_ALLOW_METRICS":     "cpu_used",
@@ -524,7 +525,7 @@ func TestLoad(t *testing.T) {
 			},
 		},
 		{
-			Name: "map-from-env-invalid",
+			Name: "map from env invalid",
 			Environment: map[string]string{
 				"GLOUTON_METRIC_SOFTSTATUS_PERIOD": "cpu_used=10,disk_used",
 			},
@@ -567,125 +568,46 @@ func TestLoad(t *testing.T) {
 				"setting is deprecated: bleemeo.enabled, use bleemeo.enable instead",
 			},
 		},
-		// {
-		// 	name: "deprecated envs",
-		// 	configFiles: []string{
-		// 		"testdata/empty.conf",
-		// 	},
-		// 	envs: map[string]string{
-		// 		"BLEEMEO_AGENT_ACCOUNT":      "the-account-id",
-		// 		"GLOUTON_KUBERNETES_ENABLED": "true",
-		// 	},
-		// 	absentKeys: []string{"kubernetes.enabled"},
-		// 	wantKeys: map[string]interface{}{
-		// 		"bleemeo.account_id": "the-account-id",
-		// 		"kubernetes.enable":  true,
-		// 	},
-		// 	warnings: []string{
-		// 		"environment variable is deprecated: BLEEMEO_AGENT_ACCOUNT, use GLOUTON_BLEEMEO_ACCOUNT_ID instead",
-		// 		"environment variable is deprecated: GLOUTON_KUBERNETES_ENABLED, use GLOUTON_KUBERNETES_ENABLE instead",
-		// 	},
-		// 	wantCfg: Config{
-		// 		SNMP: SNMP{ExporterURL: URLMustParse("http://localhost:9116/snmp")},
-		// 		Container: Container{
-		// 			Runtime: ContainerRuntime{
-		// 				Docker: ContainerRuntimeAddresses{
-		// 					Addresses: []string{
-		// 						"",
-		// 						"unix:///run/docker.sock",
-		// 						"unix:///var/run/docker.sock",
-		// 					},
-		// 					DisablePrefixHostRoot: false,
-		// 				},
-		// 				ContainerD: ContainerRuntimeAddresses{
-		// 					Addresses: []string{
-		// 						"/run/containerd/containerd.sock",
-		// 						"/run/k3s/containerd/containerd.sock",
-		// 					},
-		// 					DisablePrefixHostRoot: false,
-		// 				},
-		// 			},
-		// 		},
-		// 	},
-		// },
-		// {
-		// 	name: "bleemeo-agent envs",
-		// 	configFiles: []string{
-		// 		"testdata/empty.conf",
-		// 	},
-		// 	envs: map[string]string{
-		// 		"BLEEMEO_AGENT_KUBERNETES_ENABLE": "true",
-		// 		"BLEEMEO_AGENT_BLEEMEO_ENABLED":   "true",
-		// 	},
-		// 	absentKeys: []string{"kubernetes.enabled", "bleemeo.enabled"},
-		// 	wantKeys: map[string]interface{}{
-		// 		"bleemeo.enable":    true,
-		// 		"kubernetes.enable": true,
-		// 	},
-		// 	warnings: []string{
-		// 		"environment variable is deprecated: BLEEMEO_AGENT_KUBERNETES_ENABLE, use GLOUTON_KUBERNETES_ENABLE instead",
-		// 		"environment variable is deprecated: BLEEMEO_AGENT_BLEEMEO_ENABLED, use GLOUTON_BLEEMEO_ENABLE instead",
-		// 	},
-		// 	wantCfg: Config{
-		// 		SNMP: SNMP{ExporterURL: URLMustParse("http://localhost:9116/snmp")},
-		// 		Container: Container{
-		// 			Runtime: ContainerRuntime{
-		// 				Docker: ContainerRuntimeAddresses{
-		// 					Addresses: []string{
-		// 						"",
-		// 						"unix:///run/docker.sock",
-		// 						"unix:///var/run/docker.sock",
-		// 					},
-		// 					DisablePrefixHostRoot: false,
-		// 				},
-		// 				ContainerD: ContainerRuntimeAddresses{
-		// 					Addresses: []string{
-		// 						"/run/containerd/containerd.sock",
-		// 						"/run/k3s/containerd/containerd.sock",
-		// 					},
-		// 					DisablePrefixHostRoot: false,
-		// 				},
-		// 			},
-		// 		},
-		// 	},
-		// },
-		// {
-		// 	name: "old-logging",
-		// 	configFiles: []string{
-		// 		"testdata/old-logging.conf",
-		// 	},
-		// 	wantKeys: map[string]interface{}{
-		// 		"logging.buffer.head_size_bytes": 4200,
-		// 		"logging.buffer.tail_size_bytes": 4800,
-		// 	},
-		// 	absentKeys: []string{"logging.buffer.head_size", "logging.buffer.tail_size"},
-		// 	warnings: []string{
-		// 		"setting is deprecated: logging.buffer.head_size. Please use logging.buffer.head_size_bytes",
-		// 		"setting is deprecated: logging.buffer.tail_size. Please use logging.buffer.tail_size_bytes",
-		// 	},
-		// 	wantCfg: Config{
-		// 		SNMP: SNMP{ExporterURL: URLMustParse("http://localhost:9116/snmp")},
-		// 		Container: Container{
-		// 			Runtime: ContainerRuntime{
-		// 				Docker: ContainerRuntimeAddresses{
-		// 					Addresses: []string{
-		// 						"",
-		// 						"unix:///run/docker.sock",
-		// 						"unix:///var/run/docker.sock",
-		// 					},
-		// 					DisablePrefixHostRoot: false,
-		// 				},
-		// 				ContainerD: ContainerRuntimeAddresses{
-		// 					Addresses: []string{
-		// 						"/run/containerd/containerd.sock",
-		// 						"/run/k3s/containerd/containerd.sock",
-		// 					},
-		// 					DisablePrefixHostRoot: false,
-		// 				},
-		// 			},
-		// 		},
-		// 	},
-		// },
+		{
+			Name:  "bleemeo-agent envs",
+			Files: []string{},
+			Environment: map[string]string{
+				"BLEEMEO_AGENT_KUBERNETES_ENABLED": "true",
+				"BLEEMEO_AGENT_BLEEMEO_MQTT_HOST":  "myhost",
+			},
+			WantConfig: Config{
+				Bleemeo: Bleemeo{
+					MQTT: BleemeoMQTT{
+						Host: "myhost",
+					},
+				},
+				Kubernetes: Kubernetes{
+					Enable: true,
+				},
+			},
+			WantWarnings: []string{
+				"environment variable is deprecated: BLEEMEO_AGENT_KUBERNETES_ENABLED, use GLOUTON_KUBERNETES_ENABLE instead",
+				"environment variable is deprecated: BLEEMEO_AGENT_BLEEMEO_MQTT_HOST, use GLOUTON_BLEEMEO_MQTT_HOST instead",
+			},
+		},
+		{
+			Name: "old logging",
+			Files: []string{
+				"testdata/old-logging.conf",
+			},
+			WantConfig: Config{
+				Logging: Logging{
+					Buffer: LoggingBuffer{
+						HeadSizeBytes: 4200,
+						TailSizeBytes: 4800,
+					},
+				},
+			},
+			WantWarnings: []string{
+				"setting is deprecated: logging.buffer.head_size, use logging.buffer.head_size_bytes instead",
+				"setting is deprecated: logging.buffer.tail_size, use logging.buffer.tail_size_bytes instead",
+			},
+		},
 	}
 
 	for _, test := range tests {
@@ -705,7 +627,11 @@ func TestLoad(t *testing.T) {
 				strWarnings = append(strWarnings, warning.Error())
 			}
 
-			if diff := cmp.Diff(test.WantWarnings, strWarnings); diff != "" {
+			lessFunc := func(a, b string) bool {
+				return a < b
+			}
+
+			if diff := cmp.Diff(test.WantWarnings, strWarnings, cmpopts.SortSlices(lessFunc)); diff != "" {
 				t.Fatalf("Unexpected warnings:\n%s", diff)
 			}
 
@@ -753,7 +679,7 @@ func TestDump(t *testing.T) {
 	}
 
 	k := koanf.New(delimiter)
-	k.Load(structs.Provider(wantConfig, "yaml"), nil)
+	_ = k.Load(structs.Provider(wantConfig, "yaml"), nil)
 	wantMap := k.All()
 
 	dump := Dump(config)

@@ -37,20 +37,6 @@ var errUnknownModule = errors.New("unknown blackbox module found in your configu
 
 const maxTimeout time.Duration = 9500 * time.Millisecond
 
-// yamlConfig is the subset of glouton config that deals with probes.
-type yamlConfig struct {
-	Targets     []yamlConfigTarget       `yaml:"targets"`
-	Modules     map[string]bbConf.Module `yaml:"modules"`
-	ScraperName string                   `yaml:"scraper_name,omitempty"`
-}
-
-// ConfigTarget is the information we will supply to the probe() function.
-type yamlConfigTarget struct {
-	Name       string `yaml:"name,omitempty"`
-	URL        string `yaml:"url"`
-	ModuleName string `yaml:"module"`
-}
-
 func defaultModule(userAgent string) bbConf.Module {
 	return bbConf.Module{
 		HTTP: bbConf.HTTPProbe{
