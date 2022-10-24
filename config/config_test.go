@@ -608,6 +608,25 @@ func TestLoad(t *testing.T) {
 				"setting is deprecated: logging.buffer.tail_size, use logging.buffer.tail_size_bytes instead",
 			},
 		},
+		{
+			Name: "unused keys",
+			Files: []string{
+				"testdata/unused.conf",
+			},
+			WantConfig: Config{
+				Services: []Service{
+					{
+						ID:           "service1",
+						CheckType:    "nagios",
+						CheckCommand: "/path/to/bin --with-option",
+					},
+				},
+			},
+			WantWarnings: []string{
+				"'bleemeo' has invalid keys: unused_key",
+				"'service[0]' has invalid keys: another_key",
+			},
+		},
 	}
 
 	for _, test := range tests {

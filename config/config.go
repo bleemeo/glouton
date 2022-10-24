@@ -64,6 +64,7 @@ func Load(withDefault bool, paths ...string) (Config, Warnings, error) {
 				stringToMapHookFunc(),
 			),
 			Metadata:         nil,
+			ErrorUnused:      true,
 			Result:           &config,
 			WeaklyTypedInput: true,
 		},
@@ -82,7 +83,7 @@ func load(withDefault bool, paths ...string) (*koanf.Koanf, Warnings, error) {
 	k := koanf.New(delimiter)
 	warnings, finalErr := loadPaths(k, paths)
 
-	moreWarnings := migrate(k)
+	k, moreWarnings := migrate(k)
 	if moreWarnings != nil {
 		warnings = append(warnings, moreWarnings...)
 	}
@@ -345,26 +346,25 @@ func movedKeys() map[string]string {
 }
 
 // migrate upgrade the configuration when Glouton changes its settings.
-func migrate(k *koanf.Koanf) Warnings {
+func migrate(k *koanf.Koanf) (*koanf.Koanf, Warnings) {
+	config := k.All()
+
 	var warnings Warnings
 
-	movedConfig := make(map[string]interface{})
+	warnings = append(warnings, migrateMovedKeys(k, config)...)
+	warnings = append(warnings, migrateLogging(k, config)...)
+	warnings = append(warnings, migrateMetricsPrometheus(k, config)...)
+	warnings = append(warnings, migrateScrapperMetrics(k, config)...)
 
-	warnings = append(warnings, migrateMovedKeys(k, movedConfig)...)
-	warnings = append(warnings, migrateLogging(k, movedConfig)...)
-	warnings = append(warnings, migrateMetricsPrometheus(k, movedConfig)...)
-	warnings = append(warnings, migrateScrapperMetrics(k, movedConfig)...)
+	// We can't reuse the previous Koanf because it doesn't allow removing keys.
+	newConfig := koanf.New(delimiter)
 
-	if len(movedConfig) == 0 {
-		return nil
-	}
-
-	err := k.Load(confmap.Provider(movedConfig, "."), nil)
+	err := newConfig.Load(confmap.Provider(config, delimiter), nil)
 	if err != nil {
 		warnings = append(warnings, err)
 	}
 
-	return warnings
+	return newConfig, warnings
 }
 
 // migrateMovedKeys migrate the config settings that were simply moved.
@@ -380,6 +380,7 @@ func migrateMovedKeys(k *koanf.Koanf, config map[string]interface{}) Warnings {
 		}
 
 		config[newKey] = val
+		delete(config, oldKey)
 
 		warnings = append(warnings, fmt.Errorf("%w: %s, use %s instead", errSettingsDeprecated, oldKey, newKey))
 	}
@@ -399,6 +400,7 @@ func migrateLogging(k *koanf.Koanf, config map[string]interface{}) (warnings []e
 		}
 
 		config[newKey] = value * 100
+		delete(config, oldKey)
 
 		warnings = append(warnings, fmt.Errorf("%w: %s, use %s instead", errSettingsDeprecated, oldKey, newKey))
 	}
@@ -442,6 +444,10 @@ func migrateMetricsPrometheus(k *koanf.Koanf, config map[string]interface{}) War
 			"url":  u,
 			"name": key,
 		})
+
+		delete(config, fmt.Sprintf("metric.prometheus.%s", key))
+		delete(config, fmt.Sprintf("metric.prometheus.%s.url", key))
+		delete(config, fmt.Sprintf("metric.prometheus.%s.name", key))
 	}
 
 	if len(migratedTargets) > 0 {
@@ -505,6 +511,7 @@ func migrateScrapper(k *koanf.Koanf, config map[string]interface{}, deprecatedPa
 		}
 
 		config[correctPath] = targets
+		delete(config, deprecatedPath)
 	}
 
 	return warnings
