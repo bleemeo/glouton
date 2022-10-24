@@ -387,7 +387,7 @@ func TestOverrideDefault(t *testing.T) {
 func TestDefaultNoFile(t *testing.T) {
 	config, warnings, err := Load(true)
 	if warnings != nil {
-		t.Fatalf("Warning while loading config: %s", err)
+		t.Fatalf("Warning while loading config: %s", warnings)
 	}
 
 	if err != nil {
@@ -511,6 +511,7 @@ func TestLoad(t *testing.T) {
 			Name: "map-from-env",
 			Environment: map[string]string{
 				"GLOUTON_METRIC_SOFTSTATUS_PERIOD": "cpu_used=10,disk_used=20",
+				"GLOUTON_METRIC_ALLOW_METRICS":     "cpu_used",
 			},
 			WantConfig: Config{
 				Metric: Metric{
@@ -518,6 +519,7 @@ func TestLoad(t *testing.T) {
 						"cpu_used":  10,
 						"disk_used": 20,
 					},
+					AllowMetrics: []string{"cpu_used"},
 				},
 			},
 		},
@@ -530,80 +532,41 @@ func TestLoad(t *testing.T) {
 				`error decoding 'metric.softstatus_period': could not parse map from string: 'cpu_used=10,disk_used'`,
 			},
 		},
-		// TODO: Migrate test cases.
-		// {
-		// 	name: "enabled renamed",
-		// 	configFiles: []string{
-		// 		"testdata/enabled.conf",
-		// 	},
-		// 	absentKeys: []string{"agent.windows_exporter.enabled", "telegraf.docker_metrics_enabled", "web.enabled"},
-		// 	wantKeys: map[string]interface{}{
-		// 		"agent.windows_exporter.enable":  true,
-		// 		"telegraf.docker_metrics_enable": true,
-		// 	},
-		// 	warnings: []string{
-		// 		"setting is deprecated: agent.windows_exporter.enabled. Please use agent.windows_exporter.enable",
-		// 		"setting is deprecated: telegraf.docker_metrics_enabled. Please use telegraf.docker_metrics_enable",
-		// 	},
-		// 	wantCfg: Config{
-		// 		SNMP: SNMP{ExporterURL: URLMustParse("http://localhost:9116/snmp")},
-		// 		Container: Container{
-		// 			Runtime: ContainerRuntime{
-		// 				Docker: ContainerRuntimeAddresses{
-		// 					Addresses: []string{
-		// 						"",
-		// 						"unix:///run/docker.sock",
-		// 						"unix:///var/run/docker.sock",
-		// 					},
-		// 					DisablePrefixHostRoot: false,
-		// 				},
-		// 				ContainerD: ContainerRuntimeAddresses{
-		// 					Addresses: []string{
-		// 						"/run/containerd/containerd.sock",
-		// 						"/run/k3s/containerd/containerd.sock",
-		// 					},
-		// 					DisablePrefixHostRoot: false,
-		// 				},
-		// 			},
-		// 		},
-		// 	},
-		// },
-		// {
-		// 	name: "folder",
-		// 	configFiles: []string{
-		// 		"testdata/folder1",
-		// 	},
-		// 	absentKeys: []string{"bleemeo.enabled"},
-		// 	wantKeys: map[string]interface{}{
-		// 		"bleemeo.enable":     false,
-		// 		"bleemeo.account_id": "second",
-		// 	},
-		// 	warnings: []string{
-		// 		"setting is deprecated: bleemeo.enabled. Please use bleemeo.enable",
-		// 	},
-		// 	wantCfg: Config{
-		// 		SNMP: SNMP{ExporterURL: URLMustParse("http://localhost:9116/snmp")},
-		// 		Container: Container{
-		// 			Runtime: ContainerRuntime{
-		// 				Docker: ContainerRuntimeAddresses{
-		// 					Addresses: []string{
-		// 						"",
-		// 						"unix:///run/docker.sock",
-		// 						"unix:///var/run/docker.sock",
-		// 					},
-		// 					DisablePrefixHostRoot: false,
-		// 				},
-		// 				ContainerD: ContainerRuntimeAddresses{
-		// 					Addresses: []string{
-		// 						"/run/containerd/containerd.sock",
-		// 						"/run/k3s/containerd/containerd.sock",
-		// 					},
-		// 					DisablePrefixHostRoot: false,
-		// 				},
-		// 			},
-		// 		},
-		// 	},
-		// },
+		{
+			Name: "enabled renamed",
+			Files: []string{
+				"testdata/enabled.conf",
+			},
+			WantConfig: Config{
+				Agent: Agent{
+					WindowsExporter: NodeExporter{
+						Enable: true,
+					},
+				},
+				Telegraf: Telegraf{
+					DockerMetricsEnable: true,
+				},
+			},
+			WantWarnings: []string{
+				"setting is deprecated: agent.windows_exporter.enabled, use agent.windows_exporter.enable instead",
+				"setting is deprecated: telegraf.docker_metrics_enabled, use telegraf.docker_metrics_enable instead",
+			},
+		},
+		{
+			Name: "folder",
+			Files: []string{
+				"testdata/folder1",
+			},
+			WantConfig: Config{
+				Bleemeo: Bleemeo{
+					Enable:    false,
+					AccountID: "second",
+				},
+			},
+			WantWarnings: []string{
+				"setting is deprecated: bleemeo.enabled, use bleemeo.enable instead",
+			},
+		},
 		// {
 		// 	name: "deprecated envs",
 		// 	configFiles: []string{

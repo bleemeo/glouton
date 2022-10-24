@@ -19,6 +19,7 @@ func blackboxModuleHookFunc() mapstructure.DecodeHookFuncType {
 			return data, nil
 		}
 
+		// The data is a map[string]interface{}.
 		marshalled, err := yaml.Marshal(data)
 		if err != nil {
 			return nil, fmt.Errorf("cannot marshal blackbox_exporter module configuration: %s", err)

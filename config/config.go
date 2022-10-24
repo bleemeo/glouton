@@ -52,8 +52,8 @@ func Load(withDefault bool, paths ...string) (Config, Warnings, error) {
 
 	var config Config
 
-	// We use the "yaml" tag instead of the default "koanf" tag because our config
-	// embed the blackbox module config which uses YAML.
+	// We need to use the "yaml" tag instead of the default "koanf" tag because
+	// the config embeds the blackbox module config which uses YAML.
 	unmarshalConf := koanf.UnmarshalConf{
 		DecoderConfig: &mapstructure.DecoderConfig{
 			DecodeHook: mapstructure.ComposeDecodeHookFunc(
@@ -67,6 +67,7 @@ func Load(withDefault bool, paths ...string) (Config, Warnings, error) {
 			Result:           &config,
 			WeaklyTypedInput: true,
 		},
+		Tag: "yaml",
 	}
 
 	if warning := k.UnmarshalWithConf("", &config, unmarshalConf); warning != nil {
@@ -115,7 +116,7 @@ func load(withDefault bool, paths ...string) (*koanf.Koanf, Warnings, error) {
 			return err
 		}
 
-		err := k.Load(structsProvider(DefaultConfig(), "koanf"), nil, koanf.WithMergeFunc(mergeFunc))
+		err := k.Load(structsProvider(DefaultConfig(), "yaml"), nil, koanf.WithMergeFunc(mergeFunc))
 		if err != nil {
 			finalErr = err
 		}
@@ -130,7 +131,7 @@ func load(withDefault bool, paths ...string) (*koanf.Koanf, Warnings, error) {
 func envToKeyFunc() (func(string) string, *Warnings) {
 	// Get all config keys from an empty config.
 	k := koanf.New(delimiter)
-	k.Load(structs.Provider(Config{}, "koanf"), nil)
+	k.Load(structs.Provider(Config{}, "yaml"), nil)
 	allKeys := k.All()
 
 	// Build a map of the environment variables with their corresponding config keys.
@@ -499,7 +500,7 @@ func migrateScrapper(k *koanf.Koanf, config map[string]interface{}, deprecatedPa
 // secret is any key containing "key", "secret", "password" or "passwd".
 func Dump(config Config) map[string]interface{} {
 	k := koanf.New(delimiter)
-	k.Load(structs.Provider(config, "koanf"), nil)
+	k.Load(structs.Provider(config, "yaml"), nil)
 
 	return dump(k.All())
 }

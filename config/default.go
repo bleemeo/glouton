@@ -19,6 +19,15 @@ func DefaultPaths() []string {
 }
 
 func DefaultConfig() Config {
+	defaultBlackboxModule := bbConf.DefaultModule
+	defaultBlackboxModule.Prober = "http"
+	// We default to IPv4 as the ip_protocol_fallback option does not retry a request
+	// with a different IP version, but only has an effect when resolving the target.
+	defaultBlackboxModule.HTTP.IPProtocol = "ip4"
+	// DNS query name is unused, but we need to set it to avoid the error "query name
+	// must be set for DNS module" returned by the DNSProbe UnmarshalYAML method.
+	defaultBlackboxModule.DNS.QueryName = "default"
+
 	return Config{
 		Agent: Agent{
 			CloudImageCreationFile: "cloudimage_creation",
@@ -61,15 +70,7 @@ func DefaultConfig() Config {
 			UserAgent:       version.UserAgent(),
 			Targets:         []BlackboxTarget{},
 			Modules: map[string]bbConf.Module{
-				"http": {
-					Prober: "http",
-					HTTP: bbConf.HTTPProbe{
-						// We default to IPv4 as the ip_protocol_fallback option does not
-						// retry a request with a different IP version, but only has an
-						// effect when resolving the target.
-						IPProtocol: "ip4",
-					},
-				},
+				"http": defaultBlackboxModule,
 			},
 		},
 		Bleemeo: Bleemeo{
