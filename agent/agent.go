@@ -375,9 +375,9 @@ func (a *agent) setupLogger() {
 	switch strings.ToLower(a.config.Logging.Level) {
 	case "0", "info", "warning", "error":
 		logger.SetLevel(0)
-	case "verbose":
+	case "1", "verbose":
 		logger.SetLevel(1)
-	case "debug":
+	case "2", "debug":
 		logger.SetLevel(2)
 	default:
 		logger.SetLevel(0)
