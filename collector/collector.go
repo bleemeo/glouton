@@ -62,6 +62,13 @@ func (c *Collector) AddInput(input telegraf.Input, shortName string) (int, error
 	c.l.Lock()
 	defer c.l.Unlock()
 
+	if si, ok := input.(telegraf.Initializer); ok {
+		if err := si.Init(); err != nil {
+			// Don't add the input if the initialization failed.
+			return 0, err
+		}
+	}
+
 	id := 1
 
 	_, ok := c.inputs[id]
@@ -76,12 +83,6 @@ func (c *Collector) AddInput(input telegraf.Input, shortName string) (int, error
 
 	c.inputs[id] = input
 	c.inputNames[id] = shortName
-
-	if si, ok := input.(telegraf.Initializer); ok {
-		if err := si.Init(); err != nil {
-			return 0, err
-		}
-	}
 
 	if si, ok := input.(telegraf.ServiceInput); ok {
 		if err := si.Start(nil); err != nil {
