@@ -340,24 +340,6 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 	}
 }
 
-// Test that config files can be passed with environment variables.
-func TestConfigFilesFromEnv(t *testing.T) {
-	t.Setenv("GLOUTON_CONFIG_FILES", "testdata/simple.conf")
-
-	config, warnings, err := Load(false)
-	if warnings != nil {
-		t.Fatalf("Warning while loading config: %s", err)
-	}
-
-	if err != nil {
-		t.Fatalf("Failed to load config: %s", err)
-	}
-
-	if config.Web.StaticCDNURL != "/simple" {
-		t.Fatal("File given with GLOUTON_CONFIG_FILES not loaded")
-	}
-}
-
 // Test that users are able to override default settings.
 func TestOverrideDefault(t *testing.T) {
 	expectedConfig := DefaultConfig()
@@ -698,6 +680,29 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 				},
 				Zabbix: Zabbix{
 					Enable: true,
+				},
+			},
+		},
+		{
+			Name: "config file from env",
+			Environment: map[string]string{
+				"GLOUTON_CONFIG_FILES": "testdata/simple.conf",
+			},
+			WantConfig: Config{
+				Web: Web{
+					StaticCDNURL: "/simple",
+				},
+			},
+		},
+		{
+			Name: "empty file",
+			Files: []string{
+				"testdata/empty.conf",
+				"testdata/simple.conf",
+			},
+			WantConfig: Config{
+				Web: Web{
+					StaticCDNURL: "/simple",
 				},
 			},
 		},
