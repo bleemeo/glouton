@@ -103,7 +103,8 @@ const (
 )
 
 var (
-	errUnsupportedKey     = errors.New("unsupported item key")
+    // we want to reply with capitalized U to match output from a Zabbix agent
+	errUnsupportedKey     = errors.New("Unsupported item key") //nolint:stylecheck
 	errFeatureUnavailable = errors.New("some features are unavailable")
 )
 
