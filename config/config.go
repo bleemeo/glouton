@@ -36,16 +36,18 @@ type Warnings []error
 
 // Load loads the configuration from files and directories to a struct.
 func Load(withDefault bool, paths ...string) (Config, Warnings, error) {
-	// Add config envFiles from env.
-	envFiles := os.Getenv("GLOUTON_CONFIG_FILES")
-
-	if len(paths) == 0 || len(paths) == 1 && paths[0] == "" && envFiles != "" {
-		paths = strings.Split(envFiles, ",")
-	}
-
 	// If no config was given with flags or env variables, fallback on the default files.
 	if len(paths) == 0 || len(paths) == 1 && paths[0] == "" {
 		paths = DefaultPaths()
+	}
+
+	return loadToStruct(withDefault, paths...)
+}
+
+func loadToStruct(withDefault bool, paths ...string) (Config, Warnings, error) {
+	// Override config files if the files were given from the env.
+	if envFiles := os.Getenv("GLOUTON_CONFIG_FILES"); envFiles != "" {
+		paths = strings.Split(envFiles, ",")
 	}
 
 	k, warnings, err := load(withDefault, paths...)

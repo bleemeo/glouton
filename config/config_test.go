@@ -326,7 +326,7 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 		},
 	}
 
-	config, warnings, err := Load(false, "testdata/full.conf")
+	config, warnings, err := loadToStruct(false, "testdata/full.conf")
 	if warnings != nil {
 		t.Fatalf("Warning while loading config: %s", warnings)
 	}
@@ -351,7 +351,7 @@ func TestOverrideDefault(t *testing.T) {
 
 	t.Setenv("GLOUTON_BLEEMEO_ENABLE", "false")
 
-	config, warnings, err := Load(true, "testdata/override_default.conf")
+	config, warnings, err := loadToStruct(true, "testdata/override_default.conf")
 	if warnings != nil {
 		t.Fatalf("Warning while loading config: %s", err)
 	}
@@ -367,7 +367,7 @@ func TestOverrideDefault(t *testing.T) {
 
 // Test that the config loaded with no config file has default values.
 func TestDefaultNoFile(t *testing.T) {
-	config, warnings, err := Load(true)
+	config, warnings, err := loadToStruct(true)
 	if warnings != nil {
 		t.Fatalf("Warning while loading config: %s", warnings)
 	}
@@ -381,7 +381,7 @@ func TestDefaultNoFile(t *testing.T) {
 	}
 }
 
-// TestLoad tests loading the config and the warnings and errors returned.
+// TestloadToStruct tests loading the config and the warnings and errors returned.
 func TestLoad(t *testing.T) { //nolint:maintidx
 	tests := []struct {
 		Name         string
@@ -714,7 +714,7 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 				t.Setenv(k, v)
 			}
 
-			config, warnings, err := Load(false, test.Files...)
+			config, warnings, err := loadToStruct(false, test.Files...)
 			if diff := cmp.Diff(test.WantError, err); diff != "" {
 				t.Fatalf("Unexpected error for files %s\n%s", test.Files, diff)
 			}
@@ -866,7 +866,7 @@ func Test_migrate(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.Name, func(t *testing.T) {
-			config, _, err := Load(false, test.ConfigFile)
+			config, _, err := loadToStruct(false, test.ConfigFile)
 			if err != nil {
 				t.Fatalf("Failed to load config: %s", err)
 			}
