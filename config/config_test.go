@@ -364,7 +364,10 @@ func TestOverrideDefault(t *testing.T) {
 	expectedConfig.NetworkInterfaceBlacklist = []string{"override"}
 	expectedConfig.DF.PathIgnore = []string{"/override"}
 	expectedConfig.Bleemeo.APIBase = ""
+	expectedConfig.Bleemeo.Enable = false
 	expectedConfig.Bleemeo.MQTT.SSL = false
+
+	t.Setenv("GLOUTON_BLEEMEO_ENABLE", "false")
 
 	config, warnings, err := Load(true, "testdata/override_default.conf")
 	if warnings != nil {
@@ -639,6 +642,62 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 						SSL:    true,
 					},
 					Enable: false,
+				},
+			},
+		},
+		{
+			Name:  "convert boolean",
+			Files: []string{"testdata/bool.conf"},
+			Environment: map[string]string{
+				"GLOUTON_ZABBIX_ENABLE": "Yes",
+			},
+			WantWarnings: []string{
+				`error decoding 'mqtt.ssl_insecure': strconv.ParseBool: parsing "invalid": invalid syntax`,
+			},
+			WantConfig: Config{
+				Agent: Agent{
+					HTTPDebug: HTTPDebug{
+						Enable: true,
+					},
+					NodeExporter: NodeExporter{
+						Enable: true,
+					},
+					ProcessExporter: ProcessExporter{
+						Enable: true,
+					},
+					WindowsExporter: NodeExporter{
+						Enable: true,
+					},
+					Telemetry: Telemetry{
+						Enable: true,
+					},
+				},
+				Blackbox: Blackbox{
+					Enable:          true,
+					ScraperSendUUID: true,
+				},
+				Bleemeo: Bleemeo{
+					Enable: true,
+				},
+				InfluxDB: InfluxDB{
+					Enable: false,
+				},
+				JMX: JMX{
+					Enable: false,
+				},
+				Kubernetes: Kubernetes{
+					Enable: false,
+				},
+				MQTT: OpenSourceMQTT{
+					Enable: false,
+					SSL:    false,
+				},
+				NRPE: NRPE{
+					Enable: false,
+					SSL:    false,
+				},
+				Zabbix: Zabbix{
+					Enable: true,
 				},
 			},
 		},

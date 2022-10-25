@@ -62,6 +62,7 @@ func Load(withDefault bool, paths ...string) (Config, Warnings, error) {
 				mapstructure.TextUnmarshallerHookFunc(),
 				blackboxModuleHookFunc(),
 				stringToMapHookFunc(),
+				stringToBoolHookFunc(),
 			),
 			Metadata:         nil,
 			ErrorUnused:      true,
