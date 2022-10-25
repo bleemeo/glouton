@@ -80,10 +80,11 @@ func Load(withDefault bool, paths ...string) (Config, Warnings, error) {
 
 // load the configuration from files and directories.
 func load(withDefault bool, paths ...string) (*koanf.Koanf, Warnings, error) {
-	k := koanf.New(delimiter)
-	warnings, finalErr := loadPaths(k, paths)
+	var finalErr error
 
-	k, moreWarnings := migrate(k)
+	fileEnvKoanf, warnings, finalErr := loadPaths(paths)
+
+	fileEnvKoanf, moreWarnings := migrate(fileEnvKoanf)
 	if moreWarnings != nil {
 		warnings = append(warnings, moreWarnings...)
 	}
@@ -92,11 +93,14 @@ func load(withDefault bool, paths ...string) (*koanf.Koanf, Warnings, error) {
 	// The warnings are filled only after k.Load is called.
 	envToKey, envWarnings := envToKeyFunc()
 
-	if err := k.Load(env.Provider(deprecatedEnvPrefix, delimiter, envToKey), nil); err != nil {
+	// We keep the default merge behavior for the environment variables:
+	// koanf recursively merges keys of nested maps (map[string]interface{}),
+	// while static values are overwritten (slices, strings, etc).
+	if err := fileEnvKoanf.Load(env.Provider(deprecatedEnvPrefix, delimiter, envToKey), nil); err != nil {
 		warnings = append(warnings, err)
 	}
 
-	if err := k.Load(env.Provider(envPrefix, delimiter, envToKey), nil); err != nil {
+	if err := fileEnvKoanf.Load(env.Provider(envPrefix, delimiter, envToKey), nil); err != nil {
 		warnings = append(warnings, err)
 	}
 
@@ -105,22 +109,29 @@ func load(withDefault bool, paths ...string) (*koanf.Koanf, Warnings, error) {
 	}
 
 	// Load default values.
+	k := koanf.New(delimiter)
+
 	if withDefault {
-		mergeFunc := func(src, dest map[string]interface{}) error {
-			// Merge without overwriting, defaults are only applied
-			// when the setting has not been modified.
-			err := mergo.Merge(&dest, src)
-			if err != nil {
-				logger.Printf("Error merging config: %s", err)
-			}
-
-			return err
-		}
-
-		err := k.Load(structsProvider(DefaultConfig(), "yaml"), nil, koanf.WithMergeFunc(mergeFunc))
+		err := k.Load(structsProvider(DefaultConfig(), "yaml"), nil)
 		if err != nil {
 			finalErr = err
 		}
+	}
+
+	// Merge defaults and config from files and environment.
+	// Overwrite default values, slices and map.
+	mergeFunc := func(src, dest map[string]interface{}) error {
+		err := mergo.Merge(&dest, src, mergo.WithOverride)
+		if err != nil {
+			logger.Printf("Error merging config: %s", err)
+		}
+
+		return err
+	}
+
+	err := k.Load(confmap.Provider(fileEnvKoanf.All(), delimiter), nil, koanf.WithMergeFunc(mergeFunc))
+	if err != nil {
+		warnings = append(warnings, err)
 	}
 
 	return k, warnings, finalErr
@@ -201,11 +212,13 @@ func toDeprecatedEnvKey(key string) string {
 	return envKey
 }
 
-func loadPaths(k *koanf.Koanf, paths []string) (Warnings, error) {
+func loadPaths(paths []string) (*koanf.Koanf, Warnings, error) {
 	var (
 		finalError error
 		warnings   Warnings
 	)
+
+	k := koanf.New(delimiter)
 
 	for _, path := range paths {
 		stat, err := os.Stat(path)
@@ -248,7 +261,7 @@ func loadPaths(k *koanf.Koanf, paths []string) (Warnings, error) {
 		}
 	}
 
-	return warnings, finalError
+	return k, warnings, finalError
 }
 
 func loadDirectory(k *koanf.Koanf, dirPath string) (Warnings, error) {
@@ -276,6 +289,8 @@ func loadDirectory(k *koanf.Koanf, dirPath string) (Warnings, error) {
 }
 
 func loadFile(k *koanf.Koanf, path string) error {
+	// Merge this file with the previous config.
+	// Overwrite values, merge maps and append slices.
 	mergeFunc := func(src, dest map[string]interface{}) error {
 		err := mergo.Merge(&dest, src, mergo.WithOverride, mergo.WithAppendSlice)
 		if err != nil {

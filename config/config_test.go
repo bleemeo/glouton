@@ -360,6 +360,12 @@ func TestConfigFilesFromEnv(t *testing.T) {
 
 // Test that users are able to override default settings.
 func TestOverrideDefault(t *testing.T) {
+	expectedConfig := DefaultConfig()
+	expectedConfig.NetworkInterfaceBlacklist = []string{"override"}
+	expectedConfig.DF.PathIgnore = []string{"/override"}
+	expectedConfig.Bleemeo.APIBase = ""
+	expectedConfig.Bleemeo.MQTT.SSL = false
+
 	config, warnings, err := Load(true, "testdata/override_default.conf")
 	if warnings != nil {
 		t.Fatalf("Warning while loading config: %s", err)
@@ -369,17 +375,7 @@ func TestOverrideDefault(t *testing.T) {
 		t.Fatalf("Failed to load config: %s", err)
 	}
 
-	if len(config.NetworkInterfaceBlacklist) != 1 || config.NetworkInterfaceBlacklist[0] != "override" {
-		t.Fatalf("Expected [override], got %s", config.NetworkInterfaceBlacklist)
-	}
-
-	// Test override nested slice.
-	if len(config.DF.PathIgnore) != 1 || config.DF.PathIgnore[0] != "/override" {
-		t.Fatalf("Expected [/override], got %s", config.DF.PathIgnore)
-	}
-
-	// Test that default not set in the config file hasn't changed.
-	if diff := cmp.Diff(DefaultConfig().DF.IgnoreFSType, config.DF.IgnoreFSType); diff != "" {
+	if diff := cmp.Diff(expectedConfig, config); diff != "" {
 		t.Fatalf("Default value modified:\n%s", diff)
 	}
 }
@@ -401,7 +397,7 @@ func TestDefaultNoFile(t *testing.T) {
 }
 
 // TestLoad tests loading the config and the warnings and errors returned.
-func TestLoad(t *testing.T) {
+func TestLoad(t *testing.T) { //nolint:maintidx
 	tests := []struct {
 		Name         string
 		Files        []string
@@ -625,6 +621,25 @@ func TestLoad(t *testing.T) {
 			WantWarnings: []string{
 				"'bleemeo' has invalid keys: unused_key",
 				"'service[0]' has invalid keys: another_key",
+			},
+		},
+		{
+			Name:  "override values",
+			Files: []string{"testdata/override"},
+			Environment: map[string]string{
+				"GLOUTON_BLEEMEO_MQTT_HOST": "",
+			},
+			WantConfig: Config{
+				Bleemeo: Bleemeo{
+					APIBase: "",
+					MQTT: BleemeoMQTT{
+						Host:   "",
+						CAFile: "myfile",
+						Port:   1884,
+						SSL:    true,
+					},
+					Enable: false,
+				},
 			},
 		},
 	}
