@@ -11,38 +11,6 @@ import (
 	"github.com/prometheus/common/config"
 )
 
-// TestMerge tests that config files are merged correctly.
-// Merge should override existing values, merge maps and concatenate arrays.
-func TestMerge(t *testing.T) {
-	k, warnings, err := load(false, "testdata/merge")
-	if warnings != nil {
-		t.Fatalf("Warning while loading config: %s", err)
-	}
-
-	if err != nil {
-		t.Error(err)
-	}
-
-	cases := []struct {
-		Key  string
-		Want string
-	}{
-		{Key: "d1", Want: "1"},
-		{Key: "d2", Want: "2"},
-		{Key: "replaced", Want: "2"},
-		{Key: "dict.d1", Want: "1"},
-		{Key: "dict.d2", Want: "2"},
-		{Key: "dict.replaced", Want: "2"},
-		{Key: "arr", Want: "[1 2 2 3]"},
-	}
-	for _, c := range cases {
-		got := k.String(c.Key)
-		if c.Want != got {
-			t.Errorf("String(%#v) = %#v, want %#v", c.Key, got, c.Want)
-		}
-	}
-}
-
 // TestStructuredConfig tests loading the full configuration file.
 func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 	expectedConfig := Config{
@@ -353,7 +321,54 @@ func TestOverrideDefault(t *testing.T) {
 
 	config, warnings, err := loadToStruct(true, "testdata/override_default.conf")
 	if warnings != nil {
-		t.Fatalf("Warning while loading config: %s", err)
+		t.Fatalf("Warning while loading config: %s", warnings)
+	}
+
+	if err != nil {
+		t.Fatalf("Failed to load config: %s", err)
+	}
+
+	if diff := cmp.Diff(expectedConfig, config); diff != "" {
+		t.Fatalf("Default value modified:\n%s", diff)
+	}
+}
+
+// TestMergeWithDefault tests that the config files and the environment variables
+// are correctly merge.
+// For files, basic types (string, int, ...) are overwritten, maps are merged and arrays are concatenated.
+// Files overwrite default values but merges maps with the defaults.
+// Environment variables always overwrite the existing config.
+func TestMergeWithDefault(t *testing.T) {
+	expectedConfig := DefaultConfig()
+	expectedConfig.Bleemeo.Enable = false
+	expectedConfig.Bleemeo.MQTT.SSLInsecure = true
+	expectedConfig.Bleemeo.MQTT.Host = "b"
+	expectedConfig.MQTT.Hosts = []string{}
+	expectedConfig.Metric.AllowMetrics = []string{"mymetric", "mymetric2"}
+	expectedConfig.Metric.DenyMetrics = []string{"cpu_used"}
+	expectedConfig.Metric.SoftStatusPeriod = map[string]int{
+		"system_pending_updates": 500,
+	}
+	expectedConfig.Thresholds = map[string]Threshold{
+		"mymetric": {
+			LowWarning: 1,
+		},
+		"mymetric2": {
+			HighCritical: 90,
+		},
+		"mymetric3": {
+			HighWarning: 80,
+		},
+	}
+	expectedConfig.NetworkInterfaceBlacklist = []string{"eth0", "eth1", "eth1", "eth2"}
+
+	t.Setenv("GLOUTON_MQTT_HOSTS", "")
+	t.Setenv("GLOUTON_METRIC_DENY_METRICS", "cpu_used")
+	t.Setenv("GLOUTON_METRIC_SOFTSTATUS_PERIOD", "system_pending_updates=500")
+
+	config, warnings, err := loadToStruct(true, "testdata/merge")
+	if warnings != nil {
+		t.Fatalf("Warning while loading config: %s", warnings)
 	}
 
 	if err != nil {
