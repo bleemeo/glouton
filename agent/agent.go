@@ -89,6 +89,7 @@ import (
 	processInput "glouton/inputs/process"
 
 	paho "github.com/eclipse/paho.mqtt.golang"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/prometheus/model/labels"
 	"gopkg.in/yaml.v3"
 )
@@ -156,7 +157,7 @@ type agent struct {
 	l                sync.Mutex
 	taskIDs          map[string]int
 	metricResolution time.Duration
-	configWarnings   []error
+	configWarnings   prometheus.MultiError
 }
 
 func zabbixResponse(key string, args []string) (string, error) {
@@ -726,7 +727,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		}()
 	}
 
-	var warnings config.Warnings
+	var warnings prometheus.MultiError
 
 	a.snmpManager, warnings = snmp.NewManager(
 		a.config.Metric.SNMP.ExporterAddress,
@@ -763,7 +764,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 			FQDN:                  fqdn,
 			GloutonPort:           fmt.Sprint(a.config.Web.Listener.Port),
 			MetricFormat:          a.metricFormat,
-			BlackboxSentScraperID: a.config.Blackbox.ScraperSendUUID,
+			BlackboxSendScraperID: a.config.Blackbox.ScraperSendUUID,
 			Filter:                mFilter,
 			Queryable:             a.store,
 		})
@@ -2440,7 +2441,7 @@ func (a *agent) addWarnings(warnings ...error) {
 }
 
 // Get configuration warnings.
-func (a *agent) getWarnings() types.MultiErrors {
+func (a *agent) getWarnings() prometheus.MultiError {
 	a.l.Lock()
 	defer a.l.Unlock()
 
@@ -2549,18 +2550,19 @@ func setupContainer(hostRootPath string) {
 	}
 }
 
-// prometheusConfigToURLs convert metric.prometheus.targets config to a map of target name to URL
+// prometheusConfigToURLs convert metric.prometheus.targets config to a list of targets.
+// It returns the targets and some warnings.
 //
 // See tests for the expected config.
-func prometheusConfigToURLs(configTargets []config.PrometheusTarget) ([]*scrapper.Target, config.Warnings) {
-	var warnings config.Warnings
+func prometheusConfigToURLs(configTargets []config.PrometheusTarget) ([]*scrapper.Target, prometheus.MultiError) {
+	var warnings prometheus.MultiError
 
 	targets := make([]*scrapper.Target, 0, len(configTargets))
 
 	for _, configTarget := range configTargets {
 		targetURL, err := url.Parse(configTarget.URL)
 		if err != nil {
-			warnings = append(warnings, fmt.Errorf("%w: invalid prometheus target URL: %s", config.ErrInvalidValue, err))
+			warnings.Append(fmt.Errorf("%w: invalid prometheus target URL: %s", config.ErrInvalidValue, err))
 
 			continue
 		}

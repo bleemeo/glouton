@@ -92,7 +92,7 @@ type GathererRegistry interface {
 	Unregister(id int) bool
 }
 
-// New returns a new Discovery.
+// New returns a new Discovery and some warnings.
 func New(
 	dynamicDiscovery Discoverer,
 	coll Collector,
@@ -107,7 +107,7 @@ func New(
 	isContainerIgnored func(c facts.Container) bool,
 	metricFormat types.MetricFormat,
 	processFact processFact,
-) (*Discovery, config.Warnings) {
+) (*Discovery, prometheus.MultiError) {
 	initialServices := servicesFromState(state)
 	discoveredServicesMap := make(map[NameInstance]Service, len(initialServices))
 
@@ -153,8 +153,9 @@ func New(
 }
 
 // validateServies validates the service config.
-func validateServices(services []config.Service) ([]config.Service, config.Warnings) {
-	var warnings config.Warnings
+// It returns the services and some warnings.
+func validateServices(services []config.Service) ([]config.Service, prometheus.MultiError) {
+	var warnings prometheus.MultiError
 
 	newServices := make([]config.Service, 0, len(services))
 	replacer := strings.NewReplacer(".", "_", "-", "_")
@@ -162,7 +163,7 @@ func validateServices(services []config.Service) ([]config.Service, config.Warni
 	for _, srv := range services {
 		if srv.ID == "" {
 			warning := fmt.Errorf("%w: a key \"id\" is missing in one of your service override", config.ErrInvalidValue)
-			warnings = append(warnings, warning)
+			warnings.Append(warning)
 
 			continue
 		}
@@ -174,7 +175,7 @@ func validateServices(services []config.Service) ([]config.Service, config.Warni
 					"%w: service id \"%s\" can only contains letters, digits and underscore",
 					config.ErrInvalidValue, srv.ID,
 				)
-				warnings = append(warnings, warning)
+				warnings.Append(warning)
 
 				continue
 			}
@@ -183,7 +184,7 @@ func validateServices(services []config.Service) ([]config.Service, config.Warni
 				"%w: service id \"%s\" can not contains dot (.) or dash (-). Changed to \"%s\"",
 				config.ErrInvalidValue, srv.ID, newID,
 			)
-			warnings = append(warnings, warning)
+			warnings.Append(warning)
 
 			srv.ID = newID
 		}

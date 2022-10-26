@@ -16,6 +16,7 @@ import (
 	"github.com/knadh/koanf/providers/file"
 	"github.com/knadh/koanf/providers/structs"
 	"github.com/mitchellh/mapstructure"
+	"github.com/prometheus/client_golang/prometheus"
 	"gopkg.in/yaml.v3"
 )
 
@@ -32,10 +33,9 @@ var (
 	ErrInvalidValue       = errors.New("invalid config value")
 )
 
-type Warnings []error
-
 // Load loads the configuration from files and directories to a struct.
-func Load(withDefault bool, paths ...string) (Config, Warnings, error) {
+// Returns the config, warnings and an error.
+func Load(withDefault bool, paths ...string) (Config, prometheus.MultiError, error) {
 	// If no config was given with flags or env variables, fallback on the default files.
 	if len(paths) == 0 || len(paths) == 1 && paths[0] == "" {
 		paths = DefaultPaths()
@@ -44,7 +44,7 @@ func Load(withDefault bool, paths ...string) (Config, Warnings, error) {
 	return loadToStruct(withDefault, paths...)
 }
 
-func loadToStruct(withDefault bool, paths ...string) (Config, Warnings, error) {
+func loadToStruct(withDefault bool, paths ...string) (Config, prometheus.MultiError, error) {
 	// Override config files if the files were given from the env.
 	if envFiles := os.Getenv("GLOUTON_CONFIG_FILES"); envFiles != "" {
 		paths = strings.Split(envFiles, ",")
@@ -74,15 +74,14 @@ func loadToStruct(withDefault bool, paths ...string) (Config, Warnings, error) {
 		Tag: "yaml",
 	}
 
-	if warning := k.UnmarshalWithConf("", &config, unmarshalConf); warning != nil {
-		warnings = append(warnings, warning)
-	}
+	warning := k.UnmarshalWithConf("", &config, unmarshalConf)
+	warnings.Append(warning)
 
 	return config, unwrapErrors(warnings), err
 }
 
 // load the configuration from files and directories.
-func load(withDefault bool, paths ...string) (*koanf.Koanf, Warnings, error) {
+func load(withDefault bool, paths ...string) (*koanf.Koanf, prometheus.MultiError, error) {
 	var finalErr error
 
 	fileEnvKoanf, warnings, finalErr := loadPaths(paths)
@@ -99,13 +98,11 @@ func load(withDefault bool, paths ...string) (*koanf.Koanf, Warnings, error) {
 	// Environment variable overwrite basic types (string, int), arrays, and maps.
 	envMergeFunc := mergeFunc(mergo.WithOverride)
 
-	if err := fileEnvKoanf.Load(env.Provider(deprecatedEnvPrefix, delimiter, envToKey), nil, envMergeFunc); err != nil {
-		warnings = append(warnings, err)
-	}
+	warning := fileEnvKoanf.Load(env.Provider(deprecatedEnvPrefix, delimiter, envToKey), nil, envMergeFunc)
+	warnings.Append(warning)
 
-	if err := fileEnvKoanf.Load(env.Provider(envPrefix, delimiter, envToKey), nil, envMergeFunc); err != nil {
-		warnings = append(warnings, err)
-	}
+	warning = fileEnvKoanf.Load(env.Provider(envPrefix, delimiter, envToKey), nil, envMergeFunc)
+	warnings.Append(warning)
 
 	if len(*envWarnings) > 0 {
 		warnings = append(warnings, *envWarnings...)
@@ -115,17 +112,14 @@ func load(withDefault bool, paths ...string) (*koanf.Koanf, Warnings, error) {
 	k := koanf.New(delimiter)
 
 	if withDefault {
-		err := k.Load(structsProvider(DefaultConfig(), "yaml"), nil)
-		if err != nil {
-			finalErr = err
-		}
+		warning = k.Load(structsProvider(DefaultConfig(), "yaml"), nil)
+		warnings.Append(warning)
 	}
 
 	// Merge defaults and config from files and environment.
 	// The config overwrites the defaults for basic types (string, int) and arrays, and merges maps.
-	if err := k.Load(confmap.Provider(fileEnvKoanf.All(), delimiter), nil, mergeFunc(mergo.WithOverride)); err != nil {
-		warnings = append(warnings, err)
-	}
+	warning = k.Load(confmap.Provider(fileEnvKoanf.All(), delimiter), nil, mergeFunc(mergo.WithOverride))
+	warnings.Append(warning)
 
 	return k, warnings, finalErr
 }
@@ -133,7 +127,7 @@ func load(withDefault bool, paths ...string) (*koanf.Koanf, Warnings, error) {
 // envToKeyFunc returns a function that converts an environment variable to a configuration key
 // and a pointer to Warnings, the warnings are filled only after koanf.Load has been called.
 // Panics if two config keys correspond to the same environment variable.
-func envToKeyFunc() (func(string) string, *Warnings) {
+func envToKeyFunc() (func(string) string, *prometheus.MultiError) {
 	// Get all config keys from an empty config.
 	k := koanf.New(delimiter)
 	_ = k.Load(structs.Provider(Config{}, "yaml"), nil)
@@ -167,17 +161,17 @@ func envToKeyFunc() (func(string) string, *Warnings) {
 		movedEnvKeys[toDeprecatedEnvKey(k)] = toEnvKey(v)
 	}
 
-	warnings := make(Warnings, 0)
+	warnings := make(prometheus.MultiError, 0)
 	envFunc := func(s string) string {
 		// Migrate deprecated keys.
 		if newKey, ok := movedEnvKeys[s]; ok {
-			warnings = append(warnings, fmt.Errorf("%w: %s, use %s instead", errDeprecatedEnv, s, newKey))
+			warnings.Append(fmt.Errorf("%w: %s, use %s instead", errDeprecatedEnv, s, newKey))
 			s = newKey
 		}
 
 		if strings.HasPrefix(s, deprecatedEnvPrefix) {
 			newKey := strings.Replace(s, deprecatedEnvPrefix, envPrefix, 1)
-			warnings = append(warnings, fmt.Errorf("%w: %s, use %s instead", errDeprecatedEnv, s, newKey))
+			warnings.Append(fmt.Errorf("%w: %s, use %s instead", errDeprecatedEnv, s, newKey))
 			s = newKey
 		}
 
@@ -219,10 +213,10 @@ func toDeprecatedEnvKey(key string) string {
 	return envKey
 }
 
-func loadPaths(paths []string) (*koanf.Koanf, Warnings, error) {
+func loadPaths(paths []string) (*koanf.Koanf, prometheus.MultiError, error) {
 	var (
 		finalError error
-		warnings   Warnings
+		warnings   prometheus.MultiError
 	)
 
 	k := koanf.New(delimiter)
@@ -258,9 +252,7 @@ func loadPaths(paths []string) (*koanf.Koanf, Warnings, error) {
 			}
 		} else {
 			warning := loadFile(k, path)
-			if warning != nil {
-				warnings = append(warnings, warning)
-			}
+			warnings.Append(warning)
 		}
 
 		if err == nil {
@@ -271,13 +263,13 @@ func loadPaths(paths []string) (*koanf.Koanf, Warnings, error) {
 	return k, warnings, finalError
 }
 
-func loadDirectory(k *koanf.Koanf, dirPath string) (Warnings, error) {
+func loadDirectory(k *koanf.Koanf, dirPath string) (prometheus.MultiError, error) {
 	files, err := os.ReadDir(dirPath)
 	if err != nil {
 		return nil, err
 	}
 
-	var warnings Warnings
+	var warnings prometheus.MultiError
 
 	for _, f := range files {
 		if !strings.HasSuffix(f.Name(), ".conf") {
@@ -287,9 +279,7 @@ func loadDirectory(k *koanf.Koanf, dirPath string) (Warnings, error) {
 		path := filepath.Join(dirPath, f.Name())
 
 		warning := loadFile(k, path)
-		if warning != nil {
-			warnings = append(warnings, warning)
-		}
+		warnings.Append(warning)
 	}
 
 	return warnings, nil
@@ -307,12 +297,12 @@ func loadFile(k *koanf.Koanf, path string) error {
 }
 
 // unwrapErrors unwrap all errors in the list than contain multiple errors.
-func unwrapErrors(errs []error) []error {
+func unwrapErrors(errs prometheus.MultiError) prometheus.MultiError {
 	if len(errs) == 0 {
 		return nil
 	}
 
-	unwrapped := make([]error, 0, len(errs))
+	unwrapped := make(prometheus.MultiError, 0, len(errs))
 
 	for _, err := range errs {
 		var (
@@ -325,10 +315,10 @@ func unwrapErrors(errs []error) []error {
 			unwrapped = append(unwrapped, mapErr.WrappedErrors()...)
 		case errors.As(err, &yamlErr):
 			for _, wrappedErr := range yamlErr.Errors {
-				unwrapped = append(unwrapped, errors.New(wrappedErr)) //nolint:goerr113
+				unwrapped.Append(errors.New(wrappedErr)) //nolint:goerr113
 			}
 		default:
-			unwrapped = append(unwrapped, err)
+			unwrapped.Append(err)
 		}
 	}
 
@@ -359,10 +349,10 @@ func movedKeys() map[string]string {
 }
 
 // migrate upgrade the configuration when Glouton changes its settings.
-func migrate(k *koanf.Koanf) (*koanf.Koanf, Warnings) {
+func migrate(k *koanf.Koanf) (*koanf.Koanf, prometheus.MultiError) {
 	config := k.All()
 
-	var warnings Warnings
+	var warnings prometheus.MultiError
 
 	warnings = append(warnings, migrateMovedKeys(k, config)...)
 	warnings = append(warnings, migrateLogging(k, config)...)
@@ -372,17 +362,15 @@ func migrate(k *koanf.Koanf) (*koanf.Koanf, Warnings) {
 	// We can't reuse the previous Koanf because it doesn't allow removing keys.
 	newConfig := koanf.New(delimiter)
 
-	err := newConfig.Load(confmap.Provider(config, delimiter), nil)
-	if err != nil {
-		warnings = append(warnings, err)
-	}
+	warning := newConfig.Load(confmap.Provider(config, delimiter), nil)
+	warnings.Append(warning)
 
 	return newConfig, warnings
 }
 
 // migrateMovedKeys migrate the config settings that were simply moved.
-func migrateMovedKeys(k *koanf.Koanf, config map[string]interface{}) Warnings {
-	var warnings Warnings //nolint:prealloc // False positive.
+func migrateMovedKeys(k *koanf.Koanf, config map[string]interface{}) prometheus.MultiError {
+	var warnings prometheus.MultiError //nolint:prealloc // False positive.
 
 	keys := movedKeys()
 
@@ -395,14 +383,16 @@ func migrateMovedKeys(k *koanf.Koanf, config map[string]interface{}) Warnings {
 		config[newKey] = val
 		delete(config, oldKey)
 
-		warnings = append(warnings, fmt.Errorf("%w: %s, use %s instead", errSettingsDeprecated, oldKey, newKey))
+		warnings.Append(fmt.Errorf("%w: %s, use %s instead", errSettingsDeprecated, oldKey, newKey))
 	}
 
 	return warnings
 }
 
 // migrateLogging migrates the logging settings.
-func migrateLogging(k *koanf.Koanf, config map[string]interface{}) (warnings []error) {
+func migrateLogging(k *koanf.Koanf, config map[string]interface{}) prometheus.MultiError {
+	var warnings prometheus.MultiError
+
 	for _, name := range []string{"tail_size", "head_size"} {
 		oldKey := "logging.buffer." + name
 		newKey := "logging.buffer." + name + "_bytes"
@@ -415,14 +405,14 @@ func migrateLogging(k *koanf.Koanf, config map[string]interface{}) (warnings []e
 		config[newKey] = value * 100
 		delete(config, oldKey)
 
-		warnings = append(warnings, fmt.Errorf("%w: %s, use %s instead", errSettingsDeprecated, oldKey, newKey))
+		warnings.Append(fmt.Errorf("%w: %s, use %s instead", errSettingsDeprecated, oldKey, newKey))
 	}
 
 	return warnings
 }
 
 // migrateMetricsPrometheus migrates Prometheus settings.
-func migrateMetricsPrometheus(k *koanf.Koanf, config map[string]interface{}) Warnings {
+func migrateMetricsPrometheus(k *koanf.Koanf, config map[string]interface{}) prometheus.MultiError {
 	// metrics.prometheus was renamed metrics.prometheus.targets
 	// We guess that old path was used when metrics.prometheus.*.url exist and is a string
 	v := k.Get("metric.prometheus")
@@ -431,7 +421,7 @@ func migrateMetricsPrometheus(k *koanf.Koanf, config map[string]interface{}) War
 	}
 
 	var ( //nolint:prealloc // False positive.
-		warnings        Warnings
+		warnings        prometheus.MultiError
 		migratedTargets []interface{}
 	)
 
@@ -451,7 +441,7 @@ func migrateMetricsPrometheus(k *koanf.Koanf, config map[string]interface{}) War
 			continue
 		}
 
-		warnings = append(warnings, fmt.Errorf("%w: metrics.prometheus. See https://docs.bleemeo.com/metrics-sources/prometheus", errSettingsDeprecated))
+		warnings.Append(fmt.Errorf("%w: metrics.prometheus. See https://docs.bleemeo.com/metrics-sources/prometheus", errSettingsDeprecated))
 
 		migratedTargets = append(migratedTargets, map[string]interface{}{
 			"url":  u,
@@ -472,14 +462,14 @@ func migrateMetricsPrometheus(k *koanf.Koanf, config map[string]interface{}) War
 	}
 
 	if k.Bool("metric.prometheus.targets.include_default_metrics") {
-		warnings = append(warnings, fmt.Errorf("%w: metrics.prometheus.targets.include_default_metrics. This option does not exists anymore and has no effect", errSettingsDeprecated))
+		warnings.Append(fmt.Errorf("%w: metrics.prometheus.targets.include_default_metrics. This option does not exists anymore and has no effect", errSettingsDeprecated))
 	}
 
 	return warnings
 }
 
-func migrateScrapperMetrics(k *koanf.Koanf, config map[string]interface{}) Warnings {
-	var warnings Warnings
+func migrateScrapperMetrics(k *koanf.Koanf, config map[string]interface{}) prometheus.MultiError {
+	var warnings prometheus.MultiError
 
 	warnings = append(warnings, migrateScrapper(k, config, "metric.prometheus.allow_metrics", "metric.allow_metrics")...)
 	warnings = append(warnings, migrateScrapper(k, config, "metric.prometheus.deny_metrics", "metric.deny_metrics")...)
@@ -489,7 +479,7 @@ func migrateScrapperMetrics(k *koanf.Koanf, config map[string]interface{}) Warni
 	return warnings
 }
 
-func migrateScrapper(k *koanf.Koanf, config map[string]interface{}, deprecatedPath string, correctPath string) Warnings {
+func migrateScrapper(k *koanf.Koanf, config map[string]interface{}, deprecatedPath string, correctPath string) prometheus.MultiError {
 	migratedTargets := []string{}
 	v := k.Get(deprecatedPath)
 
@@ -502,10 +492,10 @@ func migrateScrapper(k *koanf.Koanf, config map[string]interface{}, deprecatedPa
 		return nil
 	}
 
-	var warnings Warnings
+	var warnings prometheus.MultiError
 
 	if len(vTab) > 0 {
-		warnings = append(warnings, fmt.Errorf("%w: %s. Please use %s", errSettingsDeprecated, deprecatedPath, correctPath))
+		warnings.Append(fmt.Errorf("%w: %s. Please use %s", errSettingsDeprecated, deprecatedPath, correctPath))
 
 		for _, val := range vTab {
 			s, _ := val.(string)
