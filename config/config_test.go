@@ -701,7 +701,7 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 		{
 			Name: "config file from env",
 			Environment: map[string]string{
-				"GLOUTON_CONFIG_FILES": "testdata/simple.conf",
+				EnvGloutonConfigFiles: "testdata/simple.conf",
 			},
 			WantConfig: Config{
 				Web: Web{

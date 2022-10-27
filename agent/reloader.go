@@ -290,7 +290,7 @@ func (a *agentReloader) watchConfig(ctx context.Context, reload chan struct{}) {
 	configPaths := a.configFilesFromFlag
 
 	// Get config files from env.
-	envFiles := os.Getenv("GLOUTON_CONFIG_FILES")
+	envFiles := os.Getenv(config.EnvGloutonConfigFiles)
 
 	if len(configPaths) == 0 || len(configPaths) == 1 && configPaths[0] == "" && envFiles != "" {
 		configPaths = strings.Split(envFiles, ",")

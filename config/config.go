@@ -21,9 +21,10 @@ import (
 )
 
 const (
-	envPrefix           = "GLOUTON_"
-	deprecatedEnvPrefix = "BLEEMEO_AGENT_"
-	delimiter           = "."
+	EnvGloutonConfigFiles = "GLOUTON_CONFIG_FILES"
+	envPrefix             = "GLOUTON_"
+	deprecatedEnvPrefix   = "BLEEMEO_AGENT_"
+	delimiter             = "."
 )
 
 var (
@@ -46,7 +47,7 @@ func Load(withDefault bool, paths ...string) (Config, prometheus.MultiError, err
 
 func loadToStruct(withDefault bool, paths ...string) (Config, prometheus.MultiError, error) {
 	// Override config files if the files were given from the env.
-	if envFiles := os.Getenv("GLOUTON_CONFIG_FILES"); envFiles != "" {
+	if envFiles := os.Getenv(EnvGloutonConfigFiles); envFiles != "" {
 		paths = strings.Split(envFiles, ",")
 	}
 
