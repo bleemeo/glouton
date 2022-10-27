@@ -793,7 +793,7 @@ func TestDump(t *testing.T) {
 
 	k := koanf.New(delimiter)
 	_ = k.Load(structs.Provider(wantConfig, "yaml"), nil)
-	wantMap := k.All()
+	wantMap := k.Raw()
 
 	dump := Dump(config)
 

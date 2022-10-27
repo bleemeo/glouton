@@ -526,7 +526,7 @@ func Dump(config Config) map[string]interface{} {
 	k := koanf.New(delimiter)
 	_ = k.Load(structs.Provider(config, "yaml"), nil)
 
-	return dump(k.All())
+	return dump(k.Raw())
 }
 
 func dump(root map[string]interface{}) map[string]interface{} {
