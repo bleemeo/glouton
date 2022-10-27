@@ -534,6 +534,10 @@ func applyOverride(
 			}
 		}
 
+		if override.Stack != "" {
+			service.Stack = override.Stack
+		}
+
 		// Override config.
 		err := mergo.Merge(&service.Config, override, mergo.WithOverride)
 		if err != nil {

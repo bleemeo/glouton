@@ -215,6 +215,7 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 				IgnorePorts:             []int{8081},
 				Address:                 "127.0.0.1",
 				Interval:                60,
+				Stack:                   "mystack",
 				CheckType:               "nagios",
 				HTTPPath:                "/check/",
 				HTTPStatusCode:          200,

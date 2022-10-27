@@ -271,6 +271,8 @@ type Service struct {
 	Address string `yaml:"address"`
 	// The delay between two consecutive checks in seconds.
 	Interval int `yaml:"interval"`
+	// Stack dashboard this service belongs to.
+	Stack string `yaml:"stack"`
 	// Check type used for custom checks.
 	CheckType string `yaml:"check_type"`
 	// The path used for HTTP checks.

@@ -474,6 +474,59 @@ func Test_applyOverride(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "override stack",
+			args: args{
+				discoveredServicesMap: map[NameInstance]Service{
+					{Name: "apache"}: {
+						Name:        "apache",
+						ServiceType: ApacheService,
+					},
+				},
+				servicesOverride: map[NameInstance]config.Service{
+					{Name: "apache"}: {
+						Stack: "website",
+					},
+				},
+			},
+			want: map[NameInstance]Service{
+				{Name: "apache"}: {
+					Name:        "apache",
+					ServiceType: ApacheService,
+					Stack:       "website",
+					Config: config.Service{
+						Stack: "website",
+					},
+				},
+			},
+		},
+		{
+			name: "no override stack",
+			args: args{
+				discoveredServicesMap: map[NameInstance]Service{
+					{Name: "apache"}: {
+						Name:        "apache",
+						ServiceType: ApacheService,
+						Stack:       "website",
+					},
+				},
+				servicesOverride: map[NameInstance]config.Service{
+					{Name: "apache"}: {
+						Stack: "",
+					},
+				},
+			},
+			want: map[NameInstance]Service{
+				{Name: "apache"}: {
+					Name:        "apache",
+					ServiceType: ApacheService,
+					Stack:       "website",
+					Config: config.Service{
+						Stack: "",
+					},
+				},
+			},
+		},
 	}
 	for _, tt := range tests {
 		tt := tt
