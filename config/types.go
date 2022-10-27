@@ -41,10 +41,10 @@ type Zabbix struct {
 }
 
 type Threshold struct {
-	LowWarning   float64 `yaml:"low_warning"`
-	LowCritical  float64 `yaml:"low_critical"`
-	HighWarning  float64 `yaml:"high_warning"`
-	HighCritical float64 `yaml:"high_critical"`
+	LowWarning   *float64 `yaml:"low_warning"`
+	LowCritical  *float64 `yaml:"low_critical"`
+	HighWarning  *float64 `yaml:"high_warning"`
+	HighCritical *float64 `yaml:"high_critical"`
 }
 
 type Telegraf struct {

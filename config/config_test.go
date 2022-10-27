@@ -270,10 +270,16 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 		},
 		Thresholds: map[string]Threshold{
 			"cpu_used": {
-				LowWarning:   2,
-				LowCritical:  1.5,
-				HighWarning:  80.2,
-				HighCritical: 90,
+				LowWarning:   newFloatPointer(2),
+				LowCritical:  newFloatPointer(1.5),
+				HighWarning:  newFloatPointer(80.2),
+				HighCritical: newFloatPointer(90),
+			},
+			"disk_used": {
+				LowWarning:   nil,
+				LowCritical:  newFloatPointer(2),
+				HighWarning:  newFloatPointer(90.5),
+				HighCritical: nil,
 			},
 		},
 		Web: Web{
@@ -306,6 +312,13 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 	if diff := cmp.Diff(expectedConfig, config); diff != "" {
 		t.Fatalf("Unexpected config loaded:\n%s", diff)
 	}
+}
+
+func newFloatPointer(value float64) *float64 {
+	p := new(float64)
+	*p = value
+
+	return p
 }
 
 // Test that users are able to override default settings.
@@ -351,13 +364,13 @@ func TestMergeWithDefault(t *testing.T) {
 	}
 	expectedConfig.Thresholds = map[string]Threshold{
 		"mymetric": {
-			LowWarning: 1,
+			LowWarning: newFloatPointer(1),
 		},
 		"mymetric2": {
-			HighCritical: 90,
+			HighCritical: newFloatPointer(90),
 		},
 		"mymetric3": {
-			HighWarning: 80,
+			HighWarning: newFloatPointer(80),
 		},
 	}
 	expectedConfig.NetworkInterfaceBlacklist = []string{"eth0", "eth1", "eth1", "eth2"}

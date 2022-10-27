@@ -300,20 +300,20 @@ func FromConfig(
 		HighCritical: math.NaN(),
 	}
 
-	if config.LowCritical != 0 {
-		thresh.LowCritical = config.LowCritical
+	if config.LowCritical != nil {
+		thresh.LowCritical = *config.LowCritical
 	}
 
-	if config.LowWarning != 0 {
-		thresh.LowWarning = config.LowWarning
+	if config.LowWarning != nil {
+		thresh.LowWarning = *config.LowWarning
 	}
 
-	if config.HighWarning != 0 {
-		thresh.HighWarning = config.HighWarning
+	if config.HighWarning != nil {
+		thresh.HighWarning = *config.HighWarning
 	}
 
-	if config.HighCritical != 0 {
-		thresh.HighCritical = config.HighCritical
+	if config.HighCritical != nil {
+		thresh.HighCritical = *config.HighCritical
 	}
 
 	// Apply delays from config or default delay.

@@ -364,7 +364,7 @@ func migrate(k *koanf.Koanf) (*koanf.Koanf, prometheus.MultiError) {
 
 // migrateMovedKeys migrate the config settings that were simply moved.
 func migrateMovedKeys(k *koanf.Koanf, config map[string]interface{}) prometheus.MultiError {
-	var warnings prometheus.MultiError //nolint:prealloc // False positive.
+	var warnings prometheus.MultiError
 
 	keys := movedKeys()
 
