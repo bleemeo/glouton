@@ -119,18 +119,7 @@ func New(
 		discoveredServicesMap[key] = v
 	}
 
-	servicesOverride, warnings := validateServices(servicesOverride)
-
-	// Convert service overrides to a map.
-	serviceMap := make(map[NameInstance]config.Service, len(servicesOverride))
-
-	for _, v := range servicesOverride {
-		key := NameInstance{
-			Name:     v.ID,
-			Instance: v.Instance,
-		}
-		serviceMap[key] = v
-	}
+	servicesOverrideMap, warnings := validateServices(servicesOverride)
 
 	discovery := &Discovery{
 		dynamicDiscovery:      dynamicDiscovery,
@@ -141,7 +130,7 @@ func New(
 		activeCollector:       make(map[NameInstance]collectorDetails),
 		activeCheck:           make(map[NameInstance]CheckDetails),
 		state:                 state,
-		servicesOverride:      serviceMap,
+		servicesOverride:      servicesOverrideMap,
 		isCheckIgnored:        isCheckIgnored,
 		isInputIgnored:        isInputIgnored,
 		isContainerIgnored:    isContainerIgnored,
@@ -153,11 +142,11 @@ func New(
 }
 
 // validateServies validates the service config.
-// It returns the services and some warnings.
-func validateServices(services []config.Service) ([]config.Service, prometheus.MultiError) {
+// It returns the services as a map and some warnings.
+func validateServices(services []config.Service) (map[NameInstance]config.Service, prometheus.MultiError) {
 	var warnings prometheus.MultiError
 
-	newServices := make([]config.Service, 0, len(services))
+	serviceMap := make(map[NameInstance]config.Service, len(services))
 	replacer := strings.NewReplacer(".", "_", "-", "_")
 
 	for _, srv := range services {
@@ -189,10 +178,26 @@ func validateServices(services []config.Service) ([]config.Service, prometheus.M
 			srv.ID = newID
 		}
 
-		newServices = append(newServices, srv)
+		// Check for duplicated overrides.
+		key := NameInstance{
+			Name:     srv.ID,
+			Instance: srv.Instance,
+		}
+
+		if _, ok := serviceMap[key]; ok {
+			warning := fmt.Sprintf("a service override is duplicated for '%s'", srv.ID)
+
+			if srv.Instance != "" {
+				warning = fmt.Sprintf("%s on instance '%s'", warning, srv.Instance)
+			}
+
+			warnings.Append(fmt.Errorf("%w: %s", config.ErrInvalidValue, warning))
+		}
+
+		serviceMap[key] = srv
 	}
 
-	return newServices, warnings
+	return serviceMap, warnings
 }
 
 // Close stop & cleanup inputs & check created by the discovery.

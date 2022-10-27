@@ -682,8 +682,24 @@ func TestValidateServices(t *testing.T) {
 		},
 		{
 			ID:       "apache",
+			Instance: "",
+			Port:     81,
+			Address:  "127.0.0.1",
+			HTTPPath: "/",
+			HTTPHost: "127.0.0.1:80",
+		},
+		{
+			ID:       "apache",
 			Instance: "CONTAINER_NAME",
 			Port:     80,
+			Address:  "127.17.0.2",
+			HTTPPath: "/",
+			HTTPHost: "127.0.0.1:80",
+		},
+		{
+			ID:       "apache",
+			Instance: "CONTAINER_NAME",
+			Port:     81,
 			Address:  "127.17.0.2",
 			HTTPPath: "/",
 			HTTPHost: "127.0.0.1:80",
@@ -716,40 +732,57 @@ func TestValidateServices(t *testing.T) {
 	}
 
 	wantWarnings := []string{
+		"invalid config value: a service override is duplicated for 'apache'",
+		"invalid config value: a service override is duplicated for 'apache' on instance 'CONTAINER_NAME'",
 		"invalid config value: a key \"id\" is missing in one of your service override",
 		"invalid config value: service id \" not fixable@\" can only contains letters, digits and underscore",
 		"invalid config value: service id \"custom-bad.name\" can not contains dot (.) or dash (-). Changed to \"custom_bad_name\"",
 	}
 
-	wantServices := []config.Service{
+	wantServices := map[NameInstance]config.Service{
 		{
+			Name:     "apache",
+			Instance: "",
+		}: {
 			ID:       "apache",
 			Instance: "",
-			Port:     80,
+			Port:     81,
 			Address:  "127.0.0.1",
 			HTTPPath: "/",
 			HTTPHost: "127.0.0.1:80",
 		},
 		{
+			Name:     "apache",
+			Instance: "CONTAINER_NAME",
+		}: {
 			ID:       "apache",
 			Instance: "CONTAINER_NAME",
-			Port:     80,
+			Port:     81,
 			Address:  "127.17.0.2",
 			HTTPPath: "/",
 			HTTPHost: "127.0.0.1:80",
 		},
 		{
+			Name:     "myapplication",
+			Instance: "",
+		}: {
 			ID:           "myapplication",
 			Port:         80,
 			CheckType:    "nagios",
 			CheckCommand: "command-to-run",
 		},
 		{
+			Name:     "custom_webserver",
+			Instance: "",
+		}: {
 			ID:        "custom_webserver",
 			Port:      8181,
 			CheckType: "http",
 		},
 		{
+			Name:     "custom_bad_name",
+			Instance: "",
+		}: {
 			ID:           "custom_bad_name",
 			CheckType:    "nagios",
 			CheckCommand: "azerty",
