@@ -83,9 +83,7 @@ func loadToStruct(withDefault bool, paths ...string) (Config, prometheus.MultiEr
 
 // load the configuration from files and directories.
 func load(withDefault bool, paths ...string) (*koanf.Koanf, prometheus.MultiError, error) {
-	var finalErr error
-
-	fileEnvKoanf, warnings, finalErr := loadPaths(paths)
+	fileEnvKoanf, warnings, errors := loadPaths(paths)
 
 	fileEnvKoanf, moreWarnings := migrate(fileEnvKoanf)
 	if moreWarnings != nil {
@@ -122,7 +120,7 @@ func load(withDefault bool, paths ...string) (*koanf.Koanf, prometheus.MultiErro
 	warning = k.Load(confmap.Provider(fileEnvKoanf.All(), delimiter), nil, mergeFunc(mergo.WithOverride))
 	warnings.Append(warning)
 
-	return k, warnings, finalErr
+	return k, warnings, errors.MaybeUnwrap()
 }
 
 // envToKeyFunc returns a function that converts an environment variable to a configuration key
@@ -214,11 +212,9 @@ func toDeprecatedEnvKey(key string) string {
 	return envKey
 }
 
-func loadPaths(paths []string) (*koanf.Koanf, prometheus.MultiError, error) {
-	var (
-		finalError error
-		warnings   prometheus.MultiError
-	)
+// loadPaths returns the config loaded from the given paths, warnings and errors.
+func loadPaths(paths []string) (*koanf.Koanf, prometheus.MultiError, prometheus.MultiError) {
+	var warnings, errors prometheus.MultiError
 
 	k := koanf.New(delimiter)
 
@@ -232,17 +228,14 @@ func loadPaths(paths []string) (*koanf.Koanf, prometheus.MultiError, error) {
 
 		if err != nil {
 			logger.V(2).Printf("config file: %s ignored due to %v", path, err)
-
-			finalError = err
+			errors.Append(err)
 
 			continue
 		}
 
 		if stat.IsDir() {
 			moreWarnings, err := loadDirectory(k, path)
-			if err != nil {
-				finalError = err
-			}
+			errors.Append(err)
 
 			if moreWarnings != nil {
 				warnings = append(warnings, moreWarnings...)
@@ -261,7 +254,7 @@ func loadPaths(paths []string) (*koanf.Koanf, prometheus.MultiError, error) {
 		}
 	}
 
-	return k, warnings, finalError
+	return k, warnings, errors
 }
 
 func loadDirectory(k *koanf.Koanf, dirPath string) (prometheus.MultiError, error) {
