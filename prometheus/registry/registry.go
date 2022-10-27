@@ -1209,15 +1209,12 @@ func (r *Registry) scrapeFromLoop(ctx context.Context, t0 time.Time, reg *regist
 		if len(mfs) == 0 {
 			logger.V(1).Printf("Gather of metrics failed on %s: %v", reg.option.Description, err)
 		} else {
-			// When there is points, log at lower level because we know that some gatherer always
-			// fail on some setup. node_exporter may send "node_rapl_package_joules_total" duplicated.
+			// When there is points, log at lower level because we known that some gatherer always
+			// fail on some setup. node_exporter may sent "node_rapl_package_joules_total" duplicated.
 			logger.V(1).Printf("Gather of metrics failed on %s, some metrics may be missing: %v", reg.option.Description, err)
 		}
 	}
 
-	// Use registration lock when reading metric families because
-	// another scrape might be running and modify them.
-	reg.l.Lock()
 	points := gloutonModel.FamiliesToMetricPoints(t0, mfs)
 
 	if (reg.annotations != types.MetricAnnotations{}) {
@@ -1226,6 +1223,7 @@ func (r *Registry) scrapeFromLoop(ctx context.Context, t0 time.Time, reg *regist
 		}
 	}
 
+	reg.l.Lock()
 	reg.lastScrape = t0
 	reg.lastScrapeDuration = duration
 	reg.l.Unlock()
@@ -1267,11 +1265,7 @@ func (r *Registry) scrape(ctx context.Context, state GatherState, reg *registrat
 	mfs, err := gatherMethod(ctx, state)
 
 	if !reg.option.NoLabelsAlteration {
-		// Use registration lock when modifying metric families because checkReschedule
-		// may start a scrape while we are renaming the metrics.
-		reg.l.Lock()
 		mfs = r.renamer.RenameMFS(mfs)
-		reg.l.Unlock()
 	}
 
 	return mfs, time.Since(start), err
