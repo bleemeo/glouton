@@ -271,13 +271,11 @@ var (
 		ApacheService: {
 			ServicePort:     80,
 			ServiceProtocol: "tcp",
-			// ExtraAttributeNames: []string{"address", "port", "http_host", "http_path", "http_status_code"},
 		},
 		BitBucketService: {
 			ServicePort:     7990,
 			ServiceProtocol: "tcp",
 			IgnoreHighPort:  true,
-			// ExtraAttributeNames: []string{"address", "port", "jmx_port", "jmx_username", "jmx_password", "jmx_metrics"},
 			DefaultIgnoredPorts: map[int]bool{
 				5701: true,
 			},
@@ -285,145 +283,117 @@ var (
 		BindService: {
 			ServicePort:     53,
 			ServiceProtocol: "tcp",
-			// ExtraAttributeNames: []string{"address", "port"},
 		},
 		CassandraService: {
 			ServicePort:     9042,
 			ServiceProtocol: "tcp",
 			IgnoreHighPort:  true,
-			// ExtraAttributeNames: []string{"address", "port", "jmx_port", "jmx_username", "jmx_password", "jmx_metrics", "cassandra_detailed_tables"},
 		},
 		ConfluenceService: {
 			ServicePort:     8090,
 			ServiceProtocol: "tcp",
 			IgnoreHighPort:  true,
-			// ExtraAttributeNames: []string{"address", "port", "jmx_port", "jmx_username", "jmx_password", "jmx_metrics"},
 		},
 		DovecotService: {
 			ServicePort:     143,
 			ServiceProtocol: "tcp",
-			// ExtraAttributeNames: []string{"address", "port"},
 		},
 		ElasticSearchService: {
 			ServicePort:     9200,
 			ServiceProtocol: "tcp",
-			// ExtraAttributeNames: []string{"address", "port"},
 		},
 		EjabberService: {
 			ServicePort:     5222,
 			ServiceProtocol: "tcp",
 			IgnoreHighPort:  true,
-			// ExtraAttributeNames: []string{"address", "port"},
 		},
 		EximService: {
 			ServicePort:     25,
 			ServiceProtocol: "tcp",
-			// ExtraAttributeNames: []string{"address", "port"},
 		},
 		HAProxyService: {
 			IgnoreHighPort:  true, // HAProxy use a random high-port when Syslog over-UDP is enabled.
 			ServiceProtocol: "tcp",
-			// ExtraAttributeNames: []string{"address", "port", "stats_url"},
 		},
 		InfluxDBService: {
 			ServicePort:     8086,
 			ServiceProtocol: "tcp",
-			// ExtraAttributeNames: []string{"address", "port"},
 		},
 		JIRAService: {
 			ServicePort:     8080,
 			ServiceProtocol: "tcp",
 			IgnoreHighPort:  true,
-			// ExtraAttributeNames: []string{"address", "port", "jmx_port", "jmx_username", "jmx_password", "jmx_metrics"},
 		},
 		MemcachedService: {
 			ServicePort:     11211,
 			ServiceProtocol: "tcp",
-			// ExtraAttributeNames: []string{"address", "port"},
 		},
 		MongoDBService: {
 			ServicePort:     27017,
 			ServiceProtocol: "tcp",
-			// ExtraAttributeNames: []string{"address", "port"},
 		},
 		MosquittoService: {
 			ServicePort:     1883,
 			ServiceProtocol: "tcp",
-			// ExtraAttributeNames: []string{"address", "port"},
 		},
 		MySQLService: {
 			ServicePort:     3306,
 			ServiceProtocol: "tcp",
-			// ExtraAttributeNames: []string{"address", "port", "username", "password", "metrics_unix_socket"},
 		},
 		NginxService: {
 			ServicePort:     80,
 			ServiceProtocol: "tcp",
-			// ExtraAttributeNames: []string{"address", "port", "http_host", "http_path", "http_status_code"},
 		},
 		NTPService: {
 			ServicePort:     123,
 			ServiceProtocol: "udp",
-			// ExtraAttributeNames: []string{"address", "port"},
 		},
 		OpenLDAPService: {
 			ServicePort:     389,
 			ServiceProtocol: "tcp",
-			// ExtraAttributeNames: []string{"address", "port"},
 		},
 		OpenVPNService: {
 			DisablePersistentConnection: true,
 		},
 		PHPFPMService: {
 			ServiceProtocol: "tcp",
-			// ExtraAttributeNames: []string{"address", "port", "stats_url"},
 		},
 		PostfixService: {
 			ServicePort:     25,
 			ServiceProtocol: "tcp",
-			// ExtraAttributeNames: []string{"address", "port"},
 		},
 		PostgreSQLService: {
 			ServicePort:     5432,
 			ServiceProtocol: "tcp",
-			// ExtraAttributeNames: []string{"address", "port", "username", "password"},
 		},
 		RabbitMQService: {
 			ServicePort:     5672,
 			ServiceProtocol: "tcp",
 			IgnoreHighPort:  true,
-			// ExtraAttributeNames: []string{"address", "port", "username", "password", "mgmt_port"},
 		},
 		RedisService: {
 			ServicePort:     6379,
 			ServiceProtocol: "tcp",
-			// ExtraAttributeNames: []string{"address", "port", "password"},
 		},
 		SaltMasterService: {
 			ServicePort:     4505,
 			ServiceProtocol: "tcp",
-			// ExtraAttributeNames: []string{"address", "port"},
 		},
 		SquidService: {
 			ServicePort:     3128,
 			ServiceProtocol: "tcp",
-			// ExtraAttributeNames: []string{"address", "port", "http_host", "http_path", "http_status_code"},
 		},
 		VarnishService: {
 			ServicePort:     6082,
 			ServiceProtocol: "tcp",
-			// ExtraAttributeNames: []string{"address", "port"},
 		},
 		ZookeeperService: {
 			ServicePort:     2181,
 			ServiceProtocol: "tcp",
 			IgnoreHighPort:  true,
-			// ExtraAttributeNames: []string{"address", "port", "jmx_port", "jmx_username", "jmx_password", "jmx_metrics"},
 		},
 
-		CustomService: {
-			// ExtraAttributeNames: []string{"address", "port", "check_type", "check_command", "http_host", "http_path", "http_status_code", "match_process"},
-		},
+		CustomService: {},
 	}
 )
 
