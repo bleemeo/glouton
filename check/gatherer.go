@@ -57,10 +57,13 @@ func (cg *Gatherer) GatherWithState(ctx context.Context, state registry.GatherSt
 	// Return the metrics from the last check on /metrics.
 	if !state.FromScrapeLoop {
 		cg.l.Lock()
-		mfs := cg.lastMetricFamilies
-		cg.l.Unlock()
+		defer cg.l.Unlock()
 
-		return mfs, nil
+		// Make a copy of the last metric families because they can be mutated later.
+		mfs := cg.lastMetricFamilies
+		points := model.FamiliesToMetricPoints(time.Now(), mfs)
+
+		return model.MetricPointsToFamilies(points), nil
 	}
 
 	point := cg.check.Check(ctx, cg.scheduleUpdate)
