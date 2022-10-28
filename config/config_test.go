@@ -231,6 +231,7 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 				IgnorePorts:             []int{8081},
 				Address:                 "127.0.0.1",
 				Interval:                60,
+				Stack:                   "mystack",
 				CheckType:               "nagios",
 				HTTPPath:                "/check/",
 				HTTPStatusCode:          200,
@@ -286,10 +287,16 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 		},
 		Thresholds: map[string]Threshold{
 			"cpu_used": {
-				LowWarning:   2,
-				LowCritical:  1.5,
-				HighWarning:  80.2,
-				HighCritical: 90,
+				LowWarning:   newFloatPointer(2),
+				LowCritical:  newFloatPointer(1.5),
+				HighWarning:  newFloatPointer(80.2),
+				HighCritical: newFloatPointer(90),
+			},
+			"disk_used": {
+				LowWarning:   nil,
+				LowCritical:  newFloatPointer(2),
+				HighWarning:  newFloatPointer(90.5),
+				HighCritical: nil,
 			},
 		},
 		Web: Web{
@@ -322,6 +329,13 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 	if diff := cmp.Diff(expectedConfig, config); diff != "" {
 		t.Fatalf("Unexpected config loaded:\n%s", diff)
 	}
+}
+
+func newFloatPointer(value float64) *float64 {
+	p := new(float64)
+	*p = value
+
+	return p
 }
 
 // Test that users are able to override default settings.
@@ -367,13 +381,13 @@ func TestMergeWithDefault(t *testing.T) {
 	}
 	expectedConfig.Thresholds = map[string]Threshold{
 		"mymetric": {
-			LowWarning: 1,
+			LowWarning: newFloatPointer(1),
 		},
 		"mymetric2": {
-			HighCritical: 90,
+			HighCritical: newFloatPointer(90),
 		},
 		"mymetric3": {
-			HighWarning: 80,
+			HighWarning: newFloatPointer(80),
 		},
 	}
 	expectedConfig.NetworkInterfaceBlacklist = []string{"eth0", "eth1", "eth1", "eth2"}
@@ -717,7 +731,7 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 		{
 			Name: "config file from env",
 			Environment: map[string]string{
-				"GLOUTON_CONFIG_FILES": "testdata/simple.conf",
+				EnvGloutonConfigFiles: "testdata/simple.conf",
 			},
 			WantConfig: Config{
 				Web: Web{
@@ -809,7 +823,7 @@ func TestDump(t *testing.T) {
 
 	k := koanf.New(delimiter)
 	_ = k.Load(structs.Provider(wantConfig, "yaml"), nil)
-	wantMap := k.All()
+	wantMap := k.Raw()
 
 	dump := Dump(config)
 

@@ -36,9 +36,9 @@ type Gatherer struct {
 	scheduleUpdate func(runAt time.Time)
 
 	l sync.Mutex
-	// The metrics produced by the check are kept to be returned when
-	// the gatherer is called from /metrics.
-	lastMetricFamilies []*dto.MetricFamily
+	// The last metric point produced by the check is kept to be
+	// returned when the gatherer is called from /metrics.
+	lastMetricPoint types.MetricPoint
 }
 
 // checker is an interface which specifies a check.
@@ -54,21 +54,26 @@ func NewCheckGatherer(check checker) *Gatherer {
 
 // GatherWithState implements GathererWithState.
 func (cg *Gatherer) GatherWithState(ctx context.Context, state registry.GatherState) ([]*dto.MetricFamily, error) {
-	// Return the metrics from the last check on /metrics.
-	if !state.FromScrapeLoop {
-		cg.l.Lock()
-		mfs := cg.lastMetricFamilies
-		cg.l.Unlock()
+	cg.l.Lock()
+	lastMetricPoint := cg.lastMetricPoint
+	cg.l.Unlock()
+
+	// Return the metrics from the last check on /metrics (unless we don't have one yet).
+	if !state.FromScrapeLoop && lastMetricPoint.Labels != nil {
+		mfs := model.MetricPointsToFamilies([]types.MetricPoint{lastMetricPoint})
 
 		return mfs, nil
 	}
 
 	point := cg.check.Check(ctx, cg.scheduleUpdate)
-	mfs := model.MetricPointsToFamilies([]types.MetricPoint{point})
 
+	// Keep the last point. We don't keep the metric families because
+	// they might be mutated later and cause data races.
 	cg.l.Lock()
-	cg.lastMetricFamilies = mfs
+	cg.lastMetricPoint = point
 	cg.l.Unlock()
+
+	mfs := model.MetricPointsToFamilies([]types.MetricPoint{point})
 
 	return mfs, nil
 }

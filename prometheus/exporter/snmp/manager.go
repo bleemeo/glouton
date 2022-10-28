@@ -48,15 +48,21 @@ type GathererWithInfo struct {
 }
 
 // NewManager return a new SNMP manager.
-func NewManager(exporterAddress string, scaperFact FactProvider, targets []config.SNMPTarget) (*Manager, config.Warnings) {
+func NewManager(exporterAddress string, scaperFact FactProvider, targets []config.SNMPTarget) (*Manager, prometheus.MultiError) {
+	var warnings prometheus.MultiError
+
 	exporterURL, err := url.Parse(exporterAddress)
 	if err != nil {
-		return nil, config.Warnings{err}
+		warnings.Append(err)
+
+		return nil, warnings
 	}
 
 	exporterURL, err = exporterURL.Parse("snmp")
 	if err != nil {
-		return nil, config.Warnings{err}
+		warnings.Append(err)
+
+		return nil, warnings
 	}
 
 	mgr := &Manager{
@@ -64,20 +70,17 @@ func NewManager(exporterAddress string, scaperFact FactProvider, targets []confi
 		targets:         make([]*Target, 0, len(targets)),
 	}
 
-	var warnings config.Warnings
-
 	targetExists := make(map[string]bool)
 
 	for i, t := range targets {
 		if t.Target == "" {
-			warning := fmt.Errorf("%w: metric.snmp.targets[%d] must have a target value", config.ErrInvalidValue, i)
-			warnings = append(warnings, warning)
+			warnings.Append(fmt.Errorf("%w: metric.snmp.targets[%d] must have a target value", config.ErrInvalidValue, i))
 
 			continue
 		}
 
 		if targetExists[t.Target] {
-			warnings = append(warnings, fmt.Errorf("%w: the SNMP target %s is duplicated", config.ErrInvalidValue, t.Target))
+			warnings.Append(fmt.Errorf("%w: the SNMP target %s is duplicated", config.ErrInvalidValue, t.Target))
 
 			continue
 		}

@@ -78,6 +78,9 @@ type Client struct {
 	failedPoints               []types.MetricPoint
 	lastRegisteredMetricsCount int
 	lastFailedPointsRetry      time.Time
+	// Whether we should log that all failed points have
+	// been processed during the next health check.
+	shouldLogRecovery bool
 
 	l                sync.Mutex
 	startedAt        time.Time
@@ -342,10 +345,19 @@ func (c *Client) HealthCheck() bool {
 
 	failedPointsCount := len(c.failedPoints)
 
-	if failedPointsCount >= maxPendingPoints {
-		logger.Printf("%d points are waiting to be sent to Bleemeo Cloud platform. Older points are being dropped", failedPointsCount)
-	} else if failedPointsCount > 1000 {
-		logger.Printf("%d points are waiting to be sent to Bleemeo Cloud platform", failedPointsCount)
+	switch {
+	case failedPointsCount >= maxPendingPoints:
+		logger.Printf("%d points are waiting to be sent to the Bleemeo Cloud platform. Older points are being dropped", failedPointsCount)
+
+		c.shouldLogRecovery = true
+	case failedPointsCount > 1000:
+		logger.Printf("%d points are waiting to be sent to the Bleemeo Cloud platform", failedPointsCount)
+
+		c.shouldLogRecovery = true
+	case failedPointsCount == 0 && c.shouldLogRecovery:
+		logger.Printf("Successfully recovered, all points have been sent to the Bleemeo Cloud platform")
+
+		c.shouldLogRecovery = false
 	}
 
 	return ok

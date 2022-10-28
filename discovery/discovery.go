@@ -92,7 +92,7 @@ type GathererRegistry interface {
 	Unregister(id int) bool
 }
 
-// New returns a new Discovery.
+// New returns a new Discovery and some warnings.
 func New(
 	dynamicDiscovery Discoverer,
 	coll Collector,
@@ -107,7 +107,7 @@ func New(
 	isContainerIgnored func(c facts.Container) bool,
 	metricFormat types.MetricFormat,
 	processFact processFact,
-) (*Discovery, config.Warnings) {
+) (*Discovery, prometheus.MultiError) {
 	initialServices := servicesFromState(state)
 	discoveredServicesMap := make(map[NameInstance]Service, len(initialServices))
 
@@ -119,18 +119,7 @@ func New(
 		discoveredServicesMap[key] = v
 	}
 
-	servicesOverride, warnings := validateServices(servicesOverride)
-
-	// Convert service overrides to a map.
-	serviceMap := make(map[NameInstance]config.Service, len(servicesOverride))
-
-	for _, v := range servicesOverride {
-		key := NameInstance{
-			Name:     v.ID,
-			Instance: v.Instance,
-		}
-		serviceMap[key] = v
-	}
+	servicesOverrideMap, warnings := validateServices(servicesOverride)
 
 	discovery := &Discovery{
 		dynamicDiscovery:      dynamicDiscovery,
@@ -141,7 +130,7 @@ func New(
 		activeCollector:       make(map[NameInstance]collectorDetails),
 		activeCheck:           make(map[NameInstance]CheckDetails),
 		state:                 state,
-		servicesOverride:      serviceMap,
+		servicesOverride:      servicesOverrideMap,
 		isCheckIgnored:        isCheckIgnored,
 		isInputIgnored:        isInputIgnored,
 		isContainerIgnored:    isContainerIgnored,
@@ -153,16 +142,17 @@ func New(
 }
 
 // validateServies validates the service config.
-func validateServices(services []config.Service) ([]config.Service, config.Warnings) {
-	var warnings config.Warnings
+// It returns the services as a map and some warnings.
+func validateServices(services []config.Service) (map[NameInstance]config.Service, prometheus.MultiError) {
+	var warnings prometheus.MultiError
 
-	newServices := make([]config.Service, 0, len(services))
+	serviceMap := make(map[NameInstance]config.Service, len(services))
 	replacer := strings.NewReplacer(".", "_", "-", "_")
 
 	for _, srv := range services {
 		if srv.ID == "" {
 			warning := fmt.Errorf("%w: a key \"id\" is missing in one of your service override", config.ErrInvalidValue)
-			warnings = append(warnings, warning)
+			warnings.Append(warning)
 
 			continue
 		}
@@ -174,7 +164,7 @@ func validateServices(services []config.Service) ([]config.Service, config.Warni
 					"%w: service id \"%s\" can only contains letters, digits and underscore",
 					config.ErrInvalidValue, srv.ID,
 				)
-				warnings = append(warnings, warning)
+				warnings.Append(warning)
 
 				continue
 			}
@@ -183,15 +173,31 @@ func validateServices(services []config.Service) ([]config.Service, config.Warni
 				"%w: service id \"%s\" can not contains dot (.) or dash (-). Changed to \"%s\"",
 				config.ErrInvalidValue, srv.ID, newID,
 			)
-			warnings = append(warnings, warning)
+			warnings.Append(warning)
 
 			srv.ID = newID
 		}
 
-		newServices = append(newServices, srv)
+		// Check for duplicated overrides.
+		key := NameInstance{
+			Name:     srv.ID,
+			Instance: srv.Instance,
+		}
+
+		if _, ok := serviceMap[key]; ok {
+			warning := fmt.Sprintf("a service override is duplicated for '%s'", srv.ID)
+
+			if srv.Instance != "" {
+				warning = fmt.Sprintf("%s on instance '%s'", warning, srv.Instance)
+			}
+
+			warnings.Append(fmt.Errorf("%w: %s", config.ErrInvalidValue, warning))
+		}
+
+		serviceMap[key] = srv
 	}
 
-	return newServices, warnings
+	return serviceMap, warnings
 }
 
 // Close stop & cleanup inputs & check created by the discovery.
@@ -526,6 +532,10 @@ func applyOverride(
 			for _, p := range override.IgnorePorts {
 				service.IgnoredPorts[p] = true
 			}
+		}
+
+		if override.Stack != "" {
+			service.Stack = override.Stack
 		}
 
 		// Override config.
