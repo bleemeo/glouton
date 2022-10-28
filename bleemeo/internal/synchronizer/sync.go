@@ -263,7 +263,10 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 
 	s.option.SetInitialized()
 
+	s.l.Lock()
 	s.successiveErrors = 0
+	s.l.Unlock()
+
 	successiveAuthErrors := 0
 
 	var minimalDelay time.Duration
@@ -284,7 +287,9 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 
 		err := s.runOnce(ctx, firstSync)
 		if err != nil {
+			s.l.Lock()
 			s.successiveErrors++
+			s.l.Unlock()
 
 			if client.IsAuthError(err) {
 				successiveAuthErrors++
@@ -348,7 +353,10 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 				}
 			}
 		} else {
+			s.l.Lock()
 			s.successiveErrors = 0
+			s.l.Unlock()
+
 			successiveAuthErrors = 0
 		}
 
