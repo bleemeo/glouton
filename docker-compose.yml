@@ -35,6 +35,8 @@ services:
     image: jmxtrans/jmxtrans
     volumes:
       - jmxtrans-config:/var/lib/jmxtrans
+    environment:
+      - LD_LIBRARY_PATH=/lib64
     network_mode: "host"
 
 volumes:
