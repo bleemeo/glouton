@@ -22,9 +22,9 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"glouton/config"
 	"glouton/discovery"
 	"glouton/logger"
-	"strconv"
 	"sync"
 	"time"
 )
@@ -36,7 +36,7 @@ type jmxtransConfig struct {
 	targetAddress   string
 	targetPort      int
 	sha256ToService map[string]discovery.Service
-	knownMetrics    map[metricKey][]JmxMetric
+	knownMetrics    map[metricKey][]config.JmxMetric
 	isDivisor       map[string]bool
 }
 
@@ -110,7 +110,7 @@ func (cfg *jmxtransConfig) CurrentConfig() []byte {
 	}
 
 	cfg.sha256ToService = make(map[string]discovery.Service)
-	cfg.knownMetrics = make(map[metricKey][]JmxMetric)
+	cfg.knownMetrics = make(map[metricKey][]config.JmxMetric)
 	cfg.isDivisor = make(map[string]bool)
 
 	outputConfig := configWriter{
@@ -131,11 +131,6 @@ func (cfg *jmxtransConfig) CurrentConfig() []byte {
 			continue
 		}
 
-		port, err := strconv.ParseInt(service.ExtraAttributes["jmx_port"], 10, 0)
-		if err != nil {
-			continue
-		}
-
 		hash := sha256.New()
 		_, _ = hash.Write([]byte(service.ServiceType))
 
@@ -148,14 +143,11 @@ func (cfg *jmxtransConfig) CurrentConfig() []byte {
 		server := configServer{
 			Alias:            sha256Service,
 			Host:             service.IPAddress,
-			Port:             int(port),
+			Port:             service.Config.JMXPort,
 			OutputWriters:    []configWriter{outputConfig},
 			RunPeriodSeconds: int(cfg.resolution.Seconds()),
-		}
-
-		if service.ExtraAttributes["jmx_username"] != "" {
-			server.Username = service.ExtraAttributes["jmx_username"]
-			server.Password = service.ExtraAttributes["jmx_password"]
+			Username:         service.Config.JMXUsername,
+			Password:         service.Config.JMXPassword,
 		}
 
 		for _, m := range metrics {
@@ -211,7 +203,7 @@ func (cfg *jmxtransConfig) GetService(sha256Service string) (discovery.Service, 
 	return service, found
 }
 
-func (cfg *jmxtransConfig) GetMetrics(sha256Service string, sha256Bean string, attr string) (metrics []JmxMetric, usedInRatio bool) {
+func (cfg *jmxtransConfig) GetMetrics(sha256Service string, sha256Bean string, attr string) (metrics []config.JmxMetric, usedInRatio bool) {
 	cfg.l.Lock()
 	defer cfg.l.Unlock()
 

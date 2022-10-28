@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"glouton/config"
 	"glouton/facts"
 	"glouton/inputs"
 	"glouton/logger"
@@ -28,12 +29,14 @@ import (
 	"glouton/types"
 	"os"
 	"sort"
-	"strconv"
+	"strings"
 	"sync"
 	"time"
 
+	"github.com/imdario/mergo"
 	"github.com/influxdata/telegraf"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/common/model"
 )
 
 var errNoCheckAssociated = errors.New("there is no check associated with the container")
@@ -63,7 +66,7 @@ type Discovery struct {
 	metricRegistry        GathererRegistry
 	containerInfo         containerInfoProvider
 	state                 State
-	servicesOverride      map[NameInstance]ServiceOverride
+	servicesOverride      map[NameInstance]config.Service
 	isCheckIgnored        func(Service) bool
 	isInputIgnored        func(Service) bool
 	isContainerIgnored    func(facts.Container) bool
@@ -89,7 +92,7 @@ type GathererRegistry interface {
 	Unregister(id int) bool
 }
 
-// New returns a new Discovery.
+// New returns a new Discovery and some warnings.
 func New(
 	dynamicDiscovery Discoverer,
 	coll Collector,
@@ -98,13 +101,13 @@ func New(
 	state State,
 	acc inputs.AnnotationAccumulator,
 	containerInfo containerInfoProvider,
-	servicesOverride map[NameInstance]ServiceOverride,
+	servicesOverride []config.Service,
 	isCheckIgnored func(Service) bool,
 	isInputIgnored func(Service) bool,
 	isContainerIgnored func(c facts.Container) bool,
 	metricFormat types.MetricFormat,
 	processFact processFact,
-) *Discovery {
+) (*Discovery, prometheus.MultiError) {
 	initialServices := servicesFromState(state)
 	discoveredServicesMap := make(map[NameInstance]Service, len(initialServices))
 
@@ -116,7 +119,9 @@ func New(
 		discoveredServicesMap[key] = v
 	}
 
-	return &Discovery{
+	servicesOverrideMap, warnings := validateServices(servicesOverride)
+
+	discovery := &Discovery{
 		dynamicDiscovery:      dynamicDiscovery,
 		discoveredServicesMap: discoveredServicesMap,
 		coll:                  coll,
@@ -125,13 +130,74 @@ func New(
 		activeCollector:       make(map[NameInstance]collectorDetails),
 		activeCheck:           make(map[NameInstance]CheckDetails),
 		state:                 state,
-		servicesOverride:      servicesOverride,
+		servicesOverride:      servicesOverrideMap,
 		isCheckIgnored:        isCheckIgnored,
 		isInputIgnored:        isInputIgnored,
 		isContainerIgnored:    isContainerIgnored,
 		metricFormat:          metricFormat,
 		processFact:           processFact,
 	}
+
+	return discovery, warnings
+}
+
+// validateServies validates the service config.
+// It returns the services as a map and some warnings.
+func validateServices(services []config.Service) (map[NameInstance]config.Service, prometheus.MultiError) {
+	var warnings prometheus.MultiError
+
+	serviceMap := make(map[NameInstance]config.Service, len(services))
+	replacer := strings.NewReplacer(".", "_", "-", "_")
+
+	for _, srv := range services {
+		if srv.ID == "" {
+			warning := fmt.Errorf("%w: a key \"id\" is missing in one of your service override", config.ErrInvalidValue)
+			warnings.Append(warning)
+
+			continue
+		}
+
+		if !model.IsValidMetricName(model.LabelValue(srv.ID)) {
+			newID := replacer.Replace(srv.ID)
+			if !model.IsValidMetricName(model.LabelValue(newID)) {
+				warning := fmt.Errorf(
+					"%w: service id \"%s\" can only contains letters, digits and underscore",
+					config.ErrInvalidValue, srv.ID,
+				)
+				warnings.Append(warning)
+
+				continue
+			}
+
+			warning := fmt.Errorf(
+				"%w: service id \"%s\" can not contains dot (.) or dash (-). Changed to \"%s\"",
+				config.ErrInvalidValue, srv.ID, newID,
+			)
+			warnings.Append(warning)
+
+			srv.ID = newID
+		}
+
+		// Check for duplicated overrides.
+		key := NameInstance{
+			Name:     srv.ID,
+			Instance: srv.Instance,
+		}
+
+		if _, ok := serviceMap[key]; ok {
+			warning := fmt.Sprintf("a service override is duplicated for '%s'", srv.ID)
+
+			if srv.Instance != "" {
+				warning = fmt.Sprintf("%s on instance '%s'", warning, srv.Instance)
+			}
+
+			warnings.Append(fmt.Errorf("%w: %s", config.ErrInvalidValue, warning))
+		}
+
+		serviceMap[key] = srv
+	}
+
+	return serviceMap, warnings
 }
 
 // Close stop & cleanup inputs & check created by the discovery.
@@ -403,7 +469,7 @@ func (d *Discovery) setServiceActiveAndContainer(service Service) Service {
 
 func applyOverride(
 	discoveredServicesMap map[NameInstance]Service,
-	servicesOverride map[NameInstance]ServiceOverride,
+	servicesOverride map[NameInstance]config.Service,
 ) map[NameInstance]Service {
 	servicesMap := make(map[NameInstance]Service)
 
@@ -412,12 +478,6 @@ func applyOverride(
 	}
 
 	for serviceKey, override := range servicesOverride {
-		extraAttributeCopy := make(map[string]string, len(override.ExtraAttribute))
-
-		for k, v := range override.ExtraAttribute {
-			extraAttributeCopy[k] = v
-		}
-
 		service := servicesMap[serviceKey]
 		if service.ServiceType == "" {
 			if _, ok := servicesDiscoveryInfo[ServiceName(serviceKey.Name)]; ok {
@@ -432,20 +492,15 @@ func applyOverride(
 		}
 
 		// If the address or the port is set explicitly in the config, override the listen address.
-		if override.ExtraAttribute["port"] != "" || override.ExtraAttribute["address"] != "" {
+		if override.Port != 0 || override.Address != "" {
 			address, port := service.AddressPort()
 
-			if override.ExtraAttribute["address"] != "" {
-				address = override.ExtraAttribute["address"]
+			if override.Address != "" {
+				address = override.Address
 			}
 
-			if override.ExtraAttribute["port"] != "" {
-				parsedPort, err := strconv.Atoi(override.ExtraAttribute["port"])
-				if err != nil {
-					logger.V(0).Printf("Bad port for service %v: %v", service.Name, err)
-				} else {
-					port = parsedPort
-				}
+			if override.Port != 0 {
+				port = override.Port
 			}
 
 			if address != "" && port != 0 {
@@ -467,47 +522,32 @@ func applyOverride(
 			}
 		}
 
-		service.Interval = override.Interval
+		service.Interval = time.Duration(override.Interval) * time.Second
 
-		if service.ExtraAttributes == nil {
-			service.ExtraAttributes = make(map[string]string)
-		}
-
-		if len(override.IgnoredPorts) > 0 {
+		if len(override.IgnorePorts) > 0 {
 			if service.IgnoredPorts == nil {
-				service.IgnoredPorts = make(map[int]bool, len(override.IgnoredPorts))
+				service.IgnoredPorts = make(map[int]bool, len(override.IgnorePorts))
 			}
 
-			for _, p := range override.IgnoredPorts {
+			for _, p := range override.IgnorePorts {
 				service.IgnoredPorts[p] = true
 			}
 		}
 
-		di := servicesDiscoveryInfo[service.ServiceType]
-		for _, name := range di.ExtraAttributeNames {
-			if value, ok := extraAttributeCopy[name]; ok {
-				service.ExtraAttributes[name] = value
-
-				delete(extraAttributeCopy, name)
-			}
+		if override.Stack != "" {
+			service.Stack = override.Stack
 		}
 
-		if len(extraAttributeCopy) > 0 {
-			ignoredNames := make([]string, 0, len(extraAttributeCopy))
-
-			for k := range extraAttributeCopy {
-				ignoredNames = append(ignoredNames, k)
-			}
-
-			if len(ignoredNames) != 0 {
-				logger.V(1).Printf("Unknown field for service override on %v: %v", serviceKey, ignoredNames)
-			}
+		// Override config.
+		err := mergo.Merge(&service.Config, override, mergo.WithOverride)
+		if err != nil {
+			logger.V(1).Printf("Failed to merge service and override: %s", err)
 		}
 
 		if service.ServiceType == CustomService {
-			if service.ExtraAttributes["port"] != "" {
-				if service.ExtraAttributes["address"] == "" {
-					service.ExtraAttributes["address"] = localhostIP
+			if service.Config.Port != 0 {
+				if service.Config.Address == "" {
+					service.Config.Address = localhostIP
 				}
 
 				if _, port := service.AddressPort(); port == 0 {
@@ -517,23 +557,23 @@ func applyOverride(
 				}
 			}
 
-			if service.ExtraAttributes["check_type"] == "" {
-				service.ExtraAttributes["check_type"] = customCheckTCP
+			if service.Config.CheckType == "" {
+				service.Config.CheckType = customCheckTCP
 			}
 
-			if service.ExtraAttributes["check_type"] == customCheckNagios && service.ExtraAttributes["check_command"] == "" {
+			if service.Config.CheckType == customCheckNagios && service.Config.CheckCommand == "" {
 				logger.V(0).Printf("Bad custom service definition for service %s, check_type is nagios but no check_command set", service.Name)
 
 				continue
 			}
 
-			if service.ExtraAttributes["check_type"] == customCheckProcess && service.ExtraAttributes["match_process"] == "" {
+			if service.Config.CheckType == customCheckProcess && service.Config.MatchProcess == "" {
 				logger.V(0).Printf("Bad custom service definition for service %s, check_type is process but no match_process set", service.Name)
 
 				continue
 			}
 
-			if service.ExtraAttributes["check_type"] != customCheckNagios && service.ExtraAttributes["check_type"] != customCheckProcess && service.ExtraAttributes["port"] == "" {
+			if service.Config.CheckType != customCheckNagios && service.Config.CheckType != customCheckProcess && service.Config.Port == 0 {
 				logger.V(0).Printf("Bad custom service definition for service %s, port is unknown so I don't known how to check it", service.Name)
 
 				continue

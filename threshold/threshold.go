@@ -18,16 +18,14 @@ package threshold
 
 import (
 	"context"
-	"errors"
 	"fmt"
+	"glouton/config"
 	"glouton/logger"
 	"glouton/types"
 	"math"
 	"sync"
 	"time"
 )
-
-var errIncorrectType = errors.New("incorrect variable type")
 
 const (
 	statusCacheKey     = "CacheStatusState"
@@ -288,14 +286,13 @@ const (
 	UnitTypeDay    = 8
 )
 
-// FromInterfaceMap convert a map[string]interface{} to Threshold.
-// It expect the key "low_critical", "low_warning", "high_critical" and "high_warning".
-func FromInterfaceMap(
-	input map[string]interface{},
+// FromConfig converts the threshold config to thresholds.
+func FromConfig(
+	config config.Threshold,
 	metricName string,
 	softPeriods map[string]time.Duration,
 	defaultSoftPeriod time.Duration,
-) (Threshold, error) {
+) Threshold {
 	thresh := Threshold{
 		LowCritical:  math.NaN(),
 		LowWarning:   math.NaN(),
@@ -303,30 +300,20 @@ func FromInterfaceMap(
 		HighCritical: math.NaN(),
 	}
 
-	for _, name := range []string{"low_critical", "low_warning", "high_warning", "high_critical"} {
-		if raw, ok := input[name]; ok {
-			var value float64
+	if config.LowCritical != nil {
+		thresh.LowCritical = *config.LowCritical
+	}
 
-			switch v := raw.(type) {
-			case float64:
-				value = v
-			case int:
-				value = float64(v)
-			default:
-				return thresh, fmt.Errorf("%w: %v is not a float", errIncorrectType, raw)
-			}
+	if config.LowWarning != nil {
+		thresh.LowWarning = *config.LowWarning
+	}
 
-			switch name {
-			case "low_critical":
-				thresh.LowCritical = value
-			case "low_warning":
-				thresh.LowWarning = value
-			case "high_warning":
-				thresh.HighWarning = value
-			case "high_critical":
-				thresh.HighCritical = value
-			}
-		}
+	if config.HighWarning != nil {
+		thresh.HighWarning = *config.HighWarning
+	}
+
+	if config.HighCritical != nil {
+		thresh.HighCritical = *config.HighCritical
 	}
 
 	// Apply delays from config or default delay.
@@ -338,7 +325,7 @@ func FromInterfaceMap(
 		thresh.CriticalDelay = softPeriod
 	}
 
-	return thresh, nil
+	return thresh
 }
 
 // IsZero returns true is all threshold limit are unset (NaN).

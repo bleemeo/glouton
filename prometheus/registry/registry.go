@@ -132,7 +132,7 @@ type Option struct {
 	FQDN                  string
 	GloutonPort           string
 	MetricFormat          types.MetricFormat
-	BlackboxSentScraperID bool
+	BlackboxSendScraperID bool
 	Filter                metricFilter
 }
 
@@ -1396,7 +1396,7 @@ func (r *Registry) addMetaLabels(input map[string]string) map[string]string {
 
 	result[types.LabelMetaPort] = servicePort
 
-	if r.option.BlackboxSentScraperID {
+	if r.option.BlackboxSendScraperID {
 		result[types.LabelMetaSendScraperUUID] = "yes"
 	}
 

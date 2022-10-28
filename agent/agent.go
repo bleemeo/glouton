@@ -89,6 +89,7 @@ import (
 	processInput "glouton/inputs/process"
 
 	paho "github.com/eclipse/paho.mqtt.golang"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/prometheus/model/labels"
 	"gopkg.in/yaml.v3"
 )
@@ -102,12 +103,15 @@ const (
 	defaultInterval = 0
 )
 
-var errUnsupportedKey = errors.New("Unsupported item key") //nolint:stylecheck
+var (
+	// We want to reply with capitalized U to match output from a Zabbix agent.
+	errUnsupportedKey     = errors.New("Unsupported item key") //nolint:stylecheck
+	errFeatureUnavailable = errors.New("some features are unavailable")
+)
 
 type agent struct {
 	taskRegistry *task.Registry
-	oldConfig    *config.Configuration
-	config       Config
+	config       config.Config
 	state        *state.State
 	cancel       context.CancelFunc
 	context      context.Context //nolint:containedctx
@@ -153,6 +157,7 @@ type agent struct {
 	l                sync.Mutex
 	taskIDs          map[string]int
 	metricResolution time.Duration
+	configWarnings   prometheus.MultiError
 }
 
 func zabbixResponse(key string, args []string) (string, error) {
@@ -180,8 +185,11 @@ func (a *agent) init(ctx context.Context, configFiles []string, firstRun bool) (
 	a.taskRegistry = task.NewRegistry(ctx)
 	a.taskIDs = make(map[string]int)
 
-	cfg, oldCfg, warnings, err := loadConfiguration(configFiles, nil)
-	a.oldConfig = oldCfg
+	cfg, warnings, err := config.Load(true, configFiles...)
+	if warnings != nil {
+		a.addWarnings(warnings...)
+	}
+
 	a.config = cfg
 
 	a.setupLogger()
@@ -199,9 +207,9 @@ func (a *agent) init(ctx context.Context, configFiles []string, firstRun bool) (
 	}
 
 	// Initialize sentry only on the first run so it doesn't leak goroutines on reload.
-	if dsn := a.oldConfig.String("bleemeo.sentry.dsn"); firstRun && dsn != "" {
+	if firstRun && a.config.Bleemeo.Sentry.DSN != "" {
 		err := sentry.Init(sentry.ClientOptions{
-			Dsn:              dsn,
+			Dsn:              a.config.Bleemeo.Sentry.DSN,
 			AttachStacktrace: true,
 		})
 		if err != nil {
@@ -223,19 +231,15 @@ func (a *agent) init(ctx context.Context, configFiles []string, firstRun bool) (
 		})
 	})
 
-	for _, w := range warnings {
-		logger.Printf("Warning while loading configuration: %v", w)
-	}
-
 	a.containerFilter = facts.ContainerFilter{
-		DisabledByDefault: a.config.Container.DisabledByDefault,
-		AllowList:         a.config.Container.AllowPatternList,
-		DenyList:          a.config.Container.DenyPatternList,
+		DisabledByDefault: !a.config.Container.Filter.AllowByDefault,
+		AllowList:         a.config.Container.Filter.AllowList,
+		DenyList:          a.config.Container.Filter.DenyList,
 	}
 
-	statePath := a.oldConfig.String("agent.state_file")
-	cachePath := a.oldConfig.String("agent.state_cache_file")
-	oldStatePath := a.oldConfig.String("agent.deprecated_state_file")
+	statePath := a.config.Agent.StateFile
+	cachePath := a.config.Agent.StateCacheFile
+	oldStatePath := a.config.Agent.DeprecatedStateFile
 
 	if cachePath == "" {
 		cachePath = state.DefaultCachePath(statePath)
@@ -267,7 +271,7 @@ func (a *agent) init(ctx context.Context, configFiles []string, firstRun bool) (
 		}
 	}
 
-	resetStateFile := a.oldConfig.String("agent.state_reset_file")
+	resetStateFile := a.config.Agent.StateResetFile
 
 	if _, err := os.Stat(resetStateFile); err == nil {
 		// No error means that file exists.
@@ -275,7 +279,7 @@ func (a *agent) init(ctx context.Context, configFiles []string, firstRun bool) (
 			logger.Printf("Unable to remote state reset marked: %v", err)
 			logger.Printf("Skipping state reset due to previous error")
 		} else {
-			a.state.KeptOnlyPersistent()
+			a.state.KeepOnlyPersistent()
 		}
 	}
 
@@ -318,7 +322,7 @@ func (a *agent) readXMLCredentials() {
 	}
 
 	// Don't override credentials if the user already set them in the config.
-	if a.oldConfig.String("bleemeo.account_id") != "" || a.oldConfig.String("bleemeo.registration_key") != "" {
+	if a.config.Bleemeo.AccountID != "" || a.config.Bleemeo.RegistrationKey != "" {
 		return
 	}
 
@@ -347,46 +351,42 @@ func (a *agent) readXMLCredentials() {
 		return
 	}
 
-	a.oldConfig.Set("bleemeo.account_id", credentials.AccountID)
-	a.oldConfig.Set("bleemeo.registration_key", credentials.RegistrationKey)
+	a.config.Bleemeo.AccountID = credentials.AccountID
+	a.config.Bleemeo.RegistrationKey = credentials.RegistrationKey
 }
 
 func (a *agent) setupLogger() {
 	logger.SetBufferCapacity(
-		a.oldConfig.Int("logging.buffer.head_size_bytes"),
-		a.oldConfig.Int("logging.buffer.tail_size_bytes"),
+		a.config.Logging.Buffer.HeadSizeBytes,
+		a.config.Logging.Buffer.TailSizeBytes,
 	)
 
 	var err error
 
-	switch a.oldConfig.String("logging.output") {
+	switch a.config.Logging.Output {
 	case "syslog":
 		err = logger.UseSyslog()
 	case "file":
-		err = logger.UseFile(a.oldConfig.String("logging.filename"))
+		err = logger.UseFile(a.config.Logging.FileName)
 	}
 
 	if err != nil {
-		fmt.Printf("Unable to use logging backend '%s': %v\n", a.oldConfig.String("logging.output"), err) //nolint:forbidigo
+		fmt.Printf("Unable to use logging backend '%s': %v\n", a.config.Logging.Output, err) //nolint:forbidigo
 	}
 
-	if level := a.oldConfig.Int("logging.level"); level != 0 {
-		logger.SetLevel(level)
-	} else {
-		switch strings.ToLower(a.oldConfig.String("logging.level")) {
-		case "0", "info", "warning", "error":
-			logger.SetLevel(0)
-		case "verbose":
-			logger.SetLevel(1)
-		case "debug":
-			logger.SetLevel(2)
-		default:
-			logger.SetLevel(0)
-			logger.Printf("Unknown logging.level = %#v. Using \"INFO\"", a.oldConfig.String("logging.level"))
-		}
+	switch strings.ToLower(a.config.Logging.Level) {
+	case "0", "info", "warning", "error":
+		logger.SetLevel(0)
+	case "1", "verbose":
+		logger.SetLevel(1)
+	case "2", "debug":
+		logger.SetLevel(2)
+	default:
+		logger.SetLevel(0)
+		a.addWarnings(fmt.Errorf(`%w: unknown logging.level "%s", using "INFO"`, config.ErrInvalidValue, a.config.Logging.Level))
 	}
 
-	logger.SetPkgLevels(a.oldConfig.String("logging.package_levels"))
+	logger.SetPkgLevels(a.config.Logging.PackageLevels)
 }
 
 // Run runs Glouton.
@@ -457,7 +457,7 @@ func (a *agent) BleemeoConnected() bool {
 func (a *agent) Tags() []string {
 	tagsSet := make(map[string]bool)
 
-	for _, t := range a.oldConfig.StringList("tags") {
+	for _, t := range a.config.Tags {
 		tagsSet[t] = true
 	}
 
@@ -552,48 +552,20 @@ func (a *agent) updateMetricResolution(ctx context.Context, defaultResolution ti
 	a.updateSNMPResolution(snmpResolution)
 }
 
-func (a *agent) getConfigThreshold(firstUpdate bool) map[string]threshold.Threshold {
-	rawValue, ok := a.oldConfig.Get("thresholds")
-	if !ok {
-		rawValue = map[string]interface{}{}
+func (a *agent) getConfigThreshold() map[string]threshold.Threshold {
+	configThresholds := make(map[string]threshold.Threshold, len(a.config.Thresholds))
+	defaultSoftPeriod := time.Duration(a.config.Metric.SoftStatusPeriodDefault) * time.Second
+
+	softPeriods := make(map[string]time.Duration, len(a.config.Metric.SoftStatusPeriod))
+	for metric, period := range a.config.Metric.SoftStatusPeriod {
+		softPeriods[metric] = time.Duration(period) * time.Second
 	}
 
-	rawThreshold, ok := rawValue.(map[string]interface{})
-	if !ok {
-		if firstUpdate {
-			logger.V(1).Printf("Threshold in configuration file is not map")
-		}
-
-		return make(map[string]threshold.Threshold)
+	for metric, configThreshold := range a.config.Thresholds {
+		configThresholds[metric] = threshold.FromConfig(configThreshold, metric, softPeriods, defaultSoftPeriod)
 	}
 
-	configThreshold := make(map[string]threshold.Threshold, len(rawThreshold))
-	defaultSoftPeriod := time.Duration(a.oldConfig.Int("metric.softstatus_period_default")) * time.Second
-	softPeriods := a.oldConfig.DurationMap("metric.softstatus_period")
-
-	for k, v := range rawThreshold {
-		v2, ok := v.(map[string]interface{})
-		if !ok {
-			if firstUpdate {
-				logger.V(1).Printf("Threshold in configuration file is not well-formated: %v value is not a map", k)
-			}
-
-			continue
-		}
-
-		t, err := threshold.FromInterfaceMap(v2, k, softPeriods, defaultSoftPeriod)
-		if err != nil {
-			if firstUpdate {
-				logger.V(1).Printf("Threshold in configuration file is not well-formated: %v", err)
-			}
-
-			continue
-		}
-
-		configThreshold[k] = t
-	}
-
-	return configThreshold
+	return configThresholds
 }
 
 func (a *agent) newMetricsCallback(newMetrics []types.LabelsAndAnnotation) {
@@ -622,7 +594,7 @@ func (a *agent) newMetricsCallback(newMetrics []types.LabelsAndAnnotation) {
 }
 
 func (a *agent) updateThresholds(ctx context.Context, thresholds map[string]threshold.Threshold, firstUpdate bool) {
-	configThreshold := a.getConfigThreshold(firstUpdate)
+	configThreshold := a.getConfigThreshold()
 
 	oldThresholds := map[string]threshold.Threshold{}
 
@@ -674,8 +646,8 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 	a.hostRootPath = "/"
 	a.context = ctx
 
-	if a.oldConfig.String("container.type") != "" {
-		a.hostRootPath = a.oldConfig.String("df.host_mount_point")
+	if a.config.Container.Type != "" {
+		a.hostRootPath = a.config.DF.HostMountPoint
 		setupContainer(a.hostRootPath)
 	}
 
@@ -693,9 +665,9 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 	}()
 
 	a.factProvider = facts.NewFacter(
-		a.oldConfig.String("agent.facts_file"),
+		a.config.Agent.FactsFile,
 		a.hostRootPath,
-		a.oldConfig.String("agent.public_ip_indicator"),
+		a.config.Agent.PublicIPIndicator,
 	)
 
 	factsMap, err := a.factProvider.FastFacts(ctx)
@@ -708,11 +680,13 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		fqdn = "localhost"
 	}
 
-	cloudImageFile := a.oldConfig.String("agent.cloudimage_creation_file")
-
-	content, err := os.ReadFile(cloudImageFile)
+	content, err := os.ReadFile(a.config.Agent.CloudImageCreationFile)
 	if err != nil && !os.IsNotExist(err) {
-		logger.Printf("Unable to read content of %#v file: %v", cloudImageFile, err)
+		warning := fmt.Errorf(
+			"%w: unable to read agent.cloudimage_creation_file %s: %v",
+			config.ErrInvalidValue, a.config.Agent.CloudImageCreationFile, err,
+		)
+		a.addWarnings(warning)
 	}
 
 	if err == nil || !os.IsNotExist(err) {
@@ -721,54 +695,60 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 
 		if currentMac == initialMac || currentMac == "" || initialMac == "" {
 			logger.Printf("Not starting Glouton since installation for creation of a cloud image was requested and agent is still running on the same machine")
-			logger.Printf("If this is wrong and agent should run on this machine, remove %#v file", cloudImageFile)
+			logger.Printf("If this is wrong and agent should run on this machine, remove %s file", a.config.Agent.CloudImageCreationFile)
 
 			return
 		}
 	}
 
-	_ = os.Remove(cloudImageFile)
+	_ = os.Remove(a.config.Agent.CloudImageCreationFile)
 
 	logger.Printf("Starting agent version %v (commit %v)", version.Version, version.BuildHash)
 
-	_ = os.Remove(a.oldConfig.String("agent.upgrade_file"))
-	_ = os.Remove(a.oldConfig.String("agent.auto_upgrade_file"))
+	_ = os.Remove(a.config.Agent.UpgradeFile)
+	_ = os.Remove(a.config.Agent.AutoUpgradeFile)
 
-	a.metricFormat = types.StringToMetricFormat(a.oldConfig.String("agent.metrics_format"))
+	a.metricFormat = types.StringToMetricFormat(a.config.Agent.MetricsFormat)
 	if a.metricFormat == types.MetricFormatUnknown {
-		logger.Printf("Invalid metric format %#v. Supported option are \"Bleemeo\" and \"Prometheus\". Falling back to Bleemeo", a.oldConfig.String("agent.metrics_format"))
+		logger.Printf("Invalid metric format %#v. Supported option are \"Bleemeo\" and \"Prometheus\". Falling back to Bleemeo", a.config.Agent.MetricsFormat)
 		a.metricFormat = types.MetricFormatBleemeo
 	}
 
-	apiBindAddress := fmt.Sprintf("%s:%d", a.oldConfig.String("web.listener.address"), a.oldConfig.Int("web.listener.port"))
+	apiBindAddress := fmt.Sprintf("%s:%d", a.config.Web.Listener.Address, a.config.Web.Listener.Port)
 
-	if a.oldConfig.Bool("agent.http_debug.enable") {
+	if a.config.Agent.HTTPDebug.Enable {
 		go func() {
 			defer types.ProcessPanic()
 
-			debugAddress := a.oldConfig.String("agent.http_debug.bind_address")
+			debugAddress := a.config.Agent.HTTPDebug.BindAddress
 
 			logger.Printf("Starting debug server on http://%s/debug/pprof/", debugAddress)
 			log.Println(http.ListenAndServe(debugAddress, nil)) //nolint:gosec
 		}()
 	}
 
-	a.snmpManager = snmp.NewManager(
-		a.config.SNMP.ExporterURL,
+	var warnings prometheus.MultiError
+
+	a.snmpManager, warnings = snmp.NewManager(
+		a.config.Metric.SNMP.ExporterAddress,
 		a.factProvider,
-		a.config.SNMP.Targets.ToTargetOptions()...,
+		a.config.Metric.SNMP.Targets,
 	)
+
+	if warnings != nil {
+		a.addWarnings(warnings...)
+	}
 
 	hasSwap := factsMap["swap_present"] == "true"
 
-	mFilter, err := newMetricFilter(a.oldConfig, len(a.snmpManager.Targets()) > 0, hasSwap, a.metricFormat)
+	mFilter, err := newMetricFilter(a.config, len(a.snmpManager.Targets()) > 0, hasSwap, a.metricFormat)
 	if err != nil {
 		logger.Printf("An error occurred while building the metric filter, allow/deny list may be partial: %v", err)
 	}
 
 	a.metricFilter = mFilter
 
-	if a.oldConfig.Bool("web.local_ui.enable") {
+	if a.config.Web.LocalUI.Enable {
 		a.store = store.New(time.Hour, 2*time.Hour)
 	} else {
 		a.store = store.New(2*time.Minute, 2*time.Hour)
@@ -782,9 +762,9 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 			PushPoint:             a.store,
 			ThresholdHandler:      a.threshold,
 			FQDN:                  fqdn,
-			GloutonPort:           strconv.FormatInt(int64(a.oldConfig.Int("web.listener.port")), 10),
+			GloutonPort:           fmt.Sprint(a.config.Web.Listener.Port),
 			MetricFormat:          a.metricFormat,
-			BlackboxSentScraperID: a.oldConfig.Bool("blackbox.scraper_send_uuid"),
+			BlackboxSendScraperID: a.config.Blackbox.ScraperSendUUID,
 			Filter:                mFilter,
 			Queryable:             a.store,
 		})
@@ -797,16 +777,18 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 
 	a.store.SetNewMetricCallback(a.newMetricsCallback)
 
-	a.dockerRuntime = &dockerRuntime.Docker{
-		DockerSockets:             a.config.Container.Runtime.Docker.ExpandAddresses(a.hostRootPath),
-		DeletedContainersCallback: a.deletedContainersCallback,
-		IsContainerIgnored:        a.containerFilter.ContainerIgnored,
-	}
-	a.containerdRuntime = &containerd.Containerd{
-		Addresses:                 a.config.Container.Runtime.ContainerD.ExpandAddresses(a.hostRootPath),
-		DeletedContainersCallback: a.deletedContainersCallback,
-		IsContainerIgnored:        a.containerFilter.ContainerIgnored,
-	}
+	a.dockerRuntime = dockerRuntime.New(
+		a.config.Container.Runtime.Docker,
+		a.hostRootPath,
+		a.deletedContainersCallback,
+		a.containerFilter.ContainerIgnored,
+	)
+	a.containerdRuntime = containerd.New(
+		a.config.Container.Runtime.ContainerD,
+		a.hostRootPath,
+		a.deletedContainersCallback,
+		a.containerFilter.ContainerIgnored,
+	)
 	a.containerRuntime = &merge.Runtime{
 		Runtimes: []crTypes.RuntimeInterface{
 			a.dockerRuntime,
@@ -815,18 +797,18 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		ContainerIgnored: a.containerFilter.ContainerIgnored,
 	}
 
-	if a.oldConfig.Bool("kubernetes.enable") {
+	if a.config.Kubernetes.Enable {
 		kube := &kubernetes.Kubernetes{
 			Runtime:            a.containerRuntime,
-			NodeName:           a.oldConfig.String("kubernetes.nodename"),
-			KubeConfig:         a.oldConfig.String("kubernetes.kubeconfig"),
+			NodeName:           a.config.Kubernetes.NodeName,
+			KubeConfig:         a.config.Kubernetes.KubeConfig,
 			IsContainerIgnored: a.containerFilter.ContainerIgnored,
 		}
 		a.containerRuntime = kube
 
 		var clusterNameState string
 
-		clusterName := a.oldConfig.String("kubernetes.clustername")
+		clusterName := a.config.Kubernetes.ClusterName
 
 		err = a.state.Get("kubernetes_cluster_name", &clusterNameState)
 		if err != nil {
@@ -848,8 +830,10 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		if clusterName != "" {
 			a.factProvider.SetFact("kubernetes_cluster_name", clusterName)
 		} else {
-			logger.V(0).Printf("kubernetes.clustername config is missing, some feature are unavailable. See https://go.bleemeo.com/l/agent-installation-kubernetes")
-			a.oldConfig.AddWarning("kubernetes.clustername is missing, some feature are unavailable")
+			a.addWarnings(fmt.Errorf(
+				"%w because kubernetes.clustername is missing, see https://docs.bleemeo.com/agent/installation#installation-on-kubernetes",
+				errFeatureUnavailable,
+			))
 		}
 
 		ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
@@ -862,7 +846,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 
 	var psLister facts.ProcessLister
 
-	useProc := a.oldConfig.String("container.type") == "" || a.oldConfig.Bool("container.pid_namespace_host")
+	useProc := a.config.Container.Type == "" || a.config.Container.PIDNamespaceHost
 	if !useProc {
 		logger.V(1).Printf("The agent is running in a container and \"container.pid_namespace_host\", is not true. Not all processes will be seen")
 	} else {
@@ -878,10 +862,10 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		a.hostRootPath,
 		a.containerRuntime,
 	)
-	netstat := &facts.NetstatProvider{FilePath: a.oldConfig.String("agent.netstat_file")}
+	netstat := &facts.NetstatProvider{FilePath: a.config.Agent.NetstatFile}
 
 	a.factProvider.AddCallback(a.containerRuntime.RuntimeFact)
-	a.factProvider.SetFact("installation_format", a.oldConfig.String("agent.installation_format"))
+	a.factProvider.SetFact("installation_format", a.config.Agent.InstallationFormat)
 
 	acc := &inputs.Accumulator{
 		Pusher:  a.gathererRegistry.WithTTL(5 * time.Minute),
@@ -889,14 +873,11 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 	}
 	a.collector = collector.New(acc)
 
-	servicesIgnoreCheck, _ := a.oldConfig.Get("service_ignore_check")
-	servicesIgnoreMetrics, _ := a.oldConfig.Get("service_ignore_metrics")
-	serviceIgnoreCheck := confFieldToSliceMap(servicesIgnoreCheck, "service ignore check")
-	serviceIgnoreMetrics := confFieldToSliceMap(servicesIgnoreMetrics, "service ignore metrics")
-	isCheckIgnored := discovery.NewIgnoredService(serviceIgnoreCheck).IsServiceIgnored
-	isInputIgnored := discovery.NewIgnoredService(serviceIgnoreMetrics).IsServiceIgnored
-	dynamicDiscovery := discovery.NewDynamic(psFact, netstat, a.containerRuntime, a.containerFilter.ContainerIgnored, discovery.SudoFileReader{HostRootPath: a.hostRootPath}, a.oldConfig.String("stack"))
-	a.discovery = discovery.New(
+	isCheckIgnored := discovery.NewIgnoredService(a.config.ServiceIgnoreCheck).IsServiceIgnored
+	isInputIgnored := discovery.NewIgnoredService(a.config.ServiceIgnoreMetrics).IsServiceIgnored
+	dynamicDiscovery := discovery.NewDynamic(psFact, netstat, a.containerRuntime, a.containerFilter.ContainerIgnored, discovery.SudoFileReader{HostRootPath: a.hostRootPath}, a.config.Stack)
+
+	a.discovery, warnings = discovery.New(
 		dynamicDiscovery,
 		a.collector,
 		a.gathererRegistry,
@@ -904,30 +885,26 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		a.state,
 		acc,
 		a.containerRuntime,
-		a.config.Services.ToDiscoveryMap(),
+		a.config.Services,
 		isCheckIgnored,
 		isInputIgnored,
 		a.containerFilter.ContainerIgnored,
 		a.metricFormat,
 		psFact,
 	)
+	if warnings != nil {
+		a.addWarnings(warnings...)
+	}
 
 	a.dynamicScrapper = &promexporter.DynamicScrapper{
 		Registry:       a.gathererRegistry,
 		DynamicJobName: "discovered-exporters",
 	}
 
-	if _, found := a.oldConfig.Get("metric.pull"); found {
-		logger.Printf("metric.pull is deprecated and not supported by Glouton.")
-		logger.Printf("For your custom metrics, please use Prometheus exporter & metric.prometheus")
-	}
-
-	if a.oldConfig.Bool("blackbox.enable") {
+	if a.config.Blackbox.Enable {
 		logger.V(1).Println("Starting blackbox_exporter...")
-		// the config is present, otherwise we would not be in this block
-		blackboxConf, _ := a.oldConfig.Get("blackbox")
 
-		a.monitorManager, err = blackbox.New(a.gathererRegistry, blackboxConf, a.oldConfig.String("blackbox.user_agent"), a.metricFormat)
+		a.monitorManager, err = blackbox.New(a.gathererRegistry, a.config.Blackbox, a.metricFormat)
 		if err != nil {
 			logger.V(0).Printf("Couldn't start blackbox_exporter: %v\nMonitors will not be able to run on this agent.", err)
 		}
@@ -947,11 +924,11 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		AgentInfo:          a,
 		PrometheurExporter: promExporter,
 		Threshold:          a.threshold,
-		StaticCDNURL:       a.oldConfig.String("web.static_cdn_url"),
+		StaticCDNURL:       a.config.Web.StaticCDNURL,
 		DiagnosticPage:     a.DiagnosticPage,
 		DiagnosticArchive:  a.writeDiagnosticArchive,
 		MetricFormat:       a.metricFormat,
-		LocalUIDisabled:    !a.oldConfig.Bool("web.local_ui.enable"),
+		LocalUIDisabled:    !a.config.Web.LocalUI.Enable,
 	}
 
 	tasks := []taskInfo{
@@ -968,23 +945,25 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		{a.threshold.Run, "Threshold state"},
 	}
 
-	if a.oldConfig.Bool("web.enable") {
+	if a.config.Web.Enable {
 		tasks = append(tasks, taskInfo{api.Run, "Local Web UI"})
 	}
 
-	if a.oldConfig.Bool("jmx.enable") {
-		perm, err := strconv.ParseInt(a.oldConfig.String("jmxtrans.file_permission"), 8, 0)
+	if a.config.JMX.Enable {
+		perm, err := strconv.ParseInt(a.config.JMXTrans.FilePermission, 8, 0)
 		if err != nil {
-			logger.Printf("invalid permission %#v: %v", a.oldConfig.String("jmxtrans.file_permission"), err)
-			logger.Printf("using the default 0640")
+			a.addWarnings(fmt.Errorf(
+				"%w: failed to parse jmxtrans.file_permission '%s': %s, using the default 0640",
+				config.ErrInvalidValue, a.config.JMXTrans.FilePermission, err,
+			))
 
 			perm = 0o640
 		}
 
 		a.jmx = &jmxtrans.JMX{
-			OutputConfigurationFile:       a.oldConfig.String("jmxtrans.config_file"),
+			OutputConfigurationFile:       a.config.JMXTrans.ConfigFile,
 			OutputConfigurationPermission: os.FileMode(perm),
-			ContactPort:                   a.oldConfig.Int("jmxtrans.graphite_port"),
+			ContactPort:                   a.config.JMXTrans.GraphitePort,
 			Pusher:                        a.gathererRegistry.WithTTL(5 * time.Minute),
 		}
 
@@ -993,14 +972,14 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 
 	a.rulesManager = rules.NewManager(ctx, a.store)
 
-	if a.oldConfig.Bool("bleemeo.enable") {
-		scaperName := a.oldConfig.String("blackbox.scraper_name")
+	if a.config.Bleemeo.Enable {
+		scaperName := a.config.Blackbox.ScraperName
 		if scaperName == "" {
-			scaperName = fmt.Sprintf("%s:%d", fqdn, a.oldConfig.Int("web.listener.port"))
+			scaperName = fmt.Sprintf("%s:%d", fqdn, a.config.Web.Listener.Port)
 		}
 
 		connector, err := bleemeo.New(bleemeoTypes.GlobalOption{
-			Config:                  a.oldConfig,
+			Config:                  a.config,
 			State:                   a.state,
 			Facts:                   a.factProvider,
 			Process:                 psFact,
@@ -1117,30 +1096,27 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		logger.Printf("unable to add recording rules metrics: %v", err)
 	}
 
-	if a.oldConfig.Bool("agent.process_exporter.enable") {
+	if a.config.Agent.ProcessExporter.Enable {
 		process.RegisterExporter(ctx, a.gathererRegistry, psLister, dynamicDiscovery, a.metricFormat == types.MetricFormatBleemeo)
 	}
 
-	var targets []*scrapper.Target
-
-	if promCfg, found := a.oldConfig.Get("metric.prometheus.targets"); found {
-		targets = prometheusConfigToURLs(promCfg)
+	prometheusTargets, warnings := prometheusConfigToURLs(a.config.Metric.Prometheus.Targets)
+	if warnings != nil {
+		a.addWarnings(warnings...)
 	}
 
-	for _, target := range targets {
-		hash := labels.FromMap(target.ExtraLabels).Hash()
-
+	for _, target := range prometheusTargets {
 		_, err = a.gathererRegistry.RegisterGatherer(
 			registry.RegistrationOption{
 				Description: "Prom exporter " + target.URL.String(),
-				JitterSeed:  hash,
+				JitterSeed:  labels.FromMap(target.ExtraLabels).Hash(),
 				Interval:    defaultInterval,
 				ExtraLabels: target.ExtraLabels,
 			},
 			target,
 		)
 		if err != nil {
-			logger.Printf("Unable to add Prometheus scrapper for target %s: %v", target.URL.String(), err)
+			logger.Printf("Unable to add Prometheus scrapper for target %s: %v", target.URL, err)
 		}
 	}
 
@@ -1153,31 +1129,31 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		})
 	})
 
-	if a.oldConfig.Bool("nrpe.enable") {
-		nrpeConfFile := a.oldConfig.StringList("nrpe.conf_paths")
-		nrperesponse := nrpe.NewResponse(a.config.Services.ToNRPEMap(), a.discovery, nrpeConfFile)
+	if a.config.NRPE.Enable {
+		nrpeConfFile := a.config.NRPE.ConfPaths
+		nrperesponse := nrpe.NewResponse(a.config.Services, a.discovery, nrpeConfFile)
 		server := nrpe.New(
-			fmt.Sprintf("%s:%d", a.oldConfig.String("nrpe.address"), a.oldConfig.Int("nrpe.port")),
-			a.oldConfig.Bool("nrpe.ssl"),
+			fmt.Sprintf("%s:%d", a.config.NRPE.Address, a.config.NRPE.Port),
+			a.config.NRPE.SSL,
 			nrperesponse.Response,
 		)
 		tasks = append(tasks, taskInfo{server.Run, "NRPE server"})
 	}
 
-	if a.oldConfig.Bool("zabbix.enable") {
+	if a.config.Zabbix.Enable {
 		server := zabbix.New(
-			fmt.Sprintf("%s:%d", a.oldConfig.String("zabbix.address"), a.oldConfig.Int("zabbix.port")),
+			net.JoinHostPort(a.config.Zabbix.Address, fmt.Sprint(a.config.Zabbix.Port)),
 			zabbixResponse,
 		)
 		tasks = append(tasks, taskInfo{server.Run, "Zabbix server"})
 	}
 
-	if a.oldConfig.Bool("influxdb.enable") {
+	if a.config.InfluxDB.Enable {
 		server := influxdb.New(
-			fmt.Sprintf("http://%s", net.JoinHostPort(a.oldConfig.String("influxdb.host"), a.oldConfig.String("influxdb.port"))),
-			a.oldConfig.String("influxdb.db_name"),
+			fmt.Sprintf("http://%s", net.JoinHostPort(a.config.InfluxDB.Host, fmt.Sprint(a.config.InfluxDB.Port))),
+			a.config.InfluxDB.DBName,
 			a.store,
-			a.oldConfig.StringMap("influxdb.tags"),
+			a.config.InfluxDB.Tags,
 		)
 		a.influxdbConnector = server
 		tasks = append(tasks, taskInfo{server.Run, "influxdb"})
@@ -1191,8 +1167,8 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		a.bleemeoConnector.ApplyCachedConfiguration(ctx)
 	}
 
-	if !reflect.DeepEqual(a.oldConfig.StringList("disk_monitor"), defaultConfig()["disk_monitor"]) {
-		if a.metricFormat == types.MetricFormatBleemeo && len(a.oldConfig.StringList("disk_ignore")) > 0 {
+	if !reflect.DeepEqual(a.config.DiskMonitor, config.DefaultConfig().DiskMonitor) {
+		if a.metricFormat == types.MetricFormatBleemeo && len(a.config.DiskIgnore) > 0 {
 			logger.Printf("Warning: both \"disk_monitor\" and \"disk_ignore\" are set. Only \"disk_ignore\" will be used")
 		} else if a.metricFormat != types.MetricFormatBleemeo {
 			logger.Printf("Warning: configuration \"disk_monitor\" is not used in Prometheus mode. Use \"disk_ignore\"")
@@ -1219,7 +1195,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		}
 	}
 
-	if a.oldConfig.Bool("nvidia_smi.enable") {
+	if a.config.NvidiaSMI.Enable {
 		// Force Prometheus format for NVIDIA SMI metrics as we want to keep the labels.
 		acc := &inputs.Accumulator{
 			Pusher:  a.gathererRegistry.WithTTLAndFormat(5*time.Minute, types.MetricFormatPrometheus),
@@ -1240,8 +1216,8 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 
 		err := nvidia.AddSMIInput(
 			promCollector,
-			a.oldConfig.String("nvidia_smi.bin_path"),
-			a.oldConfig.Int("nvidia_smi.timeout"),
+			a.config.NvidiaSMI.BinPath,
+			a.config.NvidiaSMI.Timeout,
 		)
 		if err != nil {
 			logger.Printf("Failed to initialize NVIDIA SMI collector: %v", err)
@@ -1256,11 +1232,12 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		"Metric collector",
 	})
 
-	if a.oldConfig.Bool("telegraf.statsd.enable") {
-		input, err := statsd.New(fmt.Sprintf("%s:%d", a.oldConfig.String("telegraf.statsd.address"), a.oldConfig.Int("telegraf.statsd.port")))
+	if a.config.Telegraf.StatsD.Enable {
+		input, err := statsd.New(fmt.Sprintf("%s:%d", a.config.Telegraf.StatsD.Address, a.config.Telegraf.StatsD.Port))
 		if err != nil {
 			logger.Printf("Unable to create StatsD input: %v", err)
-			a.oldConfig.Set("telegraf.statsd.enable", false)
+
+			a.config.Telegraf.StatsD.Enable = false
 		} else if _, err = a.collector.AddInput(input, "statsd"); err != nil {
 			if strings.Contains(err.Error(), "address already in use") {
 				logger.Printf("Unable to listen on StatsD port because another program already use it")
@@ -1270,14 +1247,14 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 				logger.Printf("Unable to create StatsD input: %v", err)
 			}
 
-			a.oldConfig.Set("telegraf.statsd.enable", false)
+			a.config.Telegraf.StatsD.Enable = false
 		}
 	}
 
-	a.factProvider.SetFact("statsd_enable", a.oldConfig.String("telegraf.statsd.enable"))
+	a.factProvider.SetFact("statsd_enable", fmt.Sprint(a.config.Telegraf.StatsD.Enable))
 	a.factProvider.SetFact("metrics_format", a.metricFormat.String())
 
-	if a.oldConfig.Bool("mqtt.enable") {
+	if a.config.MQTT.Enable {
 		a.mqtt = mqtt.New(mqtt.Options{
 			ReloadState: a.reloadState.MQTT(),
 			Config:      a.config.MQTT,
@@ -1353,7 +1330,7 @@ func (a *agent) waitAndRefreshPendingUpdates(ctx context.Context) {
 
 		updatedAt := facts.PendingSystemUpdateFreshness(
 			ctx,
-			a.oldConfig.String("container.type") != "",
+			a.config.Container.Type != "",
 			a.hostRootPath,
 		)
 		if updatedAt.IsZero() || updatedAt.After(t0) {
@@ -1365,33 +1342,32 @@ func (a *agent) waitAndRefreshPendingUpdates(ctx context.Context) {
 }
 
 func (a *agent) buildCollectorsConfig() (conf inputs.CollectorConfig, err error) {
-	whitelistRE, err := common.CompileREs(a.oldConfig.StringList("disk_monitor"))
+	whitelistRE, err := common.CompileREs(a.config.DiskMonitor)
 	if err != nil {
-		logger.V(1).Printf("the whitelist for diskio regexp couldn't compile: %s", err)
+		a.addWarnings(fmt.Errorf("%w: failed to compile regexp in disk_monitor: %s", config.ErrInvalidValue, err))
 
 		return
 	}
 
-	blacklistRE, err := common.CompileREs(a.oldConfig.StringList("disk_ignore"))
+	blacklistRE, err := common.CompileREs(a.config.DiskIgnore)
 	if err != nil {
-		logger.V(1).Printf("the blacklist for diskio regexp couldn't compile: %s", err)
+		a.addWarnings(fmt.Errorf("%w: failed to compile regexp in disk_ignore: %s", config.ErrInvalidValue, err))
 
 		return
 	}
 
-	pathBlacklist := a.oldConfig.StringList("df.path_ignore")
-	pathBlacklistTrimed := make([]string, len(pathBlacklist))
+	pathIgnoreTrimed := make([]string, len(a.config.DF.PathIgnore))
 
-	for i, v := range pathBlacklist {
-		pathBlacklistTrimed[i] = strings.TrimRight(v, "/")
+	for i, v := range a.config.DF.PathIgnore {
+		pathIgnoreTrimed[i] = strings.TrimRight(v, "/")
 	}
 
 	return inputs.CollectorConfig{
 		DFRootPath:      a.hostRootPath,
-		NetIfBlacklist:  a.oldConfig.StringList("network_interface_blacklist"),
+		NetIfBlacklist:  a.config.NetworkInterfaceBlacklist,
 		IODiskWhitelist: whitelistRE,
 		IODiskBlacklist: blacklistRE,
-		DFPathBlacklist: pathBlacklistTrimed,
+		DFPathBlacklist: pathIgnoreTrimed,
 	}, nil
 }
 
@@ -1431,7 +1407,7 @@ func (a *agent) miscGather(pusher types.PointPusher) func(context.Context, time.
 }
 
 func (a *agent) sendToTelemetry(ctx context.Context) error {
-	if a.oldConfig.Bool("agent.telemetry.enable") {
+	if a.config.Agent.Telemetry.Enable {
 		select {
 		case <-time.After(delay.JitterDelay(5*time.Minute, 0.2)):
 		case <-ctx.Done():
@@ -1448,7 +1424,7 @@ func (a *agent) sendToTelemetry(ctx context.Context) error {
 				continue
 			}
 
-			telemetry.PostInformation(ctx, telemetryID, a.oldConfig.String("agent.telemetry.address"), a.BleemeoAgentID(), facts)
+			telemetry.PostInformation(ctx, telemetryID, a.config.Agent.Telemetry.Address, a.BleemeoAgentID(), facts)
 
 			select {
 			case <-time.After(delay.JitterDelay(24*time.Hour, 0.05)):
@@ -1540,7 +1516,7 @@ func (a *agent) miscGatherMinute(pusher types.PointPusher) func(context.Context,
 			}
 		}
 
-		desc := strings.Join(a.oldConfig.GetWarnings(), "\n")
+		desc := a.getWarnings().Error()
 		status := types.StatusWarning
 
 		if len(desc) == 0 {
@@ -1872,8 +1848,7 @@ func (a *agent) sendDockerContainerHealth(ctx context.Context, container facts.C
 }
 
 func (a *agent) netstatWatcher(ctx context.Context) error {
-	filePath := a.oldConfig.String("agent.netstat_file")
-	stat, _ := os.Stat(filePath)
+	stat, _ := os.Stat(a.config.Agent.NetstatFile)
 
 	ticker := time.NewTicker(15 * time.Second)
 	defer ticker.Stop()
@@ -1885,7 +1860,7 @@ func (a *agent) netstatWatcher(ctx context.Context) error {
 		case <-ticker.C:
 		}
 
-		newStat, _ := os.Stat(filePath)
+		newStat, _ := os.Stat(a.config.Agent.NetstatFile)
 		if newStat != nil && (stat == nil || !newStat.ModTime().Equal(stat.ModTime())) {
 			a.FireTrigger(true, false, false, false)
 		}
@@ -1963,7 +1938,7 @@ func (a *agent) handleTrigger(ctx context.Context) {
 		}
 
 		hasConnection := a.dockerRuntime.IsRuntimeRunning(ctx)
-		if hasConnection && !a.dockerInputPresent && a.oldConfig.Bool("telegraf.docker_metrics_enable") {
+		if hasConnection && !a.dockerInputPresent && a.config.Telegraf.DockerMetricsEnable {
 			i, err := docker.New(a.dockerRuntime.ServerAddress(), a.dockerRuntime, a.containerFilter.ContainerIgnored)
 			if err != nil {
 				logger.V(1).Printf("error when creating Docker input: %v", err)
@@ -1993,7 +1968,7 @@ func (a *agent) handleTrigger(ctx context.Context) {
 func systemUpdateMetric(ctx context.Context, a *agent) {
 	pendingUpdate, pendingSecurityUpdate := facts.PendingSystemUpdate(
 		ctx,
-		a.oldConfig.String("container.type") != "",
+		a.config.Container.Type != "",
 		a.hostRootPath,
 	)
 
@@ -2072,7 +2047,7 @@ func (a *agent) DiagnosticPage(ctx context.Context) string {
 		runtime.Version(),
 	)
 
-	if a.oldConfig.Bool("bleemeo.enable") {
+	if a.config.Bleemeo.Enable {
 		fmt.Fprintln(builder, "Glouton has Bleemeo connection enabled")
 
 		if a.bleemeoConnector == nil {
@@ -2385,27 +2360,7 @@ func (a *agent) diagnosticConfig(ctx context.Context, archive types.ArchiveWrite
 	fmt.Fprintln(file, "# This file contains in-memory configuration used by Glouton. Value from from default, files and environment.")
 	enc.SetIndent(4)
 
-	err = enc.Encode(a.oldConfig.Dump())
-	if err != nil {
-		fmt.Fprintf(file, "# error: %v\n", err)
-	}
-
-	err = enc.Close()
-	if err != nil {
-		fmt.Fprintf(file, "# error: %v\n", err)
-	}
-
-	file, err = archive.Create("config-new.yaml")
-	if err != nil {
-		return err
-	}
-
-	enc = yaml.NewEncoder(file)
-
-	fmt.Fprintln(file, "# This file parsed configuration used by Glouton. Currently this config is incomplet.")
-	enc.SetIndent(4)
-
-	err = enc.Encode(a.config)
+	err = enc.Encode(config.Dump(a.config))
 	if err != nil {
 		fmt.Fprintf(file, "# error: %v\n", err)
 	}
@@ -2467,6 +2422,30 @@ func (a *agent) diagnosticFilterResult(ctx context.Context, archive types.Archiv
 	}
 
 	return nil
+}
+
+// Add a warning for the configuration.
+func (a *agent) addWarnings(warnings ...error) {
+	var warningsStr strings.Builder
+	for _, w := range warnings {
+		warningsStr.WriteByte('\n')
+		warningsStr.WriteString(w.Error())
+	}
+
+	logger.Printf("Warning while loading configuration:%s", warningsStr.String())
+
+	a.l.Lock()
+	defer a.l.Unlock()
+
+	a.configWarnings = append(a.configWarnings, warnings...)
+}
+
+// Get configuration warnings.
+func (a *agent) getWarnings() prometheus.MultiError {
+	a.l.Lock()
+	defer a.l.Unlock()
+
+	return a.configWarnings
 }
 
 func parseIPOutput(content []byte) string {
@@ -2571,74 +2550,37 @@ func setupContainer(hostRootPath string) {
 	}
 }
 
-// prometheusConfigToURLs convert metric.prometheus.targets config to a map of target name to URL
+// prometheusConfigToURLs convert metric.prometheus.targets config to a list of targets.
+// It returns the targets and some warnings.
 //
 // See tests for the expected config.
-func prometheusConfigToURLs(cfg interface{}) (result []*scrapper.Target) {
-	configList, ok := cfg.([]interface{})
-	if !ok {
-		return nil
-	}
+func prometheusConfigToURLs(configTargets []config.PrometheusTarget) ([]*scrapper.Target, prometheus.MultiError) {
+	var warnings prometheus.MultiError
 
-	for _, v := range configList {
-		vMap, ok := v.(map[string]interface{})
-		if !ok {
-			continue
-		}
+	targets := make([]*scrapper.Target, 0, len(configTargets))
 
-		uText, ok := vMap["url"].(string)
-		if !ok {
-			continue
-		}
-
-		u, err := url.Parse(uText)
+	for _, configTarget := range configTargets {
+		targetURL, err := url.Parse(configTarget.URL)
 		if err != nil {
-			logger.Printf("ignoring invalid exporter config: %v", err)
+			warnings.Append(fmt.Errorf("%w: invalid prometheus target URL: %s", config.ErrInvalidValue, err))
 
 			continue
 		}
-
-		name, _ := vMap["name"].(string)
 
 		target := &scrapper.Target{
 			ExtraLabels: map[string]string{
-				types.LabelMetaScrapeJob: name,
+				types.LabelMetaScrapeJob: configTarget.Name,
 				// HostPort could be empty, but this ExtraLabels is used by Registry which
 				// correctly handle empty value value (drop the label).
-				types.LabelMetaScrapeInstance: scrapper.HostPort(u),
+				types.LabelMetaScrapeInstance: scrapper.HostPort(targetURL),
 			},
-			URL:       u,
-			AllowList: []string{},
-			DenyList:  []string{},
+			URL:       targetURL,
+			AllowList: configTarget.AllowMetrics,
+			DenyList:  configTarget.DenyMetrics,
 		}
 
-		if allow, ok := vMap["allow_metrics"].([]interface{}); ok {
-			target.AllowList = make([]string, 0, len(allow))
-
-			for _, x := range allow {
-				s, _ := x.(string)
-				if s != "" {
-					target.AllowList = append(target.AllowList, s)
-				}
-			}
-		}
-
-		denyMetricsConfig(vMap, target)
-		result = append(result, target)
+		targets = append(targets, target)
 	}
 
-	return result
-}
-
-func denyMetricsConfig(vMap map[string]interface{}, target *scrapper.Target) {
-	if deny, ok := vMap["deny_metrics"].([]interface{}); ok {
-		target.DenyList = make([]string, 0, len(deny))
-
-		for _, x := range deny {
-			s, _ := x.(string)
-			if s != "" {
-				target.DenyList = append(target.DenyList, s)
-			}
-		}
-	}
+	return targets, warnings
 }

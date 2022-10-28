@@ -18,6 +18,7 @@ package discovery
 
 import (
 	"context"
+	"glouton/config"
 	"glouton/facts"
 	"os"
 	"reflect"
@@ -274,8 +275,11 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ContainerID:     "1234",
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "172.17.0.49", Port: 3306}},
 				IPAddress:       "172.17.0.49",
-				ExtraAttributes: map[string]string{"username": mysqlDefaultUser, "password": "secret"},
-				IgnoredPorts:    map[int]bool{},
+				Config: config.Service{
+					Username: mysqlDefaultUser,
+					Password: "secret",
+				},
+				IgnoredPorts: map[int]bool{},
 			},
 		},
 		{
@@ -289,7 +293,11 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ServiceType:     MySQLService,
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 3306}},
 				IPAddress:       "127.0.0.1",
-				ExtraAttributes: map[string]string{"username": "root", "password": "secret", "metrics_unix_socket": ""},
+				Config: config.Service{
+					Username:          "root",
+					Password:          "secret",
+					MetricsUnixSocket: "",
+				},
 			},
 		},
 		{
@@ -303,7 +311,11 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ServiceType:     MySQLService,
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 3306}},
 				IPAddress:       "127.0.0.1",
-				ExtraAttributes: map[string]string{"username": "root", "password": "secret", "metrics_unix_socket": "/tmp/file.sock"},
+				Config: config.Service{
+					Username:          "root",
+					Password:          "secret",
+					MetricsUnixSocket: "/tmp/file.sock",
+				},
 			},
 		},
 		{
@@ -847,12 +859,8 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 			t.Errorf("Case %s: IgnoredPorts == %v, want %v", c.testName, srv[0].IgnoredPorts, c.want.IgnoredPorts)
 		}
 
-		if c.want.ExtraAttributes == nil {
-			c.want.ExtraAttributes = make(map[string]string)
-		}
-
-		if !reflect.DeepEqual(srv[0].ExtraAttributes, c.want.ExtraAttributes) {
-			t.Errorf("Case %s: ExtraAttributes == %v, want %v", c.testName, srv[0].ExtraAttributes, c.want.ExtraAttributes)
+		if diff := cmp.Diff(srv[0].Config, c.want.Config); diff != "" {
+			t.Errorf("Case %s: unexpected config:\n%s", c.testName, diff)
 		}
 	}
 }
@@ -1104,5 +1112,38 @@ func TestDynamicDiscovery(t *testing.T) {
 				t.Errorf("services mismatch (-want +got)\n%s", diff)
 			}
 		})
+	}
+}
+
+func Test_fillGenericExtraAttributes(t *testing.T) {
+	service := Service{
+		container: facts.FakeContainer{
+			FakeLabels: map[string]string{
+				"glouton.port":         "8080",
+				"glouton.ignore_ports": "9090,9091",
+				"glouton.http_path":    "/path",
+			},
+		},
+		Config: config.Service{
+			// HTTP Path should be overwritten.
+			HTTPPath: "/other",
+			// Address should be kept.
+			Address: "192.168.0.1",
+		},
+	}
+
+	expectedConfig := config.Service{
+		HTTPPath:    "/path",
+		Port:        8080,
+		IgnorePorts: []int{9090, 9091},
+		Address:     "192.168.0.1",
+	}
+
+	dd := &DynamicDiscovery{}
+
+	dd.fillConfigFromLabels(&service)
+
+	if diff := cmp.Diff(expectedConfig, service.Config); diff != "" {
+		t.Fatalf("Unexpected config:\n%s", diff)
 	}
 }

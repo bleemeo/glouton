@@ -1,632 +1,908 @@
-// Copyright 2015-2019 Bleemeo
-//
-// bleemeo.com an infrastructure monitoring solution in the Cloud
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-// http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
-//nolint:scopelint
 package config
 
 import (
-	"bytes"
-	"encoding/json"
-	"os"
-	"reflect"
 	"testing"
+
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
+	"github.com/knadh/koanf"
+	"github.com/knadh/koanf/providers/structs"
+	bbConf "github.com/prometheus/blackbox_exporter/config"
+	"github.com/prometheus/common/config"
 )
 
-const (
-	simpleYaml = `
-agent:
-    facts_file: facts.yaml
-    installation_format: installation_format
+// TestStructuredConfig tests loading the full configuration file.
+func TestStructuredConfig(t *testing.T) { //nolint:maintidx
+	expectedConfig := Config{
+		Agent: Agent{
+			CloudImageCreationFile: "cloudimage_creation",
+			FactsFile:              "facts.yaml",
+			HTTPDebug: HTTPDebug{
+				Enable:      true,
+				BindAddress: "localhost:6060",
+			},
+			InstallationFormat:  "manual",
+			NetstatFile:         "netstat.out",
+			StateFile:           "state.json",
+			StateCacheFile:      "state.cache.json",
+			StateResetFile:      "state.reset",
+			DeprecatedStateFile: "state.deprecated",
+			UpgradeFile:         "upgrade",
+			AutoUpgradeFile:     "auto-upgrade",
+			NodeExporter: NodeExporter{
+				Enable:     true,
+				Collectors: []string{"disk"},
+			},
+			ProcessExporter: ProcessExporter{
+				Enable: true,
+			},
+			PublicIPIndicator: "https://myip.bleemeo.com",
+			WindowsExporter: NodeExporter{
+				Enable:     true,
+				Collectors: []string{"cpu"},
+			},
+			Telemetry: Telemetry{
+				Enable:  true,
+				Address: "http://example.com",
+			},
+			MetricsFormat: "prometheus",
+		},
+		Blackbox: Blackbox{
+			Enable:          true,
+			ScraperName:     "name",
+			ScraperSendUUID: true,
+			Targets: []BlackboxTarget{
+				{
+					Name:   "myname",
+					URL:    "https://bleemeo.com",
+					Module: "mymodule",
+				},
+			},
+			Modules: map[string]bbConf.Module{
+				"mymodule": {
+					Prober: "http",
+					HTTP: bbConf.HTTPProbe{
+						IPProtocol:       "ip4",
+						ValidStatusCodes: []int{200},
+						FailIfSSL:        true,
+						// Default values assigned by blackbox YAML unmarshaller.
+						IPProtocolFallback: true,
+						HTTPClientConfig:   config.DefaultHTTPClientConfig,
+					},
+					TCP:  bbConf.DefaultTCPProbe,
+					ICMP: bbConf.DefaultICMPProbe,
+					DNS:  bbConf.DefaultModule.DNS,
+					GRPC: bbConf.DefaultModule.GRPC,
+				},
+			},
+			UserAgent: "my-user-agent",
+		},
+		Bleemeo: Bleemeo{
+			AccountID:                         "myid",
+			APIBase:                           "https://api.bleemeo.com/",
+			APISSLInsecure:                    true,
+			ContainerRegistrationDelaySeconds: 30,
+			Enable:                            true,
+			InitialAgentName:                  "name1",
+			InitialServerGroupName:            "name2",
+			InitialServerGroupNameForSNMP:     "name3",
+			MQTT: BleemeoMQTT{
+				CAFile:      "/myca",
+				Host:        "mqtt.bleemeo.com",
+				Port:        8883,
+				SSLInsecure: true,
+				SSL:         true,
+			},
+			RegistrationKey: "mykey",
+			Sentry: Sentry{
+				DSN: "my-dsn",
+			},
+		},
+		Container: Container{
+			Filter: Filter{
+				AllowByDefault: true,
+				AllowList:      []string{"redis"},
+				DenyList:       []string{"postgres"},
+			},
+			Type:             "docker",
+			PIDNamespaceHost: true,
+			Runtime: ContainerRuntime{
+				Docker: ContainerRuntimeAddresses{
+					Addresses:      []string{"unix:///run/docker.sock"},
+					PrefixHostRoot: true,
+				},
+				ContainerD: ContainerRuntimeAddresses{
+					Addresses:      []string{"/run/containerd/containerd.sock"},
+					PrefixHostRoot: true,
+				},
+			},
+		},
+		DF: DF{
+			HostMountPoint: "/host-root",
+			PathIgnore:     []string{"/"},
+			IgnoreFSType:   []string{"tmpfs"},
+		},
+		DiskIgnore:  []string{"^(ram|loop|fd|(h|s|v|xv)d[a-z]|nvme\\d+n\\d+p)\\d+$"},
+		DiskMonitor: []string{"sda"},
+		InfluxDB: InfluxDB{
+			Enable: true,
+			Host:   "localhost",
+			Port:   8086,
+			DBName: "metrics",
+			Tags:   map[string]string{"mytag": "myvalue"},
+		},
+		JMX: JMX{
+			Enable: true,
+		},
+		JMXTrans: JMXTrans{
+			ConfigFile:     "/var/lib/jmxtrans/glouton-generated.json",
+			FilePermission: "0640",
+			GraphitePort:   2004,
+		},
+		Kubernetes: Kubernetes{
+			Enable:      true,
+			NodeName:    "mynode",
+			ClusterName: "mycluster",
+			KubeConfig:  "/config",
+		},
+		Logging: Logging{
+			Buffer: LoggingBuffer{
+				HeadSizeBytes: 500000,
+				TailSizeBytes: 500000,
+			},
+			Level:         "INFO",
+			Output:        "console",
+			FileName:      "name",
+			PackageLevels: "bleemeo=1",
+		},
+		Metric: Metric{
+			AllowMetrics:          []string{"allowed"},
+			DenyMetrics:           []string{"denied"},
+			IncludeDefaultMetrics: true,
+			Prometheus: Prometheus{
+				Targets: []PrometheusTarget{
+					{
+						URL:          "http://localhost:8080/metrics",
+						Name:         "my_app",
+						AllowMetrics: []string{"metric1"},
+						DenyMetrics:  []string{"metric2"},
+					},
+				},
+			},
+			SoftStatusPeriodDefault: 100,
+			SoftStatusPeriod: map[string]int{
+				"system_pending_updates":          100,
+				"system_pending_security_updates": 200,
+			},
+			SNMP: SNMP{
+				ExporterAddress: "localhost",
+				Targets: []SNMPTarget{
+					{
+						InitialName: "AP Wifi",
+						Target:      "127.0.0.1",
+					},
+				},
+			},
+		},
+		MQTT: OpenSourceMQTT{
+			Enable:      true,
+			Hosts:       []string{"localhost"},
+			Port:        1883,
+			Username:    "user",
+			Password:    "pass",
+			SSL:         true,
+			SSLInsecure: true,
+			CAFile:      "/myca",
+		},
+		NetworkInterfaceBlacklist: []string{"lo", "veth"},
+		NRPE: NRPE{
+			Enable:    true,
+			Address:   "0.0.0.0",
+			Port:      5666,
+			SSL:       true,
+			ConfPaths: []string{"/etc/nagios/nrpe.cfg"},
+		},
+		NvidiaSMI: NvidiaSMI{
+			Enable:  true,
+			BinPath: "/usr/bin/nvidia-smi",
+			Timeout: 5,
+		},
+		Services: []Service{
+			{
+				ID:                      "service1",
+				Instance:                "instance1",
+				Port:                    8080,
+				IgnorePorts:             []int{8081},
+				Address:                 "127.0.0.1",
+				Interval:                60,
+				Stack:                   "mystack",
+				CheckType:               "nagios",
+				HTTPPath:                "/check/",
+				HTTPStatusCode:          200,
+				HTTPHost:                "host",
+				MatchProcess:            "/usr/bin/dockerd",
+				CheckCommand:            "/path/to/bin --with-option",
+				NagiosNRPEName:          "nagios",
+				MetricsUnixSocket:       "/path/mysql.sock",
+				Username:                "user",
+				Password:                "password",
+				StatsURL:                "http://nginx/stats",
+				ManagementPort:          9090,
+				CassandraDetailedTables: []string{"squirreldb.data"},
+				JMXPort:                 1200,
+				JMXUsername:             "jmx_user",
+				JMXPassword:             "jmx_pass",
+				JMXMetrics: []JmxMetric{
+					{
+						Name:      "heap_size_mb",
+						MBean:     "java.lang:type=Memory",
+						Attribute: "HeapMemoryUsage",
+						Path:      "used",
+						Scale:     0.1,
+						Derive:    true,
+						Sum:       true,
+						Ratio:     "a",
+						TypeNames: []string{"name"},
+					},
+				},
+			},
+		},
+		ServiceIgnoreMetrics: []NameInstance{
+			{
+				Name:     "redis",
+				Instance: "host:*",
+			},
+		},
+		ServiceIgnoreCheck: []NameInstance{
+			{
+				Name:     "postgresql",
+				Instance: "host:* container:*",
+			},
+		},
+		Stack: "mystack",
+		Tags:  []string{"mytag"},
+		Telegraf: Telegraf{
+			DockerMetricsEnable: true,
+			StatsD: StatsD{
+				Enable:  true,
+				Address: "127.0.0.1",
+				Port:    8125,
+			},
+		},
+		Thresholds: map[string]Threshold{
+			"cpu_used": {
+				LowWarning:   newFloatPointer(2),
+				LowCritical:  newFloatPointer(1.5),
+				HighWarning:  newFloatPointer(80.2),
+				HighCritical: newFloatPointer(90),
+			},
+			"disk_used": {
+				LowWarning:   nil,
+				LowCritical:  newFloatPointer(2),
+				HighWarning:  newFloatPointer(90.5),
+				HighCritical: nil,
+			},
+		},
+		Web: Web{
+			Enable: true,
+			LocalUI: LocalUI{
+				Enable: true,
+			},
+			Listener: Listener{
+				Address: "192.168.0.1",
+				Port:    8016,
+			},
+			StaticCDNURL: "/",
+		},
+		Zabbix: Zabbix{
+			Enable:  true,
+			Address: "zabbix",
+			Port:    7000,
+		},
+	}
 
-logging:
-    level: INFO
+	config, warnings, err := loadToStruct(false, "testdata/full.conf")
+	if warnings != nil {
+		t.Fatalf("Warning while loading config: %s", warnings)
+	}
 
-nested:
-    key:
-        also:
-            work: yes
-
-influxdb:
-    tags:
-        hostname: Athena
-        uuid: 42
-        42 : random_number
-`
-	mergeOne = `
-d1: 1
-remplaced: 1
-sub_dict:
-  d1: 1
-  remplaced: 1
-nested:
-  sub_dict:
-    d1: 1
-    remplaced: 1
-influxdb:
-    tags:
-        hostname: Hestia
-        ip_address: 192.168.0.1
-        state: online
-`
-	mergeTwo = `
-d2: 2
-remplaced: 2
-sub_dict:
-  d2: 2
-  remplaced: 2
-nested:
-  sub_dict:
-    d2: 2
-    remplaced: 2
-`
-)
-
-func TestString(t *testing.T) {
-	cfg := Configuration{}
-
-	err := cfg.LoadByte([]byte(simpleYaml))
 	if err != nil {
-		t.Error(err)
+		t.Fatalf("Failed to load config: %s", err)
 	}
 
-	cases := []struct {
-		Key  string
-		Want string
-	}{
-		{Key: "agent.facts_file", Want: "facts.yaml"},
-		{Key: "agent.installation_format", Want: "installation_format"},
-		{Key: "logging.level", Want: "INFO"},
-		{Key: "nested.key.also.work", Want: "yes"},
-		{Key: "not.found", Want: ""},
-		{Key: "logging.notfound", Want: ""},
-	}
-
-	for _, c := range cases {
-		got := cfg.String(c.Key)
-		if c.Want != got {
-			t.Errorf("String(%#v) = %#v, want %#v", c.Key, got, c.Want)
-		}
+	if diff := cmp.Diff(expectedConfig, config); diff != "" {
+		t.Fatalf("Unexpected config loaded:\n%s", diff)
 	}
 }
 
-func TestStringMap(t *testing.T) {
-	cfg := Configuration{}
+func newFloatPointer(value float64) *float64 {
+	p := new(float64)
+	*p = value
 
-	err := cfg.LoadByte([]byte(simpleYaml))
+	return p
+}
+
+// Test that users are able to override default settings.
+func TestOverrideDefault(t *testing.T) {
+	expectedConfig := DefaultConfig()
+	expectedConfig.NetworkInterfaceBlacklist = []string{"override"}
+	expectedConfig.DF.PathIgnore = []string{"/override"}
+	expectedConfig.Bleemeo.APIBase = ""
+	expectedConfig.Bleemeo.Enable = false
+	expectedConfig.Bleemeo.MQTT.SSL = false
+
+	t.Setenv("GLOUTON_BLEEMEO_ENABLE", "false")
+
+	config, warnings, err := loadToStruct(true, "testdata/override_default.conf")
+	if warnings != nil {
+		t.Fatalf("Warning while loading config: %s", warnings)
+	}
+
 	if err != nil {
-		t.Error(err)
+		t.Fatalf("Failed to load config: %s", err)
 	}
 
-	want1 := make(map[string]string)
-	want1["hostname"] = "Athena"
-	want1["uuid"] = "42"
-	want1["42"] = "random_number"
-
-	want2 := make(map[string]string)
-	want2["also"] = "map[work:yes]"
-
-	cases := []struct {
-		Key  string
-		Want map[string]string
-	}{
-		{Key: "influxdb.tags", Want: want1},
-		{Key: "nested.key", Want: want2},
-		{Key: "influxdb.unexisting", Want: make(map[string]string)},
-	}
-	for _, c := range cases {
-		got := cfg.StringMap(c.Key)
-		if !reflect.DeepEqual(c.Want, got) {
-			t.Errorf("StringMap(%#v) = %#v, want %#v", c.Key, got, c.Want)
-		}
-	}
-
-	// Test after a merge
-	err = cfg.LoadByte([]byte(mergeOne))
-	if err != nil {
-		t.Error(err)
-	}
-
-	want1["hostname"] = "Hestia"
-	want1["ip_address"] = "192.168.0.1"
-	want1["state"] = "online"
-
-	for _, c := range cases {
-		got := cfg.StringMap(c.Key)
-		if !reflect.DeepEqual(c.Want, got) {
-			t.Errorf("StringMap(%#v) = %#v, want %#v", c.Key, got, c.Want)
-		}
+	if diff := cmp.Diff(expectedConfig, config); diff != "" {
+		t.Fatalf("Default value modified:\n%s", diff)
 	}
 }
 
-func TestMerge(t *testing.T) {
-	cfg := Configuration{}
+// TestMergeWithDefault tests that the config files and the environment variables
+// are correctly merge.
+// For files, basic types (string, int, ...) are overwritten, maps are merged and arrays are concatenated.
+// Files overwrite default values but merges maps with the defaults.
+// Environment variables always overwrite the existing config.
+func TestMergeWithDefault(t *testing.T) {
+	expectedConfig := DefaultConfig()
+	expectedConfig.Bleemeo.Enable = false
+	expectedConfig.Bleemeo.MQTT.SSLInsecure = true
+	expectedConfig.Bleemeo.MQTT.Host = "b"
+	expectedConfig.MQTT.Hosts = []string{}
+	expectedConfig.Metric.AllowMetrics = []string{"mymetric", "mymetric2"}
+	expectedConfig.Metric.DenyMetrics = []string{"cpu_used"}
+	expectedConfig.Metric.SoftStatusPeriod = map[string]int{
+		"system_pending_updates": 500,
+	}
+	expectedConfig.Thresholds = map[string]Threshold{
+		"mymetric": {
+			LowWarning: newFloatPointer(1),
+		},
+		"mymetric2": {
+			HighCritical: newFloatPointer(90),
+		},
+		"mymetric3": {
+			HighWarning: newFloatPointer(80),
+		},
+	}
+	expectedConfig.NetworkInterfaceBlacklist = []string{"eth0", "eth1", "eth1", "eth2"}
 
-	err := cfg.LoadByte([]byte(mergeOne))
+	t.Setenv("GLOUTON_MQTT_HOSTS", "")
+	t.Setenv("GLOUTON_METRIC_DENY_METRICS", "cpu_used")
+	t.Setenv("GLOUTON_METRIC_SOFTSTATUS_PERIOD", "system_pending_updates=500")
+
+	config, warnings, err := loadToStruct(true, "testdata/merge")
+	if warnings != nil {
+		t.Fatalf("Warning while loading config: %s", warnings)
+	}
+
 	if err != nil {
-		t.Error(err)
+		t.Fatalf("Failed to load config: %s", err)
 	}
 
-	err = cfg.LoadByte([]byte(mergeTwo))
-	if err != nil {
-		t.Error(err)
-	}
-
-	cases := []struct {
-		Key  string
-		Want string
-	}{
-		{Key: "d1", Want: "1"},
-		{Key: "d2", Want: "2"},
-		{Key: "remplaced", Want: "2"},
-		{Key: "sub_dict.d1", Want: "1"},
-		{Key: "sub_dict.d2", Want: "2"},
-		{Key: "sub_dict.remplaced", Want: "2"},
-		{Key: "nested.sub_dict.d1", Want: "1"},
-		{Key: "nested.sub_dict.d2", Want: "2"},
-		{Key: "nested.sub_dict.remplaced", Want: "2"},
-	}
-	for _, c := range cases {
-		got := cfg.String(c.Key)
-		if c.Want != got {
-			t.Errorf("String(%#v) = %#v, want %#v", c.Key, got, c.Want)
-		}
+	if diff := cmp.Diff(expectedConfig, config); diff != "" {
+		t.Fatalf("Default value modified:\n%s", diff)
 	}
 }
 
-func TestData(t *testing.T) {
-	cfg := Configuration{}
+// Test that the config loaded with no config file has default values.
+func TestDefaultNoFile(t *testing.T) {
+	config, warnings, err := loadToStruct(true)
+	if warnings != nil {
+		t.Fatalf("Warning while loading config: %s", warnings)
+	}
 
-	data, err := os.ReadFile("testdata/main.conf")
 	if err != nil {
-		t.Error(err)
+		t.Fatalf("Failed to load config: %s", err)
 	}
 
-	err = cfg.LoadByte(data)
-	if err != nil {
-		t.Error(err)
-	}
-
-	err = cfg.LoadDirectory("testdata/conf.d")
-	if err != nil {
-		t.Error(err)
-	}
-
-	cases := []struct {
-		Key  string
-		Want string
-	}{
-		{Key: "main_conf_loaded", Want: "yes"},
-		{Key: "first_conf_loaded", Want: "yes"},
-		{Key: "second_conf_loaded", Want: "yes"},
-		{Key: "overridden_value", Want: "second"},
-		{Key: "merged_dict.main", Want: "1"},
-		{Key: "merged_dict.first", Want: "yes"},
-		{Key: "sub_section.nested", Want: "<nil>"},
-		{Key: "telegraf.statsd.enable", Want: "<nil>"},
-	}
-	for _, c := range cases {
-		got := cfg.String(c.Key)
-		if c.Want != got {
-			t.Errorf("String(%#v) = %#v, want %#v", c.Key, got, c.Want)
-		}
-	}
-
-	got, ok := cfg.Get("merged_list")
-	if !ok {
-		t.Errorf("Get(%v) not found", "merged_list")
-	}
-
-	want := []interface{}{
-		"duplicated between main.conf & second.conf",
-		"item from main.conf",
-		"item from first.conf",
-		"item from second.conf",
-		"duplicated between main.conf & second.conf",
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("merged_list = %v, want %v", got, want)
+	if diff := cmp.Diff(DefaultConfig(), config, cmpopts.EquateEmpty()); diff != "" {
+		t.Fatalf("Default value modified:\n%s", diff)
 	}
 }
 
-func TestSet(t *testing.T) {
-	cfg := Configuration{}
-
-	cfg.Set("test-int", 5)
-	cfg.Set("test-str", "string")
-	cfg.Set("test-change-type", "string")
-	cfg.Set("test-int", 42)
-	cfg.Set("test-change-type", 9)
-	cfg.Set("test.sub.list", []int{})
-	cfg.Set("test.sub.dict", map[string]interface{}{"temp": 28.5})
-	cfg.Set("test.sub.int", 5)
-	cfg.Set("test.sub.nil", nil)
-
-	cases := []struct {
-		key  string
-		want interface{}
+// TestloadToStruct tests loading the config and the warnings and errors returned.
+func TestLoad(t *testing.T) { //nolint:maintidx
+	tests := []struct {
+		Name         string
+		Files        []string
+		Environment  map[string]string
+		WantConfig   Config
+		WantWarnings []string
+		WantError    error
 	}{
 		{
-			key:  "test-int",
-			want: 42,
-		},
-		{
-			key:  "test-str",
-			want: "string",
-		},
-		{
-			key:  "test-change-type",
-			want: 9,
-		},
-		{
-			key:  "test.sub.list",
-			want: []int{},
-		},
-		{
-			key:  "test.sub.dict",
-			want: map[string]interface{}{"temp": 28.5},
-		},
-		{
-			key:  "test.sub.dict.temp",
-			want: 28.5,
-		},
-		{
-			key: "test.sub",
-			want: map[string]interface{}{
-				"dict": map[string]interface{}{"temp": 28.5},
-				"list": []int{},
-				"int":  5,
-				"nil":  nil,
+			Name:  "wrong type",
+			Files: []string{"testdata/bad_wrong_type.conf"},
+			WantWarnings: []string{
+				`cannot parse 'metric.softstatus_period_default' as int: strconv.ParseInt: parsing "string": invalid syntax`,
+				`cannot parse 'metric.softstatus_period[1][system_pending_security_updates]' as int: strconv.ParseInt: parsing "bad": invalid syntax`,
 			},
-		},
-	}
-	for _, c := range cases {
-		got, ok := cfg.Get(c.key)
-		if !ok {
-			t.Errorf("cfg.Get(%#v) not found", c.key)
-		}
-
-		if !reflect.DeepEqual(got, c.want) {
-			t.Errorf("cfg.Get(%#v) == %v, want %v", c.key, got, c.want)
-		}
-	}
-}
-
-func TestLoadEnv(t *testing.T) {
-	envs := map[string]string{
-		"ENV_NAME_1":       "something",
-		"AGENT_API_PORT":   "8015",
-		"AGENT_API_ENABLE": "yes",
-		"API_ENABLE":       "false",
-		"EXTRA_ENV":        "not-used",
-		"AGENT_TAGS":       "this-is,a-list,comma separated",
-	}
-	lookupEnv := func(envName string) (string, bool) {
-		value, ok := envs[envName]
-
-		return value, ok
-	}
-	cfg := Configuration{lookupEnv: lookupEnv}
-
-	loadCases := []struct {
-		envName   string
-		varType   ValueType
-		key       string
-		wantFound bool
-	}{
-		{
-			envName:   "ENV_NAME_1",
-			varType:   TypeString,
-			key:       "name1",
-			wantFound: true,
-		},
-		{
-			envName:   "AGENT_API_PORT",
-			varType:   TypeInteger,
-			key:       "api.port",
-			wantFound: true,
-		},
-		{
-			envName:   "AGENT_API_ADDRESS",
-			varType:   TypeString,
-			key:       "api.address",
-			wantFound: false,
-		},
-		{
-			envName:   "API_ENABLE",
-			varType:   TypeBoolean,
-			key:       "api.enable",
-			wantFound: true,
-		},
-		{
-			envName:   "AGENT_API_ENABLE",
-			varType:   TypeBoolean,
-			key:       "api.enable",
-			wantFound: true,
-		},
-		{
-			envName:   "AGENT_API_PORT2",
-			varType:   TypeString,
-			key:       "api.port",
-			wantFound: false,
-		},
-		{
-			envName:   "AGENT_TAGS",
-			varType:   TypeStringList,
-			key:       "agent.tags",
-			wantFound: true,
-		},
-	}
-	cases := []struct {
-		key       string
-		wantFound bool
-		want      interface{}
-	}{
-		{
-			key:       "name1",
-			wantFound: true,
-			want:      "something",
-		},
-		{
-			key:       "api.port",
-			wantFound: true,
-			want:      8015,
-		},
-		{
-			key:       "api.address",
-			wantFound: false,
-		},
-		{
-			key:       "api.enable",
-			wantFound: true,
-			want:      true,
-		},
-		{
-			key:       "agent.tags",
-			wantFound: true,
-			want:      []string{"this-is", "a-list", "comma separated"},
-		},
-	}
-
-	for _, c := range loadCases {
-		found, err := cfg.LoadEnv(c.key, c.varType, c.envName)
-		if err != nil {
-			t.Errorf("LoadEnv(%v) failed: %v", c.envName, err)
-		}
-
-		if found != c.wantFound {
-			t.Errorf("LoadEnv(%v) == %v, want %v", c.envName, found, c.wantFound)
-		}
-	}
-
-	for _, c := range cases {
-		got, ok := cfg.Get(c.key)
-
-		if c.wantFound {
-			if !ok {
-				t.Errorf("Get(%v) not found", c.key)
-			}
-
-			if !reflect.DeepEqual(got, c.want) {
-				t.Errorf("Get(%v) == %#v, want %#v", c.key, got, c.want)
-			}
-		} else if ok {
-			t.Errorf("Get(%v) == %v, want not found", c.key, got)
-		}
-	}
-}
-
-func TestDelete(t *testing.T) {
-	makeCfg := func() *Configuration {
-		cfg := Configuration{}
-
-		cfg.Set("test-flat", "value")
-		cfg.Set("test.sub.list", []int{})
-		cfg.Set("test.sub.dict", map[string]interface{}{"temp": 28.5})
-		cfg.Set("test.sub.sub.int", 5)
-		cfg.Set("test.sub.deepdict", map[string]interface{}{
-			"deep1": map[string]interface{}{
-				"deep2": []string{"Hello, world"},
-			},
-		})
-
-		return &cfg
-	}
-
-	cases := []struct {
-		name        string
-		keyToDelete string
-		wants       map[string]interface{}
-	}{
-		{
-			name:        "non-existing-key",
-			keyToDelete: "some-value",
-			wants: map[string]interface{}{
-				"test-flat":                     "value",
-				"test.sub.list":                 []int{},
-				"test.sub.dict.temp":            28.5,
-				"test.sub.sub.int":              5,
-				"test.sub.deepdict.deep1.deep2": []string{"Hello, world"},
-			},
-		},
-		{
-			name:        "simple",
-			keyToDelete: "test-flat",
-			wants: map[string]interface{}{
-				"test-flat":                     nil,
-				"test.sub.list":                 []int{},
-				"test.sub.dict.temp":            28.5,
-				"test.sub.sub.int":              5,
-				"test.sub.deepdict.deep1.deep2": []string{"Hello, world"},
-			},
-		},
-		{
-			name:        "sub",
-			keyToDelete: "test.sub.list",
-			wants: map[string]interface{}{
-				"test-flat":                     "value",
-				"test.sub.list":                 nil,
-				"test.sub.dict.temp":            28.5,
-				"test.sub.sub.int":              5,
-				"test.sub.deepdict.deep1.deep2": []string{"Hello, world"},
-			},
-		},
-		{
-			name:        "sub-sub",
-			keyToDelete: "test.sub.sub.int",
-			wants: map[string]interface{}{
-				"test-flat":                     "value",
-				"test.sub.list":                 []int{},
-				"test.sub.dict.temp":            28.5,
-				"test.sub.sub.int":              nil,
-				"test.sub.sub":                  map[string]interface{}{},
-				"test.sub.deepdict.deep1.deep2": []string{"Hello, world"},
-			},
-		},
-		{
-			name:        "sub.dict",
-			keyToDelete: "test.sub.dict",
-			wants: map[string]interface{}{
-				"test-flat":                     "value",
-				"test.sub.list":                 []int{},
-				"test.sub.dict.temp":            nil,
-				"test.sub.dict":                 nil,
-				"test.sub.sub.int":              5,
-				"test.sub.deepdict.deep1.deep2": []string{"Hello, world"},
-			},
-		},
-		{
-			name:        "sub.dict.temp",
-			keyToDelete: "test.sub.dict.temp",
-			wants: map[string]interface{}{
-				"test-flat":                     "value",
-				"test.sub.list":                 []int{},
-				"test.sub.dict.temp":            nil,
-				"test.sub.dict":                 map[string]interface{}{},
-				"test.sub.sub.int":              5,
-				"test.sub.deepdict.deep1.deep2": []string{"Hello, world"},
-			},
-		},
-		{
-			name:        "deep2",
-			keyToDelete: "test.sub.deepdict.deep1.deep2",
-			wants: map[string]interface{}{
-				"test-flat":                     "value",
-				"test.sub.list":                 []int{},
-				"test.sub.dict.temp":            28.5,
-				"test.sub.sub.int":              5,
-				"test.sub.deepdict.deep1.deep2": nil,
-				"test.sub.deepdict.deep1":       map[string]interface{}{},
-				"test.sub.deepdict": map[string]interface{}{
-					"deep1": map[string]interface{}{},
+			WantConfig: Config{
+				Metric: Metric{
+					SoftStatusPeriod: map[string]int{"system_pending_updates": 100},
 				},
 			},
 		},
 		{
-			name:        "deep1",
-			keyToDelete: "test.sub.deepdict.deep1",
-			wants: map[string]interface{}{
-				"test-flat":                     "value",
-				"test.sub.list":                 []int{},
-				"test.sub.dict.temp":            28.5,
-				"test.sub.sub.int":              5,
-				"test.sub.deepdict.deep1.deep2": nil,
-				"test.sub.deepdict.deep1":       nil,
-				"test.sub.deepdict":             map[string]interface{}{},
+			Name:  "invalid yaml",
+			Files: []string{"testdata/bad_yaml.conf"},
+			WantWarnings: []string{
+				"line 1: cannot unmarshal !!str `bad:bad` into map[string]interface {}",
 			},
 		},
 		{
-			name:        "deep0",
-			keyToDelete: "test.sub.deepdict",
-			wants: map[string]interface{}{
-				"test-flat":                     "value",
-				"test.sub.list":                 []int{},
-				"test.sub.dict.temp":            28.5,
-				"test.sub.sub.int":              5,
-				"test.sub.deepdict.deep1.deep2": nil,
-				"test.sub.deepdict.deep1":       nil,
-				"test.sub.deepdict":             nil,
+			Name:  "invalid yaml multiple files",
+			Files: []string{"testdata/invalid"},
+			WantWarnings: []string{
+				"failed to load 'testdata/invalid/10-invalid.conf': yaml: line 2: found character that cannot start any token",
+			},
+			WantConfig: Config{
+				Agent: Agent{
+					MetricsFormat: "prometheus",
+				},
+				Bleemeo: Bleemeo{
+					APIBase: "base",
+				},
 			},
 		},
 		{
-			name:        "full tree",
-			keyToDelete: "test.sub",
-			wants: map[string]interface{}{
-				"test-flat":                     "value",
-				"test.sub.list":                 nil,
-				"test.sub.dict.temp":            nil,
-				"test.sub.sub.int":              nil,
-				"test.sub.deepdict.deep1.deep2": nil,
+			Name: "deprecated env",
+			Environment: map[string]string{
+				"BLEEMEO_AGENT_ACCOUNT": "my-account",
+				"GLOUTON_WEB_ENABLED":   "true",
+			},
+			WantWarnings: []string{
+				"environment variable is deprecated: BLEEMEO_AGENT_ACCOUNT, use GLOUTON_BLEEMEO_ACCOUNT_ID instead",
+				"environment variable is deprecated: GLOUTON_WEB_ENABLED, use GLOUTON_WEB_ENABLE instead",
+			},
+			WantConfig: Config{
+				Web: Web{
+					Enable: true,
+				},
+				Bleemeo: Bleemeo{
+					AccountID: "my-account",
+				},
 			},
 		},
 		{
-			name:        "full tree2",
-			keyToDelete: "test",
-			wants: map[string]interface{}{
-				"test-flat":                     "value",
-				"test.sub.list":                 nil,
-				"test.sub.dict.temp":            nil,
-				"test.sub.sub.int":              nil,
-				"test.sub.deepdict.deep1.deep2": nil,
+			Name:  "deprecated config",
+			Files: []string{"testdata/deprecated.conf"},
+			WantWarnings: []string{
+				"setting is deprecated: web.enabled, use web.enable instead",
+			},
+			WantConfig: Config{
+				Web: Web{
+					Enable: true,
+				},
+			},
+		},
+		{
+			Name:  "migration file",
+			Files: []string{"testdata/old-prometheus-targets.conf"},
+			WantWarnings: []string{
+				"setting is deprecated: metrics.prometheus. See https://docs.bleemeo.com/metrics-sources/prometheus",
+			},
+			WantConfig: Config{
+				Metric: Metric{
+					Prometheus: Prometheus{
+						Targets: []PrometheusTarget{
+							{
+								Name: "test1",
+								URL:  "http://localhost:9090/metrics",
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			Name: "slice from env",
+			Environment: map[string]string{
+				"GLOUTON_METRIC_ALLOW_METRICS": "metric1,metric2",
+				"GLOUTON_METRIC_DENY_METRICS":  "metric3",
+			},
+			WantConfig: Config{
+				Metric: Metric{
+					AllowMetrics: []string{"metric1", "metric2"},
+					DenyMetrics:  []string{"metric3"},
+				},
+			},
+		},
+		{
+			Name: "map from env",
+			Environment: map[string]string{
+				"GLOUTON_METRIC_SOFTSTATUS_PERIOD": "cpu_used=10,disk_used=20",
+				"GLOUTON_METRIC_ALLOW_METRICS":     "cpu_used",
+			},
+			WantConfig: Config{
+				Metric: Metric{
+					SoftStatusPeriod: map[string]int{
+						"cpu_used":  10,
+						"disk_used": 20,
+					},
+					AllowMetrics: []string{"cpu_used"},
+				},
+			},
+		},
+		{
+			Name: "map from env invalid",
+			Environment: map[string]string{
+				"GLOUTON_METRIC_SOFTSTATUS_PERIOD": "cpu_used=10,disk_used",
+			},
+			WantWarnings: []string{
+				`error decoding 'metric.softstatus_period': could not parse map from string: 'cpu_used=10,disk_used'`,
+			},
+		},
+		{
+			Name: "enabled renamed",
+			Files: []string{
+				"testdata/enabled.conf",
+			},
+			WantConfig: Config{
+				Agent: Agent{
+					WindowsExporter: NodeExporter{
+						Enable: true,
+					},
+				},
+				Telegraf: Telegraf{
+					DockerMetricsEnable: true,
+				},
+			},
+			WantWarnings: []string{
+				"setting is deprecated: agent.windows_exporter.enabled, use agent.windows_exporter.enable instead",
+				"setting is deprecated: telegraf.docker_metrics_enabled, use telegraf.docker_metrics_enable instead",
+			},
+		},
+		{
+			Name: "folder",
+			Files: []string{
+				"testdata/folder1",
+			},
+			WantConfig: Config{
+				Bleemeo: Bleemeo{
+					Enable:    false,
+					AccountID: "second",
+				},
+			},
+			WantWarnings: []string{
+				"setting is deprecated: bleemeo.enabled, use bleemeo.enable instead",
+			},
+		},
+		{
+			Name:  "bleemeo-agent envs",
+			Files: []string{},
+			Environment: map[string]string{
+				"BLEEMEO_AGENT_KUBERNETES_ENABLED": "true",
+				"BLEEMEO_AGENT_BLEEMEO_MQTT_HOST":  "myhost",
+			},
+			WantConfig: Config{
+				Bleemeo: Bleemeo{
+					MQTT: BleemeoMQTT{
+						Host: "myhost",
+					},
+				},
+				Kubernetes: Kubernetes{
+					Enable: true,
+				},
+			},
+			WantWarnings: []string{
+				"environment variable is deprecated: BLEEMEO_AGENT_KUBERNETES_ENABLED, use GLOUTON_KUBERNETES_ENABLE instead",
+				"environment variable is deprecated: BLEEMEO_AGENT_BLEEMEO_MQTT_HOST, use GLOUTON_BLEEMEO_MQTT_HOST instead",
+			},
+		},
+		{
+			Name: "old logging",
+			Files: []string{
+				"testdata/old-logging.conf",
+			},
+			WantConfig: Config{
+				Logging: Logging{
+					Buffer: LoggingBuffer{
+						HeadSizeBytes: 4200,
+						TailSizeBytes: 4800,
+					},
+				},
+			},
+			WantWarnings: []string{
+				"setting is deprecated: logging.buffer.head_size, use logging.buffer.head_size_bytes instead",
+				"setting is deprecated: logging.buffer.tail_size, use logging.buffer.tail_size_bytes instead",
+			},
+		},
+		{
+			Name: "unused keys",
+			Files: []string{
+				"testdata/unused.conf",
+			},
+			WantConfig: Config{
+				Services: []Service{
+					{
+						ID:           "service1",
+						CheckType:    "nagios",
+						CheckCommand: "/path/to/bin --with-option",
+					},
+				},
+			},
+			WantWarnings: []string{
+				"'bleemeo' has invalid keys: unused_key",
+				"'service[0]' has invalid keys: another_key",
+			},
+		},
+		{
+			Name:  "override values",
+			Files: []string{"testdata/override"},
+			Environment: map[string]string{
+				"GLOUTON_BLEEMEO_MQTT_HOST": "",
+			},
+			WantConfig: Config{
+				Bleemeo: Bleemeo{
+					APIBase: "",
+					MQTT: BleemeoMQTT{
+						Host:   "",
+						CAFile: "myfile",
+						Port:   1884,
+						SSL:    true,
+					},
+					Enable: false,
+				},
+			},
+		},
+		{
+			Name:  "convert boolean",
+			Files: []string{"testdata/bool.conf"},
+			Environment: map[string]string{
+				"GLOUTON_ZABBIX_ENABLE": "Yes",
+			},
+			WantWarnings: []string{
+				`error decoding 'mqtt.ssl_insecure': strconv.ParseBool: parsing "invalid": invalid syntax`,
+			},
+			WantConfig: Config{
+				Agent: Agent{
+					HTTPDebug: HTTPDebug{
+						Enable: true,
+					},
+					NodeExporter: NodeExporter{
+						Enable: true,
+					},
+					ProcessExporter: ProcessExporter{
+						Enable: true,
+					},
+					WindowsExporter: NodeExporter{
+						Enable: true,
+					},
+					Telemetry: Telemetry{
+						Enable: true,
+					},
+				},
+				Blackbox: Blackbox{
+					Enable:          true,
+					ScraperSendUUID: true,
+				},
+				Bleemeo: Bleemeo{
+					Enable: true,
+				},
+				InfluxDB: InfluxDB{
+					Enable: false,
+				},
+				JMX: JMX{
+					Enable: false,
+				},
+				Kubernetes: Kubernetes{
+					Enable: false,
+				},
+				MQTT: OpenSourceMQTT{
+					Enable: false,
+					SSL:    false,
+				},
+				NRPE: NRPE{
+					Enable: false,
+					SSL:    false,
+				},
+				Zabbix: Zabbix{
+					Enable: true,
+				},
+			},
+		},
+		{
+			Name: "config file from env",
+			Environment: map[string]string{
+				EnvGloutonConfigFiles: "testdata/simple.conf",
+			},
+			WantConfig: Config{
+				Web: Web{
+					StaticCDNURL: "/simple",
+				},
+			},
+		},
+		{
+			Name: "empty file",
+			Files: []string{
+				"testdata/empty.conf",
+				"testdata/simple.conf",
+			},
+			WantConfig: Config{
+				Web: Web{
+					StaticCDNURL: "/simple",
+				},
 			},
 		},
 	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			cfg := makeCfg()
 
-			cfg.Delete(c.keyToDelete)
+	for _, test := range tests {
+		t.Run(test.Name, func(t *testing.T) {
+			for k, v := range test.Environment {
+				t.Setenv(k, v)
+			}
 
-			for key, want := range c.wants {
-				got, ok := cfg.Get(key)
+			config, warnings, err := loadToStruct(false, test.Files...)
+			if diff := cmp.Diff(test.WantError, err); diff != "" {
+				t.Fatalf("Unexpected error for files %s\n%s", test.Files, diff)
+			}
 
-				if want == nil && ok {
-					t.Errorf("Get(%v) == %v, want nothing", key, got)
-				} else if !reflect.DeepEqual(got, want) {
-					t.Errorf("Get(%v) == %v, want %v", key, got, want)
-				}
+			var strWarnings []string
+
+			for _, warning := range warnings {
+				strWarnings = append(strWarnings, warning.Error())
+			}
+
+			lessFunc := func(a, b string) bool {
+				return a < b
+			}
+
+			if diff := cmp.Diff(test.WantWarnings, strWarnings, cmpopts.SortSlices(lessFunc)); diff != "" {
+				t.Fatalf("Unexpected warnings:\n%s", diff)
+			}
+
+			if diff := cmp.Diff(test.WantConfig, config); diff != "" {
+				t.Fatalf("Unexpected config:\n%s", diff)
 			}
 		})
 	}
 }
 
+// TestDump tests that secrets are redacted when the config is dumped.
 func TestDump(t *testing.T) {
-	cfg := Configuration{}
-
-	data, err := os.ReadFile("testdata/secret.conf")
-	if err != nil {
-		t.Error(err)
+	config := Config{
+		Bleemeo: Bleemeo{
+			AccountID:       "in-dump",
+			RegistrationKey: "not-in-dump",
+		},
+		MQTT: OpenSourceMQTT{
+			Password: "not-in-dump",
+		},
+		Services: []Service{
+			{
+				ID:          "in-dump",
+				Password:    "not-in-dump",
+				JMXPassword: "not-in-dump",
+			},
+		},
 	}
 
-	err = cfg.LoadByte(data)
-	if err != nil {
-		t.Error(err)
+	wantConfig := Config{
+		Bleemeo: Bleemeo{
+			AccountID:       "in-dump",
+			RegistrationKey: "*****",
+		},
+		MQTT: OpenSourceMQTT{
+			Password: "*****",
+		},
+		Services: []Service{
+			{
+				ID:          "in-dump",
+				Password:    "*****",
+				JMXPassword: "*****",
+			},
+		},
 	}
 
-	result := cfg.Dump()
+	k := koanf.New(delimiter)
+	_ = k.Load(structs.Provider(wantConfig, "yaml"), nil)
+	wantMap := k.Raw()
 
-	jsonByte, err := json.Marshal(result)
-	if err != nil {
-		t.Error(err)
+	dump := Dump(config)
+
+	if diff := cmp.Diff(wantMap, dump); diff != "" {
+		t.Fatalf("Config dump didn't redact secrets correctly:\n%s", diff)
+	}
+}
+
+func Test_migrate(t *testing.T) {
+	tests := []struct {
+		Name       string
+		ConfigFile string
+		WantConfig Config
+	}{
+		{
+			Name:       "new-prometheus-targets",
+			ConfigFile: "testdata/new-prometheus-targets.conf",
+			WantConfig: Config{
+				Metric: Metric{
+					Prometheus: Prometheus{
+						Targets: []PrometheusTarget{
+							{
+								Name: "test1",
+								URL:  "http://localhost:9090/metrics",
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			Name:       "old-prometheus-targets",
+			ConfigFile: "testdata/old-prometheus-targets.conf",
+			WantConfig: Config{
+				Metric: Metric{
+					Prometheus: Prometheus{
+						Targets: []PrometheusTarget{
+							{
+								Name: "test1",
+								URL:  "http://localhost:9090/metrics",
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			Name:       "both-prometheus-targets",
+			ConfigFile: "testdata/both-prometheus-targets.conf",
+			WantConfig: Config{
+				Metric: Metric{
+					Prometheus: Prometheus{
+						Targets: []PrometheusTarget{
+							{
+								Name: "new",
+								URL:  "http://new:9090/metrics",
+							},
+							{
+								Name: "old",
+								URL:  "http://old:9090/metrics",
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			Name:       "old-prometheus-allow/deny_metrics",
+			ConfigFile: "testdata/old-prometheus-metrics.conf",
+			WantConfig: Config{
+				Metric: Metric{
+					AllowMetrics: []string{
+						"test4",
+						"test1",
+						"test2",
+					},
+					DenyMetrics: []string{
+						"test5",
+						"test3",
+					},
+				},
+			},
+		},
 	}
 
-	if bytes.Contains(jsonByte, []byte("not_in_dump")) {
-		t.Error("Dump() contains the secret \"not_in_dump\"")
-	}
+	for _, test := range tests {
+		t.Run(test.Name, func(t *testing.T) {
+			config, _, err := loadToStruct(false, test.ConfigFile)
+			if err != nil {
+				t.Fatalf("Failed to load config: %s", err)
+			}
 
-	if !bytes.Contains(jsonByte, []byte("this_is_in_dump")) {
-		t.Error("Dump() does NOT contains  \"this_is_in_dump\"")
+			if diff := cmp.Diff(test.WantConfig, config); diff != "" {
+				t.Fatalf("Unexpected config:\n%s", diff)
+			}
+		})
 	}
 }

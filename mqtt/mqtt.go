@@ -3,6 +3,7 @@ package mqtt
 import (
 	"context"
 	"fmt"
+	"glouton/config"
 	"glouton/logger"
 	"glouton/mqtt/client"
 	"glouton/types"
@@ -27,7 +28,7 @@ type MQTT struct {
 }
 
 type Options struct {
-	Config Config
+	Config config.OpenSourceMQTT
 	FQDN   string
 	// State kept between reloads.
 	ReloadState types.MQTTReloadState
@@ -39,16 +40,6 @@ type Options struct {
 type Store interface {
 	AddNotifiee(func([]types.MetricPoint)) int
 	RemoveNotifiee(int)
-}
-
-type Config struct {
-	Hosts       []string
-	Port        int
-	SSL         bool
-	SSLInsecure bool
-	CAFile      string
-	Username    string
-	Password    string
 }
 
 type metricPayload struct {

@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"glouton/config"
 	"glouton/facts"
 	"glouton/prometheus/registry"
 	"glouton/types"
@@ -230,7 +231,7 @@ func TestDiscoverySingle(t *testing.T) {
 		state := mockState{
 			DiscoveredService: previousService,
 		}
-		disc := New(&MockDiscoverer{result: []Service{c.dynamicResult}}, nil, nil, nil, state, nil, mockContainerInfo{}, nil, nil, nil, facts.ContainerFilter{}.ContainerIgnored, types.MetricFormatBleemeo, nil)
+		disc, _ := New(&MockDiscoverer{result: []Service{c.dynamicResult}}, nil, nil, nil, state, nil, mockContainerInfo{}, nil, nil, nil, facts.ContainerFilter{}.ContainerIgnored, types.MetricFormatBleemeo, nil)
 
 		srv, err := disc.Discovery(ctx, 0)
 		if err != nil {
@@ -270,7 +271,7 @@ func TestDiscoverySingle(t *testing.T) {
 func Test_applyOverride(t *testing.T) {
 	type args struct {
 		discoveredServicesMap map[NameInstance]Service
-		servicesOverride      map[NameInstance]ServiceOverride
+		servicesOverride      map[NameInstance]config.Service
 	}
 
 	tests := []struct {
@@ -317,11 +318,9 @@ func Test_applyOverride(t *testing.T) {
 						ServiceType: ApacheService,
 					},
 				},
-				servicesOverride: map[NameInstance]ServiceOverride{
+				servicesOverride: map[NameInstance]config.Service{
 					{Name: "apache"}: {
-						ExtraAttribute: map[string]string{
-							"address": "10.0.1.2",
-						},
+						Address: "10.0.1.2",
 					},
 				},
 			},
@@ -329,43 +328,8 @@ func Test_applyOverride(t *testing.T) {
 				{Name: "apache"}: {
 					Name:        "apache",
 					ServiceType: ApacheService,
-					ExtraAttributes: map[string]string{
-						"address": "10.0.1.2",
-					},
-					ListenAddresses: []facts.ListenAddress{
-						{
-							NetworkFamily: "tcp",
-							Address:       "10.0.1.2",
-							Port:          80,
-						},
-					},
-				},
-			},
-		},
-		{
-			name: "address override & ignore unknown override",
-			args: args{
-				discoveredServicesMap: map[NameInstance]Service{
-					{Name: "apache"}: {
-						Name:        "apache",
-						ServiceType: ApacheService,
-					},
-				},
-				servicesOverride: map[NameInstance]ServiceOverride{
-					{Name: "apache"}: {
-						ExtraAttribute: map[string]string{
-							"address":         "10.0.1.2",
-							"this-is-unknown": "so-unused",
-						},
-					},
-				},
-			},
-			want: map[NameInstance]Service{
-				{Name: "apache"}: {
-					Name:        "apache",
-					ServiceType: ApacheService,
-					ExtraAttributes: map[string]string{
-						"address": "10.0.1.2",
+					Config: config.Service{
+						Address: "10.0.1.2",
 					},
 					ListenAddresses: []facts.ListenAddress{
 						{
@@ -386,18 +350,14 @@ func Test_applyOverride(t *testing.T) {
 						ServiceType: ApacheService,
 					},
 				},
-				servicesOverride: map[NameInstance]ServiceOverride{
+				servicesOverride: map[NameInstance]config.Service{
 					{Name: "myapplication"}: {
-						ExtraAttribute: map[string]string{
-							"port":          "8080",
-							"check_type":    customCheckNagios,
-							"check_command": "command-to-run",
-						},
+						Port:         8080,
+						CheckType:    customCheckNagios,
+						CheckCommand: "command-to-run",
 					},
 					{Name: "custom_webserver"}: {
-						ExtraAttribute: map[string]string{
-							"port": "8081",
-						},
+						Port: 8081,
 					},
 				},
 			},
@@ -408,21 +368,21 @@ func Test_applyOverride(t *testing.T) {
 				},
 				{Name: "myapplication"}: {
 					ServiceType: CustomService,
-					ExtraAttributes: map[string]string{
-						"address":       "127.0.0.1", // default as soon as port is set
-						"port":          "8080",
-						"check_type":    customCheckNagios,
-						"check_command": "command-to-run",
+					Config: config.Service{
+						Address:      "127.0.0.1", // default as soon as port is set
+						Port:         8080,
+						CheckType:    customCheckNagios,
+						CheckCommand: "command-to-run",
 					},
 					Name:   "myapplication",
 					Active: true,
 				},
 				{Name: "custom_webserver"}: {
 					ServiceType: CustomService,
-					ExtraAttributes: map[string]string{
-						"address":    "127.0.0.1", // default as soon as port is set
-						"port":       "8081",
-						"check_type": customCheckTCP, // default as soon as port is set
+					Config: config.Service{
+						Address:   "127.0.0.1", // default as soon as port is set
+						Port:      8081,
+						CheckType: customCheckTCP, // default as soon as port is set,
 					},
 					Name:   "custom_webserver",
 					Active: true,
@@ -433,17 +393,13 @@ func Test_applyOverride(t *testing.T) {
 			name: "bad custom check",
 			args: args{
 				discoveredServicesMap: nil,
-				servicesOverride: map[NameInstance]ServiceOverride{
+				servicesOverride: map[NameInstance]config.Service{
 					{Name: "myapplication"}: { // the check_command is missing
-						ExtraAttribute: map[string]string{
-							"port":       "8080",
-							"check_type": customCheckNagios,
-						},
+						Port:      8080,
+						CheckType: customCheckNagios,
 					},
 					{Name: "custom_webserver"}: { // port is missing
-						ExtraAttribute: map[string]string{
-							"check_type": customCheckHTTP,
-						},
+						CheckType: customCheckHTTP,
 					},
 				},
 			},
@@ -463,9 +419,9 @@ func Test_applyOverride(t *testing.T) {
 						},
 					},
 				},
-				servicesOverride: map[NameInstance]ServiceOverride{
+				servicesOverride: map[NameInstance]config.Service{
 					{Name: "apache"}: {
-						IgnoredPorts: []int{443, 22},
+						IgnorePorts: []int{443, 22},
 					},
 				},
 			},
@@ -483,7 +439,9 @@ func Test_applyOverride(t *testing.T) {
 						22:  true,
 						443: true,
 					},
-					ExtraAttributes: map[string]string{},
+					Config: config.Service{
+						IgnorePorts: []int{443, 22},
+					},
 				},
 			},
 		},
@@ -496,9 +454,9 @@ func Test_applyOverride(t *testing.T) {
 						ServiceType: ApacheService,
 					},
 				},
-				servicesOverride: map[NameInstance]ServiceOverride{
+				servicesOverride: map[NameInstance]config.Service{
 					{Name: "apache"}: {
-						IgnoredPorts: []int{443, 22},
+						IgnorePorts: []int{443, 22},
 					},
 				},
 			},
@@ -510,7 +468,62 @@ func Test_applyOverride(t *testing.T) {
 						22:  true,
 						443: true,
 					},
-					ExtraAttributes: map[string]string{},
+					Config: config.Service{
+						IgnorePorts: []int{443, 22},
+					},
+				},
+			},
+		},
+		{
+			name: "override stack",
+			args: args{
+				discoveredServicesMap: map[NameInstance]Service{
+					{Name: "apache"}: {
+						Name:        "apache",
+						ServiceType: ApacheService,
+					},
+				},
+				servicesOverride: map[NameInstance]config.Service{
+					{Name: "apache"}: {
+						Stack: "website",
+					},
+				},
+			},
+			want: map[NameInstance]Service{
+				{Name: "apache"}: {
+					Name:        "apache",
+					ServiceType: ApacheService,
+					Stack:       "website",
+					Config: config.Service{
+						Stack: "website",
+					},
+				},
+			},
+		},
+		{
+			name: "no override stack",
+			args: args{
+				discoveredServicesMap: map[NameInstance]Service{
+					{Name: "apache"}: {
+						Name:        "apache",
+						ServiceType: ApacheService,
+						Stack:       "website",
+					},
+				},
+				servicesOverride: map[NameInstance]config.Service{
+					{Name: "apache"}: {
+						Stack: "",
+					},
+				},
+			},
+			want: map[NameInstance]Service{
+				{Name: "apache"}: {
+					Name:        "apache",
+					ServiceType: ApacheService,
+					Stack:       "website",
+					Config: config.Service{
+						Stack: "",
+					},
 				},
 			},
 		},
@@ -544,7 +557,7 @@ func TestUpdateMetricsAndCheck(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	disc := New(mockDynamic, fakeCollector, reg, nil, state, nil, nil, nil, nil, nil, facts.ContainerFilter{}.ContainerIgnored, types.MetricFormatBleemeo, nil)
+	disc, _ := New(mockDynamic, fakeCollector, reg, nil, state, nil, nil, nil, nil, nil, facts.ContainerFilter{}.ContainerIgnored, types.MetricFormatBleemeo, nil)
 	disc.containerInfo = docker
 
 	mockDynamic.result = []Service{
@@ -707,5 +720,140 @@ func Test_usePreviousNetstat(t *testing.T) {
 				t.Errorf("usePreviousNetstat() = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestValidateServices(t *testing.T) {
+	services := []config.Service{
+		{
+			ID:       "apache",
+			Instance: "",
+			Port:     80,
+			Address:  "127.0.0.1",
+			HTTPPath: "/",
+			HTTPHost: "127.0.0.1:80",
+		},
+		{
+			ID:       "apache",
+			Instance: "",
+			Port:     81,
+			Address:  "127.0.0.1",
+			HTTPPath: "/",
+			HTTPHost: "127.0.0.1:80",
+		},
+		{
+			ID:       "apache",
+			Instance: "CONTAINER_NAME",
+			Port:     80,
+			Address:  "127.17.0.2",
+			HTTPPath: "/",
+			HTTPHost: "127.0.0.1:80",
+		},
+		{
+			ID:       "apache",
+			Instance: "CONTAINER_NAME",
+			Port:     81,
+			Address:  "127.17.0.2",
+			HTTPPath: "/",
+			HTTPHost: "127.0.0.1:80",
+		},
+		{
+			CheckType:    "nagios",
+			CheckCommand: "azerty",
+		},
+		{
+			ID:           "myapplication",
+			Port:         80,
+			CheckType:    "nagios",
+			CheckCommand: "command-to-run",
+		},
+		{
+			ID:           " not fixable@",
+			CheckType:    "nagios",
+			CheckCommand: "azerty",
+		},
+		{
+			ID:        "custom_webserver",
+			Port:      8181,
+			CheckType: "http",
+		},
+		{
+			ID:           "custom-bad.name",
+			CheckType:    "nagios",
+			CheckCommand: "azerty",
+		},
+	}
+
+	wantWarnings := []string{
+		"invalid config value: a service override is duplicated for 'apache'",
+		"invalid config value: a service override is duplicated for 'apache' on instance 'CONTAINER_NAME'",
+		"invalid config value: a key \"id\" is missing in one of your service override",
+		"invalid config value: service id \" not fixable@\" can only contains letters, digits and underscore",
+		"invalid config value: service id \"custom-bad.name\" can not contains dot (.) or dash (-). Changed to \"custom_bad_name\"",
+	}
+
+	wantServices := map[NameInstance]config.Service{
+		{
+			Name:     "apache",
+			Instance: "",
+		}: {
+			ID:       "apache",
+			Instance: "",
+			Port:     81,
+			Address:  "127.0.0.1",
+			HTTPPath: "/",
+			HTTPHost: "127.0.0.1:80",
+		},
+		{
+			Name:     "apache",
+			Instance: "CONTAINER_NAME",
+		}: {
+			ID:       "apache",
+			Instance: "CONTAINER_NAME",
+			Port:     81,
+			Address:  "127.17.0.2",
+			HTTPPath: "/",
+			HTTPHost: "127.0.0.1:80",
+		},
+		{
+			Name:     "myapplication",
+			Instance: "",
+		}: {
+			ID:           "myapplication",
+			Port:         80,
+			CheckType:    "nagios",
+			CheckCommand: "command-to-run",
+		},
+		{
+			Name:     "custom_webserver",
+			Instance: "",
+		}: {
+			ID:        "custom_webserver",
+			Port:      8181,
+			CheckType: "http",
+		},
+		{
+			Name:     "custom_bad_name",
+			Instance: "",
+		}: {
+			ID:           "custom_bad_name",
+			CheckType:    "nagios",
+			CheckCommand: "azerty",
+		},
+	}
+
+	gotServices, gotWarnings := validateServices(services)
+
+	if diff := cmp.Diff(gotServices, wantServices); diff != "" {
+		t.Fatalf("Validate returned unexpected services:\n%s", diff)
+	}
+
+	gotWarningsStr := make([]string, 0, len(gotWarnings))
+	for _, warning := range gotWarnings {
+		gotWarningsStr = append(gotWarningsStr, warning.Error())
+	}
+
+	if diff := cmp.Diff(gotWarningsStr, wantWarnings); diff != "" {
+		t.Fatalf("Validate returned unexpected warnings:\n%s", diff)
 	}
 }

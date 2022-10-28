@@ -33,58 +33,61 @@ import (
 	promParser "github.com/prometheus/prometheus/promql/parser"
 )
 
-const basicConf = `
-metric:
-  include_default_metrics: false
-  allow_metrics:
-    - cpu*
-    - pro*
-  deny_metrics:
-    - process_cpu_seconds_total{scrape_job="my_application123"}
-    - whatever
-
-  prometheus:
-    targets:
-      - url: "http://localhost:2113/metrics"
-        name: "my_application123"
-        allow_metrics:
-          - process_cpu_seconds_total
-
-service:
-  - id: myapplication
-    jmx_port: 1234
-    jmx_metrics:
-    - name: heap_size_mb
-      mbean: java.lang:type=Memory
-      attribute: HeapMemoryUsage
-      path: used
-      scale: 0.000000954  # 1 / 1024 / 1024
-    - name: request
-      mbean: com.bleemeo.myapplication:type=ClientRequest
-      attribute: Count
-      derive: True
-  - id: "apache"
-    address: "127.0.0.1"
-    port: 80
-    http_path: "/"
-    http_host: "127.0.0.1:80"
-`
-
-const defaultConf = `
-metric:
-  include_default_metrics: true
-`
-
-func Test_Basic_Build(t *testing.T) {
-	cfg := config.Configuration{}
-
-	err := cfg.LoadByte([]byte(basicConf))
-	if err != nil {
-		t.Error(err)
-
-		return
+//nolint:gochecknoglobals
+var (
+	basicConf = config.Config{
+		Metric: config.Metric{
+			IncludeDefaultMetrics: false,
+			AllowMetrics:          []string{"cpu*", "pro*"},
+			DenyMetrics:           []string{`process_cpu_seconds_total{scrape_job="my_application123"}`, "whatever"},
+			Prometheus: config.Prometheus{
+				Targets: []config.PrometheusTarget{
+					{
+						URL:          "http://localhost:2113/metrics",
+						Name:         "my_application123",
+						AllowMetrics: []string{"process_cpu_seconds_total"},
+					},
+				},
+			},
+		},
+		Services: []config.Service{
+			{
+				ID:      "myapplication",
+				JMXPort: 1234,
+				JMXMetrics: []config.JmxMetric{
+					{
+						Name:      "heap_size_mb",
+						MBean:     "java.lang:type=Memory",
+						Attribute: "HeapMemoryUsage",
+						Path:      "used",
+						Scale:     0.000000954, // 1 / 1024 / 1024
+					},
+					{
+						Name:      "request",
+						MBean:     "com.bleemeo.myapplication:type=ClientRequest",
+						Attribute: "Count",
+						Derive:    true,
+					},
+				},
+			},
+			{
+				ID:       "apache",
+				Address:  "127.0.0.1",
+				Port:     80,
+				HTTPPath: "/",
+				HTTPHost: "127.0.0.1:80",
+			},
+		},
 	}
 
+	defaultConf = config.Config{
+		Metric: config.Metric{
+			IncludeDefaultMetrics: true,
+		},
+	}
+)
+
+func Test_Basic_Build(t *testing.T) {
 	cpuMatcher, _ := promParser.ParseMetricSelector("{__name__=~\"cpu.*\"}")
 	proMatcher, _ := promParser.ParseMetricSelector("{__name__=~\"pro.*\"}")
 
@@ -167,7 +170,7 @@ func Test_Basic_Build(t *testing.T) {
 		},
 	}
 
-	filter, err := newMetricFilter(&cfg, false, true, types.MetricFormatBleemeo)
+	filter, err := newMetricFilter(basicConf, false, true, types.MetricFormatBleemeo)
 	if err != nil {
 		t.Error(err)
 
@@ -192,14 +195,7 @@ func Test_Basic_Build(t *testing.T) {
 }
 
 func Test_basic_build_default(t *testing.T) {
-	cfg := config.Configuration{}
-
-	err := cfg.LoadByte([]byte(defaultConf))
-	if err != nil {
-		t.Error(err)
-	}
-
-	filter, err := newMetricFilter(&cfg, false, true, types.MetricFormatBleemeo)
+	filter, err := newMetricFilter(defaultConf, false, true, types.MetricFormatBleemeo)
 	if err != nil {
 		t.Error(err)
 	}
@@ -212,16 +208,7 @@ func Test_basic_build_default(t *testing.T) {
 }
 
 func Test_Basic_FilterPoints(t *testing.T) {
-	cfg := config.Configuration{}
-
-	err := cfg.LoadByte([]byte(basicConf))
-	if err != nil {
-		t.Error(err)
-
-		return
-	}
-
-	filter, err := newMetricFilter(&cfg, false, true, types.MetricFormatBleemeo)
+	filter, err := newMetricFilter(basicConf, false, true, types.MetricFormatBleemeo)
 	if err != nil {
 		t.Error(err)
 
@@ -297,16 +284,7 @@ func Test_Basic_FilterPoints(t *testing.T) {
 }
 
 func Test_Basic_FilterFamilies(t *testing.T) {
-	cfg := config.Configuration{}
-
-	err := cfg.LoadByte([]byte(basicConf))
-	if err != nil {
-		t.Error(err)
-
-		return
-	}
-
-	filter, err := newMetricFilter(&cfg, false, true, types.MetricFormatBleemeo)
+	filter, err := newMetricFilter(basicConf, false, true, types.MetricFormatBleemeo)
 	if err != nil {
 		t.Error(err)
 
@@ -474,14 +452,7 @@ func (f *fakeScrapper) GetRegisteredLabels() map[string]map[string]string {
 }
 
 func Test_RebuildDynamicList(t *testing.T) {
-	cfg := config.Configuration{}
-
-	err := cfg.LoadByte([]byte(basicConf))
-	if err != nil {
-		t.Error(err)
-	}
-
-	mf, _ := newMetricFilter(&cfg, false, true, types.MetricFormatBleemeo)
+	mf, _ := newMetricFilter(basicConf, false, true, types.MetricFormatBleemeo)
 
 	d := fakeScrapper{
 		name: "jobname",
@@ -520,7 +491,7 @@ func Test_RebuildDynamicList(t *testing.T) {
 	allowListWant[*m2.Get(types.LabelName)] = append(allowListWant[*m2.Get(types.LabelName)], m2)
 	denyListWant[*m3.Get(types.LabelName)] = append(denyListWant[*m3.Get(types.LabelName)], m3)
 
-	err = mf.RebuildDynamicLists(&d, []discovery.Service{}, []string{}, []string{})
+	err := mf.RebuildDynamicLists(&d, []discovery.Service{}, []string{}, []string{})
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 	}
@@ -565,22 +536,19 @@ func Test_RebuildDynamicList(t *testing.T) {
 }
 
 func TestDontDuplicateKeys(t *testing.T) {
-	cfg := config.Configuration{}
-
-	err := cfg.LoadByte([]byte(`
-metric:
-  include_default_metrics: false
-  allow_metrics:
-    - cpu*
-    - cpu*
-    - pro
-    - pro
-`))
-	if err != nil {
-		t.Error(err)
+	cfg := config.Config{
+		Metric: config.Metric{
+			IncludeDefaultMetrics: false,
+			AllowMetrics: []string{
+				"cpu*",
+				"cpu*",
+				"pro",
+				"pro",
+			},
+		},
 	}
 
-	mf, _ := newMetricFilter(&cfg, false, true, types.MetricFormatBleemeo)
+	mf, _ := newMetricFilter(cfg, false, true, types.MetricFormatBleemeo)
 
 	if len(mf.allowList) != 2 {
 		t.Errorf("Unexpected number of matchers: expected 2, got %d", len(mf.allowList))
@@ -832,11 +800,13 @@ func Test_newMetricFilter(t *testing.T) { //nolint:maintidx
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			cfg := &config.Configuration{}
-
-			cfg.Set("metric.allow_metrics", tt.configAllow)
-			cfg.Set("metric.deny_metrics", tt.configDeny)
-			cfg.Set("metric.include_default_metrics", tt.configIncludeDefault)
+			cfg := config.Config{
+				Metric: config.Metric{
+					AllowMetrics:          tt.configAllow,
+					DenyMetrics:           tt.configDeny,
+					IncludeDefaultMetrics: tt.configIncludeDefault,
+				},
+			}
 
 			filter, err := newMetricFilter(cfg, false, true, tt.metricFormat)
 			if err != nil {
@@ -1053,14 +1023,7 @@ var badPoint = map[string]string{
 }
 
 func Benchmark_filters_no_match(b *testing.B) {
-	cfg := config.Configuration{}
-
-	err := cfg.LoadByte([]byte(defaultConf))
-	if err != nil {
-		b.Error(err)
-	}
-
-	metricFilter, _ := newMetricFilter(&cfg, false, true, types.MetricFormatPrometheus)
+	metricFilter, _ := newMetricFilter(basicConf, false, true, types.MetricFormatPrometheus)
 
 	list100 := generatePoints(100, badPoint)
 
@@ -1118,14 +1081,7 @@ func Benchmark_filters_no_match(b *testing.B) {
 }
 
 func Benchmark_filters_one_match_first(b *testing.B) {
-	cfg := config.Configuration{}
-
-	err := cfg.LoadByte([]byte(defaultConf))
-	if err != nil {
-		b.Error(err)
-	}
-
-	metricFilter, _ := newMetricFilter(&cfg, false, true, types.MetricFormatPrometheus)
+	metricFilter, _ := newMetricFilter(basicConf, false, true, types.MetricFormatPrometheus)
 
 	list100 := []types.MetricPoint{
 		{
@@ -1195,14 +1151,7 @@ func Benchmark_filters_one_match_first(b *testing.B) {
 }
 
 func Benchmark_filters_one_match_middle(b *testing.B) {
-	cfg := config.Configuration{}
-
-	err := cfg.LoadByte([]byte(defaultConf))
-	if err != nil {
-		b.Error(err)
-	}
-
-	metricFilter, _ := newMetricFilter(&cfg, false, true, types.MetricFormatPrometheus)
+	metricFilter, _ := newMetricFilter(basicConf, false, true, types.MetricFormatPrometheus)
 
 	list100 := generatePoints(49, badPoint)
 
@@ -1252,14 +1201,7 @@ func Benchmark_filters_one_match_middle(b *testing.B) {
 }
 
 func Benchmark_filters_one_match_last(b *testing.B) {
-	cfg := config.Configuration{}
-
-	err := cfg.LoadByte([]byte(defaultConf))
-	if err != nil {
-		b.Error(err)
-	}
-
-	metricFilter, _ := newMetricFilter(&cfg, false, true, types.MetricFormatPrometheus)
+	metricFilter, _ := newMetricFilter(basicConf, false, true, types.MetricFormatPrometheus)
 
 	list100 := generatePoints(99, badPoint)
 
@@ -1305,14 +1247,7 @@ func Benchmark_filters_one_match_last(b *testing.B) {
 }
 
 func Benchmark_filters_all(b *testing.B) {
-	cfg := config.Configuration{}
-
-	err := cfg.LoadByte([]byte(defaultConf))
-	if err != nil {
-		b.Error(err)
-	}
-
-	metricFilter, _ := newMetricFilter(&cfg, false, true, types.MetricFormatPrometheus)
+	metricFilter, _ := newMetricFilter(basicConf, false, true, types.MetricFormatPrometheus)
 
 	list100 := generatePoints(100, goodPoint)
 
@@ -1350,19 +1285,13 @@ func Benchmark_filters_all(b *testing.B) {
 }
 
 func Test_RebuildDefaultMetrics(t *testing.T) {
-	cfg := config.Configuration{}
-
-	err := cfg.LoadByte([]byte(`
-metric:
-  include_default_metrics: false
-`))
-	if err != nil {
-		t.Error(err)
-
-		return
+	cfg := config.Config{
+		Metric: config.Metric{
+			IncludeDefaultMetrics: false,
+		},
 	}
 
-	metricFilter, _ := newMetricFilter(&cfg, false, true, types.MetricFormatPrometheus)
+	metricFilter, _ := newMetricFilter(cfg, false, true, types.MetricFormatPrometheus)
 
 	services := []discovery.Service{
 		{
@@ -1375,7 +1304,7 @@ metric:
 
 	got := make(map[string]matcher.Matchers)
 
-	err = metricFilter.rebuildDefaultMetrics(services, got)
+	err := metricFilter.rebuildDefaultMetrics(services, got)
 	if err != nil {
 		t.Error(err)
 

@@ -15,6 +15,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -286,30 +287,28 @@ func (a *agentReloader) watchConfig(ctx context.Context, reload chan struct{}) {
 		return
 	}
 
-	// Get config files.
-	configFiles := a.configFilesFromFlag
-	if len(configFiles) == 0 || len(configFiles[0]) == 0 {
-		const configFileKey = "config_files"
+	configPaths := a.configFilesFromFlag
 
-		cfg := config.Configuration{}
-		cfg.Set(configFileKey, defaultConfig()[configFileKey])
+	// Get config files from env.
+	envFiles := os.Getenv(config.EnvGloutonConfigFiles)
 
-		_, err := cfg.LoadEnv(configFileKey, config.TypeStringList, keyToEnvironmentName(configFileKey))
-		if err != nil {
-			logger.Printf("Failed to load environment variable: %v", err)
-		}
+	if len(configPaths) == 0 || len(configPaths) == 1 && configPaths[0] == "" && envFiles != "" {
+		configPaths = strings.Split(envFiles, ",")
+	}
 
-		configFiles = cfg.StringList(configFileKey)
+	// If no config was given with flags or env variables, fallback on the default files.
+	if len(configPaths) == 0 || len(configPaths) == 1 && configPaths[0] == "" {
+		configPaths = config.DefaultPaths()
 	}
 
 	// Use a debouncer because fsnotify events are often duplicated.
 	reloadAgentTarget := func(ctx context.Context) {
 		if ctx.Err() == nil {
 			// Validate config before reloading.
-			if _, _, _, err := loadConfiguration(configFiles, nil); err == nil {
+			if _, _, err := config.Load(true, configPaths...); err == nil {
 				reload <- struct{}{}
 			} else {
-				logger.Printf("Error while loading configuration: %v", err)
+				logger.Printf("Error while loading configuration, keeping previous configuration: %v", err)
 			}
 		}
 	}
@@ -322,7 +321,7 @@ func (a *agentReloader) watchConfig(ctx context.Context, reload chan struct{}) {
 		a.receiveWatcherEvents(ctx, reloadDebouncer)
 	}()
 
-	for _, dir := range configFiles {
+	for _, dir := range configPaths {
 		fileInfo, err := os.Stat(dir)
 		if err != nil {
 			logger.V(2).Printf("Failed to stat file %v: %v", dir, err)

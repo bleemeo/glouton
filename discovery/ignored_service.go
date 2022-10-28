@@ -17,17 +17,18 @@
 package discovery
 
 import (
+	"glouton/config"
 	"path/filepath"
 	"strings"
 )
 
 // IgnoredService saves the ignored checks or metrics imported from the configuration file.
 type IgnoredService struct {
-	ignoredChecks []map[string]string
+	ignoredChecks []config.NameInstance
 }
 
 // NewIgnoredService initializes IgnoredCheckOrMetrics struct.
-func NewIgnoredService(ignoredChecks []map[string]string) IgnoredService {
+func NewIgnoredService(ignoredChecks []config.NameInstance) IgnoredService {
 	return IgnoredService{
 		ignoredChecks: ignoredChecks,
 	}
@@ -36,8 +37,8 @@ func NewIgnoredService(ignoredChecks []map[string]string) IgnoredService {
 // IsServiceIgnored returns if the check or the metrics are ignored or not.
 func (ic IgnoredService) IsServiceIgnored(srv Service) bool {
 	for _, ignoredCheck := range ic.ignoredChecks {
-		if ignoredCheck["name"] == srv.Name {
-			instances := strings.Split(ignoredCheck["instance"], " ")
+		if ignoredCheck.Name == srv.Name {
+			instances := strings.Split(ignoredCheck.Instance, " ")
 			if len(instances) == 1 && instances[0] == "" {
 				return true
 			}

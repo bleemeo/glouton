@@ -57,7 +57,7 @@ func (s *Synchronizer) syncMainAgent(ctx context.Context) error {
 		"tags": make([]types.Tag, 0),
 	}
 
-	for _, t := range s.option.Config.StringList("tags") {
+	for _, t := range s.option.Config.Tags {
 		if len(t) <= apiTagsLength && t != "" {
 			data["tags"] = append(data["tags"], types.Tag{Name: t})
 		}
@@ -82,11 +82,11 @@ func (s *Synchronizer) syncMainAgent(ctx context.Context) error {
 
 	s.option.Cache.SetAccountID(agent.AccountID)
 
-	if agent.AccountID != s.option.Config.String("bleemeo.account_id") && !s.warnAccountMismatchDone {
+	if agent.AccountID != s.option.Config.Bleemeo.AccountID && !s.warnAccountMismatchDone {
 		s.warnAccountMismatchDone = true
 		logger.Printf(
 			"Account ID in configuration file (%s) mismatch the current account ID (%s). The Account ID from configuration file will be ignored.",
-			s.option.Config.String("bleemeo.account_id"),
+			s.option.Config.Bleemeo.AccountID,
 			agent.AccountID,
 		)
 	}

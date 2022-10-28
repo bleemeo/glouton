@@ -1,66 +1,269 @@
-// Copyright 2015-2019 Bleemeo
-//
-// bleemeo.com an infrastructure monitoring solution in the Cloud
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-// http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
 package config
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"glouton/logger"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
-	"time"
 
+	"github.com/imdario/mergo"
+	"github.com/knadh/koanf"
+	yamlParser "github.com/knadh/koanf/parsers/yaml"
+	"github.com/knadh/koanf/providers/confmap"
+	"github.com/knadh/koanf/providers/env"
+	"github.com/knadh/koanf/providers/file"
+	"github.com/knadh/koanf/providers/structs"
+	"github.com/mitchellh/mapstructure"
+	"github.com/prometheus/client_golang/prometheus"
 	"gopkg.in/yaml.v3"
 )
 
-var errUnknownVarType = errors.New("unknown variable type")
+const (
+	EnvGloutonConfigFiles = "GLOUTON_CONFIG_FILES"
+	envPrefix             = "GLOUTON_"
+	deprecatedEnvPrefix   = "BLEEMEO_AGENT_"
+	delimiter             = "."
+)
 
-// Configuration hold the agent configuration are set of key/value
-//
-// value could be typed and a default could be provided.
-type Configuration struct {
-	rawValues map[string]interface{}
+var (
+	errDeprecatedEnv      = errors.New("environment variable is deprecated")
+	errSettingsDeprecated = errors.New("setting is deprecated")
+	errWrongMapFormat     = errors.New("could not parse map from string")
+	ErrInvalidValue       = errors.New("invalid config value")
+)
 
-	lookupEnv func(key string) (string, bool)
+// Load loads the configuration from files and directories to a struct.
+// Returns the config, warnings and an error.
+func Load(withDefault bool, paths ...string) (Config, prometheus.MultiError, error) {
+	// If no config was given with flags or env variables, fallback on the default files.
+	if len(paths) == 0 || len(paths) == 1 && paths[0] == "" {
+		paths = DefaultPaths()
+	}
 
-	warnings []string
+	return loadToStruct(withDefault, paths...)
 }
 
-// MockLookupEnv could be used to fake environment lookup. Useful for testing.
-// Use nil as lookup function to switch back to real implementation.
-func (c *Configuration) MockLookupEnv(fun func(string) (string, bool)) {
-	c.lookupEnv = fun
+func loadToStruct(withDefault bool, paths ...string) (Config, prometheus.MultiError, error) {
+	// Override config files if the files were given from the env.
+	if envFiles := os.Getenv(EnvGloutonConfigFiles); envFiles != "" {
+		paths = strings.Split(envFiles, ",")
+	}
+
+	k, warnings, err := load(withDefault, paths...)
+
+	var config Config
+
+	// We need to use the "yaml" tag instead of the default "koanf" tag because
+	// the config embeds the blackbox module config which uses YAML.
+	unmarshalConf := koanf.UnmarshalConf{
+		DecoderConfig: &mapstructure.DecoderConfig{
+			DecodeHook: mapstructure.ComposeDecodeHookFunc(
+				mapstructure.StringToTimeDurationHookFunc(),
+				mapstructure.StringToSliceHookFunc(","),
+				mapstructure.TextUnmarshallerHookFunc(),
+				blackboxModuleHookFunc(),
+				stringToMapHookFunc(),
+				stringToBoolHookFunc(),
+			),
+			Metadata:         nil,
+			ErrorUnused:      true,
+			Result:           &config,
+			WeaklyTypedInput: true,
+		},
+		Tag: "yaml",
+	}
+
+	warning := k.UnmarshalWithConf("", &config, unmarshalConf)
+	warnings.Append(warning)
+
+	return config, unwrapErrors(warnings), err
 }
 
-// LoadDirectory will read all *.conf file within given directory.
-//
-// File are read in lexicographic order (e.g. 00-initial.conf is read before 99-override.conf)
-//
-// If one file fail, error will be raised at the end after trying to load all other files.
-func (c *Configuration) LoadDirectory(dirPath string) error {
-	var firstError error
+// load the configuration from files and directories.
+func load(withDefault bool, paths ...string) (*koanf.Koanf, prometheus.MultiError, error) {
+	fileEnvKoanf, warnings, errors := loadPaths(paths)
 
-	files, err := os.ReadDir(dirPath)
-	if err != nil {
+	fileEnvKoanf, moreWarnings := migrate(fileEnvKoanf)
+	if moreWarnings != nil {
+		warnings = append(warnings, moreWarnings...)
+	}
+
+	// Load config from environment variables.
+	// The warnings are filled only after k.Load is called.
+	envToKey, envWarnings := envToKeyFunc()
+
+	// Environment variable overwrite basic types (string, int), arrays, and maps.
+	envMergeFunc := mergeFunc(mergo.WithOverride)
+
+	warning := fileEnvKoanf.Load(env.Provider(deprecatedEnvPrefix, delimiter, envToKey), nil, envMergeFunc)
+	warnings.Append(warning)
+
+	warning = fileEnvKoanf.Load(env.Provider(envPrefix, delimiter, envToKey), nil, envMergeFunc)
+	warnings.Append(warning)
+
+	if len(*envWarnings) > 0 {
+		warnings = append(warnings, *envWarnings...)
+	}
+
+	// Load default values.
+	k := koanf.New(delimiter)
+
+	if withDefault {
+		warning = k.Load(structsProvider(DefaultConfig(), "yaml"), nil)
+		warnings.Append(warning)
+	}
+
+	// Merge defaults and config from files and environment.
+	// The config overwrites the defaults for basic types (string, int) and arrays, and merges maps.
+	warning = k.Load(confmap.Provider(fileEnvKoanf.All(), delimiter), nil, mergeFunc(mergo.WithOverride))
+	warnings.Append(warning)
+
+	return k, warnings, errors.MaybeUnwrap()
+}
+
+// envToKeyFunc returns a function that converts an environment variable to a configuration key
+// and a pointer to Warnings, the warnings are filled only after koanf.Load has been called.
+// Panics if two config keys correspond to the same environment variable.
+func envToKeyFunc() (func(string) string, *prometheus.MultiError) {
+	// Get all config keys from an empty config.
+	k := koanf.New(delimiter)
+	_ = k.Load(structs.Provider(Config{}, "yaml"), nil)
+	allKeys := k.All()
+
+	// Build a map of the environment variables with their corresponding config keys.
+	envToKey := make(map[string]string, len(allKeys))
+
+	for key := range allKeys {
+		envKey := toEnvKey(key)
+
+		if oldKey, exists := envToKey[envKey]; exists {
+			panic(fmt.Sprintf("Conflict between config keys, %s and %s both corresponds to the variable %s", oldKey, key, envKey))
+		}
+
+		envToKey[envKey] = key
+	}
+
+	// Build a map of the deprecated environment variables with their corresponding new variable.
+	movedEnvKeys := map[string]string{
+		"BLEEMEO_AGENT_ACCOUNT":          "GLOUTON_BLEEMEO_ACCOUNT_ID",
+		"BLEEMEO_AGENT_REGISTRATION_KEY": "GLOUTON_BLEEMEO_REGISTRATION_KEY",
+		"BLEEMEO_AGENT_API_BASE":         "GLOUTON_BLEEMEO_API_BASE",
+		"BLEEMEO_AGENT_MQTT_HOST":        "GLOUTON_BLEEMEO_MQTT_HOST",
+		"BLEEMEO_AGENT_MQTT_PORT":        "GLOUTON_BLEEMEO_MQTT_PORT",
+		"BLEEMEO_AGENT_MQTT_SSL":         "GLOUTON_BLEEMEO_MQTT_SSL",
+	}
+
+	for k, v := range movedKeys() {
+		movedEnvKeys[toEnvKey(k)] = toEnvKey(v)
+		movedEnvKeys[toDeprecatedEnvKey(k)] = toEnvKey(v)
+	}
+
+	warnings := make(prometheus.MultiError, 0)
+	envFunc := func(s string) string {
+		// Migrate deprecated keys.
+		if newKey, ok := movedEnvKeys[s]; ok {
+			warnings.Append(fmt.Errorf("%w: %s, use %s instead", errDeprecatedEnv, s, newKey))
+			s = newKey
+		}
+
+		if strings.HasPrefix(s, deprecatedEnvPrefix) {
+			newKey := strings.Replace(s, deprecatedEnvPrefix, envPrefix, 1)
+			warnings.Append(fmt.Errorf("%w: %s, use %s instead", errDeprecatedEnv, s, newKey))
+			s = newKey
+		}
+
+		return envToKey[s]
+	}
+
+	return envFunc, &warnings
+}
+
+// mergeFunc return a merge function to use with koanf.
+func mergeFunc(opts ...func(*mergo.Config)) koanf.Option {
+	merge := func(src, dest map[string]interface{}) error {
+		err := mergo.Merge(&dest, src, opts...)
+		if err != nil {
+			logger.Printf("Error merging config: %s", err)
+		}
+
 		return err
 	}
+
+	return koanf.WithMergeFunc(merge)
+}
+
+// toEnvKey returns the environment variable corresponding to a configuration key.
+// For instance: toEnvKey("web.enable") -> GLOUTON_WEB_ENABLE.
+func toEnvKey(key string) string {
+	envKey := strings.ToUpper(key)
+	envKey = envPrefix + strings.ReplaceAll(envKey, ".", "_")
+
+	return envKey
+}
+
+// toDeprecatedEnvKey returns the environment variable corresponding to a configuration key
+// with the deprecated prefix. For instance: toEnvKey("web.enable") -> BLEEMEO_AGENT_WEB_ENABLE.
+func toDeprecatedEnvKey(key string) string {
+	envKey := strings.ToUpper(key)
+	envKey = deprecatedEnvPrefix + strings.ReplaceAll(envKey, ".", "_")
+
+	return envKey
+}
+
+// loadPaths returns the config loaded from the given paths, warnings and errors.
+func loadPaths(paths []string) (*koanf.Koanf, prometheus.MultiError, prometheus.MultiError) {
+	var warnings, errors prometheus.MultiError
+
+	k := koanf.New(delimiter)
+
+	for _, path := range paths {
+		stat, err := os.Stat(path)
+		if err != nil && os.IsNotExist(err) {
+			logger.V(2).Printf("config file: %s ignored since it does not exists", path)
+
+			continue
+		}
+
+		if err != nil {
+			logger.V(2).Printf("config file: %s ignored due to %v", path, err)
+			errors.Append(err)
+
+			continue
+		}
+
+		if stat.IsDir() {
+			moreWarnings, err := loadDirectory(k, path)
+			errors.Append(err)
+
+			if moreWarnings != nil {
+				warnings = append(warnings, moreWarnings...)
+			}
+
+			if err != nil {
+				logger.V(2).Printf("config file: directory %s have ignored some files due to %v", path, err)
+			}
+		} else {
+			warning := loadFile(k, path)
+			warnings.Append(warning)
+		}
+
+		if err == nil {
+			logger.V(2).Printf("config file: %s loaded", path)
+		}
+	}
+
+	return k, warnings, errors
+}
+
+func loadDirectory(k *koanf.Koanf, dirPath string) (prometheus.MultiError, error) {
+	files, err := os.ReadDir(dirPath)
+	if err != nil {
+		return nil, err
+	}
+
+	var warnings prometheus.MultiError
 
 	for _, f := range files {
 		if !strings.HasSuffix(f.Name(), ".conf") {
@@ -69,351 +272,259 @@ func (c *Configuration) LoadDirectory(dirPath string) error {
 
 		path := filepath.Join(dirPath, f.Name())
 
-		data, err := os.ReadFile(path)
-		if err != nil && firstError == nil {
-			firstError = fmt.Errorf("%s: %w", path, err)
-		} else if err == nil {
-			err = c.LoadByte(data)
-			if err != nil && firstError == nil {
-				firstError = fmt.Errorf("%s: %w", path, err)
-			}
-		}
+		warning := loadFile(k, path)
+		warnings.Append(warning)
 	}
 
-	return firstError
+	return warnings, nil
 }
 
-// LoadByte will load given YAML data.
-func (c *Configuration) LoadByte(data []byte) error {
-	var newValue map[string]interface{}
-
-	err := yaml.Unmarshal(data, &newValue)
-
-	if c.rawValues == nil {
-		c.rawValues = make(map[string]interface{})
+func loadFile(k *koanf.Koanf, path string) error {
+	// Merge this file with the previous config.
+	// Overwrite values, merge maps and append slices.
+	err := k.Load(file.Provider(path), yamlParser.Parser(), mergeFunc(mergo.WithOverride, mergo.WithAppendSlice))
+	if err != nil {
+		return fmt.Errorf("failed to load '%s': %w", path, err)
 	}
 
-	merge(c.rawValues, newValue)
-
-	return err
+	return nil
 }
 
-// LoadEnv will load given key from specified environment variable name.
-func (c *Configuration) LoadEnv(key string, varType ValueType, envName string) (found bool, err error) {
-	var value string
-
-	if c.lookupEnv == nil {
-		value, found = os.LookupEnv(envName)
-	} else {
-		value, found = c.lookupEnv(envName)
-	}
-
-	if !found {
-		return
-	}
-
-	switch varType { //nolint:exhaustive
-	case TypeString:
-		c.Set(key, value)
-	case TypeStringList:
-		c.Set(key, strings.Split(value, ","))
-	case TypeBoolean:
-		value, err := ConvertBoolean(value)
-		if err != nil {
-			return false, err
-		}
-
-		c.Set(key, value)
-	case TypeInteger:
-		value, err := strconv.ParseInt(value, 10, 0)
-		if err != nil {
-			return false, err
-		}
-
-		c.Set(key, int(value))
-	case TypeMap:
-		mapValue, err := convertMap(value)
-		if err != nil {
-			return false, err
-		}
-
-		c.Set(key, mapValue)
-	default:
-		return false, fmt.Errorf("%w %#v", errUnknownVarType, varType)
-	}
-
-	return found, err
-}
-
-// Set define the default for given key.
-func (c *Configuration) Set(key string, value interface{}) {
-	if c.rawValues == nil {
-		c.rawValues = make(map[string]interface{})
-	}
-
-	keyPart := strings.Split(key, ".")
-
-	setValue(c.rawValues, keyPart, value)
-}
-
-// Delete delete a key.
-func (c *Configuration) Delete(key string) {
-	keyPart := strings.Split(key, ".")
-	deleteCfg(c.rawValues, keyPart)
-}
-
-func deleteCfg(root map[string]interface{}, keyPart []string) {
-	key := keyPart[0]
-
-	if len(keyPart) == 1 {
-		delete(root, key)
-
-		return
-	}
-
-	newRoot, ok := root[key]
-	if !ok {
-		return
-	}
-
-	newMap, ok := newRoot.(map[string]interface{})
-	if !ok {
-		return
-	}
-
-	deleteCfg(newMap, keyPart[1:])
-}
-
-// String return the given key as string.
-//
-// Return "" if the key does not exists or could not be converted to string.
-func (c *Configuration) String(key string) string {
-	rawValue, ok := c.Get(key)
-	if !ok {
-		return ""
-	}
-
-	switch value := rawValue.(type) {
-	case string:
-		return value
-	case fmt.Stringer:
-		return value.String()
-	case int:
-		return strconv.FormatInt(int64(value), 10)
-	default:
-		return fmt.Sprintf("%v", rawValue)
-	}
-}
-
-// StringList return the given key as []string.
-//
-// Return nil if the key does not exists or could not be converted to []string.
-func (c *Configuration) StringList(key string) []string {
-	rawValue, ok := c.Get(key)
-	if !ok {
+// unwrapErrors unwrap all errors in the list than contain multiple errors.
+func unwrapErrors(errs prometheus.MultiError) prometheus.MultiError {
+	if len(errs) == 0 {
 		return nil
 	}
 
-	switch value := rawValue.(type) {
-	case []string:
-		return value
-	case []int:
-		result := make([]string, len(value))
+	unwrapped := make(prometheus.MultiError, 0, len(errs))
 
-		for i, v := range value {
-			result[i] = strconv.FormatInt(int64(v), 10)
-		}
+	for _, err := range errs {
+		var (
+			mapErr  *mapstructure.Error
+			yamlErr *yaml.TypeError
+		)
 
-		return result
-	case []interface{}:
-		result := make([]string, len(value))
-
-		for i, v := range value {
-			result[i] = fmt.Sprintf("%v", v)
-		}
-
-		return result
-	default:
-		return nil
-	}
-}
-
-// StringMap return the given key as a string map.
-//
-// Return an empty map if the key does not exist or could not be converted to a string map.
-func (c *Configuration) StringMap(key string) map[string]string {
-	rawValue, ok := c.Get(key)
-	if !ok {
-		return make(map[string]string)
-	}
-
-	switch value := rawValue.(type) {
-	case map[string]string:
-		return value
-	case map[string]interface{}:
-		finalMap := make(map[string]string)
-
-		for k, v := range value {
-			finalMap[k] = fmt.Sprintf("%v", v)
-		}
-
-		return finalMap
-	default:
-		return make(map[string]string)
-	}
-}
-
-// Int return the given key as int.
-//
-// Return 0 if the key does not exist or could not be converted to int.
-// Use Get() if you need to known if the key exists or not.
-func (c *Configuration) Int(key string) int {
-	rawValue, ok := c.Get(key)
-	if !ok {
-		return 0
-	}
-
-	switch value := rawValue.(type) {
-	case int:
-		return value
-	case string:
-		v, err := strconv.ParseInt(value, 10, 0)
-		if err != nil {
-			return 0
-		}
-
-		return int(v)
-	default:
-		return 0
-	}
-}
-
-// Bool return the given key as bool.
-//
-// Return false if the key does not exists or could not be converted to bool.
-// Use Get() if you need to known if the key exists or not.
-func (c *Configuration) Bool(key string) bool {
-	rawValue, ok := c.Get(key)
-	if !ok {
-		return false
-	}
-
-	switch value := rawValue.(type) {
-	case bool:
-		return value
-	case int:
-		return value != 0
-	case string:
-		v, err := ConvertBoolean(value)
-		if err != nil {
-			return false
-		}
-
-		return v
-	default:
-		return false
-	}
-}
-
-// Get return the given key as interface{}.
-func (c *Configuration) Get(key string) (result interface{}, found bool) {
-	keyPart := strings.Split(key, ".")
-
-	return get(c.rawValues, keyPart)
-}
-
-// DurationMap returns the given key as a duration map, it assumes values are given in seconds.
-// Supports durations as int, float, and string.
-func (c *Configuration) DurationMap(key string) map[string]time.Duration {
-	input, ok := c.Get(key)
-	if !ok {
-		return make(map[string]time.Duration)
-	}
-
-	inputMap, ok := ConvertToMap(input)
-	if !ok {
-		logger.Printf("Could not convert config key %s to map", key)
-
-		return make(map[string]time.Duration)
-	}
-
-	durationMap := make(map[string]time.Duration, len(inputMap))
-
-	for k, rawValue := range inputMap {
-		var duration time.Duration
-		switch value := rawValue.(type) {
-		case int:
-			duration = time.Duration(value) * time.Second
-		case float64:
-			duration = time.Duration(value) * time.Second
-		case string:
-			var err error
-
-			duration, err = time.ParseDuration(value)
-			if err != nil {
-				continue
+		switch {
+		case errors.As(err, &mapErr):
+			unwrapped = append(unwrapped, mapErr.WrappedErrors()...)
+		case errors.As(err, &yamlErr):
+			for _, wrappedErr := range yamlErr.Errors {
+				unwrapped.Append(errors.New(wrappedErr)) //nolint:goerr113
 			}
 		default:
+			unwrapped.Append(err)
+		}
+	}
+
+	return unwrapped
+}
+
+// movedKeys return all keys that were moved. The map is old key => new key.
+func movedKeys() map[string]string {
+	keys := map[string]string{
+		"agent.windows_exporter.enabled":  "agent.windows_exporter.enable",
+		"agent.http_debug.enabled":        "agent.http_debug.enable",
+		"kubernetes.enabled":              "kubernetes.enable",
+		"blackbox.enabled":                "blackbox.enable",
+		"agent.process_exporter.enabled":  "agent.process_exporter.enable",
+		"web.enabled":                     "web.enable",
+		"bleemeo.enabled":                 "bleemeo.enable",
+		"jmx.enabled":                     "jmx.enable",
+		"nrpe.enabled":                    "nrpe.enable",
+		"zabbix.enabled":                  "zabbix.enable",
+		"influxdb.enabled":                "influxdb.enable",
+		"telegraf.statsd.enabled":         "telegraf.statsd.enable",
+		"agent.telemetry.enabled":         "agent.telemetry.enable",
+		"agent.node_exporter.enabled":     "agent.node_exporter.enable",
+		"telegraf.docker_metrics_enabled": "telegraf.docker_metrics_enable",
+	}
+
+	return keys
+}
+
+// migrate upgrade the configuration when Glouton changes its settings.
+func migrate(k *koanf.Koanf) (*koanf.Koanf, prometheus.MultiError) {
+	config := k.All()
+
+	var warnings prometheus.MultiError
+
+	warnings = append(warnings, migrateMovedKeys(k, config)...)
+	warnings = append(warnings, migrateLogging(k, config)...)
+	warnings = append(warnings, migrateMetricsPrometheus(k, config)...)
+	warnings = append(warnings, migrateScrapperMetrics(k, config)...)
+
+	// We can't reuse the previous Koanf because it doesn't allow removing keys.
+	newConfig := koanf.New(delimiter)
+
+	warning := newConfig.Load(confmap.Provider(config, delimiter), nil)
+	warnings.Append(warning)
+
+	return newConfig, warnings
+}
+
+// migrateMovedKeys migrate the config settings that were simply moved.
+func migrateMovedKeys(k *koanf.Koanf, config map[string]interface{}) prometheus.MultiError {
+	var warnings prometheus.MultiError
+
+	keys := movedKeys()
+
+	for oldKey, newKey := range keys {
+		val := k.Get(oldKey)
+		if val == nil {
 			continue
 		}
 
-		durationMap[k] = duration
+		config[newKey] = val
+		delete(config, oldKey)
+
+		warnings.Append(fmt.Errorf("%w: %s, use %s instead", errSettingsDeprecated, oldKey, newKey))
 	}
 
-	return durationMap
+	return warnings
 }
 
-func ConvertToMap(input interface{}) (result map[string]interface{}, ok bool) {
-	result, ok = input.(map[string]interface{})
-	if ok {
-		return
-	}
+// migrateLogging migrates the logging settings.
+func migrateLogging(k *koanf.Koanf, config map[string]interface{}) prometheus.MultiError {
+	var warnings prometheus.MultiError
 
-	tmp, ok := input.(map[interface{}]interface{})
-	if !ok {
-		return nil, false
-	}
+	for _, name := range []string{"tail_size", "head_size"} {
+		oldKey := "logging.buffer." + name
+		newKey := "logging.buffer." + name + "_bytes"
 
-	result = make(map[string]interface{}, len(tmp))
-
-	for k, v := range tmp {
-		result[ConvertToString(k)] = v
-	}
-
-	return result, true
-}
-
-func ConvertToString(rawValue interface{}) string {
-	switch value := rawValue.(type) {
-	case string:
-		return value
-	case fmt.Stringer:
-		return value.String()
-	case int:
-		return strconv.FormatInt(int64(value), 10)
-	case []interface{}, []string, map[string]interface{}, map[interface{}]interface{}, []map[string]interface{}:
-		b, err := json.Marshal(rawValue)
-		if err != nil {
-			logger.V(1).Printf("Failed to marshal raw value: %v", err)
-
-			return ""
+		value := k.Int(oldKey)
+		if value == 0 {
+			continue
 		}
 
-		return string(b)
-	default:
-		return fmt.Sprintf("%v", rawValue)
+		config[newKey] = value * 100
+		delete(config, oldKey)
+
+		warnings.Append(fmt.Errorf("%w: %s, use %s instead", errSettingsDeprecated, oldKey, newKey))
 	}
+
+	return warnings
 }
 
-// Dump return a copy of the whole configuration, with "secret" retracted.
+// migrateMetricsPrometheus migrates Prometheus settings.
+func migrateMetricsPrometheus(k *koanf.Koanf, config map[string]interface{}) prometheus.MultiError {
+	// metrics.prometheus was renamed metrics.prometheus.targets
+	// We guess that old path was used when metrics.prometheus.*.url exist and is a string
+	v := k.Get("metric.prometheus")
+	if v == nil {
+		return nil
+	}
+
+	var ( //nolint:prealloc // False positive.
+		warnings        prometheus.MultiError
+		migratedTargets []interface{}
+	)
+
+	vMap, ok := v.(map[string]interface{})
+	if !ok {
+		return nil
+	}
+
+	for key, dict := range vMap {
+		tmp, ok := dict.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		u, ok := tmp["url"].(string)
+		if !ok {
+			continue
+		}
+
+		warnings.Append(fmt.Errorf("%w: metrics.prometheus. See https://docs.bleemeo.com/metrics-sources/prometheus", errSettingsDeprecated))
+
+		migratedTargets = append(migratedTargets, map[string]interface{}{
+			"url":  u,
+			"name": key,
+		})
+
+		delete(config, fmt.Sprintf("metric.prometheus.%s", key))
+		delete(config, fmt.Sprintf("metric.prometheus.%s.url", key))
+		delete(config, fmt.Sprintf("metric.prometheus.%s.name", key))
+	}
+
+	if len(migratedTargets) > 0 {
+		existing := k.Get("metric.prometheus.targets")
+		targets, _ := existing.([]interface{})
+		targets = append(targets, migratedTargets...)
+
+		config["metric.prometheus.targets"] = targets
+	}
+
+	if k.Bool("metric.prometheus.targets.include_default_metrics") {
+		warnings.Append(fmt.Errorf("%w: metrics.prometheus.targets.include_default_metrics. This option does not exists anymore and has no effect", errSettingsDeprecated))
+	}
+
+	return warnings
+}
+
+func migrateScrapperMetrics(k *koanf.Koanf, config map[string]interface{}) prometheus.MultiError {
+	var warnings prometheus.MultiError
+
+	warnings = append(warnings, migrateScrapper(k, config, "metric.prometheus.allow_metrics", "metric.allow_metrics")...)
+	warnings = append(warnings, migrateScrapper(k, config, "metric.prometheus.deny_metrics", "metric.deny_metrics")...)
+	warnings = append(warnings, migrateScrapper(k, config, "metric.prometheus.allow", "metric.allow_metrics")...)
+	warnings = append(warnings, migrateScrapper(k, config, "metric.prometheus.deny", "metric.deny_metrics")...)
+
+	return warnings
+}
+
+func migrateScrapper(k *koanf.Koanf, config map[string]interface{}, deprecatedPath string, correctPath string) prometheus.MultiError {
+	migratedTargets := []string{}
+	v := k.Get(deprecatedPath)
+
+	if v == nil {
+		return nil
+	}
+
+	vTab, ok := v.([]interface{})
+	if !ok {
+		return nil
+	}
+
+	var warnings prometheus.MultiError
+
+	if len(vTab) > 0 {
+		warnings.Append(fmt.Errorf("%w: %s. Please use %s", errSettingsDeprecated, deprecatedPath, correctPath))
+
+		for _, val := range vTab {
+			s, _ := val.(string)
+			if s != "" {
+				migratedTargets = append(migratedTargets, s)
+			}
+		}
+	}
+
+	if len(migratedTargets) > 0 {
+		existing := k.Get(correctPath)
+		targets, _ := existing.([]interface{})
+
+		for _, val := range migratedTargets {
+			targets = append(targets, val)
+		}
+
+		config[correctPath] = targets
+		delete(config, deprecatedPath)
+	}
+
+	return warnings
+}
+
+// Dump return a copy of the whole configuration, with secrets retracted.
 // secret is any key containing "key", "secret", "password" or "passwd".
-func (c *Configuration) Dump() (result map[string]interface{}) {
-	return dump(c.rawValues)
+func Dump(config Config) map[string]interface{} {
+	k := koanf.New(delimiter)
+	_ = k.Load(structs.Provider(config, "yaml"), nil)
+
+	return dump(k.Raw())
 }
 
 func dump(root map[string]interface{}) map[string]interface{} {
 	secretKey := []string{"key", "secret", "password", "passwd"}
-	result := make(map[string]interface{}, len(root))
 
 	for k, v := range root {
 		isSecret := false
@@ -427,133 +538,35 @@ func dump(root map[string]interface{}) map[string]interface{} {
 		}
 
 		if isSecret {
-			result[k] = "*****"
+			root[k] = "*****"
 
 			continue
 		}
 
 		switch v := v.(type) {
 		case map[string]interface{}:
-			result[k] = dump(v)
+			root[k] = dump(v)
 		case []interface{}:
-			result[k] = dumpList(v)
+			root[k] = dumpList(v)
 		default:
-			result[k] = v
+			root[k] = v
 		}
 	}
 
-	return result
+	return root
 }
 
 func dumpList(root []interface{}) []interface{} {
-	result := make([]interface{}, len(root))
-
 	for i, v := range root {
 		switch v := v.(type) {
 		case map[string]interface{}:
-			result[i] = dump(v)
+			root[i] = dump(v)
 		case []interface{}:
-			result[i] = dumpList(v)
+			root[i] = dumpList(v)
 		default:
-			result[i] = v
+			root[i] = v
 		}
 	}
 
-	return result
-}
-
-func get(root interface{}, keyPart []string) (result interface{}, found bool) {
-	if len(keyPart) == 0 {
-		return root, true
-	}
-
-	if m, ok := root.(map[string]interface{}); ok {
-		if subRoot, ok := m[keyPart[0]]; ok {
-			return get(subRoot, keyPart[1:])
-		}
-	}
-
-	return nil, false
-}
-
-func merge(root map[string]interface{}, newValue map[string]interface{}) {
-	for k, v := range newValue {
-		if newMap, ok := v.(map[interface{}]interface{}); ok {
-			v = convertToStringMap(newMap)
-		}
-		// if newMap is a map, force doing a merge to ensure all map[interface{}]interface{} are converted to map[string]interface{}
-		if newMap, ok := v.(map[string]interface{}); ok {
-			if oldV, ok := root[k]; ok {
-				if oldMap, ok := oldV.(map[string]interface{}); ok {
-					merge(oldMap, newMap)
-
-					continue
-				}
-			}
-
-			oldMap := make(map[string]interface{})
-			root[k] = oldMap
-
-			merge(oldMap, newMap)
-
-			continue
-		}
-
-		if oldV, ok := root[k]; ok {
-			if newList, ok := v.([]interface{}); ok {
-				if oldList, ok := oldV.([]interface{}); ok {
-					oldList = append(oldList, newList...)
-					root[k] = oldList
-
-					continue
-				}
-			}
-		}
-
-		root[k] = v
-	}
-}
-
-func convertToStringMap(in map[interface{}]interface{}) map[string]interface{} {
-	result := make(map[string]interface{})
-
-	for k, v := range in {
-		keyString := fmt.Sprintf("%v", k)
-		result[keyString] = v
-	}
-
-	return result
-}
-
-func setValue(root map[string]interface{}, keyPart []string, value interface{}) {
-	key := keyPart[0]
-
-	if len(keyPart) == 1 {
-		root[key] = value
-
-		return
-	}
-
-	newRoot, ok := root[key]
-	if !ok {
-		newRoot = make(map[string]interface{})
-		root[key] = newRoot
-	}
-
-	newMap, ok := newRoot.(map[string]interface{})
-	if !ok {
-		newMap = make(map[string]interface{})
-		root[key] = newMap
-	}
-
-	setValue(newMap, keyPart[1:], value)
-}
-
-// GetWarnings returns the list of warnings generated by the configuration during parsing.
-func (c *Configuration) GetWarnings() []string {
-	return c.warnings
-}
-
-func (c *Configuration) AddWarning(desc string) {
-	c.warnings = append(c.warnings, desc)
+	return root
 }

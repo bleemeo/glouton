@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"glouton/config"
 	"glouton/logger"
 	"glouton/prometheus/registry"
 	"glouton/types"
@@ -29,35 +30,20 @@ import (
 	"time"
 
 	bbConf "github.com/prometheus/blackbox_exporter/config"
-	"github.com/prometheus/common/config"
-	"gopkg.in/yaml.v3"
+	promConfig "github.com/prometheus/common/config"
 )
 
 var errUnknownModule = errors.New("unknown blackbox module found in your configuration")
 
 const maxTimeout time.Duration = 9500 * time.Millisecond
 
-// yamlConfig is the subset of glouton config that deals with probes.
-type yamlConfig struct {
-	Targets     []yamlConfigTarget       `yaml:"targets"`
-	Modules     map[string]bbConf.Module `yaml:"modules"`
-	ScraperName string                   `yaml:"scraper_name,omitempty"`
-}
-
-// ConfigTarget is the information we will supply to the probe() function.
-type yamlConfigTarget struct {
-	Name       string `yaml:"name,omitempty"`
-	URL        string `yaml:"url"`
-	ModuleName string `yaml:"module"`
-}
-
 func defaultModule(userAgent string) bbConf.Module {
 	return bbConf.Module{
 		HTTP: bbConf.HTTPProbe{
 			IPProtocol: "ip4",
-			HTTPClientConfig: config.HTTPClientConfig{
+			HTTPClientConfig: promConfig.HTTPClientConfig{
 				FollowRedirects: true,
-				TLSConfig: config.TLSConfig{
+				TLSConfig: promConfig.TLSConfig{
 					// We manually do the TLS verification after probing.
 					// This allow to gather information on self-signed server.
 					InsecureSkipVerify: true,
@@ -145,7 +131,7 @@ func genCollectorFromDynamicTarget(monitor types.Monitor, userAgent string) (*co
 		mod.Prober = proberNameTCP
 		uri = url.Host
 		mod.TCP.TLS = true
-		mod.TCP.TLSConfig = config.TLSConfig{
+		mod.TCP.TLSConfig = promConfig.TLSConfig{
 			CAFile: monitor.CAFile,
 			// We manually do the TLS verification after probing.
 			// This allow to gather information on self-signed server.
@@ -236,67 +222,49 @@ func setUserAgent(modules map[string]bbConf.Module, userAgent string) {
 // This completely resets the configuration.
 func New(
 	registry *registry.Registry,
-	externalConf interface{},
-	userAgent string,
+	config config.Blackbox,
 	metricFormat types.MetricFormat,
 ) (*RegisterManager, error) {
-	conf := yamlConfig{}
+	setUserAgent(config.Modules, config.UserAgent)
 
-	// read static config
-	// the conf cannot be missing here as it have been checked prior to calling InitConfig()
-	marshalled, err := yaml.Marshal(externalConf)
-	if err != nil {
-		logger.V(1).Printf("blackbox_exporter: Couldn't marshal blackbox_exporter configuration")
-
-		return nil, err
-	}
-
-	if err = yaml.Unmarshal(marshalled, &conf); err != nil {
-		logger.V(1).Printf("blackbox_exporter: Cannot parse blackbox_exporter config: %v", err)
-
-		return nil, err
-	}
-
-	setUserAgent(conf.Modules, userAgent)
-
-	for idx, v := range conf.Modules {
+	for idx, v := range config.Modules {
 		// override user timeouts when too high or undefined. This is important !
 		if v.Timeout > maxTimeout || v.Timeout == 0 {
 			v.Timeout = maxTimeout
-			conf.Modules[idx] = v
+			config.Modules[idx] = v
 		}
 	}
 
-	targets := make([]collectorWithLabels, 0, len(conf.Targets))
+	targets := make([]collectorWithLabels, 0, len(config.Targets))
 
-	for idx := range conf.Targets {
-		if conf.Targets[idx].Name == "" {
-			conf.Targets[idx].Name = conf.Targets[idx].URL
+	for idx := range config.Targets {
+		if config.Targets[idx].Name == "" {
+			config.Targets[idx].Name = config.Targets[idx].URL
 		}
 
-		module, present := conf.Modules[conf.Targets[idx].ModuleName]
+		module, present := config.Modules[config.Targets[idx].Module]
 		// if the module is unknown, add it to the list
 		if !present {
 			return nil, fmt.Errorf("%w for %s (module '%v'). "+
-				"This is a probably bug, please contact us", errUnknownModule, conf.Targets[idx].Name, conf.Targets[idx].ModuleName)
+				"This is a probably bug, please contact us", errUnknownModule, config.Targets[idx].Name, config.Targets[idx].Module)
 		}
 
 		targets = append(targets, genCollectorFromStaticTarget(configTarget{
-			Name:       conf.Targets[idx].Name,
-			URL:        conf.Targets[idx].URL,
+			Name:       config.Targets[idx].Name,
+			URL:        config.Targets[idx].URL,
 			Module:     module,
-			ModuleName: conf.Targets[idx].ModuleName,
+			ModuleName: config.Targets[idx].Module,
 			nowFunc:    time.Now,
 		}))
 	}
 
 	manager := &RegisterManager{
 		targets:       targets,
-		registrations: make(map[int]gathererWithConfigTarget, len(conf.Targets)),
+		registrations: make(map[int]gathererWithConfigTarget, len(config.Targets)),
 		registry:      registry,
-		scraperName:   conf.ScraperName,
+		scraperName:   config.ScraperName,
 		metricFormat:  metricFormat,
-		userAgent:     userAgent,
+		userAgent:     config.UserAgent,
 	}
 
 	if err := manager.updateRegistrations(); err != nil {

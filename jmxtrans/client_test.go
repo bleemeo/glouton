@@ -20,6 +20,7 @@ package jmxtrans
 import (
 	"context"
 	"fmt"
+	"glouton/config"
 	"glouton/discovery"
 	"glouton/logger"
 	"glouton/types"
@@ -44,7 +45,7 @@ func (s *fakeStore) EmitPoint(_ context.Context, point types.MetricPoint) {
 
 type fakeConfig struct {
 	Services map[string]discovery.Service
-	Metrics  map[serviceKey][]JmxMetric
+	Metrics  map[serviceKey][]config.JmxMetric
 }
 
 func (c fakeConfig) GetService(sha256Service string) (discovery.Service, bool) {
@@ -53,7 +54,7 @@ func (c fakeConfig) GetService(sha256Service string) (discovery.Service, bool) {
 	return r, ok
 }
 
-func (c fakeConfig) GetMetrics(sha256Service string, sha256Bean string, attr string) ([]JmxMetric, bool) {
+func (c fakeConfig) GetMetrics(sha256Service string, sha256Bean string, attr string) ([]config.JmxMetric, bool) {
 	key := serviceKey{
 		sha256Service: sha256Service,
 		sha256Bean:    sha256Bean,
@@ -102,7 +103,7 @@ func Test_jmxtransClient_processLine(t *testing.T) { //nolint:maintidx
 						Name: "cassandra",
 					},
 				},
-				Metrics: map[serviceKey][]JmxMetric{
+				Metrics: map[serviceKey][]config.JmxMetric{
 					{"sha256-of-service", "sha256-bean", "attr"}: {
 						{
 							Name: "metric_name",
@@ -127,7 +128,7 @@ func Test_jmxtransClient_processLine(t *testing.T) { //nolint:maintidx
 						ContainerName: "squirreldb-cassandra",
 					},
 				},
-				Metrics: map[serviceKey][]JmxMetric{
+				Metrics: map[serviceKey][]config.JmxMetric{
 					{"sha256-of-service", "sha256-bean", "attr"}: {
 						{
 							Name: "metric_name",
@@ -150,7 +151,7 @@ func Test_jmxtransClient_processLine(t *testing.T) { //nolint:maintidx
 						Name: "cassandra",
 					},
 				},
-				Metrics: map[serviceKey][]JmxMetric{
+				Metrics: map[serviceKey][]config.JmxMetric{
 					{"123", "456", "HeapMemoryUsage_used"}: {
 						{
 							Name:      "jvm_heap_used",
@@ -175,7 +176,7 @@ func Test_jmxtransClient_processLine(t *testing.T) { //nolint:maintidx
 						Name: "cassandra",
 					},
 				},
-				Metrics: map[serviceKey][]JmxMetric{
+				Metrics: map[serviceKey][]config.JmxMetric{
 					{"dace7cb780b17dc43fb36cd64c776219", "77b03b685768c2c35418c060add42834", "Value"}: {
 						{
 							Name:  "bloom_filter_false_ratio",
@@ -199,7 +200,7 @@ func Test_jmxtransClient_processLine(t *testing.T) { //nolint:maintidx
 						Name: "bitbucket",
 					},
 				},
-				Metrics: map[serviceKey][]JmxMetric{
+				Metrics: map[serviceKey][]config.JmxMetric{
 					{"123", "456", "Pulls"}: {
 						{
 							Name:   "pulls",
@@ -224,7 +225,7 @@ func Test_jmxtransClient_processLine(t *testing.T) { //nolint:maintidx
 						Name: "jvm",
 					},
 				},
-				Metrics: map[serviceKey][]JmxMetric{
+				Metrics: map[serviceKey][]config.JmxMetric{
 					{"123", "456", "CollectionCount"}: {
 						{
 							Name: "jvm_gc",
@@ -249,7 +250,7 @@ func Test_jmxtransClient_processLine(t *testing.T) { //nolint:maintidx
 						Name: "jvm",
 					},
 				},
-				Metrics: map[serviceKey][]JmxMetric{
+				Metrics: map[serviceKey][]config.JmxMetric{
 					{"123", "456", "CollectionCount"}: {
 						{
 							Name:   "jvm_gc",
@@ -277,7 +278,7 @@ func Test_jmxtransClient_processLine(t *testing.T) { //nolint:maintidx
 						Name: "jira",
 					},
 				},
-				Metrics: map[serviceKey][]JmxMetric{
+				Metrics: map[serviceKey][]config.JmxMetric{
 					{"123", "456", "requestCount"}: {
 						{
 							Name: "requests",
@@ -312,7 +313,7 @@ func Test_jmxtransClient_processLine(t *testing.T) { //nolint:maintidx
 						Name: "jira",
 					},
 				},
-				Metrics: map[serviceKey][]JmxMetric{
+				Metrics: map[serviceKey][]config.JmxMetric{
 					{"123", "456", "requestCount"}: {
 						{
 							Name: "requests",
@@ -347,7 +348,7 @@ func Test_jmxtransClient_processLine(t *testing.T) { //nolint:maintidx
 						Name: "jira",
 					},
 				},
-				Metrics: map[serviceKey][]JmxMetric{
+				Metrics: map[serviceKey][]config.JmxMetric{
 					{"123", "456", "requestCount"}: {
 						{
 							Name:   "requests",

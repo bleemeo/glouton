@@ -19,6 +19,7 @@ package discovery
 
 import (
 	"context"
+	"glouton/config"
 	"glouton/facts"
 	"glouton/logger"
 	"net"
@@ -31,11 +32,14 @@ import (
 	"sync"
 	"time"
 
+	"github.com/imdario/mergo"
+	"github.com/mitchellh/mapstructure"
 	"gopkg.in/ini.v1"
 )
 
 const (
-	mysqlDefaultUser = "root"
+	mysqlDefaultUser            = "root"
+	gloutonContainerLabelPrefix = "glouton."
 )
 
 // DynamicDiscovery implement the dynamic discovery. It will only return
@@ -378,8 +382,8 @@ func (dd *DynamicDiscovery) serviceFromProcess(process facts.Process, netstat ma
 
 	dd.updateListenAddresses(&service, di)
 
-	dd.fillExtraAttributes(&service)
-	dd.fillGenericExtraAttributes(&service, di)
+	dd.fillConfig(&service)
+	dd.fillConfigFromLabels(&service)
 	dd.guessJMX(&service, process.CmdLineList)
 
 	return service, true
@@ -484,17 +488,14 @@ func (dd *DynamicDiscovery) updateListenAddresses(service *Service, di discovery
 	}
 }
 
-func (dd *DynamicDiscovery) fillExtraAttributes(service *Service) {
-	if service.ExtraAttributes == nil {
-		service.ExtraAttributes = make(map[string]string)
-	}
-
+// fillConfig fills the service config with information found inside the container.
+func (dd *DynamicDiscovery) fillConfig(service *Service) {
 	if service.ServiceType == MySQLService {
 		if service.container != nil {
 			for k, v := range service.container.Environment() {
 				if k == "MYSQL_ROOT_PASSWORD" {
-					service.ExtraAttributes["username"] = mysqlDefaultUser
-					service.ExtraAttributes["password"] = v
+					service.Config.Username = mysqlDefaultUser
+					service.Config.Password = v
 				}
 			}
 		} else if dd.fileReader != nil {
@@ -502,9 +503,9 @@ func (dd *DynamicDiscovery) fillExtraAttributes(service *Service) {
 				if debianCnf, err := ini.Load(debianCnfRaw); err == nil {
 					section := debianCnf.Section("client")
 					if section != nil {
-						service.ExtraAttributes["username"] = iniSafeString(section.Key("user"))
-						service.ExtraAttributes["password"] = iniSafeString(section.Key("password"))
-						service.ExtraAttributes["metrics_unix_socket"] = iniSafeString(section.Key("socket"))
+						service.Config.Username = iniSafeString(section.Key("user"))
+						service.Config.Password = iniSafeString(section.Key("password"))
+						service.Config.MetricsUnixSocket = iniSafeString(section.Key("socket"))
 					}
 				}
 			}
@@ -515,30 +516,67 @@ func (dd *DynamicDiscovery) fillExtraAttributes(service *Service) {
 		if service.container != nil {
 			for k, v := range service.container.Environment() {
 				if k == "POSTGRES_PASSWORD" {
-					service.ExtraAttributes["password"] = v
+					service.Config.Password = v
 				}
 
 				if k == "POSTGRES_USER" {
-					service.ExtraAttributes["username"] = v
+					service.Config.Username = v
 				}
 			}
 		}
 	}
 }
 
-func (dd *DynamicDiscovery) fillGenericExtraAttributes(service *Service, di discoveryInfo) {
-	if service.ExtraAttributes == nil {
-		service.ExtraAttributes = make(map[string]string)
+// fillConfigFromLabels look for "glouton.*" labels on containers to override the service configuration.
+func (dd *DynamicDiscovery) fillConfigFromLabels(service *Service) {
+	if service.container == nil {
+		return
 	}
 
-	if service.container != nil {
-		for k, v := range facts.LabelsAndAnnotations(service.container) {
-			for _, n := range di.ExtraAttributeNames {
-				if "glouton."+n == k {
-					service.ExtraAttributes[n] = v
-				}
-			}
+	// Make a map of container labels and values with the "glouton." prefix trimmed.
+	labels := make(map[string]string)
+
+	for k, v := range facts.LabelsAndAnnotations(service.container) {
+		if !strings.HasPrefix(k, gloutonContainerLabelPrefix) {
+			continue
 		}
+
+		k = strings.TrimPrefix(k, gloutonContainerLabelPrefix)
+
+		labels[k] = v
+	}
+
+	if len(labels) == 0 {
+		return
+	}
+
+	// Decode the map in the service struct.
+	var override config.Service
+
+	decoderConfig := &mapstructure.DecoderConfig{
+		DecodeHook: mapstructure.ComposeDecodeHookFunc(
+			mapstructure.StringToSliceHookFunc(","),
+		),
+		Result:           &override,
+		WeaklyTypedInput: true,
+		TagName:          "yaml",
+	}
+
+	d, err := mapstructure.NewDecoder(decoderConfig)
+	if err != nil {
+		logger.V(1).Printf("Failed to create decoder for container labels: %s", err)
+
+		return
+	}
+
+	if err := d.Decode(labels); err != nil {
+		logger.Printf("Labels on container %s could not be decoded: %s", service.ContainerName, err)
+	}
+
+	// Override the current config with the labels from the container.
+	err = mergo.Merge(&service.Config, override, mergo.WithOverride)
+	if err != nil {
+		logger.V(1).Printf("Failed to merge service and override: %s", err)
 	}
 }
 
@@ -562,12 +600,12 @@ func (dd *DynamicDiscovery) guessJMX(service *Service, cmdLine []string) {
 
 				portStr := strings.TrimPrefix(arg, opt)
 
-				_, err := strconv.ParseInt(portStr, 10, 0)
+				port, err := strconv.ParseInt(portStr, 10, 0)
 				if err != nil {
 					continue
 				}
 
-				service.ExtraAttributes["jmx_port"] = portStr
+				service.Config.JMXPort = int(port)
 
 				return
 			}

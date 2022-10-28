@@ -31,6 +31,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/google/uuid"
+	"github.com/imdario/mergo"
 	"github.com/prometheus/prometheus/model/labels"
 )
 
@@ -956,7 +957,7 @@ func (s *stateMock) Get(key string, result interface{}) error {
 type syncTestHelper struct {
 	api        *mockAPI
 	s          *Synchronizer
-	cfg        *config.Configuration
+	cfg        config.Config
 	facts      *facts.FactProviderMock
 	containers []facts.Container
 	cache      *cache.Cache
@@ -980,7 +981,6 @@ func newHelper(t *testing.T) *syncTestHelper {
 
 	helper := &syncTestHelper{
 		api:   api,
-		cfg:   &config.Configuration{},
 		facts: facts.NewMockFacter(nil),
 		cache: &cache.Cache{},
 		state: newStateMock(),
@@ -993,11 +993,19 @@ func newHelper(t *testing.T) *syncTestHelper {
 
 	helper.httpServer = helper.api.Server()
 
-	helper.cfg.Set("logging.level", "debug")
-	helper.cfg.Set("bleemeo.api_base", helper.httpServer.URL)
-	helper.cfg.Set("bleemeo.account_id", accountID)
-	helper.cfg.Set("bleemeo.registration_key", registrationKey)
-	helper.cfg.Set("blackbox.enable", true)
+	helper.cfg = config.Config{
+		Logging: config.Logging{
+			Level: "debug",
+		},
+		Bleemeo: config.Bleemeo{
+			APIBase:         helper.httpServer.URL,
+			AccountID:       accountID,
+			RegistrationKey: registrationKey,
+		},
+		Blackbox: config.Blackbox{
+			Enable: true,
+		},
+	}
 
 	helper.facts.SetFact("fqdn", testAgentFQDN)
 
@@ -1213,7 +1221,7 @@ func TestSyncWithSNMP(t *testing.T) {
 	defer helper.Close()
 
 	helper.SNMP = []*snmp.Target{
-		snmp.NewMock(snmp.TargetOptions{InitialName: "Z-The-Initial-Name", Address: snmpAddress}, map[string]string{}),
+		snmp.NewMock(config.SNMPTarget{InitialName: "Z-The-Initial-Name", Target: snmpAddress}, map[string]string{}),
 	}
 	helper.MetricFormat = types.MetricFormatPrometheus
 
@@ -1443,7 +1451,7 @@ func TestSyncWithSNMPDelete(t *testing.T) {
 	)
 
 	helper.SNMP = []*snmp.Target{
-		snmp.NewMock(snmp.TargetOptions{InitialName: "Z-The-Initial-Name", Address: snmpAddress}, map[string]string{}),
+		snmp.NewMock(config.SNMPTarget{InitialName: "Z-The-Initial-Name", Target: snmpAddress}, map[string]string{}),
 	}
 	helper.MetricFormat = types.MetricFormatPrometheus
 	helper.NotifyLabelsUpdate = func() {
@@ -1866,37 +1874,43 @@ func TestContainerSync(t *testing.T) {
 func TestSyncServerGroup(t *testing.T) {
 	tests := []struct {
 		name                  string
-		cfgSet                map[string]string
+		cfg                   config.Config
 		wantGroupForMainAgent string
 		wantGroupForSNMPAgent string
 	}{
 		{
 			name:                  "no config",
-			cfgSet:                map[string]string{},
+			cfg:                   config.Config{},
 			wantGroupForMainAgent: "",
 			wantGroupForSNMPAgent: "",
 		},
 		{
 			name: "both set",
-			cfgSet: map[string]string{
-				"bleemeo.initial_server_group_name":          "group1",
-				"bleemeo.initial_server_group_name_for_snmp": "group2",
+			cfg: config.Config{
+				Bleemeo: config.Bleemeo{
+					InitialServerGroupName:        "group1",
+					InitialServerGroupNameForSNMP: "group2",
+				},
 			},
 			wantGroupForMainAgent: "group1",
 			wantGroupForSNMPAgent: "group2",
 		},
 		{
 			name: "only main set",
-			cfgSet: map[string]string{
-				"bleemeo.initial_server_group_name": "group3",
+			cfg: config.Config{
+				Bleemeo: config.Bleemeo{
+					InitialServerGroupName: "group3",
+				},
 			},
 			wantGroupForMainAgent: "group3",
 			wantGroupForSNMPAgent: "group3",
 		},
 		{
 			name: "only SNMP set",
-			cfgSet: map[string]string{
-				"bleemeo.initial_server_group_name_for_snmp": "group4",
+			cfg: config.Config{
+				Bleemeo: config.Bleemeo{
+					InitialServerGroupNameForSNMP: "group4",
+				},
 			},
 			wantGroupForMainAgent: "",
 			wantGroupForSNMPAgent: "group4",
@@ -1911,12 +1925,13 @@ func TestSyncServerGroup(t *testing.T) {
 			helper := newHelper(t)
 			defer helper.Close()
 
-			for k, v := range tt.cfgSet {
-				helper.cfg.Set(k, v)
+			err := mergo.Merge(&helper.cfg, tt.cfg)
+			if err != nil {
+				t.Fatalf("Failed to merge configs: %s", err)
 			}
 
 			helper.SNMP = []*snmp.Target{
-				snmp.NewMock(snmp.TargetOptions{InitialName: "Z-The-Initial-Name", Address: snmpAddress}, map[string]string{}),
+				snmp.NewMock(config.SNMPTarget{InitialName: "Z-The-Initial-Name", Target: snmpAddress}, map[string]string{}),
 			}
 
 			helper.initSynchronizer(t)

@@ -96,7 +96,7 @@ func initOSSpecificParts(stop chan<- os.Signal) {
 }
 
 func (a *agent) registerOSSpecificComponents(vethProvider *veth.Provider) {
-	if a.oldConfig.Bool("agent.windows_exporter.enable") {
+	if a.config.Agent.WindowsExporter.Enable {
 		conf, err := a.buildCollectorsConfig()
 		if err != nil {
 			logger.V(0).Printf("Couldn't build configuration for windows_exporter: %v", err)
@@ -104,7 +104,7 @@ func (a *agent) registerOSSpecificComponents(vethProvider *veth.Provider) {
 			return
 		}
 
-		collectors := a.oldConfig.StringList("agent.windows_exporter.collectors")
+		collectors := a.config.Agent.WindowsExporter.Collectors
 		if err := a.gathererRegistry.AddWindowsExporter(collectors, conf); err != nil {
 			logger.Printf("Unable to start windows_exporter, system metrics will be missing: %v", err)
 		}

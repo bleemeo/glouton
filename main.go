@@ -61,8 +61,8 @@ func main() {
 	// Run os-specific initialisation code.
 	OSDependentMain()
 
-	if val, ok := os.LookupEnv("GLOUTON_DISABLE_RELOAD"); ok && !*disableReload {
-		*disableReload, _ = config.ConvertBoolean(val)
+	if envDisableReload, ok := os.LookupEnv("GLOUTON_DISABLE_RELOAD"); ok && !*disableReload {
+		*disableReload, _ = config.ParseBool(envDisableReload)
 	}
 
 	agent.StartReloadManager(strings.Split(*configFiles, ","), *disableReload)

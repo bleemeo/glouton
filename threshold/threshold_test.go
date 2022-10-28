@@ -18,6 +18,7 @@
 package threshold
 
 import (
+	"glouton/config"
 	"glouton/types"
 	"math"
 	"reflect"
@@ -1067,4 +1068,120 @@ func TestMergeThresholds(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestThresholdsFromConfig(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		Name              string
+		Config            config.Threshold
+		MetricName        string
+		SoftPeriods       map[string]time.Duration
+		DefaultSoftPeriod time.Duration
+		Expected          Threshold
+	}{
+		{
+			Name: "full",
+			Config: config.Threshold{
+				LowCritical:  newFloatPointer(1),
+				LowWarning:   newFloatPointer(5),
+				HighWarning:  newFloatPointer(70),
+				HighCritical: newFloatPointer(80),
+			},
+			MetricName:        "",
+			SoftPeriods:       nil,
+			DefaultSoftPeriod: time.Second,
+			Expected: Threshold{
+				LowCritical:   1,
+				LowWarning:    5,
+				HighWarning:   70,
+				HighCritical:  80,
+				WarningDelay:  time.Second,
+				CriticalDelay: time.Second,
+			},
+		},
+		{
+			Name: "only high",
+			Config: config.Threshold{
+				LowCritical:  nil,
+				LowWarning:   nil,
+				HighWarning:  newFloatPointer(70),
+				HighCritical: newFloatPointer(80),
+			},
+			MetricName: "cpu_used",
+			SoftPeriods: map[string]time.Duration{
+				"cpu_used": time.Hour,
+			},
+			DefaultSoftPeriod: 300,
+			Expected: Threshold{
+				LowCritical:   math.NaN(),
+				LowWarning:    math.NaN(),
+				HighWarning:   70,
+				HighCritical:  80,
+				WarningDelay:  time.Hour,
+				CriticalDelay: time.Hour,
+			},
+		},
+		{
+			Name: "only low",
+			Config: config.Threshold{
+				LowCritical:  newFloatPointer(1),
+				LowWarning:   newFloatPointer(5.8),
+				HighWarning:  nil,
+				HighCritical: nil,
+			},
+			MetricName:        "cpu_used",
+			SoftPeriods:       nil,
+			DefaultSoftPeriod: time.Second,
+			Expected: Threshold{
+				LowCritical:   1,
+				LowWarning:    5.8,
+				HighWarning:   math.NaN(),
+				HighCritical:  math.NaN(),
+				WarningDelay:  time.Second,
+				CriticalDelay: time.Second,
+			},
+		},
+		{
+			Name: "not set",
+			Config: config.Threshold{
+				LowCritical:  nil,
+				LowWarning:   nil,
+				HighWarning:  nil,
+				HighCritical: nil,
+			},
+			MetricName:        "cpu_used",
+			SoftPeriods:       nil,
+			DefaultSoftPeriod: time.Second,
+			Expected: Threshold{
+				LowCritical:   math.NaN(),
+				LowWarning:    math.NaN(),
+				HighWarning:   math.NaN(),
+				HighCritical:  math.NaN(),
+				WarningDelay:  time.Second,
+				CriticalDelay: time.Second,
+			},
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+
+		t.Run(test.Name, func(t *testing.T) {
+			t.Parallel()
+
+			got := FromConfig(test.Config, test.MetricName, test.SoftPeriods, test.DefaultSoftPeriod)
+			if diff := cmp.Diff(test.Expected, got); diff != "" {
+				t.Fatalf("Wrong threshold from config:\n%s", diff)
+			}
+		})
+	}
+}
+
+func newFloatPointer(value float64) *float64 {
+	p := new(float64)
+	*p = value
+
+	return p
 }

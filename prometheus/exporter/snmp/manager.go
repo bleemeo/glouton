@@ -2,6 +2,8 @@ package snmp
 
 import (
 	"context"
+	"fmt"
+	"glouton/config"
 	"glouton/logger"
 	"glouton/types"
 	"net/url"
@@ -30,23 +32,57 @@ type GathererWithInfo struct {
 }
 
 // NewManager return a new SNMP manager.
-func NewManager(exporterAddress *url.URL, scaperFact FactProvider, targets ...TargetOptions) *Manager {
+func NewManager(exporterAddress string, scaperFact FactProvider, targets []config.SNMPTarget) (*Manager, prometheus.MultiError) {
+	var warnings prometheus.MultiError
+
+	exporterURL, err := url.Parse(exporterAddress)
+	if err != nil {
+		warnings.Append(err)
+
+		return nil, warnings
+	}
+
+	exporterURL, err = exporterURL.Parse("snmp")
+	if err != nil {
+		warnings.Append(err)
+
+		return nil, warnings
+	}
+
 	mgr := &Manager{
-		exporterAddress: exporterAddress,
+		exporterAddress: exporterURL,
 		targets:         make([]*Target, 0, len(targets)),
 	}
 
-	for _, t := range targets {
-		mgr.targets = append(mgr.targets, newTarget(t, scaperFact, exporterAddress))
+	targetExists := make(map[string]bool)
+
+	for i, t := range targets {
+		if t.Target == "" {
+			warnings.Append(fmt.Errorf("%w: metric.snmp.targets[%d] must have a target value", config.ErrInvalidValue, i))
+
+			continue
+		}
+
+		if targetExists[t.Target] {
+			warnings.Append(fmt.Errorf("%w: the SNMP target %s is duplicated", config.ErrInvalidValue, t.Target))
+
+			continue
+		}
+
+		mgr.targets = append(mgr.targets, newTarget(t, scaperFact, exporterURL))
 	}
 
-	return mgr
+	return mgr, warnings
 }
 
 // OnlineCount return the number of target that are available (e.g. for which Facts worked).
 // To have accurate value, Facts should be used, else the value will be updated
 // by OnlineCount in *background* (meaning value will be available on later call to OnlineCount).
 func (m *Manager) OnlineCount() int {
+	if m == nil {
+		return 0
+	}
+
 	count := 0
 
 	var needCheck []*Target

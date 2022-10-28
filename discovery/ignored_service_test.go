@@ -16,52 +16,55 @@
 
 package discovery
 
-import "testing"
+import (
+	"glouton/config"
+	"testing"
+)
 
 func TestIsCheckIgnored(t *testing.T) { //nolint:maintidx
-	checksIgnored := []map[string]string{
+	checksIgnored := []config.NameInstance{
 		{
-			"name": "mysql",
+			Name: "mysql",
 		},
 		{
-			"name":     "postgres",
-			"instance": "host:* container:*",
+			Name:     "postgres",
+			Instance: "host:* container:*",
 		},
 		{
-			"name":     "apache",
-			"instance": "container:*integration*",
+			Name:     "apache",
+			Instance: "container:*integration*",
 		},
 		{
-			"name":     "nginx",
-			"instance": "container:*",
+			Name:     "nginx",
+			Instance: "container:*",
 		},
 		{
-			"name":     "redis",
-			"instance": "host:*",
+			Name:     "redis",
+			Instance: "host:*",
 		},
 		{
-			"name":     "influxdb",
-			"instance": "host:*",
+			Name:     "influxdb",
+			Instance: "host:*",
 		},
 		{
-			"name":     "prefix",
-			"instance": "container:name-prefix*",
+			Name:     "prefix",
+			Instance: "container:name-prefix*",
 		},
 		{
-			"name":     "suffix",
-			"instance": "container:*name-suffix",
+			Name:     "suffix",
+			Instance: "container:*name-suffix",
 		},
 		{
-			"name":     "prefix-suffix",
-			"instance": "container:starts-with-*-end-withs",
+			Name:     "prefix-suffix",
+			Instance: "container:starts-with-*-end-withs",
 		},
 		{
-			"name":     "two-placeholder",
-			"instance": "container:web-??",
+			Name:     "two-placeholder",
+			Instance: "container:web-??",
 		},
 		{
-			"name":     "fixed-hostname",
-			"instance": "container:web.example.com",
+			Name:     "fixed-hostname",
+			Instance: "container:web.example.com",
 		},
 	}
 
@@ -348,7 +351,7 @@ func TestIsCheckIgnored(t *testing.T) { //nolint:maintidx
 	for i, c := range cases {
 		result := ignoredChecks.IsServiceIgnored(c.service)
 		if result != c.expectedResult {
-			t.Errorf("%v ignoredChecks.IsCheckIgnored(%v) == '%v', want '%v'", i, c.service, result, c.expectedResult)
+			t.Errorf("%v ignoredChecks.IsServiceIgnored(%v) == '%v', want '%v'", i, c.service, result, c.expectedResult)
 		}
 	}
 }

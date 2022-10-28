@@ -119,8 +119,8 @@ func New(opts Option) *Client {
 
 	if reloadState == nil {
 		reloadState = NewReloadState(ReloadStateOptions{
-			UpgradeFile:     opts.Config.String("agent.upgrade_file"),
-			AutoUpgradeFile: opts.Config.String("agent.auto_upgrade_file"),
+			UpgradeFile:     opts.Config.Agent.UpgradeFile,
+			AutoUpgradeFile: opts.Config.Agent.AutoUpgradeFile,
 			AgentID:         opts.AgentID,
 		})
 
@@ -240,15 +240,15 @@ func (c *Client) Run(ctx context.Context) error {
 func (c *Client) DiagnosticPage() string {
 	builder := &strings.Builder{}
 
-	host := c.opts.Config.String("bleemeo.mqtt.host")
-	port := c.opts.Config.Int("bleemeo.mqtt.port")
+	host := c.opts.Config.Bleemeo.MQTT.Host
+	port := c.opts.Config.Bleemeo.MQTT.Port
 
 	var tlsConfig *tls.Config
 
-	if c.opts.Config.Bool("bleemeo.mqtt.ssl") {
+	if c.opts.Config.Bleemeo.MQTT.SSL {
 		tlsConfig = mqtt.TLSConfig(
-			c.opts.Config.Bool("bleemeo.mqtt.ssl_insecure"),
-			c.opts.Config.String("bleemeo.mqtt.cafile"),
+			c.opts.Config.Bleemeo.MQTT.SSLInsecure,
+			c.opts.Config.Bleemeo.MQTT.CAFile,
 		)
 	}
 
@@ -363,12 +363,12 @@ func (c *Client) pahoOptions(ctx context.Context) (*paho.ClientOptions, error) {
 		false,
 	)
 
-	brokerURL := net.JoinHostPort(c.opts.Config.String("bleemeo.mqtt.host"), fmt.Sprint(c.opts.Config.Int("bleemeo.mqtt.port")))
+	brokerURL := net.JoinHostPort(c.opts.Config.Bleemeo.MQTT.Host, fmt.Sprint(c.opts.Config.Bleemeo.MQTT.Port))
 
-	if c.opts.Config.Bool("bleemeo.mqtt.ssl") {
+	if c.opts.Config.Bleemeo.MQTT.SSL {
 		tlsConfig := mqtt.TLSConfig(
-			c.opts.Config.Bool("bleemeo.mqtt.ssl_insecure"),
-			c.opts.Config.String("bleemeo.mqtt.cafile"),
+			c.opts.Config.Bleemeo.MQTT.SSLInsecure,
+			c.opts.Config.Bleemeo.MQTT.CAFile,
 		)
 
 		pahoOptions.SetTLSConfig(tlsConfig)
