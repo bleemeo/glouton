@@ -245,6 +245,7 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 				StatsURL:                "http://nginx/stats",
 				ManagementPort:          9090,
 				CassandraDetailedTables: []string{"squirreldb.data"},
+				KafkaDetailedTopics:     []string{"mytopic"},
 				JMXPort:                 1200,
 				JMXUsername:             "jmx_user",
 				JMXPassword:             "jmx_pass",

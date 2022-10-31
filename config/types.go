@@ -313,6 +313,8 @@ type Service struct {
 	ManagementPort int `yaml:"mgmt_port"`
 	// Detailed monitoring of specific Cassandra tables.
 	CassandraDetailedTables []string `yaml:"cassandra_detailed_tables"`
+	// Detailed monitoring of specific Kafka topics.
+	KafkaDetailedTopics []string `yaml:"kafka_detailed_topics"`
 	// JMX services.
 	JMXPort     int         `yaml:"jmx_port"`
 	JMXUsername string      `yaml:"jmx_username"`
