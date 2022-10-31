@@ -254,6 +254,35 @@ var defaultServiceMetrics = map[discovery.ServiceName][]config.JmxMetric{
 			Ratio:     "requests",
 		},
 	},
+	discovery.KafkaService: {
+		{
+			Name:      "topics_count",
+			MBean:     "kafka.controller:type=KafkaController,name=GlobalTopicCount",
+			Attribute: "Value",
+		},
+		{
+			Name:      "produce_requests_per_second",
+			MBean:     "kafka.server:type=BrokerTopicMetrics,name=TotalProduceRequestsPerSec",
+			Attribute: "Count",
+			Derive:    true,
+		},
+		{
+			Name:      "fetch_requests_per_second",
+			MBean:     "kafka.server:type=BrokerTopicMetrics,name=TotalFetchRequestsPerSec",
+			Attribute: "Count",
+			Derive:    true,
+		},
+		{
+			Name:      "fetch_average_time_ms",
+			MBean:     "kafka.network:type=RequestMetrics,name=TotalTimeMs,request=FetchConsumer",
+			Attribute: "Mean",
+		},
+		{
+			Name:      "produce_average_time_ms",
+			MBean:     "kafka.network:type=RequestMetrics,name=TotalTimeMs,request=Produce",
+			Attribute: "Mean",
+		},
+	},
 }
 
 //nolint:gochecknoglobals

@@ -77,6 +77,7 @@ const (
 	HAProxyService       ServiceName = "haproxy"
 	InfluxDBService      ServiceName = "influxdb"
 	JIRAService          ServiceName = "jira"
+	KafkaService         ServiceName = "kafka"
 	LibvirtService       ServiceName = "libvirt"
 	MemcachedService     ServiceName = "memcached"
 	MongoDBService       ServiceName = "mongodb"

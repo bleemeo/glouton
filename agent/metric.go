@@ -410,6 +410,14 @@ var (
 			"jira_status",
 		},
 
+		discovery.KafkaService: {
+			"kafka_jvm_gc",
+			"kafka_jvm_gc_time",
+			"kafka_jvm_gc_utilization",
+			"kafka_jvm_heap_used",
+			"kafka_jvm_non_heap_used",
+		},
+
 		discovery.MemcachedService: {
 			"memcached_status",
 			"memcached_command_get",
