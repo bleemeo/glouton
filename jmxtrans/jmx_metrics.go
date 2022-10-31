@@ -261,25 +261,25 @@ var (
 				Attribute: "Value",
 			},
 			{
-				Name:      "produce_requests_per_second",
+				Name:      "produce_requests",
 				MBean:     "kafka.server:type=BrokerTopicMetrics,name=TotalProduceRequestsPerSec",
 				Attribute: "Count",
 				Derive:    true,
 			},
 			{
-				Name:      "fetch_requests_per_second",
+				Name:      "fetch_requests",
 				MBean:     "kafka.server:type=BrokerTopicMetrics,name=TotalFetchRequestsPerSec",
 				Attribute: "Count",
 				Derive:    true,
 			},
 			{
-				Name:      "fetch_average_time_ms",
-				MBean:     "kafka.network:type=RequestMetrics,name=TotalTimeMs,request=FetchConsumer",
+				Name:      "produce_time",
+				MBean:     "kafka.network:type=RequestMetrics,name=TotalTimeMs,request=Produce",
 				Attribute: "Mean",
 			},
 			{
-				Name:      "produce_average_time_ms",
-				MBean:     "kafka.network:type=RequestMetrics,name=TotalTimeMs,request=Produce",
+				Name:      "fetch_time",
+				MBean:     "kafka.network:type=RequestMetrics,name=TotalTimeMs,request=FetchConsumer",
 				Attribute: "Mean",
 			},
 		},
@@ -331,14 +331,14 @@ var (
 
 	kafkaDetailedTopicMetrics = []config.JmxMetric{
 		{
-			Name:      "produce_requests_per_second",
+			Name:      "produce_requests",
 			MBean:     "kafka.server:type=BrokerTopicMetrics,name=TotalProduceRequestsPerSec,topic={topic}",
 			Attribute: "Count",
 			TypeNames: []string{"topic"},
 			Derive:    true,
 		},
 		{
-			Name:      "fetch_requests_per_second",
+			Name:      "fetch_requests",
 			MBean:     "kafka.server:type=BrokerTopicMetrics,name=TotalFetchRequestsPerSec,topic={topic}",
 			Attribute: "Count",
 			TypeNames: []string{"topic"},
