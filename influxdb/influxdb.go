@@ -142,7 +142,7 @@ func (c *Client) connect(ctx context.Context) {
 	}
 }
 
-// addPoints adds metrics points to the the client attribute BleemeopendingPoints.
+// addPoints adds metrics points to the client attribute BleemeopendingPoints.
 func (c *Client) addPoints(points []types.MetricPoint) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
