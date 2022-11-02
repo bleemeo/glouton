@@ -356,7 +356,7 @@ func FixType(m *dto.Metric, wantType dto.MetricType) *dto.Metric {
 		m.Counter = &dto.Counter{Value: value}
 	case dto.MetricType_GAUGE:
 		m.Gauge = &dto.Gauge{Value: value}
-	case dto.MetricType_HISTOGRAM:
+	case dto.MetricType_HISTOGRAM, dto.MetricType_GAUGE_HISTOGRAM:
 		m.Histogram = &dto.Histogram{SampleCount: proto.Uint64(1), SampleSum: value}
 	case dto.MetricType_SUMMARY:
 		m.Summary = &dto.Summary{SampleCount: proto.Uint64(1), SampleSum: value}
@@ -369,7 +369,7 @@ func FixType(m *dto.Metric, wantType dto.MetricType) *dto.Metric {
 		m.Counter = nil
 	case dto.MetricType_GAUGE:
 		m.Gauge = nil
-	case dto.MetricType_HISTOGRAM:
+	case dto.MetricType_HISTOGRAM, dto.MetricType_GAUGE_HISTOGRAM:
 		m.Histogram = nil
 	case dto.MetricType_SUMMARY:
 		m.Summary = nil
