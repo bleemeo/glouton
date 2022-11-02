@@ -549,6 +549,11 @@ func applyOverride(
 		}
 
 		if service.ServiceType == CustomService {
+			// If the port is not set, use the JMX port.
+			if service.Config.Port == 0 {
+				service.Config.Port = service.Config.JMXPort
+			}
+
 			if service.Config.Port != 0 {
 				if service.Config.Address == "" {
 					service.Config.Address = localhostIP
