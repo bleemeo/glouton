@@ -230,7 +230,7 @@ var (
 			Interpreter:         "java",
 		},
 		{
-			CmdLineMustContains: []string{"kafka.Kafka"},
+			CmdLineMustContains: []string{"kafka.Kafka", "server.properties"},
 			ServiceName:         KafkaService,
 			Interpreter:         "java",
 		},

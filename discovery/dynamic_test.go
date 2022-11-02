@@ -781,6 +781,38 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				},
 			},
 		},
+		{
+			testName: "kafka",
+			cmdLine: []string{
+				"/usr/local/openjdk-11/bin/java -Xmx1G -Xms1G -server -XX:+UseG1GC -XX:MaxGCPauseMillis=20",
+				"-XX:+ExplicitGCInvokesConcurrent -XX:MaxInlineLevel=15 -Djava.awt.headless=true",
+				"-Xlog:gc*:file=/opt/kafka/bin/../logs/kafkaServer-gc.log:time,tags:filecount=10,filesize=100M",
+				"-Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false",
+				"-Djava.rmi.server.hostname=localhost -Dcom.sun.management.jmxremote.rmi.port=1099 -Dcom.sun.management.jmxremote.port=1099",
+				"-Dkafka.logs.dir=/opt/kafka/bin/../logs -Dlog4j.configuration=file:/opt/kafka/bin/../config/log4j.properties",
+				"-cp /opt/kafka/bin/../libs/activation-1.1.1.jar:/opt/kafka/bin/../libs/aopalliance-repackaged-2.6.1.jar",
+				"kafka.Kafka /opt/kafka/config/server.properties",
+			},
+			containerID:      "1234",
+			containerIP:      "127.0.0.1",
+			netstatAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 9092}},
+			want: Service{
+				Name:            "kafka",
+				ServiceType:     KafkaService,
+				ContainerID:     "1234",
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 9092}},
+				IPAddress:       "127.0.0.1",
+				IgnoredPorts:    map[int]bool{},
+			},
+		},
+		{
+			testName:         "not kafka",
+			cmdLine:          []string{"java -dconf.kafka.Kafka.address=1.2.3.4 com.bleemeo.myapp"},
+			containerID:      "1234",
+			containerIP:      "127.0.0.1",
+			netstatAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 9092}},
+			noMatch:          true,
+		},
 	}
 
 	ctx := context.Background()
