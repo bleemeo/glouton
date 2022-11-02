@@ -338,6 +338,7 @@ func Test_applyOverride(t *testing.T) {
 							Port:          80,
 						},
 					},
+					IPAddress: "10.0.1.2",
 				},
 			},
 		},

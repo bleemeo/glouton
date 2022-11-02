@@ -79,8 +79,8 @@ func Test_jmxtransConfig_cassandra_Config(t *testing.T) {
 			ServiceType: discovery.CassandraService,
 			Active:      true,
 			Config: config.Service{
-				JMXPort:                 1212,
-				CassandraDetailedTables: []string{"squirreldb.data"},
+				JMXPort:       1212,
+				DetailedItems: []string{"squirreldb.data"},
 			},
 			IPAddress: "127.0.0.1",
 		},

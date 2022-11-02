@@ -365,9 +365,9 @@ func GetJMXMetrics(service discovery.Service) []config.JmxMetric {
 	metrics = append(metrics, defaultGenericMetrics...)
 	metrics = append(metrics, defaultServiceMetrics[service.ServiceType]...)
 
-	switch service.ServiceType {
+	switch service.ServiceType { //nolint:exhaustive
 	case discovery.CassandraService:
-		for _, name := range service.Config.CassandraDetailedTables {
+		for _, name := range service.Config.DetailedItems {
 			part := strings.Split(name, ".")
 			if len(part) == 2 {
 				replacer := strings.NewReplacer(
@@ -382,7 +382,7 @@ func GetJMXMetrics(service discovery.Service) []config.JmxMetric {
 			}
 		}
 	case discovery.KafkaService:
-		for _, topic := range service.Config.KafkaDetailedTopics {
+		for _, topic := range service.Config.DetailedItems {
 			replacer := strings.NewReplacer(
 				"{topic}", topic,
 			)

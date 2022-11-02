@@ -311,10 +311,8 @@ type Service struct {
 	StatsURL string `yaml:"stats_url"`
 	// Port of RabbitMQ management interface.
 	ManagementPort int `yaml:"mgmt_port"`
-	// Detailed monitoring of specific Cassandra tables.
-	CassandraDetailedTables []string `yaml:"cassandra_detailed_tables"`
-	// Detailed monitoring of specific Kafka topics.
-	KafkaDetailedTopics []string `yaml:"kafka_detailed_topics"`
+	// Detailed monitoring of specific items (Cassandra tables, Postgres databases or Kafka topics).
+	DetailedItems []string `yaml:"detailed_items"`
 	// JMX services.
 	JMXPort     int         `yaml:"jmx_port"`
 	JMXUsername string      `yaml:"jmx_username"`
