@@ -325,6 +325,10 @@ var (
 			ServiceProtocol: "tcp",
 			IgnoreHighPort:  true,
 		},
+		KafkaService: {
+			ServicePort:     9092,
+			ServiceProtocol: "tcp",
+		},
 		MemcachedService: {
 			ServicePort:     11211,
 			ServiceProtocol: "tcp",
