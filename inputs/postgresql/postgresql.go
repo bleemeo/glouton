@@ -26,46 +26,65 @@ import (
 )
 
 // New initialise postgresql.Input.
-func New(url string) (i telegraf.Input, err error) {
+func New(address string, detailedDatabases []string) (telegraf.Input, error) {
 	input, ok := telegraf_inputs.Inputs["postgresql"]
-	if ok {
-		postgresqlInput, ok := input().(*postgresql.Postgresql)
-		if ok {
-			postgresqlInput.Address = url
-			i = &internal.Input{
-				Input: postgresqlInput,
-				Accumulator: internal.Accumulator{
-					RenameGlobal: renameGlobal,
-					DerivatedMetrics: []string{
-						"xact_commit", "xact_rollback", "blks_read", "blks_hit", "tup_returned", "tup_fetched",
-						"tup_inserted", "tup_updated", "tup_deleted", "temp_files", "temp_bytes", "blk_read_time",
-						"blk_write_time",
-					},
-					TransformMetrics: transformMetrics,
-				},
-				Name: "postgresql",
-			}
-		} else {
-			err = inputs.ErrUnexpectedType
-		}
-	} else {
-		err = inputs.ErrDisabledInput
+	if !ok {
+		return nil, inputs.ErrDisabledInput
 	}
 
-	return
+	postgresqlInput, ok := input().(*postgresql.Postgresql)
+	if !ok {
+		return nil, inputs.ErrUnexpectedType
+	}
+
+	postgresqlInput.Address = address
+	postgresqlInput.Databases = detailedDatabases
+
+	globalMetricsInput := globalMetrics{
+		input: postgresqlInput,
+	}
+
+	internalInput := &internal.Input{
+		Input: globalMetricsInput,
+		Accumulator: internal.Accumulator{
+			RenameGlobal: renameGlobal(detailedDatabases),
+			DerivatedMetrics: []string{
+				"xact_commit", "xact_rollback", "blks_read", "blks_hit", "tup_returned", "tup_fetched",
+				"tup_inserted", "tup_updated", "tup_deleted", "temp_files", "temp_bytes", "blk_read_time",
+				"blk_write_time",
+			},
+			TransformMetrics: transformMetrics,
+		},
+		Name: "postgresql",
+	}
+
+	return internalInput, nil
 }
 
-func renameGlobal(gatherContext internal.GatherContext) (internal.GatherContext, bool) {
-	if gatherContext.Tags["db"] == "template0" || gatherContext.Tags["db"] == "template1" {
+func renameGlobal(detailedDatabases []string) func(internal.GatherContext) (internal.GatherContext, bool) {
+	// Gather sum metrics only if no detailed database is set in the config.
+	if len(detailedDatabases) == 0 {
+		detailedDatabases = []string{"global"}
+	}
+
+	return func(gatherContext internal.GatherContext) (internal.GatherContext, bool) {
+		for _, db := range detailedDatabases {
+			if db == gatherContext.Tags["db"] {
+				gatherContext.Annotations.BleemeoItem = gatherContext.Tags["db"]
+
+				return gatherContext, false
+			}
+		}
+
 		return gatherContext, true
 	}
-
-	gatherContext.Annotations.BleemeoItem = gatherContext.Tags["db"]
-
-	return gatherContext, false
 }
 
-func transformMetrics(currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {
+func transformMetrics(
+	currentContext internal.GatherContext,
+	fields map[string]float64,
+	originalFields map[string]interface{},
+) map[string]float64 {
 	newFields := make(map[string]float64)
 
 	for metricName, value := range fields {

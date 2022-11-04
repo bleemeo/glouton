@@ -109,8 +109,8 @@ func (a *Accumulator) PrepareGather() {
 	a.now = time.Now()
 }
 
-// convertToFloat convert the interface type in float64.
-func convertToFloat(value interface{}) (valueFloat float64, err error) {
+// ConvertToFloat convert the interface type in float64.
+func ConvertToFloat(value interface{}) (valueFloat float64, err error) {
 	switch value := value.(type) {
 	case uint64:
 		valueFloat = float64(value)
@@ -154,12 +154,12 @@ func rateAsFloat(pastPoint, currentPoint metricPoint) (value float64, err error)
 		currentValue, _ := currentPoint.Value.(int64)
 		value = float64(currentValue - pastValue)
 	default:
-		pastValueFloat, err := convertToFloat(pastPoint.Value)
+		pastValueFloat, err := ConvertToFloat(pastPoint.Value)
 		if err != nil {
 			return 0.0, err
 		}
 
-		currentValue, err := convertToFloat(currentPoint.Value)
+		currentValue, err := ConvertToFloat(currentPoint.Value)
 		if err != nil {
 			return 0.0, err
 		}
@@ -253,7 +253,7 @@ func (a *Accumulator) convertToFloatFields(currentContext GatherContext, fields 
 		}
 
 		if !derive {
-			valueFloat, err := convertToFloat(value)
+			valueFloat, err := ConvertToFloat(value)
 			if err == nil {
 				a.workResult[metricName] = valueFloat
 			} else {
@@ -288,7 +288,13 @@ func (a *Accumulator) getDerivativeValue(pastMetricPoint metricPoint, currentPoi
 	}
 }
 
-type accumulatorFunc func(measurement string, fields map[string]interface{}, tags map[string]string, annotations types.MetricAnnotations, t ...time.Time)
+type accumulatorFunc func(
+	measurement string,
+	fields map[string]interface{},
+	tags map[string]string,
+	annotations types.MetricAnnotations,
+	t ...time.Time,
+)
 
 func (a *Accumulator) processMetrics(
 	finalFunc accumulatorFunc,
