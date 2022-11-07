@@ -67,39 +67,39 @@ var (
 	defaultServiceMetrics = map[discovery.ServiceName][]config.JmxMetric{
 		discovery.CassandraService: {
 			{
-				Name:      "read_requests",
+				Name:      "read_requests_sum",
 				MBean:     "org.apache.cassandra.metrics:type=ClientRequest,scope=Read,name=Latency",
 				Attribute: "Count",
 				Derive:    true,
 			},
 			{
-				Name:      "read_time",
+				Name:      "read_time_average",
 				MBean:     "org.apache.cassandra.metrics:type=ClientRequest,scope=Read,name=TotalLatency",
 				Attribute: "Count",
 				Scale:     0.001, // convert from microsecond to millisecond
 				Derive:    true,
 			},
 			{
-				Name:      "write_requests",
+				Name:      "write_requests_sum",
 				MBean:     "org.apache.cassandra.metrics:type=ClientRequest,scope=Write,name=Latency",
 				Attribute: "Count",
 				Derive:    true,
 			},
 			{
-				Name:      "write_time",
+				Name:      "write_time_average",
 				MBean:     "org.apache.cassandra.metrics:type=ClientRequest,scope=Write,name=TotalLatency",
 				Attribute: "Count",
 				Scale:     0.001, // convert from microsecond to millisecond
 				Derive:    true,
 			},
 			{
-				Name:      "bloom_filter_false_ratio",
+				Name:      "bloom_filter_false_ratio_sum",
 				MBean:     "org.apache.cassandra.metrics:type=Table,name=BloomFilterFalseRatio",
 				Attribute: "Value",
 				Scale:     100, // convert from ratio (0 to 1) to percent
 			},
 			{
-				Name:      "sstable",
+				Name:      "sstable_sum",
 				MBean:     "org.apache.cassandra.metrics:type=Table,name=LiveSSTableCount",
 				Attribute: "Value",
 			},
@@ -261,24 +261,24 @@ var (
 				Attribute: "Value",
 			},
 			{
-				Name:      "produce_requests",
+				Name:      "produce_requests_sum",
 				MBean:     "kafka.server:type=BrokerTopicMetrics,name=TotalProduceRequestsPerSec",
 				Attribute: "Count",
 				Derive:    true,
 			},
 			{
-				Name:      "fetch_requests",
+				Name:      "fetch_requests_sum",
 				MBean:     "kafka.server:type=BrokerTopicMetrics,name=TotalFetchRequestsPerSec",
 				Attribute: "Count",
 				Derive:    true,
 			},
 			{
-				Name:      "produce_time",
+				Name:      "produce_time_average",
 				MBean:     "kafka.network:type=RequestMetrics,name=TotalTimeMs,request=Produce",
 				Attribute: "Mean",
 			},
 			{
-				Name:      "fetch_time",
+				Name:      "fetch_time_average",
 				MBean:     "kafka.network:type=RequestMetrics,name=TotalTimeMs,request=FetchConsumer",
 				Attribute: "Mean",
 			},
