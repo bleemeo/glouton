@@ -38,9 +38,8 @@ func New(address string, detailedDatabases []string) (telegraf.Input, error) {
 	}
 
 	postgresqlInput.Address = address
-	postgresqlInput.Databases = detailedDatabases
 
-	globalMetricsInput := globalMetrics{
+	globalMetricsInput := sumMetrics{
 		input: postgresqlInput,
 	}
 
@@ -62,12 +61,12 @@ func New(address string, detailedDatabases []string) (telegraf.Input, error) {
 }
 
 func renameGlobal(detailedDatabases []string) func(internal.GatherContext) (internal.GatherContext, bool) {
-	// Gather sum metrics only if no detailed database is set in the config.
-	if len(detailedDatabases) == 0 {
-		detailedDatabases = []string{"global"}
-	}
-
 	return func(gatherContext internal.GatherContext) (internal.GatherContext, bool) {
+		// Always allow sum metrics.
+		if _, ok := gatherContext.Tags["sum"]; ok {
+			return gatherContext, false
+		}
+
 		for _, db := range detailedDatabases {
 			if db == gatherContext.Tags["db"] {
 				gatherContext.Annotations.BleemeoItem = gatherContext.Tags["db"]
@@ -87,16 +86,21 @@ func transformMetrics(
 ) map[string]float64 {
 	newFields := make(map[string]float64)
 
+	suffix := ""
+	if _, ok := currentContext.Tags["sum"]; ok {
+		suffix = "_sum"
+	}
+
 	for metricName, value := range fields {
 		switch metricName {
 		case "xact_commit":
-			newFields["commit"] = value
+			newFields["commit"+suffix] = value
 		case "xact_rollback":
-			newFields["rollback"] = value
+			newFields["rollback"+suffix] = value
 		case "blks_read", "blks_hit", "tup_returned", "tup_fetched", "tup_inserted", "tup_updated":
-			newFields[metricName] = value
+			newFields[metricName+suffix] = value
 		case "tup_deleted", "temp_files", "temp_bytes", "blk_read_time", "blk_write_time":
-			newFields[metricName] = value
+			newFields[metricName+suffix] = value
 		}
 	}
 

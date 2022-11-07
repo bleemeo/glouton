@@ -53,7 +53,7 @@ func TestSum(t *testing.T) {
 			},
 			{
 				Name: "postgresql",
-				Tags: map[string]string{"db": "global"},
+				Tags: map[string]string{"sum": "true"},
 				Fields: map[string]interface{}{
 					"xact_commit":    3.,
 					"xact_rollback":  10.,

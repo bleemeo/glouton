@@ -7,14 +7,14 @@ import (
 	"github.com/influxdata/telegraf/plugins/inputs/postgresql"
 )
 
-// globalMetrics adds metrics with the sum on all databases.
-type globalMetrics struct {
+// sumMetrics adds metrics with the sum on all databases.
+type sumMetrics struct {
 	input *postgresql.Postgresql
 }
 
-func (g globalMetrics) Gather(acc telegraf.Accumulator) error {
+func (s sumMetrics) Gather(acc telegraf.Accumulator) error {
 	tmp := &internal.StoreAccumulator{}
-	err := g.input.Gather(tmp)
+	err := s.input.Gather(tmp)
 
 	sum(tmp)
 	tmp.Send(acc)
@@ -48,7 +48,7 @@ func sum(acc *internal.StoreAccumulator) {
 		Name:   "postgresql",
 		Fields: newFields,
 		Tags: map[string]string{
-			"db": "global",
+			"sum": "true",
 		},
 	}
 
@@ -56,18 +56,18 @@ func sum(acc *internal.StoreAccumulator) {
 }
 
 // SampleConfig returns the default configuration of the Processor.
-func (g globalMetrics) SampleConfig() string {
-	return g.input.SampleConfig()
+func (s sumMetrics) SampleConfig() string {
+	return s.input.SampleConfig()
 }
 
-func (g globalMetrics) Init() error {
-	return g.input.Init()
+func (s sumMetrics) Init() error {
+	return s.input.Init()
 }
 
-func (g globalMetrics) Start(acc telegraf.Accumulator) (err error) {
-	return g.input.Start(acc)
+func (s sumMetrics) Start(acc telegraf.Accumulator) (err error) {
+	return s.input.Start(acc)
 }
 
-func (g globalMetrics) Stop() {
-	g.input.Stop()
+func (s sumMetrics) Stop() {
+	s.input.Stop()
 }
