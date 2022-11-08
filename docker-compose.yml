@@ -33,6 +33,7 @@ services:
       - SYS_ADMIN # This permission is needed to retrieve the network interface names of containers.
   jmxtrans:
     image: jmxtrans/jmxtrans
+    restart: unless-stopped
     volumes:
       - jmxtrans-config:/var/lib/jmxtrans
     environment:
