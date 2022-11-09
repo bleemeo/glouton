@@ -51,6 +51,10 @@ var (
 		"kubernetes_certificate_day_left",
 		"kubernetes_kubelet_status",
 		"kubernetes_api_status",
+		"kubernetes_pods_count",
+		"kubernetes_nodes_count",
+		"kubernetes_namespaces_count",
+		"kubernetes_replicasets_count",
 
 		// Key Processes
 		"process_context_switch",

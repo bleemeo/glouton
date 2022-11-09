@@ -29,6 +29,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/version"
 	"k8s.io/client-go/rest"
@@ -38,8 +39,11 @@ import (
 var errNotImplemented = errors.New("not implemented")
 
 type mockKubernetesClient struct {
-	node     corev1.NodeList
-	pods     corev1.PodList
+	nodes       corev1.NodeList
+	pods        corev1.PodList
+	namespaces  corev1.NamespaceList
+	replicaSets appsv1.ReplicaSetList
+
 	versions struct {
 		ClientVersion *version.Info `json:"clientVersion"`
 		ServerVersion *version.Info `json:"serverVersion"`
@@ -51,7 +55,7 @@ func newKubernetesMock(dirname string) (*mockKubernetesClient, error) {
 
 	data, err := os.ReadFile(filepath.Join(dirname, "node.yaml"))
 	if err == nil {
-		err = yaml.Unmarshal(data, &result.node)
+		err = yaml.Unmarshal(data, &result.nodes)
 		if err != nil {
 			return nil, err
 		}
@@ -77,11 +81,11 @@ func newKubernetesMock(dirname string) (*mockKubernetesClient, error) {
 }
 
 func (k *mockKubernetesClient) GetNode(ctx context.Context, nodeName string) (*corev1.Node, error) {
-	if len(k.node.Items) == 0 {
+	if len(k.nodes.Items) == 0 {
 		return nil, errNotImplemented
 	}
 
-	return &k.node.Items[0], nil
+	return &k.nodes.Items[0], nil
 }
 
 func (k *mockKubernetesClient) GetPODs(ctx context.Context, nodeName string) ([]corev1.Pod, error) {

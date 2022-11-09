@@ -38,6 +38,7 @@ import (
 	"sync"
 	"time"
 
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/version"
@@ -210,11 +211,13 @@ func (k *Kubernetes) RuntimeFact(ctx context.Context, currentFact map[string]str
 		cl, err := k.getClient(ctx)
 		if err != nil {
 			logger.V(2).Printf("Kubernetes client initialization fail: %v", err)
-		} else {
-			k.node, err = cl.GetNode(ctx, k.NodeName)
-			if err != nil {
-				logger.V(2).Printf("Failed to get Kubernetes node %s: %v", k.NodeName, err)
-			}
+
+			return facts
+		}
+
+		k.node, err = cl.GetNode(ctx, k.NodeName)
+		if err != nil {
+			logger.V(2).Printf("Failed to get Kubernetes node %s: %v", k.NodeName, err)
 		}
 
 		k.version, err = cl.GetServerVersion(ctx)
@@ -274,7 +277,152 @@ func (k *Kubernetes) MetricsMinute(ctx context.Context, now time.Time) ([]types.
 	points = append(points, morePoints...)
 	multiErr = append(multiErr, errors...)
 
+	// Add global cluster metrics if this agent is the current kubernetes agent of the cluster.
+	morePoints, err = k.getGlobalMetrics(ctx, cl, now)
+	if err != nil {
+		multiErr = append(multiErr, err)
+	}
+
+	points = append(points, morePoints...)
+
 	return points, multiErr
+}
+
+func (k *Kubernetes) getGlobalMetrics(ctx context.Context, cl kubeClient, now time.Time) ([]types.MetricPoint, error) {
+	var points []types.MetricPoint
+
+	// Add metric kubernetes_pods_count with the pods states in the labels.
+	pods, err := cl.GetPODs(ctx, k.NodeName)
+	if err != nil {
+		return nil, err
+	}
+
+	podsCountByState := make(map[string]int, len(pods))
+	for _, pod := range pods {
+		state := strings.ToLower(string(podPhase(pod)))
+		podsCountByState[state] += 1
+	}
+
+	for state, count := range podsCountByState {
+		points = append(points, types.MetricPoint{
+			Point: types.Point{Time: now, Value: float64(count)},
+			Labels: map[string]string{
+				types.LabelName:  "kubernetes_pods_count",
+				types.LabelState: state,
+			},
+		})
+	}
+
+	// Add metric kubernetes_namespaces_count with the namespaces states in the labels.
+	ns, err := cl.GetNamespaces(ctx)
+	if err != nil {
+		return points, err
+	}
+
+	nsCountByState := make(map[string]int, len(ns))
+	for _, namespace := range ns {
+		state := strings.ToLower(string(namespace.Status.Phase))
+		nsCountByState[state] += 1
+	}
+
+	for state, count := range nsCountByState {
+		points = append(points, types.MetricPoint{
+			Point: types.Point{Time: now, Value: float64(count)},
+			Labels: map[string]string{
+				types.LabelName:  "kubernetes_namespaces_count",
+				types.LabelState: state,
+			},
+		})
+	}
+
+	// Add metric kubernetes_nodes_count with the nodes states in the labels.
+	nodes, err := cl.GetNodes(ctx)
+	if err != nil {
+		return points, err
+	}
+
+	nodesCountByState := make(map[string]int, len(nodes))
+	for _, node := range nodes {
+		state := strings.ToLower(string(node.Status.Phase))
+		nodesCountByState[state] += 1
+	}
+
+	for state, count := range nodesCountByState {
+		points = append(points, types.MetricPoint{
+			Point: types.Point{Time: now, Value: float64(count)},
+			Labels: map[string]string{
+				types.LabelName:  "kubernetes_nodes_count",
+				types.LabelState: state,
+			},
+		})
+	}
+
+	// Add metric kubernetes_replicasets_count.
+	replicaSets, err := cl.GetReplicasets(ctx)
+	if err != nil {
+		return points, err
+	}
+
+	points = append(points, types.MetricPoint{
+		Point: types.Point{Time: now, Value: float64(len(replicaSets))},
+		Labels: map[string]string{
+			types.LabelName: "kubernetes_replicasets_count",
+		},
+	})
+
+	return points, nil
+}
+
+// podPhase returns the status of a pod.
+func podPhase(pod corev1.Pod) corev1.PodPhase {
+	// The phase of the pod itself is not sufficient to know if the containers are running,
+	// the pod may be in the running state while the container inside is in a crash loop.
+	status := pod.Status.Phase
+	if status != corev1.PodRunning {
+		return status
+	}
+
+	status = initContainerPhase(pod.Status)
+	if status != corev1.PodRunning {
+		return status
+	}
+
+	return containerPhase(pod.Status)
+}
+
+// containerPhase returns the status of the containers.
+func containerPhase(podStatus corev1.PodStatus) corev1.PodPhase {
+	for _, status := range podStatus.ContainerStatuses {
+		switch {
+		case status.State.Terminated != nil:
+			return corev1.PodFailed
+		case status.State.Waiting != nil:
+			return corev1.PodPending
+		}
+	}
+
+	return corev1.PodRunning
+}
+
+// initContainerPhase returns the status of the init containers.
+func initContainerPhase(podStatus corev1.PodStatus) corev1.PodPhase {
+	for _, status := range podStatus.InitContainerStatuses {
+		switch {
+		case status.State.Running != nil:
+			continue
+		case status.State.Terminated != nil:
+			if status.State.Terminated.ExitCode == 0 {
+				// An init container exited with code 0 means the container succeeded.
+				continue
+			}
+
+			return corev1.PodFailed
+		case status.State.Waiting != nil:
+			return corev1.PodPending
+		}
+	}
+
+	return corev1.PodRunning
 }
 
 func (k *Kubernetes) getCertificateExpiration(ctx context.Context, config *rest.Config, now time.Time) (types.MetricPoint, error) {
@@ -597,10 +745,16 @@ func kuberIDtoRuntimeID(containerID string) string {
 }
 
 type kubeClient interface {
-	// GetNode return the node by name.
+	// GetNode returns a node by name.
 	GetNode(ctx context.Context, nodeName string) (*corev1.Node, error)
+	// GetNodes returns all nodes in the cluster.
+	GetNodes(ctx context.Context) ([]corev1.Node, error)
 	// GetPODs returns POD on given nodeName or all POD is nodeName is empty.
 	GetPODs(ctx context.Context, nodeName string) ([]corev1.Pod, error)
+	// GetNamespaces returns all namespaces in the cluster.
+	GetNamespaces(ctx context.Context) ([]corev1.Namespace, error)
+	// GetReplicasets return all replicasets in the cluster.
+	GetReplicasets(ctx context.Context) ([]appsv1.ReplicaSet, error)
 	GetServerVersion(ctx context.Context) (*version.Info, error)
 	IsUsingLocalAPI() bool
 	Config() *rest.Config
@@ -619,6 +773,15 @@ func (cl realClient) GetNode(ctx context.Context, nodeName string) (*corev1.Node
 	return node, err
 }
 
+func (cl realClient) GetNodes(ctx context.Context) ([]corev1.Node, error) {
+	node, err := cl.client.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	return node.Items, nil
+}
+
 func (cl realClient) GetPODs(ctx context.Context, nodeName string) ([]corev1.Pod, error) {
 	opts := metav1.ListOptions{}
 
@@ -632,6 +795,24 @@ func (cl realClient) GetPODs(ctx context.Context, nodeName string) ([]corev1.Pod
 	}
 
 	return list.Items, nil
+}
+
+func (cl realClient) GetNamespaces(ctx context.Context) ([]corev1.Namespace, error) {
+	ns, err := cl.client.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	return ns.Items, nil
+}
+
+func (cl realClient) GetReplicasets(ctx context.Context) ([]appsv1.ReplicaSet, error) {
+	rs, err := cl.client.AppsV1().ReplicaSets("").List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	return rs.Items, nil
 }
 
 func (cl realClient) GetServerVersion(ctx context.Context) (*version.Info, error) {
@@ -733,7 +914,7 @@ func (cl *realClient) switchToLocalAPI(ctx context.Context, localNode string) (b
 
 		for _, ip := range subset.Addresses {
 			if pod, ok := podsIP[ip.IP]; ok {
-				logger.V(2).Printf("found the POD running Kubernetes API on local node: %s", pod.Name)
+				logger.V(2).Printf("Found the POD running Kubernetes API on local node: %s", pod.Name)
 
 				shallowCopy := *cl.config
 				shallowCopy.Host = "https://" + net.JoinHostPort(ip.IP, strconv.FormatInt(int64(httpsPort), 10))
@@ -894,7 +1075,9 @@ func (w wrapProcessQuerier) ContainerFromPID(ctx context.Context, parentContaine
 		return c, err
 	}
 
+	w.k.l.Lock()
 	pod, _ := w.k.getPod(c)
+	w.k.l.Unlock()
 
 	return wrappedContainer{
 		Container: c,

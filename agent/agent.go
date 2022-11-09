@@ -1068,7 +1068,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		a.miscGather(a.gathererRegistry.WithTTL(5*time.Minute)),
 	)
 	if err != nil {
-		logger.Printf("unable to add miscGathere metrics: %v", err)
+		logger.Printf("unable to add miscGatherer metrics: %v", err)
 	}
 
 	_, err = a.gathererRegistry.RegisterPushPointsCallback(
@@ -1077,10 +1077,10 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 			JitterSeed:  baseJitter,
 			MinInterval: time.Minute,
 		},
-		a.miscGatherMinute(a.gathererRegistry.WithTTL(5*time.Minute)),
+		a.miscGatherMinute(a.gathererRegistry.WithTTLAndFormat(5*time.Minute, types.MetricFormatPrometheus)),
 	)
 	if err != nil {
-		logger.Printf("unable to add miscGathere metrics: %v", err)
+		logger.Printf("unable to add miscGathererMinute metrics: %v", err)
 	}
 
 	_, err = a.gathererRegistry.RegisterAppenderCallback(

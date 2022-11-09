@@ -134,6 +134,7 @@ const (
 	LabelScrapeJob                  = "scrape_job"
 	LabelScrapeInstance             = "scrape_instance"
 	LabelAlertname                  = "alertname"
+	LabelState                      = "state"
 )
 
 // MissingContainerID is the container ID annotation set on metrics that belong
