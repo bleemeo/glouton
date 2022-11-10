@@ -342,31 +342,23 @@ func (k *Kubernetes) getGlobalMetrics(ctx context.Context, cl kubeClient, now ti
 		})
 	}
 
-	// Add metric kubernetes_nodes_count with the nodes states in the labels.
+	// Add metric kubernetes_nodes_count.
 	nodes, err := cl.GetNodes(ctx)
 	if err != nil {
 		return points, err
 	}
 
-	nodesCountByState := make(map[string]int, len(nodes))
-	for _, node := range nodes {
-		state := strings.ToLower(string(node.Status.Phase))
-		nodesCountByState[state] += 1
-	}
-
-	for state, count := range nodesCountByState {
-		points = append(points, types.MetricPoint{
-			Point: types.Point{Time: now, Value: float64(count)},
-			Labels: map[string]string{
-				types.LabelName:  "kubernetes_nodes_count",
-				types.LabelState: state,
-			},
-		})
-	}
+	points = append(points, types.MetricPoint{
+		Point: types.Point{Time: now, Value: float64(len(nodes))},
+		Labels: map[string]string{
+			types.LabelName: "kubernetes_nodes_count",
+		},
+	})
 
 	// Add metric kubernetes_replicasets_count.
 	replicaSets, err := cl.GetReplicasets(ctx)
 	if err != nil {
+		fmt.Println("!!! err list replicasets:", err)
 		return points, err
 	}
 
@@ -781,12 +773,12 @@ func (cl realClient) GetNode(ctx context.Context, nodeName string) (*corev1.Node
 }
 
 func (cl realClient) GetNodes(ctx context.Context) ([]corev1.Node, error) {
-	node, err := cl.client.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+	nodes, err := cl.client.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, err
 	}
 
-	return node.Items, nil
+	return nodes.Items, nil
 }
 
 func (cl realClient) GetPODs(ctx context.Context, nodeName string) ([]corev1.Pod, error) {
