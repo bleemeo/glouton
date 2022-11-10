@@ -51,11 +51,15 @@ import (
 // It will add annotation, IP detection, flag "StoppedAndRestarted".
 type Kubernetes struct {
 	Runtime crTypes.RuntimeInterface
-	// NodeName is the node Glouton is running on. Allow to fetch only relevant PODs (running on the same node) instead of all PODs.
+	// NodeName is the node Glouton is running on. Allow to fetch only
+	// relevant PODs (running on the same node) instead of all PODs.
 	NodeName string
-	// KubecConfig is a kubeconfig file to use for communication with Kubernetes. If not provided, use in-cluster auto-configuration.
+	// KubeConfig is a kubeconfig file to use for communication with
+	// Kubernetes. If not provided, use in-cluster auto-configuration.
 	KubeConfig         string
 	IsContainerIgnored func(facts.Container) bool
+	// ShouldGatherClusterMetrics returns whether this agent should gather global cluster metrics.
+	ShouldGatherClusterMetrics func() bool
 
 	l              sync.Mutex
 	openConnection func(ctx context.Context, kubeConfig string, localNode string) (kubeClient, error)
@@ -278,12 +282,15 @@ func (k *Kubernetes) MetricsMinute(ctx context.Context, now time.Time) ([]types.
 	multiErr = append(multiErr, errors...)
 
 	// Add global cluster metrics if this agent is the current kubernetes agent of the cluster.
-	morePoints, err = k.getGlobalMetrics(ctx, cl, now)
-	if err != nil {
-		multiErr = append(multiErr, err)
-	}
+	if k.ShouldGatherClusterMetrics() {
+		fmt.Println("!!! get global metrics")
+		morePoints, err = k.getGlobalMetrics(ctx, cl, now)
+		if err != nil {
+			multiErr = append(multiErr, err)
+		}
 
-	points = append(points, morePoints...)
+		points = append(points, morePoints...)
+	}
 
 	return points, multiErr
 }

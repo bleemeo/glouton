@@ -735,6 +735,10 @@ func (c *Connector) AgentID() string {
 	return agentID
 }
 
+func (c *Connector) AgentIsClusterLeader() bool {
+	return c.cache.Agent().IsClusterLeader
+}
+
 // RegistrationAt returns the date of registration with Bleemeo API.
 func (c *Connector) RegistrationAt() time.Time {
 	c.l.RLock()
