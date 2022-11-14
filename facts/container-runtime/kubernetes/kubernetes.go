@@ -60,6 +60,8 @@ type Kubernetes struct {
 	IsContainerIgnored func(facts.Container) bool
 	// ShouldGatherClusterMetrics returns whether this agent should gather global cluster metrics.
 	ShouldGatherClusterMetrics func() bool
+	// ClusterName is the name of the Kubernetes cluster.
+	ClusterName string
 
 	l              sync.Mutex
 	openConnection func(ctx context.Context, kubeConfig string, localNode string) (kubeClient, error)
@@ -283,10 +285,15 @@ func (k *Kubernetes) MetricsMinute(ctx context.Context, now time.Time) ([]types.
 
 	// Add global cluster metrics if this agent is the current kubernetes agent of the cluster.
 	if k.ShouldGatherClusterMetrics() {
-		fmt.Println("!!! get global metrics")
 		morePoints, err = k.getGlobalMetrics(ctx, cl, now)
 		if err != nil {
 			multiErr = append(multiErr, err)
+		}
+
+		// Add the Kubernetes cluster meta label to global metrics, this is used to
+		// replace the agent ID by the Kubernetes agent ID in the relabel hook.
+		for _, point := range morePoints {
+			point.Labels[types.LabelMetaKubernetesCluster] = k.ClusterName
 		}
 
 		points = append(points, morePoints...)
@@ -358,7 +365,6 @@ func (k *Kubernetes) getGlobalMetrics(ctx context.Context, cl kubeClient, now ti
 	// Add metric kubernetes_replicasets_count.
 	replicaSets, err := cl.GetReplicasets(ctx)
 	if err != nil {
-		fmt.Println("!!! err list replicasets:", err)
 		return points, err
 	}
 

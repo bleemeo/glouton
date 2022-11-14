@@ -807,15 +807,6 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 			return false
 		}
 
-		kube := &kubernetes.Kubernetes{
-			Runtime:                    a.containerRuntime,
-			NodeName:                   a.config.Kubernetes.NodeName,
-			KubeConfig:                 a.config.Kubernetes.KubeConfig,
-			IsContainerIgnored:         a.containerFilter.ContainerIgnored,
-			ShouldGatherClusterMetrics: shouldGatherClusterMetrics,
-		}
-		a.containerRuntime = kube
-
 		var clusterNameState string
 
 		clusterName := a.config.Kubernetes.ClusterName
@@ -845,6 +836,16 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 				errFeatureUnavailable,
 			))
 		}
+
+		kube := &kubernetes.Kubernetes{
+			Runtime:                    a.containerRuntime,
+			NodeName:                   a.config.Kubernetes.NodeName,
+			KubeConfig:                 a.config.Kubernetes.KubeConfig,
+			IsContainerIgnored:         a.containerFilter.ContainerIgnored,
+			ShouldGatherClusterMetrics: shouldGatherClusterMetrics,
+			ClusterName:                clusterName,
+		}
+		a.containerRuntime = kube
 
 		ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 		if err := kube.Test(ctx); err != nil {

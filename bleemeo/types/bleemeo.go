@@ -27,9 +27,10 @@ import (
 )
 
 const (
-	AgentTypeSNMP    = "snmp"
-	AgentTypeAgent   = "agent"
-	AgentTypeMonitor = "connection_check"
+	AgentTypeSNMP       = "snmp"
+	AgentTypeAgent      = "agent"
+	AgentTypeMonitor    = "connection_check"
+	AgentTypeKubernetes = "kubernetes"
 )
 
 type NullTime time.Time

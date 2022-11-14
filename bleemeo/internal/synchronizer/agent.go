@@ -94,7 +94,13 @@ func (s *Synchronizer) syncMainAgent(ctx context.Context) error {
 		)
 	}
 
-	fmt.Println("!!! IsClusterLeader", agent.IsClusterLeader)
+	if agent.IsClusterLeader && !previousAgent.IsClusterLeader {
+		logger.V(1).Printf("This agent is the Kubernetes cluster leader")
+	}
+
+	if !agent.IsClusterLeader && previousAgent.IsClusterLeader {
+		logger.V(1).Printf("This agent is no longer the Kubernetes cluster leader")
+	}
 
 	return nil
 }
@@ -126,7 +132,7 @@ func (s *Synchronizer) agentsUpdateList() error {
 	s.option.Cache.SetAgentList(agents)
 
 	// If an agent is deleted, ensure our Labels on metric are up-to-date.
-	// If an SNMP agent is deleted, it agent UUID is no longer valid and metric
+	// If an SNMP agent is deleted, its agent UUID is no longer valid and metric
 	// should no longer be labeled with it.
 	newAgents := s.option.Cache.AgentsByUUID()
 	for id := range oldAgents {
