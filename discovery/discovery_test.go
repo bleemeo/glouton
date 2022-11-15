@@ -268,7 +268,7 @@ func TestDiscoverySingle(t *testing.T) {
 	}
 }
 
-func Test_applyOverride(t *testing.T) {
+func Test_applyOverride(t *testing.T) { //nolint:maintidx
 	type args struct {
 		discoveredServicesMap map[NameInstance]Service
 		servicesOverride      map[NameInstance]config.Service
@@ -524,6 +524,94 @@ func Test_applyOverride(t *testing.T) {
 					Stack:       "website",
 					Config: config.Service{
 						Stack: "",
+					},
+				},
+			},
+		},
+		{
+			name: "override port from jmx port",
+			args: args{
+				discoveredServicesMap: map[NameInstance]Service{},
+				servicesOverride: map[NameInstance]config.Service{
+					{Name: "jmx_custom"}: {
+						ID:      "jmx_custom",
+						JMXPort: 1000,
+					},
+				},
+			},
+			want: map[NameInstance]Service{
+				{Name: "jmx_custom"}: {
+					Name:        "jmx_custom",
+					ServiceType: CustomService,
+					Config: config.Service{
+						ID:        "jmx_custom",
+						Address:   "127.0.0.1",
+						Port:      1000,
+						JMXPort:   1000,
+						CheckType: customCheckTCP,
+					},
+					Active: true,
+				},
+			},
+		},
+		{
+			name: "no override port from jmx port",
+			args: args{
+				discoveredServicesMap: map[NameInstance]Service{},
+				servicesOverride: map[NameInstance]config.Service{
+					{Name: "jmx_custom"}: {
+						ID:      "jmx_custom",
+						Port:    8000,
+						JMXPort: 1000,
+					},
+				},
+			},
+			want: map[NameInstance]Service{
+				{Name: "jmx_custom"}: {
+					Name:        "jmx_custom",
+					ServiceType: CustomService,
+					Config: config.Service{
+						ID:        "jmx_custom",
+						Address:   "127.0.0.1",
+						Port:      8000,
+						JMXPort:   1000,
+						CheckType: customCheckTCP,
+					},
+					Active: true,
+				},
+			},
+		},
+		{
+			name: "override docker labels",
+			args: args{
+				discoveredServicesMap: map[NameInstance]Service{
+					{Name: "kafka"}: {
+						Name:        "kafka",
+						ServiceType: KafkaService,
+						// This case happens when "glouton.port" and
+						// "glouton.jmx_port" docker labels are set.
+						Config: config.Service{
+							Port:    8000,
+							JMXPort: 1000,
+						},
+					},
+				},
+				servicesOverride: map[NameInstance]config.Service{
+					{Name: "kafka"}: {
+						ID:      "kafka",
+						Port:    9000,
+						JMXPort: 2000,
+					},
+				},
+			},
+			want: map[NameInstance]Service{
+				{Name: "kafka"}: {
+					Name:        "kafka",
+					ServiceType: KafkaService,
+					Config: config.Service{
+						ID:      "kafka",
+						Port:    9000,
+						JMXPort: 2000,
 					},
 				},
 			},
