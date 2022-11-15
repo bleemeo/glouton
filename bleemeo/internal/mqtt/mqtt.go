@@ -86,7 +86,7 @@ type Client struct {
 	startedAt        time.Time
 	pendingPoints    []types.MetricPoint
 	maxPointCount    int
-	sendingSuspended bool // stop sending points, used when the user is is read-only mode
+	sendingSuspended bool // stop sending points, used when the user is read-only mode
 	disableReason    bleemeoTypes.DisableReason
 }
 

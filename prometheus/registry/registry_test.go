@@ -1981,7 +1981,7 @@ func metricPointsToFamilies(points []types.MetricPoint, now time.Time, typeOverl
 			m.Gauge = &dto.Gauge{Value: proto.Float64(pts.Value)}
 		case dto.MetricType_UNTYPED:
 			m.Untyped = &dto.Untyped{Value: proto.Float64(pts.Value)}
-		case dto.MetricType_HISTOGRAM:
+		case dto.MetricType_HISTOGRAM, dto.MetricType_GAUGE_HISTOGRAM:
 			m.Histogram = &dto.Histogram{SampleCount: proto.Uint64(1), SampleSum: proto.Float64(pts.Value)}
 		case dto.MetricType_SUMMARY:
 			m.Summary = &dto.Summary{SampleCount: proto.Uint64(1), SampleSum: proto.Float64(pts.Value)}

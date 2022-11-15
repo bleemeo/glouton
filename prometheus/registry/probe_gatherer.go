@@ -49,7 +49,7 @@ func (p *ProbeGatherer) SetScheduleUpdate(fun func(runAt time.Time)) {
 	p.scheduleUpdate = fun
 }
 
-// Gather some metrics with with an empty gatherer state.
+// Gather some metrics with an empty gatherer state.
 // While not a critical error, this function should never be called, as callers should know about
 // GatherWithState().
 func (p *ProbeGatherer) Gather() ([]*dto.MetricFamily, error) {

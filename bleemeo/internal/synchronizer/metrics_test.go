@@ -2024,7 +2024,7 @@ func TestMonitorDeactivation(t *testing.T) {
 	}
 
 	helper.AddTime(120 * time.Minute)
-	helper.RunSync(1, 0, false).CheckNoError("next next full sync", true)
+	helper.RunSync(1, 0, false).CheckNoError("next full sync", true)
 
 	metrics = helper.Metrics()
 

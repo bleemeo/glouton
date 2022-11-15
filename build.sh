@@ -2,7 +2,7 @@
 
 set -e
 
-GORELEASER_VERSION="v1.11.4"
+GORELEASER_VERSION="v1.12.3"
 USER_UID=$(id -u)
 
 rm -fr work
@@ -46,7 +46,13 @@ if [ "${SKIP_JS}" != "1" -a "${ONLY_GO}" != "1" ]; then
    docker run --rm -e HOME=/go/pkg/node \
       -v $(pwd):/src --tmpfs /src/webui/node_modules:exec -w /src/webui ${NODE_MOUNT_CACHE} \
       node:16 \
-      sh -c "(mkdir -p /go/pkg/node && chown node -R /go/pkg/node && npm install --legacy-peer-deps && npm run deploy); result=\$?; chown -R $USER_UID dist ../api/static/assets/js/ ../api/static/assets/css/; exit \$result"
+      sh -exc "
+      mkdir -p /go/pkg/node
+      chown node -R /go/pkg/node
+      npm install --legacy-peer-deps
+      npm run deploy 
+      chown -R $USER_UID dist ../api/static/assets/js/ ../api/static/assets/css/
+      "
 fi
 
 if [ -z "${GLOUTON_VERSION}" ]; then
@@ -66,12 +72,20 @@ if [ "${ONLY_GO}" = "1" -a "${WITH_RACE}" != "1" ]; then
    docker run --rm -e HOME=/go/pkg -e CGO_ENABLED=0 \
       -v $(pwd):/src -w /src ${GO_MOUNT_CACHE} \
       --entrypoint '' \
-      goreleaser/goreleaser:${GORELEASER_VERSION} sh -c "go build -ldflags='-X main.version=${GLOUTON_VERSION} -X main.commit=${COMMIT}' . && chown $USER_UID glouton"
+      goreleaser/goreleaser:${GORELEASER_VERSION} \
+      sh -exc "
+      go build -ldflags='-X main.version=${GLOUTON_VERSION} -X main.commit=${COMMIT}' .
+      chown $USER_UID glouton
+      "
 elif [ "${ONLY_GO}" = "1" -a "${WITH_RACE}" = "1" ]; then
    docker run --rm -e HOME=/go/pkg -e CGO_ENABLED=1 \
       -v $(pwd):/src -w /src ${GO_MOUNT_CACHE} \
       --entrypoint '' \
-      goreleaser/goreleaser:${GORELEASER_VERSION} sh -c "go build -ldflags='-X main.version=${GLOUTON_VERSION} -X main.commit=${COMMIT} -linkmode external -extldflags=-static' -race . && chown $USER_UID glouton"
+      goreleaser/goreleaser:${GORELEASER_VERSION} \
+      sh -exc "
+      go build -ldflags='-X main.version=${GLOUTON_VERSION} -X main.commit=${COMMIT} -linkmode external -extldflags=-static' -race .
+      chown $USER_UID glouton
+      "
 else
    docker run --rm -e HOME=/go/pkg -e CGO_ENABLED=0 \
       -v $(pwd):/src -w /src ${GO_MOUNT_CACHE} \
@@ -80,7 +94,16 @@ else
       -e GLOUTON_VERSION \
       -e GORELEASER_PREVIOUS_TAG=0.1.0 \
       -e GORELEASER_CURRENT_TAG=0.1.1 \
-      goreleaser/goreleaser:${GORELEASER_VERSION} sh -c "(mkdir -p /go/pkg && git config --global --add safe.directory /src && goreleaser check && go generate ./... && go test ./... && goreleaser --rm-dist --snapshot --parallelism 2); result=\$?;chown -R $USER_UID dist coverage.html coverage.out api/models_gen.go; exit \$result"
+      goreleaser/goreleaser:${GORELEASER_VERSION} \
+      sh -exc "
+      mkdir -p /go/pkg
+      git config --global --add safe.directory /src
+      goreleaser check
+      go generate ./...
+      go test ./...
+      goreleaser --rm-dist --snapshot --parallelism 2
+      chown -R $USER_UID dist api/models_gen.go
+      "
 
    echo $GLOUTON_VERSION > dist/VERSION
 

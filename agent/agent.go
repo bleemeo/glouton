@@ -2357,7 +2357,7 @@ func (a *agent) diagnosticConfig(ctx context.Context, archive types.ArchiveWrite
 
 	enc := yaml.NewEncoder(file)
 
-	fmt.Fprintln(file, "# This file contains in-memory configuration used by Glouton. Value from from default, files and environment.")
+	fmt.Fprintln(file, "# This file contains in-memory configuration used by Glouton. Value from default, files and environment.")
 	enc.SetIndent(4)
 
 	err = enc.Encode(config.Dump(a.config))
@@ -2571,7 +2571,7 @@ func prometheusConfigToURLs(configTargets []config.PrometheusTarget) ([]*scrappe
 			ExtraLabels: map[string]string{
 				types.LabelMetaScrapeJob: configTarget.Name,
 				// HostPort could be empty, but this ExtraLabels is used by Registry which
-				// correctly handle empty value value (drop the label).
+				// correctly handles empty values (drop the label).
 				types.LabelMetaScrapeInstance: scrapper.HostPort(targetURL),
 			},
 			URL:       targetURL,

@@ -339,7 +339,8 @@ func (t Threshold) IsZero() bool {
 	return t.LowCritical == 0.0 && t.LowWarning == 0.0 && t.HighWarning == 0.0 && t.HighCritical == 0.0
 }
 
-// CurrentStatus returns the current status regarding the threshold and (if not ok) return a boolean true if the exceeded side the the high threshold.
+// CurrentStatus returns the current status regarding the threshold and
+// (if not ok) a boolean true if the value exceeded the high threshold.
 func (t Threshold) CurrentStatus(value float64) (types.Status, bool) {
 	if !math.IsNaN(t.LowCritical) && value < t.LowCritical {
 		return types.StatusCritical, false

@@ -164,7 +164,7 @@ func genCollectorFromDynamicTarget(monitor types.Monitor, userAgent string) (*co
 
 func preprocessHTTPTarget(targetURL *url.URL, module bbConf.Module) (string, bbConf.Module) {
 	// For the host "kubernetes.default.svc", we will likely be unable to resolve it using DNS
-	// (because Glouton with with hostNetwork=true so it won't use Kubernetes DNS).
+	// (because Glouton with hostNetwork=true so it won't use Kubernetes DNS).
 	// Use environment for the name resolution.
 	if targetURL.Hostname() == "kubernetes.default.svc" {
 		host, port := os.Getenv("KUBERNETES_SERVICE_HOST"), os.Getenv("KUBERNETES_SERVICE_PORT")
