@@ -410,6 +410,14 @@ var (
 			"jira_status",
 		},
 
+		discovery.KafkaService: {
+			"kafka_jvm_gc",
+			"kafka_jvm_gc_time",
+			"kafka_jvm_gc_utilization",
+			"kafka_jvm_heap_used",
+			"kafka_jvm_non_heap_used",
+		},
+
 		discovery.MemcachedService: {
 			"memcached_status",
 			"memcached_command_get",
@@ -1125,21 +1133,18 @@ func (m *metricFilter) rebuildServicesMetrics(allowList map[string]matcher.Match
 			continue
 		}
 
-		newMetrics := jmxtrans.GetJMXMetrics(service)
+		// Allow JMX metrics.
+		for _, jmxMetric := range jmxtrans.GetJMXMetrics(service) {
+			metricName := service.Name + "_" + jmxMetric.Name
 
-		if len(newMetrics) != 0 {
-			for _, val := range newMetrics {
-				metricName := service.Name + "_" + val.Name
+			matchers, err := matcher.NormalizeMetric(metricName)
+			if err != nil {
+				errors = append(errors, err)
 
-				matchers, err := matcher.NormalizeMetric(metricName)
-				if err != nil {
-					errors = append(errors, err)
-
-					continue
-				}
-
-				allowList[metricName] = matchers
+				continue
 			}
+
+			allowList[metricName] = matchers
 		}
 
 		matchers, err := matcher.NormalizeMetric(service.Name + "_status")

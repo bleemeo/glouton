@@ -77,6 +77,7 @@ const (
 	HAProxyService       ServiceName = "haproxy"
 	InfluxDBService      ServiceName = "influxdb"
 	JIRAService          ServiceName = "jira"
+	KafkaService         ServiceName = "kafka"
 	LibvirtService       ServiceName = "libvirt"
 	MemcachedService     ServiceName = "memcached"
 	MongoDBService       ServiceName = "mongodb"
@@ -323,6 +324,10 @@ var (
 			ServicePort:     8080,
 			ServiceProtocol: "tcp",
 			IgnoreHighPort:  true,
+		},
+		KafkaService: {
+			ServicePort:     9092,
+			ServiceProtocol: "tcp",
 		},
 		MemcachedService: {
 			ServicePort:     11211,

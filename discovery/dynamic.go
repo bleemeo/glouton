@@ -230,6 +230,11 @@ var (
 			Interpreter:         "java",
 		},
 		{
+			CmdLineMustContains: []string{"kafka.Kafka", "server.properties"},
+			ServiceName:         KafkaService,
+			Interpreter:         "java",
+		},
+		{
 			CmdLineMustContains: []string{"salt-master"},
 			ServiceName:         SaltMasterService,
 			Interpreter:         "python",
@@ -591,7 +596,7 @@ func (dd *DynamicDiscovery) guessJMX(service *Service, cmdLine []string) {
 
 	switch service.ServiceType { //nolint:exhaustive
 	case CassandraService, ElasticSearchService, ZookeeperService, BitBucketService,
-		JIRAService, ConfluenceService:
+		JIRAService, ConfluenceService, KafkaService:
 		for _, arg := range cmdLine {
 			for _, opt := range jmxOptions {
 				if !strings.HasPrefix(arg, opt) {
