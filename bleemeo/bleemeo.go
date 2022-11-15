@@ -465,7 +465,7 @@ func (c *Connector) RelabelHook(ctx context.Context, labels map[string]string) (
 
 	// For Kubernetes cluster metrics, set the agent ID to the Kubernetes agent ID.
 	if clusterName := labels[gloutonTypes.LabelMetaKubernetesCluster]; clusterName != "" {
-		kubernetesAgentID, err := c.kubernetesAgentID(ctx, clusterName)
+		kubernetesAgentID, err := c.kubernetesAgentID(clusterName)
 		if err != nil {
 			logger.V(1).Printf("Kubernetes agent not found: %s", err)
 
@@ -479,7 +479,7 @@ func (c *Connector) RelabelHook(ctx context.Context, labels map[string]string) (
 	return labels, false
 }
 
-func (c *Connector) kubernetesAgentID(ctx context.Context, clusterName string) (string, error) {
+func (c *Connector) kubernetesAgentID(clusterName string) (string, error) {
 	kubernetesAgentType, err := c.agentTypeID(types.AgentTypeKubernetes)
 	if err != nil {
 		return "", err

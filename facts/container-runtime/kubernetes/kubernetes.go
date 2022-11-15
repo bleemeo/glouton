@@ -285,149 +285,15 @@ func (k *Kubernetes) MetricsMinute(ctx context.Context, now time.Time) ([]types.
 
 	// Add global cluster metrics if this agent is the current kubernetes agent of the cluster.
 	if k.ShouldGatherClusterMetrics() {
-		morePoints, err = k.getGlobalMetrics(ctx, cl, now)
+		morePoints, err = getGlobalMetrics(ctx, cl, now, k.ClusterName)
 		if err != nil {
 			multiErr = append(multiErr, err)
-		}
-
-		// Add the Kubernetes cluster meta label to global metrics, this is used to
-		// replace the agent ID by the Kubernetes agent ID in the relabel hook.
-		for _, point := range morePoints {
-			point.Labels[types.LabelMetaKubernetesCluster] = k.ClusterName
 		}
 
 		points = append(points, morePoints...)
 	}
 
 	return points, multiErr
-}
-
-func (k *Kubernetes) getGlobalMetrics(ctx context.Context, cl kubeClient, now time.Time) ([]types.MetricPoint, error) {
-	var points []types.MetricPoint
-
-	// Add metric kubernetes_pods_count with the pods states in the labels.
-	pods, err := cl.GetPODs(ctx, k.NodeName)
-	if err != nil {
-		return nil, err
-	}
-
-	podsCountByState := make(map[string]int, len(pods))
-	for _, pod := range pods {
-		state := strings.ToLower(string(podPhase(pod)))
-		podsCountByState[state] += 1
-	}
-
-	for state, count := range podsCountByState {
-		points = append(points, types.MetricPoint{
-			Point: types.Point{Time: now, Value: float64(count)},
-			Labels: map[string]string{
-				types.LabelName:  "kubernetes_pods_count",
-				types.LabelState: state,
-			},
-		})
-	}
-
-	// Add metric kubernetes_namespaces_count with the namespaces states in the labels.
-	ns, err := cl.GetNamespaces(ctx)
-	if err != nil {
-		return points, err
-	}
-
-	nsCountByState := make(map[string]int, len(ns))
-	for _, namespace := range ns {
-		state := strings.ToLower(string(namespace.Status.Phase))
-		nsCountByState[state] += 1
-	}
-
-	for state, count := range nsCountByState {
-		points = append(points, types.MetricPoint{
-			Point: types.Point{Time: now, Value: float64(count)},
-			Labels: map[string]string{
-				types.LabelName:  "kubernetes_namespaces_count",
-				types.LabelState: state,
-			},
-		})
-	}
-
-	// Add metric kubernetes_nodes_count.
-	nodes, err := cl.GetNodes(ctx)
-	if err != nil {
-		return points, err
-	}
-
-	points = append(points, types.MetricPoint{
-		Point: types.Point{Time: now, Value: float64(len(nodes))},
-		Labels: map[string]string{
-			types.LabelName: "kubernetes_nodes_count",
-		},
-	})
-
-	// Add metric kubernetes_replicasets_count.
-	replicaSets, err := cl.GetReplicasets(ctx)
-	if err != nil {
-		return points, err
-	}
-
-	points = append(points, types.MetricPoint{
-		Point: types.Point{Time: now, Value: float64(len(replicaSets))},
-		Labels: map[string]string{
-			types.LabelName: "kubernetes_replicasets_count",
-		},
-	})
-
-	return points, nil
-}
-
-// podPhase returns the status of a pod.
-func podPhase(pod corev1.Pod) corev1.PodPhase {
-	// The phase of the pod itself is not sufficient to know if the containers are running,
-	// the pod may be in the running state while the container inside is in a crash loop.
-	status := pod.Status.Phase
-	if status != corev1.PodRunning {
-		return status
-	}
-
-	status = initContainerPhase(pod.Status)
-	if status != corev1.PodRunning {
-		return status
-	}
-
-	return containerPhase(pod.Status)
-}
-
-// containerPhase returns the status of the containers.
-func containerPhase(podStatus corev1.PodStatus) corev1.PodPhase {
-	for _, status := range podStatus.ContainerStatuses {
-		switch {
-		case status.State.Terminated != nil:
-			return corev1.PodFailed
-		case status.State.Waiting != nil:
-			return corev1.PodPending
-		}
-	}
-
-	return corev1.PodRunning
-}
-
-// initContainerPhase returns the status of the init containers.
-func initContainerPhase(podStatus corev1.PodStatus) corev1.PodPhase {
-	for _, status := range podStatus.InitContainerStatuses {
-		switch {
-		case status.State.Running != nil:
-			continue
-		case status.State.Terminated != nil:
-			if status.State.Terminated.ExitCode == 0 {
-				// An init container exited with code 0 means the container succeeded.
-				continue
-			}
-
-			return corev1.PodFailed
-		case status.State.Waiting != nil:
-			return corev1.PodPending
-		}
-	}
-
-	return corev1.PodRunning
 }
 
 func (k *Kubernetes) getCertificateExpiration(ctx context.Context, config *rest.Config, now time.Time) (types.MetricPoint, error) {

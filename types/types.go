@@ -135,7 +135,10 @@ const (
 	LabelScrapeJob                  = "scrape_job"
 	LabelScrapeInstance             = "scrape_instance"
 	LabelAlertname                  = "alertname"
-	LabelState                      = "state"
+	// Kubernetes pods labels.
+	LabelState     = "state"
+	LabelOwnerKind = "owner_kind"
+	LabelOwnerName = "owner_name"
 )
 
 // MissingContainerID is the container ID annotation set on metrics that belong
