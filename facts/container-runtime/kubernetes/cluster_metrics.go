@@ -145,15 +145,23 @@ func podsCount(ctx context.Context, cl kubeClient, now time.Time) ([]types.Metri
 		podsCountByLabels[labels] += 1
 	}
 
-	for labels, count := range podsCountByLabels {
+	for podLabels, count := range podsCountByLabels {
+		labels := map[string]string{
+			types.LabelName:  "kubernetes_pods_count",
+			types.LabelState: podLabels.State,
+		}
+
+		if podLabels.Kind != "" {
+			labels[types.LabelOwnerKind] = podLabels.Kind
+		}
+
+		if podLabels.Name != "" {
+			labels[types.LabelOwnerName] = podLabels.Name
+		}
+
 		points = append(points, types.MetricPoint{
-			Point: types.Point{Time: now, Value: float64(count)},
-			Labels: map[string]string{
-				types.LabelName:      "kubernetes_pods_count",
-				types.LabelState:     labels.State,
-				types.LabelOwnerKind: labels.Kind,
-				types.LabelOwnerName: labels.Name,
-			},
+			Point:  types.Point{Time: now, Value: float64(count)},
+			Labels: labels,
 		})
 	}
 
