@@ -156,10 +156,11 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 			GraphitePort:   2004,
 		},
 		Kubernetes: Kubernetes{
-			Enable:      true,
-			NodeName:    "mynode",
-			ClusterName: "mycluster",
-			KubeConfig:  "/config",
+			Enable:              true,
+			AllowClusterMetrics: true,
+			NodeName:            "mynode",
+			ClusterName:         "mycluster",
+			KubeConfig:          "/config",
 		},
 		Logging: Logging{
 			Buffer: LoggingBuffer{

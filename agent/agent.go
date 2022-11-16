@@ -798,13 +798,12 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 	}
 
 	if a.config.Kubernetes.Enable {
-		// TODO: Should we also gather cluster metrics for non Bleemeo users?
 		shouldGatherClusterMetrics := func() bool {
 			if a.bleemeoConnector != nil {
 				return a.bleemeoConnector.AgentIsClusterLeader()
 			}
 
-			return false
+			return a.config.Kubernetes.AllowClusterMetrics
 		}
 
 		var clusterNameState string
