@@ -37,6 +37,7 @@ import (
 	"github.com/influxdata/telegraf"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/common/model"
+	"gopkg.in/yaml.v3"
 )
 
 var errNoCheckAssociated = errors.New("there is no check associated with the container")
@@ -244,6 +245,14 @@ func (d *Discovery) DiagnosticArchive(ctx context.Context, zipFile types.Archive
 	services := make([]Service, 0, len(d.servicesMap))
 
 	for _, v := range d.servicesMap {
+		if v.Config.JMXPassword != "" {
+			v.Config.JMXPassword = "*****"
+		}
+
+		if v.Config.Password != "" {
+			v.Config.Password = "*****"
+		}
+
 		services = append(services, v)
 	}
 
@@ -301,6 +310,25 @@ func (d *Discovery) DiagnosticArchive(ctx context.Context, zipFile types.Archive
 		for _, v := range services {
 			fmt.Fprintf(file, "%s on IP %s, active=%v, instance=%s, container=%s, listenning on %v\n", v.Name, v.IPAddress, v.Active, v.Instance, v.ContainerName, v.ListenAddresses)
 		}
+	}
+
+	file, err = zipFile.Create("discovery.yaml")
+	if err != nil {
+		return err
+	}
+
+	enc := yaml.NewEncoder(file)
+
+	enc.SetIndent(4)
+
+	err = enc.Encode(services)
+	if err != nil {
+		return err
+	}
+
+	err = enc.Close()
+	if err != nil {
+		return err
 	}
 
 	return nil
