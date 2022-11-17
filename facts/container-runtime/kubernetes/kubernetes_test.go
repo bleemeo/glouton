@@ -788,6 +788,7 @@ func TestClusterMetrics(t *testing.T) { //nolint:maintidx
 			},
 			Labels: map[string]string{
 				types.LabelName:                  "kubernetes_pods_count",
+				types.LabelNamespace:             "namespace-2",
 				types.LabelState:                 "failed",
 				types.LabelOwnerKind:             "job",
 				types.LabelOwnerName:             "job-failed",
@@ -802,6 +803,7 @@ func TestClusterMetrics(t *testing.T) { //nolint:maintidx
 			Labels: map[string]string{
 				types.LabelMetaKubernetesCluster: clusterName,
 				types.LabelName:                  "kubernetes_pods_count",
+				types.LabelNamespace:             "namespace-2",
 				types.LabelState:                 "running",
 				types.LabelOwnerKind:             "job",
 				types.LabelOwnerName:             "job-running",
@@ -814,6 +816,7 @@ func TestClusterMetrics(t *testing.T) { //nolint:maintidx
 			},
 			Labels: map[string]string{
 				types.LabelName:                  "kubernetes_pods_count",
+				types.LabelNamespace:             "namespace-1",
 				types.LabelState:                 "pending",
 				types.LabelOwnerKind:             "deployment",
 				types.LabelOwnerName:             "running-not-ready",
@@ -828,6 +831,7 @@ func TestClusterMetrics(t *testing.T) { //nolint:maintidx
 			Labels: map[string]string{
 				types.LabelMetaKubernetesCluster: clusterName,
 				types.LabelName:                  "kubernetes_pods_count",
+				types.LabelNamespace:             "kube-system",
 				types.LabelState:                 "running",
 				types.LabelOwnerKind:             "node",
 				types.LabelOwnerName:             "minikube",
@@ -844,6 +848,7 @@ func TestClusterMetrics(t *testing.T) { //nolint:maintidx
 				types.LabelOwnerName:             "inside-init",
 				types.LabelMetaKubernetesCluster: clusterName,
 				types.LabelName:                  "kubernetes_pods_count",
+				types.LabelNamespace:             "namespace-1",
 			},
 		},
 		{
@@ -853,6 +858,7 @@ func TestClusterMetrics(t *testing.T) { //nolint:maintidx
 			},
 			Labels: map[string]string{
 				types.LabelName:                  "kubernetes_pods_count",
+				types.LabelNamespace:             "namespace-2",
 				types.LabelState:                 "pending",
 				types.LabelOwnerKind:             "deployment",
 				types.LabelOwnerName:             "image-pull-backoff",
@@ -866,6 +872,7 @@ func TestClusterMetrics(t *testing.T) { //nolint:maintidx
 			},
 			Labels: map[string]string{
 				types.LabelName:                  "kubernetes_pods_count",
+				types.LabelNamespace:             "namespace-1",
 				types.LabelState:                 "failed",
 				types.LabelOwnerKind:             "deployment",
 				types.LabelOwnerName:             "init-failed",
@@ -880,6 +887,7 @@ func TestClusterMetrics(t *testing.T) { //nolint:maintidx
 			Labels: map[string]string{
 				types.LabelMetaKubernetesCluster: clusterName,
 				types.LabelName:                  "kubernetes_pods_count",
+				types.LabelNamespace:             "kube-system",
 				types.LabelState:                 "running",
 			},
 		},
@@ -890,6 +898,7 @@ func TestClusterMetrics(t *testing.T) { //nolint:maintidx
 			},
 			Labels: map[string]string{
 				types.LabelName:                  "kubernetes_pods_count",
+				types.LabelNamespace:             "namespace-2",
 				types.LabelState:                 "succeeded",
 				types.LabelOwnerKind:             "job",
 				types.LabelOwnerName:             "job-succeeded",
@@ -906,6 +915,7 @@ func TestClusterMetrics(t *testing.T) { //nolint:maintidx
 				types.LabelOwnerName:             "running-replicas",
 				types.LabelMetaKubernetesCluster: clusterName,
 				types.LabelName:                  "kubernetes_pods_count",
+				types.LabelNamespace:             "namespace-2",
 				types.LabelState:                 "running",
 			},
 		},
@@ -919,6 +929,7 @@ func TestClusterMetrics(t *testing.T) { //nolint:maintidx
 				types.LabelOwnerName:             "kube-proxy",
 				types.LabelMetaKubernetesCluster: clusterName,
 				types.LabelName:                  "kubernetes_pods_count",
+				types.LabelNamespace:             "kube-system",
 				types.LabelState:                 "running",
 			},
 		},
@@ -933,6 +944,7 @@ func TestClusterMetrics(t *testing.T) { //nolint:maintidx
 				types.LabelOwnerName:             "crash-loop-backoff",
 				types.LabelMetaKubernetesCluster: clusterName,
 				types.LabelName:                  "kubernetes_pods_count",
+				types.LabelNamespace:             "namespace-2",
 			},
 		},
 		{
@@ -942,6 +954,7 @@ func TestClusterMetrics(t *testing.T) { //nolint:maintidx
 			},
 			Labels: map[string]string{
 				types.LabelName:                  "kubernetes_pods_count",
+				types.LabelNamespace:             "namespace-3",
 				types.LabelState:                 "pending",
 				types.LabelOwnerKind:             "deployment",
 				types.LabelOwnerName:             "unschedulable",
@@ -955,6 +968,7 @@ func TestClusterMetrics(t *testing.T) { //nolint:maintidx
 			},
 			Labels: map[string]string{
 				types.LabelName:                  "kubernetes_pods_count",
+				types.LabelNamespace:             "kube-system",
 				types.LabelState:                 "running",
 				types.LabelOwnerKind:             "daemonset",
 				types.LabelOwnerName:             "kindnet",
@@ -968,6 +982,7 @@ func TestClusterMetrics(t *testing.T) { //nolint:maintidx
 			},
 			Labels: map[string]string{
 				types.LabelName:                  "kubernetes_pods_count",
+				types.LabelNamespace:             "namespace-3",
 				types.LabelState:                 "running",
 				types.LabelOwnerKind:             "deployment",
 				types.LabelOwnerName:             "running-ready",
@@ -984,6 +999,7 @@ func TestClusterMetrics(t *testing.T) { //nolint:maintidx
 				types.LabelState:                 "running",
 				types.LabelOwnerKind:             "deployment",
 				types.LabelOwnerName:             "coredns",
+				types.LabelNamespace:             "kube-system",
 				types.LabelMetaKubernetesCluster: clusterName,
 			},
 		},
@@ -995,6 +1011,7 @@ func TestClusterMetrics(t *testing.T) { //nolint:maintidx
 			Labels: map[string]string{
 				types.LabelMetaKubernetesCluster: clusterName,
 				types.LabelName:                  "kubernetes_pods_count",
+				types.LabelNamespace:             "namespace-1",
 				types.LabelState:                 "running",
 				types.LabelOwnerKind:             "deployment",
 				types.LabelOwnerName:             "running-init-ok",
@@ -1008,6 +1025,7 @@ func TestClusterMetrics(t *testing.T) { //nolint:maintidx
 			Labels: map[string]string{
 				types.LabelMetaKubernetesCluster: clusterName,
 				types.LabelName:                  "kubernetes_pods_count",
+				types.LabelNamespace:             "namespace-3",
 				types.LabelState:                 "running",
 				types.LabelOwnerKind:             "replicaset",
 				types.LabelOwnerName:             "running-replicaset",

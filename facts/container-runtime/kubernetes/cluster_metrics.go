@@ -115,9 +115,10 @@ func podsCount(ctx context.Context, cl kubeClient, now time.Time) ([]types.Metri
 	}
 
 	type podLabels struct {
-		State string
-		Kind  string
-		Name  string
+		State     string
+		Kind      string
+		Name      string
+		Namespace string
 	}
 
 	podsCountByLabels := make(map[podLabels]int, len(pods))
@@ -139,10 +140,17 @@ func podsCount(ctx context.Context, cl kubeClient, now time.Time) ([]types.Metri
 			}
 		}
 
+		// An empty namespace is the default namespace.
+		namespace := pod.Namespace
+		if namespace == "" {
+			namespace = "default"
+		}
+
 		labels := podLabels{
-			State: strings.ToLower(string(podPhase(pod))),
-			Kind:  strings.ToLower(kind),
-			Name:  strings.ToLower(name),
+			State:     strings.ToLower(string(podPhase(pod))),
+			Kind:      strings.ToLower(kind),
+			Name:      strings.ToLower(name),
+			Namespace: namespace,
 		}
 
 		podsCountByLabels[labels]++
@@ -152,8 +160,9 @@ func podsCount(ctx context.Context, cl kubeClient, now time.Time) ([]types.Metri
 
 	for podLabels, count := range podsCountByLabels {
 		labels := map[string]string{
-			types.LabelName:  "kubernetes_pods_count",
-			types.LabelState: podLabels.State,
+			types.LabelName:      "kubernetes_pods_count",
+			types.LabelState:     podLabels.State,
+			types.LabelNamespace: podLabels.Namespace,
 		}
 
 		if podLabels.Kind != "" {

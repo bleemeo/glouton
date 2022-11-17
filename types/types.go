@@ -139,6 +139,7 @@ const (
 	LabelState     = "state"
 	LabelOwnerKind = "owner_kind"
 	LabelOwnerName = "owner_name"
+	LabelNamespace = "namespace"
 )
 
 // MissingContainerID is the container ID annotation set on metrics that belong
