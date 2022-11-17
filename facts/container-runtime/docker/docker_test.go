@@ -464,6 +464,24 @@ func TestDocker_ContainerFromCGroup(t *testing.T) {
 					containerID:   "2faf78372d542468d4616d7cb85f03994a1d7ea60a42749e7114c506b8282882",
 					containerName: "testdata_rabbitmqExposed_1",
 				},
+				{
+					name: "Kubernetes 1.20 on Ubuntu 20.04",
+					cgroupData: `
+					12:freezer:/kubepods.slice/kubepods-burstable.slice/kubepods-burstable-podba16e26e_4736_4bdd_bb0e_7175c15b7f37.slice/docker-2faf78372d542468d4616d7cb85f03994a1d7ea60a42749e7114c506b8282882.scope
+					11:hugetlb:/kubepods.slice/kubepods-burstable.slice/kubepods-burstable-podba16e26e_4736_4bdd_bb0e_7175c15b7f37.slice/docker-2faf78372d542468d4616d7cb85f03994a1d7ea60a42749e7114c506b8282882.scope
+					[...]
+					1:name=systemd:/kubepods.slice/kubepods-burstable.slice/kubepods-burstable-podba16e26e_4736_4bdd_bb0e_7175c15b7f37.slice/docker-2faf78372d542468d4616d7cb85f03994a1d7ea60a42749e7114c506b8282882.scope
+					0::/kubepods.slice/kubepods-burstable.slice/kubepods-burstable-podba16e26e_4736_4bdd_bb0e_7175c15b7f37.slice/docker-2faf78372d542468d4616d7cb85f03994a1d7ea60a42749e7114c506b8282882.scope`,
+					containerID:   "2faf78372d542468d4616d7cb85f03994a1d7ea60a42749e7114c506b8282882",
+					containerName: "testdata_rabbitmqExposed_1",
+				},
+				{
+					name: "Docker 20.10.18 on Ubuntu 20.04",
+					cgroupData: `
+					0::/system.slice/docker-2faf78372d542468d4616d7cb85f03994a1d7ea60a42749e7114c506b8282882.scope`,
+					containerID:   "2faf78372d542468d4616d7cb85f03994a1d7ea60a42749e7114c506b8282882",
+					containerName: "testdata_rabbitmqExposed_1",
+				},
 			},
 		},
 		{
@@ -582,6 +600,25 @@ func TestDocker_ContainerFromCGroup(t *testing.T) {
 					containerID:         "",
 					containerName:       "",
 					mustErrDoesNotExist: true,
+				},
+			},
+		},
+		{
+			name: "docker-20.10.18 (Docker on minikube v1.27.1 / MacOS)",
+			dir:  "testdata/docker-20.10.18",
+			wants: []check{
+				{
+					name: "init",
+					cgroupData: `
+						0::/init.scope`,
+					containerID: "",
+				},
+				{
+					name: "rabbitmq",
+					cgroupData: `
+					0::/system.slice/docker-7c0b134252e94d21bdb569a6fd30e812d721f7945145ddca0c829abaeacaec1f.scope`,
+					containerID:   "7c0b134252e94d21bdb569a6fd30e812d721f7945145ddca0c829abaeacaec1f",
+					containerName: "testdata-rabbitmqExposed-1",
 				},
 			},
 		},

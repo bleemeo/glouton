@@ -1035,7 +1035,7 @@ func (c dockerContainer) PID() int {
 }
 
 var dockerCGroupRE = regexp.MustCompile(
-	`(?m:^\d+:[^:]+:(/kubepods/.*pod[0-9a-fA-F-]+/|.*/docker[-/])([0-9a-fA-F]+)(\.scope)?$)`,
+	`(?m:^\d+:[^:]*:(/kubepods/.*pod[0-9a-fA-F-]+/|.*/docker[-/])([0-9a-fA-F]+)(\.scope)?$)`,
 )
 
 type dockerProcessQuerier struct {
