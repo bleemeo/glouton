@@ -1,0 +1,291 @@
+# File used to generate cluster_metrics folder content.
+# Cluster started with "minikube start --node 3"
+# Minikube 1.28.0, Docker 20.10.21, Kubernetes 1.25.3
+# 
+# kubectl get pods --all-namespaces -o yaml > pods.yaml
+# kubectl get replicasets --all-namespaces -o yaml > replicasets.yaml
+# kubectl get nodes -o yaml > nodes.yaml
+# kubectl get namespaces -o yaml > namespaces.yaml
+# kubectl version -o yaml > version.yaml
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: namespace-1
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: namespace-2
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: namespace-3
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: namespace-unused
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: running-init-ok
+  namespace: namespace-1
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: running-init-ok
+  template:
+    metadata:
+      labels:
+        app: running-init-ok
+    spec:
+      containers:
+        - name: busybox
+          image: busybox:latest
+          command: ["sleep", "infinity"]
+      initContainers:
+        - name: init
+          image: busybox:latest
+          command: ["/bin/sh", "-c", "exit 0"]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: init-failed
+  namespace: namespace-1
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: init-failed
+  template:
+    metadata:
+      labels:
+        app: init-failed
+    spec:
+      containers:
+        - name: busybox
+          image: busybox:latest
+          command: ["sleep", "infinity"]
+      initContainers:
+        - name: init
+          image: busybox:latest
+          command: ["/bin/sh", "-c", "exit 1"]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: inside-init
+  namespace: namespace-1
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: inside-init
+  template:
+    metadata:
+      labels:
+        app: inside-init
+    spec:
+      containers:
+        - name: busybox
+          image: busybox:latest
+          command: ["sleep", "infinity"]
+      initContainers:
+        - name: init
+          image: busybox:latest
+          command: ["sleep", "infinity"]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: running-replicas
+  namespace: namespace-2
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: running-replicas
+  template:
+    metadata:
+      labels:
+        app: running-replicas
+    spec:
+      containers:
+        - name: busybox
+          image: busybox:latest
+          command: ["sleep", "infinity"]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: running-ready
+  namespace: namespace-3
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: running-ready
+  template:
+    metadata:
+      labels:
+        app: running-ready
+    spec:
+      containers:
+        - name: busybox
+          image: busybox:latest
+          command: ["sleep", "infinity"]
+          readinessProbe:
+            exec:
+              command: ["/bin/sh", "-c", "exit 0"]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: running-not-ready
+  namespace: namespace-1
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: running-not-ready
+  template:
+    metadata:
+      labels:
+        app: running-not-ready
+    spec:
+      containers:
+        - name: busybox
+          image: busybox:latest
+          command: ["sleep", "infinity"]
+          readinessProbe:
+            exec:
+              command: ["/bin/sh", "-c", "exit 1"]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: crash-loop-backoff
+  namespace: namespace-2
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: crash-loop-backoff
+  template:
+    metadata:
+      labels:
+        app: crash-loop-backoff
+    spec:
+      containers:
+        - name: busybox
+          image: busybox:latest
+          command: ["/bin/sh", "-c", "exit 1"]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: image-pull-backoff
+  namespace: namespace-2
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: image-pull-backoff
+  template:
+    metadata:
+      labels:
+        app: image-pull-backoff
+    spec:
+      containers:
+        - name: does-not-exist
+          image: registry.local/does-not-exist
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: unschedulable
+  namespace: namespace-3
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: unschedulable
+  template:
+    metadata:
+      labels:
+        app: unschedulable
+    spec:
+      containers:
+        - name: busybox
+          image: busybox:latest
+          command: ["sleep", "infinity"]
+      nodeSelector:
+        hostname: does-not-exist
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: job-succeeded
+  namespace: namespace-2
+spec:
+  template:
+    spec:
+      containers:
+        - name: busybox
+          image: busybox:latest
+          command: ["/bin/sh", "-c", "exit 0"]
+      restartPolicy: Never
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: job-failed
+  namespace: namespace-2
+spec:
+  backoffLimit: 1
+  template:
+    spec:
+      containers:
+        - name: busybox
+          image: busybox:latest
+          command: ["/bin/sh", "-c", "exit 1"]
+      restartPolicy: Never
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: job-running
+  namespace: namespace-2
+spec:
+  template:
+    spec:
+      containers:
+        - name: busybox
+          image: busybox:latest
+          command: ["sleep", "infinity"]
+      restartPolicy: Never
+---
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: running-replicaset
+  namespace: namespace-3
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: running-replicaset
+  template:
+    metadata:
+      labels:
+        app: running-replicaset
+    spec:
+      containers:
+        - name: busybox
+          image: busybox:latest
+          command: ["sleep", "infinity"]

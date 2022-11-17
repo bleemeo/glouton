@@ -133,7 +133,9 @@ func podsCount(ctx context.Context, cl kubeClient, now time.Time) ([]types.Metri
 			if kind == "ReplicaSet" {
 				ownerRef := replicasetOwnerByUUID[string(ownerRef.UID)]
 
-				kind, name = ownerRef.Kind, ownerRef.Name
+				if ownerRef.Kind != "" {
+					kind, name = ownerRef.Kind, ownerRef.Name
+				}
 			}
 		}
 
@@ -173,19 +175,24 @@ func podsCount(ctx context.Context, cl kubeClient, now time.Time) ([]types.Metri
 
 // podPhase returns the status of a pod.
 func podPhase(pod corev1.Pod) corev1.PodPhase {
-	// The phase of the pod itself is not sufficient to know if the containers are running,
-	// the pod may be in the running state while the container inside is in a crash loop.
-	status := pod.Status.Phase
+	if pod.Status.Phase == corev1.PodSucceeded || pod.Status.Phase == corev1.PodFailed {
+		return pod.Status.Phase
+	}
+
+	// When the phase is pending or running, we have to check the containers inside the pod to
+	// return a relevant status, the pod may be in the running state while the container inside
+	// is in a crash loop, or the pod may be pending if the init container failed.
+	status := initContainerPhase(pod.Status)
 	if status != corev1.PodRunning {
 		return status
 	}
 
-	status = initContainerPhase(pod.Status)
+	status = containerPhase(pod.Status)
 	if status != corev1.PodRunning {
 		return status
 	}
 
-	return containerPhase(pod.Status)
+	return pod.Status.Phase
 }
 
 // containerPhase returns the status of the containers.
@@ -195,6 +202,12 @@ func containerPhase(podStatus corev1.PodStatus) corev1.PodPhase {
 		case status.State.Terminated != nil:
 			return corev1.PodFailed
 		case status.State.Waiting != nil:
+			if status.State.Waiting.Reason == "CrashLoopBackOff" {
+				return corev1.PodFailed
+			}
+
+			return corev1.PodPending
+		case !status.Ready:
 			return corev1.PodPending
 		}
 	}

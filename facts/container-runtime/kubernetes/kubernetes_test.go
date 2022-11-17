@@ -19,16 +19,20 @@ package kubernetes
 import (
 	"context"
 	"errors"
+	"fmt"
 	"glouton/facts"
 	"glouton/facts/container-runtime/containerd"
 	"glouton/facts/container-runtime/docker"
 	"glouton/facts/container-runtime/internal/testutil"
 	crTypes "glouton/facts/container-runtime/types"
+	"glouton/types"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/version"
@@ -53,7 +57,7 @@ type mockKubernetesClient struct {
 func newKubernetesMock(dirname string) (*mockKubernetesClient, error) {
 	result := &mockKubernetesClient{}
 
-	data, err := os.ReadFile(filepath.Join(dirname, "node.yaml"))
+	data, err := os.ReadFile(filepath.Join(dirname, "nodes.yaml"))
 	if err == nil {
 		err = yaml.Unmarshal(data, &result.nodes)
 		if err != nil {
@@ -72,6 +76,23 @@ func newKubernetesMock(dirname string) (*mockKubernetesClient, error) {
 	data, err = os.ReadFile(filepath.Join(dirname, "pods.yaml"))
 	if err == nil {
 		err = yaml.Unmarshal(data, &result.pods)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// namespaces.yaml and replicasets.yaml may not be present, don't return an error.
+	data, localErr := os.ReadFile(filepath.Join(dirname, "namespaces.yaml"))
+	if localErr == nil {
+		err = yaml.Unmarshal(data, &result.namespaces)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	data, localErr = os.ReadFile(filepath.Join(dirname, "replicasets.yaml"))
+	if localErr == nil {
+		err = yaml.Unmarshal(data, &result.replicaSets)
 		if err != nil {
 			return nil, err
 		}
@@ -739,5 +760,297 @@ func TestKubernetes_Containers(t *testing.T) { //nolint:maintidx
 				t.Errorf("facts:\n%s", diff)
 			}
 		})
+	}
+}
+
+func TestClusterMetrics(t *testing.T) { //nolint:maintidx
+	mockClient, err := newKubernetesMock("testdata/cluster_metrics")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	const clusterName = "my_cluster"
+
+	now := time.Now()
+
+	points, err := getGlobalMetrics(context.Background(), mockClient, now, clusterName)
+	if err != nil {
+		t.Fatal(err)
+
+		return
+	}
+
+	expectedPoints := []types.MetricPoint{
+		{
+			Point: types.Point{
+				Time:  now,
+				Value: 2,
+			},
+			Labels: map[string]string{
+				types.LabelName:                  "kubernetes_pods_count",
+				types.LabelState:                 "failed",
+				types.LabelOwnerKind:             "job",
+				types.LabelOwnerName:             "job-failed",
+				types.LabelMetaKubernetesCluster: clusterName,
+			},
+		},
+		{
+			Point: types.Point{
+				Time:  now,
+				Value: 1,
+			},
+			Labels: map[string]string{
+				types.LabelMetaKubernetesCluster: clusterName,
+				types.LabelName:                  "kubernetes_pods_count",
+				types.LabelState:                 "running",
+				types.LabelOwnerKind:             "job",
+				types.LabelOwnerName:             "job-running",
+			},
+		},
+		{
+			Point: types.Point{
+				Time:  now,
+				Value: 1,
+			},
+			Labels: map[string]string{
+				types.LabelName:                  "kubernetes_pods_count",
+				types.LabelState:                 "pending",
+				types.LabelOwnerKind:             "deployment",
+				types.LabelOwnerName:             "running-not-ready",
+				types.LabelMetaKubernetesCluster: clusterName,
+			},
+		},
+		{
+			Point: types.Point{
+				Time:  now,
+				Value: 4,
+			},
+			Labels: map[string]string{
+				types.LabelMetaKubernetesCluster: clusterName,
+				types.LabelName:                  "kubernetes_pods_count",
+				types.LabelState:                 "running",
+				types.LabelOwnerKind:             "node",
+				types.LabelOwnerName:             "minikube",
+			},
+		},
+		{
+			Point: types.Point{
+				Time:  now,
+				Value: 1,
+			},
+			Labels: map[string]string{
+				types.LabelState:                 "pending",
+				types.LabelOwnerKind:             "deployment",
+				types.LabelOwnerName:             "inside-init",
+				types.LabelMetaKubernetesCluster: clusterName,
+				types.LabelName:                  "kubernetes_pods_count",
+			},
+		},
+		{
+			Point: types.Point{
+				Time:  now,
+				Value: 1,
+			},
+			Labels: map[string]string{
+				types.LabelName:                  "kubernetes_pods_count",
+				types.LabelState:                 "pending",
+				types.LabelOwnerKind:             "deployment",
+				types.LabelOwnerName:             "image-pull-backoff",
+				types.LabelMetaKubernetesCluster: clusterName,
+			},
+		},
+		{
+			Point: types.Point{
+				Time:  now,
+				Value: 1,
+			},
+			Labels: map[string]string{
+				types.LabelName:                  "kubernetes_pods_count",
+				types.LabelState:                 "failed",
+				types.LabelOwnerKind:             "deployment",
+				types.LabelOwnerName:             "init-failed",
+				types.LabelMetaKubernetesCluster: clusterName,
+			},
+		},
+		{
+			Point: types.Point{
+				Time:  now,
+				Value: 1,
+			},
+			Labels: map[string]string{
+				types.LabelMetaKubernetesCluster: clusterName,
+				types.LabelName:                  "kubernetes_pods_count",
+				types.LabelState:                 "running",
+			},
+		},
+		{
+			Point: types.Point{
+				Time:  now,
+				Value: 1,
+			},
+			Labels: map[string]string{
+				types.LabelName:                  "kubernetes_pods_count",
+				types.LabelState:                 "succeeded",
+				types.LabelOwnerKind:             "job",
+				types.LabelOwnerName:             "job-succeeded",
+				types.LabelMetaKubernetesCluster: clusterName,
+			},
+		},
+		{
+			Point: types.Point{
+				Time:  now,
+				Value: 2,
+			},
+			Labels: map[string]string{
+				types.LabelOwnerKind:             "deployment",
+				types.LabelOwnerName:             "running-replicas",
+				types.LabelMetaKubernetesCluster: clusterName,
+				types.LabelName:                  "kubernetes_pods_count",
+				types.LabelState:                 "running",
+			},
+		},
+		{
+			Point: types.Point{
+				Time:  now,
+				Value: 3,
+			},
+			Labels: map[string]string{
+				types.LabelOwnerKind:             "daemonset",
+				types.LabelOwnerName:             "kube-proxy",
+				types.LabelMetaKubernetesCluster: clusterName,
+				types.LabelName:                  "kubernetes_pods_count",
+				types.LabelState:                 "running",
+			},
+		},
+		{
+			Point: types.Point{
+				Time:  now,
+				Value: 1,
+			},
+			Labels: map[string]string{
+				types.LabelState:                 "failed",
+				types.LabelOwnerKind:             "deployment",
+				types.LabelOwnerName:             "crash-loop-backoff",
+				types.LabelMetaKubernetesCluster: clusterName,
+				types.LabelName:                  "kubernetes_pods_count",
+			},
+		},
+		{
+			Point: types.Point{
+				Time:  now,
+				Value: 1,
+			},
+			Labels: map[string]string{
+				types.LabelName:                  "kubernetes_pods_count",
+				types.LabelState:                 "pending",
+				types.LabelOwnerKind:             "deployment",
+				types.LabelOwnerName:             "unschedulable",
+				types.LabelMetaKubernetesCluster: clusterName,
+			},
+		},
+		{
+			Point: types.Point{
+				Time:  now,
+				Value: 3,
+			},
+			Labels: map[string]string{
+				types.LabelName:                  "kubernetes_pods_count",
+				types.LabelState:                 "running",
+				types.LabelOwnerKind:             "daemonset",
+				types.LabelOwnerName:             "kindnet",
+				types.LabelMetaKubernetesCluster: clusterName,
+			},
+		},
+		{
+			Point: types.Point{
+				Time:  now,
+				Value: 1,
+			},
+			Labels: map[string]string{
+				types.LabelName:                  "kubernetes_pods_count",
+				types.LabelState:                 "running",
+				types.LabelOwnerKind:             "deployment",
+				types.LabelOwnerName:             "running-ready",
+				types.LabelMetaKubernetesCluster: clusterName,
+			},
+		},
+		{
+			Point: types.Point{
+				Time:  now,
+				Value: 1,
+			},
+			Labels: map[string]string{
+				types.LabelName:                  "kubernetes_pods_count",
+				types.LabelState:                 "running",
+				types.LabelOwnerKind:             "deployment",
+				types.LabelOwnerName:             "coredns",
+				types.LabelMetaKubernetesCluster: clusterName,
+			},
+		},
+		{
+			Point: types.Point{
+				Time:  now,
+				Value: 1,
+			},
+			Labels: map[string]string{
+				types.LabelMetaKubernetesCluster: clusterName,
+				types.LabelName:                  "kubernetes_pods_count",
+				types.LabelState:                 "running",
+				types.LabelOwnerKind:             "deployment",
+				types.LabelOwnerName:             "running-init-ok",
+			},
+		},
+		{
+			Point: types.Point{
+				Time:  now,
+				Value: 3,
+			},
+			Labels: map[string]string{
+				types.LabelMetaKubernetesCluster: clusterName,
+				types.LabelName:                  "kubernetes_pods_count",
+				types.LabelState:                 "running",
+				types.LabelOwnerKind:             "replicaset",
+				types.LabelOwnerName:             "running-replicaset",
+			},
+		},
+		{
+			Point: types.Point{
+				Time:  now,
+				Value: 8,
+			},
+			Labels: map[string]string{
+				types.LabelState:                 "active",
+				types.LabelMetaKubernetesCluster: clusterName,
+				types.LabelName:                  "kubernetes_namespaces_count",
+			},
+		},
+		{
+			Point: types.Point{
+				Time:  now,
+				Value: 3,
+			},
+			Labels: map[string]string{
+				types.LabelName:                  "kubernetes_nodes_count",
+				types.LabelMetaKubernetesCluster: clusterName,
+			},
+		},
+	}
+
+	// Sort points by metric name, owner and state.
+	lessFunc := func(x, y types.MetricPoint) bool {
+		id := func(p types.MetricPoint) string {
+			return fmt.Sprintf("%s%s%s%s",
+				p.Labels[types.LabelName],
+				p.Labels[types.LabelOwnerKind],
+				p.Labels[types.LabelOwnerName],
+				p.Labels[types.LabelState],
+			)
+		}
+
+		return id(x) < id(y)
+	}
+
+	if diff := cmp.Diff(expectedPoints, points, cmpopts.SortSlices(lessFunc)); diff != "" {
+		t.Fatalf("Didn't get expected points:\n%s", diff)
 	}
 }
