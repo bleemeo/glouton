@@ -2288,6 +2288,14 @@ func (a *agent) diagnosticContainers(ctx context.Context, archive types.ArchiveW
 		return err
 	}
 
+	if a.config.Kubernetes.Enable && a.bleemeoConnector != nil {
+		if a.bleemeoConnector.AgentIsClusterLeader() {
+			fmt.Fprintf(file, "This agent is the kubernetes cluster leader.\n\n")
+		} else {
+			fmt.Fprintf(file, "This agent is not the kubernetes cluster leader.\n\n")
+		}
+	}
+
 	containers, err := a.containerRuntime.Containers(ctx, time.Hour, true)
 	if err != nil {
 		fmt.Fprintf(file, "can't list containers: %v", err)
