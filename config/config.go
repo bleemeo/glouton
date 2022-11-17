@@ -451,7 +451,7 @@ func migrateMetricsPrometheus(k *koanf.Koanf, config map[string]interface{}) pro
 			continue
 		}
 
-		warnings.Append(fmt.Errorf("%w: metrics.prometheus. See https://docs.bleemeo.com/metrics-sources/prometheus", errSettingsDeprecated))
+		warnings.Append(fmt.Errorf("%w: metrics.prometheus. See https://go.bleemeo.com/l/doc-prometheus", errSettingsDeprecated))
 
 		migratedTargets = append(migratedTargets, map[string]interface{}{
 			"url":  u,

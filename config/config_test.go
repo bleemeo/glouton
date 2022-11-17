@@ -507,7 +507,7 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 			Name:  "migration file",
 			Files: []string{"testdata/old-prometheus-targets.conf"},
 			WantWarnings: []string{
-				"setting is deprecated: metrics.prometheus. See https://docs.bleemeo.com/metrics-sources/prometheus",
+				"setting is deprecated: metrics.prometheus. See https://go.bleemeo.com/l/doc-prometheus",
 			},
 			WantConfig: Config{
 				Metric: Metric{

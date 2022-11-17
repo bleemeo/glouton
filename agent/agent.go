@@ -831,7 +831,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 			a.factProvider.SetFact("kubernetes_cluster_name", clusterName)
 		} else {
 			a.addWarnings(fmt.Errorf(
-				"%w because kubernetes.clustername is missing, see https://docs.bleemeo.com/agent/installation#installation-on-kubernetes",
+				"%w because kubernetes.clustername is missing, see https://go.bleemeo.com/l/agent-installation-kubernetes",
 				errFeatureUnavailable,
 			))
 		}
