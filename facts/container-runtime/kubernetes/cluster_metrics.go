@@ -49,13 +49,14 @@ func namespacesCount(ctx context.Context, cl kubeClient, now time.Time) ([]types
 		return nil, err
 	}
 
-	var points []types.MetricPoint
-
 	nsCountByState := make(map[string]int)
+
 	for _, namespace := range ns {
 		state := strings.ToLower(string(namespace.Status.Phase))
-		nsCountByState[state] += 1
+		nsCountByState[state]++
 	}
+
+	points := make([]types.MetricPoint, 0, len(nsCountByState))
 
 	for state, count := range nsCountByState {
 		points = append(points, types.MetricPoint{
@@ -88,9 +89,9 @@ func nodesCount(ctx context.Context, cl kubeClient, now time.Time) ([]types.Metr
 }
 
 // podsCount returns the metric kubernetes_pods_count with three labels:
-// - kind: the of the pod's owner, e.g. daemonset, deployment
-// - name: the name of the pod's owner, e.g. glouton, kube-proxy
-// - state: the current state of the pod (pending, running, succeeded or failed)
+// - kind: the of the pod's owner, e.g. daemonset, deployment.
+// - name: the name of the pod's owner, e.g. glouton, kube-proxy.
+// - state: the current state of the pod (pending, running, succeeded or failed).
 func podsCount(ctx context.Context, cl kubeClient, now time.Time) ([]types.MetricPoint, error) {
 	// For Kubernetes deployments with multiple replicas, a replicaset is created. This means the pod's
 	// owner is the replicaset (which has a generated name, e.g. "coredns-565d847f94"). In this case we
@@ -113,8 +114,6 @@ func podsCount(ctx context.Context, cl kubeClient, now time.Time) ([]types.Metri
 		return nil, err
 	}
 
-	var points []types.MetricPoint
-
 	type podLabels struct {
 		State string
 		Kind  string
@@ -122,8 +121,10 @@ func podsCount(ctx context.Context, cl kubeClient, now time.Time) ([]types.Metri
 	}
 
 	podsCountByLabels := make(map[podLabels]int, len(pods))
+
 	for _, pod := range pods {
 		var kind, name string
+
 		if len(pod.OwnerReferences) > 0 {
 			ownerRef := pod.OwnerReferences[0]
 			kind, name = ownerRef.Kind, ownerRef.Name
@@ -142,8 +143,10 @@ func podsCount(ctx context.Context, cl kubeClient, now time.Time) ([]types.Metri
 			Name:  strings.ToLower(name),
 		}
 
-		podsCountByLabels[labels] += 1
+		podsCountByLabels[labels]++
 	}
+
+	points := make([]types.MetricPoint, 0, len(podsCountByLabels))
 
 	for podLabels, count := range podsCountByLabels {
 		labels := map[string]string{

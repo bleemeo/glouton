@@ -92,6 +92,21 @@ func (k *mockKubernetesClient) GetPODs(ctx context.Context, nodeName string) ([]
 	return k.pods.Items, nil
 }
 
+// GetNodes returns all nodes in the cluster.
+func (k *mockKubernetesClient) GetNodes(ctx context.Context) ([]corev1.Node, error) {
+	return k.nodes.Items, nil
+}
+
+// GetNamespaces returns all namespaces in the cluster.
+func (k *mockKubernetesClient) GetNamespaces(ctx context.Context) ([]corev1.Namespace, error) {
+	return k.namespaces.Items, nil
+}
+
+// GetReplicasets return all replicasets in the cluster.
+func (k *mockKubernetesClient) GetReplicasets(ctx context.Context) ([]appsv1.ReplicaSet, error) {
+	return k.replicaSets.Items, nil
+}
+
 func (k *mockKubernetesClient) GetServerVersion(ctx context.Context) (*version.Info, error) {
 	return k.versions.ServerVersion, nil
 }
