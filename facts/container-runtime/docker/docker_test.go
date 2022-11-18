@@ -431,8 +431,9 @@ func TestDocker_ContainerFromCGroup(t *testing.T) {
 					2:cpu,cpuacct:/docker/72cf779c7429b33b04f296a98fc9be928c82c5537e333589bec734a884cbb2d2/docker/2faf78372d542468d4616d7cb85f03994a1d7ea60a42749e7114c506b8282882
 					1:name=systemd:/docker/72cf779c7429b33b04f296a98fc9be928c82c5537e333589bec734a884cbb2d2/docker/2faf78372d542468d4616d7cb85f03994a1d7ea60a42749e7114c506b8282882
 					0::/docker/72cf779c7429b33b04f296a98fc9be928c82c5537e333589bec734a884cbb2d2/system.slice/containerd.service`,
-					containerID:   "2faf78372d542468d4616d7cb85f03994a1d7ea60a42749e7114c506b8282882",
-					containerName: "testdata_rabbitmqExposed_1",
+					// Docker in Docker (with cgroup v1) had the issue that cgroup data is the same between host & the docker "VM".
+					// We choose to prefer assuming being on the host. Anyway ContainerFromPID should fix any issue.
+					mustErrDoesNotExist: true,
 				},
 				{
 					name: "minikube v0.28.2",
@@ -479,6 +480,57 @@ func TestDocker_ContainerFromCGroup(t *testing.T) {
 					name: "Docker 20.10.18 on Ubuntu 20.04",
 					cgroupData: `
 					0::/system.slice/docker-2faf78372d542468d4616d7cb85f03994a1d7ea60a42749e7114c506b8282882.scope`,
+					containerID:   "2faf78372d542468d4616d7cb85f03994a1d7ea60a42749e7114c506b8282882",
+					containerName: "testdata_rabbitmqExposed_1",
+				},
+				{
+					name: "PODs from inside minikube on Ubuntu 22.04",
+					cgroupData: `
+					0::/kubepods.slice/kubepods-burstable.slice/kubepods-burstable-podba16e26e47364bddbb0e7175c15b7f37.slice/docker-2faf78372d542468d4616d7cb85f03994a1d7ea60a42749e7114c506b8282882.scope`,
+					containerID:   "2faf78372d542468d4616d7cb85f03994a1d7ea60a42749e7114c506b8282882",
+					containerName: "testdata_rabbitmqExposed_1",
+				},
+				// the first ID, is the ID of minikube container. Since we are from outside, docker will show this container. (here we cheated at said that instead of minikube container its rabbitmq).
+				// the second ID, is the ID of the POD inside the minikube. Since we are from outside, docker don't know this ID.
+				{
+					name: "PODs from outside minikube on Ubuntu 22.04",
+					cgroupData: `
+					0::/system.slice/docker-2faf78372d542468d4616d7cb85f03994a1d7ea60a42749e7114c506b8282882.scope/kubepods.slice/kubepods-burstable.slice/kubepods-burstable-podba16e26e47364bddbb0e7175c15b7f37.slice/docker-9f45a1e3a6ae985b6318b24123314eb8a7d6580accd9d279adb7867dc8c43a48.scope`,
+					containerID:   "2faf78372d542468d4616d7cb85f03994a1d7ea60a42749e7114c506b8282882",
+					containerName: "testdata_rabbitmqExposed_1",
+				},
+				{
+					name: "PODs from outside minikube on MacOS",
+					cgroupData: `
+					0::/../2faf78372d542468d4616d7cb85f03994a1d7ea60a42749e7114c506b8282882/kubepods.slice/kubepods-besteffort.slice/kubepods-besteffort-podd240b53b_a306_422b_951d_54822714c75d.slice/docker-7bc755e4a55d5972a4cfa50ab921227b3c38321092b08df54c45537fd0bc1316.scope`,
+					containerID:   "2faf78372d542468d4616d7cb85f03994a1d7ea60a42749e7114c506b8282882",
+					containerName: "testdata_rabbitmqExposed_1",
+				},
+				{
+					name: "PODs from inside minikube on MacOS",
+					cgroupData: `
+					0::/kubepods.slice/kubepods-besteffort.slice/kubepods-besteffort-podd240b53b_a306_422b_951d_54822714c75d.slice/docker-2faf78372d542468d4616d7cb85f03994a1d7ea60a42749e7114c506b8282882.scope`,
+					containerID:   "2faf78372d542468d4616d7cb85f03994a1d7ea60a42749e7114c506b8282882",
+					containerName: "testdata_rabbitmqExposed_1",
+				},
+				{
+					name: "Docker in Docker from outside on MacOS",
+					cgroupData: `
+					0::/../2faf78372d542468d4616d7cb85f03994a1d7ea60a42749e7114c506b8282882/system.slice/docker-d4b826cbcb102335417b30518caefb9ddfcd43941a81365f73840257d600b9b2.scope`,
+					containerID:   "2faf78372d542468d4616d7cb85f03994a1d7ea60a42749e7114c506b8282882",
+					containerName: "testdata_rabbitmqExposed_1",
+				},
+				{
+					name: "Docker in Docker in Docker from first layer on MacOS",
+					cgroupData: `
+					0::/system.slice/docker-2faf78372d542468d4616d7cb85f03994a1d7ea60a42749e7114c506b8282882.scope/system.slice/docker-da908c4920e4aed9dfbf50c3aaf16e3fc3bae44ba9cb77f463f61803d92e110c.scope`,
+					containerID:   "2faf78372d542468d4616d7cb85f03994a1d7ea60a42749e7114c506b8282882",
+					containerName: "testdata_rabbitmqExposed_1",
+				},
+				{
+					name: "Docker in Docker in Docker from outside on MacOS",
+					cgroupData: `
+					0::/../2faf78372d542468d4616d7cb85f03994a1d7ea60a42749e7114c506b8282882/system.slice/docker-1b85fac471b76401a49baea1d16e268b16759883f0b8c52d48548f0c3cf69124.scope/system.slice/docker-da908c4920e4aed9dfbf50c3aaf16e3fc3bae44ba9cb77f463f61803d92e110c.scope`,
 					containerID:   "2faf78372d542468d4616d7cb85f03994a1d7ea60a42749e7114c506b8282882",
 					containerName: "testdata_rabbitmqExposed_1",
 				},
@@ -561,26 +613,25 @@ func TestDocker_ContainerFromCGroup(t *testing.T) {
 					containerID:   "72cf779c7429b33b04f296a98fc9be928c82c5537e333589bec734a884cbb2d2",
 					containerName: "minikube",
 				},
-				// TODO: For now, docker-in-docker does not work perfectly
-				// {
-				// 	name: "rabbitmq of minikube",
-				// 	cgroupData: `
-				// 		12:cpuset:/docker/72cf779c7429b33b04f296a98fc9be928c82c5537e333589bec734a884cbb2d2/docker/0960ba858a48d7f15b1b5d0a278d62fb025d4d4ec1a0bae0f1df253bffc1253b
-				// 		11:memory:/docker/72cf779c7429b33b04f296a98fc9be928c82c5537e333589bec734a884cbb2d2/docker/0960ba858a48d7f15b1b5d0a278d62fb025d4d4ec1a0bae0f1df253bffc1253b
-				// 		10:pids:/docker/72cf779c7429b33b04f296a98fc9be928c82c5537e333589bec734a884cbb2d2/docker/0960ba858a48d7f15b1b5d0a278d62fb025d4d4ec1a0bae0f1df253bffc1253b
-				// 		9:freezer:/docker/72cf779c7429b33b04f296a98fc9be928c82c5537e333589bec734a884cbb2d2/docker/0960ba858a48d7f15b1b5d0a278d62fb025d4d4ec1a0bae0f1df253bffc1253b
-				// 		8:blkio:/docker/72cf779c7429b33b04f296a98fc9be928c82c5537e333589bec734a884cbb2d2/docker/0960ba858a48d7f15b1b5d0a278d62fb025d4d4ec1a0bae0f1df253bffc1253b
-				// 		7:net_cls,net_prio:/docker/72cf779c7429b33b04f296a98fc9be928c82c5537e333589bec734a884cbb2d2/docker/0960ba858a48d7f15b1b5d0a278d62fb025d4d4ec1a0bae0f1df253bffc1253b
-				// 		6:perf_event:/docker/72cf779c7429b33b04f296a98fc9be928c82c5537e333589bec734a884cbb2d2/docker/0960ba858a48d7f15b1b5d0a278d62fb025d4d4ec1a0bae0f1df253bffc1253b
-				// 		5:rdma:/
-				// 		4:devices:/docker/72cf779c7429b33b04f296a98fc9be928c82c5537e333589bec734a884cbb2d2/docker/0960ba858a48d7f15b1b5d0a278d62fb025d4d4ec1a0bae0f1df253bffc1253b
-				// 		3:hugetlb:/docker/72cf779c7429b33b04f296a98fc9be928c82c5537e333589bec734a884cbb2d2/docker/0960ba858a48d7f15b1b5d0a278d62fb025d4d4ec1a0bae0f1df253bffc1253b
-				// 		2:cpu,cpuacct:/docker/72cf779c7429b33b04f296a98fc9be928c82c5537e333589bec734a884cbb2d2/docker/0960ba858a48d7f15b1b5d0a278d62fb025d4d4ec1a0bae0f1df253bffc1253b
-				// 		1:name=systemd:/docker/72cf779c7429b33b04f296a98fc9be928c82c5537e333589bec734a884cbb2d2/docker/0960ba858a48d7f15b1b5d0a278d62fb025d4d4ec1a0bae0f1df253bffc1253b
-				// 		0::/docker/72cf779c7429b33b04f296a98fc9be928c82c5537e333589bec734a884cbb2d2/system.slice/containerd.service`,
-				// 	containerID:   "72cf779c7429b33b04f296a98fc9be928c82c5537e333589bec734a884cbb2d2",
-				// 	containerName: "minikube",
-				// },
+				{
+					name: "rabbitmq of minikube",
+					cgroupData: `
+						12:cpuset:/docker/72cf779c7429b33b04f296a98fc9be928c82c5537e333589bec734a884cbb2d2/docker/0960ba858a48d7f15b1b5d0a278d62fb025d4d4ec1a0bae0f1df253bffc1253b
+						11:memory:/docker/72cf779c7429b33b04f296a98fc9be928c82c5537e333589bec734a884cbb2d2/docker/0960ba858a48d7f15b1b5d0a278d62fb025d4d4ec1a0bae0f1df253bffc1253b
+						10:pids:/docker/72cf779c7429b33b04f296a98fc9be928c82c5537e333589bec734a884cbb2d2/docker/0960ba858a48d7f15b1b5d0a278d62fb025d4d4ec1a0bae0f1df253bffc1253b
+						9:freezer:/docker/72cf779c7429b33b04f296a98fc9be928c82c5537e333589bec734a884cbb2d2/docker/0960ba858a48d7f15b1b5d0a278d62fb025d4d4ec1a0bae0f1df253bffc1253b
+						8:blkio:/docker/72cf779c7429b33b04f296a98fc9be928c82c5537e333589bec734a884cbb2d2/docker/0960ba858a48d7f15b1b5d0a278d62fb025d4d4ec1a0bae0f1df253bffc1253b
+						7:net_cls,net_prio:/docker/72cf779c7429b33b04f296a98fc9be928c82c5537e333589bec734a884cbb2d2/docker/0960ba858a48d7f15b1b5d0a278d62fb025d4d4ec1a0bae0f1df253bffc1253b
+						6:perf_event:/docker/72cf779c7429b33b04f296a98fc9be928c82c5537e333589bec734a884cbb2d2/docker/0960ba858a48d7f15b1b5d0a278d62fb025d4d4ec1a0bae0f1df253bffc1253b
+						5:rdma:/
+						4:devices:/docker/72cf779c7429b33b04f296a98fc9be928c82c5537e333589bec734a884cbb2d2/docker/0960ba858a48d7f15b1b5d0a278d62fb025d4d4ec1a0bae0f1df253bffc1253b
+						3:hugetlb:/docker/72cf779c7429b33b04f296a98fc9be928c82c5537e333589bec734a884cbb2d2/docker/0960ba858a48d7f15b1b5d0a278d62fb025d4d4ec1a0bae0f1df253bffc1253b
+						2:cpu,cpuacct:/docker/72cf779c7429b33b04f296a98fc9be928c82c5537e333589bec734a884cbb2d2/docker/0960ba858a48d7f15b1b5d0a278d62fb025d4d4ec1a0bae0f1df253bffc1253b
+						1:name=systemd:/docker/72cf779c7429b33b04f296a98fc9be928c82c5537e333589bec734a884cbb2d2/docker/0960ba858a48d7f15b1b5d0a278d62fb025d4d4ec1a0bae0f1df253bffc1253b
+						0::/docker/72cf779c7429b33b04f296a98fc9be928c82c5537e333589bec734a884cbb2d2/system.slice/containerd.service`,
+					containerID:   "72cf779c7429b33b04f296a98fc9be928c82c5537e333589bec734a884cbb2d2",
+					containerName: "minikube",
+				},
 				{
 					name: "unexisting id",
 					cgroupData: `

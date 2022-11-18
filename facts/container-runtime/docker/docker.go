@@ -1035,7 +1035,7 @@ func (c dockerContainer) PID() int {
 }
 
 var dockerCGroupRE = regexp.MustCompile(
-	`(?m:^\d+:[^:]*:(/kubepods/.*pod[0-9a-fA-F-]+/|.*/docker[-/])([0-9a-fA-F]+)(\.scope)?$)`,
+	`(?m:^(0::/\.\./|.*?(/kubepods/.*pod[0-9a-fA-F-]+/|/docker[-/]))(?P<container_id>[0-9a-fA-F]{64}))`,
 )
 
 type dockerProcessQuerier struct {
@@ -1412,8 +1412,8 @@ func (d *dockerProcessQuerier) ContainerFromCGroup(ctx context.Context, cgroupDa
 
 	for _, submatches := range dockerCGroupRE.FindAllStringSubmatch(cgroupData, -1) {
 		if containerID == "" {
-			containerID = submatches[2]
-		} else if containerID != submatches[2] {
+			containerID = submatches[dockerCGroupRE.SubexpIndex("container_id")]
+		} else if containerID != submatches[dockerCGroupRE.SubexpIndex("container_id")] {
 			// different value for the same PID. Abort detection of container ID from cgroup
 			return nil, fmt.Errorf("%w: more than one ID from cgroup: %v != %v", ErrDockerUnexcepted, containerID, submatches[2])
 		}
