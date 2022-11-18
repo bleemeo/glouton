@@ -51,6 +51,8 @@ const (
 	ProcessStatusUnknown     ProcessStatus = "?"
 )
 
+const defaultLowProcessThreshold = 5
+
 var errNotAvailable = errors.New("feature not available on this system")
 
 // ProcessProvider provider information about processes.
@@ -58,6 +60,7 @@ type ProcessProvider struct {
 	l sync.Mutex
 
 	containerRuntime containerRuntime
+	startedAt        time.Time
 	ps               processQuerier
 
 	processes              map[int]Process
@@ -162,6 +165,7 @@ func NewProcess(pslister ProcessLister, hostRootPath string, cr containerRuntime
 		ps: psListerWrapper{
 			ProcessLister: pslister,
 		},
+		startedAt: time.Now(),
 	}
 
 	return pp
@@ -184,7 +188,7 @@ func (pp *ProcessProvider) TopInfo(ctx context.Context, maxAge time.Duration) (t
 	defer pp.l.Unlock()
 
 	if time.Since(pp.lastProcessesUpdate) >= maxAge {
-		err = pp.updateProcesses(ctx, time.Now(), maxAge)
+		err = pp.updateProcesses(ctx, time.Now(), maxAge, defaultLowProcessThreshold)
 		if err != nil {
 			return
 		}
@@ -201,7 +205,7 @@ func (pp *ProcessProvider) ProcessesWithTime(ctx context.Context, maxAge time.Du
 	defer pp.l.Unlock()
 
 	if time.Since(pp.lastProcessesUpdate) >= maxAge {
-		err = pp.updateProcesses(ctx, time.Now(), maxAge)
+		err = pp.updateProcesses(ctx, time.Now(), maxAge, defaultLowProcessThreshold)
 		if err != nil {
 			return
 		}
@@ -263,7 +267,7 @@ func convertPSStatusOneChar(letter byte) ProcessStatus {
 	}
 }
 
-func (pp *ProcessProvider) updateProcesses(ctx context.Context, now time.Time, maxAge time.Duration) error { //nolint:maintidx
+func (pp *ProcessProvider) updateProcesses(ctx context.Context, now time.Time, maxAge time.Duration, lowProcessesThreshold int) error { //nolint:maintidx
 	// Process creation time is accurate up to 1/SC_CLK_TCK seconds,
 	// usually 1/100th of seconds.
 	// Process must be started at least 1/100th before t0.
@@ -298,13 +302,13 @@ func (pp *ProcessProvider) updateProcesses(ctx context.Context, now time.Time, m
 		}
 	}
 
-	if queryContainerRuntime != nil && len(newProcessesMap) < 5 {
+	if queryContainerRuntime != nil && len(newProcessesMap) < lowProcessesThreshold {
 		// If we have too few processes listed by gopsutil, it probably means
 		// we don't have access to root PID namespace. In this case do a processes
 		// listing using containerRuntime. We avoid it if possible as it's rather slow.
 		dockerProcesses, err := queryContainerRuntime.Processes(ctx)
-		if err != nil {
-			return err
+		if err != nil && !errors.As(err, &NoRuntimeError{}) {
+			logger.V(2).Printf("listing process from container runtime failed: %v", err)
 		}
 
 		for _, p := range dockerProcesses {
@@ -333,7 +337,7 @@ func (pp *ProcessProvider) updateProcesses(ctx context.Context, now time.Time, m
 				return ctx.Err()
 			}
 
-			var hadError bool
+			var fromCgroupErr error
 
 			if p.ContainerID != "" || queryContainerRuntime == nil {
 				continue
@@ -356,7 +360,7 @@ func (pp *ProcessProvider) updateProcesses(ctx context.Context, now time.Time, m
 				p.ContainerID = oldP.ContainerID
 				p.ContainerName = oldP.ContainerName
 				newProcessesMap[p.PID] = p
-				newProcessesDiscoveryInfoMap[p.PID] = processDiscoveryInfo{cgroupHash: cgroupHash, hadError: false}
+				newProcessesDiscoveryInfoMap[p.PID] = processDiscoveryInfo{cgroupHash: cgroupHash}
 
 				continue
 			}
@@ -391,35 +395,29 @@ func (pp *ProcessProvider) updateProcesses(ctx context.Context, now time.Time, m
 						}
 
 						newProcessesMap[p.PID] = p
-						newProcessesDiscoveryInfoMap[p.PID] = processDiscoveryInfo{cgroupHash: cgroupHash, hadError: newProcessesDiscoveryInfoMap[parent.PID].hadError}
+						newProcessesDiscoveryInfoMap[p.PID] = processDiscoveryInfo{cgroupHash: cgroupHash}
 
 						continue
 					}
 				}
 
 				container, err := queryContainerRuntime.ContainerFromCGroup(ctx, cgroupData)
-				if err != nil {
-					hadError = true
-				}
+				fromCgroupErr = err
 
-				if errors.Is(err, ErrContainerDoesNotExists) && now.Sub(p.CreateTime) < 3*time.Second {
+				if errors.Is(fromCgroupErr, ErrContainerDoesNotExists) && (now.Sub(p.CreateTime) < time.Minute || now.Sub(pp.startedAt) < 5*time.Minute) {
 					logger.V(2).Printf("Skipping process %d (%s) created recently and seems to belong to a container", p.PID, p.Name)
 					delete(newProcessesMap, p.PID)
 
 					continue
 				}
 
-				if err != nil && !errors.Is(err, ErrContainerDoesNotExists) {
-					logger.V(2).Printf("Query container runtime using cgroupData failed for process %d (%s): %v", p.PID, p.Name, err)
-				}
-
-				if err == nil && container != nil {
+				if fromCgroupErr == nil && container != nil {
 					logger.V(2).Printf("Based on cgroup, process %d (%s) belong to container %s", p.PID, p.Name, container.ContainerName())
 
 					p.ContainerID = container.ID()
 					p.ContainerName = container.ContainerName()
 					newProcessesMap[p.PID] = p
-					newProcessesDiscoveryInfoMap[p.PID] = processDiscoveryInfo{cgroupHash: cgroupHash, hadError: false}
+					newProcessesDiscoveryInfoMap[p.PID] = processDiscoveryInfo{cgroupHash: cgroupHash}
 
 					continue
 				}
@@ -433,7 +431,7 @@ func (pp *ProcessProvider) updateProcesses(ctx context.Context, now time.Time, m
 			}
 
 			if p.ContainerID == "" {
-				container, err := queryContainerRuntime.ContainerFromPID(ctx, newProcessesMap[p.PPID].ContainerID, p.PID)
+				container, fromPIDErr := queryContainerRuntime.ContainerFromPID(ctx, newProcessesMap[p.PPID].ContainerID, p.PID)
 
 				switch {
 				case container != nil:
@@ -441,13 +439,7 @@ func (pp *ProcessProvider) updateProcesses(ctx context.Context, now time.Time, m
 					p.ContainerName = container.ContainerName()
 
 					newProcessesMap[p.PID] = p
-					newProcessesDiscoveryInfoMap[p.PID] = processDiscoveryInfo{cgroupHash: cgroupHash, hadError: false}
-				case err != nil:
-					logger.V(2).Printf("Error when querying container runtime for process %d (%s): %v", p.PID, p.Name, err)
-
-					hadError = true
-
-					fallthrough
+					newProcessesDiscoveryInfoMap[p.PID] = processDiscoveryInfo{cgroupHash: cgroupHash}
 				default:
 					// Check another time because the process may have terminated while findContainerOfProcess is running
 					if exists, _ := pp.ps.PidExists(int32(p.PID)); !exists {
@@ -455,6 +447,66 @@ func (pp *ProcessProvider) updateProcesses(ctx context.Context, now time.Time, m
 						delete(newProcessesMap, p.PID)
 
 						continue
+					}
+
+					age := now.Sub(p.CreateTime)
+					if now.Sub(pp.startedAt) < age {
+						age = now.Sub(pp.startedAt)
+					}
+
+					switch {
+					case fromCgroupErr == nil && fromPIDErr == nil:
+						// no error, this process don't belong to a container
+					case (errors.As(fromCgroupErr, &NoRuntimeError{}) || fromCgroupErr == nil) && errors.As(fromPIDErr, &NoRuntimeError{}):
+						// Wait a bit to be sure on reboot some process don't get wrongly detected.
+						// This mostly means that any process will be delayed by 10 seconds when Docker isn't used.
+						if age < 10*time.Second {
+							logger.V(2).Printf("Skipping process %d (%s) because FromCgroup & FromPID fail with NoRuntime: %v", p.PID, p.Name, fromCgroupErr)
+							delete(newProcessesMap, p.PID)
+
+							continue
+						}
+					case fromCgroupErr == nil && fromPIDErr != nil:
+						// ContainerFromCGroup could not fail even if fromPID does, because based on cgroup data it
+						// could "known" that the process don't belong to a container.
+						// Because it knowledge isn't guarateed, we still delay a bit the discovery.
+						if age < 20*time.Second {
+							logger.V(2).Printf("Skipping process %d (%s) because FromPID fail with %v", p.PID, p.Name, fromPIDErr)
+							delete(newProcessesMap, p.PID)
+
+							continue
+						}
+					case errors.As(fromCgroupErr, &NoRuntimeError{}) || errors.As(fromPIDErr, &NoRuntimeError{}):
+						// Not sure this case could happen. Wait more than previous, since it means another error happened
+						if age < time.Minute {
+							logger.V(2).Printf("Skipping process %d (%s) because FromCgroup OR FromPID fail with NoRuntime: %v / %s", p.PID, p.Name, fromCgroupErr, fromPIDErr)
+							delete(newProcessesMap, p.PID)
+
+							continue
+						}
+					case errors.Is(fromCgroupErr, context.DeadlineExceeded) || errors.Is(fromPIDErr, context.DeadlineExceeded):
+						if age < 5*time.Minute {
+							logger.V(2).Printf("Skipping process %d (%s) because FromCgroup or FromPID fail with timeout: %v / %s", p.PID, p.Name, fromCgroupErr, fromPIDErr)
+							delete(newProcessesMap, p.PID)
+
+							continue
+						}
+					default:
+						if age < time.Minute {
+							logger.V(2).Printf("Skipping process %d (%s) because FromCgroup / FromPID fail: %v / %s", p.PID, p.Name, fromCgroupErr, fromPIDErr)
+							delete(newProcessesMap, p.PID)
+
+							continue
+						}
+					}
+
+					hadError := false
+					if fromCgroupErr != nil && !errors.As(fromCgroupErr, &NoRuntimeError{}) {
+						hadError = true
+					}
+
+					if fromPIDErr != nil && !errors.As(fromPIDErr, &NoRuntimeError{}) {
+						hadError = true
 					}
 
 					newProcessesDiscoveryInfoMap[p.PID] = processDiscoveryInfo{cgroupHash: cgroupHash, hadError: hadError}

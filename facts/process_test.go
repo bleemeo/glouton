@@ -19,6 +19,7 @@ package facts
 import (
 	"context"
 	"encoding/csv"
+	"errors"
 	"math"
 	"math/rand"
 	"os"
@@ -32,6 +33,8 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 )
+
+var errArbitraryErrorForTest = errors.New("arbitraryErrorForTest")
 
 func TestPsStat2Status(t *testing.T) {
 	cases := []struct {
@@ -93,6 +96,11 @@ type mockContainerRuntime struct {
 	WithCacheHook   func()
 	processesResult []Process
 
+	// Errors returned by each function.
+	// fromCGroupErr is actually only returned if the cgroup data match a container or a seemsContainer.
+	fromCGroupErr         error
+	fromPIDErr            error
+	otherErr              error
 	cgroup2seemsContainer map[string]bool
 	cgroup2Container      map[string]Container
 	pid2Containers        map[int]Container
@@ -125,6 +133,10 @@ func (m *mockContainerRuntime) ProcessWithCache() ContainerRuntimeProcessQuerier
 func (m *mockContainerRuntime) Processes(ctx context.Context) ([]Process, error) {
 	m.ProcessesCallCount++
 
+	if m.otherErr != nil {
+		return nil, m.otherErr
+	}
+
 	return m.processesResult, nil
 }
 
@@ -133,10 +145,18 @@ func (m *mockContainerRuntime) ContainerFromCGroup(ctx context.Context, cgroupDa
 
 	c := m.cgroup2Container[cgroupData]
 	if c != nil {
+		if m.fromCGroupErr != nil {
+			return nil, m.fromCGroupErr
+		}
+
 		return c, nil
 	}
 
 	if m.cgroup2seemsContainer[cgroupData] {
+		if m.fromCGroupErr != nil {
+			return nil, m.fromCGroupErr
+		}
+
 		return nil, ErrContainerDoesNotExists
 	}
 
@@ -145,6 +165,10 @@ func (m *mockContainerRuntime) ContainerFromCGroup(ctx context.Context, cgroupDa
 
 func (m *mockContainerRuntime) ContainerFromPID(ctx context.Context, parentContainerID string, pid int) (Container, error) {
 	m.ContainerFromPIDCalls = append(m.ContainerFromPIDCalls, pid)
+
+	if m.fromPIDErr != nil {
+		return nil, m.fromPIDErr
+	}
 
 	return m.pid2Containers[pid], nil
 }
@@ -224,7 +248,7 @@ func TestUpdateProcesses(t *testing.T) {
 
 	cr.makePID2Containers()
 
-	err := pp.updateProcesses(context.Background(), now, 0)
+	err := pp.updateProcesses(context.Background(), now, 0, defaultLowProcessThreshold)
 	if err != nil {
 		t.Error(err)
 	}
@@ -309,7 +333,7 @@ func TestUpdateProcesses(t *testing.T) {
 	}
 }
 
-// TestUpdateProcessesShortLived check that short lived process are correctly handled.
+// TestUpdateProcessesWithTerminated check that short lived process are correctly handled.
 func TestUpdateProcessesWithTerminated(t *testing.T) {
 	t0 := time.Now()
 	t1 := t0.Add(time.Hour)
@@ -405,7 +429,7 @@ func TestUpdateProcessesWithTerminated(t *testing.T) {
 		ps:               psutil,
 	}
 
-	err := pp.updateProcesses(context.Background(), now, 0)
+	err := pp.updateProcesses(context.Background(), now, 0, defaultLowProcessThreshold)
 	if err != nil {
 		t.Error(err)
 	}
@@ -535,7 +559,7 @@ func TestUpdateProcessesOptimization(t *testing.T) { //nolint:maintidx
 		ps:               psutil,
 	}
 
-	err := pp.updateProcesses(context.Background(), now, 0)
+	err := pp.updateProcesses(context.Background(), now, 0, defaultLowProcessThreshold)
 	if err != nil {
 		t.Error(err)
 	}
@@ -758,7 +782,7 @@ func TestUpdateProcessesOptimization(t *testing.T) { //nolint:maintidx
 		},
 	}
 
-	err = pp.updateProcesses(context.Background(), t1.Add(20*time.Second), 0)
+	err = pp.updateProcesses(context.Background(), t1.Add(20*time.Second), 0, defaultLowProcessThreshold)
 	if err != nil {
 		t.Error(err)
 	}
@@ -961,7 +985,7 @@ func TestUpdateProcessesOptimization(t *testing.T) { //nolint:maintidx
 		},
 	}
 
-	err = pp.updateProcesses(context.Background(), t2.Add(time.Minute).Add(20*time.Second), 0)
+	err = pp.updateProcesses(context.Background(), t2.Add(time.Minute).Add(20*time.Second), 0, defaultLowProcessThreshold)
 	if err != nil {
 		t.Error(err)
 	}
@@ -1006,7 +1030,7 @@ func TestUpdateProcessesOptimization(t *testing.T) { //nolint:maintidx
 	cr.ContainerFromCGroupCalls = nil
 	cr.ContainerFromPIDCalls = nil
 
-	err = pp.updateProcesses(context.Background(), t2.Add(time.Hour), 0)
+	err = pp.updateProcesses(context.Background(), t2.Add(time.Hour), 0, defaultLowProcessThreshold)
 	if err != nil {
 		t.Error(err)
 	}
@@ -1112,7 +1136,7 @@ func TestDeltaCPUPercent(t *testing.T) {
 		},
 	}
 
-	err := pp.updateProcesses(context.Background(), now, 0)
+	err := pp.updateProcesses(context.Background(), now, 0, defaultLowProcessThreshold)
 	if err != nil {
 		t.Error(err)
 	}
@@ -1166,6 +1190,861 @@ func TestDeltaCPUPercent(t *testing.T) {
 		if !reflect.DeepEqual(got, c) {
 			t.Errorf("pp.processes[%v] == %v, want %v", c.PID, got, c)
 		}
+	}
+}
+
+// TestUpdateProccesesTime test that update_processes behave as expected in the times.
+// For example it ensure that container is correctly associated in case of error with container runtime.
+func TestUpdateProccesesTime(t *testing.T) { //nolint: maintidx
+	type addRemoveProcess struct {
+		proc      Process
+		cgroup    string
+		container Container
+		// seemsCGroup is true when we only add to the cgroup2seemsContainer of container runtime.
+		// This will happen whe nthe container runtime recognize the cgroup value but didn't find the containers.
+		seemsCGroup   bool
+		skipPSUtil    bool
+		skipCRProcess bool
+		skipCRCGroup  bool
+	}
+
+	type step struct {
+		timeAddedFromT0          time.Duration
+		addProcesses             []addRemoveProcess
+		removeProcesses          []addRemoveProcess
+		wantProcesseses          []Process
+		fromCGroupErr            error
+		fromPIDErr               error
+		otherErr                 error
+		checkCallsCount          bool
+		ContainerFromPIDCalls    int
+		ContainerFromCGroupCalls int
+		ProcessesCallCount       int
+		lowProcessesThreshold    int
+	}
+
+	t0 := time.Date(2022, 2, 2, 3, 4, 5, 6, time.UTC)
+	now := time.Now()
+
+	tests := []struct {
+		name  string
+		t0    time.Time
+		steps []step
+	}{
+		{
+			name: "no container",
+			t0:   now,
+			steps: []step{
+				{
+					timeAddedFromT0: 5 * time.Second,
+					addProcesses: []addRemoveProcess{
+						{
+							proc: Process{
+								PID:        1,
+								Name:       "init",
+								CreateTime: now,
+							},
+							cgroup: "not in docker",
+						},
+						{
+							proc: Process{
+								PID:        2,
+								Name:       "kthread",
+								CreateTime: t0,
+							},
+							cgroup: "not in docker",
+						},
+					},
+					wantProcesseses: []Process{
+						{
+							PID:        1,
+							Name:       "init",
+							CreateTime: now,
+						},
+						{
+							PID:        2,
+							Name:       "kthread",
+							CreateTime: t0,
+						},
+					},
+				},
+				{
+					timeAddedFromT0: 11 * time.Second,
+					addProcesses: []addRemoveProcess{
+						{
+							proc: Process{
+								PID:        3,
+								Name:       "bash",
+								CreateTime: now,
+							},
+						},
+					},
+					removeProcesses: []addRemoveProcess{
+						{
+							proc: Process{
+								PID:        2,
+								Name:       "kthread",
+								CreateTime: t0,
+							},
+							cgroup: "not in docker",
+						},
+					},
+					wantProcesseses: []Process{
+						{
+							PID:        1,
+							Name:       "init",
+							CreateTime: now,
+						},
+						{
+							PID:        3,
+							Name:       "bash",
+							CreateTime: now,
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "container",
+			t0:   t0,
+			steps: []step{
+				{
+					timeAddedFromT0: 5 * time.Second,
+					addProcesses: []addRemoveProcess{
+						{
+							proc: Process{
+								PID:        1,
+								Name:       "init",
+								CreateTime: t0,
+							},
+							cgroup: "not in docker",
+						},
+						{
+							proc: Process{
+								PID:        2,
+								Name:       "redis",
+								CreateTime: t0,
+							},
+							container: FakeContainer{
+								FakeID:            "1",
+								FakeContainerName: "redis-name",
+							},
+							cgroup: "containerID/1",
+						},
+					},
+					wantProcesseses: []Process{
+						{
+							PID:        1,
+							Name:       "init",
+							CreateTime: t0,
+						},
+						{
+							PID:           2,
+							Name:          "redis",
+							CreateTime:    t0,
+							ContainerID:   "1",
+							ContainerName: "redis-name",
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "container-no-bycgroup",
+			t0:   t0,
+			steps: []step{
+				{
+					timeAddedFromT0: 5 * time.Second,
+					addProcesses: []addRemoveProcess{
+						{
+							proc: Process{
+								PID:        1,
+								Name:       "init",
+								CreateTime: t0,
+							},
+							cgroup: "not in docker",
+						},
+						{
+							proc: Process{
+								PID:        2,
+								Name:       "redis",
+								CreateTime: t0,
+							},
+							container: FakeContainer{
+								FakeID:            "1",
+								FakeContainerName: "redis-name",
+							},
+							cgroup:       "containerID/1",
+							skipCRCGroup: true,
+						},
+						{
+							proc: Process{
+								PID:        3,
+								Name:       "memcached",
+								CreateTime: t0,
+							},
+							container: FakeContainer{
+								FakeID:            "2",
+								FakeContainerName: "memcached-name",
+							},
+							cgroup:       "",
+							skipCRCGroup: true,
+						},
+					},
+					wantProcesseses: []Process{
+						{
+							PID:        1,
+							Name:       "init",
+							CreateTime: t0,
+						},
+						{
+							PID:           2,
+							Name:          "redis",
+							CreateTime:    t0,
+							ContainerID:   "1",
+							ContainerName: "redis-name",
+						},
+						{
+							PID:           3,
+							Name:          "memcached",
+							CreateTime:    t0,
+							ContainerID:   "2",
+							ContainerName: "memcached-name",
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "container-no-bypid",
+			t0:   t0,
+			steps: []step{
+				{
+					timeAddedFromT0: 5 * time.Second,
+					addProcesses: []addRemoveProcess{
+						{
+							proc: Process{
+								PID:        1,
+								Name:       "init",
+								CreateTime: t0,
+							},
+							cgroup: "not in docker",
+						},
+						{
+							proc: Process{
+								PID:        2,
+								Name:       "redis",
+								CreateTime: t0,
+							},
+							container: FakeContainer{
+								FakeID:            "1",
+								FakeContainerName: "redis-name",
+							},
+							cgroup:        "containerID/1",
+							skipCRProcess: true,
+						},
+					},
+					wantProcesseses: []Process{
+						{
+							PID:        1,
+							Name:       "init",
+							CreateTime: t0,
+						},
+						{
+							PID:           2,
+							Name:          "redis",
+							CreateTime:    t0,
+							ContainerID:   "1",
+							ContainerName: "redis-name",
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "container-missing-info",
+			t0:   t0,
+			steps: []step{
+				{
+					timeAddedFromT0: 5 * time.Second,
+					addProcesses: []addRemoveProcess{
+						{
+							proc: Process{
+								PID:        1,
+								Name:       "init",
+								CreateTime: t0,
+							},
+							cgroup: "not in docker",
+						},
+						{
+							proc: Process{
+								PID:        2,
+								Name:       "redis",
+								CreateTime: t0,
+							},
+							container: FakeContainer{
+								FakeID:            "1",
+								FakeContainerName: "redis-name",
+							},
+							cgroup:        "containerID/1",
+							skipCRProcess: true,
+							skipCRCGroup:  true,
+							seemsCGroup:   true,
+						},
+					},
+					wantProcesseses: []Process{
+						{
+							PID:        1,
+							Name:       "init",
+							CreateTime: t0,
+						},
+						// Redis isn't present: the FromCGroup detect that it's a container but don't find which one
+					},
+				},
+				{
+					timeAddedFromT0: 4 * time.Minute,
+					wantProcesseses: []Process{
+						{
+							PID:        1,
+							Name:       "init",
+							CreateTime: t0,
+						},
+						// Redis is still not present after 4 minutes.
+					},
+				},
+				{
+					timeAddedFromT0: 5*time.Minute + time.Second,
+					wantProcesseses: []Process{
+						{
+							PID:        1,
+							Name:       "init",
+							CreateTime: t0,
+						},
+						// after 5 minutes, we assume that FromCGroup is wrong and it don't belong to a container.
+						{
+							PID:           2,
+							Name:          "redis",
+							CreateTime:    t0,
+							ContainerID:   "",
+							ContainerName: "",
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "container-context-deadline",
+			t0:   t0,
+			steps: []step{
+				{
+					timeAddedFromT0: 5 * time.Second,
+					addProcesses: []addRemoveProcess{
+						{
+							proc: Process{
+								PID:        1,
+								Name:       "init",
+								CreateTime: t0,
+							},
+							cgroup: "not in docker",
+						},
+						{
+							proc: Process{
+								PID:        2,
+								Name:       "redis",
+								CreateTime: t0,
+							},
+							container: FakeContainer{
+								FakeID:            "1",
+								FakeContainerName: "redis-name",
+							},
+							cgroup: "containerID/1",
+						},
+						{
+							proc: Process{
+								PID:        3,
+								Name:       "unknown container",
+								CreateTime: t0,
+							},
+							cgroup:      "containerID/2",
+							seemsCGroup: true,
+						},
+					},
+					fromCGroupErr:   context.DeadlineExceeded,
+					fromPIDErr:      context.DeadlineExceeded,
+					otherErr:        context.DeadlineExceeded,
+					wantProcesseses: []Process{
+						// No process are present because container runtime had error
+					},
+				},
+				{
+					timeAddedFromT0: 21 * time.Second,
+					fromCGroupErr:   context.DeadlineExceeded,
+					fromPIDErr:      context.DeadlineExceeded,
+					otherErr:        context.DeadlineExceeded,
+					wantProcesseses: []Process{
+						// After just 20 seconds, init is present because the cgroup data don't match any container
+						{
+							PID:        1,
+							Name:       "init",
+							CreateTime: t0,
+						},
+						// Other are still absent, because based on cgroup we think they belong to a container
+					},
+				},
+				{
+					timeAddedFromT0: 5*time.Minute + time.Second,
+					fromCGroupErr:   context.DeadlineExceeded,
+					fromPIDErr:      context.DeadlineExceeded,
+					otherErr:        context.DeadlineExceeded,
+					wantProcesseses: []Process{
+						{
+							PID:        1,
+							Name:       "init",
+							CreateTime: t0,
+						},
+						// after 5 minutes, we assume that the context deadline is in fact that Docker isn't running at all
+						{
+							PID:           2,
+							Name:          "redis",
+							CreateTime:    t0,
+							ContainerID:   "",
+							ContainerName: "",
+						},
+						{
+							PID:           3,
+							Name:          "unknown container",
+							CreateTime:    t0,
+							ContainerID:   "",
+							ContainerName: "",
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "container-other-error",
+			t0:   t0,
+			steps: []step{
+				{
+					timeAddedFromT0: 5 * time.Second,
+					addProcesses: []addRemoveProcess{
+						{
+							proc: Process{
+								PID:        1,
+								Name:       "init",
+								CreateTime: t0,
+							},
+							cgroup: "not in docker",
+						},
+						{
+							proc: Process{
+								PID:        2,
+								Name:       "redis",
+								CreateTime: t0,
+							},
+							container: FakeContainer{
+								FakeID:            "1",
+								FakeContainerName: "redis-name",
+							},
+							cgroup: "containerID/1",
+						},
+						{
+							proc: Process{
+								PID:        3,
+								Name:       "unknown container",
+								CreateTime: t0,
+							},
+							cgroup:      "containerID/2",
+							seemsCGroup: true,
+						},
+					},
+					fromCGroupErr:   errArbitraryErrorForTest,
+					fromPIDErr:      errArbitraryErrorForTest,
+					otherErr:        errArbitraryErrorForTest,
+					wantProcesseses: []Process{
+						// No process are present because container runtime had error
+					},
+				},
+				{
+					timeAddedFromT0: 21 * time.Second,
+					fromCGroupErr:   errArbitraryErrorForTest,
+					fromPIDErr:      errArbitraryErrorForTest,
+					otherErr:        errArbitraryErrorForTest,
+					wantProcesseses: []Process{
+						// After just 20 seconds, init is present because the cgroup data don't match any container
+						{
+							PID:        1,
+							Name:       "init",
+							CreateTime: t0,
+						},
+						// Other are still absent, because based on cgroup we think they belong to a container
+					},
+				},
+				{
+					timeAddedFromT0: 1*time.Minute + time.Second,
+					fromCGroupErr:   errArbitraryErrorForTest,
+					fromPIDErr:      errArbitraryErrorForTest,
+					otherErr:        errArbitraryErrorForTest,
+					wantProcesseses: []Process{
+						{
+							PID:        1,
+							Name:       "init",
+							CreateTime: t0,
+						},
+						// after 1 minutes, we assume that this unknown error means that Docker isn't installed.
+						{
+							PID:           2,
+							Name:          "redis",
+							CreateTime:    t0,
+							ContainerID:   "",
+							ContainerName: "",
+						},
+						{
+							PID:           3,
+							Name:          "unknown container",
+							CreateTime:    t0,
+							ContainerID:   "",
+							ContainerName: "",
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "no-container-runtime",
+			t0:   t0,
+			steps: []step{
+				{
+					timeAddedFromT0: 5 * time.Second,
+					addProcesses: []addRemoveProcess{
+						{
+							proc: Process{
+								PID:        1,
+								Name:       "init",
+								CreateTime: t0,
+							},
+							cgroup: "not in docker",
+						},
+						{
+							proc: Process{
+								PID:        2,
+								PPID:       1,
+								Name:       "bash",
+								CreateTime: t0.Add(time.Millisecond),
+							},
+							cgroup: "not in docker",
+						},
+						{
+							proc: Process{
+								PID:        3,
+								Name:       "unknown container",
+								CreateTime: t0,
+							},
+							cgroup:      "containerID/2",
+							seemsCGroup: true,
+						},
+					},
+					// With fromCGroup we use facts.ErrContainerDoesNotExists, because a container runtime should return
+					// the ErrContainerDoesNotExists when the cgroup data match a container and NOT NoRuntimeError.
+					// The mock will behave as such: for init it return nil because cgroup match nothing and error is only returned
+					// when cgroup data match something.
+					fromCGroupErr:   ErrContainerDoesNotExists,
+					fromPIDErr:      NewNoRuntimeError(errArbitraryErrorForTest),
+					otherErr:        NewNoRuntimeError(errArbitraryErrorForTest),
+					wantProcesseses: []Process{
+						// No process are present because container runtime had error
+					},
+					checkCallsCount:          true,
+					ContainerFromCGroupCalls: 3,
+					ContainerFromPIDCalls:    2,
+				},
+				{
+					timeAddedFromT0: 11 * time.Second,
+					fromCGroupErr:   ErrContainerDoesNotExists,
+					fromPIDErr:      NewNoRuntimeError(errArbitraryErrorForTest),
+					otherErr:        NewNoRuntimeError(errArbitraryErrorForTest),
+					wantProcesseses: []Process{
+						// After just 10 seconds, init is present because the cgroup data don't match any container
+						// and runtime is not running.
+						{
+							PID:        1,
+							Name:       "init",
+							CreateTime: t0,
+						},
+						{
+							PID:        2,
+							PPID:       1,
+							Name:       "bash",
+							CreateTime: t0.Add(time.Millisecond),
+						},
+						// Other are still absent, because based on cgroup we think they belong to a container
+					},
+					checkCallsCount:          true,
+					ContainerFromCGroupCalls: 2,
+					ContainerFromPIDCalls:    1,
+				},
+				{
+					timeAddedFromT0: 4*time.Minute + time.Second,
+					fromCGroupErr:   ErrContainerDoesNotExists,
+					fromPIDErr:      NewNoRuntimeError(errArbitraryErrorForTest),
+					otherErr:        NewNoRuntimeError(errArbitraryErrorForTest),
+					wantProcesseses: []Process{
+						{
+							PID:        1,
+							Name:       "init",
+							CreateTime: t0,
+						},
+						{
+							PID:        2,
+							PPID:       1,
+							Name:       "bash",
+							CreateTime: t0.Add(time.Millisecond),
+						},
+						// Other are still absent, because we believe they belong to a container.
+					},
+					checkCallsCount:          true,
+					ContainerFromCGroupCalls: 1,
+					ContainerFromPIDCalls:    0,
+				},
+				{
+					timeAddedFromT0: 5*time.Minute + time.Second,
+					fromCGroupErr:   ErrContainerDoesNotExists,
+					fromPIDErr:      NewNoRuntimeError(errArbitraryErrorForTest),
+					otherErr:        NewNoRuntimeError(errArbitraryErrorForTest),
+					wantProcesseses: []Process{
+						{
+							PID:        1,
+							Name:       "init",
+							CreateTime: t0,
+						},
+						{
+							PID:        2,
+							PPID:       1,
+							Name:       "bash",
+							CreateTime: t0.Add(time.Millisecond),
+						},
+						{
+							PID:           3,
+							Name:          "unknown container",
+							CreateTime:    t0,
+							ContainerID:   "",
+							ContainerName: "",
+						},
+					},
+					checkCallsCount:          true,
+					ContainerFromCGroupCalls: 1,
+					ContainerFromPIDCalls:    1,
+				},
+				{
+					timeAddedFromT0: 6 * time.Minute,
+					fromCGroupErr:   ErrContainerDoesNotExists,
+					fromPIDErr:      NewNoRuntimeError(errArbitraryErrorForTest),
+					otherErr:        NewNoRuntimeError(errArbitraryErrorForTest),
+					wantProcesseses: []Process{
+						{
+							PID:        1,
+							Name:       "init",
+							CreateTime: t0,
+						},
+						{
+							PID:        2,
+							PPID:       1,
+							Name:       "bash",
+							CreateTime: t0.Add(time.Millisecond),
+						},
+						// Other are still absent, because we believe they belong to a container.
+						{
+							PID:           3,
+							Name:          "unknown container",
+							CreateTime:    t0,
+							ContainerID:   "",
+							ContainerName: "",
+						},
+					},
+					checkCallsCount:          true,
+					ContainerFromCGroupCalls: 1,
+					ContainerFromPIDCalls:    1,
+				},
+				{
+					timeAddedFromT0: 7 * time.Minute,
+					addProcesses: []addRemoveProcess{
+						{
+							proc: Process{
+								PID:        20,
+								PPID:       1,
+								Name:       "bash",
+								CreateTime: t0.Add(7 * time.Minute),
+							},
+							cgroup: "not in docker",
+						},
+					},
+					fromCGroupErr: ErrContainerDoesNotExists,
+					fromPIDErr:    NewNoRuntimeError(errArbitraryErrorForTest),
+					otherErr:      NewNoRuntimeError(errArbitraryErrorForTest),
+					wantProcesseses: []Process{
+						{
+							PID:        1,
+							Name:       "init",
+							CreateTime: t0,
+						},
+						{
+							PID:        2,
+							PPID:       1,
+							Name:       "bash",
+							CreateTime: t0.Add(time.Millisecond),
+						},
+						{
+							PID:        20,
+							PPID:       1,
+							Name:       "bash",
+							CreateTime: t0.Add(7 * time.Minute),
+						},
+						// Other are still absent, because we believe they belong to a container.
+						{
+							PID:           3,
+							Name:          "unknown container",
+							CreateTime:    t0,
+							ContainerID:   "",
+							ContainerName: "",
+						},
+					},
+					checkCallsCount:          true,
+					ContainerFromCGroupCalls: 1,
+					ContainerFromPIDCalls:    1,
+				},
+			},
+		},
+	}
+
+	deleteProc := func(processes []Process, pid int) []Process {
+		i := 0
+
+		for _, p := range processes {
+			if p.PID == pid {
+				continue
+			}
+
+			processes[i] = p
+			i++
+		}
+
+		return processes[:i]
+	}
+
+	for _, tt := range tests {
+		tt := tt
+
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			currentTime := tt.t0
+			psutil := &mockProcessQuerier{
+				processCGroup: make(map[int]string),
+			}
+			cr := &mockContainerRuntime{
+				cgroup2seemsContainer: make(map[string]bool),
+				cgroup2Container:      make(map[string]Container),
+			}
+			pp := ProcessProvider{
+				startedAt:        currentTime,
+				containerRuntime: cr,
+				ps:               psutil,
+			}
+
+			for stepIdx, step := range tt.steps {
+				cr.fromCGroupErr = step.fromCGroupErr
+				cr.fromPIDErr = step.fromPIDErr
+				cr.otherErr = step.otherErr
+
+				for _, proc := range step.removeProcesses {
+					if !proc.skipPSUtil {
+						psutil.processesResult = deleteProc(psutil.processesResult, proc.proc.PID)
+					}
+
+					if !proc.skipCRProcess {
+						cr.processesResult = deleteProc(cr.processesResult, proc.proc.PID)
+					}
+
+					cgroup := proc.cgroup
+					if cgroup == "" {
+						cgroup = psutil.processCGroup[proc.proc.PID]
+					}
+
+					if cgroup != "" {
+						delete(psutil.processCGroup, proc.proc.PID)
+
+						if !proc.skipCRProcess {
+							delete(cr.cgroup2Container, cgroup)
+							delete(cr.cgroup2seemsContainer, cgroup)
+						}
+					}
+				}
+
+				for _, proc := range step.addProcesses {
+					if !proc.skipPSUtil {
+						psutil.processesResult = append(psutil.processesResult, proc.proc)
+					}
+
+					if !proc.skipCRProcess && proc.container != nil {
+						crProc := proc.proc
+						crProc.ContainerID = proc.container.ID()
+						crProc.ContainerName = proc.container.ContainerName()
+
+						cr.processesResult = append(cr.processesResult, crProc)
+					}
+
+					if proc.cgroup != "" {
+						psutil.processCGroup[proc.proc.PID] = proc.cgroup
+
+						if proc.container != nil && !proc.skipCRCGroup {
+							cr.cgroup2Container[proc.cgroup] = proc.container
+						} else if proc.seemsCGroup {
+							cr.cgroup2seemsContainer[proc.cgroup] = true
+						}
+					}
+				}
+
+				cr.makePID2Containers()
+
+				currentTime = tt.t0.Add(step.timeAddedFromT0)
+
+				cr.ContainerFromCGroupCalls = nil
+				cr.ContainerFromPIDCalls = nil
+				cr.ProcessesCallCount = 0
+
+				err := pp.updateProcesses(context.Background(), currentTime, 0, step.lowProcessesThreshold)
+				if err != nil {
+					// This error is only an issue if container runtime don't return errors
+					if step.fromCGroupErr == nil && step.fromPIDErr == nil && step.otherErr == nil {
+						t.Fatal(err)
+					}
+				}
+
+				if step.checkCallsCount {
+					if len(cr.ContainerFromCGroupCalls) != step.ContainerFromCGroupCalls {
+						t.Errorf("step #%d, len(ContainerFromCGroupCalls) = %d, want %d", stepIdx, len(cr.ContainerFromCGroupCalls), step.ContainerFromCGroupCalls)
+					}
+
+					if len(cr.ContainerFromPIDCalls) != step.ContainerFromPIDCalls {
+						t.Errorf("step #%d, len(ContainerFromPIDCalls) = %d, want %d", stepIdx, len(cr.ContainerFromPIDCalls), step.ContainerFromPIDCalls)
+					}
+
+					if cr.ProcessesCallCount != step.ProcessesCallCount {
+						t.Errorf("step #%d, ProcessesCallCount = %d, want %d", stepIdx, cr.ProcessesCallCount, step.ProcessesCallCount)
+					}
+				}
+
+				got := make([]Process, 0, len(pp.processes))
+				for _, p := range pp.processes {
+					got = append(got, p)
+				}
+
+				sortOpts := cmpopts.SortSlices(func(x Process, y Process) bool { return x.PID < y.PID })
+				if diff := cmp.Diff(step.wantProcesseses, got, cmpopts.EquateApprox(0.001, 0), sortOpts); diff != "" {
+					t.Errorf("step #%d, processes mismatch: (-want +got):\n%s", stepIdx, diff)
+				}
+			}
+		})
 	}
 }
 
