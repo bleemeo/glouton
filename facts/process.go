@@ -461,7 +461,7 @@ func (pp *ProcessProvider) updateProcesses(ctx context.Context, now time.Time, m
 						// Wait a bit to be sure on reboot some process don't get wrongly detected.
 						// This mostly means that any process will be delayed by 10 seconds when Docker isn't used.
 						if age < 10*time.Second {
-							logger.V(2).Printf("Skipping process %d (%s) because FromCgroup & FromPID fail with NoRuntime: %v", p.PID, p.Name, fromCgroupErr)
+							logger.V(2).Printf("Skipping process %d (%s) because FromCgroup & FromPID fail with NoRuntime: %v", p.PID, p.Name, fromPIDErr)
 							delete(newProcessesMap, p.PID)
 
 							continue
