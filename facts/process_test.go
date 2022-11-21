@@ -333,7 +333,7 @@ func TestUpdateProcesses(t *testing.T) {
 	}
 }
 
-// TestUpdateProcessesWithTerminated check that short lived process are correctly handled.
+// TestUpdateProcessesWithTerminated checks that short lived process are correctly handled.
 func TestUpdateProcessesWithTerminated(t *testing.T) {
 	t0 := time.Now()
 	t1 := t0.Add(time.Hour)
@@ -1193,7 +1193,7 @@ func TestDeltaCPUPercent(t *testing.T) {
 	}
 }
 
-// TestUpdateProccesesTime test that update_processes behave as expected in the times.
+// TestUpdateProccesesTime tests that update_processes behave as expected in the times.
 // For example it ensure that container is correctly associated in case of error with container runtime.
 func TestUpdateProccesesTime(t *testing.T) { //nolint: maintidx
 	type addRemoveProcess struct {
@@ -1201,7 +1201,7 @@ func TestUpdateProccesesTime(t *testing.T) { //nolint: maintidx
 		cgroup    string
 		container Container
 		// seemsCGroup is true when we only add to the cgroup2seemsContainer of container runtime.
-		// This will happen whe nthe container runtime recognize the cgroup value but didn't find the containers.
+		// This will happen when the container runtime recognizes the cgroup value but didn't find the containers.
 		seemsCGroup   bool
 		skipPSUtil    bool
 		skipCRProcess bool
@@ -1745,14 +1745,14 @@ func TestUpdateProccesesTime(t *testing.T) { //nolint: maintidx
 						},
 					},
 					// With fromCGroup we use facts.ErrContainerDoesNotExists, because a container runtime should return
-					// the ErrContainerDoesNotExists when the cgroup data match a container and NOT NoRuntimeError.
-					// The mock will behave as such: for init it return nil because cgroup match nothing and error is only returned
-					// when cgroup data match something.
+					// the ErrContainerDoesNotExists when the cgroup data matches a container and NOT NoRuntimeError.
+					// The mock will behave as such: for init it returns nil because cgroup matches nothing and error is only returned
+					// when cgroup data matches something.
 					fromCGroupErr:   ErrContainerDoesNotExists,
 					fromPIDErr:      NewNoRuntimeError(errArbitraryErrorForTest),
 					otherErr:        NewNoRuntimeError(errArbitraryErrorForTest),
 					wantProcesseses: []Process{
-						// No process are present because container runtime had error
+						// No process are present because container runtime had an error.
 					},
 					checkCallsCount:          true,
 					ContainerFromCGroupCalls: 3,

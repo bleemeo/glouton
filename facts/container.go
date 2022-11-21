@@ -144,7 +144,7 @@ const (
 // ErrContainerDoesNotExists is the default error value when a container does not exists.
 var ErrContainerDoesNotExists = errors.New("the container doesn't exist but process seems to belong to a container")
 
-// NoRuntimeError warps an error from a container when the error likely indicate that runtime isn't running.
+// NoRuntimeError wraps an error from a container when the error likely indicates that runtime isn't running.
 type NoRuntimeError struct {
 	err error
 }

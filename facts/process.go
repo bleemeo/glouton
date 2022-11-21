@@ -456,7 +456,7 @@ func (pp *ProcessProvider) updateProcesses(ctx context.Context, now time.Time, m
 
 					switch {
 					case fromCgroupErr == nil && fromPIDErr == nil:
-						// no error, this process don't belong to a container
+						// no error, this process doesn't belong to a container
 					case (errors.As(fromCgroupErr, &NoRuntimeError{}) || fromCgroupErr == nil) && errors.As(fromPIDErr, &NoRuntimeError{}):
 						// Wait a bit to be sure on reboot some process don't get wrongly detected.
 						// This mostly means that any process will be delayed by 10 seconds when Docker isn't used.
@@ -468,32 +468,32 @@ func (pp *ProcessProvider) updateProcesses(ctx context.Context, now time.Time, m
 						}
 					case fromCgroupErr == nil && fromPIDErr != nil:
 						// ContainerFromCGroup could not fail even if fromPID does, because based on cgroup data it
-						// could "known" that the process don't belong to a container.
-						// Because it knowledge isn't guarateed, we still delay a bit the discovery.
+						// could "know" that the process doesn't belong to a container.
+						// Because this knowledge isn't guaranteed, we still delay the discovery a bit.
 						if age < 20*time.Second {
-							logger.V(2).Printf("Skipping process %d (%s) because FromPID fail with %v", p.PID, p.Name, fromPIDErr)
+							logger.V(2).Printf("Skipping process %d (%s) because FromPID failed with %v", p.PID, p.Name, fromPIDErr)
 							delete(newProcessesMap, p.PID)
 
 							continue
 						}
 					case errors.As(fromCgroupErr, &NoRuntimeError{}) || errors.As(fromPIDErr, &NoRuntimeError{}):
-						// Not sure this case could happen. Wait more than previous, since it means another error happened
+						// Not sure this case could happen. Wait more than previous, since it means another error happened.
 						if age < time.Minute {
-							logger.V(2).Printf("Skipping process %d (%s) because FromCgroup OR FromPID fail with NoRuntime: %v / %s", p.PID, p.Name, fromCgroupErr, fromPIDErr)
+							logger.V(2).Printf("Skipping process %d (%s) because FromCgroup OR FromPID failed with NoRuntime: %v / %s", p.PID, p.Name, fromCgroupErr, fromPIDErr)
 							delete(newProcessesMap, p.PID)
 
 							continue
 						}
 					case errors.Is(fromCgroupErr, context.DeadlineExceeded) || errors.Is(fromPIDErr, context.DeadlineExceeded):
 						if age < 5*time.Minute {
-							logger.V(2).Printf("Skipping process %d (%s) because FromCgroup or FromPID fail with timeout: %v / %s", p.PID, p.Name, fromCgroupErr, fromPIDErr)
+							logger.V(2).Printf("Skipping process %d (%s) because FromCgroup or FromPID failed with timeout: %v / %s", p.PID, p.Name, fromCgroupErr, fromPIDErr)
 							delete(newProcessesMap, p.PID)
 
 							continue
 						}
 					default:
 						if age < time.Minute {
-							logger.V(2).Printf("Skipping process %d (%s) because FromCgroup / FromPID fail: %v / %s", p.PID, p.Name, fromCgroupErr, fromPIDErr)
+							logger.V(2).Printf("Skipping process %d (%s) because FromCgroup / FromPID failed: %v / %s", p.PID, p.Name, fromCgroupErr, fromPIDErr)
 							delete(newProcessesMap, p.PID)
 
 							continue
