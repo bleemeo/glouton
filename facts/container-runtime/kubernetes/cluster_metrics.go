@@ -89,9 +89,10 @@ func nodesCount(ctx context.Context, cl kubeClient, now time.Time) ([]types.Metr
 }
 
 // podsCount returns the metric kubernetes_pods_count with three labels:
-// - kind: the of the pod's owner, e.g. daemonset, deployment.
-// - name: the name of the pod's owner, e.g. glouton, kube-proxy.
+// - owner_kind: the kind of the pod's owner, e.g. daemonset, deployment.
+// - owner_name: the name of the pod's owner, e.g. glouton, kube-proxy.
 // - state: the current state of the pod (pending, running, succeeded or failed).
+// - namespace: the pod's namespace.
 func podsCount(ctx context.Context, cl kubeClient, now time.Time) ([]types.MetricPoint, error) {
 	// For Kubernetes deployments with multiple replicas, a replicaset is created. This means the pod's
 	// owner is the replicaset (which has a generated name, e.g. "coredns-565d847f94"). In this case we
