@@ -29,9 +29,16 @@ import (
 	"time"
 )
 
-// containerUpdateDelay is minimal the delay between container update for change
-// other that status (likely healthcheck log).
-const containerUpdateDelay = 30 * time.Minute
+const (
+	// containerUpdateDelay is minimal the delay between container update for change
+	// other that status (likely healthcheck log).
+	containerUpdateDelay = 30 * time.Minute
+
+	// Fields stored in local cache.
+	cacheFields = "id,name,container_id,container_inspect,container_status,container_created_at,container_runtime,deleted_at"
+	// Fields used to register a container on the API.
+	registerFields = cacheFields + ",host,command,container_started_at,container_finished_at,container_image_id,container_image_name,docker_api_version"
+)
 
 type containerPayload struct {
 	types.Container
@@ -91,7 +98,7 @@ func (s *Synchronizer) syncContainers(ctx context.Context, fullSync bool, onlyEs
 func (s *Synchronizer) containerUpdateList() error {
 	params := map[string]string{
 		"host":   s.agentID,
-		"fields": "id,name,container_id,container_inspect,status,container_created_at,deleted_at",
+		"fields": cacheFields,
 	}
 
 	result, err := s.client.Iter(s.ctx, "container", params)
@@ -132,12 +139,6 @@ func (s *Synchronizer) containerRegisterAndUpdate(localContainers []facts.Contai
 
 	for i, v := range remoteContainers {
 		remoteIndexByName[v.Name] = i
-	}
-
-	params := map[string]string{
-		"fields": "id,name,host,command," +
-			"container_id,container_inspect,container_status,container_created_at," +
-			"container_finished_at,container_image_id,container_image_name,container_runtime,deleted_at",
 	}
 
 	newDelayedContainer := make(map[string]time.Time, len(s.delayedContainer))
@@ -210,7 +211,7 @@ func (s *Synchronizer) containerRegisterAndUpdate(localContainers []facts.Contai
 			payload.DockerAPIVersion = factsMap["docker_api_version"]
 		}
 
-		err := s.remoteRegister(remoteFound, &remoteContainer, &remoteContainers, params, payload, remoteIndex)
+		err := s.remoteRegister(remoteFound, &remoteContainer, &remoteContainers, payload, remoteIndex)
 		if err != nil {
 			return err
 		}
@@ -241,11 +242,14 @@ func (s *Synchronizer) remoteRegister(
 	remoteFound bool,
 	remoteContainer *types.Container,
 	remoteContainers *[]types.Container,
-	params map[string]string,
 	payload containerPayload,
 	remoteIndex int,
 ) error {
 	var result containerPayload
+
+	params := map[string]string{
+		"fields": registerFields,
+	}
 
 	if remoteFound {
 		_, err := s.client.Do(s.ctx, "PUT", fmt.Sprintf("v1/container/%s/", remoteContainer.ID), params, payload, &result)
