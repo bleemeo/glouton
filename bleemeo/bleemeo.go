@@ -473,6 +473,7 @@ func (c *Connector) RelabelHook(ctx context.Context, labels map[string]string) (
 			return labels, true
 		}
 
+		labels[gloutonTypes.LabelMetaBleemeoTargetAgent] = clusterName
 		labels[gloutonTypes.LabelMetaBleemeoTargetAgentUUID] = kubernetesAgentID
 	}
 

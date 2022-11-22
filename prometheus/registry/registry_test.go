@@ -487,7 +487,7 @@ func TestRegistry_applyRelabel(t *testing.T) {
 			name:   "blackbox_probe_icmp",
 			fields: fields{relabelConfigs: getDefaultRelabelConfig()},
 			args: args{map[string]string{
-				types.LabelMetaProbeTarget:            "icmp://8.8.8.8",
+				types.LabelMetaBleemeoTargetAgent:     "icmp://8.8.8.8",
 				types.LabelMetaProbeScraperName:       "test",
 				types.LabelMetaBleemeoTargetAgentUUID: "c571f9cf-6f07-492a-9e86-b8d5f5027557",
 				types.LabelMetaBleemeoUUID:            "a39e5a8e-34cf-4b15-87bd-4b9cdaa59c42",
@@ -510,7 +510,7 @@ func TestRegistry_applyRelabel(t *testing.T) {
 			name:   "blackbox_probe_icmp_no_scraper_name",
 			fields: fields{relabelConfigs: getDefaultRelabelConfig()},
 			args: args{map[string]string{
-				types.LabelMetaProbeTarget:            "icmp://8.8.8.8",
+				types.LabelMetaBleemeoTargetAgent:     "icmp://8.8.8.8",
 				types.LabelInstance:                   "super-instance:1111",
 				types.LabelMetaBleemeoTargetAgentUUID: "c571f9cf-6f07-492a-9e86-b8d5f5027557",
 				types.LabelMetaBleemeoUUID:            "a39e5a8e-34cf-4b15-87bd-4b9cdaa59c42",
