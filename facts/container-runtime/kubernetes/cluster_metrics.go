@@ -143,14 +143,8 @@ func podsCount(cache kubeCache, now time.Time) []types.MetricPoint {
 			types.LabelName:      "kubernetes_pods_count",
 			types.LabelState:     podLabels.State,
 			types.LabelNamespace: podLabels.Namespace,
-		}
-
-		if podLabels.Kind != "" {
-			labels[types.LabelOwnerKind] = podLabels.Kind
-		}
-
-		if podLabels.Name != "" {
-			labels[types.LabelOwnerName] = podLabels.Name
+			types.LabelOwnerKind: podLabels.Kind,
+			types.LabelOwnerName: podLabels.Name,
 		}
 
 		points = append(points, types.MetricPoint{
@@ -164,8 +158,9 @@ func podsCount(cache kubeCache, now time.Time) []types.MetricPoint {
 
 // podOwner return the kind and the name of the owner of a pod.
 func podOwner(pod corev1.Pod, replicasetOwnerByUID map[string]metav1.OwnerReference) (kind string, name string) {
+	// If the pod has no owner, use the pod name.
 	if len(pod.OwnerReferences) == 0 {
-		return "", ""
+		return pod.Kind, pod.Name
 	}
 
 	ownerRef := pod.OwnerReferences[0]
@@ -324,15 +319,9 @@ func requestsAndLimits(cache kubeCache, now time.Time) []types.MetricPoint {
 		for name, value := range values {
 			labels := map[string]string{
 				types.LabelName:      name,
+				types.LabelOwnerKind: strings.ToLower(obj.Kind),
+				types.LabelOwnerName: strings.ToLower(obj.Name),
 				types.LabelNamespace: obj.Namespace,
-			}
-
-			if obj.Kind != "" {
-				labels[types.LabelOwnerKind] = obj.Kind
-			}
-
-			if obj.Name != "" {
-				labels[types.LabelOwnerName] = obj.Name
 			}
 
 			points = append(points, types.MetricPoint{
