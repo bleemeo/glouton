@@ -54,7 +54,10 @@ var (
 		"kubernetes_pods_count",
 		"kubernetes_nodes_count",
 		"kubernetes_namespaces_count",
-		"kubernetes_replicasets_count",
+		"kubernetes_cpu_requests",
+		"kubernetes_cpu_limits",
+		"kubernetes_memory_requests",
+		"kubernetes_memory_limits",
 
 		// Key Processes
 		"process_context_switch",

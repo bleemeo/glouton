@@ -1052,6 +1052,747 @@ func TestClusterMetrics(t *testing.T) { //nolint:maintidx
 				types.LabelMetaKubernetesCluster: clusterName,
 			},
 		},
+
+		// CPU limits.
+		{
+			Point: types.Point{Time: now},
+			Labels: map[string]string{
+				types.LabelMetaKubernetesCluster: clusterName,
+				types.LabelName:                  "kubernetes_cpu_limits",
+				types.LabelNamespace:             "kube-system",
+			},
+		},
+		{
+			Point: types.Point{
+				Time:  now,
+				Value: 0.30000000000000004,
+			},
+			Labels: map[string]string{
+				types.LabelMetaKubernetesCluster: clusterName,
+				types.LabelName:                  "kubernetes_cpu_limits",
+				types.LabelNamespace:             "kube-system",
+				"owner_kind":                     "DaemonSet",
+				"owner_name":                     "kindnet",
+			},
+		},
+		{
+			Point: types.Point{Time: now},
+			Labels: map[string]string{
+				types.LabelMetaKubernetesCluster: clusterName,
+				types.LabelName:                  "kubernetes_cpu_limits",
+				types.LabelNamespace:             "kube-system",
+				"owner_kind":                     "DaemonSet",
+				"owner_name":                     "kube-proxy",
+			},
+		},
+		{
+			Point: types.Point{Time: now},
+			Labels: map[string]string{
+				types.LabelMetaKubernetesCluster: clusterName,
+				types.LabelName:                  "kubernetes_cpu_limits",
+				types.LabelNamespace:             "kube-system",
+				"owner_kind":                     "Deployment",
+				"owner_name":                     "coredns",
+			},
+		},
+		{
+			Point: types.Point{Time: now},
+			Labels: map[string]string{
+				types.LabelMetaKubernetesCluster: clusterName,
+				types.LabelName:                  "kubernetes_cpu_limits",
+				types.LabelNamespace:             "namespace-2",
+				"owner_kind":                     "Deployment",
+				"owner_name":                     "crash-loop-backoff",
+			},
+		},
+		{
+			Point: types.Point{Time: now},
+			Labels: map[string]string{
+				types.LabelMetaKubernetesCluster: clusterName,
+				types.LabelName:                  "kubernetes_cpu_limits",
+				types.LabelNamespace:             "namespace-2",
+				"owner_kind":                     "Deployment",
+				"owner_name":                     "image-pull-backoff",
+			},
+		},
+		{
+			Point: types.Point{Time: now},
+			Labels: map[string]string{
+				types.LabelMetaKubernetesCluster: clusterName,
+				types.LabelName:                  "kubernetes_cpu_limits",
+				types.LabelNamespace:             "namespace-1",
+				"owner_kind":                     "Deployment",
+				"owner_name":                     "init-failed",
+			},
+		},
+		{
+			Point: types.Point{Time: now},
+			Labels: map[string]string{
+				types.LabelMetaKubernetesCluster: clusterName,
+				types.LabelName:                  "kubernetes_cpu_limits",
+				types.LabelNamespace:             "namespace-1",
+				"owner_kind":                     "Deployment",
+				"owner_name":                     "inside-init",
+			},
+		},
+		{
+			Point: types.Point{Time: now},
+			Labels: map[string]string{
+				types.LabelMetaKubernetesCluster: clusterName,
+				types.LabelName:                  "kubernetes_cpu_limits",
+				types.LabelNamespace:             "namespace-1",
+				"owner_kind":                     "Deployment",
+				"owner_name":                     "running-init-ok",
+			},
+		},
+		{
+			Point: types.Point{Time: now},
+			Labels: map[string]string{
+				types.LabelMetaKubernetesCluster: clusterName,
+				types.LabelName:                  "kubernetes_cpu_limits",
+				types.LabelNamespace:             "namespace-1",
+				"owner_kind":                     "Deployment",
+				"owner_name":                     "running-not-ready",
+			},
+		},
+		{
+			Point: types.Point{Time: now},
+			Labels: map[string]string{
+				types.LabelMetaKubernetesCluster: clusterName,
+				types.LabelName:                  "kubernetes_cpu_limits",
+				types.LabelNamespace:             "namespace-3",
+				"owner_kind":                     "Deployment",
+				"owner_name":                     "running-ready",
+			},
+		},
+		{
+			Point: types.Point{Time: now},
+			Labels: map[string]string{
+				types.LabelMetaKubernetesCluster: clusterName,
+				types.LabelName:                  "kubernetes_cpu_limits",
+				types.LabelNamespace:             "namespace-2",
+				"owner_kind":                     "Deployment",
+				"owner_name":                     "running-replicas",
+			},
+		},
+		{
+			Point: types.Point{Time: now},
+			Labels: map[string]string{
+				types.LabelMetaKubernetesCluster: clusterName,
+				types.LabelName:                  "kubernetes_cpu_limits",
+				types.LabelNamespace:             "namespace-3",
+				"owner_kind":                     "Deployment",
+				"owner_name":                     "unschedulable",
+			},
+		},
+		{
+			Point: types.Point{Time: now},
+			Labels: map[string]string{
+				types.LabelMetaKubernetesCluster: clusterName,
+				types.LabelName:                  "kubernetes_cpu_limits",
+				types.LabelNamespace:             "namespace-2",
+				"owner_kind":                     "Job",
+				"owner_name":                     "job-failed",
+			},
+		},
+		{
+			Point: types.Point{Time: now},
+			Labels: map[string]string{
+				types.LabelMetaKubernetesCluster: clusterName,
+				types.LabelName:                  "kubernetes_cpu_limits",
+				types.LabelNamespace:             "namespace-2",
+				"owner_kind":                     "Job",
+				"owner_name":                     "job-running",
+			},
+		},
+		{
+			Point: types.Point{Time: now},
+			Labels: map[string]string{
+				types.LabelMetaKubernetesCluster: clusterName,
+				types.LabelName:                  "kubernetes_cpu_limits",
+				types.LabelNamespace:             "namespace-2",
+				"owner_kind":                     "Job",
+				"owner_name":                     "job-succeeded",
+			},
+		},
+		{
+			Point: types.Point{Time: now},
+			Labels: map[string]string{
+				types.LabelMetaKubernetesCluster: clusterName,
+				types.LabelName:                  "kubernetes_cpu_limits",
+				types.LabelNamespace:             "kube-system",
+				"owner_kind":                     "Node",
+				"owner_name":                     "minikube",
+			},
+		},
+		{
+			Point: types.Point{Time: now},
+			Labels: map[string]string{
+				types.LabelMetaKubernetesCluster: clusterName,
+				types.LabelName:                  "kubernetes_cpu_limits",
+				types.LabelNamespace:             "namespace-3",
+				"owner_kind":                     "ReplicaSet",
+				"owner_name":                     "running-replicaset",
+			},
+		},
+
+		// CPU requests.
+		{
+			Point: types.Point{Time: now},
+			Labels: map[string]string{
+				types.LabelMetaKubernetesCluster: clusterName,
+				types.LabelName:                  "kubernetes_cpu_requests",
+				types.LabelNamespace:             "kube-system",
+			},
+		},
+		{
+			Point: types.Point{
+				Time:  now,
+				Value: 0.30000000000000004,
+			},
+			Labels: map[string]string{
+				types.LabelMetaKubernetesCluster: clusterName,
+				types.LabelName:                  "kubernetes_cpu_requests",
+				types.LabelNamespace:             "kube-system",
+				"owner_kind":                     "DaemonSet",
+				"owner_name":                     "kindnet",
+			},
+		},
+		{
+			Point: types.Point{Time: now},
+			Labels: map[string]string{
+				types.LabelMetaKubernetesCluster: clusterName,
+				types.LabelName:                  "kubernetes_cpu_requests",
+				types.LabelNamespace:             "kube-system",
+				"owner_kind":                     "DaemonSet",
+				"owner_name":                     "kube-proxy",
+			},
+		},
+		{
+			Point: types.Point{Time: now, Value: 0.1},
+			Labels: map[string]string{
+				types.LabelMetaKubernetesCluster: clusterName,
+				types.LabelName:                  "kubernetes_cpu_requests",
+				types.LabelNamespace:             "kube-system",
+				"owner_kind":                     "Deployment",
+				"owner_name":                     "coredns",
+			},
+		},
+		{
+			Point: types.Point{Time: now},
+			Labels: map[string]string{
+				types.LabelMetaKubernetesCluster: clusterName,
+				types.LabelName:                  "kubernetes_cpu_requests",
+				types.LabelNamespace:             "namespace-2",
+				"owner_kind":                     "Deployment",
+				"owner_name":                     "crash-loop-backoff",
+			},
+		},
+		{
+			Point: types.Point{Time: now},
+			Labels: map[string]string{
+				types.LabelMetaKubernetesCluster: clusterName,
+				types.LabelName:                  "kubernetes_cpu_requests",
+				types.LabelNamespace:             "namespace-2",
+				"owner_kind":                     "Deployment",
+				"owner_name":                     "image-pull-backoff",
+			},
+		},
+		{
+			Point: types.Point{Time: now},
+			Labels: map[string]string{
+				types.LabelMetaKubernetesCluster: clusterName,
+				types.LabelName:                  "kubernetes_cpu_requests",
+				types.LabelNamespace:             "namespace-1",
+				"owner_kind":                     "Deployment",
+				"owner_name":                     "init-failed",
+			},
+		},
+		{
+			Point: types.Point{Time: now},
+			Labels: map[string]string{
+				types.LabelMetaKubernetesCluster: clusterName,
+				types.LabelName:                  "kubernetes_cpu_requests",
+				types.LabelNamespace:             "namespace-1",
+				"owner_kind":                     "Deployment",
+				"owner_name":                     "inside-init",
+			},
+		},
+		{
+			Point: types.Point{Time: now},
+			Labels: map[string]string{
+				types.LabelMetaKubernetesCluster: clusterName,
+				types.LabelName:                  "kubernetes_cpu_requests",
+				types.LabelNamespace:             "namespace-1",
+				"owner_kind":                     "Deployment",
+				"owner_name":                     "running-init-ok",
+			},
+		},
+		{
+			Point: types.Point{Time: now},
+			Labels: map[string]string{
+				types.LabelMetaKubernetesCluster: clusterName,
+				types.LabelName:                  "kubernetes_cpu_requests",
+				types.LabelNamespace:             "namespace-1",
+				"owner_kind":                     "Deployment",
+				"owner_name":                     "running-not-ready",
+			},
+		},
+		{
+			Point: types.Point{Time: now},
+			Labels: map[string]string{
+				types.LabelMetaKubernetesCluster: clusterName,
+				types.LabelName:                  "kubernetes_cpu_requests",
+				types.LabelNamespace:             "namespace-3",
+				"owner_kind":                     "Deployment",
+				"owner_name":                     "running-ready",
+			},
+		},
+		{
+			Point: types.Point{Time: now},
+			Labels: map[string]string{
+				types.LabelMetaKubernetesCluster: clusterName,
+				types.LabelName:                  "kubernetes_cpu_requests",
+				types.LabelNamespace:             "namespace-2",
+				"owner_kind":                     "Deployment",
+				"owner_name":                     "running-replicas",
+			},
+		},
+		{
+			Point: types.Point{Time: now},
+			Labels: map[string]string{
+				types.LabelMetaKubernetesCluster: clusterName,
+				types.LabelName:                  "kubernetes_cpu_requests",
+				types.LabelNamespace:             "namespace-3",
+				"owner_kind":                     "Deployment",
+				"owner_name":                     "unschedulable",
+			},
+		},
+		{
+			Point: types.Point{Time: now},
+			Labels: map[string]string{
+				types.LabelMetaKubernetesCluster: clusterName,
+				types.LabelName:                  "kubernetes_cpu_requests",
+				types.LabelNamespace:             "namespace-2",
+				"owner_kind":                     "Job",
+				"owner_name":                     "job-failed",
+			},
+		},
+		{
+			Point: types.Point{Time: now},
+			Labels: map[string]string{
+				types.LabelMetaKubernetesCluster: clusterName,
+				types.LabelName:                  "kubernetes_cpu_requests",
+				types.LabelNamespace:             "namespace-2",
+				"owner_kind":                     "Job",
+				"owner_name":                     "job-running",
+			},
+		},
+		{
+			Point: types.Point{Time: now},
+			Labels: map[string]string{
+				types.LabelMetaKubernetesCluster: clusterName,
+				types.LabelName:                  "kubernetes_cpu_requests",
+				types.LabelNamespace:             "namespace-2",
+				"owner_kind":                     "Job",
+				"owner_name":                     "job-succeeded",
+			},
+		},
+		{
+			Point: types.Point{Time: now, Value: 0.65},
+			Labels: map[string]string{
+				types.LabelMetaKubernetesCluster: clusterName,
+				types.LabelName:                  "kubernetes_cpu_requests",
+				types.LabelNamespace:             "kube-system",
+				"owner_kind":                     "Node",
+				"owner_name":                     "minikube",
+			},
+		},
+		{
+			Point: types.Point{Time: now},
+			Labels: map[string]string{
+				types.LabelMetaKubernetesCluster: clusterName,
+				types.LabelName:                  "kubernetes_cpu_requests",
+				types.LabelNamespace:             "namespace-3",
+				"owner_kind":                     "ReplicaSet",
+				"owner_name":                     "running-replicaset",
+			},
+		},
+
+		// Memory limits.
+		{
+			Point: types.Point{Time: now},
+			Labels: map[string]string{
+				types.LabelMetaKubernetesCluster: clusterName,
+				types.LabelName:                  "kubernetes_memory_limits",
+				types.LabelNamespace:             "kube-system",
+			},
+		},
+		{
+			Point: types.Point{
+				Time:  now,
+				Value: 1.572864e08,
+			},
+			Labels: map[string]string{
+				types.LabelMetaKubernetesCluster: clusterName,
+				types.LabelName:                  "kubernetes_memory_limits",
+				types.LabelNamespace:             "kube-system",
+				"owner_kind":                     "DaemonSet",
+				"owner_name":                     "kindnet",
+			},
+		},
+		{
+			Point: types.Point{Time: now},
+			Labels: map[string]string{
+				types.LabelMetaKubernetesCluster: clusterName,
+				types.LabelName:                  "kubernetes_memory_limits",
+				types.LabelNamespace:             "kube-system",
+				"owner_kind":                     "DaemonSet",
+				"owner_name":                     "kube-proxy",
+			},
+		},
+		{
+			Point: types.Point{
+				Time:  now,
+				Value: 1.7825792e08,
+			},
+			Labels: map[string]string{
+				types.LabelMetaKubernetesCluster: clusterName,
+				types.LabelName:                  "kubernetes_memory_limits",
+				types.LabelNamespace:             "kube-system",
+				"owner_kind":                     "Deployment",
+				"owner_name":                     "coredns",
+			},
+		},
+		{
+			Point: types.Point{Time: now},
+			Labels: map[string]string{
+				types.LabelMetaKubernetesCluster: clusterName,
+				types.LabelName:                  "kubernetes_memory_limits",
+				types.LabelNamespace:             "namespace-2",
+				"owner_kind":                     "Deployment",
+				"owner_name":                     "crash-loop-backoff",
+			},
+		},
+		{
+			Point: types.Point{Time: now},
+			Labels: map[string]string{
+				types.LabelMetaKubernetesCluster: clusterName,
+				types.LabelName:                  "kubernetes_memory_limits",
+				types.LabelNamespace:             "namespace-2",
+				"owner_kind":                     "Deployment",
+				"owner_name":                     "image-pull-backoff",
+			},
+		},
+		{
+			Point: types.Point{Time: now},
+			Labels: map[string]string{
+				types.LabelMetaKubernetesCluster: clusterName,
+				types.LabelName:                  "kubernetes_memory_limits",
+				types.LabelNamespace:             "namespace-1",
+				"owner_kind":                     "Deployment",
+				"owner_name":                     "init-failed",
+			},
+		},
+		{
+			Point: types.Point{Time: now},
+			Labels: map[string]string{
+				types.LabelMetaKubernetesCluster: clusterName,
+				types.LabelName:                  "kubernetes_memory_limits",
+				types.LabelNamespace:             "namespace-1",
+				"owner_kind":                     "Deployment",
+				"owner_name":                     "inside-init",
+			},
+		},
+		{
+			Point: types.Point{Time: now},
+			Labels: map[string]string{
+				types.LabelMetaKubernetesCluster: clusterName,
+				types.LabelName:                  "kubernetes_memory_limits",
+				types.LabelNamespace:             "namespace-1",
+				"owner_kind":                     "Deployment",
+				"owner_name":                     "running-init-ok",
+			},
+		},
+		{
+			Point: types.Point{Time: now},
+			Labels: map[string]string{
+				types.LabelMetaKubernetesCluster: clusterName,
+				types.LabelName:                  "kubernetes_memory_limits",
+				types.LabelNamespace:             "namespace-1",
+				"owner_kind":                     "Deployment",
+				"owner_name":                     "running-not-ready",
+			},
+		},
+		{
+			Point: types.Point{Time: now},
+			Labels: map[string]string{
+				types.LabelMetaKubernetesCluster: clusterName,
+				types.LabelName:                  "kubernetes_memory_limits",
+				types.LabelNamespace:             "namespace-3",
+				"owner_kind":                     "Deployment",
+				"owner_name":                     "running-ready",
+			},
+		},
+		{
+			Point: types.Point{Time: now},
+			Labels: map[string]string{
+				types.LabelMetaKubernetesCluster: clusterName,
+				types.LabelName:                  "kubernetes_memory_limits",
+				types.LabelNamespace:             "namespace-2",
+				"owner_kind":                     "Deployment",
+				"owner_name":                     "running-replicas",
+			},
+		},
+		{
+			Point: types.Point{Time: now},
+			Labels: map[string]string{
+				types.LabelMetaKubernetesCluster: clusterName,
+				types.LabelName:                  "kubernetes_memory_limits",
+				types.LabelNamespace:             "namespace-3",
+				"owner_kind":                     "Deployment",
+				"owner_name":                     "unschedulable",
+			},
+		},
+		{
+			Point: types.Point{Time: now},
+			Labels: map[string]string{
+				types.LabelMetaKubernetesCluster: clusterName,
+				types.LabelName:                  "kubernetes_memory_limits",
+				types.LabelNamespace:             "namespace-2",
+				"owner_kind":                     "Job",
+				"owner_name":                     "job-failed",
+			},
+		},
+		{
+			Point: types.Point{Time: now},
+			Labels: map[string]string{
+				types.LabelMetaKubernetesCluster: clusterName,
+				types.LabelName:                  "kubernetes_memory_limits",
+				types.LabelNamespace:             "namespace-2",
+				"owner_kind":                     "Job",
+				"owner_name":                     "job-running",
+			},
+		},
+		{
+			Point: types.Point{Time: now},
+			Labels: map[string]string{
+				types.LabelMetaKubernetesCluster: clusterName,
+				types.LabelName:                  "kubernetes_memory_limits",
+				types.LabelNamespace:             "namespace-2",
+				"owner_kind":                     "Job",
+				"owner_name":                     "job-succeeded",
+			},
+		},
+		{
+			Point: types.Point{Time: now},
+			Labels: map[string]string{
+				types.LabelMetaKubernetesCluster: clusterName,
+				types.LabelName:                  "kubernetes_memory_limits",
+				types.LabelNamespace:             "kube-system",
+				"owner_kind":                     "Node",
+				"owner_name":                     "minikube",
+			},
+		},
+		{
+			Point: types.Point{Time: now},
+			Labels: map[string]string{
+				types.LabelMetaKubernetesCluster: clusterName,
+				types.LabelName:                  "kubernetes_memory_limits",
+				types.LabelNamespace:             "namespace-3",
+				"owner_kind":                     "ReplicaSet",
+				"owner_name":                     "running-replicaset",
+			},
+		},
+
+		// Memory requests.
+		{
+			Point: types.Point{Time: now},
+			Labels: map[string]string{
+				types.LabelMetaKubernetesCluster: clusterName,
+				types.LabelName:                  "kubernetes_memory_requests",
+				types.LabelNamespace:             "kube-system",
+			},
+		},
+		{
+			Point: types.Point{
+				Time:  now,
+				Value: 1.572864e08,
+			},
+			Labels: map[string]string{
+				types.LabelMetaKubernetesCluster: clusterName,
+				types.LabelName:                  "kubernetes_memory_requests",
+				types.LabelNamespace:             "kube-system",
+				"owner_kind":                     "DaemonSet",
+				"owner_name":                     "kindnet",
+			},
+		},
+		{
+			Point: types.Point{Time: now},
+			Labels: map[string]string{
+				types.LabelMetaKubernetesCluster: clusterName,
+				types.LabelName:                  "kubernetes_memory_requests",
+				types.LabelNamespace:             "kube-system",
+				"owner_kind":                     "DaemonSet",
+				"owner_name":                     "kube-proxy",
+			},
+		},
+		{
+			Point: types.Point{
+				Time:  now,
+				Value: 7.340032e07,
+			},
+			Labels: map[string]string{
+				types.LabelMetaKubernetesCluster: clusterName,
+				types.LabelName:                  "kubernetes_memory_requests",
+				types.LabelNamespace:             "kube-system",
+				"owner_kind":                     "Deployment",
+				"owner_name":                     "coredns",
+			},
+		},
+		{
+			Point: types.Point{Time: now},
+			Labels: map[string]string{
+				types.LabelMetaKubernetesCluster: clusterName,
+				types.LabelName:                  "kubernetes_memory_requests",
+				types.LabelNamespace:             "namespace-2",
+				"owner_kind":                     "Deployment",
+				"owner_name":                     "crash-loop-backoff",
+			},
+		},
+		{
+			Point: types.Point{Time: now},
+			Labels: map[string]string{
+				types.LabelMetaKubernetesCluster: clusterName,
+				types.LabelName:                  "kubernetes_memory_requests",
+				types.LabelNamespace:             "namespace-2",
+				"owner_kind":                     "Deployment",
+				"owner_name":                     "image-pull-backoff",
+			},
+		},
+		{
+			Point: types.Point{Time: now},
+			Labels: map[string]string{
+				types.LabelMetaKubernetesCluster: clusterName,
+				types.LabelName:                  "kubernetes_memory_requests",
+				types.LabelNamespace:             "namespace-1",
+				"owner_kind":                     "Deployment",
+				"owner_name":                     "init-failed",
+			},
+		},
+		{
+			Point: types.Point{Time: now},
+			Labels: map[string]string{
+				types.LabelMetaKubernetesCluster: clusterName,
+				types.LabelName:                  "kubernetes_memory_requests",
+				types.LabelNamespace:             "namespace-1",
+				"owner_kind":                     "Deployment",
+				"owner_name":                     "inside-init",
+			},
+		},
+		{
+			Point: types.Point{Time: now},
+			Labels: map[string]string{
+				types.LabelMetaKubernetesCluster: clusterName,
+				types.LabelName:                  "kubernetes_memory_requests",
+				types.LabelNamespace:             "namespace-1",
+				"owner_kind":                     "Deployment",
+				"owner_name":                     "running-init-ok",
+			},
+		},
+		{
+			Point: types.Point{Time: now},
+			Labels: map[string]string{
+				types.LabelMetaKubernetesCluster: clusterName,
+				types.LabelName:                  "kubernetes_memory_requests",
+				types.LabelNamespace:             "namespace-1",
+				"owner_kind":                     "Deployment",
+				"owner_name":                     "running-not-ready",
+			},
+		},
+		{
+			Point: types.Point{Time: now},
+			Labels: map[string]string{
+				types.LabelMetaKubernetesCluster: clusterName,
+				types.LabelName:                  "kubernetes_memory_requests",
+				types.LabelNamespace:             "namespace-3",
+				"owner_kind":                     "Deployment",
+				"owner_name":                     "running-ready",
+			},
+		},
+		{
+			Point: types.Point{Time: now},
+			Labels: map[string]string{
+				types.LabelMetaKubernetesCluster: clusterName,
+				types.LabelName:                  "kubernetes_memory_requests",
+				types.LabelNamespace:             "namespace-2",
+				"owner_kind":                     "Deployment",
+				"owner_name":                     "running-replicas",
+			},
+		},
+		{
+			Point: types.Point{Time: now},
+			Labels: map[string]string{
+				types.LabelMetaKubernetesCluster: clusterName,
+				types.LabelName:                  "kubernetes_memory_requests",
+				types.LabelNamespace:             "namespace-3",
+				"owner_kind":                     "Deployment",
+				"owner_name":                     "unschedulable",
+			},
+		},
+		{
+			Point: types.Point{Time: now},
+			Labels: map[string]string{
+				types.LabelMetaKubernetesCluster: clusterName,
+				types.LabelName:                  "kubernetes_memory_requests",
+				types.LabelNamespace:             "namespace-2",
+				"owner_kind":                     "Job",
+				"owner_name":                     "job-failed",
+			},
+		},
+		{
+			Point: types.Point{Time: now},
+			Labels: map[string]string{
+				types.LabelMetaKubernetesCluster: clusterName,
+				types.LabelName:                  "kubernetes_memory_requests",
+				types.LabelNamespace:             "namespace-2",
+				"owner_kind":                     "Job",
+				"owner_name":                     "job-running",
+			},
+		},
+		{
+			Point: types.Point{Time: now},
+			Labels: map[string]string{
+				types.LabelMetaKubernetesCluster: clusterName,
+				types.LabelName:                  "kubernetes_memory_requests",
+				types.LabelNamespace:             "namespace-2",
+				"owner_kind":                     "Job",
+				"owner_name":                     "job-succeeded",
+			},
+		},
+		{
+			Point: types.Point{
+				Time:  now,
+				Value: 1.048576e08,
+			},
+			Labels: map[string]string{
+				types.LabelMetaKubernetesCluster: clusterName,
+				types.LabelName:                  "kubernetes_memory_requests",
+				types.LabelNamespace:             "kube-system",
+				"owner_kind":                     "Node",
+				"owner_name":                     "minikube",
+			},
+		},
+		{
+			Point: types.Point{Time: now},
+			Labels: map[string]string{
+				types.LabelMetaKubernetesCluster: clusterName,
+				types.LabelName:                  "kubernetes_memory_requests",
+				types.LabelNamespace:             "namespace-3",
+				"owner_kind":                     "ReplicaSet",
+				"owner_name":                     "running-replicaset",
+			},
+		},
 	}
 
 	// Sort points by metric name, owner and state.

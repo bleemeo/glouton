@@ -6,11 +6,19 @@ import (
 	"strings"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	corev1 "k8s.io/api/core/v1"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-type metricsFunc func(context.Context, kubeClient, time.Time) ([]types.MetricPoint, error)
+type metricsFunc func(kubeCache, time.Time) []types.MetricPoint
+
+type kubeCache struct {
+	pods                 []corev1.Pod
+	replicasetOwnerByUID map[string]metav1.OwnerReference
+	namespaces           []corev1.Namespace
+	nodes                []corev1.Node
+}
 
 // getGlobalMetrics returns global cluster metrics.
 func getGlobalMetrics(
@@ -19,17 +27,39 @@ func getGlobalMetrics(
 	now time.Time,
 	clusterName string,
 ) ([]types.MetricPoint, error) {
+	var (
+		err      error
+		multiErr prometheus.MultiError
+		cache    kubeCache
+	)
+
+	// Add resources to the cache.
+	cache.pods, err = cl.GetPODs(ctx, "")
+	multiErr.Append(err)
+
+	cache.namespaces, err = cl.GetNamespaces(ctx)
+	multiErr.Append(err)
+
+	cache.nodes, err = cl.GetNodes(ctx)
+	multiErr.Append(err)
+
+	replicasets, err := cl.GetReplicasets(ctx)
+	multiErr.Append(err)
+
+	cache.replicasetOwnerByUID = make(map[string]metav1.OwnerReference, len(replicasets))
+
+	for _, replicaset := range replicasets {
+		if len(replicaset.OwnerReferences) > 0 {
+			cache.replicasetOwnerByUID[string(replicaset.UID)] = replicaset.OwnerReferences[0]
+		}
+	}
+
 	var points []types.MetricPoint
 
-	metricFunctions := []metricsFunc{podsCount, namespacesCount, nodesCount}
+	metricFunctions := []metricsFunc{podsCount, requestsAndLimits, namespacesCount, nodesCount}
 
 	for _, f := range metricFunctions {
-		morePoints, err := f(ctx, cl, now)
-		if err != nil {
-			return points, err
-		}
-
-		points = append(points, morePoints...)
+		points = append(points, f(cache, now)...)
 	}
 
 	// Add the Kubernetes cluster meta label to global metrics, this is used to
@@ -38,20 +68,15 @@ func getGlobalMetrics(
 		point.Labels[types.LabelMetaKubernetesCluster] = clusterName
 	}
 
-	return points, nil
+	return points, multiErr.MaybeUnwrap()
 }
 
 // namespacesCount returns the metric kubernetes_namespaces_count with the
 // current state of the namespace in the labels (active or terminating).
-func namespacesCount(ctx context.Context, cl kubeClient, now time.Time) ([]types.MetricPoint, error) {
-	ns, err := cl.GetNamespaces(ctx)
-	if err != nil {
-		return nil, err
-	}
-
+func namespacesCount(cache kubeCache, now time.Time) []types.MetricPoint {
 	nsCountByState := make(map[string]int)
 
-	for _, namespace := range ns {
+	for _, namespace := range cache.namespaces {
 		state := strings.ToLower(string(namespace.Status.Phase))
 		nsCountByState[state]++
 	}
@@ -68,53 +93,27 @@ func namespacesCount(ctx context.Context, cl kubeClient, now time.Time) ([]types
 		})
 	}
 
-	return points, nil
+	return points
 }
 
 // nodesCount returns the metric kubernetes_nodes_count.
-func nodesCount(ctx context.Context, cl kubeClient, now time.Time) ([]types.MetricPoint, error) {
-	nodes, err := cl.GetNodes(ctx)
-	if err != nil {
-		return nil, err
-	}
-
+func nodesCount(cache kubeCache, now time.Time) []types.MetricPoint {
 	points := []types.MetricPoint{{
-		Point: types.Point{Time: now, Value: float64(len(nodes))},
+		Point: types.Point{Time: now, Value: float64(len(cache.nodes))},
 		Labels: map[string]string{
 			types.LabelName: "kubernetes_nodes_count",
 		},
 	}}
 
-	return points, nil
+	return points
 }
 
-// podsCount returns the metric kubernetes_pods_count with three labels:
+// podsCount returns the metric kubernetes_pods_count with the following labels:
 // - owner_kind: the kind of the pod's owner, e.g. daemonset, deployment.
 // - owner_name: the name of the pod's owner, e.g. glouton, kube-proxy.
 // - state: the current state of the pod (pending, running, succeeded or failed).
 // - namespace: the pod's namespace.
-func podsCount(ctx context.Context, cl kubeClient, now time.Time) ([]types.MetricPoint, error) {
-	// For Kubernetes deployments with multiple replicas, a replicaset is created. This means the pod's
-	// owner is the replicaset (which has a generated name, e.g. "coredns-565d847f94"). In this case we
-	// prefer to associate this pod with the owner of the replicaset (e.g. the deployment "coredns").
-	replicasets, err := cl.GetReplicasets(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	replicasetOwnerByUUID := make(map[string]v1.OwnerReference)
-
-	for _, rs := range replicasets {
-		if len(rs.OwnerReferences) > 0 {
-			replicasetOwnerByUUID[string(rs.UID)] = rs.OwnerReferences[0]
-		}
-	}
-
-	pods, err := cl.GetPODs(ctx, "")
-	if err != nil {
-		return nil, err
-	}
-
+func podsCount(cache kubeCache, now time.Time) []types.MetricPoint {
 	type podLabels struct {
 		State     string
 		Kind      string
@@ -122,36 +121,16 @@ func podsCount(ctx context.Context, cl kubeClient, now time.Time) ([]types.Metri
 		Namespace string
 	}
 
-	podsCountByLabels := make(map[podLabels]int, len(pods))
+	podsCountByLabels := make(map[podLabels]int, len(cache.pods))
 
-	for _, pod := range pods {
-		var kind, name string
-
-		if len(pod.OwnerReferences) > 0 {
-			ownerRef := pod.OwnerReferences[0]
-			kind, name = ownerRef.Kind, ownerRef.Name
-
-			// For replicasets, get the owner one level higher.
-			if kind == "ReplicaSet" {
-				ownerRef := replicasetOwnerByUUID[string(ownerRef.UID)]
-
-				if ownerRef.Kind != "" {
-					kind, name = ownerRef.Kind, ownerRef.Name
-				}
-			}
-		}
-
-		// An empty namespace is the default namespace.
-		namespace := pod.Namespace
-		if namespace == "" {
-			namespace = "default"
-		}
+	for _, pod := range cache.pods {
+		kind, name := podOwner(pod, cache.replicasetOwnerByUID)
 
 		labels := podLabels{
 			State:     strings.ToLower(string(podPhase(pod))),
 			Kind:      strings.ToLower(kind),
 			Name:      strings.ToLower(name),
-			Namespace: namespace,
+			Namespace: podNamespace(pod),
 		}
 
 		podsCountByLabels[labels]++
@@ -180,7 +159,41 @@ func podsCount(ctx context.Context, cl kubeClient, now time.Time) ([]types.Metri
 		})
 	}
 
-	return points, nil
+	return points
+}
+
+// podOwner return the kind and the name of the owner of a pod.
+func podOwner(pod corev1.Pod, replicasetOwnerByUID map[string]metav1.OwnerReference) (kind string, name string) {
+	if len(pod.OwnerReferences) == 0 {
+		return "", ""
+	}
+
+	ownerRef := pod.OwnerReferences[0]
+	kind, name = ownerRef.Kind, ownerRef.Name
+
+	// For Kubernetes deployments with multiple replicas, a replicaset is created. This means the pod's
+	// owner is the replicaset (which has a generated name, e.g. "coredns-565d847f94"). In this case we
+	// prefer to associate this pod with the owner of the replicaset (e.g. the deployment "coredns").
+	if kind == "ReplicaSet" {
+		ownerRef := replicasetOwnerByUID[string(ownerRef.UID)]
+
+		if ownerRef.Kind != "" {
+			kind, name = ownerRef.Kind, ownerRef.Name
+		}
+	}
+
+	return kind, name
+}
+
+// podNamespace returns the namespace of a pod.
+func podNamespace(pod corev1.Pod) string {
+	// An empty namespace is the default namespace.
+	namespace := pod.Namespace
+	if namespace == "" {
+		namespace = "default"
+	}
+
+	return namespace
 }
 
 // podPhase returns the status of a pod.
@@ -244,4 +257,90 @@ func initContainerPhase(podStatus corev1.PodStatus) corev1.PodPhase {
 	}
 
 	return corev1.PodRunning
+}
+
+// requestsAndLimits returns the metrics kubernetes_(cpu|memory)_(request|limit) with the following labels:
+// - owner_kind: the kind of the pod's owner, e.g. daemonset, deployment.
+// - owner_name: the name of the pod's owner, e.g. glouton, kube-proxy.
+// - namespace: the pod's namespace.
+func requestsAndLimits(cache kubeCache, now time.Time) []types.MetricPoint {
+	// object represents a Kubernetes object.
+	type object struct {
+		Kind      string
+		Name      string
+		Namespace string
+	}
+
+	type resources struct {
+		cpuRequests    float64
+		cpuLimits      float64
+		memoryRequests float64
+		memoryLimits   float64
+	}
+
+	resourceMap := make(map[object]resources, len(cache.pods))
+
+	for _, pod := range cache.pods {
+		// Sum requests and limit over containers in the pod.
+		cpuRequests, cpuLimits, memoryRequests, memoryLimits := 0., 0., 0., 0.
+
+		for _, container := range pod.Spec.Containers {
+			cpuRequests += container.Resources.Requests.Cpu().AsApproximateFloat64()
+			cpuLimits += container.Resources.Limits.Cpu().AsApproximateFloat64()
+			memoryRequests += container.Resources.Requests.Memory().AsApproximateFloat64()
+			memoryLimits += container.Resources.Limits.Memory().AsApproximateFloat64()
+		}
+
+		kind, name := podOwner(pod, cache.replicasetOwnerByUID)
+
+		obj := object{
+			Kind:      kind,
+			Name:      name,
+			Namespace: podNamespace(pod),
+		}
+
+		prevResources := resourceMap[obj]
+
+		resourceMap[obj] = resources{
+			cpuRequests:    prevResources.cpuRequests + cpuRequests,
+			cpuLimits:      prevResources.cpuLimits + cpuLimits,
+			memoryRequests: prevResources.memoryRequests + memoryRequests,
+			memoryLimits:   prevResources.memoryLimits + memoryLimits,
+		}
+	}
+
+	// There are 4 points per Kubernetes object :
+	// cpu requests, cpu limits, memory requests, memory limits.
+	points := make([]types.MetricPoint, 0, len(resourceMap)*4)
+
+	for obj, resource := range resourceMap {
+		values := map[string]float64{
+			"kubernetes_cpu_requests":    resource.cpuRequests,
+			"kubernetes_cpu_limits":      resource.cpuLimits,
+			"kubernetes_memory_requests": resource.memoryRequests,
+			"kubernetes_memory_limits":   resource.memoryLimits,
+		}
+
+		for name, value := range values {
+			labels := map[string]string{
+				types.LabelName:      name,
+				types.LabelNamespace: obj.Namespace,
+			}
+
+			if obj.Kind != "" {
+				labels[types.LabelOwnerKind] = obj.Kind
+			}
+
+			if obj.Name != "" {
+				labels[types.LabelOwnerName] = obj.Name
+			}
+
+			points = append(points, types.MetricPoint{
+				Point:  types.Point{Time: now, Value: value},
+				Labels: labels,
+			})
+		}
+	}
+
+	return points
 }
