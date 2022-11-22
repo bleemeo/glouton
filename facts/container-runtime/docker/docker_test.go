@@ -19,6 +19,7 @@ package docker
 import (
 	"context"
 	"errors"
+	"fmt"
 	"glouton/facts"
 	"glouton/facts/container-runtime/internal/testutil"
 	"reflect"
@@ -30,6 +31,7 @@ import (
 
 	containerTypes "github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/events"
+	docker "github.com/docker/docker/client"
 	"github.com/google/go-cmp/cmp"
 )
 
@@ -379,7 +381,7 @@ func TestDocker_Run(t *testing.T) {
 	}
 }
 
-func TestDocker_ContainerFromCGroup(t *testing.T) {
+func TestDocker_ContainerFromCGroup(t *testing.T) { //nolint: maintidx
 	type check struct {
 		name                string
 		cgroupData          string
@@ -413,7 +415,8 @@ func TestDocker_ContainerFromCGroup(t *testing.T) {
 						2:cpu,cpuacct:/docker/72cf779c7429b33b04f296a98fc9be928c82c5537e333589bec734a884cbb2d2/init.scope
 						1:name=systemd:/docker/72cf779c7429b33b04f296a98fc9be928c82c5537e333589bec734a884cbb2d2/init.scope
 						0::/docker/72cf779c7429b33b04f296a98fc9be928c82c5537e333589bec734a884cbb2d2/init.scope`,
-					containerID: "",
+					containerID:         "",
+					mustErrDoesNotExist: true,
 				},
 				{
 					name: "rabbitmq",
@@ -431,8 +434,9 @@ func TestDocker_ContainerFromCGroup(t *testing.T) {
 					2:cpu,cpuacct:/docker/72cf779c7429b33b04f296a98fc9be928c82c5537e333589bec734a884cbb2d2/docker/2faf78372d542468d4616d7cb85f03994a1d7ea60a42749e7114c506b8282882
 					1:name=systemd:/docker/72cf779c7429b33b04f296a98fc9be928c82c5537e333589bec734a884cbb2d2/docker/2faf78372d542468d4616d7cb85f03994a1d7ea60a42749e7114c506b8282882
 					0::/docker/72cf779c7429b33b04f296a98fc9be928c82c5537e333589bec734a884cbb2d2/system.slice/containerd.service`,
-					containerID:   "2faf78372d542468d4616d7cb85f03994a1d7ea60a42749e7114c506b8282882",
-					containerName: "testdata_rabbitmqExposed_1",
+					// Docker in Docker (with cgroup v1) had the issue that cgroup data is the same between host & the docker "VM".
+					// We choose to prefer assuming being on the host. Anyway ContainerFromPID should fix any issue.
+					mustErrDoesNotExist: true,
 				},
 				{
 					name: "minikube v0.28.2",
@@ -461,6 +465,75 @@ func TestDocker_ContainerFromCGroup(t *testing.T) {
 						10:devices:/system.slice/docker-2faf78372d542468d4616d7cb85f03994a1d7ea60a42749e7114c506b8282882.scope
 						[...]
 						1:name=systemd:/system.slice/docker-2faf78372d542468d4616d7cb85f03994a1d7ea60a42749e7114c506b8282882.scope`,
+					containerID:   "2faf78372d542468d4616d7cb85f03994a1d7ea60a42749e7114c506b8282882",
+					containerName: "testdata_rabbitmqExposed_1",
+				},
+				{
+					name: "Kubernetes 1.20 on Ubuntu 20.04",
+					cgroupData: `
+					12:freezer:/kubepods.slice/kubepods-burstable.slice/kubepods-burstable-podba16e26e_4736_4bdd_bb0e_7175c15b7f37.slice/docker-2faf78372d542468d4616d7cb85f03994a1d7ea60a42749e7114c506b8282882.scope
+					11:hugetlb:/kubepods.slice/kubepods-burstable.slice/kubepods-burstable-podba16e26e_4736_4bdd_bb0e_7175c15b7f37.slice/docker-2faf78372d542468d4616d7cb85f03994a1d7ea60a42749e7114c506b8282882.scope
+					[...]
+					1:name=systemd:/kubepods.slice/kubepods-burstable.slice/kubepods-burstable-podba16e26e_4736_4bdd_bb0e_7175c15b7f37.slice/docker-2faf78372d542468d4616d7cb85f03994a1d7ea60a42749e7114c506b8282882.scope
+					0::/kubepods.slice/kubepods-burstable.slice/kubepods-burstable-podba16e26e_4736_4bdd_bb0e_7175c15b7f37.slice/docker-2faf78372d542468d4616d7cb85f03994a1d7ea60a42749e7114c506b8282882.scope`,
+					containerID:   "2faf78372d542468d4616d7cb85f03994a1d7ea60a42749e7114c506b8282882",
+					containerName: "testdata_rabbitmqExposed_1",
+				},
+				{
+					name: "Docker 20.10.18 on Ubuntu 20.04",
+					cgroupData: `
+					0::/system.slice/docker-2faf78372d542468d4616d7cb85f03994a1d7ea60a42749e7114c506b8282882.scope`,
+					containerID:   "2faf78372d542468d4616d7cb85f03994a1d7ea60a42749e7114c506b8282882",
+					containerName: "testdata_rabbitmqExposed_1",
+				},
+				{
+					name: "PODs from inside minikube on Ubuntu 22.04",
+					cgroupData: `
+					0::/kubepods.slice/kubepods-burstable.slice/kubepods-burstable-podba16e26e47364bddbb0e7175c15b7f37.slice/docker-2faf78372d542468d4616d7cb85f03994a1d7ea60a42749e7114c506b8282882.scope`,
+					containerID:   "2faf78372d542468d4616d7cb85f03994a1d7ea60a42749e7114c506b8282882",
+					containerName: "testdata_rabbitmqExposed_1",
+				},
+				// the first ID, is the ID of minikube container. Since we are from outside, docker will show this container. (here we cheated at said that instead of minikube container its rabbitmq).
+				// the second ID, is the ID of the POD inside the minikube. Since we are from outside, docker don't know this ID.
+				{
+					name: "PODs from outside minikube on Ubuntu 22.04",
+					cgroupData: `
+					0::/system.slice/docker-2faf78372d542468d4616d7cb85f03994a1d7ea60a42749e7114c506b8282882.scope/kubepods.slice/kubepods-burstable.slice/kubepods-burstable-podba16e26e47364bddbb0e7175c15b7f37.slice/docker-9f45a1e3a6ae985b6318b24123314eb8a7d6580accd9d279adb7867dc8c43a48.scope`,
+					containerID:   "2faf78372d542468d4616d7cb85f03994a1d7ea60a42749e7114c506b8282882",
+					containerName: "testdata_rabbitmqExposed_1",
+				},
+				{
+					name: "PODs from outside minikube on MacOS",
+					cgroupData: `
+					0::/../2faf78372d542468d4616d7cb85f03994a1d7ea60a42749e7114c506b8282882/kubepods.slice/kubepods-besteffort.slice/kubepods-besteffort-podd240b53b_a306_422b_951d_54822714c75d.slice/docker-7bc755e4a55d5972a4cfa50ab921227b3c38321092b08df54c45537fd0bc1316.scope`,
+					containerID:   "2faf78372d542468d4616d7cb85f03994a1d7ea60a42749e7114c506b8282882",
+					containerName: "testdata_rabbitmqExposed_1",
+				},
+				{
+					name: "PODs from inside minikube on MacOS",
+					cgroupData: `
+					0::/kubepods.slice/kubepods-besteffort.slice/kubepods-besteffort-podd240b53b_a306_422b_951d_54822714c75d.slice/docker-2faf78372d542468d4616d7cb85f03994a1d7ea60a42749e7114c506b8282882.scope`,
+					containerID:   "2faf78372d542468d4616d7cb85f03994a1d7ea60a42749e7114c506b8282882",
+					containerName: "testdata_rabbitmqExposed_1",
+				},
+				{
+					name: "Docker in Docker from outside on MacOS",
+					cgroupData: `
+					0::/../2faf78372d542468d4616d7cb85f03994a1d7ea60a42749e7114c506b8282882/system.slice/docker-d4b826cbcb102335417b30518caefb9ddfcd43941a81365f73840257d600b9b2.scope`,
+					containerID:   "2faf78372d542468d4616d7cb85f03994a1d7ea60a42749e7114c506b8282882",
+					containerName: "testdata_rabbitmqExposed_1",
+				},
+				{
+					name: "Docker in Docker in Docker from first layer on MacOS",
+					cgroupData: `
+					0::/system.slice/docker-2faf78372d542468d4616d7cb85f03994a1d7ea60a42749e7114c506b8282882.scope/system.slice/docker-da908c4920e4aed9dfbf50c3aaf16e3fc3bae44ba9cb77f463f61803d92e110c.scope`,
+					containerID:   "2faf78372d542468d4616d7cb85f03994a1d7ea60a42749e7114c506b8282882",
+					containerName: "testdata_rabbitmqExposed_1",
+				},
+				{
+					name: "Docker in Docker in Docker from outside on MacOS",
+					cgroupData: `
+					0::/../2faf78372d542468d4616d7cb85f03994a1d7ea60a42749e7114c506b8282882/system.slice/docker-1b85fac471b76401a49baea1d16e268b16759883f0b8c52d48548f0c3cf69124.scope/system.slice/docker-da908c4920e4aed9dfbf50c3aaf16e3fc3bae44ba9cb77f463f61803d92e110c.scope`,
 					containerID:   "2faf78372d542468d4616d7cb85f03994a1d7ea60a42749e7114c506b8282882",
 					containerName: "testdata_rabbitmqExposed_1",
 				},
@@ -543,26 +616,25 @@ func TestDocker_ContainerFromCGroup(t *testing.T) {
 					containerID:   "72cf779c7429b33b04f296a98fc9be928c82c5537e333589bec734a884cbb2d2",
 					containerName: "minikube",
 				},
-				// TODO: For now, docker-in-docker does not work perfectly
-				// {
-				// 	name: "rabbitmq of minikube",
-				// 	cgroupData: `
-				// 		12:cpuset:/docker/72cf779c7429b33b04f296a98fc9be928c82c5537e333589bec734a884cbb2d2/docker/0960ba858a48d7f15b1b5d0a278d62fb025d4d4ec1a0bae0f1df253bffc1253b
-				// 		11:memory:/docker/72cf779c7429b33b04f296a98fc9be928c82c5537e333589bec734a884cbb2d2/docker/0960ba858a48d7f15b1b5d0a278d62fb025d4d4ec1a0bae0f1df253bffc1253b
-				// 		10:pids:/docker/72cf779c7429b33b04f296a98fc9be928c82c5537e333589bec734a884cbb2d2/docker/0960ba858a48d7f15b1b5d0a278d62fb025d4d4ec1a0bae0f1df253bffc1253b
-				// 		9:freezer:/docker/72cf779c7429b33b04f296a98fc9be928c82c5537e333589bec734a884cbb2d2/docker/0960ba858a48d7f15b1b5d0a278d62fb025d4d4ec1a0bae0f1df253bffc1253b
-				// 		8:blkio:/docker/72cf779c7429b33b04f296a98fc9be928c82c5537e333589bec734a884cbb2d2/docker/0960ba858a48d7f15b1b5d0a278d62fb025d4d4ec1a0bae0f1df253bffc1253b
-				// 		7:net_cls,net_prio:/docker/72cf779c7429b33b04f296a98fc9be928c82c5537e333589bec734a884cbb2d2/docker/0960ba858a48d7f15b1b5d0a278d62fb025d4d4ec1a0bae0f1df253bffc1253b
-				// 		6:perf_event:/docker/72cf779c7429b33b04f296a98fc9be928c82c5537e333589bec734a884cbb2d2/docker/0960ba858a48d7f15b1b5d0a278d62fb025d4d4ec1a0bae0f1df253bffc1253b
-				// 		5:rdma:/
-				// 		4:devices:/docker/72cf779c7429b33b04f296a98fc9be928c82c5537e333589bec734a884cbb2d2/docker/0960ba858a48d7f15b1b5d0a278d62fb025d4d4ec1a0bae0f1df253bffc1253b
-				// 		3:hugetlb:/docker/72cf779c7429b33b04f296a98fc9be928c82c5537e333589bec734a884cbb2d2/docker/0960ba858a48d7f15b1b5d0a278d62fb025d4d4ec1a0bae0f1df253bffc1253b
-				// 		2:cpu,cpuacct:/docker/72cf779c7429b33b04f296a98fc9be928c82c5537e333589bec734a884cbb2d2/docker/0960ba858a48d7f15b1b5d0a278d62fb025d4d4ec1a0bae0f1df253bffc1253b
-				// 		1:name=systemd:/docker/72cf779c7429b33b04f296a98fc9be928c82c5537e333589bec734a884cbb2d2/docker/0960ba858a48d7f15b1b5d0a278d62fb025d4d4ec1a0bae0f1df253bffc1253b
-				// 		0::/docker/72cf779c7429b33b04f296a98fc9be928c82c5537e333589bec734a884cbb2d2/system.slice/containerd.service`,
-				// 	containerID:   "72cf779c7429b33b04f296a98fc9be928c82c5537e333589bec734a884cbb2d2",
-				// 	containerName: "minikube",
-				// },
+				{
+					name: "rabbitmq of minikube",
+					cgroupData: `
+						12:cpuset:/docker/72cf779c7429b33b04f296a98fc9be928c82c5537e333589bec734a884cbb2d2/docker/0960ba858a48d7f15b1b5d0a278d62fb025d4d4ec1a0bae0f1df253bffc1253b
+						11:memory:/docker/72cf779c7429b33b04f296a98fc9be928c82c5537e333589bec734a884cbb2d2/docker/0960ba858a48d7f15b1b5d0a278d62fb025d4d4ec1a0bae0f1df253bffc1253b
+						10:pids:/docker/72cf779c7429b33b04f296a98fc9be928c82c5537e333589bec734a884cbb2d2/docker/0960ba858a48d7f15b1b5d0a278d62fb025d4d4ec1a0bae0f1df253bffc1253b
+						9:freezer:/docker/72cf779c7429b33b04f296a98fc9be928c82c5537e333589bec734a884cbb2d2/docker/0960ba858a48d7f15b1b5d0a278d62fb025d4d4ec1a0bae0f1df253bffc1253b
+						8:blkio:/docker/72cf779c7429b33b04f296a98fc9be928c82c5537e333589bec734a884cbb2d2/docker/0960ba858a48d7f15b1b5d0a278d62fb025d4d4ec1a0bae0f1df253bffc1253b
+						7:net_cls,net_prio:/docker/72cf779c7429b33b04f296a98fc9be928c82c5537e333589bec734a884cbb2d2/docker/0960ba858a48d7f15b1b5d0a278d62fb025d4d4ec1a0bae0f1df253bffc1253b
+						6:perf_event:/docker/72cf779c7429b33b04f296a98fc9be928c82c5537e333589bec734a884cbb2d2/docker/0960ba858a48d7f15b1b5d0a278d62fb025d4d4ec1a0bae0f1df253bffc1253b
+						5:rdma:/
+						4:devices:/docker/72cf779c7429b33b04f296a98fc9be928c82c5537e333589bec734a884cbb2d2/docker/0960ba858a48d7f15b1b5d0a278d62fb025d4d4ec1a0bae0f1df253bffc1253b
+						3:hugetlb:/docker/72cf779c7429b33b04f296a98fc9be928c82c5537e333589bec734a884cbb2d2/docker/0960ba858a48d7f15b1b5d0a278d62fb025d4d4ec1a0bae0f1df253bffc1253b
+						2:cpu,cpuacct:/docker/72cf779c7429b33b04f296a98fc9be928c82c5537e333589bec734a884cbb2d2/docker/0960ba858a48d7f15b1b5d0a278d62fb025d4d4ec1a0bae0f1df253bffc1253b
+						1:name=systemd:/docker/72cf779c7429b33b04f296a98fc9be928c82c5537e333589bec734a884cbb2d2/docker/0960ba858a48d7f15b1b5d0a278d62fb025d4d4ec1a0bae0f1df253bffc1253b
+						0::/docker/72cf779c7429b33b04f296a98fc9be928c82c5537e333589bec734a884cbb2d2/system.slice/containerd.service`,
+					containerID:   "72cf779c7429b33b04f296a98fc9be928c82c5537e333589bec734a884cbb2d2",
+					containerName: "minikube",
+				},
 				{
 					name: "unexisting id",
 					cgroupData: `
@@ -585,6 +657,25 @@ func TestDocker_ContainerFromCGroup(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "docker-20.10.18 (Docker on minikube v1.27.1 / MacOS)",
+			dir:  "testdata/docker-20.10.18",
+			wants: []check{
+				{
+					name: "init",
+					cgroupData: `
+						0::/init.scope`,
+					containerID: "",
+				},
+				{
+					name: "rabbitmq",
+					cgroupData: `
+					0::/system.slice/docker-7c0b134252e94d21bdb569a6fd30e812d721f7945145ddca0c829abaeacaec1f.scope`,
+					containerID:   "7c0b134252e94d21bdb569a6fd30e812d721f7945145ddca0c829abaeacaec1f",
+					containerName: "testdata-rabbitmqExposed-1",
+				},
+			},
+		},
 	}
 	for _, tt := range tests {
 		tt := tt
@@ -597,52 +688,144 @@ func TestDocker_ContainerFromCGroup(t *testing.T) {
 				return
 			}
 
-			d := FakeDocker(cl, facts.ContainerFilter{}.ContainerIgnored)
+			sharedClient := FakeDocker(cl, facts.ContainerFilter{}.ContainerIgnored)
 
-			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
-			defer cancel()
+			ctx := context.Background()
+
+			sharedQuerier := sharedClient.ProcessWithCache()
 
 			for _, c := range tt.wants {
-				c := c
+				var (
+					dockerClient *Docker
+					querier      facts.ContainerRuntimeProcessQuerier
+					wantErr      bool
+				)
 
-				t.Run(c.name, func(t *testing.T) {
-					querier := d.ProcessWithCache()
-					container, err := querier.ContainerFromCGroup(ctx, testutil.Unindent(c.cgroupData))
+				for run := 0; run < 8; run++ {
+					// We have try per check. For run =
+					// * 0 -> shared client / shared querier / no client error
+					// * 1 -> shared client / shared querier / client error
+					// * 2 -> shared client / new querier / client error
+					// * 3 -> shared client / new querier / no client error
+					// * 4 -> new client / new querier / client error
+					// * 5 -> previous client / new querier / no client error
+					// * 6 -> new client / new querier / no client error
+					// * 7 -> new client / new querier / client error for "no runtime"
 
-					if c.mustErrDoesNotExist && !errors.Is(err, facts.ErrContainerDoesNotExists) {
-						t.Errorf("err = %v want ErrContainerDoesNotExists", err)
+					// Note: a new querier new to be make after en error (or the error will persist)
+
+					switch run {
+					case 0:
+						dockerClient = sharedClient
+						querier = sharedQuerier
+						cl.ReturnError = nil
+						wantErr = false
+					case 1:
+						dockerClient = sharedClient
+						querier = sharedQuerier
+						cl.ReturnError = context.DeadlineExceeded
+						wantErr = false // because it's the same querier, it kept data in cache
+					case 2:
+						dockerClient = sharedClient
+						querier = sharedClient.ProcessWithCache()
+						cl.ReturnError = context.DeadlineExceeded
+						wantErr = true
+					case 3:
+						dockerClient = sharedClient
+						querier = sharedClient.ProcessWithCache()
+						cl.ReturnError = nil
+						wantErr = false
+					case 4:
+						dockerClient = FakeDocker(cl, facts.ContainerFilter{}.ContainerIgnored)
+						querier = dockerClient.ProcessWithCache()
+						cl.ReturnError = context.DeadlineExceeded
+						wantErr = true
+					case 5:
+						// client: same as previous
+						querier = dockerClient.ProcessWithCache()
+						cl.ReturnError = nil
+						wantErr = false
+					case 6:
+						dockerClient = FakeDocker(cl, facts.ContainerFilter{}.ContainerIgnored)
+						querier = dockerClient.ProcessWithCache()
+						cl.ReturnError = nil
+						wantErr = false
+					case 7:
+						dockerClient = FakeDocker(cl, facts.ContainerFilter{}.ContainerIgnored)
+						querier = dockerClient.ProcessWithCache()
+						cl.ReturnError = docker.ErrorConnectionFailed("value")
+						wantErr = true
 					}
 
-					if c.containerID == "" {
-						if container != nil {
-							t.Errorf("container.ID = %v (err=%v) want no container", container.ID(), err)
+					c := c
+					run := run
+					querier := querier
+
+					t.Run(fmt.Sprintf("%s-%d", c.name, run), func(t *testing.T) {
+						container, err := querier.ContainerFromCGroup(ctx, testutil.Unindent(c.cgroupData))
+
+						if c.mustErrDoesNotExist && !errors.Is(err, facts.ErrContainerDoesNotExists) {
+							// When we want ErrContainerDoesNotExists, we might allow another error if client had error, but NOT NoRuntimeError.
+							if cl.ReturnError == nil || errors.As(err, &facts.NoRuntimeError{}) {
+								t.Errorf("err = %v want ErrContainerDoesNotExists", err)
+							}
 						}
 
-						return
-					}
+						if c.containerID == "" {
+							if container != nil {
+								t.Errorf("container.ID = %v (err=%v) want no container", container.ID(), err)
+							}
 
-					if err != nil {
-						t.Errorf("err = %v want nil", err)
-					}
-					if container == nil {
-						t.Errorf("container = nil, want %s", c.containerName)
+							return
+						}
 
-						return
-					}
+						if wantErr {
+							if !errors.Is(err, cl.ReturnError) && run != 7 {
+								t.Errorf("err = %v want %v", err, cl.ReturnError)
+							}
 
-					if container.ContainerName() != c.containerName {
-						t.Errorf("ContainerName = %v, want %s", container.ContainerName(), c.containerName)
-					}
-					if container.ID() != c.containerID {
-						t.Errorf("ID = %v, want %s", container.ID(), c.containerID)
-					}
-				})
+							// This client had error on first call, we expect to have ErrContainerDoesNotExists when their is a container associated
+							// and NoRuntimeError for other case.
+							if run == 7 {
+								if c.containerID == "" && !errors.As(err, &facts.NoRuntimeError{}) {
+									t.Errorf("err = %v want NoRuntimeError", err)
+								}
+
+								if c.containerID != "" && !errors.Is(err, facts.ErrContainerDoesNotExists) {
+									t.Errorf("err = %v want ErrContainerDoesNotExists", err)
+								}
+							}
+						} else if err != nil && !(c.mustErrDoesNotExist && errors.Is(err, facts.ErrContainerDoesNotExists)) {
+							t.Errorf("err = %v want nil", err)
+						}
+
+						if container == nil {
+							// It's allowed to have container == nil IF the client return errors. But then we must have
+							// an err. Said otherwise, the Docker client should only return container & err == nil on ContainerFromCGroup
+							// when we are confident that the cgroup is not one of a container.
+							if cl.ReturnError == nil {
+								t.Errorf("container = nil, want %s", c.containerName)
+							} else if err == nil {
+								t.Errorf("container = nil, and err = nil, want err = %s", cl.ReturnError)
+							}
+
+							return
+						}
+
+						if container.ContainerName() != c.containerName {
+							t.Errorf("ContainerName = %v, want %s", container.ContainerName(), c.containerName)
+						}
+						if container.ID() != c.containerID {
+							t.Errorf("ID = %v, want %s", container.ID(), c.containerID)
+						}
+					})
+				}
 			}
 		})
 	}
 }
 
-//nolint:dupword
+//nolint:dupword,maintidx
 func TestDocker_Processes(t *testing.T) {
 	tests := []struct {
 		name                 string
@@ -751,85 +934,180 @@ func TestDocker_Processes(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 
-		t.Run(tt.name, func(t *testing.T) {
-			cl, err := NewDockerMock(tt.dir)
-			if err != nil {
-				t.Error(err)
+		subTest := []struct {
+			name             string
+			recreateQuerier  bool
+			doProcesses      bool
+			doFromPID        bool
+			doFromPIDAbsent  bool
+			haveError        error
+			wantErrNoRuntime bool
+		}{
+			{
+				name:            "full-single-querier",
+				recreateQuerier: false,
+				doProcesses:     true,
+				doFromPID:       true,
+				doFromPIDAbsent: true,
+			},
+			{
+				name:            "full-new-querier",
+				recreateQuerier: true,
+				doProcesses:     true,
+				doFromPID:       true,
+				doFromPIDAbsent: true,
+			},
+			{
+				name:            "from-pid-single-querier",
+				recreateQuerier: false,
+				doProcesses:     false,
+				doFromPID:       true,
+			},
+			{
+				name:            "err-processes",
+				recreateQuerier: true,
+				doProcesses:     true,
+				doFromPID:       false,
+				haveError:       context.DeadlineExceeded,
+			},
+			{
+				name:            "err-frompid",
+				recreateQuerier: true,
+				doProcesses:     false,
+				doFromPID:       true,
+				haveError:       context.DeadlineExceeded,
+			},
+			{
+				name:            "err-frompid-absent",
+				recreateQuerier: true,
+				doProcesses:     false,
+				doFromPID:       false,
+				doFromPIDAbsent: true,
+				haveError:       context.DeadlineExceeded,
+			},
+			{
+				name:            "err-all",
+				recreateQuerier: false,
+				doProcesses:     true,
+				doFromPID:       true,
+				doFromPIDAbsent: true,
+				haveError:       context.DeadlineExceeded,
+			},
+		}
 
-				return
-			}
+		for _, subTT := range subTest {
+			subTT := subTT
 
-			cl.Top = make(map[string]containerTypes.ContainerTopOKBody)
-			cl.TopWaux = make(map[string]containerTypes.ContainerTopOKBody)
+			t.Run(tt.name+"-"+subTT.name, func(t *testing.T) {
+				cl, err := NewDockerMock(tt.dir)
+				if err != nil {
+					t.Error(err)
 
-			for id, s := range tt.top {
-				cl.Top[id] = string2TopBody(s)
-			}
+					return
+				}
 
-			for id, s := range tt.topWaux {
-				cl.TopWaux[id] = string2TopBody(s)
-			}
+				cl.ReturnError = subTT.haveError
+				cl.Top = make(map[string]containerTypes.ContainerTopOKBody)
+				cl.TopWaux = make(map[string]containerTypes.ContainerTopOKBody)
 
-			d := FakeDocker(cl, facts.ContainerFilter{}.ContainerIgnored)
+				for id, s := range tt.top {
+					cl.Top[id] = string2TopBody(s)
+				}
 
-			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
-			defer cancel()
+				for id, s := range tt.topWaux {
+					cl.TopWaux[id] = string2TopBody(s)
+				}
 
-			querier := d.ProcessWithCache()
-			procs, err := querier.Processes(ctx)
-			if err != nil {
-				t.Error(err)
-			}
+				d := FakeDocker(cl, facts.ContainerFilter{}.ContainerIgnored)
 
-			sort.Slice(procs, func(i, j int) bool {
-				return procs[i].PID < procs[j].PID
+				ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+				defer cancel()
+
+				querier := d.ProcessWithCache()
+
+				if subTT.doProcesses {
+					procs, err := querier.Processes(ctx)
+					if err != nil {
+						if subTT.haveError != nil && !errors.Is(err, subTT.haveError) {
+							t.Error(err)
+						}
+
+						return
+					}
+
+					sort.Slice(procs, func(i, j int) bool {
+						return procs[i].PID < procs[j].PID
+					})
+					sort.Slice(tt.wantProcesses, func(i, j int) bool {
+						return tt.wantProcesses[i].PID < tt.wantProcesses[j].PID
+					})
+
+					if diff := cmp.Diff(tt.wantProcesses, procs); diff != "" {
+						t.Errorf("procs diff: %v", diff)
+					}
+				}
+
+				if subTT.doFromPID {
+					for pid, c := range tt.wantContainerFromPID {
+						if subTT.recreateQuerier {
+							querier = d.ProcessWithCache()
+						}
+
+						got, err := querier.ContainerFromPID(ctx, "", pid)
+						if err != nil {
+							if subTT.haveError != nil && !errors.Is(err, subTT.haveError) {
+								t.Error(err)
+							}
+
+							return
+						}
+
+						if diff := c.Diff(got); diff != "" {
+							t.Errorf("ContainerFromPID(%d]): %v", pid, diff)
+						}
+
+						if subTT.recreateQuerier {
+							querier = d.ProcessWithCache()
+						}
+
+						// yes we always pass the SAME containerID. This container ID is only a hint, wrong value should be an issue.
+						got, err = querier.ContainerFromPID(ctx, "b59746cf51fa8b08eb228e5f4fc4bc28446a6f7ca19cdc3c23016f932b56003f", pid)
+						if err != nil {
+							if subTT.haveError != nil && !errors.Is(err, subTT.haveError) {
+								t.Error(err)
+							}
+
+							return
+						}
+
+						if diff := c.Diff(got); diff != "" {
+							t.Errorf("ContainerFromPID(%d]): %v", pid, diff)
+						}
+					}
+				}
+
+				if subTT.doFromPIDAbsent {
+					for _, pid := range tt.notContainerForPID {
+						if subTT.recreateQuerier {
+							querier = d.ProcessWithCache()
+						}
+
+						got, err := querier.ContainerFromPID(ctx, "", pid)
+						if err != nil {
+							if subTT.haveError != nil && !errors.Is(err, subTT.haveError) {
+								t.Error(err)
+							}
+
+							return
+						}
+
+						if got != nil {
+							t.Errorf("found a container for PID=%d: %v, want none", pid, got)
+						}
+					}
+				}
 			})
-			sort.Slice(tt.wantProcesses, func(i, j int) bool {
-				return tt.wantProcesses[i].PID < tt.wantProcesses[j].PID
-			})
-
-			if diff := cmp.Diff(tt.wantProcesses, procs); diff != "" {
-				t.Errorf("procs diff: %v", diff)
-			}
-
-			for pid, c := range tt.wantContainerFromPID {
-				got, err := querier.ContainerFromPID(ctx, "", pid)
-				if err != nil {
-					t.Error(err)
-
-					return
-				}
-
-				if diff := c.Diff(got); diff != "" {
-					t.Errorf("ContainerFromPID(%d]): %v", pid, diff)
-				}
-
-				// yes we always pass the SAME containerID. This container ID is only a hint, wrong value should be an issue.
-				got, err = querier.ContainerFromPID(ctx, "b59746cf51fa8b08eb228e5f4fc4bc28446a6f7ca19cdc3c23016f932b56003f", pid)
-				if err != nil {
-					t.Error(err)
-
-					return
-				}
-
-				if diff := c.Diff(got); diff != "" {
-					t.Errorf("ContainerFromPID(%d]): %v", pid, diff)
-				}
-			}
-
-			for _, pid := range tt.notContainerForPID {
-				got, err := querier.ContainerFromPID(ctx, "", pid)
-				if err != nil {
-					t.Error(err)
-
-					return
-				}
-
-				if got != nil {
-					t.Errorf("found a container for PID=%d: %v, want none", pid, got)
-				}
-			}
-		})
+		}
 	}
 }
 
@@ -1038,5 +1316,66 @@ func TestPsTime2Second(t *testing.T) {
 		if got != c.want {
 			t.Errorf("psTime2second(%#v) == %v, want %v", c.in, got, c.want)
 		}
+	}
+}
+
+func Test_maybeWrapError(t *testing.T) {
+	var (
+		errNoConnection1 = docker.ErrorConnectionFailed("unix:///var/run/docker.sock")
+		errNoConnection2 = docker.ErrorConnectionFailed("tcp://1.2.3.4:7945/")
+	)
+
+	tests := []struct {
+		name          string
+		errInput      error
+		workedOnce    bool
+		wantNoRuntime bool
+	}{
+		{
+			name:       "nil error",
+			errInput:   nil,
+			workedOnce: false,
+		},
+		{
+			name:       "context deadline",
+			errInput:   context.DeadlineExceeded,
+			workedOnce: false,
+		},
+		{
+			name:       "context deadline 2",
+			errInput:   context.DeadlineExceeded,
+			workedOnce: true,
+		},
+		{
+			name:          "no runtime 1",
+			errInput:      errNoConnection1,
+			workedOnce:    false,
+			wantNoRuntime: true,
+		},
+		{
+			name:          "no runtime 2",
+			errInput:      errNoConnection2,
+			workedOnce:    false,
+			wantNoRuntime: true,
+		},
+		{
+			name:          "not no runtime",
+			errInput:      errNoConnection1,
+			workedOnce:    true,
+			wantNoRuntime: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := maybeWrapError(tt.errInput, tt.workedOnce)
+
+			if !errors.Is(got, tt.errInput) {
+				t.Errorf("maybeWrapError() = %v, want is %v", got, tt.errInput)
+			}
+
+			if tt.wantNoRuntime && !errors.As(got, &facts.NoRuntimeError{}) {
+				t.Errorf("maybeWrapError() = %v, want NoRuntimeError", got)
+			}
+		})
 	}
 }

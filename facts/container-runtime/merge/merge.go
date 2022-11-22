@@ -134,7 +134,7 @@ func (r *Runtime) Containers(ctx context.Context, maxAge time.Duration, includeI
 
 	if len(containers) == 0 {
 		if errs != nil {
-			return nil, errs
+			return nil, fixMultiError(errs)
 		}
 
 		return nil, nil
@@ -317,7 +317,7 @@ func (r *Runtime) Metrics(ctx context.Context, now time.Time) ([]types.MetricPoi
 		points = append(points, runtimePoints...)
 	}
 
-	return points, errors
+	return points, fixMultiError(errors)
 }
 
 func (r *Runtime) MetricsMinute(ctx context.Context, now time.Time) ([]types.MetricPoint, error) {
@@ -334,7 +334,7 @@ func (r *Runtime) MetricsMinute(ctx context.Context, now time.Time) ([]types.Met
 		points = append(points, runtimePoints...)
 	}
 
-	return points, errors
+	return points, fixMultiError(errors)
 }
 
 type mergeProcessQuerier struct {
@@ -388,7 +388,7 @@ func (m mergeProcessQuerier) ContainerFromCGroup(ctx context.Context, cgroupData
 	}
 
 	if errs != nil {
-		return nil, errs
+		return nil, fixMultiError(errs)
 	}
 
 	return nil, nil
@@ -420,7 +420,7 @@ func (m mergeProcessQuerier) ContainerFromPID(ctx context.Context, parentContain
 	}
 
 	if errs != nil {
-		return nil, errs
+		return nil, fixMultiError(errs)
 	}
 
 	return nil, nil

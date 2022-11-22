@@ -38,6 +38,7 @@ type MockDockerClient struct {
 	Version        dockerTypes.Version
 	Top            map[string]containerTypes.ContainerTopOKBody
 	TopWaux        map[string]containerTypes.ContainerTopOKBody
+	ReturnError    error
 
 	TopCallCount int
 }
@@ -60,6 +61,10 @@ func (cl *MockDockerClient) ContainerExecCreate(ctx context.Context, container s
 
 // ContainerInspect return inspect for in-memory list of containers.
 func (cl *MockDockerClient) ContainerInspect(ctx context.Context, container string) (dockerTypes.ContainerJSON, error) {
+	if cl.ReturnError != nil {
+		return dockerTypes.ContainerJSON{}, cl.ReturnError
+	}
+
 	for _, c := range cl.Containers {
 		if c.ID == container || c.Name == "/"+container {
 			return c, nil
@@ -71,6 +76,10 @@ func (cl *MockDockerClient) ContainerInspect(ctx context.Context, container stri
 
 // ContainerList list containers from in-memory list.
 func (cl *MockDockerClient) ContainerList(ctx context.Context, options dockerTypes.ContainerListOptions) ([]dockerTypes.Container, error) {
+	if cl.ReturnError != nil {
+		return nil, cl.ReturnError
+	}
+
 	if !reflect.DeepEqual(options, dockerTypes.ContainerListOptions{All: true}) {
 		return nil, fmt.Errorf("ContainerList %w with options other than all=True", errNotImplemented)
 	}
@@ -93,6 +102,10 @@ func (cl *MockDockerClient) ContainerList(ctx context.Context, options dockerTyp
 func (cl *MockDockerClient) ContainerTop(ctx context.Context, container string, arguments []string) (containerTypes.ContainerTopOKBody, error) {
 	cl.TopCallCount++
 
+	if cl.ReturnError != nil {
+		return containerTypes.ContainerTopOKBody{}, cl.ReturnError
+	}
+
 	if len(arguments) == 0 {
 		return cl.Top[container], nil
 	}
@@ -106,12 +119,19 @@ func (cl *MockDockerClient) ContainerTop(ctx context.Context, container string, 
 
 // Events do events.
 func (cl *MockDockerClient) Events(ctx context.Context, options dockerTypes.EventsOptions) (<-chan events.Message, <-chan error) {
+	if cl.ReturnError != nil {
+		ch := make(chan error, 1)
+		ch <- cl.ReturnError
+
+		return nil, ch
+	}
+
 	if cl.EventChanMaker != nil {
 		return cl.EventChanMaker(), nil
 	}
 
 	ch := make(chan error, 1)
-	ch <- fmt.Errorf("ContainerTop %w", errNotImplemented)
+	ch <- fmt.Errorf("Events %w", errNotImplemented)
 
 	return nil, ch
 }
@@ -128,11 +148,19 @@ func (cl *MockDockerClient) NetworkList(ctx context.Context, options dockerTypes
 
 // Ping do nothing.
 func (cl *MockDockerClient) Ping(ctx context.Context) (dockerTypes.Ping, error) {
+	if cl.ReturnError != nil {
+		return dockerTypes.Ping{}, cl.ReturnError
+	}
+
 	return dockerTypes.Ping{}, nil
 }
 
 // ServerVersion do server version.
 func (cl *MockDockerClient) ServerVersion(ctx context.Context) (dockerTypes.Version, error) {
+	if cl.ReturnError != nil {
+		return dockerTypes.Version{}, cl.ReturnError
+	}
+
 	if len(cl.Version.Components) == 0 {
 		return dockerTypes.Version{
 			Version: "42",
@@ -144,6 +172,10 @@ func (cl *MockDockerClient) ServerVersion(ctx context.Context) (dockerTypes.Vers
 
 // Close the docker client.
 func (cl *MockDockerClient) Close() error {
+	if cl.ReturnError != nil {
+		return cl.ReturnError
+	}
+
 	return nil
 }
 

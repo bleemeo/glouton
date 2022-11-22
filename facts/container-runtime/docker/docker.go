@@ -158,13 +158,19 @@ func (d *Docker) Containers(ctx context.Context, maxAge time.Duration, includeIg
 	d.l.Lock()
 	defer d.l.Unlock()
 
+	container, err := d.getContainers(ctx, maxAge, includeIgnored)
+	if err != nil && !d.workedOnce {
+		return nil, nil
+	}
+
+	return container, err
+}
+
+// getContainers return Docker containers.
+func (d *Docker) getContainers(ctx context.Context, maxAge time.Duration, includeIgnored bool) (containers []facts.Container, err error) {
 	if time.Since(d.lastUpdate) >= maxAge {
 		err = d.updateContainers(ctx)
 		if err != nil {
-			if !d.workedOnce {
-				return nil, nil
-			}
-
 			return nil, err
 		}
 	}
@@ -1035,8 +1041,26 @@ func (c dockerContainer) PID() int {
 }
 
 var dockerCGroupRE = regexp.MustCompile(
-	`(?m:^\d+:[^:]+:(/kubepods/.*pod[0-9a-fA-F-]+/|.*/docker[-/])([0-9a-fA-F]+)(\.scope)?$)`,
+	`(?m:^(0::/\.\./|.*?(/kubepods/.*pod[0-9a-fA-F-]+/|/docker[-/]))(?P<container_id>[0-9a-fA-F]{64}))`,
 )
+
+// maybeWrapError wraps the error inside a NoRuntimeError when Docker isn't running.
+func maybeWrapError(err error, workedOnce bool) error {
+	if workedOnce {
+		// If connection worker recently, Docker is likely to be running.
+		return err
+	}
+
+	if errors.Is(err, context.DeadlineExceeded) {
+		return err
+	}
+
+	if docker.IsErrConnectionFailed(err) {
+		return facts.NewNoRuntimeError(err)
+	}
+
+	return err
+}
 
 type dockerProcessQuerier struct {
 	d                   *Docker
@@ -1063,14 +1087,12 @@ func (d *dockerProcessQuerier) Processes(ctx context.Context) ([]facts.Process, 
 
 func (d *dockerProcessQuerier) fillContainers(ctx context.Context) error {
 	if d.containers == nil {
-		_, err := d.d.Containers(ctx, 0, false)
 		d.d.l.Lock()
 
+		_, err := d.d.getContainers(ctx, 0, false)
 		if err != nil {
 			d.containers = make(map[string]dockerContainer)
-			if !d.d.workedOnce {
-				err = nil
-			}
+			err = maybeWrapError(err, d.d.workedOnce)
 
 			d.errListContainers = err
 
@@ -1177,10 +1199,10 @@ func (d *dockerProcessQuerier) top(ctx context.Context, c facts.Container) (cont
 	defer cancel()
 
 	d.d.l.Lock()
-	cl, err := d.d.getClient(ctx)
 
-	if err != nil && !d.d.workedOnce {
-		err = nil
+	cl, err := d.d.getClient(ctx)
+	if err != nil {
+		err = maybeWrapError(err, d.d.workedOnce)
 		cl = nil
 	}
 
@@ -1412,8 +1434,8 @@ func (d *dockerProcessQuerier) ContainerFromCGroup(ctx context.Context, cgroupDa
 
 	for _, submatches := range dockerCGroupRE.FindAllStringSubmatch(cgroupData, -1) {
 		if containerID == "" {
-			containerID = submatches[2]
-		} else if containerID != submatches[2] {
+			containerID = submatches[dockerCGroupRE.SubexpIndex("container_id")]
+		} else if containerID != submatches[dockerCGroupRE.SubexpIndex("container_id")] {
 			// different value for the same PID. Abort detection of container ID from cgroup
 			return nil, fmt.Errorf("%w: more than one ID from cgroup: %v != %v", ErrDockerUnexcepted, containerID, submatches[2])
 		}
@@ -1424,7 +1446,11 @@ func (d *dockerProcessQuerier) ContainerFromCGroup(ctx context.Context, cgroupDa
 	}
 
 	if err := d.fillContainers(ctx); err != nil {
-		return nil, err
+		// When the cgroup matched the regexp, we don't want to return NoRuntimeError but
+		// we want to return ErrContainerDoesNotExists.
+		if !errors.As(err, &facts.NoRuntimeError{}) {
+			return nil, err
+		}
 	}
 
 	c, ok := d.containers[containerID]

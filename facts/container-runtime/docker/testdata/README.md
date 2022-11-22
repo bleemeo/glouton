@@ -17,3 +17,5 @@ mkdir ${_testdir}
 docker version --format '{{ .Server|json}}' > ${_testdir}/docker-version.json
 docker inspect `docker ps -a --format '{{ .ID }}'` > ${_testdir}/docker-containers.json
 ```
+
+To get cgroup values of a process, use `minikube ssh` and cat on /proc/PID/cgroup.
