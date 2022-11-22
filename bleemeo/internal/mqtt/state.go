@@ -136,7 +136,7 @@ func (rs *reloadState) Close() {
 		}
 	}()
 
-	if rs.mqtt.IsConnectionOpen() {
+	if rs.mqtt != nil && rs.mqtt.IsConnectionOpen() {
 		cause := "Clean shutdown"
 
 		if _, err := os.Stat(rs.upgradeFile); err == nil {
