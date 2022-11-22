@@ -318,7 +318,11 @@ func (d *Discovery) createInput(service Service) error {
 				username = "postgres"
 			}
 
-			input, err = postgresql.New(fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=postgres sslmode=disable", ip, port, username, service.Config.Password))
+			address := fmt.Sprintf(
+				"host=%s port=%d user=%s password=%s dbname=postgres sslmode=disable",
+				ip, port, username, service.Config.Password,
+			)
+			input, err = postgresql.New(address, service.Config.DetailedItems)
 		}
 	case RabbitMQService:
 		mgmtPort := 15672
