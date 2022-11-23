@@ -281,31 +281,23 @@ func requestsAndLimits(cache kubeCache, now time.Time) []types.MetricPoint {
 	resourceMap := make(map[object]resources, len(cache.pods))
 
 	for _, pod := range cache.pods {
-		// Sum requests and limits over all containers in the pod.
-		cpuRequests, cpuLimits, memoryRequests, memoryLimits := 0., 0., 0., 0.
-
-		for _, container := range pod.Spec.Containers {
-			cpuRequests += container.Resources.Requests.Cpu().AsApproximateFloat64()
-			cpuLimits += container.Resources.Limits.Cpu().AsApproximateFloat64()
-			memoryRequests += container.Resources.Requests.Memory().AsApproximateFloat64()
-			memoryLimits += container.Resources.Limits.Memory().AsApproximateFloat64()
-		}
-
 		kind, name := podOwner(pod, cache.replicasetOwnerByUID)
-
 		obj := object{
 			Kind:      kind,
 			Name:      name,
 			Namespace: podNamespace(pod),
 		}
 
-		prevResources := resourceMap[obj]
+		// Sum requests and limits over all containers in the pod.
+		for _, container := range pod.Spec.Containers {
+			prevResources := resourceMap[obj]
 
-		resourceMap[obj] = resources{
-			cpuRequests:    prevResources.cpuRequests + cpuRequests,
-			cpuLimits:      prevResources.cpuLimits + cpuLimits,
-			memoryRequests: prevResources.memoryRequests + memoryRequests,
-			memoryLimits:   prevResources.memoryLimits + memoryLimits,
+			resourceMap[obj] = resources{
+				cpuRequests:    prevResources.cpuRequests + container.Resources.Requests.Cpu().AsApproximateFloat64(),
+				cpuLimits:      prevResources.cpuLimits + container.Resources.Limits.Cpu().AsApproximateFloat64(),
+				memoryRequests: prevResources.memoryRequests + container.Resources.Requests.Memory().AsApproximateFloat64(),
+				memoryLimits:   prevResources.memoryLimits + container.Resources.Limits.Memory().AsApproximateFloat64(),
+			}
 		}
 	}
 
