@@ -1,5 +1,5 @@
 # File used to generate cluster_metrics folder content.
-# Cluster started with "minikube start --node 3"
+# Cluster started with "minikube start --nodes 3"
 # Minikube 1.28.0, Docker 20.10.21, Kubernetes 1.25.3
 # 
 # kubectl get pods --all-namespaces -o yaml > pods.yaml
@@ -286,6 +286,23 @@ spec:
         app: running-replicaset
     spec:
       containers:
-        - name: busybox
+        - name: busybox1
           image: busybox:latest
           command: ["sleep", "infinity"]
+          resources:
+            requests:
+              memory: "10Mi"
+              cpu: "100m"
+            limits:
+              memory: "50Mi"
+              cpu: "200m"
+        - name: busybox2
+          image: busybox:latest
+          command: ["sleep", "infinity"]
+          resources:
+            requests:
+              memory: "10Mi"
+              cpu: "100m"
+            limits:
+              memory: "50Mi"
+              cpu: "200m"

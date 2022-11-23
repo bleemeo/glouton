@@ -7,7 +7,7 @@ items:
       deployment.kubernetes.io/desired-replicas: "1"
       deployment.kubernetes.io/max-replicas: "2"
       deployment.kubernetes.io/revision: "1"
-    creationTimestamp: "2022-11-17T09:23:55Z"
+    creationTimestamp: "2022-11-23T10:37:37Z"
     generation: 1
     labels:
       k8s-app: kube-dns
@@ -28,7 +28,7 @@ items:
             f:pod-template-hash: {}
           f:ownerReferences:
             .: {}
-            k:{"uid":"3095310e-65db-447f-9843-a90b08b25375"}: {}
+            k:{"uid":"a5f017fe-42ab-47fe-9391-00841b16af9c"}: {}
         f:spec:
           f:replicas: {}
           f:selector: {}
@@ -139,7 +139,7 @@ items:
                   f:name: {}
       manager: kube-controller-manager
       operation: Update
-      time: "2022-11-17T09:23:55Z"
+      time: "2022-11-23T10:37:37Z"
     - apiVersion: apps/v1
       fieldsType: FieldsV1
       fieldsV1:
@@ -152,7 +152,7 @@ items:
       manager: kube-controller-manager
       operation: Update
       subresource: status
-      time: "2022-11-17T09:24:18Z"
+      time: "2022-11-23T10:37:59Z"
     name: coredns-565d847f94
     namespace: kube-system
     ownerReferences:
@@ -161,9 +161,9 @@ items:
       controller: true
       kind: Deployment
       name: coredns
-      uid: 3095310e-65db-447f-9843-a90b08b25375
-    resourceVersion: "449"
-    uid: 9ad0942d-cf68-475d-bba0-cce7971bda03
+      uid: a5f017fe-42ab-47fe-9391-00841b16af9c
+    resourceVersion: "451"
+    uid: 6b75f533-af3b-44c5-9fba-a515944527ec
   spec:
     replicas: 1
     selector:
@@ -283,7 +283,7 @@ items:
       deployment.kubernetes.io/desired-replicas: "1"
       deployment.kubernetes.io/max-replicas: "2"
       deployment.kubernetes.io/revision: "1"
-    creationTimestamp: "2022-11-17T09:59:21Z"
+    creationTimestamp: "2022-11-23T10:38:28Z"
     generation: 1
     labels:
       app: init-failed
@@ -304,7 +304,7 @@ items:
             f:pod-template-hash: {}
           f:ownerReferences:
             .: {}
-            k:{"uid":"bafdbb5c-81ce-44c6-85f8-e3318c2360c6"}: {}
+            k:{"uid":"817af7f5-4a65-49a0-94b6-83d6580b3988"}: {}
         f:spec:
           f:replicas: {}
           f:selector: {}
@@ -343,7 +343,7 @@ items:
               f:terminationGracePeriodSeconds: {}
       manager: kube-controller-manager
       operation: Update
-      time: "2022-11-17T09:59:21Z"
+      time: "2022-11-23T10:38:28Z"
     - apiVersion: apps/v1
       fieldsType: FieldsV1
       fieldsV1:
@@ -354,7 +354,7 @@ items:
       manager: kube-controller-manager
       operation: Update
       subresource: status
-      time: "2022-11-17T09:59:21Z"
+      time: "2022-11-23T10:38:28Z"
     name: init-failed-76d9854d6c
     namespace: namespace-1
     ownerReferences:
@@ -363,9 +363,9 @@ items:
       controller: true
       kind: Deployment
       name: init-failed
-      uid: bafdbb5c-81ce-44c6-85f8-e3318c2360c6
-    resourceVersion: "2815"
-    uid: b439774b-b904-4412-ab53-f71f4008a157
+      uid: 817af7f5-4a65-49a0-94b6-83d6580b3988
+    resourceVersion: "568"
+    uid: 3d88faf3-5292-4a72-b9a1-2295341634b7
   spec:
     replicas: 1
     selector:
@@ -416,7 +416,7 @@ items:
       deployment.kubernetes.io/desired-replicas: "1"
       deployment.kubernetes.io/max-replicas: "2"
       deployment.kubernetes.io/revision: "1"
-    creationTimestamp: "2022-11-17T09:59:21Z"
+    creationTimestamp: "2022-11-23T10:38:28Z"
     generation: 1
     labels:
       app: inside-init
@@ -437,7 +437,7 @@ items:
             f:pod-template-hash: {}
           f:ownerReferences:
             .: {}
-            k:{"uid":"ba440836-3088-422b-9547-ed8b2ed97971"}: {}
+            k:{"uid":"7b33a856-818e-4fc8-9bfd-205e8fa68e43"}: {}
         f:spec:
           f:replicas: {}
           f:selector: {}
@@ -476,7 +476,7 @@ items:
               f:terminationGracePeriodSeconds: {}
       manager: kube-controller-manager
       operation: Update
-      time: "2022-11-17T09:59:21Z"
+      time: "2022-11-23T10:38:28Z"
     - apiVersion: apps/v1
       fieldsType: FieldsV1
       fieldsV1:
@@ -487,7 +487,7 @@ items:
       manager: kube-controller-manager
       operation: Update
       subresource: status
-      time: "2022-11-17T09:59:21Z"
+      time: "2022-11-23T10:38:28Z"
     name: inside-init-6ffd7dc8cd
     namespace: namespace-1
     ownerReferences:
@@ -496,9 +496,9 @@ items:
       controller: true
       kind: Deployment
       name: inside-init
-      uid: ba440836-3088-422b-9547-ed8b2ed97971
-    resourceVersion: "2814"
-    uid: 241b60f9-0145-46ba-b683-75b7ef4a6e21
+      uid: 7b33a856-818e-4fc8-9bfd-205e8fa68e43
+    resourceVersion: "584"
+    uid: 9a8be9a5-3885-429f-8769-565bcf85e50e
   spec:
     replicas: 1
     selector:
@@ -548,7 +548,7 @@ items:
       deployment.kubernetes.io/desired-replicas: "1"
       deployment.kubernetes.io/max-replicas: "2"
       deployment.kubernetes.io/revision: "1"
-    creationTimestamp: "2022-11-17T09:59:21Z"
+    creationTimestamp: "2022-11-23T10:38:28Z"
     generation: 1
     labels:
       app: running-init-ok
@@ -569,7 +569,7 @@ items:
             f:pod-template-hash: {}
           f:ownerReferences:
             .: {}
-            k:{"uid":"47aeed7d-4ffe-44d8-b86e-8b04e218bc0a"}: {}
+            k:{"uid":"87954088-99ae-4018-99fa-71d15da8a4a9"}: {}
         f:spec:
           f:replicas: {}
           f:selector: {}
@@ -608,7 +608,7 @@ items:
               f:terminationGracePeriodSeconds: {}
       manager: kube-controller-manager
       operation: Update
-      time: "2022-11-17T09:59:21Z"
+      time: "2022-11-23T10:38:28Z"
     - apiVersion: apps/v1
       fieldsType: FieldsV1
       fieldsV1:
@@ -621,7 +621,7 @@ items:
       manager: kube-controller-manager
       operation: Update
       subresource: status
-      time: "2022-11-17T09:59:34Z"
+      time: "2022-11-23T10:38:41Z"
     name: running-init-ok-c888fff49
     namespace: namespace-1
     ownerReferences:
@@ -630,9 +630,9 @@ items:
       controller: true
       kind: Deployment
       name: running-init-ok
-      uid: 47aeed7d-4ffe-44d8-b86e-8b04e218bc0a
-    resourceVersion: "2972"
-    uid: d6c44af3-5d71-416a-800a-b4ce5d6b5a14
+      uid: 87954088-99ae-4018-99fa-71d15da8a4a9
+    resourceVersion: "836"
+    uid: 69e2bc04-f880-491a-969a-4be86d2d3f0d
   spec:
     replicas: 1
     selector:
@@ -685,7 +685,7 @@ items:
       deployment.kubernetes.io/desired-replicas: "1"
       deployment.kubernetes.io/max-replicas: "2"
       deployment.kubernetes.io/revision: "1"
-    creationTimestamp: "2022-11-17T09:59:21Z"
+    creationTimestamp: "2022-11-23T10:38:28Z"
     generation: 1
     labels:
       app: running-not-ready
@@ -706,7 +706,7 @@ items:
             f:pod-template-hash: {}
           f:ownerReferences:
             .: {}
-            k:{"uid":"cea2632e-2f17-44f4-b2dd-1281f1beac8e"}: {}
+            k:{"uid":"ece29bb9-a6ea-48eb-906e-500dcd68f8d0"}: {}
         f:spec:
           f:replicas: {}
           f:selector: {}
@@ -743,7 +743,7 @@ items:
               f:terminationGracePeriodSeconds: {}
       manager: kube-controller-manager
       operation: Update
-      time: "2022-11-17T09:59:21Z"
+      time: "2022-11-23T10:38:28Z"
     - apiVersion: apps/v1
       fieldsType: FieldsV1
       fieldsV1:
@@ -754,7 +754,7 @@ items:
       manager: kube-controller-manager
       operation: Update
       subresource: status
-      time: "2022-11-17T09:59:21Z"
+      time: "2022-11-23T10:38:28Z"
     name: running-not-ready-59d84c958b
     namespace: namespace-1
     ownerReferences:
@@ -763,9 +763,9 @@ items:
       controller: true
       kind: Deployment
       name: running-not-ready
-      uid: cea2632e-2f17-44f4-b2dd-1281f1beac8e
-    resourceVersion: "2852"
-    uid: 98d01cf4-422b-49c3-9020-0f703c79fced
+      uid: ece29bb9-a6ea-48eb-906e-500dcd68f8d0
+    resourceVersion: "622"
+    uid: 4d873d19-7def-4a78-a88a-9ba600775670
   spec:
     replicas: 1
     selector:
@@ -815,7 +815,7 @@ items:
       deployment.kubernetes.io/desired-replicas: "1"
       deployment.kubernetes.io/max-replicas: "2"
       deployment.kubernetes.io/revision: "1"
-    creationTimestamp: "2022-11-17T10:07:11Z"
+    creationTimestamp: "2022-11-23T10:38:29Z"
     generation: 1
     labels:
       app: crash-loop-backoff
@@ -836,7 +836,7 @@ items:
             f:pod-template-hash: {}
           f:ownerReferences:
             .: {}
-            k:{"uid":"b72e08d1-275c-42d2-8da2-b189437265c1"}: {}
+            k:{"uid":"b9ff2a51-282b-4900-be1d-4aa8b55fdb89"}: {}
         f:spec:
           f:replicas: {}
           f:selector: {}
@@ -864,7 +864,7 @@ items:
               f:terminationGracePeriodSeconds: {}
       manager: kube-controller-manager
       operation: Update
-      time: "2022-11-17T10:07:11Z"
+      time: "2022-11-23T10:38:29Z"
     - apiVersion: apps/v1
       fieldsType: FieldsV1
       fieldsV1:
@@ -875,7 +875,7 @@ items:
       manager: kube-controller-manager
       operation: Update
       subresource: status
-      time: "2022-11-17T10:07:11Z"
+      time: "2022-11-23T10:38:29Z"
     name: crash-loop-backoff-6f7b458877
     namespace: namespace-2
     ownerReferences:
@@ -884,9 +884,9 @@ items:
       controller: true
       kind: Deployment
       name: crash-loop-backoff
-      uid: b72e08d1-275c-42d2-8da2-b189437265c1
-    resourceVersion: "3552"
-    uid: af8e8529-7834-418a-8b7d-e64049e0c273
+      uid: b9ff2a51-282b-4900-be1d-4aa8b55fdb89
+    resourceVersion: "685"
+    uid: bd5741ad-7d79-4156-9d75-8989a10180af
   spec:
     replicas: 1
     selector:
@@ -927,7 +927,7 @@ items:
       deployment.kubernetes.io/desired-replicas: "1"
       deployment.kubernetes.io/max-replicas: "2"
       deployment.kubernetes.io/revision: "1"
-    creationTimestamp: "2022-11-17T10:07:11Z"
+    creationTimestamp: "2022-11-23T10:38:29Z"
     generation: 1
     labels:
       app: image-pull-backoff
@@ -948,7 +948,7 @@ items:
             f:pod-template-hash: {}
           f:ownerReferences:
             .: {}
-            k:{"uid":"3ac08c4b-b079-41f3-8114-34f97dabe514"}: {}
+            k:{"uid":"59c0cfc4-577e-4240-aef6-5a8eb832754b"}: {}
         f:spec:
           f:replicas: {}
           f:selector: {}
@@ -975,7 +975,7 @@ items:
               f:terminationGracePeriodSeconds: {}
       manager: kube-controller-manager
       operation: Update
-      time: "2022-11-17T10:07:11Z"
+      time: "2022-11-23T10:38:29Z"
     - apiVersion: apps/v1
       fieldsType: FieldsV1
       fieldsV1:
@@ -986,7 +986,7 @@ items:
       manager: kube-controller-manager
       operation: Update
       subresource: status
-      time: "2022-11-17T10:07:11Z"
+      time: "2022-11-23T10:38:29Z"
     name: image-pull-backoff-5db5d89c86
     namespace: namespace-2
     ownerReferences:
@@ -995,9 +995,9 @@ items:
       controller: true
       kind: Deployment
       name: image-pull-backoff
-      uid: 3ac08c4b-b079-41f3-8114-34f97dabe514
-    resourceVersion: "3550"
-    uid: eaf0b5d1-f849-4c34-92ba-7a9ad49d66b0
+      uid: 59c0cfc4-577e-4240-aef6-5a8eb832754b
+    resourceVersion: "688"
+    uid: 22e69b7e-9a84-4db7-861d-0cbf99adc24c
   spec:
     replicas: 1
     selector:
@@ -1033,9 +1033,9 @@ items:
     annotations:
       deployment.kubernetes.io/desired-replicas: "2"
       deployment.kubernetes.io/max-replicas: "3"
-      deployment.kubernetes.io/revision: "3"
-    creationTimestamp: "2022-11-17T09:59:21Z"
-    generation: 2
+      deployment.kubernetes.io/revision: "1"
+    creationTimestamp: "2022-11-23T10:38:28Z"
+    generation: 1
     labels:
       app: running-replicas
       pod-template-hash: 6bf69fb969
@@ -1055,7 +1055,7 @@ items:
             f:pod-template-hash: {}
           f:ownerReferences:
             .: {}
-            k:{"uid":"23a0fcdf-bd29-49c4-8bc3-22044cc8c386"}: {}
+            k:{"uid":"fbcda269-ad0a-4e8d-b65e-4e99b0a82d86"}: {}
         f:spec:
           f:replicas: {}
           f:selector: {}
@@ -1083,7 +1083,7 @@ items:
               f:terminationGracePeriodSeconds: {}
       manager: kube-controller-manager
       operation: Update
-      time: "2022-11-17T09:59:26Z"
+      time: "2022-11-23T10:38:28Z"
     - apiVersion: apps/v1
       fieldsType: FieldsV1
       fieldsV1:
@@ -1096,7 +1096,7 @@ items:
       manager: kube-controller-manager
       operation: Update
       subresource: status
-      time: "2022-11-17T09:59:40Z"
+      time: "2022-11-23T10:38:38Z"
     name: running-replicas-6bf69fb969
     namespace: namespace-2
     ownerReferences:
@@ -1105,9 +1105,9 @@ items:
       controller: true
       kind: Deployment
       name: running-replicas
-      uid: 23a0fcdf-bd29-49c4-8bc3-22044cc8c386
-    resourceVersion: "2993"
-    uid: d1320fbd-d302-4740-9cb0-e77c7c0db589
+      uid: fbcda269-ad0a-4e8d-b65e-4e99b0a82d86
+    resourceVersion: "792"
+    uid: 5543e429-a94d-4598-b1d0-41e65a835554
   spec:
     replicas: 2
     selector:
@@ -1139,677 +1139,17 @@ items:
   status:
     availableReplicas: 2
     fullyLabeledReplicas: 2
-    observedGeneration: 2
+    observedGeneration: 1
     readyReplicas: 2
     replicas: 2
 - apiVersion: apps/v1
   kind: ReplicaSet
   metadata:
     annotations:
-      deployment.kubernetes.io/desired-replicas: "2"
-      deployment.kubernetes.io/max-replicas: "3"
-      deployment.kubernetes.io/revision: "2"
-    creationTimestamp: "2022-11-17T09:41:56Z"
-    generation: 4
-    labels:
-      app: running-replicas
-      pod-template-hash: 76cb9df448
-    managedFields:
-    - apiVersion: apps/v1
-      fieldsType: FieldsV1
-      fieldsV1:
-        f:metadata:
-          f:annotations:
-            .: {}
-            f:deployment.kubernetes.io/desired-replicas: {}
-            f:deployment.kubernetes.io/max-replicas: {}
-            f:deployment.kubernetes.io/revision: {}
-          f:labels:
-            .: {}
-            f:app: {}
-            f:pod-template-hash: {}
-          f:ownerReferences:
-            .: {}
-            k:{"uid":"23a0fcdf-bd29-49c4-8bc3-22044cc8c386"}: {}
-        f:spec:
-          f:replicas: {}
-          f:selector: {}
-          f:template:
-            f:metadata:
-              f:labels:
-                .: {}
-                f:app: {}
-                f:pod-template-hash: {}
-            f:spec:
-              f:containers:
-                k:{"name":"busybox"}:
-                  .: {}
-                  f:command: {}
-                  f:image: {}
-                  f:imagePullPolicy: {}
-                  f:name: {}
-                  f:ports:
-                    .: {}
-                    k:{"containerPort":5672,"protocol":"TCP"}:
-                      .: {}
-                      f:containerPort: {}
-                      f:protocol: {}
-                  f:resources: {}
-                  f:terminationMessagePath: {}
-                  f:terminationMessagePolicy: {}
-              f:dnsPolicy: {}
-              f:restartPolicy: {}
-              f:schedulerName: {}
-              f:securityContext: {}
-              f:terminationGracePeriodSeconds: {}
-      manager: kube-controller-manager
-      operation: Update
-      time: "2022-11-17T09:59:40Z"
-    - apiVersion: apps/v1
-      fieldsType: FieldsV1
-      fieldsV1:
-        f:status:
-          f:observedGeneration: {}
-          f:replicas: {}
-      manager: kube-controller-manager
-      operation: Update
-      subresource: status
-      time: "2022-11-17T09:59:40Z"
-    name: running-replicas-76cb9df448
-    namespace: namespace-2
-    ownerReferences:
-    - apiVersion: apps/v1
-      blockOwnerDeletion: true
-      controller: true
-      kind: Deployment
-      name: running-replicas
-      uid: 23a0fcdf-bd29-49c4-8bc3-22044cc8c386
-    resourceVersion: "3001"
-    uid: 056fe62c-f132-41f7-912e-b0ccaca83011
-  spec:
-    replicas: 0
-    selector:
-      matchLabels:
-        app: running-replicas
-        pod-template-hash: 76cb9df448
-    template:
-      metadata:
-        creationTimestamp: null
-        labels:
-          app: running-replicas
-          pod-template-hash: 76cb9df448
-      spec:
-        containers:
-        - command:
-          - sleep
-          - infinity
-          image: busybox:latest
-          imagePullPolicy: Always
-          name: busybox
-          ports:
-          - containerPort: 5672
-            protocol: TCP
-          resources: {}
-          terminationMessagePath: /dev/termination-log
-          terminationMessagePolicy: File
-        dnsPolicy: ClusterFirst
-        restartPolicy: Always
-        schedulerName: default-scheduler
-        securityContext: {}
-        terminationGracePeriodSeconds: 30
-  status:
-    observedGeneration: 4
-    replicas: 0
-- apiVersion: apps/v1
-  kind: ReplicaSet
-  metadata:
-    annotations:
-      deployment.kubernetes.io/desired-replicas: "2"
-      deployment.kubernetes.io/max-replicas: "3"
-      deployment.kubernetes.io/revision: "1"
-    creationTimestamp: "2022-11-17T09:38:16Z"
-    generation: 3
-    labels:
-      app: running-replicas
-      pod-template-hash: 7895f6bf46
-    managedFields:
-    - apiVersion: apps/v1
-      fieldsType: FieldsV1
-      fieldsV1:
-        f:metadata:
-          f:annotations:
-            .: {}
-            f:deployment.kubernetes.io/desired-replicas: {}
-            f:deployment.kubernetes.io/max-replicas: {}
-            f:deployment.kubernetes.io/revision: {}
-          f:labels:
-            .: {}
-            f:app: {}
-            f:pod-template-hash: {}
-          f:ownerReferences:
-            .: {}
-            k:{"uid":"23a0fcdf-bd29-49c4-8bc3-22044cc8c386"}: {}
-        f:spec:
-          f:replicas: {}
-          f:selector: {}
-          f:template:
-            f:metadata:
-              f:labels:
-                .: {}
-                f:app: {}
-                f:pod-template-hash: {}
-            f:spec:
-              f:containers:
-                k:{"name":"busybox"}:
-                  .: {}
-                  f:command: {}
-                  f:image: {}
-                  f:imagePullPolicy: {}
-                  f:name: {}
-                  f:ports:
-                    .: {}
-                    k:{"containerPort":5672,"protocol":"TCP"}:
-                      .: {}
-                      f:containerPort: {}
-                      f:protocol: {}
-                  f:readinessProbe:
-                    .: {}
-                    f:exec:
-                      .: {}
-                      f:command: {}
-                    f:failureThreshold: {}
-                    f:periodSeconds: {}
-                    f:successThreshold: {}
-                    f:timeoutSeconds: {}
-                  f:resources: {}
-                  f:terminationMessagePath: {}
-                  f:terminationMessagePolicy: {}
-              f:dnsPolicy: {}
-              f:restartPolicy: {}
-              f:schedulerName: {}
-              f:securityContext: {}
-              f:terminationGracePeriodSeconds: {}
-      manager: kube-controller-manager
-      operation: Update
-      time: "2022-11-17T09:42:06Z"
-    - apiVersion: apps/v1
-      fieldsType: FieldsV1
-      fieldsV1:
-        f:status:
-          f:observedGeneration: {}
-          f:replicas: {}
-      manager: kube-controller-manager
-      operation: Update
-      subresource: status
-      time: "2022-11-17T09:42:06Z"
-    name: running-replicas-7895f6bf46
-    namespace: namespace-2
-    ownerReferences:
-    - apiVersion: apps/v1
-      blockOwnerDeletion: true
-      controller: true
-      kind: Deployment
-      name: running-replicas
-      uid: 23a0fcdf-bd29-49c4-8bc3-22044cc8c386
-    resourceVersion: "1731"
-    uid: 6d3ecf4b-f295-457b-b05b-3ef77a8f5c39
-  spec:
-    replicas: 0
-    selector:
-      matchLabels:
-        app: running-replicas
-        pod-template-hash: 7895f6bf46
-    template:
-      metadata:
-        creationTimestamp: null
-        labels:
-          app: running-replicas
-          pod-template-hash: 7895f6bf46
-      spec:
-        containers:
-        - command:
-          - sleep
-          - infinity
-          image: busybox:latest
-          imagePullPolicy: Always
-          name: busybox
-          ports:
-          - containerPort: 5672
-            protocol: TCP
-          readinessProbe:
-            exec:
-              command:
-              - exit 0
-            failureThreshold: 3
-            periodSeconds: 10
-            successThreshold: 1
-            timeoutSeconds: 1
-          resources: {}
-          terminationMessagePath: /dev/termination-log
-          terminationMessagePolicy: File
-        dnsPolicy: ClusterFirst
-        restartPolicy: Always
-        schedulerName: default-scheduler
-        securityContext: {}
-        terminationGracePeriodSeconds: 30
-  status:
-    observedGeneration: 3
-    replicas: 0
-- apiVersion: apps/v1
-  kind: ReplicaSet
-  metadata:
-    annotations:
-      deployment.kubernetes.io/desired-replicas: "1"
-      deployment.kubernetes.io/max-replicas: "2"
-      deployment.kubernetes.io/revision: "2"
-    creationTimestamp: "2022-11-17T09:41:56Z"
-    generation: 2
-    labels:
-      app: running-ready
-      pod-template-hash: 54c5cfbbdd
-    managedFields:
-    - apiVersion: apps/v1
-      fieldsType: FieldsV1
-      fieldsV1:
-        f:metadata:
-          f:annotations:
-            .: {}
-            f:deployment.kubernetes.io/desired-replicas: {}
-            f:deployment.kubernetes.io/max-replicas: {}
-            f:deployment.kubernetes.io/revision: {}
-          f:labels:
-            .: {}
-            f:app: {}
-            f:pod-template-hash: {}
-          f:ownerReferences:
-            .: {}
-            k:{"uid":"51c8e9d0-5034-428c-9e46-da5a95908ec5"}: {}
-        f:spec:
-          f:replicas: {}
-          f:selector: {}
-          f:template:
-            f:metadata:
-              f:labels:
-                .: {}
-                f:app: {}
-                f:pod-template-hash: {}
-            f:spec:
-              f:containers:
-                k:{"name":"busybox"}:
-                  .: {}
-                  f:command: {}
-                  f:image: {}
-                  f:imagePullPolicy: {}
-                  f:name: {}
-                  f:ports:
-                    .: {}
-                    k:{"containerPort":5672,"protocol":"TCP"}:
-                      .: {}
-                      f:containerPort: {}
-                      f:protocol: {}
-                  f:readinessProbe:
-                    .: {}
-                    f:exec:
-                      .: {}
-                      f:command: {}
-                    f:failureThreshold: {}
-                    f:periodSeconds: {}
-                    f:successThreshold: {}
-                    f:timeoutSeconds: {}
-                  f:resources: {}
-                  f:terminationMessagePath: {}
-                  f:terminationMessagePolicy: {}
-              f:dnsPolicy: {}
-              f:restartPolicy: {}
-              f:schedulerName: {}
-              f:securityContext: {}
-              f:terminationGracePeriodSeconds: {}
-      manager: kube-controller-manager
-      operation: Update
-      time: "2022-11-17T09:46:28Z"
-    - apiVersion: apps/v1
-      fieldsType: FieldsV1
-      fieldsV1:
-        f:status:
-          f:observedGeneration: {}
-          f:replicas: {}
-      manager: kube-controller-manager
-      operation: Update
-      subresource: status
-      time: "2022-11-17T09:46:28Z"
-    name: running-ready-54c5cfbbdd
-    namespace: namespace-3
-    ownerReferences:
-    - apiVersion: apps/v1
-      blockOwnerDeletion: true
-      controller: true
-      kind: Deployment
-      name: running-ready
-      uid: 51c8e9d0-5034-428c-9e46-da5a95908ec5
-    resourceVersion: "2067"
-    uid: 615928a6-7757-45fe-b752-beafd005c4c9
-  spec:
-    replicas: 0
-    selector:
-      matchLabels:
-        app: running-ready
-        pod-template-hash: 54c5cfbbdd
-    template:
-      metadata:
-        creationTimestamp: null
-        labels:
-          app: running-ready
-          pod-template-hash: 54c5cfbbdd
-      spec:
-        containers:
-        - command:
-          - sleep
-          - infinity
-          image: busybox:latest
-          imagePullPolicy: Always
-          name: busybox
-          ports:
-          - containerPort: 5672
-            protocol: TCP
-          readinessProbe:
-            exec:
-              command:
-              - exit
-            failureThreshold: 3
-            periodSeconds: 10
-            successThreshold: 1
-            timeoutSeconds: 1
-          resources: {}
-          terminationMessagePath: /dev/termination-log
-          terminationMessagePolicy: File
-        dnsPolicy: ClusterFirst
-        restartPolicy: Always
-        schedulerName: default-scheduler
-        securityContext: {}
-        terminationGracePeriodSeconds: 30
-  status:
-    observedGeneration: 2
-    replicas: 0
-- apiVersion: apps/v1
-  kind: ReplicaSet
-  metadata:
-    annotations:
       deployment.kubernetes.io/desired-replicas: "1"
       deployment.kubernetes.io/max-replicas: "2"
       deployment.kubernetes.io/revision: "1"
-    creationTimestamp: "2022-11-17T09:38:16Z"
-    generation: 2
-    labels:
-      app: running-ready
-      pod-template-hash: 5dffdb8f6d
-    managedFields:
-    - apiVersion: apps/v1
-      fieldsType: FieldsV1
-      fieldsV1:
-        f:metadata:
-          f:annotations:
-            .: {}
-            f:deployment.kubernetes.io/desired-replicas: {}
-            f:deployment.kubernetes.io/max-replicas: {}
-            f:deployment.kubernetes.io/revision: {}
-          f:labels:
-            .: {}
-            f:app: {}
-            f:pod-template-hash: {}
-          f:ownerReferences:
-            .: {}
-            k:{"uid":"51c8e9d0-5034-428c-9e46-da5a95908ec5"}: {}
-        f:spec:
-          f:replicas: {}
-          f:selector: {}
-          f:template:
-            f:metadata:
-              f:labels:
-                .: {}
-                f:app: {}
-                f:pod-template-hash: {}
-            f:spec:
-              f:containers:
-                k:{"name":"busybox"}:
-                  .: {}
-                  f:command: {}
-                  f:image: {}
-                  f:imagePullPolicy: {}
-                  f:name: {}
-                  f:ports:
-                    .: {}
-                    k:{"containerPort":5672,"protocol":"TCP"}:
-                      .: {}
-                      f:containerPort: {}
-                      f:protocol: {}
-                  f:readinessProbe:
-                    .: {}
-                    f:exec:
-                      .: {}
-                      f:command: {}
-                    f:failureThreshold: {}
-                    f:periodSeconds: {}
-                    f:successThreshold: {}
-                    f:timeoutSeconds: {}
-                  f:resources: {}
-                  f:terminationMessagePath: {}
-                  f:terminationMessagePolicy: {}
-              f:dnsPolicy: {}
-              f:restartPolicy: {}
-              f:schedulerName: {}
-              f:securityContext: {}
-              f:terminationGracePeriodSeconds: {}
-      manager: kube-controller-manager
-      operation: Update
-      time: "2022-11-17T09:46:23Z"
-    - apiVersion: apps/v1
-      fieldsType: FieldsV1
-      fieldsV1:
-        f:status:
-          f:observedGeneration: {}
-          f:replicas: {}
-      manager: kube-controller-manager
-      operation: Update
-      subresource: status
-      time: "2022-11-17T09:46:23Z"
-    name: running-ready-5dffdb8f6d
-    namespace: namespace-3
-    ownerReferences:
-    - apiVersion: apps/v1
-      blockOwnerDeletion: true
-      controller: true
-      kind: Deployment
-      name: running-ready
-      uid: 51c8e9d0-5034-428c-9e46-da5a95908ec5
-    resourceVersion: "2040"
-    uid: b24c3275-45ed-4241-80b5-c26ebc131c2b
-  spec:
-    replicas: 0
-    selector:
-      matchLabels:
-        app: running-ready
-        pod-template-hash: 5dffdb8f6d
-    template:
-      metadata:
-        creationTimestamp: null
-        labels:
-          app: running-ready
-          pod-template-hash: 5dffdb8f6d
-      spec:
-        containers:
-        - command:
-          - sleep
-          - infinity
-          image: busybox:latest
-          imagePullPolicy: Always
-          name: busybox
-          ports:
-          - containerPort: 5672
-            protocol: TCP
-          readinessProbe:
-            exec:
-              command:
-              - exit 0
-            failureThreshold: 3
-            periodSeconds: 10
-            successThreshold: 1
-            timeoutSeconds: 1
-          resources: {}
-          terminationMessagePath: /dev/termination-log
-          terminationMessagePolicy: File
-        dnsPolicy: ClusterFirst
-        restartPolicy: Always
-        schedulerName: default-scheduler
-        securityContext: {}
-        terminationGracePeriodSeconds: 30
-  status:
-    observedGeneration: 2
-    replicas: 0
-- apiVersion: apps/v1
-  kind: ReplicaSet
-  metadata:
-    annotations:
-      deployment.kubernetes.io/desired-replicas: "1"
-      deployment.kubernetes.io/max-replicas: "2"
-      deployment.kubernetes.io/revision: "3"
-    creationTimestamp: "2022-11-17T09:46:23Z"
-    generation: 3
-    labels:
-      app: running-ready
-      pod-template-hash: 7f986c4568
-    managedFields:
-    - apiVersion: apps/v1
-      fieldsType: FieldsV1
-      fieldsV1:
-        f:metadata:
-          f:annotations:
-            .: {}
-            f:deployment.kubernetes.io/desired-replicas: {}
-            f:deployment.kubernetes.io/max-replicas: {}
-            f:deployment.kubernetes.io/revision: {}
-          f:labels:
-            .: {}
-            f:app: {}
-            f:pod-template-hash: {}
-          f:ownerReferences:
-            .: {}
-            k:{"uid":"51c8e9d0-5034-428c-9e46-da5a95908ec5"}: {}
-        f:spec:
-          f:replicas: {}
-          f:selector: {}
-          f:template:
-            f:metadata:
-              f:labels:
-                .: {}
-                f:app: {}
-                f:pod-template-hash: {}
-            f:spec:
-              f:containers:
-                k:{"name":"busybox"}:
-                  .: {}
-                  f:command: {}
-                  f:image: {}
-                  f:imagePullPolicy: {}
-                  f:name: {}
-                  f:ports:
-                    .: {}
-                    k:{"containerPort":5672,"protocol":"TCP"}:
-                      .: {}
-                      f:containerPort: {}
-                      f:protocol: {}
-                  f:readinessProbe:
-                    .: {}
-                    f:exec:
-                      .: {}
-                      f:command: {}
-                    f:failureThreshold: {}
-                    f:periodSeconds: {}
-                    f:successThreshold: {}
-                    f:timeoutSeconds: {}
-                  f:resources: {}
-                  f:terminationMessagePath: {}
-                  f:terminationMessagePolicy: {}
-              f:dnsPolicy: {}
-              f:restartPolicy: {}
-              f:schedulerName: {}
-              f:securityContext: {}
-              f:terminationGracePeriodSeconds: {}
-      manager: kube-controller-manager
-      operation: Update
-      time: "2022-11-17T09:59:32Z"
-    - apiVersion: apps/v1
-      fieldsType: FieldsV1
-      fieldsV1:
-        f:status:
-          f:observedGeneration: {}
-          f:replicas: {}
-      manager: kube-controller-manager
-      operation: Update
-      subresource: status
-      time: "2022-11-17T09:59:32Z"
-    name: running-ready-7f986c4568
-    namespace: namespace-3
-    ownerReferences:
-    - apiVersion: apps/v1
-      blockOwnerDeletion: true
-      controller: true
-      kind: Deployment
-      name: running-ready
-      uid: 51c8e9d0-5034-428c-9e46-da5a95908ec5
-    resourceVersion: "2961"
-    uid: 14a1d60d-75a3-4fc1-9a13-ab7e34ed84b6
-  spec:
-    replicas: 0
-    selector:
-      matchLabels:
-        app: running-ready
-        pod-template-hash: 7f986c4568
-    template:
-      metadata:
-        creationTimestamp: null
-        labels:
-          app: running-ready
-          pod-template-hash: 7f986c4568
-      spec:
-        containers:
-        - command:
-          - sleep
-          - infinity
-          image: busybox:latest
-          imagePullPolicy: Always
-          name: busybox
-          ports:
-          - containerPort: 5672
-            protocol: TCP
-          readinessProbe:
-            exec:
-              command:
-              - /bin/sh
-              - -c
-              - exit 0
-            failureThreshold: 3
-            periodSeconds: 10
-            successThreshold: 1
-            timeoutSeconds: 1
-          resources: {}
-          terminationMessagePath: /dev/termination-log
-          terminationMessagePolicy: File
-        dnsPolicy: ClusterFirst
-        restartPolicy: Always
-        schedulerName: default-scheduler
-        securityContext: {}
-        terminationGracePeriodSeconds: 30
-  status:
-    observedGeneration: 3
-    replicas: 0
-- apiVersion: apps/v1
-  kind: ReplicaSet
-  metadata:
-    annotations:
-      deployment.kubernetes.io/desired-replicas: "1"
-      deployment.kubernetes.io/max-replicas: "2"
-      deployment.kubernetes.io/revision: "4"
-    creationTimestamp: "2022-11-17T09:59:21Z"
+    creationTimestamp: "2022-11-23T10:38:28Z"
     generation: 1
     labels:
       app: running-ready
@@ -1830,7 +1170,7 @@ items:
             f:pod-template-hash: {}
           f:ownerReferences:
             .: {}
-            k:{"uid":"51c8e9d0-5034-428c-9e46-da5a95908ec5"}: {}
+            k:{"uid":"d3ea8970-07e9-4f28-8ba1-a3e0fe980c18"}: {}
         f:spec:
           f:replicas: {}
           f:selector: {}
@@ -1867,7 +1207,7 @@ items:
               f:terminationGracePeriodSeconds: {}
       manager: kube-controller-manager
       operation: Update
-      time: "2022-11-17T09:59:21Z"
+      time: "2022-11-23T10:38:28Z"
     - apiVersion: apps/v1
       fieldsType: FieldsV1
       fieldsV1:
@@ -1880,7 +1220,7 @@ items:
       manager: kube-controller-manager
       operation: Update
       subresource: status
-      time: "2022-11-17T09:59:32Z"
+      time: "2022-11-23T10:38:35Z"
     name: running-ready-984956487
     namespace: namespace-3
     ownerReferences:
@@ -1889,9 +1229,9 @@ items:
       controller: true
       kind: Deployment
       name: running-ready
-      uid: 51c8e9d0-5034-428c-9e46-da5a95908ec5
-    resourceVersion: "2953"
-    uid: 0df07aaa-2b28-4433-835f-ae4b08536006
+      uid: d3ea8970-07e9-4f28-8ba1-a3e0fe980c18
+    resourceVersion: "760"
+    uid: 0517e6ff-bfce-4828-9619-a3f4f4945019
   spec:
     replicas: 1
     selector:
@@ -1941,8 +1281,8 @@ items:
   metadata:
     annotations:
       kubectl.kubernetes.io/last-applied-configuration: |
-        {"apiVersion":"apps/v1","kind":"ReplicaSet","metadata":{"annotations":{},"name":"running-replicaset","namespace":"namespace-3"},"spec":{"replicas":3,"selector":{"matchLabels":{"app":"running-replicaset"}},"template":{"metadata":{"labels":{"app":"running-replicaset"}},"spec":{"containers":[{"command":["sleep","infinity"],"image":"busybox:latest","name":"busybox"}]}}}}
-    creationTimestamp: "2022-11-17T10:15:04Z"
+        {"apiVersion":"apps/v1","kind":"ReplicaSet","metadata":{"annotations":{},"name":"running-replicaset","namespace":"namespace-3"},"spec":{"replicas":3,"selector":{"matchLabels":{"app":"running-replicaset"}},"template":{"metadata":{"labels":{"app":"running-replicaset"}},"spec":{"containers":[{"command":["sleep","infinity"],"image":"busybox:latest","name":"busybox1","resources":{"limits":{"cpu":"200m","memory":"50Mi"},"requests":{"cpu":"100m","memory":"10Mi"}}},{"command":["sleep","infinity"],"image":"busybox:latest","name":"busybox2","resources":{"limits":{"cpu":"200m","memory":"50Mi"},"requests":{"cpu":"100m","memory":"10Mi"}}}]}}}}
+    creationTimestamp: "2022-11-23T10:38:29Z"
     generation: 1
     managedFields:
     - apiVersion: apps/v1
@@ -1962,13 +1302,40 @@ items:
                 f:app: {}
             f:spec:
               f:containers:
-                k:{"name":"busybox"}:
+                k:{"name":"busybox1"}:
                   .: {}
                   f:command: {}
                   f:image: {}
                   f:imagePullPolicy: {}
                   f:name: {}
-                  f:resources: {}
+                  f:resources:
+                    .: {}
+                    f:limits:
+                      .: {}
+                      f:cpu: {}
+                      f:memory: {}
+                    f:requests:
+                      .: {}
+                      f:cpu: {}
+                      f:memory: {}
+                  f:terminationMessagePath: {}
+                  f:terminationMessagePolicy: {}
+                k:{"name":"busybox2"}:
+                  .: {}
+                  f:command: {}
+                  f:image: {}
+                  f:imagePullPolicy: {}
+                  f:name: {}
+                  f:resources:
+                    .: {}
+                    f:limits:
+                      .: {}
+                      f:cpu: {}
+                      f:memory: {}
+                    f:requests:
+                      .: {}
+                      f:cpu: {}
+                      f:memory: {}
                   f:terminationMessagePath: {}
                   f:terminationMessagePolicy: {}
               f:dnsPolicy: {}
@@ -1978,7 +1345,7 @@ items:
               f:terminationGracePeriodSeconds: {}
       manager: kubectl-client-side-apply
       operation: Update
-      time: "2022-11-17T10:15:04Z"
+      time: "2022-11-23T10:38:29Z"
     - apiVersion: apps/v1
       fieldsType: FieldsV1
       fieldsV1:
@@ -1991,11 +1358,11 @@ items:
       manager: kube-controller-manager
       operation: Update
       subresource: status
-      time: "2022-11-17T10:15:13Z"
+      time: "2022-11-23T10:38:43Z"
     name: running-replicaset
     namespace: namespace-3
-    resourceVersion: "4146"
-    uid: dec54709-b3e7-4bba-b42e-57670086aeda
+    resourceVersion: "861"
+    uid: f94812c8-b2d7-421e-8846-8f7599ea0471
   spec:
     replicas: 3
     selector:
@@ -2013,8 +1380,29 @@ items:
           - infinity
           image: busybox:latest
           imagePullPolicy: Always
-          name: busybox
-          resources: {}
+          name: busybox1
+          resources:
+            limits:
+              cpu: 200m
+              memory: 50Mi
+            requests:
+              cpu: 100m
+              memory: 10Mi
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+        - command:
+          - sleep
+          - infinity
+          image: busybox:latest
+          imagePullPolicy: Always
+          name: busybox2
+          resources:
+            limits:
+              cpu: 200m
+              memory: 50Mi
+            requests:
+              cpu: 100m
+              memory: 10Mi
           terminationMessagePath: /dev/termination-log
           terminationMessagePolicy: File
         dnsPolicy: ClusterFirst
@@ -2035,7 +1423,7 @@ items:
       deployment.kubernetes.io/desired-replicas: "1"
       deployment.kubernetes.io/max-replicas: "2"
       deployment.kubernetes.io/revision: "1"
-    creationTimestamp: "2022-11-17T10:07:11Z"
+    creationTimestamp: "2022-11-23T10:38:29Z"
     generation: 1
     labels:
       app: unschedulable
@@ -2056,7 +1444,7 @@ items:
             f:pod-template-hash: {}
           f:ownerReferences:
             .: {}
-            k:{"uid":"2c0b0cdd-c010-43e3-8fd3-6c2e040c3e7b"}: {}
+            k:{"uid":"b9ca812f-afe7-41c1-a959-3c7c47d160d6"}: {}
         f:spec:
           f:replicas: {}
           f:selector: {}
@@ -2085,7 +1473,7 @@ items:
               f:terminationGracePeriodSeconds: {}
       manager: kube-controller-manager
       operation: Update
-      time: "2022-11-17T10:07:11Z"
+      time: "2022-11-23T10:38:29Z"
     - apiVersion: apps/v1
       fieldsType: FieldsV1
       fieldsV1:
@@ -2096,7 +1484,7 @@ items:
       manager: kube-controller-manager
       operation: Update
       subresource: status
-      time: "2022-11-17T10:07:11Z"
+      time: "2022-11-23T10:38:29Z"
     name: unschedulable-54ccfd478b
     namespace: namespace-3
     ownerReferences:
@@ -2105,9 +1493,9 @@ items:
       controller: true
       kind: Deployment
       name: unschedulable
-      uid: 2c0b0cdd-c010-43e3-8fd3-6c2e040c3e7b
-    resourceVersion: "3566"
-    uid: 1489bb72-0f79-4e1c-b0b8-5bcfdca07472
+      uid: b9ca812f-afe7-41c1-a959-3c7c47d160d6
+    resourceVersion: "691"
+    uid: a5ddde1f-b97a-46ec-b2aa-3c73814e0ec6
   spec:
     replicas: 1
     selector:

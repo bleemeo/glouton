@@ -17,7 +17,8 @@ kubernetes_cpu_limits{namespace="namespace-2",owner_kind="job",owner_name="job-r
 kubernetes_cpu_limits{namespace="namespace-2",owner_kind="job",owner_name="job-succeeded"} 0 1648771200000
 kubernetes_cpu_limits{namespace="namespace-3",owner_kind="deployment",owner_name="running-ready"} 0 1648771200000
 kubernetes_cpu_limits{namespace="namespace-3",owner_kind="deployment",owner_name="unschedulable"} 0 1648771200000
-kubernetes_cpu_limits{namespace="namespace-3",owner_kind="replicaset",owner_name="running-replicaset"} 0 1648771200000
+# 200m + 200m (2 containers per pod) * 3 (3 replicas) = 1.2 (with a small error due to the conversion to float64)
+kubernetes_cpu_limits{namespace="namespace-3",owner_kind="replicaset",owner_name="running-replicaset"} 1.2000000000000002 1648771200000
 # HELP kubernetes_cpu_requests 
 # TYPE kubernetes_cpu_requests untyped
 kubernetes_cpu_requests{namespace="kube-system",owner_kind="daemonset",owner_name="kindnet"} 0.30000000000000004 1648771200000
@@ -37,7 +38,8 @@ kubernetes_cpu_requests{namespace="namespace-2",owner_kind="job",owner_name="job
 kubernetes_cpu_requests{namespace="namespace-2",owner_kind="job",owner_name="job-succeeded"} 0 1648771200000
 kubernetes_cpu_requests{namespace="namespace-3",owner_kind="deployment",owner_name="running-ready"} 0 1648771200000
 kubernetes_cpu_requests{namespace="namespace-3",owner_kind="deployment",owner_name="unschedulable"} 0 1648771200000
-kubernetes_cpu_requests{namespace="namespace-3",owner_kind="replicaset",owner_name="running-replicaset"} 0 1648771200000
+# 100m + 100m (2 containers per pod) * 3 (3 replicas) = 0.6 (with a small error due to the conversion to float64)
+kubernetes_cpu_requests{namespace="namespace-3",owner_kind="replicaset",owner_name="running-replicaset"} 0.6000000000000001 1648771200000
 # HELP kubernetes_memory_limits 
 # TYPE kubernetes_memory_limits untyped
 kubernetes_memory_limits{namespace="kube-system",owner_kind="daemonset",owner_name="kindnet"} 1.572864e+08 1648771200000
@@ -57,7 +59,8 @@ kubernetes_memory_limits{namespace="namespace-2",owner_kind="job",owner_name="jo
 kubernetes_memory_limits{namespace="namespace-2",owner_kind="job",owner_name="job-succeeded"} 0 1648771200000
 kubernetes_memory_limits{namespace="namespace-3",owner_kind="deployment",owner_name="running-ready"} 0 1648771200000
 kubernetes_memory_limits{namespace="namespace-3",owner_kind="deployment",owner_name="unschedulable"} 0 1648771200000
-kubernetes_memory_limits{namespace="namespace-3",owner_kind="replicaset",owner_name="running-replicaset"} 0 1648771200000
+# 50Mi + 50Mi (2 containers per pod) * 3 (3 replicas) = 300Mi = 314572800 bytes
+kubernetes_memory_limits{namespace="namespace-3",owner_kind="replicaset",owner_name="running-replicaset"} 3.145728e+08 1648771200000
 # HELP kubernetes_memory_requests 
 # TYPE kubernetes_memory_requests untyped
 kubernetes_memory_requests{namespace="kube-system",owner_kind="daemonset",owner_name="kindnet"} 1.572864e+08 1648771200000
@@ -77,7 +80,8 @@ kubernetes_memory_requests{namespace="namespace-2",owner_kind="job",owner_name="
 kubernetes_memory_requests{namespace="namespace-2",owner_kind="job",owner_name="job-succeeded"} 0 1648771200000
 kubernetes_memory_requests{namespace="namespace-3",owner_kind="deployment",owner_name="running-ready"} 0 1648771200000
 kubernetes_memory_requests{namespace="namespace-3",owner_kind="deployment",owner_name="unschedulable"} 0 1648771200000
-kubernetes_memory_requests{namespace="namespace-3",owner_kind="replicaset",owner_name="running-replicaset"} 0 1648771200000
+# 10Mi + 10Mi (2 containers per pod) * 3 (3 replicas) = 60Mi = 629145606
+kubernetes_memory_requests{namespace="namespace-3",owner_kind="replicaset",owner_name="running-replicaset"} 6.291456e+07 1648771200000
 # HELP kubernetes_namespaces_count 
 # TYPE kubernetes_namespaces_count untyped
 kubernetes_namespaces_count{state="active"} 8 1648771200000
@@ -106,32 +110,32 @@ kubernetes_pods_count{namespace="namespace-3",owner_kind="deployment",owner_name
 kubernetes_pods_count{namespace="namespace-3",owner_kind="replicaset",owner_name="running-replicaset",state="running"} 3 1648771200000
 # HELP kubernetes_pods_restart_count 
 # TYPE kubernetes_pods_restart_count untyped
-kubernetes_pods_restart_count{namespace="kube-system",pod_name="coredns-565d847f94-n9tg9"} 0 1648771200000
+kubernetes_pods_restart_count{namespace="kube-system",pod_name="coredns-565d847f94-7x85m"} 0 1648771200000
 kubernetes_pods_restart_count{namespace="kube-system",pod_name="etcd-minikube"} 0 1648771200000
-kubernetes_pods_restart_count{namespace="kube-system",pod_name="kindnet-dnfnr"} 0 1648771200000
-kubernetes_pods_restart_count{namespace="kube-system",pod_name="kindnet-kckjl"} 0 1648771200000
-kubernetes_pods_restart_count{namespace="kube-system",pod_name="kindnet-vfrp5"} 0 1648771200000
+kubernetes_pods_restart_count{namespace="kube-system",pod_name="kindnet-8whdq"} 0 1648771200000
+kubernetes_pods_restart_count{namespace="kube-system",pod_name="kindnet-lsth5"} 0 1648771200000
+kubernetes_pods_restart_count{namespace="kube-system",pod_name="kindnet-tnssv"} 0 1648771200000
 kubernetes_pods_restart_count{namespace="kube-system",pod_name="kube-apiserver-minikube"} 0 1648771200000
 kubernetes_pods_restart_count{namespace="kube-system",pod_name="kube-controller-manager-minikube"} 0 1648771200000
-kubernetes_pods_restart_count{namespace="kube-system",pod_name="kube-proxy-2g7kc"} 0 1648771200000
-kubernetes_pods_restart_count{namespace="kube-system",pod_name="kube-proxy-4fgg2"} 0 1648771200000
-kubernetes_pods_restart_count{namespace="kube-system",pod_name="kube-proxy-jjwgv"} 0 1648771200000
+kubernetes_pods_restart_count{namespace="kube-system",pod_name="kube-proxy-4n7vh"} 0 1648771200000
+kubernetes_pods_restart_count{namespace="kube-system",pod_name="kube-proxy-csj7b"} 0 1648771200000
+kubernetes_pods_restart_count{namespace="kube-system",pod_name="kube-proxy-jpd9v"} 0 1648771200000
 kubernetes_pods_restart_count{namespace="kube-system",pod_name="kube-scheduler-minikube"} 0 1648771200000
 kubernetes_pods_restart_count{namespace="kube-system",pod_name="storage-provisioner"} 0 1648771200000
-kubernetes_pods_restart_count{namespace="namespace-1",pod_name="init-failed-76d9854d6c-qgvlr"} 0 1648771200000
-kubernetes_pods_restart_count{namespace="namespace-1",pod_name="inside-init-6ffd7dc8cd-65wks"} 0 1648771200000
-kubernetes_pods_restart_count{namespace="namespace-1",pod_name="running-init-ok-c888fff49-tm7zj"} 0 1648771200000
-kubernetes_pods_restart_count{namespace="namespace-1",pod_name="running-not-ready-59d84c958b-j8kc7"} 0 1648771200000
-kubernetes_pods_restart_count{namespace="namespace-2",pod_name="crash-loop-backoff-6f7b458877-hmmgs"} 10 1648771200000
-kubernetes_pods_restart_count{namespace="namespace-2",pod_name="image-pull-backoff-5db5d89c86-qs8x7"} 0 1648771200000
-kubernetes_pods_restart_count{namespace="namespace-2",pod_name="job-failed-n6ht5"} 0 1648771200000
-kubernetes_pods_restart_count{namespace="namespace-2",pod_name="job-failed-nt2c7"} 0 1648771200000
-kubernetes_pods_restart_count{namespace="namespace-2",pod_name="job-running-sbd5r"} 0 1648771200000
-kubernetes_pods_restart_count{namespace="namespace-2",pod_name="job-succeeded-jxqfh"} 0 1648771200000
-kubernetes_pods_restart_count{namespace="namespace-2",pod_name="running-replicas-6bf69fb969-4ffpg"} 0 1648771200000
-kubernetes_pods_restart_count{namespace="namespace-2",pod_name="running-replicas-6bf69fb969-5d7tj"} 0 1648771200000
-kubernetes_pods_restart_count{namespace="namespace-3",pod_name="running-ready-984956487-dm4dg"} 0 1648771200000
-kubernetes_pods_restart_count{namespace="namespace-3",pod_name="running-replicaset-2lvkg"} 0 1648771200000
-kubernetes_pods_restart_count{namespace="namespace-3",pod_name="running-replicaset-5dsdj"} 0 1648771200000
-kubernetes_pods_restart_count{namespace="namespace-3",pod_name="running-replicaset-8wqgf"} 0 1648771200000
-kubernetes_pods_restart_count{namespace="namespace-3",pod_name="unschedulable-54ccfd478b-qrkwk"} 0 1648771200000
+kubernetes_pods_restart_count{namespace="namespace-1",pod_name="init-failed-76d9854d6c-r8pfj"} 0 1648771200000
+kubernetes_pods_restart_count{namespace="namespace-1",pod_name="inside-init-6ffd7dc8cd-5m94p"} 0 1648771200000
+kubernetes_pods_restart_count{namespace="namespace-1",pod_name="running-init-ok-c888fff49-2sgbm"} 0 1648771200000
+kubernetes_pods_restart_count{namespace="namespace-1",pod_name="running-not-ready-59d84c958b-2glcz"} 0 1648771200000
+kubernetes_pods_restart_count{namespace="namespace-2",pod_name="crash-loop-backoff-6f7b458877-85cst"} 3 1648771200000
+kubernetes_pods_restart_count{namespace="namespace-2",pod_name="image-pull-backoff-5db5d89c86-hfjj8"} 0 1648771200000
+kubernetes_pods_restart_count{namespace="namespace-2",pod_name="job-failed-87vz7"} 0 1648771200000
+kubernetes_pods_restart_count{namespace="namespace-2",pod_name="job-failed-xc9kw"} 0 1648771200000
+kubernetes_pods_restart_count{namespace="namespace-2",pod_name="job-running-hnhl7"} 0 1648771200000
+kubernetes_pods_restart_count{namespace="namespace-2",pod_name="job-succeeded-znprr"} 0 1648771200000
+kubernetes_pods_restart_count{namespace="namespace-2",pod_name="running-replicas-6bf69fb969-bwlkk"} 0 1648771200000
+kubernetes_pods_restart_count{namespace="namespace-2",pod_name="running-replicas-6bf69fb969-f56lp"} 0 1648771200000
+kubernetes_pods_restart_count{namespace="namespace-3",pod_name="running-ready-984956487-5t9f6"} 0 1648771200000
+kubernetes_pods_restart_count{namespace="namespace-3",pod_name="running-replicaset-b5bnx"} 0 1648771200000
+kubernetes_pods_restart_count{namespace="namespace-3",pod_name="running-replicaset-jbshn"} 0 1648771200000
+kubernetes_pods_restart_count{namespace="namespace-3",pod_name="running-replicaset-rv7pk"} 0 1648771200000
+kubernetes_pods_restart_count{namespace="namespace-3",pod_name="unschedulable-54ccfd478b-rgftw"} 0 1648771200000

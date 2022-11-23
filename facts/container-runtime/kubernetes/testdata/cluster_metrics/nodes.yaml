@@ -7,7 +7,7 @@ items:
       kubeadm.alpha.kubernetes.io/cri-socket: unix:///var/run/cri-dockerd.sock
       node.alpha.kubernetes.io/ttl: "0"
       volumes.kubernetes.io/controller-managed-attach-detach: "true"
-    creationTimestamp: "2022-11-17T09:23:39Z"
+    creationTimestamp: "2022-11-23T10:37:20Z"
     labels:
       beta.kubernetes.io/arch: amd64
       beta.kubernetes.io/os: linux
@@ -17,7 +17,7 @@ items:
       minikube.k8s.io/commit: 986b1ebd987211ed16f8cc10aed7d2c42fc8392f
       minikube.k8s.io/name: minikube
       minikube.k8s.io/primary: "true"
-      minikube.k8s.io/updated_at: 2022_11_17T10_23_44_0700
+      minikube.k8s.io/updated_at: 2022_11_23T11_37_24_0700
       minikube.k8s.io/version: v1.28.0
       node-role.kubernetes.io/control-plane: ""
       node.kubernetes.io/exclude-from-external-load-balancers: ""
@@ -38,7 +38,7 @@ items:
             f:kubernetes.io/os: {}
       manager: kubelet
       operation: Update
-      time: "2022-11-17T09:23:39Z"
+      time: "2022-11-23T10:37:20Z"
     - apiVersion: v1
       fieldsType: FieldsV1
       fieldsV1:
@@ -50,7 +50,7 @@ items:
             f:node.kubernetes.io/exclude-from-external-load-balancers: {}
       manager: kubeadm
       operation: Update
-      time: "2022-11-17T09:23:42Z"
+      time: "2022-11-23T10:37:23Z"
     - apiVersion: v1
       fieldsType: FieldsV1
       fieldsV1:
@@ -63,7 +63,7 @@ items:
             f:minikube.k8s.io/version: {}
       manager: kubectl-label
       operation: Update
-      time: "2022-11-17T09:23:44Z"
+      time: "2022-11-23T10:37:24Z"
     - apiVersion: v1
       fieldsType: FieldsV1
       fieldsV1:
@@ -77,7 +77,7 @@ items:
             v:"10.244.0.0/24": {}
       manager: kube-controller-manager
       operation: Update
-      time: "2022-11-17T09:23:55Z"
+      time: "2022-11-23T10:37:37Z"
     - apiVersion: v1
       fieldsType: FieldsV1
       fieldsV1:
@@ -99,10 +99,10 @@ items:
       manager: kubelet
       operation: Update
       subresource: status
-      time: "2022-11-17T10:35:50Z"
+      time: "2022-11-23T10:38:57Z"
     name: minikube
-    resourceVersion: "5552"
-    uid: 3808704f-7285-4c92-aeef-ac5de7e925d7
+    resourceVersion: "896"
+    uid: 1f6a0b13-15d8-4bba-a9ba-f4604f1d1ae3
   spec:
     podCIDR: 10.244.0.0/24
     podCIDRs:
@@ -118,36 +118,36 @@ items:
       ephemeral-storage: 202552628Ki
       hugepages-1Gi: "0"
       hugepages-2Mi: "0"
-      memory: 16094288Ki
+      memory: 16094292Ki
       pods: "110"
     capacity:
       cpu: "8"
       ephemeral-storage: 202552628Ki
       hugepages-1Gi: "0"
       hugepages-2Mi: "0"
-      memory: 16094288Ki
+      memory: 16094292Ki
       pods: "110"
     conditions:
-    - lastHeartbeatTime: "2022-11-17T10:35:50Z"
-      lastTransitionTime: "2022-11-17T09:23:35Z"
+    - lastHeartbeatTime: "2022-11-23T10:38:57Z"
+      lastTransitionTime: "2022-11-23T10:37:18Z"
       message: kubelet has sufficient memory available
       reason: KubeletHasSufficientMemory
       status: "False"
       type: MemoryPressure
-    - lastHeartbeatTime: "2022-11-17T10:35:50Z"
-      lastTransitionTime: "2022-11-17T09:23:35Z"
+    - lastHeartbeatTime: "2022-11-23T10:38:57Z"
+      lastTransitionTime: "2022-11-23T10:37:18Z"
       message: kubelet has no disk pressure
       reason: KubeletHasNoDiskPressure
       status: "False"
       type: DiskPressure
-    - lastHeartbeatTime: "2022-11-17T10:35:50Z"
-      lastTransitionTime: "2022-11-17T09:23:35Z"
+    - lastHeartbeatTime: "2022-11-23T10:38:57Z"
+      lastTransitionTime: "2022-11-23T10:37:18Z"
       message: kubelet has sufficient PID available
       reason: KubeletHasSufficientPID
       status: "False"
       type: PIDPressure
-    - lastHeartbeatTime: "2022-11-17T10:35:50Z"
-      lastTransitionTime: "2022-11-17T09:24:13Z"
+    - lastHeartbeatTime: "2022-11-23T10:38:57Z"
+      lastTransitionTime: "2022-11-23T10:37:54Z"
       message: kubelet is posting ready status
       reason: KubeletReady
       status: "True"
@@ -189,7 +189,7 @@ items:
       - gcr.io/k8s-minikube/storage-provisioner:v5
       sizeBytes: 31465472
     - names:
-      - busybox@sha256:6bdd92bf5240be1b5f3bf71324f5e371fe59f0e153b27fa1f1620f78ba16963c
+      - busybox@sha256:fcd85228d7a25feb59f101ac3a955d27c80df4ad824d65f5757a954831450185
       - busybox:latest
       sizeBytes: 1239772
     - names:
@@ -202,15 +202,15 @@ items:
       sizeBytes: 682696
     nodeInfo:
       architecture: amd64
-      bootID: 2aa5dcb6-2f0e-4561-9bbd-079d31811ef3
+      bootID: 2c21f5d6-9ee1-45a2-b0f8-147b352e123e
       containerRuntimeVersion: docker://20.10.20
-      kernelVersion: 5.15.0-52-generic
+      kernelVersion: 5.15.0-53-generic
       kubeProxyVersion: v1.25.3
       kubeletVersion: v1.25.3
       machineID: 996614ec4c814b87b7ec8ebee3d0e8c9
       operatingSystem: linux
       osImage: Ubuntu 20.04.5 LTS
-      systemUUID: 7d915e6e-c85f-4c2f-a69e-6a17fb274930
+      systemUUID: 73e39bb1-a31c-47db-868c-a5807bdca1db
 - apiVersion: v1
   kind: Node
   metadata:
@@ -218,7 +218,7 @@ items:
       kubeadm.alpha.kubernetes.io/cri-socket: /var/run/cri-dockerd.sock
       node.alpha.kubernetes.io/ttl: "0"
       volumes.kubernetes.io/controller-managed-attach-detach: "true"
-    creationTimestamp: "2022-11-17T09:24:05Z"
+    creationTimestamp: "2022-11-23T10:37:43Z"
     labels:
       beta.kubernetes.io/arch: amd64
       beta.kubernetes.io/os: linux
@@ -226,6 +226,20 @@ items:
       kubernetes.io/hostname: minikube-m02
       kubernetes.io/os: linux
     managedFields:
+    - apiVersion: v1
+      fieldsType: FieldsV1
+      fieldsV1:
+        f:metadata:
+          f:annotations:
+            f:node.alpha.kubernetes.io/ttl: {}
+        f:spec:
+          f:podCIDR: {}
+          f:podCIDRs:
+            .: {}
+            v:"10.244.1.0/24": {}
+      manager: kube-controller-manager
+      operation: Update
+      time: "2022-11-23T10:37:43Z"
     - apiVersion: v1
       fieldsType: FieldsV1
       fieldsV1:
@@ -242,7 +256,7 @@ items:
             f:kubernetes.io/os: {}
       manager: kubelet
       operation: Update
-      time: "2022-11-17T09:24:05Z"
+      time: "2022-11-23T10:37:43Z"
     - apiVersion: v1
       fieldsType: FieldsV1
       fieldsV1:
@@ -251,21 +265,7 @@ items:
             f:kubeadm.alpha.kubernetes.io/cri-socket: {}
       manager: kubeadm
       operation: Update
-      time: "2022-11-17T09:24:09Z"
-    - apiVersion: v1
-      fieldsType: FieldsV1
-      fieldsV1:
-        f:metadata:
-          f:annotations:
-            f:node.alpha.kubernetes.io/ttl: {}
-        f:spec:
-          f:podCIDR: {}
-          f:podCIDRs:
-            .: {}
-            v:"10.244.1.0/24": {}
-      manager: kube-controller-manager
-      operation: Update
-      time: "2022-11-17T09:24:36Z"
+      time: "2022-11-23T10:37:48Z"
     - apiVersion: v1
       fieldsType: FieldsV1
       fieldsV1:
@@ -287,10 +287,10 @@ items:
       manager: kubelet
       operation: Update
       subresource: status
-      time: "2022-11-17T10:34:50Z"
+      time: "2022-11-23T10:38:46Z"
     name: minikube-m02
-    resourceVersion: "5496"
-    uid: 540c7da1-eed7-469f-9df1-b3c8bec78689
+    resourceVersion: "875"
+    uid: 539c24cc-5cad-44c8-a12d-4f4432233407
   spec:
     podCIDR: 10.244.1.0/24
     podCIDRs:
@@ -306,36 +306,36 @@ items:
       ephemeral-storage: 202552628Ki
       hugepages-1Gi: "0"
       hugepages-2Mi: "0"
-      memory: 16094288Ki
+      memory: 16094292Ki
       pods: "110"
     capacity:
       cpu: "8"
       ephemeral-storage: 202552628Ki
       hugepages-1Gi: "0"
       hugepages-2Mi: "0"
-      memory: 16094288Ki
+      memory: 16094292Ki
       pods: "110"
     conditions:
-    - lastHeartbeatTime: "2022-11-17T10:34:50Z"
-      lastTransitionTime: "2022-11-17T09:24:04Z"
+    - lastHeartbeatTime: "2022-11-23T10:38:46Z"
+      lastTransitionTime: "2022-11-23T10:37:43Z"
       message: kubelet has sufficient memory available
       reason: KubeletHasSufficientMemory
       status: "False"
       type: MemoryPressure
-    - lastHeartbeatTime: "2022-11-17T10:34:50Z"
-      lastTransitionTime: "2022-11-17T09:24:04Z"
+    - lastHeartbeatTime: "2022-11-23T10:38:46Z"
+      lastTransitionTime: "2022-11-23T10:37:43Z"
       message: kubelet has no disk pressure
       reason: KubeletHasNoDiskPressure
       status: "False"
       type: DiskPressure
-    - lastHeartbeatTime: "2022-11-17T10:34:50Z"
-      lastTransitionTime: "2022-11-17T09:24:04Z"
+    - lastHeartbeatTime: "2022-11-23T10:38:46Z"
+      lastTransitionTime: "2022-11-23T10:37:43Z"
       message: kubelet has sufficient PID available
       reason: KubeletHasSufficientPID
       status: "False"
       type: PIDPressure
-    - lastHeartbeatTime: "2022-11-17T10:34:50Z"
-      lastTransitionTime: "2022-11-17T09:24:36Z"
+    - lastHeartbeatTime: "2022-11-23T10:38:46Z"
+      lastTransitionTime: "2022-11-23T10:38:05Z"
       message: kubelet is posting ready status
       reason: KubeletReady
       status: "True"
@@ -377,7 +377,7 @@ items:
       - gcr.io/k8s-minikube/storage-provisioner:v5
       sizeBytes: 31465472
     - names:
-      - busybox@sha256:6bdd92bf5240be1b5f3bf71324f5e371fe59f0e153b27fa1f1620f78ba16963c
+      - busybox@sha256:fcd85228d7a25feb59f101ac3a955d27c80df4ad824d65f5757a954831450185
       - busybox:latest
       sizeBytes: 1239772
     - names:
@@ -390,15 +390,15 @@ items:
       sizeBytes: 682696
     nodeInfo:
       architecture: amd64
-      bootID: 2aa5dcb6-2f0e-4561-9bbd-079d31811ef3
+      bootID: 2c21f5d6-9ee1-45a2-b0f8-147b352e123e
       containerRuntimeVersion: docker://20.10.20
-      kernelVersion: 5.15.0-52-generic
+      kernelVersion: 5.15.0-53-generic
       kubeProxyVersion: v1.25.3
       kubeletVersion: v1.25.3
       machineID: 996614ec4c814b87b7ec8ebee3d0e8c9
       operatingSystem: linux
       osImage: Ubuntu 20.04.5 LTS
-      systemUUID: e41b1a36-9820-4eef-b8d0-55ffe295cbcc
+      systemUUID: b15748d2-f194-47bb-a1aa-b47af5ec99ed
 - apiVersion: v1
   kind: Node
   metadata:
@@ -406,7 +406,7 @@ items:
       kubeadm.alpha.kubernetes.io/cri-socket: /var/run/cri-dockerd.sock
       node.alpha.kubernetes.io/ttl: "0"
       volumes.kubernetes.io/controller-managed-attach-detach: "true"
-    creationTimestamp: "2022-11-17T09:24:30Z"
+    creationTimestamp: "2022-11-23T10:38:06Z"
     labels:
       beta.kubernetes.io/arch: amd64
       beta.kubernetes.io/os: linux
@@ -430,7 +430,7 @@ items:
             f:kubernetes.io/os: {}
       manager: kubelet
       operation: Update
-      time: "2022-11-17T09:24:30Z"
+      time: "2022-11-23T10:38:06Z"
     - apiVersion: v1
       fieldsType: FieldsV1
       fieldsV1:
@@ -439,7 +439,7 @@ items:
             f:kubeadm.alpha.kubernetes.io/cri-socket: {}
       manager: kubeadm
       operation: Update
-      time: "2022-11-17T09:24:35Z"
+      time: "2022-11-23T10:38:11Z"
     - apiVersion: v1
       fieldsType: FieldsV1
       fieldsV1:
@@ -453,7 +453,7 @@ items:
             v:"10.244.2.0/24": {}
       manager: kube-controller-manager
       operation: Update
-      time: "2022-11-17T09:25:01Z"
+      time: "2022-11-23T10:38:27Z"
     - apiVersion: v1
       fieldsType: FieldsV1
       fieldsV1:
@@ -475,10 +475,10 @@ items:
       manager: kubelet
       operation: Update
       subresource: status
-      time: "2022-11-17T10:34:52Z"
+      time: "2022-11-23T10:38:37Z"
     name: minikube-m03
-    resourceVersion: "5500"
-    uid: 752729e9-1d94-40f4-9f2d-17265e484b1c
+    resourceVersion: "788"
+    uid: 5aa17b6e-59a4-4f48-a6d3-eaea659f4768
   spec:
     podCIDR: 10.244.2.0/24
     podCIDRs:
@@ -494,36 +494,36 @@ items:
       ephemeral-storage: 202552628Ki
       hugepages-1Gi: "0"
       hugepages-2Mi: "0"
-      memory: 16094288Ki
+      memory: 16094292Ki
       pods: "110"
     capacity:
       cpu: "8"
       ephemeral-storage: 202552628Ki
       hugepages-1Gi: "0"
       hugepages-2Mi: "0"
-      memory: 16094288Ki
+      memory: 16094292Ki
       pods: "110"
     conditions:
-    - lastHeartbeatTime: "2022-11-17T10:34:52Z"
-      lastTransitionTime: "2022-11-17T09:24:30Z"
+    - lastHeartbeatTime: "2022-11-23T10:38:37Z"
+      lastTransitionTime: "2022-11-23T10:38:06Z"
       message: kubelet has sufficient memory available
       reason: KubeletHasSufficientMemory
       status: "False"
       type: MemoryPressure
-    - lastHeartbeatTime: "2022-11-17T10:34:52Z"
-      lastTransitionTime: "2022-11-17T09:24:30Z"
+    - lastHeartbeatTime: "2022-11-23T10:38:37Z"
+      lastTransitionTime: "2022-11-23T10:38:06Z"
       message: kubelet has no disk pressure
       reason: KubeletHasNoDiskPressure
       status: "False"
       type: DiskPressure
-    - lastHeartbeatTime: "2022-11-17T10:34:52Z"
-      lastTransitionTime: "2022-11-17T09:24:30Z"
+    - lastHeartbeatTime: "2022-11-23T10:38:37Z"
+      lastTransitionTime: "2022-11-23T10:38:06Z"
       message: kubelet has sufficient PID available
       reason: KubeletHasSufficientPID
       status: "False"
       type: PIDPressure
-    - lastHeartbeatTime: "2022-11-17T10:34:52Z"
-      lastTransitionTime: "2022-11-17T09:25:01Z"
+    - lastHeartbeatTime: "2022-11-23T10:38:37Z"
+      lastTransitionTime: "2022-11-23T10:38:27Z"
       message: kubelet is posting ready status
       reason: KubeletReady
       status: "True"
@@ -565,7 +565,7 @@ items:
       - gcr.io/k8s-minikube/storage-provisioner:v5
       sizeBytes: 31465472
     - names:
-      - busybox@sha256:6bdd92bf5240be1b5f3bf71324f5e371fe59f0e153b27fa1f1620f78ba16963c
+      - busybox@sha256:fcd85228d7a25feb59f101ac3a955d27c80df4ad824d65f5757a954831450185
       - busybox:latest
       sizeBytes: 1239772
     - names:
@@ -578,15 +578,15 @@ items:
       sizeBytes: 682696
     nodeInfo:
       architecture: amd64
-      bootID: 2aa5dcb6-2f0e-4561-9bbd-079d31811ef3
+      bootID: 2c21f5d6-9ee1-45a2-b0f8-147b352e123e
       containerRuntimeVersion: docker://20.10.20
-      kernelVersion: 5.15.0-52-generic
+      kernelVersion: 5.15.0-53-generic
       kubeProxyVersion: v1.25.3
       kubeletVersion: v1.25.3
       machineID: 996614ec4c814b87b7ec8ebee3d0e8c9
       operatingSystem: linux
       osImage: Ubuntu 20.04.5 LTS
-      systemUUID: e3b763ee-a776-4c07-b7b3-3adc4dabc962
+      systemUUID: da866ad2-6694-44a9-836b-857dcefa3191
 kind: List
 metadata:
   resourceVersion: ""

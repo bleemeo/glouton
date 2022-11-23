@@ -792,12 +792,11 @@ func TestClusterMetrics(t *testing.T) {
 	// 	delete(point.Labels, types.LabelMetaKubernetesCluster)
 	// }
 	// mfs := model.MetricPointsToFamilies(gotPoints)
-	// fd, _ := os.OpenFile(metricFile, os.O_CREATE|os.O_WRONLY, 0o750)
+	// fd, _ := os.OpenFile("/tmp/metrics.txt", os.O_CREATE|os.O_WRONLY, 0o750)
 	// enc := expfmt.NewEncoder(fd, expfmt.FmtText)
 	// for _, mf := range mfs {
 	// 	enc.Encode(mf)
 	// }
-	// os.Exit(0)
 
 	// Read expected metrics from a file.
 	f, err := os.Open(metricFile)
