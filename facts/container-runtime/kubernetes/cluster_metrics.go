@@ -54,9 +54,10 @@ func getGlobalMetrics(
 		}
 	}
 
+	// Compute cluster metrics.
 	var points []types.MetricPoint
 
-	metricFunctions := []metricsFunc{podsCount, requestsAndLimits, namespacesCount, nodesCount}
+	metricFunctions := []metricsFunc{podsCount, requestsAndLimits, namespacesCount, nodesCount, podsRestartCount}
 
 	for _, f := range metricFunctions {
 		points = append(points, f(cache, now)...)
@@ -276,7 +277,7 @@ func requestsAndLimits(cache kubeCache, now time.Time) []types.MetricPoint {
 	resourceMap := make(map[object]resources, len(cache.pods))
 
 	for _, pod := range cache.pods {
-		// Sum requests and limit over containers in the pod.
+		// Sum requests and limits over all containers in the pod.
 		cpuRequests, cpuLimits, memoryRequests, memoryLimits := 0., 0., 0., 0.
 
 		for _, container := range pod.Spec.Containers {
@@ -329,6 +330,35 @@ func requestsAndLimits(cache kubeCache, now time.Time) []types.MetricPoint {
 				Labels: labels,
 			})
 		}
+	}
+
+	return points
+}
+
+// podsRestartCount returns the metric kubernetes_pods_restart_count with the following labels:
+// - pod_name: the pod's name.
+// - namespace: the pod's namespace.
+func podsRestartCount(cache kubeCache, now time.Time) []types.MetricPoint {
+	points := make([]types.MetricPoint, 0, len(cache.pods))
+
+	for _, pod := range cache.pods {
+		labels := map[string]string{
+			types.LabelName:      "kubernetes_pods_restart_count",
+			types.LabelPodName:   pod.Name,
+			types.LabelNamespace: pod.Namespace,
+		}
+
+		// The restart count of a pod is the sum of the restart counts of its containers.
+		restartCount := int32(0)
+
+		for _, container := range pod.Status.ContainerStatuses {
+			restartCount += container.RestartCount
+		}
+
+		points = append(points, types.MetricPoint{
+			Point:  types.Point{Time: now, Value: float64(restartCount)},
+			Labels: labels,
+		})
 	}
 
 	return points
