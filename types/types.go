@@ -139,6 +139,7 @@ const (
 	LabelState     = "state"
 	LabelOwnerKind = "owner_kind"
 	LabelOwnerName = "owner_name"
+	LabelPodName   = "pod_name"
 	LabelNamespace = "namespace"
 )
 
