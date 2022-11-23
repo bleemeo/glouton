@@ -248,6 +248,10 @@ func initContainerPhase(podStatus corev1.PodStatus) corev1.PodPhase {
 
 			return corev1.PodFailed
 		case status.State.Waiting != nil:
+			if status.State.Waiting.Reason == "CrashLoopBackOff" {
+				return corev1.PodFailed
+			}
+
 			return corev1.PodPending
 		}
 	}
