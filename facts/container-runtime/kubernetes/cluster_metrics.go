@@ -333,13 +333,19 @@ func requestsAndLimits(cache kubeCache, now time.Time) []types.MetricPoint {
 
 // podsRestartCount returns the metric kubernetes_pods_restart_count with the following labels:
 // - pod_name: the pod's name.
+// - owner_kind: the kind of the pod's owner, e.g. daemonset, deployment.
+// - owner_name: the name of the pod's owner, e.g. glouton, kube-proxy.
 // - namespace: the pod's namespace.
 func podsRestartCount(cache kubeCache, now time.Time) []types.MetricPoint {
 	points := make([]types.MetricPoint, 0, len(cache.pods))
 
 	for _, pod := range cache.pods {
+		kind, name := podOwner(pod, cache.replicasetOwnerByUID)
+
 		labels := map[string]string{
 			types.LabelName:      "kubernetes_pods_restart_count",
+			types.LabelOwnerKind: strings.ToLower(kind),
+			types.LabelOwnerName: strings.ToLower(name),
 			types.LabelPodName:   pod.Name,
 			types.LabelNamespace: pod.Namespace,
 		}
