@@ -306,3 +306,14 @@ spec:
             limits:
               memory: "50Mi"
               cpu: "200m"
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: simple-pod
+  namespace: namespace-1
+spec:
+  containers:
+    - name: busybox
+      image: busybox:latest
+      command: ["sleep", "infinity"]

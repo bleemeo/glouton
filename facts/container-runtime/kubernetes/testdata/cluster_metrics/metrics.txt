@@ -9,6 +9,7 @@ kubernetes_cpu_limits{namespace="namespace-1",owner_kind="deployment",owner_name
 kubernetes_cpu_limits{namespace="namespace-1",owner_kind="deployment",owner_name="inside-init"} 0 1648771200000
 kubernetes_cpu_limits{namespace="namespace-1",owner_kind="deployment",owner_name="running-init-ok"} 0 1648771200000
 kubernetes_cpu_limits{namespace="namespace-1",owner_kind="deployment",owner_name="running-not-ready"} 0 1648771200000
+kubernetes_cpu_limits{namespace="namespace-1",owner_kind="pod",owner_name="simple-pod"} 0 1648771200000
 kubernetes_cpu_limits{namespace="namespace-2",owner_kind="deployment",owner_name="crash-loop-backoff"} 0 1648771200000
 kubernetes_cpu_limits{namespace="namespace-2",owner_kind="deployment",owner_name="image-pull-backoff"} 0 1648771200000
 kubernetes_cpu_limits{namespace="namespace-2",owner_kind="deployment",owner_name="running-replicas"} 0 1648771200000
@@ -30,6 +31,7 @@ kubernetes_cpu_requests{namespace="namespace-1",owner_kind="deployment",owner_na
 kubernetes_cpu_requests{namespace="namespace-1",owner_kind="deployment",owner_name="inside-init"} 0 1648771200000
 kubernetes_cpu_requests{namespace="namespace-1",owner_kind="deployment",owner_name="running-init-ok"} 0 1648771200000
 kubernetes_cpu_requests{namespace="namespace-1",owner_kind="deployment",owner_name="running-not-ready"} 0 1648771200000
+kubernetes_cpu_requests{namespace="namespace-1",owner_kind="pod",owner_name="simple-pod"} 0 1648771200000
 kubernetes_cpu_requests{namespace="namespace-2",owner_kind="deployment",owner_name="crash-loop-backoff"} 0 1648771200000
 kubernetes_cpu_requests{namespace="namespace-2",owner_kind="deployment",owner_name="image-pull-backoff"} 0 1648771200000
 kubernetes_cpu_requests{namespace="namespace-2",owner_kind="deployment",owner_name="running-replicas"} 0 1648771200000
@@ -51,6 +53,7 @@ kubernetes_memory_limits{namespace="namespace-1",owner_kind="deployment",owner_n
 kubernetes_memory_limits{namespace="namespace-1",owner_kind="deployment",owner_name="inside-init"} 0 1648771200000
 kubernetes_memory_limits{namespace="namespace-1",owner_kind="deployment",owner_name="running-init-ok"} 0 1648771200000
 kubernetes_memory_limits{namespace="namespace-1",owner_kind="deployment",owner_name="running-not-ready"} 0 1648771200000
+kubernetes_memory_limits{namespace="namespace-1",owner_kind="pod",owner_name="simple-pod"} 0 1648771200000
 kubernetes_memory_limits{namespace="namespace-2",owner_kind="deployment",owner_name="crash-loop-backoff"} 0 1648771200000
 kubernetes_memory_limits{namespace="namespace-2",owner_kind="deployment",owner_name="image-pull-backoff"} 0 1648771200000
 kubernetes_memory_limits{namespace="namespace-2",owner_kind="deployment",owner_name="running-replicas"} 0 1648771200000
@@ -72,6 +75,7 @@ kubernetes_memory_requests{namespace="namespace-1",owner_kind="deployment",owner
 kubernetes_memory_requests{namespace="namespace-1",owner_kind="deployment",owner_name="inside-init"} 0 1648771200000
 kubernetes_memory_requests{namespace="namespace-1",owner_kind="deployment",owner_name="running-init-ok"} 0 1648771200000
 kubernetes_memory_requests{namespace="namespace-1",owner_kind="deployment",owner_name="running-not-ready"} 0 1648771200000
+kubernetes_memory_requests{namespace="namespace-1",owner_kind="pod",owner_name="simple-pod"} 0 1648771200000
 kubernetes_memory_requests{namespace="namespace-2",owner_kind="deployment",owner_name="crash-loop-backoff"} 0 1648771200000
 kubernetes_memory_requests{namespace="namespace-2",owner_kind="deployment",owner_name="image-pull-backoff"} 0 1648771200000
 kubernetes_memory_requests{namespace="namespace-2",owner_kind="deployment",owner_name="running-replicas"} 0 1648771200000
@@ -99,6 +103,7 @@ kubernetes_pods_count{namespace="namespace-1",owner_kind="deployment",owner_name
 kubernetes_pods_count{namespace="namespace-1",owner_kind="deployment",owner_name="inside-init",state="pending"} 1 1648771200000
 kubernetes_pods_count{namespace="namespace-1",owner_kind="deployment",owner_name="running-init-ok",state="running"} 1 1648771200000
 kubernetes_pods_count{namespace="namespace-1",owner_kind="deployment",owner_name="running-not-ready",state="pending"} 1 1648771200000
+kubernetes_pods_count{namespace="namespace-1",owner_kind="pod",owner_name="simple-pod",state="running"} 1 1648771200000
 kubernetes_pods_count{namespace="namespace-2",owner_kind="deployment",owner_name="crash-loop-backoff",state="failed"} 1 1648771200000
 kubernetes_pods_count{namespace="namespace-2",owner_kind="deployment",owner_name="image-pull-backoff",state="pending"} 1 1648771200000
 kubernetes_pods_count{namespace="namespace-2",owner_kind="deployment",owner_name="running-replicas",state="running"} 2 1648771200000
@@ -126,6 +131,7 @@ kubernetes_pods_restart_count{namespace="namespace-1",owner_kind="deployment",ow
 kubernetes_pods_restart_count{namespace="namespace-1",owner_kind="deployment",owner_name="inside-init",pod_name="inside-init-6ffd7dc8cd-5m94p"} 0 1648771200000
 kubernetes_pods_restart_count{namespace="namespace-1",owner_kind="deployment",owner_name="running-init-ok",pod_name="running-init-ok-c888fff49-2sgbm"} 0 1648771200000
 kubernetes_pods_restart_count{namespace="namespace-1",owner_kind="deployment",owner_name="running-not-ready",pod_name="running-not-ready-59d84c958b-2glcz"} 0 1648771200000
+kubernetes_pods_restart_count{namespace="namespace-1",owner_kind="pod",owner_name="simple-pod",pod_name="simple-pod"} 0 1648771200000
 kubernetes_pods_restart_count{namespace="namespace-2",owner_kind="deployment",owner_name="crash-loop-backoff",pod_name="crash-loop-backoff-6f7b458877-85cst"} 3 1648771200000
 kubernetes_pods_restart_count{namespace="namespace-2",owner_kind="deployment",owner_name="image-pull-backoff",pod_name="image-pull-backoff-5db5d89c86-hfjj8"} 0 1648771200000
 kubernetes_pods_restart_count{namespace="namespace-2",owner_kind="deployment",owner_name="running-replicas",pod_name="running-replicas-6bf69fb969-bwlkk"} 0 1648771200000
