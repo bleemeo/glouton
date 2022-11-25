@@ -550,6 +550,24 @@ var (
 			"mysql_handler_rollback",
 		},
 
+		discovery.NatsService: {
+			"nats_status",
+			"nats_uptime",
+			"nats_mem",
+			"nats_cpu",
+			"nats_cores",
+			"nats_routes",
+			"nats_remotes",
+			"nats_total_connections",
+			"nats_slow_consumers",
+			"nats_subscriptions",
+			"nats_in_bytes",
+			"nats_out_bytes",
+			"nats_in_msgs",
+			"nats_out_msgs",
+			"nats_connections",
+		},
+
 		discovery.NginxService: {
 			"nginx_status",
 			"nginx_requests",

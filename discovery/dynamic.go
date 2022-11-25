@@ -166,6 +166,7 @@ var (
 		"mosquitto":    MosquittoService, //nolint:misspell
 		"mysqld":       MySQLService,
 		"named":        BindService,
+		"nats-server":  NatsService,
 		"nginx":        NginxService,
 		"ntpd":         NTPService,
 		"openvpn":      OpenVPNService,

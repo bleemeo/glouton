@@ -554,7 +554,9 @@ func applyOverride(
 			service.IPAddress = override.Address
 		}
 
-		service.Interval = time.Duration(override.Interval) * time.Second
+		if override.Interval != 0 {
+			service.Interval = time.Duration(override.Interval) * time.Second
+		}
 
 		if len(override.IgnorePorts) > 0 {
 			if service.IgnoredPorts == nil {

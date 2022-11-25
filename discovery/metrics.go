@@ -34,6 +34,7 @@ import (
 	"glouton/inputs/modify"
 	"glouton/inputs/mongodb"
 	"glouton/inputs/mysql"
+	"glouton/inputs/nats"
 	netInput "glouton/inputs/net"
 	"glouton/inputs/nginx"
 	"glouton/inputs/phpfpm"
@@ -302,6 +303,15 @@ func (d *Discovery) createInput(service Service) error {
 		}
 	case MySQLService:
 		input, err = createMySQLInput(service)
+	case NatsService:
+		url := service.Config.StatsURL
+
+		// The default port of the monitoring server is 8222.
+		if url == "" && service.IPAddress != "" {
+			url = fmt.Sprintf("http://%s", net.JoinHostPort(service.IPAddress, "8222"))
+		}
+
+		input, err = nats.New(url)
 	case NginxService:
 		if ip, port := service.AddressPort(); ip != "" {
 			input, err = nginx.New(fmt.Sprintf("http://%s/nginx_status", net.JoinHostPort(ip, strconv.Itoa(port))))

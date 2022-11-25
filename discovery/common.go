@@ -83,6 +83,7 @@ const (
 	MongoDBService       ServiceName = "mongodb"
 	MosquittoService     ServiceName = "mosquitto" //nolint:misspell
 	MySQLService         ServiceName = "mysql"
+	NatsService          ServiceName = "nats"
 	NginxService         ServiceName = "nginx"
 	NTPService           ServiceName = "ntp"
 	OpenLDAPService      ServiceName = "openldap"
@@ -347,6 +348,10 @@ var (
 		},
 		NginxService: {
 			ServicePort:     80,
+			ServiceProtocol: "tcp",
+		},
+		NatsService: {
+			ServicePort:     4222,
 			ServiceProtocol: "tcp",
 		},
 		NTPService: {

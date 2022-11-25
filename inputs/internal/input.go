@@ -17,6 +17,8 @@
 package internal
 
 import (
+	"fmt"
+	"glouton/collector"
 	"glouton/logger"
 
 	"github.com/influxdata/telegraf"
@@ -26,9 +28,10 @@ import (
 // Input is a generic input that use the modifying Accumulator defined in this package.
 type Input struct {
 	telegraf.Input
-	Accumulator Accumulator
-	Name        string
-	startError  error
+	Accumulator       Accumulator
+	Name              string
+	startError        error
+	lastGatherIsError bool
 }
 
 // Gather takes in an accumulator and adds the metrics that the Input
@@ -36,9 +39,21 @@ type Input struct {
 func (i *Input) Gather(acc telegraf.Accumulator) error {
 	i.Accumulator.Accumulator = acc
 	i.Accumulator.PrepareGather()
-	err := i.Input.Gather(&i.Accumulator)
 
-	return err
+	err := i.Input.Gather(&i.Accumulator)
+	if err != nil {
+		if i.lastGatherIsError {
+			return fmt.Errorf("%w: %s", collector.ErrConsecutiveGather, err)
+		}
+
+		i.lastGatherIsError = true
+
+		return err
+	}
+
+	i.lastGatherIsError = false
+
+	return nil
 }
 
 // Start the ServiceInput.  The Accumulator may be retained and used until
