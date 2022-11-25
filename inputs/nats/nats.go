@@ -43,18 +43,9 @@ func New(url string) (i telegraf.Input, err error) {
 		Input: natsInput,
 		Accumulator: internal.Accumulator{
 			DerivatedMetrics: []string{"in_bytes", "out_bytes", "in_msgs", "out_msgs"},
-			TransformMetrics: transformMetrics,
 		},
 		Name: "nats",
 	}
 
 	return
-}
-
-func transformMetrics(currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {
-	// TODO: Should we ignore some fields?
-	// "uptime", "mem", "cpu", "cores", "routes", "remotes", "total_connections", "slow_consumers"
-	// "subscriptions", "in_bytes", "out_bytes", "in_msgs", "out_msgs", "connections"
-
-	return fields
 }

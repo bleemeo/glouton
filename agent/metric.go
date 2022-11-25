@@ -553,12 +553,7 @@ var (
 		discovery.NatsService: {
 			"nats_status",
 			"nats_uptime",
-			"nats_mem",
-			"nats_cpu",
-			"nats_cores",
 			"nats_routes",
-			"nats_remotes",
-			"nats_total_connections",
 			"nats_slow_consumers",
 			"nats_subscriptions",
 			"nats_in_bytes",
@@ -566,6 +561,7 @@ var (
 			"nats_in_msgs",
 			"nats_out_msgs",
 			"nats_connections",
+			"nats_total_connections",
 		},
 
 		discovery.NginxService: {
