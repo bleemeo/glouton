@@ -57,7 +57,10 @@ func (q apiQueryable) Metrics(filters map[string]string) (result []types.Metric,
 		q.agentID = q.agentIDFunc()
 	}
 
-	filters[types.LabelInstanceUUID] = q.agentID
+	// Keep only metrics from the main agent.
+	if q.agentID != "" {
+		filters[types.LabelInstanceUUID] = q.agentID
+	}
 
 	return q.store.Metrics(filters)
 }
