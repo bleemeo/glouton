@@ -37,6 +37,7 @@ import (
 	"glouton/inputs/nats"
 	netInput "glouton/inputs/net"
 	"glouton/inputs/nginx"
+	"glouton/inputs/openldap"
 	"glouton/inputs/phpfpm"
 	"glouton/inputs/postgresql"
 	"glouton/inputs/rabbitmq"
@@ -315,6 +316,10 @@ func (d *Discovery) createInput(service Service) error {
 	case NginxService:
 		if ip, port := service.AddressPort(); ip != "" {
 			input, err = nginx.New(fmt.Sprintf("http://%s/nginx_status", net.JoinHostPort(ip, strconv.Itoa(port))))
+		}
+	case OpenLDAPService:
+		if ip, port := service.AddressPort(); ip != "" {
+			input, err = openldap.New(ip, port, service.Config)
 		}
 	case PHPFPMService:
 		statsURL := urlForPHPFPM(service)

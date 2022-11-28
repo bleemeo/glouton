@@ -261,6 +261,10 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 						TypeNames: []string{"name"},
 					},
 				},
+				SSL:         true,
+				SSLInsecure: true,
+				StartTLS:    true,
+				CAFile:      "/myca",
 			},
 		},
 		ServiceIgnoreMetrics: []NameInstance{

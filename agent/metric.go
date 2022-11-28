@@ -581,6 +581,18 @@ var (
 
 		discovery.OpenLDAPService: {
 			"openldap_status",
+			"openldap_connections_current",
+			"openldap_waiters_read",
+			"openldap_waiters_write",
+			"openldap_threads_active",
+			"openldap_connections_current",
+			"openldap_statistics_bytes",
+			"openldap_statistics_entries",
+			"openldap_operations_add_completed",
+			"openldap_operations_bind_completed",
+			"openldap_operations_delete_completed",
+			"openldap_operations_modify_completed",
+			"openldap_operations_search_completed",
 		},
 
 		discovery.OpenVPNService: {

@@ -318,6 +318,11 @@ type Service struct {
 	JMXUsername string      `yaml:"jmx_username"`
 	JMXPassword string      `yaml:"jmx_password"`
 	JMXMetrics  []JmxMetric `yaml:"jmx_metrics"`
+	// TLS config.
+	SSL         bool   `yaml:"ssl"`
+	SSLInsecure bool   `yaml:"ssl_insecure"`
+	StartTLS    bool   `yaml:"starttls"`
+	CAFile      string `yaml:"ca_file"`
 }
 
 type JmxMetric struct {
