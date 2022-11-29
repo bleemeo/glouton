@@ -114,23 +114,35 @@ func (a *Accumulator) AddFieldsWithAnnotations(measurement string, fields map[st
 	a.addMetrics(measurement, fields, tags, annotations, t...)
 }
 
-// convertInterface convert the interface type in float64.
-func convertInterface(value interface{}) (float64, error) {
+// ConvertToFloat convert the interface type in float64.
+func ConvertToFloat(value interface{}) (float64, error) {
 	switch value := value.(type) {
-	case uint64:
-		return float64(value), nil
 	case float64:
 		return value, nil
 	case float32:
 		return float64(value), nil
 	case int:
 		return float64(value), nil
+	case int32:
+		return float64(value), nil
 	case int64:
 		return float64(value), nil
+	case uint:
+		return float64(value), nil
+	case uint32:
+		return float64(value), nil
+	case uint64:
+		return float64(value), nil
+	case bool:
+		if value {
+			return 1, nil
+		}
+
+		return 0, nil
 	default:
 		valueType := reflect.TypeOf(value)
 
-		return float64(0), fmt.Errorf("%w :(%v)", errTypeNotSupported, valueType)
+		return 0, fmt.Errorf("%w : %v", errTypeNotSupported, valueType)
 	}
 }
 
@@ -158,7 +170,7 @@ func (a *Accumulator) addMetrics(measurement string, fields map[string]interface
 			labels[types.LabelName] = measurement + "_" + name
 		}
 
-		value, err := convertInterface(valueRaw)
+		value, err := ConvertToFloat(valueRaw)
 		if err != nil {
 			logger.V(1).Printf("convertInterface failed. Ignoring point: %s", err)
 

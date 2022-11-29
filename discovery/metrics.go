@@ -250,7 +250,7 @@ func (d *Discovery) createPrometheusCollector(service Service) error {
 	return errNotSupported
 }
 
-func (d *Discovery) createInput(service Service) error {
+func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 	if !service.Active {
 		return nil
 	}

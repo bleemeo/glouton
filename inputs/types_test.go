@@ -114,7 +114,7 @@ func TestAccumulator(t *testing.T) {
 		}
 
 		point := m.Point
-		vFloat, _ := convertInterface(v)
+		vFloat, _ := ConvertToFloat(v)
 		want := types.Point{Time: t0, Value: vFloat}
 
 		if !reflect.DeepEqual(point, want) {
@@ -237,7 +237,7 @@ func TestStoreAccumulatorWithStatus(t *testing.T) {
 		}
 
 		point := m.Point
-		vFloat, _ := convertInterface(v)
+		vFloat, _ := ConvertToFloat(v)
 		want := types.Point{Time: t0, Value: vFloat}
 
 		if !reflect.DeepEqual(point, want) {
