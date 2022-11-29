@@ -240,6 +240,11 @@ var (
 			ServiceName:         SaltMasterService,
 			Interpreter:         "python",
 		},
+		{
+			CmdLineMustContains: []string{"fail2ban-server"},
+			ServiceName:         Fail2banService,
+			Interpreter:         "python",
+		},
 	}
 )
 
@@ -667,14 +672,21 @@ func serviceByInterpreter(name string, cmdLine []string) (serviceName ServiceNam
 	// For now, special case for java, erlang or python process.
 	// Need a more general way to manage those case. Every interpreter/VM
 	// language are affected.
-	if name == "java" || name == "python" || name == "erl" || strings.HasPrefix(name, "beam") {
+	if name == "java" || strings.HasPrefix(name, "python") || name == "erl" || strings.HasPrefix(name, "beam") {
 		for _, candidate := range knownIntepretedProcess {
-			if candidate.Interpreter == "erlang" && name != "erl" && !strings.HasPrefix(name, "beam") {
-				continue
-			}
-
-			if candidate.Interpreter != "erlang" && name != candidate.Interpreter {
-				continue
+			switch candidate.Interpreter {
+			case "erlang":
+				if name != "erl" && !strings.HasPrefix(name, "beam") {
+					continue
+				}
+			case "python":
+				if !strings.HasPrefix(name, "python") {
+					continue
+				}
+			default:
+				if name != candidate.Interpreter {
+					continue
+				}
 			}
 
 			match := true

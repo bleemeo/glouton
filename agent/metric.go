@@ -375,6 +375,12 @@ var (
 			"exim_queue_size",
 		},
 
+		discovery.Fail2banService: {
+			"fail2ban_status",
+			"fail2ban_failed",
+			"fail2ban_banned",
+		},
+
 		discovery.HAProxyService: {
 			"haproxy_status",
 			"haproxy_act",

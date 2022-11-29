@@ -813,6 +813,30 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 			netstatAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 9092}},
 			noMatch:          true,
 		},
+		{
+			testName:         "nats",
+			cmdLine:          []string{"/nats-server --config nats-server.conf"},
+			containerID:      "1234",
+			containerIP:      "127.0.0.1",
+			netstatAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 4222}},
+			want: Service{
+				Name:            "nats",
+				ServiceType:     NatsService,
+				ContainerID:     "1234",
+				IgnoredPorts:    map[int]bool{},
+				IPAddress:       "127.0.0.1",
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 4222}},
+			},
+		},
+		{
+			testName: "fail2ban",
+			cmdLine:  []string{"/usr/bin/python3", "/usr/bin/fail2ban-server", "-xf", "start"},
+			want: Service{
+				Name:        "fail2ban",
+				ServiceType: Fail2banService,
+				IPAddress:   "127.0.0.1",
+			},
+		},
 	}
 
 	ctx := context.Background()

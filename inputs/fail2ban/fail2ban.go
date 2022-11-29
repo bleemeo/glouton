@@ -14,7 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package nats
+package fail2ban
 
 import (
 	"glouton/inputs"
@@ -22,30 +22,37 @@ import (
 
 	"github.com/influxdata/telegraf"
 	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"
-	"github.com/influxdata/telegraf/plugins/inputs/nats"
+	"github.com/influxdata/telegraf/plugins/inputs/fail2ban"
 )
 
-// New returns a NATS input.
-func New(url string) (telegraf.Input, error) {
-	input, ok := telegraf_inputs.Inputs["nats"]
+// New returns a Fail2ban input.
+func New() (internalInput telegraf.Input, err error) {
+	input, ok := telegraf_inputs.Inputs["fail2ban"]
 	if !ok {
 		return nil, inputs.ErrDisabledInput
 	}
 
-	natsInput, ok := input().(*nats.Nats)
+	fail2banInput, ok := input().(*fail2ban.Fail2ban)
 	if !ok {
 		return nil, inputs.ErrUnexpectedType
 	}
 
-	natsInput.Server = url
+	// The input uses "sudo fail2ban-client status myjail" to retrieve the metrics.
+	fail2banInput.UseSudo = true
 
-	internalInput := &internal.Input{
-		Input: natsInput,
+	internalInput = &internal.Input{
+		Input: fail2banInput,
 		Accumulator: internal.Accumulator{
-			DerivatedMetrics: []string{"in_bytes", "out_bytes", "in_msgs", "out_msgs"},
+			RenameGlobal: renameGlobal,
 		},
-		Name: "nats",
+		Name: "fail2ban",
 	}
 
 	return internalInput, nil
+}
+
+func renameGlobal(gatherContext internal.GatherContext) (internal.GatherContext, bool) {
+	gatherContext.Annotations.BleemeoItem = gatherContext.Tags["jail"]
+
+	return gatherContext, false
 }

@@ -73,6 +73,7 @@ const (
 	EjabberService       ServiceName = "ejabberd"
 	ElasticSearchService ServiceName = "elasticsearch"
 	EximService          ServiceName = "exim"
+	Fail2banService      ServiceName = "fail2ban"
 	FreeradiusService    ServiceName = "freeradius"
 	HAProxyService       ServiceName = "haproxy"
 	InfluxDBService      ServiceName = "influxdb"

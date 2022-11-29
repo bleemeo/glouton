@@ -28,6 +28,7 @@ import (
 	"glouton/inputs/disk"
 	"glouton/inputs/diskio"
 	"glouton/inputs/elasticsearch"
+	"glouton/inputs/fail2ban"
 	"glouton/inputs/haproxy"
 	"glouton/inputs/mem"
 	"glouton/inputs/memcached"
@@ -290,6 +291,8 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 		if ip, port := service.AddressPort(); ip != "" {
 			input, err = elasticsearch.New(fmt.Sprintf("http://%s", net.JoinHostPort(ip, strconv.Itoa(port))))
 		}
+	case Fail2banService:
+		input, err = fail2ban.New()
 	case HAProxyService:
 		if service.Config.StatsURL != "" {
 			input, err = haproxy.New(service.Config.StatsURL)
