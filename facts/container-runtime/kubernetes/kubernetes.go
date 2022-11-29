@@ -38,6 +38,7 @@ import (
 	"sync"
 	"time"
 
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/version"
@@ -50,11 +51,17 @@ import (
 // It will add annotation, IP detection, flag "StoppedAndRestarted".
 type Kubernetes struct {
 	Runtime crTypes.RuntimeInterface
-	// NodeName is the node Glouton is running on. Allow to fetch only relevant PODs (running on the same node) instead of all PODs.
+	// NodeName is the node Glouton is running on. Allow to fetch only
+	// relevant PODs (running on the same node) instead of all PODs.
 	NodeName string
-	// KubecConfig is a kubeconfig file to use for communication with Kubernetes. If not provided, use in-cluster auto-configuration.
+	// KubeConfig is a kubeconfig file to use for communication with
+	// Kubernetes. If not provided, use in-cluster auto-configuration.
 	KubeConfig         string
 	IsContainerIgnored func(facts.Container) bool
+	// ShouldGatherClusterMetrics returns whether this agent should gather global cluster metrics.
+	ShouldGatherClusterMetrics func() bool
+	// ClusterName is the name of the Kubernetes cluster.
+	ClusterName string
 
 	l              sync.Mutex
 	openConnection func(ctx context.Context, kubeConfig string, localNode string) (kubeClient, error)
@@ -210,11 +217,13 @@ func (k *Kubernetes) RuntimeFact(ctx context.Context, currentFact map[string]str
 		cl, err := k.getClient(ctx)
 		if err != nil {
 			logger.V(2).Printf("Kubernetes client initialization fail: %v", err)
-		} else {
-			k.node, err = cl.GetNode(ctx, k.NodeName)
-			if err != nil {
-				logger.V(2).Printf("Failed to get Kubernetes node %s: %v", k.NodeName, err)
-			}
+
+			return facts
+		}
+
+		k.node, err = cl.GetNode(ctx, k.NodeName)
+		if err != nil {
+			logger.V(2).Printf("Failed to get Kubernetes node %s: %v", k.NodeName, err)
 		}
 
 		k.version, err = cl.GetServerVersion(ctx)
@@ -273,6 +282,16 @@ func (k *Kubernetes) MetricsMinute(ctx context.Context, now time.Time) ([]types.
 
 	points = append(points, morePoints...)
 	multiErr = append(multiErr, errors...)
+
+	// Add global cluster metrics if this agent is the current kubernetes agent of the cluster.
+	if k.ShouldGatherClusterMetrics() {
+		morePoints, err = getGlobalMetrics(ctx, cl, now, k.ClusterName)
+		if err != nil {
+			multiErr = append(multiErr, err)
+		}
+
+		points = append(points, morePoints...)
+	}
 
 	return points, multiErr
 }
@@ -597,10 +616,16 @@ func kuberIDtoRuntimeID(containerID string) string {
 }
 
 type kubeClient interface {
-	// GetNode return the node by name.
+	// GetNode returns a node by name.
 	GetNode(ctx context.Context, nodeName string) (*corev1.Node, error)
+	// GetNodes returns all nodes in the cluster.
+	GetNodes(ctx context.Context) ([]corev1.Node, error)
 	// GetPODs returns POD on given nodeName or all POD is nodeName is empty.
 	GetPODs(ctx context.Context, nodeName string) ([]corev1.Pod, error)
+	// GetNamespaces returns all namespaces in the cluster.
+	GetNamespaces(ctx context.Context) ([]corev1.Namespace, error)
+	// GetReplicasets return all replicasets in the cluster.
+	GetReplicasets(ctx context.Context) ([]appsv1.ReplicaSet, error)
 	GetServerVersion(ctx context.Context) (*version.Info, error)
 	IsUsingLocalAPI() bool
 	Config() *rest.Config
@@ -619,6 +644,15 @@ func (cl realClient) GetNode(ctx context.Context, nodeName string) (*corev1.Node
 	return node, err
 }
 
+func (cl realClient) GetNodes(ctx context.Context) ([]corev1.Node, error) {
+	nodes, err := cl.client.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	return nodes.Items, nil
+}
+
 func (cl realClient) GetPODs(ctx context.Context, nodeName string) ([]corev1.Pod, error) {
 	opts := metav1.ListOptions{}
 
@@ -632,6 +666,24 @@ func (cl realClient) GetPODs(ctx context.Context, nodeName string) ([]corev1.Pod
 	}
 
 	return list.Items, nil
+}
+
+func (cl realClient) GetNamespaces(ctx context.Context) ([]corev1.Namespace, error) {
+	ns, err := cl.client.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	return ns.Items, nil
+}
+
+func (cl realClient) GetReplicasets(ctx context.Context) ([]appsv1.ReplicaSet, error) {
+	rs, err := cl.client.AppsV1().ReplicaSets("").List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	return rs.Items, nil
 }
 
 func (cl realClient) GetServerVersion(ctx context.Context) (*version.Info, error) {
@@ -733,7 +785,7 @@ func (cl *realClient) switchToLocalAPI(ctx context.Context, localNode string) (b
 
 		for _, ip := range subset.Addresses {
 			if pod, ok := podsIP[ip.IP]; ok {
-				logger.V(2).Printf("found the POD running Kubernetes API on local node: %s", pod.Name)
+				logger.V(2).Printf("Found the POD running Kubernetes API on local node: %s", pod.Name)
 
 				shallowCopy := *cl.config
 				shallowCopy.Host = "https://" + net.JoinHostPort(ip.IP, strconv.FormatInt(int64(httpsPort), 10))
@@ -894,7 +946,9 @@ func (w wrapProcessQuerier) ContainerFromPID(ctx context.Context, parentContaine
 		return c, err
 	}
 
+	w.k.l.Lock()
 	pod, _ := w.k.getPod(c)
+	w.k.l.Unlock()
 
 	return wrappedContainer{
 		Container: c,

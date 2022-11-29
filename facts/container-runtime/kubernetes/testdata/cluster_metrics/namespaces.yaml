@@ -1,0 +1,230 @@
+apiVersion: v1
+items:
+- apiVersion: v1
+  kind: Namespace
+  metadata:
+    creationTimestamp: "2022-11-23T10:37:21Z"
+    labels:
+      kubernetes.io/metadata.name: default
+    managedFields:
+    - apiVersion: v1
+      fieldsType: FieldsV1
+      fieldsV1:
+        f:metadata:
+          f:labels:
+            .: {}
+            f:kubernetes.io/metadata.name: {}
+      manager: kube-apiserver
+      operation: Update
+      time: "2022-11-23T10:37:21Z"
+    name: default
+    resourceVersion: "194"
+    uid: 9cbca5b9-43d1-4694-ae26-eaeda8f59f43
+  spec:
+    finalizers:
+    - kubernetes
+  status:
+    phase: Active
+- apiVersion: v1
+  kind: Namespace
+  metadata:
+    creationTimestamp: "2022-11-23T10:37:20Z"
+    labels:
+      kubernetes.io/metadata.name: kube-node-lease
+    managedFields:
+    - apiVersion: v1
+      fieldsType: FieldsV1
+      fieldsV1:
+        f:metadata:
+          f:labels:
+            .: {}
+            f:kubernetes.io/metadata.name: {}
+      manager: kube-apiserver
+      operation: Update
+      time: "2022-11-23T10:37:20Z"
+    name: kube-node-lease
+    resourceVersion: "6"
+    uid: 3a35e64c-aee7-4b66-af98-156770d2359b
+  spec:
+    finalizers:
+    - kubernetes
+  status:
+    phase: Active
+- apiVersion: v1
+  kind: Namespace
+  metadata:
+    creationTimestamp: "2022-11-23T10:37:20Z"
+    labels:
+      kubernetes.io/metadata.name: kube-public
+    managedFields:
+    - apiVersion: v1
+      fieldsType: FieldsV1
+      fieldsV1:
+        f:metadata:
+          f:labels:
+            .: {}
+            f:kubernetes.io/metadata.name: {}
+      manager: kube-apiserver
+      operation: Update
+      time: "2022-11-23T10:37:20Z"
+    name: kube-public
+    resourceVersion: "5"
+    uid: 6f2c1009-b6d2-450d-9c99-6e3f28a09783
+  spec:
+    finalizers:
+    - kubernetes
+  status:
+    phase: Active
+- apiVersion: v1
+  kind: Namespace
+  metadata:
+    creationTimestamp: "2022-11-23T10:37:20Z"
+    labels:
+      kubernetes.io/metadata.name: kube-system
+    managedFields:
+    - apiVersion: v1
+      fieldsType: FieldsV1
+      fieldsV1:
+        f:metadata:
+          f:labels:
+            .: {}
+            f:kubernetes.io/metadata.name: {}
+      manager: kube-apiserver
+      operation: Update
+      time: "2022-11-23T10:37:20Z"
+    name: kube-system
+    resourceVersion: "4"
+    uid: 9709c889-5856-42bf-8eaf-dea391bb1f34
+  spec:
+    finalizers:
+    - kubernetes
+  status:
+    phase: Active
+- apiVersion: v1
+  kind: Namespace
+  metadata:
+    annotations:
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"v1","kind":"Namespace","metadata":{"annotations":{},"name":"namespace-1"}}
+    creationTimestamp: "2022-11-23T10:38:28Z"
+    labels:
+      kubernetes.io/metadata.name: namespace-1
+    managedFields:
+    - apiVersion: v1
+      fieldsType: FieldsV1
+      fieldsV1:
+        f:metadata:
+          f:annotations:
+            .: {}
+            f:kubectl.kubernetes.io/last-applied-configuration: {}
+          f:labels:
+            .: {}
+            f:kubernetes.io/metadata.name: {}
+      manager: kubectl-client-side-apply
+      operation: Update
+      time: "2022-11-23T10:38:28Z"
+    name: namespace-1
+    resourceVersion: "533"
+    uid: 8c10edfb-e965-4c89-992c-d465eaf468c3
+  spec:
+    finalizers:
+    - kubernetes
+  status:
+    phase: Active
+- apiVersion: v1
+  kind: Namespace
+  metadata:
+    annotations:
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"v1","kind":"Namespace","metadata":{"annotations":{},"name":"namespace-2"}}
+    creationTimestamp: "2022-11-23T10:38:28Z"
+    labels:
+      kubernetes.io/metadata.name: namespace-2
+    managedFields:
+    - apiVersion: v1
+      fieldsType: FieldsV1
+      fieldsV1:
+        f:metadata:
+          f:annotations:
+            .: {}
+            f:kubectl.kubernetes.io/last-applied-configuration: {}
+          f:labels:
+            .: {}
+            f:kubernetes.io/metadata.name: {}
+      manager: kubectl-client-side-apply
+      operation: Update
+      time: "2022-11-23T10:38:28Z"
+    name: namespace-2
+    resourceVersion: "536"
+    uid: 6828e75c-be35-4d7e-8cf4-dc7405751175
+  spec:
+    finalizers:
+    - kubernetes
+  status:
+    phase: Active
+- apiVersion: v1
+  kind: Namespace
+  metadata:
+    annotations:
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"v1","kind":"Namespace","metadata":{"annotations":{},"name":"namespace-3"}}
+    creationTimestamp: "2022-11-23T10:38:28Z"
+    labels:
+      kubernetes.io/metadata.name: namespace-3
+    managedFields:
+    - apiVersion: v1
+      fieldsType: FieldsV1
+      fieldsV1:
+        f:metadata:
+          f:annotations:
+            .: {}
+            f:kubectl.kubernetes.io/last-applied-configuration: {}
+          f:labels:
+            .: {}
+            f:kubernetes.io/metadata.name: {}
+      manager: kubectl-client-side-apply
+      operation: Update
+      time: "2022-11-23T10:38:28Z"
+    name: namespace-3
+    resourceVersion: "539"
+    uid: a3bf4392-f17d-4646-90d1-275a5777c57e
+  spec:
+    finalizers:
+    - kubernetes
+  status:
+    phase: Active
+- apiVersion: v1
+  kind: Namespace
+  metadata:
+    annotations:
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"v1","kind":"Namespace","metadata":{"annotations":{},"name":"namespace-unused"}}
+    creationTimestamp: "2022-11-23T10:38:28Z"
+    labels:
+      kubernetes.io/metadata.name: namespace-unused
+    managedFields:
+    - apiVersion: v1
+      fieldsType: FieldsV1
+      fieldsV1:
+        f:metadata:
+          f:annotations:
+            .: {}
+            f:kubectl.kubernetes.io/last-applied-configuration: {}
+          f:labels:
+            .: {}
+            f:kubernetes.io/metadata.name: {}
+      manager: kubectl-client-side-apply
+      operation: Update
+      time: "2022-11-23T10:38:28Z"
+    name: namespace-unused
+    resourceVersion: "542"
+    uid: 06bf4a44-fc4d-4833-96a5-c140a0d1c92d
+  spec:
+    finalizers:
+    - kubernetes
+  status:
+    phase: Active
+kind: List
+metadata:
+  resourceVersion: ""
+  selfLink: ""

@@ -113,9 +113,10 @@ const (
 	LabelMetaScrapeInstance         = "__meta_scrape_instance"
 	LabelMetaScrapeJob              = "__meta_scrape_job"
 	LabelMetaSNMPTarget             = "__meta_snmp_target"
+	LabelMetaKubernetesCluster      = "__meta_kubernetes_cluster"
+	LabelMetaBleemeoTargetAgent     = "__meta_bleemeo_target_agent"
 	LabelMetaBleemeoTargetAgentUUID = "__meta_bleemeo_target_agent_uuid"
 	LabelMetaBleemeoUUID            = "__meta_bleemeo_uuid"
-	LabelMetaProbeTarget            = "__meta_probe_target"
 	LabelMetaProbeServiceUUID       = "__meta_probe_service_uuid"
 	LabelMetaProbeScraperName       = "__meta_probe_scraper_name"
 	LabelMetaSendScraperUUID        = "__meta_probe_send_agent_uuid"
@@ -134,6 +135,12 @@ const (
 	LabelScrapeJob                  = "scrape_job"
 	LabelScrapeInstance             = "scrape_instance"
 	LabelAlertname                  = "alertname"
+	// Kubernetes pods labels.
+	LabelState     = "state"
+	LabelOwnerKind = "owner_kind"
+	LabelOwnerName = "owner_name"
+	LabelPodName   = "pod_name"
+	LabelNamespace = "namespace"
 )
 
 // MissingContainerID is the container ID annotation set on metrics that belong

@@ -24,11 +24,18 @@ import (
 	"glouton/facts/container-runtime/docker"
 	"glouton/facts/container-runtime/internal/testutil"
 	crTypes "glouton/facts/container-runtime/types"
+	"glouton/prometheus/model"
+	"glouton/types"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
+	dto "github.com/prometheus/client_model/go"
+	"github.com/prometheus/common/expfmt"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/version"
 	"k8s.io/client-go/rest"
@@ -38,8 +45,11 @@ import (
 var errNotImplemented = errors.New("not implemented")
 
 type mockKubernetesClient struct {
-	node     corev1.NodeList
-	pods     corev1.PodList
+	nodes       corev1.NodeList
+	pods        corev1.PodList
+	namespaces  corev1.NamespaceList
+	replicaSets appsv1.ReplicaSetList
+
 	versions struct {
 		ClientVersion *version.Info `json:"clientVersion"`
 		ServerVersion *version.Info `json:"serverVersion"`
@@ -49,9 +59,9 @@ type mockKubernetesClient struct {
 func newKubernetesMock(dirname string) (*mockKubernetesClient, error) {
 	result := &mockKubernetesClient{}
 
-	data, err := os.ReadFile(filepath.Join(dirname, "node.yaml"))
+	data, err := os.ReadFile(filepath.Join(dirname, "nodes.yaml"))
 	if err == nil {
-		err = yaml.Unmarshal(data, &result.node)
+		err = yaml.Unmarshal(data, &result.nodes)
 		if err != nil {
 			return nil, err
 		}
@@ -73,19 +83,51 @@ func newKubernetesMock(dirname string) (*mockKubernetesClient, error) {
 		}
 	}
 
+	// namespaces.yaml and replicasets.yaml may not be present, don't return an error.
+	data, localErr := os.ReadFile(filepath.Join(dirname, "namespaces.yaml"))
+	if localErr == nil {
+		err = yaml.Unmarshal(data, &result.namespaces)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	data, localErr = os.ReadFile(filepath.Join(dirname, "replicasets.yaml"))
+	if localErr == nil {
+		err = yaml.Unmarshal(data, &result.replicaSets)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	return result, err
 }
 
 func (k *mockKubernetesClient) GetNode(ctx context.Context, nodeName string) (*corev1.Node, error) {
-	if len(k.node.Items) == 0 {
+	if len(k.nodes.Items) == 0 {
 		return nil, errNotImplemented
 	}
 
-	return &k.node.Items[0], nil
+	return &k.nodes.Items[0], nil
 }
 
 func (k *mockKubernetesClient) GetPODs(ctx context.Context, nodeName string) ([]corev1.Pod, error) {
 	return k.pods.Items, nil
+}
+
+// GetNodes returns all nodes in the cluster.
+func (k *mockKubernetesClient) GetNodes(ctx context.Context) ([]corev1.Node, error) {
+	return k.nodes.Items, nil
+}
+
+// GetNamespaces returns all namespaces in the cluster.
+func (k *mockKubernetesClient) GetNamespaces(ctx context.Context) ([]corev1.Namespace, error) {
+	return k.namespaces.Items, nil
+}
+
+// GetReplicasets return all replicasets in the cluster.
+func (k *mockKubernetesClient) GetReplicasets(ctx context.Context) ([]appsv1.ReplicaSet, error) {
+	return k.replicaSets.Items, nil
 }
 
 func (k *mockKubernetesClient) GetServerVersion(ctx context.Context) (*version.Info, error) {
@@ -720,5 +762,73 @@ func TestKubernetes_Containers(t *testing.T) { //nolint:maintidx
 				t.Errorf("facts:\n%s", diff)
 			}
 		})
+	}
+}
+
+func TestClusterMetrics(t *testing.T) {
+	const (
+		mockDir     = "testdata/cluster_metrics"
+		metricFile  = mockDir + "/metrics.txt"
+		clusterName = "my_cluster"
+	)
+
+	mockClient, err := newKubernetesMock(mockDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	now := time.Date(2022, time.April, 1, 0, 0, 0, 0, time.UTC)
+
+	gotPoints, err := getGlobalMetrics(context.Background(), mockClient, now, clusterName)
+	if err != nil {
+		t.Fatal(err)
+
+		return
+	}
+
+	// Write points to file (useful to update this test).
+	// for _, point := range gotPoints {
+	// 	// Delete cluster meta label that will be dropped during conversion.
+	// 	delete(point.Labels, types.LabelMetaKubernetesCluster)
+	// }
+	// mfs := model.MetricPointsToFamilies(gotPoints)
+	// fd, _ := os.OpenFile("/tmp/metrics.txt", os.O_CREATE|os.O_WRONLY, 0o750)
+	// enc := expfmt.NewEncoder(fd, expfmt.FmtText)
+	// for _, mf := range mfs {
+	// 	enc.Encode(mf)
+	// }
+
+	// Read expected metrics from a file.
+	f, err := os.Open(metricFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var parser expfmt.TextParser
+
+	expectedMfsMap, err := parser.TextToMetricFamilies(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	expectedMfs := make([]*dto.MetricFamily, 0, len(expectedMfsMap))
+	for _, mf := range expectedMfsMap {
+		expectedMfs = append(expectedMfs, mf)
+	}
+
+	expectedPoints := model.FamiliesToMetricPoints(now, expectedMfs)
+
+	// Add the cluster meta label.
+	for _, point := range expectedPoints {
+		point.Labels[types.LabelMetaKubernetesCluster] = clusterName
+	}
+
+	// Sort points by their labels.
+	lessFunc := func(x, y types.MetricPoint) bool {
+		return types.LabelsToText(x.Labels) < types.LabelsToText(y.Labels)
+	}
+
+	if diff := cmp.Diff(expectedPoints, gotPoints, cmpopts.SortSlices(lessFunc)); diff != "" {
+		t.Fatalf("Didn't get expected points:\n%s", diff)
 	}
 }

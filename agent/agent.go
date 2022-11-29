@@ -798,13 +798,13 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 	}
 
 	if a.config.Kubernetes.Enable {
-		kube := &kubernetes.Kubernetes{
-			Runtime:            a.containerRuntime,
-			NodeName:           a.config.Kubernetes.NodeName,
-			KubeConfig:         a.config.Kubernetes.KubeConfig,
-			IsContainerIgnored: a.containerFilter.ContainerIgnored,
+		shouldGatherClusterMetrics := func() bool {
+			if a.bleemeoConnector != nil {
+				return a.bleemeoConnector.AgentIsClusterLeader()
+			}
+
+			return a.config.Kubernetes.AllowClusterMetrics
 		}
-		a.containerRuntime = kube
 
 		var clusterNameState string
 
@@ -831,10 +831,20 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 			a.factProvider.SetFact("kubernetes_cluster_name", clusterName)
 		} else {
 			a.addWarnings(fmt.Errorf(
-				"%w because kubernetes.clustername is missing, see https://docs.bleemeo.com/agent/installation#installation-on-kubernetes",
+				"%w because kubernetes.clustername is missing, see https://go.bleemeo.com/l/agent-installation-kubernetes",
 				errFeatureUnavailable,
 			))
 		}
+
+		kube := &kubernetes.Kubernetes{
+			Runtime:                    a.containerRuntime,
+			NodeName:                   a.config.Kubernetes.NodeName,
+			KubeConfig:                 a.config.Kubernetes.KubeConfig,
+			IsContainerIgnored:         a.containerFilter.ContainerIgnored,
+			ShouldGatherClusterMetrics: shouldGatherClusterMetrics,
+			ClusterName:                clusterName,
+		}
+		a.containerRuntime = kube
 
 		ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 		if err := kube.Test(ctx); err != nil {
@@ -1068,7 +1078,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		a.miscGather(a.gathererRegistry.WithTTL(5*time.Minute)),
 	)
 	if err != nil {
-		logger.Printf("unable to add miscGathere metrics: %v", err)
+		logger.Printf("unable to add miscGatherer metrics: %v", err)
 	}
 
 	_, err = a.gathererRegistry.RegisterPushPointsCallback(
@@ -1077,10 +1087,10 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 			JitterSeed:  baseJitter,
 			MinInterval: time.Minute,
 		},
-		a.miscGatherMinute(a.gathererRegistry.WithTTL(5*time.Minute)),
+		a.miscGatherMinute(a.gathererRegistry.WithTTLAndFormat(5*time.Minute, types.MetricFormatPrometheus)),
 	)
 	if err != nil {
-		logger.Printf("unable to add miscGathere metrics: %v", err)
+		logger.Printf("unable to add miscGathererMinute metrics: %v", err)
 	}
 
 	_, err = a.gathererRegistry.RegisterAppenderCallback(
@@ -2276,6 +2286,14 @@ func (a *agent) diagnosticContainers(ctx context.Context, archive types.ArchiveW
 	file, err := archive.Create("containers.txt")
 	if err != nil {
 		return err
+	}
+
+	if a.config.Kubernetes.Enable && a.bleemeoConnector != nil {
+		if a.bleemeoConnector.AgentIsClusterLeader() {
+			fmt.Fprintf(file, "This agent is the kubernetes cluster leader.\n\n")
+		} else {
+			fmt.Fprintf(file, "This agent is not the kubernetes cluster leader.\n\n")
+		}
 	}
 
 	containers, err := a.containerRuntime.Containers(ctx, time.Hour, true)

@@ -472,6 +472,7 @@ func (s *Synchronizer) NotifyConfigUpdate(immediate bool) {
 
 	s.forceSync[syncMethodInfo] = true
 	s.forceSync[syncMethodAgent] = true
+	s.forceSync[syncMethodFact] = true
 	s.forceSync[syncMethodAccountConfig] = true
 
 	if !immediate {

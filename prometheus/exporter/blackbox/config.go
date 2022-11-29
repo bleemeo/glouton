@@ -155,7 +155,7 @@ func genCollectorFromDynamicTarget(monitor types.Monitor, userAgent string) (*co
 	return &collectorWithLabels{
 		Collector: confTarget,
 		Labels: map[string]string{
-			types.LabelMetaProbeTarget:            confTarget.Name,
+			types.LabelMetaBleemeoTargetAgent:     confTarget.Name,
 			types.LabelMetaProbeServiceUUID:       monitor.ID,
 			types.LabelMetaBleemeoTargetAgentUUID: monitor.BleemeoAgentID,
 		},
@@ -192,8 +192,8 @@ func genCollectorFromStaticTarget(ct configTarget) collectorWithLabels {
 	return collectorWithLabels{
 		Collector: ct,
 		Labels: map[string]string{
-			types.LabelMetaProbeTarget: ct.Name,
-			"module":                   ct.ModuleName,
+			types.LabelMetaBleemeoTargetAgent: ct.Name,
+			"module":                          ct.ModuleName,
 		},
 	}
 }

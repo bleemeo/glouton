@@ -194,10 +194,11 @@ func DefaultConfig() Config {
 			GraphitePort:   2004,
 		},
 		Kubernetes: Kubernetes{
-			Enable:      false,
-			NodeName:    "",
-			ClusterName: "",
-			KubeConfig:  "",
+			Enable:              false,
+			AllowClusterMetrics: false,
+			NodeName:            "",
+			ClusterName:         "",
+			KubeConfig:          "",
 		},
 		Logging: Logging{
 			Buffer: LoggingBuffer{
