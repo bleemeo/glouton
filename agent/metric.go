@@ -697,16 +697,13 @@ var (
 
 		discovery.UWSGIService: {
 			"uwsgi_status",
-			"uwsgi_overview_load",
-			"uwsgi_workers_avg_rt",
-			"uwsgi_workers_tx",
-			"uwsgi_workers_rss",
-			"uwsgi_workers_vsz",
 			"uwsgi_workers_requests",
-			"uwsgi_workers_status",
-			"uwsgi_workers_exceptions",
-			"uwsgi_workers_respawn_count",
-			"uwsgi_workers_harakiri_count",
+			"uwsgi_requests",
+			"uwsgi_transmitted_bytes",
+			"uwsgi_avg_request_time",
+			"uwsgi_memory_used",
+			"uwsgi_exceptions",
+			"uwsgi_harakiri_count",
 		},
 
 		discovery.VarnishService: {

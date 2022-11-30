@@ -49,6 +49,7 @@ import (
 	"glouton/inputs/winperfcounters"
 	"glouton/inputs/zookeeper"
 	"glouton/logger"
+	"glouton/prometheus/registry"
 	"glouton/types"
 	"net"
 	"os"
@@ -388,38 +389,52 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 		return err
 	}
 
-	if input != nil {
-		logger.V(2).Printf("Add input for service %v instance %s", service.Name, service.Instance)
-
-		input = modify.AddRenameCallback(input, func(labels map[string]string, annotations types.MetricAnnotations) (map[string]string, types.MetricAnnotations) {
-			annotations.ServiceName = service.Name
-			annotations.ServiceInstance = service.Instance
-			annotations.ContainerID = service.ContainerID
-
-			_, port := service.AddressPort()
-			if port != 0 {
-				labels[types.LabelMetaServicePort] = strconv.FormatInt(int64(port), 10)
-			}
-
-			if service.Instance != "" {
-				if annotations.BleemeoItem != "" {
-					annotations.BleemeoItem = service.Instance + "_" + annotations.BleemeoItem
-				} else {
-					annotations.BleemeoItem = service.Instance
-				}
-			}
-
-			if annotations.BleemeoItem != "" {
-				labels[types.LabelItem] = annotations.BleemeoItem
-			}
-
-			return labels, annotations
-		})
-
-		return d.addInput(input, service)
+	if input == nil {
+		return nil
 	}
 
-	return nil
+	logger.V(2).Printf("Add input for service %v instance %s", service.Name, service.Instance)
+
+	internalInput := modify.AddRenameCallback(input, func(labels map[string]string, annotations types.MetricAnnotations) (map[string]string, types.MetricAnnotations) {
+		annotations.ServiceName = service.Name
+		annotations.ServiceInstance = service.Instance
+		annotations.ContainerID = service.ContainerID
+
+		_, port := service.AddressPort()
+		if port != 0 {
+			labels[types.LabelMetaServicePort] = strconv.FormatInt(int64(port), 10)
+		}
+
+		if service.Instance != "" {
+			if annotations.BleemeoItem != "" {
+				annotations.BleemeoItem = service.Instance + "_" + annotations.BleemeoItem
+			} else {
+				annotations.BleemeoItem = service.Instance
+			}
+		}
+
+		if annotations.BleemeoItem != "" {
+			labels[types.LabelItem] = annotations.BleemeoItem
+		}
+
+		return labels, annotations
+	})
+
+	// If KeepLabels is set, use an input gatherer instead of the default collector.
+	if internalInput.KeepLabels {
+		_, err = d.metricRegistry.RegisterInput(
+			registry.RegistrationOption{
+				Description: fmt.Sprintf("Input %s", internalInput.Name),
+				JitterSeed:  0,
+				Rules:       internalInput.Rules,
+			},
+			input,
+		)
+
+		return err
+	}
+
+	return d.addInput(input, service)
 }
 
 func createMySQLInput(service Service) (telegraf.Input, error) {
@@ -444,6 +459,7 @@ func createMySQLInput(service Service) (telegraf.Input, error) {
 	return nil, nil
 }
 
+// addInput is deprecated, use RegisterInput instead.
 func (d *Discovery) addInput(input telegraf.Input, service Service) error {
 	if d.coll == nil {
 		return nil

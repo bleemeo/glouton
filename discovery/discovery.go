@@ -90,6 +90,7 @@ type Registry interface {
 // GathererRegistry allow to register/unregister prometheus Gatherer.
 type GathererRegistry interface {
 	RegisterGatherer(opt registry.RegistrationOption, gatherer prometheus.Gatherer) (int, error)
+	RegisterInput(opt registry.RegistrationOption, input telegraf.Input) (int, error)
 	Unregister(id int) bool
 }
 

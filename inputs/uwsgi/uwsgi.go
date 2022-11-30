@@ -19,7 +19,7 @@ package uwsgi
 import (
 	"glouton/inputs"
 	"glouton/inputs/internal"
-	"strings"
+	"glouton/prometheus/registry"
 
 	"github.com/influxdata/telegraf"
 	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"
@@ -27,7 +27,7 @@ import (
 )
 
 // New returns a uWSGI input.
-func New(url string) (internalInput telegraf.Input, err error) {
+func New(url string) (telegraf.Input, error) {
 	input, ok := telegraf_inputs.Inputs["uwsgi"]
 	if !ok {
 		return nil, inputs.ErrDisabledInput
@@ -40,35 +40,45 @@ func New(url string) (internalInput telegraf.Input, err error) {
 
 	uwsgiInput.Servers = []string{url}
 
-	internalInput = &internal.Input{
+	internalInput := &internal.Input{
 		Input: uwsgiInput,
 		Accumulator: internal.Accumulator{
-			RenameGlobal:     renameGlobal,
-			TransformMetrics: transformMetrics,
+			DerivatedMetrics: []string{
+				"requests",
+				"exceptions",
+				"tx",
+				"harakiri_count",
+			},
 		},
-		Name: "uwsgi",
+		Name:       "uWSGI",
+		KeepLabels: true,
+		Rules: []registry.SimpleRule{
+			{
+				TargetName:  "uwsgi_requests",
+				PromQLQuery: "sum without (worker_id) (uwsgi_workers_requests)",
+			},
+			{
+				TargetName:  "uwsgi_transmitted_bytes",
+				PromQLQuery: "sum without (worker_id) (uwsgi_workers_tx)",
+			},
+			{
+				TargetName:  "uwsgi_avg_request_time",
+				PromQLQuery: "avg without (worker_id) (uwsgi_workers_avg_rt)",
+			},
+			{
+				TargetName:  "uwsgi_memory_used",
+				PromQLQuery: "sum without (worker_id) (uwsgi_workers_rss)",
+			},
+			{
+				TargetName:  "uwsgi_exceptions",
+				PromQLQuery: "sum without (worker_id) (uwsgi_workers_exceptions)",
+			},
+			{
+				TargetName:  "uwsgi_harakiri_count",
+				PromQLQuery: "sum without (worker_id) (uwsgi_workers_harakiri_count)",
+			},
+		},
 	}
 
 	return internalInput, nil
-}
-
-func renameGlobal(gatherContext internal.GatherContext) (internal.GatherContext, bool) {
-	// TODO: Let worker_id, source and other labels pass -> concatenate them in the item?
-
-	return gatherContext, false
-}
-
-func transformMetrics(
-	currentContext internal.GatherContext,
-	fields map[string]float64,
-	originalFields map[string]interface{},
-) map[string]float64 {
-	newFields := make(map[string]float64)
-
-	// Remove the "uwsgi_" prefix as we already add the service name to the fields.
-	for metricName, value := range fields {
-		newFields[strings.TrimPrefix(metricName, "uwsgi_")] = value
-	}
-
-	return newFields
 }

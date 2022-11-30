@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"glouton/collector"
 	"glouton/logger"
+	"glouton/prometheus/registry"
 
 	"github.com/influxdata/telegraf"
 	"github.com/influxdata/telegraf/models"
@@ -28,8 +29,16 @@ import (
 // Input is a generic input that use the modifying Accumulator defined in this package.
 type Input struct {
 	telegraf.Input
-	Accumulator       Accumulator
-	Name              string
+	Accumulator Accumulator
+	Name        string
+	// KeepLabels make the input use an input gatherer instead of the collector,
+	// this means all labels will be kept and not only the item.
+	KeepLabels bool
+	// Recording rules evaluated in the input gatherer. KeepLabels must
+	// be true if recording rules are used. They are evaluated after
+	// the metrics are renamed in the accumulator.
+	Rules []registry.SimpleRule
+
 	startError        error
 	lastGatherIsError bool
 }

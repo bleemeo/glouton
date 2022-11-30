@@ -30,7 +30,7 @@ type Measurement struct {
 }
 
 // StoreAccumulator store in memory all value pushed by AddFields, AddGauge...
-// All type (fields, gague, counter) are processed the same, and can't be distinguished.
+// All type (fields, gauge, counter) are processed the same, and can't be distinguished.
 type StoreAccumulator struct {
 	Measurement []Measurement
 	Errors      []error

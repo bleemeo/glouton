@@ -29,22 +29,24 @@ import (
 type RenameCallback func(labels map[string]string, annotations types.MetricAnnotations) (newLabels map[string]string, newAnnotations types.MetricAnnotations)
 
 // AddRenameCallback adds a rename callback that can mutate labels & annotations.
-func AddRenameCallback(input telegraf.Input, f RenameCallback) telegraf.Input {
-	if ourInput, ok := input.(*internal.Input); ok {
-		ourInput.Accumulator.RenameCallbacks = append(ourInput.Accumulator.RenameCallbacks, internal.RenameCallback(f))
-	} else {
-		// The first line of the sample config contains a comment with the input description.
-		configLines := strings.Split(input.SampleConfig(), "\n")
-		description := strings.TrimPrefix(configLines[0], "# ")
+func AddRenameCallback(input telegraf.Input, f RenameCallback) *internal.Input {
+	if internalInput, ok := input.(*internal.Input); ok {
+		internalInput.Accumulator.RenameCallbacks = append(internalInput.Accumulator.RenameCallbacks, internal.RenameCallback(f))
 
-		input = &internal.Input{
-			Input: input,
-			Accumulator: internal.Accumulator{
-				RenameCallbacks: []internal.RenameCallback{internal.RenameCallback(f)},
-			},
-			Name: description,
-		}
+		return internalInput
 	}
 
-	return input
+	// The first line of the sample config contains a comment with the input description.
+	configLines := strings.Split(input.SampleConfig(), "\n")
+	description := strings.TrimPrefix(configLines[0], "# ")
+
+	internalInput := &internal.Input{
+		Input: input,
+		Accumulator: internal.Accumulator{
+			RenameCallbacks: []internal.RenameCallback{internal.RenameCallback(f)},
+		},
+		Name: description,
+	}
+
+	return internalInput
 }

@@ -1298,7 +1298,7 @@ func Test_RebuildDefaultMetrics(t *testing.T) {
 			ServiceType: discovery.PostfixService,
 		},
 		{
-			ServiceType: discovery.UWSGIService,
+			ServiceType: discovery.BindService,
 		},
 	}
 
@@ -1326,11 +1326,11 @@ func Test_RebuildDefaultMetrics(t *testing.T) {
 				Value: "postfix_queue_size",
 			},
 		},
-		"uwsgi_status": {
+		"bind_status": {
 			{
 				Name:  "__name__",
 				Type:  labels.MatchEqual,
-				Value: "uwsgi_status",
+				Value: "bind_status",
 			},
 		},
 	}
