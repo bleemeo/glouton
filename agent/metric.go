@@ -697,9 +697,8 @@ var (
 
 		discovery.UWSGIService: {
 			"uwsgi_status",
-			"uwsgi_workers_requests",
 			"uwsgi_requests",
-			"uwsgi_transmitted_bytes",
+			"uwsgi_transmitted",
 			"uwsgi_avg_request_time",
 			"uwsgi_memory_used",
 			"uwsgi_exceptions",

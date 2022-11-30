@@ -58,16 +58,16 @@ func New(url string) (telegraf.Input, error) {
 				PromQLQuery: "sum without (worker_id) (uwsgi_workers_requests)",
 			},
 			{
-				TargetName:  "uwsgi_transmitted_bytes",
+				TargetName:  "uwsgi_transmitted",
 				PromQLQuery: "sum without (worker_id) (uwsgi_workers_tx)",
 			},
 			{
 				TargetName:  "uwsgi_avg_request_time",
-				PromQLQuery: "avg without (worker_id) (uwsgi_workers_avg_rt)",
+				PromQLQuery: "avg without (worker_id) (uwsgi_workers_avg_rt)/1e6",
 			},
 			{
 				TargetName:  "uwsgi_memory_used",
-				PromQLQuery: "sum without (worker_id) (uwsgi_workers_rss)",
+				PromQLQuery: "sum without (worker_id) (uwsgi_workers_rss)/8",
 			},
 			{
 				TargetName:  "uwsgi_exceptions",
