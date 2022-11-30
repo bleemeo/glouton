@@ -45,6 +45,7 @@ import (
 	"glouton/inputs/redis"
 	"glouton/inputs/swap"
 	"glouton/inputs/system"
+	"glouton/inputs/uwsgi"
 	"glouton/inputs/winperfcounters"
 	"glouton/inputs/zookeeper"
 	"glouton/logger"
@@ -368,6 +369,10 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 	case RedisService:
 		if ip, port := service.AddressPort(); ip != "" {
 			input, err = redis.New(fmt.Sprintf("tcp://%s", net.JoinHostPort(ip, strconv.Itoa(port))), service.Config.Password)
+		}
+	case UWSGIService:
+		if service.Config.StatsURL != "" {
+			input, err = uwsgi.New(service.Config.StatsURL)
 		}
 	case ZookeeperService:
 		if ip, port := service.AddressPort(); ip != "" {

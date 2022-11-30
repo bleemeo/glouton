@@ -162,9 +162,7 @@ func (d *Discovery) createCheck(service Service) {
 		)
 		d.addCheck(check, service)
 	case Fail2banService:
-		if service.Config.MatchProcess == "" {
-			service.Config.MatchProcess = "fail2ban-server"
-		}
+		service.Config.MatchProcess = "fail2ban-server"
 
 		d.createProcessCheck(service, labels, annotations)
 	case CustomService:
