@@ -1743,6 +1743,203 @@ func TestMonitorDeactivation(t *testing.T) {
 	}
 }
 
+// TestMonitorPrivate test for monitor private.
+func TestMonitorPrivate(t *testing.T) {
+	helper := newHelper(t)
+	defer helper.Close()
+
+	// Configure as private probe
+	helper.cfg.Blackbox.ScraperName = ""
+	helper.cfg.Blackbox.ScraperSendUUID = true
+
+	helper.addMonitorOnAPI(t)
+	helper.initSynchronizer(t)
+	helper.AddTime(time.Minute)
+
+	// This should NOT be needed. Glouton should not need to be able to read the
+	// monitor agent to works.
+	// Currently Glouton public probe are allowed to view such agent. Glouton private probe aren't, therefor this
+	// test show a bug in Glouton.
+	helper.api.resources["agent"].AddStore(newMonitorAgent)
+
+	if err := helper.runOnceWithResult(t).Check(); err != nil {
+		t.Error(err)
+	}
+
+	idAgentMain, _ := helper.state.BleemeoCredentials()
+	if idAgentMain == "" {
+		t.Fatal("idAgentMain == '', want something")
+	}
+
+	// Note: we use proces_sucess1/2/3 to helps reading diff in case of error. Normally the name
+	// should be "proces_sucess". But this shouldn't matter for the test.
+	initialMetrics := []metricPayload{
+		{
+			Metric: bleemeoTypes.Metric{
+				ID:      "90c6459c-851d-4bb4-957c-afbc695c2201",
+				AgentID: newMonitor.AgentID,
+				LabelsText: fmt.Sprintf(
+					"__name__=\"probe_success1\",instance=\"%s\",instance_uuid=\"%s\",scraper=\"paris\"",
+					newMonitor.URL,
+					newMonitor.AgentID,
+				),
+			},
+			Name: "probe_success1",
+		},
+		{
+			Metric: bleemeoTypes.Metric{
+				ID:      "9149d491-3a6e-4f46-abf9-c1ea9b9f7227",
+				AgentID: newMonitor.AgentID,
+				LabelsText: fmt.Sprintf(
+					"__name__=\"probe_success2\",instance=\"%s\",instance_uuid=\"%s\",scraper_uuid=\"2a38ec88-8b5b-413b-a12f-f35a8a228ee3\"",
+					newMonitor.URL,
+					newMonitor.AgentID,
+				),
+			},
+			Name: "probe_success2",
+		},
+		{
+			Metric: bleemeoTypes.Metric{
+				ID:      "92c0b336-6e5a-4960-94cc-b606db8a581f",
+				AgentID: newMonitor.AgentID,
+				LabelsText: fmt.Sprintf(
+					"__name__=\"probe_status\",instance=\"%s\",instance_uuid=\"%s\"",
+					newMonitor.URL,
+					newMonitor.AgentID,
+				),
+			},
+			Name: "probe_status",
+		},
+	}
+
+	pushedPoints := []labels.Labels{
+		labels.New(
+			labels.Label{Name: types.LabelName, Value: "probe_success3"},
+			labels.Label{Name: types.LabelScraperUUID, Value: idAgentMain},
+			labels.Label{Name: types.LabelInstance, Value: newMonitor.URL},
+			labels.Label{Name: types.LabelInstanceUUID, Value: newMonitor.AgentID},
+			labels.Label{Name: types.LabelMetaBleemeoTargetAgentUUID, Value: newMonitor.AgentID},
+		),
+		labels.New(
+			labels.Label{Name: types.LabelName, Value: "probe_duration"},
+			labels.Label{Name: types.LabelScraperUUID, Value: idAgentMain},
+			labels.Label{Name: types.LabelInstance, Value: newMonitor.URL},
+			labels.Label{Name: types.LabelInstanceUUID, Value: newMonitor.AgentID},
+			labels.Label{Name: types.LabelMetaBleemeoTargetAgentUUID, Value: newMonitor.AgentID},
+		),
+	}
+
+	helper.SetAPIMetrics(initialMetrics...)
+	helper.pushPoints(t, pushedPoints)
+
+	if err := helper.runOnceWithResult(t).Check(); err != nil {
+		t.Error(err)
+	}
+
+	want := []metricPayload{
+		{
+			Metric: bleemeoTypes.Metric{
+				ID:         idAny,
+				AgentID:    idAgentMain,
+				LabelsText: "",
+			},
+			Name: agentStatusName,
+		},
+		{
+			Metric: bleemeoTypes.Metric{
+				ID:      idAny,
+				AgentID: newMonitor.AgentID,
+				LabelsText: fmt.Sprintf(
+					"__name__=\"probe_success3\",instance=\"%s\",instance_uuid=\"%s\",scraper_uuid=\"%s\"",
+					newMonitor.URL,
+					newMonitor.AgentID,
+					idAgentMain,
+				),
+				ServiceID: newMonitor.ID,
+			},
+			Name: "probe_success3",
+		},
+		{
+			Metric: bleemeoTypes.Metric{
+				ID:      idAny,
+				AgentID: newMonitor.AgentID,
+				LabelsText: fmt.Sprintf(
+					"__name__=\"probe_duration\",instance=\"%s\",instance_uuid=\"%s\",scraper_uuid=\"%s\"",
+					newMonitor.URL,
+					newMonitor.AgentID,
+					idAgentMain,
+				),
+				ServiceID: newMonitor.ID,
+			},
+			Name: "probe_duration",
+		},
+	}
+
+	want = append(want, initialMetrics...)
+
+	helper.assertMetricsInAPI(t, want)
+
+	helper.SetTimeToNextFullSync()
+	helper.AddTime(60 * time.Minute)
+	helper.pushPoints(t, pushedPoints)
+
+	if err := helper.runOnceWithResult(t).Check(); err != nil {
+		t.Error(err)
+	}
+
+	helper.SetTimeToNextFullSync()
+	helper.AddTime(60 * time.Minute)
+
+	if err := helper.runOnceWithResult(t).Check(); err != nil {
+		t.Error(err)
+	}
+
+	want = []metricPayload{
+		{
+			Metric: bleemeoTypes.Metric{
+				ID:         idAny,
+				AgentID:    idAgentMain,
+				LabelsText: "",
+			},
+			Name: agentStatusName,
+		},
+		{
+			Metric: bleemeoTypes.Metric{
+				ID:      idAny,
+				AgentID: newMonitor.AgentID,
+				LabelsText: fmt.Sprintf(
+					"__name__=\"probe_success3\",instance=\"%s\",instance_uuid=\"%s\",scraper_uuid=\"%s\"",
+					newMonitor.URL,
+					newMonitor.AgentID,
+					idAgentMain,
+				),
+				DeactivatedAt: helper.Now(),
+				ServiceID:     newMonitor.ID,
+			},
+			Name: "probe_success3",
+		},
+		{
+			Metric: bleemeoTypes.Metric{
+				ID:      idAny,
+				AgentID: newMonitor.AgentID,
+				LabelsText: fmt.Sprintf(
+					"__name__=\"probe_duration\",instance=\"%s\",instance_uuid=\"%s\",scraper_uuid=\"%s\"",
+					newMonitor.URL,
+					newMonitor.AgentID,
+					idAgentMain,
+				),
+				DeactivatedAt: helper.Now(),
+				ServiceID:     newMonitor.ID,
+			},
+			Name: "probe_duration",
+		},
+	}
+
+	want = append(want, initialMetrics...)
+
+	helper.assertMetricsInAPI(t, want)
+}
+
 // inactive and MQTT
 
 func Test_httpResponseToMetricFailureKind(t *testing.T) {

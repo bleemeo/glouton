@@ -34,7 +34,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/prometheus/prometheus/model/labels"
+)
+
+const (
+	idAny            = "this constant in test when the object ID doesn't matter. An helper function will replace it by actual ID"
+	idObjectNotFound = "idAny was used but object isn't found"
 )
 
 var (
@@ -337,6 +344,39 @@ func (helper *syncTestHelper) AgentsFromAPI() []payloadAgent {
 	})
 
 	return agents
+}
+
+// assertMetricsInAPI check that wanted metrics (and only wanted metrics) are present in API.
+// This is mostly a wrapper around cmp.Diff which also do:
+// * replace idAny but corresponding ID (match metric by same agentID, label & labels_text)
+// * sort list by ID.
+func (helper *syncTestHelper) assertMetricsInAPI(t *testing.T, want []metricPayload) {
+	t.Helper()
+
+	metrics := helper.MetricsFromAPI()
+
+	copyWant := make([]metricPayload, 0, len(want))
+	for _, m := range want {
+		if m.ID == idAny {
+			m.ID = idObjectNotFound
+
+			for _, existingM := range metrics {
+				if m.AgentID == existingM.AgentID && m.Name == existingM.Name && m.LabelsText == existingM.LabelsText {
+					m.ID = existingM.ID
+
+					break
+				}
+			}
+
+		}
+
+		copyWant = append(copyWant, m)
+	}
+
+	optSort := cmpopts.SortSlices(func(x metricPayload, y metricPayload) bool { return x.ID < y.ID })
+	if diff := cmp.Diff(copyWant, metrics, cmpopts.EquateEmpty(), optSort); diff != "" {
+		t.Errorf("metrics mismatch (-want +got)\n%s", diff)
+	}
 }
 
 type runOnceResult struct {

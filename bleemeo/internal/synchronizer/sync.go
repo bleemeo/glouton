@@ -548,6 +548,12 @@ func (s *Synchronizer) popPendingMetricsUpdate() []string {
 }
 
 func (s *Synchronizer) waitCPUMetric(ctx context.Context) {
+	// In test, s.now is defined (then likely don't return time.Now).
+	// In test, we skip this waiting time.
+	if !s.now().Equal(time.Now()) {
+		return
+	}
+
 	metrics := s.option.Cache.Metrics()
 	for _, m := range metrics {
 		if m.Labels[types.LabelName] == "cpu_used" || m.Labels[types.LabelName] == "node_cpu_seconds_total" {
