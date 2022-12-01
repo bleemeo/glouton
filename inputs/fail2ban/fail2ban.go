@@ -41,18 +41,11 @@ func New() (internalInput telegraf.Input, err error) {
 	fail2banInput.UseSudo = true
 
 	internalInput = &internal.Input{
-		Input: fail2banInput,
-		Accumulator: internal.Accumulator{
-			RenameGlobal: renameGlobal,
-		},
-		Name: "fail2ban",
+		Input:       fail2banInput,
+		Accumulator: internal.Accumulator{},
+		Name:        "fail2ban",
+		KeepLabels:  true,
 	}
 
 	return internalInput, nil
-}
-
-func renameGlobal(gatherContext internal.GatherContext) (internal.GatherContext, bool) {
-	gatherContext.Annotations.BleemeoItem = gatherContext.Tags["jail"]
-
-	return gatherContext, false
 }

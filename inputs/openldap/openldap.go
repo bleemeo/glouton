@@ -68,7 +68,8 @@ func New(host string, port int, config config.Service) (telegraf.Input, error) {
 				"operations_search_completed",
 			},
 		},
-		Name: "openldap",
+		Name:       "openldap",
+		KeepLabels: true,
 	}
 
 	return internalInput, nil
