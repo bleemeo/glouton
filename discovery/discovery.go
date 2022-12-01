@@ -180,6 +180,16 @@ func validateServices(services []config.Service) (map[NameInstance]config.Servic
 			srv.ID = newID
 		}
 
+		if srv.SSL && srv.StartTLS {
+			warning := fmt.Errorf(
+				"%w: service %s can't set both SSL and StartTLS, SSL will be disabled",
+				config.ErrInvalidValue, srv.ID,
+			)
+			warnings.Append(warning)
+
+			srv.SSL = false
+		}
+
 		// Check for duplicated overrides.
 		key := NameInstance{
 			Name:     srv.ID,
