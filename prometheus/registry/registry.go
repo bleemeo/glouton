@@ -463,6 +463,8 @@ func (r *Registry) RegisterInput(
 		}
 	}
 
+	previousStopCallback := opt.StopCallback
+
 	// Add stop callback to stop the input.
 	opt.StopCallback = func() {
 		if si, ok := input.(telegraf.ServiceInput); ok {
@@ -470,8 +472,8 @@ func (r *Registry) RegisterInput(
 		}
 
 		// Keep previous stop callback.
-		if opt.StopCallback != nil {
-			opt.StopCallback()
+		if previousStopCallback != nil {
+			previousStopCallback()
 		}
 	}
 
