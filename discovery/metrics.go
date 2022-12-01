@@ -427,6 +427,7 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 				Description: fmt.Sprintf("Input %s", internalInput.Name),
 				JitterSeed:  0,
 				Rules:       internalInput.Rules,
+				MinInterval: internalInput.MinInterval,
 			},
 			input,
 		)

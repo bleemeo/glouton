@@ -21,6 +21,7 @@ import (
 	"glouton/collector"
 	"glouton/logger"
 	"glouton/prometheus/registry"
+	"time"
 
 	"github.com/influxdata/telegraf"
 	"github.com/influxdata/telegraf/models"
@@ -38,6 +39,8 @@ type Input struct {
 	// be true if recording rules are used. They are evaluated after
 	// the metrics are renamed in the accumulator.
 	Rules []registry.SimpleRule
+	// The delay to wait for between gathers.
+	MinInterval time.Duration
 
 	startError        error
 	lastGatherIsError bool

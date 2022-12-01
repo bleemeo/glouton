@@ -19,6 +19,7 @@ package fail2ban
 import (
 	"glouton/inputs"
 	"glouton/inputs/internal"
+	"time"
 
 	"github.com/influxdata/telegraf"
 	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"
@@ -45,6 +46,8 @@ func New() (internalInput telegraf.Input, err error) {
 		Accumulator: internal.Accumulator{},
 		Name:        "fail2ban",
 		KeepLabels:  true,
+		// The input uses an external command with sudo so we gather metrics less often.
+		MinInterval: 60 * time.Second,
 	}
 
 	return internalInput, nil
