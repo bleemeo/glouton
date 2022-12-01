@@ -558,7 +558,7 @@ var (
 
 		discovery.NatsService: {
 			"nats_status",
-			"nats_uptime",
+			"nats_uptime_seconds",
 			"nats_routes",
 			"nats_slow_consumers",
 			"nats_subscriptions",
