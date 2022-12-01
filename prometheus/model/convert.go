@@ -151,6 +151,7 @@ func MetricPointsToFamilies(points []types.MetricPoint) []*dto.MetricFamily {
 }
 
 // DropMetaLabels delete all labels which start with __ (with exception to __name__).
+// The input is modified.
 func DropMetaLabels(lbls labels.Labels) labels.Labels {
 	i := 0
 

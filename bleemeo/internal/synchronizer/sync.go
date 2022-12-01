@@ -285,7 +285,7 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 			break
 		}
 
-		err := s.runOnce(ctx, firstSync)
+		_, err := s.runOnce(ctx, firstSync)
 		if err != nil {
 			s.l.Lock()
 			s.successiveErrors++
@@ -634,12 +634,12 @@ func (s *Synchronizer) setClient() error {
 	return nil
 }
 
-func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) error {
+func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) (map[string]bool, error) {
 	var wasCreation, updateThresholds bool
 
 	if s.agentID == "" {
 		if err := s.register(ctx); err != nil {
-			return err
+			return nil, err
 		}
 
 		wasCreation = true
@@ -660,7 +660,7 @@ func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) error {
 	syncMethods := s.syncToPerform(ctx)
 
 	if len(syncMethods) == 0 {
-		return nil
+		return syncMethods, nil
 	}
 
 	s.client = &wrapperClient{
@@ -692,7 +692,7 @@ func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) error {
 
 	for _, step := range syncStep {
 		if ctx.Err() != nil {
-			return ctx.Err()
+			return syncMethods, ctx.Err()
 		}
 
 		until, reason := s.getDisabledUntil()
@@ -786,7 +786,7 @@ func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) error {
 		s.lastSync = startAt
 	}
 
-	return firstErr
+	return syncMethods, firstErr
 }
 
 func (s *Synchronizer) syncToPerform(ctx context.Context) map[string]bool {

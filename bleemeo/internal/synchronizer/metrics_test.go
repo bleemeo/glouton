@@ -18,17 +18,15 @@
 package synchronizer
 
 import (
-	"context"
 	"fmt"
 	"glouton/bleemeo/internal/cache"
 	bleemeoTypes "glouton/bleemeo/types"
 	"glouton/config"
 	"glouton/discovery"
-	"glouton/facts"
-	"glouton/store"
+	"glouton/prometheus/exporter/snmp"
+	"glouton/prometheus/model"
 	"glouton/types"
 	"net/http"
-	"net/http/httptest"
 	"reflect"
 	"sort"
 	"strconv"
@@ -36,50 +34,31 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
+	"github.com/prometheus/prometheus/model/labels"
 )
 
-const (
-	idAgentMain    = "1ea3eaa7-3c29-413c-b00e-9dbd7183fb26"
-	idAgentSNMP    = "69956bc0-943f-4125-bb9b-eb4743c83b3c"
-	idAgentMonitor = "bd50acd0-433f-4f0b-a8ce-937d914b8a4d"
-	passwordAgent  = "a-secret-password"
-)
+func sortList(list []bleemeoTypes.Metric) []bleemeoTypes.Metric {
+	newList := make([]bleemeoTypes.Metric, 0, len(list))
+	orderedNames := make([]string, 0, len(list))
 
-type mockMetric struct {
-	Name   string
-	labels map[string]string
-}
-
-func (m mockMetric) Labels() map[string]string {
-	if m.labels != nil {
-		return m.labels
+	for _, val := range list {
+		orderedNames = append(orderedNames, val.LabelsText)
 	}
 
-	return map[string]string{types.LabelName: m.Name}
-}
+	sort.Strings(orderedNames)
 
-func (m mockMetric) Annotations() types.MetricAnnotations {
-	return types.MetricAnnotations{}
-}
+	for _, name := range orderedNames {
+		for _, val := range list {
+			if val.LabelsText == name {
+				newList = append(newList, val)
 
-func (m mockMetric) Points(start, end time.Time) ([]types.Point, error) {
-	return nil, errNotImplemented
-}
+				break
+			}
+		}
+	}
 
-func (m mockMetric) LastPointReceivedAt() time.Time {
-	return time.Now()
-}
-
-type mockTime struct {
-	now time.Time
-}
-
-func (mt *mockTime) Now() time.Time {
-	return mt.now
-}
-
-func (mt *mockTime) Advance(d time.Duration) {
-	mt.now = mt.now.Add(d)
+	return newList
 }
 
 func TestPrioritizeAndFilterMetrics(t *testing.T) {
@@ -571,292 +550,33 @@ func Test_metricComparator_importanceWeight(t *testing.T) {
 	}
 }
 
-type metricTestHelper struct {
-	api        *mockAPI
-	s          *Synchronizer
-	mt         *mockTime
-	store      *store.Store
-	httpServer *httptest.Server
-	t          *testing.T
-}
-
-func newMetricHelper(t *testing.T) *metricTestHelper {
-	t.Helper()
-
-	helper := &metricTestHelper{
-		t:     t,
-		api:   newAPI(),
-		mt:    &mockTime{now: time.Now()},
-		store: store.New(time.Hour, time.Hour),
-	}
-
-	helper.httpServer = helper.api.Server()
-
-	helper.store.InternalSetNowAndRunOnce(context.Background(), helper.mt.Now)
-
-	cfg := config.Config{
-		Logging: config.Logging{
-			Level: "debug",
-		},
-		Bleemeo: config.Bleemeo{
-			APIBase:         helper.httpServer.URL,
-			AccountID:       accountID,
-			RegistrationKey: registrationKey,
-		},
-		Blackbox: config.Blackbox{
-			Enable:      true,
-			ScraperName: "paris",
-		},
-	}
-
-	cache := cache.Cache{}
-
-	cache.SetAccountConfigs([]bleemeoTypes.AccountConfig{
-		{
-			ID:   newAccountConfig.ID,
-			Name: "default",
-		},
-	})
-	cache.SetAgentTypes([]bleemeoTypes.AgentType{
-		{
-			ID:   agentTypeAgent.ID,
-			Name: bleemeoTypes.AgentTypeAgent,
-		},
-		{
-			ID:   agentTypeSNMP.ID,
-			Name: bleemeoTypes.AgentTypeSNMP,
-		},
-		{
-			ID:   agentTypeMonitor.ID,
-			Name: bleemeoTypes.AgentTypeMonitor,
-		},
-	})
-	cache.SetAgentConfigs([]bleemeoTypes.AgentConfig{
-		{
-			MetricsAllowlist: "",
-			MetricResolution: 10,
-			AccountConfig:    newAccountConfig.ID,
-			AgentType:        agentTypeAgent.ID,
-		},
-		{
-			MetricsAllowlist: "",
-			MetricResolution: 60,
-			AccountConfig:    newAccountConfig.ID,
-			AgentType:        agentTypeSNMP.ID,
-		},
-		{
-			MetricsAllowlist: "",
-			MetricResolution: 60,
-			AccountConfig:    newAccountConfig.ID,
-			AgentType:        agentTypeMonitor.ID,
-		},
-	})
-
-	mainAgent := bleemeoTypes.Agent{
-		ID:              idAgentMain,
-		CurrentConfigID: newAccountConfig.ID,
-		AgentType:       agentTypeAgent.ID,
-	}
-
-	cache.SetAgentList([]bleemeoTypes.Agent{
-		mainAgent,
-		{
-			ID:              idAgentSNMP,
-			CurrentConfigID: newAccountConfig.ID,
-			AgentType:       agentTypeSNMP.ID,
-		},
-		{
-			ID:              idAgentMonitor,
-			CurrentConfigID: newAccountConfig.ID,
-			AgentType:       agentTypeMonitor.ID,
-		},
-	})
-	cache.SetAgent(mainAgent)
-
-	state := newStateMock()
-
-	discovery := &discovery.MockDiscoverer{
-		UpdatedAt: helper.mt.Now(),
-	}
-
-	var err error
-
-	helper.s, err = New(Option{
-		Cache: &cache,
-		GlobalOption: bleemeoTypes.GlobalOption{
-			Config:              cfg,
-			Facts:               facts.NewMockFacter(nil),
-			State:               state,
-			Discovery:           discovery,
-			Store:               helper.store,
-			MetricFormat:        types.MetricFormatBleemeo,
-			SNMPOnlineTarget:    func() int { return 0 },
-			BlackboxScraperName: cfg.Blackbox.ScraperName,
-			IsContainerEnabled:  facts.ContainerFilter{}.ContainerEnabled,
-			IsMetricAllowed:     func(_ map[string]string) bool { return true },
-		},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	helper.s.now = helper.mt.Now
-	helper.s.ctx = context.Background()
-	helper.s.startedAt = helper.mt.Now()
-	helper.s.nextFullSync = helper.mt.Now()
-	helper.s.agentID = idAgentMain
-	helper.api.JWTUsername = idAgentMain + "@bleemeo.com"
-	helper.api.JWTPassword = passwordAgent
-	_ = helper.s.option.State.SetBleemeoCredentials(idAgentMain, passwordAgent)
-
-	if err := helper.s.setClient(); err != nil {
-		panic(err)
-	}
-
-	return helper
-}
-
-type runResult struct {
-	h             *metricTestHelper
-	runCount      int
-	lastErr       error
-	didFull       bool
-	stillWantSync bool
-}
-
-func (h *metricTestHelper) Close() {
-	h.httpServer.Close()
-	h.httpServer = nil
-}
-
-func (h *metricTestHelper) SetMetrics(metrics ...metricPayload) {
-	tmp := make([]interface{}, 0, len(metrics))
-
-	for _, m := range metrics {
-		tmp = append(tmp, m)
-	}
-
-	h.api.resources["metric"].SetStore(tmp...)
-}
-
-func (h *metricTestHelper) Metrics() []metricPayload {
-	var metrics []metricPayload
-
-	h.api.resources["metric"].Store(&metrics)
-	sort.Slice(metrics, func(i, j int) bool {
-		return metrics[i].ID < metrics[j].ID
-	})
-
-	return metrics
-}
-
-func (h *metricTestHelper) AddTime(d time.Duration) {
-	h.mt.now = h.mt.now.Add(d)
-	h.api.now.now = h.mt.now
-}
-
-func (h *metricTestHelper) RunSync(maxLoop int, timeStep time.Duration, forceFirst bool) runResult {
-	startAt := h.mt.Now()
-	result := runResult{
-		h: h,
-	}
-
-	h.api.ResetCount()
-
-	for result.runCount = 0; result.runCount < maxLoop; result.runCount++ {
-		h.s.client = &wrapperClient{s: h.s, client: h.s.realClient, duplicateChecked: true}
-
-		methods := h.s.syncToPerform(context.Background())
-		if full, ok := methods[syncMethodMetric]; !ok && !forceFirst {
-			break
-		} else if full {
-			result.didFull = true
-		}
-
-		_, err := h.s.syncMetrics(context.Background(), methods[syncMethodMetric], false)
-		result.lastErr = err
-
-		if err == nil {
-			// when no error, Synchronizer update it lastSync/nextFullSync
-			h.s.lastSync = startAt
-			h.s.nextFullSync = h.mt.Now().Add(time.Hour)
-		}
-
-		h.mt.now = h.mt.Now().Add(timeStep)
-	}
-
-	_, result.stillWantSync = h.s.syncToPerform(context.Background())[syncMethodMetric]
-
-	return result
-}
-
-// Check verify that runSync was successful without any server error.
-func (res runResult) Check(name string, wantFull bool) {
-	res.h.t.Helper()
-
-	res.CheckAllowError(name, wantFull)
-
-	if res.h.api.ServerErrorCount > 0 {
-		res.h.t.Errorf("%s: had %d server error, last is %v", name, res.h.api.ServerErrorCount, res.h.api.LastServerError)
-	}
-}
-
-// CheckNoError verify that runSync was successful without any error (client or server).
-func (res runResult) CheckNoError(name string, wantFull bool) {
-	res.h.t.Helper()
-
-	res.Check(name, wantFull)
-
-	if res.h.api.ClientErrorCount > 0 {
-		res.h.t.Errorf("%s: had %d client error", name, res.h.api.ClientErrorCount)
-	}
-}
-
-// CheckAllowError verify that runSync was successful possibly with error but last sync must be successful.
-func (res runResult) CheckAllowError(name string, wantFull bool) {
-	res.h.t.Helper()
-
-	if res.lastErr != nil {
-		res.h.t.Errorf("%s: sync failed after %d run: %v", name, res.runCount, res.lastErr)
-	}
-
-	if wantFull != res.didFull {
-		res.h.t.Errorf("%s: full = %v, want %v", name, res.didFull, wantFull)
-	}
-
-	if res.runCount == 0 {
-		res.h.t.Errorf("%s: did 0 run", name)
-	}
-
-	if res.stillWantSync {
-		res.h.t.Errorf("%s: still want to synchronize metrics", name)
-	}
-}
-
 // TestMetricSimpleSync test "normal" scenario:
 // Agent start and register metrics
 // Some metrics disapear => mark inative
 // Some re-appear and some new => mark active & register.
 func TestMetricSimpleSync(t *testing.T) {
-	helper := newMetricHelper(t)
+	helper := newHelper(t)
 	defer helper.Close()
 
+	helper.preregisterAgent(t)
+	helper.initSynchronizer(t)
 	helper.AddTime(time.Minute)
 
-	helper.RunSync(1, 0, false).CheckNoError("initial full", true)
-
-	// We do 3 request: JWT auth, list metrics and register agent_status
-	if helper.api.RequestCount != 3 {
-		t.Errorf("Did %d requests, want 3", helper.api.RequestCount)
-		helper.api.ShowRequest(t, 10)
+	if err := helper.runOnceWithResult(t).CheckMethodWithFull(syncMethodMetric); err != nil {
+		t.Error(err)
 	}
 
-	metrics := helper.Metrics()
+	// list metrics and register agent_status
+	helper.api.AssertCallPerResource(t, mockAPIResourceMetric, 2)
+
+	idAgentMain, _ := helper.state.BleemeoCredentials()
+
+	metrics := helper.MetricsFromAPI()
 	want := []metricPayload{
 		{
 			Metric: bleemeoTypes.Metric{
 				ID:         "1",
-				AgentID:    idAgentMain,
+				AgentID:    helper.s.agentID,
 				LabelsText: "",
 			},
 			Name: agentStatusName,
@@ -867,27 +587,23 @@ func TestMetricSimpleSync(t *testing.T) {
 		t.Errorf("metrics mismatch (-want +got):\n%s", diff)
 	}
 
-	helper.AddTime(30 * time.Minute)
-	helper.store.PushPoints(context.Background(), []types.MetricPoint{
-		{
-			Point: types.Point{Time: helper.mt.Now()},
-			Labels: map[string]string{
-				types.LabelName:         "cpu_system",
-				types.LabelInstanceUUID: idAgentMain,
-			},
-		},
+	helper.AddTime(5 * time.Minute)
+	helper.pushPoints(t, []labels.Labels{
+		labels.New(
+			labels.Label{Name: types.LabelName, Value: "cpu_system"},
+			labels.Label{Name: types.LabelInstanceUUID, Value: idAgentMain},
+		),
 	})
 
-	helper.RunSync(1, 0, false).CheckNoError("one new metric", false)
+	if err := helper.runOnceWithResult(t).CheckMethodWithoutFull(syncMethodMetric); err != nil {
+		t.Error(err)
+	}
 
 	// We do 2 request: list metrics, list inactive metrics
 	// and register new metric
-	if helper.api.RequestCount != 3 {
-		t.Errorf("Did %d requests, want 3", helper.api.RequestCount)
-		helper.api.ShowRequest(t, 10)
-	}
+	helper.api.AssertCallPerResource(t, mockAPIResourceMetric, 3)
 
-	metrics = helper.Metrics()
+	metrics = helper.MetricsFromAPI()
 	want = []metricPayload{
 		{
 			Metric: bleemeoTypes.Metric{
@@ -911,49 +627,43 @@ func TestMetricSimpleSync(t *testing.T) {
 		t.Errorf("metrics mismatch (-want +got):\n%s", diff)
 	}
 
-	helper.AddTime(30 * time.Minute)
+	helper.AddTime(5 * time.Minute)
 
 	// Register 1000 metrics
 	for n := 0; n < 1000; n++ {
-		helper.store.PushPoints(context.Background(), []types.MetricPoint{
-			{
-				Point: types.Point{Time: helper.mt.Now()},
-				Labels: map[string]string{
-					types.LabelName:         "metric",
-					"item":                  strconv.FormatInt(int64(n), 10),
-					types.LabelInstanceUUID: idAgentMain,
-				},
-				Annotations: types.MetricAnnotations{
-					BleemeoItem: strconv.FormatInt(int64(n), 10),
-				},
-			},
+		helper.pushPoints(t, []labels.Labels{
+			labels.New(
+				labels.Label{Name: types.LabelName, Value: "metric"},
+				labels.Label{Name: types.LabelItem, Value: strconv.FormatInt(int64(n), 10)},
+				labels.Label{Name: types.LabelMetaBleemeoItem, Value: strconv.FormatInt(int64(n), 10)},
+				labels.Label{Name: types.LabelInstanceUUID, Value: idAgentMain},
+			),
 		})
 	}
 
-	helper.RunSync(1, 0, false).CheckNoError("add 1000 metrics", false)
-
-	// We do 1003 request: 3 for listing and 1000 registration
-	if helper.api.RequestCount != 1003 {
-		t.Errorf("Did %d requests, want 1003", helper.api.RequestCount)
-		helper.api.ShowRequest(t, 10)
+	if err := helper.runOnceWithResult(t).CheckMethodWithoutFull(syncMethodMetric); err != nil {
+		t.Error(err)
 	}
 
-	metrics = helper.Metrics()
+	// We do 1003 request: 3 for listing and 1000 registration
+	helper.api.AssertCallPerResource(t, mockAPIResourceMetric, 1003)
+
+	metrics = helper.MetricsFromAPI()
 	if len(metrics) != 1002 {
 		t.Errorf("len(metrics) = %v, want %v", len(metrics), 1002)
 	}
 
-	helper.AddTime(30 * time.Minute)
+	helper.AddTime(5 * time.Minute)
 	helper.store.DropAllMetrics()
-	helper.RunSync(1, 0, false).CheckNoError("all metrics inactive", false)
 
-	// We do 1001 request: 1001 to mark inactive all metrics but agent_status
-	if helper.api.RequestCount != 1001 {
-		t.Errorf("Did %d requests, want 1001", helper.api.RequestCount)
-		helper.api.ShowRequest(t, 10)
+	if err := helper.runOnceWithResult(t).CheckMethodWithoutFull(syncMethodMetric); err != nil {
+		t.Error(err)
 	}
 
-	metrics = helper.Metrics()
+	// We do 1001 request: 1001 to mark inactive all metrics but agent_status
+	helper.api.AssertCallPerResource(t, mockAPIResourceMetric, 1001)
+
+	metrics = helper.MetricsFromAPI()
 	if len(metrics) != 1002 {
 		t.Errorf("len(metrics) = %v, want %v", len(metrics), 1002)
 	}
@@ -968,38 +678,31 @@ func TestMetricSimpleSync(t *testing.T) {
 		}
 	}
 
-	helper.AddTime(30 * time.Minute)
+	helper.AddTime(5 * time.Minute)
 
 	// re-activate one metric + register one
-	helper.store.PushPoints(context.Background(), []types.MetricPoint{
-		{
-			Point: types.Point{Time: helper.mt.Now()},
-			Labels: map[string]string{
-				types.LabelName:         "cpu_system",
-				types.LabelInstanceUUID: idAgentMain,
-			},
-		},
-		{
-			Point: types.Point{Time: helper.mt.Now()},
-			Labels: map[string]string{
-				types.LabelName:         "disk_used",
-				"item":                  "/home",
-				types.LabelInstanceUUID: idAgentMain,
-			},
-			Annotations: types.MetricAnnotations{BleemeoItem: "/home"},
-		},
+	helper.pushPoints(t, []labels.Labels{
+		labels.New(
+			labels.Label{Name: types.LabelName, Value: "cpu_system"},
+			labels.Label{Name: types.LabelInstanceUUID, Value: idAgentMain},
+		),
+		labels.New(
+			labels.Label{Name: types.LabelName, Value: "disk_used"},
+			labels.Label{Name: types.LabelItem, Value: "/home"},
+			labels.Label{Name: types.LabelMetaBleemeoItem, Value: "/home"},
+			labels.Label{Name: types.LabelInstanceUUID, Value: idAgentMain},
+		),
 	})
 
-	helper.RunSync(1, 0, false).CheckNoError("re-active one + reg one", false)
+	if err := helper.runOnceWithResult(t).CheckMethodWithoutFull(syncMethodMetric); err != nil {
+		t.Error(err)
+	}
 
 	// We do 3 request: 1 to re-enable metric,
 	// 1 search for metric before registration, 1 to register metric
-	if helper.api.RequestCount != 3 {
-		t.Errorf("Did %d requests, want 3", helper.api.RequestCount)
-		helper.api.ShowRequest(t, 10)
-	}
+	helper.api.AssertCallPerResource(t, mockAPIResourceMetric, 3)
 
-	metrics = helper.Metrics()
+	metrics = helper.MetricsFromAPI()
 	if len(metrics) != 1003 {
 		t.Errorf("len(metrics) = %v, want %v", len(metrics), 1002)
 	}
@@ -1021,119 +724,104 @@ func TestMetricSimpleSync(t *testing.T) {
 			}
 		}
 	}
-
-	helper.AddTime(30 * time.Minute)
 }
 
 // TestMetricDeleted test that Glouton can update metrics deleted on Bleemeo.
 func TestMetricDeleted(t *testing.T) {
-	helper := newMetricHelper(t)
+	helper := newHelper(t)
 	defer helper.Close()
 
+	helper.preregisterAgent(t)
+	helper.initSynchronizer(t)
 	helper.AddTime(time.Minute)
 
-	helper.store.PushPoints(context.Background(), []types.MetricPoint{
-		{
-			Point: types.Point{Time: helper.mt.Now()},
-			Labels: map[string]string{
-				types.LabelName: "metric1",
-			},
-		},
-		{
-			Point: types.Point{Time: helper.mt.Now()},
-			Labels: map[string]string{
-				types.LabelName: "metric2",
-			},
-		},
-		{
-			Point: types.Point{Time: helper.mt.Now()},
-			Labels: map[string]string{
-				types.LabelName: "metric3",
-			},
-		},
+	helper.pushPoints(t, []labels.Labels{
+		labels.New(
+			labels.Label{Name: types.LabelName, Value: "metric1"},
+		),
+		labels.New(
+			labels.Label{Name: types.LabelName, Value: "metric2"},
+		),
+		labels.New(
+			labels.Label{Name: types.LabelName, Value: "metric3"},
+		),
 	})
 
-	helper.RunSync(1, 0, false).CheckNoError("initial sync", true)
-
-	// We do JWT auth, list of active metrics, 2 query to register metric + 1 to register agent_status
-	if helper.api.RequestCount != 9 {
-		t.Errorf("Did %d requests, want 9", helper.api.RequestCount)
-		helper.api.ShowRequest(t, 10)
+	if err := helper.runOnceWithResult(t).CheckMethodWithFull(syncMethodMetric); err != nil {
+		t.Error(err)
 	}
 
-	metrics := helper.Metrics()
+	// list of active metrics,
+	// 2 query per metric to register (one to find potential inactive, one to register)
+	// + 1 to register agent_status
+	helper.api.AssertCallPerResource(t, mockAPIResourceMetric, 8)
+
+	metrics := helper.MetricsFromAPI()
 	if len(metrics) != 4 { // 3 + agent_status
 		t.Errorf("len(metrics) = %d, want 4", len(metrics))
 	}
 
-	helper.AddTime(70 * time.Minute)
-	helper.store.PushPoints(context.Background(), []types.MetricPoint{
-		{
-			Point: types.Point{Time: helper.mt.Now()},
-			Labels: map[string]string{
-				types.LabelName: "metric1",
-			},
-		},
-		{
-			Point: types.Point{Time: helper.mt.Now()},
-			Labels: map[string]string{
-				types.LabelName: "metric2",
-			},
-		},
-		{
-			Point: types.Point{Time: helper.mt.Now()},
-			Labels: map[string]string{
-				types.LabelName: "metric3",
-			},
-		},
+	helper.AddTime(90 * time.Minute)
+	helper.pushPoints(t, []labels.Labels{
+		labels.New(
+			labels.Label{Name: types.LabelName, Value: "metric1"},
+		),
+		labels.New(
+			labels.Label{Name: types.LabelName, Value: "metric2"},
+		),
+		labels.New(
+			labels.Label{Name: types.LabelName, Value: "metric3"},
+		),
 	})
 
 	// API deleted metric1
 	for _, m := range metrics {
 		if m.Name == "metric1" {
-			helper.api.resources["metric"].DelStore(m.ID)
+			helper.api.resources[mockAPIResourceMetric].DelStore(m.ID)
 		}
 	}
 
-	helper.RunSync(1, 0, false).CheckNoError("full after API delete", true)
+	if err := helper.runOnceWithResult(t).CheckMethodWithFull(syncMethodMetric); err != nil {
+		t.Error(err)
+	}
+
 	helper.AddTime(1 * time.Minute)
 
 	// metric1 is still alive
-	helper.store.PushPoints(context.Background(), []types.MetricPoint{
-		{
-			Point: types.Point{Time: helper.mt.Now()},
-			Labels: map[string]string{
-				types.LabelName: "metric1",
-			},
-		},
+	helper.pushPoints(t, []labels.Labels{
+		labels.New(
+			labels.Label{Name: types.LabelName, Value: "metric1"},
+		),
 	})
 
-	helper.RunSync(1, 0, false).CheckNoError("re-reg after API delete", false)
-	// We list active metrics, 2 query to re-register metric
-	if helper.api.RequestCount != 3 {
-		t.Errorf("Did %d requests, want 3", helper.api.RequestCount)
-		helper.api.ShowRequest(t, 10)
+	if err := helper.runOnceWithResult(t).CheckMethodWithoutFull(syncMethodMetric); err != nil {
+		t.Error(err)
 	}
 
-	metrics = helper.Metrics()
+	// We list active metrics, 2 query to re-register metric
+	helper.api.AssertCallPerResource(t, mockAPIResourceMetric, 3)
+
+	metrics = helper.MetricsFromAPI()
 	if len(metrics) != 4 { // 3 + agent_status
 		t.Errorf("len(metrics) = %d, want 4", len(metrics))
 	}
 
-	helper.s.nextFullSync = helper.mt.Now().Add(2 * time.Hour)
+	helper.s.nextFullSync = helper.Now().Add(2 * time.Hour)
 	helper.AddTime(90 * time.Minute)
 
 	// API deleted metric2
 	for _, m := range metrics {
 		if m.Name == "metric2" {
-			helper.api.resources["metric"].DelStore(m.ID)
+			helper.api.resources[mockAPIResourceMetric].DelStore(m.ID)
 		}
 	}
 
 	// all metrics are inactive
-	helper.RunSync(1, 0, true).Check("mark inactive", false)
+	if err := helper.runOnceWithResult(t).CheckMethodWithoutFull(syncMethodMetric); err != nil {
+		t.Error(err)
+	}
 
-	metrics = helper.Metrics()
+	metrics = helper.MetricsFromAPI()
 	if len(metrics) != 3 {
 		t.Errorf("len(metrics) = %d, want 3", len(metrics))
 	}
@@ -1153,34 +841,29 @@ func TestMetricDeleted(t *testing.T) {
 	// API deleted metric3
 	for _, m := range metrics {
 		if m.Name == "metric3" {
-			helper.api.resources["metric"].DelStore(m.ID)
+			helper.api.resources[mockAPIResourceMetric].DelStore(m.ID)
 		}
 	}
 
-	helper.store.PushPoints(context.Background(), []types.MetricPoint{
-		{
-			Point: types.Point{Time: helper.mt.Now()},
-			Labels: map[string]string{
-				types.LabelName: "metric1",
-			},
-		},
-		{
-			Point: types.Point{Time: helper.mt.Now()},
-			Labels: map[string]string{
-				types.LabelName: "metric2",
-			},
-		},
-		{
-			Point: types.Point{Time: helper.mt.Now()},
-			Labels: map[string]string{
-				types.LabelName: "metric3",
-			},
-		},
+	helper.pushPoints(t, []labels.Labels{
+		labels.New(
+			labels.Label{Name: types.LabelName, Value: "metric1"},
+		),
+		labels.New(
+			labels.Label{Name: types.LabelName, Value: "metric2"},
+		),
+		labels.New(
+			labels.Label{Name: types.LabelName, Value: "metric3"},
+		),
 	})
 
-	helper.RunSync(1, 0, true).Check("re-active metrics", false)
+	helper.s.forceSync[syncMethodMetric] = true
 
-	metrics = helper.Metrics()
+	if err := helper.runOnceWithResult(t).CheckMethodWithFull(syncMethodMetric); err != nil {
+		t.Error(err)
+	}
+
+	metrics = helper.MetricsFromAPI()
 	if len(metrics) != 4 {
 		t.Errorf("len(metrics) = %d, want 4", len(metrics))
 	}
@@ -1194,12 +877,15 @@ func TestMetricDeleted(t *testing.T) {
 
 // TestMetricError test that Glouton handle random error from Bleemeo correctly.
 func TestMetricError(t *testing.T) {
-	helper := newMetricHelper(t)
+	helper := newHelper(t)
 	defer helper.Close()
+
+	helper.preregisterAgent(t)
+	helper.initSynchronizer(t)
 
 	// API fail 1/6th of the time
 	helper.api.PreRequestHook = func(ma *mockAPI, h *http.Request) (interface{}, int, error) {
-		if len(ma.RequestList)%6 == 0 {
+		if resourceName, _ := ma.resourceNameID(h.URL); resourceName == mockAPIResourceMetric && ma.RequestPerResource[mockAPIResourceMetric]%6 == 0 {
 			return nil, http.StatusInternalServerError, nil
 		}
 
@@ -1207,45 +893,38 @@ func TestMetricError(t *testing.T) {
 	}
 	helper.AddTime(time.Minute)
 
-	helper.store.PushPoints(context.Background(), []types.MetricPoint{
-		{
-			Point: types.Point{Time: helper.mt.Now()},
-			Labels: map[string]string{
-				types.LabelName: "metric1",
-			},
-		},
-		{
-			Point: types.Point{Time: helper.mt.Now()},
-			Labels: map[string]string{
-				types.LabelName: "metric2",
-			},
-		},
-		{
-			Point: types.Point{Time: helper.mt.Now()},
-			Labels: map[string]string{
-				types.LabelName: "metric3",
-			},
-		},
+	helper.pushPoints(t, []labels.Labels{
+		labels.New(
+			labels.Label{Name: types.LabelName, Value: "metric1"},
+		),
+		labels.New(
+			labels.Label{Name: types.LabelName, Value: "metric2"},
+		),
+		labels.New(
+			labels.Label{Name: types.LabelName, Value: "metric3"},
+		),
 	})
 
-	helper.RunSync(10, 20*time.Second, false).CheckAllowError("initial sync", true)
+	if err := helper.runUntilNoError(t, 20, 20*time.Second).CheckMethodWithFull(syncMethodMetric); err != nil {
+		t.Error(err)
+	}
 
 	if helper.api.ServerErrorCount == 0 {
 		t.Errorf("We should have some error, had %d", helper.api.ServerErrorCount)
 	}
 
-	if metrics := helper.Metrics(); len(metrics) != 4 { // 3 + agent_status
+	if metrics := helper.MetricsFromAPI(); len(metrics) != 4 { // 3 + agent_status
 		t.Errorf("len(metrics) = %d, want 4", len(metrics))
 	}
 }
 
 // TestMetricUnknownError test that Glouton handle failing metric from Bleemeo correctly.
 func TestMetricUnknownError(t *testing.T) {
-	helper := newMetricHelper(t)
+	helper := newHelper(t)
 	defer helper.Close()
 
 	// API always reject registering "deny-me" metric
-	metricResource, _ := helper.api.resources["metric"].(*genericResource)
+	metricResource, _ := helper.api.resources[mockAPIResourceMetric].(*genericResource)
 	metricResource.CreateHook = func(r *http.Request, body []byte, valuePtr interface{}) error {
 		metric, _ := valuePtr.(*metricPayload)
 		if metric.Name == "deny-me" {
@@ -1258,86 +937,96 @@ func TestMetricUnknownError(t *testing.T) {
 		return nil
 	}
 
+	helper.preregisterAgent(t)
+	helper.initSynchronizer(t)
 	helper.AddTime(time.Minute)
 
-	helper.store.PushPoints(context.Background(), []types.MetricPoint{
-		{
-			Point: types.Point{Time: helper.mt.Now()},
-			Labels: map[string]string{
-				types.LabelName: "metric1",
-			},
-		},
-		{
-			Point: types.Point{Time: helper.mt.Now()},
-			Labels: map[string]string{
-				types.LabelName: "deny-me",
-			},
-		},
+	helper.pushPoints(t, []labels.Labels{
+		labels.New(
+			labels.Label{Name: types.LabelName, Value: "metric1"},
+		),
+		labels.New(
+			labels.Label{Name: types.LabelName, Value: "deny-me"},
+		),
 	})
 
-	helper.RunSync(1, 0, false).Check("initial sync", true)
+	if err := helper.runOnceWithResult(t).CheckMethodWithFull(syncMethodMetric); err != nil {
+		t.Error(err)
+	}
 
 	if helper.api.ClientErrorCount == 0 {
 		t.Errorf("We should have some client error, had %d", helper.api.ClientErrorCount)
 	}
 
-	// jwt-auth, list active metrics, register agent_status + 2x metrics to register
-	if helper.api.RequestCount != 7 {
-		t.Errorf("Had %d requests, want 7", helper.api.RequestCount)
-	}
+	// list active metrics, register agent_status + 2x metrics to register
+	helper.api.AssertCallPerResource(t, mockAPIResourceMetric, 6)
 
-	metrics := helper.Metrics()
+	metrics := helper.MetricsFromAPI()
 	if len(metrics) != 2 { // 1 + agent_status
 		t.Errorf("len(metrics) = %d, want 2", len(metrics))
 	}
 
 	// immediately re-run: should not run at all
-	res := helper.RunSync(1, 0, false)
-	if res.runCount != 0 {
-		t.Errorf("had %d run count, want 0", res.runCount)
+	if err := helper.runOnceWithResult(t).CheckMethodNotRun(syncMethodMetric); err != nil {
+		t.Error(err)
 	}
 
 	// After a short delay we retry
-	helper.s.nextFullSync = helper.mt.Now().Add(24 * time.Hour)
+	helper.s.nextFullSync = helper.Now().Add(24 * time.Hour)
 	helper.AddTime(31 * time.Second)
-	helper.RunSync(10, 15*time.Minute, false).Check("retry-run", false)
 
-	// we expected 5 retry than stopping for longer delay. Each retry had 3 requests
-	if helper.api.RequestCount != 15 {
-		t.Errorf("Had %d requests, want 15", helper.api.RequestCount)
-		helper.api.ShowRequest(t, 20)
+	// we expect few retry in quick time
+	for i := 0; i < 3; i++ {
+		if err := helper.runOnceWithResult(t).CheckMethodWithoutFull(syncMethodMetric); err != nil {
+			t.Error(err)
+		}
+
+		// Each retry had 3 requests
+		helper.api.AssertCallPerResource(t, mockAPIResourceMetric, 3)
+
+		helper.AddTime(15 * time.Minute)
+	}
+
+	// After few retry, we stop re-trying
+	for i := 0; i < 8; i++ {
+		if err := helper.runOnceWithResult(t).Check(); err != nil {
+			t.Error(err)
+		}
+
+		if helper.api.RequestPerResource[mockAPIResourceMetric] == 0 {
+			break
+		}
+
+		helper.AddTime(15 * time.Minute)
+	}
+
+	if err := helper.runOnceWithResult(t).CheckMethodNotRun(syncMethodMetric); err != nil {
+		t.Errorf("After more than 8 retry, we still try to register deny-me metric")
 	}
 
 	// Finally on next fullSync re-retry the metrics registration
-	helper.mt.now = helper.s.nextFullSync.Add(5 * time.Second)
-	helper.store.PushPoints(context.Background(), []types.MetricPoint{
-		{
-			Point: types.Point{Time: helper.mt.Now()},
-			Labels: map[string]string{
-				types.LabelName: "metric1",
-			},
-		},
-		{
-			Point: types.Point{Time: helper.mt.Now()},
-			Labels: map[string]string{
-				types.LabelName: "deny-me",
-			},
-		},
+	helper.SetTime(helper.s.nextFullSync.Add(5 * time.Second))
+	helper.pushPoints(t, []labels.Labels{
+		labels.New(
+			labels.Label{Name: types.LabelName, Value: "metric1"},
+		),
+		labels.New(
+			labels.Label{Name: types.LabelName, Value: "deny-me"},
+		),
 	})
 
-	helper.RunSync(1, 0, false).Check("next full sync", true)
+	if err := helper.runOnceWithResult(t).CheckMethodWithFull(syncMethodMetric); err != nil {
+		t.Error(err)
+	}
 
 	if helper.api.ClientErrorCount == 0 {
 		t.Errorf("We should have some client error, had %d", helper.api.ClientErrorCount)
 	}
 
 	// list active metrics, 2 for registration
-	if helper.api.RequestCount != 3 {
-		t.Errorf("Had %d requests, want 3", helper.api.RequestCount)
-		helper.api.ShowRequest(t, 10)
-	}
+	helper.api.AssertCallPerResource(t, mockAPIResourceMetric, 3)
 
-	metrics = helper.Metrics()
+	metrics = helper.MetricsFromAPI()
 	if len(metrics) != 2 { // 1 + agent_status
 		t.Errorf("len(metrics) = %d, want 2", len(metrics))
 	}
@@ -1360,11 +1049,14 @@ func TestMetricPermanentError(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			helper := newMetricHelper(t)
+			helper := newHelper(t)
 			defer helper.Close()
 
+			helper.preregisterAgent(t)
+			helper.initSynchronizer(t)
+
 			// API always reject registering "deny-me" metric
-			metricResource, _ := helper.api.resources["metric"].(*genericResource)
+			metricResource, _ := helper.api.resources[mockAPIResourceMetric].(*genericResource)
 			metricResource.CreateHook = func(r *http.Request, body []byte, valuePtr interface{}) error {
 				metric, _ := valuePtr.(*metricPayload)
 				if metric.Name == "deny-me" || metric.Name == "deny-me-also" {
@@ -1379,141 +1071,110 @@ func TestMetricPermanentError(t *testing.T) {
 
 			helper.AddTime(time.Minute)
 
-			helper.store.PushPoints(context.Background(), []types.MetricPoint{
-				{
-					Point: types.Point{Time: helper.mt.Now()},
-					Labels: map[string]string{
-						types.LabelName: "metric1",
-					},
-				},
-				{
-					Point: types.Point{Time: helper.mt.Now()},
-					Labels: map[string]string{
-						types.LabelName: "deny-me",
-					},
-				},
-				{
-					Point: types.Point{Time: helper.mt.Now()},
-					Labels: map[string]string{
-						types.LabelName: "deny-me-also",
-					},
-				},
+			helper.pushPoints(t, []labels.Labels{
+				labels.New(
+					labels.Label{Name: types.LabelName, Value: "metric1"},
+				),
+				labels.New(
+					labels.Label{Name: types.LabelName, Value: "deny-me"},
+				),
+				labels.New(
+					labels.Label{Name: types.LabelName, Value: "deny-me-also"},
+				),
 			})
 
-			helper.RunSync(1, 0, false).Check("initial sync", true)
+			if err := helper.runOnceWithResult(t).CheckMethodWithFull(syncMethodMetric); err != nil {
+				t.Error(err)
+			}
 
 			if helper.api.ClientErrorCount == 0 {
 				t.Errorf("We should have some client error, had %d", helper.api.ClientErrorCount)
 			}
 
-			// jwt-auth, list active metrics, register agent_status + 2x metrics to register
-			if helper.api.RequestCount != 9 {
-				t.Errorf("Had %d requests, want 9", helper.api.RequestCount)
-				helper.api.ShowRequest(t, 10)
-			}
+			// list active metrics, register agent_status + 2x metrics to register
+			helper.api.AssertCallPerResource(t, mockAPIResourceMetric, 8)
 
-			metrics := helper.Metrics()
+			metrics := helper.MetricsFromAPI()
 			if len(metrics) != 2 { // 1 + agent_status
 				t.Errorf("len(metrics) = %d, want 2", len(metrics))
 			}
 
 			// immediately re-run: should not run at all
-			res := helper.RunSync(1, 0, false)
-			if res.runCount != 0 {
-				t.Errorf("had %d run count, want 0", res.runCount)
+			if err := helper.runOnceWithResult(t).CheckMethodNotRun(syncMethodMetric); err != nil {
+				t.Error(err)
 			}
 
 			// After a short delay we do not retry because error is permanent
 			helper.AddTime(31 * time.Second)
-			res = helper.RunSync(10, 15*time.Minute, false)
-			if res.runCount != 0 {
-				t.Errorf("had %d run count, want 0", res.runCount)
+			if err := helper.runOnceWithResult(t).CheckMethodNotRun(syncMethodMetric); err != nil {
+				t.Error(err)
 			}
 
 			// After a long delay we do not retry because error is permanent
 			helper.AddTime(50 * time.Minute)
-			helper.store.PushPoints(context.Background(), []types.MetricPoint{
-				{
-					Point: types.Point{Time: helper.mt.Now()},
-					Labels: map[string]string{
-						types.LabelName: "metric1",
-					},
-				},
-				{
-					Point: types.Point{Time: helper.mt.Now()},
-					Labels: map[string]string{
-						types.LabelName: "deny-me",
-					},
-				},
-				{
-					Point: types.Point{Time: helper.mt.Now()},
-					Labels: map[string]string{
-						types.LabelName: "deny-me-also",
-					},
-				},
+			// ... but be sure fullSync isn't reached yet
+			helper.s.nextFullSync = helper.Now().Add(time.Hour)
+			helper.pushPoints(t, []labels.Labels{
+				labels.New(
+					labels.Label{Name: types.LabelName, Value: "metric1"},
+				),
+				labels.New(
+					labels.Label{Name: types.LabelName, Value: "deny-me"},
+				),
+				labels.New(
+					labels.Label{Name: types.LabelName, Value: "deny-me-also"},
+				),
 			})
 
-			res = helper.RunSync(10, 15*time.Minute, false)
-			if res.runCount != 0 {
-				t.Errorf("had %d run count, want 0", res.runCount)
+			if err := helper.runOnceWithResult(t).CheckMethodNotRun(syncMethodMetric); err != nil {
+				t.Error(err)
 			}
 
 			// Finally long enough to reach fullSync, we will retry ONE
-			helper.AddTime(20 * time.Minute)
-			helper.RunSync(1, 0, false).Check("second full sync", true)
+			helper.SetTimeToNextFullSync()
+			if err := helper.runOnceWithResult(t).CheckMethodWithFull(syncMethodMetric); err != nil {
+				t.Error(err)
+			}
 
 			if helper.api.ClientErrorCount == 0 {
 				t.Errorf("We should have some client error, had %d", helper.api.ClientErrorCount)
 			}
 
 			// list active metrics, retry ONE register (but for now query for existence of the 2 metrics)
-			if helper.api.RequestCount != 4 {
-				t.Errorf("Had %d requests, want 4", helper.api.RequestCount)
-				helper.api.ShowRequest(t, 10)
-			}
+			helper.api.AssertCallPerResource(t, mockAPIResourceMetric, 4)
 
-			metrics = helper.Metrics()
+			metrics = helper.MetricsFromAPI()
 			if len(metrics) != 2 { // 1 + agent_status
 				t.Errorf("len(metrics) = %d, want 2", len(metrics))
 			}
 
 			// Now metric registration will succeeds and retry all
 			metricResource.CreateHook = nil
-			helper.AddTime(70 * time.Minute)
-			helper.store.PushPoints(context.Background(), []types.MetricPoint{
-				{
-					Point: types.Point{Time: helper.mt.Now()},
-					Labels: map[string]string{
-						types.LabelName: "metric1",
-					},
-				},
-				{
-					Point: types.Point{Time: helper.mt.Now()},
-					Labels: map[string]string{
-						types.LabelName: "deny-me",
-					},
-				},
-				{
-					Point: types.Point{Time: helper.mt.Now()},
-					Labels: map[string]string{
-						types.LabelName: "deny-me-also",
-					},
-				},
+			helper.SetTimeToNextFullSync()
+			helper.pushPoints(t, []labels.Labels{
+				labels.New(
+					labels.Label{Name: types.LabelName, Value: "metric1"},
+				),
+				labels.New(
+					labels.Label{Name: types.LabelName, Value: "deny-me"},
+				),
+				labels.New(
+					labels.Label{Name: types.LabelName, Value: "deny-me-also"},
+				),
 			})
 
-			helper.RunSync(1, 0, false).Check("3rd full sync", true)
+			if err := helper.runOnceWithResult(t).CheckMethodWithFull(syncMethodMetric); err != nil {
+				t.Error(err)
+			}
 
 			if helper.api.ClientErrorCount != 0 {
 				t.Errorf("had %d client error, want 0", helper.api.ClientErrorCount)
 			}
 
 			// list active metrics, retry two register
-			if helper.api.RequestCount != 5 {
-				t.Errorf("Had %d requests, want 5", helper.api.RequestCount)
-				helper.api.ShowRequest(t, 10)
-			}
+			helper.api.AssertCallPerResource(t, mockAPIResourceMetric, 5)
 
-			metrics = helper.Metrics()
+			metrics = helper.MetricsFromAPI()
 			if len(metrics) != 4 { // 3 + agent_status
 				t.Errorf("len(metrics) = %d, want 4", len(metrics))
 			}
@@ -1523,10 +1184,13 @@ func TestMetricPermanentError(t *testing.T) {
 
 // TestMetricTooMany test that Glouton handle too many non-standard metric correctly.
 func TestMetricTooMany(t *testing.T) { //nolint:maintidx
-	helper := newMetricHelper(t)
+	helper := newHelper(t)
 	defer helper.Close()
 
-	metricResource, _ := helper.api.resources["metric"].(*genericResource)
+	helper.preregisterAgent(t)
+	helper.initSynchronizer(t)
+
+	metricResource, _ := helper.api.resources[mockAPIResourceMetric].(*genericResource)
 	defaultPatchHook := metricResource.PatchHook
 
 	// API always reject more than 3 active metrics
@@ -1541,7 +1205,7 @@ func TestMetricTooMany(t *testing.T) { //nolint:maintidx
 		metric, _ := valuePtr.(*metricPayload)
 
 		if metric.DeactivatedAt.IsZero() {
-			metrics := helper.Metrics()
+			metrics := helper.MetricsFromAPI()
 			countActive := 0
 
 			for _, m := range metrics {
@@ -1566,102 +1230,87 @@ func TestMetricTooMany(t *testing.T) { //nolint:maintidx
 	}
 
 	helper.AddTime(time.Minute)
-
-	helper.store.PushPoints(context.Background(), []types.MetricPoint{
-		{
-			Point: types.Point{Time: helper.mt.Now()},
-			Labels: map[string]string{
-				types.LabelName: "metric1",
-			},
-		},
-		{
-			Point: types.Point{Time: helper.mt.Now()},
-			Labels: map[string]string{
-				types.LabelName: "metric2",
-			},
-		},
+	helper.pushPoints(t, []labels.Labels{
+		labels.New(
+			labels.Label{Name: types.LabelName, Value: "metric1"},
+		),
+		labels.New(
+			labels.Label{Name: types.LabelName, Value: "metric2"},
+		),
 	})
 
-	helper.RunSync(1, 0, false).CheckNoError("initial sync", true)
-
-	// jwt-auth, list active metrics, register agent_status + 2x metrics to register
-	if helper.api.RequestCount != 7 {
-		t.Errorf("Had %d requests, want 7", helper.api.RequestCount)
+	if err := helper.runOnceWithResult(t).CheckMethodWithFull(syncMethodMetric); err != nil {
+		t.Error(err)
 	}
 
-	metrics := helper.Metrics()
+	// list active metrics, register agent_status + 2x metrics to register
+	helper.api.AssertCallPerResource(t, mockAPIResourceMetric, 6)
+
+	metrics := helper.MetricsFromAPI()
 	if len(metrics) != 3 { // 2 + agent_status
 		t.Errorf("len(metrics) = %d, want 3", len(metrics))
 	}
 
 	helper.AddTime(5 * time.Minute)
-	helper.store.PushPoints(context.Background(), []types.MetricPoint{
-		{
-			Point: types.Point{Time: helper.mt.Now()},
-			Labels: map[string]string{
-				types.LabelName: "metric3",
-			},
-		},
-		{
-			Point: types.Point{Time: helper.mt.Now()},
-			Labels: map[string]string{
-				types.LabelName: "metric4",
-			},
-		},
+	helper.pushPoints(t, []labels.Labels{
+		labels.New(
+			labels.Label{Name: types.LabelName, Value: "metric3"},
+		),
+		labels.New(
+			labels.Label{Name: types.LabelName, Value: "metric4"},
+		),
 	})
 
-	helper.RunSync(1, 0, false).Check("try-two-new", false)
+	if err := helper.runOnceWithResult(t).CheckMethodWithoutFull(syncMethodMetric); err != nil {
+		t.Error(err)
+	}
 
 	if helper.api.ClientErrorCount == 0 {
 		t.Errorf("We should have some client error, had %d", helper.api.ClientErrorCount)
 	}
 
 	// list active metrics + 2x metrics to register
-	if helper.api.RequestCount != 5 {
-		t.Errorf("Had %d requests, want 5", helper.api.RequestCount)
-		helper.api.ShowRequest(t, 10)
-	}
+	helper.api.AssertCallPerResource(t, mockAPIResourceMetric, 5)
 
-	metrics = helper.Metrics()
+	metrics = helper.MetricsFromAPI()
 	if len(metrics) != 3 { // 2 + agent_status
 		t.Errorf("len(metrics) = %d, want 3", len(metrics))
 	}
 
 	helper.AddTime(5 * time.Minute)
 
-	res := helper.RunSync(1, 0, false)
-	if res.runCount != 0 {
-		t.Errorf("had %d run count, want 0", res.runCount)
+	if err := helper.runOnceWithResult(t).CheckMethodNotRun(syncMethodMetric); err != nil {
+		t.Error(err)
 	}
 
-	helper.AddTime(70 * time.Minute)
+	helper.SetTimeToNextFullSync()
 	// drop all because normally store drop inactive metrics and
 	// metric1 don't emitted for 70 minutes
 	helper.store.DropAllMetrics()
-	helper.store.PushPoints(context.Background(), []types.MetricPoint{
-		{
-			Point: types.Point{Time: helper.mt.Now()},
-			Labels: map[string]string{
-				types.LabelName: "metric2",
-			},
-		},
-		{
-			Point: types.Point{Time: helper.mt.Now()},
-			Labels: map[string]string{
-				types.LabelName: "metric3",
-			},
-		},
-		{
-			Point: types.Point{Time: helper.mt.Now()},
-			Labels: map[string]string{
-				types.LabelName: "metric4",
-			},
-		},
+	helper.pushPoints(t, []labels.Labels{
+		labels.New(
+			labels.Label{Name: types.LabelName, Value: "metric2"},
+		),
+		labels.New(
+			labels.Label{Name: types.LabelName, Value: "metric3"},
+		),
+		labels.New(
+			labels.Label{Name: types.LabelName, Value: "metric4"},
+		),
 	})
 
-	helper.RunSync(2, 1*time.Second, false).Check("next full-sync", true)
+	if err := helper.runOnceWithResult(t).CheckMethodWithFull(syncMethodMetric); err != nil {
+		t.Error(err)
+	}
 
-	metrics = helper.Metrics()
+	// We need two sync: one to deactivate the metric, one to regsiter another one
+	helper.AddTime(15 * time.Second)
+
+	if err := helper.runOnceWithResult(t).CheckMethodWithoutFull(syncMethodMetric); err != nil {
+		t.Error(err)
+	}
+
+	metrics = helper.MetricsFromAPI()
 	if len(metrics) != 4 { // metric1 is now disabled, another get registered
 		t.Errorf("len(metrics) = %d, want 4", len(metrics))
 	}
@@ -1677,22 +1326,22 @@ func TestMetricTooMany(t *testing.T) { //nolint:maintidx
 	}
 
 	helper.AddTime(5 * time.Minute)
-	helper.store.PushPoints(context.Background(), []types.MetricPoint{
-		{
-			Point: types.Point{Time: helper.mt.Now()},
-			Labels: map[string]string{
-				types.LabelName: "metric1",
-			},
-		},
+	helper.pushPoints(t, []labels.Labels{
+		labels.New(
+			labels.Label{Name: types.LabelName, Value: "metric1"},
+		),
 	})
-	helper.RunSync(1, 1*time.Second, false).Check("re-enable metric1", false)
+
+	if err := helper.runOnceWithResult(t).CheckMethodWithoutFull(syncMethodMetric); err != nil {
+		t.Error(err)
+	}
 
 	if helper.api.ClientErrorCount == 0 {
 		t.Errorf("We should have some client error, had %d", helper.api.ClientErrorCount)
 	}
 
-	metrics = helper.Metrics()
-	if len(metrics) != 4 { // metric1 is now disabled, another get registered
+	metrics = helper.MetricsFromAPI()
+	if len(metrics) != 4 { // metric1 is still disabled and no newly registered
 		t.Errorf("len(metrics) = %d, want 4", len(metrics))
 	}
 
@@ -1709,42 +1358,34 @@ func TestMetricTooMany(t *testing.T) { //nolint:maintidx
 	// We do not retry to register them
 	helper.AddTime(5 * time.Minute)
 
-	res = helper.RunSync(1, 0, false)
-	if res.runCount != 0 {
-		t.Errorf("had %d run count, want 0", res.runCount)
+	if err := helper.runOnceWithResult(t).CheckMethodNotRun(syncMethodMetric); err != nil {
+		t.Error(err)
 	}
 
 	// Excepted ONE per full-sync
-	helper.AddTime(70 * time.Minute)
-	helper.store.PushPoints(context.Background(), []types.MetricPoint{
-		{
-			Point: types.Point{Time: helper.mt.Now()},
-			Labels: map[string]string{
-				types.LabelName: "metric2",
-			},
-		},
-		{
-			Point: types.Point{Time: helper.mt.Now()},
-			Labels: map[string]string{
-				types.LabelName: "metric3",
-			},
-		},
-		{
-			Point: types.Point{Time: helper.mt.Now()},
-			Labels: map[string]string{
-				types.LabelName: "metric4",
-			},
-		},
+	helper.SetTimeToNextFullSync()
+	helper.pushPoints(t, []labels.Labels{
+		labels.New(
+			labels.Label{Name: types.LabelName, Value: "metric2"},
+		),
+		labels.New(
+			labels.Label{Name: types.LabelName, Value: "metric3"},
+		),
+		labels.New(
+			labels.Label{Name: types.LabelName, Value: "metric4"},
+		),
 	})
 
-	helper.RunSync(1, 1*time.Second, false).Check("3rd full-sync", true)
+	if err := helper.runOnceWithResult(t).CheckMethodWithFull(syncMethodMetric); err != nil {
+		t.Error(err)
+	}
 
 	if helper.api.ClientErrorCount != 1 {
 		t.Errorf("had %d client error, want 1", helper.api.ClientErrorCount)
 	}
 
-	metrics = helper.Metrics()
-	if len(metrics) != 4 { // metric1 is now disabled, another get registered
+	metrics = helper.MetricsFromAPI()
+	if len(metrics) != 4 {
 		t.Errorf("len(metrics) = %d, want 4", len(metrics))
 	}
 
@@ -1760,86 +1401,67 @@ func TestMetricTooMany(t *testing.T) { //nolint:maintidx
 
 	// list active metrics + check existence of the metric we want to reg +
 	// retry to register
-	if helper.api.RequestCount != 3 {
-		t.Errorf("Had %d requests, want 3", helper.api.RequestCount)
-		helper.api.ShowRequest(t, 10)
-	}
+	helper.api.AssertCallPerResource(t, mockAPIResourceMetric, 3)
 }
 
 // TestMetricLongItem test that metric with very long item works.
 // Long item happen with long container name, test this scenario.
 func TestMetricLongItem(t *testing.T) {
-	helper := newMetricHelper(t)
+	helper := newHelper(t)
 	defer helper.Close()
 
+	helper.preregisterAgent(t)
+	helper.initSynchronizer(t)
 	helper.AddTime(time.Minute)
-	// This test is perfect as it don't set service, but helper does not yet support
-	// synchronization with service.
-	helper.store.PushPoints(context.Background(), []types.MetricPoint{
-		{
-			Point: types.Point{Time: helper.mt.Now()},
-			Labels: map[string]string{
-				types.LabelName: "redis_status",
-				types.LabelItem: "short-redis-container-name",
-			},
-			Annotations: types.MetricAnnotations{
-				BleemeoItem: "short-redis-container-name",
-			},
-		},
-		{
-			Point: types.Point{Time: helper.mt.Now()},
-			Labels: map[string]string{
-				types.LabelName: "redis_status",
-				types.LabelItem: "long-redis-container-name--this-one-is-more-than-100-char-which-is-the-limit-on-bleemeo-api-0123456789abcdef",
-			},
-			Annotations: types.MetricAnnotations{
-				BleemeoItem: "long-redis-container-name--this-one-is-more-than-100-char-which-is-the-limit-on-bleemeo-api-0123456789abcdef",
-			},
-		},
+
+	srvRedis1 := discovery.Service{
+		Name:        "redis",
+		Instance:    "short-redis-container-name",
+		ServiceType: discovery.RedisService,
+		// ContainerID: "1234",
+		Active: true,
+	}
+
+	srvRedis2 := discovery.Service{
+		Name:        "redis",
+		Instance:    "long-redis-container-name--this-one-is-more-than-100-char-which-is-the-limit-on-bleemeo-api-0123456789abcdef",
+		ServiceType: discovery.RedisService,
+		// ContainerID: "1234",
+		Active: true,
+	}
+
+	helper.discovery.SetResult([]discovery.Service{srvRedis1, srvRedis2}, nil)
+
+	helper.pushPoints(t, []labels.Labels{
+		model.AnnotationToMetaLabels(labels.FromMap(srvRedis1.LabelsOfStatus()), srvRedis1.AnnotationsOfStatus()),
+		model.AnnotationToMetaLabels(labels.FromMap(srvRedis2.LabelsOfStatus()), srvRedis2.AnnotationsOfStatus()),
 	})
 
-	helper.RunSync(1, 0, false).CheckNoError("first sync", true)
+	if err := helper.runOnceWithResult(t).CheckMethodWithFull(syncMethodMetric); err != nil {
+		t.Error(err)
+	}
 
-	metrics := helper.Metrics()
+	metrics := helper.MetricsFromAPI()
 	// agent_status + the two redis_status metrics
 	if len(metrics) != 3 {
 		t.Errorf("len(metrics) = %v, want %v", len(metrics), 3)
 	}
 
-	helper.AddTime(70 * time.Minute)
+	helper.SetTimeToNextFullSync()
 
-	helper.store.PushPoints(context.Background(), []types.MetricPoint{
-		{
-			Point: types.Point{Time: helper.mt.Now()},
-			Labels: map[string]string{
-				types.LabelName: "redis_status",
-				types.LabelItem: "short-redis-container-name",
-			},
-			Annotations: types.MetricAnnotations{
-				BleemeoItem: "short-redis-container-name",
-			},
-		},
-		{
-			Point: types.Point{Time: helper.mt.Now()},
-			Labels: map[string]string{
-				types.LabelName: "redis_status",
-				types.LabelItem: "long-redis-container-name--this-one-is-more-than-100-char-which-is-the-limit-on-bleemeo-api-0123456789abcdef",
-			},
-			Annotations: types.MetricAnnotations{
-				BleemeoItem: "long-redis-container-name--this-one-is-more-than-100-char-which-is-the-limit-on-bleemeo-api-0123456789abcdef",
-			},
-		},
+	helper.pushPoints(t, []labels.Labels{
+		model.AnnotationToMetaLabels(labels.FromMap(srvRedis1.LabelsOfStatus()), srvRedis1.AnnotationsOfStatus()),
+		model.AnnotationToMetaLabels(labels.FromMap(srvRedis2.LabelsOfStatus()), srvRedis2.AnnotationsOfStatus()),
 	})
 
-	helper.RunSync(1, 0, false).CheckNoError("new full sync", true)
-
-	// We do 1 request: list metrics.
-	if helper.api.RequestCount != 1 {
-		t.Errorf("Did %d requests, want 1", helper.api.RequestCount)
-		helper.api.ShowRequest(t, 10)
+	if err := helper.runOnceWithResult(t).CheckMethodWithFull(syncMethodMetric); err != nil {
+		t.Error(err)
 	}
 
-	metrics = helper.Metrics()
+	// We do 1 request: list metrics.
+	helper.api.AssertCallPerResource(t, mockAPIResourceMetric, 1)
+
+	metrics = helper.MetricsFromAPI()
 	// No new metrics
 	if len(metrics) != 3 {
 		t.Errorf("len(metrics) = %v, want %v", len(metrics), 3)
@@ -1848,33 +1470,75 @@ func TestMetricLongItem(t *testing.T) {
 
 // Few tests with SNMP metrics.
 func TestWithSNMP(t *testing.T) {
-	helper := newMetricHelper(t)
+	helper := newHelper(t)
 	defer helper.Close()
 
-	helper.AddTime(time.Minute)
+	helper.SNMP = []*snmp.Target{
+		snmp.NewMock(config.SNMPTarget{InitialName: "Z-The-Initial-Name", Target: snmpAddress}, map[string]string{}),
+	}
 
-	helper.store.PushPoints(context.Background(), []types.MetricPoint{
-		{
-			Point: types.Point{Time: helper.mt.Now()},
-			Labels: map[string]string{
-				types.LabelName: "cpu_system",
-			},
-		},
-		{
-			Point: types.Point{Time: helper.mt.Now()},
-			Labels: map[string]string{
-				types.LabelName:       "ifOutOctets",
-				types.LabelSNMPTarget: "127.0.0.1",
-			},
-			Annotations: types.MetricAnnotations{
-				BleemeoAgentID: idAgentSNMP,
-			},
-		},
+	helper.preregisterAgent(t)
+	helper.initSynchronizer(t)
+
+	idAgentMain, _ := helper.state.BleemeoCredentials()
+	idAgentSNMP := "1"
+
+	helper.pushPoints(t, []labels.Labels{
+		labels.New(
+			labels.Label{Name: types.LabelName, Value: "cpu_system"},
+		),
+		labels.New(
+			labels.Label{Name: types.LabelName, Value: "ifOutOctets"},
+			labels.Label{Name: types.LabelSNMPTarget, Value: snmpAddress},
+			labels.Label{Name: types.LabelMetaBleemeoTargetAgentUUID, Value: idAgentSNMP},
+		),
 	})
 
-	helper.RunSync(1, 0, false).CheckNoError("first sync", true)
+	result := helper.runOnceWithResult(t)
 
-	metrics := helper.Metrics()
+	if err := result.CheckMethodWithFull(syncMethodSNMP); err != nil {
+		t.Error(err)
+	}
+
+	if err := result.CheckMethodWithFull(syncMethodMetric); err != nil {
+		t.Error(err)
+	}
+
+	agents := helper.AgentsFromAPI()
+	wantAgents := []payloadAgent{
+		{
+			Agent: bleemeoTypes.Agent{
+				ID:              idAgentMain,
+				AccountID:       accountID,
+				CurrentConfigID: newAccountConfig.ID,
+				AgentType:       agentTypeAgent.ID,
+				FQDN:            testAgentFQDN,
+				DisplayName:     testAgentFQDN,
+			},
+			Abstracted:      false,
+			InitialPassword: "password already set",
+		},
+		{
+			Agent: bleemeoTypes.Agent{
+				ID:              idAgentSNMP,
+				CreatedAt:       helper.api.now.Now(),
+				AccountID:       accountID,
+				CurrentConfigID: newAccountConfig.ID,
+				AgentType:       agentTypeSNMP.ID,
+				FQDN:            snmpAddress,
+				DisplayName:     "Z-The-Initial-Name",
+			},
+			Abstracted:      true,
+			InitialPassword: "password already set",
+		},
+	}
+
+	optAgentSort := cmpopts.SortSlices(func(x payloadAgent, y payloadAgent) bool { return x.ID < y.ID })
+	if diff := cmp.Diff(wantAgents, agents, cmpopts.EquateEmpty(), optAgentSort); diff != "" {
+		t.Errorf("agents mismatch (-want +got)\n%s", diff)
+	}
+
+	metrics := helper.MetricsFromAPI()
 	want := []metricPayload{
 		{
 			Metric: bleemeoTypes.Metric{
@@ -1909,19 +1573,29 @@ func TestWithSNMP(t *testing.T) {
 
 // Test for monitor metric deactivation.
 func TestMonitorDeactivation(t *testing.T) {
-	helper := newMetricHelper(t)
+	helper := newHelper(t)
 	defer helper.Close()
 
+	helper.preregisterAgent(t)
+	helper.addMonitorOnAPI(t)
+	helper.initSynchronizer(t)
 	helper.AddTime(time.Minute)
+
+	// This should NOT be needed. Glouton should not need to be able to read the
+	// monitor agent to works.
+	// Currently Glouton public probe are allowed to view such agent. Glouton private probe aren't.
+	helper.api.resources["agent"].AddStore(newMonitorAgent)
+
+	idAgentMain, _ := helper.state.BleemeoCredentials()
 
 	initialMetrics := []metricPayload{
 		{
 			Metric: bleemeoTypes.Metric{
 				ID:      "90c6459c-851d-4bb4-957c-afbc695c2201",
-				AgentID: idAgentMonitor,
+				AgentID: newMonitor.AgentID,
 				LabelsText: fmt.Sprintf(
 					"__name__=\"probe_success\",instance=\"http://localhost:8000/\",instance_uuid=\"%s\",scraper=\"paris\"",
-					idAgentMonitor,
+					newMonitor.AgentID,
 				),
 			},
 			Name: "probe_success",
@@ -1929,10 +1603,10 @@ func TestMonitorDeactivation(t *testing.T) {
 		{
 			Metric: bleemeoTypes.Metric{
 				ID:      "9149d491-3a6e-4f46-abf9-c1ea9b9f7227",
-				AgentID: idAgentMonitor,
+				AgentID: newMonitor.AgentID,
 				LabelsText: fmt.Sprintf(
 					"__name__=\"probe_success\",instance=\"http://localhost:8000/\",instance_uuid=\"%s\",scraper=\"milan\"",
-					idAgentMonitor,
+					newMonitor.AgentID,
 				),
 			},
 			Name: "probe_success",
@@ -1940,51 +1614,41 @@ func TestMonitorDeactivation(t *testing.T) {
 		{
 			Metric: bleemeoTypes.Metric{
 				ID:      "92c0b336-6e5a-4960-94cc-b606db8a581f",
-				AgentID: idAgentMonitor,
+				AgentID: newMonitor.AgentID,
 				LabelsText: fmt.Sprintf(
 					"__name__=\"probe_status\",instance=\"http://localhost:8000/\",instance_uuid=\"%s\"",
-					idAgentMonitor,
+					newMonitor.AgentID,
 				),
 			},
 			Name: "probe_status",
 		},
 	}
 
-	pushPoints := func() {
-		helper.store.PushPoints(context.Background(), []types.MetricPoint{
-			{
-				Point: types.Point{Time: helper.mt.Now()},
-				Labels: map[string]string{
-					types.LabelName:         "probe_success",
-					types.LabelScraper:      "paris",
-					types.LabelInstance:     "http://localhost:8000/",
-					types.LabelInstanceUUID: idAgentMonitor,
-				},
-				Annotations: types.MetricAnnotations{
-					BleemeoAgentID: idAgentMonitor,
-				},
-			},
-			{
-				Point: types.Point{Time: helper.mt.Now()},
-				Labels: map[string]string{
-					types.LabelName:         "probe_duration",
-					types.LabelScraper:      "paris",
-					types.LabelInstance:     "http://localhost:8000/",
-					types.LabelInstanceUUID: idAgentMonitor,
-				},
-				Annotations: types.MetricAnnotations{
-					BleemeoAgentID: idAgentMonitor,
-				},
-			},
-		})
+	pushedPoints := []labels.Labels{
+		labels.New(
+			labels.Label{Name: types.LabelName, Value: "probe_success"},
+			labels.Label{Name: types.LabelScraper, Value: "paris"},
+			labels.Label{Name: types.LabelInstance, Value: "http://localhost:8000/"},
+			labels.Label{Name: types.LabelInstanceUUID, Value: newMonitor.AgentID},
+			labels.Label{Name: types.LabelMetaBleemeoTargetAgentUUID, Value: newMonitor.AgentID},
+		),
+		labels.New(
+			labels.Label{Name: types.LabelName, Value: "probe_duration"},
+			labels.Label{Name: types.LabelScraper, Value: "paris"},
+			labels.Label{Name: types.LabelInstance, Value: "http://localhost:8000/"},
+			labels.Label{Name: types.LabelInstanceUUID, Value: newMonitor.AgentID},
+			labels.Label{Name: types.LabelMetaBleemeoTargetAgentUUID, Value: newMonitor.AgentID},
+		),
 	}
 
-	helper.SetMetrics(initialMetrics...)
-	pushPoints()
+	helper.SetAPIMetrics(initialMetrics...)
+	helper.pushPoints(t, pushedPoints)
 
-	helper.RunSync(1, 0, false).CheckNoError("first sync", true)
+	if err := helper.runOnceWithResult(t).CheckMethodWithFull(syncMethodMetric); err != nil {
+		t.Error(err)
+	}
 
-	metrics := helper.Metrics()
+	metrics := helper.MetricsFromAPI()
 	want := []metricPayload{
 		{
 			Metric: bleemeoTypes.Metric{
@@ -1997,11 +1661,12 @@ func TestMonitorDeactivation(t *testing.T) {
 		{
 			Metric: bleemeoTypes.Metric{
 				ID:      "2",
-				AgentID: idAgentMonitor,
+				AgentID: newMonitor.AgentID,
 				LabelsText: fmt.Sprintf(
 					"__name__=\"probe_duration\",instance=\"http://localhost:8000/\",instance_uuid=\"%s\",scraper=\"paris\"",
-					idAgentMonitor,
+					newMonitor.AgentID,
 				),
+				ServiceID: newMonitor.ID,
 			},
 			Name: "probe_duration",
 		},
@@ -2010,23 +1675,30 @@ func TestMonitorDeactivation(t *testing.T) {
 	want = append(want, initialMetrics...)
 
 	if diff := cmp.Diff(want, metrics); diff != "" {
-		t.Errorf("metrics mismatch (-want +got):\n%s", diff)
+		t.Fatalf("metrics mismatch (-want +got):\n%s", diff)
 	}
 
-	helper.AddTime(90 * time.Minute)
-	pushPoints()
-	helper.RunSync(1, 0, false).CheckNoError("next full sync", true)
+	helper.SetTimeToNextFullSync()
+	helper.pushPoints(t, pushedPoints)
 
-	metrics = helper.Metrics()
+	if err := helper.runOnceWithResult(t).CheckMethodWithFull(syncMethodMetric); err != nil {
+		t.Error(err)
+	}
+
+	metrics = helper.MetricsFromAPI()
 
 	if diff := cmp.Diff(want, metrics); diff != "" {
 		t.Errorf("metrics mismatch (-want +got):\n%s", diff)
 	}
 
-	helper.AddTime(120 * time.Minute)
-	helper.RunSync(1, 0, false).CheckNoError("next full sync", true)
+	helper.SetTimeToNextFullSync()
+	helper.AddTime(60 * time.Minute)
 
-	metrics = helper.Metrics()
+	if err := helper.runOnceWithResult(t).CheckMethodWithFull(syncMethodMetric); err != nil {
+		t.Error(err)
+	}
+
+	metrics = helper.MetricsFromAPI()
 
 	want = []metricPayload{
 		{
@@ -2040,22 +1712,23 @@ func TestMonitorDeactivation(t *testing.T) {
 		{
 			Metric: bleemeoTypes.Metric{
 				ID:      "2",
-				AgentID: idAgentMonitor,
+				AgentID: newMonitor.AgentID,
 				LabelsText: fmt.Sprintf(
 					"__name__=\"probe_duration\",instance=\"http://localhost:8000/\",instance_uuid=\"%s\",scraper=\"paris\"",
-					idAgentMonitor,
+					newMonitor.AgentID,
 				),
 				DeactivatedAt: helper.s.now(),
+				ServiceID:     newMonitor.ID,
 			},
 			Name: "probe_duration",
 		},
 		{
 			Metric: bleemeoTypes.Metric{
 				ID:      "90c6459c-851d-4bb4-957c-afbc695c2201",
-				AgentID: idAgentMonitor,
+				AgentID: newMonitor.AgentID,
 				LabelsText: fmt.Sprintf(
 					"__name__=\"probe_success\",instance=\"http://localhost:8000/\",instance_uuid=\"%s\",scraper=\"paris\"",
-					idAgentMonitor,
+					newMonitor.AgentID,
 				),
 				DeactivatedAt: helper.s.now(),
 			},
@@ -2197,27 +1870,4 @@ func Test_MergeFirstSeenAt(t *testing.T) {
 	if res := cmp.Diff(got, want); res != "" {
 		t.Errorf("FirstSeenAt Merge did not occur correctly:\n%s", res)
 	}
-}
-
-func sortList(list []bleemeoTypes.Metric) []bleemeoTypes.Metric {
-	newList := make([]bleemeoTypes.Metric, 0, len(list))
-	orderedNames := make([]string, 0, len(list))
-
-	for _, val := range list {
-		orderedNames = append(orderedNames, val.LabelsText)
-	}
-
-	sort.Strings(orderedNames)
-
-	for _, name := range orderedNames {
-		for _, val := range list {
-			if val.LabelsText == name {
-				newList = append(newList, val)
-
-				break
-			}
-		}
-	}
-
-	return newList
 }
