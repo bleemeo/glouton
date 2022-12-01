@@ -134,6 +134,8 @@ const (
 	LabelContainerName              = "container_name"
 	LabelScrapeJob                  = "scrape_job"
 	LabelScrapeInstance             = "scrape_instance"
+	LabelService                    = "service"
+	LabelServiceInstance            = "service_instance"
 	LabelAlertname                  = "alertname"
 	LabelDevice                     = "device"
 	LabelModel                      = "model"

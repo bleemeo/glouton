@@ -1744,6 +1744,171 @@ func TestMonitorDeactivation(t *testing.T) {
 	}
 }
 
+// TestServiceStatusRename test that Glouton behave correctly on service_status rename.
+// Older glouton send metric like "apache_status" which was renamed to "service_status{service_type="apache"}".
+// The rename is done by Bleemeo API (actually Glouton try to register the new metric and API rename and response
+// with the old renamed object). API behave as if the metric apache_status is deleted and service_status is created with
+// the same UUID as apache_status.
+func TestServiceStatusRename(t *testing.T) {
+	// run 0 create old metric and then new metric (note: this isn't something that should
+	//       happen on real glouton, because on same run we don't have both old & then new)
+	// run 1 has old metric pre-create and in cache and only create new metric
+	// run 2 has old metric pre-create and not in cache and only create new metric
+	for run := 0; run < 3; run++ {
+		run := run
+
+		t.Run(fmt.Sprintf("run-%d", run), func(t *testing.T) {
+			t.Parallel()
+
+			helper := newHelper(t)
+			defer helper.Close()
+
+			helper.preregisterAgent(t)
+			helper.initSynchronizer(t)
+
+			metricResource, _ := helper.api.resources["metric"].(*genericResource)
+			metricResource.CreateHook = func(r *http.Request, body []byte, valuePtr interface{}) error {
+				// API will rename and reuse existing $SERVICE_status metric when registering service_status metrics.
+				metric, _ := valuePtr.(*metricPayload)
+				metricCopy := metric.metricFromAPI(helper.s.now())
+				serviceType := metricCopy.Labels[types.LabelService]
+
+				if metric.Name != "service_status" || serviceType == "" {
+					return nil
+				}
+
+				var metrics []metricPayload
+
+				metricResource.Store(&metrics)
+				for _, existing := range metrics {
+					if existing.Name == fmt.Sprintf("%s_status", serviceType) && existing.Item == metricCopy.Labels[types.LabelServiceInstance] {
+						metric.ID = existing.ID
+
+						return reuseIDError{metric.ID}
+					}
+				}
+
+				return nil
+			}
+
+			want1 := []metricPayload{
+				{
+					Metric: bleemeoTypes.Metric{
+						ID:         "1",
+						AgentID:    testAgent.ID,
+						LabelsText: "",
+					},
+					Name: agentStatusName,
+				},
+				{
+					Metric: bleemeoTypes.Metric{
+						ID:         "2",
+						AgentID:    testAgent.ID,
+						LabelsText: "",
+					},
+					Name: "apache_status",
+				},
+				{
+					Metric: bleemeoTypes.Metric{
+						ID:         "3",
+						AgentID:    testAgent.ID,
+						LabelsText: "",
+					},
+					Name: "nginx_status",
+					Item: "container1",
+				},
+			}
+
+			helper.AddTime(time.Minute)
+			if run == 0 {
+				helper.pushPoints(t, []labels.Labels{
+					labels.New(
+						labels.Label{Name: types.LabelName, Value: "apache_status"},
+					),
+					labels.New(
+						labels.Label{Name: types.LabelName, Value: "nginx_status"},
+						labels.Label{Name: types.LabelItem, Value: "container1"},
+						labels.Label{Name: types.LabelMetaBleemeoItem, Value: "container1"},
+					),
+				})
+
+				if err := helper.runOnceWithResult(t).CheckMethodWithFull(syncMethodMetric); err != nil {
+					t.Error(err)
+				}
+
+				// list of active metrics, 2*N query to register metric + 1 to register agent_status
+				helper.api.AssertCallPerResource(t, mockAPIResourceMetric, 6)
+
+				metrics := helper.MetricsFromAPI()
+
+				if diff := cmp.Diff(want1, metrics); diff != "" {
+					t.Errorf("metrics mismatch (-want +got):\n%s", diff)
+				}
+			}
+
+			if run > 0 {
+				helper.SetAPIMetrics(want1...)
+			}
+
+			if run == 1 {
+				helper.SetCacheMetrics(want1...)
+			}
+
+			helper.SetTimeToNextFullSync()
+			helper.pushPoints(t, []labels.Labels{
+				labels.New(
+					labels.Label{Name: types.LabelName, Value: "service_status"},
+					labels.Label{Name: types.LabelService, Value: "apache"},
+				),
+				labels.New(
+					labels.Label{Name: types.LabelName, Value: "service_status"},
+					labels.Label{Name: types.LabelService, Value: "nginx"},
+					labels.Label{Name: types.LabelServiceInstance, Value: "container1"},
+				),
+			})
+
+			if err := helper.runOnceWithResult(t).CheckMethodWithFull(syncMethodMetric); err != nil {
+				t.Error(err)
+			}
+
+			helper.AddTime(1 * time.Minute)
+
+			want2 := []metricPayload{
+				{
+					Metric: bleemeoTypes.Metric{
+						ID:         "1",
+						AgentID:    testAgent.ID,
+						LabelsText: "",
+					},
+					Name: agentStatusName,
+				},
+				{
+					Metric: bleemeoTypes.Metric{
+						ID:         "2",
+						AgentID:    testAgent.ID,
+						LabelsText: `__name__="service_status",service="apache"`,
+					},
+					Name: "service_status",
+				},
+				{
+					Metric: bleemeoTypes.Metric{
+						ID:         "3",
+						AgentID:    testAgent.ID,
+						LabelsText: `__name__="service_status",service="nginx",service_instance="container1"`,
+					},
+					Name: "service_status",
+				},
+			}
+
+			metrics := helper.MetricsFromAPI()
+
+			if diff := cmp.Diff(want2, metrics); diff != "" {
+				t.Errorf("metrics mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
 // TestMonitorPrivate test for monitor private.
 func TestMonitorPrivate(t *testing.T) {
 	helper := newHelper(t)

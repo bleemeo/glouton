@@ -342,6 +342,17 @@ func (helper *syncTestHelper) SetAPIAccountConfig(accountConfig bleemeoTypes.Acc
 	helper.api.resources[mockAPIResourceAgentConfig].SetStore(tmp...)
 }
 
+// SetCacheMetrics define the list of metric present in Glouton cache.
+func (helper *syncTestHelper) SetCacheMetrics(metrics ...metricPayload) {
+	tmp := make([]bleemeoTypes.Metric, 0, len(metrics))
+
+	for _, m := range metrics {
+		tmp = append(tmp, m.metricFromAPI(helper.Now()))
+	}
+
+	helper.s.option.Cache.SetMetrics(tmp)
+}
+
 // MetricsFromAPI returns metrics present on Bleemeo API mock.
 func (helper *syncTestHelper) MetricsFromAPI() []metricPayload {
 	var metrics []metricPayload
