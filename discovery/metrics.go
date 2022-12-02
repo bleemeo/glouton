@@ -276,6 +276,9 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 	var (
 		err   error
 		input telegraf.Input
+		// Inputs that return gatherer options will use an input gatherer instead of the collector,
+		// this means all labels will be kept and not only the item.
+		gathererOptions *inputs.GathererOptions
 	)
 
 	switch service.ServiceType { //nolint:exhaustive
@@ -294,7 +297,7 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 			input, err = elasticsearch.New(fmt.Sprintf("http://%s", net.JoinHostPort(ip, strconv.Itoa(port))))
 		}
 	case Fail2banService:
-		input, err = fail2ban.New()
+		input, gathererOptions, err = fail2ban.New()
 	case HAProxyService:
 		if service.Config.StatsURL != "" {
 			input, err = haproxy.New(service.Config.StatsURL)
@@ -319,7 +322,7 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 
 		if ip := service.AddressForPort(port, "tcp", true); ip != "" {
 			url := fmt.Sprintf("http://%s", net.JoinHostPort(service.IPAddress, strconv.Itoa(port)))
-			input, err = nats.New(url)
+			input, gathererOptions, err = nats.New(url)
 		}
 	case NginxService:
 		if ip, port := service.AddressPort(); ip != "" {
@@ -327,7 +330,7 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 		}
 	case OpenLDAPService:
 		if ip, port := service.AddressPort(); ip != "" {
-			input, err = openldap.New(ip, port, service.Config)
+			input, gathererOptions, err = openldap.New(ip, port, service.Config)
 		}
 	case PHPFPMService:
 		statsURL := urlForPHPFPM(service)
@@ -391,7 +394,7 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 
 		if ip := service.AddressForPort(port, "tcp", true); ip != "" {
 			url := fmt.Sprintf("%s://%s", protocol, net.JoinHostPort(ip, strconv.Itoa(port)))
-			input, err = uwsgi.New(url)
+			input, gathererOptions, err = uwsgi.New(url)
 		}
 	case ZookeeperService:
 		if ip, port := service.AddressPort(); ip != "" {
@@ -413,47 +416,12 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 
 	logger.V(2).Printf("Add input for service %v instance %s", service.Name, service.Instance)
 
-	internalInput := modify.AddRenameCallback(input, func(labels map[string]string, annotations types.MetricAnnotations) (map[string]string, types.MetricAnnotations) {
-		annotations.ServiceName = service.Name
-		annotations.ServiceInstance = service.Instance
-		annotations.ContainerID = service.ContainerID
-
-		_, port := service.AddressPort()
-		if port != 0 {
-			labels[types.LabelMetaServicePort] = strconv.FormatInt(int64(port), 10)
-		}
-
-		if service.Instance != "" {
-			if annotations.BleemeoItem != "" {
-				annotations.BleemeoItem = service.Instance + "_" + annotations.BleemeoItem
-			} else {
-				annotations.BleemeoItem = service.Instance
-			}
-		}
-
-		if annotations.BleemeoItem != "" {
-			labels[types.LabelItem] = annotations.BleemeoItem
-		}
-
-		return labels, annotations
-	})
-
-	// If KeepLabels is set, use an input gatherer instead of the default collector.
-	if internalInput.KeepLabels {
-		_, err = d.metricRegistry.RegisterInput(
-			registry.RegistrationOption{
-				Description: fmt.Sprintf("Input %s", internalInput.Name),
-				JitterSeed:  0,
-				Rules:       internalInput.Rules,
-				MinInterval: internalInput.MinInterval,
-			},
-			input,
-		)
-
-		return err
+	// If gatherer options are used, use an input gatherer instead of the default collector.
+	if gathererOptions != nil {
+		return d.registerInput(input, gathererOptions, service)
 	}
 
-	return d.addInput(input, service)
+	return d.addToCollector(input, service)
 }
 
 func createMySQLInput(service Service) (telegraf.Input, error) {
@@ -478,11 +446,36 @@ func createMySQLInput(service Service) (telegraf.Input, error) {
 	return nil, nil
 }
 
-// addInput is deprecated, use RegisterInput instead.
-func (d *Discovery) addInput(input telegraf.Input, service Service) error {
+// addToCollector is deprecated, use registerInput instead.
+func (d *Discovery) addToCollector(input telegraf.Input, service Service) error {
 	if d.coll == nil {
 		return nil
 	}
+
+	input = modify.AddRenameCallback(input, func(labels map[string]string, annotations types.MetricAnnotations) (map[string]string, types.MetricAnnotations) {
+		annotations.ServiceName = service.Name
+		annotations.ServiceInstance = service.Instance
+		annotations.ContainerID = service.ContainerID
+
+		_, port := service.AddressPort()
+		if port != 0 {
+			labels[types.LabelMetaServicePort] = strconv.FormatInt(int64(port), 10)
+		}
+
+		if service.Instance != "" {
+			if annotations.BleemeoItem != "" {
+				annotations.BleemeoItem = service.Instance + "_" + annotations.BleemeoItem
+			} else {
+				annotations.BleemeoItem = service.Instance
+			}
+		}
+
+		if annotations.BleemeoItem != "" {
+			labels[types.LabelItem] = annotations.BleemeoItem
+		}
+
+		return labels, annotations
+	})
 
 	inputID, err := d.coll.AddInput(input, service.Name)
 	if err != nil {
@@ -498,6 +491,35 @@ func (d *Discovery) addInput(input telegraf.Input, service Service) error {
 	}
 
 	return nil
+}
+
+func (d *Discovery) registerInput(input telegraf.Input, opts *inputs.GathererOptions, service Service) error {
+	extraLabels := map[string]string{
+		types.LabelMetaServiceName:     service.Name,
+		types.LabelMetaServiceInstance: service.Instance,
+		types.LabelMetaContainerID:     service.ContainerID,
+	}
+
+	if _, port := service.AddressPort(); port != 0 {
+		extraLabels[types.LabelMetaServicePort] = strconv.Itoa(port)
+	}
+
+	if service.Instance != "" {
+		extraLabels[types.LabelItem] = service.Instance
+	}
+
+	_, err := d.metricRegistry.RegisterInput(
+		registry.RegistrationOption{
+			Description: fmt.Sprintf("Service input %s %s", service.Name, service.Instance),
+			JitterSeed:  0,
+			Rules:       opts.Rules,
+			MinInterval: opts.MinInterval,
+			ExtraLabels: extraLabels,
+		},
+		input,
+	)
+
+	return err
 }
 
 func urlForPHPFPM(service Service) string {

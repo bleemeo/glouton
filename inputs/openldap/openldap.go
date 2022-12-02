@@ -27,15 +27,15 @@ import (
 )
 
 // New returns a OpenLDAP input.
-func New(host string, port int, config config.Service) (telegraf.Input, error) {
+func New(host string, port int, config config.Service) (telegraf.Input, *inputs.GathererOptions, error) {
 	input, ok := telegraf_inputs.Inputs["openldap"]
 	if !ok {
-		return nil, inputs.ErrDisabledInput
+		return nil, nil, inputs.ErrDisabledInput
 	}
 
 	ldapInput, ok := input().(*openldap.Openldap)
 	if !ok {
-		return nil, inputs.ErrUnexpectedType
+		return nil, nil, inputs.ErrUnexpectedType
 	}
 
 	ldapInput.Host = host
@@ -68,9 +68,8 @@ func New(host string, port int, config config.Service) (telegraf.Input, error) {
 				"operations_search_completed",
 			},
 		},
-		Name:       "openldap",
-		KeepLabels: true,
+		Name: "openldap",
 	}
 
-	return internalInput, nil
+	return internalInput, &inputs.GathererOptions{}, nil
 }

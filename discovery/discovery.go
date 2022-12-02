@@ -183,7 +183,7 @@ func validateServices(services []config.Service) (map[NameInstance]config.Servic
 		// SSL and StartTLS can't be used at the same time.
 		if srv.SSL && srv.StartTLS {
 			warning := fmt.Errorf(
-				"%w: service '%s' can't set both SSL and StartTLS, SSL will be disabled",
+				"%w: service '%s' can't set both SSL and StartTLS, StartTLS will be used",
 				config.ErrInvalidValue, srv.ID,
 			)
 			warnings.Append(warning)

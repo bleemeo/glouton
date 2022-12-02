@@ -152,7 +152,7 @@ type RegistrationOption struct {
 	// DisablePeriodicGather skip the periodic calls which forward gathered points to r.PushPoint.
 	// The periodic call use the Interval. When Interval is 0, the dynamic interval set by UpdateDelay is used.
 	DisablePeriodicGather bool
-	Rules                 []SimpleRule
+	Rules                 []types.SimpleRule
 	rrules                []*rules.RecordingRule
 }
 
@@ -191,14 +191,6 @@ func (opt *RegistrationOption) buildRules() error {
 	opt.rrules = rrules
 
 	return nil
-}
-
-// SimpleRule is a PromQL run on output from the Gatherer.
-// It's similar to a recording rule, but it's not able to use historical data and can
-// only works on latest point (so no rate, avg_over_time, ...).
-type SimpleRule struct {
-	TargetName  string
-	PromQLQuery string
 }
 
 func (opt *RegistrationOption) String() string {

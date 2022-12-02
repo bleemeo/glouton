@@ -19,7 +19,7 @@ package nats
 import (
 	"glouton/inputs"
 	"glouton/inputs/internal"
-	"glouton/prometheus/registry"
+	"glouton/types"
 
 	"github.com/influxdata/telegraf"
 	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"
@@ -27,15 +27,15 @@ import (
 )
 
 // New returns a NATS input.
-func New(url string) (telegraf.Input, error) {
+func New(url string) (telegraf.Input, *inputs.GathererOptions, error) {
 	input, ok := telegraf_inputs.Inputs["nats"]
 	if !ok {
-		return nil, inputs.ErrDisabledInput
+		return nil, nil, inputs.ErrDisabledInput
 	}
 
 	natsInput, ok := input().(*nats.Nats)
 	if !ok {
-		return nil, inputs.ErrUnexpectedType
+		return nil, nil, inputs.ErrUnexpectedType
 	}
 
 	natsInput.Server = url
@@ -46,14 +46,16 @@ func New(url string) (telegraf.Input, error) {
 			DerivatedMetrics: []string{"in_bytes", "out_bytes", "in_msgs", "out_msgs"},
 		},
 		Name: "nats",
-		Rules: []registry.SimpleRule{
+	}
+
+	options := &inputs.GathererOptions{
+		Rules: []types.SimpleRule{
 			{
 				TargetName:  "nats_uptime_seconds",
 				PromQLQuery: "nats_uptime/1e9",
 			},
 		},
-		KeepLabels: true,
 	}
 
-	return internalInput, nil
+	return internalInput, options, nil
 }

@@ -29,7 +29,7 @@ import (
 type RenameCallback func(labels map[string]string, annotations types.MetricAnnotations) (newLabels map[string]string, newAnnotations types.MetricAnnotations)
 
 // AddRenameCallback adds a rename callback that can mutate labels & annotations.
-func AddRenameCallback(input telegraf.Input, f RenameCallback) *internal.Input {
+func AddRenameCallback(input telegraf.Input, f RenameCallback) telegraf.Input {
 	if internalInput, ok := input.(*internal.Input); ok {
 		internalInput.Accumulator.RenameCallbacks = append(internalInput.Accumulator.RenameCallbacks, internal.RenameCallback(f))
 

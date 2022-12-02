@@ -892,7 +892,7 @@ func TestValidateServices(t *testing.T) {
 		"invalid config value: a key \"id\" is missing in one of your service override",
 		"invalid config value: service id \" not fixable@\" can only contains letters, digits and underscore",
 		"invalid config value: service id \"custom-bad.name\" can not contains dot (.) or dash (-). Changed to \"custom_bad_name\"",
-		"invalid config value: service 'ssl_and_starttls' can't set both SSL and StartTLS, SSL will be disabled",
+		"invalid config value: service 'ssl_and_starttls' can't set both SSL and StartTLS, StartTLS will be used",
 		"invalid config value: service 'bad_stats_protocol' has an unsupported stats protocol: 'bad'",
 	}
 

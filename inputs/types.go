@@ -274,3 +274,12 @@ var (
 	ErrUnexpectedType = errors.New("input does not have the expected type")
 	ErrDisabledInput  = errors.New("input is not enabled in service Telegraf")
 )
+
+type GathererOptions struct {
+	// Recording rules evaluated in the input gatherer. KeepLabels must
+	// be true if recording rules are used. They are evaluated after
+	// the metrics are renamed in the accumulator.
+	Rules []types.SimpleRule
+	// The delay to wait for between gathers.
+	MinInterval time.Duration
+}

@@ -27,28 +27,30 @@ import (
 )
 
 // New returns a Fail2ban input.
-func New() (internalInput telegraf.Input, err error) {
+func New() (telegraf.Input, *inputs.GathererOptions, error) {
 	input, ok := telegraf_inputs.Inputs["fail2ban"]
 	if !ok {
-		return nil, inputs.ErrDisabledInput
+		return nil, nil, inputs.ErrDisabledInput
 	}
 
 	fail2banInput, ok := input().(*fail2ban.Fail2ban)
 	if !ok {
-		return nil, inputs.ErrUnexpectedType
+		return nil, nil, inputs.ErrUnexpectedType
 	}
 
 	// The input uses "sudo fail2ban-client status myjail" to retrieve the metrics.
 	fail2banInput.UseSudo = true
 
-	internalInput = &internal.Input{
+	internalInput := &internal.Input{
 		Input:       fail2banInput,
 		Accumulator: internal.Accumulator{},
 		Name:        "fail2ban",
-		KeepLabels:  true,
+	}
+
+	options := &inputs.GathererOptions{
 		// The input uses an external command with sudo so we gather metrics less often.
 		MinInterval: 60 * time.Second,
 	}
 
-	return internalInput, nil
+	return internalInput, options, nil
 }

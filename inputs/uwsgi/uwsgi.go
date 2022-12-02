@@ -19,7 +19,7 @@ package uwsgi
 import (
 	"glouton/inputs"
 	"glouton/inputs/internal"
-	"glouton/prometheus/registry"
+	"glouton/types"
 
 	"github.com/influxdata/telegraf"
 	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"
@@ -27,15 +27,15 @@ import (
 )
 
 // New returns a uWSGI input.
-func New(url string) (telegraf.Input, error) {
+func New(url string) (telegraf.Input, *inputs.GathererOptions, error) {
 	input, ok := telegraf_inputs.Inputs["uwsgi"]
 	if !ok {
-		return nil, inputs.ErrDisabledInput
+		return nil, nil, inputs.ErrDisabledInput
 	}
 
 	uwsgiInput, ok := input().(*uwsgi.Uwsgi)
 	if !ok {
-		return nil, inputs.ErrUnexpectedType
+		return nil, nil, inputs.ErrUnexpectedType
 	}
 
 	uwsgiInput.Servers = []string{url}
@@ -50,9 +50,11 @@ func New(url string) (telegraf.Input, error) {
 				"harakiri_count",
 			},
 		},
-		Name:       "uWSGI",
-		KeepLabels: true,
-		Rules: []registry.SimpleRule{
+		Name: "uWSGI",
+	}
+
+	options := &inputs.GathererOptions{
+		Rules: []types.SimpleRule{
 			{
 				TargetName:  "uwsgi_requests",
 				PromQLQuery: "sum without (worker_id) (uwsgi_workers_requests)",
@@ -80,5 +82,5 @@ func New(url string) (telegraf.Input, error) {
 		},
 	}
 
-	return internalInput, nil
+	return internalInput, options, nil
 }
