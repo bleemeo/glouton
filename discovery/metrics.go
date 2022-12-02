@@ -348,8 +348,8 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 		mgmtPort := 15672
 		force := false
 
-		if service.Config.ManagementPort != 0 {
-			mgmtPort = service.Config.ManagementPort
+		if service.Config.StatsPort != 0 {
+			mgmtPort = service.Config.StatsPort
 			force = true
 		}
 

@@ -243,7 +243,7 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 				Username:          "user",
 				Password:          "password",
 				StatsURL:          "http://nginx/stats",
-				ManagementPort:    9090,
+				StatsPort:         9090,
 				DetailedItems:     []string{"mytopic"},
 				JMXPort:           1200,
 				JMXUsername:       "jmx_user",
@@ -769,6 +769,21 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 							"keyspace.table1",
 							"keyspace.table2",
 						},
+					},
+				},
+			},
+		},
+		{
+			Name:  "deprecated mgmt_port",
+			Files: []string{"testdata/deprecated_mgmt_port.conf"},
+			WantWarnings: []string{
+				"setting is deprecated: 'mgmt_port', use 'stats_port' instead",
+			},
+			WantConfig: Config{
+				Services: []Service{
+					{
+						ID:        "service1",
+						StatsPort: 9090,
 					},
 				},
 			},

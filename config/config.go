@@ -368,7 +368,7 @@ func migrate(k *koanf.Koanf) (*koanf.Koanf, prometheus.MultiError) {
 	warnings = append(warnings, migrateLogging(k, config)...)
 	warnings = append(warnings, migrateMetricsPrometheus(k, config)...)
 	warnings = append(warnings, migrateScrapperMetrics(k, config)...)
-	warnings = append(warnings, migrateCassandraDetailedTables(config)...)
+	warnings = append(warnings, migrateServices(config)...)
 
 	// We can't reuse the previous Koanf because it doesn't allow removing keys.
 	newConfig := koanf.New(delimiter)
@@ -531,8 +531,13 @@ func migrateScrapper(k *koanf.Koanf, config map[string]interface{}, deprecatedPa
 	return warnings
 }
 
-// migrateCassandraDetailedTables migrates "cassandra_detailed_tables" to "detailed_items".
-func migrateCassandraDetailedTables(config map[string]interface{}) prometheus.MultiError {
+// migrateServices migrates deprecated service options.
+func migrateServices(config map[string]interface{}) prometheus.MultiError {
+	migratedOptions := map[string]string{
+		"cassandra_detailed_tables": "detailed_items",
+		"mgmt_port":                 "stats_port",
+	}
+
 	var warnings prometheus.MultiError
 
 	servicesInt := config["service"]
@@ -548,15 +553,17 @@ func migrateCassandraDetailedTables(config map[string]interface{}) prometheus.Mu
 			continue
 		}
 
-		detailedTablesInt, ok := serviceMap["cassandra_detailed_tables"]
-		if !ok {
-			continue
+		for deprecated_opt, new_opt := range migratedOptions {
+			detailedTablesInt, ok := serviceMap[deprecated_opt]
+			if !ok {
+				continue
+			}
+
+			serviceMap[new_opt] = detailedTablesInt
+			delete(serviceMap, deprecated_opt)
+
+			warnings.Append(fmt.Errorf("%w: '%s', use '%s' instead", errSettingsDeprecated, deprecated_opt, new_opt))
 		}
-
-		serviceMap["detailed_items"] = detailedTablesInt
-		delete(serviceMap, "cassandra_detailed_tables")
-
-		warnings.Append(fmt.Errorf("%w: 'cassandra_detailed_tables', use 'detailed_items' instead", errSettingsDeprecated))
 	}
 
 	config["service"] = servicesInt

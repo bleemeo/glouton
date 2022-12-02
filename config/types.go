@@ -310,7 +310,7 @@ type Service struct {
 	// HAProxy and PHP-FMP stats URL.
 	StatsURL string `yaml:"stats_url"`
 	// Port of RabbitMQ management interface.
-	ManagementPort int `yaml:"mgmt_port"`
+	StatsPort int `yaml:"stats_port"`
 	// Detailed monitoring of specific items (Cassandra tables, Postgres databases or Kafka topics).
 	DetailedItems []string `yaml:"detailed_items"`
 	// JMX services.
