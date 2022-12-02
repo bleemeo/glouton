@@ -1756,12 +1756,6 @@ func TestMonitorPrivate(t *testing.T) {
 	helper.initSynchronizer(t)
 	helper.AddTime(time.Minute)
 
-	// This should NOT be needed. Glouton should not need to be able to read the
-	// monitor agent to works.
-	// Currently Glouton public probe are allowed to view such agent. Glouton private probe aren't, therefor this
-	// test show a bug in Glouton.
-	helper.api.resources["agent"].AddStore(newMonitorAgent)
-
 	if err := helper.runOnceWithResult(t).Check(); err != nil {
 		t.Error(err)
 	}
@@ -1771,50 +1765,27 @@ func TestMonitorPrivate(t *testing.T) {
 		t.Fatal("idAgentMain == '', want something")
 	}
 
-	// Note: we use probe_success1/2/3 to helps reading diff in case of error. Normally the name
-	// should be "probe_success". But this shouldn't matter for the test.
 	initialMetrics := []metricPayload{
-		{
-			Metric: bleemeoTypes.Metric{
-				ID:      "90c6459c-851d-4bb4-957c-afbc695c2201",
-				AgentID: newMonitor.AgentID,
-				LabelsText: fmt.Sprintf(
-					"__name__=\"probe_success1\",instance=\"%s\",instance_uuid=\"%s\",scraper=\"paris\"",
-					newMonitor.URL,
-					newMonitor.AgentID,
-				),
-			},
-			Name: "probe_success1",
-		},
+		// Metric from other probe are NOT present in API, because glouton private probe aren't allow to view them.
 		{
 			Metric: bleemeoTypes.Metric{
 				ID:      "9149d491-3a6e-4f46-abf9-c1ea9b9f7227",
 				AgentID: newMonitor.AgentID,
 				LabelsText: fmt.Sprintf(
-					"__name__=\"probe_success2\",instance=\"%s\",instance_uuid=\"%s\",scraper_uuid=\"2a38ec88-8b5b-413b-a12f-f35a8a228ee3\"",
+					"__name__=\"probe_success\",instance=\"%s\",instance_uuid=\"%s\",scraper_uuid=\"%s\"",
 					newMonitor.URL,
 					newMonitor.AgentID,
+					idAgentMain,
 				),
+				ServiceID: newMonitor.ID,
 			},
-			Name: "probe_success2",
-		},
-		{
-			Metric: bleemeoTypes.Metric{
-				ID:      "92c0b336-6e5a-4960-94cc-b606db8a581f",
-				AgentID: newMonitor.AgentID,
-				LabelsText: fmt.Sprintf(
-					"__name__=\"probe_status\",instance=\"%s\",instance_uuid=\"%s\"",
-					newMonitor.URL,
-					newMonitor.AgentID,
-				),
-			},
-			Name: "probe_status",
+			Name: "probe_success",
 		},
 	}
 
 	pushedPoints := []labels.Labels{
 		labels.New(
-			labels.Label{Name: types.LabelName, Value: "probe_success3"},
+			labels.Label{Name: types.LabelName, Value: "probe_success"},
 			labels.Label{Name: types.LabelScraperUUID, Value: idAgentMain},
 			labels.Label{Name: types.LabelInstance, Value: newMonitor.URL},
 			labels.Label{Name: types.LabelInstanceUUID, Value: newMonitor.AgentID},
@@ -1850,14 +1821,14 @@ func TestMonitorPrivate(t *testing.T) {
 				ID:      idAny,
 				AgentID: newMonitor.AgentID,
 				LabelsText: fmt.Sprintf(
-					"__name__=\"probe_success3\",instance=\"%s\",instance_uuid=\"%s\",scraper_uuid=\"%s\"",
+					"__name__=\"probe_success\",instance=\"%s\",instance_uuid=\"%s\",scraper_uuid=\"%s\"",
 					newMonitor.URL,
 					newMonitor.AgentID,
 					idAgentMain,
 				),
 				ServiceID: newMonitor.ID,
 			},
-			Name: "probe_success3",
+			Name: "probe_success",
 		},
 		{
 			Metric: bleemeoTypes.Metric{
@@ -1875,8 +1846,6 @@ func TestMonitorPrivate(t *testing.T) {
 		},
 	}
 
-	want = append(want, initialMetrics...)
-
 	helper.assertMetricsInAPI(t, want)
 
 	helper.SetTimeToNextFullSync()
@@ -1886,6 +1855,8 @@ func TestMonitorPrivate(t *testing.T) {
 	if err := helper.runOnceWithResult(t).Check(); err != nil {
 		t.Error(err)
 	}
+
+	helper.assertMetricsInAPI(t, want)
 
 	helper.SetTimeToNextFullSync()
 	helper.AddTime(60 * time.Minute)
@@ -1908,7 +1879,7 @@ func TestMonitorPrivate(t *testing.T) {
 				ID:      idAny,
 				AgentID: newMonitor.AgentID,
 				LabelsText: fmt.Sprintf(
-					"__name__=\"probe_success3\",instance=\"%s\",instance_uuid=\"%s\",scraper_uuid=\"%s\"",
+					"__name__=\"probe_success\",instance=\"%s\",instance_uuid=\"%s\",scraper_uuid=\"%s\"",
 					newMonitor.URL,
 					newMonitor.AgentID,
 					idAgentMain,
@@ -1916,7 +1887,7 @@ func TestMonitorPrivate(t *testing.T) {
 				DeactivatedAt: helper.Now(),
 				ServiceID:     newMonitor.ID,
 			},
-			Name: "probe_success3",
+			Name: "probe_success",
 		},
 		{
 			Metric: bleemeoTypes.Metric{
@@ -1934,8 +1905,6 @@ func TestMonitorPrivate(t *testing.T) {
 			Name: "probe_duration",
 		},
 	}
-
-	want = append(want, initialMetrics...)
 
 	helper.assertMetricsInAPI(t, want)
 }
