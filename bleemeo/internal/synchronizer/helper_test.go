@@ -126,10 +126,15 @@ func (helper *syncTestHelper) preregisterAgent(t *testing.T) {
 }
 
 // addMonitorOnAPI pre-create a monitor in the API.
-func (helper *syncTestHelper) addMonitorOnAPI(t *testing.T) {
+func (helper *syncTestHelper) addMonitorOnAPI(t *testing.T) serviceMonitor {
 	t.Helper()
 
-	helper.api.resources["service"].AddStore(newMonitor)
+	newMonitorCopy := newMonitor
+	newMonitorCopy.AccountConfig = helper.api.AccountConfigNewAgent
+
+	helper.api.resources["service"].AddStore(newMonitorCopy)
+
+	return newMonitorCopy
 }
 
 // Create or re-create the Synchronizer. It also reset the store.
@@ -322,6 +327,21 @@ func (helper *syncTestHelper) SetAPIMetrics(metrics ...metricPayload) {
 	helper.api.resources[mockAPIResourceMetric].SetStore(tmp...)
 }
 
+// SetAPIAccountConfig define the list of AccountConfig and AgentConfig present on Bleemeo API mock.
+// It also enable using the AccountConfig as default config for new Agent.
+func (helper *syncTestHelper) SetAPIAccountConfig(accountConfig bleemeoTypes.AccountConfig, agentConfigs []bleemeoTypes.AgentConfig) {
+	helper.api.AccountConfigNewAgent = accountConfig.ID
+	helper.api.resources[mockAPIResourceAccountConfig].SetStore(accountConfig)
+
+	tmp := make([]interface{}, 0, len(agentConfigs))
+
+	for _, x := range agentConfigs {
+		tmp = append(tmp, x)
+	}
+
+	helper.api.resources[mockAPIResourceAgentConfig].SetStore(tmp...)
+}
+
 // MetricsFromAPI returns metrics present on Bleemeo API mock.
 func (helper *syncTestHelper) MetricsFromAPI() []metricPayload {
 	var metrics []metricPayload
@@ -346,9 +366,87 @@ func (helper *syncTestHelper) AgentsFromAPI() []payloadAgent {
 	return agents
 }
 
+// ServicesFromAPI returns services present on Bleemeo API mock.
+func (helper *syncTestHelper) ServicesFromAPI() []serviceMonitor {
+	var services []serviceMonitor
+
+	helper.api.resources[mockAPIResourceService].Store(&services)
+	sort.Slice(services, func(i, j int) bool {
+		return services[i].ID < services[j].ID
+	})
+
+	return services
+}
+
+// assertAgentsInAPI check that wanted agents (and only wanted agents) are present in API.
+// This is mostly a wrapper around cmp.Diff which also do:
+// * replace idAny by corresponding ID (match metric by same fqdn)
+// * sort list by ID.
+func (helper *syncTestHelper) assertAgentsInAPI(t *testing.T, want []payloadAgent) {
+	t.Helper()
+
+	agents := helper.AgentsFromAPI()
+
+	copyWant := make([]payloadAgent, 0, len(want))
+
+	for _, x := range want {
+		if x.ID == idAny {
+			x.ID = idObjectNotFound
+
+			for _, existing := range agents {
+				if x.FQDN == existing.FQDN {
+					x.ID = existing.ID
+
+					break
+				}
+			}
+		}
+
+		copyWant = append(copyWant, x)
+	}
+
+	optSort := cmpopts.SortSlices(func(x payloadAgent, y payloadAgent) bool { return x.ID < y.ID })
+	if diff := cmp.Diff(copyWant, agents, cmpopts.EquateEmpty(), optSort); diff != "" {
+		t.Errorf("agents mismatch (-want +got)\n%s", diff)
+	}
+}
+
+// assertServicesInAPI check that wanted agents (and only wanted agents) are present in API.
+// This is mostly a wrapper around cmp.Diff which also do:
+// * replace idAny by corresponding ID (match service by same name, instance, url)
+// * sort list by ID.
+func (helper *syncTestHelper) assertServicesInAPI(t *testing.T, want []serviceMonitor) {
+	t.Helper()
+
+	services := helper.ServicesFromAPI()
+
+	copyWant := make([]serviceMonitor, 0, len(want))
+
+	for _, x := range want {
+		if x.ID == idAny {
+			x.ID = idObjectNotFound
+
+			for _, existing := range services {
+				if x.Label == existing.Label && x.Instance == existing.Instance && x.URL == existing.URL {
+					x.ID = existing.ID
+
+					break
+				}
+			}
+		}
+
+		copyWant = append(copyWant, x)
+	}
+
+	optSort := cmpopts.SortSlices(func(x serviceMonitor, y serviceMonitor) bool { return x.ID < y.ID })
+	if diff := cmp.Diff(copyWant, services, cmpopts.EquateEmpty(), optSort); diff != "" {
+		t.Errorf("services mismatch (-want +got)\n%s", diff)
+	}
+}
+
 // assertMetricsInAPI check that wanted metrics (and only wanted metrics) are present in API.
 // This is mostly a wrapper around cmp.Diff which also do:
-// * replace idAny but corresponding ID (match metric by same agentID, label & labels_text)
+// * replace idAny by corresponding ID (match metric by same agentID, label, item & labels_text)
 // * sort list by ID.
 func (helper *syncTestHelper) assertMetricsInAPI(t *testing.T, want []metricPayload) {
 	t.Helper()
@@ -356,18 +454,18 @@ func (helper *syncTestHelper) assertMetricsInAPI(t *testing.T, want []metricPayl
 	metrics := helper.MetricsFromAPI()
 
 	copyWant := make([]metricPayload, 0, len(want))
+
 	for _, m := range want {
 		if m.ID == idAny {
 			m.ID = idObjectNotFound
 
 			for _, existingM := range metrics {
-				if m.AgentID == existingM.AgentID && m.Name == existingM.Name && m.LabelsText == existingM.LabelsText {
+				if m.AgentID == existingM.AgentID && m.Name == existingM.Name && m.LabelsText == existingM.LabelsText && m.Item == existingM.Item {
 					m.ID = existingM.ID
 
 					break
 				}
 			}
-
 		}
 
 		copyWant = append(copyWant, m)

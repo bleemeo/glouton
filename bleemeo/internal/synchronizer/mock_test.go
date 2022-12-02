@@ -41,8 +41,11 @@ import (
 )
 
 const (
-	mockAPIResourceAgent  = "agent"
-	mockAPIResourceMetric = "metric"
+	mockAPIResourceAgent         = "agent"
+	mockAPIResourceMetric        = "metric"
+	mockAPIResourceAccountConfig = "accountconfig"
+	mockAPIResourceAgentConfig   = "agentconfig"
+	mockAPIResourceService       = "service"
 )
 
 //nolint:gochecknoglobals
@@ -55,14 +58,15 @@ var (
 // mockAPI fake global /v1 API endpoints. Currently only v1/info & v1/jwt-auth
 // Use Handle to add additional endpoints.
 type mockAPI struct {
-	JWTUsername    string
-	JWTPassword    string
-	JWTToken       string
-	AuthCallback   func(*mockAPI, *http.Request) (interface{}, int, error)
-	PreRequestHook func(*mockAPI, *http.Request) (interface{}, int, error)
-	resources      map[string]mockResource
-	serveMux       *http.ServeMux
-	now            *mockTime
+	JWTUsername           string
+	JWTPassword           string
+	JWTToken              string
+	AuthCallback          func(*mockAPI, *http.Request) (interface{}, int, error)
+	PreRequestHook        func(*mockAPI, *http.Request) (interface{}, int, error)
+	resources             map[string]mockResource
+	serveMux              *http.ServeMux
+	now                   *mockTime
+	AccountConfigNewAgent string
 
 	RequestList        []mockRequest
 	ServerErrorCount   int
@@ -123,10 +127,11 @@ type mockResource interface {
 
 func newAPI() *mockAPI {
 	api := &mockAPI{
-		JWTToken:           "random-value",
-		PreRequestHook:     nil,
-		now:                &mockTime{now: time.Now()},
-		RequestPerResource: make(map[string]int),
+		JWTToken:              "random-value",
+		PreRequestHook:        nil,
+		now:                   &mockTime{now: time.Now()},
+		RequestPerResource:    make(map[string]int),
+		AccountConfigNewAgent: newAccountConfig.ID,
 	}
 
 	api.AuthCallback = func(ma *mockAPI, r *http.Request) (interface{}, int, error) {
@@ -176,7 +181,7 @@ func newAPI() *mockAPI {
 				api.JWTPassword = agent.InitialPassword
 			}
 
-			agent.CurrentConfigID = newAccountConfig.ID
+			agent.CurrentConfigID = api.AccountConfigNewAgent
 			agent.InitialPassword = "password already set"
 			agent.CreatedAt = api.now.Now()
 
@@ -191,11 +196,11 @@ func newAPI() *mockAPI {
 		Type:     bleemeoTypes.AgentType{},
 		ReadOnly: true,
 	})
-	api.AddResource("accountconfig", &genericResource{
+	api.AddResource(mockAPIResourceAccountConfig, &genericResource{
 		Type:     bleemeoTypes.AccountConfig{},
 		ReadOnly: true,
 	})
-	api.AddResource("agentconfig", &genericResource{
+	api.AddResource(mockAPIResourceAgentConfig, &genericResource{
 		Type:     bleemeoTypes.AgentConfig{},
 		ReadOnly: true,
 	})
@@ -276,7 +281,7 @@ func newAPI() *mockAPI {
 			return nil
 		},
 	})
-	api.AddResource("service", &genericResource{
+	api.AddResource(mockAPIResourceService, &genericResource{
 		Type:        serviceMonitor{},
 		ValidFilter: []string{"agent", "active", "monitor"},
 	})
@@ -286,10 +291,10 @@ func newAPI() *mockAPI {
 		agentTypeSNMP,
 		agentTypeMonitor,
 	)
-	api.resources["accountconfig"].SetStore(
+	api.resources[mockAPIResourceAccountConfig].SetStore(
 		newAccountConfig,
 	)
-	api.resources["agentconfig"].SetStore(
+	api.resources[mockAPIResourceAgentConfig].SetStore(
 		agentConfigAgent,
 		agentConfigSNMP,
 		agentConfigMonitor,

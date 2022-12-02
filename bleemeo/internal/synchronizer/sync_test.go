@@ -21,8 +21,10 @@ import (
 	"fmt"
 	bleemeoTypes "glouton/bleemeo/types"
 	"glouton/config"
+	"glouton/discovery"
 	"glouton/facts"
 	"glouton/prometheus/exporter/snmp"
+	"glouton/prometheus/model"
 	"glouton/types"
 	"net/http"
 	"sync"
@@ -898,6 +900,390 @@ func TestSyncServerGroup(t *testing.T) {
 			if diff := cmp.Diff(wantAgents, agents, cmpopts.EquateEmpty(), optAgentSort); diff != "" {
 				t.Errorf("agents mismatch (-want +got)\n%s", diff)
 			}
+		})
+	}
+}
+
+// TestBleemeoPlan ensure Glouton works as expected in various plan.
+func TestBleemeoPlan(t *testing.T) { //nolint:maintidx
+	const (
+		configID1      = "86c0b76c-587a-48c6-a799-dd753719151c"
+		configID2      = "a0740441-88ee-4ec1-b023-b9d3e9398cf7"
+		agentConfigID1 = "62fe90d2-00cc-4b81-b49d-308de2ae22e1"
+		agentConfigID2 = "f520e10b-7718-4fb1-87d9-b1f65f90ca31"
+		agentConfigID3 = "81620241-3318-4e3b-8b33-70ff40c9e31a"
+		agentConfigID4 = "96110f90-b724-473f-8077-3244661cb68d"
+	)
+
+	cases := []struct {
+		name                string
+		accountConfig       bleemeoTypes.AccountConfig
+		agentConfigs        []bleemeoTypes.AgentConfig
+		wantSNMP            bool
+		wantCustomMetric    bool
+		wantContainerFK     bool
+		wantContainerMetric bool
+	}{
+		{
+			name:          "default",
+			accountConfig: newAccountConfig,
+			agentConfigs: []bleemeoTypes.AgentConfig{
+				agentConfigAgent,
+				agentConfigSNMP,
+				agentConfigMonitor,
+			},
+			wantSNMP:            true,
+			wantCustomMetric:    true,
+			wantContainerFK:     true,
+			wantContainerMetric: true,
+		},
+		{
+			name: "all-enable",
+			accountConfig: bleemeoTypes.AccountConfig{
+				ID:                configID1,
+				Name:              "all-enable",
+				MaxCustomMetrics:  999,
+				LiveProcess:       true,
+				DockerIntegration: true,
+				SNMPIntegration:   true,
+			},
+			agentConfigs: []bleemeoTypes.AgentConfig{
+				{
+					ID:            agentConfigID1,
+					AccountConfig: configID1,
+					AgentType:     agentTypeAgent.ID,
+				},
+				{
+					ID:            agentConfigID2,
+					AccountConfig: configID1,
+					AgentType:     agentTypeSNMP.ID,
+				},
+				{
+					ID:            agentConfigID3,
+					AccountConfig: configID1,
+					AgentType:     agentTypeMonitor.ID,
+				},
+			},
+			wantSNMP:            true,
+			wantCustomMetric:    true,
+			wantContainerFK:     true,
+			wantContainerMetric: true,
+		},
+		{
+			name: "no-docker",
+			accountConfig: bleemeoTypes.AccountConfig{
+				ID:                configID2,
+				Name:              "no-docker",
+				MaxCustomMetrics:  999,
+				LiveProcess:       true,
+				DockerIntegration: false,
+				SNMPIntegration:   true,
+			},
+			agentConfigs: []bleemeoTypes.AgentConfig{
+				{
+					ID:            agentConfigID1,
+					AccountConfig: configID2,
+					AgentType:     agentTypeAgent.ID,
+				},
+				{
+					ID:            agentConfigID2,
+					AccountConfig: configID2,
+					AgentType:     agentTypeSNMP.ID,
+				},
+				{
+					ID:            agentConfigID3,
+					AccountConfig: configID2,
+					AgentType:     agentTypeMonitor.ID,
+				},
+			},
+			wantSNMP:            true,
+			wantCustomMetric:    true,
+			wantContainerFK:     false,
+			wantContainerMetric: false,
+		},
+		{
+			name: "no-docker-limit-list",
+			accountConfig: bleemeoTypes.AccountConfig{
+				ID:                    configID2,
+				Name:                  "no-docker-limit-list",
+				MaxCustomMetrics:      999,
+				LiveProcess:           true,
+				DockerIntegration:     false,
+				SNMPIntegration:       true,
+				MetricsAgentWhitelist: "mem_used,cpu_used,probe_success",
+			},
+			agentConfigs: []bleemeoTypes.AgentConfig{
+				{
+					ID:               agentConfigID1,
+					AccountConfig:    configID2,
+					AgentType:        agentTypeAgent.ID,
+					MetricsAllowlist: "mem_used,cpu_used,probe_success",
+				},
+				{
+					ID:            agentConfigID2,
+					AccountConfig: configID2,
+					AgentType:     agentTypeSNMP.ID,
+				},
+				{
+					ID:            agentConfigID3,
+					AccountConfig: configID2,
+					AgentType:     agentTypeMonitor.ID,
+				},
+			},
+			wantSNMP:            true,
+			wantCustomMetric:    false,
+			wantContainerFK:     false,
+			wantContainerMetric: false,
+		},
+		{
+			name: "no-docker-no-snmp-limit-list",
+			accountConfig: bleemeoTypes.AccountConfig{
+				ID:                    configID2,
+				Name:                  "no-no-no",
+				MaxCustomMetrics:      999,
+				LiveProcess:           false,
+				DockerIntegration:     false,
+				SNMPIntegration:       false,
+				MetricsAgentWhitelist: "mem_used,cpu_used,probe_success",
+			},
+			agentConfigs: []bleemeoTypes.AgentConfig{
+				{
+					ID:               agentConfigID1,
+					AccountConfig:    configID2,
+					AgentType:        agentTypeAgent.ID,
+					MetricsAllowlist: "mem_used,cpu_used,probe_success",
+				},
+				{
+					ID:            agentConfigID3,
+					AccountConfig: configID2,
+					AgentType:     agentTypeMonitor.ID,
+				},
+			},
+			wantSNMP:            false,
+			wantCustomMetric:    false,
+			wantContainerFK:     false,
+			wantContainerMetric: false,
+		},
+	}
+
+	for _, tt := range cases {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			helper := newHelper(t)
+			defer helper.Close()
+
+			helper.SetAPIAccountConfig(tt.accountConfig, tt.agentConfigs)
+			helper.SNMP = []*snmp.Target{
+				snmp.NewMock(config.SNMPTarget{InitialName: "The-Initial-Name", Target: snmpAddress}, map[string]string{}),
+			}
+			helper.containers = []facts.Container{
+				facts.FakeContainer{
+					FakeContainerName: "short-redis-container-name",
+					FakeState:         facts.ContainerRunning,
+					FakeID:            "1234",
+				},
+			}
+
+			helper.initSynchronizer(t)
+			monitor := helper.addMonitorOnAPI(t)
+
+			srvRedis1 := discovery.Service{
+				Name:        "redis",
+				Instance:    "short-redis-container-name",
+				ServiceType: discovery.RedisService,
+				ContainerID: "1234",
+				Active:      true,
+			}
+
+			helper.discovery.SetResult([]discovery.Service{srvRedis1}, nil)
+
+			if err := helper.runOnceWithResult(t).Check(); err != nil {
+				t.Error(err)
+			}
+
+			// two run, because very first is "onlyEssential"
+			if err := helper.runOnceWithResult(t).Check(); err != nil {
+				t.Error(err)
+			}
+
+			idAgentMain, _ := helper.state.BleemeoCredentials()
+			if idAgentMain == "" {
+				t.Fatal("idAgentMain == '', want something")
+			}
+
+			var idAgentSNMP string
+
+			for _, a := range helper.AgentsFromAPI() {
+				if a.FQDN == snmpAddress {
+					idAgentSNMP = a.ID
+				}
+			}
+
+			helper.pushPoints(t, []labels.Labels{
+				labels.New(labels.Label{Name: types.LabelName, Value: "cpu_used"}),
+				labels.New(labels.Label{Name: types.LabelName, Value: "custom_metric"}),
+				model.AnnotationToMetaLabels(labels.FromMap(srvRedis1.LabelsOfStatus()), srvRedis1.AnnotationsOfStatus()),
+				labels.New(
+					labels.Label{Name: types.LabelName, Value: "probe_success"},
+					labels.Label{Name: types.LabelScraperUUID, Value: idAgentMain},
+					labels.Label{Name: types.LabelInstance, Value: newMonitor.URL},
+					labels.Label{Name: types.LabelInstanceUUID, Value: newMonitor.AgentID},
+					labels.Label{Name: types.LabelMetaBleemeoTargetAgentUUID, Value: newMonitor.AgentID},
+				),
+				labels.New(
+					labels.Label{Name: types.LabelName, Value: "ifOutOctets"},
+					labels.Label{Name: types.LabelSNMPTarget, Value: snmpAddress},
+					labels.Label{Name: types.LabelMetaBleemeoTargetAgentUUID, Value: idAgentSNMP},
+				),
+				labels.New(
+					labels.Label{Name: types.LabelName, Value: "redis_commands"},
+					labels.Label{Name: types.LabelMetaServiceName, Value: "redis"},
+					labels.Label{Name: types.LabelMetaServiceInstance, Value: "short-redis-container-name"},
+					labels.Label{Name: types.LabelMetaContainerID, Value: "1234"},
+					labels.Label{Name: types.LabelMetaBleemeoItem, Value: "short-redis-container-name"},
+					labels.Label{Name: types.LabelItem, Value: "short-redis-container-name"},
+				),
+			})
+
+			if err := helper.runOnceWithResult(t).Check(); err != nil {
+				t.Error(err)
+			}
+
+			wantAgents := []payloadAgent{
+				{
+					Agent: bleemeoTypes.Agent{
+						ID:              idAgentMain,
+						CreatedAt:       helper.Now(),
+						AccountID:       accountID,
+						CurrentConfigID: tt.accountConfig.ID,
+						AgentType:       agentTypeAgent.ID,
+						FQDN:            testAgentFQDN,
+						DisplayName:     testAgentFQDN,
+					},
+					Abstracted:      false,
+					InitialPassword: "password already set",
+				},
+			}
+
+			if tt.wantSNMP {
+				wantAgents = append(wantAgents, payloadAgent{
+					Agent: bleemeoTypes.Agent{
+						ID:              idAny,
+						CreatedAt:       helper.Now(),
+						AccountID:       accountID,
+						CurrentConfigID: tt.accountConfig.ID,
+						AgentType:       agentTypeSNMP.ID,
+						FQDN:            snmpAddress,
+						DisplayName:     "The-Initial-Name",
+					},
+					Abstracted:      true,
+					InitialPassword: "password already set",
+				})
+			}
+
+			helper.assertAgentsInAPI(t, wantAgents)
+
+			helper.assertServicesInAPI(t, []serviceMonitor{
+				monitor,
+				{
+					Account: accountID,
+					Monitor: bleemeoTypes.Monitor{
+						Service: bleemeoTypes.Service{
+							ID:       idAny,
+							Label:    "redis",
+							Instance: "short-redis-container-name",
+							Active:   true,
+						},
+						AgentID: idAgentMain,
+					},
+				},
+			})
+
+			wantMetrics := []metricPayload{
+				{
+					Metric: bleemeoTypes.Metric{
+						ID:      idAny,
+						AgentID: idAgentMain,
+					},
+					Name: "agent_status",
+				},
+				{
+					Metric: bleemeoTypes.Metric{
+						ID:      idAny,
+						AgentID: idAgentMain,
+					},
+					Name: "cpu_used",
+				},
+				{
+					Metric: bleemeoTypes.Metric{
+						ID:      idAny,
+						AgentID: newMonitor.AgentID,
+						LabelsText: fmt.Sprintf(
+							"__name__=\"probe_success\",instance=\"%s\",instance_uuid=\"%s\",scraper_uuid=\"%s\"",
+							newMonitor.URL,
+							newMonitor.AgentID,
+							idAgentMain,
+						),
+						ServiceID: newMonitor.ID,
+					},
+					Name: "probe_success",
+				},
+			}
+
+			redisMetric := metricPayload{
+				Metric: bleemeoTypes.Metric{
+					ID:          idAny,
+					AgentID:     idAgentMain,
+					ServiceID:   "1",
+					ContainerID: "",
+				},
+				Name: "redis_status",
+				Item: "short-redis-container-name",
+			}
+
+			if tt.wantContainerFK {
+				redisMetric.ContainerID = "1"
+			}
+
+			wantMetrics = append(wantMetrics, redisMetric)
+
+			if tt.wantContainerMetric {
+				wantMetrics = append(wantMetrics, metricPayload{
+					Metric: bleemeoTypes.Metric{
+						ID:          idAny,
+						AgentID:     idAgentMain,
+						ServiceID:   "1",
+						ContainerID: "1",
+					},
+					Name: "redis_commands",
+					Item: "short-redis-container-name",
+				})
+			}
+
+			if tt.wantCustomMetric {
+				wantMetrics = append(wantMetrics, metricPayload{
+					Metric: bleemeoTypes.Metric{
+						ID:      idAny,
+						AgentID: idAgentMain,
+					},
+					Name: "custom_metric",
+				})
+			}
+
+			if tt.wantSNMP {
+				wantMetrics = append(wantMetrics, metricPayload{
+					Metric: bleemeoTypes.Metric{
+						ID:         idAny,
+						AgentID:    idAgentSNMP,
+						LabelsText: fmt.Sprintf(`__name__="ifOutOctets",snmp_target="%s"`, snmpAddress),
+					},
+					Name: "ifOutOctets",
+				})
+			}
+
+			helper.assertMetricsInAPI(t, wantMetrics)
 		})
 	}
 }

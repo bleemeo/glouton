@@ -1771,8 +1771,8 @@ func TestMonitorPrivate(t *testing.T) {
 		t.Fatal("idAgentMain == '', want something")
 	}
 
-	// Note: we use proces_sucess1/2/3 to helps reading diff in case of error. Normally the name
-	// should be "proces_sucess". But this shouldn't matter for the test.
+	// Note: we use probe_success1/2/3 to helps reading diff in case of error. Normally the name
+	// should be "probe_success". But this shouldn't matter for the test.
 	initialMetrics := []metricPayload{
 		{
 			Metric: bleemeoTypes.Metric{
