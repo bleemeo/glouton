@@ -167,6 +167,7 @@ var (
 		"mysqld":       MySQLService,
 		"named":        BindService,
 		"nats-server":  NatsService,
+		"nfsiod":       NfsService,
 		"nginx":        NginxService,
 		"ntpd":         NTPService,
 		"openvpn":      OpenVPNService,

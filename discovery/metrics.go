@@ -37,6 +37,7 @@ import (
 	"glouton/inputs/mysql"
 	"glouton/inputs/nats"
 	netInput "glouton/inputs/net"
+	"glouton/inputs/nfs"
 	"glouton/inputs/nginx"
 	"glouton/inputs/openldap"
 	"glouton/inputs/phpfpm"
@@ -324,6 +325,8 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 			url := fmt.Sprintf("http://%s", net.JoinHostPort(service.IPAddress, strconv.Itoa(port)))
 			input, gathererOptions, err = nats.New(url)
 		}
+	case NfsService:
+		input, err = nfs.New()
 	case NginxService:
 		if ip, port := service.AddressPort(); ip != "" {
 			input, err = nginx.New(fmt.Sprintf("http://%s/nginx_status", net.JoinHostPort(ip, strconv.Itoa(port))))

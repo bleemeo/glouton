@@ -161,8 +161,13 @@ func (d *Discovery) createCheck(service Service) {
 			annotations,
 		)
 		d.addCheck(check, service)
+	// Use a process check for services that don't expose a port.
 	case Fail2banService:
 		service.Config.MatchProcess = "fail2ban-server"
+
+		d.createProcessCheck(service, labels, annotations)
+	case NfsService:
+		service.Config.MatchProcess = "nfsiod"
 
 		d.createProcessCheck(service, labels, annotations)
 	case CustomService:

@@ -837,6 +837,16 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				IPAddress:   "127.0.0.1",
 			},
 		},
+		{
+			testName: "nfsclient",
+			cmdLine:  []string{"nfsiod"},
+			want: Service{
+				Name:            "nfs",
+				ServiceType:     NfsService,
+				ListenAddresses: nil,
+				IPAddress:       "127.0.0.1",
+			},
+		},
 	}
 
 	ctx := context.Background()

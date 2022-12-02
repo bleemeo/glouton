@@ -85,6 +85,7 @@ const (
 	MosquittoService     ServiceName = "mosquitto" //nolint:misspell
 	MySQLService         ServiceName = "mysql"
 	NatsService          ServiceName = "nats"
+	NfsService           ServiceName = "nfs"
 	NginxService         ServiceName = "nginx"
 	NTPService           ServiceName = "ntp"
 	OpenLDAPService      ServiceName = "openldap"
