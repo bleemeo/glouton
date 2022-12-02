@@ -48,17 +48,17 @@ var (
 	agentTypeAgent bleemeoTypes.AgentType = bleemeoTypes.AgentType{
 		DisplayName: "A server monitored with Bleemeo agent",
 		ID:          "61zb6a83-d90a-4165-bf04-944e0b2g2a10",
-		Name:        "agent",
+		Name:        bleemeoTypes.AgentTypeAgent,
 	}
 	agentTypeSNMP bleemeoTypes.AgentType = bleemeoTypes.AgentType{
 		DisplayName: "A server monitored with SNMP agent",
 		ID:          "823b6a83-d70a-4768-be64-50450b282a30",
-		Name:        "snmp",
+		Name:        bleemeoTypes.AgentTypeSNMP,
 	}
 	agentTypeMonitor bleemeoTypes.AgentType = bleemeoTypes.AgentType{
 		DisplayName: "A website monitored with connection check",
 		ID:          "41afe63c-fa1c-4b84-b92b-028269101fde",
-		Name:        "connection_check",
+		Name:        bleemeoTypes.AgentTypeMonitor,
 	}
 
 	agentConfigAgent = bleemeoTypes.AgentConfig{

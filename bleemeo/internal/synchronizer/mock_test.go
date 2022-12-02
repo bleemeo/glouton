@@ -42,6 +42,9 @@ import (
 
 const (
 	mockAPIResourceAgent         = "agent"
+	mockAPIResourceAgentFact     = "agentfact"
+	mockAPIResourceAgentType     = "agenttype"
+	mockAPIResourceContainer     = "container"
 	mockAPIResourceMetric        = "metric"
 	mockAPIResourceAccountConfig = "accountconfig"
 	mockAPIResourceAgentConfig   = "agentconfig"
@@ -154,7 +157,7 @@ func newAPI() *mockAPI {
 		return nil, 0, nil
 	}
 
-	api.AddResource("agent", &genericResource{
+	api.AddResource(mockAPIResourceAgent, &genericResource{
 		Type: payloadAgent{},
 		CreateHook: func(r *http.Request, body []byte, valuePtr interface{}) error {
 			agent, _ := valuePtr.(*payloadAgent)
@@ -188,11 +191,11 @@ func newAPI() *mockAPI {
 			return nil
 		},
 	})
-	api.AddResource("agentfact", &genericResource{
+	api.AddResource(mockAPIResourceAgentFact, &genericResource{
 		Type:        bleemeoTypes.AgentFact{},
 		ValidFilter: []string{"agent"},
 	})
-	api.AddResource("agenttype", &genericResource{
+	api.AddResource(mockAPIResourceAgentType, &genericResource{
 		Type:     bleemeoTypes.AgentType{},
 		ReadOnly: true,
 	})
@@ -252,7 +255,7 @@ func newAPI() *mockAPI {
 			return err
 		},
 	})
-	api.AddResource("container", &genericResource{
+	api.AddResource(mockAPIResourceContainer, &genericResource{
 		Type:        containerPayload{},
 		ValidFilter: []string{"host"},
 		PatchHook: func(r *http.Request, body []byte, valuePtr interface{}, oldValue interface{}) error {
@@ -286,7 +289,7 @@ func newAPI() *mockAPI {
 		ValidFilter: []string{"agent", "active", "monitor"},
 	})
 
-	api.resources["agenttype"].SetStore(
+	api.resources[mockAPIResourceAgentType].SetStore(
 		agentTypeAgent,
 		agentTypeSNMP,
 		agentTypeMonitor,

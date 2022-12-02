@@ -122,7 +122,7 @@ func (helper *syncTestHelper) preregisterAgent(t *testing.T) {
 	helper.api.JWTPassword = password
 	helper.api.JWTUsername = testAgent.ID + "@bleemeo.com"
 
-	helper.api.resources["agent"].AddStore(testAgent)
+	helper.api.resources[mockAPIResourceAgent].AddStore(testAgent)
 }
 
 // addMonitorOnAPI pre-create a monitor in the API.
@@ -132,7 +132,7 @@ func (helper *syncTestHelper) addMonitorOnAPI(t *testing.T) serviceMonitor {
 	newMonitorCopy := newMonitor
 	newMonitorCopy.AccountConfig = helper.api.AccountConfigNewAgent
 
-	helper.api.resources["service"].AddStore(newMonitorCopy)
+	helper.api.resources[mockAPIResourceService].AddStore(newMonitorCopy)
 
 	return newMonitorCopy
 }
