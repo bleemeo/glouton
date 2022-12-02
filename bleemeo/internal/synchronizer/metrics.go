@@ -448,11 +448,16 @@ func (s *Synchronizer) excludeUnregistrableMetrics(metrics []types.Metric) []typ
 		servicesByKey[k] = v
 	}
 
+	cfg, ok := s.option.Cache.CurrentAccountConfig()
+	if !ok {
+		return nil
+	}
+
 	for _, metric := range metrics {
 		annotations := metric.Annotations()
 
 		// Exclude metrics with a missing container dependency.
-		if annotations.ContainerID != "" {
+		if annotations.ContainerID != "" && (cfg.DockerIntegration || !common.IsServiceCheckMetric(metric.Labels(), metric.Annotations())) {
 			_, ok := containersByContainerID[annotations.ContainerID]
 			if !ok {
 				continue
@@ -1300,32 +1305,14 @@ func (s *Synchronizer) prepareMetricPayload(
 		return payload, errRetryLater
 	}
 
-	if annotations.ContainerID != "" {
-		// For service metrics, when the docker integration is disabled, we register the
-		// metrics but we don't associate them with a container.
-		if !cfg.DockerIntegration && common.IsServiceCheckMetric(metric.Labels(), metric.Annotations()) {
-			// In this case we still want to fill the payload serviceID. We need
-			// to retrieve the container name to get the service and we can't use
-			// containersByContainerID since the containers are not registered.
-			containers, err := s.option.Docker.Containers(s.ctx, time.Minute, false)
-			if err != nil {
-				return payload, errRetryLater
-			}
-
-			for _, container := range containers {
-				if annotations.ContainerID == container.ID() {
-					break
-				}
-			}
-		} else {
-			container, ok := containersByContainerID[annotations.ContainerID]
-			if !ok {
-				// No error. When container get registered we trigger a metric synchronization.
-				return payload, errIgnore
-			}
-
-			payload.ContainerID = container.ID
+	if annotations.ContainerID != "" && (cfg.DockerIntegration || !common.IsServiceCheckMetric(metric.Labels(), metric.Annotations())) {
+		container, ok := containersByContainerID[annotations.ContainerID]
+		if !ok {
+			// No error. When container get registered we trigger a metric synchronization.
+			return payload, errIgnore
 		}
+
+		payload.ContainerID = container.ID
 	}
 
 	if annotations.ServiceName != "" {
