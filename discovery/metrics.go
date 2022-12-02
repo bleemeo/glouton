@@ -310,14 +310,17 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 	case MySQLService:
 		input, err = createMySQLInput(service)
 	case NatsService:
-		url := service.Config.StatsURL
-
 		// The default port of the monitoring server is 8222.
-		if url == "" && service.IPAddress != "" {
-			url = fmt.Sprintf("http://%s", net.JoinHostPort(service.IPAddress, "8222"))
+		port := 8222
+
+		if service.Config.StatsPort != 0 {
+			port = service.Config.StatsPort
 		}
 
-		input, err = nats.New(url)
+		if ip := service.AddressForPort(port, "tcp", true); ip != "" {
+			url := fmt.Sprintf("http://%s", net.JoinHostPort(service.IPAddress, strconv.Itoa(port)))
+			input, err = nats.New(url)
+		}
 	case NginxService:
 		if ip, port := service.AddressPort(); ip != "" {
 			input, err = nginx.New(fmt.Sprintf("http://%s/nginx_status", net.JoinHostPort(ip, strconv.Itoa(port))))
@@ -372,6 +375,25 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 			input, err = redis.New(fmt.Sprintf("tcp://%s", net.JoinHostPort(ip, strconv.Itoa(port))), service.Config.Password)
 		}
 	case UWSGIService:
+		// The port used in the stats server documentation is 1717.
+		port := 1717
+
+		if service.Config.StatsPort != 0 {
+			port = service.Config.StatsPort
+		}
+
+		// The stats server can be exposed with TCP or HTTP
+		// (or a socket but we don't support it).
+		protocol := "tcp"
+		if service.Config.StatsProtocol != "" {
+			protocol = service.Config.StatsProtocol
+		}
+
+		if ip := service.AddressForPort(port, "tcp", true); ip != "" {
+			url := fmt.Sprintf("%s://%s", protocol, net.JoinHostPort(service.IPAddress, strconv.Itoa(port)))
+			input, err = nats.New(url)
+		}
+
 		if service.Config.StatsURL != "" {
 			input, err = uwsgi.New(service.Config.StatsURL)
 		}

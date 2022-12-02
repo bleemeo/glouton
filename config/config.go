@@ -553,16 +553,16 @@ func migrateServices(config map[string]interface{}) prometheus.MultiError {
 			continue
 		}
 
-		for deprecated_opt, new_opt := range migratedOptions {
-			detailedTablesInt, ok := serviceMap[deprecated_opt]
+		for deprecatedOpt, newOpt := range migratedOptions {
+			detailedTablesInt, ok := serviceMap[deprecatedOpt]
 			if !ok {
 				continue
 			}
 
-			serviceMap[new_opt] = detailedTablesInt
-			delete(serviceMap, deprecated_opt)
+			serviceMap[newOpt] = detailedTablesInt
+			delete(serviceMap, deprecatedOpt)
 
-			warnings.Append(fmt.Errorf("%w: '%s', use '%s' instead", errSettingsDeprecated, deprecated_opt, new_opt))
+			warnings.Append(fmt.Errorf("%w: '%s', use '%s' instead", errSettingsDeprecated, deprecatedOpt, newOpt))
 		}
 	}
 

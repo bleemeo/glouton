@@ -180,14 +180,30 @@ func validateServices(services []config.Service) (map[NameInstance]config.Servic
 			srv.ID = newID
 		}
 
+		// SSL and StartTLS can't be used at the same time.
 		if srv.SSL && srv.StartTLS {
 			warning := fmt.Errorf(
-				"%w: service %s can't set both SSL and StartTLS, SSL will be disabled",
+				"%w: service '%s' can't set both SSL and StartTLS, SSL will be disabled",
 				config.ErrInvalidValue, srv.ID,
 			)
 			warnings.Append(warning)
 
 			srv.SSL = false
+		}
+
+		// StatsProtocol must be "http" or "tcp".
+		switch srv.StatsProtocol {
+		case "", "http", "tcp":
+		default:
+			warning := fmt.Errorf(
+				"%w: service '%s' has an unsupported stats protocol: '%s'",
+				config.ErrInvalidValue, srv.ID, srv.StatsProtocol,
+			)
+			warnings.Append(warning)
+
+			// StatsProtocol is not required, so we leave it empty to
+			// let the service decide on the default protocol to use.
+			srv.StatsProtocol = ""
 		}
 
 		// Check for duplicated overrides.

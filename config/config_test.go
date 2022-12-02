@@ -244,6 +244,7 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 				Password:          "password",
 				StatsURL:          "http://nginx/stats",
 				StatsPort:         9090,
+				StatsProtocol:     "http",
 				DetailedItems:     []string{"mytopic"},
 				JMXPort:           1200,
 				JMXUsername:       "jmx_user",
