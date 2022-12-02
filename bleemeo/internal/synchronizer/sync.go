@@ -70,6 +70,7 @@ type Synchronizer struct {
 	ctx    context.Context //nolint:containedctx
 	option Option
 	now    func() time.Time
+	inTest bool
 
 	realClient       *client.HTTPClient
 	client           *wrapperClient
@@ -146,6 +147,17 @@ type Option struct {
 // New return a new Synchronizer.
 func New(option Option) (*Synchronizer, error) {
 	return newWithNow(option, time.Now)
+}
+
+func newForTest(option Option, now func() time.Time) (*Synchronizer, error) {
+	s, err := newWithNow(option, now)
+	if err != nil {
+		return s, err
+	}
+
+	s.inTest = true
+
+	return s, nil
 }
 
 func newWithNow(option Option, now func() time.Time) (*Synchronizer, error) {
@@ -548,9 +560,8 @@ func (s *Synchronizer) popPendingMetricsUpdate() []string {
 }
 
 func (s *Synchronizer) waitCPUMetric(ctx context.Context) {
-	// In test, s.now is defined (then likely don't return time.Now).
 	// In test, we skip this waiting time.
-	if !s.now().Equal(time.Now()) {
+	if s.inTest {
 		return
 	}
 

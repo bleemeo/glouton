@@ -150,7 +150,7 @@ func (helper *syncTestHelper) initSynchronizer(t *testing.T) {
 		docker = &mockDocker{helper: helper}
 	}
 
-	s, err := newWithNow(Option{
+	s, err := newForTest(Option{
 		Cache: helper.cache,
 		GlobalOption: bleemeoTypes.GlobalOption{
 			Config:                  helper.cfg,
