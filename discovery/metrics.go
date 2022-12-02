@@ -390,12 +390,8 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 		}
 
 		if ip := service.AddressForPort(port, "tcp", true); ip != "" {
-			url := fmt.Sprintf("%s://%s", protocol, net.JoinHostPort(service.IPAddress, strconv.Itoa(port)))
-			input, err = nats.New(url)
-		}
-
-		if service.Config.StatsURL != "" {
-			input, err = uwsgi.New(service.Config.StatsURL)
+			url := fmt.Sprintf("%s://%s", protocol, net.JoinHostPort(ip, strconv.Itoa(port)))
+			input, err = uwsgi.New(url)
 		}
 	case ZookeeperService:
 		if ip, port := service.AddressPort(); ip != "" {
