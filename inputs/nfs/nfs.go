@@ -19,7 +19,7 @@ package nfs
 import (
 	"glouton/inputs"
 	"glouton/inputs/internal"
-	"glouton/prometheus/registry"
+	"glouton/types"
 
 	"github.com/influxdata/telegraf"
 	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"
@@ -27,15 +27,15 @@ import (
 )
 
 // New returns a NFS client input.
-func New() (telegraf.Input, error) {
+func New() (telegraf.Input, *inputs.GathererOptions, error) {
 	input, ok := telegraf_inputs.Inputs["nfsclient"]
 	if !ok {
-		return nil, inputs.ErrDisabledInput
+		return nil, nil, inputs.ErrDisabledInput
 	}
 
 	nfsInput, ok := input().(*nfsclient.NFSClient)
 	if !ok {
-		return nil, inputs.ErrUnexpectedType
+		return nil, nil, inputs.ErrUnexpectedType
 	}
 
 	// Limit metric to read and write operations.
@@ -52,9 +52,11 @@ func New() (telegraf.Input, error) {
 				"retrans",
 			},
 		},
-		Name:       "nfsclient",
-		KeepLabels: true,
-		Rules: []registry.SimpleRule{
+		Name: "nfsclient",
+	}
+
+	options := &inputs.GathererOptions{
+		Rules: []types.SimpleRule{
 			{
 				TargetName:  "nfs_transmitted_bits",
 				PromQLQuery: "nfs_bytes*8",
@@ -66,7 +68,7 @@ func New() (telegraf.Input, error) {
 		},
 	}
 
-	return internalInput, nil
+	return internalInput, options, nil
 }
 
 func renameGlobal(gatherContext internal.GatherContext) (internal.GatherContext, bool) {

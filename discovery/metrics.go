@@ -326,7 +326,7 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 			input, gathererOptions, err = nats.New(url)
 		}
 	case NfsService:
-		input, err = nfs.New()
+		input, gathererOptions, err = nfs.New()
 	case NginxService:
 		if ip, port := service.AddressPort(); ip != "" {
 			input, err = nginx.New(fmt.Sprintf("http://%s/nginx_status", net.JoinHostPort(ip, strconv.Itoa(port))))
