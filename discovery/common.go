@@ -356,6 +356,7 @@ var (
 			ServicePort:     4222,
 			ServiceProtocol: "tcp",
 		},
+		NfsService: {},
 		NTPService: {
 			ServicePort:     123,
 			ServiceProtocol: "udp",
