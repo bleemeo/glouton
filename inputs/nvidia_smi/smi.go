@@ -17,25 +17,28 @@
 package nvidia
 
 import (
-	"glouton/collector"
 	"glouton/inputs"
 	"glouton/inputs/internal"
 	"time"
 
+	"github.com/influxdata/telegraf"
 	"github.com/influxdata/telegraf/config"
 	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"
 	"github.com/influxdata/telegraf/plugins/inputs/nvidia_smi"
 )
 
-// AddSMIInput adds a NVIDIA SMI input to the collector, given the path to the
+// New returns a NVIDIA SMI input, given the path to the
 // nvidia-smi binary and the timeout used for GPU polling in seconds.
-func AddSMIInput(coll *collector.Collector, binPath string, timeout int) error {
+func New(binPath string, timeout int) (telegraf.Input, *inputs.GathererOptions, error) {
 	input, ok := telegraf_inputs.Inputs["nvidia_smi"]
 	if !ok {
-		return inputs.ErrDisabledInput
+		return nil, nil, inputs.ErrDisabledInput
 	}
 
-	nvidiaInput, _ := input().(*nvidia_smi.NvidiaSMI)
+	nvidiaInput, ok := input().(*nvidia_smi.NvidiaSMI)
+	if !ok {
+		return nil, nil, inputs.ErrUnexpectedType
+	}
 
 	if binPath != "" {
 		nvidiaInput.BinPath = binPath
@@ -53,11 +56,7 @@ func AddSMIInput(coll *collector.Collector, binPath string, timeout int) error {
 		Name: "nvidia-smi",
 	}
 
-	if _, err := coll.AddInput(internalInput, internalInput.Name); err != nil {
-		return err
-	}
-
-	return nil
+	return internalInput, &inputs.GathererOptions{}, nil
 }
 
 func renameGlobal(gatherContext internal.GatherContext) (result internal.GatherContext, drop bool) {

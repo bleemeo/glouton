@@ -237,7 +237,20 @@ var (
 		"temperature",
 	}
 
-	nvidiaSMIMetrics = []string{
+	// Input metrics that are not associated to a service.
+	inputMetrics = []string{
+		// SMART
+		"smart_device_exit_status",
+		"smart_device_health_ok",
+		"smart_device_media_wearout_indicator",
+		"smart_device_percent_lifetime_remain",
+		"smart_device_read_error_rate",
+		"smart_device_seek_error",
+		"smart_device_temp_c",
+		"smart_device_udma_crc_errors",
+		"smart_device_wear_leveling_count",
+
+		// Nvidia SMI
 		"nvidia_smi_fan_speed",
 		"nvidia_smi_fbc_stats_session_count",
 		"nvidia_smi_fbc_stats_average_fps",
@@ -848,7 +861,7 @@ func addScrappersList(
 
 func getDefaultMetrics(format types.MetricFormat, hasSwap bool) []string {
 	res := commonDefaultSystemMetrics
-	res = append(res, nvidiaSMIMetrics...)
+	res = append(res, inputMetrics...)
 
 	switch {
 	case format == types.MetricFormatBleemeo:

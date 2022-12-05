@@ -10,3 +10,8 @@ glouton     ALL=(root) NOPASSWD: /usr/lib/glouton/glouton-veths
 Cmnd_Alias FAIL2BAN = /usr/bin/fail2ban-client status, /usr/bin/fail2ban-client status *
 glouton  ALL=(root) NOEXEC: NOPASSWD: FAIL2BAN
 Defaults!FAIL2BAN !logfile, !syslog, !pam_session
+
+# Allow Glouton to get disk status.
+Cmnd_Alias SMARTCTL = /usr/bin/smartctl, /usr/sbin/smartctl
+glouton  ALL=(ALL) NOPASSWD: SMARTCTL
+Defaults!SMARTCTL !logfile, !syslog, !pam_session

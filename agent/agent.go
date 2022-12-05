@@ -41,6 +41,7 @@ import (
 	"glouton/inputs"
 	"glouton/inputs/docker"
 	nvidia "glouton/inputs/nvidia_smi"
+	"glouton/inputs/smart"
 	"glouton/inputs/statsd"
 	"glouton/jmxtrans"
 	"glouton/logger"
@@ -68,6 +69,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"regexp"
@@ -79,6 +81,7 @@ import (
 	"time"
 
 	"github.com/getsentry/sentry-go"
+	"github.com/influxdata/telegraf"
 
 	bleemeoTypes "glouton/bleemeo/types"
 
@@ -1195,36 +1198,10 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		}
 	}
 
-	if a.config.NvidiaSMI.Enable {
-		// Force Prometheus format for NVIDIA SMI metrics as we want to keep the labels.
-		acc := &inputs.Accumulator{
-			Pusher:  a.gathererRegistry.WithTTLAndFormat(5*time.Minute, types.MetricFormatPrometheus),
-			Context: ctx,
-		}
-		promCollector := collector.New(acc)
+	// Register inputs that are not associated to a service.
+	a.registerInputs()
 
-		_, err = a.gathererRegistry.RegisterPushPointsCallback(
-			registry.RegistrationOption{
-				Description: "Prometheus collector",
-				JitterSeed:  baseJitter,
-			},
-			promCollector.RunGather,
-		)
-		if err != nil {
-			logger.Printf("Unable to add Prometheus collector: %v", err)
-		}
-
-		err := nvidia.AddSMIInput(
-			promCollector,
-			a.config.NvidiaSMI.BinPath,
-			a.config.NvidiaSMI.Timeout,
-		)
-		if err != nil {
-			logger.Printf("Failed to initialize NVIDIA SMI collector: %v", err)
-		}
-	}
-
-	// register components only available on a given system, like node_exporter for unixes
+	// Register components only available on a given system, like node_exporter for unixes.
 	a.registerOSSpecificComponents(a.vethProvider)
 
 	tasks = append(tasks, taskInfo{
@@ -1276,6 +1253,42 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 	a.discovery.Close()
 	a.collector.Close()
 	logger.V(2).Printf("Agent stopped")
+}
+
+// Registers inputs that are not associated to a service.
+func (a *agent) registerInputs() {
+	if a.config.NvidiaSMI.Enable {
+		input, opts, err := nvidia.New(a.config.NvidiaSMI.BinPath, a.config.NvidiaSMI.Timeout)
+		a.registerInput("NVIDIA SMI", input, opts, err)
+	}
+
+	if _, err := exec.LookPath("smartctl"); err == nil {
+		input, opts, err := smart.New()
+		a.registerInput("SMART", input, opts, err)
+	}
+}
+
+// Register a single input.
+func (a *agent) registerInput(name string, input telegraf.Input, opts *inputs.GathererOptions, err error) {
+	if err != nil {
+		logger.Printf("Failed to create input %s: %v", name, err)
+
+		return
+	}
+
+	_, err = a.gathererRegistry.RegisterInput(
+		registry.RegistrationOption{
+			Description: fmt.Sprintf("Input %s", name),
+			JitterSeed:  baseJitter,
+			Rules:       opts.Rules,
+			MinInterval: opts.MinInterval,
+		},
+		input,
+	)
+
+	if err != nil {
+		logger.Printf("Failed to register input %s: %v", name, err)
+	}
 }
 
 func (a *agent) handleSighup(ctx context.Context, sighupChan chan os.Signal) {
