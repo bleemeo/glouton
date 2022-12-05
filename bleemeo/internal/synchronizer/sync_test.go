@@ -60,10 +60,10 @@ func TestSync(t *testing.T) {
 	defer helper.Close()
 
 	helper.preregisterAgent(t)
-	helper.api.resources["metric"].AddStore(testAgentMetric1, testAgentMetric2, testMonitorMetricPrivateProbe)
-	helper.api.resources["service"].AddStore(newMonitor)
+	helper.api.resources[mockAPIResourceMetric].AddStore(testAgentMetric1, testAgentMetric2, testMonitorMetricPrivateProbe)
+	helper.api.resources[mockAPIResourceService].AddStore(newMonitor)
 
-	agentResource, _ := helper.api.resources["agent"].(*genericResource)
+	agentResource, _ := helper.api.resources[mockAPIResourceAgent].(*genericResource)
 	agentResource.CreateHook = func(r *http.Request, body []byte, valuePtr interface{}) error {
 		return fmt.Errorf("%w: agent is already registered, shouldn't re-register", errUnexpectedOperation)
 	}
@@ -137,7 +137,7 @@ func TestSyncWithSNMP(t *testing.T) {
 
 	var agents []payloadAgent
 
-	helper.api.resources["agent"].Store(&agents)
+	helper.api.resources[mockAPIResourceAgent].Store(&agents)
 
 	var (
 		idAgentMain string
@@ -205,7 +205,7 @@ func TestSyncWithSNMP(t *testing.T) {
 
 	var metrics []metricPayload
 
-	helper.api.resources["metric"].Store(&metrics)
+	helper.api.resources[mockAPIResourceMetric].Store(&metrics)
 
 	wantMetrics := []metricPayload{
 		{
@@ -267,7 +267,7 @@ func TestSyncWithSNMP(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			helper.api.resources["metric"].Store(&metrics)
+			helper.api.resources[mockAPIResourceMetric].Store(&metrics)
 
 			if diff := cmp.Diff(wantMetrics, metrics, cmpopts.EquateEmpty(), optMetricSort); diff != "" {
 				t.Errorf("metrics mismatch (-want +got)\n%s", diff)
@@ -275,7 +275,7 @@ func TestSyncWithSNMP(t *testing.T) {
 		})
 	}
 
-	helper.api.resources["metric"].AddStore(metricPayload{
+	helper.api.resources[mockAPIResourceMetric].AddStore(metricPayload{
 		Metric: bleemeoTypes.Metric{
 			ID:         "4",
 			AgentID:    idAgentSNMP,
@@ -290,7 +290,7 @@ func TestSyncWithSNMP(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	helper.api.resources["metric"].Store(&metrics)
+	helper.api.resources[mockAPIResourceMetric].Store(&metrics)
 
 	wantMetrics = []metricPayload{
 		{
@@ -373,7 +373,7 @@ func TestSyncWithSNMPDelete(t *testing.T) {
 
 	var agents []payloadAgent
 
-	helper.api.resources["agent"].Store(&agents)
+	helper.api.resources[mockAPIResourceAgent].Store(&agents)
 
 	var (
 		idAgentMain string
@@ -441,7 +441,7 @@ func TestSyncWithSNMPDelete(t *testing.T) {
 
 	var metrics []metricPayload
 
-	helper.api.resources["metric"].Store(&metrics)
+	helper.api.resources[mockAPIResourceMetric].Store(&metrics)
 
 	wantMetrics := []metricPayload{
 		{
@@ -486,8 +486,8 @@ func TestSyncWithSNMPDelete(t *testing.T) {
 	// Delete the SNMP agent on API.
 	callCountBefore := updateLabelsCallCount
 
-	helper.api.resources["agent"].DelStore(idAgentSNMP)
-	helper.api.resources["metric"].DelStore("3")
+	helper.api.resources[mockAPIResourceAgent].DelStore(idAgentSNMP)
+	helper.api.resources[mockAPIResourceMetric].DelStore("3")
 
 	helper.initSynchronizer(t)
 
@@ -501,7 +501,7 @@ func TestSyncWithSNMPDelete(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	helper.api.resources["agent"].Store(&agents)
+	helper.api.resources[mockAPIResourceAgent].Store(&agents)
 
 	for _, a := range agents {
 		if a.FQDN == snmpAddress {
@@ -554,7 +554,7 @@ func TestSyncWithSNMPDelete(t *testing.T) {
 		Name: "ifOutOctets",
 	}
 
-	helper.api.resources["metric"].Store(&metrics)
+	helper.api.resources[mockAPIResourceMetric].Store(&metrics)
 
 	if diff := cmp.Diff(wantMetrics, metrics, cmpopts.EquateEmpty(), optMetricSort); diff != "" {
 		t.Errorf("metrics mismatch (-want +got)\n%s", diff)
@@ -598,7 +598,7 @@ func TestContainerSync(t *testing.T) {
 	// Did we store container & metrics?
 	var containers []containerPayload
 
-	helper.api.resources["container"].Store(&containers)
+	helper.api.resources[mockAPIResourceContainer].Store(&containers)
 
 	wantContainer := []containerPayload{
 		{
@@ -619,7 +619,7 @@ func TestContainerSync(t *testing.T) {
 
 	var metrics []metricPayload
 
-	helper.api.resources["metric"].Store(&metrics)
+	helper.api.resources[mockAPIResourceMetric].Store(&metrics)
 
 	wantMetrics := []metricPayload{
 		{
@@ -655,7 +655,7 @@ func TestContainerSync(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	helper.api.resources["container"].Store(&containers)
+	helper.api.resources[mockAPIResourceContainer].Store(&containers)
 
 	wantContainer = []containerPayload{
 		{
@@ -675,7 +675,7 @@ func TestContainerSync(t *testing.T) {
 		t.Errorf("container mistmatch (-want +got)\n%s", diff)
 	}
 
-	helper.api.resources["metric"].Store(&metrics)
+	helper.api.resources[mockAPIResourceMetric].Store(&metrics)
 
 	wantMetrics = []metricPayload{
 		{
@@ -726,7 +726,7 @@ func TestContainerSync(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	helper.api.resources["container"].Store(&containers)
+	helper.api.resources[mockAPIResourceContainer].Store(&containers)
 
 	wantContainer = []containerPayload{
 		{
@@ -745,7 +745,7 @@ func TestContainerSync(t *testing.T) {
 		t.Errorf("container mistmatch (-want +got)\n%s", diff)
 	}
 
-	helper.api.resources["metric"].Store(&metrics)
+	helper.api.resources[mockAPIResourceMetric].Store(&metrics)
 
 	wantMetrics = []metricPayload{
 		{
@@ -848,7 +848,7 @@ func TestSyncServerGroup(t *testing.T) {
 
 			var agents []payloadAgent
 
-			helper.api.resources["agent"].Store(&agents)
+			helper.api.resources[mockAPIResourceAgent].Store(&agents)
 
 			var (
 				idAgentMain string

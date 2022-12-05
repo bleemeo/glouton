@@ -122,7 +122,7 @@ func (helper *syncTestHelper) preregisterAgent(t *testing.T) {
 	helper.api.JWTPassword = password
 	helper.api.JWTUsername = testAgent.ID + "@bleemeo.com"
 
-	helper.api.resources["agent"].AddStore(testAgent)
+	helper.api.resources[mockAPIResourceAgent].AddStore(testAgent)
 }
 
 // addMonitorOnAPI pre-create a monitor in the API.
@@ -132,7 +132,7 @@ func (helper *syncTestHelper) addMonitorOnAPI(t *testing.T) serviceMonitor {
 	newMonitorCopy := newMonitor
 	newMonitorCopy.AccountConfig = helper.api.AccountConfigNewAgent
 
-	helper.api.resources["service"].AddStore(newMonitorCopy)
+	helper.api.resources[mockAPIResourceService].AddStore(newMonitorCopy)
 
 	return newMonitorCopy
 }
@@ -366,6 +366,18 @@ func (helper *syncTestHelper) AgentsFromAPI() []payloadAgent {
 	return agents
 }
 
+// FactsFromAPI returns facts present on Bleemeo API mock.
+func (helper *syncTestHelper) FactsFromAPI() []bleemeoTypes.AgentFact {
+	var facts []bleemeoTypes.AgentFact
+
+	helper.api.resources[mockAPIResourceAgentFact].Store(&facts)
+	sort.Slice(facts, func(i, j int) bool {
+		return facts[i].ID < facts[j].ID
+	})
+
+	return facts
+}
+
 // ServicesFromAPI returns services present on Bleemeo API mock.
 func (helper *syncTestHelper) ServicesFromAPI() []serviceMonitor {
 	var services []serviceMonitor
@@ -474,6 +486,39 @@ func (helper *syncTestHelper) assertMetricsInAPI(t *testing.T, want []metricPayl
 	optSort := cmpopts.SortSlices(func(x metricPayload, y metricPayload) bool { return x.ID < y.ID })
 	if diff := cmp.Diff(copyWant, metrics, cmpopts.EquateEmpty(), optSort); diff != "" {
 		t.Errorf("metrics mismatch (-want +got)\n%s", diff)
+	}
+}
+
+// assertFactsInAPI check that wanted facts (and only wanted facts) are present in API.
+// This is mostly a wrapper around cmp.Diff which also do:
+// * replace idAny but corresponding ID (match metric by same agentID, key & value)
+// * sort list by ID.
+func (helper *syncTestHelper) assertFactsInAPI(t *testing.T, want []bleemeoTypes.AgentFact) {
+	t.Helper()
+
+	facts := helper.FactsFromAPI()
+
+	copyWant := make([]bleemeoTypes.AgentFact, 0, len(want))
+
+	for _, fact := range want {
+		if fact.ID == idAny {
+			fact.ID = idObjectNotFound
+
+			for _, existingFact := range facts {
+				if fact.AgentID == existingFact.AgentID && fact.Key == existingFact.Key && fact.Value == existingFact.Value {
+					fact.ID = existingFact.ID
+
+					break
+				}
+			}
+		}
+
+		copyWant = append(copyWant, fact)
+	}
+
+	optSort := cmpopts.SortSlices(func(x bleemeoTypes.AgentFact, y bleemeoTypes.AgentFact) bool { return x.ID < y.ID })
+	if diff := cmp.Diff(copyWant, facts, cmpopts.EquateEmpty(), optSort); diff != "" {
+		t.Errorf("facts mismatch (-want +got)\n%s", diff)
 	}
 }
 

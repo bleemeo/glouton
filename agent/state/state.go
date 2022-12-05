@@ -34,6 +34,10 @@ const (
 	discardFileForTest = "/this/path/does/not/exists"
 )
 
+const (
+	KeyKubernetesCluster = "kubernetes_cluster_name"
+)
+
 var errVersionIncompatible = errors.New("state.json is incompatible with this glouton")
 
 type persistedState struct {

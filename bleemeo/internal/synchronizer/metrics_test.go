@@ -23,6 +23,7 @@ import (
 	bleemeoTypes "glouton/bleemeo/types"
 	"glouton/config"
 	"glouton/discovery"
+	"glouton/facts"
 	"glouton/prometheus/exporter/snmp"
 	"glouton/prometheus/model"
 	"glouton/types"
@@ -1904,6 +1905,230 @@ func TestMonitorPrivate(t *testing.T) {
 			},
 			Name: "probe_duration",
 		},
+	}
+
+	helper.assertMetricsInAPI(t, want)
+}
+
+// TestKubernetesMetrics test for kubernetes clutser metrics.
+func TestKubernetesMetrics(t *testing.T) {
+	helper := newHelper(t)
+	defer helper.Close()
+
+	// Glouton is configured as Kubernetes cluster
+	helper.facts.SetFact(facts.FactKubernetesCluster, testK8SClusterName)
+
+	helper.initSynchronizer(t)
+	helper.AddTime(time.Minute)
+
+	if err := helper.runOnceWithResult(t).Check(); err != nil {
+		t.Error(err)
+	}
+
+	idAgentMain, _ := helper.state.BleemeoCredentials()
+	if idAgentMain == "" {
+		t.Fatal("idAgentMain == '', want something")
+	}
+
+	helper.assertFactsInAPI(t, []bleemeoTypes.AgentFact{
+		{
+			ID:      idAny,
+			AgentID: idAgentMain,
+			Key:     "fqdn",
+			Value:   testAgentFQDN,
+		},
+		{
+			ID:      idAny,
+			AgentID: idAgentMain,
+			Key:     facts.FactKubernetesCluster,
+			Value:   testK8SClusterName,
+		},
+	})
+
+	// API does a lead-election and notify us that we are leader
+	helper.AddTime(time.Second)
+
+	for _, agent := range helper.AgentsFromAPI() {
+		if agent.ID == idAgentMain {
+			agent.IsClusterLeader = true
+			helper.api.resources[mockAPIResourceAgent].AddStore(agent)
+
+			// Currently on leader status change, API sent "config-changed" message
+			helper.s.NotifyConfigUpdate(true)
+
+			break
+		}
+	}
+
+	// API create a global Kubernetes agent
+	helper.api.resources[mockAPIResourceAgent].AddStore(testK8SAgent)
+
+	helper.AddTime(10 * time.Second)
+
+	if err := helper.runOnceWithResult(t).CheckMethodWithFull(syncMethodAgent); err != nil {
+		t.Error(err)
+	}
+
+	if !helper.cache.Agent().IsClusterLeader {
+		t.Fatal("agent isn't ClusterLeader")
+	}
+
+	pushedPoints := []labels.Labels{
+		labels.New(
+			labels.Label{Name: types.LabelName, Value: "kubernetes_kubelet_status"},
+		),
+		labels.New(
+			labels.Label{Name: types.LabelName, Value: "cpu_used"},
+		),
+		// Note: we have both meta-label & normal label because we need to simulare Registry.applyRelabel()
+		// (we need both annotation & getDefaultRelabelConfig())
+		labels.New(
+			labels.Label{Name: types.LabelName, Value: "kubernetes_cpu_limits"},
+			labels.Label{Name: types.LabelOwnerKind, Value: "daemonset"},
+			labels.Label{Name: types.LabelOwnerName, Value: "glouton"},
+			labels.Label{Name: types.LabelNamespace, Value: "default"},
+			labels.Label{Name: types.LabelMetaKubernetesCluster, Value: testK8SClusterName},
+			labels.Label{Name: types.LabelMetaBleemeoTargetAgent, Value: testK8SClusterName},
+			labels.Label{Name: types.LabelMetaBleemeoTargetAgentUUID, Value: testK8SAgent.ID},
+			labels.Label{Name: types.LabelInstance, Value: testK8SClusterName},
+			labels.Label{Name: types.LabelInstanceUUID, Value: testK8SAgent.ID},
+		),
+		labels.New(
+			labels.Label{Name: types.LabelName, Value: "kubernetes_cpu_requests"},
+			labels.Label{Name: types.LabelOwnerKind, Value: "daemonset"},
+			labels.Label{Name: types.LabelOwnerName, Value: "glouton"},
+			labels.Label{Name: types.LabelNamespace, Value: "default"},
+			labels.Label{Name: types.LabelMetaKubernetesCluster, Value: testK8SClusterName},
+			labels.Label{Name: types.LabelMetaBleemeoTargetAgent, Value: testK8SClusterName},
+			labels.Label{Name: types.LabelMetaBleemeoTargetAgentUUID, Value: testK8SAgent.ID},
+			labels.Label{Name: types.LabelInstance, Value: testK8SClusterName},
+			labels.Label{Name: types.LabelInstanceUUID, Value: testK8SAgent.ID},
+		),
+	}
+
+	helper.pushPoints(t, pushedPoints)
+
+	if err := helper.runOnceWithResult(t).Check(); err != nil {
+		t.Error(err)
+	}
+
+	want := []metricPayload{
+		{
+			Metric: bleemeoTypes.Metric{
+				ID:         idAny,
+				AgentID:    idAgentMain,
+				LabelsText: "",
+			},
+			Name: agentStatusName,
+		},
+		{
+			Metric: bleemeoTypes.Metric{
+				ID:         idAny,
+				AgentID:    idAgentMain,
+				LabelsText: "",
+			},
+			Name: "cpu_used",
+		},
+		{
+			Metric: bleemeoTypes.Metric{
+				ID:         idAny,
+				AgentID:    idAgentMain,
+				LabelsText: "",
+			},
+			Name: "kubernetes_kubelet_status",
+		},
+		{
+			Metric: bleemeoTypes.Metric{
+				ID:      idAny,
+				AgentID: testK8SAgent.ID,
+				LabelsText: fmt.Sprintf(
+					"__name__=\"kubernetes_cpu_limits\",instance=\"%s\",instance_uuid=\"%s\",namespace=\"default\",owner_kind=\"daemonset\",owner_name=\"glouton\"",
+					testK8SClusterName,
+					testK8SAgent.ID,
+				),
+			},
+			Name: "kubernetes_cpu_limits",
+		},
+		{
+			Metric: bleemeoTypes.Metric{
+				ID:      idAny,
+				AgentID: testK8SAgent.ID,
+				LabelsText: fmt.Sprintf(
+					"__name__=\"kubernetes_cpu_requests\",instance=\"%s\",instance_uuid=\"%s\",namespace=\"default\",owner_kind=\"daemonset\",owner_name=\"glouton\"",
+					testK8SClusterName,
+					testK8SAgent.ID,
+				),
+			},
+			Name: "kubernetes_cpu_requests",
+		},
+	}
+
+	helper.assertMetricsInAPI(t, want)
+
+	helper.SetTimeToNextFullSync()
+	helper.AddTime(60 * time.Minute)
+	helper.pushPoints(t, pushedPoints)
+
+	if err := helper.runOnceWithResult(t).Check(); err != nil {
+		t.Error(err)
+	}
+
+	helper.assertMetricsInAPI(t, want)
+
+	helper.SetTimeToNextFullSync()
+	helper.AddTime(60 * time.Minute)
+
+	// One metrics become inactive (kubernetes_cpu_requests)
+	pushedPoints = pushedPoints[:len(pushedPoints)-1]
+	want[len(want)-1].DeactivatedAt = helper.Now()
+
+	helper.pushPoints(t, pushedPoints)
+
+	if err := helper.runOnceWithResult(t).Check(); err != nil {
+		t.Error(err)
+	}
+
+	helper.assertMetricsInAPI(t, want)
+
+	// I'm no longer leader
+	helper.AddTime(time.Second)
+
+	for _, agent := range helper.AgentsFromAPI() {
+		if agent.ID == idAgentMain {
+			agent.IsClusterLeader = false
+			helper.api.resources[mockAPIResourceAgent].AddStore(agent)
+
+			// Currently on leader status change, API sent "config-changed" message
+			helper.s.NotifyConfigUpdate(true)
+
+			break
+		}
+	}
+
+	// Therefor Glouton stop emitting all kubernetes global metric, but it won't change which metrics is active or not
+	pushedPoints = []labels.Labels{
+		labels.New(
+			labels.Label{Name: types.LabelName, Value: "kubernetes_kubelet_status"},
+		),
+		labels.New(
+			labels.Label{Name: types.LabelName, Value: "cpu_used"},
+		),
+	}
+
+	helper.pushPoints(t, pushedPoints)
+
+	if err := helper.runOnceWithResult(t).Check(); err != nil {
+		t.Error(err)
+	}
+
+	helper.assertMetricsInAPI(t, want)
+
+	helper.SetTimeToNextFullSync()
+	helper.AddTime(60 * time.Minute)
+	helper.pushPoints(t, pushedPoints)
+
+	if err := helper.runOnceWithResult(t).Check(); err != nil {
+		t.Error(err)
 	}
 
 	helper.assertMetricsInAPI(t, want)

@@ -1471,8 +1471,9 @@ func (s *Synchronizer) undeactivableMetric(v bleemeoTypes.Metric, agents map[str
 		return true
 	}
 
+	agent := agents[v.AgentID]
+
 	if v.Labels[types.LabelName] == agentStatusName {
-		agent := agents[v.AgentID]
 		snmpTypeID, found := s.getAgentType(bleemeoTypes.AgentTypeSNMP)
 
 		// We only skip deactivation of agent_status when it not an SNMP agent.
@@ -1480,6 +1481,12 @@ func (s *Synchronizer) undeactivableMetric(v bleemeoTypes.Metric, agents map[str
 		if !found || agent.AgentType != snmpTypeID {
 			return true
 		}
+	}
+
+	kubernetesTypeID, found := s.getAgentType(bleemeoTypes.AgentTypeKubernetes)
+	if found && agent.AgentType == kubernetesTypeID && !s.option.Cache.Agent().IsClusterLeader {
+		// Can't deactivate Kubernetes metrics if I'm not the leader.
+		return true
 	}
 
 	return false

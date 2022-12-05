@@ -43,6 +43,10 @@ import (
 
 const virtualTypeKVM = "kvm"
 
+const (
+	FactKubernetesCluster = "kubernetes_cluster_name"
+)
+
 var (
 	errAutoUpgradeNotSupported = errors.New("auto upgrade is not supported on this operating system")
 

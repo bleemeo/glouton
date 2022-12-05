@@ -810,9 +810,9 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 
 		clusterName := a.config.Kubernetes.ClusterName
 
-		err = a.state.Get("kubernetes_cluster_name", &clusterNameState)
+		err = a.state.Get(state.KeyKubernetesCluster, &clusterNameState)
 		if err != nil {
-			logger.V(2).Printf("failed to get kubernetes_cluster_name: %v", err)
+			logger.V(2).Printf("failed to get %s: %v", state.KeyKubernetesCluster, err)
 		}
 
 		if clusterName == "" && clusterNameState != "" {
@@ -821,14 +821,14 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		}
 
 		if clusterName != "" && clusterNameState != clusterName {
-			err = a.state.Set("kubernetes_cluster_name", clusterNameState)
+			err = a.state.Set(state.KeyKubernetesCluster, clusterNameState)
 			if err != nil {
-				logger.V(2).Printf("failed to set kubernetes_cluster_name: %v", err)
+				logger.V(2).Printf("failed to set %s: %v", state.KeyKubernetesCluster, err)
 			}
 		}
 
 		if clusterName != "" {
-			a.factProvider.SetFact("kubernetes_cluster_name", clusterName)
+			a.factProvider.SetFact(facts.FactKubernetesCluster, clusterName)
 		} else {
 			a.addWarnings(fmt.Errorf(
 				"%w because kubernetes.clustername is missing, see https://go.bleemeo.com/l/agent-installation-kubernetes",
