@@ -22,7 +22,6 @@ import (
 	"glouton/inputs"
 	"glouton/logger"
 	"glouton/types"
-	"reflect"
 	"sort"
 	"strings"
 	"sync"
@@ -31,10 +30,7 @@ import (
 	"github.com/influxdata/telegraf"
 )
 
-var (
-	errNotImplemented  = errors.New("not implemented")
-	errUnsupportedType = errors.New("value type not supported")
-)
+var errNotImplemented = errors.New("not implemented")
 
 type metricPoint struct {
 	Value interface{} // could be uint64 or int64
@@ -109,33 +105,6 @@ func (a *Accumulator) PrepareGather() {
 	a.now = time.Now()
 }
 
-// ConvertToFloat convert the interface type in float64.
-func ConvertToFloat(value interface{}) (valueFloat float64, err error) {
-	switch value := value.(type) {
-	case uint64:
-		valueFloat = float64(value)
-	case float64:
-		valueFloat = value
-	case float32:
-		valueFloat = float64(value)
-	case int:
-		valueFloat = float64(value)
-	case int64:
-		valueFloat = float64(value)
-	case bool:
-		if value {
-			valueFloat = 1.0
-		} else {
-			valueFloat = 0.0
-		}
-	default:
-		valueType := reflect.TypeOf(value)
-		err = fmt.Errorf("%w: %v", errUnsupportedType, valueType)
-	}
-
-	return
-}
-
 // rateAsFloat compute the delta/duration between two points.
 func rateAsFloat(pastPoint, currentPoint metricPoint) (value float64, err error) {
 	switch pastValue := pastPoint.Value.(type) {
@@ -154,12 +123,12 @@ func rateAsFloat(pastPoint, currentPoint metricPoint) (value float64, err error)
 		currentValue, _ := currentPoint.Value.(int64)
 		value = float64(currentValue - pastValue)
 	default:
-		pastValueFloat, err := ConvertToFloat(pastPoint.Value)
+		pastValueFloat, err := inputs.ConvertToFloat(pastPoint.Value)
 		if err != nil {
 			return 0.0, err
 		}
 
-		currentValue, err := ConvertToFloat(currentPoint.Value)
+		currentValue, err := inputs.ConvertToFloat(currentPoint.Value)
 		if err != nil {
 			return 0.0, err
 		}
@@ -253,7 +222,7 @@ func (a *Accumulator) convertToFloatFields(currentContext GatherContext, fields 
 		}
 
 		if !derive {
-			valueFloat, err := ConvertToFloat(value)
+			valueFloat, err := inputs.ConvertToFloat(value)
 			if err == nil {
 				a.workResult[metricName] = valueFloat
 			} else {

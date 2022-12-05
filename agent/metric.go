@@ -383,6 +383,12 @@ var (
 			"exim_queue_size",
 		},
 
+		discovery.Fail2banService: {
+			"fail2ban_status",
+			"fail2ban_failed",
+			"fail2ban_banned",
+		},
+
 		discovery.HAProxyService: {
 			"haproxy_status",
 			"haproxy_act",
@@ -558,6 +564,20 @@ var (
 			"mysql_handler_rollback",
 		},
 
+		discovery.NatsService: {
+			"nats_status",
+			"nats_uptime_seconds",
+			"nats_routes",
+			"nats_slow_consumers",
+			"nats_subscriptions",
+			"nats_in_bytes",
+			"nats_out_bytes",
+			"nats_in_msgs",
+			"nats_out_msgs",
+			"nats_connections",
+			"nats_total_connections",
+		},
+
 		discovery.NginxService: {
 			"nginx_status",
 			"nginx_requests",
@@ -575,6 +595,17 @@ var (
 
 		discovery.OpenLDAPService: {
 			"openldap_status",
+			"openldap_connections_current",
+			"openldap_waiters_read",
+			"openldap_waiters_write",
+			"openldap_threads_active",
+			"openldap_statistics_bytes",
+			"openldap_statistics_entries",
+			"openldap_operations_add_completed",
+			"openldap_operations_bind_completed",
+			"openldap_operations_delete_completed",
+			"openldap_operations_modify_completed",
+			"openldap_operations_search_completed",
 		},
 
 		discovery.OpenVPNService: {
@@ -674,6 +705,12 @@ var (
 
 		discovery.UWSGIService: {
 			"uwsgi_status",
+			"uwsgi_requests",
+			"uwsgi_transmitted",
+			"uwsgi_avg_request_time",
+			"uwsgi_memory_used",
+			"uwsgi_exceptions",
+			"uwsgi_harakiri_count",
 		},
 
 		discovery.VarnishService: {

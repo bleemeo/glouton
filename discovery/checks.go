@@ -135,7 +135,7 @@ func (d *Discovery) createCheck(service Service) {
 	}
 
 	switch service.ServiceType { //nolint:exhaustive
-	case DovecotService, MemcachedService, RabbitMQService, RedisService, ZookeeperService:
+	case DovecotService, MemcachedService, RabbitMQService, RedisService, ZookeeperService, NatsService:
 		d.createTCPCheck(service, di, primaryAddress, tcpAddresses, labels, annotations)
 	case ApacheService, InfluxDBService, NginxService, SquidService:
 		d.createHTTPCheck(service, di, primaryAddress, tcpAddresses, labels, annotations)
@@ -161,6 +161,10 @@ func (d *Discovery) createCheck(service Service) {
 			annotations,
 		)
 		d.addCheck(check, service)
+	case Fail2banService:
+		service.Config.MatchProcess = "fail2ban-server"
+
+		d.createProcessCheck(service, labels, annotations)
 	case CustomService:
 		createCheckType(service, d, di, primaryAddress, tcpAddresses, labels, annotations)
 	default:
@@ -248,7 +252,7 @@ func (d *Discovery) createHTTPCheck(
 	expectedStatusCode := 0
 
 	if service.ServiceType == SquidService {
-		// Agent does a normal HTTP request, but squid expect a proxy. It expect
+		// Agent does a normal HTTP request, but squid expect a proxy. It expects
 		// squid to reply with a 400 - Bad request.
 		expectedStatusCode = 400
 	}

@@ -73,6 +73,7 @@ const (
 	EjabberService       ServiceName = "ejabberd"
 	ElasticSearchService ServiceName = "elasticsearch"
 	EximService          ServiceName = "exim"
+	Fail2banService      ServiceName = "fail2ban"
 	FreeradiusService    ServiceName = "freeradius"
 	HAProxyService       ServiceName = "haproxy"
 	InfluxDBService      ServiceName = "influxdb"
@@ -83,6 +84,7 @@ const (
 	MongoDBService       ServiceName = "mongodb"
 	MosquittoService     ServiceName = "mosquitto" //nolint:misspell
 	MySQLService         ServiceName = "mysql"
+	NatsService          ServiceName = "nats"
 	NginxService         ServiceName = "nginx"
 	NTPService           ServiceName = "ntp"
 	OpenLDAPService      ServiceName = "openldap"
@@ -312,6 +314,7 @@ var (
 			ServicePort:     25,
 			ServiceProtocol: "tcp",
 		},
+		Fail2banService: {},
 		HAProxyService: {
 			IgnoreHighPort:  true, // HAProxy use a random high-port when Syslog over-UDP is enabled.
 			ServiceProtocol: "tcp",
@@ -347,6 +350,10 @@ var (
 		},
 		NginxService: {
 			ServicePort:     80,
+			ServiceProtocol: "tcp",
+		},
+		NatsService: {
+			ServicePort:     4222,
 			ServiceProtocol: "tcp",
 		},
 		NTPService: {
@@ -388,6 +395,7 @@ var (
 			ServicePort:     3128,
 			ServiceProtocol: "tcp",
 		},
+		UWSGIService: {},
 		VarnishService: {
 			ServicePort:     6082,
 			ServiceProtocol: "tcp",

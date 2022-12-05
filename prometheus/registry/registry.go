@@ -36,6 +36,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/influxdata/telegraf"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -151,7 +152,7 @@ type RegistrationOption struct {
 	// DisablePeriodicGather skip the periodic calls which forward gathered points to r.PushPoint.
 	// The periodic call use the Interval. When Interval is 0, the dynamic interval set by UpdateDelay is used.
 	DisablePeriodicGather bool
-	Rules                 []SimpleRule
+	Rules                 []types.SimpleRule
 	rrules                []*rules.RecordingRule
 }
 
@@ -192,14 +193,6 @@ func (opt *RegistrationOption) buildRules() error {
 	return nil
 }
 
-// SimpleRule is a PromQL run on output from the Gatherer.
-// It's similar to a recording rule, but it's not able to use historical data and can
-// only works on latest point (so no rate, avg_over_time, ...).
-type SimpleRule struct {
-	TargetName  string
-	PromQLQuery string
-}
-
 func (opt *RegistrationOption) String() string {
 	hasStop := "without stop callback"
 	if opt.StopCallback != nil {
@@ -213,16 +206,15 @@ func (opt *RegistrationOption) String() string {
 }
 
 type registration struct {
-	l                         sync.Mutex
-	option                    RegistrationOption
-	includedInMetricsEndpoint bool
-	loop                      *scrapeLoop
-	lastScrape                time.Time
-	lastScrapeDuration        time.Duration
-	gatherer                  *labeledGatherer
-	annotations               types.MetricAnnotations
-	relabelHookSkip           bool
-	lastRebalHookRetry        time.Time
+	l                  sync.Mutex
+	option             RegistrationOption
+	loop               *scrapeLoop
+	lastScrape         time.Time
+	lastScrapeDuration time.Duration
+	gatherer           *labeledGatherer
+	annotations        types.MetricAnnotations
+	relabelHookSkip    bool
+	lastRebalHookRetry time.Time
 }
 
 type reschedule struct {
@@ -411,10 +403,7 @@ func (r *Registry) registerPushPointsCallback(opt RegistrationOption, f func(con
 	r.l.Lock()
 	defer r.l.Unlock()
 
-	reg := &registration{
-		option:                    opt,
-		includedInMetricsEndpoint: false,
-	}
+	reg := &registration{option: opt}
 	r.setupGatherer(reg, pushGatherer{fun: f})
 
 	return r.addRegistration(reg)
@@ -435,11 +424,58 @@ func (r *Registry) RegisterAppenderCallback(
 	r.l.Lock()
 	defer r.l.Unlock()
 
-	reg := &registration{
-		option:                    opt,
-		includedInMetricsEndpoint: false,
-	}
+	reg := &registration{option: opt}
 	r.setupGatherer(reg, &appenderGatherer{cb: cb, opt: appOpt})
+
+	return r.addRegistration(reg)
+}
+
+// RegisterInput uses a Telegraph input to write points to the registry.
+func (r *Registry) RegisterInput(
+	opt RegistrationOption,
+	input telegraf.Input,
+) (int, error) {
+	r.init()
+
+	if err := opt.buildRules(); err != nil {
+		return 0, err
+	}
+
+	// Initialize the input.
+	if si, ok := input.(telegraf.Initializer); ok {
+		if err := si.Init(); err != nil {
+			return 0, err
+		}
+	}
+
+	// Start the input.
+	if si, ok := input.(telegraf.ServiceInput); ok {
+		if err := si.Start(nil); err != nil {
+			return 0, err
+		}
+	}
+
+	previousStopCallback := opt.StopCallback
+
+	// Add stop callback to stop the input.
+	opt.StopCallback = func() {
+		if si, ok := input.(telegraf.ServiceInput); ok {
+			si.Stop()
+		}
+
+		// Keep previous stop callback.
+		if previousStopCallback != nil {
+			previousStopCallback()
+		}
+	}
+
+	r.l.Lock()
+	defer r.l.Unlock()
+
+	reg := &registration{
+		option: opt,
+	}
+	r.setupGatherer(reg, newInputGatherer(input))
 
 	return r.addRegistration(reg)
 }

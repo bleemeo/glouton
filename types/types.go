@@ -441,3 +441,11 @@ type Message struct {
 	Topic   string
 	Payload interface{}
 }
+
+// SimpleRule is a PromQL run on output from the Gatherer.
+// It's similar to a recording rule, but it's not able to use historical data and can
+// only works on latest point (so no rate, avg_over_time, ...).
+type SimpleRule struct {
+	TargetName  string
+	PromQLQuery string
+}

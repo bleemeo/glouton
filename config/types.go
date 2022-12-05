@@ -310,8 +310,10 @@ type Service struct {
 	Password string `yaml:"password"`
 	// HAProxy and PHP-FMP stats URL.
 	StatsURL string `yaml:"stats_url"`
-	// Port of RabbitMQ management interface.
-	ManagementPort int `yaml:"mgmt_port"`
+	// Port used to get statistics for a service.
+	StatsPort int `yaml:"stats_port"`
+	// Protocol used to get statistics (TCP, HTTP).
+	StatsProtocol string `yaml:"stats_protocol"`
 	// Detailed monitoring of specific items (Cassandra tables, Postgres databases or Kafka topics).
 	DetailedItems []string `yaml:"detailed_items"`
 	// JMX services.
@@ -319,6 +321,11 @@ type Service struct {
 	JMXUsername string      `yaml:"jmx_username"`
 	JMXPassword string      `yaml:"jmx_password"`
 	JMXMetrics  []JmxMetric `yaml:"jmx_metrics"`
+	// TLS config.
+	SSL         bool   `yaml:"ssl"`
+	SSLInsecure bool   `yaml:"ssl_insecure"`
+	StartTLS    bool   `yaml:"starttls"`
+	CAFile      string `yaml:"ca_file"`
 }
 
 type JmxMetric struct {

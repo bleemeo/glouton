@@ -871,6 +871,19 @@ func TestValidateServices(t *testing.T) {
 			CheckType:    "nagios",
 			CheckCommand: "azerty",
 		},
+		{
+			ID:       "ssl_and_starttls",
+			SSL:      true,
+			StartTLS: true,
+		},
+		{
+			ID:            "good_stats_protocol",
+			StatsProtocol: "http",
+		},
+		{
+			ID:            "bad_stats_protocol",
+			StatsProtocol: "bad",
+		},
 	}
 
 	wantWarnings := []string{
@@ -879,6 +892,8 @@ func TestValidateServices(t *testing.T) {
 		"invalid config value: a key \"id\" is missing in one of your service override",
 		"invalid config value: service id \" not fixable@\" can only contains letters, digits and underscore",
 		"invalid config value: service id \"custom-bad.name\" can not contains dot (.) or dash (-). Changed to \"custom_bad_name\"",
+		"invalid config value: service 'ssl_and_starttls' can't set both SSL and StartTLS, StartTLS will be used",
+		"invalid config value: service 'bad_stats_protocol' has an unsupported stats protocol: 'bad'",
 	}
 
 	wantServices := map[NameInstance]config.Service{
@@ -928,6 +943,25 @@ func TestValidateServices(t *testing.T) {
 			ID:           "custom_bad_name",
 			CheckType:    "nagios",
 			CheckCommand: "azerty",
+		},
+		{
+			Name: "ssl_and_starttls",
+		}: {
+			ID:       "ssl_and_starttls",
+			SSL:      false,
+			StartTLS: true,
+		},
+		{
+			Name: "good_stats_protocol",
+		}: {
+			ID:            "good_stats_protocol",
+			StatsProtocol: "http",
+		},
+		{
+			Name: "bad_stats_protocol",
+		}: {
+			ID:            "bad_stats_protocol",
+			StatsProtocol: "",
 		},
 	}
 

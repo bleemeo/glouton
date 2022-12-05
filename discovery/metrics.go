@@ -28,23 +28,28 @@ import (
 	"glouton/inputs/disk"
 	"glouton/inputs/diskio"
 	"glouton/inputs/elasticsearch"
+	"glouton/inputs/fail2ban"
 	"glouton/inputs/haproxy"
 	"glouton/inputs/mem"
 	"glouton/inputs/memcached"
 	"glouton/inputs/modify"
 	"glouton/inputs/mongodb"
 	"glouton/inputs/mysql"
+	"glouton/inputs/nats"
 	netInput "glouton/inputs/net"
 	"glouton/inputs/nginx"
+	"glouton/inputs/openldap"
 	"glouton/inputs/phpfpm"
 	"glouton/inputs/postgresql"
 	"glouton/inputs/rabbitmq"
 	"glouton/inputs/redis"
 	"glouton/inputs/swap"
 	"glouton/inputs/system"
+	"glouton/inputs/uwsgi"
 	"glouton/inputs/winperfcounters"
 	"glouton/inputs/zookeeper"
 	"glouton/logger"
+	"glouton/prometheus/registry"
 	"glouton/types"
 	"net"
 	"os"
@@ -53,6 +58,7 @@ import (
 	"strconv"
 
 	"github.com/influxdata/telegraf"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 var errNotSupported = errors.New("service not supported by Prometheus collector")
@@ -153,12 +159,14 @@ func addDefaultFromOS(inputsConfig inputs.CollectorConfig, coll *collector.Colle
 	return nil
 }
 
-func (d *Discovery) configureMetricInputs(oldServices, services map[NameInstance]Service) (err error) {
+func (d *Discovery) configureMetricInputs(oldServices, services map[NameInstance]Service) error {
 	for key := range oldServices {
 		if _, ok := services[key]; !ok {
 			d.removeInput(key)
 		}
 	}
+
+	var err prometheus.MultiError
 
 	for key, service := range services {
 		oldService, ok := oldServices[key]
@@ -177,15 +185,12 @@ func (d *Discovery) configureMetricInputs(oldServices, services map[NameInstance
 			d.removeInput(key)
 
 			if serviceState != facts.ContainerStopped {
-				err = d.createInput(service)
-				if err != nil {
-					return
-				}
+				err.Append(d.createInput(service))
 			}
 		}
 	}
 
-	return nil
+	return err.MaybeUnwrap()
 }
 
 func serviceNeedUpdate(oldService, service Service, oldServiceState facts.ContainerState, serviceState facts.ContainerState) bool {
@@ -248,7 +253,7 @@ func (d *Discovery) createPrometheusCollector(service Service) error {
 	return errNotSupported
 }
 
-func (d *Discovery) createInput(service Service) error {
+func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 	if !service.Active {
 		return nil
 	}
@@ -271,6 +276,9 @@ func (d *Discovery) createInput(service Service) error {
 	var (
 		err   error
 		input telegraf.Input
+		// Inputs that return gatherer options will use an input gatherer instead of the collector,
+		// this means all labels will be kept and not only the item.
+		gathererOptions *inputs.GathererOptions
 	)
 
 	switch service.ServiceType { //nolint:exhaustive
@@ -288,6 +296,8 @@ func (d *Discovery) createInput(service Service) error {
 		if ip, port := service.AddressPort(); ip != "" {
 			input, err = elasticsearch.New(fmt.Sprintf("http://%s", net.JoinHostPort(ip, strconv.Itoa(port))))
 		}
+	case Fail2banService:
+		input, gathererOptions, err = fail2ban.New()
 	case HAProxyService:
 		if service.Config.StatsURL != "" {
 			input, err = haproxy.New(service.Config.StatsURL)
@@ -302,9 +312,25 @@ func (d *Discovery) createInput(service Service) error {
 		}
 	case MySQLService:
 		input, err = createMySQLInput(service)
+	case NatsService:
+		// The default port of the monitoring server is 8222.
+		port := 8222
+
+		if service.Config.StatsPort != 0 {
+			port = service.Config.StatsPort
+		}
+
+		if ip := service.AddressForPort(port, "tcp", true); ip != "" {
+			url := fmt.Sprintf("http://%s", net.JoinHostPort(service.IPAddress, strconv.Itoa(port)))
+			input, gathererOptions, err = nats.New(url)
+		}
 	case NginxService:
 		if ip, port := service.AddressPort(); ip != "" {
 			input, err = nginx.New(fmt.Sprintf("http://%s/nginx_status", net.JoinHostPort(ip, strconv.Itoa(port))))
+		}
+	case OpenLDAPService:
+		if ip, port := service.AddressPort(); ip != "" {
+			input, gathererOptions, err = openldap.New(ip, port, service.Config)
 		}
 	case PHPFPMService:
 		statsURL := urlForPHPFPM(service)
@@ -328,8 +354,8 @@ func (d *Discovery) createInput(service Service) error {
 		mgmtPort := 15672
 		force := false
 
-		if service.Config.ManagementPort != 0 {
-			mgmtPort = service.Config.ManagementPort
+		if service.Config.StatsPort != 0 {
+			mgmtPort = service.Config.StatsPort
 			force = true
 		}
 
@@ -351,6 +377,25 @@ func (d *Discovery) createInput(service Service) error {
 		if ip, port := service.AddressPort(); ip != "" {
 			input, err = redis.New(fmt.Sprintf("tcp://%s", net.JoinHostPort(ip, strconv.Itoa(port))), service.Config.Password)
 		}
+	case UWSGIService:
+		// The port used in the stats server documentation is 1717.
+		port := 1717
+
+		if service.Config.StatsPort != 0 {
+			port = service.Config.StatsPort
+		}
+
+		// The stats server can be exposed with TCP or HTTP
+		// (or a socket but we don't support it).
+		protocol := "tcp"
+		if service.Config.StatsProtocol != "" {
+			protocol = service.Config.StatsProtocol
+		}
+
+		if ip := service.AddressForPort(port, "tcp", true); ip != "" {
+			url := fmt.Sprintf("%s://%s", protocol, net.JoinHostPort(ip, strconv.Itoa(port)))
+			input, gathererOptions, err = uwsgi.New(url)
+		}
 	case ZookeeperService:
 		if ip, port := service.AddressPort(); ip != "" {
 			input, err = zookeeper.New(fmt.Sprintf("%s:%d", ip, port))
@@ -365,38 +410,18 @@ func (d *Discovery) createInput(service Service) error {
 		return err
 	}
 
-	if input != nil {
-		logger.V(2).Printf("Add input for service %v instance %s", service.Name, service.Instance)
-
-		input = modify.AddRenameCallback(input, func(labels map[string]string, annotations types.MetricAnnotations) (map[string]string, types.MetricAnnotations) {
-			annotations.ServiceName = service.Name
-			annotations.ServiceInstance = service.Instance
-			annotations.ContainerID = service.ContainerID
-
-			_, port := service.AddressPort()
-			if port != 0 {
-				labels[types.LabelMetaServicePort] = strconv.FormatInt(int64(port), 10)
-			}
-
-			if service.Instance != "" {
-				if annotations.BleemeoItem != "" {
-					annotations.BleemeoItem = service.Instance + "_" + annotations.BleemeoItem
-				} else {
-					annotations.BleemeoItem = service.Instance
-				}
-			}
-
-			if annotations.BleemeoItem != "" {
-				labels[types.LabelItem] = annotations.BleemeoItem
-			}
-
-			return labels, annotations
-		})
-
-		return d.addInput(input, service)
+	if input == nil {
+		return nil
 	}
 
-	return nil
+	logger.V(2).Printf("Add input for service %v instance %s", service.Name, service.Instance)
+
+	// If gatherer options are used, use an input gatherer instead of the default collector.
+	if gathererOptions != nil {
+		return d.registerInput(input, gathererOptions, service)
+	}
+
+	return d.addToCollector(input, service)
 }
 
 func createMySQLInput(service Service) (telegraf.Input, error) {
@@ -421,10 +446,36 @@ func createMySQLInput(service Service) (telegraf.Input, error) {
 	return nil, nil
 }
 
-func (d *Discovery) addInput(input telegraf.Input, service Service) error {
+// addToCollector is deprecated, use registerInput instead.
+func (d *Discovery) addToCollector(input telegraf.Input, service Service) error {
 	if d.coll == nil {
 		return nil
 	}
+
+	input = modify.AddRenameCallback(input, func(labels map[string]string, annotations types.MetricAnnotations) (map[string]string, types.MetricAnnotations) {
+		annotations.ServiceName = service.Name
+		annotations.ServiceInstance = service.Instance
+		annotations.ContainerID = service.ContainerID
+
+		_, port := service.AddressPort()
+		if port != 0 {
+			labels[types.LabelMetaServicePort] = strconv.FormatInt(int64(port), 10)
+		}
+
+		if service.Instance != "" {
+			if annotations.BleemeoItem != "" {
+				annotations.BleemeoItem = service.Instance + "_" + annotations.BleemeoItem
+			} else {
+				annotations.BleemeoItem = service.Instance
+			}
+		}
+
+		if annotations.BleemeoItem != "" {
+			labels[types.LabelItem] = annotations.BleemeoItem
+		}
+
+		return labels, annotations
+	})
 
 	inputID, err := d.coll.AddInput(input, service.Name)
 	if err != nil {
@@ -440,6 +491,35 @@ func (d *Discovery) addInput(input telegraf.Input, service Service) error {
 	}
 
 	return nil
+}
+
+func (d *Discovery) registerInput(input telegraf.Input, opts *inputs.GathererOptions, service Service) error {
+	extraLabels := map[string]string{
+		types.LabelMetaServiceName:     service.Name,
+		types.LabelMetaServiceInstance: service.Instance,
+		types.LabelMetaContainerID:     service.ContainerID,
+	}
+
+	if _, port := service.AddressPort(); port != 0 {
+		extraLabels[types.LabelMetaServicePort] = strconv.Itoa(port)
+	}
+
+	if service.Instance != "" {
+		extraLabels[types.LabelItem] = service.Instance
+	}
+
+	_, err := d.metricRegistry.RegisterInput(
+		registry.RegistrationOption{
+			Description: fmt.Sprintf("Service input %s %s", service.Name, service.Instance),
+			JitterSeed:  0,
+			Rules:       opts.Rules,
+			MinInterval: opts.MinInterval,
+			ExtraLabels: extraLabels,
+		},
+		input,
+	)
+
+	return err
 }
 
 func urlForPHPFPM(service Service) string {

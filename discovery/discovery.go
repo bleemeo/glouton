@@ -90,6 +90,7 @@ type Registry interface {
 // GathererRegistry allow to register/unregister prometheus Gatherer.
 type GathererRegistry interface {
 	RegisterGatherer(opt registry.RegistrationOption, gatherer prometheus.Gatherer) (int, error)
+	RegisterInput(opt registry.RegistrationOption, input telegraf.Input) (int, error)
 	Unregister(id int) bool
 }
 
@@ -177,6 +178,32 @@ func validateServices(services []config.Service) (map[NameInstance]config.Servic
 			warnings.Append(warning)
 
 			srv.ID = newID
+		}
+
+		// SSL and StartTLS can't be used at the same time.
+		if srv.SSL && srv.StartTLS {
+			warning := fmt.Errorf(
+				"%w: service '%s' can't set both SSL and StartTLS, StartTLS will be used",
+				config.ErrInvalidValue, srv.ID,
+			)
+			warnings.Append(warning)
+
+			srv.SSL = false
+		}
+
+		// StatsProtocol must be "http" or "tcp".
+		switch srv.StatsProtocol {
+		case "", "http", "tcp":
+		default:
+			warning := fmt.Errorf(
+				"%w: service '%s' has an unsupported stats protocol: '%s'",
+				config.ErrInvalidValue, srv.ID, srv.StatsProtocol,
+			)
+			warnings.Append(warning)
+
+			// StatsProtocol is not required, so we leave it empty to
+			// let the service decide on the default protocol to use.
+			srv.StatsProtocol = ""
 		}
 
 		// Check for duplicated overrides.
@@ -554,7 +581,9 @@ func applyOverride(
 			service.IPAddress = override.Address
 		}
 
-		service.Interval = time.Duration(override.Interval) * time.Second
+		if override.Interval != 0 {
+			service.Interval = time.Duration(override.Interval) * time.Second
+		}
 
 		if len(override.IgnorePorts) > 0 {
 			if service.IgnoredPorts == nil {

@@ -1,6 +1,7 @@
 package postgresql
 
 import (
+	"glouton/inputs"
 	"glouton/inputs/internal"
 
 	"github.com/influxdata/telegraf"
@@ -28,7 +29,7 @@ func sum(acc *internal.StoreAccumulator) {
 
 	for _, m := range acc.Measurement {
 		for name, value := range m.Fields {
-			vFloat, err := internal.ConvertToFloat(value)
+			vFloat, err := inputs.ConvertToFloat(value)
 			if err != nil {
 				continue
 			}

@@ -18,12 +18,13 @@ package registry
 
 import (
 	"fmt"
+	"glouton/types"
 	"strings"
 	"time"
 )
 
-func DefaultSNMPRules(resolution time.Duration) []SimpleRule {
-	defaultRules := []SimpleRule{
+func DefaultSNMPRules(resolution time.Duration) []types.SimpleRule {
+	defaultRules := []types.SimpleRule{
 		{
 			TargetName:  "mem_used",
 			PromQLQuery: `sum without (hrStorageDescr, hrStorageIndex) (hrStorageUsed{hrStorageDescr="Real Memory"} * hrStorageAllocationUnits)`,

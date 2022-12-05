@@ -29,7 +29,10 @@ import (
 	"github.com/influxdata/telegraf"
 )
 
-var errTooManyInputs = errors.New("too many inputs in the collectors. Unable to find new slot")
+var (
+	ErrConsecutiveGather = errors.New("multiple consecutive errors")
+	errTooManyInputs     = errors.New("too many inputs in the collectors. Unable to find new slot")
+)
 
 // Collector implement running Gather on inputs every fixed time interval.
 type Collector struct {
@@ -162,7 +165,9 @@ func (c *Collector) runOnce(t0 time.Time) {
 			defer wg.Done()
 
 			err := input.Gather(acc)
-			if err != nil {
+
+			// Don't log consecutive errors to avoid spam.
+			if err != nil && !errors.Is(err, ErrConsecutiveGather) {
 				logger.Printf("Input %s failed: %v", inputsNameCopy[i], err)
 			}
 		}()
