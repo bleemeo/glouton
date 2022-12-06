@@ -273,6 +273,9 @@ var (
 		"nvidia_smi_clocks_current_sm",
 		"nvidia_smi_clocks_current_memory",
 		"nvidia_smi_clocks_current_video",
+
+		// Temperature
+		`{__name__="sensor_temperature", sensor=~"coretemp_package_id_.*"}`,
 	}
 
 	defaultServiceMetrics map[discovery.ServiceName][]string = map[discovery.ServiceName][]string{

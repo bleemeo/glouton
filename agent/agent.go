@@ -43,6 +43,7 @@ import (
 	nvidia "glouton/inputs/nvidia_smi"
 	"glouton/inputs/smart"
 	"glouton/inputs/statsd"
+	"glouton/inputs/temp"
 	"glouton/jmxtrans"
 	"glouton/logger"
 	"glouton/mqtt"
@@ -1269,6 +1270,9 @@ func (a *agent) registerInputs() {
 		input, opts, err := smart.New(a.config.Smart)
 		a.registerInput("SMART", input, opts, err)
 	}
+
+	input, opts, err := temp.New()
+	a.registerInput("Temp", input, opts, err)
 }
 
 // Register a single input.
