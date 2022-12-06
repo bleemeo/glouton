@@ -1262,8 +1262,11 @@ func (a *agent) registerInputs() {
 		a.registerInput("NVIDIA SMI", input, opts, err)
 	}
 
-	if _, err := exec.LookPath("smartctl"); err == nil {
-		input, opts, err := smart.New()
+	// The SMART input is enabled if "smartctl" is found in
+	// the PATH or if the path was given in the config.
+	_, err := exec.LookPath("smartctl")
+	if a.config.Smart.Enable && (err == nil || a.config.Smart.PathSmartctl != "") {
+		input, opts, err := smart.New(a.config.Smart)
 		a.registerInput("SMART", input, opts, err)
 	}
 }

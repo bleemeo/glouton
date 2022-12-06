@@ -17,6 +17,7 @@
 package smart
 
 import (
+	"glouton/config"
 	"glouton/inputs"
 	"glouton/inputs/internal"
 	"time"
@@ -27,7 +28,7 @@ import (
 )
 
 // New returns a SMART input.
-func New() (telegraf.Input, *inputs.GathererOptions, error) {
+func New(config config.Smart) (telegraf.Input, *inputs.GathererOptions, error) {
 	input, ok := telegraf_inputs.Inputs["smart"]
 	if !ok {
 		return nil, nil, inputs.ErrDisabledInput
@@ -39,6 +40,9 @@ func New() (telegraf.Input, *inputs.GathererOptions, error) {
 	}
 
 	smartInput.UseSudo = true
+	smartInput.Devices = config.Devices
+	smartInput.Excludes = config.Excludes
+	smartInput.PathSmartctl = config.PathSmartctl
 
 	internalInput := &internal.Input{
 		Input:       smartInput,

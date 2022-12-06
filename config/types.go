@@ -42,12 +42,20 @@ type Config struct {
 	Services                  []Service            `yaml:"service"`
 	ServiceIgnoreMetrics      []NameInstance       `yaml:"service_ignore_metrics"`
 	ServiceIgnoreCheck        []NameInstance       `yaml:"service_ignore_check"`
+	Smart                     Smart                `yaml:"smart"`
 	Stack                     string               `yaml:"stack"`
 	Tags                      []string             `yaml:"tags"`
 	Telegraf                  Telegraf             `yaml:"telegraf"`
 	Thresholds                map[string]Threshold `yaml:"thresholds"`
 	Web                       Web                  `yaml:"web"`
 	Zabbix                    Zabbix               `yaml:"zabbix"`
+}
+
+type Smart struct {
+	Enable       bool     `yaml:"enable"`
+	PathSmartctl string   `yaml:"path_smartctl"`
+	Devices      []string `yaml:"devices"`
+	Excludes     []string `yaml:"excludes"`
 }
 
 type Zabbix struct {

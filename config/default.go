@@ -264,8 +264,14 @@ func DefaultConfig() Config {
 		ServiceIgnoreCheck:   []NameInstance{},
 		ServiceIgnoreMetrics: []NameInstance{},
 		Services:             []Service{},
-		Stack:                "",
-		Tags:                 []string{},
+		Smart: Smart{
+			Enable:       true,
+			PathSmartctl: "",
+			Devices:      []string{},
+			Excludes:     []string{},
+		},
+		Stack: "",
+		Tags:  []string{},
 		Telegraf: Telegraf{
 			DockerMetricsEnable: true,
 			StatsD: StatsD{

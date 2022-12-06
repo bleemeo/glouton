@@ -280,6 +280,12 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 				Instance: "host:* container:*",
 			},
 		},
+		Smart: Smart{
+			Enable:       true,
+			PathSmartctl: "/smartctl",
+			Devices:      []string{"/dev/sda"},
+			Excludes:     []string{"/dev/sdb"},
+		},
 		Stack: "mystack",
 		Tags:  []string{"mytag"},
 		Telegraf: Telegraf{
