@@ -99,6 +99,7 @@ const (
 	SquidService         ServiceName = "squid"
 	UWSGIService         ServiceName = "uwsgi"
 	VarnishService       ServiceName = "varnish"
+	UPSDService          ServiceName = "upsd"
 	ZookeeperService     ServiceName = "zookeeper"
 
 	CustomService ServiceName = "__custom__"
@@ -394,6 +395,10 @@ var (
 		},
 		SquidService: {
 			ServicePort:     3128,
+			ServiceProtocol: "tcp",
+		},
+		UPSDService: {
+			ServicePort:     3493,
 			ServiceProtocol: "tcp",
 		},
 		VarnishService: {

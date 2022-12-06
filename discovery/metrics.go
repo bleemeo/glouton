@@ -46,6 +46,7 @@ import (
 	"glouton/inputs/redis"
 	"glouton/inputs/swap"
 	"glouton/inputs/system"
+	"glouton/inputs/upsd"
 	"glouton/inputs/uwsgi"
 	"glouton/inputs/winperfcounters"
 	"glouton/inputs/zookeeper"
@@ -379,6 +380,10 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 	case RedisService:
 		if ip, port := service.AddressPort(); ip != "" {
 			input, err = redis.New(fmt.Sprintf("tcp://%s", net.JoinHostPort(ip, strconv.Itoa(port))), service.Config.Password)
+		}
+	case UPSDService:
+		if ip, port := service.AddressPort(); ip != "" {
+			input, gathererOptions, err = upsd.New(ip, port, service.Config.Username, service.Config.Password)
 		}
 	case UWSGIService:
 		// The port used in the stats server documentation is 1717.

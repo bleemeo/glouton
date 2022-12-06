@@ -23,7 +23,7 @@ require (
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510
 	github.com/google/uuid v1.3.0
 	github.com/influxdata/influxdb1-client v0.0.0-20220302092344-a9ab5670611c
-	github.com/influxdata/telegraf v1.24.3
+	github.com/influxdata/telegraf v1.24.4
 	github.com/influxdata/toml v0.0.0-20190415235208-270119a8ce65
 	github.com/json-iterator/go v1.1.12
 	github.com/ncabatoff/process-exporter v0.7.10
@@ -46,7 +46,7 @@ require (
 	// gopsutils v3.22.10 has a breaking change, host.Warning had been moved to common.Warning
 	// We need to wait for telegraf to upgrade their version before we can upgrade it.
 	github.com/shirou/gopsutil/v3 v3.22.9
-	github.com/urfave/cli/v2 v2.19.2
+	github.com/urfave/cli/v2 v2.23.5
 	github.com/vektah/gqlparser/v2 v2.5.1
 	github.com/vishvananda/netlink v1.2.1-beta.2
 	golang.org/x/sys v0.1.0
@@ -199,7 +199,7 @@ require (
 	github.com/xrash/smetrics v0.0.0-20201216005158-039620a65673 // indirect
 	github.com/youmark/pkcs8 v0.0.0-20201027041543-1326539a0a0a // indirect
 	github.com/yusufpapurcu/wmi v1.2.2 // indirect
-	go.mongodb.org/mongo-driver v1.10.4 // indirect
+	go.mongodb.org/mongo-driver v1.11.0 // indirect
 	go.opencensus.io v0.23.0 // indirect
 	go.uber.org/atomic v1.10.0 // indirect
 	go.uber.org/goleak v1.2.0 // indirect
@@ -225,6 +225,8 @@ require (
 	sigs.k8s.io/json v0.0.0-20220713155537-f223a00ba0e2 // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.2.3 // indirect
 )
+
+require github.com/robbiet480/go.nut v0.0.0-20220219091450-bd8f121e1fa1 // indirect
 
 // We can't upgrade to node_exporter v1.4.0 because it breaks go get command.
 // This replace is needed because without it the ability of checking for upgrades in VS Code is broken.

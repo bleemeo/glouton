@@ -177,9 +177,10 @@ var (
 		"slapd":        OpenLDAPService,
 		"squid3":       SquidService,
 		"squid":        SquidService,
-		"varnishd":     VarnishService,
+		"upsd":         UPSDService,
 		"uwsgi":        UWSGIService,
 		"uWSGI":        UWSGIService,
+		"varnishd":     VarnishService,
 	}
 	knownIntepretedProcess = []struct {
 		CmdLineMustContains []string

@@ -719,6 +719,19 @@ var (
 			"squid3_status",
 		},
 
+		discovery.UPSDService: {
+			"upsd_status_flags",
+			"upsd_battery_voltage",
+			"upsd_input_voltage",
+			"upsd_output_voltage",
+			"upsd_load_percent",
+			"upsd_battery_charge_percent",
+			"upsd_internal_temp",
+			"upsd_input_frequency",
+			"upsd_time_left_seconds",
+			"upsd_time_on_battery_seconds",
+		},
+
 		discovery.UWSGIService: {
 			"uwsgi_status",
 			"uwsgi_requests",
