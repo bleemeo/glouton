@@ -20,6 +20,7 @@ import (
 	"glouton/config"
 	"glouton/inputs"
 	"glouton/inputs/internal"
+	"glouton/types"
 	"time"
 
 	"github.com/influxdata/telegraf"
@@ -69,6 +70,12 @@ func New(config config.Service) (telegraf.Input, *inputs.GathererOptions, error)
 
 	options := &inputs.GathererOptions{
 		MinInterval: 60 * time.Second,
+		Rules: []types.SimpleRule{
+			{
+				TargetName:  "jenkins_job_duration_seconds",
+				PromQLQuery: "jenkins_job_duration/1000",
+			},
+		},
 	}
 
 	return internalInput, options, nil

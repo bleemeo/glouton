@@ -424,7 +424,7 @@ var (
 		discovery.JenkinsService: {
 			"jenkins_busy_executors",
 			"jenkins_total_executors",
-			"jenkins_job_duration",
+			"jenkins_job_duration_seconds",
 			"jenkins_job_number",
 			"jenkins_job_result_code",
 		},
