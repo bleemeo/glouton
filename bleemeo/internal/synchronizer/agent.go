@@ -27,7 +27,10 @@ import (
 
 var errNoConfig = errors.New("agent don't have any configuration on Bleemeo Cloud platform. Please contact support@bleemeo.com about this issue")
 
-const apiTagsLength = 100
+const (
+	apiTagsLength = 100
+	agentFields   = "account,agent_type,created_at,current_config,display_name,fqdn,id,is_cluster_leader,next_config_at,tags"
+)
 
 func (s *Synchronizer) syncAgent(ctx context.Context, fullSync bool, onlyEssential bool) (updateThresholds bool, err error) {
 	if err := s.syncMainAgent(ctx); err != nil {
@@ -51,7 +54,7 @@ func (s *Synchronizer) syncMainAgent(ctx context.Context) error {
 	var agent types.Agent
 
 	params := map[string]string{
-		"fields": "tags,id,created_at,account,next_config_at,current_config",
+		"fields": agentFields,
 	}
 	data := map[string][]types.Tag{
 		"tags": make([]types.Tag, 0),
@@ -63,7 +66,7 @@ func (s *Synchronizer) syncMainAgent(ctx context.Context) error {
 		}
 	}
 
-	previousConfig := s.option.Cache.Agent().CurrentConfigID
+	previousAgent := s.option.Cache.Agent()
 
 	_, err := s.client.Do(ctx, "PATCH", fmt.Sprintf("v1/agent/%s/", s.agentID), params, data, &agent)
 	if err != nil {
@@ -76,7 +79,7 @@ func (s *Synchronizer) syncMainAgent(ctx context.Context) error {
 		return errNoConfig
 	}
 
-	if previousConfig != agent.CurrentConfigID && s.option.UpdateConfigCallback != nil {
+	if previousAgent.CurrentConfigID != agent.CurrentConfigID && s.option.UpdateConfigCallback != nil {
 		s.option.UpdateConfigCallback(ctx, true)
 	}
 
@@ -91,6 +94,14 @@ func (s *Synchronizer) syncMainAgent(ctx context.Context) error {
 		)
 	}
 
+	if agent.IsClusterLeader && !previousAgent.IsClusterLeader {
+		logger.V(1).Printf("This agent is the Kubernetes cluster leader")
+	}
+
+	if !agent.IsClusterLeader && previousAgent.IsClusterLeader {
+		logger.V(1).Printf("This agent is no longer the Kubernetes cluster leader")
+	}
+
 	return nil
 }
 
@@ -98,7 +109,7 @@ func (s *Synchronizer) agentsUpdateList() error {
 	oldAgents := s.option.Cache.AgentsByUUID()
 
 	params := map[string]string{
-		"fields": "id,created_at,account,next_config_at,current_config,tags,agent_type,fqdn,display_name",
+		"fields": agentFields,
 	}
 
 	result, err := s.client.Iter(s.ctx, "agent", params)
@@ -121,7 +132,7 @@ func (s *Synchronizer) agentsUpdateList() error {
 	s.option.Cache.SetAgentList(agents)
 
 	// If an agent is deleted, ensure our Labels on metric are up-to-date.
-	// If an SNMP agent is deleted, it agent UUID is no longer valid and metric
+	// If an SNMP agent is deleted, its agent UUID is no longer valid and metric
 	// should no longer be labeled with it.
 	newAgents := s.option.Cache.AgentsByUUID()
 	for id := range oldAgents {

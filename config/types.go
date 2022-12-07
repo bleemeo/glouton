@@ -126,10 +126,11 @@ type LoggingBuffer struct {
 }
 
 type Kubernetes struct {
-	Enable      bool   `yaml:"enable"`
-	NodeName    string `yaml:"nodename"`
-	ClusterName string `yaml:"clustername"`
-	KubeConfig  string `yaml:"kubeconfig"`
+	Enable              bool   `yaml:"enable"`
+	AllowClusterMetrics bool   `yaml:"allow_cluster_metrics"`
+	NodeName            string `yaml:"nodename"`
+	ClusterName         string `yaml:"clustername"`
+	KubeConfig          string `yaml:"kubeconfig"`
 }
 
 type JMXTrans struct {

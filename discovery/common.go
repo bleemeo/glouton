@@ -317,6 +317,7 @@ var (
 			ServicePort:     25,
 			ServiceProtocol: "tcp",
 		},
+		Fail2banService: {},
 		HAProxyService: {
 			IgnoreHighPort:  true, // HAProxy use a random high-port when Syslog over-UDP is enabled.
 			ServiceProtocol: "tcp",
@@ -406,6 +407,7 @@ var (
 			ServicePort:     3493,
 			ServiceProtocol: "tcp",
 		},
+		UWSGIService: {},
 		VarnishService: {
 			ServicePort:     6082,
 			ServiceProtocol: "tcp",

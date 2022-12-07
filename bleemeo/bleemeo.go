@@ -38,7 +38,11 @@ import (
 	gloutonTypes "glouton/types"
 )
 
-var ErrBadOption = errors.New("bad option")
+var (
+	errBadOption         = errors.New("bad option")
+	errAgentTypeNotFound = errors.New("agent type not found")
+	errAgentIDNotFound   = errors.New("agent ID not found")
+)
 
 // reloadState implements the types.BleemeoReloadState interface.
 type reloadState struct {
@@ -128,7 +132,7 @@ func New(option types.GlobalOption) (c *Connector, err error) {
 	})
 
 	if option.SNMPOnlineTarget == nil {
-		return c, fmt.Errorf("%w: missing SNMPOnlineTarget function", ErrBadOption)
+		return c, fmt.Errorf("%w: missing SNMPOnlineTarget function", errBadOption)
 	}
 
 	return c, err
@@ -426,11 +430,9 @@ func (c *Connector) RelabelHook(ctx context.Context, labels map[string]string) (
 
 	labels[gloutonTypes.LabelMetaBleemeoUUID] = agentID
 
+	// For SNMP metrics, set the agent ID to the SNMP agent ID.
 	if labels[gloutonTypes.LabelMetaSNMPTarget] != "" {
-		var (
-			snmpTypeID string
-			target     *snmp.Target
-		)
+		var target *snmp.Target
 
 		for _, t := range c.option.SNMP {
 			if t.Address() == labels[gloutonTypes.LabelMetaSNMPTarget] {
@@ -446,12 +448,9 @@ func (c *Connector) RelabelHook(ctx context.Context, labels map[string]string) (
 			return labels, true
 		}
 
-		for _, t := range c.cache.AgentTypes() {
-			if t.Name == types.AgentTypeSNMP {
-				snmpTypeID = t.ID
-
-				break
-			}
+		snmpTypeID, err := c.agentTypeID(types.AgentTypeSNMP)
+		if err != nil {
+			return labels, true
 		}
 
 		agent, err := c.sync.FindSNMPAgent(ctx, target, snmpTypeID, c.cache.AgentsByUUID())
@@ -464,7 +463,51 @@ func (c *Connector) RelabelHook(ctx context.Context, labels map[string]string) (
 		labels[gloutonTypes.LabelMetaBleemeoTargetAgentUUID] = agent.ID
 	}
 
+	// For Kubernetes cluster metrics, set the agent ID to the Kubernetes agent ID.
+	if clusterName := labels[gloutonTypes.LabelMetaKubernetesCluster]; clusterName != "" {
+		kubernetesAgentID, err := c.kubernetesAgentID(clusterName)
+		if err != nil {
+			logger.V(1).Printf("Kubernetes agent not found: %s", err)
+
+			// Kubernetes agent not found, retry later.
+			return labels, true
+		}
+
+		labels[gloutonTypes.LabelMetaBleemeoTargetAgent] = clusterName
+		labels[gloutonTypes.LabelMetaBleemeoTargetAgentUUID] = kubernetesAgentID
+	}
+
 	return labels, false
+}
+
+func (c *Connector) kubernetesAgentID(clusterName string) (string, error) {
+	kubernetesAgentType, err := c.agentTypeID(types.AgentTypeKubernetes)
+	if err != nil {
+		return "", err
+	}
+
+	for _, agent := range c.cache.AgentsByUUID() {
+		if agent.AgentType != kubernetesAgentType {
+			continue
+		}
+
+		if clusterName != "" && agent.FQDN == clusterName {
+			return agent.ID, nil
+		}
+	}
+
+	return "", fmt.Errorf("%w: no kubernetes agent with FQDN '%s'", errAgentIDNotFound, clusterName)
+}
+
+// agentTypeID returns the ID of the given agent type.
+func (c *Connector) agentTypeID(agentType string) (string, error) {
+	for _, t := range c.cache.AgentTypes() {
+		if t.Name == agentType {
+			return t.ID, nil
+		}
+	}
+
+	return "", fmt.Errorf("%w: %s", errAgentTypeNotFound, agentType)
 }
 
 // DiagnosticPage return useful information to troubleshoot issue.
@@ -733,6 +776,10 @@ func (c *Connector) AgentID() string {
 	agentID, _ := c.option.State.BleemeoCredentials()
 
 	return agentID
+}
+
+func (c *Connector) AgentIsClusterLeader() bool {
+	return c.cache.Agent().IsClusterLeader
 }
 
 // RegistrationAt returns the date of registration with Bleemeo API.

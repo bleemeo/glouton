@@ -73,7 +73,7 @@ if [ "${ONLY_GO}" = "1" -a "${WITH_RACE}" != "1" ]; then
       -v $(pwd):/src -w /src ${GO_MOUNT_CACHE} \
       --entrypoint '' \
       goreleaser/goreleaser:${GORELEASER_VERSION} \
-      sh -exc "
+      tini -g -- sh -exc "
       go build -ldflags='-X main.version=${GLOUTON_VERSION} -X main.commit=${COMMIT}' .
       chown $USER_UID glouton
       "
@@ -82,7 +82,7 @@ elif [ "${ONLY_GO}" = "1" -a "${WITH_RACE}" = "1" ]; then
       -v $(pwd):/src -w /src ${GO_MOUNT_CACHE} \
       --entrypoint '' \
       goreleaser/goreleaser:${GORELEASER_VERSION} \
-      sh -exc "
+      tini -g -- sh -exc "
       go build -ldflags='-X main.version=${GLOUTON_VERSION} -X main.commit=${COMMIT} -linkmode external -extldflags=-static' -race .
       chown $USER_UID glouton
       "
@@ -95,7 +95,7 @@ else
       -e GORELEASER_PREVIOUS_TAG=0.1.0 \
       -e GORELEASER_CURRENT_TAG=0.1.1 \
       goreleaser/goreleaser:${GORELEASER_VERSION} \
-      sh -exc "
+      tini -g -- sh -exc "
       mkdir -p /go/pkg
       git config --global --add safe.directory /src
       goreleaser check

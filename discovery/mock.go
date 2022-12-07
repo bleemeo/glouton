@@ -24,12 +24,19 @@ import (
 // MockDiscoverer is useful for tests.
 type MockDiscoverer struct {
 	result    []Service
+	err       error
 	UpdatedAt time.Time
+}
+
+// SetResult fill result of Discovery.
+func (md *MockDiscoverer) SetResult(services []Service, err error) {
+	md.result = services
+	md.err = err
 }
 
 // Discovery implements Discoverer.
 func (md *MockDiscoverer) Discovery(ctx context.Context, maxAge time.Duration) (services []Service, err error) {
-	return md.result, nil
+	return md.result, md.err
 }
 
 // LastUpdate implements Discoverer.

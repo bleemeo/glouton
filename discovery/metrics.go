@@ -61,6 +61,7 @@ import (
 	"strconv"
 
 	"github.com/influxdata/telegraf"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 var errNotSupported = errors.New("service not supported by Prometheus collector")
@@ -161,12 +162,14 @@ func addDefaultFromOS(inputsConfig inputs.CollectorConfig, coll *collector.Colle
 	return nil
 }
 
-func (d *Discovery) configureMetricInputs(oldServices, services map[NameInstance]Service) (err error) {
+func (d *Discovery) configureMetricInputs(oldServices, services map[NameInstance]Service) error {
 	for key := range oldServices {
 		if _, ok := services[key]; !ok {
 			d.removeInput(key)
 		}
 	}
+
+	var err prometheus.MultiError
 
 	for key, service := range services {
 		oldService, ok := oldServices[key]
@@ -185,15 +188,12 @@ func (d *Discovery) configureMetricInputs(oldServices, services map[NameInstance
 			d.removeInput(key)
 
 			if serviceState != facts.ContainerStopped {
-				err = d.createInput(service)
-				if err != nil {
-					return
-				}
+				err.Append(d.createInput(service))
 			}
 		}
 	}
 
-	return nil
+	return err.MaybeUnwrap()
 }
 
 func serviceNeedUpdate(oldService, service Service, oldServiceState facts.ContainerState, serviceState facts.ContainerState) bool {
