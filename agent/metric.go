@@ -421,6 +421,14 @@ var (
 			"influxdb_status",
 		},
 
+		discovery.JenkinsService: {
+			"jenkins_busy_executors",
+			"jenkins_total_executors",
+			"jenkins_job_duration",
+			"jenkins_job_number",
+			"jenkins_job_result_code",
+		},
+
 		discovery.JIRAService: {
 			"jira_jvm_gc",
 			"jira_jvm_gc_time",

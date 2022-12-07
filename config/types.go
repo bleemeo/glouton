@@ -315,7 +315,7 @@ type Service struct {
 	// Credentials for services that require authentication.
 	Username string `yaml:"username"`
 	Password string `yaml:"password"`
-	// HAProxy and PHP-FMP stats URL.
+	// URL used to retrieve metrics (used for instance by HAProxy and PHP-FMP).
 	StatsURL string `yaml:"stats_url"`
 	// Port used to get statistics for a service.
 	StatsPort int `yaml:"stats_port"`
@@ -333,6 +333,11 @@ type Service struct {
 	SSLInsecure bool   `yaml:"ssl_insecure"`
 	StartTLS    bool   `yaml:"starttls"`
 	CAFile      string `yaml:"ca_file"`
+	CertFile    string `yaml:"cert_file"`
+	KeyFile     string `yaml:"key_file"`
+	// Include or exlude specific items (for instance Jenkins jobs).
+	Include []string `yaml:"include"`
+	Exclude []string `yaml:"exclude"`
 }
 
 type JmxMetric struct {

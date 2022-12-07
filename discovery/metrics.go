@@ -30,6 +30,7 @@ import (
 	"glouton/inputs/elasticsearch"
 	"glouton/inputs/fail2ban"
 	"glouton/inputs/haproxy"
+	"glouton/inputs/jenkins"
 	"glouton/inputs/mem"
 	"glouton/inputs/memcached"
 	"glouton/inputs/modify"
@@ -303,6 +304,10 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 	case HAProxyService:
 		if service.Config.StatsURL != "" {
 			input, err = haproxy.New(service.Config.StatsURL)
+		}
+	case JenkinsService:
+		if service.Config.StatsURL != "" && service.Config.Password != "" {
+			input, gathererOptions, err = jenkins.New(service.Config)
 		}
 	case MemcachedService:
 		if ip, port := service.AddressPort(); ip != "" {

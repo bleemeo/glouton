@@ -223,6 +223,11 @@ var (
 			Interpreter:         "java",
 		},
 		{
+			CmdLineMustContains: []string{"jenkins.war"},
+			ServiceName:         JenkinsService,
+			Interpreter:         "java",
+		},
+		{
 			CmdLineMustContains: []string{"org.apache.catalina.startup.Bootstrap", "jira"},
 			ServiceName:         JIRAService,
 			Interpreter:         "java",

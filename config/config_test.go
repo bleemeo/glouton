@@ -265,7 +265,11 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 				SSL:         true,
 				SSLInsecure: true,
 				StartTLS:    true,
-				CAFile:      "/myca",
+				CAFile:      "/myca.pem",
+				CertFile:    "/mycert.pem",
+				KeyFile:     "/mykey.pem",
+				Include:     []string{"included"},
+				Exclude:     []string{"excluded"},
 			},
 		},
 		ServiceIgnoreMetrics: []NameInstance{
@@ -861,6 +865,7 @@ func TestDump(t *testing.T) {
 				ID:          "in-dump",
 				Password:    "*****",
 				JMXPassword: "*****",
+				KeyFile:     "*****",
 			},
 		},
 	}

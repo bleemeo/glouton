@@ -77,6 +77,7 @@ const (
 	FreeradiusService    ServiceName = "freeradius"
 	HAProxyService       ServiceName = "haproxy"
 	InfluxDBService      ServiceName = "influxdb"
+	JenkinsService       ServiceName = "jenkins"
 	JIRAService          ServiceName = "jira"
 	KafkaService         ServiceName = "kafka"
 	LibvirtService       ServiceName = "libvirt"
@@ -322,6 +323,10 @@ var (
 		},
 		InfluxDBService: {
 			ServicePort:     8086,
+			ServiceProtocol: "tcp",
+		},
+		JenkinsService: {
+			ServicePort:     8080,
 			ServiceProtocol: "tcp",
 		},
 		JIRAService: {
