@@ -336,9 +336,9 @@ type Service struct {
 	CAFile      string `yaml:"ca_file"`
 	CertFile    string `yaml:"cert_file"`
 	KeyFile     string `yaml:"key_file"`
-	// Include or exlude specific items (for instance Jenkins jobs).
-	Include []string `yaml:"include"`
-	Exclude []string `yaml:"exclude"`
+	// IncludedItems or exlude specific items (for instance Jenkins jobs).
+	IncludedItems []string `yaml:"included_items"`
+	ExcludedItems []string `yaml:"excluded_items"`
 }
 
 type JmxMetric struct {

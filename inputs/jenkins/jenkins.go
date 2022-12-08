@@ -44,8 +44,8 @@ func New(config config.Service) (telegraf.Input, *inputs.GathererOptions, error)
 	jenkinsInput.URL = config.StatsURL
 	jenkinsInput.Username = config.Username
 	jenkinsInput.Password = config.Password
-	jenkinsInput.JobInclude = config.Include
-	jenkinsInput.JobExclude = config.Exclude
+	jenkinsInput.JobInclude = config.IncludedItems
+	jenkinsInput.JobExclude = config.ExcludedItems
 
 	if config.SSL {
 		jenkinsInput.TLSCA = config.CAFile
