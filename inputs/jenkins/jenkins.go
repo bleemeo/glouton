@@ -55,8 +55,8 @@ func New(config config.Service) (telegraf.Input, *inputs.GathererOptions, error)
 	}
 
 	// The input writes points in the past (at the date the job started).
-	// Limit jobs to process to 5 minutes in the past.
-	jenkinsInput.MaxBuildAge = tConfig.Duration(5 * time.Minute)
+	// Limit jobs to process to 1 hour in the past.
+	jenkinsInput.MaxBuildAge = tConfig.Duration(time.Hour)
 
 	// Don't gather node metrics. Metrics for available disk,
 	// memory and SWAP are already gathered by Glouton.
