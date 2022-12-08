@@ -20,6 +20,7 @@ import (
 	"glouton/inputs"
 	"glouton/inputs/internal"
 	"glouton/types"
+	"strings"
 
 	"github.com/influxdata/telegraf"
 	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"
@@ -44,9 +45,11 @@ func New(server string, port int, username, password string) (telegraf.Input, *i
 	upsdInput.Password = password
 
 	internalInput := &internal.Input{
-		Input:       upsdInput,
-		Accumulator: internal.Accumulator{},
-		Name:        "UPSD",
+		Input: upsdInput,
+		Accumulator: internal.Accumulator{
+			RenameGlobal: renameGlobal,
+		},
+		Name: "UPSD",
 	}
 
 	options := &inputs.GathererOptions{
@@ -63,4 +66,18 @@ func New(server string, port int, username, password string) (telegraf.Input, *i
 	}
 
 	return internalInput, options, nil
+}
+
+func renameGlobal(gatherContext internal.GatherContext) (result internal.GatherContext, drop bool) {
+	for name := range gatherContext.Tags {
+		// Status labels are added (status_OL, status_OB, ...) depending on the UPS state.
+		// To prevent a new metric being created every time the state changes, remove these tags.
+		if strings.HasPrefix(name, "status") {
+			delete(gatherContext.Tags, name)
+		}
+	}
+
+	delete(gatherContext.Tags, "serial")
+
+	return gatherContext, false
 }
