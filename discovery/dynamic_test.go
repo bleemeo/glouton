@@ -860,6 +860,16 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				IPAddress:       "127.0.0.1",
 			},
 		},
+		{
+			testName: "upsd",
+			cmdLine:  []string{"/lib/nut/upsd"},
+			want: Service{
+				Name:            "upsd",
+				ServiceType:     UPSDService,
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 3493}},
+				IPAddress:       "127.0.0.1",
+			},
+		},
 	}
 
 	ctx := context.Background()
