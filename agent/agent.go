@@ -1091,10 +1091,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 			JitterSeed:  baseJitter,
 			MinInterval: time.Minute,
 		},
-		a.miscGatherMinute(
-			a.store,
-			a.gathererRegistry.WithTTLAndFormat(5*time.Minute, types.MetricFormatPrometheus),
-		),
+		a.miscGatherMinute(a.gathererRegistry.WithTTLAndFormat(5*time.Minute, types.MetricFormatPrometheus)),
 	)
 	if err != nil {
 		logger.Printf("unable to add miscGathererMinute metrics: %v", err)
@@ -1470,7 +1467,7 @@ func (a *agent) sendToTelemetry(ctx context.Context) error {
 	return nil
 }
 
-func (a *agent) miscGatherMinute(store *store.Store, pusher types.PointPusher) func(context.Context, time.Time) {
+func (a *agent) miscGatherMinute(pusher types.PointPusher) func(context.Context, time.Time) {
 	return func(ctx context.Context, t0 time.Time) {
 		points, err := a.containerRuntime.MetricsMinute(ctx, t0)
 		if err != nil {
@@ -1573,7 +1570,7 @@ func (a *agent) miscGatherMinute(store *store.Store, pusher types.PointPusher) f
 			},
 		})
 
-		points = append(points, smartStatus(t0, store)...)
+		points = append(points, smartStatus(t0, a.store)...)
 
 		pusher.PushPoints(ctx, points)
 	}
@@ -1634,6 +1631,7 @@ func smartStatus(now time.Time, store *store.Store) []types.MetricPoint {
 			},
 			Labels: map[string]string{
 				types.LabelName: "smart_status",
+				types.LabelItem: metric.Labels()[types.LabelDevice],
 			},
 			Annotations: types.MetricAnnotations{
 				Status:      status,
