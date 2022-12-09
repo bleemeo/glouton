@@ -1571,6 +1571,7 @@ func (a *agent) miscGatherMinute(pusher types.PointPusher) func(context.Context,
 		})
 
 		points = append(points, smartStatus(t0, a.store)...)
+		points = append(points, upsdBatteryStatus(t0, a.store)...)
 
 		pusher.PushPoints(ctx, points)
 	}
@@ -1586,12 +1587,12 @@ func smartStatus(now time.Time, store *store.Store) []types.MetricPoint {
 	smartPoints := make([]types.MetricPoint, 0, len(metrics))
 
 	for _, metric := range metrics {
+		// Get the last point from this metric.
 		points, _ := metric.Points(now.Add(-2*time.Minute), now)
 		if len(points) == 0 {
 			continue
 		}
 
-		// Get the last point from this metric.
 		sort.Slice(
 			points,
 			func(i, j int) bool {
@@ -1624,6 +1625,8 @@ func smartStatus(now time.Time, store *store.Store) []types.MetricPoint {
 			}
 		}
 
+		deviceName := metric.Labels()[types.LabelDevice]
+
 		smartPoints = append(smartPoints, types.MetricPoint{
 			Point: types.Point{
 				Value: float64(status.CurrentStatus.NagiosCode()),
@@ -1631,16 +1634,113 @@ func smartStatus(now time.Time, store *store.Store) []types.MetricPoint {
 			},
 			Labels: map[string]string{
 				types.LabelName: "smart_status",
-				types.LabelItem: metric.Labels()[types.LabelDevice],
+				types.LabelItem: deviceName,
 			},
 			Annotations: types.MetricAnnotations{
 				Status:      status,
-				BleemeoItem: metric.Labels()[types.LabelDevice],
+				BleemeoItem: deviceName,
 			},
 		})
 	}
 
 	return smartPoints
+}
+
+// smartStatus returns the upsd_battery_status metric.
+// It reports a critical status when:
+// - the UPS is overloaded
+// - the UPS is on battery
+// - the battery is low
+// - the battery needs to be replaced.
+func upsdBatteryStatus(now time.Time, store *store.Store) []types.MetricPoint {
+	metrics, _ := store.Metrics(map[string]string{types.LabelName: "upsd_status_flags"})
+	if len(metrics) == 0 {
+		return nil
+	}
+
+	upsdPoints := make([]types.MetricPoint, 0, len(metrics))
+
+	for _, metric := range metrics {
+		// Get the last point from this metric.
+		points, _ := metric.Points(now.Add(-2*time.Minute), now)
+		if len(points) == 0 {
+			continue
+		}
+
+		sort.Slice(
+			points,
+			func(i, j int) bool {
+				return points[i].Time.Before(points[j].Time)
+			},
+		)
+
+		lastPoint := points[len(points)-1]
+
+		var status types.StatusDescription
+
+		// The value is a composed of status bits documented in apcupsd:
+		// http://www.apcupsd.org/manual/#status-bits
+		// 0 	Runtime calibration occurring (Not reported by Smart UPS v/s and BackUPS Pro)
+		// 1 	SmartTrim (Not reported by 1st and 2nd generation SmartUPS models)
+		// 2 	SmartBoost
+		// 3 	On line (this is the normal condition)
+		// 4 	On battery
+		// 5 	Overloaded output
+		// 6 	Battery low
+		// 7 	Replace battery
+		statusFlags := int(lastPoint.Value)
+		onLine := statusFlags&0b00001000 > 0
+		overloadedOutput := statusFlags&0b00100000 > 0
+		lowBattery := statusFlags&0b01000000 > 0
+		replaceBattery := statusFlags&0b10000000 > 0
+
+		switch {
+		case replaceBattery:
+			status = types.StatusDescription{
+				CurrentStatus:     types.StatusCritical,
+				StatusDescription: "Battery should be replaced",
+			}
+		case lowBattery:
+			status = types.StatusDescription{
+				CurrentStatus:     types.StatusCritical,
+				StatusDescription: "Battery is low",
+			}
+		case overloadedOutput:
+			status = types.StatusDescription{
+				CurrentStatus:     types.StatusCritical,
+				StatusDescription: "UPS is overloaded",
+			}
+		case !onLine:
+			status = types.StatusDescription{
+				CurrentStatus:     types.StatusCritical,
+				StatusDescription: "UPS is running on battery",
+			}
+		default:
+			status = types.StatusDescription{
+				CurrentStatus:     types.StatusOk,
+				StatusDescription: "On line, battery ok",
+			}
+		}
+
+		upsName := metric.Labels()[types.LabelUPSName]
+
+		upsdPoints = append(upsdPoints, types.MetricPoint{
+			Point: types.Point{
+				Value: float64(status.CurrentStatus.NagiosCode()),
+				Time:  now,
+			},
+			Labels: map[string]string{
+				types.LabelName: "upsd_battery_status",
+				types.LabelItem: upsName,
+			},
+			Annotations: types.MetricAnnotations{
+				Status:      status,
+				BleemeoItem: upsName,
+			},
+		})
+	}
+
+	return upsdPoints
 }
 
 func (a *agent) miscTasks(ctx context.Context) error {

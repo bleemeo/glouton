@@ -735,6 +735,8 @@ var (
 		},
 
 		discovery.UPSDService: {
+			"upsd_status",
+			"upsd_battery_status",
 			"upsd_status_flags",
 			"upsd_battery_voltage",
 			"upsd_input_voltage",

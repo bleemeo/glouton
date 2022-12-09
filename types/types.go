@@ -137,6 +137,7 @@ const (
 	LabelAlertname                  = "alertname"
 	LabelDevice                     = "device"
 	LabelModel                      = "model"
+	LabelUPSName                    = "ups_name"
 	// Kubernetes pods labels.
 	LabelState     = "state"
 	LabelOwnerKind = "owner_kind"
