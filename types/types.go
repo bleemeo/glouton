@@ -135,6 +135,8 @@ const (
 	LabelScrapeJob                  = "scrape_job"
 	LabelScrapeInstance             = "scrape_instance"
 	LabelAlertname                  = "alertname"
+	LabelDevice                     = "device"
+	LabelModel                      = "model"
 	// Kubernetes pods labels.
 	LabelState     = "state"
 	LabelOwnerKind = "owner_kind"

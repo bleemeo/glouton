@@ -1091,7 +1091,10 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 			JitterSeed:  baseJitter,
 			MinInterval: time.Minute,
 		},
-		a.miscGatherMinute(a.gathererRegistry.WithTTLAndFormat(5*time.Minute, types.MetricFormatPrometheus)),
+		a.miscGatherMinute(
+			a.store,
+			a.gathererRegistry.WithTTLAndFormat(5*time.Minute, types.MetricFormatPrometheus),
+		),
 	)
 	if err != nil {
 		logger.Printf("unable to add miscGathererMinute metrics: %v", err)
@@ -1467,7 +1470,7 @@ func (a *agent) sendToTelemetry(ctx context.Context) error {
 	return nil
 }
 
-func (a *agent) miscGatherMinute(pusher types.PointPusher) func(context.Context, time.Time) {
+func (a *agent) miscGatherMinute(store *store.Store, pusher types.PointPusher) func(context.Context, time.Time) {
 	return func(ctx context.Context, t0 time.Time) {
 		points, err := a.containerRuntime.MetricsMinute(ctx, t0)
 		if err != nil {
@@ -1570,7 +1573,94 @@ func (a *agent) miscGatherMinute(pusher types.PointPusher) func(context.Context,
 			},
 		})
 
+		if smartMetric := smartStatus(t0, store); smartMetric != nil {
+			points = append(points, *smartMetric)
+		}
+
 		pusher.PushPoints(ctx, points)
+	}
+}
+
+// smartStatus returns the smart_status metric.
+func smartStatus(now time.Time, store *store.Store) *types.MetricPoint {
+	metrics, _ := store.Metrics(map[string]string{types.LabelName: "smart_device_health_ok"})
+	if len(metrics) == 0 {
+		return nil
+	}
+
+	// Search for devices with failed SMART tests and add their descriptions to the array.
+	var criticalDevices []string
+
+	for _, metric := range metrics {
+		points, _ := metric.Points(now.Add(-2*time.Minute), now)
+		if len(points) == 0 {
+			continue
+		}
+
+		// Get the last point from this metric.
+		sort.Slice(
+			points,
+			func(i, j int) bool {
+				return points[i].Time.Before(points[j].Time)
+			},
+		)
+
+		lastPoint := points[len(points)-1]
+
+		// The device_health_ok field from the SMART input is a boolean we converted to an integer.
+		if lastPoint.Value != 1 {
+			criticalDevices = append(
+				criticalDevices,
+				fmt.Sprintf("%s (%s)", metric.Labels()[types.LabelDevice], metric.Labels()[types.LabelModel]),
+			)
+		}
+	}
+
+	status := smartStatusDescription(criticalDevices)
+	metric := &types.MetricPoint{
+		Point: types.Point{
+			Value: float64(status.CurrentStatus.NagiosCode()),
+			Time:  now,
+		},
+		Labels: map[string]string{
+			types.LabelName: "smart_status",
+		},
+		Annotations: types.MetricAnnotations{
+			Status: status,
+		},
+	}
+
+	return metric
+}
+
+// smartStatusDescription returns the SMART status description.
+// The description looks like this:
+// - SMART tests passed
+// - SMART tests failed on nvme0 (PC401 NVMe SK hynix 512GB), sda (ST1000LM035).
+func smartStatusDescription(criticalDevices []string) types.StatusDescription {
+	if len(criticalDevices) == 0 {
+		return types.StatusDescription{
+			CurrentStatus:     types.StatusOk,
+			StatusDescription: "SMART tests passed",
+		}
+	}
+
+	var description strings.Builder
+
+	description.WriteString("SMART tests failed on ")
+
+	for i, device := range criticalDevices {
+		description.WriteString(device)
+
+		// Don't add a coma after the last device.
+		if i != len(criticalDevices)-1 {
+			description.WriteString(", ")
+		}
+	}
+
+	return types.StatusDescription{
+		CurrentStatus:     types.StatusCritical,
+		StatusDescription: description.String(),
 	}
 }
 

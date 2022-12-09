@@ -18,11 +18,14 @@
 package agent
 
 import (
+	"context"
 	"glouton/config"
 	"glouton/prometheus/scrapper"
+	"glouton/store"
 	"glouton/types"
 	"net/url"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -263,6 +266,189 @@ func Test_prometheusConfigToURLs(t *testing.T) {
 
 			if diff := cmp.Diff(tt.want, got, cmpopts.IgnoreUnexported(scrapper.Target{})); diff != "" {
 				t.Errorf("prometheusConfigToURLs() != want: %v", diff)
+			}
+		})
+	}
+}
+
+// Test the smart_status metric description.
+func TestSMARTStatus(t *testing.T) {
+	t.Parallel()
+
+	now := time.Now()
+
+	tests := []struct {
+		name           string
+		points         []types.MetricPoint
+		expectedMetric *types.MetricPoint
+	}{
+		{
+			name:           "no-points",
+			points:         nil,
+			expectedMetric: nil,
+		},
+		{
+			name: "status-ok",
+			points: []types.MetricPoint{
+				{
+					Point: types.Point{
+						Time:  now,
+						Value: 1,
+					},
+					Labels: map[string]string{
+						types.LabelName:   "smart_device_health_ok",
+						types.LabelDevice: "nvme0",
+						types.LabelModel:  "PC401 NVMe SK hynix 512GB",
+					},
+				},
+				{
+					Point: types.Point{
+						Time:  now,
+						Value: 1,
+					},
+					Labels: map[string]string{
+						types.LabelName:   "smart_device_health_ok",
+						types.LabelDevice: "sda",
+						types.LabelModel:  "ST1000LM035",
+					},
+				},
+			},
+			expectedMetric: &types.MetricPoint{
+				Point: types.Point{
+					Time:  now,
+					Value: float64(types.StatusOk.NagiosCode()),
+				},
+				Labels: map[string]string{
+					types.LabelName: "smart_status",
+				},
+				Annotations: types.MetricAnnotations{
+					Status: types.StatusDescription{
+						CurrentStatus:     types.StatusOk,
+						StatusDescription: "SMART tests passed",
+					},
+				},
+			},
+		},
+		{ //nolint:dupl
+			name: "one-critical",
+			points: []types.MetricPoint{
+				{
+					Point: types.Point{
+						Time:  now,
+						Value: 1,
+					},
+					Labels: map[string]string{
+						types.LabelName:   "smart_device_health_ok",
+						types.LabelDevice: "nvme0",
+						types.LabelModel:  "PC401 NVMe SK hynix 512GB",
+					},
+				},
+				{
+					Point: types.Point{
+						Time:  now,
+						Value: 0,
+					},
+					Labels: map[string]string{
+						types.LabelName:   "smart_device_health_ok",
+						types.LabelDevice: "sda",
+						types.LabelModel:  "ST1000LM035",
+					},
+				},
+				{
+					Point: types.Point{
+						Time:  now,
+						Value: 1,
+					},
+					Labels: map[string]string{
+						types.LabelName:   "smart_device_health_ok",
+						types.LabelDevice: "sdb",
+						types.LabelModel:  "ST1000LM035",
+					},
+				},
+			},
+			expectedMetric: &types.MetricPoint{
+				Point: types.Point{
+					Time:  now,
+					Value: float64(types.StatusCritical.NagiosCode()),
+				},
+				Labels: map[string]string{
+					types.LabelName: "smart_status",
+				},
+				Annotations: types.MetricAnnotations{
+					Status: types.StatusDescription{
+						CurrentStatus:     types.StatusCritical,
+						StatusDescription: "SMART tests failed on sda (ST1000LM035)",
+					},
+				},
+			},
+		},
+		{ //nolint:dupl
+			name: "multiple-critical",
+			points: []types.MetricPoint{
+				{
+					Point: types.Point{
+						Time:  now,
+						Value: 0,
+					},
+					Labels: map[string]string{
+						types.LabelName:   "smart_device_health_ok",
+						types.LabelDevice: "nvme0",
+						types.LabelModel:  "PC401 NVMe SK hynix 512GB",
+					},
+				},
+				{
+					Point: types.Point{
+						Time:  now,
+						Value: 1,
+					},
+					Labels: map[string]string{
+						types.LabelName:   "smart_device_health_ok",
+						types.LabelDevice: "sda",
+						types.LabelModel:  "ST1000LM035",
+					},
+				},
+				{
+					Point: types.Point{
+						Time:  now,
+						Value: 0,
+					},
+					Labels: map[string]string{
+						types.LabelName:   "smart_device_health_ok",
+						types.LabelDevice: "sdb",
+						types.LabelModel:  "ST1000LM035",
+					},
+				},
+			},
+			expectedMetric: &types.MetricPoint{
+				Point: types.Point{
+					Time:  now,
+					Value: float64(types.StatusCritical.NagiosCode()),
+				},
+				Labels: map[string]string{
+					types.LabelName: "smart_status",
+				},
+				Annotations: types.MetricAnnotations{
+					Status: types.StatusDescription{
+						CurrentStatus:     types.StatusCritical,
+						StatusDescription: "SMART tests failed on nvme0 (PC401 NVMe SK hynix 512GB), sdb (ST1000LM035)",
+					},
+				},
+			},
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+
+		t.Run(test.name, func(t *testing.T) {
+			store := store.New(time.Minute, time.Minute)
+
+			store.PushPoints(context.Background(), test.points)
+
+			gotMetric := smartStatus(now, store)
+
+			if diff := cmp.Diff(test.expectedMetric, gotMetric); diff != "" {
+				t.Fatalf("Got unexpected metric:\n %s", diff)
 			}
 		})
 	}
