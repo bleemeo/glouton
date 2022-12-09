@@ -280,14 +280,14 @@ func TestSMARTStatus(t *testing.T) {
 	tests := []struct {
 		name           string
 		points         []types.MetricPoint
-		expectedMetric *types.MetricPoint
+		expectedMetric []types.MetricPoint
 	}{
 		{
 			name:           "no-points",
 			points:         nil,
 			expectedMetric: nil,
 		},
-		{
+		{ //nolint:dupl
 			name: "status-ok",
 			points: []types.MetricPoint{
 				{
@@ -313,18 +313,37 @@ func TestSMARTStatus(t *testing.T) {
 					},
 				},
 			},
-			expectedMetric: &types.MetricPoint{
-				Point: types.Point{
-					Time:  now,
-					Value: float64(types.StatusOk.NagiosCode()),
+			expectedMetric: []types.MetricPoint{
+				{
+					Point: types.Point{
+						Time:  now,
+						Value: float64(types.StatusOk.NagiosCode()),
+					},
+					Labels: map[string]string{
+						types.LabelName: "smart_status",
+					},
+					Annotations: types.MetricAnnotations{
+						Status: types.StatusDescription{
+							CurrentStatus:     types.StatusOk,
+							StatusDescription: "SMART tests passed on nvme0 (PC401 NVMe SK hynix 512GB)",
+						},
+						BleemeoItem: "nvme0",
+					},
 				},
-				Labels: map[string]string{
-					types.LabelName: "smart_status",
-				},
-				Annotations: types.MetricAnnotations{
-					Status: types.StatusDescription{
-						CurrentStatus:     types.StatusOk,
-						StatusDescription: "SMART tests passed",
+				{
+					Point: types.Point{
+						Time:  now,
+						Value: float64(types.StatusOk.NagiosCode()),
+					},
+					Labels: map[string]string{
+						types.LabelName: "smart_status",
+					},
+					Annotations: types.MetricAnnotations{
+						Status: types.StatusDescription{
+							CurrentStatus:     types.StatusOk,
+							StatusDescription: "SMART tests passed on sda (ST1000LM035)",
+						},
+						BleemeoItem: "sda",
 					},
 				},
 			},
@@ -354,35 +373,43 @@ func TestSMARTStatus(t *testing.T) {
 						types.LabelModel:  "ST1000LM035",
 					},
 				},
+			},
+			expectedMetric: []types.MetricPoint{
 				{
 					Point: types.Point{
 						Time:  now,
-						Value: 1,
+						Value: float64(types.StatusOk.NagiosCode()),
 					},
 					Labels: map[string]string{
-						types.LabelName:   "smart_device_health_ok",
-						types.LabelDevice: "sdb",
-						types.LabelModel:  "ST1000LM035",
+						types.LabelName: "smart_status",
+					},
+					Annotations: types.MetricAnnotations{
+						Status: types.StatusDescription{
+							CurrentStatus:     types.StatusOk,
+							StatusDescription: "SMART tests passed on nvme0 (PC401 NVMe SK hynix 512GB)",
+						},
+						BleemeoItem: "nvme0",
 					},
 				},
-			},
-			expectedMetric: &types.MetricPoint{
-				Point: types.Point{
-					Time:  now,
-					Value: float64(types.StatusCritical.NagiosCode()),
-				},
-				Labels: map[string]string{
-					types.LabelName: "smart_status",
-				},
-				Annotations: types.MetricAnnotations{
-					Status: types.StatusDescription{
-						CurrentStatus:     types.StatusCritical,
-						StatusDescription: "SMART tests failed on sda (ST1000LM035)",
+				{
+					Point: types.Point{
+						Time:  now,
+						Value: float64(types.StatusCritical.NagiosCode()),
+					},
+					Labels: map[string]string{
+						types.LabelName: "smart_status",
+					},
+					Annotations: types.MetricAnnotations{
+						Status: types.StatusDescription{
+							CurrentStatus:     types.StatusCritical,
+							StatusDescription: "SMART tests failed on sda (ST1000LM035)",
+						},
+						BleemeoItem: "sda",
 					},
 				},
 			},
 		},
-		{ //nolint:dupl
+		{
 			name: "multiple-critical",
 			points: []types.MetricPoint{
 				{
@@ -419,18 +446,53 @@ func TestSMARTStatus(t *testing.T) {
 					},
 				},
 			},
-			expectedMetric: &types.MetricPoint{
-				Point: types.Point{
-					Time:  now,
-					Value: float64(types.StatusCritical.NagiosCode()),
+			expectedMetric: []types.MetricPoint{
+				{
+					Point: types.Point{
+						Time:  now,
+						Value: float64(types.StatusCritical.NagiosCode()),
+					},
+					Labels: map[string]string{
+						types.LabelName: "smart_status",
+					},
+					Annotations: types.MetricAnnotations{
+						Status: types.StatusDescription{
+							CurrentStatus:     types.StatusCritical,
+							StatusDescription: "SMART tests failed on nvme0 (PC401 NVMe SK hynix 512GB)",
+						},
+						BleemeoItem: "nvme0",
+					},
 				},
-				Labels: map[string]string{
-					types.LabelName: "smart_status",
+				{
+					Point: types.Point{
+						Time:  now,
+						Value: float64(types.StatusOk.NagiosCode()),
+					},
+					Labels: map[string]string{
+						types.LabelName: "smart_status",
+					},
+					Annotations: types.MetricAnnotations{
+						Status: types.StatusDescription{
+							CurrentStatus:     types.StatusOk,
+							StatusDescription: "SMART tests passed on sda (ST1000LM035)",
+						},
+						BleemeoItem: "sda",
+					},
 				},
-				Annotations: types.MetricAnnotations{
-					Status: types.StatusDescription{
-						CurrentStatus:     types.StatusCritical,
-						StatusDescription: "SMART tests failed on nvme0 (PC401 NVMe SK hynix 512GB), sdb (ST1000LM035)",
+				{
+					Point: types.Point{
+						Time:  now,
+						Value: float64(types.StatusCritical.NagiosCode()),
+					},
+					Labels: map[string]string{
+						types.LabelName: "smart_status",
+					},
+					Annotations: types.MetricAnnotations{
+						Status: types.StatusDescription{
+							CurrentStatus:     types.StatusCritical,
+							StatusDescription: "SMART tests failed on sdb (ST1000LM035)",
+						},
+						BleemeoItem: "sdb",
 					},
 				},
 			},
@@ -447,7 +509,11 @@ func TestSMARTStatus(t *testing.T) {
 
 			gotMetric := smartStatus(now, store)
 
-			if diff := cmp.Diff(test.expectedMetric, gotMetric); diff != "" {
+			lessFunc := func(x, y types.MetricPoint) bool {
+				return x.Annotations.BleemeoItem < y.Annotations.BleemeoItem
+			}
+
+			if diff := cmp.Diff(test.expectedMetric, gotMetric, cmpopts.SortSlices(lessFunc)); diff != "" {
 				t.Fatalf("Got unexpected metric:\n %s", diff)
 			}
 		})
