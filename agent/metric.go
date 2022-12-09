@@ -604,7 +604,6 @@ var (
 		},
 
 		discovery.NfsService: {
-			"nfs_status",
 			"nfs_ops",
 			"nfs_transmitted_bits",
 			"nfs_rtt_per_op_seconds",

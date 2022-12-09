@@ -167,9 +167,9 @@ func (d *Discovery) createCheck(service Service) {
 
 		d.createProcessCheck(service, labels, annotations)
 	case NfsService:
-		service.Config.MatchProcess = "nfsiod"
-
-		d.createProcessCheck(service, labels, annotations)
+		// Ignore NFS, it's hard to define a useful status for this service.
+		// We can't rely on a process check since the process may be running
+		// even if the NFS share failed to be mounted.
 	case CustomService:
 		createCheckType(service, d, di, primaryAddress, tcpAddresses, labels, annotations)
 	default:
