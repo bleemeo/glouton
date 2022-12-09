@@ -46,13 +46,11 @@ func New(config config.Service) (telegraf.Input, *inputs.GathererOptions, error)
 	jenkinsInput.Password = config.Password
 	jenkinsInput.JobInclude = config.IncludedItems
 	jenkinsInput.JobExclude = config.ExcludedItems
-
-	if config.SSL {
-		jenkinsInput.TLSCA = config.CAFile
-		jenkinsInput.TLSCert = config.CertFile
-		jenkinsInput.TLSKey = config.KeyFile
-		jenkinsInput.InsecureSkipVerify = config.SSLInsecure
-	}
+	// TLS config.
+	jenkinsInput.TLSCA = config.CAFile
+	jenkinsInput.TLSCert = config.CertFile
+	jenkinsInput.TLSKey = config.KeyFile
+	jenkinsInput.InsecureSkipVerify = config.SSLInsecure
 
 	// The input writes points in the past (at the date the job started).
 	// Limit jobs to process to 1 hour in the past.
