@@ -1734,8 +1734,10 @@ func upsdBatteryStatus(now time.Time, store *store.Store) []types.MetricPoint {
 				types.LabelItem: upsName,
 			},
 			Annotations: types.MetricAnnotations{
-				Status:      status,
-				BleemeoItem: upsName,
+				Status:          status,
+				BleemeoItem:     upsName,
+				ServiceName:     metric.Annotations().ServiceName,
+				ServiceInstance: metric.Annotations().ServiceInstance,
 			},
 		})
 	}

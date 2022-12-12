@@ -441,7 +441,10 @@ func TestUPSDBatteryStatus(t *testing.T) { //nolint:maintidx
 					},
 					Labels: map[string]string{
 						types.LabelName:    "upsd_status_flags",
-						types.LabelUPSName: "on-line",
+						types.LabelUPSName: "on-line-with-service",
+					},
+					Annotations: types.MetricAnnotations{
+						ServiceName: "upsd",
 					},
 				},
 				{
@@ -533,14 +536,15 @@ func TestUPSDBatteryStatus(t *testing.T) { //nolint:maintidx
 					},
 					Labels: map[string]string{
 						types.LabelName: "upsd_battery_status",
-						types.LabelItem: "on-line",
+						types.LabelItem: "on-line-with-service",
 					},
 					Annotations: types.MetricAnnotations{
 						Status: types.StatusDescription{
 							CurrentStatus:     types.StatusOk,
 							StatusDescription: "On line, battery ok",
 						},
-						BleemeoItem: "on-line",
+						BleemeoItem: "on-line-with-service",
+						ServiceName: "upsd",
 					},
 				},
 				{
