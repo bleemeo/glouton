@@ -1570,21 +1570,34 @@ func (a *agent) miscGatherMinute(pusher types.PointPusher) func(context.Context,
 			},
 		})
 
-		points = append(points, smartStatus(t0, a.store)...)
-		points = append(points, upsdBatteryStatus(t0, a.store)...)
+		// Add SMART status and UPSD battery status metrics.
+		points = append(
+			points,
+			statusFromLastPoint(t0, a.store, "smart_device_health_ok", "smart_status", smartStatus)...,
+		)
+		points = append(
+			points,
+			statusFromLastPoint(t0, a.store, "upsd_status_flags", "upsd_battery_status", upsdBatteryStatus)...,
+		)
 
 		pusher.PushPoints(ctx, points)
 	}
 }
 
-// smartStatus returns the smart_status metric.
-func smartStatus(now time.Time, store *store.Store) []types.MetricPoint {
-	metrics, _ := store.Metrics(map[string]string{types.LabelName: "smart_device_health_ok"})
+// statusFromLastPoint returns points for the targetMetricName based on the last point from baseMetricName.
+// statusDescription must return the status description based on the last point and labels of baseMetricName.
+func statusFromLastPoint(
+	now time.Time,
+	store *store.Store,
+	baseMetricName, targetMetricName string,
+	statusDescription func(value float64, labels map[string]string) types.StatusDescription,
+) []types.MetricPoint {
+	metrics, _ := store.Metrics(map[string]string{types.LabelName: baseMetricName})
 	if len(metrics) == 0 {
 		return nil
 	}
 
-	smartPoints := make([]types.MetricPoint, 0, len(metrics))
+	newPoints := make([]types.MetricPoint, 0, len(metrics))
 
 	for _, metric := range metrics {
 		// Get the last point from this metric.
@@ -1602,147 +1615,120 @@ func smartStatus(now time.Time, store *store.Store) []types.MetricPoint {
 
 		lastPoint := points[len(points)-1]
 
-		var status types.StatusDescription
+		// Keep annotations from the base metric, only change the status.
+		annotations := metric.Annotations()
+		annotations.Status = statusDescription(lastPoint.Value, metric.Labels())
 
-		// The device_health_ok field from the SMART input is a boolean we converted to an integer.
-		if lastPoint.Value == 1 {
-			status = types.StatusDescription{
-				CurrentStatus: types.StatusOk,
-				StatusDescription: fmt.Sprintf(
-					"SMART tests passed on %s (%s)",
-					metric.Labels()[types.LabelDevice],
-					metric.Labels()[types.LabelModel],
-				),
+		// Keep all labels from the metric except its name.
+		labelsCopy := make(map[string]string, len(metric.Labels()))
+
+		for name, value := range metric.Labels() {
+			if name == types.LabelName {
+				continue
 			}
-		} else {
-			status = types.StatusDescription{
-				CurrentStatus: types.StatusCritical,
-				StatusDescription: fmt.Sprintf(
-					"SMART tests failed on %s (%s)",
-					metric.Labels()[types.LabelDevice],
-					metric.Labels()[types.LabelModel],
-				),
-			}
+
+			labelsCopy[name] = value
 		}
 
-		deviceName := metric.Labels()[types.LabelDevice]
+		labelsCopy[types.LabelName] = targetMetricName
 
-		smartPoints = append(smartPoints, types.MetricPoint{
+		newPoints = append(newPoints, types.MetricPoint{
 			Point: types.Point{
-				Value: float64(status.CurrentStatus.NagiosCode()),
+				Value: float64(annotations.Status.CurrentStatus.NagiosCode()),
 				Time:  now,
 			},
-			Labels: map[string]string{
-				types.LabelName: "smart_status",
-				types.LabelItem: deviceName,
-			},
-			Annotations: types.MetricAnnotations{
-				Status:      status,
-				BleemeoItem: deviceName,
-			},
+			Labels:      labelsCopy,
+			Annotations: annotations,
 		})
 	}
 
-	return smartPoints
+	return newPoints
 }
 
-// smartStatus returns the upsd_battery_status metric.
+// smartStatus returns the "smart_status" metric description from the last value
+// of the metric "device_health_ok" and its labels.
+func smartStatus(value float64, labels map[string]string) types.StatusDescription {
+	var status types.StatusDescription
+
+	// The device_health_ok field from the SMART input is a boolean we converted to an integer.
+	if value == 1 {
+		status = types.StatusDescription{
+			CurrentStatus: types.StatusOk,
+			StatusDescription: fmt.Sprintf(
+				"SMART tests passed on %s (%s)",
+				labels[types.LabelDevice],
+				labels[types.LabelModel],
+			),
+		}
+	} else {
+		status = types.StatusDescription{
+			CurrentStatus: types.StatusCritical,
+			StatusDescription: fmt.Sprintf(
+				"SMART tests failed on %s (%s)",
+				labels[types.LabelDevice],
+				labels[types.LabelModel],
+			),
+		}
+	}
+
+	return status
+}
+
+// upsdBatteryStatus returns the "upsd_battery_status" metric description from the last value
+// of the metric "upsd_status_flags" and its labels.
 // It reports a critical status when:
 // - the UPS is overloaded
 // - the UPS is on battery
 // - the battery is low
 // - the battery needs to be replaced.
-func upsdBatteryStatus(now time.Time, store *store.Store) []types.MetricPoint {
-	metrics, _ := store.Metrics(map[string]string{types.LabelName: "upsd_status_flags"})
-	if len(metrics) == 0 {
-		return nil
+func upsdBatteryStatus(value float64, _ map[string]string) types.StatusDescription {
+	var status types.StatusDescription
+
+	// The value is a composed of status bits documented in apcupsd:
+	// http://www.apcupsd.org/manual/#status-bits
+	// 0 	Runtime calibration occurring (Not reported by Smart UPS v/s and BackUPS Pro)
+	// 1 	SmartTrim (Not reported by 1st and 2nd generation SmartUPS models)
+	// 2 	SmartBoost
+	// 3 	On line (this is the normal condition)
+	// 4 	On battery
+	// 5 	Overloaded output
+	// 6 	Battery low
+	// 7 	Replace battery
+	statusFlags := int(value)
+	onLine := statusFlags&(1<<3) > 0
+	overloadedOutput := statusFlags&(1<<5) > 0
+	lowBattery := statusFlags&(1<<6) > 0
+	replaceBattery := statusFlags&(1<<7) > 0
+
+	switch {
+	case replaceBattery:
+		status = types.StatusDescription{
+			CurrentStatus:     types.StatusCritical,
+			StatusDescription: "Battery should be replaced",
+		}
+	case lowBattery:
+		status = types.StatusDescription{
+			CurrentStatus:     types.StatusCritical,
+			StatusDescription: "Battery is low",
+		}
+	case overloadedOutput:
+		status = types.StatusDescription{
+			CurrentStatus:     types.StatusCritical,
+			StatusDescription: "UPS is overloaded",
+		}
+	case !onLine:
+		status = types.StatusDescription{
+			CurrentStatus:     types.StatusCritical,
+			StatusDescription: "UPS is running on battery",
+		}
+	default:
+		status = types.StatusDescription{
+			CurrentStatus:     types.StatusOk,
+			StatusDescription: "On line, battery ok",
+		}
 	}
 
-	upsdPoints := make([]types.MetricPoint, 0, len(metrics))
-
-	for _, metric := range metrics {
-		// Get the last point from this metric.
-		points, _ := metric.Points(now.Add(-2*time.Minute), now)
-		if len(points) == 0 {
-			continue
-		}
-
-		sort.Slice(
-			points,
-			func(i, j int) bool {
-				return points[i].Time.Before(points[j].Time)
-			},
-		)
-
-		lastPoint := points[len(points)-1]
-
-		var status types.StatusDescription
-
-		// The value is a composed of status bits documented in apcupsd:
-		// http://www.apcupsd.org/manual/#status-bits
-		// 0 	Runtime calibration occurring (Not reported by Smart UPS v/s and BackUPS Pro)
-		// 1 	SmartTrim (Not reported by 1st and 2nd generation SmartUPS models)
-		// 2 	SmartBoost
-		// 3 	On line (this is the normal condition)
-		// 4 	On battery
-		// 5 	Overloaded output
-		// 6 	Battery low
-		// 7 	Replace battery
-		statusFlags := int(lastPoint.Value)
-		onLine := statusFlags&(1<<3) > 0
-		overloadedOutput := statusFlags&(1<<5) > 0
-		lowBattery := statusFlags&(1<<6) > 0
-		replaceBattery := statusFlags&(1<<7) > 0
-
-		switch {
-		case replaceBattery:
-			status = types.StatusDescription{
-				CurrentStatus:     types.StatusCritical,
-				StatusDescription: "Battery should be replaced",
-			}
-		case lowBattery:
-			status = types.StatusDescription{
-				CurrentStatus:     types.StatusCritical,
-				StatusDescription: "Battery is low",
-			}
-		case overloadedOutput:
-			status = types.StatusDescription{
-				CurrentStatus:     types.StatusCritical,
-				StatusDescription: "UPS is overloaded",
-			}
-		case !onLine:
-			status = types.StatusDescription{
-				CurrentStatus:     types.StatusCritical,
-				StatusDescription: "UPS is running on battery",
-			}
-		default:
-			status = types.StatusDescription{
-				CurrentStatus:     types.StatusOk,
-				StatusDescription: "On line, battery ok",
-			}
-		}
-
-		upsName := metric.Labels()[types.LabelUPSName]
-
-		upsdPoints = append(upsdPoints, types.MetricPoint{
-			Point: types.Point{
-				Value: float64(status.CurrentStatus.NagiosCode()),
-				Time:  now,
-			},
-			Labels: map[string]string{
-				types.LabelName: "upsd_battery_status",
-				types.LabelItem: upsName,
-			},
-			Annotations: types.MetricAnnotations{
-				Status:          status,
-				BleemeoItem:     upsName,
-				ServiceName:     metric.Annotations().ServiceName,
-				ServiceInstance: metric.Annotations().ServiceInstance,
-			},
-		})
-	}
-
-	return upsdPoints
+	return status
 }
 
 func (a *agent) miscTasks(ctx context.Context) error {

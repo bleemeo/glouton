@@ -331,15 +331,15 @@ func TestSMARTStatus(t *testing.T) {
 						Value: float64(types.StatusCritical.NagiosCode()),
 					},
 					Labels: map[string]string{
-						types.LabelName: "smart_status",
-						types.LabelItem: "nvme0",
+						types.LabelName:   "smart_status",
+						types.LabelDevice: "nvme0",
+						types.LabelModel:  "PC401 NVMe SK hynix 512GB",
 					},
 					Annotations: types.MetricAnnotations{
 						Status: types.StatusDescription{
 							CurrentStatus:     types.StatusCritical,
 							StatusDescription: "SMART tests failed on nvme0 (PC401 NVMe SK hynix 512GB)",
 						},
-						BleemeoItem: "nvme0",
 					},
 				},
 				{
@@ -348,15 +348,15 @@ func TestSMARTStatus(t *testing.T) {
 						Value: float64(types.StatusOk.NagiosCode()),
 					},
 					Labels: map[string]string{
-						types.LabelName: "smart_status",
-						types.LabelItem: "sda",
+						types.LabelName:   "smart_status",
+						types.LabelDevice: "sda",
+						types.LabelModel:  "ST1000LM035",
 					},
 					Annotations: types.MetricAnnotations{
 						Status: types.StatusDescription{
 							CurrentStatus:     types.StatusOk,
 							StatusDescription: "SMART tests passed on sda (ST1000LM035)",
 						},
-						BleemeoItem: "sda",
 					},
 				},
 				{
@@ -365,15 +365,15 @@ func TestSMARTStatus(t *testing.T) {
 						Value: float64(types.StatusCritical.NagiosCode()),
 					},
 					Labels: map[string]string{
-						types.LabelName: "smart_status",
-						types.LabelItem: "sdb",
+						types.LabelName:   "smart_status",
+						types.LabelDevice: "sdb",
+						types.LabelModel:  "ST1000LM035",
 					},
 					Annotations: types.MetricAnnotations{
 						Status: types.StatusDescription{
 							CurrentStatus:     types.StatusCritical,
 							StatusDescription: "SMART tests failed on sdb (ST1000LM035)",
 						},
-						BleemeoItem: "sdb",
 					},
 				},
 			},
@@ -390,10 +390,10 @@ func TestSMARTStatus(t *testing.T) {
 
 			store.PushPoints(context.Background(), test.points)
 
-			gotMetric := smartStatus(now, store)
+			gotMetric := statusFromLastPoint(now, store, "smart_device_health_ok", "smart_status", smartStatus)
 
 			lessFunc := func(x, y types.MetricPoint) bool {
-				return x.Annotations.BleemeoItem < y.Annotations.BleemeoItem
+				return x.Labels[types.LabelDevice] < y.Labels[types.LabelDevice]
 			}
 
 			if diff := cmp.Diff(test.expectedMetric, gotMetric, cmpopts.SortSlices(lessFunc)); diff != "" {
@@ -535,15 +535,14 @@ func TestUPSDBatteryStatus(t *testing.T) { //nolint:maintidx
 						Value: float64(types.StatusOk.NagiosCode()),
 					},
 					Labels: map[string]string{
-						types.LabelName: "upsd_battery_status",
-						types.LabelItem: "on-line-with-service",
+						types.LabelName:    "upsd_battery_status",
+						types.LabelUPSName: "on-line-with-service",
 					},
 					Annotations: types.MetricAnnotations{
 						Status: types.StatusDescription{
 							CurrentStatus:     types.StatusOk,
 							StatusDescription: "On line, battery ok",
 						},
-						BleemeoItem: "on-line-with-service",
 						ServiceName: "upsd",
 					},
 				},
@@ -553,15 +552,14 @@ func TestUPSDBatteryStatus(t *testing.T) { //nolint:maintidx
 						Value: float64(types.StatusOk.NagiosCode()),
 					},
 					Labels: map[string]string{
-						types.LabelName: "upsd_battery_status",
-						types.LabelItem: "on-line-calibration-smart-trim-boost",
+						types.LabelName:    "upsd_battery_status",
+						types.LabelUPSName: "on-line-calibration-smart-trim-boost",
 					},
 					Annotations: types.MetricAnnotations{
 						Status: types.StatusDescription{
 							CurrentStatus:     types.StatusOk,
 							StatusDescription: "On line, battery ok",
 						},
-						BleemeoItem: "on-line-calibration-smart-trim-boost",
 					},
 				},
 				{
@@ -570,15 +568,14 @@ func TestUPSDBatteryStatus(t *testing.T) { //nolint:maintidx
 						Value: float64(types.StatusCritical.NagiosCode()),
 					},
 					Labels: map[string]string{
-						types.LabelName: "upsd_battery_status",
-						types.LabelItem: "on-battery",
+						types.LabelName:    "upsd_battery_status",
+						types.LabelUPSName: "on-battery",
 					},
 					Annotations: types.MetricAnnotations{
 						Status: types.StatusDescription{
 							CurrentStatus:     types.StatusCritical,
 							StatusDescription: "UPS is running on battery",
 						},
-						BleemeoItem: "on-battery",
 					},
 				},
 				{
@@ -587,15 +584,14 @@ func TestUPSDBatteryStatus(t *testing.T) { //nolint:maintidx
 						Value: float64(types.StatusCritical.NagiosCode()),
 					},
 					Labels: map[string]string{
-						types.LabelName: "upsd_battery_status",
-						types.LabelItem: "overloaded-on-line",
+						types.LabelName:    "upsd_battery_status",
+						types.LabelUPSName: "overloaded-on-line",
 					},
 					Annotations: types.MetricAnnotations{
 						Status: types.StatusDescription{
 							CurrentStatus:     types.StatusCritical,
 							StatusDescription: "UPS is overloaded",
 						},
-						BleemeoItem: "overloaded-on-line",
 					},
 				},
 				{
@@ -604,15 +600,14 @@ func TestUPSDBatteryStatus(t *testing.T) { //nolint:maintidx
 						Value: float64(types.StatusCritical.NagiosCode()),
 					},
 					Labels: map[string]string{
-						types.LabelName: "upsd_battery_status",
-						types.LabelItem: "overloaded-on-battery",
+						types.LabelName:    "upsd_battery_status",
+						types.LabelUPSName: "overloaded-on-battery",
 					},
 					Annotations: types.MetricAnnotations{
 						Status: types.StatusDescription{
 							CurrentStatus:     types.StatusCritical,
 							StatusDescription: "UPS is overloaded",
 						},
-						BleemeoItem: "overloaded-on-battery",
 					},
 				},
 				{
@@ -621,15 +616,14 @@ func TestUPSDBatteryStatus(t *testing.T) { //nolint:maintidx
 						Value: float64(types.StatusCritical.NagiosCode()),
 					},
 					Labels: map[string]string{
-						types.LabelName: "upsd_battery_status",
-						types.LabelItem: "battery-low-on-battery",
+						types.LabelName:    "upsd_battery_status",
+						types.LabelUPSName: "battery-low-on-battery",
 					},
 					Annotations: types.MetricAnnotations{
 						Status: types.StatusDescription{
 							CurrentStatus:     types.StatusCritical,
 							StatusDescription: "Battery is low",
 						},
-						BleemeoItem: "battery-low-on-battery",
 					},
 				},
 				{
@@ -638,15 +632,14 @@ func TestUPSDBatteryStatus(t *testing.T) { //nolint:maintidx
 						Value: float64(types.StatusCritical.NagiosCode()),
 					},
 					Labels: map[string]string{
-						types.LabelName: "upsd_battery_status",
-						types.LabelItem: "battery-low-overloaded-on-line",
+						types.LabelName:    "upsd_battery_status",
+						types.LabelUPSName: "battery-low-overloaded-on-line",
 					},
 					Annotations: types.MetricAnnotations{
 						Status: types.StatusDescription{
 							CurrentStatus:     types.StatusCritical,
 							StatusDescription: "Battery is low",
 						},
-						BleemeoItem: "battery-low-overloaded-on-line",
 					},
 				},
 				{
@@ -655,15 +648,14 @@ func TestUPSDBatteryStatus(t *testing.T) { //nolint:maintidx
 						Value: float64(types.StatusCritical.NagiosCode()),
 					},
 					Labels: map[string]string{
-						types.LabelName: "upsd_battery_status",
-						types.LabelItem: "replace-battery-on-line",
+						types.LabelName:    "upsd_battery_status",
+						types.LabelUPSName: "replace-battery-on-line",
 					},
 					Annotations: types.MetricAnnotations{
 						Status: types.StatusDescription{
 							CurrentStatus:     types.StatusCritical,
 							StatusDescription: "Battery should be replaced",
 						},
-						BleemeoItem: "replace-battery-on-line",
 					},
 				},
 				{
@@ -672,15 +664,14 @@ func TestUPSDBatteryStatus(t *testing.T) { //nolint:maintidx
 						Value: float64(types.StatusCritical.NagiosCode()),
 					},
 					Labels: map[string]string{
-						types.LabelName: "upsd_battery_status",
-						types.LabelItem: "replace-battery-on-battery-overloaded-battery-low",
+						types.LabelName:    "upsd_battery_status",
+						types.LabelUPSName: "replace-battery-on-battery-overloaded-battery-low",
 					},
 					Annotations: types.MetricAnnotations{
 						Status: types.StatusDescription{
 							CurrentStatus:     types.StatusCritical,
 							StatusDescription: "Battery should be replaced",
 						},
-						BleemeoItem: "replace-battery-on-battery-overloaded-battery-low",
 					},
 				},
 			},
@@ -697,10 +688,10 @@ func TestUPSDBatteryStatus(t *testing.T) { //nolint:maintidx
 
 			store.PushPoints(context.Background(), test.points)
 
-			gotMetric := upsdBatteryStatus(now, store)
+			gotMetric := statusFromLastPoint(now, store, "upsd_status_flags", "upsd_battery_status", upsdBatteryStatus)
 
 			lessFunc := func(x, y types.MetricPoint) bool {
-				return x.Annotations.BleemeoItem < y.Annotations.BleemeoItem
+				return x.Labels[types.LabelUPSName] < y.Labels[types.LabelUPSName]
 			}
 
 			if diff := cmp.Diff(test.expectedMetric, gotMetric, cmpopts.SortSlices(lessFunc)); diff != "" {
