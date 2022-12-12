@@ -167,6 +167,7 @@ var (
 		"mysqld":       MySQLService,
 		"named":        BindService,
 		"nats-server":  NatsService,
+		"nfsiod":       NfsService,
 		"nginx":        NginxService,
 		"ntpd":         NTPService,
 		"openvpn":      OpenVPNService,
@@ -176,9 +177,10 @@ var (
 		"slapd":        OpenLDAPService,
 		"squid3":       SquidService,
 		"squid":        SquidService,
-		"varnishd":     VarnishService,
+		"upsd":         UPSDService,
 		"uwsgi":        UWSGIService,
 		"uWSGI":        UWSGIService,
+		"varnishd":     VarnishService,
 	}
 	knownIntepretedProcess = []struct {
 		CmdLineMustContains []string
@@ -218,6 +220,11 @@ var (
 		{
 			CmdLineMustContains: []string{"com.atlassian.bitbucket.internal.launcher.BitbucketServerLauncher"},
 			ServiceName:         BitBucketService,
+			Interpreter:         "java",
+		},
+		{
+			CmdLineMustContains: []string{"jenkins.war"},
+			ServiceName:         JenkinsService,
 			Interpreter:         "java",
 		},
 		{

@@ -195,6 +195,11 @@ func (c *Processes) Processes(ctx context.Context, maxAge time.Duration) (proces
 			logger.V(2).Printf("getCmdline failed: %v", err)
 		}
 
+		// If there is no command line, default to the process name.
+		if len(cmdline) == 0 {
+			cmdline = []string{p.procStat.Comm}
+		}
+
 		result = append(result, facts.Process{
 			PID:             p.ID.Pid,
 			PPID:            p.procStat.PPID,

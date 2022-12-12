@@ -18,11 +18,14 @@
 package agent
 
 import (
+	"context"
 	"glouton/config"
 	"glouton/prometheus/scrapper"
+	"glouton/store"
 	"glouton/types"
 	"net/url"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -263,6 +266,436 @@ func Test_prometheusConfigToURLs(t *testing.T) {
 
 			if diff := cmp.Diff(tt.want, got, cmpopts.IgnoreUnexported(scrapper.Target{})); diff != "" {
 				t.Errorf("prometheusConfigToURLs() != want: %v", diff)
+			}
+		})
+	}
+}
+
+// Test the smart_status metric description.
+func TestSMARTStatus(t *testing.T) {
+	t.Parallel()
+
+	now := time.Now()
+
+	tests := []struct {
+		name           string
+		points         []types.MetricPoint
+		expectedMetric []types.MetricPoint
+	}{
+		{
+			name:           "no-points",
+			points:         nil,
+			expectedMetric: nil,
+		},
+		{
+			name: "multiple-critical",
+			points: []types.MetricPoint{
+				{
+					Point: types.Point{
+						Time:  now,
+						Value: 0,
+					},
+					Labels: map[string]string{
+						types.LabelName:   "smart_device_health_ok",
+						types.LabelDevice: "nvme0",
+						types.LabelModel:  "PC401 NVMe SK hynix 512GB",
+					},
+				},
+				{
+					Point: types.Point{
+						Time:  now,
+						Value: 1,
+					},
+					Labels: map[string]string{
+						types.LabelName:   "smart_device_health_ok",
+						types.LabelDevice: "sda",
+						types.LabelModel:  "ST1000LM035",
+					},
+				},
+				{
+					Point: types.Point{
+						Time:  now,
+						Value: 0,
+					},
+					Labels: map[string]string{
+						types.LabelName:   "smart_device_health_ok",
+						types.LabelDevice: "sdb",
+						types.LabelModel:  "ST1000LM035",
+					},
+				},
+			},
+			expectedMetric: []types.MetricPoint{
+				{
+					Point: types.Point{
+						Time:  now,
+						Value: float64(types.StatusCritical.NagiosCode()),
+					},
+					Labels: map[string]string{
+						types.LabelName:   "smart_status",
+						types.LabelDevice: "nvme0",
+						types.LabelModel:  "PC401 NVMe SK hynix 512GB",
+					},
+					Annotations: types.MetricAnnotations{
+						Status: types.StatusDescription{
+							CurrentStatus:     types.StatusCritical,
+							StatusDescription: "SMART tests failed on nvme0 (PC401 NVMe SK hynix 512GB)",
+						},
+					},
+				},
+				{
+					Point: types.Point{
+						Time:  now,
+						Value: float64(types.StatusOk.NagiosCode()),
+					},
+					Labels: map[string]string{
+						types.LabelName:   "smart_status",
+						types.LabelDevice: "sda",
+						types.LabelModel:  "ST1000LM035",
+					},
+					Annotations: types.MetricAnnotations{
+						Status: types.StatusDescription{
+							CurrentStatus:     types.StatusOk,
+							StatusDescription: "SMART tests passed on sda (ST1000LM035)",
+						},
+					},
+				},
+				{
+					Point: types.Point{
+						Time:  now,
+						Value: float64(types.StatusCritical.NagiosCode()),
+					},
+					Labels: map[string]string{
+						types.LabelName:   "smart_status",
+						types.LabelDevice: "sdb",
+						types.LabelModel:  "ST1000LM035",
+					},
+					Annotations: types.MetricAnnotations{
+						Status: types.StatusDescription{
+							CurrentStatus:     types.StatusCritical,
+							StatusDescription: "SMART tests failed on sdb (ST1000LM035)",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			store := store.New(time.Minute, time.Minute)
+
+			store.PushPoints(context.Background(), test.points)
+
+			gotMetric := statusFromLastPoint(now, store, "smart_device_health_ok", "smart_status", smartStatus)
+
+			lessFunc := func(x, y types.MetricPoint) bool {
+				return x.Labels[types.LabelDevice] < y.Labels[types.LabelDevice]
+			}
+
+			if diff := cmp.Diff(test.expectedMetric, gotMetric, cmpopts.SortSlices(lessFunc)); diff != "" {
+				t.Fatalf("Got unexpected metric:\n %s", diff)
+			}
+		})
+	}
+}
+
+// Test the upsd_battery_status metric description.
+func TestUPSDBatteryStatus(t *testing.T) { //nolint:maintidx
+	t.Parallel()
+
+	const (
+		statusCalibration    = 1 << 0
+		statusSmartTrim      = 1 << 1
+		statusSmartBoost     = 1 << 2
+		statusOnLine         = 1 << 3
+		statusOnBattery      = 1 << 4
+		statusOverloaded     = 1 << 5
+		statusBatteryLow     = 1 << 6
+		statusReplaceBattery = 1 << 7
+	)
+
+	now := time.Now()
+
+	tests := []struct {
+		name           string
+		points         []types.MetricPoint
+		expectedMetric []types.MetricPoint
+	}{
+		{
+			name:           "no-points",
+			points:         nil,
+			expectedMetric: nil,
+		},
+		{
+			name: "multiple-critical",
+			points: []types.MetricPoint{
+				{
+					Point: types.Point{
+						Time: now,
+						// On line
+						Value: float64(1 << 3),
+					},
+					Labels: map[string]string{
+						types.LabelName:    "upsd_status_flags",
+						types.LabelUPSName: "on-line-with-service",
+					},
+					Annotations: types.MetricAnnotations{
+						ServiceName: "upsd",
+					},
+				},
+				{
+					Point: types.Point{
+						Time:  now,
+						Value: float64(statusCalibration + statusSmartTrim + statusSmartBoost + statusOnLine),
+					},
+					Labels: map[string]string{
+						types.LabelName:    "upsd_status_flags",
+						types.LabelUPSName: "on-line-calibration-smart-trim-boost",
+					},
+				},
+				{
+					Point: types.Point{
+						Time:  now,
+						Value: float64(1 << 4),
+					},
+					Labels: map[string]string{
+						types.LabelName:    "upsd_status_flags",
+						types.LabelUPSName: "on-battery",
+					},
+				},
+				{
+					Point: types.Point{
+						Time:  now,
+						Value: float64(statusOnLine + statusOverloaded),
+					},
+					Labels: map[string]string{
+						types.LabelName:    "upsd_status_flags",
+						types.LabelUPSName: "overloaded-on-line",
+					},
+				},
+				{
+					Point: types.Point{
+						Time:  now,
+						Value: float64(statusOnBattery + statusOverloaded),
+					},
+					Labels: map[string]string{
+						types.LabelName:    "upsd_status_flags",
+						types.LabelUPSName: "overloaded-on-battery",
+					},
+				},
+				{
+					Point: types.Point{
+						Time:  now,
+						Value: float64(statusOnBattery + statusBatteryLow),
+					},
+					Labels: map[string]string{
+						types.LabelName:    "upsd_status_flags",
+						types.LabelUPSName: "battery-low-on-battery",
+					},
+				},
+				{
+					Point: types.Point{
+						Time:  now,
+						Value: float64(statusOnLine + statusOverloaded + statusBatteryLow),
+					},
+					Labels: map[string]string{
+						types.LabelName:    "upsd_status_flags",
+						types.LabelUPSName: "battery-low-overloaded-on-line",
+					},
+				},
+				{
+					Point: types.Point{
+						Time:  now,
+						Value: float64(statusOnLine + statusReplaceBattery),
+					},
+					Labels: map[string]string{
+						types.LabelName:    "upsd_status_flags",
+						types.LabelUPSName: "replace-battery-on-line",
+					},
+				},
+				{
+					Point: types.Point{
+						Time:  now,
+						Value: float64(statusOnBattery + statusOverloaded + statusBatteryLow + statusReplaceBattery),
+					},
+					Labels: map[string]string{
+						types.LabelName:    "upsd_status_flags",
+						types.LabelUPSName: "replace-battery-on-battery-overloaded-battery-low",
+					},
+				},
+			},
+			expectedMetric: []types.MetricPoint{
+				{
+					Point: types.Point{
+						Time:  now,
+						Value: float64(types.StatusOk.NagiosCode()),
+					},
+					Labels: map[string]string{
+						types.LabelName:    "upsd_battery_status",
+						types.LabelUPSName: "on-line-with-service",
+					},
+					Annotations: types.MetricAnnotations{
+						Status: types.StatusDescription{
+							CurrentStatus:     types.StatusOk,
+							StatusDescription: "On line, battery ok",
+						},
+						ServiceName: "upsd",
+					},
+				},
+				{
+					Point: types.Point{
+						Time:  now,
+						Value: float64(types.StatusOk.NagiosCode()),
+					},
+					Labels: map[string]string{
+						types.LabelName:    "upsd_battery_status",
+						types.LabelUPSName: "on-line-calibration-smart-trim-boost",
+					},
+					Annotations: types.MetricAnnotations{
+						Status: types.StatusDescription{
+							CurrentStatus:     types.StatusOk,
+							StatusDescription: "On line, battery ok",
+						},
+					},
+				},
+				{
+					Point: types.Point{
+						Time:  now,
+						Value: float64(types.StatusCritical.NagiosCode()),
+					},
+					Labels: map[string]string{
+						types.LabelName:    "upsd_battery_status",
+						types.LabelUPSName: "on-battery",
+					},
+					Annotations: types.MetricAnnotations{
+						Status: types.StatusDescription{
+							CurrentStatus:     types.StatusCritical,
+							StatusDescription: "UPS is running on battery",
+						},
+					},
+				},
+				{
+					Point: types.Point{
+						Time:  now,
+						Value: float64(types.StatusCritical.NagiosCode()),
+					},
+					Labels: map[string]string{
+						types.LabelName:    "upsd_battery_status",
+						types.LabelUPSName: "overloaded-on-line",
+					},
+					Annotations: types.MetricAnnotations{
+						Status: types.StatusDescription{
+							CurrentStatus:     types.StatusCritical,
+							StatusDescription: "UPS is overloaded",
+						},
+					},
+				},
+				{
+					Point: types.Point{
+						Time:  now,
+						Value: float64(types.StatusCritical.NagiosCode()),
+					},
+					Labels: map[string]string{
+						types.LabelName:    "upsd_battery_status",
+						types.LabelUPSName: "overloaded-on-battery",
+					},
+					Annotations: types.MetricAnnotations{
+						Status: types.StatusDescription{
+							CurrentStatus:     types.StatusCritical,
+							StatusDescription: "UPS is overloaded",
+						},
+					},
+				},
+				{
+					Point: types.Point{
+						Time:  now,
+						Value: float64(types.StatusCritical.NagiosCode()),
+					},
+					Labels: map[string]string{
+						types.LabelName:    "upsd_battery_status",
+						types.LabelUPSName: "battery-low-on-battery",
+					},
+					Annotations: types.MetricAnnotations{
+						Status: types.StatusDescription{
+							CurrentStatus:     types.StatusCritical,
+							StatusDescription: "Battery is low",
+						},
+					},
+				},
+				{
+					Point: types.Point{
+						Time:  now,
+						Value: float64(types.StatusCritical.NagiosCode()),
+					},
+					Labels: map[string]string{
+						types.LabelName:    "upsd_battery_status",
+						types.LabelUPSName: "battery-low-overloaded-on-line",
+					},
+					Annotations: types.MetricAnnotations{
+						Status: types.StatusDescription{
+							CurrentStatus:     types.StatusCritical,
+							StatusDescription: "Battery is low",
+						},
+					},
+				},
+				{
+					Point: types.Point{
+						Time:  now,
+						Value: float64(types.StatusCritical.NagiosCode()),
+					},
+					Labels: map[string]string{
+						types.LabelName:    "upsd_battery_status",
+						types.LabelUPSName: "replace-battery-on-line",
+					},
+					Annotations: types.MetricAnnotations{
+						Status: types.StatusDescription{
+							CurrentStatus:     types.StatusCritical,
+							StatusDescription: "Battery should be replaced",
+						},
+					},
+				},
+				{
+					Point: types.Point{
+						Time:  now,
+						Value: float64(types.StatusCritical.NagiosCode()),
+					},
+					Labels: map[string]string{
+						types.LabelName:    "upsd_battery_status",
+						types.LabelUPSName: "replace-battery-on-battery-overloaded-battery-low",
+					},
+					Annotations: types.MetricAnnotations{
+						Status: types.StatusDescription{
+							CurrentStatus:     types.StatusCritical,
+							StatusDescription: "Battery should be replaced",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			store := store.New(time.Minute, time.Minute)
+
+			store.PushPoints(context.Background(), test.points)
+
+			gotMetric := statusFromLastPoint(now, store, "upsd_status_flags", "upsd_battery_status", upsdBatteryStatus)
+
+			lessFunc := func(x, y types.MetricPoint) bool {
+				return x.Labels[types.LabelUPSName] < y.Labels[types.LabelUPSName]
+			}
+
+			if diff := cmp.Diff(test.expectedMetric, gotMetric, cmpopts.SortSlices(lessFunc)); diff != "" {
+				t.Fatalf("Got unexpected metric:\n %s", diff)
 			}
 		})
 	}

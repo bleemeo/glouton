@@ -1,4 +1,4 @@
-Defaults:glouton !requiretty
+Defaults:glouton !requiretty, !logfile, !syslog, !pam_session
 
 # Allow Glouton to read the MySQL user credentials needed to access the metrics. 
 glouton     ALL=(root) NOPASSWD: /bin/cat /etc/mysql/debian.cnf
@@ -7,6 +7,7 @@ glouton     ALL=(root) NOPASSWD: /bin/cat /etc/mysql/debian.cnf
 glouton     ALL=(root) NOPASSWD: /usr/lib/glouton/glouton-veths
 
 # Allow Glouton to get the number of banned IPs from fail2ban.
-Cmnd_Alias FAIL2BAN = /usr/bin/fail2ban-client status, /usr/bin/fail2ban-client status *
-glouton  ALL=(root) NOEXEC: NOPASSWD: FAIL2BAN
-Defaults!FAIL2BAN !logfile, !syslog, !pam_session
+glouton     ALL=(root) NOEXEC: NOPASSWD: /usr/bin/fail2ban-client status, /usr/bin/fail2ban-client status *
+
+# Allow Glouton to get SMART metrics.
+glouton     ALL=(ALL) NOPASSWD: /usr/bin/smartctl, /usr/sbin/smartctl

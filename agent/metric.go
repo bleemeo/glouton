@@ -245,7 +245,20 @@ var (
 		"temperature",
 	}
 
-	nvidiaSMIMetrics = []string{
+	// Input metrics that are not associated to a service.
+	inputMetrics = []string{
+		// SMART
+		"smart_status",
+		"smart_device_exit_status",
+		"smart_device_health_ok",
+		"smart_device_media_wearout_indicator",
+		"smart_device_percent_lifetime_remain",
+		"smart_device_read_error_rate",
+		"smart_device_seek_error_rate",
+		"smart_device_udma_crc_errors",
+		"smart_device_wear_leveling_count",
+
+		// Nvidia SMI
 		"nvidia_smi_fan_speed",
 		"nvidia_smi_fbc_stats_session_count",
 		"nvidia_smi_fbc_stats_average_fps",
@@ -268,6 +281,9 @@ var (
 		"nvidia_smi_clocks_current_sm",
 		"nvidia_smi_clocks_current_memory",
 		"nvidia_smi_clocks_current_video",
+
+		// Temperature
+		`{__name__="sensor_temperature", sensor=~"coretemp_package_id_.*"}`,
 	}
 
 	defaultServiceMetrics map[discovery.ServiceName][]string = map[discovery.ServiceName][]string{
@@ -411,6 +427,14 @@ var (
 
 		discovery.InfluxDBService: {
 			"influxdb_status",
+		},
+
+		discovery.JenkinsService: {
+			"jenkins_busy_executors",
+			"jenkins_total_executors",
+			"jenkins_job_duration_seconds",
+			"jenkins_job_number",
+			"jenkins_job_result_code",
 		},
 
 		discovery.JIRAService: {
@@ -578,6 +602,13 @@ var (
 			"nats_total_connections",
 		},
 
+		discovery.NfsService: {
+			"nfs_ops",
+			"nfs_transmitted_bits",
+			"nfs_rtt_per_op_seconds",
+			"nfs_retrans",
+		},
+
 		discovery.NginxService: {
 			"nginx_status",
 			"nginx_requests",
@@ -701,6 +732,21 @@ var (
 
 		discovery.SquidService: {
 			"squid3_status",
+		},
+
+		discovery.UPSDService: {
+			"upsd_status",
+			"upsd_battery_status",
+			"upsd_status_flags",
+			"upsd_battery_voltage",
+			"upsd_input_voltage",
+			"upsd_output_voltage",
+			"upsd_load_percent",
+			"upsd_battery_charge_percent",
+			"upsd_internal_temp",
+			"upsd_input_frequency",
+			"upsd_time_left_seconds",
+			"upsd_time_on_battery_seconds",
 		},
 
 		discovery.UWSGIService: {
@@ -848,7 +894,7 @@ func addScrappersList(
 
 func getDefaultMetrics(format types.MetricFormat, hasSwap bool) []string {
 	res := commonDefaultSystemMetrics
-	res = append(res, nvidiaSMIMetrics...)
+	res = append(res, inputMetrics...)
 
 	switch {
 	case format == types.MetricFormatBleemeo:

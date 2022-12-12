@@ -77,6 +77,7 @@ const (
 	FreeradiusService    ServiceName = "freeradius"
 	HAProxyService       ServiceName = "haproxy"
 	InfluxDBService      ServiceName = "influxdb"
+	JenkinsService       ServiceName = "jenkins"
 	JIRAService          ServiceName = "jira"
 	KafkaService         ServiceName = "kafka"
 	LibvirtService       ServiceName = "libvirt"
@@ -85,6 +86,7 @@ const (
 	MosquittoService     ServiceName = "mosquitto" //nolint:misspell
 	MySQLService         ServiceName = "mysql"
 	NatsService          ServiceName = "nats"
+	NfsService           ServiceName = "nfs"
 	NginxService         ServiceName = "nginx"
 	NTPService           ServiceName = "ntp"
 	OpenLDAPService      ServiceName = "openldap"
@@ -98,6 +100,7 @@ const (
 	SquidService         ServiceName = "squid"
 	UWSGIService         ServiceName = "uwsgi"
 	VarnishService       ServiceName = "varnish"
+	UPSDService          ServiceName = "upsd"
 	ZookeeperService     ServiceName = "zookeeper"
 
 	CustomService ServiceName = "__custom__"
@@ -323,6 +326,10 @@ var (
 			ServicePort:     8086,
 			ServiceProtocol: "tcp",
 		},
+		JenkinsService: {
+			ServicePort:     8080,
+			ServiceProtocol: "tcp",
+		},
 		JIRAService: {
 			ServicePort:     8080,
 			ServiceProtocol: "tcp",
@@ -356,6 +363,7 @@ var (
 			ServicePort:     4222,
 			ServiceProtocol: "tcp",
 		},
+		NfsService: {},
 		NTPService: {
 			ServicePort:     123,
 			ServiceProtocol: "udp",
@@ -393,6 +401,10 @@ var (
 		},
 		SquidService: {
 			ServicePort:     3128,
+			ServiceProtocol: "tcp",
+		},
+		UPSDService: {
+			ServicePort:     3493,
 			ServiceProtocol: "tcp",
 		},
 		UWSGIService: {},

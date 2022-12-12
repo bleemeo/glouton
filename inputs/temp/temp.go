@@ -14,54 +14,66 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package nvidia
+package temp
 
 import (
 	"glouton/inputs"
 	"glouton/inputs/internal"
-	"time"
 
 	"github.com/influxdata/telegraf"
-	"github.com/influxdata/telegraf/config"
 	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"
-	"github.com/influxdata/telegraf/plugins/inputs/nvidia_smi"
+	"github.com/influxdata/telegraf/plugins/inputs/temp"
 )
 
-// New returns a NVIDIA SMI input, given the path to the
-// nvidia-smi binary and the timeout used for GPU polling in seconds.
-func New(binPath string, timeout int) (telegraf.Input, *inputs.GathererOptions, error) {
-	input, ok := telegraf_inputs.Inputs["nvidia_smi"]
+// New returns a temperature input.
+func New() (telegraf.Input, *inputs.GathererOptions, error) {
+	input, ok := telegraf_inputs.Inputs["temp"]
 	if !ok {
 		return nil, nil, inputs.ErrDisabledInput
 	}
 
-	nvidiaInput, ok := input().(*nvidia_smi.NvidiaSMI)
+	tempInput, ok := input().(*temp.Temperature)
 	if !ok {
 		return nil, nil, inputs.ErrUnexpectedType
 	}
 
-	if binPath != "" {
-		nvidiaInput.BinPath = binPath
-	}
-
-	if timeout != 0 {
-		nvidiaInput.Timeout = config.Duration(timeout) * config.Duration(time.Second)
-	}
-
 	internalInput := &internal.Input{
-		Input: nvidiaInput,
+		Input: tempInput,
 		Accumulator: internal.Accumulator{
-			RenameGlobal: renameGlobal,
+			RenameGlobal:     renameGlobal,
+			TransformMetrics: transformMetrics,
 		},
-		Name: "nvidia-smi",
+		Name: "Temp",
 	}
 
 	return internalInput, &inputs.GathererOptions{}, nil
 }
 
-func renameGlobal(gatherContext internal.GatherContext) (result internal.GatherContext, drop bool) {
-	// Remove overclocking state label as it's not stable.
-	delete(gatherContext.Tags, "pstate")
+// Rename "temp" measurement to "sensor".
+func renameGlobal(gatherContext internal.GatherContext) (internal.GatherContext, bool) {
+	if gatherContext.Measurement == "temp" {
+		gatherContext.Measurement = "sensor"
+	}
 
 	return gatherContext, false
+}
+
+// Rename "temp" field to "temperature".
+func transformMetrics(
+	currentContext internal.GatherContext,
+	fields map[string]float64,
+	originalFields map[string]interface{},
+) map[string]float64 {
+	newFields := make(map[string]float64, len(fields))
+
+	for name, value := range fields {
+		switch name {
+		case "temp":
+			newFields["temperature"] = value
+		default:
+			newFields[name] = value
+		}
+	}
+
+	return newFields
 }

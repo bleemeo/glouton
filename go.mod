@@ -23,7 +23,7 @@ require (
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510
 	github.com/google/uuid v1.3.0
 	github.com/influxdata/influxdb1-client v0.0.0-20220302092344-a9ab5670611c
-	github.com/influxdata/telegraf v1.24.3
+	github.com/influxdata/telegraf v1.24.4
 	github.com/influxdata/toml v0.0.0-20190415235208-270119a8ce65
 	github.com/json-iterator/go v1.1.12
 	github.com/ncabatoff/process-exporter v0.7.10
@@ -178,6 +178,7 @@ require (
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/power-devops/perfstat v0.0.0-20220216144756-c35f1ee13d7c // indirect
 	github.com/prometheus/common/sigv4 v0.1.0 // indirect
+	github.com/robbiet480/go.nut v0.0.0-20220219091450-bd8f121e1fa1 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
 	github.com/safchain/ethtool v0.2.0 // indirect
 	github.com/shopspring/decimal v1.3.1 // indirect

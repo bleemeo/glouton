@@ -41,7 +41,9 @@ import (
 	"glouton/inputs"
 	"glouton/inputs/docker"
 	nvidia "glouton/inputs/nvidia_smi"
+	"glouton/inputs/smart"
 	"glouton/inputs/statsd"
+	"glouton/inputs/temp"
 	"glouton/jmxtrans"
 	"glouton/logger"
 	"glouton/mqtt"
@@ -68,6 +70,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"regexp"
@@ -79,6 +82,7 @@ import (
 	"time"
 
 	"github.com/getsentry/sentry-go"
+	"github.com/influxdata/telegraf"
 
 	bleemeoTypes "glouton/bleemeo/types"
 
@@ -1204,36 +1208,10 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		}
 	}
 
-	if a.config.NvidiaSMI.Enable {
-		// Force Prometheus format for NVIDIA SMI metrics as we want to keep the labels.
-		acc := &inputs.Accumulator{
-			Pusher:  a.gathererRegistry.WithTTLAndFormat(5*time.Minute, types.MetricFormatPrometheus),
-			Context: ctx,
-		}
-		promCollector := collector.New(acc)
+	// Register inputs that are not associated to a service.
+	a.registerInputs()
 
-		_, err = a.gathererRegistry.RegisterPushPointsCallback(
-			registry.RegistrationOption{
-				Description: "Prometheus collector",
-				JitterSeed:  baseJitter,
-			},
-			promCollector.RunGather,
-		)
-		if err != nil {
-			logger.Printf("Unable to add Prometheus collector: %v", err)
-		}
-
-		err := nvidia.AddSMIInput(
-			promCollector,
-			a.config.NvidiaSMI.BinPath,
-			a.config.NvidiaSMI.Timeout,
-		)
-		if err != nil {
-			logger.Printf("Failed to initialize NVIDIA SMI collector: %v", err)
-		}
-	}
-
-	// register components only available on a given system, like node_exporter for unixes
+	// Register components only available on a given system, like node_exporter for unixes.
 	a.registerOSSpecificComponents(a.vethProvider)
 
 	tasks = append(tasks, taskInfo{
@@ -1285,6 +1263,48 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 	a.discovery.Close()
 	a.collector.Close()
 	logger.V(2).Printf("Agent stopped")
+}
+
+// Registers inputs that are not associated to a service.
+func (a *agent) registerInputs() {
+	if a.config.NvidiaSMI.Enable {
+		input, opts, err := nvidia.New(a.config.NvidiaSMI.BinPath, a.config.NvidiaSMI.Timeout)
+		a.registerInput("NVIDIA SMI", input, opts, err)
+	}
+
+	// The SMART input is enabled if "smartctl" is found in
+	// the PATH or if the path was given in the config.
+	_, err := exec.LookPath("smartctl")
+	if a.config.Smart.Enable && (err == nil || a.config.Smart.PathSmartctl != "") {
+		input, opts, err := smart.New(a.config.Smart)
+		a.registerInput("SMART", input, opts, err)
+	}
+
+	input, opts, err := temp.New()
+	a.registerInput("Temp", input, opts, err)
+}
+
+// Register a single input.
+func (a *agent) registerInput(name string, input telegraf.Input, opts *inputs.GathererOptions, err error) {
+	if err != nil {
+		logger.Printf("Failed to create input %s: %v", name, err)
+
+		return
+	}
+
+	_, err = a.gathererRegistry.RegisterInput(
+		registry.RegistrationOption{
+			Description: fmt.Sprintf("Input %s", name),
+			JitterSeed:  baseJitter,
+			Rules:       opts.Rules,
+			MinInterval: opts.MinInterval,
+		},
+		input,
+	)
+
+	if err != nil {
+		logger.Printf("Failed to register input %s: %v", name, err)
+	}
 }
 
 func (a *agent) handleSighup(ctx context.Context, sighupChan chan os.Signal) {
@@ -1549,8 +1569,165 @@ func (a *agent) miscGatherMinute(pusher types.PointPusher) func(context.Context,
 			},
 		})
 
+		// Add SMART status and UPSD battery status metrics.
+		points = append(
+			points,
+			statusFromLastPoint(t0, a.store, "smart_device_health_ok", "smart_status", smartStatus)...,
+		)
+		points = append(
+			points,
+			statusFromLastPoint(t0, a.store, "upsd_status_flags", "upsd_battery_status", upsdBatteryStatus)...,
+		)
+
 		pusher.PushPoints(ctx, points)
 	}
+}
+
+// statusFromLastPoint returns points for the targetMetricName based on the last point from baseMetricName.
+// statusDescription must return the status description based on the last point and labels of baseMetricName.
+func statusFromLastPoint(
+	now time.Time,
+	store *store.Store,
+	baseMetricName, targetMetricName string,
+	statusDescription func(value float64, labels map[string]string) types.StatusDescription,
+) []types.MetricPoint {
+	metrics, _ := store.Metrics(map[string]string{types.LabelName: baseMetricName})
+	if len(metrics) == 0 {
+		return nil
+	}
+
+	newPoints := make([]types.MetricPoint, 0, len(metrics))
+
+	for _, metric := range metrics {
+		// Get the last point from this metric.
+		points, _ := metric.Points(now.Add(-2*time.Minute), now)
+		if len(points) == 0 {
+			continue
+		}
+
+		sort.Slice(
+			points,
+			func(i, j int) bool {
+				return points[i].Time.Before(points[j].Time)
+			},
+		)
+
+		lastPoint := points[len(points)-1]
+
+		// Keep annotations from the base metric, only change the status.
+		annotations := metric.Annotations()
+		annotations.Status = statusDescription(lastPoint.Value, metric.Labels())
+
+		// Keep all labels from the metric except its name.
+		labelsCopy := make(map[string]string, len(metric.Labels()))
+
+		for name, value := range metric.Labels() {
+			if name == types.LabelName {
+				continue
+			}
+
+			labelsCopy[name] = value
+		}
+
+		labelsCopy[types.LabelName] = targetMetricName
+
+		newPoints = append(newPoints, types.MetricPoint{
+			Point: types.Point{
+				Value: float64(annotations.Status.CurrentStatus.NagiosCode()),
+				Time:  now,
+			},
+			Labels:      labelsCopy,
+			Annotations: annotations,
+		})
+	}
+
+	return newPoints
+}
+
+// smartStatus returns the "smart_status" metric description from the last value
+// of the metric "device_health_ok" and its labels.
+func smartStatus(value float64, labels map[string]string) types.StatusDescription {
+	var status types.StatusDescription
+
+	// The device_health_ok field from the SMART input is a boolean we converted to an integer.
+	if value == 1 {
+		status = types.StatusDescription{
+			CurrentStatus: types.StatusOk,
+			StatusDescription: fmt.Sprintf(
+				"SMART tests passed on %s (%s)",
+				labels[types.LabelDevice],
+				labels[types.LabelModel],
+			),
+		}
+	} else {
+		status = types.StatusDescription{
+			CurrentStatus: types.StatusCritical,
+			StatusDescription: fmt.Sprintf(
+				"SMART tests failed on %s (%s)",
+				labels[types.LabelDevice],
+				labels[types.LabelModel],
+			),
+		}
+	}
+
+	return status
+}
+
+// upsdBatteryStatus returns the "upsd_battery_status" metric description from the last value
+// of the metric "upsd_status_flags" and its labels.
+// It reports a critical status when:
+// - the UPS is overloaded
+// - the UPS is on battery
+// - the battery is low
+// - the battery needs to be replaced.
+func upsdBatteryStatus(value float64, _ map[string]string) types.StatusDescription {
+	var status types.StatusDescription
+
+	// The value is a composed of status bits documented in apcupsd:
+	// http://www.apcupsd.org/manual/#status-bits
+	// 0 	Runtime calibration occurring (Not reported by Smart UPS v/s and BackUPS Pro)
+	// 1 	SmartTrim (Not reported by 1st and 2nd generation SmartUPS models)
+	// 2 	SmartBoost
+	// 3 	On line (this is the normal condition)
+	// 4 	On battery
+	// 5 	Overloaded output
+	// 6 	Battery low
+	// 7 	Replace battery
+	statusFlags := int(value)
+	onLine := statusFlags&(1<<3) > 0
+	overloadedOutput := statusFlags&(1<<5) > 0
+	lowBattery := statusFlags&(1<<6) > 0
+	replaceBattery := statusFlags&(1<<7) > 0
+
+	switch {
+	case replaceBattery:
+		status = types.StatusDescription{
+			CurrentStatus:     types.StatusCritical,
+			StatusDescription: "Battery should be replaced",
+		}
+	case lowBattery:
+		status = types.StatusDescription{
+			CurrentStatus:     types.StatusCritical,
+			StatusDescription: "Battery is low",
+		}
+	case overloadedOutput:
+		status = types.StatusDescription{
+			CurrentStatus:     types.StatusCritical,
+			StatusDescription: "UPS is overloaded",
+		}
+	case !onLine:
+		status = types.StatusDescription{
+			CurrentStatus:     types.StatusCritical,
+			StatusDescription: "UPS is running on battery",
+		}
+	default:
+		status = types.StatusDescription{
+			CurrentStatus:     types.StatusOk,
+			StatusDescription: "On line, battery ok",
+		}
+	}
+
+	return status
 }
 
 func (a *agent) miscTasks(ctx context.Context) error {

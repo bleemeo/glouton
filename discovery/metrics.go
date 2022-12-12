@@ -30,6 +30,7 @@ import (
 	"glouton/inputs/elasticsearch"
 	"glouton/inputs/fail2ban"
 	"glouton/inputs/haproxy"
+	"glouton/inputs/jenkins"
 	"glouton/inputs/mem"
 	"glouton/inputs/memcached"
 	"glouton/inputs/modify"
@@ -37,6 +38,7 @@ import (
 	"glouton/inputs/mysql"
 	"glouton/inputs/nats"
 	netInput "glouton/inputs/net"
+	"glouton/inputs/nfs"
 	"glouton/inputs/nginx"
 	"glouton/inputs/openldap"
 	"glouton/inputs/phpfpm"
@@ -45,6 +47,7 @@ import (
 	"glouton/inputs/redis"
 	"glouton/inputs/swap"
 	"glouton/inputs/system"
+	"glouton/inputs/upsd"
 	"glouton/inputs/uwsgi"
 	"glouton/inputs/winperfcounters"
 	"glouton/inputs/zookeeper"
@@ -302,6 +305,10 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 		if service.Config.StatsURL != "" {
 			input, err = haproxy.New(service.Config.StatsURL)
 		}
+	case JenkinsService:
+		if service.Config.StatsURL != "" && service.Config.Password != "" {
+			input, gathererOptions, err = jenkins.New(service.Config)
+		}
 	case MemcachedService:
 		if ip, port := service.AddressPort(); ip != "" {
 			input, err = memcached.New(fmt.Sprintf("%s:%d", ip, port))
@@ -324,6 +331,8 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 			url := fmt.Sprintf("http://%s", net.JoinHostPort(service.IPAddress, strconv.Itoa(port)))
 			input, gathererOptions, err = nats.New(url)
 		}
+	case NfsService:
+		input, gathererOptions, err = nfs.New()
 	case NginxService:
 		if ip, port := service.AddressPort(); ip != "" {
 			input, err = nginx.New(fmt.Sprintf("http://%s/nginx_status", net.JoinHostPort(ip, strconv.Itoa(port))))
@@ -376,6 +385,10 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 	case RedisService:
 		if ip, port := service.AddressPort(); ip != "" {
 			input, err = redis.New(fmt.Sprintf("tcp://%s", net.JoinHostPort(ip, strconv.Itoa(port))), service.Config.Password)
+		}
+	case UPSDService:
+		if ip, port := service.AddressPort(); ip != "" {
+			input, gathererOptions, err = upsd.New(ip, port, service.Config.Username, service.Config.Password)
 		}
 	case UWSGIService:
 		// The port used in the stats server documentation is 1717.

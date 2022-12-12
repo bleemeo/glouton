@@ -14,54 +14,70 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package nvidia
+package upsd
 
 import (
 	"glouton/inputs"
 	"glouton/inputs/internal"
-	"time"
+	"glouton/types"
+	"strings"
 
 	"github.com/influxdata/telegraf"
-	"github.com/influxdata/telegraf/config"
 	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"
-	"github.com/influxdata/telegraf/plugins/inputs/nvidia_smi"
+	"github.com/influxdata/telegraf/plugins/inputs/upsd"
 )
 
-// New returns a NVIDIA SMI input, given the path to the
-// nvidia-smi binary and the timeout used for GPU polling in seconds.
-func New(binPath string, timeout int) (telegraf.Input, *inputs.GathererOptions, error) {
-	input, ok := telegraf_inputs.Inputs["nvidia_smi"]
+// New returns a UPSD input.
+func New(server string, port int, username, password string) (telegraf.Input, *inputs.GathererOptions, error) {
+	input, ok := telegraf_inputs.Inputs["upsd"]
 	if !ok {
 		return nil, nil, inputs.ErrDisabledInput
 	}
 
-	nvidiaInput, ok := input().(*nvidia_smi.NvidiaSMI)
+	upsdInput, ok := input().(*upsd.Upsd)
 	if !ok {
 		return nil, nil, inputs.ErrUnexpectedType
 	}
 
-	if binPath != "" {
-		nvidiaInput.BinPath = binPath
-	}
-
-	if timeout != 0 {
-		nvidiaInput.Timeout = config.Duration(timeout) * config.Duration(time.Second)
-	}
+	upsdInput.Server = server
+	upsdInput.Port = port
+	upsdInput.Username = username
+	upsdInput.Password = password
 
 	internalInput := &internal.Input{
-		Input: nvidiaInput,
+		Input: upsdInput,
 		Accumulator: internal.Accumulator{
 			RenameGlobal: renameGlobal,
 		},
-		Name: "nvidia-smi",
+		Name: "UPSD",
 	}
 
-	return internalInput, &inputs.GathererOptions{}, nil
+	options := &inputs.GathererOptions{
+		Rules: []types.SimpleRule{
+			{
+				TargetName:  "upsd_time_left_seconds",
+				PromQLQuery: "upsd_time_left_ns/1e9",
+			},
+			{
+				TargetName:  "upsd_time_on_battery_seconds",
+				PromQLQuery: "upsd_time_on_battery_ns/1e9",
+			},
+		},
+	}
+
+	return internalInput, options, nil
 }
 
 func renameGlobal(gatherContext internal.GatherContext) (result internal.GatherContext, drop bool) {
-	// Remove overclocking state label as it's not stable.
-	delete(gatherContext.Tags, "pstate")
+	for name := range gatherContext.Tags {
+		// Status labels are added (status_OL, status_OB, ...) depending on the UPS state.
+		// To prevent a new metric being created every time the state changes, remove these tags.
+		if strings.HasPrefix(name, "status") {
+			delete(gatherContext.Tags, name)
+		}
+	}
+
+	delete(gatherContext.Tags, "serial")
 
 	return gatherContext, false
 }

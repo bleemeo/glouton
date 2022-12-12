@@ -837,6 +837,39 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				IPAddress:   "127.0.0.1",
 			},
 		},
+		{
+			testName: "nfsclient",
+			cmdLine:  []string{"nfsiod"},
+			want: Service{
+				Name:            "nfs",
+				ServiceType:     NfsService,
+				ListenAddresses: nil,
+				IPAddress:       "127.0.0.1",
+			},
+		},
+		{
+			testName: "jenkins",
+			cmdLine: []string{
+				"java", "-Duser.home=/var/jenkins_home", "-Djenkins.model.Jenkins.slaveAgentPort=50000",
+				"-Dhudson.lifecycle=hudson.lifecycle.ExitLifecycle", "-jar", "/usr/share/jenkins/jenkins.war",
+			},
+			want: Service{
+				Name:            "jenkins",
+				ServiceType:     JenkinsService,
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 8080}},
+				IPAddress:       "127.0.0.1",
+			},
+		},
+		{
+			testName: "upsd",
+			cmdLine:  []string{"/lib/nut/upsd"},
+			want: Service{
+				Name:            "upsd",
+				ServiceType:     UPSDService,
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 3493}},
+				IPAddress:       "127.0.0.1",
+			},
+		},
 	}
 
 	ctx := context.Background()
