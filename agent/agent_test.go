@@ -404,8 +404,19 @@ func TestSMARTStatus(t *testing.T) {
 }
 
 // Test the upsd_battery_status metric description.
-func TestUPSDBatteryStatus(t *testing.T) {
+func TestUPSDBatteryStatus(t *testing.T) { //nolint:maintidx
 	t.Parallel()
+
+	const (
+		statusCalibration    = 1 << 0
+		statusSmartTrim      = 1 << 1
+		statusSmartBoost     = 1 << 2
+		statusOnLine         = 1 << 3
+		statusOnBattery      = 1 << 4
+		statusOverloaded     = 1 << 5
+		statusBatteryLow     = 1 << 6
+		statusReplaceBattery = 1 << 7
+	)
 
 	now := time.Now()
 
@@ -424,8 +435,9 @@ func TestUPSDBatteryStatus(t *testing.T) {
 			points: []types.MetricPoint{
 				{
 					Point: types.Point{
-						Time:  now,
-						Value: float64(0b00001111),
+						Time: now,
+						// On line
+						Value: float64(1 << 3),
 					},
 					Labels: map[string]string{
 						types.LabelName:    "upsd_status_flags",
@@ -435,7 +447,17 @@ func TestUPSDBatteryStatus(t *testing.T) {
 				{
 					Point: types.Point{
 						Time:  now,
-						Value: float64(0b00010111),
+						Value: float64(statusCalibration + statusSmartTrim + statusSmartBoost + statusOnLine),
+					},
+					Labels: map[string]string{
+						types.LabelName:    "upsd_status_flags",
+						types.LabelUPSName: "on-line-calibration-smart-trim-boost",
+					},
+				},
+				{
+					Point: types.Point{
+						Time:  now,
+						Value: float64(1 << 4),
 					},
 					Labels: map[string]string{
 						types.LabelName:    "upsd_status_flags",
@@ -445,31 +467,61 @@ func TestUPSDBatteryStatus(t *testing.T) {
 				{
 					Point: types.Point{
 						Time:  now,
-						Value: float64(0b00111111),
+						Value: float64(statusOnLine + statusOverloaded),
 					},
 					Labels: map[string]string{
 						types.LabelName:    "upsd_status_flags",
-						types.LabelUPSName: "overloaded",
+						types.LabelUPSName: "overloaded-on-line",
 					},
 				},
 				{
 					Point: types.Point{
 						Time:  now,
-						Value: float64(0b01111111),
+						Value: float64(statusOnBattery + statusOverloaded),
 					},
 					Labels: map[string]string{
 						types.LabelName:    "upsd_status_flags",
-						types.LabelUPSName: "battery-low",
+						types.LabelUPSName: "overloaded-on-battery",
 					},
 				},
 				{
 					Point: types.Point{
 						Time:  now,
-						Value: float64(0b11111111),
+						Value: float64(statusOnBattery + statusBatteryLow),
 					},
 					Labels: map[string]string{
 						types.LabelName:    "upsd_status_flags",
-						types.LabelUPSName: "replace-battery",
+						types.LabelUPSName: "battery-low-on-battery",
+					},
+				},
+				{
+					Point: types.Point{
+						Time:  now,
+						Value: float64(statusOnLine + statusOverloaded + statusBatteryLow),
+					},
+					Labels: map[string]string{
+						types.LabelName:    "upsd_status_flags",
+						types.LabelUPSName: "battery-low-overloaded-on-line",
+					},
+				},
+				{
+					Point: types.Point{
+						Time:  now,
+						Value: float64(statusOnLine + statusReplaceBattery),
+					},
+					Labels: map[string]string{
+						types.LabelName:    "upsd_status_flags",
+						types.LabelUPSName: "replace-battery-on-line",
+					},
+				},
+				{
+					Point: types.Point{
+						Time:  now,
+						Value: float64(statusOnBattery + statusOverloaded + statusBatteryLow + statusReplaceBattery),
+					},
+					Labels: map[string]string{
+						types.LabelName:    "upsd_status_flags",
+						types.LabelUPSName: "replace-battery-on-battery-overloaded-battery-low",
 					},
 				},
 			},
@@ -489,6 +541,23 @@ func TestUPSDBatteryStatus(t *testing.T) {
 							StatusDescription: "On line, battery ok",
 						},
 						BleemeoItem: "on-line",
+					},
+				},
+				{
+					Point: types.Point{
+						Time:  now,
+						Value: float64(types.StatusOk.NagiosCode()),
+					},
+					Labels: map[string]string{
+						types.LabelName: "upsd_battery_status",
+						types.LabelItem: "on-line-calibration-smart-trim-boost",
+					},
+					Annotations: types.MetricAnnotations{
+						Status: types.StatusDescription{
+							CurrentStatus:     types.StatusOk,
+							StatusDescription: "On line, battery ok",
+						},
+						BleemeoItem: "on-line-calibration-smart-trim-boost",
 					},
 				},
 				{
@@ -515,14 +584,14 @@ func TestUPSDBatteryStatus(t *testing.T) {
 					},
 					Labels: map[string]string{
 						types.LabelName: "upsd_battery_status",
-						types.LabelItem: "overloaded",
+						types.LabelItem: "overloaded-on-line",
 					},
 					Annotations: types.MetricAnnotations{
 						Status: types.StatusDescription{
 							CurrentStatus:     types.StatusCritical,
 							StatusDescription: "UPS is overloaded",
 						},
-						BleemeoItem: "overloaded",
+						BleemeoItem: "overloaded-on-line",
 					},
 				},
 				{
@@ -532,14 +601,31 @@ func TestUPSDBatteryStatus(t *testing.T) {
 					},
 					Labels: map[string]string{
 						types.LabelName: "upsd_battery_status",
-						types.LabelItem: "battery-low",
+						types.LabelItem: "overloaded-on-battery",
+					},
+					Annotations: types.MetricAnnotations{
+						Status: types.StatusDescription{
+							CurrentStatus:     types.StatusCritical,
+							StatusDescription: "UPS is overloaded",
+						},
+						BleemeoItem: "overloaded-on-battery",
+					},
+				},
+				{
+					Point: types.Point{
+						Time:  now,
+						Value: float64(types.StatusCritical.NagiosCode()),
+					},
+					Labels: map[string]string{
+						types.LabelName: "upsd_battery_status",
+						types.LabelItem: "battery-low-on-battery",
 					},
 					Annotations: types.MetricAnnotations{
 						Status: types.StatusDescription{
 							CurrentStatus:     types.StatusCritical,
 							StatusDescription: "Battery is low",
 						},
-						BleemeoItem: "battery-low",
+						BleemeoItem: "battery-low-on-battery",
 					},
 				},
 				{
@@ -549,14 +635,48 @@ func TestUPSDBatteryStatus(t *testing.T) {
 					},
 					Labels: map[string]string{
 						types.LabelName: "upsd_battery_status",
-						types.LabelItem: "replace-battery",
+						types.LabelItem: "battery-low-overloaded-on-line",
+					},
+					Annotations: types.MetricAnnotations{
+						Status: types.StatusDescription{
+							CurrentStatus:     types.StatusCritical,
+							StatusDescription: "Battery is low",
+						},
+						BleemeoItem: "battery-low-overloaded-on-line",
+					},
+				},
+				{
+					Point: types.Point{
+						Time:  now,
+						Value: float64(types.StatusCritical.NagiosCode()),
+					},
+					Labels: map[string]string{
+						types.LabelName: "upsd_battery_status",
+						types.LabelItem: "replace-battery-on-line",
 					},
 					Annotations: types.MetricAnnotations{
 						Status: types.StatusDescription{
 							CurrentStatus:     types.StatusCritical,
 							StatusDescription: "Battery should be replaced",
 						},
-						BleemeoItem: "replace-battery",
+						BleemeoItem: "replace-battery-on-line",
+					},
+				},
+				{
+					Point: types.Point{
+						Time:  now,
+						Value: float64(types.StatusCritical.NagiosCode()),
+					},
+					Labels: map[string]string{
+						types.LabelName: "upsd_battery_status",
+						types.LabelItem: "replace-battery-on-battery-overloaded-battery-low",
+					},
+					Annotations: types.MetricAnnotations{
+						Status: types.StatusDescription{
+							CurrentStatus:     types.StatusCritical,
+							StatusDescription: "Battery should be replaced",
+						},
+						BleemeoItem: "replace-battery-on-battery-overloaded-battery-low",
 					},
 				},
 			},
