@@ -854,17 +854,16 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		cancel()
 	}
 
+	if a.config.Container.Type != "" && !a.config.Container.PIDNamespaceHost {
+		logger.V(1).Printf("The agent is running in a container and \"container.pid_namespace_host\", is not true. Not all processes will be seen")
+	}
+
 	var psLister facts.ProcessLister
 
-	useProc := a.config.Container.Type == "" || a.config.Container.PIDNamespaceHost
-	if !useProc {
-		logger.V(1).Printf("The agent is running in a container and \"container.pid_namespace_host\", is not true. Not all processes will be seen")
+	if !version.IsLinux() {
+		psLister = facts.NewPsUtilLister("")
 	} else {
-		if !version.IsLinux() {
-			psLister = facts.NewPsUtilLister("")
-		} else {
-			psLister = process.NewProcessLister(a.hostRootPath, 9*time.Second)
-		}
+		psLister = process.NewProcessLister(a.hostRootPath, 9*time.Second)
 	}
 
 	psFact := facts.NewProcess(
