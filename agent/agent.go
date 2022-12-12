@@ -1689,10 +1689,10 @@ func upsdBatteryStatus(now time.Time, store *store.Store) []types.MetricPoint {
 		// 6 	Battery low
 		// 7 	Replace battery
 		statusFlags := int(lastPoint.Value)
-		onLine := statusFlags&0b00001000 > 0
-		overloadedOutput := statusFlags&0b00100000 > 0
-		lowBattery := statusFlags&0b01000000 > 0
-		replaceBattery := statusFlags&0b10000000 > 0
+		onLine := statusFlags&(1<<3) > 0
+		overloadedOutput := statusFlags&(1<<5) > 0
+		lowBattery := statusFlags&(1<<6) > 0
+		replaceBattery := statusFlags&(1<<7) > 0
 
 		switch {
 		case replaceBattery:
