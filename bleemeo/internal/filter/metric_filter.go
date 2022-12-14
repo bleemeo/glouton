@@ -56,13 +56,13 @@ func (f *Filter) IsAllowed(lbls map[string]string, annotations types.MetricAnnot
 		return false, bleemeoTypes.DenyItemTooLong, nil
 	}
 
-	// Service status and alerting rules metrics are always allowed.
-	if common.IsServiceCheckMetric(lbls, annotations) || annotations.AlertingRuleID != "" {
+	// Alerting rules metrics are always allowed.
+	if annotations.AlertingRuleID != "" {
 		return true, bleemeoTypes.NotDenied, nil
 	}
 
-	// Deny metrics associated to a container if the docker integration is disabled.
-	if !f.accountConfigs[f.defaultConfigID].DockerIntegration && annotations.ContainerID != "" {
+	// Deny metrics associated to a container when Docker integration is disabled unless we will ignore container.
+	if !f.accountConfigs[f.defaultConfigID].DockerIntegration && annotations.ContainerID != "" && !common.IgnoreContainer(f.accountConfigs[f.defaultConfigID], lbls) {
 		return false, bleemeoTypes.DenyNoDockerIntegration, nil
 	}
 

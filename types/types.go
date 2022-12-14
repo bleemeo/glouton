@@ -148,6 +148,10 @@ const (
 	LabelNamespace = "namespace"
 )
 
+const (
+	MetricServiceStatus = "service_status"
+)
+
 // MissingContainerID is the container ID annotation set on metrics that belong
 // to a container when the container is not known yet.
 const MissingContainerID = "missing-container-id"

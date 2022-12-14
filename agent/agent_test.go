@@ -271,7 +271,7 @@ func Test_prometheusConfigToURLs(t *testing.T) {
 	}
 }
 
-// Test the smart_status metric description.
+// Test the service_status{service="smart"} metric description.
 func TestSMARTStatus(t *testing.T) {
 	t.Parallel()
 
@@ -331,9 +331,10 @@ func TestSMARTStatus(t *testing.T) {
 						Value: float64(types.StatusCritical.NagiosCode()),
 					},
 					Labels: map[string]string{
-						types.LabelName:   "smart_status",
-						types.LabelDevice: "nvme0",
-						types.LabelModel:  "PC401 NVMe SK hynix 512GB",
+						types.LabelName:    types.MetricServiceStatus,
+						types.LabelService: "smart",
+						types.LabelDevice:  "nvme0",
+						types.LabelModel:   "PC401 NVMe SK hynix 512GB",
 					},
 					Annotations: types.MetricAnnotations{
 						Status: types.StatusDescription{
@@ -348,9 +349,10 @@ func TestSMARTStatus(t *testing.T) {
 						Value: float64(types.StatusOk.NagiosCode()),
 					},
 					Labels: map[string]string{
-						types.LabelName:   "smart_status",
-						types.LabelDevice: "sda",
-						types.LabelModel:  "ST1000LM035",
+						types.LabelName:    types.MetricServiceStatus,
+						types.LabelService: "smart",
+						types.LabelDevice:  "sda",
+						types.LabelModel:   "ST1000LM035",
 					},
 					Annotations: types.MetricAnnotations{
 						Status: types.StatusDescription{
@@ -365,9 +367,10 @@ func TestSMARTStatus(t *testing.T) {
 						Value: float64(types.StatusCritical.NagiosCode()),
 					},
 					Labels: map[string]string{
-						types.LabelName:   "smart_status",
-						types.LabelDevice: "sdb",
-						types.LabelModel:  "ST1000LM035",
+						types.LabelName:    types.MetricServiceStatus,
+						types.LabelService: "smart",
+						types.LabelDevice:  "sdb",
+						types.LabelModel:   "ST1000LM035",
 					},
 					Annotations: types.MetricAnnotations{
 						Status: types.StatusDescription{
@@ -390,7 +393,7 @@ func TestSMARTStatus(t *testing.T) {
 
 			store.PushPoints(context.Background(), test.points)
 
-			gotMetric := statusFromLastPoint(now, store, "smart_device_health_ok", "smart_status", smartStatus)
+			gotMetric := statusFromLastPoint(now, store, "smart_device_health_ok", map[string]string{types.LabelName: types.MetricServiceStatus, types.LabelService: "smart"}, smartStatus)
 
 			lessFunc := func(x, y types.MetricPoint) bool {
 				return x.Labels[types.LabelDevice] < y.Labels[types.LabelDevice]
@@ -688,7 +691,7 @@ func TestUPSDBatteryStatus(t *testing.T) { //nolint:maintidx
 
 			store.PushPoints(context.Background(), test.points)
 
-			gotMetric := statusFromLastPoint(now, store, "upsd_status_flags", "upsd_battery_status", upsdBatteryStatus)
+			gotMetric := statusFromLastPoint(now, store, "upsd_status_flags", map[string]string{types.LabelName: "upsd_battery_status"}, upsdBatteryStatus)
 
 			lessFunc := func(x, y types.MetricPoint) bool {
 				return x.Labels[types.LabelUPSName] < y.Labels[types.LabelUPSName]

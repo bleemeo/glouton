@@ -68,7 +68,7 @@ func TestPrioritizeAndFilterMetrics(t *testing.T) {
 		HighPriority bool
 	}{
 		{"cpu_used", true},
-		{"cassandra_status", false},
+		{"service_status", false},
 		{"io_utilization", true},
 		{"nginx_requests", false},
 		{"mem_used", true},
@@ -502,14 +502,14 @@ func Test_metricComparator_importanceWeight(t *testing.T) {
 		{
 			name:         "high cardinality after status",
 			format:       types.MetricFormatBleemeo,
-			metricBefore: `__name__="apache_status"`,
+			metricBefore: `__name__="service_status"`,
 			metricAfter:  `__name__="net_bits_recv",item="tap150"`,
 		},
 		{
 			name:         "good item before status",
 			format:       types.MetricFormatBleemeo,
 			metricBefore: `__name__="net_bits_recv",item="eth0"`,
-			metricAfter:  `__name__="apache_status"`,
+			metricAfter:  `__name__="service_status"`,
 		},
 		{
 			name:         "high cardinality before custom",
@@ -1443,7 +1443,7 @@ func TestMetricLongItem(t *testing.T) {
 	}
 
 	metrics := helper.MetricsFromAPI()
-	// agent_status + the two redis_status metrics
+	// agent_status + the two service_status metrics
 	if len(metrics) != 3 {
 		t.Errorf("len(metrics) = %v, want %v", len(metrics), 3)
 	}

@@ -457,7 +457,7 @@ func (s *Synchronizer) excludeUnregistrableMetrics(metrics []types.Metric) []typ
 		annotations := metric.Annotations()
 
 		// Exclude metrics with a missing container dependency.
-		if annotations.ContainerID != "" && (cfg.DockerIntegration || !common.IsServiceCheckMetric(metric.Labels(), metric.Annotations())) {
+		if annotations.ContainerID != "" && !common.IgnoreContainer(cfg, metric.Labels()) {
 			_, ok := containersByContainerID[annotations.ContainerID]
 			if !ok {
 				continue
@@ -1305,7 +1305,7 @@ func (s *Synchronizer) prepareMetricPayload(
 		return payload, errRetryLater
 	}
 
-	if annotations.ContainerID != "" && (cfg.DockerIntegration || !common.IsServiceCheckMetric(metric.Labels(), metric.Annotations())) {
+	if annotations.ContainerID != "" && !common.IgnoreContainer(cfg, metric.Labels()) {
 		container, ok := containersByContainerID[annotations.ContainerID]
 		if !ok {
 			// No error. When container get registered we trigger a metric synchronization.

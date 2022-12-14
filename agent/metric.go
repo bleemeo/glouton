@@ -39,6 +39,7 @@ import (
 var (
 	commonDefaultSystemMetrics = []string{
 		"agent_status",
+		types.MetricServiceStatus,
 		"system_pending_updates",
 		"system_pending_security_updates",
 		"time_drift",
@@ -248,7 +249,6 @@ var (
 	// Input metrics that are not associated to a service.
 	inputMetrics = []string{
 		// SMART
-		"smart_status",
 		"smart_device_exit_status",
 		"smart_device_health_ok",
 		"smart_device_media_wearout_indicator",
@@ -295,7 +295,6 @@ var (
 			"apache_idle_workers",
 			"apache_max_workers",
 			"apache_requests",
-			"apache_status",
 			"apache_uptime",
 			"apache_scoreboard_waiting",
 			"apache_scoreboard_starting",
@@ -326,7 +325,6 @@ var (
 			"bitbucket_queued_request_time",
 			"bitbucket_queued_requests",
 			"bitbucket_queued_ssh_connections",
-			"bitbucket_status",
 			"bitbucket_tasks",
 		},
 
@@ -340,7 +338,6 @@ var (
 			"cassandra_read_requests",
 			"cassandra_read_time",
 			"cassandra_sstable",
-			"cassandra_status",
 			"cassandra_write_requests",
 			"cassandra_write_time",
 			"cassandra_bloom_filter_false_ratio",
@@ -364,23 +361,9 @@ var (
 			"confluence_queued_mails",
 			"confluence_queued_request_time",
 			"confluence_queued_requests",
-			"confluence_status",
-		},
-
-		discovery.BindService: {
-			"bind_status",
-		},
-
-		discovery.DovecotService: {
-			"dovecot_status",
-		},
-
-		discovery.EjabberService: {
-			"ejabberd_status",
 		},
 
 		discovery.ElasticSearchService: {
-			"elasticsearch_status",
 			"elasticsearch_docs_count",
 			"elasticsearch_jvm_gc",
 			"elasticsearch_jvm_gc_time",
@@ -395,18 +378,15 @@ var (
 		},
 
 		discovery.EximService: {
-			"exim_status",
 			"exim_queue_size",
 		},
 
 		discovery.Fail2banService: {
-			"fail2ban_status",
 			"fail2ban_failed",
 			"fail2ban_banned",
 		},
 
 		discovery.HAProxyService: {
-			"haproxy_status",
 			"haproxy_act",
 			"haproxy_bin",
 			"haproxy_bout",
@@ -424,11 +404,6 @@ var (
 			"haproxy_stot",
 			"haproxy_ttime",
 		},
-
-		discovery.InfluxDBService: {
-			"influxdb_status",
-		},
-
 		discovery.JenkinsService: {
 			"jenkins_busy_executors",
 			"jenkins_total_executors",
@@ -445,7 +420,6 @@ var (
 			"jira_jvm_non_heap_used",
 			"jira_queued_request_time",
 			"jira_queued_requests",
-			"jira_status",
 		},
 
 		discovery.KafkaService: {
@@ -457,7 +431,6 @@ var (
 		},
 
 		discovery.MemcachedService: {
-			"memcached_status",
 			"memcached_command_get",
 			"memcached_command_set",
 			"memcached_connections_current",
@@ -483,7 +456,6 @@ var (
 		},
 
 		discovery.MongoDBService: {
-			"mongodb_status",
 			"mongodb_open_connections",
 			"mongodb_net_in_bytes",
 			"mongodb_net_out_bytes",
@@ -494,12 +466,7 @@ var (
 			"mongodb_queries",
 		},
 
-		discovery.MosquittoService: {
-			"mosquitto_status", //nolint:misspell
-		},
-
 		discovery.MySQLService: {
-			"mysql_status",
 			"mysql_cache_result_qcache_hits",
 			"mysql_cache_result_qcache_inserts",
 			"mysql_cache_result_qcache_not_cached",
@@ -589,7 +556,6 @@ var (
 		},
 
 		discovery.NatsService: {
-			"nats_status",
 			"nats_uptime_seconds",
 			"nats_routes",
 			"nats_slow_consumers",
@@ -610,7 +576,6 @@ var (
 		},
 
 		discovery.NginxService: {
-			"nginx_status",
 			"nginx_requests",
 			"nginx_connections_accepted",
 			"nginx_connections_handled",
@@ -620,12 +585,7 @@ var (
 			"nginx_connections_writing",
 		},
 
-		discovery.NTPService: {
-			"ntp_status",
-		},
-
 		discovery.OpenLDAPService: {
-			"openldap_status",
 			"openldap_connections_current",
 			"openldap_waiters_read",
 			"openldap_waiters_write",
@@ -639,12 +599,7 @@ var (
 			"openldap_operations_search_completed",
 		},
 
-		discovery.OpenVPNService: {
-			"openvpn_status",
-		},
-
 		discovery.PHPFPMService: {
-			"phpfpm_status",
 			"phpfpm_accepted_conn",
 			"phpfpm_active_processes",
 			"phpfpm_idle_processes",
@@ -659,12 +614,10 @@ var (
 		},
 
 		discovery.PostfixService: {
-			"postfix_status",
 			"postfix_queue_size",
 		},
 
 		discovery.PostgreSQLService: {
-			"postgresql_status",
 			"postgresql_blk_read_time",
 			"postgresql_blk_read_time_sum",
 			"postgresql_blk_write_time",
@@ -694,7 +647,6 @@ var (
 		},
 
 		discovery.RabbitMQService: {
-			"rabbitmq_status",
 			"rabbitmq_connections",
 			"rabbitmq_consumers",
 			"rabbitmq_messages_acked",
@@ -706,7 +658,6 @@ var (
 		},
 
 		discovery.RedisService: {
-			"redis_status",
 			"redis_current_connections_clients",
 			"redis_current_connections_slaves",
 			"redis_evicted_keys",
@@ -726,16 +677,7 @@ var (
 			"redis_volatile_changes",
 		},
 
-		discovery.SaltMasterService: {
-			"salt_status",
-		},
-
-		discovery.SquidService: {
-			"squid3_status",
-		},
-
 		discovery.UPSDService: {
-			"upsd_status",
 			"upsd_battery_status",
 			"upsd_status_flags",
 			"upsd_battery_voltage",
@@ -750,7 +692,6 @@ var (
 		},
 
 		discovery.UWSGIService: {
-			"uwsgi_status",
 			"uwsgi_requests",
 			"uwsgi_transmitted",
 			"uwsgi_avg_request_time",
@@ -759,12 +700,7 @@ var (
 			"uwsgi_harakiri_count",
 		},
 
-		discovery.VarnishService: {
-			"varnish_status",
-		},
-
 		discovery.ZookeeperService: {
-			"zookeeper_status",
 			"zookeeper_connections",
 			"zookeeper_packets_received",
 			"zookeeper_packets_sent",
@@ -1250,15 +1186,6 @@ func (m *metricFilter) rebuildServicesMetrics(allowList map[string]matcher.Match
 
 			allowList[metricName] = matchers
 		}
-
-		matchers, err := matcher.NormalizeMetric(service.Name + "_status")
-		if err != nil {
-			errors = append(errors, err)
-
-			continue
-		}
-
-		allowList[service.Name+"_status"] = matchers
 	}
 
 	if m.includeDefaultMetrics {

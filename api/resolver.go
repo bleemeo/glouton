@@ -314,7 +314,7 @@ func (r *queryResolver) Services(ctx context.Context, isActive bool) ([]*Service
 				Active:          service.Active,
 			}
 
-			metrics, err := r.api.DB.Metrics(map[string]string{types.LabelName: service.Name + "_status"})
+			metrics, err := r.api.DB.Metrics(map[string]string{types.LabelName: types.MetricServiceStatus, types.LabelService: service.Name, types.LabelServiceInstance: service.Instance})
 			if err != nil {
 				logger.V(2).Printf("Can not retrieve services: %v", err)
 
