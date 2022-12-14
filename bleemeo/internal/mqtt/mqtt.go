@@ -664,11 +664,13 @@ func (c *Client) preparePoints(
 			payload.Status = p.Annotations.Status.CurrentStatus.String()
 			payload.StatusDescription = p.Annotations.Status.StatusDescription
 
+			// Add a 5 minutes grace period after a container was killed.
+			// This should prevent notifications when running "docker compose up -d --pull always".
 			if p.Annotations.ContainerID != "" {
 				lastKilledAt := c.opts.Docker.ContainerLastKill(p.Annotations.ContainerID)
-				gracePeriod := time.Since(lastKilledAt) + 300*time.Second
+				gracePeriod := 5*time.Minute - time.Since(lastKilledAt)
 
-				if gracePeriod > 60*time.Second {
+				if gracePeriod > 0 {
 					payload.EventGracePeriod = int(gracePeriod.Seconds())
 				}
 			}

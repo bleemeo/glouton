@@ -175,7 +175,9 @@ func mockClient(t *testing.T) *Client {
 	return c
 }
 
-func TestMQTT(t *testing.T) {
+// TestMQTTPointOrder verifies that point are sent in the right order when an
+// inactive metric becomes active.
+func TestMQTTPointOrder(t *testing.T) {
 	t.Parallel()
 
 	const metricID = "test-metric"
