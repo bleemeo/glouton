@@ -1844,6 +1844,18 @@ func TestServiceStatusRename(t *testing.T) {
 				if diff := cmp.Diff(want1, metrics); diff != "" {
 					t.Errorf("metrics mismatch (-want +got):\n%s", diff)
 				}
+
+				helper.store.DropAllMetrics()
+				helper.SetTimeToNextFullSync()
+			}
+
+			// Newer agent no longer allow apache_status & nginx_status by default.
+			helper.s.option.IsMetricAllowed = func(lbls map[string]string) bool {
+				if lbls[types.LabelName] == "apache_status" || lbls[types.LabelName] == "nginx_status" {
+					return false
+				}
+
+				return true
 			}
 
 			if run > 0 {
@@ -1854,12 +1866,7 @@ func TestServiceStatusRename(t *testing.T) {
 				helper.SetCacheMetrics(want1...)
 			}
 
-			helper.SetTimeToNextFullSync()
 			helper.pushPoints(t, []labels.Labels{
-				labels.New(
-					labels.Label{Name: types.LabelName, Value: "service_status"},
-					labels.Label{Name: types.LabelService, Value: "apache"},
-				),
 				labels.New(
 					labels.Label{Name: types.LabelName, Value: "service_status"},
 					labels.Label{Name: types.LabelService, Value: "nginx"},
@@ -1886,9 +1893,9 @@ func TestServiceStatusRename(t *testing.T) {
 					Metric: bleemeoTypes.Metric{
 						ID:         "2",
 						AgentID:    testAgent.ID,
-						LabelsText: `__name__="service_status",service="apache"`,
+						LabelsText: "",
 					},
-					Name: "service_status",
+					Name: "apache_status",
 				},
 				{
 					Metric: bleemeoTypes.Metric{
@@ -1903,6 +1910,52 @@ func TestServiceStatusRename(t *testing.T) {
 			metrics := helper.MetricsFromAPI()
 
 			if diff := cmp.Diff(want2, metrics); diff != "" {
+				t.Errorf("metrics mismatch (-want +got):\n%s", diff)
+			}
+
+			helper.pushPoints(t, []labels.Labels{
+				labels.New(
+					labels.Label{Name: types.LabelName, Value: "service_status"},
+					labels.Label{Name: types.LabelService, Value: "apache"},
+				),
+			})
+
+			if err := helper.runOnceWithResult(t).Check(); err != nil {
+				t.Error(err)
+			}
+
+			helper.AddTime(1 * time.Minute)
+
+			want3 := []metricPayload{
+				{
+					Metric: bleemeoTypes.Metric{
+						ID:         "1",
+						AgentID:    testAgent.ID,
+						LabelsText: "",
+					},
+					Name: agentStatusName,
+				},
+				{
+					Metric: bleemeoTypes.Metric{
+						ID:         "2",
+						AgentID:    testAgent.ID,
+						LabelsText: `__name__="service_status",service="apache"`,
+					},
+					Name: "service_status",
+				},
+				{
+					Metric: bleemeoTypes.Metric{
+						ID:         "3",
+						AgentID:    testAgent.ID,
+						LabelsText: `__name__="service_status",service="nginx",service_instance="container1"`,
+					},
+					Name: "service_status",
+				},
+			}
+
+			metrics = helper.MetricsFromAPI()
+
+			if diff := cmp.Diff(want3, metrics); diff != "" {
 				t.Errorf("metrics mismatch (-want +got):\n%s", diff)
 			}
 		})
