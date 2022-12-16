@@ -180,10 +180,22 @@ func mockClient(t *testing.T) *Client {
 func TestMQTTPointOrder(t *testing.T) {
 	t.Parallel()
 
-	const metricID = "test-metric"
+	// - metric1 is inactive at t0 and t1, active after t2
+	// - metric2 is always active
+	const (
+		metric1ID = "test-metric-1"
+		metric2ID = "test-metric-2"
+	)
 
-	metricLabels := map[string]string{
-		types.LabelName:         "cpu_used",
+	metric1Labels := map[string]string{
+		types.LabelName:         "container_cpu_used",
+		types.LabelItem:         "inactive-then-active",
+		types.LabelInstanceUUID: agentID,
+	}
+
+	metric2Labels := map[string]string{
+		types.LabelName:         "container_cpu_used",
+		types.LabelItem:         "always-active",
 		types.LabelInstanceUUID: agentID,
 	}
 
@@ -193,25 +205,42 @@ func TestMQTTPointOrder(t *testing.T) {
 	t2 := time.Date(2022, time.December, 14, 11, 0, 20, 0, time.UTC)
 	t3 := time.Date(2022, time.December, 14, 11, 0, 30, 0, time.UTC)
 
-	// Set metric inactive.
+	// Set metric1 inactive and metric2 active.
 	client.opts.Cache.SetMetrics([]bleemeoTypes.Metric{
 		{
-			ID:            metricID,
-			Labels:        metricLabels,
-			LabelsText:    types.LabelsToText(metricLabels),
+			ID:            metric1ID,
+			Labels:        metric1Labels,
+			LabelsText:    types.LabelsToText(metric1Labels),
 			AgentID:       agentID,
 			DeactivatedAt: t0,
 		},
+		{
+			ID:            metric2ID,
+			Labels:        metric2Labels,
+			LabelsText:    types.LabelsToText(metric2Labels),
+			AgentID:       agentID,
+			DeactivatedAt: time.Time{},
+		},
 	})
 
-	// Send a point at t0.
-	// It should be added to the failed points because the metric is inactive.
+	// Send point at t0.
+	// metric1 should be added to the failed points because the metric is inactive.
+	// metric2 should be published.
 	points := []types.MetricPoint{
 		{
 			Point: types.Point{
 				Time: t0,
 			},
-			Labels: metricLabels,
+			Labels: metric1Labels,
+			Annotations: types.MetricAnnotations{
+				BleemeoAgentID: agentID,
+			},
+		},
+		{
+			Point: types.Point{
+				Time: t0,
+			},
+			Labels: metric2Labels,
 			Annotations: types.MetricAnnotations{
 				BleemeoAgentID: agentID,
 			},
@@ -222,13 +251,23 @@ func TestMQTTPointOrder(t *testing.T) {
 	client.sendPoints()
 
 	// Send a point at t1.
-	// It should be added to the failed points because the metric is inactive.
+	// metric1 should be added to the failed points because the metric is inactive.
+	// metric2 should be published.
 	points = []types.MetricPoint{
 		{
 			Point: types.Point{
 				Time: t1,
 			},
-			Labels: metricLabels,
+			Labels: metric1Labels,
+			Annotations: types.MetricAnnotations{
+				BleemeoAgentID: agentID,
+			},
+		},
+		{
+			Point: types.Point{
+				Time: t1,
+			},
+			Labels: metric2Labels,
 			Annotations: types.MetricAnnotations{
 				BleemeoAgentID: agentID,
 			},
@@ -238,25 +277,42 @@ func TestMQTTPointOrder(t *testing.T) {
 	client.addPoints(points)
 	client.sendPoints()
 
-	// Set metric active.
+	// Set metric1 active.
 	client.opts.Cache.SetMetrics([]bleemeoTypes.Metric{
 		{
-			ID:            metricID,
-			Labels:        metricLabels,
-			LabelsText:    types.LabelsToText(metricLabels),
+			ID:            metric1ID,
+			Labels:        metric1Labels,
+			LabelsText:    types.LabelsToText(metric1Labels),
+			AgentID:       agentID,
+			DeactivatedAt: time.Time{},
+		},
+		{
+			ID:            metric2ID,
+			Labels:        metric2Labels,
+			LabelsText:    types.LabelsToText(metric2Labels),
 			AgentID:       agentID,
 			DeactivatedAt: time.Time{},
 		},
 	})
 
 	// Send a point at t2.
-	// It should be added to the failed points because the previous points failed.
+	// metric1 should be added to the failed points because the previous points failed.
+	// metric2 should be published.
 	points = []types.MetricPoint{
 		{
 			Point: types.Point{
 				Time: t2,
 			},
-			Labels: metricLabels,
+			Labels: metric1Labels,
+			Annotations: types.MetricAnnotations{
+				BleemeoAgentID: agentID,
+			},
+		},
+		{
+			Point: types.Point{
+				Time: t2,
+			},
+			Labels: metric2Labels,
 			Annotations: types.MetricAnnotations{
 				BleemeoAgentID: agentID,
 			},
@@ -266,23 +322,33 @@ func TestMQTTPointOrder(t *testing.T) {
 	client.addPoints(points)
 	client.sendPoints()
 
-	// Verify that no points were published.
+	// Verify that the points from metric2 were published (one point at t0, t1 and t2).
 	mqtt, _ := client.mqtt.(*mockMQTTClient)
-	if len(mqtt.publishedPoints) > 0 {
-		t.Fatal("A point was sent too soon")
+	if len(mqtt.publishedPoints) != 3 {
+		t.Fatalf("Expected 3 points published, got %d", len(mqtt.publishedPoints))
 	}
 
 	// Force client to retry failed points.
 	client.lastFailedPointsRetry = time.Time{}
 
 	// Send a point at t3.
-	// It should not be added to the failed points since the failed points should be empty.
+	// metric1 should be published since the failed points should be empty.
+	// metric2 should be published.
 	points = []types.MetricPoint{
 		{
 			Point: types.Point{
 				Time: t3,
 			},
-			Labels: metricLabels,
+			Labels: metric1Labels,
+			Annotations: types.MetricAnnotations{
+				BleemeoAgentID: agentID,
+			},
+		},
+		{
+			Point: types.Point{
+				Time: t3,
+			},
+			Labels: metric2Labels,
 			Annotations: types.MetricAnnotations{
 				BleemeoAgentID: agentID,
 			},
@@ -292,20 +358,20 @@ func TestMQTTPointOrder(t *testing.T) {
 	client.addPoints(points)
 	client.sendPoints()
 
-	if len(mqtt.publishedPoints) != 4 {
-		t.Fatalf("Expected 4 points published, got %d", len(mqtt.publishedPoints))
+	if len(mqtt.publishedPoints) != 8 {
+		t.Fatalf("Expected 8 points published, got %d", len(mqtt.publishedPoints))
 	}
 
 	// Verify that the points are ordered correctly.
-	lastTimestamp := int64(0)
+	lastTimestampByLabels := make(map[string]int64)
 	for _, metric := range mqtt.publishedPoints {
-		if metric.TimestampMS < lastTimestamp {
+		if metric.TimestampMS < lastTimestampByLabels[metric.LabelsText] {
 			t.Fatalf(
 				"Published points are not ordered, point with timestamp %s received before timestamp %s",
-				time.UnixMilli(lastTimestamp), time.UnixMilli(metric.TimestampMS),
+				time.UnixMilli(lastTimestampByLabels[metric.LabelsText]), time.UnixMilli(metric.TimestampMS),
 			)
 		}
 
-		lastTimestamp = metric.TimestampMS
+		lastTimestampByLabels[metric.LabelsText] = metric.TimestampMS
 	}
 }

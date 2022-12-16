@@ -670,7 +670,9 @@ func (c *Client) preparePoints(
 				lastKilledAt := c.opts.Docker.ContainerLastKill(p.Annotations.ContainerID)
 				gracePeriod := 5*time.Minute - time.Since(lastKilledAt)
 
-				if gracePeriod > 0 {
+				// Ignore grace period shorter than 1 minute. Without an explicit
+				// grace period, a default of 1 minute will be used.
+				if gracePeriod > time.Minute {
 					payload.EventGracePeriod = int(gracePeriod.Seconds())
 				}
 			}
