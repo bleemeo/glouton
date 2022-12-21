@@ -9,6 +9,7 @@ import (
 	"github.com/knadh/koanf/providers/confmap"
 	"github.com/knadh/koanf/providers/env"
 	"github.com/knadh/koanf/providers/file"
+	"github.com/mitchellh/mapstructure"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -44,14 +45,12 @@ const (
 
 // Load config from a provider and add source information on config items.
 func (c *configLoader) Load(path string, kProvider koanf.Provider, parser koanf.Parser) error {
-	k := koanf.New(delimiter)
+	provider := providerType(kProvider)
 
-	err := k.Load(kProvider, parser)
+	k, err := typedConfig(kProvider, parser)
 	if err != nil {
 		return err
 	}
-
-	provider := providerType(kProvider)
 
 	for key, value := range k.All() {
 		priority := c.priority(provider, key, value)
@@ -98,6 +97,71 @@ func (c *configLoader) Load(path string, kProvider koanf.Provider, parser koanf.
 	}
 
 	return nil
+}
+
+// typedConfig loads config from the given provider and does type conversions when needed.
+// For details about the type conversions, see the DecodeHook below and mapstructure WeaklyTypedInput.
+func typedConfig(kProvider koanf.Provider, parser koanf.Parser) (*koanf.Koanf, error) {
+	// Unmarshal base config to do all needed type conversions.
+	baseKoanf := koanf.New(delimiter)
+
+	err := baseKoanf.Load(kProvider, parser)
+	if err != nil {
+		return nil, err
+	}
+
+	var config Config
+
+	// We need to use the "yaml" tag instead of the default "koanf" tag because
+	// the config embeds the blackbox module config which uses YAML.
+	unmarshalConf := koanf.UnmarshalConf{
+		DecoderConfig: &mapstructure.DecoderConfig{
+			DecodeHook: mapstructure.ComposeDecodeHookFunc(
+				mapstructure.StringToTimeDurationHookFunc(),
+				mapstructure.StringToSliceHookFunc(","),
+				mapstructure.TextUnmarshallerHookFunc(),
+				blackboxModuleHookFunc(),
+				stringToMapHookFunc(),
+				stringToBoolHookFunc(),
+			),
+			Metadata:         nil,
+			ErrorUnused:      true,
+			Result:           &config,
+			WeaklyTypedInput: true,
+		},
+		Tag: Tag,
+	}
+
+	err = baseKoanf.UnmarshalWithConf("", &config, unmarshalConf)
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert the structured configuration back to a koanf.
+	typedKoanf := koanf.New(delimiter)
+
+	err = typedKoanf.Load(newStructsProvider(config, Tag), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	// Use another koanf to remove keys that were not set in the given config.
+	cleanKeys := typedKoanf.All()
+	baseKeys := baseKoanf.All()
+
+	for key := range cleanKeys {
+		if _, ok := baseKeys[key]; !ok {
+			delete(cleanKeys, key)
+		}
+	}
+
+	cleanKoanf := koanf.New(delimiter)
+	err = cleanKoanf.Load(confmap.Provider(cleanKeys, delimiter), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return cleanKoanf, nil
 }
 
 // priority returns the priority for a provider and a config key value.

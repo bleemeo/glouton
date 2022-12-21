@@ -73,6 +73,7 @@ func loadToStruct(withDefault bool, paths ...string) (Config, prometheus.MultiEr
 
 	var config Config
 
+	// TODO: this could be removed? or at least deduplicated with the loader unmarshal.
 	// We need to use the "yaml" tag instead of the default "koanf" tag because
 	// the config embeds the blackbox module config which uses YAML.
 	unmarshalConf := koanf.UnmarshalConf{
