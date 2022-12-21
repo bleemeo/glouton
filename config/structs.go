@@ -25,20 +25,20 @@ import (
 
 var errNotSupported = errors.New("structs provider does not support this method")
 
-// provider implements a structs provider.
-type provider struct {
+// structsProvider implements a structs structsProvider.
+type structsProvider struct {
 	s   interface{}
 	tag string
 }
 
 // Provider returns a provider that takes a  takes a struct and a struct tag
 // and uses structs to parse and provide it to koanf.
-func structsProvider(s interface{}, tag string) *provider {
-	return &provider{s: s, tag: tag}
+func newStructsProvider(s interface{}, tag string) *structsProvider {
+	return &structsProvider{s: s, tag: tag}
 }
 
 // Read reads the struct and returns a nested config map.
-func (s *provider) Read() (map[string]interface{}, error) {
+func (s *structsProvider) Read() (map[string]interface{}, error) {
 	ns := structs.New(s.s)
 	ns.TagName = s.tag
 
@@ -63,11 +63,11 @@ func (s *provider) Read() (map[string]interface{}, error) {
 }
 
 // ReadBytes is not supported by the structs provider.
-func (s *provider) ReadBytes() ([]byte, error) {
+func (s *structsProvider) ReadBytes() ([]byte, error) {
 	return nil, errNotSupported
 }
 
 // Watch is not supported by the structs provider.
-func (s *provider) Watch(cb func(event interface{}, err error)) error {
+func (s *structsProvider) Watch(cb func(event interface{}, err error)) error {
 	return errNotSupported
 }

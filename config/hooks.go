@@ -61,27 +61,40 @@ func stringToMapHookFunc() mapstructure.DecodeHookFuncType {
 
 		strMap, _ := data.(string)
 
-		result := make(map[string]interface{})
+		return parseMap(strMap)
+	}
+}
 
-		elementsList := strings.Split(strMap, ",")
-		for i, element := range elementsList {
-			values := strings.Split(element, "=")
+// parseMap parses a map from a string.
+// It assumes the following format: "k1=v1,k2=v2".
+func parseMap(strMap string) (map[string]interface{}, error) {
+	// keyValues = ["k1=v1", "k2=v2"]
+	keyValues := strings.Split(strMap, ",")
+	result := make(map[string]interface{}, len(keyValues))
 
-			if i == len(elementsList)-1 && element == "" {
-				return result, nil
-			}
+	for _, keyValue := range keyValues {
+		// keyValue = "k1=v1"
+		values := strings.Split(keyValue, "=")
 
-			if len(values) < 2 {
-				err := fmt.Errorf("%w: '%s'", errWrongMapFormat, strMap)
+		if len(values) < 2 {
+			err := fmt.Errorf("%w: '%s'", errWrongMapFormat, strMap)
 
-				return make(map[string]interface{}), err
-			}
-
-			result[strings.TrimLeft(values[0], " ")] = strings.TrimRight(strings.Join(values[1:], "="), " ")
+			return make(map[string]interface{}), err
 		}
 
-		return result, nil
+		// Handle case where the string ends with a ','.
+		if keyValue == "" {
+			continue
+		}
+
+		// Remove spaces before and after the values.
+		key := strings.Trim(values[0], " ")
+		value := strings.Trim(strings.Join(values[1:], "="), " ")
+
+		result[key] = value
 	}
+
+	return result, nil
 }
 
 // stringToBoolHookFunc converts strings to bool.
