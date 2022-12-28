@@ -9,6 +9,7 @@ import (
 	"github.com/knadh/koanf/providers/confmap"
 	"github.com/knadh/koanf/providers/env"
 	"github.com/knadh/koanf/providers/file"
+	"github.com/knadh/koanf/providers/structs"
 	"github.com/mitchellh/mapstructure"
 	"github.com/prometheus/client_golang/prometheus"
 )
@@ -47,48 +48,16 @@ const (
 func (c *configLoader) Load(path string, kProvider koanf.Provider, parser koanf.Parser) error {
 	provider := providerType(kProvider)
 
-	k, err := typedConfig(kProvider, parser)
+	config, err := typedConfig(kProvider, parser)
 	if err != nil {
 		return err
 	}
 
-	for key, value := range k.All() {
+	for key, value := range config {
 		priority := c.priority(provider, key, value)
-
-		// Skip map config values, they are added separately.
-		// Koanf gives us keys like "thresholds.mymetric.low_warning", but this leads
-		// to errors because the key doesn't really exist, we want to keep only the key "thresholds".
-		if isMapKey(key) {
-			continue
-		}
 
 		c.items = append(c.items, item{
 			Key:      key,
-			Value:    value,
-			Source:   provider,
-			Path:     path,
-			Priority: priority,
-		})
-	}
-
-	// Add map values that were skipped.
-	for _, mapKey := range mapKeys() {
-		value := k.Get(mapKey)
-		if value == nil {
-			continue
-		}
-
-		if valueStr, ok := value.(string); ok {
-			value, err = parseMap(valueStr)
-			if err != nil {
-				return fmt.Errorf("error decoding '%s': %w", mapKey, err)
-			}
-		}
-
-		priority := c.priority(provider, mapKey, value)
-
-		c.items = append(c.items, item{
-			Key:      mapKey,
 			Value:    value,
 			Source:   provider,
 			Path:     path,
@@ -101,7 +70,7 @@ func (c *configLoader) Load(path string, kProvider koanf.Provider, parser koanf.
 
 // typedConfig loads config from the given provider and does type conversions when needed.
 // For details about the type conversions, see the DecodeHook below and mapstructure WeaklyTypedInput.
-func typedConfig(kProvider koanf.Provider, parser koanf.Parser) (*koanf.Koanf, error) {
+func typedConfig(kProvider koanf.Provider, parser koanf.Parser) (map[string]interface{}, error) {
 	// Unmarshal base config to do all needed type conversions.
 	baseKoanf := koanf.New(delimiter)
 
@@ -140,14 +109,14 @@ func typedConfig(kProvider koanf.Provider, parser koanf.Parser) (*koanf.Koanf, e
 	// Convert the structured configuration back to a koanf.
 	typedKoanf := koanf.New(delimiter)
 
-	err = typedKoanf.Load(newStructsProvider(config, Tag), nil)
+	err = typedKoanf.Load(structs.ProviderWithDelim(config, Tag, delimiter), nil)
 	if err != nil {
 		return nil, err
 	}
 
 	// Use another koanf to remove keys that were not set in the given config.
-	cleanKeys := typedKoanf.All()
-	baseKeys := baseKoanf.All()
+	cleanKeys := allKeys(typedKoanf)
+	baseKeys := allKeys(baseKoanf)
 
 	for key := range cleanKeys {
 		if _, ok := baseKeys[key]; !ok {
@@ -155,13 +124,25 @@ func typedConfig(kProvider koanf.Provider, parser koanf.Parser) (*koanf.Koanf, e
 		}
 	}
 
-	cleanKoanf := koanf.New(delimiter)
-	err = cleanKoanf.Load(confmap.Provider(cleanKeys, delimiter), nil)
-	if err != nil {
-		return nil, err
+	return cleanKeys, nil
+}
+
+// allKeys returns all keys from the koanf.
+// Map keys are fixed: instead of returning map keys separately
+// ("metric.softstatus_period.cpu_used",  "metric.softstatus_period.disk_used"),
+// return a single key per map ("metric.softstatus_period").
+func allKeys(k *koanf.Koanf) map[string]interface{} {
+	all := k.All()
+
+	for key := range all {
+		if isMap, mapKey := isMapKey(key); isMap {
+			delete(all, key)
+
+			all[mapKey] = k.Get(mapKey)
+		}
 	}
 
-	return cleanKoanf, nil
+	return all
 }
 
 // priority returns the priority for a provider and a config key value.
@@ -186,7 +167,7 @@ func (c *configLoader) priority(provider source, key string, value interface{}) 
 		}
 
 		// Map in files all have the same priority because they are merged.
-		if isMapKey(key) {
+		if isMap, _ := isMapKey(key); isMap {
 			return priorityMapAndArrayFile
 		}
 
@@ -217,26 +198,30 @@ func providerType(provider koanf.Provider) source {
 // mapKeys returns the config keys that hold map values.
 func mapKeys() []string {
 	// TODO: this could be generated from the default config.
-	return []string{"thresholds", "metric.softstatus_period"}
+	return []string{
+		"thresholds",
+		"metric.softstatus_period",
+		"influxdb.tags",
+	}
 }
 
-// isMapKey returns true if the config key represents a map value.
-// For instance: isMapKey("thresholds.cpu_used.low_warning") -> true
-func isMapKey(key string) bool {
+// isMapKey returns true if the config key represents a map value, and the map key.
+// For instance: isMapKey("thresholds.cpu_used.low_warning") -> (true, "thresholds")
+func isMapKey(key string) (bool, string) {
 	// TODO: don't hardcode this, use the default config to know the type.
 	// Special case for "softstatus_period_default" which
 	// has the same prefix as "softstatus_period".
 	if key == "metric.softstatus_period_default" {
-		return false
+		return false, ""
 	}
 
 	for _, mapKey := range mapKeys() {
 		if strings.HasPrefix(key, mapKey) {
-			return true
+			return true, mapKey
 		}
 	}
 
-	return false
+	return false, ""
 }
 
 // Build the configuration from the loaded items.
