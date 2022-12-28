@@ -10,7 +10,7 @@ import (
 )
 
 // Test that conversion hooks are correctly applied in the loader.
-func TestLoaderHooks(t *testing.T) {
+func TestHooksLoader(t *testing.T) {
 	loader := configLoader{}
 
 	err := loader.Load("", file.Provider("testdata/loader_hooks.conf"), yamlParser.Parser())
@@ -23,7 +23,7 @@ func TestLoaderHooks(t *testing.T) {
 			Key:      "bleemeo.enable",
 			Value:    true,
 			Source:   "file",
-			Priority: 0,
+			Priority: 1,
 		},
 		{
 			Key: "metric.softstatus_period",

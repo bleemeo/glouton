@@ -104,18 +104,19 @@ func loadToStruct(withDefault bool, paths ...string) (Config, prometheus.MultiEr
 func load(withDefault bool, paths ...string) (*koanf.Koanf, prometheus.MultiError, error) {
 	loader := &configLoader{}
 
-	fileEnvKoanf, warnings, errors := loadPaths(loader, paths)
+	warnings, errors := loadPaths(loader, paths)
 
-	fileEnvKoanf, moreWarnings := migrate(fileEnvKoanf)
-	if moreWarnings != nil {
-		warnings = append(warnings, moreWarnings...)
-	}
+	// TODO: remove
+	// fileEnvKoanf, moreWarnings := migrate(fileEnvKoanf)
+	// if moreWarnings != nil {
+	// 	warnings = append(warnings, moreWarnings...)
+	// }
 
 	// Load config from environment variables.
 	// The warnings are filled only after k.Load is called.
 	envToKey, envWarnings := envToKeyFunc()
 
-	moreWarnings = loader.Load("", env.Provider(deprecatedEnvPrefix, delimiter, envToKey), nil)
+	moreWarnings := loader.Load("", env.Provider(deprecatedEnvPrefix, delimiter, envToKey), nil)
 	warnings = append(warnings, moreWarnings...)
 
 	moreWarnings = loader.Load("", env.Provider(envPrefix, delimiter, envToKey), nil)
@@ -212,10 +213,8 @@ func toDeprecatedEnvKey(key string) string {
 }
 
 // loadPaths returns the config loaded from the given paths, warnings and errors.
-func loadPaths(loader *configLoader, paths []string) (*koanf.Koanf, prometheus.MultiError, prometheus.MultiError) {
+func loadPaths(loader *configLoader, paths []string) (prometheus.MultiError, prometheus.MultiError) {
 	var warnings, errors prometheus.MultiError
-
-	k := koanf.New(delimiter)
 
 	for _, path := range paths {
 		stat, err := os.Stat(path)
@@ -233,7 +232,7 @@ func loadPaths(loader *configLoader, paths []string) (*koanf.Koanf, prometheus.M
 		}
 
 		if stat.IsDir() {
-			moreWarnings, err := loadDirectory(k, loader, path)
+			moreWarnings, err := loadDirectory(loader, path)
 			errors.Append(err)
 
 			if moreWarnings != nil {
@@ -244,7 +243,7 @@ func loadPaths(loader *configLoader, paths []string) (*koanf.Koanf, prometheus.M
 				logger.V(2).Printf("config file: directory %s have ignored some files due to %v", path, err)
 			}
 		} else {
-			warning := loadFile(k, loader, path)
+			warning := loadFile(loader, path)
 			warnings = append(warnings, warning...)
 		}
 
@@ -253,10 +252,10 @@ func loadPaths(loader *configLoader, paths []string) (*koanf.Koanf, prometheus.M
 		}
 	}
 
-	return k, warnings, errors
+	return warnings, errors
 }
 
-func loadDirectory(k *koanf.Koanf, loader *configLoader, dirPath string) (prometheus.MultiError, error) {
+func loadDirectory(loader *configLoader, dirPath string) (prometheus.MultiError, error) {
 	files, err := os.ReadDir(dirPath)
 	if err != nil {
 		return nil, err
@@ -271,14 +270,14 @@ func loadDirectory(k *koanf.Koanf, loader *configLoader, dirPath string) (promet
 
 		path := filepath.Join(dirPath, f.Name())
 
-		warning := loadFile(k, loader, path)
+		warning := loadFile(loader, path)
 		warnings = append(warnings, warning...)
 	}
 
 	return warnings, nil
 }
 
-func loadFile(k *koanf.Koanf, loader *configLoader, path string) prometheus.MultiError {
+func loadFile(loader *configLoader, path string) prometheus.MultiError {
 	// Merge this file with the previous config.
 	// Overwrite values, merge maps and append slices.
 	err := loader.Load(path, file.Provider(path), yamlParser.Parser())

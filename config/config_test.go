@@ -476,7 +476,7 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 			Name:  "invalid yaml multiple files",
 			Files: []string{"testdata/invalid"},
 			WantWarnings: []string{
-				"failed to load 'testdata/invalid/10-invalid.conf': yaml: line 2: found character that cannot start any token",
+				"yaml: line 2: found character that cannot start any token",
 			},
 			WantConfig: Config{
 				Agent: Agent{
@@ -827,7 +827,7 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 				t.Fatalf("Unexpected warnings:\n%s", diff)
 			}
 
-			if diff := cmp.Diff(test.WantConfig, config); diff != "" {
+			if diff := cmp.Diff(test.WantConfig, config, cmpopts.EquateEmpty()); diff != "" {
 				t.Fatalf("Unexpected config:\n%s", diff)
 			}
 		})

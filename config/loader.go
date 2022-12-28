@@ -19,6 +19,8 @@ import (
 // configLoader loads the config from Koanf providers.
 type configLoader struct {
 	items []item
+	// Number of provider loaded, used to assign priority to items.
+	loadCount int
 }
 
 type item struct {
@@ -47,21 +49,32 @@ const (
 )
 
 // Load config from a provider and add source information on config items.
-func (c *configLoader) Load(path string, kProvider koanf.Provider, parser koanf.Parser) prometheus.MultiError {
+func (c *configLoader) Load(path string, provider koanf.Provider, parser koanf.Parser) prometheus.MultiError {
+	c.loadCount++
+
 	var warnings prometheus.MultiError
 
-	provider := providerType(kProvider)
+	providerType := providerType(provider)
 
-	config, warning := typedConfig(kProvider, parser)
-	warnings.Append(warning)
+	k := koanf.New(delimiter)
+
+	err := k.Load(provider, parser)
+	warnings.Append(err)
+
+	// Migrate old configuration keys.
+	k, moreWarnings := migrate(k)
+	warnings = append(warnings, moreWarnings...)
+
+	config, moreWarnings := typedConfig(k)
+	warnings = append(warnings, moreWarnings...)
 
 	for key, value := range config {
-		priority := c.priority(provider, key, value)
+		priority := c.priority(providerType, key, value, c.loadCount)
 
 		c.items = append(c.items, item{
 			Key:      key,
 			Value:    value,
-			Source:   provider,
+			Source:   providerType,
 			Path:     path,
 			Priority: priority,
 		})
@@ -70,18 +83,15 @@ func (c *configLoader) Load(path string, kProvider koanf.Provider, parser koanf.
 	return warnings
 }
 
-// typedConfig loads config from the given provider and does type conversions when needed.
+// typedConfig convert config keys to the right type and returns warnings.
 // For details about the type conversions, see the DecodeHook below and mapstructure WeaklyTypedInput.
-func typedConfig(kProvider koanf.Provider, parser koanf.Parser) (map[string]interface{}, error) {
-	// Unmarshal base config to do all needed type conversions.
-	baseKoanf := koanf.New(delimiter)
-
-	err := baseKoanf.Load(kProvider, parser)
-	if err != nil {
-		return nil, err
-	}
-
-	var config Config
+func typedConfig(
+	baseKoanf *koanf.Koanf,
+) (map[string]interface{}, prometheus.MultiError) {
+	var (
+		warnings prometheus.MultiError
+		config   Config
+	)
 
 	// We need to use the "yaml" tag instead of the default "koanf" tag because
 	// the config embeds the blackbox module config which uses YAML.
@@ -104,15 +114,14 @@ func typedConfig(kProvider koanf.Provider, parser koanf.Parser) (map[string]inte
 	}
 
 	// Errors returned by unmarshal are only warnings, we can keep using the config.
-	warning := baseKoanf.UnmarshalWithConf("", &config, unmarshalConf)
+	err := baseKoanf.UnmarshalWithConf("", &config, unmarshalConf)
+	warnings.Append(err)
 
 	// Convert the structured configuration back to a koanf.
 	typedKoanf := koanf.New(delimiter)
 
 	err = typedKoanf.Load(structs.ProviderWithDelim(config, Tag, delimiter), nil)
-	if err != nil {
-		return nil, err
-	}
+	warnings.Append(err)
 
 	// Use another koanf to remove keys that were not set in the given config.
 	cleanKeys := allKeys(typedKoanf)
@@ -124,7 +133,7 @@ func typedConfig(kProvider koanf.Provider, parser koanf.Parser) (map[string]inte
 		}
 	}
 
-	return cleanKeys, warning
+	return cleanKeys, warnings
 }
 
 // allKeys returns all keys from the koanf.
@@ -150,7 +159,7 @@ func allKeys(k *koanf.Koanf) map[string]interface{} {
 // When the value is a map or an array, the items may have the same priority, in
 // this case the arrays are appended to each other, and the maps are merged.
 // It panics on unknown providers.
-func (c *configLoader) priority(provider source, key string, value interface{}) int {
+func (c *configLoader) priority(provider source, key string, value interface{}, loadCount int) int {
 	const (
 		priorityDefault         = -1
 		priorityMapAndArrayFile = 1
@@ -173,7 +182,7 @@ func (c *configLoader) priority(provider source, key string, value interface{}) 
 
 		// For basic types (string, int, bool, float), the config from the
 		// last loaded file has a greater priority than the previous files.
-		return len(c.items)
+		return loadCount
 	case sourceDefault:
 		return priorityDefault
 	default:
@@ -206,7 +215,7 @@ func mapKeys() []string {
 }
 
 // isMapKey returns true if the config key represents a map value, and the map key.
-// For instance: isMapKey("thresholds.cpu_used.low_warning") -> (true, "thresholds")
+// For instance: isMapKey("thresholds.cpu_used.low_warning") -> (true, "thresholds").
 func isMapKey(key string) (bool, string) {
 	// TODO: don't hardcode this, use the default config to know the type.
 	// Special case for "softstatus_period_default" which
@@ -233,7 +242,7 @@ func (c *configLoader) Build() (*koanf.Koanf, prometheus.MultiError) {
 
 	for _, item := range c.items {
 		_, configExists := config[item.Key]
-		previousPriority, _ := priorities[item.Key]
+		previousPriority := priorities[item.Key]
 
 		switch {
 		// Higher priority items overwrite previous values.
@@ -254,10 +263,6 @@ func (c *configLoader) Build() (*koanf.Koanf, prometheus.MultiError) {
 	k := koanf.New(delimiter)
 	err := k.Load(confmap.Provider(config, delimiter), nil)
 	warnings.Append(err)
-
-	// Migrate old configuration keys.
-	k, moreWarnings := migrate(k)
-	warnings = append(warnings, moreWarnings...)
 
 	return k, warnings
 }
