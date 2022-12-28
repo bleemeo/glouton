@@ -34,6 +34,16 @@ func DefaultPaths() []string {
 	}
 }
 
+// mapKeys returns the config keys that hold map values.
+// This must be updated when a map value is added to the config.
+func mapKeys() []string {
+	return []string{
+		"thresholds",
+		"metric.softstatus_period",
+		"influxdb.tags",
+	}
+}
+
 func DefaultConfig() Config {
 	defaultBlackboxModule := bbConf.DefaultModule
 	defaultBlackboxModule.Prober = "http"

@@ -1,7 +1,6 @@
 package config
 
 import (
-	"encoding/json"
 	"fmt"
 	"math"
 	"reflect"
@@ -12,7 +11,6 @@ import (
 	"github.com/knadh/koanf/providers/env"
 	"github.com/knadh/koanf/providers/file"
 	"github.com/knadh/koanf/providers/structs"
-	"github.com/mitchellh/mapstructure"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -39,7 +37,6 @@ type item struct {
 	Priority int
 }
 
-// TODO: int enum?
 type source string
 
 const (
@@ -88,33 +85,9 @@ func (c *configLoader) Load(path string, provider koanf.Provider, parser koanf.P
 func typedConfig(
 	baseKoanf *koanf.Koanf,
 ) (map[string]interface{}, prometheus.MultiError) {
-	var (
-		warnings prometheus.MultiError
-		config   Config
-	)
+	var warnings prometheus.MultiError
 
-	// We need to use the "yaml" tag instead of the default "koanf" tag because
-	// the config embeds the blackbox module config which uses YAML.
-	unmarshalConf := koanf.UnmarshalConf{
-		DecoderConfig: &mapstructure.DecoderConfig{
-			DecodeHook: mapstructure.ComposeDecodeHookFunc(
-				mapstructure.StringToTimeDurationHookFunc(),
-				mapstructure.StringToSliceHookFunc(","),
-				mapstructure.TextUnmarshallerHookFunc(),
-				blackboxModuleHookFunc(),
-				stringToMapHookFunc(),
-				stringToBoolHookFunc(),
-			),
-			Metadata:         nil,
-			ErrorUnused:      true,
-			Result:           &config,
-			WeaklyTypedInput: true,
-		},
-		Tag: Tag,
-	}
-
-	// Errors returned by unmarshal are only warnings, we can keep using the config.
-	err := baseKoanf.UnmarshalWithConf("", &config, unmarshalConf)
+	config, err := unmarshalConfig(baseKoanf)
 	warnings.Append(err)
 
 	// Convert the structured configuration back to a koanf.
@@ -197,35 +170,20 @@ func providerType(provider koanf.Provider) source {
 		return sourceEnv
 	case *file.File:
 		return sourceFile
-	case *structsProvider:
+	case *structs.Structs:
 		return sourceDefault
 	default:
 		panic(fmt.Errorf("%w: %T", errUnsupportedProvider, provider))
 	}
 }
 
-// mapKeys returns the config keys that hold map values.
-func mapKeys() []string {
-	// TODO: this could be generated from the default config.
-	return []string{
-		"thresholds",
-		"metric.softstatus_period",
-		"influxdb.tags",
-	}
-}
-
 // isMapKey returns true if the config key represents a map value, and the map key.
 // For instance: isMapKey("thresholds.cpu_used.low_warning") -> (true, "thresholds").
 func isMapKey(key string) (bool, string) {
-	// TODO: don't hardcode this, use the default config to know the type.
-	// Special case for "softstatus_period_default" which
-	// has the same prefix as "softstatus_period".
-	if key == "metric.softstatus_period_default" {
-		return false, ""
-	}
-
 	for _, mapKey := range mapKeys() {
-		if strings.HasPrefix(key, mapKey) {
+		// For the map key "thresholds", the key corresponds to this map if the keys
+		// are equal or if it begins by the map key and a dot ("thresholds.cpu_used").
+		if key == mapKey || strings.HasPrefix(key, fmt.Sprintf("%s.", mapKey)) {
 			return true, mapKey
 		}
 	}
@@ -267,58 +225,44 @@ func (c *configLoader) Build() (*koanf.Koanf, prometheus.MultiError) {
 	return k, warnings
 }
 
-// Merge append slices and merges maps.
-func merge(dstInt interface{}, srcInt interface{}) (interface{}, error) {
-	// Convert slices to []interface{} and maps to map[string]interface{} to merge them.
-	dstInt, err := fixType(dstInt)
-	if err != nil {
-		return nil, err
-	}
-
-	srcInt, err = fixType(srcInt)
-	if err != nil {
-		return nil, err
-	}
-
-	switch dst := dstInt.(type) {
+// Merge maps and append slices.
+func merge(dst interface{}, src interface{}) (interface{}, error) {
+	switch dstType := dst.(type) {
 	case []interface{}:
-		src, ok := srcInt.([]interface{})
-		if !ok {
-			return nil, fmt.Errorf("%w: %T and %T are not compatible", errCannotMerge, srcInt, dstInt)
-		}
-
-		return append(dst, src...), nil
+		return mergeSlices(dstType, src)
+	case []string:
+		return mergeSlices(dstType, src)
 	case map[string]interface{}:
-		src, ok := srcInt.(map[string]interface{})
-		if !ok {
-			return nil, fmt.Errorf("%w: %T and %T are not compatible", errCannotMerge, srcInt, dstInt)
-		}
-
-		for key, value := range src {
-			dst[key] = value
-		}
-
-		return dst, nil
+		return mergeMaps(dstType, src)
+	case map[string]int:
+		return mergeMaps(dstType, src)
 	default:
-		// This should never happen, only map and strings can be merged.
-		return nil, fmt.Errorf("%w: unsupported type %T", errCannotMerge, dstInt)
+		return nil, fmt.Errorf("%w: unsupported type %T", errCannotMerge, dst)
 	}
 }
 
-// fixType converts slices to []interface{} and maps to map[string]interface{}.
-func fixType(v interface{}) (interface{}, error) {
-	// TODO: we could merge maps without using json.
-	marshalled, err := json.Marshal(v)
-	if err != nil {
-		return nil, err
+// mergeSlices merges two slices by appending them.
+// It returns an error if src doesn't have the same type as dst.
+func mergeSlices[T any](dst []T, src interface{}) ([]T, error) {
+	srcSlice, ok := src.([]T)
+	if !ok {
+		return nil, fmt.Errorf("%w: %T and %T are not compatible", errCannotMerge, src, dst)
 	}
 
-	var newValue interface{}
+	return append(dst, srcSlice...), nil
+}
 
-	err = json.Unmarshal(marshalled, &newValue)
-	if err != nil {
-		return nil, err
+// mergeMaps merges two maps.
+// It retursn an error if src doesn't have the same type as dst.
+func mergeMaps[T any](dst map[string]T, src interface{}) (map[string]T, error) {
+	srcMap, ok := src.(map[string]T)
+	if !ok {
+		return nil, fmt.Errorf("%w: %T and %T are not compatible", errCannotMerge, src, dst)
 	}
 
-	return newValue, nil
+	for key, value := range srcMap {
+		dst[key] = value
+	}
+
+	return dst, nil
 }

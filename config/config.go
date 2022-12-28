@@ -36,6 +36,9 @@ import (
 )
 
 const (
+	// Tag used to unmarshal the config.
+	// We need to use the "yaml" tag instead of the default "koanf" tag because
+	// the config embeds the blackbox module config which uses YAML.
 	Tag                   = "yaml"
 	EnvGloutonConfigFiles = "GLOUTON_CONFIG_FILES"
 	envPrefix             = "GLOUTON_"
@@ -71,11 +74,16 @@ func loadToStruct(withDefault bool, paths ...string) (Config, prometheus.MultiEr
 
 	k, warnings, err := load(withDefault, paths...)
 
+	config, warning := unmarshalConfig(k)
+	warnings.Append(warning)
+
+	return config, unwrapErrors(warnings), err
+}
+
+// unmarshalConfig convert a koanf to a structured config.
+func unmarshalConfig(k *koanf.Koanf) (Config, error) {
 	var config Config
 
-	// TODO: this could be removed? or at least deduplicated with the loader unmarshal.
-	// We need to use the "yaml" tag instead of the default "koanf" tag because
-	// the config embeds the blackbox module config which uses YAML.
 	unmarshalConf := koanf.UnmarshalConf{
 		DecoderConfig: &mapstructure.DecoderConfig{
 			DecodeHook: mapstructure.ComposeDecodeHookFunc(
@@ -94,10 +102,9 @@ func loadToStruct(withDefault bool, paths ...string) (Config, prometheus.MultiEr
 		Tag: Tag,
 	}
 
-	warning := k.UnmarshalWithConf("", &config, unmarshalConf)
-	warnings.Append(warning)
+	err := k.UnmarshalWithConf("", &config, unmarshalConf)
 
-	return config, unwrapErrors(warnings), err
+	return config, err
 }
 
 // load the configuration from files and directories.
@@ -105,12 +112,6 @@ func load(withDefault bool, paths ...string) (*koanf.Koanf, prometheus.MultiErro
 	loader := &configLoader{}
 
 	warnings, errors := loadPaths(loader, paths)
-
-	// TODO: remove
-	// fileEnvKoanf, moreWarnings := migrate(fileEnvKoanf)
-	// if moreWarnings != nil {
-	// 	warnings = append(warnings, moreWarnings...)
-	// }
 
 	// Load config from environment variables.
 	// The warnings are filled only after k.Load is called.
@@ -127,7 +128,7 @@ func load(withDefault bool, paths ...string) (*koanf.Koanf, prometheus.MultiErro
 	}
 
 	if withDefault {
-		moreWarnings = loader.Load("", newStructsProvider(DefaultConfig(), Tag), nil)
+		moreWarnings = loader.Load("", structs.Provider(DefaultConfig(), Tag), nil)
 		warnings = append(warnings, moreWarnings...)
 	}
 
