@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	yamlParser "github.com/knadh/koanf/parsers/yaml"
 	"github.com/knadh/koanf/providers/file"
 )
@@ -34,7 +35,11 @@ func TestLoaderHooks(t *testing.T) {
 		},
 	}
 
-	if diff := cmp.Diff(expected, loader.items); diff != "" {
+	lessFunc := func(x item, y item) bool {
+		return x.Key < y.Key
+	}
+
+	if diff := cmp.Diff(expected, loader.items, cmpopts.SortSlices(lessFunc)); diff != "" {
 		t.Fatalf("diff:\n%s", diff)
 	}
 }

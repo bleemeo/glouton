@@ -1,8 +1,10 @@
 package config
 
 import (
+	"encoding/json"
 	"fmt"
 	"math"
+	"reflect"
 	"strings"
 
 	"github.com/knadh/koanf"
@@ -45,13 +47,13 @@ const (
 )
 
 // Load config from a provider and add source information on config items.
-func (c *configLoader) Load(path string, kProvider koanf.Provider, parser koanf.Parser) error {
+func (c *configLoader) Load(path string, kProvider koanf.Provider, parser koanf.Parser) prometheus.MultiError {
+	var warnings prometheus.MultiError
+
 	provider := providerType(kProvider)
 
-	config, err := typedConfig(kProvider, parser)
-	if err != nil {
-		return err
-	}
+	config, warning := typedConfig(kProvider, parser)
+	warnings.Append(warning)
 
 	for key, value := range config {
 		priority := c.priority(provider, key, value)
@@ -65,7 +67,7 @@ func (c *configLoader) Load(path string, kProvider koanf.Provider, parser koanf.
 		})
 	}
 
-	return nil
+	return warnings
 }
 
 // typedConfig loads config from the given provider and does type conversions when needed.
@@ -101,10 +103,8 @@ func typedConfig(kProvider koanf.Provider, parser koanf.Parser) (map[string]inte
 		Tag: Tag,
 	}
 
-	err = baseKoanf.UnmarshalWithConf("", &config, unmarshalConf)
-	if err != nil {
-		return nil, err
-	}
+	// Errors returned by unmarshal are only warnings, we can keep using the config.
+	warning := baseKoanf.UnmarshalWithConf("", &config, unmarshalConf)
 
 	// Convert the structured configuration back to a koanf.
 	typedKoanf := koanf.New(delimiter)
@@ -124,7 +124,7 @@ func typedConfig(kProvider koanf.Provider, parser koanf.Parser) (map[string]inte
 		}
 	}
 
-	return cleanKeys, nil
+	return cleanKeys, warning
 }
 
 // allKeys returns all keys from the koanf.
@@ -162,7 +162,7 @@ func (c *configLoader) priority(provider source, key string, value interface{}) 
 		return priorityEnv
 	case sourceFile:
 		// Slices in files all have the same priority because they are appended.
-		if _, ok := value.([]interface{}); ok {
+		if reflect.TypeOf(value).Kind() == reflect.Slice {
 			return priorityMapAndArrayFile
 		}
 
@@ -264,6 +264,17 @@ func (c *configLoader) Build() (*koanf.Koanf, prometheus.MultiError) {
 
 // Merge append slices and merges maps.
 func merge(dstInt interface{}, srcInt interface{}) (interface{}, error) {
+	// Convert slices to []interface{} and maps to map[string]interface{} to merge them.
+	dstInt, err := fixType(dstInt)
+	if err != nil {
+		return nil, err
+	}
+
+	srcInt, err = fixType(srcInt)
+	if err != nil {
+		return nil, err
+	}
+
 	switch dst := dstInt.(type) {
 	case []interface{}:
 		src, ok := srcInt.([]interface{})
@@ -287,4 +298,22 @@ func merge(dstInt interface{}, srcInt interface{}) (interface{}, error) {
 		// This should never happen, only map and strings can be merged.
 		return nil, fmt.Errorf("%w: unsupported type %T", errCannotMerge, dstInt)
 	}
+}
+
+// fixType converts slices to []interface{} and maps to map[string]interface{}.
+func fixType(v interface{}) (interface{}, error) {
+	// TODO: we could merge maps without using json.
+	marshalled, err := json.Marshal(v)
+	if err != nil {
+		return nil, err
+	}
+
+	var newValue interface{}
+
+	err = json.Unmarshal(marshalled, &newValue)
+	if err != nil {
+		return nil, err
+	}
+
+	return newValue, nil
 }

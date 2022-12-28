@@ -115,19 +115,19 @@ func load(withDefault bool, paths ...string) (*koanf.Koanf, prometheus.MultiErro
 	// The warnings are filled only after k.Load is called.
 	envToKey, envWarnings := envToKeyFunc()
 
-	warning := loader.Load("", env.Provider(deprecatedEnvPrefix, delimiter, envToKey), nil)
-	warnings.Append(warning)
+	moreWarnings = loader.Load("", env.Provider(deprecatedEnvPrefix, delimiter, envToKey), nil)
+	warnings = append(warnings, moreWarnings...)
 
-	warning = loader.Load("", env.Provider(envPrefix, delimiter, envToKey), nil)
-	warnings.Append(warning)
+	moreWarnings = loader.Load("", env.Provider(envPrefix, delimiter, envToKey), nil)
+	warnings = append(warnings, moreWarnings...)
 
 	if len(*envWarnings) > 0 {
 		warnings = append(warnings, *envWarnings...)
 	}
 
 	if withDefault {
-		warning = loader.Load("", newStructsProvider(DefaultConfig(), Tag), nil)
-		warnings.Append(warning)
+		moreWarnings = loader.Load("", newStructsProvider(DefaultConfig(), Tag), nil)
+		warnings = append(warnings, moreWarnings...)
 	}
 
 	finalKoanf, moreWarnings := loader.Build()
@@ -245,7 +245,7 @@ func loadPaths(loader *configLoader, paths []string) (*koanf.Koanf, prometheus.M
 			}
 		} else {
 			warning := loadFile(k, loader, path)
-			warnings.Append(warning)
+			warnings = append(warnings, warning...)
 		}
 
 		if err == nil {
@@ -272,18 +272,18 @@ func loadDirectory(k *koanf.Koanf, loader *configLoader, dirPath string) (promet
 		path := filepath.Join(dirPath, f.Name())
 
 		warning := loadFile(k, loader, path)
-		warnings.Append(warning)
+		warnings = append(warnings, warning...)
 	}
 
 	return warnings, nil
 }
 
-func loadFile(k *koanf.Koanf, loader *configLoader, path string) error {
+func loadFile(k *koanf.Koanf, loader *configLoader, path string) prometheus.MultiError {
 	// Merge this file with the previous config.
 	// Overwrite values, merge maps and append slices.
 	err := loader.Load(path, file.Provider(path), yamlParser.Parser())
 	if err != nil {
-		return fmt.Errorf("failed to load '%s': %w", path, err)
+		return err
 	}
 
 	return nil
