@@ -28,7 +28,9 @@ import (
 )
 
 // blackboxModuleHookFunc unmarshals Blackbox module config.
-// This is needed because we embed the external module config from Blackbox in our own config.
+// We embed the external module config from Blackbox in our own config.
+// Blackbox implements its own yaml marshaller that sets default values,
+// so we need to unmarshal it to set the default values.
 func blackboxModuleHookFunc() mapstructure.DecodeHookFuncType {
 	return func(source reflect.Type, target reflect.Type, data interface{}) (interface{}, error) {
 		module, ok := reflect.New(target).Interface().(*bbConf.Module)
@@ -43,7 +45,7 @@ func blackboxModuleHookFunc() mapstructure.DecodeHookFuncType {
 		}
 
 		if err := yaml.Unmarshal(marshalled, &module); err != nil {
-			return nil, fmt.Errorf("%w: cannot parse blackbox_exporter module configuration: %s", ErrInvalidValue, err)
+			return nil, fmt.Errorf("%w: cannot unmarshal blackbox_exporter module configuration: %s", ErrInvalidValue, err)
 		}
 
 		return module, nil

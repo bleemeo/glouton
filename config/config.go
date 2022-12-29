@@ -74,37 +74,25 @@ func loadToStruct(withDefault bool, paths ...string) (Config, prometheus.MultiEr
 
 	k, warnings, err := load(withDefault, paths...)
 
-	config, warning := unmarshalConfig(k)
-	warnings.Append(warning)
-
-	return config, unwrapErrors(warnings), err
-}
-
-// unmarshalConfig convert a koanf to a structured config.
-func unmarshalConfig(k *koanf.Koanf) (Config, error) {
+	// Unmarshal the config.
 	var config Config
 
+	// Here we ignore unused keys warnings and most decoder hooks
+	// because this processing was already done in the config loader.
 	unmarshalConf := koanf.UnmarshalConf{
 		DecoderConfig: &mapstructure.DecoderConfig{
-			DecodeHook: mapstructure.ComposeDecodeHookFunc(
-				mapstructure.StringToTimeDurationHookFunc(),
-				mapstructure.StringToSliceHookFunc(","),
-				mapstructure.TextUnmarshallerHookFunc(),
-				blackboxModuleHookFunc(),
-				stringToMapHookFunc(),
-				stringToBoolHookFunc(),
-			),
-			Metadata:         nil,
-			ErrorUnused:      true,
-			Result:           &config,
-			WeaklyTypedInput: true,
+			// Keep the blackbox hook to use its custom yaml
+			// marshaller that sets default values.
+			DecodeHook: blackboxModuleHookFunc(),
+			Result:     &config,
 		},
 		Tag: Tag,
 	}
 
-	err := k.UnmarshalWithConf("", &config, unmarshalConf)
+	warning := k.UnmarshalWithConf("", &config, unmarshalConf)
+	warnings.Append(warning)
 
-	return config, err
+	return config, unwrapErrors(warnings), err
 }
 
 // load the configuration from files and directories.

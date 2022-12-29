@@ -11,16 +11,19 @@ import (
 	"github.com/knadh/koanf/providers/env"
 	"github.com/knadh/koanf/providers/file"
 	"github.com/knadh/koanf/providers/structs"
+	"github.com/mitchellh/mapstructure"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
 // configLoader loads the config from Koanf providers.
 type configLoader struct {
+	// Items loaded in the config.
 	items []item
 	// Number of provider loaded, used to assign priority to items.
 	loadCount int
 }
 
+// item represents a single config key from a provider.
 type item struct {
 	// The config Key (e.g. "bleemeo.enable").
 	Key string
@@ -37,6 +40,7 @@ type item struct {
 	Priority int
 }
 
+// source represents the source of an item.
 type source string
 
 const (
@@ -62,7 +66,7 @@ func (c *configLoader) Load(path string, provider koanf.Provider, parser koanf.P
 	k, moreWarnings := migrate(k)
 	warnings = append(warnings, moreWarnings...)
 
-	config, moreWarnings := typedConfig(k)
+	config, moreWarnings := convertTypes(k)
 	warnings = append(warnings, moreWarnings...)
 
 	for key, value := range config {
@@ -80,14 +84,35 @@ func (c *configLoader) Load(path string, provider koanf.Provider, parser koanf.P
 	return warnings
 }
 
-// typedConfig convert config keys to the right type and returns warnings.
-// For details about the type conversions, see the DecodeHook below and mapstructure WeaklyTypedInput.
-func typedConfig(
+// convertTypes converts config keys to the right type and returns warnings.
+func convertTypes(
 	baseKoanf *koanf.Koanf,
 ) (map[string]interface{}, prometheus.MultiError) {
 	var warnings prometheus.MultiError
 
-	config, err := unmarshalConfig(baseKoanf)
+	// Unmarshal the config to a struct, this does all needed type conversions
+	// (int to string, string to bool, and many more).
+	var config Config
+
+	unmarshalConf := koanf.UnmarshalConf{
+		DecoderConfig: &mapstructure.DecoderConfig{
+			DecodeHook: mapstructure.ComposeDecodeHookFunc(
+				mapstructure.StringToTimeDurationHookFunc(),
+				mapstructure.StringToSliceHookFunc(","),
+				mapstructure.TextUnmarshallerHookFunc(),
+				blackboxModuleHookFunc(),
+				stringToMapHookFunc(),
+				stringToBoolHookFunc(),
+			),
+			Metadata:         nil,
+			ErrorUnused:      true,
+			Result:           &config,
+			WeaklyTypedInput: true,
+		},
+		Tag: Tag,
+	}
+
+	err := baseKoanf.UnmarshalWithConf("", &config, unmarshalConf)
 	warnings.Append(err)
 
 	// Convert the structured configuration back to a koanf.
@@ -96,17 +121,33 @@ func typedConfig(
 	err = typedKoanf.Load(structs.ProviderWithDelim(config, Tag, delimiter), nil)
 	warnings.Append(err)
 
-	// Use another koanf to remove keys that were not set in the given config.
-	cleanKeys := allKeys(typedKoanf)
+	// When the config is loaded from the struct, all possible config keys
+	// are set. We want to only keep the keys that were present in the
+	// base koanf, otherwise it would break merging config files because
+	// we wouldn't be able to know if a key was set by a file.
+	typedKeys := allKeys(typedKoanf)
 	baseKeys := allKeys(baseKoanf)
 
-	for key := range cleanKeys {
+	// Remove keys that were not set in the base config.
+	for key := range typedKeys {
 		if _, ok := baseKeys[key]; !ok {
-			delete(cleanKeys, key)
+			delete(typedKeys, key)
 		}
 	}
 
-	return cleanKeys, warnings
+	// Some keys may be present in the base config but missing in the typed
+	// config, so we need to add them here.
+	// This happens because we embed the Blackbox config, which uses omitempty
+	// on all its config keys. This means that if "ip_protocol_fallback" is set
+	// to false in the config, it will be dropped when the structured config is
+	// converted back to a koanf.
+	for key, value := range baseKeys {
+		if _, ok := typedKeys[key]; !ok {
+			typedKeys[key] = value
+		}
+	}
+
+	return typedKeys, warnings
 }
 
 // allKeys returns all keys from the koanf.
