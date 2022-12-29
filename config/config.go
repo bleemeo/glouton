@@ -102,7 +102,7 @@ func load(withDefault bool, paths ...string) (*koanf.Koanf, prometheus.MultiErro
 	warnings, errors := loadPaths(loader, paths)
 
 	// Load config from environment variables.
-	// The warnings are filled only after k.Load is called.
+	// The warnings are filled only after Load is called.
 	envToKey, envWarnings := envToKeyFunc()
 
 	moreWarnings := loader.Load("", env.Provider(deprecatedEnvPrefix, delimiter, envToKey), nil)
@@ -115,6 +115,7 @@ func load(withDefault bool, paths ...string) (*koanf.Koanf, prometheus.MultiErro
 		warnings = append(warnings, *envWarnings...)
 	}
 
+	// Load default config.
 	if withDefault {
 		moreWarnings = loader.Load("", structs.Provider(DefaultConfig(), Tag), nil)
 		warnings = append(warnings, moreWarnings...)
@@ -208,28 +209,25 @@ func loadPaths(loader *configLoader, paths []string) (prometheus.MultiError, pro
 	for _, path := range paths {
 		stat, err := os.Stat(path)
 		if err != nil && os.IsNotExist(err) {
-			logger.V(2).Printf("config file: %s ignored since it does not exists", path)
+			logger.V(2).Printf("config file %s ignored because it does not exists", path)
 
 			continue
 		}
 
 		if err != nil {
-			logger.V(2).Printf("config file: %s ignored due to %v", path, err)
-			errors.Append(err)
+			errors.Append(fmt.Errorf("file %s ignored: %w", path, err))
 
 			continue
 		}
 
 		if stat.IsDir() {
 			moreWarnings, err := loadDirectory(loader, path)
-			errors.Append(err)
+			if err != nil {
+				errors.Append(fmt.Errorf("failed to load directory %s: %w", path, err))
+			}
 
 			if moreWarnings != nil {
 				warnings = append(warnings, moreWarnings...)
-			}
-
-			if err != nil {
-				logger.V(2).Printf("config file: directory %s have ignored some files due to %v", path, err)
 			}
 		} else {
 			warning := loadFile(loader, path)
@@ -269,12 +267,14 @@ func loadDirectory(loader *configLoader, dirPath string) (prometheus.MultiError,
 func loadFile(loader *configLoader, path string) prometheus.MultiError {
 	// Merge this file with the previous config.
 	// Overwrite values, merge maps and append slices.
-	err := loader.Load(path, file.Provider(path), yamlParser.Parser())
-	if err != nil {
-		return err
+	warnings := loader.Load(path, file.Provider(path), yamlParser.Parser())
+
+	// Add path to errors.
+	for i, warning := range warnings {
+		warnings[i] = fmt.Errorf("%s: %w", path, warning)
 	}
 
-	return nil
+	return warnings
 }
 
 // unwrapErrors unwrap all errors in the list than contain multiple errors.

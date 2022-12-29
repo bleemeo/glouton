@@ -476,7 +476,7 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 			Name:  "invalid yaml multiple files",
 			Files: []string{"testdata/invalid"},
 			WantWarnings: []string{
-				"yaml: line 2: found character that cannot start any token",
+				"testdata/invalid/10-invalid.conf: yaml: line 2: found character that cannot start any token",
 			},
 			WantConfig: Config{
 				Agent: Agent{
@@ -510,7 +510,7 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 			Name:  "deprecated config",
 			Files: []string{"testdata/deprecated.conf"},
 			WantWarnings: []string{
-				"setting is deprecated: web.enabled, use web.enable instead",
+				"testdata/deprecated.conf: setting is deprecated: web.enabled, use web.enable instead",
 			},
 			WantConfig: Config{
 				Web: Web{
@@ -522,7 +522,8 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 			Name:  "migration file",
 			Files: []string{"testdata/old-prometheus-targets.conf"},
 			WantWarnings: []string{
-				"setting is deprecated: metrics.prometheus. See https://go.bleemeo.com/l/doc-prometheus",
+				"testdata/old-prometheus-targets.conf: setting is deprecated: metrics.prometheus. " +
+					"See https://go.bleemeo.com/l/doc-prometheus",
 			},
 			WantConfig: Config{
 				Metric: Metric{
@@ -591,8 +592,8 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 				},
 			},
 			WantWarnings: []string{
-				"setting is deprecated: agent.windows_exporter.enabled, use agent.windows_exporter.enable instead",
-				"setting is deprecated: telegraf.docker_metrics_enabled, use telegraf.docker_metrics_enable instead",
+				"testdata/enabled.conf: setting is deprecated: agent.windows_exporter.enabled, use agent.windows_exporter.enable instead",
+				"testdata/enabled.conf: setting is deprecated: telegraf.docker_metrics_enabled, use telegraf.docker_metrics_enable instead",
 			},
 		},
 		{
@@ -607,7 +608,7 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 				},
 			},
 			WantWarnings: []string{
-				"setting is deprecated: bleemeo.enabled, use bleemeo.enable instead",
+				"testdata/folder1/00-first.conf: setting is deprecated: bleemeo.enabled, use bleemeo.enable instead",
 			},
 		},
 		{
@@ -646,8 +647,8 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 				},
 			},
 			WantWarnings: []string{
-				"setting is deprecated: logging.buffer.head_size, use logging.buffer.head_size_bytes instead",
-				"setting is deprecated: logging.buffer.tail_size, use logging.buffer.tail_size_bytes instead",
+				"testdata/old-logging.conf: setting is deprecated: logging.buffer.head_size, use logging.buffer.head_size_bytes instead",
+				"testdata/old-logging.conf: setting is deprecated: logging.buffer.tail_size, use logging.buffer.tail_size_bytes instead",
 			},
 		},
 		{
@@ -771,7 +772,8 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 			Name:  "deprecated cassandra_detailed_tables",
 			Files: []string{"testdata/deprecated_cassandra.conf"},
 			WantWarnings: []string{
-				"setting is deprecated: 'cassandra_detailed_tables', use 'detailed_items' instead",
+				"testdata/deprecated_cassandra.conf: setting is deprecated: 'cassandra_detailed_tables'" +
+					", use 'detailed_items' instead",
 			},
 			WantConfig: Config{
 				Services: []Service{
@@ -789,7 +791,7 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 			Name:  "deprecated mgmt_port",
 			Files: []string{"testdata/deprecated_mgmt_port.conf"},
 			WantWarnings: []string{
-				"setting is deprecated: 'mgmt_port', use 'stats_port' instead",
+				"testdata/deprecated_mgmt_port.conf: setting is deprecated: 'mgmt_port', use 'stats_port' instead",
 			},
 			WantConfig: Config{
 				Services: []Service{
