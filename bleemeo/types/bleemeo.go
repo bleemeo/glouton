@@ -336,3 +336,41 @@ type AlertingRule struct {
 	Active              bool     `json:"active"`
 	Agents              []string `json:"agents"`
 }
+
+// GloutonConfigItem object on the Bleemeo API.
+type GloutonConfigItem struct {
+	ID       string           `json:"id"`
+	Agent    string           `json:"agent"`
+	Key      string           `json:"key"`
+	Value    interface{}      `json:"value"`
+	Priority int              `json:"priority"`
+	Source   ConfigItemSource `json:"source"`
+	Path     string           `json:"path"`
+	Type     ConfigItemType   `json:"type"`
+}
+
+// ConfigItemSource enumeration on the Bleemeo API.
+// This should always be the same as the enumeration on the API.
+type ConfigItemSource int
+
+const (
+	SourceUnknown ConfigItemSource = 0
+	SourceFile    ConfigItemSource = 1
+	SourceEnv     ConfigItemSource = 2
+	SourceDefault ConfigItemSource = 3
+	SourceAPI     ConfigItemSource = 4
+)
+
+// ConfigItemType enumeration on the Bleemeo API.
+// This should always be the same as the enumeration on the API.
+type ConfigItemType int
+
+const (
+	TypeUnknown ConfigItemType = 0
+	TypeInt     ConfigItemType = 1
+	TypeFloat   ConfigItemType = 2
+	TypeBool    ConfigItemType = 3
+	TypeString  ConfigItemType = 4
+	TypeList    ConfigItemType = 5
+	TypeMap     ConfigItemType = 6
+)

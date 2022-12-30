@@ -63,6 +63,7 @@ const (
 	syncMethodContainer     = "container"
 	syncMethodMetric        = "metric"
 	syncMethodAlertingRules = "alertingrules"
+	syncMethodConfig        = "config"
 )
 
 // Synchronizer synchronize object with Bleemeo.
@@ -702,6 +703,7 @@ func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) (map[str
 		{name: syncMethodMonitor, method: s.syncMonitors, skipOnlyEssential: true},
 		{name: syncMethodMetric, method: s.syncMetrics},
 		{name: syncMethodAlertingRules, method: s.syncAlertingRules},
+		{name: syncMethodConfig, method: s.syncConfig},
 	}
 	startAt := s.now()
 
@@ -831,6 +833,7 @@ func (s *Synchronizer) syncToPerform(ctx context.Context) map[string]bool {
 		syncMethods[syncMethodMonitor] = fullSync
 		syncMethods[syncMethodSNMP] = fullSync
 		syncMethods[syncMethodAlertingRules] = fullSync
+		syncMethods[syncMethodConfig] = fullSync
 	}
 
 	if fullSync || s.lastFactUpdatedAt != localFacts["fact_updated_at"] {

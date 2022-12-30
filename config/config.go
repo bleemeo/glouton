@@ -55,49 +55,27 @@ var (
 	ErrInvalidValue        = errors.New("invalid config value")
 )
 
-// Load loads the configuration from files and directories to a struct.
-// Returns the config, warnings and an error.
-func Load(withDefault bool, paths ...string) (Config, prometheus.MultiError, error) {
+// Load the configuration from files and environment variables.
+// It returns the config, the loaded items, warnings and an error.
+func Load(withDefault bool, paths ...string) (Config, []Item, prometheus.MultiError, error) {
 	// If no config was given with flags or env variables, fallback on the default files.
 	if len(paths) == 0 || len(paths) == 1 && paths[0] == "" {
 		paths = DefaultPaths()
 	}
 
-	return loadToStruct(withDefault, paths...)
+	loader := &configLoader{}
+
+	config, warnings, err := load(loader, withDefault, paths...)
+
+	return config, loader.items, warnings, err
 }
 
-func loadToStruct(withDefault bool, paths ...string) (Config, prometheus.MultiError, error) {
+// load the configuration from files and environment variables.
+func load(loader *configLoader, withDefault bool, paths ...string) (Config, prometheus.MultiError, error) {
 	// Override config files if the files were given from the env.
 	if envFiles := os.Getenv(EnvGloutonConfigFiles); envFiles != "" {
 		paths = strings.Split(envFiles, ",")
 	}
-
-	k, warnings, err := load(withDefault, paths...)
-
-	// Unmarshal the config.
-	var config Config
-
-	// Here we ignore unused keys warnings and most decoder hooks
-	// because this processing was already done in the config loader.
-	unmarshalConf := koanf.UnmarshalConf{
-		DecoderConfig: &mapstructure.DecoderConfig{
-			// Keep the blackbox hook to use its custom yaml
-			// marshaller that sets default values.
-			DecodeHook: blackboxModuleHookFunc(),
-			Result:     &config,
-		},
-		Tag: Tag,
-	}
-
-	warning := k.UnmarshalWithConf("", &config, unmarshalConf)
-	warnings.Append(warning)
-
-	return config, unwrapErrors(warnings), err
-}
-
-// load the configuration from files and directories.
-func load(withDefault bool, paths ...string) (*koanf.Koanf, prometheus.MultiError, error) {
-	loader := &configLoader{}
 
 	warnings, errors := loadPaths(loader, paths)
 
@@ -121,10 +99,29 @@ func load(withDefault bool, paths ...string) (*koanf.Koanf, prometheus.MultiErro
 		warnings = append(warnings, moreWarnings...)
 	}
 
+	// Build the final config from the loaded items.
 	finalKoanf, moreWarnings := loader.Build()
 	warnings = append(warnings, moreWarnings...)
 
-	return finalKoanf, warnings, errors.MaybeUnwrap()
+	// Unmarshal the config.
+	var config Config
+
+	// Here we ignore unused keys warnings and most decoder hooks
+	// because this processing was already done in the config loader.
+	unmarshalConf := koanf.UnmarshalConf{
+		DecoderConfig: &mapstructure.DecoderConfig{
+			// Keep the blackbox hook to use its custom yaml
+			// marshaller that sets default values.
+			DecodeHook: blackboxModuleHookFunc(),
+			Result:     &config,
+		},
+		Tag: Tag,
+	}
+
+	warning := finalKoanf.UnmarshalWithConf("", &config, unmarshalConf)
+	warnings.Append(warning)
+
+	return config, unwrapErrors(warnings), errors.MaybeUnwrap()
 }
 
 // envToKeyFunc returns a function that converts an environment variable to a configuration key

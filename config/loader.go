@@ -1,3 +1,19 @@
+// Copyright 2015-2022 Bleemeo
+//
+// bleemeo.com an infrastructure monitoring solution in the Cloud
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package config
 
 import (
@@ -18,19 +34,19 @@ import (
 // configLoader loads the config from Koanf providers.
 type configLoader struct {
 	// Items loaded in the config.
-	items []item
+	items []Item
 	// Number of provider loaded, used to assign priority to items.
 	loadCount int
 }
 
-// item represents a single config key from a provider.
-type item struct {
+// Item represents a single config key from a provider.
+type Item struct {
 	// The config Key (e.g. "bleemeo.enable").
 	Key string
 	// The Value for this config key.
 	Value interface{}
 	// Source of the config key (can be a default value, an environment variable or a file).
-	Source source
+	Source Source
 	// Path to the file the item comes (empty when it doesn't come from a file).
 	Path string
 	// Priority of the item.
@@ -40,13 +56,13 @@ type item struct {
 	Priority int
 }
 
-// source represents the source of an item.
-type source string
+// Source represents the Source of an item.
+type Source string
 
 const (
-	sourceDefault source = "default"
-	sourceEnv     source = "env"
-	sourceFile    source = "file"
+	SourceDefault Source = "default"
+	SourceEnv     Source = "env"
+	SourceFile    Source = "file"
 )
 
 // Load config from a provider and add source information on config items.
@@ -70,9 +86,9 @@ func (c *configLoader) Load(path string, provider koanf.Provider, parser koanf.P
 	warnings = append(warnings, moreWarnings...)
 
 	for key, value := range config {
-		priority := c.priority(providerType, key, value, c.loadCount)
+		priority := priority(providerType, key, value, c.loadCount)
 
-		c.items = append(c.items, item{
+		c.items = append(c.items, Item{
 			Key:      key,
 			Value:    value,
 			Source:   providerType,
@@ -173,17 +189,17 @@ func allKeys(k *koanf.Koanf) map[string]interface{} {
 // When the value is a map or an array, the items may have the same priority, in
 // this case the arrays are appended to each other, and the maps are merged.
 // It panics on unknown providers.
-func (c *configLoader) priority(provider source, key string, value interface{}, loadCount int) int {
+func priority(provider Source, key string, value interface{}, loadCount int) int {
 	const (
 		priorityDefault         = -1
 		priorityMapAndArrayFile = 1
-		priorityEnv             = math.MaxInt
+		priorityEnv             = math.MaxInt32
 	)
 
 	switch provider {
-	case sourceEnv:
+	case SourceEnv:
 		return priorityEnv
-	case sourceFile:
+	case SourceFile:
 		// Slices in files all have the same priority because they are appended.
 		if reflect.TypeOf(value).Kind() == reflect.Slice {
 			return priorityMapAndArrayFile
@@ -197,7 +213,7 @@ func (c *configLoader) priority(provider source, key string, value interface{}, 
 		// For basic types (string, int, bool, float), the config from the
 		// last loaded file has a greater priority than the previous files.
 		return loadCount
-	case sourceDefault:
+	case SourceDefault:
 		return priorityDefault
 	default:
 		panic(fmt.Errorf("%w: %T", errUnsupportedProvider, provider))
@@ -205,14 +221,14 @@ func (c *configLoader) priority(provider source, key string, value interface{}, 
 }
 
 // providerTypes return the provider type from a Koanf provider.
-func providerType(provider koanf.Provider) source {
+func providerType(provider koanf.Provider) Source {
 	switch provider.(type) {
 	case *env.Env:
-		return sourceEnv
+		return SourceEnv
 	case *file.File:
-		return sourceFile
+		return SourceFile
 	case *structs.Structs:
-		return sourceDefault
+		return SourceDefault
 	default:
 		panic(fmt.Errorf("%w: %T", errUnsupportedProvider, provider))
 	}

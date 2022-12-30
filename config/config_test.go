@@ -333,7 +333,7 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 		},
 	}
 
-	config, warnings, err := loadToStruct(false, "testdata/full.conf")
+	config, warnings, err := load(&configLoader{}, false, "testdata/full.conf")
 	if warnings != nil {
 		t.Fatalf("Warning while loading config: %s", warnings)
 	}
@@ -365,7 +365,7 @@ func TestOverrideDefault(t *testing.T) {
 
 	t.Setenv("GLOUTON_BLEEMEO_ENABLE", "false")
 
-	config, warnings, err := loadToStruct(true, "testdata/override_default.conf")
+	config, warnings, err := load(&configLoader{}, true, "testdata/override_default.conf")
 	if warnings != nil {
 		t.Fatalf("Warning while loading config: %s", warnings)
 	}
@@ -412,7 +412,7 @@ func TestMergeWithDefault(t *testing.T) {
 	t.Setenv("GLOUTON_METRIC_DENY_METRICS", "cpu_used")
 	t.Setenv("GLOUTON_METRIC_SOFTSTATUS_PERIOD", "system_pending_updates=500")
 
-	config, warnings, err := loadToStruct(true, "testdata/merge")
+	config, warnings, err := load(&configLoader{}, true, "testdata/merge")
 	if warnings != nil {
 		t.Fatalf("Warning while loading config: %s", warnings)
 	}
@@ -428,7 +428,7 @@ func TestMergeWithDefault(t *testing.T) {
 
 // Test that the config loaded with no config file has default values.
 func TestDefaultNoFile(t *testing.T) {
-	config, warnings, err := loadToStruct(true)
+	config, warnings, err := load(&configLoader{}, true)
 	if warnings != nil {
 		t.Fatalf("Warning while loading config: %s", warnings)
 	}
@@ -442,7 +442,7 @@ func TestDefaultNoFile(t *testing.T) {
 	}
 }
 
-// TestloadToStruct tests loading the config and the warnings and errors returned.
+// Testload tests loading the config and the warnings and errors returned.
 func TestLoad(t *testing.T) { //nolint:maintidx
 	tests := []struct {
 		Name         string
@@ -810,7 +810,7 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 				t.Setenv(k, v)
 			}
 
-			config, warnings, err := loadToStruct(false, test.Files...)
+			config, warnings, err := load(&configLoader{}, false, test.Files...)
 			if diff := cmp.Diff(test.WantError, err); diff != "" {
 				t.Fatalf("Unexpected error for files %s\n%s", test.Files, diff)
 			}
@@ -963,7 +963,7 @@ func Test_migrate(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.Name, func(t *testing.T) {
-			config, _, err := loadToStruct(false, test.ConfigFile)
+			config, _, err := load(&configLoader{}, false, test.ConfigFile)
 			if err != nil {
 				t.Fatalf("Failed to load config: %s", err)
 			}
