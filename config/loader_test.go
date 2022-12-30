@@ -43,8 +43,8 @@ func TestHooksLoader(t *testing.T) {
 		},
 		{
 			Key: "metric.softstatus_period",
-			Value: map[string]int{
-				"cpu_used": 60,
+			Value: map[string]any{
+				"cpu_used": float64(60),
 			},
 			Source:   "file",
 			Priority: 1,

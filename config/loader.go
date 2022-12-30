@@ -17,7 +17,9 @@
 package config
 
 import (
+	"encoding/json"
 	"fmt"
+	"glouton/logger"
 	"math"
 	"reflect"
 	"strings"
@@ -88,6 +90,16 @@ func (c *configLoader) Load(path string, provider koanf.Provider, parser koanf.P
 	for key, value := range config {
 		priority := priority(providerType, key, value, c.loadCount)
 
+		// Convert value to use JSON types.
+		// This is needed because the values are stored on the Bleemeo API as JSON fields,
+		// so to compare a local value with remote value we need to convert it here.
+		// For instance without this conversion "bleemeo.mqtt.port" would be a int locally
+		// but a float64 when read from the API, which makes them hard to compare.
+		value, err := convertToJSONTypes(value)
+		if err != nil {
+			logger.V(1).Printf("Failed to convert value %v to JSON: %s", value, err)
+		}
+
 		c.items = append(c.items, Item{
 			Key:      key,
 			Value:    value,
@@ -98,6 +110,24 @@ func (c *configLoader) Load(path string, provider koanf.Provider, parser koanf.P
 	}
 
 	return warnings
+}
+
+// convertToJSONTypes convert the value to only use JSON types.
+// It converts int to float64, structs to map, []T to []any...
+func convertToJSONTypes(value interface{}) (interface{}, error) {
+	jsonBytes, err := json.Marshal(value)
+	if err != nil {
+		return nil, err
+	}
+
+	var jsonValue interface{}
+
+	err = json.Unmarshal(jsonBytes, &jsonValue)
+	if err != nil {
+		return nil, err
+	}
+
+	return jsonValue, nil
 }
 
 // convertTypes converts config keys to the right type and returns warnings.
