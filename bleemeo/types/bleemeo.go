@@ -366,11 +366,15 @@ const (
 type ConfigItemType int
 
 const (
-	TypeUnknown ConfigItemType = 0
-	TypeInt     ConfigItemType = 1
-	TypeFloat   ConfigItemType = 2
-	TypeBool    ConfigItemType = 3
-	TypeString  ConfigItemType = 4
-	TypeList    ConfigItemType = 5
-	TypeMap     ConfigItemType = 6
+	TypeUnknown       ConfigItemType = 0
+	TypeInt           ConfigItemType = 1
+	TypeFloat         ConfigItemType = 2
+	TypeBool          ConfigItemType = 3
+	TypeString        ConfigItemType = 4
+	TypeListString    ConfigItemType = 10
+	TypeListInt       ConfigItemType = 11
+	TypeListUnknown   ConfigItemType = 12
+	TypeMapStrStr     ConfigItemType = 20
+	TypeMapStrInt     ConfigItemType = 21
+	TypeMapStrUnknown ConfigItemType = 22
 )

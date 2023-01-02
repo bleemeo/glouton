@@ -18,6 +18,7 @@ package config
 
 import (
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -76,7 +77,8 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 			},
 			Modules: map[string]bbConf.Module{
 				"mymodule": {
-					Prober: "http",
+					Prober:  "http",
+					Timeout: 5 * time.Second,
 					HTTP: bbConf.HTTPProbe{
 						IPProtocol:       "ip4",
 						ValidStatusCodes: []int{200},

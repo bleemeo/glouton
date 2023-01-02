@@ -71,6 +71,8 @@ func (s *Synchronizer) syncConfig(
 		return false, err
 	}
 
+	fmt.Println("!!! end sync")
+
 	return false, nil
 }
 
@@ -124,7 +126,7 @@ func (s *Synchronizer) localConfigItems() map[comparableConfigItem]interface{} {
 			Priority: item.Priority,
 			Source:   bleemeoItemSourceFromConfigSource(item.Source),
 			Path:     shortenCharField(item.Path),
-			Type:     bleemeoItemTypeFromConfigValue(item.Value),
+			Type:     bleemeoItemTypeFromConfigType(item.Type),
 		}
 
 		items[key] = item.Value
@@ -144,7 +146,7 @@ func shortenCharField(field string) string {
 	return field[:maxChar]
 }
 
-func bleemeoItemSourceFromConfigSource(source config.Source) bleemeoTypes.ConfigItemSource {
+func bleemeoItemSourceFromConfigSource(source config.ItemSource) bleemeoTypes.ConfigItemSource {
 	switch source {
 	case config.SourceFile:
 		return bleemeoTypes.SourceFile
@@ -157,31 +159,31 @@ func bleemeoItemSourceFromConfigSource(source config.Source) bleemeoTypes.Config
 	}
 }
 
-func bleemeoItemTypeFromConfigValue(value interface{}) bleemeoTypes.ConfigItemType {
-	switch value.(type) {
-	case int:
-		return bleemeoTypes.TypeInt
-	case float64:
-		return bleemeoTypes.TypeFloat
-	case bool:
+func bleemeoItemTypeFromConfigType(source config.ItemType) bleemeoTypes.ConfigItemType {
+	switch source {
+	case config.TypeBool:
 		return bleemeoTypes.TypeBool
-	case string:
+	case config.TypeFloat:
+		return bleemeoTypes.TypeFloat
+	case config.TypeInt:
+		return bleemeoTypes.TypeInt
+	case config.TypeString:
 		return bleemeoTypes.TypeString
-	}
-
-	// For slices and maps of any types, we need reflection.
-	if value == nil {
+	case config.TypeListString:
+		return bleemeoTypes.TypeListString
+	case config.TypeListInt:
+		return bleemeoTypes.TypeListInt
+	case config.TypeListUnknown:
+		return bleemeoTypes.TypeListUnknown
+	case config.TypeMapStrStr:
+		return bleemeoTypes.TypeMapStrStr
+	case config.TypeMapStrInt:
+		return bleemeoTypes.TypeMapStrInt
+	case config.TypeMapStrUnknown:
+		return bleemeoTypes.TypeMapStrUnknown
+	default:
 		return bleemeoTypes.TypeUnknown
 	}
-
-	switch reflect.TypeOf(value).Kind() { //nolint:exhaustive
-	case reflect.Slice:
-		return bleemeoTypes.TypeList
-	case reflect.Map:
-		return bleemeoTypes.TypeMap
-	}
-
-	return bleemeoTypes.TypeUnknown
 }
 
 // registerLocalConfigItems registers local config items not present on the API.

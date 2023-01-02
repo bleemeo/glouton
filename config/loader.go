@@ -47,8 +47,10 @@ type Item struct {
 	Key string
 	// The Value for this config key.
 	Value interface{}
+	// Type of the value.
+	Type ItemType
 	// Source of the config key (can be a default value, an environment variable or a file).
-	Source Source
+	Source ItemSource
 	// Path to the file the item comes (empty when it doesn't come from a file).
 	Path string
 	// Priority of the item.
@@ -58,13 +60,30 @@ type Item struct {
 	Priority int
 }
 
-// Source represents the Source of an item.
-type Source string
+// ItemSource represents the ItemSource of an item.
+type ItemSource int
 
 const (
-	SourceDefault Source = "default"
-	SourceEnv     Source = "env"
-	SourceFile    Source = "file"
+	SourceDefault ItemSource = iota
+	SourceEnv
+	SourceFile
+)
+
+// ItemType represents the type of an item value.
+type ItemType int
+
+const (
+	TypeUnknown ItemType = iota
+	TypeInt
+	TypeFloat
+	TypeBool
+	TypeString
+	TypeListString
+	TypeListInt
+	TypeListUnknown
+	TypeMapStrStr
+	TypeMapStrInt
+	TypeMapStrUnknown
 )
 
 // Load config from a provider and add source information on config items.
@@ -90,6 +109,9 @@ func (c *configLoader) Load(path string, provider koanf.Provider, parser koanf.P
 	for key, value := range config {
 		priority := priority(providerType, key, value, c.loadCount)
 
+		// Keep the real type of the value before it's converted to JSON.
+		valueType := itemTypeFromValue(value)
+
 		// Convert value to use JSON types.
 		// This is needed because the values are stored on the Bleemeo API as JSON fields,
 		// so to compare a local value with remote value we need to convert it here.
@@ -103,6 +125,7 @@ func (c *configLoader) Load(path string, provider koanf.Provider, parser koanf.P
 		c.items = append(c.items, Item{
 			Key:      key,
 			Value:    value,
+			Type:     valueType,
 			Source:   providerType,
 			Path:     path,
 			Priority: priority,
@@ -110,6 +133,35 @@ func (c *configLoader) Load(path string, provider koanf.Provider, parser koanf.P
 	}
 
 	return warnings
+}
+
+func itemTypeFromValue(value interface{}) ItemType {
+	switch value.(type) {
+	case int:
+		return TypeInt
+	case float64:
+		return TypeFloat
+	case bool:
+		return TypeBool
+	case string:
+		return TypeString
+	case map[string]int:
+		return TypeMapStrInt
+	case map[string]string:
+		return TypeMapStrStr
+	case map[string]interface{}:
+		return TypeMapStrUnknown
+	case []string:
+		return TypeListString
+	case []int:
+		return TypeListInt
+	case []interface{}:
+		return TypeListUnknown
+	default:
+		logger.V(1).Printf("Unsupported item type %T", value)
+
+		return TypeUnknown
+	}
 }
 
 // convertToJSONTypes convert the value to only use JSON types.
@@ -219,7 +271,7 @@ func allKeys(k *koanf.Koanf) map[string]interface{} {
 // When the value is a map or an array, the items may have the same priority, in
 // this case the arrays are appended to each other, and the maps are merged.
 // It panics on unknown providers.
-func priority(provider Source, key string, value interface{}, loadCount int) int {
+func priority(provider ItemSource, key string, value interface{}, loadCount int) int {
 	const (
 		priorityDefault         = -1
 		priorityMapAndArrayFile = 1
@@ -251,7 +303,7 @@ func priority(provider Source, key string, value interface{}, loadCount int) int
 }
 
 // providerTypes return the provider type from a Koanf provider.
-func providerType(provider koanf.Provider) Source {
+func providerType(provider koanf.Provider) ItemSource {
 	switch provider.(type) {
 	case *env.Env:
 		return SourceEnv
@@ -316,40 +368,24 @@ func (c *configLoader) Build() (*koanf.Koanf, prometheus.MultiError) {
 func merge(dst interface{}, src interface{}) (interface{}, error) {
 	switch dstType := dst.(type) {
 	case []interface{}:
-		return mergeSlices(dstType, src)
-	case []string:
-		return mergeSlices(dstType, src)
+		srcSlice, ok := src.([]interface{})
+		if !ok {
+			return nil, fmt.Errorf("%w: []interface{} with %T", errCannotMerge, src)
+		}
+
+		return append(dstType, srcSlice...), nil
 	case map[string]interface{}:
-		return mergeMaps(dstType, src)
-	case map[string]int:
-		return mergeMaps(dstType, src)
+		srcMap, ok := src.(map[string]interface{})
+		if !ok {
+			return nil, fmt.Errorf("%w: map[string]interface{} with %T", errCannotMerge, src)
+		}
+
+		for key, value := range srcMap {
+			dstType[key] = value
+		}
+
+		return dstType, nil
 	default:
 		return nil, fmt.Errorf("%w: unsupported type %T", errCannotMerge, dst)
 	}
-}
-
-// mergeSlices merges two slices by appending them.
-// It returns an error if src doesn't have the same type as dst.
-func mergeSlices[T any](dst []T, src interface{}) ([]T, error) {
-	srcSlice, ok := src.([]T)
-	if !ok {
-		return nil, fmt.Errorf("%w: %T and %T are not compatible", errCannotMerge, src, dst)
-	}
-
-	return append(dst, srcSlice...), nil
-}
-
-// mergeMaps merges two maps.
-// It retursn an error if src doesn't have the same type as dst.
-func mergeMaps[T any](dst map[string]T, src interface{}) (map[string]T, error) {
-	srcMap, ok := src.(map[string]T)
-	if !ok {
-		return nil, fmt.Errorf("%w: %T and %T are not compatible", errCannotMerge, src, dst)
-	}
-
-	for key, value := range srcMap {
-		dst[key] = value
-	}
-
-	return dst, nil
 }
