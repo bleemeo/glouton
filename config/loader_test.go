@@ -18,6 +18,7 @@ package config
 
 import (
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -54,16 +55,10 @@ func TestLoader(t *testing.T) {
 			Priority: 1,
 		},
 		{
-			Key: "blackbox.targets",
-			Value: []interface{}{
-				map[string]interface{}{
-					"module": "mymodule",
-					"name":   "myname",
-					"url":    "https://bleemeo.com",
-				},
-			},
-			Type:     TypeListUnknown,
+			Key:      "blackbox.modules.mymodule.timeout",
+			Value:    float64(5 * time.Second),
 			Source:   SourceFile,
+			Type:     TypeInt,
 			Path:     path,
 			Priority: 1,
 		},
@@ -73,6 +68,20 @@ func TestLoader(t *testing.T) {
 				200.0,
 			},
 			Type:     TypeListInt,
+			Source:   SourceFile,
+			Path:     path,
+			Priority: 1,
+		},
+		{
+			Key: "blackbox.targets",
+			Value: []interface{}{
+				map[string]interface{}{
+					"module": "mymodule",
+					"name":   "myname",
+					"url":    "https://bleemeo.com",
+				},
+			},
+			Type:     TypeListUnknown,
 			Source:   SourceFile,
 			Path:     path,
 			Priority: 1,

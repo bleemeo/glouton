@@ -23,6 +23,7 @@ import (
 	"math"
 	"reflect"
 	"strings"
+	"time"
 
 	"github.com/knadh/koanf"
 	"github.com/knadh/koanf/providers/confmap"
@@ -137,7 +138,7 @@ func (c *configLoader) Load(path string, provider koanf.Provider, parser koanf.P
 
 func itemTypeFromValue(value interface{}) ItemType {
 	switch value.(type) {
-	case int:
+	case int, time.Duration:
 		return TypeInt
 	case float64:
 		return TypeFloat

@@ -21,6 +21,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/mitchellh/mapstructure"
 	bbConf "github.com/prometheus/blackbox_exporter/config"
@@ -38,8 +39,18 @@ func blackboxModuleHookFunc() mapstructure.DecodeHookFuncType {
 			return data, nil
 		}
 
-		// The data is a map[string]interface{}.
-		marshalled, err := yaml.Marshal(data)
+		srcModule, ok := data.(map[string]interface{})
+		if !ok {
+			return data, nil
+		}
+
+		// Durations are converted to float64 values in the config loader,
+		// but unmarshalling float64 to a duration fails, so we convert it.
+		if timeout, ok := srcModule["timeout"].(float64); ok {
+			srcModule["timeout"] = time.Duration(timeout)
+		}
+
+		marshalled, err := yaml.Marshal(srcModule)
 		if err != nil {
 			return nil, fmt.Errorf("%w: cannot marshal blackbox_exporter module configuration: %s", ErrInvalidValue, err)
 		}

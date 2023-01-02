@@ -71,8 +71,6 @@ func (s *Synchronizer) syncConfig(
 		return false, err
 	}
 
-	fmt.Println("!!! end sync")
-
 	return false, nil
 }
 
@@ -146,6 +144,7 @@ func shortenCharField(field string) string {
 	return field[:maxChar]
 }
 
+// Convert a config item source to a Bleemeo config item source.
 func bleemeoItemSourceFromConfigSource(source config.ItemSource) bleemeoTypes.ConfigItemSource {
 	switch source {
 	case config.SourceFile:
@@ -159,6 +158,9 @@ func bleemeoItemSourceFromConfigSource(source config.ItemSource) bleemeoTypes.Co
 	}
 }
 
+// Convert a config item type to a Bleemeo config item type.
+// Both enums are very similar, but they are duplicated to not
+// put any Bleemeo API specific types in the config.
 func bleemeoItemTypeFromConfigType(source config.ItemType) bleemeoTypes.ConfigItemType {
 	switch source {
 	case config.TypeBool:
@@ -181,6 +183,8 @@ func bleemeoItemTypeFromConfigType(source config.ItemType) bleemeoTypes.ConfigIt
 		return bleemeoTypes.TypeMapStrInt
 	case config.TypeMapStrUnknown:
 		return bleemeoTypes.TypeMapStrUnknown
+	case config.TypeUnknown:
+		return bleemeoTypes.TypeUnknown
 	default:
 		return bleemeoTypes.TypeUnknown
 	}
