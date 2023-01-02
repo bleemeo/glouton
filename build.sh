@@ -2,7 +2,7 @@
 
 set -e
 
-GORELEASER_VERSION="v1.12.3"
+GORELEASER_VERSION="v1.14.1"
 USER_UID=$(id -u)
 
 rm -fr work
