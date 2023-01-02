@@ -92,6 +92,9 @@ type Synchronizer struct {
 	lastMetricCount         int
 	agentID                 string
 
+	// configSyncDone is true when the config items were successfully synced.
+	configSyncDone bool
+
 	// An edge case occurs when an agent is spawned while the maintenance mode is enabled on the backend:
 	// the agent cannot register agent_status, thus the MQTT connector cannot start, and we cannot receive
 	// notifications to tell us the backend is out of maintenance. So we resort to HTTP polling every 15
@@ -753,7 +756,7 @@ func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) (map[str
 				if firstErr == nil {
 					firstErr = err
 				} else if !client.IsAuthError(firstErr) && client.IsAuthError(err) {
-					// Prefere returning Authentication error that other errors
+					// Prefer returning Authentication error than other errors.
 					firstErr = err
 				}
 			}
@@ -762,7 +765,7 @@ func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) (map[str
 
 			if onlyEssential && !step.skipOnlyEssential {
 				// We registered only essential object. Make sure all other
-				// object are registered on second run
+				// objects are registered on the second run.
 				s.l.Lock()
 				s.forceSync[step.name] = false || s.forceSync[step.name]
 				s.l.Unlock()
@@ -833,7 +836,6 @@ func (s *Synchronizer) syncToPerform(ctx context.Context) map[string]bool {
 		syncMethods[syncMethodMonitor] = fullSync
 		syncMethods[syncMethodSNMP] = fullSync
 		syncMethods[syncMethodAlertingRules] = fullSync
-		syncMethods[syncMethodConfig] = fullSync
 	}
 
 	if fullSync || s.lastFactUpdatedAt != localFacts["fact_updated_at"] {
@@ -843,6 +845,12 @@ func (s *Synchronizer) syncToPerform(ctx context.Context) map[string]bool {
 	if s.lastSNMPcount != s.option.SNMPOnlineTarget() {
 		syncMethods[syncMethodFact] = fullSync
 		syncMethods[syncMethodSNMP] = fullSync
+	}
+
+	// After a reload, the config has been changed, so we want to do a fullsync
+	// without waiting the nextFullSync that is kept between reload.
+	if fullSync || !s.configSyncDone {
+		syncMethods[syncMethodConfig] = true
 	}
 
 	minDelayed := time.Time{}

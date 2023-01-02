@@ -47,7 +47,7 @@ func (s *Synchronizer) syncConfig(
 	fullSync bool,
 	onlyEssential bool,
 ) (updateThresholds bool, err error) {
-	// The config is not essential and synchronisation is done only during full sync.
+	// The config is not essential and can be registered later.
 	if onlyEssential || !fullSync {
 		return false, nil
 	}
@@ -70,6 +70,8 @@ func (s *Synchronizer) syncConfig(
 	if err != nil {
 		return false, err
 	}
+
+	s.configSyncDone = true
 
 	return false, nil
 }
@@ -220,6 +222,8 @@ func (s *Synchronizer) registerLocalConfigItems(
 		if err != nil {
 			return err
 		}
+
+		logger.V(2).Printf(`Config item "%s" from %s %s registered`, item.Key, item.Source, item.Path)
 	}
 
 	return nil
@@ -249,6 +253,11 @@ func (s *Synchronizer) removeRemoteConfigItems(
 
 			return err
 		}
+
+		logger.V(2).Printf(
+			`Config item %s ("%s" from %s %s) deleted`,
+			remoteItem.ID, remoteKey.Key, remoteKey.Source, remoteKey.Path,
+		)
 	}
 
 	return nil

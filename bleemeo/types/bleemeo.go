@@ -231,7 +231,7 @@ func (kind FailureKind) String() string {
 	case FailureTooManyCustomMetrics:
 		return "too-many-custom-metrics"
 	case FailureUnknown:
-		return "unknown"
+		return "unknown" //nolint:goconst
 	default:
 		return "unknown"
 	}
@@ -360,6 +360,23 @@ const (
 	SourceDefault ConfigItemSource = 3
 	SourceAPI     ConfigItemSource = 4
 )
+
+func (c ConfigItemSource) String() string {
+	switch c {
+	case SourceFile:
+		return "file"
+	case SourceEnv:
+		return "env"
+	case SourceDefault:
+		return "default"
+	case SourceAPI:
+		return "api"
+	case SourceUnknown:
+		return "unknown"
+	default:
+		return "unknown"
+	}
+}
 
 // ConfigItemType enumeration on the Bleemeo API.
 // This should always be the same as the enumeration on the API.
