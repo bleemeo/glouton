@@ -678,7 +678,7 @@ func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) (map[str
 		s.waitCPUMetric(ctx)
 	}
 
-	syncMethods := s.syncToPerform(ctx)
+	syncMethods, fullsync := s.syncToPerform(ctx)
 
 	if len(syncMethods) == 0 {
 		return syncMethods, nil
@@ -788,7 +788,7 @@ func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) (map[str
 		s.UpdateUnitsAndThresholds(ctx, false)
 	}
 
-	if len(syncMethods) == len(syncStep) && firstErr == nil {
+	if fullsync && firstErr == nil {
 		s.option.Cache.Save()
 		s.fullSyncCount++
 		s.nextFullSync = s.now().Add(delay.JitterDelay(
@@ -811,7 +811,10 @@ func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) (map[str
 	return syncMethods, firstErr
 }
 
-func (s *Synchronizer) syncToPerform(ctx context.Context) map[string]bool {
+// syncToPerform returns the methods that should be synced in a map. For each method
+// in the map, the value indicates whether a fullsync should be performed.
+// It also returns true if the current sync is a full sync.
+func (s *Synchronizer) syncToPerform(ctx context.Context) (map[string]bool, bool) {
 	s.l.Lock()
 	defer s.l.Unlock()
 
@@ -905,7 +908,7 @@ func (s *Synchronizer) syncToPerform(ctx context.Context) map[string]bool {
 		syncMethods[syncMethodInfo] = false || syncMethods[syncMethodInfo]
 	}
 
-	return syncMethods
+	return syncMethods, fullSync
 }
 
 func (s *Synchronizer) checkDuplicated() error {
