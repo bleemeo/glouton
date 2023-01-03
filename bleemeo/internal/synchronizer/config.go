@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"glouton/bleemeo/client"
+	"glouton/bleemeo/internal/common"
 	bleemeoTypes "glouton/bleemeo/types"
 	"glouton/config"
 	"glouton/logger"
@@ -121,11 +122,17 @@ func (s *Synchronizer) localConfigItems() map[comparableConfigItem]interface{} {
 	items := make(map[comparableConfigItem]interface{}, len(s.option.ConfigItems))
 
 	for _, item := range s.option.ConfigItems {
+		// Ignore items with key or path too long because we won't be able to register them.
+		if len(item.Key) > common.APIConfigItemKeyLength ||
+			len(item.Path) > common.APIConfigItemPathLength {
+			continue
+		}
+
 		key := comparableConfigItem{
-			Key:      shortenCharField(item.Key),
+			Key:      item.Key,
 			Priority: item.Priority,
 			Source:   bleemeoItemSourceFromConfigSource(item.Source),
-			Path:     shortenCharField(item.Path),
+			Path:     item.Path,
 			Type:     bleemeoItemTypeFromConfigType(item.Type),
 		}
 
@@ -133,17 +140,6 @@ func (s *Synchronizer) localConfigItems() map[comparableConfigItem]interface{} {
 	}
 
 	return items
-}
-
-// Shorten a field to make it registerable on the API.
-func shortenCharField(field string) string {
-	const maxChar = 100
-
-	if len(field) <= maxChar {
-		return field
-	}
-
-	return field[:maxChar]
 }
 
 // Convert a config item source to a Bleemeo config item source.
@@ -237,6 +233,11 @@ func (s *Synchronizer) removeRemoteConfigItems(
 ) error {
 	// Find and remove remote items that are not present locally.
 	for remoteKey, remoteItem := range remoteConfigItems {
+		// Skip API source, these items are managed by the API itself.
+		if remoteKey.Source == bleemeoTypes.SourceAPI {
+			continue
+		}
+
 		localValue, ok := localConfigItems[remoteKey]
 
 		// Skip items that already exist locally.
