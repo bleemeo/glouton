@@ -75,7 +75,7 @@ type Client struct {
 	ctx                        context.Context //nolint:containedctx
 	mqtt                       bleemeoTypes.MQTTClient
 	encoder                    mqtt.Encoder
-	failedPoints               []types.MetricPoint
+	failedPoints               failedPointsCache
 	lastRegisteredMetricsCount int
 	lastFailedPointsRetry      time.Time
 	// Whether we should log that all failed points have
@@ -85,7 +85,6 @@ type Client struct {
 	l                sync.Mutex
 	startedAt        time.Time
 	pendingPoints    []types.MetricPoint
-	maxPointCount    int
 	sendingSuspended bool // stop sending points, used when the user is read-only mode
 	disableReason    bleemeoTypes.DisableReason
 }
@@ -113,6 +112,12 @@ func New(opts Option) *Client {
 
 	c := &Client{
 		opts: opts,
+	}
+
+	c.failedPoints = failedPointsCache{
+		metricExists:        make(map[string]struct{}),
+		maxPendingPoints:    maxPendingPoints,
+		cleanupFailedPoints: c.cleanupFailedPoints,
 	}
 
 	checkDuplicate := func(ctx context.Context) {
@@ -265,28 +270,31 @@ func (c *Client) DiagnosticArchive(ctx context.Context, archive types.ArchiveWri
 	c.l.Lock()
 	defer c.l.Unlock()
 
-	if len(c.failedPoints) > 100 {
+	if c.failedPoints.Len() > 100 {
 		file, err := archive.Create("mqtt-failed-metric-points.txt")
 		if err != nil {
 			return err
 		}
 
-		maxSample := 50
+		const maxSample = 50
 
-		fmt.Fprintf(file, "MQTT connector has %d points that are failing.\n", len(c.failedPoints))
+		fmt.Fprintf(file, "MQTT connector has %d points that are failing.\n", c.failedPoints.Len())
 		fmt.Fprintf(file, "It usually happen when MQTT is not connector OR when metric are not registered with Bleemeo.\n")
 
-		if maxSample > len(c.failedPoints) {
+		if c.failedPoints.Len() < maxSample {
 			fmt.Fprintf(file, "Here is the list of all blocked metrics:\n")
 
-			for _, p := range c.failedPoints {
+			for _, p := range c.failedPoints.Copy() {
 				fmt.Fprintf(file, "%v\n", p.Labels)
 			}
 		} else {
 			fmt.Fprintf(file, "Here is a sample of %d blocked metrics:\n", maxSample)
-			indices := rand.Perm(len(c.failedPoints))
+
+			indices := rand.Perm(c.failedPoints.Len())
+			failedPointsCopy := c.failedPoints.Copy()
+
 			for _, i := range indices[:maxSample] {
-				p := c.failedPoints[i]
+				p := failedPointsCopy[i]
 				fmt.Fprintf(file, "%v\n", p.Labels)
 			}
 		}
@@ -306,7 +314,6 @@ func (c *Client) DiagnosticArchive(ctx context.Context, archive types.ArchiveWri
 		LastRegisteredMetricsCount int
 		LastFailedPointsRetry      time.Time
 		PendingPointsCount         int
-		MaxPointCount              int
 		SendingSuspended           bool
 		DisableReason              bleemeoTypes.DisableReason
 	}{
@@ -314,7 +321,6 @@ func (c *Client) DiagnosticArchive(ctx context.Context, archive types.ArchiveWri
 		LastRegisteredMetricsCount: c.lastRegisteredMetricsCount,
 		LastFailedPointsRetry:      c.lastFailedPointsRetry,
 		PendingPointsCount:         len(c.pendingPoints),
-		MaxPointCount:              c.maxPointCount,
 		SendingSuspended:           c.sendingSuspended,
 		DisableReason:              c.disableReason,
 	}
@@ -343,7 +349,7 @@ func (c *Client) HealthCheck() bool {
 	c.l.Lock()
 	defer c.l.Unlock()
 
-	failedPointsCount := len(c.failedPoints)
+	failedPointsCount := c.failedPoints.Len()
 
 	switch {
 	case failedPointsCount >= maxPendingPoints:
@@ -509,8 +515,7 @@ func (c *Client) PopPoints(includeFailedPoints bool) []types.MetricPoint {
 	var points []types.MetricPoint
 
 	if includeFailedPoints {
-		points = c.failedPoints
-		c.failedPoints = nil
+		points = c.failedPoints.Pop()
 	}
 
 	points = append(points, c.pendingPoints...)
@@ -536,18 +541,20 @@ func (c *Client) sendPoints() {
 		return
 	}
 
-	registreredMetricByKey := c.opts.Cache.MetricLookupFromList()
+	registeredMetricByKey := c.opts.Cache.MetricLookupFromList()
 
-	if len(c.failedPoints) > 0 && c.connected() && (time.Since(c.lastFailedPointsRetry) > 5*time.Minute || len(registreredMetricByKey) != c.lastRegisteredMetricsCount) {
-		c.lastRegisteredMetricsCount = len(registreredMetricByKey)
+	// Retry failed points every 5 minutes, or instantly if a new metric was registered.
+	if c.failedPoints.Len() > 0 && c.connected() &&
+		(time.Since(c.lastFailedPointsRetry) > 5*time.Minute ||
+			len(registeredMetricByKey) != c.lastRegisteredMetricsCount) {
+		c.lastRegisteredMetricsCount = len(registeredMetricByKey)
 		c.lastFailedPointsRetry = time.Now()
 
-		points = append(c.failedPoints, points...)
-		c.failedPoints = nil
+		points = append(c.failedPoints.Pop(), points...)
 	}
 
 	points = c.filterPoints(points)
-	payload := c.preparePoints(registreredMetricByKey, points)
+	payload := c.preparePoints(registeredMetricByKey, points)
 	nbPoints := 0
 
 	for _, metrics := range payload {
@@ -579,38 +586,23 @@ func (c *Client) sendPoints() {
 func (c *Client) addFailedPoints(points ...types.MetricPoint) {
 	for _, p := range points {
 		key := types.LabelsToText(p.Labels)
-		if reg := c.opts.Cache.MetricRegistrationsFailByKey()[key]; reg.FailCounter > 5 || reg.LastFailKind.IsPermanentFailure() {
+
+		// Ignore metrics that failed to register too many times.
+		reg := c.opts.Cache.MetricRegistrationsFailByKey()[key]
+		if reg.FailCounter > 5 || reg.LastFailKind.IsPermanentFailure() {
 			continue
 		}
 
-		c.failedPoints = append(c.failedPoints, p)
-	}
-
-	if len(c.failedPoints) > maxPendingPoints {
-		c.maxPointCount++
-
-		// To avoid a memory leak (due to "purge" by re-slicing),
-		// copy points to a fresh array from time-to-time. We don't do it
-		// every run to reduce the impact of copy().
-		if c.maxPointCount%50 == 0 {
-			// At the same time, cleanup any points that won't be sent. Clean will copy points.
-			c.cleanupFailedPoints()
-			numberToDrop := len(c.failedPoints) - maxPendingPoints
-
-			if numberToDrop > 0 {
-				c.failedPoints = c.failedPoints[numberToDrop:len(c.failedPoints)]
-			}
-		} else {
-			c.failedPoints = c.failedPoints[len(c.failedPoints)-maxPendingPoints : len(c.failedPoints)]
-		}
+		c.failedPoints.Add(p)
 	}
 }
 
 // cleanupFailedPoints remove points from deleted metrics or points for metric denied by configuration.
-func (c *Client) cleanupFailedPoints() {
+func (c *Client) cleanupFailedPoints(failedPoints []types.MetricPoint) []types.MetricPoint {
+	// Remove points for points that are no longer present in the store.
 	localMetrics, err := c.opts.Store.Metrics(nil)
 	if err != nil {
-		return
+		return failedPoints
 	}
 
 	localExistsByKey := make(map[string]bool, len(localMetrics))
@@ -620,59 +612,78 @@ func (c *Client) cleanupFailedPoints() {
 		localExistsByKey[key] = true
 	}
 
-	newPoints := make([]types.MetricPoint, 0, len(c.failedPoints))
+	newPoints := make([]types.MetricPoint, 0, len(failedPoints))
 
-	for _, p := range c.failedPoints {
+	for _, p := range failedPoints {
 		key := types.LabelsToText(p.Labels)
 		if localExistsByKey[key] {
 			newPoints = append(newPoints, p)
 		}
 	}
 
-	c.failedPoints = c.filterPoints(newPoints)
+	// Remove points that are not allowed in the current plan.
+	return c.filterPoints(newPoints)
 }
 
-// preparePoints updates the MQTT payload by processing some points and returning the a map between agent uuids and the metrics.
-func (c *Client) preparePoints(registreredMetricByKey map[string]bleemeoTypes.Metric, points []types.MetricPoint) map[bleemeoTypes.AgentID][]metricPayload {
-	payload := make(map[bleemeoTypes.AgentID][]metricPayload, 1)
+// preparePoints returns the MQTT payload by processing some points and returning a map of metrics by agent ID.
+func (c *Client) preparePoints(
+	registeredMetricByKey map[string]bleemeoTypes.Metric,
+	points []types.MetricPoint,
+) map[bleemeoTypes.AgentID][]metricPayload {
+	payloadByAgent := make(map[bleemeoTypes.AgentID][]metricPayload, 1)
 
 	for _, p := range points {
 		key := common.MetricKey(p.Labels, p.Annotations, string(c.opts.AgentID))
-		if m, ok := registreredMetricByKey[key]; ok && m.DeactivatedAt.IsZero() {
-			value := metricPayload{
-				LabelsText:  m.LabelsText,
-				TimestampMS: p.Time.UnixNano() / 1e6,
-				Value:       p.Value,
-			}
+		metric, ok := registeredMetricByKey[key]
 
-			if c.opts.MetricFormat == types.MetricFormatBleemeo && common.MetricOnlyHasItem(m.Labels, m.AgentID) {
-				value.UUID = m.ID
-				value.LabelsText = ""
-			}
+		// Don't send point if its associated metric is deactivated or not yet registered.
+		// Also add the point to the failed points if a previous point from the same
+		// metric is in the failed points. This ensures that points are sent in the right
+		// order when a metric is registered.
+		if !ok || !metric.DeactivatedAt.IsZero() || c.failedPoints.Contains(p.Labels) {
+			c.addFailedPoints(p)
 
-			if p.Annotations.Status.CurrentStatus.IsSet() {
-				value.Status = p.Annotations.Status.CurrentStatus.String()
-				value.StatusDescription = p.Annotations.Status.StatusDescription
+			continue
+		}
 
-				if p.Annotations.ContainerID != "" {
-					lastKilledAt := c.opts.Docker.ContainerLastKill(p.Annotations.ContainerID)
-					gracePeriod := time.Since(lastKilledAt) + 300*time.Second
+		payload := metricPayload{
+			LabelsText:  metric.LabelsText,
+			TimestampMS: p.Time.UnixMilli(),
+			Value:       p.Value,
+		}
 
-					if gracePeriod > 60*time.Second {
-						value.EventGracePeriod = int(gracePeriod.Seconds())
-					}
+		// Don't send labels text if the metric only has a name and an item.
+		if c.opts.MetricFormat == types.MetricFormatBleemeo && common.MetricOnlyHasItem(metric.Labels, metric.AgentID) {
+			// The metric ID is not used when labels text are present
+			// because they already uniquely identify the metric.
+			payload.UUID = metric.ID
+			payload.LabelsText = ""
+		}
+
+		if p.Annotations.Status.CurrentStatus.IsSet() {
+			payload.Status = p.Annotations.Status.CurrentStatus.String()
+			payload.StatusDescription = p.Annotations.Status.StatusDescription
+
+			// Add a 5 minutes grace period after a container was killed.
+			// This should prevent notifications when running "docker compose up -d --pull always".
+			if p.Annotations.ContainerID != "" {
+				lastKilledAt := c.opts.Docker.ContainerLastKill(p.Annotations.ContainerID)
+				gracePeriod := 5*time.Minute - time.Since(lastKilledAt)
+
+				// Ignore grace period shorter than 1 minute. Without an explicit
+				// grace period, a default of 1 minute will be used.
+				if gracePeriod > time.Minute {
+					payload.EventGracePeriod = int(gracePeriod.Seconds())
 				}
 			}
-
-			bleemeoAgentID := bleemeoTypes.AgentID(m.AgentID)
-
-			payload[bleemeoAgentID] = append(payload[bleemeoAgentID], value)
-		} else {
-			c.addFailedPoints(p)
 		}
+
+		bleemeoAgentID := bleemeoTypes.AgentID(metric.AgentID)
+
+		payloadByAgent[bleemeoAgentID] = append(payloadByAgent[bleemeoAgentID], payload)
 	}
 
-	return payload
+	return payloadByAgent
 }
 
 func (c *Client) onConnect(mqttClient paho.Client) {
@@ -837,4 +848,104 @@ func (c *Client) receiveEvents(ctx context.Context) {
 			return
 		}
 	}
+}
+
+// failedPointsCache stores failed points and can check if a metric is present in the points.
+type failedPointsCache struct {
+	maxPendingPoints int
+
+	l      sync.Mutex
+	points []types.MetricPoint
+	// Map of metric names contained in the points.
+	metricExists        map[string]struct{}
+	cleanupFailedPoints func(failedPoints []types.MetricPoint) []types.MetricPoint
+	tooManyPointsCount  int
+}
+
+// Add points to the cache.
+func (p *failedPointsCache) Add(points ...types.MetricPoint) {
+	p.l.Lock()
+	defer p.l.Unlock()
+
+	p.addNoLock(points...)
+}
+
+// Add points to the cache
+// The lock should be held when calling this method.
+func (p *failedPointsCache) addNoLock(points ...types.MetricPoint) {
+	for _, point := range points {
+		p.metricExists[types.LabelsToText(point.Labels)] = struct{}{}
+	}
+
+	p.points = append(p.points, points...)
+
+	// Remove some old points if there are too many points.
+	if len(p.points) > p.maxPendingPoints {
+		p.tooManyPointsCount++
+
+		newPoints := p.popNoLock()
+
+		// To avoid a memory leak (due to "purge" by re-slicing),
+		// copy points to a fresh array from time-to-time. We don't do it
+		// every run to reduce the impact of copy().
+		if p.tooManyPointsCount%50 == 0 {
+			// At the same time, cleanup any points that won't be sent. Clean will copy points.
+			newPoints = p.cleanupFailedPoints(newPoints)
+		}
+
+		numberToDrop := len(newPoints) - p.maxPendingPoints
+		if numberToDrop > 0 {
+			newPoints = newPoints[numberToDrop:]
+		}
+
+		p.addNoLock(newPoints...)
+	}
+}
+
+// Pop the metric points.
+func (p *failedPointsCache) Pop() []types.MetricPoint {
+	p.l.Lock()
+	defer p.l.Unlock()
+
+	return p.popNoLock()
+}
+
+// Pop the metric points.
+// The lock should be held when calling this method.
+func (p *failedPointsCache) popNoLock() []types.MetricPoint {
+	points := p.points
+	p.points = nil
+
+	for metric := range p.metricExists {
+		delete(p.metricExists, metric)
+	}
+
+	return points
+}
+
+// Copy returns a copy of the metric points.
+func (p *failedPointsCache) Copy() []types.MetricPoint {
+	p.l.Lock()
+	defer p.l.Unlock()
+
+	pointsCopy := make([]types.MetricPoint, len(p.points))
+
+	copy(pointsCopy, p.points)
+
+	return pointsCopy
+}
+
+// Len returns the number of points in the cache.
+func (p *failedPointsCache) Len() int {
+	p.l.Lock()
+	defer p.l.Unlock()
+
+	return len(p.points)
+}
+
+// Contains returns whether the labels correspond to a failed point.
+func (p *failedPointsCache) Contains(labels map[string]string) bool {
+	_, ok := p.metricExists[types.LabelsToText(labels)]
+
+	return ok
 }
