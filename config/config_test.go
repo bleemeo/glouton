@@ -853,6 +853,13 @@ func TestDump(t *testing.T) {
 				ID:          "in-dump",
 				Password:    "not-in-dump",
 				JMXPassword: "not-in-dump",
+				KeyFile:     "not-in-dump",
+			},
+			{
+				ID:          "in-dump-2",
+				Password:    "",
+				JMXPassword: "",
+				KeyFile:     "",
 			},
 		},
 	}
@@ -871,6 +878,13 @@ func TestDump(t *testing.T) {
 				Password:    "*****",
 				JMXPassword: "*****",
 				KeyFile:     "*****",
+			},
+			{
+				ID: "in-dump-2",
+				// In dump because these fields were unset.
+				Password:    "",
+				JMXPassword: "",
+				KeyFile:     "",
 			},
 		},
 	}

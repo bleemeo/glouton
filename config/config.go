@@ -545,47 +545,55 @@ func Dump(config Config) map[string]interface{} {
 	k := koanf.New(delimiter)
 	_ = k.Load(structs.Provider(config, Tag), nil)
 
-	return dump(k.Raw())
+	return dumpMap(k.Raw())
 }
 
-func dump(root map[string]interface{}) map[string]interface{} {
-	secretKey := []string{"key", "secret", "password", "passwd"}
-
+func dumpMap(root map[string]interface{}) map[string]interface{} {
 	for k, v := range root {
-		isSecret := false
-
-		for _, name := range secretKey {
-			if strings.Contains(k, name) {
-				isSecret = true
-
-				break
-			}
-		}
-
-		if isSecret {
-			root[k] = "*****"
-
-			continue
-		}
-
-		switch v := v.(type) {
-		case map[string]interface{}:
-			root[k] = dump(v)
-		case []interface{}:
-			root[k] = dumpList(v)
-		default:
-			root[k] = v
-		}
+		root[k] = CensorSecretItem(k, v)
 	}
 
 	return root
+}
+
+// CensorSecretItem returns the censored item value with secrets
+// and password removed for safe external use.
+func CensorSecretItem(key string, value interface{}) interface{} {
+	if isSecret(key) {
+		// Don't censor unset secrets.
+		if valueStr, ok := value.(string); ok && valueStr == "" {
+			return ""
+		}
+
+		return "*****"
+	}
+
+	switch value := value.(type) {
+	case map[string]interface{}:
+		return dumpMap(value)
+	case []interface{}:
+		return dumpList(value)
+	default:
+		return value
+	}
+}
+
+// isSecret returns whether the given config key corresponds to a secret.
+func isSecret(key string) bool {
+	for _, name := range []string{"key", "secret", "password", "passwd"} {
+		if strings.Contains(key, name) {
+			return true
+		}
+	}
+
+	return false
 }
 
 func dumpList(root []interface{}) []interface{} {
 	for i, v := range root {
 		switch v := v.(type) {
 		case map[string]interface{}:
-			root[i] = dump(v)
+			root[i] = dumpMap(v)
 		case []interface{}:
 			root[i] = dumpList(v)
 		default:

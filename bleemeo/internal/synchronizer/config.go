@@ -128,6 +128,9 @@ func (s *Synchronizer) localConfigItems() map[comparableConfigItem]interface{} {
 			continue
 		}
 
+		// Censor secrets and passwords on the API.
+		item.Value = config.CensorSecretItem(item.Key, item.Value)
+
 		key := comparableConfigItem{
 			Key:      item.Key,
 			Priority: item.Priority,
