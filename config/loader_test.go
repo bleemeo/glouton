@@ -64,7 +64,7 @@ func TestLoader(t *testing.T) {
 		},
 		{
 			Key: "blackbox.modules.mymodule.http.valid_status_codes",
-			Value: []interface{}{
+			Value: []any{
 				200.0,
 			},
 			Type:     TypeListInt,
@@ -74,14 +74,14 @@ func TestLoader(t *testing.T) {
 		},
 		{
 			Key: "blackbox.targets",
-			Value: []interface{}{
-				map[string]interface{}{
+			Value: []any{
+				map[string]any{
 					"module": "mymodule",
 					"name":   "myname",
 					"url":    "https://bleemeo.com",
 				},
 			},
-			Type:     TypeListUnknown,
+			Type:     TypeBlackboxTargets,
 			Source:   SourceFile,
 			Path:     path,
 			Priority: 1,
@@ -96,7 +96,7 @@ func TestLoader(t *testing.T) {
 		},
 		{
 			Key: "disk_monitor",
-			Value: []interface{}{
+			Value: []any{
 				"sda",
 			},
 			Type:     TypeListString,
@@ -114,7 +114,7 @@ func TestLoader(t *testing.T) {
 		},
 		{
 			Key: "metric.softstatus_period",
-			Value: map[string]interface{}{
+			Value: map[string]any{
 				"cpu_used": 60.0,
 			},
 			Type:     TypeMapStrInt,
@@ -123,9 +123,45 @@ func TestLoader(t *testing.T) {
 			Priority: 1,
 		},
 		{
+			Key: "metric.prometheus.targets",
+			Value: []any{
+				map[string]any{
+					"allow_metrics": nil,
+					"deny_metrics":  nil,
+					"name":          "my_app",
+					"url":           "http://localhost:8080/metrics",
+				},
+			},
+			Type:     TypePrometheusTargets,
+			Source:   SourceFile,
+			Path:     path,
+			Priority: 1,
+		},
+		{
+			Key:      "metric.snmp.exporter_address",
+			Value:    "localhost",
+			Type:     TypeString,
+			Source:   SourceFile,
+			Path:     path,
+			Priority: 1,
+		},
+		{
+			Key: "metric.snmp.targets",
+			Value: []any{
+				map[string]any{
+					"initial_name": "AP Wifi",
+					"target":       "127.0.0.1",
+				},
+			},
+			Type:     TypeSNMPTargets,
+			Source:   SourceFile,
+			Path:     path,
+			Priority: 1,
+		},
+		{
 			Key: "service",
-			Value: []interface{}{
-				map[string]interface{}{
+			Value: []any{
+				map[string]any{
 					"address":             "",
 					"ca_file":             "",
 					"http_host":           "",
@@ -134,7 +170,7 @@ func TestLoader(t *testing.T) {
 					"ssl":                 false,
 					"ssl_insecure":        false,
 					"included_items":      nil,
-					"jmx_metrics":         []interface{}{},
+					"jmx_metrics":         []any{},
 					"match_process":       "",
 					"stack":               "",
 					"starttls":            false,
@@ -161,22 +197,48 @@ func TestLoader(t *testing.T) {
 					"username":            "",
 				},
 			},
-			Type:     TypeListUnknown,
+			Type:     TypeServices,
+			Source:   SourceFile,
+			Path:     path,
+			Priority: 1,
+		},
+		{
+			Key: "service_ignore_check",
+			Value: []any{
+				map[string]any{
+					"instance": "host:* container:*",
+					"name":     "postgresql",
+				},
+			},
+			Type:     TypeNameInstances,
+			Source:   SourceFile,
+			Path:     path,
+			Priority: 1,
+		},
+		{
+			Key: "service_ignore_metrics",
+			Value: []any{
+				map[string]any{
+					"instance": "host:*",
+					"name":     "redis",
+				},
+			},
+			Type:     TypeNameInstances,
 			Source:   SourceFile,
 			Path:     path,
 			Priority: 1,
 		},
 		{
 			Key: "thresholds",
-			Value: map[string]interface{}{
-				"cpu_used": map[string]interface{}{
+			Value: map[string]any{
+				"cpu_used": map[string]any{
 					"high_critical": 90.0,
 					"high_warning":  nil,
 					"low_critical":  nil,
 					"low_warning":   nil,
 				},
 			},
-			Type:     TypeMapStrUnknown,
+			Type:     TypeThresholds,
 			Source:   SourceFile,
 			Path:     path,
 			Priority: 1,

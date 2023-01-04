@@ -173,18 +173,26 @@ func bleemeoItemTypeFromConfigType(source config.ItemType) bleemeoTypes.ConfigIt
 		return bleemeoTypes.TypeListString
 	case config.TypeListInt:
 		return bleemeoTypes.TypeListInt
-	case config.TypeListUnknown:
-		return bleemeoTypes.TypeListUnknown
 	case config.TypeMapStrStr:
 		return bleemeoTypes.TypeMapStrStr
 	case config.TypeMapStrInt:
 		return bleemeoTypes.TypeMapStrInt
-	case config.TypeMapStrUnknown:
-		return bleemeoTypes.TypeMapStrUnknown
-	case config.TypeUnknown:
-		return bleemeoTypes.TypeUnknown
+	case config.TypeThresholds:
+		return bleemeoTypes.TypeThresholds
+	case config.TypeServices:
+		return bleemeoTypes.TypeServices
+	case config.TypeNameInstances:
+		return bleemeoTypes.TypeNameInstances
+	case config.TypeBlackboxTargets:
+		return bleemeoTypes.TypeBlackboxTargets
+	case config.TypePrometheusTargets:
+		return bleemeoTypes.TypePrometheusTargets
+	case config.TypeSNMPTargets:
+		return bleemeoTypes.TypeSNMPTargets
+	case config.TypeAny:
+		return bleemeoTypes.TypeAny
 	default:
-		return bleemeoTypes.TypeUnknown
+		return bleemeoTypes.TypeAny
 	}
 }
 

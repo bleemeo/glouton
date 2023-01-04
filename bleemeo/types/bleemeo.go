@@ -383,15 +383,19 @@ func (c ConfigItemSource) String() string {
 type ConfigItemType int
 
 const (
-	TypeUnknown       ConfigItemType = 0
-	TypeInt           ConfigItemType = 1
-	TypeFloat         ConfigItemType = 2
-	TypeBool          ConfigItemType = 3
-	TypeString        ConfigItemType = 4
-	TypeListString    ConfigItemType = 10
-	TypeListInt       ConfigItemType = 11
-	TypeListUnknown   ConfigItemType = 12
-	TypeMapStrStr     ConfigItemType = 20
-	TypeMapStrInt     ConfigItemType = 21
-	TypeMapStrUnknown ConfigItemType = 22
+	TypeAny               ConfigItemType = 0
+	TypeInt               ConfigItemType = 1
+	TypeFloat             ConfigItemType = 2
+	TypeBool              ConfigItemType = 3
+	TypeString            ConfigItemType = 4
+	TypeListString        ConfigItemType = 10
+	TypeListInt           ConfigItemType = 11
+	TypeMapStrStr         ConfigItemType = 20
+	TypeMapStrInt         ConfigItemType = 21
+	TypeThresholds        ConfigItemType = 30
+	TypeServices          ConfigItemType = 31
+	TypeNameInstances     ConfigItemType = 32
+	TypeBlackboxTargets   ConfigItemType = 33
+	TypePrometheusTargets ConfigItemType = 34
+	TypeSNMPTargets       ConfigItemType = 35
 )

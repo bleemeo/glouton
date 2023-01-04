@@ -74,17 +74,21 @@ const (
 type ItemType int
 
 const (
-	TypeUnknown ItemType = iota
+	TypeAny ItemType = iota
 	TypeInt
 	TypeFloat
 	TypeBool
 	TypeString
 	TypeListString
 	TypeListInt
-	TypeListUnknown
 	TypeMapStrStr
 	TypeMapStrInt
-	TypeMapStrUnknown
+	TypeThresholds
+	TypeServices
+	TypeNameInstances
+	TypeBlackboxTargets
+	TypePrometheusTargets
+	TypeSNMPTargets
 )
 
 // Load config from a provider and add source information on config items.
@@ -111,7 +115,7 @@ func (c *configLoader) Load(path string, provider koanf.Provider, parser koanf.P
 		priority := priority(providerType, key, value, c.loadCount)
 
 		// Keep the real type of the value before it's converted to JSON.
-		valueType := itemTypeFromValue(value)
+		valueType := itemTypeFromValue(key, value)
 
 		// Convert value to use JSON types.
 		// This is needed because the values are stored on the Bleemeo API as JSON fields,
@@ -136,7 +140,8 @@ func (c *configLoader) Load(path string, provider koanf.Provider, parser koanf.P
 	return warnings
 }
 
-func itemTypeFromValue(value interface{}) ItemType {
+func itemTypeFromValue(key string, value interface{}) ItemType {
+	// Detect base types.
 	switch value.(type) {
 	case int, time.Duration:
 		return TypeInt
@@ -150,19 +155,31 @@ func itemTypeFromValue(value interface{}) ItemType {
 		return TypeMapStrInt
 	case map[string]string:
 		return TypeMapStrStr
-	case map[string]interface{}:
-		return TypeMapStrUnknown
 	case []string:
 		return TypeListString
 	case []int:
 		return TypeListInt
-	case []interface{}:
-		return TypeListUnknown
-	default:
-		logger.V(1).Printf("Unsupported item type %T", value)
-
-		return TypeUnknown
 	}
+
+	// For more complex types (map or slices of structs), we use the key.
+	switch key {
+	case "thresholds":
+		return TypeThresholds
+	case "service":
+		return TypeServices
+	case "service_ignore_metrics", "service_ignore_check":
+		return TypeNameInstances
+	case "blackbox.targets":
+		return TypeBlackboxTargets
+	case "metric.prometheus.targets":
+		return TypePrometheusTargets
+	case "metric.snmp.targets":
+		return TypeSNMPTargets
+	}
+
+	logger.V(1).Printf("Unsupported item type %T", value)
+
+	return TypeAny
 }
 
 // convertToJSONTypes convert the value to only use JSON types.
