@@ -30,20 +30,20 @@ import (
 )
 
 type netTransformer struct {
-	blacklist    []string
+	denylist     []string
 	vethProvider *veth.Provider
 }
 
 // New initialise net.Input
 //
-// blacklist contains a list of interface name prefix to ignore.
-func New(blacklist []string, vethProvider *veth.Provider) (i telegraf.Input, err error) {
+// denylist contains a list of interface name prefix to ignore.
+func New(denylist []string, vethProvider *veth.Provider) (i telegraf.Input, err error) {
 	input, ok := telegraf_inputs.Inputs["net"]
 	if ok {
 		netInput, _ := input().(*net.NetIOStats)
 		netInput.IgnoreProtocolStats = true
 		nt := netTransformer{
-			blacklist:    blacklist,
+			denylist:     denylist,
 			vethProvider: vethProvider,
 		}
 		i = &internal.Input{
@@ -71,7 +71,7 @@ func (nt netTransformer) renameGlobal(gatherContext internal.GatherContext) (int
 		return gatherContext, true
 	}
 
-	for _, b := range nt.blacklist {
+	for _, b := range nt.denylist {
 		if strings.HasPrefix(item, b) {
 			return gatherContext, true
 		}

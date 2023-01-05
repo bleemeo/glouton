@@ -249,7 +249,7 @@ func DefaultConfig() Config {
 			SSLInsecure: false,
 			SSL:         false,
 		},
-		NetworkInterfaceBlacklist: []string{
+		NetworkInterfaceDenylist: []string{
 			"docker",
 			"lo",
 			"veth",

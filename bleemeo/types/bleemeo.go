@@ -100,16 +100,13 @@ type Tag struct {
 
 // AccountConfig is a configuration of account.
 type AccountConfig struct {
-	ID                      string `json:"id"`
-	Name                    string `json:"name"`
-	MetricsAgentWhitelist   string `json:"metrics_agent_whitelist"`
-	MaxCustomMetrics        int    `json:"number_of_custom_metrics"`
-	MetricAgentResolution   int    `json:"metrics_agent_resolution"`
-	MetricMonitorResolution int    `json:"metrics_monitor_resolution"`
-	LiveProcessResolution   int    `json:"live_process_resolution"`
-	LiveProcess             bool   `json:"live_process"`
-	DockerIntegration       bool   `json:"docker_integration"`
-	SNMPIntegration         bool   `json:"snmp_integration"`
+	ID                    string `json:"id"`
+	Name                  string `json:"name"`
+	MaxCustomMetrics      int    `json:"number_of_custom_metrics"`
+	LiveProcessResolution int    `json:"live_process_resolution"`
+	LiveProcess           bool   `json:"live_process"`
+	DockerIntegration     bool   `json:"docker_integration"`
+	SNMPIntegration       bool   `json:"snmp_integration"`
 }
 
 // AgentConfig is a configuration for one kind of agent.

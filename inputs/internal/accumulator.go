@@ -69,7 +69,7 @@ type Accumulator struct {
 	// It may:
 	// * change the measurement name (prefix of metric name)
 	// * alter tags
-	// * completly drop this base (e.g. blacklisting for disk/network interface/...))
+	// * completly drop this base (e.g. blocking a disk/network interface/...))
 	// You should return a modified version of originalContext to kept all non-modified field from originalContext.
 	RenameGlobal func(gatherContext GatherContext) (result GatherContext, drop bool)
 

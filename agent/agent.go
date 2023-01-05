@@ -1374,14 +1374,14 @@ func (a *agent) waitAndRefreshPendingUpdates(ctx context.Context) {
 }
 
 func (a *agent) buildCollectorsConfig() (conf inputs.CollectorConfig, err error) {
-	whitelistRE, err := common.CompileREs(a.config.DiskMonitor)
+	allowlistRE, err := common.CompileREs(a.config.DiskMonitor)
 	if err != nil {
 		a.addWarnings(fmt.Errorf("%w: failed to compile regexp in disk_monitor: %s", config.ErrInvalidValue, err))
 
 		return
 	}
 
-	blacklistRE, err := common.CompileREs(a.config.DiskIgnore)
+	denylistRE, err := common.CompileREs(a.config.DiskIgnore)
 	if err != nil {
 		a.addWarnings(fmt.Errorf("%w: failed to compile regexp in disk_ignore: %s", config.ErrInvalidValue, err))
 
@@ -1396,10 +1396,10 @@ func (a *agent) buildCollectorsConfig() (conf inputs.CollectorConfig, err error)
 
 	return inputs.CollectorConfig{
 		DFRootPath:      a.hostRootPath,
-		NetIfBlacklist:  a.config.NetworkInterfaceBlacklist,
-		IODiskWhitelist: whitelistRE,
-		IODiskBlacklist: blacklistRE,
-		DFPathBlacklist: pathIgnoreTrimed,
+		NetIfDenylist:   a.config.NetworkInterfaceDenylist,
+		IODiskAllowlist: allowlistRE,
+		IODiskDenylist:  denylistRE,
+		DFPathDenylist:  pathIgnoreTrimed,
 	}, nil
 }
 

@@ -213,7 +213,7 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 			SSLInsecure: true,
 			CAFile:      "/myca",
 		},
-		NetworkInterfaceBlacklist: []string{"lo", "veth"},
+		NetworkInterfaceDenylist: []string{"lo", "veth"},
 		NRPE: NRPE{
 			Enable:    true,
 			Address:   "0.0.0.0",
@@ -359,7 +359,7 @@ func newFloatPointer(value float64) *float64 {
 // Test that users are able to override default settings.
 func TestOverrideDefault(t *testing.T) {
 	expectedConfig := DefaultConfig()
-	expectedConfig.NetworkInterfaceBlacklist = []string{"override"}
+	expectedConfig.NetworkInterfaceDenylist = []string{"override"}
 	expectedConfig.DF.PathIgnore = []string{"/override"}
 	expectedConfig.Bleemeo.APIBase = ""
 	expectedConfig.Bleemeo.Enable = false
@@ -408,7 +408,7 @@ func TestMergeWithDefault(t *testing.T) {
 			HighWarning: newFloatPointer(80),
 		},
 	}
-	expectedConfig.NetworkInterfaceBlacklist = []string{"eth0", "eth1", "eth1", "eth2"}
+	expectedConfig.NetworkInterfaceDenylist = []string{"eth0", "eth1", "eth1", "eth2"}
 
 	t.Setenv("GLOUTON_MQTT_HOSTS", "")
 	t.Setenv("GLOUTON_METRIC_DENY_METRICS", "cpu_used")
@@ -802,6 +802,17 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 						StatsPort: 9090,
 					},
 				},
+			},
+		},
+		{
+			Name:  "deprecated network_interface_blacklist",
+			Files: []string{"testdata/deprecated_blacklist.conf"},
+			WantWarnings: []string{
+				"testdata/deprecated_blacklist.conf: setting is deprecated: network_interface_blacklist, " +
+					"use network_interface_denylist instead",
+			},
+			WantConfig: Config{
+				NetworkInterfaceDenylist: []string{"eth0"},
 			},
 		},
 	}
