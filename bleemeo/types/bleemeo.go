@@ -355,9 +355,9 @@ type ConfigItemSource int
 
 const (
 	SourceUnknown ConfigItemSource = 0
-	SourceFile    ConfigItemSource = 1
-	SourceEnv     ConfigItemSource = 2
-	SourceDefault ConfigItemSource = 3
+	SourceDefault ConfigItemSource = 1
+	SourceFile    ConfigItemSource = 2
+	SourceEnv     ConfigItemSource = 3
 	SourceAPI     ConfigItemSource = 4
 )
 
