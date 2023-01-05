@@ -662,12 +662,6 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		10*time.Second,
 	)
 
-	go func() {
-		defer types.ProcessPanic()
-
-		a.handleSighup(ctx, sighupChan)
-	}()
-
 	a.factProvider = facts.NewFacter(
 		a.config.Agent.FactsFile,
 		a.hostRootPath,
@@ -1254,6 +1248,14 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 			"MQTT connector",
 		})
 	}
+
+	// Handle sighup signals only after the agent is completely initialized
+	// to make sure an early signal won't access uninitialized fields.
+	go func() {
+		defer types.ProcessPanic()
+
+		a.handleSighup(ctx, sighupChan)
+	}()
 
 	a.startTasks(tasks)
 
@@ -2071,8 +2073,8 @@ func (a *agent) FireTrigger(discovery bool, sendFacts bool, systemUpdateMetric b
 		a.triggerSystemUpdateMetric = true
 	}
 
-	// Some discovery request ask for a second discovery in 1 minutes.
-	// The second discovery allow to discovery service that are slow to start
+	// Some discovery requests ask for a second discovery in 1 minutes.
+	// The second discovery allows to discover services that are slow to start
 	if secondDiscovery {
 		deadline := time.Now().Add(time.Minute)
 		a.triggerDiscAt = deadline
