@@ -890,6 +890,17 @@ func (m mockMonitorManager) UpdateDynamicTargets(monitors []types.Monitor) error
 	return nil
 }
 
+// mockProcessLister is a process lister that returns no process.
+type mockProcessLister struct{}
+
+func (mockProcessLister) Processes(ctx context.Context, maxAge time.Duration) (processes map[int]facts.Process, err error) {
+	return map[int]facts.Process{}, nil
+}
+
+func (mockProcessLister) TopInfo(ctx context.Context, maxAge time.Duration) (topinfo facts.TopInfo, err error) {
+	return facts.TopInfo{}, nil
+}
+
 func newStateMock() *stateMock {
 	return &stateMock{
 		data: map[string]interface{}{},
