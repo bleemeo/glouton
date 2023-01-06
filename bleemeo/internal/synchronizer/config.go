@@ -28,6 +28,9 @@ import (
 	"reflect"
 )
 
+// The number of item Glouton can register in a single request.
+const gloutonConfigItemBatchSize = 100
+
 // comparableConfigItem is a modified GloutonConfigItem without the
 // interface{} value to make it comparable.
 type comparableConfigItem struct {
@@ -205,6 +208,8 @@ func (s *Synchronizer) registerLocalConfigItems(
 	localConfigItems map[comparableConfigItem]interface{},
 	remoteConfigItems map[comparableConfigItem]configItemValue,
 ) error {
+	var itemsToRegister []bleemeoTypes.GloutonConfigItem //nolint:prealloc
+
 	// Find and register local items that are not present on the API.
 	for localItem, localValue := range localConfigItems {
 		remoteItem, ok := remoteConfigItems[localItem]
@@ -214,23 +219,31 @@ func (s *Synchronizer) registerLocalConfigItems(
 			continue
 		}
 
-		// Register the new item.
-		item := bleemeoTypes.GloutonConfigItem{
-			Agent:    s.agentID,
-			Key:      localItem.Key,
-			Value:    localValue,
-			Priority: localItem.Priority,
-			Source:   localItem.Source,
-			Path:     localItem.Path,
-			Type:     localItem.Type,
+		itemsToRegister = append(itemsToRegister,
+			bleemeoTypes.GloutonConfigItem{
+				Agent:    s.agentID,
+				Key:      localItem.Key,
+				Value:    localValue,
+				Priority: localItem.Priority,
+				Source:   localItem.Source,
+				Path:     localItem.Path,
+				Type:     localItem.Type,
+			},
+		)
+
+		logger.V(2).Printf(`Registering config item "%s" from %s %s`, localItem.Key, localItem.Source, localItem.Path)
+	}
+
+	for start := 0; start < len(itemsToRegister); start += gloutonConfigItemBatchSize {
+		end := start + gloutonConfigItemBatchSize
+		if end > len(itemsToRegister) {
+			end = len(itemsToRegister)
 		}
 
-		_, err := s.client.Do(ctx, "POST", "v1/gloutonconfigitem/", nil, item, nil)
+		_, err := s.client.Do(ctx, "POST", "v1/gloutonconfigitem/", nil, itemsToRegister[start:end], nil)
 		if err != nil {
 			return err
 		}
-
-		logger.V(2).Printf(`Config item "%s" from %s %s registered`, item.Key, item.Source, item.Path)
 	}
 
 	return nil
