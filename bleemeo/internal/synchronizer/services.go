@@ -49,6 +49,22 @@ type servicePayload struct {
 	Agent   string `json:"agent"`
 }
 
+func servicePayloadFromDiscovery(service discovery.Service, listenAddresses string, accountID string, agentID string, serviceID string) servicePayload {
+	return servicePayload{
+		Service: types.Service{
+			ID:              serviceID,
+			Label:           service.Name,
+			Instance:        service.Instance,
+			ListenAddresses: listenAddresses,
+			ExePath:         service.ExePath,
+			Stack:           service.Stack,
+			Active:          service.Active,
+		},
+		Account: accountID,
+		Agent:   agentID,
+	}
+}
+
 func serviceIndexByKey(services []types.Service) map[serviceNameInstance]int {
 	result := make(map[serviceNameInstance]int, len(services))
 
@@ -213,18 +229,7 @@ func (s *Synchronizer) serviceRegisterAndUpdate(localServices []discovery.Servic
 			continue
 		}
 
-		payload := servicePayload{
-			Service: types.Service{
-				Label:           srv.Name,
-				Instance:        key.instance,
-				ListenAddresses: listenAddresses,
-				ExePath:         srv.ExePath,
-				Stack:           srv.Stack,
-				Active:          srv.Active,
-			},
-			Account: s.option.Cache.AccountID(),
-			Agent:   s.agentID,
-		}
+		payload := servicePayloadFromDiscovery(srv, listenAddresses, s.option.Cache.AccountID(), s.agentID, "")
 
 		var result types.Service
 

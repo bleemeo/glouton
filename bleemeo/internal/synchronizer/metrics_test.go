@@ -1749,11 +1749,11 @@ func TestMonitorDeactivation(t *testing.T) {
 // The rename is done by Bleemeo API (actually Glouton try to register the new metric and API rename and response
 // with the old renamed object). API behave as if the metric apache_status is deleted and service_status is created with
 // the same UUID as apache_status.
-func TestServiceStatusRename(t *testing.T) {
+func TestServiceStatusRename(t *testing.T) { //nolint: maintidx
 	// run 0 create old metric and then new metric (note: this isn't something that should
 	//       happen on real glouton, because on same run we don't have both old & then new)
-	// run 1 has old metric pre-create and in cache and only create new metric
-	// run 2 has old metric pre-create and not in cache and only create new metric
+	// run 1 has old metric pre-create in API and in cache and only create new metric
+	// run 2 has old metric pre-create in API and not in cache and only create new metric
 	for run := 0; run < 3; run++ {
 		run := run
 
@@ -1769,6 +1769,7 @@ func TestServiceStatusRename(t *testing.T) {
 			metricResource, _ := helper.api.resources["metric"].(*genericResource)
 			metricResource.CreateHook = func(r *http.Request, body []byte, valuePtr interface{}) error {
 				// API will rename and reuse existing $SERVICE_status metric when registering service_status metrics.
+				// From Glouton point of vue, it the same as if a new metric is created (service_status) and the old is deleted.
 				metric, _ := valuePtr.(*metricPayload)
 				metricCopy := metric.metricFromAPI(helper.s.now())
 				serviceType := metricCopy.Labels[types.LabelService]
@@ -1791,6 +1792,29 @@ func TestServiceStatusRename(t *testing.T) {
 				return nil
 			}
 
+			srvApache := discovery.Service{
+				Name:        "apache",
+				Instance:    "",
+				ServiceType: discovery.ApacheService,
+				Active:      true,
+			}
+			srvNginx := discovery.Service{
+				Name:        "nginx",
+				Instance:    "container1",
+				ServiceType: discovery.NginxService,
+				Active:      true,
+			}
+
+			srvApacheID := "892cb229-0f8c-4b6c-866c-02a13256b618"
+			srvNginxID := "809bc83b-2f28-43f1-9fb7-a84445ca1bc0"
+
+			helper.SetAPIServices(
+				servicePayloadFromDiscovery(srvApache, "", testAgent.AccountID, testAgent.ID, srvApacheID),
+				servicePayloadFromDiscovery(srvNginx, "", testAgent.AccountID, testAgent.ID, srvNginxID),
+			)
+
+			helper.discovery.SetResult([]discovery.Service{srvApache, srvNginx}, nil)
+
 			want1 := []metricPayload{
 				{
 					Metric: bleemeoTypes.Metric{
@@ -1805,6 +1829,7 @@ func TestServiceStatusRename(t *testing.T) {
 						ID:         "2",
 						AgentID:    testAgent.ID,
 						LabelsText: "",
+						ServiceID:  srvApacheID,
 					},
 					Name: "apache_status",
 				},
@@ -1813,6 +1838,7 @@ func TestServiceStatusRename(t *testing.T) {
 						ID:         "3",
 						AgentID:    testAgent.ID,
 						LabelsText: "",
+						ServiceID:  srvNginxID,
 					},
 					Name: "nginx_status",
 					Item: "container1",
@@ -1822,13 +1848,25 @@ func TestServiceStatusRename(t *testing.T) {
 			helper.AddTime(time.Minute)
 			if run == 0 {
 				helper.pushPoints(t, []labels.Labels{
-					labels.New(
-						labels.Label{Name: types.LabelName, Value: "apache_status"},
+					model.AnnotationToMetaLabels(
+						labels.New(
+							labels.Label{Name: types.LabelName, Value: "apache_status"},
+						),
+						types.MetricAnnotations{
+							ServiceName:     srvApache.Name,
+							ServiceInstance: srvApache.Instance,
+						},
 					),
-					labels.New(
-						labels.Label{Name: types.LabelName, Value: "nginx_status"},
-						labels.Label{Name: types.LabelItem, Value: "container1"},
-						labels.Label{Name: types.LabelMetaBleemeoItem, Value: "container1"},
+					model.AnnotationToMetaLabels(
+						labels.New(
+							labels.Label{Name: types.LabelName, Value: "nginx_status"},
+							labels.Label{Name: types.LabelItem, Value: "container1"},
+							labels.Label{Name: types.LabelMetaBleemeoItem, Value: "container1"},
+						),
+						types.MetricAnnotations{
+							ServiceName:     srvNginx.Name,
+							ServiceInstance: srvNginx.Instance,
+						},
 					),
 				})
 
@@ -1867,18 +1905,12 @@ func TestServiceStatusRename(t *testing.T) {
 			}
 
 			helper.pushPoints(t, []labels.Labels{
-				labels.New(
-					labels.Label{Name: types.LabelName, Value: "service_status"},
-					labels.Label{Name: types.LabelService, Value: "nginx"},
-					labels.Label{Name: types.LabelServiceInstance, Value: "container1"},
-				),
+				model.AnnotationToMetaLabels(labels.FromMap(srvNginx.LabelsOfStatus()), srvNginx.AnnotationsOfStatus()),
 			})
 
 			if err := helper.runOnceWithResult(t).CheckMethodWithFull(syncMethodMetric); err != nil {
 				t.Error(err)
 			}
-
-			helper.AddTime(1 * time.Minute)
 
 			want2 := []metricPayload{
 				{
@@ -1894,6 +1926,7 @@ func TestServiceStatusRename(t *testing.T) {
 						ID:         "2",
 						AgentID:    testAgent.ID,
 						LabelsText: "",
+						ServiceID:  srvApacheID,
 					},
 					Name: "apache_status",
 				},
@@ -1902,9 +1935,16 @@ func TestServiceStatusRename(t *testing.T) {
 						ID:         "3",
 						AgentID:    testAgent.ID,
 						LabelsText: `__name__="service_status",service="nginx",service_instance="container1"`,
+						ServiceID:  srvNginxID,
 					},
 					Name: "service_status",
 				},
+			}
+
+			if run == 0 {
+				// run 0 is a bit special: we simulate an imposible situation: Glouton is running and change during runtime
+				// from old metric to new metric. One consequences is that old apache_status get deactivated immediately
+				want2[1].DeactivatedAt = helper.Now()
 			}
 
 			metrics := helper.MetricsFromAPI()
@@ -1913,11 +1953,10 @@ func TestServiceStatusRename(t *testing.T) {
 				t.Errorf("metrics mismatch (-want +got):\n%s", diff)
 			}
 
+			helper.AddTime(1 * time.Minute)
+
 			helper.pushPoints(t, []labels.Labels{
-				labels.New(
-					labels.Label{Name: types.LabelName, Value: "service_status"},
-					labels.Label{Name: types.LabelService, Value: "apache"},
-				),
+				model.AnnotationToMetaLabels(labels.FromMap(srvApache.LabelsOfStatus()), srvApache.AnnotationsOfStatus()),
 			})
 
 			if err := helper.runOnceWithResult(t).Check(); err != nil {
@@ -1940,6 +1979,7 @@ func TestServiceStatusRename(t *testing.T) {
 						ID:         "2",
 						AgentID:    testAgent.ID,
 						LabelsText: `__name__="service_status",service="apache"`,
+						ServiceID:  srvApacheID,
 					},
 					Name: "service_status",
 				},
@@ -1948,6 +1988,7 @@ func TestServiceStatusRename(t *testing.T) {
 						ID:         "3",
 						AgentID:    testAgent.ID,
 						LabelsText: `__name__="service_status",service="nginx",service_instance="container1"`,
+						ServiceID:  srvNginxID,
 					},
 					Name: "service_status",
 				},

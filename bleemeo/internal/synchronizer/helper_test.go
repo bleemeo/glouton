@@ -327,6 +327,24 @@ func (helper *syncTestHelper) SetAPIMetrics(metrics ...metricPayload) {
 	helper.api.resources[mockAPIResourceMetric].SetStore(tmp...)
 }
 
+// SetAPIServices define the list of service present on Bleemeo API mock.
+func (helper *syncTestHelper) SetAPIServices(services ...servicePayload) {
+	tmp := make([]interface{}, 0, len(services))
+
+	for _, m := range services {
+		tmp = append(tmp, serviceMonitor{
+			Monitor: bleemeoTypes.Monitor{
+				Service: m.Service,
+				AgentID: m.Agent,
+			},
+			Account:   m.Account,
+			IsMonitor: false,
+		})
+	}
+
+	helper.api.resources[mockAPIResourceService].SetStore(tmp...)
+}
+
 // SetAPIAccountConfig define the list of AccountConfig and AgentConfig present on Bleemeo API mock.
 // It also enable using the AccountConfig as default config for new Agent.
 func (helper *syncTestHelper) SetAPIAccountConfig(accountConfig bleemeoTypes.AccountConfig, agentConfigs []bleemeoTypes.AgentConfig) {

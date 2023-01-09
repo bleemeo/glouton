@@ -1524,6 +1524,16 @@ func (s *Synchronizer) metricDeactivate(localMetrics []types.Metric) error {
 			continue
 		}
 
+		// If it's an old service status metric, wait a bit before deactivating it.
+		// Without this wait, the following would happen:
+		// * Glouton start, and don't yet created the new service_status metric (because check didn't yet run)
+		// * but because the old metric isn't allowed, it get deactivated
+		// * then later, when new metric is created, the old metric is renamed & reactivated.
+		// With this wait, we avoid one HTTP request to deactivate the metric.
+		if v.ServiceID != "" && strings.HasSuffix(v.Labels[types.LabelName], "_status") && now.Sub(s.startedAt) < 5*time.Minute {
+			continue
+		}
+
 		if !v.DeactivatedAt.IsZero() {
 			if s.now().Sub(v.DeactivatedAt) > 200*24*time.Hour {
 				delete(registeredMetrics, k)
