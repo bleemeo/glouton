@@ -35,6 +35,7 @@ import (
 	"math/big"
 	"net/http"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -945,18 +946,15 @@ func (s *Synchronizer) isDuplicatedOnSameHost(ctx context.Context) (bool, error)
 		return false, fmt.Errorf("list processes: %w", err)
 	}
 
-	nbAgents := 0
+	pid := os.Getpid()
 
 	for _, process := range processes {
-		// Both our systemd service and docker container use "/usr/sbin/glouton".
-		if !strings.Contains(process.CmdLine, "/usr/sbin/glouton") {
-			continue
-		}
-
-		// There is a duplication if two agents are running.
-		nbAgents++
-		if nbAgents >= 2 {
-			logger.Printf("Another agent is already running on this host with PID %d", process.PID)
+		// On Linux, both our systemd service and docker container use "/usr/sbin/glouton".
+		// On Windows we don't know the installation path, only that the process uses "glouton.exe".
+		// Skip our own PID to detect only other agent processes.
+		if process.PID != pid && (strings.Contains(process.CmdLine, "/usr/sbin/glouton") ||
+			strings.Contains(process.CmdLine, "glouton.exe")) {
+			logger.Printf("Another agent is already running on this host with PID %d (I'm PID %d)", process.PID, pid)
 
 			return true, nil
 		}
