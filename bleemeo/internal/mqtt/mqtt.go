@@ -82,11 +82,14 @@ type Client struct {
 	// been processed during the next health check.
 	shouldLogRecovery bool
 
-	l                sync.Mutex
-	startedAt        time.Time
-	pendingPoints    []types.MetricPoint
-	sendingSuspended bool // stop sending points, used when the user is read-only mode
-	disableReason    bleemeoTypes.DisableReason
+	l             sync.Mutex
+	startedAt     time.Time
+	pendingPoints []types.MetricPoint
+	// Stop sending points, used when the user is read-only mode.
+	sendingSuspended bool
+	// Stop buffering failed points, used when the account is suspended.
+	bufferingSuspended bool
+	disableReason      bleemeoTypes.DisableReason
 }
 
 type metricPayload struct {
@@ -429,7 +432,7 @@ func (c *Client) shutdownTimeDrift() error {
 	return nil
 }
 
-// SuspendSending sets whether the mqtt client should stop sendings metrics (and topinfo).
+// SuspendSending sets whether the MQTT client should stop sending metrics (and topinfo).
 func (c *Client) SuspendSending(suspended bool) {
 	c.l.Lock()
 	defer c.l.Unlock()
@@ -442,6 +445,15 @@ func (c *Client) SuspendSending(suspended bool) {
 	}
 
 	c.sendingSuspended = suspended
+}
+
+// SuspendBuffering sets whether the MQTT client should stop buffering points.
+// It means that all points that can't be sent will be dropped.
+func (c *Client) SuspendBuffering(suspended bool) {
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	c.bufferingSuspended = suspended
 }
 
 // IsSendingSuspended returns true if the mqtt connector is suspended from sending merics (and topinfo).
@@ -584,6 +596,11 @@ func (c *Client) sendPoints() {
 
 // addFailedPoints add given points to list of failed points.
 func (c *Client) addFailedPoints(points ...types.MetricPoint) {
+	// Drop the failed points if buffering is suspended.
+	if c.bufferingSuspended {
+		return
+	}
+
 	for _, p := range points {
 		key := types.LabelsToText(p.Labels)
 

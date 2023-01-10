@@ -233,6 +233,7 @@ func (c *Cache) AccountConfigsByUUID() map[string]bleemeoTypes.GloutonAccountCon
 			LiveProcess:           accountConfig.LiveProcess,
 			DockerIntegration:     accountConfig.DockerIntegration,
 			SNMPIntegration:       accountConfig.SNMPIntegration,
+			Suspended:             accountConfig.Suspended,
 			AgentConfigByName:     make(map[string]bleemeoTypes.GloutonAgentConfig),
 			AgentConfigByID:       make(map[string]bleemeoTypes.GloutonAgentConfig),
 			MaxCustomMetrics:      accountConfig.MaxCustomMetrics,

@@ -185,6 +185,7 @@ type GloutonAccountConfig struct {
 	LiveProcess           bool
 	DockerIntegration     bool
 	SNMPIntegration       bool
+	Suspended             bool
 	AgentConfigByName     map[string]GloutonAgentConfig
 	AgentConfigByID       map[string]GloutonAgentConfig
 	MaxCustomMetrics      int

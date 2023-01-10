@@ -128,6 +128,7 @@ func New(option types.GlobalOption) (c *Connector, err error) {
 		DisableCallback:             c.disableCallback,
 		SetInitialized:              c.setInitialized,
 		SetBleemeoInMaintenanceMode: c.setMaintenance,
+		SetBleemeoInSuspendedMode:   c.setSuspended,
 		IsMqttConnected:             c.Connected,
 	})
 
@@ -225,6 +226,23 @@ func (c *Connector) setMaintenance(maintenance bool) {
 
 	if c.mqtt != nil {
 		c.mqtt.SuspendSending(maintenance)
+	}
+}
+
+// setSuspended suspends sending on MQTT and point buffering.
+func (c *Connector) setSuspended(suspended bool) {
+	if suspended {
+		logger.V(0).Println("Bleemeo: read only/suspended mode enabled")
+	} else {
+		logger.V(0).Println("Bleemeo: read only/suspended mode is now disabled, will resume sending metrics")
+	}
+
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	if c.mqtt != nil {
+		c.mqtt.SuspendSending(suspended)
+		c.mqtt.SuspendBuffering(suspended)
 	}
 }
 

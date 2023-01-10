@@ -47,6 +47,12 @@ func (s *Synchronizer) syncAccountConfig(ctx context.Context, fullSync bool, onl
 		if ok && !reflect.DeepEqual(currentConfig, newConfig) && s.option.UpdateConfigCallback != nil {
 			s.option.UpdateConfigCallback(ctx, currentConfig.Name != newConfig.Name)
 		}
+
+		// Set suspended mode if it changed.
+		if s.suspendedMode != newConfig.Suspended {
+			s.option.SetBleemeoInSuspendedMode(newConfig.Suspended)
+			s.suspendedMode = newConfig.Suspended
+		}
 	}
 
 	return false, nil
@@ -81,7 +87,7 @@ func (s *Synchronizer) agentTypesUpdateList() error {
 
 func (s *Synchronizer) accountConfigUpdateList() error {
 	params := map[string]string{
-		"fields": "id,name,metrics_agent_whitelist,metrics_agent_resolution,metrics_monitor_resolution,live_process_resolution,live_process,docker_integration,snmp_integration,number_of_custom_metrics",
+		"fields": "id,name,metrics_agent_whitelist,metrics_agent_resolution,metrics_monitor_resolution,live_process_resolution,live_process,docker_integration,snmp_integration,number_of_custom_metrics,suspended",
 	}
 
 	result, err := s.client.Iter(s.ctx, "accountconfig", params)
