@@ -134,7 +134,7 @@ type Service struct {
 	CreationDate    string `json:"created_at"`
 }
 
-// Container is a Contaier object on Bleemeo API.
+// Container is a Container object on Bleemeo API.
 type Container struct {
 	ID               string    `json:"id"`
 	Name             string    `json:"name"`
