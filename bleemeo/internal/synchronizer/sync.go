@@ -701,7 +701,7 @@ func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) (map[str
 		skipOnlyEssential      bool // should be true for method that ignore onlyEssential
 	}{
 		{name: syncMethodInfo, method: s.syncInfo, enabledInMaintenance: true, skipOnlyEssential: true},
-		{name: syncMethodAgent, method: s.syncAgent, skipOnlyEssential: true},
+		{name: syncMethodAgent, method: s.syncAgent, enabledInSuspendedMode: true, skipOnlyEssential: true},
 		{name: syncMethodAccountConfig, method: s.syncAccountConfig, enabledInSuspendedMode: true, skipOnlyEssential: true},
 		{name: syncMethodFact, method: s.syncFacts},
 		{name: syncMethodContainer, method: s.syncContainers},
