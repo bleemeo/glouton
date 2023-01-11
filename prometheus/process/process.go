@@ -24,7 +24,6 @@ import (
 	"glouton/discovery"
 	"glouton/logger"
 	"glouton/prometheus/registry"
-	"glouton/types"
 	"sync"
 	"time"
 
@@ -64,13 +63,14 @@ func RegisterExporter(ctx context.Context, reg *registry.Registry, psLister inte
 		}
 
 		if bleemeoFormat {
-			_, err := reg.RegisterPushPointsCallback(
+			_, err := reg.RegisterAppenderCallback(
 				registry.RegistrationOption{
 					Description: "process-exporter",
 					Interval:    defaultInterval,
 					JitterSeed:  defaultJitter,
 				},
-				processExporter.PushTo(reg.WithTTL(5*time.Minute)),
+				registry.AppenderRegistrationOption{},
+				&appender{exporter: processExporter},
 			)
 			if err != nil {
 				logger.Printf("unable to add processes metrics: %v", err)
@@ -127,14 +127,6 @@ type Exporter struct {
 	scrapeProcReadErrorsDesc *prometheus.Desc
 	scrapePartialErrorsDesc  *prometheus.Desc
 	threadWchanDesc          *prometheus.Desc
-}
-
-// PushTo return a callback function that will push points on each call.
-func (e *Exporter) PushTo(p types.PointPusher) func(context.Context, time.Time) {
-	return (&pusher{
-		exporter: e,
-		pusher:   p,
-	}).push
 }
 
 func (e *Exporter) init() {
