@@ -258,9 +258,7 @@ func (c *Cache) AccountConfigsByUUID() map[string]bleemeoTypes.GloutonAccountCon
 			config.SNMPIntegration = false
 		}
 
-		if len(config.AgentConfigByName) > 0 {
-			result[accountConfig.ID] = config
-		}
+		result[accountConfig.ID] = config
 	}
 
 	return result
