@@ -24,7 +24,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/imdario/mergo"
 	"github.com/knadh/koanf"
 	yamlParser "github.com/knadh/koanf/parsers/yaml"
 	"github.com/knadh/koanf/providers/confmap"
@@ -37,6 +36,10 @@ import (
 )
 
 const (
+	// Tag used to unmarshal the config.
+	// We need to use the "yaml" tag instead of the default "koanf" tag because
+	// the config embeds the blackbox module config which uses YAML.
+	Tag                   = "yaml"
 	EnvGloutonConfigFiles = "GLOUTON_CONFIG_FILES"
 	envPrefix             = "GLOUTON_"
 	deprecatedEnvPrefix   = "BLEEMEO_AGENT_"
@@ -44,99 +47,81 @@ const (
 )
 
 var (
-	errDeprecatedEnv      = errors.New("environment variable is deprecated")
-	errSettingsDeprecated = errors.New("setting is deprecated")
-	errWrongMapFormat     = errors.New("could not parse map from string")
-	ErrInvalidValue       = errors.New("invalid config value")
+	errDeprecatedEnv       = errors.New("environment variable is deprecated")
+	errSettingsDeprecated  = errors.New("setting is deprecated")
+	errWrongMapFormat      = errors.New("could not parse map from string")
+	errUnsupportedProvider = errors.New("provider not supported by config loader")
+	errCannotMerge         = errors.New("cannot merge")
+	ErrInvalidValue        = errors.New("invalid config value")
 )
 
-// Load loads the configuration from files and directories to a struct.
-// Returns the config, warnings and an error.
-func Load(withDefault bool, paths ...string) (Config, prometheus.MultiError, error) {
+// Load the configuration from files and environment variables.
+// It returns the config, the loaded items, warnings and an error.
+func Load(withDefault bool, paths ...string) (Config, []Item, prometheus.MultiError, error) {
 	// If no config was given with flags or env variables, fallback on the default files.
 	if len(paths) == 0 || len(paths) == 1 && paths[0] == "" {
 		paths = DefaultPaths()
 	}
 
-	return loadToStruct(withDefault, paths...)
+	loader := &configLoader{}
+
+	config, warnings, err := load(loader, withDefault, paths...)
+
+	return config, loader.items, warnings, err
 }
 
-func loadToStruct(withDefault bool, paths ...string) (Config, prometheus.MultiError, error) {
+// load the configuration from files and environment variables.
+func load(loader *configLoader, withDefault bool, paths ...string) (Config, prometheus.MultiError, error) {
 	// Override config files if the files were given from the env.
 	if envFiles := os.Getenv(EnvGloutonConfigFiles); envFiles != "" {
 		paths = strings.Split(envFiles, ",")
 	}
 
-	k, warnings, err := load(withDefault, paths...)
-
-	var config Config
-
-	// We need to use the "yaml" tag instead of the default "koanf" tag because
-	// the config embeds the blackbox module config which uses YAML.
-	unmarshalConf := koanf.UnmarshalConf{
-		DecoderConfig: &mapstructure.DecoderConfig{
-			DecodeHook: mapstructure.ComposeDecodeHookFunc(
-				mapstructure.StringToTimeDurationHookFunc(),
-				mapstructure.StringToSliceHookFunc(","),
-				mapstructure.TextUnmarshallerHookFunc(),
-				blackboxModuleHookFunc(),
-				stringToMapHookFunc(),
-				stringToBoolHookFunc(),
-			),
-			Metadata:         nil,
-			ErrorUnused:      true,
-			Result:           &config,
-			WeaklyTypedInput: true,
-		},
-		Tag: "yaml",
-	}
-
-	warning := k.UnmarshalWithConf("", &config, unmarshalConf)
-	warnings.Append(warning)
-
-	return config, unwrapErrors(warnings), err
-}
-
-// load the configuration from files and directories.
-func load(withDefault bool, paths ...string) (*koanf.Koanf, prometheus.MultiError, error) {
-	fileEnvKoanf, warnings, errors := loadPaths(paths)
-
-	fileEnvKoanf, moreWarnings := migrate(fileEnvKoanf)
-	if moreWarnings != nil {
-		warnings = append(warnings, moreWarnings...)
-	}
+	warnings, errors := loadPaths(loader, paths)
 
 	// Load config from environment variables.
-	// The warnings are filled only after k.Load is called.
+	// The warnings are filled only after Load is called.
 	envToKey, envWarnings := envToKeyFunc()
 
-	// Environment variable overwrite basic types (string, int), arrays, and maps.
-	envMergeFunc := mergeFunc(mergo.WithOverride)
+	moreWarnings := loader.Load("", env.Provider(deprecatedEnvPrefix, delimiter, envToKey), nil)
+	warnings = append(warnings, moreWarnings...)
 
-	warning := fileEnvKoanf.Load(env.Provider(deprecatedEnvPrefix, delimiter, envToKey), nil, envMergeFunc)
-	warnings.Append(warning)
-
-	warning = fileEnvKoanf.Load(env.Provider(envPrefix, delimiter, envToKey), nil, envMergeFunc)
-	warnings.Append(warning)
+	moreWarnings = loader.Load("", env.Provider(envPrefix, delimiter, envToKey), nil)
+	warnings = append(warnings, moreWarnings...)
 
 	if len(*envWarnings) > 0 {
 		warnings = append(warnings, *envWarnings...)
 	}
 
-	// Load default values.
-	k := koanf.New(delimiter)
-
+	// Load default config.
 	if withDefault {
-		warning = k.Load(structsProvider(DefaultConfig(), "yaml"), nil)
-		warnings.Append(warning)
+		moreWarnings = loader.Load("", structs.Provider(DefaultConfig(), Tag), nil)
+		warnings = append(warnings, moreWarnings...)
 	}
 
-	// Merge defaults and config from files and environment.
-	// The config overwrites the defaults for basic types (string, int) and arrays, and merges maps.
-	warning = k.Load(confmap.Provider(fileEnvKoanf.All(), delimiter), nil, mergeFunc(mergo.WithOverride))
+	// Build the final config from the loaded items.
+	finalKoanf, moreWarnings := loader.Build()
+	warnings = append(warnings, moreWarnings...)
+
+	// Unmarshal the config.
+	var config Config
+
+	// Here we ignore unused keys warnings and most decoder hooks
+	// because this processing was already done in the config loader.
+	unmarshalConf := koanf.UnmarshalConf{
+		DecoderConfig: &mapstructure.DecoderConfig{
+			// Keep the blackbox hook to use its custom yaml
+			// marshaller that sets default values.
+			DecodeHook: blackboxModuleHookFunc(),
+			Result:     &config,
+		},
+		Tag: Tag,
+	}
+
+	warning := finalKoanf.UnmarshalWithConf("", &config, unmarshalConf)
 	warnings.Append(warning)
 
-	return k, warnings, errors.MaybeUnwrap()
+	return config, unwrapErrors(warnings), errors.MaybeUnwrap()
 }
 
 // envToKeyFunc returns a function that converts an environment variable to a configuration key
@@ -145,7 +130,7 @@ func load(withDefault bool, paths ...string) (*koanf.Koanf, prometheus.MultiErro
 func envToKeyFunc() (func(string) string, *prometheus.MultiError) {
 	// Get all config keys from an empty config.
 	k := koanf.New(delimiter)
-	_ = k.Load(structs.Provider(Config{}, "yaml"), nil)
+	_ = k.Load(structs.Provider(Config{}, Tag), nil)
 	allKeys := k.All()
 
 	// Build a map of the environment variables with their corresponding config keys.
@@ -196,20 +181,6 @@ func envToKeyFunc() (func(string) string, *prometheus.MultiError) {
 	return envFunc, &warnings
 }
 
-// mergeFunc return a merge function to use with koanf.
-func mergeFunc(opts ...func(*mergo.Config)) koanf.Option {
-	merge := func(src, dest map[string]interface{}) error {
-		err := mergo.Merge(&dest, src, opts...)
-		if err != nil {
-			logger.Printf("Error merging config: %s", err)
-		}
-
-		return err
-	}
-
-	return koanf.WithMergeFunc(merge)
-}
-
 // toEnvKey returns the environment variable corresponding to a configuration key.
 // For instance: toEnvKey("web.enable") -> GLOUTON_WEB_ENABLE.
 func toEnvKey(key string) string {
@@ -229,40 +200,35 @@ func toDeprecatedEnvKey(key string) string {
 }
 
 // loadPaths returns the config loaded from the given paths, warnings and errors.
-func loadPaths(paths []string) (*koanf.Koanf, prometheus.MultiError, prometheus.MultiError) {
+func loadPaths(loader *configLoader, paths []string) (prometheus.MultiError, prometheus.MultiError) {
 	var warnings, errors prometheus.MultiError
-
-	k := koanf.New(delimiter)
 
 	for _, path := range paths {
 		stat, err := os.Stat(path)
 		if err != nil && os.IsNotExist(err) {
-			logger.V(2).Printf("config file: %s ignored since it does not exists", path)
+			logger.V(2).Printf("config file %s ignored because it does not exists", path)
 
 			continue
 		}
 
 		if err != nil {
-			logger.V(2).Printf("config file: %s ignored due to %v", path, err)
-			errors.Append(err)
+			errors.Append(fmt.Errorf("file %s ignored: %w", path, err))
 
 			continue
 		}
 
 		if stat.IsDir() {
-			moreWarnings, err := loadDirectory(k, path)
-			errors.Append(err)
+			moreWarnings, err := loadDirectory(loader, path)
+			if err != nil {
+				errors.Append(fmt.Errorf("failed to load directory %s: %w", path, err))
+			}
 
 			if moreWarnings != nil {
 				warnings = append(warnings, moreWarnings...)
 			}
-
-			if err != nil {
-				logger.V(2).Printf("config file: directory %s have ignored some files due to %v", path, err)
-			}
 		} else {
-			warning := loadFile(k, path)
-			warnings.Append(warning)
+			warning := loadFile(loader, path)
+			warnings = append(warnings, warning...)
 		}
 
 		if err == nil {
@@ -270,10 +236,10 @@ func loadPaths(paths []string) (*koanf.Koanf, prometheus.MultiError, prometheus.
 		}
 	}
 
-	return k, warnings, errors
+	return warnings, errors
 }
 
-func loadDirectory(k *koanf.Koanf, dirPath string) (prometheus.MultiError, error) {
+func loadDirectory(loader *configLoader, dirPath string) (prometheus.MultiError, error) {
 	files, err := os.ReadDir(dirPath)
 	if err != nil {
 		return nil, err
@@ -288,22 +254,24 @@ func loadDirectory(k *koanf.Koanf, dirPath string) (prometheus.MultiError, error
 
 		path := filepath.Join(dirPath, f.Name())
 
-		warning := loadFile(k, path)
-		warnings.Append(warning)
+		warning := loadFile(loader, path)
+		warnings = append(warnings, warning...)
 	}
 
 	return warnings, nil
 }
 
-func loadFile(k *koanf.Koanf, path string) error {
+func loadFile(loader *configLoader, path string) prometheus.MultiError {
 	// Merge this file with the previous config.
 	// Overwrite values, merge maps and append slices.
-	err := k.Load(file.Provider(path), yamlParser.Parser(), mergeFunc(mergo.WithOverride, mergo.WithAppendSlice))
-	if err != nil {
-		return fmt.Errorf("failed to load '%s': %w", path, err)
+	warnings := loader.Load(path, file.Provider(path), yamlParser.Parser())
+
+	// Add path to errors.
+	for i, warning := range warnings {
+		warnings[i] = fmt.Errorf("%s: %w", path, warning)
 	}
 
-	return nil
+	return warnings
 }
 
 // unwrapErrors unwrap all errors in the list than contain multiple errors.
@@ -575,49 +543,57 @@ func migrateServices(config map[string]interface{}) prometheus.MultiError {
 // secret is any key containing "key", "secret", "password" or "passwd".
 func Dump(config Config) map[string]interface{} {
 	k := koanf.New(delimiter)
-	_ = k.Load(structs.Provider(config, "yaml"), nil)
+	_ = k.Load(structs.Provider(config, Tag), nil)
 
-	return dump(k.Raw())
+	return dumpMap(k.Raw())
 }
 
-func dump(root map[string]interface{}) map[string]interface{} {
-	secretKey := []string{"key", "secret", "password", "passwd"}
-
+func dumpMap(root map[string]interface{}) map[string]interface{} {
 	for k, v := range root {
-		isSecret := false
-
-		for _, name := range secretKey {
-			if strings.Contains(k, name) {
-				isSecret = true
-
-				break
-			}
-		}
-
-		if isSecret {
-			root[k] = "*****"
-
-			continue
-		}
-
-		switch v := v.(type) {
-		case map[string]interface{}:
-			root[k] = dump(v)
-		case []interface{}:
-			root[k] = dumpList(v)
-		default:
-			root[k] = v
-		}
+		root[k] = CensorSecretItem(k, v)
 	}
 
 	return root
+}
+
+// CensorSecretItem returns the censored item value with secrets
+// and password removed for safe external use.
+func CensorSecretItem(key string, value interface{}) interface{} {
+	if isSecret(key) {
+		// Don't censor unset secrets.
+		if valueStr, ok := value.(string); ok && valueStr == "" {
+			return ""
+		}
+
+		return "*****"
+	}
+
+	switch value := value.(type) {
+	case map[string]interface{}:
+		return dumpMap(value)
+	case []interface{}:
+		return dumpList(value)
+	default:
+		return value
+	}
+}
+
+// isSecret returns whether the given config key corresponds to a secret.
+func isSecret(key string) bool {
+	for _, name := range []string{"key", "secret", "password", "passwd"} {
+		if strings.Contains(key, name) {
+			return true
+		}
+	}
+
+	return false
 }
 
 func dumpList(root []interface{}) []interface{} {
 	for i, v := range root {
 		switch v := v.(type) {
 		case map[string]interface{}:
-			root[i] = dump(v)
+			root[i] = dumpMap(v)
 		case []interface{}:
 			root[i] = dumpList(v)
 		default:

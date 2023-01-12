@@ -97,7 +97,7 @@ require (
 	github.com/ema/qdisc v0.0.0-20200603082823-62d0308e3e00 // indirect
 	github.com/emicklei/go-restful/v3 v3.10.1 // indirect
 	github.com/fatih/color v1.13.0 // indirect
-	github.com/fatih/structs v1.1.0
+	github.com/fatih/structs v1.1.0 // indirect
 	github.com/go-asn1-ber/asn1-ber v1.5.4 // indirect
 	github.com/go-ldap/ldap/v3 v3.4.4 // indirect
 	github.com/go-logfmt/logfmt v0.5.1 // indirect

@@ -231,7 +231,7 @@ func (kind FailureKind) String() string {
 	case FailureTooManyCustomMetrics:
 		return "too-many-custom-metrics"
 	case FailureUnknown:
-		return "unknown"
+		return "unknown" //nolint:goconst
 	default:
 		return "unknown"
 	}
@@ -336,3 +336,66 @@ type AlertingRule struct {
 	Active              bool     `json:"active"`
 	Agents              []string `json:"agents"`
 }
+
+// GloutonConfigItem object on the Bleemeo API.
+type GloutonConfigItem struct {
+	ID       string           `json:"id"`
+	Agent    string           `json:"agent"`
+	Key      string           `json:"key"`
+	Value    interface{}      `json:"value"`
+	Priority int              `json:"priority"`
+	Source   ConfigItemSource `json:"source"`
+	Path     string           `json:"path"`
+	Type     ConfigItemType   `json:"type"`
+}
+
+// ConfigItemSource enumeration on the Bleemeo API.
+// This should always be the same as the enumeration on the API.
+type ConfigItemSource int
+
+const (
+	SourceUnknown ConfigItemSource = 0
+	SourceDefault ConfigItemSource = 1
+	SourceFile    ConfigItemSource = 2
+	SourceEnv     ConfigItemSource = 3
+	SourceAPI     ConfigItemSource = 4
+)
+
+func (c ConfigItemSource) String() string {
+	switch c {
+	case SourceFile:
+		return "file"
+	case SourceEnv:
+		return "env"
+	case SourceDefault:
+		return "default"
+	case SourceAPI:
+		return "api"
+	case SourceUnknown:
+		return "unknown"
+	default:
+		return "unknown"
+	}
+}
+
+// ConfigItemType enumeration on the Bleemeo API.
+// This should always be the same as the enumeration on the API.
+type ConfigItemType int
+
+const (
+	TypeAny               ConfigItemType = 0
+	TypeInt               ConfigItemType = 1
+	TypeFloat             ConfigItemType = 2
+	TypeBool              ConfigItemType = 3
+	TypeString            ConfigItemType = 4
+	TypeListString        ConfigItemType = 10
+	TypeListInt           ConfigItemType = 11
+	TypeMapStrStr         ConfigItemType = 20
+	TypeMapStrInt         ConfigItemType = 21
+	TypeThresholds        ConfigItemType = 30
+	TypeServices          ConfigItemType = 31
+	TypeNameInstances     ConfigItemType = 32
+	TypeBlackboxTargets   ConfigItemType = 33
+	TypePrometheusTargets ConfigItemType = 34
+	TypeSNMPTargets       ConfigItemType = 35
+)

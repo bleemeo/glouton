@@ -116,6 +116,7 @@ var (
 type agent struct {
 	taskRegistry *task.Registry
 	config       config.Config
+	configItems  []config.Item
 	state        *state.State
 	cancel       context.CancelFunc
 	context      context.Context //nolint:containedctx
@@ -189,12 +190,13 @@ func (a *agent) init(ctx context.Context, configFiles []string, firstRun bool) (
 	a.taskRegistry = task.NewRegistry(ctx)
 	a.taskIDs = make(map[string]int)
 
-	cfg, warnings, err := config.Load(true, configFiles...)
+	cfg, configItems, warnings, err := config.Load(true, configFiles...)
 	if warnings != nil {
 		a.addWarnings(warnings...)
 	}
 
 	a.config = cfg
+	a.configItems = configItems
 
 	a.setupLogger()
 
@@ -987,6 +989,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 
 		connector, err := bleemeo.New(bleemeoTypes.GlobalOption{
 			Config:                  a.config,
+			ConfigItems:             a.configItems,
 			State:                   a.state,
 			Facts:                   a.factProvider,
 			Process:                 psFact,

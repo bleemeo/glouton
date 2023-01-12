@@ -33,6 +33,7 @@ import (
 // GlobalOption are option user by most component of bleemeo.Connector.
 type GlobalOption struct {
 	Config                  config.Config
+	ConfigItems             []config.Item
 	State                   State
 	Facts                   FactProvider
 	Process                 ProcessProvider

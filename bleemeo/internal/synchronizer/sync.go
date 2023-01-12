@@ -63,6 +63,7 @@ const (
 	syncMethodContainer     = "container"
 	syncMethodMetric        = "metric"
 	syncMethodAlertingRules = "alertingrules"
+	syncMethodConfig        = "config"
 )
 
 // Synchronizer synchronize object with Bleemeo.
@@ -90,6 +91,9 @@ type Synchronizer struct {
 	callUpdateLabels        bool
 	lastMetricCount         int
 	agentID                 string
+
+	// configSyncDone is true when the config items were successfully synced.
+	configSyncDone bool
 
 	// An edge case occurs when an agent is spawned while the maintenance mode is enabled on the backend:
 	// the agent cannot register agent_status, thus the MQTT connector cannot start, and we cannot receive
@@ -674,7 +678,7 @@ func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) (map[str
 		s.waitCPUMetric(ctx)
 	}
 
-	syncMethods := s.syncToPerform(ctx)
+	syncMethods, fullsync := s.syncToPerform(ctx)
 
 	if len(syncMethods) == 0 {
 		return syncMethods, nil
@@ -702,6 +706,7 @@ func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) (map[str
 		{name: syncMethodMonitor, method: s.syncMonitors, skipOnlyEssential: true},
 		{name: syncMethodMetric, method: s.syncMetrics},
 		{name: syncMethodAlertingRules, method: s.syncAlertingRules},
+		{name: syncMethodConfig, method: s.syncConfig},
 	}
 	startAt := s.now()
 
@@ -751,7 +756,7 @@ func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) (map[str
 				if firstErr == nil {
 					firstErr = err
 				} else if !client.IsAuthError(firstErr) && client.IsAuthError(err) {
-					// Prefere returning Authentication error that other errors
+					// Prefer returning Authentication error than other errors.
 					firstErr = err
 				}
 			}
@@ -760,7 +765,7 @@ func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) (map[str
 
 			if onlyEssential && !step.skipOnlyEssential {
 				// We registered only essential object. Make sure all other
-				// object are registered on second run
+				// objects are registered on the second run.
 				s.l.Lock()
 				s.forceSync[step.name] = false || s.forceSync[step.name]
 				s.l.Unlock()
@@ -783,7 +788,7 @@ func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) (map[str
 		s.UpdateUnitsAndThresholds(ctx, false)
 	}
 
-	if len(syncMethods) == len(syncStep) && firstErr == nil {
+	if fullsync && firstErr == nil {
 		s.option.Cache.Save()
 		s.fullSyncCount++
 		s.nextFullSync = s.now().Add(delay.JitterDelay(
@@ -806,7 +811,10 @@ func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) (map[str
 	return syncMethods, firstErr
 }
 
-func (s *Synchronizer) syncToPerform(ctx context.Context) map[string]bool {
+// syncToPerform returns the methods that should be synced in a map. For each method
+// in the map, the value indicates whether a fullsync should be performed.
+// It also returns true if the current sync is a full sync.
+func (s *Synchronizer) syncToPerform(ctx context.Context) (map[string]bool, bool) {
 	s.l.Lock()
 	defer s.l.Unlock()
 
@@ -840,6 +848,12 @@ func (s *Synchronizer) syncToPerform(ctx context.Context) map[string]bool {
 	if s.lastSNMPcount != s.option.SNMPOnlineTarget() {
 		syncMethods[syncMethodFact] = fullSync
 		syncMethods[syncMethodSNMP] = fullSync
+	}
+
+	// After a reload, the config has been changed, so we want to do a fullsync
+	// without waiting the nextFullSync that is kept between reload.
+	if fullSync || !s.configSyncDone {
+		syncMethods[syncMethodConfig] = true
 	}
 
 	minDelayed := time.Time{}
@@ -894,7 +908,7 @@ func (s *Synchronizer) syncToPerform(ctx context.Context) map[string]bool {
 		syncMethods[syncMethodInfo] = false || syncMethods[syncMethodInfo]
 	}
 
-	return syncMethods
+	return syncMethods, fullSync
 }
 
 func (s *Synchronizer) checkDuplicated() error {
