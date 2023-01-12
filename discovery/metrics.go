@@ -90,7 +90,7 @@ func AddDefaultInputs(
 		return err
 	}
 
-	input, err = netInput.New(inputsConfig.NetIfBlacklist, vethProvider)
+	input, err = netInput.New(inputsConfig.NetIfDenylist, vethProvider)
 	if err != nil {
 		return err
 	}
@@ -100,7 +100,7 @@ func AddDefaultInputs(
 	}
 
 	if inputsConfig.DFRootPath != "" {
-		input, err = disk.New(inputsConfig.DFRootPath, inputsConfig.DFPathBlacklist)
+		input, err = disk.New(inputsConfig.DFRootPath, inputsConfig.DFPathDenylist)
 		if err != nil {
 			return err
 		}
@@ -110,7 +110,7 @@ func AddDefaultInputs(
 		}
 	}
 
-	input, err = diskio.New(inputsConfig.IODiskWhitelist, inputsConfig.IODiskBlacklist)
+	input, err = diskio.New(inputsConfig.IODiskAllowlist, inputsConfig.IODiskDenylist)
 	if err != nil {
 		return err
 	}

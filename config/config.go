@@ -321,6 +321,7 @@ func movedKeys() map[string]string {
 		"agent.telemetry.enabled":         "agent.telemetry.enable",
 		"agent.node_exporter.enabled":     "agent.node_exporter.enable",
 		"telegraf.docker_metrics_enabled": "telegraf.docker_metrics_enable",
+		"network_interface_blacklist":     "network_interface_denylist",
 	}
 
 	return keys

@@ -37,7 +37,7 @@ func (a *agent) registerOSSpecificComponents(vethProvider *veth.Provider) {
 		}
 
 		nodeOption.WithPathIgnore(a.config.DF.PathIgnore)
-		nodeOption.WithNetworkIgnore(a.config.NetworkInterfaceBlacklist)
+		nodeOption.WithNetworkIgnore(a.config.NetworkInterfaceDenylist)
 		nodeOption.WithDiskIgnore(a.config.DiskIgnore)
 		nodeOption.WithPathIgnoreFSType(a.config.DF.IgnoreFSType)
 

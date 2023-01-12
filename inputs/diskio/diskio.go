@@ -28,25 +28,25 @@ import (
 )
 
 type diskIOTransformer struct {
-	whitelist []*regexp.Regexp
-	blacklist []*regexp.Regexp
+	allowlist []*regexp.Regexp
+	denylist  []*regexp.Regexp
 }
 
 // New initialise diskio.Input.
 //
-// whitelist is a list of regular expretion for device to include
-// blacklist is a list of regular expretion for device to include
+// allowlist is a list of regular expretion for device to include
+// denylist is a list of regular expretion for device to include
 //
-// If blacklist is provided (not empty) it's used and whitelist is ignored.
-func New(whitelist []*regexp.Regexp, blacklist []*regexp.Regexp) (i telegraf.Input, err error) {
+// If denylist is provided (not empty) it's used and allowlist is ignored.
+func New(allowlist []*regexp.Regexp, denylist []*regexp.Regexp) (i telegraf.Input, err error) {
 	input, ok := telegraf_inputs.Inputs["diskio"]
 
 	if ok {
 		diskioInput, _ := input().(*diskio.DiskIO)
 		diskioInput.Log = internal.Logger{}
 		dt := diskIOTransformer{
-			whitelist: whitelist,
-			blacklist: blacklist,
+			allowlist: allowlist,
+			denylist:  denylist,
 		}
 		i = &internal.Input{
 			Input: diskioInput,
@@ -75,10 +75,10 @@ func (dt diskIOTransformer) renameGlobal(gatherContext internal.GatherContext) (
 
 	match := false
 
-	if len(dt.blacklist) > 0 {
+	if len(dt.denylist) > 0 {
 		match = true
 
-		for _, r := range dt.blacklist {
+		for _, r := range dt.denylist {
 			if r.MatchString(item) {
 				match = false
 
@@ -86,7 +86,7 @@ func (dt diskIOTransformer) renameGlobal(gatherContext internal.GatherContext) (
 			}
 		}
 	} else {
-		for _, r := range dt.whitelist {
+		for _, r := range dt.allowlist {
 			if r.MatchString(item) {
 				match = true
 

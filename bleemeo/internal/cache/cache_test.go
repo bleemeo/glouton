@@ -159,7 +159,6 @@ func checkAccountConfigs(t *testing.T, cache *Cache, liveProcess bool) {
 	wantAccountConfig := types.AccountConfig{
 		ID:                    "d7b022ba-e230-4776-8018-465e681e096e",
 		Name:                  "default",
-		MetricAgentResolution: 10,
 		LiveProcessResolution: 10,
 		LiveProcess:           liveProcess,
 		DockerIntegration:     true,

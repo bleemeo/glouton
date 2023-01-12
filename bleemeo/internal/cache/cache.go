@@ -238,16 +238,8 @@ func (c *Cache) AccountConfigsByUUID() map[string]bleemeoTypes.GloutonAccountCon
 			MaxCustomMetrics:      accountConfig.MaxCustomMetrics,
 		}
 
-		var (
-			agentTypeFound   bool
-			monitorTypeFound bool
-			hasAgentConfig   bool
-		)
-
 		for _, agentType := range c.data.AgentTypes {
 			for _, agentConfig := range c.data.AgentConfigs {
-				hasAgentConfig = true
-
 				if agentConfig.AgentType == agentType.ID && agentConfig.AccountConfig == accountConfig.ID {
 					config.AgentConfigByName[agentType.Name] = bleemeoTypes.GloutonAgentConfig{
 						MetricResolution: time.Duration(agentConfig.MetricResolution) * time.Second,
@@ -256,32 +248,7 @@ func (c *Cache) AccountConfigsByUUID() map[string]bleemeoTypes.GloutonAccountCon
 
 					config.AgentConfigByID[agentType.ID] = config.AgentConfigByName[agentType.Name]
 
-					if agentType.Name == bleemeoTypes.AgentTypeAgent {
-						agentTypeFound = true
-					}
-
-					if agentType.Name == bleemeoTypes.AgentTypeMonitor {
-						monitorTypeFound = true
-					}
-
 					break
-				}
-			}
-		}
-
-		// We only fill values from AccountConfig if we have no AgentConfig (i.e. the API is the old version).
-		if !hasAgentConfig {
-			if !agentTypeFound && accountConfig.MetricAgentResolution != 0 {
-				config.AgentConfigByName[bleemeoTypes.AgentTypeAgent] = bleemeoTypes.GloutonAgentConfig{
-					MetricsAllowlist: allowListToMap(accountConfig.MetricsAgentWhitelist),
-					MetricResolution: time.Duration(accountConfig.MetricAgentResolution) * time.Second,
-				}
-			}
-
-			if !monitorTypeFound && accountConfig.MetricMonitorResolution != 0 {
-				config.AgentConfigByName[bleemeoTypes.AgentTypeMonitor] = bleemeoTypes.GloutonAgentConfig{
-					MetricsAllowlist: nil,
-					MetricResolution: time.Duration(accountConfig.MetricMonitorResolution) * time.Second,
 				}
 			}
 		}
