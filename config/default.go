@@ -68,7 +68,7 @@ func DefaultConfig() Config {
 			MetricsFormat:       "Bleemeo",
 			NodeExporter: NodeExporter{
 				Enable:     true,
-				Collectors: []string{"cpu", "diskstats", "filesystem", "loadavg", "meminfo", "netdev"},
+				Collectors: []string{"cpu", "diskstats", "filesystem", "loadavg", "meminfo", "netdev", "uname"},
 			},
 			WindowsExporter: NodeExporter{
 				Enable:     true,
