@@ -90,7 +90,7 @@ import (
 
 	crTypes "glouton/facts/container-runtime/types"
 
-	processInput "glouton/inputs/process"
+	processSource "glouton/prometheus/sources/process"
 
 	paho "github.com/eclipse/paho.mqtt.golang"
 	"github.com/prometheus/client_golang/prometheus"
@@ -858,10 +858,10 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 
 	var psLister facts.ProcessLister
 
-	if !version.IsLinux() {
-		psLister = facts.NewPsUtilLister("")
-	} else {
+	if version.IsLinux() {
 		psLister = process.NewProcessLister(a.hostRootPath, 9*time.Second)
+	} else {
+		psLister = facts.NewPsUtilLister("")
 	}
 
 	psFact := facts.NewProcess(
@@ -1059,7 +1059,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 				JitterSeed:  baseJitter,
 			},
 			registry.AppenderRegistrationOption{},
-			processInput.New(psFact),
+			processSource.NewStatusSource(psFact),
 		)
 		if err != nil {
 			logger.Printf("unable to add processes metrics: %v", err)
@@ -1116,7 +1116,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 	}
 
 	if a.config.Agent.ProcessExporter.Enable {
-		process.RegisterExporter(ctx, a.gathererRegistry, psLister, dynamicDiscovery, a.metricFormat == types.MetricFormatBleemeo)
+		processSource.RegisterExporter(ctx, a.gathererRegistry, psLister, dynamicDiscovery, a.metricFormat == types.MetricFormatBleemeo)
 	}
 
 	prometheusTargets, warnings := prometheusConfigToURLs(a.config.Metric.Prometheus.Targets)

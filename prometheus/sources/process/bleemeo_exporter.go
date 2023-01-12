@@ -30,7 +30,8 @@ import (
 	"github.com/prometheus/prometheus/storage"
 )
 
-type appender struct {
+// bleemeoExporter is similar to process exporter with metrics renamed.
+type bleemeoExporter struct {
 	exporter *Exporter
 
 	lastCount map[string]proc.Counts
@@ -38,8 +39,8 @@ type appender struct {
 }
 
 // Collect sends process metrics to the Appender.
-func (p *appender) Collect(ctx context.Context, app storage.Appender) error {
-	points, err := p.points(time.Now())
+func (b *bleemeoExporter) Collect(ctx context.Context, app storage.Appender) error {
+	points, err := b.points(time.Now())
 	if err != nil {
 		return err
 	}
@@ -53,23 +54,23 @@ func (p *appender) Collect(ctx context.Context, app storage.Appender) error {
 }
 
 // points returns the points to send to the appender.
-func (p *appender) points(t0 time.Time) ([]types.MetricPoint, error) {
-	p.exporter.init()
-	p.exporter.l.Lock()
-	defer p.exporter.l.Unlock()
+func (b *bleemeoExporter) points(t0 time.Time) ([]types.MetricPoint, error) {
+	b.exporter.init()
+	b.exporter.l.Lock()
+	defer b.exporter.l.Unlock()
 
-	if p.lastCount == nil {
-		p.lastCount = make(map[string]proc.Counts)
-		p.lastTime = make(map[string]time.Time)
+	if b.lastCount == nil {
+		b.lastCount = make(map[string]proc.Counts)
+		b.lastTime = make(map[string]time.Time)
 	}
 
 	now := time.Now()
-	permErrs, groups, err := p.exporter.grouper.Update(p.exporter.Source.AllProcs())
+	permErrs, groups, err := b.exporter.grouper.Update(b.exporter.Source.AllProcs())
 
-	p.exporter.scrapePartialErrors += permErrs.Partial
+	b.exporter.scrapePartialErrors += permErrs.Partial
 
 	if err != nil {
-		p.exporter.scrapeErrors++
+		b.exporter.scrapeErrors++
 
 		return nil, fmt.Errorf("update processes: %w", err)
 	}
@@ -81,25 +82,25 @@ func (p *appender) points(t0 time.Time) ([]types.MetricPoint, error) {
 
 	for gname, gcounts := range groups {
 		if gcounts.Procs > 0 {
-			p.exporter.groupActive[gname] = true
+			b.exporter.groupActive[gname] = true
 		}
 
-		if !p.exporter.groupActive[gname] {
+		if !b.exporter.groupActive[gname] {
 			continue
 		}
 
 		// we set the group inactive after testing for inactive group & skipping
 		// to allow emitting metrics one last time
 		if gcounts.Procs == 0 {
-			p.exporter.groupActive[gname] = false
+			b.exporter.groupActive[gname] = false
 		}
 
-		previous := p.lastCount[gname]
-		previousTime := p.lastTime[gname]
+		previous := b.lastCount[gname]
+		previousTime := b.lastTime[gname]
 		delta := gcounts.Counts.Sub(previous)
 
-		p.lastCount[gname] = gcounts.Counts
-		p.lastTime[gname] = now
+		b.lastCount[gname] = gcounts.Counts
+		b.lastTime[gname] = now
 
 		memBytes := float64(gcounts.ResidentBytes)
 		if gcounts.ProportionalBytes > 0 {

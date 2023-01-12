@@ -34,19 +34,19 @@ type processProvider interface {
 	Processes(ctx context.Context, maxAge time.Duration) (processes map[int]facts.Process, err error)
 }
 
-// Input represents an input tied with a process.
-type Input struct {
+// StatusSource collects process status metrics.
+type StatusSource struct {
 	ps processProvider
 }
 
-// New initialize process.Input.
-func New(ps processProvider) Input {
-	return Input{ps: ps}
+// NewStatusSource initializes a StatusSource.
+func NewStatusSource(ps processProvider) StatusSource {
+	return StatusSource{ps: ps}
 }
 
 // Collect sends process metrics to the Appender.
-func (i Input) Collect(ctx context.Context, app storage.Appender) error {
-	proc, err := i.ps.Processes(ctx, maxAge)
+func (s StatusSource) Collect(ctx context.Context, app storage.Appender) error {
+	proc, err := s.ps.Processes(ctx, maxAge)
 	if err != nil {
 		return fmt.Errorf("unable to gather process metrics: %w", err)
 	}
