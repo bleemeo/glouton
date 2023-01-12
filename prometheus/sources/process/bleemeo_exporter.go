@@ -111,7 +111,7 @@ func (b *bleemeoExporter) points(t0 time.Time) ([]types.MetricPoint, error) {
 			types.MetricPoint{
 				Labels: map[string]string{
 					types.LabelName: "process_num_procs",
-					"group_name":    gname,
+					types.LabelItem: gname,
 				},
 				Point: types.Point{
 					Time:  t0,
@@ -124,7 +124,7 @@ func (b *bleemeoExporter) points(t0 time.Time) ([]types.MetricPoint, error) {
 			types.MetricPoint{
 				Labels: map[string]string{
 					types.LabelName: "process_mem_bytes",
-					"group_name":    gname,
+					types.LabelItem: gname,
 				},
 				Point: types.Point{
 					Time:  t0,
@@ -137,7 +137,7 @@ func (b *bleemeoExporter) points(t0 time.Time) ([]types.MetricPoint, error) {
 			types.MetricPoint{
 				Labels: map[string]string{
 					types.LabelName: "process_open_filedesc",
-					"group_name":    gname,
+					types.LabelItem: gname,
 				},
 				Point: types.Point{
 					Time:  t0,
@@ -150,7 +150,7 @@ func (b *bleemeoExporter) points(t0 time.Time) ([]types.MetricPoint, error) {
 			types.MetricPoint{
 				Labels: map[string]string{
 					types.LabelName: "process_worst_fd_ratio",
-					"group_name":    gname,
+					types.LabelItem: gname,
 				},
 				Point: types.Point{
 					Time:  t0,
@@ -163,7 +163,7 @@ func (b *bleemeoExporter) points(t0 time.Time) ([]types.MetricPoint, error) {
 			types.MetricPoint{
 				Labels: map[string]string{
 					types.LabelName: "process_num_threads",
-					"group_name":    gname,
+					types.LabelItem: gname,
 				},
 				Point: types.Point{
 					Time:  t0,
@@ -195,7 +195,7 @@ func (b *bleemeoExporter) points(t0 time.Time) ([]types.MetricPoint, error) {
 				types.MetricPoint{
 					Labels: map[string]string{
 						types.LabelName: "process_cpu_user",
-						"group_name":    gname,
+						types.LabelItem: gname,
 					},
 					Point: types.Point{
 						Time:  t0,
@@ -208,7 +208,7 @@ func (b *bleemeoExporter) points(t0 time.Time) ([]types.MetricPoint, error) {
 				types.MetricPoint{
 					Labels: map[string]string{
 						types.LabelName: "process_cpu_system",
-						"group_name":    gname,
+						types.LabelItem: gname,
 					},
 					Point: types.Point{
 						Time:  t0,
@@ -221,7 +221,7 @@ func (b *bleemeoExporter) points(t0 time.Time) ([]types.MetricPoint, error) {
 				types.MetricPoint{
 					Labels: map[string]string{
 						types.LabelName: "process_major_fault",
-						"group_name":    gname,
+						types.LabelItem: gname,
 					},
 					Point: types.Point{
 						Time:  t0,
@@ -234,7 +234,7 @@ func (b *bleemeoExporter) points(t0 time.Time) ([]types.MetricPoint, error) {
 				types.MetricPoint{
 					Labels: map[string]string{
 						types.LabelName: "process_context_switch",
-						"group_name":    gname,
+						types.LabelItem: gname,
 					},
 					Point: types.Point{
 						Time:  t0,
@@ -247,7 +247,7 @@ func (b *bleemeoExporter) points(t0 time.Time) ([]types.MetricPoint, error) {
 				types.MetricPoint{
 					Labels: map[string]string{
 						types.LabelName: "process_io_read_bytes",
-						"group_name":    gname,
+						types.LabelItem: gname,
 					},
 					Point: types.Point{
 						Time:  t0,
@@ -260,7 +260,7 @@ func (b *bleemeoExporter) points(t0 time.Time) ([]types.MetricPoint, error) {
 				types.MetricPoint{
 					Labels: map[string]string{
 						types.LabelName: "process_io_write_bytes",
-						"group_name":    gname,
+						types.LabelItem: gname,
 					},
 					Point: types.Point{
 						Time:  t0,
