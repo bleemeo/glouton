@@ -123,7 +123,6 @@ var (
 		"node_network_transmit_packets_total",
 		"node_network_receive_errs_total",
 		"node_network_transmit_errs_total",
-		"node_uname_info",
 	}
 
 	promLinuxSwapMetrics = []string{

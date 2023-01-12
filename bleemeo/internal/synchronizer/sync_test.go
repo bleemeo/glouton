@@ -1004,13 +1004,12 @@ func TestBleemeoPlan(t *testing.T) { //nolint:maintidx
 		{
 			name: "no-docker-limit-list",
 			accountConfig: bleemeoTypes.AccountConfig{
-				ID:                    configID2,
-				Name:                  "no-docker-limit-list",
-				MaxCustomMetrics:      999,
-				LiveProcess:           true,
-				DockerIntegration:     false,
-				SNMPIntegration:       true,
-				MetricsAgentWhitelist: "mem_used,cpu_used,probe_success",
+				ID:                configID2,
+				Name:              "no-docker-limit-list",
+				MaxCustomMetrics:  999,
+				LiveProcess:       true,
+				DockerIntegration: false,
+				SNMPIntegration:   true,
 			},
 			agentConfigs: []bleemeoTypes.AgentConfig{
 				{
@@ -1038,13 +1037,12 @@ func TestBleemeoPlan(t *testing.T) { //nolint:maintidx
 		{
 			name: "no-docker-no-snmp-limit-list",
 			accountConfig: bleemeoTypes.AccountConfig{
-				ID:                    configID2,
-				Name:                  "no-no-no",
-				MaxCustomMetrics:      999,
-				LiveProcess:           false,
-				DockerIntegration:     false,
-				SNMPIntegration:       false,
-				MetricsAgentWhitelist: "mem_used,cpu_used,probe_success",
+				ID:                configID2,
+				Name:              "no-no-no",
+				MaxCustomMetrics:  999,
+				LiveProcess:       false,
+				DockerIntegration: false,
+				SNMPIntegration:   false,
 			},
 			agentConfigs: []bleemeoTypes.AgentConfig{
 				{

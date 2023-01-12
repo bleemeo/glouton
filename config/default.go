@@ -34,6 +34,16 @@ func DefaultPaths() []string {
 	}
 }
 
+// mapKeys returns the config keys that hold map values.
+// This must be updated when a map value is added to the config.
+func mapKeys() []string {
+	return []string{
+		"thresholds",
+		"metric.softstatus_period",
+		"influxdb.tags",
+	}
+}
+
 func DefaultConfig() Config {
 	defaultBlackboxModule := bbConf.DefaultModule
 	defaultBlackboxModule.Prober = "http"
@@ -68,7 +78,7 @@ func DefaultConfig() Config {
 			MetricsFormat:       "Bleemeo",
 			NodeExporter: NodeExporter{
 				Enable:     true,
-				Collectors: []string{"cpu", "diskstats", "filesystem", "loadavg", "meminfo", "netdev"},
+				Collectors: []string{"cpu", "diskstats", "filesystem", "loadavg", "meminfo", "netdev", "uname"},
 			},
 			WindowsExporter: NodeExporter{
 				Enable:     true,
@@ -239,7 +249,7 @@ func DefaultConfig() Config {
 			SSLInsecure: false,
 			SSL:         false,
 		},
-		NetworkInterfaceBlacklist: []string{
+		NetworkInterfaceDenylist: []string{
 			"docker",
 			"lo",
 			"veth",

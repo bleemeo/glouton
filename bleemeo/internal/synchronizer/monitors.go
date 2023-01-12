@@ -275,7 +275,7 @@ OuterBreak:
 			for k, v := range currentMonitors {
 				if v.ID == m.uuid {
 					// syncing metrics is necessary when an account in which there is a probe is downgraded to a plan with
-					// a stricter metric whitelist, as we need to stop using the metrics in our cache, as they were deleted by the API.
+					// a stricter metric allowlist, as we need to stop using the metrics in our cache, as they were deleted by the API.
 					// We could trigger metrics synchronisation even less often, by checking if the linked account config really changed,
 					// but that would required to compare unordered lists or to do some complex machinery, and I'm not sure it's worth
 					// the added complexity.

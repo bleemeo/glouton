@@ -1044,6 +1044,10 @@ func TestMetricPermanentError(t *testing.T) {
 			content: `{"label":["This metric is not whitelisted for this agent"]}`,
 		},
 		{
+			name:    "allow-list",
+			content: `{"label":["This metric is not in allow-list for this agent"]}`,
+		},
+		{
 			name:    "too many metrics",
 			content: `{"label":["Too many non standard metrics"]}`,
 		},

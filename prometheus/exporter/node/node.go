@@ -89,7 +89,7 @@ func NewCollector(option Option) (prometheus.Collector, error) {
 
 	if option.NetworkIgnoredDevices != "" {
 		args = append(args, fmt.Sprintf("--collector.netclass.ignored-devices=%s", option.NetworkIgnoredDevices))
-		args = append(args, fmt.Sprintf("--collector.netdev.device-blacklist=%s", option.NetworkIgnoredDevices))
+		args = append(args, fmt.Sprintf("--collector.netdev.device-exclude=%s", option.NetworkIgnoredDevices))
 	}
 
 	if option.DiskStatsIgnoredDevices != "" {

@@ -116,6 +116,7 @@ var (
 type agent struct {
 	taskRegistry *task.Registry
 	config       config.Config
+	configItems  []config.Item
 	state        *state.State
 	cancel       context.CancelFunc
 	context      context.Context //nolint:containedctx
@@ -189,12 +190,13 @@ func (a *agent) init(ctx context.Context, configFiles []string, firstRun bool) (
 	a.taskRegistry = task.NewRegistry(ctx)
 	a.taskIDs = make(map[string]int)
 
-	cfg, warnings, err := config.Load(true, configFiles...)
+	cfg, configItems, warnings, err := config.Load(true, configFiles...)
 	if warnings != nil {
 		a.addWarnings(warnings...)
 	}
 
 	a.config = cfg
+	a.configItems = configItems
 
 	a.setupLogger()
 
@@ -662,12 +664,6 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		10*time.Second,
 	)
 
-	go func() {
-		defer types.ProcessPanic()
-
-		a.handleSighup(ctx, sighupChan)
-	}()
-
 	a.factProvider = facts.NewFacter(
 		a.config.Agent.FactsFile,
 		a.hostRootPath,
@@ -993,6 +989,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 
 		connector, err := bleemeo.New(bleemeoTypes.GlobalOption{
 			Config:                  a.config,
+			ConfigItems:             a.configItems,
 			State:                   a.state,
 			Facts:                   a.factProvider,
 			Process:                 psFact,
@@ -1255,6 +1252,14 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		})
 	}
 
+	// Handle sighup signals only after the agent is completely initialized
+	// to make sure an early signal won't access uninitialized fields.
+	go func() {
+		defer types.ProcessPanic()
+
+		a.handleSighup(ctx, sighupChan)
+	}()
+
 	a.startTasks(tasks)
 
 	<-ctx.Done()
@@ -1371,14 +1376,14 @@ func (a *agent) waitAndRefreshPendingUpdates(ctx context.Context) {
 }
 
 func (a *agent) buildCollectorsConfig() (conf inputs.CollectorConfig, err error) {
-	whitelistRE, err := common.CompileREs(a.config.DiskMonitor)
+	allowlistRE, err := common.CompileREs(a.config.DiskMonitor)
 	if err != nil {
 		a.addWarnings(fmt.Errorf("%w: failed to compile regexp in disk_monitor: %s", config.ErrInvalidValue, err))
 
 		return
 	}
 
-	blacklistRE, err := common.CompileREs(a.config.DiskIgnore)
+	denylistRE, err := common.CompileREs(a.config.DiskIgnore)
 	if err != nil {
 		a.addWarnings(fmt.Errorf("%w: failed to compile regexp in disk_ignore: %s", config.ErrInvalidValue, err))
 
@@ -1393,10 +1398,10 @@ func (a *agent) buildCollectorsConfig() (conf inputs.CollectorConfig, err error)
 
 	return inputs.CollectorConfig{
 		DFRootPath:      a.hostRootPath,
-		NetIfBlacklist:  a.config.NetworkInterfaceBlacklist,
-		IODiskWhitelist: whitelistRE,
-		IODiskBlacklist: blacklistRE,
-		DFPathBlacklist: pathIgnoreTrimed,
+		NetIfDenylist:   a.config.NetworkInterfaceDenylist,
+		IODiskAllowlist: allowlistRE,
+		IODiskDenylist:  denylistRE,
+		DFPathDenylist:  pathIgnoreTrimed,
 	}, nil
 }
 
@@ -2071,8 +2076,8 @@ func (a *agent) FireTrigger(discovery bool, sendFacts bool, systemUpdateMetric b
 		a.triggerSystemUpdateMetric = true
 	}
 
-	// Some discovery request ask for a second discovery in 1 minutes.
-	// The second discovery allow to discovery service that are slow to start
+	// Some discovery requests ask for a second discovery in 1 minutes.
+	// The second discovery allows to discover services that are slow to start
 	if secondDiscovery {
 		deadline := time.Now().Add(time.Minute)
 		a.triggerDiscAt = deadline
