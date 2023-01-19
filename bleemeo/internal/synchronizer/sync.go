@@ -35,6 +35,7 @@ import (
 	"math/big"
 	"net/http"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -917,11 +918,83 @@ func (s *Synchronizer) syncToPerform(ctx context.Context) (map[string]bool, bool
 	return syncMethods, fullSync
 }
 
-func (s *Synchronizer) checkDuplicated() error {
+// checkDuplicated checks if another glouton is running with the same ID.
+func (s *Synchronizer) checkDuplicated(ctx context.Context) error {
+	isDuplicatedOnSameHost, err := s.isDuplicatedOnSameHost(ctx)
+	if err != nil {
+		return fmt.Errorf("check duplicated agent on same host: %w", err)
+	}
+
+	isDuplicatedOnAnotherHost, err := s.isDuplicatedOnAnotherHost()
+	if err != nil {
+		return fmt.Errorf("check duplicated agent on another host: %w", err)
+	}
+
+	if !isDuplicatedOnSameHost && !isDuplicatedOnAnotherHost {
+		return nil
+	}
+
+	// The agent is duplicated, update the last duplication date on the API.
+	params := map[string]string{
+		"fields": "last_duplication_date",
+	}
+
+	data := map[string]time.Time{
+		"last_duplication_date": time.Now(),
+	}
+
+	_, err = s.client.Do(s.ctx, "PATCH", fmt.Sprintf("v1/agent/%s/", s.agentID), params, data, nil)
+	if err != nil {
+		logger.V(1).Printf("Failed to update duplication date: %s", err)
+	}
+
+	return errConnectorTemporaryDisabled
+}
+
+// isDuplicatedOnSameHost checks if another agent is running on the same host.
+func (s *Synchronizer) isDuplicatedOnSameHost(ctx context.Context) (bool, error) {
+	// The local duplication detection by process can be deactivated in the config.
+	// This can be useful to LXC users where an agent could be running on the host
+	// and detect another agent process in a container and wrongly detect duplication.
+	if s.option.Config.Agent.DisableLocalDuplicationDetection {
+		return false, nil
+	}
+
+	// Check if another agent process is running.
+	processes, err := s.option.Process.Processes(ctx, time.Minute)
+	if err != nil {
+		return false, fmt.Errorf("list processes: %w", err)
+	}
+
+	pid := os.Getpid()
+
+	for _, process := range processes {
+		// On Linux, both our systemd service and docker container use "/usr/sbin/glouton".
+		// On Windows we don't know the installation path, only that the process uses "glouton.exe".
+		// Skip our own PID to detect only other agent processes.
+		if process.PID != pid && (strings.Contains(process.CmdLine, "/usr/sbin/glouton") ||
+			strings.Contains(process.CmdLine, "glouton.exe")) {
+			logger.Printf("Another agent is already running on this host with PID %d (I'm PID %d)", process.PID, pid)
+
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+// isDuplicatedOnAnotherHost checks if another agent with the same ID is running
+// on another host. This may happen if the state file is shared by multiple agents.
+func (s *Synchronizer) isDuplicatedOnAnotherHost() (bool, error) {
+	// We use the fact that the agents will send different facts to the API.
+	// If the facts we fetch from the API are not the same as the last facts
+	// we registered, another agent with the same ID must have modified them.
+	// Note that this won't work if the two agents are on the same host
+	// because both agents will send mostly the same facts.
 	oldFacts := s.option.Cache.FactsByKey()
 
 	if err := s.factsUpdateList(); err != nil {
-		return err
+		return false, fmt.Errorf("update facts list: %w", err)
 	}
 
 	newFacts := s.option.Cache.FactsByKey()
@@ -960,24 +1033,10 @@ func (s *Synchronizer) checkDuplicated() error {
 				"and https://go.bleemeo.com/l/agent-installation-cloud-image ",
 		)
 
-		// Update last duplication date on the API.
-		params := map[string]string{
-			"fields": "last_duplication_date",
-		}
-
-		data := map[string]time.Time{
-			"last_duplication_date": time.Now(),
-		}
-
-		_, err := s.client.Do(s.ctx, "PATCH", fmt.Sprintf("v1/agent/%s/", s.agentID), params, data, nil)
-		if err != nil {
-			logger.V(1).Printf("Failed to update duplication date: %s", err)
-		}
-
-		return errConnectorTemporaryDisabled
+		return true, nil
 	}
 
-	return nil
+	return false, nil
 }
 
 func (s *Synchronizer) register(ctx context.Context) error {

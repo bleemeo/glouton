@@ -46,7 +46,7 @@ func (cl *wrapperClient) Do(ctx context.Context, method string, path string, par
 
 	if !cl.duplicateChecked {
 		cl.duplicateChecked = true
-		cl.duplicateError = cl.s.checkDuplicated()
+		cl.duplicateError = cl.s.checkDuplicated(ctx)
 	}
 
 	if cl.duplicateError != nil {
@@ -63,7 +63,7 @@ func (cl *wrapperClient) Iter(ctx context.Context, resource string, params map[s
 
 	if !cl.duplicateChecked {
 		cl.duplicateChecked = true
-		cl.duplicateError = cl.s.checkDuplicated()
+		cl.duplicateError = cl.s.checkDuplicated(ctx)
 	}
 
 	if cl.duplicateError != nil {
