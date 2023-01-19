@@ -88,6 +88,7 @@ type Synchronizer struct {
 	successiveErrors        int
 	warnAccountMismatchDone bool
 	maintenanceMode         bool
+	suspendedMode           bool
 	callUpdateLabels        bool
 	lastMetricCount         int
 	agentID                 string
@@ -139,13 +140,19 @@ type Option struct {
 	// SetInitialized tells the bleemeo connector that the MQTT module can be started
 	SetInitialized func()
 
-	// IsMqttConnected returns wether the MQTT connector is operating nominally, and specifically that it can receive mqtt notifications.
-	// It is useful for the fallback on http polling described above Synchronizer.lastMaintenanceSync definition.
+	// IsMqttConnected returns wether the MQTT connector is operating nominally, and specifically
+	// that it can receive mqtt notifications. It is useful for the fallback on http polling
+	// described above Synchronizer.lastMaintenanceSync definition.
 	// Note: returns false when the mqtt connector is not enabled.
 	IsMqttConnected func() bool
 
-	// SetBleemeoInMaintenanceMode makes the bleemeo connector wait a day before checking again for maintenance
+	// SetBleemeoInMaintenanceMode makes the bleemeo connector wait a day before checking again for maintenance.
 	SetBleemeoInMaintenanceMode func(maintenance bool)
+
+	// SetBleemeoInSuspendedMode sets the suspended mode. While Bleemeo is suspended the agent doesn't
+	// create or update objects on the API and stops sending points on MQTT. The suspended mode differs
+	// from the maintenance mode because we stop buffering points to send on MQTT and just drop them.
+	SetBleemeoInSuspendedMode func(suspended bool)
 }
 
 // New return a new Synchronizer.
@@ -691,14 +698,15 @@ func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) (map[str
 	previousCount := s.realClient.RequestsCount()
 
 	syncStep := []struct {
-		name                 string
-		method               func(context.Context, bool, bool) (updateThresholds bool, err error)
-		enabledInMaintenance bool
-		skipOnlyEssential    bool // should be true for method that ignore onlyEssential
+		name                   string
+		method                 func(context.Context, bool, bool) (updateThresholds bool, err error)
+		enabledInMaintenance   bool
+		enabledInSuspendedMode bool
+		skipOnlyEssential      bool // should be true for method that ignore onlyEssential
 	}{
 		{name: syncMethodInfo, method: s.syncInfo, enabledInMaintenance: true, skipOnlyEssential: true},
-		{name: syncMethodAgent, method: s.syncAgent, skipOnlyEssential: true},
-		{name: syncMethodAccountConfig, method: s.syncAccountConfig, skipOnlyEssential: true},
+		{name: syncMethodAgent, method: s.syncAgent, enabledInSuspendedMode: true, skipOnlyEssential: true},
+		{name: syncMethodAccountConfig, method: s.syncAccountConfig, enabledInSuspendedMode: true, skipOnlyEssential: true},
 		{name: syncMethodFact, method: s.syncFacts},
 		{name: syncMethodContainer, method: s.syncContainers},
 		{name: syncMethodSNMP, method: s.syncSNMP},
@@ -731,21 +739,19 @@ func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) (map[str
 			break
 		}
 
-		if s.IsMaintenance() {
-			if !step.enabledInMaintenance {
-				// store the fact that we must sync this step when we will no longer be in maintenance:
-				// we will try to sync it again at every iteration of runOnce(), until we get out of
-				// maintenance.
-				// This ensures that if the maintenance takes a long time, we will still update the
-				// objects that should have been synced in that period.
-				if full, ok := syncMethods[step.name]; ok {
-					s.l.Lock()
-					s.forceSync[step.name] = full || s.forceSync[step.name]
-					s.l.Unlock()
-				}
-
-				continue
+		if (s.IsMaintenance() && !step.enabledInMaintenance) || (s.suspendedMode && !step.enabledInSuspendedMode) {
+			// Store the fact that we must sync this step when we will no longer be in maintenance:
+			// we will try to sync it again at every iteration of runOnce(), until we get out of
+			// maintenance.
+			// This ensures that if the maintenance takes a long time, we will still update the
+			// objects that should have been synced in that period.
+			if full, ok := syncMethods[step.name]; ok {
+				s.l.Lock()
+				s.forceSync[step.name] = full || s.forceSync[step.name]
+				s.l.Unlock()
 			}
+
+			continue
 		}
 
 		if full, ok := syncMethods[step.name]; ok {
