@@ -18,10 +18,14 @@ package process
 
 import (
 	"context"
+	"fmt"
 	"glouton/facts"
 	"glouton/logger"
+	"glouton/prometheus/model"
 	"glouton/types"
 	"time"
+
+	"github.com/prometheus/prometheus/storage"
 )
 
 const maxAge = 1 * time.Second
@@ -30,30 +34,24 @@ type processProvider interface {
 	Processes(ctx context.Context, maxAge time.Duration) (processes map[int]facts.Process, err error)
 }
 
-// Input represents an input tied with a process.
-type Input struct {
-	ps     processProvider
-	pusher types.PointPusher
+// StatusSource collects process status metrics.
+type StatusSource struct {
+	ps processProvider
 }
 
-// New initialize process.Input.
-func New(ps processProvider, pusher types.PointPusher) Input {
-	return Input{
-		ps:     ps,
-		pusher: pusher,
-	}
+// NewStatusSource initializes a StatusSource.
+func NewStatusSource(ps processProvider) StatusSource {
+	return StatusSource{ps: ps}
 }
 
-// Gather send metrics to the PointPusher.
-func (i Input) Gather(ctx context.Context, now time.Time) {
-	proc, err := i.ps.Processes(ctx, maxAge)
+// Collect sends process metrics to the Appender.
+func (s StatusSource) Collect(ctx context.Context, app storage.Appender) error {
+	proc, err := s.ps.Processes(ctx, maxAge)
 	if err != nil {
-		logger.V(1).Printf("unable to gather process metrics: %v", err)
-
-		return
+		return fmt.Errorf("unable to gather process metrics: %w", err)
 	}
 
-	// Glouton should always sent those counters
+	// Glouton should always send those counters.
 	counts := map[string]int{
 		"sleeping": 0,
 		"blocked":  0,
@@ -94,6 +92,7 @@ func (i Input) Gather(ctx context.Context, now time.Time) {
 		totalThreads += p.NumThreads
 	}
 
+	now := time.Now()
 	points := []types.MetricPoint{
 		{
 			Labels: map[string]string{
@@ -127,5 +126,10 @@ func (i Input) Gather(ctx context.Context, now time.Time) {
 		})
 	}
 
-	i.pusher.PushPoints(ctx, points)
+	err = model.SendPointsToAppender(points, app)
+	if err != nil {
+		return fmt.Errorf("send points to appender: %w", err)
+	}
+
+	return app.Commit()
 }
