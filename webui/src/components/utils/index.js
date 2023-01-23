@@ -1,10 +1,6 @@
 /* eslint-disable indent */
 import React from "react";
-import ReactTooltip from "react-tooltip";
 import PropTypes from "prop-types";
-
-import { cssClassForStatus, textForStatus } from "./converter";
-import { formatDateTime } from "./formater";
 
 export const createFilterFn = (input) => {
   const i = input.toLowerCase();
@@ -58,65 +54,6 @@ export const MetricDescription = ({ description }) => {
 
 MetricDescription.propTypes = {
   description: PropTypes.string.isRequired,
-};
-
-export const tooltipColor = (status) => {
-  switch (status) {
-    case 0:
-      return "success";
-    case 1:
-      return "warning";
-    case 2:
-      return "error";
-    default:
-      return "info";
-  }
-};
-
-const tooltipContent = (metric) => {
-  return (
-    <div>
-      {typeof metric.current_status_changed_at === "string" ? (
-        <span>Since {formatDateTime(metric.current_status_changed_at)}</span>
-      ) : (
-        <noscript />
-      )}
-      <MetricDescription description={metric.status_descriptions[0]} />
-    </div>
-  );
-};
-
-export const MetricStatusLabel = ({ metric }) => {
-  const status = metric ? metric.current_status : null;
-  if (!metric || status === null) {
-    return <noscript />;
-  }
-  return (
-    <span
-      data-tip
-      data-for={`metricStatusLabel${metric.id}`}
-      className={`badge badge-${cssClassForStatus(status)}`}
-    >
-      {textForStatus(status)}
-      {typeof metric.current_status_changed_at === "string" ||
-      (metric.status_descriptions && metric.status_descriptions.length > 0) ? (
-        <ReactTooltip
-          id={`metricStatusLabel${metric.id}`}
-          place="bottom"
-          type={tooltipColor(status)}
-          effect="solid"
-        >
-          <div style={{ marginBottom: "0rem" }}>{tooltipContent(metric)}</div>
-        </ReactTooltip>
-      ) : (
-        <noscript />
-      )}
-    </span>
-  );
-};
-
-MetricStatusLabel.propTypes = {
-  metric: PropTypes.object,
 };
 
 export const copyToClipboard = (cmd) => {

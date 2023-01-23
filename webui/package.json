@@ -45,7 +45,7 @@
     "react-query": "^3.39.2",
     "react-router": "^6.7.0",
     "react-router-dom": "^6.7.0",
-    "react-tooltip": "^4.5.1",
+    "react-tooltip": "^5.5.2",
     "react-visibility-sensor": "^5.1.1",
     "reactstrap": "^9.1.5",
     "serialize-javascript": "^6.0.1",
