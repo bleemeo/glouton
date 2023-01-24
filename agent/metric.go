@@ -891,6 +891,22 @@ func addScrappersList(
 	}
 }
 
+// Allow metrics gathered from parsing logs.
+func addLogMetrics(config config.Config, metricList map[labels.Matcher][]matcher.Matchers) {
+	for _, input := range config.Log.Inputs {
+		for _, filter := range input.Filters {
+			matchers, err := matcher.NormalizeMetric(filter.Metric)
+			if err != nil {
+				logger.V(2).Printf("Could not normalize metric %s", filter.Metric)
+
+				continue
+			}
+
+			addToList(metricList, matchers)
+		}
+	}
+}
+
 func getDefaultMetrics(format types.MetricFormat, hasSwap bool) []string {
 	res := commonDefaultSystemMetrics
 	res = append(res, inputMetrics...)
@@ -947,6 +963,7 @@ func (m *metricFilter) buildList(config config.Config, hasSNMP, hasSwap bool, fo
 
 	m.staticAllowList = buildMatcherList(config.Metric.AllowMetrics)
 	addScrappersList(config, m.staticAllowList, "allow")
+	addLogMetrics(config, m.staticAllowList)
 
 	m.staticDenyList = buildMatcherList(config.Metric.DenyMetrics)
 	addScrappersList(config, m.staticDenyList, "deny")

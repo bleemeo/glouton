@@ -33,6 +33,7 @@ type Config struct {
 	JMX                      JMX                  `yaml:"jmx"`
 	JMXTrans                 JMXTrans             `yaml:"jmxtrans"`
 	Kubernetes               Kubernetes           `yaml:"kubernetes"`
+	Log                      Log                  `yaml:"log"`
 	Logging                  Logging              `yaml:"logging"`
 	Metric                   Metric               `yaml:"metric"`
 	MQTT                     OpenSourceMQTT       `yaml:"mqtt"`
@@ -49,6 +50,21 @@ type Config struct {
 	Thresholds               map[string]Threshold `yaml:"thresholds"`
 	Web                      Web                  `yaml:"web"`
 	Zabbix                   Zabbix               `yaml:"zabbix"`
+}
+
+type Log struct {
+	FluentbitURL string     `yaml:"fluentbit_url"`
+	Inputs       []LogInput `yaml:"inputs"`
+}
+
+type LogInput struct {
+	Path    string      `yaml:"path"`
+	Filters []LogFilter `yaml:"filters"`
+}
+
+type LogFilter struct {
+	Metric string `yaml:"metric"`
+	Regex  string `yaml:"regex"`
 }
 
 type Smart struct {
@@ -355,13 +371,13 @@ type JmxMetric struct {
 }
 
 type Container struct {
-	Filter           Filter           `yaml:"filter"`
+	Filter           ContainerFilter  `yaml:"filter"`
 	Type             string           `yaml:"type"`
 	PIDNamespaceHost bool             `yaml:"pid_namespace_host"`
 	Runtime          ContainerRuntime `yaml:"runtime"`
 }
 
-type Filter struct {
+type ContainerFilter struct {
 	AllowByDefault bool     `yaml:"allow_by_default"`
 	AllowList      []string `yaml:"allow_list"`
 	DenyList       []string `yaml:"deny_list"`

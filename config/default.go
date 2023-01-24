@@ -124,7 +124,7 @@ func DefaultConfig() Config {
 		Container: Container{
 			PIDNamespaceHost: false,
 			Type:             "",
-			Filter: Filter{
+			Filter: ContainerFilter{
 				AllowByDefault: true,
 				AllowList:      []string{},
 				DenyList:       []string{},
@@ -210,6 +210,10 @@ func DefaultConfig() Config {
 			NodeName:            "",
 			ClusterName:         "",
 			KubeConfig:          "",
+		},
+		Log: Log{
+			FluentbitURL: "http://localhost:2020",
+			Inputs:       []LogInput{},
 		},
 		Logging: Logging{
 			Buffer: LoggingBuffer{

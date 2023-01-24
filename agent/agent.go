@@ -37,6 +37,7 @@ import (
 	"glouton/facts/container-runtime/kubernetes"
 	"glouton/facts/container-runtime/merge"
 	"glouton/facts/container-runtime/veth"
+	"glouton/fluentbit"
 	"glouton/influxdb"
 	"glouton/inputs"
 	"glouton/inputs/docker"
@@ -1194,6 +1195,13 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 			logger.Printf("Warning: both \"disk_monitor\" and \"disk_ignore\" are set. Only \"disk_ignore\" will be used")
 		} else if a.metricFormat != types.MetricFormatBleemeo {
 			logger.Printf("Warning: configuration \"disk_monitor\" is not used in Prometheus mode. Use \"disk_ignore\"")
+		}
+	}
+
+	if len(a.config.Log.Inputs) > 0 {
+		err := fluentbit.Load(ctx, a.config.Log, a.gathererRegistry)
+		if err != nil {
+			logger.Printf("Failed to load log config: %s", err)
 		}
 	}
 
