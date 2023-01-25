@@ -11,3 +11,6 @@ glouton     ALL=(root) NOEXEC: NOPASSWD: /usr/bin/fail2ban-client status, /usr/b
 
 # Allow Glouton to get SMART metrics.
 glouton     ALL=(ALL) NOPASSWD: /usr/bin/smartctl, /usr/sbin/smartctl
+
+# Allow Glouton to restart Fluentbit to apply a new configuration.
+glouton     ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart fluent-bit

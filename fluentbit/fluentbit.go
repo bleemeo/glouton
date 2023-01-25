@@ -2,18 +2,22 @@ package fluentbit
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"glouton/config"
+	"glouton/logger"
 	"glouton/prometheus/registry"
 	"glouton/prometheus/scrapper"
 	"glouton/types"
 	"net/url"
 	"os"
+	"os/exec"
 
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-const configFile = "/var/lib/glouton/fluentbit.conf"
+// TODO: Do we want to support Windows?
+const configFile = "/var/lib/glouton/fluent-bit.conf"
 
 type registerer interface {
 	RegisterGatherer(opt registry.RegistrationOption, gatherer prometheus.Gatherer) (int, error)
@@ -49,9 +53,14 @@ func Load(ctx context.Context, config config.Log, reg registerer) error {
 		return fmt.Errorf("register fluenbit scrapper: %w", err)
 	}
 
+	// Reload Fluentbit to apply the configuration.
+	// Do it in a goroutine to not block the agent startup.
+	go reloadConfig(ctx)
+
 	return nil
 }
 
+// Return PromQL rules to rename the Fluentbit metrics to the input metric names.
 func promQLRulesFromInputs(inputs []config.LogInput) []types.SimpleRule {
 	rules := make([]types.SimpleRule, 0, len(inputs))
 
@@ -65,4 +74,27 @@ func promQLRulesFromInputs(inputs []config.LogInput) []types.SimpleRule {
 	}
 
 	return rules
+}
+
+// Reload Fluentbit config.
+// Currently the only way to reload the configuration when Fluent Bit is installed as a package
+// is to restart it, see https://github.com/fluent/fluent-bit/issues/365 for updated information.
+func reloadConfig(ctx context.Context) {
+	// Skip reloading on systems without systemctl.
+	// In Docker and Kubernetes, Fluent Bit will detect the config change and reload by itself.
+	if _, err := os.Stat("/usr/bin/systemctl"); err != nil {
+		logger.V(2).Printf("Skipping Fluent Bit reload because systemctl is not present: %s", err)
+
+		return
+	}
+
+	_, err := exec.CommandContext(ctx, "sudo", "-n", "/usr/bin/systemctl", "restart", "fluent-bit").Output()
+	if err != nil {
+		stderr := err.Error()
+		if exitErr := &(exec.ExitError{}); errors.As(err, &exitErr) {
+			stderr += ": " + string(exitErr.Stderr)
+		}
+
+		logger.V(0).Printf("Failed to restart Fluent Bit: %s", stderr)
+	}
 }
