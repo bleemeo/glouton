@@ -19,7 +19,9 @@ package promexporter
 
 import (
 	"fmt"
+	"glouton/config"
 	"glouton/facts"
+	"glouton/fluentbit"
 	"glouton/logger"
 	"glouton/prometheus/registry"
 	"glouton/prometheus/scrapper"
@@ -78,6 +80,7 @@ func (d *DynamicScrapper) listExporters(containers []facts.Container) []*scrappe
 		target := &scrapper.Target{
 			URL:             tmp,
 			ExtraLabels:     labels,
+			Rules:           d.rulesForContainer(c.Labels(), c.Annotations()),
 			ContainerLabels: cLabelsAnnotations,
 		}
 		result = append(result, target)
@@ -121,6 +124,7 @@ type DynamicScrapper struct {
 	containersLabels map[string]map[string]string
 	DynamicJobName   string
 	Registry         *registry.Registry
+	FluentBitInputs  []config.LogInput
 }
 
 // Update updates the scrappers targets using new containers informations.
@@ -165,6 +169,7 @@ func (d *DynamicScrapper) update(containers []facts.Container) {
 				Description: "Prometheus exporter " + t.URL.String(),
 				JitterSeed:  hash,
 				Interval:    defaultInterval,
+				Rules:       t.Rules,
 				ExtraLabels: t.ExtraLabels,
 			},
 			t,
@@ -220,4 +225,18 @@ func copyMap(toCopy map[string]map[string]string) map[string]map[string]string {
 	}
 
 	return copyMap
+}
+
+func (d *DynamicScrapper) rulesForContainer(labels, annotations map[string]string) []types.SimpleRule {
+	component := labels["glouton.component"]
+	if component == "" {
+		component = annotations["glouton.component"]
+	}
+
+	// Fluent Bit containers need special rules to rename the metrics.
+	if component == "fluent-bit" {
+		return fluentbit.PromQLRulesFromInputs(d.FluentBitInputs)
+	}
+
+	return nil
 }

@@ -84,7 +84,7 @@ func createFluentBitScrapper(cfg config.Log, reg registerer) error {
 	_, err = reg.RegisterGatherer(
 		registry.RegistrationOption{
 			Description: "Prom exporter " + promScrapper.URL.String(),
-			Rules:       promQLRulesFromInputs(cfg.Inputs),
+			Rules:       PromQLRulesFromInputs(cfg.Inputs),
 		},
 		promScrapper,
 	)
@@ -95,8 +95,8 @@ func createFluentBitScrapper(cfg config.Log, reg registerer) error {
 	return nil
 }
 
-// Return PromQL rules to rename the Fluent Bit metrics to the input metric names.
-func promQLRulesFromInputs(inputs []config.LogInput) []types.SimpleRule {
+// PromQLRulesFromInputs returns rules to rename the Fluent Bit metrics to the input metric names.
+func PromQLRulesFromInputs(inputs []config.LogInput) []types.SimpleRule {
 	rules := make([]types.SimpleRule, 0, len(inputs))
 
 	for _, input := range inputs {

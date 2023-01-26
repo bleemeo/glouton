@@ -907,8 +907,9 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 	}
 
 	a.dynamicScrapper = &promexporter.DynamicScrapper{
-		Registry:       a.gathererRegistry,
-		DynamicJobName: "discovered-exporters",
+		Registry:        a.gathererRegistry,
+		DynamicJobName:  "discovered-exporters",
+		FluentBitInputs: a.config.Log.Inputs,
 	}
 
 	if a.config.Blackbox.Enable {
