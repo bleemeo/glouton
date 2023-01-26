@@ -17,27 +17,66 @@ import (
 )
 
 // TODO: Do we want to support Windows?
-const configFile = "/var/lib/glouton/fluent-bit.conf"
+const (
+	configDir  = "/var/lib/glouton/fluent-bit"
+	configFile = configDir + "/fluent-bit.conf"
+)
 
 type registerer interface {
 	RegisterGatherer(opt registry.RegistrationOption, gatherer prometheus.Gatherer) (int, error)
 }
 
-// Load the config to Fluentbit.
-func Load(ctx context.Context, config config.Log, reg registerer) error {
-	// Write Fluenbit config.
-	fluentbitConfig := inputsToFluentbitConfig(config.Inputs)
-
-	//nolint:gosec // The file needs to be readable by Fluentbit.
-	err := os.WriteFile(configFile, []byte(fluentbitConfig), 0o644)
+// Load the Fluent Bit config and start a scrapper.
+func Load(ctx context.Context, cfg config.Log, reg registerer) error {
+	err := writeFluentBitConfig(cfg.Inputs)
 	if err != nil {
-		return fmt.Errorf("write fluentbit config: %w", err)
+		return err
 	}
 
-	// Create Prometheus scrapper.
-	fluentbitURL, err := url.Parse(config.FluentbitURL)
+	err = createFluentBitScrapper(cfg, reg)
 	if err != nil {
-		return fmt.Errorf("parse fluentbit URL: %w", err)
+		return err
+	}
+
+	// Do the reload in a goroutine to not block the agent startup.
+	go reloadFluentBit(ctx)
+
+	return nil
+}
+
+// Write the Fluent Config.
+func writeFluentBitConfig(inputs []config.LogInput) error {
+	fluentbitConfig := inputsToFluentBitConfig(inputs)
+
+	// Even if Glouton only manages a single config file, we have to put it
+	// in its own directory so the directory can be mounted on Docker and Kubernetes.
+	// Mounting a single file doesn't seem to work well with inotify and Fluent Bit
+	// doesn't detect that its config has been modified.
+	err := os.MkdirAll(configDir, 0o744)
+	if err != nil {
+		return fmt.Errorf("create Fluent Bit config directory: %w", err)
+	}
+
+	//nolint:gosec // The file needs to be readable by Fluent Bit.
+	err = os.WriteFile(configFile, []byte(fluentbitConfig), 0o644)
+	if err != nil {
+		return fmt.Errorf("write Fluent Bit config: %w", err)
+	}
+
+	return nil
+}
+
+// Create a Prometheus scrapper to retrieve the Fluent Bit metrics.
+func createFluentBitScrapper(cfg config.Log, reg registerer) error {
+	// In Docker and Kubernetes, the Fluent Bit URL is empty because
+	// labels are used on the Fluent Bit container or pod instead.
+	if cfg.FluentBitURL == "" {
+		return nil
+	}
+
+	fluentbitURL, err := url.Parse(cfg.FluentBitURL)
+	if err != nil {
+		return fmt.Errorf("parse Fluent Bit URL: %w", err)
 	}
 
 	promScrapper := scrapper.New(fluentbitURL, nil)
@@ -45,7 +84,7 @@ func Load(ctx context.Context, config config.Log, reg registerer) error {
 	_, err = reg.RegisterGatherer(
 		registry.RegistrationOption{
 			Description: "Prom exporter " + promScrapper.URL.String(),
-			Rules:       promQLRulesFromInputs(config.Inputs),
+			Rules:       promQLRulesFromInputs(cfg.Inputs),
 		},
 		promScrapper,
 	)
@@ -53,14 +92,10 @@ func Load(ctx context.Context, config config.Log, reg registerer) error {
 		return fmt.Errorf("register fluenbit scrapper: %w", err)
 	}
 
-	// Reload Fluentbit to apply the configuration.
-	// Do it in a goroutine to not block the agent startup.
-	go reloadConfig(ctx)
-
 	return nil
 }
 
-// Return PromQL rules to rename the Fluentbit metrics to the input metric names.
+// Return PromQL rules to rename the Fluent Bit metrics to the input metric names.
 func promQLRulesFromInputs(inputs []config.LogInput) []types.SimpleRule {
 	rules := make([]types.SimpleRule, 0, len(inputs))
 
@@ -76,10 +111,10 @@ func promQLRulesFromInputs(inputs []config.LogInput) []types.SimpleRule {
 	return rules
 }
 
-// Reload Fluentbit config.
+// Reload Fluent Bit to apply the configuration.
 // Currently the only way to reload the configuration when Fluent Bit is installed as a package
 // is to restart it, see https://github.com/fluent/fluent-bit/issues/365 for updated information.
-func reloadConfig(ctx context.Context) {
+func reloadFluentBit(ctx context.Context) {
 	// Skip reloading on systems without systemctl.
 	// In Docker and Kubernetes, Fluent Bit will detect the config change and reload by itself.
 	if _, err := os.Stat("/usr/bin/systemctl"); err != nil {

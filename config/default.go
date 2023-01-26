@@ -212,7 +212,7 @@ func DefaultConfig() Config {
 			KubeConfig:          "",
 		},
 		Log: Log{
-			FluentbitURL: "http://localhost:2020",
+			FluentBitURL: "http://localhost:2020",
 			Inputs:       []LogInput{},
 		},
 		Logging: Logging{

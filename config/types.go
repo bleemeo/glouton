@@ -53,7 +53,7 @@ type Config struct {
 }
 
 type Log struct {
-	FluentbitURL string     `yaml:"fluentbit_url"`
+	FluentBitURL string     `yaml:"fluentbit_url"`
 	Inputs       []LogInput `yaml:"inputs"`
 }
 

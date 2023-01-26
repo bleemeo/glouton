@@ -47,8 +47,8 @@ const outputNullConfig = `
   Alias   %s
 `
 
-// Convert the log inputs to a Fluentbit config.
-func inputsToFluentbitConfig(inputs []config.LogInput) string {
+// Convert the log inputs to a Fluent Bit config.
+func inputsToFluentBitConfig(inputs []config.LogInput) string {
 	var configText strings.Builder
 
 	configText.WriteString(serviceConfig)
