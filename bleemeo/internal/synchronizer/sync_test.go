@@ -17,6 +17,7 @@
 package synchronizer
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	bleemeoTypes "glouton/bleemeo/types"
@@ -1282,6 +1283,93 @@ func TestBleemeoPlan(t *testing.T) { //nolint:maintidx
 			}
 
 			helper.assertMetricsInAPI(t, wantMetrics)
+		})
+	}
+}
+
+func TestIsDuplicatedOnSameHost(t *testing.T) {
+	t.Parallel()
+
+	// The PID of our own agent.
+	const agentPID = 1
+
+	tests := []struct {
+		Name           string
+		Process        map[int]facts.Process
+		WantDuplicated bool
+	}{
+		{
+			Name: "glouton-netstat",
+			Process: map[int]facts.Process{
+				agentPID: {
+					PID:     agentPID,
+					CmdLine: "/usr/sbin/glouton",
+					Name:    "glouton",
+				},
+				2: {
+					PID:     2,
+					CmdLine: "/bin/sh /usr/sbin/glouton-netstat",
+					Name:    "glouton-netstat",
+				},
+			},
+			WantDuplicated: false,
+		},
+		{
+			Name: "glouton-cron",
+			Process: map[int]facts.Process{
+				agentPID: {
+					PID:     agentPID,
+					CmdLine: "/usr/sbin/glouton",
+					Name:    "glouton",
+				},
+				2: {
+					PID:     2,
+					CmdLine: "/bin/sh /etc/cron.hourly/glouton",
+					Name:    "glouton",
+				},
+			},
+			WantDuplicated: false,
+		},
+		{
+			Name: "duplicated",
+			Process: map[int]facts.Process{
+				agentPID: {
+					PID:     agentPID,
+					CmdLine: "/usr/sbin/glouton",
+					Name:    "glouton",
+				},
+				2: {
+					PID:     2,
+					CmdLine: "/usr/sbin/glouton",
+					Name:    "glouton",
+				},
+			},
+			WantDuplicated: true,
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+
+		t.Run(test.Name, func(t *testing.T) {
+			t.Parallel()
+
+			sync := Synchronizer{
+				option: Option{
+					GlobalOption: bleemeoTypes.GlobalOption{
+						Process: mockProcessLister{test.Process},
+					},
+				},
+			}
+
+			isDuplicated, err := sync.isDuplicatedOnSameHost(context.Background(), agentPID)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if isDuplicated != test.WantDuplicated {
+				t.Fatalf("Wanted isDuplicated=%t, got %t", true, isDuplicated)
+			}
 		})
 	}
 }
