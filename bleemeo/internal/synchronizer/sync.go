@@ -975,7 +975,7 @@ func (s *Synchronizer) isDuplicatedOnSameHost(ctx context.Context, pid int) (boo
 		// On Linux, both our systemd service and docker container use "/usr/sbin/glouton".
 		// On Windows we don't know the installation path, only that the process uses "glouton.exe".
 		if strings.Contains(process.CmdLine, "/usr/sbin/glouton") && process.Name == "glouton" ||
-			strings.Contains(process.CmdLine, "glouton.exe") {
+			process.Name == "glouton.exe" {
 			logger.Printf("Another agent is already running on this host with PID %d (I'm PID %d)", process.PID, pid)
 
 			return true, nil
