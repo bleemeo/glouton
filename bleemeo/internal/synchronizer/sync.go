@@ -920,7 +920,7 @@ func (s *Synchronizer) syncToPerform(ctx context.Context) (map[string]bool, bool
 
 // checkDuplicated checks if another glouton is running with the same ID.
 func (s *Synchronizer) checkDuplicated(ctx context.Context) error {
-	isDuplicatedOnSameHost, err := s.isDuplicatedOnSameHost(ctx)
+	isDuplicatedOnSameHost, err := s.isDuplicatedOnSameHost(ctx, os.Getpid())
 	if err != nil {
 		return fmt.Errorf("check duplicated agent on same host: %w", err)
 	}
@@ -952,7 +952,7 @@ func (s *Synchronizer) checkDuplicated(ctx context.Context) error {
 }
 
 // isDuplicatedOnSameHost checks if another agent is running on the same host.
-func (s *Synchronizer) isDuplicatedOnSameHost(ctx context.Context) (bool, error) {
+func (s *Synchronizer) isDuplicatedOnSameHost(ctx context.Context, pid int) (bool, error) {
 	// The local duplication detection by process can be deactivated in the config.
 	// This can be useful to LXC users where an agent could be running on the host
 	// and detect another agent process in a container and wrongly detect duplication.
@@ -966,14 +966,16 @@ func (s *Synchronizer) isDuplicatedOnSameHost(ctx context.Context) (bool, error)
 		return false, fmt.Errorf("list processes: %w", err)
 	}
 
-	pid := os.Getpid()
-
 	for _, process := range processes {
+		// Skip our own PID to detect only other agent processes.
+		if process.PID == pid {
+			continue
+		}
+
 		// On Linux, both our systemd service and docker container use "/usr/sbin/glouton".
 		// On Windows we don't know the installation path, only that the process uses "glouton.exe".
-		// Skip our own PID to detect only other agent processes.
-		if process.PID != pid && (strings.Contains(process.CmdLine, "/usr/sbin/glouton") ||
-			strings.Contains(process.CmdLine, "glouton.exe")) {
+		if strings.Contains(process.CmdLine, "/usr/sbin/glouton") && process.Name == "glouton" ||
+			strings.Contains(process.CmdLine, "glouton.exe") {
 			logger.Printf("Another agent is already running on this host with PID %d (I'm PID %d)", process.PID, pid)
 
 			return true, nil
