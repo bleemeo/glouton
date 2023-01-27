@@ -49,6 +49,7 @@ type Container interface {
 	ImageName() string
 	Labels() map[string]string
 	ListenAddresses() []ListenAddress
+	LogPath() string
 	PodName() string
 	PodNamespace() string
 	PrimaryAddress() string
@@ -315,6 +316,7 @@ type FakeContainer struct {
 	FakeImageName          string
 	FakeLabels             map[string]string
 	FakeListenAddresses    []ListenAddress
+	FakeLogPath            string
 	FakePodName            string
 	FakePodNamespace       string
 	FakePrimaryAddress     string
@@ -386,6 +388,10 @@ func (c FakeContainer) Labels() map[string]string {
 
 func (c FakeContainer) ListenAddresses() []ListenAddress {
 	return c.FakeListenAddresses
+}
+
+func (c FakeContainer) LogPath() string {
+	return c.FakeLogPath
 }
 
 func (c FakeContainer) PodName() string {

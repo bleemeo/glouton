@@ -2,7 +2,7 @@ package fluentbit
 
 import (
 	"fmt"
-	"glouton/config"
+	"os"
 	"strings"
 )
 
@@ -47,8 +47,30 @@ const outputNullConfig = `
   Alias   %s
 `
 
+// Write the Fluent Config.
+func writeFluentBitConfig(inputs []input) error {
+	fluentbitConfig := inputsToFluentBitConfig(inputs)
+
+	// Even if Glouton only manages a single config file, we have to put it
+	// in its own directory so the directory can be mounted on Docker and Kubernetes.
+	// Mounting a single file doesn't seem to work well with inotify and Fluent Bit
+	// doesn't detect that its config has been modified.
+	err := os.MkdirAll(configDir, 0o744)
+	if err != nil {
+		return fmt.Errorf("create Fluent Bit config directory: %w", err)
+	}
+
+	//nolint:gosec // The file needs to be readable by Fluent Bit.
+	err = os.WriteFile(configFile, []byte(fluentbitConfig), 0o644)
+	if err != nil {
+		return fmt.Errorf("write Fluent Bit config: %w", err)
+	}
+
+	return nil
+}
+
 // Convert the log inputs to a Fluent Bit config.
-func inputsToFluentBitConfig(inputs []config.LogInput) string {
+func inputsToFluentBitConfig(inputs []input) string {
 	var configText strings.Builder
 
 	configText.WriteString(serviceConfig)

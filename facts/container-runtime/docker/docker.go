@@ -983,6 +983,10 @@ func (c dockerContainer) ListenAddresses() []facts.ListenAddress {
 	return addresses
 }
 
+func (c dockerContainer) LogPath() string {
+	return c.inspect.LogPath
+}
+
 func (c dockerContainer) PodName() string {
 	// Get the POD namespace from Docker labels if k8s API not available
 	labels := c.Labels()

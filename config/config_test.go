@@ -169,11 +169,36 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 			FluentBitURL: "http://localhost:2020",
 			Inputs: []LogInput{
 				{
-					Path: "/var/log/apache/access.log",
+					Path:      "/var/log/apache/access.log",
+					Selectors: []LogSelector{},
 					Filters: []LogFilter{
 						{
 							Metric: "apache_errors_count",
 							Regex:  "\\[error\\]",
+						},
+					},
+				},
+				{
+					ContainerName: "redis",
+					Selectors:     []LogSelector{},
+					Filters: []LogFilter{
+						{
+							Metric: "redis_errors_count",
+							Regex:  "ERROR",
+						},
+					},
+				},
+				{
+					Selectors: []LogSelector{
+						{
+							Name:  "app",
+							Value: "postgres",
+						},
+					},
+					Filters: []LogFilter{
+						{
+							Metric: "postgres_errors_count",
+							Regex:  "error",
 						},
 					},
 				},

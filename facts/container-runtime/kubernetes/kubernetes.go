@@ -821,6 +821,19 @@ func (c wrappedContainer) Annotations() map[string]string {
 	return c.pod.Annotations
 }
 
+func (c wrappedContainer) Labels() map[string]string {
+	labels := c.Container.Labels()
+	if labels == nil {
+		return c.pod.Labels
+	}
+
+	for name, value := range c.pod.Labels {
+		labels[name] = value
+	}
+
+	return labels
+}
+
 func (c wrappedContainer) PrimaryAddress() string {
 	if c.pod.Status.PodIP != "" {
 		return c.pod.Status.PodIP

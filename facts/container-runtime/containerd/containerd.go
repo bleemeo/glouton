@@ -989,6 +989,10 @@ func (c containerObject) ListenAddresses() []facts.ListenAddress {
 	return nil
 }
 
+func (c containerObject) LogPath() string {
+	return ""
+}
+
 func (c containerObject) PodName() string {
 	return c.info.Labels["io.kubernetes.pod.name"]
 }

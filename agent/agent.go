@@ -1200,10 +1200,15 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 	}
 
 	if len(a.config.Log.Inputs) > 0 {
-		err := fluentbit.Load(ctx, a.config.Log, a.gathererRegistry)
+		fluentbitTask, err := fluentbit.New(a.config.Log, a.gathererRegistry, a.containerRuntime)
 		if err != nil {
 			logger.Printf("Failed to load log config: %s", err)
 		}
+
+		tasks = append(tasks, taskInfo{
+			fluentbitTask.Run,
+			"Fluent Bit manager",
+		})
 	}
 
 	a.vethProvider = &veth.Provider{
