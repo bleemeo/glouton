@@ -834,6 +834,39 @@ func (c wrappedContainer) Labels() map[string]string {
 	return labels
 }
 
+func (c wrappedContainer) LogPath() string {
+	// The log path is present in the annotation "io.kubernetes.container.logpath" but
+	// only with the Docker runtime, to also support ContainerD we use /var/log/containers.
+	userContainerName := c.userContainerName()
+	if userContainerName == "" {
+		return ""
+	}
+
+	// Remove prefix used by ContainerD.
+	containerID := strings.TrimPrefix(c.ID(), "k8s.io/")
+
+	return fmt.Sprintf(
+		"/var/log/containers/%s_%s_%s-%s.log",
+		c.PodName(), c.PodNamespace(), userContainerName, containerID,
+	)
+}
+
+// Return the container name assigned by the user, not the one created by Kubernetes.
+// For instance a container may have the name
+// "k8s_uwsgi_bleemeo-api-uwsgi-9b75c7f8c-grm4v_bleemeo-minikube_6646e89a-604f-491d-aa64-62a34db0e01b_3"
+// but the user only assigned the name "uwsgi" to the container in the deployment.
+func (c wrappedContainer) userContainerName() string {
+	// The name we want is the one in c.pod.Spec.Containers[0].Name, but this doesn't work
+	// if the pod has multiple containers, so we parse the container name instead.
+	// The name has the format "k8s_<container_name>_[...]".
+	splitName := strings.SplitN(c.ContainerName(), "_", 3)
+	if len(splitName) < 3 {
+		return ""
+	}
+
+	return splitName[1]
+}
+
 func (c wrappedContainer) PrimaryAddress() string {
 	if c.pod.Status.PodIP != "" {
 		return c.pod.Status.PodIP

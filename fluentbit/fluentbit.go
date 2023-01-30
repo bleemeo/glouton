@@ -14,6 +14,7 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"sort"
 	"strings"
 	"time"
 
@@ -187,6 +188,9 @@ func inputLogPaths(input config.LogInput, containers []facts.Container) []string
 	if len(logPaths) == 0 {
 		logger.V(0).Printf("Failed to find log file for input %s, logs won't be processed", formatInput(input))
 	}
+
+	// Sort the path to be able to compare them with the previous paths.
+	sort.Strings(logPaths)
 
 	return logPaths
 }
