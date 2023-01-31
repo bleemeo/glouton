@@ -220,7 +220,7 @@ func formatInput(input config.LogInput) string {
 }
 
 // Return true if the container's labels or annotations match the selectors.
-func containerMatchesSelectors(container facts.Container, selectors []config.LogSelector) bool {
+func containerMatchesSelectors(container facts.Container, selectors map[string]string) bool {
 	matchLabels := labelsMatchSelectors(container.Labels(), selectors)
 	matchAnnotations := labelsMatchSelectors(container.Annotations(), selectors)
 
@@ -228,9 +228,9 @@ func containerMatchesSelectors(container facts.Container, selectors []config.Log
 }
 
 // Return true if the labels match all the selectors.
-func labelsMatchSelectors(labels map[string]string, selectors []config.LogSelector) bool {
-	for _, selector := range selectors {
-		if labels[selector.Name] != selector.Value {
+func labelsMatchSelectors(labels map[string]string, selectors map[string]string) bool {
+	for name, value := range selectors {
+		if labels[name] != value {
 			return false
 		}
 	}
@@ -304,7 +304,7 @@ func PromQLRulesFromInputs(inputs []config.LogInput) map[string]string {
 }
 
 func (m *Manager) DiagnosticArchive(ctx context.Context, archive types.ArchiveWriter) error {
-	file, err := archive.Create(fmt.Sprintf("fluent-bit.txt"))
+	file, err := archive.Create("fluent-bit.txt")
 	if err != nil {
 		return err
 	}

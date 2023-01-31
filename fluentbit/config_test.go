@@ -130,27 +130,16 @@ func TestInputLogPaths(t *testing.T) {
 		{
 			Name: "select-labels",
 			Input: config.LogInput{
-				Selectors: []config.LogSelector{
-					{
-						Name:  "app",
-						Value: "redis",
-					},
-				},
+				Selectors: map[string]string{"app": "redis"},
 			},
 			ExpectedPaths: []string{"/redis-1", "/redis-2"},
 		},
 		{
 			Name: "select-annotations",
 			Input: config.LogInput{
-				Selectors: []config.LogSelector{
-					{
-						Name:  "app",
-						Value: "uwsgi",
-					},
-					{
-						Name:  "env",
-						Value: "prod",
-					},
+				Selectors: map[string]string{
+					"app": "uwsgi",
+					"env": "prod",
 				},
 			},
 			ExpectedPaths: []string{"/uwsgi-1", "/uwsgi-2"},
@@ -159,12 +148,7 @@ func TestInputLogPaths(t *testing.T) {
 			Name: "container-name-and-selector",
 			Input: config.LogInput{
 				ContainerName: "postgres",
-				Selectors: []config.LogSelector{
-					{
-						Name:  "env",
-						Value: "prod",
-					},
-				},
+				Selectors:     map[string]string{"env": "prod"},
 			},
 			ExpectedPaths: []string{"/postgres"},
 		},

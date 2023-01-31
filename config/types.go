@@ -58,15 +58,10 @@ type Log struct {
 }
 
 type LogInput struct {
-	Path          string        `yaml:"path"`
-	ContainerName string        `yaml:"container_name"`
-	Selectors     []LogSelector `yaml:"selectors"`
-	Filters       []LogFilter   `yaml:"filters"`
-}
-
-type LogSelector struct {
-	Name  string `yaml:"name"`
-	Value string `yaml:"value"`
+	Path          string            `yaml:"path"`
+	ContainerName string            `yaml:"container_name"`
+	Selectors     map[string]string `yaml:"container_selectors"`
+	Filters       []LogFilter       `yaml:"filters"`
 }
 
 type LogFilter struct {
