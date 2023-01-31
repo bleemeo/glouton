@@ -22,7 +22,7 @@ var parsersConfig string
 const serviceConfig = `# DO NOT EDIT, this file is managed by Glouton.
 
 [SERVICE]
-    Parsers_File parsers.conf
+    Parsers_File %s
 `
 
 // Input to tail a log file with a parser and associate it to a tag.
@@ -99,7 +99,7 @@ func writeDynamicConfig(inputs []input) error {
 func inputsToFluentBitConfig(inputs []input) string {
 	var configText strings.Builder
 
-	configText.WriteString(serviceConfig)
+	configText.WriteString(fmt.Sprintf(serviceConfig, parsersFile))
 
 	for _, input := range inputs {
 		inputTag := "original_input_" + input.Path
