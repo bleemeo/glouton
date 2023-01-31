@@ -21,13 +21,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-const (
-	// TODO: Do we want to support Windows?
-	configDir  = "/var/lib/glouton/fluent-bit"
-	configFile = configDir + "/fluent-bit.conf"
-
-	updateInterval = time.Minute
-)
+const updateInterval = time.Minute
 
 type registerer interface {
 	RegisterGatherer(opt registry.RegistrationOption, gatherer prometheus.Gatherer) (int, error)
@@ -43,6 +37,7 @@ type Manager struct {
 
 type input struct {
 	Path    string
+	Runtime string
 	Filters []config.LogFilter
 }
 
@@ -81,7 +76,12 @@ func validateConfig(cfg config.Log) []error {
 }
 
 func (m *Manager) Run(ctx context.Context) error {
-	err := m.createFluentBitScrapper()
+	err := writeStaticConfig()
+	if err != nil {
+		return err
+	}
+
+	err = m.createFluentBitScrapper()
 	if err != nil {
 		return err
 	}
@@ -109,7 +109,7 @@ func (m *Manager) update(ctx context.Context) error {
 	}
 
 	if m.needConfigChange(inputs) {
-		err = writeFluentBitConfig(inputs)
+		err = writeDynamicConfig(inputs)
 		if err != nil {
 			return err
 		}
@@ -150,7 +150,7 @@ func (m *Manager) processConfigInputs(ctx context.Context) ([]input, error) {
 	inputs := make([]input, 0, len(m.config.Inputs))
 
 	for _, configInput := range m.config.Inputs {
-		paths := inputLogPaths(configInput, containers)
+		paths, runtime := inputLogPaths(configInput, containers)
 
 		if len(paths) == 0 {
 			continue
@@ -158,6 +158,7 @@ func (m *Manager) processConfigInputs(ctx context.Context) ([]input, error) {
 
 		inputs = append(inputs, input{
 			Path:    strings.Join(paths, ","),
+			Runtime: runtime,
 			Filters: configInput.Filters,
 		})
 	}
@@ -165,14 +166,15 @@ func (m *Manager) processConfigInputs(ctx context.Context) ([]input, error) {
 	return inputs, nil
 }
 
-// Return the log paths for a log input.
-func inputLogPaths(input config.LogInput, containers []facts.Container) []string {
+// Return the log paths and the runtime for a log input.
+func inputLogPaths(input config.LogInput, containers []facts.Container) ([]string, string) {
 	// The configured path has priority over the container name and selectors.
 	if input.Path != "" {
-		return []string{input.Path}
+		return []string{input.Path}, ""
 	}
 
 	logPaths := make([]string, 0, 1)
+	runtime := ""
 
 	for _, container := range containers {
 		// If both container name and selectors are present, the container must match both.
@@ -182,6 +184,7 @@ func inputLogPaths(input config.LogInput, containers []facts.Container) []string
 		if len(input.Selectors) == 0 && matchName || input.ContainerName == "" && matchSelectors ||
 			matchName && matchSelectors {
 			logPaths = append(logPaths, container.LogPath())
+			runtime = container.RuntimeName()
 		}
 	}
 
@@ -192,7 +195,7 @@ func inputLogPaths(input config.LogInput, containers []facts.Container) []string
 	// Sort the path to be able to compare them with the previous paths.
 	sort.Strings(logPaths)
 
-	return logPaths
+	return logPaths, runtime
 }
 
 // Format an input to a string.

@@ -1,67 +1,96 @@
 package fluentbit
 
 import (
+	_ "embed"
 	"fmt"
+	containerTypes "glouton/facts/container-runtime/types"
 	"os"
 	"strings"
 )
+
+const (
+	// TODO: Do we want to support Windows?
+	configDir   = "/var/lib/glouton/fluent-bit"
+	configFile  = configDir + "/fluent-bit.conf"
+	parsersFile = configDir + "/parsers.conf"
+)
+
+//go:embed parsers.conf
+var parsersConfig string
 
 // The service config enables the monitoring endpoint.
 const serviceConfig = `# DO NOT EDIT, this file is managed by Glouton.
 
 [SERVICE]
-  HTTP_Server  On
-  HTTP_Listen  0.0.0.0
-  HTTP_PORT    2020
+    HTTP_Server  On
+    HTTP_Listen  0.0.0.0
+    HTTP_PORT    2020
+    Parsers_File parsers.conf
 `
 
-// Basic input to tail a log file and associate it to a tag.
-const inputTailConfig = `
+// Input to tail a log file with a parser and associate it to a tag.
+const inputTailWithParserConfig = `
 [INPUT]
-  Name    tail
-  Path    %s
-  Tag     %s
+    Name    tail
+    Parser  %s
+    Path    %s
+    Tag     %s
+`
+
+// Input to tail a log file and associate it to a tag.
+const inputTailNoParserConfig = `
+[INPUT]
+    Name    tail
+    Path    %s
+    Tag     %s
 `
 
 // Rewrite tag filter duplicates an input with another tag.
 const filterRewriteConfig = `
 [FILTER]
-  Name    rewrite_tag
-  Match   %s
-  Rule    log .* %s true
+    Name    rewrite_tag
+    Match   %s
+    Rule    log .* %s true
 `
 
 // Grep filters lines matching a regular expression.
 const filterGrepConfig = `
 [FILTER]
-  Name    grep
-  Match   %s
-  Regex   log %s
+    Name    grep
+    Match   %s
+    Regex   log %s
 `
 
 // Null output drops all lines received.
 const outputNullConfig = `
 [OUTPUT]
-  Name    null
-  Match   %s
-  Alias   %s
+    Name    null
+    Match   %s
+    Alias   %s
 `
 
-// Write the Fluent Config.
-func writeFluentBitConfig(inputs []input) error {
-	fluentbitConfig := inputsToFluentBitConfig(inputs)
-
-	// Even if Glouton only manages a single config file, we have to put it
-	// in its own directory so the directory can be mounted on Docker and Kubernetes.
-	// Mounting a single file doesn't seem to work well with inotify and Fluent Bit
-	// doesn't detect that its config has been modified.
+// Write the static Fluent Bit config.
+func writeStaticConfig() error {
 	err := os.MkdirAll(configDir, 0o744)
 	if err != nil {
 		return fmt.Errorf("create Fluent Bit config directory: %w", err)
 	}
 
 	//nolint:gosec // The file needs to be readable by Fluent Bit.
-	err = os.WriteFile(configFile, []byte(fluentbitConfig), 0o644)
+	err = os.WriteFile(parsersFile, []byte(parsersConfig), 0o644)
+	if err != nil {
+		return fmt.Errorf("write Fluent Bit config: %w", err)
+	}
+
+	return nil
+}
+
+// Write the Fluent Bit config corresponding to the inputs.
+func writeDynamicConfig(inputs []input) error {
+	fluentbitConfig := inputsToFluentBitConfig(inputs)
+
+	//nolint:gosec // The file needs to be readable by Fluent Bit.
+	err := os.WriteFile(configFile, []byte(fluentbitConfig), 0o644)
 	if err != nil {
 		return fmt.Errorf("write Fluent Bit config: %w", err)
 	}
@@ -78,8 +107,22 @@ func inputsToFluentBitConfig(inputs []input) string {
 	for _, input := range inputs {
 		inputTag := "original_input_" + input.Path
 
+		var inputConfig string
+
+		switch input.Runtime {
+		case containerTypes.DockerRuntime:
+			// Use docker parser to interpret the JSON formatted data.
+			inputConfig = fmt.Sprintf(inputTailWithParserConfig, "docker", input.Path, inputTag)
+		case containerTypes.ContainerDRuntime:
+			// ContainerD uses the cri-o log format.
+			inputConfig = fmt.Sprintf(inputTailWithParserConfig, "cri", input.Path, inputTag)
+		default:
+			// Outside of containers, interpret the logs as unstructured data.
+			inputConfig = fmt.Sprintf(inputTailNoParserConfig, input.Path, inputTag)
+		}
+
 		// Configure the input to read the log file.
-		configText.WriteString(fmt.Sprintf(inputTailConfig, input.Path, inputTag))
+		configText.WriteString(inputConfig)
 
 		for _, filter := range input.Filters {
 			filterTag := filter.Metric + "_tag"

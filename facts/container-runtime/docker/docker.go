@@ -822,7 +822,7 @@ type dockerContainer struct {
 }
 
 func (c dockerContainer) RuntimeName() string {
-	return "docker"
+	return containerTypes.DockerRuntime
 }
 
 func (c dockerContainer) Annotations() map[string]string {

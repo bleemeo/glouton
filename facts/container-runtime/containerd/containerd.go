@@ -902,7 +902,7 @@ type ContainerOCISpec struct {
 }
 
 func (c containerObject) RuntimeName() string {
-	return "containerd"
+	return containerTypes.ContainerDRuntime
 }
 
 func (c containerObject) Annotations() map[string]string {
