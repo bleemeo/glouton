@@ -212,7 +212,7 @@ func DefaultConfig() Config {
 			KubeConfig:          "",
 		},
 		Log: Log{
-			FluentBitURL: "http://localhost:2020",
+			FluentBitURL: "http://localhost:2020/api/v1/metrics/prometheus",
 			Inputs:       []LogInput{},
 		},
 		Logging: Logging{

@@ -10,7 +10,6 @@ import (
 	"glouton/logger"
 	"glouton/prometheus/registry"
 	"glouton/prometheus/scrapper"
-	"glouton/types"
 	"net/url"
 	"os"
 	"os/exec"
@@ -273,7 +272,6 @@ func (m *Manager) createFluentBitScrapper() error {
 	_, err = m.registry.RegisterGatherer(
 		registry.RegistrationOption{
 			Description: "Prom exporter " + promScrapper.URL.String(),
-			Rules:       PromQLRulesFromInputs(m.config.Inputs),
 		},
 		promScrapper,
 	)
@@ -284,16 +282,13 @@ func (m *Manager) createFluentBitScrapper() error {
 	return nil
 }
 
-// PromQLRulesFromInputs returns rules to rename the Fluent Bit metrics to the input metric names.
-func PromQLRulesFromInputs(inputs []config.LogInput) []types.SimpleRule {
-	rules := make([]types.SimpleRule, 0, len(inputs))
+// PromQLRulesFromInputs returns rules to rename and apply rates to the Fluent Bit metrics.
+func PromQLRulesFromInputs(inputs []config.LogInput) map[string]string {
+	rules := make(map[string]string, len(inputs))
 
 	for _, input := range inputs {
 		for _, filter := range input.Filters {
-			rules = append(rules, types.SimpleRule{
-				TargetName:  filter.Metric,
-				PromQLQuery: fmt.Sprintf(`fluentbit_output_proc_records_total{name="%s"}`, filter.Metric),
-			})
+			rules[filter.Metric] = fmt.Sprintf(`rate(fluentbit_output_proc_records_total{name="%s"}[1m])`, filter.Metric)
 		}
 	}
 

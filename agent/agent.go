@@ -981,7 +981,8 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		tasks = append(tasks, taskInfo{a.jmx.Run, "jmxtrans"})
 	}
 
-	a.rulesManager = rules.NewManager(ctx, a.store)
+	baseRules := fluentbit.PromQLRulesFromInputs(a.config.Log.Inputs)
+	a.rulesManager = rules.NewManager(ctx, a.store, baseRules)
 
 	if a.config.Bleemeo.Enable {
 		scaperName := a.config.Blackbox.ScraperName

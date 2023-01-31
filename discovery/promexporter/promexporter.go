@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"glouton/config"
 	"glouton/facts"
-	"glouton/fluentbit"
 	"glouton/logger"
 	"glouton/prometheus/registry"
 	"glouton/prometheus/scrapper"
@@ -80,7 +79,6 @@ func (d *DynamicScrapper) listExporters(containers []facts.Container) []*scrappe
 		target := &scrapper.Target{
 			URL:             tmp,
 			ExtraLabels:     labels,
-			Rules:           d.rulesForContainer(c.Labels(), c.Annotations()),
 			ContainerLabels: cLabelsAnnotations,
 		}
 		result = append(result, target)
@@ -225,18 +223,4 @@ func copyMap(toCopy map[string]map[string]string) map[string]map[string]string {
 	}
 
 	return copyMap
-}
-
-func (d *DynamicScrapper) rulesForContainer(labels, annotations map[string]string) []types.SimpleRule {
-	component := labels["glouton.component"]
-	if component == "" {
-		component = annotations["glouton.component"]
-	}
-
-	// Fluent Bit containers need special rules to rename the metrics.
-	if component == "fluent-bit" {
-		return fluentbit.PromQLRulesFromInputs(d.FluentBitInputs)
-	}
-
-	return nil
 }

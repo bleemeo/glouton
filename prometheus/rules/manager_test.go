@@ -184,7 +184,7 @@ func TestManager(t *testing.T) {
 
 			app := &mockAppendable{forceTS: t1}
 
-			mgr := NewManager(context.Background(), tt.queryable)
+			mgr := NewManager(context.Background(), tt.queryable, nil)
 
 			err := mgr.Collect(context.Background(), app.Appender(context.Background()))
 			if err != nil {
