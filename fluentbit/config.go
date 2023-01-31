@@ -13,6 +13,7 @@ const (
 	configDir   = "/var/lib/glouton/fluent-bit"
 	configFile  = configDir + "/fluent-bit.conf"
 	parsersFile = configDir + "/parsers.conf"
+	dbFile      = configDir + "/logs.db"
 )
 
 //go:embed parsers.conf
@@ -29,6 +30,7 @@ const serviceConfig = `# DO NOT EDIT, this file is managed by Glouton.
 const inputTailWithParserConfig = `
 [INPUT]
     Name    tail
+    DB      %s
     Parser  %s
     Path    %s
     Tag     %s
@@ -38,6 +40,7 @@ const inputTailWithParserConfig = `
 const inputTailNoParserConfig = `
 [INPUT]
     Name    tail
+    DB      %s
     Path    %s
     Tag     %s
 `
@@ -109,13 +112,13 @@ func inputsToFluentBitConfig(inputs []input) string {
 		switch input.Runtime {
 		case containerTypes.DockerRuntime:
 			// Use docker parser to interpret the JSON formatted data.
-			inputConfig = fmt.Sprintf(inputTailWithParserConfig, "docker-escaped", input.Path, inputTag)
+			inputConfig = fmt.Sprintf(inputTailWithParserConfig, dbFile, "docker-escaped", input.Path, inputTag)
 		case containerTypes.ContainerDRuntime:
 			// ContainerD uses the cri-o log format.
-			inputConfig = fmt.Sprintf(inputTailWithParserConfig, "cri-log", input.Path, inputTag)
+			inputConfig = fmt.Sprintf(inputTailWithParserConfig, dbFile, "cri-log", input.Path, inputTag)
 		default:
 			// Outside of containers, interpret the logs as unstructured data.
-			inputConfig = fmt.Sprintf(inputTailNoParserConfig, input.Path, inputTag)
+			inputConfig = fmt.Sprintf(inputTailNoParserConfig, dbFile, input.Path, inputTag)
 		}
 
 		// Configure the input to read the log file.
