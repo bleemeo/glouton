@@ -2,6 +2,7 @@ package fluentbit
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"glouton/config"
@@ -10,11 +11,13 @@ import (
 	"glouton/logger"
 	"glouton/prometheus/registry"
 	"glouton/prometheus/scrapper"
+	"glouton/types"
 	"net/url"
 	"os"
 	"os/exec"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -31,6 +34,7 @@ type Manager struct {
 	registry registerer
 	runtime  crTypes.RuntimeInterface
 
+	l            sync.Mutex
 	loadedInputs []input
 }
 
@@ -107,6 +111,9 @@ func (m *Manager) update(ctx context.Context) error {
 		return err
 	}
 
+	m.l.Lock()
+	defer m.l.Unlock()
+
 	if m.needConfigChange(inputs) {
 		err = writeDynamicConfig(inputs)
 		if err != nil {
@@ -125,6 +132,7 @@ func (m *Manager) update(ctx context.Context) error {
 }
 
 // Return whether the Fluent Bit config needs to be modified.
+// The manager lock must be held.
 func (m *Manager) needConfigChange(inputs []input) bool {
 	if len(inputs) != len(m.loadedInputs) {
 		return true
@@ -293,4 +301,21 @@ func PromQLRulesFromInputs(inputs []config.LogInput) map[string]string {
 	}
 
 	return rules
+}
+
+func (m *Manager) DiagnosticArchive(ctx context.Context, archive types.ArchiveWriter) error {
+	file, err := archive.Create(fmt.Sprintf("fluent-bit.txt"))
+	if err != nil {
+		return err
+	}
+
+	m.l.Lock()
+	defer m.l.Unlock()
+
+	fmt.Fprintf(file, "Loaded %d inputs.\n\n", len(m.loadedInputs))
+
+	enc := json.NewEncoder(file)
+	enc.SetIndent("", "  ")
+
+	return enc.Encode(m.loadedInputs)
 }

@@ -149,6 +149,7 @@ type agent struct {
 	reloadState            ReloadState
 	vethProvider           *veth.Provider
 	mqtt                   *mqtt.MQTT
+	fluentbitManager       *fluentbit.Manager
 
 	triggerHandler            *debouncer.Debouncer
 	triggerLock               sync.Mutex
@@ -1201,13 +1202,13 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 	}
 
 	if len(a.config.Log.Inputs) > 0 {
-		fluentbitTask, err := fluentbit.New(a.config.Log, a.gathererRegistry, a.containerRuntime)
-		if err != nil {
-			logger.Printf("Failed to load log config: %s", err)
+		a.fluentbitManager, warnings = fluentbit.New(a.config.Log, a.gathererRegistry, a.containerRuntime)
+		if warnings != nil {
+			a.addWarnings(warnings...)
 		}
 
 		tasks = append(tasks, taskInfo{
-			fluentbitTask.Run,
+			a.fluentbitManager.Run,
 			"Fluent Bit manager",
 		})
 	}
@@ -2037,6 +2038,10 @@ func (a *agent) writeDiagnosticArchive(ctx context.Context, archive types.Archiv
 
 	if a.mqtt != nil {
 		modules = append(modules, a.mqtt.DiagnosticArchive)
+	}
+
+	if a.fluentbitManager != nil {
+		modules = append(modules, a.fluentbitManager.DiagnosticArchive)
 	}
 
 	for _, f := range modules {
