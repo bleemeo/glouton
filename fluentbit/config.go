@@ -22,9 +22,6 @@ var parsersConfig string
 const serviceConfig = `# DO NOT EDIT, this file is managed by Glouton.
 
 [SERVICE]
-    HTTP_Server  On
-    HTTP_Listen  0.0.0.0
-    HTTP_PORT    2020
     Parsers_File parsers.conf
 `
 
@@ -112,10 +109,10 @@ func inputsToFluentBitConfig(inputs []input) string {
 		switch input.Runtime {
 		case containerTypes.DockerRuntime:
 			// Use docker parser to interpret the JSON formatted data.
-			inputConfig = fmt.Sprintf(inputTailWithParserConfig, "docker", input.Path, inputTag)
+			inputConfig = fmt.Sprintf(inputTailWithParserConfig, "docker-escaped", input.Path, inputTag)
 		case containerTypes.ContainerDRuntime:
 			// ContainerD uses the cri-o log format.
-			inputConfig = fmt.Sprintf(inputTailWithParserConfig, "cri", input.Path, inputTag)
+			inputConfig = fmt.Sprintf(inputTailWithParserConfig, "cri-log", input.Path, inputTag)
 		default:
 			// Outside of containers, interpret the logs as unstructured data.
 			inputConfig = fmt.Sprintf(inputTailNoParserConfig, input.Path, inputTag)
