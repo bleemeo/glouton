@@ -290,13 +290,18 @@ func (m *Manager) createFluentBitScrapper() error {
 	return nil
 }
 
-// PromQLRulesFromInputs returns rules to rename and apply rates to the Fluent Bit metrics.
+// PromQLRulesFromInputs returns the PromQL rules for an input.
 func PromQLRulesFromInputs(inputs []config.LogInput) map[string]string {
 	rules := make(map[string]string, len(inputs))
 
+	// fluentbit_output_proc_records_total is a counter which resets every time Fluent Bit
+	// restarts, we need to apply a rate so it can be usable. Then we remove the "name"
+	// label which is duplicated with the new metric name ("__name__") using a sum.
+	const rule = `sum(rate(fluentbit_output_proc_records_total{name="%s"}[1m])) without (name)`
+
 	for _, input := range inputs {
 		for _, filter := range input.Filters {
-			rules[filter.Metric] = fmt.Sprintf(`rate(fluentbit_output_proc_records_total{name="%s"}[1m])`, filter.Metric)
+			rules[filter.Metric] = fmt.Sprintf(rule, filter.Metric)
 		}
 	}
 
