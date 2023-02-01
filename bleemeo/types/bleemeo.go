@@ -396,4 +396,5 @@ const (
 	TypeBlackboxTargets   ConfigItemType = 33
 	TypePrometheusTargets ConfigItemType = 34
 	TypeSNMPTargets       ConfigItemType = 35
+	TypeLogInputs         ConfigItemType = 36
 )

@@ -195,6 +195,8 @@ func bleemeoItemTypeFromConfigType(source config.ItemType) bleemeoTypes.ConfigIt
 		return bleemeoTypes.TypePrometheusTargets
 	case config.TypeSNMPTargets:
 		return bleemeoTypes.TypeSNMPTargets
+	case config.TypeLogInputs:
+		return bleemeoTypes.TypeLogInputs
 	case config.TypeAny:
 		return bleemeoTypes.TypeAny
 	default:

@@ -89,6 +89,7 @@ const (
 	TypeBlackboxTargets
 	TypePrometheusTargets
 	TypeSNMPTargets
+	TypeLogInputs
 )
 
 // Load config from a provider and add source information on config items.
@@ -175,6 +176,8 @@ func itemTypeFromValue(key string, value interface{}) ItemType {
 		return TypePrometheusTargets
 	case "metric.snmp.targets":
 		return TypeSNMPTargets
+	case "log.inputs":
+		return TypeLogInputs
 	}
 
 	logger.V(1).Printf("Unsupported item type %T", value)
