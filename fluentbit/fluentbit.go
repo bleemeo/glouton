@@ -250,7 +250,7 @@ func reloadFluentBit(ctx context.Context) error {
 		return nil
 	}
 
-	_, err := exec.CommandContext(ctx, "sudo", "-n", "/usr/bin/systemctl", "restart", "fluent-bit").Output()
+	_, err := exec.CommandContext(ctx, "sudo", "-n", "/usr/bin/systemctl", "restart", "glouton-logs").Output()
 	if err != nil {
 		if exitErr := &(exec.ExitError{}); errors.As(err, &exitErr) {
 			err = fmt.Errorf("%w: %s", err, string(exitErr.Stderr))
