@@ -68,7 +68,7 @@ func TestPrioritizeAndFilterMetrics(t *testing.T) {
 		HighPriority bool
 	}{
 		{"cpu_used", true},
-		{"cassandra_status", false},
+		{"service_status", false},
 		{"io_utilization", true},
 		{"nginx_requests", false},
 		{"mem_used", true},
@@ -502,14 +502,14 @@ func Test_metricComparator_importanceWeight(t *testing.T) {
 		{
 			name:         "high cardinality after status",
 			format:       types.MetricFormatBleemeo,
-			metricBefore: `__name__="apache_status"`,
+			metricBefore: `__name__="service_status"`,
 			metricAfter:  `__name__="net_bits_recv",item="tap150"`,
 		},
 		{
 			name:         "good item before status",
 			format:       types.MetricFormatBleemeo,
 			metricBefore: `__name__="net_bits_recv",item="eth0"`,
-			metricAfter:  `__name__="apache_status"`,
+			metricAfter:  `__name__="service_status"`,
 		},
 		{
 			name:         "high cardinality before custom",
@@ -1447,7 +1447,7 @@ func TestMetricLongItem(t *testing.T) {
 	}
 
 	metrics := helper.MetricsFromAPI()
-	// agent_status + the two redis_status metrics
+	// agent_status + the two service_status metrics
 	if len(metrics) != 3 {
 		t.Errorf("len(metrics) = %v, want %v", len(metrics), 3)
 	}
@@ -1745,6 +1745,265 @@ func TestMonitorDeactivation(t *testing.T) {
 
 	if diff := cmp.Diff(want, metrics); diff != "" {
 		t.Errorf("metrics mismatch (-want +got):\n%s", diff)
+	}
+}
+
+// TestServiceStatusRename test that Glouton behave correctly on service_status rename.
+// Older glouton send metric like "apache_status" which was renamed to "service_status{service_type="apache"}".
+// The rename is done by Bleemeo API (actually Glouton try to register the new metric and API rename and response
+// with the old renamed object). API behave as if the metric apache_status is deleted and service_status is created with
+// the same UUID as apache_status.
+func TestServiceStatusRename(t *testing.T) { //nolint: maintidx
+	// run 0 create old metric and then new metric (note: this isn't something that should
+	//       happen on real glouton, because on same run we don't have both old & then new)
+	// run 1 has old metric pre-create in API and in cache and only create new metric
+	// run 2 has old metric pre-create in API and not in cache and only create new metric
+	for run := 0; run < 3; run++ {
+		run := run
+
+		t.Run(fmt.Sprintf("run-%d", run), func(t *testing.T) {
+			t.Parallel()
+
+			helper := newHelper(t)
+			defer helper.Close()
+
+			helper.preregisterAgent(t)
+			helper.initSynchronizer(t)
+
+			metricResource, _ := helper.api.resources["metric"].(*genericResource)
+			metricResource.CreateHook = func(r *http.Request, body []byte, valuePtr interface{}) error {
+				// API will rename and reuse existing $SERVICE_status metric when registering service_status metrics.
+				// From Glouton point of vue, it the same as if a new metric is created (service_status) and the old is deleted.
+				metric, _ := valuePtr.(*metricPayload)
+				metricCopy := metric.metricFromAPI(helper.s.now())
+				serviceType := metricCopy.Labels[types.LabelService]
+
+				if metric.Name != "service_status" || serviceType == "" {
+					return nil
+				}
+
+				var metrics []metricPayload
+
+				metricResource.Store(&metrics)
+				for _, existing := range metrics {
+					if existing.Name == fmt.Sprintf("%s_status", serviceType) && existing.Item == metricCopy.Labels[types.LabelServiceInstance] {
+						metric.ID = existing.ID
+
+						return reuseIDError{metric.ID}
+					}
+				}
+
+				return nil
+			}
+
+			srvApache := discovery.Service{
+				Name:        "apache",
+				Instance:    "",
+				ServiceType: discovery.ApacheService,
+				Active:      true,
+			}
+			srvNginx := discovery.Service{
+				Name:        "nginx",
+				Instance:    "container1",
+				ServiceType: discovery.NginxService,
+				Active:      true,
+			}
+
+			srvApacheID := "892cb229-0f8c-4b6c-866c-02a13256b618"
+			srvNginxID := "809bc83b-2f28-43f1-9fb7-a84445ca1bc0"
+
+			helper.SetAPIServices(
+				servicePayloadFromDiscovery(srvApache, "", testAgent.AccountID, testAgent.ID, srvApacheID),
+				servicePayloadFromDiscovery(srvNginx, "", testAgent.AccountID, testAgent.ID, srvNginxID),
+			)
+
+			helper.discovery.SetResult([]discovery.Service{srvApache, srvNginx}, nil)
+
+			want1 := []metricPayload{
+				{
+					Metric: bleemeoTypes.Metric{
+						ID:         "1",
+						AgentID:    testAgent.ID,
+						LabelsText: "",
+					},
+					Name: agentStatusName,
+				},
+				{
+					Metric: bleemeoTypes.Metric{
+						ID:         "2",
+						AgentID:    testAgent.ID,
+						LabelsText: "",
+						ServiceID:  srvApacheID,
+					},
+					Name: "apache_status",
+				},
+				{
+					Metric: bleemeoTypes.Metric{
+						ID:         "3",
+						AgentID:    testAgent.ID,
+						LabelsText: "",
+						ServiceID:  srvNginxID,
+					},
+					Name: "nginx_status",
+					Item: "container1",
+				},
+			}
+
+			helper.AddTime(time.Minute)
+			if run == 0 {
+				helper.pushPoints(t, []labels.Labels{
+					model.AnnotationToMetaLabels(
+						labels.New(
+							labels.Label{Name: types.LabelName, Value: "apache_status"},
+						),
+						types.MetricAnnotations{
+							ServiceName:     srvApache.Name,
+							ServiceInstance: srvApache.Instance,
+						},
+					),
+					model.AnnotationToMetaLabels(
+						labels.New(
+							labels.Label{Name: types.LabelName, Value: "nginx_status"},
+							labels.Label{Name: types.LabelItem, Value: "container1"},
+							labels.Label{Name: types.LabelMetaBleemeoItem, Value: "container1"},
+						),
+						types.MetricAnnotations{
+							ServiceName:     srvNginx.Name,
+							ServiceInstance: srvNginx.Instance,
+						},
+					),
+				})
+
+				if err := helper.runOnceWithResult(t).CheckMethodWithFull(syncMethodMetric); err != nil {
+					t.Error(err)
+				}
+
+				// list of active metrics, 2*N query to register metric + 1 to register agent_status
+				helper.api.AssertCallPerResource(t, mockAPIResourceMetric, 6)
+
+				metrics := helper.MetricsFromAPI()
+
+				if diff := cmp.Diff(want1, metrics); diff != "" {
+					t.Errorf("metrics mismatch (-want +got):\n%s", diff)
+				}
+
+				helper.store.DropAllMetrics()
+				helper.SetTimeToNextFullSync()
+			}
+
+			// Newer agent no longer allow apache_status & nginx_status by default.
+			helper.s.option.IsMetricAllowed = func(lbls map[string]string) bool {
+				if lbls[types.LabelName] == "apache_status" || lbls[types.LabelName] == "nginx_status" {
+					return false
+				}
+
+				return true
+			}
+
+			if run > 0 {
+				helper.SetAPIMetrics(want1...)
+			}
+
+			if run == 1 {
+				helper.SetCacheMetrics(want1...)
+			}
+
+			helper.pushPoints(t, []labels.Labels{
+				model.AnnotationToMetaLabels(labels.FromMap(srvNginx.LabelsOfStatus()), srvNginx.AnnotationsOfStatus()),
+			})
+
+			if err := helper.runOnceWithResult(t).CheckMethodWithFull(syncMethodMetric); err != nil {
+				t.Error(err)
+			}
+
+			want2 := []metricPayload{
+				{
+					Metric: bleemeoTypes.Metric{
+						ID:         "1",
+						AgentID:    testAgent.ID,
+						LabelsText: "",
+					},
+					Name: agentStatusName,
+				},
+				{
+					Metric: bleemeoTypes.Metric{
+						ID:         "2",
+						AgentID:    testAgent.ID,
+						LabelsText: "",
+						ServiceID:  srvApacheID,
+					},
+					Name: "apache_status",
+				},
+				{
+					Metric: bleemeoTypes.Metric{
+						ID:         "3",
+						AgentID:    testAgent.ID,
+						LabelsText: `__name__="service_status",service="nginx",service_instance="container1"`,
+						ServiceID:  srvNginxID,
+					},
+					Name: "service_status",
+				},
+			}
+
+			if run == 0 {
+				// run 0 is a bit special: we simulate an imposible situation: Glouton is running and change during runtime
+				// from old metric to new metric. One consequences is that old apache_status get deactivated immediately
+				want2[1].DeactivatedAt = helper.Now()
+			}
+
+			metrics := helper.MetricsFromAPI()
+
+			if diff := cmp.Diff(want2, metrics); diff != "" {
+				t.Errorf("metrics mismatch (-want +got):\n%s", diff)
+			}
+
+			helper.AddTime(1 * time.Minute)
+
+			helper.pushPoints(t, []labels.Labels{
+				model.AnnotationToMetaLabels(labels.FromMap(srvApache.LabelsOfStatus()), srvApache.AnnotationsOfStatus()),
+			})
+
+			if err := helper.runOnceWithResult(t).Check(); err != nil {
+				t.Error(err)
+			}
+
+			helper.AddTime(1 * time.Minute)
+
+			want3 := []metricPayload{
+				{
+					Metric: bleemeoTypes.Metric{
+						ID:         "1",
+						AgentID:    testAgent.ID,
+						LabelsText: "",
+					},
+					Name: agentStatusName,
+				},
+				{
+					Metric: bleemeoTypes.Metric{
+						ID:         "2",
+						AgentID:    testAgent.ID,
+						LabelsText: `__name__="service_status",service="apache"`,
+						ServiceID:  srvApacheID,
+					},
+					Name: "service_status",
+				},
+				{
+					Metric: bleemeoTypes.Metric{
+						ID:         "3",
+						AgentID:    testAgent.ID,
+						LabelsText: `__name__="service_status",service="nginx",service_instance="container1"`,
+						ServiceID:  srvNginxID,
+					},
+					Name: "service_status",
+				},
+			}
+
+			metrics = helper.MetricsFromAPI()
+
+			if diff := cmp.Diff(want3, metrics); diff != "" {
+				t.Errorf("metrics mismatch (-want +got):\n%s", diff)
+			}
+		})
 	}
 }
 

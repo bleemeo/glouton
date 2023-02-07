@@ -175,11 +175,11 @@ func (ma miscAppenderMinute) Collect(ctx context.Context, app storage.Appender) 
 	// Add SMART status and UPSD battery status metrics.
 	points = append(
 		points,
-		statusFromLastPoint(now, ma.store, "smart_device_health_ok", "smart_status", smartStatus)...,
+		statusFromLastPoint(now, ma.store, "smart_device_health_ok", map[string]string{types.LabelName: types.MetricServiceStatus, types.LabelService: "smart"}, smartStatus)...,
 	)
 	points = append(
 		points,
-		statusFromLastPoint(now, ma.store, "upsd_status_flags", "upsd_battery_status", upsdBatteryStatus)...,
+		statusFromLastPoint(now, ma.store, "upsd_status_flags", map[string]string{types.LabelName: "upsd_battery_status"}, upsdBatteryStatus)...,
 	)
 
 	err = model.SendPointsToAppender(points, app)
@@ -190,12 +190,12 @@ func (ma miscAppenderMinute) Collect(ctx context.Context, app storage.Appender) 
 	return app.Commit()
 }
 
-// statusFromLastPoint returns points for the targetMetricName based on the last point from baseMetricName.
+// statusFromLastPoint returns points for the targetMetric based on the last point from baseMetricName.
 // statusDescription must return the status description based on the last point and labels of baseMetricName.
 func statusFromLastPoint(
 	now time.Time,
 	store *store.Store,
-	baseMetricName, targetMetricName string,
+	baseMetricName string, targetMetric map[string]string,
 	statusDescription func(value float64, labels map[string]string) types.StatusDescription,
 ) []types.MetricPoint {
 	metrics, _ := store.Metrics(map[string]string{types.LabelName: baseMetricName})
@@ -236,7 +236,9 @@ func statusFromLastPoint(
 			labelsCopy[name] = value
 		}
 
-		labelsCopy[types.LabelName] = targetMetricName
+		for k, v := range targetMetric {
+			labelsCopy[k] = v
+		}
 
 		newPoints = append(newPoints, types.MetricPoint{
 			Point: types.Point{
@@ -251,7 +253,7 @@ func statusFromLastPoint(
 	return newPoints
 }
 
-// smartStatus returns the "smart_status" metric description from the last value
+// smartStatus returns the "service_status{service="smart"}" metric description from the last value
 // of the metric "device_health_ok" and its labels.
 func smartStatus(value float64, labels map[string]string) types.StatusDescription {
 	var status types.StatusDescription

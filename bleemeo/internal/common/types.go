@@ -19,7 +19,6 @@ package common
 import (
 	bleemeoTypes "glouton/bleemeo/types"
 	"glouton/types"
-	"strings"
 )
 
 // Maximal length of fields on Bleemeo API.
@@ -104,7 +103,12 @@ func MetricLookupFromList(registeredMetrics []bleemeoTypes.Metric) map[string]bl
 	return registeredMetricsByKey
 }
 
-// IsServiceCheckMetric returns whether this metric is a service check and should always be allowed.
-func IsServiceCheckMetric(labels map[string]string, annotations types.MetricAnnotations) bool {
-	return annotations.ServiceName != "" && strings.HasSuffix(labels[types.LabelName], "_status")
+// IgnoreContainer returns true if the metric's container information should be ignored.
+// If this is true, docker integration is also disabled.
+func IgnoreContainer(cfg bleemeoTypes.GloutonAccountConfig, labels map[string]string) bool {
+	if cfg.DockerIntegration {
+		return false
+	}
+
+	return labels[types.LabelName] == types.MetricServiceStatus
 }

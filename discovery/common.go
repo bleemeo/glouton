@@ -199,11 +199,12 @@ func (s Service) AddressPort() (string, int) {
 // LabelsOfStatus returns the labels for the status metrics of this service.
 func (s Service) LabelsOfStatus() map[string]string {
 	labels := map[string]string{
-		types.LabelName: fmt.Sprintf("%s_status", s.Name),
+		types.LabelName:    types.MetricServiceStatus,
+		types.LabelService: s.Name,
 	}
 
 	if s.Instance != "" {
-		labels[types.LabelItem] = s.Instance
+		labels[types.LabelServiceInstance] = s.Instance
 	}
 
 	return labels
@@ -214,10 +215,6 @@ func (s Service) AnnotationsOfStatus() types.MetricAnnotations {
 	annotations := types.MetricAnnotations{
 		ServiceName:     s.Name,
 		ServiceInstance: s.Instance,
-	}
-
-	if s.Instance != "" {
-		annotations.BleemeoItem = s.Instance
 	}
 
 	if s.ContainerID != "" {

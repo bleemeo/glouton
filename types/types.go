@@ -134,6 +134,8 @@ const (
 	LabelContainerName              = "container_name"
 	LabelScrapeJob                  = "scrape_job"
 	LabelScrapeInstance             = "scrape_instance"
+	LabelService                    = "service"
+	LabelServiceInstance            = "service_instance"
 	LabelAlertname                  = "alertname"
 	LabelDevice                     = "device"
 	LabelModel                      = "model"
@@ -144,6 +146,10 @@ const (
 	LabelOwnerName = "owner_name"
 	LabelPodName   = "pod_name"
 	LabelNamespace = "namespace"
+)
+
+const (
+	MetricServiceStatus = "service_status"
 )
 
 // MissingContainerID is the container ID annotation set on metrics that belong

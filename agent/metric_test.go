@@ -1312,25 +1312,11 @@ func Test_RebuildDefaultMetrics(t *testing.T) {
 	}
 
 	want := map[string]matcher.Matchers{
-		"postfix_status": {
-			{
-				Name:  "__name__",
-				Type:  labels.MatchEqual,
-				Value: "postfix_status",
-			},
-		},
 		"postfix_queue_size": {
 			{
 				Name:  "__name__",
 				Type:  labels.MatchEqual,
 				Value: "postfix_queue_size",
-			},
-		},
-		"bind_status": {
-			{
-				Name:  "__name__",
-				Type:  labels.MatchEqual,
-				Value: "bind_status",
 			},
 		},
 	}

@@ -108,6 +108,10 @@ type stateMock struct {
 	password  string
 }
 
+type reuseIDError struct {
+	ID string
+}
+
 type paginatedList []interface{}
 
 type clientError struct {
@@ -777,8 +781,12 @@ func (res *genericResource) Create(r *http.Request) (interface{}, error) {
 	}
 
 	if res.CreateHook != nil {
+		var errReuseID reuseIDError
+
 		err := res.CreateHook(r, body, valueReflect.Interface())
-		if err != nil {
+		if errors.As(err, &errReuseID) {
+			id = errReuseID.ID
+		} else if err != nil {
 			return nil, err
 		}
 	}
@@ -953,4 +961,8 @@ func (s *stateMock) Get(key string, result interface{}) error {
 	}
 
 	return nil
+}
+
+func (reuseIDError) Error() string {
+	return "reuseIDError"
 }

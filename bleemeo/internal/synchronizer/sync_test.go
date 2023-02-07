@@ -585,9 +585,9 @@ func TestContainerSync(t *testing.T) {
 
 	helper.pushPoints(t, []labels.Labels{
 		labels.New(
-			labels.Label{Name: types.LabelName, Value: "redis_status"},
-			labels.Label{Name: types.LabelItem, Value: "my_redis_1"},
-			labels.Label{Name: types.LabelMetaBleemeoItem, Value: "my_redis_1"},
+			labels.Label{Name: types.LabelName, Value: types.MetricServiceStatus},
+			labels.Label{Name: types.LabelService, Value: "redis"},
+			labels.Label{Name: types.LabelServiceInstance, Value: "my_redis_1"},
 			labels.Label{Name: types.LabelMetaContainerID, Value: containerID},
 		),
 	})
@@ -635,11 +635,11 @@ func TestContainerSync(t *testing.T) {
 			Metric: bleemeoTypes.Metric{
 				ID:          "2",
 				AgentID:     testAgent.ID,
-				LabelsText:  "",
+				LabelsText:  `__name__="service_status",service="redis",service_instance="my_redis_1"`,
 				ContainerID: "1",
 			},
-			Name: "redis_status",
-			Item: "my_redis_1",
+			Name: types.MetricServiceStatus,
+			Item: "",
 		},
 	}
 
@@ -691,12 +691,12 @@ func TestContainerSync(t *testing.T) {
 			Metric: bleemeoTypes.Metric{
 				ID:            "2",
 				AgentID:       testAgent.ID,
-				LabelsText:    "",
+				LabelsText:    `__name__="service_status",service="redis",service_instance="my_redis_1"`,
 				ContainerID:   "1",
 				DeactivatedAt: helper.s.now(),
 			},
-			Name: "redis_status",
-			Item: "my_redis_1",
+			Name: types.MetricServiceStatus,
+			Item: "",
 		},
 	}
 
@@ -716,9 +716,9 @@ func TestContainerSync(t *testing.T) {
 
 	helper.pushPoints(t, []labels.Labels{
 		labels.New(
-			labels.Label{Name: types.LabelName, Value: "redis_status"},
-			labels.Label{Name: types.LabelItem, Value: "my_redis_1"},
-			labels.Label{Name: types.LabelMetaBleemeoItem, Value: "my_redis_1"},
+			labels.Label{Name: types.LabelName, Value: types.MetricServiceStatus},
+			labels.Label{Name: types.LabelService, Value: "redis"},
+			labels.Label{Name: types.LabelServiceInstance, Value: "my_redis_1"},
 			labels.Label{Name: types.LabelMetaContainerID, Value: containerID2},
 		),
 	})
@@ -761,11 +761,11 @@ func TestContainerSync(t *testing.T) {
 			Metric: bleemeoTypes.Metric{
 				ID:          "2",
 				AgentID:     testAgent.ID,
-				LabelsText:  "",
+				LabelsText:  `__name__="service_status",service="redis",service_instance="my_redis_1"`,
 				ContainerID: "1",
 			},
-			Name: "redis_status",
-			Item: "my_redis_1",
+			Name: types.MetricServiceStatus,
+			Item: "",
 		},
 	}
 
@@ -1017,7 +1017,7 @@ func TestBleemeoPlan(t *testing.T) { //nolint:maintidx
 					ID:               agentConfigID1,
 					AccountConfig:    configID2,
 					AgentType:        agentTypeAgent.ID,
-					MetricsAllowlist: "mem_used,cpu_used,probe_success",
+					MetricsAllowlist: "mem_used,cpu_used,probe_success,service_status",
 				},
 				{
 					ID:            agentConfigID2,
@@ -1050,7 +1050,7 @@ func TestBleemeoPlan(t *testing.T) { //nolint:maintidx
 					ID:               agentConfigID1,
 					AccountConfig:    configID2,
 					AgentType:        agentTypeAgent.ID,
-					MetricsAllowlist: "mem_used,cpu_used,probe_success",
+					MetricsAllowlist: "mem_used,cpu_used,probe_success,service_status",
 				},
 				{
 					ID:            agentConfigID3,
@@ -1235,11 +1235,12 @@ func TestBleemeoPlan(t *testing.T) { //nolint:maintidx
 				Metric: bleemeoTypes.Metric{
 					ID:          idAny,
 					AgentID:     idAgentMain,
+					LabelsText:  `__name__="service_status",service="redis",service_instance="short-redis-container-name"`,
 					ServiceID:   "1",
 					ContainerID: "",
 				},
-				Name: "redis_status",
-				Item: "short-redis-container-name",
+				Name: "service_status",
+				Item: "",
 			}
 
 			if tt.wantContainerFK {

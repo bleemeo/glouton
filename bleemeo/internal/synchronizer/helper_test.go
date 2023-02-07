@@ -328,6 +328,24 @@ func (helper *syncTestHelper) SetAPIMetrics(metrics ...metricPayload) {
 	helper.api.resources[mockAPIResourceMetric].SetStore(tmp...)
 }
 
+// SetAPIServices define the list of service present on Bleemeo API mock.
+func (helper *syncTestHelper) SetAPIServices(services ...servicePayload) {
+	tmp := make([]interface{}, 0, len(services))
+
+	for _, m := range services {
+		tmp = append(tmp, serviceMonitor{
+			Monitor: bleemeoTypes.Monitor{
+				Service: m.Service,
+				AgentID: m.Agent,
+			},
+			Account:   m.Account,
+			IsMonitor: false,
+		})
+	}
+
+	helper.api.resources[mockAPIResourceService].SetStore(tmp...)
+}
+
 // SetAPIAccountConfig define the list of AccountConfig and AgentConfig present on Bleemeo API mock.
 // It also enable using the AccountConfig as default config for new Agent.
 func (helper *syncTestHelper) SetAPIAccountConfig(accountConfig bleemeoTypes.AccountConfig, agentConfigs []bleemeoTypes.AgentConfig) {
@@ -341,6 +359,17 @@ func (helper *syncTestHelper) SetAPIAccountConfig(accountConfig bleemeoTypes.Acc
 	}
 
 	helper.api.resources[mockAPIResourceAgentConfig].SetStore(tmp...)
+}
+
+// SetCacheMetrics define the list of metric present in Glouton cache.
+func (helper *syncTestHelper) SetCacheMetrics(metrics ...metricPayload) {
+	tmp := make([]bleemeoTypes.Metric, 0, len(metrics))
+
+	for _, m := range metrics {
+		tmp = append(tmp, m.metricFromAPI(helper.Now()))
+	}
+
+	helper.s.option.Cache.SetMetrics(tmp)
 }
 
 // MetricsFromAPI returns metrics present on Bleemeo API mock.
