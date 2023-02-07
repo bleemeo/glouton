@@ -1,3 +1,19 @@
+// Copyright 2015-2022 Bleemeo
+//
+// bleemeo.com an infrastructure monitoring solution in the Cloud
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package fluentbit
 
 import (
@@ -9,7 +25,6 @@ import (
 )
 
 const (
-	// TODO: Do we want to support Windows?
 	configDir   = "/var/lib/glouton/fluent-bit"
 	configFile  = configDir + "/fluent-bit.conf"
 	parsersFile = configDir + "/parsers.conf"
@@ -76,8 +91,7 @@ func writeStaticConfig() error {
 		return fmt.Errorf("create Fluent Bit config directory: %w", err)
 	}
 
-	//nolint:gosec // The file needs to be readable by Fluent Bit.
-	err = os.WriteFile(parsersFile, []byte(parsersConfig), 0o644)
+	err = os.WriteFile(parsersFile, []byte(parsersConfig), 0o600)
 	if err != nil {
 		return fmt.Errorf("write Fluent Bit config: %w", err)
 	}

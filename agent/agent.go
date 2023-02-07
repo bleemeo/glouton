@@ -1207,10 +1207,12 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 			a.addWarnings(warnings...)
 		}
 
-		tasks = append(tasks, taskInfo{
-			a.fluentbitManager.Run,
-			"Fluent Bit manager",
-		})
+		if a.fluentbitManager != nil {
+			tasks = append(tasks, taskInfo{
+				a.fluentbitManager.Run,
+				"Fluent Bit manager",
+			})
+		}
 	}
 
 	a.vethProvider = &veth.Provider{
