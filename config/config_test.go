@@ -166,7 +166,8 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 			KubeConfig:          "/config",
 		},
 		Log: Log{
-			FluentBitURL: "http://localhost:2020",
+			FluentBitURL:   "http://localhost:2020",
+			PrefixHostRoot: true,
 			Inputs: []LogInput{
 				{
 					Path: "/var/log/apache/access.log",

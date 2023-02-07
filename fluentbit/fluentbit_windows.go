@@ -24,7 +24,7 @@ import (
 	crTypes "glouton/facts/container-runtime/types"
 )
 
-var errNotSupported = errors.New("log inputs are not supported on windows")
+var errNotSupported = errors.New("log inputs are not supported on Windows")
 
 // New returns an initialized Fluent Bit manager and config warnings.
 func New(cfg config.Log, reg registerer, runtime crTypes.RuntimeInterface) (*Manager, []error) {

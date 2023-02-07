@@ -125,30 +125,50 @@ func TestInputLogPaths(t *testing.T) {
 	}
 
 	tests := []struct {
-		Name          string
-		Input         config.LogInput
-		ExpectedPaths []string
+		Name           string
+		Input          config.LogInput
+		PrefixHostRoot bool
+		ExpectedPaths  []string
 	}{
 		{
 			Name: "direct-path",
 			Input: config.LogInput{
 				Path: "/path",
 			},
-			ExpectedPaths: []string{"/path"},
+			PrefixHostRoot: false,
+			ExpectedPaths:  []string{"/path"},
+		},
+		{
+			Name: "direct-path-with-prefix",
+			Input: config.LogInput{
+				Path: "/path",
+			},
+			PrefixHostRoot: true,
+			ExpectedPaths:  []string{"/hostroot/path"},
 		},
 		{
 			Name: "container-name",
 			Input: config.LogInput{
 				ContainerName: "postgres",
 			},
-			ExpectedPaths: []string{"/postgres"},
+			PrefixHostRoot: false,
+			ExpectedPaths:  []string{"/postgres"},
+		},
+		{
+			Name: "container-name-with-hostroot",
+			Input: config.LogInput{
+				ContainerName: "postgres",
+			},
+			PrefixHostRoot: true,
+			ExpectedPaths:  []string{"/hostroot/postgres"},
 		},
 		{
 			Name: "select-labels",
 			Input: config.LogInput{
 				Selectors: map[string]string{"app": "redis"},
 			},
-			ExpectedPaths: []string{"/redis-1", "/redis-2"},
+			PrefixHostRoot: false,
+			ExpectedPaths:  []string{"/redis-1", "/redis-2"},
 		},
 		{
 			Name: "select-annotations",
@@ -158,7 +178,8 @@ func TestInputLogPaths(t *testing.T) {
 					"env": "prod",
 				},
 			},
-			ExpectedPaths: []string{"/uwsgi-1", "/uwsgi-2"},
+			PrefixHostRoot: false,
+			ExpectedPaths:  []string{"/uwsgi-1", "/uwsgi-2"},
 		},
 		{
 			Name: "container-name-and-selector",
@@ -166,13 +187,20 @@ func TestInputLogPaths(t *testing.T) {
 				ContainerName: "postgres",
 				Selectors:     map[string]string{"env": "prod"},
 			},
-			ExpectedPaths: []string{"/postgres"},
+			PrefixHostRoot: false,
+			ExpectedPaths:  []string{"/postgres"},
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.Name, func(t *testing.T) {
-			gotLogPaths, _ := inputLogPaths(test.Input, containers)
+			m := Manager{
+				config: config.Log{
+					PrefixHostRoot: test.PrefixHostRoot,
+				},
+			}
+
+			gotLogPaths, _ := m.inputLogPaths(test.Input, containers)
 
 			if diff := cmp.Diff(test.ExpectedPaths, gotLogPaths); diff != "" {
 				t.Fatalf("Unexpected log paths:\n%s", diff)

@@ -213,7 +213,9 @@ func DefaultConfig() Config {
 		},
 		Log: Log{
 			FluentBitURL: "http://localhost:2021/api/v1/metrics/prometheus",
-			Inputs:       []LogInput{},
+			// bleemeo-agent-logs overrides this value to false.
+			PrefixHostRoot: true,
+			Inputs:         []LogInput{},
 		},
 		Logging: Logging{
 			Buffer: LoggingBuffer{
