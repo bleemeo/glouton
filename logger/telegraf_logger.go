@@ -18,6 +18,7 @@ package logger
 
 import (
 	"fmt"
+	"sync"
 	"time"
 )
 
@@ -27,6 +28,7 @@ const minVisibleLogInterval = time.Hour
 
 type TelegrafLogger struct {
 	name string
+	l    sync.Mutex
 	// The last time a log was sent with level 0.
 	lastVisibleLog time.Time
 }
@@ -50,6 +52,9 @@ func (t *TelegrafLogger) Error(args ...interface{}) {
 }
 
 func (t *TelegrafLogger) errorLogLevel() int {
+	t.l.Lock()
+	defer t.l.Unlock()
+
 	// Messages that should have been logged at level 0 are logged
 	// at level 1 instead if another one was logged recently.
 	level := 1
