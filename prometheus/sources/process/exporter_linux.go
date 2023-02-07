@@ -15,7 +15,6 @@
 // limitations under the License.
 
 //go:build linux
-// +build linux
 
 package process
 
@@ -23,8 +22,8 @@ import (
 	"context"
 	"glouton/discovery"
 	"glouton/logger"
+	"glouton/prometheus/process"
 	"glouton/prometheus/registry"
-	"glouton/types"
 	"sync"
 	"time"
 
@@ -39,49 +38,59 @@ const (
 )
 
 // RegisterExporter will create a new prometheus exporter using the specified parameters and adds it to the registry.
-func RegisterExporter(ctx context.Context, reg *registry.Registry, psLister interface{}, dynamicDiscovery *discovery.DynamicDiscovery, bleemeoFormat bool) {
-	if processExporter := NewExporter(psLister, dynamicDiscovery); processExporter != nil {
-		processGatherer := prometheus.NewRegistry()
+func RegisterExporter(
+	ctx context.Context,
+	reg *registry.Registry,
+	psLister interface{},
+	dynamicDiscovery *discovery.DynamicDiscovery,
+	bleemeoFormat bool,
+) {
+	processExporter := newExporter(psLister, dynamicDiscovery)
+	if processExporter == nil {
+		return
+	}
 
-		err := processGatherer.Register(processExporter)
+	processGatherer := prometheus.NewRegistry()
+
+	err := processGatherer.Register(processExporter)
+	if err != nil {
+		logger.Printf("Failed to register process-exporter: %v", err)
+		logger.Printf("Processes metrics won't be available on /metrics endpoints")
+	} else {
+		_, err = reg.RegisterGatherer(
+			registry.RegistrationOption{
+				Description:           "process-exporter metrics",
+				Interval:              defaultInterval,
+				JitterSeed:            defaultJitter,
+				DisablePeriodicGather: bleemeoFormat,
+			},
+			processGatherer,
+		)
 		if err != nil {
 			logger.Printf("Failed to register process-exporter: %v", err)
 			logger.Printf("Processes metrics won't be available on /metrics endpoints")
-		} else {
-			_, err = reg.RegisterGatherer(
-				registry.RegistrationOption{
-					Description:           "process-exporter",
-					Interval:              defaultInterval,
-					JitterSeed:            defaultJitter,
-					DisablePeriodicGather: bleemeoFormat,
-				},
-				processGatherer,
-			)
-			if err != nil {
-				logger.Printf("Failed to register process-exporter: %v", err)
-				logger.Printf("Processes metrics won't be available on /metrics endpoints")
-			}
 		}
+	}
 
-		if bleemeoFormat {
-			_, err := reg.RegisterPushPointsCallback(
-				registry.RegistrationOption{
-					Description: "process-exporter",
-					Interval:    defaultInterval,
-					JitterSeed:  defaultJitter,
-				},
-				processExporter.PushTo(reg.WithTTL(5*time.Minute)),
-			)
-			if err != nil {
-				logger.Printf("unable to add processes metrics: %v", err)
-			}
+	if bleemeoFormat {
+		_, err := reg.RegisterAppenderCallback(
+			registry.RegistrationOption{
+				Description: "Bleemeo process-exporter metrics",
+				Interval:    defaultInterval,
+				JitterSeed:  defaultJitter,
+			},
+			registry.AppenderRegistrationOption{},
+			&bleemeoExporter{exporter: processExporter},
+		)
+		if err != nil {
+			logger.Printf("unable to add processes metrics: %v", err)
 		}
 	}
 }
 
-// NewExporter creates a new Prometheus exporter using the specified parameters.
-func NewExporter(psLister interface{}, processQuerier *discovery.DynamicDiscovery) *Exporter {
-	if source, ok := psLister.(*Processes); ok {
+// newExporter creates a new Prometheus exporter using the specified parameters.
+func newExporter(psLister interface{}, processQuerier *discovery.DynamicDiscovery) *Exporter {
+	if source, ok := psLister.(*process.Processes); ok {
 		return &Exporter{
 			Source:         source,
 			ProcessQuerier: processQuerier,
@@ -127,14 +136,6 @@ type Exporter struct {
 	scrapeProcReadErrorsDesc *prometheus.Desc
 	scrapePartialErrorsDesc  *prometheus.Desc
 	threadWchanDesc          *prometheus.Desc
-}
-
-// PushTo return a callback function that will push points on each call.
-func (e *Exporter) PushTo(p types.PointPusher) func(context.Context, time.Time) {
-	return (&pusher{
-		exporter: e,
-		pusher:   p,
-	}).push
 }
 
 func (e *Exporter) init() {

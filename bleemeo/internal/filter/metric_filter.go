@@ -91,7 +91,7 @@ func allowListForMetric(
 ) (map[string]bool, error) {
 	// TODO: snmp metric should use the correct AgentConfig
 	if annotations.BleemeoAgentID != "" {
-		var whitelist map[string]bool
+		var allowlist map[string]bool
 
 		monitor, present := monitors[bleemeoTypes.AgentID(annotations.BleemeoAgentID)]
 		if present {
@@ -100,7 +100,7 @@ func allowListForMetric(
 				return nil, fmt.Errorf("%w for monitor with config ID=%s", ErrConfigNotFound, monitor.AccountConfig)
 			}
 
-			whitelist = accountConfig.AgentConfigByName[bleemeoTypes.AgentTypeMonitor].MetricsAllowlist
+			allowlist = accountConfig.AgentConfigByName[bleemeoTypes.AgentTypeMonitor].MetricsAllowlist
 		} else {
 			agent, present := agents[annotations.BleemeoAgentID]
 			if !present {
@@ -117,10 +117,10 @@ func allowListForMetric(
 				return nil, fmt.Errorf("%w: missing agent config for type ID=%s", ErrConfigNotFound, agent.AgentType)
 			}
 
-			whitelist = ac.MetricsAllowlist
+			allowlist = ac.MetricsAllowlist
 		}
 
-		return whitelist, nil
+		return allowlist, nil
 	}
 
 	tmp, ok := configs[defaultConfigID].AgentConfigByName[bleemeoTypes.AgentTypeAgent]

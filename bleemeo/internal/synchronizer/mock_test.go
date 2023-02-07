@@ -49,6 +49,7 @@ const (
 	mockAPIResourceAccountConfig = "accountconfig"
 	mockAPIResourceAgentConfig   = "agentconfig"
 	mockAPIResourceService       = "service"
+	mockAPIGloutonConfigItem     = "gloutonconfigitem"
 )
 
 //nolint:gochecknoglobals
@@ -291,6 +292,10 @@ func newAPI() *mockAPI {
 	api.AddResource(mockAPIResourceService, &genericResource{
 		Type:        serviceMonitor{},
 		ValidFilter: []string{"agent", "active", "monitor"},
+	})
+	api.AddResource(mockAPIGloutonConfigItem, &genericResource{
+		Type:        bleemeoTypes.GloutonConfigItem{},
+		ValidFilter: []string{"agent"},
 	})
 
 	api.resources[mockAPIResourceAgentType].SetStore(
@@ -896,6 +901,20 @@ func (d mockDocker) LastUpdate() time.Time {
 
 func (m mockMonitorManager) UpdateDynamicTargets(monitors []types.Monitor) error {
 	return nil
+}
+
+// mockProcessLister is a process lister that returns fake processes.
+// TopInfo is not implemented.
+type mockProcessLister struct {
+	processes map[int]facts.Process
+}
+
+func (m mockProcessLister) Processes(ctx context.Context, maxAge time.Duration) (processes map[int]facts.Process, err error) {
+	return m.processes, nil
+}
+
+func (m mockProcessLister) TopInfo(ctx context.Context, maxAge time.Duration) (topinfo facts.TopInfo, err error) {
+	return facts.TopInfo{}, errNotImplemented
 }
 
 func newStateMock() *stateMock {

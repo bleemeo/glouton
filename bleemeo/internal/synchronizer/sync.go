@@ -35,6 +35,7 @@ import (
 	"math/big"
 	"net/http"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -63,6 +64,7 @@ const (
 	syncMethodContainer     = "container"
 	syncMethodMetric        = "metric"
 	syncMethodAlertingRules = "alertingrules"
+	syncMethodConfig        = "config"
 )
 
 // Synchronizer synchronize object with Bleemeo.
@@ -87,9 +89,13 @@ type Synchronizer struct {
 	successiveErrors        int
 	warnAccountMismatchDone bool
 	maintenanceMode         bool
+	suspendedMode           bool
 	callUpdateLabels        bool
 	lastMetricCount         int
 	agentID                 string
+
+	// configSyncDone is true when the config items were successfully synced.
+	configSyncDone bool
 
 	// An edge case occurs when an agent is spawned while the maintenance mode is enabled on the backend:
 	// the agent cannot register agent_status, thus the MQTT connector cannot start, and we cannot receive
@@ -135,13 +141,19 @@ type Option struct {
 	// SetInitialized tells the bleemeo connector that the MQTT module can be started
 	SetInitialized func()
 
-	// IsMqttConnected returns wether the MQTT connector is operating nominally, and specifically that it can receive mqtt notifications.
-	// It is useful for the fallback on http polling described above Synchronizer.lastMaintenanceSync definition.
+	// IsMqttConnected returns wether the MQTT connector is operating nominally, and specifically
+	// that it can receive mqtt notifications. It is useful for the fallback on http polling
+	// described above Synchronizer.lastMaintenanceSync definition.
 	// Note: returns false when the mqtt connector is not enabled.
 	IsMqttConnected func() bool
 
-	// SetBleemeoInMaintenanceMode makes the bleemeo connector wait a day before checking again for maintenance
+	// SetBleemeoInMaintenanceMode makes the bleemeo connector wait a day before checking again for maintenance.
 	SetBleemeoInMaintenanceMode func(maintenance bool)
+
+	// SetBleemeoInSuspendedMode sets the suspended mode. While Bleemeo is suspended the agent doesn't
+	// create or update objects on the API and stops sending points on MQTT. The suspended mode differs
+	// from the maintenance mode because we stop buffering points to send on MQTT and just drop them.
+	SetBleemeoInSuspendedMode func(suspended bool)
 }
 
 // New return a new Synchronizer.
@@ -674,7 +686,7 @@ func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) (map[str
 		s.waitCPUMetric(ctx)
 	}
 
-	syncMethods := s.syncToPerform(ctx)
+	syncMethods, fullsync := s.syncToPerform(ctx)
 
 	if len(syncMethods) == 0 {
 		return syncMethods, nil
@@ -687,14 +699,15 @@ func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) (map[str
 	previousCount := s.realClient.RequestsCount()
 
 	syncStep := []struct {
-		name                 string
-		method               func(context.Context, bool, bool) (updateThresholds bool, err error)
-		enabledInMaintenance bool
-		skipOnlyEssential    bool // should be true for method that ignore onlyEssential
+		name                   string
+		method                 func(context.Context, bool, bool) (updateThresholds bool, err error)
+		enabledInMaintenance   bool
+		enabledInSuspendedMode bool
+		skipOnlyEssential      bool // should be true for method that ignore onlyEssential
 	}{
 		{name: syncMethodInfo, method: s.syncInfo, enabledInMaintenance: true, skipOnlyEssential: true},
-		{name: syncMethodAgent, method: s.syncAgent, skipOnlyEssential: true},
-		{name: syncMethodAccountConfig, method: s.syncAccountConfig, skipOnlyEssential: true},
+		{name: syncMethodAgent, method: s.syncAgent, enabledInSuspendedMode: true, skipOnlyEssential: true},
+		{name: syncMethodAccountConfig, method: s.syncAccountConfig, enabledInSuspendedMode: true, skipOnlyEssential: true},
 		{name: syncMethodFact, method: s.syncFacts},
 		{name: syncMethodContainer, method: s.syncContainers},
 		{name: syncMethodSNMP, method: s.syncSNMP},
@@ -702,6 +715,7 @@ func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) (map[str
 		{name: syncMethodMonitor, method: s.syncMonitors, skipOnlyEssential: true},
 		{name: syncMethodMetric, method: s.syncMetrics},
 		{name: syncMethodAlertingRules, method: s.syncAlertingRules},
+		{name: syncMethodConfig, method: s.syncConfig},
 	}
 	startAt := s.now()
 
@@ -726,21 +740,19 @@ func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) (map[str
 			break
 		}
 
-		if s.IsMaintenance() {
-			if !step.enabledInMaintenance {
-				// store the fact that we must sync this step when we will no longer be in maintenance:
-				// we will try to sync it again at every iteration of runOnce(), until we get out of
-				// maintenance.
-				// This ensures that if the maintenance takes a long time, we will still update the
-				// objects that should have been synced in that period.
-				if full, ok := syncMethods[step.name]; ok {
-					s.l.Lock()
-					s.forceSync[step.name] = full || s.forceSync[step.name]
-					s.l.Unlock()
-				}
-
-				continue
+		if (s.IsMaintenance() && !step.enabledInMaintenance) || (s.suspendedMode && !step.enabledInSuspendedMode) {
+			// Store the fact that we must sync this step when we will no longer be in maintenance:
+			// we will try to sync it again at every iteration of runOnce(), until we get out of
+			// maintenance.
+			// This ensures that if the maintenance takes a long time, we will still update the
+			// objects that should have been synced in that period.
+			if full, ok := syncMethods[step.name]; ok {
+				s.l.Lock()
+				s.forceSync[step.name] = full || s.forceSync[step.name]
+				s.l.Unlock()
 			}
+
+			continue
 		}
 
 		if full, ok := syncMethods[step.name]; ok {
@@ -751,7 +763,7 @@ func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) (map[str
 				if firstErr == nil {
 					firstErr = err
 				} else if !client.IsAuthError(firstErr) && client.IsAuthError(err) {
-					// Prefere returning Authentication error that other errors
+					// Prefer returning Authentication error than other errors.
 					firstErr = err
 				}
 			}
@@ -760,7 +772,7 @@ func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) (map[str
 
 			if onlyEssential && !step.skipOnlyEssential {
 				// We registered only essential object. Make sure all other
-				// object are registered on second run
+				// objects are registered on the second run.
 				s.l.Lock()
 				s.forceSync[step.name] = false || s.forceSync[step.name]
 				s.l.Unlock()
@@ -783,7 +795,7 @@ func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) (map[str
 		s.UpdateUnitsAndThresholds(ctx, false)
 	}
 
-	if len(syncMethods) == len(syncStep) && firstErr == nil {
+	if fullsync && firstErr == nil {
 		s.option.Cache.Save()
 		s.fullSyncCount++
 		s.nextFullSync = s.now().Add(delay.JitterDelay(
@@ -806,7 +818,10 @@ func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) (map[str
 	return syncMethods, firstErr
 }
 
-func (s *Synchronizer) syncToPerform(ctx context.Context) map[string]bool {
+// syncToPerform returns the methods that should be synced in a map. For each method
+// in the map, the value indicates whether a fullsync should be performed.
+// It also returns true if the current sync is a full sync.
+func (s *Synchronizer) syncToPerform(ctx context.Context) (map[string]bool, bool) {
 	s.l.Lock()
 	defer s.l.Unlock()
 
@@ -840,6 +855,12 @@ func (s *Synchronizer) syncToPerform(ctx context.Context) map[string]bool {
 	if s.lastSNMPcount != s.option.SNMPOnlineTarget() {
 		syncMethods[syncMethodFact] = fullSync
 		syncMethods[syncMethodSNMP] = fullSync
+	}
+
+	// After a reload, the config has been changed, so we want to do a fullsync
+	// without waiting the nextFullSync that is kept between reload.
+	if fullSync || !s.configSyncDone {
+		syncMethods[syncMethodConfig] = true
 	}
 
 	minDelayed := time.Time{}
@@ -894,14 +915,88 @@ func (s *Synchronizer) syncToPerform(ctx context.Context) map[string]bool {
 		syncMethods[syncMethodInfo] = false || syncMethods[syncMethodInfo]
 	}
 
-	return syncMethods
+	return syncMethods, fullSync
 }
 
-func (s *Synchronizer) checkDuplicated() error {
+// checkDuplicated checks if another glouton is running with the same ID.
+func (s *Synchronizer) checkDuplicated(ctx context.Context) error {
+	isDuplicatedOnSameHost, err := s.isDuplicatedOnSameHost(ctx, os.Getpid())
+	if err != nil {
+		return fmt.Errorf("check duplicated agent on same host: %w", err)
+	}
+
+	isDuplicatedOnAnotherHost, err := s.isDuplicatedOnAnotherHost()
+	if err != nil {
+		return fmt.Errorf("check duplicated agent on another host: %w", err)
+	}
+
+	if !isDuplicatedOnSameHost && !isDuplicatedOnAnotherHost {
+		return nil
+	}
+
+	// The agent is duplicated, update the last duplication date on the API.
+	params := map[string]string{
+		"fields": "last_duplication_date",
+	}
+
+	data := map[string]time.Time{
+		"last_duplication_date": time.Now(),
+	}
+
+	_, err = s.client.Do(s.ctx, "PATCH", fmt.Sprintf("v1/agent/%s/", s.agentID), params, data, nil)
+	if err != nil {
+		logger.V(1).Printf("Failed to update duplication date: %s", err)
+	}
+
+	return errConnectorTemporaryDisabled
+}
+
+// isDuplicatedOnSameHost checks if another agent is running on the same host.
+func (s *Synchronizer) isDuplicatedOnSameHost(ctx context.Context, pid int) (bool, error) {
+	// The local duplication detection by process can be deactivated in the config.
+	// This can be useful to LXC users where an agent could be running on the host
+	// and detect another agent process in a container and wrongly detect duplication.
+	if s.option.Config.Agent.DisableLocalDuplicationDetection {
+		return false, nil
+	}
+
+	// Check if another agent process is running.
+	processes, err := s.option.Process.Processes(ctx, time.Minute)
+	if err != nil {
+		return false, fmt.Errorf("list processes: %w", err)
+	}
+
+	for _, process := range processes {
+		// Skip our own PID to detect only other agent processes.
+		if process.PID == pid {
+			continue
+		}
+
+		// On Linux, both our systemd service and docker container use "/usr/sbin/glouton".
+		// On Windows we don't know the installation path, only that the process uses "glouton.exe".
+		if strings.Contains(process.CmdLine, "/usr/sbin/glouton") && process.Name == "glouton" ||
+			process.Name == "glouton.exe" {
+			logger.Printf("Another agent is already running on this host with PID %d (I'm PID %d)", process.PID, pid)
+
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+// isDuplicatedOnAnotherHost checks if another agent with the same ID is running
+// on another host. This may happen if the state file is shared by multiple agents.
+func (s *Synchronizer) isDuplicatedOnAnotherHost() (bool, error) {
+	// We use the fact that the agents will send different facts to the API.
+	// If the facts we fetch from the API are not the same as the last facts
+	// we registered, another agent with the same ID must have modified them.
+	// Note that this won't work if the two agents are on the same host
+	// because both agents will send mostly the same facts.
 	oldFacts := s.option.Cache.FactsByKey()
 
 	if err := s.factsUpdateList(); err != nil {
-		return err
+		return false, fmt.Errorf("update facts list: %w", err)
 	}
 
 	newFacts := s.option.Cache.FactsByKey()
@@ -940,24 +1035,10 @@ func (s *Synchronizer) checkDuplicated() error {
 				"and https://go.bleemeo.com/l/agent-installation-cloud-image ",
 		)
 
-		// Update last duplication date on the API.
-		params := map[string]string{
-			"fields": "last_duplication_date",
-		}
-
-		data := map[string]time.Time{
-			"last_duplication_date": time.Now(),
-		}
-
-		_, err := s.client.Do(s.ctx, "PATCH", fmt.Sprintf("v1/agent/%s/", s.agentID), params, data, nil)
-		if err != nil {
-			logger.V(1).Printf("Failed to update duplication date: %s", err)
-		}
-
-		return errConnectorTemporaryDisabled
+		return true, nil
 	}
 
-	return nil
+	return false, nil
 }
 
 func (s *Synchronizer) register(ctx context.Context) error {

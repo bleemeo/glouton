@@ -90,7 +90,7 @@ import (
 
 	crTypes "glouton/facts/container-runtime/types"
 
-	processInput "glouton/inputs/process"
+	processSource "glouton/prometheus/sources/process"
 
 	paho "github.com/eclipse/paho.mqtt.golang"
 	"github.com/prometheus/client_golang/prometheus"
@@ -116,6 +116,7 @@ var (
 type agent struct {
 	taskRegistry *task.Registry
 	config       config.Config
+	configItems  []config.Item
 	state        *state.State
 	cancel       context.CancelFunc
 	context      context.Context //nolint:containedctx
@@ -189,12 +190,13 @@ func (a *agent) init(ctx context.Context, configFiles []string, firstRun bool) (
 	a.taskRegistry = task.NewRegistry(ctx)
 	a.taskIDs = make(map[string]int)
 
-	cfg, warnings, err := config.Load(true, configFiles...)
+	cfg, configItems, warnings, err := config.Load(true, configFiles...)
 	if warnings != nil {
 		a.addWarnings(warnings...)
 	}
 
 	a.config = cfg
+	a.configItems = configItems
 
 	a.setupLogger()
 
@@ -662,12 +664,6 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		10*time.Second,
 	)
 
-	go func() {
-		defer types.ProcessPanic()
-
-		a.handleSighup(ctx, sighupChan)
-	}()
-
 	a.factProvider = facts.NewFacter(
 		a.config.Agent.FactsFile,
 		a.hostRootPath,
@@ -864,10 +860,10 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 
 	var psLister facts.ProcessLister
 
-	if !version.IsLinux() {
-		psLister = facts.NewPsUtilLister("")
-	} else {
+	if version.IsLinux() {
 		psLister = process.NewProcessLister(a.hostRootPath, 9*time.Second)
+	} else {
+		psLister = facts.NewPsUtilLister("")
 	}
 
 	psFact := facts.NewProcess(
@@ -993,6 +989,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 
 		connector, err := bleemeo.New(bleemeoTypes.GlobalOption{
 			Config:                  a.config,
+			ConfigItems:             a.configItems,
 			State:                   a.state,
 			Facts:                   a.factProvider,
 			Process:                 psFact,
@@ -1059,41 +1056,53 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 	}
 
 	if a.metricFormat == types.MetricFormatBleemeo {
-		processInput := processInput.New(psFact, a.gathererRegistry.WithTTL(5*time.Minute))
-
-		_, err = a.gathererRegistry.RegisterPushPointsCallback(
+		_, err = a.gathererRegistry.RegisterAppenderCallback(
 			registry.RegistrationOption{
 				Description: "process status metrics",
 				JitterSeed:  baseJitter,
 			},
-			processInput.Gather,
+			registry.AppenderRegistrationOption{},
+			processSource.NewStatusSource(psFact),
 		)
 		if err != nil {
 			logger.Printf("unable to add processes metrics: %v", err)
 		}
 	}
 
-	_, err = a.gathererRegistry.RegisterPushPointsCallback(
+	// Register misc appender to gather some container metrics.
+	_, err = a.gathererRegistry.RegisterAppenderCallback(
 		registry.RegistrationOption{
-			Description: "miscGather",
+			Description: "miscAppender",
 			JitterSeed:  baseJitter,
 		},
-		a.miscGather(a.gathererRegistry.WithTTL(5*time.Minute)),
+		registry.AppenderRegistrationOption{},
+		miscAppender{
+			containerRuntime: a.containerRuntime,
+		},
 	)
 	if err != nil {
-		logger.Printf("unable to add miscGatherer metrics: %v", err)
+		logger.Printf("unable to add miscAppender metrics: %v", err)
 	}
 
-	_, err = a.gathererRegistry.RegisterPushPointsCallback(
+	// Register misc appender minute to gather some various metrics
+	// from containers, services and config warnings.
+	_, err = a.gathererRegistry.RegisterAppenderCallback(
 		registry.RegistrationOption{
-			Description: "miscGatherMinute",
+			Description: "miscAppenderMinute",
 			JitterSeed:  baseJitter,
 			MinInterval: time.Minute,
 		},
-		a.miscGatherMinute(a.gathererRegistry.WithTTLAndFormat(5*time.Minute, types.MetricFormatPrometheus)),
+		registry.AppenderRegistrationOption{},
+		miscAppenderMinute{
+			containerRuntime:  a.containerRuntime,
+			discovery:         a.discovery,
+			store:             a.store,
+			hostRootPath:      a.hostRootPath,
+			getConfigWarnings: a.getWarnings,
+		},
 	)
 	if err != nil {
-		logger.Printf("unable to add miscGathererMinute metrics: %v", err)
+		logger.Printf("unable to add miscAppenderMinute metrics: %v", err)
 	}
 
 	_, err = a.gathererRegistry.RegisterAppenderCallback(
@@ -1110,7 +1119,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 	}
 
 	if a.config.Agent.ProcessExporter.Enable {
-		process.RegisterExporter(ctx, a.gathererRegistry, psLister, dynamicDiscovery, a.metricFormat == types.MetricFormatBleemeo)
+		processSource.RegisterExporter(ctx, a.gathererRegistry, psLister, dynamicDiscovery, a.metricFormat == types.MetricFormatBleemeo)
 	}
 
 	prometheusTargets, warnings := prometheusConfigToURLs(a.config.Metric.Prometheus.Targets)
@@ -1255,6 +1264,14 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		})
 	}
 
+	// Handle sighup signals only after the agent is completely initialized
+	// to make sure an early signal won't access uninitialized fields.
+	go func() {
+		defer types.ProcessPanic()
+
+		a.handleSighup(ctx, sighupChan)
+	}()
+
 	a.startTasks(tasks)
 
 	<-ctx.Done()
@@ -1371,14 +1388,14 @@ func (a *agent) waitAndRefreshPendingUpdates(ctx context.Context) {
 }
 
 func (a *agent) buildCollectorsConfig() (conf inputs.CollectorConfig, err error) {
-	whitelistRE, err := common.CompileREs(a.config.DiskMonitor)
+	allowlistRE, err := common.CompileREs(a.config.DiskMonitor)
 	if err != nil {
 		a.addWarnings(fmt.Errorf("%w: failed to compile regexp in disk_monitor: %s", config.ErrInvalidValue, err))
 
 		return
 	}
 
-	blacklistRE, err := common.CompileREs(a.config.DiskIgnore)
+	denylistRE, err := common.CompileREs(a.config.DiskIgnore)
 	if err != nil {
 		a.addWarnings(fmt.Errorf("%w: failed to compile regexp in disk_ignore: %s", config.ErrInvalidValue, err))
 
@@ -1393,46 +1410,11 @@ func (a *agent) buildCollectorsConfig() (conf inputs.CollectorConfig, err error)
 
 	return inputs.CollectorConfig{
 		DFRootPath:      a.hostRootPath,
-		NetIfBlacklist:  a.config.NetworkInterfaceBlacklist,
-		IODiskWhitelist: whitelistRE,
-		IODiskBlacklist: blacklistRE,
-		DFPathBlacklist: pathIgnoreTrimed,
+		NetIfDenylist:   a.config.NetworkInterfaceDenylist,
+		IODiskAllowlist: allowlistRE,
+		IODiskDenylist:  denylistRE,
+		DFPathDenylist:  pathIgnoreTrimed,
 	}, nil
-}
-
-func (a *agent) miscGather(pusher types.PointPusher) func(context.Context, time.Time) {
-	return func(ctx context.Context, t0 time.Time) {
-		points, err := a.containerRuntime.Metrics(ctx, t0)
-		if err != nil {
-			logger.V(2).Printf("container Runtime metrics gather failed: %v", err)
-		}
-
-		// We don't really care about having up-to-date information because
-		// when containers are started/stopped, the information is updated anyway.
-		containers, err := a.containerRuntime.Containers(ctx, 2*time.Hour, false)
-		if err != nil {
-			logger.V(2).Printf("gather on DockerProvider failed: %v", err)
-
-			return
-		}
-
-		countRunning := 0
-
-		for _, c := range containers {
-			if c.State().IsRunning() {
-				countRunning++
-			}
-		}
-
-		points = append(points, types.MetricPoint{
-			Point: types.Point{Time: t0, Value: float64(countRunning)},
-			Labels: map[string]string{
-				"__name__": "containers_count",
-			},
-		})
-
-		pusher.PushPoints(ctx, points)
-	}
 }
 
 func (a *agent) sendToTelemetry(ctx context.Context) error {
@@ -1464,272 +1446,6 @@ func (a *agent) sendToTelemetry(ctx context.Context) error {
 	}
 
 	return nil
-}
-
-func (a *agent) miscGatherMinute(pusher types.PointPusher) func(context.Context, time.Time) {
-	return func(ctx context.Context, t0 time.Time) {
-		points, err := a.containerRuntime.MetricsMinute(ctx, t0)
-		if err != nil {
-			logger.V(2).Printf("container Runtime metrics gather failed: %v", err)
-		}
-
-		service, err := a.discovery.Discovery(ctx, 2*time.Hour)
-		if err != nil {
-			logger.V(1).Printf("get service failed to every-minute metrics: %v", err)
-
-			service = nil
-		}
-
-		for _, srv := range service {
-			if !srv.Active {
-				continue
-			}
-
-			switch srv.ServiceType { //nolint:exhaustive,nolintlint
-			case discovery.PostfixService:
-				n, err := postfixQueueSize(ctx, srv, a.hostRootPath, a.containerRuntime)
-				if err != nil {
-					logger.V(1).Printf("Unabled to gather postfix queue size on %s: %v", srv, err)
-
-					continue
-				}
-
-				labels := map[string]string{
-					types.LabelName: "postfix_queue_size",
-					types.LabelItem: srv.Instance,
-				}
-
-				annotations := types.MetricAnnotations{
-					BleemeoItem:     srv.Instance,
-					ContainerID:     srv.ContainerID,
-					ServiceName:     srv.Name,
-					ServiceInstance: srv.Instance,
-				}
-
-				points = append(points, types.MetricPoint{
-					Labels:      labels,
-					Annotations: annotations,
-					Point: types.Point{
-						Time:  time.Now(),
-						Value: n,
-					},
-				})
-			case discovery.EximService:
-				n, err := eximQueueSize(ctx, srv, a.hostRootPath, a.containerRuntime)
-				if err != nil {
-					logger.V(1).Printf("Unabled to gather exim queue size on %s: %v", srv, err)
-
-					continue
-				}
-
-				labels := map[string]string{
-					types.LabelName: "exim_queue_size",
-					types.LabelItem: srv.Instance,
-				}
-
-				annotations := types.MetricAnnotations{
-					BleemeoItem:     srv.Instance,
-					ContainerID:     srv.ContainerID,
-					ServiceName:     srv.Name,
-					ServiceInstance: srv.Instance,
-				}
-
-				points = append(points, types.MetricPoint{
-					Labels:      labels,
-					Annotations: annotations,
-					Point: types.Point{
-						Time:  time.Now(),
-						Value: n,
-					},
-				})
-			}
-		}
-
-		desc := a.getWarnings().Error()
-		status := types.StatusWarning
-
-		if len(desc) == 0 {
-			status = types.StatusOk
-			desc = "configuration returned no warnings."
-		}
-
-		points = append(points, types.MetricPoint{
-			Point: types.Point{
-				Value: float64(status.NagiosCode()),
-				Time:  t0,
-			},
-			Labels: map[string]string{
-				types.LabelName: "agent_config_warning",
-			},
-			Annotations: types.MetricAnnotations{
-				Status: types.StatusDescription{
-					StatusDescription: desc,
-					CurrentStatus:     status,
-				},
-			},
-		})
-
-		// Add SMART status and UPSD battery status metrics.
-		points = append(
-			points,
-			statusFromLastPoint(t0, a.store, "smart_device_health_ok", map[string]string{types.LabelName: types.MetricServiceStatus, types.LabelService: "smart"}, smartStatus)...,
-		)
-		points = append(
-			points,
-			statusFromLastPoint(t0, a.store, "upsd_status_flags", map[string]string{types.LabelName: "upsd_battery_status"}, upsdBatteryStatus)...,
-		)
-
-		pusher.PushPoints(ctx, points)
-	}
-}
-
-// statusFromLastPoint returns points for the targetMetric based on the last point from baseMetricName.
-// statusDescription must return the status description based on the last point and labels of baseMetricName.
-func statusFromLastPoint(
-	now time.Time,
-	store *store.Store,
-	baseMetricName string, targetMetric map[string]string,
-	statusDescription func(value float64, labels map[string]string) types.StatusDescription,
-) []types.MetricPoint {
-	metrics, _ := store.Metrics(map[string]string{types.LabelName: baseMetricName})
-	if len(metrics) == 0 {
-		return nil
-	}
-
-	newPoints := make([]types.MetricPoint, 0, len(metrics))
-
-	for _, metric := range metrics {
-		// Get the last point from this metric.
-		points, _ := metric.Points(now.Add(-2*time.Minute), now)
-		if len(points) == 0 {
-			continue
-		}
-
-		sort.Slice(
-			points,
-			func(i, j int) bool {
-				return points[i].Time.Before(points[j].Time)
-			},
-		)
-
-		lastPoint := points[len(points)-1]
-
-		// Keep annotations from the base metric, only change the status.
-		annotations := metric.Annotations()
-		annotations.Status = statusDescription(lastPoint.Value, metric.Labels())
-
-		// Keep all labels from the metric except its name.
-		labelsCopy := make(map[string]string, len(metric.Labels()))
-
-		for name, value := range metric.Labels() {
-			if name == types.LabelName {
-				continue
-			}
-
-			labelsCopy[name] = value
-		}
-
-		for k, v := range targetMetric {
-			labelsCopy[k] = v
-		}
-
-		newPoints = append(newPoints, types.MetricPoint{
-			Point: types.Point{
-				Value: float64(annotations.Status.CurrentStatus.NagiosCode()),
-				Time:  now,
-			},
-			Labels:      labelsCopy,
-			Annotations: annotations,
-		})
-	}
-
-	return newPoints
-}
-
-// smartStatus returns the "service_status{service="smart"}" metric description from the last value
-// of the metric "device_health_ok" and its labels.
-func smartStatus(value float64, labels map[string]string) types.StatusDescription {
-	var status types.StatusDescription
-
-	// The device_health_ok field from the SMART input is a boolean we converted to an integer.
-	if value == 1 {
-		status = types.StatusDescription{
-			CurrentStatus: types.StatusOk,
-			StatusDescription: fmt.Sprintf(
-				"SMART tests passed on %s (%s)",
-				labels[types.LabelDevice],
-				labels[types.LabelModel],
-			),
-		}
-	} else {
-		status = types.StatusDescription{
-			CurrentStatus: types.StatusCritical,
-			StatusDescription: fmt.Sprintf(
-				"SMART tests failed on %s (%s)",
-				labels[types.LabelDevice],
-				labels[types.LabelModel],
-			),
-		}
-	}
-
-	return status
-}
-
-// upsdBatteryStatus returns the "upsd_battery_status" metric description from the last value
-// of the metric "upsd_status_flags" and its labels.
-// It reports a critical status when:
-// - the UPS is overloaded
-// - the UPS is on battery
-// - the battery is low
-// - the battery needs to be replaced.
-func upsdBatteryStatus(value float64, _ map[string]string) types.StatusDescription {
-	var status types.StatusDescription
-
-	// The value is a composed of status bits documented in apcupsd:
-	// http://www.apcupsd.org/manual/#status-bits
-	// 0 	Runtime calibration occurring (Not reported by Smart UPS v/s and BackUPS Pro)
-	// 1 	SmartTrim (Not reported by 1st and 2nd generation SmartUPS models)
-	// 2 	SmartBoost
-	// 3 	On line (this is the normal condition)
-	// 4 	On battery
-	// 5 	Overloaded output
-	// 6 	Battery low
-	// 7 	Replace battery
-	statusFlags := int(value)
-	onLine := statusFlags&(1<<3) > 0
-	overloadedOutput := statusFlags&(1<<5) > 0
-	lowBattery := statusFlags&(1<<6) > 0
-	replaceBattery := statusFlags&(1<<7) > 0
-
-	switch {
-	case replaceBattery:
-		status = types.StatusDescription{
-			CurrentStatus:     types.StatusCritical,
-			StatusDescription: "Battery should be replaced",
-		}
-	case lowBattery:
-		status = types.StatusDescription{
-			CurrentStatus:     types.StatusCritical,
-			StatusDescription: "Battery is low",
-		}
-	case overloadedOutput:
-		status = types.StatusDescription{
-			CurrentStatus:     types.StatusCritical,
-			StatusDescription: "UPS is overloaded",
-		}
-	case !onLine:
-		status = types.StatusDescription{
-			CurrentStatus:     types.StatusCritical,
-			StatusDescription: "UPS is running on battery",
-		}
-	default:
-		status = types.StatusDescription{
-			CurrentStatus:     types.StatusOk,
-			StatusDescription: "On line, battery ok",
-		}
-	}
-
-	return status
 }
 
 func (a *agent) miscTasks(ctx context.Context) error {
@@ -2073,8 +1789,8 @@ func (a *agent) FireTrigger(discovery bool, sendFacts bool, systemUpdateMetric b
 		a.triggerSystemUpdateMetric = true
 	}
 
-	// Some discovery request ask for a second discovery in 1 minutes.
-	// The second discovery allow to discovery service that are slow to start
+	// Some discovery requests ask for a second discovery in 1 minutes.
+	// The second discovery allows to discover services that are slow to start
 	if secondDiscovery {
 		deadline := time.Now().Add(time.Minute)
 		a.triggerDiscAt = deadline

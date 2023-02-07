@@ -124,7 +124,6 @@ var (
 		"node_network_transmit_packets_total",
 		"node_network_receive_errs_total",
 		"node_network_transmit_errs_total",
-		"node_uname_info",
 	}
 
 	promLinuxSwapMetrics = []string{
@@ -330,22 +329,22 @@ var (
 
 		discovery.CassandraService: {
 			"cassandra_bloom_filter_false_ratio",
+			"cassandra_bloom_filter_false_ratio_sum",
 			"cassandra_jvm_gc",
 			"cassandra_jvm_gc_time",
 			"cassandra_jvm_gc_utilization",
 			"cassandra_jvm_heap_used",
 			"cassandra_jvm_non_heap_used",
 			"cassandra_read_requests",
+			"cassandra_read_requests_sum",
 			"cassandra_read_time",
+			"cassandra_read_time_average",
 			"cassandra_sstable",
+			"cassandra_sstable_sum",
 			"cassandra_write_requests",
+			"cassandra_write_requests_sum",
 			"cassandra_write_time",
-			"cassandra_bloom_filter_false_ratio",
-			"cassandra_read_requests",
-			"cassandra_read_time",
-			"cassandra_sstable",
-			"cassandra_write_requests",
-			"cassandra_write_time",
+			"cassandra_write_time_average",
 		},
 
 		discovery.ConfluenceService: {

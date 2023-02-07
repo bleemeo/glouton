@@ -22,33 +22,33 @@ import (
 
 // Config is the structured configuration of the agent.
 type Config struct {
-	Agent                     Agent                `yaml:"agent"`
-	Blackbox                  Blackbox             `yaml:"blackbox"`
-	Bleemeo                   Bleemeo              `yaml:"bleemeo"`
-	Container                 Container            `yaml:"container"`
-	DF                        DF                   `yaml:"df"`
-	DiskIgnore                []string             `yaml:"disk_ignore"`
-	DiskMonitor               []string             `yaml:"disk_monitor"`
-	InfluxDB                  InfluxDB             `yaml:"influxdb"`
-	JMX                       JMX                  `yaml:"jmx"`
-	JMXTrans                  JMXTrans             `yaml:"jmxtrans"`
-	Kubernetes                Kubernetes           `yaml:"kubernetes"`
-	Logging                   Logging              `yaml:"logging"`
-	Metric                    Metric               `yaml:"metric"`
-	MQTT                      OpenSourceMQTT       `yaml:"mqtt"`
-	NetworkInterfaceBlacklist []string             `yaml:"network_interface_blacklist"`
-	NRPE                      NRPE                 `yaml:"nrpe"`
-	NvidiaSMI                 NvidiaSMI            `yaml:"nvidia_smi"`
-	Services                  []Service            `yaml:"service"`
-	ServiceIgnoreMetrics      []NameInstance       `yaml:"service_ignore_metrics"`
-	ServiceIgnoreCheck        []NameInstance       `yaml:"service_ignore_check"`
-	Smart                     Smart                `yaml:"smart"`
-	Stack                     string               `yaml:"stack"`
-	Tags                      []string             `yaml:"tags"`
-	Telegraf                  Telegraf             `yaml:"telegraf"`
-	Thresholds                map[string]Threshold `yaml:"thresholds"`
-	Web                       Web                  `yaml:"web"`
-	Zabbix                    Zabbix               `yaml:"zabbix"`
+	Agent                    Agent                `yaml:"agent"`
+	Blackbox                 Blackbox             `yaml:"blackbox"`
+	Bleemeo                  Bleemeo              `yaml:"bleemeo"`
+	Container                Container            `yaml:"container"`
+	DF                       DF                   `yaml:"df"`
+	DiskIgnore               []string             `yaml:"disk_ignore"`
+	DiskMonitor              []string             `yaml:"disk_monitor"`
+	InfluxDB                 InfluxDB             `yaml:"influxdb"`
+	JMX                      JMX                  `yaml:"jmx"`
+	JMXTrans                 JMXTrans             `yaml:"jmxtrans"`
+	Kubernetes               Kubernetes           `yaml:"kubernetes"`
+	Logging                  Logging              `yaml:"logging"`
+	Metric                   Metric               `yaml:"metric"`
+	MQTT                     OpenSourceMQTT       `yaml:"mqtt"`
+	NetworkInterfaceDenylist []string             `yaml:"network_interface_denylist"`
+	NRPE                     NRPE                 `yaml:"nrpe"`
+	NvidiaSMI                NvidiaSMI            `yaml:"nvidia_smi"`
+	Services                 []Service            `yaml:"service"`
+	ServiceIgnoreMetrics     []NameInstance       `yaml:"service_ignore_metrics"`
+	ServiceIgnoreCheck       []NameInstance       `yaml:"service_ignore_check"`
+	Smart                    Smart                `yaml:"smart"`
+	Stack                    string               `yaml:"stack"`
+	Tags                     []string             `yaml:"tags"`
+	Telegraf                 Telegraf             `yaml:"telegraf"`
+	Thresholds               map[string]Threshold `yaml:"thresholds"`
+	Web                      Web                  `yaml:"web"`
+	Zabbix                   Zabbix               `yaml:"zabbix"`
 }
 
 type Smart struct {
@@ -193,23 +193,24 @@ type BlackboxTarget struct {
 }
 
 type Agent struct {
-	CloudImageCreationFile string          `yaml:"cloudimage_creation_file"`
-	HTTPDebug              HTTPDebug       `yaml:"http_debug"`
-	InstallationFormat     string          `yaml:"installation_format"`
-	FactsFile              string          `yaml:"facts_file"`
-	NetstatFile            string          `yaml:"netstat_file"`
-	StateFile              string          `yaml:"state_file"`
-	StateCacheFile         string          `yaml:"state_cache_file"`
-	StateResetFile         string          `yaml:"state_reset_file"`
-	DeprecatedStateFile    string          `yaml:"deprecated_state_file"`
-	UpgradeFile            string          `yaml:"upgrade_file"`
-	AutoUpgradeFile        string          `yaml:"auto_upgrade_file"`
-	ProcessExporter        ProcessExporter `yaml:"process_exporter"`
-	PublicIPIndicator      string          `yaml:"public_ip_indicator"`
-	NodeExporter           NodeExporter    `yaml:"node_exporter"`
-	WindowsExporter        NodeExporter    `yaml:"windows_exporter"`
-	Telemetry              Telemetry       `yaml:"telemetry"`
-	MetricsFormat          string          `yaml:"metrics_format"`
+	CloudImageCreationFile           string          `yaml:"cloudimage_creation_file"`
+	HTTPDebug                        HTTPDebug       `yaml:"http_debug"`
+	InstallationFormat               string          `yaml:"installation_format"`
+	FactsFile                        string          `yaml:"facts_file"`
+	NetstatFile                      string          `yaml:"netstat_file"`
+	StateFile                        string          `yaml:"state_file"`
+	StateCacheFile                   string          `yaml:"state_cache_file"`
+	StateResetFile                   string          `yaml:"state_reset_file"`
+	DeprecatedStateFile              string          `yaml:"deprecated_state_file"`
+	UpgradeFile                      string          `yaml:"upgrade_file"`
+	AutoUpgradeFile                  string          `yaml:"auto_upgrade_file"`
+	DisableLocalDuplicationDetection bool            `yaml:"disable_local_duplication_detection_by_process"`
+	ProcessExporter                  ProcessExporter `yaml:"process_exporter"`
+	PublicIPIndicator                string          `yaml:"public_ip_indicator"`
+	NodeExporter                     NodeExporter    `yaml:"node_exporter"`
+	WindowsExporter                  NodeExporter    `yaml:"windows_exporter"`
+	Telemetry                        Telemetry       `yaml:"telemetry"`
+	MetricsFormat                    string          `yaml:"metrics_format"`
 }
 
 type Telemetry struct {

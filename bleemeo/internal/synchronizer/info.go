@@ -159,7 +159,7 @@ func (s *Synchronizer) IsTimeDriftTooLarge() bool {
 func (s *Synchronizer) SetMaintenance(maintenance bool) {
 	if s.IsMaintenance() && !maintenance {
 		// getting out of maintenance, let's check for a duplicated state.json file
-		err := s.checkDuplicated()
+		err := s.checkDuplicated(s.ctx)
 		if err != nil {
 			// it's not a critical error at all, we will perform this check again on the next synchronization pass
 			logger.V(2).Printf("Couldn't check for duplicated agent: %v", err)

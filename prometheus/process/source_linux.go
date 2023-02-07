@@ -15,7 +15,6 @@
 // limitations under the License.
 
 //go:build linux
-// +build linux
 
 package process
 
@@ -57,8 +56,8 @@ func getCmdLinePrivateMethod(unsafe.Pointer) ([]string, error)
 //go:linkname getStatPrivateMethod github.com/ncabatoff/process-exporter/proc.(*proccache).getStat
 func getStatPrivateMethod(unsafe.Pointer) (procfs.ProcStat, error)
 
-// Processes allow to list process and kept in cache the last value
-// It allow to query list of processes for multiple usage without re-doing the list.
+// Processes allows to list processes and keep the last values in cache.
+// It allows to query a list of processes for multiple usages without re-doing the list.
 type Processes struct {
 	HostRootPath    string
 	DefaultValidity time.Duration

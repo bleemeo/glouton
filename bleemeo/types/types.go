@@ -33,6 +33,7 @@ import (
 // GlobalOption are option user by most component of bleemeo.Connector.
 type GlobalOption struct {
 	Config                  config.Config
+	ConfigItems             []config.Item
 	State                   State
 	Facts                   FactProvider
 	Process                 ProcessProvider
@@ -185,6 +186,7 @@ type GloutonAccountConfig struct {
 	LiveProcess           bool
 	DockerIntegration     bool
 	SNMPIntegration       bool
+	Suspended             bool
 	AgentConfigByName     map[string]GloutonAgentConfig
 	AgentConfigByID       map[string]GloutonAgentConfig
 	MaxCustomMetrics      int

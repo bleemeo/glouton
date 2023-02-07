@@ -21,6 +21,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/mitchellh/mapstructure"
 	bbConf "github.com/prometheus/blackbox_exporter/config"
@@ -28,7 +29,9 @@ import (
 )
 
 // blackboxModuleHookFunc unmarshals Blackbox module config.
-// This is needed because we embed the external module config from Blackbox in our own config.
+// We embed the external module config from Blackbox in our own config.
+// Blackbox implements its own yaml marshaller that sets default values,
+// so we need to unmarshal it to set the default values.
 func blackboxModuleHookFunc() mapstructure.DecodeHookFuncType {
 	return func(source reflect.Type, target reflect.Type, data interface{}) (interface{}, error) {
 		module, ok := reflect.New(target).Interface().(*bbConf.Module)
@@ -36,14 +39,24 @@ func blackboxModuleHookFunc() mapstructure.DecodeHookFuncType {
 			return data, nil
 		}
 
-		// The data is a map[string]interface{}.
-		marshalled, err := yaml.Marshal(data)
+		srcModule, ok := data.(map[string]interface{})
+		if !ok {
+			return data, nil
+		}
+
+		// Durations are converted to float64 values in the config loader,
+		// but unmarshalling float64 to a duration fails, so we convert it.
+		if timeout, ok := srcModule["timeout"].(float64); ok {
+			srcModule["timeout"] = time.Duration(timeout)
+		}
+
+		marshalled, err := yaml.Marshal(srcModule)
 		if err != nil {
 			return nil, fmt.Errorf("%w: cannot marshal blackbox_exporter module configuration: %s", ErrInvalidValue, err)
 		}
 
 		if err := yaml.Unmarshal(marshalled, &module); err != nil {
-			return nil, fmt.Errorf("%w: cannot parse blackbox_exporter module configuration: %s", ErrInvalidValue, err)
+			return nil, fmt.Errorf("%w: cannot unmarshal blackbox_exporter module configuration: %s", ErrInvalidValue, err)
 		}
 
 		return module, nil
@@ -61,27 +74,40 @@ func stringToMapHookFunc() mapstructure.DecodeHookFuncType {
 
 		strMap, _ := data.(string)
 
-		result := make(map[string]interface{})
+		return parseMap(strMap)
+	}
+}
 
-		elementsList := strings.Split(strMap, ",")
-		for i, element := range elementsList {
-			values := strings.Split(element, "=")
+// parseMap parses a map from a string.
+// It assumes the following format: "k1=v1,k2=v2".
+func parseMap(strMap string) (map[string]interface{}, error) {
+	// keyValues = ["k1=v1", "k2=v2"]
+	keyValues := strings.Split(strMap, ",")
+	result := make(map[string]interface{}, len(keyValues))
 
-			if i == len(elementsList)-1 && element == "" {
-				return result, nil
-			}
+	for _, keyValue := range keyValues {
+		// keyValue = "k1=v1"
+		values := strings.Split(keyValue, "=")
 
-			if len(values) < 2 {
-				err := fmt.Errorf("%w: '%s'", errWrongMapFormat, strMap)
+		if len(values) < 2 {
+			err := fmt.Errorf("%w: '%s'", errWrongMapFormat, strMap)
 
-				return make(map[string]interface{}), err
-			}
-
-			result[strings.TrimLeft(values[0], " ")] = strings.TrimRight(strings.Join(values[1:], "="), " ")
+			return make(map[string]interface{}), err
 		}
 
-		return result, nil
+		// Handle case where the string ends with a ','.
+		if keyValue == "" {
+			continue
+		}
+
+		// Remove spaces before and after the values.
+		key := strings.Trim(values[0], " ")
+		value := strings.Trim(strings.Join(values[1:], "="), " ")
+
+		result[key] = value
 	}
+
+	return result, nil
 }
 
 // stringToBoolHookFunc converts strings to bool.

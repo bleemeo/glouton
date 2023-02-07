@@ -36,33 +36,33 @@ const maxScrapeDuration time.Duration = 9500 * time.Millisecond
 func NewCollector(enabledCollectors []string, options inputs.CollectorConfig) (prometheus.Collector, error) {
 	var args []string
 
-	if len(options.IODiskWhitelist) > 0 {
+	if len(options.IODiskAllowlist) > 0 {
 		// this will not fail, as we checked the validity of this regexp earlier
-		whitelist, _ := common.MergeREs(options.IODiskWhitelist)
-		args = append(args, fmt.Sprintf("--collector.logical_disk.volume-whitelist=%s", whitelist))
+		allowlist, _ := common.MergeREs(options.IODiskAllowlist)
+		args = append(args, fmt.Sprintf("--collector.logical_disk.volume-whitelist=%s", allowlist))
 	}
 
-	if len(options.IODiskBlacklist) > 0 {
+	if len(options.IODiskDenylist) > 0 {
 		// this will not fail, as we checked the validity of this regexp earlier
-		blacklist, _ := common.MergeREs(options.IODiskBlacklist)
-		args = append(args, fmt.Sprintf("--collector.logical_disk.volume-blacklist=%s", blacklist))
+		denylist, _ := common.MergeREs(options.IODiskDenylist)
+		args = append(args, fmt.Sprintf("--collector.logical_disk.volume-blacklist=%s", denylist))
 	}
 
-	if len(options.NetIfBlacklist) > 0 {
-		blacklistREs := make([]string, 0, len(options.NetIfBlacklist))
+	if len(options.NetIfDenylist) > 0 {
+		denylistREs := make([]string, 0, len(options.NetIfDenylist))
 
-		for _, inter := range options.NetIfBlacklist {
-			blacklistRE, err := common.ReFromPrefix(inter)
+		for _, inter := range options.NetIfDenylist {
+			denylistRE, err := common.ReFromPrefix(inter)
 			if err != nil {
-				logger.V(1).Printf("windows_exporter: failed to parse the network interface blacklist: %v", err)
+				logger.V(1).Printf("windows_exporter: failed to parse the network interface denylist: %v", err)
 			} else {
-				blacklistREs = append(blacklistREs, blacklistRE)
+				denylistREs = append(denylistREs, denylistRE)
 			}
 		}
 
 		// this will not fail, as we checked the validity of every regexp earlier
-		blacklist, _ := common.ReFromREs(blacklistREs)
-		args = append(args, fmt.Sprintf("--collector.net.nic-blacklist=%s", blacklist))
+		denylist, _ := common.ReFromREs(denylistREs)
+		args = append(args, fmt.Sprintf("--collector.net.nic-blacklist=%s", denylist))
 	}
 
 	if _, err := kingpin.CommandLine.Parse(args); err != nil {

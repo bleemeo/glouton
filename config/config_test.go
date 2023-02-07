@@ -18,6 +18,7 @@ package config
 
 import (
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -37,14 +38,15 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 				Enable:      true,
 				BindAddress: "localhost:6060",
 			},
-			InstallationFormat:  "manual",
-			NetstatFile:         "netstat.out",
-			StateFile:           "state.json",
-			StateCacheFile:      "state.cache.json",
-			StateResetFile:      "state.reset",
-			DeprecatedStateFile: "state.deprecated",
-			UpgradeFile:         "upgrade",
-			AutoUpgradeFile:     "auto-upgrade",
+			InstallationFormat:               "manual",
+			NetstatFile:                      "netstat.out",
+			StateFile:                        "state.json",
+			StateCacheFile:                   "state.cache.json",
+			StateResetFile:                   "state.reset",
+			DeprecatedStateFile:              "state.deprecated",
+			UpgradeFile:                      "upgrade",
+			AutoUpgradeFile:                  "auto-upgrade",
+			DisableLocalDuplicationDetection: true,
 			NodeExporter: NodeExporter{
 				Enable:     true,
 				Collectors: []string{"disk"},
@@ -76,7 +78,8 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 			},
 			Modules: map[string]bbConf.Module{
 				"mymodule": {
-					Prober: "http",
+					Prober:  "http",
+					Timeout: 5 * time.Second,
 					HTTP: bbConf.HTTPProbe{
 						IPProtocol:       "ip4",
 						ValidStatusCodes: []int{200},
@@ -211,7 +214,7 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 			SSLInsecure: true,
 			CAFile:      "/myca",
 		},
-		NetworkInterfaceBlacklist: []string{"lo", "veth"},
+		NetworkInterfaceDenylist: []string{"lo", "veth"},
 		NRPE: NRPE{
 			Enable:    true,
 			Address:   "0.0.0.0",
@@ -333,7 +336,7 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 		},
 	}
 
-	config, warnings, err := loadToStruct(false, "testdata/full.conf")
+	config, warnings, err := load(&configLoader{}, false, "testdata/full.conf")
 	if warnings != nil {
 		t.Fatalf("Warning while loading config: %s", warnings)
 	}
@@ -357,7 +360,7 @@ func newFloatPointer(value float64) *float64 {
 // Test that users are able to override default settings.
 func TestOverrideDefault(t *testing.T) {
 	expectedConfig := DefaultConfig()
-	expectedConfig.NetworkInterfaceBlacklist = []string{"override"}
+	expectedConfig.NetworkInterfaceDenylist = []string{"override"}
 	expectedConfig.DF.PathIgnore = []string{"/override"}
 	expectedConfig.Bleemeo.APIBase = ""
 	expectedConfig.Bleemeo.Enable = false
@@ -365,7 +368,7 @@ func TestOverrideDefault(t *testing.T) {
 
 	t.Setenv("GLOUTON_BLEEMEO_ENABLE", "false")
 
-	config, warnings, err := loadToStruct(true, "testdata/override_default.conf")
+	config, warnings, err := load(&configLoader{}, true, "testdata/override_default.conf")
 	if warnings != nil {
 		t.Fatalf("Warning while loading config: %s", warnings)
 	}
@@ -406,13 +409,13 @@ func TestMergeWithDefault(t *testing.T) {
 			HighWarning: newFloatPointer(80),
 		},
 	}
-	expectedConfig.NetworkInterfaceBlacklist = []string{"eth0", "eth1", "eth1", "eth2"}
+	expectedConfig.NetworkInterfaceDenylist = []string{"eth0", "eth1", "eth1", "eth2"}
 
 	t.Setenv("GLOUTON_MQTT_HOSTS", "")
 	t.Setenv("GLOUTON_METRIC_DENY_METRICS", "cpu_used")
 	t.Setenv("GLOUTON_METRIC_SOFTSTATUS_PERIOD", "system_pending_updates=500")
 
-	config, warnings, err := loadToStruct(true, "testdata/merge")
+	config, warnings, err := load(&configLoader{}, true, "testdata/merge")
 	if warnings != nil {
 		t.Fatalf("Warning while loading config: %s", warnings)
 	}
@@ -428,7 +431,7 @@ func TestMergeWithDefault(t *testing.T) {
 
 // Test that the config loaded with no config file has default values.
 func TestDefaultNoFile(t *testing.T) {
-	config, warnings, err := loadToStruct(true)
+	config, warnings, err := load(&configLoader{}, true)
 	if warnings != nil {
 		t.Fatalf("Warning while loading config: %s", warnings)
 	}
@@ -442,7 +445,7 @@ func TestDefaultNoFile(t *testing.T) {
 	}
 }
 
-// TestloadToStruct tests loading the config and the warnings and errors returned.
+// Testload tests loading the config and the warnings and errors returned.
 func TestLoad(t *testing.T) { //nolint:maintidx
 	tests := []struct {
 		Name         string
@@ -476,7 +479,7 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 			Name:  "invalid yaml multiple files",
 			Files: []string{"testdata/invalid"},
 			WantWarnings: []string{
-				"failed to load 'testdata/invalid/10-invalid.conf': yaml: line 2: found character that cannot start any token",
+				"testdata/invalid/10-invalid.conf: yaml: line 2: found character that cannot start any token",
 			},
 			WantConfig: Config{
 				Agent: Agent{
@@ -510,7 +513,7 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 			Name:  "deprecated config",
 			Files: []string{"testdata/deprecated.conf"},
 			WantWarnings: []string{
-				"setting is deprecated: web.enabled, use web.enable instead",
+				"testdata/deprecated.conf: setting is deprecated: web.enabled, use web.enable instead",
 			},
 			WantConfig: Config{
 				Web: Web{
@@ -522,7 +525,8 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 			Name:  "migration file",
 			Files: []string{"testdata/old-prometheus-targets.conf"},
 			WantWarnings: []string{
-				"setting is deprecated: metrics.prometheus. See https://go.bleemeo.com/l/doc-prometheus",
+				"testdata/old-prometheus-targets.conf: setting is deprecated: metrics.prometheus. " +
+					"See https://go.bleemeo.com/l/doc-prometheus",
 			},
 			WantConfig: Config{
 				Metric: Metric{
@@ -591,8 +595,8 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 				},
 			},
 			WantWarnings: []string{
-				"setting is deprecated: agent.windows_exporter.enabled, use agent.windows_exporter.enable instead",
-				"setting is deprecated: telegraf.docker_metrics_enabled, use telegraf.docker_metrics_enable instead",
+				"testdata/enabled.conf: setting is deprecated: agent.windows_exporter.enabled, use agent.windows_exporter.enable instead",
+				"testdata/enabled.conf: setting is deprecated: telegraf.docker_metrics_enabled, use telegraf.docker_metrics_enable instead",
 			},
 		},
 		{
@@ -607,7 +611,7 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 				},
 			},
 			WantWarnings: []string{
-				"setting is deprecated: bleemeo.enabled, use bleemeo.enable instead",
+				"testdata/folder1/00-first.conf: setting is deprecated: bleemeo.enabled, use bleemeo.enable instead",
 			},
 		},
 		{
@@ -646,8 +650,8 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 				},
 			},
 			WantWarnings: []string{
-				"setting is deprecated: logging.buffer.head_size, use logging.buffer.head_size_bytes instead",
-				"setting is deprecated: logging.buffer.tail_size, use logging.buffer.tail_size_bytes instead",
+				"testdata/old-logging.conf: setting is deprecated: logging.buffer.head_size, use logging.buffer.head_size_bytes instead",
+				"testdata/old-logging.conf: setting is deprecated: logging.buffer.tail_size, use logging.buffer.tail_size_bytes instead",
 			},
 		},
 		{
@@ -771,7 +775,8 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 			Name:  "deprecated cassandra_detailed_tables",
 			Files: []string{"testdata/deprecated_cassandra.conf"},
 			WantWarnings: []string{
-				"setting is deprecated: 'cassandra_detailed_tables', use 'detailed_items' instead",
+				"testdata/deprecated_cassandra.conf: setting is deprecated: 'cassandra_detailed_tables'" +
+					", use 'detailed_items' instead",
 			},
 			WantConfig: Config{
 				Services: []Service{
@@ -789,7 +794,7 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 			Name:  "deprecated mgmt_port",
 			Files: []string{"testdata/deprecated_mgmt_port.conf"},
 			WantWarnings: []string{
-				"setting is deprecated: 'mgmt_port', use 'stats_port' instead",
+				"testdata/deprecated_mgmt_port.conf: setting is deprecated: 'mgmt_port', use 'stats_port' instead",
 			},
 			WantConfig: Config{
 				Services: []Service{
@@ -800,6 +805,17 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 				},
 			},
 		},
+		{
+			Name:  "deprecated network_interface_blacklist",
+			Files: []string{"testdata/deprecated_blacklist.conf"},
+			WantWarnings: []string{
+				"testdata/deprecated_blacklist.conf: setting is deprecated: network_interface_blacklist, " +
+					"use network_interface_denylist instead",
+			},
+			WantConfig: Config{
+				NetworkInterfaceDenylist: []string{"eth0"},
+			},
+		},
 	}
 
 	for _, test := range tests {
@@ -808,7 +824,7 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 				t.Setenv(k, v)
 			}
 
-			config, warnings, err := loadToStruct(false, test.Files...)
+			config, warnings, err := load(&configLoader{}, false, test.Files...)
 			if diff := cmp.Diff(test.WantError, err); diff != "" {
 				t.Fatalf("Unexpected error for files %s\n%s", test.Files, diff)
 			}
@@ -827,7 +843,7 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 				t.Fatalf("Unexpected warnings:\n%s", diff)
 			}
 
-			if diff := cmp.Diff(test.WantConfig, config); diff != "" {
+			if diff := cmp.Diff(test.WantConfig, config, cmpopts.EquateEmpty()); diff != "" {
 				t.Fatalf("Unexpected config:\n%s", diff)
 			}
 		})
@@ -849,6 +865,13 @@ func TestDump(t *testing.T) {
 				ID:          "in-dump",
 				Password:    "not-in-dump",
 				JMXPassword: "not-in-dump",
+				KeyFile:     "not-in-dump",
+			},
+			{
+				ID:          "in-dump-2",
+				Password:    "",
+				JMXPassword: "",
+				KeyFile:     "",
 			},
 		},
 	}
@@ -868,11 +891,18 @@ func TestDump(t *testing.T) {
 				JMXPassword: "*****",
 				KeyFile:     "*****",
 			},
+			{
+				ID: "in-dump-2",
+				// In dump because these fields were unset.
+				Password:    "",
+				JMXPassword: "",
+				KeyFile:     "",
+			},
 		},
 	}
 
 	k := koanf.New(delimiter)
-	_ = k.Load(structs.Provider(wantConfig, "yaml"), nil)
+	_ = k.Load(structs.Provider(wantConfig, Tag), nil)
 	wantMap := k.Raw()
 
 	dump := Dump(config)
@@ -961,7 +991,7 @@ func Test_migrate(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.Name, func(t *testing.T) {
-			config, _, err := loadToStruct(false, test.ConfigFile)
+			config, _, err := load(&configLoader{}, false, test.ConfigFile)
 			if err != nil {
 				t.Fatalf("Failed to load config: %s", err)
 			}

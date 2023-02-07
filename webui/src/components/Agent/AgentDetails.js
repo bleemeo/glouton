@@ -3,7 +3,7 @@ import * as d3 from "d3";
 import React, { useState } from "react";
 import PropTypes from "prop-types";
 import { Grid } from "tabler-react";
-import ReactTooltip from "react-tooltip";
+import { Tooltip } from "react-tooltip";
 import Panel from "../UI/Panel";
 import { cssClassForStatus, textForStatus } from "../utils/converter";
 import FaIcon from "../UI/FaIcon";
@@ -14,6 +14,7 @@ import Smiley from "../UI/Smiley";
 import { Problems, isNullOrUndefined } from "../utils";
 import FetchSuspense from "../UI/FetchSuspense";
 import { AGENT_DETAILS } from "../utils/gqlRequests";
+import 'react-tooltip/dist/react-tooltip.css'
 
 const AgentDetails = ({ facts }) => {
   const [showServiceDetails, setShowServiceDetails] = useState(null);
@@ -90,21 +91,21 @@ const AgentDetails = ({ facts }) => {
 
     problems = (
       <div className="marginOffset">
-        <p className="text-center" data-tip data-for="agentStatus">
+        <p className="text-center" id="agentStatus">
           <Smiley status={agentStatus.status} />
         </p>
         <p className="text-center">{textForStatus(agentStatus.status)}</p>
         {agentStatus.statusDescription.length > 0 ? (
-          <ReactTooltip
+          <Tooltip
             place="bottom"
-            id="agentStatus"
+            anchorId="agentStatus"
             effect="solid"
             type={tooltipType}
           >
             <div style={{ maxWidth: "80rem", wordBreak: "break-all" }}>
               <Problems problems={agentStatus.statusDescription} />
             </div>
-          </ReactTooltip>
+          </Tooltip>
         ) : null}
       </div>
     );

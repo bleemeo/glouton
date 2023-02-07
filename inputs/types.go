@@ -190,10 +190,10 @@ func (a *Accumulator) addMetrics(measurement string, fields map[string]interface
 // CollectorConfig represents the configuration of a collector.
 type CollectorConfig struct {
 	DFRootPath      string
-	DFPathBlacklist []string
-	NetIfBlacklist  []string
-	IODiskWhitelist []*regexp.Regexp
-	IODiskBlacklist []*regexp.Regexp
+	DFPathDenylist  []string
+	NetIfDenylist   []string
+	IODiskAllowlist []*regexp.Regexp
+	IODiskDenylist  []*regexp.Regexp
 }
 
 // FixedTimeAccumulator implement telegraf.Accumulator (+AddFieldsWithAnnotations) and use given Time for all points.

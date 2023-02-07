@@ -26,6 +26,8 @@ const (
 	APIMetricItemLength      int = 250
 	APIServiceInstanceLength int = 250
 	APIContainerNameLength   int = 250
+	APIConfigItemKeyLength   int = 100
+	APIConfigItemPathLength  int = 250
 )
 
 // MetricOnlyHasItem return true if the metric only has a name and an item (which could be empty).

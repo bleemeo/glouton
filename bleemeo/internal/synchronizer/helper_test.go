@@ -162,6 +162,7 @@ func (helper *syncTestHelper) initSynchronizer(t *testing.T) {
 			MonitorManager:          mockMonitorManager{},
 			NotifyFirstRegistration: func() {},
 			MetricFormat:            helper.MetricFormat,
+			Process:                 mockProcessLister{},
 			SNMP:                    helper.SNMP,
 			SNMPOnlineTarget:        func() int { return len(helper.SNMP) },
 			NotifyLabelsUpdate:      helper.NotifyLabelsUpdate,
