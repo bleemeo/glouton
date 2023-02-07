@@ -120,7 +120,7 @@ func (m *Manager) update(ctx context.Context) error {
 	defer m.l.Unlock()
 
 	if m.needConfigChange(inputs) {
-		err = writeDynamicConfig(inputs)
+		err = writeDynamicConfig(inputs, m.config.PrefixHostRoot)
 		if err != nil {
 			return err
 		}

@@ -28,56 +28,114 @@ import (
 )
 
 func TestInputsToFluentBitConfig(t *testing.T) {
-	inputs := []input{
+	t.Parallel()
+
+	tests := []struct {
+		Name           string
+		Inputs         []input
+		IsInContainer  bool
+		ExpectedConfig string
+	}{
 		{
-			Path:    "/var/log/apache/access.log",
-			Runtime: containerTypes.DockerRuntime,
-			Filters: []config.LogFilter{
+			Name: "full-config",
+			Inputs: []input{
 				{
-					Metric: "apache_errors_count",
-					Regex:  "\\[error\\]",
+					Path:    "/var/log/apache/access.log",
+					Runtime: containerTypes.DockerRuntime,
+					Filters: []config.LogFilter{
+						{
+							Metric: "apache_errors_count",
+							Regex:  "\\[error\\]",
+						},
+						{
+							Metric: "apache_requests_count",
+							Regex:  "GET /",
+						},
+					},
 				},
 				{
-					Metric: "apache_requests_count",
-					Regex:  "GET /",
+					Path:    "/var/log/pods/redis1.log,/var/log/pods/redis2.log",
+					Runtime: containerTypes.ContainerDRuntime,
+					Filters: []config.LogFilter{
+						{
+							Metric: "redis_logs_count",
+							Regex:  ".*",
+						},
+					},
+				},
+				{
+					Path: "/var/log/uwsgi/uwsgi.log",
+					Filters: []config.LogFilter{
+						{
+							Metric: "uwsgi_logs_count",
+							Regex:  ".*",
+						},
+					},
 				},
 			},
+			IsInContainer:  false,
+			ExpectedConfig: "testdata/fluentbit.conf",
 		},
 		{
-			Path:    "/var/log/pods/redis1.log,/var/log/pods/redis2.log",
-			Runtime: containerTypes.ContainerDRuntime,
-			Filters: []config.LogFilter{
+			Name: "full-config-in-container",
+			Inputs: []input{
 				{
-					Metric: "redis_logs_count",
-					Regex:  ".*",
+					Path:    "/var/log/apache/access.log",
+					Runtime: containerTypes.DockerRuntime,
+					Filters: []config.LogFilter{
+						{
+							Metric: "apache_errors_count",
+							Regex:  "\\[error\\]",
+						},
+						{
+							Metric: "apache_requests_count",
+							Regex:  "GET /",
+						},
+					},
+				},
+				{
+					Path:    "/var/log/pods/redis1.log,/var/log/pods/redis2.log",
+					Runtime: containerTypes.ContainerDRuntime,
+					Filters: []config.LogFilter{
+						{
+							Metric: "redis_logs_count",
+							Regex:  ".*",
+						},
+					},
+				},
+				{
+					Path: "/var/log/uwsgi/uwsgi.log",
+					Filters: []config.LogFilter{
+						{
+							Metric: "uwsgi_logs_count",
+							Regex:  ".*",
+						},
+					},
 				},
 			},
-		},
-		{
-			Path: "/var/log/uwsgi/uwsgi.log",
-			Filters: []config.LogFilter{
-				{
-					Metric: "uwsgi_logs_count",
-					Regex:  ".*",
-				},
-			},
+			IsInContainer:  true,
+			ExpectedConfig: "testdata/fluentbit-container.conf",
 		},
 	}
 
-	expectedFile, err := os.Open("testdata/fluentbit.conf")
-	if err != nil {
-		t.Fatal(err)
-	}
+	for _, test := range tests {
+		t.Run(test.Name, func(t *testing.T) {
+			expectedFile, err := os.Open(test.ExpectedConfig)
+			if err != nil {
+				t.Fatal(err)
+			}
 
-	expectedConfig, err := io.ReadAll(expectedFile)
-	if err != nil {
-		t.Fatal(err)
-	}
+			expectedConfig, err := io.ReadAll(expectedFile)
+			if err != nil {
+				t.Fatal(err)
+			}
 
-	gotConfig := inputsToFluentBitConfig(inputs)
+			gotConfig := inputsToFluentBitConfig(test.Inputs, test.IsInContainer)
 
-	if diff := cmp.Diff(gotConfig, string(expectedConfig)); diff != "" {
-		t.Fatalf("Unexpected config:\n%s", diff)
+			if diff := cmp.Diff(gotConfig, string(expectedConfig)); diff != "" {
+				t.Fatalf("Unexpected config:\n%s", diff)
+			}
+		})
 	}
 }
 

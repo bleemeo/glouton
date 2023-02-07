@@ -212,8 +212,8 @@ func DefaultConfig() Config {
 			KubeConfig:          "",
 		},
 		Log: Log{
-			FluentBitURL: "http://localhost:2021/api/v1/metrics/prometheus",
-			// bleemeo-agent-logs overrides this value to false.
+			// bleemeo-agent-logs overrides the URL and disables the host root prefix.
+			FluentBitURL:   "",
 			PrefixHostRoot: true,
 			Inputs:         []LogInput{},
 		},
