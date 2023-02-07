@@ -17,8 +17,6 @@
 package internal
 
 import (
-	"fmt"
-	"glouton/collector"
 	"glouton/logger"
 
 	"github.com/influxdata/telegraf"
@@ -31,8 +29,8 @@ type Input struct {
 	Accumulator Accumulator
 	Name        string
 
-	startError        error
-	lastGatherIsError bool
+	startError error
+	logger     *logger.TelegrafLogger
 }
 
 // Gather takes in an accumulator and adds the metrics that the Input
@@ -43,16 +41,11 @@ func (i *Input) Gather(acc telegraf.Accumulator) error {
 
 	err := i.Input.Gather(&i.Accumulator)
 	if err != nil {
-		if i.lastGatherIsError {
-			return fmt.Errorf("%w: %s", collector.ErrConsecutiveGather, err)
-		}
-
-		i.lastGatherIsError = true
+		// Use the telegraf logger which limits log spamming.
+		i.logger.Error(err)
 
 		return err
 	}
-
-	i.lastGatherIsError = false
 
 	return nil
 }
@@ -95,5 +88,6 @@ func (i *Input) Stop() {
 // fixTelegrafInput do some fix to make Telegraf input working.
 // It try to initialize all fields that must be initialized like Log.
 func (i *Input) fixTelegrafInput() {
-	models.SetLoggerOnPlugin(i.Input, logger.NewTelegrafLog(i.Name))
+	i.logger = logger.NewTelegrafLog(i.Name)
+	models.SetLoggerOnPlugin(i.Input, i.logger)
 }

@@ -29,16 +29,12 @@ import (
 	"github.com/influxdata/telegraf"
 )
 
-var (
-	ErrConsecutiveGather = errors.New("multiple consecutive errors")
-	errTooManyInputs     = errors.New("too many inputs in the collectors. Unable to find new slot")
-)
+var errTooManyInputs = errors.New("too many inputs in the collectors. Unable to find new slot")
 
 // Collector implement running Gather on inputs every fixed time interval.
 type Collector struct {
 	acc          telegraf.Accumulator
 	inputs       map[int]telegraf.Input
-	inputNames   map[int]string
 	currentDelay time.Duration
 	updateDelayC chan interface{}
 	l            sync.Mutex
@@ -52,7 +48,6 @@ func New(acc telegraf.Accumulator) *Collector {
 	c := &Collector{
 		acc:          acc,
 		inputs:       make(map[int]telegraf.Input),
-		inputNames:   make(map[int]string),
 		currentDelay: 10 * time.Second,
 		updateDelayC: make(chan interface{}),
 	}
@@ -85,7 +80,6 @@ func (c *Collector) AddInput(input telegraf.Input, shortName string) (int, error
 	}
 
 	c.inputs[id] = input
-	c.inputNames[id] = shortName
 
 	if si, ok := input.(telegraf.ServiceInput); ok {
 		if err := si.Start(nil); err != nil {
@@ -110,7 +104,6 @@ func (c *Collector) RemoveInput(id int) {
 	}
 
 	delete(c.inputs, id)
-	delete(c.inputNames, id)
 }
 
 // Close stops all inputs.
@@ -130,23 +123,21 @@ func (c *Collector) RunGather(_ context.Context, t0 time.Time) {
 	c.runOnce(t0)
 }
 
-func (c *Collector) inputsForCollection() ([]telegraf.Input, []string) {
+func (c *Collector) inputsForCollection() []telegraf.Input {
 	c.l.Lock()
 	defer c.l.Unlock()
 
 	inputsCopy := make([]telegraf.Input, 0)
-	inputsNameCopy := make([]string, 0)
 
-	for id, v := range c.inputs {
+	for _, v := range c.inputs {
 		inputsCopy = append(inputsCopy, v)
-		inputsNameCopy = append(inputsNameCopy, c.inputNames[id])
 	}
 
-	return inputsCopy, inputsNameCopy
+	return inputsCopy
 }
 
 func (c *Collector) runOnce(t0 time.Time) {
-	inputsCopy, inputsNameCopy := c.inputsForCollection()
+	inputsCopy := c.inputsForCollection()
 	acc := inputs.FixedTimeAccumulator{
 		Time: t0,
 		Acc:  c.acc,
@@ -154,8 +145,7 @@ func (c *Collector) runOnce(t0 time.Time) {
 
 	var wg sync.WaitGroup
 
-	for i, input := range inputsCopy {
-		i := i
+	for _, input := range inputsCopy {
 		input := input
 
 		wg.Add(1)
@@ -164,12 +154,8 @@ func (c *Collector) runOnce(t0 time.Time) {
 			defer types.ProcessPanic()
 			defer wg.Done()
 
-			err := input.Gather(acc)
-
-			// Don't log consecutive errors to avoid spam.
-			if err != nil && !errors.Is(err, ErrConsecutiveGather) {
-				logger.Printf("Input %s failed: %v", inputsNameCopy[i], err)
-			}
+			// Errors are already logged by the input.
+			_ = input.Gather(acc)
 		}()
 	}
 
