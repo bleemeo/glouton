@@ -25,10 +25,10 @@ import (
 )
 
 const (
-	configDir   = "/var/lib/glouton/fluent-bit"
+	configDir   = "/var/lib/glouton/fluent-bit/config"
 	configFile  = configDir + "/fluent-bit.conf"
 	parsersFile = configDir + "/parsers.conf"
-	dbDir       = "/var/lib/glouton/fluent-bit-db"
+	dbDir       = "/var/lib/glouton/fluent-bit/db"
 	dbFile      = dbDir + "/logs.db"
 )
 
@@ -106,8 +106,8 @@ func writeStaticConfig() error {
 }
 
 // Write the Fluent Bit config corresponding to the inputs.
-func writeDynamicConfig(inputs []input, isInContainer bool) error {
-	fluentbitConfig := inputsToFluentBitConfig(inputs, isInContainer)
+func writeDynamicConfig(inputs []input) error {
+	fluentbitConfig := inputsToFluentBitConfig(inputs)
 
 	//nolint:gosec // The file needs to be readable by Fluent Bit.
 	err := os.WriteFile(configFile, []byte(fluentbitConfig), 0o644)
@@ -119,16 +119,10 @@ func writeDynamicConfig(inputs []input, isInContainer bool) error {
 }
 
 // Convert the log inputs to a Fluent Bit config.
-func inputsToFluentBitConfig(inputs []input, isInContainer bool) string {
+func inputsToFluentBitConfig(inputs []input) string {
 	var configText strings.Builder
 
-	// When Fluent Bit is running in a container, /var/lib/glouton is mounted to /fluent-bit/config.
-	parsersMountedFile := parsersFile
-	if isInContainer {
-		parsersMountedFile = "/fluent-bit/config/parsers.conf"
-	}
-
-	configText.WriteString(fmt.Sprintf(serviceConfig, parsersMountedFile))
+	configText.WriteString(fmt.Sprintf(serviceConfig, parsersFile))
 
 	for _, input := range inputs {
 		inputTag := "original_input_" + input.Path

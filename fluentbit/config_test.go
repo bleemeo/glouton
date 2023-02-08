@@ -33,7 +33,6 @@ func TestInputsToFluentBitConfig(t *testing.T) {
 	tests := []struct {
 		Name           string
 		Inputs         []input
-		IsInContainer  bool
 		ExpectedConfig string
 	}{
 		{
@@ -73,48 +72,7 @@ func TestInputsToFluentBitConfig(t *testing.T) {
 					},
 				},
 			},
-			IsInContainer:  false,
 			ExpectedConfig: "testdata/fluentbit.conf",
-		},
-		{
-			Name: "full-config-in-container",
-			Inputs: []input{
-				{
-					Path:    "/var/log/apache/access.log",
-					Runtime: containerTypes.DockerRuntime,
-					Filters: []config.LogFilter{
-						{
-							Metric: "apache_errors_count",
-							Regex:  "\\[error\\]",
-						},
-						{
-							Metric: "apache_requests_count",
-							Regex:  "GET /",
-						},
-					},
-				},
-				{
-					Path:    "/var/log/pods/redis1.log,/var/log/pods/redis2.log",
-					Runtime: containerTypes.ContainerDRuntime,
-					Filters: []config.LogFilter{
-						{
-							Metric: "redis_logs_count",
-							Regex:  ".*",
-						},
-					},
-				},
-				{
-					Path: "/var/log/uwsgi/uwsgi.log",
-					Filters: []config.LogFilter{
-						{
-							Metric: "uwsgi_logs_count",
-							Regex:  ".*",
-						},
-					},
-				},
-			},
-			IsInContainer:  true,
-			ExpectedConfig: "testdata/fluentbit-container.conf",
 		},
 	}
 
@@ -130,7 +88,7 @@ func TestInputsToFluentBitConfig(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			gotConfig := inputsToFluentBitConfig(test.Inputs, test.IsInContainer)
+			gotConfig := inputsToFluentBitConfig(test.Inputs)
 
 			if diff := cmp.Diff(gotConfig, string(expectedConfig)); diff != "" {
 				t.Fatalf("Unexpected config:\n%s", diff)
