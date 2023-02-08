@@ -167,7 +167,7 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 		},
 		Log: Log{
 			FluentBitURL:   "http://localhost:2020",
-			PrefixHostRoot: true,
+			HostRootPrefix: "/hostroot",
 			Inputs: []LogInput{
 				{
 					Path: "/var/log/apache/access.log",

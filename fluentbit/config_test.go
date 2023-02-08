@@ -143,7 +143,7 @@ func TestInputLogPaths(t *testing.T) {
 	tests := []struct {
 		Name           string
 		Input          config.LogInput
-		PrefixHostRoot bool
+		HostRootPrefix string
 		ExpectedPaths  []string
 	}{
 		{
@@ -151,7 +151,7 @@ func TestInputLogPaths(t *testing.T) {
 			Input: config.LogInput{
 				Path: "/path",
 			},
-			PrefixHostRoot: false,
+			HostRootPrefix: "",
 			ExpectedPaths:  []string{"/path"},
 		},
 		{
@@ -159,7 +159,7 @@ func TestInputLogPaths(t *testing.T) {
 			Input: config.LogInput{
 				Path: "/path",
 			},
-			PrefixHostRoot: true,
+			HostRootPrefix: "/hostroot",
 			ExpectedPaths:  []string{"/hostroot/path"},
 		},
 		{
@@ -167,7 +167,7 @@ func TestInputLogPaths(t *testing.T) {
 			Input: config.LogInput{
 				ContainerName: "postgres",
 			},
-			PrefixHostRoot: false,
+			HostRootPrefix: "",
 			ExpectedPaths:  []string{"/postgres"},
 		},
 		{
@@ -175,7 +175,7 @@ func TestInputLogPaths(t *testing.T) {
 			Input: config.LogInput{
 				ContainerName: "postgres",
 			},
-			PrefixHostRoot: true,
+			HostRootPrefix: "/hostroot",
 			ExpectedPaths:  []string{"/hostroot/postgres"},
 		},
 		{
@@ -183,7 +183,7 @@ func TestInputLogPaths(t *testing.T) {
 			Input: config.LogInput{
 				Selectors: map[string]string{"app": "redis"},
 			},
-			PrefixHostRoot: false,
+			HostRootPrefix: "",
 			ExpectedPaths:  []string{"/redis-1", "/redis-2"},
 		},
 		{
@@ -194,7 +194,7 @@ func TestInputLogPaths(t *testing.T) {
 					"env": "prod",
 				},
 			},
-			PrefixHostRoot: false,
+			HostRootPrefix: "",
 			ExpectedPaths:  []string{"/uwsgi-1", "/uwsgi-2"},
 		},
 		{
@@ -203,7 +203,7 @@ func TestInputLogPaths(t *testing.T) {
 				ContainerName: "postgres",
 				Selectors:     map[string]string{"env": "prod"},
 			},
-			PrefixHostRoot: false,
+			HostRootPrefix: "",
 			ExpectedPaths:  []string{"/postgres"},
 		},
 	}
@@ -212,7 +212,7 @@ func TestInputLogPaths(t *testing.T) {
 		t.Run(test.Name, func(t *testing.T) {
 			m := Manager{
 				config: config.Log{
-					PrefixHostRoot: test.PrefixHostRoot,
+					HostRootPrefix: test.HostRootPrefix,
 				},
 			}
 

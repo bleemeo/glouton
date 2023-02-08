@@ -54,7 +54,7 @@ type Config struct {
 
 type Log struct {
 	FluentBitURL   string     `yaml:"fluentbit_url"`
-	PrefixHostRoot bool       `yaml:"prefix_hostroot"`
+	HostRootPrefix string     `yaml:"hostroot_prefix"`
 	Inputs         []LogInput `yaml:"inputs"`
 }
 

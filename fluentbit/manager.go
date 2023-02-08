@@ -181,7 +181,7 @@ func (m *Manager) processConfigInputs(ctx context.Context) ([]input, error) {
 func (m *Manager) inputLogPaths(input config.LogInput, containers []facts.Container) ([]string, string) {
 	// The configured path has priority over the container name and selectors.
 	if input.Path != "" {
-		return []string{m.prefixHostRoot(input.Path)}, ""
+		return []string{filepath.Join(m.config.HostRootPrefix, input.Path)}, ""
 	}
 
 	logPaths := make([]string, 0, 1)
@@ -194,7 +194,7 @@ func (m *Manager) inputLogPaths(input config.LogInput, containers []facts.Contai
 
 		if len(input.Selectors) == 0 && matchName || input.ContainerName == "" && matchSelectors ||
 			matchName && matchSelectors {
-			logPaths = append(logPaths, m.prefixHostRoot(container.LogPath()))
+			logPaths = append(logPaths, filepath.Join(m.config.HostRootPrefix, container.LogPath()))
 			runtime = container.RuntimeName()
 		}
 	}
@@ -207,15 +207,6 @@ func (m *Manager) inputLogPaths(input config.LogInput, containers []facts.Contai
 	sort.Strings(logPaths)
 
 	return logPaths, runtime
-}
-
-// Add the host root prefix to the path if Fluent Bit is running in a container.
-func (m *Manager) prefixHostRoot(path string) string {
-	if m.config.PrefixHostRoot {
-		return filepath.Join("/hostroot", path)
-	}
-
-	return path
 }
 
 // Format an input to a string.
