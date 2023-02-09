@@ -1829,16 +1829,53 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 					},
 				},
 			}),
-			// wantOverrideMFType: map[string]*dto.MetricType{
-			// 	"mem_used":      dto.MetricType_UNTYPED.Enum(),
-			// 	"mem_used_perc": dto.MetricType_UNTYPED.Enum(),
-			// 	"mem_free":      dto.MetricType_UNTYPED.Enum(),
-			// },
-			// wantOverrideMFHelp: map[string]string{
-			// 	"mem_used":      "",
-			// 	"mem_used_perc": "",
-			// 	"mem_free":      "",
-			// },
+			wantOverrideMFType: map[string]*dto.MetricType{
+				"mem_used":      dto.MetricType_UNTYPED.Enum(),
+				"mem_used_perc": dto.MetricType_UNTYPED.Enum(),
+				"mem_free":      dto.MetricType_UNTYPED.Enum(),
+			},
+			wantOverrideMFHelp: map[string]string{
+				"mem_used":      "",
+				"mem_used_perc": "",
+				"mem_free":      "",
+			},
+		},
+		{
+			name:                  "gatherer-with-relabel",
+			kindToTest:            kindGatherer,
+			metricFormat:          types.MetricFormatBleemeo,
+			metricFamiliesUseTime: true,
+			input: []types.MetricPoint{
+				{
+					Labels: map[string]string{
+						types.LabelName:                       "hrStorageAllocationUnits",
+						types.LabelMetaBleemeoTargetAgent:     "test-agent",
+						types.LabelMetaBleemeoTargetAgentUUID: "test-uuid",
+					},
+					Point: types.Point{
+						Value: 1024.0,
+					},
+				},
+			},
+			opt: RegistrationOption{
+				DisablePeriodicGather: true,
+				ApplyDynamicRelabel:   true,
+			},
+			want: sortMetricPoints([]types.MetricPoint{
+				{
+					Labels: map[string]string{
+						types.LabelName:         "hrStorageAllocationUnits",
+						types.LabelInstance:     "test-agent",
+						types.LabelInstanceUUID: "test-uuid",
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: "test-uuid",
+					},
+					Point: types.Point{
+						Value: 1024.0,
+					},
+				},
+			}),
 		},
 	}
 
