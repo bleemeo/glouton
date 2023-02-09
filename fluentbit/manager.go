@@ -50,6 +50,8 @@ type Manager struct {
 	config   config.Log
 	registry registerer
 	runtime  crTypes.RuntimeInterface
+	// Whether an error has been logged for an input.
+	errorLoggedForInput map[string]bool
 
 	l            sync.Mutex
 	loadedInputs []input
@@ -192,14 +194,17 @@ func (m *Manager) inputLogPaths(input config.LogInput, containers []facts.Contai
 		matchName := input.ContainerName != "" && container.ContainerName() == input.ContainerName
 		matchSelectors := len(input.Selectors) > 0 && containerMatchesSelectors(container, input.Selectors)
 
-		if len(input.Selectors) == 0 && matchName || input.ContainerName == "" && matchSelectors ||
-			matchName && matchSelectors {
+		if (len(input.Selectors) == 0 && matchName || input.ContainerName == "" && matchSelectors ||
+			matchName && matchSelectors) && container.LogPath() != "" {
 			logPaths = append(logPaths, filepath.Join(m.config.HostRootPrefix, container.LogPath()))
 			runtime = container.RuntimeName()
 		}
 	}
 
-	if len(logPaths) == 0 {
+	// Log message only once when no path was found for an input.
+	if len(logPaths) == 0 && !m.errorLoggedForInput[formatInput(input)] {
+		m.errorLoggedForInput[formatInput(input)] = true
+
 		logger.V(0).Printf("Failed to find log file for input %s, logs won't be processed", formatInput(input))
 	}
 
@@ -301,7 +306,7 @@ func PromQLRulesFromInputs(inputs []config.LogInput) map[string]string {
 	// fluentbit_output_proc_records_total is a counter which resets every time Fluent Bit
 	// restarts, we need to apply a rate so it can be usable. Then we remove the "name"
 	// label which is duplicated with the new metric name ("__name__") using a sum.
-	const rule = `sum(rate(fluentbit_output_proc_records_total{name="%s"}[1m])) without (name)`
+	const rule = `sum(rate(fluentbit_output_proc_records_total{name="%s"}[1m])) without (name,scrape_instance,scrape_job)`
 
 	for _, input := range inputs {
 		for _, filter := range input.Filters {

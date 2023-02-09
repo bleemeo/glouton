@@ -27,9 +27,10 @@ import (
 func New(cfg config.Log, reg registerer, runtime crTypes.RuntimeInterface) (*Manager, []error) {
 	warnings := validateConfig(cfg)
 	manager := &Manager{
-		config:   cfg,
-		registry: reg,
-		runtime:  runtime,
+		config:              cfg,
+		registry:            reg,
+		runtime:             runtime,
+		errorLoggedForInput: make(map[string]bool),
 	}
 
 	return manager, warnings
