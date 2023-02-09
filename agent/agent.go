@@ -1074,6 +1074,8 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		registry.RegistrationOption{
 			Description: "miscAppender",
 			JitterSeed:  baseJitter,
+			// Container metrics contain meta labels that needs to be relabeled.
+			ApplyDynamicRelabel: true,
 		},
 		registry.AppenderRegistrationOption{},
 		miscAppender{
@@ -1091,6 +1093,8 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 			Description: "miscAppenderMinute",
 			JitterSeed:  baseJitter,
 			MinInterval: time.Minute,
+			// Container metrics contain meta labels that needs to be relabeled.
+			ApplyDynamicRelabel: true,
 		},
 		registry.AppenderRegistrationOption{},
 		miscAppenderMinute{

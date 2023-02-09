@@ -78,7 +78,7 @@ func (r *SimpleRuler) ApplyRulesMFS(ctx context.Context, now time.Time, mfs []*d
 		nameToIndex[mf.GetName()] = i
 	}
 
-	points := model.FamiliesToMetricPoints(now, mfs)
+	points := model.FamiliesToMetricPoints(now, mfs, true)
 
 	r.l.Lock()
 	defer r.l.Unlock()

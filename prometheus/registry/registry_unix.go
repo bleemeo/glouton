@@ -51,7 +51,7 @@ func (r *Registry) AddNodeExporter(option node.Option, vethProvider *veth.Provid
 			Interval:              defaultInterval,
 			DisablePeriodicGather: r.option.MetricFormat != types.MetricFormatPrometheus,
 		},
-		relabelGatherer{
+		nodeGatherer{
 			gatherer:     reg,
 			vethProvider: vethProvider,
 		},
@@ -60,14 +60,14 @@ func (r *Registry) AddNodeExporter(option node.Option, vethProvider *veth.Provid
 	return err
 }
 
-// relabelGatherer adds containerID label to container interfaces.
-type relabelGatherer struct {
+// nodeGatherer adds containerID label to container interfaces.
+type nodeGatherer struct {
 	gatherer     prometheus.Gatherer
 	vethProvider *veth.Provider
 }
 
-func (rg relabelGatherer) Gather() ([]*dto.MetricFamily, error) {
-	mfs, err := rg.gatherer.Gather()
+func (ng nodeGatherer) Gather() ([]*dto.MetricFamily, error) {
+	mfs, err := ng.gatherer.Gather()
 	if err != nil {
 		return nil, err
 	}
@@ -85,7 +85,7 @@ func (rg relabelGatherer) Gather() ([]*dto.MetricFamily, error) {
 					continue
 				}
 
-				containerID, err := rg.vethProvider.ContainerID(label.GetValue())
+				containerID, err := ng.vethProvider.ContainerID(label.GetValue())
 				if err != nil {
 					logger.V(1).Printf("Failed to get container interfaces: %s", err)
 

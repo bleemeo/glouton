@@ -152,8 +152,10 @@ type RegistrationOption struct {
 	// DisablePeriodicGather skip the periodic calls which forward gathered points to r.PushPoint.
 	// The periodic call use the Interval. When Interval is 0, the dynamic interval set by UpdateDelay is used.
 	DisablePeriodicGather bool
-	Rules                 []types.SimpleRule
-	rrules                []*rules.RecordingRule
+	// ApplyDynamicRelabel controls whether the metrics should go through the relabel hook.
+	ApplyDynamicRelabel bool
+	Rules               []types.SimpleRule
+	rrules              []*rules.RecordingRule
 }
 
 type AppenderRegistrationOption struct {
@@ -206,15 +208,15 @@ func (opt *RegistrationOption) String() string {
 }
 
 type registration struct {
-	l                  sync.Mutex
-	option             RegistrationOption
-	loop               *scrapeLoop
-	lastScrape         time.Time
-	lastScrapeDuration time.Duration
-	gatherer           *labeledGatherer
-	annotations        types.MetricAnnotations
-	relabelHookSkip    bool
-	lastRebalHookRetry time.Time
+	l                    sync.Mutex
+	option               RegistrationOption
+	loop                 *scrapeLoop
+	lastScrape           time.Time
+	lastScrapeDuration   time.Duration
+	gatherer             *labeledGatherer
+	annotations          types.MetricAnnotations
+	relabelHookSkip      bool
+	lastRelabelHookRetry time.Time
 }
 
 type reschedule struct {
@@ -223,7 +225,7 @@ type reschedule struct {
 	RunAt time.Time
 }
 
-var errToManyGatherers = errors.New("too many gatherers in the registry. Unable to find a new slot")
+var errTooManyGatherers = errors.New("too many gatherers in the registry. Unable to find a new slot")
 
 func getDefaultRelabelConfig() []*relabel.Config {
 	return []*relabel.Config{
@@ -735,7 +737,7 @@ func (r *Registry) addRegistration(reg *registration) (int, error) {
 	for ok {
 		id++
 		if id == 0 {
-			return 0, errToManyGatherers
+			return 0, errTooManyGatherers
 		}
 
 		_, ok = r.registrations[id]
@@ -960,16 +962,22 @@ func (r *Registry) GatherWithState(ctx context.Context, state GatherState) ([]*d
 
 			scrapedMFS, _, err := r.scrape(ctx, state, reg)
 
-			// Apply thresholds.
-			scrapedPoints := gloutonModel.FamiliesToMetricPoints(time.Time{}, scrapedMFS)
+			// Don't drop the meta labels here, they are needed for relabeling.
+			scrapedPoints := gloutonModel.FamiliesToMetricPoints(state.T0, scrapedMFS, !reg.option.ApplyDynamicRelabel)
 
+			if reg.option.ApplyDynamicRelabel {
+				scrapedPoints = r.relabelPoints(ctx, scrapedPoints)
+			}
+
+			// Apply the thresholds after relabeling to get the instance UUID in the labels.
 			var statusPoints []types.MetricPoint
 
 			if r.option.ThresholdHandler != nil {
 				_, statusPoints = r.option.ThresholdHandler.ApplyThresholds(scrapedPoints)
 			}
 
-			statusMFS := gloutonModel.MetricPointsToFamilies(statusPoints)
+			scrapedPoints = append(scrapedPoints, statusPoints...)
+			allMFS := gloutonModel.MetricPointsToFamilies(scrapedPoints)
 
 			mutex.Lock()
 			defer mutex.Unlock()
@@ -978,8 +986,7 @@ func (r *Registry) GatherWithState(ctx context.Context, state GatherState) ([]*d
 				errs = append(errs, err)
 			}
 
-			mfs = append(mfs, scrapedMFS...)
-			mfs = append(mfs, statusMFS...)
+			mfs = append(mfs, allMFS...)
 		}()
 	}
 
@@ -1251,7 +1258,13 @@ func (r *Registry) scrapeFromLoop(ctx context.Context, t0 time.Time, reg *regist
 		}
 	}
 
-	points := gloutonModel.FamiliesToMetricPoints(t0, mfs)
+	reg.l.Lock()
+	reg.lastScrape = t0
+	reg.lastScrapeDuration = duration
+	reg.l.Unlock()
+
+	// Don't drop the meta labels here, they are needed for relabeling.
+	points := gloutonModel.FamiliesToMetricPoints(t0, mfs, !reg.option.ApplyDynamicRelabel)
 
 	if (reg.annotations != types.MetricAnnotations{}) {
 		for i := range points {
@@ -1259,19 +1272,19 @@ func (r *Registry) scrapeFromLoop(ctx context.Context, t0 time.Time, reg *regist
 		}
 	}
 
-	reg.l.Lock()
-	reg.lastScrape = t0
-	reg.lastScrapeDuration = duration
-	reg.l.Unlock()
+	if reg.option.ApplyDynamicRelabel {
+		points = r.relabelPoints(ctx, points)
+	}
+
+	// Apply the thresholds after relabeling to get the instance UUID in the labels.
+	if r.option.ThresholdHandler != nil {
+		var statusPoints []types.MetricPoint
+
+		points, statusPoints = r.option.ThresholdHandler.ApplyThresholds(points)
+		points = append(points, statusPoints...)
+	}
 
 	if len(points) > 0 && r.option.PushPoint != nil {
-		if r.option.ThresholdHandler != nil {
-			var statusPoints []types.MetricPoint
-
-			points, statusPoints = r.option.ThresholdHandler.ApplyThresholds(points)
-			points = append(points, statusPoints...)
-		}
-
 		r.option.PushPoint.PushPoints(ctx, points)
 	}
 }
@@ -1280,7 +1293,7 @@ func (r *Registry) scrape(ctx context.Context, state GatherState, reg *registrat
 	r.l.Lock()
 	reg.l.Lock()
 
-	if reg.relabelHookSkip && time.Since(reg.lastRebalHookRetry) > hookRetryDelay {
+	if reg.relabelHookSkip && time.Since(reg.lastRelabelHookRetry) > hookRetryDelay {
 		r.setupGatherer(reg, reg.gatherer.getSource())
 	}
 
@@ -1325,8 +1338,10 @@ func (r *Registry) pushPoint(ctx context.Context, points []types.MetricPoint, tt
 
 	for _, point := range points {
 		var (
-			err  error
-			skip bool
+			err            error
+			skip           bool
+			newLabels      labels.Labels
+			newAnnotations types.MetricAnnotations
 		)
 
 		point.Labels, err = fixLabels(point.Labels)
@@ -1347,28 +1362,20 @@ func (r *Registry) pushPoint(ctx context.Context, points []types.MetricPoint, tt
 
 			point.Labels = newLabelsMap
 
-			if r.relabelHook != nil {
-				ctx, cancel := context.WithTimeout(ctx, relabelTimeout)
-				point.Labels, skip = r.relabelHook(ctx, point.Labels)
+			ctx, cancel := context.WithTimeout(ctx, relabelTimeout)
+			defer cancel()
 
-				cancel()
-			}
-
-			newLabels, _ := r.applyRelabel(point.Labels)
+			newLabels, _, skip = r.applyRelabel(ctx, point.Labels)
 			point.Labels = newLabels.Map()
 		} else {
 			point.Labels = r.addMetaLabels(point.Labels)
 
-			if r.relabelHook != nil {
-				ctx, cancel := context.WithTimeout(ctx, relabelTimeout)
-				point.Labels, skip = r.relabelHook(ctx, point.Labels)
+			ctx, cancel := context.WithTimeout(ctx, relabelTimeout)
+			defer cancel()
 
-				cancel()
-			}
-
-			newLabels, annotations2 := r.applyRelabel(point.Labels)
+			newLabels, newAnnotations, skip = r.applyRelabel(ctx, point.Labels)
 			point.Labels = newLabels.Map()
-			point.Annotations = point.Annotations.Merge(annotations2)
+			point.Annotations = point.Annotations.Merge(newAnnotations)
 		}
 
 		if !skip {
@@ -1439,7 +1446,39 @@ func (r *Registry) addMetaLabels(input map[string]string) map[string]string {
 	return result
 }
 
-func (r *Registry) applyRelabel(input map[string]string) (labels.Labels, types.MetricAnnotations) {
+func (r *Registry) relabelPoints(ctx context.Context, points []types.MetricPoint) []types.MetricPoint {
+	n := 0
+
+	for _, point := range points {
+		ctx, cancel := context.WithTimeout(ctx, relabelTimeout)
+		defer cancel()
+
+		newLabels, newAnnotations, skip := r.applyRelabel(ctx, point.Labels)
+		point.Labels = newLabels.Map()
+		point.Annotations = point.Annotations.Merge(newAnnotations)
+
+		if !skip {
+			points[n] = point
+			n++
+		}
+	}
+
+	return points[:n]
+}
+
+func (r *Registry) applyRelabel(
+	ctx context.Context,
+	input map[string]string,
+) (labels.Labels, types.MetricAnnotations, bool) {
+	var retryLater bool
+
+	if r.relabelHook != nil {
+		ctx, cancel := context.WithTimeout(ctx, relabelTimeout)
+		input, retryLater = r.relabelHook(ctx, input)
+
+		cancel()
+	}
+
 	promLabels := labels.FromMap(input)
 	annotations := gloutonModel.MetaLabelsToAnnotation(promLabels)
 	promLabels = relabel.Process(
@@ -1449,7 +1488,7 @@ func (r *Registry) applyRelabel(input map[string]string) (labels.Labels, types.M
 
 	promLabels = gloutonModel.DropMetaLabels(promLabels)
 
-	return promLabels, annotations
+	return promLabels, annotations, retryLater
 }
 
 func (r *Registry) setupGatherer(reg *registration, source prometheus.Gatherer) {
@@ -1464,14 +1503,13 @@ func (r *Registry) setupGatherer(reg *registration, source prometheus.Gatherer) 
 		reg.relabelHookSkip = false
 
 		if r.relabelHook != nil {
-			ctxTimeout, cancel := context.WithTimeout(context.Background(), relabelTimeout)
-			defer cancel()
-
-			extraLabels, reg.relabelHookSkip = r.relabelHook(ctxTimeout, extraLabels)
-			reg.lastRebalHookRetry = time.Now()
+			reg.lastRelabelHookRetry = time.Now()
 		}
 
-		promLabels, annotations = r.applyRelabel(extraLabels)
+		ctxTimeout, cancel := context.WithTimeout(context.Background(), relabelTimeout)
+		defer cancel()
+
+		promLabels, annotations, reg.relabelHookSkip = r.applyRelabel(ctxTimeout, extraLabels)
 	}
 
 	g := newLabeledGatherer(source, promLabels, reg.option.rrules)

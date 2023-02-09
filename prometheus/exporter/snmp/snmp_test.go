@@ -220,7 +220,7 @@ func Test_factFromPoints(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			result := model.FamiliesToMetricPoints(time.Now(), tmp)
+			result := model.FamiliesToMetricPoints(time.Now(), tmp, true)
 			got := factFromPoints(result, now, tt.scraperFacts)
 
 			got2, err := tgt.Facts(context.Background(), 0)

@@ -270,7 +270,7 @@ func Test_labeledGatherer_GatherPoints(t *testing.T) {
 				return
 			}
 
-			got := model.FamiliesToMetricPoints(time.Now(), mfs)
+			got := model.FamiliesToMetricPoints(time.Now(), mfs, true)
 			if (tt.fields.annotations != types.MetricAnnotations{}) {
 				for i := range got {
 					got[i].Annotations = got[i].Annotations.Merge(tt.fields.annotations)

@@ -206,12 +206,14 @@ func TestRegistry_Register(t *testing.T) {
 		return labels, false
 	})
 
-	result, err := reg.Gather()
+	now := time.Now()
+
+	result, err := reg.GatherWithState(context.Background(), GatherState{T0: now})
 	if err != nil {
 		t.Error(err)
 	}
 
-	helpText := "fake metric"
+	helpText := ""
 	dummyName := "dummy"
 	dummyValue := "value"
 	instanceIDName := types.LabelInstanceUUID
@@ -221,38 +223,40 @@ func TestRegistry_Register(t *testing.T) {
 		{
 			Name: &gather1.name,
 			Help: &helpText,
-			Type: dto.MetricType_GAUGE.Enum(),
+			Type: dto.MetricType_UNTYPED.Enum(),
 			Metric: []*dto.Metric{
 				{
 					Label: []*dto.LabelPair{
 						{Name: &dummyName, Value: &dummyValue},
 						{Name: &instanceIDName, Value: &instanceIDValue},
 					},
-					Gauge: &dto.Gauge{
+					Untyped: &dto.Untyped{
 						Value: &value,
 					},
+					TimestampMs: proto.Int64(now.UnixMilli()),
 				},
 			},
 		},
 		{
 			Name: &gather2.name,
 			Help: &helpText,
-			Type: dto.MetricType_GAUGE.Enum(),
+			Type: dto.MetricType_UNTYPED.Enum(),
 			Metric: []*dto.Metric{
 				{
 					Label: []*dto.LabelPair{
 						{Name: &instanceIDName, Value: &instanceIDValue},
 					},
-					Gauge: &dto.Gauge{
+					Untyped: &dto.Untyped{
 						Value: &value,
 					},
+					TimestampMs: proto.Int64(now.UnixMilli()),
 				},
 			},
 		},
 	}
 
-	if !reflect.DeepEqual(result, want) {
-		t.Errorf("reg.Gather() = %v, want %v", result, want)
+	if diff := cmp.Diff(result, want); diff != "" {
+		t.Errorf("reg.Gather() diff:\n%s", diff)
 	}
 
 	reg.Unregister(id1)
@@ -533,7 +537,7 @@ func TestRegistry_applyRelabel(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			r := &Registry{}
 			r.relabelConfigs = tt.fields.relabelConfigs
-			promLabels, annotations := r.applyRelabel(tt.args.input)
+			promLabels, annotations, _ := r.applyRelabel(context.Background(), tt.args.input)
 			if !reflect.DeepEqual(promLabels, tt.want) {
 				t.Errorf("Registry.applyRelabel() promLabels = %+v, want %+v", promLabels, tt.want)
 			}
@@ -596,7 +600,7 @@ func BenchmarkRegistry_applyRelabel(b *testing.B) {
 			b.ResetTimer()
 
 			for n := 0; n < b.N; n++ {
-				r.applyRelabel(tt.labels)
+				r.applyRelabel(context.Background(), tt.labels)
 			}
 		})
 	}
@@ -1024,9 +1028,10 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 			},
 		},
 		{
-			name:         "gatherer-bleemeo",
-			kindToTest:   kindGatherer,
-			metricFormat: types.MetricFormatBleemeo,
+			name:                  "gatherer-bleemeo",
+			kindToTest:            kindGatherer,
+			metricFormat:          types.MetricFormatBleemeo,
+			metricFamiliesUseTime: true,
 			input: []types.MetricPoint{
 				{
 					Labels: map[string]string{
@@ -1079,9 +1084,10 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 			},
 		},
 		{
-			name:         "gatherer-extralabels",
-			kindToTest:   kindGatherer,
-			metricFormat: types.MetricFormatBleemeo,
+			name:                  "gatherer-extralabels",
+			kindToTest:            kindGatherer,
+			metricFormat:          types.MetricFormatBleemeo,
+			metricFamiliesUseTime: true,
 			input: []types.MetricPoint{
 				{
 					Labels: map[string]string{
@@ -1114,9 +1120,10 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 			},
 		},
 		{
-			name:         "metric-rename-simple-gatherer",
-			kindToTest:   kindGatherer,
-			metricFormat: types.MetricFormatBleemeo,
+			name:                  "metric-rename-simple-gatherer",
+			kindToTest:            kindGatherer,
+			metricFormat:          types.MetricFormatBleemeo,
+			metricFamiliesUseTime: true,
 			input: []types.MetricPoint{
 				{
 					Labels: map[string]string{
@@ -1239,9 +1246,10 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 			},
 		},
 		{
-			name:         "metric-rename-simple-pushpoint",
-			kindToTest:   kindPushPointCallback,
-			metricFormat: types.MetricFormatPrometheus,
+			name:                  "metric-rename-simple-pushpoint",
+			kindToTest:            kindPushPointCallback,
+			metricFormat:          types.MetricFormatPrometheus,
+			metricFamiliesUseTime: true,
 			input: []types.MetricPoint{
 				{
 					Labels: map[string]string{
@@ -1297,7 +1305,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 					Annotations: types.MetricAnnotations{},
 				},
 			},
-			metricFamiliesUseTime: true,
 			wantOverrideMFType: map[string]*dto.MetricType{
 				"cpu_used":      dto.MetricType_UNTYPED.Enum(),
 				"hrStorageUsed": dto.MetricType_UNTYPED.Enum(),
@@ -1308,9 +1315,10 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 			},
 		},
 		{
-			name:         "metric-rename-simple-2",
-			kindToTest:   kindGatherer,
-			metricFormat: types.MetricFormatBleemeo,
+			name:                  "metric-rename-simple-2",
+			kindToTest:            kindGatherer,
+			metricFormat:          types.MetricFormatBleemeo,
+			metricFamiliesUseTime: true,
 			input: []types.MetricPoint{
 				{
 					Labels: map[string]string{
@@ -1422,9 +1430,10 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 			},
 		},
 		{
-			name:         "metric-rename-multiple-1",
-			kindToTest:   kindGatherer,
-			metricFormat: types.MetricFormatBleemeo,
+			name:                  "metric-rename-multiple-1",
+			kindToTest:            kindGatherer,
+			metricFormat:          types.MetricFormatBleemeo,
+			metricFamiliesUseTime: true,
 			input: []types.MetricPoint{
 				{
 					Labels: map[string]string{
@@ -1474,9 +1483,10 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 			}),
 		},
 		{
-			name:         "metric-rename-multiple-2",
-			kindToTest:   kindGatherer,
-			metricFormat: types.MetricFormatBleemeo,
+			name:                  "metric-rename-multiple-2",
+			kindToTest:            kindGatherer,
+			metricFormat:          types.MetricFormatBleemeo,
+			metricFamiliesUseTime: true,
 			input: []types.MetricPoint{
 				{
 					Labels: map[string]string{
@@ -1690,9 +1700,10 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 			},
 		},
 		{
-			name:         "metric-rule-and-rename",
-			kindToTest:   kindGatherer,
-			metricFormat: types.MetricFormatBleemeo,
+			name:                  "metric-rule-and-rename",
+			kindToTest:            kindGatherer,
+			metricFormat:          types.MetricFormatBleemeo,
+			metricFamiliesUseTime: true,
 			input: []types.MetricPoint{
 				{
 					Labels: map[string]string{
@@ -1818,16 +1829,16 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 					},
 				},
 			}),
-			wantOverrideMFType: map[string]*dto.MetricType{
-				"mem_used":      dto.MetricType_UNTYPED.Enum(),
-				"mem_used_perc": dto.MetricType_UNTYPED.Enum(),
-				"mem_free":      dto.MetricType_UNTYPED.Enum(),
-			},
-			wantOverrideMFHelp: map[string]string{
-				"mem_used":      "",
-				"mem_used_perc": "",
-				"mem_free":      "",
-			},
+			// wantOverrideMFType: map[string]*dto.MetricType{
+			// 	"mem_used":      dto.MetricType_UNTYPED.Enum(),
+			// 	"mem_used_perc": dto.MetricType_UNTYPED.Enum(),
+			// 	"mem_free":      dto.MetricType_UNTYPED.Enum(),
+			// },
+			// wantOverrideMFHelp: map[string]string{
+			// 	"mem_used":      "",
+			// 	"mem_used_perc": "",
+			// 	"mem_free":      "",
+			// },
 		},
 	}
 
@@ -1910,15 +1921,15 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 				t.Errorf("gotPoints mismatch (-want +got):\n%s", diff)
 			}
 
-			got, err := reg.Gather()
-			if err != nil {
-				t.Fatal(err)
-			}
-
 			var mfsTime time.Time
 
 			if tt.metricFamiliesUseTime {
 				mfsTime = now
+			}
+
+			got, err := reg.GatherWithState(context.Background(), GatherState{T0: mfsTime})
+			if err != nil {
+				t.Fatal(err)
 			}
 
 			wantMFs := metricPointsToFamilies(tt.want, mfsTime, tt.wantOverrideMFType, tt.wantOverrideMFHelp)
@@ -1949,12 +1960,12 @@ func metricPointsToFamilies(points []types.MetricPoint, now time.Time, typeOverl
 		if mf == nil {
 			typ := typeOverload[name]
 			if typ == nil {
-				typ = dto.MetricType_COUNTER.Enum()
+				typ = dto.MetricType_UNTYPED.Enum()
 			}
 
 			help, ok := helpOverload[name]
 			if !ok {
-				help = "fake metrics"
+				help = ""
 			}
 
 			mf = &dto.MetricFamily{

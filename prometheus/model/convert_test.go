@@ -193,7 +193,7 @@ func TestConvertionLoop(t *testing.T) {
 					mfs = append(mfs, mf)
 				}
 
-				got := FamiliesToMetricPoints(now, mfs)
+				got := FamiliesToMetricPoints(now, mfs, true)
 
 				optMetricSort := cmpopts.SortSlices(func(x types.MetricPoint, y types.MetricPoint) bool {
 					lblsX := labels.FromMap(x.Labels)

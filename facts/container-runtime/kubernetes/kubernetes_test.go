@@ -816,7 +816,7 @@ func TestClusterMetrics(t *testing.T) {
 		expectedMfs = append(expectedMfs, mf)
 	}
 
-	expectedPoints := model.FamiliesToMetricPoints(now, expectedMfs)
+	expectedPoints := model.FamiliesToMetricPoints(now, expectedMfs, true)
 
 	// Add the cluster meta label.
 	for _, point := range expectedPoints {
