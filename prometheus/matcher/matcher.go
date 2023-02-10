@@ -44,7 +44,7 @@ func NormalizeMetric(metric string) (Matchers, error) {
 		metric = strings.NewReplacer(".", "_", "-", "_").Replace(metric)
 
 		if strings.Contains(metric, "*") {
-			// metric is in the blob format: we need to convert it in a regex
+			// The metric is in the glob format, we need to convert it to a regex.
 			matchType += "~"
 			metric = globToRegex(metric)
 		}
@@ -54,7 +54,7 @@ func NormalizeMetric(metric string) (Matchers, error) {
 
 	m, err := parser.ParseMetricSelector(metric)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("parse metric %s: %w", metric, err)
 	}
 
 	return m, nil
