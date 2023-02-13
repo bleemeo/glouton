@@ -199,7 +199,7 @@ var (
 		"mem_total",
 		"mem_used",
 		"mem_used_perc",
-		"mem_used,perc_status",
+		"mem_used_perc_status",
 		"net_bits_recv",
 		"net_bits_sent",
 		"net_drop_in",
@@ -735,7 +735,7 @@ type metricFilter struct {
 	denyList  map[labels.Matcher][]matcher.Matchers
 }
 
-func buildMatcherList(metrics []string) ([]matcher.Matchers, prometheus.MultiError) {
+func buildMatchersList(metrics []string) ([]matcher.Matchers, prometheus.MultiError) {
 	var errors prometheus.MultiError
 
 	metricList := make([]matcher.Matchers, 0, len(metrics))
@@ -769,11 +769,7 @@ func matchersToMap(matchersList []matcher.Matchers) map[labels.Matcher][]matcher
 			found := false
 
 			for name := range matchersMap {
-				if name.Type != newName.Type {
-					continue
-				}
-
-				if name.Value == newName.Value {
+				if name.Type == newName.Type && name.Value == newName.Value {
 					matchersMap[name] = append(matchersMap[name], matchers)
 					found = true
 
@@ -906,12 +902,12 @@ func newMetricFilter(config config.Config, hasSNMP, hasSwap bool, format types.M
 
 	var warnings prometheus.MultiError
 
-	staticAllowList, warn := buildMatcherList(rawAllowList)
+	staticAllowList, warn := buildMatchersList(rawAllowList)
 	if warn != nil {
 		warnings = append(warnings, warn...)
 	}
 
-	staticDenyList, warn := buildMatcherList(config.Metric.DenyMetrics)
+	staticDenyList, warn := buildMatchersList(config.Metric.DenyMetrics)
 	if warn != nil {
 		warnings = append(warnings, warn...)
 	}
@@ -1156,61 +1152,25 @@ type dynamicScrapper interface {
 	GetContainersLabels() map[string]map[string]string
 }
 
-func (m *metricFilter) rebuildServicesMetrics(services []discovery.Service) ([]matcher.Matchers, prometheus.MultiError) {
-	var (
-		allowList []matcher.Matchers
-		warnings  prometheus.MultiError
-	)
-
+func (m *metricFilter) rebuildServicesMetrics(
+	services []discovery.Service,
+	allowedMetrics map[string]struct{},
+) {
 	for _, service := range services {
 		if !service.Active {
 			continue
 		}
 
-		// Allow JMX metrics.
 		for _, jmxMetric := range jmxtrans.GetJMXMetrics(service) {
-			metricName := service.Name + "_" + jmxMetric.Name
+			allowedMetrics[service.Name+"_"+jmxMetric.Name] = struct{}{}
+		}
 
-			matchers, err := matcher.NormalizeMetric(metricName)
-			if err != nil {
-				warnings = append(warnings, err)
-
-				continue
+		if m.includeDefaultMetrics {
+			for _, metric := range defaultServiceMetrics[service.ServiceType] {
+				allowedMetrics[metric] = struct{}{}
 			}
-
-			allowList = append(allowList, matchers)
 		}
 	}
-
-	if m.includeDefaultMetrics {
-		defaultAllow, err := m.rebuildDefaultMetrics(services)
-		if err != nil {
-			warnings = append(warnings, err)
-		}
-
-		allowList = append(allowList, defaultAllow...)
-	}
-
-	return allowList, warnings
-}
-
-func (m *metricFilter) rebuildDefaultMetrics(services []discovery.Service) ([]matcher.Matchers, error) {
-	var allowList []matcher.Matchers
-
-	for _, service := range services {
-		defaults := defaultServiceMetrics[service.ServiceType]
-
-		for _, val := range defaults {
-			matchers, err := matcher.NormalizeMetric(val)
-			if err != nil {
-				return nil, err
-			}
-
-			allowList = append(allowList, matchers)
-		}
-	}
-
-	return allowList, nil
 }
 
 func (m *metricFilter) RebuildDynamicLists(
@@ -1222,13 +1182,32 @@ func (m *metricFilter) RebuildDynamicLists(
 	m.l.Lock()
 	defer m.l.Unlock()
 
-	// We don't need to make a copy of the static list because we only append
-	// to the list and we never modify the matchers.
-	allowList := m.staticAllowList
-	denyList := m.staticDenyList
+	// Use a map of metric names to deduplicate them.
+	allowedMetricMap := make(map[string]struct{}, len(thresholdMetricNames)+len(alertMetrics))
 
-	var warnings prometheus.MultiError
+	// Allow alert metrics.
+	for _, metric := range alertMetrics {
+		allowedMetricMap[metric] = struct{}{}
+	}
 
+	m.rebuildServicesMetrics(services, allowedMetricMap)
+	m.rebuildThresholdsMetrics(thresholdMetricNames, allowedMetricMap)
+
+	// Convert allowed metric map to a matchers list.
+	allowedMetric := make([]string, 0, len(allowedMetricMap))
+	for k := range allowedMetricMap {
+		allowedMetric = append(allowedMetric, k)
+	}
+
+	var (
+		warnings prometheus.MultiError
+		denyList []matcher.Matchers
+	)
+
+	allowList, moreWarnings := buildMatchersList(allowedMetric)
+	warnings = append(warnings, moreWarnings...)
+
+	// Add dynamic scrapper metrics.
 	if scrapper != nil {
 		registeredLabels := scrapper.GetRegisteredLabels()
 		containersLabels := scrapper.GetContainersLabels()
@@ -1246,15 +1225,9 @@ func (m *metricFilter) RebuildDynamicLists(
 		}
 	}
 
-	serviceAllowList, moreWarnings := m.rebuildServicesMetrics(services)
-	warnings = append(warnings, moreWarnings...)
-	allowList = append(allowList, serviceAllowList...)
-
-	// Adding the threshold metrics needs to be done after the allowlist is filled with non threshold metrics
-	// because we need to check if the base metrics are allowed before allowing the status metrics.
-	thresholdsAllowList, moreWarnings := m.rebuildThresholdsMetrics(thresholdMetricNames, alertMetrics)
-	warnings = append(warnings, moreWarnings...)
-	allowList = append(allowList, thresholdsAllowList...)
+	// Add static filter lists.
+	allowList = append(allowList, m.staticAllowList...)
+	denyList = append(denyList, m.staticDenyList...)
 
 	m.allowList = matchersToMap(allowList)
 	m.denyList = matchersToMap(denyList)
@@ -1264,34 +1237,17 @@ func (m *metricFilter) RebuildDynamicLists(
 
 func (m *metricFilter) rebuildThresholdsMetrics(
 	thresholdMetricNames []string,
-	alertMetrics []string,
-) ([]matcher.Matchers, prometheus.MultiError) {
-	var warnings prometheus.MultiError
-
-	allowList := make([]matcher.Matchers, 0, len(thresholdMetricNames)+len(alertMetrics))
-
+	allowedMetrics map[string]struct{},
+) {
 	for _, metric := range thresholdMetricNames {
-		newMetric, err := matcher.NormalizeMetric(metric + "_status")
-		if err != nil {
-			warnings = append(warnings, err)
-
-			continue
-		}
-
 		// Check if the base metric is allowed.
 		baseMetric := map[string]string{types.LabelName: metric}
 		if m.isAllowedAndNotDeniedNoLock(baseMetric) {
-			allowList = append(allowList, newMetric)
+			allowedMetrics[metric+"_status"] = struct{}{}
 		} else {
 			logger.V(1).Printf("Denied status metric for %s", metric)
 		}
 	}
-
-	alertMatchers, moreWarnings := buildMatcherList(alertMetrics)
-	warnings = append(warnings, moreWarnings...)
-	allowList = append(allowList, alertMatchers...)
-
-	return allowList, warnings
 }
 
 // Return the allowed and denied metrics for a container using the container

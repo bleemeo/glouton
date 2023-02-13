@@ -1287,7 +1287,7 @@ func Benchmark_filters_all(b *testing.B) {
 func Test_RebuildDefaultMetrics(t *testing.T) {
 	cfg := config.Config{
 		Metric: config.Metric{
-			IncludeDefaultMetrics: false,
+			IncludeDefaultMetrics: true,
 		},
 	}
 
@@ -1295,31 +1295,27 @@ func Test_RebuildDefaultMetrics(t *testing.T) {
 
 	services := []discovery.Service{
 		{
+			Active:      true,
 			ServiceType: discovery.PostfixService,
 		},
 		{
+			Active:      true,
 			ServiceType: discovery.BindService,
 		},
 	}
 
-	got, err := metricFilter.rebuildDefaultMetrics(services)
-	if err != nil {
-		t.Error(err)
+	metricsMap := make(map[string]struct{})
 
-		return
+	metricFilter.rebuildServicesMetrics(services, metricsMap)
+
+	metricsNames := make([]string, 0, len(metricsMap))
+	for k := range metricsMap {
+		metricsNames = append(metricsNames, k)
 	}
 
-	want := []matcher.Matchers{
-		{
-			{
-				Name:  "__name__",
-				Type:  labels.MatchEqual,
-				Value: "postfix_queue_size",
-			},
-		},
-	}
+	want := []string{"postfix_queue_size"}
 
-	res := cmp.Diff(got, want, cmpopts.IgnoreUnexported(labels.Matcher{}))
+	res := cmp.Diff(metricsNames, want, cmpopts.IgnoreUnexported(labels.Matcher{}))
 
 	if res != "" {
 		t.Errorf("rebuildDefaultMetrics():\n%s", res)
