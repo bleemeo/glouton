@@ -255,8 +255,8 @@ func TestRegistry_Register(t *testing.T) {
 		},
 	}
 
-	if diff := cmp.Diff(result, want); diff != "" {
-		t.Errorf("reg.Gather() diff:\n%s", diff)
+	if diff := cmp.Diff(want, result); diff != "" {
+		t.Errorf("reg.Gather() diff: (-want +got)\n%s", diff)
 	}
 
 	reg.Unregister(id1)
