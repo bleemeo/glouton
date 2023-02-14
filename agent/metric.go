@@ -26,7 +26,9 @@ import (
 	"glouton/prometheus/matcher"
 	"glouton/prometheus/model"
 	"glouton/types"
+	"io"
 	"runtime"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -871,22 +873,28 @@ func (m *metricFilter) DiagnosticArchive(ctx context.Context, archive types.Arch
 	defer m.l.Unlock()
 
 	fmt.Fprintf(file, "# Allow list (%d entries)\n", len(m.allowList))
-
-	for _, r := range m.allowList {
-		for _, val := range r {
-			fmt.Fprintf(file, "%s\n", val.String())
-		}
-	}
+	printSortedList(file, m.allowList)
 
 	fmt.Fprintf(file, "\n# Deny list (%d entries)\n", len(m.denyList))
+	printSortedList(file, m.denyList)
 
-	for _, r := range m.denyList {
-		for _, val := range r {
-			fmt.Fprintf(file, "%s\n", val.String())
+	return nil
+}
+
+func printSortedList(file io.Writer, matchersMap map[labels.Matcher][]matcher.Matchers) {
+	sortedMatchers := make([]string, 0, len(matchersMap))
+
+	for _, list := range matchersMap {
+		for _, matchers := range list {
+			sortedMatchers = append(sortedMatchers, matchers.String())
 		}
 	}
 
-	return nil
+	sort.Strings(sortedMatchers)
+
+	for _, matchers := range sortedMatchers {
+		fmt.Fprintf(file, "%s\n", matchers)
+	}
 }
 
 func newMetricFilter(config config.Config, hasSNMP, hasSwap bool, format types.MetricFormat) (*metricFilter, error) {
