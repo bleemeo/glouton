@@ -932,7 +932,9 @@ func (w wrapProcessQuerier) ContainerFromCGroup(ctx context.Context, cgroupData 
 		return c, err
 	}
 
+	w.k.l.Lock()
 	pod, _ := w.k.getPod(c)
+	w.k.l.Unlock()
 
 	return wrappedContainer{
 		Container: c,
