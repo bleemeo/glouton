@@ -825,7 +825,7 @@ func TestDocker_ContainerFromCGroup(t *testing.T) { //nolint: maintidx
 	}
 }
 
-//nolint:dupword,maintidx
+//nolint:maintidx
 func TestDocker_Processes(t *testing.T) {
 	tests := []struct {
 		name                 string

@@ -31,7 +31,7 @@ type information struct {
 	BleemeoActive      bool   `json:"bleemeo_active"`
 	CPUCores           string `json:"cpu_cores"`
 	CPUModel           string `json:"cpu_model"`
-	Country            string `string:"country"`
+	Country            string `json:"country"`
 	InstallationFormat string `json:"installation_format"`
 	KernelVersion      string `json:"kernel_version"`
 	Memory             string `json:"memory"`

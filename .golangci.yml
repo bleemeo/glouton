@@ -40,6 +40,8 @@ linters:
     - wrapcheck # Too many errors, which would require to refactor most returned errors.
     - errorlint # Should be enabled, but it's difficult to test that we keep the same behavior with errors.As.
     - contextcheck # Requires to change a lot of code to pass a context everywhere.
+    - gomoddirectives # We sometimes need to use mod replacements to fix upgrades.
+    - musttag # json tags must be added public fields used in JSON. Disabled because it also report errors on dependencies.
     # Requires to review all our tests. Should be done.
     - paralleltest
     - tparallel
@@ -59,12 +61,6 @@ linters-settings:
       rules:
         json: snake
         yaml: snake
-
-  # Project specific settings.
-  gomoddirectives:
-    # List of allowed `replace` directives. Needed because go.mod doesn't support nolint comments.
-    replace-allow-list:
-      - github.com/prometheus/node_exporter
 
 issues:
   include: # the list of ids of default excludes to include

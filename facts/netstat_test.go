@@ -27,8 +27,6 @@ import (
 )
 
 // (partial) output of sudo netstat -lnp with LANG=fr_FR.UTF-8.
-//
-//nolint:dupword
 const fileContent = `Connexions Internet actives (seulement serveurs)
 Proto Recv-Q Send-Q Adresse locale          Adresse distante        Etat       PID/Program name
 tcp        0      0 127.0.0.1:46319         0.0.0.0:*               LISTEN      5534/cli
