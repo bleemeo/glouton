@@ -107,7 +107,9 @@ func (k *Kubernetes) CachedContainer(containerID string) (c facts.Container, fou
 		return nil, found
 	}
 
+	k.l.Lock()
 	pod, _ := k.getPod(c)
+	k.l.Unlock()
 
 	return wrappedContainer{
 		Container: c,
