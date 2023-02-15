@@ -43,7 +43,7 @@ func (d *Discovery) createPrometheusMemcached(service Service) error {
 	address := fmt.Sprintf("%s:%d", ip, port)
 
 	extLogger := log.With(logger.GoKitLoggerWrapper(logger.V(2)), "service", "memcached", "instance", service.Instance)
-	collector := memcachedExporter.New(address, 5*time.Second, extLogger)
+	collector := memcachedExporter.New(address, 5*time.Second, extLogger, nil)
 	lbls := map[string]string{
 		types.LabelMetaServiceName:    service.Name,
 		types.LabelMetaScrapeInstance: service.Instance,
