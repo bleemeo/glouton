@@ -13,4 +13,4 @@ glouton     ALL=(root) NOEXEC: NOPASSWD: /usr/bin/fail2ban-client status, /usr/b
 glouton     ALL=(ALL) NOPASSWD: /usr/bin/smartctl, /usr/sbin/smartctl
 
 # Allow Glouton to restart Fluent Bit to apply a new configuration.
-glouton     ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart bleemeo-agent-logs
+glouton     ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart bleemeo-agent-logs, /bin/systemctl restart bleemeo-agent-logs

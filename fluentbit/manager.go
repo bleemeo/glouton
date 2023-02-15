@@ -29,7 +29,6 @@ import (
 	"glouton/prometheus/scrapper"
 	"glouton/types"
 	"net/url"
-	"os"
 	"os/exec"
 	"path/filepath"
 	"sort"
@@ -64,6 +63,7 @@ type input struct {
 }
 
 func validateConfig(cfg config.Log) []error {
+	reloadFluentBit(context.Background())
 	var warnings []error
 
 	for _, input := range cfg.Inputs {
@@ -253,13 +253,13 @@ func labelsMatchSelectors(labels map[string]string, selectors map[string]string)
 func reloadFluentBit(ctx context.Context) error {
 	// Skip reloading on systems without systemctl.
 	// In Docker and Kubernetes, Fluent Bit will detect the config change and reload by itself.
-	if _, err := os.Stat("/usr/bin/systemctl"); err != nil {
+	if _, err := exec.LookPath("systemctl"); err != nil {
 		logger.V(2).Printf("Skipping Fluent Bit reload because systemctl is not present: %s", err)
 
 		return nil
 	}
 
-	_, err := exec.CommandContext(ctx, "sudo", "-n", "/usr/bin/systemctl", "restart", "bleemeo-agent-logs").Output()
+	_, err := exec.CommandContext(ctx, "sudo", "-n", "systemctl", "restart", "bleemeo-agent-logs").Output()
 	if err != nil {
 		if exitErr := &(exec.ExitError{}); errors.As(err, &exitErr) {
 			err = fmt.Errorf("%w: %s", err, string(exitErr.Stderr))
