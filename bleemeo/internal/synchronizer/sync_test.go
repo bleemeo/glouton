@@ -1316,6 +1316,22 @@ func TestIsDuplicatedOnSameHost(t *testing.T) {
 			WantDuplicated: false,
 		},
 		{
+			Name: "glouton-netstat2",
+			Process: map[int]facts.Process{
+				agentPID: {
+					PID:     agentPID,
+					CmdLine: "/usr/sbin/glouton",
+					Name:    "glouton",
+				},
+				2: {
+					PID:     2,
+					CmdLine: "/usr/sbin/glouton-netstat",
+					Name:    "glouton-netstat",
+				},
+			},
+			WantDuplicated: false,
+		},
+		{
 			Name: "glouton-cron",
 			Process: map[int]facts.Process{
 				agentPID: {
