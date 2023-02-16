@@ -38,6 +38,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -106,7 +107,9 @@ func (k *Kubernetes) CachedContainer(containerID string) (c facts.Container, fou
 		return nil, found
 	}
 
+	k.l.Lock()
 	pod, _ := k.getPod(c)
+	k.l.Unlock()
 
 	return wrappedContainer{
 		Container: c,
@@ -256,7 +259,7 @@ func (k *Kubernetes) Metrics(ctx context.Context, now time.Time) ([]types.Metric
 }
 
 func (k *Kubernetes) MetricsMinute(ctx context.Context, now time.Time) ([]types.MetricPoint, error) {
-	var multiErr types.MultiErrors
+	var multiErr prometheus.MultiError
 
 	points, errMetrics := k.Runtime.MetricsMinute(ctx, now)
 
@@ -268,7 +271,7 @@ func (k *Kubernetes) MetricsMinute(ctx context.Context, now time.Time) ([]types.
 	if err != nil {
 		multiErr = append(multiErr, err)
 
-		return points, multiErr
+		return points, multiErr.MaybeUnwrap()
 	}
 
 	if cl.IsUsingLocalAPI() {
@@ -293,7 +296,7 @@ func (k *Kubernetes) MetricsMinute(ctx context.Context, now time.Time) ([]types.
 		points = append(points, morePoints...)
 	}
 
-	return points, multiErr
+	return points, multiErr.MaybeUnwrap()
 }
 
 func (k *Kubernetes) getCertificateExpiration(ctx context.Context, config *rest.Config, now time.Time) (types.MetricPoint, error) {
@@ -932,7 +935,9 @@ func (w wrapProcessQuerier) ContainerFromCGroup(ctx context.Context, cgroupData 
 		return c, err
 	}
 
+	w.k.l.Lock()
 	pod, _ := w.k.getPod(c)
+	w.k.l.Unlock()
 
 	return wrappedContainer{
 		Container: c,
