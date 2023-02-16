@@ -39,7 +39,11 @@ var (
 	errUnsupportedType = errors.New("unsupported metric type")
 )
 
-func FamiliesToMetricPoints(now time.Time, families []*dto.MetricFamily) []types.MetricPoint {
+func FamiliesToMetricPoints(
+	now time.Time,
+	families []*dto.MetricFamily,
+	dropMetaLabels bool,
+) []types.MetricPoint {
 	samples, err := expfmt.ExtractSamples(
 		&expfmt.DecodeOptions{Timestamp: model.TimeFromUnixNano(now.UnixNano())},
 		families...,
@@ -59,7 +63,10 @@ func FamiliesToMetricPoints(now time.Time, families []*dto.MetricFamily) []types
 
 		lbls := builder.Labels()
 		annotations := MetaLabelsToAnnotation(lbls)
-		lbls = DropMetaLabels(lbls)
+
+		if dropMetaLabels {
+			lbls = DropMetaLabels(lbls)
+		}
 
 		result[i] = types.MetricPoint{
 			Labels:      lbls.Map(),

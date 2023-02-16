@@ -47,7 +47,7 @@ func (ma miscAppender) Collect(ctx context.Context, app storage.Appender) error 
 	points = append(points, types.MetricPoint{
 		Point: types.Point{Time: now, Value: float64(countRunning)},
 		Labels: map[string]string{
-			"__name__": "containers_count",
+			types.LabelName: "containers_count",
 		},
 	})
 
