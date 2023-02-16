@@ -106,6 +106,9 @@ Content-Length: 68
 			if err != nil {
 				t.Fatal(err)
 			}
+
+			defer resp.Body.Close()
+
 			got := fieldsFromResponse(resp, decodeError(resp))
 
 			if got.Content != tt.want.Content {

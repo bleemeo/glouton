@@ -617,8 +617,8 @@ func decodeError(resp *http.Response) APIError {
 	var (
 		jsonMessage json.RawMessage
 		jsonError   struct {
-			Error          string
-			Detail         string
+			Error          string   `json:"error"`
+			Detail         string   `json:"detail"`
 			NonFieldErrors []string `json:"non_field_errors"`
 		}
 		errorList []string
