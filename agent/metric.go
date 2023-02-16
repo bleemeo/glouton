@@ -26,11 +26,14 @@ import (
 	"glouton/prometheus/matcher"
 	"glouton/prometheus/model"
 	"glouton/types"
+	"io"
 	"runtime"
+	"sort"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
 	"github.com/prometheus/prometheus/model/labels"
 )
@@ -198,7 +201,7 @@ var (
 		"mem_total",
 		"mem_used",
 		"mem_used_perc",
-		"mem_used,perc_status",
+		"mem_used_perc_status",
 		"net_bits_recv",
 		"net_bits_sent",
 		"net_drop_in",
@@ -721,110 +724,121 @@ const (
 
 // metricFilter is a thread-safe holder of an allow / deny metrics list.
 type metricFilter struct {
-	// staticList contains the matchers generated from static source (config file).
-	// They won't change at runtime, and don't need to be rebuilt
-	staticAllowList map[labels.Matcher][]matcher.Matchers
-	staticDenyList  map[labels.Matcher][]matcher.Matchers
-
-	// these list are the actual list used while filtering.
-	allowList map[labels.Matcher][]matcher.Matchers
-	denyList  map[labels.Matcher][]matcher.Matchers
-
 	includeDefaultMetrics bool
 
+	// Static matchers generated from the config file.
+	// They won't change at runtime, and don't need to be rebuilt.
+	staticAllowList []matcher.Matchers
+	staticDenyList  []matcher.Matchers
+
 	l sync.Mutex
+	// Lists used while filtering.
+	allowList map[labels.Matcher][]matcher.Matchers
+	denyList  map[labels.Matcher][]matcher.Matchers
 }
 
-func buildMatcherList(metrics []string) map[labels.Matcher][]matcher.Matchers {
-	metricList := make(map[labels.Matcher][]matcher.Matchers)
+func buildMatchersList(metrics []string) ([]matcher.Matchers, prometheus.MultiError) {
+	var errors prometheus.MultiError
+
+	metricList := make([]matcher.Matchers, 0, len(metrics))
 
 	for _, str := range metrics {
 		matchers, err := matcher.NormalizeMetric(str)
 		if err != nil {
-			logger.V(2).Printf("An error occurred while normalizing metric: %w", err)
+			errors = append(errors, err)
 
 			continue
 		}
 
-		addToList(metricList, matchers)
+		metricList = append(metricList, matchers)
 	}
 
-	return metricList
+	return metricList, errors
 }
 
-func addToList(metricList map[labels.Matcher][]matcher.Matchers, metrics matcher.Matchers) {
-	newName := metrics.Get(types.LabelName)
+func matchersToMap(matchersList []matcher.Matchers) map[labels.Matcher][]matcher.Matchers {
+	matchersMap := make(map[labels.Matcher][]matcher.Matchers, len(matchersList))
 
-	if newName.Type == labels.MatchEqual || newName.Type == labels.MatchNotEqual {
-		if metricList[*newName] == nil {
-			metricList[*newName] = []matcher.Matchers{metrics}
-		} else {
-			metricList[*newName] = append(metricList[*newName], metrics)
+	for _, matchers := range matchersList {
+		newName := matchers.Get(types.LabelName)
+
+		switch newName.Type {
+		case labels.MatchEqual, labels.MatchNotEqual:
+			matchersMap[*newName] = append(matchersMap[*newName], matchers)
+		case labels.MatchRegexp, labels.MatchNotRegexp:
+			// labels.Matcher has a pointer to a regex so we can't use it as a key
+			// to know if the matcher already exist in the map.
+			found := false
+
+			for name := range matchersMap {
+				if name.Type == newName.Type && name.Value == newName.Value {
+					matchersMap[name] = append(matchersMap[name], matchers)
+					found = true
+
+					break
+				}
+			}
+
+			if !found {
+				matchersMap[*newName] = []matcher.Matchers{matchers}
+			}
 		}
-
-		return
 	}
 
-	for key := range metricList {
-		if key.Type != newName.Type {
+	return matchersMap
+}
+
+func staticScrapperLists(configTargets []config.PrometheusTarget) ([]matcher.Matchers, []matcher.Matchers) {
+	var allowList, denyList []matcher.Matchers
+
+	targets, _ := prometheusConfigToURLs(configTargets)
+	for _, target := range targets {
+		allowMatchers := matchersForScrapperTarget(target.AllowList, target.ExtraLabels)
+		allowList = append(allowList, allowMatchers...)
+
+		denyMatchers := matchersForScrapperTarget(target.DenyList, target.ExtraLabels)
+		denyList = append(denyList, denyMatchers...)
+	}
+
+	return allowList, denyList
+}
+
+func matchersForScrapperTarget(targetFilterList []string, extraLabels map[string]string) []matcher.Matchers {
+	matchersList := make([]matcher.Matchers, 0, len(targetFilterList))
+
+	for _, metric := range targetFilterList {
+		matchers, err := matcher.NormalizeMetric(metric)
+		if err != nil {
+			logger.V(2).Printf(
+				"Could not normalize metric %s with instance %s and job %s",
+				metric, extraLabels[types.LabelMetaScrapeInstance], extraLabels[types.LabelMetaScrapeJob],
+			)
+
 			continue
 		}
 
-		if key.Value == newName.Value {
-			metricList[key] = append(metricList[key], metrics)
-
-			return
-		}
-	}
-
-	metricList[*newName] = []matcher.Matchers{metrics}
-}
-
-func addScrappersList(
-	config config.Config,
-	metricList map[labels.Matcher][]matcher.Matchers,
-	metricListType string,
-) {
-	targetList, _ := prometheusConfigToURLs(config.Metric.Prometheus.Targets)
-
-	for _, t := range targetList {
-		var list []string
-
-		if metricListType == "allow" {
-			list = t.AllowList
-		} else {
-			list = t.DenyList
-		}
-
-		for _, val := range list {
-			matchers, err := matcher.NormalizeMetric(val)
+		if matchers.Get(types.LabelScrapeInstance) == nil {
+			err := matchers.Add(types.LabelScrapeInstance, extraLabels[types.LabelMetaScrapeInstance], labels.MatchEqual)
 			if err != nil {
-				logger.V(2).Printf("Could not normalize metric %s with instance %s and job %s", val, t.ExtraLabels[types.LabelMetaScrapeInstance], t.ExtraLabels[types.LabelMetaScrapeJob])
+				logger.V(2).Printf("Could not add label %s to metric %s", types.LabelScrapeInstance, metric)
 
 				continue
 			}
-
-			if matchers.Get(types.LabelScrapeInstance) == nil {
-				err := matchers.Add(types.LabelScrapeInstance, t.ExtraLabels[types.LabelMetaScrapeInstance], labels.MatchEqual)
-				if err != nil {
-					logger.V(2).Printf("Could not add label %s to metric %s", types.LabelScrapeInstance, val)
-
-					continue
-				}
-			}
-
-			if matchers.Get(types.LabelScrapeJob) == nil {
-				err := matchers.Add(types.LabelScrapeJob, t.ExtraLabels[types.LabelMetaScrapeJob], labels.MatchEqual)
-				if err != nil {
-					logger.V(2).Printf("Could not add label %s to metric %s", types.LabelScrapeJob, val)
-
-					continue
-				}
-			}
-
-			addToList(metricList, matchers)
 		}
+
+		if matchers.Get(types.LabelScrapeJob) == nil {
+			err := matchers.Add(types.LabelScrapeJob, extraLabels[types.LabelMetaScrapeJob], labels.MatchEqual)
+			if err != nil {
+				logger.V(2).Printf("Could not add label %s to metric %s", types.LabelScrapeJob, metric)
+
+				continue
+			}
+		}
+
+		matchersList = append(matchersList, matchers)
 	}
+
+	return matchersList
 }
 
 func getDefaultMetrics(format types.MetricFormat, hasSwap bool) []string {
@@ -859,87 +873,67 @@ func (m *metricFilter) DiagnosticArchive(ctx context.Context, archive types.Arch
 	defer m.l.Unlock()
 
 	fmt.Fprintf(file, "# Allow list (%d entries)\n", len(m.allowList))
-
-	for _, r := range m.allowList {
-		for _, val := range r {
-			fmt.Fprintf(file, "%s\n", val.String())
-		}
-	}
+	printSortedList(file, m.allowList)
 
 	fmt.Fprintf(file, "\n# Deny list (%d entries)\n", len(m.denyList))
-
-	for _, r := range m.denyList {
-		for _, val := range r {
-			fmt.Fprintf(file, "%s\n", val.String())
-		}
-	}
+	printSortedList(file, m.denyList)
 
 	return nil
 }
 
-func (m *metricFilter) buildList(config config.Config, hasSNMP, hasSwap bool, format types.MetricFormat) error {
-	m.l.Lock()
-	defer m.l.Unlock()
+func printSortedList(file io.Writer, matchersMap map[labels.Matcher][]matcher.Matchers) {
+	sortedMatchers := make([]string, 0, len(matchersMap))
 
-	m.staticAllowList = buildMatcherList(config.Metric.AllowMetrics)
-	addScrappersList(config, m.staticAllowList, "allow")
+	for _, list := range matchersMap {
+		for _, matchers := range list {
+			sortedMatchers = append(sortedMatchers, matchers.String())
+		}
+	}
 
-	m.staticDenyList = buildMatcherList(config.Metric.DenyMetrics)
-	addScrappersList(config, m.staticDenyList, "deny")
+	sort.Strings(sortedMatchers)
+
+	for _, matchers := range sortedMatchers {
+		fmt.Fprintf(file, "%s\n", matchers)
+	}
+}
+
+func newMetricFilter(config config.Config, hasSNMP, hasSwap bool, format types.MetricFormat) (*metricFilter, error) {
+	rawAllowList := config.Metric.AllowMetrics
 
 	if hasSNMP {
-		for _, val := range snmpMetrics {
-			matchers, err := matcher.NormalizeMetric(val)
-			if err != nil {
-				return err
-			}
-
-			addToList(m.staticAllowList, matchers)
-		}
+		rawAllowList = append(rawAllowList, snmpMetrics...)
 	}
 
-	m.includeDefaultMetrics = config.Metric.IncludeDefaultMetrics
-
-	if m.includeDefaultMetrics {
-		defaultMetricsList := getDefaultMetrics(format, hasSwap)
-		for _, val := range defaultMetricsList {
-			matchers, err := matcher.NormalizeMetric(val)
-			if err != nil {
-				return err
-			}
-
-			addToList(m.staticAllowList, matchers)
-		}
+	if config.Metric.IncludeDefaultMetrics {
+		rawAllowList = append(rawAllowList, getDefaultMetrics(format, hasSwap)...)
 	}
 
-	m.allowList = map[labels.Matcher][]matcher.Matchers{}
+	var warnings prometheus.MultiError
 
-	for key, val := range m.staticAllowList {
-		m.allowList[key] = make([]matcher.Matchers, len(val))
-
-		copy(m.allowList[key], val)
+	staticAllowList, warn := buildMatchersList(rawAllowList)
+	if warn != nil {
+		warnings = append(warnings, warn...)
 	}
 
-	m.denyList = map[labels.Matcher][]matcher.Matchers{}
-
-	for key, val := range m.staticDenyList {
-		m.denyList[key] = make([]matcher.Matchers, len(val))
-
-		copy(m.denyList[key], val)
+	staticDenyList, warn := buildMatchersList(config.Metric.DenyMetrics)
+	if warn != nil {
+		warnings = append(warnings, warn...)
 	}
 
-	return nil
-}
+	scrapperAllowList, scrapperDenyList := staticScrapperLists(config.Metric.Prometheus.Targets)
 
-func newMetricFilter(
-	config config.Config,
-	hasSNMP, hasSwap bool,
-	metricFormat types.MetricFormat,
-) (*metricFilter, error) {
-	filter := metricFilter{}
-	err := filter.buildList(config, hasSNMP, hasSwap, metricFormat)
+	staticAllowList = append(staticAllowList, scrapperAllowList...)
+	staticDenyList = append(staticDenyList, scrapperDenyList...)
 
-	return &filter, err
+	filter := &metricFilter{
+		staticAllowList:       staticAllowList,
+		staticDenyList:        staticDenyList,
+		allowList:             matchersToMap(staticAllowList),
+		denyList:              matchersToMap(staticDenyList),
+		includeDefaultMetrics: config.Metric.IncludeDefaultMetrics,
+	}
+
+	return filter, warnings.MaybeUnwrap()
 }
 
 func getMatchersList(list map[labels.Matcher][]matcher.Matchers, labelName string) []matcher.Matchers {
@@ -1166,52 +1160,25 @@ type dynamicScrapper interface {
 	GetContainersLabels() map[string]map[string]string
 }
 
-func (m *metricFilter) rebuildServicesMetrics(allowList map[string]matcher.Matchers, services []discovery.Service, errors types.MultiErrors) (map[string]matcher.Matchers, types.MultiErrors) {
+func (m *metricFilter) rebuildServicesMetrics(
+	services []discovery.Service,
+	allowedMetrics map[string]struct{},
+) {
 	for _, service := range services {
 		if !service.Active {
 			continue
 		}
 
-		// Allow JMX metrics.
 		for _, jmxMetric := range jmxtrans.GetJMXMetrics(service) {
-			metricName := service.Name + "_" + jmxMetric.Name
+			allowedMetrics[service.Name+"_"+jmxMetric.Name] = struct{}{}
+		}
 
-			matchers, err := matcher.NormalizeMetric(metricName)
-			if err != nil {
-				errors = append(errors, err)
-
-				continue
+		if m.includeDefaultMetrics {
+			for _, metric := range defaultServiceMetrics[service.ServiceType] {
+				allowedMetrics[metric] = struct{}{}
 			}
-
-			allowList[metricName] = matchers
 		}
 	}
-
-	if m.includeDefaultMetrics {
-		err := m.rebuildDefaultMetrics(services, allowList)
-		if err != nil {
-			errors = append(errors, err)
-		}
-	}
-
-	return allowList, errors
-}
-
-func (m *metricFilter) rebuildDefaultMetrics(services []discovery.Service, list map[string]matcher.Matchers) error {
-	for _, val := range services {
-		defaults := defaultServiceMetrics[val.ServiceType]
-
-		for _, val := range defaults {
-			matchers, err := matcher.NormalizeMetric(val)
-			if err != nil {
-				return err
-			}
-
-			list[val] = matchers
-		}
-	}
-
-	return nil
 }
 
 func (m *metricFilter) RebuildDynamicLists(
@@ -1220,130 +1187,115 @@ func (m *metricFilter) RebuildDynamicLists(
 	thresholdMetricNames []string,
 	alertMetrics []string,
 ) error {
-	allowList := make(map[string]matcher.Matchers)
-	denyList := make(map[string]matcher.Matchers)
-	errors := types.MultiErrors{}
-
 	m.l.Lock()
 	defer m.l.Unlock()
 
-	var registeredLabels map[string]map[string]string
+	// Use a map of metric names to deduplicate them.
+	allowedMetricMap := make(map[string]struct{}, len(thresholdMetricNames)+len(alertMetrics))
 
-	var containersLabels map[string]map[string]string
+	// Allow alert metrics.
+	for _, metric := range alertMetrics {
+		allowedMetricMap[metric] = struct{}{}
+	}
 
+	m.rebuildServicesMetrics(services, allowedMetricMap)
+	m.rebuildThresholdsMetrics(thresholdMetricNames, allowedMetricMap)
+
+	// Convert allowed metric map to a matchers list.
+	allowedMetric := make([]string, 0, len(allowedMetricMap))
+	for k := range allowedMetricMap {
+		allowedMetric = append(allowedMetric, k)
+	}
+
+	var (
+		warnings prometheus.MultiError
+		denyList []matcher.Matchers
+	)
+
+	allowList, moreWarnings := buildMatchersList(allowedMetric)
+	warnings = append(warnings, moreWarnings...)
+
+	// Add dynamic scrapper metrics.
 	if scrapper != nil {
-		registeredLabels = scrapper.GetRegisteredLabels()
-		containersLabels = scrapper.GetContainersLabels()
+		registeredLabels := scrapper.GetRegisteredLabels()
+		containersLabels := scrapper.GetContainersLabels()
 
 		for key, val := range registeredLabels {
-			allowMatchers, denyMatchers, err := addNewSource(containersLabels[key], val)
+			scrapperAllow, scrapperDeny, err := rebuildDynamicScrapperLists(containersLabels[key], val)
 			if err != nil {
-				errors = append(errors, err)
+				warnings = append(warnings, err)
 
 				continue
 			}
 
-			for key, val := range allowMatchers {
-				allowList[key] = val
-			}
-
-			for key, val := range denyMatchers {
-				denyList[key] = val
-			}
+			allowList = append(allowList, scrapperAllow...)
+			denyList = append(denyList, scrapperDeny...)
 		}
 	}
 
-	allowList, errors = m.rebuildServicesMetrics(allowList, services, errors)
+	// Add static filter lists.
+	allowList = append(allowList, m.staticAllowList...)
+	denyList = append(denyList, m.staticDenyList...)
 
-	m.allowList = map[labels.Matcher][]matcher.Matchers{}
+	m.allowList = matchersToMap(allowList)
+	m.denyList = matchersToMap(denyList)
 
-	for key, val := range m.staticAllowList {
-		m.allowList[key] = make([]matcher.Matchers, len(val))
-
-		copy(m.allowList[key], val)
-	}
-
-	for _, val := range allowList {
-		addToList(m.allowList, val)
-	}
-
-	m.denyList = map[labels.Matcher][]matcher.Matchers{}
-
-	for key, val := range m.staticDenyList {
-		m.denyList[key] = make([]matcher.Matchers, len(val))
-
-		copy(m.denyList[key], val)
-	}
-
-	for _, val := range denyList {
-		addToList(m.denyList, val)
-	}
-
-	// Adding the threshold metrics needs to be done after the allowlist is filled with non threshold metrics
-	// because we need to check if the base metrics are allowed before allowing the status metrics.
-	allowList, errors = m.rebuildThresholdsMetric(thresholdMetricNames, alertMetrics, errors)
-
-	for _, val := range allowList {
-		addToList(m.allowList, val)
-	}
-
-	if len(errors) == 0 {
-		return nil
-	}
-
-	return errors
+	return warnings.MaybeUnwrap()
 }
 
-func (m *metricFilter) rebuildThresholdsMetric(thresholdMetricNames []string, alertMetrics []string, errors types.MultiErrors) (map[string]matcher.Matchers, types.MultiErrors) {
-	allowList := make(map[string]matcher.Matchers, len(thresholdMetricNames)+len(alertMetrics))
-
-	for _, val := range thresholdMetricNames {
-		newMetric, err := matcher.NormalizeMetric(val + "_status")
-		if err != nil {
-			errors = append(errors, err)
-
-			continue
-		}
-
+func (m *metricFilter) rebuildThresholdsMetrics(
+	thresholdMetricNames []string,
+	allowedMetrics map[string]struct{},
+) {
+	for _, metric := range thresholdMetricNames {
 		// Check if the base metric is allowed.
-		baseMetric := map[string]string{types.LabelName: val}
+		baseMetric := map[string]string{types.LabelName: metric}
 		if m.isAllowedAndNotDeniedNoLock(baseMetric) {
-			allowList[val+"_status"] = newMetric
+			allowedMetrics[metric+"_status"] = struct{}{}
 		} else {
-			logger.V(1).Printf("Denied status metric for %s", val)
+			logger.V(1).Printf("Denied status metric for %s", metric)
 		}
 	}
-
-	for _, val := range alertMetrics {
-		newMetric, err := matcher.NormalizeMetric(val)
-		if err != nil {
-			errors = append(errors, err)
-
-			continue
-		}
-
-		allowList[val] = newMetric
-	}
-
-	return allowList, errors
 }
 
-func addNewSource(cLabels map[string]string, extraLabels map[string]string) (map[string]matcher.Matchers, map[string]matcher.Matchers, error) {
+// Return the allowed and denied metrics for a container using the container
+// labels "glouton.allow_metrics" and "glouton.deny_metrics".
+func rebuildDynamicScrapperLists(
+	containerLabels map[string]string,
+	extraLabels map[string]string,
+) ([]matcher.Matchers, []matcher.Matchers, error) {
 	allowList := []string{}
 	denyList := []string{}
 
-	if allow, ok := cLabels["glouton.allow_metrics"]; ok && allow != "" {
+	if allow, ok := containerLabels["glouton.allow_metrics"]; ok && allow != "" {
 		allowList = strings.Split(allow, ",")
 	}
 
-	if deny, ok := cLabels["glouton.deny_metrics"]; ok && deny != "" {
+	if deny, ok := containerLabels["glouton.deny_metrics"]; ok && deny != "" {
 		denyList = strings.Split(deny, ",")
 	}
 
-	allowMatchers, denyMatchers, err := newMatcherSource(allowList, denyList,
-		extraLabels[types.LabelMetaScrapeInstance], extraLabels[types.LabelMetaScrapeJob])
-	if err != nil {
-		return nil, nil, err
+	scrapeInstance := extraLabels[types.LabelMetaScrapeInstance]
+	scrapeJob := extraLabels[types.LabelMetaScrapeJob]
+	allowMatchers := make([]matcher.Matchers, 0, len(allowList))
+	denyMatchers := make([]matcher.Matchers, 0, len(denyList))
+
+	for _, metric := range allowList {
+		matchers, err := addMetaLabels(metric, scrapeInstance, scrapeJob)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		allowMatchers = append(allowMatchers, matchers)
+	}
+
+	for _, metric := range denyList {
+		matchers, err := addMetaLabels(metric, scrapeInstance, scrapeJob)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		denyMatchers = append(denyMatchers, matchers)
 	}
 
 	return allowMatchers, denyMatchers, nil
@@ -1366,29 +1318,4 @@ func addMetaLabels(metric string, scrapeInstance string, scrapeJob string) (matc
 	}
 
 	return m, nil
-}
-
-func newMatcherSource(allowList []string, denyList []string, scrapeInstance string, scrapeJob string) (map[string]matcher.Matchers, map[string]matcher.Matchers, error) {
-	allowMatchers := make(map[string]matcher.Matchers)
-	denyMatchers := make(map[string]matcher.Matchers)
-
-	for _, val := range allowList {
-		allowVal, err := addMetaLabels(val, scrapeInstance, scrapeJob)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		allowMatchers[val] = allowVal
-	}
-
-	for _, val := range denyList {
-		denyVal, err := addMetaLabels(val, scrapeInstance, scrapeJob)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		denyMatchers[val] = denyVal
-	}
-
-	return allowMatchers, denyMatchers, nil
 }

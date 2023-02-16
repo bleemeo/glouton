@@ -462,12 +462,21 @@ func Test_RebuildDynamicList(t *testing.T) {
 				types.LabelMetaScrapeJob:      "discovered-exporters",
 				"test":                        "salut",
 			},
+			"container2URL": {
+				types.LabelMetaScrapeInstance: "container2URL",
+				types.LabelMetaScrapeJob:      "discovered-exporters",
+			},
 		},
 		containersLabels: map[string]map[string]string{
 			"containerURL": {
 				"prometheus.io/scrape":  "true",
-				"glouton.allow_metrics": "something,else",
-				"glouton.deny_metrics":  "other",
+				"glouton.allow_metrics": "something,else,same_name",
+				"glouton.deny_metrics":  "other,same_name_2",
+			},
+			"container2URL": {
+				"prometheus.io/scrape":  "true",
+				"glouton.allow_metrics": "same_name",
+				"glouton.deny_metrics":  "same_name_2",
 			},
 		},
 	}
@@ -485,15 +494,21 @@ func Test_RebuildDynamicList(t *testing.T) {
 
 	m, _ := matcher.NormalizeMetric("{__name__=\"something\",scrape_instance=\"containerURL\",scrape_job=\"discovered-exporters\"}")
 	m2, _ := matcher.NormalizeMetric("{__name__=\"else\",scrape_instance=\"containerURL\",scrape_job=\"discovered-exporters\"}")
-	m3, _ := matcher.NormalizeMetric("{__name__=\"other\",scrape_instance=\"containerURL\",scrape_job=\"discovered-exporters\"}")
+	m3, _ := matcher.NormalizeMetric("{__name__=\"same_name\",scrape_instance=\"containerURL\",scrape_job=\"discovered-exporters\"}")
+	m4, _ := matcher.NormalizeMetric("{__name__=\"same_name\",scrape_instance=\"container2URL\",scrape_job=\"discovered-exporters\"}")
+	m5, _ := matcher.NormalizeMetric("{__name__=\"other\",scrape_instance=\"containerURL\",scrape_job=\"discovered-exporters\"}")
+	m6, _ := matcher.NormalizeMetric("{__name__=\"same_name_2\",scrape_instance=\"containerURL\",scrape_job=\"discovered-exporters\"}")
+	m7, _ := matcher.NormalizeMetric("{__name__=\"same_name_2\",scrape_instance=\"container2URL\",scrape_job=\"discovered-exporters\"}")
 
 	allowListWant[*m.Get(types.LabelName)] = append(allowListWant[*m.Get(types.LabelName)], m)
 	allowListWant[*m2.Get(types.LabelName)] = append(allowListWant[*m2.Get(types.LabelName)], m2)
-	denyListWant[*m3.Get(types.LabelName)] = append(denyListWant[*m3.Get(types.LabelName)], m3)
+	allowListWant[*m3.Get(types.LabelName)] = append(allowListWant[*m3.Get(types.LabelName)], m3, m4)
+	denyListWant[*m5.Get(types.LabelName)] = append(denyListWant[*m5.Get(types.LabelName)], m5)
+	denyListWant[*m6.Get(types.LabelName)] = append(denyListWant[*m6.Get(types.LabelName)], m6, m7)
 
 	err := mf.RebuildDynamicLists(&d, []discovery.Service{}, []string{}, []string{})
 	if err != nil {
-		t.Errorf("Unexpected error: %v", err)
+		t.Fatalf("Unexpected error: %v", err)
 	}
 
 	got := sortMatchers(listFromMap(mf.allowList))
@@ -501,7 +516,7 @@ func Test_RebuildDynamicList(t *testing.T) {
 
 	res := cmp.Diff(got, wanted, cmpopts.IgnoreUnexported(labels.Matcher{}))
 	if res != "" {
-		t.Errorf("got != expected for allowList: %s", res)
+		t.Fatalf("got != expected for allowList: %s", res)
 	}
 
 	got = sortMatchers(listFromMap(mf.denyList))
@@ -509,13 +524,13 @@ func Test_RebuildDynamicList(t *testing.T) {
 
 	res = cmp.Diff(got, wanted, cmpopts.IgnoreUnexported(labels.Matcher{}))
 	if res != "" {
-		t.Errorf("got != expected for denyList: %s", res)
+		t.Fatalf("got != expected for denyList: %s", res)
 	}
 
 	// Rebuild is done twice to make sure the build is effectively cleared and rebuild
 	err = mf.RebuildDynamicLists(&d, []discovery.Service{}, []string{}, []string{})
 	if err != nil {
-		t.Errorf("Unexpected error: %v", err)
+		t.Fatalf("Unexpected error: %v", err)
 	}
 
 	got = sortMatchers(listFromMap(mf.allowList))
@@ -523,7 +538,7 @@ func Test_RebuildDynamicList(t *testing.T) {
 
 	res = cmp.Diff(got, wanted, cmpopts.IgnoreUnexported(labels.Matcher{}))
 	if res != "" {
-		t.Errorf("got != expected for second allowList: %s", res)
+		t.Fatalf("got != expected for second allowList: %s", res)
 	}
 
 	got = sortMatchers(listFromMap(mf.denyList))
@@ -531,7 +546,7 @@ func Test_RebuildDynamicList(t *testing.T) {
 
 	res = cmp.Diff(got, wanted, cmpopts.IgnoreUnexported(labels.Matcher{}))
 	if res != "" {
-		t.Errorf("got != expected for second denyList: %s", res)
+		t.Fatalf("got != expected for second denyList: %s", res)
 	}
 }
 
@@ -969,27 +984,12 @@ func listFromMap(m map[labels.Matcher][]matcher.Matchers) []matcher.Matchers {
 	return res
 }
 
-func sortMatchers(list []matcher.Matchers) []matcher.Matchers {
-	nameList := []string{}
-	orderedList := []matcher.Matchers{}
+func sortMatchers(matchers []matcher.Matchers) []matcher.Matchers {
+	sort.Slice(matchers, func(i, j int) bool {
+		return matchers[i].String() < matchers[j].String()
+	})
 
-	for _, val := range list {
-		nameList = append(nameList, val[0].Value)
-	}
-
-	sort.Strings(nameList)
-
-	for _, val := range nameList {
-		for _, v := range list {
-			if v[0].Value == val {
-				orderedList = append(orderedList, v)
-
-				break
-			}
-		}
-	}
-
-	return orderedList
+	return matchers
 }
 
 func generatePoints(nb int, lbls map[string]string) []types.MetricPoint {
@@ -1287,7 +1287,7 @@ func Benchmark_filters_all(b *testing.B) {
 func Test_RebuildDefaultMetrics(t *testing.T) {
 	cfg := config.Config{
 		Metric: config.Metric{
-			IncludeDefaultMetrics: false,
+			IncludeDefaultMetrics: true,
 		},
 	}
 
@@ -1295,33 +1295,27 @@ func Test_RebuildDefaultMetrics(t *testing.T) {
 
 	services := []discovery.Service{
 		{
+			Active:      true,
 			ServiceType: discovery.PostfixService,
 		},
 		{
+			Active:      true,
 			ServiceType: discovery.BindService,
 		},
 	}
 
-	got := make(map[string]matcher.Matchers)
+	metricsMap := make(map[string]struct{})
 
-	err := metricFilter.rebuildDefaultMetrics(services, got)
-	if err != nil {
-		t.Error(err)
+	metricFilter.rebuildServicesMetrics(services, metricsMap)
 
-		return
+	metricsNames := make([]string, 0, len(metricsMap))
+	for k := range metricsMap {
+		metricsNames = append(metricsNames, k)
 	}
 
-	want := map[string]matcher.Matchers{
-		"postfix_queue_size": {
-			{
-				Name:  "__name__",
-				Type:  labels.MatchEqual,
-				Value: "postfix_queue_size",
-			},
-		},
-	}
+	want := []string{"postfix_queue_size"}
 
-	res := cmp.Diff(got, want, cmpopts.IgnoreUnexported(labels.Matcher{}))
+	res := cmp.Diff(metricsNames, want, cmpopts.IgnoreUnexported(labels.Matcher{}))
 
 	if res != "" {
 		t.Errorf("rebuildDefaultMetrics():\n%s", res)
