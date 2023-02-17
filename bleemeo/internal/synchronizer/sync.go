@@ -976,9 +976,13 @@ func (s *Synchronizer) isDuplicatedOnSameHost(ctx context.Context, pid int) (boo
 		// On Windows we don't know the installation path, only that the process uses "glouton.exe".
 		if (strings.HasPrefix(process.CmdLine, "/usr/sbin/glouton") && process.Name == "glouton") ||
 			(process.Name == "glouton.exe" && version.IsWindows()) {
-			logger.Printf("Another agent is already running on this host with PID %d (I'm PID %d)", process.PID, pid)
+			// But still ensure that this process isn't a very young process. We don't want "glouton --version" to
+			// be detected as duplicated agent.
+			if s.now().Sub(process.CreateTime) >= time.Minute {
+				logger.Printf("Another agent is already running on this host with PID %d (I'm PID %d)", process.PID, pid)
 
-			return true, nil
+				return true, nil
+			}
 		}
 	}
 

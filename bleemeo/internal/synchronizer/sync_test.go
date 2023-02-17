@@ -1294,6 +1294,10 @@ func TestIsDuplicatedOnSameHost(t *testing.T) {
 	// The PID of our own agent.
 	const agentPID = 1
 
+	now := time.Now()
+	startYoung := now.Add(-10 * time.Second)
+	startOld := now.Add(-2 * time.Minute)
+
 	tests := []struct {
 		Name           string
 		Process        map[int]facts.Process
@@ -1303,14 +1307,16 @@ func TestIsDuplicatedOnSameHost(t *testing.T) {
 			Name: "glouton-netstat",
 			Process: map[int]facts.Process{
 				agentPID: {
-					PID:     agentPID,
-					CmdLine: "/usr/sbin/glouton",
-					Name:    "glouton",
+					PID:        agentPID,
+					CmdLine:    "/usr/sbin/glouton",
+					Name:       "glouton",
+					CreateTime: startOld,
 				},
 				2: {
-					PID:     2,
-					CmdLine: "/bin/sh /usr/sbin/glouton-netstat",
-					Name:    "glouton-netstat",
+					PID:        2,
+					CmdLine:    "/bin/sh /usr/sbin/glouton-netstat",
+					Name:       "glouton-netstat",
+					CreateTime: startOld,
 				},
 			},
 			WantDuplicated: false,
@@ -1319,14 +1325,16 @@ func TestIsDuplicatedOnSameHost(t *testing.T) {
 			Name: "glouton-netstat2",
 			Process: map[int]facts.Process{
 				agentPID: {
-					PID:     agentPID,
-					CmdLine: "/usr/sbin/glouton",
-					Name:    "glouton",
+					PID:        agentPID,
+					CmdLine:    "/usr/sbin/glouton",
+					Name:       "glouton",
+					CreateTime: startOld,
 				},
 				2: {
-					PID:     2,
-					CmdLine: "/usr/sbin/glouton-netstat",
-					Name:    "glouton-netstat",
+					PID:        2,
+					CmdLine:    "/usr/sbin/glouton-netstat",
+					Name:       "glouton-netstat",
+					CreateTime: startOld,
 				},
 			},
 			WantDuplicated: false,
@@ -1335,14 +1343,16 @@ func TestIsDuplicatedOnSameHost(t *testing.T) {
 			Name: "glouton-cron",
 			Process: map[int]facts.Process{
 				agentPID: {
-					PID:     agentPID,
-					CmdLine: "/usr/sbin/glouton",
-					Name:    "glouton",
+					PID:        agentPID,
+					CmdLine:    "/usr/sbin/glouton",
+					Name:       "glouton",
+					CreateTime: startOld,
 				},
 				2: {
-					PID:     2,
-					CmdLine: "/bin/sh /etc/cron.hourly/glouton",
-					Name:    "glouton",
+					PID:        2,
+					CmdLine:    "/bin/sh /etc/cron.hourly/glouton",
+					Name:       "glouton",
+					CreateTime: startOld,
 				},
 			},
 			WantDuplicated: false,
@@ -1351,17 +1361,37 @@ func TestIsDuplicatedOnSameHost(t *testing.T) {
 			Name: "duplicated",
 			Process: map[int]facts.Process{
 				agentPID: {
-					PID:     agentPID,
-					CmdLine: "/usr/sbin/glouton",
-					Name:    "glouton",
+					PID:        agentPID,
+					CmdLine:    "/usr/sbin/glouton",
+					Name:       "glouton",
+					CreateTime: startOld,
 				},
 				2: {
-					PID:     2,
-					CmdLine: "/usr/sbin/glouton",
-					Name:    "glouton",
+					PID:        2,
+					CmdLine:    "/usr/sbin/glouton",
+					Name:       "glouton",
+					CreateTime: startOld,
 				},
 			},
 			WantDuplicated: true,
+		},
+		{
+			Name: "young-duplicated",
+			Process: map[int]facts.Process{
+				agentPID: {
+					PID:        agentPID,
+					CmdLine:    "/usr/sbin/glouton",
+					Name:       "glouton",
+					CreateTime: startOld,
+				},
+				2: {
+					PID:        2,
+					CmdLine:    "/usr/sbin/glouton --version",
+					Name:       "glouton",
+					CreateTime: startYoung,
+				},
+			},
+			WantDuplicated: false,
 		},
 	}
 
@@ -1377,6 +1407,10 @@ func TestIsDuplicatedOnSameHost(t *testing.T) {
 						Process: mockProcessLister{test.Process},
 					},
 				},
+			}
+
+			sync.now = func() time.Time {
+				return now
 			}
 
 			isDuplicated, err := sync.isDuplicatedOnSameHost(context.Background(), agentPID)
