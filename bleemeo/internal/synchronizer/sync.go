@@ -988,6 +988,10 @@ func (s *Synchronizer) isDuplicatedOnSameHost(ctx context.Context, pid int) (boo
 			if s.now().Sub(process.CreateTime) >= time.Minute {
 				logger.Printf("Another agent is already running on this host with PID %d (I'm PID %d)", process.PID, pid)
 
+				logger.Printf(
+					"The following links may be relevant to solve the issue: https://go.bleemeo.com/l/doc-duplicated-agent",
+				)
+
 				return true, nil
 			}
 		}
@@ -1035,8 +1039,7 @@ func (s *Synchronizer) isDuplicatedOnAnotherHost() (bool, error) {
 			new.Value,
 		)
 		logger.Printf(
-			"The following links may be relevant to solve the issue: https://go.bleemeo.com/l/agent-upgrade " +
-				"and https://go.bleemeo.com/l/agent-installation-cloud-image ",
+			"The following links may be relevant to solve the issue: https://go.bleemeo.com/l/doc-duplicated-agent",
 		)
 
 		return true, nil
