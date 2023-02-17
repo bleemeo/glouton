@@ -934,6 +934,13 @@ func (s *Synchronizer) checkDuplicated(ctx context.Context) error {
 		return nil
 	}
 
+	until := s.now().Add(delay.JitterDelay(15*time.Minute, 0.05))
+	s.Disable(until, bleemeoTypes.DisableDuplicatedAgent)
+
+	if s.option.DisableCallback != nil {
+		s.option.DisableCallback(bleemeoTypes.DisableDuplicatedAgent, until)
+	}
+
 	// The agent is duplicated, update the last duplication date on the API.
 	params := map[string]string{
 		"fields": "last_duplication_date",
@@ -1019,13 +1026,6 @@ func (s *Synchronizer) isDuplicatedOnAnotherHost() (bool, error) {
 
 		if old.Value == new.Value {
 			continue
-		}
-
-		until := s.now().Add(delay.JitterDelay(15*time.Minute, 0.05))
-		s.Disable(until, bleemeoTypes.DisableDuplicatedAgent)
-
-		if s.option.DisableCallback != nil {
-			s.option.DisableCallback(bleemeoTypes.DisableDuplicatedAgent, until)
 		}
 
 		logger.Printf(
