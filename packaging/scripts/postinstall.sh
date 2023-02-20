@@ -97,8 +97,12 @@ EOF
 EOF
 fi
 
+# Create Fluent Bit directories and initial configuration.
+mkdir -p /var/lib/glouton/fluent-bit/db
+mkdir -p /var/lib/glouton/fluent-bit/config
+touch /var/lib/glouton/fluent-bit/config/fluent-bit.conf
 
-chown glouton:glouton /var/lib/glouton
+chown glouton:glouton -R /var/lib/glouton
 
 if [ -d /etc/init ]; then
    cat > /etc/init/glouton.conf <<EOF
