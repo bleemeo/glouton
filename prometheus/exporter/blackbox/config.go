@@ -113,6 +113,15 @@ func genCollectorFromDynamicTarget(monitor types.Monitor, userAgent string) (*co
 
 		mod.HTTP.HTTPClientConfig.TLSConfig.CAFile = monitor.CAFile
 
+		// Add the custom headers to the default headers.
+		if mod.HTTP.Headers == nil {
+			mod.HTTP.Headers = make(map[string]string, len(monitor.Headers))
+		}
+
+		for header, value := range monitor.Headers {
+			mod.HTTP.Headers[header] = value
+		}
+
 		uri, mod = preprocessHTTPTarget(url, mod)
 	case proberNameDNS:
 		mod.Prober = proberNameDNS
