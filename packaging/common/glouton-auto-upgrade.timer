@@ -2,7 +2,7 @@
 Description=Glouton auto-upgrade
 
 [Timer]
-OnCalendar=Mon..Fri 7:00
+OnCalendar=Mon,Tue,Wed,Thu,Fri 7:00
 RandomizedDelaySec=12h
 
 [Install]
