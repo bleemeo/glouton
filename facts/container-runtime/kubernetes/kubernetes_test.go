@@ -765,6 +765,37 @@ func TestKubernetes_Containers(t *testing.T) { //nolint:maintidx
 	}
 }
 
+// Test the container log path on Docker and ContainerD runtimes.
+func TestContainerLogPath(t *testing.T) {
+	containerWithContainerD := wrappedContainer{
+		Container: facts.FakeContainer{
+			FakeID:            "k8s.io/e00f87ac94cffd0bf7e79c2605e97ed2df3ad3bc65b3abfafbc7df57a218f6d9",
+			FakeContainerName: "k8s_rabbitmq_rabbitmq-labels-74cfb594d8-cgbzn_default",
+			FakePodName:       "rabbitmq-labels-74cfb594d8-cgbzn",
+			FakePodNamespace:  "default",
+		},
+	}
+
+	containerWithDocker := wrappedContainer{
+		Container: facts.FakeContainer{
+			FakeID:            "e00f87ac94cffd0bf7e79c2605e97ed2df3ad3bc65b3abfafbc7df57a218f6d9",
+			FakeContainerName: "k8s_rabbitmq_rabbitmq-labels-74cfb594d8-cgbzn_default_173e7224-1fef-485d-bb72-30d45e46a551_0",
+			FakePodName:       "rabbitmq-labels-74cfb594d8-cgbzn",
+			FakePodNamespace:  "default",
+		},
+	}
+
+	const expectedPath = "/var/log/containers/rabbitmq-labels-74cfb594d8-cgbzn_default_rabbitmq-e00f87ac94cffd0bf7e79c2605e97ed2df3ad3bc65b3abfafbc7df57a218f6d9.log"
+
+	if containerWithContainerD.LogPath() != expectedPath {
+		t.Fatalf("Expected %s, got %s", expectedPath, containerWithContainerD.LogPath())
+	}
+
+	if containerWithDocker.LogPath() != expectedPath {
+		t.Fatalf("Expected %s, got %s", expectedPath, containerWithContainerD.LogPath())
+	}
+}
+
 func TestClusterMetrics(t *testing.T) {
 	const (
 		mockDir     = "testdata/cluster_metrics"

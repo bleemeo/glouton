@@ -37,6 +37,7 @@ import (
 	"glouton/facts/container-runtime/kubernetes"
 	"glouton/facts/container-runtime/merge"
 	"glouton/facts/container-runtime/veth"
+	"glouton/fluentbit"
 	"glouton/influxdb"
 	"glouton/inputs"
 	"glouton/inputs/docker"
@@ -148,6 +149,7 @@ type agent struct {
 	reloadState            ReloadState
 	vethProvider           *veth.Provider
 	mqtt                   *mqtt.MQTT
+	fluentbitManager       *fluentbit.Manager
 
 	triggerHandler            *debouncer.Debouncer
 	triggerLock               sync.Mutex
@@ -906,8 +908,9 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 	}
 
 	a.dynamicScrapper = &promexporter.DynamicScrapper{
-		Registry:       a.gathererRegistry,
-		DynamicJobName: "discovered-exporters",
+		Registry:        a.gathererRegistry,
+		DynamicJobName:  "discovered-exporters",
+		FluentBitInputs: a.config.Log.Inputs,
 	}
 
 	if a.config.Blackbox.Enable {
@@ -979,7 +982,8 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		tasks = append(tasks, taskInfo{a.jmx.Run, "jmxtrans"})
 	}
 
-	a.rulesManager = rules.NewManager(ctx, a.store)
+	baseRules := fluentbit.PromQLRulesFromInputs(a.config.Log.Inputs)
+	a.rulesManager = rules.NewManager(ctx, a.store, baseRules)
 
 	if a.config.Bleemeo.Enable {
 		scaperName := a.config.Blackbox.ScraperName
@@ -1198,6 +1202,20 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 			logger.Printf("Warning: both \"disk_monitor\" and \"disk_ignore\" are set. Only \"disk_ignore\" will be used")
 		} else if a.metricFormat != types.MetricFormatBleemeo {
 			logger.Printf("Warning: configuration \"disk_monitor\" is not used in Prometheus mode. Use \"disk_ignore\"")
+		}
+	}
+
+	if len(a.config.Log.Inputs) > 0 {
+		a.fluentbitManager, warnings = fluentbit.New(a.config.Log, a.gathererRegistry, a.containerRuntime)
+		if warnings != nil {
+			a.addWarnings(warnings...)
+		}
+
+		if a.fluentbitManager != nil {
+			tasks = append(tasks, taskInfo{
+				a.fluentbitManager.Run,
+				"Fluent Bit manager",
+			})
 		}
 	}
 
@@ -2026,6 +2044,10 @@ func (a *agent) writeDiagnosticArchive(ctx context.Context, archive types.Archiv
 
 	if a.mqtt != nil {
 		modules = append(modules, a.mqtt.DiagnosticArchive)
+	}
+
+	if a.fluentbitManager != nil {
+		modules = append(modules, a.fluentbitManager.DiagnosticArchive)
 	}
 
 	for _, f := range modules {

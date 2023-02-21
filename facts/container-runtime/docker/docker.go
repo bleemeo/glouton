@@ -822,7 +822,7 @@ type dockerContainer struct {
 }
 
 func (c dockerContainer) RuntimeName() string {
-	return "docker"
+	return containerTypes.DockerRuntime
 }
 
 func (c dockerContainer) Annotations() map[string]string {
@@ -981,6 +981,10 @@ func (c dockerContainer) ListenAddresses() []facts.ListenAddress {
 	})
 
 	return addresses
+}
+
+func (c dockerContainer) LogPath() string {
+	return c.inspect.LogPath
 }
 
 func (c dockerContainer) PodName() string {

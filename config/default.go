@@ -124,7 +124,7 @@ func DefaultConfig() Config {
 		Container: Container{
 			PIDNamespaceHost: false,
 			Type:             "",
-			Filter: Filter{
+			Filter: ContainerFilter{
 				AllowByDefault: true,
 				AllowList:      []string{},
 				DenyList:       []string{},
@@ -210,6 +210,14 @@ func DefaultConfig() Config {
 			NodeName:            "",
 			ClusterName:         "",
 			KubeConfig:          "",
+		},
+		Log: Log{
+			// bleemeo-agent-logs overrides the URL and set an empty host root prefix.
+			// We don't set an empty host root by default and change it in the Glouton docker image to
+			// support the case where Glouton is installed as a package and Fluent Bit is in a container.
+			FluentBitURL:   "",
+			HostRootPrefix: "/hostroot",
+			Inputs:         []LogInput{},
 		},
 		Logging: Logging{
 			Buffer: LoggingBuffer{

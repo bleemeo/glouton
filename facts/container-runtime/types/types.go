@@ -26,6 +26,11 @@ import (
 	"time"
 )
 
+const (
+	DockerRuntime     = "docker"
+	ContainerDRuntime = "containerd"
+)
+
 // RuntimeInterface is the interface that container runtime provide.
 type RuntimeInterface interface {
 	CachedContainer(containerID string) (c facts.Container, found bool)

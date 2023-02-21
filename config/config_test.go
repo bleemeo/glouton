@@ -118,7 +118,7 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 			},
 		},
 		Container: Container{
-			Filter: Filter{
+			Filter: ContainerFilter{
 				AllowByDefault: true,
 				AllowList:      []string{"redis"},
 				DenyList:       []string{"postgres"},
@@ -164,6 +164,39 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 			NodeName:            "mynode",
 			ClusterName:         "mycluster",
 			KubeConfig:          "/config",
+		},
+		Log: Log{
+			FluentBitURL:   "http://localhost:2020",
+			HostRootPrefix: "/hostroot",
+			Inputs: []LogInput{
+				{
+					Path: "/var/log/apache/access.log",
+					Filters: []LogFilter{
+						{
+							Metric: "apache_errors_count",
+							Regex:  "\\[error\\]",
+						},
+					},
+				},
+				{
+					ContainerName: "redis",
+					Filters: []LogFilter{
+						{
+							Metric: "redis_errors_count",
+							Regex:  "ERROR",
+						},
+					},
+				},
+				{
+					Selectors: map[string]string{"app": "postgres"},
+					Filters: []LogFilter{
+						{
+							Metric: "postgres_errors_count",
+							Regex:  "error",
+						},
+					},
+				},
+			},
 		},
 		Logging: Logging{
 			Buffer: LoggingBuffer{

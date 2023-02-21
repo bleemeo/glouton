@@ -113,13 +113,17 @@ var (
 	}
 )
 
-func NewManager(ctx context.Context, queryable storage.Queryable) *Manager {
-	defaultRules := defaultLinuxRecordingRules
+func NewManager(ctx context.Context, queryable storage.Queryable, baseRules map[string]string) *Manager {
+	rules := defaultLinuxRecordingRules
 	if runtime.GOOS == "windows" {
-		defaultRules = defaultWindowsRecordingRules
+		rules = defaultWindowsRecordingRules
 	}
 
-	return newManager(ctx, queryable, defaultRules, time.Now())
+	for metric, rule := range baseRules {
+		rules[metric] = rule
+	}
+
+	return newManager(ctx, queryable, rules, time.Now())
 }
 
 func newManager(ctx context.Context, queryable storage.Queryable, defaultRules map[string]string, created time.Time) *Manager {
@@ -192,6 +196,12 @@ func (rm *Manager) MetricNames() []string {
 
 	rm.l.Lock()
 	defer rm.l.Unlock()
+
+	for _, group := range rm.recordingRules {
+		for _, rule := range group.Rules() {
+			names = append(names, rule.Name())
+		}
+	}
 
 	for _, r := range rm.ruleGroups {
 		names = append(names, r.promqlRule.Name)

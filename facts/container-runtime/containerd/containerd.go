@@ -902,7 +902,7 @@ type ContainerOCISpec struct {
 }
 
 func (c containerObject) RuntimeName() string {
-	return "containerd"
+	return containerTypes.ContainerDRuntime
 }
 
 func (c containerObject) Annotations() map[string]string {
@@ -987,6 +987,10 @@ func (c containerObject) Labels() map[string]string {
 
 func (c containerObject) ListenAddresses() []facts.ListenAddress {
 	return nil
+}
+
+func (c containerObject) LogPath() string {
+	return ""
 }
 
 func (c containerObject) PodName() string {

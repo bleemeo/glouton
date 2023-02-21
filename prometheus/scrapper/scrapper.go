@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"glouton/logger"
 	"glouton/prometheus/registry"
+	"glouton/types"
 	"glouton/version"
 	"io"
 	"net/http"
@@ -61,6 +62,7 @@ type Target struct {
 	URL             *url.URL
 	AllowList       []string
 	DenyList        []string
+	Rules           []types.SimpleRule
 	ExtraLabels     map[string]string
 	ContainerLabels map[string]string
 	mockResponse    []byte

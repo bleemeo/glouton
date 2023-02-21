@@ -24,6 +24,7 @@ import (
 	"glouton/bleemeo/internal/common"
 	"glouton/bleemeo/types"
 	"glouton/facts"
+	containerTypes "glouton/facts/container-runtime/types"
 	"glouton/logger"
 	"strings"
 	"time"
@@ -207,7 +208,7 @@ func (s *Synchronizer) containerRegisterAndUpdate(localContainers []facts.Contai
 			ImageName:  container.ImageName(),
 		}
 
-		if container.RuntimeName() == "docker" {
+		if container.RuntimeName() == containerTypes.DockerRuntime {
 			payload.DockerAPIVersion = factsMap["docker_api_version"]
 		}
 

@@ -19,6 +19,7 @@ package promexporter
 
 import (
 	"fmt"
+	"glouton/config"
 	"glouton/facts"
 	"glouton/logger"
 	"glouton/prometheus/registry"
@@ -121,6 +122,7 @@ type DynamicScrapper struct {
 	containersLabels map[string]map[string]string
 	DynamicJobName   string
 	Registry         *registry.Registry
+	FluentBitInputs  []config.LogInput
 }
 
 // Update updates the scrappers targets using new containers informations.
@@ -165,6 +167,7 @@ func (d *DynamicScrapper) update(containers []facts.Container) {
 				Description: "Prometheus exporter " + t.URL.String(),
 				JitterSeed:  hash,
 				Interval:    defaultInterval,
+				Rules:       t.Rules,
 				ExtraLabels: t.ExtraLabels,
 			},
 			t,
