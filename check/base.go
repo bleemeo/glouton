@@ -50,11 +50,14 @@ type baseCheck struct {
 	wg     sync.WaitGroup
 
 	persistentConnection bool
+	// Map of addresses with disabled persistent connection.
+	// We use a sync.Map to avoid using the lock in the openSocket() goroutine,
+	// which can cause a deadlock when Check() waits for all goroutines to end.
+	disabledPersistent sync.Map
 
-	l                  sync.Mutex
-	cancel             func()
-	previousStatus     types.StatusDescription
-	disabledPersistent map[string]bool
+	l              sync.Mutex
+	cancel         func()
+	previousStatus types.StatusDescription
 }
 
 func newBase(mainTCPAddress string, tcpAddresses []string, persistentConnection bool, mainCheck func(context.Context) types.StatusDescription, labels map[string]string, annotations types.MetricAnnotations) *baseCheck {
@@ -93,7 +96,6 @@ func newBase(mainTCPAddress string, tcpAddresses []string, persistentConnection 
 			CurrentStatus:     types.StatusOk,
 			StatusDescription: "initial status - description is ignored",
 		},
-		disabledPersistent: make(map[string]bool),
 	}
 }
 
@@ -196,7 +198,7 @@ func (bc *baseCheck) openSockets(scheduleUpdate func(runAt time.Time)) {
 	for _, addr := range bc.tcpAddresses {
 		addr := addr
 
-		if bc.disabledPersistent[addr] {
+		if _, ok := bc.disabledPersistent.Load(addr); ok {
 			continue
 		}
 
@@ -225,9 +227,7 @@ func (bc *baseCheck) openSocket(ctx context.Context, addr string, scheduleUpdate
 
 		if consecutiveFailure > 12 {
 			logger.V(1).Printf("persistent connection to check %s keep getting closed quickly. Disabled persistent connection for this port", addr)
-			bc.l.Lock()
-			bc.disabledPersistent[addr] = true
-			bc.l.Unlock()
+			bc.disabledPersistent.Store(addr, true)
 
 			return
 		}
