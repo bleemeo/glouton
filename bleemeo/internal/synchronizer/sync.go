@@ -934,6 +934,13 @@ func (s *Synchronizer) checkDuplicated(ctx context.Context) error {
 		return nil
 	}
 
+	until := s.now().Add(delay.JitterDelay(15*time.Minute, 0.05))
+	s.Disable(until, bleemeoTypes.DisableDuplicatedAgent)
+
+	if s.option.DisableCallback != nil {
+		s.option.DisableCallback(bleemeoTypes.DisableDuplicatedAgent, until)
+	}
+
 	// The agent is duplicated, update the last duplication date on the API.
 	params := map[string]string{
 		"fields": "last_duplication_date",
@@ -974,11 +981,19 @@ func (s *Synchronizer) isDuplicatedOnSameHost(ctx context.Context, pid int) (boo
 
 		// On Linux, both our systemd service and docker container use "/usr/sbin/glouton".
 		// On Windows we don't know the installation path, only that the process uses "glouton.exe".
-		if strings.Contains(process.CmdLine, "/usr/sbin/glouton") && process.Name == "glouton" ||
-			process.Name == "glouton.exe" {
-			logger.Printf("Another agent is already running on this host with PID %d (I'm PID %d)", process.PID, pid)
+		if (strings.HasPrefix(process.CmdLine, "/usr/sbin/glouton") && process.Name == "glouton") ||
+			(process.Name == "glouton.exe" && version.IsWindows()) {
+			// But still ensure that this process isn't a very young process. We don't want "glouton --version" to
+			// be detected as duplicated agent.
+			if s.now().Sub(process.CreateTime) >= time.Minute {
+				logger.Printf("Another agent is already running on this host with PID %d (I'm PID %d)", process.PID, pid)
 
-			return true, nil
+				logger.Printf(
+					"The following links may be relevant to solve the issue: https://go.bleemeo.com/l/doc-duplicated-agent",
+				)
+
+				return true, nil
+			}
 		}
 	}
 
@@ -1017,13 +1032,6 @@ func (s *Synchronizer) isDuplicatedOnAnotherHost() (bool, error) {
 			continue
 		}
 
-		until := s.now().Add(delay.JitterDelay(15*time.Minute, 0.05))
-		s.Disable(until, bleemeoTypes.DisableDuplicatedAgent)
-
-		if s.option.DisableCallback != nil {
-			s.option.DisableCallback(bleemeoTypes.DisableDuplicatedAgent, until)
-		}
-
 		logger.Printf(
 			"Detected duplicated state.json. Another agent changed %#v from %#v to %#v",
 			name,
@@ -1031,8 +1039,7 @@ func (s *Synchronizer) isDuplicatedOnAnotherHost() (bool, error) {
 			new.Value,
 		)
 		logger.Printf(
-			"The following links may be relevant to solve the issue: https://go.bleemeo.com/l/agent-upgrade " +
-				"and https://go.bleemeo.com/l/agent-installation-cloud-image ",
+			"The following links may be relevant to solve the issue: https://go.bleemeo.com/l/doc-duplicated-agent",
 		)
 
 		return true, nil
