@@ -827,6 +827,9 @@ func (s *Synchronizer) syncToPerform(ctx context.Context) (map[string]bool, bool
 
 	syncMethods := make(map[string]bool)
 
+	// Always sync agent to update the MQTT connection status.
+	syncMethods[syncMethodAgent] = false
+
 	fullSync := false
 	if s.nextFullSync.Before(s.now()) {
 		fullSync = true
@@ -837,17 +840,16 @@ func (s *Synchronizer) syncToPerform(ctx context.Context) (map[string]bool, bool
 		fullSync = true
 	}
 
-	localFacts, _ := s.option.Facts.Facts(ctx, 24*time.Hour)
-
 	if fullSync {
-		syncMethods[syncMethodInfo] = fullSync
-		syncMethods[syncMethodAgent] = fullSync
-		syncMethods[syncMethodAccountConfig] = fullSync
-		syncMethods[syncMethodMonitor] = fullSync
-		syncMethods[syncMethodSNMP] = fullSync
-		syncMethods[syncMethodAlertingRules] = fullSync
+		syncMethods[syncMethodInfo] = true
+		syncMethods[syncMethodAgent] = true
+		syncMethods[syncMethodAccountConfig] = true
+		syncMethods[syncMethodMonitor] = true
+		syncMethods[syncMethodSNMP] = true
+		syncMethods[syncMethodAlertingRules] = true
 	}
 
+	localFacts, _ := s.option.Facts.Facts(ctx, 24*time.Hour)
 	if fullSync || s.lastFactUpdatedAt != localFacts["fact_updated_at"] {
 		syncMethods[syncMethodFact] = fullSync
 	}
