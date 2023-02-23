@@ -229,8 +229,13 @@ func (s *Synchronizer) updateMQTTStatus() error {
 			fmt.Sprintf("v1/metric/%s/", metric.ID),
 			map[string]string{"fields": "current_status,status_descriptions"},
 			payloadType{
-				CurrentStatus:     2, // critical
-				StatusDescription: []string{"Agent can't access Bleemeo MQTT on port 1883, is the port blocked by a firewall?"},
+				CurrentStatus: 2, // critical
+				StatusDescription: []string{
+					fmt.Sprintf(
+						"Agent can't access Bleemeo MQTT on port %d, is the port blocked by a firewall?",
+						s.option.Config.Bleemeo.MQTT.Port,
+					),
+				},
 			},
 			nil,
 		)
