@@ -96,7 +96,6 @@ type Synchronizer struct {
 
 	// configSyncDone is true when the config items were successfully synced.
 	configSyncDone bool
-
 	// An edge case occurs when an agent is spawned while the maintenance mode is enabled on the backend:
 	// the agent cannot register agent_status, thus the MQTT connector cannot start, and we cannot receive
 	// notifications to tell us the backend is out of maintenance. So we resort to HTTP polling every 15
@@ -119,6 +118,11 @@ type Synchronizer struct {
 	retryableMetricFailure     map[bleemeoTypes.FailureKind]bool
 	metricRetryAt              time.Time
 	lastInfo                   bleemeoTypes.GlobalInfo
+	// Whether the agent MQTT status should be synced. This is used to avoid syncing
+	// the MQTT status too soon before the agent has tried to connect to MQTT.
+	canSyncAgentMQTTStatus bool
+	// Whether the agent is connected to MQTT. We use a pointer to know if the field is set.
+	isMQTTConnected *bool
 }
 
 type thresholdOverrideKey struct {
@@ -827,9 +831,6 @@ func (s *Synchronizer) syncToPerform(ctx context.Context) (map[string]bool, bool
 
 	syncMethods := make(map[string]bool)
 
-	// Always sync agent to update the MQTT connection status.
-	syncMethods[syncMethodAgent] = false
-
 	fullSync := false
 	if s.nextFullSync.Before(s.now()) {
 		fullSync = true
@@ -1153,5 +1154,22 @@ func (s *Synchronizer) logThrottle(msg string) {
 		logger.V(1).Println(msg)
 
 		s.lastDenyReasonLogAt = time.Now()
+	}
+}
+
+func (s *Synchronizer) SetMQTTConnected(isConnected bool) {
+	s.l.Lock()
+	defer s.l.Unlock()
+
+	// Don't set the MQTT status too soon, let some time to the agent to connect.
+	if time.Since(s.startedAt) < time.Minute {
+		return
+	}
+
+	// Only sync the MQTT status when it changes.
+	if s.isMQTTConnected == nil || isConnected != *s.isMQTTConnected {
+		s.forceSync[syncMethodAgent] = false
+		s.isMQTTConnected = &isConnected
+		s.canSyncAgentMQTTStatus = true
 	}
 }

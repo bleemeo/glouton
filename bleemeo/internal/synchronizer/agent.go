@@ -37,14 +37,12 @@ const (
 )
 
 func (s *Synchronizer) syncAgent(ctx context.Context, fullSync bool, onlyEssential bool) (updateThresholds bool, err error) {
-	if err := s.agentUpdateMQTTStatus(ctx); err != nil {
+	if err := s.syncMainAgent(ctx); err != nil {
 		return false, err
 	}
 
-	if fullSync || onlyEssential {
-		if err := s.syncMainAgent(ctx); err != nil {
-			return false, err
-		}
+	if err := s.agentUpdateMQTTStatus(ctx); err != nil {
+		return false, err
 	}
 
 	if fullSync {
@@ -151,16 +149,36 @@ func (s *Synchronizer) agentsUpdateList() error {
 }
 
 func (s *Synchronizer) agentUpdateMQTTStatus(ctx context.Context) error {
-	mqttAddress := net.JoinHostPort(s.option.Config.Bleemeo.MQTT.Host, strconv.Itoa(s.option.Config.Bleemeo.MQTT.Port))
+	s.l.Lock()
+	isMQTTConnected := s.isMQTTConnected != nil && *s.isMQTTConnected
+	canSync := s.canSyncAgentMQTTStatus
+	s.l.Unlock()
 
-	conn, dialErr := net.DialTimeout("tcp", mqttAddress, 5*time.Second)
-	if conn != nil {
-		defer conn.Close()
+	if !canSync {
+		return nil
 	}
 
-	canAccessMQTT := dialErr == nil
-
 	agent := s.option.Cache.Agent()
+
+	// The agent is already up to date.
+	if agent.CanAccessMQTT && isMQTTConnected || !agent.CanAccessMQTT && !isMQTTConnected {
+		return nil
+	}
+
+	canAccessMQTT := isMQTTConnected
+
+	// When the agent is not connected check whether MQTT is accessible.
+	if !isMQTTConnected {
+		mqttAddress := net.JoinHostPort(s.option.Config.Bleemeo.MQTT.Host, strconv.Itoa(s.option.Config.Bleemeo.MQTT.Port))
+
+		conn, dialErr := net.DialTimeout("tcp", mqttAddress, 5*time.Second)
+		if conn != nil {
+			defer conn.Close()
+		}
+
+		canAccessMQTT = dialErr == nil
+	}
+
 	if agent.CanAccessMQTT == canAccessMQTT {
 		// Nothing to do, the field is up to date.
 		return nil
