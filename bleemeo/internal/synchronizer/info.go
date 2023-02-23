@@ -213,6 +213,13 @@ func (s *Synchronizer) updateMQTTStatus() error {
 		}
 	}
 
+	msg := fmt.Sprintf(
+		"Agent can't access Bleemeo MQTT on port %d, is the port blocked by a firewall?",
+		s.option.Config.Bleemeo.MQTT.Port,
+	)
+
+	logger.Printf(msg)
+
 	// Mark the agent_status as disconnected because MQTT is not accessible.
 	metricKey := types.LabelsToText(
 		map[string]string{types.LabelName: "agent_status", types.LabelInstanceUUID: s.agentID},
@@ -229,13 +236,8 @@ func (s *Synchronizer) updateMQTTStatus() error {
 			fmt.Sprintf("v1/metric/%s/", metric.ID),
 			map[string]string{"fields": "current_status,status_descriptions"},
 			payloadType{
-				CurrentStatus: 2, // critical
-				StatusDescription: []string{
-					fmt.Sprintf(
-						"Agent can't access Bleemeo MQTT on port %d, is the port blocked by a firewall?",
-						s.option.Config.Bleemeo.MQTT.Port,
-					),
-				},
+				CurrentStatus:     2, // critical
+				StatusDescription: []string{msg},
 			},
 			nil,
 		)
