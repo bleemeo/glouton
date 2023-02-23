@@ -24,24 +24,26 @@ import (
 	"glouton/logger"
 	"glouton/types"
 	"glouton/version"
+	"net"
+	"strconv"
 	"strings"
 	"time"
 )
 
 // syncInfo retrieves the minimum supported glouton version the API supports.
 func (s *Synchronizer) syncInfo(ctx context.Context, _ bool, onlyEssential bool) (updateThresholds bool, err error) {
-	return s.syncInfoReal(true)
+	return s.syncInfoReal(ctx, true)
 }
 
 // syncInfoReal retrieves the minimum supported glouton version the API supports.
-func (s *Synchronizer) syncInfoReal(disableOnTimeDrift bool) (updateThresholds bool, err error) {
+func (s *Synchronizer) syncInfoReal(ctx context.Context, disableOnTimeDrift bool) (updateThresholds bool, err error) {
 	var globalInfo bleemeoTypes.GlobalInfo
 
-	statusCode, err := s.realClient.DoUnauthenticated(s.ctx, "GET", "v1/info/", nil, nil, &globalInfo)
+	statusCode, err := s.realClient.DoUnauthenticated(ctx, "GET", "v1/info/", nil, nil, &globalInfo)
 	if err != nil && strings.Contains(err.Error(), "certificate has expired") {
 		// This could happen when local time is really to far away from real time.
 		// Since this request is unauthenticated we retry it with insecure TLS
-		statusCode, err = s.realClient.DoTLSInsecure(s.ctx, "GET", "v1/info/", nil, nil, &globalInfo)
+		statusCode, err = s.realClient.DoTLSInsecure(ctx, "GET", "v1/info/", nil, nil, &globalInfo)
 	}
 
 	if err != nil {
@@ -72,6 +74,11 @@ func (s *Synchronizer) syncInfoReal(disableOnTimeDrift bool) (updateThresholds b
 		}
 	}
 
+	err = s.updateMQTTStatus()
+	if err != nil {
+		return false, err
+	}
+
 	if s.option.SetBleemeoInMaintenanceMode != nil {
 		s.option.SetBleemeoInMaintenanceMode(globalInfo.MaintenanceEnabled)
 	}
@@ -79,7 +86,7 @@ func (s *Synchronizer) syncInfoReal(disableOnTimeDrift bool) (updateThresholds b
 	if globalInfo.CurrentTime != 0 {
 		delta := globalInfo.TimeDrift()
 
-		s.option.PushPoints.PushPoints(s.ctx, []types.MetricPoint{
+		s.option.PushPoints.PushPoints(ctx, []types.MetricPoint{
 			{
 				Point: types.Point{
 					Time:  globalInfo.BleemeoTime().Truncate(time.Second),
@@ -117,7 +124,7 @@ func (s *Synchronizer) syncInfoReal(disableOnTimeDrift bool) (updateThresholds b
 			}
 
 			_, err := s.client.Do(
-				s.ctx,
+				ctx,
 				"PATCH",
 				fmt.Sprintf("v1/metric/%s/", metric.ID),
 				map[string]string{"fields": "current_status,status_descriptions"},
@@ -178,4 +185,59 @@ func (s *Synchronizer) UpdateMaintenance() {
 	defer s.l.Unlock()
 
 	s.forceSync[syncMethodInfo] = false
+}
+
+func (s *Synchronizer) updateMQTTStatus() error {
+	s.l.Lock()
+	isMQTTConnected := s.isMQTTConnected != nil && *s.isMQTTConnected
+	shouldUpdate := s.shouldUpdateMQTTStatus
+	s.shouldUpdateMQTTStatus = false
+	s.l.Unlock()
+
+	if !shouldUpdate || isMQTTConnected {
+		return nil
+	}
+
+	// When the agent is not connected check whether MQTT is accessible.
+	if !isMQTTConnected {
+		mqttAddress := net.JoinHostPort(s.option.Config.Bleemeo.MQTT.Host, strconv.Itoa(s.option.Config.Bleemeo.MQTT.Port))
+
+		conn, dialErr := net.DialTimeout("tcp", mqttAddress, 5*time.Second)
+		if conn != nil {
+			defer conn.Close()
+		}
+
+		if dialErr == nil {
+			// The agent can access MQTT, nothing to do.
+			return nil
+		}
+	}
+
+	// Mark the agent_status as disconnected because MQTT is not accessible.
+	metricKey := types.LabelsToText(
+		map[string]string{types.LabelName: "agent_status", types.LabelInstanceUUID: s.agentID},
+	)
+	if metric, ok := s.option.Cache.MetricLookupFromList()[metricKey]; ok {
+		type payloadType struct {
+			CurrentStatus     int      `json:"current_status"`
+			StatusDescription []string `json:"status_descriptions"`
+		}
+
+		_, err := s.client.Do(
+			s.ctx,
+			"PATCH",
+			fmt.Sprintf("v1/metric/%s/", metric.ID),
+			map[string]string{"fields": "current_status,status_descriptions"},
+			payloadType{
+				CurrentStatus:     2, // critical
+				StatusDescription: []string{"Agent can't access Bleemeo MQTT on port 1883, is the port blocked by a firewall?"},
+			},
+			nil,
+		)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }

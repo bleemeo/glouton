@@ -96,6 +96,7 @@ type Synchronizer struct {
 
 	// configSyncDone is true when the config items were successfully synced.
 	configSyncDone bool
+
 	// An edge case occurs when an agent is spawned while the maintenance mode is enabled on the backend:
 	// the agent cannot register agent_status, thus the MQTT connector cannot start, and we cannot receive
 	// notifications to tell us the backend is out of maintenance. So we resort to HTTP polling every 15
@@ -120,7 +121,7 @@ type Synchronizer struct {
 	lastInfo                   bleemeoTypes.GlobalInfo
 	// Whether the agent MQTT status should be synced. This is used to avoid syncing
 	// the MQTT status too soon before the agent has tried to connect to MQTT.
-	canSyncAgentMQTTStatus bool
+	shouldUpdateMQTTStatus bool
 	// Whether the agent is connected to MQTT. We use a pointer to know if the field is set.
 	isMQTTConnected *bool
 }
@@ -284,7 +285,7 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 	// syncInfo early because MQTT connection will establish or not depending on it (maintenance & outdated agent).
 	// syncInfo also disable if time drift is too big. We don't do this disable now for a new agent, because
 	// we want it to perform registration and creation of agent_status in order to mark this agent as "bad time" on Bleemeo.
-	_, err := s.syncInfoReal(!firstSync)
+	_, err := s.syncInfoReal(ctx, !firstSync)
 	if err != nil {
 		logger.V(1).Printf("bleemeo: pre-run checks: couldn't sync the global config: %v", err)
 	}
@@ -1166,10 +1167,12 @@ func (s *Synchronizer) SetMQTTConnected(isConnected bool) {
 		return
 	}
 
-	// Only sync the MQTT status when it changes.
-	if s.isMQTTConnected == nil || isConnected != *s.isMQTTConnected {
-		s.forceSync[syncMethodAgent] = false
-		s.isMQTTConnected = &isConnected
-		s.canSyncAgentMQTTStatus = true
+	// Update the MQTT status when MQTT just became inaccessible.
+	shouldUpdateStatus := (s.isMQTTConnected == nil || *s.isMQTTConnected) && !isConnected
+	s.isMQTTConnected = &isConnected
+
+	if shouldUpdateStatus {
+		s.forceSync[syncMethodInfo] = false || s.forceSync[syncMethodInfo]
+		s.shouldUpdateMQTTStatus = true
 	}
 }

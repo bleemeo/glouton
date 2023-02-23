@@ -81,7 +81,6 @@ type Agent struct {
 	// If the agent is running in Kubernetes, is he the current cluster leader?
 	// Only the cluster leader gather global metrics for the cluster.
 	IsClusterLeader bool `json:"is_cluster_leader"`
-	CanAccessMQTT   bool `json:"can_access_mqtt"`
 }
 
 // AgentType is an AgentType object on Bleemeo API.

@@ -23,17 +23,13 @@ import (
 	"fmt"
 	"glouton/bleemeo/types"
 	"glouton/logger"
-	"net"
-	"strconv"
-	"time"
 )
 
 var errNoConfig = errors.New("agent don't have any configuration on Bleemeo Cloud platform. Please contact support@bleemeo.com about this issue")
 
 const (
 	apiTagsLength = 100
-	agentFields   = "account,agent_type,created_at,current_config,display_name,fqdn,id," +
-		"is_cluster_leader,next_config_at,tags,can_access_mqtt"
+	agentFields   = "account,agent_type,created_at,current_config,display_name,fqdn,id,is_cluster_leader,next_config_at,tags"
 )
 
 func (s *Synchronizer) syncAgent(ctx context.Context, fullSync bool, onlyEssential bool) (updateThresholds bool, err error) {
@@ -41,8 +37,8 @@ func (s *Synchronizer) syncAgent(ctx context.Context, fullSync bool, onlyEssenti
 		return false, err
 	}
 
-	if err := s.agentUpdateMQTTStatus(ctx); err != nil {
-		return false, err
+	if onlyEssential {
+		return false, nil
 	}
 
 	if fullSync {
@@ -144,62 +140,6 @@ func (s *Synchronizer) agentsUpdateList() error {
 			s.callUpdateLabels = true
 		}
 	}
-
-	return nil
-}
-
-func (s *Synchronizer) agentUpdateMQTTStatus(ctx context.Context) error {
-	s.l.Lock()
-	isMQTTConnected := s.isMQTTConnected != nil && *s.isMQTTConnected
-	canSync := s.canSyncAgentMQTTStatus
-	s.l.Unlock()
-
-	if !canSync {
-		return nil
-	}
-
-	agent := s.option.Cache.Agent()
-
-	// The agent is already up to date.
-	if agent.CanAccessMQTT && isMQTTConnected || !agent.CanAccessMQTT && !isMQTTConnected {
-		return nil
-	}
-
-	canAccessMQTT := isMQTTConnected
-
-	// When the agent is not connected check whether MQTT is accessible.
-	if !isMQTTConnected {
-		mqttAddress := net.JoinHostPort(s.option.Config.Bleemeo.MQTT.Host, strconv.Itoa(s.option.Config.Bleemeo.MQTT.Port))
-
-		conn, dialErr := net.DialTimeout("tcp", mqttAddress, 5*time.Second)
-		if conn != nil {
-			defer conn.Close()
-		}
-
-		canAccessMQTT = dialErr == nil
-	}
-
-	if agent.CanAccessMQTT == canAccessMQTT {
-		// Nothing to do, the field is up to date.
-		return nil
-	}
-
-	_, err := s.client.Do(
-		ctx,
-		"PATCH",
-		fmt.Sprintf("v1/agent/%s/", agent.ID),
-		map[string]string{"fields": "can_access_mqtt"},
-		struct {
-			CanAccessMQTT bool `json:"can_access_mqtt"`
-		}{canAccessMQTT},
-		nil,
-	)
-	if err != nil {
-		return err
-	}
-
-	agent.CanAccessMQTT = canAccessMQTT
-	s.option.Cache.SetAgent(agent)
 
 	return nil
 }
