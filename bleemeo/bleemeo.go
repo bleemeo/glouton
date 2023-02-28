@@ -886,6 +886,10 @@ func (c *Connector) HealthCheck() bool {
 				c.mqttRestart <- nil
 			}
 		}
+
+		c.sync.SetMQTTConnected(c.mqtt.Connected())
+	} else {
+		c.sync.SetMQTTConnected(false)
 	}
 
 	return ok

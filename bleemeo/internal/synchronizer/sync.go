@@ -119,6 +119,11 @@ type Synchronizer struct {
 	retryableMetricFailure     map[bleemeoTypes.FailureKind]bool
 	metricRetryAt              time.Time
 	lastInfo                   bleemeoTypes.GlobalInfo
+	// Whether the agent MQTT status should be synced. This is used to avoid syncing
+	// the MQTT status too soon before the agent has tried to connect to MQTT.
+	shouldUpdateMQTTStatus bool
+	// Whether the agent is connected to MQTT. We use a pointer to know if the field is set.
+	isMQTTConnected *bool
 }
 
 type thresholdOverrideKey struct {
@@ -280,7 +285,7 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 	// syncInfo early because MQTT connection will establish or not depending on it (maintenance & outdated agent).
 	// syncInfo also disable if time drift is too big. We don't do this disable now for a new agent, because
 	// we want it to perform registration and creation of agent_status in order to mark this agent as "bad time" on Bleemeo.
-	_, err := s.syncInfoReal(!firstSync)
+	_, err := s.syncInfoReal(ctx, !firstSync)
 	if err != nil {
 		logger.V(1).Printf("bleemeo: pre-run checks: couldn't sync the global config: %v", err)
 	}
@@ -837,17 +842,16 @@ func (s *Synchronizer) syncToPerform(ctx context.Context) (map[string]bool, bool
 		fullSync = true
 	}
 
-	localFacts, _ := s.option.Facts.Facts(ctx, 24*time.Hour)
-
 	if fullSync {
-		syncMethods[syncMethodInfo] = fullSync
-		syncMethods[syncMethodAgent] = fullSync
-		syncMethods[syncMethodAccountConfig] = fullSync
-		syncMethods[syncMethodMonitor] = fullSync
-		syncMethods[syncMethodSNMP] = fullSync
-		syncMethods[syncMethodAlertingRules] = fullSync
+		syncMethods[syncMethodInfo] = true
+		syncMethods[syncMethodAgent] = true
+		syncMethods[syncMethodAccountConfig] = true
+		syncMethods[syncMethodMonitor] = true
+		syncMethods[syncMethodSNMP] = true
+		syncMethods[syncMethodAlertingRules] = true
 	}
 
+	localFacts, _ := s.option.Facts.Facts(ctx, 24*time.Hour)
 	if fullSync || s.lastFactUpdatedAt != localFacts["fact_updated_at"] {
 		syncMethods[syncMethodFact] = fullSync
 	}
@@ -1151,5 +1155,24 @@ func (s *Synchronizer) logThrottle(msg string) {
 		logger.V(1).Println(msg)
 
 		s.lastDenyReasonLogAt = time.Now()
+	}
+}
+
+func (s *Synchronizer) SetMQTTConnected(isConnected bool) {
+	s.l.Lock()
+	defer s.l.Unlock()
+
+	// Don't set the MQTT status too soon, let some time to the agent to connect.
+	if time.Since(s.startedAt) < time.Minute {
+		return
+	}
+
+	// Update the MQTT status when MQTT just became inaccessible.
+	shouldUpdateStatus := (s.isMQTTConnected == nil || *s.isMQTTConnected) && !isConnected
+	s.isMQTTConnected = &isConnected
+
+	if shouldUpdateStatus {
+		s.forceSync[syncMethodInfo] = false || s.forceSync[syncMethodInfo]
+		s.shouldUpdateMQTTStatus = true
 	}
 }
