@@ -63,7 +63,6 @@ type input struct {
 }
 
 func validateConfig(cfg config.Log) []error {
-	reloadFluentBit(context.Background())
 	var warnings []error
 
 	for _, input := range cfg.Inputs {

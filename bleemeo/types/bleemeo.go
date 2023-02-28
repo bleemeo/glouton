@@ -166,10 +166,11 @@ type Monitor struct {
 
 // MonitorHTTPOptions groups all the possible options when the probe is targeting an HTTP or HTTPS service.
 type MonitorHTTPOptions struct {
-	ExpectedContent      string `json:"monitor_expected_content,omitempty"`
-	ExpectedResponseCode int    `json:"monitor_expected_response_code,omitempty"`
-	ForbiddenContent     string `json:"monitor_unexpected_content,omitempty"`
-	CAFile               string `json:"monitor_ca_file,omitempty"`
+	ExpectedContent      string            `json:"monitor_expected_content,omitempty"`
+	ExpectedResponseCode int               `json:"monitor_expected_response_code,omitempty"`
+	ForbiddenContent     string            `json:"monitor_unexpected_content,omitempty"`
+	CAFile               string            `json:"monitor_ca_file,omitempty"`
+	Headers              map[string]string `json:"monitor_headers,omitempty"`
 }
 
 // Metric is a Metric object on Bleemeo API.
