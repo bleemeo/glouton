@@ -292,9 +292,15 @@ func (uf updateFacter) fromYUM(ctx context.Context) (pendingUpdates int, pending
 func decodeUpdateNotifierFile(content []byte) (pendingUpdates int, pendingSecurityUpdates int) {
 	pendingUpdates = -1
 	pendingSecurityUpdates = -1
-	re := regexp.MustCompile(`^(\d+) [\pL\s:]+.$`)
+	re := regexp.MustCompile(`^[^\d]*(\d+) .+.$`)
 	firstMatch := true
 
+	// The output from update-notifier seems to always have the following:
+	// * the number of updates (including security updates)
+	// * (optional) the number of security update. This is absent if no security update exists
+	//   and if security update exists, that number of updates is > 0
+	// * (optional) the number of ESM (paid support) security update on Ubuntu. This
+	//   number could exists with number of updates == 0.
 	for _, line := range strings.Split(string(content), "\n") {
 		match := re.FindStringSubmatch(line)
 		if len(match) > 0 && firstMatch {
@@ -303,6 +309,18 @@ func decodeUpdateNotifierFile(content []byte) (pendingUpdates int, pendingSecuri
 			firstMatch = false
 		} else if len(match) > 0 {
 			tmp, _ := strconv.ParseInt(match[1], 10, 0)
+
+			// Exclude ESM update.
+			if strings.Contains(line, "ESM") {
+				continue
+			}
+
+			// If number of update is 0, we shouldn't have any security update. It's likely a
+			// false detection of ESM-like feature.
+			if pendingUpdates == 0 {
+				continue
+			}
+
 			pendingSecurityUpdates = int(tmp)
 		}
 	}

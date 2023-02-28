@@ -18,6 +18,7 @@ package facts
 
 import "testing"
 
+func TestDecodeFile(t *testing.T) { //nolint:maintidx
 	// cases could be produced by reading /var/lib/update-notifier/updates-available or
 	// running LANGUAGE=fr /usr/lib/update-notifier/apt-check --human-readable
 	cases := []struct {
@@ -56,6 +57,380 @@ import "testing"
 			pendingUpdate:   -1,
 			pendingSecurity: -1,
 		},
+		{
+			name: "Ubuntu2204_update1_en",
+			in: `
+9 updates can be applied immediately.
+To see these additional updates run: apt list --upgradable
+`,
+			pendingUpdate:   9,
+			pendingSecurity: 0,
+		},
+		{
+			name: "Ubuntu2204_no_update_en",
+			in: `
+Expanded Security Maintenance for Applications is not enabled.
+
+0 updates can be applied immediately.
+
+Enable ESM Apps to receive additional future security updates.
+See https://ubuntu.com/esm or run: sudo pro status
+`,
+			pendingUpdate:   0,
+			pendingSecurity: 0,
+		},
+		{
+			name: "Ubuntu2204_no_update_fr",
+			in: `
+La maintenance de sécurité étendue pour Applications n'est pas activée.
+
+0 mise à jour peut être appliquée immédiatement.
+
+Enable ESM Apps to receive additional future security updates.
+See https://ubuntu.com/esm or run: sudo pro status
+`,
+			pendingUpdate:   0,
+			pendingSecurity: 0,
+		},
+		{
+			name: "Ubuntu2204_no_update_de",
+			in: `
+Erweiterte Sicherheitswartung (ESM) für Applications ist  nicht aktiviert.
+
+0 Aktualisierungen können sofort angewendet werden.
+
+Aktivieren Sie ESM Apps, um zusätzliche zukünftige Sicherheitsupdates zu erhalten.
+Siehe https://ubuntu.com/esm oder führen Sie aus: sudo pro status
+`,
+			pendingUpdate:   0,
+			pendingSecurity: 0,
+		},
+		{
+			name: "Ubuntu2204_no_update_es",
+			in: `
+El mantenimiento de seguridad expandido para Applications está desactivado
+
+Se pueden aplicar 0 actualizaciones de forma inmediata.
+
+Active ESM Apps para recibir futuras actualizaciones de seguridad adicionales.
+Vea https://ubuntu.com/esm o ejecute «sudo pro status»
+`,
+			pendingUpdate:   0,
+			pendingSecurity: 0,
+		},
+		{
+			name: "Ubuntu2204_esm_en",
+			in: `
+Expanded Security Maintenance for Applications is not enabled.
+
+0 updates can be applied immediately.
+
+2 additional security updates can be applied with ESM Apps.
+Learn more about enabling ESM Apps service at https://ubuntu.com/esm
+`,
+			pendingUpdate:   0,
+			pendingSecurity: 0,
+		},
+		{
+			name: "Ubuntu2204_esm_fr",
+			in: `
+La maintenance de sécurité étendue pour Applications n'est pas activée.
+
+0 mise à jour peut être appliquée immédiatement.
+
+2 additional security updates can be applied with ESM Apps.
+Learn more about enabling ESM Apps service at https://ubuntu.com/esm
+`,
+			pendingUpdate:   0,
+			pendingSecurity: 0,
+		},
+		{
+			name: "Ubuntu2204_esm_de",
+			in: `
+Erweiterte Sicherheitswartung (ESM) für Applications ist  nicht aktiviert.
+
+0 Aktualisierungen können sofort angewendet werden.
+
+2 zusätzliche Sicherheitsupdates können mit ESM Apps angewendet werden.
+Erfahren Sie mehr über die Aktivierung des ESM Apps-Dienstes at https://ubuntu.com/esm
+`,
+			pendingUpdate:   0,
+			pendingSecurity: 0,
+		},
+		{
+			name: "Ubuntu2204_esm_es",
+			in: `
+El mantenimiento de seguridad expandido para Applications está desactivado
+
+Se pueden aplicar 0 actualizaciones de forma inmediata.
+
+2 actualizaciones de seguridad adicionales se pueden aplicar con ESM Apps.
+Aprenda más sobre cómo activar el servicio ESM Apps at https://ubuntu.com/esm
+`,
+			pendingUpdate:   0,
+			pendingSecurity: 0,
+		},
+		{
+			name: "Ubuntu2204_esm2_en",
+			in: `
+Expanded Security Maintenance for Applications is not enabled.
+
+1 update can be applied immediately.
+To see these additional updates run: apt list --upgradable
+
+4 additional security updates can be applied with ESM Apps.
+Learn more about enabling ESM Apps service at https://ubuntu.com/esm
+`,
+			pendingUpdate:   1,
+			pendingSecurity: 0,
+		},
+		{
+			name: "Ubuntu2204_esm2_zh",
+			in: `
+扩展安全维护（ESM）Applications 未启用。
+
+1 更新可以立即应用。
+要查看这些附加更新，请运行：apt list --upgradable
+
+4 个额外的安全更新可以通过 ESM Apps 来获取安装。
+可通过以下途径了解如何启用 ESM Apps：at https://ubuntu.com/esm
+`,
+			pendingUpdate:   1,
+			pendingSecurity: 0,
+		},
+		{
+			name: "Ubuntu2204_esm3_en",
+			in: `
+Expanded Security Maintenance for Applications is not enabled.
+
+5 updates can be applied immediately.
+5 of these updates are standard security updates.
+To see these additional updates run: apt list --upgradable
+
+7 additional security updates can be applied with ESM Apps.
+Learn more about enabling ESM Apps service at https://ubuntu.com/esm
+`,
+			pendingUpdate:   5,
+			pendingSecurity: 5,
+		},
+		{
+			name: "Ubuntu2204_esm3_zh",
+			in: `
+扩展安全维护（ESM）Applications 未启用。
+
+5 更新可以立即应用。
+这些更新中有 5 个是标准安全更新。
+要查看这些附加更新，请运行：apt list --upgradable
+
+7 个额外的安全更新可以通过 ESM Apps 来获取安装。
+可通过以下途径了解如何启用 ESM Apps：at https://ubuntu.com/esm
+`,
+			pendingUpdate:   5,
+			pendingSecurity: 5,
+		},
+		{
+			name: "Ubuntu2204_update2_en",
+			in: `
+Expanded Security Maintenance for Applications is not enabled.
+
+4 updates can be applied immediately.
+4 of these updates are standard security updates.
+To see these additional updates run: apt list --upgradable
+
+Enable ESM Apps to receive additional future security updates.
+See https://ubuntu.com/esm or run: sudo pro status
+`,
+			pendingUpdate:   4,
+			pendingSecurity: 4,
+		},
+		{
+			name: "Ubuntu2204_update2_fr",
+			in: `
+La maintenance de sécurité étendue pour Applications n'est pas activée.
+
+4 mises à jour peuvent être appliquées immédiatement.
+4 de ces mises à jour sont des mises à jour de sécurité.
+Pour afficher ces mises à jour supplémentaires, exécuter : apt list --upgradable
+
+Enable ESM Apps to receive additional future security updates.
+See https://ubuntu.com/esm or run: sudo pro status
+`,
+			pendingUpdate:   4,
+			pendingSecurity: 4,
+		},
+		{
+			name: "Ubuntu2204_update2_de",
+			in: `
+Erweiterte Sicherheitswartung (ESM) für Applications ist  nicht aktiviert.
+
+4 Aktualisierungen können sofort angewendet werden.
+4 dieser Aktualisierungen sind Standard-Sicherheitsaktualisierungen.
+Zum Anzeigen dieser zusätzlichen Aktualisierungen bitte »apt list --upgradable« ausführen
+
+Aktivieren Sie ESM Apps, um zusätzliche zukünftige Sicherheitsupdates zu erhalten.
+Siehe https://ubuntu.com/esm oder führen Sie aus: sudo pro status
+`,
+			pendingUpdate:   4,
+			pendingSecurity: 4,
+		},
+		{
+			name: "Ubuntu2204_update2_es",
+			in: `
+El mantenimiento de seguridad expandido para Applications está desactivado
+
+Se pueden aplicar 4 actualizaciones de forma inmediata.
+4 de estas son actualizaciones de seguridad estándares.
+Para ver estas actualizaciones adicionales, ejecute: apt list --upgradable
+
+Active ESM Apps para recibir futuras actualizaciones de seguridad adicionales.
+Vea https://ubuntu.com/esm o ejecute «sudo pro status»
+`,
+			pendingUpdate:   4,
+			pendingSecurity: 4,
+		},
+		{
+			name: "Ubuntu1804_update1_en",
+			in: `
+Expanded Security Maintenance for Applications is not enabled.
+
+7 updates can be applied immediately.
+6 of these updates are standard security updates.
+To see these additional updates run: apt list --upgradable
+
+12 additional security updates can be applied with ESM Apps.
+Learn more about enabling ESM Apps service at https://ubuntu.com/esm
+`,
+			pendingUpdate:   7,
+			pendingSecurity: 6,
+		},
+		{
+			name: "Ubuntu1804_update1_fr",
+			in: `
+La maintenance de sécurité étendue pour Applications n'est pas activée.
+
+7 mises à jour peuvent être appliquées immédiatement.
+6 de ces mises à jour sont des mises à jour de sécurité.
+Pour afficher ces mises à jour supplémentaires, exécuter : apt list --upgradable
+
+12 mises à jour de sécurité supplémentaires peuvent être appliquées avec ESM Apps.
+En savoir plus sur l'activation du service ESM Apps at https://ubuntu.com/esm
+`,
+			pendingUpdate:   7,
+			pendingSecurity: 6,
+		},
+		{
+			name: "Ubuntu1804_update1_de",
+			in: `
+Erweiterte Sicherheitswartung (ESM) für Applications ist  nicht aktiviert.
+
+7 Aktualisierungen können sofort angewendet werden.
+6 dieser Aktualisierungen sind Standard-Sicherheitsaktualisierungen.
+Zum Anzeigen dieser zusätzlichen Aktualisierungen bitte »apt list --upgradable« ausführen
+
+12 zusätzliche Sicherheitsupdates können mit ESM Apps angewendet werden.
+Erfahren Sie mehr über die Aktivierung des ESM Apps-Dienstes at https://ubuntu.com/esm
+`,
+			pendingUpdate:   7,
+			pendingSecurity: 6,
+		},
+		{
+			name: "Ubuntu1804_update1_es",
+			in: `
+El mantenimiento de seguridad expandido para Applications está desactivado
+
+Se pueden aplicar 7 actualizaciones de forma inmediata.
+6 de estas son actualizaciones de seguridad estándares.
+Para ver estas actualizaciones adicionales, ejecute: apt list --upgradable
+
+12 actualizaciones de seguridad adicionales se pueden aplicar con ESM Apps.
+Aprenda más sobre cómo activar el servicio ESM Apps at https://ubuntu.com/esm
+`,
+			pendingUpdate:   7,
+			pendingSecurity: 6,
+		},
+		{
+			name: "Ubuntu2004_update",
+			in: `
+77 updates can be applied immediately.
+To see these additional updates run: apt list --upgradable
+`,
+			pendingUpdate:   77,
+			pendingSecurity: 0,
+		},
+		{
+			name: "Ubuntu2004_update2",
+			in: `
+112 updates can be installed immediately.
+5 of these updates are security updates.
+To see these additional updates run: apt list --upgradable
+`,
+			pendingUpdate:   112,
+			pendingSecurity: 5,
+		},
+		{
+			name: "Ubuntu2210_update1_en",
+			in: `
+9 updates can be applied immediately.
+8 of these updates are standard security updates.
+To see these additional updates run: apt list --upgradable	
+`,
+			pendingUpdate:   9,
+			pendingSecurity: 8,
+		},
+		{
+			name: "Ubuntu2210_update1_fr",
+			in: `
+9 mises à jour peuvent être appliquées immédiatement.
+8 de ces mises à jour sont des mises à jour de sécurité.
+Pour afficher ces mises à jour supplémentaires, exécuter : apt list --upgradable	
+`,
+			pendingUpdate:   9,
+			pendingSecurity: 8,
+		},
+		{
+			name: "Ubuntu2210_update1_de",
+			in: `
+9 Aktualisierungen können sofort angewendet werden.
+8 dieser Aktualisierungen sind Standard-Sicherheitsaktualisierungen.
+Zum Anzeigen dieser zusätzlichen Aktualisierungen bitte »apt list --upgradable« ausführen	
+`,
+			pendingUpdate:   9,
+			pendingSecurity: 8,
+		},
+		{
+			name: "Ubuntu2210_update1_es",
+			in: `
+Se pueden aplicar 9 actualizaciones de forma inmediata.
+8 de estas son actualizaciones de seguridad estándares.
+Para ver estas actualizaciones adicionales, ejecute: apt list --upgradable	
+`,
+			pendingUpdate:   9,
+			pendingSecurity: 8,
+		},
+		{
+			name:            "Ubuntu2210_no_update_en",
+			in:              `0 updates can be applied immediately.`,
+			pendingUpdate:   0,
+			pendingSecurity: 0,
+		},
+		{
+			name:            "Ubuntu2210_no_update_fr",
+			in:              `0 mise à jour peut être appliquée immédiatement.`,
+			pendingUpdate:   0,
+			pendingSecurity: 0,
+		},
+		{
+			name:            "Ubuntu2210_no_update_de",
+			in:              `0 Aktualisierungen können sofort angewendet werden.`,
+			pendingUpdate:   0,
+			pendingSecurity: 0,
+		},
+		{
+			name:            "Ubuntu2210_no_update_es",
+			in:              `Se pueden aplicar 0 actualizaciones de forma inmediata.`,
+			pendingUpdate:   0,
+			pendingSecurity: 0,
+		},
 		// The next 5 entries are crafter after reading source code / executing part of the code,
 		// so they may be inaccurate or might be impossible to generate.
 		{
@@ -84,7 +459,7 @@ import "testing"
 				"2 of these updates are UA Apps: ESM security updates.\n" +
 				"To see these additional updates run: apt list --upgradable\n"),
 			pendingUpdate:   5,
-			pendingSecurity: 2,
+			pendingSecurity: 0,
 		},
 		{
 			name: "hand_made_esm2",
@@ -96,7 +471,7 @@ import "testing"
 				"2 additional security updates can be applied with UA Apps: ESM\n" +
 				"Learn more about enabling UA Apps: ESM service at https://ubuntu.com/esm),\n"),
 			pendingUpdate:   5,
-			pendingSecurity: 2,
+			pendingSecurity: 0,
 		},
 	}
 	for _, c := range cases {
