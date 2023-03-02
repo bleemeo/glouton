@@ -57,7 +57,7 @@ var (
 
 // Load the configuration from files and environment variables.
 // It returns the config, the loaded items, warnings and an error.
-func Load(withDefault bool, paths ...string) (Config, []Item, prometheus.MultiError, error) {
+func Load(withDefault bool, loadEnviron bool, paths ...string) (Config, []Item, prometheus.MultiError, error) {
 	// If no config was given with flags or env variables, fallback on the default files.
 	if len(paths) == 0 || len(paths) == 1 && paths[0] == "" {
 		paths = DefaultPaths()
@@ -65,37 +65,39 @@ func Load(withDefault bool, paths ...string) (Config, []Item, prometheus.MultiEr
 
 	loader := &configLoader{}
 
-	config, warnings, err := load(loader, withDefault, paths...)
+	config, warnings, err := load(loader, withDefault, loadEnviron, paths...)
 
 	return config, loader.items, warnings, err
 }
 
 // load the configuration from files and environment variables.
-func load(loader *configLoader, withDefault bool, paths ...string) (Config, prometheus.MultiError, error) {
+func load(loader *configLoader, withDefault bool, loadEnviron bool, paths ...string) (Config, prometheus.MultiError, error) {
 	// Override config files if the files were given from the env.
-	if envFiles := os.Getenv(EnvGloutonConfigFiles); envFiles != "" {
+	if envFiles := os.Getenv(EnvGloutonConfigFiles); loadEnviron && envFiles != "" {
 		paths = strings.Split(envFiles, ",")
 	}
 
 	warnings, errors := loadPaths(loader, paths)
 
-	// Load config from environment variables.
-	// The warnings are filled only after Load is called.
-	envToKey, envWarnings := envToKeyFunc()
+	if loadEnviron {
+		// Load config from environment variables.
+		// The warnings are filled only after Load is called.
+		envToKey, envWarnings := envToKeyFunc()
 
-	moreWarnings := loader.Load("", env.Provider(deprecatedEnvPrefix, delimiter, envToKey), nil)
-	warnings = append(warnings, moreWarnings...)
+		moreWarnings := loader.Load("", env.Provider(deprecatedEnvPrefix, delimiter, envToKey), nil)
+		warnings = append(warnings, moreWarnings...)
 
-	moreWarnings = loader.Load("", env.Provider(envPrefix, delimiter, envToKey), nil)
-	warnings = append(warnings, moreWarnings...)
+		moreWarnings = loader.Load("", env.Provider(envPrefix, delimiter, envToKey), nil)
+		warnings = append(warnings, moreWarnings...)
 
-	if len(*envWarnings) > 0 {
-		warnings = append(warnings, *envWarnings...)
+		if len(*envWarnings) > 0 {
+			warnings = append(warnings, *envWarnings...)
+		}
 	}
 
 	// Load default config.
 	if withDefault {
-		moreWarnings = loader.Load("", structs.Provider(DefaultConfig(), Tag), nil)
+		moreWarnings := loader.Load("", structs.Provider(DefaultConfig(), Tag), nil)
 		warnings = append(warnings, moreWarnings...)
 	}
 
