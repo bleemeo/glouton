@@ -192,7 +192,7 @@ func (a *agent) init(ctx context.Context, configFiles []string, firstRun bool) (
 	a.taskRegistry = task.NewRegistry(ctx)
 	a.taskIDs = make(map[string]int)
 
-	cfg, configItems, warnings, err := config.Load(true, configFiles...)
+	cfg, configItems, warnings, err := config.Load(true, true, configFiles...)
 	if warnings != nil {
 		a.addWarnings(warnings...)
 	}
