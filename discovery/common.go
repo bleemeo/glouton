@@ -304,6 +304,7 @@ var (
 		ElasticSearchService: {
 			ServicePort:     9200,
 			ServiceProtocol: "tcp",
+			IgnoreHighPort:  true,
 		},
 		EjabberService: {
 			ServicePort:     5222,
@@ -326,6 +327,7 @@ var (
 		JenkinsService: {
 			ServicePort:     8080,
 			ServiceProtocol: "tcp",
+			IgnoreHighPort:  true,
 		},
 		JIRAService: {
 			ServicePort:     8080,
@@ -335,6 +337,7 @@ var (
 		KafkaService: {
 			ServicePort:     9092,
 			ServiceProtocol: "tcp",
+			IgnoreHighPort:  true,
 		},
 		MemcachedService: {
 			ServicePort:     11211,
