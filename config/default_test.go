@@ -134,7 +134,7 @@ func TestLoadFile(t *testing.T) {
 		HighWarning:  newFloatPointer(80),
 		HighCritical: newFloatPointer(90),
 	}
-	defaultCfg.Thresholds["io_utilisation"] = Threshold{
+	defaultCfg.Thresholds["io_utilization"] = Threshold{
 		HighWarning:  newFloatPointer(80),
 		HighCritical: newFloatPointer(90),
 	}
