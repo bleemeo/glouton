@@ -171,11 +171,12 @@ func DefaultConfig() Config {
 			},
 		},
 		DiskIgnore: []string{
-			"^(ram|loop|fd|(h|s|v|xv)d[a-z]|nvme\\d+n\\d+p)\\d+$",
-			"^dm-[0-9]+$",
-			// Ignore partitions.
-			"^(hd|sd|vd|xvd|fio|rssd)[a-z][0-9]+$",
-			"^(mmcblk|nvme[0-9]n|drbd|rbd|skd|rsxx)[0-9]p[0-9]+$",
+			// Ignore some devices
+			"^(bcache|dm-|fd|loop|ram|sr|zd|zram)\\d+$",
+			// Ignore parition (sda1 like, not pN)
+			"^((h|rss|s|v|xv)d[a-z]+|fio[a-z]+)\\d+$",
+			// Ignore parition (pN like)
+			"^(drbd|md|mmcblk|nbd|nvme\\d+n|rbd|rsxx|skd)\\d+p\\d+$",
 		},
 		DiskMonitor: []string{
 			"^(hd|sd|vd|xvd)[a-z]$",
