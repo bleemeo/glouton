@@ -3,6 +3,9 @@ package config
 import (
 	"glouton/prometheus/exporter/common"
 	"testing"
+
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 )
 
 // TestDiskIgnore check that disk ignore regexp match expected disks.
@@ -101,5 +104,42 @@ func TestDefaultDiskIgnore(t *testing.T) {
 				t.Errorf("Disk %s is allowed=%v, want %v", disk, match, shouldMatch)
 			}
 		})
+	}
+}
+
+// TestLoadFile check that loading the etc/glouton.conf file works and yield the default settings.
+func TestLoadFile(t *testing.T) {
+	cfg, warnings, err := load(&configLoader{}, true, false, "../etc/glouton.conf")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(warnings) > 0 {
+		t.Errorf("config had warning: %v", warnings)
+	}
+
+	defaultCfg := DefaultConfig()
+	// There is few settings that aren't in built-in default:
+	// * thershold: most likely for historical reason, we should probably comment
+	//   the settings in glouton.conf.
+	defaultCfg.Thresholds["cpu_used"] = Threshold{
+		HighWarning:  newFloatPointer(80),
+		HighCritical: newFloatPointer(90),
+	}
+	defaultCfg.Thresholds["disk_used_perc"] = Threshold{
+		HighWarning:  newFloatPointer(80),
+		HighCritical: newFloatPointer(90),
+	}
+	defaultCfg.Thresholds["mem_used_perc"] = Threshold{
+		HighWarning:  newFloatPointer(80),
+		HighCritical: newFloatPointer(90),
+	}
+	defaultCfg.Thresholds["io_utilisation"] = Threshold{
+		HighWarning:  newFloatPointer(80),
+		HighCritical: newFloatPointer(90),
+	}
+
+	if diff := cmp.Diff(defaultCfg, cfg, cmpopts.EquateEmpty()); diff != "" {
+		t.Fatalf("Default value modified:\n%s", diff)
 	}
 }
