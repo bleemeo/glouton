@@ -119,25 +119,6 @@ func TestLoadFile(t *testing.T) {
 	}
 
 	defaultCfg := DefaultConfig()
-	// There is few settings that aren't in built-in default:
-	// * thershold: most likely for historical reason, we should probably comment
-	//   the settings in glouton.conf.
-	defaultCfg.Thresholds["cpu_used"] = Threshold{
-		HighWarning:  newFloatPointer(80),
-		HighCritical: newFloatPointer(90),
-	}
-	defaultCfg.Thresholds["disk_used_perc"] = Threshold{
-		HighWarning:  newFloatPointer(80),
-		HighCritical: newFloatPointer(90),
-	}
-	defaultCfg.Thresholds["mem_used_perc"] = Threshold{
-		HighWarning:  newFloatPointer(80),
-		HighCritical: newFloatPointer(90),
-	}
-	defaultCfg.Thresholds["io_utilization"] = Threshold{
-		HighWarning:  newFloatPointer(80),
-		HighCritical: newFloatPointer(90),
-	}
 
 	if diff := cmp.Diff(defaultCfg, cfg, cmpopts.EquateEmpty()); diff != "" {
 		t.Fatalf("Default value modified:\n%s", diff)
