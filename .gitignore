@@ -8,8 +8,6 @@
 /etc/conf.d/90-local.conf
 /work
 .vscode/
-/VERSION
-/COMMIT_HASH
 .vscode
 /agent-go
 /agentgo*

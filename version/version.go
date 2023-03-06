@@ -51,6 +51,11 @@ func IsMacOS() bool {
 	return runtime.GOOS == "darwin"
 }
 
+// IsFreeBSD returns true when the current operating system is FreeBSD.
+func IsFreeBSD() bool {
+	return runtime.GOOS == "freebsd"
+}
+
 type version struct {
 	valid bool
 	date  time.Time
