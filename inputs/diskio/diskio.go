@@ -19,8 +19,8 @@ package diskio
 import (
 	"glouton/inputs"
 	"glouton/inputs/internal"
+	"glouton/types"
 	"glouton/version"
-	"regexp"
 
 	"github.com/influxdata/telegraf"
 	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"
@@ -28,25 +28,18 @@ import (
 )
 
 type diskIOTransformer struct {
-	allowlist []*regexp.Regexp
-	denylist  []*regexp.Regexp
+	matcher types.Matcher
 }
 
 // New initialise diskio.Input.
-//
-// allowlist is a list of regular expretion for device to include
-// denylist is a list of regular expretion for device to include
-//
-// If denylist is provided (not empty) it's used and allowlist is ignored.
-func New(allowlist []*regexp.Regexp, denylist []*regexp.Regexp) (i telegraf.Input, err error) {
+func New(diskMatcher types.Matcher) (i telegraf.Input, err error) {
 	input, ok := telegraf_inputs.Inputs["diskio"]
 
 	if ok {
 		diskioInput, _ := input().(*diskio.DiskIO)
 		diskioInput.Log = internal.Logger{}
 		dt := diskIOTransformer{
-			allowlist: allowlist,
-			denylist:  denylist,
+			matcher: diskMatcher,
 		}
 		i = &internal.Input{
 			Input: diskioInput,
@@ -73,29 +66,7 @@ func (dt diskIOTransformer) renameGlobal(gatherContext internal.GatherContext) (
 		return gatherContext, true
 	}
 
-	match := false
-
-	if len(dt.denylist) > 0 {
-		match = true
-
-		for _, r := range dt.denylist {
-			if r.MatchString(item) {
-				match = false
-
-				break
-			}
-		}
-	} else {
-		for _, r := range dt.allowlist {
-			if r.MatchString(item) {
-				match = true
-
-				break
-			}
-		}
-	}
-
-	if !match {
+	if !dt.matcher.Match(item) {
 		return gatherContext, true
 	}
 

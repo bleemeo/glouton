@@ -50,7 +50,6 @@ import (
 	"glouton/mqtt"
 	"glouton/nrpe"
 	"glouton/prometheus/exporter/blackbox"
-	"glouton/prometheus/exporter/common"
 	"glouton/prometheus/exporter/snmp"
 	"glouton/prometheus/process"
 	"glouton/prometheus/registry"
@@ -1410,32 +1409,18 @@ func (a *agent) waitAndRefreshPendingUpdates(ctx context.Context) {
 }
 
 func (a *agent) buildCollectorsConfig() (conf inputs.CollectorConfig, err error) {
-	allowlistRE, err := common.CompileREs(a.config.DiskMonitor)
+	diskFilter, err := config.NewDiskIOMatcher(a.config)
 	if err != nil {
-		a.addWarnings(fmt.Errorf("%w: failed to compile regexp in disk_monitor: %s", config.ErrInvalidValue, err))
+		a.addWarnings(err)
 
 		return
-	}
-
-	denylistRE, err := common.CompileREs(a.config.DiskIgnore)
-	if err != nil {
-		a.addWarnings(fmt.Errorf("%w: failed to compile regexp in disk_ignore: %s", config.ErrInvalidValue, err))
-
-		return
-	}
-
-	pathIgnoreTrimed := make([]string, len(a.config.DF.PathIgnore))
-
-	for i, v := range a.config.DF.PathIgnore {
-		pathIgnoreTrimed[i] = strings.TrimRight(v, "/")
 	}
 
 	return inputs.CollectorConfig{
-		DFRootPath:      a.hostRootPath,
-		NetIfDenylist:   a.config.NetworkInterfaceDenylist,
-		IODiskAllowlist: allowlistRE,
-		IODiskDenylist:  denylistRE,
-		DFPathDenylist:  pathIgnoreTrimed,
+		DFRootPath:    a.hostRootPath,
+		NetIfMatcher:  config.NewNetworkInterfaceMatcher(a.config),
+		IODiskMatcher: diskFilter,
+		DFPathMatcher: config.NewDFPathMatcher(a.config),
 	}, nil
 }
 

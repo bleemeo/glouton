@@ -1,18 +1,80 @@
+// Copyright 2015-2023 Bleemeo
+//
+// bleemeo.com an infrastructure monitoring solution in the Cloud
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package config
 
 import (
-	"glouton/prometheus/exporter/common"
+	"glouton/types"
+	"regexp"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 )
 
+func testMatcher(t *testing.T, matcher types.Matcher, allowedItems []string, deniedItem []string) {
+	t.Helper()
+
+	var (
+		denyRE *regexp.Regexp
+		err    error
+	)
+
+	if reMatcher, ok := matcher.(types.MatcherRegexp); ok {
+		denyREString := reMatcher.AsDenyRegexp()
+		denyRE, err = regexp.Compile(denyREString)
+
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	allItems := make([]string, 0, len(allowedItems)+len(deniedItem))
+	allItems = append(allItems, allowedItems...)
+	allItems = append(allItems, deniedItem...)
+
+	for i, item := range allItems {
+		i := i
+		item := item
+
+		t.Run(item, func(t *testing.T) {
+			t.Parallel()
+
+			match := matcher.Match(item)
+			shouldMatch := i < len(allowedItems)
+
+			if match != shouldMatch {
+				t.Errorf("Item %s is allowed=%v, want %v", item, match, shouldMatch)
+			}
+
+			if denyRE != nil {
+				matchRE := !denyRE.MatchString(item)
+				if match != matchRE {
+					t.Errorf("AsRegexp.Match() = %v, want %v", matchRE, match)
+				}
+			}
+		})
+	}
+}
+
 // TestDiskIgnore check that disk ignore regexp match expected disks.
 func TestDefaultDiskIgnore(t *testing.T) {
 	cfg := DefaultConfig()
 
-	denylistRE, err := common.CompileREs(cfg.DiskIgnore)
+	filter, err := NewDiskIOMatcher(cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,34 +139,113 @@ func TestDefaultDiskIgnore(t *testing.T) {
 		"zram0", // compressed tmpfs, usually for compressed swap
 	}
 
-	allDisk := make([]string, 0, len(allowedDisk)+len(deniedDisk))
-	allDisk = append(allDisk, allowedDisk...)
-	allDisk = append(allDisk, deniedDisk...)
+	testMatcher(t, filter, allowedDisk, deniedDisk)
+}
 
-	for i, disk := range allDisk {
-		i := i
-		disk := disk
+// TestDefaultNetworkIgnore check that network ignore pattern match expected network interfaces.
+func TestDefaultNetworkIgnore(t *testing.T) {
+	cfg := DefaultConfig()
 
-		t.Run(disk, func(t *testing.T) {
-			t.Parallel()
+	filter := NewNetworkInterfaceMatcher(cfg)
 
-			match := true
-
-			for _, r := range denylistRE {
-				if r.MatchString(disk) {
-					match = false
-
-					break
-				}
-			}
-
-			shouldMatch := i < len(allowedDisk)
-
-			if match != shouldMatch {
-				t.Errorf("Disk %s is allowed=%v, want %v", disk, match, shouldMatch)
-			}
-		})
+	allowedInterface := []string{
+		"bond0.82",
+		"bond0",
+		"br-088b71fff3aa",
+		"br0",
+		"bridge0",
+		"em0",
+		"en0",
+		"en7",
+		"eno0",
+		"eno1.104",
+		"eno50.514",
+		"enp101s0f1np1",
+		"enp130s0f1.888",
+		"eth0",
+		"tap0",
+		"tun0",
+		"vlan10",
+		"vtnet0",
+		"wlan0",
+		"wlp12s0",
 	}
+
+	deniedInterface := []string{
+		"docker0",
+		"lo",
+		"lo0",
+		"veth034056c",
+	}
+
+	testMatcher(t, filter, allowedInterface, deniedInterface)
+}
+
+// TestDefaultDFPathIgnore check that df ignore pattern match expected filesystem path.
+func TestDefaultDFPathIgnore(t *testing.T) {
+	cfg := DefaultConfig()
+
+	filter := NewDFPathMatcher(cfg)
+
+	allowedPath := []string{
+		"/",
+		"/home",
+		"/snapshot", // This is allowed, because it's not below "/snap"
+		"/srv",
+		"/var/lib",
+		"C:",
+		"D:",
+	}
+
+	deniedPath := []string{
+		"/run/snapd/ns",
+		"/snap",
+		"/snap/core/14447",
+		"/snap/shot",
+		"/var/lib/docker/containers/dee975a2411bf87e954ecd1f4e3dd61b80e1c2b72072e98547bcb955ca441d56/mounts/shm",
+		"/var/lib/docker/overlay2/1ed9f56b42e012a558634a03a336640922a59aae6f831ef7824564c18f6b4662/merged/dev/shm",
+		"/var/lib/docker/overlay2/dee975a2411bf87e954ecd1f4e3dd61b80e1c2b72072e98547bcb955ca441d56/merged",
+	}
+
+	testMatcher(t, filter, allowedPath, deniedPath)
+}
+
+// TestDefaultDFFSTypeIgnore check that df ignore pattern match expected filesystem type.
+func TestDefaultDFFSTypeIgnore(t *testing.T) {
+	cfg := DefaultConfig()
+
+	filter, err := NewDFFSTypeMatcher(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	allowedType := []string{
+		"ext4",
+		"vfat",
+	}
+
+	deniedType := []string{
+		"autofs",
+		"bpf",
+		"cgroup",
+		"cgroup2",
+		"configfs",
+		"debugfs",
+		"devpts",
+		"devtmpfs",
+		"fusectl",
+		"hugetlbfs",
+		"mqueue",
+		"nsfs",
+		"overlay",
+		"pstore",
+		"securityfs",
+		"sysfs",
+		"tmpfs",
+		"tracefs",
+	}
+
+	testMatcher(t, filter, allowedType, deniedType)
 }
 
 // TestLoadFile check that loading the etc/glouton.conf file works and yield the default settings.

@@ -21,6 +21,7 @@ import (
 	"glouton/logger"
 	"glouton/prometheus/exporter/buildinfo"
 	"glouton/prometheus/exporter/common"
+	"glouton/types"
 	"glouton/version"
 	"strings"
 	_ "unsafe" // using hack with go linkname to access private variable :)
@@ -153,15 +154,8 @@ func (o *Option) WithDiskIgnore(prefixes []string) *Option {
 }
 
 // WithPathIgnoreFSType set the of filesystem type to ignore.
-func (o *Option) WithPathIgnoreFSType(prefixes []string) *Option {
-	var err error
-
-	re, err := common.ReFromREs(prefixes)
-	if err != nil {
-		return o
-	}
-
-	o.FilesystemIgnoredType = re
+func (o *Option) WithPathIgnoreFSType(matcher types.MatcherRegexp) *Option {
+	o.FilesystemIgnoredType = matcher.AsDenyRegexp()
 
 	return o
 }

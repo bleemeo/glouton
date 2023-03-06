@@ -19,6 +19,7 @@ package disk
 import (
 	"glouton/inputs"
 	"glouton/inputs/internal"
+	"glouton/types"
 	"glouton/version"
 	"os"
 	"strings"
@@ -30,16 +31,13 @@ import (
 
 type diskTransformer struct {
 	mountPoint string
-	denylist   []string
+	matcher    types.Matcher
 }
 
 // New initialise disk.Input
 //
 // mountPoint is the root path to monitor. Useful when running inside a Docker.
-//
-// denylist is a list of path-prefix to ignore. Path prefix means that "/mnt" and "/mnt/disk" both have "/mnt"
-// as prefix, but "/mnt-disk" does not.
-func New(mountPoint string, denylist []string) (i telegraf.Input, err error) {
+func New(mountPoint string, pathMatcher types.Matcher) (i telegraf.Input, err error) {
 	input, ok := telegraf_inputs.Inputs["disk"]
 
 	if ok {
@@ -57,7 +55,7 @@ func New(mountPoint string, denylist []string) (i telegraf.Input, err error) {
 
 		dt := diskTransformer{
 			strings.TrimRight(mountPoint, "/"),
-			denylist,
+			pathMatcher,
 		}
 		i = &internal.Input{
 			Input: diskDeduplicateInput,
@@ -93,10 +91,8 @@ func (dt diskTransformer) renameGlobal(gatherContext internal.GatherContext) (in
 		item = "/"
 	}
 
-	for _, v := range dt.denylist {
-		if v == item || strings.HasPrefix(item, v+"/") {
-			return gatherContext, true
-		}
+	if !dt.matcher.Match(item) {
+		return gatherContext, true
 	}
 
 	gatherContext.Annotations.BleemeoItem = item

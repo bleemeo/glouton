@@ -20,6 +20,7 @@
 package agent
 
 import (
+	"glouton/config"
 	"glouton/facts/container-runtime/veth"
 	"glouton/logger"
 	"glouton/prometheus/exporter/node"
@@ -31,6 +32,13 @@ func initOSSpecificParts(stop chan<- os.Signal) {
 
 func (a *agent) registerOSSpecificComponents(vethProvider *veth.Provider) {
 	if a.config.Agent.NodeExporter.Enable {
+		filter, err := config.NewDFFSTypeMatcher(a.config)
+		if err != nil {
+			logger.Printf("Unable to start node_exporter, system metrics will be missing: %v", err)
+
+			return
+		}
+
 		nodeOption := node.Option{
 			RootFS:            a.hostRootPath,
 			EnabledCollectors: a.config.Agent.NodeExporter.Collectors,
@@ -39,7 +47,7 @@ func (a *agent) registerOSSpecificComponents(vethProvider *veth.Provider) {
 		nodeOption.WithPathIgnore(a.config.DF.PathIgnore)
 		nodeOption.WithNetworkIgnore(a.config.NetworkInterfaceDenylist)
 		nodeOption.WithDiskIgnore(a.config.DiskIgnore)
-		nodeOption.WithPathIgnoreFSType(a.config.DF.IgnoreFSType)
+		nodeOption.WithPathIgnoreFSType(filter)
 
 		if err := a.gathererRegistry.AddNodeExporter(nodeOption, vethProvider); err != nil {
 			logger.Printf("Unable to start node_exporter, system metrics will be missing: %v", err)

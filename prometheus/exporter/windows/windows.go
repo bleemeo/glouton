@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"glouton/inputs"
 	"glouton/logger"
-	"glouton/prometheus/exporter/common"
 	"time"
 
 	"github.com/prometheus-community/windows_exporter/collector"
@@ -36,34 +35,8 @@ const maxScrapeDuration time.Duration = 9500 * time.Millisecond
 func NewCollector(enabledCollectors []string, options inputs.CollectorConfig) (prometheus.Collector, error) {
 	var args []string
 
-	if len(options.IODiskAllowlist) > 0 {
-		// this will not fail, as we checked the validity of this regexp earlier
-		allowlist, _ := common.MergeREs(options.IODiskAllowlist)
-		args = append(args, fmt.Sprintf("--collector.logical_disk.volume-whitelist=%s", allowlist))
-	}
-
-	if len(options.IODiskDenylist) > 0 {
-		// this will not fail, as we checked the validity of this regexp earlier
-		denylist, _ := common.MergeREs(options.IODiskDenylist)
-		args = append(args, fmt.Sprintf("--collector.logical_disk.volume-blacklist=%s", denylist))
-	}
-
-	if len(options.NetIfDenylist) > 0 {
-		denylistREs := make([]string, 0, len(options.NetIfDenylist))
-
-		for _, inter := range options.NetIfDenylist {
-			denylistRE, err := common.ReFromPrefix(inter)
-			if err != nil {
-				logger.V(1).Printf("windows_exporter: failed to parse the network interface denylist: %v", err)
-			} else {
-				denylistREs = append(denylistREs, denylistRE)
-			}
-		}
-
-		// this will not fail, as we checked the validity of every regexp earlier
-		denylist, _ := common.ReFromREs(denylistREs)
-		args = append(args, fmt.Sprintf("--collector.net.nic-blacklist=%s", denylist))
-	}
+	args = append(args, fmt.Sprintf("--collector.logical_disk.volume-blacklist=%s", options.IODiskMatcher.AsDenyRegexp()))
+	args = append(args, fmt.Sprintf("--collector.net.nic-blacklist=%s", options.NetIfMatcher.AsDenyRegexp()))
 
 	if _, err := kingpin.CommandLine.Parse(args); err != nil {
 		return nil, fmt.Errorf("windows_exporter: kingpin initialization failed: %w", err)
