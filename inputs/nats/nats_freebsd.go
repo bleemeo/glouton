@@ -14,50 +14,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build !freebsd
+//go:build freebsd
 
 package nats
 
 import (
 	"glouton/inputs"
-	"glouton/inputs/internal"
-	"glouton/types"
 
 	"github.com/influxdata/telegraf"
-	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"
-	"github.com/influxdata/telegraf/plugins/inputs/nats"
 )
 
 // New returns a NATS input.
 func New(url string) (telegraf.Input, *inputs.GathererOptions, error) {
-	input, ok := telegraf_inputs.Inputs["nats"]
-	if !ok {
-		return nil, nil, inputs.ErrDisabledInput
-	}
-
-	natsInput, ok := input().(*nats.Nats)
-	if !ok {
-		return nil, nil, inputs.ErrUnexpectedType
-	}
-
-	natsInput.Server = url
-
-	internalInput := &internal.Input{
-		Input: natsInput,
-		Accumulator: internal.Accumulator{
-			DerivatedMetrics: []string{"in_bytes", "out_bytes", "in_msgs", "out_msgs"},
-		},
-		Name: "nats",
-	}
-
-	options := &inputs.GathererOptions{
-		Rules: []types.SimpleRule{
-			{
-				TargetName:  "nats_uptime_seconds",
-				PromQLQuery: "nats_uptime/1e9",
-			},
-		},
-	}
-
-	return internalInput, options, nil
+	return nil, nil, inputs.ErrDisabledInput
 }

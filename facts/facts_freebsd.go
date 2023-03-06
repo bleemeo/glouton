@@ -14,30 +14,31 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build windows || darwin || freebsd
-
-package veth
+package facts
 
 import (
-	"net"
-	"strings"
+	"context"
+
+	"github.com/shirou/gopsutil/v3/load"
 )
 
-// linkList returns the links using the telegraf input "net".
-func linkList() ([]link, error) {
-	interfaces, err := net.Interfaces()
+func (f *FactProvider) platformFacts() map[string]string {
+	return nil
+}
+
+// primaryAddresses returns the primary IPv4
+//
+// This should be the IP address that this server use to communicate
+// on internet. It may be the private IP if the box is NATed.
+func (f *FactProvider) primaryAddress(ctx context.Context) (ipAddress string, macAddress string) {
+	return "", ""
+}
+
+func getCPULoads() ([]float64, error) {
+	loads, err := load.Avg()
 	if err != nil {
 		return nil, err
 	}
 
-	links := make([]link, len(interfaces))
-	for i, iface := range interfaces {
-		links[i] = link{
-			name:      iface.Name,
-			index:     iface.Index,
-			hasNSPeer: strings.HasPrefix(iface.Name, "veth"),
-		}
-	}
-
-	return links, nil
+	return []float64{loads.Load1, loads.Load5, loads.Load15}, nil
 }
