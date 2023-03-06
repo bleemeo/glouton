@@ -19,7 +19,7 @@ package cpu
 import (
 	"glouton/inputs"
 	"glouton/inputs/internal"
-	"runtime"
+	"glouton/version"
 	"strings"
 
 	"github.com/influxdata/telegraf"
@@ -57,6 +57,7 @@ func renameGlobal(gatherContext internal.GatherContext) (internal.GatherContext,
 	return gatherContext, false
 }
 
+//nolint:goconst
 func transformMetrics(currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {
 	finalFields := make(map[string]float64)
 
@@ -98,7 +99,7 @@ func transformMetrics(currentContext internal.GatherContext, fields map[string]f
 	finalFields["used"] = cpuUsed
 
 	// drop unsupported fields on windows, it is needless to generate traffic for "null" metrics
-	if runtime.GOOS == "windows" {
+	if version.IsWindows() {
 		for k := range finalFields {
 			switch k {
 			// note: cpu interrupt is a special case, as it CAN be reported (telegraf
@@ -111,6 +112,18 @@ func transformMetrics(currentContext internal.GatherContext, fields map[string]f
 				continue
 			default:
 				// apparently, there is no risks of iterator invalidation here in go (https://github.com/golang/go/issues/9926), so...
+				delete(finalFields, k)
+			}
+		}
+	}
+
+	// drop unsupported fields on FreeBSD
+	if version.IsFreeBSD() {
+		for k := range finalFields {
+			switch k {
+			case "used", "other", "system", "user", "nice", "interrupt", "idle":
+				continue
+			default:
 				delete(finalFields, k)
 			}
 		}
