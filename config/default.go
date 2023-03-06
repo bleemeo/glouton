@@ -197,7 +197,7 @@ func DefaultConfig() Config { //nolint:maintidx
 		},
 		DiskIgnore: []string{
 			// Ignore some devices
-			"^(bcache|dm-|fd|loop|ram|sr|zd|zram)\\d+$",
+			"^(bcache|cd|dm-|fd|loop|pass|ram|sr|zd|zram)\\d+$",
 			// Ignore parition (sda1 like, not pN)
 			"^((h|rss|s|v|xv)d[a-z]+|fio[a-z]+)\\d+$",
 			// Ignore parition (pN like)
