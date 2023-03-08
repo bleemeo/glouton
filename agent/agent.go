@@ -399,7 +399,7 @@ func (a *agent) setupLogger() {
 
 // Run runs Glouton.
 func Run(ctx context.Context, reloadState ReloadState, configFiles []string, signalChan chan os.Signal, firstRun bool) {
-	rand.Seed(time.Now().UnixNano()) //nolint:staticcheck // Deprecated since Go 1.20,a random seed is used by default.
+	rand.Seed(time.Now().UnixNano())
 
 	agent := &agent{reloadState: reloadState}
 
