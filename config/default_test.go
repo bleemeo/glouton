@@ -17,6 +17,7 @@
 package config
 
 import (
+	"glouton/inputs/disk"
 	"glouton/types"
 	"regexp"
 	"testing"
@@ -246,6 +247,39 @@ func TestDefaultDFFSTypeIgnore(t *testing.T) {
 	}
 
 	testMatcher(t, filter, allowedType, deniedType)
+
+	// Glouton had 2 list of ignored FS:
+	// * one in the configuration (DF.IgnoreFSType, which is tested just above)
+	// * one in glouton/inputs/disk. This one should be dropped and use the configuration.
+
+	// Here we test the second ignore FS list to ensure both are consitent at least on testcases.
+	allItems := make([]string, 0, len(allowedType)+len(deniedType))
+	allItems = append(allItems, allowedType...)
+	allItems = append(allItems, deniedType...)
+
+	for i, item := range allItems {
+		i := i
+		item := item
+
+		t.Run(item, func(t *testing.T) {
+			t.Parallel()
+
+			match := true
+			for _, v := range disk.IgnoredFSType {
+				if v == item {
+					match = false
+
+					break
+				}
+			}
+
+			shouldMatch := i < len(allowedType)
+
+			if match != shouldMatch {
+				t.Errorf("Item %s is allowed=%v, want %v", item, match, shouldMatch)
+			}
+		})
+	}
 }
 
 // TestLoadFile check that loading the etc/glouton.conf file works and yield the default settings.
