@@ -252,7 +252,6 @@ func TestDefaultDFFSTypeIgnore(t *testing.T) {
 		"ext4",
 		"vfat",
 		"ufs",
-		"zfs",
 	}
 
 	deniedType := []string{
@@ -279,6 +278,7 @@ func TestDefaultDFFSTypeIgnore(t *testing.T) {
 		"sysfs",
 		"tmpfs",
 		"tracefs",
+		"zfs",
 	}
 
 	testMatcher(t, filter, allowedType, deniedType)

@@ -182,6 +182,7 @@ func DefaultConfig() Config { //nolint:maintidx
 				"linprocfs",
 				"linsysfs",
 				"nullfs",
+				"zfs",
 			},
 			PathIgnore: []string{
 				"/var/lib/docker/aufs",

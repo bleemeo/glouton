@@ -183,7 +183,7 @@ func (opt *RegistrationOption) buildRules() error {
 	for _, r := range opt.Rules {
 		expr, err := parser.ParseExpr(r.PromQLQuery)
 		if err != nil {
-			return err
+			return fmt.Errorf("rule %s: %w", r.TargetName, err)
 		}
 
 		rr := rules.NewRecordingRule(r.TargetName, expr, nil)
