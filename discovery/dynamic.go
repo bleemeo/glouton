@@ -22,6 +22,7 @@ import (
 	"glouton/config"
 	"glouton/facts"
 	"glouton/logger"
+	"glouton/version"
 	"net"
 	"os"
 	"path/filepath"
@@ -85,6 +86,16 @@ func NewDynamic(ps processFact, netstat netstatProvider, containerInfo container
 
 // Discovery detect service running on the system and return a list of Service object.
 func (dd *DynamicDiscovery) Discovery(ctx context.Context, maxAge time.Duration) (services []Service, err error) {
+	if version.IsFreeBSD() {
+		// Disable service discovery on FreeBSD for now. Glouton only support TrueNAS which don't have lots
+		// of services (especially not lots of service we support).
+		// Before re-enable this, we should fix our netstat on FreeBSD which isn't working:
+		// * We don't use correct option in netstat
+		// * The gopsutil Connections() isn't tested at all
+		// * On TrueNAS service run in jail, so we must handle them (probably similar to what we do for Docker).
+		return nil, nil
+	}
+
 	dd.l.Lock()
 	defer dd.l.Unlock()
 
