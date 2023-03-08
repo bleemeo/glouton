@@ -101,7 +101,7 @@ else
       goreleaser check
       go generate ./...
       go test ./...
-      goreleaser --rm-dist --snapshot --parallelism 2
+      goreleaser --clean --snapshot --parallelism 2
       chown -R $USER_UID dist api/models_gen.go
       "
 
