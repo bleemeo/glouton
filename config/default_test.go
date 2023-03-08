@@ -251,6 +251,8 @@ func TestDefaultDFFSTypeIgnore(t *testing.T) {
 	allowedType := []string{
 		"ext4",
 		"vfat",
+		"ufs",
+		"zfs",
 	}
 
 	deniedType := []string{
@@ -260,12 +262,17 @@ func TestDefaultDFFSTypeIgnore(t *testing.T) {
 		"cgroup2",
 		"configfs",
 		"debugfs",
+		"devfs",
 		"devpts",
 		"devtmpfs",
+		"fdescfs",
 		"fusectl",
 		"hugetlbfs",
+		"linprocfs",
+		"linsysfs",
 		"mqueue",
 		"nsfs",
+		"nullfs",
 		"overlay",
 		"pstore",
 		"securityfs",

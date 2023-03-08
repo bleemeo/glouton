@@ -178,6 +178,10 @@ func DefaultConfig() Config { //nolint:maintidx
 				"aufs",
 				"tmpfs",
 				"efivarfs",
+				"fdescfs",
+				"linprocfs",
+				"linsysfs",
+				"nullfs",
 			},
 			PathIgnore: []string{
 				"/var/lib/docker/aufs",
