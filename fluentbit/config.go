@@ -87,12 +87,12 @@ const outputNullConfig = `
 
 // Write the static Fluent Bit config.
 func writeStaticConfig() error {
-	err := os.MkdirAll(dbDir, 0o744)
+	err := os.MkdirAll(dbDir, 0o744) //nolint:gosec
 	if err != nil {
 		return fmt.Errorf("create Fluent Bit database directory: %w", err)
 	}
 
-	err = os.MkdirAll(configDir, 0o744)
+	err = os.MkdirAll(configDir, 0o744) //nolint:gosec
 	if err != nil {
 		return fmt.Errorf("create Fluent Bit config directory: %w", err)
 	}
