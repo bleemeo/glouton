@@ -18,12 +18,44 @@ package facts
 
 import (
 	"context"
+	"glouton/logger"
+	"os"
+	"os/exec"
 
 	"github.com/shirou/gopsutil/v3/load"
+	"golang.org/x/sys/unix"
 )
 
 func (f *FactProvider) platformFacts() map[string]string {
-	return nil
+	var utsName unix.Utsname
+
+	err := unix.Uname(&utsName)
+	if err != nil {
+		logger.V(1).Printf("unable to execute uname: %v", err)
+
+		return nil
+	}
+
+	facts := make(map[string]string)
+
+	facts["kernel"] = bytesToString(utsName.Sysname[:])
+	facts["kernel_release"] = bytesToString(utsName.Release[:])
+	facts["os_family"] = "FreeBSD"
+
+	if versionData, err := os.ReadFile("/etc/version"); err != nil {
+		logger.V(1).Printf("unable to read os-release file: %v", err)
+	} else {
+		osRelease, err := decodeFreeBSDVersion(string(versionData))
+		if err != nil {
+			logger.V(1).Printf("version file is invalid: %v", err)
+		}
+
+		facts["os_name"] = osRelease["NAME"]
+		facts["os_version"] = osRelease["VERSION_ID"]
+		facts["os_pretty_name"] = osRelease["PRETTY_NAME"]
+	}
+
+	return facts
 }
 
 // primaryAddresses returns the primary IPv4
@@ -31,7 +63,14 @@ func (f *FactProvider) platformFacts() map[string]string {
 // This should be the IP address that this server use to communicate
 // on internet. It may be the private IP if the box is NATed.
 func (f *FactProvider) primaryAddress(ctx context.Context) (ipAddress string, macAddress string) {
-	return "", ""
+	out, err := exec.Command("route", "-nv", "get", "8.8.8.8").Output()
+	if err != nil {
+		logger.V(1).Printf("unable to run route get: %v", err)
+
+		return "", ""
+	}
+
+	return decodeFreeBSDRouteGet(string(out))
 }
 
 func getCPULoads() ([]float64, error) {

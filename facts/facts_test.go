@@ -109,3 +109,126 @@ func TestByteCountDecimalGB(t *testing.T) {
 		t.Errorf("TEstbyteCountDecimal(...) == %s, want %s", got, want)
 	}
 }
+
+func Test_decodeFreeBSDRouteGet(t *testing.T) {
+	tests := []struct {
+		name    string
+		data    string
+		wantMac string
+		wantIP  string
+	}{
+		{
+			name: "TrueNAS-13.0-U4",
+			data: `
+RTA_DST: inet 8.8.8.8; RTA_IFP: link ; RTM_GET: Report Metrics: len 224, pid: 0, seq 1, errno 0, flags:<UP,GATEWAY,HOST,STATIC>
+locks:  inits:
+sockaddrs: <DST,IFP>
+ 8.8.8.8 link#0
+   route to: 8.8.8.8
+destination: 0.0.0.0
+       mask: 0.0.0.0
+    gateway: 192.168.205.1
+        fib: 0
+  interface: em0
+      flags: <UP,GATEWAY,DONE,STATIC>
+ recvpipe  sendpipe  ssthresh  rtt,msec    mtu        weight    expire
+       0         0         0         0      1500         1         0
+
+locks:  inits:
+sockaddrs: <DST,GATEWAY,NETMASK,IFP,IFA>
+ 0.0.0.0 192.168.205.1 0.0.0.0 em0:8a.79.fc.cd.e9.d0 192.168.205.12
+`,
+			wantMac: "8a:79:fc:cd:e9:d0",
+			wantIP:  "192.168.205.12",
+		},
+		{
+			name: "FreeBSD 13.1-RELEASE",
+			data: `
+RTA_DST: inet 8.8.8.8; RTA_IFP: link ; RTM_GET: Report Metrics: len 224, pid: 0, seq 1, errno 0, flags:<UP,GATEWAY,HOST,STATIC>
+locks:  inits:
+sockaddrs: <DST,IFP>
+ 8.8.8.8 link#0
+   route to: 8.8.8.8
+destination: 0.0.0.0
+       mask: 0.0.0.0
+    gateway: 192.168.205.1
+        fib: 0
+  interface: vtnet0
+      flags: <UP,GATEWAY,DONE,STATIC>
+ recvpipe  sendpipe  ssthresh  rtt,msec    mtu        weight    expire
+       0         0         0         0      1500         1         0
+
+locks:  inits:
+sockaddrs: <DST,GATEWAY,NETMASK,IFP,IFA>
+ 0.0.0.0 192.168.205.1 0.0.0.0 vtnet0:52.55.5f.37.31.b5 192.168.205.13
+`,
+			wantMac: "52:55:5f:37:31:b5",
+			wantIP:  "192.168.205.13",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotIP, gotMac := decodeFreeBSDRouteGet(tt.data)
+			if gotIP != tt.wantIP {
+				t.Errorf("decodeFreeBSDRouteGet() IP = %v, want %v", gotIP, tt.wantIP)
+			}
+			if gotMac != tt.wantMac {
+				t.Errorf("decodeFreeBSDRouteGet() MAC = %v, want %v", gotMac, tt.wantMac)
+			}
+		})
+	}
+}
+
+func Test_decodeFreeBSDVersion(t *testing.T) {
+	tests := []struct {
+		name    string
+		data    string
+		want    map[string]string
+		wantErr bool
+	}{
+		{
+			name: "TrueNAS-13.0-U4",
+			data: "TrueNAS-13.0-U4 (e5af99be6d)",
+			want: map[string]string{
+				"NAME":        "TrueNAS",
+				"VERSION_ID":  "13.0-U4",
+				"PRETTY_NAME": "TrueNAS 13.0-U4",
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := decodeFreeBSDVersion(tt.data)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("decodeFreeBSDVersion() error = %v, wantErr %v", err, tt.wantErr)
+
+				return
+			}
+
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("decodeFreeBSDVersion() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func Test_bytesToString(t *testing.T) {
+	tests := []struct {
+		name   string
+		buffer []byte
+		want   string
+	}{
+		{
+			name:   "Test to make linter happy, else bytesToString isn't used on Windows",
+			buffer: []byte{'a', 'b', 0, 0},
+			want:   "ab",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := bytesToString(tt.buffer); got != tt.want {
+				t.Errorf("bytesToString() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
