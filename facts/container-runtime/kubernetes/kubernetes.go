@@ -824,10 +824,14 @@ func (c wrappedContainer) Annotations() map[string]string {
 	return c.pod.Annotations
 }
 
+// Labels returns the container labels and the pod labels merged.
 func (c wrappedContainer) Labels() map[string]string {
-	labels := c.Container.Labels()
-	if labels == nil {
-		return c.pod.Labels
+	containerLabels := c.Container.Labels()
+
+	// Return a copy of the labels, don't mutate the container labels.
+	labels := make(map[string]string, len(containerLabels)+len(c.pod.Labels))
+	for name, value := range containerLabels {
+		labels[name] = value
 	}
 
 	for name, value := range c.pod.Labels {
