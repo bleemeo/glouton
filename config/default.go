@@ -44,7 +44,7 @@ func mapKeys() []string {
 	}
 }
 
-func DefaultConfig() Config {
+func DefaultConfig() Config { //nolint:maintidx
 	defaultBlackboxModule := bbConf.DefaultModule
 	defaultBlackboxModule.Prober = "http"
 	// We default to IPv4 as the ip_protocol_fallback option does not retry a request
@@ -150,10 +150,34 @@ func DefaultConfig() Config {
 		DF: DF{
 			HostMountPoint: "",
 			IgnoreFSType: []string{
-				"^(autofs|binfmt_misc|bpf|cgroup2?|configfs|debugfs|devpts|devtmpfs|fusectl|hugetlbfs|iso9660|mqueue|nsfs|overlay|proc|procfs|pstore|rpc_pipefs|securityfs|selinuxfs|squashfs|sysfs|tracefs|devfs|aufs)$",
+				"autofs",
+				"binfmt_misc",
+				"bpf",
+				"cgroup",
+				"cgroup2",
+				"configfs",
+				"debugfs",
+				"devpts",
+				"devtmpfs",
+				"fusectl",
+				"hugetlbfs",
+				"iso9660",
+				"mqueue",
+				"nsfs",
+				"overlay",
+				"proc",
+				"procfs",
+				"pstore",
+				"rpc_pipefs",
+				"securityfs",
+				"selinuxfs",
+				"squashfs",
+				"sysfs",
+				"tracefs",
+				"devfs",
+				"aufs",
 				"tmpfs",
 				"efivarfs",
-				".*gvfs.*",
 			},
 			PathIgnore: []string{
 				"/var/lib/docker/aufs",

@@ -100,7 +100,7 @@ func AddDefaultInputs(
 	}
 
 	if inputsConfig.DFRootPath != "" {
-		input, err = disk.New(inputsConfig.DFRootPath, inputsConfig.DFPathMatcher)
+		input, err = disk.New(inputsConfig.DFRootPath, inputsConfig.DFPathMatcher, inputsConfig.DFIgnoreFSTypes)
 		if err != nil {
 			return err
 		}

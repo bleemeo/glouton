@@ -1417,10 +1417,11 @@ func (a *agent) buildCollectorsConfig() (conf inputs.CollectorConfig, err error)
 	}
 
 	return inputs.CollectorConfig{
-		DFRootPath:    a.hostRootPath,
-		NetIfMatcher:  config.NewNetworkInterfaceMatcher(a.config),
-		IODiskMatcher: diskFilter,
-		DFPathMatcher: config.NewDFPathMatcher(a.config),
+		DFRootPath:      a.hostRootPath,
+		NetIfMatcher:    config.NewNetworkInterfaceMatcher(a.config),
+		IODiskMatcher:   diskFilter,
+		DFPathMatcher:   config.NewDFPathMatcher(a.config),
+		DFIgnoreFSTypes: a.config.DF.IgnoreFSType,
 	}, nil
 }
 

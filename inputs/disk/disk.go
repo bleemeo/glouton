@@ -34,22 +34,15 @@ type diskTransformer struct {
 	matcher    types.Matcher
 }
 
-// IgnoredFSType should be dropped and use the config DF.IgnoreFSType.
-var IgnoredFSType = []string{ //nolint:gochecknoglobals
-	"autofs", "binfmt_misc", "bpf", "cgroup", "cgroup2", "configfs", "debugfs", "devpts", "devtmpfs",
-	"fusectl", "hugetlbfs", "iso9660", "mqueue", "nsfs", "overlay", "proc", "procfs", "pstore", "rpc_pipefs",
-	"securityfs", "selinuxfs", "squashfs", "sysfs", "sysfs", "tracefs", "tmpfs", "devfs", "aufs", "efivarfs",
-}
-
-// New initialise disk.Input
+// New initializes disk.Input
 //
 // mountPoint is the root path to monitor. Useful when running inside a Docker.
-func New(mountPoint string, pathMatcher types.Matcher) (i telegraf.Input, err error) {
+func New(mountPoint string, pathMatcher types.Matcher, ignoreFSTypes []string) (i telegraf.Input, err error) {
 	input, ok := telegraf_inputs.Inputs["disk"]
 
 	if ok {
 		diskInput, _ := input().(*disk.DiskStats)
-		diskInput.IgnoreFS = IgnoredFSType
+		diskInput.IgnoreFS = ignoreFSTypes
 
 		diskDeduplicateInput := deduplicator{
 			Input:    diskInput,
