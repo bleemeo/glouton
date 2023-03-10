@@ -192,6 +192,7 @@ func DefaultConfig() Config { //nolint:maintidx
 				"/snap",
 				"/run/snapd",
 				"/run/docker/runtime-runc",
+				"/dev",
 			},
 		},
 		DiskIgnore: []string{
