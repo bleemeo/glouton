@@ -21,6 +21,7 @@ import (
 	"glouton/logger"
 	"glouton/prometheus/exporter/common"
 	"regexp"
+	"regexp/syntax"
 	"strings"
 )
 
@@ -151,17 +152,29 @@ func (f DFPathMatcher) Match(path string) bool {
 }
 
 func NewDFFSTypeMatcher(config Config) (DFFSTypeMatcher, error) {
-	var (
-		err    error
-		result DFFSTypeMatcher
-	)
+	denylistRE := make([]*regexp.Regexp, 0, len(config.DF.IgnoreFSType))
 
-	result.denylistRE, err = common.CompileREs(config.DF.IgnoreFSType)
-	if err != nil {
-		return result, fmt.Errorf("%w: failed to compile regexp in disk_ignore: %s", ErrInvalidValue, err)
+	for _, fsType := range config.DF.IgnoreFSType {
+		// Create a regex that only matches a single string.
+		matcher := syntax.Regexp{
+			Op:    syntax.OpLiteral,
+			Flags: syntax.Perl,
+			Rune:  []rune(fsType),
+		}
+
+		r, err := regexp.Compile(matcher.String())
+		if err != nil {
+			return DFFSTypeMatcher{}, fmt.Errorf("%w: failed to compile regexp in disk_ignore: %s", ErrInvalidValue, err)
+		}
+
+		denylistRE = append(denylistRE, r)
 	}
 
-	return result, nil
+	filter := DFFSTypeMatcher{
+		denylistRE: denylistRE,
+	}
+
+	return filter, nil
 }
 
 func (f DFFSTypeMatcher) Match(fsType string) bool {

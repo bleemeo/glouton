@@ -210,6 +210,29 @@ func TestDefaultDFPathIgnore(t *testing.T) {
 	testMatcher(t, filter, allowedPath, deniedPath)
 }
 
+// TestDFFSTypeMatcher checks that the df type matcher considers the types as strings and not regex.
+func TestDFFSTypeMatcher(t *testing.T) {
+	cfg := Config{
+		DF: DF{
+			IgnoreFSType: []string{
+				// Should be considered as a string, so it shouldn't match "fuse-ext4".
+				"fuse.ext4",
+				"devtmpfs",
+			},
+		},
+	}
+
+	fsTypeMatcher, err := NewDFFSTypeMatcher(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	allowedType := []string{"ext4", "fuse-ext4"}
+	deniedType := []string{"fuse.ext4", "devtmpfs"}
+
+	testMatcher(t, fsTypeMatcher, allowedType, deniedType)
+}
+
 // TestDefaultDFFSTypeIgnore check that df ignore pattern match expected filesystem type.
 func TestDefaultDFFSTypeIgnore(t *testing.T) {
 	cfg := DefaultConfig()
