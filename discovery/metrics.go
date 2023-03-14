@@ -521,7 +521,7 @@ func (d *Discovery) registerInput(input telegraf.Input, opts *inputs.GathererOpt
 		extraLabels[types.LabelItem] = service.Instance
 	}
 
-	_, err := d.metricRegistry.RegisterInput(
+	gathererID, err := d.metricRegistry.RegisterInput(
 		registry.RegistrationOption{
 			Description: fmt.Sprintf("Service input %s %s", service.Name, service.Instance),
 			JitterSeed:  0,
@@ -531,6 +531,14 @@ func (d *Discovery) registerInput(input telegraf.Input, opts *inputs.GathererOpt
 		},
 		input,
 	)
+
+	key := NameInstance{
+		Name:     service.Name,
+		Instance: service.Instance,
+	}
+	d.activeCollector[key] = collectorDetails{
+		gathererID: gathererID,
+	}
 
 	return err
 }
