@@ -33,6 +33,7 @@ func New() (i telegraf.Input, err error) {
 		i = &internal.Input{
 			Input: swapInput,
 			Accumulator: internal.Accumulator{
+				DerivatedMetrics: []string{"in", "out"},
 				TransformMetrics: transformMetrics,
 			},
 			Name: "swap",
