@@ -45,9 +45,11 @@ func New(config config.Smart) (telegraf.Input, *inputs.GathererOptions, error) {
 	smartInput.PathSmartctl = config.PathSmartctl
 
 	internalInput := &internal.Input{
-		Input:       smartInput,
-		Accumulator: internal.Accumulator{},
-		Name:        "SMART",
+		Input: smartInput,
+		Accumulator: internal.Accumulator{
+			RenameGlobal: renameGlobal,
+		},
+		Name: "SMART",
 	}
 
 	options := &inputs.GathererOptions{
@@ -56,4 +58,13 @@ func New(config config.Smart) (telegraf.Input, *inputs.GathererOptions, error) {
 	}
 
 	return internalInput, options, nil
+}
+
+func renameGlobal(gatherContext internal.GatherContext) (result internal.GatherContext, drop bool) {
+	// Remove labels that are not useful.
+	delete(gatherContext.Tags, "capacity")
+	delete(gatherContext.Tags, "enabled")
+	delete(gatherContext.Tags, "power")
+
+	return gatherContext, false
 }
