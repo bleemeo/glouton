@@ -47,6 +47,7 @@ type Container interface {
 	ID() string
 	ImageID() string
 	ImageName() string
+	// Labels returns the container labels. They must not be mutated.
 	Labels() map[string]string
 	ListenAddresses() []ListenAddress
 	LogPath() string
