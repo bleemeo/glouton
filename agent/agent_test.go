@@ -271,7 +271,7 @@ func Test_prometheusConfigToURLs(t *testing.T) {
 	}
 }
 
-// Test the service_status{service="smart"} metric description.
+// Test the smart_device_health_status metric description.
 func TestSMARTStatus(t *testing.T) {
 	t.Parallel()
 
@@ -288,8 +288,9 @@ func TestSMARTStatus(t *testing.T) {
 			expectedMetric: nil,
 		},
 		{
-			name: "multiple-critical",
+			name: "multiple-critical-exit",
 			points: []types.MetricPoint{
+				// nvme0: health bad, exit 0
 				{
 					Point: types.Point{
 						Time:  now,
@@ -301,6 +302,18 @@ func TestSMARTStatus(t *testing.T) {
 						types.LabelModel:  "PC401 NVMe SK hynix 512GB",
 					},
 				},
+				{
+					Point: types.Point{
+						Time:  now,
+						Value: 0,
+					},
+					Labels: map[string]string{
+						types.LabelName:   "smart_device_exit_status",
+						types.LabelDevice: "nvme0",
+						types.LabelModel:  "PC401 NVMe SK hynix 512GB",
+					},
+				},
+				// sda: health ok, exit 0
 				{
 					Point: types.Point{
 						Time:  now,
@@ -318,8 +331,89 @@ func TestSMARTStatus(t *testing.T) {
 						Value: 0,
 					},
 					Labels: map[string]string{
+						types.LabelName:   "smart_device_exit_status",
+						types.LabelDevice: "sda",
+						types.LabelModel:  "ST1000LM035",
+					},
+				},
+				// sdb: health bad, exit 0
+				{
+					Point: types.Point{
+						Time:  now,
+						Value: 0,
+					},
+					Labels: map[string]string{
 						types.LabelName:   "smart_device_health_ok",
 						types.LabelDevice: "sdb",
+						types.LabelModel:  "ST1000LM035",
+					},
+				},
+				{
+					Point: types.Point{
+						Time:  now,
+						Value: 0,
+					},
+					Labels: map[string]string{
+						types.LabelName:   "smart_device_exit_status",
+						types.LabelDevice: "sdb",
+						types.LabelModel:  "ST1000LM035",
+					},
+				},
+				// sdc: health not found, exit 1
+				{
+					Point: types.Point{
+						Time:  now,
+						Value: 1,
+					},
+					Labels: map[string]string{
+						types.LabelName:   "smart_device_exit_status",
+						types.LabelDevice: "sdc",
+						types.LabelModel:  "ST1000LM035",
+					},
+				},
+				// sdd: health ok, exit 1
+				{
+					Point: types.Point{
+						Time:  now,
+						Value: 1,
+					},
+					Labels: map[string]string{
+						types.LabelName:   "smart_device_health_ok",
+						types.LabelDevice: "sdd",
+						types.LabelModel:  "ST1000LM035",
+					},
+				},
+				{
+					Point: types.Point{
+						Time:  now,
+						Value: 1,
+					},
+					Labels: map[string]string{
+						types.LabelName:   "smart_device_exit_status",
+						types.LabelDevice: "sdd",
+						types.LabelModel:  "ST1000LM035",
+					},
+				},
+				// sde: health bad, exit 1
+				{
+					Point: types.Point{
+						Time:  now,
+						Value: 0,
+					},
+					Labels: map[string]string{
+						types.LabelName:   "smart_device_health_ok",
+						types.LabelDevice: "sde",
+						types.LabelModel:  "ST1000LM035",
+					},
+				},
+				{
+					Point: types.Point{
+						Time:  now,
+						Value: 1,
+					},
+					Labels: map[string]string{
+						types.LabelName:   "smart_device_exit_status",
+						types.LabelDevice: "sde",
 						types.LabelModel:  "ST1000LM035",
 					},
 				},
@@ -331,10 +425,9 @@ func TestSMARTStatus(t *testing.T) {
 						Value: float64(types.StatusCritical.NagiosCode()),
 					},
 					Labels: map[string]string{
-						types.LabelName:    types.MetricServiceStatus,
-						types.LabelService: "smart",
-						types.LabelDevice:  "nvme0",
-						types.LabelModel:   "PC401 NVMe SK hynix 512GB",
+						types.LabelName:   "smart_device_health_status",
+						types.LabelDevice: "nvme0",
+						types.LabelModel:  "PC401 NVMe SK hynix 512GB",
 					},
 					Annotations: types.MetricAnnotations{
 						Status: types.StatusDescription{
@@ -349,10 +442,9 @@ func TestSMARTStatus(t *testing.T) {
 						Value: float64(types.StatusOk.NagiosCode()),
 					},
 					Labels: map[string]string{
-						types.LabelName:    types.MetricServiceStatus,
-						types.LabelService: "smart",
-						types.LabelDevice:  "sda",
-						types.LabelModel:   "ST1000LM035",
+						types.LabelName:   "smart_device_health_status",
+						types.LabelDevice: "sda",
+						types.LabelModel:  "ST1000LM035",
 					},
 					Annotations: types.MetricAnnotations{
 						Status: types.StatusDescription{
@@ -367,15 +459,65 @@ func TestSMARTStatus(t *testing.T) {
 						Value: float64(types.StatusCritical.NagiosCode()),
 					},
 					Labels: map[string]string{
-						types.LabelName:    types.MetricServiceStatus,
-						types.LabelService: "smart",
-						types.LabelDevice:  "sdb",
-						types.LabelModel:   "ST1000LM035",
+						types.LabelName:   "smart_device_health_status",
+						types.LabelDevice: "sdb",
+						types.LabelModel:  "ST1000LM035",
 					},
 					Annotations: types.MetricAnnotations{
 						Status: types.StatusDescription{
 							CurrentStatus:     types.StatusCritical,
 							StatusDescription: "SMART tests failed on sdb (ST1000LM035)",
+						},
+					},
+				},
+				{
+					Point: types.Point{
+						Time:  now,
+						Value: float64(types.StatusUnknown.NagiosCode()),
+					},
+					Labels: map[string]string{
+						types.LabelName:   "smart_device_health_status",
+						types.LabelDevice: "sdc",
+						types.LabelModel:  "ST1000LM035",
+					},
+					Annotations: types.MetricAnnotations{
+						Status: types.StatusDescription{
+							CurrentStatus:     types.StatusUnknown,
+							StatusDescription: "smartctl check failed with exit code 1 on sdc (ST1000LM035)",
+						},
+					},
+				},
+				{
+					Point: types.Point{
+						Time:  now,
+						Value: float64(types.StatusOk.NagiosCode()),
+					},
+					Labels: map[string]string{
+						types.LabelName:   "smart_device_health_status",
+						types.LabelDevice: "sdd",
+						types.LabelModel:  "ST1000LM035",
+					},
+					Annotations: types.MetricAnnotations{
+						Status: types.StatusDescription{
+							CurrentStatus:     types.StatusOk,
+							StatusDescription: "SMART tests passed on sdd (ST1000LM035)",
+						},
+					},
+				},
+				{
+					Point: types.Point{
+						Time:  now,
+						Value: float64(types.StatusCritical.NagiosCode()),
+					},
+					Labels: map[string]string{
+						types.LabelName:   "smart_device_health_status",
+						types.LabelDevice: "sde",
+						types.LabelModel:  "ST1000LM035",
+					},
+					Annotations: types.MetricAnnotations{
+						Status: types.StatusDescription{
+							CurrentStatus:     types.StatusCritical,
+							StatusDescription: "SMART tests failed on sde (ST1000LM035)",
 						},
 					},
 				},
@@ -393,7 +535,7 @@ func TestSMARTStatus(t *testing.T) {
 
 			store.PushPoints(context.Background(), test.points)
 
-			gotMetric := statusFromLastPoint(now, store, "smart_device_health_ok", map[string]string{types.LabelName: types.MetricServiceStatus, types.LabelService: "smart"}, smartStatus)
+			gotMetric := smartHealthStatusPoints(now, store)
 
 			lessFunc := func(x, y types.MetricPoint) bool {
 				return x.Labels[types.LabelDevice] < y.Labels[types.LabelDevice]

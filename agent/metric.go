@@ -251,8 +251,7 @@ var (
 	// Input metrics that are not associated to a service.
 	inputMetrics = []string{
 		// SMART
-		"smart_device_exit_status",
-		"smart_device_health_ok",
+		"smart_device_health_status",
 		"smart_device_media_wearout_indicator",
 		"smart_device_percent_lifetime_remain",
 		"smart_device_read_error_rate",

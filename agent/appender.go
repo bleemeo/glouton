@@ -25,6 +25,7 @@ import (
 	"glouton/prometheus/model"
 	"glouton/store"
 	"glouton/types"
+	"reflect"
 	"sort"
 	"time"
 
@@ -189,10 +190,7 @@ func (ma miscAppenderMinute) Collect(ctx context.Context, app storage.Appender) 
 	})
 
 	// Add SMART status and UPSD battery status metrics.
-	points = append(
-		points,
-		statusFromLastPoint(now, ma.store, "smart_device_health_ok", map[string]string{types.LabelName: types.MetricServiceStatus, types.LabelService: "smart"}, smartStatus)...,
-	)
+	points = append(points, smartHealthStatusPoints(now, ma.store)...)
 	points = append(
 		points,
 		statusFromLastPoint(now, ma.store, "upsd_status_flags", map[string]string{types.LabelName: "upsd_battery_status"}, upsdBatteryStatus)...,
@@ -208,6 +206,7 @@ func (ma miscAppenderMinute) Collect(ctx context.Context, app storage.Appender) 
 
 // statusFromLastPoint returns points for the targetMetric based on the last point from baseMetricName.
 // statusDescription must return the status description based on the last point and labels of baseMetricName.
+// If statusDescription returns an unset status, the point is ignored.
 func statusFromLastPoint(
 	now time.Time,
 	store *store.Store,
@@ -241,6 +240,11 @@ func statusFromLastPoint(
 		annotations := metric.Annotations()
 		annotations.Status = statusDescription(lastPoint.Value, metric.Labels())
 
+		if annotations.Status.CurrentStatus == types.StatusUnset {
+			// There is no status, ignore this point.
+			continue
+		}
+
 		// Keep all labels from the metric except its name.
 		labelsCopy := make(map[string]string, len(metric.Labels()))
 
@@ -269,9 +273,42 @@ func statusFromLastPoint(
 	return newPoints
 }
 
-// smartStatus returns the "service_status{service="smart"}" metric description from the last value
-// of the metric "device_health_ok" and its labels.
-func smartStatus(value float64, labels map[string]string) types.StatusDescription {
+// smartHealthStatusPoints returns the "smart_device_health_status" metric points.
+// The health status metric is generated from two metrics:
+// - if "smart_device_health_ok" is present for a device we return a status based on this metric
+// - else if "smart_device_health_ok" is missing and "smart_device_exit_status" is not 0, it means the check
+// command failed and we return an unknown status.
+func smartHealthStatusPoints(now time.Time, store *store.Store) []types.MetricPoint {
+	smartHealthStatusLabels := map[string]string{types.LabelName: "smart_device_health_status"}
+
+	healthPoints := statusFromLastPoint(now, store, "smart_device_health_ok", smartHealthStatusLabels, smartHealthStatus)
+	exitStatusPoints := statusFromLastPoint(now, store, "smart_device_exit_status", smartHealthStatusLabels, smartExitStatus)
+
+	// Add the exit status points to the health points if the labels are not already present.
+	// This is in case a check has an exit code != 0 but still generates a "device_health_ok" metric.
+	// In this case we just keep the point generated from "device_health_ok" and ignore the exit code.
+	for _, exitPoint := range exitStatusPoints {
+		isDuplicated := false
+
+		for _, healthPoint := range healthPoints {
+			if reflect.DeepEqual(exitPoint.Labels, healthPoint.Labels) {
+				isDuplicated = true
+
+				break
+			}
+		}
+
+		if !isDuplicated {
+			healthPoints = append(healthPoints, exitPoint)
+		}
+	}
+
+	return healthPoints
+}
+
+// smartHealthStatus returns the "smart_device_health_status" metric description from the last value
+// of the metric "smart_device_health_ok" and its labels.
+func smartHealthStatus(value float64, labels map[string]string) types.StatusDescription {
 	var status types.StatusDescription
 
 	// The device_health_ok field from the SMART input is a boolean we converted to an integer.
@@ -289,6 +326,28 @@ func smartStatus(value float64, labels map[string]string) types.StatusDescriptio
 			CurrentStatus: types.StatusCritical,
 			StatusDescription: fmt.Sprintf(
 				"SMART tests failed on %s (%s)",
+				labels[types.LabelDevice],
+				labels[types.LabelModel],
+			),
+		}
+	}
+
+	return status
+}
+
+// smartExitStatus returns the "smart_device_health_status" metric description from the last value
+// of the metric "smart_device_exit_status" and its labels.
+func smartExitStatus(value float64, labels map[string]string) types.StatusDescription {
+	var status types.StatusDescription
+
+	// Exit status 0 means the command executed successfully.
+	// We only return a status unknown when the command failed.
+	if value != 0 {
+		status = types.StatusDescription{
+			CurrentStatus: types.StatusUnknown,
+			StatusDescription: fmt.Sprintf(
+				"smartctl check failed with exit code %d on %s (%s)",
+				int(value),
 				labels[types.LabelDevice],
 				labels[types.LabelModel],
 			),
