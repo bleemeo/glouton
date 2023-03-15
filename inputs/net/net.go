@@ -22,7 +22,6 @@ import (
 	"glouton/inputs/internal"
 	"glouton/logger"
 	"glouton/types"
-	"strings"
 
 	"github.com/influxdata/telegraf"
 	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"
@@ -30,20 +29,20 @@ import (
 )
 
 type netTransformer struct {
-	denylist     []string
+	filter       types.Matcher
 	vethProvider *veth.Provider
 }
 
 // New initialise net.Input
 //
 // denylist contains a list of interface name prefix to ignore.
-func New(denylist []string, vethProvider *veth.Provider) (i telegraf.Input, err error) {
+func New(filter types.Matcher, vethProvider *veth.Provider) (i telegraf.Input, err error) {
 	input, ok := telegraf_inputs.Inputs["net"]
 	if ok {
 		netInput, _ := input().(*net.NetIOStats)
 		netInput.IgnoreProtocolStats = true
 		nt := netTransformer{
-			denylist:     denylist,
+			filter:       filter,
 			vethProvider: vethProvider,
 		}
 		i = &internal.Input{
@@ -71,10 +70,9 @@ func (nt netTransformer) renameGlobal(gatherContext internal.GatherContext) (int
 		return gatherContext, true
 	}
 
-	for _, b := range nt.denylist {
-		if strings.HasPrefix(item, b) {
-			return gatherContext, true
-		}
+	match := nt.filter.Match(item)
+	if !match {
+		return gatherContext, true
 	}
 
 	gatherContext.Annotations.BleemeoItem = item

@@ -216,25 +216,7 @@ func (c *winCollector) renameGlobal(originalContext internal.GatherContext) (new
 
 	instance = partitions[0]
 	originalContext.Annotations.BleemeoItem = instance
-
-	for _, r := range c.option.IODiskDenylist {
-		if r.MatchString(instance) {
-			return originalContext, true
-		}
-	}
-
-	// If the allowlist is empty, we return all the disks that are not denied.
-	// If it is not empty, we filter them with the allowlist.
-	drop = len(c.option.IODiskAllowlist) != 0
-	if drop {
-		for _, r := range c.option.IODiskAllowlist {
-			if r.MatchString(instance) {
-				drop = false
-
-				break
-			}
-		}
-	}
+	drop = !c.option.IODiskMatcher.Match(instance)
 
 	return originalContext, drop
 }

@@ -459,3 +459,14 @@ type SimpleRule struct {
 	TargetName  string
 	PromQLQuery string
 }
+
+// Matcher allow to match value.
+type Matcher interface {
+	Match(item string) bool
+}
+
+// MatcherRegexp allow to match value and could return a deny regexp.
+type MatcherRegexp interface {
+	Matcher
+	AsDenyRegexp() string
+}

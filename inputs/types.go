@@ -23,7 +23,6 @@ import (
 	"glouton/logger"
 	"glouton/types"
 	"reflect"
-	"regexp"
 	"time"
 
 	"github.com/influxdata/telegraf"
@@ -190,10 +189,10 @@ func (a *Accumulator) addMetrics(measurement string, fields map[string]interface
 // CollectorConfig represents the configuration of a collector.
 type CollectorConfig struct {
 	DFRootPath      string
-	DFPathDenylist  []string
-	NetIfDenylist   []string
-	IODiskAllowlist []*regexp.Regexp
-	IODiskDenylist  []*regexp.Regexp
+	DFPathMatcher   types.Matcher
+	DFIgnoreFSTypes []string
+	NetIfMatcher    types.MatcherRegexp
+	IODiskMatcher   types.MatcherRegexp
 }
 
 // FixedTimeAccumulator implement telegraf.Accumulator (+AddFieldsWithAnnotations) and use given Time for all points.
