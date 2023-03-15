@@ -648,13 +648,11 @@ func (pp *ProcessProvider) baseTopinfo() (result TopInfo, err error) {
 	// swap is a complex topic on windows
 	if !version.IsWindows() {
 		swapUsage, err := mem.SwapMemory()
-		if err != nil {
-			return result, err
+		if err == nil {
+			result.Swap.Total = float64(swapUsage.Total) / 1024.
+			result.Swap.Used = float64(swapUsage.Used) / 1024.
+			result.Swap.Free = float64(swapUsage.Free) / 1024.
 		}
-
-		result.Swap.Total = float64(swapUsage.Total) / 1024.
-		result.Swap.Used = float64(swapUsage.Used) / 1024.
-		result.Swap.Free = float64(swapUsage.Free) / 1024.
 	}
 
 	cpusTimes, err := cpu.Times(false)
