@@ -44,9 +44,6 @@ archives:
   - src: "packaging/truenas/06-distribution.conf"
     dst: ./etc/conf.d/
     strip_parent: true
-  - src: "packaging/truenas/glouton-sudoers.conf"
-    dst: ./etc
-    strip_parent: true
   wrap_in_directory: "glouton_{{ .Version }}"
 nfpms:
 - vendor: Bleemeo

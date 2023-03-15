@@ -8,11 +8,9 @@ glouton_script is the helper script that will take care of one of
 * uninstall glouton
 """
 
-import grp
 import os
 import pathlib
 import json
-import pwd
 import shutil
 import subprocess
 import sys
@@ -29,7 +27,6 @@ def main():
         "upgrade": do_upgrade,
         "uninstall": do_uninstall,
         "make-symlink": do_symlink,
-        "configure-sudoers": configure_sudoers,
     }
 
     cmd_name = sys.argv[1] if len(sys.argv) > 1 else "install"
@@ -50,19 +47,8 @@ def main():
 
 
 def initiliaze():
-    """Ensure for environment variable are correctly set and return path to Glouton install location
-
-    The environment that are checked at that $PATH contaiers /usr/local folders
+    """ return path to Glouton install location
     """
-
-    needed_paths = [
-        "/usr/local/sbin",  # for visudo
-    ]
-
-    for path in needed_paths:
-        if path not in os.environ["PATH"].split(":"):
-            os.environ["PATH"] = path + ":" + os.environ["PATH"]
-
     script_path = pathlib.Path(__file__).resolve()
     extract_location = script_path.parent
     install_location = extract_location.parent
@@ -262,62 +248,8 @@ def update_cfg_file(path_info):
 def do_start(path_info):
     do_symlink(path_info)
     setup_cron(path_info)
-    configure_sudoers(path_info)
 
     # Most of the following is what would be present in postinstall of a package manager.
-    try:
-        grp.getgrnam("glouton")
-    except KeyError:
-        print("+ pw groupadd glouton")
-        subprocess.run(
-            ["pw", "groupadd", "glouton"],
-            check=True,
-        )
-
-    try:
-        pwd.getpwnam("glouton")
-    except KeyError:
-        print(
-            '+ pw useradd glouton -g glouton -d /var/lib/glouton -s /sbin/nologin -c "Glouton daemon"'
-        )
-        subprocess.run(
-            [
-                "pw",
-                "useradd",
-                "glouton",
-                "-g",
-                "glouton",
-                "-d",
-                "/var/lib/glouton",
-                "-s",
-                "/sbin/nologin",
-                "-c",
-                "Glouton daemon",
-            ],
-            check=True,
-        )
-        # When user is created, setup ownership
-        print("+ chown -R glouton:glouton /var/lib/glouton/")
-        subprocess.run(
-            ["chown", "-R", "glouton:glouton", "/var/lib/glouton/"],
-            check=True,
-        )
-
-    get_install_cfg = pathlib.Path("/etc/glouton/conf.d/30-install.conf")
-    if get_install_cfg.exists():
-        try:
-            owner = get_install_cfg.owner()
-        except KeyError:
-            owner = "non-existing"
-
-        if owner != "glouton":
-            print(f"+ chown glouton:glouton {get_install_cfg}")
-            print(f"+ chmod 0640 {get_install_cfg}")
-            subprocess.run(
-                ["chown", "glouton:glouton", str(get_install_cfg)],
-                check=True,
-            )
-            get_install_cfg.chmod(0o640)
 
     rc_file = pathlib.Path("/usr/local/etc/rc.d/glouton")
     src_rc_file = path_info["install_location"] / "current" / "glouton.init"
@@ -408,7 +340,7 @@ def do_uninstall(path_info):
     print("+ sysrc -x glouton_enabled")
     subprocess.run(["sysrc", "-x", "glouton_enable"])
     print(
-        "+ rm /etc/glouton /usr/local/etc/glouton /var/lib/glouton /usr/local/etc/sudoers.d/glouton /usr/local/etc/rc.d/glouton"
+        "+ rm /etc/glouton /usr/local/etc/glouton /var/lib/glouton /usr/local/etc/rc.d/glouton"
     )
     subprocess.run(
         [
@@ -416,42 +348,9 @@ def do_uninstall(path_info):
             "/etc/glouton",
             "/usr/local/etc/glouton",
             "/var/lib/glouton",
-            "/usr/local/etc/sudoers.d/glouton",
             "/usr/local/etc/rc.d/glouton",
         ]
     )
-    print("+ pw userdel glouton")
-    subprocess.run(["pw", "userdel", "glouton"])
-    print("+ pw groupdel glouton")
-    subprocess.run(["pw", "groupdel", "glouton"], capture_output=True)
-
-    main_sudoers = pathlib.Path("/usr/local/etc/sudoers")
-    sudoers_content = main_sudoers.read_text()
-    if (
-        "Added by Glouton" in sudoers_content
-        or "/usr/local/etc/sudoers.d/glouton" in sudoers_content
-    ):
-        print(f"Removing @include /usr/local/etc/sudoers.d/glouton from {main_sudoers}")
-        lines = [
-            x
-            for x in sudoers_content.splitlines()
-            if "Added by Glouton" not in x
-            and "/usr/local/etc/sudoers.d/glouton" not in x
-        ]
-        new_contents = "\n".join(lines) + "\n"
-
-        result = subprocess.run(
-            ["visudo", "-c", "-f", "-"],
-            check=False,
-            input=new_contents.encode("utf-8"),
-            capture_output=True,
-        )
-        if result.returncode != 0:
-            print(
-                "Unable to remove glouton line from {main_sudoers}, please do it manually"
-            )
-        else:
-            main_sudoers.write_text(new_contents)
 
     token, token_id = _get_api_token()
 
@@ -526,46 +425,6 @@ def setup_cron(path_info):
 
     print(f"Adding cron for auto-upgrade: {target_crond}")
     target_crond.write_text(new_content)
-
-
-def configure_sudoers(path_info):
-    """Configure sudoer for glouton"""
-    src_sudoers = path_info["install_location"] / "etc" / "glouton-sudoers.conf"
-    target_sudoers = pathlib.Path("/usr/local/etc/sudoers.d/glouton")
-    main_sudoers = pathlib.Path("/usr/local/etc/sudoers")
-
-    result = subprocess.run(
-        ["visudo", "-c", "-f", str(src_sudoers)],
-        check=False,
-        capture_output=True,
-    )
-    if result.returncode != 0:
-        print("Glouton sudoers is invalid, skipping its installation")
-        return
-
-    if not target_sudoers.exists():
-        print(f"+ cp -p {src_sudoers} {target_sudoers}")
-        shutil.copy2(src_sudoers, target_sudoers)
-
-        data = main_sudoers.read_text()
-        if (
-            "includedir /usr/local/etc/sudoers.d" not in data
-            and "include /usr/local/etc/sudoers.d/glouton" not in data
-        ):
-            print(
-                "+ echo @include /usr/local/etc/sudoers.d/glouton >> /usr/local/etc/sudoers"
-            )
-            with main_sudoers.open("a") as fd:
-                fd.write(
-                    "# Added by Glouton installation. Comment the next line to disable it\n"
-                )
-                fd.write("@include /usr/local/etc/sudoers.d/glouton\n")
-    else:
-        new_content = src_sudoers.read_text()
-        existing_content = target_sudoers.read_text()
-        if new_content != existing_content:
-            print(f"+ cp -p {src_sudoers} {target_sudoers}")
-            shutil.copy2(src_sudoers, target_sudoers)
 
 
 if __name__ == "__main__":

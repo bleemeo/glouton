@@ -12,8 +12,7 @@ name="glouton"
 desc="Glouton"
 rcvar="glouton_enable"
 
-extra_commands="update_sudoers uninstall upgrade"
-update_sudoers_cmd="glouton_update_sudoers"
+extra_commands="uninstall upgrade"
 uninstall_cmd="glouton_uninstall"
 upgrade_cmd="glouton_upgrade"
 
@@ -24,14 +23,10 @@ upgrade_cmd="glouton_upgrade"
 
 # daemon
 command=/usr/sbin/daemon
-command_args="-u glouton -crP ${glouton_pidfile} \"${glouton_install_path}/current/${name}\""
+command_args="-crP ${glouton_pidfile} \"${glouton_install_path}/current/${name}\" --yes-run-as-root"
 pidfile="${glouton_pidfile}"
 
 export PATH=/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/sbin:/usr/local/bin
-
-glouton_update_sudoers() {
-    "${glouton_install_path}/current/glouton_install.py" configure-sudoers
-}
 
 glouton_uninstall() {
     "${glouton_install_path}/current/glouton_install.py" uninstall
