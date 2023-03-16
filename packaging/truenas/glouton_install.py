@@ -274,11 +274,11 @@ def _highest_parent(path):
 
 
 def do_upgrade(path_info):
-    upgrade_url_file = pathlib.Path("/etc/glouton/freebsd-update-url")
+    upgrade_url_file = pathlib.Path("/etc/glouton/truenas-update-url")
     if upgrade_url_file.exists():
         upgrade_url = upgrade_url_file.read_text()
     else:
-        upgrade_url = "https://packages.bleemeo.com/bleemeo-agent/freebsd/glouton_latest_freebsd_amd64.tar.gz"
+        upgrade_url = "https://packages.bleemeo.com/bleemeo-agent/truenas/glouton_latest_truenas_amd64.tar.gz"
 
     first_member = True
     new_version = None
