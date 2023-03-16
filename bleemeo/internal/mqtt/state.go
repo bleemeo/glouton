@@ -23,6 +23,7 @@ import (
 	"glouton/mqtt/client"
 	"os"
 	"sync"
+	"time"
 
 	gloutonTypes "glouton/types"
 
@@ -151,6 +152,8 @@ func (rs *reloadState) Close() {
 
 		rs.mqtt.Publish(fmt.Sprintf("v1/agent/%s/disconnect", rs.agentID), payload, false)
 	}
+
+	rs.mqtt.Disconnect(5 * time.Second)
 
 	// The callbacks need to know when the channel are closed
 	// so they don't send on a closed channel.
