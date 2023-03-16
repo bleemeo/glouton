@@ -278,7 +278,7 @@ def do_upgrade(path_info):
     if upgrade_url_file.exists():
         upgrade_url = upgrade_url_file.read_text()
     else:
-        upgrade_url = "https://packages.bleemeo.com/bleemeo-agent/truenas/glouton_latest_truenas_amd64.tar.gz"
+        upgrade_url = "https://packages.bleemeo.com/bleemeo-agent/truenas/bleemeo-agent_proposed_truenas_amd64.tar.gz"
 
     first_member = True
     new_version = None
