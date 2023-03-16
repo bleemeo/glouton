@@ -1044,7 +1044,7 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelItem: "/home",
 					},
 					Annotations: types.MetricAnnotations{
-						BleemeoItem: "/home... but annotation are NOT used with Gatherer",
+						BleemeoItem: "/home... but annotation are NOT used with Gatherer, the label item value win",
 					},
 				},
 				{
@@ -1073,12 +1073,18 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelItem:     "/home",
 						types.LabelInstance: "server.bleemeo.com:8016",
 					},
+					Annotations: types.MetricAnnotations{
+						BleemeoItem: "/home",
+					},
 				},
 				{
 					Labels: map[string]string{
 						types.LabelName:     "disk_used_perc",
 						types.LabelItem:     "/srv",
 						types.LabelInstance: "server.bleemeo.com:8016",
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoItem: "/srv",
 					},
 				},
 			},
