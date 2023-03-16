@@ -26,10 +26,10 @@ import (
 	"strings"
 	_ "unsafe" // using hack with go linkname to access private variable :)
 
+	"github.com/alecthomas/kingpin/v2"
 	"github.com/go-kit/log"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/node_exporter/collector"
-	"gopkg.in/alecthomas/kingpin.v2"
 )
 
 // Option are options for node_exporter. If absent, the default of node_exporter will be used.
