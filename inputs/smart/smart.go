@@ -20,6 +20,7 @@ import (
 	"glouton/config"
 	"glouton/inputs"
 	"glouton/inputs/internal"
+	"os"
 	"time"
 
 	"github.com/influxdata/telegraf"
@@ -39,7 +40,9 @@ func New(config config.Smart) (telegraf.Input, *inputs.GathererOptions, error) {
 		return nil, nil, inputs.ErrUnexpectedType
 	}
 
-	smartInput.UseSudo = true
+	// Don't use sudo if we are already root. This is mandatory on TrueNAS... because root isn't allowed
+	// to sudo on TrueNAS
+	smartInput.UseSudo = os.Getuid() != 0
 	smartInput.Devices = config.Devices
 	smartInput.Excludes = config.Excludes
 	smartInput.PathSmartctl = config.PathSmartctl
