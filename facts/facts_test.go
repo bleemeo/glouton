@@ -165,6 +165,30 @@ sockaddrs: <DST,GATEWAY,NETMASK,IFP,IFA>
 			wantMac: "52:55:5f:37:31:b5",
 			wantIP:  "192.168.205.13",
 		},
+		{
+			name: "TrueNAS-12.0-RELEASE",
+			data: `
+RTA_DST: inet 8.8.8.8; RTA_IFP: link ; RTM_GET: Report Metrics: len 224, pid: 0, seq 1, errno 0, flags:<UP,GATEWAY,HOST,STATIC>
+locks:  inits: 
+sockaddrs: <DST,IFP>
+ 8.8.8.8 link#0
+   route to: 8.8.8.8
+destination: 0.0.0.0
+       mask: 0.0.0.0
+    gateway: 192.168.205.1
+        fib: 0
+  interface: em0
+      flags: <UP,GATEWAY,DONE,STATIC>
+ recvpipe  sendpipe  ssthresh  rtt,msec    mtu        weight    expire
+       0         0         0         0      1500         1         0 
+
+locks:  inits: 
+sockaddrs: <DST,GATEWAY,NETMASK,IFP,IFA>
+ 0.0.0.0 192.168.205.1 0.0.0.0 em0:52.55.f3.c4.ce.e0 192.168.205.19
+ `,
+			wantMac: "52:55:f3:c4:ce:e0",
+			wantIP:  "192.168.205.19",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -193,6 +217,15 @@ func Test_decodeFreeBSDVersion(t *testing.T) {
 				"NAME":        "TrueNAS",
 				"VERSION_ID":  "13.0-U4",
 				"PRETTY_NAME": "TrueNAS 13.0-U4",
+			},
+		},
+		{
+			name: "TrueNAS-12.0-RELEASE",
+			data: "TrueNAS-12.0-RELEASE (f862218137)",
+			want: map[string]string{
+				"NAME":        "TrueNAS",
+				"VERSION_ID":  "12.0-RELEASE",
+				"PRETTY_NAME": "TrueNAS 12.0-RELEASE",
 			},
 		},
 	}
