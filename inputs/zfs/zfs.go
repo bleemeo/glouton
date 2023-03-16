@@ -54,19 +54,19 @@ func New() (telegraf.Input, *inputs.GathererOptions, error) {
 		Rules: []types.SimpleRule{
 			{
 				TargetName:  "disk_used",
-				PromQLQuery: `label_replace((sum by (pool)(zfs_pool_allocated)), "item", "$1", "pool", "(.*)")`,
+				PromQLQuery: `sum by (item)(label_replace((sum by (pool)(zfs_pool_allocated)), "item", "$1", "pool", "(.*)"))`,
 			},
 			{
 				TargetName:  "disk_used_perc",
-				PromQLQuery: `label_replace((sum by (pool)(zfs_pool_allocated)/(sum by (pool)(zfs_pool_size)))*100, "item", "$1", "pool", "(.*)")`,
+				PromQLQuery: `sum by (item)(label_replace((sum by (pool)(zfs_pool_allocated)/(sum by (pool)(zfs_pool_size)))*100, "item", "$1", "pool", "(.*)"))`,
 			},
 			{
 				TargetName:  "disk_total",
-				PromQLQuery: `label_replace((sum by (pool)(zfs_pool_size)), "item", "$1", "pool", "(.*)")`,
+				PromQLQuery: `sum by (item)(label_replace((sum by (pool)(zfs_pool_size)), "item", "$1", "pool", "(.*)"))`,
 			},
 			{
 				TargetName:  "disk_free",
-				PromQLQuery: `label_replace((sum by (pool)(zfs_pool_free)), "item", "$1", "pool", "(.*)")`,
+				PromQLQuery: `sum by (item)(label_replace((sum by (pool)(zfs_pool_free)), "item", "$1", "pool", "(.*)"))`,
 			},
 		},
 	}
