@@ -226,6 +226,7 @@ var (
 		"system_load15",
 		"uptime",
 		"users_logged",
+		"zfs_pool_health_status",
 	}
 
 	bleemeoSwapMetrics = []string{

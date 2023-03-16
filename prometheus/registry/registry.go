@@ -155,7 +155,11 @@ type RegistrationOption struct {
 	// ApplyDynamicRelabel controls whether the metrics should go through the relabel hook.
 	ApplyDynamicRelabel bool
 	Rules               []types.SimpleRule
-	rrules              []*rules.RecordingRule
+	// GatherModifier is a function that can modify the gather result (add/modify/delete). It is called after Rules
+	// are applied, just before ExtraLabels is done.
+	// It could be nil to skip this step.
+	GatherModifier func(mfs []*dto.MetricFamily) []*dto.MetricFamily
+	rrules         []*rules.RecordingRule
 }
 
 type AppenderRegistrationOption struct {
@@ -1512,7 +1516,7 @@ func (r *Registry) setupGatherer(reg *registration, source prometheus.Gatherer) 
 		promLabels, annotations, reg.relabelHookSkip = r.applyRelabel(ctxTimeout, extraLabels)
 	}
 
-	g := newLabeledGatherer(source, promLabels, reg.option.rrules)
+	g := newLabeledGatherer(source, promLabels, reg.option.rrules, reg.option.GatherModifier)
 	reg.annotations = annotations
 	reg.gatherer = g
 }

@@ -149,14 +149,15 @@ func (w *GathererWithStateWrapper) Gather() ([]*dto.MetricFamily, error) {
 // labeledGatherer provides a gatherer that will add provided labels to all metrics.
 // It also allows to gather to MetricPoints.
 type labeledGatherer struct {
-	labels []*dto.LabelPair
-	ruler  *ruler.SimpleRuler
+	labels   []*dto.LabelPair
+	ruler    *ruler.SimpleRuler
+	modifier func([]*dto.MetricFamily) []*dto.MetricFamily
 
 	l      sync.Mutex
 	source prometheus.Gatherer
 }
 
-func newLabeledGatherer(g prometheus.Gatherer, extraLabels labels.Labels, rrules []*rules.RecordingRule) *labeledGatherer {
+func newLabeledGatherer(g prometheus.Gatherer, extraLabels labels.Labels, rrules []*rules.RecordingRule, modifier func([]*dto.MetricFamily) []*dto.MetricFamily) *labeledGatherer {
 	labels := make([]*dto.LabelPair, 0, len(extraLabels))
 
 	for _, l := range extraLabels {
@@ -170,9 +171,10 @@ func newLabeledGatherer(g prometheus.Gatherer, extraLabels labels.Labels, rrules
 	}
 
 	return &labeledGatherer{
-		source: g,
-		labels: labels,
-		ruler:  ruler.New(rrules),
+		source:   g,
+		labels:   labels,
+		ruler:    ruler.New(rrules),
+		modifier: modifier,
 	}
 }
 
@@ -225,6 +227,10 @@ func (g *labeledGatherer) GatherWithState(ctx context.Context, state GatherState
 	}
 
 	mfs = g.ruler.ApplyRulesMFS(ctx, now, mfs)
+
+	if g.modifier != nil {
+		mfs = g.modifier(mfs)
+	}
 
 	if len(g.labels) == 0 {
 		return mfs, err

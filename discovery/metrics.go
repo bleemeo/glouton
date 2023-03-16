@@ -120,11 +120,12 @@ func AddDefaultInputs(
 
 		_, err = metricRegistry.RegisterInput(
 			registry.RegistrationOption{
-				Description: "ZFS input",
-				JitterSeed:  0,
-				Rules:       gathererOptions.Rules,
-				MinInterval: gathererOptions.MinInterval,
-				ExtraLabels: nil,
+				Description:    "ZFS input",
+				JitterSeed:     0,
+				Rules:          gathererOptions.Rules,
+				GatherModifier: gathererOptions.GatherModifier,
+				MinInterval:    gathererOptions.MinInterval,
+				ExtraLabels:    nil,
 			},
 			input,
 		)
@@ -546,11 +547,12 @@ func (d *Discovery) registerInput(input telegraf.Input, opts *inputs.GathererOpt
 
 	gathererID, err := d.metricRegistry.RegisterInput(
 		registry.RegistrationOption{
-			Description: fmt.Sprintf("Service input %s %s", service.Name, service.Instance),
-			JitterSeed:  0,
-			Rules:       opts.Rules,
-			MinInterval: opts.MinInterval,
-			ExtraLabels: extraLabels,
+			Description:    fmt.Sprintf("Service input %s %s", service.Name, service.Instance),
+			JitterSeed:     0,
+			Rules:          opts.Rules,
+			GatherModifier: opts.GatherModifier,
+			MinInterval:    opts.MinInterval,
+			ExtraLabels:    extraLabels,
 		},
 		input,
 	)
