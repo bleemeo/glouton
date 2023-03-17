@@ -50,14 +50,15 @@ import (
 	"glouton/inputs/upsd"
 	"glouton/inputs/uwsgi"
 	"glouton/inputs/winperfcounters"
+	"glouton/inputs/zfs"
 	"glouton/inputs/zookeeper"
 	"glouton/logger"
 	"glouton/prometheus/registry"
 	"glouton/types"
+	"glouton/version"
 	"net"
 	"os"
 	"reflect"
-	"runtime"
 	"strconv"
 
 	"github.com/influxdata/telegraf"
@@ -68,6 +69,7 @@ var errNotSupported = errors.New("service not supported by Prometheus collector"
 
 // AddDefaultInputs adds system inputs to a collector.
 func AddDefaultInputs(
+	metricRegistry GathererRegistry,
 	coll *collector.Collector,
 	inputsConfig inputs.CollectorConfig,
 	vethProvider *veth.Provider,
@@ -110,6 +112,28 @@ func AddDefaultInputs(
 		}
 	}
 
+	if version.IsFreeBSD() {
+		input, gathererOptions, err := zfs.New()
+		if err != nil {
+			return fmt.Errorf("unable to create ZFS input: %w", err)
+		}
+
+		_, err = metricRegistry.RegisterInput(
+			registry.RegistrationOption{
+				Description:    "ZFS input",
+				JitterSeed:     0,
+				Rules:          gathererOptions.Rules,
+				GatherModifier: gathererOptions.GatherModifier,
+				MinInterval:    gathererOptions.MinInterval,
+				ExtraLabels:    nil,
+			},
+			input,
+		)
+		if err != nil {
+			return fmt.Errorf("unable to add ZFS input: %w", err)
+		}
+	}
+
 	input, err = diskio.New(inputsConfig.IODiskMatcher)
 	if err != nil {
 		return err
@@ -127,8 +151,8 @@ func addDefaultFromOS(inputsConfig inputs.CollectorConfig, coll *collector.Colle
 
 	var err error
 
-	switch runtime.GOOS {
-	case "windows":
+	switch {
+	case version.IsWindows():
 		input, err = winperfcounters.New(inputsConfig)
 		if err != nil {
 			return err
@@ -523,11 +547,12 @@ func (d *Discovery) registerInput(input telegraf.Input, opts *inputs.GathererOpt
 
 	gathererID, err := d.metricRegistry.RegisterInput(
 		registry.RegistrationOption{
-			Description: fmt.Sprintf("Service input %s %s", service.Name, service.Instance),
-			JitterSeed:  0,
-			Rules:       opts.Rules,
-			MinInterval: opts.MinInterval,
-			ExtraLabels: extraLabels,
+			Description:    fmt.Sprintf("Service input %s %s", service.Name, service.Instance),
+			JitterSeed:     0,
+			Rules:          opts.Rules,
+			GatherModifier: opts.GatherModifier,
+			MinInterval:    opts.MinInterval,
+			ExtraLabels:    extraLabels,
 		},
 		input,
 	)

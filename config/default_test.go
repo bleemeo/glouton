@@ -80,7 +80,9 @@ func TestDefaultDiskIgnore(t *testing.T) {
 	}
 
 	allowedDisk := []string{
+		"ada0",
 		"C:",
+		"da0",
 		"disk0", // Value seen on MacOS
 		"drbd0",
 		"fioa",
@@ -101,6 +103,7 @@ func TestDefaultDiskIgnore(t *testing.T) {
 		"sdz",
 		"skd0",
 		"vda",
+		"vtbd0",
 		"xvda",
 
 		// Edge case. We probably should like to ignore this, but it seems a
@@ -137,6 +140,9 @@ func TestDefaultDiskIgnore(t *testing.T) {
 		"zd0", // zs are ZFS volume
 		"zd48",
 		"zram0", // compressed tmpfs, usually for compressed swap
+		"cd0",   // cdrom on FreeBSD
+		"pass0", // fuse for block device on FreeBSD
+		"pass2", // fuse for block device on FreeBSD
 	}
 
 	testMatcher(t, filter, allowedDisk, deniedDisk)
@@ -245,6 +251,7 @@ func TestDefaultDFFSTypeIgnore(t *testing.T) {
 	allowedType := []string{
 		"ext4",
 		"vfat",
+		"ufs",
 	}
 
 	deniedType := []string{
@@ -254,18 +261,24 @@ func TestDefaultDFFSTypeIgnore(t *testing.T) {
 		"cgroup2",
 		"configfs",
 		"debugfs",
+		"devfs",
 		"devpts",
 		"devtmpfs",
+		"fdescfs",
 		"fusectl",
 		"hugetlbfs",
+		"linprocfs",
+		"linsysfs",
 		"mqueue",
 		"nsfs",
+		"nullfs",
 		"overlay",
 		"pstore",
 		"securityfs",
 		"sysfs",
 		"tmpfs",
 		"tracefs",
+		"zfs",
 	}
 
 	testMatcher(t, filter, allowedType, deniedType)

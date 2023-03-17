@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/influxdata/telegraf"
+	dto "github.com/prometheus/client_model/go"
 )
 
 var (
@@ -279,6 +280,9 @@ type GathererOptions struct {
 	// be true if recording rules are used. They are evaluated after
 	// the metrics are renamed in the accumulator.
 	Rules []types.SimpleRule
+	// GatherModifier is a function that can modify the gather result (add/modify/delete).
+	// It could be nil to skip this step.
+	GatherModifier func(mfs []*dto.MetricFamily) []*dto.MetricFamily
 	// The delay to wait for between gathers.
 	MinInterval time.Duration
 }

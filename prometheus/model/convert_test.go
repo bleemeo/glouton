@@ -95,6 +95,7 @@ func TestConvertionLoop(t *testing.T) {
 							CurrentStatus:     types.StatusUnknown,
 							StatusDescription: "disk absent",
 						},
+						BleemeoItem: "/home",
 					},
 				},
 				{
@@ -105,6 +106,7 @@ func TestConvertionLoop(t *testing.T) {
 							CurrentStatus:     types.StatusOk,
 							StatusDescription: "LGTM",
 						},
+						BleemeoItem: "/srv",
 					},
 				},
 				{
@@ -115,6 +117,7 @@ func TestConvertionLoop(t *testing.T) {
 							CurrentStatus:     types.StatusCritical,
 							StatusDescription: "110% is more than 100%",
 						},
+						BleemeoItem: "/",
 					},
 				},
 				{

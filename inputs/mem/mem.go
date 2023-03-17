@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"glouton/inputs"
 	"glouton/inputs/internal"
+	"glouton/version"
 
 	"github.com/influxdata/telegraf"
 	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"
@@ -65,9 +66,27 @@ func transformMetrics(currentContext internal.GatherContext, fields map[string]f
 		case "sunreclaim":
 			delete(fields, "sunreclaim")
 			fields["slab_unrecl"] = value
+		case "buffered", "cached":
+			if version.IsFreeBSD() {
+				// It's unclear whether buffered memory is already counter in mem_wired or not.
+				// Anyway, it seems that FreeBSD only had buffered memory with UFS and not with ZFS,
+				// since we support TrueNAS, we should only had ZFS.
+				// For "cached", it no longer exists on recent FreeBSD. It's replaced by "laundry".
+				delete(fields, metricName)
+			}
+		// Only include inactive, because active & wired are already included in used.
+		// Inactive can't really be mapped to existing metrics (buffered or cached).
+		// On FreeBSD inactive are metric allocated by application not recently used (on Linux, we would
+		// report it as used). It may contains both clean and dirty (likely anonymous) pages which on
+		// Linux are more or less buffers (dirty pages) and cached (clean pages).
+		case "inactive":
+			if !version.IsFreeBSD() {
+				// Those metrics aren't used on non-FreeBSD system.
+				delete(fields, metricName)
+			}
 		// All next cases are metric ignored. They are on different case to
 		// avoid very long line.
-		case "active", "inactive", "wired", "commit_limit", "committed_as", "dirty", "high_free", "high_total":
+		case "active", "wired", "commit_limit", "committed_as", "dirty", "high_free", "high_total":
 			delete(fields, metricName)
 		case "huge_page_size", "huge_pages_free", "huge_pages_total", "low_free", "low_total", "mapped", "page_tables":
 			delete(fields, metricName)

@@ -315,7 +315,36 @@ func MetaLabelsToAnnotation(lbls labels.Labels) types.MetricAnnotations {
 		annotations.Status.StatusDescription = lbls.Get(types.LabelMetaCurrentDescription)
 	}
 
+	// For item, if the only non-meta label is just item & instance, convert it to an annotation item.
+	// It not supported to have only item which isn't an annotation.
+	// But we don't override the annotation if it's already filled.
+	item := lbls.Get(types.LabelItem)
+	if item != "" && annotations.BleemeoItem == "" {
+		if metricOnlyHasItem(lbls) {
+			annotations.BleemeoItem = item
+		}
+	}
+
 	return annotations
+}
+
+// metricOnlyHasItem is the same as bleemeo/internal/common.MetricOnlyHasItem but works on labels.Labels.
+// Since here the meta label could still be present, ignore them.
+// Unlike MetricOnlyHasItem we don't check for LabelInstanceUUID value. If a false positive is made the worse
+// case is that the BleemeoItem annotation is set, but then bleemeo connector won't use it since MetricOnlyHasItem will
+// not have this false positive.
+func metricOnlyHasItem(lbsl labels.Labels) bool {
+	for _, lbl := range lbsl {
+		if strings.HasPrefix(lbl.Name, model.ReservedLabelPrefix) {
+			continue
+		}
+
+		if lbl.Name != types.LabelName && lbl.Name != types.LabelItem && lbl.Name != types.LabelInstanceUUID && lbl.Name != types.LabelInstance {
+			return false
+		}
+	}
+
+	return true
 }
 
 func DTO2Labels(name string, input *dto.Metric) map[string]string {

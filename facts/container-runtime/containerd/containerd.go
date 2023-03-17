@@ -580,7 +580,7 @@ func (c *Containerd) run(ctx context.Context) error {
 				gloutonEvent.Container = container
 			}
 
-			switch gloutonEvent.Type { //nolint:exhaustive
+			switch gloutonEvent.Type { //nolint:exhaustive,nolintlint
 			case facts.EventTypeDelete:
 				delete(c.containers, gloutonEvent.ContainerID)
 			case facts.EventTypeStop:

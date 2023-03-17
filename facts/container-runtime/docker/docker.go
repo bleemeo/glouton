@@ -466,7 +466,7 @@ func (d *Docker) run(ctx context.Context) error {
 
 				event.Container = d.containers[actorID]
 
-				switch event.Type { //nolint:exhaustive
+				switch event.Type { //nolint:exhaustive,nolintlint
 				case facts.EventTypeDelete:
 					delete(d.containers, event.ContainerID)
 				case facts.EventTypeStop:

@@ -1275,8 +1275,8 @@ func (s *Synchronizer) prepareMetricPayload(
 			agentID = metric.Annotations().BleemeoAgentID
 		}
 
-		payload.Item = annotations.BleemeoItem
 		if common.MetricOnlyHasItem(labels, agentID) {
+			payload.Item = annotations.BleemeoItem
 			payload.LabelsText = ""
 		}
 	}

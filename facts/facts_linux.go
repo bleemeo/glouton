@@ -17,7 +17,6 @@
 package facts
 
 import (
-	"bytes"
 	"context"
 	"glouton/logger"
 	"net"
@@ -126,12 +125,6 @@ func (f *FactProvider) primaryAddress(ctx context.Context) (ipAddress string, ma
 	}
 
 	return routes[0].Src.String(), macAddressByAddress(ctx, routes[0].Src.String())
-}
-
-func bytesToString(buffer []byte) string {
-	n := bytes.IndexByte(buffer, 0)
-
-	return string(buffer[:n])
 }
 
 func macAddressByAddress(ctx context.Context, ipAddress string) string {

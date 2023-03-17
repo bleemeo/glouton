@@ -202,6 +202,7 @@ var (
 		"mem_used",
 		"mem_used_perc",
 		"mem_used_perc_status",
+		"mem_inactive",
 		"net_bits_recv",
 		"net_bits_sent",
 		"net_drop_in",
@@ -225,6 +226,7 @@ var (
 		"system_load15",
 		"uptime",
 		"users_logged",
+		"zfs_pool_health_status",
 	}
 
 	bleemeoSwapMetrics = []string{

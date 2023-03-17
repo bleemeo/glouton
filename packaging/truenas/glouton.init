@@ -1,0 +1,40 @@
+#!/bin/sh
+# $FreeBSD$
+
+# PROVIDE: glouton
+# REQUIRE: DAEMON NETWORKING
+# BEFORE: LOGIN
+# KEYWORD: shutdown
+
+. /etc/rc.subr
+
+name="glouton"
+desc="Glouton"
+rcvar="glouton_enable"
+
+extra_commands="uninstall upgrade"
+uninstall_cmd="glouton_uninstall"
+upgrade_cmd="glouton_upgrade"
+
+
+: ${glouton_install_path="$(dirname "$(dirname "$(readlink -f "$0")")")"}
+: ${glouton_enable="YES"}
+: ${glouton_pidfile="/var/run/${name}.pid"}
+
+# daemon
+command=/usr/sbin/daemon
+command_args="-crP ${glouton_pidfile} \"${glouton_install_path}/current/${name}\" --yes-run-as-root"
+pidfile="${glouton_pidfile}"
+
+export PATH=/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/sbin:/usr/local/bin
+
+glouton_uninstall() {
+    "${glouton_install_path}/current/glouton_install.py" uninstall
+}
+
+glouton_upgrade() {
+    "${glouton_install_path}/current/glouton_install.py" upgrade
+}
+
+load_rc_config $name
+run_rc_command "$1"

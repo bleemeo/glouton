@@ -17,6 +17,7 @@
 package facts
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -49,6 +50,7 @@ const (
 
 var (
 	errAutoUpgradeNotSupported = errors.New("auto upgrade is not supported on this operating system")
+	errUnsupportedOS           = errors.New("unsupported OS")
 
 	autoUpgradeTimerRegex = regexp.MustCompile("glouton-auto-upgrade.timer")
 	commandNotFoundRegex  = regexp.MustCompile("not found")
@@ -374,6 +376,63 @@ func decodeOsRelease(data string) (map[string]string, error) {
 	}
 
 	return result, nil
+}
+
+func decodeFreeBSDVersion(data string) (map[string]string, error) {
+	if !strings.HasPrefix(data, "TrueNAS-") {
+		return nil, errUnsupportedOS
+	}
+
+	part := strings.Split(data, " ")
+	part = strings.SplitN(part[0], "-", 2)
+
+	if len(part) < 2 {
+		return nil, errUnsupportedOS
+	}
+
+	version := part[1]
+
+	return map[string]string{
+		"NAME":        "TrueNAS",
+		"VERSION_ID":  version,
+		"PRETTY_NAME": "TrueNAS " + version,
+	}, nil
+}
+
+func decodeFreeBSDRouteGet(data string) (string, string) {
+	lines := strings.Split(data, "\n")
+	if len(lines) == 0 {
+		return "a", ""
+	}
+
+	lastLine := strings.TrimSpace(lines[len(lines)-1])
+	if lastLine == "" && len(lines) > 1 {
+		lastLine = strings.TrimSpace(lines[len(lines)-2])
+	}
+
+	part := strings.Split(lastLine, " ")
+
+	if len(part) != 5 {
+		return "", ""
+	}
+
+	ifp := part[3]
+	ifa := part[4]
+
+	part = strings.Split(ifp, ":")
+	if len(part) != 2 {
+		return "c", ""
+	}
+
+	mac := strings.ReplaceAll(part[1], ".", ":")
+
+	return ifa, mac
+}
+
+func bytesToString(buffer []byte) string {
+	n := bytes.IndexByte(buffer, 0)
+
+	return string(buffer[:n])
 }
 
 func guessVirtual(facts map[string]string) string {

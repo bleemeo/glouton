@@ -178,6 +178,11 @@ func DefaultConfig() Config { //nolint:maintidx
 				"aufs",
 				"tmpfs",
 				"efivarfs",
+				"fdescfs",
+				"linprocfs",
+				"linsysfs",
+				"nullfs",
+				"zfs",
 			},
 			PathIgnore: []string{
 				"/var/lib/docker/aufs",
@@ -197,7 +202,7 @@ func DefaultConfig() Config { //nolint:maintidx
 		},
 		DiskIgnore: []string{
 			// Ignore some devices
-			"^(bcache|dm-|fd|loop|ram|sr|zd|zram)\\d+$",
+			"^(bcache|cd|dm-|fd|loop|pass|ram|sr|zd|zram)\\d+$",
 			// Ignore parition (sda1 like, not pN)
 			"^((h|rss|s|v|xv)d[a-z]+|fio[a-z]+)\\d+$",
 			// Ignore parition (pN like)
@@ -314,7 +319,9 @@ func DefaultConfig() Config { //nolint:maintidx
 			Enable:       true,
 			PathSmartctl: "",
 			Devices:      []string{},
-			Excludes:     []string{},
+			Excludes: []string{
+				"/dev/cd0", // we assume there isn't more than one CDROM on TrueNAS.
+			},
 		},
 		Stack: "",
 		Tags:  []string{},
