@@ -320,7 +320,7 @@ func DefaultConfig() Config { //nolint:maintidx
 			PathSmartctl: "",
 			Devices:      []string{},
 			Excludes: []string{
-				"cd0", // we assume there isn't more than one CDROM on TrueNAS.
+				"/dev/cd0", // we assume there isn't more than one CDROM on TrueNAS.
 			},
 		},
 		Stack: "",
