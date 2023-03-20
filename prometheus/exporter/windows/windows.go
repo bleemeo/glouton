@@ -25,9 +25,9 @@ import (
 	"glouton/logger"
 	"time"
 
-	"github.com/alecthomas/kingpin/v2"
 	"github.com/prometheus-community/windows_exporter/collector"
 	"github.com/prometheus/client_golang/prometheus"
+	"gopkg.in/alecthomas/kingpin.v2"
 )
 
 const maxScrapeDuration time.Duration = 9500 * time.Millisecond
