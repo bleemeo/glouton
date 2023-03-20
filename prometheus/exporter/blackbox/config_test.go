@@ -128,7 +128,8 @@ func TestConfigParsing(t *testing.T) {
 		}),
 	}
 
-	if diff := cmp.Diff(expectedValue, bbManager.targets, cmpopts.IgnoreUnexported(configTarget{})); diff != "" {
+	ignoreUnexported := cmpopts.IgnoreUnexported(configTarget{}, bbConf.Module{}.HTTP.HTTPClientConfig.ProxyConfig)
+	if diff := cmp.Diff(expectedValue, bbManager.targets, ignoreUnexported); diff != "" {
 		t.Errorf("bbManager.targets mismatch (-want +got)\n%s", diff)
 	}
 }

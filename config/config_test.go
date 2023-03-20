@@ -378,7 +378,7 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 		t.Fatalf("Failed to load config: %s", err)
 	}
 
-	if diff := cmp.Diff(expectedConfig, config); diff != "" {
+	if diff := compareConfig(expectedConfig, config); diff != "" {
 		t.Fatalf("Unexpected config loaded:\n%s", diff)
 	}
 }
@@ -410,9 +410,16 @@ func TestOverrideDefault(t *testing.T) {
 		t.Fatalf("Failed to load config: %s", err)
 	}
 
-	if diff := cmp.Diff(expectedConfig, config); diff != "" {
+	if diff := compareConfig(expectedConfig, config); diff != "" {
 		t.Fatalf("Default value modified:\n%s", diff)
 	}
+}
+
+func compareConfig(expected, got Config, opts ...cmp.Option) string {
+	ignoreUnexported := cmpopts.IgnoreUnexported(bbConf.Module{}.HTTP.HTTPClientConfig.ProxyConfig)
+	opts = append(opts, ignoreUnexported)
+
+	return cmp.Diff(expected, got, opts...)
 }
 
 // TestMergeWithDefault tests that the config files and the environment variables
@@ -457,7 +464,7 @@ func TestMergeWithDefault(t *testing.T) {
 		t.Fatalf("Failed to load config: %s", err)
 	}
 
-	if diff := cmp.Diff(expectedConfig, config); diff != "" {
+	if diff := compareConfig(expectedConfig, config); diff != "" {
 		t.Fatalf("Default value modified:\n%s", diff)
 	}
 }
@@ -473,7 +480,7 @@ func TestDefaultNoFile(t *testing.T) {
 		t.Fatalf("Failed to load config: %s", err)
 	}
 
-	if diff := cmp.Diff(DefaultConfig(), config, cmpopts.EquateEmpty()); diff != "" {
+	if diff := compareConfig(DefaultConfig(), config, cmpopts.EquateEmpty()); diff != "" {
 		t.Fatalf("Default value modified:\n%s", diff)
 	}
 }
@@ -876,7 +883,7 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 				t.Fatalf("Unexpected warnings:\n%s", diff)
 			}
 
-			if diff := cmp.Diff(test.WantConfig, config, cmpopts.EquateEmpty()); diff != "" {
+			if diff := compareConfig(test.WantConfig, config, cmpopts.EquateEmpty()); diff != "" {
 				t.Fatalf("Unexpected config:\n%s", diff)
 			}
 		})
@@ -1029,7 +1036,7 @@ func Test_migrate(t *testing.T) {
 				t.Fatalf("Failed to load config: %s", err)
 			}
 
-			if diff := cmp.Diff(test.WantConfig, config); diff != "" {
+			if diff := compareConfig(test.WantConfig, config); diff != "" {
 				t.Fatalf("Unexpected config:\n%s", diff)
 			}
 		})
