@@ -37,6 +37,7 @@ import (
 	"github.com/containerd/containerd/namespaces"
 	"github.com/containerd/containerd/oci"
 	"github.com/containerd/containerd/platforms"
+	"github.com/containerd/typeurl/v2"
 	prototypes "github.com/gogo/protobuf/types"
 	"github.com/google/go-cmp/cmp"
 	"github.com/opencontainers/go-digest"
@@ -184,13 +185,13 @@ func (j *MockNamespace) fill(ctx context.Context, client *containerd.Client) err
 			return fmt.Errorf("%w, labels = %v, want %v", errIncorrectValue, lbls, info.Labels)
 		}
 
-		if info.Spec.TypeUrl != expectedSpecType {
-			return fmt.Errorf("%w, TypeUrl = %v, want %v", errIncorrectValue, info.Spec.TypeUrl, expectedSpecType)
+		if info.Spec.GetTypeUrl() != expectedSpecType {
+			return fmt.Errorf("%w, TypeUrl = %v, want %v", errIncorrectValue, info.Spec.GetTypeUrl(), expectedSpecType)
 		}
 
 		var infoSpec oci.Spec
 
-		err = json.Unmarshal(info.Spec.Value, &infoSpec)
+		err = typeurl.UnmarshalTo(info.Spec, &infoSpec)
 		if err != nil {
 			return err
 		}
@@ -480,7 +481,7 @@ func (c MockContainer) SetLabels(context.Context, map[string]string) (map[string
 }
 
 // Extensions implement containerd.Container.
-func (c MockContainer) Extensions(context.Context) (map[string]prototypes.Any, error) {
+func (c MockContainer) Extensions(context.Context) (map[string]typeurl.Any, error) {
 	return nil, ErrMockNotImplemented
 }
 
@@ -522,6 +523,11 @@ func (i MockImage) RootFS(ctx context.Context) ([]digest.Digest, error) {
 // Size implement containerd.Image.
 func (i MockImage) Size(ctx context.Context) (int64, error) {
 	return 0, ErrMockNotImplemented
+}
+
+// Size implement containerd.Image.
+func (i MockImage) Spec(ctx context.Context) (ocispec.Image, error) {
+	return ocispec.Image{}, ErrMockNotImplemented
 }
 
 // Usage implement containerd.Image.
