@@ -473,23 +473,6 @@ func TestSMARTStatus(t *testing.T) {
 				{
 					Point: types.Point{
 						Time:  now,
-						Value: float64(types.StatusUnknown.NagiosCode()),
-					},
-					Labels: map[string]string{
-						types.LabelName:   "smart_device_health_status",
-						types.LabelDevice: "sdc",
-						types.LabelModel:  "ST1000LM035",
-					},
-					Annotations: types.MetricAnnotations{
-						Status: types.StatusDescription{
-							CurrentStatus:     types.StatusUnknown,
-							StatusDescription: "smartctl check failed with exit code 1 on sdc (ST1000LM035)",
-						},
-					},
-				},
-				{
-					Point: types.Point{
-						Time:  now,
 						Value: float64(types.StatusOk.NagiosCode()),
 					},
 					Labels: map[string]string{
@@ -535,7 +518,7 @@ func TestSMARTStatus(t *testing.T) {
 
 			store.PushPoints(context.Background(), test.points)
 
-			gotMetric := smartHealthStatusPoints(now, store)
+			gotMetric := statusFromLastPoint(now, store, "smart_device_health_ok", map[string]string{types.LabelName: "smart_device_health_status"}, smartHealthStatus)
 
 			lessFunc := func(x, y types.MetricPoint) bool {
 				return x.Labels[types.LabelDevice] < y.Labels[types.LabelDevice]
