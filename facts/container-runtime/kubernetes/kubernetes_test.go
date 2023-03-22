@@ -769,8 +769,7 @@ func TestKubernetes_Containers(t *testing.T) { //nolint:maintidx
 			},
 			wantFacts: map[string]string{
 				"kubernetes_version": "v1.26.1",
-				// Not sure what it's not working.
-				//"kubelet_version":    "v1.26.1",
+				"kubelet_version":    "v1.26.1",
 			},
 		},
 	}

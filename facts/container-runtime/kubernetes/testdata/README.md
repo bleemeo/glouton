@@ -40,7 +40,7 @@ sleep 10 # need to wait for container to restart
 
 mkdir ${_testdir}
 minikube kubectl -- get pods -o yaml > ${_testdir}/pods.yaml
-minikube kubectl -- get node -o yaml > ${_testdir}/node.yaml
+minikube kubectl -- get nodes -o yaml > ${_testdir}/nodes.yaml
 minikube kubectl -- version -o yaml > ${_testdir}/version.yaml
 
 # When Docker
