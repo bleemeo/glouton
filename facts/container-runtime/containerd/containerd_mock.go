@@ -136,6 +136,15 @@ func DumpToJSON(ctx context.Context, address string) ([]byte, error) {
 		}
 	}
 
+	// Set to nil all typeurl.Any fields.
+	// These fields prevent unmarshalling from the JSON file.
+	for i := 0; i < len(result.Namespaces); i++ {
+		for j := 0; j < len(result.Namespaces[i].MockContainers); j++ {
+			result.Namespaces[i].MockContainers[j].MockInfo.Container.Runtime.Options = nil
+			result.Namespaces[i].MockContainers[j].MockInfo.Container.Extensions = nil
+		}
+	}
+
 	return json.MarshalIndent(result, "", "  ")
 }
 
