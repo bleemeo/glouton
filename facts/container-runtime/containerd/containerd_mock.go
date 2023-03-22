@@ -124,6 +124,11 @@ func DumpToJSON(ctx context.Context, address string) ([]byte, error) {
 	}
 
 	for i, ns := range namespaces {
+		if ns == "moby" {
+			// Skip Docker containers.
+			continue
+		}
+
 		result.Namespaces[i].MockNamespace = ns
 
 		if err := result.Namespaces[i].fill(ctx, client); err != nil {
@@ -525,7 +530,7 @@ func (i MockImage) Size(ctx context.Context) (int64, error) {
 	return 0, ErrMockNotImplemented
 }
 
-// Size implement containerd.Image.
+// Spec implement containerd.Image.
 func (i MockImage) Spec(ctx context.Context) (ocispec.Image, error) {
 	return ocispec.Image{}, ErrMockNotImplemented
 }

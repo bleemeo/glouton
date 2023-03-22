@@ -13,9 +13,7 @@
             "Image": "docker.io/library/rabbitmq:latest",
             "Runtime": {
               "Name": "io.containerd.runc.v2",
-              "Options": {
-                "type_url": "containerd.runc.v1.Options"
-              }
+              "Options": null
             },
             "SnapshotKey": "gloutonIgnore",
             "Snapshotter": "overlayfs",
@@ -380,9 +378,7 @@
             "Image": "docker.io/library/rabbitmq:latest",
             "Runtime": {
               "Name": "io.containerd.runc.v2",
-              "Options": {
-                "type_url": "containerd.runc.v1.Options"
-              }
+              "Options": null
             },
             "SnapshotKey": "notRunning",
             "Snapshotter": "overlayfs",
@@ -720,9 +716,7 @@
             "Image": "docker.io/library/rabbitmq:latest",
             "Runtime": {
               "Name": "io.containerd.runc.v2",
-              "Options": {
-                "type_url": "containerd.runc.v1.Options"
-              }
+              "Options": null
             },
             "SnapshotKey": "rabbitLabels",
             "Snapshotter": "overlayfs",
@@ -1088,9 +1082,7 @@
             "Image": "docker.io/library/rabbitmq:latest",
             "Runtime": {
               "Name": "io.containerd.runc.v2",
-              "Options": {
-                "type_url": "containerd.runc.v1.Options"
-              }
+              "Options": null
             },
             "SnapshotKey": "rabbitmqInternal",
             "Snapshotter": "overlayfs",
