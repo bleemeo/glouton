@@ -45,7 +45,7 @@ import (
 	"github.com/containerd/containerd/events"
 	"github.com/containerd/containerd/namespaces"
 	"github.com/containerd/containerd/oci"
-	"github.com/containerd/typeurl"
+	"github.com/containerd/typeurl/v2"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/shirou/gopsutil/v3/mem"
 	"github.com/shirou/gopsutil/v3/process"
@@ -709,9 +709,9 @@ func convertToContainerObject(ctx context.Context, ns string, cont containerd.Co
 
 	var spec oci.Spec
 
-	err = json.Unmarshal(info.Spec.Value, &spec)
+	err = typeurl.UnmarshalTo(info.Spec, &spec)
 	if err != nil {
-		return containerObject{}, fmt.Errorf("%w: %s/%s unable to decode spec (type=%s): %v", errIgnoredContainer, ns, cont.ID(), info.Spec.TypeUrl, err)
+		return containerObject{}, fmt.Errorf("%w: %s/%s unable to decode spec (type=%s): %v", errIgnoredContainer, ns, cont.ID(), info.Spec.GetTypeUrl(), err)
 	}
 
 	obj := containerObject{

@@ -1,0 +1,615 @@
+apiVersion: v1
+items:
+- apiVersion: v1
+  kind: Pod
+  metadata:
+    creationTimestamp: "2023-03-22T13:27:07Z"
+    generateName: crash-loop-797c896fcc-
+    labels:
+      app: crash-loop
+      pod-template-hash: 797c896fcc
+    name: crash-loop-797c896fcc-92mv5
+    namespace: default
+    ownerReferences:
+    - apiVersion: apps/v1
+      blockOwnerDeletion: true
+      controller: true
+      kind: ReplicaSet
+      name: crash-loop-797c896fcc
+      uid: d0d13c2c-a27c-415f-b664-978a7637f1b3
+    resourceVersion: "5874"
+    uid: 691a5aed-b5a8-45ca-bddc-880a61c2cda7
+  spec:
+    containers:
+    - command:
+      - "false"
+      image: busybox:latest
+      imagePullPolicy: Always
+      name: "false"
+      resources: {}
+      terminationMessagePath: /dev/termination-log
+      terminationMessagePolicy: File
+      volumeMounts:
+      - mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+        name: kube-api-access-vb8g9
+        readOnly: true
+    dnsPolicy: ClusterFirst
+    enableServiceLinks: true
+    nodeName: minikube
+    preemptionPolicy: PreemptLowerPriority
+    priority: 0
+    restartPolicy: Always
+    schedulerName: default-scheduler
+    securityContext: {}
+    serviceAccount: default
+    serviceAccountName: default
+    terminationGracePeriodSeconds: 30
+    tolerations:
+    - effect: NoExecute
+      key: node.kubernetes.io/not-ready
+      operator: Exists
+      tolerationSeconds: 300
+    - effect: NoExecute
+      key: node.kubernetes.io/unreachable
+      operator: Exists
+      tolerationSeconds: 300
+    volumes:
+    - name: kube-api-access-vb8g9
+      projected:
+        defaultMode: 420
+        sources:
+        - serviceAccountToken:
+            expirationSeconds: 3607
+            path: token
+        - configMap:
+            items:
+            - key: ca.crt
+              path: ca.crt
+            name: kube-root-ca.crt
+        - downwardAPI:
+            items:
+            - fieldRef:
+                apiVersion: v1
+                fieldPath: metadata.namespace
+              path: namespace
+  status:
+    conditions:
+    - lastProbeTime: null
+      lastTransitionTime: "2023-03-22T13:27:07Z"
+      status: "True"
+      type: Initialized
+    - lastProbeTime: null
+      lastTransitionTime: "2023-03-22T13:27:07Z"
+      message: 'containers with unready status: [false]'
+      reason: ContainersNotReady
+      status: "False"
+      type: Ready
+    - lastProbeTime: null
+      lastTransitionTime: "2023-03-22T13:27:07Z"
+      message: 'containers with unready status: [false]'
+      reason: ContainersNotReady
+      status: "False"
+      type: ContainersReady
+    - lastProbeTime: null
+      lastTransitionTime: "2023-03-22T13:27:07Z"
+      status: "True"
+      type: PodScheduled
+    containerStatuses:
+    - containerID: containerd://3a3048719896f1a5b8bfad10c731968c0dcd49587a5f85f7059141b4c083be01
+      image: docker.io/library/busybox:latest
+      imageID: docker.io/library/busybox@sha256:b5d6fe0712636ceb7430189de28819e195e8966372edfc2d9409d79402a0dc16
+      lastState:
+        terminated:
+          containerID: containerd://3a3048719896f1a5b8bfad10c731968c0dcd49587a5f85f7059141b4c083be01
+          exitCode: 1
+          finishedAt: "2023-03-22T15:16:02Z"
+          reason: Error
+          startedAt: "2023-03-22T15:16:02Z"
+      name: "false"
+      ready: false
+      restartCount: 26
+      started: false
+      state:
+        waiting:
+          message: back-off 5m0s restarting failed container=false pod=crash-loop-797c896fcc-92mv5_default(691a5aed-b5a8-45ca-bddc-880a61c2cda7)
+          reason: CrashLoopBackOff
+    hostIP: 10.0.2.15
+    phase: Running
+    podIP: 10.244.0.6
+    podIPs:
+    - ip: 10.244.0.6
+    qosClass: BestEffort
+    startTime: "2023-03-22T13:27:07Z"
+- apiVersion: v1
+  kind: Pod
+  metadata:
+    creationTimestamp: "2023-03-22T13:27:07Z"
+    generateName: delete-me-once-7756f7d5fb-
+    labels:
+      app: delete-me-once
+      pod-template-hash: 7756f7d5fb
+    name: delete-me-once-7756f7d5fb-xb2jb
+    namespace: default
+    ownerReferences:
+    - apiVersion: apps/v1
+      blockOwnerDeletion: true
+      controller: true
+      kind: ReplicaSet
+      name: delete-me-once-7756f7d5fb
+      uid: f72fd58f-1968-4c39-9586-84eed9e76772
+    resourceVersion: "724"
+    uid: 30c5307d-e4be-42e6-a4b7-2a4cb2e867f7
+  spec:
+    containers:
+    - command:
+      - sleep
+      - 9999d
+      image: busybox:latest
+      imagePullPolicy: Always
+      name: "true"
+      resources: {}
+      terminationMessagePath: /dev/termination-log
+      terminationMessagePolicy: File
+      volumeMounts:
+      - mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+        name: kube-api-access-69tvx
+        readOnly: true
+    dnsPolicy: ClusterFirst
+    enableServiceLinks: true
+    nodeName: minikube
+    preemptionPolicy: PreemptLowerPriority
+    priority: 0
+    restartPolicy: Always
+    schedulerName: default-scheduler
+    securityContext: {}
+    serviceAccount: default
+    serviceAccountName: default
+    terminationGracePeriodSeconds: 30
+    tolerations:
+    - effect: NoExecute
+      key: node.kubernetes.io/not-ready
+      operator: Exists
+      tolerationSeconds: 300
+    - effect: NoExecute
+      key: node.kubernetes.io/unreachable
+      operator: Exists
+      tolerationSeconds: 300
+    volumes:
+    - name: kube-api-access-69tvx
+      projected:
+        defaultMode: 420
+        sources:
+        - serviceAccountToken:
+            expirationSeconds: 3607
+            path: token
+        - configMap:
+            items:
+            - key: ca.crt
+              path: ca.crt
+            name: kube-root-ca.crt
+        - downwardAPI:
+            items:
+            - fieldRef:
+                apiVersion: v1
+                fieldPath: metadata.namespace
+              path: namespace
+  status:
+    conditions:
+    - lastProbeTime: null
+      lastTransitionTime: "2023-03-22T13:27:07Z"
+      status: "True"
+      type: Initialized
+    - lastProbeTime: null
+      lastTransitionTime: "2023-03-22T13:30:32Z"
+      status: "True"
+      type: Ready
+    - lastProbeTime: null
+      lastTransitionTime: "2023-03-22T13:30:32Z"
+      status: "True"
+      type: ContainersReady
+    - lastProbeTime: null
+      lastTransitionTime: "2023-03-22T13:27:07Z"
+      status: "True"
+      type: PodScheduled
+    containerStatuses:
+    - containerID: containerd://723d373792322b3bc352c4363e50033d7b9ea43b4a4ac22be69f62f62a23d61b
+      image: docker.io/library/busybox:latest
+      imageID: docker.io/library/busybox@sha256:b5d6fe0712636ceb7430189de28819e195e8966372edfc2d9409d79402a0dc16
+      lastState:
+        terminated:
+          containerID: containerd://4a420544ab753a575f8c8bf77aeb3e92b89e4ef5d608994b12785709295afe97
+          exitCode: 137
+          finishedAt: "2023-03-22T13:30:30Z"
+          reason: Error
+          startedAt: "2023-03-22T13:27:24Z"
+      name: "true"
+      ready: true
+      restartCount: 1
+      started: true
+      state:
+        running:
+          startedAt: "2023-03-22T13:30:32Z"
+    hostIP: 10.0.2.15
+    phase: Running
+    podIP: 10.244.0.7
+    podIPs:
+    - ip: 10.244.0.7
+    qosClass: BestEffort
+    startTime: "2023-03-22T13:27:07Z"
+- apiVersion: v1
+  kind: Pod
+  metadata:
+    creationTimestamp: "2023-03-22T13:27:07Z"
+    generateName: rabbitmq-container-port-5787c86cff-
+    labels:
+      app: rabbitmq-container-port
+      pod-template-hash: 5787c86cff
+    name: rabbitmq-container-port-5787c86cff-w6tln
+    namespace: default
+    ownerReferences:
+    - apiVersion: apps/v1
+      blockOwnerDeletion: true
+      controller: true
+      kind: ReplicaSet
+      name: rabbitmq-container-port-5787c86cff
+      uid: 14299970-70ac-483c-8223-899cf11947c7
+    resourceVersion: "543"
+    uid: 263201fe-148b-4c3f-ae78-06d76fb340a1
+  spec:
+    containers:
+    - image: rabbitmq:latest
+      imagePullPolicy: Always
+      name: rabbitmq
+      ports:
+      - containerPort: 5672
+        protocol: TCP
+      readinessProbe:
+        failureThreshold: 3
+        periodSeconds: 10
+        successThreshold: 1
+        tcpSocket:
+          port: 5672
+        timeoutSeconds: 1
+      resources: {}
+      terminationMessagePath: /dev/termination-log
+      terminationMessagePolicy: File
+      volumeMounts:
+      - mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+        name: kube-api-access-fx5pc
+        readOnly: true
+    dnsPolicy: ClusterFirst
+    enableServiceLinks: true
+    nodeName: minikube
+    preemptionPolicy: PreemptLowerPriority
+    priority: 0
+    restartPolicy: Always
+    schedulerName: default-scheduler
+    securityContext: {}
+    serviceAccount: default
+    serviceAccountName: default
+    terminationGracePeriodSeconds: 30
+    tolerations:
+    - effect: NoExecute
+      key: node.kubernetes.io/not-ready
+      operator: Exists
+      tolerationSeconds: 300
+    - effect: NoExecute
+      key: node.kubernetes.io/unreachable
+      operator: Exists
+      tolerationSeconds: 300
+    volumes:
+    - name: kube-api-access-fx5pc
+      projected:
+        defaultMode: 420
+        sources:
+        - serviceAccountToken:
+            expirationSeconds: 3607
+            path: token
+        - configMap:
+            items:
+            - key: ca.crt
+              path: ca.crt
+            name: kube-root-ca.crt
+        - downwardAPI:
+            items:
+            - fieldRef:
+                apiVersion: v1
+                fieldPath: metadata.namespace
+              path: namespace
+  status:
+    conditions:
+    - lastProbeTime: null
+      lastTransitionTime: "2023-03-22T13:27:07Z"
+      status: "True"
+      type: Initialized
+    - lastProbeTime: null
+      lastTransitionTime: "2023-03-22T13:27:28Z"
+      status: "True"
+      type: Ready
+    - lastProbeTime: null
+      lastTransitionTime: "2023-03-22T13:27:28Z"
+      status: "True"
+      type: ContainersReady
+    - lastProbeTime: null
+      lastTransitionTime: "2023-03-22T13:27:07Z"
+      status: "True"
+      type: PodScheduled
+    containerStatuses:
+    - containerID: containerd://c8c3d79eb703c5c91b0de56c2b8b6463caa751960598a6389f234584e28b3b67
+      image: docker.io/library/rabbitmq:latest
+      imageID: docker.io/library/rabbitmq@sha256:7c74642976b61aafb7254a0762606bc8ac5ead30e96e07d3d260d73839a436ce
+      lastState: {}
+      name: rabbitmq
+      ready: true
+      restartCount: 0
+      started: true
+      state:
+        running:
+          startedAt: "2023-03-22T13:27:14Z"
+    hostIP: 10.0.2.15
+    phase: Running
+    podIP: 10.244.0.4
+    podIPs:
+    - ip: 10.244.0.4
+    qosClass: BestEffort
+    startTime: "2023-03-22T13:27:07Z"
+- apiVersion: v1
+  kind: Pod
+  metadata:
+    annotations:
+      glouton.check.ignore.port.4369: TruE
+      glouton.check.ignore.port.5671: "on"
+    creationTimestamp: "2023-03-22T13:27:07Z"
+    generateName: rabbitmq-labels-dd85c8cf9-
+    labels:
+      app: rabbitmq-labels
+      pod-template-hash: dd85c8cf9
+    name: rabbitmq-labels-dd85c8cf9-lcfdt
+    namespace: default
+    ownerReferences:
+    - apiVersion: apps/v1
+      blockOwnerDeletion: true
+      controller: true
+      kind: ReplicaSet
+      name: rabbitmq-labels-dd85c8cf9
+      uid: ed529135-d17f-41f7-8353-cfeb5f914ced
+    resourceVersion: "501"
+    uid: b23ef26f-9dd8-456b-929a-b65598eefb8b
+  spec:
+    containers:
+    - image: rabbitmq:latest
+      imagePullPolicy: Always
+      name: rabbitmq
+      resources: {}
+      terminationMessagePath: /dev/termination-log
+      terminationMessagePolicy: File
+      volumeMounts:
+      - mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+        name: kube-api-access-gbj5b
+        readOnly: true
+    dnsPolicy: ClusterFirst
+    enableServiceLinks: true
+    nodeName: minikube
+    preemptionPolicy: PreemptLowerPriority
+    priority: 0
+    restartPolicy: Always
+    schedulerName: default-scheduler
+    securityContext: {}
+    serviceAccount: default
+    serviceAccountName: default
+    terminationGracePeriodSeconds: 30
+    tolerations:
+    - effect: NoExecute
+      key: node.kubernetes.io/not-ready
+      operator: Exists
+      tolerationSeconds: 300
+    - effect: NoExecute
+      key: node.kubernetes.io/unreachable
+      operator: Exists
+      tolerationSeconds: 300
+    volumes:
+    - name: kube-api-access-gbj5b
+      projected:
+        defaultMode: 420
+        sources:
+        - serviceAccountToken:
+            expirationSeconds: 3607
+            path: token
+        - configMap:
+            items:
+            - key: ca.crt
+              path: ca.crt
+            name: kube-root-ca.crt
+        - downwardAPI:
+            items:
+            - fieldRef:
+                apiVersion: v1
+                fieldPath: metadata.namespace
+              path: namespace
+  status:
+    conditions:
+    - lastProbeTime: null
+      lastTransitionTime: "2023-03-22T13:27:07Z"
+      status: "True"
+      type: Initialized
+    - lastProbeTime: null
+      lastTransitionTime: "2023-03-22T13:27:15Z"
+      status: "True"
+      type: Ready
+    - lastProbeTime: null
+      lastTransitionTime: "2023-03-22T13:27:15Z"
+      status: "True"
+      type: ContainersReady
+    - lastProbeTime: null
+      lastTransitionTime: "2023-03-22T13:27:07Z"
+      status: "True"
+      type: PodScheduled
+    containerStatuses:
+    - containerID: containerd://e3bf87b4f9dfdb0130ed130ed2010b98862017476acae4027684cccf081460ad
+      image: docker.io/library/rabbitmq:latest
+      imageID: docker.io/library/rabbitmq@sha256:7c74642976b61aafb7254a0762606bc8ac5ead30e96e07d3d260d73839a436ce
+      lastState: {}
+      name: rabbitmq
+      ready: true
+      restartCount: 0
+      started: true
+      state:
+        running:
+          startedAt: "2023-03-22T13:27:15Z"
+    hostIP: 10.0.2.15
+    phase: Running
+    podIP: 10.244.0.3
+    podIPs:
+    - ip: 10.244.0.3
+    qosClass: BestEffort
+    startTime: "2023-03-22T13:27:07Z"
+- apiVersion: v1
+  kind: Pod
+  metadata:
+    annotations:
+      glouton.enable: "off"
+    creationTimestamp: "2023-03-22T13:27:07Z"
+    generateName: redis-memcached-78d6bb89c6-
+    labels:
+      app: redis-memcached
+      pod-template-hash: 78d6bb89c6
+    name: redis-memcached-78d6bb89c6-9v2hn
+    namespace: default
+    ownerReferences:
+    - apiVersion: apps/v1
+      blockOwnerDeletion: true
+      controller: true
+      kind: ReplicaSet
+      name: redis-memcached-78d6bb89c6
+      uid: 81d05a22-5828-474e-87c8-ae4c52902d85
+    resourceVersion: "535"
+    uid: 8e8a950e-b31e-4749-b5d2-fe5d0a952123
+  spec:
+    containers:
+    - image: redis:latest
+      imagePullPolicy: Always
+      name: the-redis
+      ports:
+      - containerPort: 6363
+        protocol: TCP
+      readinessProbe:
+        failureThreshold: 3
+        periodSeconds: 10
+        successThreshold: 1
+        tcpSocket:
+          port: 6379
+        timeoutSeconds: 1
+      resources: {}
+      terminationMessagePath: /dev/termination-log
+      terminationMessagePolicy: File
+      volumeMounts:
+      - mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+        name: kube-api-access-4s48b
+        readOnly: true
+    - image: memcached:latest
+      imagePullPolicy: Always
+      name: a-memcached
+      readinessProbe:
+        failureThreshold: 3
+        periodSeconds: 10
+        successThreshold: 1
+        tcpSocket:
+          port: 11211
+        timeoutSeconds: 1
+      resources: {}
+      terminationMessagePath: /dev/termination-log
+      terminationMessagePolicy: File
+      volumeMounts:
+      - mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+        name: kube-api-access-4s48b
+        readOnly: true
+    dnsPolicy: ClusterFirst
+    enableServiceLinks: true
+    nodeName: minikube
+    preemptionPolicy: PreemptLowerPriority
+    priority: 0
+    restartPolicy: Always
+    schedulerName: default-scheduler
+    securityContext: {}
+    serviceAccount: default
+    serviceAccountName: default
+    terminationGracePeriodSeconds: 30
+    tolerations:
+    - effect: NoExecute
+      key: node.kubernetes.io/not-ready
+      operator: Exists
+      tolerationSeconds: 300
+    - effect: NoExecute
+      key: node.kubernetes.io/unreachable
+      operator: Exists
+      tolerationSeconds: 300
+    volumes:
+    - name: kube-api-access-4s48b
+      projected:
+        defaultMode: 420
+        sources:
+        - serviceAccountToken:
+            expirationSeconds: 3607
+            path: token
+        - configMap:
+            items:
+            - key: ca.crt
+              path: ca.crt
+            name: kube-root-ca.crt
+        - downwardAPI:
+            items:
+            - fieldRef:
+                apiVersion: v1
+                fieldPath: metadata.namespace
+              path: namespace
+  status:
+    conditions:
+    - lastProbeTime: null
+      lastTransitionTime: "2023-03-22T13:27:07Z"
+      status: "True"
+      type: Initialized
+    - lastProbeTime: null
+      lastTransitionTime: "2023-03-22T13:27:27Z"
+      status: "True"
+      type: Ready
+    - lastProbeTime: null
+      lastTransitionTime: "2023-03-22T13:27:27Z"
+      status: "True"
+      type: ContainersReady
+    - lastProbeTime: null
+      lastTransitionTime: "2023-03-22T13:27:07Z"
+      status: "True"
+      type: PodScheduled
+    containerStatuses:
+    - containerID: containerd://41a41b52ad10fc6fb0acbc6e5cfce28fdf47bd466cb84d0118add1871dedb42c
+      image: docker.io/library/memcached:latest
+      imageID: docker.io/library/memcached@sha256:fc997e6877268f7aa27aa96f1e99ea76b20304127aabab4fec4b4936af49ec03
+      lastState: {}
+      name: a-memcached
+      ready: true
+      restartCount: 0
+      started: true
+      state:
+        running:
+          startedAt: "2023-03-22T13:27:26Z"
+    - containerID: containerd://43c62a41b6394cc7df2f53312756670fcbb71f4de9fa07aa3935a63898e016c5
+      image: docker.io/library/redis:latest
+      imageID: docker.io/library/redis@sha256:f47a4234a90715919a0ee91ea2ea51457fe059c94b79f9cac095b61f5fcb8ac9
+      lastState: {}
+      name: the-redis
+      ready: true
+      restartCount: 0
+      started: true
+      state:
+        running:
+          startedAt: "2023-03-22T13:27:20Z"
+    hostIP: 10.0.2.15
+    phase: Running
+    podIP: 10.244.0.5
+    podIPs:
+    - ip: 10.244.0.5
+    qosClass: BestEffort
+    startTime: "2023-03-22T13:27:07Z"
+kind: List
+metadata:
+  resourceVersion: ""

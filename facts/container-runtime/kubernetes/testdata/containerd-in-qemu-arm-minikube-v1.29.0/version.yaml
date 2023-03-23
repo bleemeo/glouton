@@ -1,0 +1,22 @@
+clientVersion:
+  buildDate: "2023-01-18T15:58:16Z"
+  compiler: gc
+  gitCommit: 8f94681cd294aa8cfd3407b8191f6c70214973a4
+  gitTreeState: clean
+  gitVersion: v1.26.1
+  goVersion: go1.19.5
+  major: "1"
+  minor: "26"
+  platform: darwin/arm64
+kustomizeVersion: v4.5.7
+serverVersion:
+  buildDate: "2023-01-18T15:51:25Z"
+  compiler: gc
+  gitCommit: 8f94681cd294aa8cfd3407b8191f6c70214973a4
+  gitTreeState: clean
+  gitVersion: v1.26.1
+  goVersion: go1.19.5
+  major: "1"
+  minor: "26"
+  platform: linux/arm64
+

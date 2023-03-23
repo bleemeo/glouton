@@ -30,12 +30,13 @@ import (
 	"github.com/containerd/containerd"
 	pbEvents "github.com/containerd/containerd/api/events"
 	"github.com/containerd/containerd/events"
-	"github.com/containerd/typeurl"
-	"github.com/gogo/protobuf/types"
+	"github.com/containerd/containerd/protobuf"
+	"google.golang.org/protobuf/types/known/anypb"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-func mustMarshalAny(v interface{}) *types.Any {
-	r, err := typeurl.MarshalAny(v)
+func mustMarshalAny(v interface{}) *anypb.Any {
+	r, err := protobuf.MarshalAnyToProto(v)
 	if err != nil {
 		panic(err)
 	}
@@ -272,7 +273,7 @@ func TestContainerd_Run(t *testing.T) {
 						Image: c0.MockInfo.Image,
 						Runtime: &pbEvents.ContainerCreate_Runtime{
 							Name:    c0.MockInfo.Runtime.Name,
-							Options: c0.MockInfo.Runtime.Options,
+							Options: protobuf.FromAny(c0.MockInfo.Runtime.Options),
 						},
 					}),
 				}
@@ -309,7 +310,7 @@ func TestContainerd_Run(t *testing.T) {
 						ID:          c0.MockTask.MockID,
 						Pid:         c0.MockTask.MockPID,
 						ExitStatus:  137,
-						ExitedAt:    t0,
+						ExitedAt:    timestamppb.New(t0),
 					}),
 				}
 				ch <- &events.Envelope{

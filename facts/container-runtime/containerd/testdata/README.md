@@ -27,7 +27,7 @@ minikube ssh -- sudo ctr run -d --label glouton.enable=off docker.io/library/rab
 
 mkdir ${_testdir}
 
-CGO_ENABLED=0 go build -o /tmp/containerd-testdata facts/container-runtime/containerd/testdata/containerd-testdata.go && \
+CGO_ENABLED=0 GOOS=linux go build -o /tmp/containerd-testdata facts/container-runtime/containerd/testdata/containerd-testdata.go && \
 base64 < /tmp/containerd-testdata | minikube ssh --native-ssh=false 'base64 -d > containerd-testdata' && \
 minikube ssh -- chmod +x containerd-testdata && \
 minikube ssh -- sudo ./containerd-testdata -create-redis; \
