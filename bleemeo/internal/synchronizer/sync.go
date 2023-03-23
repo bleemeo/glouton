@@ -923,14 +923,24 @@ func (s *Synchronizer) syncToPerform(ctx context.Context) (map[string]bool, bool
 
 // checkDuplicated checks if another glouton is running with the same ID.
 func (s *Synchronizer) checkDuplicated(ctx context.Context) error {
-	isDuplicated, err := s.isDuplicatedUsingFacts()
-	if err != nil {
-		return fmt.Errorf("check duplicated agent: %w", err)
+	oldFacts := s.option.Cache.FactsByKey()
+
+	if err := s.factsUpdateList(ctx); err != nil {
+		return fmt.Errorf("update facts list: %w", err)
 	}
+
+	newFacts := s.option.Cache.FactsByKey()
+
+	isDuplicated, message := isDuplicatedUsingFacts(s.startedAt, oldFacts[s.agentID], newFacts[s.agentID])
 
 	if !isDuplicated {
 		return nil
 	}
+
+	logger.Printf(message)
+	logger.Printf(
+		"The following links may be relevant to solve the issue: https://go.bleemeo.com/l/doc-duplicated-agent",
+	)
 
 	until := s.now().Add(delay.JitterDelay(15*time.Minute, 0.05))
 	s.Disable(until, bleemeoTypes.DisableDuplicatedAgent)
@@ -948,7 +958,7 @@ func (s *Synchronizer) checkDuplicated(ctx context.Context) error {
 		"last_duplication_date": time.Now(),
 	}
 
-	_, err = s.client.Do(s.ctx, "PATCH", fmt.Sprintf("v1/agent/%s/", s.agentID), params, data, nil)
+	_, err := s.client.Do(s.ctx, "PATCH", fmt.Sprintf("v1/agent/%s/", s.agentID), params, data, nil)
 	if err != nil {
 		logger.V(1).Printf("Failed to update duplication date: %s", err)
 	}
@@ -958,28 +968,23 @@ func (s *Synchronizer) checkDuplicated(ctx context.Context) error {
 
 // isDuplicatedUsingFacts checks if another agent with the same ID using AgentFact registered
 // on Bleemeo API. This happen only if the state file is shared by multiple running agents.
-func (s *Synchronizer) isDuplicatedUsingFacts() (bool, error) {
+func isDuplicatedUsingFacts(agentStartedAt time.Time, oldFacts map[string]bleemeoTypes.AgentFact, newFacts map[string]bleemeoTypes.AgentFact) (bool, string) {
+	// This isn't yet used, but will be in the future. It allow test to have fewer changes.
+	_ = agentStartedAt
+
 	// We use the fact that the agents will send different facts to the API.
 	// If the facts we fetch from the API are not the same as the last facts
 	// we registered, another agent with the same ID must have modified them.
 	// Note that this won't work if the two agents are on the same host
 	// because both agents will send mostly the same facts.
-	oldFacts := s.option.Cache.FactsByKey()
-
-	if err := s.factsUpdateList(); err != nil {
-		return false, fmt.Errorf("update facts list: %w", err)
-	}
-
-	newFacts := s.option.Cache.FactsByKey()
-
 	factNames := []string{"fqdn", "primary_address", "primary_mac_address"}
 	for _, name := range factNames {
-		old, ok := oldFacts[s.agentID][name]
+		old, ok := oldFacts[name]
 		if !ok {
 			continue
 		}
 
-		new, ok := newFacts[s.agentID][name] //nolint:predeclared
+		new, ok := newFacts[name] //nolint:predeclared
 		if !ok {
 			continue
 		}
@@ -988,20 +993,17 @@ func (s *Synchronizer) isDuplicatedUsingFacts() (bool, error) {
 			continue
 		}
 
-		logger.Printf(
+		message := fmt.Sprintf(
 			"Detected duplicated state.json. Another agent changed %#v from %#v to %#v",
 			name,
 			old.Value,
 			new.Value,
 		)
-		logger.Printf(
-			"The following links may be relevant to solve the issue: https://go.bleemeo.com/l/doc-duplicated-agent",
-		)
 
-		return true, nil
+		return true, message
 	}
 
-	return false, nil
+	return false, ""
 }
 
 func (s *Synchronizer) register(ctx context.Context) error {
