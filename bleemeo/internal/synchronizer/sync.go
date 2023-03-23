@@ -35,7 +35,6 @@ import (
 	"math/big"
 	"net/http"
 	"net/url"
-	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -924,17 +923,12 @@ func (s *Synchronizer) syncToPerform(ctx context.Context) (map[string]bool, bool
 
 // checkDuplicated checks if another glouton is running with the same ID.
 func (s *Synchronizer) checkDuplicated(ctx context.Context) error {
-	isDuplicatedOnSameHost, err := s.isDuplicatedOnSameHost(ctx, os.Getpid())
+	isDuplicated, err := s.isDuplicatedUsingFacts()
 	if err != nil {
-		return fmt.Errorf("check duplicated agent on same host: %w", err)
+		return fmt.Errorf("check duplicated agent: %w", err)
 	}
 
-	isDuplicatedOnAnotherHost, err := s.isDuplicatedOnAnotherHost()
-	if err != nil {
-		return fmt.Errorf("check duplicated agent on another host: %w", err)
-	}
-
-	if !isDuplicatedOnSameHost && !isDuplicatedOnAnotherHost {
+	if !isDuplicated {
 		return nil
 	}
 
@@ -962,51 +956,9 @@ func (s *Synchronizer) checkDuplicated(ctx context.Context) error {
 	return errConnectorTemporaryDisabled
 }
 
-// isDuplicatedOnSameHost checks if another agent is running on the same host.
-func (s *Synchronizer) isDuplicatedOnSameHost(ctx context.Context, pid int) (bool, error) {
-	// The local duplication detection by process can be deactivated in the config.
-	// This can be useful to LXC users where an agent could be running on the host
-	// and detect another agent process in a container and wrongly detect duplication.
-	if s.option.Config.Agent.DisableLocalDuplicationDetection {
-		return false, nil
-	}
-
-	// Check if another agent process is running.
-	processes, err := s.option.Process.Processes(ctx, time.Minute)
-	if err != nil {
-		return false, fmt.Errorf("list processes: %w", err)
-	}
-
-	for _, process := range processes {
-		// Skip our own PID to detect only other agent processes.
-		if process.PID == pid {
-			continue
-		}
-
-		// On Linux, both our systemd service and docker container use "/usr/sbin/glouton".
-		// On Windows we don't know the installation path, only that the process uses "glouton.exe".
-		if (strings.HasPrefix(process.CmdLine, "/usr/sbin/glouton") && process.Name == "glouton") ||
-			(process.Name == "glouton.exe" && version.IsWindows()) {
-			// But still ensure that this process isn't a very young process. We don't want "glouton --version" to
-			// be detected as duplicated agent.
-			if s.now().Sub(process.CreateTime) >= time.Minute {
-				logger.Printf("Another agent is already running on this host with PID %d (I'm PID %d)", process.PID, pid)
-
-				logger.Printf(
-					"The following links may be relevant to solve the issue: https://go.bleemeo.com/l/doc-duplicated-agent",
-				)
-
-				return true, nil
-			}
-		}
-	}
-
-	return false, nil
-}
-
-// isDuplicatedOnAnotherHost checks if another agent with the same ID is running
-// on another host. This may happen if the state file is shared by multiple agents.
-func (s *Synchronizer) isDuplicatedOnAnotherHost() (bool, error) {
+// isDuplicatedUsingFacts checks if another agent with the same ID using AgentFact registered
+// on Bleemeo API. This happen only if the state file is shared by multiple running agents.
+func (s *Synchronizer) isDuplicatedUsingFacts() (bool, error) {
 	// We use the fact that the agents will send different facts to the API.
 	// If the facts we fetch from the API are not the same as the last facts
 	// we registered, another agent with the same ID must have modified them.

@@ -212,24 +212,23 @@ type BlackboxTarget struct {
 }
 
 type Agent struct {
-	CloudImageCreationFile           string          `yaml:"cloudimage_creation_file"`
-	HTTPDebug                        HTTPDebug       `yaml:"http_debug"`
-	InstallationFormat               string          `yaml:"installation_format"`
-	FactsFile                        string          `yaml:"facts_file"`
-	NetstatFile                      string          `yaml:"netstat_file"`
-	StateFile                        string          `yaml:"state_file"`
-	StateCacheFile                   string          `yaml:"state_cache_file"`
-	StateResetFile                   string          `yaml:"state_reset_file"`
-	DeprecatedStateFile              string          `yaml:"deprecated_state_file"`
-	UpgradeFile                      string          `yaml:"upgrade_file"`
-	AutoUpgradeFile                  string          `yaml:"auto_upgrade_file"`
-	DisableLocalDuplicationDetection bool            `yaml:"disable_local_duplication_detection_by_process"`
-	ProcessExporter                  ProcessExporter `yaml:"process_exporter"`
-	PublicIPIndicator                string          `yaml:"public_ip_indicator"`
-	NodeExporter                     NodeExporter    `yaml:"node_exporter"`
-	WindowsExporter                  NodeExporter    `yaml:"windows_exporter"`
-	Telemetry                        Telemetry       `yaml:"telemetry"`
-	MetricsFormat                    string          `yaml:"metrics_format"`
+	CloudImageCreationFile string          `yaml:"cloudimage_creation_file"`
+	HTTPDebug              HTTPDebug       `yaml:"http_debug"`
+	InstallationFormat     string          `yaml:"installation_format"`
+	FactsFile              string          `yaml:"facts_file"`
+	NetstatFile            string          `yaml:"netstat_file"`
+	StateFile              string          `yaml:"state_file"`
+	StateCacheFile         string          `yaml:"state_cache_file"`
+	StateResetFile         string          `yaml:"state_reset_file"`
+	DeprecatedStateFile    string          `yaml:"deprecated_state_file"`
+	UpgradeFile            string          `yaml:"upgrade_file"`
+	AutoUpgradeFile        string          `yaml:"auto_upgrade_file"`
+	ProcessExporter        ProcessExporter `yaml:"process_exporter"`
+	PublicIPIndicator      string          `yaml:"public_ip_indicator"`
+	NodeExporter           NodeExporter    `yaml:"node_exporter"`
+	WindowsExporter        NodeExporter    `yaml:"windows_exporter"`
+	Telemetry              Telemetry       `yaml:"telemetry"`
+	MetricsFormat          string          `yaml:"metrics_format"`
 }
 
 type Telemetry struct {
