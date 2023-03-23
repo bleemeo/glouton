@@ -82,7 +82,7 @@ func loggerPrintf(fmtArg string, a ...interface{}) {
 	defer cfg.l.Unlock()
 
 	if !cfg.useSyslog {
-		_, _ = fmt.Fprintf(cfg.writer, "%s ", time.Now().Format("2006/01/02 15:04:05"))
+		_, _ = fmt.Fprintf(cfg.writer, "%s ", time.Now().Format("2006-01-02 15:04:05.000"))
 	}
 
 	_, _ = fmt.Fprintf(cfg.teeWriter, fmtArg+"\n", a...)
@@ -93,7 +93,7 @@ func loggerPrintln(v ...interface{}) {
 	defer cfg.l.Unlock()
 
 	if !cfg.useSyslog {
-		_, _ = fmt.Fprintf(cfg.writer, "%s ", time.Now().Format("2006/01/02 15:04:05"))
+		_, _ = fmt.Fprintf(cfg.writer, "%s ", time.Now().Format("2006-01-02 15:04:05.000"))
 	}
 
 	_, _ = fmt.Fprintln(cfg.teeWriter, v...)

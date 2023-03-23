@@ -21,7 +21,6 @@ import (
 	"regexp"
 	"testing"
 
-	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 )
 
@@ -330,7 +329,7 @@ func TestLoadFile(t *testing.T) {
 
 	defaultCfg := DefaultConfig()
 
-	if diff := cmp.Diff(defaultCfg, cfg, cmpopts.EquateEmpty()); diff != "" {
+	if diff := compareConfig(defaultCfg, cfg, cmpopts.EquateEmpty()); diff != "" {
 		t.Fatalf("Default value modified:\n%s", diff)
 	}
 }

@@ -22,6 +22,7 @@ import (
 	"strings"
 
 	"github.com/influxdata/telegraf"
+	"github.com/influxdata/telegraf/config"
 	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"
 	"github.com/influxdata/telegraf/plugins/inputs/mysql"
 )
@@ -29,32 +30,62 @@ import (
 // New initialise mysql.Input.
 func New(server string) (i telegraf.Input, err error) {
 	input, ok := telegraf_inputs.Inputs["mysql"]
-	if ok {
-		mysqlInput, ok := input().(*mysql.Mysql)
-		if ok {
-			slice := append(make([]string, 0), server)
-			mysqlInput.Servers = slice
-			mysqlInput.GatherInnoDBMetrics = true
-			mysqlInput.Log = internal.Logger{}
-			i = &internal.Input{
-				Input: mysqlInput,
-				Accumulator: internal.Accumulator{
-					DerivatedMetrics: []string{
-						"bytes_received", "bytes_sent", "threads_created", "queries", "slow_queries",
-					},
-					ShouldDerivateMetrics: shouldDerivateMetrics,
-					TransformMetrics:      transformMetrics,
-				},
-				Name: "mysql",
-			}
-		} else {
-			err = inputs.ErrUnexpectedType
-		}
-	} else {
-		err = inputs.ErrDisabledInput
+	if !ok {
+		return nil, inputs.ErrDisabledInput
+	}
+
+	mysqlInput, ok := input().(*mysql.Mysql)
+	if !ok {
+		return nil, inputs.ErrUnexpectedType
+	}
+
+	mysqlInput.Servers = []config.Secret{
+		config.NewSecret([]byte(server)),
+	}
+	mysqlInput.GatherInnoDBMetrics = true
+	mysqlInput.Log = internal.Logger{}
+	i = &internal.Input{
+		Input: mysqlWrapper{mysqlInput},
+		Accumulator: internal.Accumulator{
+			DerivatedMetrics: []string{
+				"bytes_received", "bytes_sent", "threads_created", "queries", "slow_queries",
+			},
+			ShouldDerivateMetrics: shouldDerivateMetrics,
+			TransformMetrics:      transformMetrics,
+		},
+		Name: "mysql",
 	}
 
 	return
+}
+
+// mysqlWrapper wraps the MySQL Telegraf input and implements telegraf.ServiceInput
+// to destroy the secrets when the input is stopped.
+type mysqlWrapper struct {
+	input *mysql.Mysql
+}
+
+func (m mysqlWrapper) Gather(acc telegraf.Accumulator) error {
+	return m.input.Gather(acc)
+}
+
+func (m mysqlWrapper) SampleConfig() string {
+	return m.input.SampleConfig()
+}
+
+func (m mysqlWrapper) Init() error {
+	return m.input.Init()
+}
+
+func (m mysqlWrapper) Start(acc telegraf.Accumulator) (err error) {
+	return nil
+}
+
+func (m mysqlWrapper) Stop() {
+	// Free the memory associated to the secrets.
+	for _, secret := range m.input.Servers {
+		secret.Destroy()
+	}
 }
 
 func shouldDerivateMetrics(currentContext internal.GatherContext, metricName string) bool {

@@ -86,5 +86,8 @@ func (s sumMetrics) Start(acc telegraf.Accumulator) (err error) {
 }
 
 func (s sumMetrics) Stop() {
+	// Free the memory associated to the secret.
+	s.input.Address.Destroy()
+
 	s.input.Stop()
 }
