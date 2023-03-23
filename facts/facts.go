@@ -262,6 +262,7 @@ func (f *FactProvider) fastUpdateFacts(ctx context.Context) map[string]string {
 	// TODO: drop agent_version. It's deprecated and is replaced by glouton_version
 	newFacts["agent_version"] = version.Version
 	newFacts["fact_updated_at"] = time.Now().UTC().Format(time.RFC3339)
+	newFacts["glouton_pid"] = strconv.FormatInt(int64(os.Getpid()), 10)
 
 	autoUpgradeEnabled, err := autoUpgradeIsEnabled(ctx)
 	if !errors.Is(err, errAutoUpgradeNotSupported) {
