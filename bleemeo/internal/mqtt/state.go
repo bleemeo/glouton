@@ -151,9 +151,8 @@ func (rs *reloadState) Close() {
 		payload, _ := json.Marshal(disconnectCause{cause}) //nolint:errchkjson // False positive.
 
 		rs.mqtt.Publish(fmt.Sprintf("v1/agent/%s/disconnect", rs.agentID), payload, false)
+		rs.mqtt.Disconnect(5 * time.Second)
 	}
-
-	rs.mqtt.Disconnect(5 * time.Second)
 
 	// The callbacks need to know when the channel are closed
 	// so they don't send on a closed channel.
