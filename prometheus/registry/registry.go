@@ -966,8 +966,13 @@ func (r *Registry) GatherWithState(ctx context.Context, state GatherState) ([]*d
 
 			scrapedMFS, _, err := r.scrape(ctx, state, reg)
 
+			now := state.T0
+			if state.T0.IsZero() {
+				now = time.Now()
+			}
+
 			// Don't drop the meta labels here, they are needed for relabeling.
-			scrapedPoints := gloutonModel.FamiliesToMetricPoints(state.T0, scrapedMFS, !reg.option.ApplyDynamicRelabel)
+			scrapedPoints := gloutonModel.FamiliesToMetricPoints(now, scrapedMFS, !reg.option.ApplyDynamicRelabel)
 
 			if reg.option.ApplyDynamicRelabel {
 				scrapedPoints = r.relabelPoints(ctx, scrapedPoints)

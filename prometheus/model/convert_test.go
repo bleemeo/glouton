@@ -150,17 +150,26 @@ func TestConvertionLoop(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "zero-time",
+			points: []types.MetricPoint{
+				{
+					Point:  types.Point{Time: time.Time{}, Value: 1},
+					Labels: map[string]string{types.LabelName: "name"},
+				},
+			},
+		},
 	}
 
 	for _, tt := range cases {
 		tt := tt
 
 		for _, useAppenable := range []bool{false, true} {
-			useAppenable := useAppenable
+			useAppendable := useAppenable
 
 			fullName := tt.name + "WithoutAppendable"
-			if useAppenable {
-				fullName = tt.name + "WithAppenable"
+			if useAppendable {
+				fullName = tt.name + "WithAppendable"
 			}
 
 			t.Run(fullName, func(t *testing.T) {
@@ -173,7 +182,7 @@ func TestConvertionLoop(t *testing.T) {
 
 				app := NewBufferAppender()
 
-				if useAppenable {
+				if useAppendable {
 					app2 = NewFromAppender(app).Appender(context.Background())
 				} else {
 					app2 = app
@@ -196,6 +205,17 @@ func TestConvertionLoop(t *testing.T) {
 					mfs = append(mfs, mf)
 				}
 
+				// Expected points are the input points with the date changed if it was empty.
+				// The default behavior is to set the date to now if it was empty.
+				expected := make([]types.MetricPoint, 0, len(tt.points))
+				for _, point := range tt.points {
+					if point.Time.IsZero() {
+						point.Time = now
+					}
+
+					expected = append(expected, point)
+				}
+
 				got := FamiliesToMetricPoints(now, mfs, true)
 
 				optMetricSort := cmpopts.SortSlices(func(x types.MetricPoint, y types.MetricPoint) bool {
@@ -205,7 +225,7 @@ func TestConvertionLoop(t *testing.T) {
 					return labels.Compare(lblsX, lblsY) < 0
 				})
 
-				if diff := cmp.Diff(got, tt.points, optMetricSort, cmpopts.EquateEmpty()); diff != "" {
+				if diff := cmp.Diff(expected, got, optMetricSort, cmpopts.EquateEmpty()); diff != "" {
 					t.Errorf("conversion mismatch: (-want +got)\n:%s", diff)
 				}
 			})

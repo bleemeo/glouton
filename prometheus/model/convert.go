@@ -68,11 +68,16 @@ func FamiliesToMetricPoints(
 			lbls = DropMetaLabels(lbls)
 		}
 
+		ts := sample.Timestamp.Time()
+		if sample.Timestamp == 0 {
+			ts = time.Time{}
+		}
+
 		result[i] = types.MetricPoint{
 			Labels:      lbls.Map(),
 			Annotations: annotations,
 			Point: types.Point{
-				Time:  sample.Timestamp.Time(),
+				Time:  ts,
 				Value: float64(sample.Value),
 			},
 		}
@@ -103,9 +108,14 @@ func MetricPointsToFamilies(points []types.MetricPoint) []*dto.MetricFamily {
 
 		lbls := AnnotationToMetaLabels(labels.FromMap(p.Labels), p.Annotations)
 
+		ts := proto.Int64(p.Time.UnixMilli())
+		if p.Time.IsZero() {
+			ts = nil
+		}
+
 		metric := &dto.Metric{
 			Label:       make([]*dto.LabelPair, 0, len(lbls)-1),
-			TimestampMs: proto.Int64(p.Time.UnixMilli()),
+			TimestampMs: ts,
 			Untyped: &dto.Untyped{
 				Value: proto.Float64(p.Value),
 			},
@@ -202,9 +212,14 @@ func SamplesToMetricFamily(samples []promql.Sample, mType *dto.MetricType) (*dto
 			return nil, errInvalidSample
 		}
 
+		ts := proto.Int64(pt.T)
+		if pt.T == 0 {
+			ts = nil
+		}
+
 		metric := &dto.Metric{
 			Label:       make([]*dto.LabelPair, 0, len(pt.Metric)-1),
-			TimestampMs: proto.Int64(pt.T),
+			TimestampMs: ts,
 		}
 
 		for _, l := range pt.Metric {
@@ -242,7 +257,12 @@ func SendPointsToAppender(points []types.MetricPoint, app storage.Appender) erro
 	for _, pts := range points {
 		promLabels := AnnotationToMetaLabels(labels.FromMap(pts.Labels), pts.Annotations)
 
-		_, err := app.Append(0, promLabels, pts.Time.UnixMilli(), pts.Value)
+		ts := pts.Time.UnixMilli()
+		if pts.Time.IsZero() {
+			ts = 0
+		}
+
+		_, err := app.Append(0, promLabels, ts, pts.Value)
 		if err != nil {
 			return err
 		}
