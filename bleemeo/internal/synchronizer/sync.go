@@ -28,6 +28,7 @@ import (
 	"glouton/bleemeo/internal/common"
 	bleemeoTypes "glouton/bleemeo/types"
 	"glouton/delay"
+	"glouton/facts"
 	"glouton/logger"
 	"glouton/threshold"
 	"glouton/types"
@@ -851,7 +852,7 @@ func (s *Synchronizer) syncToPerform(ctx context.Context) (map[string]bool, bool
 	}
 
 	localFacts, _ := s.option.Facts.Facts(ctx, 24*time.Hour)
-	if fullSync || s.lastFactUpdatedAt != localFacts["fact_updated_at"] {
+	if fullSync || s.lastFactUpdatedAt != localFacts[facts.FactUpdatedAt] {
 		syncMethods[syncMethodFact] = fullSync
 	}
 
@@ -969,15 +970,12 @@ func (s *Synchronizer) checkDuplicated(ctx context.Context) error {
 // isDuplicatedUsingFacts checks if another agent with the same ID using AgentFact registered
 // on Bleemeo API. This happen only if the state file is shared by multiple running agents.
 func isDuplicatedUsingFacts(agentStartedAt time.Time, oldFacts map[string]bleemeoTypes.AgentFact, newFacts map[string]bleemeoTypes.AgentFact) (bool, string) {
-	// This isn't yet used, but will be in the future. It allow test to have fewer changes.
-	_ = agentStartedAt
-
 	// We use the fact that the agents will send different facts to the API.
 	// If the facts we fetch from the API are not the same as the last facts
 	// we registered, another agent with the same ID must have modified them.
 	// Note that this won't work if the two agents are on the same host
 	// because both agents will send mostly the same facts.
-	factNames := []string{"fqdn", "primary_address", "primary_mac_address"}
+	factNames := []string{"fqdn", "primary_address", "primary_mac_address", "glouton_pid"}
 	for _, name := range factNames {
 		old, ok := oldFacts[name]
 		if !ok {
@@ -991,6 +989,19 @@ func isDuplicatedUsingFacts(agentStartedAt time.Time, oldFacts map[string]bleeme
 
 		if old.Value == new.Value {
 			continue
+		}
+
+		if name == "glouton_pid" {
+			// For the fact glouton_pid we are going to be smarter. We don't want to announce a duplicate state.json
+			// when glouton crash or when its state.cache.json is restored to an older version.
+			// To solve this problem, we check that facts (old & new) where updated *after* Glouton started (this assume fact glouton_pid
+			// is updated at the same time as fact_updated_at, which is true unless a Glouton crashed during facts update).
+			oldStartedAt, _ := time.Parse(time.RFC3339, oldFacts[facts.FactUpdatedAt].Value)
+			newStartedAt, _ := time.Parse(time.RFC3339, newFacts[facts.FactUpdatedAt].Value)
+
+			if !oldStartedAt.IsZero() && !newStartedAt.IsZero() && oldStartedAt.Before(agentStartedAt) && newStartedAt.Before(agentStartedAt) {
+				continue
+			}
 		}
 
 		message := fmt.Sprintf(

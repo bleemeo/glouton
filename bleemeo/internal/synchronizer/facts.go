@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"glouton/bleemeo/client"
 	"glouton/bleemeo/types"
+	"glouton/facts"
 	"glouton/logger"
 	"time"
 )
@@ -111,7 +112,7 @@ func (s *Synchronizer) syncFacts(ctx context.Context, fullSync bool, onlyEssenti
 		return false, err
 	}
 
-	s.lastFactUpdatedAt = localFacts["fact_updated_at"]
+	s.lastFactUpdatedAt = localFacts[facts.FactUpdatedAt]
 
 	return false, nil
 }

@@ -1819,7 +1819,8 @@ func Test_isDuplicatedUsingFacts(t *testing.T) { //nolint:maintidx
 				"swap_present":         "true",
 				"virtual":              "docker",
 			}),
-			wantDuplicated: false,
+			wantDuplicated: true,
+			wantMessage:    `Detected duplicated state.json. Another agent changed "glouton_pid" from "2829" to "2873"`,
 		},
 		{
 			// Two agent on the same server

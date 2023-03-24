@@ -544,7 +544,7 @@ func factFromPoints(points []types.MetricPoint, now time.Time, scraperFact map[s
 		return result
 	}
 
-	result["fact_updated_at"] = now.UTC().Format(time.RFC3339)
+	result[facts.FactUpdatedAt] = now.UTC().Format(time.RFC3339)
 	result["primary_mac_address"] = strings.ToLower(result["primary_mac_address"])
 	result["hostname"] = result["fqdn"]
 
