@@ -21,6 +21,7 @@ import (
 	"glouton/inputs"
 	"glouton/inputs/internal"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/influxdata/telegraf"
@@ -50,7 +51,8 @@ func New(config config.Smart) (telegraf.Input, *inputs.GathererOptions, error) {
 	internalInput := &internal.Input{
 		Input: smartInput,
 		Accumulator: internal.Accumulator{
-			RenameGlobal: renameGlobal,
+			RenameGlobal:     renameGlobal,
+			TransformMetrics: transformMetrics,
 		},
 		Name: "SMART",
 	}
@@ -61,6 +63,16 @@ func New(config config.Smart) (telegraf.Input, *inputs.GathererOptions, error) {
 	}
 
 	return internalInput, options, nil
+}
+
+func transformMetrics(currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {
+	if tempC, ok := fields["temp_c"]; ok && tempC == 0 {
+		// 0°C is way to improbable to be a real temperature.
+		// Some disk, when SMART is unavailable/disabled, will report 0°C (at least PERC H710 does).
+		delete(fields, "temp_c")
+	}
+
+	return fields
 }
 
 func renameGlobal(gatherContext internal.GatherContext) (result internal.GatherContext, drop bool) {
