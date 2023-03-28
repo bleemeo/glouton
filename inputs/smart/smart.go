@@ -64,6 +64,17 @@ func New(config config.Smart) (telegraf.Input, *inputs.GathererOptions, error) {
 }
 
 func renameGlobal(gatherContext internal.GatherContext) (result internal.GatherContext, drop bool) {
+	// It possible to don't have SMART active. In this case exclude the devices.
+	// The exact output of this tag depend on smartctl output.
+	// The following are known existing values:
+	// * "Enabled"
+	// * absent (e.g. for NVME disk)
+	// * "Unavailable - device lacks SMART capability." on Dell PERC H710P
+	lowerEnabled := strings.ToLower(gatherContext.Tags["enabled"])
+	if strings.Contains(lowerEnabled, "unavailable") || strings.Contains(lowerEnabled, "disabled") {
+		return gatherContext, true
+	}
+
 	// Remove labels that are not useful.
 	delete(gatherContext.Tags, "capacity")
 	delete(gatherContext.Tags, "enabled")
