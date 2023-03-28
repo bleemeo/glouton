@@ -254,6 +254,7 @@ var (
 	inputMetrics = []string{
 		// SMART
 		"smart_device_health_status",
+		"smart_device_temp_c",
 		"smart_device_media_wearout_indicator",
 		"smart_device_percent_lifetime_remain",
 		"smart_device_read_error_rate",
