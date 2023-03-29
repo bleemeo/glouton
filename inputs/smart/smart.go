@@ -21,6 +21,7 @@ import (
 	"glouton/inputs"
 	"glouton/inputs/internal"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/influxdata/telegraf"
@@ -50,7 +51,8 @@ func New(config config.Smart) (telegraf.Input, *inputs.GathererOptions, error) {
 	internalInput := &internal.Input{
 		Input: smartInput,
 		Accumulator: internal.Accumulator{
-			RenameGlobal: renameGlobal,
+			RenameGlobal:     renameGlobal,
+			TransformMetrics: transformMetrics,
 		},
 		Name: "SMART",
 	}
@@ -63,7 +65,28 @@ func New(config config.Smart) (telegraf.Input, *inputs.GathererOptions, error) {
 	return internalInput, options, nil
 }
 
+func transformMetrics(currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {
+	if tempC, ok := fields["temp_c"]; ok && tempC == 0 {
+		// 0°C is way to improbable to be a real temperature.
+		// Some disk, when SMART is unavailable/disabled, will report 0°C (at least PERC H710 does).
+		delete(fields, "temp_c")
+	}
+
+	return fields
+}
+
 func renameGlobal(gatherContext internal.GatherContext) (result internal.GatherContext, drop bool) {
+	// It possible to don't have SMART active. In this case exclude the devices.
+	// The exact output of this tag depend on smartctl output.
+	// The following are known existing values:
+	// * "Enabled"
+	// * absent (e.g. for NVME disk)
+	// * "Unavailable - device lacks SMART capability." on Dell PERC H710P
+	lowerEnabled := strings.ToLower(gatherContext.Tags["enabled"])
+	if strings.Contains(lowerEnabled, "unavailable") || strings.Contains(lowerEnabled, "disabled") {
+		return gatherContext, true
+	}
+
 	// Remove labels that are not useful.
 	delete(gatherContext.Tags, "capacity")
 	delete(gatherContext.Tags, "enabled")
