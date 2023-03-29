@@ -28,6 +28,7 @@ import (
 	"glouton/bleemeo/internal/common"
 	bleemeoTypes "glouton/bleemeo/types"
 	"glouton/delay"
+	"glouton/facts"
 	"glouton/logger"
 	"glouton/threshold"
 	"glouton/types"
@@ -35,7 +36,6 @@ import (
 	"math/big"
 	"net/http"
 	"net/url"
-	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -852,7 +852,7 @@ func (s *Synchronizer) syncToPerform(ctx context.Context) (map[string]bool, bool
 	}
 
 	localFacts, _ := s.option.Facts.Facts(ctx, 24*time.Hour)
-	if fullSync || s.lastFactUpdatedAt != localFacts["fact_updated_at"] {
+	if fullSync || s.lastFactUpdatedAt != localFacts[facts.FactUpdatedAt] {
 		syncMethods[syncMethodFact] = fullSync
 	}
 
@@ -924,19 +924,24 @@ func (s *Synchronizer) syncToPerform(ctx context.Context) (map[string]bool, bool
 
 // checkDuplicated checks if another glouton is running with the same ID.
 func (s *Synchronizer) checkDuplicated(ctx context.Context) error {
-	isDuplicatedOnSameHost, err := s.isDuplicatedOnSameHost(ctx, os.Getpid())
-	if err != nil {
-		return fmt.Errorf("check duplicated agent on same host: %w", err)
+	oldFacts := s.option.Cache.FactsByKey()
+
+	if err := s.factsUpdateList(ctx); err != nil {
+		return fmt.Errorf("update facts list: %w", err)
 	}
 
-	isDuplicatedOnAnotherHost, err := s.isDuplicatedOnAnotherHost()
-	if err != nil {
-		return fmt.Errorf("check duplicated agent on another host: %w", err)
-	}
+	newFacts := s.option.Cache.FactsByKey()
 
-	if !isDuplicatedOnSameHost && !isDuplicatedOnAnotherHost {
+	isDuplicated, message := isDuplicatedUsingFacts(s.startedAt, oldFacts[s.agentID], newFacts[s.agentID])
+
+	if !isDuplicated {
 		return nil
 	}
+
+	logger.Printf(message)
+	logger.Printf(
+		"The following links may be relevant to solve the issue: https://go.bleemeo.com/l/doc-duplicated-agent",
+	)
 
 	until := s.now().Add(delay.JitterDelay(15*time.Minute, 0.05))
 	s.Disable(until, bleemeoTypes.DisableDuplicatedAgent)
@@ -954,7 +959,7 @@ func (s *Synchronizer) checkDuplicated(ctx context.Context) error {
 		"last_duplication_date": time.Now(),
 	}
 
-	_, err = s.client.Do(s.ctx, "PATCH", fmt.Sprintf("v1/agent/%s/", s.agentID), params, data, nil)
+	_, err := s.client.Do(s.ctx, "PATCH", fmt.Sprintf("v1/agent/%s/", s.agentID), params, data, nil)
 	if err != nil {
 		logger.V(1).Printf("Failed to update duplication date: %s", err)
 	}
@@ -962,72 +967,22 @@ func (s *Synchronizer) checkDuplicated(ctx context.Context) error {
 	return errConnectorTemporaryDisabled
 }
 
-// isDuplicatedOnSameHost checks if another agent is running on the same host.
-func (s *Synchronizer) isDuplicatedOnSameHost(ctx context.Context, pid int) (bool, error) {
-	// The local duplication detection by process can be deactivated in the config.
-	// This can be useful to LXC users where an agent could be running on the host
-	// and detect another agent process in a container and wrongly detect duplication.
-	if s.option.Config.Agent.DisableLocalDuplicationDetection {
-		return false, nil
-	}
-
-	// Check if another agent process is running.
-	processes, err := s.option.Process.Processes(ctx, time.Minute)
-	if err != nil {
-		return false, fmt.Errorf("list processes: %w", err)
-	}
-
-	for _, process := range processes {
-		// Skip our own PID to detect only other agent processes.
-		if process.PID == pid {
-			continue
-		}
-
-		// On Linux, both our systemd service and docker container use "/usr/sbin/glouton".
-		// On Windows we don't know the installation path, only that the process uses "glouton.exe".
-		if (strings.HasPrefix(process.CmdLine, "/usr/sbin/glouton") && process.Name == "glouton") ||
-			(process.Name == "glouton.exe" && version.IsWindows()) {
-			// But still ensure that this process isn't a very young process. We don't want "glouton --version" to
-			// be detected as duplicated agent.
-			if s.now().Sub(process.CreateTime) >= time.Minute {
-				logger.Printf("Another agent is already running on this host with PID %d (I'm PID %d)", process.PID, pid)
-
-				logger.Printf(
-					"The following links may be relevant to solve the issue: https://go.bleemeo.com/l/doc-duplicated-agent",
-				)
-
-				return true, nil
-			}
-		}
-	}
-
-	return false, nil
-}
-
-// isDuplicatedOnAnotherHost checks if another agent with the same ID is running
-// on another host. This may happen if the state file is shared by multiple agents.
-func (s *Synchronizer) isDuplicatedOnAnotherHost() (bool, error) {
+// isDuplicatedUsingFacts checks if another agent with the same ID using AgentFact registered
+// on Bleemeo API. This happen only if the state file is shared by multiple running agents.
+func isDuplicatedUsingFacts(agentStartedAt time.Time, oldFacts map[string]bleemeoTypes.AgentFact, newFacts map[string]bleemeoTypes.AgentFact) (bool, string) {
 	// We use the fact that the agents will send different facts to the API.
 	// If the facts we fetch from the API are not the same as the last facts
 	// we registered, another agent with the same ID must have modified them.
 	// Note that this won't work if the two agents are on the same host
 	// because both agents will send mostly the same facts.
-	oldFacts := s.option.Cache.FactsByKey()
-
-	if err := s.factsUpdateList(); err != nil {
-		return false, fmt.Errorf("update facts list: %w", err)
-	}
-
-	newFacts := s.option.Cache.FactsByKey()
-
-	factNames := []string{"fqdn", "primary_address", "primary_mac_address"}
+	factNames := []string{"fqdn", "primary_address", "primary_mac_address", "glouton_pid"}
 	for _, name := range factNames {
-		old, ok := oldFacts[s.agentID][name]
+		old, ok := oldFacts[name]
 		if !ok {
 			continue
 		}
 
-		new, ok := newFacts[s.agentID][name] //nolint:predeclared
+		new, ok := newFacts[name] //nolint:predeclared
 		if !ok {
 			continue
 		}
@@ -1036,20 +991,30 @@ func (s *Synchronizer) isDuplicatedOnAnotherHost() (bool, error) {
 			continue
 		}
 
-		logger.Printf(
+		if name == "glouton_pid" {
+			// For the fact glouton_pid we are going to be smarter. We don't want to announce a duplicate state.json
+			// when glouton crash or when its state.cache.json is restored to an older version.
+			// To solve this problem, we check that facts (old & new) where updated *after* Glouton started (this assume fact glouton_pid
+			// is updated at the same time as fact_updated_at, which is true unless a Glouton crashed during facts update).
+			oldStartedAt, _ := time.Parse(time.RFC3339, oldFacts[facts.FactUpdatedAt].Value)
+			newStartedAt, _ := time.Parse(time.RFC3339, newFacts[facts.FactUpdatedAt].Value)
+
+			if !oldStartedAt.IsZero() && !newStartedAt.IsZero() && oldStartedAt.Before(agentStartedAt) && newStartedAt.Before(agentStartedAt) {
+				continue
+			}
+		}
+
+		message := fmt.Sprintf(
 			"Detected duplicated state.json. Another agent changed %#v from %#v to %#v",
 			name,
 			old.Value,
 			new.Value,
 		)
-		logger.Printf(
-			"The following links may be relevant to solve the issue: https://go.bleemeo.com/l/doc-duplicated-agent",
-		)
 
-		return true, nil
+		return true, message
 	}
 
-	return false, nil
+	return false, ""
 }
 
 func (s *Synchronizer) register(ctx context.Context) error {

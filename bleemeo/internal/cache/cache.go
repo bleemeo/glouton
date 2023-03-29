@@ -295,7 +295,16 @@ func (c *Cache) FactsByKey() map[string]map[string]bleemeoTypes.AgentFact {
 			result[v.AgentID] = make(map[string]bleemeoTypes.AgentFact, estimatedSize)
 		}
 
-		result[v.AgentID][v.Key] = v
+		// In case of duplicate facts, choose the key with the smallest ID.
+		// Having a consistent selection of which duplicate facts to select is important for
+		// the duplicate state.json detection:
+		// If the glouton registered a new fact with a different FQDN but didn't yet deleted
+		// the old one (due to crash for example), it could return a different facts in the
+		// FactsByKey() call for oldFacts and newFacts, resulting in isDuplicatedUsingFacts thinking
+		// the facts is changed by another agent.
+		if existing, ok := result[v.AgentID][v.Key]; !ok || existing.ID > v.ID {
+			result[v.AgentID][v.Key] = v
+		}
 	}
 
 	return result

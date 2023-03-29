@@ -46,6 +46,7 @@ const virtualTypeKVM = "kvm"
 
 const (
 	FactKubernetesCluster = "kubernetes_cluster_name"
+	FactUpdatedAt         = "fact_updated_at"
 )
 
 var (
@@ -261,7 +262,8 @@ func (f *FactProvider) fastUpdateFacts(ctx context.Context) map[string]string {
 	newFacts["glouton_version"] = version.Version
 	// TODO: drop agent_version. It's deprecated and is replaced by glouton_version
 	newFacts["agent_version"] = version.Version
-	newFacts["fact_updated_at"] = time.Now().UTC().Format(time.RFC3339)
+	newFacts[FactUpdatedAt] = time.Now().UTC().Format(time.RFC3339)
+	newFacts["glouton_pid"] = strconv.FormatInt(int64(os.Getpid()), 10)
 
 	autoUpgradeEnabled, err := autoUpgradeIsEnabled(ctx)
 	if !errors.Is(err, errAutoUpgradeNotSupported) {
