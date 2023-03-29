@@ -8,4 +8,13 @@
 RANDOM_SLEEP=$(( $(dd if=/dev/random bs=2 count=1 2> /dev/null | cksum | cut -d' ' -f1) % 43200 ))
 
 sleep ${RANDOM_SLEEP}
-exec service glouton upgrade
+
+# When Glouton is gracefully shutdown, it checks for the presence of
+# this file to send the appropriate MQTT disconnect will.
+AUTO_UPGRADE_FILE=/var/lib/glouton/auto_upgrade
+
+trap "rm -f $AUTO_UPGRADE_FILE || true" EXIT
+
+touch $AUTO_UPGRADE_FILE
+
+service glouton upgrade
