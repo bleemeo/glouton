@@ -22,7 +22,6 @@ import (
 	"strings"
 
 	"github.com/influxdata/telegraf"
-	"github.com/influxdata/telegraf/config"
 	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"
 	"github.com/influxdata/telegraf/plugins/inputs/mysql"
 )
@@ -39,9 +38,8 @@ func New(server string) (i telegraf.Input, err error) {
 		return nil, inputs.ErrUnexpectedType
 	}
 
-	mysqlInput.Servers = []config.Secret{
-		config.NewSecret([]byte(server)),
-	}
+	slice := append(make([]string, 0), server)
+	mysqlInput.Servers = slice
 	mysqlInput.GatherInnoDBMetrics = true
 	mysqlInput.Log = internal.Logger{}
 	i = &internal.Input{
@@ -82,10 +80,6 @@ func (m mysqlWrapper) Start(acc telegraf.Accumulator) (err error) {
 }
 
 func (m mysqlWrapper) Stop() {
-	// Free the memory associated to the secrets.
-	for _, secret := range m.input.Servers {
-		secret.Destroy()
-	}
 }
 
 func shouldDerivateMetrics(currentContext internal.GatherContext, metricName string) bool {

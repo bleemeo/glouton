@@ -115,7 +115,7 @@ func New(inputsConfig inputs.CollectorConfig) (result telegraf.Input, err error)
 
 	tmpInput := input()
 
-	winInput, ok := tmpInput.(*win_perf_counters.WinPerfCounters)
+	winInput, ok := tmpInput.(*win_perf_counters.Win_PerfCounters)
 	if !ok {
 		return result, fmt.Errorf("%w for telegraf input 'win_perf_counters', got %T, expected *win_perf_counters.Win_PerfCounters", errInvalidType, tmpInput)
 	}
