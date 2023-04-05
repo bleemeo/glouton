@@ -50,9 +50,9 @@ import (
 	"glouton/inputs/upsd"
 	"glouton/inputs/uwsgi"
 	"glouton/inputs/winperfcounters"
-	"glouton/inputs/zfs"
 	"glouton/inputs/zookeeper"
 	"glouton/logger"
+	"glouton/prometheus/exporter/zfs"
 	"glouton/prometheus/registry"
 	"glouton/types"
 	"glouton/version"
@@ -60,6 +60,7 @@ import (
 	"os"
 	"reflect"
 	"strconv"
+	"time"
 
 	"github.com/influxdata/telegraf"
 	"github.com/prometheus/client_golang/prometheus"
@@ -112,22 +113,20 @@ func AddDefaultInputs(
 		}
 	}
 
-	if version.IsFreeBSD() {
-		input, gathererOptions, err := zfs.New()
-		if err != nil {
-			return fmt.Errorf("unable to create ZFS input: %w", err)
-		}
+	source, err := zfs.New(time.Minute)
 
-		_, err = metricRegistry.RegisterInput(
+	switch {
+	case errors.Is(err, zfs.ErrZFSNotAvailable):
+		logger.V(2).Printf("zfs isn't available: %v", err)
+	case err != nil:
+		logger.V(2).Printf("failed to create ZFS source: %v", err)
+	default:
+		_, err = metricRegistry.RegisterGatherer(
 			registry.RegistrationOption{
-				Description:    "ZFS input",
-				JitterSeed:     0,
-				Rules:          gathererOptions.Rules,
-				GatherModifier: gathererOptions.GatherModifier,
-				MinInterval:    gathererOptions.MinInterval,
-				ExtraLabels:    nil,
+				Description: "ZFS metrics",
+				JitterSeed:  0,
 			},
-			input,
+			source,
 		)
 		if err != nil {
 			return fmt.Errorf("unable to add ZFS input: %w", err)
