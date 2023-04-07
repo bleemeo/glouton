@@ -532,7 +532,20 @@ func byteCountDecimal(b uint64) string {
 }
 
 func autoUpgradeIsEnabled(ctx context.Context) (bool, error) {
-	if version.IsWindows() || version.IsMacOS() {
+	if version.IsFreeBSD() {
+		_, err := os.Stat("/etc/cron.d/glouton-auto-upgrade")
+
+		switch {
+		case err == nil:
+			return true, nil
+		case os.IsNotExist(err):
+			return false, nil
+		default:
+			return false, err
+		}
+	}
+
+	if !version.IsLinux() {
 		return false, errAutoUpgradeNotSupported
 	}
 
