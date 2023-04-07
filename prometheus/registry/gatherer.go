@@ -67,6 +67,14 @@ type GatherState struct {
 	NoFilter       bool
 }
 
+func (s GatherState) Now() time.Time {
+	if s.T0.IsZero() {
+		return time.Now()
+	}
+
+	return s.T0
+}
+
 // GatherStateFromMap creates a GatherState from a state passed as a map.
 func GatherStateFromMap(params map[string][]string) GatherState {
 	state := GatherState{}
