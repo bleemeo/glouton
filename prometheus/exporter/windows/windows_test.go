@@ -24,7 +24,7 @@ import (
 	"glouton/inputs"
 	"testing"
 
-	"gopkg.in/alecthomas/kingpin.v2"
+	"github.com/alecthomas/kingpin/v2"
 )
 
 // Test_optionsToFlags ensure the option still existing in node_exporter.
