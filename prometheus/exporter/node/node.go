@@ -72,38 +72,70 @@ func setCollector(collectorName []string) {
 	}
 }
 
-// NewCollector return a node_exporter.
-func NewCollector(option Option) (prometheus.Collector, error) {
-	var args []string
+func optionsToFlags(option Option) map[string]string {
+	result := make(map[string]string)
 
 	if option.RootFS != "" {
-		args = append(args, fmt.Sprintf("--path.rootfs=%s", option.RootFS))
+		result["path.rootfs"] = option.RootFS
 	}
 
 	if option.FilesystemIgnoredMountPoints != "" {
-		args = append(args, fmt.Sprintf("--collector.filesystem.ignored-mount-points=%s", option.FilesystemIgnoredMountPoints))
+		result["collector.filesystem.ignored-mount-points"] = option.FilesystemIgnoredMountPoints
 	}
 
 	if option.FilesystemIgnoredType != "" {
-		args = append(args, fmt.Sprintf("--collector.filesystem.ignored-fs-types=%s", option.FilesystemIgnoredType))
+		result["collector.filesystem.ignored-fs-types"] = option.FilesystemIgnoredType
 	}
 
 	if option.NetworkIgnoredDevices != "" {
-		args = append(args, fmt.Sprintf("--collector.netclass.ignored-devices=%s", option.NetworkIgnoredDevices))
-		args = append(args, fmt.Sprintf("--collector.netdev.device-exclude=%s", option.NetworkIgnoredDevices))
+		if version.IsLinux() {
+			result["collector.netclass.ignored-devices"] = option.NetworkIgnoredDevices
+		}
+
+		result["collector.netdev.device-exclude"] = option.NetworkIgnoredDevices
 	}
 
 	if option.DiskStatsIgnoredDevices != "" {
-		args = append(args, fmt.Sprintf("--collector.diskstats.ignored-devices=%s", option.DiskStatsIgnoredDevices))
+		result["collector.diskstats.ignored-devices"] = option.DiskStatsIgnoredDevices
+	}
+
+	return result
+}
+
+func setKingpinOptions(option Option) error {
+	optionMap := optionsToFlags(option)
+	args := make([]string, 0, len(optionMap))
+
+	for key, value := range optionMap {
+		args = append(args, fmt.Sprintf("--%s=%s", key, value))
 	}
 
 	logger.V(2).Printf("Starting node_exporter with %v as args", args)
 
 	if _, err := kingpin.CommandLine.Parse(args); err != nil {
-		return nil, fmt.Errorf("kingpin initialization: %w", err)
+		return fmt.Errorf("kingpin initialization: %w", err)
 	}
 
 	setCollector(option.EnabledCollectors)
+
+	return nil
+}
+
+// NewCollector return a node_exporter.
+func NewCollector(option Option) (prometheus.Collector, error) {
+	c, err := newCollector(option)
+	if err != nil {
+		return nil, err
+	}
+
+	return buildinfo.AddBuildInfo(c, "node_exporter", "1.0.0-rc.0", version.BuildHash, "glouton"), nil
+}
+
+// newCollector return a node_exporter.
+func newCollector(option Option) (*collector.NodeCollector, error) {
+	if err := setKingpinOptions(option); err != nil {
+		return nil, err
+	}
 
 	l := log.NewNopLogger()
 
@@ -112,7 +144,7 @@ func NewCollector(option Option) (prometheus.Collector, error) {
 		return nil, err
 	}
 
-	return buildinfo.AddBuildInfo(c, "node_exporter", "1.0.0-rc.0", version.BuildHash, "glouton"), nil
+	return c, nil
 }
 
 // WithPathIgnore set the of mount points to ignore.
