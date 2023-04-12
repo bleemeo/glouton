@@ -22,10 +22,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
 	dto "github.com/prometheus/client_model/go"
-	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/storage"
 )
 
@@ -218,14 +215,14 @@ func TestConvertionLoop(t *testing.T) {
 
 				got := FamiliesToMetricPoints(now, mfs, true)
 
-				optMetricSort := cmpopts.SortSlices(func(x types.MetricPoint, y types.MetricPoint) bool {
-					lblsX := labels.FromMap(x.Labels)
-					lblsY := labels.FromMap(y.Labels)
+				if diff := types.DiffMetricPoints(expected, got, false); diff != "" {
+					t.Errorf("conversion mismatch: (-want +got)\n:%s", diff)
+				}
 
-					return labels.Compare(lblsX, lblsY) < 0
-				})
+				mfs = MetricPointsToFamilies(tt.points)
+				got = FamiliesToMetricPoints(now, mfs, true)
 
-				if diff := cmp.Diff(expected, got, optMetricSort, cmpopts.EquateEmpty()); diff != "" {
+				if diff := types.DiffMetricPoints(expected, got, false); diff != "" {
 					t.Errorf("conversion mismatch: (-want +got)\n:%s", diff)
 				}
 			})
@@ -248,4 +245,73 @@ func copyPoints(input []types.MetricPoint) []types.MetricPoint {
 	}
 
 	return result
+}
+
+func TestFamiliesToCollector(t *testing.T) {
+	tests := []struct {
+		name   string
+		points []types.MetricPoint
+	}{
+		{
+			name:   "empty",
+			points: nil,
+		},
+		{
+			name: "one points",
+			points: []types.MetricPoint{
+				{
+					Point:  types.Point{Time: time.Time{}, Value: 42.1},
+					Labels: map[string]string{types.LabelName: "cpu_used"},
+				},
+			},
+		},
+		{
+			name: "more points",
+			points: []types.MetricPoint{
+				{
+					Point:  types.Point{Time: time.Time{}, Value: 42.1},
+					Labels: map[string]string{types.LabelName: "cpu_used"},
+				},
+				{
+					Point: types.Point{Time: time.Time{}, Value: 42.1},
+					Labels: map[string]string{
+						types.LabelName: "disk_used",
+						"not_item":      "/home",
+					},
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		tt := tt
+
+		for _, targetType := range []dto.MetricType{dto.MetricType_GAUGE, dto.MetricType_COUNTER} {
+			targetType := targetType
+
+			name := tt.name + "-" + targetType.String()
+
+			t.Run(name, func(t *testing.T) {
+				mfs := MetricPointsToFamilies(tt.points)
+				for _, mf := range mfs {
+					FamilyConvertType(mf, targetType)
+				}
+
+				metrics, err := FamiliesToCollector(mfs)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				mfs, err = CollectorToFamilies(metrics)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				got := FamiliesToMetricPoints(time.Time{}, mfs, true)
+
+				if diff := types.DiffMetricPoints(tt.points, got, false); diff != "" {
+					t.Errorf("conversion mismatch: (-want +got)\n:%s", diff)
+				}
+			})
+		}
+	}
 }

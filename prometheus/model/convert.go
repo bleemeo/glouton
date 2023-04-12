@@ -18,6 +18,7 @@ package model
 
 import (
 	"errors"
+	"fmt"
 	"glouton/logger"
 	"glouton/types"
 	"sort"
@@ -25,6 +26,7 @@ import (
 	"time"
 
 	"github.com/gogo/protobuf/proto"
+	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
 	"github.com/prometheus/common/expfmt"
 	"github.com/prometheus/common/model"
@@ -44,6 +46,10 @@ func FamiliesToMetricPoints(
 	families []*dto.MetricFamily,
 	dropMetaLabels bool,
 ) []types.MetricPoint {
+	if now.IsZero() {
+		now = time.UnixMilli(0)
+	}
+
 	samples, err := expfmt.ExtractSamples(
 		&expfmt.DecodeOptions{Timestamp: model.TimeFromUnixNano(now.UnixNano())},
 		families...,
@@ -84,6 +90,72 @@ func FamiliesToMetricPoints(
 	}
 
 	return result
+}
+
+type fixedCollector struct {
+	Metrics []prometheus.Metric
+}
+
+func (c fixedCollector) Collect(ch chan<- prometheus.Metric) {
+	for _, m := range c.Metrics {
+		ch <- m
+	}
+}
+
+func (c fixedCollector) Describe(ch chan<- *prometheus.Desc) {
+}
+
+func CollectorToFamilies(metrics []prometheus.Metric) ([]*dto.MetricFamily, error) {
+	gatherer := prometheus.NewRegistry()
+	if err := gatherer.Register(fixedCollector{Metrics: metrics}); err != nil {
+		return nil, err
+	}
+
+	return gatherer.Gather()
+}
+
+// FamiliesToCollector convert metric familly to prometheus.Metric.
+// Note: meta-label are not kept in this conversion.
+func FamiliesToCollector(families []*dto.MetricFamily) ([]prometheus.Metric, error) {
+	var errs prometheus.MultiError
+
+	result := make([]prometheus.Metric, 0)
+
+	for _, mf := range families {
+		metrics := mf.GetMetric()
+		if len(metrics) == 0 {
+			continue
+		}
+
+		for _, metric := range metrics {
+			labels := make([]string, 0, len(metric.GetLabel()))
+			labelsValues := make([]string, 0, len(metric.GetLabel()))
+
+			// we assume labels to be unique
+			for _, labelPair := range metric.GetLabel() {
+				labels = append(labels, *labelPair.Name)
+				labelsValues = append(labelsValues, *labelPair.Value)
+			}
+
+			desc := prometheus.NewDesc(
+				prometheus.BuildFQName("", "", mf.GetName()),
+				mf.GetHelp(),
+				labels,
+				nil,
+			)
+
+			switch {
+			case metric.GetCounter() != nil:
+				result = append(result, prometheus.MustNewConstMetric(desc, prometheus.CounterValue, metric.GetCounter().GetValue(), labelsValues...))
+			case metric.GetGauge() != nil:
+				result = append(result, prometheus.MustNewConstMetric(desc, prometheus.GaugeValue, metric.GetGauge().GetValue(), labelsValues...))
+			default:
+				errs = append(errs, fmt.Errorf("%w: got %v", errUnsupportedType, metric))
+			}
+		}
+	}
+
+	return result, errs.MaybeUnwrap()
 }
 
 func MetricPointsToFamilies(points []types.MetricPoint) []*dto.MetricFamily {
@@ -178,6 +250,35 @@ func DropMetaLabels(lbls labels.Labels) labels.Labels {
 		}
 
 		if l.Value == "" {
+			continue
+		}
+
+		lbls[i] = l
+		i++
+	}
+
+	return lbls[:i]
+}
+
+// DropMetaLabelsFromFamilies delete all labels which start with __ (with exception to __name__).
+// The input is modified.
+func DropMetaLabelsFromFamilies(families []*dto.MetricFamily) {
+	for _, mf := range families {
+		for _, m := range mf.Metric {
+			m.Label = dropMetaLabelsFromPair(m.Label)
+		}
+	}
+}
+
+func dropMetaLabelsFromPair(lbls []*dto.LabelPair) []*dto.LabelPair {
+	i := 0
+
+	for _, l := range lbls {
+		if l.GetName() != types.LabelName && strings.HasPrefix(l.GetName(), model.ReservedLabelPrefix) {
+			continue
+		}
+
+		if l.GetValue() == "" {
 			continue
 		}
 
@@ -378,9 +479,18 @@ func DTO2Labels(name string, input *dto.Metric) map[string]string {
 	return lbls
 }
 
+// FamilyConvertType convert a MetricFamilty to another type.
+// Some information may be lost in the process.
+func FamilyConvertType(mf *dto.MetricFamily, targetType dto.MetricType) {
+	mf.Type = &targetType
+	for _, metric := range mf.Metric {
+		FixType(metric, targetType)
+	}
+}
+
 // FixType changes the type of a metric.
 // Some information may be lost in the process.
-func FixType(m *dto.Metric, wantType dto.MetricType) *dto.Metric {
+func FixType(m *dto.Metric, wantType dto.MetricType) {
 	var (
 		value   *float64
 		gotType dto.MetricType
@@ -405,7 +515,7 @@ func FixType(m *dto.Metric, wantType dto.MetricType) *dto.Metric {
 	}
 
 	if gotType == wantType {
-		return m
+		return
 	}
 
 	switch wantType {
@@ -433,6 +543,4 @@ func FixType(m *dto.Metric, wantType dto.MetricType) *dto.Metric {
 	case dto.MetricType_UNTYPED:
 		m.Untyped = nil
 	}
-
-	return m
 }

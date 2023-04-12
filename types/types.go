@@ -29,6 +29,9 @@ import (
 
 	paho "github.com/eclipse/paho.mqtt.golang"
 	"github.com/getsentry/sentry-go"
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
+	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/promql/parser"
 )
 
@@ -469,4 +472,27 @@ type Matcher interface {
 type MatcherRegexp interface {
 	Matcher
 	AsDenyRegexp() string
+}
+
+// DiffMetricPoints return a diff between want and got. Mostly useful in tests.
+// Points are sorted before being compared. If approximate is true, float are compared
+// with a approximation (compare only 3 first digits).
+func DiffMetricPoints(want []MetricPoint, got []MetricPoint, approximate bool) string {
+	optMetricSort := cmpopts.SortSlices(func(x MetricPoint, y MetricPoint) bool {
+		lblsX := labels.FromMap(x.Labels)
+		lblsY := labels.FromMap(y.Labels)
+
+		return labels.Compare(lblsX, lblsY) < 0
+	})
+
+	opts := []cmp.Option{
+		optMetricSort,
+		cmpopts.EquateEmpty(),
+	}
+
+	if approximate {
+		opts = append(opts, cmpopts.EquateApprox(0.001, 0))
+	}
+
+	return cmp.Diff(want, got, opts...)
 }
