@@ -18,6 +18,7 @@ package blackbox
 
 import (
 	"glouton/logger"
+	"glouton/prometheus/model"
 
 	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
@@ -41,38 +42,12 @@ func filterMFs(mfs []*dto.MetricFamily, include func(mf *dto.MetricFamily) bool)
 
 // writeMFsToChan converts metrics families to new metrics, before writing them on the 'ch' channel.
 func writeMFsToChan(mfs []*dto.MetricFamily, ch chan<- prometheus.Metric) {
-	for _, mf := range mfs {
-		metrics := mf.GetMetric()
-		if len(metrics) == 0 {
-			continue
-		}
+	metrics, err := model.FamiliesToCollector(mfs)
+	for _, metric := range metrics {
+		ch <- metric
+	}
 
-		for _, metric := range metrics {
-			labels := make([]string, 0, len(metric.GetLabel()))
-			labelsValues := make([]string, 0, len(metric.GetLabel()))
-
-			// we assume labels to be unique
-			for _, labelPair := range metric.GetLabel() {
-				labels = append(labels, *labelPair.Name)
-				labelsValues = append(labelsValues, *labelPair.Value)
-			}
-
-			desc := prometheus.NewDesc(
-				prometheus.BuildFQName("", "", mf.GetName()),
-				mf.GetHelp(),
-				labels,
-				nil,
-			)
-
-			// in theory, this should only be a counter or a gauge, given the fact that we only do this probing operation once (and then we start again from scratch)
-			switch {
-			case metric.GetCounter() != nil:
-				ch <- prometheus.MustNewConstMetric(desc, prometheus.CounterValue, metric.GetCounter().GetValue(), labelsValues...)
-			case metric.GetGauge() != nil:
-				ch <- prometheus.MustNewConstMetric(desc, prometheus.GaugeValue, metric.GetGauge().GetValue(), labelsValues...)
-			default:
-				logger.V(1).Printf("blackbox_exporter: invalid type supplied to a probe, got %v", metric)
-			}
-		}
+	if err != nil {
+		logger.V(1).Printf("blackbox_exporter: error while sending metrics %v", err)
 	}
 }
