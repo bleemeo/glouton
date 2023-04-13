@@ -20,6 +20,7 @@ import (
 	"glouton/config"
 	"glouton/discovery"
 	"glouton/prometheus/matcher"
+	"glouton/prometheus/model"
 	"glouton/types"
 	"reflect"
 	"sort"
@@ -873,44 +874,9 @@ func makePointsFromLabels(input []labels.Labels, t0 time.Time) []types.MetricPoi
 }
 
 func makeFamiliesFromLabels(input []labels.Labels) []*dto.MetricFamily {
-	families := []*dto.MetricFamily{}
-	fam := make(map[string]bool)
-	orderedFam := []string{}
+	points := makePointsFromLabels(input, time.Time{})
 
-	for _, lbls := range input {
-		fam[lbls.Get("__name__")] = true
-	}
-
-	for k := range fam {
-		orderedFam = append(orderedFam, k)
-	}
-
-	sort.Strings(orderedFam)
-
-	for _, famName := range orderedFam {
-		family := dto.MetricFamily{}
-
-		name := famName
-
-		family.Name = &name
-		families = append(families, &family)
-	}
-
-	for _, lbls := range input {
-		metric := dto.Metric{}
-
-		metric.Label = labelstoDtolabels(lbls)
-
-		for _, fam := range families {
-			if *fam.Name == lbls.Get("__name__") {
-				fam.Metric = append(fam.Metric, &metric)
-
-				break
-			}
-		}
-	}
-
-	return families
+	return model.MetricPointsToFamilies(points)
 }
 
 func makeMetricsFromLabels(input []labels.Labels) []types.Metric {
@@ -953,25 +919,6 @@ func (m fakeMetric) Points(start, end time.Time) (result []types.Point, err erro
 // LastPointReceivedAt returns points between the two given time range (boundary are included).
 func (m fakeMetric) LastPointReceivedAt() time.Time {
 	return time.Time{}
-}
-
-func labelstoDtolabels(lb labels.Labels) []*dto.LabelPair {
-	labelPair := []*dto.LabelPair{}
-
-	for _, val := range lb {
-		val := val
-
-		if val.Name == "__name__" {
-			continue
-		}
-
-		labelPair = append(labelPair, &dto.LabelPair{
-			Name:  &val.Name,
-			Value: &val.Value,
-		})
-	}
-
-	return labelPair
 }
 
 func listFromMap(m map[labels.Matcher][]matcher.Matchers) []matcher.Matchers {

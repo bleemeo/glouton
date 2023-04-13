@@ -4,10 +4,6 @@ package zfs
 import (
 	"glouton/types"
 	"testing"
-
-	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
-	"github.com/prometheus/prometheus/model/labels"
 )
 
 func Test_decodeZpool(t *testing.T) { //nolint:maintidx
@@ -408,14 +404,7 @@ pool_001	ONLINE	9663676416	107520	9663568896
 
 			got := decodeZpool(tt.zpoolOutput)
 
-			optMetricSort := cmpopts.SortSlices(func(x types.MetricPoint, y types.MetricPoint) bool {
-				lblsX := labels.FromMap(x.Labels)
-				lblsY := labels.FromMap(y.Labels)
-
-				return labels.Compare(lblsX, lblsY) < 0
-			})
-
-			if diff := cmp.Diff(tt.want, got, optMetricSort, cmpopts.EquateEmpty(), cmpopts.EquateApprox(0.001, 0)); diff != "" {
+			if diff := types.DiffMetricPoints(tt.want, got, true); diff != "" {
 				t.Errorf("decodeZpool mismatch (-want +got):\n%s", diff)
 			}
 		})
