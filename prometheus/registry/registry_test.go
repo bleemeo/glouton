@@ -722,16 +722,64 @@ func TestRegistry_run(t *testing.T) {
 	}
 }
 
+type sourceKind string
+
+const (
+	kindPushPoint         sourceKind = "pushpoint"
+	kindPushPointCallback sourceKind = "pushpointCallback"
+	kindAppenderCallback  sourceKind = "appenderCallback"
+	kindGatherer          sourceKind = "gatherer"
+)
+
+func registryRunOnce(t *testing.T, now time.Time, reg *Registry, kindToTest sourceKind, opt RegistrationOption, input []types.MetricPoint) error {
+	t.Helper()
+
+	switch kindToTest {
+	case kindPushPoint:
+		reg.WithTTL(5*time.Minute).PushPoints(context.Background(), input)
+	case kindPushPointCallback:
+		id, err := reg.registerPushPointsCallback(
+			opt,
+			func(c context.Context, t time.Time) {
+				reg.WithTTL(5*time.Minute).PushPoints(c, input)
+			},
+		)
+		if err != nil {
+			return err
+		}
+
+		reg.InternalRunScrape(context.Background(), now, id)
+	case kindAppenderCallback:
+		id, err := reg.RegisterAppenderCallback(
+			opt,
+			AppenderRegistrationOption{},
+			fakeAppenderCallback{
+				input: input,
+			},
+		)
+		if err != nil {
+			return err
+		}
+
+		reg.InternalRunScrape(context.Background(), now, id)
+	case kindGatherer:
+		id, err := reg.RegisterGatherer(
+			opt,
+			&fakeGatherer{
+				response: model.MetricPointsToFamilies(dropTime(input)),
+			},
+		)
+		if err != nil {
+			return err
+		}
+
+		reg.InternalRunScrape(context.Background(), now, id)
+	}
+
+	return nil
+}
+
 func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
-	type sourceKind string
-
-	const (
-		kindPushPoint         sourceKind = "pushpoint"
-		kindPushPointCallback sourceKind = "pushpointCallback"
-		kindAppenderCallback  sourceKind = "appenderCallback"
-		kindGatherer          sourceKind = "gatherer"
-	)
-
 	tests := []struct {
 		name                  string
 		input                 []types.MetricPoint
@@ -739,8 +787,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 		kindToTest            sourceKind
 		metricFormat          types.MetricFormat
 		metricFamiliesUseTime bool
-		wantOverrideMFType    map[string]*dto.MetricType
-		wantOverrideMFHelp    map[string]string
 		want                  []types.MetricPoint
 	}{
 		{
@@ -800,16 +846,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 				},
 			},
 			metricFamiliesUseTime: true,
-			wantOverrideMFType: map[string]*dto.MetricType{
-				"cpu_used":       dto.MetricType_UNTYPED.Enum(),
-				"disk_used":      dto.MetricType_UNTYPED.Enum(),
-				"disk_used_perc": dto.MetricType_UNTYPED.Enum(),
-			},
-			wantOverrideMFHelp: map[string]string{
-				"cpu_used":       "",
-				"disk_used":      "",
-				"disk_used_perc": "",
-			},
 		},
 		{
 			name:         "pushpointCallback-bleemeo",
@@ -868,16 +904,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 				},
 			},
 			metricFamiliesUseTime: true,
-			wantOverrideMFType: map[string]*dto.MetricType{
-				"cpu_used":       dto.MetricType_UNTYPED.Enum(),
-				"disk_used":      dto.MetricType_UNTYPED.Enum(),
-				"disk_used_perc": dto.MetricType_UNTYPED.Enum(),
-			},
-			wantOverrideMFHelp: map[string]string{
-				"cpu_used":       "",
-				"disk_used":      "",
-				"disk_used_perc": "",
-			},
 		},
 		{
 			name:         "pushpoint-prometheus",
@@ -942,16 +968,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 				},
 			},
 			metricFamiliesUseTime: true,
-			wantOverrideMFType: map[string]*dto.MetricType{
-				"cpu_used":       dto.MetricType_UNTYPED.Enum(),
-				"disk_used":      dto.MetricType_UNTYPED.Enum(),
-				"disk_used_perc": dto.MetricType_UNTYPED.Enum(),
-			},
-			wantOverrideMFHelp: map[string]string{
-				"cpu_used":       "",
-				"disk_used":      "",
-				"disk_used_perc": "",
-			},
 		},
 		{
 			name:         "appender",
@@ -1016,16 +1032,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 				},
 			},
 			metricFamiliesUseTime: true,
-			wantOverrideMFType: map[string]*dto.MetricType{
-				"cpu_used":       dto.MetricType_UNTYPED.Enum(),
-				"disk_used":      dto.MetricType_UNTYPED.Enum(),
-				"disk_used_perc": dto.MetricType_UNTYPED.Enum(),
-			},
-			wantOverrideMFHelp: map[string]string{
-				"cpu_used":       "",
-				"disk_used":      "",
-				"disk_used_perc": "",
-			},
 		},
 		{
 			name:                  "gatherer-bleemeo",
@@ -1044,7 +1050,7 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						types.LabelItem: "/home",
 					},
 					Annotations: types.MetricAnnotations{
-						BleemeoItem: "/home... but annotation are NOT used with Gatherer, the label item value win",
+						BleemeoItem: "/home",
 					},
 				},
 				{
@@ -1244,12 +1250,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 					},
 				},
 			},
-			wantOverrideMFType: map[string]*dto.MetricType{
-				"mem_used": dto.MetricType_UNTYPED.Enum(),
-			},
-			wantOverrideMFHelp: map[string]string{
-				"mem_used": "",
-			},
 		},
 		{
 			name:                  "metric-rename-simple-pushpoint",
@@ -1310,14 +1310,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 					},
 					Annotations: types.MetricAnnotations{},
 				},
-			},
-			wantOverrideMFType: map[string]*dto.MetricType{
-				"cpu_used":      dto.MetricType_UNTYPED.Enum(),
-				"hrStorageUsed": dto.MetricType_UNTYPED.Enum(),
-			},
-			wantOverrideMFHelp: map[string]string{
-				"cpu_used":      "",
-				"hrStorageUsed": "",
 			},
 		},
 		{
@@ -1424,16 +1416,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 					},
 				},
 			}),
-			wantOverrideMFType: map[string]*dto.MetricType{
-				"mem_used":      dto.MetricType_UNTYPED.Enum().Enum(),
-				"mem_free":      dto.MetricType_UNTYPED.Enum().Enum(),
-				"mem_used_perc": dto.MetricType_UNTYPED.Enum().Enum(),
-			},
-			wantOverrideMFHelp: map[string]string{
-				"mem_used":      "",
-				"mem_free":      "",
-				"mem_used_perc": "",
-			},
 		},
 		{
 			name:                  "metric-rename-multiple-1",
@@ -1696,14 +1678,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 					},
 				},
 			}),
-			wantOverrideMFType: map[string]*dto.MetricType{
-				"mem_free":      dto.MetricType_UNTYPED.Enum(),
-				"mem_used_perc": dto.MetricType_UNTYPED.Enum(),
-			},
-			wantOverrideMFHelp: map[string]string{
-				"mem_free":      "",
-				"mem_used_perc": "",
-			},
 		},
 		{
 			name:                  "metric-rule-and-rename",
@@ -1835,16 +1809,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 					},
 				},
 			}),
-			wantOverrideMFType: map[string]*dto.MetricType{
-				"mem_used":      dto.MetricType_UNTYPED.Enum(),
-				"mem_used_perc": dto.MetricType_UNTYPED.Enum(),
-				"mem_free":      dto.MetricType_UNTYPED.Enum(),
-			},
-			wantOverrideMFHelp: map[string]string{
-				"mem_used":      "",
-				"mem_used_perc": "",
-				"mem_free":      "",
-			},
 		},
 		{
 			name:                  "gatherer-with-relabel",
@@ -1883,6 +1847,185 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 				},
 			}),
 		},
+		{
+			// Test output from our telegraf-input. input should match what plugin really send.
+			name:         "telegraf-input",
+			kindToTest:   kindPushPointCallback,
+			metricFormat: types.MetricFormatBleemeo,
+			input: []types.MetricPoint{
+				{
+					Labels: map[string]string{
+						types.LabelName: "cpu_used",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName: "disk_used",
+						"mountpoint":    "/home",
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoItem: "/home",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName: "io_utilization",
+						"device":        "sda",
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoItem: "sda",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:              "container_cpu_used",
+						types.LabelMetaContainerName: "myredis",
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoItem: "myredis",
+						ContainerID: "1234",
+					},
+				},
+			},
+			opt: RegistrationOption{
+				DisablePeriodicGather: true,
+			},
+			want: []types.MetricPoint{
+				{
+					Labels: map[string]string{
+						types.LabelName: "cpu_used",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName: "disk_used",
+						types.LabelItem: "/home",
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoItem: "/home",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName: "io_utilization",
+						types.LabelItem: "sda",
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoItem: "sda",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName: "container_cpu_used",
+						types.LabelItem: "myredis",
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoItem: "myredis",
+						ContainerID: "1234",
+					},
+				},
+			},
+			metricFamiliesUseTime: true,
+		},
+		{
+			// Test output from miscAppender
+			name:       "miscAppender",
+			kindToTest: kindAppenderCallback,
+			input: []types.MetricPoint{
+				{
+					Labels: map[string]string{
+						types.LabelName: "containers_count",
+					},
+				},
+				// containerd runtime
+				{
+					Labels: map[string]string{
+						types.LabelName:            "container_cpu_used",
+						types.LabelItem:            "myredis",
+						types.LabelMetaContainerID: "1234",
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoItem: "myredis",
+						ContainerID: "1234",
+					},
+				},
+			},
+			opt: RegistrationOption{
+				DisablePeriodicGather: true,
+				ApplyDynamicRelabel:   true,
+			},
+			want: []types.MetricPoint{
+				{
+					Labels: map[string]string{
+						types.LabelName:     "containers_count",
+						types.LabelInstance: "server.bleemeo.com:8016",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:     "container_cpu_used",
+						types.LabelItem:     "myredis",
+						types.LabelInstance: "server.bleemeo.com:8016",
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoItem: "myredis",
+						ContainerID: "1234",
+					},
+				},
+			},
+			metricFamiliesUseTime: true,
+		},
+		{
+			// Test output from node_exporter for /metrics (for example/prometheus)
+			name:       "node_exporter",
+			kindToTest: kindGatherer,
+			input: []types.MetricPoint{
+				{
+					Labels: map[string]string{
+						types.LabelName: "node_cpu_seconds_total",
+						"cpu":           "3",
+						"mode":          "iowait",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName: "node_uname_info",
+						"domainname":    "(none)",
+						"machine":       "aarch64",
+						"nodename":      "docker-desktop",
+						"release":       "5.15.49-linuxkit",
+						"sysname":       "Linux",
+						"version":       "#1 SMP PREEMPT Tue Sep 13 07:51:32 UTC 2022",
+					},
+				},
+			},
+			opt: RegistrationOption{
+				DisablePeriodicGather: true,
+			},
+			want: []types.MetricPoint{
+				{
+					Labels: map[string]string{
+						types.LabelName:     "node_cpu_seconds_total",
+						"cpu":               "3",
+						"mode":              "iowait",
+						types.LabelInstance: "server.bleemeo.com:8016",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:     "node_uname_info",
+						"domainname":        "(none)",
+						"machine":           "aarch64",
+						"nodename":          "docker-desktop",
+						"release":           "5.15.49-linuxkit",
+						"sysname":           "Linux",
+						"version":           "#1 SMP PREEMPT Tue Sep 13 07:51:32 UTC 2022",
+						types.LabelInstance: "server.bleemeo.com:8016",
+					},
+				},
+			},
+			metricFamiliesUseTime: true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -1913,54 +2056,16 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 			}
 
 			now := time.Date(2021, 12, 7, 10, 11, 13, 0, time.UTC)
-			fillDateAndValue(tt.input, now)
-			fillDateAndValue(tt.want, now)
+			input := fillDateAndValue(tt.input, now)
+			want := fillDateAndValue(tt.want, now)
 
-			switch tt.kindToTest {
-			case kindPushPoint:
-				reg.WithTTL(5*time.Minute).PushPoints(context.Background(), tt.input)
-			case kindPushPointCallback:
-				id, err := reg.registerPushPointsCallback(
-					tt.opt,
-					func(c context.Context, t time.Time) {
-						reg.WithTTL(5*time.Minute).PushPoints(c, tt.input)
-					},
-				)
-				if err != nil {
-					t.Fatal(err)
-				}
-
-				reg.InternalRunScrape(context.Background(), now, id)
-			case kindAppenderCallback:
-				id, err := reg.RegisterAppenderCallback(
-					tt.opt,
-					AppenderRegistrationOption{},
-					fakeAppenderCallback{
-						input: tt.input,
-					},
-				)
-				if err != nil {
-					t.Fatal(err)
-				}
-
-				reg.InternalRunScrape(context.Background(), now, id)
-			case kindGatherer:
-				id, err := reg.RegisterGatherer(
-					tt.opt,
-					&fakeGatherer{
-						response: metricPointsToFamilies(tt.input, time.Time{}, nil, nil),
-					},
-				)
-				if err != nil {
-					t.Fatal(err)
-				}
-
-				reg.InternalRunScrape(context.Background(), now, id)
+			if err := registryRunOnce(t, now, reg, tt.kindToTest, tt.opt, input); err != nil {
+				t.Fatal(err)
 			}
 
 			gotPoints = sortMetricPoints(gotPoints)
 
-			if diff := cmp.Diff(tt.want, gotPoints, cmpopts.EquateApprox(0.001, 0)); diff != "" {
+			if diff := types.DiffMetricPoints(want, gotPoints, true); diff != "" {
 				t.Errorf("gotPoints mismatch (-want +got):\n%s", diff)
 			}
 
@@ -1975,7 +2080,8 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 				t.Fatal(err)
 			}
 
-			wantMFs := metricPointsToFamilies(tt.want, mfsTime, tt.wantOverrideMFType, tt.wantOverrideMFHelp)
+			wantMFs := model.MetricPointsToFamilies(want)
+			model.DropMetaLabelsFromFamilies(wantMFs)
 
 			if diff := cmp.Diff(wantMFs, got, cmpopts.EquateApprox(0.001, 0), cmpopts.EquateEmpty()); diff != "" {
 				t.Errorf("Gather mismatch (-want +got):\n%s", diff)
@@ -1984,90 +2090,27 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 	}
 }
 
-func fillDateAndValue(in []types.MetricPoint, now time.Time) {
-	for i := range in {
-		in[i].Point.Time = now
-		if in[i].Point.Value == 0 {
-			in[i].Point.Value = 4.2
+func fillDateAndValue(in []types.MetricPoint, now time.Time) []types.MetricPoint {
+	result := make([]types.MetricPoint, len(in))
+	copy(result, in)
+
+	for i := range result {
+		result[i].Point.Time = now
+		if result[i].Point.Value == 0 {
+			result[i].Point.Value = 4.2
 		}
 	}
+
+	return result
 }
 
-func metricPointsToFamilies(points []types.MetricPoint, now time.Time, typeOverload map[string]*dto.MetricType, helpOverload map[string]string) []*dto.MetricFamily {
-	resultMap := make(map[string]*dto.MetricFamily)
+func dropTime(in []types.MetricPoint) []types.MetricPoint {
+	result := make([]types.MetricPoint, len(in))
+	copy(result, in)
 
-	for _, pts := range points {
-		name := pts.Labels[types.LabelName]
-		mf := resultMap[name]
-
-		if mf == nil {
-			typ := typeOverload[name]
-			if typ == nil {
-				typ = dto.MetricType_UNTYPED.Enum()
-			}
-
-			help, ok := helpOverload[name]
-			if !ok {
-				help = ""
-			}
-
-			mf = &dto.MetricFamily{
-				Name: proto.String(pts.Labels[types.LabelName]),
-				Type: typ,
-				Help: proto.String(help),
-			}
-		}
-
-		var ts *int64
-
-		if !now.IsZero() {
-			ts = proto.Int64(now.UnixMilli())
-		}
-
-		m := &dto.Metric{
-			TimestampMs: ts,
-		}
-
-		switch *mf.Type {
-		case dto.MetricType_COUNTER:
-			m.Counter = &dto.Counter{Value: proto.Float64(pts.Value)}
-		case dto.MetricType_GAUGE:
-			m.Gauge = &dto.Gauge{Value: proto.Float64(pts.Value)}
-		case dto.MetricType_UNTYPED:
-			m.Untyped = &dto.Untyped{Value: proto.Float64(pts.Value)}
-		case dto.MetricType_HISTOGRAM, dto.MetricType_GAUGE_HISTOGRAM:
-			m.Histogram = &dto.Histogram{SampleCount: proto.Uint64(1), SampleSum: proto.Float64(pts.Value)}
-		case dto.MetricType_SUMMARY:
-			m.Summary = &dto.Summary{SampleCount: proto.Uint64(1), SampleSum: proto.Float64(pts.Value)}
-		}
-
-		for k, v := range pts.Labels {
-			if k == types.LabelName {
-				continue
-			}
-
-			m.Label = append(m.Label, &dto.LabelPair{
-				Name:  proto.String(k),
-				Value: proto.String(v),
-			})
-		}
-
-		sort.Slice(m.Label, func(i, j int) bool {
-			return m.Label[i].GetName() < m.Label[j].GetName()
-		})
-
-		mf.Metric = append(mf.Metric, m)
-		resultMap[pts.Labels[types.LabelName]] = mf
+	for i := range result {
+		result[i].Time = time.Time{}
 	}
-
-	result := make([]*dto.MetricFamily, 0, len(resultMap))
-	for _, mf := range resultMap {
-		result = append(result, mf)
-	}
-
-	sort.Slice(result, func(i, j int) bool {
-		return result[i].GetName() < result[j].GetName()
-	})
 
 	return result
 }

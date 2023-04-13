@@ -320,12 +320,14 @@ func mergeMFS(mfs []*dto.MetricFamily) ([]*dto.MetricFamily, error) {
 			case existingMF.GetType() == dto.MetricType_UNTYPED:
 				existingMF.Type = mf.Type
 				for i, metric := range existingMF.GetMetric() {
-					existingMF.Metric[i] = model.FixType(metric, *mf.GetType().Enum())
+					model.FixType(metric, *mf.GetType().Enum())
+					existingMF.Metric[i] = metric
 				}
 			case mf.GetType() == dto.MetricType_UNTYPED:
 				mf.Type = existingMF.Type
 				for i, metric := range mf.GetMetric() {
-					mf.Metric[i] = model.FixType(metric, *existingMF.GetType().Enum())
+					model.FixType(metric, *existingMF.GetType().Enum())
+					mf.Metric[i] = metric
 				}
 			case existingMF.GetType() != mf.GetType():
 				errs = append(errs, fmt.Errorf(

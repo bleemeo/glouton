@@ -27,6 +27,7 @@ import (
 	dto "github.com/prometheus/client_model/go"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/storage"
+	"google.golang.org/protobuf/proto"
 )
 
 func TestConvertionLoop(t *testing.T) {
@@ -218,18 +219,399 @@ func TestConvertionLoop(t *testing.T) {
 
 				got := FamiliesToMetricPoints(now, mfs, true)
 
-				optMetricSort := cmpopts.SortSlices(func(x types.MetricPoint, y types.MetricPoint) bool {
-					lblsX := labels.FromMap(x.Labels)
-					lblsY := labels.FromMap(y.Labels)
+				if diff := types.DiffMetricPoints(expected, got, false); diff != "" {
+					t.Errorf("conversion mismatch: (-want +got)\n:%s", diff)
+				}
 
-					return labels.Compare(lblsX, lblsY) < 0
-				})
+				mfs = MetricPointsToFamilies(tt.points)
+				got = FamiliesToMetricPoints(now, mfs, true)
 
-				if diff := cmp.Diff(expected, got, optMetricSort, cmpopts.EquateEmpty()); diff != "" {
+				if diff := types.DiffMetricPoints(expected, got, false); diff != "" {
 					t.Errorf("conversion mismatch: (-want +got)\n:%s", diff)
 				}
 			})
 		}
+	}
+}
+
+func TestConvertion(t *testing.T) { //nolint: maintidx
+	now := time.UnixMilli(time.Now().UnixMilli())
+
+	cases := []struct {
+		name           string
+		input          []types.MetricPoint
+		wantMFS        []*dto.MetricFamily
+		wantPromLabels []labels.Labels
+		wantPoints     []types.MetricPoint
+	}{
+		{
+			name:           "empty",
+			input:          nil,
+			wantMFS:        nil,
+			wantPromLabels: nil,
+			wantPoints:     nil,
+		},
+		{
+			name: "one-points",
+			input: []types.MetricPoint{
+				{
+					Point:  types.Point{Time: now, Value: 42.1},
+					Labels: map[string]string{types.LabelName: "cpu_used"},
+				},
+			},
+			wantMFS: []*dto.MetricFamily{
+				{
+					Name: proto.String("cpu_used"),
+					Help: proto.String(""),
+					Type: dto.MetricType_UNTYPED.Enum(),
+					Metric: []*dto.Metric{
+						{
+							TimestampMs: proto.Int64(now.UnixMilli()),
+							Untyped: &dto.Untyped{
+								Value: proto.Float64(42.1),
+							},
+						},
+					},
+				},
+			},
+			wantPromLabels: []labels.Labels{
+				labels.FromMap(map[string]string{
+					types.LabelName: "cpu_used",
+				}),
+			},
+			wantPoints: []types.MetricPoint{
+				{
+					Point:  types.Point{Time: now, Value: 42.1},
+					Labels: map[string]string{types.LabelName: "cpu_used"},
+				},
+			},
+		},
+		{
+			name: "zero-time",
+			input: []types.MetricPoint{
+				{
+					Point:  types.Point{Time: time.Time{}, Value: 42.1},
+					Labels: map[string]string{types.LabelName: "cpu_used"},
+				},
+			},
+			wantMFS: []*dto.MetricFamily{
+				{
+					Name: proto.String("cpu_used"),
+					Help: proto.String(""),
+					Type: dto.MetricType_UNTYPED.Enum(),
+					Metric: []*dto.Metric{
+						{
+							Untyped: &dto.Untyped{
+								Value: proto.Float64(42.1),
+							},
+						},
+					},
+				},
+			},
+			wantPromLabels: []labels.Labels{
+				labels.FromMap(map[string]string{
+					types.LabelName: "cpu_used",
+				}),
+			},
+			wantPoints: []types.MetricPoint{
+				{
+					Point:  types.Point{Time: now, Value: 42.1},
+					Labels: map[string]string{types.LabelName: "cpu_used"},
+				},
+			},
+		},
+		{
+			name: "annotations-in-annotations",
+			input: []types.MetricPoint{
+				{
+					Point: types.Point{Time: now, Value: 42.1},
+					Labels: map[string]string{
+						types.LabelName: "cpu_used",
+						"alabel":        "test",
+						"zlabel":        "test2",
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoItem: "value1",
+						ContainerID: "123456",
+						ServiceName: "apache",
+						Status: types.StatusDescription{
+							CurrentStatus:     types.StatusCritical,
+							StatusDescription: "decription",
+						},
+					},
+				},
+				{
+					Point: types.Point{Time: now, Value: 42.1},
+					Labels: map[string]string{
+						types.LabelName: "cpu_used",
+						"alabel":        "test3",
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoItem: "value2",
+						ContainerID: "7890",
+						ServiceName: "apache",
+						Status: types.StatusDescription{
+							CurrentStatus:     types.StatusCritical,
+							StatusDescription: "decription",
+						},
+					},
+				},
+			},
+			wantMFS: []*dto.MetricFamily{ //nolint: dupl
+				{
+					Name: proto.String("cpu_used"),
+					Help: proto.String(""),
+					Type: dto.MetricType_UNTYPED.Enum(),
+					Metric: []*dto.Metric{
+						{
+							TimestampMs: proto.Int64(now.UnixMilli()),
+							Label: []*dto.LabelPair{
+								{Name: proto.String(types.LabelMetaBleemeoItem), Value: proto.String("value1")},
+								{Name: proto.String(types.LabelMetaContainerID), Value: proto.String("123456")},
+								{Name: proto.String(types.LabelMetaCurrentDescription), Value: proto.String("decription")},
+								{Name: proto.String(types.LabelMetaCurrentStatus), Value: proto.String("critical")},
+								{Name: proto.String(types.LabelMetaServiceName), Value: proto.String("apache")},
+								{Name: proto.String("alabel"), Value: proto.String("test")},
+								{Name: proto.String("zlabel"), Value: proto.String("test2")},
+							},
+							Untyped: &dto.Untyped{
+								Value: proto.Float64(42.1),
+							},
+						},
+						{
+							TimestampMs: proto.Int64(now.UnixMilli()),
+							Label: []*dto.LabelPair{
+								{Name: proto.String(types.LabelMetaBleemeoItem), Value: proto.String("value2")},
+								{Name: proto.String(types.LabelMetaContainerID), Value: proto.String("7890")},
+								{Name: proto.String(types.LabelMetaCurrentDescription), Value: proto.String("decription")},
+								{Name: proto.String(types.LabelMetaCurrentStatus), Value: proto.String("critical")},
+								{Name: proto.String(types.LabelMetaServiceName), Value: proto.String("apache")},
+								{Name: proto.String("alabel"), Value: proto.String("test3")},
+							},
+							Untyped: &dto.Untyped{
+								Value: proto.Float64(42.1),
+							},
+						},
+					},
+				},
+			},
+			wantPromLabels: []labels.Labels{
+				labels.FromMap(map[string]string{
+					types.LabelName:                   "cpu_used",
+					"alabel":                          "test",
+					"zlabel":                          "test2",
+					types.LabelMetaBleemeoItem:        "value1",
+					types.LabelMetaContainerID:        "123456",
+					types.LabelMetaCurrentDescription: "decription",
+					types.LabelMetaCurrentStatus:      "critical",
+					types.LabelMetaServiceName:        "apache",
+				}),
+				labels.FromMap(map[string]string{
+					types.LabelName:                   "cpu_used",
+					"alabel":                          "test3",
+					types.LabelMetaBleemeoItem:        "value2",
+					types.LabelMetaContainerID:        "7890",
+					types.LabelMetaCurrentDescription: "decription",
+					types.LabelMetaCurrentStatus:      "critical",
+					types.LabelMetaServiceName:        "apache",
+				}),
+			},
+			wantPoints: []types.MetricPoint{
+				{
+					Point: types.Point{Time: now, Value: 42.1},
+					Labels: map[string]string{
+						types.LabelName: "cpu_used",
+						"alabel":        "test",
+						"zlabel":        "test2",
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoItem: "value1",
+						ContainerID: "123456",
+						ServiceName: "apache",
+						Status: types.StatusDescription{
+							CurrentStatus:     types.StatusCritical,
+							StatusDescription: "decription",
+						},
+					},
+				},
+				{
+					Point: types.Point{Time: now, Value: 42.1},
+					Labels: map[string]string{
+						types.LabelName: "cpu_used",
+						"alabel":        "test3",
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoItem: "value2",
+						ContainerID: "7890",
+						ServiceName: "apache",
+						Status: types.StatusDescription{
+							CurrentStatus:     types.StatusCritical,
+							StatusDescription: "decription",
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "annotations-in-labels",
+			input: []types.MetricPoint{
+				{
+					Point: types.Point{Time: now, Value: 42.1},
+					Labels: map[string]string{
+						types.LabelName:                   "cpu_used",
+						"alabel":                          "test",
+						"zlabel":                          "test2",
+						types.LabelMetaBleemeoItem:        "value1",
+						types.LabelMetaContainerID:        "123456",
+						types.LabelMetaCurrentDescription: "decription",
+						types.LabelMetaCurrentStatus:      "critical",
+						types.LabelMetaServiceName:        "apache",
+					},
+				},
+				{
+					Point: types.Point{Time: now, Value: 42.1},
+					Labels: map[string]string{
+						types.LabelName:                   "cpu_used",
+						"alabel":                          "test3",
+						types.LabelMetaBleemeoItem:        "value2",
+						types.LabelMetaContainerID:        "7890",
+						types.LabelMetaCurrentDescription: "decription",
+						types.LabelMetaCurrentStatus:      "critical",
+						types.LabelMetaServiceName:        "apache",
+					},
+				},
+			},
+			wantMFS: []*dto.MetricFamily{ //nolint: dupl
+				{
+					Name: proto.String("cpu_used"),
+					Help: proto.String(""),
+					Type: dto.MetricType_UNTYPED.Enum(),
+					Metric: []*dto.Metric{
+						{
+							TimestampMs: proto.Int64(now.UnixMilli()),
+							Label: []*dto.LabelPair{
+								{Name: proto.String(types.LabelMetaBleemeoItem), Value: proto.String("value1")},
+								{Name: proto.String(types.LabelMetaContainerID), Value: proto.String("123456")},
+								{Name: proto.String(types.LabelMetaCurrentDescription), Value: proto.String("decription")},
+								{Name: proto.String(types.LabelMetaCurrentStatus), Value: proto.String("critical")},
+								{Name: proto.String(types.LabelMetaServiceName), Value: proto.String("apache")},
+								{Name: proto.String("alabel"), Value: proto.String("test")},
+								{Name: proto.String("zlabel"), Value: proto.String("test2")},
+							},
+							Untyped: &dto.Untyped{
+								Value: proto.Float64(42.1),
+							},
+						},
+						{
+							TimestampMs: proto.Int64(now.UnixMilli()),
+							Label: []*dto.LabelPair{
+								{Name: proto.String(types.LabelMetaBleemeoItem), Value: proto.String("value2")},
+								{Name: proto.String(types.LabelMetaContainerID), Value: proto.String("7890")},
+								{Name: proto.String(types.LabelMetaCurrentDescription), Value: proto.String("decription")},
+								{Name: proto.String(types.LabelMetaCurrentStatus), Value: proto.String("critical")},
+								{Name: proto.String(types.LabelMetaServiceName), Value: proto.String("apache")},
+								{Name: proto.String("alabel"), Value: proto.String("test3")},
+							},
+							Untyped: &dto.Untyped{
+								Value: proto.Float64(42.1),
+							},
+						},
+					},
+				},
+			},
+			wantPromLabels: []labels.Labels{
+				labels.FromMap(map[string]string{
+					types.LabelName:                   "cpu_used",
+					"alabel":                          "test",
+					"zlabel":                          "test2",
+					types.LabelMetaBleemeoItem:        "value1",
+					types.LabelMetaContainerID:        "123456",
+					types.LabelMetaCurrentDescription: "decription",
+					types.LabelMetaCurrentStatus:      "critical",
+					types.LabelMetaServiceName:        "apache",
+				}),
+				labels.FromMap(map[string]string{
+					types.LabelName:                   "cpu_used",
+					"alabel":                          "test3",
+					types.LabelMetaBleemeoItem:        "value2",
+					types.LabelMetaContainerID:        "7890",
+					types.LabelMetaCurrentDescription: "decription",
+					types.LabelMetaCurrentStatus:      "critical",
+					types.LabelMetaServiceName:        "apache",
+				}),
+			},
+			wantPoints: []types.MetricPoint{
+				{
+					Point: types.Point{Time: now, Value: 42.1},
+					Labels: map[string]string{
+						types.LabelName: "cpu_used",
+						"alabel":        "test",
+						"zlabel":        "test2",
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoItem: "value1",
+						ContainerID: "123456",
+						ServiceName: "apache",
+						Status: types.StatusDescription{
+							CurrentStatus:     types.StatusCritical,
+							StatusDescription: "decription",
+						},
+					},
+				},
+				{
+					Point: types.Point{Time: now, Value: 42.1},
+					Labels: map[string]string{
+						types.LabelName: "cpu_used",
+						"alabel":        "test3",
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoItem: "value2",
+						ContainerID: "7890",
+						ServiceName: "apache",
+						Status: types.StatusDescription{
+							CurrentStatus:     types.StatusCritical,
+							StatusDescription: "decription",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	for _, tt := range cases {
+		tt := tt
+
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			gotMFS := MetricPointsToFamilies(tt.input)
+
+			mfsCmpOpts := cmp.Options{
+				cmpopts.IgnoreUnexported(dto.MetricFamily{}),
+				cmpopts.IgnoreUnexported(dto.Metric{}),
+				cmpopts.IgnoreUnexported(dto.LabelPair{}),
+				cmpopts.EquateEmpty(),
+			}
+
+			if diff := cmp.Diff(tt.wantMFS, gotMFS, mfsCmpOpts...); diff != "" {
+				t.Errorf("MetricPointsToFamilies mismatch (-want +got)\n%s", diff)
+			}
+
+			got := FamiliesToMetricPoints(now, gotMFS, true)
+			if diff := types.DiffMetricPoints(tt.wantPoints, got, false); diff != "" {
+				t.Errorf("FamiliesToMetricPoints mismatch (-want +got)\n%s", diff)
+			}
+
+			gotPromLabels := make([]labels.Labels, 0, len(tt.input))
+			for _, pts := range tt.input {
+				promLabels := AnnotationToMetaLabels(labels.FromMap(pts.Labels), pts.Annotations)
+				gotPromLabels = append(gotPromLabels, promLabels)
+			}
+
+			if diff := cmp.Diff(tt.wantPromLabels, gotPromLabels, cmpopts.EquateEmpty()); diff != "" {
+				t.Errorf("AnnotationToMetaLabels mismatch (-want +got)\n%s", diff)
+			}
+		})
 	}
 }
 
@@ -248,4 +630,73 @@ func copyPoints(input []types.MetricPoint) []types.MetricPoint {
 	}
 
 	return result
+}
+
+func TestFamiliesToCollector(t *testing.T) {
+	tests := []struct {
+		name   string
+		points []types.MetricPoint
+	}{
+		{
+			name:   "empty",
+			points: nil,
+		},
+		{
+			name: "one points",
+			points: []types.MetricPoint{
+				{
+					Point:  types.Point{Time: time.Time{}, Value: 42.1},
+					Labels: map[string]string{types.LabelName: "cpu_used"},
+				},
+			},
+		},
+		{
+			name: "more points",
+			points: []types.MetricPoint{
+				{
+					Point:  types.Point{Time: time.Time{}, Value: 42.1},
+					Labels: map[string]string{types.LabelName: "cpu_used"},
+				},
+				{
+					Point: types.Point{Time: time.Time{}, Value: 42.1},
+					Labels: map[string]string{
+						types.LabelName: "disk_used",
+						"not_item":      "/home",
+					},
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		tt := tt
+
+		for _, targetType := range []dto.MetricType{dto.MetricType_GAUGE, dto.MetricType_COUNTER} {
+			targetType := targetType
+
+			name := tt.name + "-" + targetType.String()
+
+			t.Run(name, func(t *testing.T) {
+				mfs := MetricPointsToFamilies(tt.points)
+				for _, mf := range mfs {
+					FamilyConvertType(mf, targetType)
+				}
+
+				metrics, err := FamiliesToCollector(mfs)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				mfs, err = CollectorToFamilies(metrics)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				got := FamiliesToMetricPoints(time.Time{}, mfs, true)
+
+				if diff := types.DiffMetricPoints(tt.points, got, false); diff != "" {
+					t.Errorf("conversion mismatch: (-want +got)\n:%s", diff)
+				}
+			})
+		}
+	}
 }

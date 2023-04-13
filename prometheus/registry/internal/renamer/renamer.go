@@ -121,7 +121,7 @@ func (r *Renamer) RenameMFS(mfs []*dto.MetricFamily) []*dto.MetricFamily {
 
 					nameToIndex[name] = idx
 				} else {
-					m = model.FixType(m, mfs[idx].GetType())
+					model.FixType(m, mfs[idx].GetType())
 				}
 
 				mfs[idx].Metric = append(mfs[idx].Metric, m)
