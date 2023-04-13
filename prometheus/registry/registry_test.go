@@ -1940,9 +1940,9 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 				// containerd runtime
 				{
 					Labels: map[string]string{
-						types.LabelName:              "container_cpu_used",
-						types.LabelMetaContainerName: "myredis",
-						types.LabelMetaContainerID:   "1234",
+						types.LabelName:            "container_cpu_used",
+						types.LabelItem:            "myredis",
+						types.LabelMetaContainerID: "1234",
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoItem: "myredis",
@@ -1963,9 +1963,9 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 				},
 				{
 					Labels: map[string]string{
-						types.LabelName:          "container_cpu_used",
-						types.LabelContainerName: "myredis", // we want item here instead of container name
-						types.LabelInstance:      "server.bleemeo.com:8016",
+						types.LabelName:     "container_cpu_used",
+						types.LabelItem:     "myredis",
+						types.LabelInstance: "server.bleemeo.com:8016",
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoItem: "myredis",

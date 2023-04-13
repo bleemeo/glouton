@@ -1352,9 +1352,9 @@ func rateFromMetricValue(gloutonIDToName map[string]string, pastValues []metricV
 			points = append(points, types.MetricPoint{
 				Point: types.Point{Time: newV.Time, Value: floatValue},
 				Labels: map[string]string{
-					types.LabelName:              k,
-					types.LabelMetaContainerName: name,
-					types.LabelMetaContainerID:   id,
+					types.LabelName:            k,
+					types.LabelItem:            name,
+					types.LabelMetaContainerID: id,
 				},
 				Annotations: types.MetricAnnotations{
 					BleemeoItem: name,
@@ -1379,9 +1379,9 @@ func rateFromMetricValue(gloutonIDToName map[string]string, pastValues []metricV
 					points = append(points, types.MetricPoint{
 						Point: types.Point{Time: newV.Time, Value: floatValue},
 						Labels: map[string]string{
-							types.LabelName:              "container_mem_used_perc",
-							types.LabelMetaContainerName: name,
-							types.LabelMetaContainerID:   id,
+							types.LabelName:            "container_mem_used_perc",
+							types.LabelItem:            name,
+							types.LabelMetaContainerID: id,
 						},
 						Annotations: types.MetricAnnotations{
 							BleemeoItem: name,
