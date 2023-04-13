@@ -408,6 +408,10 @@ func (c *Client) IsConnectionOpen() bool {
 	c.l.Lock()
 	defer c.l.Unlock()
 
+	return c.isConnectionOpen()
+}
+
+func (c *Client) isConnectionOpen() bool {
 	if c.mqtt == nil {
 		return false
 	}
@@ -429,22 +433,24 @@ func (c *Client) DiagnosticArchive(ctx context.Context, archive types.ArchiveWri
 
 	fmt.Fprintf(file, "%s", c.stats)
 
-	file, err = archive.Create(fmt.Sprintf("%s-mqtt-state.json", fileID))
+	file, err = archive.Create(fmt.Sprintf("%s-mqtt-client.json", fileID))
 	if err != nil {
 		return err
 	}
 
 	obj := struct {
+		ConnectionOpen      bool
 		PendingMessageCount int
 		LastConnectionTimes []time.Time
-		CurrentConnectDelay time.Duration
+		CurrentConnectDelay string
 		ConsecutiveErrors   int
 		LastReport          time.Time
 		DisabledUntil       time.Time
 	}{
+		ConnectionOpen:      c.isConnectionOpen(),
 		PendingMessageCount: len(c.opts.ReloadState.PendingMessages()),
 		LastConnectionTimes: c.lastConnectionTimes,
-		CurrentConnectDelay: c.currentConnectDelay,
+		CurrentConnectDelay: c.currentConnectDelay.String(),
 		ConsecutiveErrors:   c.consecutiveErrors,
 		LastReport:          c.lastReport,
 		DisabledUntil:       c.disabledUntil,
