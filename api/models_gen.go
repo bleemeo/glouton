@@ -7,8 +7,8 @@ import (
 )
 
 type AgentInfo struct {
-	RegistrationAt *time.Time `json:"registrationAt"`
-	LastReport     *time.Time `json:"lastReport"`
+	RegistrationAt *time.Time `json:"registrationAt,omitempty"`
+	LastReport     *time.Time `json:"lastReport,omitempty"`
 	IsConnected    bool       `json:"isConnected"`
 }
 
@@ -32,14 +32,14 @@ type CPUUsage struct {
 
 type Container struct {
 	Command      string     `json:"command"`
-	CreatedAt    *time.Time `json:"createdAt"`
+	CreatedAt    *time.Time `json:"createdAt,omitempty"`
 	ID           string     `json:"id"`
 	Image        string     `json:"image"`
 	InspectJSON  string     `json:"inspectJSON"`
 	Name         string     `json:"name"`
-	StartedAt    *time.Time `json:"startedAt"`
+	StartedAt    *time.Time `json:"startedAt,omitempty"`
 	State        string     `json:"state"`
-	FinishedAt   *time.Time `json:"finishedAt"`
+	FinishedAt   *time.Time `json:"finishedAt,omitempty"`
 	IoWriteBytes float64    `json:"ioWriteBytes"`
 	IoReadBytes  float64    `json:"ioReadBytes"`
 	NetBitsRecv  float64    `json:"netBitsRecv"`
@@ -104,7 +104,7 @@ type Service struct {
 	ExePath           string   `json:"exePath"`
 	Active            bool     `json:"active"`
 	Status            float64  `json:"status"`
-	StatusDescription *string  `json:"statusDescription"`
+	StatusDescription *string  `json:"statusDescription,omitempty"`
 }
 
 type SwapUsage struct {
@@ -123,7 +123,7 @@ type Topinfo struct {
 	Loads     []float64    `json:"Loads"`
 	Users     int          `json:"Users"`
 	Processes []*Process   `json:"Processes"`
-	CPU       *CPUUsage    `json:"CPU"`
-	Memory    *MemoryUsage `json:"Memory"`
-	Swap      *SwapUsage   `json:"Swap"`
+	CPU       *CPUUsage    `json:"CPU,omitempty"`
+	Memory    *MemoryUsage `json:"Memory,omitempty"`
+	Swap      *SwapUsage   `json:"Swap,omitempty"`
 }

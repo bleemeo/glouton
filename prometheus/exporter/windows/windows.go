@@ -25,21 +25,42 @@ import (
 	"glouton/logger"
 	"time"
 
+	"github.com/alecthomas/kingpin/v2"
 	"github.com/prometheus-community/windows_exporter/collector"
 	"github.com/prometheus/client_golang/prometheus"
-	"gopkg.in/alecthomas/kingpin.v2"
 )
 
 const maxScrapeDuration time.Duration = 9500 * time.Millisecond
 
-func NewCollector(enabledCollectors []string, options inputs.CollectorConfig) (prometheus.Collector, error) {
-	var args []string
+func optionsToFlags(option inputs.CollectorConfig) map[string]string {
+	result := make(map[string]string)
 
-	args = append(args, fmt.Sprintf("--collector.logical_disk.volume-blacklist=%s", options.IODiskMatcher.AsDenyRegexp()))
-	args = append(args, fmt.Sprintf("--collector.net.nic-blacklist=%s", options.NetIfMatcher.AsDenyRegexp()))
+	result["collector.logical_disk.volume-blacklist"] = option.IODiskMatcher.AsDenyRegexp()
+	result["collector.net.nic-blacklist"] = option.NetIfMatcher.AsDenyRegexp()
+
+	return result
+}
+
+func setKingpinOptions(option inputs.CollectorConfig) error {
+	optionMap := optionsToFlags(option)
+	args := make([]string, 0, len(optionMap))
+
+	for key, value := range optionMap {
+		args = append(args, fmt.Sprintf("--%s=%s", key, value))
+	}
+
+	logger.V(2).Printf("Starting node_exporter with %v as args", args)
 
 	if _, err := kingpin.CommandLine.Parse(args); err != nil {
-		return nil, fmt.Errorf("windows_exporter: kingpin initialization failed: %w", err)
+		return fmt.Errorf("kingpin initialization: %w", err)
+	}
+
+	return nil
+}
+
+func NewCollector(enabledCollectors []string, options inputs.CollectorConfig) (prometheus.Collector, error) {
+	if err := setKingpinOptions(options); err != nil {
+		return nil, err
 	}
 
 	collectors := map[string]collector.Collector{}
