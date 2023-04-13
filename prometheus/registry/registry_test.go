@@ -1847,6 +1847,185 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 				},
 			}),
 		},
+		{
+			// Test output from our telegraf-input. input should match what plugin really send.
+			name:         "telegraf-input",
+			kindToTest:   kindPushPointCallback,
+			metricFormat: types.MetricFormatBleemeo,
+			input: []types.MetricPoint{
+				{
+					Labels: map[string]string{
+						types.LabelName: "cpu_used",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName: "disk_used",
+						"mountpoint":    "/home",
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoItem: "/home",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName: "io_utilization",
+						"device":        "sda",
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoItem: "sda",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:              "container_cpu_used",
+						types.LabelMetaContainerName: "myredis",
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoItem: "myredis",
+						ContainerID: "1234",
+					},
+				},
+			},
+			opt: RegistrationOption{
+				DisablePeriodicGather: true,
+			},
+			want: []types.MetricPoint{
+				{
+					Labels: map[string]string{
+						types.LabelName: "cpu_used",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName: "disk_used",
+						types.LabelItem: "/home",
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoItem: "/home",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName: "io_utilization",
+						types.LabelItem: "sda",
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoItem: "sda",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName: "container_cpu_used",
+						types.LabelItem: "myredis",
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoItem: "myredis",
+						ContainerID: "1234",
+					},
+				},
+			},
+			metricFamiliesUseTime: true,
+		},
+		{
+			// Test output from miscAppender
+			name:       "miscAppender",
+			kindToTest: kindAppenderCallback,
+			input: []types.MetricPoint{
+				{
+					Labels: map[string]string{
+						types.LabelName: "containers_count",
+					},
+				},
+				// containerd runtime
+				{
+					Labels: map[string]string{
+						types.LabelName:              "container_cpu_used",
+						types.LabelMetaContainerName: "myredis",
+						types.LabelMetaContainerID:   "1234",
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoItem: "myredis",
+						ContainerID: "1234",
+					},
+				},
+			},
+			opt: RegistrationOption{
+				DisablePeriodicGather: true,
+				ApplyDynamicRelabel:   true,
+			},
+			want: []types.MetricPoint{
+				{
+					Labels: map[string]string{
+						types.LabelName:     "containers_count",
+						types.LabelInstance: "server.bleemeo.com:8016",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:          "container_cpu_used",
+						types.LabelContainerName: "myredis", // we want item here instead of container name
+						types.LabelInstance:      "server.bleemeo.com:8016",
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoItem: "myredis",
+						ContainerID: "1234",
+					},
+				},
+			},
+			metricFamiliesUseTime: true,
+		},
+		{
+			// Test output from node_exporter for /metrics (for example/prometheus)
+			name:       "node_exporter",
+			kindToTest: kindGatherer,
+			input: []types.MetricPoint{
+				{
+					Labels: map[string]string{
+						types.LabelName: "node_cpu_seconds_total",
+						"cpu":           "3",
+						"mode":          "iowait",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName: "node_uname_info",
+						"domainname":    "(none)",
+						"machine":       "aarch64",
+						"nodename":      "docker-desktop",
+						"release":       "5.15.49-linuxkit",
+						"sysname":       "Linux",
+						"version":       "#1 SMP PREEMPT Tue Sep 13 07:51:32 UTC 2022",
+					},
+				},
+			},
+			opt: RegistrationOption{
+				DisablePeriodicGather: true,
+			},
+			want: []types.MetricPoint{
+				{
+					Labels: map[string]string{
+						types.LabelName:     "node_cpu_seconds_total",
+						"cpu":               "3",
+						"mode":              "iowait",
+						types.LabelInstance: "server.bleemeo.com:8016",
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:     "node_uname_info",
+						"domainname":        "(none)",
+						"machine":           "aarch64",
+						"nodename":          "docker-desktop",
+						"release":           "5.15.49-linuxkit",
+						"sysname":           "Linux",
+						"version":           "#1 SMP PREEMPT Tue Sep 13 07:51:32 UTC 2022",
+						types.LabelInstance: "server.bleemeo.com:8016",
+					},
+				},
+			},
+			metricFamiliesUseTime: true,
+		},
 	}
 
 	for _, tt := range tests {
