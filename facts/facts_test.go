@@ -265,3 +265,50 @@ func Test_bytesToString(t *testing.T) {
 		})
 	}
 }
+
+func Test_tzFromSymlink(t *testing.T) {
+	tests := []struct {
+		name          string
+		symlinkTarget string
+		want          string
+	}{
+		{
+			name:          "almalinux8-1",
+			symlinkTarget: "../usr/share/zoneinfo/UTC",
+			want:          "UTC",
+		},
+		{
+			name:          "almalinux8-2",
+			symlinkTarget: "../usr/share/zoneinfo/Pacific/Guadalcanal",
+			want:          "Pacific/Guadalcanal",
+		},
+		{
+			name:          "ubuntu2204-1",
+			symlinkTarget: "/usr/share/zoneinfo/Etc/UTC",
+			want:          "Etc/UTC",
+		},
+		{
+			name:          "ubuntu2204-1",
+			symlinkTarget: "/usr/share/zoneinfo/America/Cancun",
+			want:          "America/Cancun",
+		},
+		{
+			name:          "avoid-crash",
+			symlinkTarget: "/usr/share/zoneinfo",
+			want:          "",
+		},
+		{
+			name:          "unknown-link",
+			symlinkTarget: "/usr/local/myfile/UTC",
+			want:          "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tzFromSymlink(tt.symlinkTarget); got != tt.want {
+				t.Errorf("tzFromSymlink() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

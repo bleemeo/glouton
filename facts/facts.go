@@ -254,9 +254,7 @@ func (f *FactProvider) fastUpdateFacts(ctx context.Context) map[string]string {
 	}
 
 	if f.hostRootPath != "" {
-		if v, err := os.ReadFile(filepath.Join(f.hostRootPath, "etc/timezone")); err == nil {
-			newFacts["timezone"] = strings.TrimSpace(string(v))
-		}
+		newFacts["timezone"] = getTimezone(f.hostRootPath)
 	}
 
 	newFacts["glouton_version"] = version.Version
@@ -314,6 +312,33 @@ func CleanFacts(facts map[string]string) {
 			facts[k] = v[:97] + "..."
 		}
 	}
+}
+
+func getTimezone(hostRootPath string) string {
+	if v, err := os.ReadFile(filepath.Join(hostRootPath, "etc/timezone")); err == nil {
+		return strings.TrimSpace(string(v))
+	}
+
+	if v, err := os.ReadFile(filepath.Join(hostRootPath, "var/db/zoneinfo")); err == nil {
+		return strings.TrimSpace(string(v))
+	}
+
+	if target, err := os.Readlink(filepath.Join(hostRootPath, "etc/localtime")); err == nil {
+		return tzFromSymlink(target)
+	}
+
+	return ""
+}
+
+func tzFromSymlink(target string) string {
+	part := strings.Split(target, string(os.PathSeparator))
+	for i, component := range part {
+		if component == "zoneinfo" {
+			return strings.Join(part[i+1:], "/")
+		}
+	}
+
+	return ""
 }
 
 func getFQDN(ctx context.Context) (hostname string, fqdn string) {
