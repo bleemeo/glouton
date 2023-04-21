@@ -365,7 +365,7 @@ func GetJMXMetrics(service discovery.Service) []config.JmxMetric {
 	metrics = append(metrics, defaultGenericMetrics...)
 	metrics = append(metrics, defaultServiceMetrics[service.ServiceType]...)
 
-	switch service.ServiceType { //nolint:exhaustive
+	switch service.ServiceType { //nolint:exhaustive,nolintlint
 	case discovery.CassandraService:
 		for _, name := range service.Config.DetailedItems {
 			part := strings.Split(name, ".")

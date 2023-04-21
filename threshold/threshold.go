@@ -182,7 +182,7 @@ func (s *statusState) setNewStatus(newStatus types.Status, now time.Time) (time.
 	criticalDuration := time.Duration(0)
 	warningDuration := time.Duration(0)
 
-	switch newStatus { //nolint:exhaustive
+	switch newStatus { //nolint:exhaustive,nolintlint
 	case types.StatusCritical:
 		if s.CriticalSince.IsZero() {
 			s.CriticalSince = now
