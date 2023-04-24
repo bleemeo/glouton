@@ -300,6 +300,12 @@ func processMFS(
 					l.Value = proto.String(indexToType[l.GetValue()])
 				}
 			}
+
+			if mf.GetName() == "sysUpTime" && m.GetGauge() != nil {
+				g := m.GetGauge()
+				g.Value = proto.Float64(g.GetValue() / 100) // convert from 1/100th of seconds to seconds.
+				m.Gauge = g
+			}
 		}
 	}
 
