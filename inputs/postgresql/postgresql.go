@@ -99,8 +99,12 @@ func transformMetrics(
 			newFields["rollback"+suffix] = value
 		case "blks_read", "blks_hit", "tup_returned", "tup_fetched", "tup_inserted", "tup_updated":
 			newFields[metricName+suffix] = value
-		case "tup_deleted", "temp_files", "temp_bytes", "blk_read_time", "blk_write_time":
+		case "tup_deleted", "temp_files", "temp_bytes":
 			newFields[metricName+suffix] = value
+		case "blk_read_time":
+			newFields["blk_read_utilization"+suffix] = value / 10 // convert ms/s to %
+		case "blk_write_time":
+			newFields["blk_write_utilization"+suffix] = value / 10 // convert ms/s to %
 		}
 	}
 

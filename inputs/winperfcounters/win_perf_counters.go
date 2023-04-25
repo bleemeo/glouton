@@ -228,9 +228,6 @@ func (c *winCollector) transformMetrics(currentContext internal.GatherContext, f
 		if freePerc, present := fields["Percent_Idle_Time"]; present {
 			// we clamp the min value to zero as a slightly negative value can be returned (due to what I believe to be timing imprecisions)
 			res["utilization"] = math.Max(0., 100.-freePerc)
-			// io_time is the number of ms spent doing IO in the last second.
-			// utilization is 100% when we spent 1000ms during one second
-			res["time"] = res["utilization"] * 1000. / 100.
 		}
 	}
 

@@ -77,12 +77,24 @@ func (dt diskIOTransformer) renameGlobal(gatherContext internal.GatherContext) (
 }
 
 func (dt diskIOTransformer) transformMetrics(currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {
-	if ioTime, ok := fields["io_time"]; ok {
-		delete(fields, "io_time")
+	for _, name := range []string{"io_time", "read_time", "write_time"} {
+		if value, ok := fields[name]; ok {
+			delete(fields, name)
 
-		fields["time"] = ioTime
-		// io_time is millisecond per second.
-		fields["utilization"] = ioTime / 1000. * 100.
+			newName := name
+
+			switch name {
+			case "io_time":
+				newName = "utilization"
+			case "read_time":
+				newName = "read_utilization"
+			case "write_time":
+				newName = "write_utilization"
+			}
+
+			// io_time & co are millisecond per second.
+			fields[newName] = value / 1000. * 100.
+		}
 	}
 
 	if rmerged, ok := fields["merged_reads"]; ok {
