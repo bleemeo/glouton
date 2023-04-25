@@ -218,9 +218,7 @@ func (c *jmxtransClient) processLine(ctx context.Context, line string) {
 		}
 
 		labels := map[string]string{
-			types.LabelName:                name,
-			types.LabelMetaServiceName:     service.Name,
-			types.LabelMetaServiceInstance: service.Instance,
+			types.LabelName: name,
 		}
 		if item != "" {
 			labels[types.LabelItem] = item
