@@ -84,7 +84,7 @@ func transformMetrics(currentContext internal.GatherContext, fields map[string]f
 		if searchCount, ok := fields["search_query_total"]; ok {
 			newFields["search"] = searchCount
 			if searchTime, ok2 := fields["search_query_time_in_millis"]; ok2 {
-				newFields["search_time"] = searchTime / searchCount
+				newFields["search_time"] = searchTime / searchCount / 1000
 			}
 		}
 	case "elasticsearch_jvm":
