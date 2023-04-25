@@ -247,6 +247,13 @@ func (c *jmxtransClient) processLine(ctx context.Context, line string) {
 			// we are summing over typesName, drop them from item
 			item = service.Instance
 			annotations.BleemeoItem = item
+
+			if item != "" {
+				labels[types.LabelItem] = item
+			} else {
+				delete(labels, types.LabelItem)
+			}
+
 			key := nameItem{
 				Name: name,
 				Item: item,
@@ -338,11 +345,12 @@ func (c *jmxtransClient) flush(ctx context.Context) {
 
 		if points[0].Metric.Ratio != "" {
 			c.pendingRatio[key] = metricInfo{
-				Service:   points[0].Service,
-				Metric:    points[0].Metric,
-				Labels:    points[0].Labels,
-				Timestamp: points[0].Timestamp,
-				Value:     sum,
+				Service:     points[0].Service,
+				Metric:      points[0].Metric,
+				Labels:      points[0].Labels,
+				Annotations: points[0].Annotations,
+				Timestamp:   points[0].Timestamp,
+				Value:       sum,
 			}
 
 			continue
