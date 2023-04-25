@@ -226,10 +226,6 @@ func (c *jmxtransClient) processLine(ctx context.Context, line string) {
 			labels[types.LabelItem] = item
 		}
 
-		if typeNames != "" {
-			labels["object"] = typeNames
-		}
-
 		annotations := types.MetricAnnotations{
 			BleemeoItem:     item,
 			ServiceName:     service.Name,
