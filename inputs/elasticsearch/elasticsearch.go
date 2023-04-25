@@ -104,7 +104,6 @@ func transformMetrics(currentContext internal.GatherContext, fields map[string]f
 			}
 		}
 
-		newFields["jvm_gc_time"] = jvmGcTime
 		newFields["jvm_gc_utilization"] = jvmGcTime / 10.
 		newFields["jvm_gc"] = jvmGCCount
 	case "elasticsearch_clusterstats_indices":

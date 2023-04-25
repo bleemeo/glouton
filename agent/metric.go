@@ -317,7 +317,6 @@ var (
 			"bitbucket_events",
 			"bitbucket_io_tasks",
 			"bitbucket_jvm_gc",
-			"bitbucket_jvm_gc_time",
 			"bitbucket_jvm_gc_utilization",
 			"bitbucket_jvm_heap_used",
 			"bitbucket_jvm_non_heap_used",
@@ -336,7 +335,6 @@ var (
 			"cassandra_bloom_filter_false_ratio",
 			"cassandra_bloom_filter_false_ratio_sum",
 			"cassandra_jvm_gc",
-			"cassandra_jvm_gc_time",
 			"cassandra_jvm_gc_utilization",
 			"cassandra_jvm_heap_used",
 			"cassandra_jvm_non_heap_used",
@@ -355,7 +353,6 @@ var (
 		discovery.ConfluenceService: {
 			"confluence_db_query_time",
 			"confluence_jvm_gc",
-			"confluence_jvm_gc_time",
 			"confluence_jvm_gc_utilization",
 			"confluence_jvm_heap_used",
 			"confluence_jvm_non_heap_used",
@@ -370,7 +367,6 @@ var (
 		discovery.ElasticSearchService: {
 			"elasticsearch_docs_count",
 			"elasticsearch_jvm_gc",
-			"elasticsearch_jvm_gc_time",
 			"elasticsearch_jvm_gc_utilization",
 			"elasticsearch_jvm_heap_used",
 			"elasticsearch_jvm_non_heap_used",
@@ -418,7 +414,6 @@ var (
 
 		discovery.JIRAService: {
 			"jira_jvm_gc",
-			"jira_jvm_gc_time",
 			"jira_jvm_gc_utilization",
 			"jira_jvm_heap_used",
 			"jira_jvm_non_heap_used",
@@ -428,7 +423,6 @@ var (
 
 		discovery.KafkaService: {
 			"kafka_jvm_gc",
-			"kafka_jvm_gc_time",
 			"kafka_jvm_gc_utilization",
 			"kafka_jvm_heap_used",
 			"kafka_jvm_non_heap_used",
@@ -712,7 +706,6 @@ var (
 			"zookeeper_watch_count",
 			"zookeeper_znode_count",
 			"zookeeper_jvm_gc",
-			"zookeeper_jvm_gc_time",
 			"zookeeper_jvm_gc_utilization",
 			"zookeeper_jvm_heap_used",
 			"zookeeper_jvm_non_heap_used",

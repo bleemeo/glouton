@@ -46,14 +46,6 @@ var (
 			TypeNames: []string{"name"},
 		},
 		{
-			Name:      "jvm_gc_time",
-			MBean:     "java.lang:type=GarbageCollector,name=*",
-			Attribute: "CollectionTime",
-			Derive:    true,
-			Sum:       true,
-			TypeNames: []string{"name"},
-		},
-		{
 			Name:      "jvm_gc_utilization",
 			MBean:     "java.lang:type=GarbageCollector,name=*",
 			Attribute: "CollectionTime",
