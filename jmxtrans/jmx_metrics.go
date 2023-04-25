@@ -76,7 +76,7 @@ var (
 				Name:      "read_time_average",
 				MBean:     "org.apache.cassandra.metrics:type=ClientRequest,scope=Read,name=TotalLatency",
 				Attribute: "Count",
-				Scale:     0.001, // convert from microsecond to millisecond
+				Scale:     0.000001, // convert from microsecond to second
 				Derive:    true,
 			},
 			{
@@ -89,7 +89,7 @@ var (
 				Name:      "write_time_average",
 				MBean:     "org.apache.cassandra.metrics:type=ClientRequest,scope=Write,name=TotalLatency",
 				Attribute: "Count",
-				Scale:     0.001, // convert from microsecond to millisecond
+				Scale:     0.000001, // convert from microsecond to second
 				Derive:    true,
 			},
 			{
@@ -172,6 +172,7 @@ var (
 				Derive:    true,
 				Sum:       true,
 				Ratio:     "requests",
+				Scale:     0.001, // convert from millisecond to second
 			},
 			{
 				Name:      "requests",
@@ -189,6 +190,7 @@ var (
 				Derive:    true,
 				Sum:       true,
 				Ratio:     "requests",
+				Scale:     0.001, // convert from millisecond to second
 			},
 		},
 		discovery.ConfluenceService: {
@@ -196,6 +198,7 @@ var (
 				Name:      "last_index_time",
 				MBean:     "Confluence:name=IndexingStatistics",
 				Attribute: "LastElapsedMilliseconds",
+				Scale:     0.001, // convert from millisecond to second
 			},
 			{
 				Name:      "queued_index_tasks",
@@ -206,6 +209,7 @@ var (
 				Name:      "db_query_time",
 				MBean:     "Confluence:name=SystemInformation",
 				Attribute: "DatabaseExampleLatency",
+				Scale:     0.001, // convert from millisecond to second
 			},
 			{
 				Name:      "queued_mails",
@@ -233,6 +237,7 @@ var (
 				Derive:    true,
 				Sum:       true,
 				Ratio:     "requests",
+				Scale:     0.001, // convert from millisecond to second
 			},
 		},
 		discovery.JIRAService: {
@@ -252,6 +257,7 @@ var (
 				Derive:    true,
 				Sum:       true,
 				Ratio:     "requests",
+				Scale:     0.001, // convert from millisecond to second
 			},
 		},
 		discovery.KafkaService: {
@@ -276,11 +282,13 @@ var (
 				Name:      "produce_time_average",
 				MBean:     "kafka.network:type=RequestMetrics,name=TotalTimeMs,request=Produce",
 				Attribute: "Mean",
+				Scale:     0.001, // convert from millisecond to second
 			},
 			{
 				Name:      "fetch_time_average",
 				MBean:     "kafka.network:type=RequestMetrics,name=TotalTimeMs,request=FetchConsumer",
 				Attribute: "Mean",
+				Scale:     0.001, // convert from millisecond to second
 			},
 		},
 	}
@@ -303,6 +311,7 @@ var (
 			Name:      "read_time",
 			MBean:     "org.apache.cassandra.metrics:type=Table,keyspace={keyspace},scope={table},name=ReadTotalLatency",
 			Attribute: "Count",
+			Scale:     0.000001, // convert from microsecond to second
 			TypeNames: []string{"keyspace", "scope"},
 			Derive:    true,
 		},
@@ -317,6 +326,7 @@ var (
 			Name:      "write_time",
 			MBean:     "org.apache.cassandra.metrics:type=Table,keyspace={keyspace},scope={table},name=WriteTotalLatency",
 			Attribute: "Count",
+			Scale:     0.000001, // convert from microsecond to second
 			TypeNames: []string{"keyspace", "scope"},
 			Derive:    true,
 		},
