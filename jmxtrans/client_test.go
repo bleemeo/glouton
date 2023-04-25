@@ -305,6 +305,38 @@ func Test_jmxtransClient_processLine(t *testing.T) { //nolint:maintidx
 			},
 		},
 		{
+			name: "derive-scale",
+			config: fakeConfig{
+				Services: map[string]discovery.Service{
+					"123": {
+						Name: "jvm",
+					},
+				},
+				Metrics: map[serviceKey][]config.JmxMetric{
+					{"123", "456", "Pulls"}: {
+						{
+							Name:   "jvm_gc",
+							Scale:  10,
+							Derive: true,
+						},
+					},
+				},
+			},
+			lines: []string{
+				"jmxtrans.123.456.Pulls 42 1585810000",
+				"jmxtrans.123.456.Pulls 50 1585810010",
+			},
+			want: []types.MetricPoint{
+				{
+					Labels: map[string]string{types.LabelName: "jvm_jvm_gc"},
+					Point:  types.Point{Time: time.Unix(1585810010, 0), Value: 8},
+					Annotations: types.MetricAnnotations{
+						ServiceName: "jvm",
+					},
+				},
+			},
+		},
+		{
 			name: "ratio",
 			config: fakeConfig{
 				Services: map[string]discovery.Service{
@@ -467,9 +499,240 @@ func Test_jmxtransClient_processLine(t *testing.T) { //nolint:maintidx
 				},
 			},
 		},
+		{
+			name: "reused_metric",
+			config: fakeConfig{
+				Services: map[string]discovery.Service{
+					"sha256-of-service": {
+						Name: "cassandra",
+					},
+				},
+				Metrics: map[serviceKey][]config.JmxMetric{
+					{"sha256-of-service", "sha256-bean", "attr"}: {
+						{
+							Name: "unmodified",
+						},
+						{
+							Name:  "scale",
+							Scale: 2,
+						},
+						{
+							Name:  "scale_once_more",
+							Scale: 3,
+						},
+						{
+							Name: "sum",
+							Sum:  true,
+						},
+						{
+							Name:   "derive",
+							Derive: true,
+						},
+						{
+							Name:   "derive-sum-scale",
+							Derive: true,
+							Sum:    true,
+							Scale:  5,
+						},
+						{
+							Name: "unmodified2",
+						},
+					},
+				},
+			},
+			lines: []string{
+				"jmxtrans.sha256-of-service.sha256-bean.One.attr 1.0 1585818816",
+				"jmxtrans.sha256-of-service.sha256-bean.Two.attr 2.0 1585818816",
+				"jmxtrans.sha256-of-service.sha256-bean.One.attr 1.5 1585818826",
+				"jmxtrans.sha256-of-service.sha256-bean.Two.attr 2.8 1585818826",
+			},
+			want: []types.MetricPoint{
+				// timestamp 1585818816
+				{
+					Labels:      map[string]string{types.LabelName: "cassandra_unmodified", types.LabelItem: "One"},
+					Point:       types.Point{Time: time.Unix(1585818816, 0), Value: 1.0},
+					Annotations: types.MetricAnnotations{ServiceName: "cassandra", BleemeoItem: "One"},
+				},
+				{
+					Labels:      map[string]string{types.LabelName: "cassandra_unmodified", types.LabelItem: "Two"},
+					Point:       types.Point{Time: time.Unix(1585818816, 0), Value: 2.0},
+					Annotations: types.MetricAnnotations{ServiceName: "cassandra", BleemeoItem: "Two"},
+				},
+				{
+					Labels:      map[string]string{types.LabelName: "cassandra_unmodified2", types.LabelItem: "One"},
+					Point:       types.Point{Time: time.Unix(1585818816, 0), Value: 1.0},
+					Annotations: types.MetricAnnotations{ServiceName: "cassandra", BleemeoItem: "One"},
+				},
+				{
+					Labels:      map[string]string{types.LabelName: "cassandra_unmodified2", types.LabelItem: "Two"},
+					Point:       types.Point{Time: time.Unix(1585818816, 0), Value: 2.0},
+					Annotations: types.MetricAnnotations{ServiceName: "cassandra", BleemeoItem: "Two"},
+				},
+				{
+					Labels:      map[string]string{types.LabelName: "cassandra_scale", types.LabelItem: "One"},
+					Point:       types.Point{Time: time.Unix(1585818816, 0), Value: 2.0},
+					Annotations: types.MetricAnnotations{ServiceName: "cassandra", BleemeoItem: "One"},
+				},
+				{
+					Labels:      map[string]string{types.LabelName: "cassandra_scale", types.LabelItem: "Two"},
+					Point:       types.Point{Time: time.Unix(1585818816, 0), Value: 4.0},
+					Annotations: types.MetricAnnotations{ServiceName: "cassandra", BleemeoItem: "Two"},
+				},
+				{
+					Labels:      map[string]string{types.LabelName: "cassandra_scale_once_more", types.LabelItem: "One"},
+					Point:       types.Point{Time: time.Unix(1585818816, 0), Value: 3.0},
+					Annotations: types.MetricAnnotations{ServiceName: "cassandra", BleemeoItem: "One"},
+				},
+				{
+					Labels:      map[string]string{types.LabelName: "cassandra_scale_once_more", types.LabelItem: "Two"},
+					Point:       types.Point{Time: time.Unix(1585818816, 0), Value: 6.0},
+					Annotations: types.MetricAnnotations{ServiceName: "cassandra", BleemeoItem: "Two"},
+				},
+				{
+					Labels:      map[string]string{types.LabelName: "cassandra_sum"},
+					Point:       types.Point{Time: time.Unix(1585818816, 0), Value: 3.0},
+					Annotations: types.MetricAnnotations{ServiceName: "cassandra"},
+				},
+
+				// timestamp 1585818826
+				{
+					Labels:      map[string]string{types.LabelName: "cassandra_unmodified", types.LabelItem: "One"},
+					Point:       types.Point{Time: time.Unix(1585818826, 0), Value: 1.5},
+					Annotations: types.MetricAnnotations{ServiceName: "cassandra", BleemeoItem: "One"},
+				},
+				{
+					Labels:      map[string]string{types.LabelName: "cassandra_unmodified", types.LabelItem: "Two"},
+					Point:       types.Point{Time: time.Unix(1585818826, 0), Value: 2.8},
+					Annotations: types.MetricAnnotations{ServiceName: "cassandra", BleemeoItem: "Two"},
+				},
+				{
+					Labels:      map[string]string{types.LabelName: "cassandra_unmodified2", types.LabelItem: "One"},
+					Point:       types.Point{Time: time.Unix(1585818826, 0), Value: 1.5},
+					Annotations: types.MetricAnnotations{ServiceName: "cassandra", BleemeoItem: "One"},
+				},
+				{
+					Labels:      map[string]string{types.LabelName: "cassandra_unmodified2", types.LabelItem: "Two"},
+					Point:       types.Point{Time: time.Unix(1585818826, 0), Value: 2.8},
+					Annotations: types.MetricAnnotations{ServiceName: "cassandra", BleemeoItem: "Two"},
+				},
+				{
+					Labels:      map[string]string{types.LabelName: "cassandra_scale", types.LabelItem: "One"},
+					Point:       types.Point{Time: time.Unix(1585818826, 0), Value: 3.0},
+					Annotations: types.MetricAnnotations{ServiceName: "cassandra", BleemeoItem: "One"},
+				},
+				{
+					Labels:      map[string]string{types.LabelName: "cassandra_scale", types.LabelItem: "Two"},
+					Point:       types.Point{Time: time.Unix(1585818826, 0), Value: 5.6},
+					Annotations: types.MetricAnnotations{ServiceName: "cassandra", BleemeoItem: "Two"},
+				},
+				{
+					Labels:      map[string]string{types.LabelName: "cassandra_scale_once_more", types.LabelItem: "One"},
+					Point:       types.Point{Time: time.Unix(1585818826, 0), Value: 4.5},
+					Annotations: types.MetricAnnotations{ServiceName: "cassandra", BleemeoItem: "One"},
+				},
+				{
+					Labels:      map[string]string{types.LabelName: "cassandra_scale_once_more", types.LabelItem: "Two"},
+					Point:       types.Point{Time: time.Unix(1585818826, 0), Value: 8.4},
+					Annotations: types.MetricAnnotations{ServiceName: "cassandra", BleemeoItem: "Two"},
+				},
+				{
+					Labels:      map[string]string{types.LabelName: "cassandra_sum"},
+					Point:       types.Point{Time: time.Unix(1585818826, 0), Value: 4.3},
+					Annotations: types.MetricAnnotations{ServiceName: "cassandra"},
+				},
+
+				// derivated (timestamp 1585818826)
+				{
+					Labels:      map[string]string{types.LabelName: "cassandra_derive", types.LabelItem: "One"},
+					Point:       types.Point{Time: time.Unix(1585818826, 0), Value: 0.05},
+					Annotations: types.MetricAnnotations{ServiceName: "cassandra", BleemeoItem: "One"},
+				},
+				{
+					Labels:      map[string]string{types.LabelName: "cassandra_derive", types.LabelItem: "Two"},
+					Point:       types.Point{Time: time.Unix(1585818826, 0), Value: 0.08},
+					Annotations: types.MetricAnnotations{ServiceName: "cassandra", BleemeoItem: "Two"},
+				},
+				{
+					Labels:      map[string]string{types.LabelName: "cassandra_derive-sum-scale"},
+					Point:       types.Point{Time: time.Unix(1585818826, 0), Value: 0.65},
+					Annotations: types.MetricAnnotations{ServiceName: "cassandra"},
+				},
+			},
+		},
+		{
+			name: "jvm_gc_time",
+			config: fakeConfig{
+				Services: map[string]discovery.Service{
+					"123": {
+						Name: "cassandra",
+					},
+				},
+				Metrics: map[serviceKey][]config.JmxMetric{
+					{"123", "456", "CollectionTime"}: {
+						{
+							Name:      "jvm_gc_time",
+							Attribute: "CollectionTime",
+							Derive:    true,
+							Sum:       true,
+							TypeNames: []string{"name"},
+						},
+						{
+							Name:      "jvm_gc_utilization",
+							Attribute: "CollectionTime",
+							Derive:    true,
+							Sum:       true,
+							TypeNames: []string{"name"},
+							Scale:     0.1, // time is in ms/s. Convert in %
+						},
+					},
+				},
+			},
+			lines: []string{
+				"jmxtrans.123.456.G1YoungGeneration.CollectionTime 185 1585828000",
+				"jmxtrans.123.456.G1OldGeneration.CollectionTime 2 1585828000",
+				"jmxtrans.123.456.G1YoungGeneration.CollectionTime 190 1585828010",
+				"jmxtrans.123.456.G1OldGeneration.CollectionTime 12 1585828010",
+				"jmxtrans.123.456.G1YoungGeneration.CollectionTime 190 1585828020",
+				"jmxtrans.123.456.G1OldGeneration.CollectionTime 12 1585828020",
+			},
+			want: []types.MetricPoint{
+				{
+					Labels: map[string]string{types.LabelName: "cassandra_jvm_gc_time"},
+					Point:  types.Point{Time: time.Unix(1585828010, 0), Value: 1.5},
+					Annotations: types.MetricAnnotations{
+						ServiceName: "cassandra",
+					},
+				},
+				{
+					Labels: map[string]string{types.LabelName: "cassandra_jvm_gc_utilization"},
+					Point:  types.Point{Time: time.Unix(1585828010, 0), Value: 0.15},
+					Annotations: types.MetricAnnotations{
+						ServiceName: "cassandra",
+					},
+				},
+				{
+					Labels: map[string]string{types.LabelName: "cassandra_jvm_gc_time"},
+					Point:  types.Point{Time: time.Unix(1585828020, 0), Value: 0},
+					Annotations: types.MetricAnnotations{
+						ServiceName: "cassandra",
+					},
+				},
+				{
+					Labels: map[string]string{types.LabelName: "cassandra_jvm_gc_utilization"},
+					Point:  types.Point{Time: time.Unix(1585828020, 0), Value: 0},
+					Annotations: types.MetricAnnotations{
+						ServiceName: "cassandra",
+					},
+				},
+			},
+		},
 	}
 	for _, tt := range tests {
+		tt := tt
+
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			store := fakeStore{}
 			c := &jmxtransClient{
 				Config:    tt.config,
@@ -484,7 +747,7 @@ func Test_jmxtransClient_processLine(t *testing.T) { //nolint:maintidx
 
 			c.flush(context.Background())
 
-			if diff := types.DiffMetricPoints(tt.want, store.Points, false); diff != "" {
+			if diff := types.DiffMetricPoints(tt.want, store.Points, true); diff != "" {
 				t.Errorf("points mismatch (-want +got):\n%s", diff)
 			}
 		})
