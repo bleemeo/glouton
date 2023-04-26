@@ -639,6 +639,7 @@ func (r *Registry) diagnosticScrapeLoop(archive types.ArchiveWriter) error {
 
 	type loopInfo struct {
 		ID                 int
+		Description        string
 		LastScrape         []scrapeRun
 		ScrapeInterval     string
 		Option             RegistrationOption
@@ -656,10 +657,11 @@ func (r *Registry) diagnosticScrapeLoop(archive types.ArchiveWriter) error {
 		copy(copySlice, reg.lastScrapes)
 
 		info := loopInfo{
-			ID:         id,
-			LastScrape: reg.lastScrapes,
-			Option:     reg.option,
-			LabelUsed:  dtoLabelToMap(reg.gatherer.labels),
+			ID:          id,
+			Description: reg.option.Description,
+			LastScrape:  reg.lastScrapes,
+			Option:      reg.option,
+			LabelUsed:   dtoLabelToMap(reg.gatherer.labels),
 		}
 
 		if reg.option.StopCallback != nil {
