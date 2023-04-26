@@ -56,6 +56,7 @@ const (
 	relabelTimeout              = 20 * time.Second
 	baseJitter                  = 0
 	defaultInterval             = 0
+	maxLastScrape               = 10
 )
 
 // RelabelHook is a hook called just before applying relabeling.
@@ -143,7 +144,7 @@ type RegistrationOption struct {
 	Interval     time.Duration
 	MinInterval  time.Duration
 	Timeout      time.Duration
-	StopCallback func()
+	StopCallback func() `json:"-"`
 	// ExtraLabels are labels added. If a labels already exists, extraLabels take precedence.
 	ExtraLabels map[string]string
 	// NoLabelsAlteration disable (most) alteration of labels. It don't apply to PushPoints.
@@ -158,7 +159,7 @@ type RegistrationOption struct {
 	// GatherModifier is a function that can modify the gather result (add/modify/delete). It is called after Rules
 	// are applied, just before ExtraLabels is done.
 	// It could be nil to skip this step.
-	GatherModifier func(mfs []*dto.MetricFamily) []*dto.MetricFamily
+	GatherModifier func(mfs []*dto.MetricFamily) []*dto.MetricFamily `json:"-"`
 	rrules         []*rules.RecordingRule
 }
 
@@ -211,12 +212,25 @@ func (opt *RegistrationOption) String() string {
 	)
 }
 
+type scrapeRun struct {
+	ScrapeAt       time.Time
+	ScrapeDuration time.Duration
+}
+
+func (s scrapeRun) MarshalJSON() ([]byte, error) {
+	tmp := struct {
+		ScrapeAt       time.Time
+		ScrapeDuration string
+	}{s.ScrapeAt, s.ScrapeDuration.String()}
+
+	return json.Marshal(tmp)
+}
+
 type registration struct {
 	l                    sync.Mutex
 	option               RegistrationOption
 	loop                 *scrapeLoop
-	lastScrape           time.Time
-	lastScrapeDuration   time.Duration
+	lastScrapes          []scrapeRun
 	gatherer             *labeledGatherer
 	annotations          types.MetricAnnotations
 	relabelHookSkip      bool
@@ -564,62 +578,8 @@ func (r *Registry) DiagnosticArchive(ctx context.Context, archive types.ArchiveW
 		return err
 	}
 
-	r.l.Lock()
-	defer r.l.Unlock()
-
-	file, err = archive.Create("scrape-loop.txt")
-	if err != nil {
+	if err := r.diagnosticScrapeLoop(archive); err != nil {
 		return err
-	}
-
-	type regWithID struct {
-		*registration
-		id int
-	}
-
-	var (
-		loopRegistration   []regWithID
-		noloopRegistration []regWithID
-	)
-
-	for id, reg := range r.registrations {
-		if reg.loop != nil {
-			loopRegistration = append(loopRegistration, regWithID{id: id, registration: reg})
-		} else {
-			noloopRegistration = append(noloopRegistration, regWithID{id: id, registration: reg})
-		}
-	}
-
-	sort.Slice(loopRegistration, func(i, j int) bool {
-		return loopRegistration[i].id < loopRegistration[j].id
-	})
-
-	sort.Slice(noloopRegistration, func(i, j int) bool {
-		return noloopRegistration[i].id < noloopRegistration[j].id
-	})
-
-	fmt.Fprintf(file, "# %d collector registered, %d with a scrape-loop.\n", len(r.registrations), len(loopRegistration))
-	fmt.Fprintf(file, "# %d collectors with loop active:\n", len(loopRegistration))
-
-	for _, reg := range loopRegistration {
-		reg.l.Lock()
-
-		fmt.Fprintf(file, "id=%d, lastRun=%v (duration=%v, interval=%v,)\n", reg.id, reg.lastScrape, reg.lastScrapeDuration, reg.loop.interval)
-		fmt.Fprintf(file, "    %s\n", reg.option.String())
-		fmt.Fprintf(file, "    label used: %v\n", dtoLabelToMap(reg.gatherer.labels))
-
-		reg.l.Unlock()
-	}
-
-	fmt.Fprintf(file, "\n# %d collectors with no active loop (only on /metrics):\n", len(noloopRegistration))
-
-	for _, reg := range noloopRegistration {
-		reg.l.Lock()
-
-		fmt.Fprintf(file, "id=%d, lastRun=%v (duration=%v)\n", reg.id, reg.lastScrape, reg.lastScrapeDuration)
-		fmt.Fprintf(file, "    %s\n", reg.option.String())
-
-		reg.l.Unlock()
 	}
 
 	return nil
@@ -661,6 +621,91 @@ func (r *Registry) diagnosticState(archive types.ArchiveWriter) error {
 	enc.SetIndent("", "  ")
 
 	return enc.Encode(obj)
+}
+
+func (r *Registry) diagnosticScrapeLoop(archive types.ArchiveWriter) error {
+	r.l.Lock()
+	defer r.l.Unlock()
+
+	activeFile, err := archive.Create("scrape-loop-active.json")
+	if err != nil {
+		return err
+	}
+
+	type unexportableOption struct {
+		HasStopCallback   bool
+		HasGatherModifier bool
+	}
+
+	type loopInfo struct {
+		ID                 int
+		Description        string
+		LastScrape         []scrapeRun
+		ScrapeInterval     string
+		Option             RegistrationOption
+		UnexportableOption unexportableOption
+		LabelUsed          map[string]string
+	}
+
+	activeResult := []loopInfo{}
+	inactiveResult := []loopInfo{}
+
+	for id, reg := range r.registrations {
+		reg.l.Lock()
+
+		copySlice := make([]scrapeRun, len(reg.lastScrapes))
+		copy(copySlice, reg.lastScrapes)
+
+		info := loopInfo{
+			ID:          id,
+			Description: reg.option.Description,
+			LastScrape:  reg.lastScrapes,
+			Option:      reg.option,
+			LabelUsed:   dtoLabelToMap(reg.gatherer.labels),
+		}
+
+		if reg.option.StopCallback != nil {
+			info.UnexportableOption.HasStopCallback = true
+		}
+
+		if reg.option.GatherModifier != nil {
+			info.UnexportableOption.HasGatherModifier = true
+		}
+
+		if reg.loop != nil {
+			info.ScrapeInterval = reg.loop.interval.String()
+			activeResult = append(activeResult, info)
+		} else {
+			inactiveResult = append(inactiveResult, info)
+		}
+
+		reg.l.Unlock()
+	}
+
+	sort.Slice(activeResult, func(i, j int) bool {
+		return activeResult[i].ID < activeResult[j].ID
+	})
+
+	sort.Slice(inactiveResult, func(i, j int) bool {
+		return inactiveResult[i].ID < inactiveResult[j].ID
+	})
+
+	enc := json.NewEncoder(activeFile)
+	enc.SetIndent("", "  ")
+
+	if err := enc.Encode(activeResult); err != nil {
+		return err
+	}
+
+	inactiveFile, err := archive.Create("scrape-loop-only-slash-metrics.json")
+	if err != nil {
+		return err
+	}
+
+	enc = json.NewEncoder(inactiveFile)
+	enc.SetIndent("", "  ")
+
+	return enc.Encode(inactiveResult)
 }
 
 func (r *Registry) writeMetrics(ctx context.Context, file io.Writer, filter bool) error {
@@ -1268,8 +1313,12 @@ func (r *Registry) scrapeFromLoop(ctx context.Context, t0 time.Time, reg *regist
 	}
 
 	reg.l.Lock()
-	reg.lastScrape = t0
-	reg.lastScrapeDuration = duration
+	reg.lastScrapes = append(reg.lastScrapes, scrapeRun{ScrapeAt: t0, ScrapeDuration: duration})
+
+	if len(reg.lastScrapes) > maxLastScrape {
+		reg.lastScrapes = reg.lastScrapes[len(reg.lastScrapes)-maxLastScrape:]
+	}
+
 	reg.l.Unlock()
 
 	// Don't drop the meta labels here, they are needed for relabeling.
