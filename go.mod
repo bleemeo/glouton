@@ -3,7 +3,7 @@ module glouton
 go 1.18
 
 require (
-	github.com/99designs/gqlgen v0.17.28
+	github.com/99designs/gqlgen v0.17.30
 	github.com/AstromechZA/etcpwdparse v0.0.0-20170319193008-f0e5f0779716
 	github.com/StackExchange/wmi v1.2.1
 	github.com/alecthomas/kingpin/v2 v2.3.2
@@ -11,7 +11,7 @@ require (
 	github.com/containerd/cgroups v1.1.0
 	github.com/containerd/containerd v1.7.0
 	github.com/containerd/typeurl/v2 v2.1.0
-	github.com/docker/docker v23.0.3+incompatible
+	github.com/docker/docker v23.0.4+incompatible
 	github.com/eclipse/paho.mqtt.golang v1.4.2
 	github.com/fsnotify/fsnotify v1.6.0
 	github.com/getsentry/sentry-go v0.20.0
@@ -32,20 +32,20 @@ require (
 	github.com/ncabatoff/process-exporter v0.7.10
 	github.com/opencontainers/go-digest v1.0.0
 	github.com/opencontainers/image-spec v1.1.0-rc2.0.20221005185240-3a7f492d3f1b
-	github.com/opencontainers/runtime-spec v1.1.0-rc.1
+	github.com/opencontainers/runtime-spec v1.1.0-rc.2
 	github.com/prometheus-community/windows_exporter v0.22.0
 	github.com/prometheus/blackbox_exporter v0.23.0
-	github.com/prometheus/client_golang v1.14.0
+	github.com/prometheus/client_golang v1.15.0
 	github.com/prometheus/client_model v0.3.0
 	github.com/prometheus/common v0.42.0
-	github.com/prometheus/memcached_exporter v0.11.2
+	github.com/prometheus/memcached_exporter v0.11.3
 	github.com/prometheus/node_exporter v1.5.0
 	github.com/prometheus/procfs v0.9.0
 	// github.com/influxdata/telegraf depends on prometheus v1.8.2-*, and prometheus
 	// has tagged its latest versions to v0.*.*, so we need to wait for telegraf to
 	// upgrade its prometheus dependency before we can upgrade it.
 	github.com/prometheus/prometheus v1.8.2-0.20220308163432-03831554a519 // 2.33.5
-	github.com/rs/cors v1.8.3
+	github.com/rs/cors v1.9.0
 	github.com/shirou/gopsutil/v3 v3.23.3
 	github.com/urfave/cli/v2 v2.25.1
 	github.com/vektah/gqlparser/v2 v2.5.1
@@ -55,9 +55,9 @@ require (
 	gopkg.in/alecthomas/kingpin.v2 v2.2.6
 	gopkg.in/ini.v1 v1.67.0
 	gopkg.in/yaml.v3 v3.0.1
-	k8s.io/api v0.26.3
-	k8s.io/apimachinery v0.26.3
-	k8s.io/client-go v0.26.3
+	k8s.io/api v0.27.1
+	k8s.io/apimachinery v0.27.1
+	k8s.io/client-go v0.27.1
 	sigs.k8s.io/yaml v1.3.0
 )
 
@@ -66,7 +66,7 @@ require (
 	github.com/AdamKorcz/go-118-fuzz-build v0.0.0-20230306123547-8075edf89bb0 // indirect
 	github.com/Azure/go-ntlmssp v0.0.0-20221128193559-754e69321358 // indirect
 	github.com/HdrHistogram/hdrhistogram-go v1.1.2 // indirect
-	github.com/Microsoft/go-winio v0.6.0 // indirect
+	github.com/Microsoft/go-winio v0.6.1 // indirect
 	github.com/Microsoft/hcsshim v0.10.0-rc.7 // indirect
 	github.com/agnivade/levenshtein v1.1.1 // indirect
 	github.com/alecthomas/template v0.0.0-20190718012654-fb15b899a751 // indirect
@@ -75,7 +75,7 @@ require (
 	github.com/armon/go-metrics v0.4.1 // indirect
 	github.com/awnumar/memcall v0.1.2 // indirect
 	github.com/awnumar/memguard v0.22.3 // indirect
-	github.com/aws/aws-sdk-go v1.44.240 // indirect
+	github.com/aws/aws-sdk-go v1.44.250 // indirect
 	github.com/beevik/ntp v0.3.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/blues/jsonata-go v1.5.4 // indirect
@@ -113,7 +113,7 @@ require (
 	github.com/go-openapi/jsonreference v0.20.2 // indirect
 	github.com/go-openapi/swag v0.22.3 // indirect
 	github.com/go-redis/redis/v8 v8.11.5 // indirect
-	github.com/go-sql-driver/mysql v1.7.0 // indirect
+	github.com/go-sql-driver/mysql v1.7.1 // indirect
 	github.com/gobwas/glob v0.2.3 // indirect
 	github.com/godbus/dbus/v5 v5.1.0 // indirect
 	github.com/gofrs/uuid v4.3.1+incompatible // indirect
@@ -143,7 +143,7 @@ require (
 	github.com/josharian/native v1.1.0 // indirect
 	github.com/jpillora/backoff v1.0.0 // indirect
 	github.com/jsimonetti/rtnetlink v1.3.2 // indirect
-	github.com/klauspost/compress v1.16.4 // indirect
+	github.com/klauspost/compress v1.16.5 // indirect
 	github.com/leoluk/perflib_exporter v0.2.0 // indirect
 	github.com/lufia/iostat v1.2.1 // indirect
 	github.com/lufia/plan9stats v0.0.0-20230326075908-cb1d2100619a // indirect
@@ -172,12 +172,12 @@ require (
 	github.com/mwitkow/go-conntrack v0.0.0-20190716064945-2f068394615f // indirect
 	github.com/naoina/go-stringutil v0.1.0 // indirect
 	github.com/nats-io/jwt/v2 v2.4.1 // indirect
-	github.com/nats-io/nats-server/v2 v2.9.15 // indirect
+	github.com/nats-io/nats-server/v2 v2.9.16 // indirect
 	github.com/nats-io/nkeys v0.4.4 // indirect
 	github.com/nats-io/nuid v1.0.1 // indirect
 	github.com/ncabatoff/go-seq v0.0.0-20180805175032-b08ef85ed833 // indirect
 	github.com/oklog/ulid v1.3.1 // indirect
-	github.com/opencontainers/runc v1.1.5 // indirect
+	github.com/opencontainers/runc v1.1.6 // indirect
 	github.com/opencontainers/selinux v1.11.0 // indirect
 	github.com/opentracing/opentracing-go v1.2.1-0.20220228012449-10b1cf09e00b // indirect
 	github.com/philhofer/fwd v1.1.2 // indirect
