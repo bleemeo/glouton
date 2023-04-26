@@ -74,6 +74,10 @@ func transformMetrics(currentContext internal.GatherContext, fields map[string]f
 		"memory_free":                   1024 * 1024, // MiB to bytes
 		"memory_used":                   1024 * 1024, // MiB to bytes
 		"memory_total":                  1024 * 1024, // MiB to bytes
+		"clocks_current_graphics":       1000000,     // MHz to Hz
+		"clocks_current_sm":             1000000,     // MHz to Hz
+		"clocks_current_memory":         1000000,     // MHz to Hz
+		"clocks_current_video":          1000000,     // MHz to Hz
 	}
 
 	for k, factor := range factors {
