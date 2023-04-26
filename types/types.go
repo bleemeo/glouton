@@ -482,7 +482,13 @@ func DiffMetricPoints(want []MetricPoint, got []MetricPoint, approximate bool) s
 		lblsX := labels.FromMap(x.Labels)
 		lblsY := labels.FromMap(y.Labels)
 
-		return labels.Compare(lblsX, lblsY) < 0
+		lblCmp := labels.Compare(lblsX, lblsY)
+		if lblCmp != 0 {
+			return lblCmp < 0
+		}
+
+		// labels are equal, sort by timestamp
+		return x.Point.Time.Before(y.Point.Time)
 	})
 
 	opts := []cmp.Option{

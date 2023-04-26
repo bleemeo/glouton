@@ -90,8 +90,10 @@ func transformMetrics(currentContext internal.GatherContext, fields map[string]f
 		switch name {
 		case "stot", "bin", "bout", "dreq", "dresp", "ereq", "econ", "eresp", "req_tot":
 			newFields[name] = value
-		case "qcur", "scur", "qtime", "ctime", "rtime", "ttime":
+		case "qcur", "scur":
 			newFields[name] = value
+		case "qtime", "ctime", "rtime", "ttime":
+			newFields[name] = value / 1000 // convert from milliseconds to seconds
 		case "active_servers":
 			newFields["act"] = value
 		}

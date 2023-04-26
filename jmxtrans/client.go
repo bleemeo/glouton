@@ -208,6 +208,8 @@ func (c *jmxtransClient) processLine(ctx context.Context, line string) {
 
 		var item string
 
+		finalValue := value
+
 		switch {
 		case service.Instance != "" && typeNames != "":
 			item = service.Instance + "_" + typeNames
@@ -218,16 +220,10 @@ func (c *jmxtransClient) processLine(ctx context.Context, line string) {
 		}
 
 		labels := map[string]string{
-			types.LabelName:                name,
-			types.LabelMetaServiceName:     service.Name,
-			types.LabelMetaServiceInstance: service.Instance,
+			types.LabelName: name,
 		}
 		if item != "" {
 			labels[types.LabelItem] = item
-		}
-
-		if typeNames != "" {
-			labels["object"] = typeNames
 		}
 
 		annotations := types.MetricAnnotations{
@@ -238,14 +234,14 @@ func (c *jmxtransClient) processLine(ctx context.Context, line string) {
 		}
 
 		if metric.Derive {
-			value, ok = c.deriveValue(name, item, value, lineTime)
+			finalValue, ok = c.deriveValue(name, item, finalValue, lineTime)
 			if !ok {
 				continue
 			}
 		}
 
 		if metric.Scale != 0 {
-			value *= metric.Scale
+			finalValue *= metric.Scale
 		}
 
 		switch {
@@ -253,6 +249,13 @@ func (c *jmxtransClient) processLine(ctx context.Context, line string) {
 			// we are summing over typesName, drop them from item
 			item = service.Instance
 			annotations.BleemeoItem = item
+
+			if item != "" {
+				labels[types.LabelItem] = item
+			} else {
+				delete(labels, types.LabelItem)
+			}
+
 			key := nameItem{
 				Name: name,
 				Item: item,
@@ -264,7 +267,7 @@ func (c *jmxtransClient) processLine(ctx context.Context, line string) {
 				Labels:      labels,
 				Annotations: annotations,
 				Timestamp:   lineTime,
-				Value:       value,
+				Value:       finalValue,
 				UsedInRatio: usedInRatio,
 			})
 		case metric.Ratio != "":
@@ -279,7 +282,7 @@ func (c *jmxtransClient) processLine(ctx context.Context, line string) {
 				Labels:      labels,
 				Annotations: annotations,
 				Timestamp:   lineTime,
-				Value:       value,
+				Value:       finalValue,
 			}
 		default:
 			c.EmitPoint(ctx, types.MetricPoint{
@@ -287,7 +290,7 @@ func (c *jmxtransClient) processLine(ctx context.Context, line string) {
 				Annotations: annotations,
 				Point: types.Point{
 					Time:  lineTime,
-					Value: value,
+					Value: finalValue,
 				},
 			})
 		}
@@ -303,7 +306,7 @@ func (c *jmxtransClient) processLine(ctx context.Context, line string) {
 				Annotations: annotations,
 				Labels:      labels,
 				Timestamp:   lineTime,
-				Value:       value,
+				Value:       finalValue,
 			}
 		}
 	}
@@ -344,11 +347,12 @@ func (c *jmxtransClient) flush(ctx context.Context) {
 
 		if points[0].Metric.Ratio != "" {
 			c.pendingRatio[key] = metricInfo{
-				Service:   points[0].Service,
-				Metric:    points[0].Metric,
-				Labels:    points[0].Labels,
-				Timestamp: points[0].Timestamp,
-				Value:     sum,
+				Service:     points[0].Service,
+				Metric:      points[0].Metric,
+				Labels:      points[0].Labels,
+				Annotations: points[0].Annotations,
+				Timestamp:   points[0].Timestamp,
+				Value:       sum,
 			}
 
 			continue

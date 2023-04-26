@@ -51,7 +51,8 @@ func New(binPath string, timeout int) (telegraf.Input, *inputs.GathererOptions, 
 	internalInput := &internal.Input{
 		Input: nvidiaInput,
 		Accumulator: internal.Accumulator{
-			RenameGlobal: renameGlobal,
+			RenameGlobal:     renameGlobal,
+			TransformMetrics: transformMetrics,
 		},
 		Name: "nvidia-smi",
 	}
@@ -64,4 +65,27 @@ func renameGlobal(gatherContext internal.GatherContext) (result internal.GatherC
 	delete(gatherContext.Tags, "pstate")
 
 	return gatherContext, false
+}
+
+func transformMetrics(currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {
+	factors := map[string]float64{
+		"fbc_stats_average_latency":     1e-6,        // microsecond to second
+		"encoder_stats_average_latency": 1e-6,        // microsecond to second
+		"memory_free":                   1024 * 1024, // MiB to bytes
+		"memory_used":                   1024 * 1024, // MiB to bytes
+		"memory_total":                  1024 * 1024, // MiB to bytes
+		"clocks_current_graphics":       1000000,     // MHz to Hz
+		"clocks_current_sm":             1000000,     // MHz to Hz
+		"clocks_current_memory":         1000000,     // MHz to Hz
+		"clocks_current_video":          1000000,     // MHz to Hz
+	}
+
+	for k, factor := range factors {
+		value, ok := fields[k]
+		if ok {
+			fields[k] = value * factor
+		}
+	}
+
+	return fields
 }
