@@ -324,9 +324,9 @@ var (
 			"bitbucket_queued_events",
 			"bitbucket_queued_scm_clients",
 			"bitbucket_queued_scm_commands",
-			"bitbucket_queued_request_time",
-			"bitbucket_queued_requests",
-			"bitbucket_queued_ssh_connections",
+			"bitbucket_request_time",
+			"bitbucket_requests",
+			"bitbucket_ssh_connections",
 			"bitbucket_tasks",
 		},
 
@@ -359,8 +359,8 @@ var (
 			"confluence_queued_error_mails",
 			"confluence_queued_index_tasks",
 			"confluence_queued_mails",
-			"confluence_queued_request_time",
-			"confluence_queued_requests",
+			"confluence_request_time",
+			"confluence_requests",
 		},
 
 		discovery.ElasticSearchService: {
@@ -416,8 +416,8 @@ var (
 			"jira_jvm_gc_utilization",
 			"jira_jvm_heap_used",
 			"jira_jvm_non_heap_used",
-			"jira_queued_request_time",
-			"jira_queued_requests",
+			"jira_request_time",
+			"jira_requests",
 		},
 
 		discovery.KafkaService: {
