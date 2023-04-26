@@ -26,6 +26,7 @@ import (
 	"context"
 	"glouton/prometheus/model"
 	"glouton/types"
+	"io"
 	"reflect"
 	"sort"
 	"sync"
@@ -62,6 +63,27 @@ func (f *fakeFilter) FilterPoints(points []types.MetricPoint) []types.MetricPoin
 
 func (f *fakeFilter) FilterFamilies(families []*dto.MetricFamily) []*dto.MetricFamily {
 	return families
+}
+
+type fakeArchive struct {
+	l           sync.Mutex
+	currentFile string
+}
+
+func (a *fakeArchive) Create(filename string) (io.Writer, error) {
+	a.l.Lock()
+	defer a.l.Unlock()
+
+	a.currentFile = filename
+
+	return io.Discard, nil
+}
+
+func (a *fakeArchive) CurrentFileName() string {
+	a.l.Lock()
+	defer a.l.Unlock()
+
+	return a.currentFile
 }
 
 func (g *fakeGatherer) fillResponse() {
@@ -263,6 +285,52 @@ func TestRegistry_Register(t *testing.T) {
 
 	if stopCallCount != 1 {
 		t.Errorf("stopCallCount = %v, want 1", stopCallCount)
+	}
+}
+
+func TestRegistryDiagnostic(t *testing.T) {
+	reg := &Registry{}
+	reg.init()
+	reg.UpdateDelay(250 * time.Millisecond)
+
+	gather1 := &fakeGatherer{
+		name: "gather1",
+	}
+	gather2 := &fakeGatherer{
+		name: "gather2",
+	}
+
+	if _, err := reg.RegisterGatherer(RegistrationOption{}, gather1); err != nil {
+		t.Errorf("reg.RegisterGatherer(gather1) failed: %v", err)
+	}
+
+	if _, err := reg.RegisterGatherer(RegistrationOption{ExtraLabels: map[string]string{"name": "value"}}, gather1); err != nil {
+		t.Errorf("re-reg.RegisterGatherer(gather1) failed: %v", err)
+	}
+
+	if _, err := reg.RegisterGatherer(RegistrationOption{}, gather2); err != nil {
+		t.Errorf("re-reg.RegisterGatherer(gather2) failed: %v", err)
+	}
+
+	if _, err := reg.RegisterGatherer(RegistrationOption{StopCallback: func() {}, ExtraLabels: map[string]string{"dummy": "value", "empty-value-to-dropped": ""}}, gather1); err != nil {
+		t.Errorf("reg.RegisterGatherer(gather1) failed: %v", err)
+	}
+
+	if _, err := reg.RegisterGatherer(RegistrationOption{DisablePeriodicGather: true}, gather2); err != nil {
+		t.Errorf("re-reg.RegisterGatherer(gather2) failed: %v", err)
+	}
+
+	reg.UpdateRelabelHook(func(_ context.Context, labels map[string]string) (newLabel map[string]string, retryLater bool) {
+		labels[types.LabelMetaBleemeoUUID] = testAgentID
+
+		return labels, false
+	})
+
+	// After this delay, registry should have run at least once.
+	time.Sleep(300 * time.Millisecond)
+
+	if err := reg.DiagnosticArchive(context.Background(), &fakeArchive{}); err != nil {
+		t.Error(err)
 	}
 }
 
