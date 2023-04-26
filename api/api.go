@@ -196,7 +196,7 @@ func (api *API) init() {
 
 	router.HandleFunc("/diagnostic.txt", func(w http.ResponseWriter, r *http.Request) {
 		hdr := w.Header()
-		hdr.Add("Content-Type", "text/plain")
+		hdr.Add("Content-Type", "text/plain; charset=utf-8")
 
 		archive := newTextArchive(w)
 		defer archive.Close()
