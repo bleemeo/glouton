@@ -160,9 +160,10 @@ type labeledGatherer struct {
 	labels   []*dto.LabelPair
 	ruler    *ruler.SimpleRuler
 	modifier func([]*dto.MetricFamily) []*dto.MetricFamily
+	source   prometheus.Gatherer
 
 	l      sync.Mutex
-	source prometheus.Gatherer
+	closed bool
 }
 
 func newLabeledGatherer(g prometheus.Gatherer, extraLabels labels.Labels, rrules []*rules.RecordingRule, modifier func([]*dto.MetricFamily) []*dto.MetricFamily) *labeledGatherer {
@@ -208,7 +209,7 @@ func (g *labeledGatherer) GatherWithState(ctx context.Context, state GatherState
 	g.l.Lock()
 	defer g.l.Unlock()
 
-	if g.source == nil {
+	if g.closed || g.source == nil {
 		return nil, errGatherOnNilGatherer
 	}
 
@@ -259,13 +260,10 @@ func (g *labeledGatherer) close() {
 	g.l.Lock()
 	defer g.l.Unlock()
 
-	g.source = nil
+	g.closed = true
 }
 
 func (g *labeledGatherer) getSource() prometheus.Gatherer {
-	g.l.Lock()
-	defer g.l.Unlock()
-
 	return g.source
 }
 
