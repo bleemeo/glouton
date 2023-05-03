@@ -1526,7 +1526,7 @@ func (a *agent) watchdog(ctx context.Context) error {
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
 
-	failing := false
+	failingCount := 0
 
 	for {
 		select {
@@ -1550,11 +1550,11 @@ func (a *agent) watchdog(ctx context.Context) error {
 		a.l.Unlock()
 
 		switch {
-		case time.Since(lastHealthCheck) > 15*time.Minute && !failing:
+		case time.Since(lastHealthCheck) > 15*time.Minute && failingCount < 2:
 			logger.V(2).Printf("Healthcheck are no longer running. Last run was at %s", lastHealthCheck.Format(time.RFC3339))
 
-			failing = true
-		case time.Since(lastHealthCheck) > 15*time.Minute && failing:
+			failingCount++
+		case time.Since(lastHealthCheck) > 15*time.Minute && failingCount >= 2:
 			logger.Printf("Healthcheck are no longer running. Last run was at %s", lastHealthCheck.Format(time.RFC3339))
 			// We don't know how big the buffer needs to be to collect
 			// all the goroutines. Use 2MB buffer which hopefully is enough
@@ -1565,7 +1565,7 @@ func (a *agent) watchdog(ctx context.Context) error {
 			logger.Printf("Glouton seems unhealthy, killing myself")
 			panic("Glouton seems unhealthy (health check is no longer running), killing myself")
 		default:
-			failing = false
+			failingCount = 0
 		}
 	}
 }
