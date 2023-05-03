@@ -18,6 +18,7 @@ package bleemeo
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"glouton/bleemeo/internal/cache"
@@ -744,13 +745,24 @@ func (c *Connector) diagnosticCache(file io.Writer) {
 	fmt.Fprintf(file, "\n# Structured account config\n")
 
 	for _, ac := range gloutonAccountConfigs {
-		fmt.Fprintf(file, "%#v\n", ac)
+		v, err := json.MarshalIndent(ac, "", "  ")
+		if err != nil {
+			fmt.Fprintf(file, "err=%v\n", err)
+		} else {
+			fmt.Fprintf(file, "%s\n", string(v))
+		}
 	}
 
 	config, ok := c.cache.CurrentAccountConfig()
 	if ok {
 		fmt.Fprintf(file, "\n# And current account config is\n")
-		fmt.Fprintf(file, "%#v\n", config)
+
+		v, err := json.MarshalIndent(config, "", "  ")
+		if err != nil {
+			fmt.Fprintf(file, "err=%v\n", err)
+		} else {
+			fmt.Fprintf(file, "%s\n", string(v))
+		}
 	} else {
 		fmt.Fprintf(file, "\n# And current account config is not yet loaded\n")
 	}
