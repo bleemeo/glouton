@@ -151,7 +151,8 @@ func (helper *syncTestHelper) initSynchronizer(t *testing.T) {
 	}
 
 	s, err := newForTest(Option{
-		Cache: helper.cache,
+		Cache:           helper.cache,
+		IsMqttConnected: func() bool { return false },
 		GlobalOption: bleemeoTypes.GlobalOption{
 			Config:                  helper.cfg,
 			Facts:                   helper.facts,

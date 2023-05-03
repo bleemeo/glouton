@@ -827,6 +827,13 @@ func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) (map[str
 // in the map, the value indicates whether a fullsync should be performed.
 // It also returns true if the current sync is a full sync.
 func (s *Synchronizer) syncToPerform(ctx context.Context) (map[string]bool, bool) {
+	// Take values that will be used later before taking the lock. This reduce dead-lock risk
+	localFacts, _ := s.option.Facts.Facts(ctx, 24*time.Hour)
+	currentSNMPCount := s.option.SNMPOnlineTarget()
+	lastDiscovery := s.option.Discovery.LastUpdate()
+	currentMetricCount := s.option.Store.MetricsCount()
+	mqttIsConnected := s.option.IsMqttConnected()
+
 	s.l.Lock()
 	defer s.l.Unlock()
 
@@ -851,14 +858,16 @@ func (s *Synchronizer) syncToPerform(ctx context.Context) (map[string]bool, bool
 		syncMethods[syncMethodAlertingRules] = true
 	}
 
-	localFacts, _ := s.option.Facts.Facts(ctx, 24*time.Hour)
 	if fullSync || s.lastFactUpdatedAt != localFacts[facts.FactUpdatedAt] {
 		syncMethods[syncMethodFact] = fullSync
 	}
 
-	if s.lastSNMPcount != s.option.SNMPOnlineTarget() {
+	if s.lastSNMPcount != currentSNMPCount {
 		syncMethods[syncMethodFact] = fullSync
 		syncMethods[syncMethodSNMP] = fullSync
+		// TODO: this isn't idea. If the synchronization fail, it won't be retried.
+		// I think the ideal fix would be to always retry all syncMethods that was to synchronize but failed.
+		s.lastSNMPcount = currentSNMPCount
 	}
 
 	// After a reload, the config has been changed, so we want to do a fullsync
@@ -875,7 +884,7 @@ func (s *Synchronizer) syncToPerform(ctx context.Context) (map[string]bool, bool
 		}
 	}
 
-	if fullSync || s.lastSync.Before(s.option.Discovery.LastUpdate()) || (!minDelayed.IsZero() && s.now().After(minDelayed)) {
+	if fullSync || s.lastSync.Before(lastDiscovery) || (!minDelayed.IsZero() && s.now().After(minDelayed)) {
 		syncMethods[syncMethodService] = fullSync
 		syncMethods[syncMethodContainer] = fullSync
 	}
@@ -895,23 +904,16 @@ func (s *Synchronizer) syncToPerform(ctx context.Context) (map[string]bool, bool
 		syncMethods[syncMethodMetric] = false
 	}
 
-	if fullSync || s.now().After(s.metricRetryAt) || s.lastSync.Before(s.option.Discovery.LastUpdate()) || s.lastMetricCount != s.option.Store.MetricsCount() {
+	if fullSync || s.now().After(s.metricRetryAt) || s.lastSync.Before(lastDiscovery) || s.lastMetricCount != currentMetricCount {
 		syncMethods[syncMethodMetric] = fullSync
 	}
 
 	// when the mqtt connector is not connected, we cannot receive notifications to get out of maintenance
 	// mode, so we poll more often.
-	if s.maintenanceMode {
-		// Don't call a callback while holding a lock. This could result in deadlock
-		s.l.Unlock()
-		mqttIsConnected := s.option.IsMqttConnected()
-		s.l.Lock()
+	if s.maintenanceMode && !mqttIsConnected && s.now().After(s.lastMaintenanceSync.Add(15*time.Minute)) {
+		s.forceSync[syncMethodInfo] = false
 
-		if s.maintenanceMode && !mqttIsConnected && s.now().After(s.lastMaintenanceSync.Add(15*time.Minute)) {
-			s.forceSync[syncMethodInfo] = false
-
-			s.lastMaintenanceSync = s.now()
-		}
+		s.lastMaintenanceSync = s.now()
 	}
 
 	for k, full := range s.forceSync {

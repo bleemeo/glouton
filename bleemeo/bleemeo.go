@@ -157,7 +157,7 @@ func (c *Connector) isInitialized() bool {
 func (c *Connector) ApplyCachedConfiguration(ctx context.Context) {
 	c.l.RLock()
 	disabledUntil := c.disabledUntil
-	defer c.l.RUnlock()
+	c.l.RUnlock()
 
 	if time.Now().Before(disabledUntil) {
 		return
@@ -777,9 +777,6 @@ func (c *Connector) Tags() []string {
 // AccountID returns the Account UUID of Bleemeo
 // It return the empty string if the Account UUID is not available.
 func (c *Connector) AccountID() string {
-	c.l.Lock()
-	defer c.l.Unlock()
-
 	accountID := c.cache.AccountID()
 	if accountID != "" {
 		return accountID
@@ -802,9 +799,6 @@ func (c *Connector) AgentIsClusterLeader() bool {
 
 // RegistrationAt returns the date of registration with Bleemeo API.
 func (c *Connector) RegistrationAt() time.Time {
-	c.l.RLock()
-	defer c.l.RUnlock()
-
 	agent := c.cache.Agent()
 
 	return agent.CreatedAt
