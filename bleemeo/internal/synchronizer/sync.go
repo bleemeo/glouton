@@ -901,10 +901,17 @@ func (s *Synchronizer) syncToPerform(ctx context.Context) (map[string]bool, bool
 
 	// when the mqtt connector is not connected, we cannot receive notifications to get out of maintenance
 	// mode, so we poll more often.
-	if s.maintenanceMode && !s.option.IsMqttConnected() && s.now().After(s.lastMaintenanceSync.Add(15*time.Minute)) {
-		s.forceSync[syncMethodInfo] = false
+	if s.maintenanceMode {
+		// Don't call a callback while holding a lock. This could result in deadlock
+		s.l.Unlock()
+		mqttIsConnected := s.option.IsMqttConnected()
+		s.l.Lock()
 
-		s.lastMaintenanceSync = s.now()
+		if s.maintenanceMode && !mqttIsConnected && s.now().After(s.lastMaintenanceSync.Add(15*time.Minute)) {
+			s.forceSync[syncMethodInfo] = false
+
+			s.lastMaintenanceSync = s.now()
+		}
 	}
 
 	for k, full := range s.forceSync {
