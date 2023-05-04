@@ -68,6 +68,8 @@ type ProcessProvider struct {
 	topinfo                TopInfo
 	lastCPUtimes           cpu.TimesStat
 	lastProcessesUpdate    time.Time
+	pendingUpdateCond      *sync.Cond
+	pendingUpdate          bool
 }
 
 // Process describe one Process.
@@ -168,6 +170,8 @@ func NewProcess(pslister ProcessLister, hostRootPath string, cr containerRuntime
 		startedAt: time.Now(),
 	}
 
+	pp.pendingUpdateCond = sync.NewCond(&pp.l)
+
 	return pp
 }
 
@@ -188,9 +192,24 @@ func (pp *ProcessProvider) TopInfo(ctx context.Context, maxAge time.Duration) (t
 	defer pp.l.Unlock()
 
 	if time.Since(pp.lastProcessesUpdate) >= maxAge {
-		err = pp.updateProcesses(ctx, time.Now(), maxAge, defaultLowProcessThreshold)
-		if err != nil {
-			return
+		for pp.pendingUpdate {
+			pp.pendingUpdateCond.Wait()
+		}
+
+		pp.pendingUpdate = true
+		defer func() {
+			pp.pendingUpdate = false
+			pp.pendingUpdateCond.Signal()
+		}()
+
+		if time.Since(pp.lastProcessesUpdate) >= maxAge {
+			pp.l.Unlock()
+			err = pp.updateProcesses(ctx, time.Now(), maxAge, defaultLowProcessThreshold)
+			pp.l.Lock()
+
+			if err != nil {
+				return
+			}
 		}
 	}
 
@@ -205,9 +224,24 @@ func (pp *ProcessProvider) ProcessesWithTime(ctx context.Context, maxAge time.Du
 	defer pp.l.Unlock()
 
 	if time.Since(pp.lastProcessesUpdate) >= maxAge {
-		err = pp.updateProcesses(ctx, time.Now(), maxAge, defaultLowProcessThreshold)
-		if err != nil {
-			return
+		for pp.pendingUpdate {
+			pp.pendingUpdateCond.Wait()
+		}
+
+		pp.pendingUpdate = true
+		defer func() {
+			pp.pendingUpdate = false
+			pp.pendingUpdateCond.Signal()
+		}()
+
+		if time.Since(pp.lastProcessesUpdate) >= maxAge {
+			pp.l.Unlock()
+			err = pp.updateProcesses(ctx, time.Now(), maxAge, defaultLowProcessThreshold)
+			pp.l.Lock()
+
+			if err != nil {
+				return
+			}
 		}
 	}
 
@@ -267,6 +301,8 @@ func convertPSStatusOneChar(letter byte) ProcessStatus {
 	}
 }
 
+// Only one updateProcesses should be running at a time (the pendingUpdateCond ensure this).
+// The lock should not be held, updateDiscovery take care of taking lock before access to mutable fields.
 func (pp *ProcessProvider) updateProcesses(ctx context.Context, now time.Time, maxAge time.Duration, lowProcessesThreshold int) error { //nolint:maintidx
 	// Process creation time is accurate up to 1/SC_CLK_TCK seconds,
 	// usually 1/100th of seconds.
@@ -551,6 +587,9 @@ func (pp *ProcessProvider) updateProcesses(ctx context.Context, now time.Time, m
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
+
+	pp.l.Lock()
+	defer pp.l.Unlock()
 
 	pp.topinfo = topinfo
 	pp.processes = newProcessesMap

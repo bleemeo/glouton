@@ -114,9 +114,8 @@ func TestServiceByCommand(t *testing.T) {
 func TestDynamicDiscoverySimple(t *testing.T) {
 	t0 := time.Now()
 
-	dd := &DynamicDiscovery{
-		now: func() time.Time { return t0 },
-		ps: mockProcess{
+	dd := NewDynamic(
+		mockProcess{
 			[]facts.Process{
 				{
 					PID:         1547,
@@ -134,13 +133,18 @@ func TestDynamicDiscoverySimple(t *testing.T) {
 				},
 			},
 		},
-		netstat: mockNetstat{result: map[int][]facts.ListenAddress{
+		mockNetstat{result: map[int][]facts.ListenAddress{
 			1547: {
 				{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 11211},
 			},
 		}},
-		isContainerIgnored: facts.ContainerFilter{}.ContainerIgnored,
-	}
+		mockContainerInfo{},
+		facts.ContainerFilter{}.ContainerIgnored,
+		nil,
+		"",
+	)
+	dd.now = func() time.Time { return t0 }
+
 	ctx := context.Background()
 
 	srv, err := dd.Discovery(ctx, 0)
@@ -875,9 +879,8 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 	ctx := context.Background()
 
 	for _, c := range cases {
-		dd := &DynamicDiscovery{
-			now: func() time.Time { return t0 },
-			ps: mockProcess{
+		dd := NewDynamic(
+			mockProcess{
 				[]facts.Process{
 					{
 						PID:         42,
@@ -886,10 +889,10 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 					},
 				},
 			},
-			netstat: mockNetstat{result: map[int][]facts.ListenAddress{
+			mockNetstat{result: map[int][]facts.ListenAddress{
 				42: c.netstatAddresses,
 			}},
-			containerInfo: mockContainerInfo{
+			mockContainerInfo{
 				containers: map[string]facts.FakeContainer{
 					c.containerID: {
 						FakePrimaryAddress:  c.containerIP,
@@ -899,11 +902,13 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 					},
 				},
 			},
-			fileReader: mockFileReader{
+			facts.ContainerFilter{}.ContainerIgnored,
+			mockFileReader{
 				contents: c.filesContent,
 			},
-			isContainerIgnored: facts.ContainerFilter{}.ContainerIgnored,
-		}
+			"",
+		)
+		dd.now = func() time.Time { return t0 }
 
 		srv, err := dd.Discovery(ctx, 0)
 		if err != nil {
@@ -1173,20 +1178,21 @@ func TestDynamicDiscovery(t *testing.T) {
 
 			t.Parallel()
 
-			dd := &DynamicDiscovery{
-				now: func() time.Time { return t0 },
-				ps: mockProcess{
+			dd := NewDynamic(
+				mockProcess{
 					result: c.processes,
 				},
-				netstat: mockNetstat{result: c.netstatAddressesPerPID},
-				containerInfo: mockContainerInfo{
+				mockNetstat{result: c.netstatAddressesPerPID},
+				mockContainerInfo{
 					containers: c.containers,
 				},
-				fileReader: mockFileReader{
+				facts.ContainerFilter{}.ContainerIgnored,
+				mockFileReader{
 					contents: c.filesContent,
 				},
-				isContainerIgnored: facts.ContainerFilter{}.ContainerIgnored,
-			}
+				"",
+			)
+			dd.now = func() time.Time { return t0 }
 
 			srv, err := dd.Discovery(ctx, 0)
 			if err != nil {
@@ -1228,7 +1234,14 @@ func Test_fillGenericExtraAttributes(t *testing.T) {
 		Address:     "192.168.0.1",
 	}
 
-	dd := &DynamicDiscovery{}
+	dd := NewDynamic(
+		mockProcess{},
+		mockNetstat{},
+		mockContainerInfo{},
+		facts.ContainerFilter{}.ContainerIgnored,
+		nil,
+		"",
+	)
 
 	dd.fillConfigFromLabels(&service)
 

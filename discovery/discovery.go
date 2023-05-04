@@ -73,6 +73,8 @@ type Discovery struct {
 	isContainerIgnored    func(facts.Container) bool
 	metricFormat          types.MetricFormat
 	processFact           processFact
+	pendingUpdateCond     *sync.Cond
+	pendingUpdate         bool
 }
 
 // Collector will gather metrics for added inputs.
@@ -139,6 +141,8 @@ func New(
 		metricFormat:          metricFormat,
 		processFact:           processFact,
 	}
+
+	discovery.pendingUpdateCond = sync.NewCond(&discovery.l)
 
 	return discovery, warnings
 }
@@ -366,16 +370,31 @@ func (d *Discovery) discovery(ctx context.Context, maxAge time.Duration) (servic
 	defer cancel()
 
 	if time.Since(d.lastDiscoveryUpdate) >= maxAge {
-		err := d.updateDiscovery(ctx, time.Now())
-		if err != nil {
-			return nil, err
+		for d.pendingUpdate {
+			d.pendingUpdateCond.Wait()
 		}
 
-		if ctx.Err() == nil {
-			saveState(d.state, d.discoveredServicesMap)
-			d.reconfigure()
+		d.pendingUpdate = true
+		defer func() {
+			d.pendingUpdate = false
+			d.pendingUpdateCond.Signal()
+		}()
 
-			d.lastDiscoveryUpdate = time.Now()
+		if time.Since(d.lastDiscoveryUpdate) >= maxAge {
+			d.l.Unlock()
+			err := d.updateDiscovery(ctx, time.Now())
+			d.l.Lock()
+
+			if err != nil {
+				return nil, err
+			}
+
+			if ctx.Err() == nil {
+				saveState(d.state, d.discoveredServicesMap)
+				d.reconfigure()
+
+				d.lastDiscoveryUpdate = time.Now()
+			}
 		}
 	}
 
@@ -425,6 +444,8 @@ func (d *Discovery) reconfigure() {
 	d.lastConfigservicesMap = d.servicesMap
 }
 
+// Only one updateDiscovery should be running at a time (the pendingUpdateCond ensure this).
+// The lock should not be held, updateDiscovery take care of taking lock before access to mutable fields.
 func (d *Discovery) updateDiscovery(ctx context.Context, now time.Time) error {
 	// Make sure we have a container list. This is important for startup, so
 	// that previously known service could get associated with container.
@@ -469,6 +490,9 @@ func (d *Discovery) updateDiscovery(ctx context.Context, now time.Time) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
+
+	d.l.Lock()
+	defer d.l.Unlock()
 
 	d.discoveredServicesMap = servicesMap
 	d.servicesMap = applyOverride(servicesMap, d.servicesOverride)
