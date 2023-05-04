@@ -92,6 +92,7 @@ type Synchronizer struct {
 	suspendedMode           bool
 	callUpdateLabels        bool
 	lastMetricCount         int
+	currentConfigNotified   string
 	agentID                 string
 
 	// configSyncDone is true when the config items were successfully synced.
@@ -280,6 +281,11 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 
 	if err := s.setClient(); err != nil {
 		return fmt.Errorf("unable to create Bleemeo HTTP client. Is the API base URL correct ? (error is %w)", err)
+	}
+
+	cfg, ok := s.option.Cache.CurrentAccountConfig()
+	if ok {
+		s.currentConfigNotified = cfg.ID
 	}
 
 	// syncInfo early because MQTT connection will establish or not depending on it (maintenance & outdated agent).
@@ -844,9 +850,15 @@ func (s *Synchronizer) syncToPerform(ctx context.Context) (map[string]bool, bool
 		fullSync = true
 	}
 
-	nextConfigAt := s.option.Cache.Agent().NextConfigAt
+	agent := s.option.Cache.Agent()
+
+	nextConfigAt := agent.NextConfigAt
 	if !nextConfigAt.IsZero() && nextConfigAt.Before(s.now()) {
 		fullSync = true
+	}
+
+	if s.currentConfigNotified != agent.CurrentConfigID {
+		syncMethods[syncMethodAccountConfig] = true
 	}
 
 	if fullSync {

@@ -44,9 +44,21 @@ func (s *Synchronizer) syncAccountConfig(ctx context.Context, fullSync bool, onl
 		}
 
 		newConfig, ok := s.option.Cache.CurrentAccountConfig()
-		if ok && !reflect.DeepEqual(currentConfig, newConfig) && s.option.UpdateConfigCallback != nil {
-			s.option.UpdateConfigCallback(ctx, currentConfig.Name != newConfig.Name)
+		if ok && s.option.UpdateConfigCallback != nil {
+			hasChanged := !reflect.DeepEqual(currentConfig, newConfig)
+			nameHasChanged := currentConfig.Name != newConfig.Name
+
+			if s.currentConfigNotified != newConfig.ID {
+				hasChanged = true
+				nameHasChanged = true
+			}
+
+			if hasChanged {
+				s.option.UpdateConfigCallback(ctx, nameHasChanged)
+			}
 		}
+
+		s.currentConfigNotified = newConfig.ID
 
 		// Set suspended mode if it changed.
 		if s.suspendedMode != newConfig.Suspended {
