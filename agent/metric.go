@@ -95,6 +95,7 @@ var (
 
 		// Probes
 		"probe_duration_seconds",
+		"probe_dns_lookup_time_seconds",
 		"probe_http_status_code",
 		"probe_success",
 		"probe_ssl_earliest_cert_expiry",
