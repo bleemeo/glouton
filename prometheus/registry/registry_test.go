@@ -33,13 +33,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gogo/protobuf/proto"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	dto "github.com/prometheus/client_model/go"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/model/relabel"
 	"github.com/prometheus/prometheus/storage"
+	"google.golang.org/protobuf/proto"
 )
 
 const testAgentID = "fcdc81a8-5bce-4305-8108-8e1e75439329"
@@ -277,7 +277,7 @@ func TestRegistry_Register(t *testing.T) {
 		},
 	}
 
-	if diff := cmp.Diff(want, result); diff != "" {
+	if diff := types.DiffMetricFamilies(want, result, false); diff != "" {
 		t.Errorf("reg.Gather() diff: (-want +got)\n%s", diff)
 	}
 
@@ -427,8 +427,8 @@ func TestRegistry_pushPoint(t *testing.T) {
 		return *got[i].Name < *got[j].Name
 	})
 
-	if diff := cmp.Diff(got, want); diff != "" {
-		t.Error(diff)
+	if diff := types.DiffMetricFamilies(want, got, false); diff != "" {
+		t.Errorf("Gather() missmatch: (-want +got):\n%s", diff)
 	}
 
 	reg.UpdateRelabelHook(func(_ context.Context, labels map[string]string) (newLabel map[string]string, retryLater bool) {
@@ -484,8 +484,8 @@ func TestRegistry_pushPoint(t *testing.T) {
 		},
 	}
 
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("reg.Gather() = %v, want %v", got, want)
+	if diff := types.DiffMetricFamilies(want, got, false); diff != "" {
+		t.Errorf("Gather() missmatch: (-want +got):\n%s", diff)
 	}
 }
 
@@ -2151,7 +2151,7 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 			wantMFs := model.MetricPointsToFamilies(want)
 			model.DropMetaLabelsFromFamilies(wantMFs)
 
-			if diff := cmp.Diff(wantMFs, got, cmpopts.EquateApprox(0.001, 0), cmpopts.EquateEmpty()); diff != "" {
+			if diff := types.DiffMetricFamilies(wantMFs, got, true); diff != "" {
 				t.Errorf("Gather mismatch (-want +got):\n%s", diff)
 			}
 		})

@@ -846,12 +846,12 @@ func Test_newMetricFilter(t *testing.T) { //nolint:maintidx
 				t.Errorf("FilterMetrics(): Expected :\n%v\ngot:\n%v", wantMetrics, gotMetrics)
 			}
 
-			if diff := cmp.Diff(gotPoints, wantPoints); diff != "" {
-				t.Errorf("FilterPoints(): %s", diff)
+			if diff := cmp.Diff(wantPoints, gotPoints); diff != "" {
+				t.Errorf("FilterPoints missmatch (-want +got):\n%s", diff)
 			}
 
-			if diff := cmp.Diff(gotFamilies, wantFamilies); diff != "" {
-				t.Errorf("FilterFamilies(): %s", diff)
+			if diff := types.DiffMetricFamilies(wantFamilies, gotFamilies, false); diff != "" {
+				t.Errorf("FilterFamilies missmatch (-want +got):\n%s", diff)
 			}
 		})
 	}

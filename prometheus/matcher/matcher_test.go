@@ -455,14 +455,14 @@ func Test_Matches_Basic_Family(t *testing.T) {
 	tests := []struct {
 		name       string
 		metricName string
-		metric     dto.Metric
+		metric     *dto.Metric
 		matchers   Matchers
 		want       bool
 	}{
 		{
 			name:       "basic metric glob",
 			metricName: fn[0],
-			metric: dto.Metric{
+			metric: &dto.Metric{
 				Label: []*dto.LabelPair{
 					{
 						Name:  &lbln[0],
@@ -496,7 +496,7 @@ func Test_Matches_Basic_Family(t *testing.T) {
 		{
 			name:       "basic metric regex",
 			metricName: fn[0],
-			metric: dto.Metric{
+			metric: &dto.Metric{
 				Label: []*dto.LabelPair{
 					{
 						Name:  &lbln[0],
@@ -526,7 +526,7 @@ func Test_Matches_Basic_Family(t *testing.T) {
 		{
 			name:       "basic metric glob fail",
 			metricName: fn[1],
-			metric: dto.Metric{
+			metric: &dto.Metric{
 				Label: []*dto.LabelPair{
 					{
 						Name:  &lbln[0],
@@ -560,7 +560,7 @@ func Test_Matches_Basic_Family(t *testing.T) {
 		{
 			name:       "basic metric glob fail missing label",
 			metricName: fn[0],
-			metric: dto.Metric{
+			metric: &dto.Metric{
 				Label: []*dto.LabelPair{
 					{
 						Name:  &lbln[0],
@@ -590,7 +590,7 @@ func Test_Matches_Basic_Family(t *testing.T) {
 		{
 			name:       "basic metric regex fail",
 			metricName: fn[2],
-			metric: dto.Metric{
+			metric: &dto.Metric{
 				Label: []*dto.LabelPair{
 					{
 						Name:  &lbln[0],
@@ -620,7 +620,7 @@ func Test_Matches_Basic_Family(t *testing.T) {
 		{
 			name:       "metric regex with unchecked labels",
 			metricName: fn[0],
-			metric: dto.Metric{
+			metric: &dto.Metric{
 				Label: []*dto.LabelPair{
 					{
 						Name:  &lbln[0],
@@ -640,7 +640,7 @@ func Test_Matches_Basic_Family(t *testing.T) {
 		{
 			name:       "metric regex with different labels",
 			metricName: fn[2],
-			metric: dto.Metric{
+			metric: &dto.Metric{
 				Label: []*dto.LabelPair{
 					{
 						Name:  &lbln[0],
@@ -673,7 +673,7 @@ func Test_Matches_Basic_Family(t *testing.T) {
 		test := test
 
 		t.Run(test.name, func(t *testing.T) {
-			got := test.matchers.Matches(model.DTO2Labels(test.metricName, &test.metric))
+			got := test.matchers.Matches(model.DTO2Labels(test.metricName, test.metric))
 
 			if got != test.want {
 				t.Errorf("An error occurred: expected %v, got %v", test.want, got)

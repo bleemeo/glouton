@@ -31,6 +31,7 @@ import (
 	"github.com/getsentry/sentry-go"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	dto "github.com/prometheus/client_model/go"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/promql/parser"
 )
@@ -493,6 +494,31 @@ func DiffMetricPoints(want []MetricPoint, got []MetricPoint, approximate bool) s
 
 	opts := []cmp.Option{
 		optMetricSort,
+		cmpopts.EquateEmpty(),
+	}
+
+	if approximate {
+		opts = append(opts, cmpopts.EquateApprox(0.001, 0))
+	}
+
+	return cmp.Diff(want, got, opts...)
+}
+
+// DiffMetricFamilies return a diff between want and got. Mostly useful in tests.
+func DiffMetricFamilies(want []*dto.MetricFamily, got []*dto.MetricFamily, approximate bool) string {
+	opts := []cmp.Option{
+		cmpopts.IgnoreUnexported(dto.MetricFamily{}),
+		cmpopts.IgnoreUnexported(dto.Metric{}),
+		cmpopts.IgnoreUnexported(dto.LabelPair{}),
+		cmpopts.IgnoreUnexported(dto.Gauge{}),
+		cmpopts.IgnoreUnexported(dto.Counter{}),
+		cmpopts.IgnoreUnexported(dto.Summary{}),
+		cmpopts.IgnoreUnexported(dto.Untyped{}),
+		cmpopts.IgnoreUnexported(dto.Histogram{}),
+		cmpopts.IgnoreUnexported(dto.Exemplar{}),
+		cmpopts.IgnoreUnexported(dto.Quantile{}),
+		cmpopts.IgnoreUnexported(dto.Bucket{}),
+		cmpopts.IgnoreUnexported(dto.BucketSpan{}),
 		cmpopts.EquateEmpty(),
 	}
 

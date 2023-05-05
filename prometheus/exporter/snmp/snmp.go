@@ -34,9 +34,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gogo/protobuf/proto"
 	dto "github.com/prometheus/client_model/go"
 	"github.com/prometheus/common/expfmt"
+	"google.golang.org/protobuf/proto"
 )
 
 const (
