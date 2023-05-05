@@ -31,10 +31,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gogo/protobuf/proto"
 	"github.com/google/go-cmp/cmp"
 	dto "github.com/prometheus/client_model/go"
 	"github.com/prometheus/common/expfmt"
+	"google.golang.org/protobuf/proto"
 )
 
 func fileToMFS(filename string) ([]*dto.MetricFamily, error) {
@@ -537,7 +537,7 @@ func Test_mfsFilterInterface(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got := mfsFilterInterface(tt.args.mfs, tt.args.interfaceUp)
 
-			if diff := cmp.Diff(tt.want, got); diff != "" {
+			if diff := types.DiffMetricFamilies(tt.want, got, false); diff != "" {
 				t.Errorf("mfsFilterInterface() mismatch (-want +got):\n%s", diff)
 			}
 		})
@@ -588,7 +588,7 @@ func Test_processMFS(t *testing.T) {
 
 			got := processMFS(input, tt.state, tt.status, types.StatusOk, tt.msg)
 
-			if diff := cmp.Diff(want, got); diff != "" {
+			if diff := types.DiffMetricFamilies(want, got, false); diff != "" {
 				t.Errorf("processMFS() mismatch (-want +got):\n%s", diff)
 			}
 		})

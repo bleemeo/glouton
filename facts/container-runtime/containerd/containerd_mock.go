@@ -38,11 +38,11 @@ import (
 	"github.com/containerd/containerd/oci"
 	"github.com/containerd/containerd/platforms"
 	"github.com/containerd/typeurl/v2"
-	prototypes "github.com/gogo/protobuf/types"
 	"github.com/google/go-cmp/cmp"
 	"github.com/opencontainers/go-digest"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/opencontainers/runtime-spec/specs-go"
+	"google.golang.org/protobuf/types/known/anypb"
 )
 
 var (
@@ -409,7 +409,7 @@ func (c MockContainer) Info(ctx context.Context, opts ...containerd.InfoOpts) (c
 	}
 
 	info := c.MockInfo.Container
-	info.Spec = &prototypes.Any{
+	info.Spec = &anypb.Any{
 		TypeUrl: expectedSpecType,
 		Value:   buffer,
 	}

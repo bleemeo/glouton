@@ -714,7 +714,7 @@ func (r *Registry) writeMetrics(ctx context.Context, file io.Writer, filter bool
 		return err
 	}
 
-	enc := expfmt.NewEncoder(file, expfmt.FmtOpenMetrics)
+	enc := expfmt.NewEncoder(file, expfmt.FmtOpenMetrics_1_0_0)
 	for _, mf := range result {
 		if err := enc.Encode(mf); err != nil {
 			return err
@@ -730,7 +730,7 @@ func (r *Registry) writeMetricsSelf(file io.Writer) error {
 		return err
 	}
 
-	enc := expfmt.NewEncoder(file, expfmt.FmtOpenMetrics)
+	enc := expfmt.NewEncoder(file, expfmt.FmtOpenMetrics_1_0_0)
 	for _, mf := range result {
 		if err := enc.Encode(mf); err != nil {
 			return err

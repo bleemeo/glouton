@@ -28,10 +28,10 @@ import (
 	"time"
 
 	"github.com/go-kit/log"
-	"github.com/gogo/protobuf/proto"
 	dto "github.com/prometheus/client_model/go"
 	"github.com/prometheus/prometheus/promql"
 	"github.com/prometheus/prometheus/rules"
+	"google.golang.org/protobuf/proto"
 )
 
 // Points older than pointsMaxAge are removed from the store.

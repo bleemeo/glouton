@@ -586,14 +586,7 @@ func TestConvertion(t *testing.T) { //nolint: maintidx
 
 			gotMFS := MetricPointsToFamilies(tt.input)
 
-			mfsCmpOpts := cmp.Options{
-				cmpopts.IgnoreUnexported(dto.MetricFamily{}),
-				cmpopts.IgnoreUnexported(dto.Metric{}),
-				cmpopts.IgnoreUnexported(dto.LabelPair{}),
-				cmpopts.EquateEmpty(),
-			}
-
-			if diff := cmp.Diff(tt.wantMFS, gotMFS, mfsCmpOpts...); diff != "" {
+			if diff := types.DiffMetricFamilies(tt.wantMFS, gotMFS, false); diff != "" {
 				t.Errorf("MetricPointsToFamilies mismatch (-want +got)\n%s", diff)
 			}
 
