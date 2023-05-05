@@ -79,10 +79,6 @@ func (s *Synchronizer) syncMainAgent(ctx context.Context) error {
 		return errNoConfig
 	}
 
-	if previousAgent.CurrentConfigID != agent.CurrentConfigID && s.option.UpdateConfigCallback != nil {
-		s.option.UpdateConfigCallback(ctx, true)
-	}
-
 	s.option.Cache.SetAccountID(agent.AccountID)
 
 	if agent.AccountID != s.option.Config.Bleemeo.AccountID && !s.warnAccountMismatchDone {

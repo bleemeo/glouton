@@ -92,6 +92,7 @@ type Synchronizer struct {
 	suspendedMode           bool
 	callUpdateLabels        bool
 	lastMetricCount         int
+	currentConfigNotified   string
 	agentID                 string
 
 	// configSyncDone is true when the config items were successfully synced.
@@ -280,6 +281,11 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 
 	if err := s.setClient(); err != nil {
 		return fmt.Errorf("unable to create Bleemeo HTTP client. Is the API base URL correct ? (error is %w)", err)
+	}
+
+	cfg, ok := s.option.Cache.CurrentAccountConfig()
+	if ok {
+		s.currentConfigNotified = cfg.ID
 	}
 
 	// syncInfo early because MQTT connection will establish or not depending on it (maintenance & outdated agent).
@@ -827,6 +833,13 @@ func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) (map[str
 // in the map, the value indicates whether a fullsync should be performed.
 // It also returns true if the current sync is a full sync.
 func (s *Synchronizer) syncToPerform(ctx context.Context) (map[string]bool, bool) {
+	// Take values that will be used later before taking the lock. This reduce dead-lock risk
+	localFacts, _ := s.option.Facts.Facts(ctx, 24*time.Hour)
+	currentSNMPCount := s.option.SNMPOnlineTarget()
+	lastDiscovery := s.option.Discovery.LastUpdate()
+	currentMetricCount := s.option.Store.MetricsCount()
+	mqttIsConnected := s.option.IsMqttConnected()
+
 	s.l.Lock()
 	defer s.l.Unlock()
 
@@ -837,9 +850,15 @@ func (s *Synchronizer) syncToPerform(ctx context.Context) (map[string]bool, bool
 		fullSync = true
 	}
 
-	nextConfigAt := s.option.Cache.Agent().NextConfigAt
+	agent := s.option.Cache.Agent()
+
+	nextConfigAt := agent.NextConfigAt
 	if !nextConfigAt.IsZero() && nextConfigAt.Before(s.now()) {
 		fullSync = true
+	}
+
+	if s.currentConfigNotified != agent.CurrentConfigID {
+		syncMethods[syncMethodAccountConfig] = true
 	}
 
 	if fullSync {
@@ -851,14 +870,16 @@ func (s *Synchronizer) syncToPerform(ctx context.Context) (map[string]bool, bool
 		syncMethods[syncMethodAlertingRules] = true
 	}
 
-	localFacts, _ := s.option.Facts.Facts(ctx, 24*time.Hour)
 	if fullSync || s.lastFactUpdatedAt != localFacts[facts.FactUpdatedAt] {
 		syncMethods[syncMethodFact] = fullSync
 	}
 
-	if s.lastSNMPcount != s.option.SNMPOnlineTarget() {
+	if s.lastSNMPcount != currentSNMPCount {
 		syncMethods[syncMethodFact] = fullSync
 		syncMethods[syncMethodSNMP] = fullSync
+		// TODO: this isn't idea. If the synchronization fail, it won't be retried.
+		// I think the ideal fix would be to always retry all syncMethods that was to synchronize but failed.
+		s.lastSNMPcount = currentSNMPCount
 	}
 
 	// After a reload, the config has been changed, so we want to do a fullsync
@@ -875,7 +896,7 @@ func (s *Synchronizer) syncToPerform(ctx context.Context) (map[string]bool, bool
 		}
 	}
 
-	if fullSync || s.lastSync.Before(s.option.Discovery.LastUpdate()) || (!minDelayed.IsZero() && s.now().After(minDelayed)) {
+	if fullSync || s.lastSync.Before(lastDiscovery) || (!minDelayed.IsZero() && s.now().After(minDelayed)) {
 		syncMethods[syncMethodService] = fullSync
 		syncMethods[syncMethodContainer] = fullSync
 	}
@@ -895,13 +916,13 @@ func (s *Synchronizer) syncToPerform(ctx context.Context) (map[string]bool, bool
 		syncMethods[syncMethodMetric] = false
 	}
 
-	if fullSync || s.now().After(s.metricRetryAt) || s.lastSync.Before(s.option.Discovery.LastUpdate()) || s.lastMetricCount != s.option.Store.MetricsCount() {
+	if fullSync || s.now().After(s.metricRetryAt) || s.lastSync.Before(lastDiscovery) || s.lastMetricCount != currentMetricCount {
 		syncMethods[syncMethodMetric] = fullSync
 	}
 
 	// when the mqtt connector is not connected, we cannot receive notifications to get out of maintenance
 	// mode, so we poll more often.
-	if s.maintenanceMode && !s.option.IsMqttConnected() && s.now().After(s.lastMaintenanceSync.Add(15*time.Minute)) {
+	if s.maintenanceMode && !mqttIsConnected && s.now().After(s.lastMaintenanceSync.Add(15*time.Minute)) {
 		s.forceSync[syncMethodInfo] = false
 
 		s.lastMaintenanceSync = s.now()

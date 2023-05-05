@@ -134,6 +134,7 @@ type agent struct {
 	threshold              *threshold.Registry
 	jmx                    *jmxtrans.JMX
 	snmpManager            *snmp.Manager
+	snmpUpdatePending      bool
 	snmpRegistration       []int
 	store                  *store.Store
 	gathererRegistry       *registry.Registry
@@ -161,6 +162,7 @@ type agent struct {
 	dockerInputID      int
 
 	l                sync.Mutex
+	cond             *sync.Cond
 	taskIDs          map[string]int
 	metricResolution time.Duration
 	configWarnings   prometheus.MultiError
@@ -185,6 +187,7 @@ type taskInfo struct {
 
 func (a *agent) init(ctx context.Context, configFiles []string, firstRun bool) (ok bool) {
 	a.l.Lock()
+	a.cond = sync.NewCond(&a.l)
 	a.lastHealthCheck = time.Now()
 	a.l.Unlock()
 
@@ -504,19 +507,26 @@ func (a *agent) notifyBleemeoUpdateLabels() {
 
 func (a *agent) updateSNMPResolution(resolution time.Duration) {
 	a.l.Lock()
-	defer a.l.Unlock()
 
-	for _, id := range a.snmpRegistration {
-		a.gathererRegistry.Unregister(id)
+	for a.snmpUpdatePending {
+		a.cond.Wait()
 	}
 
-	if a.snmpRegistration != nil {
-		a.snmpRegistration = a.snmpRegistration[:0]
+	a.snmpUpdatePending = true
+	previousRegistration := a.snmpRegistration
+	a.snmpRegistration = nil
+
+	a.l.Unlock()
+
+	for _, id := range previousRegistration {
+		a.gathererRegistry.Unregister(id)
 	}
 
 	if resolution == 0 {
 		return
 	}
+
+	var newRegistration []int
 
 	for _, target := range a.snmpManager.Gatherers() {
 		hash := labels.FromMap(target.ExtraLabels).Hash()
@@ -535,9 +545,16 @@ func (a *agent) updateSNMPResolution(resolution time.Duration) {
 		if err != nil {
 			logger.Printf("Unable to add SNMP scrapper for target %s: %v", target.Address, err)
 		} else {
-			a.snmpRegistration = append(a.snmpRegistration, id)
+			newRegistration = append(newRegistration, id)
 		}
 	}
+
+	a.l.Lock()
+	defer a.l.Unlock()
+
+	a.snmpUpdatePending = false
+	a.cond.Broadcast()
+	a.snmpRegistration = append(a.snmpRegistration, newRegistration...)
 }
 
 func (a *agent) updateMetricResolution(ctx context.Context, defaultResolution time.Duration, snmpResolution time.Duration) {
@@ -1509,7 +1526,7 @@ func (a *agent) watchdog(ctx context.Context) error {
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
 
-	failing := false
+	failingCount := 0
 
 	for {
 		select {
@@ -1533,11 +1550,11 @@ func (a *agent) watchdog(ctx context.Context) error {
 		a.l.Unlock()
 
 		switch {
-		case time.Since(lastHealthCheck) > 15*time.Minute && !failing:
+		case time.Since(lastHealthCheck) > 15*time.Minute && failingCount < 2:
 			logger.V(2).Printf("Healthcheck are no longer running. Last run was at %s", lastHealthCheck.Format(time.RFC3339))
 
-			failing = true
-		case time.Since(lastHealthCheck) > 15*time.Minute && failing:
+			failingCount++
+		case time.Since(lastHealthCheck) > 15*time.Minute && failingCount >= 2:
 			logger.Printf("Healthcheck are no longer running. Last run was at %s", lastHealthCheck.Format(time.RFC3339))
 			// We don't know how big the buffer needs to be to collect
 			// all the goroutines. Use 2MB buffer which hopefully is enough
@@ -1548,7 +1565,7 @@ func (a *agent) watchdog(ctx context.Context) error {
 			logger.Printf("Glouton seems unhealthy, killing myself")
 			panic("Glouton seems unhealthy (health check is no longer running), killing myself")
 		default:
-			failing = false
+			failingCount = 0
 		}
 	}
 }

@@ -56,6 +56,8 @@ type DynamicDiscovery struct {
 	fileReader         fileReader
 	defaultStack       string
 	isContainerIgnored func(facts.Container) bool
+	pendingUpdateCond  *sync.Cond
+	pendingUpdate      bool
 
 	lastDiscoveryUpdate time.Time
 	services            []Service
@@ -73,7 +75,7 @@ type fileReader interface {
 // NewDynamic create a new dynamic service discovery which use information from
 // processess and netstat to discovery services.
 func NewDynamic(ps processFact, netstat netstatProvider, containerInfo containerInfoProvider, isContainerIgnored func(facts.Container) bool, fileReader fileReader, defaultStack string) *DynamicDiscovery {
-	return &DynamicDiscovery{
+	dd := &DynamicDiscovery{
 		now:                time.Now,
 		ps:                 ps,
 		netstat:            netstat,
@@ -82,6 +84,10 @@ func NewDynamic(ps processFact, netstat netstatProvider, containerInfo container
 		defaultStack:       defaultStack,
 		isContainerIgnored: isContainerIgnored,
 	}
+
+	dd.pendingUpdateCond = sync.NewCond(&dd.l)
+
+	return dd
 }
 
 // Discovery detect service running on the system and return a list of Service object.
@@ -99,19 +105,34 @@ func (dd *DynamicDiscovery) Discovery(ctx context.Context, maxAge time.Duration)
 	dd.l.Lock()
 	defer dd.l.Unlock()
 
-	ctx, cancel := context.WithTimeout(ctx, discoveryTimeout)
-	defer cancel()
-
 	if time.Since(dd.lastDiscoveryUpdate) >= maxAge {
-		err = dd.updateDiscovery(ctx, maxAge)
-		if err != nil {
-			logger.V(2).Printf("An error occurred while running discovery: %v", err)
+		for dd.pendingUpdate {
+			dd.pendingUpdateCond.Wait()
+		}
 
-			return
+		dd.pendingUpdate = true
+		defer func() {
+			dd.pendingUpdate = false
+			dd.pendingUpdateCond.Signal()
+		}()
+
+		if time.Since(dd.lastDiscoveryUpdate) >= maxAge {
+			ctx, cancel := context.WithTimeout(ctx, discoveryTimeout)
+			defer cancel()
+
+			dd.l.Unlock()
+			err = dd.updateDiscovery(ctx, maxAge)
+			dd.l.Lock()
+
+			if err != nil {
+				logger.V(2).Printf("An error occurred while running discovery: %v", err)
+
+				return
+			}
 		}
 	}
 
-	return dd.services, ctx.Err()
+	return dd.services, nil
 }
 
 // LastUpdate return when the last update occurred.
@@ -274,6 +295,8 @@ type netstatProvider interface {
 	Netstat(ctx context.Context, processes map[int]facts.Process) (netstat map[int][]facts.ListenAddress, err error)
 }
 
+// Only one updateDiscovery should be running at a time (the pendingUpdateCond ensure this).
+// The lock should not be held, updateDiscovery take care of taking lock before access to mutable fields.
 func (dd *DynamicDiscovery) updateDiscovery(ctx context.Context, maxAge time.Duration) error {
 	processes, err := dd.ps.Processes(ctx, maxAge)
 	if err != nil {
@@ -364,6 +387,9 @@ func (dd *DynamicDiscovery) updateDiscovery(ctx context.Context, maxAge time.Dur
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
+
+	dd.l.Lock()
+	defer dd.l.Unlock()
 
 	dd.lastDiscoveryUpdate = time.Now()
 	services := make([]Service, 0, len(servicesMap))
