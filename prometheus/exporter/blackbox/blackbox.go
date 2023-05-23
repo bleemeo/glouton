@@ -287,7 +287,11 @@ func (target configTarget) CollectWithContext(ctx context.Context, ch chan<- pro
 	if success {
 		successVal = 1
 	}
-	ch <- prometheus.MustNewConstMetric(probeDurationDesc, prometheus.GaugeValue, duration.Seconds(), target.Name)
+
+	if ctx.Err() == nil {
+		// only emit probe_duration_seconds if it didn't timeout
+		ch <- prometheus.MustNewConstMetric(probeDurationDesc, prometheus.GaugeValue, duration.Seconds(), target.Name)
+	}
 	ch <- prometheus.MustNewConstMetric(probeSuccessDesc, prometheus.GaugeValue, successVal, target.Name)
 }
 
