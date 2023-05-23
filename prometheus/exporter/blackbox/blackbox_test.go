@@ -74,6 +74,7 @@ type testCase struct {
 	probeDurationIsTimeout bool
 }
 
+// Test_Collect_HTTPS tests HTTPS (and HTTP) probes.
 func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 	monitorID := "7331d6c1-ede1-4483-a3b3-c99f0965f64b"
 	agentID := "1d6a2c82-4579-4f7d-91fe-3d4946aacaf7"
@@ -1520,7 +1521,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 	}
 }
 
-func runTest(t *testing.T, test testCase, isSSL bool, monitorID, agentID, agentFQDN string, t0 time.Time) {
+func runTest(t *testing.T, test testCase, usePlainTCPOrSSL bool, monitorID, agentID, agentFQDN string, t0 time.Time) {
 	t.Helper()
 	t.Parallel()
 
@@ -1528,8 +1529,9 @@ func runTest(t *testing.T, test testCase, isSSL bool, monitorID, agentID, agentF
 	defer test.target.Close()
 
 	targetURL := test.target.URL()
-	if isSSL {
+	if usePlainTCPOrSSL {
 		targetURL = strings.Replace(targetURL, "https://", "ssl://", 1)
+		targetURL = strings.Replace(targetURL, "http://", "tcp://", 1)
 	}
 
 	monitor := types.Monitor{
@@ -1872,7 +1874,8 @@ func (t *httpTestTarget) RequestContext(ctx context.Context) context.Context {
 	})
 }
 
-func Test_Collect_SSL(t *testing.T) { //nolint:maintidx
+// Test_Collect_TCP tests tcp:// and ssl:// probes.
+func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 	monitorID := "7331d6c1-ede1-4483-a3b3-c99f0965f64b"
 	agentID := "1d6a2c82-4579-4f7d-91fe-3d4946aacaf7"
 	targetNotYetKnown := "this-label-value-will-be-replaced"
@@ -1888,7 +1891,7 @@ func Test_Collect_SSL(t *testing.T) { //nolint:maintidx
 
 	tests := []testCase{
 		{
-			name: "success-200",
+			name: "ssl-success-200",
 			absentPoints: []map[string]string{
 				{
 					types.LabelName:         "probe_failed_due_to_tls_error",
@@ -2693,6 +2696,76 @@ func Test_Collect_SSL(t *testing.T) { //nolint:maintidx
 			},
 			trustCert: true,
 			target:    &httpTestTarget{TLSCert: []tls.Certificate{certs.CertExpireFar}, CloseInTLSHandshake: true},
+		},
+		{
+			name: "tcp-success",
+			wantPoints: []types.MetricPoint{
+				{
+					Point: types.Point{Time: t0, Value: 1},
+					Labels: map[string]string{
+						types.LabelName:         "probe_success",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: math.NaN()},
+					Labels: map[string]string{
+						types.LabelName:         "probe_duration_seconds",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+			},
+			target: &httpTestTarget{},
+		},
+		/*{
+		I'm not sure we can easily simulare a TCP connect() timeout.
+		I've trying just bind() and/or listen() a socket (e.g. never call accept()) but it's don't
+		work on all OS (on Linux it don't timeout, the connection succeed).
+		name: "tcp-timeout",
+		[...]
+		*/
+		{
+			name: "tcp-connection-refused",
+			wantPoints: []types.MetricPoint{
+				{
+					Point: types.Point{Time: t0, Value: 0},
+					Labels: map[string]string{
+						types.LabelName:         "probe_success",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: math.NaN()},
+					Labels: map[string]string{
+						types.LabelName:         "probe_duration_seconds",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+			},
+			target: &httpTestTarget{
+				ServerStopped: true,
+			},
+			probeDurationIsTimeout: false,
 		},
 	}
 
