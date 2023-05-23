@@ -221,6 +221,7 @@ func (a *agent) init(ctx context.Context, configFiles []string, firstRun bool) (
 		err := sentry.Init(sentry.ClientOptions{
 			Dsn:              a.config.Bleemeo.Sentry.DSN,
 			AttachStacktrace: true,
+			Release:          version.Version,
 		})
 		if err != nil {
 			logger.V(1).Printf("sentry.Init failed: %s", err)
