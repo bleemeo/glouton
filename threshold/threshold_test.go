@@ -273,7 +273,7 @@ func TestFormatDuration(t *testing.T) {
 	for _, c := range cases {
 		got := formatDuration(c.value)
 		if got != c.want {
-			t.Errorf("formatValue(%v) == %v, want %v", c.value, got, c.want)
+			t.Errorf("formatDuration(%v) == %v, want %v", c.value, got, c.want)
 		}
 	}
 }
