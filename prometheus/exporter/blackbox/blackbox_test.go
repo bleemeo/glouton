@@ -71,7 +71,14 @@ type testCase struct {
 	absentPoints []map[string]string
 	target       testTarget
 	trustCert    bool
+	// Check that probe duration is between given value.
+	// If the min or max value is 0, no check is done.
+	probeDurationMinValue float64
+	probeDurationMaxValue float64
 }
+
+// timeoutTime is a time longer any of our timeouts.
+const timeoutTime = 15 * time.Second
 
 // Test_Collect_HTTPS tests HTTPS (and HTTP) probes.
 func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
@@ -174,7 +181,8 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 			},
-			target: &httpTestTarget{},
+			probeDurationMaxValue: 5,
+			target:                &httpTestTarget{},
 		},
 		{
 			name:         "success-200",
@@ -278,8 +286,9 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 			},
-			trustCert: true,
-			target:    &httpTestTarget{TLSCert: []tls.Certificate{certs.CertExpireFar}},
+			probeDurationMaxValue: 5,
+			trustCert:             true,
+			target:                &httpTestTarget{TLSCert: []tls.Certificate{certs.CertExpireFar}},
 		},
 		{
 			name:         "fail-404",
@@ -383,7 +392,8 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 			},
-			trustCert: true,
+			probeDurationMaxValue: 5,
+			trustCert:             true,
 			target: &httpTestTarget{
 				TLSCert:    []tls.Certificate{certs.CertExpireFar},
 				StatusCode: 404,
@@ -1117,30 +1127,48 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					types.LabelInstanceUUID: agentID,
 					types.LabelScraper:      agentFQDN,
 				},
-				{
-					types.LabelName:         "probe_ssl_last_chain_expiry_timestamp_seconds",
-					types.LabelInstance:     targetNotYetKnown,
-					types.LabelInstanceUUID: agentID,
-					types.LabelScraper:      agentFQDN,
-				},
-				{
-					types.LabelName:         "probe_ssl_validation_success",
-					types.LabelInstance:     targetNotYetKnown,
-					types.LabelInstanceUUID: agentID,
-					types.LabelScraper:      agentFQDN,
-				},
-				{
-					types.LabelName:         "probe_duration_seconds",
-					types.LabelInstance:     targetNotYetKnown,
-					types.LabelInstanceUUID: agentID,
-					types.LabelScraper:      agentFQDN,
-				},
 			},
 			wantPoints: []types.MetricPoint{
 				{
 					Point: types.Point{Time: t0, Value: 0},
 					Labels: map[string]string{
 						types.LabelName:         "probe_success",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: math.NaN()},
+					Labels: map[string]string{
+						types.LabelName:         "probe_duration_seconds",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: 0},
+					Labels: map[string]string{
+						types.LabelName:         "probe_ssl_validation_success",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: float64(time.Time{}.Unix())},
+					Labels: map[string]string{
+						types.LabelName:         "probe_ssl_last_chain_expiry_timestamp_seconds",
 						types.LabelInstance:     targetNotYetKnown,
 						types.LabelInstanceUUID: agentID,
 						types.LabelScraper:      agentFQDN,
@@ -1187,7 +1215,10 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 			},
-			trustCert: true,
+			// blackbox exporter have a default timeout of 10 second for TLS handshake.
+			probeDurationMinValue: 10,
+			probeDurationMaxValue: defaultTimeout.Seconds(),
+			trustCert:             true,
 			target: &httpTestTarget{
 				TLSCert:               []tls.Certificate{certs.CertExpireFar},
 				TimeoutInTLSHandshake: true,
@@ -1202,30 +1233,48 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					types.LabelInstanceUUID: agentID,
 					types.LabelScraper:      agentFQDN,
 				},
-				{
-					types.LabelName:         "probe_ssl_last_chain_expiry_timestamp_seconds",
-					types.LabelInstance:     targetNotYetKnown,
-					types.LabelInstanceUUID: agentID,
-					types.LabelScraper:      agentFQDN,
-				},
-				{
-					types.LabelName:         "probe_ssl_validation_success",
-					types.LabelInstance:     targetNotYetKnown,
-					types.LabelInstanceUUID: agentID,
-					types.LabelScraper:      agentFQDN,
-				},
-				{
-					types.LabelName:         "probe_duration_seconds",
-					types.LabelInstance:     targetNotYetKnown,
-					types.LabelInstanceUUID: agentID,
-					types.LabelScraper:      agentFQDN,
-				},
 			},
 			wantPoints: []types.MetricPoint{
 				{
 					Point: types.Point{Time: t0, Value: 0},
 					Labels: map[string]string{
 						types.LabelName:         "probe_success",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: math.NaN()},
+					Labels: map[string]string{
+						types.LabelName:         "probe_duration_seconds",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: 0},
+					Labels: map[string]string{
+						types.LabelName:         "probe_ssl_validation_success",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: float64(time.Time{}.Unix())},
+					Labels: map[string]string{
+						types.LabelName:         "probe_ssl_last_chain_expiry_timestamp_seconds",
 						types.LabelInstance:     targetNotYetKnown,
 						types.LabelInstanceUUID: agentID,
 						types.LabelScraper:      agentFQDN,
@@ -1272,7 +1321,10 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					},
 				},
 			},
-			trustCert: true,
+			// blackbox exporter have a default timeout of 10 second for TLS handshake.
+			probeDurationMinValue: 10,
+			probeDurationMaxValue: defaultTimeout.Seconds(),
+			trustCert:             true,
 			target: &httpTestTarget{
 				TLSCert:            []tls.Certificate{certs.CertExpireFar},
 				TimeoutInTCPAccept: true,
@@ -1979,8 +2031,16 @@ func runTest(t *testing.T, test testCase, usePlainTCPOrSSL bool, monitorID, agen
 		}
 
 		if want.Labels[types.LabelName] == "probe_duration_seconds" {
-			if got.Value > 5 {
-				t.Errorf("probe_duration_seconds = %v, want <= 5", got.Value)
+			if test.probeDurationMaxValue != 0 {
+				if got.Value > test.probeDurationMaxValue {
+					t.Errorf("probe_duration_seconds = %v, want <= %v", got.Value, test.probeDurationMaxValue)
+				}
+			}
+
+			if test.probeDurationMinValue != 0 {
+				if got.Value < test.probeDurationMinValue {
+					t.Errorf("probe_duration_seconds = %v, want >= %v", got.Value, test.probeDurationMinValue)
+				}
 			}
 		}
 	}
@@ -2129,7 +2189,7 @@ type wrapListenner struct {
 
 func (w wrapListenner) Accept() (net.Conn, error) {
 	if w.Timeout {
-		time.Sleep(11 * time.Second)
+		time.Sleep(timeoutTime)
 	}
 
 	return w.Listener.Accept()
@@ -2138,7 +2198,7 @@ func (w wrapListenner) Accept() (net.Conn, error) {
 func (t *httpTestTarget) Start() {
 	t.srv = httptest.NewUnstartedServer(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
 		if t.TimeoutInHTTP {
-			time.Sleep(11 * time.Second)
+			time.Sleep(timeoutTime)
 		}
 
 		if t.CloseInHTTP {
@@ -2176,7 +2236,7 @@ func (t *httpTestTarget) Start() {
 
 		t.srv.TLS.GetCertificate = func(chi *tls.ClientHelloInfo) (*tls.Certificate, error) {
 			if t.TimeoutInTLSHandshake {
-				time.Sleep(11 * time.Second)
+				time.Sleep(timeoutTime)
 			}
 
 			if t.CloseInTLSHandshake {
@@ -2218,7 +2278,7 @@ func (t *httpTestTarget) RequestContext(ctx context.Context) context.Context {
 	return httptrace.WithClientTrace(ctx, &httptrace.ClientTrace{
 		TLSHandshakeDone: func(cs tls.ConnectionState, e error) {
 			if t.TimeoutAfterHandshake {
-				time.Sleep(11 * time.Second)
+				time.Sleep(timeoutTime)
 			}
 		},
 	})
@@ -2324,8 +2384,9 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					},
 				},
 			},
-			trustCert: true,
-			target:    &httpTestTarget{TLSCert: []tls.Certificate{certs.CertExpireFar}},
+			probeDurationMaxValue: 5,
+			trustCert:             true,
+			target:                &httpTestTarget{TLSCert: []tls.Certificate{certs.CertExpireFar}},
 		},
 		{
 			name: "ssl-expire-soon",
@@ -3273,7 +3334,8 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 					},
 				},
 			},
-			target: &httpTestTarget{},
+			probeDurationMaxValue: 5,
+			target:                &httpTestTarget{},
 		},
 		/*{
 		I'm not sure we can easily simulare a TCP connect() timeout.
