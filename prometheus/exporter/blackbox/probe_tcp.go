@@ -97,15 +97,17 @@ func ProbeTCP(ctx context.Context, target string, module config.Module, registry
 
 	conn, err := dialTCP(ctx, target, module, registry, logger)
 	if err != nil {
-		registry.MustRegister(probeFailedDueToTLSError)
+		if module.TCP.TLS {
+			registry.MustRegister(probeFailedDueToTLSError)
 
-		var netErr net.Error
+			var netErr net.Error
 
-		if errors.As(err, &netErr) && netErr.Timeout() ||
-			strings.Contains(err.Error(), "tls:") || err.Error() == "EOF" {
-			probeFailedDueToTLSError.Set(1)
-		} else {
-			probeFailedDueToTLSError.Set(0)
+			if errors.As(err, &netErr) && netErr.Timeout() ||
+				strings.Contains(err.Error(), "tls:") || err.Error() == "EOF" {
+				probeFailedDueToTLSError.Set(1)
+			} else {
+				probeFailedDueToTLSError.Set(0)
+			}
 		}
 
 		_ = level.Error(logger).Log("msg", "Error dialing TCP", "err", err)

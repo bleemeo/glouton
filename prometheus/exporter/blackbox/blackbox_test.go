@@ -3308,6 +3308,14 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 		},
 		{
 			name: "tcp-success",
+			absentPoints: []map[string]string{
+				{
+					types.LabelName:         "probe_failed_due_to_tls_error",
+					types.LabelInstance:     targetNotYetKnown,
+					types.LabelInstanceUUID: agentID,
+					types.LabelScraper:      agentFQDN,
+				},
+			},
 			wantPoints: []types.MetricPoint{
 				{
 					Point: types.Point{Time: t0, Value: 1},
@@ -3346,6 +3354,14 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 		*/
 		{
 			name: "tcp-connection-refused",
+			absentPoints: []map[string]string{
+				{
+					types.LabelName:         "probe_failed_due_to_tls_error",
+					types.LabelInstance:     targetNotYetKnown,
+					types.LabelInstanceUUID: agentID,
+					types.LabelScraper:      agentFQDN,
+				},
+			},
 			wantPoints: []types.MetricPoint{
 				{
 					Point: types.Point{Time: t0, Value: 0},
@@ -3378,6 +3394,14 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 		},
 		{
 			name: "tcp-bad-dns",
+			absentPoints: []map[string]string{
+				{
+					types.LabelName:         "probe_failed_due_to_tls_error",
+					types.LabelInstance:     targetNotYetKnown,
+					types.LabelInstanceUUID: agentID,
+					types.LabelScraper:      agentFQDN,
+				},
+			},
 			wantPoints: []types.MetricPoint{
 				{
 					Point: types.Point{Time: t0, Value: 0},
