@@ -23,7 +23,7 @@ Glouton is the agent used in the **Bleemeo cloud monitoring solution**. Deployin
 - Support **[Nagios checks](https://go.bleemeo.com/l/custom-service-check), [NRPE](https://go.bleemeo.com/l/agent-configuration-nagios-nrpe) and [StatsD](https://go.bleemeo.com/l/doc-statsd)** metrics ingester
 - **Kubernetes native:** create metrics and checks for pods
 - Monitor your printers and network devices with [**SNMP**](https://go.bleemeo.com/l/network-monitoring-installation)
-- **[JMX support](https://go.bleemeo.com/l/java)** to monitor your Java applications.
+- **[JMX support](https://go.bleemeo.com/l/java-monitoring)** to monitor your Java applications.
 - Integrated **web dashboard**
 - Support [pushing metrics](#mqtt) to an external **[MQTT](https://mqtt.org/) broker**
 
