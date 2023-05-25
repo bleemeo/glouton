@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"glouton/config"
 	"glouton/facts"
-	"glouton/inputs"
 	"glouton/logger"
 	"glouton/prometheus/registry"
 	"glouton/task"
@@ -101,9 +100,7 @@ func New(
 	dynamicDiscovery Discoverer,
 	coll Collector,
 	metricRegistry GathererRegistry,
-	taskRegistry Registry,
 	state State,
-	acc inputs.AnnotationAccumulator,
 	containerInfo containerInfoProvider,
 	servicesOverride []config.Service,
 	isCheckIgnored func(Service) bool,

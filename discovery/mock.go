@@ -35,7 +35,9 @@ func (md *MockDiscoverer) SetResult(services []Service, err error) {
 }
 
 // Discovery implements Discoverer.
-func (md *MockDiscoverer) Discovery(ctx context.Context, maxAge time.Duration) (services []Service, err error) {
+func (md *MockDiscoverer) Discovery(_ context.Context, maxAge time.Duration) (services []Service, err error) {
+	_ = maxAge
+
 	return md.result, md.err
 }
 
@@ -49,4 +51,4 @@ func (md *MockDiscoverer) LastUpdate() time.Time {
 }
 
 // RemoveIfNonRunning implements PersistentDiscoverer.
-func (md MockDiscoverer) RemoveIfNonRunning(ctx context.Context, services []Service) {}
+func (md MockDiscoverer) RemoveIfNonRunning(context.Context, []Service) {}

@@ -53,7 +53,7 @@ func (a *dynamicAppendable) SetAppendable(app storage.Appendable) {
 	a.app = app
 }
 
-func (a errAppender) Append(ref storage.SeriesRef, l labels.Labels, t int64, v float64) (storage.SeriesRef, error) {
+func (a errAppender) Append(storage.SeriesRef, labels.Labels, int64, float64) (storage.SeriesRef, error) {
 	return 0, errNotAvailable
 }
 
@@ -65,6 +65,6 @@ func (a errAppender) Rollback() error {
 	return errNotAvailable
 }
 
-func (a errAppender) AppendExemplar(ref storage.SeriesRef, l labels.Labels, e exemplar.Exemplar) (storage.SeriesRef, error) {
+func (a errAppender) AppendExemplar(storage.SeriesRef, labels.Labels, exemplar.Exemplar) (storage.SeriesRef, error) {
 	return 0, errNotAvailable
 }

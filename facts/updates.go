@@ -43,7 +43,7 @@ type updateFacter struct {
 
 // PendingSystemUpdateFreshness return the indicative value for last update of the preferred method.
 // It could be zero if the preferred method don't have any cache or we can't determine the freshness value.
-func PendingSystemUpdateFreshness(ctx context.Context, inContainer bool, hostRootPath string) time.Time {
+func PendingSystemUpdateFreshness(_ context.Context, inContainer bool, hostRootPath string) time.Time {
 	if hostRootPath == "" && inContainer {
 		return time.Time{}
 	}

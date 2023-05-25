@@ -72,7 +72,9 @@ type mockProcessQuerier struct {
 	CGroupCalls []int
 }
 
-func (m *mockProcessQuerier) Processes(ctx context.Context, maxAge time.Duration) (processes []Process, err error) {
+func (m *mockProcessQuerier) Processes(_ context.Context, maxAge time.Duration) (processes []Process, err error) {
+	_ = maxAge
+
 	return m.processesResult, nil
 }
 
@@ -130,7 +132,7 @@ func (m *mockContainerRuntime) ProcessWithCache() ContainerRuntimeProcessQuerier
 	return m
 }
 
-func (m *mockContainerRuntime) Processes(ctx context.Context) ([]Process, error) {
+func (m *mockContainerRuntime) Processes(_ context.Context) ([]Process, error) {
 	m.ProcessesCallCount++
 
 	if m.otherErr != nil {
@@ -140,7 +142,7 @@ func (m *mockContainerRuntime) Processes(ctx context.Context) ([]Process, error)
 	return m.processesResult, nil
 }
 
-func (m *mockContainerRuntime) ContainerFromCGroup(ctx context.Context, cgroupData string) (Container, error) {
+func (m *mockContainerRuntime) ContainerFromCGroup(_ context.Context, cgroupData string) (Container, error) {
 	m.ContainerFromCGroupCalls = append(m.ContainerFromCGroupCalls, cgroupData)
 
 	c := m.cgroup2Container[cgroupData]
@@ -163,7 +165,9 @@ func (m *mockContainerRuntime) ContainerFromCGroup(ctx context.Context, cgroupDa
 	return nil, nil //nolint: nilnil // here first nil means not found and its not an error.
 }
 
-func (m *mockContainerRuntime) ContainerFromPID(ctx context.Context, parentContainerID string, pid int) (Container, error) {
+func (m *mockContainerRuntime) ContainerFromPID(_ context.Context, parentContainerID string, pid int) (Container, error) {
+	_ = parentContainerID
+
 	m.ContainerFromPIDCalls = append(m.ContainerFromPIDCalls, pid)
 
 	if m.fromPIDErr != nil {

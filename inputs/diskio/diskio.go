@@ -77,6 +77,9 @@ func (dt diskIOTransformer) renameGlobal(gatherContext internal.GatherContext) (
 }
 
 func (dt diskIOTransformer) transformMetrics(currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {
+	_ = currentContext
+	_ = originalFields
+
 	for _, name := range []string{"io_time", "read_time", "write_time"} {
 		if value, ok := fields[name]; ok {
 			delete(fields, name)

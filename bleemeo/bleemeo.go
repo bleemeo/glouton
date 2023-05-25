@@ -659,11 +659,7 @@ func (c *Connector) DiagnosticArchive(ctx context.Context, archive gloutonTypes.
 
 	c.diagnosticCache(file)
 
-	if err := c.sync.DiagnosticArchive(ctx, archive); err != nil {
-		return err
-	}
-
-	return nil
+	return c.sync.DiagnosticArchive(ctx, archive)
 }
 
 // DiagnosticSNMPAssociation return useful information to troubleshoot issue.

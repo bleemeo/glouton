@@ -46,6 +46,9 @@ func New() (i telegraf.Input, err error) {
 }
 
 func transformMetrics(currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {
+	_ = currentContext
+	_ = originalFields
+
 	if value, ok := fields["used_percent"]; ok {
 		delete(fields, "used_percent")
 		fields["used_perc"] = value

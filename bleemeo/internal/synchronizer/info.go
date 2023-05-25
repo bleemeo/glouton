@@ -32,6 +32,8 @@ import (
 
 // syncInfo retrieves the minimum supported glouton version the API supports.
 func (s *Synchronizer) syncInfo(ctx context.Context, _ bool, onlyEssential bool) (updateThresholds bool, err error) {
+	_ = onlyEssential
+
 	return s.syncInfoReal(ctx, true)
 }
 

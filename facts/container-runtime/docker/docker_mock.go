@@ -50,17 +50,23 @@ var (
 )
 
 // ContainerExecAttach is not implemented.
-func (cl *MockDockerClient) ContainerExecAttach(ctx context.Context, execID string, config dockerTypes.ExecStartCheck) (dockerTypes.HijackedResponse, error) {
+func (cl *MockDockerClient) ContainerExecAttach(_ context.Context, execID string, config dockerTypes.ExecStartCheck) (dockerTypes.HijackedResponse, error) {
+	_ = execID
+	_ = config
+
 	return dockerTypes.HijackedResponse{}, errNotImplemented
 }
 
 // ContainerExecCreate is not implemented.
-func (cl *MockDockerClient) ContainerExecCreate(ctx context.Context, container string, config dockerTypes.ExecConfig) (dockerTypes.IDResponse, error) {
+func (cl *MockDockerClient) ContainerExecCreate(_ context.Context, container string, config dockerTypes.ExecConfig) (dockerTypes.IDResponse, error) {
+	_ = container
+	_ = config
+
 	return dockerTypes.IDResponse{}, errNotImplemented
 }
 
 // ContainerInspect return inspect for in-memory list of containers.
-func (cl *MockDockerClient) ContainerInspect(ctx context.Context, container string) (dockerTypes.ContainerJSON, error) {
+func (cl *MockDockerClient) ContainerInspect(_ context.Context, container string) (dockerTypes.ContainerJSON, error) {
 	if cl.ReturnError != nil {
 		return dockerTypes.ContainerJSON{}, cl.ReturnError
 	}
@@ -75,7 +81,7 @@ func (cl *MockDockerClient) ContainerInspect(ctx context.Context, container stri
 }
 
 // ContainerList list containers from in-memory list.
-func (cl *MockDockerClient) ContainerList(ctx context.Context, options dockerTypes.ContainerListOptions) ([]dockerTypes.Container, error) {
+func (cl *MockDockerClient) ContainerList(_ context.Context, options dockerTypes.ContainerListOptions) ([]dockerTypes.Container, error) {
 	if cl.ReturnError != nil {
 		return nil, cl.ReturnError
 	}
@@ -99,7 +105,7 @@ func (cl *MockDockerClient) ContainerList(ctx context.Context, options dockerTyp
 }
 
 // ContainerTop return hard-coded value for top.
-func (cl *MockDockerClient) ContainerTop(ctx context.Context, container string, arguments []string) (containerTypes.ContainerTopOKBody, error) {
+func (cl *MockDockerClient) ContainerTop(_ context.Context, container string, arguments []string) (containerTypes.ContainerTopOKBody, error) {
 	cl.TopCallCount++
 
 	if cl.ReturnError != nil {
@@ -118,7 +124,7 @@ func (cl *MockDockerClient) ContainerTop(ctx context.Context, container string, 
 }
 
 // Events do events.
-func (cl *MockDockerClient) Events(ctx context.Context, options dockerTypes.EventsOptions) (<-chan events.Message, <-chan error) {
+func (cl *MockDockerClient) Events(context.Context, dockerTypes.EventsOptions) (<-chan events.Message, <-chan error) {
 	if cl.ReturnError != nil {
 		ch := make(chan error, 1)
 		ch <- cl.ReturnError
@@ -137,17 +143,20 @@ func (cl *MockDockerClient) Events(ctx context.Context, options dockerTypes.Even
 }
 
 // NetworkInspect is not implemented.
-func (cl *MockDockerClient) NetworkInspect(ctx context.Context, network string, options dockerTypes.NetworkInspectOptions) (dockerTypes.NetworkResource, error) {
+func (cl *MockDockerClient) NetworkInspect(_ context.Context, network string, options dockerTypes.NetworkInspectOptions) (dockerTypes.NetworkResource, error) {
+	_ = network
+	_ = options
+
 	return dockerTypes.NetworkResource{}, fmt.Errorf("NetworkInspect %w", errNotImplemented)
 }
 
 // NetworkList is not implemented.
-func (cl *MockDockerClient) NetworkList(ctx context.Context, options dockerTypes.NetworkListOptions) ([]dockerTypes.NetworkResource, error) {
+func (cl *MockDockerClient) NetworkList(context.Context, dockerTypes.NetworkListOptions) ([]dockerTypes.NetworkResource, error) {
 	return nil, fmt.Errorf("NetworkList %w", errNotImplemented)
 }
 
 // Ping do nothing.
-func (cl *MockDockerClient) Ping(ctx context.Context) (dockerTypes.Ping, error) {
+func (cl *MockDockerClient) Ping(context.Context) (dockerTypes.Ping, error) {
 	if cl.ReturnError != nil {
 		return dockerTypes.Ping{}, cl.ReturnError
 	}
@@ -156,7 +165,7 @@ func (cl *MockDockerClient) Ping(ctx context.Context) (dockerTypes.Ping, error) 
 }
 
 // ServerVersion do server version.
-func (cl *MockDockerClient) ServerVersion(ctx context.Context) (dockerTypes.Version, error) {
+func (cl *MockDockerClient) ServerVersion(context.Context) (dockerTypes.Version, error) {
 	if cl.ReturnError != nil {
 		return dockerTypes.Version{}, cl.ReturnError
 	}

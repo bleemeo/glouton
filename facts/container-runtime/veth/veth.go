@@ -231,7 +231,7 @@ func parseOutput(output string) map[int][]int {
 	return interfaceIndexByPID
 }
 
-func (p *Provider) DiagnosticArchive(ctx context.Context, archive types.ArchiveWriter) error {
+func (p *Provider) DiagnosticArchive(_ context.Context, archive types.ArchiveWriter) error {
 	p.l.Lock()
 	defer p.l.Unlock()
 

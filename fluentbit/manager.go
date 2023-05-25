@@ -316,7 +316,7 @@ func PromQLRulesFromInputs(inputs []config.LogInput) map[string]string {
 	return rules
 }
 
-func (m *Manager) DiagnosticArchive(ctx context.Context, archive types.ArchiveWriter) error {
+func (m *Manager) DiagnosticArchive(_ context.Context, archive types.ArchiveWriter) error {
 	file, err := archive.Create("fluent-bit.txt")
 	if err != nil {
 		return err

@@ -232,11 +232,7 @@ func (s *State) save() error {
 func (s *State) saveCacheTo(w io.Writer) error {
 	encoder := json.NewEncoder(w)
 
-	if err := encoder.Encode(s.cache); err != nil {
-		return err
-	}
-
-	return nil
+	return encoder.Encode(s.cache)
 }
 
 func (s *State) savePersistentTo(w io.Writer) error {

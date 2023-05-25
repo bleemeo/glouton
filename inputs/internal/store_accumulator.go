@@ -97,13 +97,15 @@ func (a *StoreAccumulator) AddError(err error) {
 // it sets that as the precision. Otherwise, it takes the second argument
 // as the order of time that the metrics should be rounded to, with the
 // maximum being 1s.
-func (a *StoreAccumulator) SetPrecision(precision time.Duration) {
+func (a *StoreAccumulator) SetPrecision(time.Duration) {
 	a.AddError(errNotImplemented)
 }
 
 // WithTracking upgrades to a TrackingAccumulator with space for maxTracked
 // metrics/batches.
 func (a *StoreAccumulator) WithTracking(maxTracked int) telegraf.TrackingAccumulator {
+	_ = maxTracked
+
 	a.AddError(errNotImplemented)
 
 	return nil

@@ -26,7 +26,9 @@ import (
 
 type mockProcessProvider struct{}
 
-func (ps mockProcessProvider) Processes(ctx context.Context, maxAge time.Duration) (processes map[int]facts.Process, err error) {
+func (ps mockProcessProvider) Processes(_ context.Context, maxAge time.Duration) (processes map[int]facts.Process, err error) {
+	_ = maxAge
+
 	procs := map[int]facts.Process{
 		354: {
 			CmdLine: "",

@@ -41,6 +41,8 @@ func (ws winService) Execute(
 	req <-chan svc.ChangeRequest,
 	status chan<- svc.Status,
 ) (svcSpecificEC bool, exitCode uint32) {
+	_ = args
+
 	const cmdsAccepted = svc.AcceptStop | svc.AcceptShutdown
 	status <- svc.Status{State: svc.StartPending}
 	status <- svc.Status{State: svc.Running, Accepts: cmdsAccepted}
@@ -95,7 +97,7 @@ func initOSSpecificParts(stop chan<- os.Signal) {
 	wmi.DefaultClient.SWbemServicesClient = s
 }
 
-func (a *agent) registerOSSpecificComponents(vethProvider *veth.Provider) {
+func (a *agent) registerOSSpecificComponents(*veth.Provider) {
 	if a.config.Agent.WindowsExporter.Enable {
 		conf, err := a.buildCollectorsConfig()
 		if err != nil {

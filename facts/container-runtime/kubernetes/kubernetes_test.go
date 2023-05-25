@@ -103,7 +103,9 @@ func newKubernetesMock(dirname string) (*mockKubernetesClient, error) {
 	return result, err
 }
 
-func (k *mockKubernetesClient) GetNode(ctx context.Context, nodeName string) (*corev1.Node, error) {
+func (k *mockKubernetesClient) GetNode(_ context.Context, nodeName string) (*corev1.Node, error) {
+	_ = nodeName
+
 	if len(k.nodes.Items) == 0 {
 		return nil, errNotImplemented
 	}
@@ -111,26 +113,28 @@ func (k *mockKubernetesClient) GetNode(ctx context.Context, nodeName string) (*c
 	return &k.nodes.Items[0], nil
 }
 
-func (k *mockKubernetesClient) GetPODs(ctx context.Context, nodeName string) ([]corev1.Pod, error) {
+func (k *mockKubernetesClient) GetPODs(_ context.Context, nodeName string) ([]corev1.Pod, error) {
+	_ = nodeName
+
 	return k.pods.Items, nil
 }
 
 // GetNodes returns all nodes in the cluster.
-func (k *mockKubernetesClient) GetNodes(ctx context.Context) ([]corev1.Node, error) {
+func (k *mockKubernetesClient) GetNodes(_ context.Context) ([]corev1.Node, error) {
 	return k.nodes.Items, nil
 }
 
 // GetNamespaces returns all namespaces in the cluster.
-func (k *mockKubernetesClient) GetNamespaces(ctx context.Context) ([]corev1.Namespace, error) {
+func (k *mockKubernetesClient) GetNamespaces(_ context.Context) ([]corev1.Namespace, error) {
 	return k.namespaces.Items, nil
 }
 
 // GetReplicasets return all replicasets in the cluster.
-func (k *mockKubernetesClient) GetReplicasets(ctx context.Context) ([]appsv1.ReplicaSet, error) {
+func (k *mockKubernetesClient) GetReplicasets(_ context.Context) ([]appsv1.ReplicaSet, error) {
 	return k.replicaSets.Items, nil
 }
 
-func (k *mockKubernetesClient) GetServerVersion(ctx context.Context) (*version.Info, error) {
+func (k *mockKubernetesClient) GetServerVersion(_ context.Context) (*version.Info, error) {
 	return k.versions.ServerVersion, nil
 }
 

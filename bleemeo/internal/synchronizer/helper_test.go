@@ -143,7 +143,7 @@ func (helper *syncTestHelper) initSynchronizer(t *testing.T) {
 
 	helper.store = store.New(time.Hour, 2*time.Hour)
 
-	helper.store.InternalSetNowAndRunOnce(context.Background(), helper.api.now.Now)
+	helper.store.InternalSetNowAndRunOnce(helper.api.now.Now)
 
 	var docker bleemeoTypes.DockerProvider
 	if helper.containers != nil {

@@ -27,7 +27,7 @@ import (
 	"os"
 )
 
-func initOSSpecificParts(stop chan<- os.Signal) {
+func initOSSpecificParts(chan<- os.Signal) {
 }
 
 func (a *agent) registerOSSpecificComponents(vethProvider *veth.Provider) {

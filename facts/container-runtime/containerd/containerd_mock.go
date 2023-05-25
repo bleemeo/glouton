@@ -332,7 +332,7 @@ func (m *MockClient) LoadContainer(ctx context.Context, id string) (containerd.C
 }
 
 // Version do version.
-func (m *MockClient) Version(ctx context.Context) (containerd.Version, error) {
+func (m *MockClient) Version(context.Context) (containerd.Version, error) {
 	if m.closed {
 		panic("already closed")
 	}
@@ -341,12 +341,14 @@ func (m *MockClient) Version(ctx context.Context) (containerd.Version, error) {
 }
 
 // Metrics do metrics.
-func (m *MockClient) Metrics(ctx context.Context, filters []string) (*tasks.MetricsResponse, error) {
+func (m *MockClient) Metrics(_ context.Context, filters []string) (*tasks.MetricsResponse, error) {
+	_ = filters
+
 	return nil, ErrMockNotImplemented
 }
 
 // Namespaces do namespaces.
-func (m *MockClient) Namespaces(ctx context.Context) ([]string, error) {
+func (m *MockClient) Namespaces(context.Context) ([]string, error) {
 	if m.closed {
 		panic("already closed")
 	}
@@ -361,7 +363,7 @@ func (m *MockClient) Namespaces(ctx context.Context) ([]string, error) {
 }
 
 // Events do events.
-func (m *MockClient) Events(ctx context.Context) (<-chan *events.Envelope, <-chan error) {
+func (m *MockClient) Events(context.Context) (<-chan *events.Envelope, <-chan error) {
 	if m.closed {
 		panic("already closed")
 	}
@@ -393,7 +395,7 @@ func (c MockContainer) ID() string {
 }
 
 // Info implement containerd.Container.
-func (c MockContainer) Info(ctx context.Context, opts ...containerd.InfoOpts) (containers.Container, error) {
+func (c MockContainer) Info(ctx context.Context, _ ...containerd.InfoOpts) (containers.Container, error) {
 	ns, err := namespaces.NamespaceRequired(ctx)
 	if err != nil {
 		return containers.Container{}, err
@@ -442,7 +444,7 @@ func (c MockContainer) Spec(ctx context.Context) (*oci.Spec, error) {
 }
 
 // Task implement containerd.Container.
-func (c MockContainer) Task(ctx context.Context, io cio.Attach) (containerd.Task, error) {
+func (c MockContainer) Task(ctx context.Context, _ cio.Attach) (containerd.Task, error) {
 	ns, err := namespaces.NamespaceRequired(ctx)
 	if err != nil {
 		return nil, err
@@ -530,17 +532,17 @@ func (i MockImage) Unpack(context.Context, string, ...containerd.UnpackOpt) erro
 }
 
 // RootFS implement containerd.Image.
-func (i MockImage) RootFS(ctx context.Context) ([]digest.Digest, error) {
+func (i MockImage) RootFS(_ context.Context) ([]digest.Digest, error) {
 	return nil, ErrMockNotImplemented
 }
 
 // Size implement containerd.Image.
-func (i MockImage) Size(ctx context.Context) (int64, error) {
+func (i MockImage) Size(_ context.Context) (int64, error) {
 	return 0, ErrMockNotImplemented
 }
 
 // Spec implement containerd.Image.
-func (i MockImage) Spec(ctx context.Context) (ocispec.Image, error) {
+func (i MockImage) Spec(_ context.Context) (ocispec.Image, error) {
 	return ocispec.Image{}, ErrMockNotImplemented
 }
 
@@ -550,7 +552,7 @@ func (i MockImage) Usage(context.Context, ...containerd.UsageOpt) (int64, error)
 }
 
 // Config implement containerd.Image.
-func (i MockImage) Config(ctx context.Context) (ocispec.Descriptor, error) {
+func (i MockImage) Config(_ context.Context) (ocispec.Descriptor, error) {
 	return ocispec.Descriptor{}, ErrMockNotImplemented
 }
 
@@ -610,7 +612,7 @@ func (t MockTask) CloseIO(context.Context, ...containerd.IOCloserOpts) error {
 }
 
 // Resize implements containerd.Task.
-func (t MockTask) Resize(ctx context.Context, w, h uint32) error {
+func (t MockTask) Resize(_ context.Context, _, _ uint32) error {
 	return ErrMockNotImplemented
 }
 

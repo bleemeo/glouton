@@ -102,7 +102,7 @@ func (c fixedCollector) Collect(ch chan<- prometheus.Metric) {
 	}
 }
 
-func (c fixedCollector) Describe(ch chan<- *prometheus.Desc) {
+func (c fixedCollector) Describe(chan<- *prometheus.Desc) {
 }
 
 func CollectorToFamilies(metrics []prometheus.Metric) ([]*dto.MetricFamily, error) {

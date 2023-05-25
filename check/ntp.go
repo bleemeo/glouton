@@ -113,7 +113,7 @@ func decodeLeapVersionMode(value uint8) (leapIndicator int, version int, mode in
 	return
 }
 
-func (nc *NTPCheck) ntpMainCheck(ctx context.Context) types.StatusDescription {
+func (nc *NTPCheck) ntpMainCheck(context.Context) types.StatusDescription {
 	if nc.mainAddress == "" {
 		return types.StatusDescription{
 			CurrentStatus: types.StatusOk,

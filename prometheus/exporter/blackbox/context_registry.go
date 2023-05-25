@@ -48,7 +48,7 @@ func (g *gathererWithContext) Gather() ([]*dto.MetricFamily, error) {
 	return g.GatherWithState(context.Background(), registry.GatherState{})
 }
 
-func (g *gathererWithContext) GatherWithState(ctx context.Context, state registry.GatherState) ([]*dto.MetricFamily, error) {
+func (g *gathererWithContext) GatherWithState(ctx context.Context, _ registry.GatherState) ([]*dto.MetricFamily, error) {
 	g.l.Lock()
 	defer g.l.Unlock()
 

@@ -28,6 +28,8 @@ import (
 )
 
 func (s *Synchronizer) syncAccountConfig(ctx context.Context, fullSync bool, onlyEssential bool) (updateThresholds bool, err error) {
+	_ = onlyEssential
+
 	if fullSync {
 		currentConfig, _ := s.option.Cache.CurrentAccountConfig()
 

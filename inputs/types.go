@@ -78,7 +78,7 @@ func (a *Accumulator) AddHistogram(measurement string, fields map[string]interfa
 }
 
 // SetPrecision do nothing right now.
-func (a *Accumulator) SetPrecision(precision time.Duration) {
+func (a *Accumulator) SetPrecision(time.Duration) {
 	a.AddError(fmt.Errorf("SetPrecision %w", errNotImplemented))
 }
 
@@ -89,6 +89,8 @@ func (a *Accumulator) AddMetric(telegraf.Metric) {
 
 // WithTracking is not yet implemented.
 func (a *Accumulator) WithTracking(maxTracked int) telegraf.TrackingAccumulator {
+	_ = maxTracked
+
 	a.AddError(fmt.Errorf("WithTracking %w", errNotImplemented))
 
 	return nil
@@ -208,32 +210,32 @@ type FixedTimeAccumulator struct {
 // Create a point with a value, decorating it with tags
 // NOTE: tags is expected to be owned by the caller, don't mutate
 // it after passing to Add.
-func (a FixedTimeAccumulator) AddFields(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+func (a FixedTimeAccumulator) AddFields(measurement string, fields map[string]interface{}, tags map[string]string, _ ...time.Time) {
 	a.Acc.AddFields(measurement, fields, tags, a.Time)
 }
 
 // AddGauge is the same as AddFields, but will add the metric as a "Gauge" type.
-func (a FixedTimeAccumulator) AddGauge(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+func (a FixedTimeAccumulator) AddGauge(measurement string, fields map[string]interface{}, tags map[string]string, _ ...time.Time) {
 	a.Acc.AddGauge(measurement, fields, tags, a.Time)
 }
 
 // AddCounter is the same as AddFields, but will add the metric as a "Counter" type.
-func (a FixedTimeAccumulator) AddCounter(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+func (a FixedTimeAccumulator) AddCounter(measurement string, fields map[string]interface{}, tags map[string]string, _ ...time.Time) {
 	a.Acc.AddCounter(measurement, fields, tags, a.Time)
 }
 
 // AddSummary is the same as AddFields, but will add the metric as a "Summary" type.
-func (a FixedTimeAccumulator) AddSummary(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+func (a FixedTimeAccumulator) AddSummary(measurement string, fields map[string]interface{}, tags map[string]string, _ ...time.Time) {
 	a.Acc.AddSummary(measurement, fields, tags, a.Time)
 }
 
 // AddHistogram is the same as AddFields, but will add the metric as a "Histogram" type.
-func (a FixedTimeAccumulator) AddHistogram(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+func (a FixedTimeAccumulator) AddHistogram(measurement string, fields map[string]interface{}, tags map[string]string, _ ...time.Time) {
 	a.Acc.AddHistogram(measurement, fields, tags, a.Time)
 }
 
 // SetPrecision do nothing right now.
-func (a FixedTimeAccumulator) SetPrecision(precision time.Duration) {
+func (a FixedTimeAccumulator) SetPrecision(time.Duration) {
 	a.AddError(fmt.Errorf("SetPrecision %w", errNotImplemented))
 }
 
@@ -244,6 +246,8 @@ func (a FixedTimeAccumulator) AddMetric(telegraf.Metric) {
 
 // WithTracking is not yet implemented.
 func (a FixedTimeAccumulator) WithTracking(maxTracked int) telegraf.TrackingAccumulator {
+	_ = maxTracked
+
 	a.AddError(fmt.Errorf("WithTracking %w", errNotImplemented))
 
 	return nil
@@ -259,7 +263,7 @@ func (a FixedTimeAccumulator) AddError(err error) {
 // AddFieldsWithAnnotations have extra fields for the annotations attached to the measurement and fields
 //
 // This method call AddFieldsWithAnnotations() is available and call AddGauge + AddError otherwise.
-func (a FixedTimeAccumulator) AddFieldsWithAnnotations(measurement string, fields map[string]interface{}, tags map[string]string, annotations types.MetricAnnotations, t ...time.Time) {
+func (a FixedTimeAccumulator) AddFieldsWithAnnotations(measurement string, fields map[string]interface{}, tags map[string]string, annotations types.MetricAnnotations, _ ...time.Time) {
 	if annocationAcc, ok := a.Acc.(AnnotationAccumulator); ok {
 		annocationAcc.AddFieldsWithAnnotations(measurement, fields, tags, annotations, a.Time)
 

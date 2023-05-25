@@ -98,6 +98,9 @@ func (dt diskTransformer) renameGlobal(gatherContext internal.GatherContext) (in
 }
 
 func (dt diskTransformer) transformMetrics(currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {
+	_ = currentContext
+	_ = originalFields
+
 	usedPerc, ok := fields["used_percent"]
 	delete(fields, "used_percent")
 

@@ -40,6 +40,8 @@ type minimalThreshold struct {
 }
 
 func (s *Synchronizer) syncAlertingRules(ctx context.Context, fullSync bool, onlyEssential bool) (updateThresholds bool, err error) {
+	_ = onlyEssential
+
 	if s.option.RebuildPromQLRules == nil {
 		return false, nil
 	}

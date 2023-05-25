@@ -42,7 +42,7 @@ type NetstatProvider struct {
 // Netstat return a mapping from PID to listening addresses
 //
 // Supported addresses network is currently "tcp", "udp" or "unix".
-func (np NetstatProvider) Netstat(ctx context.Context, processes map[int]Process) (netstat map[int][]ListenAddress, err error) {
+func (np NetstatProvider) Netstat(_ context.Context, processes map[int]Process) (netstat map[int][]ListenAddress, err error) {
 	netstat = make(map[int][]ListenAddress)
 
 	netstatInfo, errFile := os.Stat(np.FilePath)

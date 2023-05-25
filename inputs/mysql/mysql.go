@@ -75,7 +75,7 @@ func (m mysqlWrapper) Init() error {
 	return m.input.Init()
 }
 
-func (m mysqlWrapper) Start(acc telegraf.Accumulator) (err error) {
+func (m mysqlWrapper) Start(telegraf.Accumulator) (err error) {
 	return nil
 }
 
@@ -83,6 +83,8 @@ func (m mysqlWrapper) Stop() {
 }
 
 func shouldDerivateMetrics(currentContext internal.GatherContext, metricName string) bool {
+	_ = currentContext
+
 	if strings.HasPrefix(metricName, "qcache_") {
 		switch metricName {
 		case "qcache_queries_in_cache", "qcache_total_blocks", "qcache_free_blocks", "qcache_free_memory":
@@ -108,6 +110,8 @@ func shouldDerivateMetrics(currentContext internal.GatherContext, metricName str
 }
 
 func transformMetrics(currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {
+	_ = currentContext
+	_ = originalFields
 	newFields := make(map[string]float64)
 
 	for metricName, value := range fields {

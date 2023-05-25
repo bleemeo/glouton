@@ -63,7 +63,7 @@ func windowsTimeToTime(t int64) time.Time {
 	return time.Unix(t/10000000, (t%10000000)*100)
 }
 
-func (z PsutilLister) Processes(ctx context.Context, maxAge time.Duration) ([]Process, error) {
+func (z PsutilLister) Processes(context.Context, time.Duration) ([]Process, error) {
 	// In order to retrieve process information on windows, given the fact that LocalService has limited privileges,
 	// we prefer to iterate over processes via the NtQuerySystemInformation syscall
 	var (

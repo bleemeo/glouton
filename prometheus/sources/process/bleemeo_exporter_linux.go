@@ -38,7 +38,7 @@ type bleemeoExporter struct {
 }
 
 // Collect sends process metrics to the Appender.
-func (b *bleemeoExporter) Collect(ctx context.Context, app storage.Appender) error {
+func (b *bleemeoExporter) Collect(_ context.Context, app storage.Appender) error {
 	points, err := b.points(time.Now())
 	if err != nil {
 		return err

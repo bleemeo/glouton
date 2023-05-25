@@ -33,7 +33,8 @@ type mockProcess struct {
 	result []facts.Process
 }
 
-func (mp mockProcess) Processes(ctx context.Context, maxAge time.Duration) (processes map[int]facts.Process, err error) {
+func (mp mockProcess) Processes(_ context.Context, maxAge time.Duration) (processes map[int]facts.Process, err error) {
+	_ = maxAge
 	m := make(map[int]facts.Process)
 
 	for _, p := range mp.result {
@@ -47,7 +48,8 @@ type mockNetstat struct {
 	result map[int][]facts.ListenAddress
 }
 
-func (mn mockNetstat) Netstat(ctx context.Context, processes map[int]facts.Process) (netstat map[int][]facts.ListenAddress, err error) {
+func (mn mockNetstat) Netstat(_ context.Context, processes map[int]facts.Process) (netstat map[int][]facts.ListenAddress, err error) {
+	_ = processes
 	result := make(map[int][]facts.ListenAddress, len(mn.result))
 
 	for pid, l := range mn.result {
@@ -67,7 +69,9 @@ func (mci mockContainerInfo) CachedContainer(containerID string) (container fact
 	return c, ok
 }
 
-func (mci mockContainerInfo) Containers(ctx context.Context, maxAge time.Duration, includeIgnored bool) (containers []facts.Container, err error) {
+func (mci mockContainerInfo) Containers(_ context.Context, maxAge time.Duration, includeIgnored bool) (containers []facts.Container, err error) {
+	_ = maxAge
+	_ = includeIgnored
 	res := make([]facts.Container, 0, len(mci.containers))
 
 	for _, v := range mci.containers {

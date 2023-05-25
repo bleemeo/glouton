@@ -169,6 +169,8 @@ type agent struct {
 }
 
 func zabbixResponse(key string, args []string) (string, error) {
+	_ = args
+
 	if key == "agent.ping" {
 		return "1", nil
 	}
@@ -887,7 +889,6 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 
 	psFact := facts.NewProcess(
 		psLister,
-		a.hostRootPath,
 		a.containerRuntime,
 	)
 	netstat := &facts.NetstatProvider{FilePath: a.config.Agent.NetstatFile}
@@ -909,9 +910,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		dynamicDiscovery,
 		a.collector,
 		a.gathererRegistry,
-		a.taskRegistry,
 		a.state,
-		acc,
 		a.containerRuntime,
 		a.config.Services,
 		isCheckIgnored,
@@ -2114,7 +2113,7 @@ func (a *agent) diagnosticGlobalInfo(ctx context.Context, archive types.ArchiveW
 	return nil
 }
 
-func (a *agent) diagnosticGloutonState(ctx context.Context, archive types.ArchiveWriter) error {
+func (a *agent) diagnosticGloutonState(_ context.Context, archive types.ArchiveWriter) error {
 	file, err := archive.Create("glouton-state.json")
 	if err != nil {
 		return err
@@ -2156,7 +2155,7 @@ func (a *agent) diagnosticGloutonState(ctx context.Context, archive types.Archiv
 	return enc.Encode(obj)
 }
 
-func (a *agent) diagnosticJitter(ctx context.Context, archive types.ArchiveWriter) error {
+func (a *agent) diagnosticJitter(_ context.Context, archive types.ArchiveWriter) error {
 	file, err := archive.Create("jitter.txt")
 	if err != nil {
 		return err
@@ -2291,7 +2290,7 @@ func (a *agent) diagnosticSNMP(ctx context.Context, archive types.ArchiveWriter)
 	return nil
 }
 
-func (a *agent) diagnosticConfig(ctx context.Context, archive types.ArchiveWriter) error {
+func (a *agent) diagnosticConfig(_ context.Context, archive types.ArchiveWriter) error {
 	file, err := archive.Create("config.yaml")
 	if err != nil {
 		return err
@@ -2315,7 +2314,7 @@ func (a *agent) diagnosticConfig(ctx context.Context, archive types.ArchiveWrite
 	return nil
 }
 
-func (a *agent) diagnosticFilterResult(ctx context.Context, archive types.ArchiveWriter) error {
+func (a *agent) diagnosticFilterResult(_ context.Context, archive types.ArchiveWriter) error {
 	file, err := archive.Create("metric-filter-result.txt")
 	if err != nil {
 		return err

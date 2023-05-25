@@ -26,10 +26,10 @@ import (
 
 // RegisterExporter does nothing, process_exporter is not supported on this platform.
 func RegisterExporter(
-	ctx context.Context,
-	reg *registry.Registry,
-	psLister interface{},
-	processQuerier *discovery.DynamicDiscovery,
-	bleemeoFormat bool,
+	context.Context,
+	*registry.Registry,
+	interface{},
+	*discovery.DynamicDiscovery,
+	bool,
 ) {
 }

@@ -25,6 +25,6 @@ import (
 )
 
 // New returns a NATS input.
-func New(url string) (telegraf.Input, *inputs.GathererOptions, error) {
+func New(string) (telegraf.Input, *inputs.GathererOptions, error) {
 	return nil, nil, inputs.ErrDisabledInput
 }

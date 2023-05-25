@@ -105,7 +105,7 @@ func (t *Target) Gather() ([]*dto.MetricFamily, error) {
 	return t.GatherWithState(ctx, registry.GatherState{})
 }
 
-func (t *Target) GatherWithState(ctx context.Context, state registry.GatherState) ([]*dto.MetricFamily, error) {
+func (t *Target) GatherWithState(ctx context.Context, _ registry.GatherState) ([]*dto.MetricFamily, error) {
 	u := t.URL
 
 	logger.V(2).Printf("Scrapping Prometheus exporter %s", u.String())

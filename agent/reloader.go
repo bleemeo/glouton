@@ -76,7 +76,7 @@ func (rs *reloadState) MQTT() types.MQTTReloadState {
 	return rs.mqtt
 }
 
-func (rs *reloadState) DiagnosticArchive(ctx context.Context, archive types.ArchiveWriter) error {
+func (rs *reloadState) DiagnosticArchive(_ context.Context, archive types.ArchiveWriter) error {
 	file, err := archive.Create("reload-state.txt")
 	if err != nil {
 		return err

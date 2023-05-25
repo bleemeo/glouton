@@ -44,10 +44,15 @@ type mockState struct {
 }
 
 func (ms mockState) Set(key string, object interface{}) error {
+	_ = key
+	_ = object
+
 	return errNotImplemented
 }
 
 func (ms mockState) Get(key string, object interface{}) error {
+	_ = key
+
 	if services, ok := object.(*[]Service); ok {
 		*services = ms.DiscoveredService
 
@@ -231,7 +236,7 @@ func TestDiscoverySingle(t *testing.T) {
 		state := mockState{
 			DiscoveredService: previousService,
 		}
-		disc, _ := New(&MockDiscoverer{result: []Service{c.dynamicResult}}, nil, nil, nil, state, nil, mockContainerInfo{}, nil, nil, nil, facts.ContainerFilter{}.ContainerIgnored, types.MetricFormatBleemeo, nil)
+		disc, _ := New(&MockDiscoverer{result: []Service{c.dynamicResult}}, nil, nil, state, mockContainerInfo{}, nil, nil, nil, facts.ContainerFilter{}.ContainerIgnored, types.MetricFormatBleemeo, nil)
 
 		srv, err := disc.Discovery(ctx, 0)
 		if err != nil {
@@ -646,7 +651,7 @@ func TestUpdateMetricsAndCheck(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	disc, _ := New(mockDynamic, fakeCollector, reg, nil, state, nil, nil, nil, nil, nil, facts.ContainerFilter{}.ContainerIgnored, types.MetricFormatBleemeo, nil)
+	disc, _ := New(mockDynamic, fakeCollector, reg, state, nil, nil, nil, nil, facts.ContainerFilter{}.ContainerIgnored, types.MetricFormatBleemeo, nil)
 	disc.containerInfo = docker
 
 	mockDynamic.result = []Service{

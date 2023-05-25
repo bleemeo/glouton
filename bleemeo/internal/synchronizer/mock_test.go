@@ -872,6 +872,9 @@ func (m mockMetric) Annotations() types.MetricAnnotations {
 }
 
 func (m mockMetric) Points(start, end time.Time) ([]types.Point, error) {
+	_ = start
+	_ = end
+
 	return nil, errNotImplemented
 }
 
@@ -887,11 +890,14 @@ func (mt *mockTime) Advance(d time.Duration) {
 	mt.now = mt.now.Add(d)
 }
 
-func (d mockDocker) Containers(ctx context.Context, maxAge time.Duration, includeIgnored bool) (containers []facts.Container, err error) {
+func (d mockDocker) Containers(_ context.Context, maxAge time.Duration, includeIgnored bool) (containers []facts.Container, err error) {
+	_ = maxAge
+	_ = includeIgnored
+
 	return d.helper.containers, nil
 }
 
-func (d mockDocker) ContainerLastKill(containerID string) time.Time {
+func (d mockDocker) ContainerLastKill(string) time.Time {
 	return time.Time{}
 }
 
@@ -899,7 +905,7 @@ func (d mockDocker) LastUpdate() time.Time {
 	return d.helper.s.now()
 }
 
-func (m mockMonitorManager) UpdateDynamicTargets(monitors []types.Monitor) error {
+func (m mockMonitorManager) UpdateDynamicTargets([]types.Monitor) error {
 	return nil
 }
 
@@ -909,11 +915,15 @@ type mockProcessLister struct {
 	processes map[int]facts.Process
 }
 
-func (m mockProcessLister) Processes(ctx context.Context, maxAge time.Duration) (processes map[int]facts.Process, err error) {
+func (m mockProcessLister) Processes(_ context.Context, maxAge time.Duration) (processes map[int]facts.Process, err error) {
+	_ = maxAge
+
 	return m.processes, nil
 }
 
-func (m mockProcessLister) TopInfo(ctx context.Context, maxAge time.Duration) (topinfo facts.TopInfo, err error) {
+func (m mockProcessLister) TopInfo(_ context.Context, maxAge time.Duration) (topinfo facts.TopInfo, err error) {
+	_ = maxAge
+
 	return facts.TopInfo{}, errNotImplemented
 }
 

@@ -116,6 +116,8 @@ func (d *Docker) ProcessWithCache() facts.ContainerRuntimeProcessQuerier {
 
 // RuntimeFact will return facts from the Docker runtime, like docker_version.
 func (d *Docker) RuntimeFact(ctx context.Context, currentFact map[string]string) map[string]string {
+	_ = currentFact
+
 	d.l.Lock()
 	defer d.l.Unlock()
 
@@ -185,11 +187,15 @@ func (d *Docker) getContainers(ctx context.Context, maxAge time.Duration, includ
 	return
 }
 
-func (d *Docker) Metrics(ctx context.Context, now time.Time) ([]types.MetricPoint, error) {
+func (d *Docker) Metrics(_ context.Context, now time.Time) ([]types.MetricPoint, error) {
+	_ = now
+
 	return []types.MetricPoint{}, nil
 }
 
-func (d *Docker) MetricsMinute(ctx context.Context, now time.Time) ([]types.MetricPoint, error) {
+func (d *Docker) MetricsMinute(_ context.Context, now time.Time) ([]types.MetricPoint, error) {
+	_ = now
+
 	return []types.MetricPoint{}, nil
 }
 

@@ -87,7 +87,7 @@ type pointBuffer struct {
 }
 
 // PushPoints adds points to the buffer.
-func (p *pointBuffer) PushPoints(ctx context.Context, points []types.MetricPoint) {
+func (p *pointBuffer) PushPoints(_ context.Context, points []types.MetricPoint) {
 	p.points = append(p.points, points...)
 }
 
