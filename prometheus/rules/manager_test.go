@@ -52,13 +52,13 @@ type mockAppender struct {
 	buffer []types.MetricPoint
 }
 
-func (app *mockAppendable) Appender(ctx context.Context) storage.Appender {
+func (app *mockAppendable) Appender(context.Context) storage.Appender {
 	return &mockAppender{
 		parent: app,
 	}
 }
 
-func (a *mockAppender) Append(ref storage.SeriesRef, l labels.Labels, t int64, v float64) (storage.SeriesRef, error) {
+func (a *mockAppender) Append(_ storage.SeriesRef, l labels.Labels, t int64, v float64) (storage.SeriesRef, error) {
 	labelsMap := make(map[string]string)
 
 	for _, lblv := range l {
@@ -100,7 +100,7 @@ func (a *mockAppender) Rollback() error {
 	return nil
 }
 
-func (a *mockAppender) AppendExemplar(ref storage.SeriesRef, l labels.Labels, e exemplar.Exemplar) (storage.SeriesRef, error) {
+func (a *mockAppender) AppendExemplar(storage.SeriesRef, labels.Labels, exemplar.Exemplar) (storage.SeriesRef, error) {
 	return 0, errNotImplemented
 }
 
@@ -1646,9 +1646,9 @@ func Test_NoCrossRead(t *testing.T) {
 			hadResult = true
 
 			continue
-		} else {
-			t.Errorf("point status = %v want %v", p.Annotations.Status.CurrentStatus, types.StatusUnknown)
 		}
+
+		t.Errorf("point status = %v want %v", p.Annotations.Status.CurrentStatus, types.StatusUnknown)
 	}
 
 	if !hadResult {

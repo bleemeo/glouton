@@ -197,7 +197,7 @@ func (f *FactProvider) platformFacts() map[string]string {
 //
 // This should be the IP address that this server use to communicate
 // on internet. It may be the private IP if the box is NATed.
-func (f *FactProvider) primaryAddress(ctx context.Context) (ipAddress string, macAddress string) {
+func (f *FactProvider) primaryAddress(context.Context) (ipAddress string, macAddress string) {
 	// To get the primary IP, we retrieve the interface index for the destination 0.0.0.0,
 	// and we iterate over the addresses of that interface until we find an address in the subnet
 	// of the next hop (the gateway, in unix parlance) for 0.0.0.0 (return via WMI alongside the

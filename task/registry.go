@@ -61,7 +61,7 @@ func NewRegistry(ctx context.Context) *Registry {
 	}
 }
 
-func (r *Registry) DiagnosticArchive(ctx context.Context, archive types.ArchiveWriter) error {
+func (r *Registry) DiagnosticArchive(_ context.Context, archive types.ArchiveWriter) error {
 	file, err := archive.Create("task-registry.txt")
 	if err != nil {
 		return err

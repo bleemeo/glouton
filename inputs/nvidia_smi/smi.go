@@ -68,6 +68,9 @@ func renameGlobal(gatherContext internal.GatherContext) (result internal.GatherC
 }
 
 func transformMetrics(currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {
+	_ = currentContext
+	_ = originalFields
+
 	factors := map[string]float64{
 		"fbc_stats_average_latency":     1e-6,        // microsecond to second
 		"encoder_stats_average_latency": 1e-6,        // microsecond to second

@@ -337,7 +337,7 @@ func (r *queryResolver) Services(ctx context.Context, isActive bool) ([]*Service
 }
 
 // AgentInformation returns some informations about agent registration to Bleemeo Cloud.
-func (r *queryResolver) AgentInformation(ctx context.Context) (*AgentInfo, error) {
+func (r *queryResolver) AgentInformation(_ context.Context) (*AgentInfo, error) {
 	if r.api.AgentInfo == nil {
 		return nil, gqlerror.Errorf("Can not retrieve agent information at this moment. Please try later")
 	}
@@ -355,7 +355,7 @@ func (r *queryResolver) AgentInformation(ctx context.Context) (*AgentInfo, error
 }
 
 // Tags returns a list of tags from system.
-func (r *queryResolver) Tags(ctx context.Context) ([]*Tag, error) {
+func (r *queryResolver) Tags(_ context.Context) ([]*Tag, error) {
 	if r.api.AgentInfo == nil {
 		return nil, gqlerror.Errorf("Can not retrieve tags at this moment. Please try later")
 	}
@@ -374,7 +374,7 @@ func (r *queryResolver) Tags(ctx context.Context) ([]*Tag, error) {
 }
 
 // AgentStatus returns an integer that represent global server status over several metrics.
-func (r *queryResolver) AgentStatus(ctx context.Context) (*AgentStatus, error) {
+func (r *queryResolver) AgentStatus(_ context.Context) (*AgentStatus, error) {
 	if r.api.DB == nil {
 		return nil, gqlerror.Errorf("Can not retrieve agent status at this moment. Please try later")
 	}

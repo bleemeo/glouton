@@ -57,7 +57,7 @@ func (rs *ReloadState) SetClient(cli paho.Client) {
 	rs.client = cli
 }
 
-func (rs *ReloadState) OnConnectionLost(cli paho.Client, err error) {
+func (rs *ReloadState) OnConnectionLost(_ paho.Client, err error) {
 	rs.l.Lock()
 	defer rs.l.Unlock()
 
@@ -104,7 +104,7 @@ func (rs *ReloadState) Close() {
 
 	// Consume all events on channel to make sure the paho client is not blocked.
 	go func() {
-		for range rs.connectionLostChannel {
+		for range rs.connectionLostChannel { //nolint: revive
 		}
 	}()
 

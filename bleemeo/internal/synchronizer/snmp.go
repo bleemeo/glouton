@@ -36,7 +36,9 @@ type payloadAgent struct {
 
 // TODO the deletion need to be done
 
-func (s *Synchronizer) syncSNMP(ctx context.Context, fullSync bool, onlyEssential bool) (updateThresholds bool, err error) {
+func (s *Synchronizer) syncSNMP(_ context.Context, fullSync bool, onlyEssential bool) (updateThresholds bool, err error) {
+	_ = fullSync
+
 	cfg, ok := s.option.Cache.CurrentAccountConfig()
 	if !ok || !cfg.SNMPIntegration {
 		return false, nil

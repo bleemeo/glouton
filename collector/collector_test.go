@@ -28,7 +28,7 @@ type mockInput struct {
 	GatherCallCount int
 }
 
-func (m *mockInput) Gather(acc telegraf.Accumulator) error {
+func (m *mockInput) Gather(telegraf.Accumulator) error {
 	m.GatherCallCount++
 
 	return nil

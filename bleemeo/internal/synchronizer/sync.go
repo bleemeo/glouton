@@ -205,7 +205,7 @@ func newWithNow(option Option, now func() time.Time) (*Synchronizer, error) {
 	return s, nil
 }
 
-func (s *Synchronizer) DiagnosticArchive(ctx context.Context, archive types.ArchiveWriter) error {
+func (s *Synchronizer) DiagnosticArchive(_ context.Context, archive types.ArchiveWriter) error {
 	file, err := archive.Create("bleemeo-sync-state.json")
 	if err != nil {
 		return err
@@ -1003,12 +1003,12 @@ func isDuplicatedUsingFacts(agentStartedAt time.Time, oldFacts map[string]bleeme
 			continue
 		}
 
-		new, ok := newFacts[name] //nolint:predeclared
+		newFact, ok := newFacts[name]
 		if !ok {
 			continue
 		}
 
-		if old.Value == new.Value {
+		if old.Value == newFact.Value {
 			continue
 		}
 
@@ -1029,7 +1029,7 @@ func isDuplicatedUsingFacts(agentStartedAt time.Time, oldFacts map[string]bleeme
 			"Detected duplicated state.json. Another agent changed %#v from %#v to %#v",
 			name,
 			old.Value,
-			new.Value,
+			newFact.Value,
 		)
 
 		return true, message

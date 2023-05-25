@@ -45,6 +45,8 @@ func getEssentialFacts() map[string]bool {
 }
 
 func (s *Synchronizer) syncFacts(ctx context.Context, fullSync bool, onlyEssential bool) (updateThresholds bool, err error) {
+	_ = fullSync
+
 	localFacts, err := s.option.Facts.Facts(ctx, 24*time.Hour)
 	if err != nil {
 		return false, err

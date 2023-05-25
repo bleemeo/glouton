@@ -93,10 +93,14 @@ func renameGlobal(gatherContext internal.GatherContext) (internal.GatherContext,
 }
 
 func shouldDerivateMetrics(currentContext internal.GatherContext, metricName string) bool {
+	_ = metricName
+
 	return currentContext.OriginalTags["metric_type"] == "counter"
 }
 
 func transformMetrics(currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {
+	_ = originalFields
+
 	newFields := make(map[string]float64)
 
 	if currentContext.OriginalTags["metric_type"] == "timing" {

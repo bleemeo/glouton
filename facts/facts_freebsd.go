@@ -63,7 +63,7 @@ func (f *FactProvider) platformFacts() map[string]string {
 // This should be the IP address that this server use to communicate
 // on internet. It may be the private IP if the box is NATed.
 func (f *FactProvider) primaryAddress(ctx context.Context) (ipAddress string, macAddress string) {
-	out, err := exec.Command("route", "-nv", "get", "8.8.8.8").Output()
+	out, err := exec.CommandContext(ctx, "route", "-nv", "get", "8.8.8.8").Output()
 	if err != nil {
 		logger.V(1).Printf("unable to run route get: %v", err)
 

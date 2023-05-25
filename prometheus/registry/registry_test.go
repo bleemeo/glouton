@@ -129,7 +129,7 @@ func (g *fakeGatherer) Gather() ([]*dto.MetricFamily, error) {
 	return result, nil
 }
 
-func (cb fakeAppenderCallback) Collect(ctx context.Context, app storage.Appender) error {
+func (cb fakeAppenderCallback) Collect(_ context.Context, app storage.Appender) error {
 	if err := model.SendPointsToAppender(cb.input, app); err != nil {
 		return err
 	}

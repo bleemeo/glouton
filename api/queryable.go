@@ -109,10 +109,15 @@ func (q apiQuerier) Close() error {
 
 // LabelValues is not implemented.
 func (q apiQuerier) LabelValues(name string, matchers ...*labels.Matcher) ([]string, storage.Warnings, error) {
+	_ = name
+	_ = matchers
+
 	return nil, nil, errNotImplemented
 }
 
 // LabelNames is not implemented.
 func (q apiQuerier) LabelNames(matchers ...*labels.Matcher) ([]string, storage.Warnings, error) {
+	_ = matchers
+
 	return nil, nil, errNotImplemented
 }

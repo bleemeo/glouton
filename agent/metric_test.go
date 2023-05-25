@@ -912,7 +912,7 @@ func (m fakeMetric) Annotations() types.MetricAnnotations {
 }
 
 // Points returns points between the two given time range (boundary are included).
-func (m fakeMetric) Points(start, end time.Time) (result []types.Point, err error) {
+func (m fakeMetric) Points(_, _ time.Time) (result []types.Point, err error) {
 	return nil, nil
 }
 

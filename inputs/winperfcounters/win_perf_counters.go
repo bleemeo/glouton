@@ -222,6 +222,7 @@ func (c *winCollector) renameGlobal(originalContext internal.GatherContext) (new
 }
 
 func (c *winCollector) transformMetrics(currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {
+	_ = originalFields
 	res := make(map[string]float64, len(fields))
 
 	if currentContext.Measurement == diskIOModuleName {

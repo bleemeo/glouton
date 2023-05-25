@@ -858,7 +858,7 @@ func getDefaultMetrics(format types.MetricFormat, hasSwap bool) []string {
 	return res
 }
 
-func (m *metricFilter) DiagnosticArchive(ctx context.Context, archive types.ArchiveWriter) error {
+func (m *metricFilter) DiagnosticArchive(_ context.Context, archive types.ArchiveWriter) error {
 	file, err := archive.Create("filter-metrics.txt")
 	if err != nil {
 		return err

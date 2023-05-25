@@ -39,7 +39,7 @@ const (
 
 // RegisterExporter will create a new prometheus exporter using the specified parameters and adds it to the registry.
 func RegisterExporter(
-	ctx context.Context,
+	_ context.Context,
 	reg *registry.Registry,
 	psLister interface{},
 	dynamicDiscovery *discovery.DynamicDiscovery,

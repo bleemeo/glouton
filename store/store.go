@@ -68,7 +68,7 @@ func New(maxPointsAge time.Duration, maxMetricsAge time.Duration) *Store {
 	return s
 }
 
-func (s *Store) DiagnosticArchive(ctx context.Context, archive types.ArchiveWriter) error {
+func (s *Store) DiagnosticArchive(_ context.Context, archive types.ArchiveWriter) error {
 	file, err := archive.Create("store.txt")
 	if err != nil {
 		return err
@@ -412,7 +412,7 @@ func (s *Store) PushPoints(_ context.Context, points []types.MetricPoint) {
 // InternalSetNowAndRunOnce is used for testing.
 // It will set the Now() function used by the store and will call one loop of Run() method
 // which does purge of older metrics.
-func (s *Store) InternalSetNowAndRunOnce(ctx context.Context, nowFunc func() time.Time) {
+func (s *Store) InternalSetNowAndRunOnce(nowFunc func() time.Time) {
 	s.nowFunc = nowFunc
 	s.RunOnce()
 }

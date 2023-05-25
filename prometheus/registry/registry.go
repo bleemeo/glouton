@@ -578,11 +578,7 @@ func (r *Registry) DiagnosticArchive(ctx context.Context, archive types.ArchiveW
 		return err
 	}
 
-	if err := r.diagnosticScrapeLoop(archive); err != nil {
-		return err
-	}
-
-	return nil
+	return r.diagnosticScrapeLoop(archive)
 }
 
 func (r *Registry) diagnosticState(archive types.ArchiveWriter) error {

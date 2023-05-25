@@ -420,7 +420,7 @@ func (c *Client) isConnectionOpen() bool {
 }
 
 // DiagnosticArchive add to a zipfile useful diagnostic information.
-func (c *Client) DiagnosticArchive(ctx context.Context, archive types.ArchiveWriter) error {
+func (c *Client) DiagnosticArchive(_ context.Context, archive types.ArchiveWriter) error {
 	c.l.Lock()
 	defer c.l.Unlock()
 

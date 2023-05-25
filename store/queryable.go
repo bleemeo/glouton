@@ -31,7 +31,7 @@ import (
 var errNotImplemented = errors.New("not implemented")
 
 // Querier returns a storage.Querier to read from memory store.
-func (s *Store) Querier(ctx context.Context, mint, maxt int64) (storage.Querier, error) {
+func (s *Store) Querier(_ context.Context, mint, maxt int64) (storage.Querier, error) {
 	return querier{store: s, mint: mint, maxt: maxt}, nil
 }
 
@@ -45,6 +45,9 @@ type querier struct {
 // Caller can specify if it requires returned series to be sorted. Prefer not requiring sorting for better performance.
 // It allows passing hints that can help in optimising select, but it's up to implementation how this is used if used at all.
 func (q querier) Select(sortSeries bool, hints *storage.SelectHints, matchers ...*labels.Matcher) storage.SeriesSet {
+	_ = sortSeries
+	_ = hints
+
 	q.store.lock.Lock()
 	defer q.store.lock.Unlock()
 
@@ -81,6 +84,9 @@ outerLoop:
 // LabelValues returns all potential values for a label name.
 // It is not safe to use the strings beyond the lifefime of the querier.
 func (q querier) LabelValues(name string, matchers ...*labels.Matcher) ([]string, storage.Warnings, error) {
+	_ = name
+	_ = matchers
+
 	return nil, nil, errNotImplemented
 }
 

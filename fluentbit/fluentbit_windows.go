@@ -29,6 +29,8 @@ var errNotSupported = errors.New("log inputs are not supported on Windows")
 // New returns an initialized Fluent Bit manager and config warnings.
 func New(cfg config.Log, reg registerer, runtime crTypes.RuntimeInterface) (*Manager, []error) {
 	_ = validateConfig(cfg) // Fix unused function warning.
+	_ = reg
+	_ = runtime
 
 	return nil, []error{errNotSupported}
 }

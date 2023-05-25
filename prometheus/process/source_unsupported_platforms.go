@@ -23,6 +23,6 @@ import (
 	"time"
 )
 
-func NewProcessLister(hostRootPath string, defaultValidity time.Duration) facts.ProcessLister {
+func NewProcessLister(string, time.Duration) facts.ProcessLister {
 	return nil
 }

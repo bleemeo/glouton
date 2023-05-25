@@ -497,7 +497,7 @@ func (s *Synchronizer) findUnregisteredMetrics(metrics []types.Metric) []types.M
 	return result
 }
 
-func (s *Synchronizer) syncMetrics(ctx context.Context, fullSync bool, onlyEssential bool) (updateThresholds bool, err error) {
+func (s *Synchronizer) syncMetrics(_ context.Context, fullSync bool, onlyEssential bool) (updateThresholds bool, err error) {
 	localMetrics, err := s.option.Store.Metrics(nil)
 	if err != nil {
 		return false, err

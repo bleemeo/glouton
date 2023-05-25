@@ -284,7 +284,7 @@ func New(
 }
 
 // DiagnosticArchive add diagnostic information.
-func (m *RegisterManager) DiagnosticArchive(ctx context.Context, archive types.ArchiveWriter) error {
+func (m *RegisterManager) DiagnosticArchive(_ context.Context, archive types.ArchiveWriter) error {
 	m.l.Lock()
 	targets := m.targets
 	m.l.Unlock()

@@ -38,7 +38,7 @@ func NewBufferAppender() *BufferAppender {
 	return &BufferAppender{}
 }
 
-func (a *BufferAppender) Append(ref storage.SeriesRef, l labels.Labels, t int64, v float64) (storage.SeriesRef, error) {
+func (a *BufferAppender) Append(_ storage.SeriesRef, l labels.Labels, t int64, v float64) (storage.SeriesRef, error) {
 	a.temp = append(a.temp, promql.Sample{Point: promql.Point{T: t, V: v}, Metric: l})
 
 	return 0, nil
@@ -65,6 +65,6 @@ func (a *BufferAppender) Rollback() error {
 	return nil
 }
 
-func (a *BufferAppender) AppendExemplar(ref storage.SeriesRef, l labels.Labels, e exemplar.Exemplar) (storage.SeriesRef, error) {
+func (a *BufferAppender) AppendExemplar(storage.SeriesRef, labels.Labels, exemplar.Exemplar) (storage.SeriesRef, error) {
 	return 0, errNotImplemented
 }

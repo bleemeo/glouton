@@ -243,8 +243,8 @@ func serviceNeedUpdate(oldService, service Service, oldServiceState facts.Contai
 	// We assume order of ListenAddresses is mostly stable. serviceEqual may return
 	// some false positive.
 	for i, old := range oldService.ListenAddresses {
-		new := service.ListenAddresses[i] //nolint:predeclared
-		if old.Network() != new.Network() || old.String() != new.String() {
+		newListenAddress := service.ListenAddresses[i]
+		if old.Network() != newListenAddress.Network() || old.String() != newListenAddress.String() {
 			return true
 		}
 	}

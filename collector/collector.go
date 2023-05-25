@@ -57,6 +57,8 @@ func New(acc telegraf.Accumulator) *Collector {
 
 // AddInput add an input to this collector and return an ID.
 func (c *Collector) AddInput(input telegraf.Input, shortName string) (int, error) {
+	_ = shortName
+
 	c.l.Lock()
 	defer c.l.Unlock()
 

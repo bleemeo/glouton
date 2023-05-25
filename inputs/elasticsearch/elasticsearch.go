@@ -69,6 +69,7 @@ func renameGlobal(gatherContext internal.GatherContext) (internal.GatherContext,
 }
 
 func transformMetrics(currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {
+	_ = originalFields
 	newFields := make(map[string]float64)
 
 	switch currentContext.OriginalMeasurement {

@@ -101,6 +101,8 @@ type mockMQTTClient struct {
 func (m *mockMQTTClient) Publish(topic string, payload interface{}, retry bool) {
 	var metrics []metricPayload
 
+	_ = topic
+	_ = retry
 	payloadBytes, _ := payload.([]byte)
 
 	err := m.encoder.Decode(payloadBytes, &metrics)
@@ -111,15 +113,15 @@ func (m *mockMQTTClient) Publish(topic string, payload interface{}, retry bool) 
 	m.publishedPoints = append(m.publishedPoints, metrics...)
 }
 
-func (*mockMQTTClient) Run(ctx context.Context) {}
-func (*mockMQTTClient) IsConnectionOpen() bool  { return true }
-func (*mockMQTTClient) DiagnosticArchive(ctx context.Context, archive types.ArchiveWriter) error {
+func (*mockMQTTClient) Run(context.Context)    {}
+func (*mockMQTTClient) IsConnectionOpen() bool { return true }
+func (*mockMQTTClient) DiagnosticArchive(context.Context, types.ArchiveWriter) error {
 	return nil
 }
-func (*mockMQTTClient) LastReport() time.Time            { return time.Now() }
-func (*mockMQTTClient) Disable(until time.Time)          {}
-func (*mockMQTTClient) DisabledUntil() time.Time         { return time.Time{} }
-func (*mockMQTTClient) Disconnect(timeout time.Duration) {}
+func (*mockMQTTClient) LastReport() time.Time    { return time.Now() }
+func (*mockMQTTClient) Disable(time.Time)        {}
+func (*mockMQTTClient) DisabledUntil() time.Time { return time.Time{} }
+func (*mockMQTTClient) Disconnect(time.Duration) {}
 
 const agentID = "test-agent"
 

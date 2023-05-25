@@ -606,7 +606,7 @@ func (rm *Manager) RebuildPromQLRules(promqlRules []PromQLRule) error {
 	return nil
 }
 
-func (rm *Manager) DiagnosticArchive(ctx context.Context, archive types.ArchiveWriter) error {
+func (rm *Manager) DiagnosticArchive(_ context.Context, archive types.ArchiveWriter) error {
 	file, err := archive.Create("alertings-recording-rules.txt")
 	if err != nil {
 		return err

@@ -66,6 +66,9 @@ func New(config config.Smart) (telegraf.Input, *inputs.GathererOptions, error) {
 }
 
 func transformMetrics(currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {
+	_ = currentContext
+	_ = originalFields
+
 	if tempC, ok := fields["temp_c"]; ok && tempC == 0 {
 		// 0°C is way to improbable to be a real temperature.
 		// Some disk, when SMART is unavailable/disabled, will report 0°C (at least PERC H710 does).

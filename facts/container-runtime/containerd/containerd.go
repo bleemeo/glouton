@@ -103,6 +103,8 @@ func (c *Containerd) LastUpdate() time.Time {
 
 // RuntimeFact will return facts from the ContainerD runtime, like containerd_version.
 func (c *Containerd) RuntimeFact(ctx context.Context, currentFact map[string]string) map[string]string {
+	_ = currentFact
+
 	c.l.Lock()
 	defer c.l.Unlock()
 
@@ -276,7 +278,9 @@ func convertMetric(data interface{}) (map[string]uint64, error) {
 	return valueMap, nil
 }
 
-func (c *Containerd) MetricsMinute(ctx context.Context, now time.Time) ([]types.MetricPoint, error) {
+func (c *Containerd) MetricsMinute(_ context.Context, now time.Time) ([]types.MetricPoint, error) {
+	_ = now
+
 	return nil, nil
 }
 
@@ -510,6 +514,8 @@ func (c *Containerd) Run(ctx context.Context) error {
 // ContainerLastKill return the last time a container was killed or zero-time if unknown.
 // containerd does not provide this information.
 func (c *Containerd) ContainerLastKill(containerID string) time.Time {
+	_ = containerID
+
 	return time.Time{}
 }
 
@@ -832,7 +838,7 @@ type containerdClient interface {
 	Close() error
 }
 
-func openConnection(ctx context.Context, address string) (containerdClient, error) {
+func openConnection(_ context.Context, address string) (containerdClient, error) {
 	if address != "" && (address[0] == '/' || address[1] == '\\') {
 		_, err := os.Stat(address)
 		if err != nil {
@@ -1074,7 +1080,7 @@ type containerdProcessQuerier struct {
 	pid2container         map[int]containerObject
 }
 
-func (q *containerdProcessQuerier) Processes(ctx context.Context) ([]facts.Process, error) {
+func (q *containerdProcessQuerier) Processes(context.Context) ([]facts.Process, error) {
 	// API don't have top() like Docker. We don't exec "ps" since the binary may not exist in containers.
 	return nil, nil
 }
@@ -1146,6 +1152,8 @@ func (q *containerdProcessQuerier) getContainerFromCGroupPath(cgroupPath string)
 }
 
 func (q *containerdProcessQuerier) ContainerFromPID(ctx context.Context, parentContainerID string, pid int) (facts.Container, error) {
+	_ = parentContainerID
+
 	q.c.l.Lock()
 	defer q.c.l.Unlock()
 

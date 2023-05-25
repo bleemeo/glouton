@@ -84,6 +84,7 @@ func transformMetrics(
 	fields map[string]float64,
 	originalFields map[string]interface{},
 ) map[string]float64 {
+	_ = originalFields
 	newFields := make(map[string]float64)
 
 	suffix := ""

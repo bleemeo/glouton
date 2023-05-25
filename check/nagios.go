@@ -58,7 +58,7 @@ func NewNagios(
 	return nc
 }
 
-func (nc *NagiosCheck) nagiosMainCheck(ctx context.Context) types.StatusDescription {
+func (nc *NagiosCheck) nagiosMainCheck(context.Context) types.StatusDescription {
 	part, err := shlex.Split(nc.nagiosCommand)
 	if err != nil {
 		return types.StatusDescription{

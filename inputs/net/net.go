@@ -82,6 +82,9 @@ func (nt netTransformer) renameGlobal(gatherContext internal.GatherContext) (int
 }
 
 func (nt netTransformer) transformMetrics(currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {
+	_ = currentContext
+	_ = originalFields
+
 	for metricName, value := range fields {
 		if metricName == "bytes_sent" {
 			delete(fields, "bytes_sent")

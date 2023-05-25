@@ -54,6 +54,8 @@ func New(url string) (i telegraf.Input, err error) {
 }
 
 func shouldDerivateMetrics(currentContext internal.GatherContext, metricName string) bool {
+	_ = currentContext
+
 	if strings.HasPrefix(metricName, "cmd_") {
 		return true
 	}
@@ -70,6 +72,8 @@ func shouldDerivateMetrics(currentContext internal.GatherContext, metricName str
 }
 
 func transformMetrics(currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {
+	_ = currentContext
+	_ = originalFields
 	newFields := make(map[string]float64)
 
 	for metricName, value := range fields {

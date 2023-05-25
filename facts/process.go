@@ -161,7 +161,7 @@ func NewPsUtilLister(hostRootPath string) PsutilLister {
 //
 // Docker provider should be given to allow processes to be associated with a Docker container.
 // useProc should be true if the Agent see all processes (running outside container or with host PID namespace).
-func NewProcess(pslister ProcessLister, hostRootPath string, cr containerRuntime) *ProcessProvider {
+func NewProcess(pslister ProcessLister, cr containerRuntime) *ProcessProvider {
 	pp := &ProcessProvider{
 		containerRuntime: cr,
 		ps: psListerWrapper{

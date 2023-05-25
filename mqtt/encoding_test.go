@@ -28,7 +28,7 @@ import (
 
 // getTopinfo return a topinfo from the system running the test.
 func getTopinfo() facts.TopInfo {
-	provider := facts.NewProcess(facts.NewPsUtilLister(""), "", nil)
+	provider := facts.NewProcess(facts.NewPsUtilLister(""), nil)
 
 	topinfo, err := provider.TopInfo(context.Background(), 0)
 	if err != nil {

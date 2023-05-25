@@ -91,7 +91,7 @@ func (rs *reloadState) ConnectChannel() <-chan paho.Client {
 	return rs.connectChannel
 }
 
-func (rs *reloadState) OnNotification(cli paho.Client, msg paho.Message) {
+func (rs *reloadState) OnNotification(_ paho.Client, msg paho.Message) {
 	rs.l.Lock()
 	defer rs.l.Unlock()
 
@@ -129,11 +129,11 @@ func (rs *reloadState) SetPendingPoints(points []gloutonTypes.MetricPoint) {
 func (rs *reloadState) Close() {
 	// Consume all events on channels to make sure the paho client is not blocked.
 	go func() {
-		for range rs.notificationChannel {
+		for range rs.notificationChannel { //nolint:revive
 		}
 	}()
 	go func() {
-		for range rs.connectChannel {
+		for range rs.connectChannel { //nolint:revive
 		}
 	}()
 
