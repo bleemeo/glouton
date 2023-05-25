@@ -191,6 +191,16 @@ func TestFormatValue(t *testing.T) {
 			unit:  Unit{UnitType: UnitTypeByte, UnitText: "Byte"},
 			want:  "-1.00 GBytes",
 		},
+		{
+			value: 1 << 70,
+			unit:  Unit{UnitType: UnitTypeBytesPS, UnitText: "Bytes/s"},
+			want:  "1024.00 EBytes/s",
+		},
+		{
+			value: -1 << 60,
+			unit:  Unit{UnitType: UnitTypeBitsPS, UnitText: "Bits/s"},
+			want:  "-1.00 EBits/s",
+		},
 	}
 	for _, c := range cases {
 		got := FormatValue(c.value, c.unit)

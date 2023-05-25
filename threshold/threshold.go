@@ -23,6 +23,7 @@ import (
 	"glouton/logger"
 	"glouton/types"
 	"math"
+	"strings"
 	"sync"
 	"time"
 )
@@ -279,11 +280,13 @@ type Unit struct {
 
 // Possible value for UnitType. It must match value in Bleemeo API.
 const (
-	UnitTypeUnit   = 0
-	UnitTypeByte   = 2
-	UnitTypeBit    = 3
-	UnitTypeSecond = 6
-	UnitTypeDay    = 8
+	UnitTypeUnit    = 0
+	UnitTypeByte    = 2
+	UnitTypeBit     = 3
+	UnitTypeSecond  = 6
+	UnitTypeDay     = 8
+	UnitTypeBytesPS = 10
+	UnitTypeBitsPS  = 11
 )
 
 // FromConfig converts the threshold config to thresholds.
@@ -460,7 +463,7 @@ func FormatValue(value float64, unit Unit) string {
 	switch unit.UnitType {
 	case UnitTypeUnit:
 		return fmt.Sprintf("%.2f", value)
-	case UnitTypeBit, UnitTypeByte:
+	case UnitTypeBit, UnitTypeBitsPS, UnitTypeByte, UnitTypeBytesPS:
 		scales := []string{"", "K", "M", "G", "T", "P", "E"}
 
 		i := 0
@@ -470,7 +473,11 @@ func FormatValue(value float64, unit Unit) string {
 			value /= 1024
 		}
 
-		return fmt.Sprintf("%.2f %s%ss", value, scales[i], unit.UnitText)
+		pluralMark := ""
+		if !strings.HasSuffix(unit.UnitText, "s") {
+			pluralMark = "s"
+		}
+		return fmt.Sprintf("%.2f %s%s%s", value, scales[i], unit.UnitText, pluralMark)
 	case UnitTypeSecond:
 		return formatDuration(time.Duration(value) * time.Second)
 	case UnitTypeDay:
