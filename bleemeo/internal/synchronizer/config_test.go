@@ -1,6 +1,7 @@
 package synchronizer
 
 import (
+	"context"
 	"sync"
 	"testing"
 )
@@ -13,6 +14,11 @@ func TestParallelSync(t *testing.T) {
 	helper.preregisterAgent(t)
 	helper.initSynchronizer(t)
 
+	helper.s.client = &wrapperClient{
+		s:      helper.s,
+		client: helper.s.realClient,
+	}
+
 	wg := new(sync.WaitGroup)
 
 	for i := 0; i < 5; i++ {
@@ -21,7 +27,7 @@ func TestParallelSync(t *testing.T) {
 		go func() {
 			defer wg.Done()
 
-			err := helper.runOnce(t)
+			_, err := helper.s.syncConfig(context.Background(), true, false)
 			if err != nil {
 				t.Error(err)
 				return
