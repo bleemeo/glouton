@@ -552,11 +552,13 @@ func Dump(config Config) map[string]interface{} {
 }
 
 func dumpMap(root map[string]interface{}) map[string]interface{} {
+	censored := make(map[string]interface{}, len(root))
+
 	for k, v := range root {
-		root[k] = CensorSecretItem(k, v)
+		censored[k] = CensorSecretItem(k, v)
 	}
 
-	return root
+	return censored
 }
 
 // CensorSecretItem returns the censored item value with secrets

@@ -1,40 +1,80 @@
 package synchronizer
 
 import (
-	"context"
-	"sync"
+	"fmt"
+	"glouton/config"
 	"testing"
+
+	"github.com/google/go-cmp/cmp"
 )
 
-// TestParallelSync should be run with the -race flag.
-func TestParallelSync(t *testing.T) {
-	helper := newHelper(t)
-	defer helper.Close()
+func TestCensorSecretItem(t *testing.T) {
+	configItems := []config.Item{
+		{
+			Key: "item 1",
+			Value: map[string]interface{}{
+				"secret": "hello",
+				"b":      map[string]interface{}{"key": "123"},
+			},
+		},
+	}
+	items := make(map[comparableConfigItem]interface{}, len(configItems))
 
-	helper.preregisterAgent(t)
-	helper.initSynchronizer(t)
+	backedUpConfigItems := deepCopy(configItems)
 
-	helper.s.client = &wrapperClient{
-		s:      helper.s,
-		client: helper.s.realClient,
+	for _, item := range configItems {
+		item.Value = config.CensorSecretItem(item.Key, item.Value)
+
+		key := comparableConfigItem{
+			Key:      item.Key,
+			Priority: item.Priority,
+			Source:   bleemeoItemSourceFromConfigSource(item.Source),
+			Path:     item.Path,
+			Type:     bleemeoItemTypeFromConfigType(item.Type),
+		}
+
+		items[key] = item.Value
 	}
 
-	wg := new(sync.WaitGroup)
+	if !cmp.Equal(configItems, backedUpConfigItems) {
+		t.Fatal("Initial list have been modified.")
+	}
+}
 
-	for i := 0; i < 5; i++ {
-		wg.Add(1)
+func deepCopy(items []config.Item) []config.Item {
+	cpy := make([]config.Item, len(items))
 
-		go func() {
-			defer wg.Done()
-
-			_, err := helper.s.syncConfig(context.Background(), true, false)
-			if err != nil {
-				t.Error(err)
-
-				return
-			}
-		}()
+	for i, item := range items {
+		cpy[i] = config.Item{Key: item.Key, Value: deepCopyValue(item.Value)}
 	}
 
-	wg.Wait()
+	return cpy
+}
+
+func deepCopyValue(value interface{}) interface{} {
+	if _, isStr := value.(string); isStr {
+		return fmt.Sprint(value)
+	}
+
+	if valueAsMap, isMap := value.(map[string]interface{}); isMap {
+		m := make(map[string]interface{}, len(valueAsMap))
+
+		for k, v := range valueAsMap {
+			m[k] = deepCopyValue(v)
+		}
+
+		return m
+	}
+
+	if valueAsSlice, isSlice := value.([]interface{}); isSlice {
+		s := make([]interface{}, len(valueAsSlice))
+
+		for i, e := range valueAsSlice {
+			s[i] = deepCopyValue(e)
+		}
+
+		return s
+	}
+
+	return value
 }

@@ -56,9 +56,6 @@ func (s *Synchronizer) syncConfig(
 		return false, nil
 	}
 
-	s.l.Lock()
-	defer s.l.Unlock()
-
 	remoteConfigItems, err := s.fetchAllConfigItems(ctx)
 	if err != nil {
 		return false, fmt.Errorf("failed to fetch config items: %w", err)
