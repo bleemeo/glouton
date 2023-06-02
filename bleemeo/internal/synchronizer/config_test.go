@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-// TestParallelSync should be run with the -race flag
+// TestParallelSync should be run with the -race flag.
 func TestParallelSync(t *testing.T) {
 	helper := newHelper(t)
 	defer helper.Close()
@@ -30,6 +30,7 @@ func TestParallelSync(t *testing.T) {
 			_, err := helper.s.syncConfig(context.Background(), true, false)
 			if err != nil {
 				t.Error(err)
+
 				return
 			}
 		}()
