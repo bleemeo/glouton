@@ -492,8 +492,8 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 			},
 			trustCert: true,
 			target: &httpTestTarget{
-				TLSCert:       []tls.Certificate{certs.CertExpireFar},
-				TimeoutInHTTP: true,
+				TLSCert:   []tls.Certificate{certs.CertExpireFar},
+				HTTPDelay: timeoutTime,
 			},
 		},
 		{
@@ -1886,6 +1886,115 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 			},
 			target: noDNSTarget{useSSL: true},
 		},
+		{
+			name: "https-502-after-10seconds",
+			wantPoints: []types.MetricPoint{
+				{
+					Point: types.Point{Time: t0, Value: 0},
+					Labels: map[string]string{
+						types.LabelName:         "probe_success",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: http.StatusBadGateway},
+					Labels: map[string]string{
+						types.LabelName:         "probe_http_status_code",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: math.NaN()},
+					Labels: map[string]string{
+						types.LabelName:         "probe_http_duration_seconds",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+						"phase":                 "connect",
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: math.NaN()},
+					Labels: map[string]string{
+						types.LabelName:         "probe_dns_lookup_time_seconds",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: math.NaN()},
+					Labels: map[string]string{
+						types.LabelName:         "probe_duration_seconds",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: float64(certs.NotAfterFar.Unix())},
+					Labels: map[string]string{
+						types.LabelName:         "probe_ssl_last_chain_expiry_timestamp_seconds",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: float64(certs.NotAfterFar.Unix())},
+					Labels: map[string]string{
+						types.LabelName:         "probe_ssl_earliest_cert_expiry",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+				{
+					Point: types.Point{Time: t0, Value: 1},
+					Labels: map[string]string{
+						types.LabelName:         "probe_ssl_validation_success",
+						types.LabelInstance:     targetNotYetKnown,
+						types.LabelInstanceUUID: agentID,
+						types.LabelScraper:      agentFQDN,
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: agentID,
+					},
+				},
+			},
+			probeDurationMinValue: 10,
+			trustCert:             true,
+			target: &httpTestTarget{
+				TLSCert:    []tls.Certificate{certs.CertExpireFar},
+				HTTPDelay:  10 * time.Second,
+				StatusCode: http.StatusBadGateway,
+			},
+		},
 	}
 
 	t.Parallel()
@@ -2172,7 +2281,7 @@ type httpTestTarget struct {
 	TimeoutInTCPAccept    bool
 	TimeoutInTLSHandshake bool
 	TimeoutAfterHandshake bool
-	TimeoutInHTTP         bool
+	HTTPDelay             time.Duration
 	ServerStopped         bool
 	CloseInTLSHandshake   bool
 	CloseInHTTP           bool
@@ -2197,8 +2306,8 @@ func (w wrapListenner) Accept() (net.Conn, error) {
 
 func (t *httpTestTarget) Start() {
 	t.srv = httptest.NewUnstartedServer(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
-		if t.TimeoutInHTTP {
-			time.Sleep(timeoutTime)
+		if t.HTTPDelay > 0 {
+			time.Sleep(t.HTTPDelay)
 		}
 
 		if t.CloseInHTTP {
