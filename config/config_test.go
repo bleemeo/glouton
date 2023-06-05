@@ -856,9 +856,16 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 			},
 		},
 		{
-			Name:       "config part is null",
-			Files:      []string{"testdata/null-part.conf"},
-			WantConfig: Config{},
+			Name:  "config contains null parts",
+			Files: []string{"testdata/null-parts.conf"},
+			WantConfig: Config{
+				Bleemeo: Bleemeo{
+					APIBase: "not/null",
+				},
+				Web: Web{
+					StaticCDNURL: "/simple",
+				},
+			},
 		},
 	}
 

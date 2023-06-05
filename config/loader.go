@@ -113,10 +113,6 @@ func (c *configLoader) Load(path string, provider koanf.Provider, parser koanf.P
 	warnings = append(warnings, moreWarnings...)
 
 	for key, value := range config {
-		if value == nil {
-			continue
-		}
-
 		priority := priority(providerType, key, value, c.loadCount)
 
 		// Keep the real type of the value before it's converted to JSON.
@@ -308,7 +304,7 @@ func priority(provider ItemSource, key string, value interface{}, loadCount int)
 		return priorityEnv
 	case SourceFile:
 		// Slices in files all have the same priority because they are appended.
-		if reflect.TypeOf(value).Kind() == reflect.Slice {
+		if value != nil && reflect.TypeOf(value).Kind() == reflect.Slice {
 			return priorityMapAndArrayFile
 		}
 
