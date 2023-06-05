@@ -1,7 +1,6 @@
 package synchronizer
 
 import (
-	"fmt"
 	"glouton/config"
 	"testing"
 
@@ -52,10 +51,6 @@ func deepCopy(items []config.Item) []config.Item {
 }
 
 func deepCopyValue(value interface{}) interface{} {
-	if _, isStr := value.(string); isStr {
-		return fmt.Sprint(value)
-	}
-
 	if valueAsMap, isMap := value.(map[string]interface{}); isMap {
 		m := make(map[string]interface{}, len(valueAsMap))
 
