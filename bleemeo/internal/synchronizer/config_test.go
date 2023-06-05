@@ -35,6 +35,18 @@ func TestCensorSecretItem(t *testing.T) {
 		items[key] = item.Value
 	}
 
+	expectedCensoring := map[comparableConfigItem]interface{}{
+		{"item 1", 0, 1, "", 0}: map[string]interface{}{
+			"b":      map[string]interface{}{"key": "*****"},
+			"secret": "*****",
+		},
+	}
+
+	if !cmp.Equal(items, expectedCensoring) {
+		t.Log(cmp.Diff(items, expectedCensoring))
+		t.Fatal("Unexpected censoring result")
+	}
+
 	if !cmp.Equal(configItems, backedUpConfigItems) {
 		t.Fatal("Initial list have been modified.")
 	}
