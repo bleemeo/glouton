@@ -855,6 +855,11 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 				NetworkInterfaceDenylist: []string{"eth0"},
 			},
 		},
+		{
+			Name:       "config part is null",
+			Files:      []string{"testdata/null-part.conf"},
+			WantConfig: Config{},
+		},
 	}
 
 	for _, test := range tests {

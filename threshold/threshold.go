@@ -477,6 +477,7 @@ func FormatValue(value float64, unit Unit) string {
 		if !strings.HasSuffix(unit.UnitText, "s") {
 			pluralMark = "s"
 		}
+
 		return fmt.Sprintf("%.2f %s%s%s", value, scales[i], unit.UnitText, pluralMark)
 	case UnitTypeSecond:
 		return formatDuration(time.Duration(value) * time.Second)
