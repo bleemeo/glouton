@@ -35,7 +35,7 @@ import (
 
 var errUnknownModule = errors.New("unknown blackbox module found in your configuration")
 
-const maxTimeout time.Duration = 9500 * time.Millisecond
+const defaultTimeout time.Duration = 12 * time.Second
 
 func defaultModule(userAgent string) bbConf.Module {
 	return bbConf.Module{
@@ -66,10 +66,7 @@ func defaultModule(userAgent string) bbConf.Module {
 			IPProtocolFallback: true,
 		},
 		// Sadly, the API does allow to specify the timeout AFAIK.
-		// This value is deliberately lower than our scrape time of 10s, so as to prevent timeouts
-		// from exceeding the total scrape time. Otherwise, the outer context could be cancelled
-		// en route, thus preventing the collection of ANY metric from blackbox !
-		Timeout: maxTimeout,
+		Timeout: defaultTimeout,
 	}
 }
 
@@ -237,9 +234,8 @@ func New(
 	setUserAgent(config.Modules, config.UserAgent)
 
 	for idx, v := range config.Modules {
-		// override user timeouts when too high or undefined. This is important !
-		if v.Timeout > maxTimeout || v.Timeout == 0 {
-			v.Timeout = maxTimeout
+		if v.Timeout == 0 {
+			v.Timeout = defaultTimeout
 			config.Modules[idx] = v
 		}
 	}

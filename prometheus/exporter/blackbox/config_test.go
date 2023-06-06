@@ -82,7 +82,7 @@ func TestConfigParsing(t *testing.T) {
 			URL: "inpt.fr",
 			Module: bbConf.Module{
 				Prober:  "dns",
-				Timeout: 9500 * time.Millisecond,
+				Timeout: defaultTimeout,
 				DNS: bbConf.DNSProbe{
 					IPProtocol: "ip4",
 					QueryName:  "nightmared.fr",
