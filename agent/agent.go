@@ -2035,8 +2035,8 @@ func (a *agent) writeDiagnosticArchive(ctx context.Context, archive types.Archiv
 		a.rulesManager.DiagnosticArchive,
 		a.reloadState.DiagnosticArchive,
 		a.vethProvider.DiagnosticArchive,
-		a.diagnosticThresholds,
-		a.diagnosticStatusStates,
+		a.threshold.DiagnosticThresholds,
+		a.threshold.DiagnosticStatusStates,
 	}
 
 	if a.bleemeoConnector != nil {
@@ -2365,32 +2365,6 @@ func (a *agent) diagnosticFilterResult(_ context.Context, archive types.ArchiveW
 	}
 
 	return nil
-}
-
-func (a *agent) diagnosticThresholds(_ context.Context, archive types.ArchiveWriter) error {
-	file, err := archive.Create("thresholds.json")
-	if err != nil {
-		return err
-	}
-
-	nonZeroThresholds := a.threshold.GetNonZeroThresholds()
-	enc := json.NewEncoder(file)
-	enc.SetIndent("", "  ")
-
-	return enc.Encode(nonZeroThresholds)
-}
-
-func (a *agent) diagnosticStatusStates(_ context.Context, archive types.ArchiveWriter) error {
-	file, err := archive.Create("status-states.json")
-	if err != nil {
-		return err
-	}
-
-	states := a.threshold.GetAllStates(true)
-	enc := json.NewEncoder(file)
-	enc.SetIndent("", "  ")
-
-	return enc.Encode(states)
 }
 
 // Add a warning for the configuration.

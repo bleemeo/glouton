@@ -18,6 +18,7 @@ package threshold
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"glouton/config"
 	"glouton/logger"
@@ -445,27 +446,6 @@ func (r *Registry) getThreshold(labelsText string) Threshold {
 	return threshold
 }
 
-func (r *Registry) GetNonZeroThresholds() map[string]Threshold {
-	r.l.Lock()
-	defer r.l.Unlock()
-
-	thresholds := make(map[string]Threshold)
-
-	for labelsText, threshold := range r.thresholds {
-		if !threshold.IsZero() {
-			thresholds[labelsText] = threshold
-		}
-	}
-
-	for labelsText, threshold := range r.thresholdsAllItem {
-		if !threshold.IsZero() {
-			thresholds[labelsText] = threshold
-		}
-	}
-
-	return thresholds
-}
-
 // Run will periodically save status state and clean it.
 func (r *Registry) Run(ctx context.Context) error {
 	lastSave := r.nowFunc()
@@ -709,7 +689,43 @@ func (r *Registry) addPointWithThreshold(
 	return points, statusPoints
 }
 
-func (r *Registry) GetAllStates(sorted bool) []jsonState { //nolint:revive
+func (r *Registry) DiagnosticThresholds(_ context.Context, archive types.ArchiveWriter) error {
+	file, err := archive.Create("thresholds.json")
+	if err != nil {
+		return err
+	}
+
+	nonZeroThresholds := make(map[string]Threshold)
+
+	func() {
+		r.l.Lock()
+		defer r.l.Unlock()
+
+		for labelsText, threshold := range r.thresholds {
+			if !threshold.IsZero() {
+				nonZeroThresholds[labelsText] = threshold
+			}
+		}
+
+		for labelsText, threshold := range r.thresholdsAllItem {
+			if !threshold.IsZero() {
+				nonZeroThresholds[labelsText] = threshold
+			}
+		}
+	}()
+
+	enc := json.NewEncoder(file)
+	enc.SetIndent("", "  ")
+
+	return enc.Encode(nonZeroThresholds)
+}
+
+func (r *Registry) DiagnosticStatusStates(_ context.Context, archive types.ArchiveWriter) error {
+	file, err := archive.Create("threshold-status-states.json")
+	if err != nil {
+		return err
+	}
+
 	jsonStates := make([]jsonState, 0, len(r.states))
 
 	for labelsText, state := range r.states {
@@ -719,11 +735,12 @@ func (r *Registry) GetAllStates(sorted bool) []jsonState { //nolint:revive
 		})
 	}
 
-	if sorted {
-		sort.Slice(jsonStates, func(i, j int) bool {
-			return jsonStates[i].LabelsText < jsonStates[j].LabelsText
-		})
-	}
+	sort.Slice(jsonStates, func(i, j int) bool {
+		return jsonStates[i].LabelsText < jsonStates[j].LabelsText
+	})
 
-	return jsonStates
+	enc := json.NewEncoder(file)
+	enc.SetIndent("", "  ")
+
+	return enc.Encode(jsonStates)
 }
