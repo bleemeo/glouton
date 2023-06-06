@@ -58,8 +58,8 @@ func New(config config.Smart) (telegraf.Input, *inputs.GathererOptions, error) {
 	}
 
 	options := &inputs.GathererOptions{
-		// This input uses an external command with sudo so we gather less often.
-		MinInterval: 60 * time.Second,
+		// smartctl might take some time to gather, especially with large number of disk.
+		MinInterval: 5 * 60 * time.Second,
 	}
 
 	return internalInput, options, nil
