@@ -2015,6 +2015,53 @@ func (a *agent) DiagnosticPage(ctx context.Context) string {
 		}
 	}
 
+	nonZeroThresholds := a.threshold.GetNonZeroThresholds()
+	thresholdsLines := make([]string, 0, len(nonZeroThresholds))
+
+	for labelsText, thresh := range nonZeroThresholds {
+		thresholdsLines = append(thresholdsLines,
+			fmt.Sprintf(" * %s = %.2f/%.2f/%.2f/%.2f",
+				labelsText, thresh.LowCritical, thresh.LowWarning, thresh.HighWarning, thresh.HighCritical))
+	}
+
+	sort.Strings(thresholdsLines)
+
+	fmt.Fprintln(builder, "Thresholds:")
+
+	for _, l := range thresholdsLines {
+		fmt.Fprintln(builder, l)
+	}
+
+	type cachedStatusState struct {
+		LabelsText    string
+		CurrentStatus types.Status
+		CriticalSince time.Time
+		WarningSince  time.Time
+		LastUpdate    time.Time
+	}
+
+	var statusStates []cachedStatusState
+
+	err = a.state.Get("CacheStatusState", &statusStates)
+	if err != nil {
+		fmt.Fprintln(builder, "Unable to gather status states:", err)
+	} else {
+		statusLines := make([]string, len(statusStates))
+
+		for i, status := range statusStates {
+			statusLines[i] = fmt.Sprintf("* %s = %s (Warning since %s / Critical since %s / Last update at %s)",
+				status.LabelsText, status.CurrentStatus, status.WarningSince.Format(time.DateTime),
+				status.CriticalSince.Format(time.DateTime), status.LastUpdate.Format(time.DateTime))
+		}
+
+		sort.Strings(statusLines)
+
+		fmt.Fprintln(builder, "Status states:")
+		for _, l := range statusLines {
+			fmt.Fprintln(builder, l)
+		}
+	}
+
 	return builder.String()
 }
 

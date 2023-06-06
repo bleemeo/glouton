@@ -409,6 +409,18 @@ func (r *Registry) getThreshold(labelsText string) Threshold {
 	return threshold
 }
 
+func (r *Registry) GetNonZeroThresholds() map[string]Threshold {
+	thresholds := make(map[string]Threshold)
+
+	for labelsText, threshold := range r.thresholds {
+		if !threshold.IsZero() {
+			thresholds[labelsText] = threshold
+		}
+	}
+
+	return thresholds
+}
+
 // Run will periodically save status state and clean it.
 func (r *Registry) Run(ctx context.Context) error {
 	lastSave := r.nowFunc()
