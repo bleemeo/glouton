@@ -2015,60 +2015,6 @@ func (a *agent) DiagnosticPage(ctx context.Context) string {
 		}
 	}
 
-	nonZeroThresholds := a.threshold.GetNonZeroThresholds()
-	thresholdsLines := make([]string, 0, len(nonZeroThresholds))
-
-	for labelsText, thresh := range nonZeroThresholds {
-		thresholdsLines = append(thresholdsLines,
-			fmt.Sprintf(" * %s = %.2f/%.2f/%.2f/%.2f",
-				labelsText, thresh.LowCritical, thresh.LowWarning, thresh.HighWarning, thresh.HighCritical))
-	}
-
-	sort.Strings(thresholdsLines)
-
-	fmt.Fprintln(builder, "Thresholds:")
-
-	for _, l := range thresholdsLines {
-		fmt.Fprintln(builder, l)
-	}
-
-	var statusStates []struct {
-		LabelsText    string
-		CurrentStatus types.Status
-		CriticalSince time.Time
-		WarningSince  time.Time
-		LastUpdate    time.Time
-	}
-
-	err = a.state.Get("CacheStatusState", &statusStates)
-	if err != nil {
-		fmt.Fprintln(builder, "Unable to gather status states:", err)
-	} else {
-		statusLines := make([]string, len(statusStates))
-
-		for i, status := range statusStates {
-			strTimes := make(map[string]string, 3)
-
-			for name, t := range map[string]time.Time{"warning": status.WarningSince, "critical": status.CriticalSince, "lastUpdate": status.LastUpdate} {
-				if t.IsZero() {
-					strTimes[name] = "-"
-				} else {
-					strTimes[name] = t.Format(time.RFC3339)
-				}
-			}
-
-			statusLines[i] = fmt.Sprintf("* %s = %s (Warning since %s / Critical since %s / Last update at %s)",
-				status.LabelsText, status.CurrentStatus, strTimes["warning"], strTimes["critical"], strTimes["lastUpdate"])
-		}
-
-		sort.Strings(statusLines)
-
-		fmt.Fprintln(builder, "Status states:")
-		for _, l := range statusLines {
-			fmt.Fprintln(builder, l)
-		}
-	}
-
 	return builder.String()
 }
 
@@ -2089,6 +2035,8 @@ func (a *agent) writeDiagnosticArchive(ctx context.Context, archive types.Archiv
 		a.rulesManager.DiagnosticArchive,
 		a.reloadState.DiagnosticArchive,
 		a.vethProvider.DiagnosticArchive,
+		a.diagnosticThresholds,
+		a.diagnosticStatusStates,
 	}
 
 	if a.bleemeoConnector != nil {
@@ -2417,6 +2365,32 @@ func (a *agent) diagnosticFilterResult(_ context.Context, archive types.ArchiveW
 	}
 
 	return nil
+}
+
+func (a *agent) diagnosticThresholds(_ context.Context, archive types.ArchiveWriter) error {
+	file, err := archive.Create("thresholds.json")
+	if err != nil {
+		return err
+	}
+
+	nonZeroThresholds := a.threshold.GetNonZeroThresholds()
+	enc := json.NewEncoder(file)
+	enc.SetIndent("", "  ")
+
+	return enc.Encode(nonZeroThresholds)
+}
+
+func (a *agent) diagnosticStatusStates(_ context.Context, archive types.ArchiveWriter) error {
+	file, err := archive.Create("status-states.json")
+	if err != nil {
+		return err
+	}
+
+	states := a.threshold.GetAllStates(true)
+	enc := json.NewEncoder(file)
+	enc.SetIndent("", "  ")
+
+	return enc.Encode(states)
 }
 
 // Add a warning for the configuration.

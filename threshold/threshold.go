@@ -23,6 +23,7 @@ import (
 	"glouton/logger"
 	"glouton/types"
 	"math"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -239,7 +240,25 @@ type Threshold struct {
 	CriticalDelay time.Duration
 }
 
-// Equal test equality of threhold object.
+func (t Threshold) MarshalJSON() ([]byte, error) {
+	floatToStr := func(f float64) string {
+		if math.IsNaN(f) {
+			return "null"
+		}
+
+		return fmt.Sprint(f)
+	}
+
+	str := fmt.Sprintf(
+		`{"LowCritical":%s,"LowWarning":%s,"HighWarning":%s,"HighCritical":%s,"WarningDelay":"%s","CriticalDelay":"%s"}`,
+		floatToStr(t.LowCritical), floatToStr(t.LowWarning), floatToStr(t.HighWarning), floatToStr(t.HighCritical),
+		t.WarningDelay.String(), t.CriticalDelay.String(),
+	)
+
+	return []byte(str), nil
+}
+
+// Equal test equality of threshold object.
 func (t Threshold) Equal(other Threshold) bool {
 	if t == other {
 		return true
@@ -427,9 +446,18 @@ func (r *Registry) getThreshold(labelsText string) Threshold {
 }
 
 func (r *Registry) GetNonZeroThresholds() map[string]Threshold {
+	r.l.Lock()
+	defer r.l.Unlock()
+
 	thresholds := make(map[string]Threshold)
 
 	for labelsText, threshold := range r.thresholds {
+		if !threshold.IsZero() {
+			thresholds[labelsText] = threshold
+		}
+	}
+
+	for labelsText, threshold := range r.thresholdsAllItem {
 		if !threshold.IsZero() {
 			thresholds[labelsText] = threshold
 		}
@@ -679,4 +707,23 @@ func (r *Registry) addPointWithThreshold(
 	})
 
 	return points, statusPoints
+}
+
+func (r *Registry) GetAllStates(sorted bool) []jsonState { //nolint:revive
+	jsonStates := make([]jsonState, 0, len(r.states))
+
+	for labelsText, state := range r.states {
+		jsonStates = append(jsonStates, jsonState{
+			LabelsText:  labelsText,
+			statusState: state,
+		})
+	}
+
+	if sorted {
+		sort.Slice(jsonStates, func(i, j int) bool {
+			return jsonStates[i].LabelsText < jsonStates[j].LabelsText
+		})
+	}
+
+	return jsonStates
 }
