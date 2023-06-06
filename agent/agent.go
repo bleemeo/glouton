@@ -2032,15 +2032,13 @@ func (a *agent) DiagnosticPage(ctx context.Context) string {
 		fmt.Fprintln(builder, l)
 	}
 
-	type cachedStatusState struct {
+	var statusStates []struct {
 		LabelsText    string
 		CurrentStatus types.Status
 		CriticalSince time.Time
 		WarningSince  time.Time
 		LastUpdate    time.Time
 	}
-
-	var statusStates []cachedStatusState
 
 	err = a.state.Get("CacheStatusState", &statusStates)
 	if err != nil {
@@ -2049,9 +2047,18 @@ func (a *agent) DiagnosticPage(ctx context.Context) string {
 		statusLines := make([]string, len(statusStates))
 
 		for i, status := range statusStates {
+			strTimes := make(map[string]string, 3)
+
+			for name, t := range map[string]time.Time{"warning": status.WarningSince, "critical": status.CriticalSince, "lastUpdate": status.LastUpdate} {
+				if t.IsZero() {
+					strTimes[name] = "-"
+				} else {
+					strTimes[name] = t.Format(time.RFC3339)
+				}
+			}
+
 			statusLines[i] = fmt.Sprintf("* %s = %s (Warning since %s / Critical since %s / Last update at %s)",
-				status.LabelsText, status.CurrentStatus, status.WarningSince.Format(time.DateTime),
-				status.CriticalSince.Format(time.DateTime), status.LastUpdate.Format(time.DateTime))
+				status.LabelsText, status.CurrentStatus, strTimes["warning"], strTimes["critical"], strTimes["lastUpdate"])
 		}
 
 		sort.Strings(statusLines)
