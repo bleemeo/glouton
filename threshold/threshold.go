@@ -84,6 +84,15 @@ func (r *Registry) SetThresholds(thresholdWithItem map[string]Threshold, thresho
 	r.l.Lock()
 	defer r.l.Unlock()
 
+	// The finality of this map is to contain only the deleted thresholds
+	// to be able to delete their related status states,
+	// which is no longer relevant without a threshold
+	oldThresholds := make(map[string]struct{}, len(r.thresholds))
+
+	for labelsText := range r.thresholds {
+		oldThresholds[labelsText] = struct{}{}
+	}
+
 	// When threshold is *updated*, we want to immediately apply the new threshold
 	changedName := make(map[string]bool)
 	changedItem := make(map[string]bool)
@@ -100,12 +109,20 @@ func (r *Registry) SetThresholds(thresholdWithItem map[string]Threshold, thresho
 		if ok && !threshold.Equal(old) {
 			changedItem[labelsText] = true
 		}
+		// Remove this threshold from the list of supposedly deleted thresholds
+		delete(oldThresholds, labelsText)
 	}
 
 	r.thresholdsAllItem = thresholdAllItem
 	r.thresholds = thresholdWithItem
 
 	for labelsText, state := range r.states {
+		if _, isDeleted := oldThresholds[labelsText]; isDeleted {
+			delete(r.states, labelsText)
+
+			continue
+		}
+
 		lbls := types.TextToLabels(labelsText)
 
 		if changedItem[labelsText] || changedName[lbls[types.LabelName]] {
