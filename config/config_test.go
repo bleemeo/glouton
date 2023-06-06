@@ -855,6 +855,18 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 				NetworkInterfaceDenylist: []string{"eth0"},
 			},
 		},
+		{
+			Name:  "config contains null parts",
+			Files: []string{"testdata/null-parts.conf"},
+			WantConfig: Config{
+				Bleemeo: Bleemeo{
+					APIBase: "not/null",
+				},
+				Web: Web{
+					StaticCDNURL: "/simple",
+				},
+			},
+		},
 	}
 
 	for _, test := range tests {

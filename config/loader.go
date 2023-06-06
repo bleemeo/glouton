@@ -304,7 +304,7 @@ func priority(provider ItemSource, key string, value interface{}, loadCount int)
 		return priorityEnv
 	case SourceFile:
 		// Slices in files all have the same priority because they are appended.
-		if reflect.TypeOf(value).Kind() == reflect.Slice {
+		if value != nil && reflect.TypeOf(value).Kind() == reflect.Slice {
 			return priorityMapAndArrayFile
 		}
 
