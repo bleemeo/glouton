@@ -139,7 +139,7 @@ func (c *Client) setupMQTT(ctx context.Context) (paho.Client, error) {
 // Publish sends the payload to MQTT on the given topic.
 // If retry is set to true and MQTT is currently unreachable, the client will
 // retry to send the message later, else it will be dropped.
-func (c *Client) Publish(topic string, payload interface{}, retry bool) {
+func (c *Client) Publish(topic string, payload []byte, retry bool) {
 	c.l.Lock()
 	defer c.l.Unlock()
 
