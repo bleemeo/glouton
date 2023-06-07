@@ -40,6 +40,7 @@ const (
 	// If we stayed connected to MQTT for more stableConnection, the connection is considered stable,
 	// and we won't wait long to reconnect in case of a disconnection.
 	stableConnection = 5 * time.Minute
+	maxPayloadSize   = 1024 * 1024
 )
 
 type Client struct {
@@ -140,6 +141,12 @@ func (c *Client) setupMQTT(ctx context.Context) (paho.Client, error) {
 // If retry is set to true and MQTT is currently unreachable, the client will
 // retry to send the message later, else it will be dropped.
 func (c *Client) Publish(topic string, payload []byte, retry bool) {
+	if len(payload) > maxPayloadSize {
+		logger.V(1).Printf("%s: drop too large message to MQTT topic %s, it size is %d", c.opts.ID, topic, len(payload))
+
+		return
+	}
+
 	c.l.Lock()
 	defer c.l.Unlock()
 
