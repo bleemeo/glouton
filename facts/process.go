@@ -589,7 +589,8 @@ func (pp *ProcessProvider) updateProcesses(ctx context.Context, now time.Time, m
 	}
 
 	if len(topinfo.Processes) > maxTopInfoProcesses {
-		// Limit the number of processes; as this may lead to data loss.
+		// Limit the number of processes, because too large list of processes
+		// won't be usable and will be rejected by the Bleemeo Cloud.
 		// We start by sorting them to always return the same processes.
 		sort.Slice(topinfo.Processes, func(i, j int) bool {
 			return topinfo.Processes[i].PID < topinfo.Processes[j].PID
