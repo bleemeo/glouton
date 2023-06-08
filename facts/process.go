@@ -51,7 +51,10 @@ const (
 	ProcessStatusUnknown     ProcessStatus = "?"
 )
 
-const defaultLowProcessThreshold = 5
+const (
+	defaultLowProcessThreshold = 5
+	maxTopInfoProcesses        = 2000
+)
 
 var errNotAvailable = errors.New("feature not available on this system")
 
@@ -94,14 +97,15 @@ type Process struct {
 
 // TopInfo contains all information to show a top-like view.
 type TopInfo struct {
-	Time      int64       `json:"time"`
-	Uptime    int         `json:"uptime"`
-	Loads     []float64   `json:"loads"`
-	Users     int         `json:"users"`
-	Processes []Process   `json:"processes"`
-	CPU       CPUUsage    `json:"cpu"`
-	Memory    MemoryUsage `json:"memory"`
-	Swap      SwapUsage   `json:"swap"`
+	Time                 int64       `json:"time"`
+	Uptime               int         `json:"uptime"`
+	Loads                []float64   `json:"loads"`
+	Users                int         `json:"users"`
+	Processes            []Process   `json:"processes"`
+	CPU                  CPUUsage    `json:"cpu"`
+	Memory               MemoryUsage `json:"memory"`
+	Swap                 SwapUsage   `json:"swap"`
+	ProcessListTruncated bool        `json:"process_list_truncated"`
 }
 
 // CPUUsage contains usage of CPU.
@@ -582,6 +586,17 @@ func (pp *ProcessProvider) updateProcesses(ctx context.Context, now time.Time, m
 
 	for _, p := range newProcessesMap {
 		topinfo.Processes = append(topinfo.Processes, p)
+	}
+
+	if len(topinfo.Processes) > maxTopInfoProcesses {
+		// Limit the number of processes; as this may lead to data loss.
+		// We start by sorting them to always return the same processes.
+		sort.Slice(topinfo.Processes, func(i, j int) bool {
+			return topinfo.Processes[i].PID < topinfo.Processes[j].PID
+		})
+
+		topinfo.Processes = topinfo.Processes[:maxTopInfoProcesses]
+		topinfo.ProcessListTruncated = true
 	}
 
 	if ctx.Err() != nil {
