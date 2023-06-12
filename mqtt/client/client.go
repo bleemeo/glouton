@@ -317,21 +317,21 @@ func (c *Client) ackManager(ctx context.Context) {
 	var lastErrShowed time.Time
 
 	for ctx.Err() == nil {
-		select {
-		case msg := <-c.opts.ReloadState.PendingMessages():
-			err := c.ackOne(msg, 10*time.Second)
-			if err != nil {
-				if time.Since(lastErrShowed) > time.Minute {
-					logger.V(2).Printf(
-						"%s MQTT publish on %s failed: %v (%d pending messages)",
-						c.opts.ID, msg.Topic, err, len(c.opts.ReloadState.PendingMessages()),
-					)
+		msg, open := c.opts.ReloadState.PendingMessage()
+		if !open {
+			continue // re-check if ctx.Err is still nil
+		}
 
-					lastErrShowed = time.Now()
-				}
+		err := c.ackOne(msg, 10*time.Second)
+		if err != nil {
+			if time.Since(lastErrShowed) > time.Minute {
+				logger.V(2).Printf(
+					"%s MQTT publish on %s failed: %v (%d pending messages)",
+					c.opts.ID, msg.Topic, err, c.opts.ReloadState.PendingMessagesCount(),
+				)
+
+				lastErrShowed = time.Now()
 			}
-
-		case <-ctx.Done():
 		}
 	}
 }
@@ -448,7 +448,7 @@ func (c *Client) DiagnosticArchive(_ context.Context, archive types.ArchiveWrite
 		DisabledUntil       time.Time
 	}{
 		ConnectionOpen:      c.isConnectionOpen(),
-		PendingMessageCount: len(c.opts.ReloadState.PendingMessages()),
+		PendingMessageCount: c.opts.ReloadState.PendingMessagesCount(),
 		LastConnectionTimes: c.lastConnectionTimes,
 		CurrentConnectDelay: c.currentConnectDelay.String(),
 		ConsecutiveErrors:   c.consecutiveErrors,

@@ -247,14 +247,13 @@ func TestRacing(t *testing.T) {
 
 	wg.Wait()
 
-	if totalErrs > 0 {
-		t.Logf("Inaccuracies: %.2f%%\n", float64(totalErrs)/10000*100)
-	} else {
-		t.Log("No inaccuracies")
-	}
-
 	length := queue.len()
 	if length != 0 {
 		t.Fatalf("Queue expected to be empty, but has a length of %d.", length)
+	}
+
+	inaccuraciesPerc := float64(totalErrs) / 10000 * 100
+	if inaccuraciesPerc > 1 {
+		t.Fatalf("Unexacceptable amount of inaccuracies: %.2f%%\n", inaccuraciesPerc)
 	}
 }

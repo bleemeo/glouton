@@ -34,6 +34,11 @@ func newFifo[T any](size int) *fifo[T] {
 // close marks the fifo as closed, thus unable to get or put elements.
 func (fifo *fifo[T]) close() {
 	atomic.StoreUint32(&fifo.closed, 1)
+
+	// Release goroutines eventually waiting
+	// for the queue not to be full or empty.
+	fifo.notFull.Broadcast()
+	fifo.notEmpty.Broadcast()
 }
 
 // isClosed reports whether the fifo queue is closed.
@@ -42,6 +47,7 @@ func (fifo *fifo[T]) isClosed() bool {
 }
 
 // len returns the number of elements contained in the fifo queue.
+// The returned value is not affected by the closing of the queue.
 func (fifo *fifo[T]) len() int {
 	return int(atomic.LoadInt64(&fifo.writeReadDiff))
 }
@@ -52,23 +58,23 @@ func (fifo *fifo[T]) len() int {
 // Note that if the get method returns that the queue is not opened anymore,
 // the value returned is the zero-value of the queue's type.
 func (fifo *fifo[T]) get() (v T, open bool) {
+	if fifo.isClosed() {
+		return v, false
+	}
+
 	fifo.l.Lock()
 	defer fifo.l.Unlock()
 
-	if fifo.isClosed() {
-		return v, false
+	for fifo.writeReadDiff <= 0 {
+		fifo.notEmpty.Wait()
+
+		if fifo.isClosed() {
+			return v, false
+		}
 	}
 
 	if fifo.readIdx == fifo.size {
 		fifo.readIdx = 0
-	}
-
-	for fifo.writeReadDiff <= 0 {
-		fifo.notEmpty.Wait()
-	}
-
-	if fifo.isClosed() {
-		return v, false
 	}
 
 	fifo.writeReadDiff--
@@ -85,23 +91,23 @@ func (fifo *fifo[T]) get() (v T, open bool) {
 // If the queue is full, put waits until a slot is freed and
 // only returns once the value has been added.
 func (fifo *fifo[T]) put(v T) {
+	if fifo.isClosed() {
+		return
+	}
+
 	fifo.l.Lock()
 	defer fifo.l.Unlock()
 
-	if fifo.isClosed() {
-		return
+	for fifo.writeReadDiff >= int64(fifo.size) {
+		fifo.notFull.Wait()
+
+		if fifo.isClosed() {
+			return
+		}
 	}
 
 	if fifo.writeIdx == fifo.size {
 		fifo.writeIdx = 0
-	}
-
-	for fifo.writeReadDiff >= int64(fifo.size) {
-		fifo.notFull.Wait()
-	}
-
-	if fifo.isClosed() {
-		return
 	}
 
 	fifo.writeReadDiff++
@@ -113,6 +119,7 @@ func (fifo *fifo[T]) put(v T) {
 
 // putNoWait tries to add the given value to the queue if a slot is free.
 // If the queue is full, putNoWait does nothing and returns false.
+// If the queue is closed, putNoWait also does nothing and returns false.
 func (fifo *fifo[T]) putNoWait(v T) (ok bool) {
 	fifo.l.Lock()
 	defer fifo.l.Unlock()

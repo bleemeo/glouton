@@ -445,7 +445,8 @@ type MQTTReloadState interface {
 	ConnectionLostChannel() <-chan error
 	Close()
 	AddPendingMessage(m Message, shouldWait bool)
-	PendingMessages() <-chan Message
+	PendingMessage() (Message, bool)
+	PendingMessagesCount() int
 }
 
 // Message contains all information to send a message to MQTT.
