@@ -1,12 +1,14 @@
 package client
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"math"
-	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
+
+	"golang.org/x/sync/errgroup"
 )
 
 func TestSize(t *testing.T) {
@@ -15,52 +17,62 @@ func TestSize(t *testing.T) {
 	for size := 1; size < 1e7; size *= 10 {
 		t.Run(fmt.Sprintf("%d sized fifo queue", size), func(t *testing.T) {
 			queue := newFifo[int](size)
+			ctx, cancel := context.WithCancel(context.Background())
 
-			length := queue.len()
+			length := queue.Len()
 			if length != 0 {
+				cancel()
 				t.Fatalf("Unexpected queue length: got %d, want 0.", length)
 			}
 
 			for i := 0; i < size-1; i++ {
-				queue.put(i)
+				queue.Put(ctx, i)
 			}
 
-			length = queue.len()
+			length = queue.Len()
 			if length != size-1 {
+				cancel()
 				t.Fatalf("Unexpected queue length: got %d, want %d.", length, size-1)
 			}
 
-			added := queue.putNoWait(1)
+			added := queue.PutNoWait(1)
 			if !added {
+				cancel()
 				t.Fatalf("Should have added item n°%d in %d-sized queue.", size, size)
 			}
 
-			length = queue.len()
+			length = queue.Len()
 			if length != size {
+				cancel()
 				t.Fatalf("Unexpected queue length: got %d, want %d.", length, size)
 			}
 
-			added = queue.putNoWait(1)
+			added = queue.PutNoWait(1)
 			if added {
+				cancel()
 				t.Fatalf("Should not have added item n°%d in %d-sized queue.", size+1, size)
 			}
 
-			length = queue.len()
+			length = queue.Len()
 			if length != size {
+				cancel()
 				t.Fatalf("Unexpected queue length: got %d, want %d.", length, size)
 			}
 
-			queue.close()
+			queue.Close()
 
-			length = queue.len()
+			length = queue.Len()
 			if length != size {
+				cancel()
 				t.Fatalf("Unexpected queue length: got %d, want %d.", length, size)
 			}
+
+			cancel()
 		})
 	}
 }
 
-func doesTimeout(duration time.Duration, fn func()) (timedOut bool) {
+func doesTimeout[T any](duration time.Duration, fn func(), queue *fifo[T]) (timedOut bool) {
 	done := make(chan struct{})
 	timer := time.NewTimer(duration)
 
@@ -73,64 +85,72 @@ func doesTimeout(duration time.Duration, fn func()) (timedOut bool) {
 	case <-done:
 		return false
 	case <-timer.C:
+		queue.Close()
+		<-done
+
 		return true
 	}
 }
 
-func TestBlocking(t *testing.T) {
-	t.Run("put", func(t *testing.T) {
+func TestMethods(t *testing.T) {
+	t.Run("Put", func(t *testing.T) {
 		t.Parallel()
 
 		queue := newFifo[string](2)
+		ctx, cancel := context.WithCancel(context.Background())
 
-		if doesTimeout(time.Millisecond, func() { queue.put("a") }) {
+		if doesTimeout(time.Millisecond, func() { queue.Put(ctx, "a") }, queue) {
+			cancel()
 			t.Fatal("Should not have waited to put element in queue.")
 		}
 
-		if doesTimeout(time.Millisecond, func() { queue.put("b") }) {
+		if doesTimeout(time.Millisecond, func() { queue.Put(ctx, "b") }, queue) {
+			cancel()
 			t.Fatal("Should not have waited to put element in queue.")
 		}
 
-		if !doesTimeout(5*time.Millisecond, func() { queue.put("c") }) {
+		if !doesTimeout(5*time.Millisecond, func() { queue.Put(ctx, "c") }, queue) {
+			cancel()
 			t.Fatal("Should have waited to put element in queue.")
 		}
+
+		cancel()
 	})
 
 	t.Run("Get", func(t *testing.T) {
 		t.Parallel()
 
 		queue := newFifo[string](2)
+		ctx, cancel := context.WithCancel(context.Background())
 
-		getFn := func(expected string) func() {
-			t.Helper()
-
+		getFn := func(expectedValue string, expectedOk bool) func() {
 			return func() {
-				v, ok := queue.get()
-				if !ok {
-					t.Fatalf("Queue unexpectedly closed.")
+				v, ok := queue.Get(ctx)
+				if ok != expectedOk {
+					t.Errorf("unexpected ok status: got %t, want %t", ok, expectedOk)
 				}
-				if v != expected {
-					t.Fatalf("Unexpected value: got %q, want %q.", v, expected)
+				if v != expectedValue {
+					t.Errorf("unexpected value: got \"%v\", want \"%v\"", v, expectedValue)
 				}
 			}
 		}
 
-		if !doesTimeout(5*time.Millisecond, getFn("_")) {
-			t.Fatal("Should have waited to get element from queue.")
+		queue.Put(ctx, "a")
+
+		if doesTimeout(5*time.Millisecond, getFn("a", true), queue) {
+			cancel()
+			t.Fatalf("Should not have waited to get element from queue.")
 		}
 
-		queue.put("_") // Release previous get
-
-		time.Sleep(time.Millisecond) // Guarantee that previous get is completed
-
-		queue.put("a")
-
-		if doesTimeout(5*time.Millisecond, getFn("a")) {
-			t.Fatal("Should not have waited to get element from queue.")
+		if !doesTimeout(5*time.Millisecond, getFn("", false), queue) {
+			cancel()
+			t.Fatalf("Should not have return without value or closing.")
 		}
+
+		cancel()
 	})
 
-	t.Run("putNoWait", func(t *testing.T) {
+	t.Run("PutNoWait", func(t *testing.T) {
 		t.Parallel()
 
 		queue := newFifo[string](2)
@@ -139,7 +159,7 @@ func TestBlocking(t *testing.T) {
 			t.Helper()
 
 			return func() {
-				ok := queue.putNoWait(v)
+				ok := queue.PutNoWait(v)
 				if ok != expected {
 					if expected {
 						t.Error("Should have inserted the value.")
@@ -150,15 +170,15 @@ func TestBlocking(t *testing.T) {
 			}
 		}
 
-		if doesTimeout(time.Millisecond, putFn("a", true)) {
+		if doesTimeout(time.Millisecond, putFn("a", true), queue) {
 			t.Fatal("Should not have waited to put element in queue.")
 		}
 
-		if doesTimeout(time.Millisecond, putFn("b", true)) {
+		if doesTimeout(time.Millisecond, putFn("b", true), queue) {
 			t.Fatal("Should not have waited to put element in queue.")
 		}
 
-		if doesTimeout(time.Millisecond, putFn("c", false)) {
+		if doesTimeout(time.Millisecond, putFn("c", false), queue) {
 			t.Fatal("Should not have waited after failed to put element in queue.")
 		}
 	})
@@ -167,93 +187,158 @@ func TestBlocking(t *testing.T) {
 func TestClose(t *testing.T) {
 	t.Parallel()
 
-	queue := newFifo[float64](2)
+	t.Run("ThroughMethod", func(t *testing.T) {
+		queue := newFifo[float64](2)
+		ctx, cancel := context.WithCancel(context.Background())
 
-	queue.put(math.Pi)
+		queue.Put(ctx, math.Pi)
 
-	v, open := queue.get()
-	if v != math.Pi {
-		t.Fatal("Unexpected value from Get")
-	}
+		v, open := queue.Get(ctx)
+		if v != math.Pi {
+			cancel()
+			t.Fatal("Unexpected value from Get")
+		}
 
-	if !open {
-		t.Fatal("Queue unexpectedly closed")
-	}
+		if !open {
+			cancel()
+			t.Fatal("Queue unexpectedly closed")
+		}
 
-	queue.close()
+		queue.Close()
 
-	_, open = queue.get()
-	if open {
-		t.Fatal("Queue should have been closed")
-	}
+		_, open = queue.Get(ctx)
+		if open {
+			cancel()
+			t.Fatal("Queue should have been closed")
+		}
 
-	queue.put(4.9)
+		queue.Put(ctx, 4.9)
 
-	length := queue.len()
-	if length != 0 {
-		t.Fatal("Element should not have been put in queue")
-	}
+		length := queue.Len()
+		if length != 0 {
+			cancel()
+			t.Fatal("Element should not have been put in queue")
+		}
+
+		cancel()
+	})
+
+	t.Run("ThroughContext", func(t *testing.T) {
+		queue := newFifo[float64](2)
+		ctx, cancel := context.WithCancel(context.Background())
+
+		queue.Put(ctx, math.Pi)
+
+		v, open := queue.Get(ctx)
+		if v != math.Pi {
+			cancel()
+			t.Fatal("Unexpected value from Get")
+		}
+
+		if !open {
+			cancel()
+			t.Fatal("Queue unexpectedly closed")
+		}
+
+		cancel()
+
+		_, open = queue.Get(ctx)
+		if open {
+			t.Fatal("Should not be able to Get after context cancel")
+		}
+
+		queue.Put(ctx, 4.9)
+
+		length := queue.Len()
+		if length != 0 {
+			t.Fatal("Element should not have been put in queue")
+		}
+	})
 }
+
+var errUnexpectedQueueStatus = errors.New("unexpected queue status")
 
 // This test should be run with the -race flag.
 func TestRacing(t *testing.T) {
 	t.Parallel()
 
-	var wg sync.WaitGroup
+	t.Run("MultiWriter", func(t *testing.T) {
+		queue := newFifo[time.Time](1000)
+		ctx, cancel := context.WithCancel(context.Background())
+		g, errCtx := errgroup.WithContext(ctx)
 
-	queue := newFifo[time.Time](1000)
+		for w := 0; w < 10; w++ {
+			g.Go(func() error {
+				for i := 0; i < 1000; i++ {
+					queue.Put(errCtx, time.Now())
+				}
 
-	for g := 0; g < 10; g++ {
-		wg.Add(1)
-		go func() { //nolint:wsl
-			defer wg.Done()
+				return nil
+			})
+		}
 
-			for i := 0; i < 1000; i++ {
-				queue.put(time.Now())
-			}
-		}()
-	}
-
-	var totalErrs int32
-
-	for g := 0; g < 10; g++ {
-		wg.Add(1)
-		go func() { //nolint:wsl
-			defer wg.Done()
-
-			var (
-				prev time.Time
-				errs int32
-			)
-
-			for i := 0; i < 1000; i++ {
-				ts, ok := queue.get()
+		g.Go(func() error {
+			for i := 0; i < 10000; i++ {
+				_, ok := queue.Get(errCtx)
 				if !ok {
-					t.Error("Unexpectedly closed queue")
-
-					return
+					return errUnexpectedQueueStatus
 				}
-
-				if ts.Before(prev) {
-					errs++
-				}
-
-				prev = ts
 			}
 
-			atomic.AddInt32(&totalErrs, errs)
-		}()
-	}
+			return nil
+		})
 
-	wg.Wait()
+		if err := g.Wait(); err != nil {
+			cancel()
+			t.Fatalf("Error while interacting with fifo: %v", err)
+		}
 
-	length := queue.len()
-	if length != 0 {
-		t.Fatalf("Queue expected to be empty, but has a length of %d.", length)
-	}
+		length := queue.Len()
+		if length != 0 {
+			cancel()
+			t.Fatalf("Queue expected to be empty, but has a length of %d.", length)
+		}
 
-	inaccuraciesPerc := float64(totalErrs) / 10000 * 100
-	if inaccuraciesPerc > 1 {
-		t.Fatalf("Unexacceptable amount of inaccuracies: %.2f%%\n", inaccuraciesPerc)
-	}
+		cancel()
+	})
+
+	t.Run("MultiReader", func(t *testing.T) {
+		queue := newFifo[time.Time](1000)
+		ctx, cancel := context.WithCancel(context.Background())
+		g, errCtx := errgroup.WithContext(ctx)
+
+		g.Go(func() error {
+			for i := 0; i < 10000; i++ {
+				queue.Put(errCtx, time.Now())
+			}
+
+			return nil
+		})
+
+		for r := 0; r < 10; r++ {
+			g.Go(func() error {
+				for i := 0; i < 1000; i++ {
+					_, ok := queue.Get(errCtx)
+					if !ok {
+						return errUnexpectedQueueStatus
+					}
+				}
+
+				return nil
+			})
+		}
+
+		if err := g.Wait(); err != nil {
+			cancel()
+			t.Fatalf("Error while interacting with fifo: %v", err)
+		}
+
+		length := queue.Len()
+		if length != 0 {
+			cancel()
+			t.Fatalf("Queue expected to be empty, but has a length of %d.", length)
+		}
+
+		cancel()
+	})
 }

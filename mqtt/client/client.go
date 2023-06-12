@@ -158,7 +158,7 @@ func (c *Client) Publish(topic string, payload interface{}, retry bool) {
 		c.stats.messagePublished(msg.Token, time.Now())
 	}
 
-	c.opts.ReloadState.AddPendingMessage(msg, true)
+	c.opts.ReloadState.AddPendingMessage(context.Background(), msg, true)
 }
 
 func (c *Client) onConnectionLost(err error) {
@@ -317,7 +317,7 @@ func (c *Client) ackManager(ctx context.Context) {
 	var lastErrShowed time.Time
 
 	for ctx.Err() == nil {
-		msg, open := c.opts.ReloadState.PendingMessage()
+		msg, open := c.opts.ReloadState.PendingMessage(ctx)
 		if !open {
 			continue // re-check if ctx.Err is still nil
 		}
@@ -377,7 +377,7 @@ func (c *Client) ackOne(msg types.Message, timeout time.Duration) error {
 	}
 
 	if shouldWaitAgain {
-		c.opts.ReloadState.AddPendingMessage(msg, false)
+		c.opts.ReloadState.AddPendingMessage(context.Background(), msg, false)
 
 		return err
 	}

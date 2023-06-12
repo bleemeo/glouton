@@ -17,6 +17,7 @@
 package client
 
 import (
+	"context"
 	"glouton/logger"
 	"glouton/types"
 	"sync"
@@ -72,20 +73,20 @@ func (rs *ReloadState) ConnectionLostChannel() <-chan error {
 	return rs.connectionLostChannel
 }
 
-func (rs *ReloadState) AddPendingMessage(m types.Message, shouldWait bool) {
+func (rs *ReloadState) AddPendingMessage(ctx context.Context, m types.Message, shouldWait bool) {
 	if shouldWait {
-		rs.pendingMessages.put(m)
+		rs.pendingMessages.Put(ctx, m)
 	} else {
-		rs.pendingMessages.putNoWait(m)
+		rs.pendingMessages.PutNoWait(m)
 	}
 }
 
-func (rs *ReloadState) PendingMessage() (m types.Message, open bool) {
-	return rs.pendingMessages.get()
+func (rs *ReloadState) PendingMessage(ctx context.Context) (m types.Message, open bool) {
+	return rs.pendingMessages.Get(ctx)
 }
 
 func (rs *ReloadState) PendingMessagesCount() int {
-	return rs.pendingMessages.len()
+	return rs.pendingMessages.Len()
 }
 
 func (rs *ReloadState) Close() {
@@ -101,7 +102,7 @@ func (rs *ReloadState) Close() {
 
 	rs.client.Disconnect(uint(5 * time.Second.Milliseconds()))
 
-	logger.V(2).Printf("Stopped MQTT with %d messages still pending", rs.pendingMessages.len())
+	logger.V(2).Printf("Stopped MQTT with %d messages still pending", rs.pendingMessages.Len())
 
 	// The callbacks need to know when the channel are closed
 	// so they don't send on a closed channel.
@@ -111,5 +112,5 @@ func (rs *ReloadState) Close() {
 	rs.isClosed = true
 
 	close(rs.connectionLostChannel)
-	rs.pendingMessages.close()
+	rs.pendingMessages.Close()
 }

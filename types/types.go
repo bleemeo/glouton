@@ -444,8 +444,8 @@ type MQTTReloadState interface {
 	OnConnectionLost(cli paho.Client, err error)
 	ConnectionLostChannel() <-chan error
 	Close()
-	AddPendingMessage(m Message, shouldWait bool)
-	PendingMessage() (Message, bool)
+	AddPendingMessage(ctx context.Context, m Message, shouldWait bool)
+	PendingMessage(ctx context.Context) (Message, bool)
 	PendingMessagesCount() int
 }
 

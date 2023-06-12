@@ -1,9 +1,12 @@
 package client
 
 import (
+	"context"
+	"errors"
 	"sync"
-	"sync/atomic"
 )
+
+var errOpDone = errors.New("operation done")
 
 // fifo is a First In First Out queue implementation.
 // A fifo queue can be queried and updated by multiple goroutines simultaneously.
@@ -11,11 +14,10 @@ type fifo[T any] struct {
 	size              int
 	queue             []T
 	readIdx, writeIdx int
-	writeReadDiff     int64
+	writeReadDiff     int
 	l                 *sync.Mutex
 	notEmpty, notFull *sync.Cond
-	// any value > 0 means closed
-	closed uint32
+	closed            bool
 }
 
 // newFifo returns an initialized fifo queue.
@@ -31,9 +33,11 @@ func newFifo[T any](size int) *fifo[T] {
 	}
 }
 
-// close marks the fifo as closed, thus unable to get or put elements.
-func (fifo *fifo[T]) close() {
-	atomic.StoreUint32(&fifo.closed, 1)
+// Close marks the fifo as closed, thus unable to add or pop elements.
+func (fifo *fifo[T]) Close() {
+	fifo.l.Lock()
+	fifo.closed = true
+	fifo.l.Unlock()
 
 	// Release goroutines eventually waiting
 	// for the queue not to be full or empty.
@@ -41,34 +45,50 @@ func (fifo *fifo[T]) close() {
 	fifo.notEmpty.Broadcast()
 }
 
-// isClosed reports whether the fifo queue is closed.
-func (fifo *fifo[T]) isClosed() bool {
-	return atomic.LoadUint32(&fifo.closed) != 0
-}
-
-// len returns the number of elements contained in the fifo queue.
+// Len returns the number of elements contained in the fifo queue.
 // The returned value is not affected by the closing of the queue.
-func (fifo *fifo[T]) len() int {
-	return int(atomic.LoadInt64(&fifo.writeReadDiff))
+func (fifo *fifo[T]) Len() int {
+	fifo.l.Lock()
+	defer fifo.l.Unlock()
+
+	return fifo.writeReadDiff
 }
 
-// get returns the oldest element of the queue along with whether the queue is open or not.
-// If the queue is empty, get will wait until an element is added to return it.
-// When an element is returned by get, it is removed from the queue freeing up a slot.
-// Note that if the get method returns that the queue is not opened anymore,
-// the value returned is the zero-value of the queue's type.
-func (fifo *fifo[T]) get() (v T, open bool) {
-	if fifo.isClosed() {
-		return v, false
+// watchForDone waits for the given Context to expire.
+// Then, if it was not canceled due to the normal finish of calling function,
+// it broadcasts a signal on conditions to release eventually waiting goroutines.
+func (fifo *fifo[T]) watchForDone(ctx context.Context) {
+	<-ctx.Done()
+
+	if !errors.Is(context.Cause(ctx), errOpDone) {
+		fifo.notFull.Broadcast()
+		fifo.notEmpty.Broadcast()
 	}
+}
+
+// Get returns the oldest element of the queue along with whether the queue is open or not.
+// If the queue is empty, Get will wait until an element is added to return it.
+// When an element is returned by Get, it is removed from the queue freeing up a slot.
+// If the given Context is canceled during the execution of Get, it returns false.
+// Note that if the Get method returns that the queue is not opened anymore,
+// the value returned is the zero-value of the queue's type.
+func (fifo *fifo[T]) Get(ctx context.Context) (v T, open bool) {
+	subCtx, cancel := context.WithCancelCause(ctx)
+	defer cancel(errOpDone)
+
+	go fifo.watchForDone(subCtx)
 
 	fifo.l.Lock()
 	defer fifo.l.Unlock()
 
+	if fifo.closed || ctx.Err() != nil {
+		return v, false
+	}
+
 	for fifo.writeReadDiff <= 0 {
 		fifo.notEmpty.Wait()
 
-		if fifo.isClosed() {
+		if fifo.closed || ctx.Err() != nil {
 			return v, false
 		}
 	}
@@ -86,22 +106,27 @@ func (fifo *fifo[T]) get() (v T, open bool) {
 	return v, true
 }
 
-// put adds the given value to the queue.
-// If the queue is closed, put returns without doing nothing.
-// If the queue is full, put waits until a slot is freed and
+// Put adds the given value to the queue.
+// If the queue is closed, Put returns without doing nothing.
+// If the queue is full, Put waits until a slot is freed and
 // only returns once the value has been added.
-func (fifo *fifo[T]) put(v T) {
-	if fifo.isClosed() {
-		return
-	}
+func (fifo *fifo[T]) Put(ctx context.Context, v T) {
+	subCtx, cancel := context.WithCancelCause(ctx)
+	defer cancel(errOpDone)
+
+	go fifo.watchForDone(subCtx)
 
 	fifo.l.Lock()
 	defer fifo.l.Unlock()
 
-	for fifo.writeReadDiff >= int64(fifo.size) {
+	if fifo.closed || ctx.Err() != nil {
+		return
+	}
+
+	for fifo.writeReadDiff >= fifo.size {
 		fifo.notFull.Wait()
 
-		if fifo.isClosed() {
+		if fifo.closed || ctx.Err() != nil {
 			return
 		}
 	}
@@ -117,27 +142,27 @@ func (fifo *fifo[T]) put(v T) {
 	fifo.notEmpty.Signal()
 }
 
-// putNoWait tries to add the given value to the queue if a slot is free.
-// If the queue is full, putNoWait does nothing and returns false.
-// If the queue is closed, putNoWait also does nothing and returns false.
-func (fifo *fifo[T]) putNoWait(v T) (ok bool) {
+// PutNoWait tries to add the given value to the queue if a slot is free.
+// If the queue is full, PutNoWait does nothing and returns false.
+// If the queue is closed, PutNoWait also does nothing and returns false.
+func (fifo *fifo[T]) PutNoWait(v T) (ok bool) {
 	fifo.l.Lock()
 	defer fifo.l.Unlock()
 
-	if fifo.isClosed() {
+	if fifo.closed {
+		return false
+	}
+
+	if fifo.writeReadDiff >= fifo.size {
+		return false
+	}
+
+	if fifo.closed {
 		return false
 	}
 
 	if fifo.writeIdx == fifo.size {
 		fifo.writeIdx = 0
-	}
-
-	if fifo.writeReadDiff >= int64(fifo.size) {
-		return false
-	}
-
-	if fifo.isClosed() {
-		return false
 	}
 
 	fifo.writeReadDiff++
