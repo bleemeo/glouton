@@ -97,15 +97,16 @@ type Process struct {
 
 // TopInfo contains all information to show a top-like view.
 type TopInfo struct {
-	Time                   int64       `json:"time"`
-	Uptime                 int         `json:"uptime"`
-	Loads                  []float64   `json:"loads"`
-	Users                  int         `json:"users"`
-	Processes              []Process   `json:"processes"`
-	CPU                    CPUUsage    `json:"cpu"`
-	Memory                 MemoryUsage `json:"memory"`
-	Swap                   SwapUsage   `json:"swap"`
-	ProcessListTruncatedAt *int        `json:"process_list_truncated_at"`
+	Time                   int64                 `json:"time"`
+	Uptime                 int                   `json:"uptime"`
+	Loads                  []float64             `json:"loads"`
+	Users                  int                   `json:"users"`
+	Processes              []Process             `json:"processes"`
+	CPU                    CPUUsage              `json:"cpu"`
+	Memory                 MemoryUsage           `json:"memory"`
+	Swap                   SwapUsage             `json:"swap"`
+	ProcessListTruncatedAt *int                  `json:"process_list_truncated_at"`
+	ProcessesCount         map[ProcessStatus]int `json:"processes_count"`
 }
 
 // CPUUsage contains usage of CPU.
@@ -583,9 +584,11 @@ func (pp *ProcessProvider) updateProcesses(ctx context.Context, now time.Time, m
 
 	topinfo.Time = now.Unix()
 	topinfo.Processes = make([]Process, 0, len(newProcessesMap))
+	topinfo.ProcessesCount = make(map[ProcessStatus]int)
 
 	for _, p := range newProcessesMap {
 		topinfo.Processes = append(topinfo.Processes, p)
+		topinfo.ProcessesCount[p.Status]++
 	}
 
 	if len(topinfo.Processes) > maxTopInfoProcesses {
