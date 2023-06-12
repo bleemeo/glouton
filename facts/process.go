@@ -97,15 +97,15 @@ type Process struct {
 
 // TopInfo contains all information to show a top-like view.
 type TopInfo struct {
-	Time                 int64       `json:"time"`
-	Uptime               int         `json:"uptime"`
-	Loads                []float64   `json:"loads"`
-	Users                int         `json:"users"`
-	Processes            []Process   `json:"processes"`
-	CPU                  CPUUsage    `json:"cpu"`
-	Memory               MemoryUsage `json:"memory"`
-	Swap                 SwapUsage   `json:"swap"`
-	ProcessListTruncated bool        `json:"process_list_truncated"`
+	Time                   int64       `json:"time"`
+	Uptime                 int         `json:"uptime"`
+	Loads                  []float64   `json:"loads"`
+	Users                  int         `json:"users"`
+	Processes              []Process   `json:"processes"`
+	CPU                    CPUUsage    `json:"cpu"`
+	Memory                 MemoryUsage `json:"memory"`
+	Swap                   SwapUsage   `json:"swap"`
+	ProcessListTruncatedAt *int        `json:"process_list_truncated_at"`
 }
 
 // CPUUsage contains usage of CPU.
@@ -597,7 +597,8 @@ func (pp *ProcessProvider) updateProcesses(ctx context.Context, now time.Time, m
 		})
 
 		topinfo.Processes = topinfo.Processes[:maxTopInfoProcesses]
-		topinfo.ProcessListTruncated = true
+		at := maxTopInfoProcesses
+		topinfo.ProcessListTruncatedAt = &at
 	}
 
 	if ctx.Err() != nil {
