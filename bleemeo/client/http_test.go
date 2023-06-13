@@ -94,6 +94,23 @@ Content-Length: 68
 				UnmarshalErr: nil,
 			},
 		},
+		{
+			name: "field-failing-validation",
+			response: []byte(`HTTP/1.1 400 Bad Request
+Content-Type: application/json
+Vary: Accept
+Allow: GET, POST, HEAD, OPTIONS
+Content-Length: 43
+
+[{"value":["This field may not be null."]}]`),
+			want: APIError{
+				StatusCode:   400,
+				ContentType:  "application/json",
+				Content:      "invalid field \"value\": This field may not be null.",
+				IsAuthError:  false,
+				UnmarshalErr: nil,
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
