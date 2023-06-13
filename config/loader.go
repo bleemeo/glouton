@@ -18,6 +18,7 @@ package config
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"glouton/logger"
 	"math"
@@ -92,6 +93,8 @@ const (
 	TypeLogInputs
 )
 
+var errNullConfigValue = errors.New("config entry has a null value, ignoring it")
+
 // Load config from a provider and add source information on config items.
 func (c *configLoader) Load(path string, provider koanf.Provider, parser koanf.Parser) prometheus.MultiError {
 	c.loadCount++
@@ -113,6 +116,12 @@ func (c *configLoader) Load(path string, provider koanf.Provider, parser koanf.P
 	warnings = append(warnings, moreWarnings...)
 
 	for key, value := range config {
+		if value == nil {
+			warnings = append(warnings, fmt.Errorf("%q %w", key, errNullConfigValue))
+
+			continue
+		}
+
 		priority := priority(providerType, key, value, c.loadCount)
 
 		// Keep the real type of the value before it's converted to JSON.
