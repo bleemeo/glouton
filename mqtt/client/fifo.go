@@ -6,7 +6,7 @@ import (
 	"sync"
 )
 
-var errOpDone = errors.New("operation done")
+var errOpDone = errors.New("fifo operation done")
 
 // fifo is a First In First Out queue implementation.
 // A fifo queue can be queried and updated by multiple goroutines simultaneously.
@@ -56,13 +56,15 @@ func (fifo *fifo[T]) Len() int {
 
 // watchForDone waits for the given Context to expire.
 // Then, if it was not canceled due to the normal finish of calling function,
-// it broadcasts a signal on conditions to release eventually waiting goroutines.
-func (fifo *fifo[T]) watchForDone(ctx context.Context) {
+// it broadcasts a signal on the given condition to release eventually waiting goroutines.
+// watchForDone must be started in a new goroutine, for instance by using the go statement.
+func (fifo *fifo[T]) watchForDone(ctx context.Context, cond *sync.Cond) {
 	<-ctx.Done()
 
 	if !errors.Is(context.Cause(ctx), errOpDone) {
-		fifo.notFull.Broadcast()
-		fifo.notEmpty.Broadcast()
+		fifo.l.Lock()
+		cond.Broadcast()
+		fifo.l.Unlock()
 	}
 }
 
@@ -76,7 +78,7 @@ func (fifo *fifo[T]) Get(ctx context.Context) (v T, open bool) {
 	subCtx, cancel := context.WithCancelCause(ctx)
 	defer cancel(errOpDone)
 
-	go fifo.watchForDone(subCtx)
+	go fifo.watchForDone(subCtx, fifo.notEmpty)
 
 	fifo.l.Lock()
 	defer fifo.l.Unlock()
@@ -114,7 +116,7 @@ func (fifo *fifo[T]) Put(ctx context.Context, v T) {
 	subCtx, cancel := context.WithCancelCause(ctx)
 	defer cancel(errOpDone)
 
-	go fifo.watchForDone(subCtx)
+	go fifo.watchForDone(subCtx, fifo.notFull)
 
 	fifo.l.Lock()
 	defer fifo.l.Unlock()

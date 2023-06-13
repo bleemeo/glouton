@@ -278,10 +278,15 @@ func TestRacing(t *testing.T) {
 		}
 
 		g.Go(func() error {
+			var prev time.Time
+
 			for i := 0; i < 10000; i++ {
-				_, ok := queue.Get(errCtx)
+				ts, ok := queue.Get(errCtx)
 				if !ok {
 					return errUnexpectedQueueStatus
+				}
+				if ts.Before(prev) {
+					return fmt.Errorf("unordered values: got %v, expected more than %v", ts, prev) //nolint:goerr113
 				}
 			}
 
@@ -317,10 +322,15 @@ func TestRacing(t *testing.T) {
 
 		for r := 0; r < 10; r++ {
 			g.Go(func() error {
+				var prev time.Time
+
 				for i := 0; i < 1000; i++ {
-					_, ok := queue.Get(errCtx)
+					ts, ok := queue.Get(errCtx)
 					if !ok {
 						return errUnexpectedQueueStatus
+					}
+					if ts.Before(prev) {
+						return fmt.Errorf("unordered values: got %v, expected more than %v", ts, prev) //nolint:goerr113
 					}
 				}
 
