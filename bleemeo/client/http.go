@@ -634,7 +634,7 @@ func decodeError(resp *http.Response) APIError {
 		}
 	}
 
-	err = json.Unmarshal(jsonMessage, &jsonError) // [{"value":["This field may not be null."]}]
+	err = json.Unmarshal(jsonMessage, &jsonError)
 	if err != nil {
 		err = json.Unmarshal(jsonMessage, &errorList)
 		if err != nil {
@@ -663,7 +663,7 @@ func decodeError(resp *http.Response) APIError {
 
 		for _, m := range validationErrors {
 			for field, validErrs := range m {
-				errs = append(errs, fmt.Sprintf("invalid field %q: %s", field, strings.Join(validErrs, ",")))
+				errs = append(errs, fmt.Sprintf("invalid field %q: %s", field, strings.Join(validErrs, ", ")))
 			}
 		}
 
