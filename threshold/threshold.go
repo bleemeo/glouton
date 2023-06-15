@@ -18,11 +18,13 @@ package threshold
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"glouton/config"
 	"glouton/logger"
 	"glouton/types"
 	"math"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -84,6 +86,15 @@ func (r *Registry) SetThresholds(thresholdWithItem map[string]Threshold, thresho
 	r.l.Lock()
 	defer r.l.Unlock()
 
+	// The finality of this map is to contain only the deleted thresholds
+	// to be able to delete their related status states,
+	// which is no longer relevant without a threshold
+	oldThresholds := make(map[string]struct{}, len(r.thresholds))
+
+	for labelsText := range r.thresholds {
+		oldThresholds[labelsText] = struct{}{}
+	}
+
 	// When threshold is *updated*, we want to immediately apply the new threshold
 	changedName := make(map[string]bool)
 	changedItem := make(map[string]bool)
@@ -100,12 +111,20 @@ func (r *Registry) SetThresholds(thresholdWithItem map[string]Threshold, thresho
 		if ok && !threshold.Equal(old) {
 			changedItem[labelsText] = true
 		}
+		// Remove this threshold from the list of supposedly deleted thresholds
+		delete(oldThresholds, labelsText)
 	}
 
 	r.thresholdsAllItem = thresholdAllItem
 	r.thresholds = thresholdWithItem
 
 	for labelsText, state := range r.states {
+		if _, isDeleted := oldThresholds[labelsText]; isDeleted {
+			delete(r.states, labelsText)
+
+			continue
+		}
+
 		lbls := types.TextToLabels(labelsText)
 
 		if changedItem[labelsText] || changedName[lbls[types.LabelName]] {
@@ -222,7 +241,25 @@ type Threshold struct {
 	CriticalDelay time.Duration
 }
 
-// Equal test equality of threhold object.
+func (t Threshold) MarshalJSON() ([]byte, error) {
+	floatToStr := func(f float64) string {
+		if math.IsNaN(f) {
+			return "null"
+		}
+
+		return fmt.Sprint(f)
+	}
+
+	str := fmt.Sprintf(
+		`{"LowCritical":%s,"LowWarning":%s,"HighWarning":%s,"HighCritical":%s,"WarningDelay":"%s","CriticalDelay":"%s"}`,
+		floatToStr(t.LowCritical), floatToStr(t.LowWarning), floatToStr(t.HighWarning), floatToStr(t.HighCritical),
+		t.WarningDelay.String(), t.CriticalDelay.String(),
+	)
+
+	return []byte(str), nil
+}
+
+// Equal test equality of threshold object.
 func (t Threshold) Equal(other Threshold) bool {
 	if t == other {
 		return true
@@ -651,4 +688,60 @@ func (r *Registry) addPointWithThreshold(
 	})
 
 	return points, statusPoints
+}
+
+func (r *Registry) DiagnosticThresholds(_ context.Context, archive types.ArchiveWriter) error {
+	file, err := archive.Create("thresholds.json")
+	if err != nil {
+		return err
+	}
+
+	nonZeroThresholds := make(map[string]Threshold)
+
+	func() {
+		r.l.Lock()
+		defer r.l.Unlock()
+
+		for labelsText, threshold := range r.thresholds {
+			if !threshold.IsZero() {
+				nonZeroThresholds[labelsText] = threshold
+			}
+		}
+
+		for labelsText, threshold := range r.thresholdsAllItem {
+			if !threshold.IsZero() {
+				nonZeroThresholds[labelsText] = threshold
+			}
+		}
+	}()
+
+	enc := json.NewEncoder(file)
+	enc.SetIndent("", "  ")
+
+	return enc.Encode(nonZeroThresholds)
+}
+
+func (r *Registry) DiagnosticStatusStates(_ context.Context, archive types.ArchiveWriter) error {
+	file, err := archive.Create("threshold-status-states.json")
+	if err != nil {
+		return err
+	}
+
+	jsonStates := make([]jsonState, 0, len(r.states))
+
+	for labelsText, state := range r.states {
+		jsonStates = append(jsonStates, jsonState{
+			LabelsText:  labelsText,
+			statusState: state,
+		})
+	}
+
+	sort.Slice(jsonStates, func(i, j int) bool {
+		return jsonStates[i].LabelsText < jsonStates[j].LabelsText
+	})
+
+	enc := json.NewEncoder(file)
+	enc.SetIndent("", "  ")
+
+	return enc.Encode(jsonStates)
 }

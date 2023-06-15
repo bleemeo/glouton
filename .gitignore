@@ -9,6 +9,7 @@
 /work
 .vscode/
 .vscode
+.idea/
 /agent-go
 /agentgo*
 /glouton*

@@ -2035,6 +2035,8 @@ func (a *agent) writeDiagnosticArchive(ctx context.Context, archive types.Archiv
 		a.rulesManager.DiagnosticArchive,
 		a.reloadState.DiagnosticArchive,
 		a.vethProvider.DiagnosticArchive,
+		a.threshold.DiagnosticThresholds,
+		a.threshold.DiagnosticStatusStates,
 	}
 
 	if a.bleemeoConnector != nil {
