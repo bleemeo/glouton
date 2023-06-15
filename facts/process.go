@@ -51,7 +51,10 @@ const (
 	ProcessStatusUnknown     ProcessStatus = "?"
 )
 
-const defaultLowProcessThreshold = 5
+const (
+	defaultLowProcessThreshold = 5
+	maxTopInfoProcesses        = 2000
+)
 
 var errNotAvailable = errors.New("feature not available on this system")
 
@@ -94,14 +97,16 @@ type Process struct {
 
 // TopInfo contains all information to show a top-like view.
 type TopInfo struct {
-	Time      int64       `json:"time"`
-	Uptime    int         `json:"uptime"`
-	Loads     []float64   `json:"loads"`
-	Users     int         `json:"users"`
-	Processes []Process   `json:"processes"`
-	CPU       CPUUsage    `json:"cpu"`
-	Memory    MemoryUsage `json:"memory"`
-	Swap      SwapUsage   `json:"swap"`
+	Time                   int64                 `json:"time"`
+	Uptime                 int                   `json:"uptime"`
+	Loads                  []float64             `json:"loads"`
+	Users                  int                   `json:"users"`
+	Processes              []Process             `json:"processes"`
+	CPU                    CPUUsage              `json:"cpu"`
+	Memory                 MemoryUsage           `json:"memory"`
+	Swap                   SwapUsage             `json:"swap"`
+	ProcessListTruncatedAt *int                  `json:"process_list_truncated_at"`
+	ProcessesCount         map[ProcessStatus]int `json:"processes_count"`
 }
 
 // CPUUsage contains usage of CPU.
@@ -579,9 +584,24 @@ func (pp *ProcessProvider) updateProcesses(ctx context.Context, now time.Time, m
 
 	topinfo.Time = now.Unix()
 	topinfo.Processes = make([]Process, 0, len(newProcessesMap))
+	topinfo.ProcessesCount = make(map[ProcessStatus]int)
 
 	for _, p := range newProcessesMap {
 		topinfo.Processes = append(topinfo.Processes, p)
+		topinfo.ProcessesCount[p.Status]++
+	}
+
+	if len(topinfo.Processes) > maxTopInfoProcesses {
+		// Limit the number of processes, because too large list of processes
+		// won't be usable and will be rejected by the Bleemeo Cloud.
+		// We start by sorting them to always return the same processes.
+		sort.Slice(topinfo.Processes, func(i, j int) bool {
+			return topinfo.Processes[i].PID < topinfo.Processes[j].PID
+		})
+
+		topinfo.Processes = topinfo.Processes[:maxTopInfoProcesses]
+		at := maxTopInfoProcesses
+		topinfo.ProcessListTruncatedAt = &at
 	}
 
 	if ctx.Err() != nil {
