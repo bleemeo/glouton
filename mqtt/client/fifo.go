@@ -58,10 +58,7 @@ func (fifo *fifo[T]) Len() int {
 // Then, if it was not canceled due to the normal finish of calling function,
 // it broadcasts a signal on the given condition to release eventually waiting goroutines.
 // watchForDone must be started in a new goroutine, for instance by using the go statement.
-// Then, watchForDone marks the given WaitGroup as done just before returning.
-func (fifo *fifo[T]) watchForDone(ctx context.Context, cond *sync.Cond, wg *sync.WaitGroup) {
-	defer wg.Done()
-
+func (fifo *fifo[T]) watchForDone(ctx context.Context, cond *sync.Cond) {
 	<-ctx.Done()
 
 	if !errors.Is(context.Cause(ctx), errOpDone) {
@@ -78,15 +75,20 @@ func (fifo *fifo[T]) watchForDone(ctx context.Context, cond *sync.Cond, wg *sync
 // Note that if the Get method returns that the queue is not opened anymore,
 // the value returned is the zero-value of the queue's type.
 func (fifo *fifo[T]) Get(ctx context.Context) (v T, open bool) {
-	wg := new(sync.WaitGroup)
+	subCtx, cancel := context.WithCancelCause(ctx)
+
+	var wg sync.WaitGroup
+
 	wg.Add(1)
+	go func() { //nolint:wsl
+		defer wg.Done()
+
+		fifo.watchForDone(subCtx, fifo.notEmpty)
+	}()
 
 	defer wg.Wait()
-
-	subCtx, cancel := context.WithCancelCause(ctx)
+	// Deferring context cancel after WaitGroup.Wait to have it called before the WaitGroup.Wait
 	defer cancel(errOpDone)
-
-	go fifo.watchForDone(subCtx, fifo.notEmpty, wg)
 
 	fifo.l.Lock()
 	defer fifo.l.Unlock()
@@ -121,15 +123,20 @@ func (fifo *fifo[T]) Get(ctx context.Context) (v T, open bool) {
 // If the queue is full, Put waits until a slot is freed and
 // only returns once the value has been added.
 func (fifo *fifo[T]) Put(ctx context.Context, v T) {
-	wg := new(sync.WaitGroup)
+	subCtx, cancel := context.WithCancelCause(ctx)
+
+	var wg sync.WaitGroup
+
 	wg.Add(1)
+	go func() { //nolint:wsl
+		defer wg.Done()
+
+		go fifo.watchForDone(subCtx, fifo.notFull)
+	}()
 
 	defer wg.Wait()
-
-	subCtx, cancel := context.WithCancelCause(ctx)
+	// Deferring context cancel after WaitGroup.Wait to have it called before the WaitGroup.Wait
 	defer cancel(errOpDone)
-
-	go fifo.watchForDone(subCtx, fifo.notFull, wg)
 
 	fifo.l.Lock()
 	defer fifo.l.Unlock()
