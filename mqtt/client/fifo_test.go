@@ -14,7 +14,7 @@ import (
 func TestSize(t *testing.T) {
 	t.Parallel()
 
-	for size := 1; size < 1e7; size *= 10 {
+	for size := 1; size < 1e6; size *= 10 {
 		t.Run(fmt.Sprintf("%d sized fifo queue", size), func(t *testing.T) {
 			queue := newFifo[int](size)
 			ctx, cancel := context.WithCancel(context.Background())

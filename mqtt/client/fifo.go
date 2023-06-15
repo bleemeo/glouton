@@ -58,7 +58,10 @@ func (fifo *fifo[T]) Len() int {
 // Then, if it was not canceled due to the normal finish of calling function,
 // it broadcasts a signal on the given condition to release eventually waiting goroutines.
 // watchForDone must be started in a new goroutine, for instance by using the go statement.
-func (fifo *fifo[T]) watchForDone(ctx context.Context, cond *sync.Cond) {
+// Then, watchForDone marks the given WaitGroup as done just before returning.
+func (fifo *fifo[T]) watchForDone(ctx context.Context, cond *sync.Cond, wg *sync.WaitGroup) {
+	defer wg.Done()
+
 	<-ctx.Done()
 
 	if !errors.Is(context.Cause(ctx), errOpDone) {
@@ -75,10 +78,15 @@ func (fifo *fifo[T]) watchForDone(ctx context.Context, cond *sync.Cond) {
 // Note that if the Get method returns that the queue is not opened anymore,
 // the value returned is the zero-value of the queue's type.
 func (fifo *fifo[T]) Get(ctx context.Context) (v T, open bool) {
+	wg := new(sync.WaitGroup)
+	wg.Add(1)
+
+	defer wg.Wait()
+
 	subCtx, cancel := context.WithCancelCause(ctx)
 	defer cancel(errOpDone)
 
-	go fifo.watchForDone(subCtx, fifo.notEmpty)
+	go fifo.watchForDone(subCtx, fifo.notEmpty, wg)
 
 	fifo.l.Lock()
 	defer fifo.l.Unlock()
@@ -109,14 +117,19 @@ func (fifo *fifo[T]) Get(ctx context.Context) (v T, open bool) {
 }
 
 // Put adds the given value to the queue.
-// If the queue is closed, Put returns without doing nothing.
+// If the queue is closed, Put returns without doing anything.
 // If the queue is full, Put waits until a slot is freed and
 // only returns once the value has been added.
 func (fifo *fifo[T]) Put(ctx context.Context, v T) {
+	wg := new(sync.WaitGroup)
+	wg.Add(1)
+
+	defer wg.Wait()
+
 	subCtx, cancel := context.WithCancelCause(ctx)
 	defer cancel(errOpDone)
 
-	go fifo.watchForDone(subCtx, fifo.notFull)
+	go fifo.watchForDone(subCtx, fifo.notFull, wg)
 
 	fifo.l.Lock()
 	defer fifo.l.Unlock()

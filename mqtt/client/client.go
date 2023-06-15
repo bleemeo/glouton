@@ -319,7 +319,11 @@ func (c *Client) ackManager(ctx context.Context) {
 	for ctx.Err() == nil {
 		msg, open := c.opts.ReloadState.PendingMessage(ctx)
 		if !open {
-			continue // re-check if ctx.Err is still nil
+			logger.V(2).Println("MQTT messages queue has been closed.")
+
+			<-ctx.Done()
+
+			break
 		}
 
 		err := c.ackOne(msg, 10*time.Second)
