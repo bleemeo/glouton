@@ -621,7 +621,8 @@ func decodeError(resp *http.Response) APIError {
 			Detail         string   `json:"detail"`
 			NonFieldErrors []string `json:"non_field_errors"`
 		}
-		errorList []string
+		errorList        []string
+		validationErrors []map[string][]string
 	)
 
 	err := json.NewDecoder(resp.Body).Decode(&jsonMessage)
@@ -636,6 +637,9 @@ func decodeError(resp *http.Response) APIError {
 	err = json.Unmarshal(jsonMessage, &jsonError)
 	if err != nil {
 		err = json.Unmarshal(jsonMessage, &errorList)
+		if err != nil {
+			err = json.Unmarshal(jsonMessage, &validationErrors)
+		}
 	}
 
 	if err != nil {
@@ -646,9 +650,25 @@ func decodeError(resp *http.Response) APIError {
 		}
 	}
 
-	if errorList != nil {
+	if len(errorList) > 0 && errorList[0] != "" {
 		return APIError{
 			Content:      strings.Join(errorList, ", "),
+			UnmarshalErr: nil,
+			IsAuthError:  resp.StatusCode == 401,
+		}
+	}
+
+	if len(validationErrors) > 0 && len(validationErrors[0]) > 0 {
+		var errs []string
+
+		for _, m := range validationErrors {
+			for field, validErrs := range m {
+				errs = append(errs, fmt.Sprintf("invalid field %q: %s", field, strings.Join(validErrs, ", ")))
+			}
+		}
+
+		return APIError{
+			Content:      strings.Join(errs, ", "),
 			UnmarshalErr: nil,
 			IsAuthError:  resp.StatusCode == 401,
 		}

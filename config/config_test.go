@@ -866,6 +866,7 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 					StaticCDNURL: "/simple",
 				},
 			},
+			WantWarnings: []string{`testdata/null-parts.conf: "blackbox" config entry has a null value, ignoring it`},
 		},
 	}
 
