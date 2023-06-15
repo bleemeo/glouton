@@ -17,6 +17,7 @@
 package client
 
 import (
+	"context"
 	"glouton/logger"
 	"glouton/types"
 	"sync"
@@ -31,13 +32,13 @@ type ReloadState struct {
 	client                paho.Client
 	isClosed              bool
 	connectionLostChannel chan error
-	pendingMessages       chan types.Message
+	pendingMessages       *fifo[types.Message]
 }
 
 func NewReloadState() *ReloadState {
 	return &ReloadState{
 		connectionLostChannel: make(chan error),
-		pendingMessages:       make(chan types.Message, maxPendingMessages),
+		pendingMessages:       newFifo[types.Message](maxPendingMessages),
 	}
 }
 
@@ -72,29 +73,20 @@ func (rs *ReloadState) ConnectionLostChannel() <-chan error {
 	return rs.connectionLostChannel
 }
 
-func (rs *ReloadState) AddPendingMessage(m types.Message, shouldWait bool) {
-	rs.l.Lock()
-	defer rs.l.Unlock()
-
-	if rs.isClosed {
-		return
-	}
-
+func (rs *ReloadState) AddPendingMessage(ctx context.Context, m types.Message, shouldWait bool) {
 	if shouldWait {
-		rs.pendingMessages <- m
-
-		return
-	}
-
-	// Add the message back to the pending messages if there is enough space in the channel.
-	select {
-	case rs.pendingMessages <- m:
-	default:
+		rs.pendingMessages.Put(ctx, m)
+	} else {
+		rs.pendingMessages.PutNoWait(m)
 	}
 }
 
-func (rs *ReloadState) PendingMessages() <-chan types.Message {
-	return rs.pendingMessages
+func (rs *ReloadState) PendingMessage(ctx context.Context) (m types.Message, open bool) {
+	return rs.pendingMessages.Get(ctx)
+}
+
+func (rs *ReloadState) PendingMessagesCount() int {
+	return rs.pendingMessages.Len()
 }
 
 func (rs *ReloadState) Close() {
@@ -110,7 +102,7 @@ func (rs *ReloadState) Close() {
 
 	rs.client.Disconnect(uint(5 * time.Second.Milliseconds()))
 
-	logger.V(2).Printf("Stopped MQTT with %d messages still pending", len(rs.pendingMessages))
+	logger.V(2).Printf("Stopped MQTT with %d messages still pending", rs.pendingMessages.Len())
 
 	// The callbacks need to know when the channel are closed
 	// so they don't send on a closed channel.
@@ -120,5 +112,5 @@ func (rs *ReloadState) Close() {
 	rs.isClosed = true
 
 	close(rs.connectionLostChannel)
-	close(rs.pendingMessages)
+	rs.pendingMessages.Close()
 }

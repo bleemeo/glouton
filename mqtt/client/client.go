@@ -158,7 +158,7 @@ func (c *Client) Publish(topic string, payload interface{}, retry bool) {
 		c.stats.messagePublished(msg.Token, time.Now())
 	}
 
-	c.opts.ReloadState.AddPendingMessage(msg, true)
+	c.opts.ReloadState.AddPendingMessage(context.Background(), msg, true)
 }
 
 func (c *Client) onConnectionLost(err error) {
@@ -317,21 +317,25 @@ func (c *Client) ackManager(ctx context.Context) {
 	var lastErrShowed time.Time
 
 	for ctx.Err() == nil {
-		select {
-		case msg := <-c.opts.ReloadState.PendingMessages():
-			err := c.ackOne(msg, 10*time.Second)
-			if err != nil {
-				if time.Since(lastErrShowed) > time.Minute {
-					logger.V(2).Printf(
-						"%s MQTT publish on %s failed: %v (%d pending messages)",
-						c.opts.ID, msg.Topic, err, len(c.opts.ReloadState.PendingMessages()),
-					)
+		msg, open := c.opts.ReloadState.PendingMessage(ctx)
+		if !open {
+			logger.V(2).Println("MQTT messages queue has been closed.")
 
-					lastErrShowed = time.Now()
-				}
+			<-ctx.Done()
+
+			break
+		}
+
+		err := c.ackOne(msg, 10*time.Second)
+		if err != nil {
+			if time.Since(lastErrShowed) > time.Minute {
+				logger.V(2).Printf(
+					"%s MQTT publish on %s failed: %v (%d pending messages)",
+					c.opts.ID, msg.Topic, err, c.opts.ReloadState.PendingMessagesCount(),
+				)
+
+				lastErrShowed = time.Now()
 			}
-
-		case <-ctx.Done():
 		}
 	}
 }
@@ -377,7 +381,7 @@ func (c *Client) ackOne(msg types.Message, timeout time.Duration) error {
 	}
 
 	if shouldWaitAgain {
-		c.opts.ReloadState.AddPendingMessage(msg, false)
+		c.opts.ReloadState.AddPendingMessage(context.Background(), msg, false)
 
 		return err
 	}
@@ -448,7 +452,7 @@ func (c *Client) DiagnosticArchive(_ context.Context, archive types.ArchiveWrite
 		DisabledUntil       time.Time
 	}{
 		ConnectionOpen:      c.isConnectionOpen(),
-		PendingMessageCount: len(c.opts.ReloadState.PendingMessages()),
+		PendingMessageCount: c.opts.ReloadState.PendingMessagesCount(),
 		LastConnectionTimes: c.lastConnectionTimes,
 		CurrentConnectDelay: c.currentConnectDelay.String(),
 		ConsecutiveErrors:   c.consecutiveErrors,

@@ -444,8 +444,9 @@ type MQTTReloadState interface {
 	OnConnectionLost(cli paho.Client, err error)
 	ConnectionLostChannel() <-chan error
 	Close()
-	AddPendingMessage(m Message, shouldWait bool)
-	PendingMessages() <-chan Message
+	AddPendingMessage(ctx context.Context, m Message, shouldWait bool)
+	PendingMessage(ctx context.Context) (Message, bool)
+	PendingMessagesCount() int
 }
 
 // Message contains all information to send a message to MQTT.
