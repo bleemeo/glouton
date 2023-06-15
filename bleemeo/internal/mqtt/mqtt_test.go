@@ -98,14 +98,13 @@ type mockMQTTClient struct {
 	publishedPoints []metricPayload
 }
 
-func (m *mockMQTTClient) Publish(topic string, payload interface{}, retry bool) {
+func (m *mockMQTTClient) Publish(topic string, payload []byte, retry bool) {
 	var metrics []metricPayload
 
 	_ = topic
 	_ = retry
-	payloadBytes, _ := payload.([]byte)
 
-	err := m.encoder.Decode(payloadBytes, &metrics)
+	err := m.encoder.Decode(payload, &metrics)
 	if err != nil {
 		log.Printf("Failed to decode payload: %s\n", err)
 	}
