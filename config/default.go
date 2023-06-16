@@ -68,13 +68,15 @@ func DefaultConfig() Config { //nolint:maintidx
 			},
 			PublicIPIndicator: "https://myip.bleemeo.com",
 			NetstatFile:       "netstat.out",
-			StateFile:         "state.json",
-			// By default ".cache" is added before the state file extension.
-			StateCacheFile:      "",
-			StateResetFile:      "state.reset",
-			DeprecatedStateFile: "",
-			// By default, it will be set to the parent dir of StateFile
-			StateDirectory:  "",
+			State: State{
+				Directory: "",
+				File:      "state.json",
+				// By default, ".cache" is added before the state file extension.
+				CacheFile:           "",
+				ResetFile:           "state.reset",
+				DeprecatedStateFile: "",
+				MaxCrashReportDirs:  2,
+			},
 			UpgradeFile:     "upgrade",
 			AutoUpgradeFile: "auto_upgrade",
 			MetricsFormat:   "Bleemeo",
