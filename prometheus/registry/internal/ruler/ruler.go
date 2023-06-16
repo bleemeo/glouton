@@ -22,7 +22,6 @@ import (
 	"glouton/prometheus/model"
 	"glouton/store"
 	"glouton/types"
-	"os"
 	"sort"
 	"sync"
 	"time"
@@ -46,7 +45,7 @@ type SimpleRuler struct {
 }
 
 func New(input []*rules.RecordingRule) *SimpleRuler {
-	promLogger := log.NewLogfmtLogger(log.NewSyncWriter(os.Stderr))
+	promLogger := logger.GoKitLoggerWrapper(logger.V(1))
 	engine := promql.NewEngine(promql.EngineOpts{
 		Logger:             log.With(promLogger, "component", "query engine"),
 		Reg:                nil,
