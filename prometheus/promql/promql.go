@@ -23,9 +23,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"glouton/logger"
 	"math"
 	"net/http"
-	"os"
 	"regexp"
 	"strconv"
 	"time"
@@ -128,7 +128,7 @@ func (p *PromQL) Register(st storage.Queryable) http.Handler {
 }
 
 func (p *PromQL) init() {
-	p.logger = log.NewLogfmtLogger(log.NewSyncWriter(os.Stderr))
+	p.logger = logger.GoKitLoggerWrapper(logger.V(1))
 	opts := promql.EngineOpts{
 		Logger:             log.With(p.logger, "component", "query engine"),
 		Reg:                nil,
