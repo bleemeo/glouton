@@ -50,7 +50,7 @@ if [ "${SKIP_JS}" != "1" -a "${ONLY_GO}" != "1" ]; then
       mkdir -p /go/pkg/node
       chown node -R /go/pkg/node
       npm install --legacy-peer-deps
-      npm run deploy 
+      npm run deploy
       chown -R $USER_UID dist ../api/static/assets/js/ ../api/static/assets/css/
       "
 fi
