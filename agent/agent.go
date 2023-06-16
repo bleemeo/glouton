@@ -423,7 +423,18 @@ func (a *agent) manageErrorLogs() {
 	}
 
 	if len(existingStderrFiles) > 0 {
-		logger.V(1).Printf("Found %d stderr log files", len(existingStderrFiles))
+		lastStderrLogFile := existingStderrFiles[len(existingStderrFiles)-1]
+
+		stat, err := os.Stat(lastStderrLogFile)
+		if err != nil {
+			logger.V(1).Printf("Failed to stat stderr log file %q: %v", lastStderrLogFile, err)
+
+			return
+		}
+
+		if stat.Size() > 0 {
+			logger.V(0).Println("Found a non-empty stderr log file:", lastStderrLogFile)
+		}
 	}
 }
 
