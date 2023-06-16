@@ -221,6 +221,7 @@ type Agent struct {
 	StateCacheFile         string          `yaml:"state_cache_file"`
 	StateResetFile         string          `yaml:"state_reset_file"`
 	DeprecatedStateFile    string          `yaml:"deprecated_state_file"`
+	StateDirectory         string          `yaml:"state_directory"`
 	UpgradeFile            string          `yaml:"upgrade_file"`
 	AutoUpgradeFile        string          `yaml:"auto_upgrade_file"`
 	ProcessExporter        ProcessExporter `yaml:"process_exporter"`
