@@ -18,6 +18,7 @@
 package agent
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"encoding/xml"
@@ -229,6 +230,10 @@ func (a *agent) init(ctx context.Context, configFiles []string, firstRun bool) (
 		}
 	}
 
+	if firstRun {
+		a.manageCrashReports()
+	}
+
 	// Initialize paho loggers, this need to be done only once to prevent data races.
 	if firstRun {
 		paho.ERROR = logger.V(2)
@@ -327,17 +332,80 @@ func (a *agent) init(ctx context.Context, configFiles []string, firstRun bool) (
 		logger.Printf("The deprecated state file (%s) is migrated to new path (%s).", oldStatePath, statePath)
 	}
 
-	if a.config.Agent.StateDirectory != "" {
-		a.stateDir = a.config.Agent.StateDirectory
-	} else {
-		a.stateDir = filepath.Dir(statePath)
-	}
-
 	a.readXMLCredentials()
 
-	a.manageErrorLogs()
-
 	return true
+}
+
+// manageCrashReports takes care of removing the excess of error log files and
+// replaces the stderr file descriptor by a newly created log file.
+func (a *agent) manageCrashReports() {
+	const (
+		stderrFileName        = "crashreport.log"
+		crashReportDirFormat  = "crashreport_20060102-150405"
+		crashReportDirPattern = "crashreport_[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]-[0-9][0-9][0-9][0-9][0-9][0-9]"
+	)
+
+	stderrFilePath := filepath.Join(a.stateDir, stderrFileName)
+
+	maxCrashReportDirs := a.config.Agent.State.MaxCrashReportDirs
+	if maxCrashReportDirs > 0 {
+		lastCrashReportContent, err := os.ReadFile(stderrFilePath)
+		if err == nil {
+			if bytes.Contains(lastCrashReportContent, []byte("panic")) {
+				crashReportDir := filepath.Join(a.stateDir, time.Now().Format(crashReportDirFormat))
+
+				err = os.Mkdir(crashReportDir, 0o740)
+				if err != nil {
+					logger.V(1).Printf("Failed to create crash report folder %q: %v", crashReportDir, err)
+
+					return
+				}
+
+				err = os.Rename(stderrFilePath, filepath.Join(crashReportDir, stderrFileName))
+				if err != nil {
+					logger.V(1).Printf("Failed to move crash report to folder %q: %v", crashReportDir, err)
+
+					return
+				}
+
+				logger.V(0).Printf("Created a crash-report dir at %q", crashReportDir)
+			}
+		}
+	}
+
+	existingCrashReportDirs, err := filepath.Glob(filepath.Join(a.stateDir, crashReportDirPattern))
+	if err != nil {
+		panic("failed to parse crash report glob pattern: " + err.Error())
+	}
+
+	// Remove the oldest excess crash report dirs
+	if len(existingCrashReportDirs) > maxCrashReportDirs {
+		sort.Strings(existingCrashReportDirs)
+
+		for i, dir := range existingCrashReportDirs {
+			if i == len(existingCrashReportDirs)-maxCrashReportDirs {
+				break
+			}
+
+			err = os.RemoveAll(dir)
+			if err != nil {
+				logger.V(1).Printf("Failed to remove old crash report dir %q: %v", dir, err)
+			}
+		}
+	}
+
+	newStderrFile, err := os.Create(stderrFilePath)
+	if err != nil {
+		logger.V(1).Println("Failed to create new stderr log file:", err)
+
+		return
+	}
+
+	err = redirectOSSpecificStderrToFile(newStderrFile.Fd())
+	if err != nil {
+		logger.V(1).Println("Failed to redirect stderr to log file:", err)
+	}
 }
 
 // readXMLCredentials reads the bleemeo account ID and registration key
@@ -379,67 +447,6 @@ func (a *agent) readXMLCredentials() {
 
 	a.config.Bleemeo.AccountID = credentials.AccountID
 	a.config.Bleemeo.RegistrationKey = credentials.RegistrationKey
-}
-
-// manageErrorLogs takes care of removing the excess of error log files and
-// replaces the stderr file descriptor by a newly created log file.
-func (a *agent) manageErrorLogs() {
-	const (
-		maxErrorLogFiles  = 3
-		stderrFileFormat  = "stderr_20060102-150405.log"
-		stderrGlobPattern = "stderr_[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]-[0-9][0-9][0-9][0-9][0-9][0-9].log"
-	)
-
-	existingStderrFiles, err := filepath.Glob(filepath.Join(a.stateDir, stderrGlobPattern))
-	if err != nil {
-		panic("failed to parse stderr glob pattern: " + err.Error())
-	}
-
-	// Remove oldest excess files
-	if len(existingStderrFiles) >= maxErrorLogFiles {
-		sort.Strings(existingStderrFiles)
-
-		for i, file := range existingStderrFiles {
-			if i-1 == len(existingStderrFiles)-maxErrorLogFiles {
-				break
-			}
-
-			err = os.Remove(file)
-			if err != nil {
-				logger.V(1).Printf("Failed to remove old stderr log file %q: %v", file, err)
-			}
-		}
-
-		// Get rid of log files we just deleted
-		existingStderrFiles = existingStderrFiles[len(existingStderrFiles)-maxErrorLogFiles:]
-	}
-
-	newStderrFile, err := os.Create(filepath.Join(a.stateDir, time.Now().Format(stderrFileFormat)))
-	if err != nil {
-		logger.V(1).Println("Failed to create new stderr log file:", err)
-
-		return
-	}
-
-	err = redirectOSSpecificStderrToFile(newStderrFile.Fd())
-	if err != nil {
-		logger.V(1).Println("Failed to redirect stderr to log file:", err)
-	}
-
-	if len(existingStderrFiles) > 0 {
-		lastStderrLogFile := existingStderrFiles[len(existingStderrFiles)-1]
-
-		stat, err := os.Stat(lastStderrLogFile)
-		if err != nil {
-			logger.V(1).Printf("Failed to stat stderr log file %q: %v", lastStderrLogFile, err)
-
-			return
-		}
-
-		if stat.Size() > 0 {
-			logger.V(0).Println("Found a non-empty stderr log file:", lastStderrLogFile)
-		}
-	}
 }
 
 func (a *agent) setupLogger() {
