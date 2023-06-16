@@ -116,6 +116,7 @@ type agent struct {
 	config       config.Config
 	configItems  []config.Item
 	state        *state.State
+	stateDir     string
 	cancel       context.CancelFunc
 	context      context.Context //nolint:containedctx
 
@@ -320,7 +321,15 @@ func (a *agent) init(ctx context.Context, configFiles []string, firstRun bool) (
 		logger.Printf("The deprecated state file (%s) is migrated to new path (%s).", oldStatePath, statePath)
 	}
 
+	if a.config.Agent.StateDirectory != "" {
+		a.stateDir = a.config.Agent.StateDirectory
+	} else {
+		a.stateDir = filepath.Dir(statePath)
+	}
+
 	a.readXMLCredentials()
+
+	a.manageErrorLogs()
 
 	return true
 }
@@ -364,6 +373,56 @@ func (a *agent) readXMLCredentials() {
 
 	a.config.Bleemeo.AccountID = credentials.AccountID
 	a.config.Bleemeo.RegistrationKey = credentials.RegistrationKey
+}
+
+// manageErrorLogs takes care of removing the excess of error log files and
+// replaces the stderr file descriptor by a newly created log file.
+func (a *agent) manageErrorLogs() {
+	const (
+		maxErrorLogFiles  = 3
+		stderrFileFormat  = "stderr_20060102-150405.log"
+		stderrGlobPattern = "stderr_[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]-[0-9][0-9][0-9][0-9][0-9][0-9].log"
+	)
+
+	existingStderrFiles, err := filepath.Glob(filepath.Join(a.stateDir, stderrGlobPattern))
+	if err != nil {
+		panic("failed to parse stderr glob pattern: " + err.Error())
+	}
+
+	// Remove oldest excess files
+	if len(existingStderrFiles) >= maxErrorLogFiles {
+		sort.Strings(existingStderrFiles)
+
+		for i, file := range existingStderrFiles {
+			if i-1 == len(existingStderrFiles)-maxErrorLogFiles {
+				break
+			}
+
+			err = os.Remove(file)
+			if err != nil {
+				logger.V(1).Printf("Failed to remove old stderr log file %q: %v", file, err)
+			}
+		}
+
+		// Get rid of log files we just deleted
+		existingStderrFiles = existingStderrFiles[len(existingStderrFiles)-maxErrorLogFiles:]
+	}
+
+	newStderrFile, err := os.Create(filepath.Join(a.stateDir, time.Now().Format(stderrFileFormat)))
+	if err != nil {
+		logger.V(1).Println("Failed to create new stderr log file:", err)
+
+		return
+	}
+
+	err = redirectOSSpecificStderrToFile(newStderrFile.Fd())
+	if err != nil {
+		logger.V(1).Println("Failed to redirect stderr to log file:", err)
+	}
+
+	if len(existingStderrFiles) > 0 {
+		logger.V(1).Printf("Found %d stderr log files", len(existingStderrFiles))
+	}
 }
 
 func (a *agent) setupLogger() {

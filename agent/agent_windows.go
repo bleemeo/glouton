@@ -26,6 +26,7 @@ import (
 	"os"
 
 	"github.com/StackExchange/wmi"
+	"golang.org/x/sys/windows"
 	"golang.org/x/sys/windows/svc"
 )
 
@@ -111,4 +112,8 @@ func (a *agent) registerOSSpecificComponents(*veth.Provider) {
 			logger.Printf("Unable to start windows_exporter, system metrics will be missing: %v", err)
 		}
 	}
+}
+
+func redirectOSSpecificStderrToFile(stderrFileFd uintptr) error {
+	return windows.SetStdHandle(windows.STD_ERROR_HANDLE, windows.Handle(stderrFileFd))
 }

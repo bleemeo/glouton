@@ -69,9 +69,11 @@ func DefaultConfig() Config { //nolint:maintidx
 			StateCacheFile:      "",
 			StateResetFile:      "state.reset",
 			DeprecatedStateFile: "",
-			UpgradeFile:         "upgrade",
-			AutoUpgradeFile:     "auto_upgrade",
-			MetricsFormat:       "Bleemeo",
+			// By default, it will be set to the parent dir of StateFile
+			StateDirectory:  "",
+			UpgradeFile:     "upgrade",
+			AutoUpgradeFile: "auto_upgrade",
+			MetricsFormat:   "Bleemeo",
 			NodeExporter: NodeExporter{
 				Enable:     true,
 				Collectors: []string{"cpu", "diskstats", "filesystem", "loadavg", "meminfo", "netdev", "uname"},
