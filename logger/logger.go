@@ -118,17 +118,17 @@ type config struct {
 var (
 	logBuffer = &buffer{}
 	cfg       = config{
-		writer:    os.Stderr,
-		teeWriter: io.MultiWriter(logBuffer, os.Stderr),
+		writer:    os.Stdout,
+		teeWriter: io.MultiWriter(logBuffer, os.Stdout),
 	}
 )
 
-// setLogger calls the function passed as argument, and revert to stderr if there is an error.
+// setLogger calls the function passed as argument, and revert to stdout if there is an error.
 func setLogger(cb func() error) error {
 	cfg.l.Lock()
 	defer cfg.l.Unlock()
 
-	if closer, ok := cfg.writer.(io.WriteCloser); ok && cfg.writer != os.Stderr {
+	if closer, ok := cfg.writer.(io.WriteCloser); ok && cfg.writer != os.Stdout {
 		closer.Close()
 	}
 
@@ -136,7 +136,7 @@ func setLogger(cb func() error) error {
 
 	err := cb()
 	if err != nil {
-		cfg.writer = os.Stderr
+		cfg.writer = os.Stdout
 	}
 
 	cfg.teeWriter = io.MultiWriter(logBuffer, cfg.writer)
