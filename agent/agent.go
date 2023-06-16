@@ -249,9 +249,15 @@ func (a *agent) init(ctx context.Context, configFiles []string, firstRun bool) (
 		DenyList:          a.config.Container.Filter.DenyList,
 	}
 
-	statePath := a.config.Agent.StateFile
-	cachePath := a.config.Agent.StateCacheFile
-	oldStatePath := a.config.Agent.DeprecatedStateFile
+	a.stateDir = a.config.Agent.State.Directory
+
+	statePath := a.config.Agent.State.File
+	if !filepath.IsAbs(statePath) {
+		statePath = filepath.Join(a.stateDir, a.config.Agent.State.File)
+	}
+
+	cachePath := a.config.Agent.State.CacheFile
+	oldStatePath := a.config.Agent.State.DeprecatedStateFile
 
 	if cachePath == "" {
 		cachePath = state.DefaultCachePath(statePath)
@@ -283,7 +289,7 @@ func (a *agent) init(ctx context.Context, configFiles []string, firstRun bool) (
 		}
 	}
 
-	resetStateFile := a.config.Agent.StateResetFile
+	resetStateFile := a.config.Agent.State.ResetFile
 
 	if _, err := os.Stat(resetStateFile); err == nil {
 		// No error means that file exists.
