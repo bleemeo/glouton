@@ -341,7 +341,7 @@ func (a *agent) init(ctx context.Context, configFiles []string, firstRun bool) (
 
 // manageCrashReports takes care of removing the excess of error log files and
 // replaces the stderr file descriptor by a newly created log file.
-func (a *agent) manageCrashReports() {
+func (a *agent) manageCrashReports() (crashDirCreated string) {
 	const (
 		stderrFileName        = "crashreport.log"
 		crashReportDirFormat  = "crashreport_20060102-150405"
@@ -352,33 +352,49 @@ func (a *agent) manageCrashReports() {
 
 	maxCrashReportDirs := a.config.Agent.State.MaxCrashReportDirs
 	if maxCrashReportDirs > 0 {
-		lastCrashReportContent, err := os.ReadFile(stderrFilePath)
-		if err == nil {
-			if bytes.Contains(lastCrashReportContent, []byte("panic")) {
-				crashReportDir := filepath.Join(a.stateDir, time.Now().Format(crashReportDirFormat))
+		if f, err := os.Open(stderrFilePath); err == nil {
+			lastCrashReportContent := make([]byte, 4096)
 
-				err = os.Mkdir(crashReportDir, 0o740)
-				if err != nil {
-					logger.V(1).Printf("Failed to create crash report folder %q: %v", crashReportDir, err)
+			_, err = f.Read(lastCrashReportContent)
+			if err == nil || errors.Is(err, io.EOF) {
+				if bytes.Contains(lastCrashReportContent, []byte("panic")) {
+					crashDirCreated = filepath.Join(a.stateDir, time.Now().Format(crashReportDirFormat))
 
-					return
+					err = os.Mkdir(crashDirCreated, 0o740)
+					if err != nil {
+						logger.V(1).Printf("Failed to create crash report folder %q: %v", crashDirCreated, err)
+
+						return ""
+					}
+
+					err = os.Rename(stderrFilePath, filepath.Join(crashDirCreated, stderrFileName))
+					if err != nil {
+						logger.V(1).Printf("Failed to move crash report to folder %q: %v", crashDirCreated, err)
+
+						return ""
+					}
+
+					logger.V(0).Printf("Created a crash-report dir at %q", crashDirCreated)
 				}
-
-				err = os.Rename(stderrFilePath, filepath.Join(crashReportDir, stderrFileName))
-				if err != nil {
-					logger.V(1).Printf("Failed to move crash report to folder %q: %v", crashReportDir, err)
-
-					return
-				}
-
-				logger.V(0).Printf("Created a crash-report dir at %q", crashReportDir)
 			}
 		}
 	}
 
+	newStderrFile, err := os.Create(stderrFilePath)
+	if err != nil {
+		logger.V(1).Println("Failed to create new stderr log file:", err)
+
+		return crashDirCreated
+	}
+
+	err = redirectOSSpecificStderrToFile(newStderrFile.Fd())
+	if err != nil {
+		logger.V(1).Println("Failed to redirect stderr to log file:", err)
+	}
+
 	existingCrashReportDirs, err := filepath.Glob(filepath.Join(a.stateDir, crashReportDirPattern))
 	if err != nil {
-		panic("failed to parse crash report glob pattern: " + err.Error())
+		logger.V(0).Println("Failed to parse crash report glob pattern:", err)
 	}
 
 	// Remove the oldest excess crash report dirs
@@ -397,17 +413,7 @@ func (a *agent) manageCrashReports() {
 		}
 	}
 
-	newStderrFile, err := os.Create(stderrFilePath)
-	if err != nil {
-		logger.V(1).Println("Failed to create new stderr log file:", err)
-
-		return
-	}
-
-	err = redirectOSSpecificStderrToFile(newStderrFile.Fd())
-	if err != nil {
-		logger.V(1).Println("Failed to redirect stderr to log file:", err)
-	}
+	return crashDirCreated
 }
 
 // readXMLCredentials reads the bleemeo account ID and registration key
