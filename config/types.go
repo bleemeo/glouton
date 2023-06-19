@@ -217,7 +217,12 @@ type Agent struct {
 	InstallationFormat     string          `yaml:"installation_format"`
 	FactsFile              string          `yaml:"facts_file"`
 	NetstatFile            string          `yaml:"netstat_file"`
-	State                  State           `yaml:"state"`
+	StateFile              string          `yaml:"state_file"`
+	StateCacheFile         string          `yaml:"state_cache_file"`
+	StateResetFile         string          `yaml:"state_reset_file"`
+	DeprecatedStateFile    string          `yaml:"deprecated_state_file"`
+	StateDirectory         string          `yaml:"state_directory"`
+	MaxCrashReportDirs     int             `yaml:"max_crash_report_dirs"`
 	UpgradeFile            string          `yaml:"upgrade_file"`
 	AutoUpgradeFile        string          `yaml:"auto_upgrade_file"`
 	ProcessExporter        ProcessExporter `yaml:"process_exporter"`
@@ -226,15 +231,6 @@ type Agent struct {
 	WindowsExporter        NodeExporter    `yaml:"windows_exporter"`
 	Telemetry              Telemetry       `yaml:"telemetry"`
 	MetricsFormat          string          `yaml:"metrics_format"`
-}
-
-type State struct {
-	Directory           string `yaml:"directory"`
-	File                string `yaml:"file"`
-	CacheFile           string `yaml:"cache_file"`
-	ResetFile           string `yaml:"reset_file"`
-	DeprecatedStateFile string `yaml:"deprecated_state_file"`
-	MaxCrashReportDirs  int    `yaml:"max_crash_report_dirs"`
 }
 
 type Telemetry struct {
