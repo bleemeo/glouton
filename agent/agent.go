@@ -254,15 +254,11 @@ func (a *agent) init(ctx context.Context, configFiles []string, firstRun bool) (
 		DenyList:          a.config.Container.Filter.DenyList,
 	}
 
-	a.stateDir = a.config.Agent.State.Directory
+	a.stateDir = a.config.Agent.StateDirectory
+	statePath := a.config.Agent.StateFile
 
-	statePath := a.config.Agent.State.File
-	if !filepath.IsAbs(statePath) {
-		statePath = filepath.Join(a.stateDir, a.config.Agent.State.File)
-	}
-
-	cachePath := a.config.Agent.State.CacheFile
-	oldStatePath := a.config.Agent.State.DeprecatedStateFile
+	cachePath := a.config.Agent.StateCacheFile
+	oldStatePath := a.config.Agent.DeprecatedStateFile
 
 	if cachePath == "" {
 		cachePath = state.DefaultCachePath(statePath)
@@ -294,7 +290,7 @@ func (a *agent) init(ctx context.Context, configFiles []string, firstRun bool) (
 		}
 	}
 
-	resetStateFile := a.config.Agent.State.ResetFile
+	resetStateFile := a.config.Agent.StateResetFile
 
 	if _, err := os.Stat(resetStateFile); err == nil {
 		// No error means that file exists.
@@ -348,7 +344,7 @@ func (a *agent) manageCrashReports() (crashDirCreated string) {
 
 	stderrFilePath := filepath.Join(a.stateDir, stderrFileName)
 
-	maxCrashReportDirs := a.config.Agent.State.MaxCrashReportDirs
+	maxCrashReportDirs := a.config.Agent.MaxCrashReportDirs
 	if maxCrashReportDirs > 0 {
 		if f, err := os.Open(stderrFilePath); err == nil {
 			lastCrashReportContent := make([]byte, 4096)

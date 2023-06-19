@@ -64,18 +64,16 @@ func DefaultConfig() Config { //nolint:maintidx
 			},
 			PublicIPIndicator: "https://myip.bleemeo.com",
 			NetstatFile:       "netstat.out",
-			State: State{
-				Directory: "",
-				File:      "state.json",
-				// By default, ".cache" is added before the state file extension.
-				CacheFile:           "",
-				ResetFile:           "state.reset",
-				DeprecatedStateFile: "",
-				MaxCrashReportDirs:  2,
-			},
-			UpgradeFile:     "upgrade",
-			AutoUpgradeFile: "auto_upgrade",
-			MetricsFormat:   "Bleemeo",
+			StateDirectory:    "",
+			StateFile:         "state.json",
+			// By default ".cache" is added before the state file extension.
+			StateCacheFile:      "",
+			StateResetFile:      "state.reset",
+			DeprecatedStateFile: "",
+			MaxCrashReportDirs:  2,
+			UpgradeFile:         "upgrade",
+			AutoUpgradeFile:     "auto_upgrade",
+			MetricsFormat:       "Bleemeo",
 			NodeExporter: NodeExporter{
 				Enable:     true,
 				Collectors: []string{"cpu", "diskstats", "filesystem", "loadavg", "meminfo", "netdev", "uname"},
