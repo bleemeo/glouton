@@ -20,9 +20,9 @@
 package agent
 
 import (
+	"glouton/crashreport"
 	"glouton/facts/container-runtime/veth"
 	"glouton/logger"
-	"glouton/types"
 	"os"
 
 	"github.com/StackExchange/wmi"
@@ -75,7 +75,7 @@ func initOSSpecificParts(stop chan<- os.Signal) {
 
 	if !isInteractive {
 		go func() {
-			defer types.ProcessPanic()
+			defer crashreport.ProcessPanic()
 
 			err = svc.Run(serviceName, winService{stop})
 			if err != nil {

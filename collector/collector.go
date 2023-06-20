@@ -20,9 +20,9 @@ package collector
 import (
 	"context"
 	"errors"
+	"glouton/crashreport"
 	"glouton/inputs"
 	"glouton/logger"
-	"glouton/types"
 	"sync"
 	"time"
 
@@ -153,7 +153,7 @@ func (c *Collector) runOnce(t0 time.Time) {
 		wg.Add(1)
 
 		go func() {
-			defer types.ProcessPanic()
+			defer crashreport.ProcessPanic()
 			defer wg.Done()
 
 			// Errors are already logged by the input.

@@ -22,8 +22,8 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"glouton/crashreport"
 	"glouton/logger"
-	"glouton/types"
 	"io"
 	"net"
 	"strings"
@@ -351,7 +351,7 @@ func (s Server) Run(ctx context.Context) error {
 		wg.Add(1)
 
 		go func() {
-			defer types.ProcessPanic()
+			defer crashreport.ProcessPanic()
 			defer wg.Done()
 
 			handleConnection(c, s.callback)

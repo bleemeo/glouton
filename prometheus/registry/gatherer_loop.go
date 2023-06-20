@@ -18,7 +18,7 @@ package registry
 
 import (
 	"context"
-	"glouton/types"
+	"glouton/crashreport"
 	"time"
 )
 
@@ -52,7 +52,7 @@ func startScrapeLoop(
 	}
 
 	go func() {
-		defer types.ProcessPanic()
+		defer crashreport.ProcessPanic()
 		sl.run(ctx, interval, timeout, jitterSeed)
 	}()
 

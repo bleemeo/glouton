@@ -28,7 +28,7 @@ import (
 	"glouton/bleemeo"
 	"glouton/collector"
 	"glouton/config"
-	"glouton/crash-report"
+	"glouton/crashreport"
 	"glouton/debouncer"
 	"glouton/delay"
 	"glouton/discovery"
@@ -749,7 +749,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 
 	if a.config.Agent.HTTPDebug.Enable {
 		go func() {
-			defer types.ProcessPanic()
+			defer crashreport.ProcessPanic()
 
 			debugAddress := a.config.Agent.HTTPDebug.BindAddress
 
@@ -1319,7 +1319,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 	// Handle sighup signals only after the agent is completely initialized
 	// to make sure an early signal won't access uninitialized fields.
 	go func() {
-		defer types.ProcessPanic()
+		defer crashreport.ProcessPanic()
 
 		a.handleSighup(ctx, sighupChan)
 	}()
@@ -1398,7 +1398,7 @@ func (a *agent) handleSighup(ctx context.Context, sighupChan chan os.Signal) {
 				systemUpdateMetricPending = true
 
 				go func() {
-					defer types.ProcessPanic()
+					defer crashreport.ProcessPanic()
 
 					a.waitAndRefreshPendingUpdates(ctx)
 
@@ -1687,7 +1687,7 @@ func (a *agent) dockerWatcher(ctx context.Context) error {
 	wg.Add(1)
 
 	go func() {
-		defer types.ProcessPanic()
+		defer crashreport.ProcessPanic()
 		defer wg.Done()
 
 		a.dockerWatcherContainerHealth(ctx)

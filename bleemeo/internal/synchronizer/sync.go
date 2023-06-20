@@ -27,6 +27,7 @@ import (
 	"glouton/bleemeo/internal/cache"
 	"glouton/bleemeo/internal/common"
 	bleemeoTypes "glouton/bleemeo/types"
+	"glouton/crashreport"
 	"glouton/delay"
 	"glouton/facts"
 	"glouton/logger"
@@ -455,13 +456,13 @@ func (s *Synchronizer) DiagnosticPage() string {
 	httpMessage := make(chan string)
 
 	go func() {
-		defer types.ProcessPanic()
+		defer crashreport.ProcessPanic()
 
 		tcpMessage <- common.DiagnosticTCP(u.Hostname(), port, tlsConfig)
 	}()
 
 	go func() {
-		defer types.ProcessPanic()
+		defer crashreport.ProcessPanic()
 
 		httpMessage <- common.DiagnosticHTTP(s.diagnosticClient, u.String())
 	}()

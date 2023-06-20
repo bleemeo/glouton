@@ -18,6 +18,7 @@ package check
 
 import (
 	"context"
+	"glouton/crashreport"
 	"glouton/logger"
 	"glouton/types"
 	"net"
@@ -205,7 +206,7 @@ func (bc *baseCheck) openSockets(scheduleUpdate func(runAt time.Time)) {
 		bc.wg.Add(1)
 
 		go func() {
-			defer types.ProcessPanic()
+			defer crashreport.ProcessPanic()
 			defer bc.wg.Done()
 
 			bc.openSocket(ctx, addr, scheduleUpdate)
