@@ -963,7 +963,8 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 	}
 }
 
-func TestDynamicDiscovery(t *testing.T) {
+//nolint:dupl
+func TestDynamicDiscovery(t *testing.T) { //nolint:maintidx
 	t0 := time.Now()
 
 	cases := []struct {
@@ -1165,6 +1166,588 @@ func TestDynamicDiscovery(t *testing.T) {
 						{NetworkFamily: "tcp", Address: "10.0.2.1", Port: 6443},
 					},
 					IPAddress:       "127.0.0.1",
+					IgnoredPorts:    map[int]bool{},
+					HasNetstatInfo:  true,
+					LastNetstatInfo: t0,
+					Active:          true,
+				},
+			},
+		},
+		{
+			name: "two-services-two-containers-two-listen-addresses",
+			processes: []facts.Process{
+				{
+					PID:         3,
+					CmdLineList: []string{"nginx: master process nginx -g daemon off;"},
+					ContainerID: "id001",
+				},
+				{
+					PID:         4,
+					CmdLineList: []string{"php-fpm: master process (/etc/php/7.0/fpm/php-fpm.conf)"},
+					ContainerID: "id002",
+				},
+			},
+			netstatAddressesPerPID: nil, // netstat won't provide information for containers
+			containers: map[string]facts.FakeContainer{
+				"id001": {
+					FakePrimaryAddress:  "172.17.0.49",
+					FakeListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "172.17.0.49", Port: 80}},
+				},
+				"id002": {
+					FakePrimaryAddress:  "172.17.0.50",
+					FakeListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "172.17.0.50", Port: 9000}},
+				},
+			},
+			want: []Service{
+				{
+					Name:        "nginx",
+					ServiceType: NginxService,
+					ContainerID: "id001",
+					ListenAddresses: []facts.ListenAddress{
+						{NetworkFamily: "tcp", Address: "172.17.0.49", Port: 80},
+					},
+					IPAddress:       "172.17.0.49",
+					IgnoredPorts:    map[int]bool{},
+					HasNetstatInfo:  true,
+					LastNetstatInfo: t0,
+					Active:          true,
+				},
+				{
+					Name:        "phpfpm",
+					ServiceType: PHPFPMService,
+					ContainerID: "id002",
+					ListenAddresses: []facts.ListenAddress{
+						{NetworkFamily: "tcp", Address: "172.17.0.50", Port: 9000},
+					},
+					IPAddress:       "172.17.0.50",
+					IgnoredPorts:    map[int]bool{},
+					HasNetstatInfo:  true,
+					LastNetstatInfo: t0,
+					Active:          true,
+				},
+			},
+		},
+		{
+			name: "two-services-two-containers-one-listen-addresses",
+			processes: []facts.Process{
+				{
+					PID:         3,
+					CmdLineList: []string{"nginx: master process nginx -g daemon off;"},
+					ContainerID: "id001",
+				},
+				{
+					PID:         4,
+					CmdLineList: []string{"php-fpm: master process (/etc/php/7.0/fpm/php-fpm.conf)"},
+					ContainerID: "id002",
+				},
+			},
+			netstatAddressesPerPID: nil, // netstat won't provide information for containers
+			containers: map[string]facts.FakeContainer{
+				"id001": {
+					FakePrimaryAddress:  "172.17.0.49",
+					FakeListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "172.17.0.49", Port: 80}},
+				},
+				"id002": {
+					FakePrimaryAddress: "172.17.0.50",
+				},
+			},
+			want: []Service{
+				{
+					Name:        "nginx",
+					ServiceType: NginxService,
+					ContainerID: "id001",
+					ListenAddresses: []facts.ListenAddress{
+						{NetworkFamily: "tcp", Address: "172.17.0.49", Port: 80},
+					},
+					IPAddress:       "172.17.0.49",
+					IgnoredPorts:    map[int]bool{},
+					HasNetstatInfo:  true,
+					LastNetstatInfo: t0,
+					Active:          true,
+				},
+				{
+					Name:            "phpfpm",
+					ServiceType:     PHPFPMService,
+					ContainerID:     "id002",
+					ListenAddresses: []facts.ListenAddress{},
+					IPAddress:       "172.17.0.50",
+					IgnoredPorts:    map[int]bool{},
+					HasNetstatInfo:  false,
+					Active:          true,
+				},
+			},
+		},
+		{
+			name: "two-services-two-containers-zero-listen-addresses",
+			processes: []facts.Process{
+				{
+					PID:         3,
+					CmdLineList: []string{"nginx: master process nginx -g daemon off;"},
+					ContainerID: "id001",
+				},
+				{
+					PID:         4,
+					CmdLineList: []string{"php-fpm: master process (/etc/php/7.0/fpm/php-fpm.conf)"},
+					ContainerID: "id002",
+				},
+			},
+			netstatAddressesPerPID: nil, // netstat won't provide information for containers
+			containers: map[string]facts.FakeContainer{
+				"id001": {
+					FakePrimaryAddress: "172.17.0.49",
+				},
+				"id002": {
+					FakePrimaryAddress: "172.17.0.50",
+				},
+			},
+			want: []Service{
+				{
+					Name:        "nginx",
+					ServiceType: NginxService,
+					ContainerID: "id001",
+					ListenAddresses: []facts.ListenAddress{
+						{NetworkFamily: "tcp", Address: "172.17.0.49", Port: 80},
+					},
+					IPAddress:      "172.17.0.49",
+					IgnoredPorts:   map[int]bool{},
+					HasNetstatInfo: false,
+					Active:         true,
+				},
+				{
+					Name:            "phpfpm",
+					ServiceType:     PHPFPMService,
+					ContainerID:     "id002",
+					ListenAddresses: []facts.ListenAddress{},
+					IPAddress:       "172.17.0.50",
+					IgnoredPorts:    map[int]bool{},
+					HasNetstatInfo:  false,
+					Active:          true,
+				},
+			},
+		},
+		{
+			name: "two-services-one-containers-two-listen-addresses",
+			processes: []facts.Process{
+				{
+					PID:         3,
+					CmdLineList: []string{"nginx: master process nginx -g daemon off;"},
+					ContainerID: "id001",
+				},
+				{
+					PID:         4,
+					CmdLineList: []string{"php-fpm: master process (/etc/php/7.0/fpm/php-fpm.conf)"},
+					ContainerID: "id001",
+				},
+			},
+			netstatAddressesPerPID: nil, // netstat won't provide information for containers
+			containers: map[string]facts.FakeContainer{
+				"id001": {
+					FakePrimaryAddress: "172.17.0.49",
+					FakeListenAddresses: []facts.ListenAddress{
+						{NetworkFamily: "tcp", Address: "172.17.0.49", Port: 80},
+						{NetworkFamily: "tcp", Address: "172.17.0.49", Port: 9000},
+					},
+				},
+			},
+			want: []Service{
+				{
+					Name:        "nginx",
+					ServiceType: NginxService,
+					ContainerID: "id001",
+					ListenAddresses: []facts.ListenAddress{
+						{NetworkFamily: "tcp", Address: "172.17.0.49", Port: 80},
+					},
+					IPAddress:       "172.17.0.49",
+					IgnoredPorts:    map[int]bool{},
+					HasNetstatInfo:  true,
+					LastNetstatInfo: t0,
+					Active:          true,
+				},
+				{
+					Name:            "phpfpm",
+					ServiceType:     PHPFPMService,
+					ContainerID:     "id001",
+					ListenAddresses: []facts.ListenAddress{},
+					IPAddress:       "172.17.0.49",
+					IgnoredPorts:    map[int]bool{},
+					HasNetstatInfo:  false,
+					Active:          true,
+				},
+			},
+		},
+		{
+			name: "two-services-one-containers-one-listen-addresses",
+			processes: []facts.Process{
+				{
+					PID:         3,
+					CmdLineList: []string{"nginx: master process nginx -g daemon off;"},
+					ContainerID: "id001",
+				},
+				{
+					PID:         4,
+					CmdLineList: []string{"php-fpm: master process (/etc/php/7.0/fpm/php-fpm.conf)"},
+					ContainerID: "id001",
+				},
+			},
+			netstatAddressesPerPID: nil, // netstat won't provide information for containers
+			containers: map[string]facts.FakeContainer{
+				"id001": {
+					FakePrimaryAddress:  "172.17.0.49",
+					FakeListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "172.17.0.49", Port: 80}},
+				},
+			},
+			want: []Service{
+				{
+					Name:        "nginx",
+					ServiceType: NginxService,
+					ContainerID: "id001",
+					ListenAddresses: []facts.ListenAddress{
+						{NetworkFamily: "tcp", Address: "172.17.0.49", Port: 80},
+					},
+					IPAddress:       "172.17.0.49",
+					IgnoredPorts:    map[int]bool{},
+					HasNetstatInfo:  true,
+					LastNetstatInfo: t0,
+					Active:          true,
+				},
+				{
+					Name:            "phpfpm",
+					ServiceType:     PHPFPMService,
+					ContainerID:     "id001",
+					ListenAddresses: []facts.ListenAddress{},
+					IPAddress:       "172.17.0.49",
+					IgnoredPorts:    map[int]bool{},
+					HasNetstatInfo:  false,
+					Active:          true,
+				},
+			},
+		},
+		{
+			name: "two-services-one-containers-zero-listen-addresses",
+			processes: []facts.Process{
+				{
+					PID:         3,
+					CmdLineList: []string{"nginx: master process nginx -g daemon off;"},
+					ContainerID: "id001",
+				},
+				{
+					PID:         4,
+					CmdLineList: []string{"php-fpm: master process (/etc/php/7.0/fpm/php-fpm.conf)"},
+					ContainerID: "id001",
+				},
+			},
+			netstatAddressesPerPID: nil, // netstat won't provide information for containers
+			containers: map[string]facts.FakeContainer{
+				"id001": {
+					FakePrimaryAddress: "172.17.0.49",
+				},
+			},
+			want: []Service{
+				{
+					Name:        "nginx",
+					ServiceType: NginxService,
+					ContainerID: "id001",
+					ListenAddresses: []facts.ListenAddress{
+						{NetworkFamily: "tcp", Address: "172.17.0.49", Port: 80},
+					},
+					IPAddress:      "172.17.0.49",
+					IgnoredPorts:   map[int]bool{},
+					HasNetstatInfo: false,
+					Active:         true,
+				},
+				{
+					Name:            "phpfpm",
+					ServiceType:     PHPFPMService,
+					ContainerID:     "id001",
+					ListenAddresses: []facts.ListenAddress{},
+					IPAddress:       "172.17.0.49",
+					IgnoredPorts:    map[int]bool{},
+					HasNetstatInfo:  false,
+					Active:          true,
+				},
+			},
+		},
+		{
+			name: "nginx-phpfpm-port-8080",
+			processes: []facts.Process{
+				{
+					PID:         3,
+					CmdLineList: []string{"nginx: master process nginx -g daemon off;"},
+					ContainerID: "id001",
+				},
+				{
+					PID:         4,
+					CmdLineList: []string{"php-fpm: master process (/etc/php/7.0/fpm/php-fpm.conf)"},
+					ContainerID: "id001",
+				},
+			},
+			netstatAddressesPerPID: nil, // netstat won't provide information for containers
+			containers: map[string]facts.FakeContainer{
+				"id001": {
+					FakePrimaryAddress:  "172.17.0.49",
+					FakeListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "172.17.0.49", Port: 8080}},
+				},
+			},
+			want: []Service{
+				{
+					Name:            "nginx",
+					ServiceType:     NginxService,
+					ContainerID:     "id001",
+					ListenAddresses: []facts.ListenAddress{},
+					IPAddress:       "172.17.0.49",
+					IgnoredPorts:    map[int]bool{},
+					HasNetstatInfo:  false,
+					Active:          true,
+				},
+				{
+					Name:            "phpfpm",
+					ServiceType:     PHPFPMService,
+					ContainerID:     "id001",
+					ListenAddresses: []facts.ListenAddress{},
+					IPAddress:       "172.17.0.49",
+					IgnoredPorts:    map[int]bool{},
+					HasNetstatInfo:  false,
+					Active:          true,
+				},
+			},
+		},
+		{
+			name: "nginx-apache-port-80",
+			processes: []facts.Process{
+				{
+					PID:         3,
+					CmdLineList: []string{"nginx: master process nginx -g daemon off;"},
+					ContainerID: "id001",
+				},
+				{
+					PID:         4,
+					CmdLineList: []string{"/usr/sbin/apache2", "-k", "start"},
+					ContainerID: "id001",
+				},
+			},
+			netstatAddressesPerPID: nil, // netstat won't provide information for containers
+			containers: map[string]facts.FakeContainer{
+				"id001": {
+					FakePrimaryAddress:  "172.17.0.49",
+					FakeListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "172.17.0.49", Port: 80}},
+				},
+			},
+			want: []Service{
+				{
+					Name:            "nginx",
+					ServiceType:     NginxService,
+					ContainerID:     "id001",
+					ListenAddresses: []facts.ListenAddress{},
+					IPAddress:       "172.17.0.49",
+					IgnoredPorts:    map[int]bool{},
+					HasNetstatInfo:  false,
+					Active:          true,
+				},
+				{
+					Name:            "apache",
+					ServiceType:     ApacheService,
+					ContainerID:     "id001",
+					ListenAddresses: []facts.ListenAddress{},
+					IPAddress:       "172.17.0.49",
+					IgnoredPorts:    map[int]bool{},
+					HasNetstatInfo:  false,
+					Active:          true,
+				},
+			},
+		},
+		{
+			name: "nginx-apache-port-80-and-8080",
+			processes: []facts.Process{
+				{
+					PID:         3,
+					CmdLineList: []string{"nginx: master process nginx -g daemon off;"},
+					ContainerID: "id001",
+				},
+				{
+					PID:         4,
+					CmdLineList: []string{"/usr/sbin/apache2", "-k", "start"},
+					ContainerID: "id001",
+				},
+			},
+			netstatAddressesPerPID: nil, // netstat won't provide information for containers
+			containers: map[string]facts.FakeContainer{
+				"id001": {
+					FakePrimaryAddress: "172.17.0.49",
+					FakeListenAddresses: []facts.ListenAddress{
+						{NetworkFamily: "tcp", Address: "172.17.0.49", Port: 80},
+						{NetworkFamily: "tcp", Address: "172.17.0.49", Port: 8080},
+					},
+				},
+			},
+			want: []Service{
+				{
+					Name:            "nginx",
+					ServiceType:     NginxService,
+					ContainerID:     "id001",
+					ListenAddresses: []facts.ListenAddress{},
+					IPAddress:       "172.17.0.49",
+					IgnoredPorts:    map[int]bool{},
+					HasNetstatInfo:  false,
+					Active:          true,
+				},
+				{
+					Name:            "apache",
+					ServiceType:     ApacheService,
+					ContainerID:     "id001",
+					ListenAddresses: []facts.ListenAddress{},
+					IPAddress:       "172.17.0.49",
+					IgnoredPorts:    map[int]bool{},
+					HasNetstatInfo:  false,
+					Active:          true,
+				},
+			},
+		},
+		{
+			name: "nginx-phpfpm-port-80-and-443",
+			processes: []facts.Process{
+				{
+					PID:         3,
+					CmdLineList: []string{"nginx: master process nginx -g daemon off;"},
+					ContainerID: "id001",
+				},
+				{
+					PID:         4,
+					CmdLineList: []string{"php-fpm: master process (/etc/php/7.0/fpm/php-fpm.conf)"},
+					ContainerID: "id001",
+				},
+			},
+			netstatAddressesPerPID: nil, // netstat won't provide information for containers
+			containers: map[string]facts.FakeContainer{
+				"id001": {
+					FakePrimaryAddress: "172.17.0.49",
+					FakeListenAddresses: []facts.ListenAddress{
+						{NetworkFamily: "tcp", Address: "172.17.0.49", Port: 80},
+						{NetworkFamily: "tcp", Address: "172.17.0.49", Port: 443},
+					},
+				},
+			},
+			want: []Service{
+				{
+					Name:        "nginx",
+					ServiceType: NginxService,
+					ContainerID: "id001",
+					ListenAddresses: []facts.ListenAddress{
+						{NetworkFamily: "tcp", Address: "172.17.0.49", Port: 80},
+					},
+					IPAddress:       "172.17.0.49",
+					IgnoredPorts:    map[int]bool{},
+					HasNetstatInfo:  true,
+					LastNetstatInfo: t0,
+					Active:          true,
+				},
+				{
+					Name:            "phpfpm",
+					ServiceType:     PHPFPMService,
+					ContainerID:     "id001",
+					ListenAddresses: []facts.ListenAddress{},
+					IPAddress:       "172.17.0.49",
+					IgnoredPorts:    map[int]bool{},
+					HasNetstatInfo:  false,
+					Active:          true,
+				},
+			},
+		},
+		{
+			name: "nginx-redis-port-80-and-6379",
+			processes: []facts.Process{
+				{
+					PID:         3,
+					CmdLineList: []string{"nginx: master process nginx -g daemon off;"},
+					ContainerID: "id001",
+				},
+				{
+					PID:         4,
+					CmdLineList: []string{"redis-server *:6379"},
+					ContainerID: "id001",
+				},
+			},
+			netstatAddressesPerPID: nil, // netstat won't provide information for containers
+			containers: map[string]facts.FakeContainer{
+				"id001": {
+					FakePrimaryAddress: "172.17.0.49",
+					FakeListenAddresses: []facts.ListenAddress{
+						{NetworkFamily: "tcp", Address: "172.17.0.49", Port: 80},
+						{NetworkFamily: "tcp", Address: "172.17.0.49", Port: 6379},
+					},
+				},
+			},
+			want: []Service{
+				{
+					Name:        "nginx",
+					ServiceType: NginxService,
+					ContainerID: "id001",
+					ListenAddresses: []facts.ListenAddress{
+						{NetworkFamily: "tcp", Address: "172.17.0.49", Port: 80},
+					},
+					IPAddress:       "172.17.0.49",
+					IgnoredPorts:    map[int]bool{},
+					HasNetstatInfo:  true,
+					LastNetstatInfo: t0,
+					Active:          true,
+				},
+				{
+					Name:        "redis",
+					ServiceType: RedisService,
+					ContainerID: "id001",
+					ListenAddresses: []facts.ListenAddress{
+						{NetworkFamily: "tcp", Address: "172.17.0.49", Port: 6379},
+					},
+					IPAddress:       "172.17.0.49",
+					IgnoredPorts:    map[int]bool{},
+					HasNetstatInfo:  true,
+					LastNetstatInfo: t0,
+					Active:          true,
+				},
+			},
+		},
+		{
+			name: "nginx-redis-port-8080-and-6379",
+			processes: []facts.Process{
+				{
+					PID:         3,
+					CmdLineList: []string{"nginx: master process nginx -g daemon off;"},
+					ContainerID: "id001",
+				},
+				{
+					PID:         4,
+					CmdLineList: []string{"redis-server *:6379"},
+					ContainerID: "id001",
+				},
+			},
+			netstatAddressesPerPID: nil, // netstat won't provide information for containers
+			containers: map[string]facts.FakeContainer{
+				"id001": {
+					FakePrimaryAddress: "172.17.0.49",
+					FakeListenAddresses: []facts.ListenAddress{
+						{NetworkFamily: "tcp", Address: "172.17.0.49", Port: 8080},
+						{NetworkFamily: "tcp", Address: "172.17.0.49", Port: 6379},
+					},
+				},
+			},
+			want: []Service{
+				{
+					Name:            "nginx",
+					ServiceType:     NginxService,
+					ContainerID:     "id001",
+					ListenAddresses: []facts.ListenAddress{},
+					IPAddress:       "172.17.0.49",
+					IgnoredPorts:    map[int]bool{},
+					HasNetstatInfo:  false,
+					Active:          true,
+				},
+				{
+					Name:        "redis",
+					ServiceType: RedisService,
+					ContainerID: "id001",
+					ListenAddresses: []facts.ListenAddress{
+						{NetworkFamily: "tcp", Address: "172.17.0.49", Port: 6379},
+					},
+					IPAddress:       "172.17.0.49",
 					IgnoredPorts:    map[int]bool{},
 					HasNetstatInfo:  true,
 					LastNetstatInfo: t0,

@@ -388,16 +388,15 @@ func (dd *DynamicDiscovery) updateDiscovery(ctx context.Context, maxAge time.Dur
 		return ctx.Err()
 	}
 
+	// Resolve possible conflict of listen address. If two services are discovered in the same containers, it's
+	// possible for two different service to have the same listenning address... which is unlikely.
+	// When a conflict occur, only kept port that are associated with the standard port of the service.
+	services := fixListenAddressConflict(servicesMap)
+
 	dd.l.Lock()
 	defer dd.l.Unlock()
 
 	dd.lastDiscoveryUpdate = time.Now()
-	services := make([]Service, 0, len(servicesMap))
-
-	for _, v := range servicesMap {
-		services = append(services, v)
-	}
-
 	dd.services = services
 
 	return nil
@@ -775,4 +774,99 @@ func iniSafeString(key *ini.Key) string {
 	}
 
 	return key.String()
+}
+
+// fixListenAddressConflict resolve conflict when two service listen on the same address.
+func fixListenAddressConflict(servicesMap map[NameInstance]Service) []Service {
+	services := make([]Service, 0, len(servicesMap))
+	addressesMap := make(map[facts.ListenAddress][]NameInstance)
+
+	for k, v := range servicesMap {
+		for _, address := range v.ListenAddresses {
+			addressesMap[address] = append(addressesMap[address], k)
+		}
+	}
+
+	for _, v := range servicesMap {
+		v = filterConflictListenAddress(v, servicesMap, addressesMap)
+
+		services = append(services, v)
+	}
+
+	return services
+}
+
+// filterConflictListenAddress remove address that have a conflict. It might mutate service input.
+func filterConflictListenAddress(service Service, servicesMap map[NameInstance]Service, addressesMap map[facts.ListenAddress][]NameInstance) Service {
+	var newListenAddress []facts.ListenAddress //nolint:prealloc // prealloc is used
+
+	key := NameInstance{service.Name, service.Instance}
+
+	for i, addr := range service.ListenAddresses {
+		if len(addressesMap[addr]) == 1 && newListenAddress == nil {
+			// fast path: if there is no address conflict, do no copy and no mutation
+			continue
+		}
+
+		if len(addressesMap[addr]) == 1 {
+			newListenAddress = append(newListenAddress, addr)
+
+			continue
+		}
+
+		if newListenAddress == nil {
+			// First conflict for this service. service.ListenAddresses need to be modified but a copy must be
+			// done (as this slice is shared with all services in the same containers).
+			// Do a copy now.
+			newListenAddress = make([]facts.ListenAddress, i)
+			copy(newListenAddress, service.ListenAddresses)
+		}
+
+		// There is a conflict. Two case:
+		// * either addr is using the standard port of current service AND
+		//   it isn't the standard port of any other service. Then we kept the address
+		// * or we don't kept the address because we aren't confident enough that this address belong to this service and not
+		//   another one.
+
+		if addr.Port != servicesDiscoveryInfo[service.ServiceType].ServicePort {
+			continue
+		}
+
+		isStandardPortOfAnotherService := false
+
+		for _, otherServiceKey := range addressesMap[addr] {
+			if otherServiceKey == key {
+				continue
+			}
+
+			otherService := servicesMap[otherServiceKey]
+
+			if addr.Port == servicesDiscoveryInfo[otherService.ServiceType].ServicePort {
+				isStandardPortOfAnotherService = true
+
+				break
+			}
+		}
+
+		if isStandardPortOfAnotherService {
+			continue
+		}
+
+		newListenAddress = append(newListenAddress, addr) //nolint:makezero // but we fill the non-zero length part with a copy just after preallocation
+	}
+
+	if newListenAddress == nil {
+		return service
+	}
+
+	if len(service.ListenAddresses) > 0 && len(newListenAddress) == 0 {
+		// clear has netstat info. The netstat information didn't allowed to known port on which this
+		// service listen (if it does).
+		service.HasNetstatInfo = false
+		service.LastNetstatInfo = time.Time{}
+	}
+
+	service.ListenAddresses = newListenAddress
+
+	return service
 }
