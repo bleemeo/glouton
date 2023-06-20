@@ -23,12 +23,12 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
-	"glouton/agent/crashreport"
 	"glouton/agent/state"
 	"glouton/api"
 	"glouton/bleemeo"
 	"glouton/collector"
 	"glouton/config"
+	"glouton/crash-report"
 	"glouton/debouncer"
 	"glouton/delay"
 	"glouton/discovery"
@@ -231,9 +231,10 @@ func (a *agent) init(ctx context.Context, configFiles []string, firstRun bool) (
 	}
 
 	a.stateDir = a.config.Agent.StateDirectory
+	crashreport.SetStateDir(a.stateDir)
 
 	if firstRun {
-		crashreport.SetupStderrRedirection(a.stateDir)
+		crashreport.SetupStderrRedirection()
 	}
 
 	// Initialize paho loggers, this needs to be done only once to prevent data races.
@@ -1533,13 +1534,9 @@ func (a *agent) miscTasks(ctx context.Context) error {
 }
 
 func (a *agent) crashReportManagement(ctx context.Context) error {
-	createdReportDir, archiveWriter := crashreport.BundleCrashReportFiles(a.config.Agent)
+	createdReportDir, archiveWriter := crashreport.BundleCrashReportFiles(a.config.Agent.DisableCrashReporting, a.config.Agent.MaxCrashReportDirs)
 	if createdReportDir != "" && archiveWriter != nil {
-		defer func() {
-			if closerArchive, isCloser := archiveWriter.(io.Closer); isCloser {
-				closerArchive.Close()
-			}
-		}()
+		defer archiveWriter.Close()
 
 		ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 		defer cancel()
@@ -1550,8 +1547,8 @@ func (a *agent) crashReportManagement(ctx context.Context) error {
 		}
 	}
 
-	crashreport.PurgeCrashReportDirs(a.stateDir, a.config.Agent.MaxCrashReportDirs, createdReportDir)
-	crashreport.MarkAsDone(a.stateDir)
+	crashreport.PurgeCrashReportDirs(a.config.Agent.MaxCrashReportDirs, createdReportDir)
+	crashreport.MarkAsDone()
 
 	logger.V(0).Println("Crash report management is done !")
 

@@ -19,9 +19,7 @@ package crashreport
 import (
 	"bytes"
 	"errors"
-	"glouton/config"
 	"glouton/logger"
-	"glouton/types"
 	"io"
 	"os"
 	"path/filepath"
@@ -41,19 +39,28 @@ const (
 	writeInProgressFlag = ".WRITE_IN_PROGRESS"
 )
 
-var skipReporting bool //nolint:gochecknoglobals
+//nolint:gochecknoglobals
+var (
+	skipReporting bool
+	stateDir      string
+)
+
+// SetStateDir defines 'dir' as the directory where any crash report related file will go.
+func SetStateDir(dir string) {
+	stateDir = dir
+}
 
 // SetupStderrRedirection creates a file that will receive stderr output.
 // If such a file already exists, it is moved to a '.old' version and
 // a new and empty file takes it place.
-func SetupStderrRedirection(stateDir string) {
+func SetupStderrRedirection() {
 	if _, err := os.Stat(filepath.Join(stateDir, writeInProgressFlag)); err == nil {
 		// If the flag has not been deleted the last run, it may be because the crash reporting process crashed.
 		// So to try not to crash again, we skip the crash reporting this time.
 		// We will try to report the next time, so we delete the flag.
 		skipReporting = true
 
-		MarkAsDone(stateDir)
+		MarkAsDone()
 
 		return
 	}
@@ -88,7 +95,7 @@ func SetupStderrRedirection(stateDir string) {
 // PurgeCrashReportDirs deletes oldest crash report directories present
 // in 'stateDir' and only keeps the 'maxDirCount' most recent ones.
 // Directories specified as 'except' won't be deleted.
-func PurgeCrashReportDirs(stateDir string, maxDirCount int, preserve ...string) {
+func PurgeCrashReportDirs(maxDirCount int, preserve ...string) {
 	existingCrashReportDirs, err := filepath.Glob(filepath.Join(stateDir, crashReportDirPattern))
 	if err != nil {
 		logger.V(0).Println("Failed to parse crash report glob pattern:", err)
@@ -130,17 +137,16 @@ func PurgeCrashReportDirs(stateDir string, maxDirCount int, preserve ...string) 
 // as the crash report is not complete (the flag will be removed once the diagnostic is created).
 // It returns the path to the crash report directory (or an empty string if not created),
 // along with an ArchiveWriter to generate a diagnostic (which can be nil).
-func BundleCrashReportFiles(agentConfig config.Agent) (reportDir string, archiveWriter types.ArchiveWriter) {
+func BundleCrashReportFiles(disabled bool, maxCrashDirCount int) (reportDir string, archiveWriter ReportArchiveWriter) {
 	if skipReporting {
 		return "", nil
 	}
 
-	if agentConfig.DisableCrashReporting || agentConfig.MaxCrashReportDirs <= 0 {
+	if disabled || maxCrashDirCount <= 0 {
 		// Crash reports are apparently disabled in config.
 		return
 	}
 
-	stateDir := agentConfig.StateDirectory
 	lastStderrFilePath := filepath.Join(stateDir, oldStderrFileName)
 
 	lastStderrFile, err := os.Open(lastStderrFilePath)
@@ -195,7 +201,7 @@ func BundleCrashReportFiles(agentConfig config.Agent) (reportDir string, archive
 
 // MarkAsDone deletes the file implying that crash report writing isn't done yet,
 // which means that crash reports are now ready for upload.
-func MarkAsDone(stateDir string) {
+func MarkAsDone() {
 	err := os.Remove(filepath.Join(stateDir, writeInProgressFlag))
 	if err != nil {
 		logger.V(1).Println("Failed to delete write-in-progress flag:", err)
