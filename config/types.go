@@ -221,6 +221,7 @@ type Agent struct {
 	StateResetFile         string          `yaml:"state_reset_file"`
 	DeprecatedStateFile    string          `yaml:"deprecated_state_file"`
 	StateDirectory         string          `yaml:"state_directory"`
+	DisableCrashReporting  bool            `yaml:"disable_crash_reporting"`
 	MaxCrashReportDirs     int             `yaml:"max_crash_report_dirs"`
 	UpgradeFile            string          `yaml:"upgrade_file"`
 	AutoUpgradeFile        string          `yaml:"auto_upgrade_file"`
