@@ -23,6 +23,7 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
+	"glouton/agent/crashreport"
 	"glouton/agent/state"
 	"glouton/api"
 	"glouton/bleemeo"
@@ -96,7 +97,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/prometheus/model/labels"
 	"gopkg.in/yaml.v3"
-	"glouton/agent/crashreport"
 )
 
 // Jitter define the aligned timestamp used for scrapping.
@@ -234,11 +234,8 @@ func (a *agent) init(ctx context.Context, configFiles []string, firstRun bool) (
 
 	a.stateDir = a.config.Agent.StateDirectory
 
-	var createdReportDir string
 	if firstRun {
 		crashreport.SetupStderrRedirection(a.stateDir)
-		crashreport.PurgeCrashReportDirs(a.stateDir, a.config.Agent.MaxCrashReportDirs)
-		createdReportDir = crashreport.BundleCrashReportFiles(a.stateDir, a.config.Agent.MaxCrashReportDirs)
 	}
 
 	// Initialize paho loggers, this needs to be done only once to prevent data races.
@@ -985,6 +982,10 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		{a.threshold.Run, "Threshold state"},
 	}
 
+	if !a.config.Agent.DisableCrashReporting {
+		tasks = append(tasks, taskInfo{a.crashReportManagement, "Crash report management"})
+	}
+
 	if a.config.Web.Enable {
 		tasks = append(tasks, taskInfo{api.Run, "Local Web UI"})
 	}
@@ -1518,6 +1519,32 @@ func (a *agent) miscTasks(ctx context.Context) error {
 		}
 		a.triggerLock.Unlock()
 	}
+}
+
+func (a *agent) crashReportManagement(ctx context.Context) error {
+	createdReportDir, archiveWriter := crashreport.BundleCrashReportFiles(a.config.Agent)
+	if createdReportDir != "" && archiveWriter != nil {
+		defer func() {
+			if closerArchive, isCloser := archiveWriter.(io.Closer); isCloser {
+				closerArchive.Close()
+			}
+		}()
+
+		ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		defer cancel()
+
+		err := a.writeDiagnosticArchive(ctx, archiveWriter)
+		if err != nil {
+			return fmt.Errorf("failed to write to diagnostic.zip file: %w", err)
+		}
+	}
+
+	crashreport.PurgeCrashReportDirs(a.stateDir, a.config.Agent.MaxCrashReportDirs, createdReportDir)
+	crashreport.MarkAsDone(a.stateDir)
+
+	logger.V(0).Println("Crash report management is done !")
+
+	return nil
 }
 
 func (a *agent) startTasks(tasks []taskInfo) {
