@@ -18,7 +18,6 @@
 package agent
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"encoding/xml"
@@ -97,6 +96,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/prometheus/model/labels"
 	"gopkg.in/yaml.v3"
+	"glouton/agent/crashreport"
 )
 
 // Jitter define the aligned timestamp used for scrapping.
@@ -232,11 +232,16 @@ func (a *agent) init(ctx context.Context, configFiles []string, firstRun bool) (
 		}
 	}
 
+	a.stateDir = a.config.Agent.StateDirectory
+
+	var createdReportDir string
 	if firstRun {
-		a.manageCrashReports()
+		crashreport.SetupStderrRedirection(a.stateDir)
+		crashreport.PurgeCrashReportDirs(a.stateDir, a.config.Agent.MaxCrashReportDirs)
+		createdReportDir = crashreport.BundleCrashReportFiles(a.stateDir, a.config.Agent.MaxCrashReportDirs)
 	}
 
-	// Initialize paho loggers, this need to be done only once to prevent data races.
+	// Initialize paho loggers, this needs to be done only once to prevent data races.
 	if firstRun {
 		paho.ERROR = logger.V(2)
 		paho.CRITICAL = logger.V(2)
@@ -256,7 +261,6 @@ func (a *agent) init(ctx context.Context, configFiles []string, firstRun bool) (
 		DenyList:          a.config.Container.Filter.DenyList,
 	}
 
-	a.stateDir = a.config.Agent.StateDirectory
 	statePath := a.config.Agent.StateFile
 
 	cachePath := a.config.Agent.StateCacheFile
@@ -333,83 +337,6 @@ func (a *agent) init(ctx context.Context, configFiles []string, firstRun bool) (
 	a.readXMLCredentials()
 
 	return true
-}
-
-// manageCrashReports takes care of removing the excess of error log files and
-// replaces the stderr file descriptor by a newly created log file.
-func (a *agent) manageCrashReports() (crashDirCreated string) {
-	const (
-		stderrFileName        = "crashreport.log"
-		crashReportDirFormat  = "crashreport_20060102-150405"
-		crashReportDirPattern = "crashreport_[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]-[0-9][0-9][0-9][0-9][0-9][0-9]"
-	)
-
-	stderrFilePath := filepath.Join(a.stateDir, stderrFileName)
-
-	maxCrashReportDirs := a.config.Agent.MaxCrashReportDirs
-	if maxCrashReportDirs > 0 {
-		if f, err := os.Open(stderrFilePath); err == nil {
-			lastCrashReportContent := make([]byte, 4096)
-
-			_, err = f.Read(lastCrashReportContent)
-			if err == nil || errors.Is(err, io.EOF) {
-				if bytes.Contains(lastCrashReportContent, []byte("panic")) {
-					crashDirCreated = filepath.Join(a.stateDir, time.Now().Format(crashReportDirFormat))
-
-					err = os.Mkdir(crashDirCreated, 0o740)
-					if err != nil {
-						logger.V(1).Printf("Failed to create crash report folder %q: %v", crashDirCreated, err)
-
-						return ""
-					}
-
-					err = os.Rename(stderrFilePath, filepath.Join(crashDirCreated, stderrFileName))
-					if err != nil {
-						logger.V(1).Printf("Failed to move crash report to folder %q: %v", crashDirCreated, err)
-
-						return ""
-					}
-
-					logger.V(0).Printf("Created a crash-report dir at %q", crashDirCreated)
-				}
-			}
-		}
-	}
-
-	newStderrFile, err := os.Create(stderrFilePath)
-	if err != nil {
-		logger.V(1).Println("Failed to create new stderr log file:", err)
-
-		return crashDirCreated
-	}
-
-	err = redirectOSSpecificStderrToFile(newStderrFile.Fd())
-	if err != nil {
-		logger.V(1).Println("Failed to redirect stderr to log file:", err)
-	}
-
-	existingCrashReportDirs, err := filepath.Glob(filepath.Join(a.stateDir, crashReportDirPattern))
-	if err != nil {
-		logger.V(0).Println("Failed to parse crash report glob pattern:", err)
-	}
-
-	// Remove the oldest excess crash report dirs
-	if len(existingCrashReportDirs) > maxCrashReportDirs {
-		sort.Strings(existingCrashReportDirs)
-
-		for i, dir := range existingCrashReportDirs {
-			if i == len(existingCrashReportDirs)-maxCrashReportDirs {
-				break
-			}
-
-			err = os.RemoveAll(dir)
-			if err != nil {
-				logger.V(1).Printf("Failed to remove old crash report dir %q: %v", dir, err)
-			}
-		}
-	}
-
-	return crashDirCreated
 }
 
 // readXMLCredentials reads the bleemeo account ID and registration key

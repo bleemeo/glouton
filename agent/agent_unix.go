@@ -25,8 +25,6 @@ import (
 	"glouton/logger"
 	"glouton/prometheus/exporter/node"
 	"os"
-
-	"golang.org/x/sys/unix"
 )
 
 func initOSSpecificParts(chan<- os.Signal) {
@@ -55,8 +53,4 @@ func (a *agent) registerOSSpecificComponents(vethProvider *veth.Provider) {
 			logger.Printf("Unable to start node_exporter, system metrics will be missing: %v", err)
 		}
 	}
-}
-
-func redirectOSSpecificStderrToFile(stderrFileFd uintptr) error {
-	return unix.Dup2(int(stderrFileFd), unix.Stderr)
 }
