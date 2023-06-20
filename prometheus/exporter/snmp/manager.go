@@ -20,8 +20,8 @@ import (
 	"context"
 	"fmt"
 	"glouton/config"
+	"glouton/crashreport"
 	"glouton/logger"
-	"glouton/types"
 	"net/url"
 	"sync"
 	"time"
@@ -123,7 +123,7 @@ func (m *Manager) OnlineCount() int {
 			m.checkOnlinePending = true
 
 			go func() {
-				defer types.ProcessPanic()
+				defer crashreport.ProcessPanic()
 
 				m.checkTargets(needCheck)
 

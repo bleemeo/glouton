@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"glouton/crashreport"
 	"glouton/logger"
 	"glouton/types"
 	"sort"
@@ -148,7 +149,7 @@ func (r *Registry) AddTask(task Runner, shortName string) (int, error) {
 	}
 
 	go func() {
-		defer types.ProcessPanic()
+		defer crashreport.ProcessPanic()
 		defer close(waitC)
 
 		err := task(ctx)

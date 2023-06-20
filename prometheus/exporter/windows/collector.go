@@ -26,8 +26,8 @@ package windows
 
 import (
 	"fmt"
+	"glouton/crashreport"
 	"glouton/logger"
-	"glouton/types"
 	"sync"
 	"time"
 
@@ -136,7 +136,7 @@ func (coll windowsCollector) Collect(ch chan<- prometheus.Metric) {
 	finished := false
 
 	go func() {
-		defer types.ProcessPanic()
+		defer crashreport.ProcessPanic()
 
 		for m := range metricsBuffer {
 			l.Lock()
@@ -151,7 +151,7 @@ func (coll windowsCollector) Collect(ch chan<- prometheus.Metric) {
 
 	for name, c := range coll.collectors {
 		go func(name string, c collector.Collector) {
-			defer types.ProcessPanic()
+			defer crashreport.ProcessPanic()
 			defer wg.Done()
 
 			outcome := execute(name, c, scrapeContext, metricsBuffer)
@@ -169,7 +169,7 @@ func (coll windowsCollector) Collect(ch chan<- prometheus.Metric) {
 	allDone := make(chan struct{})
 
 	go func() {
-		defer types.ProcessPanic()
+		defer crashreport.ProcessPanic()
 
 		wg.Wait()
 		close(allDone)

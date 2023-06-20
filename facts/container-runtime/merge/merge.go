@@ -20,6 +20,7 @@ package merge
 import (
 	"context"
 	"errors"
+	"glouton/crashreport"
 	"glouton/facts"
 	crTypes "glouton/facts/container-runtime/types"
 	"glouton/logger"
@@ -213,7 +214,7 @@ func (r *Runtime) Run(ctx context.Context) error {
 		cr := cr
 
 		go func() {
-			defer types.ProcessPanic()
+			defer crashreport.ProcessPanic()
 			defer wg.Done()
 
 			err := cr.Run(ctx)
@@ -230,7 +231,7 @@ func (r *Runtime) Run(ctx context.Context) error {
 		}()
 
 		go func() {
-			defer types.ProcessPanic()
+			defer crashreport.ProcessPanic()
 			defer wg.Done()
 
 			ch := cr.Events()

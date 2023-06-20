@@ -25,6 +25,7 @@ import (
 	"glouton/bleemeo/internal/common"
 	"glouton/bleemeo/internal/filter"
 	bleemeoTypes "glouton/bleemeo/types"
+	"glouton/crashreport"
 	"glouton/logger"
 	"glouton/mqtt"
 	"glouton/mqtt/client"
@@ -218,7 +219,7 @@ func (c *Client) Run(ctx context.Context) error {
 	wg.Add(1)
 
 	go func() {
-		defer types.ProcessPanic()
+		defer crashreport.ProcessPanic()
 
 		c.receiveEvents(ctx)
 		wg.Done()
@@ -227,7 +228,7 @@ func (c *Client) Run(ctx context.Context) error {
 	wg.Add(1)
 
 	go func() {
-		defer types.ProcessPanic()
+		defer crashreport.ProcessPanic()
 
 		c.mqtt.Run(ctx)
 		wg.Done()

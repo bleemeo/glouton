@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"glouton/config"
+	"glouton/crashreport"
 	"glouton/discovery"
 	"glouton/facts"
 	"glouton/logger"
@@ -272,7 +273,7 @@ func (api *API) Run(ctx context.Context) error {
 	idleConnsClosed := make(chan struct{})
 
 	go func() {
-		defer types.ProcessPanic()
+		defer crashreport.ProcessPanic()
 
 		<-ctx.Done()
 

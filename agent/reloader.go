@@ -23,6 +23,7 @@ import (
 	"glouton/bleemeo"
 	bleemeoTypes "glouton/bleemeo/types"
 	"glouton/config"
+	"glouton/crashreport"
 	"glouton/debouncer"
 	"glouton/logger"
 	"glouton/mqtt/client"
@@ -254,7 +255,7 @@ out:
 			first := firstRun
 
 			go func() {
-				defer types.ProcessPanic()
+				defer crashreport.ProcessPanic()
 				defer wg.Done()
 
 				a.runAgent(ctx, sighupChan, first)
@@ -332,7 +333,7 @@ func (a *agentReloader) watchConfig(ctx context.Context, reload chan struct{}) {
 	reloadDebouncer := debouncer.New(ctx, reloadAgentTarget, reloadDebouncerDelay, reloadDebouncerPeriod)
 
 	go func() {
-		defer types.ProcessPanic()
+		defer crashreport.ProcessPanic()
 
 		a.receiveWatcherEvents(ctx, reloadDebouncer)
 	}()

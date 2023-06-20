@@ -26,8 +26,10 @@ import (
 	"glouton/bleemeo/internal/mqtt"
 	"glouton/bleemeo/internal/synchronizer"
 	"glouton/bleemeo/types"
+	"glouton/crashreport"
 	"glouton/logger"
 	"glouton/prometheus/exporter/snmp"
+	gloutonTypes "glouton/types"
 	"io"
 	"math/rand"
 	"runtime"
@@ -35,8 +37,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	gloutonTypes "glouton/types"
 )
 
 var (
@@ -285,7 +285,7 @@ func (c *Connector) mqttRestarter(ctx context.Context) error {
 				resultChan := make(chan []gloutonTypes.MetricPoint, 1)
 
 				go func() {
-					defer gloutonTypes.ProcessPanic()
+					defer crashreport.ProcessPanic()
 
 					resultChan <- c.mqtt.PopPoints(true)
 				}()
@@ -306,7 +306,7 @@ func (c *Connector) mqttRestarter(ctx context.Context) error {
 			wg.Add(1)
 
 			go func() {
-				defer gloutonTypes.ProcessPanic()
+				defer crashreport.ProcessPanic()
 				defer wg.Done()
 
 				err := c.mqtt.Run(subCtx)
@@ -348,7 +348,7 @@ func (c *Connector) Run(ctx context.Context) error {
 	wg.Add(1)
 
 	go func() {
-		defer gloutonTypes.ProcessPanic()
+		defer crashreport.ProcessPanic()
 		defer wg.Done()
 		defer cancel()
 
@@ -358,7 +358,7 @@ func (c *Connector) Run(ctx context.Context) error {
 	wg.Add(1)
 
 	go func() {
-		defer gloutonTypes.ProcessPanic()
+		defer crashreport.ProcessPanic()
 		defer wg.Done()
 		defer cancel()
 
@@ -372,7 +372,7 @@ func (c *Connector) Run(ctx context.Context) error {
 			wg.Add(1)
 
 			go func() {
-				defer gloutonTypes.ProcessPanic()
+				defer crashreport.ProcessPanic()
 				defer wg.Done()
 				defer cancel()
 
@@ -587,13 +587,13 @@ func (c *Connector) DiagnosticPage() string {
 	mqttPage := make(chan string)
 
 	go func() {
-		defer gloutonTypes.ProcessPanic()
+		defer crashreport.ProcessPanic()
 
 		syncPage <- c.sync.DiagnosticPage()
 	}()
 
 	go func() {
-		defer gloutonTypes.ProcessPanic()
+		defer crashreport.ProcessPanic()
 
 		if mqtt == nil {
 			mqttPage <- "MQTT connector is not (yet) initialized\n"

@@ -25,6 +25,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"glouton/crashreport"
 	"glouton/logger"
 	gloutonModel "glouton/prometheus/model"
 	"glouton/prometheus/registry/internal/renamer"
@@ -924,7 +925,7 @@ func (r *Registry) scheduleUpdate(id int, reg *registration, runAt time.Time) {
 	// Run the actual update in another goroutine and return instantly to make
 	// sure taking the registry lock doesn't cause a deadlock.
 	go func() {
-		defer types.ProcessPanic()
+		defer crashreport.ProcessPanic()
 
 		r.l.Lock()
 		defer r.l.Unlock()
@@ -966,7 +967,7 @@ func (r *Registry) checkReschedule(ctx context.Context) time.Duration {
 		reg := value.Reg
 
 		go func() {
-			defer types.ProcessPanic()
+			defer crashreport.ProcessPanic()
 
 			ctx, cancel := context.WithTimeout(ctx, defaultGatherTimeout)
 			defer cancel()
@@ -1072,7 +1073,7 @@ func (r *Registry) GatherWithState(ctx context.Context, state GatherState) ([]*d
 		wg.Add(1)
 
 		go func() {
-			defer types.ProcessPanic()
+			defer crashreport.ProcessPanic()
 			defer wg.Done()
 
 			scrapedMFS, _, err := r.scrape(ctx, state, reg)
