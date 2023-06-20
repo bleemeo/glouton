@@ -134,7 +134,7 @@ func mockClient(t *testing.T) *Client {
 		agentTypeID     = "test-agent-type"
 	)
 
-	state, err := state.Load("", "")
+	state, err := state.LoadReadOnly("", "")
 	if err != nil {
 		t.Fatalf("Failed to load state: %s", err)
 	}

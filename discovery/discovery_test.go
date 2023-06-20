@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"glouton/agent/state"
 	"glouton/config"
 	"glouton/facts"
 	"glouton/prometheus/registry"
@@ -983,5 +984,158 @@ func TestValidateServices(t *testing.T) {
 
 	if diff := cmp.Diff(gotWarningsStr, wantWarnings); diff != "" {
 		t.Fatalf("Validate returned unexpected warnings:\n%s", diff)
+	}
+}
+
+func Test_servicesFromState(t *testing.T) {
+	tests := []struct {
+		name              string
+		stateFileBaseName string
+		want              []Service
+	}{
+		{
+			name:              "no-version",
+			stateFileBaseName: "no-version",
+			want: []Service{
+				{
+					Name:          "redis",
+					Instance:      "redis",
+					ContainerID:   "399366e861976b77e5574c6b956f70dd2473944d822196e8bd6735da7e1d373f",
+					ContainerName: "redis",
+					IPAddress:     "172.17.0.2",
+					ListenAddresses: []facts.ListenAddress{
+						{NetworkFamily: "tcp", Address: "172.17.0.2", Port: 6379},
+					},
+					ExePath:     "/usr/local/bin/redis-server",
+					ServiceType: RedisService,
+				},
+			},
+		},
+		{
+			name:              "no-version-port-conflict",
+			stateFileBaseName: "no-version-port-conflict",
+			want: []Service{
+				{
+					Active:        true,
+					Name:          "nginx",
+					Instance:      "composetest-phpfpm_and_nginx-1",
+					ContainerID:   "231aa25b7994847ea8b672cff7cd1d6a95a301dacece589982fd0de78470d7e3",
+					ContainerName: "composetest-phpfpm_and_nginx-1",
+					IPAddress:     "172.18.0.7",
+					ListenAddresses: []facts.ListenAddress{
+						{NetworkFamily: "tcp", Address: "172.18.0.7", Port: 80},
+					},
+					ServiceType:     NginxService,
+					HasNetstatInfo:  true,
+					LastNetstatInfo: time.Date(2023, 6, 20, 15, 18, 37, 267699930, time.UTC),
+				},
+				{
+					Name:          "phpfpm",
+					Instance:      "composetest-phpfpm_and_nginx-1",
+					ContainerID:   "231aa25b7994847ea8b672cff7cd1d6a95a301dacece589982fd0de78470d7e3",
+					ContainerName: "composetest-phpfpm_and_nginx-1",
+					IPAddress:     "172.18.0.7",
+					ListenAddresses: []facts.ListenAddress{
+						{NetworkFamily: "tcp", Address: "172.18.0.7", Port: 80},
+					},
+					ServiceType:     PHPFPMService,
+					Active:          true,
+					HasNetstatInfo:  true,
+					LastNetstatInfo: time.Date(2023, 6, 20, 15, 18, 37, 267699930, time.UTC),
+				},
+				{
+					Active:        true,
+					Name:          "nginx",
+					Instance:      "conflict-other-port",
+					ContainerID:   "741852963",
+					ContainerName: "conflict-other-port",
+					IPAddress:     "172.18.0.7",
+					ListenAddresses: []facts.ListenAddress{
+						{NetworkFamily: "tcp", Address: "172.18.0.7", Port: 8080},
+					},
+					ServiceType:     NginxService,
+					HasNetstatInfo:  true,
+					LastNetstatInfo: time.Date(2023, 6, 20, 15, 18, 37, 267699930, time.UTC),
+				},
+				{
+					Name:          "phpfpm",
+					Instance:      "conflict-other-port",
+					ContainerID:   "741852963",
+					ContainerName: "conflict-other-port",
+					IPAddress:     "172.18.0.7",
+					ListenAddresses: []facts.ListenAddress{
+						{NetworkFamily: "tcp", Address: "172.18.0.7", Port: 8080},
+					},
+					ServiceType:     PHPFPMService,
+					Active:          true,
+					HasNetstatInfo:  true,
+					LastNetstatInfo: time.Date(2023, 6, 20, 15, 18, 37, 267699930, time.UTC),
+				},
+				{
+					Active:        true,
+					Name:          "postgresql",
+					Instance:      "",
+					ContainerID:   "",
+					ContainerName: "",
+					IPAddress:     "127.0.0.1",
+					ListenAddresses: []facts.ListenAddress{
+						{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 5432},
+						{NetworkFamily: "unix", Address: "/var/run/postgresql/.s.PGSQL.5432", Port: 0},
+					},
+					ServiceType:     PostgreSQLService,
+					HasNetstatInfo:  true,
+					LastNetstatInfo: time.Date(2023, 6, 20, 15, 18, 37, 249753388, time.UTC),
+				},
+				{
+					Active:        true,
+					Name:          "nginx",
+					Instance:      "conflict-inactive",
+					ContainerID:   "123456789",
+					ContainerName: "conflict-inactive",
+					IPAddress:     "172.18.0.9",
+					ListenAddresses: []facts.ListenAddress{
+						{NetworkFamily: "tcp", Address: "172.18.0.9", Port: 80},
+					},
+					ServiceType:     NginxService,
+					HasNetstatInfo:  true,
+					LastNetstatInfo: time.Date(2023, 6, 20, 15, 18, 37, 267699930, time.UTC),
+				},
+				{
+					Active:        false,
+					Name:          "phpfpm",
+					Instance:      "conflict-inactive",
+					ContainerID:   "123456789",
+					ContainerName: "conflict-inactive",
+					IPAddress:     "172.18.0.9",
+					ListenAddresses: []facts.ListenAddress{
+						{NetworkFamily: "tcp", Address: "172.18.0.9", Port: 80},
+					},
+					ServiceType:     PHPFPMService,
+					HasNetstatInfo:  true,
+					LastNetstatInfo: time.Date(2023, 6, 20, 15, 18, 37, 267699930, time.UTC),
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		tt := tt
+
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			state, err := state.LoadReadOnly(
+				fmt.Sprintf("testdata/state-%s.json", tt.stateFileBaseName),
+				fmt.Sprintf("testdata/state-%s.cache.json", tt.stateFileBaseName),
+			)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			got := servicesFromState(state)
+
+			if diff := cmp.Diff(tt.want, got, cmpopts.IgnoreUnexported(Service{}), cmpopts.EquateEmpty()); diff != "" {
+				t.Errorf("servicesFromState() mismatch (-want +got)\n%s", diff)
+			}
+		})
 	}
 }

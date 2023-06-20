@@ -29,10 +29,7 @@ import (
 	"github.com/google/uuid"
 )
 
-const (
-	stateVersion       = 1
-	discardFileForTest = "/this/path/does/not/exists"
-)
+const stateVersion = 1
 
 const (
 	KeyKubernetesCluster = "kubernetes_cluster_name"
@@ -56,6 +53,7 @@ type State struct {
 	l              sync.Mutex
 	persistentPath string
 	cachePath      string
+	isInMemory     bool
 }
 
 func DefaultCachePath(persistentPath string) string {
@@ -64,45 +62,71 @@ func DefaultCachePath(persistentPath string) string {
 	return fmt.Sprintf("%s.cache%s", persistentPath[0:len(persistentPath)-len(ext)], ext)
 }
 
-// Load load state.json file.
+// Load loads state.json file.
 func Load(persistentPath string, cachePath string) (*State, error) {
+	return load(false, persistentPath, cachePath)
+}
+
+// LoadReadOnly create a state that don't write file. It only read file initially and then work from memory.
+// File could be omitted by using empty string but you should probably omit both or none or state versionning might
+// cause trouble.
+// This function is mostly present for test that need a state mock.
+// SaveTo will use a file and remove the fact that state is only in-memory.
+func LoadReadOnly(persistentPath string, cachePath string) (*State, error) {
+	return load(true, persistentPath, cachePath)
+}
+
+// load loads state.json file.
+func load(readOnly bool, persistentPath string, cachePath string) (*State, error) {
 	state := State{
 		persistentPath: persistentPath,
 		cachePath:      cachePath,
 		cache:          make(map[string]json.RawMessage),
+		isInMemory:     readOnly,
 	}
 
-	f, err := os.Open(persistentPath)
-	if err != nil && os.IsNotExist(err) {
-		state.persistent.Version = stateVersion
-		state.persistent.dirty = true
-
-		return &state, nil
-	} else if err != nil {
-		return nil, err
+	if readOnly {
+		state.persistentPath = ""
+		state.cachePath = ""
 	}
 
-	decoder := json.NewDecoder(f)
-	err = decoder.Decode(&state.persistent)
+	if persistentPath != "" {
+		f, err := os.Open(persistentPath)
+		if err != nil && os.IsNotExist(err) {
+			state.persistent.Version = stateVersion
+			state.persistent.dirty = true
 
-	f.Close()
-
-	if err != nil {
-		return nil, err
-	}
-
-	f, err = os.Open(cachePath)
-	if err == nil {
-		decoder = json.NewDecoder(f)
-		err = decoder.Decode(&state.cache)
-
-		if err != nil {
-			logger.V(1).Printf("unable to load state cache: %v", err)
+			return &state, nil
+		} else if err != nil {
+			return nil, err
 		}
 
+		decoder := json.NewDecoder(f)
+		err = decoder.Decode(&state.persistent)
+
 		f.Close()
+
+		if err != nil {
+			return nil, err
+		}
 	} else {
-		logger.V(1).Printf("unable to load state cache: %v", err)
+		state.persistent.Version = stateVersion
+	}
+
+	if cachePath != "" {
+		f, err := os.Open(cachePath)
+		if err == nil {
+			decoder := json.NewDecoder(f)
+			err = decoder.Decode(&state.cache)
+
+			if err != nil {
+				logger.V(1).Printf("unable to load state cache: %v", err)
+			}
+
+			f.Close()
+		} else {
+			logger.V(1).Printf("unable to load state cache: %v", err)
+		}
 	}
 
 	upgradeCount := 0
@@ -150,6 +174,7 @@ func (s *State) SaveTo(persistentPath string, cachePath string) error {
 
 	s.persistentPath = persistentPath
 	s.cachePath = cachePath
+	s.isInMemory = false
 
 	return s.save()
 }
@@ -163,6 +188,10 @@ func (s *State) Save() error {
 }
 
 func (s *State) saveIfPossible() error {
+	if s.isInMemory {
+		return nil
+	}
+
 	file, err := os.Open(s.cachePath)
 	if errors.Is(err, os.ErrNotExist) {
 		// This case happens when the state.cache.json is deleted at runtime.
@@ -181,7 +210,7 @@ func (s *State) saveIfPossible() error {
 }
 
 func (s *State) save() error {
-	if s.persistentPath == discardFileForTest {
+	if s.isInMemory {
 		return nil
 	}
 

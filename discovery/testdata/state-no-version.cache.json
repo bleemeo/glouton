@@ -1,0 +1,63 @@
+{
+  "DiscoveredServices": [
+    {
+      "Config": {
+        "ID": "",
+        "Instance": "",
+        "Port": 0,
+        "IgnorePorts": null,
+        "Address": "",
+        "Interval": 0,
+        "Stack": "",
+        "CheckType": "",
+        "HTTPPath": "",
+        "HTTPStatusCode": 0,
+        "HTTPHost": "",
+        "MatchProcess": "",
+        "CheckCommand": "",
+        "NagiosNRPEName": "",
+        "MetricsUnixSocket": "",
+        "Username": "",
+        "Password": "",
+        "StatsURL": "",
+        "StatsPort": 0,
+        "StatsProtocol": "",
+        "DetailedItems": null,
+        "JMXPort": 0,
+        "JMXUsername": "",
+        "JMXPassword": "",
+        "JMXMetrics": null,
+        "SSL": false,
+        "SSLInsecure": false,
+        "StartTLS": false,
+        "CAFile": "",
+        "CertFile": "",
+        "KeyFile": "",
+        "IncludedItems": null,
+        "ExcludedItems": null
+      },
+      "Name": "redis",
+      "Instance": "redis",
+      "ServiceType": "redis",
+      "ContainerID": "399366e861976b77e5574c6b956f70dd2473944d822196e8bd6735da7e1d373f",
+      "ContainerName": "redis",
+      "IPAddress": "172.17.0.2",
+      "ListenAddresses": [
+        {
+          "NetworkFamily": "tcp",
+          "Address": "172.17.0.2",
+          "Port": 6379
+        }
+      ],
+      "ExePath": "/usr/local/bin/redis-server",
+      "Stack": "",
+      "IgnoredPorts": {},
+      "Active": false,
+      "CheckIgnored": false,
+      "MetricsIgnored": false,
+      "Interval": 0,
+      "HasNetstatInfo": false,
+      "LastNetstatInfo": "0001-01-01T00:00:00Z"
+    }
+  ]
+}
