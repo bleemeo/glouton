@@ -23,6 +23,13 @@ import (
 	"time"
 )
 
+// ReportArchiveWriter implements the types.ReportArchiveWriter interface.
+type ReportArchiveWriter interface {
+	Create(filename string) (io.Writer, error)
+	CurrentFileName() string
+	Close() error
+}
+
 // Copied from api/tar_archive.go
 
 type tarArchive struct {
