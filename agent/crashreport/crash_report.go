@@ -17,14 +17,18 @@
 package crashreport
 
 import (
+	"bytes"
+	"errors"
+	"glouton/config"
 	"glouton/logger"
+	"glouton/types"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
-	"io"
-	"bytes"
 	"time"
-	"errors"
+
+	"k8s.io/utils/strings/slices"
 )
 
 const (
@@ -37,10 +41,23 @@ const (
 	writeInProgressFlag = ".WRITE_IN_PROGRESS"
 )
 
+var skipReporting bool //nolint:gochecknoglobals
+
 // SetupStderrRedirection creates a file that will receive stderr output.
 // If such a file already exists, it is moved to a '.old' version and
 // a new and empty file takes it place.
 func SetupStderrRedirection(stateDir string) {
+	if _, err := os.Stat(filepath.Join(stateDir, writeInProgressFlag)); err == nil {
+		// If the flag has not been deleted the last run, it may be because the crash reporting process crashed.
+		// So to try not to crash again, we skip the crash reporting this time.
+		// We will try to report the next time, so we delete the flag.
+		skipReporting = true
+
+		MarkAsDone(stateDir)
+
+		return
+	}
+
 	stderrFilePath := filepath.Join(stateDir, stderrFileName)
 	oldStderrFilePath := filepath.Join(stateDir, oldStderrFileName)
 
@@ -70,17 +87,34 @@ func SetupStderrRedirection(stateDir string) {
 
 // PurgeCrashReportDirs deletes oldest crash report directories present
 // in 'stateDir' and only keeps the 'maxDirCount' most recent ones.
-func PurgeCrashReportDirs(stateDir string, maxDirCount int) {
+// Directories specified as 'except' won't be deleted.
+func PurgeCrashReportDirs(stateDir string, maxDirCount int, preserve ...string) {
 	existingCrashReportDirs, err := filepath.Glob(filepath.Join(stateDir, crashReportDirPattern))
 	if err != nil {
 		logger.V(0).Println("Failed to parse crash report glob pattern:", err)
+	}
+
+	crashReportDirCount := len(existingCrashReportDirs)
+
+	// Prevent preserved report dirs from being purged
+	for _, dir := range preserve {
+		// A slices package will be included in the standard library from Go 1.21.
+		// For now, using the one from the k8s API.
+		if idx := slices.Index(existingCrashReportDirs, dir); idx >= 0 {
+			// Remove dir from the list of report directories
+			existingCrashReportDirs = append(existingCrashReportDirs[:idx], existingCrashReportDirs[idx+1:]...)
+		}
+	}
+
+	if crashReportDirCount <= maxDirCount {
+		return
 	}
 
 	// Remove the oldest excess crash report dirs
 	sort.Strings(existingCrashReportDirs)
 
 	for i, dir := range existingCrashReportDirs {
-		if i == len(existingCrashReportDirs)-maxDirCount {
+		if i == crashReportDirCount-maxDirCount {
 			break
 		}
 
@@ -92,18 +126,26 @@ func PurgeCrashReportDirs(stateDir string, maxDirCount int) {
 }
 
 // BundleCrashReportFiles creates a new directory with the current datetime in its name,
-// then moves the previous stderr log file to it, and creates a flag file to mark it as
-// not complete (the flag will be removed once the diagnostic is created).
-func BundleCrashReportFiles(stateDir string, maxDirCount int) (reportDir string) {
-	if maxDirCount <= 0 {
+// then moves the previous stderr log file to it, and creates a flag file to prevent any upload,
+// as the crash report is not complete (the flag will be removed once the diagnostic is created).
+// It returns the path to the crash report directory (or an empty string if not created),
+// along with an ArchiveWriter to generate a diagnostic (which can be nil).
+func BundleCrashReportFiles(agentConfig config.Agent) (reportDir string, archiveWriter types.ArchiveWriter) {
+	if skipReporting {
+		return "", nil
+	}
+
+	if agentConfig.DisableCrashReporting || agentConfig.MaxCrashReportDirs <= 0 {
 		// Crash reports are apparently disabled in config.
 		return
 	}
 
+	stateDir := agentConfig.StateDirectory
 	lastStderrFilePath := filepath.Join(stateDir, oldStderrFileName)
+
 	lastStderrFile, err := os.Open(lastStderrFilePath)
 	if err != nil {
-		return "" // No previous stderr file
+		return "", nil // No previous stderr file
 	}
 
 	// Only the first 4KiB of the file are needed
@@ -119,27 +161,43 @@ func BundleCrashReportFiles(stateDir string, maxDirCount int) (reportDir string)
 			if err != nil {
 				logger.V(1).Printf("Failed to create crash report folder %q: %v", reportDir, err)
 
-				return ""
+				return "", nil
 			}
 
 			err = os.Rename(lastStderrFilePath, filepath.Join(reportDir, stderrFileName))
 			if err != nil {
 				logger.V(1).Printf("Failed to move crash report to folder %q: %v", reportDir, err)
 
-				return ""
+				return "", nil
 			}
 
-			// Mark this crash report dir as not complete, because we haven't generated a diagnostic yet.
-			_, err = os.Create(filepath.Join(reportDir, writeInProgressFlag))
+			// Create a file to flag that the crash report is not complete because we haven't generated a diagnostic yet.
+			_, err = os.Create(filepath.Join(stateDir, writeInProgressFlag))
 			if err != nil {
 				logger.V(1).Printf("Failed to flag crash report dir %q as write in progress", reportDir)
 			}
 
-			logger.V(0).Printf("Created a crash-report dir at %q", reportDir)
+			logger.V(0).Printf("Created a crash-report dir at %q", reportDir) // TODO: remove
 
-			return reportDir
+			archive, err := os.Create(filepath.Join(reportDir, "diagnostic.tar"))
+			if err != nil {
+				logger.V(1).Println("Failed to create diagnostic archive:", err)
+
+				return reportDir, nil
+			}
+
+			return reportDir, newTarWriter(archive)
 		}
 	}
 
-	return "" // No crash report dir created
+	return "", nil // No crash report dir created
+}
+
+// MarkAsDone deletes the file implying that crash report writing isn't done yet,
+// which means that crash reports are now ready for upload.
+func MarkAsDone(stateDir string) {
+	err := os.Remove(filepath.Join(stateDir, writeInProgressFlag))
+	if err != nil {
+		logger.V(1).Println("Failed to delete write-in-progress flag:", err)
+	}
 }
