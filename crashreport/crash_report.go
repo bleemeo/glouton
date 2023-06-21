@@ -94,9 +94,7 @@ func SetupStderrRedirection() {
 		// We will try to report the next time, so we delete the flag.
 		skipReporting = true
 
-		MarkAsDone()
-
-		return
+		markAsDone()
 	}
 
 	if !createWorkDirIfNotExist() {
@@ -110,8 +108,6 @@ func SetupStderrRedirection() {
 		err = os.Rename(stderrFilePath, oldStderrFilePath)
 		if err != nil {
 			logger.V(1).Println("Failed to handle old stderr log file:", err)
-
-			return
 		}
 	}
 
@@ -136,7 +132,9 @@ func SetupStderrRedirection() {
 func PurgeCrashReports(maxReportCount int, preserve ...string) {
 	existingCrashReports, err := filepath.Glob(filepath.Join(stateDir, crashReportArchivePattern))
 	if err != nil {
-		logger.V(0).Println("Failed to parse crash report glob pattern:", err)
+		// filepath.Glob's documentation states that "Glob ignores file system errors [...]".
+		// The only possible returned error is ErrBadPattern, and the above pattern is known to be valid.
+		return
 	}
 
 	crashReportCount := len(existingCrashReports)
@@ -228,6 +226,8 @@ func makeBundle(ctx context.Context) string {
 		logger.V(1).Println("Failed to create flag to mark crash report writing as in progress")
 	}
 
+	defer markAsDone()
+
 	crashReportPath := filepath.Join(stateDir, time.Now().Format(crashReportArchiveFormat))
 
 	crashReportArchive, err := os.Create(crashReportPath)
@@ -313,6 +313,21 @@ func makeBundle(ctx context.Context) string {
 	return crashReportPath
 }
 
+// markAsDone removes the crash report working directory and
+// deletes the file implying that crash report writing is not done yet,
+// which means that crash reports are now ready for upload.
+func markAsDone() {
+	err := os.RemoveAll(filepath.Join(stateDir, crashReportWorkDir))
+	if err != nil {
+		logger.V(1).Println("Failed to remove the crash report work dir:", err)
+	}
+
+	err = os.Remove(filepath.Join(stateDir, writeInProgressFlag))
+	if err != nil && !os.IsNotExist(err) {
+		logger.V(1).Println("Failed to delete write-in-progress flag:", err)
+	}
+}
+
 // generateDiagnostic writes a diagnostic to the given writer.
 // The given context must have defined a timeout if the generation
 // of the diagnostic should be limited in time.
@@ -349,14 +364,5 @@ func generateDiagnostic(ctx context.Context, writer types.ArchiveWriter) error {
 		return err
 	case <-ctx.Done():
 		return ctx.Err()
-	}
-}
-
-// MarkAsDone deletes the file implying that crash report writing is not done yet,
-// which means that crash reports are now ready for upload.
-func MarkAsDone() {
-	err := os.Remove(filepath.Join(stateDir, writeInProgressFlag))
-	if err != nil && !os.IsNotExist(err) {
-		logger.V(1).Println("Failed to delete write-in-progress flag:", err)
 	}
 }
