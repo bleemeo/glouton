@@ -983,7 +983,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		{a.threshold.Run, "Threshold state"},
 	}
 
-	if !a.config.Agent.EnableCrashReporting {
+	if a.config.Agent.EnableCrashReporting {
 		tasks = append(tasks, taskInfo{a.crashReportManagement, "Crash report management"})
 	}
 
