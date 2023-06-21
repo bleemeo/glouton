@@ -71,6 +71,14 @@ func Load(withDefault bool, loadEnviron bool, paths ...string) (Config, []Item, 
 		config.Agent.StateFile = filepath.Join(config.Agent.StateDirectory, config.Agent.StateFile)
 	}
 
+	if !filepath.IsAbs(config.Agent.StateCacheFile) {
+		config.Agent.StateCacheFile = filepath.Join(config.Agent.StateDirectory, config.Agent.StateCacheFile)
+	}
+
+	if !filepath.IsAbs(config.Agent.StateResetFile) {
+		config.Agent.StateResetFile = filepath.Join(config.Agent.StateDirectory, config.Agent.StateResetFile)
+	}
+
 	return config, loader.items, warnings, err
 }
 

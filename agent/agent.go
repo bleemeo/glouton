@@ -1525,10 +1525,10 @@ func (a *agent) miscTasks(ctx context.Context) error {
 func (a *agent) crashReportManagement(ctx context.Context) error {
 	createdReportDir := crashreport.BundleCrashReportFiles(ctx)
 
-	crashreport.MarkAsDone()
+	// We protect the report generated just now to be sure it won't be purged.
+	// Without that, the purge would only be based on filename (generation datetime),
+	// and if the time moves backward, the report we generated just now could be the one with the oldest time.
 	crashreport.PurgeCrashReports(a.config.Agent.MaxCrashReportDirs, createdReportDir)
-
-	logger.V(0).Println("Crash report management is done !")
 
 	return nil
 }
