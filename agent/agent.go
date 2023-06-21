@@ -233,7 +233,7 @@ func (a *agent) init(ctx context.Context, configFiles []string, firstRun bool) (
 	}
 
 	a.stateDir = a.config.Agent.StateDirectory
-	crashreport.SetOptions(a.config.Agent.DisableCrashReporting, a.stateDir, a.config.Agent.MaxCrashReportDirs, a.writeDiagnosticArchive)
+	crashreport.SetOptions(a.config.Agent.EnableCrashReporting, a.stateDir, a.config.Agent.MaxCrashReportDirs, a.writeDiagnosticArchive)
 
 	if firstRun {
 		crashreport.SetupStderrRedirection()
@@ -983,7 +983,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		{a.threshold.Run, "Threshold state"},
 	}
 
-	if !a.config.Agent.DisableCrashReporting {
+	if !a.config.Agent.EnableCrashReporting {
 		tasks = append(tasks, taskInfo{a.crashReportManagement, "Crash report management"})
 	}
 
