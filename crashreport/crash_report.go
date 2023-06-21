@@ -177,13 +177,15 @@ func PurgeCrashReports(maxReportCount int, preserve ...string) {
 // as the crash report is not complete (the flag will be removed once the diagnostic is created).
 // It returns the path to the created crash report (or an empty string if not created).
 func BundleCrashReportFiles(ctx context.Context) (reportPath string) {
+	defer markAsDone()
+
 	if skipReporting {
 		return ""
 	}
 
 	if disabled || maxReportDirCount <= 0 {
 		// Crash reports are apparently disabled in config.
-		return
+		return ""
 	}
 
 	var foundStderrLog, foundPanicDiagnostic bool
@@ -229,8 +231,6 @@ func makeBundle(ctx context.Context) string {
 	if err != nil {
 		logger.V(1).Println("Failed to create flag to mark crash report writing as in progress")
 	}
-
-	defer markAsDone()
 
 	crashReportPath := filepath.Join(stateDir, time.Now().Format(crashReportArchiveFormat))
 
