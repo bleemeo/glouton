@@ -1030,46 +1030,37 @@ func Test_servicesFromState(t *testing.T) {
 					LastNetstatInfo: time.Date(2023, 6, 20, 15, 18, 37, 267699930, time.UTC),
 				},
 				{
-					Name:          "phpfpm",
-					Instance:      "composetest-phpfpm_and_nginx-1",
-					ContainerID:   "231aa25b7994847ea8b672cff7cd1d6a95a301dacece589982fd0de78470d7e3",
-					ContainerName: "composetest-phpfpm_and_nginx-1",
-					IPAddress:     "172.18.0.7",
-					ListenAddresses: []facts.ListenAddress{
-						{NetworkFamily: "tcp", Address: "172.18.0.7", Port: 80},
-					},
+					Name:            "phpfpm",
+					Instance:        "composetest-phpfpm_and_nginx-1",
+					ContainerID:     "231aa25b7994847ea8b672cff7cd1d6a95a301dacece589982fd0de78470d7e3",
+					ContainerName:   "composetest-phpfpm_and_nginx-1",
+					IPAddress:       "172.18.0.7",
+					ListenAddresses: []facts.ListenAddress{},
 					ServiceType:     PHPFPMService,
 					Active:          true,
-					HasNetstatInfo:  true,
-					LastNetstatInfo: time.Date(2023, 6, 20, 15, 18, 37, 267699930, time.UTC),
+					HasNetstatInfo:  false,
 				},
 				{
-					Active:        true,
-					Name:          "nginx",
-					Instance:      "conflict-other-port",
-					ContainerID:   "741852963",
-					ContainerName: "conflict-other-port",
-					IPAddress:     "172.18.0.7",
-					ListenAddresses: []facts.ListenAddress{
-						{NetworkFamily: "tcp", Address: "172.18.0.7", Port: 8080},
-					},
+					Active:          true,
+					Name:            "nginx",
+					Instance:        "conflict-other-port",
+					ContainerID:     "741852963",
+					ContainerName:   "conflict-other-port",
+					IPAddress:       "172.18.0.7",
+					ListenAddresses: []facts.ListenAddress{},
 					ServiceType:     NginxService,
-					HasNetstatInfo:  true,
-					LastNetstatInfo: time.Date(2023, 6, 20, 15, 18, 37, 267699930, time.UTC),
+					HasNetstatInfo:  false,
 				},
 				{
-					Name:          "phpfpm",
-					Instance:      "conflict-other-port",
-					ContainerID:   "741852963",
-					ContainerName: "conflict-other-port",
-					IPAddress:     "172.18.0.7",
-					ListenAddresses: []facts.ListenAddress{
-						{NetworkFamily: "tcp", Address: "172.18.0.7", Port: 8080},
-					},
+					Name:            "phpfpm",
+					Instance:        "conflict-other-port",
+					ContainerID:     "741852963",
+					ContainerName:   "conflict-other-port",
+					IPAddress:       "172.18.0.7",
+					ListenAddresses: []facts.ListenAddress{},
 					ServiceType:     PHPFPMService,
 					Active:          true,
-					HasNetstatInfo:  true,
-					LastNetstatInfo: time.Date(2023, 6, 20, 15, 18, 37, 267699930, time.UTC),
+					HasNetstatInfo:  false,
 				},
 				{
 					Active:        true,
@@ -1101,14 +1092,48 @@ func Test_servicesFromState(t *testing.T) {
 					LastNetstatInfo: time.Date(2023, 6, 20, 15, 18, 37, 267699930, time.UTC),
 				},
 				{
-					Active:        false,
-					Name:          "phpfpm",
-					Instance:      "conflict-inactive",
-					ContainerID:   "123456789",
-					ContainerName: "conflict-inactive",
-					IPAddress:     "172.18.0.9",
+					Active:          false,
+					Name:            "phpfpm",
+					Instance:        "conflict-inactive",
+					ContainerID:     "123456789",
+					ContainerName:   "conflict-inactive",
+					IPAddress:       "172.18.0.9",
+					ListenAddresses: []facts.ListenAddress{},
+					ServiceType:     PHPFPMService,
+					HasNetstatInfo:  false,
+				},
+			},
+		},
+		{
+			// This state is likely impossible to produce. fixListenAddressConflict should have remove the
+			// listenning address on one service.
+			// This state was made-up but allow to test that migration is only applied when migrating from v0 to v1.
+			name:              "version1-no-two-migration",
+			stateFileBaseName: "version1-no-two-migration",
+			want: []Service{
+				{
+					Active:        true,
+					Name:          "nginx",
+					Instance:      "",
+					ContainerID:   "",
+					ContainerName: "",
+					IPAddress:     "127.0.0.1",
 					ListenAddresses: []facts.ListenAddress{
-						{NetworkFamily: "tcp", Address: "172.18.0.9", Port: 80},
+						{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 80},
+					},
+					ServiceType:     NginxService,
+					HasNetstatInfo:  true,
+					LastNetstatInfo: time.Date(2023, 6, 20, 15, 18, 37, 267699930, time.UTC),
+				},
+				{
+					Active:        true,
+					Name:          "phpfpm",
+					Instance:      "",
+					ContainerID:   "",
+					ContainerName: "",
+					IPAddress:     "127.0.0.1",
+					ListenAddresses: []facts.ListenAddress{
+						{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 80},
 					},
 					ServiceType:     PHPFPMService,
 					HasNetstatInfo:  true,
@@ -1123,7 +1148,7 @@ func Test_servicesFromState(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			state, err := state.LoadReadOnly(
+			memoryState, err := state.LoadReadOnly(
 				fmt.Sprintf("testdata/state-%s.json", tt.stateFileBaseName),
 				fmt.Sprintf("testdata/state-%s.cache.json", tt.stateFileBaseName),
 			)
@@ -1131,10 +1156,40 @@ func Test_servicesFromState(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			got := servicesFromState(state)
+			cmpOptions := []cmp.Option{
+				cmpopts.IgnoreUnexported(Service{}),
+				cmpopts.EquateEmpty(),
+				cmpopts.SortSlices(func(x Service, y Service) bool {
+					if x.Name < y.Name {
+						return true
+					}
 
-			if diff := cmp.Diff(tt.want, got, cmpopts.IgnoreUnexported(Service{}), cmpopts.EquateEmpty()); diff != "" {
+					if x.Name == y.Name && x.Instance < y.Instance {
+						return true
+					}
+
+					return false
+				}),
+			}
+
+			got := servicesFromState(memoryState)
+
+			if diff := cmp.Diff(tt.want, got, cmpOptions...); diff != "" {
 				t.Errorf("servicesFromState() mismatch (-want +got)\n%s", diff)
+			}
+
+			// Check that write/re-read yield the same result
+			emptyState, err := state.LoadReadOnly("", "")
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			saveState(emptyState, serviceListToMap(got))
+
+			got = servicesFromState(emptyState)
+
+			if diff := cmp.Diff(tt.want, got, cmpOptions...); diff != "" {
+				t.Errorf("servicesFromState(saveState()) mismatch (-want +got)\n%s", diff)
 			}
 		})
 	}
