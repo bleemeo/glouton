@@ -17,9 +17,14 @@
 package crashreport
 
 import (
+	"archive/tar"
+	"archive/zip"
 	"bytes"
+	"context"
 	"errors"
+	"fmt"
 	"glouton/logger"
+	"glouton/types"
 	"io"
 	"os"
 	"path/filepath"
@@ -30,24 +35,53 @@ import (
 )
 
 const (
+	crashReportWorkDir = "crash_report"
+
 	stderrFileName    = "stderr.log"
-	oldStderrFileName = "stderr.old.log"
+	oldStderrFileName = crashReportWorkDir + string(os.PathSeparator) + stderrFileName
 
-	crashReportDirFormat  = "crashreport_20060102-150405"
-	crashReportDirPattern = "crashreport_[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]-[0-9][0-9][0-9][0-9][0-9][0-9]"
+	panicDiagnosticArchive = "crash_diagnostic.tar"
 
-	writeInProgressFlag = ".WRITE_IN_PROGRESS"
+	crashReportArchiveFormat  = "crashreport_20060102-150405.zip"
+	crashReportArchivePattern = "crashreport_[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]-[0-9][0-9][0-9][0-9][0-9][0-9].zip"
+
+	writeInProgressFlag = "crash_report_in_progress"
 )
+
+var errFailedToDiagnostic = errors.New("failed to generate a diagnostic")
 
 //nolint:gochecknoglobals
 var (
-	skipReporting bool
-	stateDir      string
+	skipReporting     bool
+	enabled           bool
+	stateDir          string
+	maxReportDirCount int
+	diagnostic        func(context.Context, types.ArchiveWriter) error
 )
 
-// SetStateDir defines 'dir' as the directory where any crash report related file will go.
-func SetStateDir(dir string) {
+// SetOptions defines 'dir' as the directory where any crash report related file will go.
+func SetOptions(disabled bool, dir string, maxDirCount int, diagnosticFn func(context.Context, types.ArchiveWriter) error) {
+	enabled = !disabled
 	stateDir = dir
+	maxReportDirCount = maxDirCount
+	diagnostic = diagnosticFn
+}
+
+func createWorkDirIfNotExist() (ok bool) {
+	workDirPath := filepath.Join(stateDir, crashReportWorkDir)
+
+	err := os.Mkdir(workDirPath, 0o740)
+	if err != nil {
+		if os.IsExist(err) {
+			return true
+		}
+
+		logger.V(1).Println("Failed to create crash report work dir:", err)
+
+		return false
+	}
+
+	return true
 }
 
 // SetupStderrRedirection creates a file that will receive stderr output.
@@ -65,13 +99,17 @@ func SetupStderrRedirection() {
 		return
 	}
 
+	if !createWorkDirIfNotExist() {
+		return
+	}
+
 	stderrFilePath := filepath.Join(stateDir, stderrFileName)
 	oldStderrFilePath := filepath.Join(stateDir, oldStderrFileName)
 
 	if _, err := os.Stat(stderrFilePath); err == nil {
 		err = os.Rename(stderrFilePath, oldStderrFilePath)
 		if err != nil {
-			logger.V(1).Println("Failed to mark stderr log file as old:", err)
+			logger.V(1).Println("Failed to handle old stderr log file:", err)
 
 			return
 		}
@@ -92,67 +130,70 @@ func SetupStderrRedirection() {
 	}
 }
 
-// PurgeCrashReportDirs deletes oldest crash report directories present
-// in 'stateDir' and only keeps the 'maxDirCount' most recent ones.
-// Directories specified as 'except' won't be deleted.
-func PurgeCrashReportDirs(maxDirCount int, preserve ...string) {
-	existingCrashReportDirs, err := filepath.Glob(filepath.Join(stateDir, crashReportDirPattern))
+// PurgeCrashReports deletes oldest crash reports present in 'stateDir'
+// and only keeps the 'maxReportCount' most recent ones.
+// Crash reports specified as 'preserve' won't be deleted.
+func PurgeCrashReports(maxReportCount int, preserve ...string) {
+	existingCrashReports, err := filepath.Glob(filepath.Join(stateDir, crashReportArchivePattern))
 	if err != nil {
 		logger.V(0).Println("Failed to parse crash report glob pattern:", err)
 	}
 
-	crashReportDirCount := len(existingCrashReportDirs)
+	crashReportCount := len(existingCrashReports)
 
-	// Prevent preserved report dirs from being purged
-	for _, dir := range preserve {
+	// Prevent preserved reports from being purged
+	for _, report := range preserve {
 		// A slices package will be included in the standard library from Go 1.21.
 		// For now, using the one from the k8s API.
-		if idx := slices.Index(existingCrashReportDirs, dir); idx >= 0 {
-			// Remove dir from the list of report directories
-			existingCrashReportDirs = append(existingCrashReportDirs[:idx], existingCrashReportDirs[idx+1:]...)
+		if idx := slices.Index(existingCrashReports, report); idx >= 0 {
+			// Remove report from the list of crash reports
+			existingCrashReports = append(existingCrashReports[:idx], existingCrashReports[idx+1:]...)
 		}
 	}
 
-	if crashReportDirCount <= maxDirCount {
+	if crashReportCount <= maxReportCount {
 		return
 	}
 
-	// Remove the oldest excess crash report dirs
-	sort.Strings(existingCrashReportDirs)
+	// Remove the oldest excess crash reports
+	sort.Strings(existingCrashReports)
 
-	for i, dir := range existingCrashReportDirs {
-		if i == crashReportDirCount-maxDirCount {
+	for i, report := range existingCrashReports {
+		if i == crashReportCount-maxReportCount {
 			break
 		}
 
-		err = os.RemoveAll(dir)
+		err = os.RemoveAll(report)
 		if err != nil {
-			logger.V(1).Printf("Failed to remove old crash report dir %q: %v", dir, err)
+			logger.V(1).Printf("Failed to remove old crash report %q: %v", report, err)
 		}
 	}
 }
 
-// BundleCrashReportFiles creates a new directory with the current datetime in its name,
+// BundleCrashReportFiles creates a crash report archive with the current datetime in its name,
 // then moves the previous stderr log file to it, and creates a flag file to prevent any upload,
 // as the crash report is not complete (the flag will be removed once the diagnostic is created).
-// It returns the path to the crash report directory (or an empty string if not created),
-// along with an ArchiveWriter to generate a diagnostic (which can be nil).
-func BundleCrashReportFiles(disabled bool, maxCrashDirCount int) (reportDir string, archiveWriter ReportArchiveWriter) {
+// It returns the path to the created crash report (or an empty string if not created).
+func BundleCrashReportFiles(ctx context.Context) (reportPath string) {
 	if skipReporting {
-		return "", nil
+		return ""
 	}
 
-	if disabled || maxCrashDirCount <= 0 {
+	if !enabled || maxReportDirCount <= 0 {
 		// Crash reports are apparently disabled in config.
 		return
 	}
+
+	var foundStderrLog, foundPanicDiagnostic bool
 
 	lastStderrFilePath := filepath.Join(stateDir, oldStderrFileName)
 
 	lastStderrFile, err := os.Open(lastStderrFilePath)
 	if err != nil {
-		return "", nil // No previous stderr file
+		return "" // No previous crash
 	}
+
+	defer lastStderrFile.Close()
 
 	// Only the first 4KiB of the file are needed
 	// to know whether it contains a stacktrace or not.
@@ -161,49 +202,161 @@ func BundleCrashReportFiles(disabled bool, maxCrashDirCount int) (reportDir stri
 	_, err = lastStderrFile.Read(lastStderrFileContent)
 	if err == nil || errors.Is(err, io.EOF) {
 		if bytes.Contains(lastStderrFileContent, []byte("panic")) {
-			reportDir = filepath.Join(stateDir, time.Now().Format(crashReportDirFormat))
-
-			err = os.Mkdir(reportDir, 0o740)
-			if err != nil {
-				logger.V(1).Printf("Failed to create crash report folder %q: %v", reportDir, err)
-
-				return "", nil
-			}
-
-			err = os.Rename(lastStderrFilePath, filepath.Join(reportDir, stderrFileName))
-			if err != nil {
-				logger.V(1).Printf("Failed to move crash report to folder %q: %v", reportDir, err)
-
-				return "", nil
-			}
-
-			// Create a file to flag that the crash report is not complete because we haven't generated a diagnostic yet.
-			_, err = os.Create(filepath.Join(stateDir, writeInProgressFlag))
-			if err != nil {
-				logger.V(1).Printf("Failed to flag crash report dir %q as write in progress", reportDir)
-			}
-
-			logger.V(0).Printf("Created a crash-report dir at %q", reportDir) // TODO: remove
-
-			archive, err := os.Create(filepath.Join(reportDir, "diagnostic.tar"))
-			if err != nil {
-				logger.V(1).Println("Failed to create diagnostic archive:", err)
-
-				return reportDir, nil
-			}
-
-			return reportDir, newTarWriter(archive)
+			foundStderrLog = true
 		}
 	}
 
-	return "", nil // No crash report dir created
+	if _, err = os.Stat(filepath.Join(stateDir, panicDiagnosticArchive)); err == nil {
+		foundPanicDiagnostic = true
+	}
+
+	if foundStderrLog || foundPanicDiagnostic {
+		return makeBundle(ctx)
+	}
+
+	return "" // No crash report created
 }
 
-// MarkAsDone deletes the file implying that crash report writing isn't done yet,
+// makeBundle creates an archive with the current datetime in its name,
+// containing the old stderr log file, a freshly created diagnostic
+// and the diagnostic generated at the moment of the last crash, if one.
+// It returns the name of the created archive if everything went well, otherwise an empty string.
+func makeBundle(ctx context.Context) string {
+	// Create a file to flag that the crash report is not complete because we haven't generated a diagnostic yet.
+	_, err := os.Create(filepath.Join(stateDir, writeInProgressFlag))
+	if err != nil {
+		logger.V(1).Println("Failed to create flag to mark crash report writing as in progress")
+	}
+
+	crashReportPath := filepath.Join(stateDir, time.Now().Format(crashReportArchiveFormat))
+
+	crashReportArchive, err := os.Create(crashReportPath)
+	if err != nil {
+		logger.V(1).Printf("Can't create crash report archive %q: %v", crashReportPath, err)
+
+		return ""
+	}
+
+	defer crashReportArchive.Close()
+
+	zipWriter := zip.NewWriter(crashReportArchive)
+
+	defer zipWriter.Close()
+
+	stderrFile, err := os.Open(filepath.Join(stateDir, oldStderrFileName))
+	if err == nil { // Open stderr log file
+		writer, err := zipWriter.Create(stderrFileName)
+		if err == nil { // Create stderr.log entry in zip
+			stderrFileContent, err := io.ReadAll(stderrFile)
+			if err == nil { // Read stderr log file content
+				if _, err = writer.Write(stderrFileContent); err != nil { // Write it to zip
+					logger.V(1).Println("Failed to write stderr log file to zip:", err)
+				}
+			} else {
+				logger.V(1).Println("Failed to read stderr log file:", err)
+			}
+		} else {
+			logger.V(1).Println("Failed create stderr log file in zip:", err)
+		}
+	}
+
+	// If a diagnostic has been generated when crashing, copy it into the archive
+	crashDiagnosticFile, err := os.Open(filepath.Join(stateDir, panicDiagnosticArchive))
+	if err == nil {
+		defer func() {
+			crashDiagnosticFile.Close()
+
+			err := os.Remove(crashDiagnosticFile.Name())
+			if err != nil {
+				logger.V(1).Println("Failed to delete crash diagnostic archive:", err)
+			}
+		}()
+
+		crashDiagnosticReader := tar.NewReader(crashDiagnosticFile)
+
+		for {
+			entry, err := crashDiagnosticReader.Next()
+			if err != nil {
+				break
+			}
+
+			crashDiagnosticZipWriter, err := zipWriter.Create("crash_diagnostic/" + entry.Name)
+			if err != nil {
+				logger.V(1).Println("Failed to create a crash diagnostic entry to crash report archive:", err)
+
+				continue
+			}
+
+			_, err = io.Copy(crashDiagnosticZipWriter, crashDiagnosticReader) //nolint:gosec
+			if err != nil {
+				logger.V(1).Printf("Failed to copy crash diagnostic file %q to crash report archive: %v", entry.Name, err)
+			}
+		}
+	} else {
+		logger.V(1).Println("Failed to copy crash diagnostic to crash report archive:", err)
+	}
+
+	if diagnostic != nil {
+		inSituArchiveWriter := newInSituZipWriter("diagnostic", zipWriter)
+
+		diagnosticCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		defer cancel()
+
+		err = generateDiagnostic(diagnosticCtx, inSituArchiveWriter)
+		if err != nil {
+			logger.V(1).Println("Failed to generate a diagnostic into the crash report archive:", err)
+		}
+	} else {
+		logger.V(1).Println("Can't generate a diagnostic.")
+	}
+
+	return crashReportPath
+}
+
+// generateDiagnostic writes a diagnostic to the given writer.
+// The given context must have defined a timeout if the generation
+// of the diagnostic should be limited in time.
+// When calling generateDiagnostic, the diagnostic callback must not be nil.
+func generateDiagnostic(ctx context.Context, writer types.ArchiveWriter) error {
+	done := make(chan error, 1) // Buffered channel to avoid the goroutine being blocked on send
+
+	go func() {
+		defer func() {
+			if recovErr := recover(); recovErr != nil {
+				w, err := writer.Create("diagnostic-crash.log")
+				if err != nil {
+					logger.V(1).Println("Failed to write diagnostic crash stack trace:", err)
+
+					done <- errFailedToDiagnostic
+
+					return
+				}
+
+				_, err = fmt.Fprint(w, recovErr)
+				if err != nil {
+					logger.V(1).Println("Failed to write diagnostic crash stack trace:", err)
+				}
+
+				done <- errFailedToDiagnostic
+			}
+		}()
+
+		done <- diagnostic(ctx, writer)
+	}()
+
+	select {
+	case err := <-done:
+		return err
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+// MarkAsDone deletes the file implying that crash report writing is not done yet,
 // which means that crash reports are now ready for upload.
 func MarkAsDone() {
 	err := os.Remove(filepath.Join(stateDir, writeInProgressFlag))
-	if err != nil {
+	if err != nil && !os.IsNotExist(err) {
 		logger.V(1).Println("Failed to delete write-in-progress flag:", err)
 	}
 }

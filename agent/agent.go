@@ -231,7 +231,7 @@ func (a *agent) init(ctx context.Context, configFiles []string, firstRun bool) (
 	}
 
 	a.stateDir = a.config.Agent.StateDirectory
-	crashreport.SetStateDir(a.stateDir)
+	crashreport.SetOptions(a.config.Agent.DisableCrashReporting, a.stateDir, a.config.Agent.MaxCrashReportDirs, a.writeDiagnosticArchive)
 
 	if firstRun {
 		crashreport.SetupStderrRedirection()
@@ -1534,21 +1534,10 @@ func (a *agent) miscTasks(ctx context.Context) error {
 }
 
 func (a *agent) crashReportManagement(ctx context.Context) error {
-	createdReportDir, archiveWriter := crashreport.BundleCrashReportFiles(a.config.Agent.DisableCrashReporting, a.config.Agent.MaxCrashReportDirs)
-	if createdReportDir != "" && archiveWriter != nil {
-		defer archiveWriter.Close()
+	createdReportDir := crashreport.BundleCrashReportFiles(ctx)
 
-		ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-		defer cancel()
-
-		err := a.writeDiagnosticArchive(ctx, archiveWriter)
-		if err != nil {
-			return fmt.Errorf("failed to write to diagnostic.zip file: %w", err)
-		}
-	}
-
-	crashreport.PurgeCrashReportDirs(a.config.Agent.MaxCrashReportDirs, createdReportDir)
 	crashreport.MarkAsDone()
+	crashreport.PurgeCrashReports(a.config.Agent.MaxCrashReportDirs, createdReportDir)
 
 	logger.V(0).Println("Crash report management is done !")
 
