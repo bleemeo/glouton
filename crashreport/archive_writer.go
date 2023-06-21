@@ -18,16 +18,38 @@ package crashreport
 
 import (
 	"archive/tar"
+	"archive/zip"
 	"bytes"
+	"glouton/types"
 	"io"
+	"strings"
 	"time"
 )
 
-// ReportArchiveWriter implements the types.ReportArchiveWriter interface.
-type ReportArchiveWriter interface {
-	Create(filename string) (io.Writer, error)
-	CurrentFileName() string
-	Close() error
+type inSituZipWriter struct {
+	baseFolder      string
+	zipWriter       *zip.Writer
+	currentFileName string
+}
+
+// newInSituZipWriter returns an ArchiveWriter able to write directly into the given zip archive.
+func newInSituZipWriter(baseFolder string, zipWriter *zip.Writer) types.ArchiveWriter {
+	return &inSituZipWriter{
+		// Zip entries must not start with a slash, and slashes will automatically be added before filenames.
+		baseFolder: strings.Trim(baseFolder, "/"),
+		zipWriter:  zipWriter,
+	}
+}
+
+func (zw *inSituZipWriter) Create(filename string) (io.Writer, error) {
+	fullFilename := zw.baseFolder + "/" + filename
+	zw.currentFileName = fullFilename
+
+	return zw.zipWriter.Create(fullFilename)
+}
+
+func (zw *inSituZipWriter) CurrentFileName() string {
+	return zw.currentFileName
 }
 
 // Copied from api/tar_archive.go
