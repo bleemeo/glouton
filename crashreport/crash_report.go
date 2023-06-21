@@ -53,15 +53,19 @@ var errFailedToDiagnostic = errors.New("failed to generate a diagnostic")
 //nolint:gochecknoglobals
 var (
 	skipReporting     bool
-	enabled           bool
+	disabled          bool
 	stateDir          string
 	maxReportDirCount int
 	diagnostic        func(context.Context, types.ArchiveWriter) error
 )
 
-// SetOptions defines 'dir' as the directory where any crash report related file will go.
-func SetOptions(disabled bool, dir string, maxDirCount int, diagnosticFn func(context.Context, types.ArchiveWriter) error) {
-	enabled = !disabled
+// SetOptions defines multiple things related to crash reporting:
+// - enabled: whether crash reports should be created or not
+// - dir: the directory where crash reports should be created
+// - maxDirCount: the maximum number of crash reports we should keep in dir
+// - diagnosticFn: a callback to generate diagnostics (might be nil if no diagnostic should be created).
+func SetOptions(enabled bool, dir string, maxDirCount int, diagnosticFn func(context.Context, types.ArchiveWriter) error) {
+	disabled = !enabled
 	stateDir = dir
 	maxReportDirCount = maxDirCount
 	diagnostic = diagnosticFn
@@ -177,7 +181,7 @@ func BundleCrashReportFiles(ctx context.Context) (reportPath string) {
 		return ""
 	}
 
-	if !enabled || maxReportDirCount <= 0 {
+	if disabled || maxReportDirCount <= 0 {
 		// Crash reports are apparently disabled in config.
 		return
 	}
