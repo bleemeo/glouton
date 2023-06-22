@@ -14,43 +14,40 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package api
+package archivewriter
 
 import (
-	"archive/zip"
+	"fmt"
 	"io"
-	"time"
 )
 
-type zipArchive struct {
-	w               *zip.Writer
-	currentFilename string
+type TextArchive struct {
+	w           io.Writer
+	currentFile string
 }
 
-func newZipWriter(w io.Writer) *zipArchive {
-	return &zipArchive{
-		w: zip.NewWriter(w),
+func NewTextArchive(w io.Writer) *TextArchive {
+	return &TextArchive{
+		w: w,
 	}
 }
 
-func (a *zipArchive) CurrentFileName() string {
-	return a.currentFilename
+func (a *TextArchive) CurrentFileName() string {
+	return a.currentFile
 }
 
-func (a *zipArchive) Create(filename string) (io.Writer, error) {
-	if err := a.w.Flush(); err != nil {
-		return nil, err
+func (a *TextArchive) Create(filename string) (io.Writer, error) {
+	if a.currentFile != "" {
+		fmt.Fprintf(a.w, "-----[ end of filename: %s ]-----\n\n", a.currentFile)
 	}
 
-	a.currentFilename = filename
+	a.currentFile = filename
 
-	return a.w.CreateHeader(&zip.FileHeader{
-		Name:     filename,
-		Modified: time.Now(),
-		Method:   zip.Deflate,
-	})
+	fmt.Fprintf(a.w, "-----[ start of filename: %s ]-----\n", filename)
+
+	return a.w, nil
 }
 
-func (a *zipArchive) Close() error {
-	return a.w.Close()
+func (a *TextArchive) Close() error {
+	return nil
 }

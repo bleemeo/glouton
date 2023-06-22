@@ -3,6 +3,7 @@ package crashreport
 import (
 	"context"
 	"fmt"
+	"glouton/utils/archivewriter"
 	"os"
 	"path/filepath"
 	"time"
@@ -45,7 +46,7 @@ func tryToGenerateDiagnostic(timeout time.Duration) {
 		return
 	}
 
-	tarWriter := newTarWriter(diagnosticArchive)
+	tarWriter := archivewriter.NewTarWriter(diagnosticArchive)
 
 	err = generateDiagnostic(ctx, tarWriter, diagnosticFn)
 	if err != nil {

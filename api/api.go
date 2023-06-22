@@ -28,6 +28,7 @@ import (
 	"glouton/prometheus/promql"
 	"glouton/threshold"
 	"glouton/types"
+	"glouton/utils/archivewriter"
 	"html/template"
 	"io"
 	"net/http"
@@ -175,7 +176,7 @@ func (api *API) init() {
 		hdr := w.Header()
 		hdr.Add("Content-Type", "application/zip")
 
-		zipFile := newZipWriter(w)
+		zipFile := archivewriter.NewZipWriter(w)
 		defer zipFile.Close()
 
 		if err := api.diagnosticArchive(r.Context(), zipFile); err != nil {
@@ -187,7 +188,7 @@ func (api *API) init() {
 		hdr := w.Header()
 		hdr.Add("Content-Type", "application/x-tar")
 
-		archive := newTarWriter(w)
+		archive := archivewriter.NewTarWriter(w)
 		defer archive.Close()
 
 		if err := api.diagnosticArchive(r.Context(), archive); err != nil {
@@ -199,7 +200,7 @@ func (api *API) init() {
 		hdr := w.Header()
 		hdr.Add("Content-Type", "text/plain; charset=utf-8")
 
-		archive := newTextArchive(w)
+		archive := archivewriter.NewTextArchive(w)
 		defer archive.Close()
 
 		if err := api.diagnosticArchive(r.Context(), archive); err != nil {
