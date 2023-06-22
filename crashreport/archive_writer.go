@@ -33,6 +33,7 @@ type inSituZipWriter struct {
 }
 
 // newInSituZipWriter returns an ArchiveWriter able to write directly into the given zip archive.
+// Every call to Create will create a file in the given base folder.
 // It's up to the caller to close the given zip.Writer once everything is done.
 func newInSituZipWriter(baseFolder string, zipWriter *zip.Writer) types.ArchiveWriter {
 	return &inSituZipWriter{

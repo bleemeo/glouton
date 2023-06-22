@@ -274,17 +274,15 @@ func makeBundle(ctx context.Context, stateDir string, diagnosticFn diagnosticFun
 			Method:   zip.Deflate,
 		})
 		if err == nil { // Create stderr.log entry in zip
-			stderrFileContent, err := io.ReadAll(stderrFile)
-			if err == nil { // Read stderr log file content
-				if _, err = writer.Write(stderrFileContent); err != nil { // Write it to zip
-					logger.V(1).Println("Failed to write stderr log file to zip:", err)
-				}
-			} else {
-				logger.V(1).Println("Failed to read stderr log file:", err)
+			_, err = io.Copy(writer, stderrFile)
+			if err != nil { // Copy stderr log file content to zip
+				logger.V(1).Println("Failed to copy stderr log file to zip:", err)
 			}
 		} else {
 			logger.V(1).Println("Failed create stderr log file in zip:", err)
 		}
+
+		stderrFile.Close()
 	}
 
 	// If a diagnostic has been generated when crashing, copy it into the archive
@@ -330,7 +328,7 @@ func makeBundle(ctx context.Context, stateDir string, diagnosticFn diagnosticFun
 	if diagnosticFn != nil {
 		inSituArchiveWriter := newInSituZipWriter("diagnostic", zipWriter)
 
-		diagnosticCtx, cancel := context.WithTimeout(ctx, time.Minute)
+		diagnosticCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 		defer cancel()
 
 		err = generateDiagnostic(diagnosticCtx, inSituArchiveWriter, diagnosticFn)
@@ -369,20 +367,7 @@ func generateDiagnostic(ctx context.Context, writer types.ArchiveWriter, diagnos
 	go func() {
 		defer func() {
 			if recovErr := recover(); recovErr != nil {
-				w, err := writer.Create("diagnostic-crash.log")
-				if err != nil {
-					logger.V(1).Println("Failed to write diagnostic crash stack trace:", err)
-
-					done <- errFailedToDiagnostic
-
-					return
-				}
-
-				_, err = fmt.Fprint(w, recovErr)
-				if err != nil {
-					logger.V(1).Println("Failed to write diagnostic crash stack trace:", err)
-				}
-
+				fmt.Fprintln(os.Stderr, "Diagnostic generation crashed:", recovErr)
 				done <- errFailedToDiagnostic
 			}
 		}()

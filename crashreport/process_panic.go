@@ -2,7 +2,7 @@ package crashreport
 
 import (
 	"context"
-	"glouton/logger"
+	"fmt"
 	"os"
 	"path/filepath"
 	"time"
@@ -40,7 +40,7 @@ func tryToGenerateDiagnostic(timeout time.Duration) {
 
 	diagnosticArchive, err := os.Create(diagnosticPath)
 	if err != nil {
-		logger.V(1).Println("Failed to create diagnostic archive:", err)
+		fmt.Fprintln(os.Stderr, "Failed to create diagnostic archive:", err)
 
 		return
 	}
@@ -49,10 +49,8 @@ func tryToGenerateDiagnostic(timeout time.Duration) {
 
 	err = generateDiagnostic(ctx, tarWriter, diagnosticFn)
 	if err != nil {
-		logger.V(1).Println("Failed to generate diagnostic archive:", err)
+		fmt.Fprintln(os.Stderr, "Failed to generate diagnostic archive:", err)
 
 		return
 	}
-
-	logger.V(1).Println("Generated diagnostic at", diagnosticPath)
 }
