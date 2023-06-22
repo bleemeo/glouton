@@ -33,19 +33,23 @@ type inSituZipWriter struct {
 }
 
 // newInSituZipWriter returns an ArchiveWriter able to write directly into the given zip archive.
+// It's up to the caller to close the given zip.Writer once everything is done.
 func newInSituZipWriter(baseFolder string, zipWriter *zip.Writer) types.ArchiveWriter {
 	return &inSituZipWriter{
-		// Zip entries must not start with a slash, and slashes will automatically be added before filenames.
+		// Zip entries must not start with a slash.
 		baseFolder: strings.Trim(baseFolder, "/"),
 		zipWriter:  zipWriter,
 	}
 }
 
 func (zw *inSituZipWriter) Create(filename string) (io.Writer, error) {
-	fullFilename := zw.baseFolder + "/" + filename
-	zw.currentFileName = fullFilename
+	zw.currentFileName = zw.baseFolder + "/" + filename
 
-	return zw.zipWriter.Create(fullFilename)
+	return zw.zipWriter.CreateHeader(&zip.FileHeader{
+		Name:     zw.currentFileName,
+		Modified: time.Now(),
+		Method:   zip.Deflate,
+	})
 }
 
 func (zw *inSituZipWriter) CurrentFileName() string {

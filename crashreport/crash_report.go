@@ -268,7 +268,11 @@ func makeBundle(ctx context.Context, stateDir string, diagnosticFn diagnosticFun
 
 	stderrFile, err := os.Open(filepath.Join(stateDir, oldStderrFileName))
 	if err == nil { // Open stderr log file
-		writer, err := zipWriter.Create(stderrFileName)
+		writer, err := zipWriter.CreateHeader(&zip.FileHeader{
+			Name:     stderrFileName,
+			Modified: time.Now(),
+			Method:   zip.Deflate,
+		})
 		if err == nil { // Create stderr.log entry in zip
 			stderrFileContent, err := io.ReadAll(stderrFile)
 			if err == nil { // Read stderr log file content
@@ -303,7 +307,11 @@ func makeBundle(ctx context.Context, stateDir string, diagnosticFn diagnosticFun
 				break
 			}
 
-			crashDiagnosticZipWriter, err := zipWriter.Create("crash_diagnostic/" + entry.Name)
+			crashDiagnosticZipWriter, err := zipWriter.CreateHeader(&zip.FileHeader{
+				Name:     "crash_diagnostic/" + entry.Name,
+				Modified: time.Now(),
+				Method:   zip.Deflate,
+			})
 			if err != nil {
 				logger.V(1).Println("Failed to create a crash diagnostic entry to crash report archive:", err)
 
