@@ -429,3 +429,18 @@ type discoveryInfo struct {
 	DisablePersistentConnection bool
 	DefaultIgnoredPorts         map[int]bool
 }
+
+func serviceListToMap(services []Service) map[NameInstance]Service {
+	servicesMap := make(map[NameInstance]Service, len(services))
+
+	for _, service := range services {
+		key := NameInstance{
+			Name:     service.Name,
+			Instance: service.Instance,
+		}
+
+		servicesMap[key] = service
+	}
+
+	return servicesMap
+}

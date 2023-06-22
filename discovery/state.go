@@ -32,7 +32,11 @@ var (
 	errIncorrectPartNumber = errors.New("incorrect number of parts")
 )
 
-const stateKey = "DiscoveredServices"
+const (
+	stateKey        = "DiscoveredServices"
+	stateVersionKey = "DiscoveredServicesVersion"
+	stateVersion    = 1
+)
 
 // State allow to persite object.
 type State interface {
@@ -118,7 +122,10 @@ func (o oldService) toService(instance string) (srv Service, err error) {
 }
 
 func servicesFromState(state State) []Service {
-	var result []Service
+	var (
+		result  []Service
+		version int
+	)
 
 	if err := state.Get(stateKey, &result); err != nil || result == nil {
 		// Try to load old format
@@ -144,6 +151,12 @@ func servicesFromState(state State) []Service {
 		}
 	}
 
+	if err := state.Get(stateVersionKey, &version); err != nil {
+		logger.V(1).Printf("Unable to find version of discovery state, assume version 0: %v", err)
+
+		version = 0
+	}
+
 	for i := range result {
 		if result[i].HasNetstatInfo && result[i].LastNetstatInfo.IsZero() {
 			result[i].LastNetstatInfo = time.Now()
@@ -153,6 +166,16 @@ func servicesFromState(state State) []Service {
 		if result[i].ContainerName != "" && result[i].Instance == "" {
 			result[i].Instance = result[i].ContainerName
 		}
+	}
+
+	if version < 1 {
+		// Before version 1, fixListenAddressConflict was not applied. This resulted in
+		// servicesFromState that could contains wrong ListenningAddresses with HasNetstatInfo=True. So
+		// even if new dynamic discovery don't return the wrong ListenningAddresses, it would be used from
+		// servicesFromState because HasNetstatInfo=True.
+		//
+		// Apply the same fixListenAddressConflict to servicesFromState when upgrading.
+		result = fixListenAddressConflict(serviceListToMap(result))
 	}
 
 	return result
@@ -166,6 +189,13 @@ func saveState(state State, servicesMap map[NameInstance]Service) {
 	}
 
 	err := state.Set(stateKey, services)
+	if err != nil {
+		logger.V(1).Printf("Unable to persist discovered services: %v", err)
+
+		return
+	}
+
+	err = state.Set(stateVersionKey, stateVersion)
 	if err != nil {
 		logger.V(1).Printf("Unable to persist discovered services: %v", err)
 	}

@@ -1,0 +1,41 @@
+{
+    "DiscoveredServices": [
+        {
+            "Name": "nginx",
+            "Instance": "",
+            "ServiceType": "nginx",
+            "ContainerID": "",
+            "ContainerName": "",
+            "IPAddress": "127.0.0.1",
+            "ListenAddresses": [
+                {
+                    "NetworkFamily": "tcp",
+                    "Address": "127.0.0.1",
+                    "Port": 80
+                }
+            ],
+            "Active": true,
+            "HasNetstatInfo": true,
+            "LastNetstatInfo": "2023-06-20T15:18:37.26769993Z"
+        },
+        {
+            "Name": "phpfpm",
+            "Instance": "",
+            "ServiceType": "phpfpm",
+            "ContainerID": "",
+            "ContainerName": "",
+            "IPAddress": "127.0.0.1",
+            "ListenAddresses": [
+                {
+                    "NetworkFamily": "tcp",
+                    "Address": "127.0.0.1",
+                    "Port": 80
+                }
+            ],
+            "Active": true,
+            "HasNetstatInfo": true,
+            "LastNetstatInfo": "2023-06-20T15:18:37.26769993Z"
+        }
+    ],
+    "DiscoveredServicesVersion": 1
+}

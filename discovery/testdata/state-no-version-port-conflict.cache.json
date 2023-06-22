@@ -1,0 +1,135 @@
+{
+    "DiscoveredServices": [
+        {
+            "Name": "nginx",
+            "Instance": "composetest-phpfpm_and_nginx-1",
+            "ServiceType": "nginx",
+            "ContainerID": "231aa25b7994847ea8b672cff7cd1d6a95a301dacece589982fd0de78470d7e3",
+            "ContainerName": "composetest-phpfpm_and_nginx-1",
+            "IPAddress": "172.18.0.7",
+            "ListenAddresses": [
+                {
+                    "NetworkFamily": "tcp",
+                    "Address": "172.18.0.7",
+                    "Port": 80
+                }
+            ],
+            "Active": true,
+            "HasNetstatInfo": true,
+            "LastNetstatInfo": "2023-06-20T15:18:37.26769993Z"
+        },
+        {
+            "Name": "phpfpm",
+            "Instance": "composetest-phpfpm_and_nginx-1",
+            "ServiceType": "phpfpm",
+            "ContainerID": "231aa25b7994847ea8b672cff7cd1d6a95a301dacece589982fd0de78470d7e3",
+            "ContainerName": "composetest-phpfpm_and_nginx-1",
+            "IPAddress": "172.18.0.7",
+            "ListenAddresses": [
+                {
+                    "NetworkFamily": "tcp",
+                    "Address": "172.18.0.7",
+                    "Port": 80
+                }
+            ],
+            "Active": true,
+            "HasNetstatInfo": true,
+            "LastNetstatInfo": "2023-06-20T15:18:37.26769993Z"
+        },
+        {
+            "Name": "nginx",
+            "Instance": "conflict-other-port",
+            "ServiceType": "nginx",
+            "ContainerID": "741852963",
+            "ContainerName": "conflict-other-port",
+            "IPAddress": "172.18.0.7",
+            "ListenAddresses": [
+                {
+                    "NetworkFamily": "tcp",
+                    "Address": "172.18.0.7",
+                    "Port": 8080
+                }
+            ],
+            "Active": true,
+            "HasNetstatInfo": true,
+            "LastNetstatInfo": "2023-06-20T15:18:37.26769993Z"
+        },
+        {
+            "Name": "phpfpm",
+            "Instance": "conflict-other-port",
+            "ServiceType": "phpfpm",
+            "ContainerID": "741852963",
+            "ContainerName": "conflict-other-port",
+            "IPAddress": "172.18.0.7",
+            "ListenAddresses": [
+                {
+                    "NetworkFamily": "tcp",
+                    "Address": "172.18.0.7",
+                    "Port": 8080
+                }
+            ],
+            "Active": true,
+            "HasNetstatInfo": true,
+            "LastNetstatInfo": "2023-06-20T15:18:37.26769993Z"
+        },
+        {
+            "Name": "postgresql",
+            "Instance": "",
+            "ServiceType": "postgresql",
+            "ContainerID": "",
+            "ContainerName": "",
+            "IPAddress": "127.0.0.1",
+            "ListenAddresses": [
+                {
+                    "NetworkFamily": "tcp",
+                    "Address": "127.0.0.1",
+                    "Port": 5432
+                },
+                {
+                    "NetworkFamily": "unix",
+                    "Address": "/var/run/postgresql/.s.PGSQL.5432",
+                    "Port": 0
+                }
+            ],
+            "Active": true,
+            "HasNetstatInfo": true,
+            "LastNetstatInfo": "2023-06-20T15:18:37.249753388Z"
+        },
+        {
+            "Name": "nginx",
+            "Instance": "conflict-inactive",
+            "ServiceType": "nginx",
+            "ContainerID": "123456789",
+            "ContainerName": "conflict-inactive",
+            "IPAddress": "172.18.0.9",
+            "ListenAddresses": [
+                {
+                    "NetworkFamily": "tcp",
+                    "Address": "172.18.0.9",
+                    "Port": 80
+                }
+            ],
+            "Active": true,
+            "HasNetstatInfo": true,
+            "LastNetstatInfo": "2023-06-20T15:18:37.26769993Z"
+        },
+        {
+            "Name": "phpfpm",
+            "Instance": "conflict-inactive",
+            "ServiceType": "phpfpm",
+            "ContainerID": "123456789",
+            "ContainerName": "conflict-inactive",
+            "IPAddress": "172.18.0.9",
+            "ListenAddresses": [
+                {
+                    "NetworkFamily": "tcp",
+                    "Address": "172.18.0.9",
+                    "Port": 80
+                }
+            ],
+            "Active": false,
+            "HasNetstatInfo": true,
+            "LastNetstatInfo": "2023-06-20T15:18:37.26769993Z"
+        }
+    ]
+}
