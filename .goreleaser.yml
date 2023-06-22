@@ -19,7 +19,7 @@ builds:
     goamd64: v1
     tags:
       # flag to disable some node_exporter module that require CGO_ENABLED=1
-      - noexec,nomeminfo,nozfs,nonetdev
+      - noexec,nomeminfo,nozfs,nonetdev,nonetisr
 archives:
 - format: binary
   format_overrides:

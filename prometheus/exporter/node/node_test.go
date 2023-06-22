@@ -23,7 +23,7 @@ import (
 	"testing"
 	"unsafe"
 
-	"gopkg.in/alecthomas/kingpin.v2"
+	"github.com/alecthomas/kingpin/v2"
 )
 
 // Prevent gofmt from removing "unsafe", //go:linkname is only allowed in Go files that import "unsafe".

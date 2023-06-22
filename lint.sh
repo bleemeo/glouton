@@ -57,7 +57,7 @@ echo "Start lint FreeBSD"
 
 docker run --rm -v "$(pwd)":/app ${GO_MOUNT_CACHE} -e HOME=/go/pkg \
    -e GOOS=freebsd -e GOARCH=amd64 --tmpfs /app/webui/node_modules:exec -w /app golangci/golangci-lint:${LINTER_VERSION} \
-   golangci-lint run --build-tags noexec,nomeminfo,nozfs,nonetdev
+   golangci-lint run --build-tags noexec,nomeminfo,nozfs,nonetdev,nonetisr
 
 echo "Start lint Windows"
 

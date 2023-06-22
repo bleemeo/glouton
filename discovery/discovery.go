@@ -32,7 +32,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/imdario/mergo"
+	"dario.cat/mergo"
 	"github.com/influxdata/telegraf"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/common/model"
