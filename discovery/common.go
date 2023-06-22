@@ -27,7 +27,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/imdario/mergo"
+	"dario.cat/mergo"
 )
 
 const tcpPortocol = "tcp"

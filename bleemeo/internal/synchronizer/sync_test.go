@@ -31,10 +31,10 @@ import (
 	"testing"
 	"time"
 
+	"dario.cat/mergo"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/google/uuid"
-	"github.com/imdario/mergo"
 	"github.com/prometheus/prometheus/model/labels"
 )
 
