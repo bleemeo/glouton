@@ -23,6 +23,12 @@ import (
 	"testing"
 )
 
+func TestCrashReportArchivePattern(t *testing.T) {
+	if _, err := filepath.Match(crashReportArchivePattern, ""); err != nil {
+		t.Fatal("`crashReportArchivePattern` is invalid:", err)
+	}
+}
+
 func setupTestDir(t *testing.T) (testDir string, delTestDir func()) {
 	t.Helper()
 
