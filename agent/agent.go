@@ -2043,7 +2043,27 @@ func (a *agent) DiagnosticPage(ctx context.Context) string {
 	return builder.String()
 }
 
-func (a *agent) writeDiagnosticArchive(ctx context.Context, archive types.ArchiveWriter) error {
+func (a *agent) writeDiagnosticArchive(ctx context.Context, archive types.ArchiveWriter) (err error) {
+	startTime := time.Now()
+
+	defer func() {
+		writer, wErr := archive.Create("meta")
+		if wErr != nil {
+			logger.V(1).Println("Failed to add meta file to diagnostic archive:", wErr)
+
+			return
+		}
+
+		endTime := time.Now()
+		total := endTime.Sub(startTime)
+
+		fmt.Fprintf(writer, "Start: %s\nEnd: %s\nTotal: %s\n", startTime, endTime, total)
+
+		if err != nil {
+			fmt.Fprintln(writer, "Error:", err)
+		}
+	}()
+
 	modules := []func(ctx context.Context, archive types.ArchiveWriter) error{
 		a.diagnosticGlobalInfo,
 		a.diagnosticGloutonState,
@@ -2081,7 +2101,7 @@ func (a *agent) writeDiagnosticArchive(ctx context.Context, archive types.Archiv
 	}
 
 	for _, f := range modules {
-		if err := f(ctx, archive); err != nil {
+		if err = f(ctx, archive); err != nil {
 			return err
 		}
 
