@@ -79,6 +79,26 @@ func Load(withDefault bool, loadEnviron bool, paths ...string) (Config, []Item, 
 		config.Agent.StateResetFile = filepath.Join(config.Agent.StateDirectory, config.Agent.StateResetFile)
 	}
 
+	if !filepath.IsAbs(config.Agent.FactsFile) {
+		config.Agent.FactsFile = filepath.Join(config.Agent.StateDirectory, config.Agent.FactsFile)
+	}
+
+	if !filepath.IsAbs(config.Agent.NetstatFile) {
+		config.Agent.NetstatFile = filepath.Join(config.Agent.StateDirectory, config.Agent.NetstatFile)
+	}
+
+	if !filepath.IsAbs(config.Agent.UpgradeFile) {
+		config.Agent.UpgradeFile = filepath.Join(config.Agent.StateDirectory, config.Agent.UpgradeFile)
+	}
+
+	if !filepath.IsAbs(config.Agent.AutoUpgradeFile) {
+		config.Agent.AutoUpgradeFile = filepath.Join(config.Agent.StateDirectory, config.Agent.AutoUpgradeFile)
+	}
+
+	if !filepath.IsAbs(config.Agent.CloudImageCreationFile) {
+		config.Agent.CloudImageCreationFile = filepath.Join(config.Agent.StateDirectory, config.Agent.CloudImageCreationFile)
+	}
+
 	return config, loader.items, warnings, err
 }
 
