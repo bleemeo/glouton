@@ -17,10 +17,15 @@
 package crashreport
 
 import (
+	"context"
+	"errors"
 	"glouton/logger"
+	"glouton/types"
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestCrashReportArchivePattern(t *testing.T) {
@@ -84,36 +89,67 @@ func TestWorkDirCreation(t *testing.T) {
 	}
 }
 
-/*func TestStderrRedirection(t *testing.T) {
-	testDir, delTmpDir := setupTestDir(t)
-	defer delTmpDir()
+type noopArchiveWriter struct{}
 
-	SetOptions(true, testDir, 1, nil)
+func (aw noopArchiveWriter) Create(_ string) (io.Writer, error) {
+	return nil, nil
+}
 
-	SetupStderrRedirection()
+func (aw noopArchiveWriter) CurrentFileName() string {
+	return ""
+}
 
-	stderrFilePath := filepath.Join(testDir, stderrFileName)
-
-	info, err := os.Stat(stderrFilePath)
-	if err != nil {
-		t.Fatal("Failed to", err)
+func TestGenerateDiagnostic(t *testing.T) {
+	cases := []struct {
+		name               string
+		ctxTimeout         time.Duration
+		diagnosticDuration time.Duration
+		diagnosticError    string
+		shouldPanic        bool
+		expectedError      string
+	}{
+		{
+			name:               "Errorless behavior",
+			ctxTimeout:         time.Second,
+			diagnosticDuration: time.Millisecond,
+			diagnosticError:    "<nil>",
+			expectedError:      "<nil>",
+		},
+		{
+			name:               "Context timeout",
+			ctxTimeout:         time.Millisecond,
+			diagnosticDuration: 10 * time.Millisecond,
+			expectedError:      "context deadline exceeded",
+		},
+		{
+			name:               "Panic",
+			ctxTimeout:         time.Second,
+			diagnosticDuration: time.Millisecond,
+			shouldPanic:        true,
+			expectedError:      errFailedToDiagnostic.Error(),
+		},
 	}
 
-	if info.Size() != 0 {
-		t.Fatal("Stderr log file should be empty until someone writes to stderr")
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			diagnosticFn := func(ctx context.Context, writer types.ArchiveWriter) error {
+				time.Sleep(testCase.diagnosticDuration) // Simulates processing
+
+				if testCase.shouldPanic {
+					panic(testCase.diagnosticError)
+				}
+
+				return errors.New(testCase.diagnosticError) //nolint:goerr113
+			}
+
+			ctx, cancel := context.WithTimeout(context.Background(), testCase.ctxTimeout)
+			defer cancel()
+
+			err := generateDiagnostic(ctx, noopArchiveWriter{}, diagnosticFn)
+			errStr := err.Error()
+			if errStr != testCase.expectedError {
+				t.Fatalf("Unexpected error: want %q, got %q", testCase.expectedError, errStr)
+			}
+		})
 	}
-
-	const logContent = "This is a message written on stderr."
-
-	log.Println(logContent)
-
-	stderrContent, err := os.ReadFile(stderrFilePath)
-	if err != nil {
-		t.Fatal("Failed to", err)
-	}
-
-	strStderr := string(stderrContent)
-	if strStderr != logContent {
-		t.Fatalf("Unexpected content from stderr:\nwant: %q\n got: %q", logContent, strStderr)
-	}
-}*/
+}
