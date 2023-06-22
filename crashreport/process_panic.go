@@ -24,7 +24,12 @@ func ProcessPanic() {
 }
 
 func tryToGenerateDiagnostic(timeout time.Duration) {
-	if diagnostic == nil {
+	lock.Lock()
+	stateDir := dir
+	diagnosticFn := diagnostic
+	lock.Unlock()
+
+	if diagnosticFn == nil {
 		return // No diagnostic generation will be possible.
 	}
 
@@ -42,7 +47,7 @@ func tryToGenerateDiagnostic(timeout time.Duration) {
 
 	tarWriter := newTarWriter(diagnosticArchive)
 
-	err = generateDiagnostic(ctx, tarWriter)
+	err = generateDiagnostic(ctx, tarWriter, diagnosticFn)
 	if err != nil {
 		logger.V(1).Println("Failed to generate diagnostic archive:", err)
 

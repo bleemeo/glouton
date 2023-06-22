@@ -233,7 +233,7 @@ func (a *agent) init(ctx context.Context, configFiles []string, firstRun bool) (
 	}
 
 	a.stateDir = a.config.Agent.StateDirectory
-	crashreport.SetOptions(a.config.Agent.EnableCrashReporting, a.stateDir, a.config.Agent.MaxCrashReportDirs, a.writeDiagnosticArchive)
+	crashreport.SetOptions(a.config.Agent.EnableCrashReporting, a.stateDir, a.writeDiagnosticArchive)
 
 	if firstRun {
 		crashreport.SetupStderrRedirection()
@@ -1523,7 +1523,7 @@ func (a *agent) miscTasks(ctx context.Context) error {
 }
 
 func (a *agent) crashReportManagement(ctx context.Context) error {
-	createdReportDir := crashreport.BundleCrashReportFiles(ctx)
+	createdReportDir := crashreport.BundleCrashReportFiles(ctx, a.config.Agent.MaxCrashReportDirs)
 
 	// We protect the report generated just now to be sure it won't be purged.
 	// Without that, the purge would only be based on filename (generation datetime),
