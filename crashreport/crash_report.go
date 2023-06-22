@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"glouton/logger"
 	"glouton/types"
+	"glouton/utils/archivewriter"
 	"io"
 	"os"
 	"path/filepath"
@@ -326,12 +327,12 @@ func makeBundle(ctx context.Context, stateDir string, diagnosticFn diagnosticFun
 	}
 
 	if diagnosticFn != nil {
-		inSituArchiveWriter := newInSituZipWriter("diagnostic", zipWriter)
+		subDirZipWriter := archivewriter.NewSubDirZipWriter("diagnostic", zipWriter)
 
 		diagnosticCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 		defer cancel()
 
-		err = generateDiagnostic(diagnosticCtx, inSituArchiveWriter, diagnosticFn)
+		err = generateDiagnostic(diagnosticCtx, subDirZipWriter, diagnosticFn)
 		if err != nil {
 			logger.V(1).Println("Failed to generate a diagnostic into the crash report archive:", err)
 		}

@@ -14,7 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package crashreport
+package archivewriter
 
 import (
 	"archive/zip"
@@ -25,8 +25,8 @@ import (
 	"testing"
 )
 
-func TestInSituZipWriter(t *testing.T) {
-	// Ending slash will be removed by newInSituZipWriter()
+func TestSubDirZipWriter(t *testing.T) {
+	// Ending slash will be removed by NewSubDirZipWriter()
 	// then re-added in front of each zipped file name.
 	const baseFolder = "sub/"
 
@@ -38,10 +38,10 @@ func TestInSituZipWriter(t *testing.T) {
 
 	buf := new(bytes.Buffer)
 	zipWriter := zip.NewWriter(buf)
-	inSituWriter := newInSituZipWriter(baseFolder, zipWriter)
+	subDirWriter := NewSubDirZipWriter(baseFolder, zipWriter)
 
 	for file, content := range files {
-		writer, err := inSituWriter.Create(file)
+		writer, err := subDirWriter.Create(file)
 		if err != nil {
 			t.Fatal("Unexpected error while creating a zip entry:", err)
 		}

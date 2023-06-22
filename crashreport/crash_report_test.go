@@ -83,3 +83,37 @@ func TestWorkDirCreation(t *testing.T) {
 		t.Fatalf("Did not create work dir with expected permissions:\nwant: -rwxr-----\n got: %s", perm)
 	}
 }
+
+/*func TestStderrRedirection(t *testing.T) {
+	testDir, delTmpDir := setupTestDir(t)
+	defer delTmpDir()
+
+	SetOptions(true, testDir, 1, nil)
+
+	SetupStderrRedirection()
+
+	stderrFilePath := filepath.Join(testDir, stderrFileName)
+
+	info, err := os.Stat(stderrFilePath)
+	if err != nil {
+		t.Fatal("Failed to", err)
+	}
+
+	if info.Size() != 0 {
+		t.Fatal("Stderr log file should be empty until someone writes to stderr")
+	}
+
+	const logContent = "This is a message written on stderr."
+
+	log.Println(logContent)
+
+	stderrContent, err := os.ReadFile(stderrFilePath)
+	if err != nil {
+		t.Fatal("Failed to", err)
+	}
+
+	strStderr := string(stderrContent)
+	if strStderr != logContent {
+		t.Fatalf("Unexpected content from stderr:\nwant: %q\n got: %q", logContent, strStderr)
+	}
+}*/
