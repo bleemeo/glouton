@@ -125,7 +125,7 @@ func SetupStderrRedirection() {
 		}
 	}
 
-	newStderrFile, err := os.Create(stderrFileName)
+	newStderrFile, err := os.Create(stderrFilePath)
 	if err != nil {
 		logger.V(1).Println("Failed to create a new stderr log file:", err)
 

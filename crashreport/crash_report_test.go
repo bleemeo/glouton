@@ -19,6 +19,7 @@ package crashreport
 import (
 	"context"
 	"errors"
+	"fmt"
 	"glouton/logger"
 	"glouton/types"
 	"os"
@@ -60,31 +61,88 @@ func setupTestDir(t *testing.T) (testDir string, delTestDir func()) {
 }
 
 func TestWorkDirCreation(t *testing.T) {
+	wrapper := func(t *testing.T, testDir string) {
+		t.Helper()
+
+		SetOptions(false, testDir, nil)
+
+		ok := createWorkDirIfNotExist(testDir)
+		if !ok {
+			// The error has been given to the logger
+			t.Fatal(string(logger.Buffer()))
+		}
+
+		workDirPath := filepath.Join(testDir, crashReportWorkDir)
+
+		info, err := os.Stat(workDirPath)
+		if err != nil {
+			t.Fatal("Failed to", err)
+		}
+
+		if !info.IsDir() {
+			t.Fatalf("Work dir %q is not a directory ...", workDirPath)
+		}
+
+		perm := info.Mode().Perm()
+		if perm != 480 {
+			t.Fatalf("Did not create work dir with expected permissions:\nwant: -rwxr-----\n got: %s", perm)
+		}
+	}
+
+	t.Run("Work dir not existing", func(t *testing.T) {
+		testDir, delTmpDir := setupTestDir(t)
+		defer delTmpDir()
+
+		wrapper(t, testDir)
+	})
+
+	t.Run("Work dir already existing", func(t *testing.T) {
+		testDir, delTmpDir := setupTestDir(t)
+		defer delTmpDir()
+
+		err := os.Mkdir(filepath.Join(testDir, crashReportWorkDir), 0o740)
+		if err != nil && !os.IsExist(err) {
+			t.Fatal("Failed to pre-create crash report work dir:", err)
+		}
+
+		wrapper(t, testDir)
+	})
+}
+
+func TestStderrRedirection(t *testing.T) {
 	testDir, delTmpDir := setupTestDir(t)
 	defer delTmpDir()
 
-	SetOptions(false, testDir, nil)
+	SetOptions(true, testDir, nil)
 
-	ok := createWorkDirIfNotExist(testDir)
-	if !ok {
-		// The error has been given to the logger
-		t.Fatal(string(logger.Buffer()))
-	}
+	SetupStderrRedirection()
 
-	workDirPath := filepath.Join(testDir, crashReportWorkDir)
+	stderrFilePath := filepath.Join(testDir, stderrFileName)
 
-	info, err := os.Stat(workDirPath)
+	info, err := os.Stat(stderrFilePath)
 	if err != nil {
 		t.Fatal("Failed to", err)
 	}
 
-	if !info.IsDir() {
-		t.Fatalf("Work dir %q is not a directory ...", workDirPath)
+	if info.Size() != 0 {
+		t.Fatal("Stderr log file should be empty until someone writes to stderr")
 	}
 
-	perm := info.Mode().Perm()
-	if perm != 480 {
-		t.Fatalf("Did not create work dir with expected permissions:\nwant: -rwxr-----\n got: %s", perm)
+	const logContent = "This is a message written on stderr."
+
+	_, err = fmt.Fprint(os.Stderr, logContent)
+	if err != nil {
+		t.Fatal("Failed to write to stderr:", err)
+	}
+
+	stderrContent, err := os.ReadFile(stderrFilePath)
+	if err != nil {
+		t.Fatal("Failed to", err)
+	}
+
+	strStderr := string(stderrContent)
+	if strStderr != logContent {
+		t.Fatalf("Unexpected content from stderr:\nwant: %q\n got: %q", logContent, strStderr)
 	}
 }
 
