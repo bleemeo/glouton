@@ -24,9 +24,12 @@ import (
 	"glouton/types"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/google/go-cmp/cmp"
 )
 
 func setupTestDir(t *testing.T) (testDir string, delTestDir func()) {
@@ -120,7 +123,7 @@ func TestIsWriteInProgress(t *testing.T) {
 			t.Fatal("Failed to create write-in-progress flag file:", err)
 		}
 
-		defer f.Close()
+		f.Close()
 
 		if !isWriteInProgress(testDir) {
 			t.Fatal("Write is in progress but was not considered as such.")
@@ -172,6 +175,88 @@ func TestStderrRedirection(t *testing.T) {
 	if strStderr != logContent {
 		t.Fatalf("Unexpected content from stderr:\nwant: %q\n got: %q", logContent, strStderr)
 	}
+}
+
+func TestPurgeCrashReports(t *testing.T) {
+	t.Run("Keep the last reports", func(t *testing.T) {
+		testDir, delTmpDir := setupTestDir(t)
+		defer delTmpDir()
+
+		const keep = 2
+		mostRecentReports := make([]string, keep)
+
+		for i := 0; i < 5; i++ {
+			reportTime := time.Now().Add(time.Duration(-i) * time.Hour).Add(time.Duration(i*7) * time.Second)
+			crashReportPath := filepath.Join(testDir, reportTime.Format(crashReportArchiveFormat))
+
+			if i < keep {
+				mostRecentReports[i] = crashReportPath // Save it for later check
+			}
+
+			f, err := os.Create(crashReportPath)
+			if err != nil {
+				t.Fatal("Failed to create fake crash report:", err)
+			}
+
+			f.Close()
+		}
+
+		SetOptions(true, testDir, nil)
+
+		PurgeCrashReports(keep)
+
+		allReports, err := filepath.Glob(filepath.Join(testDir, crashReportArchivePattern))
+		if err != nil {
+			t.Fatal("Invalid pattern for `crashReportArchivePattern`:", err)
+		}
+
+		sort.Strings(mostRecentReports)
+
+		if diff := cmp.Diff(allReports, mostRecentReports); diff != "" {
+			t.Log(diff)
+			t.Fatal("Unexpected crash report purge result.")
+		}
+	})
+
+	t.Run("Keep preserved reports", func(t *testing.T) {
+		testDir, delTmpDir := setupTestDir(t)
+		defer delTmpDir()
+
+		var reportsToKeep []string
+
+		for i := 0; i < 10; i++ {
+			reportTime := time.Now().Add(time.Duration(-i) * time.Hour).Add(time.Duration(i*7) * time.Second)
+			crashReportPath := filepath.Join(testDir, reportTime.Format(crashReportArchiveFormat))
+
+			if i%3 == 0 {
+				reportsToKeep = append(reportsToKeep, crashReportPath) // Save it for later check
+			}
+
+			f, err := os.Create(crashReportPath)
+			if err != nil {
+				t.Fatal("Failed to create fake crash report:", err)
+			}
+
+			f.Close()
+		}
+
+		SetOptions(true, testDir, nil)
+
+		// The max report count doesn't matter when some reports should be preserved.
+		PurgeCrashReports(0, reportsToKeep...)
+
+		allReports, err := filepath.Glob(filepath.Join(testDir, crashReportArchivePattern))
+		if err != nil {
+			t.Fatal("Invalid pattern for `crashReportArchivePattern`:", err)
+		}
+
+		sort.Strings(reportsToKeep)
+
+		if diff := cmp.Diff(allReports, reportsToKeep); diff != "" {
+			t.Log(diff)
+			t.Fatal("Unexpected crash report purge result.")
+		}
+	})
 }
 
 func TestMarkAsDone(t *testing.T) {
