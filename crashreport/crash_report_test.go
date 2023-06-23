@@ -24,15 +24,10 @@ import (
 	"glouton/types"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
-
-func TestCrashReportArchivePattern(t *testing.T) {
-	if _, err := filepath.Match(crashReportArchivePattern, ""); err != nil {
-		t.Fatal("`crashReportArchivePattern` is invalid:", err)
-	}
-}
 
 func setupTestDir(t *testing.T) (testDir string, delTestDir func()) {
 	t.Helper()
@@ -58,6 +53,12 @@ func setupTestDir(t *testing.T) (testDir string, delTestDir func()) {
 	}
 
 	return testDir, delTestDir
+}
+
+func TestCrashReportArchivePattern(t *testing.T) {
+	if _, err := filepath.Match(crashReportArchivePattern, ""); err != nil {
+		t.Fatal("`crashReportArchivePattern` is invalid:", err)
+	}
 }
 
 func TestWorkDirCreation(t *testing.T) {
@@ -109,6 +110,33 @@ func TestWorkDirCreation(t *testing.T) {
 	})
 }
 
+func TestIsWriteInProgress(t *testing.T) {
+	t.Run("In progress", func(t *testing.T) {
+		testDir, delTmpDir := setupTestDir(t)
+		defer delTmpDir()
+
+		f, err := os.Create(filepath.Join(testDir, writeInProgressFlag))
+		if err != nil {
+			t.Fatal("Failed to create write-in-progress flag file:", err)
+		}
+
+		defer f.Close()
+
+		if !isWriteInProgress(testDir) {
+			t.Fatal("Write is in progress but was not considered as such.")
+		}
+	})
+
+	t.Run("Not in progress", func(t *testing.T) {
+		testDir, delTmpDir := setupTestDir(t)
+		defer delTmpDir()
+
+		if isWriteInProgress(testDir) {
+			t.Fatal("Write is not in progress but was considered to be in progress.")
+		}
+	})
+}
+
 func TestStderrRedirection(t *testing.T) {
 	testDir, delTmpDir := setupTestDir(t)
 	defer delTmpDir()
@@ -143,6 +171,50 @@ func TestStderrRedirection(t *testing.T) {
 	strStderr := string(stderrContent)
 	if strStderr != logContent {
 		t.Fatalf("Unexpected content from stderr:\nwant: %q\n got: %q", logContent, strStderr)
+	}
+}
+
+func TestMarkAsDone(t *testing.T) {
+	testDir, delTmpDir := setupTestDir(t)
+	defer delTmpDir()
+
+	ok := createWorkDirIfNotExist(testDir)
+	if !ok {
+		t.Fatal("Failed to create work dir:", string(logger.Buffer()))
+	}
+
+	flagFilePath := filepath.Join(testDir, writeInProgressFlag)
+
+	f, err := os.Create(flagFilePath)
+	if err != nil {
+		t.Fatal("Failed to create write-in-progress flag:", err)
+	}
+
+	f.Close()
+
+	const initLog = "<LOG INIT>"
+	// Writing some logs to initialize the buffer,
+	// otherwise logger.Buffer() crashes.
+	logger.Printf(initLog)
+
+	markAsDone(testDir)
+
+	errLogs := string(logger.Buffer())
+	idx := strings.Index(errLogs, initLog)
+	// Remove initLog and keep logs produced by markAsDone()
+	errLogs = errLogs[idx+len(initLog)+1:]
+	if errLogs != "" {
+		t.Fatal("Some errors logs have been written by markAsDone():\n", errLogs)
+	}
+
+	_, err = os.Stat(filepath.Join(testDir, crashReportWorkDir))
+	if !os.IsNotExist(err) {
+		t.Fatal("markAsDone() did not delete crash report work dir.")
+	}
+
+	_, err = os.Stat(flagFilePath)
+	if !os.IsNotExist(err) {
+		t.Fatal("markAsDone() did not delete the write-in-progress flag.")
 	}
 }
 

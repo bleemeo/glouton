@@ -47,6 +47,7 @@ func tryToGenerateDiagnostic(timeout time.Duration) {
 	}
 
 	tarWriter := archivewriter.NewTarWriter(diagnosticArchive)
+	defer tarWriter.Close()
 
 	err = generateDiagnostic(ctx, tarWriter, diagnosticFn)
 	if err != nil {
