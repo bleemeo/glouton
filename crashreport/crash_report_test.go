@@ -21,7 +21,6 @@ import (
 	"errors"
 	"glouton/logger"
 	"glouton/types"
-	"io"
 	"os"
 	"path/filepath"
 	"testing"
@@ -89,66 +88,58 @@ func TestWorkDirCreation(t *testing.T) {
 	}
 }
 
-type noopArchiveWriter struct{}
-
-func (aw noopArchiveWriter) Create(_ string) (io.Writer, error) {
-	return nil, nil
-}
-
-func (aw noopArchiveWriter) CurrentFileName() string {
-	return ""
-}
-
 func TestGenerateDiagnostic(t *testing.T) {
+	var nilErr error
 	cases := []struct {
 		name               string
 		ctxTimeout         time.Duration
 		diagnosticDuration time.Duration
-		diagnosticError    string
+		diagnosticError    error
 		shouldPanic        bool
-		expectedError      string
+		expectedError      error
 	}{
 		{
 			name:               "Errorless behavior",
 			ctxTimeout:         time.Second,
 			diagnosticDuration: time.Millisecond,
-			diagnosticError:    "<nil>",
-			expectedError:      "<nil>",
+			diagnosticError:    nilErr,
+			expectedError:      nilErr,
 		},
 		{
 			name:               "Context timeout",
 			ctxTimeout:         time.Millisecond,
 			diagnosticDuration: 10 * time.Millisecond,
-			expectedError:      "context deadline exceeded",
+			expectedError:      context.DeadlineExceeded,
 		},
 		{
 			name:               "Panic",
 			ctxTimeout:         time.Second,
 			diagnosticDuration: time.Millisecond,
 			shouldPanic:        true,
-			expectedError:      errFailedToDiagnostic.Error(),
+			expectedError:      errFailedToDiagnostic,
 		},
 	}
 
 	for _, testCase := range cases {
-		t.Run(testCase.name, func(t *testing.T) {
-			diagnosticFn := func(ctx context.Context, writer types.ArchiveWriter) error {
-				time.Sleep(testCase.diagnosticDuration) // Simulates processing
+		tc := testCase
 
-				if testCase.shouldPanic {
-					panic(testCase.diagnosticError)
+		t.Run(tc.name, func(t *testing.T) {
+			diagnosticFn := func(ctx context.Context, writer types.ArchiveWriter) error {
+				time.Sleep(tc.diagnosticDuration) // Simulates processing
+
+				if tc.shouldPanic {
+					panic("Panicking")
 				}
 
-				return errors.New(testCase.diagnosticError) //nolint:goerr113
+				return tc.diagnosticError
 			}
 
-			ctx, cancel := context.WithTimeout(context.Background(), testCase.ctxTimeout)
+			ctx, cancel := context.WithTimeout(context.Background(), tc.ctxTimeout)
 			defer cancel()
 
-			err := generateDiagnostic(ctx, noopArchiveWriter{}, diagnosticFn)
-			errStr := err.Error()
-			if errStr != testCase.expectedError {
-				t.Fatalf("Unexpected error: want %q, got %q", testCase.expectedError, errStr)
+			err := generateDiagnostic(ctx, nil, diagnosticFn)
+			if !errors.Is(err, tc.expectedError) {
+				t.Fatalf("Unexpected error: want %q, got %q", tc.expectedError, err)
 			}
 		})
 	}
