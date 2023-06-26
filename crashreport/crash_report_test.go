@@ -20,12 +20,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"glouton/logger"
 	"glouton/types"
 	"os"
 	"path/filepath"
 	"sort"
-	"strings"
 	"testing"
 	"time"
 
@@ -70,10 +68,9 @@ func TestWorkDirCreation(t *testing.T) {
 
 		SetOptions(false, testDir, nil)
 
-		ok := createWorkDirIfNotExist(testDir)
-		if !ok {
-			// The error has been given to the logger
-			t.Fatal(string(logger.Buffer()))
+		err := createWorkDirIfNotExist(testDir)
+		if err != nil {
+			t.Fatal("Failed to create work dir:", err)
 		}
 
 		workDirPath := filepath.Join(testDir, crashReportWorkDir)
@@ -263,9 +260,9 @@ func TestMarkAsDone(t *testing.T) {
 	testDir, delTmpDir := setupTestDir(t)
 	defer delTmpDir()
 
-	ok := createWorkDirIfNotExist(testDir)
-	if !ok {
-		t.Fatal("Failed to create work dir:", string(logger.Buffer()))
+	err := createWorkDirIfNotExist(testDir)
+	if err != nil {
+		t.Fatal("Failed to create work dir:", err)
 	}
 
 	flagFilePath := filepath.Join(testDir, writeInProgressFlag)
@@ -277,19 +274,9 @@ func TestMarkAsDone(t *testing.T) {
 
 	f.Close()
 
-	const initLog = "<LOG INIT>"
-	// Writing some logs to initialize the buffer,
-	// otherwise logger.Buffer() crashes.
-	logger.Printf(initLog)
-
-	markAsDone(testDir)
-
-	errLogs := string(logger.Buffer())
-	idx := strings.Index(errLogs, initLog)
-	// Remove initLog and keep logs produced by markAsDone()
-	errLogs = errLogs[idx+len(initLog)+1:]
-	if errLogs != "" {
-		t.Fatal("Some errors logs have been written by markAsDone():\n", errLogs)
+	errs := markAsDone(testDir)
+	if errs != nil {
+		t.Fatal("Some errors logs have been written by markAsDone():", errs.Error())
 	}
 
 	_, err = os.Stat(filepath.Join(testDir, crashReportWorkDir))
@@ -304,7 +291,6 @@ func TestMarkAsDone(t *testing.T) {
 }
 
 func TestGenerateDiagnostic(t *testing.T) {
-	var nilErr error
 	cases := []struct {
 		name               string
 		ctxTimeout         time.Duration
@@ -317,8 +303,8 @@ func TestGenerateDiagnostic(t *testing.T) {
 			name:               "Errorless behavior",
 			ctxTimeout:         time.Second,
 			diagnosticDuration: time.Millisecond,
-			diagnosticError:    nilErr,
-			expectedError:      nilErr,
+			diagnosticError:    nil,
+			expectedError:      nil,
 		},
 		{
 			name:               "Context timeout",
