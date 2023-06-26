@@ -116,19 +116,20 @@ func SetupStderrRedirection() {
 		logMultiErrs(markAsDone(stateDir))
 	}
 
-	if err := createWorkDirIfNotExist(stateDir); err != nil {
-		logger.V(1).Println("Failed to create crash report work dir:", err)
-
-		return
+	wdErr := createWorkDirIfNotExist(stateDir)
+	if wdErr != nil {
+		logger.V(1).Println("Failed to create crash report work dir:", wdErr)
 	}
 
 	stderrFilePath := filepath.Join(stateDir, stderrFileName)
 	oldStderrFilePath := filepath.Join(stateDir, oldStderrFileName)
 
-	if _, err := os.Stat(stderrFilePath); err == nil {
-		err = os.Rename(stderrFilePath, oldStderrFilePath)
-		if err != nil {
-			logger.V(1).Println("Failed to handle old stderr log file:", err)
+	if wdErr == nil { // If we can't back up the old stderr file, we'll just override it.
+		if _, err := os.Stat(stderrFilePath); err == nil {
+			err = os.Rename(stderrFilePath, oldStderrFilePath)
+			if err != nil {
+				logger.V(1).Println("Failed to handle old stderr log file:", err)
+			}
 		}
 	}
 
@@ -208,8 +209,6 @@ func BundleCrashReportFiles(ctx context.Context, maxReportCount int) (reportPath
 		return ""
 	}
 
-	defer func() { logMultiErrs(markAsDone(stateDir)) }()
-
 	if !enabled || maxReportCount <= 0 {
 		// Crash reports are apparently disabled in config.
 		return ""
@@ -242,7 +241,11 @@ func BundleCrashReportFiles(ctx context.Context, maxReportCount int) (reportPath
 	}
 
 	if foundStderrLog || foundPanicDiagnostic {
-		return makeBundle(ctx, stateDir, diagnosticFn)
+		reportPath = makeBundle(ctx, stateDir, diagnosticFn)
+
+		logMultiErrs(markAsDone(stateDir))
+
+		return reportPath
 	}
 
 	return "" // No crash report created
