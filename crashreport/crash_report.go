@@ -276,9 +276,11 @@ func makeBundle(ctx context.Context, stateDir string, diagnosticFn diagnosticFun
 
 	stderrFile, err := os.Open(filepath.Join(stateDir, oldStderrFileName))
 	if err == nil { // Open stderr log file
+		info, _ := stderrFile.Stat()
+
 		writer, err := zipWriter.CreateHeader(&zip.FileHeader{
 			Name:     stderrFileName,
-			Modified: time.Now(),
+			Modified: info.ModTime(),
 			Method:   zip.Deflate,
 		})
 		if err == nil { // Create stderr.log entry in zip
@@ -315,7 +317,7 @@ func makeBundle(ctx context.Context, stateDir string, diagnosticFn diagnosticFun
 
 			crashDiagnosticZipWriter, err := zipWriter.CreateHeader(&zip.FileHeader{
 				Name:     "crash_diagnostic/" + entry.Name,
-				Modified: time.Now(),
+				Modified: entry.ModTime,
 				Method:   zip.Deflate,
 			})
 			if err != nil {
