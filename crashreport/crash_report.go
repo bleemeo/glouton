@@ -33,6 +33,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"k8s.io/utils/strings/slices"
 )
 
@@ -77,23 +78,27 @@ func SetOptions(enabled bool, stateDir string, diagnosticFn diagnosticFunc) {
 	diagnostic = diagnosticFn
 }
 
+func logMultiErrs(errs prometheus.MultiError) {
+	for _, err := range errs {
+		logger.V(1).Println(err)
+	}
+}
+
 func isWriteInProgress(stateDir string) bool {
 	_, err := os.Stat(filepath.Join(stateDir, writeInProgressFlag))
 
 	return err == nil
 }
 
-func createWorkDirIfNotExist(stateDir string) (ok bool) {
+func createWorkDirIfNotExist(stateDir string) error {
 	workDirPath := filepath.Join(stateDir, crashReportWorkDir)
 
 	err := os.Mkdir(workDirPath, 0o740)
 	if err != nil && !os.IsExist(err) {
-		logger.V(1).Println("Failed to create crash report work dir:", err)
-
-		return false
+		return err
 	}
 
-	return true
+	return nil
 }
 
 // SetupStderrRedirection creates a file that will receive stderr output.
@@ -108,10 +113,12 @@ func SetupStderrRedirection() {
 		// If the flag has not been deleted the last run, it may be because the crash reporting process crashed.
 		// So to try not to crash again, we skip the crash reporting this time.
 		// We will try to report the next time, so we delete the flag.
-		markAsDone(stateDir)
+		logMultiErrs(markAsDone(stateDir))
 	}
 
-	if !createWorkDirIfNotExist(stateDir) {
+	if err := createWorkDirIfNotExist(stateDir); err != nil {
+		logger.V(1).Println("Failed to create crash report work dir:", err)
+
 		return
 	}
 
@@ -201,7 +208,7 @@ func BundleCrashReportFiles(ctx context.Context, maxReportCount int) (reportPath
 		return ""
 	}
 
-	defer markAsDone(stateDir)
+	defer func() { logMultiErrs(markAsDone(stateDir)) }()
 
 	if !enabled || maxReportCount <= 0 {
 		// Crash reports are apparently disabled in config.
@@ -346,16 +353,19 @@ func makeBundle(ctx context.Context, stateDir string, diagnosticFn diagnosticFun
 // markAsDone removes the crash report working directory and
 // deletes the file implying that crash report writing is not done yet,
 // which means that crash reports are now ready for upload.
-func markAsDone(stateDir string) {
+// It returns all encountered errors while trying to go until the end.
+func markAsDone(stateDir string) (errs prometheus.MultiError) {
 	err := os.RemoveAll(filepath.Join(stateDir, crashReportWorkDir))
 	if err != nil {
-		logger.V(1).Println("Failed to remove the crash report work dir:", err)
+		errs = append(errs, fmt.Errorf("failed to remove the crash report work dir: %w", err))
 	}
 
 	err = os.Remove(filepath.Join(stateDir, writeInProgressFlag))
 	if err != nil && !os.IsNotExist(err) {
-		logger.V(1).Println("Failed to delete write-in-progress flag:", err)
+		errs = append(errs, fmt.Errorf("failed to delete write-in-progress flag: %w", err))
 	}
+
+	return
 }
 
 // generateDiagnostic writes a diagnostic to the given writer.
