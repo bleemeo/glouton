@@ -325,7 +325,7 @@ func TestGenerateDiagnostic(t *testing.T) {
 		tc := testCase
 
 		t.Run(tc.name, func(t *testing.T) {
-			diagnosticFn := func(ctx context.Context, writer types.ArchiveWriter) error {
+			diagnosticFn := func(context.Context, types.ArchiveWriter) error {
 				time.Sleep(tc.diagnosticDuration) // Simulates processing
 
 				if tc.shouldPanic {
