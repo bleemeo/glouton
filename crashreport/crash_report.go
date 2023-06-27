@@ -102,19 +102,12 @@ func createWorkDirIfNotExist(stateDir string) error {
 }
 
 // SetupStderrRedirection creates a file that will receive stderr output.
-// If such a file already exists, it is moved to a '.old' version and
-// a new and empty file takes it place.
+// If such a file already exists, it is moved to a work directory
+// and the new and empty file takes its place.
 func SetupStderrRedirection() {
 	lock.Lock()
 	stateDir := dir
 	lock.Unlock()
-
-	if isWriteInProgress(stateDir) {
-		// If the flag has not been deleted the last run, it may be because the crash reporting process crashed.
-		// So to try not to crash again, we skip the crash reporting this time.
-		// We will try to report the next time, so we delete the flag.
-		logMultiErrs(markAsDone(stateDir))
-	}
 
 	wdErr := createWorkDirIfNotExist(stateDir)
 	if wdErr != nil {
@@ -206,6 +199,11 @@ func BundleCrashReportFiles(ctx context.Context, maxReportCount int) (reportPath
 	lock.Unlock()
 
 	if isWriteInProgress(stateDir) {
+		// If the flag has not been deleted the last run, it may be because the crash reporting process crashed.
+		// So to try not to crash again, we skip the crash reporting this time.
+		// We will try to report the next time, so we delete the flag.
+		logMultiErrs(markAsDone(stateDir))
+
 		return ""
 	}
 
