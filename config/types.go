@@ -213,7 +213,6 @@ type BlackboxTarget struct {
 
 type Agent struct {
 	CloudImageCreationFile string          `yaml:"cloudimage_creation_file"`
-	HTTPDebug              HTTPDebug       `yaml:"http_debug"`
 	InstallationFormat     string          `yaml:"installation_format"`
 	FactsFile              string          `yaml:"facts_file"`
 	NetstatFile            string          `yaml:"netstat_file"`
@@ -243,10 +242,6 @@ type ProcessExporter struct {
 type NodeExporter struct {
 	Enable     bool     `yaml:"enable"`
 	Collectors []string `yaml:"collectors"`
-}
-type HTTPDebug struct {
-	Enable      bool   `yaml:"enable"`
-	BindAddress string `yaml:"bind_address"`
 }
 
 type Metric struct {
@@ -287,10 +282,15 @@ type DF struct {
 }
 
 type Web struct {
-	Enable       bool     `yaml:"enable"`
-	LocalUI      LocalUI  `yaml:"local_ui"`
-	Listener     Listener `yaml:"listener"`
-	StaticCDNURL string   `yaml:"static_cdn_url"`
+	Enable       bool         `yaml:"enable"`
+	Endpoints    WebEndpoints `yaml:"endpoints"`
+	LocalUI      LocalUI      `yaml:"local_ui"`
+	Listener     Listener     `yaml:"listener"`
+	StaticCDNURL string       `yaml:"static_cdn_url"`
+}
+
+type WebEndpoints struct {
+	DebugEnable bool `yaml:"debug_enable"`
 }
 
 type LocalUI struct {

@@ -63,11 +63,9 @@ import (
 	"glouton/version"
 	"glouton/zabbix"
 	"io"
-	"log"
 	"math"
 	"math/rand"
 	"net"
-	"net/http"
 	"net/url"
 	"os"
 	"os/exec"
@@ -737,17 +735,6 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 
 	apiBindAddress := fmt.Sprintf("%s:%d", a.config.Web.Listener.Address, a.config.Web.Listener.Port)
 
-	if a.config.Agent.HTTPDebug.Enable {
-		go func() {
-			defer types.ProcessPanic()
-
-			debugAddress := a.config.Agent.HTTPDebug.BindAddress
-
-			logger.Printf("Starting debug server on http://%s/debug/pprof/", debugAddress)
-			log.Println(http.ListenAndServe(debugAddress, nil)) //nolint:gosec
-		}()
-	}
-
 	var warnings prometheus.MultiError
 
 	a.snmpManager, warnings = snmp.NewManager(
@@ -945,6 +932,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 	api := &api.API{
 		DB:                 api.NewQueryable(a.store, a.BleemeoAgentID),
 		ContainerRuntime:   a.containerRuntime,
+		Endpoints:          a.config.Web.Endpoints,
 		PsFact:             psFact,
 		FactProvider:       a.factProvider,
 		BindAddress:        apiBindAddress,

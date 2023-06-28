@@ -309,7 +309,8 @@ func unwrapErrors(errs prometheus.MultiError) prometheus.MultiError {
 func movedKeys() map[string]string {
 	keys := map[string]string{
 		"agent.windows_exporter.enabled":  "agent.windows_exporter.enable",
-		"agent.http_debug.enabled":        "agent.http_debug.enable",
+		"agent.http_debug.enabled":        "web.endpoints.debug_enable",
+		"agent.http_debug.enable":         "web.endpoints.debug_enable",
 		"kubernetes.enabled":              "kubernetes.enable",
 		"blackbox.enabled":                "blackbox.enable",
 		"agent.process_exporter.enabled":  "agent.process_exporter.enable",

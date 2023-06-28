@@ -24,8 +24,6 @@ import (
 	versionPkg "glouton/version"
 	"os"
 	"strings"
-
-	_ "net/http/pprof" //nolint:gosec
 )
 
 //nolint:gochecknoglobals

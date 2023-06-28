@@ -34,18 +34,14 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 		Agent: Agent{
 			CloudImageCreationFile: "cloudimage_creation",
 			FactsFile:              "facts.yaml",
-			HTTPDebug: HTTPDebug{
-				Enable:      true,
-				BindAddress: "localhost:6060",
-			},
-			InstallationFormat:  "manual",
-			NetstatFile:         "netstat.out",
-			StateFile:           "state.json",
-			StateCacheFile:      "state.cache.json",
-			StateResetFile:      "state.reset",
-			DeprecatedStateFile: "state.deprecated",
-			UpgradeFile:         "upgrade",
-			AutoUpgradeFile:     "auto-upgrade",
+			InstallationFormat:     "manual",
+			NetstatFile:            "netstat.out",
+			StateFile:              "state.json",
+			StateCacheFile:         "state.cache.json",
+			StateResetFile:         "state.reset",
+			DeprecatedStateFile:    "state.deprecated",
+			UpgradeFile:            "upgrade",
+			AutoUpgradeFile:        "auto-upgrade",
 			NodeExporter: NodeExporter{
 				Enable:     true,
 				Collectors: []string{"disk"},
@@ -352,6 +348,9 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 		},
 		Web: Web{
 			Enable: true,
+			Endpoints: WebEndpoints{
+				DebugEnable: false,
+			},
 			LocalUI: LocalUI{
 				Enable: true,
 			},
@@ -742,9 +741,6 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 			},
 			WantConfig: Config{
 				Agent: Agent{
-					HTTPDebug: HTTPDebug{
-						Enable: true,
-					},
 					NodeExporter: NodeExporter{
 						Enable: true,
 					},
@@ -784,6 +780,11 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 				},
 				Zabbix: Zabbix{
 					Enable: true,
+				},
+				Web: Web{
+					Endpoints: WebEndpoints{
+						DebugEnable: true,
+					},
 				},
 			},
 		},
