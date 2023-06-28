@@ -961,10 +961,6 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		{a.threshold.Run, "Threshold state"},
 	}
 
-	if a.config.Web.Enable {
-		tasks = append(tasks, taskInfo{api.Run, "Local Web UI"})
-	}
-
 	if a.config.JMX.Enable {
 		perm, err := strconv.ParseInt(a.config.JMXTrans.FilePermission, 8, 0)
 		if err != nil {
@@ -1300,11 +1296,31 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 
 	a.startTasks(tasks)
 
+	lateCtx, lateCtxCancel := context.WithCancel(context.Background())
+
+	var lateTasks sync.WaitGroup
+
+	if a.config.Web.Enable {
+		lateTasks.Add(1)
+
+		go func() {
+			defer lateTasks.Done()
+
+			if err := api.Run(lateCtx); err != nil {
+				logger.V(1).Printf("Error while stopping api: %v", err)
+			}
+		}()
+	}
+
 	<-ctx.Done()
 	logger.V(2).Printf("Stopping agent...")
 	a.taskRegistry.Close()
 	a.discovery.Close()
 	a.collector.Close()
+
+	lateCtxCancel()
+	lateTasks.Wait()
+
 	logger.V(2).Printf("Agent stopped")
 }
 
