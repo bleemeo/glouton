@@ -21,6 +21,7 @@ import (
 	"embed"
 	"errors"
 	"fmt"
+	"glouton/config"
 	"glouton/discovery"
 	"glouton/facts"
 	"glouton/logger"
@@ -30,6 +31,7 @@ import (
 	"html/template"
 	"io"
 	"net/http"
+	"net/http/pprof"
 	"path"
 	"strings"
 	"time"
@@ -60,6 +62,7 @@ type API struct {
 	BindAddress        string
 	StaticCDNURL       string
 	LocalUIDisabled    bool
+	Endpoints          config.WebEndpoints
 	MetricFormat       types.MetricFormat
 	DB                 metricQueryable
 	ContainerRuntime   containerInterface
@@ -205,6 +208,14 @@ func (api *API) init() {
 			logger.V(1).Printf("failed to serve diagnostic.txt (current file %s): %v", archive.CurrentFileName(), err)
 		}
 	})
+
+	if api.Endpoints.DebugEnable {
+		router.Handle("/debug/pprof/*", http.HandlerFunc(pprof.Index))
+		router.Handle("/debug/pprof/cmdline", http.HandlerFunc(pprof.Cmdline))
+		router.Handle("/debug/pprof/profile", http.HandlerFunc(pprof.Profile))
+		router.Handle("/debug/pprof/symbol", http.HandlerFunc(pprof.Symbol))
+		router.Handle("/debug/pprof/trace", http.HandlerFunc(pprof.Trace))
+	}
 
 	router.Handle("/static/*", http.StripPrefix("/static", &assetsFileServer{fs: http.FileServer(http.FS(staticFolder))}))
 	router.HandleFunc("/*", func(w http.ResponseWriter, r *http.Request) {

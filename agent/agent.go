@@ -63,11 +63,9 @@ import (
 	"glouton/version"
 	"glouton/zabbix"
 	"io"
-	"log"
 	"math"
 	"math/rand"
 	"net"
-	"net/http"
 	"net/url"
 	"os"
 	"os/exec"
@@ -737,17 +735,6 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 
 	apiBindAddress := fmt.Sprintf("%s:%d", a.config.Web.Listener.Address, a.config.Web.Listener.Port)
 
-	if a.config.Agent.HTTPDebug.Enable {
-		go func() {
-			defer types.ProcessPanic()
-
-			debugAddress := a.config.Agent.HTTPDebug.BindAddress
-
-			logger.Printf("Starting debug server on http://%s/debug/pprof/", debugAddress)
-			log.Println(http.ListenAndServe(debugAddress, nil)) //nolint:gosec
-		}()
-	}
-
 	var warnings prometheus.MultiError
 
 	a.snmpManager, warnings = snmp.NewManager(
@@ -945,6 +932,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 	api := &api.API{
 		DB:                 api.NewQueryable(a.store, a.BleemeoAgentID),
 		ContainerRuntime:   a.containerRuntime,
+		Endpoints:          a.config.Web.Endpoints,
 		PsFact:             psFact,
 		FactProvider:       a.factProvider,
 		BindAddress:        apiBindAddress,
@@ -971,10 +959,6 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		{a.miscTasks, "Miscelanous tasks"},
 		{a.sendToTelemetry, "Send Facts information to our telemetry tool"},
 		{a.threshold.Run, "Threshold state"},
-	}
-
-	if a.config.Web.Enable {
-		tasks = append(tasks, taskInfo{api.Run, "Local Web UI"})
 	}
 
 	if a.config.JMX.Enable {
@@ -1312,11 +1296,31 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 
 	a.startTasks(tasks)
 
+	lateCtx, lateCtxCancel := context.WithCancel(context.Background())
+
+	var lateTasks sync.WaitGroup
+
+	if a.config.Web.Enable {
+		lateTasks.Add(1)
+
+		go func() {
+			defer lateTasks.Done()
+
+			if err := api.Run(lateCtx); err != nil {
+				logger.V(1).Printf("Error while stopping api: %v", err)
+			}
+		}()
+	}
+
 	<-ctx.Done()
 	logger.V(2).Printf("Stopping agent...")
 	a.taskRegistry.Close()
 	a.discovery.Close()
 	a.collector.Close()
+
+	lateCtxCancel()
+	lateTasks.Wait()
+
 	logger.V(2).Printf("Agent stopped")
 }
 
@@ -2069,12 +2073,19 @@ func (a *agent) writeDiagnosticArchive(ctx context.Context, archive types.Archiv
 }
 
 func (a *agent) diagnosticGlobalInfo(ctx context.Context, archive types.ArchiveWriter) error {
-	file, err := archive.Create("diagnostic.txt")
+	file, err := archive.Create("goroutines.txt")
 	if err != nil {
 		return err
 	}
 
-	_, err = file.Write([]byte(a.DiagnosticPage(ctx)))
+	// We don't know how big the buffer needs to be to collect
+	// all the goroutines. Use 2MB buffer which hopefully is enough
+	buffer := make([]byte, 1<<21)
+
+	n := runtime.Stack(buffer, true)
+	buffer = buffer[:n]
+
+	_, err = file.Write(buffer)
 	if err != nil {
 		return err
 	}
@@ -2095,19 +2106,12 @@ func (a *agent) diagnosticGlobalInfo(ctx context.Context, archive types.ArchiveW
 
 	fmt.Fprintf(file, "-- Log size = %d, compressed = %d (ratio: %.2f)\n", len(tmp), compressedSize, float64(compressedSize)/float64(len(tmp)))
 
-	file, err = archive.Create("goroutines.txt")
+	file, err = archive.Create("diagnostic.txt")
 	if err != nil {
 		return err
 	}
 
-	// We don't know how big the buffer needs to be to collect
-	// all the goroutines. Use 2MB buffer which hopefully is enough
-	buffer := make([]byte, 1<<21)
-
-	n := runtime.Stack(buffer, true)
-	buffer = buffer[:n]
-
-	_, err = file.Write(buffer)
+	_, err = file.Write([]byte(a.DiagnosticPage(ctx)))
 	if err != nil {
 		return err
 	}

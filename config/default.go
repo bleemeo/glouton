@@ -58,11 +58,7 @@ func DefaultConfig() Config { //nolint:maintidx
 		Agent: Agent{
 			CloudImageCreationFile: "cloudimage_creation",
 			FactsFile:              "facts.yaml",
-			HTTPDebug: HTTPDebug{
-				Enable:      false,
-				BindAddress: "localhost:6060",
-			},
-			InstallationFormat: "manual",
+			InstallationFormat:     "manual",
 			ProcessExporter: ProcessExporter{
 				Enable: true,
 			},
@@ -335,6 +331,9 @@ func DefaultConfig() Config { //nolint:maintidx
 		Thresholds: map[string]Threshold{},
 		Web: Web{
 			Enable: true,
+			Endpoints: WebEndpoints{
+				DebugEnable: true,
+			},
 			Listener: Listener{
 				Address: "127.0.0.1",
 				Port:    8015,
