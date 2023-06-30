@@ -36,6 +36,7 @@ import (
 	"math/big"
 	"net/http"
 	"net/url"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -83,6 +84,7 @@ type Synchronizer struct {
 	fullSyncCount int
 
 	startedAt               time.Time
+	syncHearthbeat          time.Time
 	lastSync                time.Time
 	lastFactUpdatedAt       string
 	lastSNMPcount           int
@@ -216,6 +218,7 @@ func (s *Synchronizer) DiagnosticArchive(_ context.Context, archive types.Archiv
 
 	obj := struct {
 		NextFullSync               time.Time
+		HeartBeat                  time.Time
 		FullSyncCount              int
 		StartedAt                  time.Time
 		LastSync                   time.Time
@@ -238,6 +241,7 @@ func (s *Synchronizer) DiagnosticArchive(_ context.Context, archive types.Archiv
 		ThresholdOverrides         string
 	}{
 		NextFullSync:               s.nextFullSync,
+		HeartBeat:                  s.syncHearthbeat,
 		FullSyncCount:              s.fullSyncCount,
 		StartedAt:                  s.startedAt,
 		LastSync:                   s.lastSync,
@@ -674,8 +678,47 @@ func (s *Synchronizer) setClient() error {
 	return nil
 }
 
+// HealthCheck perform some health check and log any issue found.
+// This method could panic when health condition are bad for too long in order to cause a Glouton restart.
+func (s *Synchronizer) HealthCheck() bool {
+	s.l.Lock()
+	defer s.l.Unlock()
+
+	syncHearthbeat := s.syncHearthbeat
+	if syncHearthbeat.IsZero() {
+		syncHearthbeat = s.startedAt
+	}
+
+	if s.now().Before(s.disabledUntil) {
+		// synchronization is still disabled, don't check syncHearthbeat
+		return true
+	}
+
+	if s.now().Sub(syncHearthbeat) > time.Hour {
+		logger.Printf("Bleemeo API communication didn't run since %s. This should be a Glouton bug", syncHearthbeat.Format(time.RFC3339))
+
+		if s.now().Sub(syncHearthbeat) > 6*time.Hour {
+			logger.Printf("Bleemeo API communication is broken. Glouton seems unhealthy, killing myself")
+
+			// We don't know how big the buffer needs to be to collect
+			// all the goroutines. Use 2MB buffer which hopefully is enough
+			buffer := make([]byte, 1<<21)
+
+			runtime.Stack(buffer, true)
+			logger.Printf("%s", string(buffer))
+			panic("Glouton seems unhealthy (last API request too old), killing myself")
+		}
+	}
+
+	return true
+}
+
 func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) (map[string]bool, error) {
 	var wasCreation, updateThresholds bool
+
+	s.l.Lock()
+	s.syncHearthbeat = time.Now()
+	s.l.Unlock()
 
 	if s.agentID == "" {
 		if err := s.register(ctx); err != nil {

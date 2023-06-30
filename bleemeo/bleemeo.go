@@ -839,7 +839,8 @@ func (c *Connector) LastReport() time.Time {
 	return c.lastKnownReport
 }
 
-// HealthCheck perform some health check and logger any issue found.
+// HealthCheck perform some health check and log any issue found.
+// This method could panic when health condition are bad for too long in order to cause a Glouton restart.
 func (c *Connector) HealthCheck() bool {
 	ok := true
 
@@ -853,6 +854,8 @@ func (c *Connector) HealthCheck() bool {
 
 	c.l.Lock()
 	defer c.l.Unlock()
+
+	ok = c.sync.HealthCheck() && ok
 
 	if time.Now().Before(c.disabledUntil) {
 		delay := time.Until(c.disabledUntil)
