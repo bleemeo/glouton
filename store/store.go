@@ -310,7 +310,7 @@ func (s *Store) run(now time.Time) {
 		delete(s.points, metricID)
 	}
 
-	logger.V(2).Printf("deleted %d points. Total point: %d", deletedPoints, totalPoints)
+	logger.V(2).Printf("Store: deleted %d points. Total point: %d", deletedPoints, totalPoints)
 }
 
 // metricGet will return the metric that exactly match given labels.
