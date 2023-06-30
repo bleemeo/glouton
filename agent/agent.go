@@ -521,6 +521,15 @@ func (a *agent) updateSNMPResolution(resolution time.Duration) {
 
 	a.l.Unlock()
 
+	defer func() {
+		a.l.Lock()
+
+		a.snmpUpdatePending = false
+		a.cond.Broadcast()
+
+		a.l.Unlock()
+	}()
+
 	for _, id := range previousRegistration {
 		a.gathererRegistry.Unregister(id)
 	}
@@ -555,8 +564,6 @@ func (a *agent) updateSNMPResolution(resolution time.Duration) {
 	a.l.Lock()
 	defer a.l.Unlock()
 
-	a.snmpUpdatePending = false
-	a.cond.Broadcast()
 	a.snmpRegistration = append(a.snmpRegistration, newRegistration...)
 }
 
