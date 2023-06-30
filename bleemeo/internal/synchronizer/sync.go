@@ -83,19 +83,20 @@ type Synchronizer struct {
 	nextFullSync  time.Time
 	fullSyncCount int
 
-	startedAt               time.Time
-	syncHearthbeat          time.Time
-	lastSync                time.Time
-	lastFactUpdatedAt       string
-	lastSNMPcount           int
-	successiveErrors        int
-	warnAccountMismatchDone bool
-	maintenanceMode         bool
-	suspendedMode           bool
-	callUpdateLabels        bool
-	lastMetricCount         int
-	currentConfigNotified   string
-	agentID                 string
+	startedAt                 time.Time
+	syncHeartbeat             time.Time
+	heartbeatConsecutiveError int
+	lastSync                  time.Time
+	lastFactUpdatedAt         string
+	lastSNMPcount             int
+	successiveErrors          int
+	warnAccountMismatchDone   bool
+	maintenanceMode           bool
+	suspendedMode             bool
+	callUpdateLabels          bool
+	lastMetricCount           int
+	currentConfigNotified     string
+	agentID                   string
 
 	// configSyncDone is true when the config items were successfully synced.
 	configSyncDone bool
@@ -219,6 +220,7 @@ func (s *Synchronizer) DiagnosticArchive(_ context.Context, archive types.Archiv
 	obj := struct {
 		NextFullSync               time.Time
 		HeartBeat                  time.Time
+		HeartbeatConsecutiveError  int
 		FullSyncCount              int
 		StartedAt                  time.Time
 		LastSync                   time.Time
@@ -241,7 +243,8 @@ func (s *Synchronizer) DiagnosticArchive(_ context.Context, archive types.Archiv
 		ThresholdOverrides         string
 	}{
 		NextFullSync:               s.nextFullSync,
-		HeartBeat:                  s.syncHearthbeat,
+		HeartBeat:                  s.syncHeartbeat,
+		HeartbeatConsecutiveError:  s.heartbeatConsecutiveError,
 		FullSyncCount:              s.fullSyncCount,
 		StartedAt:                  s.startedAt,
 		LastSync:                   s.lastSync,
@@ -684,7 +687,7 @@ func (s *Synchronizer) HealthCheck() bool {
 	s.l.Lock()
 	defer s.l.Unlock()
 
-	syncHearthbeat := s.syncHearthbeat
+	syncHearthbeat := s.syncHeartbeat
 	if syncHearthbeat.IsZero() {
 		syncHearthbeat = s.startedAt
 	}
@@ -698,16 +701,22 @@ func (s *Synchronizer) HealthCheck() bool {
 		logger.Printf("Bleemeo API communication didn't run since %s. This should be a Glouton bug", syncHearthbeat.Format(time.RFC3339))
 
 		if s.now().Sub(syncHearthbeat) > 6*time.Hour {
-			logger.Printf("Bleemeo API communication is broken. Glouton seems unhealthy, killing myself")
+			s.heartbeatConsecutiveError++
 
-			// We don't know how big the buffer needs to be to collect
-			// all the goroutines. Use 2MB buffer which hopefully is enough
-			buffer := make([]byte, 1<<21)
+			if s.heartbeatConsecutiveError >= 3 {
+				logger.Printf("Bleemeo API communication is broken. Glouton seems unhealthy, killing myself")
 
-			runtime.Stack(buffer, true)
-			logger.Printf("%s", string(buffer))
-			panic("Glouton seems unhealthy (last API request too old), killing myself")
+				// We don't know how big the buffer needs to be to collect
+				// all the goroutines. Use 2MB buffer which hopefully is enough
+				buffer := make([]byte, 1<<21)
+
+				runtime.Stack(buffer, true)
+				logger.Printf("%s", string(buffer))
+				panic("Glouton seems unhealthy (last API request too old), killing myself")
+			}
 		}
+	} else {
+		s.heartbeatConsecutiveError = 0
 	}
 
 	return true
@@ -717,7 +726,7 @@ func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) (map[str
 	var wasCreation, updateThresholds bool
 
 	s.l.Lock()
-	s.syncHearthbeat = time.Now()
+	s.syncHeartbeat = time.Now()
 	s.l.Unlock()
 
 	if s.agentID == "" {

@@ -110,11 +110,12 @@ type Registry struct {
 
 	l sync.Mutex
 
-	condition       *sync.Cond
-	countScrape     int
-	countPushPoints int
-	blockScrape     bool
-	blockPushPoint  bool
+	condition               *sync.Cond
+	countScrape             int
+	countPushPoints         int
+	blockScrape             bool
+	blockPushPoint          bool
+	tooSlowConsecutiveError int
 
 	reschedules             []reschedule
 	relabelConfigs          []*relabel.Config
@@ -601,6 +602,7 @@ func (r *Registry) diagnosticState(archive types.ArchiveWriter) error {
 		LastPushedPointsCleanup time.Time
 		CurrentDelaySeconds     float64
 		PushedPointsCount       int
+		TooSlowConsecutiveError int
 	}{
 		Option:                  r.option,
 		CountScrape:             r.countScrape,
@@ -611,6 +613,7 @@ func (r *Registry) diagnosticState(archive types.ArchiveWriter) error {
 		LastPushedPointsCleanup: r.lastPushedPointsCleanup,
 		CurrentDelaySeconds:     r.currentDelay.Seconds(),
 		PushedPointsCount:       len(r.pushedPoints),
+		TooSlowConsecutiveError: r.tooSlowConsecutiveError,
 	}
 
 	defer r.l.Unlock()
@@ -665,14 +668,20 @@ func (r *Registry) HealthCheck() {
 	}
 
 	if panicMessage != "" {
-		// We don't know how big the buffer needs to be to collect
-		// all the goroutines. Use 2MB buffer which hopefully is enough
-		buffer := make([]byte, 1<<21)
+		r.tooSlowConsecutiveError++
 
-		runtime.Stack(buffer, true)
-		logger.Printf("%s", string(buffer))
+		if r.tooSlowConsecutiveError >= 3 {
+			// We don't know how big the buffer needs to be to collect
+			// all the goroutines. Use 2MB buffer which hopefully is enough
+			buffer := make([]byte, 1<<21)
 
-		panic(panicMessage)
+			runtime.Stack(buffer, true)
+			logger.Printf("%s", string(buffer))
+
+			panic(panicMessage)
+		}
+	} else {
+		r.tooSlowConsecutiveError = 0
 	}
 }
 

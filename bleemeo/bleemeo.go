@@ -104,11 +104,12 @@ type Connector struct {
 	mqtt        *mqtt.Client
 	mqttRestart chan interface{}
 
-	l               sync.RWMutex
-	lastKnownReport time.Time
-	lastMQTTRestart time.Time
-	disabledUntil   time.Time
-	disableReason   types.DisableReason
+	l                          sync.RWMutex
+	lastKnownReport            time.Time
+	lastMQTTRestart            time.Time
+	mqttReportConsecutiveError int
+	disabledUntil              time.Time
+	disableReason              types.DisableReason
 
 	// initialized indicates whether the mqtt connetcor can be started
 	initialized bool
@@ -874,15 +875,19 @@ func (c *Connector) HealthCheck() bool {
 			logger.Printf("MQTT connection fail to re-establish since %s. This may be a long network issue or a Glouton bug", lastReport.Format(time.RFC3339))
 
 			if time.Since(lastReport) > 36*time.Hour {
-				logger.Printf("Restarting MQTT is not enough. Glouton seems unhealthy, killing myself")
+				c.mqttReportConsecutiveError++
 
-				// We don't know how big the buffer needs to be to collect
-				// all the goroutines. Use 2MB buffer which hopefully is enough
-				buffer := make([]byte, 1<<21)
+				if c.mqttReportConsecutiveError >= 3 {
+					logger.Printf("Restarting MQTT is not enough. Glouton seems unhealthy, killing myself")
 
-				runtime.Stack(buffer, true)
-				logger.Printf("%s", string(buffer))
-				panic(fmt.Sprint("Glouton seems unhealthy (last report too old), killing myself\n", c.DiagnosticPage()))
+					// We don't know how big the buffer needs to be to collect
+					// all the goroutines. Use 2MB buffer which hopefully is enough
+					buffer := make([]byte, 1<<21)
+
+					runtime.Stack(buffer, true)
+					logger.Printf("%s", string(buffer))
+					panic(fmt.Sprint("Glouton seems unhealthy (last report too old), killing myself\n", c.DiagnosticPage()))
+				}
 			}
 
 			logger.Printf("Trying to restart the MQTT connection from scratch")
@@ -890,6 +895,8 @@ func (c *Connector) HealthCheck() bool {
 			if c.mqttRestart != nil {
 				c.mqttRestart <- nil
 			}
+		} else {
+			c.mqttReportConsecutiveError = 0
 		}
 
 		c.sync.SetMQTTConnected(c.mqtt.Connected())
