@@ -22,6 +22,8 @@ import (
 	"glouton/threshold"
 	"reflect"
 	"testing"
+
+	"github.com/google/go-cmp/cmp"
 )
 
 func Test_allowListToMap(t *testing.T) {
@@ -48,18 +50,46 @@ func Test_allowListToMap(t *testing.T) {
 			},
 		},
 		{
-			" cpu used  ,agent_status\n\t",
+			" cpu_used  ,agent_status\n\t",
 			map[string]bool{
-				"cpu used":     true,
+				"cpu_used":     true,
 				"agent_status": true,
+			},
+		},
+		{
+			"agent_config_warning,\nagent_status,\ncertificate_day_left_status,\n",
+			map[string]bool{
+				"agent_config_warning":        true,
+				"agent_status":                true,
+				"certificate_day_left_status": true,
+			},
+		},
+		{
+			"agent_config_warning,\r\nagent_status,\n\rcertificate_day_left_status,\rcpu_used",
+			map[string]bool{
+				"agent_config_warning":        true,
+				"agent_status":                true,
+				"cpu_used":                    true,
+				"certificate_day_left_status": true,
+			},
+		},
+		{
+			"metric1 metric-2\tmetric_3\nmetric04,metric:5,,\n\n\t   ,,,metric6",
+			map[string]bool{
+				"metric1":  true,
+				"metric-2": true,
+				"metric_3": true,
+				"metric04": true,
+				"metric:5": true,
+				"metric6":  true,
 			},
 		},
 	}
 
 	for _, c := range cases {
 		got := allowListToMap(c.flat)
-		if !reflect.DeepEqual(got, c.want) {
-			t.Errorf("allowListToMap(%#v) == %v, want %v", c.flat, got, c.want)
+		if diff := cmp.Diff(c.want, got); diff != "" {
+			t.Errorf("allowListToMap mismatch (-want +got)\n%s", diff)
 		}
 	}
 }
