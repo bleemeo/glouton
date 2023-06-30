@@ -2073,12 +2073,19 @@ func (a *agent) writeDiagnosticArchive(ctx context.Context, archive types.Archiv
 }
 
 func (a *agent) diagnosticGlobalInfo(ctx context.Context, archive types.ArchiveWriter) error {
-	file, err := archive.Create("diagnostic.txt")
+	file, err := archive.Create("goroutines.txt")
 	if err != nil {
 		return err
 	}
 
-	_, err = file.Write([]byte(a.DiagnosticPage(ctx)))
+	// We don't know how big the buffer needs to be to collect
+	// all the goroutines. Use 2MB buffer which hopefully is enough
+	buffer := make([]byte, 1<<21)
+
+	n := runtime.Stack(buffer, true)
+	buffer = buffer[:n]
+
+	_, err = file.Write(buffer)
 	if err != nil {
 		return err
 	}
@@ -2099,19 +2106,12 @@ func (a *agent) diagnosticGlobalInfo(ctx context.Context, archive types.ArchiveW
 
 	fmt.Fprintf(file, "-- Log size = %d, compressed = %d (ratio: %.2f)\n", len(tmp), compressedSize, float64(compressedSize)/float64(len(tmp)))
 
-	file, err = archive.Create("goroutines.txt")
+	file, err = archive.Create("diagnostic.txt")
 	if err != nil {
 		return err
 	}
 
-	// We don't know how big the buffer needs to be to collect
-	// all the goroutines. Use 2MB buffer which hopefully is enough
-	buffer := make([]byte, 1<<21)
-
-	n := runtime.Stack(buffer, true)
-	buffer = buffer[:n]
-
-	_, err = file.Write(buffer)
+	_, err = file.Write([]byte(a.DiagnosticPage(ctx)))
 	if err != nil {
 		return err
 	}
