@@ -24,6 +24,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 )
 
 const (
@@ -272,8 +273,16 @@ func allowListToMap(list string) map[string]bool {
 
 	result := make(map[string]bool)
 
-	for _, n := range strings.Split(list, ",") {
-		result[strings.Trim(n, " \t\n")] = true
+	separator := func(r rune) bool {
+		if r == ',' {
+			return true
+		}
+
+		return unicode.IsSpace(r)
+	}
+
+	for _, n := range strings.FieldsFunc(list, separator) {
+		result[strings.TrimSpace(n)] = true
 	}
 
 	return result
