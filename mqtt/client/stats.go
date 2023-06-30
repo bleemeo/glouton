@@ -18,6 +18,7 @@ package client
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -147,6 +148,21 @@ func (s *mqttStats) String() string {
 	s.l.Lock()
 	defer s.l.Unlock()
 
+	type sortableBucket struct {
+		ts time.Time
+		bucketStats
+	}
+
+	bucketsStats := make([]sortableBucket, 0, len(s.buckets))
+
+	for bucket, stats := range s.buckets {
+		bucketsStats = append(bucketsStats, sortableBucket{bucket, stats})
+	}
+
+	sort.Slice(bucketsStats, func(i, j int) bool {
+		return bucketsStats[i].ts.Before(bucketsStats[j].ts)
+	})
+
 	var builder strings.Builder
 
 	_, _ = builder.WriteString(
@@ -158,9 +174,9 @@ func (s *mqttStats) String() string {
 
 	_, _ = builder.WriteString("start, min, avg, max, messages\n")
 
-	for bucket, stats := range s.buckets {
+	for _, stats := range bucketsStats {
 		_, _ = builder.WriteString(
-			fmt.Sprintf("%v, %v, %v, %v, %v\n", bucket, stats.min, stats.avg, stats.max, stats.nbMessages),
+			fmt.Sprintf("%v, %v, %v, %v, %v\n", stats.ts, stats.min, stats.avg, stats.max, stats.nbMessages),
 		)
 	}
 
