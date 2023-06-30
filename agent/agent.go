@@ -1594,6 +1594,10 @@ func (a *agent) healthCheck(ctx context.Context) error {
 			a.bleemeoConnector.HealthCheck()
 		}
 
+		if a.gathererRegistry != nil {
+			a.gathererRegistry.HealthCheck()
+		}
+
 		if a.influxdbConnector != nil {
 			a.influxdbConnector.HealthCheck()
 		}

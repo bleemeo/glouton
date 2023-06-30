@@ -31,6 +31,7 @@ import (
 	"glouton/types"
 	"io"
 	"net/http"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -229,6 +230,7 @@ func (s scrapeRun) MarshalJSON() ([]byte, error) {
 type registration struct {
 	l                    sync.Mutex
 	option               RegistrationOption
+	addedAt              time.Time
 	loop                 *scrapeLoop
 	lastScrapes          []scrapeRun
 	gatherer             *labeledGatherer
@@ -619,6 +621,61 @@ func (r *Registry) diagnosticState(archive types.ArchiveWriter) error {
 	return enc.Encode(obj)
 }
 
+// HealthCheck perform some health check and log any issue found.
+// This method could panic when health condition are bad for too long in order to cause a Glouton restart.
+func (r *Registry) HealthCheck() {
+	r.l.Lock()
+	defer r.l.Unlock()
+
+	// We only panic if this string is not empty
+	var panicMessage string
+
+	for _, reg := range r.registrations {
+		reg.l.Lock()
+
+		if reg.loop != nil {
+			lastScrape := reg.addedAt
+
+			if len(reg.lastScrapes) > 0 {
+				lastScrape = reg.lastScrapes[len(reg.lastScrapes)-1].ScrapeAt
+			}
+
+			if time.Since(lastScrape) > 5*reg.loop.interval {
+				logger.Printf("Metrics collections is too slow for collector %s. Last run at %s and should run every %s",
+					reg.option.Description,
+					lastScrape.Format(time.RFC3339),
+					reg.loop.interval.String(),
+				)
+
+				if time.Since(lastScrape) > 10*reg.loop.interval && time.Since(lastScrape) > time.Hour {
+					msg := fmt.Sprintf("Metrics collections is blocked for collector %s. Last run at %s and should run every %s. Glouton seems unhealthy, killing myself",
+						reg.option.Description,
+						lastScrape.Format(time.RFC3339),
+						reg.loop.interval.String(),
+					)
+					logger.Printf(msg)
+
+					// We don't panic immediately. We want to unlock reg before.
+					panicMessage = msg
+				}
+			}
+		}
+
+		reg.l.Unlock()
+	}
+
+	if panicMessage != "" {
+		// We don't know how big the buffer needs to be to collect
+		// all the goroutines. Use 2MB buffer which hopefully is enough
+		buffer := make([]byte, 1<<21)
+
+		runtime.Stack(buffer, true)
+		logger.Printf("%s", string(buffer))
+
+		panic(panicMessage)
+	}
+}
+
 func (r *Registry) diagnosticScrapeLoop(archive types.ArchiveWriter) error {
 	r.l.Lock()
 	defer r.l.Unlock()
@@ -636,6 +693,7 @@ func (r *Registry) diagnosticScrapeLoop(archive types.ArchiveWriter) error {
 	type loopInfo struct {
 		ID                 int
 		Description        string
+		AddedAt            time.Time
 		LastScrape         []scrapeRun
 		ScrapeInterval     string
 		Option             RegistrationOption
@@ -655,6 +713,7 @@ func (r *Registry) diagnosticScrapeLoop(archive types.ArchiveWriter) error {
 		info := loopInfo{
 			ID:          id,
 			Description: reg.option.Description,
+			AddedAt:     reg.addedAt,
 			LastScrape:  reg.lastScrapes,
 			Option:      reg.option,
 			LabelUsed:   dtoLabelToMap(reg.gatherer.labels),
@@ -787,6 +846,8 @@ func (r *Registry) addRegistration(reg *registration) (int, error) {
 
 		_, ok = r.registrations[id]
 	}
+
+	reg.addedAt = time.Now()
 
 	r.registrations[id] = reg
 
