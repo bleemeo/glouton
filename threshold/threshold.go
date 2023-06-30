@@ -420,16 +420,16 @@ func (r *Registry) GetThresholdMetricNames() []string {
 }
 
 // GetThreshold returns the current threshold for a Metric by labels text.
-func (r *Registry) GetThreshold(labelsText string) Threshold {
+func (r *Registry) GetThreshold(labelsText string, agentID string) Threshold {
 	r.l.Lock()
 	defer r.l.Unlock()
 
-	return r.getThreshold(labelsText)
+	return r.getThreshold(labelsText, agentID)
 }
 
-func (r *Registry) getThreshold(labelsText string) Threshold {
+func (r *Registry) getThreshold(labelsText string, agentID string) Threshold {
 	labelsMap := types.TextToLabels(labelsText)
-	if metricutils.MetricOnlyHasItem(labelsMap, labelsMap[types.LabelInstanceUUID]) {
+	if metricutils.MetricOnlyHasItem(labelsMap, agentID) {
 		// Getting rid of the 'instance' label, which impedes retrieving the threshold.
 		labelsMap = map[string]string{
 			types.LabelName:         labelsMap[types.LabelName],
@@ -603,7 +603,7 @@ func (r *Registry) ApplyThresholds(points []types.MetricPoint) ([]types.MetricPo
 	for _, point := range points {
 		if !point.Annotations.Status.CurrentStatus.IsSet() {
 			labelsText := types.LabelsToText(point.Labels)
-			threshold := r.getThreshold(labelsText)
+			threshold := r.getThreshold(labelsText, point.Labels[types.LabelInstanceUUID])
 
 			if !threshold.IsZero() && !math.IsNaN(point.Value) {
 				newPoints, statusPoints = r.addPointWithThreshold(newPoints, statusPoints, point, threshold, labelsText)
