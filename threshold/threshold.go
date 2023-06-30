@@ -23,6 +23,7 @@ import (
 	"glouton/config"
 	"glouton/logger"
 	"glouton/types"
+	"glouton/utils/metricutils"
 	"math"
 	"sort"
 	"strings"
@@ -427,11 +428,22 @@ func (r *Registry) GetThreshold(labelsText string) Threshold {
 }
 
 func (r *Registry) getThreshold(labelsText string) Threshold {
+	labelsMap := types.TextToLabels(labelsText)
+	if metricutils.MetricOnlyHasItem(labelsMap, labelsMap[types.LabelInstanceUUID]) {
+		// Getting rid of the 'instance' label, which impedes retrieving the threshold.
+		labelsMap = map[string]string{
+			types.LabelName:         labelsMap[types.LabelName],
+			types.LabelItem:         labelsMap[types.LabelItem],
+			types.LabelInstanceUUID: labelsMap[types.LabelInstanceUUID],
+		}
+		labelsText = types.LabelsToText(labelsMap)
+	}
+
 	if threshold, ok := r.thresholds[labelsText]; ok {
 		return threshold
 	}
 
-	metricName := types.TextToLabels(labelsText)[types.LabelName]
+	metricName := labelsMap[types.LabelName]
 	threshold := r.thresholdsAllItem[metricName]
 
 	if threshold.IsZero() {
