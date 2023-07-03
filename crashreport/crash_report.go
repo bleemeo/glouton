@@ -84,7 +84,7 @@ func logMultiErrs(errs prometheus.MultiError) {
 	}
 }
 
-func isWriteInProgress(stateDir string) bool {
+func IsWriteInProgress(stateDir string) bool {
 	_, err := os.Stat(filepath.Join(stateDir, writeInProgressFlag))
 
 	return err == nil
@@ -141,6 +141,28 @@ func SetupStderrRedirection() {
 	}
 }
 
+// ListCrashReports returns all crash reports present in stateDir.
+func ListCrashReports(stateDir string) []string {
+	crashReports, err := filepath.Glob(filepath.Join(stateDir, crashReportArchivePattern))
+	if err != nil {
+		// filepath.Glob's documentation states that "Glob ignores file system errors [...]".
+		// The only possible returned error is ErrBadPattern, and the above pattern is known to be valid.
+		return nil
+	}
+
+	return crashReports
+}
+
+// Remove deletes all the given crash reports from stateDir.
+func Remove(reports ...string) {
+	for _, report := range reports {
+		err := os.RemoveAll(report)
+		if err != nil && !os.IsNotExist(err) {
+			logger.V(1).Printf("Failed to remove crash report %q: %v", report, err)
+		}
+	}
+}
+
 // PurgeCrashReports deletes oldest crash reports present in 'stateDir'
 // and only keeps the 'maxReportCount' most recent ones.
 // Crash reports specified as 'preserve' won't be deleted.
@@ -149,13 +171,7 @@ func PurgeCrashReports(maxReportCount int, preserve ...string) {
 	stateDir := dir
 	lock.Unlock()
 
-	existingCrashReports, err := filepath.Glob(filepath.Join(stateDir, crashReportArchivePattern))
-	if err != nil {
-		// filepath.Glob's documentation states that "Glob ignores file system errors [...]".
-		// The only possible returned error is ErrBadPattern, and the above pattern is known to be valid.
-		return
-	}
-
+	existingCrashReports := ListCrashReports(stateDir)
 	crashReportCount := len(existingCrashReports)
 
 	// Prevent preserved reports from being purged
@@ -175,16 +191,7 @@ func PurgeCrashReports(maxReportCount int, preserve ...string) {
 	// Remove the oldest excess crash reports
 	sort.Strings(existingCrashReports)
 
-	for i, report := range existingCrashReports {
-		if i == crashReportCount-maxReportCount {
-			break
-		}
-
-		err = os.RemoveAll(report)
-		if err != nil {
-			logger.V(1).Printf("Failed to remove old crash report %q: %v", report, err)
-		}
-	}
+	Remove(existingCrashReports[:len(existingCrashReports)-maxReportCount]...)
 }
 
 // BundleCrashReportFiles creates a crash report archive with the current datetime in its name,
@@ -198,7 +205,7 @@ func BundleCrashReportFiles(ctx context.Context, maxReportCount int) (reportPath
 	diagnosticFn := diagnostic
 	lock.Unlock()
 
-	if isWriteInProgress(stateDir) {
+	if IsWriteInProgress(stateDir) {
 		// If the flag has not been deleted the last run, it may be because the crash reporting process crashed.
 		// So to try not to crash again, we skip the crash reporting this time.
 		// We will try to report the next time, so we delete the flag.
