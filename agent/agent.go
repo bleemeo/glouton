@@ -630,10 +630,10 @@ func (a *agent) updateThresholds(ctx context.Context, thresholds map[string]thre
 			types.LabelName:         name,
 			types.LabelInstanceUUID: a.BleemeoAgentID(),
 		}
-		oldThresholds[name] = a.threshold.GetThreshold(types.LabelsToText(lbls), a.BleemeoAgentID())
+		oldThresholds[name] = a.threshold.GetThreshold(types.LabelsToText(lbls))
 	}
 
-	a.threshold.SetThresholds(thresholds, configThreshold)
+	a.threshold.SetThresholds(a.BleemeoAgentID(), thresholds, configThreshold)
 
 	services, err := a.discovery.Discovery(ctx, 1*time.Hour)
 
@@ -651,7 +651,7 @@ func (a *agent) updateThresholds(ctx context.Context, thresholds map[string]thre
 			types.LabelName:         name,
 			types.LabelInstanceUUID: a.BleemeoAgentID(),
 		}
-		newThreshold := a.threshold.GetThreshold(types.LabelsToText(lbls), a.BleemeoAgentID())
+		newThreshold := a.threshold.GetThreshold(types.LabelsToText(lbls))
 
 		if !firstUpdate && !oldThresholds[name].Equal(newThreshold) {
 			if name == "time_drift" && a.bleemeoConnector != nil {

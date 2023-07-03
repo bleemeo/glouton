@@ -48,6 +48,8 @@ type State interface {
 type Registry struct {
 	state State
 
+	agentID string
+
 	l sync.Mutex
 	// Threshold states by labels text.
 	states map[string]statusState
@@ -83,9 +85,11 @@ func New(state State) *Registry {
 // SetThresholds configure thresholds.
 // The thresholdWithItem is searched first and only match if both the metric name and item match
 // Then thresholdAllItem is searched and match is the metric name match regardless of the metric item.
-func (r *Registry) SetThresholds(thresholdWithItem map[string]Threshold, thresholdAllItem map[string]Threshold) {
+func (r *Registry) SetThresholds(agentID string, thresholdWithItem map[string]Threshold, thresholdAllItem map[string]Threshold) {
 	r.l.Lock()
 	defer r.l.Unlock()
+
+	r.agentID = agentID
 
 	// The finality of this map is to contain only the deleted thresholds
 	// to be able to delete their related status states,
@@ -420,24 +424,16 @@ func (r *Registry) GetThresholdMetricNames() []string {
 }
 
 // GetThreshold returns the current threshold for a Metric by labels text.
-func (r *Registry) GetThreshold(labelsText string, agentID string) Threshold {
+func (r *Registry) GetThreshold(labelsText string) Threshold {
 	r.l.Lock()
 	defer r.l.Unlock()
 
-	return r.getThreshold(labelsText, agentID)
+	return r.getThreshold(labelsText)
 }
 
-func (r *Registry) getThreshold(labelsText string, agentID string) Threshold {
+func (r *Registry) getThreshold(labelsText string) Threshold {
 	labelsMap := types.TextToLabels(labelsText)
-	if metricutils.MetricOnlyHasItem(labelsMap, agentID) {
-		// Getting rid of the 'instance' label, which impedes retrieving the threshold.
-		labelsMap = map[string]string{
-			types.LabelName:         labelsMap[types.LabelName],
-			types.LabelItem:         labelsMap[types.LabelItem],
-			types.LabelInstanceUUID: labelsMap[types.LabelInstanceUUID],
-		}
-		labelsText = types.LabelsToText(labelsMap)
-	}
+	labelsText = r.labelsWithoutInstance(labelsText)
 
 	if threshold, ok := r.thresholds[labelsText]; ok {
 		return threshold
@@ -591,6 +587,23 @@ func formatDuration(period time.Duration) string {
 	return result
 }
 
+// labelsWithoutInstance remove all labels but the name and the item
+// if the given labelsText match metricutils.MetricOnlyHasItem.
+// Otherwise, it returns the labels unchanged.
+func (r *Registry) labelsWithoutInstance(labelsText string) string {
+	labelsMap := types.TextToLabels(labelsText)
+	if metricutils.MetricOnlyHasItem(labelsMap, r.agentID) {
+		// Getting rid of the 'instance' label
+		labelsMap = map[string]string{
+			types.LabelName: labelsMap[types.LabelName],
+			types.LabelItem: labelsMap[types.LabelItem],
+		}
+		labelsText = types.LabelsToText(labelsMap)
+	}
+
+	return labelsText
+}
+
 // ApplyThresholds applies the thresholds. It returns input points with their status modified by the thresholds,
 // and the new status points generated.
 func (r *Registry) ApplyThresholds(points []types.MetricPoint) ([]types.MetricPoint, []types.MetricPoint) {
@@ -603,7 +616,7 @@ func (r *Registry) ApplyThresholds(points []types.MetricPoint) ([]types.MetricPo
 	for _, point := range points {
 		if !point.Annotations.Status.CurrentStatus.IsSet() {
 			labelsText := types.LabelsToText(point.Labels)
-			threshold := r.getThreshold(labelsText, point.Labels[types.LabelInstanceUUID])
+			threshold := r.getThreshold(labelsText)
 
 			if !threshold.IsZero() && !math.IsNaN(point.Value) {
 				newPoints, statusPoints = r.addPointWithThreshold(newPoints, statusPoints, point, threshold, labelsText)
@@ -630,8 +643,8 @@ func (r *Registry) addPointWithThreshold(
 	newState := previousState.Update(softStatus, threshold.WarningDelay, threshold.CriticalDelay, r.nowFunc())
 	r.states[labelsText] = newState
 
-	unit := r.units[labelsText]
-	// Consumer expect status description from threshold to start with "Current value:"
+	unit := r.units[r.labelsWithoutInstance(labelsText)]
+	// Consumer expects status description from threshold to start with "Current value:"
 	statusDescription := fmt.Sprintf("Current value: %s", FormatValue(point.Value, unit))
 
 	if newState.CurrentStatus != types.StatusOk {
