@@ -444,7 +444,7 @@ type MQTTReloadState interface {
 	OnConnectionLost(cli paho.Client, err error)
 	ConnectionLostChannel() <-chan error
 	Close()
-	AddPendingMessage(ctx context.Context, m Message, shouldWait bool)
+	AddPendingMessage(ctx context.Context, m Message, shouldWait bool) bool
 	PendingMessage(ctx context.Context) (Message, bool)
 	PendingMessagesCount() int
 }
@@ -454,7 +454,7 @@ type Message struct {
 	Token   paho.Token
 	Retry   bool
 	Topic   string
-	Payload interface{}
+	Payload []byte
 }
 
 // SimpleRule is a PromQL run on output from the Gatherer.

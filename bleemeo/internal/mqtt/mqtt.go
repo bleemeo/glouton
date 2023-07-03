@@ -540,6 +540,28 @@ func (c *Client) PopPoints(includeFailedPoints bool) []types.MetricPoint {
 func (c *Client) sendPoints() {
 	points := c.PopPoints(false)
 
+	payload := c.sendPointsMakePayload(points)
+
+	for agentID, agentPayload := range payload {
+		for i := 0; i < len(agentPayload); i += pointsBatchSize {
+			end := i + pointsBatchSize
+			if end > len(agentPayload) {
+				end = len(agentPayload)
+			}
+
+			buffer, err := c.encoder.Encode(agentPayload[i:end])
+			if err != nil {
+				logger.V(1).Printf("Unable to encode points: %v", err)
+
+				return
+			}
+
+			c.mqtt.Publish(fmt.Sprintf("v1/agent/%s/data", agentID), buffer, true)
+		}
+	}
+}
+
+func (c *Client) sendPointsMakePayload(points []types.MetricPoint) map[bleemeoTypes.AgentID][]metricPayload {
 	c.l.Lock()
 	defer c.l.Unlock()
 
@@ -550,7 +572,7 @@ func (c *Client) sendPoints() {
 		// Make sure that when connection is back we retry failed points as soon as possible
 		c.lastFailedPointsRetry = time.Time{}
 
-		return
+		return nil
 	}
 
 	registeredMetricByKey := c.opts.Cache.MetricLookupFromList()
@@ -575,23 +597,7 @@ func (c *Client) sendPoints() {
 
 	logger.V(2).Printf("MQTT: sending %d points", nbPoints)
 
-	for agentID, agentPayload := range payload {
-		for i := 0; i < len(agentPayload); i += pointsBatchSize {
-			end := i + pointsBatchSize
-			if end > len(agentPayload) {
-				end = len(agentPayload)
-			}
-
-			buffer, err := c.encoder.Encode(agentPayload[i:end])
-			if err != nil {
-				logger.V(1).Printf("Unable to encode points: %v", err)
-
-				return
-			}
-
-			c.mqtt.Publish(fmt.Sprintf("v1/agent/%s/data", agentID), buffer, true)
-		}
-	}
+	return payload
 }
 
 // addFailedPoints add given points to list of failed points.

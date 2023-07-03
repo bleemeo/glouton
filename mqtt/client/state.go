@@ -73,12 +73,14 @@ func (rs *ReloadState) ConnectionLostChannel() <-chan error {
 	return rs.connectionLostChannel
 }
 
-func (rs *ReloadState) AddPendingMessage(ctx context.Context, m types.Message, shouldWait bool) {
+func (rs *ReloadState) AddPendingMessage(ctx context.Context, m types.Message, shouldWait bool) bool {
 	if shouldWait {
 		rs.pendingMessages.Put(ctx, m)
-	} else {
-		rs.pendingMessages.PutNoWait(m)
+
+		return true
 	}
+
+	return rs.pendingMessages.PutNoWait(m)
 }
 
 func (rs *ReloadState) PendingMessage(ctx context.Context) (m types.Message, open bool) {
