@@ -122,7 +122,7 @@ func TestIsWriteInProgress(t *testing.T) {
 
 		f.Close()
 
-		if !isWriteInProgress(testDir) {
+		if !IsWriteInProgress(testDir) {
 			t.Fatal("Write is in progress but was not considered as such.")
 		}
 	})
@@ -131,7 +131,7 @@ func TestIsWriteInProgress(t *testing.T) {
 		testDir, delTmpDir := setupTestDir(t)
 		defer delTmpDir()
 
-		if isWriteInProgress(testDir) {
+		if IsWriteInProgress(testDir) {
 			t.Fatal("Write is not in progress but was considered to be in progress.")
 		}
 	})
