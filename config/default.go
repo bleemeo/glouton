@@ -332,7 +332,7 @@ func DefaultConfig() Config { //nolint:maintidx
 		Web: Web{
 			Enable: true,
 			Endpoints: WebEndpoints{
-				DebugEnable: true,
+				DebugEnable: false,
 			},
 			Listener: Listener{
 				Address: "127.0.0.1",

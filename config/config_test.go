@@ -349,7 +349,7 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 		Web: Web{
 			Enable: true,
 			Endpoints: WebEndpoints{
-				DebugEnable: false,
+				DebugEnable: true,
 			},
 			LocalUI: LocalUI{
 				Enable: true,
@@ -783,7 +783,7 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 				},
 				Web: Web{
 					Endpoints: WebEndpoints{
-						DebugEnable: true,
+						DebugEnable: false,
 					},
 				},
 			},
