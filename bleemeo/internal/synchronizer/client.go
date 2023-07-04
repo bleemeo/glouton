@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"glouton/bleemeo/client"
+	"io"
 	"time"
 )
 
@@ -71,4 +72,8 @@ func (cl *wrapperClient) Iter(ctx context.Context, resource string, params map[s
 	}
 
 	return cl.client.Iter(ctx, resource, params)
+}
+
+func (cl *wrapperClient) DoWithBody(ctx context.Context, path string, contentType string, body io.Reader) (statusCode int, err error) {
+	return cl.client.DoWithBody(ctx, path, contentType, body)
 }
