@@ -1,3 +1,19 @@
+// Copyright 2015-2023 Bleemeo
+//
+// bleemeo.com an infrastructure monitoring solution in the Cloud
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package synchronizer
 
 import (
@@ -61,7 +77,15 @@ func (s *Synchronizer) syncCrashReports(
 
 	notUploadedYet := sliceDiff(localCrashReports, reportPaths)
 
-	return false, s.uploadCrashReports(ctx, notUploadedYet)
+	if err = s.uploadCrashReports(ctx, notUploadedYet); err != nil {
+		// We "ignore" error from crash report upload because:
+		// * they are not essential
+		// * by "ignoring" the error, it will be re-tried on next full sync instead of after a short delay,
+		//   which seems better since it could send a rather large payload.
+		logger.V(1).Printf("Upload crash report: %v", err)
+	}
+
+	return false, nil
 }
 
 func (s *Synchronizer) listRemoteCrashReports(ctx context.Context) ([]RemoteCrashReport, error) {
@@ -114,7 +138,7 @@ func (s *Synchronizer) uploadCrashReport(ctx context.Context, reportPath string)
 	}
 
 	if stat.Size() > crashreport.MaxReportSize {
-		logger.V(1).Printf("Skipping crash report %q which is too big.", reportPath)
+		logger.V(2).Printf("Skipping crash report %q which is too big.", reportPath)
 
 		return nil
 	}
