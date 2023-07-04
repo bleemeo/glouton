@@ -587,7 +587,7 @@ func formatDuration(period time.Duration) string {
 	return result
 }
 
-// labelsWithoutInstance remove all labels but the name and the item
+// labelsWithoutInstance remove all labels but the name, the item and the instance_uuid
 // if the given labelsText match metricutils.MetricOnlyHasItem.
 // Otherwise, it returns the labels unchanged.
 func (r *Registry) labelsWithoutInstance(labelsText string) string {
@@ -595,8 +595,9 @@ func (r *Registry) labelsWithoutInstance(labelsText string) string {
 	if metricutils.MetricOnlyHasItem(labelsMap, r.agentID) {
 		// Getting rid of the 'instance' label
 		labelsMap = map[string]string{
-			types.LabelName: labelsMap[types.LabelName],
-			types.LabelItem: labelsMap[types.LabelItem],
+			types.LabelName:         labelsMap[types.LabelName],
+			types.LabelItem:         labelsMap[types.LabelItem],
+			types.LabelInstanceUUID: labelsMap[types.LabelInstanceUUID],
 		}
 		labelsText = types.LabelsToText(labelsMap)
 	}
