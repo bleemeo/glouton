@@ -50,6 +50,7 @@ const (
 	mockAPIResourceAgentConfig   = "agentconfig"
 	mockAPIResourceService       = "service"
 	mockAPIGloutonConfigItem     = "gloutonconfigitem"
+	mockAPIGloutonCrashReport    = "gloutoncrashreport"
 )
 
 //nolint:gochecknoglobals
@@ -296,6 +297,9 @@ func newAPI() *mockAPI {
 	api.AddResource(mockAPIGloutonConfigItem, &genericResource{
 		Type:        bleemeoTypes.GloutonConfigItem{},
 		ValidFilter: []string{"agent"},
+	})
+	api.AddResource(mockAPIGloutonCrashReport, &genericResource{
+		Type: RemoteCrashReport{},
 	})
 
 	api.resources[mockAPIResourceAgentType].SetStore(

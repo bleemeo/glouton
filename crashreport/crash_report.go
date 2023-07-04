@@ -37,6 +37,8 @@ import (
 	"k8s.io/utils/strings/slices"
 )
 
+const MaxReportSize = 2 << 20
+
 const (
 	crashReportWorkDir = "crash_report"
 
@@ -84,6 +86,7 @@ func logMultiErrs(errs prometheus.MultiError) {
 	}
 }
 
+// IsWriteInProgress returns whether a crash report is being written or not.
 func IsWriteInProgress(stateDir string) bool {
 	_, err := os.Stat(filepath.Join(stateDir, writeInProgressFlag))
 

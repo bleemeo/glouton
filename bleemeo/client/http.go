@@ -229,6 +229,27 @@ func (c *HTTPClient) DoTLSInsecure(ctx context.Context, method string, path stri
 	return c.do(ctx, req, result, true, false, true)
 }
 
+// DoWithBody sends a POST request to the given path with the given body under the given content-type.
+// It returns the status code of the response or any error that occurred.
+func (c *HTTPClient) DoWithBody(ctx context.Context, path string, contentType string, body io.Reader) (int, error) {
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	u, err := c.baseURL.Parse(path)
+	if err != nil {
+		return 0, err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u.String(), body)
+	if err != nil {
+		return 0, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return c.do(ctx, req, nil, true, true, false)
+}
+
 func (c *HTTPClient) prepareRequest(method string, path string, params map[string]string, data interface{}) (*http.Request, error) {
 	u, err := c.baseURL.Parse(path)
 	if err != nil {
