@@ -982,6 +982,10 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		tasks = append(tasks, taskInfo{a.crashReportManagement, "Crash report management"})
 	}
 
+	if a.config.Agent.EnableCrashReporting {
+		tasks = append(tasks, taskInfo{a.crashReportManagement, "Crash report management"})
+	}
+
 	if a.config.JMX.Enable {
 		perm, err := strconv.ParseInt(a.config.JMXTrans.FilePermission, 8, 0)
 		if err != nil {
