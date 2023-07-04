@@ -131,7 +131,7 @@ func (fifo *fifo[T]) Put(ctx context.Context, v T) {
 	go func() { //nolint:wsl
 		defer wg.Done()
 
-		go fifo.watchForDone(subCtx, fifo.notFull)
+		fifo.watchForDone(subCtx, fifo.notFull)
 	}()
 
 	defer wg.Wait()
