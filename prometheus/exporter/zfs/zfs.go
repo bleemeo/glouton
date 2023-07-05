@@ -105,7 +105,7 @@ func decodeZpool(output string) []types.MetricPoint {
 		case "ONLINE":
 			status = types.StatusOk
 		case "DEGRADED":
-			status = types.StatusWarning
+			status = types.StatusCritical
 		case "OFFLINE":
 			status = types.StatusWarning
 		default:
