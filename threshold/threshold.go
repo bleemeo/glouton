@@ -638,13 +638,14 @@ func (r *Registry) addPointWithThreshold(
 	threshold Threshold,
 	labelsText string,
 ) ([]types.MetricPoint, []types.MetricPoint) {
+	labelsText = r.labelsWithoutInstance(labelsText)
 	softStatus, highThreshold := threshold.CurrentStatus(point.Value)
 	previousState := r.states[labelsText]
 
 	newState := previousState.Update(softStatus, threshold.WarningDelay, threshold.CriticalDelay, r.nowFunc())
 	r.states[labelsText] = newState
 
-	unit := r.units[r.labelsWithoutInstance(labelsText)]
+	unit := r.units[labelsText]
 	// Consumer expects status description from threshold to start with "Current value:"
 	statusDescription := fmt.Sprintf("Current value: %s", FormatValue(point.Value, unit))
 
