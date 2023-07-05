@@ -209,11 +209,11 @@ func BundleCrashReportFiles(ctx context.Context, maxReportCount int) (reportPath
 	lock.Unlock()
 
 	isWriteInProgress := IsWriteInProgress(stateDir)
+
+	logMultiErrs(markAsDone(stateDir))
 	// If the flag has not been deleted the last run, it may be because the crash reporting process crashed.
 	// So to try not to crash again, we skip the crash reporting this time.
 	// We will try to report the next time, so we delete the flag.
-	logMultiErrs(markAsDone(stateDir))
-
 	if isWriteInProgress {
 		return ""
 	}

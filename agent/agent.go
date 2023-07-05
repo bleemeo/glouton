@@ -260,13 +260,8 @@ func (a *agent) init(ctx context.Context, configFiles []string, firstRun bool) (
 	}
 
 	statePath := a.config.Agent.StateFile
-
 	cachePath := a.config.Agent.StateCacheFile
 	oldStatePath := a.config.Agent.DeprecatedStateFile
-
-	if cachePath == a.config.Agent.StateDirectory {
-		cachePath = state.DefaultCachePath(statePath)
-	}
 
 	a.state, err = state.Load(statePath, cachePath)
 	if err != nil {
