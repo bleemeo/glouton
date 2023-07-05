@@ -272,10 +272,12 @@ func TestTelemetryFieldMigration(t *testing.T) {
 		t.Fatal("Failed to read persisted state:", err)
 	}
 
-	persisted = bytes.Trim(persisted, "\n")
-	expected := `{"version":1,"agent_uuid":"98a28d20-eb60-4304-aa05-1e1ffe633bee","password":"theSecretPassword","telemetry_id":"78946"}`
+	expected, err := os.ReadFile("testdata/state-v1-migrate-telemetry.json")
+	if err != nil {
+		t.Fatal("Failed to read test data:", err)
+	}
 
-	if diff := cmp.Diff(expected, string(persisted)); diff != "" {
+	if diff := cmp.Diff(expected, persisted); diff != "" {
 		t.Fatal("Unexpected persisted state (-want +got)\n", diff)
 	}
 }
