@@ -235,6 +235,8 @@ func (a *agent) init(ctx context.Context, configFiles []string, firstRun bool) (
 
 	if firstRun {
 		crashreport.SetupStderrRedirection()
+
+		_, _ = fmt.Fprintf(os.Stderr, "Starting Glouton at %s with PID %d\n", time.Now().Format(time.RFC3339), os.Getpid())
 	}
 
 	// Initialize paho loggers, this needs to be done only once to prevent data races.
@@ -976,10 +978,6 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		{a.miscTasks, "Miscelanous tasks"},
 		{a.sendToTelemetry, "Send Facts information to our telemetry tool"},
 		{a.threshold.Run, "Threshold state"},
-	}
-
-	if a.config.Agent.EnableCrashReporting {
-		tasks = append(tasks, taskInfo{a.crashReportManagement, "Crash report management"})
 	}
 
 	if a.config.Agent.EnableCrashReporting {

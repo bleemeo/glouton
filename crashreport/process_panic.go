@@ -19,6 +19,7 @@ package crashreport
 import (
 	"context"
 	"fmt"
+	"glouton/logger"
 	"glouton/utils/archivewriter"
 	"os"
 	"path/filepath"
@@ -31,10 +32,14 @@ import (
 // It should be deferred at the beginning of every new goroutine.
 func ProcessPanic() {
 	if err := recover(); err != nil {
+		_, _ = fmt.Fprintln(os.Stderr, "Glouton crashed at", time.Now().Format(time.RFC3339))
+
 		sentry.CurrentHub().Recover(err)
 		sentry.Flush(time.Second * 5)
 
 		tryToGenerateDiagnostic(time.Second * 10)
+
+		logger.Printf("Glouton crashed: %v", err)
 
 		panic(err)
 	}
