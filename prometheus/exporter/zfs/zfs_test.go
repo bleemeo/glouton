@@ -284,11 +284,11 @@ pool_001	ONLINE	9663676416	107520	9663568896
 						types.LabelItem: "pool_001",
 					},
 					Point: types.Point{
-						Value: 1,
+						Value: 2,
 					},
 					Annotations: types.MetricAnnotations{
 						Status: types.StatusDescription{
-							CurrentStatus:     types.StatusWarning,
+							CurrentStatus:     types.StatusCritical,
 							StatusDescription: "ZFS pool is DEGRADED",
 						},
 					},
