@@ -317,6 +317,7 @@ func DefaultConfig() Config { //nolint:maintidx
 			Excludes: []string{
 				"/dev/cd0", // we assume there isn't more than one CDROM on TrueNAS.
 			},
+			MaxConcurrency: 4,
 		},
 		Stack: "",
 		Tags:  []string{},
