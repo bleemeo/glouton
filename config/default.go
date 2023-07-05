@@ -71,7 +71,7 @@ func DefaultConfig() Config { //nolint:maintidx
 			StateResetFile:       "state.reset",
 			DeprecatedStateFile:  "",
 			EnableCrashReporting: true,
-			MaxCrashReportDirs:   2,
+			MaxCrashReportsCount: 2,
 			UpgradeFile:          "upgrade",
 			AutoUpgradeFile:      "auto_upgrade",
 			MetricsFormat:        "Bleemeo",

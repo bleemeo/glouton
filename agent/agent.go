@@ -1531,12 +1531,12 @@ func (a *agent) miscTasks(ctx context.Context) error {
 }
 
 func (a *agent) crashReportManagement(ctx context.Context) error {
-	createdReportDir := crashreport.BundleCrashReportFiles(ctx, a.config.Agent.MaxCrashReportDirs)
+	createdReportDir := crashreport.BundleCrashReportFiles(ctx, a.config.Agent.MaxCrashReportsCount)
 
 	// We protect the report generated just now to be sure it won't be purged.
 	// Without that, the purge would only be based on filename (generation datetime),
 	// and if the time moves backward, the report we generated just now could be the one with the oldest time.
-	crashreport.PurgeCrashReports(a.config.Agent.MaxCrashReportDirs, createdReportDir)
+	crashreport.PurgeCrashReports(a.config.Agent.MaxCrashReportsCount, createdReportDir)
 
 	return nil
 }

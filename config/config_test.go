@@ -42,7 +42,7 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 			StateResetFile:         "state.reset",
 			DeprecatedStateFile:    "state.deprecated",
 			EnableCrashReporting:   true,
-			MaxCrashReportDirs:     2,
+			MaxCrashReportsCount:   2,
 			UpgradeFile:            "upgrade",
 			AutoUpgradeFile:        "auto-upgrade",
 			NodeExporter: NodeExporter{
