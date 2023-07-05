@@ -262,7 +262,7 @@ func (a *agent) init(ctx context.Context, configFiles []string, firstRun bool) (
 	cachePath := a.config.Agent.StateCacheFile
 	oldStatePath := a.config.Agent.DeprecatedStateFile
 
-	if cachePath == "" {
+	if cachePath == a.config.Agent.StateDirectory {
 		cachePath = state.DefaultCachePath(statePath)
 	}
 
