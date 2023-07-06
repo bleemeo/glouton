@@ -36,7 +36,7 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 			FactsFile:              "facts.yaml",
 			InstallationFormat:     "manual",
 			NetstatFile:            "netstat.out",
-			StateDirectory:         "/var/lib/glouton/state",
+			StateDirectory:         ".",
 			StateFile:              "state.json",
 			StateCacheFile:         "state.cache.json",
 			StateResetFile:         "state.reset",
