@@ -69,7 +69,7 @@ func Load(withDefault bool, loadEnviron bool, paths ...string) (Config, []Item, 
 	config, warnings, err := load(loader, withDefault, loadEnviron, paths...)
 
 	if config.Agent.StateCacheFile == "" {
-		config.Agent.StateCacheFile = state.DefaultCachePath(config.Agent.StateCacheFile)
+		config.Agent.StateCacheFile = state.DefaultCachePath(config.Agent.StateFile)
 	}
 
 	if !filepath.IsAbs(config.Agent.StateFile) {
