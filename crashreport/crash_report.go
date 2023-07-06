@@ -208,13 +208,14 @@ func BundleCrashReportFiles(ctx context.Context, maxReportCount int) (reportPath
 	diagnosticFn := diagnostic
 	lock.Unlock()
 
-	isWriteInProgress := IsWriteInProgress(stateDir)
+	defer func() {
+		logMultiErrs(markAsDone(stateDir))
+	}()
 
-	logMultiErrs(markAsDone(stateDir))
 	// If the flag has not been deleted the last run, it may be because the crash reporting process crashed.
 	// So to try not to crash again, we skip the crash reporting this time.
-	// We will try to report the next time, so we delete the flag.
-	if isWriteInProgress {
+	// We will try to report the next time, so we delete the flag and return.
+	if IsWriteInProgress(stateDir) {
 		return ""
 	}
 
@@ -250,11 +251,7 @@ func BundleCrashReportFiles(ctx context.Context, maxReportCount int) (reportPath
 	}
 
 	if foundStderrLog || foundPanicDiagnostic {
-		reportPath = makeBundle(ctx, stateDir, diagnosticFn)
-
-		logMultiErrs(markAsDone(stateDir))
-
-		return reportPath
+		return makeBundle(ctx, stateDir, diagnosticFn)
 	}
 
 	return "" // No crash report created
@@ -263,7 +260,7 @@ func BundleCrashReportFiles(ctx context.Context, maxReportCount int) (reportPath
 // makeBundle creates an archive with the current datetime in its name,
 // containing the old stderr log file, a freshly created diagnostic
 // and the diagnostic generated at the moment of the last crash, if one.
-// It returns the name of the created archive if everything went well, otherwise an empty string.
+// It returns the path to the created archive if everything went well, otherwise an empty string.
 func makeBundle(ctx context.Context, stateDir string, diagnosticFn diagnosticFunc) string {
 	// Create a file to flag that the crash report is not complete because we haven't generated a diagnostic yet.
 	_, err := os.Create(filepath.Join(stateDir, writeInProgressFlag))
