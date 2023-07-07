@@ -241,7 +241,7 @@ func BundleCrashReportFiles(ctx context.Context, maxReportCount int) (reportPath
 
 	_, err = lastStderrFile.Read(lastStderrFileContent)
 	if err == nil || errors.Is(err, io.EOF) {
-		if bytes.Contains(lastStderrFileContent, []byte("panic")) {
+		if bytes.Contains(lastStderrFileContent, []byte("panic:")) {
 			foundStderrLog = true
 		}
 	}
