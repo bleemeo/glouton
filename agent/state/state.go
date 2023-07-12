@@ -41,8 +41,10 @@ type persistedState struct {
 	Version         int    `json:"version"`
 	BleemeoAgentID  string `json:"agent_uuid"`
 	BleemeoPassword string `json:"password"`
-	TelemetryID     string `json:"telemery_id"`
-	dirty           bool   `json:"-"`
+	TelemetryID     string `json:"telemetry_id"`
+	// TelemeryID is being migrated to TelemetryID.
+	TelemeryID string `json:"telemery_id,omitempty"`
+	dirty      bool   `json:"-"`
 }
 
 // State is both state.json and state.cache.json.
@@ -108,6 +110,14 @@ func load(readOnly bool, persistentPath string, cachePath string) (*State, error
 
 		if err != nil {
 			return nil, err
+		}
+
+		if state.persistent.TelemetryID == "" {
+			// Migrate old 'telemery' field to new telemetry field
+			state.persistent.TelemetryID = state.persistent.TelemeryID
+			state.persistent.TelemeryID = "" // so that it is omitted during the next marshaling
+
+			state.persistent.dirty = true
 		}
 	} else {
 		state.persistent.Version = stateVersion
@@ -390,7 +400,7 @@ func (s *State) loadFromV0() error {
 	var tmp struct{ ID string }
 
 	if err := s.Get("Telemetry", &tmp); err != nil {
-		logger.V(2).Printf("failed to load telemery ID from V0 state: %v", err)
+		logger.V(2).Printf("failed to load telemetry ID from V0 state: %v", err)
 	} else {
 		s.persistent.TelemetryID = tmp.ID
 	}
