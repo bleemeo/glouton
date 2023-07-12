@@ -349,6 +349,7 @@ func TestThresholdEqual(t *testing.T) {
 func TestAccumulatorThreshold(t *testing.T) {
 	threshold := New(mockState{})
 	threshold.SetThresholds(
+		"fake_id",
 		nil,
 		map[string]Threshold{"cpu_used": {
 			HighWarning:   80,
@@ -716,7 +717,7 @@ func TestThreshold(t *testing.T) { //nolint: maintidx
 		currentTime := t0.Add(step.AddedToT0)
 
 		if step.SetThresholds != nil {
-			threshold.SetThresholds(step.SetThresholds.thresholdWithItem, step.SetThresholds.thresholdAllItem)
+			threshold.SetThresholds("fake_id", step.SetThresholds.thresholdWithItem, step.SetThresholds.thresholdAllItem)
 		}
 
 		threshold.nowFunc = func() time.Time { return currentTime }
@@ -950,7 +951,7 @@ func TestThresholdRestart(t *testing.T) {
 		currentTime := t0.Add(step.AddedToT0)
 
 		if step.SetThresholds != nil {
-			threshold.SetThresholds(step.SetThresholds.thresholdWithItem, step.SetThresholds.thresholdAllItem)
+			threshold.SetThresholds("fake_id", step.SetThresholds.thresholdWithItem, step.SetThresholds.thresholdAllItem)
 		}
 
 		threshold.nowFunc = func() time.Time { return currentTime }

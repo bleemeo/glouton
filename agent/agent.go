@@ -638,7 +638,7 @@ func (a *agent) updateThresholds(ctx context.Context, thresholds map[string]thre
 		oldThresholds[name] = a.threshold.GetThreshold(types.LabelsToText(lbls))
 	}
 
-	a.threshold.SetThresholds(thresholds, configThreshold)
+	a.threshold.SetThresholds(a.BleemeoAgentID(), thresholds, configThreshold)
 
 	services, err := a.discovery.Discovery(ctx, 1*time.Hour)
 

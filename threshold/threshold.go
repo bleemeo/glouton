@@ -23,6 +23,7 @@ import (
 	"glouton/config"
 	"glouton/logger"
 	"glouton/types"
+	"glouton/utils/metricutils"
 	"math"
 	"sort"
 	"strings"
@@ -46,6 +47,8 @@ type State interface {
 // Use WithPusher() to create a pusher and sent metric points to it.
 type Registry struct {
 	state State
+
+	agentID string
 
 	l sync.Mutex
 	// Threshold states by labels text.
@@ -82,9 +85,11 @@ func New(state State) *Registry {
 // SetThresholds configure thresholds.
 // The thresholdWithItem is searched first and only match if both the metric name and item match
 // Then thresholdAllItem is searched and match is the metric name match regardless of the metric item.
-func (r *Registry) SetThresholds(thresholdWithItem map[string]Threshold, thresholdAllItem map[string]Threshold) {
+func (r *Registry) SetThresholds(agentID string, thresholdWithItem map[string]Threshold, thresholdAllItem map[string]Threshold) {
 	r.l.Lock()
 	defer r.l.Unlock()
+
+	r.agentID = agentID
 
 	// The finality of this map is to contain only the deleted thresholds
 	// to be able to delete their related status states,
@@ -427,11 +432,14 @@ func (r *Registry) GetThreshold(labelsText string) Threshold {
 }
 
 func (r *Registry) getThreshold(labelsText string) Threshold {
+	labelsMap := types.TextToLabels(labelsText)
+	labelsText = r.labelsWithoutInstance(labelsText)
+
 	if threshold, ok := r.thresholds[labelsText]; ok {
 		return threshold
 	}
 
-	metricName := types.TextToLabels(labelsText)[types.LabelName]
+	metricName := labelsMap[types.LabelName]
 	threshold := r.thresholdsAllItem[metricName]
 
 	if threshold.IsZero() {
@@ -579,6 +587,24 @@ func formatDuration(period time.Duration) string {
 	return result
 }
 
+// labelsWithoutInstance remove all labels but the name, the item and the instance_uuid
+// if the given labelsText match metricutils.MetricOnlyHasItem.
+// Otherwise, it returns the labels unchanged.
+func (r *Registry) labelsWithoutInstance(labelsText string) string {
+	labelsMap := types.TextToLabels(labelsText)
+	if metricutils.MetricOnlyHasItem(labelsMap, r.agentID) {
+		// Getting rid of the 'instance' label
+		labelsMap = map[string]string{
+			types.LabelName:         labelsMap[types.LabelName],
+			types.LabelItem:         labelsMap[types.LabelItem],
+			types.LabelInstanceUUID: labelsMap[types.LabelInstanceUUID],
+		}
+		labelsText = types.LabelsToText(labelsMap)
+	}
+
+	return labelsText
+}
+
 // ApplyThresholds applies the thresholds. It returns input points with their status modified by the thresholds,
 // and the new status points generated.
 func (r *Registry) ApplyThresholds(points []types.MetricPoint) ([]types.MetricPoint, []types.MetricPoint) {
@@ -612,6 +638,7 @@ func (r *Registry) addPointWithThreshold(
 	threshold Threshold,
 	labelsText string,
 ) ([]types.MetricPoint, []types.MetricPoint) {
+	labelsText = r.labelsWithoutInstance(labelsText)
 	softStatus, highThreshold := threshold.CurrentStatus(point.Value)
 	previousState := r.states[labelsText]
 
@@ -619,7 +646,7 @@ func (r *Registry) addPointWithThreshold(
 	r.states[labelsText] = newState
 
 	unit := r.units[labelsText]
-	// Consumer expect status description from threshold to start with "Current value:"
+	// Consumer expects status description from threshold to start with "Current value:"
 	statusDescription := fmt.Sprintf("Current value: %s", FormatValue(point.Value, unit))
 
 	if newState.CurrentStatus != types.StatusOk {
