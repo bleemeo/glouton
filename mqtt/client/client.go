@@ -147,6 +147,14 @@ func (c *Client) Publish(topic string, payload []byte, retry bool) {
 		return
 	}
 
+	msg, ok := c.publish(topic, payload, retry)
+
+	if ok {
+		c.opts.ReloadState.AddPendingMessage(context.Background(), msg, true)
+	}
+}
+
+func (c *Client) publish(topic string, payload []byte, retry bool) (types.Message, bool) {
 	c.l.Lock()
 	defer c.l.Unlock()
 
@@ -157,7 +165,7 @@ func (c *Client) Publish(topic string, payload []byte, retry bool) {
 	}
 
 	if c.mqtt == nil && !retry {
-		return
+		return msg, false
 	}
 
 	if c.mqtt != nil {
@@ -165,7 +173,7 @@ func (c *Client) Publish(topic string, payload []byte, retry bool) {
 		c.stats.messagePublished(msg.Token, time.Now())
 	}
 
-	c.opts.ReloadState.AddPendingMessage(context.Background(), msg, true)
+	return msg, true
 }
 
 func (c *Client) onConnectionLost(err error) {
@@ -368,12 +376,14 @@ func (c *Client) ackOne(msg types.Message, timeout time.Duration) error {
 		}
 
 		c.l.Lock()
-		if c.mqtt != nil {
-			msg.Token = c.mqtt.Publish(msg.Topic, 1, false, msg.Payload)
+		mqtt := c.mqtt
+		c.l.Unlock()
+
+		if mqtt != nil {
+			msg.Token = mqtt.Publish(msg.Topic, 1, false, msg.Payload)
 		}
 
-		publishFailed := c.mqtt == nil || msg.Token.Error() != nil
-		c.l.Unlock()
+		publishFailed := mqtt == nil || msg.Token.Error() != nil
 
 		// The Token will be awaited later.
 		shouldWaitAgain = true
@@ -388,7 +398,11 @@ func (c *Client) ackOne(msg types.Message, timeout time.Duration) error {
 	}
 
 	if shouldWaitAgain {
-		c.opts.ReloadState.AddPendingMessage(context.Background(), msg, false)
+		ok := c.opts.ReloadState.AddPendingMessage(context.Background(), msg, false)
+
+		if !ok {
+			logger.V(1).Printf("%s: MQTT pending message queue is full, message on topic %s is dropped", c.opts.ID, msg.Topic)
+		}
 
 		return err
 	}
