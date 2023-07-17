@@ -112,6 +112,10 @@ func SetupStderrRedirection() {
 	stateDir := dir
 	lock.Unlock()
 
+	setupStderrRedirection(stateDir)
+}
+
+func setupStderrRedirection(stateDir string) {
 	wdErr := createWorkDirIfNotExist(stateDir)
 	if wdErr != nil {
 		logger.V(1).Println("Failed to create crash report work dir:", wdErr)
@@ -174,6 +178,10 @@ func PurgeCrashReports(maxReportCount int, preserve ...string) {
 	stateDir := dir
 	lock.Unlock()
 
+	purgeCrashReports(maxReportCount, preserve, stateDir)
+}
+
+func purgeCrashReports(maxReportCount int, preserve []string, stateDir string) {
 	existingCrashReports := ListCrashReports(stateDir)
 	crashReportCount := len(existingCrashReports)
 
@@ -208,6 +216,10 @@ func BundleCrashReportFiles(ctx context.Context, maxReportCount int) (reportPath
 	diagnosticFn := diagnostic
 	lock.Unlock()
 
+	return bundleCrashReportFiles(ctx, maxReportCount, stateDir, enabled, diagnosticFn)
+}
+
+func bundleCrashReportFiles(ctx context.Context, maxReportCount int, stateDir string, enabled bool, diagnosticFn diagnosticFunc) (reportPath string) {
 	defer func() {
 		if err := recover(); err != nil {
 			panic(err)

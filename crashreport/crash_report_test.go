@@ -61,16 +61,18 @@ func setupTestDir(t *testing.T) (testDir string, delTestDir func()) {
 }
 
 func TestCrashReportArchivePattern(t *testing.T) {
+	t.Parallel()
+
 	if _, err := filepath.Match(crashReportArchivePattern, ""); err != nil {
 		t.Fatal("`crashReportArchivePattern` is invalid:", err)
 	}
 }
 
 func TestWorkDirCreation(t *testing.T) {
+	t.Parallel()
+
 	wrapper := func(t *testing.T, testDir string) {
 		t.Helper()
-
-		SetOptions(false, testDir, nil)
 
 		err := createWorkDirIfNotExist(testDir)
 		if err != nil {
@@ -115,6 +117,8 @@ func TestWorkDirCreation(t *testing.T) {
 }
 
 func TestIsWriteInProgress(t *testing.T) {
+	t.Parallel()
+
 	t.Run("In progress", func(t *testing.T) {
 		testDir, delTmpDir := setupTestDir(t)
 		defer delTmpDir()
@@ -142,12 +146,12 @@ func TestIsWriteInProgress(t *testing.T) {
 }
 
 func TestStderrRedirection(t *testing.T) {
+	t.Parallel()
+
 	testDir, delTmpDir := setupTestDir(t)
 	defer delTmpDir()
 
-	SetOptions(true, testDir, nil)
-
-	SetupStderrRedirection()
+	setupStderrRedirection(testDir)
 
 	stderrFilePath := filepath.Join(testDir, stderrFileName)
 
@@ -179,6 +183,8 @@ func TestStderrRedirection(t *testing.T) {
 }
 
 func TestPurgeCrashReports(t *testing.T) {
+	t.Parallel()
+
 	t.Run("Keep the last reports", func(t *testing.T) {
 		testDir, delTmpDir := setupTestDir(t)
 		defer delTmpDir()
@@ -202,9 +208,7 @@ func TestPurgeCrashReports(t *testing.T) {
 			f.Close()
 		}
 
-		SetOptions(true, testDir, nil)
-
-		PurgeCrashReports(keep)
+		purgeCrashReports(keep, []string{}, testDir)
 
 		allReports, err := filepath.Glob(filepath.Join(testDir, crashReportArchivePattern))
 		if err != nil {
@@ -241,10 +245,8 @@ func TestPurgeCrashReports(t *testing.T) {
 			f.Close()
 		}
 
-		SetOptions(true, testDir, nil)
-
 		// The max report count doesn't matter when some reports should be preserved.
-		PurgeCrashReports(0, reportsToKeep...)
+		purgeCrashReports(0, reportsToKeep, testDir)
 
 		allReports, err := filepath.Glob(filepath.Join(testDir, crashReportArchivePattern))
 		if err != nil {
@@ -261,6 +263,8 @@ func TestPurgeCrashReports(t *testing.T) {
 }
 
 func TestMarkAsDone(t *testing.T) {
+	t.Parallel()
+
 	testDir, delTmpDir := setupTestDir(t)
 	defer delTmpDir()
 
@@ -295,6 +299,8 @@ func TestMarkAsDone(t *testing.T) {
 }
 
 func TestGenerateDiagnostic(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		name               string
 		ctxTimeout         time.Duration
@@ -351,6 +357,8 @@ func TestGenerateDiagnostic(t *testing.T) {
 }
 
 func TestBundleCrashReportFiles(t *testing.T) { //nolint:maintidx
+	t.Parallel()
+
 	// fileCmp allows comparing a filename and
 	// a pattern while knowing which is which.
 	type fileCmp struct {
@@ -495,7 +503,7 @@ func TestBundleCrashReportFiles(t *testing.T) { //nolint:maintidx
 				f.Close()
 			}
 
-			SetOptions(tc.reportingEnabled, stateDir, func(ctx context.Context, writer types.ArchiveWriter) error {
+			diagnosticFn := func(ctx context.Context, writer types.ArchiveWriter) error {
 				for file, content := range tc.diagnosticContent {
 					w, err := writer.Create(file)
 					if err != nil {
@@ -506,12 +514,12 @@ func TestBundleCrashReportFiles(t *testing.T) { //nolint:maintidx
 				}
 
 				return nil
-			})
+			}
 
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
 
-			reportPath := BundleCrashReportFiles(ctx, 2)
+			reportPath := bundleCrashReportFiles(ctx, 2, stateDir, tc.reportingEnabled, diagnosticFn)
 			if (reportPath != "") != tc.wantReportPath {
 				t.Fatalf("Expected a report path: %t, got one: %t.", tc.wantReportPath, reportPath != "")
 			}

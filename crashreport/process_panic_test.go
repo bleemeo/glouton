@@ -31,13 +31,13 @@ import (
 )
 
 func TestTryToGenerateDiagnostic(t *testing.T) {
+	t.Parallel()
+
 	t.Run("No diagnostic", func(t *testing.T) {
 		testDir, delTmpDir := setupTestDir(t)
 		defer delTmpDir()
 
-		SetOptions(true, testDir, nil)
-
-		tryToGenerateDiagnostic(time.Second)
+		tryToGenerateDiagnostic(time.Second, testDir, nil)
 
 		diagnosticPath := filepath.Join(testDir, panicDiagnosticArchive)
 
@@ -83,9 +83,7 @@ func TestTryToGenerateDiagnostic(t *testing.T) {
 		testDir, delTmpDir := setupTestDir(t)
 		defer delTmpDir()
 
-		SetOptions(true, testDir, diagnosticFn)
-
-		tryToGenerateDiagnostic(timeout)
+		tryToGenerateDiagnostic(timeout, testDir, diagnosticFn)
 
 		diagnosticPath := filepath.Join(testDir, panicDiagnosticArchive)
 
@@ -130,10 +128,9 @@ func TestTryToGenerateDiagnostic(t *testing.T) {
 		testDir, delTmpDir := setupTestDir(t)
 		defer delTmpDir()
 
-		SetOptions(true, testDir, diagnosticFn)
-		SetupStderrRedirection() // For reading errors produced by tryToGenerateDiagnostic()
+		setupStderrRedirection(testDir) // For reading errors produced by tryToGenerateDiagnostic()
 
-		tryToGenerateDiagnostic(time.Second)
+		tryToGenerateDiagnostic(time.Second, testDir, diagnosticFn)
 
 		stderrContent, err := os.ReadFile(filepath.Join(testDir, stderrFileName))
 		if err != nil {
