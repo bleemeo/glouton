@@ -1027,7 +1027,7 @@ func TestStateLoading(t *testing.T) {
 			}
 
 			if diff := cmp.Diff(tc.WantConfig, config.Agent); diff != "" {
-				t.Fatalf("Unexpected agent config:\n%s", diff)
+				t.Errorf("Unexpected agent config: (-want +got)\n%s", diff)
 			}
 		})
 	}

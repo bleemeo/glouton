@@ -209,6 +209,10 @@ func BundleCrashReportFiles(ctx context.Context, maxReportCount int) (reportPath
 	lock.Unlock()
 
 	defer func() {
+		if err := recover(); err != nil {
+			panic(err)
+		}
+		// If everything went well, then remove the flag.
 		logMultiErrs(markAsDone(stateDir))
 	}()
 

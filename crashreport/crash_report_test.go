@@ -354,10 +354,9 @@ func TestBundleCrashReportFiles(t *testing.T) { //nolint:maintidx
 	// fileCmp allows comparing a filename and
 	// a pattern while knowing which is which.
 	type fileCmp struct {
-		// str represents either the pattern or the filename to be tested.
-		str string
+		filenameOrPattern string
 		// toBeTested is set to true for filenames
-		// that will be tested against the pattern.
+		// that should be tested against the pattern.
 		toBeTested bool
 	}
 
@@ -411,7 +410,7 @@ func TestBundleCrashReportFiles(t *testing.T) { //nolint:maintidx
 				"stderr.log":           "panic: something went wrong",
 				"diagnostic/file.json": `{"some": "data"}`,
 			},
-			wantFilesInStateDir: []fileCmp{{str: "crashreport_*.zip"}},
+			wantFilesInStateDir: []fileCmp{{filenameOrPattern: "crashreport_*.zip"}},
 		},
 		{
 			name:                      "With previous crash diagnostic",
@@ -427,7 +426,7 @@ func TestBundleCrashReportFiles(t *testing.T) { //nolint:maintidx
 				"diagnostic/file.log":       "Some logs",
 				"crash_diagnostic/file.txt": "Some crash diagnostic content",
 			},
-			wantFilesInStateDir: []fileCmp{{str: "crashreport_*.zip"}},
+			wantFilesInStateDir: []fileCmp{{filenameOrPattern: "crashreport_*.zip"}},
 		},
 		{
 			name:                   "Had a crash but write is in progress",
@@ -526,7 +525,7 @@ func TestBundleCrashReportFiles(t *testing.T) { //nolint:maintidx
 			stateDirFiles := make([]fileCmp, len(filesInStateDir))
 
 			for i, file := range filesInStateDir {
-				stateDirFiles[i] = fileCmp{str: file.Name(), toBeTested: true}
+				stateDirFiles[i] = fileCmp{filenameOrPattern: file.Name(), toBeTested: true}
 			}
 
 			filepathComparer := cmp.Comparer(func(x, y fileCmp) bool {
@@ -534,9 +533,9 @@ func TestBundleCrashReportFiles(t *testing.T) { //nolint:maintidx
 				// which one is the filename to test and which one is the pattern to match.
 				var pattern, value string
 				if x.toBeTested {
-					pattern, value = y.str, x.str
+					pattern, value = y.filenameOrPattern, x.filenameOrPattern
 				} else {
-					pattern, value = x.str, y.str
+					pattern, value = x.filenameOrPattern, y.filenameOrPattern
 				}
 
 				match, err := path.Match(pattern, value)
@@ -587,6 +586,8 @@ func TestBundleCrashReportFiles(t *testing.T) { //nolint:maintidx
 					t.Fatal("Failed to read content of stderr file from report archive:", err)
 				}
 
+				reportStderr.Close()
+
 				if diff := cmp.Diff(tc.previousStderrContent, string(stderrContent)); diff != "" {
 					t.Fatal("Unexpected stderr file content:\n", diff)
 				}
@@ -607,6 +608,8 @@ func TestBundleCrashReportFiles(t *testing.T) { //nolint:maintidx
 					if err != nil && !errors.Is(err, io.EOF) {
 						t.Fatalf("Failed to read content of %q from report archive: %v", reportFile.Name, err)
 					}
+
+					fileReader.Close()
 
 					archiveFiles[reportFile.Name] = string(fileContent)
 				}
