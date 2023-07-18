@@ -2056,6 +2056,8 @@ func (a *agent) DiagnosticPage(ctx context.Context) string {
 }
 
 func (a *agent) writeDiagnosticArchive(ctx context.Context, archive types.ArchiveWriter) (err error) {
+	var success bool
+
 	startTime := time.Now()
 
 	defer func() {
@@ -2069,7 +2071,7 @@ func (a *agent) writeDiagnosticArchive(ctx context.Context, archive types.Archiv
 		endTime := time.Now()
 		total := endTime.Sub(startTime)
 
-		fmt.Fprintf(writer, "Start: %s\nEnd: %s\nTotal: %s\n", startTime, endTime, total)
+		fmt.Fprintf(writer, "Start: %s\nEnd: %s\nTotal: %s (Diagnostic successfully completed: %t)\n", startTime, endTime, total, success)
 
 		if err != nil {
 			fmt.Fprintln(writer, "Error:", err)
@@ -2121,6 +2123,8 @@ func (a *agent) writeDiagnosticArchive(ctx context.Context, archive types.Archiv
 			break
 		}
 	}
+
+	success = true
 
 	return ctx.Err()
 }
