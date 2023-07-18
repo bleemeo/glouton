@@ -1001,7 +1001,7 @@ func TestStateLoading(t *testing.T) {
 				NetstatFile:            "/var/lib/glouton/netstat.out",
 				StateDirectory:         "/var/lib/glouton",
 				StateFile:              "/var/lib/glouton/state.json",
-				StateCacheFile:         "/var/lib/glouton/state.cache.json",
+				StateCacheFile:         "state.cache.json",
 				StateResetFile:         "/var/lib/glouton/state.reset",
 				UpgradeFile:            "/var/lib/glouton/upgrade",
 				AutoUpgradeFile:        "/var/lib/glouton/auto_upgrade",
