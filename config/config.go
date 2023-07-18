@@ -72,14 +72,17 @@ func Load(withDefault bool, loadEnviron bool, paths ...string) (Config, []Item, 
 		config.Agent.StateCacheFile = state.DefaultCachePath(config.Agent.StateFile)
 	}
 
-	if filepath.IsAbs(config.Agent.StateFile) && config.Agent.StateDirectory == "" {
+	switch {
+	case config.Agent.StateFile != "" && config.Agent.StateDirectory == "":
 		config.Agent.StateDirectory = filepath.Dir(config.Agent.StateFile)
-	} else if config.Agent.StateDirectory == "" {
+	case config.Agent.StateDirectory == "":
 		config.Agent.StateDirectory = "."
+	case !filepath.IsAbs(config.Agent.StateFile):
+		config.Agent.StateFile = filepath.Join(config.Agent.StateDirectory, config.Agent.StateFile)
 	}
 
-	if !filepath.IsAbs(config.Agent.StateFile) {
-		config.Agent.StateFile = filepath.Join(config.Agent.StateDirectory, config.Agent.StateFile)
+	if !filepath.IsAbs(config.Agent.StateCacheFile) {
+		config.Agent.StateCacheFile = filepath.Join(config.Agent.StateDirectory, config.Agent.StateCacheFile)
 	}
 
 	if !filepath.IsAbs(config.Agent.StateResetFile) {

@@ -909,7 +909,7 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 
 func TestStateLoading(t *testing.T) {
 	defaultAgentCfg := DefaultConfig().Agent
-	agentCfg := Agent{ // Avoids repeating all these lines in all test cases
+	agentCfg := Agent{ // Avoids repeating all these lines in every test case
 		EnableCrashReporting: defaultAgentCfg.EnableCrashReporting,
 		MaxCrashReportsCount: defaultAgentCfg.MaxCrashReportsCount,
 		ProcessExporter:      defaultAgentCfg.ProcessExporter,
@@ -1001,7 +1001,7 @@ func TestStateLoading(t *testing.T) {
 				NetstatFile:            "/var/lib/glouton/netstat.out",
 				StateDirectory:         "/var/lib/glouton",
 				StateFile:              "/var/lib/glouton/state.json",
-				StateCacheFile:         "state.cache.json",
+				StateCacheFile:         "/var/lib/glouton/state.cache.json",
 				StateResetFile:         "/var/lib/glouton/state.reset",
 				UpgradeFile:            "/var/lib/glouton/upgrade",
 				AutoUpgradeFile:        "/var/lib/glouton/auto_upgrade",
@@ -1053,6 +1053,22 @@ func TestStateLoading(t *testing.T) {
 				StateResetFile:         "/home/glouton/data/state.reset",
 				UpgradeFile:            "/home/glouton/data/upgrade",
 				AutoUpgradeFile:        "/home/glouton/data/auto_upgrade",
+			},
+		},
+		{
+			Name:  "Glouton custom 4",
+			Files: []string{"testdata/state-custom4.conf"},
+			WantConfig: Agent{
+				InstallationFormat:     "manual",
+				CloudImageCreationFile: "myfolder/data/cloudimage_creation",
+				FactsFile:              "myfolder/data/facts.yaml",
+				NetstatFile:            "myfolder/data/netstat.out",
+				StateDirectory:         "myfolder/data",
+				StateFile:              "myfolder/data/state.json",
+				StateCacheFile:         "myfolder/data/state.cache.json",
+				StateResetFile:         "myfolder/data/state.reset",
+				UpgradeFile:            "myfolder/data/upgrade",
+				AutoUpgradeFile:        "myfolder/data/auto_upgrade",
 			},
 		},
 	}
