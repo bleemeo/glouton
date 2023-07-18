@@ -62,12 +62,11 @@ func DefaultConfig() Config { //nolint:maintidx
 			ProcessExporter: ProcessExporter{
 				Enable: true,
 			},
-			PublicIPIndicator: "https://myip.bleemeo.com",
-			NetstatFile:       "netstat.out",
-			StateDirectory:    "",
-			StateFile:         "state.json",
-			// By default, ".cache" is added before the state file extension.
-			StateCacheFile:       "",
+			PublicIPIndicator:    "https://myip.bleemeo.com",
+			NetstatFile:          "netstat.out",
+			StateDirectory:       "",
+			StateFile:            "state.json",
+			StateCacheFile:       "state.cache.json",
 			StateResetFile:       "state.reset",
 			DeprecatedStateFile:  "",
 			EnableCrashReporting: true,

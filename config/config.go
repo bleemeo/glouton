@@ -19,7 +19,6 @@ package config
 import (
 	"errors"
 	"fmt"
-	"glouton/agent/state"
 	"glouton/logger"
 	"os"
 	"path/filepath"
@@ -67,10 +66,6 @@ func Load(withDefault bool, loadEnviron bool, paths ...string) (Config, []Item, 
 	loader := &configLoader{}
 
 	config, warnings, err := load(loader, withDefault, loadEnviron, paths...)
-
-	if config.Agent.StateCacheFile == "" {
-		config.Agent.StateCacheFile = state.DefaultCachePath(config.Agent.StateFile)
-	}
 
 	switch {
 	case config.Agent.StateFile != "" && config.Agent.StateDirectory == "":
