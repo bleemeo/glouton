@@ -96,7 +96,7 @@ func IsWriteInProgress(stateDir string) bool {
 func createWorkDirIfNotExist(stateDir string) error {
 	workDirPath := filepath.Join(stateDir, crashReportWorkDir)
 
-	err := os.Mkdir(workDirPath, 0o740)
+	err := os.Mkdir(workDirPath, 0o700)
 	if err != nil && !os.IsExist(err) {
 		return err
 	}
@@ -279,10 +279,14 @@ func bundleCrashReportFiles(ctx context.Context, maxReportCount int, stateDir st
 // It returns the path to the created archive if everything went well, otherwise an empty string.
 func makeBundle(ctx context.Context, stateDir string, diagnosticFn diagnosticFunc) string {
 	// Create a file to flag that the crash report is not complete because we haven't generated a diagnostic yet.
-	_, err := os.Create(filepath.Join(stateDir, writeInProgressFlag))
+	f, err := os.Create(filepath.Join(stateDir, writeInProgressFlag))
 	if err != nil {
 		logger.V(1).Println("Failed to create flag to mark crash report writing as in progress")
+
+		return ""
 	}
+
+	f.Close()
 
 	crashReportPath := filepath.Join(stateDir, time.Now().Format(crashReportArchiveFormat))
 
@@ -301,11 +305,15 @@ func makeBundle(ctx context.Context, stateDir string, diagnosticFn diagnosticFun
 
 	stderrFile, err := os.Open(filepath.Join(stateDir, oldStderrFileName))
 	if err == nil { // Open stderr log file
-		info, _ := stderrFile.Stat()
+		modTime := time.Now()
+
+		if info, err := stderrFile.Stat(); err == nil {
+			modTime = info.ModTime()
+		}
 
 		writer, err := zipWriter.CreateHeader(&zip.FileHeader{
 			Name:     stderrFileName,
-			Modified: info.ModTime(),
+			Modified: modTime,
 			Method:   zip.Deflate,
 		})
 		if err == nil { // Create stderr.log entry in zip

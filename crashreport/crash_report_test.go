@@ -91,8 +91,8 @@ func TestWorkDirCreation(t *testing.T) {
 		}
 
 		perm := info.Mode().Perm()
-		if perm != 480 {
-			t.Fatalf("Did not create work dir with expected permissions:\nwant: -rwxr-----\n got: %s", perm)
+		if perm != 448 {
+			t.Fatalf("Did not create work dir with expected permissions:\nwant: -rwx------\n got: %s", perm)
 		}
 	}
 
@@ -107,7 +107,7 @@ func TestWorkDirCreation(t *testing.T) {
 		testDir, delTmpDir := setupTestDir(t)
 		defer delTmpDir()
 
-		err := os.Mkdir(filepath.Join(testDir, crashReportWorkDir), 0o740)
+		err := os.Mkdir(filepath.Join(testDir, crashReportWorkDir), 0o700)
 		if err != nil && !os.IsExist(err) {
 			t.Fatal("Failed to pre-create crash report work dir:", err)
 		}
