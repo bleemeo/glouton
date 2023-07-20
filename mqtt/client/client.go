@@ -156,7 +156,8 @@ func (c *Client) Publish(topic string, payload []byte, retry bool) {
 
 func (c *Client) publish(topic string, payload []byte, retry bool) (types.Message, bool) {
 	c.l.Lock()
-	defer c.l.Unlock()
+	mqtt := c.mqtt
+	c.l.Unlock()
 
 	msg := types.Message{
 		Retry:   retry,
@@ -164,12 +165,12 @@ func (c *Client) publish(topic string, payload []byte, retry bool) (types.Messag
 		Topic:   topic,
 	}
 
-	if c.mqtt == nil && !retry {
+	if mqtt == nil && !retry {
 		return msg, false
 	}
 
-	if c.mqtt != nil {
-		msg.Token = c.mqtt.Publish(topic, 1, false, payload)
+	if mqtt != nil {
+		msg.Token = mqtt.Publish(topic, 1, false, payload)
 		c.stats.messagePublished(msg.Token, time.Now())
 	}
 
