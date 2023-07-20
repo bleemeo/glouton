@@ -2052,6 +2052,7 @@ func (a *agent) writeDiagnosticArchive(ctx context.Context, archive types.Archiv
 		a.vethProvider.DiagnosticArchive,
 		a.threshold.DiagnosticThresholds,
 		a.threshold.DiagnosticStatusStates,
+		smart.DiagnosticArchive,
 	}
 
 	if a.bleemeoConnector != nil {

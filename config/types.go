@@ -71,10 +71,11 @@ type LogFilter struct {
 }
 
 type Smart struct {
-	Enable       bool     `yaml:"enable"`
-	PathSmartctl string   `yaml:"path_smartctl"`
-	Devices      []string `yaml:"devices"`
-	Excludes     []string `yaml:"excludes"`
+	Enable         bool     `yaml:"enable"`
+	PathSmartctl   string   `yaml:"path_smartctl"`
+	Devices        []string `yaml:"devices"`
+	Excludes       []string `yaml:"excludes"`
+	MaxConcurrency int      `yaml:"max_concurrency"`
 }
 
 type Zabbix struct {
