@@ -140,12 +140,12 @@ func setupStderrRedirection(stateDir string) {
 		return
 	}
 
-	defer newStderrFile.Close()
-
 	err = redirectOSSpecificStderrToFile(newStderrFile.Fd())
 	if err != nil {
 		logger.V(1).Println("Failed to redirect stderr to log file:", err)
 	}
+
+	os.Stderr = newStderrFile
 }
 
 // ListCrashReports returns all crash reports present in stateDir.
