@@ -39,8 +39,9 @@ const (
 	maxPendingMessages = 1000
 	// If we stayed connected to MQTT for more stableConnection, the connection is considered stable,
 	// and we won't wait long to reconnect in case of a disconnection.
-	stableConnection = 5 * time.Minute
-	maxPayloadSize   = 1024 * 1024
+	stableConnection    = 5 * time.Minute
+	maxPayloadSize      = 1024 * 1024
+	maxDelayWithoutPing = 90 * time.Second
 )
 
 type Client struct {
@@ -67,7 +68,8 @@ type Options struct {
 	// Function called when too many errors happened.
 	TooManyErrorsHandler func(ctx context.Context)
 	// A unique identifier for this client.
-	ID string
+	ID                  string
+	PahoLastPingCheckAt func() time.Time
 }
 
 // New creates a new client.
@@ -190,6 +192,7 @@ func (c *Client) connectionManager(ctx context.Context) {
 
 	currentConnectDelay := minimalDelayBetweenConnect / 2
 	consecutiveError := 0
+	pingMissingConsecutive := 0
 
 mainLoop:
 	for ctx.Err() == nil {
@@ -290,6 +293,26 @@ mainLoop:
 
 					logger.Printf("%s MQTT connection established", c.opts.ID)
 				}
+			}
+		case mqtt != nil && mqtt.IsConnectionOpen():
+			if c.opts.PahoLastPingCheckAt != nil && !c.opts.PahoLastPingCheckAt().IsZero() && time.Since(c.opts.PahoLastPingCheckAt()) > maxDelayWithoutPing {
+				pingMissingConsecutive++
+
+				if pingMissingConsecutive >= 2 {
+					logger.V(1).Println("Paho ping check seems blocked, forcing a disconnection")
+
+					c.l.Lock()
+
+					if c.mqtt != nil {
+						c.mqtt.Disconnect(100)
+					}
+
+					c.mqtt = nil
+
+					c.l.Unlock()
+				}
+			} else {
+				pingMissingConsecutive = 0
 			}
 		}
 

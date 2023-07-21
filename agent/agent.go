@@ -48,6 +48,7 @@ import (
 	"glouton/jmxtrans"
 	"glouton/logger"
 	"glouton/mqtt"
+	"glouton/mqtt/client"
 	"glouton/nrpe"
 	"glouton/prometheus/exporter/blackbox"
 	"glouton/prometheus/exporter/snmp"
@@ -90,7 +91,6 @@ import (
 
 	processSource "glouton/prometheus/sources/process"
 
-	paho "github.com/eclipse/paho.mqtt.golang"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/prometheus/model/labels"
 	"gopkg.in/yaml.v3"
@@ -147,6 +147,7 @@ type agent struct {
 	reloadState            ReloadState
 	vethProvider           *veth.Provider
 	mqtt                   *mqtt.MQTT
+	pahoLogWrapper         *client.LogWrapper
 	fluentbitManager       *fluentbit.Manager
 
 	triggerHandler            *debouncer.Debouncer
@@ -228,13 +229,7 @@ func (a *agent) init(ctx context.Context, configFiles []string, firstRun bool) (
 		}
 	}
 
-	// Initialize paho loggers, this need to be done only once to prevent data races.
-	if firstRun {
-		paho.ERROR = logger.V(2)
-		paho.CRITICAL = logger.V(2)
-		paho.WARN = logger.V(2)
-		paho.DEBUG = logger.V(3)
-	}
+	a.pahoLogWrapper = client.GetOrCreateWrapper()
 
 	sentry.ConfigureScope(func(scope *sentry.Scope) {
 		scope.SetContext("agent", map[string]interface{}{
@@ -1022,6 +1017,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 			ReloadState:             a.reloadState.Bleemeo(),
 			IsContainerEnabled:      a.containerFilter.ContainerEnabled,
 			IsMetricAllowed:         a.metricFilter.isAllowedAndNotDenied,
+			PahoLastPingCheckAt:     a.pahoLogWrapper.LastPingAt,
 		})
 		if err != nil {
 			logger.Printf("unable to start Bleemeo SAAS connector: %v", err)
@@ -1281,10 +1277,11 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 
 	if a.config.MQTT.Enable {
 		a.mqtt = mqtt.New(mqtt.Options{
-			ReloadState: a.reloadState.MQTT(),
-			Config:      a.config.MQTT,
-			Store:       filteredStore,
-			FQDN:        fqdn,
+			ReloadState:         a.reloadState.MQTT(),
+			Config:              a.config.MQTT,
+			Store:               filteredStore,
+			FQDN:                fqdn,
+			PahoLastPingCheckAt: a.pahoLogWrapper.LastPingAt,
 		})
 
 		tasks = append(tasks, taskInfo{
@@ -2150,6 +2147,7 @@ func (a *agent) diagnosticGloutonState(_ context.Context, archive types.ArchiveW
 		DockerInputPresent        bool
 		DockerInputID             int
 		MetricResolutionSeconds   float64
+		PahoLastPingCheckAt       time.Time
 	}{
 		HostRootPath:              a.hostRootPath,
 		LastHealthCheck:           a.lastHealthCheck,
@@ -2161,6 +2159,7 @@ func (a *agent) diagnosticGloutonState(_ context.Context, archive types.ArchiveW
 		DockerInputPresent:        a.dockerInputPresent,
 		DockerInputID:             a.dockerInputID,
 		MetricResolutionSeconds:   a.metricResolution.Seconds(),
+		PahoLastPingCheckAt:       a.pahoLogWrapper.LastPingAt(),
 	}
 
 	a.triggerLock.Unlock()

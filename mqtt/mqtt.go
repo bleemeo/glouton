@@ -49,7 +49,8 @@ type Options struct {
 	// State kept between reloads.
 	ReloadState types.MQTTReloadState
 	// The store provides the metrics to send to MQTT.
-	Store Store
+	Store               Store
+	PahoLastPingCheckAt func() time.Time
 }
 
 // Store is the interface used by the client to access the Metric Store.
@@ -70,9 +71,10 @@ func New(opts Options) *MQTT {
 	m := MQTT{opts: opts}
 
 	m.client = client.New(client.Options{
-		OptionsFunc: m.pahoOptions,
-		ReloadState: opts.ReloadState,
-		ID:          "Open Source",
+		OptionsFunc:         m.pahoOptions,
+		ReloadState:         opts.ReloadState,
+		ID:                  "Open Source",
+		PahoLastPingCheckAt: opts.PahoLastPingCheckAt,
 	})
 
 	return &m
