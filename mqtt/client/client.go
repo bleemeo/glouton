@@ -198,6 +198,7 @@ mainLoop:
 		c.currentConnectDelay = currentConnectDelay
 		c.consecutiveErrors = consecutiveError
 
+		mqtt := c.mqtt
 		disabledUntil := c.disabledUntil
 		c.l.Unlock()
 
@@ -210,7 +211,7 @@ mainLoop:
 				c.mqtt = nil
 			}
 			c.l.Unlock()
-		case c.mqtt == nil:
+		case mqtt == nil:
 			length := len(lastConnectionTimes)
 
 			if length >= 7 && time.Since(lastConnectionTimes[length-7]) < 10*time.Minute {
