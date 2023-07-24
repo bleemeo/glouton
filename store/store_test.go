@@ -370,12 +370,28 @@ func TestPoints(t *testing.T) {
 		t.Error(err)
 	}
 
+	// Appending some unordered points
+
+	p3 := types.Point{Time: t1.Add(5 * time.Second), Value: 15}
+
+	err = db.points.pushPoint(m.metricID, p3)
+	if err != nil {
+		t.Error(err)
+	}
+
+	p4 := types.Point{Time: t2.Add(5 * time.Second), Value: 25}
+
+	err = db.points.pushPoint(m.metricID, p4)
+	if err != nil {
+		t.Error(err)
+	}
+
 	points, err = db.points.getPoints(m.metricID)
 	if err != nil {
 		t.Error(err)
 	}
 
-	if diff := cmp.Diff(points, []types.Point{p1, p2}, timeComparer); diff != "" {
+	if diff := cmp.Diff(points, []types.Point{p1, p2, p3, p4}, timeComparer); diff != "" {
 		t.Errorf("Unexpected points:\n%v", diff)
 	}
 }

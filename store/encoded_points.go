@@ -168,18 +168,12 @@ func (epts *encodedPoints) setPoints(metricID uint64, points []types.Point) erro
 	}
 
 	epts.raws[metricID] = chunk.Bytes()
-	meta := epts.metas[metricID]
-	meta.count = len(points)
 
-	if points[0].Time.Before(meta.youngest) || meta.youngest.IsZero() {
-		meta.youngest = points[0].Time
+	epts.metas[metricID] = encodedPointsMeta{
+		count:    len(points),
+		youngest: points[0].Time,
+		oldest:   points[len(points)-1].Time,
 	}
-
-	if points[len(points)-1].Time.After(meta.oldest) || meta.oldest.IsZero() {
-		meta.oldest = points[len(points)-1].Time
-	}
-
-	epts.metas[metricID] = meta
 
 	return nil
 }
