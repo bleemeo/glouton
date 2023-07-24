@@ -30,6 +30,10 @@ import (
 	"github.com/prometheus/prometheus/model/value"
 )
 
+var timeComparer = cmp.Comparer(func(x, y time.Time) bool { //nolint:gochecknoglobals
+	return x.Truncate(time.Millisecond).Equal(y.Truncate(time.Millisecond))
+})
+
 // metricGetOrCreate will return the metric that exactly match given labels.
 //
 // It just metricGet followed by update to s.metrics in case of creation.
@@ -289,16 +293,17 @@ func TestPoints(t *testing.T) {
 		{Point: p0, Labels: labels},
 	})
 
-	if len(db.points) != 1 {
-		t.Errorf("len(db.points) == %v, want %v", len(db.points), 1)
+	if len(db.points.raws) != 1 {
+		t.Errorf("len(db.points) == %v, want %v", len(db.points.raws), 1)
 	}
 
-	if len(db.points[m.metricID]) != 1 {
-		t.Errorf("len(db.points[%v]) == %v, want %v", m.metricID, len(db.points[m.metricID]), 1)
+	if db.points.count(m.metricID) != 1 {
+		t.Errorf("len(db.points[%v]) == %v, want %v", m.metricID, db.points.count(m.metricID), 1)
 	}
 
-	if !reflect.DeepEqual(db.points[m.metricID][0], p0) {
-		t.Errorf("db.points[%v][0] == %v, want %v", m.metricID, db.points[m.metricID][0], p0)
+	p := db.points.getPoint(m.metricID, 0)
+	if diff := cmp.Diff(p, p0, timeComparer); diff != "" {
+		t.Errorf("Unexpected value for db.points[%v][0]:\n%v", m.metricID, diff)
 	}
 
 	db.PushPoints(context.Background(), []types.MetricPoint{
@@ -308,12 +313,12 @@ func TestPoints(t *testing.T) {
 		{Point: p2, Labels: labels},
 	})
 
-	if len(db.points) != 1 {
-		t.Errorf("len(db.points) == %v, want %v", len(db.points), 1)
+	if len(db.points.raws) != 1 {
+		t.Errorf("len(db.points) == %v, want %v", len(db.points.raws), 1)
 	}
 
-	if len(db.points[m.metricID]) != 3 {
-		t.Errorf("len(db.points[%v]) == %v, want %v", m.metricID, len(db.points[m.metricID]), 3)
+	if db.points.count(m.metricID) != 3 {
+		t.Errorf("len(db.points[%v]) == %v, want %v", m.metricID, db.points.count(m.metricID), 3)
 	}
 
 	points, err := m.Points(t0, t2)
@@ -331,11 +336,47 @@ func TestPoints(t *testing.T) {
 	}
 
 	if len(points) != 1 {
-		t.Errorf("len(points) == %v, want %v", len(points), 1)
+		t.Fatalf("len(points) == %v, want %v", len(points), 1)
 	}
 
-	if !reflect.DeepEqual(points[0], p1) {
-		t.Errorf("points[0] == %v, want %v", points[0], p1)
+	if diff := cmp.Diff(points[0], p1, timeComparer); diff != "" {
+		t.Errorf("Unexpected value for db.points[0]:\n%v", diff)
+	}
+
+	youngest, oldest := db.points.metas[m.metricID].timeBounds()
+
+	if diff := cmp.Diff(youngest, t0); diff != "" {
+		t.Errorf("Unexpected youngest timestamp:\n%v", diff)
+	}
+
+	if diff := cmp.Diff(oldest, t2); diff != "" {
+		t.Errorf("Unexpected oldest timestamp:\n%v", diff)
+	}
+
+	db.points.dropPoints(m.metricID)
+
+	if len(db.points.raws) != 0 {
+		t.Errorf("len(points) == %v, want %v", len(db.points.raws), 0)
+	}
+
+	// p0 will be dropped by db.points.setPoints()
+	err = db.points.pushPoint(m.metricID, p0)
+	if err != nil {
+		t.Error(err)
+	}
+
+	err = db.points.setPoints(m.metricID, []types.Point{p1, p2})
+	if err != nil {
+		t.Error(err)
+	}
+
+	points, err = db.points.getPoints(m.metricID)
+	if err != nil {
+		t.Error(err)
+	}
+
+	if diff := cmp.Diff(points, []types.Point{p1, p2}, timeComparer); diff != "" {
+		t.Errorf("Unexpected points:\n%v", diff)
 	}
 }
 
@@ -712,7 +753,7 @@ func TestStore_run(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				if diff := cmp.Diff(want.points, got); diff != "" {
+				if diff := cmp.Diff(want.points, got, timeComparer); diff != "" {
 					t.Errorf("Points of %v mismatch: (-want +got):\n%s", result[0].Labels(), diff)
 				}
 			}
