@@ -1,0 +1,135 @@
+ID  | Name             | Type                     | Reading    | Units | Event
+1   | SEL              | Event Logging Disabled   | N/A        | N/A   | N/A
+2   | Intrusion        | Physical Security        | N/A        | N/A   | 'OK'
+12  | Fan1             | Fan                      | 4920.00    | RPM   | 'OK'
+13  | Fan2             | Fan                      | 5160.00    | RPM   | 'OK'
+14  | Fan3             | Fan                      | 5040.00    | RPM   | 'OK'
+15  | Fan4             | Fan                      | 5280.00    | RPM   | 'OK'
+16  | Fan5             | Fan                      | 5520.00    | RPM   | 'OK'
+17  | Fan6             | Fan                      | 5640.00    | RPM   | 'OK'
+18  | Inlet Temp       | Temperature              | 23.00      | C     | 'OK'
+19  | Exhaust Temp     | Temperature              | 36.00      | C     | 'OK'
+20  | OS Watchdog      | Watchdog 2               | N/A        | N/A   | 'OK'
+21  | VCORE PG         | Voltage                  | N/A        | N/A   | 'State Deasserted'
+22  | VCORE PG         | Voltage                  | N/A        | N/A   | N/A
+23  | 3.3V PG          | Voltage                  | N/A        | N/A   | 'State Deasserted'
+24  | 5V PG            | Voltage                  | N/A        | N/A   | 'State Deasserted'
+25  | USB Cable Pres   | Cable/Interconnect       | N/A        | N/A   | 'Cable/Interconnect is connected'
+26  | VGA Cable Pres   | Cable/Interconnect       | N/A        | N/A   | 'Cable/Interconnect is connected'
+27  | Presence         | Entity Presence          | N/A        | N/A   | 'Entity Present'
+28  | Presence         | Entity Presence          | N/A        | N/A   | 'Entity Present'
+29  | Presence         | Entity Presence          | N/A        | N/A   | 'Entity Absent'
+30  | PLL PG           | Voltage                  | N/A        | N/A   | N/A
+31  | PLL PG           | Voltage                  | N/A        | N/A   | 'State Deasserted'
+32  | 1.1V PG          | Voltage                  | N/A        | N/A   | 'State Deasserted'
+33  | BP0 5V PG        | Voltage                  | N/A        | N/A   | N/A
+34  | M23 VDDQ PG      | Voltage                  | N/A        | N/A   | 'State Deasserted'
+35  | M23 VTT PG       | Voltage                  | N/A        | N/A   | 'State Deasserted'
+36  | FETDRV PG        | Voltage                  | N/A        | N/A   | 'State Deasserted'
+37  | Presence         | Entity Presence          | N/A        | N/A   | 'Entity Present'
+38  | VSA PG           | Voltage                  | N/A        | N/A   | N/A
+39  | VSA PG           | Voltage                  | N/A        | N/A   | 'State Deasserted'
+40  | M01 VDDQ PG      | Voltage                  | N/A        | N/A   | N/A
+41  | M01 VDDQ PG      | Voltage                  | N/A        | N/A   | 'State Deasserted'
+42  | M23 VTT PG       | Voltage                  | N/A        | N/A   | N/A
+43  | M01 VTT PG       | Voltage                  | N/A        | N/A   | N/A
+44  | NDC PG           | Voltage                  | N/A        | N/A   | 'State Deasserted'
+45  | LCD Cable Pres   | Cable/Interconnect       | N/A        | N/A   | 'OK'
+46  | VTT PG           | Voltage                  | N/A        | N/A   | N/A
+47  | VTT PG           | Voltage                  | N/A        | N/A   | 'State Deasserted'
+48  | M23 VDDQ PG      | Voltage                  | N/A        | N/A   | N/A
+49  | Presence         | Entity Presence          | N/A        | N/A   | 'Entity Present'
+50  | Presence         | Entity Presence          | N/A        | N/A   | 'Entity Absent'
+51  | Status           | Processor                | N/A        | N/A   | 'Processor Presence detected'
+52  | Status           | Processor                | N/A        | N/A   | 'OK'
+53  | Fan Redundancy   | Fan                      | N/A        | N/A   | 'Fully Redundant'
+57  | Riser Config Err | Cable/Interconnect       | N/A        | N/A   | 'Cable/Interconnect is connected'
+58  | 1.5V PG          | Voltage                  | N/A        | N/A   | 'State Deasserted'
+59  | PS2 PG Fail      | Voltage                  | N/A        | N/A   | 'State Deasserted'
+60  | PS1 PG Fail      | Voltage                  | N/A        | N/A   | 'State Deasserted'
+61  | BP1 5V PG        | Voltage                  | N/A        | N/A   | 'State Deasserted'
+62  | M01 VTT PG       | Voltage                  | N/A        | N/A   | 'State Deasserted'
+63  | Presence         | Entity Presence          | N/A        | N/A   | 'Entity Present'
+64  | PCIe Slot1       | Critical Interrupt       | N/A        | N/A   | N/A
+65  | PCIe Slot2       | Critical Interrupt       | N/A        | N/A   | N/A
+66  | PCIe Slot3       | Critical Interrupt       | N/A        | N/A   | N/A
+67  | PCIe Slot4       | Critical Interrupt       | N/A        | N/A   | N/A
+68  | PCIe Slot5       | Critical Interrupt       | N/A        | N/A   | N/A
+69  | PCIe Slot6       | Critical Interrupt       | N/A        | N/A   | N/A
+70  | PCIe Slot7       | Critical Interrupt       | N/A        | N/A   | N/A
+71  | A                | Memory                   | N/A        | N/A   | 'Presence detected'
+72  | B                | Memory                   | N/A        | N/A   | 'OK'
+74  | vFlash           | Module/Board             | N/A        | N/A   | 'OEM Event = 0000h'
+75  | CMOS Battery     | Battery                  | N/A        | N/A   | 'OK'
+76  | Presence         | Entity Presence          | N/A        | N/A   | 'Entity Absent'
+77  | Presence         | Entity Presence          | N/A        | N/A   | 'Entity Present'
+78  | Current 1        | Current                  | 0.40       | A     | 'OK'
+79  | Current 2        | Current                  | 0.40       | A     | 'OK'
+80  | Voltage 1        | Voltage                  | 228.00     | V     | 'OK'
+81  | Voltage 2        | Voltage                  | 228.00     | V     | 'OK'
+82  | PS Redundancy    | Power Supply             | N/A        | N/A   | N/A
+83  | Status           | Power Supply             | N/A        | N/A   | 'Presence detected'
+84  | Status           | Power Supply             | N/A        | N/A   | 'Presence detected'
+85  | Pwr Consumption  | Current                  | 168.00     | W     | 'OK'
+86  | Power Optimized  | OEM Reserved             | N/A        | N/A   | 'OEM Event = 0001h'
+87  | SD1              | OEM Reserved             | N/A        | N/A   | N/A
+88  | SD2              | OEM Reserved             | N/A        | N/A   | N/A
+89  | Redundancy       | OEM Reserved             | N/A        | N/A   | N/A
+90  | ECC Corr Err     | Memory                   | N/A        | N/A   | N/A
+91  | ECC Uncorr Err   | Memory                   | N/A        | N/A   | N/A
+92  | I/O Channel Chk  | Critical Interrupt       | N/A        | N/A   | N/A
+93  | PCI Parity Err   | Critical Interrupt       | N/A        | N/A   | N/A
+94  | PCI System Err   | Critical Interrupt       | N/A        | N/A   | N/A
+95  | SBE Log Disabled | Event Logging Disabled   | N/A        | N/A   | N/A
+96  | Logging Disabled | Event Logging Disabled   | N/A        | N/A   | N/A
+97  | Unknown          | System Event             | N/A        | N/A   | N/A
+98  | CPU Protocol Err | Processor                | N/A        | N/A   | N/A
+99  | CPU Bus PERR     | Processor                | N/A        | N/A   | N/A
+100 | CPU Init Err     | Processor                | N/A        | N/A   | N/A
+101 | CPU Machine Chk  | Processor                | N/A        | N/A   | N/A
+102 | Memory Spared    | Memory                   | N/A        | N/A   | N/A
+103 | Memory Mirrored  | Memory                   | N/A        | N/A   | N/A
+104 | Memory RAID      | Memory                   | N/A        | N/A   | N/A
+105 | Memory Added     | Memory                   | N/A        | N/A   | N/A
+106 | Memory Removed   | Memory                   | N/A        | N/A   | N/A
+107 | Memory Cfg Err   | Memory                   | N/A        | N/A   | N/A
+108 | Mem Redun Gain   | Memory                   | N/A        | N/A   | N/A
+109 | PCIE Fatal Err   | Critical Interrupt       | N/A        | N/A   | N/A
+110 | Chipset Err      | Critical Interrupt       | N/A        | N/A   | N/A
+111 | Err Reg Pointer  | OEM Reserved             | N/A        | N/A   | N/A
+112 | Mem ECC Warning  | Memory                   | N/A        | N/A   | N/A
+113 | Mem CRC Err      | Memory                   | N/A        | N/A   | N/A
+114 | USB Over-current | Memory                   | N/A        | N/A   | N/A
+115 | POST Err         | System Firmware Progress | N/A        | N/A   | N/A
+116 | Hdwr version err | Version Change           | N/A        | N/A   | N/A
+117 | Mem Overtemp     | Memory                   | N/A        | N/A   | N/A
+118 | Mem Fatal SB CRC | Memory                   | N/A        | N/A   | N/A
+119 | Mem Fatal NB CRC | Memory                   | N/A        | N/A   | N/A
+120 | OS Watchdog Time | Watchdog 1               | N/A        | N/A   | N/A
+121 | Non Fatal PCI Er | OEM Reserved             | N/A        | N/A   | N/A
+122 | Fatal IO Error   | OEM Reserved             | N/A        | N/A   | N/A
+123 | MSR Info Log     | OEM Reserved             | N/A        | N/A   | N/A
+124 | TXT Status       | OS Critical Stop         | N/A        | N/A   | N/A
+125 | Drive 0          | Drive Slot               | N/A        | N/A   | 'Drive Presence'
+126 | Drive 15         | Drive Slot               | N/A        | N/A   | N/A
+127 | Cable SAS A      | Cable/Interconnect       | N/A        | N/A   | N/A
+128 | Cable SAS B      | Cable/Interconnect       | N/A        | N/A   | N/A
+129 | Cable SAS C      | Cable/Interconnect       | N/A        | N/A   | N/A
+130 | Cable SAS D      | Cable/Interconnect       | N/A        | N/A   | N/A
+131 | Cable SAS A      | Cable/Interconnect       | N/A        | N/A   | 'Cable/Interconnect is connected'
+132 | Cable SAS B      | Cable/Interconnect       | N/A        | N/A   | 'Cable/Interconnect is connected'
+133 | Cable SAS C      | Cable/Interconnect       | N/A        | N/A   | N/A
+134 | Cable SAS D      | Cable/Interconnect       | N/A        | N/A   | N/A
+135 | Power Cable      | Cable/Interconnect       | N/A        | N/A   | N/A
+136 | Signal Cable     | Cable/Interconnect       | N/A        | N/A   | N/A
+137 | Power Cable      | Cable/Interconnect       | N/A        | N/A   | 'Cable/Interconnect is connected'
+138 | Signal Cable     | Cable/Interconnect       | N/A        | N/A   | 'Cable/Interconnect is connected'
+139 | PFault Fail Safe | Voltage                  | N/A        | N/A   | N/A
+140 | ROMB Battery     | Battery                  | N/A        | N/A   | 'OK'
+141 | ROMB Battery     | Battery                  | N/A        | N/A   | N/A
+142 | Dedicated NIC    | Entity Presence          | N/A        | N/A   | 'Entity Present'
+143 | Riser 1 Presence | Cable/Interconnect       | N/A        | N/A   | 'Cable/Interconnect is connected'
+144 | Riser 2 Presence | Cable/Interconnect       | N/A        | N/A   | 'Cable/Interconnect is connected'
+145 | Riser 3 Presence | Cable/Interconnect       | N/A        | N/A   | 'Cable/Interconnect is connected'
+146 | Temp             | Temperature              | 44.00      | C     | 'OK'
+147 | Temp             | Temperature              | N/A        | C     | N/A

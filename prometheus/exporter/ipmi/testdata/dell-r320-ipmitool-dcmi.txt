@@ -1,0 +1,10 @@
+IANA PEN registry open failed: No such file or directory
+
+    Instantaneous power reading:                    65 Watts
+    Minimum during sampling period:                  0 Watts
+    Maximum during sampling period:                133 Watts
+    Average power reading over sample period:       63 Watts
+    IPMI timestamp:                           07/25/23 15:34:31 UTC    Sampling period:                          00026547 Seconds.
+    Power reading state is:                   activated
+
+

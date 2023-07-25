@@ -50,6 +50,7 @@ import (
 	"glouton/mqtt"
 	"glouton/nrpe"
 	"glouton/prometheus/exporter/blackbox"
+	"glouton/prometheus/exporter/ipmi"
 	"glouton/prometheus/exporter/snmp"
 	"glouton/prometheus/process"
 	"glouton/prometheus/registry"
@@ -1344,6 +1345,22 @@ func (a *agent) registerInputs() {
 	if a.config.Smart.Enable && (err == nil || a.config.Smart.PathSmartctl != "") {
 		input, opts, err := smart.New(a.config.Smart)
 		a.registerInput("SMART", input, opts, err)
+	}
+
+	if a.config.IPMI.Enable {
+		gatherer := ipmi.New(a.config.IPMI)
+
+		_, err = a.gathererRegistry.RegisterGatherer(
+			registry.RegistrationOption{
+				Description: "IPMI metrics",
+				JitterSeed:  0,
+				MinInterval: time.Minute,
+			},
+			gatherer,
+		)
+		if err != nil {
+			logger.V(1).Printf("unable to add IPMI input: %w", err)
+		}
 	}
 
 	input, opts, err := temp.New()

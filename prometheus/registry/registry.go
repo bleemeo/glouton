@@ -72,6 +72,10 @@ var errInvalidName = errors.New("invalid metric name or label name")
 
 type pushFunction func(ctx context.Context, points []types.MetricPoint)
 
+type diagnosticer interface {
+	DiagnosticArchive(ctx context.Context, archive types.ArchiveWriter) error
+}
+
 // AddMetricPoints implement PointAdder.
 func (f pushFunction) PushPoints(ctx context.Context, points []types.MetricPoint) {
 	f(ctx, points)
@@ -581,7 +585,7 @@ func (r *Registry) DiagnosticArchive(ctx context.Context, archive types.ArchiveW
 		return err
 	}
 
-	return r.diagnosticScrapeLoop(archive)
+	return r.diagnosticScrapeLoop(ctx, archive)
 }
 
 func (r *Registry) diagnosticState(archive types.ArchiveWriter) error {
@@ -685,9 +689,11 @@ func (r *Registry) HealthCheck() {
 	}
 }
 
-func (r *Registry) diagnosticScrapeLoop(archive types.ArchiveWriter) error {
+func (r *Registry) diagnosticScrapeLoop(ctx context.Context, archive types.ArchiveWriter) error {
 	r.l.Lock()
 	defer r.l.Unlock()
+
+	var subDiagnostics []func(ctx context.Context, archive types.ArchiveWriter) error
 
 	activeFile, err := archive.Create("scrape-loop-active.json")
 	if err != nil {
@@ -743,6 +749,10 @@ func (r *Registry) diagnosticScrapeLoop(archive types.ArchiveWriter) error {
 			inactiveResult = append(inactiveResult, info)
 		}
 
+		if diag, ok := reg.gatherer.source.(diagnosticer); ok {
+			subDiagnostics = append(subDiagnostics, diag.DiagnosticArchive)
+		}
+
 		reg.l.Unlock()
 	}
 
@@ -769,7 +779,17 @@ func (r *Registry) diagnosticScrapeLoop(archive types.ArchiveWriter) error {
 	enc = json.NewEncoder(inactiveFile)
 	enc.SetIndent("", "  ")
 
-	return enc.Encode(inactiveResult)
+	if err := enc.Encode(inactiveResult); err != nil {
+		return err
+	}
+
+	for _, diagFunc := range subDiagnostics {
+		if err := diagFunc(ctx, archive); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (r *Registry) writeMetrics(ctx context.Context, file io.Writer, filter bool) error {
