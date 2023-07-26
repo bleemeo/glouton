@@ -57,6 +57,7 @@ nfpms:
   - util-linux
   - iproute2
   - procps-ng
+  - freeipmi
   description: |
     Bleemeo agent
       Bleemeo is a solution of Monitoring as a Service.
@@ -138,6 +139,7 @@ nfpms:
       - util-linux
       - iproute2
       - procps-ng
+      - freeipmi
       - yum-plugin-post-transaction-actions
 checksum:
   name_template: 'checksums.txt'
