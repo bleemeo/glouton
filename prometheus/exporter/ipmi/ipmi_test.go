@@ -24,6 +24,7 @@ import (
 	"glouton/prometheus/model"
 	"glouton/types"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -49,14 +50,23 @@ var errTestCommandNotImplemented = errors.New("test don't implement this command
 func Test_GatherWithState(t *testing.T) { //nolint:maintidx
 	now := time.Date(2023, 7, 24, 8, 23, 53, 0, time.UTC)
 
+	catFullPath, err := exec.LookPath("cat")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	folderWithCat := filepath.Dir(catFullPath)
+
 	tests := []struct {
 		name                string
 		testprefix          string
+		config              config.IPMI
 		want                []types.MetricPoint
 		wantMethod          ipmiMethod
 		disableFreeIPMI     bool
 		disableFreeIPMIDCMI bool
 		disableIPMITool     bool
+		useCatAndRunCmd     bool
 		cmdNotRunAfterInit  bool
 	}{
 		{
@@ -79,6 +89,43 @@ func Test_GatherWithState(t *testing.T) { //nolint:maintidx
 			name:       "R320",
 			testprefix: "dell-r320",
 			wantMethod: methodFreeIPMIDCMI,
+			want: []types.MetricPoint{
+				{
+					Labels: map[string]string{
+						types.LabelName: metricSystemPowerConsumptionName,
+					},
+					Point: types.Point{
+						Time:  now,
+						Value: 61, // value from ipmi-dcmi
+					},
+				},
+			},
+		},
+		{
+			name:            "R320-use-cat",
+			testprefix:      "dell-r320",
+			useCatAndRunCmd: true,
+			wantMethod:      methodFreeIPMIDCMI,
+			want: []types.MetricPoint{
+				{
+					Labels: map[string]string{
+						types.LabelName: metricSystemPowerConsumptionName,
+					},
+					Point: types.Point{
+						Time:  now,
+						Value: 61, // value from ipmi-dcmi
+					},
+				},
+			},
+		},
+		{
+			name:       "R320-use-cat-search-path",
+			testprefix: "dell-r320",
+			config: config.IPMI{
+				BinarySearchPath: folderWithCat,
+			},
+			useCatAndRunCmd: true,
+			wantMethod:      methodFreeIPMIDCMI,
 			want: []types.MetricPoint{
 				{
 					Labels: map[string]string{
@@ -272,13 +319,24 @@ func Test_GatherWithState(t *testing.T) { //nolint:maintidx
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			var runCounts int
+			var (
+				runCounts              int
+				cmdFreeIMPSensors      = []string{"cat", filepath.Join("testdata", tt.testprefix+"-ipmi-sensors.txt")}
+				cmdFreeIMPDCMI         = []string{"cat", filepath.Join("testdata", tt.testprefix+"-ipmi-dcmi.txt")}
+				cmdFreeIMPDCMIEnhanced = []string{"cat", filepath.Join("testdata", tt.testprefix+"-ipmi-dcmi-enhanced.txt")}
+				cmdIPMITool            = []string{"cat", filepath.Join("testdata", tt.testprefix+"-ipmitool-dcmi.txt")}
+				cmdDoesNotExists       = []string{"this-command-does-not-exists"}
+			)
 
 			testRunCMD := func(ctx context.Context, searchPath string, useSudo bool, args []string) ([]byte, error) {
 				var (
-					testFile string
+					cmd      []string
 					disabled bool
 				)
+
+				// we don't take lock around runCounts, because we want error to raise
+				// with -race if the runCmd is called twice concurrently.
+				runCounts++
 
 				switch strings.Join(args, " ") {
 				case strings.Join(freeipmiSensorsCmd, " "):
@@ -286,45 +344,45 @@ func Test_GatherWithState(t *testing.T) { //nolint:maintidx
 						disabled = true
 					}
 
-					testFile = filepath.Join("testdata", tt.testprefix+"-ipmi-sensors.txt")
+					cmd = cmdFreeIMPSensors
 				case strings.Join(freeipmiDCMIEnhanced, " "):
 					if tt.disableFreeIPMI || tt.disableFreeIPMIDCMI {
 						disabled = true
 					}
 
-					testFile = filepath.Join("testdata", tt.testprefix+"-ipmi-dcmi-enhanced.txt")
+					cmd = cmdFreeIMPDCMIEnhanced
 				case strings.Join(freeipmiDCMISimple, " "):
 					if tt.disableFreeIPMI || tt.disableFreeIPMIDCMI {
 						disabled = true
 					}
 
-					testFile = filepath.Join("testdata", tt.testprefix+"-ipmi-dcmi.txt")
+					cmd = cmdFreeIMPDCMI
 				case strings.Join(ipmitoolDCMI, " "):
 					if tt.disableIPMITool {
 						disabled = true
 					}
 
-					testFile = filepath.Join("testdata", tt.testprefix+"-ipmitool-dcmi.txt")
+					cmd = cmdIPMITool
 				default:
 					return nil, fmt.Errorf("%w: %s", errTestCommandNotImplemented, args[0])
 				}
 
-				if testFile == "" {
-					testFile = "empty.txt"
+				if tt.useCatAndRunCmd {
+					if disabled {
+						return runCmd(ctx, searchPath, false, cmdDoesNotExists)
+					}
+
+					return runCmd(ctx, searchPath, false, cmd)
 				}
 
 				if disabled {
 					return []byte("command not found"), errTestCommandNotImplemented
 				}
 
-				// we don't take lock around runCounts, because we want error to raise
-				// with -race if the runCmd is called twice concurrently.
-				runCounts++
-
-				return os.ReadFile(testFile)
+				return os.ReadFile(cmd[1])
 			}
 
-			g := newGatherer(config.IPMI{}, testRunCMD)
+			g := newGatherer(tt.config, testRunCMD)
 
 			mfs, err := g.Gather()
 			if err != nil {
@@ -341,25 +399,27 @@ func Test_GatherWithState(t *testing.T) { //nolint:maintidx
 				t.Errorf("Gather points mismatch (-want +got):\n%s", diff)
 			}
 
-			runCounts = 0
+			for _, extraCall := range []int{2, 3} {
+				runCounts = 0
 
-			mfs, err = g.Gather()
-			if err != nil {
-				t.Fatal(err)
-			}
+				mfs, err = g.Gather()
+				if err != nil {
+					t.Fatal(err)
+				}
 
-			got = model.FamiliesToMetricPoints(now, mfs, true)
+				got = model.FamiliesToMetricPoints(now, mfs, true)
 
-			if diff := types.DiffMetricPoints(tt.want, got, false); diff != "" {
-				t.Errorf("2nd Gather points mismatch (-want +got):\n%s", diff)
-			}
+				if diff := types.DiffMetricPoints(tt.want, got, false); diff != "" {
+					t.Errorf("call #%d Gather points mismatch (-want +got):\n%s", extraCall, diff)
+				}
 
-			if runCounts != 0 && tt.cmdNotRunAfterInit {
-				t.Errorf("runCmd was called %d times after init, want not called", runCounts)
-			}
+				if runCounts != 0 && tt.cmdNotRunAfterInit {
+					t.Errorf("call #%d runCmd was called %d times after init, want not called", extraCall, runCounts)
+				}
 
-			if runCounts != 1 && !tt.cmdNotRunAfterInit {
-				t.Errorf("runCmd was called %d times after init, want called only once", runCounts)
+				if runCounts != 1 && !tt.cmdNotRunAfterInit {
+					t.Errorf("call #%d runCmd was called %d times after init, want called only once", extraCall, runCounts)
+				}
 			}
 		})
 	}

@@ -38,6 +38,7 @@ import (
 
 const (
 	metricSystemPowerConsumptionName = "system_power_consumption"
+	defaultTimeout                   = 10 * time.Second
 
 	// Some Dell server seems to report the period with a value in seconds when ipmi CLI expect a
 	// value in milliseconds.
@@ -293,12 +294,16 @@ func newGatherer(cfg config.IPMI, runCmd runFunction) *Gatherer {
 		cfg.UseSudo = false
 	}
 
+	if cfg.Timeout == 0 {
+		cfg.Timeout = int(defaultTimeout.Seconds())
+	}
+
 	return &Gatherer{cfg: cfg, runCmd: runCmd, usedMethod: methodNotInitialized}
 }
 
 func runCmd(ctx context.Context, searchPath string, useSudo bool, args []string) ([]byte, error) {
 	if searchPath != "" {
-		args[0] = filepath.Join(searchPath, args[0])
+		args = append([]string{filepath.Join(searchPath, args[0])}, args[1:]...)
 	}
 
 	if useSudo {
