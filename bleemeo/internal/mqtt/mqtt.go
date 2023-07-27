@@ -144,6 +144,7 @@ func New(opts Option) *Client {
 		ReloadState:          reloadState.ClientState(),
 		TooManyErrorsHandler: checkDuplicate,
 		ID:                   "Bleemeo",
+		PahoLastPingCheckAt:  opts.PahoLastPingCheckAt,
 	})
 
 	return c
