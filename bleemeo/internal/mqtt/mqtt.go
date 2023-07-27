@@ -64,6 +64,8 @@ type Option struct {
 	UpdateMaintenance func()
 	// GetJWT returns the JWT used to talk with the Bleemeo API.
 	GetJWT func(ctx context.Context) (string, error)
+	// Return date of last metric activation / registration
+	LastMetricActivation func() time.Time
 
 	InitialPoints []types.MetricPoint
 }
@@ -582,7 +584,8 @@ func (c *Client) sendPointsMakePayload(points []types.MetricPoint) map[bleemeoTy
 	// Retry failed points every 5 minutes, or instantly if a new metric was registered.
 	if c.failedPoints.Len() > 0 && c.connected() &&
 		(time.Since(c.lastFailedPointsRetry) > 5*time.Minute ||
-			len(registeredMetricByKey) != c.lastRegisteredMetricsCount) {
+			len(registeredMetricByKey) != c.lastRegisteredMetricsCount ||
+			c.lastFailedPointsRetry.Before(c.opts.LastMetricActivation())) {
 		c.lastRegisteredMetricsCount = len(registeredMetricByKey)
 		c.lastFailedPointsRetry = time.Now()
 

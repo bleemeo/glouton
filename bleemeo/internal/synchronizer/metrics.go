@@ -960,6 +960,7 @@ type metricRegisterer struct {
 	regCountBeforeUpdate int
 	errorCount           int
 	pendingErr           error
+	doneAtLeastOne       bool
 }
 
 func newMetricRegisterer(s *Synchronizer) *metricRegisterer {
@@ -1030,7 +1031,13 @@ func (mr *metricRegisterer) registerMetrics(localMetrics []types.Metric) error {
 	}
 
 	mr.s.l.Lock()
+
 	mr.s.metricRetryAt = minRetryAt
+
+	if mr.doneAtLeastOne {
+		mr.s.lastMetricActivation = mr.s.now()
+	}
+
 	mr.s.l.Unlock()
 
 	mr.s.option.Cache.SetMetricRegistrationsFail(failedRegistrations)
@@ -1224,6 +1231,7 @@ func (mr *metricRegisterer) metricRegisterAndUpdateOne(metric types.Metric) erro
 
 		mr.registeredMetricsByKey[key] = result
 		mr.registeredMetricsByUUID[result.ID] = result
+		mr.doneAtLeastOne = true
 
 		return nil
 	}
@@ -1247,6 +1255,7 @@ func (mr *metricRegisterer) metricRegisterAndUpdateOne(metric types.Metric) erro
 	logger.V(2).Printf("Metric %v registered with UUID %s", key, result.ID)
 	mr.registeredMetricsByKey[key] = result.metricFromAPI(mr.registeredMetricsByKey[result.ID].FirstSeenAt)
 	mr.registeredMetricsByUUID[result.ID] = result.metricFromAPI(mr.registeredMetricsByKey[result.ID].FirstSeenAt)
+	mr.doneAtLeastOne = true
 
 	return nil
 }

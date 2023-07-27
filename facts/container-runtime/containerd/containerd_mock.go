@@ -25,6 +25,7 @@ import (
 	"os"
 	"reflect"
 	"syscall"
+	"time"
 
 	"github.com/containerd/containerd"
 	"github.com/containerd/containerd/api/services/tasks/v1"
@@ -274,6 +275,7 @@ func FakeContainerd(client *MockClient, isContainerIgnored func(facts.Container)
 		},
 		Addresses:          []string{"unused"},
 		IsContainerIgnored: isContainerIgnored,
+		lastDestroyedName:  make(map[string]time.Time),
 	}
 }
 
