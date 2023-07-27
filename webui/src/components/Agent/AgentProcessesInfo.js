@@ -281,7 +281,7 @@ const AgentProcessesInfo = ({ top }) => {
                       p["status"] === "sleeping" ||
                       p["status"] === "?" ||
                       p["status"] === "idle" ||
-                      p["status"] === "disk-sleep"
+                      p["status"] === "disk-sleep",
                   ).length
                 }{" "}
                 sleeping

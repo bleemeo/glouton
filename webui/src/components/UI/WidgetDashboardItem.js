@@ -27,7 +27,7 @@ const WidgetDashboardItem = ({
         let lastPoint = null;
         if (points[0]) {
           lastPoint = parseFloat(
-            points[0].values[points[0].values.length - 1][1]
+            points[0].values[points[0].values.length - 1][1],
           );
         }
         let thresholds = null;
@@ -78,7 +78,7 @@ const WidgetDashboardItem = ({
     let start = period.from
       ? new Date(period.from).toISOString()
       : new Date(
-          new Date().setMinutes(new Date().getMinutes() - period.minutes)
+          new Date().setMinutes(new Date().getMinutes() - period.minutes),
         ).toISOString();
     let end = period.to
       ? new Date(period.to).toISOString()
@@ -89,10 +89,10 @@ const WidgetDashboardItem = ({
     for (let idx in metrics) {
       urls.push(
         `/api/v1/query_range?query=${encodeURIComponent(
-          metrics[idx].query
+          metrics[idx].query,
         )}&start=${encodeURIComponent(start)}&end=${encodeURIComponent(
-          end
-        )}&step=${encodeURIComponent(step)}`
+          end,
+        )}&step=${encodeURIComponent(step)}`,
       );
     }
     return urls;
@@ -176,5 +176,5 @@ export default React.memo(
   (prevProps, nextProps) =>
     isShallowEqual(nextProps.period, prevProps.period) &&
     prevProps.isVisible === nextProps.isVisible &&
-    prevProps.windowWidth === nextProps.windowWidth
+    prevProps.windowWidth === nextProps.windowWidth,
 );

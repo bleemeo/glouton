@@ -4,6 +4,6 @@ export const getStorageItem = (key) =>
 export const setStorageItem = (key, newValue) => {
   window.localStorage.setItem(
     "GLOUTON_STORAGE_" + key,
-    JSON.stringify(newValue)
+    JSON.stringify(newValue),
   );
 };

@@ -26,7 +26,7 @@ const AgentDockerList = () => {
       allContainers,
       search,
     },
-    10000
+    10000,
   );
   let displayContainers;
   if (isLoading) {
@@ -52,7 +52,7 @@ const AgentDockerList = () => {
             <a className="page-link" onClick={() => setOffset(i * PAGE_SIZE)}>
               {i + 1}
             </a>
-          </li>
+          </li>,
         );
       }
       pager = (

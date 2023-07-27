@@ -68,13 +68,13 @@ const AgentSystemDashboard = ({ facts }) => {
         period.minutes,
         startDate,
         endDate,
-        isForward
+        isForward,
       );
       startDate = res.startDate;
       endDate = res.endDate;
     } else if (period.from && period.to) {
       const nbMinutes = Math.floor(
-        Math.abs(new Date(period.to) - new Date(period.from)) / 1000 / 60
+        Math.abs(new Date(period.to) - new Date(period.from)) / 1000 / 60,
       );
       startDate = new Date(period.from);
       endDate = new Date(period.to);
@@ -82,7 +82,7 @@ const AgentSystemDashboard = ({ facts }) => {
         nbMinutes,
         startDate,
         endDate,
-        isForward
+        isForward,
       );
       startDate = res.startDate;
       endDate = res.endDate;

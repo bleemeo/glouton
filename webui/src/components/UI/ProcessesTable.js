@@ -157,9 +157,9 @@ class ProcessesTable extends React.PureComponent {
       () => {
         onSizePerPageChange(
           this.state.displayAll ? this.props.data.length : 20,
-          page
+          page,
         );
-      }
+      },
     );
   };
 

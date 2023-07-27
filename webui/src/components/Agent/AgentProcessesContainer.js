@@ -17,7 +17,7 @@ const AgentProcessesContainer = () => {
   const { isLoading, error, points, processes } = useFetch(
     PROCESSES,
     null,
-    10000
+    10000,
   );
   return (
     <FetchSuspense

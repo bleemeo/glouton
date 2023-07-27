@@ -14,7 +14,7 @@ import Smiley from "../UI/Smiley";
 import { Problems, isNullOrUndefined } from "../utils";
 import FetchSuspense from "../UI/FetchSuspense";
 import { AGENT_DETAILS } from "../utils/gqlRequests";
-import 'react-tooltip/dist/react-tooltip.css'
+import "react-tooltip/dist/react-tooltip.css";
 
 const AgentDetails = ({ facts }) => {
   const [showServiceDetails, setShowServiceDetails] = useState(null);
@@ -144,7 +144,7 @@ const AgentDetails = ({ facts }) => {
                             <button
                               // TODO : Change in favor of service status
                               className={`btn blee-label btn-${cssClassForStatus(
-                                service.status
+                                service.status,
                               )}`}
                               onClick={() => setShowServiceDetails(service)}
                             >
@@ -170,7 +170,7 @@ const AgentDetails = ({ facts }) => {
                     <li>
                       <b>Glouton registration at:</b>{" "}
                       {formatDateTimeWithSeconds(
-                        agentInformation.registrationAt
+                        agentInformation.registrationAt,
                       )}
                     </li>
                   ) : null}
