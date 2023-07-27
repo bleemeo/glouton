@@ -1,0 +1,1 @@
+ipmi_cmd_dcmi_get_dcmi_capability_info_enhanced_system_power_statistics_attributes: command invalid or unsupported

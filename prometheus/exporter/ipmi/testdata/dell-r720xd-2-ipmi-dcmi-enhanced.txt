@@ -1,0 +1,36 @@
+Power Statistics for Rolling Average Time Period 0 Seconds
+
+Current Power                        : 170 Watts
+Minimum Power over sampling duration : 69 watts
+Maximum Power over sampling duration : 312 watts
+Average Power over sampling duration : 173 watts
+Time Stamp                           : 07/25/2023 - 15:44:18
+Statistics reporting time period     : 0 milliseconds
+Power Measurement                    : Active
+Power Statistics for Rolling Average Time Period 1 Hours
+
+Current Power                        : 170 Watts
+Minimum Power over sampling duration : 166 watts
+Maximum Power over sampling duration : 205 watts
+Average Power over sampling duration : 170 watts
+Time Stamp                           : 07/25/2023 - 15:00:56
+Statistics reporting time period     : 1 milliseconds
+Power Measurement                    : Active
+Power Statistics for Rolling Average Time Period 1 Days
+
+Current Power                        : 170 Watts
+Minimum Power over sampling duration : 166 watts
+Maximum Power over sampling duration : 205 watts
+Average Power over sampling duration : 171 watts
+Time Stamp                           : 07/25/2023 - 15:00:56
+Statistics reporting time period     : 1 milliseconds
+Power Measurement                    : Active
+Power Statistics for Rolling Average Time Period 7 Days
+
+Current Power                        : 170 Watts
+Minimum Power over sampling duration : 166 watts
+Maximum Power over sampling duration : 215 watts
+Average Power over sampling duration : 172 watts
+Time Stamp                           : 07/22/2023 - 07:59:58
+Statistics reporting time period     : 7 milliseconds
+Power Measurement                    : Active

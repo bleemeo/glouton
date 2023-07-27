@@ -1,0 +1,1 @@
+This isn't an ipmi-sensor output because the first line don't start with "ID"

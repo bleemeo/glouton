@@ -222,6 +222,12 @@ func DefaultConfig() Config { //nolint:maintidx
 			Port:   8086,
 			Tags:   map[string]string{},
 		},
+		IPMI: IPMI{
+			Enable:           true,
+			UseSudo:          true,
+			BinarySearchPath: "", // means default $PATH
+			Timeout:          10,
+		},
 		JMX: JMX{
 			Enable: true,
 		},

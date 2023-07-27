@@ -1,0 +1,3 @@
+
+    DCMI request failed because: Invalid command (c1)
+
