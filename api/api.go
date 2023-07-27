@@ -28,6 +28,7 @@ import (
 	"glouton/prometheus/promql"
 	"glouton/threshold"
 	"glouton/types"
+	"glouton/utils/archivewriter"
 	"html/template"
 	"io"
 	"net/http"
@@ -203,6 +204,28 @@ func (api *API) init() {
 
 		archive := newTextArchive(w)
 		defer archive.Close()
+
+		if err := api.diagnosticArchive(r.Context(), archive); err != nil {
+			logger.V(1).Printf("failed to serve diagnostic.txt (current file %s): %v", archive.CurrentFileName(), err)
+		}
+	})
+
+	router.HandleFunc("/diagnostic.txt/*", func(w http.ResponseWriter, r *http.Request) {
+		hdr := w.Header()
+		hdr.Add("Content-Type", "text/plain; charset=utf-8")
+
+		var archive types.ArchiveWriter
+
+		subPath := strings.TrimPrefix(r.URL.Path, "/diagnostic.txt/")
+
+		if strings.Contains(subPath, "*") {
+			realArchive := newTextArchive(w)
+			defer realArchive.Close()
+
+			archive = archivewriter.NewFilterWriter(subPath, realArchive)
+		} else {
+			archive = archivewriter.NewSingleFileWriter(subPath, w)
+		}
 
 		if err := api.diagnosticArchive(r.Context(), archive); err != nil {
 			logger.V(1).Printf("failed to serve diagnostic.txt (current file %s): %v", archive.CurrentFileName(), err)
