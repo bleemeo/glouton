@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/alecthomas/kingpin/v2"
+	"github.com/go-kit/log"
 	"github.com/prometheus-community/windows_exporter/collector"
 	"github.com/prometheus/client_golang/prometheus"
 )
@@ -35,8 +36,8 @@ const maxScrapeDuration time.Duration = 9500 * time.Millisecond
 func optionsToFlags(option inputs.CollectorConfig) map[string]string {
 	result := make(map[string]string)
 
-	result["collector.logical_disk.volume-blacklist"] = option.IODiskMatcher.AsDenyRegexp()
-	result["collector.net.nic-blacklist"] = option.NetIfMatcher.AsDenyRegexp()
+	result["collector.logical_disk.volume-exclude"] = option.IODiskMatcher.AsDenyRegexp()
+	result["collector.net.nic-exclude"] = option.NetIfMatcher.AsDenyRegexp()
 
 	return result
 }
@@ -63,10 +64,12 @@ func NewCollector(enabledCollectors []string, options inputs.CollectorConfig) (p
 		return nil, err
 	}
 
+	extLogger := log.With(logger.GoKitLoggerWrapper(logger.V(2)), "collector", "windows_exporter")
+
 	collectors := map[string]collector.Collector{}
 
 	for _, name := range enabledCollectors {
-		c, err := collector.Build(name)
+		c, err := collector.Build(name, extLogger)
 		if err != nil {
 			logger.V(0).Printf("windows_exporter: couldn't build the list of collectors: %s", err)
 
