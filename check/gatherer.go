@@ -44,6 +44,7 @@ type Gatherer struct {
 // checker is an interface which specifies a check.
 type checker interface {
 	Check(ctx context.Context, scheduleUpdate func(runAt time.Time)) types.MetricPoint
+	DiagnosticArchive(ctx context.Context, archive types.ArchiveWriter) error
 	Close()
 }
 
@@ -102,4 +103,8 @@ func (cg *Gatherer) CheckNow(ctx context.Context) types.StatusDescription {
 
 func (cg *Gatherer) Close() {
 	cg.check.Close()
+}
+
+func (cg *Gatherer) DiagnosticArchive(ctx context.Context, archive types.ArchiveWriter) error {
+	return cg.check.DiagnosticArchive(ctx, archive)
 }

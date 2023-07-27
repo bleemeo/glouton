@@ -19,6 +19,7 @@ package check
 import (
 	"context"
 	"crypto/tls"
+	"encoding/json"
 	"fmt"
 	"glouton/logger"
 	"glouton/types"
@@ -86,6 +87,32 @@ func NewHTTP(
 	hc.baseCheck = newBase(mainTCPAddress, persistentAddresses, persistentConnection, hc.httpMainCheck, labels, annotations)
 
 	return hc
+}
+
+func (hc *HTTPCheck) DiagnosticArchive(ctx context.Context, archive types.ArchiveWriter) error {
+	if err := hc.baseCheck.DiagnosticArchive(ctx, archive); err != nil {
+		return err
+	}
+
+	file, err := archive.Create("check-http.json")
+	if err != nil {
+		return err
+	}
+
+	obj := struct {
+		URL                string
+		HTTPHost           string
+		ExpectedStatusCode int
+	}{
+		URL:                hc.url,
+		HTTPHost:           hc.httpHost,
+		ExpectedStatusCode: hc.expectedStatusCode,
+	}
+
+	enc := json.NewEncoder(file)
+	enc.SetIndent("", "  ")
+
+	return enc.Encode(obj)
 }
 
 func (hc *HTTPCheck) httpMainCheck(ctx context.Context) types.StatusDescription {

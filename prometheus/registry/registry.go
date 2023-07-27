@@ -29,6 +29,7 @@ import (
 	gloutonModel "glouton/prometheus/model"
 	"glouton/prometheus/registry/internal/renamer"
 	"glouton/types"
+	"glouton/utils/archivewriter"
 	"io"
 	"net/http"
 	"runtime"
@@ -693,8 +694,6 @@ func (r *Registry) diagnosticScrapeLoop(ctx context.Context, archive types.Archi
 	r.l.Lock()
 	defer r.l.Unlock()
 
-	var subDiagnostics []func(ctx context.Context, archive types.ArchiveWriter) error
-
 	activeFile, err := archive.Create("scrape-loop-active.json")
 	if err != nil {
 		return err
@@ -714,6 +713,7 @@ func (r *Registry) diagnosticScrapeLoop(ctx context.Context, archive types.Archi
 		Option             RegistrationOption
 		UnexportableOption unexportableOption
 		LabelUsed          map[string]string
+		subDiagnostic      func(ctx context.Context, archive types.ArchiveWriter) error
 	}
 
 	activeResult := []loopInfo{}
@@ -742,17 +742,16 @@ func (r *Registry) diagnosticScrapeLoop(ctx context.Context, archive types.Archi
 			info.UnexportableOption.HasGatherModifier = true
 		}
 
+		if diag, ok := reg.gatherer.source.(diagnosticer); ok {
+			info.subDiagnostic = diag.DiagnosticArchive
+		}
+
 		if reg.loop != nil {
 			info.ScrapeInterval = reg.loop.interval.String()
 			activeResult = append(activeResult, info)
 		} else {
 			inactiveResult = append(inactiveResult, info)
 		}
-
-		if diag, ok := reg.gatherer.source.(diagnosticer); ok {
-			subDiagnostics = append(subDiagnostics, diag.DiagnosticArchive)
-		}
-
 		reg.l.Unlock()
 	}
 
@@ -783,8 +782,14 @@ func (r *Registry) diagnosticScrapeLoop(ctx context.Context, archive types.Archi
 		return err
 	}
 
-	for _, diagFunc := range subDiagnostics {
-		if err := diagFunc(ctx, archive); err != nil {
+	for _, info := range activeResult {
+		if info.subDiagnostic == nil {
+			continue
+		}
+
+		subArchive := archivewriter.NewPrefixWriter(fmt.Sprintf("gatherer-%d/", info.ID), archive)
+
+		if err := info.subDiagnostic(ctx, subArchive); err != nil {
 			return err
 		}
 	}
