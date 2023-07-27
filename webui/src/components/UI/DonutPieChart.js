@@ -75,7 +75,7 @@ const DonutPieChart = ({
             key={idx.toString() + idxTau.toString()}
             style={{ fill: segmentsColor[idx] + opacity }}
             d={arc()}
-          />
+          />,
         );
         totalValuesTau += tauValue.value;
       });

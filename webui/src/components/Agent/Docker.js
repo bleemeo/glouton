@@ -17,7 +17,7 @@ const DockerProcesses = ({ containerId, name }) => {
   const { isLoading, error, processes } = useFetch(
     CONTAINER_PROCESSES,
     { containerId },
-    10000
+    10000,
   );
   return (
     <div
@@ -36,7 +36,7 @@ const DockerProcesses = ({ containerId, name }) => {
             let memTotal = result["Memory"]["Total"];
             dockerProcesses.map((process) => {
               process.mem_percent = d3.format(".2r")(
-                (process.memory_rss / memTotal) * 100
+                (process.memory_rss / memTotal) * 100,
               );
               process.new_cpu_times = _formatCpuTime(process.cpu_time);
               return process;
@@ -127,12 +127,12 @@ const Docker = ({ container, date }) => {
               {renderNetwork(
                 "Network IO",
                 container.netBitsRecv,
-                container.netBitsSent
+                container.netBitsSent,
               )}
               {renderDisk(
                 "Disk IO",
                 container.ioWriteBytes,
-                container.ioReadBytes
+                container.ioReadBytes,
               )}
             </div>
           </div>

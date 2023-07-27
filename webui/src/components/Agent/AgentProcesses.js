@@ -41,7 +41,7 @@ export default class AgentProcesses extends React.Component {
     const { order, field } = this.state;
     const filteredProcesses = this.getFilteredProcesses();
     const processesWithSamePPID = filteredProcesses.filter(
-      (p) => row.ppid === p.ppid
+      (p) => row.ppid === p.ppid,
     );
     const processParent = top["Processes"].find((p) => row.ppid === p.pid);
     processesWithSamePPID.sort((a, b) => {
@@ -181,7 +181,7 @@ export default class AgentProcesses extends React.Component {
       const filteredProcesses = this.getFilteredProcesses();
       const processesTmp = filteredProcesses.map((process) => {
         process.mem_percent = parseFloat(
-          d3.format(".2r")((process.memory_rss / top["Memory"]["Total"]) * 100)
+          d3.format(".2r")((process.memory_rss / top["Memory"]["Total"]) * 100),
         );
         process.new_cpu_times = _formatCpuTime(process.cpu_time);
         return process;
@@ -214,7 +214,7 @@ export default class AgentProcesses extends React.Component {
           !siblingsProcesses.some(
             (pBrother) =>
               childrenProcesses.get(pBrother.pid) &&
-              childrenProcesses.get(pBrother.pid).length
+              childrenProcesses.get(pBrother.pid).length,
           )
         ) {
           processesLeaves.push(process);
@@ -226,7 +226,7 @@ export default class AgentProcesses extends React.Component {
       processesLeaves.map((process) => {
         const processesWithSameParents = childrenProcesses.get(process.ppid);
         const processParent = top["Processes"].find(
-          (p) => process.ppid === p.pid
+          (p) => process.ppid === p.pid,
         );
         if (!previousProcesses.includes(processParent.pid)) {
           previousProcesses.push(processParent.pid);
@@ -238,20 +238,20 @@ export default class AgentProcesses extends React.Component {
             .map((p) =>
               !isNullOrUndefined(p.cpu_percent) && !isNaN(p.cpu_percent)
                 ? p.cpu_percent
-                : 0
+                : 0,
             )
             .reduce((acc, val) => acc + val);
           const totalMem = [...processesWithSameParents, processParent]
             .map((p) =>
               !isNullOrUndefined(p.mem_percent) && !isNaN(p.mem_percent)
                 ? p.mem_percent
-                : 0
+                : 0,
             )
             .reduce((acc, val) => parseFloat(acc) + parseFloat(val));
           finalProcesses.push({
             ...process,
             username: [...processesWithSameParents, processParent].every(
-              (p) => p.username === process.username
+              (p) => p.username === process.username,
             )
               ? process.username
               : "...",
@@ -259,14 +259,14 @@ export default class AgentProcesses extends React.Component {
             cpu_percent: totalCpu,
             mem_percent: totalMem,
             status: [...processesWithSameParents, processParent].every(
-              (p) => p.status === process.status
+              (p) => p.status === process.status,
             )
               ? process.status
               : "...",
             new_cpu_times: _formatCpuTime(
               [...processesWithSameParents, processParent]
                 .map((p) => (!isNullOrUndefined(p.cpu_time) ? p.cpu_time : 0))
-                .reduce((acc, v) => acc + v)
+                .reduce((acc, v) => acc + v),
             ),
             cpu_time: processesWithSameParents
               .map((p) => (!isNullOrUndefined(p.cpu_time) ? p.cpu_time : 0))

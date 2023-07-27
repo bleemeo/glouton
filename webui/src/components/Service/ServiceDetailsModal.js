@@ -45,7 +45,7 @@ const ServiceDetails = ({ service }) => {
           <strong>Current status : </strong>
           <span
             className={`badge badge-${cssClassForStatus(
-              currentStatus ? currentStatus : undefined
+              currentStatus ? currentStatus : undefined,
             )}`}
           >
             {textForStatus(currentStatus ? currentStatus : undefined)}

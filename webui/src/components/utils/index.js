@@ -76,18 +76,18 @@ export const computeStart = (type, period) => {
   if (chartTypes[0] === type) {
     if (period.minutes) {
       return new Date(
-        new Date().setMinutes(new Date().getMinutes() - 1)
+        new Date().setMinutes(new Date().getMinutes() - 1),
       ).toISOString();
     } else {
       const end = new Date(period.to);
       return new Date(
-        new Date().setMinutes(end.getMinutes() - 1)
+        new Date().setMinutes(end.getMinutes() - 1),
       ).toISOString();
     }
   } else {
     if (period.minutes) {
       return new Date(
-        new Date().setMinutes(new Date().getMinutes() - period.minutes)
+        new Date().setMinutes(new Date().getMinutes() - period.minutes),
       ).toISOString();
     } else {
       return new Date(period.from).toISOString();
@@ -113,8 +113,8 @@ export const fillEmptyPoints = (data, period) => {
     for (
       let iDate = new Date(
         new Date(firstData[0]).setSeconds(
-          new Date(firstData[0]).getSeconds() - resampling / 6
-        )
+          new Date(firstData[0]).getSeconds() - resampling / 6,
+        ),
       );
       iDate > new Date(start);
       iDate.setSeconds(iDate.getSeconds() - resampling / 6)
@@ -138,7 +138,7 @@ export const fillEmptyPoints = (data, period) => {
     }
   }
   return data.filter(
-    (d) => new Date(d[0]) >= new Date(start) && new Date(d[0]) <= new Date(end)
+    (d) => new Date(d[0]) >= new Date(start) && new Date(d[0]) <= new Date(end),
   );
 };
 
@@ -157,7 +157,7 @@ export function composeMetricName(metric, name) {
   } else if (metricName.indexOf("{{ mountpoint }}") > -1) {
     metricName = metricName.replace(
       "{{ mountpoint }}",
-      metric.metric.mountpoint
+      metric.metric.mountpoint,
     );
   } else if (metricName.indexOf("{{ volume }}") > -1) {
     metricName = metricName.replace("{{ volume }}", metric.metric.volume);

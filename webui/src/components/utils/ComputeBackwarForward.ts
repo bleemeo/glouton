@@ -2,7 +2,7 @@ export const computeBackwardForward = (
   nbMinutes: number,
   startDate: Date,
   endDate: Date,
-  isForward = false
+  isForward = false,
 ): unknown => {
   const applyBackwardOrForward = isForward
     ? nbMinutes * 0.9
