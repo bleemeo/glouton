@@ -903,6 +903,7 @@ func (s *Synchronizer) syncToPerform(ctx context.Context) (map[string]bool, bool
 	lastDiscovery := s.option.Discovery.LastUpdate()
 	currentMetricCount := s.option.Store.MetricsCount()
 	mqttIsConnected := s.option.IsMqttConnected()
+	lastAnnotationChange := s.option.LastMetricAnnotationChange()
 
 	s.l.Lock()
 	defer s.l.Unlock()
@@ -980,7 +981,7 @@ func (s *Synchronizer) syncToPerform(ctx context.Context) (map[string]bool, bool
 		syncMethods[syncMethodMetric] = false
 	}
 
-	if fullSync || s.now().After(s.metricRetryAt) || s.lastSync.Before(lastDiscovery) || s.lastMetricCount != currentMetricCount {
+	if fullSync || s.now().After(s.metricRetryAt) || s.lastSync.Before(lastDiscovery) || s.lastSync.Before(lastAnnotationChange) || s.lastMetricCount != currentMetricCount {
 		syncMethods[syncMethodMetric] = fullSync
 	}
 

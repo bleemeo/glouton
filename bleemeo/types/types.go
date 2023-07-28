@@ -57,6 +57,7 @@ type GlobalOption struct {
 	IsContainerEnabled             func(facts.Container) (bool, bool)
 	IsContainerNameRecentlyDeleted func(name string) bool
 	PahoLastPingCheckAt            func() time.Time
+	LastMetricAnnotationChange     func() time.Time
 	// IsMetricAllowed returns whether a metric is allowed or not in the config files.
 	IsMetricAllowed func(lbls map[string]string) bool
 }
