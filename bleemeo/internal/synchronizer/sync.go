@@ -736,6 +736,8 @@ func (s *Synchronizer) HealthCheck() bool {
 func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) (map[string]bool, error) {
 	var wasCreation, updateThresholds bool
 
+	startAt := s.now()
+
 	s.l.Lock()
 	s.syncHeartbeat = time.Now()
 	s.l.Unlock()
@@ -791,7 +793,6 @@ func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) (map[str
 		{name: syncMethodAlertingRules, method: s.syncAlertingRules},
 		{name: syncMethodConfig, method: s.syncConfig},
 	}
-	startAt := s.now()
 
 	var firstErr error
 
