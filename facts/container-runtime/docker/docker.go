@@ -554,7 +554,10 @@ func (d *Docker) run(ctx context.Context) error {
 
 				d.l.Lock()
 
-				event.Container = d.containers[actorID]
+				container, found := d.containers[actorID]
+				if found {
+					event.Container = container
+				}
 
 				switch event.Type { //nolint:exhaustive,nolintlint
 				case facts.EventTypeDelete:
