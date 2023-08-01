@@ -91,6 +91,7 @@ type Synchronizer struct {
 	lastSync                  time.Time
 	lastFactUpdatedAt         string
 	lastSNMPcount             int
+	lastMetricActivation      time.Time
 	successiveErrors          int
 	warnAccountMismatchDone   bool
 	maintenanceMode           bool
@@ -226,6 +227,7 @@ func (s *Synchronizer) DiagnosticArchive(_ context.Context, archive types.Archiv
 		FullSyncCount              int
 		StartedAt                  time.Time
 		LastSync                   time.Time
+		LastMetricActivation       time.Time
 		LastFactUpdatedAt          string
 		SuccessiveErrors           int
 		WarnAccountMismatchDone    bool
@@ -251,6 +253,7 @@ func (s *Synchronizer) DiagnosticArchive(_ context.Context, archive types.Archiv
 		StartedAt:                  s.startedAt,
 		LastSync:                   s.lastSync,
 		LastFactUpdatedAt:          s.lastFactUpdatedAt,
+		LastMetricActivation:       s.lastMetricActivation,
 		SuccessiveErrors:           s.successiveErrors,
 		WarnAccountMismatchDone:    s.warnAccountMismatchDone,
 		MaintenanceMode:            s.maintenanceMode,
@@ -528,6 +531,14 @@ func (s *Synchronizer) NotifyConfigUpdate(immediate bool) {
 	s.forceSync[syncMethodMonitor] = true
 }
 
+// LastMetricActivation return the date at which last metric was activated/registrered.
+func (s *Synchronizer) LastMetricActivation() time.Time {
+	s.l.Lock()
+	defer s.l.Unlock()
+
+	return s.lastMetricActivation
+}
+
 // UpdateMetrics request to update a specific metrics.
 func (s *Synchronizer) UpdateMetrics(metricUUID ...string) {
 	s.l.Lock()
@@ -727,6 +738,8 @@ func (s *Synchronizer) HealthCheck() bool {
 func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) (map[string]bool, error) {
 	var wasCreation, updateThresholds bool
 
+	startAt := s.now()
+
 	s.l.Lock()
 	s.syncHeartbeat = time.Now()
 	s.l.Unlock()
@@ -783,7 +796,6 @@ func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) (map[str
 		{name: syncMethodConfig, method: s.syncConfig},
 		{name: syncMethodCrashReports, method: s.syncCrashReports},
 	}
-	startAt := s.now()
 
 	var firstErr error
 
@@ -894,6 +906,7 @@ func (s *Synchronizer) syncToPerform(ctx context.Context) (map[string]bool, bool
 	lastDiscovery := s.option.Discovery.LastUpdate()
 	currentMetricCount := s.option.Store.MetricsCount()
 	mqttIsConnected := s.option.IsMqttConnected()
+	lastAnnotationChange := s.option.LastMetricAnnotationChange()
 
 	s.l.Lock()
 	defer s.l.Unlock()
@@ -972,7 +985,7 @@ func (s *Synchronizer) syncToPerform(ctx context.Context) (map[string]bool, bool
 		syncMethods[syncMethodMetric] = false
 	}
 
-	if fullSync || s.now().After(s.metricRetryAt) || s.lastSync.Before(lastDiscovery) || s.lastMetricCount != currentMetricCount {
+	if fullSync || s.now().After(s.metricRetryAt) || s.lastSync.Before(lastDiscovery) || s.lastSync.Before(lastAnnotationChange) || s.lastMetricCount != currentMetricCount {
 		syncMethods[syncMethodMetric] = fullSync
 	}
 

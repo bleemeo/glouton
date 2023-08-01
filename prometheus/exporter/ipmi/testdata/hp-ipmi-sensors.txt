@@ -1,0 +1,93 @@
+ID | Name             | Type                     | Reading    | Units       | Event
+0  | UID              | OEM Reserved             | N/A        | N/A         | 'OEM Event = 0001h'
+1  | SysHealth_Stat   | Chassis                  | N/A        | N/A         | 'transition to OK'
+2  | 01-Inlet Ambient | Temperature              | 23.00      | C           | 'OK'
+3  | 02-CPU 1         | Temperature              | 40.00      | C           | 'OK'
+4  | 03-CPU 2         | Temperature              | N/A        | C           | N/A
+5  | 04-P1 DIMM 1-6   | Temperature              | N/A        | C           | N/A
+6  | 05-PMM 1-6       | Temperature              | N/A        | C           | N/A
+7  | 06-P1 DIMM 7-12  | Temperature              | 26.00      | C           | 'OK'
+8  | 07-PMM 7-12      | Temperature              | N/A        | C           | N/A
+9  | 08-P2 DIMM 1-6   | Temperature              | N/A        | C           | N/A
+10 | 09-PMM 1-6       | Temperature              | N/A        | C           | N/A
+11 | 10-P2 DIMM 7-12  | Temperature              | N/A        | C           | N/A
+12 | 11-PMM 7-12      | Temperature              | N/A        | C           | N/A
+13 | 12-HD Max        | Temperature              | 35.00      | C           | 'OK'
+14 | 13-Exp Bay Drive | Temperature              | N/A        | C           | N/A
+15 | 14-Stor Batt 1   | Temperature              | 24.00      | C           | 'OK'
+16 | 15-Front Ambient | Temperature              | 24.00      | C           | 'OK'
+17 | 16-VR P1         | Temperature              | 30.00      | C           | 'OK'
+18 | 17-VR P2         | Temperature              | N/A        | C           | N/A
+19 | 18-VR P1 Mem 1   | Temperature              | 28.00      | C           | 'OK'
+20 | 19-VR P1 Mem 2   | Temperature              | 27.00      | C           | 'OK'
+21 | 20-VR P2 Mem 1   | Temperature              | N/A        | C           | N/A
+22 | 21-VR P2 Mem 2   | Temperature              | N/A        | C           | N/A
+23 | 22-Chipset       | Temperature              | 37.00      | C           | 'OK'
+24 | 23-BMC           | Temperature              | 66.00      | C           | 'OK'
+25 | 24-BMC Zone      | Temperature              | 38.00      | C           | 'OK'
+26 | 25-HD Controller | Temperature              | 52.00      | C           | 'OK'
+27 | 26-HD Cntlr Zone | Temperature              | 31.00      | C           | 'OK'
+28 | 27-LOM           | Temperature              | N/A        | C           | N/A
+29 | 28-LOM Card      | Temperature              | N/A        | C           | N/A
+30 | 29-I/O Zone      | Temperature              | 29.00      | C           | 'OK'
+31 | 30-PCI 1         | Temperature              | N/A        | C           | N/A
+32 | 31-PCI 1 Zone    | Temperature              | 30.00      | C           | 'OK'
+33 | 32-PCI 2         | Temperature              | N/A        | C           | N/A
+34 | 33-PCI 2 Zone    | Temperature              | 30.00      | C           | 'OK'
+35 | 34-PCI 3         | Temperature              | N/A        | C           | N/A
+36 | 35-PCI 3 Zone    | Temperature              | N/A        | C           | N/A
+37 | 37-Rear HD Max   | Temperature              | N/A        | C           | N/A
+38 | 38-Battery Zone  | Temperature              | 31.00      | C           | 'OK'
+39 | 39-P/S 1 Inlet   | Temperature              | N/A        | C           | N/A
+40 | 40-P/S 2 Inlet   | Temperature              | N/A        | C           | N/A
+41 | 41-P/S 1         | Temperature              | N/A        | C           | N/A
+42 | 42-P/S 2         | Temperature              | N/A        | C           | N/A
+43 | 43-E-Fuse        | Temperature              | 20.00      | C           | 'OK'
+44 | 44-P/S 2 Zone    | Temperature              | 26.00      | C           | 'OK'
+45 | 61-AHCI HD Max   | Temperature              | N/A        | C           | N/A
+46 | 69-PCI 1 M2      | Temperature              | N/A        | C           | N/A
+47 | 70-PCI 1 M2 Zn   | Temperature              | N/A        | C           | N/A
+48 | 71-PCI 2 M2      | Temperature              | N/A        | C           | N/A
+49 | 72-PCI 2 M2 Zn   | Temperature              | N/A        | C           | N/A
+50 | 73-PCI 3 M2      | Temperature              | N/A        | C           | N/A
+51 | 74-PCI 3 M2 Zn   | Temperature              | N/A        | C           | N/A
+52 | Fan 1            | Fan                      | N/A        | N/A         | N/A
+53 | Fan 1 DutyCycle  | Fan                      | N/A        | %           | N/A
+54 | Fan 1 Presence   | Fan                      | N/A        | N/A         | N/A
+55 | Fan 2            | Fan                      | N/A        | N/A         | N/A
+56 | Fan 2 DutyCycle  | Fan                      | N/A        | %           | N/A
+57 | Fan 2 Presence   | Fan                      | N/A        | N/A         | N/A
+58 | Fan 3            | Fan                      | N/A        | N/A         | N/A
+59 | Fan 3 DutyCycle  | Fan                      | N/A        | %           | N/A
+60 | Fan 3 Presence   | Fan                      | N/A        | N/A         | N/A
+61 | Fan 4            | Fan                      | N/A        | N/A         | N/A
+62 | Fan 4 DutyCycle  | Fan                      | N/A        | %           | N/A
+63 | Fan 4 Presence   | Fan                      | N/A        | N/A         | N/A
+64 | Fan 5            | Fan                      | N/A        | N/A         | N/A
+65 | Fan 5 DutyCycle  | Fan                      | N/A        | %           | N/A
+66 | Fan 5 Presence   | Fan                      | N/A        | N/A         | N/A
+67 | Fan 6            | Fan                      | N/A        | N/A         | N/A
+68 | Fan 6 DutyCycle  | Fan                      | N/A        | %           | N/A
+69 | Fan 6 Presence   | Fan                      | N/A        | N/A         | N/A
+70 | Fan 7            | Fan                      | N/A        | N/A         | N/A
+71 | Fan 7 DutyCycle  | Fan                      | N/A        | %           | N/A
+72 | Fan 7 Presence   | Fan                      | N/A        | N/A         | N/A
+73 | Power Supply 1   | Power Supply             | N/A        | N/A         | N/A
+74 | PS 1 Output      | Power Supply             | N/A        | W           | N/A
+75 | Power Supply 2   | Power Supply             | N/A        | N/A         | N/A
+76 | PS 2 Output      | Power Supply             | N/A        | W           | N/A
+77 | Power Meter      | Other Units Based Sensor | 60.00      | W           | 'OK'
+78 | Fans             | Fan                      | N/A        | N/A         | N/A
+80 | Power Supplies   | Power Supply             | N/A        | N/A         | N/A
+82 | Memory Status    | Memory                   | N/A        | N/A         | 'Presence detected'
+83 | Megacell Status  | Battery                  | N/A        | N/A         | 'battery presence detected'
+84 | Intrusion        | Physical Security        | N/A        | N/A         | N/A
+85 | CPU Utilization  | Processor                | 15.00      | unspecified | 'OK'
+86 | LOM_Link_P1      | LAN                      | N/A        | N/A         | N/A
+87 | LOM_Link_P2      | LAN                      | N/A        | N/A         | N/A
+88 | LOM_Link_P3      | LAN                      | N/A        | N/A         | N/A
+89 | LOM_Link_P4      | LAN                      | N/A        | N/A         | N/A
+90 | Dr_Stat_1I1_B001 | Drive Slot               | N/A        | N/A         | N/A
+91 | Dr_Stat_1I1_B002 | Drive Slot               | N/A        | N/A         | N/A
+92 | CPU_Stat_C1      | Processor                | N/A        | N/A         | 'Processor Presence detected'
+93 | CPU_Stat_C2      | Processor                | N/A        | N/A         | 'OK'

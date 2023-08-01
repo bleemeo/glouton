@@ -224,6 +224,7 @@ var (
 		"system_load1",
 		"system_load5",
 		"system_load15",
+		"system_power_consumption",
 		"uptime",
 		"users_logged",
 		"zfs_pool_health_status",

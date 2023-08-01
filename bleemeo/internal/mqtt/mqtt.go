@@ -30,6 +30,7 @@ import (
 	"glouton/mqtt"
 	"glouton/mqtt/client"
 	"glouton/types"
+	"glouton/utils/metricutils"
 	"math"
 	"math/rand"
 	"net"
@@ -64,6 +65,8 @@ type Option struct {
 	UpdateMaintenance func()
 	// GetJWT returns the JWT used to talk with the Bleemeo API.
 	GetJWT func(ctx context.Context) (string, error)
+	// Return date of last metric activation / registration
+	LastMetricActivation func() time.Time
 
 	InitialPoints []types.MetricPoint
 }
@@ -144,6 +147,7 @@ func New(opts Option) *Client {
 		ReloadState:          reloadState.ClientState(),
 		TooManyErrorsHandler: checkDuplicate,
 		ID:                   "Bleemeo",
+		PahoLastPingCheckAt:  opts.PahoLastPingCheckAt,
 	})
 
 	return c
@@ -541,40 +545,7 @@ func (c *Client) PopPoints(includeFailedPoints bool) []types.MetricPoint {
 func (c *Client) sendPoints() {
 	points := c.PopPoints(false)
 
-	c.l.Lock()
-	defer c.l.Unlock()
-
-	if !c.connected() || c.isSendingSuspended() {
-		// store all new points as failed ones
-		c.addFailedPoints(c.filterPoints(points)...)
-
-		// Make sure that when connection is back we retry failed points as soon as possible
-		c.lastFailedPointsRetry = time.Time{}
-
-		return
-	}
-
-	registeredMetricByKey := c.opts.Cache.MetricLookupFromList()
-
-	// Retry failed points every 5 minutes, or instantly if a new metric was registered.
-	if c.failedPoints.Len() > 0 && c.connected() &&
-		(time.Since(c.lastFailedPointsRetry) > 5*time.Minute ||
-			len(registeredMetricByKey) != c.lastRegisteredMetricsCount) {
-		c.lastRegisteredMetricsCount = len(registeredMetricByKey)
-		c.lastFailedPointsRetry = time.Now()
-
-		points = append(c.failedPoints.Pop(), points...)
-	}
-
-	points = c.filterPoints(points)
-	payload := c.preparePoints(registeredMetricByKey, points)
-	nbPoints := 0
-
-	for _, metrics := range payload {
-		nbPoints += len(metrics)
-	}
-
-	logger.V(2).Printf("MQTT: sending %d points", nbPoints)
+	payload := c.sendPointsMakePayload(points)
 
 	for agentID, agentPayload := range payload {
 		for i := 0; i < len(agentPayload); i += pointsBatchSize {
@@ -593,6 +564,46 @@ func (c *Client) sendPoints() {
 			c.mqtt.Publish(fmt.Sprintf("v1/agent/%s/data", agentID), buffer, true)
 		}
 	}
+}
+
+func (c *Client) sendPointsMakePayload(points []types.MetricPoint) map[bleemeoTypes.AgentID][]metricPayload {
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	if !c.connected() || c.isSendingSuspended() {
+		// store all new points as failed ones
+		c.addFailedPoints(c.filterPoints(points)...)
+
+		// Make sure that when connection is back we retry failed points as soon as possible
+		c.lastFailedPointsRetry = time.Time{}
+
+		return nil
+	}
+
+	registeredMetricByKey := c.opts.Cache.MetricLookupFromList()
+
+	// Retry failed points every 5 minutes, or instantly if a new metric was registered.
+	if c.failedPoints.Len() > 0 && c.connected() &&
+		(time.Since(c.lastFailedPointsRetry) > 5*time.Minute ||
+			len(registeredMetricByKey) != c.lastRegisteredMetricsCount ||
+			c.lastFailedPointsRetry.Before(c.opts.LastMetricActivation())) {
+		c.lastRegisteredMetricsCount = len(registeredMetricByKey)
+		c.lastFailedPointsRetry = time.Now()
+
+		points = append(c.failedPoints.Pop(), points...)
+	}
+
+	points = c.filterPoints(points)
+	payload := c.preparePoints(registeredMetricByKey, points)
+	nbPoints := 0
+
+	for _, metrics := range payload {
+		nbPoints += len(metrics)
+	}
+
+	logger.V(2).Printf("MQTT: sending %d points", nbPoints)
+
+	return payload
 }
 
 // addFailedPoints add given points to list of failed points.
@@ -671,7 +682,7 @@ func (c *Client) preparePoints(
 		}
 
 		// Don't send labels text if the metric only has a name and an item.
-		if c.opts.MetricFormat == types.MetricFormatBleemeo && common.MetricOnlyHasItem(metric.Labels, metric.AgentID) {
+		if c.opts.MetricFormat == types.MetricFormatBleemeo && metricutils.MetricOnlyHasItem(metric.Labels, metric.AgentID) {
 			// The metric ID is not used when labels text are present
 			// because they already uniquely identify the metric.
 			payload.UUID = metric.ID

@@ -31,10 +31,10 @@ const ScrollToTop = ScrollToTopComponent;
 
 const AgentSystemDashboard = lazy(() => import("./Agent/AgentSystemDashboard"));
 const AgentDockerListContainer = lazy(() =>
-  import("./Agent/AgentDockerListContainer")
+  import("./Agent/AgentDockerListContainer"),
 );
 const AgentProcessesContainer = lazy(() =>
-  import("./Agent/AgentProcessesContainer")
+  import("./Agent/AgentProcessesContainer"),
 );
 const AgentDetails = lazy(() => import("./Agent/AgentDetails"));
 

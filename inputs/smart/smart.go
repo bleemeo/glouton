@@ -17,9 +17,11 @@
 package smart
 
 import (
+	"context"
 	"glouton/config"
 	"glouton/inputs"
 	"glouton/inputs/internal"
+	"glouton/types"
 	"os"
 	"strings"
 	"time"
@@ -31,6 +33,9 @@ import (
 
 // New returns a SMART input.
 func New(config config.Smart) (telegraf.Input, *inputs.GathererOptions, error) {
+	SetupGlobalWrapper()
+	globalRunCmd.SetConcurrency(config.MaxConcurrency)
+
 	input, ok := telegraf_inputs.Inputs["smart"]
 	if !ok {
 		return nil, nil, inputs.ErrDisabledInput
@@ -63,6 +68,10 @@ func New(config config.Smart) (telegraf.Input, *inputs.GathererOptions, error) {
 	}
 
 	return internalInput, options, nil
+}
+
+func DiagnosticArchive(ctx context.Context, archive types.ArchiveWriter) error {
+	return globalRunCmd.diagnosticArchive(ctx, archive)
 }
 
 func transformMetrics(currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {

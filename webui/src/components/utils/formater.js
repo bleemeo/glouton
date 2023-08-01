@@ -56,7 +56,7 @@ if (window.Intl) {
       day: undefined,
       hour: "2-digit",
       minute: "2-digit",
-    }
+    },
   ).format;
   hoursMinutesSecondsFormater = new Intl.DateTimeFormat(
     window.navigator.language || "en",
@@ -67,7 +67,7 @@ if (window.Intl) {
       hour: "2-digit",
       minute: "2-digit",
       second: "2-digit",
-    }
+    },
   ).format;
 } else {
   dayFormater = d3.timeFormat("%d");

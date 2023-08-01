@@ -42,7 +42,7 @@ export default class MetricNumberItem extends React.Component {
       // -centerX*(factor-1)
       this.textElem.setAttribute(
         "transform",
-        `matrix(${ratio}, 0, 0, ${ratio}, ${translateRatio}, ${translateRatio})`
+        `matrix(${ratio}, 0, 0, ${ratio}, ${translateRatio}, ${translateRatio})`,
       );
     }
   }

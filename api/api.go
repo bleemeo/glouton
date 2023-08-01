@@ -211,6 +211,28 @@ func (api *API) init() {
 		}
 	})
 
+	router.HandleFunc("/diagnostic.txt/*", func(w http.ResponseWriter, r *http.Request) {
+		hdr := w.Header()
+		hdr.Add("Content-Type", "text/plain; charset=utf-8")
+
+		var archive types.ArchiveWriter
+
+		subPath := strings.TrimPrefix(r.URL.Path, "/diagnostic.txt/")
+
+		if strings.Contains(subPath, "*") {
+			realArchive := archivewriter.NewTextArchive(w)
+			defer realArchive.Close()
+
+			archive = archivewriter.NewFilterWriter(subPath, realArchive)
+		} else {
+			archive = archivewriter.NewSingleFileWriter(subPath, w)
+		}
+
+		if err := api.diagnosticArchive(r.Context(), archive); err != nil {
+			logger.V(1).Printf("failed to serve diagnostic.txt (current file %s): %v", archive.CurrentFileName(), err)
+		}
+	})
+
 	if api.Endpoints.DebugEnable {
 		router.Handle("/debug/pprof/*", http.HandlerFunc(pprof.Index))
 		router.Handle("/debug/pprof/cmdline", http.HandlerFunc(pprof.Cmdline))

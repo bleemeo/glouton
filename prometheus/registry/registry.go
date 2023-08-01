@@ -30,6 +30,7 @@ import (
 	gloutonModel "glouton/prometheus/model"
 	"glouton/prometheus/registry/internal/renamer"
 	"glouton/types"
+	"glouton/utils/archivewriter"
 	"io"
 	"net/http"
 	"runtime"
@@ -72,6 +73,10 @@ type RelabelHook func(ctx context.Context, labels map[string]string) (newLabel m
 var errInvalidName = errors.New("invalid metric name or label name")
 
 type pushFunction func(ctx context.Context, points []types.MetricPoint)
+
+type diagnosticer interface {
+	DiagnosticArchive(ctx context.Context, archive types.ArchiveWriter) error
+}
 
 // AddMetricPoints implement PointAdder.
 func (f pushFunction) PushPoints(ctx context.Context, points []types.MetricPoint) {
@@ -582,7 +587,7 @@ func (r *Registry) DiagnosticArchive(ctx context.Context, archive types.ArchiveW
 		return err
 	}
 
-	return r.diagnosticScrapeLoop(archive)
+	return r.diagnosticScrapeLoop(ctx, archive)
 }
 
 func (r *Registry) diagnosticState(archive types.ArchiveWriter) error {
@@ -686,7 +691,7 @@ func (r *Registry) HealthCheck() {
 	}
 }
 
-func (r *Registry) diagnosticScrapeLoop(archive types.ArchiveWriter) error {
+func (r *Registry) diagnosticScrapeLoop(ctx context.Context, archive types.ArchiveWriter) error {
 	r.l.Lock()
 	defer r.l.Unlock()
 
@@ -709,6 +714,7 @@ func (r *Registry) diagnosticScrapeLoop(archive types.ArchiveWriter) error {
 		Option             RegistrationOption
 		UnexportableOption unexportableOption
 		LabelUsed          map[string]string
+		subDiagnostic      func(ctx context.Context, archive types.ArchiveWriter) error
 	}
 
 	activeResult := []loopInfo{}
@@ -737,13 +743,16 @@ func (r *Registry) diagnosticScrapeLoop(archive types.ArchiveWriter) error {
 			info.UnexportableOption.HasGatherModifier = true
 		}
 
+		if diag, ok := reg.gatherer.source.(diagnosticer); ok {
+			info.subDiagnostic = diag.DiagnosticArchive
+		}
+
 		if reg.loop != nil {
 			info.ScrapeInterval = reg.loop.interval.String()
 			activeResult = append(activeResult, info)
 		} else {
 			inactiveResult = append(inactiveResult, info)
 		}
-
 		reg.l.Unlock()
 	}
 
@@ -770,7 +779,23 @@ func (r *Registry) diagnosticScrapeLoop(archive types.ArchiveWriter) error {
 	enc = json.NewEncoder(inactiveFile)
 	enc.SetIndent("", "  ")
 
-	return enc.Encode(inactiveResult)
+	if err := enc.Encode(inactiveResult); err != nil {
+		return err
+	}
+
+	for _, info := range activeResult {
+		if info.subDiagnostic == nil {
+			continue
+		}
+
+		subArchive := archivewriter.NewPrefixWriter(fmt.Sprintf("gatherer-%d/", info.ID), archive)
+
+		if err := info.subDiagnostic(ctx, subArchive); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (r *Registry) writeMetrics(ctx context.Context, file io.Writer, filter bool) error {

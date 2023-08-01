@@ -321,10 +321,11 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 			},
 		},
 		Smart: Smart{
-			Enable:       true,
-			PathSmartctl: "/smartctl",
-			Devices:      []string{"/dev/sda"},
-			Excludes:     []string{"/dev/sdb"},
+			Enable:         true,
+			PathSmartctl:   "/smartctl",
+			Devices:        []string{"/dev/sda"},
+			Excludes:       []string{"/dev/sdb"},
+			MaxConcurrency: 42,
 		},
 		Stack: "mystack",
 		Tags:  []string{"mytag"},
@@ -353,7 +354,7 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 		Web: Web{
 			Enable: true,
 			Endpoints: WebEndpoints{
-				DebugEnable: false,
+				DebugEnable: true,
 			},
 			LocalUI: LocalUI{
 				Enable: true,
@@ -787,7 +788,7 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 				},
 				Web: Web{
 					Endpoints: WebEndpoints{
-						DebugEnable: true,
+						DebugEnable: false,
 					},
 				},
 			},

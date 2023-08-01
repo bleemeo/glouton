@@ -34,7 +34,7 @@ import (
 //
 // It just metricGet followed by update to s.metrics in case of creation.
 func (s *Store) metricGetOrCreate(lbls map[string]string, annotations types.MetricAnnotations) metric {
-	m, ok := s.metricGet(lbls, annotations)
+	m, ok, _ := s.metricGet(lbls, annotations)
 	if !ok {
 		s.metrics[m.metricID] = m
 	}

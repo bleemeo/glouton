@@ -185,6 +185,11 @@ func MetricPointsToFamilies(points []types.MetricPoint) []*dto.MetricFamily {
 			ts = nil
 		}
 
+		if len(lbls) == 0 {
+			// This shouldn't happen, but it happened once on a TrueNAS with Glouton version 23.06.30.134546
+			continue
+		}
+
 		metric := &dto.Metric{
 			Label:       make([]*dto.LabelPair, 0, len(lbls)-1),
 			TimestampMs: ts,

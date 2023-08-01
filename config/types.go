@@ -30,6 +30,7 @@ type Config struct {
 	DiskIgnore               []string             `yaml:"disk_ignore"`
 	DiskMonitor              []string             `yaml:"disk_monitor"`
 	InfluxDB                 InfluxDB             `yaml:"influxdb"`
+	IPMI                     IPMI                 `yaml:"ipmi"`
 	JMX                      JMX                  `yaml:"jmx"`
 	JMXTrans                 JMXTrans             `yaml:"jmxtrans"`
 	Kubernetes               Kubernetes           `yaml:"kubernetes"`
@@ -71,10 +72,11 @@ type LogFilter struct {
 }
 
 type Smart struct {
-	Enable       bool     `yaml:"enable"`
-	PathSmartctl string   `yaml:"path_smartctl"`
-	Devices      []string `yaml:"devices"`
-	Excludes     []string `yaml:"excludes"`
+	Enable         bool     `yaml:"enable"`
+	PathSmartctl   string   `yaml:"path_smartctl"`
+	Devices        []string `yaml:"devices"`
+	Excludes       []string `yaml:"excludes"`
+	MaxConcurrency int      `yaml:"max_concurrency"`
 }
 
 type Zabbix struct {
@@ -168,6 +170,13 @@ type InfluxDB struct {
 	Port   int               `yaml:"port"`
 	DBName string            `yaml:"db_name"`
 	Tags   map[string]string `yaml:"tags"`
+}
+
+type IPMI struct {
+	Enable           bool   `yaml:"enable"`
+	BinarySearchPath string `yaml:"bin_search_path"`
+	UseSudo          bool   `yaml:"use_sudo"`
+	Timeout          int    `yaml:"timeout"`
 }
 
 type Bleemeo struct {

@@ -18,6 +18,8 @@ package check
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"glouton/crashreport"
 	"glouton/logger"
 	"glouton/types"
@@ -98,6 +100,54 @@ func newBase(mainTCPAddress string, tcpAddresses []string, persistentConnection 
 			StatusDescription: "initial status - description is ignored",
 		},
 	}
+}
+
+func (bc *baseCheck) DiagnosticArchive(_ context.Context, archive types.ArchiveWriter) error {
+	file, err := archive.Create("check-base.json")
+	if err != nil {
+		return err
+	}
+
+	bc.l.Lock()
+	defer bc.l.Unlock()
+
+	disabledPersistent := make([]string, 0)
+
+	bc.disabledPersistent.Range(func(key, value any) bool {
+		keyStr, ok := key.(string)
+		if !ok {
+			keyStr = fmt.Sprintf("%v", key)
+		}
+
+		disabledPersistent = append(disabledPersistent, keyStr)
+
+		return true
+	})
+
+	obj := struct {
+		MetricName              string
+		MetricLabels            map[string]string
+		MetricAnnotations       types.MetricAnnotations
+		MainTCPAddress          string
+		TCPAddresses            []string
+		UsePersistentConnection bool
+		DisabledPersistent      []string
+		PreviousStatus          types.StatusDescription
+	}{
+		MetricName:              bc.metricName,
+		MetricLabels:            bc.labels,
+		MetricAnnotations:       bc.annotations,
+		MainTCPAddress:          bc.mainTCPAddress,
+		TCPAddresses:            bc.tcpAddresses,
+		UsePersistentConnection: bc.persistentConnection,
+		DisabledPersistent:      disabledPersistent,
+		PreviousStatus:          bc.previousStatus,
+	}
+
+	enc := json.NewEncoder(file)
+	enc.SetIndent("", "  ")
+
+	return enc.Encode(obj)
 }
 
 // Check runs the Check and returns the resulting point.

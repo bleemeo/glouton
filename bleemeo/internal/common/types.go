@@ -19,6 +19,7 @@ package common
 import (
 	bleemeoTypes "glouton/bleemeo/types"
 	"glouton/types"
+	"glouton/utils/metricutils"
 )
 
 // Maximal length of fields on Bleemeo API.
@@ -29,27 +30,6 @@ const (
 	APIConfigItemKeyLength   int = 100
 	APIConfigItemPathLength  int = 250
 )
-
-// MetricOnlyHasItem return true if the metric only has a name and an item (which could be empty).
-// Said otherwise, the metrics don't need to use labels_text on Bleemeo API to store its labels.
-// instance_uuid and instance are ignored in this check if instance_uuid match agentID.
-func MetricOnlyHasItem(labels map[string]string, agentID string) bool {
-	if len(labels) > 4 {
-		return false
-	}
-
-	for k, v := range labels {
-		if k != types.LabelName && k != types.LabelItem && k != types.LabelInstanceUUID && k != types.LabelInstance {
-			return false
-		}
-
-		if k == types.LabelInstanceUUID && v != agentID {
-			return false
-		}
-	}
-
-	return true
-}
 
 // MetricKey return a unique key that could be used in for lookup in cache.MetricLookupFromList
 //
@@ -70,7 +50,7 @@ func MetricKey(lbls map[string]string, annotations types.MetricAnnotations, agen
 			agentID = annotations.BleemeoAgentID
 		}
 
-		if MetricOnlyHasItem(lbls, agentID) {
+		if metricutils.MetricOnlyHasItem(lbls, agentID) {
 			tmp := make(map[string]string, len(lbls)+1)
 
 			for k, v := range lbls {

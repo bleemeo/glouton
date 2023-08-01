@@ -49,8 +49,10 @@ import (
 	"glouton/jmxtrans"
 	"glouton/logger"
 	"glouton/mqtt"
+	"glouton/mqtt/client"
 	"glouton/nrpe"
 	"glouton/prometheus/exporter/blackbox"
+	"glouton/prometheus/exporter/ipmi"
 	"glouton/prometheus/exporter/snmp"
 	"glouton/prometheus/process"
 	"glouton/prometheus/registry"
@@ -91,7 +93,6 @@ import (
 
 	processSource "glouton/prometheus/sources/process"
 
-	paho "github.com/eclipse/paho.mqtt.golang"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/prometheus/model/labels"
 	"gopkg.in/yaml.v3"
@@ -149,6 +150,7 @@ type agent struct {
 	reloadState            ReloadState
 	vethProvider           *veth.Provider
 	mqtt                   *mqtt.MQTT
+	pahoLogWrapper         *client.LogWrapper
 	fluentbitManager       *fluentbit.Manager
 
 	triggerHandler            *debouncer.Debouncer
@@ -239,13 +241,7 @@ func (a *agent) init(ctx context.Context, configFiles []string, firstRun bool) (
 		_, _ = fmt.Fprintf(os.Stderr, "Starting Glouton at %s with PID %d\n", time.Now().Format(time.RFC3339), os.Getpid())
 	}
 
-	// Initialize paho loggers, this needs to be done only once to prevent data races.
-	if firstRun {
-		paho.ERROR = logger.V(2)
-		paho.CRITICAL = logger.V(2)
-		paho.WARN = logger.V(2)
-		paho.DEBUG = logger.V(3)
-	}
+	a.pahoLogWrapper = client.GetOrCreateWrapper()
 
 	sentry.ConfigureScope(func(scope *sentry.Scope) {
 		scope.SetContext("agent", map[string]interface{}{
@@ -645,7 +641,7 @@ func (a *agent) updateThresholds(ctx context.Context, thresholds map[string]thre
 		oldThresholds[name] = a.threshold.GetThreshold(types.LabelsToText(lbls))
 	}
 
-	a.threshold.SetThresholds(thresholds, configThreshold)
+	a.threshold.SetThresholds(a.BleemeoAgentID(), thresholds, configThreshold)
 
 	services, err := a.discovery.Discovery(ctx, 1*time.Hour)
 
@@ -1010,29 +1006,32 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		}
 
 		connector, err := bleemeo.New(bleemeoTypes.GlobalOption{
-			Config:                  a.config,
-			ConfigItems:             a.configItems,
-			State:                   a.state,
-			Facts:                   a.factProvider,
-			Process:                 psFact,
-			Docker:                  a.containerRuntime,
-			Store:                   filteredStore,
-			SNMP:                    a.snmpManager.Targets(),
-			SNMPOnlineTarget:        a.snmpManager.OnlineCount,
-			PushPoints:              a.gathererRegistry.WithTTL(5 * time.Minute),
-			Discovery:               a.discovery,
-			MonitorManager:          a.monitorManager,
-			UpdateMetricResolution:  a.updateMetricResolution,
-			UpdateThresholds:        a.UpdateThresholds,
-			UpdateUnits:             a.threshold.SetUnits,
-			MetricFormat:            a.metricFormat,
-			NotifyFirstRegistration: a.notifyBleemeoFirstRegistration,
-			NotifyLabelsUpdate:      a.notifyBleemeoUpdateLabels,
-			BlackboxScraperName:     scaperName,
-			RebuildPromQLRules:      a.rulesManager.RebuildPromQLRules,
-			ReloadState:             a.reloadState.Bleemeo(),
-			IsContainerEnabled:      a.containerFilter.ContainerEnabled,
-			IsMetricAllowed:         a.metricFilter.isAllowedAndNotDenied,
+			Config:                         a.config,
+			ConfigItems:                    a.configItems,
+			State:                          a.state,
+			Facts:                          a.factProvider,
+			Process:                        psFact,
+			Docker:                         a.containerRuntime,
+			Store:                          filteredStore,
+			SNMP:                           a.snmpManager.Targets(),
+			SNMPOnlineTarget:               a.snmpManager.OnlineCount,
+			PushPoints:                     a.gathererRegistry.WithTTL(5 * time.Minute),
+			Discovery:                      a.discovery,
+			MonitorManager:                 a.monitorManager,
+			UpdateMetricResolution:         a.updateMetricResolution,
+			UpdateThresholds:               a.UpdateThresholds,
+			UpdateUnits:                    a.threshold.SetUnits,
+			MetricFormat:                   a.metricFormat,
+			NotifyFirstRegistration:        a.notifyBleemeoFirstRegistration,
+			NotifyLabelsUpdate:             a.notifyBleemeoUpdateLabels,
+			BlackboxScraperName:            scaperName,
+			RebuildPromQLRules:             a.rulesManager.RebuildPromQLRules,
+			ReloadState:                    a.reloadState.Bleemeo(),
+			IsContainerEnabled:             a.containerFilter.ContainerEnabled,
+			IsContainerNameRecentlyDeleted: a.containerRuntime.IsContainerNameRecentlyDeleted,
+			IsMetricAllowed:                a.metricFilter.isAllowedAndNotDenied,
+			PahoLastPingCheckAt:            a.pahoLogWrapper.LastPingAt,
+			LastMetricAnnotationChange:     a.store.LastAnnotationChange,
 		})
 		if err != nil {
 			logger.Printf("unable to start Bleemeo SAAS connector: %v", err)
@@ -1292,10 +1291,11 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 
 	if a.config.MQTT.Enable {
 		a.mqtt = mqtt.New(mqtt.Options{
-			ReloadState: a.reloadState.MQTT(),
-			Config:      a.config.MQTT,
-			Store:       filteredStore,
-			FQDN:        fqdn,
+			ReloadState:         a.reloadState.MQTT(),
+			Config:              a.config.MQTT,
+			Store:               filteredStore,
+			FQDN:                fqdn,
+			PahoLastPingCheckAt: a.pahoLogWrapper.LastPingAt,
 		})
 
 		tasks = append(tasks, taskInfo{
@@ -1355,6 +1355,22 @@ func (a *agent) registerInputs() {
 	if a.config.Smart.Enable && (err == nil || a.config.Smart.PathSmartctl != "") {
 		input, opts, err := smart.New(a.config.Smart)
 		a.registerInput("SMART", input, opts, err)
+	}
+
+	if a.config.IPMI.Enable {
+		gatherer := ipmi.New(a.config.IPMI)
+
+		_, err = a.gathererRegistry.RegisterGatherer(
+			registry.RegistrationOption{
+				Description: "IPMI metrics",
+				JitterSeed:  0,
+				MinInterval: time.Minute,
+			},
+			gatherer,
+		)
+		if err != nil {
+			logger.V(1).Printf("unable to add IPMI input: %w", err)
+		}
 	}
 
 	input, opts, err := temp.New()
@@ -2096,6 +2112,8 @@ func (a *agent) writeDiagnosticArchive(ctx context.Context, archive types.Archiv
 		a.vethProvider.DiagnosticArchive,
 		a.threshold.DiagnosticThresholds,
 		a.threshold.DiagnosticStatusStates,
+		smart.DiagnosticArchive,
+		a.containerRuntime.DiagnosticArchive,
 	}
 
 	if a.bleemeoConnector != nil {
@@ -2196,6 +2214,7 @@ func (a *agent) diagnosticGloutonState(_ context.Context, archive types.ArchiveW
 		DockerInputPresent        bool
 		DockerInputID             int
 		MetricResolutionSeconds   float64
+		PahoLastPingCheckAt       time.Time
 	}{
 		HostRootPath:              a.hostRootPath,
 		LastHealthCheck:           a.lastHealthCheck,
@@ -2207,6 +2226,7 @@ func (a *agent) diagnosticGloutonState(_ context.Context, archive types.ArchiveW
 		DockerInputPresent:        a.dockerInputPresent,
 		DockerInputID:             a.dockerInputID,
 		MetricResolutionSeconds:   a.metricResolution.Seconds(),
+		PahoLastPingCheckAt:       a.pahoLogWrapper.LastPingAt(),
 	}
 
 	a.triggerLock.Unlock()

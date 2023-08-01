@@ -122,7 +122,7 @@ export const getOptions = (series, stacked, funcConverter, unit) => ({
                   }</b>
                 </td>
               </tr>
-            `)
+            `),
       );
       html +=
         total > -1
@@ -220,7 +220,7 @@ const LineChart = ({
       metrics.forEach((metric, idx) => {
         const nameDisplay = composeMetricName(
           metric,
-          metrics_param[metric.metric.legendId].legend
+          metrics_param[metric.metric.legendId].legend,
         );
         let data = metric.values.map((point) => [point[0] * 1000, point[1]]);
         data = fillEmptyPoints(data, period);
@@ -244,7 +244,7 @@ const LineChart = ({
       const svg = echarts.init(svgChart.current);
       setSeries(series);
       svg.setOption(
-        getOptions(series, stacked, selectUnitConverter(unit), unit)
+        getOptions(series, stacked, selectUnitConverter(unit), unit),
       );
     }
   }, [svgChart.current, metrics]);
@@ -386,7 +386,7 @@ const LineChart = ({
               {/* If there is less than 20 seconds between end date and now, we do not display forward arrow */}
               {period.to &&
               Math.floor(
-                (new Date().getTime() - new Date(period.to).getTime()) / 1000
+                (new Date().getTime() - new Date(period.to).getTime()) / 1000,
               ) > 60 ? (
                 <span
                   style={{

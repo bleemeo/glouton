@@ -18,5 +18,5 @@ ReactDom.render(
       <App />
     </Suspense>
   </PanelErrorBoundary>,
-  document.getElementById("main")
+  document.getElementById("main"),
 );

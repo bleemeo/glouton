@@ -14,3 +14,6 @@ glouton     ALL=(ALL) NOPASSWD: /usr/bin/smartctl, /usr/sbin/smartctl
 
 # Allow Glouton to restart Fluent Bit to apply a new configuration.
 glouton     ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart bleemeo-agent-logs, /bin/systemctl restart bleemeo-agent-logs
+
+# Allow Glouton to read IPMI sensors / DCMI power reading.
+glouton     ALL=(ALL) NOPASSWD: /usr/sbin/ipmi-sensors -W discretereading --sdr-cache-recreate, /usr/sbin/ipmi-dcmi --get-enhanced-system-power-statistics, /usr/sbin/ipmi-dcmi --get-system-power-statistics, /usr/bin/ipmitool dcmi power reading

@@ -78,6 +78,7 @@ type Docker struct {
 
 	containers                     map[string]dockerContainer
 	lastKill                       map[string]time.Time
+	lastDestroyedName              map[string]time.Time
 	ignoredID                      map[string]bool
 	lastUpdate                     time.Time
 	bridgeNetworks                 map[string]interface{}
@@ -96,6 +97,68 @@ func New(
 		DeletedContainersCallback: deletedContainersCallback,
 		IsContainerIgnored:        isContainerIgnored,
 	}
+}
+
+func (d *Docker) DiagnosticArchive(_ context.Context, archive types.ArchiveWriter) error {
+	file, err := archive.Create("docker.json")
+	if err != nil {
+		return err
+	}
+
+	d.l.Lock()
+	defer d.l.Unlock()
+
+	type containerInfo struct {
+		ID        string
+		Name      string
+		LastKill  time.Time
+		IsIgnored bool
+	}
+
+	containers := make([]containerInfo, 0, len(d.containers))
+
+	for _, c := range d.containers {
+		containers = append(containers, containerInfo{
+			ID:        c.ID(),
+			Name:      c.ContainerName(),
+			LastKill:  d.lastKill[c.ID()],
+			IsIgnored: d.ignoredID[c.ID()],
+		})
+	}
+
+	networks := make([]string, 0, len(d.bridgeNetworks))
+	for net := range d.bridgeNetworks {
+		networks = append(networks, net)
+	}
+
+	obj := struct {
+		WorkedOnce        bool
+		ServerAddress     string
+		ServerVersion     string
+		APIVersion        string
+		ReconnectAttempt  int
+		Containers        []containerInfo
+		LastDestroyedName map[string]time.Time
+		AllLastKill       map[string]time.Time
+		LastUpdate        time.Time
+		BridgeNetworks    []string
+	}{
+		WorkedOnce:        d.workedOnce,
+		ServerAddress:     d.serverAddress,
+		ServerVersion:     d.serverVersion,
+		APIVersion:        d.apiVersion,
+		ReconnectAttempt:  d.reconnectAttempt,
+		Containers:        containers,
+		LastUpdate:        d.lastUpdate,
+		BridgeNetworks:    networks,
+		LastDestroyedName: d.lastDestroyedName,
+		AllLastKill:       d.lastKill,
+	}
+
+	enc := json.NewEncoder(file)
+	enc.SetIndent("", "  ")
+
+	return enc.Encode(obj)
 }
 
 // LastUpdate return the last time containers list was updated.
@@ -338,6 +401,15 @@ func (d *Docker) IsRuntimeRunning(ctx context.Context) bool {
 	return err == nil
 }
 
+func (d *Docker) IsContainerNameRecentlyDeleted(name string) bool {
+	d.l.Lock()
+	defer d.l.Unlock()
+
+	_, ok := d.lastDestroyedName[name]
+
+	return ok
+}
+
 // similar to getClient but also check that connection works.
 func (d *Docker) ensureClient(ctx context.Context) (cl dockerClient, err error) {
 	ctx, cancel := context.WithTimeout(ctx, dockerTimeout)
@@ -375,6 +447,10 @@ func (d *Docker) run(ctx context.Context) error {
 		d.lastKill = make(map[string]time.Time)
 	}
 
+	if d.lastDestroyedName == nil {
+		d.lastDestroyedName = make(map[string]time.Time)
+	}
+
 	d.l.Unlock()
 
 	if err != nil {
@@ -400,6 +476,14 @@ func (d *Docker) run(ctx context.Context) error {
 					delete(d.lastKill, k)
 				}
 			}
+
+			for k, v := range d.lastDestroyedName {
+				if time.Since(v) > 10*time.Minute {
+					delete(d.lastDestroyedName, k)
+				}
+			}
+
+			lastCleanup = time.Now()
 
 			d.l.Unlock()
 		}
@@ -470,10 +554,17 @@ func (d *Docker) run(ctx context.Context) error {
 
 				d.l.Lock()
 
-				event.Container = d.containers[actorID]
+				container, found := d.containers[actorID]
+				if found {
+					event.Container = container
+				}
 
 				switch event.Type { //nolint:exhaustive,nolintlint
 				case facts.EventTypeDelete:
+					if event.Container != nil {
+						d.lastDestroyedName[event.Container.ContainerName()] = time.Now()
+					}
+
 					delete(d.containers, event.ContainerID)
 				case facts.EventTypeStop:
 					current, ok := d.containers[event.ContainerID]

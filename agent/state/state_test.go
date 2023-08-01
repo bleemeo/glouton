@@ -19,6 +19,8 @@ package state
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
+	"os"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -235,5 +237,47 @@ func TestLoad(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestTelemetryFieldMigration(t *testing.T) {
+	state, err := Load("testdata/state-v1.json", "testdata/state-v1.cache.json")
+	if err != nil {
+		t.Fatal("Failed to load state:", err)
+	}
+
+	persistentFile, errP := os.CreateTemp("", "persistent")
+	cacheFile, errC := os.CreateTemp("", "cache")
+
+	if errP != nil || errC != nil {
+		t.Skip("Failed to setup test:\n", errors.Join(errP, errC))
+	}
+
+	persistentPath, cachePath := persistentFile.Name(), cacheFile.Name()
+
+	_, _ = persistentFile.Close(), cacheFile.Close()
+
+	defer func() {
+		_ = os.Remove(persistentPath)
+		_ = os.Remove(cachePath)
+	}()
+
+	err = state.SaveTo(persistentPath, cachePath)
+	if err != nil {
+		t.Fatal("Failed to save state:", err)
+	}
+
+	persisted, err := os.ReadFile(persistentPath)
+	if err != nil {
+		t.Fatal("Failed to read persisted state:", err)
+	}
+
+	expected, err := os.ReadFile("testdata/state-v1-migrate-telemetry.json")
+	if err != nil {
+		t.Fatal("Failed to read test data:", err)
+	}
+
+	if diff := cmp.Diff(expected, persisted); diff != "" {
+		t.Fatal("Unexpected persisted state (-want +got)\n", diff)
 	}
 }

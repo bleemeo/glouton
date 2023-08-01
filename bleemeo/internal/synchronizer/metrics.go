@@ -28,6 +28,7 @@ import (
 	"glouton/logger"
 	"glouton/threshold"
 	"glouton/types"
+	"glouton/utils/metricutils"
 	"regexp"
 	"runtime"
 	"sort"
@@ -824,7 +825,7 @@ func (s *Synchronizer) metricUpdateList(metrics []types.Metric) error {
 			"fields":      metricFields,
 		}
 
-		if s.option.MetricFormat == types.MetricFormatBleemeo && common.MetricOnlyHasItem(metric.Labels(), agentID) {
+		if s.option.MetricFormat == types.MetricFormatBleemeo && metricutils.MetricOnlyHasItem(metric.Labels(), agentID) {
 			annotations := metric.Annotations()
 			params["label"] = metric.Labels()[types.LabelName]
 			params["item"] = annotations.BleemeoItem
@@ -959,6 +960,7 @@ type metricRegisterer struct {
 	regCountBeforeUpdate int
 	errorCount           int
 	pendingErr           error
+	doneAtLeastOne       bool
 }
 
 func newMetricRegisterer(s *Synchronizer) *metricRegisterer {
@@ -1029,7 +1031,13 @@ func (mr *metricRegisterer) registerMetrics(localMetrics []types.Metric) error {
 	}
 
 	mr.s.l.Lock()
+
 	mr.s.metricRetryAt = minRetryAt
+
+	if mr.doneAtLeastOne {
+		mr.s.lastMetricActivation = mr.s.now()
+	}
+
 	mr.s.l.Unlock()
 
 	mr.s.option.Cache.SetMetricRegistrationsFail(failedRegistrations)
@@ -1223,6 +1231,7 @@ func (mr *metricRegisterer) metricRegisterAndUpdateOne(metric types.Metric) erro
 
 		mr.registeredMetricsByKey[key] = result
 		mr.registeredMetricsByUUID[result.ID] = result
+		mr.doneAtLeastOne = true
 
 		return nil
 	}
@@ -1246,6 +1255,7 @@ func (mr *metricRegisterer) metricRegisterAndUpdateOne(metric types.Metric) erro
 	logger.V(2).Printf("Metric %v registered with UUID %s", key, result.ID)
 	mr.registeredMetricsByKey[key] = result.metricFromAPI(mr.registeredMetricsByKey[result.ID].FirstSeenAt)
 	mr.registeredMetricsByUUID[result.ID] = result.metricFromAPI(mr.registeredMetricsByKey[result.ID].FirstSeenAt)
+	mr.doneAtLeastOne = true
 
 	return nil
 }
@@ -1275,7 +1285,7 @@ func (s *Synchronizer) prepareMetricPayload(
 			agentID = metric.Annotations().BleemeoAgentID
 		}
 
-		if common.MetricOnlyHasItem(labels, agentID) {
+		if metricutils.MetricOnlyHasItem(labels, agentID) {
 			payload.Item = annotations.BleemeoItem
 			payload.LabelsText = ""
 		}
