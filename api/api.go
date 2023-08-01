@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"glouton/config"
+	"glouton/crashreport"
 	"glouton/discovery"
 	"glouton/facts"
 	"glouton/logger"
@@ -178,7 +179,7 @@ func (api *API) init() {
 		hdr := w.Header()
 		hdr.Add("Content-Type", "application/zip")
 
-		zipFile := newZipWriter(w)
+		zipFile := archivewriter.NewZipWriter(w)
 		defer zipFile.Close()
 
 		if err := api.diagnosticArchive(r.Context(), zipFile); err != nil {
@@ -190,7 +191,7 @@ func (api *API) init() {
 		hdr := w.Header()
 		hdr.Add("Content-Type", "application/x-tar")
 
-		archive := newTarWriter(w)
+		archive := archivewriter.NewTarWriter(w)
 		defer archive.Close()
 
 		if err := api.diagnosticArchive(r.Context(), archive); err != nil {
@@ -202,7 +203,7 @@ func (api *API) init() {
 		hdr := w.Header()
 		hdr.Add("Content-Type", "text/plain; charset=utf-8")
 
-		archive := newTextArchive(w)
+		archive := archivewriter.NewTextArchive(w)
 		defer archive.Close()
 
 		if err := api.diagnosticArchive(r.Context(), archive); err != nil {
@@ -219,7 +220,7 @@ func (api *API) init() {
 		subPath := strings.TrimPrefix(r.URL.Path, "/diagnostic.txt/")
 
 		if strings.Contains(subPath, "*") {
-			realArchive := newTextArchive(w)
+			realArchive := archivewriter.NewTextArchive(w)
 			defer realArchive.Close()
 
 			archive = archivewriter.NewFilterWriter(subPath, realArchive)
@@ -295,7 +296,7 @@ func (api *API) Run(ctx context.Context) error {
 	idleConnsClosed := make(chan struct{})
 
 	go func() {
-		defer types.ProcessPanic()
+		defer crashreport.ProcessPanic()
 
 		<-ctx.Done()
 

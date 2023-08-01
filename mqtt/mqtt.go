@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"glouton/config"
+	"glouton/crashreport"
 	"glouton/logger"
 	"glouton/mqtt/client"
 	"glouton/types"
@@ -125,7 +126,7 @@ func (m *MQTT) Run(ctx context.Context) error {
 	wg.Add(1)
 
 	go func() {
-		defer types.ProcessPanic()
+		defer crashreport.ProcessPanic()
 
 		m.client.Run(ctx)
 		wg.Done()

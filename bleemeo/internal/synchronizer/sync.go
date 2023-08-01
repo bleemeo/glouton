@@ -27,6 +27,7 @@ import (
 	"glouton/bleemeo/internal/cache"
 	"glouton/bleemeo/internal/common"
 	bleemeoTypes "glouton/bleemeo/types"
+	"glouton/crashreport"
 	"glouton/delay"
 	"glouton/facts"
 	"glouton/logger"
@@ -66,6 +67,7 @@ const (
 	syncMethodMetric        = "metric"
 	syncMethodAlertingRules = "alertingrules"
 	syncMethodConfig        = "config"
+	syncMethodCrashReports  = "crashreports"
 )
 
 // Synchronizer synchronize object with Bleemeo.
@@ -465,13 +467,13 @@ func (s *Synchronizer) DiagnosticPage() string {
 	httpMessage := make(chan string)
 
 	go func() {
-		defer types.ProcessPanic()
+		defer crashreport.ProcessPanic()
 
 		tcpMessage <- common.DiagnosticTCP(u.Hostname(), port, tlsConfig)
 	}()
 
 	go func() {
-		defer types.ProcessPanic()
+		defer crashreport.ProcessPanic()
 
 		httpMessage <- common.DiagnosticHTTP(s.diagnosticClient, u.String())
 	}()
@@ -792,6 +794,7 @@ func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) (map[str
 		{name: syncMethodMetric, method: s.syncMetrics},
 		{name: syncMethodAlertingRules, method: s.syncAlertingRules},
 		{name: syncMethodConfig, method: s.syncConfig},
+		{name: syncMethodCrashReports, method: s.syncCrashReports},
 	}
 
 	var firstErr error
@@ -933,6 +936,7 @@ func (s *Synchronizer) syncToPerform(ctx context.Context) (map[string]bool, bool
 		syncMethods[syncMethodMonitor] = true
 		syncMethods[syncMethodSNMP] = true
 		syncMethods[syncMethodAlertingRules] = true
+		syncMethods[syncMethodCrashReports] = true
 	}
 
 	if fullSync || s.lastFactUpdatedAt != localFacts[facts.FactUpdatedAt] {

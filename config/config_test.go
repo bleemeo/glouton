@@ -20,6 +20,7 @@ import (
 	"testing"
 	"time"
 
+	"dario.cat/mergo"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/knadh/koanf"
@@ -36,10 +37,13 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 			FactsFile:              "facts.yaml",
 			InstallationFormat:     "manual",
 			NetstatFile:            "netstat.out",
+			StateDirectory:         ".",
 			StateFile:              "state.json",
 			StateCacheFile:         "state.cache.json",
 			StateResetFile:         "state.reset",
 			DeprecatedStateFile:    "state.deprecated",
+			EnableCrashReporting:   true,
+			MaxCrashReportsCount:   2,
 			UpgradeFile:            "upgrade",
 			AutoUpgradeFile:        "auto-upgrade",
 			NodeExporter: NodeExporter{
@@ -899,6 +903,196 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 
 			if diff := compareConfig(test.WantConfig, config, cmpopts.EquateEmpty()); diff != "" {
 				t.Fatalf("Unexpected config:\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestStateLoading(t *testing.T) {
+	defaultAgentCfg := DefaultConfig().Agent
+	agentCfg := Agent{ // Avoids repeating all these lines in every test case
+		EnableCrashReporting: defaultAgentCfg.EnableCrashReporting,
+		MaxCrashReportsCount: defaultAgentCfg.MaxCrashReportsCount,
+		ProcessExporter:      defaultAgentCfg.ProcessExporter,
+		PublicIPIndicator:    defaultAgentCfg.PublicIPIndicator,
+		NodeExporter:         defaultAgentCfg.NodeExporter,
+		WindowsExporter:      defaultAgentCfg.WindowsExporter,
+		Telemetry:            defaultAgentCfg.Telemetry,
+		MetricsFormat:        defaultAgentCfg.MetricsFormat,
+	}
+
+	cases := []struct {
+		Name       string
+		Files      []string
+		WantConfig Agent
+	}{
+		{
+			Name:  "Glouton as a package",
+			Files: []string{"testdata/state-package.conf"},
+			WantConfig: Agent{
+				InstallationFormat:     "Package (deb)",
+				CloudImageCreationFile: "/var/lib/glouton/cloudimage_creation",
+				FactsFile:              "/var/lib/glouton/facts.yaml",
+				NetstatFile:            "/var/lib/glouton/netstat.out",
+				StateDirectory:         "/var/lib/glouton",
+				StateFile:              "/var/lib/glouton/state.json",
+				StateCacheFile:         "/var/lib/glouton/state.cache.json",
+				StateResetFile:         "/var/lib/glouton/state.reset",
+				UpgradeFile:            "/var/lib/glouton/upgrade",
+				AutoUpgradeFile:        "/var/lib/glouton/auto_upgrade",
+			},
+		},
+		{
+			Name:  "Glouton as a Docker image",
+			Files: []string{"testdata/state-docker.conf"},
+			WantConfig: Agent{
+				InstallationFormat:     "Docker image",
+				CloudImageCreationFile: "/var/lib/glouton/cloudimage_creation",
+				FactsFile:              "/var/lib/glouton/facts.yaml",
+				NetstatFile:            "/var/lib/glouton/netstat.out",
+				StateDirectory:         "/var/lib/glouton",
+				StateFile:              "/var/lib/glouton/state.json",
+				StateCacheFile:         "/var/lib/glouton/state.cache.json",
+				StateResetFile:         "/var/lib/glouton/state.reset",
+				UpgradeFile:            "/var/lib/glouton/upgrade",
+				AutoUpgradeFile:        "/var/lib/glouton/auto_upgrade",
+				DeprecatedStateFile:    "/var/lib/bleemeo/state.json",
+			},
+		},
+		// Testing for Windows is impossible to do from a unix Go runtime,
+		// because path/filepath functions exclusively use / as the path separator.
+		/*{
+			Name:  "Glouton on Windows",
+			Files: []string{"testdata/state-windows.conf"},
+			WantConfig: Agent{
+				InstallationFormat:     "Package (Windows)",
+				CloudImageCreationFile: `C:\ProgramData\glouton\cloudimage_creation`,
+				FactsFile:              `C:\ProgramData\glouton\facts.yaml`,
+				NetstatFile:            `C:\ProgramData\glouton\netstat.out`,
+				StateDirectory:         `C:\ProgramData\glouton`,
+				StateFile:              `C:\ProgramData\glouton\state.json`,
+				StateCacheFile:         `C:\ProgramData\glouton\state.cache.json`,
+				StateResetFile:         `C:\ProgramData\glouton\state.reset`,
+				UpgradeFile:            `C:\ProgramData\glouton\upgrade`,
+				AutoUpgradeFile:        `C:\ProgramData\glouton\auto_upgrade`,
+			},
+		},*/
+		{
+			Name: "Glouton as dev",
+			WantConfig: Agent{
+				InstallationFormat:     "manual",
+				CloudImageCreationFile: defaultAgentCfg.CloudImageCreationFile,
+				FactsFile:              defaultAgentCfg.FactsFile,
+				NetstatFile:            defaultAgentCfg.NetstatFile,
+				StateFile:              defaultAgentCfg.StateFile,
+				StateCacheFile:         "state.cache.json",
+				StateResetFile:         defaultAgentCfg.StateResetFile,
+				StateDirectory:         ".",
+				UpgradeFile:            defaultAgentCfg.UpgradeFile,
+				AutoUpgradeFile:        defaultAgentCfg.AutoUpgradeFile,
+			},
+		},
+		{
+			Name:  "Glouton custom",
+			Files: []string{"testdata/state-custom.conf"},
+			WantConfig: Agent{
+				InstallationFormat:     "manual",
+				CloudImageCreationFile: "/var/lib/glouton/cloudimage_creation",
+				FactsFile:              "/var/lib/glouton/facts.yaml",
+				NetstatFile:            "/var/lib/glouton/netstat.out",
+				StateDirectory:         "/var/lib/glouton",
+				StateFile:              "/var/lib/glouton/state.json",
+				StateCacheFile:         "/var/lib/glouton/state.cache.json",
+				StateResetFile:         "/var/lib/glouton/state.reset",
+				UpgradeFile:            "/var/lib/glouton/upgrade",
+				AutoUpgradeFile:        "/var/lib/glouton/auto_upgrade",
+			},
+		},
+		{
+			Name:  "Glouton custom 2 with system",
+			Files: []string{"testdata/state-package.conf", "testdata/state-custom2.conf"},
+			WantConfig: Agent{
+				InstallationFormat:     "Package (deb)",
+				CloudImageCreationFile: "/var/lib/glouton/cloudimage_creation",
+				FactsFile:              "/var/lib/glouton/facts.yaml",
+				NetstatFile:            "/var/lib/glouton/netstat.out",
+				StateDirectory:         "/var/lib/glouton",
+				StateFile:              "/var/lib/glouton/state.json",
+				StateCacheFile:         "/var/lib/glouton/state.cache.json",
+				StateResetFile:         "/var/lib/glouton/state.reset",
+				UpgradeFile:            "/var/lib/glouton/upgrade",
+				AutoUpgradeFile:        "/var/lib/glouton/auto_upgrade",
+			},
+		},
+		{
+			Name:  "Glouton custom 2 without system",
+			Files: []string{"testdata/state-custom2.conf"},
+			WantConfig: Agent{
+				InstallationFormat:     "manual",
+				CloudImageCreationFile: "/var/lib/glouton/cloudimage_creation",
+				FactsFile:              "/var/lib/glouton/facts.yaml",
+				NetstatFile:            "/var/lib/glouton/netstat.out",
+				StateDirectory:         "/var/lib/glouton",
+				StateFile:              "/var/lib/glouton/state.json",
+				StateCacheFile:         "/var/lib/glouton/state.cache.json",
+				StateResetFile:         "/var/lib/glouton/state.reset",
+				UpgradeFile:            "/var/lib/glouton/upgrade",
+				AutoUpgradeFile:        "/var/lib/glouton/auto_upgrade",
+			},
+		},
+		{
+			Name:  "Glouton custom 3",
+			Files: []string{"testdata/state-custom3.conf"},
+			WantConfig: Agent{
+				InstallationFormat:     "manual",
+				CloudImageCreationFile: "/home/glouton/data/cloudimage_creation",
+				FactsFile:              "/home/glouton/data/facts.yaml",
+				NetstatFile:            "/home/glouton/data/netstat.out",
+				StateDirectory:         "/home/glouton/data",
+				StateFile:              "/home/glouton/data/state.json",
+				StateCacheFile:         "/home/glouton/data/state.cache.json",
+				StateResetFile:         "/home/glouton/data/state.reset",
+				UpgradeFile:            "/home/glouton/data/upgrade",
+				AutoUpgradeFile:        "/home/glouton/data/auto_upgrade",
+			},
+		},
+		{
+			Name:  "Glouton custom 4",
+			Files: []string{"testdata/state-custom4.conf"},
+			WantConfig: Agent{
+				InstallationFormat:     "manual",
+				CloudImageCreationFile: "myfolder/data/cloudimage_creation",
+				FactsFile:              "myfolder/data/facts.yaml",
+				NetstatFile:            "myfolder/data/netstat.out",
+				StateDirectory:         "myfolder/data",
+				StateFile:              "myfolder/data/state.json",
+				StateCacheFile:         "myfolder/data/state.cache.json",
+				StateResetFile:         "myfolder/data/state.reset",
+				UpgradeFile:            "myfolder/data/upgrade",
+				AutoUpgradeFile:        "myfolder/data/auto_upgrade",
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		// This action is not specific to the current test case.
+		err := mergo.Merge(&tc.WantConfig, agentCfg)
+		if err != nil {
+			t.Fatal("Failed to merge default agent config:", err)
+		}
+
+		t.Run(tc.Name, func(t *testing.T) {
+			config, _, warnings, err := Load(true, false, tc.Files...)
+			if err != nil {
+				t.Fatal("Error while loading config:", err)
+			}
+
+			if len(warnings) != 0 {
+				t.Error("Got some warnings while loading config:", warnings.Error())
+			}
+
+			if diff := cmp.Diff(tc.WantConfig, config.Agent); diff != "" {
+				t.Errorf("Unexpected agent config: (-want +got)\n%s", diff)
 			}
 		})
 	}

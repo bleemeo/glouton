@@ -1062,7 +1062,7 @@ func (mr *metricRegisterer) logTooManyMetrics(nbFailedStandardMetrics, nbFailedC
 
 			const msg = "Failed to register %d metrics because you reached the maximum number of custom metrics%s. " +
 				"Consider removing some metrics from your allowlist, see the documentation for more details " +
-				"(https://go.bleemeo.com/l/metrics-filtering)."
+				"(https://go.bleemeo.com/l/agent-metrics-filtering)."
 
 			logger.V(0).Printf(msg, nbFailedCustomMetrics, maxCustomMetricsStr)
 		})
@@ -1072,7 +1072,7 @@ func (mr *metricRegisterer) logTooManyMetrics(nbFailedStandardMetrics, nbFailedC
 		mr.s.logOnce.Do(func() {
 			const msg = "Failed to register %d metrics because you reached the maximum number of metrics. " +
 				"Consider removing some metrics from your allowlist, see the documentation for more details " +
-				"(https://go.bleemeo.com/l/metrics-filtering)."
+				"(https://go.bleemeo.com/l/agent-metrics-filtering)."
 
 			logger.V(0).Printf(msg, nbFailedStandardMetrics)
 		})

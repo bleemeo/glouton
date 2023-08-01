@@ -18,7 +18,7 @@ package debouncer
 
 import (
 	"context"
-	"glouton/types"
+	"glouton/crashreport"
 	"sync"
 	"time"
 )
@@ -69,7 +69,7 @@ func (dd *Debouncer) Trigger() {
 	}
 
 	go func() {
-		defer types.ProcessPanic()
+		defer crashreport.ProcessPanic()
 
 		time.Sleep(startDelay)
 

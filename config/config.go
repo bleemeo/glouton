@@ -67,6 +67,43 @@ func Load(withDefault bool, loadEnviron bool, paths ...string) (Config, []Item, 
 
 	config, warnings, err := load(loader, withDefault, loadEnviron, paths...)
 
+	switch {
+	case config.Agent.StateFile != "" && config.Agent.StateDirectory == "":
+		config.Agent.StateDirectory = filepath.Dir(config.Agent.StateFile)
+	case config.Agent.StateDirectory == "":
+		config.Agent.StateDirectory = "."
+	case !filepath.IsAbs(config.Agent.StateFile):
+		config.Agent.StateFile = filepath.Join(config.Agent.StateDirectory, config.Agent.StateFile)
+	}
+
+	if !filepath.IsAbs(config.Agent.StateCacheFile) {
+		config.Agent.StateCacheFile = filepath.Join(config.Agent.StateDirectory, config.Agent.StateCacheFile)
+	}
+
+	if !filepath.IsAbs(config.Agent.StateResetFile) {
+		config.Agent.StateResetFile = filepath.Join(config.Agent.StateDirectory, config.Agent.StateResetFile)
+	}
+
+	if !filepath.IsAbs(config.Agent.FactsFile) {
+		config.Agent.FactsFile = filepath.Join(config.Agent.StateDirectory, config.Agent.FactsFile)
+	}
+
+	if !filepath.IsAbs(config.Agent.NetstatFile) {
+		config.Agent.NetstatFile = filepath.Join(config.Agent.StateDirectory, config.Agent.NetstatFile)
+	}
+
+	if !filepath.IsAbs(config.Agent.UpgradeFile) {
+		config.Agent.UpgradeFile = filepath.Join(config.Agent.StateDirectory, config.Agent.UpgradeFile)
+	}
+
+	if !filepath.IsAbs(config.Agent.AutoUpgradeFile) {
+		config.Agent.AutoUpgradeFile = filepath.Join(config.Agent.StateDirectory, config.Agent.AutoUpgradeFile)
+	}
+
+	if !filepath.IsAbs(config.Agent.CloudImageCreationFile) {
+		config.Agent.CloudImageCreationFile = filepath.Join(config.Agent.StateDirectory, config.Agent.CloudImageCreationFile)
+	}
+
 	return config, loader.items, warnings, err
 }
 

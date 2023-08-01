@@ -28,6 +28,7 @@ import (
 	"glouton/bleemeo"
 	"glouton/collector"
 	"glouton/config"
+	"glouton/crashreport"
 	"glouton/debouncer"
 	"glouton/delay"
 	"glouton/discovery"
@@ -117,6 +118,7 @@ type agent struct {
 	config       config.Config
 	configItems  []config.Item
 	state        *state.State
+	stateDir     string
 	cancel       context.CancelFunc
 	context      context.Context //nolint:containedctx
 
@@ -230,6 +232,15 @@ func (a *agent) init(ctx context.Context, configFiles []string, firstRun bool) (
 		}
 	}
 
+	a.stateDir = a.config.Agent.StateDirectory
+	crashreport.SetOptions(a.config.Agent.EnableCrashReporting, a.stateDir, a.writeDiagnosticArchive)
+
+	if firstRun {
+		crashreport.SetupStderrRedirection()
+
+		_, _ = fmt.Fprintf(os.Stderr, "Starting Glouton at %s with PID %d\n", time.Now().Format(time.RFC3339), os.Getpid())
+	}
+
 	a.pahoLogWrapper = client.GetOrCreateWrapper()
 
 	sentry.ConfigureScope(func(scope *sentry.Scope) {
@@ -247,10 +258,6 @@ func (a *agent) init(ctx context.Context, configFiles []string, firstRun bool) (
 	statePath := a.config.Agent.StateFile
 	cachePath := a.config.Agent.StateCacheFile
 	oldStatePath := a.config.Agent.DeprecatedStateFile
-
-	if cachePath == "" {
-		cachePath = state.DefaultCachePath(statePath)
-	}
 
 	a.state, err = state.Load(statePath, cachePath)
 	if err != nil {
@@ -964,6 +971,10 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		{a.threshold.Run, "Threshold state"},
 	}
 
+	if a.config.Agent.EnableCrashReporting {
+		tasks = append(tasks, taskInfo{a.crashReportManagement, "Crash report management"})
+	}
+
 	if a.config.JMX.Enable {
 		perm, err := strconv.ParseInt(a.config.JMXTrans.FilePermission, 8, 0)
 		if err != nil {
@@ -1296,7 +1307,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 	// Handle sighup signals only after the agent is completely initialized
 	// to make sure an early signal won't access uninitialized fields.
 	go func() {
-		defer types.ProcessPanic()
+		defer crashreport.ProcessPanic()
 
 		a.handleSighup(ctx, sighupChan)
 	}()
@@ -1411,7 +1422,7 @@ func (a *agent) handleSighup(ctx context.Context, sighupChan chan os.Signal) {
 				systemUpdateMetricPending = true
 
 				go func() {
-					defer types.ProcessPanic()
+					defer crashreport.ProcessPanic()
 
 					a.waitAndRefreshPendingUpdates(ctx)
 
@@ -1533,6 +1544,17 @@ func (a *agent) miscTasks(ctx context.Context) error {
 		}
 		a.triggerLock.Unlock()
 	}
+}
+
+func (a *agent) crashReportManagement(ctx context.Context) error {
+	createdReportDir := crashreport.BundleCrashReportFiles(ctx, a.config.Agent.MaxCrashReportsCount)
+
+	// We protect the report generated just now to be sure it won't be purged.
+	// Without that, the purge would only be based on filename (generation datetime),
+	// and if the time moves backward, the report we generated just now could be the one with the oldest time.
+	crashreport.PurgeCrashReports(a.config.Agent.MaxCrashReportsCount, createdReportDir)
+
+	return nil
 }
 
 func (a *agent) startTasks(tasks []taskInfo) {
@@ -1682,7 +1704,7 @@ func (a *agent) dockerWatcher(ctx context.Context) error {
 	wg.Add(1)
 
 	go func() {
-		defer types.ProcessPanic()
+		defer crashreport.ProcessPanic()
 		defer wg.Done()
 
 		a.dockerWatcherContainerHealth(ctx)
@@ -2049,7 +2071,29 @@ func (a *agent) DiagnosticPage(ctx context.Context) string {
 	return builder.String()
 }
 
-func (a *agent) writeDiagnosticArchive(ctx context.Context, archive types.ArchiveWriter) error {
+func (a *agent) writeDiagnosticArchive(ctx context.Context, archive types.ArchiveWriter) (err error) {
+	var success bool
+
+	startTime := time.Now()
+
+	defer func() {
+		writer, wErr := archive.Create("meta")
+		if wErr != nil {
+			logger.V(1).Println("Failed to add meta file to diagnostic archive:", wErr)
+
+			return
+		}
+
+		endTime := time.Now()
+		total := endTime.Sub(startTime)
+
+		fmt.Fprintf(writer, "Start: %s\nEnd: %s\nTotal: %s (Diagnostic successfully completed: %t)\n", startTime, endTime, total, success)
+
+		if err != nil {
+			fmt.Fprintln(writer, "Error:", err)
+		}
+	}()
+
 	modules := []func(ctx context.Context, archive types.ArchiveWriter) error{
 		a.diagnosticGlobalInfo,
 		a.diagnosticGloutonState,
@@ -2089,7 +2133,7 @@ func (a *agent) writeDiagnosticArchive(ctx context.Context, archive types.Archiv
 	}
 
 	for _, f := range modules {
-		if err := f(ctx, archive); err != nil {
+		if err = f(ctx, archive); err != nil {
 			return err
 		}
 
@@ -2097,6 +2141,8 @@ func (a *agent) writeDiagnosticArchive(ctx context.Context, archive types.Archiv
 			break
 		}
 	}
+
+	success = true
 
 	return ctx.Err()
 }

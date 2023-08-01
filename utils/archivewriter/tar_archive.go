@@ -14,7 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package api
+package archivewriter
 
 import (
 	"archive/tar"
@@ -23,23 +23,23 @@ import (
 	"time"
 )
 
-type tarArchive struct {
+type TarArchive struct {
 	w                  *tar.Writer
 	currentFileContent *bytes.Buffer
 	currentFileHeader  tar.Header
 }
 
-func newTarWriter(w io.Writer) *tarArchive {
-	return &tarArchive{
+func NewTarWriter(w io.Writer) *TarArchive {
+	return &TarArchive{
 		w: tar.NewWriter(w),
 	}
 }
 
-func (a *tarArchive) CurrentFileName() string {
+func (a *TarArchive) CurrentFileName() string {
 	return a.currentFileHeader.Name
 }
 
-func (a *tarArchive) flushPending() error {
+func (a *TarArchive) flushPending() error {
 	if a.currentFileHeader.Name == "" {
 		return nil
 	}
@@ -55,7 +55,7 @@ func (a *tarArchive) flushPending() error {
 	return err
 }
 
-func (a *tarArchive) Create(filename string) (io.Writer, error) {
+func (a *TarArchive) Create(filename string) (io.Writer, error) {
 	if err := a.flushPending(); err != nil {
 		return nil, err
 	}
@@ -75,7 +75,7 @@ func (a *tarArchive) Create(filename string) (io.Writer, error) {
 	return a.currentFileContent, nil
 }
 
-func (a *tarArchive) Close() error {
+func (a *TarArchive) Close() error {
 	if err := a.flushPending(); err != nil {
 		return err
 	}

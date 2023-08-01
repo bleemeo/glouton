@@ -28,7 +28,6 @@ import (
 	"time"
 
 	paho "github.com/eclipse/paho.mqtt.golang"
-	"github.com/getsentry/sentry-go"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	dto "github.com/prometheus/client_model/go"
@@ -437,16 +436,6 @@ func NewHTTPTransport(tlsConfig *tls.Config) http.RoundTripper {
 	t.TLSClientConfig = tlsConfig
 
 	return t
-}
-
-// ProcessPanic logs panics to Sentry.
-// It should be defered at the beginning of every new goroutines.
-func ProcessPanic() {
-	if err := recover(); err != nil {
-		sentry.CurrentHub().Recover(err)
-		sentry.Flush(time.Second * 5)
-		panic(err)
-	}
 }
 
 // MQTTReloadState is the state kept between reloads for MQTT.

@@ -26,3 +26,6 @@ api/static/assets/css
 coverage.html
 coverage.out
 __debug_bin
+/stderr.log
+/crashreport_*.zip
+/crash_diagnostic.tar

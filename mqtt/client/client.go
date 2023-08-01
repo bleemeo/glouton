@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"glouton/crashreport"
 	"glouton/delay"
 	"glouton/logger"
 	"glouton/types"
@@ -91,7 +92,7 @@ func (c *Client) Run(ctx context.Context) {
 	wg.Add(1)
 
 	go func() {
-		defer types.ProcessPanic()
+		defer crashreport.ProcessPanic()
 		defer wg.Done()
 
 		c.connectionManager(ctx)
@@ -100,7 +101,7 @@ func (c *Client) Run(ctx context.Context) {
 	wg.Add(1)
 
 	go func() {
-		defer types.ProcessPanic()
+		defer crashreport.ProcessPanic()
 		defer wg.Done()
 
 		c.ackManager(ctx)
@@ -109,7 +110,7 @@ func (c *Client) Run(ctx context.Context) {
 	wg.Add(1)
 
 	go func() {
-		defer types.ProcessPanic()
+		defer crashreport.ProcessPanic()
 
 		c.receiveEvents(ctx)
 		wg.Done()

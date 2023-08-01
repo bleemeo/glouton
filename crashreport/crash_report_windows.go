@@ -14,43 +14,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package api
+//go:build windows
 
-import (
-	"archive/zip"
-	"io"
-	"time"
-)
+package crashreport
 
-type zipArchive struct {
-	w               *zip.Writer
-	currentFilename string
-}
+import "golang.org/x/sys/windows"
 
-func newZipWriter(w io.Writer) *zipArchive {
-	return &zipArchive{
-		w: zip.NewWriter(w),
-	}
-}
-
-func (a *zipArchive) CurrentFileName() string {
-	return a.currentFilename
-}
-
-func (a *zipArchive) Create(filename string) (io.Writer, error) {
-	if err := a.w.Flush(); err != nil {
-		return nil, err
-	}
-
-	a.currentFilename = filename
-
-	return a.w.CreateHeader(&zip.FileHeader{
-		Name:     filename,
-		Modified: time.Now(),
-		Method:   zip.Deflate,
-	})
-}
-
-func (a *zipArchive) Close() error {
-	return a.w.Close()
+func redirectOSSpecificStderrToFile(stderrFileFd uintptr) error {
+	return windows.SetStdHandle(windows.STD_ERROR_HANDLE, windows.Handle(stderrFileFd))
 }
