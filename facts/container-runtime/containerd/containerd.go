@@ -63,15 +63,16 @@ type Containerd struct {
 	DeletedContainersCallback func(containersID []string)
 	IsContainerIgnored        func(facts.Container) bool
 
-	l                sync.Mutex
-	workedOnce       bool
-	openConnection   func(ctx context.Context, address string) (cl containerdClient, err error)
-	client           containerdClient
-	lastUpdate       time.Time
-	containers       map[string]containerObject
-	ignoredID        map[string]bool
-	notifyC          chan facts.ContainerEvent
-	pastMetricValues []metricValue
+	l                 sync.Mutex
+	workedOnce        bool
+	openConnection    func(ctx context.Context, address string) (cl containerdClient, err error)
+	client            containerdClient
+	lastUpdate        time.Time
+	lastDestroyedName map[string]time.Time
+	containers        map[string]containerObject
+	ignoredID         map[string]bool
+	notifyC           chan facts.ContainerEvent
+	pastMetricValues  []metricValue
 }
 
 // ignore "moby" namespace. It contains container managed by Docker, for which
@@ -90,7 +91,53 @@ func New(
 		Addresses:                 containerTypes.ExpandRuntimeAddresses(runtime, hostRoot),
 		DeletedContainersCallback: deletedContainersCallback,
 		IsContainerIgnored:        isContainerIgnored,
+		lastDestroyedName:         make(map[string]time.Time),
 	}
+}
+
+func (c *Containerd) DiagnosticArchive(_ context.Context, archive types.ArchiveWriter) error {
+	file, err := archive.Create("containerd.json")
+	if err != nil {
+		return err
+	}
+
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	type containerInfo struct {
+		ID        string
+		Name      string
+		IsIgnored bool
+	}
+
+	containers := make([]containerInfo, 0, len(c.containers))
+
+	for _, row := range c.containers {
+		containers = append(containers, containerInfo{
+			ID:        row.ID(),
+			Name:      row.ContainerName(),
+			IsIgnored: c.ignoredID[row.ID()],
+		})
+	}
+
+	obj := struct {
+		WorkedOnce        bool
+		Containers        []containerInfo
+		LastDestroyedName map[string]time.Time
+		LastUpdate        time.Time
+		PastMetricValues  []metricValue
+	}{
+		WorkedOnce:        c.workedOnce,
+		Containers:        containers,
+		LastDestroyedName: c.lastDestroyedName,
+		LastUpdate:        c.lastUpdate,
+		PastMetricValues:  c.pastMetricValues,
+	}
+
+	enc := json.NewEncoder(file)
+	enc.SetIndent("", "  ")
+
+	return enc.Encode(obj)
 }
 
 // LastUpdate return the last time containers list was updated.
@@ -208,7 +255,7 @@ func (c *Containerd) Metrics(ctx context.Context, now time.Time) ([]types.Metric
 				ContainerNamespace: ns,
 				ContainerID:        metric.ID,
 				Time:               now,
-				values:             valueMap,
+				Values:             valueMap,
 			})
 		}
 	}
@@ -345,6 +392,15 @@ func (c *Containerd) IsRuntimeRunning(ctx context.Context) bool {
 	}
 
 	return true
+}
+
+func (c *Containerd) IsContainerNameRecentlyDeleted(name string) bool {
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	_, ok := c.lastDestroyedName[name]
+
+	return ok
 }
 
 // Exec run a command in a container and return stdout+stderr.
@@ -538,7 +594,23 @@ func (c *Containerd) run(ctx context.Context) error {
 
 	eventC, errC := cl.Events(ctx2)
 
+	var lastCleanup time.Time
+
 	for {
+		if time.Since(lastCleanup) > 10*time.Minute {
+			c.l.Lock()
+
+			for k, v := range c.lastDestroyedName {
+				if time.Since(v) > 10*time.Minute {
+					delete(c.lastDestroyedName, k)
+				}
+			}
+
+			lastCleanup = time.Now()
+
+			c.l.Unlock()
+		}
+
 		select {
 		case event, ok := <-eventC:
 			if !ok {
@@ -588,6 +660,10 @@ func (c *Containerd) run(ctx context.Context) error {
 
 			switch gloutonEvent.Type { //nolint:exhaustive,nolintlint
 			case facts.EventTypeDelete:
+				if gloutonEvent.Container != nil {
+					c.lastDestroyedName[gloutonEvent.Container.ContainerName()] = time.Now()
+				}
+
 				delete(c.containers, gloutonEvent.ContainerID)
 			case facts.EventTypeStop:
 				if found {
@@ -1299,7 +1375,7 @@ type metricValue struct {
 	ContainerNamespace string
 	ContainerID        string
 	Time               time.Time
-	values             map[string]uint64
+	Values             map[string]uint64
 }
 
 func rateFromMetricValue(gloutonIDToName map[string]string, pastValues []metricValue, newValues []metricValue) []types.MetricPoint {
@@ -1335,7 +1411,7 @@ func rateFromMetricValue(gloutonIDToName map[string]string, pastValues []metricV
 			continue
 		}
 
-		for k, v := range newV.values {
+		for k, v := range newV.Values {
 			var floatValue float64
 
 			switch {
@@ -1345,8 +1421,8 @@ func rateFromMetricValue(gloutonIDToName map[string]string, pastValues []metricV
 			case k == "container_mem_used":
 				// It's the only non-derivated value
 				floatValue = float64(v)
-			case pastV.values[k] <= v:
-				floatValue = float64(v-pastV.values[k]) / deltaT.Seconds()
+			case pastV.Values[k] <= v:
+				floatValue = float64(v-pastV.Values[k]) / deltaT.Seconds()
 			default:
 				// assume reset of the counter
 				floatValue = float64(v) / deltaT.Seconds()
@@ -1371,7 +1447,7 @@ func rateFromMetricValue(gloutonIDToName map[string]string, pastValues []metricV
 			})
 
 			if k == "container_mem_used" {
-				limit := newV.values["container_mem_limit"]
+				limit := newV.Values["container_mem_limit"]
 				if memUsage != nil && (limit > memUsage.Total || limit == 0) {
 					limit = memUsage.Total
 				} else if limit >= 9e18 {

@@ -41,17 +41,18 @@ var errDeletedMetric = errors.New("metric was deleted")
 //
 // See methods GetMetrics and GetMetricPoints.
 type Store struct {
-	metrics           map[uint64]metric
-	points            map[uint64][]types.Point
-	notifyCallbacks   map[int]func([]types.MetricPoint)
-	newMetricCallback func([]types.LabelsAndAnnotation)
-	maxPointsAge      time.Duration
-	maxMetricsAge     time.Duration
-	workLabels        labels.Labels
-	lock              sync.Mutex
-	notifeeLock       sync.Mutex
-	resetRuleLock     sync.Mutex
-	nowFunc           func() time.Time
+	metrics              map[uint64]metric
+	points               map[uint64][]types.Point
+	notifyCallbacks      map[int]func([]types.MetricPoint)
+	newMetricCallback    func([]types.LabelsAndAnnotation)
+	maxPointsAge         time.Duration
+	maxMetricsAge        time.Duration
+	lastAnnotationChange time.Time
+	workLabels           labels.Labels
+	lock                 sync.Mutex
+	notifeeLock          sync.Mutex
+	resetRuleLock        sync.Mutex
+	nowFunc              func() time.Time
 }
 
 // New create a return a store. Store should be Close()d before leaving.
@@ -97,6 +98,7 @@ func (s *Store) DiagnosticArchive(_ context.Context, archive types.ArchiveWriter
 	}
 
 	metricsCount := len(s.metrics)
+	lastAnnotationChange := s.lastAnnotationChange
 
 	s.lock.Unlock()
 
@@ -104,8 +106,16 @@ func (s *Store) DiagnosticArchive(_ context.Context, archive types.ArchiveWriter
 	fmt.Fprintf(file, "metrics count: %d\n", metricsCount)
 	fmt.Fprintf(file, "points count: %d\n", pointsCount)
 	fmt.Fprintf(file, "points time range: %v to %v\n", oldestTime, youngestTime)
+	fmt.Fprintf(file, "last annotation change: %s\n", lastAnnotationChange)
 
 	return nil
+}
+
+func (s *Store) LastAnnotationChange() time.Time {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
+	return s.lastAnnotationChange
 }
 
 // Run will run the store until context is cancelled.
@@ -317,8 +327,9 @@ func (s *Store) run(now time.Time) {
 //
 // If won't create the metric if it does not exists but it return the metric ready to be added to s.metrics.
 // The store lock is assumed to be held.
-// Annotations is always updated with value provided as argument if the metric exists.
-func (s *Store) metricGet(lbls map[string]string, annotations types.MetricAnnotations) (metric, bool) {
+// Annotations is always updated with value provided as argument if the metric exists, but if annotation "change" a boolean will be set.
+// Annotations are considered to change if a value change with exception of status.
+func (s *Store) metricGet(lbls map[string]string, annotations types.MetricAnnotations) (metric, bool, bool) {
 	if cap(s.workLabels) < len(lbls) {
 		s.workLabels = make(labels.Labels, len(lbls))
 	}
@@ -335,10 +346,11 @@ func (s *Store) metricGet(lbls map[string]string, annotations types.MetricAnnota
 
 	m, ok := s.metrics[hash]
 	if ok {
+		changed := m.annotations.Changed(annotations)
 		m.annotations = annotations
 		s.metrics[hash] = m
 
-		return m, true
+		return m, true, changed
 	}
 
 	m = metric{
@@ -349,7 +361,7 @@ func (s *Store) metricGet(lbls map[string]string, annotations types.MetricAnnota
 		createAt:    s.nowFunc(),
 	}
 
-	return m, false
+	return m, false, true
 }
 
 // PushPoints append new metric points to the store, creating new metric
@@ -364,7 +376,7 @@ func (s *Store) PushPoints(_ context.Context, points []types.MetricPoint) {
 
 	s.lock.Lock()
 	for _, point := range points {
-		metric, found := s.metricGet(point.Labels, point.Annotations)
+		metric, found, changed := s.metricGet(point.Labels, point.Annotations)
 		length := len(s.points[metric.metricID])
 
 		if length > 0 && s.points[metric.metricID][length-1].Time.Equal(point.Time) {
@@ -381,6 +393,10 @@ func (s *Store) PushPoints(_ context.Context, points []types.MetricPoint) {
 
 		if !found {
 			newMetrics = append(newMetrics, types.LabelsAndAnnotation{Labels: point.Labels, Annotations: point.Annotations})
+		}
+
+		if found && changed {
+			s.lastAnnotationChange = time.Now()
 		}
 
 		metric.lastPoint = s.nowFunc()

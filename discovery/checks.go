@@ -54,6 +54,7 @@ type collectorDetails struct {
 // checker is an interface which specifies a check.
 type checker interface {
 	Check(ctx context.Context, scheduleUpdate func(runAt time.Time)) types.MetricPoint
+	DiagnosticArchive(ctx context.Context, archive types.ArchiveWriter) error
 	Close()
 }
 

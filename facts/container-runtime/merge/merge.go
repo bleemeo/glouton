@@ -178,6 +178,26 @@ func (r *Runtime) IsRuntimeRunning(ctx context.Context) bool {
 	return atLeastOne
 }
 
+func (r *Runtime) IsContainerNameRecentlyDeleted(name string) bool {
+	for _, runtime := range r.Runtimes {
+		if runtime.IsContainerNameRecentlyDeleted(name) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (r *Runtime) DiagnosticArchive(ctx context.Context, archive types.ArchiveWriter) error {
+	for _, runtime := range r.Runtimes {
+		if err := runtime.DiagnosticArchive(ctx, archive); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 // ProcessWithCache call function on container runtimes.
 func (r *Runtime) ProcessWithCache() facts.ContainerRuntimeProcessQuerier {
 	queriers := make([]facts.ContainerRuntimeProcessQuerier, len(r.Runtimes))

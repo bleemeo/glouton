@@ -167,7 +167,7 @@ func (g *Gatherer) GatherWithState(ctx context.Context, _ registry.GatherState) 
 }
 
 func (g *Gatherer) DiagnosticArchive(_ context.Context, archive types.ArchiveWriter) error {
-	file, err := archive.Create("gatherer-ipmi.json")
+	file, err := archive.Create("ipmi.json")
 	if err != nil {
 		return err
 	}

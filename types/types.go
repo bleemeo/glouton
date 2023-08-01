@@ -322,6 +322,18 @@ func (a MetricAnnotations) Merge(other MetricAnnotations) MetricAnnotations {
 	return a
 }
 
+// Changed tells whether two annotation are different or not. Status isn't considered when comparing the annotations.
+func (a MetricAnnotations) Changed(other MetricAnnotations) bool {
+	return (a.BleemeoItem != other.BleemeoItem ||
+		a.ContainerID != other.ContainerID ||
+		a.ServiceName != other.ServiceName ||
+		a.ServiceInstance != other.ServiceInstance ||
+		a.StatusOf != other.StatusOf ||
+		a.SNMPTarget != other.SNMPTarget ||
+		a.AlertingRuleID != other.AlertingRuleID ||
+		a.BleemeoAgentID != other.BleemeoAgentID)
+}
+
 // LabelsToText return a text version of a labels set
 // The text representation has a one-to-one relation with labels set.
 // It does because:

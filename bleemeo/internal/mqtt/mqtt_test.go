@@ -176,8 +176,9 @@ func mockClient(t *testing.T) *Client {
 
 	c := &Client{
 		opts: Option{
-			AgentID: bleemeoTypes.AgentID(agentID),
-			Cache:   cache,
+			AgentID:              bleemeoTypes.AgentID(agentID),
+			Cache:                cache,
+			LastMetricActivation: func() time.Time { return time.Time{} },
 		},
 	}
 

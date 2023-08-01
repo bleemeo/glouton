@@ -184,6 +184,66 @@ func (k *Kubernetes) IsRuntimeRunning(ctx context.Context) bool {
 	return k.Runtime.IsRuntimeRunning(ctx)
 }
 
+func (k *Kubernetes) IsContainerNameRecentlyDeleted(name string) bool {
+	return k.Runtime.IsContainerNameRecentlyDeleted(name)
+}
+
+func (k *Kubernetes) DiagnosticArchive(ctx context.Context, archive types.ArchiveWriter) error {
+	if err := k.Runtime.DiagnosticArchive(ctx, archive); err != nil {
+		return err
+	}
+
+	file, err := archive.Create("kubernetes.json")
+	if err != nil {
+		return err
+	}
+
+	k.l.Lock()
+	defer k.l.Unlock()
+
+	type podInfo struct {
+		PodIP        string
+		Name         string
+		ContainerIDs []string
+	}
+
+	pods := make([]podInfo, 0, len(k.pods))
+	podIDToIdx := make(map[string]int, len(k.pods))
+
+	for _, pod := range k.pods {
+		podIDToIdx[string(pod.UID)] = len(pods)
+
+		pods = append(pods, podInfo{
+			PodIP: string(pod.UID),
+			Name:  pod.ObjectMeta.Name,
+		})
+	}
+
+	for id, pod := range k.id2Pod {
+		idx, ok := podIDToIdx[string(pod.UID)]
+		if !ok {
+			continue
+		}
+
+		pods[idx].ContainerIDs = append(pods[idx].ContainerIDs, id)
+	}
+
+	obj := struct {
+		Pods           []podInfo
+		LastUpdatePods time.Time
+		LastUpdateNode time.Time
+	}{
+		Pods:           pods,
+		LastUpdatePods: k.lastPodsUpdate,
+		LastUpdateNode: k.lastNodeUpdate,
+	}
+
+	enc := json.NewEncoder(file)
+	enc.SetIndent("", "  ")
+
+	return enc.Encode(obj)
+}
+
 // ProcessWithCache implement ContainerRuntimeProcessQuerier.
 func (k *Kubernetes) ProcessWithCache() facts.ContainerRuntimeProcessQuerier {
 	return wrapProcessQuerier{
