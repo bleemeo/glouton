@@ -85,13 +85,13 @@ func (s *Store) DiagnosticArchive(_ context.Context, archive types.ArchiveWriter
 
 	for _, meta := range s.points.metas {
 		pointsCount += meta.count
-		youngest, oldest := meta.timeBounds()
+		oldest, youngest := meta.timeBounds()
 
-		if oldestTime.IsZero() || oldest.After(oldestTime) {
+		if oldestTime.IsZero() || oldest.Before(oldestTime) {
 			oldestTime = oldest
 		}
 
-		if youngestTime.IsZero() || youngest.Before(youngestTime) {
+		if youngestTime.IsZero() || youngest.After(youngestTime) {
 			youngestTime = youngest
 		}
 	}

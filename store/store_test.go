@@ -343,14 +343,14 @@ func TestPoints(t *testing.T) {
 		t.Errorf("Unexpected value for db.points[0]:\n%v", diff)
 	}
 
-	youngest, oldest := db.points.metas[m.metricID].timeBounds()
+	oldest, youngest := db.points.metas[m.metricID].timeBounds()
 
-	if diff := cmp.Diff(youngest, t0); diff != "" {
-		t.Errorf("Unexpected youngest timestamp:\n%v", diff)
+	if diff := cmp.Diff(oldest, t0); diff != "" {
+		t.Errorf("Unexpected oldest timestamp:\n%v", diff)
 	}
 
-	if diff := cmp.Diff(oldest, t2); diff != "" {
-		t.Errorf("Unexpected oldest timestamp:\n%v", diff)
+	if diff := cmp.Diff(youngest, t2); diff != "" {
+		t.Errorf("Unexpected youngest timestamp:\n%v", diff)
 	}
 
 	db.points.dropPoints(m.metricID)
