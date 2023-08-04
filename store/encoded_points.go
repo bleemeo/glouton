@@ -1,3 +1,19 @@
+// Copyright 2015-2023 Bleemeo
+//
+// bleemeo.com an infrastructure monitoring solution in the Cloud
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package store
 
 import (
@@ -9,13 +25,13 @@ import (
 
 type encodedPointsMeta struct {
 	count            int
-	youngest, oldest time.Time
+	oldest, youngest time.Time
 }
 
-// timeBounds returns the youngest and oldest timestamps
+// timeBounds returns the oldest and youngest timestamps
 // of the point collection associated with this meta.
-func (meta encodedPointsMeta) timeBounds() (time.Time, time.Time) {
-	return meta.youngest, meta.oldest
+func (meta encodedPointsMeta) timeBounds() (oldest time.Time, youngest time.Time) {
+	return meta.oldest, meta.youngest
 }
 
 type encodedPoints struct {
@@ -45,6 +61,7 @@ func (epts *encodedPoints) count(metricID uint64) int {
 
 // getPoint returns the point at the given index from
 // the collection associated with the given metric ID.
+// If an error occurs, a zero-value Point is returned.
 func (epts *encodedPoints) getPoint(metricID uint64, idx int) types.Point {
 	rawPoint, exists := epts.raws[metricID]
 	if !exists {
@@ -134,12 +151,12 @@ func (epts *encodedPoints) pushPoint(metricID uint64, point types.Point) error {
 	meta := epts.metas[metricID]
 	meta.count++
 
-	if point.Time.Before(meta.youngest) || meta.youngest.IsZero() {
-		meta.youngest = point.Time
+	if meta.oldest.IsZero() || point.Time.Before(meta.oldest) {
+		meta.oldest = point.Time
 	}
 
-	if point.Time.After(meta.oldest) || meta.oldest.IsZero() {
-		meta.oldest = point.Time
+	if meta.youngest.IsZero() || point.Time.After(meta.youngest) {
+		meta.youngest = point.Time
 	}
 
 	epts.metas[metricID] = meta
@@ -171,8 +188,8 @@ func (epts *encodedPoints) setPoints(metricID uint64, points []types.Point) erro
 
 	epts.metas[metricID] = encodedPointsMeta{
 		count:    len(points),
-		youngest: points[0].Time,
-		oldest:   points[len(points)-1].Time,
+		oldest:   points[0].Time,
+		youngest: points[len(points)-1].Time,
 	}
 
 	return nil
