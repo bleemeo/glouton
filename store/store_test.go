@@ -394,6 +394,11 @@ func TestPoints(t *testing.T) {
 	if diff := cmp.Diff(points, []types.Point{p1, p2, p3, p4}, timeComparer); diff != "" {
 		t.Errorf("Unexpected points:\n%v", diff)
 	}
+
+	point := db.points.getPoint(m.metricID, 2)
+	if diff := cmp.Diff(point, p3, timeComparer); diff != "" {
+		t.Errorf("Unexpected point at index 2:\n%v", diff)
+	}
 }
 
 func makeMetric(b *testing.B, rnd *rand.Rand, labelCount int) map[string]string {

@@ -22,20 +22,11 @@ import (
 	"time"
 )
 
-type mapStore map[uint64][]types.Point
-
-func (mStore *mapStore) pushPoint(id uint64, point types.Point) error {
-	(*mStore)[id] = append((*mStore)[id], point)
-
-	return nil
-}
-
 const pointsPerMetric = 360
 
 func BenchmarkPointsWriting(b *testing.B) {
 	t0 := time.Now()
 	points := newEncodedPoints()
-	//points := make(mapStore)
 
 	for i := 0; i < b.N; i++ {
 		m := uint64(i)
