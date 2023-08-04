@@ -34,18 +34,20 @@ func (meta encodedPointsMeta) timeBounds() (oldest time.Time, youngest time.Time
 	return meta.oldest, meta.youngest
 }
 
-type encodedPoints struct {
-	xorChunkPool chunkenc.Pool
+type raw struct {
+	chunk    *chunkenc.XORChunk
+	appender chunkenc.Appender
+}
 
+type encodedPoints struct {
 	metas map[uint64]encodedPointsMeta
-	raws  map[uint64][]byte
+	raws  map[uint64]raw
 }
 
 func newEncodedPoints() *encodedPoints {
 	return &encodedPoints{
-		xorChunkPool: chunkenc.NewPool(),
-		metas:        make(map[uint64]encodedPointsMeta),
-		raws:         make(map[uint64][]byte),
+		metas: make(map[uint64]encodedPointsMeta),
+		raws:  make(map[uint64]raw),
 	}
 }
 
@@ -63,19 +65,12 @@ func (epts *encodedPoints) count(metricID uint64) int {
 // the collection associated with the given metric ID.
 // If an error occurs, a zero-value Point is returned.
 func (epts *encodedPoints) getPoint(metricID uint64, idx int) types.Point {
-	rawPoint, exists := epts.raws[metricID]
+	rawPts, exists := epts.raws[metricID]
 	if !exists {
 		return types.Point{}
 	}
 
-	chunk, err := epts.xorChunkPool.Get(chunkenc.EncXOR, rawPoint)
-	if err != nil {
-		return types.Point{}
-	}
-
-	defer epts.xorChunkPool.Put(chunk) //nolint:errcheck
-
-	for i, it := 0, chunk.Iterator(nil); it.Next(); i++ {
+	for i, it := 0, rawPts.chunk.Iterator(nil); it.Next(); i++ {
 		if i != idx {
 			continue
 		}
@@ -94,21 +89,14 @@ func (epts *encodedPoints) getPoint(metricID uint64, idx int) types.Point {
 // getPoints returns all the points associated with the given metric ID,
 // or any error that occurs during the retrieving operation.
 func (epts *encodedPoints) getPoints(metricID uint64) ([]types.Point, error) {
-	rawPoints, exist := epts.raws[metricID]
+	rawPts, exist := epts.raws[metricID]
 	if !exist {
 		return []types.Point{}, nil
 	}
 
-	chunk, err := epts.xorChunkPool.Get(chunkenc.EncXOR, rawPoints)
-	if err != nil {
-		return nil, err
-	}
+	points := make([]types.Point, 0, rawPts.chunk.NumSamples())
 
-	defer epts.xorChunkPool.Put(chunk) //nolint:errcheck
-
-	points := make([]types.Point, 0, chunk.NumSamples())
-
-	it := chunk.Iterator(nil)
+	it := rawPts.chunk.Iterator(nil)
 	for it.Next() {
 		t, v := it.At()
 
@@ -124,29 +112,21 @@ func (epts *encodedPoints) getPoints(metricID uint64) ([]types.Point, error) {
 // pushPoint appends the given point to the collection associated
 // with the given metric ID. It returns any error encountered.
 func (epts *encodedPoints) pushPoint(metricID uint64, point types.Point) error {
-	chunk := chunkenc.NewXORChunk()
+	rawPts, exist := epts.raws[metricID]
+	if !exist { // Path only taken on instance's first push
+		rawPts.chunk = chunkenc.NewXORChunk()
 
-	app, err := chunk.Appender()
-	if err != nil {
-		return err
-	}
-
-	if _, exist := epts.raws[metricID]; exist {
-		points, err := epts.getPoints(metricID)
+		appender, err := rawPts.chunk.Appender()
 		if err != nil {
 			return err
 		}
 
-		for _, p := range points {
-			app.Append(p.Time.UnixMilli(), p.Value)
-		}
+		rawPts.appender = appender
 	}
 
-	app.Append(point.Time.UnixMilli(), point.Value)
+	rawPts.appender.Append(point.Time.UnixMilli(), point.Value)
 
-	chunk.Compact()
-
-	epts.raws[metricID] = chunk.Bytes()
+	epts.raws[metricID] = rawPts
 
 	meta := epts.metas[metricID]
 	meta.count++
@@ -184,7 +164,7 @@ func (epts *encodedPoints) setPoints(metricID uint64, points []types.Point) erro
 		app.Append(p.Time.UnixMilli(), p.Value)
 	}
 
-	epts.raws[metricID] = chunk.Bytes()
+	epts.raws[metricID] = raw{chunk, app}
 
 	epts.metas[metricID] = encodedPointsMeta{
 		count:    len(points),
