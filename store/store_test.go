@@ -293,8 +293,8 @@ func TestPoints(t *testing.T) {
 		{Point: p0, Labels: labels},
 	})
 
-	if len(db.points.raws) != 1 {
-		t.Errorf("len(db.points) == %v, want %v", len(db.points.raws), 1)
+	if len(db.points.pointsPerMetric) != 1 {
+		t.Errorf("len(db.points) == %v, want %v", len(db.points.pointsPerMetric), 1)
 	}
 
 	if db.points.count(m.metricID) != 1 {
@@ -313,8 +313,8 @@ func TestPoints(t *testing.T) {
 		{Point: p2, Labels: labels},
 	})
 
-	if len(db.points.raws) != 1 {
-		t.Errorf("len(db.points) == %v, want %v", len(db.points.raws), 1)
+	if len(db.points.pointsPerMetric) != 1 {
+		t.Errorf("len(db.points) == %v, want %v", len(db.points.pointsPerMetric), 1)
 	}
 
 	if db.points.count(m.metricID) != 3 {
@@ -343,7 +343,7 @@ func TestPoints(t *testing.T) {
 		t.Errorf("Unexpected value for db.points[0]:\n%v", diff)
 	}
 
-	oldest, youngest := db.points.metas[m.metricID].timeBounds()
+	oldest, youngest := db.points.pointsPerMetric[m.metricID].timeBounds()
 
 	if diff := cmp.Diff(oldest, t0); diff != "" {
 		t.Errorf("Unexpected oldest timestamp:\n%v", diff)
@@ -355,8 +355,8 @@ func TestPoints(t *testing.T) {
 
 	db.points.dropPoints(m.metricID)
 
-	if len(db.points.raws) != 0 {
-		t.Errorf("len(points) == %v, want %v", len(db.points.raws), 0)
+	if len(db.points.pointsPerMetric) != 0 {
+		t.Errorf("len(points) == %v, want %v", len(db.points.pointsPerMetric), 0)
 	}
 
 	// p0 will be dropped by db.points.setPoints()
@@ -398,6 +398,10 @@ func TestPoints(t *testing.T) {
 	point := db.points.getPoint(m.metricID, 2)
 	if diff := cmp.Diff(point, p3, timeComparer); diff != "" {
 		t.Errorf("Unexpected point at index 2:\n%v", diff)
+	}
+
+	if count := db.points.count(m.metricID); count != 4 {
+		t.Errorf("Unexpected point count: want %d, got %d", 4, count)
 	}
 }
 

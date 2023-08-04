@@ -23,39 +23,39 @@ import (
 	"github.com/prometheus/prometheus/tsdb/chunkenc"
 )
 
-type encodedPointsMeta struct {
-	count            int
+type pointsData struct {
+	chunk    *chunkenc.XORChunk
+	appender chunkenc.Appender
+
 	oldest, youngest time.Time
 }
 
-// timeBounds returns the oldest and youngest timestamps
-// of the point collection associated with this meta.
-func (meta encodedPointsMeta) timeBounds() (oldest time.Time, youngest time.Time) {
-	return meta.oldest, meta.youngest
+// count returns the number of points present in this collection.
+func (data pointsData) count() int {
+	return data.chunk.NumSamples()
 }
 
-type raw struct {
-	chunk    *chunkenc.XORChunk
-	appender chunkenc.Appender
+// timeBounds returns the oldest and youngest timestamps
+// of this point collection.
+func (data pointsData) timeBounds() (oldest time.Time, youngest time.Time) {
+	return data.oldest, data.youngest
 }
 
 type encodedPoints struct {
-	metas map[uint64]encodedPointsMeta
-	raws  map[uint64]raw
+	pointsPerMetric map[uint64]pointsData
 }
 
 func newEncodedPoints() *encodedPoints {
 	return &encodedPoints{
-		metas: make(map[uint64]encodedPointsMeta),
-		raws:  make(map[uint64]raw),
+		pointsPerMetric: make(map[uint64]pointsData),
 	}
 }
 
 // count returns the number of points associated with the given metric ID.
 // If the metric is not referenced, 0 is returned.
 func (epts *encodedPoints) count(metricID uint64) int {
-	if meta, ok := epts.metas[metricID]; ok {
-		return meta.count
+	if data, ok := epts.pointsPerMetric[metricID]; ok {
+		return data.count()
 	}
 
 	return 0
@@ -65,12 +65,12 @@ func (epts *encodedPoints) count(metricID uint64) int {
 // the collection associated with the given metric ID.
 // If an error occurs, a zero-value Point is returned.
 func (epts *encodedPoints) getPoint(metricID uint64, idx int) types.Point {
-	rawPts, exists := epts.raws[metricID]
+	data, exists := epts.pointsPerMetric[metricID]
 	if !exists {
 		return types.Point{}
 	}
 
-	for i, it := 0, rawPts.chunk.Iterator(nil); it.Next(); i++ {
+	for i, it := 0, data.chunk.Iterator(nil); it.Next(); i++ {
 		if i != idx {
 			continue
 		}
@@ -89,14 +89,14 @@ func (epts *encodedPoints) getPoint(metricID uint64, idx int) types.Point {
 // getPoints returns all the points associated with the given metric ID,
 // or any error that occurs during the retrieving operation.
 func (epts *encodedPoints) getPoints(metricID uint64) ([]types.Point, error) {
-	rawPts, exist := epts.raws[metricID]
+	data, exist := epts.pointsPerMetric[metricID]
 	if !exist {
 		return []types.Point{}, nil
 	}
 
-	points := make([]types.Point, 0, rawPts.chunk.NumSamples())
+	points := make([]types.Point, 0, data.chunk.NumSamples())
 
-	it := rawPts.chunk.Iterator(nil)
+	it := data.chunk.Iterator(nil)
 	for it.Next() {
 		t, v := it.At()
 
@@ -112,34 +112,29 @@ func (epts *encodedPoints) getPoints(metricID uint64) ([]types.Point, error) {
 // pushPoint appends the given point to the collection associated
 // with the given metric ID. It returns any error encountered.
 func (epts *encodedPoints) pushPoint(metricID uint64, point types.Point) error {
-	rawPts, exist := epts.raws[metricID]
+	data, exist := epts.pointsPerMetric[metricID]
 	if !exist { // Path only taken on instance's first push
-		rawPts.chunk = chunkenc.NewXORChunk()
+		data.chunk = chunkenc.NewXORChunk()
 
-		appender, err := rawPts.chunk.Appender()
+		app, err := data.chunk.Appender()
 		if err != nil {
 			return err
 		}
 
-		rawPts.appender = appender
+		data.appender = app
 	}
 
-	rawPts.appender.Append(point.Time.UnixMilli(), point.Value)
+	data.appender.Append(point.Time.UnixMilli(), point.Value)
 
-	epts.raws[metricID] = rawPts
-
-	meta := epts.metas[metricID]
-	meta.count++
-
-	if meta.oldest.IsZero() || point.Time.Before(meta.oldest) {
-		meta.oldest = point.Time
+	if data.oldest.IsZero() || point.Time.Before(data.oldest) {
+		data.oldest = point.Time
 	}
 
-	if meta.youngest.IsZero() || point.Time.After(meta.youngest) {
-		meta.youngest = point.Time
+	if data.youngest.IsZero() || point.Time.After(data.youngest) {
+		data.youngest = point.Time
 	}
 
-	epts.metas[metricID] = meta
+	epts.pointsPerMetric[metricID] = data
 
 	return nil
 }
@@ -160,16 +155,25 @@ func (epts *encodedPoints) setPoints(metricID uint64, points []types.Point) erro
 		return err
 	}
 
+	var oldest, youngest time.Time
+
 	for _, p := range points {
 		app.Append(p.Time.UnixMilli(), p.Value)
+
+		if oldest.IsZero() || p.Time.Before(oldest) {
+			oldest = p.Time
+		}
+
+		if youngest.IsZero() || p.Time.After(youngest) {
+			youngest = p.Time
+		}
 	}
 
-	epts.raws[metricID] = raw{chunk, app}
-
-	epts.metas[metricID] = encodedPointsMeta{
-		count:    len(points),
-		oldest:   points[0].Time,
-		youngest: points[len(points)-1].Time,
+	epts.pointsPerMetric[metricID] = pointsData{
+		chunk:    chunk,
+		appender: app,
+		oldest:   oldest,
+		youngest: youngest,
 	}
 
 	return nil
@@ -178,6 +182,5 @@ func (epts *encodedPoints) setPoints(metricID uint64, points []types.Point) erro
 // dropPoints drops the point collection associated with the given metric ID.
 // If the metric ID is not referenced, dropPoints does nothing.
 func (epts *encodedPoints) dropPoints(metricID uint64) {
-	delete(epts.metas, metricID)
-	delete(epts.raws, metricID)
+	delete(epts.pointsPerMetric, metricID)
 }

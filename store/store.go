@@ -83,9 +83,9 @@ func (s *Store) DiagnosticArchive(_ context.Context, archive types.ArchiveWriter
 		pointsCount  int
 	)
 
-	for _, meta := range s.points.metas {
-		pointsCount += meta.count
-		oldest, youngest := meta.timeBounds()
+	for _, data := range s.points.pointsPerMetric {
+		pointsCount += data.count()
+		oldest, youngest := data.timeBounds()
 
 		if oldestTime.IsZero() || oldest.Before(oldestTime) {
 			oldestTime = oldest
