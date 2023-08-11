@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/influxdata/telegraf"
+	"github.com/prometheus/prometheus/model/value"
 )
 
 var errTooManyInputs = errors.New("too many inputs in the collectors. Unable to find new slot")
@@ -38,6 +39,7 @@ type Collector struct {
 	currentDelay time.Duration
 	updateDelayC chan interface{}
 	l            sync.Mutex
+	fieldsCache  map[string]map[string]struct{}
 }
 
 // New returns a Collector with default option
@@ -50,6 +52,7 @@ func New(acc telegraf.Accumulator) *Collector {
 		inputs:       make(map[int]telegraf.Input),
 		currentDelay: 10 * time.Second,
 		updateDelayC: make(chan interface{}),
+		fieldsCache:  make(map[string]map[string]struct{}),
 	}
 
 	return c
@@ -142,7 +145,7 @@ func (c *Collector) runOnce(t0 time.Time) {
 	inputsCopy := c.inputsForCollection()
 	acc := inputs.FixedTimeAccumulator{
 		Time: t0,
-		Acc:  c.acc,
+		Acc:  &inactiveMarkerAccumulator{Accumulator: c.acc, fieldsCache: c.fieldsCache},
 	}
 
 	var wg sync.WaitGroup
@@ -162,4 +165,63 @@ func (c *Collector) runOnce(t0 time.Time) {
 	}
 
 	wg.Wait()
+}
+
+// inactiveMarkerAccumulator wraps a telegraf Accumulator while marking inactive metrics it receives as such.
+type inactiveMarkerAccumulator struct {
+	telegraf.Accumulator
+
+	fieldsCache map[string]map[string]struct{}
+	l           sync.Mutex
+}
+
+type accCallback func(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time)
+
+func (ima *inactiveMarkerAccumulator) doAdd(accCb accCallback, measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+	ima.l.Lock()
+
+	// Using a closure to make the deferred call to unlock happening before the call
+	// to the accumulator callback to release the lock a little bit quicker, while
+	// keeping the assurance of having the lock released regardless of the behavior.
+	func() {
+		defer ima.l.Unlock()
+
+		updatedMetrics := make(map[string]struct{})
+		// Update the cache with the metrics that are existing right now
+		for newField := range fields {
+			updatedMetrics[newField] = struct{}{}
+		}
+
+		metrics := ima.fieldsCache[measurement]
+		// Setting a NaN value for metrics that are now longer updated to mark them as inactive
+		for oldField := range metrics {
+			if _, exists := fields[oldField]; !exists {
+				fields[oldField] = value.StaleNaN
+			}
+		}
+
+		ima.fieldsCache[measurement] = updatedMetrics
+	}()
+
+	accCb(measurement, fields, tags, t...)
+}
+
+func (ima *inactiveMarkerAccumulator) AddFields(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+	ima.doAdd(ima.Accumulator.AddFields, measurement, fields, tags, t...)
+}
+
+func (ima *inactiveMarkerAccumulator) AddGauge(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+	ima.doAdd(ima.Accumulator.AddGauge, measurement, fields, tags, t...)
+}
+
+func (ima *inactiveMarkerAccumulator) AddCounter(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+	ima.doAdd(ima.Accumulator.AddCounter, measurement, fields, tags, t...)
+}
+
+func (ima *inactiveMarkerAccumulator) AddSummary(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+	ima.doAdd(ima.Accumulator.AddSummary, measurement, fields, tags, t...)
+}
+
+func (ima *inactiveMarkerAccumulator) AddHistogram(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+	ima.doAdd(ima.Accumulator.AddHistogram, measurement, fields, tags, t...)
 }
