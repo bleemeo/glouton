@@ -35,11 +35,13 @@ func TestFailedPointsCache(t *testing.T) {
 
 	const (
 		maxPendingPoints = 10
+		cleanupBatchSize = 1
 		labelID          = "id"
 	)
 
 	failedPoints := failedPointsCache{
 		maxPendingPoints:    maxPendingPoints,
+		cleanupBatchSize:    cleanupBatchSize,
 		cleanupFailedPoints: func(failedPoints []types.MetricPoint) []types.MetricPoint { return failedPoints },
 		metricExists:        make(map[string]struct{}),
 	}
@@ -72,12 +74,12 @@ func TestFailedPointsCache(t *testing.T) {
 		failedPoints.Add(p)
 	}
 
-	// The first 5 points should be deleted.
-	if failedPoints.Len() != 10 {
-		t.Fatal("Failed points should contain 10 points")
+	// The first 4 points should be deleted (it would've been 5 without cleanupBatchSize at 1).
+	if failedPoints.Len() != 11 {
+		t.Fatal("Failed points should contain 11 points")
 	}
 
-	for i := 0; i < 5; i++ {
+	for i := 0; i < 4; i++ {
 		labels := map[string]string{labelID: fmt.Sprint(i)}
 
 		if failedPoints.Contains(labels) {
@@ -391,5 +393,48 @@ func TestMQTTPointOrder(t *testing.T) {
 		}
 
 		lastTimestampByLabels[metric.LabelsText] = metric.TimestampMS
+	}
+}
+
+func BenchmarkAddFailedPoints(b *testing.B) {
+	const (
+		maxPendingPoints = 10000
+		cleanupBatchSize = 100
+		labelID          = "id"
+	)
+
+	for bn := 0; bn < b.N; bn++ {
+		failedPoints := failedPointsCache{
+			maxPendingPoints:    maxPendingPoints,
+			cleanupBatchSize:    cleanupBatchSize,
+			cleanupFailedPoints: func(failedPoints []types.MetricPoint) []types.MetricPoint { return failedPoints },
+			metricExists:        make(map[string]struct{}),
+		}
+
+		// Add 10 metrics with labels id=1, id=2, ... with 100 points each
+		for i := 1; i <= 10; i++ {
+			labels := map[string]string{labelID: fmt.Sprint(i)}
+
+			for j := 0; j < 100; j++ {
+				p := types.MetricPoint{
+					Labels: labels,
+				}
+
+				failedPoints.Add(p)
+			}
+		}
+
+		// Add 1000 more points for each metric
+		for i := 1; i <= 10; i++ {
+			labels := map[string]string{labelID: fmt.Sprint(i)}
+
+			for j := 0; j < 1000; j++ {
+				p := types.MetricPoint{
+					Labels: labels,
+				}
+
+				failedPoints.Add(p)
+			}
+		}
 	}
 }
