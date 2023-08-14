@@ -74,12 +74,12 @@ func TestFailedPointsCache(t *testing.T) {
 		failedPoints.Add(p)
 	}
 
-	// The first 4 points should be deleted (it would've been 5 without cleanupBatchSize at 1).
-	if failedPoints.Len() != 11 {
-		t.Fatal("Failed points should contain 11 points")
+	// The first 6 points should be deleted (it would've been 5 without cleanupBatchSize at 1).
+	if failedPoints.Len() != 9 {
+		t.Fatal("Failed points should contain 9 points")
 	}
 
-	for i := 0; i < 4; i++ {
+	for i := 0; i < 6; i++ {
 		labels := map[string]string{labelID: fmt.Sprint(i)}
 
 		if failedPoints.Contains(labels) {
@@ -398,8 +398,8 @@ func TestMQTTPointOrder(t *testing.T) {
 
 func BenchmarkAddFailedPoints(b *testing.B) {
 	const (
-		maxPendingPoints = 10000
-		cleanupBatchSize = 100
+		maxPendingPoints = 100000
+		cleanupBatchSize = 1000
 		labelID          = "id"
 	)
 
@@ -411,11 +411,11 @@ func BenchmarkAddFailedPoints(b *testing.B) {
 			metricExists:        make(map[string]struct{}),
 		}
 
-		// Add 10 metrics with labels id=1, id=2, ... with 100 points each
+		// Add 10 metrics with labels id=1, id=2, ... with 500 points each
 		for i := 1; i <= 10; i++ {
 			labels := map[string]string{labelID: fmt.Sprint(i)}
 
-			for j := 0; j < 100; j++ {
+			for j := 0; j < 500; j++ {
 				p := types.MetricPoint{
 					Labels: labels,
 				}
@@ -424,11 +424,11 @@ func BenchmarkAddFailedPoints(b *testing.B) {
 			}
 		}
 
-		// Add 1000 more points for each metric
+		// Add 10000 more points for each metric
 		for i := 1; i <= 10; i++ {
 			labels := map[string]string{labelID: fmt.Sprint(i)}
 
-			for j := 0; j < 1000; j++ {
+			for j := 0; j < 10000; j++ {
 				p := types.MetricPoint{
 					Labels: labels,
 				}

@@ -913,7 +913,7 @@ func (p *failedPointsCache) addNoLock(points ...types.MetricPoint) {
 	p.points = append(p.points, points...)
 
 	// Remove some old points if there are too many points.
-	if len(p.points) > (p.maxPendingPoints)+p.cleanupBatchSize {
+	if len(p.points) > p.maxPendingPoints+p.cleanupBatchSize {
 		p.tooManyPointsCount++
 
 		newPoints := p.popNoLock()
@@ -926,7 +926,7 @@ func (p *failedPointsCache) addNoLock(points ...types.MetricPoint) {
 			newPoints = p.cleanupFailedPoints(newPoints)
 		}
 
-		numberToDrop := len(newPoints) - (p.maxPendingPoints) - p.cleanupBatchSize
+		numberToDrop := len(newPoints) - (p.maxPendingPoints - p.cleanupBatchSize)
 		if numberToDrop > 0 {
 			newPoints = newPoints[numberToDrop:]
 		}
