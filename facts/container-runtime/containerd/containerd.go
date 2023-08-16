@@ -87,11 +87,28 @@ func New(
 	deletedContainersCallback func(containersID []string),
 	isContainerIgnored func(facts.Container) bool,
 ) *Containerd {
+	return newWithOpenner(
+		containerTypes.ExpandRuntimeAddresses(runtime, hostRoot),
+		deletedContainersCallback,
+		isContainerIgnored,
+		openConnection,
+	)
+}
+
+func newWithOpenner(
+	addresses []string,
+	deletedContainersCallback func(containersID []string),
+	isContainerIgnored func(facts.Container) bool,
+	openConnection func(ctx context.Context, address string) (cl containerdClient, err error),
+) *Containerd {
 	return &Containerd{
-		Addresses:                 containerTypes.ExpandRuntimeAddresses(runtime, hostRoot),
+		openConnection:            openConnection,
+		Addresses:                 addresses,
 		DeletedContainersCallback: deletedContainersCallback,
 		IsContainerIgnored:        isContainerIgnored,
 		lastDestroyedName:         make(map[string]time.Time),
+		containers:                make(map[string]containerObject),
+		ignoredID:                 make(map[string]bool),
 	}
 }
 
@@ -855,10 +872,6 @@ func (c *Containerd) addContainersInfo(ctx context.Context, containers map[strin
 }
 
 func (c *Containerd) getClient(ctx context.Context) (containerdClient, error) {
-	if c.openConnection == nil {
-		c.openConnection = openConnection
-	}
-
 	if c.client == nil {
 		var firstErr error
 
