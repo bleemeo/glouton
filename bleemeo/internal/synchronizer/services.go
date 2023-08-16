@@ -137,6 +137,8 @@ func (s *Synchronizer) syncServices(ctx context.Context, fullSync bool, onlyEsse
 
 	s.serviceDeactivateNonLocal(localServices)
 
+	s.serviceDeactivateDuplicates()
+
 	return false, nil
 }
 
@@ -335,28 +337,63 @@ func (s *Synchronizer) serviceDeactivateNonLocal(localServices []discovery.Servi
 		}
 
 		// Deactivate the remote service that is not present locally.
-		params := map[string]string{
-			"fields": "id,label,instance,listen_addresses,exe_path,stack,active,account,agent",
-		}
-
-		payload := servicePayload{
-			Service: types.Service{
-				Active:          false,
-				Label:           remoteSrv.Label,
-				Instance:        remoteSrv.Instance,
-				ListenAddresses: remoteSrv.ListenAddresses,
-				ExePath:         remoteSrv.ExePath,
-				Stack:           remoteSrv.Stack,
-			},
-			Account: s.option.Cache.AccountID(),
-			Agent:   s.agentID,
-		}
-
-		_, err := s.client.Do(s.ctx, "PUT", fmt.Sprintf("v1/service/%s/", remoteSrv.ID), params, payload, nil)
+		err := s.serviceDeactivate(remoteSrv)
 		if err != nil {
 			logger.V(1).Printf("Failed to deactivate service %v on Bleemeo API: %v", key, err)
 
 			continue
 		}
 	}
+}
+
+// serviceDeactivateDuplicates looks for duplicate services and marks them inactive on the Bleemeo API side.
+func (s *Synchronizer) serviceDeactivateDuplicates() {
+	registeredServicesDupCheck := make(map[serviceNameInstance][]types.Service)
+
+	registeredServices := s.option.Cache.Services()
+	for _, remoteSrv := range registeredServices {
+		if !remoteSrv.Active {
+			continue
+		}
+
+		key := serviceNameInstance{name: remoteSrv.Label, instance: remoteSrv.Instance}
+		registeredServicesDupCheck[key] = append(registeredServicesDupCheck[key], remoteSrv)
+	}
+
+	for key, services := range registeredServicesDupCheck {
+		if len(services) == 1 {
+			continue // no duplicates
+		}
+
+		for _, service := range services {
+			err := s.serviceDeactivate(service)
+			if err != nil {
+				logger.V(1).Printf("Failed to deactivate duplicate service %v on Bleemeo API: %v", key, err)
+			}
+		}
+	}
+}
+
+// serviceDeactivate makes a PUT request to the Bleemeo API to mark the given service as inactive.
+func (s *Synchronizer) serviceDeactivate(service types.Service) error {
+	params := map[string]string{
+		"fields": "id,label,instance,listen_addresses,exe_path,stack,active,account,agent",
+	}
+
+	payload := servicePayload{
+		Service: types.Service{
+			Active:          false,
+			Label:           service.Label,
+			Instance:        service.Instance,
+			ListenAddresses: service.ListenAddresses,
+			ExePath:         service.ExePath,
+			Stack:           service.Stack,
+		},
+		Account: s.option.Cache.AccountID(),
+		Agent:   s.agentID,
+	}
+
+	_, err := s.client.Do(s.ctx, "PUT", fmt.Sprintf("v1/service/%s/", service.ID), params, payload, nil)
+
+	return err
 }
