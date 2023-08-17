@@ -396,39 +396,37 @@ func TestMQTTPointOrder(t *testing.T) {
 	}
 }
 
-func BenchmarkAddFailedPoints(b *testing.B) {
-	const (
-		maxPendingPoints = 100000
-		cleanupBatchSize = 1000
-		labelID          = "id"
-	)
+func BenchmarkFailedPointsDropping(b *testing.B) {
+	const labelID = "id"
+
+	failedPoints := failedPointsCache{
+		maxPendingPoints:    maxPendingPoints,
+		cleanupBatchSize:    cleanupBatchSize,
+		cleanupFailedPoints: func(failedPoints []types.MetricPoint) []types.MetricPoint { return failedPoints },
+		metricExists:        make(map[string]struct{}),
+	}
+
+	// Add 10 metrics with labels id=1, id=2, ... with 10000 points each
+	for i := 1; i <= 10; i++ {
+		labels := map[string]string{labelID: fmt.Sprint(i)}
+
+		for j := 0; j < maxPendingPoints/10; j++ {
+			p := types.MetricPoint{
+				Labels: labels,
+			}
+
+			failedPoints.Add(p)
+		}
+	}
+
+	b.ResetTimer()
 
 	for bn := 0; bn < b.N; bn++ {
-		failedPoints := failedPointsCache{
-			maxPendingPoints:    maxPendingPoints,
-			cleanupBatchSize:    cleanupBatchSize,
-			cleanupFailedPoints: func(failedPoints []types.MetricPoint) []types.MetricPoint { return failedPoints },
-			metricExists:        make(map[string]struct{}),
-		}
-
-		// Add 10 metrics with labels id=1, id=2, ... with 500 points each
+		// Add 100 more points for each metric
 		for i := 1; i <= 10; i++ {
 			labels := map[string]string{labelID: fmt.Sprint(i)}
 
-			for j := 0; j < 500; j++ {
-				p := types.MetricPoint{
-					Labels: labels,
-				}
-
-				failedPoints.Add(p)
-			}
-		}
-
-		// Add 10000 more points for each metric
-		for i := 1; i <= 10; i++ {
-			labels := map[string]string{labelID: fmt.Sprint(i)}
-
-			for j := 0; j < 10000; j++ {
+			for j := 0; j < cleanupBatchSize/10; j++ {
 				p := types.MetricPoint{
 					Labels: labels,
 				}
