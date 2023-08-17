@@ -41,10 +41,10 @@ var (
 type Collector struct {
 	acc          telegraf.Accumulator
 	inputs       map[int]telegraf.Input
+	fieldsCache  map[int]map[string]map[string]struct{}
 	currentDelay time.Duration
 	updateDelayC chan interface{}
 	l            sync.Mutex
-	fieldsCache  map[int]map[string]map[string]struct{}
 }
 
 // New returns a Collector with default option
@@ -90,6 +90,7 @@ func (c *Collector) AddInput(input telegraf.Input, shortName string) (int, error
 	}
 
 	c.inputs[id] = input
+	c.fieldsCache[id] = make(map[string]map[string]struct{})
 
 	if si, ok := input.(telegraf.ServiceInput); ok {
 		if err := si.Start(nil); err != nil {
@@ -114,6 +115,7 @@ func (c *Collector) RemoveInput(id int) {
 	}
 
 	delete(c.inputs, id)
+	delete(c.fieldsCache, id)
 }
 
 // Close stops all inputs.
@@ -133,14 +135,14 @@ func (c *Collector) RunGather(_ context.Context, t0 time.Time) {
 	c.runOnce(t0)
 }
 
-func (c *Collector) inputsForCollection() []telegraf.Input {
+func (c *Collector) inputsForCollection() map[int]telegraf.Input {
 	c.l.Lock()
 	defer c.l.Unlock()
 
-	inputsCopy := make([]telegraf.Input, 0)
+	inputsCopy := make(map[int]telegraf.Input, len(c.inputs))
 
-	for _, v := range c.inputs {
-		inputsCopy = append(inputsCopy, v)
+	for i, v := range c.inputs {
+		inputsCopy[i] = v
 	}
 
 	return inputsCopy
@@ -164,14 +166,8 @@ func (c *Collector) runOnce(t0 time.Time) {
 			defer crashreport.ProcessPanic()
 			defer wg.Done()
 
-			fieldsCache, ok := c.fieldsCache[i]
-			if !ok {
-				c.fieldsCache[i] = make(map[string]map[string]struct{})
-				fieldsCache = c.fieldsCache[i]
-			}
-
 			// Errors are already logged by the input.
-			_ = input.Gather(&inactiveMarkerAccumulator{Accumulator: acc, fieldsCache: fieldsCache})
+			_ = input.Gather(&inactiveMarkerAccumulator{Accumulator: acc, fieldsCache: c.fieldsCache[i]})
 		}()
 	}
 
