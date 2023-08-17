@@ -20,9 +20,11 @@ package collector
 import (
 	"context"
 	"errors"
+	"fmt"
 	"glouton/crashreport"
 	"glouton/inputs"
 	"glouton/logger"
+	"glouton/types"
 	"sync"
 	"time"
 
@@ -30,7 +32,10 @@ import (
 	"github.com/prometheus/prometheus/model/value"
 )
 
-var errTooManyInputs = errors.New("too many inputs in the collectors. Unable to find new slot")
+var (
+	errTooManyInputs = errors.New("too many inputs in the collectors. Unable to find new slot")
+	errMissingMethod = errors.New("AddFieldsWithAnnotations method missing, the annotation is lost")
+)
 
 // Collector implement running Gather on inputs every fixed time interval.
 type Collector struct {
@@ -39,7 +44,7 @@ type Collector struct {
 	currentDelay time.Duration
 	updateDelayC chan interface{}
 	l            sync.Mutex
-	fieldsCache  map[string]map[string]struct{}
+	fieldsCache  map[int]map[string]map[string]struct{}
 }
 
 // New returns a Collector with default option
@@ -52,7 +57,7 @@ func New(acc telegraf.Accumulator) *Collector {
 		inputs:       make(map[int]telegraf.Input),
 		currentDelay: 10 * time.Second,
 		updateDelayC: make(chan interface{}),
-		fieldsCache:  make(map[string]map[string]struct{}),
+		fieldsCache:  make(map[int]map[string]map[string]struct{}),
 	}
 
 	return c
@@ -145,13 +150,13 @@ func (c *Collector) runOnce(t0 time.Time) {
 	inputsCopy := c.inputsForCollection()
 	acc := inputs.FixedTimeAccumulator{
 		Time: t0,
-		Acc:  &inactiveMarkerAccumulator{Accumulator: c.acc, fieldsCache: c.fieldsCache},
+		Acc:  c.acc,
 	}
 
 	var wg sync.WaitGroup
 
-	for _, input := range inputsCopy {
-		input := input
+	for i, input := range inputsCopy {
+		i, input := i, input
 
 		wg.Add(1)
 
@@ -159,8 +164,14 @@ func (c *Collector) runOnce(t0 time.Time) {
 			defer crashreport.ProcessPanic()
 			defer wg.Done()
 
+			fieldsCache, ok := c.fieldsCache[i]
+			if !ok {
+				c.fieldsCache[i] = make(map[string]map[string]struct{})
+				fieldsCache = c.fieldsCache[i]
+			}
+
 			// Errors are already logged by the input.
-			_ = input.Gather(acc)
+			_ = input.Gather(&inactiveMarkerAccumulator{Accumulator: acc, fieldsCache: fieldsCache})
 		}()
 	}
 
@@ -177,7 +188,7 @@ type inactiveMarkerAccumulator struct {
 
 type accCallback func(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time)
 
-func (ima *inactiveMarkerAccumulator) doAdd(accCb accCallback, measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+func (ima *inactiveMarkerAccumulator) doAdd(kind string, accCb accCallback, measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
 	ima.l.Lock()
 
 	// Using a closure to make the deferred call to unlock happening before the call
@@ -186,13 +197,15 @@ func (ima *inactiveMarkerAccumulator) doAdd(accCb accCallback, measurement strin
 	func() {
 		defer ima.l.Unlock()
 
-		updatedMetrics := make(map[string]struct{})
+		newMetrics := make(map[string]struct{})
 		// Update the cache with the metrics that are existing right now
 		for newField := range fields {
-			updatedMetrics[newField] = struct{}{}
+			newMetrics[newField] = struct{}{}
 		}
 
-		metrics := ima.fieldsCache[measurement]
+		strTags := fmt.Sprint(tags)
+
+		metrics := ima.fieldsCache[kind+"__"+measurement+"__"+strTags]
 		// Setting a NaN value for metrics that are now longer updated to mark them as inactive
 		for oldField := range metrics {
 			if _, exists := fields[oldField]; !exists {
@@ -200,28 +213,50 @@ func (ima *inactiveMarkerAccumulator) doAdd(accCb accCallback, measurement strin
 			}
 		}
 
-		ima.fieldsCache[measurement] = updatedMetrics
+		ima.fieldsCache[kind+"__"+measurement+"__"+strTags] = newMetrics
 	}()
 
-	accCb(measurement, fields, tags, t...)
+	if accCb != nil {
+		accCb(measurement, fields, tags, t...)
+	}
 }
 
 func (ima *inactiveMarkerAccumulator) AddFields(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	ima.doAdd(ima.Accumulator.AddFields, measurement, fields, tags, t...)
+	ima.doAdd("fields", ima.Accumulator.AddFields, measurement, fields, tags, t...)
 }
 
 func (ima *inactiveMarkerAccumulator) AddGauge(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	ima.doAdd(ima.Accumulator.AddGauge, measurement, fields, tags, t...)
+	ima.doAdd("gauge", ima.Accumulator.AddGauge, measurement, fields, tags, t...)
 }
 
 func (ima *inactiveMarkerAccumulator) AddCounter(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	ima.doAdd(ima.Accumulator.AddCounter, measurement, fields, tags, t...)
+	ima.doAdd("counter", ima.Accumulator.AddCounter, measurement, fields, tags, t...)
 }
 
 func (ima *inactiveMarkerAccumulator) AddSummary(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	ima.doAdd(ima.Accumulator.AddSummary, measurement, fields, tags, t...)
+	ima.doAdd("summary", ima.Accumulator.AddSummary, measurement, fields, tags, t...)
 }
 
 func (ima *inactiveMarkerAccumulator) AddHistogram(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	ima.doAdd(ima.Accumulator.AddHistogram, measurement, fields, tags, t...)
+	ima.doAdd("histogram", ima.Accumulator.AddHistogram, measurement, fields, tags, t...)
+}
+
+func (ima *inactiveMarkerAccumulator) AddFieldsWithAnnotations(measurement string, fields map[string]interface{}, tags map[string]string, annotations types.MetricAnnotations, t ...time.Time) {
+	// With a nil callback, doAdd() will just mutate the fields map and update fieldsCache.
+	ima.doAdd("annotation", nil, measurement, fields, tags, t...)
+
+	if annotationAcc, ok := ima.Accumulator.(inputs.AnnotationAccumulator); ok {
+		annotationAcc.AddFieldsWithAnnotations(measurement, fields, tags, annotations, t...)
+
+		return
+	}
+
+	ima.Accumulator.AddGauge(measurement, fields, tags, t...)
+	ima.Accumulator.AddError(errMissingMethod)
+}
+
+func (ima *inactiveMarkerAccumulator) AddError(err error) {
+	if err != nil {
+		logger.V(1).Printf("Add error called with: %v", err)
+	}
 }
