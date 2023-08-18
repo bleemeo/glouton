@@ -18,6 +18,7 @@ package collector
 
 import (
 	"context"
+	"glouton/types"
 	"sync"
 	"testing"
 	"time"
@@ -89,28 +90,32 @@ func TestRun(t *testing.T) {
 	}
 }
 
-type mma map[string]map[string]any
+type msmsa map[string]map[string]any
 
 type shallowAcc struct {
-	fields map[time.Time]mma
+	fields map[time.Time]msmsa
 	l      sync.Mutex
 }
 
 func (sa *shallowAcc) AddFields(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	_, _ = measurement, tags
-
 	if t == nil {
-		t = []time.Time{time.Now()}
+		t = []time.Time{time.Now()} // normally unused
 	}
 
 	sa.l.Lock()
 	defer sa.l.Unlock()
 
 	if _, ok := sa.fields[t[0]]; !ok {
-		sa.fields[t[0]] = make(map[string]map[string]any)
+		sa.fields[t[0]] = make(msmsa)
 	}
 
-	sa.fields[t[0]][measurement] = fields
+	if _, ok := sa.fields[t[0]][measurement]; !ok {
+		sa.fields[t[0]][measurement] = make(map[string]any)
+	}
+
+	for field, v := range fields {
+		sa.fields[t[0]][measurement][field+"__"+types.LabelsToText(tags)] = v
+	}
 }
 
 func (sa *shallowAcc) AddGauge(string, map[string]interface{}, map[string]string, ...time.Time) {
@@ -135,6 +140,7 @@ func (sa *shallowAcc) WithTracking(int) telegraf.TrackingAccumulator { return ni
 
 type shallowInput struct {
 	measurement string
+	tag         string
 	fields      map[string]float64
 }
 
@@ -143,13 +149,13 @@ func (s shallowInput) Gather(acc telegraf.Accumulator) error {
 		return nil // Nothing to gather
 	}
 
-	fields := make(map[string]any)
+	fields := make(map[string]any, len(s.fields))
 
 	for field, val := range s.fields {
 		fields[field] = val
 	}
 
-	acc.AddFields(s.measurement, fields, nil)
+	acc.AddFields(s.measurement, fields, map[string]string{"name": s.tag})
 
 	return nil
 }
@@ -159,9 +165,9 @@ func (s shallowInput) SampleConfig() string {
 }
 
 func TestMarkInactive(t *testing.T) {
-	acc := shallowAcc{fields: make(map[time.Time]mma)}
-	input1 := shallowInput{measurement: "i1", fields: map[string]float64{"f1": 1, "f2": 0.2, "f3": 333}}
-	input2 := shallowInput{measurement: "i2", fields: map[string]float64{"f": 2}}
+	acc := shallowAcc{fields: make(map[time.Time]msmsa)}
+	input1 := shallowInput{measurement: "i1", tag: "i1", fields: map[string]float64{"f1": 1, "f2": 0.2, "f3": 333}}
+	input2 := shallowInput{measurement: "i2", tag: "i2", fields: map[string]float64{"f": 2}}
 
 	c := New(&acc)
 
@@ -178,18 +184,71 @@ func TestMarkInactive(t *testing.T) {
 
 	c.RunGather(context.Background(), t0)
 
+	expectedCache := map[int]map[string]map[string]map[string]fieldCache{
+		1: {
+			"i1": {
+				"f1": {`name="i1"`: fieldCache{}},
+				"f2": {`name="i1"`: fieldCache{}},
+				"f3": {`name="i1"`: fieldCache{}},
+			},
+		},
+		2: {
+			"i2": {
+				"f": {`name="i2"`: fieldCache{}},
+			},
+		},
+	}
+	if diff := cmp.Diff(expectedCache, c.fieldCaches, cmpopts.IgnoreUnexported(fieldCache{})); diff != "" {
+		t.Errorf("Unexpected field cache state after t0:\n%v", diff)
+	}
+
 	delete(input1.fields, "f1") // No more f1 metric
 	// Keeping the same value for f2
 	input1.fields["f3"] = 3.3 // The value of f3 has changed
 
-	delete(input2.fields, "f")
+	input2.tag = "I2" // Tags have changed
 
 	c.RunGather(context.Background(), t1)
+
+	expectedCache = map[int]map[string]map[string]map[string]fieldCache{
+		1: {
+			"i1": {
+				"f2": {`name="i1"`: fieldCache{}},
+				"f3": {`name="i1"`: fieldCache{}},
+			},
+		},
+		2: {
+			"i2": {
+				"f": {`name="I2"`: fieldCache{}},
+			},
+		},
+	}
+	if diff := cmp.Diff(expectedCache, c.fieldCaches, cmpopts.IgnoreUnexported(fieldCache{})); diff != "" {
+		t.Errorf("Unexpected field cache state after t1:\n%v", diff)
+	}
 
 	delete(input1.fields, "f2") // No more f2 metric
 	input1.fields["f3"] = 3
 
+	input2.fields["f"] = 22
+
 	c.RunGather(context.Background(), t2)
+
+	expectedCache = map[int]map[string]map[string]map[string]fieldCache{
+		1: {
+			"i1": {
+				"f3": {`name="i1"`: fieldCache{}},
+			},
+		},
+		2: {
+			"i2": {
+				"f": {`name="I2"`: fieldCache{}},
+			},
+		},
+	}
+	if diff := cmp.Diff(expectedCache, c.fieldCaches, cmpopts.IgnoreUnexported(fieldCache{})); diff != "" {
+		t.Errorf("Unexpected field cache state after t2:\n%v", diff)
+	}
 
 	// Gathering a few times to trigger the fields cache purge
 	c.RunGather(context.Background(), t2.Add(10*time.Second))
@@ -197,36 +256,40 @@ func TestMarkInactive(t *testing.T) {
 	c.RunGather(context.Background(), t2.Add(30*time.Second))
 
 	t0Fields := acc.fields[t0]
-	if diff := cmp.Diff(t0Fields, mma{"i1": {"f1": 1., "f2": 0.2, "f3": 333.}, "i2": {"f": 2.}}); diff != "" {
+	expectedT0 := msmsa{
+		"i1": {`f1__name="i1"`: 1., `f2__name="i1"`: 0.2, `f3__name="i1"`: 333.},
+		"i2": {`f__name="i2"`: 2.},
+	}
+
+	if diff := cmp.Diff(expectedT0, t0Fields); diff != "" {
 		t.Errorf("Unexpected fields at t0:\n%v", diff)
 	}
 
 	t1Fields := acc.fields[t1]
-	if diff := cmp.Diff(t1Fields, mma{"i1": {"f1": value.StaleNaN, "f2": 0.2, "f3": 3.3}}); diff != "" {
-		if t1Fields["i1"]["f1"] != value.StaleNaN {
-			t.Error("The value of f1 field should be StaleNaN.")
-		}
+	expectedT1 := msmsa{
+		"i1": {`f1__name="i1"`: value.StaleNaN, `f2__name="i1"`: 0.2, `f3__name="i1"`: 3.3},
+		"i2": {`f__name="i2"`: value.StaleNaN, `f__name="I2"`: 2.},
+	}
 
+	if diff := cmp.Diff(t1Fields, expectedT1); diff != "" {
 		t.Errorf("Unexpected fields at t1:\n%v", diff)
+
+		if t1Fields["i1"]["f1"] != value.StaleNaN {
+			t.Error("The value of f1 field should be StaleNaN.\n")
+		}
 	}
 
 	t2Fields := acc.fields[t2]
-	if diff := cmp.Diff(t2Fields, mma{"i1": {"f2": value.StaleNaN, "f3": 3.}}); diff != "" {
-		if t2Fields["i1"]["f2"] != value.StaleNaN {
-			t.Error("The value of f2 field should be StaleNaN.")
-		}
-		t.Errorf("Unexpected fields at t2:\n%v", diff)
+	expectedT2 := msmsa{
+		"i1": {`f2__name="i1"`: value.StaleNaN, `f3__name="i1"`: 3.},
+		"i2": {`f__name="I2"`: 22.},
 	}
 
-	expectedCache := map[int]map[string]fieldCache{
-		1: {
-			"i1__": {
-				Cache: map[string]struct{}{"f3": {}},
-			},
-		},
-		2: {},
-	}
-	if diff := cmp.Diff(c.FieldsCaches, expectedCache, cmpopts.IgnoreUnexported(fieldCache{})); diff != "" {
-		t.Errorf("Unexpected cache state (purge might have failed):\n%v", diff)
+	if diff := cmp.Diff(t2Fields, expectedT2); diff != "" {
+		t.Errorf("Unexpected fields at t2:\n%v", diff)
+
+		if t2Fields["i1"]["f2"] != value.StaleNaN {
+			t.Error("The value of f2 field should be StaleNaN.\n")
+		}
 	}
 }
