@@ -115,6 +115,8 @@ func (s *Synchronizer) syncServices(ctx context.Context, fullSync bool, onlyEsse
 		if err != nil {
 			return false, err
 		}
+
+		s.serviceDeactivateDuplicates()
 	}
 
 	s.serviceRemoveDeletedFromRemote(localServices, previousServices)
@@ -346,30 +348,39 @@ func (s *Synchronizer) serviceDeactivateNonLocal(localServices []discovery.Servi
 	}
 }
 
-// serviceDeactivateDuplicates looks for duplicate services and marks them inactive on the Bleemeo API side.
+// serviceDeactivateDuplicates looks for duplicate services,
+// removes them from the cache and marks them inactive on the Bleemeo API side.
 func (s *Synchronizer) serviceDeactivateDuplicates() {
-	duplicatedKey := make(map[serviceNameInstance]bool)
+	services := s.option.Cache.ServicesByUUID()
+	duplicatedKey := make(map[serviceNameInstance]bool, len(services))
 
-	registeredServices := s.option.Cache.Services()
-	for _, remoteSrv := range registeredServices {
-		if !remoteSrv.Active {
-			continue
-		}
-
-		key := serviceNameInstance{name: remoteSrv.Label, instance: remoteSrv.Instance}
+	for id, service := range services {
+		key := serviceNameInstance{name: service.Label, instance: service.Instance}
 		if !duplicatedKey[key] {
 			duplicatedKey[key] = true
 
 			continue
 		}
 
-		logger.V(2).Printf("Mark inactive the service %v (uuid %s)", key, remoteSrv.ID)
+		logger.V(2).Printf("Mark inactive the service %v (uuid %s)", key, service.ID)
 
-		err := s.serviceDeactivate(remoteSrv)
+		err := s.serviceDeactivate(service)
 		if err != nil {
 			logger.V(1).Printf("Failed to deactivate duplicate service %v on Bleemeo API: %v", key, err)
+
+			continue
 		}
+
+		delete(services, id)
 	}
+
+	servicesWithoutDuplicates := make([]types.Service, 0, len(services))
+
+	for _, service := range services {
+		servicesWithoutDuplicates = append(servicesWithoutDuplicates, service)
+	}
+
+	s.option.Cache.SetServices(servicesWithoutDuplicates)
 }
 
 // serviceDeactivate makes a PUT request to the Bleemeo API to mark the given service as inactive.
