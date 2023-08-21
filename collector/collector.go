@@ -217,9 +217,11 @@ func (ima *inactiveMarkerAccumulator) deactivateUnseenMetrics() {
 				}
 			}
 		}
+	}
 
-		// Deleting the entry to prepare for the update with the latest metrics
-		delete(ima.fieldCaches, oldMeasurement)
+	// Deleting all entries to prepare for the update with the latest metrics
+	for k := range ima.fieldCaches {
+		delete(ima.fieldCaches, k)
 	}
 
 	// Update the cache with the metrics that are existing right now
@@ -277,8 +279,12 @@ func (ima *inactiveMarkerAccumulator) doAdd(accCb accCallback, measurement strin
 		ima.latestValues[measurement] = m
 	}()
 
-	if accCb != nil {
+	if accCb != nil { //nolint:gocritic
 		accCb(ima.FixedTimeAccumulator, measurement, fields, tags, t...)
+	} else if len(annotations) == 1 {
+		ima.FixedTimeAccumulator.AddFieldsWithAnnotations(measurement, fields, tags, annotations[0], ima.Time)
+	} else {
+		logger.V(2).Printf("No callback or annotations given for %s / %s with fields %v", measurement, types.LabelsToText(tags), fields)
 	}
 }
 
@@ -303,8 +309,6 @@ func (ima *inactiveMarkerAccumulator) AddHistogram(measurement string, fields ma
 }
 
 func (ima *inactiveMarkerAccumulator) AddFieldsWithAnnotations(measurement string, fields map[string]interface{}, tags map[string]string, annotations types.MetricAnnotations, t ...time.Time) {
-	// When given a nil callback, doAdd() will just mutate the fields map and update fieldCaches.
+	// When given a nil callback but annotations, doAdd() will call ima.FixedTimeAccumulator.AddFieldsWithAnnotations()
 	ima.doAdd(nil, measurement, fields, tags, t, annotations)
-
-	ima.FixedTimeAccumulator.AddFieldsWithAnnotations(measurement, fields, tags, annotations, t...)
 }
