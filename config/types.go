@@ -409,8 +409,9 @@ type ContainerRuntimeAddresses struct {
 }
 
 type VSphere struct {
-	Enable   bool     `yaml:"enable"`
-	URLs     []string `yaml:"urls"`
-	Username string   `yaml:"username"`
-	Password string   `yaml:"password"`
+	Enable             bool     `yaml:"enable"`
+	URLs               []string `yaml:"urls"`
+	Username           string   `yaml:"username"`
+	Password           string   `yaml:"password"`
+	InsecureSkipVerify bool     `yaml:"insecure_skip_verify"`
 }

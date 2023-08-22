@@ -10,7 +10,7 @@ import (
 	"github.com/influxdata/telegraf/plugins/inputs/vsphere"
 )
 
-func New(urls []string, username, password string) (telegraf.Input, *inputs.GathererOptions, error) {
+func New(urls []string, username, password string, insecureSkipVerify bool) (telegraf.Input, *inputs.GathererOptions, error) {
 	input, ok := telegraf_inputs.Inputs["vsphere"]
 	if !ok {
 		return nil, nil, inputs.ErrDisabledInput
@@ -49,7 +49,7 @@ func New(urls []string, username, password string) (telegraf.Input, *inputs.Gath
 	vsphereInput.ClusterMetricExclude = []string{"*"}
 	vsphereInput.DatastoreMetricExclude = []string{"*"}
 
-	vsphereInput.InsecureSkipVerify = true
+	vsphereInput.InsecureSkipVerify = insecureSkipVerify
 
 	internalInput := &internal.Input{
 		Input: vsphereInput,
