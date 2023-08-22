@@ -1378,7 +1378,7 @@ func (a *agent) registerInputs() {
 	a.registerInput("Temp", input, opts, err)
 
 	if a.config.VSphere.Enable {
-		input, opts, err := vsphere.New(a.config.VSphere.URLs, a.config.VSphere.Username, a.config.VSphere.Password)
+		input, opts, err := vsphere.New(a.config.VSphere.URLs, a.config.VSphere.Username, a.config.VSphere.Password, a.config.VSphere.InsecureSkipVerify)
 		a.registerInput("vSphere", input, opts, err)
 	}
 }
