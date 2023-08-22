@@ -46,6 +46,7 @@ import (
 	"glouton/inputs/smart"
 	"glouton/inputs/statsd"
 	"glouton/inputs/temp"
+	"glouton/inputs/vsphere"
 	"glouton/jmxtrans"
 	"glouton/logger"
 	"glouton/mqtt"
@@ -1375,6 +1376,11 @@ func (a *agent) registerInputs() {
 
 	input, opts, err := temp.New()
 	a.registerInput("Temp", input, opts, err)
+
+	if a.config.VSphere.Enable {
+		input, opts, err := vsphere.New(a.config.VSphere.URLs, a.config.VSphere.Username, a.config.VSphere.Password)
+		a.registerInput("vSphere", input, opts, err)
+	}
 }
 
 // Register a single input.
