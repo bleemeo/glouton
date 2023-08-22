@@ -166,6 +166,8 @@ func DefaultConfig() Config { //nolint:maintidx
 				"linprocfs",
 				"linsysfs",
 				"mqueue",
+				"nfs",
+				"nfs4",
 				"nsfs",
 				"nullfs",
 				"overlay",
