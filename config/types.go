@@ -49,6 +49,7 @@ type Config struct {
 	Tags                     []string             `yaml:"tags"`
 	Telegraf                 Telegraf             `yaml:"telegraf"`
 	Thresholds               map[string]Threshold `yaml:"thresholds"`
+	VSphere                  VSphere              `yaml:"vsphere"`
 	Web                      Web                  `yaml:"web"`
 	Zabbix                   Zabbix               `yaml:"zabbix"`
 }
@@ -405,4 +406,11 @@ type ContainerRuntime struct {
 type ContainerRuntimeAddresses struct {
 	Addresses      []string `yaml:"addresses"`
 	PrefixHostRoot bool     `yaml:"prefix_hostroot"`
+}
+
+type VSphere struct {
+	Enable   bool     `yaml:"enable"`
+	URLs     []string `yaml:"urls"`
+	Username string   `yaml:"username"`
+	Password string   `yaml:"password"`
 }
