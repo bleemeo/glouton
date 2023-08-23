@@ -228,10 +228,12 @@ func NewDockerMockFromFile(filename string) (*MockDockerClient, error) {
 
 // FakeDocker return a Docker runtime connector that use a mock client.
 func FakeDocker(client *MockDockerClient, isContainerIgnored func(facts.Container) bool) *Docker {
-	return &Docker{
-		openConnection: func(_ context.Context, _ string) (cl dockerClient, err error) {
+	return newWithOpenner(
+		nil,
+		nil,
+		isContainerIgnored,
+		func(_ context.Context, _ string) (cl dockerClient, err error) {
 			return client, nil
 		},
-		IsContainerIgnored: isContainerIgnored,
-	}
+	)
 }

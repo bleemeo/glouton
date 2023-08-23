@@ -92,10 +92,30 @@ func New(
 	deletedContainersCallback func(containersID []string),
 	isContainerIgnored func(facts.Container) bool,
 ) *Docker {
+	return newWithOpenner(
+		containerTypes.ExpandRuntimeAddresses(runtime, hostRoot),
+		deletedContainersCallback,
+		isContainerIgnored,
+		openConnection,
+	)
+}
+
+func newWithOpenner(
+	sockets []string,
+	deletedContainersCallback func(containersID []string),
+	isContainerIgnored func(facts.Container) bool,
+	openConnection func(ctx context.Context, host string) (cl dockerClient, err error),
+) *Docker {
 	return &Docker{
-		DockerSockets:             containerTypes.ExpandRuntimeAddresses(runtime, hostRoot),
+		DockerSockets:             sockets,
 		DeletedContainersCallback: deletedContainersCallback,
 		IsContainerIgnored:        isContainerIgnored,
+		lastKill:                  make(map[string]time.Time),
+		lastDestroyedName:         make(map[string]time.Time),
+		containers:                make(map[string]dockerContainer),
+		ignoredID:                 make(map[string]bool),
+		bridgeNetworks:            make(map[string]interface{}),
+		openConnection:            openConnection,
 	}
 }
 
@@ -443,14 +463,6 @@ func (d *Docker) run(ctx context.Context) error {
 
 	cl, err := d.ensureClient(ctx)
 
-	if d.lastKill == nil {
-		d.lastKill = make(map[string]time.Time)
-	}
-
-	if d.lastDestroyedName == nil {
-		d.lastDestroyedName = make(map[string]time.Time)
-	}
-
 	d.l.Unlock()
 
 	if err != nil {
@@ -759,10 +771,6 @@ func (d *Docker) primaryAddress(inspect dockerTypes.ContainerJSON, bridgeNetwork
 }
 
 func (d *Docker) getClient(ctx context.Context) (cl dockerClient, err error) {
-	if d.openConnection == nil {
-		d.openConnection = openConnection
-	}
-
 	if d.client == nil {
 		var firstErr error
 

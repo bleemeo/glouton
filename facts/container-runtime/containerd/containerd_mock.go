@@ -25,7 +25,6 @@ import (
 	"os"
 	"reflect"
 	"syscall"
-	"time"
 
 	"github.com/containerd/containerd"
 	"github.com/containerd/containerd/api/services/tasks/v1"
@@ -269,14 +268,14 @@ func NewMockFromFile(filename string) (*MockClient, error) {
 
 // FakeContainerd return a Containerd runtime connector that use a mock client.
 func FakeContainerd(client *MockClient, isContainerIgnored func(facts.Container) bool) *Containerd {
-	return &Containerd{
-		openConnection: func(_ context.Context, _ string) (cl containerdClient, err error) {
+	return newWithOpenner(
+		[]string{"unused"},
+		nil,
+		isContainerIgnored,
+		func(_ context.Context, _ string) (cl containerdClient, err error) {
 			return client, nil
 		},
-		Addresses:          []string{"unused"},
-		IsContainerIgnored: isContainerIgnored,
-		lastDestroyedName:  make(map[string]time.Time),
-	}
+	)
 }
 
 // Containers do Containers.
