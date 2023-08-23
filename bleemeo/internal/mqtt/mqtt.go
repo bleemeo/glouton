@@ -43,7 +43,9 @@ import (
 
 const (
 	maxPendingPoints = 100000
-	pointsBatchSize  = 1000
+	cleanupBatchSize = 1000
+
+	pointsBatchSize = 1000
 )
 
 // Option are parameter for the MQTT client.
@@ -124,6 +126,7 @@ func New(opts Option) *Client {
 	c.failedPoints = failedPointsCache{
 		metricExists:        make(map[string]struct{}),
 		maxPendingPoints:    maxPendingPoints,
+		cleanupBatchSize:    cleanupBatchSize,
 		cleanupFailedPoints: c.cleanupFailedPoints,
 	}
 
@@ -882,6 +885,7 @@ func (c *Client) receiveEvents(ctx context.Context) {
 // failedPointsCache stores failed points and can check if a metric is present in the points.
 type failedPointsCache struct {
 	maxPendingPoints int
+	cleanupBatchSize int
 
 	l      sync.Mutex
 	points []types.MetricPoint
@@ -909,7 +913,7 @@ func (p *failedPointsCache) addNoLock(points ...types.MetricPoint) {
 	p.points = append(p.points, points...)
 
 	// Remove some old points if there are too many points.
-	if len(p.points) > p.maxPendingPoints {
+	if len(p.points) > p.maxPendingPoints+p.cleanupBatchSize {
 		p.tooManyPointsCount++
 
 		newPoints := p.popNoLock()
@@ -922,7 +926,7 @@ func (p *failedPointsCache) addNoLock(points ...types.MetricPoint) {
 			newPoints = p.cleanupFailedPoints(newPoints)
 		}
 
-		numberToDrop := len(newPoints) - p.maxPendingPoints
+		numberToDrop := len(newPoints) - (p.maxPendingPoints - p.cleanupBatchSize)
 		if numberToDrop > 0 {
 			newPoints = newPoints[numberToDrop:]
 		}
