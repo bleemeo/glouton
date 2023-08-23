@@ -42,7 +42,7 @@ var errDeletedMetric = errors.New("metric was deleted")
 // See methods GetMetrics and GetMetricPoints.
 type Store struct {
 	metrics              map[uint64]metric
-	points               map[uint64][]types.Point
+	points               *encodedPoints
 	notifyCallbacks      map[int]func([]types.MetricPoint)
 	newMetricCallback    func([]types.LabelsAndAnnotation)
 	maxPointsAge         time.Duration
@@ -59,7 +59,7 @@ type Store struct {
 func New(maxPointsAge time.Duration, maxMetricsAge time.Duration) *Store {
 	s := &Store{
 		metrics:         make(map[uint64]metric),
-		points:          make(map[uint64][]types.Point),
+		points:          newEncodedPoints(),
 		notifyCallbacks: make(map[int]func([]types.MetricPoint)),
 		maxPointsAge:    maxPointsAge,
 		maxMetricsAge:   maxMetricsAge,
@@ -83,17 +83,16 @@ func (s *Store) DiagnosticArchive(_ context.Context, archive types.ArchiveWriter
 		pointsCount  int
 	)
 
-	for _, pts := range s.points {
-		pointsCount += len(pts)
+	for _, data := range s.points.pointsPerMetric {
+		pointsCount += data.count()
+		oldest, youngest := data.timeBounds()
 
-		for _, p := range pts {
-			if oldestTime.IsZero() || p.Time.Before(oldestTime) {
-				oldestTime = p.Time
-			}
+		if oldestTime.IsZero() || oldest.Before(oldestTime) {
+			oldestTime = oldest
+		}
 
-			if youngestTime.IsZero() || p.Time.After(youngestTime) {
-				youngestTime = p.Time
-			}
+		if youngestTime.IsZero() || youngest.After(youngestTime) {
+			youngestTime = youngest
 		}
 	}
 
@@ -187,7 +186,7 @@ func (s *Store) DropMetrics(labelsList []map[string]string) {
 		for _, l := range labelsList {
 			if reflect.DeepEqual(m.labels, l) {
 				delete(s.metrics, i)
-				delete(s.points, i)
+				s.points.dropPoints(i)
 			}
 		}
 	}
@@ -199,7 +198,7 @@ func (s *Store) DropAllMetrics() {
 	defer s.lock.Unlock()
 
 	s.metrics = make(map[uint64]metric)
-	s.points = make(map[uint64][]types.Point)
+	s.points = newEncodedPoints()
 }
 
 // Metrics return a list of Metric matching given labels filter.
@@ -245,12 +244,16 @@ func (m metric) Points(start, end time.Time) (result []types.Point, err error) {
 		return nil, errDeletedMetric
 	}
 
-	points := m.store.points[m.metricID]
+	points, err := m.store.points.getPoints(m.metricID)
+	if err != nil {
+		return nil, fmt.Errorf("can't decode points: %w", err)
+	}
+
 	result = make([]types.Point, 0)
 
 	for _, point := range points {
 		pointTimeUTC := point.Time.UTC()
-		if !pointTimeUTC.Before(start) && !pointTimeUTC.After(end) {
+		if !pointTimeUTC.Before(start.Truncate(time.Millisecond)) && !pointTimeUTC.After(end) {
 			result = append(result, point)
 		}
 	}
@@ -296,7 +299,11 @@ func (s *Store) run(now time.Time) {
 	metricToDelete := make([]uint64, 0)
 
 	for metricID, metric := range s.metrics {
-		points := s.points[metricID]
+		points, err := s.points.getPoints(metricID)
+		if err != nil {
+			continue
+		}
+
 		newPoints := make([]types.Point, 0)
 
 		for _, p := range points {
@@ -308,7 +315,10 @@ func (s *Store) run(now time.Time) {
 		if len(newPoints) == 0 && now.Sub(metric.lastPoint) >= s.maxMetricsAge {
 			metricToDelete = append(metricToDelete, metricID)
 		} else {
-			s.points[metricID] = newPoints
+			err = s.points.setPoints(metricID, newPoints)
+			if err != nil {
+				logger.V(2).Printf("Store: failed to set points of metric %d: %v", metricID, err)
+			}
 		}
 
 		totalPoints += len(newPoints)
@@ -317,7 +327,7 @@ func (s *Store) run(now time.Time) {
 
 	for _, metricID := range metricToDelete {
 		delete(s.metrics, metricID)
-		delete(s.points, metricID)
+		s.points.dropPoints(metricID)
 	}
 
 	logger.V(2).Printf("Store: deleted %d points. Total point: %d", deletedPoints, totalPoints)
@@ -377,16 +387,16 @@ func (s *Store) PushPoints(_ context.Context, points []types.MetricPoint) {
 	s.lock.Lock()
 	for _, point := range points {
 		metric, found, changed := s.metricGet(point.Labels, point.Annotations)
-		length := len(s.points[metric.metricID])
+		length := s.points.count(metric.metricID)
 
-		if length > 0 && s.points[metric.metricID][length-1].Time.Equal(point.Time) {
+		if length > 0 && s.points.getPoint(metric.metricID, length-1).Time.Equal(point.Time) {
 			continue
 		}
 
 		if math.Float64bits(point.Value) == value.StaleNaN {
 			// Metric is inactive, delete it
 			delete(s.metrics, metric.metricID)
-			delete(s.points, metric.metricID)
+			s.points.dropPoints(metric.metricID)
 
 			continue
 		}
@@ -401,7 +411,12 @@ func (s *Store) PushPoints(_ context.Context, points []types.MetricPoint) {
 
 		metric.lastPoint = s.nowFunc()
 		s.metrics[metric.metricID] = metric
-		s.points[metric.metricID] = append(s.points[metric.metricID], point.Point)
+
+		err := s.points.pushPoint(metric.metricID, point.Point)
+		if err != nil {
+			logger.V(2).Printf("Store: failed to push point of metric %d: %s", metric.metricID, err)
+		}
+
 		dedupPoints = append(dedupPoints, point)
 	}
 
