@@ -21,6 +21,7 @@ import (
 	"errors"
 	"glouton/inputs"
 	"glouton/types"
+	"math"
 	"sync"
 	"testing"
 	"time"
@@ -296,6 +297,10 @@ func TestMarkInactive(t *testing.T) {
 
 	c.RunGather(context.Background(), t2)
 
+	// Since StaleNaN is directly given as a float to avoid conversions with a loss of precision,
+	// expected values should also be represented as floats.
+	floatStaleNaN := math.Float64frombits(value.StaleNaN)
+
 	expectedCache = map[int]map[string]map[string]map[string]fieldCache{
 		1: {
 			"i1": {
@@ -327,7 +332,7 @@ func TestMarkInactive(t *testing.T) {
 		"i2": {`f__name="i2"`: 2., `f__name="i2b"`: 2.2},
 		"ia": {`fa__name="ia"`: 7.},
 	}
-	if diff := cmp.Diff(expectedT0, acc.fields[t0]); diff != "" {
+	if diff := cmp.Diff(expectedT0, acc.fields[t0], cmpopts.EquateNaNs()); diff != "" {
 		t.Errorf("Unexpected fields at t0:\n%v", diff)
 	}
 
@@ -337,14 +342,14 @@ func TestMarkInactive(t *testing.T) {
 	}
 
 	expectedT1 := msmsa{
-		"i1": {`f1__name="i1"`: value.StaleNaN, `f2__name="i1"`: 0.2, `f3__name="i1"`: 3.3},
-		"i2": {`f__name="i2"`: value.StaleNaN, `f__name="I2"`: 2., `f__name="i2b"`: 2.2},
+		"i1": {`f1__name="i1"`: floatStaleNaN, `f2__name="i1"`: 0.2, `f3__name="i1"`: 3.3},
+		"i2": {`f__name="i2"`: floatStaleNaN, `f__name="I2"`: 2., `f__name="i2b"`: 2.2},
 		"ia": {`fa__name="ia"`: 7.},
 	}
-	if diff := cmp.Diff(expectedT1, acc.fields[t1]); diff != "" {
+	if diff := cmp.Diff(expectedT1, acc.fields[t1], cmpopts.EquateNaNs()); diff != "" {
 		t.Errorf("Unexpected fields at t1:\n%v", diff)
 
-		if acc.fields[t1]["i1"]["f1"] != value.StaleNaN {
+		if acc.fields[t1]["i1"]["f1"] != floatStaleNaN {
 			t.Error("The value of f1 field should be StaleNaN.\n")
 		}
 	}
@@ -355,14 +360,14 @@ func TestMarkInactive(t *testing.T) {
 	}
 
 	expectedT2 := msmsa{
-		"i1": {`f2__name="i1"`: value.StaleNaN, `f3__name="i1"`: 3.},
+		"i1": {`f2__name="i1"`: floatStaleNaN, `f3__name="i1"`: 3.},
 		"i2": {`f__name="I2"`: 22., `f__name="i2b"`: 22.22},
 		"ia": {`fa__name="ia"`: 7.},
 	}
-	if diff := cmp.Diff(expectedT2, acc.fields[t2]); diff != "" {
+	if diff := cmp.Diff(expectedT2, acc.fields[t2], cmpopts.EquateNaNs()); diff != "" {
 		t.Errorf("Unexpected fields at t2:\n%v", diff)
 
-		if acc.fields[t2]["i1"]["f2"] != value.StaleNaN {
+		if acc.fields[t2]["i1"]["f2"] != floatStaleNaN {
 			t.Error("The value of f2 field should be StaleNaN.\n")
 		}
 	}
