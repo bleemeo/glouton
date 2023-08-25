@@ -39,6 +39,7 @@ type Cache struct {
 	dirty bool
 	state bleemeoTypes.State
 
+	cachedServiceLookup          map[common.ServiceNameInstance]bleemeoTypes.Service
 	cachedMetricLookup           map[string]bleemeoTypes.Metric
 	cachedFailRegistrationLookup map[string]bleemeoTypes.MetricRegistration
 }
@@ -106,6 +107,7 @@ func (c *Cache) SetServices(services []bleemeoTypes.Service) {
 	defer c.l.Unlock()
 
 	c.data.Services = services
+	c.cachedServiceLookup = nil
 	c.dirty = true
 }
 
@@ -380,6 +382,21 @@ func (c *Cache) MonitorsByAgentUUID() map[bleemeoTypes.AgentID]bleemeoTypes.Moni
 	}
 
 	return result
+}
+
+// ServiceLookupFromList return a map[ServiceNameInstance]Service of all known Services
+//
+// This is an optimized version of common.ServiceLookupFromList(c.Services()).
+// You should NOT mutate the result.
+func (c *Cache) ServiceLookupFromList() map[common.ServiceNameInstance]bleemeoTypes.Service {
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	if c.cachedServiceLookup == nil {
+		c.cachedServiceLookup = common.ServiceLookupFromList(c.data.Services)
+	}
+
+	return c.cachedServiceLookup
 }
 
 // ServicesByUUID returns a map service.id => service.

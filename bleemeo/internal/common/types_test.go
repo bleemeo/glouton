@@ -22,6 +22,8 @@ import (
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/google/go-cmp/cmp"
 )
 
 func TestMetricLookupFromList(t *testing.T) {
@@ -84,5 +86,64 @@ func TestMetricLookupFromList(t *testing.T) {
 
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("MetricLookupFromList(...) == %v, want %v", got, want)
+	}
+}
+
+func TestServiceLookupFromList(t *testing.T) {
+	input := []bleemeoTypes.Service{
+		{
+			ID:       "id-1",
+			Label:    "srv",
+			Instance: "S1",
+			Active:   true,
+		},
+		{
+			ID:       "id-2",
+			Label:    "srv",
+			Instance: "S2",
+			Active:   true,
+		},
+		{
+			ID:       "id-3",
+			Label:    "srv",
+			Instance: "S2",
+			Active:   false,
+		},
+		{
+			ID:       "id-4",
+			Label:    "other-srv",
+			Instance: "S",
+			Active:   false,
+		},
+		{
+			ID:       "id-5",
+			Label:    "other-srv",
+			Instance: "S",
+			Active:   true,
+		},
+		{
+			ID:       "id-6",
+			Label:    "other-srv",
+			Instance: "S",
+			Active:   true,
+		},
+		{
+			ID:       "id-7",
+			Label:    "service",
+			Instance: "S",
+			Active:   false,
+		},
+	}
+
+	want := map[ServiceNameInstance]bleemeoTypes.Service{
+		{"srv", "S1"}:      {ID: "id-1", Label: "srv", Instance: "S1", Active: true},
+		{"srv", "S2"}:      {ID: "id-2", Label: "srv", Instance: "S2", Active: true},
+		{"other-srv", "S"}: {ID: "id-5", Label: "other-srv", Instance: "S", Active: true},
+		{"service", "S"}:   {ID: "id-7", Label: "service", Instance: "S", Active: false},
+	}
+	got := ServiceLookupFromList(input)
+
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Fatalf("Unexpected output from ServiceLookupFromList():\n%v", diff)
 	}
 }

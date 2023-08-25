@@ -30,19 +30,6 @@ import (
 	"time"
 )
 
-type serviceNameInstance struct {
-	name     string
-	instance string
-}
-
-func (sni serviceNameInstance) String() string {
-	if sni.instance != "" {
-		return fmt.Sprintf("%s on %s", sni.name, sni.instance)
-	}
-
-	return sni.name
-}
-
 type servicePayload struct {
 	types.Service
 	Account string `json:"account"`
@@ -65,15 +52,18 @@ func servicePayloadFromDiscovery(service discovery.Service, listenAddresses stri
 	}
 }
 
-func serviceIndexByKey(services []types.Service) map[serviceNameInstance]int {
-	result := make(map[serviceNameInstance]int, len(services))
+func serviceIndexByKey(services []types.Service) map[common.ServiceNameInstance]int {
+	result := make(map[common.ServiceNameInstance]int, len(services))
 
 	for i, srv := range services {
-		key := serviceNameInstance{
-			name:     srv.Label,
-			instance: srv.Instance,
+		key := common.ServiceNameInstance{
+			Name:     srv.Label,
+			Instance: srv.Instance,
 		}
-		result[key] = i
+
+		if existing, ok := result[key]; !ok || !services[existing].Active {
+			result[key] = i
+		}
 	}
 
 	return result
@@ -115,8 +105,6 @@ func (s *Synchronizer) syncServices(ctx context.Context, fullSync bool, onlyEsse
 		if err != nil {
 			return false, err
 		}
-
-		s.serviceDeactivateDuplicates()
 	}
 
 	s.serviceRemoveDeletedFromRemote(localServices, previousServices)
@@ -176,11 +164,11 @@ func (s *Synchronizer) serviceUpdateList() error {
 func (s *Synchronizer) serviceRemoveDeletedFromRemote(localServices []discovery.Service, previousServices map[string]types.Service) {
 	newServices := s.option.Cache.ServicesByUUID()
 
-	deletedServiceNameInstance := make(map[serviceNameInstance]bool)
+	deletedServiceNameInstance := make(map[common.ServiceNameInstance]bool)
 
 	for _, srv := range previousServices {
 		if _, ok := newServices[srv.ID]; !ok {
-			key := serviceNameInstance{name: srv.Label, instance: srv.Instance}
+			key := common.ServiceNameInstance{Name: srv.Label, Instance: srv.Instance}
 			deletedServiceNameInstance[key] = true
 		}
 	}
@@ -188,9 +176,9 @@ func (s *Synchronizer) serviceRemoveDeletedFromRemote(localServices []discovery.
 	localServiceToDelete := make([]discovery.Service, 0)
 
 	for _, srv := range localServices {
-		key := serviceNameInstance{
-			name:     srv.Name,
-			instance: srv.Instance,
+		key := common.ServiceNameInstance{
+			Name:     srv.Name,
+			Instance: srv.Instance,
 		}
 		if _, ok := deletedServiceNameInstance[key]; ok {
 			localServiceToDelete = append(localServiceToDelete, srv)
@@ -214,9 +202,9 @@ func (s *Synchronizer) serviceRegisterAndUpdate(localServices []discovery.Servic
 			continue
 		}
 
-		key := serviceNameInstance{
-			name:     srv.Name,
-			instance: srv.Instance,
+		key := common.ServiceNameInstance{
+			Name:     srv.Name,
+			Instance: srv.Instance,
 		}
 
 		remoteIndex, remoteFound := remoteIndexByKey[key]
@@ -316,12 +304,12 @@ func (s *Synchronizer) serviceExcludeUnregistrable(services []discovery.Service)
 
 // serviceDeactivateNonLocal marks inactive the registered services that were not found in the discovery.
 func (s *Synchronizer) serviceDeactivateNonLocal(localServices []discovery.Service) {
-	localServiceExists := make(map[serviceNameInstance]bool, len(localServices))
+	localServiceExists := make(map[common.ServiceNameInstance]bool, len(localServices))
 
 	for _, srv := range localServices {
-		key := serviceNameInstance{
-			name:     srv.Name,
-			instance: srv.Instance,
+		key := common.ServiceNameInstance{
+			Name:     srv.Name,
+			Instance: srv.Instance,
 		}
 
 		localServiceExists[key] = true
@@ -329,7 +317,7 @@ func (s *Synchronizer) serviceDeactivateNonLocal(localServices []discovery.Servi
 
 	registeredServices := s.option.Cache.Services()
 	for _, remoteSrv := range registeredServices {
-		key := serviceNameInstance{name: remoteSrv.Label, instance: remoteSrv.Instance}
+		key := common.ServiceNameInstance{Name: remoteSrv.Label, Instance: remoteSrv.Instance}
 		if localServiceExists[key] {
 			continue
 		}
@@ -352,10 +340,10 @@ func (s *Synchronizer) serviceDeactivateNonLocal(localServices []discovery.Servi
 // removes them from the cache and marks them inactive on the Bleemeo API side.
 func (s *Synchronizer) serviceDeactivateDuplicates() {
 	services := s.option.Cache.ServicesByUUID()
-	duplicatedKey := make(map[serviceNameInstance]bool, len(services))
+	duplicatedKey := make(map[common.ServiceNameInstance]bool, len(services))
 
 	for id, service := range services {
-		key := serviceNameInstance{name: service.Label, instance: service.Instance}
+		key := common.ServiceNameInstance{Name: service.Label, Instance: service.Instance}
 		if !duplicatedKey[key] {
 			duplicatedKey[key] = true
 

@@ -17,6 +17,7 @@
 package common
 
 import (
+	"fmt"
 	bleemeoTypes "glouton/bleemeo/types"
 	"glouton/types"
 	"glouton/utils/metricutils"
@@ -30,6 +31,19 @@ const (
 	APIConfigItemKeyLength   int = 100
 	APIConfigItemPathLength  int = 250
 )
+
+type ServiceNameInstance struct {
+	Name     string
+	Instance string
+}
+
+func (sni ServiceNameInstance) String() string {
+	if sni.Instance != "" {
+		return fmt.Sprintf("%s on %s", sni.Name, sni.Instance)
+	}
+
+	return sni.Name
+}
 
 // MetricKey return a unique key that could be used in for lookup in cache.MetricLookupFromList
 //
@@ -81,6 +95,21 @@ func MetricLookupFromList(registeredMetrics []bleemeoTypes.Metric) map[string]bl
 	}
 
 	return registeredMetricsByKey
+}
+
+// ServiceLookupFromList returns a map[ServiceNameInstance]bleemeoTypes.Service
+// from the given list, while excluding any duplicated and inactive service.
+func ServiceLookupFromList(registeredServices []bleemeoTypes.Service) map[ServiceNameInstance]bleemeoTypes.Service {
+	registeredServicesByKey := make(map[ServiceNameInstance]bleemeoTypes.Service, len(registeredServices))
+
+	for _, v := range registeredServices {
+		key := ServiceNameInstance{Name: v.Label, Instance: v.Instance}
+		if existing, ok := registeredServicesByKey[key]; !ok || !existing.Active {
+			registeredServicesByKey[key] = v
+		}
+	}
+
+	return registeredServicesByKey
 }
 
 // IgnoreContainer returns true if the metric's container information should be ignored.
