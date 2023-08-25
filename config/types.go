@@ -49,7 +49,7 @@ type Config struct {
 	Tags                     []string             `yaml:"tags"`
 	Telegraf                 Telegraf             `yaml:"telegraf"`
 	Thresholds               map[string]Threshold `yaml:"thresholds"`
-	VSphere                  VSphere              `yaml:"vsphere"`
+	VSpheres                 []VSphere            `yaml:"vspheres"`
 	Web                      Web                  `yaml:"web"`
 	Zabbix                   Zabbix               `yaml:"zabbix"`
 }
@@ -409,8 +409,9 @@ type ContainerRuntimeAddresses struct {
 }
 
 type VSphere struct {
-	URLs               []string `yaml:"urls"`
-	Username           string   `yaml:"username"`
-	Password           string   `yaml:"password"`
-	InsecureSkipVerify bool     `yaml:"insecure_skip_verify"`
+	URL                string `yaml:"url"`
+	Username           string `yaml:"username"`
+	Password           string `yaml:"password"`
+	InsecureSkipVerify bool   `yaml:"insecure_skip_verify"`
+	MonitorVMs         bool   `yaml:"monitor_vms"`
 }

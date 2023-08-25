@@ -340,12 +340,7 @@ func DefaultConfig() Config { //nolint:maintidx
 			},
 		},
 		Thresholds: map[string]Threshold{},
-		VSphere: VSphere{
-			URLs:               []string{}, // No URLs means disabled
-			Username:           "",
-			Password:           "",
-			InsecureSkipVerify: false,
-		},
+		VSpheres:   []VSphere{},
 		Web: Web{
 			Enable: true,
 			Endpoints: WebEndpoints{

@@ -10,7 +10,7 @@ import (
 	"github.com/influxdata/telegraf/plugins/inputs/vsphere"
 )
 
-func New(urls []string, username, password string, insecureSkipVerify bool) (telegraf.Input, *inputs.GathererOptions, error) {
+func New(url string, username, password string, insecureSkipVerify, monitorVMs bool) (telegraf.Input, *inputs.GathererOptions, error) {
 	input, ok := telegraf_inputs.Inputs["vsphere"]
 	if !ok {
 		return nil, nil, inputs.ErrDisabledInput
@@ -21,10 +21,11 @@ func New(urls []string, username, password string, insecureSkipVerify bool) (tel
 		return nil, nil, inputs.ErrUnexpectedType
 	}
 
-	vsphereInput.Vcenters = urls
+	vsphereInput.Vcenters = []string{url}
 	vsphereInput.Username = username
 	vsphereInput.Password = password
 
+	vsphereInput.VMInstances = monitorVMs
 	vsphereInput.VMMetricInclude = []string{
 		"cpu.usage.average",
 		"cpu.latency.average",

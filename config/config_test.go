@@ -351,6 +351,15 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 				HighCritical: nil,
 			},
 		},
+		VSpheres: []VSphere{
+			{
+				URL:                "https://esxi.test",
+				Username:           "root",
+				Password:           "passwd",
+				InsecureSkipVerify: false,
+				MonitorVMs:         true,
+			},
+		},
 		Web: Web{
 			Enable: true,
 			Endpoints: WebEndpoints{

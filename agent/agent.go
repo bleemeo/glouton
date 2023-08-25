@@ -1396,9 +1396,9 @@ func (a *agent) registerInputs() {
 	input, opts, err := temp.New()
 	a.registerInput("Temp", input, opts, err)
 
-	if len(a.config.VSphere.URLs) != 0 {
-		input, opts, err := vsphere.New(a.config.VSphere.URLs, a.config.VSphere.Username, a.config.VSphere.Password, a.config.VSphere.InsecureSkipVerify)
-		a.registerInput("vSphere", input, opts, err)
+	for i, vSphere := range a.config.VSpheres {
+		input, opts, err := vsphere.New(vSphere.URL, vSphere.Username, vSphere.Password, vSphere.InsecureSkipVerify, vSphere.MonitorVMs)
+		a.registerInput(fmt.Sprintf("vSphere-%d", i+1), input, opts, err)
 	}
 }
 
