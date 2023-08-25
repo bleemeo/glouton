@@ -409,7 +409,6 @@ type ContainerRuntimeAddresses struct {
 }
 
 type VSphere struct {
-	Enable             bool     `yaml:"enable"`
 	URLs               []string `yaml:"urls"`
 	Username           string   `yaml:"username"`
 	Password           string   `yaml:"password"`

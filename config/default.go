@@ -341,8 +341,7 @@ func DefaultConfig() Config { //nolint:maintidx
 		},
 		Thresholds: map[string]Threshold{},
 		VSphere: VSphere{
-			Enable:             false,
-			URLs:               []string{},
+			URLs:               []string{}, // No URLs means disabled
 			Username:           "",
 			Password:           "",
 			InsecureSkipVerify: false,
