@@ -211,7 +211,7 @@ func (ima *inactiveMarkerAccumulator) deactivateUnseenMetrics() {
 				// Publish the StaleNaN value to mark the metric as inactive.
 				fieldsMap := map[string]any{
 					// We need to convert the StaleNaN value to a float this way to avoid
-					// the conversion float64(uint64) which implies a precision loss.
+					// the conversion float64(value.StaleNaN) which gives an unexpected result.
 					// This would have resulted in the value not being handled as StaleNaN later.
 					oldField: math.Float64frombits(value.StaleNaN),
 				}

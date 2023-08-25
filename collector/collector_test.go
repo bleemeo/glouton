@@ -332,7 +332,7 @@ func TestMarkInactive(t *testing.T) {
 		"i2": {`f__name="i2"`: 2., `f__name="i2b"`: 2.2},
 		"ia": {`fa__name="ia"`: 7.},
 	}
-	if diff := cmp.Diff(expectedT0, acc.fields[t0], cmpopts.EquateNaNs()); diff != "" {
+	if diff := cmp.Diff(expectedT0, acc.fields[t0], cmpStaleNaN()); diff != "" {
 		t.Errorf("Unexpected fields at t0:\n%v", diff)
 	}
 
@@ -346,7 +346,7 @@ func TestMarkInactive(t *testing.T) {
 		"i2": {`f__name="i2"`: floatStaleNaN, `f__name="I2"`: 2., `f__name="i2b"`: 2.2},
 		"ia": {`fa__name="ia"`: 7.},
 	}
-	if diff := cmp.Diff(expectedT1, acc.fields[t1], cmpopts.EquateNaNs()); diff != "" {
+	if diff := cmp.Diff(expectedT1, acc.fields[t1], cmpStaleNaN()); diff != "" {
 		t.Errorf("Unexpected fields at t1:\n%v", diff)
 
 		if acc.fields[t1]["i1"]["f1"] != floatStaleNaN {
@@ -364,7 +364,7 @@ func TestMarkInactive(t *testing.T) {
 		"i2": {`f__name="I2"`: 22., `f__name="i2b"`: 22.22},
 		"ia": {`fa__name="ia"`: 7.},
 	}
-	if diff := cmp.Diff(expectedT2, acc.fields[t2], cmpopts.EquateNaNs()); diff != "" {
+	if diff := cmp.Diff(expectedT2, acc.fields[t2], cmpStaleNaN()); diff != "" {
 		t.Errorf("Unexpected fields at t2:\n%v", diff)
 
 		if acc.fields[t2]["i1"]["f2"] != floatStaleNaN {
@@ -376,4 +376,15 @@ func TestMarkInactive(t *testing.T) {
 	if diff := cmp.Diff(expectedAnnotT2, acc.annotations[t2]); diff != "" {
 		t.Errorf("Unexpected annotations at t2:\n%v", diff)
 	}
+}
+
+func cmpStaleNaN() cmp.Option {
+	f := func(x, y float64) bool {
+		return math.IsNaN(x) && math.IsNaN(y)
+	}
+	comparer := func(x, y float64) bool {
+		return value.IsStaleNaN(x) == value.IsStaleNaN(y)
+	}
+
+	return cmp.FilterValues(f, cmp.Comparer(comparer))
 }
