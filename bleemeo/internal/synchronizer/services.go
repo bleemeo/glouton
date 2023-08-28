@@ -52,23 +52,6 @@ func servicePayloadFromDiscovery(service discovery.Service, listenAddresses stri
 	}
 }
 
-func serviceIndexByKey(services []types.Service) map[common.ServiceNameInstance]int {
-	result := make(map[common.ServiceNameInstance]int, len(services))
-
-	for i, srv := range services {
-		key := common.ServiceNameInstance{
-			Name:     srv.Label,
-			Instance: srv.Instance,
-		}
-
-		if existing, ok := result[key]; !ok || !services[existing].Active {
-			result[key] = i
-		}
-	}
-
-	return result
-}
-
 func getListenAddress(addresses []facts.ListenAddress) string {
 	stringList := make([]string, 0, len(addresses))
 
@@ -126,8 +109,6 @@ func (s *Synchronizer) syncServices(ctx context.Context, fullSync bool, onlyEsse
 	}
 
 	s.serviceDeactivateNonLocal(localServices)
-
-	s.serviceDeactivateDuplicates()
 
 	return false, nil
 }
@@ -190,7 +171,8 @@ func (s *Synchronizer) serviceRemoveDeletedFromRemote(localServices []discovery.
 
 func (s *Synchronizer) serviceRegisterAndUpdate(localServices []discovery.Service) error {
 	remoteServices := s.option.Cache.Services()
-	remoteIndexByKey := serviceIndexByKey(remoteServices)
+	remoteServicesByKey := common.ServiceLookupFromList(remoteServices)
+	registeredServices := s.option.Cache.ServicesByUUID()
 	params := map[string]string{
 		"fields": "id,label,instance,listen_addresses,exe_path,stack,active,account,agent",
 	}
@@ -207,13 +189,7 @@ func (s *Synchronizer) serviceRegisterAndUpdate(localServices []discovery.Servic
 			Instance: srv.Instance,
 		}
 
-		remoteIndex, remoteFound := remoteIndexByKey[key]
-
-		var remoteSrv types.Service
-
-		if remoteFound {
-			remoteSrv = remoteServices[remoteIndex]
-		}
+		remoteSrv, remoteFound := remoteServicesByKey[key]
 
 		// Skip updating the remote service if the service is already up to date.
 		listenAddresses := getListenAddress(srv.ListenAddresses)
@@ -231,7 +207,7 @@ func (s *Synchronizer) serviceRegisterAndUpdate(localServices []discovery.Servic
 				return err
 			}
 
-			remoteServices[remoteIndex] = result
+			registeredServices[result.ID] = result
 			logger.V(2).Printf("Service %v updated with UUID %s", key, result.ID)
 		} else {
 			_, err := s.client.Do(s.ctx, "POST", "v1/service/", params, payload, &result)
@@ -239,7 +215,7 @@ func (s *Synchronizer) serviceRegisterAndUpdate(localServices []discovery.Servic
 				return err
 			}
 
-			remoteServices = append(remoteServices, result)
+			registeredServices[result.ID] = result
 			logger.V(2).Printf("Service %v registered with UUID %s", key, result.ID)
 		}
 
@@ -262,7 +238,13 @@ func (s *Synchronizer) serviceRegisterAndUpdate(localServices []discovery.Servic
 		}
 	}
 
-	s.option.Cache.SetServices(remoteServices)
+	finalServices := make([]types.Service, 0, len(registeredServices))
+
+	for _, srv := range registeredServices {
+		finalServices = append(finalServices, srv)
+	}
+
+	s.option.Cache.SetServices(finalServices)
 
 	return nil
 }
@@ -315,16 +297,24 @@ func (s *Synchronizer) serviceDeactivateNonLocal(localServices []discovery.Servi
 		localServiceExists[key] = true
 	}
 
-	registeredServices := s.option.Cache.Services()
+	registeredServices := s.option.Cache.ServicesByUUID()
+	duplicatedKey := make(map[common.ServiceNameInstance]bool, len(registeredServices))
+
 	for _, remoteSrv := range registeredServices {
 		key := common.ServiceNameInstance{Name: remoteSrv.Label, Instance: remoteSrv.Instance}
-		if localServiceExists[key] {
-			continue
+		if !duplicatedKey[key] {
+			duplicatedKey[key] = true
+
+			if localServiceExists[key] {
+				continue
+			}
+
+			if !remoteSrv.Active {
+				continue
+			}
 		}
 
-		if !remoteSrv.Active {
-			continue
-		}
+		logger.V(2).Printf("Mark inactive the service %v (uuid %s)", key, remoteSrv.ID)
 
 		// Deactivate the remote service that is not present locally.
 		err := s.serviceDeactivate(remoteSrv)
@@ -334,41 +324,6 @@ func (s *Synchronizer) serviceDeactivateNonLocal(localServices []discovery.Servi
 			continue
 		}
 	}
-}
-
-// serviceDeactivateDuplicates looks for duplicate services,
-// removes them from the cache and marks them inactive on the Bleemeo API side.
-func (s *Synchronizer) serviceDeactivateDuplicates() {
-	services := s.option.Cache.ServicesByUUID()
-	duplicatedKey := make(map[common.ServiceNameInstance]bool, len(services))
-
-	for id, service := range services {
-		key := common.ServiceNameInstance{Name: service.Label, Instance: service.Instance}
-		if !duplicatedKey[key] {
-			duplicatedKey[key] = true
-
-			continue
-		}
-
-		logger.V(2).Printf("Mark inactive the service %v (uuid %s)", key, service.ID)
-
-		err := s.serviceDeactivate(service)
-		if err != nil {
-			logger.V(1).Printf("Failed to deactivate duplicate service %v on Bleemeo API: %v", key, err)
-
-			continue
-		}
-
-		delete(services, id)
-	}
-
-	servicesWithoutDuplicates := make([]types.Service, 0, len(services))
-
-	for _, service := range services {
-		servicesWithoutDuplicates = append(servicesWithoutDuplicates, service)
-	}
-
-	s.option.Cache.SetServices(servicesWithoutDuplicates)
 }
 
 // serviceDeactivate makes a PUT request to the Bleemeo API to mark the given service as inactive.

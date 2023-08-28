@@ -98,7 +98,8 @@ func MetricLookupFromList(registeredMetrics []bleemeoTypes.Metric) map[string]bl
 }
 
 // ServiceLookupFromList returns a map[ServiceNameInstance]bleemeoTypes.Service
-// from the given list, while excluding any duplicated and inactive service.
+// from the given list, while excluding any duplicated service.
+// It prioritizes the exclusion of inactive services over active ones.
 func ServiceLookupFromList(registeredServices []bleemeoTypes.Service) map[ServiceNameInstance]bleemeoTypes.Service {
 	registeredServicesByKey := make(map[ServiceNameInstance]bleemeoTypes.Service, len(registeredServices))
 
