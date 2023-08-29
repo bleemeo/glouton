@@ -119,7 +119,7 @@ func ServiceLookupFromList(registeredServices []bleemeoTypes.Service) map[Servic
 
 			srvCreationDate, err := time.Parse(time.RFC3339, srv.CreationDate)
 			if err != nil {
-				logger.V(1).Printf("Failed to parse creation date %q of service %s: %v", existing.CreationDate, existing.ID, err)
+				logger.V(1).Printf("Failed to parse creation date %q of service %s: %v", srv.CreationDate, srv.ID, err)
 
 				continue
 			}
