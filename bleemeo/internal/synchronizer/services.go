@@ -299,25 +299,14 @@ func (s *Synchronizer) serviceDeactivateNonLocal(localServices []discovery.Servi
 
 	registeredServices := s.option.Cache.Services()
 	remoteServicesByKey := common.ServiceLookupFromList(registeredServices)
-	duplicatedKey := make(map[common.ServiceNameInstance]bool, len(registeredServices))
 	finalServices := make([]types.Service, 0, len(registeredServices))
 
 	for _, remoteSrv := range registeredServices {
 		key := common.ServiceNameInstance{Name: remoteSrv.Label, Instance: remoteSrv.Instance}
-		if !duplicatedKey[key] {
-			if localServiceExists[key] || !remoteSrv.Active {
-				duplicatedKey[key] = true
+		if !remoteSrv.Active || (remoteSrv.ID == remoteServicesByKey[key].ID && localServiceExists[key]) {
+			finalServices = append(finalServices, remoteSrv)
 
-				finalServices = append(finalServices, remoteSrv)
-
-				continue
-			}
-		} else {
-			if remoteSrv.ID == remoteServicesByKey[key].ID || !remoteSrv.Active {
-				finalServices = append(finalServices, remoteSrv)
-
-				continue
-			}
+			continue
 		}
 
 		logger.V(2).Printf("Mark inactive the service %v (uuid %s)", key, remoteSrv.ID)
