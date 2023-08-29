@@ -299,17 +299,16 @@ func (s *Synchronizer) serviceDeactivateNonLocal(localServices []discovery.Servi
 
 	registeredServices := s.option.Cache.ServicesByUUID()
 	duplicatedKey := make(map[common.ServiceNameInstance]bool, len(registeredServices))
+	finalServices := make([]types.Service, 0, len(registeredServices))
 
 	for _, remoteSrv := range registeredServices {
 		key := common.ServiceNameInstance{Name: remoteSrv.Label, Instance: remoteSrv.Instance}
 		if !duplicatedKey[key] {
 			duplicatedKey[key] = true
 
-			if localServiceExists[key] {
-				continue
-			}
+			if localServiceExists[key] || !remoteSrv.Active {
+				finalServices = append(finalServices, remoteSrv)
 
-			if !remoteSrv.Active {
 				continue
 			}
 		}
@@ -324,6 +323,8 @@ func (s *Synchronizer) serviceDeactivateNonLocal(localServices []discovery.Servi
 			continue
 		}
 	}
+
+	s.option.Cache.SetServices(finalServices)
 }
 
 // serviceDeactivate makes a PUT request to the Bleemeo API to mark the given service as inactive.
