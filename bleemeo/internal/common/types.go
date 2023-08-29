@@ -19,8 +19,10 @@ package common
 import (
 	"fmt"
 	bleemeoTypes "glouton/bleemeo/types"
+	"glouton/logger"
 	"glouton/types"
 	"glouton/utils/metricutils"
+	"time"
 )
 
 // Maximal length of fields on Bleemeo API.
@@ -99,14 +101,32 @@ func MetricLookupFromList(registeredMetrics []bleemeoTypes.Metric) map[string]bl
 
 // ServiceLookupFromList returns a map[ServiceNameInstance]bleemeoTypes.Service
 // from the given list, while excluding any duplicated service.
-// It prioritizes the exclusion of inactive services over active ones.
+// It prioritizes the exclusion of oldest services over the youngest ones.
 func ServiceLookupFromList(registeredServices []bleemeoTypes.Service) map[ServiceNameInstance]bleemeoTypes.Service {
 	registeredServicesByKey := make(map[ServiceNameInstance]bleemeoTypes.Service, len(registeredServices))
 
-	for _, v := range registeredServices {
-		key := ServiceNameInstance{Name: v.Label, Instance: v.Instance}
-		if existing, ok := registeredServicesByKey[key]; !ok || !existing.Active {
-			registeredServicesByKey[key] = v
+	for _, srv := range registeredServices {
+		key := ServiceNameInstance{Name: srv.Label, Instance: srv.Instance}
+		if existing, ok := registeredServicesByKey[key]; !ok {
+			registeredServicesByKey[key] = srv
+		} else { // Compare creation dates and keep the youngest service
+			existingCreationDate, err := time.Parse(time.RFC3339, existing.CreationDate)
+			if err != nil {
+				logger.V(1).Printf("Failed to parse creation date %q of service %s: %v", existing.CreationDate, existing.ID, err)
+
+				continue
+			}
+
+			srvCreationDate, err := time.Parse(time.RFC3339, srv.CreationDate)
+			if err != nil {
+				logger.V(1).Printf("Failed to parse creation date %q of service %s: %v", existing.CreationDate, existing.ID, err)
+
+				continue
+			}
+
+			if srvCreationDate.After(existingCreationDate) {
+				registeredServicesByKey[key] = srv
+			}
 		}
 	}
 

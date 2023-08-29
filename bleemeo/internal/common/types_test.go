@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 )
 
 func TestMetricLookupFromList(t *testing.T) {
@@ -92,46 +93,53 @@ func TestMetricLookupFromList(t *testing.T) {
 func TestServiceLookupFromList(t *testing.T) {
 	input := []bleemeoTypes.Service{
 		{
-			ID:       "id-1",
-			Label:    "srv",
-			Instance: "S1",
-			Active:   true,
+			ID:           "id-1",
+			Label:        "srv",
+			Instance:     "S1",
+			Active:       true,
+			CreationDate: "2023-08-28T13:21:15.539941Z",
 		},
 		{
-			ID:       "id-2",
-			Label:    "srv",
-			Instance: "S2",
-			Active:   true,
+			ID:           "id-2",
+			Label:        "srv",
+			Instance:     "S2",
+			Active:       true,
+			CreationDate: "2023-08-28T14:12:45.647132Z",
 		},
 		{
-			ID:       "id-3",
-			Label:    "srv",
-			Instance: "S2",
-			Active:   false,
+			ID:           "id-3",
+			Label:        "srv",
+			Instance:     "S2",
+			Active:       false,
+			CreationDate: "2023-08-28T13:58:02.332047Z",
 		},
 		{
-			ID:       "id-4",
-			Label:    "other-srv",
-			Instance: "S",
-			Active:   false,
+			ID:           "id-4",
+			Label:        "other-srv",
+			Instance:     "S",
+			Active:       false,
+			CreationDate: "2023-08-27T15:21:27.104098Z",
 		},
 		{
-			ID:       "id-5",
-			Label:    "other-srv",
-			Instance: "S",
-			Active:   true,
+			ID:           "id-5",
+			Label:        "other-srv",
+			Instance:     "S",
+			Active:       true,
+			CreationDate: "2023-08-28T17:25:36.745169Z",
 		},
 		{
-			ID:       "id-6",
-			Label:    "other-srv",
-			Instance: "S",
-			Active:   true,
+			ID:           "id-6",
+			Label:        "other-srv",
+			Instance:     "S",
+			Active:       true,
+			CreationDate: "2023-08-28T09:15:28.134825Z",
 		},
 		{
-			ID:       "id-7",
-			Label:    "service",
-			Instance: "S",
-			Active:   false,
+			ID:           "id-7",
+			Label:        "service",
+			Instance:     "S",
+			Active:       false,
+			CreationDate: "2023-08-29T13:21:15.539941Z",
 		},
 	}
 
@@ -143,7 +151,7 @@ func TestServiceLookupFromList(t *testing.T) {
 	}
 	got := ServiceLookupFromList(input)
 
-	if diff := cmp.Diff(want, got); diff != "" {
+	if diff := cmp.Diff(want, got, cmpopts.IgnoreFields(bleemeoTypes.Service{}, "CreationDate")); diff != "" {
 		t.Fatalf("Unexpected output from ServiceLookupFromList():\n%v", diff)
 	}
 }

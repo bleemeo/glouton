@@ -116,7 +116,7 @@ func (s *Synchronizer) syncServices(ctx context.Context, fullSync bool, onlyEsse
 func (s *Synchronizer) serviceUpdateList() error {
 	params := map[string]string{
 		"agent":  s.agentID,
-		"fields": "id,label,instance,listen_addresses,exe_path,stack,active",
+		"fields": "id,label,instance,listen_addresses,exe_path,stack,active,created_at",
 	}
 
 	result, err := s.client.Iter(s.ctx, "service", params)
@@ -174,7 +174,7 @@ func (s *Synchronizer) serviceRegisterAndUpdate(localServices []discovery.Servic
 	remoteServicesByKey := common.ServiceLookupFromList(remoteServices)
 	registeredServices := s.option.Cache.ServicesByUUID()
 	params := map[string]string{
-		"fields": "id,label,instance,listen_addresses,exe_path,stack,active,account,agent",
+		"fields": "id,label,instance,listen_addresses,exe_path,stack,active,account,agent,created_at",
 	}
 
 	for _, srv := range localServices {
@@ -297,16 +297,23 @@ func (s *Synchronizer) serviceDeactivateNonLocal(localServices []discovery.Servi
 		localServiceExists[key] = true
 	}
 
-	registeredServices := s.option.Cache.ServicesByUUID()
+	registeredServices := s.option.Cache.Services()
+	remoteServicesByKey := common.ServiceLookupFromList(registeredServices)
 	duplicatedKey := make(map[common.ServiceNameInstance]bool, len(registeredServices))
 	finalServices := make([]types.Service, 0, len(registeredServices))
 
 	for _, remoteSrv := range registeredServices {
 		key := common.ServiceNameInstance{Name: remoteSrv.Label, Instance: remoteSrv.Instance}
 		if !duplicatedKey[key] {
-			duplicatedKey[key] = true
-
 			if localServiceExists[key] || !remoteSrv.Active {
+				duplicatedKey[key] = true
+
+				finalServices = append(finalServices, remoteSrv)
+
+				continue
+			}
+		} else {
+			if remoteSrv.ID == remoteServicesByKey[key].ID || !remoteSrv.Active {
 				finalServices = append(finalServices, remoteSrv)
 
 				continue
@@ -316,21 +323,23 @@ func (s *Synchronizer) serviceDeactivateNonLocal(localServices []discovery.Servi
 		logger.V(2).Printf("Mark inactive the service %v (uuid %s)", key, remoteSrv.ID)
 
 		// Deactivate the remote service that is not present locally.
-		err := s.serviceDeactivate(remoteSrv)
+		result, err := s.serviceDeactivate(remoteSrv)
 		if err != nil {
 			logger.V(1).Printf("Failed to deactivate service %v on Bleemeo API: %v", key, err)
 
 			continue
 		}
+
+		finalServices = append(finalServices, result)
 	}
 
 	s.option.Cache.SetServices(finalServices)
 }
 
 // serviceDeactivate makes a PUT request to the Bleemeo API to mark the given service as inactive.
-func (s *Synchronizer) serviceDeactivate(service types.Service) error {
+func (s *Synchronizer) serviceDeactivate(service types.Service) (types.Service, error) {
 	params := map[string]string{
-		"fields": "id,label,instance,listen_addresses,exe_path,stack,active,account,agent",
+		"fields": "id,label,instance,listen_addresses,exe_path,stack,active,account,agent,created_at",
 	}
 
 	payload := servicePayload{
@@ -346,7 +355,9 @@ func (s *Synchronizer) serviceDeactivate(service types.Service) error {
 		Agent:   s.agentID,
 	}
 
-	_, err := s.client.Do(s.ctx, "PUT", fmt.Sprintf("v1/service/%s/", service.ID), params, payload, nil)
+	var result types.Service
 
-	return err
+	_, err := s.client.Do(s.ctx, "PUT", fmt.Sprintf("v1/service/%s/", service.ID), params, payload, &result)
+
+	return result, err
 }
