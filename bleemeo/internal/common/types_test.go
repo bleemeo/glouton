@@ -141,13 +141,28 @@ func TestServiceLookupFromList(t *testing.T) {
 			Active:       false,
 			CreationDate: "2023-08-29T13:21:15.539941Z",
 		},
+		{
+			ID:           "id-8",
+			Label:        "create_time_second",
+			Instance:     "",
+			Active:       false,
+			CreationDate: "2023-08-28T09:15:28Z",
+		},
+		{
+			ID:           "id-9",
+			Label:        "create_time_second",
+			Instance:     "",
+			Active:       false,
+			CreationDate: "2023-08-29T13:21:15Z",
+		},
 	}
 
 	want := map[ServiceNameInstance]bleemeoTypes.Service{
-		{"srv", "S1"}:      {ID: "id-1", Label: "srv", Instance: "S1", Active: true},
-		{"srv", "S2"}:      {ID: "id-2", Label: "srv", Instance: "S2", Active: true},
-		{"other-srv", "S"}: {ID: "id-5", Label: "other-srv", Instance: "S", Active: true},
-		{"service", "S"}:   {ID: "id-7", Label: "service", Instance: "S", Active: false},
+		{"srv", "S1"}:              {ID: "id-1", Label: "srv", Instance: "S1", Active: true},
+		{"srv", "S2"}:              {ID: "id-2", Label: "srv", Instance: "S2", Active: true},
+		{"other-srv", "S"}:         {ID: "id-5", Label: "other-srv", Instance: "S", Active: true},
+		{"service", "S"}:           {ID: "id-7", Label: "service", Instance: "S", Active: false},
+		{"create_time_second", ""}: {ID: "id-9", Label: "create_time_second", Instance: "", Active: false},
 	}
 	got := ServiceLookupFromList(input)
 
