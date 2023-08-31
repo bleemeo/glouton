@@ -278,7 +278,7 @@ func (s *Synchronizer) DiagnosticArchive(_ context.Context, archive types.Archiv
 	return enc.Encode(obj)
 }
 
-// Run run the Connector.
+// Run runs the Synchronizer.
 func (s *Synchronizer) Run(ctx context.Context) error {
 	s.ctx = ctx
 	s.startedAt = s.now()
