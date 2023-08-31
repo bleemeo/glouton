@@ -959,17 +959,11 @@ type metricRegisterer struct {
 
 func newMetricRegisterer(s *Synchronizer) *metricRegisterer {
 	fails := s.option.Cache.MetricRegistrationsFail()
-	services := s.option.Cache.Services()
-	servicesByKey := make(map[common.ServiceNameInstance]bleemeoTypes.Service, len(services))
+	servicesByKey := s.option.Cache.ServiceLookupFromList()
 	failedRegistrationByKey := make(map[string]bleemeoTypes.MetricRegistration, len(fails))
 
 	for _, v := range s.option.Cache.MetricRegistrationsFail() {
 		failedRegistrationByKey[v.LabelsText] = v
-	}
-
-	for _, v := range services {
-		k := common.ServiceNameInstance{Name: v.Label, Instance: v.Instance}
-		servicesByKey[k] = v
 	}
 
 	return &metricRegisterer{
