@@ -41,7 +41,8 @@ type Collector struct {
 	currentDelay time.Duration
 	updateDelayC chan interface{}
 	l            sync.Mutex
-	fieldCaches  map[int]map[string]map[string]map[string]fieldCache
+	// map inputID -> measurement -> field name -> tags key/value -> fieldCache
+	fieldCaches map[int]map[string]map[string]map[string]fieldCache
 }
 
 // New returns a Collector with default option
@@ -138,8 +139,8 @@ func (c *Collector) inputsForCollection() map[int]telegraf.Input {
 
 	inputsCopy := make(map[int]telegraf.Input, len(c.inputs))
 
-	for i, v := range c.inputs {
-		inputsCopy[i] = v
+	for id, v := range c.inputs {
+		inputsCopy[id] = v
 	}
 
 	return inputsCopy
@@ -154,8 +155,8 @@ func (c *Collector) runOnce(t0 time.Time) {
 
 	var wg sync.WaitGroup
 
-	for i, input := range inputsCopy {
-		i, input := i, input
+	for id, input := range inputsCopy {
+		id, input := id, input
 
 		wg.Add(1)
 
@@ -166,7 +167,7 @@ func (c *Collector) runOnce(t0 time.Time) {
 			ima := &inactiveMarkerAccumulator{
 				FixedTimeAccumulator: acc,
 				latestValues:         make(map[string]map[string]map[string]fieldCache),
-				fieldCaches:          c.fieldCaches[i],
+				fieldCaches:          c.fieldCaches[id],
 			}
 			// Errors are already logged by the input.
 			_ = input.Gather(ima)
@@ -231,7 +232,9 @@ func (ima *inactiveMarkerAccumulator) deactivateUnseenMetrics() {
 		delete(ima.fieldCaches, k)
 	}
 
-	// Update the cache with the metrics that are existing right now
+	// Update the cache with the metrics that are existing right now;
+	// we must copy the map value-by-value, because doing `ima.fieldCaches = ima.latestValues`
+	// would lose the persistence of ima.fieldCaches, which is an item of the Collector.fieldCaches map.
 	for measurement, fields := range ima.latestValues {
 		if _, ok := ima.fieldCaches[measurement]; !ok {
 			ima.fieldCaches[measurement] = make(map[string]map[string]fieldCache)
