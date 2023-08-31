@@ -316,6 +316,12 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 
 	successiveAuthErrors := 0
 
+	// We schedule a metric synchronization for in a few minutes to permit
+	// the deactivation of metrics whose item has disappeared between
+	// the startup of Glouton and the metrics gracePeriod.
+	// 11min is the time needed to run two metric collections.
+	s.scheduleMetricSync(ctx, 11*time.Minute)
+
 	var minimalDelay time.Duration
 
 	if len(s.option.Cache.FactsByKey()) != 0 {
@@ -415,6 +421,24 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 	}
 
 	return nil //nolint:nilerr
+}
+
+// scheduleMetricSync will run s.syncMetrics after the given delay, in a new goroutine.
+func (s *Synchronizer) scheduleMetricSync(ctx context.Context, delay time.Duration) {
+	go func() {
+		defer crashreport.ProcessPanic()
+
+		timer := time.NewTimer(delay)
+
+		select {
+		case <-timer.C:
+			_, err := s.syncMetrics(ctx, false, false)
+			if err != nil {
+				logger.V(1).Printf("Delayed metrics sync failed: %v", err)
+			}
+		case <-ctx.Done(): // return
+		}
+	}()
 }
 
 // DiagnosticPage return useful information to troubleshoot issue.
