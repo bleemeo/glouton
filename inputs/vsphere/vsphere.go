@@ -20,6 +20,7 @@ import (
 	"glouton/inputs"
 	"glouton/inputs/internal"
 	"strings"
+	"time"
 
 	"github.com/influxdata/telegraf"
 	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"
@@ -58,11 +59,10 @@ func New(url string, username, password string, insecureSkipVerify, monitorVMs b
 		"cpu.usage.average",
 		"mem.active.average",
 		"mem.swapused.average",
-		"mem.capacity.provisioned.average",
+		"mem.totalCapacity.average",
 		"mem.usage.average",
-		"disk.throughput.contention.average",
-		"disk.throughput.usage.average",
-		"net.throughput.usage.average",
+		"disk.usage.average",
+		"net.transmitted.average",
 	}
 	vsphereInput.ResourcePoolMetricExclude = []string{"*"}
 	vsphereInput.ClusterMetricExclude = []string{"*"}
@@ -79,7 +79,7 @@ func New(url string, username, password string, insecureSkipVerify, monitorVMs b
 		Name: "vSphere",
 	}
 
-	return internalInput, &inputs.GathererOptions{}, nil
+	return internalInput, &inputs.GathererOptions{MinInterval: 20 * time.Second}, nil
 }
 
 func renameMetrics(currentContext internal.GatherContext, metricName string) (newMeasurement string, newMetricName string) {
@@ -90,27 +90,40 @@ func renameMetrics(currentContext internal.GatherContext, metricName string) (ne
 }
 
 func transformMetrics(currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {
-	_, _ = currentContext, originalFields
+	_ = originalFields
 
-	factors := map[string]float64{
-		"vsphere_vm_mem_swapped_average":                  1000, // KB to B
-		"vsphere_vm_disk_read_average":                    1000, // KB to B
-		"vsphere_vm_disk_write_average":                   1000, // KB/s to B/s
-		"vsphere_vm_disk_usage_average":                   1000, // KB/s to B/s
-		"vsphere_vm_net_transmitted_average":              1000, // KB/s to B/s
-		"vsphere_vm_net_received_average":                 1000, // KB/s to B/s
-		"vsphere_vm_net_usage_average":                    1000, // KB/s to B/s
-		"vsphere_host_mem_active_average":                 1000, // KB to B
-		"vsphere_host_mem_swapused_average":               1000, // KB to B
-		"vsphere_host_mem_capacity_provisioned_average":   1000, // KB to B
-		"vsphere_host_disk_throughput_contention_average": 1e-3, // ms to s
-		"vsphere_host_disk_throughput_usage_average":      1000, // KB/s to B/s
-		"vsphere_host_net_throughput_usage_average":       1000, // KB/s to B/s
+	// map measurement -> field -> factor
+	factors := map[string]map[string]float64{
+		// VM metrics
+		"vsphere_vm_mem": {
+			"swapped_average": 1000, // KB to B
+		},
+		"vsphere_vm_disk": {
+			"read_average":  1000, // KB to B
+			"write_average": 1000, // KB/s to B/s
+			"usage_average": 1000, // KB/s to B/s
+		},
+		"vsphere_vm_net": {
+			"transmitted_average": 1000, // KB/s to B/s
+			"received_average":    1000, // KB/s to B/s
+			"usage_average":       1000, // KB/s to B/s
+		},
+		// Host metrics
+		"vsphere_host_mem": {
+			"active_average":        1000,    // KB to B
+			"swapused_average":      1000,    // KB to B
+			"totalCapacity_average": 1000000, // MB to B
+		},
+		"vsphere_host_disk": {
+			"usage_average": 1000, // KB/s to B/s
+		},
+		"vsphere_host_net": {
+			"net_transmitted_average": 1000, // KB/s to B/s
+		},
 	}
 
-	for field := range fields {
-		factor, ok := factors[field]
-		if ok {
+	for field, factor := range factors[currentContext.Measurement] {
+		if _, ok := fields[field]; ok {
 			fields[field] *= factor
 		}
 	}
