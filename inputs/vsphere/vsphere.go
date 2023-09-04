@@ -99,7 +99,7 @@ func transformMetrics(currentContext internal.GatherContext, fields map[string]f
 			"swapped_average": 1000, // KB to B
 		},
 		"vsphere_vm_disk": {
-			"read_average":  1000, // KB to B
+			"read_average":  1000, // KB/s to B/s
 			"write_average": 1000, // KB/s to B/s
 			"usage_average": 1000, // KB/s to B/s
 		},
@@ -123,8 +123,8 @@ func transformMetrics(currentContext internal.GatherContext, fields map[string]f
 	}
 
 	for field, factor := range factors[currentContext.Measurement] {
-		if _, ok := fields[field]; ok {
-			fields[field] *= factor
+		if value, ok := fields[field]; ok {
+			fields[field] = value * factor
 		}
 	}
 
