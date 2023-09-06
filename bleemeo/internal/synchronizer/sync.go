@@ -65,7 +65,6 @@ const (
 	syncMethodService       = "service"
 	syncMethodContainer     = "container"
 	syncMethodMetric        = "metric"
-	syncMethodAlertingRules = "alertingrules"
 	syncMethodConfig        = "config"
 	syncMethodCrashReports  = "crashreports"
 )
@@ -114,18 +113,17 @@ type Synchronizer struct {
 	logOnce             sync.Once
 	lastDenyReasonLogAt time.Time
 
-	l                          sync.Mutex
-	disabledUntil              time.Time
-	disableReason              bleemeoTypes.DisableReason
-	forceSync                  map[string]bool
-	pendingMetricsUpdate       []string
-	pendingMonitorsUpdate      []MonitorUpdate
-	pendingAlertingRulesUpdate []string
-	thresholdOverrides         map[thresholdOverrideKey]threshold.Threshold
-	delayedContainer           map[string]time.Time
-	retryableMetricFailure     map[bleemeoTypes.FailureKind]bool
-	metricRetryAt              time.Time
-	lastInfo                   bleemeoTypes.GlobalInfo
+	l                      sync.Mutex
+	disabledUntil          time.Time
+	disableReason          bleemeoTypes.DisableReason
+	forceSync              map[string]bool
+	pendingMetricsUpdate   []string
+	pendingMonitorsUpdate  []MonitorUpdate
+	thresholdOverrides     map[thresholdOverrideKey]threshold.Threshold
+	delayedContainer       map[string]time.Time
+	retryableMetricFailure map[bleemeoTypes.FailureKind]bool
+	metricRetryAt          time.Time
+	lastInfo               bleemeoTypes.GlobalInfo
 	// Whether the agent MQTT status should be synced. This is used to avoid syncing
 	// the MQTT status too soon before the agent has tried to connect to MQTT.
 	shouldUpdateMQTTStatus bool
@@ -792,7 +790,6 @@ func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) (map[str
 		{name: syncMethodService, method: s.syncServices},
 		{name: syncMethodMonitor, method: s.syncMonitors, skipOnlyEssential: true},
 		{name: syncMethodMetric, method: s.syncMetrics},
-		{name: syncMethodAlertingRules, method: s.syncAlertingRules},
 		{name: syncMethodConfig, method: s.syncConfig},
 		{name: syncMethodCrashReports, method: s.syncCrashReports},
 	}
@@ -935,7 +932,6 @@ func (s *Synchronizer) syncToPerform(ctx context.Context) (map[string]bool, bool
 		syncMethods[syncMethodAccountConfig] = true
 		syncMethods[syncMethodMonitor] = true
 		syncMethods[syncMethodSNMP] = true
-		syncMethods[syncMethodAlertingRules] = true
 		syncMethods[syncMethodCrashReports] = true
 	}
 

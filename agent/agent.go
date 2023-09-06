@@ -1025,7 +1025,6 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 			NotifyFirstRegistration:        a.notifyBleemeoFirstRegistration,
 			NotifyLabelsUpdate:             a.notifyBleemeoUpdateLabels,
 			BlackboxScraperName:            scaperName,
-			RebuildPromQLRules:             a.rulesManager.RebuildPromQLRules,
 			ReloadState:                    a.reloadState.Bleemeo(),
 			IsContainerEnabled:             a.containerFilter.ContainerEnabled,
 			IsContainerNameRecentlyDeleted: a.containerRuntime.IsContainerNameRecentlyDeleted,
