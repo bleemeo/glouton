@@ -1,6 +1,8 @@
 module glouton
 
-go 1.18
+go 1.21
+
+toolchain go1.21.1
 
 require (
 	dario.cat/mergo v1.0.0
