@@ -37,7 +37,7 @@ var timeComparer = cmp.Comparer(func(x, y time.Time) bool { //nolint:gochecknogl
 // metricGetOrCreate will return the metric that exactly match given labels.
 //
 // It just metricGet followed by update to s.metrics in case of creation.
-func (s *Store) metricGetOrCreate(lbls map[string]string, annotations types.MetricAnnotations) metric {
+func (s *Store) metricGetOrCreate(lbls map[string]string, annotations types.MetricAnnotations) metric { //nolint:unparam
 	m, ok, _ := s.metricGet(lbls, annotations)
 	if !ok {
 		s.metrics[m.metricID] = m

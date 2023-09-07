@@ -127,7 +127,7 @@ func (dd *DynamicDiscovery) Discovery(ctx context.Context, maxAge time.Duration)
 			if err != nil {
 				logger.V(2).Printf("An error occurred while running discovery: %v", err)
 
-				return
+				return nil, err
 			}
 		}
 	}
@@ -680,9 +680,7 @@ func serviceByCommand(cmdLine []string) (serviceName ServiceName, found bool) {
 	}
 
 	if name == "" {
-		found = false
-
-		return
+		return "", false
 	}
 
 	// Some process alter their name to add information. Redis, nginx or php-fpm do this.

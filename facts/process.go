@@ -245,7 +245,7 @@ func (pp *ProcessProvider) ProcessesWithTime(ctx context.Context, maxAge time.Du
 			pp.l.Lock()
 
 			if err != nil {
-				return
+				return nil, time.Time{}, err
 			}
 		}
 	}

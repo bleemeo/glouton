@@ -217,13 +217,13 @@ func (b *buffer) Content() []byte {
 
 		_, err := io.Copy(results, r) //nolint: gosec
 		if err != nil && !errors.Is(err, io.ErrUnexpectedEOF) {
-			results.Write([]byte(fmt.Sprintf("\ndecode err in closed head: %v\n", err)))
+			results.Write([]byte(fmt.Sprintf("\ndecode err in closed head: %v\n", err))) //nolint:mirror
 
 			return results.Bytes()
 		}
 
 		if b.droppedFirstTail {
-			results.Write([]byte("[...]\n"))
+			results.Write([]byte("[...]\n")) //nolint:mirror
 		}
 
 		for n := 1; n <= len(b.tails); n++ {
@@ -237,7 +237,7 @@ func (b *buffer) Content() []byte {
 
 			_, err := io.Copy(results, r) //nolint: gosec
 			if err != nil && !errors.Is(err, io.ErrUnexpectedEOF) {
-				results.Write([]byte(fmt.Sprintf("\ndecode err in tail: %v\n", err)))
+				results.Write([]byte(fmt.Sprintf("\ndecode err in tail: %v\n", err))) //nolint:mirror
 
 				return results.Bytes()
 			}
