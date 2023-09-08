@@ -37,8 +37,8 @@ var timeComparer = cmp.Comparer(func(x, y time.Time) bool { //nolint:gochecknogl
 // metricGetOrCreate will return the metric that exactly match given labels.
 //
 // It just metricGet followed by update to s.metrics in case of creation.
-func (s *Store) metricGetOrCreate(lbls map[string]string, annotations types.MetricAnnotations) metric {
-	m, ok, _ := s.metricGet(lbls, annotations)
+func (s *Store) metricGetOrCreate(lbls map[string]string) metric {
+	m, ok, _ := s.metricGet(lbls, types.MetricAnnotations{})
 	if !ok {
 		s.metrics[m.metricID] = m
 	}
@@ -195,7 +195,7 @@ func TestMetricsSimple(t *testing.T) {
 		types.LabelName: "measurement_fieldFloat",
 	}
 	db := New(time.Hour, time.Hour)
-	m := db.metricGetOrCreate(labels, types.MetricAnnotations{})
+	m := db.metricGetOrCreate(labels)
 
 	if _, ok := db.metrics[m.metricID]; !ok {
 		t.Errorf("db.metrics[%v] == nil, want it to exists", m.metricID)
@@ -229,9 +229,9 @@ func TestMetricsMultiple(t *testing.T) {
 		"fstype":        "ext4",
 	}
 	db := New(time.Hour, time.Hour)
-	db.metricGetOrCreate(labels1, types.MetricAnnotations{})
-	db.metricGetOrCreate(labels2, types.MetricAnnotations{})
-	db.metricGetOrCreate(labels3, types.MetricAnnotations{})
+	db.metricGetOrCreate(labels1)
+	db.metricGetOrCreate(labels2)
+	db.metricGetOrCreate(labels3)
 
 	metrics, err := db.Metrics(labels1)
 	if err != nil {
@@ -280,7 +280,7 @@ func TestPoints(t *testing.T) {
 		types.LabelName: "cpu_used",
 	}
 	db := New(time.Hour, time.Hour)
-	m := db.metricGetOrCreate(labels, types.MetricAnnotations{})
+	m := db.metricGetOrCreate(labels)
 
 	t0 := time.Now().Add(-60 * time.Second)
 	t1 := t0.Add(10 * time.Second)
@@ -561,18 +561,18 @@ func Benchmark_metricGetOrCreate(b *testing.B) {
 		b.Run(tt.name, func(b *testing.B) {
 			db := New(time.Hour, time.Hour)
 
-			rnd := rand.New(rand.NewSource(42)) //nolint: gosec
+			rnd := rand.New(rand.NewSource(42)) //nolint:gosec
 			metricsLabels := makeMetrics(b, rnd, tt.metricCount, tt.labelsCount)
 
 			// we do not benchmark first time add
 			for _, lbls := range metricsLabels {
-				db.metricGetOrCreate(lbls, types.MetricAnnotations{})
+				db.metricGetOrCreate(lbls)
 			}
 
 			b.ResetTimer()
 			for n := 0; n < b.N; n++ {
 				for _, lbls := range metricsLabels {
-					db.metricGetOrCreate(lbls, types.MetricAnnotations{})
+					db.metricGetOrCreate(lbls)
 				}
 			}
 		})

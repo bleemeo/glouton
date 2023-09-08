@@ -1,5 +1,5 @@
 run:
-  go: "1.17"
+  go: "1.21"
   timeout: 5m
   skip-dirs:
     - work
@@ -61,6 +61,13 @@ linters-settings:
       rules:
         json: snake
         yaml: snake
+
+  depguard:
+    rules:
+      main:
+        deny:
+          - pkg: "io/ioutil"
+            desc: "ioutil is deprecated starting with Go 1.16"
 
 issues:
   include: # the list of ids of default excludes to include

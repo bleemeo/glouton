@@ -54,7 +54,7 @@ func New(url string) (i telegraf.Input, err error) {
 		}()
 
 		if err != nil {
-			return
+			return nil, err
 		}
 
 		i = &internal.Input{

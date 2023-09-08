@@ -1075,6 +1075,7 @@ func TestStateLoading(t *testing.T) {
 	}
 
 	for _, tc := range cases {
+		tc := tc
 		// This action is not specific to the current test case.
 		err := mergo.Merge(&tc.WantConfig, agentCfg)
 		if err != nil {
@@ -1082,6 +1083,8 @@ func TestStateLoading(t *testing.T) {
 		}
 
 		t.Run(tc.Name, func(t *testing.T) {
+			t.Parallel()
+
 			config, _, warnings, err := Load(true, false, tc.Files...)
 			if err != nil {
 				t.Fatal("Error while loading config:", err)

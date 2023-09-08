@@ -350,7 +350,7 @@ func TestGenerateDiagnostic(t *testing.T) {
 
 			err := generateDiagnostic(ctx, nil, diagnosticFn)
 			if !errors.Is(err, tc.expectedError) {
-				t.Fatalf("Unexpected error: want %q, got %q", tc.expectedError, err)
+				t.Fatalf("Unexpected error: want '%v', got '%v'", tc.expectedError, err)
 			}
 		})
 	}

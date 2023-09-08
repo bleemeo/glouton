@@ -175,7 +175,7 @@ func (uf updateFacter) pendingUpdatesWindows() (pendingUpdates int, pendingSecur
 	if len(splits) != 2 {
 		logger.V(2).Printf("Couldn't retrieve Windows Update information: got %d values, expected 2 in %v", len(splits), splits)
 
-		return
+		return pendingUpdates, pendingSecurityUpdates
 	}
 
 	parsedPendingUpdates, err1 := strconv.Atoi(splits[0])
@@ -184,7 +184,7 @@ func (uf updateFacter) pendingUpdatesWindows() (pendingUpdates int, pendingSecur
 	if err1 != nil || err2 != nil {
 		logger.V(2).Printf("Couldn't retrieve Windows Update information: cannot parse the file with content %v", splits)
 
-		return
+		return pendingUpdates, pendingSecurityUpdates
 	}
 
 	return parsedPendingUpdates, parsedPendingSecurityUpdates

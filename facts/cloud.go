@@ -298,7 +298,7 @@ func gceFacts(ctx context.Context, facts map[string]string) (found bool) {
 
 	projectIDStr := httpQuery(ctx, "http://metadata.google.internal/computeMetadata/v1/project/numeric-project-id", []string{"Metadata-Flavor:Google"})
 	if projectIDStr == "" {
-		return
+		return false
 	}
 
 	// retrieve the ID of the (GCE) project for which this VM instance was spawned. We will use it later to "sanitize" machine types, zone names, and so on.
