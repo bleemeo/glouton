@@ -23,10 +23,13 @@ import (
 	"glouton/crashreport"
 	"glouton/inputs"
 	"glouton/logger"
+	"glouton/types"
+	"math"
 	"sync"
 	"time"
 
 	"github.com/influxdata/telegraf"
+	"github.com/prometheus/prometheus/model/value"
 )
 
 var errTooManyInputs = errors.New("too many inputs in the collectors. Unable to find new slot")
@@ -38,6 +41,8 @@ type Collector struct {
 	currentDelay time.Duration
 	updateDelayC chan interface{}
 	l            sync.Mutex
+	// map inputID -> measurement -> field name -> tags key/value -> fieldCache
+	fieldCaches map[int]map[string]map[string]map[string]fieldCache
 }
 
 // New returns a Collector with default option
@@ -50,6 +55,7 @@ func New(acc telegraf.Accumulator) *Collector {
 		inputs:       make(map[int]telegraf.Input),
 		currentDelay: 10 * time.Second,
 		updateDelayC: make(chan interface{}),
+		fieldCaches:  make(map[int]map[string]map[string]map[string]fieldCache),
 	}
 
 	return c
@@ -82,6 +88,7 @@ func (c *Collector) AddInput(input telegraf.Input, shortName string) (int, error
 	}
 
 	c.inputs[id] = input
+	c.fieldCaches[id] = make(map[string]map[string]map[string]fieldCache)
 
 	if si, ok := input.(telegraf.ServiceInput); ok {
 		if err := si.Start(nil); err != nil {
@@ -106,6 +113,7 @@ func (c *Collector) RemoveInput(id int) {
 	}
 
 	delete(c.inputs, id)
+	delete(c.fieldCaches, id)
 }
 
 // Close stops all inputs.
@@ -125,14 +133,14 @@ func (c *Collector) RunGather(_ context.Context, t0 time.Time) {
 	c.runOnce(t0)
 }
 
-func (c *Collector) inputsForCollection() []telegraf.Input {
+func (c *Collector) inputsForCollection() map[int]telegraf.Input {
 	c.l.Lock()
 	defer c.l.Unlock()
 
-	inputsCopy := make([]telegraf.Input, 0)
+	inputsCopy := make(map[int]telegraf.Input, len(c.inputs))
 
-	for _, v := range c.inputs {
-		inputsCopy = append(inputsCopy, v)
+	for id, v := range c.inputs {
+		inputsCopy[id] = v
 	}
 
 	return inputsCopy
@@ -147,8 +155,8 @@ func (c *Collector) runOnce(t0 time.Time) {
 
 	var wg sync.WaitGroup
 
-	for _, input := range inputsCopy {
-		input := input
+	for id, input := range inputsCopy {
+		id, input := id, input
 
 		wg.Add(1)
 
@@ -156,10 +164,161 @@ func (c *Collector) runOnce(t0 time.Time) {
 			defer crashreport.ProcessPanic()
 			defer wg.Done()
 
+			ima := &inactiveMarkerAccumulator{
+				FixedTimeAccumulator: acc,
+				latestValues:         make(map[string]map[string]map[string]fieldCache),
+				fieldCaches:          c.fieldCaches[id],
+			}
 			// Errors are already logged by the input.
-			_ = input.Gather(acc)
+			_ = input.Gather(ima)
+
+			ima.deactivateUnseenMetrics()
 		}()
 	}
 
 	wg.Wait()
+}
+
+type accCallback func(acc inputs.FixedTimeAccumulator, measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time)
+
+type fieldCache struct {
+	annotations types.MetricAnnotations
+	callback    accCallback
+}
+
+// inactiveMarkerAccumulator wraps a telegraf Accumulator while marking inactive metrics it receives as such.
+type inactiveMarkerAccumulator struct {
+	inputs.FixedTimeAccumulator
+	latestValues map[string]map[string]map[string]fieldCache
+	fieldCaches  map[string]map[string]map[string]fieldCache
+	l            sync.Mutex
+}
+
+func (ima *inactiveMarkerAccumulator) deactivateUnseenMetrics() {
+	ima.l.Lock()
+	defer ima.l.Unlock()
+
+	// Check if a metric has been seen for each measurement, field and tags "pair".
+	for oldMeasurement, oldFields := range ima.fieldCaches {
+		for oldField, oldTags := range oldFields {
+			for oldTag, cache := range oldTags {
+				if _, ok := ima.latestValues[oldMeasurement]; ok {
+					if _, ok = ima.latestValues[oldMeasurement][oldField]; ok {
+						if _, ok = ima.latestValues[oldMeasurement][oldField][oldTag]; ok {
+							continue // This metric has been seen, everything's all right
+						}
+					}
+				}
+				// Publish the StaleNaN value to mark the metric as inactive.
+				fieldsMap := map[string]any{
+					// We need to convert the StaleNaN value to a float this way to avoid
+					// the conversion float64(value.StaleNaN) which gives an unexpected result.
+					// This would have resulted in the value not being handled as StaleNaN later.
+					oldField: math.Float64frombits(value.StaleNaN),
+				}
+				tagsMap := types.TextToLabels(oldTag)
+
+				if cache.callback != nil {
+					cache.callback(ima.FixedTimeAccumulator, oldMeasurement, fieldsMap, tagsMap, ima.Time)
+				} else {
+					ima.FixedTimeAccumulator.AddFieldsWithAnnotations(oldMeasurement, fieldsMap, tagsMap, cache.annotations, ima.Time)
+				}
+			}
+		}
+	}
+
+	// Deleting all entries to prepare for the update with the latest metrics
+	for k := range ima.fieldCaches {
+		delete(ima.fieldCaches, k)
+	}
+
+	// Update the cache with the metrics that are existing right now;
+	// we must copy the map value-by-value, because doing `ima.fieldCaches = ima.latestValues`
+	// would lose the persistence of ima.fieldCaches, which is an item of the Collector.fieldCaches map.
+	for measurement, fields := range ima.latestValues {
+		if _, ok := ima.fieldCaches[measurement]; !ok {
+			ima.fieldCaches[measurement] = make(map[string]map[string]fieldCache)
+		}
+
+		for field, tags := range fields {
+			if _, ok := ima.fieldCaches[measurement][field]; !ok {
+				ima.fieldCaches[measurement][field] = make(map[string]fieldCache)
+			}
+
+			for tag, v := range tags {
+				ima.fieldCaches[measurement][field][tag] = v
+			}
+		}
+	}
+
+	// ima.latestValues will be dropped as the inactiveMarkerAccumulator itself will be.
+} //nolint:wsl
+
+func (ima *inactiveMarkerAccumulator) doAdd(accCb accCallback, measurement string, fields map[string]interface{}, tags map[string]string, t []time.Time, annotations ...types.MetricAnnotations) {
+	ima.l.Lock()
+
+	// Using a closure to make the deferred call to unlock happening before the call
+	// to the accumulator callback to release the lock a little bit quicker, while
+	// keeping the assurance of having the lock released regardless of the behavior.
+	func() {
+		defer ima.l.Unlock()
+
+		m, ok := ima.latestValues[measurement]
+		if !ok {
+			m = make(map[string]map[string]fieldCache)
+		}
+
+		strTags := types.LabelsToText(tags)
+
+		for field := range fields {
+			cache := fieldCache{
+				callback: accCb,
+			}
+
+			if len(annotations) == 1 {
+				cache.annotations = annotations[0]
+			}
+
+			if _, ok = m[field]; !ok {
+				m[field] = make(map[string]fieldCache)
+			}
+
+			m[field][strTags] = cache
+		}
+
+		ima.latestValues[measurement] = m
+	}()
+
+	if accCb != nil { //nolint:gocritic
+		accCb(ima.FixedTimeAccumulator, measurement, fields, tags, t...)
+	} else if len(annotations) == 1 {
+		ima.FixedTimeAccumulator.AddFieldsWithAnnotations(measurement, fields, tags, annotations[0], ima.Time)
+	} else {
+		logger.V(2).Printf("No callback or annotations given for %s / %s with fields %v", measurement, types.LabelsToText(tags), fields)
+	}
+}
+
+func (ima *inactiveMarkerAccumulator) AddFields(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+	ima.doAdd(inputs.FixedTimeAccumulator.AddFields, measurement, fields, tags, t)
+}
+
+func (ima *inactiveMarkerAccumulator) AddGauge(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+	ima.doAdd(inputs.FixedTimeAccumulator.AddGauge, measurement, fields, tags, t)
+}
+
+func (ima *inactiveMarkerAccumulator) AddCounter(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+	ima.doAdd(inputs.FixedTimeAccumulator.AddCounter, measurement, fields, tags, t)
+}
+
+func (ima *inactiveMarkerAccumulator) AddSummary(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+	ima.doAdd(inputs.FixedTimeAccumulator.AddSummary, measurement, fields, tags, t)
+}
+
+func (ima *inactiveMarkerAccumulator) AddHistogram(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+	ima.doAdd(inputs.FixedTimeAccumulator.AddHistogram, measurement, fields, tags, t)
+}
+
+func (ima *inactiveMarkerAccumulator) AddFieldsWithAnnotations(measurement string, fields map[string]interface{}, tags map[string]string, annotations types.MetricAnnotations, t ...time.Time) {
+	// When given a nil callback but annotations, doAdd() will call ima.FixedTimeAccumulator.AddFieldsWithAnnotations()
+	ima.doAdd(nil, measurement, fields, tags, t, annotations)
 }
