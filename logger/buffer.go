@@ -237,7 +237,7 @@ func (b *buffer) Content() []byte {
 
 			_, err := io.Copy(results, r) //nolint: gosec
 			if err != nil && !errors.Is(err, io.ErrUnexpectedEOF) {
-				results.Write([]byte(fmt.Sprintf("\ndecode err in tail: %v\n", err))) //nolint:mirror
+				results.WriteString(fmt.Sprintf("\ndecode err in tail: %v\n", err))
 
 				return results.Bytes()
 			}
