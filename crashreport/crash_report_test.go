@@ -327,7 +327,7 @@ func TestGenerateDiagnostic(t *testing.T) {
 			ctxTimeout:         time.Second,
 			diagnosticDuration: time.Millisecond,
 			shouldPanic:        true,
-			expectedError:      nil,
+			expectedError:      errFailedToDiagnostic,
 		},
 	}
 
