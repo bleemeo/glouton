@@ -215,15 +215,15 @@ func (b *buffer) Content() []byte {
 
 		r := flate.NewReader(bytes.NewReader(b.head.Bytes()))
 
-		_, err := io.Copy(results, r) //nolint: gosec
+		_, err := io.Copy(results, r) //nolint:gosec
 		if err != nil && !errors.Is(err, io.ErrUnexpectedEOF) {
-			results.Write([]byte(fmt.Sprintf("\ndecode err in closed head: %v\n", err))) //nolint:mirror
+			results.WriteString(fmt.Sprintf("\ndecode err in closed head: %v\n", err))
 
 			return results.Bytes()
 		}
 
 		if b.droppedFirstTail {
-			results.Write([]byte("[...]\n")) //nolint:mirror
+			results.WriteString("[...]\n")
 		}
 
 		for n := 1; n <= len(b.tails); n++ {

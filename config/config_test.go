@@ -1083,6 +1083,8 @@ func TestStateLoading(t *testing.T) {
 		}
 
 		t.Run(tc.Name, func(t *testing.T) {
+			t.Parallel()
+
 			config, _, warnings, err := Load(true, false, tc.Files...)
 			if err != nil {
 				t.Fatal("Error while loading config:", err)
