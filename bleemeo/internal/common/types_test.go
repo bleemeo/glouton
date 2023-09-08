@@ -22,6 +22,9 @@ import (
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 )
 
 func TestMetricLookupFromList(t *testing.T) {
@@ -84,5 +87,86 @@ func TestMetricLookupFromList(t *testing.T) {
 
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("MetricLookupFromList(...) == %v, want %v", got, want)
+	}
+}
+
+func TestServiceLookupFromList(t *testing.T) {
+	input := []bleemeoTypes.Service{
+		{
+			ID:           "id-1",
+			Label:        "srv",
+			Instance:     "S1",
+			Active:       true,
+			CreationDate: "2023-08-28T13:21:15.539941Z",
+		},
+		{
+			ID:           "id-2",
+			Label:        "srv",
+			Instance:     "S2",
+			Active:       true,
+			CreationDate: "2023-08-28T14:12:45.647132Z",
+		},
+		{
+			ID:           "id-3",
+			Label:        "srv",
+			Instance:     "S2",
+			Active:       false,
+			CreationDate: "2023-08-28T13:58:02.332047Z",
+		},
+		{
+			ID:           "id-4",
+			Label:        "other-srv",
+			Instance:     "S",
+			Active:       false,
+			CreationDate: "2023-08-27T15:21:27.104098Z",
+		},
+		{
+			ID:           "id-5",
+			Label:        "other-srv",
+			Instance:     "S",
+			Active:       true,
+			CreationDate: "2023-08-28T17:25:36.745169Z",
+		},
+		{
+			ID:           "id-6",
+			Label:        "other-srv",
+			Instance:     "S",
+			Active:       true,
+			CreationDate: "2023-08-28T09:15:28.134825Z",
+		},
+		{
+			ID:           "id-7",
+			Label:        "service",
+			Instance:     "S",
+			Active:       false,
+			CreationDate: "2023-08-29T13:21:15.539941Z",
+		},
+		{
+			ID:           "id-8",
+			Label:        "create_time_second",
+			Instance:     "",
+			Active:       false,
+			CreationDate: "2023-08-28T09:15:28Z",
+		},
+		{
+			ID:           "id-9",
+			Label:        "create_time_second",
+			Instance:     "",
+			Active:       false,
+			CreationDate: "2023-08-29T13:21:15Z",
+		},
+	}
+
+	want := map[ServiceNameInstance]bleemeoTypes.Service{
+		{"srv", "S1"}:              {ID: "id-1", Label: "srv", Instance: "S1", Active: true},
+		{"srv", "S2"}:              {ID: "id-2", Label: "srv", Instance: "S2", Active: true},
+		{"other-srv", "S"}:         {ID: "id-5", Label: "other-srv", Instance: "S", Active: true},
+		{"service", "S"}:           {ID: "id-7", Label: "service", Instance: "S", Active: false},
+		{"create_time_second", ""}: {ID: "id-9", Label: "create_time_second", Instance: "", Active: false},
+	}
+	got := ServiceLookupFromList(input)
+
+	if diff := cmp.Diff(want, got, cmpopts.IgnoreFields(bleemeoTypes.Service{}, "CreationDate")); diff != "" {
+		t.Fatalf("Unexpected output from ServiceLookupFromList():\n%v", diff)
 	}
 }

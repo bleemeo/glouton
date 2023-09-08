@@ -441,13 +441,7 @@ func (s *Synchronizer) filterMetrics(input []types.Metric) []types.Metric {
 func (s *Synchronizer) excludeUnregistrableMetrics(metrics []types.Metric) []types.Metric {
 	result := make([]types.Metric, 0, len(metrics))
 	containersByContainerID := s.option.Cache.ContainersByContainerID()
-	services := s.option.Cache.Services()
-	servicesByKey := make(map[serviceNameInstance]bleemeoTypes.Service, len(services))
-
-	for _, v := range services {
-		k := serviceNameInstance{name: v.Label, instance: v.Instance}
-		servicesByKey[k] = v
-	}
+	servicesByKey := s.option.Cache.ServiceLookupFromList()
 
 	cfg, ok := s.option.Cache.CurrentAccountConfig()
 	if !ok {
@@ -467,7 +461,7 @@ func (s *Synchronizer) excludeUnregistrableMetrics(metrics []types.Metric) []typ
 
 		// Exclude metrics with a missing service dependency.
 		if annotations.ServiceName != "" {
-			srvKey := serviceNameInstance{name: annotations.ServiceName, instance: annotations.ServiceInstance}
+			srvKey := common.ServiceNameInstance{Name: annotations.ServiceName, Instance: annotations.ServiceInstance}
 
 			if _, ok := servicesByKey[srvKey]; !ok {
 				continue
@@ -948,7 +942,7 @@ type metricRegisterer struct {
 	registeredMetricsByUUID map[string]bleemeoTypes.Metric
 	registeredMetricsByKey  map[string]bleemeoTypes.Metric
 	containersByContainerID map[string]bleemeoTypes.Container
-	servicesByKey           map[serviceNameInstance]bleemeoTypes.Service
+	servicesByKey           map[common.ServiceNameInstance]bleemeoTypes.Service
 	failedRegistrationByKey map[string]bleemeoTypes.MetricRegistration
 	monitors                []bleemeoTypes.Monitor
 
@@ -965,17 +959,11 @@ type metricRegisterer struct {
 
 func newMetricRegisterer(s *Synchronizer) *metricRegisterer {
 	fails := s.option.Cache.MetricRegistrationsFail()
-	services := s.option.Cache.Services()
-	servicesByKey := make(map[serviceNameInstance]bleemeoTypes.Service, len(services))
+	servicesByKey := s.option.Cache.ServiceLookupFromList()
 	failedRegistrationByKey := make(map[string]bleemeoTypes.MetricRegistration, len(fails))
 
 	for _, v := range s.option.Cache.MetricRegistrationsFail() {
 		failedRegistrationByKey[v.LabelsText] = v
-	}
-
-	for _, v := range services {
-		k := serviceNameInstance{name: v.Label, instance: v.Instance}
-		servicesByKey[k] = v
 	}
 
 	return &metricRegisterer{
@@ -1264,7 +1252,7 @@ func (s *Synchronizer) prepareMetricPayload(
 	metric types.Metric,
 	registeredMetricsByKey map[string]bleemeoTypes.Metric,
 	containersByContainerID map[string]bleemeoTypes.Container,
-	servicesByKey map[serviceNameInstance]bleemeoTypes.Service,
+	servicesByKey map[common.ServiceNameInstance]bleemeoTypes.Service,
 	monitors []bleemeoTypes.Monitor,
 ) (metricPayload, error) {
 	labels := metric.Labels()
@@ -1326,7 +1314,7 @@ func (s *Synchronizer) prepareMetricPayload(
 	}
 
 	if annotations.ServiceName != "" {
-		srvKey := serviceNameInstance{name: annotations.ServiceName, instance: annotations.ServiceInstance}
+		srvKey := common.ServiceNameInstance{Name: annotations.ServiceName, Instance: annotations.ServiceInstance}
 
 		service, ok := servicesByKey[srvKey]
 		if !ok {

@@ -17,9 +17,12 @@
 package common
 
 import (
+	"fmt"
 	bleemeoTypes "glouton/bleemeo/types"
+	"glouton/logger"
 	"glouton/types"
 	"glouton/utils/metricutils"
+	"time"
 )
 
 // Maximal length of fields on Bleemeo API.
@@ -30,6 +33,19 @@ const (
 	APIConfigItemKeyLength   int = 100
 	APIConfigItemPathLength  int = 250
 )
+
+type ServiceNameInstance struct {
+	Name     string
+	Instance string
+}
+
+func (sni ServiceNameInstance) String() string {
+	if sni.Instance != "" {
+		return fmt.Sprintf("%s on %s", sni.Name, sni.Instance)
+	}
+
+	return sni.Name
+}
 
 // MetricKey return a unique key that could be used in for lookup in cache.MetricLookupFromList
 //
@@ -81,6 +97,40 @@ func MetricLookupFromList(registeredMetrics []bleemeoTypes.Metric) map[string]bl
 	}
 
 	return registeredMetricsByKey
+}
+
+// ServiceLookupFromList returns a map[ServiceNameInstance]bleemeoTypes.Service
+// from the given list, while excluding any duplicated service.
+// It prioritizes the exclusion of oldest services over the youngest ones.
+func ServiceLookupFromList(registeredServices []bleemeoTypes.Service) map[ServiceNameInstance]bleemeoTypes.Service {
+	registeredServicesByKey := make(map[ServiceNameInstance]bleemeoTypes.Service, len(registeredServices))
+
+	for _, srv := range registeredServices {
+		key := ServiceNameInstance{Name: srv.Label, Instance: srv.Instance}
+		if existing, ok := registeredServicesByKey[key]; !ok {
+			registeredServicesByKey[key] = srv
+		} else { // Compare creation dates and keep the youngest service
+			existingCreationDate, err := time.Parse(time.RFC3339, existing.CreationDate)
+			if err != nil {
+				logger.V(1).Printf("Failed to parse creation date %q of service %s: %v", existing.CreationDate, existing.ID, err)
+
+				continue
+			}
+
+			srvCreationDate, err := time.Parse(time.RFC3339, srv.CreationDate)
+			if err != nil {
+				logger.V(1).Printf("Failed to parse creation date %q of service %s: %v", srv.CreationDate, srv.ID, err)
+
+				continue
+			}
+
+			if srvCreationDate.After(existingCreationDate) {
+				registeredServicesByKey[key] = srv
+			}
+		}
+	}
+
+	return registeredServicesByKey
 }
 
 // IgnoreContainer returns true if the metric's container information should be ignored.
