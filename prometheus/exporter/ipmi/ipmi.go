@@ -306,6 +306,13 @@ func runCmd(ctx context.Context, searchPath string, useSudo bool, args []string)
 		args = append([]string{filepath.Join(searchPath, args[0])}, args[1:]...)
 	}
 
+	fullPath, err := exec.LookPath(args[0])
+	if err != nil {
+		return nil, err
+	}
+
+	args = append([]string{fullPath}, args[1:]...)
+
 	if useSudo {
 		args = append([]string{"sudo", "-n"}, args...)
 	}
