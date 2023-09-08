@@ -57,8 +57,7 @@ const failedRegistrationExpiration = 24 * time.Hour
 // metricFields is the fields used on the API for a metric, we always use all fields to
 // make sure no Metric object is returned with some empty fields which could create bugs.
 const metricFields = "id,label,item,labels_text,unit,unit_text,service,container,deactivated_at," +
-	"threshold_low_warning,threshold_low_critical,threshold_high_warning,threshold_high_critical," +
-	"status_of,agent,promql_query,is_user_promql_alert,alerting_rule"
+	"threshold_low_warning,threshold_low_critical,threshold_high_warning,threshold_high_critical,status_of,agent"
 
 var (
 	errRetryLater     = errors.New("metric registration should be retried later")
@@ -1323,10 +1322,6 @@ func (s *Synchronizer) prepareMetricPayload(
 		}
 
 		payload.ServiceID = service.ID
-	}
-
-	if annotations.AlertingRuleID != "" {
-		payload.AlertingRuleID = annotations.AlertingRuleID
 	}
 
 	// override the agent and service UUIDs when the metric is a probe's

@@ -61,8 +61,6 @@ type Option struct {
 	UpdateMetrics func(metricUUID ...string)
 	// UpdateMonitor requests a sync of a monitor
 	UpdateMonitor func(op string, uuid string)
-	// UpdateAlertingRule requests an update for the given alerting rule UUID.
-	UpdateAlertingRule func(uuid string)
 	// UpdateMaintenance requests to check for the maintenance mode again
 	UpdateMaintenance func()
 	// GetJWT returns the JWT used to talk with the Bleemeo API.
@@ -762,7 +760,6 @@ type notificationPayload struct {
 	MessageType          string `json:"message_type"`
 	MetricUUID           string `json:"metric_uuid,omitempty"`
 	MonitorUUID          string `json:"monitor_uuid,omitempty"`
-	AlertingRuleUUID     string `json:"alertingrule_uuid"`
 	MonitorOperationType string `json:"monitor_operation_type,omitempty"`
 }
 
@@ -792,8 +789,6 @@ func (c *Client) onNotification(msg paho.Message) {
 		c.opts.UpdateMaintenance()
 	case "threshold-update":
 		c.opts.UpdateMetrics(payload.MetricUUID)
-	case "alertingrule-update":
-		c.opts.UpdateAlertingRule(payload.AlertingRuleUUID)
 	case "monitor-update":
 		c.opts.UpdateMonitor(payload.MonitorOperationType, payload.MonitorUUID)
 	}

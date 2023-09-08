@@ -184,9 +184,8 @@ type Metric struct {
 	StatusOf    string            `json:"status_of,omitempty"`
 	Threshold
 	threshold.Unit
-	DeactivatedAt  time.Time `json:"deactivated_at,omitempty"`
-	FirstSeenAt    time.Time `json:"first_seen_at"`
-	AlertingRuleID string    `json:"alerting_rule,omitempty"`
+	DeactivatedAt time.Time `json:"deactivated_at,omitempty"`
+	FirstSeenAt   time.Time `json:"first_seen_at"`
 }
 
 // FailureKind is the kind of failure to register a metric. Used to know if
@@ -321,19 +320,6 @@ func (i GlobalInfo) IsTimeDriftTooLarge() bool {
 	}
 
 	return math.Abs(i.TimeDrift().Seconds()) >= i.MaxTimeDrift
-}
-
-// AlertingRule object on the Bleemeo API.
-type AlertingRule struct {
-	ID                  string   `json:"id"`
-	Account             string   `json:"account"`
-	Name                string   `json:"name"`
-	WarningQuery        string   `json:"warning_query"`
-	WarningDelaySecond  int      `json:"warning_delay_second"`
-	CriticalQuery       string   `json:"critical_query"`
-	CriticalDelaySecond int      `json:"critical_delay_second"`
-	Active              bool     `json:"active"`
-	Agents              []string `json:"agents"`
 }
 
 // GloutonConfigItem object on the Bleemeo API.

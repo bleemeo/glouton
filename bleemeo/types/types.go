@@ -22,7 +22,6 @@ import (
 	"glouton/discovery"
 	"glouton/facts"
 	"glouton/prometheus/exporter/snmp"
-	"glouton/prometheus/rules"
 	"glouton/threshold"
 	"glouton/types"
 	"time"
@@ -53,7 +52,6 @@ type GlobalOption struct {
 	UpdateMetricResolution         func(ctx context.Context, defaultResolution time.Duration, snmpResolution time.Duration)
 	UpdateThresholds               func(ctx context.Context, thresholds map[string]threshold.Threshold, firstUpdate bool)
 	UpdateUnits                    func(units map[string]threshold.Unit)
-	RebuildPromQLRules             func(promqlRules []rules.PromQLRule) error
 	IsContainerEnabled             func(facts.Container) (bool, bool)
 	IsContainerNameRecentlyDeleted func(name string) bool
 	PahoLastPingCheckAt            func() time.Time
