@@ -428,8 +428,6 @@ func makeMetric(b *testing.B, rnd *rand.Rand, labelCount int) map[string]string 
 	labelNames := []string{
 		"action",
 		"address",
-		"alertname",
-		"alertstate",
 		"alias",
 		"application",
 		"build_date",

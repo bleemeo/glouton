@@ -111,13 +111,6 @@ func newManager(ctx context.Context, queryable storage.Queryable, defaultRules m
 			Appendable: app,
 			Queryable:  queryable,
 			QueryFunc:  rules.EngineQueryFunc(engine, queryable),
-			NotifyFunc: func(ctx context.Context, expr string, alerts ...*rules.Alert) {
-				if len(alerts) == 0 {
-					return
-				}
-
-				logger.V(2).Printf("notification triggered for expression %x with state %v and labels %v", expr, alerts[0].State, alerts[0].Labels)
-			},
 		},
 	})
 
