@@ -304,11 +304,16 @@ var (
 		"vsphere_vm_net_usage",
 		//    Host metrics
 		"vsphere_host_cpu_usage",
+		"vsphere_host_mem_active",
+		"vsphere_host_mem_totalCapacity",
 		"vsphere_host_mem_usage",
-		"vsphere_host_mem_swapused",
-		"vsphere_host_disk_throughput_contention",
-		"vsphere_host_disk_throughput_usage",
-		"vsphere_host_net_throughput_usage",
+		"vsphere_host_mem_swapout",
+		"vsphere_host_disk_read",
+		"vsphere_host_disk_write",
+		"vsphere_host_disk_usage",
+		"vsphere_host_net_transmitted",
+		"vsphere_host_net_received",
+		"vsphere_host_net_usage",
 	}
 
 	defaultServiceMetrics map[discovery.ServiceName][]string = map[discovery.ServiceName][]string{

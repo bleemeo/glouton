@@ -51,6 +51,7 @@ require (
 	github.com/urfave/cli/v2 v2.25.7
 	github.com/vektah/gqlparser/v2 v2.5.9
 	github.com/vishvananda/netlink v1.2.1-beta.2
+	github.com/vmware/govmomi v0.28.1-0.20220921224932-b4b508abf208
 	golang.org/x/sync v0.3.0
 	golang.org/x/sys v0.12.0
 	google.golang.org/protobuf v1.31.0
@@ -202,7 +203,6 @@ require (
 	github.com/uber/jaeger-client-go v2.30.0+incompatible // indirect
 	github.com/uber/jaeger-lib v2.4.1+incompatible // indirect
 	github.com/vishvananda/netns v0.0.4 // indirect
-	github.com/vmware/govmomi v0.28.1-0.20220921224932-b4b508abf208 // indirect
 	github.com/xdg-go/pbkdf2 v1.0.0 // indirect
 	github.com/xdg-go/scram v1.1.2 // indirect
 	github.com/xdg-go/stringprep v1.0.4 // indirect

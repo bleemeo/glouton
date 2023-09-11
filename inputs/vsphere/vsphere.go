@@ -58,11 +58,15 @@ func New(url string, username, password string, insecureSkipVerify, monitorVMs b
 	vsphereInput.HostMetricInclude = []string{
 		"cpu.usage.average",
 		"mem.active.average",
-		"mem.swapused.average",
 		"mem.totalCapacity.average",
 		"mem.usage.average",
+		"mem.swapout.average",
+		"disk.read.average",
+		"disk.write.average",
 		"disk.usage.average",
 		"net.transmitted.average",
+		"net.received.average",
+		"net.usage.average",
 	}
 	vsphereInput.ResourcePoolMetricExclude = []string{"*"}
 	vsphereInput.ClusterMetricExclude = []string{"*"}
@@ -111,14 +115,18 @@ func transformMetrics(currentContext internal.GatherContext, fields map[string]f
 		// Host metrics
 		"vsphere_host_mem": {
 			"active_average":        1000,    // KB to B
-			"swapused_average":      1000,    // KB to B
 			"totalCapacity_average": 1000000, // MB to B
+			"swapout_average":       1000,    // KB to B
 		},
 		"vsphere_host_disk": {
+			"read_average":  1000, // KB/s to B/s
+			"write_average": 1000, // KB/s to B/s
 			"usage_average": 1000, // KB/s to B/s
 		},
 		"vsphere_host_net": {
 			"net_transmitted_average": 1000, // KB/s to B/s
+			"net_received_average":    1000, // KB/s to B/s
+			"net_usage_average":       1000, // KB/s to B/s
 		},
 	}
 

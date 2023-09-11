@@ -190,7 +190,9 @@ func TestVSphereInputNoHost(t *testing.T) {
 			`usage_average__clustername="DC0_C0",cpu="*",dcname="DC0",esxhostname="DC0_C0_H0",moid="host-23",source="DC0_C0_H0"`: 0.,
 		},
 		"vsphere_host_disk": {
+			`read_average__clustername="DC0_C0",dcname="DC0",disk="*",esxhostname="DC0_C0_H0",moid="host-23",source="DC0_C0_H0"`:  int64(0),
 			`usage_average__clustername="DC0_C0",dcname="DC0",disk="*",esxhostname="DC0_C0_H0",moid="host-23",source="DC0_C0_H0"`: int64(0),
+			`write_average__clustername="DC0_C0",dcname="DC0",disk="*",esxhostname="DC0_C0_H0",moid="host-23",source="DC0_C0_H0"`: int64(0),
 		},
 		"vsphere_host_mem": {
 			`active_average__clustername="DC0_C0",dcname="DC0",esxhostname="DC0_C0_H0",instance="*",moid="host-23",source="DC0_C0_H0"`:        int64(0),
@@ -198,7 +200,9 @@ func TestVSphereInputNoHost(t *testing.T) {
 			`usage_average__clustername="DC0_C0",dcname="DC0",esxhostname="DC0_C0_H0",instance="*",moid="host-23",source="DC0_C0_H0"`:         0.,
 		},
 		"vsphere_host_net": {
+			`received_average__clustername="DC0_C0",dcname="DC0",esxhostname="DC0_C0_H0",interface="*",moid="host-23",source="DC0_C0_H0"`:    int64(0),
 			`transmitted_average__clustername="DC0_C0",dcname="DC0",esxhostname="DC0_C0_H0",interface="*",moid="host-23",source="DC0_C0_H0"`: int64(0),
+			`usage_average__clustername="DC0_C0",dcname="DC0",esxhostname="DC0_C0_H0",interface="*",moid="host-23",source="DC0_C0_H0"`:       int64(0),
 		},
 		"vsphere_vm_cpu": {
 			`latency_average__clustername="DC0_C0",cpu="*",dcname="DC0",esxhostname="DC0_C0_H0",guest="other",moid="vm-28",rpname="Resources",source="DC0_C0_RP0_VM0",uuid="cd0681bf-2f18-5c00-9b9b-8197c0095348",vmname="DC0_C0_RP0_VM0"`: 0.,
@@ -269,9 +273,15 @@ func TestVSphereInputMultipleHosts(t *testing.T) {
 			`usage_average__cpu="*",dcname="DC0",esxhostname="DC0_H1",moid="host-32",source="DC0_H1"`:                            0.,
 		},
 		"vsphere_host_disk": {
+			`read_average__clustername="DC0_C0",dcname="DC0",disk="*",esxhostname="DC0_C0_H0",moid="host-45",source="DC0_C0_H0"`:  int64(0),
+			`read_average__dcname="DC0",disk="*",esxhostname="DC0_H0",moid="host-21",source="DC0_H0"`:                             int64(0),
+			`read_average__dcname="DC0",disk="*",esxhostname="DC0_H1",moid="host-32",source="DC0_H1"`:                             int64(0),
 			`usage_average__clustername="DC0_C0",dcname="DC0",disk="*",esxhostname="DC0_C0_H0",moid="host-45",source="DC0_C0_H0"`: int64(0),
 			`usage_average__dcname="DC0",disk="*",esxhostname="DC0_H0",moid="host-21",source="DC0_H0"`:                            int64(0),
 			`usage_average__dcname="DC0",disk="*",esxhostname="DC0_H1",moid="host-32",source="DC0_H1"`:                            int64(0),
+			`write_average__clustername="DC0_C0",dcname="DC0",disk="*",esxhostname="DC0_C0_H0",moid="host-45",source="DC0_C0_H0"`: int64(0),
+			`write_average__dcname="DC0",disk="*",esxhostname="DC0_H0",moid="host-21",source="DC0_H0"`:                            int64(0),
+			`write_average__dcname="DC0",disk="*",esxhostname="DC0_H1",moid="host-32",source="DC0_H1"`:                            int64(0),
 		},
 		"vsphere_host_mem": {
 			`active_average__clustername="DC0_C0",dcname="DC0",esxhostname="DC0_C0_H0",instance="*",moid="host-45",source="DC0_C0_H0"`:        int64(0),
@@ -285,9 +295,15 @@ func TestVSphereInputMultipleHosts(t *testing.T) {
 			`usage_average__dcname="DC0",esxhostname="DC0_H1",instance="*",moid="host-32",source="DC0_H1"`:                                    0.,
 		},
 		"vsphere_host_net": {
+			`received_average__clustername="DC0_C0",dcname="DC0",esxhostname="DC0_C0_H0",interface="*",moid="host-45",source="DC0_C0_H0"`:    int64(0),
+			`received_average__dcname="DC0",esxhostname="DC0_H0",interface="*",moid="host-21",source="DC0_H0"`:                               int64(0),
+			`received_average__dcname="DC0",esxhostname="DC0_H1",interface="*",moid="host-32",source="DC0_H1"`:                               int64(0),
 			`transmitted_average__clustername="DC0_C0",dcname="DC0",esxhostname="DC0_C0_H0",interface="*",moid="host-45",source="DC0_C0_H0"`: int64(0),
 			`transmitted_average__dcname="DC0",esxhostname="DC0_H0",interface="*",moid="host-21",source="DC0_H0"`:                            int64(0),
 			`transmitted_average__dcname="DC0",esxhostname="DC0_H1",interface="*",moid="host-32",source="DC0_H1"`:                            int64(0),
+			`usage_average__clustername="DC0_C0",dcname="DC0",esxhostname="DC0_C0_H0",interface="*",moid="host-45",source="DC0_C0_H0"`:       int64(0),
+			`usage_average__dcname="DC0",esxhostname="DC0_H0",interface="*",moid="host-21",source="DC0_H0"`:                                  int64(0),
+			`usage_average__dcname="DC0",esxhostname="DC0_H1",interface="*",moid="host-32",source="DC0_H1"`:                                  int64(0),
 		},
 		"vsphere_vm_cpu": {
 			`latency_average__clustername="DC0_C0",cpu="*",dcname="DC0",esxhostname="DC0_C0_H0",guest="other",moid="vm-56",rpname="Resources",source="DC0_C0_RP0_VM0",uuid="cd0681bf-2f18-5c00-9b9b-8197c0095348",vmname="DC0_C0_RP0_VM0"`: 0.,
