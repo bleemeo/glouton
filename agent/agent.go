@@ -1605,8 +1605,8 @@ func (a *agent) watchdog(ctx context.Context) error {
 			// all the goroutines. Use 2MB buffer which hopefully is enough
 			buffer := make([]byte, 1<<21)
 
-			runtime.Stack(buffer, true)
-			logger.Printf("%s", string(buffer))
+			n := runtime.Stack(buffer, true)
+			logger.Printf("%s", string(buffer[:n]))
 			logger.Printf("Glouton seems unhealthy, killing myself")
 			panic("Glouton seems unhealthy (health check is no longer running), killing myself")
 		default:

@@ -662,7 +662,6 @@ func (r *Registry) HealthCheck() {
 						lastScrape.Format(time.RFC3339),
 						reg.loop.interval.String(),
 					)
-					logger.Printf(msg)
 
 					// We don't panic immediately. We want to unlock reg before.
 					panicMessage = msg
@@ -677,12 +676,14 @@ func (r *Registry) HealthCheck() {
 		r.tooSlowConsecutiveError++
 
 		if r.tooSlowConsecutiveError >= 3 {
+			logger.Printf(panicMessage)
+
 			// We don't know how big the buffer needs to be to collect
 			// all the goroutines. Use 2MB buffer which hopefully is enough
 			buffer := make([]byte, 1<<21)
 
-			runtime.Stack(buffer, true)
-			logger.Printf("%s", string(buffer))
+			n := runtime.Stack(buffer, true)
+			logger.Printf("%s", string(buffer[:n]))
 
 			panic(panicMessage)
 		}
