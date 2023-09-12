@@ -65,7 +65,7 @@ func New(url string, username, password string, insecureSkipVerify, monitorVMs b
 		"net.transmitted.average",
 		"net.received.average",
 	}
-	vsphereInput.DatacenterExclude = []string{"*"}
+	vsphereInput.DatacenterMetricExclude = []string{"*"}
 	vsphereInput.ResourcePoolMetricExclude = []string{"*"}
 	vsphereInput.ClusterMetricExclude = []string{"*"}
 	vsphereInput.DatastoreMetricExclude = []string{"*"}

@@ -183,23 +183,6 @@ func TestVSphereInputNoHost(t *testing.T) {
 	}
 
 	expectedFields := msmsa{
-		"vsphere_datacenter_vmop": {
-			`numChangeDS_latest__dcname="DC0",moid="datacenter-2",source="DC0"`:      int64(0),
-			`numChangeHost_latest__dcname="DC0",moid="datacenter-2",source="DC0"`:    int64(0),
-			`numCreate_latest__dcname="DC0",moid="datacenter-2",source="DC0"`:        int64(0),
-			`numDestroy_latest__dcname="DC0",moid="datacenter-2",source="DC0"`:       int64(0),
-			`numPoweroff_latest__dcname="DC0",moid="datacenter-2",source="DC0"`:      int64(0),
-			`numPoweron_latest__dcname="DC0",moid="datacenter-2",source="DC0"`:       int64(0),
-			`numRebootGuest_latest__dcname="DC0",moid="datacenter-2",source="DC0"`:   int64(0),
-			`numReconfigure_latest__dcname="DC0",moid="datacenter-2",source="DC0"`:   int64(0),
-			`numRegister_latest__dcname="DC0",moid="datacenter-2",source="DC0"`:      int64(0),
-			`numReset_latest__dcname="DC0",moid="datacenter-2",source="DC0"`:         int64(0),
-			`numSVMotion_latest__dcname="DC0",moid="datacenter-2",source="DC0"`:      int64(0),
-			`numShutdownGuest_latest__dcname="DC0",moid="datacenter-2",source="DC0"`: int64(0),
-			`numSuspend_latest__dcname="DC0",moid="datacenter-2",source="DC0"`:       int64(0),
-			`numUnregister_latest__dcname="DC0",moid="datacenter-2",source="DC0"`:    int64(0),
-			`numVMotion_latest__dcname="DC0",moid="datacenter-2",source="DC0"`:       int64(0),
-		},
 		"vsphere_host_cpu": {
 			`usage_average__clustername="DC0_C0",cpu="*",dcname="DC0",esxhostname="DC0_C0_H0",moid="host-23",source="DC0_C0_H0"`: 0.,
 		},
@@ -261,23 +244,6 @@ func TestVSphereInputMultipleHosts(t *testing.T) {
 	}
 
 	expectedFields := msmsa{
-		"vsphere_datacenter_vmop": {
-			`numChangeDS_latest__dcname="DC0",moid="datacenter-2",source="DC0"`:      int64(0),
-			`numChangeHost_latest__dcname="DC0",moid="datacenter-2",source="DC0"`:    int64(0),
-			`numCreate_latest__dcname="DC0",moid="datacenter-2",source="DC0"`:        int64(0),
-			`numDestroy_latest__dcname="DC0",moid="datacenter-2",source="DC0"`:       int64(0),
-			`numPoweroff_latest__dcname="DC0",moid="datacenter-2",source="DC0"`:      int64(0),
-			`numPoweron_latest__dcname="DC0",moid="datacenter-2",source="DC0"`:       int64(0),
-			`numRebootGuest_latest__dcname="DC0",moid="datacenter-2",source="DC0"`:   int64(0),
-			`numReconfigure_latest__dcname="DC0",moid="datacenter-2",source="DC0"`:   int64(0),
-			`numRegister_latest__dcname="DC0",moid="datacenter-2",source="DC0"`:      int64(0),
-			`numReset_latest__dcname="DC0",moid="datacenter-2",source="DC0"`:         int64(0),
-			`numSVMotion_latest__dcname="DC0",moid="datacenter-2",source="DC0"`:      int64(0),
-			`numShutdownGuest_latest__dcname="DC0",moid="datacenter-2",source="DC0"`: int64(0),
-			`numSuspend_latest__dcname="DC0",moid="datacenter-2",source="DC0"`:       int64(0),
-			`numUnregister_latest__dcname="DC0",moid="datacenter-2",source="DC0"`:    int64(0),
-			`numVMotion_latest__dcname="DC0",moid="datacenter-2",source="DC0"`:       int64(0),
-		},
 		"vsphere_host_cpu": {
 			`usage_average__clustername="DC0_C0",cpu="*",dcname="DC0",esxhostname="DC0_C0_H0",moid="host-45",source="DC0_C0_H0"`: 0.,
 			`usage_average__cpu="*",dcname="DC0",esxhostname="DC0_H0",moid="host-21",source="DC0_H0"`:                            0.,
