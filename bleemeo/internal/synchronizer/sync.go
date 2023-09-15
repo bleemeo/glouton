@@ -61,6 +61,7 @@ const (
 	syncMethodAccountConfig = "accountconfig"
 	syncMethodMonitor       = "monitor"
 	syncMethodSNMP          = "snmp"
+	syncMethodVSphere       = "vsphere"
 	syncMethodFact          = "facts"
 	syncMethodService       = "service"
 	syncMethodContainer     = "container"
@@ -789,6 +790,7 @@ func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) (map[str
 		{name: syncMethodFact, method: s.syncFacts},
 		{name: syncMethodContainer, method: s.syncContainers},
 		{name: syncMethodSNMP, method: s.syncSNMP},
+		{name: syncMethodVSphere, method: s.syncVSphere},
 		{name: syncMethodService, method: s.syncServices},
 		{name: syncMethodMonitor, method: s.syncMonitors, skipOnlyEssential: true},
 		{name: syncMethodMetric, method: s.syncMetrics},
@@ -935,6 +937,7 @@ func (s *Synchronizer) syncToPerform(ctx context.Context) (map[string]bool, bool
 		syncMethods[syncMethodAccountConfig] = true
 		syncMethods[syncMethodMonitor] = true
 		syncMethods[syncMethodSNMP] = true
+		syncMethods[syncMethodVSphere] = true
 		syncMethods[syncMethodAlertingRules] = true
 		syncMethods[syncMethodCrashReports] = true
 	}

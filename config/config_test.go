@@ -104,6 +104,7 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 			InitialAgentName:                  "name1",
 			InitialServerGroupName:            "name2",
 			InitialServerGroupNameForSNMP:     "name3",
+			InitialServerGroupNameForVSphere:  "name4",
 			MQTT: BleemeoMQTT{
 				CAFile:      "/myca",
 				Host:        "mqtt.bleemeo.com",

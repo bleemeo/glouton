@@ -153,6 +153,7 @@ type agent struct {
 	mqtt                   *mqtt.MQTT
 	pahoLogWrapper         *client.LogWrapper
 	fluentbitManager       *fluentbit.Manager
+	vSphereManager         *vsphere.Manager
 
 	triggerHandler            *debouncer.Debouncer
 	triggerLock               sync.Mutex
@@ -1000,6 +1001,8 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 	baseRules := fluentbit.PromQLRulesFromInputs(a.config.Log.Inputs)
 	a.rulesManager = rules.NewManager(ctx, a.store, baseRules)
 
+	a.vSphereManager = &vsphere.Manager{}
+
 	if a.config.Bleemeo.Enable {
 		scaperName := a.config.Blackbox.ScraperName
 		if scaperName == "" {
@@ -1028,6 +1031,8 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 			BlackboxScraperName:            scaperName,
 			RebuildPromQLRules:             a.rulesManager.RebuildPromQLRules,
 			ReloadState:                    a.reloadState.Bleemeo(),
+			VSphereDevices:                 a.vSphereManager.Devices,
+			FindVSphereDevice:              a.vSphereManager.FindDevice,
 			IsContainerEnabled:             a.containerFilter.ContainerEnabled,
 			IsContainerNameRecentlyDeleted: a.containerRuntime.IsContainerNameRecentlyDeleted,
 			IsMetricAllowed:                a.metricFilter.isAllowedAndNotDenied,
@@ -1377,10 +1382,7 @@ func (a *agent) registerInputs() {
 	input, opts, err := temp.New()
 	a.registerInput("Temp", input, opts, err)
 
-	for i, vSphere := range a.config.VSpheres {
-		input, opts, err := vsphere.New(vSphere.URL, vSphere.Username, vSphere.Password, vSphere.InsecureSkipVerify, vSphere.MonitorVMs)
-		a.registerInput(fmt.Sprintf("vSphere-%d", i+1), input, opts, err)
-	}
+	a.vSphereManager.RegisterInputs(a.config.VSpheres, a.registerInput)
 }
 
 // Register a single input.
@@ -1393,10 +1395,11 @@ func (a *agent) registerInput(name string, input telegraf.Input, opts *inputs.Ga
 
 	_, err = a.gathererRegistry.RegisterInput(
 		registry.RegistrationOption{
-			Description: fmt.Sprintf("Input %s", name),
-			JitterSeed:  baseJitter,
-			Rules:       opts.Rules,
-			MinInterval: opts.MinInterval,
+			Description:         fmt.Sprintf("Input %s", name),
+			JitterSeed:          baseJitter,
+			Rules:               opts.Rules,
+			MinInterval:         opts.MinInterval,
+			ApplyDynamicRelabel: opts.ApplyDynamicRelabel,
 		},
 		input,
 	)

@@ -498,6 +498,40 @@ func (c *Connector) RelabelHook(ctx context.Context, labels map[string]string) (
 		labels[gloutonTypes.LabelMetaBleemeoTargetAgentUUID] = kubernetesAgentID
 	}
 
+	if vSphere := labels[gloutonTypes.LabelMetaVSphere]; vSphere != "" {
+		device := c.option.FindVSphereDevice(ctx, vSphere, labels["moid"])
+		if device == nil {
+			// Trigger a registration ? (won't last too long because device discovery has just been done)
+			return labels, true
+		}
+
+		var agentType string = types.AgentTypeSNMP
+
+		// FIXME: uncomment when API has vSphere agent types
+		/*switch device.Kind() {
+		case vsphere.KindHost:
+			agentType = types.AgentTypeVSphereHost
+		case vsphere.KindVM:
+			agentType = types.AgentTypeVSphereVM
+		default:
+			return labels, true
+		}*/
+
+		vSphereAgentTypeID, err := c.agentTypeID(agentType)
+		if err != nil {
+			return labels, true
+		}
+
+		agent, err := c.sync.FindVSphereAgent(ctx, device, vSphereAgentTypeID, c.cache.AgentsByUUID())
+		if err != nil {
+			logger.V(2).Printf("FindVSphereAgent failed: %w", err)
+
+			return labels, true
+		}
+
+		labels[gloutonTypes.LabelMetaBleemeoTargetAgentUUID] = agent.ID
+	}
+
 	return labels, false
 }
 

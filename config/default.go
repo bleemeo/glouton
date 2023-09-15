@@ -106,6 +106,7 @@ func DefaultConfig() Config { //nolint:maintidx
 			InitialAgentName:                  "",
 			InitialServerGroupName:            "",
 			InitialServerGroupNameForSNMP:     "",
+			InitialServerGroupNameForVSphere:  "",
 			MQTT: BleemeoMQTT{
 				CAFile:      "",
 				Host:        "mqtt.bleemeo.com",

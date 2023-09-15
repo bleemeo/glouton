@@ -21,6 +21,7 @@ import (
 	"glouton/config"
 	"glouton/discovery"
 	"glouton/facts"
+	"glouton/inputs/vsphere"
 	"glouton/prometheus/exporter/snmp"
 	"glouton/prometheus/rules"
 	"glouton/threshold"
@@ -49,6 +50,8 @@ type GlobalOption struct {
 	NotifyLabelsUpdate      func()
 	BlackboxScraperName     string
 	ReloadState             BleemeoReloadState
+	VSphereDevices          func(ctx context.Context, maxAge time.Duration) []vsphere.Device
+	FindVSphereDevice       func(ctx context.Context, vSphere, moid string) vsphere.Device
 
 	UpdateMetricResolution         func(ctx context.Context, defaultResolution time.Duration, snmpResolution time.Duration)
 	UpdateThresholds               func(ctx context.Context, thresholds map[string]threshold.Threshold, firstUpdate bool)

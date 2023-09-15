@@ -189,6 +189,7 @@ type Bleemeo struct {
 	InitialAgentName                  string      `yaml:"initial_agent_name"`
 	InitialServerGroupName            string      `yaml:"initial_server_group_name"`
 	InitialServerGroupNameForSNMP     string      `yaml:"initial_server_group_name_for_snmp"`
+	InitialServerGroupNameForVSphere  string      `yaml:"initial_server_group_name_for_vsphere"`
 	MQTT                              BleemeoMQTT `yaml:"mqtt"`
 	RegistrationKey                   string      `yaml:"registration_key"`
 	Sentry                            Sentry      `yaml:"sentry"`

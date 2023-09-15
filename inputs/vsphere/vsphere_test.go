@@ -19,6 +19,7 @@ package vsphere
 import (
 	"crypto/tls"
 	"fmt"
+	"glouton/config"
 	"glouton/inputs/internal"
 	"glouton/types"
 	"strings"
@@ -162,7 +163,17 @@ func setupVSphereTest(t *testing.T, hostsCount int) (vsphereInput *vsphere.VSphe
 
 	lgr := &logHandler{}
 
-	input, _, err := New(server.URL.String(), "user", "pass", true, true)
+	vSphere := &vSphere{
+		opts: config.VSphere{
+			URL:                server.URL.String(),
+			Username:           "user",
+			Password:           "pass",
+			InsecureSkipVerify: true,
+			MonitorVMs:         true,
+		},
+	}
+
+	input, _, err := vSphere.makeInput()
 	if err != nil {
 		t.Fatal("Failed to create vSphere input:", err)
 	}
