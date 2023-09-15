@@ -25,6 +25,7 @@ import (
 	"glouton/config"
 	"glouton/discovery"
 	"glouton/facts"
+	"glouton/inputs/vsphere"
 	"glouton/prometheus/exporter/snmp"
 	"glouton/prometheus/model"
 	"glouton/store"
@@ -62,6 +63,7 @@ type syncTestHelper struct {
 	discovery  *discovery.MockDiscoverer
 	store      *store.Store
 	httpServer *httptest.Server
+	devices    []vsphere.Device
 
 	// Following fields are options used by some method
 	SNMP               []*snmp.Target
@@ -167,6 +169,7 @@ func (helper *syncTestHelper) initSynchronizer(t *testing.T) {
 			SNMP:                       helper.SNMP,
 			SNMPOnlineTarget:           func() int { return len(helper.SNMP) },
 			NotifyLabelsUpdate:         helper.NotifyLabelsUpdate,
+			VSphereDevices:             func(context.Context, time.Duration) []vsphere.Device { return helper.devices },
 			IsContainerEnabled:         facts.ContainerFilter{}.ContainerEnabled,
 			IsMetricAllowed:            func(_ map[string]string) bool { return true },
 			BlackboxScraperName:        helper.cfg.Blackbox.ScraperName,

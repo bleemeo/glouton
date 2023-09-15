@@ -117,6 +117,7 @@ const (
 	LabelMetaScrapeJob              = "__meta_scrape_job"
 	LabelMetaSNMPTarget             = "__meta_snmp_target"
 	LabelMetaKubernetesCluster      = "__meta_kubernetes_cluster"
+	LabelMetaVSphere                = "__meta_vsphere"
 	LabelMetaBleemeoTargetAgent     = "__meta_bleemeo_target_agent"
 	LabelMetaBleemeoTargetAgentUUID = "__meta_bleemeo_target_agent_uuid"
 	LabelMetaBleemeoUUID            = "__meta_bleemeo_uuid"

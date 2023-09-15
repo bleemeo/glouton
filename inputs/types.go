@@ -289,4 +289,7 @@ type GathererOptions struct {
 	GatherModifier func(mfs []*dto.MetricFamily) []*dto.MetricFamily
 	// The delay to wait for between gathers.
 	MinInterval time.Duration
+
+	// ApplyDynamicRelabel controls whether the metrics should go through the relabel hook.
+	ApplyDynamicRelabel bool
 }

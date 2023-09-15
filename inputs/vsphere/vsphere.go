@@ -17,8 +17,13 @@
 package vsphere
 
 import (
+	"context"
+	"fmt"
+	"glouton/config"
 	"glouton/inputs"
 	"glouton/inputs/internal"
+	"glouton/logger"
+	"glouton/types"
 	"strings"
 	"time"
 
@@ -27,7 +32,42 @@ import (
 	"github.com/influxdata/telegraf/plugins/inputs/vsphere"
 )
 
-func New(url string, username, password string, insecureSkipVerify, monitorVMs bool) (telegraf.Input, *inputs.GathererOptions, error) {
+type vSphere struct {
+	host string
+	opts config.VSphere
+}
+
+func (vSphere *vSphere) String() string {
+	return fmt.Sprintf("vSphere(%s)", vSphere.host)
+}
+
+func (vSphere *vSphere) devices(ctx context.Context, deviceChan chan<- Device) {
+	soapCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	logger.Printf("Discovering devices for vSphere %q ...", vSphere.host) // TODO: remove
+
+	finder, err := newDeviceFinder(soapCtx, vSphere.opts)
+	if err != nil {
+		logger.V(1).Printf("Can't create vSphere client for %q: %v", vSphere.host, err)
+
+		return
+	}
+
+	hosts, vms, err := findDevices(soapCtx, finder)
+	if err != nil {
+		logger.V(1).Printf("Can't find devices on vSphere %q: %v", vSphere.host, err)
+
+		return
+	}
+
+	logger.Printf("Found %d hosts and %d vms.", len(hosts), len(vms))
+
+	describeHosts(soapCtx, hosts, deviceChan)
+	describeVMs(soapCtx, vms, deviceChan)
+}
+
+func (vSphere *vSphere) makeInput() (telegraf.Input, *inputs.GathererOptions, error) {
 	input, ok := telegraf_inputs.Inputs["vsphere"]
 	if !ok {
 		return nil, nil, inputs.ErrDisabledInput
@@ -38,11 +78,11 @@ func New(url string, username, password string, insecureSkipVerify, monitorVMs b
 		return nil, nil, inputs.ErrUnexpectedType
 	}
 
-	vsphereInput.Vcenters = []string{url}
-	vsphereInput.Username = username
-	vsphereInput.Password = password
+	vsphereInput.Vcenters = []string{vSphere.opts.URL}
+	vsphereInput.Username = vSphere.opts.Username
+	vsphereInput.Password = vSphere.opts.Password
 
-	vsphereInput.VMInstances = monitorVMs
+	vsphereInput.VMInstances = vSphere.opts.MonitorVMs
 	vsphereInput.VMMetricInclude = []string{
 		"cpu.usage.average",
 		"cpu.latency.average",
@@ -70,18 +110,36 @@ func New(url string, username, password string, insecureSkipVerify, monitorVMs b
 	vsphereInput.ClusterMetricExclude = []string{"*"}
 	vsphereInput.DatastoreMetricExclude = []string{"*"}
 
-	vsphereInput.InsecureSkipVerify = insecureSkipVerify
+	vsphereInput.InsecureSkipVerify = vSphere.opts.InsecureSkipVerify
 
 	internalInput := &internal.Input{
 		Input: vsphereInput,
 		Accumulator: internal.Accumulator{
 			RenameMetrics:    renameMetrics,
 			TransformMetrics: transformMetrics,
+			RenameGlobal:     vSphere.renameGlobal,
 		},
 		Name: "vSphere",
 	}
+	opts := &inputs.GathererOptions{
+		MinInterval:         20 * time.Second,
+		ApplyDynamicRelabel: true,
+	}
 
-	return internalInput, &inputs.GathererOptions{MinInterval: 20 * time.Second}, nil
+	// As we only have one vCenter per telegraf input, perhaps we should
+	// build our own input designed for one vCenter; that would allow us
+	// to pass context to the collecting method, as well as only starting
+	// one goroutine per vCenter, instead of two now.
+	// Note: our input would still rely on telegraf's vSphere endpoint,
+	// but endpoints may be managed by us instead of telegraf's input.
+
+	return internalInput, opts, nil
+}
+
+func (vSphere *vSphere) renameGlobal(gatherContext internal.GatherContext) (result internal.GatherContext, drop bool) {
+	gatherContext.Tags[types.LabelMetaVSphere] = vSphere.host
+
+	return gatherContext, false
 }
 
 func renameMetrics(currentContext internal.GatherContext, metricName string) (newMeasurement string, newMetricName string) {

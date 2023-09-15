@@ -96,6 +96,25 @@ func (s *Synchronizer) syncFacts(ctx context.Context, fullSync bool, onlyEssenti
 				allAgentFacts[agent.ID] = facts
 			}
 		}
+
+		for _, dev := range s.option.VSphereDevices(ctx, 24*time.Hour) {
+			if agent, err := s.FindVSphereAgent(ctx, dev, agentTypeID, remoteAgentList); err == nil {
+				facts, err := dev.Facts(ctx, 24*time.Hour)
+				if err != nil {
+					logger.V(2).Printf("unable to get vSphere facts: %v", err)
+
+					// Reuse previous facts
+					tmp := previousFacts[agent.ID]
+					facts = make(map[string]string, len(tmp))
+
+					for _, v := range tmp {
+						facts[v.Key] = v.Value
+					}
+				}
+
+				allAgentFacts[agent.ID] = facts
+			}
+		}
 	}
 
 	// s.factUpdateList() is already done by checkDuplicated
