@@ -83,6 +83,7 @@ import (
 
 	"github.com/getsentry/sentry-go"
 	"github.com/influxdata/telegraf"
+	"github.com/shirou/gopsutil/v3/host"
 
 	bleemeoTypes "glouton/bleemeo/types"
 
@@ -730,6 +731,28 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 	_ = os.Remove(a.config.Agent.CloudImageCreationFile)
 
 	logger.Printf("Starting agent version %v (commit %v)", version.Version, version.BuildHash)
+
+	for key, value := range factsMap {
+		logger.V(2).Printf("Fact %s = %s", key, value)
+	}
+
+	uptimeRaw, err := host.UptimeWithContext(ctx)
+	if err != nil {
+		logger.V(2).Printf("failed to get uptime: %v", err)
+	} else {
+		uptime := time.Duration(uptimeRaw) * time.Second
+		boottime := time.Now().Add(-uptime)
+		logger.V(2).Printf("uptime: system booted %s ago, at %s", uptime, boottime.Format(time.RFC3339))
+	}
+
+	boottimeRaw, err := host.BootTime()
+	if err != nil {
+		logger.V(2).Printf("failed to get bootime: %v", err)
+	} else {
+		boottime := time.UnixMilli(int64(boottimeRaw) * 1000)
+		uptime := time.Since(boottime).Truncate(time.Second)
+		logger.V(2).Printf("bootime: system booted at %s, %s ago", boottime.Format(time.RFC3339), uptime)
+	}
 
 	_ = os.Remove(a.config.Agent.UpgradeFile)
 	_ = os.Remove(a.config.Agent.AutoUpgradeFile)
@@ -1605,8 +1628,8 @@ func (a *agent) watchdog(ctx context.Context) error {
 			// all the goroutines. Use 2MB buffer which hopefully is enough
 			buffer := make([]byte, 1<<21)
 
-			runtime.Stack(buffer, true)
-			logger.Printf("%s", string(buffer))
+			n := runtime.Stack(buffer, true)
+			logger.Printf("%s", string(buffer[:n]))
 			logger.Printf("Glouton seems unhealthy, killing myself")
 			panic("Glouton seems unhealthy (health check is no longer running), killing myself")
 		default:

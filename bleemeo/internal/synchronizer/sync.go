@@ -745,8 +745,8 @@ func (s *Synchronizer) HealthCheck() bool {
 				// all the goroutines. Use 2MB buffer which hopefully is enough
 				buffer := make([]byte, 1<<21)
 
-				runtime.Stack(buffer, true)
-				logger.Printf("%s", string(buffer))
+				n := runtime.Stack(buffer, true)
+				logger.Printf("%s", string(buffer[:n]))
 				panic("Glouton seems unhealthy (last API request too old), killing myself")
 			}
 		}

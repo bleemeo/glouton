@@ -883,8 +883,8 @@ func (c *Connector) HealthCheck() bool {
 					// all the goroutines. Use 2MB buffer which hopefully is enough
 					buffer := make([]byte, 1<<21)
 
-					runtime.Stack(buffer, true)
-					logger.Printf("%s", string(buffer))
+					n := runtime.Stack(buffer, true)
+					logger.Printf("%s", string(buffer[:n]))
 					panic(fmt.Sprint("Glouton seems unhealthy (last report too old), killing myself\n", c.DiagnosticPage()))
 				}
 			}
