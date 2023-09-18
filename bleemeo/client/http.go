@@ -425,9 +425,6 @@ func (c *HTTPClient) GetJWT(ctx context.Context) (types.JWT, error) {
 
 		token, err := c.getJWT(ctx, "v1/jwt-refresh/", body)
 
-		// The refresh token is unchanged.
-		token.Refresh = c.jwt.Refresh
-
 		if err == nil {
 			return token, nil
 		}
