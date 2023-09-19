@@ -1,3 +1,19 @@
+// Copyright 2015-2023 Bleemeo
+//
+// bleemeo.com an infrastructure monitoring solution in the Cloud
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package synchronizer
 
 import (
@@ -41,6 +57,10 @@ func (s *Synchronizer) FindVSphereAgent(ctx context.Context, device vsphere.Devi
 		return agent, nil
 	}
 
+	// For each vSphere device, try to match any vSphere agent that:
+	// has the correct FQDN & don't have current association.
+	// If no agent is found, one will be registered by s.vSphereRegisterAndUpdate().
+
 	devices := s.option.VSphereDevices(ctx, time.Hour)
 	associatedID := make(map[string]bool, len(devices))
 
@@ -73,7 +93,7 @@ func (s *Synchronizer) FindVSphereAgent(ctx context.Context, device vsphere.Devi
 }
 
 func (s *Synchronizer) vSphereRegisterAndUpdate(localTargets []vsphere.Device) error {
-	var newAgent []types.Agent //nolint: prealloc
+	var newAgents []types.Agent //nolint: prealloc
 
 	remoteAgentList := s.option.Cache.AgentsByUUID()
 
@@ -95,13 +115,13 @@ func (s *Synchronizer) vSphereRegisterAndUpdate(localTargets []vsphere.Device) e
 		case vsphere.KindVM:
 			agentTypeID = vmAgentTypeID
 		default:
-			logger.V(1).Printf("Unknown vSphere kind %q for device %s", device.Kind(), device.FQDN())
+			logger.V(1).Printf("Unknown vSphere kind %q for device %s", kind, device.FQDN())
 
 			continue
 		}
 
 		if _, err := s.FindVSphereAgent(s.ctx, device, agentTypeID, remoteAgentList); err != nil && !errors.Is(err, errNotExist) {
-			logger.V(0).Printf("Skip registration of vSphere agent: %v", err) // TODO:2
+			logger.V(0).Printf("Skip registration of vSphere agent: %v", err) // TODO: V(2)
 
 			continue
 		} else if err == nil {
@@ -116,7 +136,7 @@ func (s *Synchronizer) vSphereRegisterAndUpdate(localTargets []vsphere.Device) e
 		payload := payloadAgent{
 			Agent: types.Agent{
 				FQDN:        device.FQDN(),
-				DisplayName: device.Kind() + " " + device.MOID(),
+				DisplayName: device.Name(),
 				AgentType:   agentTypeID,
 				Tags:        []types.Tag{},
 			},
@@ -125,25 +145,25 @@ func (s *Synchronizer) vSphereRegisterAndUpdate(localTargets []vsphere.Device) e
 			InitialServerGroup: serverGroup,
 		}
 
-		tmp, err := s.remoteRegisterVSphereDevice(params, payload)
+		registeredAgent, err := s.remoteRegisterVSphereDevice(params, payload)
 		if err != nil {
 			return err
 		}
 
-		newAgent = append(newAgent, tmp)
+		newAgents = append(newAgents, registeredAgent)
+
 		err = s.option.State.Set("bleemeo:vsphere:"+device.FQDN(), vSphereAssociation{
 			FQDN: device.FQDN(),
-			ID:   tmp.ID,
+			ID:   registeredAgent.ID,
 		})
-
 		if err != nil {
-			logger.V(0).Printf("Failed to update state: %v", err) // TODO:2
+			logger.V(0).Printf("Failed to update state: %v", err) // TODO: V(2)
 		}
 	}
 
-	if len(newAgent) > 0 {
+	if len(newAgents) > 0 {
 		agents := s.option.Cache.Agents()
-		agents = append(agents, newAgent...)
+		agents = append(agents, newAgents...)
 		s.option.Cache.SetAgentList(agents)
 	}
 
@@ -182,4 +202,20 @@ func (s *Synchronizer) getVSphereAgentTypes() (hostAgentTypeID, vmAgentTypeID st
 	}
 
 	return hostAgentTypeID, vmAgentTypeID, foundBoth
+}
+
+func (s *Synchronizer) getVSphereAgentType(kind string) (agentTypeID string, found bool) {
+	hostAgentTypeID, vmAgentTypeID, found := s.getVSphereAgentTypes()
+	if !found {
+		return "", false
+	}
+
+	switch kind {
+	case vsphere.KindHost:
+		return hostAgentTypeID, true
+	case vsphere.KindVM:
+		return vmAgentTypeID, true
+	default:
+		return "", false
+	}
 }

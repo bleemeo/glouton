@@ -122,7 +122,7 @@ func (vSphere *vSphere) makeInput() (telegraf.Input, *inputs.GathererOptions, er
 		Name: "vSphere",
 	}
 	opts := &inputs.GathererOptions{
-		MinInterval:         20 * time.Second,
+		MinInterval:         time.Minute,
 		ApplyDynamicRelabel: true,
 	}
 

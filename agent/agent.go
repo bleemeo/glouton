@@ -1001,7 +1001,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 	baseRules := fluentbit.PromQLRulesFromInputs(a.config.Log.Inputs)
 	a.rulesManager = rules.NewManager(ctx, a.store, baseRules)
 
-	a.vSphereManager = &vsphere.Manager{}
+	a.vSphereManager = new(vsphere.Manager)
 
 	if a.config.Bleemeo.Enable {
 		scaperName := a.config.Blackbox.ScraperName
