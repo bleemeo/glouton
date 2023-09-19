@@ -292,20 +292,18 @@ var (
 
 		// vSphere
 		//   VM metrics
-		"vsphere_vm_cpu_used",
+		"vsphere_vm_cpu_used_perc",
 		"vsphere_vm_cpu_latency",
-		"vsphere_vm_mem_active",
-		"vsphere_vm_mem_used",
+		"vsphere_vm_mem_used_perc",
 		"vsphere_vm_swap_used",
 		"vsphere_vm_io_read_bytes",
 		"vsphere_vm_io_write_bytes",
 		"vsphere_vm_net_bits_recv",
 		"vsphere_vm_net_bits_sent",
 		//    Host metrics
-		"vsphere_host_cpu_used",
-		"vsphere_host_mem_active",
+		"vsphere_host_cpu_used_perc",
 		"vsphere_host_mem_total",
-		"vsphere_host_mem_used",
+		"vsphere_host_mem_used_perc",
 		"vsphere_host_swap_out",
 		"vsphere_host_io_read_bytes",
 		"vsphere_host_io_write_bytes",
