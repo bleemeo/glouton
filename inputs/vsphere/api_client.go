@@ -1,13 +1,29 @@
+// Copyright 2015-2023 Bleemeo
+//
+// bleemeo.com an infrastructure monitoring solution in the Cloud
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package vsphere
 
 import (
 	"context"
 	"fmt"
 	"glouton/config"
+	"glouton/facts"
 	"glouton/logger"
 	"net/url"
 	"strings"
-	"time"
 
 	"github.com/vmware/govmomi"
 	"github.com/vmware/govmomi/find"
@@ -21,16 +37,19 @@ var (
 	relevantHostProperties = []string{
 		"hardware.cpuInfo.numCpuCores",
 		"summary.hardware.cpuModel",
+		"summary.config.name",
+		"config.option",
 		"hardware.memorySize",
 		"config.product.osType",
 		"summary.hardware.model",
 		"summary.hardware.vendor",
 		"config.dateTimeInfo.timeZone.name",
+		"config.network.dnsConfig.domainName",
+		"config.network.vnic",
 		// config.vmotion.ipConfig.ipAddress ?
 		// config.ipmi.bmcIpAddress ?
 		// config.ipmi.bmcMacAddress ?
 		"config.network.ipV6Enabled",
-		"runtime.hostMaxVirtualDiskCapacity",
 		"config.product.version",
 		"summary.config.vmotionEnabled",
 	}
@@ -106,34 +125,62 @@ func describeHosts(ctx context.Context, rawHosts []*object.HostSystem, deviceCha
 }
 
 func describeHost(host *object.HostSystem, hostProps mo.HostSystem) *HostSystem {
-	facts := map[string]string{
+	hostFacts := map[string]string{
 		"cpu_cores":      str(hostProps.Summary.Hardware.NumCpuCores),
 		"cpu_model_name": hostProps.Summary.Hardware.CpuModel,
+		"hostname":       hostProps.Summary.Config.Name,
 		"product_name":   hostProps.Summary.Hardware.Model,
 		"system_vendor":  hostProps.Summary.Hardware.Vendor,
 		// custom
-		"boot_time":          hostProps.Runtime.BootTime.Format(time.RFC3339),
-		"max_vdisk_capacity": str(hostProps.Runtime.HostMaxVirtualDiskCapacity),
-		"vmotion_enabled":    str(hostProps.Summary.Config.VmotionEnabled),
-		"reboot_required":    str(hostProps.Summary.RebootRequired),
+		"vmotion_enabled": str(hostProps.Summary.Config.VmotionEnabled),
 	}
 
 	if hostProps.Hardware != nil {
-		facts["cpu_cores"] = str(hostProps.Hardware.CpuInfo.NumCpuCores)
-		facts["memory"] = str(hostProps.Hardware.MemorySize)
+		hostFacts["cpu_cores"] = str(hostProps.Hardware.CpuInfo.NumCpuCores)
+		hostFacts["memory"] = facts.ByteCountDecimal(uint64(hostProps.Hardware.MemorySize))
 	}
 
 	if hostProps.Config != nil {
-		facts["os_pretty_name"] = hostProps.Config.Product.OsType
-		facts["timezone"] = hostProps.Config.DateTimeInfo.TimeZone.Name
-		facts["ipv6_enabled"] = str(*hostProps.Config.Network.IpV6Enabled)
-		facts["version"] = hostProps.Config.Product.Version
+		hostFacts["os_pretty_name"] = hostProps.Config.Product.OsType
+		hostFacts["ipv6_enabled"] = str(*hostProps.Config.Network.IpV6Enabled)
+		hostFacts["version"] = hostProps.Config.Product.Version
+
+		if hostProps.Config.DateTimeInfo != nil {
+			hostFacts["timezone"] = hostProps.Config.DateTimeInfo.TimeZone.Name
+		}
+
+		if hostProps.Config.Network != nil {
+			if dns := hostProps.Config.Network.DnsConfig; dns != nil {
+				if cfg := dns.GetHostDnsConfig(); cfg != nil {
+					hostFacts["domain"] = cfg.DomainName
+				}
+			}
+
+			if vnic := hostProps.Config.Network.Vnic; len(vnic) > 0 {
+				if vnic[0].Spec.Ip != nil {
+					hostFacts["primary_address"] = vnic[0].Spec.Ip.IpAddress
+				}
+			}
+		}
+
+		if hostFacts["hostname"] == "" {
+			for _, opt := range hostProps.Config.Option {
+				if optValue := opt.GetOptionValue(); optValue != nil {
+					if optValue.Key == "Misc.HostName" {
+						hostFacts["hostname"], _ = optValue.Value.(string)
+
+						break
+					}
+				}
+			}
+		}
 	}
 
 	dev := device{
 		source: host.Client().URL().Host,
 		moid:   host.Reference().Value,
-		facts:  facts,
+		name:   fallback(hostFacts["hostname"], host.Reference().Value),
+		facts:  hostFacts,
 	}
 
 	dev.facts["fqdn"] = dev.FQDN()
@@ -157,18 +204,18 @@ func describeVMs(ctx context.Context, rawVMs []*object.VirtualMachine, deviceCha
 }
 
 func describeVM(ctx context.Context, vm *object.VirtualMachine, vmProps mo.VirtualMachine) *VirtualMachine {
-	facts := make(map[string]string)
+	vmFacts := make(map[string]string)
 
 	if vmProps.Config != nil {
-		facts["cpu_cores"] = str(vmProps.Config.Hardware.NumCPU)
-		facts["memory"] = str(vmProps.Config.Hardware.MemoryMB)
-		facts["os_pretty_name"] = vmProps.Config.GuestFullName
-		facts["version"] = vmProps.Config.Version
-		facts["vm_name"] = vmProps.Config.Name
+		vmFacts["cpu_cores"] = str(vmProps.Config.Hardware.NumCPU)
+		vmFacts["memory"] = facts.ByteCountDecimal(uint64(vmProps.Config.Hardware.MemoryMB))
+		vmFacts["os_pretty_name"] = vmProps.Config.GuestFullName
+		vmFacts["version"] = vmProps.Config.Version
+		vmFacts["vm_name"] = vmProps.Config.Name
 
 		if vmProps.Summary.Config.Product != nil {
-			facts["product_name"] = vmProps.Summary.Config.Product.Name
-			facts["system_vendor"] = vmProps.Summary.Config.Product.Vendor
+			vmFacts["product_name"] = vmProps.Summary.Config.Product.Name
+			vmFacts["system_vendor"] = vmProps.Summary.Config.Product.Vendor
 		}
 
 		if datastores := vmProps.Config.DatastoreUrl; len(datastores) > 0 {
@@ -177,39 +224,36 @@ func describeVM(ctx context.Context, vm *object.VirtualMachine, vmProps mo.Virtu
 				dsNames[i] = datastore.Name
 			}
 
-			facts["datastore"] = strings.Join(dsNames, ", ")
+			vmFacts["datastore"] = strings.Join(dsNames, ", ")
 		}
 	}
 
-	if vmProps.Runtime.BootTime != nil {
-		facts["boot_time"] = vmProps.Runtime.BootTime.Format(time.RFC3339)
-	}
-
 	if vmProps.Runtime.Host != nil {
-		facts["host"] = vmProps.Runtime.Host.Value
+		vmFacts["host"] = vmProps.Runtime.Host.Value
 	}
 
 	if vmProps.ResourcePool != nil {
-		facts["resource_pool"] = vmProps.ResourcePool.Value
+		vmFacts["resource_pool"] = vmProps.ResourcePool.Value
 	}
 
 	if vmProps.Guest != nil {
-		facts["primary_address"] = vmProps.Guest.IpAddress
+		vmFacts["primary_address"] = vmProps.Guest.IpAddress
 	}
 
 	switch {
 	case vmProps.Guest != nil && vmProps.Guest.HostName != "":
-		facts["hostname"] = vmProps.Guest.HostName
+		vmFacts["hostname"] = vmProps.Guest.HostName
 	case vmProps.Summary.Vm != nil:
-		facts["hostname"] = vmProps.Summary.Vm.Value
+		vmFacts["hostname"] = vmProps.Summary.Vm.Value
 	default:
-		facts["hostname"] = vm.Reference().Value
+		vmFacts["hostname"] = vm.Reference().Value
 	}
 
 	dev := device{
 		source: vm.Client().URL().Host,
 		moid:   vm.Reference().Value,
-		facts:  facts,
+		name:   fallback(vmFacts["vm_name"], vm.Reference().Value),
+		facts:  vmFacts,
 	}
 
 	dev.facts["fqdn"] = dev.FQDN()
@@ -221,3 +265,11 @@ func describeVM(ctx context.Context, vm *object.VirtualMachine, vmProps mo.Virtu
 }
 
 func str(v any) string { return fmt.Sprint(v) }
+
+func fallback(v string, otherwise string) string {
+	if v != "" {
+		return v
+	}
+
+	return otherwise
+}
