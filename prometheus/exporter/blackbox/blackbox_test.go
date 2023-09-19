@@ -1127,24 +1127,18 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					types.LabelInstanceUUID: agentID,
 					types.LabelScraper:      agentFQDN,
 				},
+				{
+					types.LabelName:         "probe_duration_seconds",
+					types.LabelInstance:     targetNotYetKnown,
+					types.LabelInstanceUUID: agentID,
+					types.LabelScraper:      agentFQDN,
+				},
 			},
 			wantPoints: []types.MetricPoint{
 				{
 					Point: types.Point{Time: t0, Value: 0},
 					Labels: map[string]string{
 						types.LabelName:         "probe_success",
-						types.LabelInstance:     targetNotYetKnown,
-						types.LabelInstanceUUID: agentID,
-						types.LabelScraper:      agentFQDN,
-					},
-					Annotations: types.MetricAnnotations{
-						BleemeoAgentID: agentID,
-					},
-				},
-				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
-					Labels: map[string]string{
-						types.LabelName:         "probe_duration_seconds",
 						types.LabelInstance:     targetNotYetKnown,
 						types.LabelInstanceUUID: agentID,
 						types.LabelScraper:      agentFQDN,
@@ -1225,10 +1219,22 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 			},
 		},
 		{
+			// This test don't work as expected. It's a timeout, but not where I initially expected.
+			// It's not the same as trying to connect to blackhole IP (e.g. http://1.2.3.4):
+			// * when connecting to blackhole target, we receive no response at all and we hit the context deadline
+			// * in this test, the TCP connection is established (so TCP syn packet is received and we
+			//   timeout in the TLS handshake).
+			//   At the end this test is probably the same as timeout-tls-handshake
 			name: "timeout-in-tcp-accept",
 			absentPoints: []map[string]string{
 				{
 					types.LabelName:         "probe_ssl_earliest_cert_expiry",
+					types.LabelInstance:     targetNotYetKnown,
+					types.LabelInstanceUUID: agentID,
+					types.LabelScraper:      agentFQDN,
+				},
+				{
+					types.LabelName:         "probe_duration_seconds",
 					types.LabelInstance:     targetNotYetKnown,
 					types.LabelInstanceUUID: agentID,
 					types.LabelScraper:      agentFQDN,
@@ -1239,18 +1245,6 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 					Point: types.Point{Time: t0, Value: 0},
 					Labels: map[string]string{
 						types.LabelName:         "probe_success",
-						types.LabelInstance:     targetNotYetKnown,
-						types.LabelInstanceUUID: agentID,
-						types.LabelScraper:      agentFQDN,
-					},
-					Annotations: types.MetricAnnotations{
-						BleemeoAgentID: agentID,
-					},
-				},
-				{
-					Point: types.Point{Time: t0, Value: math.NaN()},
-					Labels: map[string]string{
-						types.LabelName:         "probe_duration_seconds",
 						types.LabelInstance:     targetNotYetKnown,
 						types.LabelInstanceUUID: agentID,
 						types.LabelScraper:      agentFQDN,

@@ -27,6 +27,7 @@ import (
 	"net"
 	"net/http/httptrace"
 	"net/url"
+	"os"
 	"reflect"
 	"sync"
 	"time"
@@ -93,6 +94,7 @@ var errNoCertificates = errors.New("no server certificate")
 type roundTrip struct {
 	HostPort string
 	TLSState *tls.ConnectionState
+	TLSError error
 }
 
 type roundTripTLSVerify struct {
@@ -210,6 +212,7 @@ func (target configTarget) CollectWithContext(ctx context.Context, ch chan<- pro
 			}
 
 			currentRoundTrip.TLSState = &cs
+			currentRoundTrip.TLSError = e
 		},
 	})
 
@@ -288,7 +291,21 @@ func (target configTarget) CollectWithContext(ctx context.Context, ch chan<- pro
 		successVal = 1
 	}
 
-	if ctx.Err() == nil {
+	var timeoutInTLS bool
+
+	type timeoutIntf interface {
+		Timeout() bool
+	}
+
+	for _, roundTrip := range roundTrips {
+		timeoutErr, ok := roundTrip.TLSError.(timeoutIntf)
+
+		if errors.Is(roundTrip.TLSError, os.ErrDeadlineExceeded) || (ok && timeoutErr.Timeout()) {
+			timeoutInTLS = true
+		}
+	}
+
+	if ctx.Err() == nil && !timeoutInTLS {
 		// only emit probe_duration_seconds if it didn't timeout
 		ch <- prometheus.MustNewConstMetric(probeDurationDesc, prometheus.GaugeValue, duration.Seconds(), target.Name)
 	}
