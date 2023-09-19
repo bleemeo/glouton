@@ -150,6 +150,7 @@ func renameMetrics(currentContext internal.GatherContext, metricName string) (ne
 	// VM metrics
 	case "vsphere_vm_cpu":
 		newMetricName = strings.Replace(newMetricName, "usage", "used", 1)
+		newMetricName += "_perc" // For now, all VM CPU metrics are given as a percentage.
 	case "vsphere_vm_mem":
 		if newMetricName == "swapped" {
 			newMeasurement = "vsphere_vm_swap"
@@ -166,14 +167,14 @@ func renameMetrics(currentContext internal.GatherContext, metricName string) (ne
 		newMetricName = strings.Replace(newMetricName, "transmitted", "bits_sent", 1)
 	// Host metrics
 	case "vsphere_host_cpu":
-		newMetricName = strings.Replace(newMetricName, "usage", "used", 1)
+		newMetricName = strings.Replace(newMetricName, "usage", "used_perc", 1)
 	case "vsphere_host_mem":
 		if newMetricName == "swapout" {
 			newMeasurement = "vsphere_host_swap"
 			newMetricName = "out"
 		} else {
 			newMetricName = strings.Replace(newMetricName, "totalCapacity", "total", 1)
-			newMetricName = strings.Replace(newMetricName, "usage", "used", 1)
+			newMetricName = strings.Replace(newMetricName, "usage", "used_perc", 1)
 		}
 	case "vsphere_host_disk":
 		newMeasurement = "vsphere_host_io"
