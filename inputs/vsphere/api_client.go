@@ -132,7 +132,7 @@ func describeHost(host *object.HostSystem, hostProps mo.HostSystem) *HostSystem 
 		"product_name":   hostProps.Summary.Hardware.Model,
 		"system_vendor":  hostProps.Summary.Hardware.Vendor,
 		// custom
-		"vmotion_enabled": str(hostProps.Summary.Config.VmotionEnabled),
+		"vsphere_vmotion_enabled": str(hostProps.Summary.Config.VmotionEnabled),
 	}
 
 	if hostProps.Hardware != nil {
@@ -211,7 +211,7 @@ func describeVM(ctx context.Context, vm *object.VirtualMachine, vmProps mo.Virtu
 		vmFacts["memory"] = facts.ByteCountDecimal(uint64(vmProps.Config.Hardware.MemoryMB) * 1 << 20) // MB to B
 		vmFacts["os_pretty_name"] = vmProps.Config.GuestFullName
 		vmFacts["version"] = vmProps.Config.Version
-		vmFacts["vm_name"] = vmProps.Config.Name
+		vmFacts["vsphere_vm_name"] = vmProps.Config.Name
 
 		if vmProps.Summary.Config.Product != nil {
 			vmFacts["product_name"] = vmProps.Summary.Config.Product.Name
@@ -224,16 +224,16 @@ func describeVM(ctx context.Context, vm *object.VirtualMachine, vmProps mo.Virtu
 				dsNames[i] = datastore.Name
 			}
 
-			vmFacts["datastore"] = strings.Join(dsNames, ", ")
+			vmFacts["vsphere_datastore"] = strings.Join(dsNames, ", ")
 		}
 	}
 
 	if vmProps.Runtime.Host != nil {
-		vmFacts["host"] = vmProps.Runtime.Host.Value
+		vmFacts["vsphere_host"] = vmProps.Runtime.Host.Value
 	}
 
 	if vmProps.ResourcePool != nil {
-		vmFacts["resource_pool"] = vmProps.ResourcePool.Value
+		vmFacts["vsphere_resource_pool"] = vmProps.ResourcePool.Value
 	}
 
 	if vmProps.Guest != nil {
@@ -252,7 +252,7 @@ func describeVM(ctx context.Context, vm *object.VirtualMachine, vmProps mo.Virtu
 	dev := device{
 		source: vm.Client().URL().Host,
 		moid:   vm.Reference().Value,
-		name:   fallback(vmFacts["vm_name"], vm.Reference().Value),
+		name:   fallback(vmFacts["vsphere_vm_name"], vm.Reference().Value),
 		facts:  vmFacts,
 	}
 
