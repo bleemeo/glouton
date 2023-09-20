@@ -1,0 +1,301 @@
+<ObjectContent>
+  <obj type="VirtualMachine">1</obj>
+  <propSet>
+    <name>availableField</name>
+    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="ArrayOfCustomFieldDef"></val>
+  </propSet>
+  <propSet>
+    <name>capability</name>
+    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="VirtualMachineCapability">
+      <snapshotOperationsSupported>false</snapshotOperationsSupported>
+      <multipleSnapshotsSupported>false</multipleSnapshotsSupported>
+      <snapshotConfigSupported>false</snapshotConfigSupported>
+      <poweredOffSnapshotsSupported>false</poweredOffSnapshotsSupported>
+      <memorySnapshotsSupported>false</memorySnapshotsSupported>
+      <revertToSnapshotSupported>false</revertToSnapshotSupported>
+      <quiescedSnapshotsSupported>false</quiescedSnapshotsSupported>
+      <disableSnapshotsSupported>false</disableSnapshotsSupported>
+      <lockSnapshotsSupported>false</lockSnapshotsSupported>
+      <consolePreferencesSupported>false</consolePreferencesSupported>
+      <cpuFeatureMaskSupported>false</cpuFeatureMaskSupported>
+      <s1AcpiManagementSupported>false</s1AcpiManagementSupported>
+      <settingScreenResolutionSupported>false</settingScreenResolutionSupported>
+      <toolsAutoUpdateSupported>false</toolsAutoUpdateSupported>
+      <vmNpivWwnSupported>false</vmNpivWwnSupported>
+      <npivWwnOnNonRdmVmSupported>false</npivWwnOnNonRdmVmSupported>
+      <vmNpivWwnDisableSupported>false</vmNpivWwnDisableSupported>
+      <vmNpivWwnUpdateSupported>false</vmNpivWwnUpdateSupported>
+      <swapPlacementSupported>false</swapPlacementSupported>
+      <toolsSyncTimeSupported>false</toolsSyncTimeSupported>
+      <virtualMmuUsageSupported>false</virtualMmuUsageSupported>
+      <diskSharesSupported>false</diskSharesSupported>
+      <bootOptionsSupported>false</bootOptionsSupported>
+      <bootRetryOptionsSupported>false</bootRetryOptionsSupported>
+      <settingVideoRamSizeSupported>false</settingVideoRamSizeSupported>
+      <settingDisplayTopologySupported>false</settingDisplayTopologySupported>
+      <recordReplaySupported>false</recordReplaySupported>
+      <changeTrackingSupported>false</changeTrackingSupported>
+      <multipleCoresPerSocketSupported>false</multipleCoresPerSocketSupported>
+      <hostBasedReplicationSupported>false</hostBasedReplicationSupported>
+      <guestAutoLockSupported>false</guestAutoLockSupported>
+      <memoryReservationLockSupported>false</memoryReservationLockSupported>
+      <featureRequirementSupported>false</featureRequirementSupported>
+      <poweredOnMonitorTypeChangeSupported>false</poweredOnMonitorTypeChangeSupported>
+      <seSparseDiskSupported>false</seSparseDiskSupported>
+      <nestedHVSupported>false</nestedHVSupported>
+      <vPMCSupported>false</vPMCSupported>
+    </val>
+  </propSet>
+  <propSet>
+    <name>configIssue</name>
+    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="ArrayOfEvent"></val>
+  </propSet>
+  <propSet>
+    <name>configStatus</name>
+    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="ManagedEntityStatus">red</val>
+  </propSet>
+  <propSet>
+    <name>customValue</name>
+    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="ArrayOfCustomFieldValue"></val>
+  </propSet>
+  <propSet>
+    <name>datastore</name>
+    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="ArrayOfManagedObjectReference"></val>
+  </propSet>
+  <propSet>
+    <name>declaredAlarmState</name>
+    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="ArrayOfAlarmState"></val>
+  </propSet>
+  <propSet>
+    <name>disabledMethod</name>
+    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="ArrayOfString">
+      <string>setCustomValue</string>
+      <string>Rename_Task</string>
+      <string>Destroy_Task</string>
+      <string>AddTag</string>
+      <string>RemoveTag</string>
+      <string>RetrieveCustomValues</string>
+      <string>RefreshStorageInfo</string>
+      <string>ReportFailoverCompleted</string>
+      <string>RetrieveBackupAgent</string>
+      <string>CreateSnapshot_Task</string>
+      <string>CreateSnapshotEx_Task</string>
+      <string>RevertToCurrentSnapshot_Task</string>
+      <string>RemoveAllSnapshots_Task</string>
+      <string>ConsolidateVMDisks_Task</string>
+      <string>EstimateStorageForConsolidateSnapshots_Task</string>
+      <string>ReconfigVM_Task</string>
+      <string>UpgradeVM_Task</string>
+      <string>ExtractOvfEnvironment</string>
+      <string>PowerOnVM_Task</string>
+      <string>PowerOffVM_Task</string>
+      <string>SuspendVM_Task</string>
+      <string>SuspendToMemoryVM_Task</string>
+      <string>ResetVM_Task</string>
+      <string>ShutdownGuest</string>
+      <string>RebootGuest</string>
+      <string>StandbyGuest</string>
+      <string>AnswerVM</string>
+      <string>CustomizeVM_Task</string>
+      <string>CheckCustomizationSpec</string>
+      <string>MigrateVM_Task</string>
+      <string>RelocateVM_Task</string>
+      <string>CloneVM_Task</string>
+      <string>CloneFromLibraryItem_Task</string>
+      <string>InstantClone_Task</string>
+      <string>CreateForkChild_Task</string>
+      <string>EnableForkParent_Task</string>
+      <string>DisableForkParent_Task</string>
+      <string>RetrieveForkChildren_Task</string>
+      <string>RetrieveForkParent_Task</string>
+      <string>CreateImportLease</string>
+      <string>ExportVm</string>
+      <string>MarkAsTemplate</string>
+      <string>MarkAsVirtualMachine</string>
+      <string>ResetGuestInformation</string>
+      <string>MountToolsInstaller</string>
+      <string>MountToolsInstallerImage</string>
+      <string>UnmountToolsInstaller</string>
+      <string>UpgradeTools_Task</string>
+      <string>UpgradeToolsFromImage_Task</string>
+      <string>AcquireMksTicket</string>
+      <string>QueryConnections</string>
+      <string>DropConnections</string>
+      <string>AcquireTicket</string>
+      <string>SetScreenResolution</string>
+      <string>DefragmentAllDisks</string>
+      <string>CreateSecondaryVM_Task</string>
+      <string>CreateSecondaryVMEx_Task</string>
+      <string>TurnOffFaultToleranceForVM_Task</string>
+      <string>MakePrimaryVM_Task</string>
+      <string>TerminateFaultTolerantVM_Task</string>
+      <string>DisableSecondaryVM_Task</string>
+      <string>EnableSecondaryVM_Task</string>
+      <string>SetDisplayTopology</string>
+      <string>StartRecording_Task</string>
+      <string>StopRecording_Task</string>
+      <string>StartReplaying_Task</string>
+      <string>StopReplaying_Task</string>
+      <string>PromoteDisks_Task</string>
+      <string>CreateScreenshot_Task</string>
+      <string>PutUsbScanCodes</string>
+      <string>QueryChangedDiskAreas</string>
+      <string>QueryUnownedFiles</string>
+      <string>reloadVirtualMachineFromPath_Task</string>
+      <string>QueryFaultToleranceCompatibility</string>
+      <string>QueryFaultToleranceCompatibilityEx</string>
+      <string>InvokeFSR_Task</string>
+      <string>TerminateVM</string>
+      <string>IsNativeSnapshotCapable</string>
+      <string>ConfigureQuorumFilePathPrefix_Task</string>
+      <string>InjectOvfEnvironment</string>
+      <string>WipeDisk_Task</string>
+      <string>ShrinkDisk_Task</string>
+      <string>SendNMI</string>
+      <string>ReloadEx_Task</string>
+      <string>AttachDisk_Task</string>
+      <string>DetachDisk_Task</string>
+      <string>ApplyEvcModeVM_Task</string>
+      <string>CryptoUnlock_Task</string>
+      <string>CryptoRepairIntegrity_Task</string>
+      <string>Checkout_Task</string>
+      <string>Checkin_Task</string>
+      <string>Revert_Task</string>
+      <string>MarkAsLibraryItem_Task</string>
+      <string>RemoveLibraryItem_Task</string>
+      <string>CloneVmAsLibraryItem_Task</string>
+      <string>SetAhDeviceHints</string>
+      <string>GuestQuiesceBegin_Task</string>
+      <string>GuestQuiesceEnd_Task</string>
+    </val>
+  </propSet>
+  <propSet>
+    <name>effectiveRole</name>
+    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="ArrayOfInt">
+      <int>-7</int>
+    </val>
+  </propSet>
+  <propSet>
+    <name>environmentBrowser</name>
+    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="ManagedObjectReference" type="EnvironmentBrowser">1-envmgr</val>
+  </propSet>
+  <propSet>
+    <name>guest</name>
+    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="GuestInfo">
+      <guestState>unknown</guestState>
+    </val>
+  </propSet>
+  <propSet>
+    <name>guestHeartbeatStatus</name>
+    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="ManagedEntityStatus">gray</val>
+  </propSet>
+  <propSet>
+    <name>name</name>
+    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="xsd:string">/vmfs/volumes/64d4b065-879077de-6dfb-5254000ed68e/vcenter/vcenter.vmx</val>
+  </propSet>
+  <propSet>
+    <name>network</name>
+    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="ArrayOfManagedObjectReference"></val>
+  </propSet>
+  <propSet>
+    <name>overallStatus</name>
+    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="ManagedEntityStatus">green</val>
+  </propSet>
+  <propSet>
+    <name>parent</name>
+    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="ManagedObjectReference" type="Folder">ha-folder-vm</val>
+  </propSet>
+  <propSet>
+    <name>permission</name>
+    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="ArrayOfPermission">
+      <Permission>
+        <entity type="VirtualMachine">1</entity>
+        <principal>root</principal>
+        <group>true</group>
+        <roleId>-7</roleId>
+        <propagate>true</propagate>
+      </Permission>
+    </val>
+  </propSet>
+  <propSet>
+    <name>recentTask</name>
+    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="ArrayOfManagedObjectReference"></val>
+  </propSet>
+  <propSet>
+    <name>resourceConfig</name>
+    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="ResourceConfigSpec">
+      <entity type="VirtualMachine">1</entity>
+      <cpuAllocation></cpuAllocation>
+      <memoryAllocation></memoryAllocation>
+    </val>
+  </propSet>
+  <propSet>
+    <name>resourcePool</name>
+    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="ManagedObjectReference" type="ResourcePool">ha-root-pool</val>
+  </propSet>
+  <propSet>
+    <name>rootSnapshot</name>
+    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="ArrayOfManagedObjectReference"></val>
+  </propSet>
+  <propSet>
+    <name>runtime</name>
+    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="VirtualMachineRuntimeInfo">
+      <host type="HostSystem">ha-host</host>
+      <connectionState>inaccessible</connectionState>
+      <powerState>poweredOff</powerState>
+      <vmFailoverInProgress>false</vmFailoverInProgress>
+      <faultToleranceState>notConfigured</faultToleranceState>
+      <toolsInstallerMounted>false</toolsInstallerMounted>
+      <numMksConnections>0</numMksConnections>
+      <recordReplayState>inactive</recordReplayState>
+      <onlineStandby>false</onlineStandby>
+      <consolidationNeeded>false</consolidationNeeded>
+      <paused>false</paused>
+      <snapshotInBackground>false</snapshotInBackground>
+      <instantCloneFrozen>false</instantCloneFrozen>
+    </val>
+  </propSet>
+  <propSet>
+    <name>summary</name>
+    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="VirtualMachineSummary">
+      <vm type="VirtualMachine">1</vm>
+      <runtime>
+        <host type="HostSystem">ha-host</host>
+        <connectionState>inaccessible</connectionState>
+        <powerState>poweredOff</powerState>
+        <vmFailoverInProgress>false</vmFailoverInProgress>
+        <faultToleranceState>notConfigured</faultToleranceState>
+        <toolsInstallerMounted>false</toolsInstallerMounted>
+        <numMksConnections>0</numMksConnections>
+        <recordReplayState>inactive</recordReplayState>
+        <onlineStandby>false</onlineStandby>
+        <consolidationNeeded>false</consolidationNeeded>
+        <paused>false</paused>
+        <snapshotInBackground>false</snapshotInBackground>
+        <instantCloneFrozen>false</instantCloneFrozen>
+      </runtime>
+      <guest></guest>
+      <config>
+        <name>/vmfs/volumes/64d4b065-879077de-6dfb-5254000ed68e/vcenter/vcenter.vmx</name>
+        <template>false</template>
+        <vmPathName>[] /vmfs/volumes/64d4b065-879077de-6dfb-5254000ed68e/vcenter/vcenter.vmx</vmPathName>
+      </config>
+      <quickStats>
+        <guestHeartbeatStatus>gray</guestHeartbeatStatus>
+      </quickStats>
+      <overallStatus>green</overallStatus>
+    </val>
+  </propSet>
+  <propSet>
+    <name>tag</name>
+    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="ArrayOfTag"></val>
+  </propSet>
+  <propSet>
+    <name>triggeredAlarmState</name>
+    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="ArrayOfAlarmState"></val>
+  </propSet>
+  <propSet>
+    <name>value</name>
+    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="ArrayOfCustomFieldValue"></val>
+  </propSet>
+</ObjectContent>

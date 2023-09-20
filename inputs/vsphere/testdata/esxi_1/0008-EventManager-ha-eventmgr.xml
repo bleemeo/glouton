@@ -1,0 +1,21 @@
+<ObjectContent>
+  <obj type="EventManager">ha-eventmgr</obj>
+  <propSet>
+    <name>latestEvent</name>
+    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="UserLoginSessionEvent">
+      <key>95</key>
+      <chainId>95</chainId>
+      <createdTime>2023-09-20T09:03:43.116621Z</createdTime>
+      <userName>root</userName>
+      <fullFormattedMessage>User root@192.168.121.1 logged in as govc/0.0.0</fullFormattedMessage>
+      <ipAddress>192.168.121.1</ipAddress>
+      <userAgent>govc/0.0.0</userAgent>
+      <locale>en</locale>
+      <sessionId>525c3d99-345b-fbcf-f628-982ce8336a41</sessionId>
+    </val>
+  </propSet>
+  <propSet>
+    <name>maxCollector</name>
+    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="xsd:int">1000</val>
+  </propSet>
+</ObjectContent>

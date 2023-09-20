@@ -1,0 +1,68 @@
+<ObjectContent>
+  <obj type="OptionManager">VpxSettings</obj>
+  <propSet>
+    <name>supportedOption</name>
+    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="ArrayOfOptionDef"></val>
+  </propSet>
+  <propSet>
+    <name>setting</name>
+    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="ArrayOfOptionValue">
+      <OptionValue XMLSchema-instance:type="OptionValue">
+        <key>config.vpxd.sso.sts.uri</key>
+        <value XMLSchema-instance:type="xsd:string">https://127.0.0.1:8989/sts/STSService/vsphere.local</value>
+      </OptionValue>
+      <OptionValue XMLSchema-instance:type="OptionValue">
+        <key>config.vpxd.sso.solutionUser.privateKey</key>
+        <value XMLSchema-instance:type="xsd:string">/etc/vmware-vpx/ssl/vcsoluser.key</value>
+      </OptionValue>
+      <OptionValue XMLSchema-instance:type="OptionValue">
+        <key>config.vpxd.sso.solutionUser.name</key>
+        <value XMLSchema-instance:type="xsd:string">vpxd-b643d01c-928f-469b-96a5-d571d762a78e@vsphere.local</value>
+      </OptionValue>
+      <OptionValue XMLSchema-instance:type="OptionValue">
+        <key>config.vpxd.sso.solutionUser.certificate</key>
+        <value XMLSchema-instance:type="xsd:string">/etc/vmware-vpx/ssl/vcsoluser.crt</value>
+      </OptionValue>
+      <OptionValue XMLSchema-instance:type="OptionValue">
+        <key>config.vpxd.sso.groupcheck.uri</key>
+        <value XMLSchema-instance:type="xsd:string">https://127.0.0.1:8989/sso-adminserver/sdk/vsphere.local</value>
+      </OptionValue>
+      <OptionValue XMLSchema-instance:type="OptionValue">
+        <key>config.vpxd.sso.enabled</key>
+        <value XMLSchema-instance:type="xsd:string">false</value>
+      </OptionValue>
+      <OptionValue XMLSchema-instance:type="OptionValue">
+        <key>config.vpxd.sso.default.isGroup</key>
+        <value XMLSchema-instance:type="xsd:string">false</value>
+      </OptionValue>
+      <OptionValue XMLSchema-instance:type="OptionValue">
+        <key>config.vpxd.sso.default.admin</key>
+        <value XMLSchema-instance:type="xsd:string">Administrator@vsphere.local</value>
+      </OptionValue>
+      <OptionValue XMLSchema-instance:type="OptionValue">
+        <key>config.vpxd.sso.admin.uri</key>
+        <value XMLSchema-instance:type="xsd:string">https://127.0.0.1:8989/sso-adminserver/sdk/vsphere.local</value>
+      </OptionValue>
+      <OptionValue XMLSchema-instance:type="OptionValue">
+        <key>VirtualCenter.InstanceName</key>
+        <value XMLSchema-instance:type="xsd:string">127.0.0.1</value>
+      </OptionValue>
+      <OptionValue XMLSchema-instance:type="OptionValue">
+        <key>event.batchsize</key>
+        <value XMLSchema-instance:type="xsd:int">2000</value>
+      </OptionValue>
+      <OptionValue XMLSchema-instance:type="OptionValue">
+        <key>event.maxAge</key>
+        <value XMLSchema-instance:type="xsd:int">30</value>
+      </OptionValue>
+      <OptionValue XMLSchema-instance:type="OptionValue">
+        <key>event.maxAgeEnabled</key>
+        <value XMLSchema-instance:type="xsd:boolean">true</value>
+      </OptionValue>
+      <OptionValue XMLSchema-instance:type="OptionValue">
+        <key>vcsim.server.url</key>
+        <value XMLSchema-instance:type="xsd:string">https://127.0.0.1:8989/sdk</value>
+      </OptionValue>
+    </val>
+  </propSet>
+</ObjectContent>

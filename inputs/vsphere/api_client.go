@@ -208,7 +208,7 @@ func describeVM(ctx context.Context, vm *object.VirtualMachine, vmProps mo.Virtu
 
 	if vmProps.Config != nil {
 		vmFacts["cpu_cores"] = str(vmProps.Config.Hardware.NumCPU)
-		vmFacts["memory"] = facts.ByteCountDecimal(uint64(vmProps.Config.Hardware.MemoryMB))
+		vmFacts["memory"] = facts.ByteCountDecimal(uint64(vmProps.Config.Hardware.MemoryMB) * 1 << 20) // MB to B
 		vmFacts["os_pretty_name"] = vmProps.Config.GuestFullName
 		vmFacts["version"] = vmProps.Config.Version
 		vmFacts["vm_name"] = vmProps.Config.Name

@@ -159,19 +159,13 @@ type device struct {
 }
 
 func (dev *device) FQDN() string {
-	var hostname, domain string
-
-	if dev.facts["hostname"] != "" {
-		hostname = dev.facts["hostname"]
-	} else {
-		hostname = dev.name
-	}
+	var domain string
 
 	if dev.facts["domain"] != "" {
 		domain = "." + dev.facts["domain"]
 	}
 
-	return hostname + domain // TODO: slugify ?
+	return dev.name + domain // TODO: slugify ?
 }
 
 func (dev *device) Source() string {
