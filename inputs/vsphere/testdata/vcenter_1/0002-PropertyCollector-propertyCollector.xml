@@ -1,0 +1,7 @@
+<ObjectContent>
+  <obj type="PropertyCollector">propertyCollector</obj>
+  <propSet>
+    <name>filter</name>
+    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="ArrayOfManagedObjectReference"></val>
+  </propSet>
+</ObjectContent>
