@@ -104,22 +104,7 @@ func (s *Synchronizer) syncFacts(ctx context.Context, fullSync bool, onlyEssenti
 			}
 
 			if agent, err := s.FindVSphereAgent(ctx, dev, agentTypeID, remoteAgentList); err == nil {
-				// As vSphere facts are only gathered during the device discovery,
-				// there is no need to specify a max age below.
-				facts, err := dev.Facts(ctx, 0)
-				if err != nil {
-					logger.V(2).Printf("Unable to get vSphere facts: %v", err)
-
-					// Reuse previous facts; it avoids removing then adding them back.
-					tmp := previousFacts[agent.ID]
-					facts = make(map[string]string, len(tmp))
-
-					for _, v := range tmp {
-						facts[v.Key] = v.Value
-					}
-				}
-
-				allAgentFacts[agent.ID] = facts
+				allAgentFacts[agent.ID] = dev.Facts()
 			}
 		}
 	}

@@ -82,7 +82,7 @@ func (m *Manager) Devices(ctx context.Context, maxAge time.Duration) []Device {
 	}
 
 	logger.Printf("Discovering vSphere devices ...") // TODO: remove
-	startTime := time.Now()
+	startTime := time.Now()                          //nolint:wsl
 
 	deviceChan := make(chan Device)
 	wg := new(sync.WaitGroup)
@@ -103,7 +103,7 @@ func (m *Manager) Devices(ctx context.Context, maxAge time.Duration) []Device {
 	go func() { wg.Wait(); close(deviceChan) }()
 
 	var devices []Device //nolint:prealloc
-	var names []string
+	var names []string   //nolint:prealloc,wsl
 
 	for device := range deviceChan {
 		devices = append(devices, device)
@@ -122,7 +122,7 @@ func (m *Manager) Devices(ctx context.Context, maxAge time.Duration) []Device {
 
 func (m *Manager) FindDevice(ctx context.Context, vSphereHost, moid string) Device {
 	// We specify a small max age here, because as metric gathering is done every minute,
-	// there's a good chance to discover a new vSphere appliance from here.
+	// there's a good chance to discover new vSphere VMs from the metric gathering.
 	devices := m.Devices(ctx, 5*time.Minute)
 
 	for _, dev := range devices {
@@ -147,7 +147,7 @@ type Device interface {
 	MOID() string
 	Name() string
 
-	Facts(ctx context.Context, maxAge time.Duration) (facts map[string]string, err error)
+	Facts() map[string]string
 }
 
 type device struct {
@@ -182,8 +182,8 @@ func (dev *device) Name() string {
 
 // Facts returns the facts of this device, but ignores the given maxAge
 // since the facts had been gathered at the same as the device itself.
-func (dev *device) Facts(_ context.Context, _ time.Duration) (map[string]string, error) {
-	return dev.facts, nil
+func (dev *device) Facts() map[string]string {
+	return dev.facts
 }
 
 type HostSystem struct {
