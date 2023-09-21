@@ -66,6 +66,16 @@ var (
 		ID:          "f8477dcd-36d8-489f-a6b8-e52f6bc013d2",
 		Name:        bleemeoTypes.AgentTypeKubernetes,
 	}
+	agentTypeVSphereHost bleemeoTypes.AgentType = bleemeoTypes.AgentType{
+		DisplayName: "A vSphere host",
+		ID:          "eef9553e-f6f8-483d-9360-979ae24974af",
+		Name:        bleemeoTypes.AgentTypeVSphereHost,
+	}
+	agentTypeVSphereVM bleemeoTypes.AgentType = bleemeoTypes.AgentType{
+		DisplayName: "A vSphere VM",
+		ID:          "ae5d4581-e74a-4c11-8c9d-fde62a7073e5",
+		Name:        bleemeoTypes.AgentTypeVSphereVM,
+	}
 
 	agentConfigAgent = bleemeoTypes.AgentConfig{
 		ID:               "cab64659-a765-4878-84d8-c7b0112aaecb",
@@ -89,6 +99,18 @@ var (
 		ID:               "dcbd9b4f-8761-4363-8530-ca8d03570899",
 		AccountConfig:    newAccountConfig.ID,
 		AgentType:        agentTypeKubernetes.ID,
+		MetricResolution: 60,
+	}
+	agentConfigVSphereHost = bleemeoTypes.AgentConfig{
+		ID:               "44e05701-13d8-4130-9683-9b289a2ad0fa",
+		AccountConfig:    newAccountConfig.ID,
+		AgentType:        agentTypeVSphereHost.ID,
+		MetricResolution: 60,
+	}
+	agentConfigVSphereVM = bleemeoTypes.AgentConfig{
+		ID:               "8febf9bc-1236-4c40-9665-609be5f6c545",
+		AccountConfig:    newAccountConfig.ID,
+		AgentType:        agentTypeVSphereVM.ID,
 		MetricResolution: 60,
 	}
 
