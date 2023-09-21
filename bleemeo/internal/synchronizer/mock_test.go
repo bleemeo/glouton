@@ -307,6 +307,8 @@ func newAPI() *mockAPI {
 		agentTypeSNMP,
 		agentTypeMonitor,
 		agentTypeKubernetes,
+		agentTypeVSphereHost,
+		agentTypeVSphereVM,
 	)
 	api.resources[mockAPIResourceAccountConfig].SetStore(
 		newAccountConfig,
@@ -316,6 +318,8 @@ func newAPI() *mockAPI {
 		agentConfigSNMP,
 		agentConfigMonitor,
 		agentConfigKubernetes,
+		agentConfigVSphereHost,
+		agentConfigVSphereVM,
 	)
 
 	return api

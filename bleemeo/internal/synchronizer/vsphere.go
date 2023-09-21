@@ -178,7 +178,7 @@ func (s *Synchronizer) remoteRegisterVSphereDevice(params map[string]string, pay
 		return result, err
 	}
 
-	logger.V(0).Printf("vSphere agent %v registered with UUID %s", payload.DisplayName, result.ID) // TODO:2
+	logger.V(0).Printf("vSphere agent %v registered with UUID %s", payload.DisplayName, result.ID) // TODO: V(2)
 
 	return result, nil
 }
@@ -188,11 +188,9 @@ func (s *Synchronizer) getVSphereAgentTypes() (hostAgentTypeID, vmAgentTypeID st
 
 	for i := 0; i < len(agentTypes) && !foundBoth; i++ {
 		switch a := agentTypes[i]; {
-		case a.Name == types.AgentTypeSNMP:
+		case a.Name == types.AgentTypeVSphereHost:
 			hostAgentTypeID = a.ID
-
-			fallthrough // FIXME: keep until we have agent types for vSphere on the API side
-		case a.Name == types.AgentTypeSNMP: //nolint: gocritic
+		case a.Name == types.AgentTypeVSphereVM:
 			vmAgentTypeID = a.ID
 		default:
 			continue

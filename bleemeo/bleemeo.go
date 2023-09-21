@@ -27,6 +27,7 @@ import (
 	"glouton/bleemeo/internal/synchronizer"
 	"glouton/bleemeo/types"
 	"glouton/crashreport"
+	"glouton/inputs/vsphere"
 	"glouton/logger"
 	"glouton/prometheus/exporter/snmp"
 	gloutonTypes "glouton/types"
@@ -503,17 +504,16 @@ func (c *Connector) RelabelHook(ctx context.Context, labels map[string]string) (
 			return labels, true
 		}
 
-		var agentType string = types.AgentTypeSNMP
+		var agentType string
 
-		// FIXME: uncomment when API has vSphere agent types
-		/*switch device.Kind() {
+		switch device.Kind() {
 		case vsphere.KindHost:
 			agentType = types.AgentTypeVSphereHost
 		case vsphere.KindVM:
 			agentType = types.AgentTypeVSphereVM
 		default:
 			return labels, true
-		}*/
+		}
 
 		vSphereAgentTypeID, err := c.agentTypeID(agentType)
 		if err != nil {
