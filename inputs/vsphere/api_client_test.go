@@ -22,10 +22,12 @@ import (
 	"glouton/config"
 	"glouton/inputs"
 	"net/url"
+	"sort"
 	"testing"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/influxdata/telegraf"
 	"github.com/vmware/govmomi/simulator"
 )
@@ -182,141 +184,206 @@ func TestVCenterDescribing(t *testing.T) {
 	}
 }
 
-// TestESXIDescribing lists and describes the devices of an ESXI,
+// TestESXIDescribing lists and describes devices across multiple test cases,
 // but by calling the higher-level method Manager.Devices.
 func TestESXIDescribing(t *testing.T) {
-	vSphereCfg, deferFn := setupVSphereAPITest(t, "esxi_1")
-	defer deferFn()
-
-	vSphereURL, err := url.Parse(vSphereCfg.URL)
-	if err != nil {
-		t.Fatalf("Failed to parse vSphere URL %q: %v", vSphereCfg.URL, err)
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	manager := new(Manager)
-	manager.RegisterInputs([]config.VSphere{vSphereCfg}, func(string, telegraf.Input, *inputs.GathererOptions, error) {})
-
-	devices := manager.Devices(ctx, 0)
-	if len(devices) != 4 {
-		t.Fatalf("Expected 4 devices to be described, got %d.", len(devices))
-	}
-
-	var (
-		hosts []*HostSystem
-		vms   []*VirtualMachine
-	)
-
-	for _, dev := range devices {
-		switch kind := dev.Kind(); kind {
-		case KindHost:
-			hosts = append(hosts, dev.(*HostSystem)) //nolint: forcetypeassert
-		case KindVM:
-			vms = append(vms, dev.(*VirtualMachine)) //nolint: forcetypeassert
-		default:
-			// If this error is triggered, the test will (normally) stop at the if right below.
-			t.Errorf("Unexpected device kind: %q", kind)
-		}
-	}
-
-	if len(hosts) != 1 || len(vms) != 3 {
-		t.Fatalf("Expected 1 host and 3 VMs, got %d host(s) and %d VM(s).", len(hosts), len(vms))
-	}
-
-	expectedHost := HostSystem{
-		device{
-			source: vSphereURL.Host,
-			moid:   "ha-host",
-			name:   "esxi.test",
-			facts: map[string]string{
-				"cpu_cores":               "4",
-				"cpu_model_name":          "Intel(R) Core(TM) i7-8550U CPU @ 1.80GHz",
-				"fqdn":                    "esxi.test",
-				"hostname":                "esxi.test",
-				"ipv6_enabled":            "false",
-				"memory":                  "4.00 GB",
-				"os_pretty_name":          "vmnix-x86",
-				"primary_address":         "192.168.121.241",
-				"product_name":            "Standard PC (i440FX + PIIX, 1996)",
-				"system_vendor":           "QEMU",
-				"timezone":                "UTC",
-				"vsphere_host_version":    "8.0.1",
-				"vsphere_vmotion_enabled": "false",
+	testCases := []struct {
+		name          string
+		dirName       string
+		expectedHosts []*HostSystem
+		expectedVMs   []*VirtualMachine
+	}{
+		{
+			name:    "ESXI running on QEMU",
+			dirName: "esxi_1",
+			expectedHosts: []*HostSystem{
+				{
+					device{
+						moid: "ha-host",
+						name: "esxi.test",
+						facts: map[string]string{
+							"cpu_cores":               "4",
+							"cpu_model_name":          "Intel(R) Core(TM) i7-8550U CPU @ 1.80GHz",
+							"fqdn":                    "esxi.test",
+							"hostname":                "esxi.test",
+							"ipv6_enabled":            "false",
+							"memory":                  "4.00 GB",
+							"os_pretty_name":          "vmnix-x86",
+							"primary_address":         "192.168.121.241",
+							"product_name":            "Standard PC (i440FX + PIIX, 1996)",
+							"system_vendor":           "QEMU",
+							"timezone":                "UTC",
+							"vsphere_host_version":    "8.0.1",
+							"vsphere_vmotion_enabled": "false",
+						},
+					},
+				},
 			},
-		},
-	}
-	if diff := cmp.Diff(expectedHost, *hosts[0], cmp.AllowUnexported(HostSystem{}, device{})); diff != "" {
-		t.Fatalf("Unexpected host description:\n%s", diff)
-	}
-
-	expectedVMs := map[string]VirtualMachine{
-		"1": {
-			device: device{
-				source: vSphereURL.Host,
-				moid:   "1",
-				name:   "1",
-				facts: map[string]string{
-					"fqdn":                  "1",
-					"hostname":              "1",
-					"vsphere_host":          "ha-host",
-					"vsphere_resource_pool": "ha-root-pool",
+			expectedVMs: []*VirtualMachine{
+				{
+					device: device{
+						moid: "1",
+						name: "1",
+						facts: map[string]string{
+							"fqdn":                  "1",
+							"hostname":              "1",
+							"vsphere_host":          "ha-host",
+							"vsphere_resource_pool": "ha-root-pool",
+						},
+					},
+				},
+				{
+					device: device{
+						moid: "4",
+						name: "v-center",
+						facts: map[string]string{
+							"cpu_cores":             "2",
+							"fqdn":                  "v-center",
+							"hostname":              "4",
+							"memory":                "14.00 GB",
+							"os_pretty_name":        "Other 3.x or later Linux (64-bit)",
+							"vsphere_datastore":     "datastore1",
+							"vsphere_host":          "ha-host",
+							"vsphere_resource_pool": "ha-root-pool",
+							"vsphere_vm_name":       "v-center",
+							"vsphere_vm_version":    "vmx-10",
+						},
+					},
+					UUID: "564d8859-9d98-c670-0aca-009149c3a8af",
+				},
+				{
+					device: device{
+						moid: "7",
+						name: "lunar",
+						facts: map[string]string{
+							"cpu_cores":             "2",
+							"fqdn":                  "lunar",
+							"hostname":              "7",
+							"memory":                "1.00 GB",
+							"os_pretty_name":        "Ubuntu Linux (64-bit)",
+							"vsphere_datastore":     "datastore1",
+							"vsphere_host":          "ha-host",
+							"vsphere_resource_pool": "ha-root-pool",
+							"vsphere_vm_name":       "lunar",
+							"vsphere_vm_version":    "vmx-10",
+						},
+					},
+					UUID: "564de3ab-988d-b51c-a5cb-5e1af6f5f313",
 				},
 			},
 		},
-		"4": {
-			device: device{
-				source: vSphereURL.Host,
-				moid:   "4",
-				name:   "v-center",
-				facts: map[string]string{
-					"cpu_cores":             "2",
-					"fqdn":                  "v-center",
-					"hostname":              "4",
-					"memory":                "14.00 GB",
-					"os_pretty_name":        "Other 3.x or later Linux (64-bit)",
-					"vsphere_datastore":     "datastore1",
-					"vsphere_host":          "ha-host",
-					"vsphere_resource_pool": "ha-root-pool",
-					"vsphere_vm_name":       "v-center",
-					"vsphere_vm_version":    "vmx-10",
+		{
+			name:    "vCenter vcsim'ulated",
+			dirName: "vcenter_1",
+			expectedHosts: []*HostSystem{
+				{
+					device: device{
+						moid: "host-23",
+						name: "DC0_C0_H0",
+						facts: map[string]string{
+							"cpu_cores":               "2",
+							"cpu_model_name":          "Intel(R) Core(TM) i7-3615QM CPU @ 2.30GHz",
+							"fqdn":                    "DC0_C0_H0",
+							"hostname":                "DC0_C0_H0",
+							"ipv6_enabled":            "false",
+							"memory":                  "4.00 GB",
+							"os_pretty_name":          "vmnix-x86",
+							"primary_address":         "127.0.0.1",
+							"product_name":            "VMware Virtual Platform",
+							"system_vendor":           "VMware, Inc. (govmomi simulator)",
+							"vsphere_host_version":    "6.5.0",
+							"vsphere_vmotion_enabled": "false",
+						},
+					},
 				},
 			},
-			UUID: "564d8859-9d98-c670-0aca-009149c3a8af",
-		},
-		"7": {
-			device: device{
-				source: vSphereURL.Host,
-				moid:   "7",
-				name:   "lunar",
-				facts: map[string]string{
-					"cpu_cores":             "2",
-					"fqdn":                  "lunar",
-					"hostname":              "7",
-					"memory":                "1.00 GB",
-					"os_pretty_name":        "Ubuntu Linux (64-bit)",
-					"vsphere_datastore":     "datastore1",
-					"vsphere_host":          "ha-host",
-					"vsphere_resource_pool": "ha-root-pool",
-					"vsphere_vm_name":       "lunar",
-					"vsphere_vm_version":    "vmx-10",
+			expectedVMs: []*VirtualMachine{
+				{
+					device: device{
+						moid: "vm-28",
+						name: "DC0_C0_RP0_VM0",
+						facts: map[string]string{
+							"cpu_cores":             "1",
+							"fqdn":                  "DC0_C0_RP0_VM0",
+							"hostname":              "vm-28",
+							"memory":                "32.00 MB",
+							"os_pretty_name":        "otherGuest",
+							"vsphere_host":          "host-23",
+							"vsphere_resource_pool": "resgroup-15",
+							"vsphere_vm_name":       "DC0_C0_RP0_VM0",
+							"vsphere_vm_version":    "vmx-13",
+						},
+					},
+					UUID: "cd0681bf-2f18-5c00-9b9b-8197c0095348",
 				},
 			},
-			UUID: "564de3ab-988d-b51c-a5cb-5e1af6f5f313",
 		},
 	}
 
-	for _, vm := range vms {
-		expectedVM, found := expectedVMs[vm.moid]
-		if !found {
-			t.Errorf("Did not expected a VM with moid %q.", vm.moid)
+	for _, testCase := range testCases {
+		tc := testCase
 
-			continue
-		}
+		t.Run(tc.name, func(t *testing.T) {
+			// govmomi simulator doesn't seem to like having multiple instances in parallel.
 
-		if diff := cmp.Diff(expectedVM, *vm, cmp.AllowUnexported(VirtualMachine{}, device{})); diff != "" {
-			t.Errorf("Unexpected VM description:\n%s", diff)
-		}
+			vSphereCfg, deferFn := setupVSphereAPITest(t, tc.dirName)
+			defer deferFn()
+
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+
+			manager := new(Manager)
+			manager.RegisterInputs([]config.VSphere{vSphereCfg}, func(string, telegraf.Input, *inputs.GathererOptions, error) {})
+
+			devices := manager.Devices(ctx, 0)
+
+			var (
+				hosts []*HostSystem
+				vms   []*VirtualMachine
+			)
+
+			for _, dev := range devices {
+				switch kind := dev.Kind(); kind {
+				case KindHost:
+					hosts = append(hosts, dev.(*HostSystem)) //nolint: forcetypeassert
+				case KindVM:
+					vms = append(vms, dev.(*VirtualMachine)) //nolint: forcetypeassert
+				default:
+					// If this error is triggered, the test will (normally) stop at the if right below.
+					t.Errorf("Unexpected device kind: %q", kind)
+				}
+			}
+
+			if len(hosts) != len(tc.expectedHosts) || len(vms) != len(tc.expectedVMs) {
+				t.Fatalf("Expected %d host(s) and %d VM(s), got %d host(s) and %d VM(s).", len(tc.expectedHosts), len(tc.expectedVMs), len(hosts), len(vms))
+			}
+
+			noSourceCmp := cmpopts.IgnoreFields(device{}, "source")
+
+			sortDevices(tc.expectedHosts)
+			sortDevices(hosts)
+			// We need to compare the hosts and VMs one by one, otherwise the diff is way harder to analyze.
+			for i, expectedHost := range tc.expectedHosts {
+				if diff := cmp.Diff(expectedHost, hosts[i], cmp.AllowUnexported(HostSystem{}, device{}), noSourceCmp); diff != "" {
+					t.Fatalf("Unexpected host description:\n%s", diff)
+				}
+			}
+
+			sortDevices(tc.expectedVMs)
+			sortDevices(vms)
+
+			for i, expectedVM := range tc.expectedVMs {
+				if diff := cmp.Diff(expectedVM, vms[i], cmp.AllowUnexported(VirtualMachine{}, device{}), noSourceCmp); diff != "" {
+					t.Errorf("Unexpected VM description:\n%s", diff)
+				}
+			}
+		})
 	}
+}
+
+// sortDevices sorts the given Device slice in place, according to device MOIDs.
+func sortDevices[D Device](devices []D) {
+	sort.Slice(devices, func(i, j int) bool {
+		return devices[i].MOID() < devices[j].MOID()
+	})
 }
