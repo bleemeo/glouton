@@ -143,7 +143,7 @@ func describeHost(host *object.HostSystem, hostProps mo.HostSystem) *HostSystem 
 	if hostProps.Config != nil {
 		hostFacts["os_pretty_name"] = hostProps.Config.Product.OsType
 		hostFacts["ipv6_enabled"] = str(*hostProps.Config.Network.IpV6Enabled)
-		hostFacts["version"] = hostProps.Config.Product.Version
+		hostFacts["vsphere_host_version"] = hostProps.Config.Product.Version
 
 		if hostProps.Config.DateTimeInfo != nil {
 			hostFacts["timezone"] = hostProps.Config.DateTimeInfo.TimeZone.Name
@@ -210,7 +210,7 @@ func describeVM(ctx context.Context, vm *object.VirtualMachine, vmProps mo.Virtu
 		vmFacts["cpu_cores"] = str(vmProps.Config.Hardware.NumCPU)
 		vmFacts["memory"] = facts.ByteCountDecimal(uint64(vmProps.Config.Hardware.MemoryMB) * 1 << 20) // MB to B
 		vmFacts["os_pretty_name"] = vmProps.Config.GuestFullName
-		vmFacts["version"] = vmProps.Config.Version
+		vmFacts["vsphere_vm_version"] = vmProps.Config.Version
 		vmFacts["vsphere_vm_name"] = vmProps.Config.Name
 
 		if vmProps.Summary.Config.Product != nil {
