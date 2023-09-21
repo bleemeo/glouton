@@ -45,10 +45,14 @@ type vSphereAssociation struct {
 	ID   string
 }
 
+func deviceAssoID(device vsphere.Device) string {
+	return device.Name() + "__" + device.Source()
+}
+
 func (s *Synchronizer) FindVSphereAgent(ctx context.Context, device vsphere.Device, agentTypeID string, agentsByID map[string]types.Agent) (types.Agent, error) {
 	var association vSphereAssociation
 
-	err := s.option.State.Get("bleemeo:vsphere:"+device.FQDN(), &association)
+	err := s.option.State.Get("bleemeo:vsphere:"+deviceAssoID(device), &association)
 	if err != nil {
 		return types.Agent{}, err
 	}
@@ -65,7 +69,7 @@ func (s *Synchronizer) FindVSphereAgent(ctx context.Context, device vsphere.Devi
 	associatedID := make(map[string]bool, len(devices))
 
 	for _, dev := range devices {
-		err := s.option.State.Get("bleemeo:vsphere:"+dev.FQDN(), &association)
+		err := s.option.State.Get("bleemeo:vsphere:"+deviceAssoID(dev), &association)
 		if err != nil {
 			return types.Agent{}, err
 		}
@@ -152,7 +156,7 @@ func (s *Synchronizer) vSphereRegisterAndUpdate(localTargets []vsphere.Device) e
 
 		newAgents = append(newAgents, registeredAgent)
 
-		err = s.option.State.Set("bleemeo:vsphere:"+device.FQDN(), vSphereAssociation{
+		err = s.option.State.Set("bleemeo:vsphere:"+deviceAssoID(device), vSphereAssociation{
 			FQDN: device.FQDN(),
 			ID:   registeredAgent.ID,
 		})
