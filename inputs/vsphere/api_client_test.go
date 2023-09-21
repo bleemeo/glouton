@@ -21,11 +21,11 @@ import (
 	"crypto/tls"
 	"glouton/config"
 	"glouton/inputs"
+	"net/url"
 	"testing"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/influxdata/telegraf"
 	"github.com/vmware/govmomi/simulator"
 )
@@ -63,13 +63,16 @@ func setupVSphereAPITest(t *testing.T, dirName string) (vSphereCfg config.VSpher
 	}
 }
 
-var noSourceCmp = cmpopts.IgnoreFields(device{}, "source") //nolint:gochecknoglobals
-
 // TestVCenterDescribing list and describes the devices of a vCenter,
 // by calling individually each method needed.
 func TestVCenterDescribing(t *testing.T) {
 	vSphereCfg, deferFn := setupVSphereAPITest(t, "vcenter_1")
 	defer deferFn()
+
+	vSphereURL, err := url.Parse(vSphereCfg.URL)
+	if err != nil {
+		t.Fatalf("Failed to parse vSphere URL %q: %v", vSphereCfg.URL, err)
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -119,9 +122,9 @@ func TestVCenterDescribing(t *testing.T) {
 
 	expectedHost := HostSystem{
 		device{
-			// We can't compare the source, as the port changes every run.
-			moid: "host-23",
-			name: "DC0_C0_H0",
+			source: vSphereURL.Host,
+			moid:   "host-23",
+			name:   "DC0_C0_H0",
 			facts: map[string]string{
 				"cpu_cores":               "2",
 				"cpu_model_name":          "Intel(R) Core(TM) i7-3615QM CPU @ 2.30GHz",
@@ -138,7 +141,7 @@ func TestVCenterDescribing(t *testing.T) {
 			},
 		},
 	}
-	if diff := cmp.Diff(expectedHost, *host, cmp.AllowUnexported(HostSystem{}, device{}), noSourceCmp); diff != "" {
+	if diff := cmp.Diff(expectedHost, *host, cmp.AllowUnexported(HostSystem{}, device{})); diff != "" {
 		t.Fatalf("Unexpected host description:\n%s", diff)
 	}
 
@@ -157,9 +160,9 @@ func TestVCenterDescribing(t *testing.T) {
 
 	expectedVM := VirtualMachine{
 		device: device{
-			// We can't compare the source, as the port changes every run.
-			moid: "vm-28",
-			name: "DC0_C0_RP0_VM0",
+			source: vSphereURL.Host,
+			moid:   "vm-28",
+			name:   "DC0_C0_RP0_VM0",
 			facts: map[string]string{
 				"cpu_cores":             "1",
 				"fqdn":                  "DC0_C0_RP0_VM0",
@@ -174,7 +177,7 @@ func TestVCenterDescribing(t *testing.T) {
 		},
 		UUID: "cd0681bf-2f18-5c00-9b9b-8197c0095348",
 	}
-	if diff := cmp.Diff(expectedVM, *vm, cmp.AllowUnexported(VirtualMachine{}, device{}), noSourceCmp); diff != "" {
+	if diff := cmp.Diff(expectedVM, *vm, cmp.AllowUnexported(VirtualMachine{}, device{})); diff != "" {
 		t.Fatalf("Unexpected VM description:\n%s", diff)
 	}
 }
@@ -184,6 +187,11 @@ func TestVCenterDescribing(t *testing.T) {
 func TestESXIDescribing(t *testing.T) {
 	vSphereCfg, deferFn := setupVSphereAPITest(t, "esxi_1")
 	defer deferFn()
+
+	vSphereURL, err := url.Parse(vSphereCfg.URL)
+	if err != nil {
+		t.Fatalf("Failed to parse vSphere URL %q: %v", vSphereCfg.URL, err)
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -219,9 +227,9 @@ func TestESXIDescribing(t *testing.T) {
 
 	expectedHost := HostSystem{
 		device{
-			// Still no source comparison
-			moid: "ha-host",
-			name: "esxi.test",
+			source: vSphereURL.Host,
+			moid:   "ha-host",
+			name:   "esxi.test",
 			facts: map[string]string{
 				"cpu_cores":               "4",
 				"cpu_model_name":          "Intel(R) Core(TM) i7-8550U CPU @ 1.80GHz",
@@ -239,16 +247,16 @@ func TestESXIDescribing(t *testing.T) {
 			},
 		},
 	}
-	if diff := cmp.Diff(expectedHost, *hosts[0], cmp.AllowUnexported(HostSystem{}, device{}), noSourceCmp); diff != "" {
+	if diff := cmp.Diff(expectedHost, *hosts[0], cmp.AllowUnexported(HostSystem{}, device{})); diff != "" {
 		t.Fatalf("Unexpected host description:\n%s", diff)
 	}
 
 	expectedVMs := map[string]VirtualMachine{
 		"1": {
 			device: device{
-				// Still no source comparison
-				moid: "1",
-				name: "1",
+				source: vSphereURL.Host,
+				moid:   "1",
+				name:   "1",
 				facts: map[string]string{
 					"fqdn":                  "1",
 					"hostname":              "1",
@@ -259,9 +267,9 @@ func TestESXIDescribing(t *testing.T) {
 		},
 		"4": {
 			device: device{
-				// Still no source comparison
-				moid: "4",
-				name: "v-center",
+				source: vSphereURL.Host,
+				moid:   "4",
+				name:   "v-center",
 				facts: map[string]string{
 					"cpu_cores":             "2",
 					"fqdn":                  "v-center",
@@ -279,9 +287,9 @@ func TestESXIDescribing(t *testing.T) {
 		},
 		"7": {
 			device: device{
-				// Still no source comparison
-				moid: "7",
-				name: "lunar",
+				source: vSphereURL.Host,
+				moid:   "7",
+				name:   "lunar",
 				facts: map[string]string{
 					"cpu_cores":             "2",
 					"fqdn":                  "lunar",
@@ -307,7 +315,7 @@ func TestESXIDescribing(t *testing.T) {
 			continue
 		}
 
-		if diff := cmp.Diff(expectedVM, *vm, cmp.AllowUnexported(VirtualMachine{}, device{}), noSourceCmp); diff != "" {
+		if diff := cmp.Diff(expectedVM, *vm, cmp.AllowUnexported(VirtualMachine{}, device{})); diff != "" {
 			t.Errorf("Unexpected VM description:\n%s", diff)
 		}
 	}
