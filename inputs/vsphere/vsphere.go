@@ -86,7 +86,6 @@ func (vSphere *vSphere) makeInput() (telegraf.Input, *inputs.GathererOptions, er
 	vsphereInput.VMMetricInclude = []string{
 		"cpu.usage.average",
 		"cpu.latency.average",
-		"mem.active.average",
 		"mem.usage.average",
 		"mem.swapped.average",
 		"disk.read.average",
@@ -96,7 +95,6 @@ func (vSphere *vSphere) makeInput() (telegraf.Input, *inputs.GathererOptions, er
 	}
 	vsphereInput.HostMetricInclude = []string{
 		"cpu.usage.average",
-		"mem.active.average",
 		"mem.totalCapacity.average",
 		"mem.usage.average",
 		"mem.swapout.average",
@@ -156,7 +154,7 @@ func renameMetrics(currentContext internal.GatherContext, metricName string) (ne
 			newMeasurement = "vsphere_vm_swap"
 			newMetricName = "used"
 		} else {
-			newMetricName = strings.Replace(newMetricName, "usage", "used", 1)
+			newMetricName = strings.Replace(newMetricName, "usage", "used_perc", 1)
 		}
 	case "vsphere_vm_disk":
 		newMeasurement = "vsphere_vm_io"
@@ -195,7 +193,6 @@ func transformMetrics(currentContext internal.GatherContext, fields map[string]f
 	factors := map[string]map[string]float64{
 		// VM metrics
 		"vsphere_vm_mem": {
-			"active_average":  1000, // KB to B
 			"swapped_average": 1000, // KB to B
 		},
 		"vsphere_vm_disk": {
@@ -208,7 +205,6 @@ func transformMetrics(currentContext internal.GatherContext, fields map[string]f
 		},
 		// Host metrics
 		"vsphere_host_mem": {
-			"active_average":        1000,    // KB to B
 			"totalCapacity_average": 1000000, // MB to B
 			"swapout_average":       1000,    // KB to B
 		},
