@@ -41,18 +41,18 @@ func (s *Synchronizer) syncVSphere(ctx context.Context, fullSync bool, onlyEssen
 }
 
 type vSphereAssociation struct {
-	FQDN string
-	ID   string
+	Key string
+	ID  string
 }
 
-func deviceAssoID(device vsphere.Device) string {
-	return device.Name() + "__" + device.Source()
+func deviceAssoKey(device vsphere.Device) string {
+	return device.MOID() + "__" + device.Source()
 }
 
 func (s *Synchronizer) FindVSphereAgent(ctx context.Context, device vsphere.Device, agentTypeID string, agentsByID map[string]types.Agent) (types.Agent, error) {
 	var association vSphereAssociation
 
-	err := s.option.State.Get("bleemeo:vsphere:"+deviceAssoID(device), &association)
+	err := s.option.State.Get("bleemeo:vsphere:"+deviceAssoKey(device), &association)
 	if err != nil {
 		return types.Agent{}, err
 	}
@@ -61,15 +61,17 @@ func (s *Synchronizer) FindVSphereAgent(ctx context.Context, device vsphere.Devi
 		return agent, nil
 	}
 
-	// For each vSphere device, try to match any vSphere agent that:
-	// has the correct FQDN & don't have current association.
-	// If no agent is found, one will be registered by s.vSphereRegisterAndUpdate().
+	// If no agent has been found using the sole association key,
+	// for each vSphere device we will try to match any vSphere agent that:
+	// has the same agent type, don't have current association and has the same FQDN.
+	// If the cache has been lost, the agent can be retrieved this way.
+	// Otherwise, if no agent is found, one will be registered by s.vSphereRegisterAndUpdate().
 
 	devices := s.option.VSphereDevices(ctx, time.Hour)
 	associatedID := make(map[string]bool, len(devices))
 
 	for _, dev := range devices {
-		err := s.option.State.Get("bleemeo:vsphere:"+deviceAssoID(dev), &association)
+		err := s.option.State.Get("bleemeo:vsphere:"+deviceAssoKey(dev), &association)
 		if err != nil {
 			return types.Agent{}, err
 		}
@@ -156,9 +158,9 @@ func (s *Synchronizer) vSphereRegisterAndUpdate(localTargets []vsphere.Device) e
 
 		newAgents = append(newAgents, registeredAgent)
 
-		err = s.option.State.Set("bleemeo:vsphere:"+deviceAssoID(device), vSphereAssociation{
-			FQDN: device.FQDN(),
-			ID:   registeredAgent.ID,
+		err = s.option.State.Set("bleemeo:vsphere:"+deviceAssoKey(device), vSphereAssociation{
+			Key: deviceAssoKey(device),
+			ID:  registeredAgent.ID,
 		})
 		if err != nil {
 			logger.V(0).Printf("Failed to update state: %v", err) // TODO: V(2)
