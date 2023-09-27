@@ -144,7 +144,7 @@ func TestVCenterDescribing(t *testing.T) {
 		},
 	}
 	if diff := cmp.Diff(expectedHost, *host, cmp.AllowUnexported(HostSystem{}, device{})); diff != "" {
-		t.Fatalf("Unexpected host description:\n%s", diff)
+		t.Fatalf("Unexpected host description (-want +got):\n%s", diff)
 	}
 
 	describeVMs(ctx, vms, deviceChan)
@@ -180,7 +180,7 @@ func TestVCenterDescribing(t *testing.T) {
 		UUID: "cd0681bf-2f18-5c00-9b9b-8197c0095348",
 	}
 	if diff := cmp.Diff(expectedVM, *vm, cmp.AllowUnexported(VirtualMachine{}, device{})); diff != "" {
-		t.Fatalf("Unexpected VM description:\n%s", diff)
+		t.Fatalf("Unexpected VM description (-want +got):\n%s", diff)
 	}
 }
 
@@ -365,7 +365,7 @@ func TestESXIDescribing(t *testing.T) {
 			// We need to compare the hosts and VMs one by one, otherwise the diff is way harder to analyze.
 			for i, expectedHost := range tc.expectedHosts {
 				if diff := cmp.Diff(expectedHost, hosts[i], cmp.AllowUnexported(HostSystem{}, device{}), noSourceCmp); diff != "" {
-					t.Fatalf("Unexpected host description:\n%s", diff)
+					t.Errorf("Unexpected host description (-want +got):\n%s", diff)
 				}
 			}
 
@@ -374,7 +374,7 @@ func TestESXIDescribing(t *testing.T) {
 
 			for i, expectedVM := range tc.expectedVMs {
 				if diff := cmp.Diff(expectedVM, vms[i], cmp.AllowUnexported(VirtualMachine{}, device{}), noSourceCmp); diff != "" {
-					t.Errorf("Unexpected VM description:\n%s", diff)
+					t.Errorf("Unexpected VM description (-want +got):\n%s", diff)
 				}
 			}
 		})
