@@ -341,7 +341,7 @@ func DefaultConfig() Config { //nolint:maintidx
 			},
 		},
 		Thresholds: map[string]Threshold{},
-		VSpheres:   []VSphere{},
+		VSphere:    []VSphere{},
 		Web: Web{
 			Enable: true,
 			Endpoints: WebEndpoints{
