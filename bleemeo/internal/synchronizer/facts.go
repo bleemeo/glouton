@@ -98,7 +98,7 @@ func (s *Synchronizer) syncFacts(ctx context.Context, fullSync bool, onlyEssenti
 		}
 
 		for _, dev := range s.option.VSphereDevices(ctx, time.Hour) {
-			agentTypeID, found := s.getVSphereAgentType(dev.Kind())
+			agentTypeID, found := s.GetVSphereAgentType(dev.Kind())
 			if !found {
 				continue
 			}

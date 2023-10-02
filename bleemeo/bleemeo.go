@@ -806,6 +806,30 @@ func (c *Connector) diagnosticCache(file io.Writer) {
 	fmt.Fprintf(file, "\n# Cache known %d monitors\n", len(c.cache.Monitors()))
 }
 
+func (c *Connector) GetAllVSphereAssociations(ctx context.Context, devices []vsphere.Device) (map[string]string, error) {
+	hostAgentTypeID, vmAgentTypeID, ok := c.sync.GetVSphereAgentTypes()
+	if !ok {
+		return map[string]string{}, errAgentTypeNotFound
+	}
+
+	agentTypes := map[string]string{
+		vsphere.KindHost: hostAgentTypeID,
+		vsphere.KindVM:   vmAgentTypeID,
+	}
+	associations := make(map[string]string, len(devices))
+
+	for _, dev := range devices {
+		agent, err := c.sync.FindVSphereAgent(ctx, dev, agentTypes[dev.Kind()], c.cache.AgentsByUUID())
+		if err != nil {
+			return associations, err
+		}
+
+		associations[dev.Source()+dev.MOID()] = agent.ID
+	}
+
+	return associations, nil
+}
+
 // Tags returns the Tags set on Bleemeo Cloud platform.
 func (c *Connector) Tags() []string {
 	agent := c.cache.Agent()

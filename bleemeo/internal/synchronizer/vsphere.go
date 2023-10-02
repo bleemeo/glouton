@@ -103,7 +103,7 @@ func (s *Synchronizer) vSphereRegisterAndUpdate(localTargets []vsphere.Device) e
 
 	remoteAgentList := s.option.Cache.AgentsByUUID()
 
-	hostAgentTypeID, vmAgentTypeID, found := s.getVSphereAgentTypes()
+	hostAgentTypeID, vmAgentTypeID, found := s.GetVSphereAgentTypes()
 	if !found {
 		return errRetryLater
 	}
@@ -189,7 +189,7 @@ func (s *Synchronizer) remoteRegisterVSphereDevice(params map[string]string, pay
 	return result, nil
 }
 
-func (s *Synchronizer) getVSphereAgentTypes() (hostAgentTypeID, vmAgentTypeID string, foundBoth bool) {
+func (s *Synchronizer) GetVSphereAgentTypes() (hostAgentTypeID, vmAgentTypeID string, foundBoth bool) {
 	agentTypes := s.option.Cache.AgentTypes()
 
 	for i := 0; i < len(agentTypes) && !foundBoth; i++ {
@@ -208,8 +208,8 @@ func (s *Synchronizer) getVSphereAgentTypes() (hostAgentTypeID, vmAgentTypeID st
 	return hostAgentTypeID, vmAgentTypeID, foundBoth
 }
 
-func (s *Synchronizer) getVSphereAgentType(kind string) (agentTypeID string, found bool) {
-	hostAgentTypeID, vmAgentTypeID, found := s.getVSphereAgentTypes()
+func (s *Synchronizer) GetVSphereAgentType(kind string) (agentTypeID string, found bool) {
+	hostAgentTypeID, vmAgentTypeID, found := s.GetVSphereAgentTypes()
 	if !found {
 		return "", false
 	}
