@@ -352,7 +352,7 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 				HighCritical: nil,
 			},
 		},
-		VSpheres: []VSphere{
+		VSphere: []VSphere{
 			{
 				URL:                "https://esxi.test",
 				Username:           "root",

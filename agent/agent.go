@@ -1382,7 +1382,7 @@ func (a *agent) registerInputs() {
 	input, opts, err := temp.New()
 	a.registerInput("Temp", input, opts, err)
 
-	a.vSphereManager.RegisterInputs(a.config.VSpheres, a.registerInput)
+	a.vSphereManager.RegisterInputs(a.config.VSphere, a.registerInput)
 }
 
 // Register a single input.

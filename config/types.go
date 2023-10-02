@@ -49,7 +49,7 @@ type Config struct {
 	Tags                     []string             `yaml:"tags"`
 	Telegraf                 Telegraf             `yaml:"telegraf"`
 	Thresholds               map[string]Threshold `yaml:"thresholds"`
-	VSpheres                 []VSphere            `yaml:"vspheres"`
+	VSphere                  []VSphere            `yaml:"vsphere"`
 	Web                      Web                  `yaml:"web"`
 	Zabbix                   Zabbix               `yaml:"zabbix"`
 }
