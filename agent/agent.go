@@ -2133,6 +2133,7 @@ func (a *agent) writeDiagnosticArchive(ctx context.Context, archive types.Archiv
 		a.diagnosticContainers,
 		a.diagnosticSNMP,
 		a.diagnosticFilterResult,
+		a.diagnosticVSphere,
 		a.metricFilter.DiagnosticArchive,
 		a.gathererRegistry.DiagnosticArchive,
 		a.rulesManager.DiagnosticArchive,
@@ -2474,6 +2475,58 @@ func (a *agent) diagnosticFilterResult(_ context.Context, archive types.ArchiveW
 	}
 
 	return nil
+}
+
+func (a *agent) diagnosticVSphere(ctx context.Context, archive types.ArchiveWriter) error {
+	file, err := archive.Create("vsphere-devices.json")
+	if err != nil {
+		return err
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	// 10min of max age to reuse devices found by the last metric collection,
+	// while ensuring to display information close to reality.
+	devices := a.vSphereManager.Devices(ctx, 10*time.Minute)
+
+	type device struct {
+		Source                 string            `json:"source"`
+		Kind                   string            `json:"kind"`
+		MOID                   string            `json:"moid"`
+		Name                   string            `json:"name"`
+		AssociatedBleemeoAgent string            `json:"associated_bleemeo_agent,omitempty"`
+		Facts                  map[string]string `json:"facts"`
+	}
+
+	associations, err := a.bleemeoConnector.GetAllVSphereAssociations(ctx, devices)
+	if err != nil {
+		logger.V(1).Println("Failed to diagnostic vSphere associations:", err)
+	}
+
+	finalDevices := make([]device, len(devices))
+
+	for i, dev := range devices {
+		finalDevices[i] = device{
+			Source:                 dev.Source(),
+			Kind:                   dev.Kind(),
+			MOID:                   dev.MOID(),
+			Name:                   dev.Name(),
+			AssociatedBleemeoAgent: associations[dev.Source()+dev.MOID()],
+			Facts:                  dev.Facts(),
+		}
+	}
+
+	sort.Slice(finalDevices, func(i, j int) bool {
+		// Sort by source, then by MOID
+		if finalDevices[i].Source == finalDevices[j].Source {
+			return finalDevices[i].MOID < finalDevices[j].MOID
+		}
+
+		return finalDevices[i].Source < finalDevices[j].Source
+	})
+
+	return json.NewEncoder(file).Encode(finalDevices)
 }
 
 // Add a warning for the configuration.
