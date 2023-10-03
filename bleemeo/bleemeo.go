@@ -500,25 +500,26 @@ func (c *Connector) RelabelHook(ctx context.Context, labels map[string]string) (
 	}
 
 	if vSphere := labels[gloutonTypes.LabelMetaVSphere]; vSphere != "" {
-		device := c.option.FindVSphereDevice(ctx, vSphere, labels["moid"])
+		moid, ok := labels[gloutonTypes.LabelMetaVSphereMOID]
+
+		device := c.option.FindVSphereDevice(ctx, vSphere, moid)
 		if device == nil {
-			// Trigger a registration ? (won't last too long because device discovery has just been done)
-			return labels, true
-		}
+			// The registration won't last too long, because device discovery has just been done.
+			err := c.sync.VSphereRegisterAndUpdate(c.option.VSphereDevices(ctx, time.Minute))
+			if err == nil {
+				device = c.option.FindVSphereDevice(ctx, vSphere, moid)
+			} else {
+				logger.V(1).Println("Failed to register vSphere devices:", err)
+			}
 
-		var agentType string
+			if err != nil || device == nil {
+				return labels, true
+			}
+			// Successfully registered yet-unknown device
+		} //nolint:wsl
 
-		switch device.Kind() {
-		case vsphere.KindHost:
-			agentType = types.AgentTypeVSphereHost
-		case vsphere.KindVM:
-			agentType = types.AgentTypeVSphereVM
-		default:
-			return labels, true
-		}
-
-		vSphereAgentTypeID, err := c.agentTypeID(agentType)
-		if err != nil {
+		vSphereAgentTypeID, ok := c.sync.GetVSphereAgentType(device.Kind())
+		if !ok {
 			return labels, true
 		}
 

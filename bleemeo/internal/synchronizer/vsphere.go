@@ -37,7 +37,7 @@ func (s *Synchronizer) syncVSphere(ctx context.Context, fullSync bool, onlyEssen
 
 	logger.Printf("Synchronizing vSphere") // TODO: remove
 
-	return false, s.vSphereRegisterAndUpdate(s.option.VSphereDevices(ctx, time.Hour))
+	return false, s.VSphereRegisterAndUpdate(s.option.VSphereDevices(ctx, time.Hour))
 }
 
 type vSphereAssociation struct {
@@ -65,7 +65,7 @@ func (s *Synchronizer) FindVSphereAgent(ctx context.Context, device vsphere.Devi
 	// for each vSphere device we will try to match any vSphere agent that:
 	// has the same agent type, don't have current association and has the same FQDN.
 	// If the cache has been lost, the agent can be retrieved this way.
-	// Otherwise, if no agent is found, one will be registered by s.vSphereRegisterAndUpdate().
+	// Otherwise, if no agent is found, one will be registered by s.VSphereRegisterAndUpdate().
 
 	devices := s.option.VSphereDevices(ctx, time.Hour)
 	associatedID := make(map[string]bool, len(devices))
@@ -98,19 +98,19 @@ func (s *Synchronizer) FindVSphereAgent(ctx context.Context, device vsphere.Devi
 	return types.Agent{}, errNotExist
 }
 
-func (s *Synchronizer) vSphereRegisterAndUpdate(localTargets []vsphere.Device) error {
-	var newAgents []types.Agent //nolint: prealloc
-
-	remoteAgentList := s.option.Cache.AgentsByUUID()
-
+func (s *Synchronizer) VSphereRegisterAndUpdate(localTargets []vsphere.Device) error {
 	hostAgentTypeID, vmAgentTypeID, found := s.GetVSphereAgentTypes()
 	if !found {
 		return errRetryLater
 	}
 
+	remoteAgentList := s.option.Cache.AgentsByUUID()
+
 	params := map[string]string{
 		"fields": "id,display_name,account,agent_type,abstracted,fqdn,initial_password,created_at,next_config_at,current_config,tags,initial_server_group_name",
 	}
+
+	var newAgents []types.Agent //nolint: prealloc
 
 	for _, device := range localTargets {
 		var agentTypeID string

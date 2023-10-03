@@ -136,6 +136,22 @@ func (vSphere *vSphere) makeInput() (telegraf.Input, *inputs.GathererOptions, er
 
 func (vSphere *vSphere) renameGlobal(gatherContext internal.GatherContext) (result internal.GatherContext, drop bool) {
 	gatherContext.Tags[types.LabelMetaVSphere] = vSphere.host
+	gatherContext.Tags[types.LabelMetaVSphereMOID] = gatherContext.Tags["moid"]
+
+	if _, ok := gatherContext.Tags["moid"]; !ok {
+		logger.Printf("No moid for %s/%v/%v", gatherContext.Measurement, gatherContext.OriginalFields, gatherContext.OriginalTags)
+	}
+
+	delete(gatherContext.Tags, "moid")
+	delete(gatherContext.Tags, "rpname")
+	delete(gatherContext.Tags, "guest")
+	delete(gatherContext.Tags, "source")
+	delete(gatherContext.Tags, "vmname")
+	delete(gatherContext.Tags, "vcenter")
+
+	if gatherContext.Tags["interface"] == "*" {
+		delete(gatherContext.Tags, "interface")
+	}
 
 	return gatherContext, false
 }
