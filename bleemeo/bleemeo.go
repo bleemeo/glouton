@@ -498,7 +498,7 @@ func (c *Connector) RelabelHook(ctx context.Context, labels map[string]string) (
 	}
 
 	if vSphere := labels[gloutonTypes.LabelMetaVSphere]; vSphere != "" {
-		moid, ok := labels[gloutonTypes.LabelMetaVSphereMOID]
+		moid := labels[gloutonTypes.LabelMetaVSphereMOID]
 
 		device := c.option.FindVSphereDevice(ctx, vSphere, moid)
 		if device == nil {

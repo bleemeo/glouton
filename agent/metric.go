@@ -291,6 +291,7 @@ var (
 		`{__name__="sensor_temperature", sensor=~"coretemp_package_id_.*"}`,
 
 		// vSphere
+		"vsphere_device_status",
 		//   VM metrics
 		"vsphere_vm_cpu_used_perc",
 		"vsphere_vm_cpu_latency",
