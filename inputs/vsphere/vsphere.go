@@ -25,16 +25,48 @@ import (
 	"glouton/logger"
 	"glouton/types"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/influxdata/telegraf"
 	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"
 	"github.com/influxdata/telegraf/plugins/inputs/vsphere"
+	dto "github.com/prometheus/client_model/go"
+	"google.golang.org/protobuf/proto"
 )
 
 type vSphere struct {
 	host string
 	opts config.VSphere
+
+	lastStatus       types.Status
+	lastErrorMessage string
+	consecutiveErr   int
+	errLock          sync.Mutex
+}
+
+func (vSphere *vSphere) setErr(err error) {
+	vSphere.errLock.Lock()
+	defer vSphere.errLock.Unlock()
+
+	if err == nil {
+		vSphere.lastErrorMessage = ""
+		vSphere.consecutiveErr = 0
+	} else {
+		vSphere.lastErrorMessage = err.Error()
+		vSphere.consecutiveErr++
+	}
+}
+
+func (vSphere *vSphere) getStatus() (types.Status, string) {
+	vSphere.errLock.Lock()
+	defer vSphere.errLock.Unlock()
+
+	if vSphere.consecutiveErr >= 2 {
+		return types.StatusCritical, vSphere.lastErrorMessage
+	}
+
+	return types.StatusOk, ""
 }
 
 func (vSphere *vSphere) String() string {
@@ -49,13 +81,15 @@ func (vSphere *vSphere) devices(ctx context.Context, deviceChan chan<- Device) {
 
 	finder, err := newDeviceFinder(soapCtx, vSphere.opts)
 	if err != nil {
-		logger.V(1).Printf("Can't create vSphere client for %q: %v", vSphere.host, err)
+		vSphere.setErr(err)
+		logger.V(1).Printf("Can't create vSphere client for %q: %v", vSphere.host, err) // TODO: V(2) ?
 
 		return
 	}
 
 	hosts, vms, err := findDevices(soapCtx, finder)
 	if err != nil {
+		vSphere.setErr(err)
 		logger.V(1).Printf("Can't find devices on vSphere %q: %v", vSphere.host, err)
 
 		return
@@ -65,6 +99,8 @@ func (vSphere *vSphere) devices(ctx context.Context, deviceChan chan<- Device) {
 
 	describeHosts(soapCtx, hosts, deviceChan)
 	describeVMs(soapCtx, vms, deviceChan)
+
+	vSphere.setErr(nil)
 }
 
 func (vSphere *vSphere) makeInput() (telegraf.Input, *inputs.GathererOptions, error) {
@@ -120,6 +156,7 @@ func (vSphere *vSphere) makeInput() (telegraf.Input, *inputs.GathererOptions, er
 		Name: "vSphere",
 	}
 	opts := &inputs.GathererOptions{
+		GatherModifier:      vSphere.gatherModifier,
 		MinInterval:         time.Minute,
 		ApplyDynamicRelabel: true,
 	}
@@ -132,6 +169,35 @@ func (vSphere *vSphere) makeInput() (telegraf.Input, *inputs.GathererOptions, er
 	// but endpoints may be managed by us instead of telegraf's input.
 
 	return internalInput, opts, nil
+}
+
+func (vSphere *vSphere) gatherModifier(mfs []*dto.MetricFamily) []*dto.MetricFamily {
+	logger.Printf("GatherModifier (%d): %s", len(mfs), vSphere.host)
+
+	status, msg := vSphere.getStatus()
+	if status == types.StatusOk || status == types.StatusCritical && vSphere.lastStatus != types.StatusCritical {
+		vSphereDeviceStatus := &dto.MetricFamily{
+			Name: proto.String("vsphere_device_status"),
+			Type: dto.MetricType_GAUGE.Enum(),
+			Metric: []*dto.Metric{
+				{
+					Label: []*dto.LabelPair{
+						{Name: proto.String(types.LabelMetaCurrentStatus), Value: proto.String(status.String())},
+						{Name: proto.String(types.LabelMetaCurrentDescription), Value: proto.String(msg)},
+					},
+					Gauge: &dto.Gauge{
+						Value: proto.Float64(float64(status.NagiosCode())),
+					},
+				},
+			},
+		}
+
+		mfs = append(mfs, vSphereDeviceStatus)
+	}
+
+	vSphere.lastStatus = status
+
+	return mfs
 }
 
 func (vSphere *vSphere) renameGlobal(gatherContext internal.GatherContext) (result internal.GatherContext, drop bool) {

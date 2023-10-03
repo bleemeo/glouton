@@ -1400,6 +1400,7 @@ func (a *agent) registerInput(name string, input telegraf.Input, opts *inputs.Ga
 			Rules:               opts.Rules,
 			MinInterval:         opts.MinInterval,
 			ApplyDynamicRelabel: opts.ApplyDynamicRelabel,
+			GatherModifier:      opts.GatherModifier,
 		},
 		input,
 	)
