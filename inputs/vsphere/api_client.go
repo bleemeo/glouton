@@ -209,9 +209,12 @@ func describeVM(ctx context.Context, vm *object.VirtualMachine, vmProps mo.Virtu
 	if vmProps.Config != nil {
 		vmFacts["cpu_cores"] = str(vmProps.Config.Hardware.NumCPU)
 		vmFacts["memory"] = facts.ByteCountDecimal(uint64(vmProps.Config.Hardware.MemoryMB) * 1 << 20) // MB to B
-		vmFacts["os_pretty_name"] = vmProps.Config.GuestFullName
 		vmFacts["vsphere_vm_version"] = vmProps.Config.Version
 		vmFacts["vsphere_vm_name"] = vmProps.Config.Name
+
+		if vmProps.Config.GuestFullName != "otherGuest" {
+			vmFacts["os_pretty_name"] = vmProps.Config.GuestFullName
+		}
 
 		if vmProps.Summary.Config.Product != nil {
 			vmFacts["product_name"] = vmProps.Summary.Config.Product.Name
