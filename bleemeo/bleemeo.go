@@ -513,6 +513,8 @@ func (c *Connector) RelabelHook(ctx context.Context, labels map[string]string) (
 			}
 
 			if err != nil || device == nil {
+				logger.Printf("Did not find vSphere device %q / %q", vSphere, moid) // TODO: remove
+
 				return labels, true
 			}
 			// Successfully registered yet-unknown device

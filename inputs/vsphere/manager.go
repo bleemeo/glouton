@@ -18,11 +18,13 @@ package vsphere
 
 import (
 	"context"
+	"fmt"
 	"glouton/config"
 	"glouton/crashreport"
 	"glouton/inputs"
 	"glouton/logger"
 	"net/url"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -58,7 +60,7 @@ func (m *Manager) RegisterInputs(vSphereCfgs []config.VSphere, registerInput fun
 			continue
 		}
 
-		vSphere := &vSphere{host: u.Host, opts: vSphereCfg}
+		vSphere := newVSphere(u.Host, vSphereCfg)
 
 		input, opts, err := vSphere.makeInput()
 		if err != nil {
@@ -81,8 +83,7 @@ func (m *Manager) Devices(ctx context.Context, maxAge time.Duration) []Device {
 		return m.lastDevices
 	}
 
-	logger.Printf("Discovering vSphere devices ...") // TODO: remove
-	startTime := time.Now()                          //nolint:wsl
+	startTime := time.Now()
 
 	deviceChan := make(chan Device)
 	wg := new(sync.WaitGroup)
@@ -103,14 +104,16 @@ func (m *Manager) Devices(ctx context.Context, maxAge time.Duration) []Device {
 	go func() { wg.Wait(); close(deviceChan) }()
 
 	var devices []Device //nolint:prealloc
-	var names []string   //nolint:prealloc,wsl
+	var moids []string   //nolint:prealloc,wsl // TODO: remove
 
 	for device := range deviceChan {
 		devices = append(devices, device)
-		names = append(names, device.Name())
+		moids = append(moids, device.MOID()) // TODO: remove
 	}
 
-	logger.Printf("Found devices: %s", strings.Join(names, ", ")) // TODO: remove
+	logger.Printf("Found devices: %s", strings.Join(moids, ", ")) // TODO: remove
+
+	printCallStack() // TODO: remove
 
 	m.lastDevices = devices
 	m.lastDevicesUpdate = time.Now()
@@ -120,6 +123,19 @@ func (m *Manager) Devices(ctx context.Context, maxAge time.Duration) []Device {
 	return devices
 }
 
+func printCallStack() {
+	for i := 1; i < 15; i++ {
+		pc, file, line, ok := runtime.Caller(i)
+
+		details := runtime.FuncForPC(pc)
+		if ok && details != nil {
+			fmt.Printf("%s%s (%s:%d)\n", strings.Repeat(" ", i), details.Name(), file, line) //nolint:forbidigo
+		}
+	}
+}
+
+// FindDevice returns the device from the given vSphere that has the given MOID.
+// If no matching device is found, it returns nil.
 func (m *Manager) FindDevice(ctx context.Context, vSphereHost, moid string) Device {
 	// We specify a small max age here, because as metric gathering is done every minute,
 	// there's a good chance to discover new vSphere VMs from the metric gathering.
@@ -130,8 +146,6 @@ func (m *Manager) FindDevice(ctx context.Context, vSphereHost, moid string) Devi
 			return dev
 		}
 	}
-
-	logger.Printf("Did not found vSphere device %q / %q", vSphereHost, moid) // TODO: remove
 
 	return nil
 }
@@ -148,14 +162,19 @@ type Device interface {
 	Name() string
 
 	Facts() map[string]string
+
+	isPoweredOn() bool
+	latestError() error
 }
 
 type device struct {
 	// The source is the host address of the vCenter/ESXI from which this device was described.
-	source string
-	moid   string
-	name   string
-	facts  map[string]string
+	source     string
+	moid       string
+	name       string
+	facts      map[string]string
+	powerState string
+	err        error
 }
 
 func (dev *device) FQDN() string {
@@ -184,6 +203,14 @@ func (dev *device) Name() string {
 // since the facts had been gathered at the same as the device itself.
 func (dev *device) Facts() map[string]string {
 	return dev.facts
+}
+
+func (dev *device) isPoweredOn() bool {
+	return dev.powerState == "poweredOn"
+}
+
+func (dev *device) latestError() error {
+	return dev.err
 }
 
 type HostSystem struct {

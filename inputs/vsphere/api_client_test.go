@@ -107,9 +107,11 @@ func TestVCenterDescribing(t *testing.T) {
 		t.FailNow()
 	}
 
+	dummyVSphere := &vSphere{deviceCache: make(map[string]Device)}
+
 	deviceChan := make(chan Device, 1) // 1 of buffer because we only have 1 host, then 1 VM.
 
-	describeHosts(ctx, hosts, deviceChan)
+	dummyVSphere.describeHosts(ctx, hosts, deviceChan)
 
 	if len(deviceChan) != 1 {
 		t.Fatalf("Expected 1 host to be described, but got %d.", len(deviceChan))
@@ -147,7 +149,7 @@ func TestVCenterDescribing(t *testing.T) {
 		t.Fatalf("Unexpected host description (-want +got):\n%s", diff)
 	}
 
-	describeVMs(ctx, vms, deviceChan)
+	dummyVSphere.describeVMs(ctx, vms, deviceChan)
 
 	if len(deviceChan) != 1 {
 		t.Fatalf("Expected 1 VM to be described, but got %d.", len(deviceChan))
@@ -170,12 +172,12 @@ func TestVCenterDescribing(t *testing.T) {
 				"fqdn":                  "DC0_C0_RP0_VM0",
 				"hostname":              "vm-28",
 				"memory":                "32.00 MB",
-				"os_pretty_name":        "otherGuest",
 				"vsphere_host":          "host-23",
 				"vsphere_resource_pool": "resgroup-15",
 				"vsphere_vm_name":       "DC0_C0_RP0_VM0",
 				"vsphere_vm_version":    "vmx-13",
 			},
+			powerState: "poweredOn",
 		},
 		UUID: "cd0681bf-2f18-5c00-9b9b-8197c0095348",
 	}
@@ -216,6 +218,7 @@ func TestESXIDescribing(t *testing.T) {
 							"vsphere_host_version":    "8.0.1",
 							"vsphere_vmotion_enabled": "false",
 						},
+						powerState: "poweredOn",
 					},
 				},
 			},
@@ -230,6 +233,7 @@ func TestESXIDescribing(t *testing.T) {
 							"vsphere_host":          "ha-host",
 							"vsphere_resource_pool": "ha-root-pool",
 						},
+						powerState: "poweredOff",
 					},
 				},
 				{
@@ -248,6 +252,7 @@ func TestESXIDescribing(t *testing.T) {
 							"vsphere_vm_name":       "v-center",
 							"vsphere_vm_version":    "vmx-10",
 						},
+						powerState: "poweredOff",
 					},
 					UUID: "564d8859-9d98-c670-0aca-009149c3a8af",
 				},
@@ -267,6 +272,7 @@ func TestESXIDescribing(t *testing.T) {
 							"vsphere_vm_name":       "lunar",
 							"vsphere_vm_version":    "vmx-10",
 						},
+						powerState: "poweredOff",
 					},
 					UUID: "564de3ab-988d-b51c-a5cb-5e1af6f5f313",
 				},
@@ -307,12 +313,12 @@ func TestESXIDescribing(t *testing.T) {
 							"fqdn":                  "DC0_C0_RP0_VM0",
 							"hostname":              "vm-28",
 							"memory":                "32.00 MB",
-							"os_pretty_name":        "otherGuest",
 							"vsphere_host":          "host-23",
 							"vsphere_resource_pool": "resgroup-15",
 							"vsphere_vm_name":       "DC0_C0_RP0_VM0",
 							"vsphere_vm_version":    "vmx-13",
 						},
+						powerState: "poweredOn",
 					},
 					UUID: "cd0681bf-2f18-5c00-9b9b-8197c0095348",
 				},
