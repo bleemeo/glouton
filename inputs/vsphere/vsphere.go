@@ -24,6 +24,7 @@ import (
 	"glouton/inputs/internal"
 	"glouton/logger"
 	"glouton/types"
+	//"maps" // TODO: uncomment & remove go/exp import, once rebased on main
 	"strings"
 	"sync"
 	"time"
@@ -32,17 +33,37 @@ import (
 	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"
 	"github.com/influxdata/telegraf/plugins/inputs/vsphere"
 	dto "github.com/prometheus/client_model/go"
+	"github.com/vmware/govmomi/object"
+	"github.com/vmware/govmomi/vim25/mo"
+	"golang.org/x/exp/maps"
 	"google.golang.org/protobuf/proto"
+)
+
+const (
+	vCenterConsecutiveErrorsStatusThreshold = 2
+	noMetricsStatusThreshold                = 5
 )
 
 type vSphere struct {
 	host string
 	opts config.VSphere
 
-	lastStatus       types.Status
+	deviceCache      map[string]Device
+	noMetricsSince   map[string]int
+	lastStatuses     map[string]types.Status
 	lastErrorMessage string
 	consecutiveErr   int
 	errLock          sync.Mutex
+}
+
+func newVSphere(host string, cfg config.VSphere) *vSphere {
+	return &vSphere{
+		host:           host,
+		opts:           cfg,
+		deviceCache:    make(map[string]Device),
+		noMetricsSince: make(map[string]int),
+		lastStatuses:   make(map[string]types.Status),
+	}
 }
 
 func (vSphere *vSphere) setErr(err error) {
@@ -62,7 +83,7 @@ func (vSphere *vSphere) getStatus() (types.Status, string) {
 	vSphere.errLock.Lock()
 	defer vSphere.errLock.Unlock()
 
-	if vSphere.consecutiveErr >= 2 {
+	if vSphere.consecutiveErr >= vCenterConsecutiveErrorsStatusThreshold {
 		return types.StatusCritical, vSphere.lastErrorMessage
 	}
 
@@ -97,10 +118,56 @@ func (vSphere *vSphere) devices(ctx context.Context, deviceChan chan<- Device) {
 
 	logger.Printf("Found %d hosts and %d vms.", len(hosts), len(vms))
 
-	describeHosts(soapCtx, hosts, deviceChan)
-	describeVMs(soapCtx, vms, deviceChan)
+	vSphere.describeHosts(soapCtx, hosts, deviceChan)
+	vSphere.describeVMs(soapCtx, vms, deviceChan)
 
 	vSphere.setErr(nil)
+}
+
+func (vSphere *vSphere) describeHosts(ctx context.Context, rawHosts []*object.HostSystem, deviceChan chan<- Device) {
+	for _, host := range rawHosts {
+		var hostProps mo.HostSystem
+
+		moid := host.Reference().Value
+
+		err := host.Properties(ctx, host.Reference(), relevantHostProperties, &hostProps)
+		if err != nil {
+			logger.Printf("Failed to fetch host props: %v", err) // TODO: remove
+
+			if dev, ok := vSphere.deviceCache[moid]; ok {
+				dev.(*HostSystem).err = err //nolint:forcetypeassert
+			}
+
+			continue
+		}
+
+		devHost := describeHost(host, hostProps)
+		deviceChan <- devHost
+		vSphere.deviceCache[moid] = devHost
+	}
+}
+
+func (vSphere *vSphere) describeVMs(ctx context.Context, rawVMs []*object.VirtualMachine, deviceChan chan<- Device) {
+	for _, vm := range rawVMs {
+		var vmProps mo.VirtualMachine
+
+		moid := vm.Reference().Value
+
+		err := vm.Properties(ctx, vm.Reference(), relevantVMProperties, &vmProps)
+		if err != nil {
+			logger.Printf("Failed to fetch VM props:", err) // TODO: remove
+
+			if dev, ok := vSphere.deviceCache[moid]; ok {
+				dev.(*VirtualMachine).err = err //nolint:forcetypeassert
+			}
+
+			continue
+		}
+
+		devVM := describeVM(ctx, vm, vmProps)
+		deviceChan <- devVM
+		vSphere.deviceCache[moid] = devVM
+	}
 }
 
 func (vSphere *vSphere) makeInput() (telegraf.Input, *inputs.GathererOptions, error) {
@@ -172,52 +239,103 @@ func (vSphere *vSphere) makeInput() (telegraf.Input, *inputs.GathererOptions, er
 }
 
 func (vSphere *vSphere) gatherModifier(mfs []*dto.MetricFamily) []*dto.MetricFamily {
-	logger.Printf("GatherModifier (%d): %s", len(mfs), vSphere.host)
+	seenDevices := make(map[string]struct{})
 
-	status, msg := vSphere.getStatus()
-	if status == types.StatusOk || status == types.StatusCritical && vSphere.lastStatus != types.StatusCritical {
-		vSphereDeviceStatus := &dto.MetricFamily{
-			Name: proto.String("vsphere_device_status"),
-			Type: dto.MetricType_GAUGE.Enum(),
-			Metric: []*dto.Metric{
-				{
-					Label: []*dto.LabelPair{
-						{Name: proto.String(types.LabelMetaCurrentStatus), Value: proto.String(status.String())},
-						{Name: proto.String(types.LabelMetaCurrentDescription), Value: proto.String(msg)},
-					},
-					Gauge: &dto.Gauge{
-						Value: proto.Float64(float64(status.NagiosCode())),
-					},
-				},
-			},
+	for _, mf := range mfs {
+		for _, metric := range mf.Metric {
+			for _, label := range metric.Label {
+				if label.GetName() == types.LabelMetaVSphereMOID {
+					seenDevices[label.GetValue()] = struct{}{}
+
+					break // also break mf.Metric loop ?
+				}
+			}
 		}
-
-		mfs = append(mfs, vSphereDeviceStatus)
 	}
 
-	vSphere.lastStatus = status
+	vSphereStatus, vSphereMsg := vSphere.getStatus()
+
+	for _, dev := range vSphere.deviceCache {
+		var (
+			deviceStatus types.Status
+			deviceMsg    string
+		)
+
+		moid := dev.MOID()
+		_, metricSeen := seenDevices[moid]
+
+		switch {
+		case vSphereStatus == types.StatusCritical:
+			deviceStatus = types.StatusCritical
+			deviceMsg = "vCenter is unreachable"
+
+			if vSphereMsg != "" { // Maybe no error message
+				deviceMsg += ": " + vSphereMsg
+			}
+		case !dev.isPoweredOn():
+			deviceStatus = types.StatusCritical
+
+			if err := dev.latestError(); err != nil {
+				deviceMsg = err.Error()
+			} else {
+				deviceMsg = dev.Kind() + " is stopped"
+			}
+		case metricSeen:
+			deviceStatus = types.StatusOk
+			vSphere.noMetricsSince[moid] = 0
+		case !metricSeen:
+			vSphere.noMetricsSince[moid]++
+			if vSphere.noMetricsSince[moid] >= noMetricsStatusThreshold {
+				deviceStatus = types.StatusCritical
+				deviceMsg = "No metrics seen since a long time"
+			}
+		}
+
+		if deviceStatus == types.StatusOk || deviceStatus == types.StatusCritical && vSphere.lastStatuses[moid] != types.StatusCritical {
+			vSphereDeviceStatus := &dto.MetricFamily{
+				Name: proto.String("vsphere_device_status"),
+				Type: dto.MetricType_GAUGE.Enum(),
+				Metric: []*dto.Metric{
+					{
+						Label: []*dto.LabelPair{
+							{Name: proto.String(types.LabelMetaCurrentStatus), Value: proto.String(deviceStatus.String())},
+							{Name: proto.String(types.LabelMetaCurrentDescription), Value: proto.String(deviceMsg)},
+							{Name: proto.String(types.LabelMetaVSphere), Value: proto.String(vSphere.host)},
+							{Name: proto.String(types.LabelMetaVSphereMOID), Value: proto.String(moid)},
+						},
+						Gauge: &dto.Gauge{
+							Value: proto.Float64(float64(deviceStatus.NagiosCode())),
+						},
+					},
+				},
+			}
+
+			mfs = append(mfs, vSphereDeviceStatus)
+		}
+
+		vSphere.lastStatuses[moid] = deviceStatus
+	}
 
 	return mfs
 }
 
 func (vSphere *vSphere) renameGlobal(gatherContext internal.GatherContext) (result internal.GatherContext, drop bool) {
-	gatherContext.Tags[types.LabelMetaVSphere] = vSphere.host
-	gatherContext.Tags[types.LabelMetaVSphereMOID] = gatherContext.Tags["moid"]
+	tags := maps.Clone(gatherContext.Tags) // Prevents some labels to be removed
 
-	if _, ok := gatherContext.Tags["moid"]; !ok {
-		logger.Printf("No moid for %s/%v/%v", gatherContext.Measurement, gatherContext.OriginalFields, gatherContext.OriginalTags)
+	tags[types.LabelMetaVSphere] = vSphere.host
+	tags[types.LabelMetaVSphereMOID] = tags["moid"]
+
+	delete(tags, "moid")
+	delete(tags, "rpname")
+	delete(tags, "guest")
+	delete(tags, "source")
+	delete(tags, "vcenter")
+
+	if tags["interface"] == "*" { // Get rid of this "useless" label
+		delete(tags, "interface")
 	}
 
-	delete(gatherContext.Tags, "moid")
-	delete(gatherContext.Tags, "rpname")
-	delete(gatherContext.Tags, "guest")
-	delete(gatherContext.Tags, "source")
-	delete(gatherContext.Tags, "vmname")
-	delete(gatherContext.Tags, "vcenter")
-
-	if gatherContext.Tags["interface"] == "*" {
-		delete(gatherContext.Tags, "interface")
-	}
+	gatherContext.Tags = tags
 
 	return gatherContext, false
 }

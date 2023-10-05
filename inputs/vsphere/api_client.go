@@ -18,10 +18,10 @@ package vsphere
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"glouton/config"
 	"glouton/facts"
-	"glouton/logger"
 	"net/url"
 	"strings"
 
@@ -52,6 +52,8 @@ var (
 		"config.network.ipV6Enabled",
 		"config.product.version",
 		"summary.config.vmotionEnabled",
+
+		"runtime.powerState", // Only used for generating a status
 	}
 	relevantVMProperties = []string{
 		"config.hardware.numCPU",
@@ -66,6 +68,8 @@ var (
 		"config.datastoreUrl",
 		"config.version",
 		"config.name",
+
+		"runtime.powerState", // Only used for generating a status
 	}
 )
 
@@ -96,32 +100,21 @@ func newDeviceFinder(ctx context.Context, vSphereCfg config.VSphere) (*find.Find
 }
 
 func findDevices(ctx context.Context, finder *find.Finder) (hosts []*object.HostSystem, vms []*object.VirtualMachine, err error) {
+	// The find.NotFoundError is thrown when no devices are found,
+	// even if the path is not restrictive to a particular device.
+	var notFoundError *find.NotFoundError
+
 	hosts, err = finder.HostSystemList(ctx, "*")
-	if err != nil {
+	if err != nil && !errors.As(err, &notFoundError) {
 		return nil, nil, err
 	}
 
 	vms, err = finder.VirtualMachineList(ctx, "*")
-	if err != nil {
+	if err != nil && !errors.As(err, &notFoundError) {
 		return nil, nil, err
 	}
 
 	return hosts, vms, nil
-}
-
-func describeHosts(ctx context.Context, rawHosts []*object.HostSystem, deviceChan chan<- Device) {
-	for _, host := range rawHosts {
-		var hostProps mo.HostSystem
-
-		err := host.Properties(ctx, host.Reference(), relevantHostProperties, &hostProps)
-		if err != nil {
-			logger.Printf("Failed to fetch host props: %v", err) // TODO: remove
-
-			continue
-		}
-
-		deviceChan <- describeHost(host, hostProps)
-	}
 }
 
 func describeHost(host *object.HostSystem, hostProps mo.HostSystem) *HostSystem {
@@ -177,30 +170,16 @@ func describeHost(host *object.HostSystem, hostProps mo.HostSystem) *HostSystem 
 	}
 
 	dev := device{
-		source: host.Client().URL().Host,
-		moid:   host.Reference().Value,
-		name:   fallback(hostFacts["hostname"], host.Reference().Value),
-		facts:  hostFacts,
+		source:     host.Client().URL().Host,
+		moid:       host.Reference().Value,
+		name:       fallback(hostFacts["hostname"], host.Reference().Value),
+		facts:      hostFacts,
+		powerState: string(hostProps.Runtime.PowerState),
 	}
 
 	dev.facts["fqdn"] = dev.FQDN()
 
 	return &HostSystem{dev}
-}
-
-func describeVMs(ctx context.Context, rawVMs []*object.VirtualMachine, deviceChan chan<- Device) {
-	for _, vm := range rawVMs {
-		var vmProps mo.VirtualMachine
-
-		err := vm.Properties(ctx, vm.Reference(), relevantVMProperties, &vmProps)
-		if err != nil {
-			logger.Printf("Failed to fetch VM props:", err) // TODO: remove
-
-			continue
-		}
-
-		deviceChan <- describeVM(ctx, vm, vmProps)
-	}
 }
 
 func describeVM(ctx context.Context, vm *object.VirtualMachine, vmProps mo.VirtualMachine) *VirtualMachine {
@@ -253,10 +232,11 @@ func describeVM(ctx context.Context, vm *object.VirtualMachine, vmProps mo.Virtu
 	}
 
 	dev := device{
-		source: vm.Client().URL().Host,
-		moid:   vm.Reference().Value,
-		name:   fallback(vmFacts["vsphere_vm_name"], vm.Reference().Value),
-		facts:  vmFacts,
+		source:     vm.Client().URL().Host,
+		moid:       vm.Reference().Value,
+		name:       fallback(vmFacts["vsphere_vm_name"], vm.Reference().Value),
+		facts:      vmFacts,
+		powerState: string(vmProps.Runtime.PowerState),
 	}
 
 	dev.facts["fqdn"] = dev.FQDN()
