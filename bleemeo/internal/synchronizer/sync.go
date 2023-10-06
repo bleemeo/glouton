@@ -91,6 +91,7 @@ type Synchronizer struct {
 	lastSync                  time.Time
 	lastFactUpdatedAt         string
 	lastSNMPcount             int
+	lastVSphereUpdate         time.Time
 	lastMetricActivation      time.Time
 	successiveErrors          int
 	warnAccountMismatchDone   bool
@@ -959,7 +960,6 @@ func (s *Synchronizer) syncToPerform(ctx context.Context) (map[string]bool, bool
 		syncMethods[syncMethodMonitor] = true
 		syncMethods[syncMethodSNMP] = true
 		syncMethods[syncMethodVSphere] = true
-		syncMethods[syncMethodVSphere] = true
 		syncMethods[syncMethodCrashReports] = true
 	}
 
@@ -973,6 +973,11 @@ func (s *Synchronizer) syncToPerform(ctx context.Context) (map[string]bool, bool
 		// TODO: this isn't idea. If the synchronization fail, it won't be retried.
 		// I think the ideal fix would be to always retry all syncMethods that was to synchronize but failed.
 		s.lastSNMPcount = currentSNMPCount
+	}
+
+	if lastUpdate := s.option.LastVSphereChange(); lastUpdate.After(s.lastVSphereUpdate) {
+		syncMethods[syncMethodVSphere] = true // why fullSync for others ?
+		s.lastVSphereUpdate = lastUpdate
 	}
 
 	// After a reload, the config has been changed, so we want to do a fullsync

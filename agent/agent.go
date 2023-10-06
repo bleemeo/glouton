@@ -1021,7 +1021,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 	baseRules := fluentbit.PromQLRulesFromInputs(a.config.Log.Inputs)
 	a.rulesManager = rules.NewManager(ctx, a.store, baseRules)
 
-	a.vSphereManager = new(vsphere.Manager)
+	a.vSphereManager = vsphere.NewManager()
 
 	if a.config.Bleemeo.Enable {
 		scaperName := a.config.Blackbox.ScraperName
@@ -1052,6 +1052,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 			ReloadState:                    a.reloadState.Bleemeo(),
 			VSphereDevices:                 a.vSphereManager.Devices,
 			FindVSphereDevice:              a.vSphereManager.FindDevice,
+			LastVSphereChange:              a.vSphereManager.LastChange,
 			IsContainerEnabled:             a.containerFilter.ContainerEnabled,
 			IsContainerNameRecentlyDeleted: a.containerRuntime.IsContainerNameRecentlyDeleted,
 			IsMetricAllowed:                a.metricFilter.isAllowedAndNotDenied,

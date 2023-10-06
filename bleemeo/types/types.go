@@ -51,6 +51,7 @@ type GlobalOption struct {
 	ReloadState             BleemeoReloadState
 	VSphereDevices          func(ctx context.Context, maxAge time.Duration) []vsphere.Device
 	FindVSphereDevice       func(ctx context.Context, vSphere, moid string) vsphere.Device
+	LastVSphereChange       func() time.Time
 
 	UpdateMetricResolution         func(ctx context.Context, defaultResolution time.Duration, snmpResolution time.Duration)
 	UpdateThresholds               func(ctx context.Context, thresholds map[string]threshold.Threshold, firstUpdate bool)

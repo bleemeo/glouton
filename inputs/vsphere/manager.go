@@ -25,6 +25,7 @@ import (
 	"glouton/prometheus/registry"
 	"glouton/types"
 	"net/url"
+	"reflect"
 	"sort"
 	"strings"
 	"sync"
@@ -44,6 +45,16 @@ type Manager struct {
 	l                 sync.Mutex
 	lastDevices       []Device
 	lastDevicesUpdate time.Time
+
+	lastChange time.Time
+}
+
+func NewManager() *Manager {
+	return &Manager{}
+}
+
+func (m *Manager) LastChange() time.Time {
+	return m.lastChange
 }
 
 func (m *Manager) RegisterGatherers(vSphereCfgs []config.VSphere, registerGatherer func(opt registry.RegistrationOption, gatherer prometheus.Gatherer) (int, error)) {
@@ -118,6 +129,12 @@ func (m *Manager) Devices(ctx context.Context, maxAge time.Duration) []Device {
 	}
 
 	logger.Printf("Found devices: %s", strings.Join(moids, ", ")) // TODO: remove
+
+	if reflect.DeepEqual(devices, m.lastDevices) {
+		m.lastChange = time.Now()
+
+		logger.Printf("vSphere devices changed") // TODO: remove
+	}
 
 	m.lastDevices = devices
 	m.lastDevicesUpdate = time.Now()
