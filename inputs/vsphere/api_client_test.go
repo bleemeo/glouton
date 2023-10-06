@@ -20,7 +20,7 @@ import (
 	"context"
 	"crypto/tls"
 	"glouton/config"
-	"glouton/inputs"
+	"glouton/prometheus/registry"
 	"net/url"
 	"sort"
 	"testing"
@@ -28,7 +28,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
-	"github.com/influxdata/telegraf"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/vmware/govmomi/simulator"
 )
 
@@ -339,7 +339,7 @@ func TestESXIDescribing(t *testing.T) {
 			defer cancel()
 
 			manager := new(Manager)
-			manager.RegisterInputs([]config.VSphere{vSphereCfg}, func(string, telegraf.Input, *inputs.GathererOptions, error) {})
+			manager.RegisterGatherers([]config.VSphere{vSphereCfg}, func(opt registry.RegistrationOption, gatherer prometheus.Gatherer) (int, error) { return 0, nil })
 
 			devices := manager.Devices(ctx, 0)
 

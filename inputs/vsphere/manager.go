@@ -18,18 +18,19 @@ package vsphere
 
 import (
 	"context"
-	"fmt"
+	"encoding/json"
 	"glouton/config"
 	"glouton/crashreport"
-	"glouton/inputs"
 	"glouton/logger"
+	"glouton/prometheus/registry"
+	"glouton/types"
 	"net/url"
-	"runtime"
+	"sort"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/influxdata/telegraf"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 const (
@@ -45,7 +46,7 @@ type Manager struct {
 	lastDevicesUpdate time.Time
 }
 
-func (m *Manager) RegisterInputs(vSphereCfgs []config.VSphere, registerInput func(name string, input telegraf.Input, opts *inputs.GathererOptions, err error)) {
+func (m *Manager) RegisterGatherers(vSphereCfgs []config.VSphere, registerGatherer func(opt registry.RegistrationOption, gatherer prometheus.Gatherer) (int, error)) {
 	m.vSpheres = make(map[string]*vSphere)
 
 	for _, vSphereCfg := range vSphereCfgs {
@@ -62,14 +63,19 @@ func (m *Manager) RegisterInputs(vSphereCfgs []config.VSphere, registerInput fun
 
 		vSphere := newVSphere(u.Host, vSphereCfg)
 
-		input, opts, err := vSphere.makeInput()
+		gatherer, opt, err := vSphere.makeGatherer()
 		if err != nil {
 			logger.Printf("Failed to create input %s: %v", vSphere.String(), err)
 
 			continue
 		}
 
-		registerInput(vSphere.String(), input, opts, err)
+		_, err = registerGatherer(opt, gatherer)
+		if err != nil {
+			logger.Printf("Failed to register gatherer for %s: %v", vSphere.String(), err)
+
+			continue
+		}
 
 		m.vSpheres[u.Host] = vSphere
 	}
@@ -113,25 +119,12 @@ func (m *Manager) Devices(ctx context.Context, maxAge time.Duration) []Device {
 
 	logger.Printf("Found devices: %s", strings.Join(moids, ", ")) // TODO: remove
 
-	printCallStack() // TODO: remove
-
 	m.lastDevices = devices
 	m.lastDevicesUpdate = time.Now()
 
 	logger.Printf("vSphere devices discovery done in %s", time.Since(startTime)) // TODO: V(2)
 
 	return devices
-}
-
-func printCallStack() {
-	for i := 1; i < 15; i++ {
-		pc, file, line, ok := runtime.Caller(i)
-
-		details := runtime.FuncForPC(pc)
-		if ok && details != nil {
-			fmt.Printf("%s%s (%s:%d)\n", strings.Repeat(" ", i), details.Name(), file, line) //nolint:forbidigo
-		}
-	}
 }
 
 // FindDevice returns the device from the given vSphere that has the given MOID.
@@ -228,4 +221,86 @@ type VirtualMachine struct {
 
 func (vm *VirtualMachine) Kind() string {
 	return KindVM
+}
+
+func (m *Manager) DiagnosticVSphere(ctx context.Context, archive types.ArchiveWriter, getAssociations func(ctx context.Context, devices []Device) (map[string]string, error)) error {
+	file, err := archive.Create("vsphere.json")
+	if err != nil {
+		return err
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	// 10min of max age to reuse devices found by the last metric collection,
+	// while ensuring to display information close to reality.
+	devices := m.Devices(ctx, 10*time.Minute)
+
+	associations, err := getAssociations(ctx, devices)
+	if err != nil {
+		logger.V(1).Println("Failed to diagnostic vSphere associations:", err)
+	}
+
+	type device struct {
+		Source                 string            `json:"source"`
+		Kind                   string            `json:"kind"`
+		MOID                   string            `json:"moid"`
+		Name                   string            `json:"name"`
+		AssociatedBleemeoAgent string            `json:"associated_bleemeo_agent,omitempty"`
+		Error                  string            `json:"error,omitempty"`
+		Facts                  map[string]string `json:"facts"`
+	}
+
+	finalDevices := make([]device, len(devices))
+
+	for i, dev := range devices {
+		var deviceError string
+
+		if err := dev.latestError(); err != nil {
+			deviceError = err.Error()
+		}
+
+		finalDevices[i] = device{
+			Source:                 dev.Source(),
+			Kind:                   dev.Kind(),
+			MOID:                   dev.MOID(),
+			Name:                   dev.Name(),
+			AssociatedBleemeoAgent: associations[dev.Source()+dev.MOID()],
+			Error:                  deviceError,
+			Facts:                  dev.Facts(),
+		}
+	}
+
+	sort.Slice(finalDevices, func(i, j int) bool {
+		// Sort by source, then by MOID
+		if finalDevices[i].Source == finalDevices[j].Source {
+			return finalDevices[i].MOID < finalDevices[j].MOID
+		}
+
+		return finalDevices[i].Source < finalDevices[j].Source
+	})
+
+	endpointStatuses := make(map[string]string, len(m.vSpheres))
+
+	for host, vSphere := range m.vSpheres {
+		status := "ok"
+
+		if vSphere.lastErrorMessage != "" {
+			status = vSphere.lastErrorMessage
+		} else if vSphere.gatherer.endpoint == nil {
+			status = vSphere.gatherer.lastErr.Error()
+		}
+
+		endpointStatuses[host] = status
+	}
+
+	diagnosticContent := struct {
+		Endpoints map[string]string `json:"endpoints"`
+		Devices   []device          `json:"devices"`
+	}{
+		Endpoints: endpointStatuses,
+		Devices:   finalDevices,
+	}
+
+	return json.NewEncoder(file).Encode(diagnosticContent)
 }

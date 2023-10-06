@@ -18,19 +18,13 @@ package vsphere
 
 import (
 	"crypto/tls"
-	"fmt"
 	"glouton/config"
 	"glouton/inputs/internal"
-	"glouton/types"
-	"strings"
-	"sync"
 	"testing"
-	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
-	"github.com/influxdata/telegraf"
-	"github.com/influxdata/telegraf/plugins/inputs/vsphere"
+	dto "github.com/prometheus/client_model/go"
 	"github.com/vmware/govmomi/simulator"
 )
 
@@ -144,7 +138,7 @@ func TestTransformMetrics(t *testing.T) {
 	}
 }
 
-func setupVSphereTest(t *testing.T, hostsCount int) (vsphereInput *vsphere.VSphere, deferFn func()) {
+func setupVSphereTest(t *testing.T, hostsCount int) (vsphereGatherer *vSphereGatherer, deferFn func()) {
 	t.Helper()
 
 	model := simulator.VPX()
@@ -161,8 +155,6 @@ func setupVSphereTest(t *testing.T, hostsCount int) (vsphereInput *vsphere.VSphe
 
 	server := model.Service.NewServer()
 
-	lgr := &logHandler{}
-
 	vSphere := &vSphere{
 		opts: config.VSphere{
 			URL:                server.URL.String(),
@@ -173,19 +165,16 @@ func setupVSphereTest(t *testing.T, hostsCount int) (vsphereInput *vsphere.VSphe
 		},
 	}
 
-	input, _, err := vSphere.makeInput()
+	gatherer, _, err := vSphere.makeGatherer()
 	if err != nil {
-		t.Fatal("Failed to create vSphere input:", err)
+		t.Fatal("Failed to create vSphere gatherer:", err)
 	}
 
-	vsphereInput = input.(*internal.Input).Input.(*vsphere.VSphere) //nolint:forcetypeassert
-	vsphereInput.Log = lgr
+	vsphereGatherer = gatherer.(*vSphereGatherer) //nolint:forcetypeassert
 
-	return vsphereInput, func() {
+	return vsphereGatherer, func() {
 		model.Remove()
 		server.Close()
-
-		lgr.assertNoUnexpectedLogs(t)
 	}
 }
 
@@ -197,53 +186,15 @@ func TestVSphereInputNoHost(t *testing.T) {
 	input, deferFn := setupVSphereTest(t, 0)
 	defer deferFn()
 
-	acc := shallowAcc{fields: make(msmsa)}
-
-	err := input.Start(&acc)
+	mfs, err := input.Gather()
 	if err != nil {
-		t.Fatal("Failed to start vSphere input:", err)
+		t.Fatal("Failed to gather from vSphere gatherer:", err)
 	}
 
-	err = input.Gather(&acc)
-	if err != nil {
-		t.Fatal("Failed to gather from vSphere input:", err)
-	}
-
-	expectedFields := msmsa{
-		"vsphere_host_cpu": {
-			`usage_average__clustername="DC0_C0",cpu="*",dcname="DC0",esxhostname="DC0_C0_H0",moid="host-23",source="DC0_C0_H0"`: 0.,
-		},
-		"vsphere_host_disk": {
-			`read_average__clustername="DC0_C0",dcname="DC0",disk="*",esxhostname="DC0_C0_H0",moid="host-23",source="DC0_C0_H0"`:  int64(0),
-			`write_average__clustername="DC0_C0",dcname="DC0",disk="*",esxhostname="DC0_C0_H0",moid="host-23",source="DC0_C0_H0"`: int64(0),
-		},
-		"vsphere_host_mem": {
-			`totalCapacity_average__clustername="DC0_C0",dcname="DC0",esxhostname="DC0_C0_H0",instance="*",moid="host-23",source="DC0_C0_H0"`: int64(0),
-			`usage_average__clustername="DC0_C0",dcname="DC0",esxhostname="DC0_C0_H0",instance="*",moid="host-23",source="DC0_C0_H0"`:         0.,
-		},
-		"vsphere_host_net": {
-			`received_average__clustername="DC0_C0",dcname="DC0",esxhostname="DC0_C0_H0",interface="*",moid="host-23",source="DC0_C0_H0"`:    int64(0),
-			`transmitted_average__clustername="DC0_C0",dcname="DC0",esxhostname="DC0_C0_H0",interface="*",moid="host-23",source="DC0_C0_H0"`: int64(0),
-		},
-		"vsphere_vm_cpu": {
-			`latency_average__clustername="DC0_C0",cpu="*",dcname="DC0",esxhostname="DC0_C0_H0",guest="other",moid="vm-28",rpname="Resources",source="DC0_C0_RP0_VM0",uuid="cd0681bf-2f18-5c00-9b9b-8197c0095348",vmname="DC0_C0_RP0_VM0"`: 0.,
-			`usage_average__clustername="DC0_C0",cpu="*",dcname="DC0",esxhostname="DC0_C0_H0",guest="other",moid="vm-28",rpname="Resources",source="DC0_C0_RP0_VM0",uuid="cd0681bf-2f18-5c00-9b9b-8197c0095348",vmname="DC0_C0_RP0_VM0"`:   0.,
-		},
-		"vsphere_vm_disk": {
-			`read_average__clustername="DC0_C0",dcname="DC0",disk="*",esxhostname="DC0_C0_H0",guest="other",moid="vm-28",rpname="Resources",source="DC0_C0_RP0_VM0",uuid="cd0681bf-2f18-5c00-9b9b-8197c0095348",vmname="DC0_C0_RP0_VM0"`:  int64(0),
-			`write_average__clustername="DC0_C0",dcname="DC0",disk="*",esxhostname="DC0_C0_H0",guest="other",moid="vm-28",rpname="Resources",source="DC0_C0_RP0_VM0",uuid="cd0681bf-2f18-5c00-9b9b-8197c0095348",vmname="DC0_C0_RP0_VM0"`: int64(0),
-		},
-		"vsphere_vm_mem": {
-			`usage_average__clustername="DC0_C0",dcname="DC0",esxhostname="DC0_C0_H0",guest="other",instance="*",moid="vm-28",rpname="Resources",source="DC0_C0_RP0_VM0",uuid="cd0681bf-2f18-5c00-9b9b-8197c0095348",vmname="DC0_C0_RP0_VM0"`: 0.,
-		},
-		"vsphere_vm_net": {
-			`received_average__clustername="DC0_C0",dcname="DC0",esxhostname="DC0_C0_H0",guest="other",interface="*",moid="vm-28",rpname="Resources",source="DC0_C0_RP0_VM0",uuid="cd0681bf-2f18-5c00-9b9b-8197c0095348",vmname="DC0_C0_RP0_VM0"`:    int64(0),
-			`transmitted_average__clustername="DC0_C0",dcname="DC0",esxhostname="DC0_C0_H0",guest="other",interface="*",moid="vm-28",rpname="Resources",source="DC0_C0_RP0_VM0",uuid="cd0681bf-2f18-5c00-9b9b-8197c0095348",vmname="DC0_C0_RP0_VM0"`: int64(0),
-		},
-	}
+	expectedMfs := []*dto.MetricFamily{}
 
 	// Field values are random, so we exclude them from diffing by ignoring int64 and floats.
-	if diff := cmp.Diff(expectedFields, acc.fields, cmpopts.IgnoreTypes(int64(0), float64(0))); diff != "" {
+	if diff := cmp.Diff(expectedMfs, mfs, cmpopts.IgnoreTypes(int64(0), float64(0))); diff != "" {
 		t.Errorf("Unexpected fields:\n%v", diff)
 	}
 }
@@ -256,171 +207,15 @@ func TestVSphereInputMultipleHosts(t *testing.T) {
 	input, deferFn := setupVSphereTest(t, 2)
 	defer deferFn()
 
-	acc := shallowAcc{fields: make(msmsa)}
-
-	err := input.Start(&acc)
+	mfs, err := input.Gather()
 	if err != nil {
-		t.Fatal("Failed to start vSphere input:", err)
+		t.Fatal("Failed to gather from vSphere gatherer:", err)
 	}
 
-	err = input.Gather(&acc)
-	if err != nil {
-		t.Fatal("Failed to gather from vSphere input:", err)
-	}
-
-	expectedFields := msmsa{
-		"vsphere_host_cpu": {
-			`usage_average__clustername="DC0_C0",cpu="*",dcname="DC0",esxhostname="DC0_C0_H0",moid="host-45",source="DC0_C0_H0"`: 0.,
-			`usage_average__cpu="*",dcname="DC0",esxhostname="DC0_H0",moid="host-21",source="DC0_H0"`:                            0.,
-			`usage_average__cpu="*",dcname="DC0",esxhostname="DC0_H1",moid="host-32",source="DC0_H1"`:                            0.,
-		},
-		"vsphere_host_disk": {
-			`read_average__clustername="DC0_C0",dcname="DC0",disk="*",esxhostname="DC0_C0_H0",moid="host-45",source="DC0_C0_H0"`:  int64(0),
-			`read_average__dcname="DC0",disk="*",esxhostname="DC0_H0",moid="host-21",source="DC0_H0"`:                             int64(0),
-			`read_average__dcname="DC0",disk="*",esxhostname="DC0_H1",moid="host-32",source="DC0_H1"`:                             int64(0),
-			`write_average__clustername="DC0_C0",dcname="DC0",disk="*",esxhostname="DC0_C0_H0",moid="host-45",source="DC0_C0_H0"`: int64(0),
-			`write_average__dcname="DC0",disk="*",esxhostname="DC0_H0",moid="host-21",source="DC0_H0"`:                            int64(0),
-			`write_average__dcname="DC0",disk="*",esxhostname="DC0_H1",moid="host-32",source="DC0_H1"`:                            int64(0),
-		},
-		"vsphere_host_mem": {
-			`totalCapacity_average__clustername="DC0_C0",dcname="DC0",esxhostname="DC0_C0_H0",instance="*",moid="host-45",source="DC0_C0_H0"`: int64(0),
-			`totalCapacity_average__dcname="DC0",esxhostname="DC0_H0",instance="*",moid="host-21",source="DC0_H0"`:                            int64(0),
-			`totalCapacity_average__dcname="DC0",esxhostname="DC0_H1",instance="*",moid="host-32",source="DC0_H1"`:                            int64(0),
-			`usage_average__clustername="DC0_C0",dcname="DC0",esxhostname="DC0_C0_H0",instance="*",moid="host-45",source="DC0_C0_H0"`:         0.,
-			`usage_average__dcname="DC0",esxhostname="DC0_H0",instance="*",moid="host-21",source="DC0_H0"`:                                    0.,
-			`usage_average__dcname="DC0",esxhostname="DC0_H1",instance="*",moid="host-32",source="DC0_H1"`:                                    0.,
-		},
-		"vsphere_host_net": {
-			`received_average__clustername="DC0_C0",dcname="DC0",esxhostname="DC0_C0_H0",interface="*",moid="host-45",source="DC0_C0_H0"`:    int64(0),
-			`received_average__dcname="DC0",esxhostname="DC0_H0",interface="*",moid="host-21",source="DC0_H0"`:                               int64(0),
-			`received_average__dcname="DC0",esxhostname="DC0_H1",interface="*",moid="host-32",source="DC0_H1"`:                               int64(0),
-			`transmitted_average__clustername="DC0_C0",dcname="DC0",esxhostname="DC0_C0_H0",interface="*",moid="host-45",source="DC0_C0_H0"`: int64(0),
-			`transmitted_average__dcname="DC0",esxhostname="DC0_H0",interface="*",moid="host-21",source="DC0_H0"`:                            int64(0),
-			`transmitted_average__dcname="DC0",esxhostname="DC0_H1",interface="*",moid="host-32",source="DC0_H1"`:                            int64(0),
-		},
-		"vsphere_vm_cpu": {
-			`latency_average__clustername="DC0_C0",cpu="*",dcname="DC0",esxhostname="DC0_C0_H0",guest="other",moid="vm-56",rpname="Resources",source="DC0_C0_RP0_VM0",uuid="cd0681bf-2f18-5c00-9b9b-8197c0095348",vmname="DC0_C0_RP0_VM0"`: 0.,
-			`latency_average__cpu="*",dcname="DC0",esxhostname="DC0_H0",guest="other",moid="vm-50",rpname="Resources",source="DC0_H0_VM0",uuid="265104de-1472-547c-b873-6dc7883fb6cb",vmname="DC0_H0_VM0"`:                                 0.,
-			`latency_average__cpu="*",dcname="DC0",esxhostname="DC0_H1",guest="other",moid="vm-53",rpname="Resources",source="DC0_H1_VM0",uuid="4d341ac4-941f-5827-a28b-9550db7729f5",vmname="DC0_H1_VM0"`:                                 0.,
-			`usage_average__clustername="DC0_C0",cpu="*",dcname="DC0",esxhostname="DC0_C0_H0",guest="other",moid="vm-56",rpname="Resources",source="DC0_C0_RP0_VM0",uuid="cd0681bf-2f18-5c00-9b9b-8197c0095348",vmname="DC0_C0_RP0_VM0"`:   0.,
-			`usage_average__cpu="*",dcname="DC0",esxhostname="DC0_H0",guest="other",moid="vm-50",rpname="Resources",source="DC0_H0_VM0",uuid="265104de-1472-547c-b873-6dc7883fb6cb",vmname="DC0_H0_VM0"`:                                   0.,
-			`usage_average__cpu="*",dcname="DC0",esxhostname="DC0_H1",guest="other",moid="vm-53",rpname="Resources",source="DC0_H1_VM0",uuid="4d341ac4-941f-5827-a28b-9550db7729f5",vmname="DC0_H1_VM0"`:                                   0.,
-		},
-		"vsphere_vm_disk": {
-			`read_average__clustername="DC0_C0",dcname="DC0",disk="*",esxhostname="DC0_C0_H0",guest="other",moid="vm-56",rpname="Resources",source="DC0_C0_RP0_VM0",uuid="cd0681bf-2f18-5c00-9b9b-8197c0095348",vmname="DC0_C0_RP0_VM0"`:  int64(0),
-			`read_average__dcname="DC0",disk="*",esxhostname="DC0_H0",guest="other",moid="vm-50",rpname="Resources",source="DC0_H0_VM0",uuid="265104de-1472-547c-b873-6dc7883fb6cb",vmname="DC0_H0_VM0"`:                                  int64(0),
-			`read_average__dcname="DC0",disk="*",esxhostname="DC0_H1",guest="other",moid="vm-53",rpname="Resources",source="DC0_H1_VM0",uuid="4d341ac4-941f-5827-a28b-9550db7729f5",vmname="DC0_H1_VM0"`:                                  int64(0),
-			`write_average__clustername="DC0_C0",dcname="DC0",disk="*",esxhostname="DC0_C0_H0",guest="other",moid="vm-56",rpname="Resources",source="DC0_C0_RP0_VM0",uuid="cd0681bf-2f18-5c00-9b9b-8197c0095348",vmname="DC0_C0_RP0_VM0"`: int64(0),
-			`write_average__dcname="DC0",disk="*",esxhostname="DC0_H0",guest="other",moid="vm-50",rpname="Resources",source="DC0_H0_VM0",uuid="265104de-1472-547c-b873-6dc7883fb6cb",vmname="DC0_H0_VM0"`:                                 int64(0),
-			`write_average__dcname="DC0",disk="*",esxhostname="DC0_H1",guest="other",moid="vm-53",rpname="Resources",source="DC0_H1_VM0",uuid="4d341ac4-941f-5827-a28b-9550db7729f5",vmname="DC0_H1_VM0"`:                                 int64(0),
-		},
-		"vsphere_vm_mem": {
-			`usage_average__clustername="DC0_C0",dcname="DC0",esxhostname="DC0_C0_H0",guest="other",instance="*",moid="vm-56",rpname="Resources",source="DC0_C0_RP0_VM0",uuid="cd0681bf-2f18-5c00-9b9b-8197c0095348",vmname="DC0_C0_RP0_VM0"`: 0.,
-			`usage_average__dcname="DC0",esxhostname="DC0_H0",guest="other",instance="*",moid="vm-50",rpname="Resources",source="DC0_H0_VM0",uuid="265104de-1472-547c-b873-6dc7883fb6cb",vmname="DC0_H0_VM0"`:                                 0.,
-			`usage_average__dcname="DC0",esxhostname="DC0_H1",guest="other",instance="*",moid="vm-53",rpname="Resources",source="DC0_H1_VM0",uuid="4d341ac4-941f-5827-a28b-9550db7729f5",vmname="DC0_H1_VM0"`:                                 0.,
-		},
-		"vsphere_vm_net": {
-			`received_average__clustername="DC0_C0",dcname="DC0",esxhostname="DC0_C0_H0",guest="other",interface="*",moid="vm-56",rpname="Resources",source="DC0_C0_RP0_VM0",uuid="cd0681bf-2f18-5c00-9b9b-8197c0095348",vmname="DC0_C0_RP0_VM0"`:    int64(0),
-			`received_average__dcname="DC0",esxhostname="DC0_H0",guest="other",interface="*",moid="vm-50",rpname="Resources",source="DC0_H0_VM0",uuid="265104de-1472-547c-b873-6dc7883fb6cb",vmname="DC0_H0_VM0"`:                                    int64(0),
-			`received_average__dcname="DC0",esxhostname="DC0_H1",guest="other",interface="*",moid="vm-53",rpname="Resources",source="DC0_H1_VM0",uuid="4d341ac4-941f-5827-a28b-9550db7729f5",vmname="DC0_H1_VM0"`:                                    int64(0),
-			`transmitted_average__clustername="DC0_C0",dcname="DC0",esxhostname="DC0_C0_H0",guest="other",interface="*",moid="vm-56",rpname="Resources",source="DC0_C0_RP0_VM0",uuid="cd0681bf-2f18-5c00-9b9b-8197c0095348",vmname="DC0_C0_RP0_VM0"`: int64(0),
-			`transmitted_average__dcname="DC0",esxhostname="DC0_H0",guest="other",interface="*",moid="vm-50",rpname="Resources",source="DC0_H0_VM0",uuid="265104de-1472-547c-b873-6dc7883fb6cb",vmname="DC0_H0_VM0"`:                                 int64(0),
-			`transmitted_average__dcname="DC0",esxhostname="DC0_H1",guest="other",interface="*",moid="vm-53",rpname="Resources",source="DC0_H1_VM0",uuid="4d341ac4-941f-5827-a28b-9550db7729f5",vmname="DC0_H1_VM0"`:                                 int64(0),
-		},
-	}
+	expectedMfs := []*dto.MetricFamily{}
 
 	// Field values are random, so we exclude them from diffing by ignoring int64 and floats.
-	if diff := cmp.Diff(expectedFields, acc.fields, cmpopts.IgnoreTypes(int64(0), float64(0))); diff != "" {
+	if diff := cmp.Diff(expectedMfs, mfs, cmpopts.IgnoreTypes(int64(0), float64(0))); diff != "" {
 		t.Errorf("Unexpected fields:\n%v", diff)
-	}
-}
-
-type msmsa map[string]map[string]any
-
-type shallowAcc struct {
-	fields msmsa
-	l      sync.Mutex
-}
-
-func (sa *shallowAcc) AddFields(measurement string, fields map[string]interface{}, tags map[string]string, _ ...time.Time) {
-	sa.l.Lock()
-	defer sa.l.Unlock()
-
-	// The vcenter tag contains the port the simulator is listening to,
-	// but as this port is randomly picked at each simulator startup,
-	// we must prevent cmp.Diff from comparing it.
-	delete(tags, "vcenter")
-
-	if _, ok := sa.fields[measurement]; !ok {
-		sa.fields[measurement] = make(map[string]any)
-	}
-
-	for field, v := range fields {
-		sa.fields[measurement][field+"__"+types.LabelsToText(tags)] = v
-	}
-}
-
-func (sa *shallowAcc) AddGauge(string, map[string]interface{}, map[string]string, ...time.Time) {
-}
-
-func (sa *shallowAcc) AddCounter(string, map[string]interface{}, map[string]string, ...time.Time) {
-}
-
-func (sa *shallowAcc) AddSummary(string, map[string]interface{}, map[string]string, ...time.Time) {
-}
-
-func (sa *shallowAcc) AddHistogram(string, map[string]interface{}, map[string]string, ...time.Time) {
-}
-
-func (sa *shallowAcc) AddFieldsWithAnnotations(measurement string, fields map[string]interface{}, tags map[string]string, _ types.MetricAnnotations, t ...time.Time) {
-	sa.AddFields(measurement, fields, tags, t...)
-}
-
-func (sa *shallowAcc) AddMetric(telegraf.Metric) {}
-
-func (sa *shallowAcc) SetPrecision(time.Duration) {}
-
-func (sa *shallowAcc) AddError(error) {}
-
-func (sa *shallowAcc) WithTracking(int) telegraf.TrackingAccumulator { return nil }
-
-// logHandler stores errors and warns, and discards infos and debugs.
-type logHandler struct {
-	errors, warns []string
-}
-
-func (l *logHandler) Errorf(format string, args ...interface{}) {
-	l.errors = append(l.errors, fmt.Sprintf(format, args...))
-}
-
-func (l *logHandler) Error(args ...interface{}) {
-	l.errors = append(l.errors, fmt.Sprint(args...))
-}
-
-func (l *logHandler) Warnf(format string, args ...interface{}) {
-	l.warns = append(l.warns, fmt.Sprintf(format, args...))
-}
-
-func (l *logHandler) Warn(args ...interface{}) {
-	l.warns = append(l.warns, fmt.Sprint(args...))
-}
-
-func (l *logHandler) Infof(string, ...interface{}) {}
-
-func (l *logHandler) Info(...interface{}) {}
-
-func (l *logHandler) Debugf(string, ...interface{}) {}
-
-func (l *logHandler) Debug(...interface{}) {}
-
-func (l *logHandler) assertNoUnexpectedLogs(t *testing.T) {
-	t.Helper()
-
-	if l.errors != nil {
-		t.Errorf("Some errors were logged:\n- %s", strings.Join(l.errors, "\n- "))
-	}
-
-	if l.warns != nil {
-		t.Errorf("Some warnings were logged:\n- %s", strings.Join(l.warns, "\n- "))
 	}
 }

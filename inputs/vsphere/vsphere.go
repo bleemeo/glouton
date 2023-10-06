@@ -23,19 +23,19 @@ import (
 	"glouton/inputs"
 	"glouton/inputs/internal"
 	"glouton/logger"
+	"glouton/prometheus/registry"
 	"glouton/types"
-	//"maps" // TODO: uncomment & remove go/exp import, once rebased on main
+	"maps"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/influxdata/telegraf"
 	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"
 	"github.com/influxdata/telegraf/plugins/inputs/vsphere"
+	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
 	"github.com/vmware/govmomi/object"
 	"github.com/vmware/govmomi/vim25/mo"
-	"golang.org/x/exp/maps"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -47,6 +47,8 @@ const (
 type vSphere struct {
 	host string
 	opts config.VSphere
+
+	gatherer *vSphereGatherer
 
 	deviceCache      map[string]Device
 	noMetricsSince   map[string]int
@@ -85,6 +87,11 @@ func (vSphere *vSphere) getStatus() (types.Status, string) {
 
 	if vSphere.consecutiveErr >= vCenterConsecutiveErrorsStatusThreshold {
 		return types.StatusCritical, vSphere.lastErrorMessage
+	}
+
+	if vSphere.gatherer.lastErr != nil {
+		// Should this necessarily be critical ?
+		return types.StatusCritical, "endpoint error: " + vSphere.gatherer.lastErr.Error()
 	}
 
 	return types.StatusOk, ""
@@ -170,18 +177,17 @@ func (vSphere *vSphere) describeVMs(ctx context.Context, rawVMs []*object.Virtua
 	}
 }
 
-func (vSphere *vSphere) makeInput() (telegraf.Input, *inputs.GathererOptions, error) {
+func (vSphere *vSphere) makeGatherer() (prometheus.Gatherer, registry.RegistrationOption, error) {
 	input, ok := telegraf_inputs.Inputs["vsphere"]
 	if !ok {
-		return nil, nil, inputs.ErrDisabledInput
+		return nil, registry.RegistrationOption{}, inputs.ErrDisabledInput
 	}
 
 	vsphereInput, ok := input().(*vsphere.VSphere)
 	if !ok {
-		return nil, nil, inputs.ErrUnexpectedType
+		return nil, registry.RegistrationOption{}, inputs.ErrUnexpectedType
 	}
 
-	vsphereInput.Vcenters = []string{vSphere.opts.URL}
 	vsphereInput.Username = vSphere.opts.Username
 	vsphereInput.Password = vSphere.opts.Password
 
@@ -213,29 +219,29 @@ func (vSphere *vSphere) makeInput() (telegraf.Input, *inputs.GathererOptions, er
 
 	vsphereInput.InsecureSkipVerify = vSphere.opts.InsecureSkipVerify
 
-	internalInput := &internal.Input{
-		Input: vsphereInput,
-		Accumulator: internal.Accumulator{
-			RenameMetrics:    renameMetrics,
-			TransformMetrics: transformMetrics,
-			RenameGlobal:     vSphere.renameGlobal,
-		},
-		Name: "vSphere",
+	vsphereInput.Log = logger.NewTelegrafLog(vSphere.String())
+
+	acc := &internal.Accumulator{
+		RenameMetrics:    renameMetrics,
+		TransformMetrics: transformMetrics,
+		RenameGlobal:     vSphere.renameGlobal,
 	}
-	opts := &inputs.GathererOptions{
-		GatherModifier:      vSphere.gatherModifier,
+
+	gatherer, err := newGatherer(vSphere.opts.URL, vsphereInput, acc)
+	if err != nil {
+		return nil, registry.RegistrationOption{}, err
+	}
+
+	vSphere.gatherer = gatherer
+
+	opt := registry.RegistrationOption{
 		MinInterval:         time.Minute,
+		StopCallback:        gatherer.stop,
 		ApplyDynamicRelabel: true,
+		GatherModifier:      vSphere.gatherModifier,
 	}
 
-	// As we only have one vCenter per telegraf input, perhaps we should
-	// build our own input designed for one vCenter; that would allow us
-	// to pass context to the collecting method, as well as only starting
-	// one goroutine per vCenter, instead of two now.
-	// Note: our input would still rely on telegraf's vSphere endpoint,
-	// but endpoints may be managed by us instead of telegraf's input.
-
-	return internalInput, opts, nil
+	return gatherer, opt, nil
 }
 
 func (vSphere *vSphere) gatherModifier(mfs []*dto.MetricFamily) []*dto.MetricFamily {
@@ -247,7 +253,7 @@ func (vSphere *vSphere) gatherModifier(mfs []*dto.MetricFamily) []*dto.MetricFam
 				if label.GetName() == types.LabelMetaVSphereMOID {
 					seenDevices[label.GetValue()] = struct{}{}
 
-					break // also break mf.Metric loop ?
+					break
 				}
 			}
 		}
