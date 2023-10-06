@@ -959,6 +959,7 @@ func (s *Synchronizer) syncToPerform(ctx context.Context) (map[string]bool, bool
 		syncMethods[syncMethodMonitor] = true
 		syncMethods[syncMethodSNMP] = true
 		syncMethods[syncMethodVSphere] = true
+		syncMethods[syncMethodVSphere] = true
 		syncMethods[syncMethodCrashReports] = true
 	}
 
