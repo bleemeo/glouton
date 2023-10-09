@@ -927,6 +927,7 @@ func (s *Synchronizer) syncToPerform(ctx context.Context) (map[string]bool, bool
 	// Take values that will be used later before taking the lock. This reduce dead-lock risk
 	localFacts, _ := s.option.Facts.Facts(ctx, 24*time.Hour)
 	currentSNMPCount := s.option.SNMPOnlineTarget()
+	lastVSphereChange := s.option.LastVSphereChange(ctx)
 	lastDiscovery := s.option.Discovery.LastUpdate()
 	currentMetricCount := s.option.Store.MetricsCount()
 	mqttIsConnected := s.option.IsMqttConnected()
@@ -975,9 +976,9 @@ func (s *Synchronizer) syncToPerform(ctx context.Context) (map[string]bool, bool
 		s.lastSNMPcount = currentSNMPCount
 	}
 
-	if lastUpdate := s.option.LastVSphereChange(); lastUpdate.After(s.lastVSphereUpdate) {
-		syncMethods[syncMethodVSphere] = true // why fullSync for others ?
-		s.lastVSphereUpdate = lastUpdate
+	if lastVSphereChange.After(s.lastVSphereUpdate) {
+		syncMethods[syncMethodVSphere] = true
+		s.lastVSphereUpdate = lastVSphereChange
 	}
 
 	// After a reload, the config has been changed, so we want to do a fullsync

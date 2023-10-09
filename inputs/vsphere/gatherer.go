@@ -24,7 +24,8 @@ const endpointCreationRetryDelay = 5 * time.Minute
 type vSphereGatherer struct {
 	// Storing the endpoint's URL, just in case the endpoint can't be
 	// created at startup and will need to be instanced later.
-	soapURL *url.URL
+	soapURL             *url.URL
+	endpointCreateTimer *time.Timer
 
 	endpoint *vsphere.Endpoint
 	cancel   context.CancelFunc
@@ -33,7 +34,8 @@ type vSphereGatherer struct {
 	buffer     *registry.PointBuffer
 	lastPoints []types.MetricPoint
 	lastErr    error
-	l          sync.Mutex
+
+	l sync.Mutex
 }
 
 func (gatherer *vSphereGatherer) Gather() ([]*dto.MetricFamily, error) {
@@ -87,6 +89,9 @@ func (gatherer *vSphereGatherer) stop() {
 		defer gatherer.l.Unlock()
 
 		gatherer.endpoint.Close()
+	} else if gatherer.endpointCreateTimer != nil {
+		// Case where the endpoint still has not been created.
+		gatherer.endpointCreateTimer.Stop()
 	}
 }
 
@@ -107,7 +112,7 @@ func (gatherer *vSphereGatherer) createEndpoint(ctx context.Context, input *vsph
 
 	logger.V(1).Printf("Failed to create vSphere endpoint for %q: %v -- will retry in %s.", gatherer.soapURL.Host, err, endpointCreationRetryDelay)
 
-	time.AfterFunc(endpointCreationRetryDelay, func() {
+	gatherer.endpointCreateTimer = time.AfterFunc(endpointCreationRetryDelay, func() {
 		if ctx.Err() == nil {
 			gatherer.createEndpoint(ctx, input)
 		}

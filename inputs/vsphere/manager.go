@@ -53,7 +53,9 @@ func NewManager() *Manager {
 	return &Manager{}
 }
 
-func (m *Manager) LastChange() time.Time {
+func (m *Manager) LastChange(ctx context.Context) time.Time {
+	m.Devices(ctx, 2*time.Minute)
+
 	return m.lastChange
 }
 
@@ -130,7 +132,7 @@ func (m *Manager) Devices(ctx context.Context, maxAge time.Duration) []Device {
 
 	logger.Printf("Found devices: %s", strings.Join(moids, ", ")) // TODO: remove
 
-	if reflect.DeepEqual(devices, m.lastDevices) {
+	if !reflect.DeepEqual(devices, m.lastDevices) {
 		m.lastChange = time.Now()
 
 		logger.Printf("vSphere devices changed") // TODO: remove
