@@ -19,6 +19,9 @@ package synchronizer
 import (
 	"context"
 	"errors"
+	"fmt"
+	"glouton/agent/state"
+	"glouton/bleemeo/client"
 	"glouton/bleemeo/types"
 	"glouton/inputs/vsphere"
 	"glouton/logger"
@@ -98,7 +101,7 @@ func (s *Synchronizer) FindVSphereAgent(ctx context.Context, device vsphere.Devi
 	return types.Agent{}, errNotExist
 }
 
-func (s *Synchronizer) VSphereRegisterAndUpdate(localTargets []vsphere.Device) error {
+func (s *Synchronizer) VSphereRegisterAndUpdate(localDevices []vsphere.Device) error {
 	hostAgentTypeID, vmAgentTypeID, found := s.GetVSphereAgentTypes()
 	if !found {
 		return errRetryLater
@@ -109,10 +112,11 @@ func (s *Synchronizer) VSphereRegisterAndUpdate(localTargets []vsphere.Device) e
 	params := map[string]string{
 		"fields": "id,display_name,account,agent_type,abstracted,fqdn,initial_password,created_at,next_config_at,current_config,tags,initial_server_group_name",
 	}
+	seenDevices := make(map[string]string, len(localDevices))
 
 	var newAgents []types.Agent //nolint: prealloc
 
-	for _, device := range localTargets {
+	for _, device := range localDevices {
 		var agentTypeID string
 
 		switch kind := device.Kind(); kind {
@@ -126,11 +130,13 @@ func (s *Synchronizer) VSphereRegisterAndUpdate(localTargets []vsphere.Device) e
 			continue
 		}
 
-		if _, err := s.FindVSphereAgent(s.ctx, device, agentTypeID, remoteAgentList); err != nil && !errors.Is(err, errNotExist) {
+		if a, err := s.FindVSphereAgent(s.ctx, device, agentTypeID, remoteAgentList); err != nil && !errors.Is(err, errNotExist) {
 			logger.V(0).Printf("Skip registration of vSphere agent: %v", err) // TODO: V(2)
 
 			continue
 		} else if err == nil {
+			seenDevices[a.ID] = agentTypeID
+
 			continue
 		}
 
@@ -157,6 +163,7 @@ func (s *Synchronizer) VSphereRegisterAndUpdate(localTargets []vsphere.Device) e
 		}
 
 		newAgents = append(newAgents, registeredAgent)
+		seenDevices[registeredAgent.ID] = agentTypeID
 
 		err = s.option.State.Set("bleemeo:vsphere:"+deviceAssoKey(device), vSphereAssociation{
 			Key: deviceAssoKey(device),
@@ -173,6 +180,32 @@ func (s *Synchronizer) VSphereRegisterAndUpdate(localTargets []vsphere.Device) e
 		s.option.Cache.SetAgentList(agents)
 	}
 
+	for id, agent := range remoteAgentList {
+		if agent.AgentType != hostAgentTypeID && agent.AgentType != vmAgentTypeID {
+			continue
+		}
+
+		if agentType, ok := seenDevices[id]; !ok {
+			logger.Printf("Deleting agent %q (%s), which is not present locally", agent.DisplayName, id) // TODO: remove
+
+			err := s.remoteDeleteVSphereAgent(id)
+			if err != nil {
+				logger.V(1).Printf("Failed to delete remote agent %s: %v", id, err)
+
+				continue
+			}
+
+			err = removeVSphereAssoFromCache(s.option.State, agent)
+			if err != nil {
+				logger.V(1).Printf("Failed to remove vSphere association from cache: %v", err)
+
+				continue
+			}
+		} else if agent.AgentType != agentType {
+			// TODO: Sync ?
+		}
+	}
+
 	return nil
 }
 
@@ -187,6 +220,15 @@ func (s *Synchronizer) remoteRegisterVSphereDevice(params map[string]string, pay
 	logger.V(0).Printf("vSphere agent %v registered with UUID %s", payload.DisplayName, result.ID) // TODO: V(2)
 
 	return result, nil
+}
+
+func (s *Synchronizer) remoteDeleteVSphereAgent(agentID string) error {
+	_, err := s.client.Do(s.ctx, "DELETE", fmt.Sprintf("v1/agent/%s/", agentID), nil, nil, nil)
+	if client.IsNotFound(err) {
+		return nil
+	}
+
+	return err // which may be nil
 }
 
 func (s *Synchronizer) GetVSphereAgentTypes() (hostAgentTypeID, vmAgentTypeID string, foundBoth bool) {
@@ -222,4 +264,27 @@ func (s *Synchronizer) GetVSphereAgentType(kind string) (agentTypeID string, fou
 	default:
 		return "", false
 	}
+}
+
+func removeVSphereAssoFromCache(st types.State, agent types.Agent) error {
+	// TODO: add GetByPrefix() to the State interface
+	associations, err := st.(*state.State).GetByPrefix("bleemeo:vsphere:", vSphereAssociation{})
+	if err != nil {
+		return err
+	}
+
+	for key, value := range associations {
+		asso, ok := value.(vSphereAssociation)
+		if !ok {
+			continue // false-positive from GetByPrefix()
+		}
+
+		if asso.ID == agent.ID {
+			logger.Printf("Found association to delete: key=%q, id=%s", key, agent.ID) // TODO: remove
+
+			return st.Delete(key)
+		}
+	}
+
+	return nil // maybe the association didn't exist
 }

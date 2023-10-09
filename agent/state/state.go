@@ -24,9 +24,11 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/google/uuid"
+	"github.com/mitchellh/mapstructure"
 )
 
 const stateVersion = 1
@@ -413,4 +415,33 @@ func (s *State) loadFromV0() error {
 	s.persistent.dirty = true
 
 	return nil
+}
+
+// GetByPrefix returns all the objects starting by the given key prefix.
+// Note that it only searches at the root level of the cache.
+func (s *State) GetByPrefix(keyPrefix string, resultType any) (map[string]any, error) {
+	s.l.Lock()
+	defer s.l.Unlock()
+
+	result := make(map[string]any)
+
+	for key, value := range s.cache {
+		if strings.HasPrefix(key, keyPrefix) {
+			var output any
+
+			err := json.Unmarshal(value, &output)
+			if err != nil {
+				return nil, err // Really unexpected
+			}
+
+			err = mapstructure.Decode(output, &resultType)
+			if err != nil {
+				logger.Printf("GetByPrefix mapstructure: %v", err) // TODO: remove
+			}
+
+			result[key] = resultType
+		}
+	}
+
+	return result, nil
 }
