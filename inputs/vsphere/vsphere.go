@@ -235,6 +235,7 @@ func (vSphere *vSphere) makeGatherer() (prometheus.Gatherer, registry.Registrati
 	vSphere.gatherer = gatherer
 
 	opt := registry.RegistrationOption{
+		Description:         vSphere.String(),
 		MinInterval:         time.Minute,
 		StopCallback:        gatherer.stop,
 		ApplyDynamicRelabel: true,
@@ -245,13 +246,13 @@ func (vSphere *vSphere) makeGatherer() (prometheus.Gatherer, registry.Registrati
 }
 
 func (vSphere *vSphere) gatherModifier(mfs []*dto.MetricFamily) []*dto.MetricFamily {
-	seenDevices := make(map[string]struct{})
+	seenDevices := make(map[string]bool)
 
 	for _, mf := range mfs {
 		for _, metric := range mf.Metric {
 			for _, label := range metric.Label {
 				if label.GetName() == types.LabelMetaVSphereMOID {
-					seenDevices[label.GetValue()] = struct{}{}
+					seenDevices[label.GetValue()] = true
 
 					break
 				}
@@ -268,7 +269,7 @@ func (vSphere *vSphere) gatherModifier(mfs []*dto.MetricFamily) []*dto.MetricFam
 		)
 
 		moid := dev.MOID()
-		_, metricSeen := seenDevices[moid]
+		metricSeen := seenDevices[moid]
 
 		switch {
 		case vSphereStatus == types.StatusCritical:

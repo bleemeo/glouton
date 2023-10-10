@@ -59,6 +59,18 @@ func (m *Manager) LastChange(ctx context.Context) time.Time {
 	return m.lastChange
 }
 
+func (m *Manager) EndpointsInError() map[string]struct{} {
+	endpoints := make(map[string]struct{})
+
+	for _, vSphere := range m.vSpheres {
+		if vSphere.consecutiveErr > 0 {
+			endpoints[vSphere.host] = struct{}{}
+		}
+	}
+
+	return endpoints
+}
+
 func (m *Manager) RegisterGatherers(vSphereCfgs []config.VSphere, registerGatherer func(opt registry.RegistrationOption, gatherer prometheus.Gatherer) (int, error)) {
 	m.vSpheres = make(map[string]*vSphere)
 
@@ -78,7 +90,7 @@ func (m *Manager) RegisterGatherers(vSphereCfgs []config.VSphere, registerGather
 
 		gatherer, opt, err := vSphere.makeGatherer()
 		if err != nil {
-			logger.Printf("Failed to create input %s: %v", vSphere.String(), err)
+			logger.Printf("Failed to create gatherer for %s: %v", vSphere.String(), err)
 
 			continue
 		}

@@ -418,6 +418,7 @@ func (s *State) loadFromV0() error {
 }
 
 // GetByPrefix returns all the objects starting by the given key prefix.
+// The given resultType must be of the type the objects are expected to be.
 // Note that it only searches at the root level of the cache.
 func (s *State) GetByPrefix(keyPrefix string, resultType any) (map[string]any, error) {
 	s.l.Lock()
@@ -427,7 +428,12 @@ func (s *State) GetByPrefix(keyPrefix string, resultType any) (map[string]any, e
 
 	for key, value := range s.cache {
 		if strings.HasPrefix(key, keyPrefix) {
-			var output any
+			// We could have used the resultType to receive the value,
+			// but as it is passed as an interface{}, the json unmarshaler
+			// would have redefined it as a map[string]interface{}.
+			// Thus, we expect a map[string]interface{} and then
+			// decode it into the resultType.
+			var output map[string]any
 
 			err := json.Unmarshal(value, &output)
 			if err != nil {
@@ -436,7 +442,7 @@ func (s *State) GetByPrefix(keyPrefix string, resultType any) (map[string]any, e
 
 			err = mapstructure.Decode(output, &resultType)
 			if err != nil {
-				logger.Printf("GetByPrefix mapstructure: %v", err) // TODO: remove
+				continue
 			}
 
 			result[key] = resultType

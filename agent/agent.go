@@ -1053,6 +1053,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 			VSphereDevices:                 a.vSphereManager.Devices,
 			FindVSphereDevice:              a.vSphereManager.FindDevice,
 			LastVSphereChange:              a.vSphereManager.LastChange,
+			VSphereEndpointsInError:        a.vSphereManager.EndpointsInError,
 			IsContainerEnabled:             a.containerFilter.ContainerEnabled,
 			IsContainerNameRecentlyDeleted: a.containerRuntime.IsContainerNameRecentlyDeleted,
 			IsMetricAllowed:                a.metricFilter.isAllowedAndNotDenied,

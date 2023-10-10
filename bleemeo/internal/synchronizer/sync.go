@@ -92,6 +92,7 @@ type Synchronizer struct {
 	lastFactUpdatedAt         string
 	lastSNMPcount             int
 	lastVSphereUpdate         time.Time
+	lastVSphereAgentsPurge    time.Time
 	lastMetricActivation      time.Time
 	successiveErrors          int
 	warnAccountMismatchDone   bool

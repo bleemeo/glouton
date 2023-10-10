@@ -30,6 +30,8 @@ import (
 	"github.com/google/uuid"
 )
 
+const vSphereAgentsPurgeMinInterval = 2 * time.Minute
+
 func (s *Synchronizer) syncVSphere(ctx context.Context, fullSync bool, onlyEssential bool) (updateThresholds bool, err error) {
 	_ = fullSync
 
@@ -44,8 +46,10 @@ func (s *Synchronizer) syncVSphere(ctx context.Context, fullSync bool, onlyEssen
 }
 
 type vSphereAssociation struct {
-	Key string
-	ID  string
+	Source string
+	ID     string
+	// Meant for local usage
+	key string
 }
 
 func deviceAssoKey(device vsphere.Device) string {
@@ -166,8 +170,8 @@ func (s *Synchronizer) VSphereRegisterAndUpdate(localDevices []vsphere.Device) e
 		seenDevices[registeredAgent.ID] = agentTypeID
 
 		err = s.option.State.Set("bleemeo:vsphere:"+deviceAssoKey(device), vSphereAssociation{
-			Key: deviceAssoKey(device),
-			ID:  registeredAgent.ID,
+			Source: device.Source(),
+			ID:     registeredAgent.ID,
 		})
 		if err != nil {
 			logger.V(0).Printf("Failed to update state: %v", err) // TODO: V(2)
@@ -180,30 +184,13 @@ func (s *Synchronizer) VSphereRegisterAndUpdate(localDevices []vsphere.Device) e
 		s.option.Cache.SetAgentList(agents)
 	}
 
-	for id, agent := range remoteAgentList {
-		if agent.AgentType != hostAgentTypeID && agent.AgentType != vmAgentTypeID {
-			continue
+	if s.now().After(s.lastVSphereAgentsPurge.Add(vSphereAgentsPurgeMinInterval)) {
+		err := s.purgeVSphereAgents(remoteAgentList, seenDevices, map[string]bool{hostAgentTypeID: true, vmAgentTypeID: true})
+		if err != nil {
+			logger.V(1).Printf("Failed to purge vSphere agents: %v", err)
 		}
 
-		if agentType, ok := seenDevices[id]; !ok {
-			logger.Printf("Deleting agent %q (%s), which is not present locally", agent.DisplayName, id) // TODO: remove
-
-			err := s.remoteDeleteVSphereAgent(id)
-			if err != nil {
-				logger.V(1).Printf("Failed to delete remote agent %s: %v", id, err)
-
-				continue
-			}
-
-			err = removeVSphereAssoFromCache(s.option.State, agent)
-			if err != nil {
-				logger.V(1).Printf("Failed to remove vSphere association from cache: %v", err)
-
-				continue
-			}
-		} else if agent.AgentType != agentType {
-			// TODO: Sync ?
-		}
+		s.lastVSphereAgentsPurge = s.now()
 	}
 
 	return nil
@@ -220,15 +207,6 @@ func (s *Synchronizer) remoteRegisterVSphereDevice(params map[string]string, pay
 	logger.V(0).Printf("vSphere agent %v registered with UUID %s", payload.DisplayName, result.ID) // TODO: V(2)
 
 	return result, nil
-}
-
-func (s *Synchronizer) remoteDeleteVSphereAgent(agentID string) error {
-	_, err := s.client.Do(s.ctx, "DELETE", fmt.Sprintf("v1/agent/%s/", agentID), nil, nil, nil)
-	if client.IsNotFound(err) {
-		return nil
-	}
-
-	return err // which may be nil
 }
 
 func (s *Synchronizer) GetVSphereAgentTypes() (hostAgentTypeID, vmAgentTypeID string, foundBoth bool) {
@@ -266,12 +244,14 @@ func (s *Synchronizer) GetVSphereAgentType(kind string) (agentTypeID string, fou
 	}
 }
 
-func removeVSphereAssoFromCache(st types.State, agent types.Agent) error {
+func (s *Synchronizer) purgeVSphereAgents(remoteAgents map[string]types.Agent, seenDevices map[string]string, vSphereAgentTypes map[string]bool) error {
 	// TODO: add GetByPrefix() to the State interface
-	associations, err := st.(*state.State).GetByPrefix("bleemeo:vsphere:", vSphereAssociation{})
+	associations, err := s.option.State.(*state.State).GetByPrefix("bleemeo:vsphere:", vSphereAssociation{})
 	if err != nil {
 		return err
 	}
+
+	assosByID := make(map[string]vSphereAssociation, len(associations))
 
 	for key, value := range associations {
 		asso, ok := value.(vSphereAssociation)
@@ -279,12 +259,43 @@ func removeVSphereAssoFromCache(st types.State, agent types.Agent) error {
 			continue // false-positive from GetByPrefix()
 		}
 
-		if asso.ID == agent.ID {
-			logger.Printf("Found association to delete: key=%q, id=%s", key, agent.ID) // TODO: remove
+		asso.key = key
 
-			return st.Delete(key)
+		assosByID[asso.ID] = asso
+	}
+
+	failingEndpoints := s.option.VSphereEndpointsInError()
+
+	for id, agent := range remoteAgents {
+		if !vSphereAgentTypes[agent.AgentType] { // Not a vSphere host/VM
+			continue
+		}
+
+		if agentType, ok := seenDevices[id]; !ok {
+			asso, hasAsso := assosByID[id]
+			if hasAsso {
+				if _, endpointIsFailing := failingEndpoints[asso.Source]; endpointIsFailing {
+					logger.Printf("Sparing device %s because endpoint is unreachable.", asso.key) // TODO: remove
+					// Spare this device, as its vCenter endpoint can't be reached.
+					continue
+				}
+
+				err = s.option.State.Delete(asso.key)
+				if err != nil {
+					logger.V(1).Printf("Failed to remove vSphere association from cache: %v", err)
+				}
+			}
+
+			logger.Printf("Deleting agent %q (%s), which is not present locally", agent.DisplayName, id) // TODO: remove
+
+			_, err := s.client.Do(s.ctx, "DELETE", fmt.Sprintf("v1/agent/%s/", id), nil, nil, nil)
+			if err != nil && !client.IsNotFound(err) {
+				return err
+			}
+		} else if agent.AgentType != agentType {
+			// TODO: Sync ?
 		}
 	}
 
-	return nil // maybe the association didn't exist
+	return nil
 }
