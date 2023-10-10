@@ -84,6 +84,7 @@ type Config interface {
 type State interface {
 	Set(key string, object interface{}) error
 	Get(key string, result interface{}) error
+	GetByPrefix(keyPrefix string, resultType any) (map[string]any, error)
 	Delete(key string) error
 	BleemeoCredentials() (string, string)
 	SetBleemeoCredentials(agentUUID string, password string) error

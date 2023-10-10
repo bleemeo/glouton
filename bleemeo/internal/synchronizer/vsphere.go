@@ -20,7 +20,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"glouton/agent/state"
 	"glouton/bleemeo/client"
 	"glouton/bleemeo/types"
 	"glouton/inputs/vsphere"
@@ -184,7 +183,7 @@ func (s *Synchronizer) VSphereRegisterAndUpdate(localDevices []vsphere.Device) e
 		s.option.Cache.SetAgentList(agents)
 	}
 
-	if s.now().After(s.lastVSphereAgentsPurge.Add(vSphereAgentsPurgeMinInterval)) {
+	if s.now().After(s.lastVSphereAgentsPurge.Add(vSphereAgentsPurgeMinInterval)) && len(remoteAgentList) > 0 {
 		err := s.purgeVSphereAgents(remoteAgentList, seenDevices, map[string]bool{hostAgentTypeID: true, vmAgentTypeID: true})
 		if err != nil {
 			logger.V(1).Printf("Failed to purge vSphere agents: %v", err)
@@ -245,8 +244,7 @@ func (s *Synchronizer) GetVSphereAgentType(kind string) (agentTypeID string, fou
 }
 
 func (s *Synchronizer) purgeVSphereAgents(remoteAgents map[string]types.Agent, seenDevices map[string]string, vSphereAgentTypes map[string]bool) error {
-	// TODO: add GetByPrefix() to the State interface
-	associations, err := s.option.State.(*state.State).GetByPrefix("bleemeo:vsphere:", vSphereAssociation{})
+	associations, err := s.option.State.GetByPrefix("bleemeo:vsphere:", vSphereAssociation{})
 	if err != nil {
 		return err
 	}
@@ -275,7 +273,6 @@ func (s *Synchronizer) purgeVSphereAgents(remoteAgents map[string]types.Agent, s
 			asso, hasAsso := assosByID[id]
 			if hasAsso {
 				if _, endpointIsFailing := failingEndpoints[asso.Source]; endpointIsFailing {
-					logger.Printf("Sparing device %s because endpoint is unreachable.", asso.key) // TODO: remove
 					// Spare this device, as its vCenter endpoint can't be reached.
 					continue
 				}
@@ -292,7 +289,7 @@ func (s *Synchronizer) purgeVSphereAgents(remoteAgents map[string]types.Agent, s
 			if err != nil && !client.IsNotFound(err) {
 				return err
 			}
-		} else if agent.AgentType != agentType {
+		} else if agent.AgentType != agentType { //nolint: revive,staticcheck
 			// TODO: Sync ?
 		}
 	}

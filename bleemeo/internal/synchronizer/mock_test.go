@@ -981,6 +981,20 @@ func (s *stateMock) Get(key string, result interface{}) error {
 	return nil
 }
 
+func (s *stateMock) GetByPrefix(keyPrefix string, resultType any) (map[string]any, error) {
+	result := make(map[string]any)
+
+	for key, val := range s.data {
+		if strings.HasPrefix(key, keyPrefix) {
+			reflect.ValueOf(&resultType).Elem().Set(reflect.ValueOf(val))
+
+			result[key] = resultType
+		}
+	}
+
+	return result, nil
+}
+
 func (reuseIDError) Error() string {
 	return "reuseIDError"
 }

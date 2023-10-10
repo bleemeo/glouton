@@ -281,3 +281,73 @@ func TestTelemetryFieldMigration(t *testing.T) {
 		t.Fatal("Unexpected persisted state (-want +got)\n", diff)
 	}
 }
+
+func TestGetByPrefix(t *testing.T) {
+	type a struct {
+		A float32 `json:"a"`
+	}
+
+	state := State{
+		cache: map[string]json.RawMessage{
+			"a:b:c1": []byte(`[1, 2, 3]`),
+			"a:b:c2": []byte(`[7]`),
+			"a:bc:d": []byte(`{"a": 2.5}`),
+			"a:":     []byte(`{"b:": "c"}`),
+		},
+	}
+
+	testCases := []struct {
+		prefix     string
+		resultType any
+		expected   map[string]any
+	}{
+		{
+			prefix:     "a:b:",
+			resultType: []int{},
+			expected: map[string]any{
+				"a:b:c1": []int{1, 2, 3},
+				"a:b:c2": []int{7},
+			},
+		},
+		{
+			prefix:     "a:b:c2",
+			resultType: []int{},
+			expected: map[string]any{
+				"a:b:c2": []int{7},
+			},
+		},
+		{
+			prefix:     "a:bc",
+			resultType: a{},
+			expected: map[string]any{
+				"a:bc:d": a{2.5},
+			},
+		},
+		{
+			prefix:     "a:",
+			resultType: map[string]any{},
+			expected: map[string]any{
+				// a{} can also be represented as a map:
+				"a:bc:d": map[string]any{
+					"a": 2.5,
+				},
+				"a:": map[string]any{
+					"b:": "c",
+				},
+			},
+		},
+	}
+
+	for _, tc := range testCases { //nolint:wsl
+		// No parallel runs, as the state is locked during each interaction.
+
+		result, err := state.GetByPrefix(tc.prefix, tc.resultType)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if diff := cmp.Diff(tc.expected, result); diff != "" {
+			t.Errorf("Unexpected result of GetByPrefix(%q, %T):\n%v", tc.prefix, tc.resultType, diff)
+		}
+	}
+}

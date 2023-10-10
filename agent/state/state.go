@@ -24,6 +24,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync"
 
@@ -417,13 +418,17 @@ func (s *State) loadFromV0() error {
 	return nil
 }
 
-// GetByPrefix returns all the objects starting by the given key prefix.
-// The given resultType must be of the type the objects are expected to be.
-// Note that it only searches at the root level of the cache.
+// GetByPrefix returns all the objects starting by the given key prefix,
+// and which can be represented as the given resultType.
+// The resultType must be of the type the objects are expected to be.
+//
+// Note that it only searches at the root level of the cache,
+// and resultType must be a map, a struct or a slice.
 func (s *State) GetByPrefix(keyPrefix string, resultType any) (map[string]any, error) {
 	s.l.Lock()
 	defer s.l.Unlock()
 
+	resultTyp := reflect.TypeOf(resultType)
 	result := make(map[string]any)
 
 	for key, value := range s.cache {
@@ -431,21 +436,25 @@ func (s *State) GetByPrefix(keyPrefix string, resultType any) (map[string]any, e
 			// We could have used the resultType to receive the value,
 			// but as it is passed as an interface{}, the json unmarshaler
 			// would have redefined it as a map[string]interface{}.
-			// Thus, we expect a map[string]interface{} and then
-			// decode it into the resultType.
-			var output map[string]any
+			// Thus, we expect any-thing and then
+			// decode it into a 'resultTyp' variable.
+			var output any
 
 			err := json.Unmarshal(value, &output)
 			if err != nil {
 				return nil, err // Really unexpected
 			}
 
-			err = mapstructure.Decode(output, &resultType)
+			// We allocate a new variable of the expected type, to prevent
+			// modifying previous values of types that are passed by reference (e.g.: slices)
+			resultTypeAlloc := reflect.New(resultTyp).Elem().Interface()
+
+			err = mapstructure.Decode(output, &resultTypeAlloc)
 			if err != nil {
 				continue
 			}
 
-			result[key] = resultType
+			result[key] = resultTypeAlloc
 		}
 	}
 
