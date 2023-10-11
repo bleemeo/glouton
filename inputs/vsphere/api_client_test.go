@@ -324,6 +324,34 @@ func TestESXIDescribing(t *testing.T) {
 				},
 			},
 		},
+		{
+			name:          "vCenter",
+			dirName:       "vcenter_2",
+			expectedHosts: []*HostSystem{},
+			expectedVMs: []*VirtualMachine{
+				{
+					device: device{
+						moid: "vm-74",
+						name: "app-haproxy2",
+						facts: map[string]string{
+							"cpu_cores":             "2",
+							"fqdn":                  "app-haproxy2",
+							"hostname":              "app-haproxy2",
+							"memory":                "2.00 GB",
+							"vsphere_host":          "host-11",                     // TODO improve this
+							"vsphere_resource_pool": "resgroup-8",                  // TODO improve this
+							"os_pretty_name":        "Debian GNU/Linux 5 (64-bit)", // TODO: we want "Debian GNU/Linux 11 (64-bit)"
+							"primary_address":       "192.168.0.2",
+							"vsphere_datastore":     "Datastore001",
+							"vsphere_vm_name":       "app-haproxy2",
+							"vsphere_vm_version":    "vmx-07",
+						},
+						powerState: "poweredOn",
+					},
+					UUID: "d72b7d0e-95e3-4bd1-b788-18da89624595",
+				},
+			},
+		},
 	}
 
 	for _, testCase := range testCases {
