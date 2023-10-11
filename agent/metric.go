@@ -305,6 +305,7 @@ var (
 		"vsphere_host_cpu_used_perc",
 		"vsphere_host_mem_total",
 		"vsphere_host_mem_used_perc",
+		"vsphere_host_swap_in",
 		"vsphere_host_swap_out",
 		"vsphere_host_io_read_bytes",
 		"vsphere_host_io_write_bytes",

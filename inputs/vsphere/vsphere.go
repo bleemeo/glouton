@@ -206,6 +206,7 @@ func (vSphere *vSphere) makeGatherer() (prometheus.Gatherer, registry.Registrati
 		"cpu.usage.average",
 		"mem.totalCapacity.average",
 		"mem.usage.average",
+		"mem.swapin.average",
 		"mem.swapout.average",
 		"disk.read.average",
 		"disk.write.average",
@@ -374,10 +375,14 @@ func renameMetrics(currentContext internal.GatherContext, metricName string) (ne
 	case "vsphere_host_cpu":
 		newMetricName = strings.Replace(newMetricName, "usage", "used_perc", 1)
 	case "vsphere_host_mem":
-		if newMetricName == "swapout" {
+		switch newMetricName {
+		case "swapin":
+			newMeasurement = "vsphere_host_swap"
+			newMetricName = "in"
+		case "swapout":
 			newMeasurement = "vsphere_host_swap"
 			newMetricName = "out"
-		} else {
+		default:
 			newMetricName = strings.Replace(newMetricName, "totalCapacity", "total", 1)
 			newMetricName = strings.Replace(newMetricName, "usage", "used_perc", 1)
 		}
@@ -413,6 +418,7 @@ func transformMetrics(currentContext internal.GatherContext, fields map[string]f
 		// Host metrics
 		"vsphere_host_mem": {
 			"totalCapacity_average": 1000000, // MB to B
+			"swapin_average":        1000,    // KB to B
 			"swapout_average":       1000,    // KB to B
 		},
 		"vsphere_host_disk": {
