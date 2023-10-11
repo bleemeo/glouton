@@ -19,6 +19,7 @@ package vsphere
 import (
 	"context"
 	"crypto/tls"
+	bleemeoTypes "glouton/bleemeo/types"
 	"glouton/config"
 	"glouton/prometheus/registry"
 	"net/url"
@@ -107,9 +108,9 @@ func TestVCenterDescribing(t *testing.T) {
 		t.FailNow()
 	}
 
-	dummyVSphere := &vSphere{deviceCache: make(map[string]Device)}
+	dummyVSphere := &vSphere{deviceCache: make(map[string]bleemeoTypes.VSphereDevice)}
 
-	deviceChan := make(chan Device, 1) // 1 of buffer because we only have 1 host, then 1 VM.
+	deviceChan := make(chan bleemeoTypes.VSphereDevice, 1) // 1 of buffer because we only have 1 host, then 1 VM.
 
 	dummyVSphere.describeHosts(ctx, hosts, deviceChan)
 
@@ -367,7 +368,7 @@ func TestESXIDescribing(t *testing.T) {
 			defer cancel()
 
 			manager := new(Manager)
-			manager.RegisterGatherers([]config.VSphere{vSphereCfg}, func(opt registry.RegistrationOption, gatherer prometheus.Gatherer) (int, error) { return 0, nil })
+			manager.RegisterGatherers([]config.VSphere{vSphereCfg}, func(opt registry.RegistrationOption, gatherer prometheus.Gatherer) (int, error) { return 0, nil }, nil)
 
 			devices := manager.Devices(ctx, 0)
 
@@ -415,8 +416,8 @@ func TestESXIDescribing(t *testing.T) {
 	}
 }
 
-// sortDevices sorts the given Device slice in place, according to device MOIDs.
-func sortDevices[D Device](devices []D) {
+// sortDevices sorts the given VSphereDevice slice in place, according to device MOIDs.
+func sortDevices[D bleemeoTypes.VSphereDevice](devices []D) {
 	sort.Slice(devices, func(i, j int) bool {
 		return devices[i].MOID() < devices[j].MOID()
 	})

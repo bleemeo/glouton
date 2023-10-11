@@ -286,7 +286,7 @@ type GathererOptions struct {
 	Rules []types.SimpleRule
 	// GatherModifier is a function that can modify the gather result (add/modify/delete).
 	// It could be nil to skip this step.
-	GatherModifier func(mfs []*dto.MetricFamily) []*dto.MetricFamily
+	GatherModifier func(mfs []*dto.MetricFamily, gatherError error) []*dto.MetricFamily
 	// The delay to wait for between gathers.
 	MinInterval time.Duration
 

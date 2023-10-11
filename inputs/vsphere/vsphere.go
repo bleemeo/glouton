@@ -19,6 +19,7 @@ package vsphere
 import (
 	"context"
 	"fmt"
+	bleemeoTypes "glouton/bleemeo/types"
 	"glouton/config"
 	"glouton/inputs"
 	"glouton/inputs/internal"
@@ -48,9 +49,11 @@ type vSphere struct {
 	host string
 	opts config.VSphere
 
+	state bleemeoTypes.State
+
 	gatherer *vSphereGatherer
 
-	deviceCache      map[string]Device
+	deviceCache      map[string]bleemeoTypes.VSphereDevice
 	noMetricsSince   map[string]int
 	lastStatuses     map[string]types.Status
 	lastErrorMessage string
@@ -58,11 +61,12 @@ type vSphere struct {
 	errLock          sync.Mutex
 }
 
-func newVSphere(host string, cfg config.VSphere) *vSphere {
+func newVSphere(host string, cfg config.VSphere, state bleemeoTypes.State) *vSphere {
 	return &vSphere{
 		host:           host,
 		opts:           cfg,
-		deviceCache:    make(map[string]Device),
+		state:          state,
+		deviceCache:    make(map[string]bleemeoTypes.VSphereDevice),
 		noMetricsSince: make(map[string]int),
 		lastStatuses:   make(map[string]types.Status),
 	}
@@ -101,7 +105,7 @@ func (vSphere *vSphere) String() string {
 	return fmt.Sprintf("vSphere(%s)", vSphere.host)
 }
 
-func (vSphere *vSphere) devices(ctx context.Context, deviceChan chan<- Device) {
+func (vSphere *vSphere) devices(ctx context.Context, deviceChan chan<- bleemeoTypes.VSphereDevice) {
 	soapCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
@@ -131,7 +135,7 @@ func (vSphere *vSphere) devices(ctx context.Context, deviceChan chan<- Device) {
 	vSphere.setErr(nil)
 }
 
-func (vSphere *vSphere) describeHosts(ctx context.Context, rawHosts []*object.HostSystem, deviceChan chan<- Device) {
+func (vSphere *vSphere) describeHosts(ctx context.Context, rawHosts []*object.HostSystem, deviceChan chan<- bleemeoTypes.VSphereDevice) {
 	for _, host := range rawHosts {
 		var hostProps mo.HostSystem
 
@@ -154,7 +158,7 @@ func (vSphere *vSphere) describeHosts(ctx context.Context, rawHosts []*object.Ho
 	}
 }
 
-func (vSphere *vSphere) describeVMs(ctx context.Context, rawVMs []*object.VirtualMachine, deviceChan chan<- Device) {
+func (vSphere *vSphere) describeVMs(ctx context.Context, rawVMs []*object.VirtualMachine, deviceChan chan<- bleemeoTypes.VSphereDevice) {
 	for _, vm := range rawVMs {
 		var vmProps mo.VirtualMachine
 
@@ -246,7 +250,11 @@ func (vSphere *vSphere) makeGatherer() (prometheus.Gatherer, registry.Registrati
 	return gatherer, opt, nil
 }
 
-func (vSphere *vSphere) gatherModifier(mfs []*dto.MetricFamily) []*dto.MetricFamily {
+func (vSphere *vSphere) gatherModifier(mfs []*dto.MetricFamily, gatherErr error) []*dto.MetricFamily {
+	if len(vSphere.deviceCache) == 0 && (gatherErr != nil || vSphere.consecutiveErr > 0) {
+		return append(mfs, vSphere.statusesWhenNoDevices(gatherErr)...)
+	}
+
 	seenDevices := make(map[string]bool)
 
 	for _, mf := range mfs {
@@ -275,15 +283,15 @@ func (vSphere *vSphere) gatherModifier(mfs []*dto.MetricFamily) []*dto.MetricFam
 		switch {
 		case vSphereStatus == types.StatusCritical:
 			deviceStatus = types.StatusCritical
-			deviceMsg = "vCenter is unreachable"
+			deviceMsg = "vSphere is unreachable"
 
 			if vSphereMsg != "" { // Maybe no error message
 				deviceMsg += ": " + vSphereMsg
 			}
-		case !dev.isPoweredOn():
+		case !dev.IsPoweredOn():
 			deviceStatus = types.StatusCritical
 
-			if err := dev.latestError(); err != nil {
+			if err := dev.LatestError(); err != nil {
 				deviceMsg = err.Error()
 			} else {
 				deviceMsg = dev.Kind() + " is stopped"
@@ -321,6 +329,76 @@ func (vSphere *vSphere) gatherModifier(mfs []*dto.MetricFamily) []*dto.MetricFam
 			mfs = append(mfs, vSphereDeviceStatus)
 		}
 
+		vSphere.lastStatuses[moid] = deviceStatus
+	}
+
+	return mfs
+}
+
+func (vSphere *vSphere) statusesWhenNoDevices(gatherErr error) []*dto.MetricFamily {
+	logger.Printf("No devices on %s", vSphere.String()) // TODO: remove
+
+	associations, err := vSphere.state.GetByPrefix("bleemeo:vsphere:", map[string]string{})
+	if err != nil {
+		logger.Printf("Can't give status for %s: can't lookup state: %v", err) // TODO: V(2)
+
+		return nil
+	}
+
+	deviceStatus := types.StatusCritical
+	deviceMsg := "vSphere is unreachable: "
+
+	if gatherErr != nil {
+		deviceMsg += gatherErr.Error()
+	} else {
+		_, vSphereMessage := vSphere.getStatus()
+		deviceMsg += vSphereMessage
+	}
+
+	var mfs []*dto.MetricFamily //nolint:prealloc
+
+	for _, value := range associations {
+		asso, ok := value.(map[string]string)
+		if !ok {
+			continue
+		}
+
+		if asso["Source"] != vSphere.host {
+			continue
+		}
+
+		moid, ok := asso["MOID"]
+		if !ok {
+			continue
+		}
+
+		if vSphere.lastStatuses[moid] == types.StatusCritical {
+			// We already sent this status
+			continue
+		}
+
+		statusMetric := &dto.MetricFamily{
+			Name: proto.String("vsphere_device_status"),
+			Type: dto.MetricType_GAUGE.Enum(),
+			Metric: []*dto.Metric{
+				{
+					Label: []*dto.LabelPair{
+						{Name: proto.String(types.LabelMetaCurrentStatus), Value: proto.String(deviceStatus.String())},
+						{Name: proto.String(types.LabelMetaCurrentDescription), Value: proto.String(deviceMsg)},
+						{Name: proto.String(types.LabelMetaVSphere), Value: proto.String(vSphere.host)},
+						{Name: proto.String(types.LabelMetaVSphereMOID), Value: proto.String(moid)},
+						// Instead of the giving the MOID, which would be processed by RelabelHook(),
+						// we directly set the agent ID (which is actually easier to have from here).
+						// {Name: proto.String(types.LabelMetaBleemeoTargetAgentUUID), Value: proto.String(agentID)},
+					},
+					Gauge: &dto.Gauge{
+						Value: proto.Float64(float64(deviceStatus.NagiosCode())),
+					},
+				},
+			},
+		}
+
+		mfs = append(mfs, statusMetric)
 		vSphere.lastStatuses[moid] = deviceStatus
 	}
 
@@ -401,7 +479,7 @@ func renameMetrics(currentContext internal.GatherContext, metricName string) (ne
 func transformMetrics(currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {
 	_ = originalFields
 
-	// map measurement -> field -> factor
+	// map is: measurement -> field -> factor
 	factors := map[string]map[string]float64{
 		// VM metrics
 		"vsphere_vm_mem": {

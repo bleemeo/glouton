@@ -1403,7 +1403,7 @@ func (a *agent) registerInputs() {
 	input, opts, err := temp.New()
 	a.registerInput("Temp", input, opts, err)
 
-	a.vSphereManager.RegisterGatherers(a.config.VSphere, a.gathererRegistry.RegisterGatherer)
+	a.vSphereManager.RegisterGatherers(a.config.VSphere, a.gathererRegistry.RegisterGatherer, a.state)
 }
 
 // Register a single input.

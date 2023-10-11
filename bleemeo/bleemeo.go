@@ -807,7 +807,7 @@ func (c *Connector) diagnosticCache(file io.Writer) {
 	fmt.Fprintf(file, "\n# Cache known %d monitors\n", len(c.cache.Monitors()))
 }
 
-func (c *Connector) GetAllVSphereAssociations(ctx context.Context, devices []vsphere.Device) (map[string]string, error) {
+func (c *Connector) GetAllVSphereAssociations(ctx context.Context, devices []types.VSphereDevice) (map[string]string, error) {
 	hostAgentTypeID, vmAgentTypeID, ok := c.sync.GetVSphereAgentTypes()
 	if !ok {
 		return map[string]string{}, errAgentTypeNotFound
