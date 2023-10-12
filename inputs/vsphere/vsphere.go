@@ -430,45 +430,38 @@ func renameMetrics(currentContext internal.GatherContext, metricName string) (ne
 	newMeasurement = currentContext.Measurement
 	newMetricName = strings.TrimSuffix(metricName, "_average")
 
+	// We remove the prefix "vsphere_(vm|host)_", except for "vsphere_vm_cpu_latency"
+	if newMetricName != "latency" {
+		newMeasurement = strings.TrimPrefix(newMeasurement, "vsphere_")
+		newMeasurement = strings.TrimPrefix(newMeasurement, "vm_")
+	}
+
+	newMeasurement = strings.TrimPrefix(newMeasurement, "host_")
+
 	switch newMeasurement {
-	// VM metrics
-	case "vsphere_vm_cpu":
+	case "cpu", "vsphere_vm_cpu":
 		newMetricName = strings.Replace(newMetricName, "usage", "used", 1)
-		newMetricName += "_perc" // For now, all VM CPU metrics are given as a percentage.
-	case "vsphere_vm_mem":
-		if newMetricName == "swapped" {
-			newMeasurement = "vsphere_vm_swap"
-			newMetricName = "used"
-		} else {
-			newMetricName = strings.Replace(newMetricName, "usage", "used_perc", 1)
-		}
-	case "vsphere_vm_disk":
-		newMeasurement = "vsphere_vm_io"
-		newMetricName = strings.Replace(newMetricName, "read", "read_bytes", 1)
-		newMetricName = strings.Replace(newMetricName, "write", "write_bytes", 1)
-	case "vsphere_vm_net":
-		newMetricName = strings.Replace(newMetricName, "received", "bits_recv", 1)
-		newMetricName = strings.Replace(newMetricName, "transmitted", "bits_sent", 1)
-	// Host metrics
-	case "vsphere_host_cpu":
-		newMetricName = strings.Replace(newMetricName, "usage", "used_perc", 1)
-	case "vsphere_host_mem":
+		newMetricName += "_perc" // For now, all CPU metrics are given as a percentage.
+	case "mem":
 		switch newMetricName {
+		case "swapped":
+			newMeasurement = "swap" //nolint:goconst
+			newMetricName = "used"
 		case "swapin":
-			newMeasurement = "vsphere_host_swap"
+			newMeasurement = "swap"
 			newMetricName = "in"
 		case "swapout":
-			newMeasurement = "vsphere_host_swap"
+			newMeasurement = "swap"
 			newMetricName = "out"
 		default:
-			newMetricName = strings.Replace(newMetricName, "totalCapacity", "total", 1)
 			newMetricName = strings.Replace(newMetricName, "usage", "used_perc", 1)
+			newMetricName = strings.Replace(newMetricName, "totalCapacity", "total", 1)
 		}
-	case "vsphere_host_disk":
-		newMeasurement = "vsphere_host_io"
+	case "disk":
+		newMeasurement = "io"
 		newMetricName = strings.Replace(newMetricName, "read", "read_bytes", 1)
 		newMetricName = strings.Replace(newMetricName, "write", "write_bytes", 1)
-	case "vsphere_host_net":
+	case "net":
 		newMetricName = strings.Replace(newMetricName, "received", "bits_recv", 1)
 		newMetricName = strings.Replace(newMetricName, "transmitted", "bits_sent", 1)
 	}

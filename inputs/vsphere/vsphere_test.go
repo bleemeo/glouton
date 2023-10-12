@@ -38,25 +38,25 @@ func TestRenameMetrics(t *testing.T) {
 		{
 			"vsphere_host_mem",
 			"swapout_average",
-			"vsphere_host_swap",
+			"swap",
 			"out",
 		},
 		{
 			"vsphere_host_mem",
 			"totalCapacity_average",
-			"vsphere_host_mem",
+			"mem",
 			"total",
 		},
 		{
 			"vsphere_vm_disk",
 			"read_average",
-			"vsphere_vm_io",
+			"io",
 			"read_bytes",
 		},
 		{
 			"vsphere_vm_net",
 			"transmitted_average",
-			"vsphere_vm_net",
+			"net",
 			"bits_sent",
 		},
 	}
