@@ -85,12 +85,18 @@ func TestVCenterDescribing(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	hosts, vms, err := findDevices(ctx, finder)
+	clusters, hosts, vms, err := findDevices(ctx, finder)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	fail := false
+
+	if len(clusters) != 1 {
+		t.Errorf("Expected 1 cluster, found %d.", len(clusters))
+
+		fail = true
+	}
 
 	if len(hosts) != 1 {
 		t.Errorf("Expected 1 host, found %d.", len(hosts))
@@ -108,9 +114,38 @@ func TestVCenterDescribing(t *testing.T) {
 		t.FailNow()
 	}
 
-	dummyVSphere := &vSphere{deviceCache: make(map[string]bleemeoTypes.VSphereDevice)}
+	dummyVSphere := newVSphere(vSphereCfg.URL, vSphereCfg, nil)
+	deviceChan := make(chan bleemeoTypes.VSphereDevice, 1) // 1 of buffer because we only have 1 cluster, then 1 host, then 1 VM.
 
-	deviceChan := make(chan bleemeoTypes.VSphereDevice, 1) // 1 of buffer because we only have 1 host, then 1 VM.
+	dummyVSphere.describeClusters(ctx, clusters, deviceChan)
+
+	if len(deviceChan) != 1 {
+		t.Fatalf("Expected 1 cluster to be described, but got %d.", len(deviceChan))
+	}
+
+	devCluster := <-deviceChan
+
+	cluster, ok := devCluster.(*Cluster)
+	if !ok {
+		t.Fatalf("Expected device to be a Cluster, but is %T.", devCluster)
+	}
+
+	expectedCluster := Cluster{
+		device: device{
+			source: vSphereURL.Host,
+			moid:   "domain-c16",
+			name:   "DC0_C0",
+			facts: map[string]string{
+				"cpu_cores": "2",
+				"fqdn":      "DC0_C0",
+				"hosts":     "1",
+			},
+		},
+		datastores: []string{"datastore-25"},
+	}
+	if diff := cmp.Diff(expectedCluster, *cluster, cmp.AllowUnexported(Cluster{}, device{})); diff != "" {
+		t.Fatalf("Unexpected host description (-want +got):\n%s", diff)
+	}
 
 	dummyVSphere.describeHosts(ctx, hosts, deviceChan)
 
@@ -189,12 +224,13 @@ func TestVCenterDescribing(t *testing.T) {
 
 // TestESXIDescribing lists and describes devices across multiple test cases,
 // but by calling the higher-level method Manager.Devices.
-func TestESXIDescribing(t *testing.T) {
+func TestESXIDescribing(t *testing.T) { //nolint:maintidx
 	testCases := []struct {
-		name          string
-		dirName       string
-		expectedHosts []*HostSystem
-		expectedVMs   []*VirtualMachine
+		name             string
+		dirName          string
+		expectedClusters []*Cluster
+		expectedHosts    []*HostSystem
+		expectedVMs      []*VirtualMachine
 	}{
 		{
 			name:    "ESXI running on QEMU",
@@ -282,6 +318,20 @@ func TestESXIDescribing(t *testing.T) {
 		{
 			name:    "vCenter vcsim'ulated",
 			dirName: "vcenter_1",
+			expectedClusters: []*Cluster{
+				{
+					device: device{
+						moid: "domain-c16",
+						name: "DC0_C0",
+						facts: map[string]string{
+							"cpu_cores": "2",
+							"fqdn":      "DC0_C0",
+							"hosts":     "1",
+						},
+					},
+					datastores: []string{"datastore-25"},
+				},
+			},
 			expectedHosts: []*HostSystem{
 				{
 					device: device{
@@ -373,12 +423,15 @@ func TestESXIDescribing(t *testing.T) {
 			devices := manager.Devices(ctx, 0)
 
 			var (
-				hosts []*HostSystem
-				vms   []*VirtualMachine
+				clusters []*Cluster
+				hosts    []*HostSystem
+				vms      []*VirtualMachine
 			)
 
 			for _, dev := range devices {
 				switch kind := dev.Kind(); kind {
+				case KindCluster:
+					clusters = append(clusters, dev.(*Cluster)) //nolint: forcetypeassert
 				case KindHost:
 					hosts = append(hosts, dev.(*HostSystem)) //nolint: forcetypeassert
 				case KindVM:
@@ -389,15 +442,24 @@ func TestESXIDescribing(t *testing.T) {
 				}
 			}
 
-			if len(hosts) != len(tc.expectedHosts) || len(vms) != len(tc.expectedVMs) {
-				t.Fatalf("Expected %d host(s) and %d VM(s), got %d host(s) and %d VM(s).", len(tc.expectedHosts), len(tc.expectedVMs), len(hosts), len(vms))
+			if len(clusters) != len(tc.expectedClusters) || len(hosts) != len(tc.expectedHosts) || len(vms) != len(tc.expectedVMs) {
+				t.Fatalf("Expected %d cluster(s), %d host(s) and %d VM(s), got %d cluster(s), %d host(s) and %d VM(s).",
+					len(tc.expectedClusters), len(tc.expectedHosts), len(tc.expectedVMs), len(clusters), len(hosts), len(vms))
 			}
 
 			noSourceCmp := cmpopts.IgnoreFields(device{}, "source")
 
+			sortDevices(tc.expectedClusters)
+			sortDevices(clusters)
+			// We need to compare the clusters, hosts and VMs one by one, otherwise the diff is way harder to analyze.
+			for i, expectedCluster := range tc.expectedClusters {
+				if diff := cmp.Diff(expectedCluster, clusters[i], cmp.AllowUnexported(Cluster{}, device{}), noSourceCmp); diff != "" {
+					t.Errorf("Unexpected cluster description (-want +got):\n%s", diff)
+				}
+			}
+
 			sortDevices(tc.expectedHosts)
 			sortDevices(hosts)
-			// We need to compare the hosts and VMs one by one, otherwise the diff is way harder to analyze.
 			for i, expectedHost := range tc.expectedHosts {
 				if diff := cmp.Diff(expectedHost, hosts[i], cmp.AllowUnexported(HostSystem{}, device{}), noSourceCmp); diff != "" {
 					t.Errorf("Unexpected host description (-want +got):\n%s", diff)

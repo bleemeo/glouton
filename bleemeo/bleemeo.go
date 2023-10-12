@@ -808,14 +808,15 @@ func (c *Connector) diagnosticCache(file io.Writer) {
 }
 
 func (c *Connector) GetAllVSphereAssociations(ctx context.Context, devices []types.VSphereDevice) (map[string]string, error) {
-	hostAgentTypeID, vmAgentTypeID, ok := c.sync.GetVSphereAgentTypes()
+	clusterAgentTypeID, hostAgentTypeID, vmAgentTypeID, ok := c.sync.GetVSphereAgentTypes()
 	if !ok {
 		return map[string]string{}, errAgentTypeNotFound
 	}
 
 	agentTypes := map[string]string{
-		vsphere.KindHost: hostAgentTypeID,
-		vsphere.KindVM:   vmAgentTypeID,
+		vsphere.KindCluster: clusterAgentTypeID,
+		vsphere.KindHost:    hostAgentTypeID,
+		vsphere.KindVM:      vmAgentTypeID,
 	}
 	associations := make(map[string]string, len(devices))
 

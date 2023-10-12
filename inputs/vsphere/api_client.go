@@ -34,7 +34,8 @@ import (
 
 //nolint:gochecknoglobals
 var (
-	relevantHostProperties = []string{
+	relevantClusterProperties []string // An empty list will retrieve all properties.
+	relevantHostProperties    = []string{
 		"hardware.cpuInfo.numCpuCores",
 		"summary.hardware.cpuModel",
 		"summary.config.name",
@@ -99,22 +100,57 @@ func newDeviceFinder(ctx context.Context, vSphereCfg config.VSphere) (*find.Find
 	return f, nil
 }
 
-func findDevices(ctx context.Context, finder *find.Finder) (hosts []*object.HostSystem, vms []*object.VirtualMachine, err error) {
+func findDevices(ctx context.Context, finder *find.Finder) (clusters []*object.ClusterComputeResource, hosts []*object.HostSystem, vms []*object.VirtualMachine, err error) {
 	// The find.NotFoundError is thrown when no devices are found,
 	// even if the path is not restrictive to a particular device.
 	var notFoundError *find.NotFoundError
 
+	clusters, err = finder.ClusterComputeResourceList(ctx, "*")
+	if err != nil && !errors.As(err, &notFoundError) {
+		return nil, nil, nil, err
+	}
+
 	hosts, err = finder.HostSystemList(ctx, "*")
 	if err != nil && !errors.As(err, &notFoundError) {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	vms, err = finder.VirtualMachineList(ctx, "*")
 	if err != nil && !errors.As(err, &notFoundError) {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
-	return hosts, vms, nil
+	return clusters, hosts, vms, nil
+}
+
+func describeCluster(cluster *object.ClusterComputeResource, clusterProps mo.ClusterComputeResource) *Cluster {
+	clusterFacts := make(map[string]string)
+
+	if resourceSummary := clusterProps.Summary.GetComputeResourceSummary(); resourceSummary != nil {
+		clusterFacts["hosts"] = str(resourceSummary.NumHosts)
+		clusterFacts["cpu_cores"] = str(resourceSummary.NumCpuCores)
+	}
+
+	datastores := make([]string, len(clusterProps.Datastore))
+
+	for i, ds := range clusterProps.Datastore {
+		datastores[i] = ds.Value
+	}
+
+	dev := device{
+		source: cluster.Client().URL().Host,
+		moid:   cluster.Reference().Value,
+		name:   cluster.Name(),
+		facts:  clusterFacts,
+		// TODO: Rename powerState to status and store the cluster's overallStatus ? (green)
+	}
+
+	dev.facts["fqdn"] = dev.FQDN()
+
+	return &Cluster{
+		device:     dev,
+		datastores: datastores,
+	}
 }
 
 func describeHost(host *object.HostSystem, hostProps mo.HostSystem) *HostSystem {

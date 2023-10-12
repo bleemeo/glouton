@@ -106,7 +106,7 @@ func (vSphere *vSphere) String() string {
 }
 
 func (vSphere *vSphere) devices(ctx context.Context, deviceChan chan<- bleemeoTypes.VSphereDevice) {
-	soapCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	soapCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
 	logger.Printf("Discovering devices for vSphere %q ...", vSphere.host) // TODO: remove
@@ -119,7 +119,7 @@ func (vSphere *vSphere) devices(ctx context.Context, deviceChan chan<- bleemeoTy
 		return
 	}
 
-	hosts, vms, err := findDevices(soapCtx, finder)
+	clusters, hosts, vms, err := findDevices(soapCtx, finder)
 	if err != nil {
 		vSphere.setErr(err)
 		logger.V(1).Printf("Can't find devices on vSphere %q: %v", vSphere.host, err)
@@ -129,10 +129,34 @@ func (vSphere *vSphere) devices(ctx context.Context, deviceChan chan<- bleemeoTy
 
 	logger.Printf("Found %d hosts and %d vms.", len(hosts), len(vms))
 
+	vSphere.describeClusters(soapCtx, clusters, deviceChan)
 	vSphere.describeHosts(soapCtx, hosts, deviceChan)
 	vSphere.describeVMs(soapCtx, vms, deviceChan)
 
 	vSphere.setErr(nil)
+}
+
+func (vSphere *vSphere) describeClusters(ctx context.Context, rawClusters []*object.ClusterComputeResource, deviceChan chan<- bleemeoTypes.VSphereDevice) {
+	for _, cluster := range rawClusters {
+		var clusterProps mo.ClusterComputeResource
+
+		moid := cluster.Reference().Value
+
+		err := cluster.Properties(ctx, cluster.Reference(), relevantClusterProperties, &clusterProps)
+		if err != nil {
+			logger.Printf("Failed to fetch cluster props: %v", err) // TODO: remove
+
+			if dev, ok := vSphere.deviceCache[moid]; ok {
+				dev.(*Cluster).err = err //nolint:forcetypeassert
+			}
+
+			continue
+		}
+
+		devCluster := describeCluster(cluster, clusterProps)
+		deviceChan <- devCluster
+		vSphere.deviceCache[moid] = devCluster
+	}
 }
 
 func (vSphere *vSphere) describeHosts(ctx context.Context, rawHosts []*object.HostSystem, deviceChan chan<- bleemeoTypes.VSphereDevice) {
@@ -196,6 +220,10 @@ func (vSphere *vSphere) makeGatherer() (prometheus.Gatherer, registry.Registrati
 	vsphereInput.Password = vSphere.opts.Password
 
 	vsphereInput.VMInstances = vSphere.opts.MonitorVMs
+	// vsphereInput.HostInstances is true by default
+	vsphereInput.DatastoreInstances = true
+	vsphereInput.ClusterInstances = true
+
 	vsphereInput.VMMetricInclude = []string{
 		"cpu.usage.average",
 		"cpu.latency.average",
@@ -217,10 +245,18 @@ func (vSphere *vSphere) makeGatherer() (prometheus.Gatherer, registry.Registrati
 		"net.transmitted.average",
 		"net.received.average",
 	}
+	vsphereInput.DatastoreMetricInclude = []string{
+		"datastore.write.average",
+		"datastore.read.average",
+		"disk.used.latest",
+	}
+	vsphereInput.ClusterMetricInclude = []string{
+		"cpu.usage.average",
+		"mem.usage.average",
+		"mem.swapused.average",
+	}
 	vsphereInput.DatacenterMetricExclude = []string{"*"}
 	vsphereInput.ResourcePoolMetricExclude = []string{"*"}
-	vsphereInput.ClusterMetricExclude = []string{"*"}
-	vsphereInput.DatastoreMetricExclude = []string{"*"}
 
 	vsphereInput.InsecureSkipVerify = vSphere.opts.InsecureSkipVerify
 
@@ -285,8 +321,11 @@ func (vSphere *vSphere) gatherModifier(mfs []*dto.MetricFamily, gatherErr error)
 			deviceStatus = types.StatusCritical
 			deviceMsg = "vSphere is unreachable"
 
-			if vSphereMsg != "" { // Maybe no error message
-				deviceMsg += ": " + vSphereMsg
+			if vSphereMsg != "" {
+				// This telegraf error isn't really problematic.
+				if !strings.Contains(vSphereMsg, "A specified parameter was not correct: querySpec[0]") {
+					deviceMsg += ": " + vSphereMsg
+				}
 			}
 		case !dev.IsPoweredOn():
 			deviceStatus = types.StatusCritical
@@ -406,7 +445,7 @@ func (vSphere *vSphere) statusesWhenNoDevices(gatherErr error) []*dto.MetricFami
 }
 
 func (vSphere *vSphere) renameGlobal(gatherContext internal.GatherContext) (result internal.GatherContext, drop bool) {
-	tags := maps.Clone(gatherContext.Tags) // Prevents some labels to be removed
+	tags := maps.Clone(gatherContext.Tags) // Prevents labels from being unexpectedly removed
 
 	tags[types.LabelMetaVSphere] = vSphere.host
 	tags[types.LabelMetaVSphereMOID] = tags["moid"]
@@ -429,6 +468,7 @@ func (vSphere *vSphere) renameGlobal(gatherContext internal.GatherContext) (resu
 func renameMetrics(currentContext internal.GatherContext, metricName string) (newMeasurement string, newMetricName string) {
 	newMeasurement = currentContext.Measurement
 	newMetricName = strings.TrimSuffix(metricName, "_average")
+	newMetricName = strings.TrimSuffix(newMetricName, "_latest")
 
 	// We remove the prefix "vsphere_(vm|host)_", except for "vsphere_vm_cpu_latency"
 	if newMetricName != "latency" {
@@ -437,14 +477,18 @@ func renameMetrics(currentContext internal.GatherContext, metricName string) (ne
 	}
 
 	newMeasurement = strings.TrimPrefix(newMeasurement, "host_")
+	newMeasurement = strings.TrimPrefix(newMeasurement, "datastore_")
+	newMeasurement = strings.TrimPrefix(newMeasurement, "cluster_")
 
 	switch newMeasurement {
 	case "cpu", "vsphere_vm_cpu":
 		newMetricName = strings.Replace(newMetricName, "usage", "used", 1)
-		newMetricName += "_perc" // For now, all CPU metrics are given as a percentage.
+		if newMetricName == "latency" {
+			newMetricName = "latency_perc"
+		}
 	case "mem":
 		switch newMetricName {
-		case "swapped":
+		case "swapped", "swapused":
 			newMeasurement = "swap" //nolint:goconst
 			newMetricName = "used"
 		case "swapin":
@@ -457,10 +501,12 @@ func renameMetrics(currentContext internal.GatherContext, metricName string) (ne
 			newMetricName = strings.Replace(newMetricName, "usage", "used_perc", 1)
 			newMetricName = strings.Replace(newMetricName, "totalCapacity", "total", 1)
 		}
-	case "disk":
-		newMeasurement = "io"
-		newMetricName = strings.Replace(newMetricName, "read", "read_bytes", 1)
-		newMetricName = strings.Replace(newMetricName, "write", "write_bytes", 1)
+	case "disk", "datastore":
+		if newMetricName != "used" {
+			newMeasurement = "io"
+			newMetricName = strings.Replace(newMetricName, "read", "read_bytes", 1)
+			newMetricName = strings.Replace(newMetricName, "write", "write_bytes", 1)
+		}
 	case "net":
 		newMetricName = strings.Replace(newMetricName, "received", "bits_recv", 1)
 		newMetricName = strings.Replace(newMetricName, "transmitted", "bits_sent", 1)
@@ -499,6 +545,18 @@ func transformMetrics(currentContext internal.GatherContext, fields map[string]f
 		"vsphere_host_net": {
 			"received_average":    8000, // KB/s to b/s
 			"transmitted_average": 8000, // KB/s to b/s
+		},
+		// Datastore metrics
+		"vsphere_datastore_datastore": {
+			"write_average": 8000, // KB/s to b/s
+			"read_average":  8000, // KB/s to b/s
+		},
+		"vsphere_datastore_disk": {
+			"used_latest": 1000, // KB to B
+		},
+		// Cluster metrics
+		"vsphere_cluster_mem": {
+			"swapused_average": 1000, // KB to B
 		},
 	}
 

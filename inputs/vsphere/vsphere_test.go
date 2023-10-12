@@ -36,6 +36,12 @@ func TestRenameMetrics(t *testing.T) {
 		expectedName        string
 	}{
 		{
+			"vsphere_vm_cpu",
+			"latency_average",
+			"vsphere_vm_cpu",
+			"latency_perc",
+		},
+		{
 			"vsphere_host_mem",
 			"swapout_average",
 			"swap",
@@ -52,6 +58,12 @@ func TestRenameMetrics(t *testing.T) {
 			"read_average",
 			"io",
 			"read_bytes",
+		},
+		{
+			"vsphere_datastore_datastore",
+			"write_average",
+			"io",
+			"write_bytes",
 		},
 		{
 			"vsphere_vm_net",

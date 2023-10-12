@@ -292,17 +292,7 @@ var (
 
 		// vSphere
 		"vsphere_device_status",
-		"cpu_used_perc",
 		"vsphere_vm_cpu_latency_perc",
-		"mem_total",
-		"mem_used_perc",
-		"swap_used",
-		"swap_in",
-		"swap_out",
-		"io_read_bytes",
-		"io_write_bytes",
-		"net_bits_recv",
-		"net_bits_sent",
 	}
 
 	defaultServiceMetrics map[discovery.ServiceName][]string = map[discovery.ServiceName][]string{

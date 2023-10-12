@@ -161,6 +161,8 @@ func (m *Manager) Devices(ctx context.Context, maxAge time.Duration) []bleemeoTy
 }
 
 // FindDevice returns the device from the given vSphere that has the given MOID.
+// If the MOID happens to be that of a datastore,
+// the device returned will be the cluster the datastore belongs to, if any.
 // If no matching device is found, it returns nil.
 func (m *Manager) FindDevice(ctx context.Context, vSphereHost, moid string) bleemeoTypes.VSphereDevice {
 	// We specify a small max age here, because as metric gathering is done every minute,
@@ -168,8 +170,21 @@ func (m *Manager) FindDevice(ctx context.Context, vSphereHost, moid string) blee
 	devices := m.Devices(ctx, 5*time.Minute)
 
 	for _, dev := range devices {
-		if dev.Source() == vSphereHost && dev.MOID() == moid {
+		if dev.Source() != vSphereHost {
+			continue
+		}
+
+		if dev.MOID() == moid {
 			return dev
+		}
+
+		// Maybe the device is a datastore belonging to a cluster ...
+		if cluster, ok := dev.(*Cluster); ok {
+			for _, datastore := range cluster.datastores {
+				if datastore == moid {
+					return cluster
+				}
+			}
 		}
 	}
 
@@ -220,6 +235,15 @@ func (dev *device) IsPoweredOn() bool {
 
 func (dev *device) LatestError() error {
 	return dev.err
+}
+
+type Cluster struct {
+	device
+	datastores []string
+}
+
+func (host *Cluster) Kind() string {
+	return KindCluster
 }
 
 type HostSystem struct {
