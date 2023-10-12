@@ -36,8 +36,9 @@ import (
 )
 
 const (
-	KindHost = "HostSystem"
-	KindVM   = "VirtualMachine"
+	KindCluster = "ClusterComputeResource"
+	KindHost    = "HostSystem"
+	KindVM      = "VirtualMachine"
 )
 
 type Manager struct {

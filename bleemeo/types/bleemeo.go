@@ -27,12 +27,13 @@ import (
 )
 
 const (
-	AgentTypeSNMP        = "snmp"
-	AgentTypeAgent       = "agent"
-	AgentTypeMonitor     = "connection_check"
-	AgentTypeKubernetes  = "kubernetes"
-	AgentTypeVSphereHost = "vsphere_host"
-	AgentTypeVSphereVM   = "vsphere_vm"
+	AgentTypeSNMP           = "snmp"
+	AgentTypeAgent          = "agent"
+	AgentTypeMonitor        = "connection_check"
+	AgentTypeKubernetes     = "kubernetes"
+	AgentTypeVSphereCluster = "vsphere_cluster"
+	AgentTypeVSphereHost    = "vsphere_host"
+	AgentTypeVSphereVM      = "vsphere_vm"
 )
 
 type NullTime time.Time

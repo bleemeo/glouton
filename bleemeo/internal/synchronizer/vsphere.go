@@ -109,7 +109,7 @@ func (s *Synchronizer) FindVSphereAgent(ctx context.Context, device types.VSpher
 }
 
 func (s *Synchronizer) VSphereRegisterAndUpdate(localDevices []types.VSphereDevice) error {
-	hostAgentTypeID, vmAgentTypeID, found := s.GetVSphereAgentTypes()
+	clusterAgentTypeID, hostAgentTypeID, vmAgentTypeID, found := s.GetVSphereAgentTypes()
 	if !found {
 		return errRetryLater
 	}
@@ -127,6 +127,8 @@ func (s *Synchronizer) VSphereRegisterAndUpdate(localDevices []types.VSphereDevi
 		var agentTypeID string
 
 		switch kind := device.Kind(); kind {
+		case vsphere.KindCluster:
+			agentTypeID = clusterAgentTypeID
 		case vsphere.KindHost:
 			agentTypeID = hostAgentTypeID
 		case vsphere.KindVM:
@@ -213,11 +215,13 @@ func (s *Synchronizer) remoteRegisterVSphereDevice(params map[string]string, pay
 	return result, nil
 }
 
-func (s *Synchronizer) GetVSphereAgentTypes() (hostAgentTypeID, vmAgentTypeID string, foundBoth bool) {
+func (s *Synchronizer) GetVSphereAgentTypes() (clusterAgentTypeID, hostAgentTypeID, vmAgentTypeID string, foundAll bool) {
 	agentTypes := s.option.Cache.AgentTypes()
 
-	for i := 0; i < len(agentTypes) && !foundBoth; i++ {
+	for i := 0; i < len(agentTypes) && !foundAll; i++ {
 		switch a := agentTypes[i]; {
+		case a.Name == types.AgentTypeVSphereCluster:
+			clusterAgentTypeID = a.ID
 		case a.Name == types.AgentTypeVSphereHost:
 			hostAgentTypeID = a.ID
 		case a.Name == types.AgentTypeVSphereVM:
@@ -226,19 +230,21 @@ func (s *Synchronizer) GetVSphereAgentTypes() (hostAgentTypeID, vmAgentTypeID st
 			continue
 		}
 
-		foundBoth = hostAgentTypeID != "" && vmAgentTypeID != ""
+		foundAll = clusterAgentTypeID != "" && hostAgentTypeID != "" && vmAgentTypeID != ""
 	}
 
-	return hostAgentTypeID, vmAgentTypeID, foundBoth
+	return clusterAgentTypeID, hostAgentTypeID, vmAgentTypeID, foundAll
 }
 
 func (s *Synchronizer) GetVSphereAgentType(kind string) (agentTypeID string, found bool) {
-	hostAgentTypeID, vmAgentTypeID, found := s.GetVSphereAgentTypes()
+	clusterAgentTypeID, hostAgentTypeID, vmAgentTypeID, found := s.GetVSphereAgentTypes()
 	if !found {
 		return "", false
 	}
 
 	switch kind {
+	case vsphere.KindCluster:
+		return clusterAgentTypeID, true
 	case vsphere.KindHost:
 		return hostAgentTypeID, true
 	case vsphere.KindVM:

@@ -318,6 +318,7 @@ func newAPI() *mockAPI {
 		agentConfigSNMP,
 		agentConfigMonitor,
 		agentConfigKubernetes,
+		agentTypeVSphereCluster,
 		agentConfigVSphereHost,
 		agentConfigVSphereVM,
 	)
