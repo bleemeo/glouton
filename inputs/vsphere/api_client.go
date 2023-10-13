@@ -20,7 +20,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/vmware/govmomi/vim25/types"
 	"glouton/config"
 	"glouton/facts"
 	"net/url"
@@ -32,6 +31,7 @@ import (
 	"github.com/vmware/govmomi/object"
 	"github.com/vmware/govmomi/vim25/mo"
 	"github.com/vmware/govmomi/vim25/soap"
+	"github.com/vmware/govmomi/vim25/types"
 )
 
 //nolint:gochecknoglobals

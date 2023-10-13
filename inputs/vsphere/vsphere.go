@@ -348,7 +348,7 @@ func (vSphere *vSphere) gatherModifier(mfs []*dto.MetricFamily, gatherErr error)
 
 		if deviceStatus == types.StatusOk || deviceStatus == types.StatusCritical && vSphere.lastStatuses[moid] != types.StatusCritical {
 			vSphereDeviceStatus := &dto.MetricFamily{
-				Name: proto.String("vsphere_device_status"),
+				Name: proto.String("agent_status"),
 				Type: dto.MetricType_GAUGE.Enum(),
 				Metric: []*dto.Metric{
 					{
@@ -417,7 +417,7 @@ func (vSphere *vSphere) statusesWhenNoDevices(gatherErr error) []*dto.MetricFami
 		}
 
 		statusMetric := &dto.MetricFamily{
-			Name: proto.String("vsphere_device_status"),
+			Name: proto.String("agent_status"),
 			Type: dto.MetricType_GAUGE.Enum(),
 			Metric: []*dto.Metric{
 				{

@@ -291,7 +291,6 @@ var (
 		`{__name__="sensor_temperature", sensor=~"coretemp_package_id_.*"}`,
 
 		// vSphere
-		"vsphere_device_status", // TODO: rename to agent_status
 		"vsphere_vm_cpu_latency_perc",
 
 		"vms_running_count",
