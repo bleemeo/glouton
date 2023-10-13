@@ -215,7 +215,8 @@ func TestVCenterDescribing(t *testing.T) {
 			},
 			powerState: "poweredOn",
 		},
-		UUID: "cd0681bf-2f18-5c00-9b9b-8197c0095348",
+		UUID:          "cd0681bf-2f18-5c00-9b9b-8197c0095348",
+		inventoryPath: "/DC0/vm/DC0_C0_RP0_VM0",
 	}
 	if diff := cmp.Diff(expectedVM, *vm, cmp.AllowUnexported(VirtualMachine{}, device{})); diff != "" {
 		t.Fatalf("Unexpected VM description (-want +got):\n%s", diff)
@@ -272,6 +273,7 @@ func TestESXIDescribing(t *testing.T) { //nolint:maintidx
 						},
 						powerState: "poweredOff",
 					},
+					inventoryPath: "/ha-datacenter/vm/vmfs/volumes/64d4b065-879077de-6dfb-5254000ed68e/vcenter/vcenter.vmx",
 				},
 				{
 					device: device{
@@ -291,7 +293,8 @@ func TestESXIDescribing(t *testing.T) { //nolint:maintidx
 						},
 						powerState: "poweredOff",
 					},
-					UUID: "564d8859-9d98-c670-0aca-009149c3a8af",
+					UUID:          "564d8859-9d98-c670-0aca-009149c3a8af",
+					inventoryPath: "/ha-datacenter/vm/v-center",
 				},
 				{
 					device: device{
@@ -311,7 +314,8 @@ func TestESXIDescribing(t *testing.T) { //nolint:maintidx
 						},
 						powerState: "poweredOff",
 					},
-					UUID: "564de3ab-988d-b51c-a5cb-5e1af6f5f313",
+					UUID:          "564de3ab-988d-b51c-a5cb-5e1af6f5f313",
+					inventoryPath: "/ha-datacenter/vm/lunar",
 				},
 			},
 		},
@@ -371,7 +375,8 @@ func TestESXIDescribing(t *testing.T) { //nolint:maintidx
 						},
 						powerState: "poweredOn",
 					},
-					UUID: "cd0681bf-2f18-5c00-9b9b-8197c0095348",
+					UUID:          "cd0681bf-2f18-5c00-9b9b-8197c0095348",
+					inventoryPath: "/DC0/vm/DC0_C0_RP0_VM0",
 				},
 			},
 		},
@@ -399,7 +404,8 @@ func TestESXIDescribing(t *testing.T) { //nolint:maintidx
 						},
 						powerState: "poweredOn",
 					},
-					UUID: "d72b7d0e-95e3-4bd1-b788-18da89624595",
+					UUID:          "d72b7d0e-95e3-4bd1-b788-18da89624595",
+					inventoryPath: "/DC0/vm/app-haproxy2",
 				},
 			},
 		},

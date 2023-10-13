@@ -55,12 +55,16 @@ func NewManager() *Manager {
 	return &Manager{}
 }
 
+// LastChange returns the last time a change occurred in the vSphere device list,
+// and actualize it if it has not been for 2 minutes.
 func (m *Manager) LastChange(ctx context.Context) time.Time {
 	m.Devices(ctx, 2*time.Minute)
 
 	return m.lastChange
 }
 
+// EndpointsInError returns the addresses of all the endpoints
+// which couldn't be created or have errors.
 func (m *Manager) EndpointsInError() map[string]struct{} {
 	endpoints := make(map[string]struct{})
 
@@ -256,7 +260,8 @@ func (host *HostSystem) Kind() string {
 
 type VirtualMachine struct {
 	device
-	UUID string
+	UUID          string
+	inventoryPath string
 }
 
 func (vm *VirtualMachine) Kind() string {

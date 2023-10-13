@@ -19,6 +19,7 @@ package vsphere
 import (
 	"context"
 	"errors"
+	"glouton/config"
 	"glouton/inputs"
 	"glouton/inputs/internal"
 	"glouton/logger"
@@ -38,6 +39,7 @@ import (
 const endpointCreationRetryDelay = 5 * time.Minute
 
 type vSphereGatherer struct {
+	cfg config.VSphere
 	// Storing the endpoint's URL, just in case the endpoint can't be
 	// created at startup and will need to be instanced later.
 	soapURL             *url.URL
@@ -82,11 +84,8 @@ func (gatherer *vSphereGatherer) GatherWithState(ctx context.Context, state regi
 		acc.Accumulator = &errAcc
 
 		err := gatherer.endpoint.Collect(ctx, acc)
-		allErrs := errors.Join(append(errAcc.errs, err)...)
-
-		if allErrs != nil {
-			logger.Printf("Collected some error(s) for vSphere %q:\n%s", gatherer.soapURL.Host, allErrs)
-		}
+		errAddMetrics := gatherer.collectAdditionalMetrics(ctx, acc)
+		allErrs := errors.Join(append(errAcc.errs, err, errAddMetrics)...)
 
 		gatherer.lastPoints = gatherer.buffer.Points()
 		gatherer.lastErr = allErrs
@@ -95,6 +94,34 @@ func (gatherer *vSphereGatherer) GatherWithState(ctx context.Context, state regi
 	mfs := model.MetricPointsToFamilies(gatherer.lastPoints)
 
 	return mfs, gatherer.lastErr
+}
+
+func (gatherer *vSphereGatherer) collectAdditionalMetrics(ctx context.Context, acc telegraf.Accumulator) error {
+	finder, err := newDeviceFinder(ctx, gatherer.cfg)
+	if err != nil {
+		return err
+	}
+
+	clusters, hosts, vms, err := findDevices(ctx, finder)
+	if err != nil {
+		return err
+	}
+
+	if len(hosts) == 0 && len(vms) == 0 {
+		return nil
+	}
+
+	// For each host, we have a list of vm states (running/stopped)
+	vmStatesPerHost := make(map[string][]bool, len(hosts))
+
+	err = additionalVMMetrics(ctx, vms, acc, vmStatesPerHost, objectNames(hosts))
+	if err != nil {
+		return err
+	}
+
+	err = additionalHostMetrics(ctx, hosts, acc, vmStatesPerHost, objectNames(clusters))
+
+	return err
 }
 
 func (gatherer *vSphereGatherer) stop() {
@@ -137,8 +164,8 @@ func (gatherer *vSphereGatherer) createEndpoint(ctx context.Context, input *vsph
 
 // newGatherer creates a vSphere gatherer from the given endpoint.
 // It will return an error if the endpoint URL is not valid.
-func newGatherer(endpointURL string, input *vsphere.VSphere, acc *internal.Accumulator) (*vSphereGatherer, error) {
-	soapURL, err := soap.ParseURL(endpointURL)
+func newGatherer(cfg config.VSphere, input *vsphere.VSphere, acc *internal.Accumulator) (*vSphereGatherer, error) {
+	soapURL, err := soap.ParseURL(cfg.URL)
 	if err != nil {
 		return nil, err
 	}
@@ -146,6 +173,7 @@ func newGatherer(endpointURL string, input *vsphere.VSphere, acc *internal.Accum
 	ctx, cancel := context.WithCancel(context.Background())
 
 	gatherer := &vSphereGatherer{
+		cfg:     cfg,
 		soapURL: soapURL,
 		acc:     acc,
 		buffer:  new(registry.PointBuffer),
@@ -157,8 +185,11 @@ func newGatherer(endpointURL string, input *vsphere.VSphere, acc *internal.Accum
 	return gatherer, nil
 }
 
+// errorAccumulator embeds a real accumulator while collecting
+// all the errors given to it, instead of logging them.
 type errorAccumulator struct {
 	telegraf.Accumulator
+
 	errs []error
 }
 

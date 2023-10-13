@@ -268,7 +268,7 @@ func (vSphere *vSphere) makeGatherer() (prometheus.Gatherer, registry.Registrati
 		RenameGlobal:     vSphere.renameGlobal,
 	}
 
-	gatherer, err := newGatherer(vSphere.opts.URL, vsphereInput, acc)
+	gatherer, err := newGatherer(vSphere.opts, vsphereInput, acc)
 	if err != nil {
 		return nil, registry.RegistrationOption{}, err
 	}
@@ -322,7 +322,7 @@ func (vSphere *vSphere) gatherModifier(mfs []*dto.MetricFamily, gatherErr error)
 			deviceMsg = "vSphere is unreachable"
 
 			if vSphereMsg != "" {
-				// This telegraf error isn't really problematic.
+				// This telegraf/govmomi error isn't really problematic.
 				if !strings.Contains(vSphereMsg, "A specified parameter was not correct: querySpec[0]") {
 					deviceMsg += ": " + vSphereMsg
 				}
@@ -450,10 +450,12 @@ func (vSphere *vSphere) renameGlobal(gatherContext internal.GatherContext) (resu
 	tags[types.LabelMetaVSphere] = vSphere.host
 	tags[types.LabelMetaVSphereMOID] = tags["moid"]
 
+	delete(tags, "guest")
+	delete(tags, "guesthostname")
 	delete(tags, "moid")
 	delete(tags, "rpname")
-	delete(tags, "guest")
 	delete(tags, "source")
+	delete(tags, "uuid")
 	delete(tags, "vcenter")
 
 	if tags["interface"] == "*" { // Get rid of this "useless" label
@@ -502,7 +504,7 @@ func renameMetrics(currentContext internal.GatherContext, metricName string) (ne
 			newMetricName = strings.Replace(newMetricName, "totalCapacity", "total", 1)
 		}
 	case "disk", "datastore":
-		if newMetricName != "used" {
+		if newMetricName == "read" || newMetricName == "write" {
 			newMeasurement = "io"
 			newMetricName = strings.Replace(newMetricName, "read", "read_bytes", 1)
 			newMetricName = strings.Replace(newMetricName, "write", "write_bytes", 1)

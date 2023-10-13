@@ -20,11 +20,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/vmware/govmomi/vim25/types"
 	"glouton/config"
 	"glouton/facts"
 	"net/url"
 	"strings"
 
+	"github.com/influxdata/telegraf"
 	"github.com/vmware/govmomi"
 	"github.com/vmware/govmomi/find"
 	"github.com/vmware/govmomi/object"
@@ -254,8 +256,14 @@ func describeVM(ctx context.Context, vm *object.VirtualMachine, vmProps mo.Virtu
 		vmFacts["vsphere_resource_pool"] = vmProps.ResourcePool.Value
 	}
 
+	disks := make(map[string]float64)
+
 	if vmProps.Guest != nil {
 		vmFacts["primary_address"] = vmProps.Guest.IpAddress
+
+		for _, disk := range vmProps.Guest.Disk {
+			disks[disk.DiskPath] = (float64(disk.FreeSpace) * 100) / float64(disk.Capacity) // Percentage of disk used
+		}
 	}
 
 	switch {
@@ -278,8 +286,9 @@ func describeVM(ctx context.Context, vm *object.VirtualMachine, vmProps mo.Virtu
 	dev.facts["fqdn"] = dev.FQDN()
 
 	return &VirtualMachine{
-		device: dev,
-		UUID:   vm.UUID(ctx),
+		device:        dev,
+		UUID:          vm.UUID(ctx),
+		inventoryPath: vm.InventoryPath,
 	}
 }
 
@@ -291,4 +300,111 @@ func fallback(v string, otherwise string) string {
 	}
 
 	return otherwise
+}
+
+type commonObject interface {
+	Reference() types.ManagedObjectReference
+	Name() string
+}
+
+// objectNames returns a map moid -> name of the given objects.
+func objectNames[T commonObject](objects []T) map[string]string {
+	names := make(map[string]string, len(objects))
+
+	for _, obj := range objects {
+		names[obj.Reference().Value] = obj.Name()
+	}
+
+	return names
+}
+
+//nolint:gochecknoglobals
+var (
+	additionalVMProps   = []string{"runtime.host", "runtime.powerState", "guest.disk"}
+	additionalHostProps = []string{"parent"}
+)
+
+func additionalVMMetrics(ctx context.Context, vms []*object.VirtualMachine, acc telegraf.Accumulator, vmStatePerHost map[string][]bool, hostNames map[string]string) error {
+	for _, vm := range vms {
+		var vmProps mo.VirtualMachine
+
+		err := vm.Properties(ctx, vm.Reference(), additionalVMProps, &vmProps)
+		if err != nil {
+			return err
+		}
+
+		var hostname string
+
+		if vmProps.Runtime.Host != nil {
+			host := vmProps.Runtime.Host.Value
+			vmState := vmProps.Runtime.PowerState == "poweredOn" // true for running, false for stopped
+
+			if states, ok := vmStatePerHost[host]; ok {
+				vmStatePerHost[host] = append(states, vmState)
+			} else {
+				vmStatePerHost[host] = []bool{vmState}
+			}
+
+			hostname = hostNames[host]
+		}
+
+		if vmProps.Guest != nil {
+			for _, disk := range vmProps.Guest.Disk {
+				usage := (float64(disk.FreeSpace) * 100) / float64(disk.Capacity) // Percentage of disk used
+
+				tags := map[string]string{
+					"clustername": "", // TODO
+					"dcname":      "", // TODO
+					"esxhostname": hostname,
+					"item":        disk.DiskPath,
+					"moid":        vm.Reference().Value,
+					"vmname":      vm.Name(),
+				}
+
+				acc.AddFields("vsphere_vm_disk", map[string]any{"used_perc": usage}, tags)
+			}
+		}
+	}
+
+	return nil
+}
+
+func additionalHostMetrics(ctx context.Context, hosts []*object.HostSystem, acc telegraf.Accumulator, vmStatesPerHost map[string][]bool, clusterNames map[string]string) error {
+	for _, host := range hosts {
+		moid := host.Reference().Value
+		if vmStates, ok := vmStatesPerHost[moid]; ok {
+			var running, stopped int
+
+			for _, isRunning := range vmStates {
+				if isRunning {
+					running++
+				} else {
+					stopped++
+				}
+			}
+
+			fields := map[string]any{
+				"running_count": running,
+				"stopped_count": stopped,
+			}
+
+			var hostProps mo.HostSystem
+
+			err := host.Properties(ctx, host.Reference(), additionalHostProps, &hostProps)
+			if err != nil {
+				return err
+			}
+
+			tags := map[string]string{
+				"clustername": clusterNames[hostProps.Parent.Value],
+				"dcname":      "", // TODO
+				"esxhostname": host.Name(),
+				"moid":        moid,
+			}
+
+			acc.AddFields("vms", fields, tags)
+		}
+	}
+
+	return nil
 }
