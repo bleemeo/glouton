@@ -129,7 +129,6 @@ func describeCluster(cluster *object.ClusterComputeResource, clusterProps mo.Clu
 	clusterFacts := make(map[string]string)
 
 	if resourceSummary := clusterProps.Summary.GetComputeResourceSummary(); resourceSummary != nil {
-		clusterFacts["hosts"] = str(resourceSummary.NumHosts)
 		clusterFacts["cpu_cores"] = str(resourceSummary.NumCpuCores)
 	}
 
@@ -256,14 +255,8 @@ func describeVM(ctx context.Context, vm *object.VirtualMachine, vmProps mo.Virtu
 		vmFacts["vsphere_resource_pool"] = vmProps.ResourcePool.Value
 	}
 
-	disks := make(map[string]float64)
-
 	if vmProps.Guest != nil {
 		vmFacts["primary_address"] = vmProps.Guest.IpAddress
-
-		for _, disk := range vmProps.Guest.Disk {
-			disks[disk.DiskPath] = (float64(disk.FreeSpace) * 100) / float64(disk.Capacity) // Percentage of disk used
-		}
 	}
 
 	switch {

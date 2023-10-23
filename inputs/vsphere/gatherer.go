@@ -125,12 +125,12 @@ func (gatherer *vSphereGatherer) collectAdditionalMetrics(ctx context.Context, a
 }
 
 func (gatherer *vSphereGatherer) stop() {
+	gatherer.l.Lock()
+	defer gatherer.l.Unlock()
+
 	gatherer.cancel()
 
 	if gatherer.endpoint != nil {
-		gatherer.l.Lock()
-		defer gatherer.l.Unlock()
-
 		gatherer.endpoint.Close()
 	} else if gatherer.endpointCreateTimer != nil {
 		// Case where the endpoint still has not been created.
@@ -150,11 +150,12 @@ func (gatherer *vSphereGatherer) createEndpoint(ctx context.Context, input *vsph
 		return
 	}
 
-	// As this input is not running, no concurrent access should occur with this field.
-	gatherer.lastErr = err
-
 	logger.V(1).Printf("Failed to create vSphere endpoint for %q: %v -- will retry in %s.", gatherer.soapURL.Host, err, endpointCreationRetryDelay)
 
+	gatherer.l.Lock()
+	defer gatherer.l.Unlock()
+
+	gatherer.lastErr = err
 	gatherer.endpointCreateTimer = time.AfterFunc(endpointCreationRetryDelay, func() {
 		if ctx.Err() == nil {
 			gatherer.createEndpoint(ctx, input)

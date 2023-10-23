@@ -138,7 +138,6 @@ func TestVCenterDescribing(t *testing.T) {
 			facts: map[string]string{
 				"cpu_cores": "2",
 				"fqdn":      "DC0_C0",
-				"hosts":     "1",
 			},
 		},
 		datastores: []string{"datastore-25"},
@@ -330,7 +329,6 @@ func TestESXIDescribing(t *testing.T) { //nolint:maintidx
 						facts: map[string]string{
 							"cpu_cores": "2",
 							"fqdn":      "DC0_C0",
-							"hosts":     "1",
 						},
 					},
 					datastores: []string{"datastore-25"},

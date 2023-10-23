@@ -58,7 +58,8 @@ type vSphere struct {
 	lastStatuses     map[string]types.Status
 	lastErrorMessage string
 	consecutiveErr   int
-	errLock          sync.Mutex
+
+	l sync.Mutex
 }
 
 func newVSphere(host string, cfg config.VSphere, state bleemeoTypes.State) *vSphere {
@@ -72,9 +73,10 @@ func newVSphere(host string, cfg config.VSphere, state bleemeoTypes.State) *vSph
 	}
 }
 
+// Takes the lock
 func (vSphere *vSphere) setErr(err error) {
-	vSphere.errLock.Lock()
-	defer vSphere.errLock.Unlock()
+	vSphere.l.Lock()
+	defer vSphere.l.Unlock()
 
 	if err == nil {
 		vSphere.lastErrorMessage = ""
@@ -86,9 +88,6 @@ func (vSphere *vSphere) setErr(err error) {
 }
 
 func (vSphere *vSphere) getStatus() (types.Status, string) {
-	vSphere.errLock.Lock()
-	defer vSphere.errLock.Unlock()
-
 	if vSphere.consecutiveErr >= vCenterConsecutiveErrorsStatusThreshold {
 		return types.StatusCritical, vSphere.lastErrorMessage
 	}
@@ -155,7 +154,10 @@ func (vSphere *vSphere) describeClusters(ctx context.Context, rawClusters []*obj
 
 		devCluster := describeCluster(cluster, clusterProps)
 		deviceChan <- devCluster
+
+		vSphere.l.Lock()
 		vSphere.deviceCache[moid] = devCluster
+		vSphere.l.Unlock()
 	}
 }
 
@@ -178,7 +180,10 @@ func (vSphere *vSphere) describeHosts(ctx context.Context, rawHosts []*object.Ho
 
 		devHost := describeHost(host, hostProps)
 		deviceChan <- devHost
+
+		vSphere.l.Lock()
 		vSphere.deviceCache[moid] = devHost
+		vSphere.l.Unlock()
 	}
 }
 
@@ -201,7 +206,10 @@ func (vSphere *vSphere) describeVMs(ctx context.Context, rawVMs []*object.Virtua
 
 		devVM := describeVM(ctx, vm, vmProps)
 		deviceChan <- devVM
+
+		vSphere.l.Lock()
 		vSphere.deviceCache[moid] = devVM
+		vSphere.l.Unlock()
 	}
 }
 
@@ -220,7 +228,7 @@ func (vSphere *vSphere) makeGatherer() (prometheus.Gatherer, registry.Registrati
 	vsphereInput.Password = vSphere.opts.Password
 
 	vsphereInput.VMInstances = vSphere.opts.MonitorVMs
-	// vsphereInput.HostInstances is true by default
+	vsphereInput.HostInstances = true
 	vsphereInput.DatastoreInstances = true
 	vsphereInput.ClusterInstances = true
 
@@ -287,6 +295,9 @@ func (vSphere *vSphere) makeGatherer() (prometheus.Gatherer, registry.Registrati
 }
 
 func (vSphere *vSphere) gatherModifier(mfs []*dto.MetricFamily, gatherErr error) []*dto.MetricFamily {
+	vSphere.l.Lock()
+	defer vSphere.l.Unlock()
+
 	if len(vSphere.deviceCache) == 0 && (gatherErr != nil || vSphere.consecutiveErr > 0) {
 		return append(mfs, vSphere.statusesWhenNoDevices(gatherErr)...)
 	}
@@ -294,8 +305,8 @@ func (vSphere *vSphere) gatherModifier(mfs []*dto.MetricFamily, gatherErr error)
 	seenDevices := make(map[string]bool)
 
 	for _, mf := range mfs {
-		for _, metric := range mf.Metric {
-			for _, label := range metric.Label {
+		for _, metric := range mf.GetMetric() {
+			for _, label := range metric.GetLabel() {
 				if label.GetName() == types.LabelMetaVSphereMOID {
 					seenDevices[label.GetValue()] = true
 
@@ -346,6 +357,7 @@ func (vSphere *vSphere) gatherModifier(mfs []*dto.MetricFamily, gatherErr error)
 			}
 		}
 
+		// We only want to publish a critical status when it's new, not to store points for all offline devices.
 		if deviceStatus == types.StatusOk || deviceStatus == types.StatusCritical && vSphere.lastStatuses[moid] != types.StatusCritical {
 			vSphereDeviceStatus := &dto.MetricFamily{
 				Name: proto.String("agent_status"),
@@ -472,7 +484,7 @@ func renameMetrics(currentContext internal.GatherContext, metricName string) (ne
 	newMetricName = strings.TrimSuffix(metricName, "_average")
 	newMetricName = strings.TrimSuffix(newMetricName, "_latest")
 
-	// We remove the prefix "vsphere_(vm|host)_", except for "vsphere_vm_cpu_latency"
+	// We remove the prefix "vsphere_(vm|host|datastore|cluster)_", except for "vsphere_vm_cpu_latency"
 	if newMetricName != "latency" {
 		newMeasurement = strings.TrimPrefix(newMeasurement, "vsphere_")
 		newMeasurement = strings.TrimPrefix(newMeasurement, "vm_")

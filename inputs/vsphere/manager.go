@@ -44,11 +44,11 @@ const (
 type Manager struct {
 	vSpheres map[string]*vSphere
 
-	l                 sync.Mutex
 	lastDevices       []bleemeoTypes.VSphereDevice
 	lastDevicesUpdate time.Time
+	lastChange        time.Time
 
-	lastChange time.Time
+	l sync.Mutex
 }
 
 func NewManager() *Manager {
@@ -66,6 +66,9 @@ func (m *Manager) LastChange(ctx context.Context) time.Time {
 // EndpointsInError returns the addresses of all the endpoints
 // which couldn't be created or have errors.
 func (m *Manager) EndpointsInError() map[string]struct{} {
+	m.l.Lock()
+	defer m.l.Unlock()
+
 	endpoints := make(map[string]struct{})
 
 	for _, vSphere := range m.vSpheres {
@@ -78,6 +81,9 @@ func (m *Manager) EndpointsInError() map[string]struct{} {
 }
 
 func (m *Manager) RegisterGatherers(vSphereCfgs []config.VSphere, registerGatherer func(opt registry.RegistrationOption, gatherer prometheus.Gatherer) (int, error), state bleemeoTypes.State) {
+	m.l.Lock()
+	defer m.l.Unlock()
+
 	m.vSpheres = make(map[string]*vSphere)
 
 	for _, vSphereCfg := range vSphereCfgs {
@@ -227,8 +233,6 @@ func (dev *device) Name() string {
 	return dev.name
 }
 
-// Facts returns the facts of this device, but ignores the given maxAge
-// since the facts had been gathered at the same as the device itself.
 func (dev *device) Facts() map[string]string {
 	return dev.facts
 }
@@ -285,6 +289,10 @@ func (m *Manager) DiagnosticVSphere(ctx context.Context, archive types.ArchiveWr
 	if err != nil {
 		logger.V(1).Println("Failed to diagnostic vSphere associations:", err)
 	}
+
+	// Locking after the call to m.Devices()
+	m.l.Lock()
+	defer m.l.Unlock()
 
 	type device struct {
 		Source                 string            `json:"source"`
@@ -347,5 +355,8 @@ func (m *Manager) DiagnosticVSphere(ctx context.Context, archive types.ArchiveWr
 		Devices:   finalDevices,
 	}
 
-	return json.NewEncoder(file).Encode(diagnosticContent)
+	jsonEnc := json.NewEncoder(file)
+	jsonEnc.SetIndent("", "  ")
+
+	return jsonEnc.Encode(diagnosticContent)
 }
