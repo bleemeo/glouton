@@ -110,6 +110,7 @@ type AccountConfig struct {
 	LiveProcess           bool   `json:"live_process"`
 	DockerIntegration     bool   `json:"docker_integration"`
 	SNMPIntegration       bool   `json:"snmp_integration"`
+	VSphereIntegration    bool   `json:"vsphere_integration"`
 	Suspended             bool   `json:"suspended"`
 }
 

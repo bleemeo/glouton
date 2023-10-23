@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"testing"
 
@@ -338,16 +339,20 @@ func TestGetByPrefix(t *testing.T) {
 		},
 	}
 
-	for _, tc := range testCases { //nolint:wsl
-		// No parallel runs, as the state is locked during each interaction.
+	for i, testCase := range testCases {
+		tc := testCase
 
-		result, err := state.GetByPrefix(tc.prefix, tc.resultType)
-		if err != nil {
-			t.Fatal(err)
-		}
+		t.Run(fmt.Sprint("n°", i+1), func(t *testing.T) {
+			t.Parallel()
 
-		if diff := cmp.Diff(tc.expected, result); diff != "" {
-			t.Errorf("Unexpected result of GetByPrefix(%q, %T):\n%v", tc.prefix, tc.resultType, diff)
-		}
+			result, err := state.GetByPrefix(tc.prefix, tc.resultType)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if diff := cmp.Diff(tc.expected, result); diff != "" {
+				t.Errorf("Unexpected result of GetByPrefix(%q, %T): (-want +got)\n%v", tc.prefix, tc.resultType, diff)
+			}
+		})
 	}
 }

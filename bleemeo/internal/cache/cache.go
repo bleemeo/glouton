@@ -235,6 +235,7 @@ func (c *Cache) AccountConfigsByUUID() map[string]bleemeoTypes.GloutonAccountCon
 			LiveProcess:           accountConfig.LiveProcess,
 			DockerIntegration:     accountConfig.DockerIntegration,
 			SNMPIntegration:       accountConfig.SNMPIntegration,
+			VSphereIntegration:    accountConfig.VSphereIntegration,
 			Suspended:             accountConfig.Suspended,
 			AgentConfigByName:     make(map[string]bleemeoTypes.GloutonAgentConfig),
 			AgentConfigByID:       make(map[string]bleemeoTypes.GloutonAgentConfig),
@@ -258,6 +259,14 @@ func (c *Cache) AccountConfigsByUUID() map[string]bleemeoTypes.GloutonAccountCon
 
 		if _, ok := config.AgentConfigByName[bleemeoTypes.AgentTypeSNMP]; !ok {
 			config.SNMPIntegration = false
+		}
+
+		_, isVM := config.AgentConfigByName[bleemeoTypes.AgentTypeVSphereVM]
+		_, isHost := config.AgentConfigByName[bleemeoTypes.AgentTypeVSphereHost]
+		_, isCluster := config.AgentConfigByName[bleemeoTypes.AgentTypeVSphereCluster]
+
+		if !(isVM || isHost || isCluster) {
+			config.VSphereIntegration = false
 		}
 
 		result[accountConfig.ID] = config

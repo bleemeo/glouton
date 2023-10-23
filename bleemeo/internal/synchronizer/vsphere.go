@@ -35,6 +35,11 @@ const vSphereAgentsPurgeMinInterval = 2 * time.Minute
 func (s *Synchronizer) syncVSphere(ctx context.Context, fullSync bool, onlyEssential bool) (updateThresholds bool, err error) {
 	_ = fullSync
 
+	cfg, ok := s.option.Cache.CurrentAccountConfig()
+	if !ok || !cfg.VSphereIntegration {
+		return false, nil
+	}
+
 	if onlyEssential {
 		// no essential vSphere, skip registering.
 		return false, nil
@@ -75,7 +80,7 @@ func (s *Synchronizer) FindVSphereAgent(ctx context.Context, device types.VSpher
 	// for each vSphere device we will try to match any vSphere agent that:
 	// has the same agent type, don't have current association and has the same FQDN.
 	// If the cache has been lost, the agent can be retrieved this way.
-	// Otherwise, if no agent is found, one will be registered by s.VSphereRegisterAndUpdate().
+	// Otherwise, if no agent is found, errNotExist is returned.
 
 	devices := s.option.VSphereDevices(ctx, time.Hour)
 	associatedID := make(map[string]bool, len(devices))
@@ -121,7 +126,10 @@ func (s *Synchronizer) VSphereRegisterAndUpdate(localDevices []types.VSphereDevi
 	}
 	seenDeviceAgents := make(map[string]string, len(localDevices))
 
-	var newAgents []types.Agent //nolint: prealloc
+	var ( //nolint: prealloc
+		newAgents []types.Agent
+		errs      []error
+	)
 
 	for _, device := range localDevices {
 		var agentTypeID string
@@ -168,7 +176,9 @@ func (s *Synchronizer) VSphereRegisterAndUpdate(localDevices []types.VSphereDevi
 
 		registeredAgent, err := s.remoteRegisterVSphereDevice(params, payload)
 		if err != nil {
-			return err
+			errs = append(errs, err)
+
+			continue
 		}
 
 		newAgents = append(newAgents, registeredAgent)
@@ -199,7 +209,7 @@ func (s *Synchronizer) VSphereRegisterAndUpdate(localDevices []types.VSphereDevi
 		s.lastVSphereAgentsPurge = s.now()
 	}
 
-	return nil
+	return errors.Join(errs...)
 }
 
 func (s *Synchronizer) remoteRegisterVSphereDevice(params map[string]string, payload payloadAgent) (types.Agent, error) {
