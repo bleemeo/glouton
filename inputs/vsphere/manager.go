@@ -290,10 +290,6 @@ func (m *Manager) DiagnosticVSphere(ctx context.Context, archive types.ArchiveWr
 		logger.V(1).Println("Failed to diagnostic vSphere associations:", err)
 	}
 
-	// Locking after the call to m.Devices()
-	m.l.Lock()
-	defer m.l.Unlock()
-
 	type device struct {
 		Source                 string            `json:"source"`
 		Kind                   string            `json:"kind"`
@@ -333,6 +329,8 @@ func (m *Manager) DiagnosticVSphere(ctx context.Context, archive types.ArchiveWr
 		return finalDevices[i].Source < finalDevices[j].Source
 	})
 
+	m.l.Lock()
+
 	endpointStatuses := make(map[string]string, len(m.vSpheres))
 
 	for host, vSphere := range m.vSpheres {
@@ -340,12 +338,14 @@ func (m *Manager) DiagnosticVSphere(ctx context.Context, archive types.ArchiveWr
 
 		if vSphere.lastErrorMessage != "" {
 			status = vSphere.lastErrorMessage
-		} else if vSphere.gatherer.endpoint == nil {
+		} else if vSphere.gatherer.lastErr != nil {
 			status = vSphere.gatherer.lastErr.Error()
 		}
 
 		endpointStatuses[host] = status
 	}
+
+	m.l.Unlock()
 
 	diagnosticContent := struct {
 		Endpoints map[string]string `json:"endpoints"`

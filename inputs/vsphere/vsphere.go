@@ -73,7 +73,7 @@ func newVSphere(host string, cfg config.VSphere, state bleemeoTypes.State) *vSph
 	}
 }
 
-// Takes the lock
+// Takes the lock.
 func (vSphere *vSphere) setErr(err error) {
 	vSphere.l.Lock()
 	defer vSphere.l.Unlock()
@@ -105,12 +105,12 @@ func (vSphere *vSphere) String() string {
 }
 
 func (vSphere *vSphere) devices(ctx context.Context, deviceChan chan<- bleemeoTypes.VSphereDevice) {
-	soapCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
+	findCtx, cancelFind := context.WithTimeout(ctx, 5*time.Second)
+	defer cancelFind()
 
 	logger.Printf("Discovering devices for vSphere %q ...", vSphere.host) // TODO: remove
 
-	finder, err := newDeviceFinder(soapCtx, vSphere.opts)
+	finder, err := newDeviceFinder(findCtx, vSphere.opts)
 	if err != nil {
 		vSphere.setErr(err)
 		logger.V(1).Printf("Can't create vSphere client for %q: %v", vSphere.host, err) // TODO: V(2) ?
@@ -118,7 +118,7 @@ func (vSphere *vSphere) devices(ctx context.Context, deviceChan chan<- bleemeoTy
 		return
 	}
 
-	clusters, hosts, vms, err := findDevices(soapCtx, finder)
+	clusters, hosts, vms, err := findDevices(findCtx, finder)
 	if err != nil {
 		vSphere.setErr(err)
 		logger.V(1).Printf("Can't find devices on vSphere %q: %v", vSphere.host, err)
@@ -128,14 +128,32 @@ func (vSphere *vSphere) devices(ctx context.Context, deviceChan chan<- bleemeoTy
 
 	logger.Printf("Found %d hosts and %d vms.", len(hosts), len(vms))
 
-	vSphere.describeClusters(soapCtx, clusters, deviceChan)
-	vSphere.describeHosts(soapCtx, hosts, deviceChan)
-	vSphere.describeVMs(soapCtx, vms, deviceChan)
+	describeCtx, cancelDescribe := context.WithTimeout(ctx, 20*time.Second)
+	defer cancelDescribe()
+
+	var devs []bleemeoTypes.VSphereDevice
+
+	devs = append(devs, vSphere.describeClusters(describeCtx, clusters)...)
+	devs = append(devs, vSphere.describeHosts(describeCtx, hosts)...)
+	devs = append(devs, vSphere.describeVMs(describeCtx, vms)...)
 
 	vSphere.setErr(nil)
+
+	vSphere.l.Lock()
+	defer vSphere.l.Unlock()
+
+	vSphere.deviceCache = make(map[string]bleemeoTypes.VSphereDevice, len(devs))
+
+	for _, dev := range devs {
+		vSphere.deviceCache[dev.MOID()] = dev
+
+		deviceChan <- dev
+	}
 }
 
-func (vSphere *vSphere) describeClusters(ctx context.Context, rawClusters []*object.ClusterComputeResource, deviceChan chan<- bleemeoTypes.VSphereDevice) {
+func (vSphere *vSphere) describeClusters(ctx context.Context, rawClusters []*object.ClusterComputeResource) []bleemeoTypes.VSphereDevice {
+	clusters := make([]bleemeoTypes.VSphereDevice, 0, len(rawClusters))
+
 	for _, cluster := range rawClusters {
 		var clusterProps mo.ClusterComputeResource
 
@@ -152,16 +170,15 @@ func (vSphere *vSphere) describeClusters(ctx context.Context, rawClusters []*obj
 			continue
 		}
 
-		devCluster := describeCluster(cluster, clusterProps)
-		deviceChan <- devCluster
-
-		vSphere.l.Lock()
-		vSphere.deviceCache[moid] = devCluster
-		vSphere.l.Unlock()
+		clusters = append(clusters, describeCluster(cluster, clusterProps))
 	}
+
+	return clusters
 }
 
-func (vSphere *vSphere) describeHosts(ctx context.Context, rawHosts []*object.HostSystem, deviceChan chan<- bleemeoTypes.VSphereDevice) {
+func (vSphere *vSphere) describeHosts(ctx context.Context, rawHosts []*object.HostSystem) []bleemeoTypes.VSphereDevice {
+	hosts := make([]bleemeoTypes.VSphereDevice, 0, len(rawHosts))
+
 	for _, host := range rawHosts {
 		var hostProps mo.HostSystem
 
@@ -178,16 +195,15 @@ func (vSphere *vSphere) describeHosts(ctx context.Context, rawHosts []*object.Ho
 			continue
 		}
 
-		devHost := describeHost(host, hostProps)
-		deviceChan <- devHost
-
-		vSphere.l.Lock()
-		vSphere.deviceCache[moid] = devHost
-		vSphere.l.Unlock()
+		hosts = append(hosts, describeHost(host, hostProps))
 	}
+
+	return hosts
 }
 
-func (vSphere *vSphere) describeVMs(ctx context.Context, rawVMs []*object.VirtualMachine, deviceChan chan<- bleemeoTypes.VSphereDevice) {
+func (vSphere *vSphere) describeVMs(ctx context.Context, rawVMs []*object.VirtualMachine) []bleemeoTypes.VSphereDevice {
+	vms := make([]bleemeoTypes.VSphereDevice, 0, len(rawVMs))
+
 	for _, vm := range rawVMs {
 		var vmProps mo.VirtualMachine
 
@@ -195,7 +211,7 @@ func (vSphere *vSphere) describeVMs(ctx context.Context, rawVMs []*object.Virtua
 
 		err := vm.Properties(ctx, vm.Reference(), relevantVMProperties, &vmProps)
 		if err != nil {
-			logger.Printf("Failed to fetch VM props:", err) // TODO: remove
+			logger.Printf("Failed to fetch VM props: %v", err) // TODO: remove
 
 			if dev, ok := vSphere.deviceCache[moid]; ok {
 				dev.(*VirtualMachine).err = err //nolint:forcetypeassert
@@ -204,13 +220,10 @@ func (vSphere *vSphere) describeVMs(ctx context.Context, rawVMs []*object.Virtua
 			continue
 		}
 
-		devVM := describeVM(ctx, vm, vmProps)
-		deviceChan <- devVM
-
-		vSphere.l.Lock()
-		vSphere.deviceCache[moid] = devVM
-		vSphere.l.Unlock()
+		vms = append(vms, describeVM(ctx, vm, vmProps))
 	}
+
+	return vms
 }
 
 func (vSphere *vSphere) makeGatherer() (prometheus.Gatherer, registry.RegistrationOption, error) {
@@ -277,7 +290,7 @@ func (vSphere *vSphere) makeGatherer() (prometheus.Gatherer, registry.Registrati
 		RenameGlobal:     vSphere.renameGlobal,
 	}
 
-	gatherer, err := newGatherer(vSphere.opts, vsphereInput, acc)
+	gatherer, err := newGatherer(&vSphere.opts, vsphereInput, acc)
 	if err != nil {
 		return nil, registry.RegistrationOption{}, err
 	}

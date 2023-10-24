@@ -115,19 +115,15 @@ func TestVCenterDescribing(t *testing.T) {
 	}
 
 	dummyVSphere := newVSphere(vSphereCfg.URL, vSphereCfg, nil)
-	deviceChan := make(chan bleemeoTypes.VSphereDevice, 1) // 1 of buffer because we only have 1 cluster, then 1 host, then 1 VM.
 
-	dummyVSphere.describeClusters(ctx, clusters, deviceChan)
-
-	if len(deviceChan) != 1 {
-		t.Fatalf("Expected 1 cluster to be described, but got %d.", len(deviceChan))
+	devices := dummyVSphere.describeClusters(ctx, clusters)
+	if len(devices) != 1 {
+		t.Fatalf("Expected 1 cluster to be described, but got %d.", len(devices))
 	}
 
-	devCluster := <-deviceChan
-
-	cluster, ok := devCluster.(*Cluster)
+	cluster, ok := devices[0].(*Cluster)
 	if !ok {
-		t.Fatalf("Expected device to be a Cluster, but is %T.", devCluster)
+		t.Fatalf("Expected device to be a Cluster, but is %T.", devices[0])
 	}
 
 	expectedCluster := Cluster{
@@ -146,17 +142,14 @@ func TestVCenterDescribing(t *testing.T) {
 		t.Fatalf("Unexpected host description (-want +got):\n%s", diff)
 	}
 
-	dummyVSphere.describeHosts(ctx, hosts, deviceChan)
-
-	if len(deviceChan) != 1 {
-		t.Fatalf("Expected 1 host to be described, but got %d.", len(deviceChan))
+	devices = dummyVSphere.describeHosts(ctx, hosts)
+	if len(devices) != 1 {
+		t.Fatalf("Expected 1 host to be described, but got %d.", len(devices))
 	}
 
-	devHost := <-deviceChan
-
-	host, ok := devHost.(*HostSystem)
+	host, ok := devices[0].(*HostSystem)
 	if !ok {
-		t.Fatalf("Expected device to be a HostSystem, but is %T.", devHost)
+		t.Fatalf("Expected device to be a HostSystem, but is %T.", devices[0])
 	}
 
 	expectedHost := HostSystem{
@@ -184,17 +177,14 @@ func TestVCenterDescribing(t *testing.T) {
 		t.Fatalf("Unexpected host description (-want +got):\n%s", diff)
 	}
 
-	dummyVSphere.describeVMs(ctx, vms, deviceChan)
-
-	if len(deviceChan) != 1 {
-		t.Fatalf("Expected 1 VM to be described, but got %d.", len(deviceChan))
+	devices = dummyVSphere.describeVMs(ctx, vms)
+	if len(devices) != 1 {
+		t.Fatalf("Expected 1 VM to be described, but got %d.", len(devices))
 	}
 
-	devVM := <-deviceChan
-
-	vm, ok := devVM.(*VirtualMachine)
+	vm, ok := devices[0].(*VirtualMachine)
 	if !ok {
-		t.Fatalf("Expected device to be a VirtualMachine, but is %T.", devVM)
+		t.Fatalf("Expected device to be a VirtualMachine, but is %T.", devices)
 	}
 
 	expectedVM := VirtualMachine{
