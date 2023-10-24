@@ -237,10 +237,10 @@ func (vSphere *vSphere) makeGatherer() (prometheus.Gatherer, registry.Registrati
 		"cpu.latency.average",
 		"mem.usage.average",
 		"mem.swapped.average",
-		"disk.read.average",
-		"disk.write.average",
 		"net.transmitted.average",
 		"net.received.average",
+		"virtualDisk.read.average",
+		"virtualDisk.write.average",
 	}
 	vsphereInput.HostMetricInclude = []string{
 		"cpu.usage.average",
@@ -248,8 +248,8 @@ func (vSphere *vSphere) makeGatherer() (prometheus.Gatherer, registry.Registrati
 		"mem.usage.average",
 		"mem.swapin.average",
 		"mem.swapout.average",
-		"disk.read.average",
-		"disk.write.average",
+		"datastore.read.average",
+		"datastore.write.average",
 		"net.transmitted.average",
 		"net.received.average",
 	}
@@ -257,6 +257,7 @@ func (vSphere *vSphere) makeGatherer() (prometheus.Gatherer, registry.Registrati
 		"datastore.write.average",
 		"datastore.read.average",
 		"disk.used.latest",
+		"disk.capacity.latest",
 	}
 	vsphereInput.ClusterMetricInclude = []string{
 		"cpu.usage.average",
@@ -484,7 +485,7 @@ func renameMetrics(currentContext internal.GatherContext, metricName string) (ne
 	newMetricName = strings.TrimSuffix(metricName, "_average")
 	newMetricName = strings.TrimSuffix(newMetricName, "_latest")
 
-	// We remove the prefix "vsphere_(vm|host|datastore|cluster)_", except for "vsphere_vm_cpu_latency"
+	// We remove the prefix "vsphere_(vm|host|datastore|cluster)_", except for "vsphere_vm_cpu latency"
 	if newMetricName != "latency" {
 		newMeasurement = strings.TrimPrefix(newMeasurement, "vsphere_")
 		newMeasurement = strings.TrimPrefix(newMeasurement, "vm_")
@@ -515,11 +516,13 @@ func renameMetrics(currentContext internal.GatherContext, metricName string) (ne
 			newMetricName = strings.Replace(newMetricName, "usage", "used_perc", 1)
 			newMetricName = strings.Replace(newMetricName, "totalCapacity", "total", 1)
 		}
-	case "disk", "datastore":
+	case "disk", "virtualDisk", "datastore":
 		if newMetricName == "read" || newMetricName == "write" {
 			newMeasurement = "io"
 			newMetricName = strings.Replace(newMetricName, "read", "read_bytes", 1)
 			newMetricName = strings.Replace(newMetricName, "write", "write_bytes", 1)
+		} else if newMetricName == "capacity" {
+			newMetricName = "total"
 		}
 	case "net":
 		newMetricName = strings.Replace(newMetricName, "received", "bits_recv", 1)
@@ -566,7 +569,8 @@ func transformMetrics(currentContext internal.GatherContext, fields map[string]f
 			"read_average":  8000, // KB/s to b/s
 		},
 		"vsphere_datastore_disk": {
-			"used_latest": 1000, // KB to B
+			"used_latest":     1000, // KB to B
+			"capacity_latest": 1000, // KB to B
 		},
 		// Cluster metrics
 		"vsphere_cluster_mem": {
