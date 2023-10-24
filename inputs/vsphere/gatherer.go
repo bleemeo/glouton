@@ -39,7 +39,7 @@ import (
 const endpointCreationRetryDelay = 5 * time.Minute
 
 type vSphereGatherer struct {
-	cfg config.VSphere
+	cfg *config.VSphere
 	// Storing the endpoint's URL, just in case the endpoint can't be
 	// created at startup and will need to be instanced later.
 	soapURL             *url.URL
@@ -97,7 +97,7 @@ func (gatherer *vSphereGatherer) GatherWithState(ctx context.Context, state regi
 }
 
 func (gatherer *vSphereGatherer) collectAdditionalMetrics(ctx context.Context, acc telegraf.Accumulator) error {
-	finder, err := newDeviceFinder(ctx, gatherer.cfg)
+	finder, err := newDeviceFinder(ctx, *gatherer.cfg)
 	if err != nil {
 		return err
 	}
@@ -139,21 +139,52 @@ func (gatherer *vSphereGatherer) stop() {
 }
 
 func (gatherer *vSphereGatherer) createEndpoint(ctx context.Context, input *vsphere.VSphere) {
-	endpoint, err := vsphere.NewEndpoint(ctx, input, gatherer.soapURL, input.Log)
-	if err == nil {
-		gatherer.l.Lock()
-		gatherer.endpoint = endpoint
-		gatherer.l.Unlock()
+	gatherer.l.Lock()
+	defer gatherer.l.Unlock()
 
+	newEP := func(epURL *url.URL) error {
+		epCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		defer cancel()
+
+		ep, err := vsphere.NewEndpoint(epCtx, input, epURL, input.Log)
+		if err == nil {
+			gatherer.endpoint = ep
+		}
+
+		return err
+	}
+
+	err := newEP(gatherer.soapURL)
+	if err == nil {
 		logger.Printf("vSphere endpoint for %q successfully created", gatherer.soapURL.Host) // TODO: remove
 
 		return
 	}
 
-	logger.V(1).Printf("Failed to create vSphere endpoint for %q: %v -- will retry in %s.", gatherer.soapURL.Host, err, endpointCreationRetryDelay)
+	var urlErr *url.Error
+	if errors.As(err, &urlErr) {
+		if urlErr.Unwrap().Error() == "400 Bad Request" {
+			if gatherer.soapURL.Path == "/" {
+				urlWithSlashSDK := *gatherer.soapURL
+				urlWithSlashSDK.Path = "/sdk"
 
-	gatherer.l.Lock()
-	defer gatherer.l.Unlock()
+				err = newEP(&urlWithSlashSDK)
+				if err == nil {
+					logger.V(0).Printf(
+						"vSphere endpoint for %q created, but on /sdk instead of %s",
+						gatherer.soapURL.Host, gatherer.soapURL.Path,
+					) // TODO: V(2)
+
+					gatherer.soapURL = &urlWithSlashSDK
+					gatherer.cfg.URL = urlWithSlashSDK.String()
+
+					return
+				}
+			}
+		}
+	}
+
+	logger.V(1).Printf("Failed to create vSphere endpoint for %q: %v -- will retry in %s.", gatherer.soapURL.Host, err, endpointCreationRetryDelay)
 
 	gatherer.lastErr = err
 	gatherer.endpointCreateTimer = time.AfterFunc(endpointCreationRetryDelay, func() {
@@ -165,7 +196,7 @@ func (gatherer *vSphereGatherer) createEndpoint(ctx context.Context, input *vsph
 
 // newGatherer creates a vSphere gatherer from the given endpoint.
 // It will return an error if the endpoint URL is not valid.
-func newGatherer(cfg config.VSphere, input *vsphere.VSphere, acc *internal.Accumulator) (*vSphereGatherer, error) {
+func newGatherer(cfg *config.VSphere, input *vsphere.VSphere, acc *internal.Accumulator) (*vSphereGatherer, error) {
 	soapURL, err := soap.ParseURL(cfg.URL)
 	if err != nil {
 		return nil, err
