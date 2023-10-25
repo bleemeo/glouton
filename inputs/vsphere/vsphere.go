@@ -335,13 +335,9 @@ func (vSphere *vSphere) makeGatherer() (prometheus.Gatherer, registry.Registrati
 	return gatherer, opt, nil
 }
 
-func (vSphere *vSphere) gatherModifier(mfs []*dto.MetricFamily, gatherErr error) []*dto.MetricFamily {
+func (vSphere *vSphere) gatherModifier(mfs []*dto.MetricFamily, _ error) []*dto.MetricFamily {
 	vSphere.l.Lock()
 	defer vSphere.l.Unlock()
-
-	if len(vSphere.deviceCache) == 0 && (gatherErr != nil || vSphere.consecutiveErr > 0) {
-		return append(mfs, vSphere.statusesWhenNoDevices(gatherErr)...)
-	}
 
 	seenDevices := make(map[string]bool)
 
@@ -355,6 +351,8 @@ func (vSphere *vSphere) gatherModifier(mfs []*dto.MetricFamily, gatherErr error)
 			for _, label := range metric.GetLabel() {
 				if label.GetName() == types.LabelMetaVSphereMOID {
 					seenDevices[label.GetValue()] = true
+
+					break
 				}
 			}
 
@@ -431,76 +429,6 @@ func (vSphere *vSphere) gatherModifier(mfs []*dto.MetricFamily, gatherErr error)
 			mfs = append(mfs, vSphereDeviceStatus)
 		}
 
-		vSphere.lastStatuses[moid] = deviceStatus
-	}
-
-	return mfs
-}
-
-func (vSphere *vSphere) statusesWhenNoDevices(gatherErr error) []*dto.MetricFamily {
-	logger.Printf("No devices on %s", vSphere.String()) // TODO: remove
-
-	associations, err := vSphere.state.GetByPrefix("bleemeo:vsphere:", map[string]string{})
-	if err != nil {
-		logger.Printf("Can't give status for %s: can't lookup state: %v", err) // TODO: V(2)
-
-		return nil
-	}
-
-	deviceStatus := types.StatusCritical
-	deviceMsg := "vSphere is unreachable: "
-
-	if gatherErr != nil {
-		deviceMsg += gatherErr.Error()
-	} else {
-		_, vSphereMessage := vSphere.getStatus()
-		deviceMsg += vSphereMessage
-	}
-
-	var mfs []*dto.MetricFamily //nolint:prealloc
-
-	for _, value := range associations {
-		asso, ok := value.(map[string]string)
-		if !ok {
-			continue
-		}
-
-		if asso["Source"] != vSphere.host {
-			continue
-		}
-
-		moid, ok := asso["MOID"]
-		if !ok {
-			continue
-		}
-
-		if vSphere.lastStatuses[moid] == types.StatusCritical {
-			// We already sent this status
-			continue
-		}
-
-		statusMetric := &dto.MetricFamily{
-			Name: proto.String("agent_status"),
-			Type: dto.MetricType_GAUGE.Enum(),
-			Metric: []*dto.Metric{
-				{
-					Label: []*dto.LabelPair{
-						{Name: proto.String(types.LabelMetaCurrentStatus), Value: proto.String(deviceStatus.String())},
-						{Name: proto.String(types.LabelMetaCurrentDescription), Value: proto.String(deviceMsg)},
-						{Name: proto.String(types.LabelMetaVSphere), Value: proto.String(vSphere.host)},
-						{Name: proto.String(types.LabelMetaVSphereMOID), Value: proto.String(moid)},
-						// Instead of the giving the MOID, which would be processed by RelabelHook(),
-						// we directly set the agent ID (which is actually easier to have from here).
-						// {Name: proto.String(types.LabelMetaBleemeoTargetAgentUUID), Value: proto.String(agentID)},
-					},
-					Gauge: &dto.Gauge{
-						Value: proto.Float64(float64(deviceStatus.NagiosCode())),
-					},
-				},
-			},
-		}
-
-		mfs = append(mfs, statusMetric)
 		vSphere.lastStatuses[moid] = deviceStatus
 	}
 

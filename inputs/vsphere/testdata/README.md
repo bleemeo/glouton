@@ -14,7 +14,7 @@
     - Folder-*
     - PropertyCollector
     - SessionManager
-    - Datacenter
+    - Datacenter-*
     - ComputeResource-*
     - HostSystem-*
     - VirtualMachine-*
