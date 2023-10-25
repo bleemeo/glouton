@@ -382,10 +382,7 @@ func (vSphere *vSphere) gatherModifier(mfs []*dto.MetricFamily, _ error) []*dto.
 			deviceMsg = "vSphere is unreachable"
 
 			if vSphereMsg != "" {
-				// This telegraf/govmomi error isn't really problematic.
-				if !strings.Contains(vSphereMsg, "A specified parameter was not correct: querySpec[0]") {
-					deviceMsg += ": " + vSphereMsg
-				}
+				deviceMsg += ": " + vSphereMsg
 			}
 		case !dev.IsPoweredOn():
 			deviceStatus = types.StatusCritical

@@ -27,6 +27,7 @@ import (
 	"glouton/prometheus/registry"
 	"glouton/types"
 	"net/url"
+	"strings"
 	"sync"
 	"time"
 
@@ -85,7 +86,7 @@ func (gatherer *vSphereGatherer) GatherWithState(ctx context.Context, state regi
 
 		err := gatherer.endpoint.Collect(ctx, acc)
 		errAddMetrics := gatherer.collectAdditionalMetrics(ctx, acc)
-		allErrs := errors.Join(append(errAcc.errs, err, errAddMetrics)...)
+		allErrs := errors.Join(filterErrors(append(errAcc.errs, err, errAddMetrics))...)
 
 		gatherer.lastPoints = gatherer.buffer.Points()
 		gatherer.lastErr = allErrs
@@ -94,6 +95,21 @@ func (gatherer *vSphereGatherer) GatherWithState(ctx context.Context, state regi
 	mfs := model.MetricPointsToFamilies(gatherer.lastPoints)
 
 	return mfs, gatherer.lastErr
+}
+
+func filterErrors(errs []error) []error {
+	idx := 0
+
+	for i := 0; i < len(errs); i++ {
+		if errs[i] == nil || strings.Contains(errs[i].Error(), "A specified parameter was not correct: querySpec[0]") {
+			errs = append(errs[:i], errs[i+1:]...) // remove this error from the list
+			i--
+		} else {
+			idx++
+		}
+	}
+
+	return errs[:idx]
 }
 
 func (gatherer *vSphereGatherer) collectAdditionalMetrics(ctx context.Context, acc telegraf.Accumulator) error {
