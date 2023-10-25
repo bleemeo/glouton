@@ -40,12 +40,12 @@ func setupVSphereAPITest(t *testing.T, dirName string) (vSphereCfg config.VSpher
 
 	err := model.Create()
 	if err != nil {
-		t.Fatal(err)
+		t.Fatal("Model creation:", err)
 	}
 
 	err = model.Load("testdata/" + dirName)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatal("Model loading:", err)
 	}
 
 	model.Service.TLS = new(tls.Config)
@@ -85,7 +85,7 @@ func TestVCenterDescribing(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	clusters, hosts, vms, err := findDevices(ctx, finder)
+	clusters, _, hosts, vms, err := findDevices(ctx, finder, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -171,13 +171,14 @@ func TestVCenterDescribing(t *testing.T) {
 				"vsphere_host_version":    "6.5.0",
 				"vsphere_vmotion_enabled": "false",
 			},
+			powerState: "poweredOn",
 		},
 	}
 	if diff := cmp.Diff(expectedHost, *host, cmp.AllowUnexported(HostSystem{}, device{})); diff != "" {
 		t.Fatalf("Unexpected host description (-want +got):\n%s", diff)
 	}
 
-	devices = dummyVSphere.describeVMs(ctx, vms)
+	devices, vmLabelsMetadata := dummyVSphere.describeVMs(ctx, vms)
 	if len(devices) != 1 {
 		t.Fatalf("Expected 1 VM to be described, but got %d.", len(devices))
 	}
@@ -209,6 +210,14 @@ func TestVCenterDescribing(t *testing.T) {
 	}
 	if diff := cmp.Diff(expectedVM, *vm, cmp.AllowUnexported(VirtualMachine{}, device{})); diff != "" {
 		t.Fatalf("Unexpected VM description (-want +got):\n%s", diff)
+	}
+
+	expectedLabelsMetadata := labelsMetadata{
+		disksPerVM:         map[string]map[string]string{"vm-28": {"scsi0:0": "disk-202-0"}},
+		netInterfacesPerVM: map[string]map[string]string{"vm-28": {"4000": "ethernet-0"}},
+	}
+	if diff := cmp.Diff(expectedLabelsMetadata, vmLabelsMetadata, cmp.AllowUnexported(labelsMetadata{})); diff != "" {
+		t.Fatalf("Unexpected labels metadata (-want +got):\n%s", diff)
 	}
 }
 
@@ -266,33 +275,12 @@ func TestESXIDescribing(t *testing.T) { //nolint:maintidx
 				},
 				{
 					device: device{
-						moid: "4",
-						name: "v-center",
-						facts: map[string]string{
-							"cpu_cores":             "2",
-							"fqdn":                  "v-center",
-							"hostname":              "4",
-							"memory":                "14.00 GB",
-							"os_pretty_name":        "Other 3.x or later Linux (64-bit)",
-							"vsphere_datastore":     "datastore1",
-							"vsphere_host":          "ha-host",
-							"vsphere_resource_pool": "ha-root-pool",
-							"vsphere_vm_name":       "v-center",
-							"vsphere_vm_version":    "vmx-10",
-						},
-						powerState: "poweredOff",
-					},
-					UUID:          "564d8859-9d98-c670-0aca-009149c3a8af",
-					inventoryPath: "/ha-datacenter/vm/v-center",
-				},
-				{
-					device: device{
-						moid: "7",
+						moid: "8",
 						name: "lunar",
 						facts: map[string]string{
 							"cpu_cores":             "2",
 							"fqdn":                  "lunar",
-							"hostname":              "7",
+							"hostname":              "8",
 							"memory":                "1.00 GB",
 							"os_pretty_name":        "Ubuntu Linux (64-bit)",
 							"vsphere_datastore":     "datastore1",
@@ -305,6 +293,28 @@ func TestESXIDescribing(t *testing.T) { //nolint:maintidx
 					},
 					UUID:          "564de3ab-988d-b51c-a5cb-5e1af6f5f313",
 					inventoryPath: "/ha-datacenter/vm/lunar",
+				},
+				{
+					device: device{
+						moid: "10",
+						name: "alp1",
+						facts: map[string]string{
+							"cpu_cores":             "1",
+							"fqdn":                  "alp1",
+							"hostname":              "alpine",
+							"memory":                "512.00 MB",
+							"os_pretty_name":        "Other (32-bit)",
+							"primary_address":       "192.168.121.117",
+							"vsphere_datastore":     "datastore1",
+							"vsphere_host":          "ha-host",
+							"vsphere_resource_pool": "ha-root-pool",
+							"vsphere_vm_name":       "alp1",
+							"vsphere_vm_version":    "vmx-14",
+						},
+						powerState: "poweredOn",
+					},
+					UUID:          "564de822-678c-5efd-f01e-bca0da637105",
+					inventoryPath: "/ha-datacenter/vm/alp1",
 				},
 			},
 		},
@@ -343,6 +353,7 @@ func TestESXIDescribing(t *testing.T) { //nolint:maintidx
 							"vsphere_host_version":    "6.5.0",
 							"vsphere_vmotion_enabled": "false",
 						},
+						powerState: "poweredOn",
 					},
 				},
 			},

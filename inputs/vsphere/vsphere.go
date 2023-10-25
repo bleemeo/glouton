@@ -45,6 +45,15 @@ const (
 	noMetricsStatusThreshold                = 5
 )
 
+// A common label value.
+const instanceTotal = "instance-total"
+
+type labelsMetadata struct {
+	datastorePerLUN    map[string]string
+	disksPerVM         map[string]map[string]string
+	netInterfacesPerVM map[string]map[string]string
+}
+
 type vSphere struct {
 	host string
 	opts config.VSphere
@@ -54,6 +63,7 @@ type vSphere struct {
 	gatherer *vSphereGatherer
 
 	deviceCache      map[string]bleemeoTypes.VSphereDevice
+	labelsMetadata   labelsMetadata
 	noMetricsSince   map[string]int
 	lastStatuses     map[string]types.Status
 	lastErrorMessage string
@@ -64,10 +74,15 @@ type vSphere struct {
 
 func newVSphere(host string, cfg config.VSphere, state bleemeoTypes.State) *vSphere {
 	return &vSphere{
-		host:           host,
-		opts:           cfg,
-		state:          state,
-		deviceCache:    make(map[string]bleemeoTypes.VSphereDevice),
+		host:        host,
+		opts:        cfg,
+		state:       state,
+		deviceCache: make(map[string]bleemeoTypes.VSphereDevice),
+		labelsMetadata: labelsMetadata{
+			datastorePerLUN:    make(map[string]string),
+			disksPerVM:         make(map[string]map[string]string),
+			netInterfacesPerVM: make(map[string]map[string]string),
+		},
 		noMetricsSince: make(map[string]int),
 		lastStatuses:   make(map[string]types.Status),
 	}
@@ -118,7 +133,7 @@ func (vSphere *vSphere) devices(ctx context.Context, deviceChan chan<- bleemeoTy
 		return
 	}
 
-	clusters, hosts, vms, err := findDevices(findCtx, finder)
+	clusters, datastores, hosts, vms, err := findDevices(findCtx, finder, true)
 	if err != nil {
 		vSphere.setErr(err)
 		logger.V(1).Printf("Can't find devices on vSphere %q: %v", vSphere.host, err)
@@ -135,13 +150,18 @@ func (vSphere *vSphere) devices(ctx context.Context, deviceChan chan<- bleemeoTy
 
 	devs = append(devs, vSphere.describeClusters(describeCtx, clusters)...)
 	devs = append(devs, vSphere.describeHosts(describeCtx, hosts)...)
-	devs = append(devs, vSphere.describeVMs(describeCtx, vms)...)
+	describedVMs, labelsMetadata := vSphere.describeVMs(describeCtx, vms)
+	devs = append(devs, describedVMs...)
+
+	dsPerLUN := getDatastorePerLUN(describeCtx, datastores)
 
 	vSphere.setErr(nil)
 
 	vSphere.l.Lock()
 	defer vSphere.l.Unlock()
 
+	labelsMetadata.datastorePerLUN = dsPerLUN
+	vSphere.labelsMetadata = labelsMetadata
 	vSphere.deviceCache = make(map[string]bleemeoTypes.VSphereDevice, len(devs))
 
 	for _, dev := range devs {
@@ -201,8 +221,12 @@ func (vSphere *vSphere) describeHosts(ctx context.Context, rawHosts []*object.Ho
 	return hosts
 }
 
-func (vSphere *vSphere) describeVMs(ctx context.Context, rawVMs []*object.VirtualMachine) []bleemeoTypes.VSphereDevice {
+func (vSphere *vSphere) describeVMs(ctx context.Context, rawVMs []*object.VirtualMachine) ([]bleemeoTypes.VSphereDevice, labelsMetadata) {
 	vms := make([]bleemeoTypes.VSphereDevice, 0, len(rawVMs))
+	labelsMetadata := labelsMetadata{
+		disksPerVM:         make(map[string]map[string]string),
+		netInterfacesPerVM: make(map[string]map[string]string),
+	}
 
 	for _, vm := range rawVMs {
 		var vmProps mo.VirtualMachine
@@ -220,10 +244,13 @@ func (vSphere *vSphere) describeVMs(ctx context.Context, rawVMs []*object.Virtua
 			continue
 		}
 
-		vms = append(vms, describeVM(ctx, vm, vmProps))
+		vm, disks, netInterfaces := describeVM(ctx, vm, vmProps)
+		vms = append(vms, vm)
+		labelsMetadata.disksPerVM[moid] = disks
+		labelsMetadata.netInterfacesPerVM[moid] = netInterfaces
 	}
 
-	return vms
+	return vms, labelsMetadata
 }
 
 func (vSphere *vSphere) makeGatherer() (prometheus.Gatherer, registry.RegistrationOption, error) {
@@ -319,13 +346,23 @@ func (vSphere *vSphere) gatherModifier(mfs []*dto.MetricFamily, gatherErr error)
 	seenDevices := make(map[string]bool)
 
 	for _, mf := range mfs {
-		for _, metric := range mf.GetMetric() {
+		if mf == nil {
+			continue
+		}
+
+		for m := 0; m < len(mf.Metric); m++ { //nolint:protogetter
+			metric := mf.Metric[m] //nolint:protogetter
 			for _, label := range metric.GetLabel() {
 				if label.GetName() == types.LabelMetaVSphereMOID {
 					seenDevices[label.GetValue()] = true
-
-					break
 				}
+			}
+
+			if shouldBeKept, labels := vSphere.modifyLabels(metric.GetLabel()); shouldBeKept {
+				metric.Label = labels
+			} else {
+				mf.Metric = append(mf.Metric[:m], mf.Metric[m+1:]...) //nolint:protogetter
+				m--
 			}
 		}
 	}
@@ -371,7 +408,7 @@ func (vSphere *vSphere) gatherModifier(mfs []*dto.MetricFamily, gatherErr error)
 			}
 		}
 
-		// We only want to publish a critical status when it's new, not to store points for all offline devices.
+		// We only want to publish a critical status when it is new, not to store points for all offline devices.
 		if deviceStatus == types.StatusOk || deviceStatus == types.StatusCritical && vSphere.lastStatuses[moid] != types.StatusCritical {
 			vSphereDeviceStatus := &dto.MetricFamily{
 				Name: proto.String("agent_status"),
@@ -470,6 +507,114 @@ func (vSphere *vSphere) statusesWhenNoDevices(gatherErr error) []*dto.MetricFami
 	return mfs
 }
 
+// modifyLabels applies some modifications to the given labels,
+// and returns whether the related metric should be kept or not.
+//
+//nolint:nakedret
+func (vSphere *vSphere) modifyLabels(labelPairs []*dto.LabelPair) (shouldBeKept bool, finalLabels []*dto.LabelPair) {
+	labels := make(map[string]*dto.LabelPair, len(labelPairs))
+	// Converting label pairs to a map, which is easier to edit
+	for _, label := range labelPairs {
+		if label != nil {
+			labels[label.GetName()] = label
+		}
+	}
+
+	// Once we did everything we wanted if the labels, we rebuild the list
+	defer func() {
+		if shouldBeKept {
+			for _, label := range labels {
+				finalLabels = append(finalLabels, label)
+			}
+		}
+	}()
+
+	shouldBeKept = true // By default, we keep the metric
+
+	moid := labels[types.LabelMetaVSphereMOID].GetValue()
+
+	isVM := labels["vmname"].GetValue() != ""
+	isHost := !isVM && labels["esxhostname"].GetValue() != ""
+
+	switch {
+	case isVM:
+		if diskLabel, ok := labels["disk"]; ok {
+			if diskLabel.GetValue() == instanceTotal {
+				shouldBeKept = false
+
+				break
+			}
+
+			if vmDisks, ok := vSphere.labelsMetadata.disksPerVM[moid]; ok {
+				starLabelReplacer(diskLabel, vmDisks) // TODO: remove
+
+				if diskName, ok := vmDisks[diskLabel.GetValue()]; ok {
+					labels["item"] = &dto.LabelPair{Name: ptr("item"), Value: &diskName}
+				} else {
+					shouldBeKept = false
+
+					break
+				}
+			}
+
+			delete(labels, "disk")
+		} else if interfaceLabel, ok := labels["interface"]; ok {
+			if interfaceLabel.GetValue() == instanceTotal {
+				shouldBeKept = false
+
+				break
+			}
+
+			if vmInterfaces, ok := vSphere.labelsMetadata.netInterfacesPerVM[moid]; ok {
+				starLabelReplacer(interfaceLabel, vmInterfaces) // TODO: remove
+
+				if interfaceName, ok := vmInterfaces[interfaceLabel.GetValue()]; ok {
+					labels["item"] = &dto.LabelPair{Name: ptr("item"), Value: &interfaceName}
+				} else {
+					shouldBeKept = false
+
+					break
+				}
+			}
+
+			delete(labels, "interface")
+		}
+	case isHost:
+		if lunLabel, ok := labels["lun"]; ok {
+			starLabelReplacer(lunLabel, vSphere.labelsMetadata.datastorePerLUN) // TODO: remove
+
+			if datastore, ok := vSphere.labelsMetadata.datastorePerLUN[lunLabel.GetValue()]; ok {
+				labels["item"] = &dto.LabelPair{Name: ptr("item"), Value: &datastore}
+			} else {
+				shouldBeKept = false
+
+				break
+			}
+
+			delete(labels, "lun")
+		}
+	}
+
+	return
+}
+
+func ptr[T any](e T) *T { return &e }
+
+// starLabelReplacer handles the special case where the label comes from a vcsim.
+// It sets its value to the first key found in the given map,
+// so its belonging metric is not ignored.
+func starLabelReplacer(labelPair *dto.LabelPair, m map[string]string) {
+	if labelPair.GetValue() != "*" {
+		return
+	}
+
+	for k := range m {
+		labelPair.Value = &k //nolint:exportloopref
+
+		break
+	}
+}
+
 func (vSphere *vSphere) renameGlobal(gatherContext internal.GatherContext) (result internal.GatherContext, drop bool) {
 	tags := maps.Clone(gatherContext.Tags) // Prevents labels from being unexpectedly removed
 
@@ -484,8 +629,19 @@ func (vSphere *vSphere) renameGlobal(gatherContext internal.GatherContext) (resu
 	delete(tags, "uuid")
 	delete(tags, "vcenter")
 
-	if tags["interface"] == "*" { // Get rid of this "useless" label
-		delete(tags, "interface")
+	if tags["cpu"] == "*" { // Special case (vcsim)
+		tags["cpu"] = instanceTotal
+	}
+
+	// Only keep the total of CPUs
+	if value, ok := tags["cpu"]; ok && value != instanceTotal {
+		return gatherContext, true
+	}
+
+	if value, ok := tags["dsname"]; ok {
+		delete(tags, "dsname")
+
+		tags["item"] = value
 	}
 
 	gatherContext.Tags = tags

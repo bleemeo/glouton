@@ -8,8 +8,9 @@
     <name>childEntity</name>
     <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="ArrayOfManagedObjectReference">
       <ManagedObjectReference type="VirtualMachine">1</ManagedObjectReference>
-      <ManagedObjectReference type="VirtualMachine">4</ManagedObjectReference>
-      <ManagedObjectReference type="VirtualMachine">7</ManagedObjectReference>
+      <ManagedObjectReference type="VirtualMachine">10</ManagedObjectReference>
+      <ManagedObjectReference type="VirtualMachine">8</ManagedObjectReference>
+      <ManagedObjectReference type="VirtualMachine">9</ManagedObjectReference>
     </val>
   </propSet>
   <propSet>

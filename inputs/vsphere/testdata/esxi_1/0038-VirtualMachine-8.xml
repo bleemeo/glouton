@@ -1,5 +1,5 @@
 <ObjectContent>
-  <obj type="VirtualMachine">7</obj>
+  <obj type="VirtualMachine">8</obj>
   <propSet>
     <name>availableField</name>
     <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="ArrayOfCustomFieldDef"></val>
@@ -60,14 +60,14 @@
   <propSet>
     <name>config</name>
     <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="VirtualMachineConfigInfo">
-      <changeVersion>2023-09-20T08:58:22.064339Z</changeVersion>
+      <changeVersion>2023-10-25T07:12:38.332796Z</changeVersion>
       <modified>1970-01-01T00:00:00Z</modified>
       <name>lunar</name>
       <guestFullName>Ubuntu Linux (64-bit)</guestFullName>
       <version>vmx-10</version>
       <uuid>564de3ab-988d-b51c-a5cb-5e1af6f5f313</uuid>
-      <createDate>2023-09-15T10:03:20.337025Z</createDate>
-      <instanceUuid>52874138-b33e-cb2f-446f-8ff016061518</instanceUuid>
+      <createDate>2023-10-11T15:04:54.695763Z</createDate>
+      <instanceUuid>5265f9fd-82f7-3d50-7994-c79f470f8b91</instanceUuid>
       <npivTemporaryDisabled>true</npivTemporaryDisabled>
       <locationId>564de3ab-988d-b51c-a5cb-5e1af6f5f313</locationId>
       <template>false</template>
@@ -80,8 +80,7 @@
         <logDirectory>[datastore1] lunar</logDirectory>
       </files>
       <tools>
-        <toolsVersion>12325</toolsVersion>
-        <toolsInstallType>guestToolsTypeOpenVMTools</toolsInstallType>
+        <toolsVersion>2147483647</toolsVersion>
         <afterPowerOn>true</afterPowerOn>
         <afterResume>true</afterResume>
         <beforeGuestStandby>true</beforeGuestStandby>
@@ -221,7 +220,7 @@
           </deviceInfo>
           <controllerKey>100</controllerKey>
           <unitNumber>17</unitNumber>
-          <id>-151653613</id>
+          <id>-1</id>
           <allowUnrestrictedCommunication>false</allowUnrestrictedCommunication>
           <filterEnable>false</filterEnable>
         </device>
@@ -231,9 +230,6 @@
             <label>SCSI controller 0</label>
             <summary>VMware paravirtual SCSI</summary>
           </deviceInfo>
-          <slotInfo XMLSchema-instance:type="VirtualDevicePciBusSlotInfo">
-            <pciSlotNumber>160</pciSlotNumber>
-          </slotInfo>
           <controllerKey>100</controllerKey>
           <unitNumber>3</unitNumber>
           <busNumber>0</busNumber>
@@ -276,8 +272,8 @@
             <writeThrough>false</writeThrough>
             <thinProvisioned>true</thinProvisioned>
             <eagerlyScrub>false</eagerlyScrub>
-            <uuid>6000C298-4edf-7556-aa23-0c8516e031e0</uuid>
-            <contentId>c838d0a02497ff2fa5e1fd78ad11e344</contentId>
+            <uuid>6000C293-58c3-b0b6-14eb-9654faaa3626</uuid>
+            <contentId>ffde3c77b2eabf181b7195babc680fbd</contentId>
             <digestEnabled>false</digestEnabled>
             <sharing>sharingNone</sharing>
           </backing>
@@ -297,7 +293,7 @@
             </shares>
             <reservation>0</reservation>
           </storageIOAllocation>
-          <diskObjectId>7-2000</diskObjectId>
+          <diskObjectId>8-2000</diskObjectId>
           <nativeUnmanagedLinkedClone>false</nativeUnmanagedLinkedClone>
         </device>
         <device XMLSchema-instance:type="VirtualFloppy">
@@ -337,13 +333,9 @@
             <connected>false</connected>
             <status>untried</status>
           </connectable>
-          <slotInfo XMLSchema-instance:type="VirtualDevicePciBusSlotInfo">
-            <pciSlotNumber>192</pciSlotNumber>
-          </slotInfo>
           <controllerKey>100</controllerKey>
           <unitNumber>7</unitNumber>
           <addressType>generated</addressType>
-          <macAddress>00:0c:29:f5:f3:13</macAddress>
           <wakeOnLanEnabled>true</wakeOnLanEnabled>
           <resourceAllocation>
             <reservation>0</reservation>
@@ -468,80 +460,8 @@
         <value XMLSchema-instance:type="xsd:string">TRUE</value>
       </extraConfig>
       <extraConfig XMLSchema-instance:type="OptionValue">
-        <key>vmxstats.filename</key>
-        <value XMLSchema-instance:type="xsd:string">lunar.scoreboard</value>
-      </extraConfig>
-      <extraConfig XMLSchema-instance:type="OptionValue">
-        <key>numa.autosize.cookie</key>
-        <value XMLSchema-instance:type="xsd:string">20001</value>
-      </extraConfig>
-      <extraConfig XMLSchema-instance:type="OptionValue">
-        <key>numa.autosize.vcpu.maxPerVirtualNode</key>
-        <value XMLSchema-instance:type="xsd:string">2</value>
-      </extraConfig>
-      <extraConfig XMLSchema-instance:type="OptionValue">
-        <key>sched.swap.derivedName</key>
-        <value XMLSchema-instance:type="xsd:string">/vmfs/volumes/64d4b065-879077de-6dfb-5254000ed68e/lunar/lunar-93044b3d.vswp</value>
-      </extraConfig>
-      <extraConfig XMLSchema-instance:type="OptionValue">
-        <key>pciBridge0.pciSlotNumber</key>
-        <value XMLSchema-instance:type="xsd:string">17</value>
-      </extraConfig>
-      <extraConfig XMLSchema-instance:type="OptionValue">
-        <key>pciBridge4.pciSlotNumber</key>
-        <value XMLSchema-instance:type="xsd:string">21</value>
-      </extraConfig>
-      <extraConfig XMLSchema-instance:type="OptionValue">
-        <key>pciBridge5.pciSlotNumber</key>
-        <value XMLSchema-instance:type="xsd:string">22</value>
-      </extraConfig>
-      <extraConfig XMLSchema-instance:type="OptionValue">
-        <key>pciBridge6.pciSlotNumber</key>
-        <value XMLSchema-instance:type="xsd:string">23</value>
-      </extraConfig>
-      <extraConfig XMLSchema-instance:type="OptionValue">
-        <key>pciBridge7.pciSlotNumber</key>
-        <value XMLSchema-instance:type="xsd:string">24</value>
-      </extraConfig>
-      <extraConfig XMLSchema-instance:type="OptionValue">
-        <key>scsi0.pciSlotNumber</key>
-        <value XMLSchema-instance:type="xsd:string">160</value>
-      </extraConfig>
-      <extraConfig XMLSchema-instance:type="OptionValue">
-        <key>ethernet0.pciSlotNumber</key>
-        <value XMLSchema-instance:type="xsd:string">192</value>
-      </extraConfig>
-      <extraConfig XMLSchema-instance:type="OptionValue">
-        <key>scsi0:0.redo</key>
-        <value XMLSchema-instance:type="xsd:string"></value>
-      </extraConfig>
-      <extraConfig XMLSchema-instance:type="OptionValue">
-        <key>scsi0.sasWWID</key>
-        <value XMLSchema-instance:type="xsd:string">50 05 05 6b 98 8d b5 10</value>
-      </extraConfig>
-      <extraConfig XMLSchema-instance:type="OptionValue">
-        <key>vmotion.checkpointFBSize</key>
-        <value XMLSchema-instance:type="xsd:string">4194304</value>
-      </extraConfig>
-      <extraConfig XMLSchema-instance:type="OptionValue">
-        <key>ethernet0.generatedAddressOffset</key>
-        <value XMLSchema-instance:type="xsd:string">0</value>
-      </extraConfig>
-      <extraConfig XMLSchema-instance:type="OptionValue">
-        <key>monitor.phys_bits_used</key>
-        <value XMLSchema-instance:type="xsd:string">40</value>
-      </extraConfig>
-      <extraConfig XMLSchema-instance:type="OptionValue">
-        <key>softPowerOff</key>
-        <value XMLSchema-instance:type="xsd:string">TRUE</value>
-      </extraConfig>
-      <extraConfig XMLSchema-instance:type="OptionValue">
-        <key>guestInfo.detailed.data</key>
-        <value XMLSchema-instance:type="xsd:string">architecture=&#39;X86&#39; bitness=&#39;64&#39; distroName=&#39;Ubuntu 23.04&#39; distroVersion=&#39;23.04&#39; familyName=&#39;Linux&#39; kernelVersion=&#39;6.2.0-32-generic&#39; prettyName=&#39;Ubuntu 23.04&#39;</value>
-      </extraConfig>
-      <extraConfig XMLSchema-instance:type="OptionValue">
         <key>vmware.tools.internalversion</key>
-        <value XMLSchema-instance:type="xsd:string">12325</value>
+        <value XMLSchema-instance:type="xsd:string">2147483647</value>
       </extraConfig>
       <extraConfig XMLSchema-instance:type="OptionValue">
         <key>vmware.tools.requiredversion</key>
@@ -557,7 +477,7 @@
       </extraConfig>
       <extraConfig XMLSchema-instance:type="OptionValue">
         <key>migrate.hostLog</key>
-        <value XMLSchema-instance:type="xsd:string">./lunar-93044b3d.hlog</value>
+        <value XMLSchema-instance:type="xsd:string"></value>
       </extraConfig>
       <cpuFeatureMask>
         <level>0</level>
@@ -613,8 +533,8 @@
       <guestAutoLockEnabled>true</guestAutoLockEnabled>
       <memoryReservationLockedToMax>false</memoryReservationLockedToMax>
       <initialOverhead>
-        <initialMemoryReservation>58249216</initialMemoryReservation>
-        <initialSwapReservation>397234176</initialSwapReservation>
+        <initialMemoryReservation>194863104</initialMemoryReservation>
+        <initialSwapReservation>1062957056</initialSwapReservation>
       </initialOverhead>
       <nestedHVEnabled>false</nestedHVEnabled>
       <vPMCEnabled>false</vPMCEnabled>
@@ -622,7 +542,7 @@
         <upgradePolicy>never</upgradePolicy>
         <scheduledHardwareUpgradeStatus>none</scheduledHardwareUpgradeStatus>
       </scheduledHardwareUpgradeInfo>
-      <vmxConfigChecksum>Gl3xBCb09IkMping2IQieyG8uKU=</vmxConfigChecksum>
+      <vmxConfigChecksum>UlVnRhMGrrNPTxBpxFM1VkEyHOc=</vmxConfigChecksum>
       <messageBusTunnelEnabled>false</messageBusTunnelEnabled>
       <guestIntegrityInfo>
         <enabled>false</enabled>
@@ -777,7 +697,7 @@
   </propSet>
   <propSet>
     <name>environmentBrowser</name>
-    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="ManagedObjectReference" type="EnvironmentBrowser">7-envmgr</val>
+    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="ManagedObjectReference" type="EnvironmentBrowser">8-envmgr</val>
   </propSet>
   <propSet>
     <name>guest</name>
@@ -786,8 +706,7 @@
       <toolsVersionStatus>guestToolsUnmanaged</toolsVersionStatus>
       <toolsVersionStatus2>guestToolsUnmanaged</toolsVersionStatus2>
       <toolsRunningStatus>guestToolsNotRunning</toolsRunningStatus>
-      <toolsVersion>12325</toolsVersion>
-      <toolsInstallType>guestToolsTypeOpenVMTools</toolsInstallType>
+      <toolsVersion>2147483647</toolsVersion>
       <screen>
         <width>0</width>
         <height>0</height>
@@ -812,10 +731,7 @@
   <propSet>
     <name>layout</name>
     <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="VirtualMachineFileLayout">
-      <configFile>lunar.nvram</configFile>
       <configFile>lunar.vmsd</configFile>
-      <logFile>vmware-1.log</logFile>
-      <logFile>vmware.log</logFile>
       <disk>
         <key>2000</key>
         <diskFile>[datastore1] lunar/lunar.vmdk</diskFile>
@@ -834,58 +750,34 @@
       </file>
       <file>
         <key>1</key>
-        <name>[datastore1] lunar/lunar.nvram</name>
-        <type>nvram</type>
-        <size>8684</size>
-        <uniqueSize>8684</uniqueSize>
-        <accessible>true</accessible>
-      </file>
-      <file>
-        <key>2</key>
         <name>[datastore1] lunar/lunar.vmsd</name>
         <type>snapshotList</type>
         <size>0</size>
         <accessible>true</accessible>
       </file>
       <file>
-        <key>3</key>
+        <key>2</key>
         <name>[datastore1] lunar/lunar.vmdk</name>
         <type>diskDescriptor</type>
         <size>0</size>
         <accessible>true</accessible>
       </file>
       <file>
-        <key>4</key>
+        <key>3</key>
         <name>[datastore1] lunar/lunar-flat.vmdk</name>
         <type>diskExtent</type>
-        <size>1873805312</size>
-        <uniqueSize>1873805312</uniqueSize>
-        <accessible>true</accessible>
-      </file>
-      <file>
-        <key>5</key>
-        <name>[datastore1] lunar/vmware-1.log</name>
-        <type>log</type>
-        <size>135228</size>
-        <uniqueSize>135228</uniqueSize>
-        <accessible>true</accessible>
-      </file>
-      <file>
-        <key>6</key>
-        <name>[datastore1] lunar/vmware.log</name>
-        <type>log</type>
-        <size>188059</size>
-        <uniqueSize>188059</uniqueSize>
+        <size>1780482048</size>
+        <uniqueSize>1780482048</uniqueSize>
         <accessible>true</accessible>
       </file>
       <disk>
         <key>2000</key>
         <chain>
+          <fileKey>2</fileKey>
           <fileKey>3</fileKey>
-          <fileKey>4</fileKey>
         </chain>
       </disk>
-      <timestamp>2023-09-20T08:58:22.830627Z</timestamp>
+      <timestamp>2023-10-25T07:12:38.403485Z</timestamp>
     </val>
   </propSet>
   <propSet>
@@ -917,7 +809,7 @@
   <propSet>
     <name>resourceConfig</name>
     <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="ResourceConfigSpec">
-      <entity type="VirtualMachine">7</entity>
+      <entity type="VirtualMachine">8</entity>
       <cpuAllocation>
         <reservation>0</reservation>
         <expandableReservation>false</expandableReservation>
@@ -977,17 +869,17 @@
     <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="VirtualMachineStorageInfo">
       <perDatastoreUsage>
         <datastore type="Datastore">64d4b065-879077de-6dfb-5254000ed68e</datastore>
-        <committed>1874137283</committed>
-        <uncommitted>10334589453</uncommitted>
-        <unshared>1874137283</unshared>
+        <committed>1780482048</committed>
+        <uncommitted>11093635575</uncommitted>
+        <unshared>1780482048</unshared>
       </perDatastoreUsage>
-      <timestamp>2023-09-20T08:58:22.830756Z</timestamp>
+      <timestamp>2023-10-25T07:12:38.403548Z</timestamp>
     </val>
   </propSet>
   <propSet>
     <name>summary</name>
     <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="VirtualMachineSummary">
-      <vm type="VirtualMachine">7</vm>
+      <vm type="VirtualMachine">8</vm>
       <runtime>
         <host type="HostSystem">ha-host</host>
         <connectionState>connected</connectionState>
@@ -1027,17 +919,17 @@
         <numEthernetCards>1</numEthernetCards>
         <numVirtualDisks>1</numVirtualDisks>
         <uuid>564de3ab-988d-b51c-a5cb-5e1af6f5f313</uuid>
-        <instanceUuid>52874138-b33e-cb2f-446f-8ff016061518</instanceUuid>
+        <instanceUuid>5265f9fd-82f7-3d50-7994-c79f470f8b91</instanceUuid>
         <guestId>ubuntu64Guest</guestId>
         <guestFullName>Ubuntu Linux (64-bit)</guestFullName>
         <tpmPresent>false</tpmPresent>
         <hwVersion>vmx-10</hwVersion>
       </config>
       <storage>
-        <committed>1874137283</committed>
-        <uncommitted>10334589453</uncommitted>
-        <unshared>1874137283</unshared>
-        <timestamp>2023-09-20T08:58:22.830756Z</timestamp>
+        <committed>1780482048</committed>
+        <uncommitted>11093635575</uncommitted>
+        <unshared>1780482048</unshared>
+        <timestamp>2023-10-25T07:12:38.403548Z</timestamp>
       </storage>
       <quickStats>
         <guestHeartbeatStatus>gray</guestHeartbeatStatus>

@@ -22,7 +22,10 @@ import (
 	"fmt"
 	"glouton/config"
 	"glouton/facts"
+	"glouton/logger"
 	"net/url"
+	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/influxdata/telegraf"
@@ -61,6 +64,7 @@ var (
 	relevantVMProperties = []string{
 		"config.hardware.numCPU",
 		"guest.hostName",
+		"config.hardware.device",
 		"config.hardware.memoryMB",
 		"config.guestFullName",
 		"summary.config.product.name",   // Don't really know if the Product
@@ -102,27 +106,34 @@ func newDeviceFinder(ctx context.Context, vSphereCfg config.VSphere) (*find.Find
 	return f, nil
 }
 
-func findDevices(ctx context.Context, finder *find.Finder) (clusters []*object.ClusterComputeResource, hosts []*object.HostSystem, vms []*object.VirtualMachine, err error) {
+func findDevices(ctx context.Context, finder *find.Finder, listDatastores bool) (clusters []*object.ClusterComputeResource, datastores []*object.Datastore, hosts []*object.HostSystem, vms []*object.VirtualMachine, err error) {
 	// The find.NotFoundError is thrown when no devices are found,
 	// even if the path is not restrictive to a particular device.
 	var notFoundError *find.NotFoundError
 
 	clusters, err = finder.ClusterComputeResourceList(ctx, "*")
 	if err != nil && !errors.As(err, &notFoundError) {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
+	}
+
+	if listDatastores {
+		datastores, err = finder.DatastoreList(ctx, "*")
+		if err != nil && !errors.As(err, &notFoundError) {
+			return nil, nil, nil, nil, err
+		}
 	}
 
 	hosts, err = finder.HostSystemList(ctx, "*")
 	if err != nil && !errors.As(err, &notFoundError) {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 
 	vms, err = finder.VirtualMachineList(ctx, "*")
 	if err != nil && !errors.As(err, &notFoundError) {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 
-	return clusters, hosts, vms, nil
+	return clusters, datastores, hosts, vms, nil
 }
 
 func describeCluster(cluster *object.ClusterComputeResource, clusterProps mo.ClusterComputeResource) *Cluster {
@@ -219,8 +230,13 @@ func describeHost(host *object.HostSystem, hostProps mo.HostSystem) *HostSystem 
 	return &HostSystem{dev}
 }
 
-func describeVM(ctx context.Context, vm *object.VirtualMachine, vmProps mo.VirtualMachine) *VirtualMachine {
+func describeVM(ctx context.Context, vm *object.VirtualMachine, vmProps mo.VirtualMachine) (*VirtualMachine, map[string]string, map[string]string) {
 	vmFacts := make(map[string]string)
+
+	var (
+		disks         map[string]string
+		netInterfaces map[string]string
+	)
 
 	if vmProps.Config != nil {
 		vmFacts["cpu_cores"] = str(vmProps.Config.Hardware.NumCPU)
@@ -245,6 +261,8 @@ func describeVM(ctx context.Context, vm *object.VirtualMachine, vmProps mo.Virtu
 
 			vmFacts["vsphere_datastore"] = strings.Join(dsNames, ", ")
 		}
+
+		disks, netInterfaces = getVMLabelsMetadata(vmProps.Config.Hardware.Device)
 	}
 
 	if vmProps.Runtime.Host != nil {
@@ -282,7 +300,32 @@ func describeVM(ctx context.Context, vm *object.VirtualMachine, vmProps mo.Virtu
 		device:        dev,
 		UUID:          vm.UUID(ctx),
 		inventoryPath: vm.InventoryPath,
+	}, disks, netInterfaces
+}
+
+func getVMLabelsMetadata(devices object.VirtualDeviceList) (map[string]string, map[string]string) {
+	disks := make(map[string]string)
+	netInterfaces := make(map[string]string)
+
+	for _, device := range devices {
+		switch dev := device.(type) {
+		case *types.VirtualDisk:
+			if dev.UnitNumber == nil {
+				break
+			}
+
+			c := devices.FindByKey(dev.ControllerKey)
+			if scsi, ok := c.(types.BaseVirtualSCSIController); ok {
+				disks[fmt.Sprintf("scsi%d:%d", scsi.GetVirtualSCSIController().BusNumber, *dev.UnitNumber)] = devices.Name(dev)
+			}
+		case types.BaseVirtualEthernetCard: // VirtualVmxnet, VirtualE1000, ...
+			virtEthCard := dev.GetVirtualEthernetCard()
+
+			netInterfaces[strconv.Itoa(int(virtEthCard.Key))] = devices.Name(virtEthCard)
+		}
 	}
+
+	return disks, netInterfaces
 }
 
 func str(v any) string { return fmt.Sprint(v) }
@@ -309,6 +352,37 @@ func objectNames[T commonObject](objects []T) map[string]string {
 	}
 
 	return names
+}
+
+var isolateLUN = regexp.MustCompile(`.*/([^/]+)/?$`)
+
+func getDatastorePerLUN(ctx context.Context, rawDatastores []*object.Datastore) map[string]string {
+	dsPerLUN := make(map[string]string, len(rawDatastores))
+
+	for _, ds := range rawDatastores {
+		var dsProps mo.Datastore
+
+		err := ds.Properties(ctx, ds.Reference(), relevantClusterProperties, &dsProps)
+		if err != nil {
+			logger.V(1).Printf("Failed to fetch properties of datastore %q: %v", ds.Reference().Value, err)
+
+			continue
+		}
+
+		info := dsProps.Info.GetDatastoreInfo()
+		if info == nil {
+			continue
+		}
+
+		matches := isolateLUN.FindStringSubmatch(info.Url)
+		if matches == nil {
+			continue
+		}
+
+		dsPerLUN[matches[1]] = dsProps.Name
+	}
+
+	return dsPerLUN
 }
 
 //nolint:gochecknoglobals

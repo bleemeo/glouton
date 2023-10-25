@@ -71,6 +71,10 @@
     <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="ManagedObjectReference" type="Folder">group-4</val>
   </propSet>
   <propSet>
+    <name>datastoreFolder</name>
+    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="ManagedObjectReference" type="Folder">group-5</val>
+  </propSet>
+  <propSet>
     <name>networkFolder</name>
     <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="ManagedObjectReference" type="Folder">group-6</val>
   </propSet>

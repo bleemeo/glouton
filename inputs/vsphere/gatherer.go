@@ -102,7 +102,7 @@ func (gatherer *vSphereGatherer) collectAdditionalMetrics(ctx context.Context, a
 		return err
 	}
 
-	clusters, hosts, vms, err := findDevices(ctx, finder)
+	clusters, _, hosts, vms, err := findDevices(ctx, finder, false)
 	if err != nil {
 		return err
 	}

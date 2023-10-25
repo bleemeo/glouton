@@ -63,6 +63,1129 @@
     <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="ArrayOfTag"></val>
   </propSet>
   <propSet>
+    <name>runtime</name>
+    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="HostRuntimeInfo">
+      <connectionState>connected</connectionState>
+      <powerState>poweredOn</powerState>
+      <standbyMode>none</standbyMode>
+      <inMaintenanceMode>false</inMaintenanceMode>
+      <bootTime>2023-10-25T09:30:27.925430337+02:00</bootTime>
+      <healthSystemRuntime>
+        <systemHealthInfo>
+          <numericSensorInfo>
+            <name>VMware Rollup Health State</name>
+            <healthState XMLSchema-instance:type="ElementDescription">
+              <label>Green</label>
+              <summary>Sensor is operating under normal conditions</summary>
+              <key>green</key>
+            </healthState>
+            <currentReading>0</currentReading>
+            <unitModifier>0</unitModifier>
+            <baseUnits></baseUnits>
+            <sensorType>system</sensorType>
+          </numericSensorInfo>
+          <numericSensorInfo>
+            <name>CPU socket #0 Level-1 Cache is 16384 B</name>
+            <healthState XMLSchema-instance:type="ElementDescription">
+              <label>Green</label>
+              <summary>Sensor is operating under normal conditions</summary>
+              <key>green</key>
+            </healthState>
+            <currentReading>0</currentReading>
+            <unitModifier>0</unitModifier>
+            <baseUnits></baseUnits>
+            <sensorType>Processors</sensorType>
+          </numericSensorInfo>
+          <numericSensorInfo>
+            <name>CPU socket #0 Level-2 Cache is 0 B</name>
+            <healthState XMLSchema-instance:type="ElementDescription">
+              <label>Green</label>
+              <summary>Sensor is operating under normal conditions</summary>
+              <key>green</key>
+            </healthState>
+            <currentReading>0</currentReading>
+            <unitModifier>0</unitModifier>
+            <baseUnits></baseUnits>
+            <sensorType>Processors</sensorType>
+          </numericSensorInfo>
+          <numericSensorInfo>
+            <name>CPU socket #1 Level-1 Cache is 16384 B</name>
+            <healthState XMLSchema-instance:type="ElementDescription">
+              <label>Green</label>
+              <summary>Sensor is operating under normal conditions</summary>
+              <key>green</key>
+            </healthState>
+            <currentReading>0</currentReading>
+            <unitModifier>0</unitModifier>
+            <baseUnits></baseUnits>
+            <sensorType>Processors</sensorType>
+          </numericSensorInfo>
+          <numericSensorInfo>
+            <name>CPU socket #1 Level-2 Cache is 0 B</name>
+            <healthState XMLSchema-instance:type="ElementDescription">
+              <label>Green</label>
+              <summary>Sensor is operating under normal conditions</summary>
+              <key>green</key>
+            </healthState>
+            <currentReading>0</currentReading>
+            <unitModifier>0</unitModifier>
+            <baseUnits></baseUnits>
+            <sensorType>Processors</sensorType>
+          </numericSensorInfo>
+          <numericSensorInfo>
+            <name>Phoenix Technologies LTD System BIOS 6.00 2014-05-20 00:00:00.000</name>
+            <healthState XMLSchema-instance:type="ElementDescription">
+              <label>Green</label>
+              <summary>Sensor is operating under normal conditions</summary>
+              <key>green</key>
+            </healthState>
+            <currentReading>0</currentReading>
+            <unitModifier>0</unitModifier>
+            <baseUnits></baseUnits>
+            <sensorType>Software Components</sensorType>
+          </numericSensorInfo>
+          <numericSensorInfo>
+            <name>VMware, Inc. VMware ESXi 6.0.0 build-3634798 2016-03-07 00:00:00.000</name>
+            <healthState XMLSchema-instance:type="ElementDescription">
+              <label>Green</label>
+              <summary>Sensor is operating under normal conditions</summary>
+              <key>green</key>
+            </healthState>
+            <currentReading>0</currentReading>
+            <unitModifier>0</unitModifier>
+            <baseUnits></baseUnits>
+            <sensorType>Software Components</sensorType>
+          </numericSensorInfo>
+          <numericSensorInfo>
+            <name>VMware sata-ata-piix 2.12-10vmw.600.2.34.3634798 2016-03-08 07:38:41.000</name>
+            <healthState XMLSchema-instance:type="ElementDescription">
+              <label>Green</label>
+              <summary>Sensor is operating under normal conditions</summary>
+              <key>green</key>
+            </healthState>
+            <currentReading>0</currentReading>
+            <unitModifier>0</unitModifier>
+            <baseUnits></baseUnits>
+            <sensorType>Software Components</sensorType>
+          </numericSensorInfo>
+          <numericSensorInfo>
+            <name>VMware lsu-lsi-mptsas-plugin 1.0.0-1vmw.600.2.34.3634798 2016-03-08 07:39:28.000</name>
+            <healthState XMLSchema-instance:type="ElementDescription">
+              <label>Green</label>
+              <summary>Sensor is operating under normal conditions</summary>
+              <key>green</key>
+            </healthState>
+            <currentReading>0</currentReading>
+            <unitModifier>0</unitModifier>
+            <baseUnits></baseUnits>
+            <sensorType>Software Components</sensorType>
+          </numericSensorInfo>
+          <numericSensorInfo>
+            <name>VMware net-mlx4-core 1.9.7.0-1vmw.600.2.34.3634798 2016-03-08 07:38:45.000</name>
+            <healthState XMLSchema-instance:type="ElementDescription">
+              <label>Green</label>
+              <summary>Sensor is operating under normal conditions</summary>
+              <key>green</key>
+            </healthState>
+            <currentReading>0</currentReading>
+            <unitModifier>0</unitModifier>
+            <baseUnits></baseUnits>
+            <sensorType>Software Components</sensorType>
+          </numericSensorInfo>
+          <numericSensorInfo>
+            <name>VMware lsu-lsi-mpt2sas-plugin 1.0.0-4vmw.600.2.34.3634798 2016-03-08 07:39:28.000</name>
+            <healthState XMLSchema-instance:type="ElementDescription">
+              <label>Green</label>
+              <summary>Sensor is operating under normal conditions</summary>
+              <key>green</key>
+            </healthState>
+            <currentReading>0</currentReading>
+            <unitModifier>0</unitModifier>
+            <baseUnits></baseUnits>
+            <sensorType>Software Components</sensorType>
+          </numericSensorInfo>
+          <numericSensorInfo>
+            <name>VMware scsi-aacraid 1.1.5.1-9vmw.600.2.34.3634798 2016-03-08 07:38:45.000</name>
+            <healthState XMLSchema-instance:type="ElementDescription">
+              <label>Green</label>
+              <summary>Sensor is operating under normal conditions</summary>
+              <key>green</key>
+            </healthState>
+            <currentReading>0</currentReading>
+            <unitModifier>0</unitModifier>
+            <baseUnits></baseUnits>
+            <sensorType>Software Components</sensorType>
+          </numericSensorInfo>
+          <numericSensorInfo>
+            <name>VMware ata-pata-via 0.3.3-2vmw.600.2.34.3634798 2016-03-08 07:38:45.000</name>
+            <healthState XMLSchema-instance:type="ElementDescription">
+              <label>Green</label>
+              <summary>Sensor is operating under normal conditions</summary>
+              <key>green</key>
+            </healthState>
+            <currentReading>0</currentReading>
+            <unitModifier>0</unitModifier>
+            <baseUnits></baseUnits>
+            <sensorType>Software Components</sensorType>
+          </numericSensorInfo>
+          <numericSensorInfo>
+            <name>VMware scsi-qla4xxx 5.01.03.2-7vmw.600.2.34.3634798 2016-03-08 07:38:45.000</name>
+            <healthState XMLSchema-instance:type="ElementDescription">
+              <label>Green</label>
+              <summary>Sensor is operating under normal conditions</summary>
+              <key>green</key>
+            </healthState>
+            <currentReading>0</currentReading>
+            <unitModifier>0</unitModifier>
+            <baseUnits></baseUnits>
+            <sensorType>Software Components</sensorType>
+          </numericSensorInfo>
+          <numericSensorInfo>
+            <name>VMware sata-sata-promise 2.12-3vmw.600.2.34.3634798 2016-03-08 07:38:45.000</name>
+            <healthState XMLSchema-instance:type="ElementDescription">
+              <label>Green</label>
+              <summary>Sensor is operating under normal conditions</summary>
+              <key>green</key>
+            </healthState>
+            <currentReading>0</currentReading>
+            <unitModifier>0</unitModifier>
+            <baseUnits></baseUnits>
+            <sensorType>Software Components</sensorType>
+          </numericSensorInfo>
+          <numericSensorInfo>
+            <name>VMware scsi-megaraid-mbox 2.20.5.1-6vmw.600.2.34.3634798 2016-03-08 07:38:45.000</name>
+            <healthState XMLSchema-instance:type="ElementDescription">
+              <label>Green</label>
+              <summary>Sensor is operating under normal conditions</summary>
+              <key>green</key>
+            </healthState>
+            <currentReading>0</currentReading>
+            <unitModifier>0</unitModifier>
+            <baseUnits></baseUnits>
+            <sensorType>Software Components</sensorType>
+          </numericSensorInfo>
+          <numericSensorInfo>
+            <name>VMware vsan 6.0.0-2.34.3563498 2016-02-17 17:18:19.000</name>
+            <healthState XMLSchema-instance:type="ElementDescription">
+              <label>Green</label>
+              <summary>Sensor is operating under normal conditions</summary>
+              <key>green</key>
+            </healthState>
+            <currentReading>0</currentReading>
+            <unitModifier>0</unitModifier>
+            <baseUnits></baseUnits>
+            <sensorType>Software Components</sensorType>
+          </numericSensorInfo>
+          <numericSensorInfo>
+            <name>VMware net-e1000 8.0.3.1-5vmw.600.2.34.3634798 2016-03-08 07:38:45.000</name>
+            <healthState XMLSchema-instance:type="ElementDescription">
+              <label>Green</label>
+              <summary>Sensor is operating under normal conditions</summary>
+              <key>green</key>
+            </healthState>
+            <currentReading>0</currentReading>
+            <unitModifier>0</unitModifier>
+            <baseUnits></baseUnits>
+            <sensorType>Software Components</sensorType>
+          </numericSensorInfo>
+          <numericSensorInfo>
+            <name>VMware ata-pata-serverworks 0.4.3-3vmw.600.2.34.3634798 2016-03-08 07:38:45.000</name>
+            <healthState XMLSchema-instance:type="ElementDescription">
+              <label>Green</label>
+              <summary>Sensor is operating under normal conditions</summary>
+              <key>green</key>
+            </healthState>
+            <currentReading>0</currentReading>
+            <unitModifier>0</unitModifier>
+            <baseUnits></baseUnits>
+            <sensorType>Software Components</sensorType>
+          </numericSensorInfo>
+          <numericSensorInfo>
+            <name>VMware scsi-mptspi 4.23.01.00-9vmw.600.2.34.3634798 2016-03-08 07:38:45.000</name>
+            <healthState XMLSchema-instance:type="ElementDescription">
+              <label>Green</label>
+              <summary>Sensor is operating under normal conditions</summary>
+              <key>green</key>
+            </healthState>
+            <currentReading>0</currentReading>
+            <unitModifier>0</unitModifier>
+            <baseUnits></baseUnits>
+            <sensorType>Software Components</sensorType>
+          </numericSensorInfo>
+          <numericSensorInfo>
+            <name>VMware net-nx-nic 5.0.621-5vmw.600.2.34.3634798 2016-03-08 07:38:45.000</name>
+            <healthState XMLSchema-instance:type="ElementDescription">
+              <label>Green</label>
+              <summary>Sensor is operating under normal conditions</summary>
+              <key>green</key>
+            </healthState>
+            <currentReading>0</currentReading>
+            <unitModifier>0</unitModifier>
+            <baseUnits></baseUnits>
+            <sensorType>Software Components</sensorType>
+          </numericSensorInfo>
+          <numericSensorInfo>
+            <name>VMware block-cciss 3.6.14-10vmw.600.2.34.3634798 2016-03-08 07:38:45.000</name>
+            <healthState XMLSchema-instance:type="ElementDescription">
+              <label>Green</label>
+              <summary>Sensor is operating under normal conditions</summary>
+              <key>green</key>
+            </healthState>
+            <currentReading>0</currentReading>
+            <unitModifier>0</unitModifier>
+            <baseUnits></baseUnits>
+            <sensorType>Software Components</sensorType>
+          </numericSensorInfo>
+          <numericSensorInfo>
+            <name>VMware net-bnx2x 1.78.80.v60.12-1vmw.600.2.34.3634798 2016-03-08 07:38:41.000</name>
+            <healthState XMLSchema-instance:type="ElementDescription">
+              <label>Green</label>
+              <summary>Sensor is operating under normal conditions</summary>
+              <key>green</key>
+            </healthState>
+            <currentReading>0</currentReading>
+            <unitModifier>0</unitModifier>
+            <baseUnits></baseUnits>
+            <sensorType>Software Components</sensorType>
+          </numericSensorInfo>
+          <numericSensorInfo>
+            <name>VMware ipmi-ipmi-devintf 39.1-4vmw.600.2.34.3634798 2016-03-08 07:38:45.000</name>
+            <healthState XMLSchema-instance:type="ElementDescription">
+              <label>Green</label>
+              <summary>Sensor is operating under normal conditions</summary>
+              <key>green</key>
+            </healthState>
+            <currentReading>0</currentReading>
+            <unitModifier>0</unitModifier>
+            <baseUnits></baseUnits>
+            <sensorType>Software Components</sensorType>
+          </numericSensorInfo>
+          <numericSensorInfo>
+            <name>VMware scsi-mptsas 4.23.01.00-9vmw.600.2.34.3634798 2016-03-08 07:38:45.000</name>
+            <healthState XMLSchema-instance:type="ElementDescription">
+              <label>Green</label>
+              <summary>Sensor is operating under normal conditions</summary>
+              <key>green</key>
+            </healthState>
+            <currentReading>0</currentReading>
+            <unitModifier>0</unitModifier>
+            <baseUnits></baseUnits>
+            <sensorType>Software Components</sensorType>
+          </numericSensorInfo>
+          <numericSensorInfo>
+            <name>VMware scsi-megaraid2 2.00.4-9vmw.600.2.34.3634798 2016-03-08 07:38:45.000</name>
+            <healthState XMLSchema-instance:type="ElementDescription">
+              <label>Green</label>
+              <summary>Sensor is operating under normal conditions</summary>
+              <key>green</key>
+            </healthState>
+            <currentReading>0</currentReading>
+            <unitModifier>0</unitModifier>
+            <baseUnits></baseUnits>
+            <sensorType>Software Components</sensorType>
+          </numericSensorInfo>
+          <numericSensorInfo>
+            <name>VMware nvme 1.0e.0.35-1vmw.600.2.34.3634798 2016-03-08 07:38:46.000</name>
+            <healthState XMLSchema-instance:type="ElementDescription">
+              <label>Green</label>
+              <summary>Sensor is operating under normal conditions</summary>
+              <key>green</key>
+            </healthState>
+            <currentReading>0</currentReading>
+            <unitModifier>0</unitModifier>
+            <baseUnits></baseUnits>
+            <sensorType>Software Components</sensorType>
+          </numericSensorInfo>
+          <numericSensorInfo>
+            <name>VMware esx-xserver 6.0.0-2.34.3634798 2016-03-08 07:39:27.000</name>
+            <healthState XMLSchema-instance:type="ElementDescription">
+              <label>Green</label>
+              <summary>Sensor is operating under normal conditions</summary>
+              <key>green</key>
+            </healthState>
+            <currentReading>0</currentReading>
+            <unitModifier>0</unitModifier>
+            <baseUnits></baseUnits>
+            <sensorType>Software Components</sensorType>
+          </numericSensorInfo>
+          <numericSensorInfo>
+            <name>VMware nmlx4-en 3.0.0.0-1vmw.600.2.34.3634798 2016-03-08 07:38:46.000</name>
+            <healthState XMLSchema-instance:type="ElementDescription">
+              <label>Green</label>
+              <summary>Sensor is operating under normal conditions</summary>
+              <key>green</key>
+            </healthState>
+            <currentReading>0</currentReading>
+            <unitModifier>0</unitModifier>
+            <baseUnits></baseUnits>
+            <sensorType>Software Components</sensorType>
+          </numericSensorInfo>
+          <numericSensorInfo>
+            <name>VMware lsu-hp-hpsa-plugin 1.0.0-1vmw.600.2.34.3634798 2016-03-08 07:39:28.000</name>
+            <healthState XMLSchema-instance:type="ElementDescription">
+              <label>Green</label>
+              <summary>Sensor is operating under normal conditions</summary>
+              <key>green</key>
+            </healthState>
+            <currentReading>0</currentReading>
+            <unitModifier>0</unitModifier>
+            <baseUnits></baseUnits>
+            <sensorType>Software Components</sensorType>
+          </numericSensorInfo>
+          <numericSensorInfo>
+            <name>VMware scsi-megaraid-sas 6.603.55.00-2vmw.600.2.34.3634798 2016-03-08 07:38:45.000</name>
+            <healthState XMLSchema-instance:type="ElementDescription">
+              <label>Green</label>
+              <summary>Sensor is operating under normal conditions</summary>
+              <key>green</key>
+            </healthState>
+            <currentReading>0</currentReading>
+            <unitModifier>0</unitModifier>
+            <baseUnits></baseUnits>
+            <sensorType>Software Components</sensorType>
+          </numericSensorInfo>
+          <numericSensorInfo>
+            <name>VMware net-enic 2.1.2.38-2vmw.600.2.34.3634798 2016-03-08 07:38:45.000</name>
+            <healthState XMLSchema-instance:type="ElementDescription">
+              <label>Green</label>
+              <summary>Sensor is operating under normal conditions</summary>
+              <key>green</key>
+            </healthState>
+            <currentReading>0</currentReading>
+            <unitModifier>0</unitModifier>
+            <baseUnits></baseUnits>
+            <sensorType>Software Components</sensorType>
+          </numericSensorInfo>
+          <numericSensorInfo>
+            <name>VMware lsi-msgpt3 06.255.12.00-8vmw.600.2.34.3634798 2016-03-08 07:38:46.000</name>
+            <healthState XMLSchema-instance:type="ElementDescription">
+              <label>Green</label>
+              <summary>Sensor is operating under normal conditions</summary>
+              <key>green</key>
+            </healthState>
+            <currentReading>0</currentReading>
+            <unitModifier>0</unitModifier>
+            <baseUnits></baseUnits>
+            <sensorType>Software Components</sensorType>
+          </numericSensorInfo>
+          <numericSensorInfo>
+            <name>VMware sata-ahci 3.0-22vmw.600.2.34.3634798 2016-03-08 07:38:45.000</name>
+            <healthState XMLSchema-instance:type="ElementDescription">
+              <label>Green</label>
+              <summary>Sensor is operating under normal conditions</summary>
+              <key>green</key>
+            </healthState>
+            <currentReading>0</currentReading>
+            <unitModifier>0</unitModifier>
+            <baseUnits></baseUnits>
+            <sensorType>Software Components</sensorType>
+          </numericSensorInfo>
+          <numericSensorInfo>
+            <name>VMware net-forcedeth 0.61-2vmw.600.2.34.3634798 2016-03-08 07:38:45.000</name>
+            <healthState XMLSchema-instance:type="ElementDescription">
+              <label>Green</label>
+              <summary>Sensor is operating under normal conditions</summary>
+              <key>green</key>
+            </healthState>
+            <currentReading>0</currentReading>
+            <unitModifier>0</unitModifier>
+            <baseUnits></baseUnits>
+            <sensorType>Software Components</sensorType>
+          </numericSensorInfo>
+          <numericSensorInfo>
+            <name>VMware ata-pata-atiixp 0.4.6-4vmw.600.2.34.3634798 2016-03-08 07:38:45.000</name>
+            <healthState XMLSchema-instance:type="ElementDescription">
+              <label>Green</label>
+              <summary>Sensor is operating under normal conditions</summary>
+              <key>green</key>
+            </healthState>
+            <currentReading>0</currentReading>
+            <unitModifier>0</unitModifier>
+            <baseUnits></baseUnits>
+            <sensorType>Software Components</sensorType>
+          </numericSensorInfo>
+          <numericSensorInfo>
+            <name>VMware elxnet 10.2.309.6v-1vmw.600.2.34.3634798 2016-03-08 07:38:46.000</name>
+            <healthState XMLSchema-instance:type="ElementDescription">
+              <label>Green</label>
+              <summary>Sensor is operating under normal conditions</summary>
+              <key>green</key>
+            </healthState>
+            <currentReading>0</currentReading>
+            <unitModifier>0</unitModifier>
+            <baseUnits></baseUnits>
+            <sensorType>Software Components</sensorType>
+          </numericSensorInfo>
+          <numericSensorInfo>
+            <name>VMware esx-dvfilter-generic-fastpath 6.0.0-2.34.3634798 2016-03-08 07:39:28.000</name>
+            <healthState XMLSchema-instance:type="ElementDescription">
+              <label>Green</label>
+              <summary>Sensor is operating under normal conditions</summary>
+              <key>green</key>
+            </healthState>
+            <currentReading>0</currentReading>
+            <unitModifier>0</unitModifier>
+            <baseUnits></baseUnits>
+            <sensorType>Software Components</sensorType>
+          </numericSensorInfo>
+          <numericSensorInfo>
+            <name>VMware uhci-usb-uhci 1.0-3vmw.600.2.34.3634798 2016-03-08 07:38:45.000</name>
+            <healthState XMLSchema-instance:type="ElementDescription">
+              <label>Green</label>
+              <summary>Sensor is operating under normal conditions</summary>
+              <key>green</key>
+            </healthState>
+            <currentReading>0</currentReading>
+            <unitModifier>0</unitModifier>
+            <baseUnits></baseUnits>
+            <sensorType>Software Components</sensorType>
+          </numericSensorInfo>
+          <numericSensorInfo>
+            <name>VMware ata-pata-amd 0.3.10-3vmw.600.2.34.3634798 2016-03-08 07:38:45.000</name>
+            <healthState XMLSchema-instance:type="ElementDescription">
+              <label>Green</label>
+              <summary>Sensor is operating under normal conditions</summary>
+              <key>green</key>
+            </healthState>
+            <currentReading>0</currentReading>
+            <unitModifier>0</unitModifier>
+            <baseUnits></baseUnits>
+            <sensorType>Software Components</sensorType>
+          </numericSensorInfo>
+          <numericSensorInfo>
+            <name>VMware sata-sata-sil24 1.1-1vmw.600.2.34.3634798 2016-03-08 07:38:45.000</name>
+            <healthState XMLSchema-instance:type="ElementDescription">
+              <label>Green</label>
+              <summary>Sensor is operating under normal conditions</summary>
+              <key>green</key>
+            </healthState>
+            <currentReading>0</currentReading>
+            <unitModifier>0</unitModifier>
+            <baseUnits></baseUnits>
+            <sensorType>Software Components</sensorType>
+          </numericSensorInfo>
+          <numericSensorInfo>
+            <name>VMware ohci-usb-ohci 1.0-3vmw.600.2.34.3634798 2016-03-08 07:38:45.000</name>
+            <healthState XMLSchema-instance:type="ElementDescription">
+              <label>Green</label>
+              <summary>Sensor is operating under normal conditions</summary>
+              <key>green</key>
+            </healthState>
+            <currentReading>0</currentReading>
+            <unitModifier>0</unitModifier>
+            <baseUnits></baseUnits>
+            <sensorType>Software Components</sensorType>
+          </numericSensorInfo>
+          <numericSensorInfo>
+            <name>VMware net-igb 5.0.5.1.1-5vmw.600.2.34.3634798 2016-03-08 07:38:45.000</name>
+            <healthState XMLSchema-instance:type="ElementDescription">
+              <label>Green</label>
+              <summary>Sensor is operating under normal conditions</summary>
+              <key>green</key>
+            </healthState>
+            <currentReading>0</currentReading>
+            <unitModifier>0</unitModifier>
+            <baseUnits></baseUnits>
+            <sensorType>Software Components</sensorType>
+          </numericSensorInfo>
+          <numericSensorInfo>
+            <name>VMware ata-pata-pdc2027x 1.0-3vmw.600.2.34.3634798 2016-03-08 07:38:45.000</name>
+            <healthState XMLSchema-instance:type="ElementDescription">
+              <label>Green</label>
+              <summary>Sensor is operating under normal conditions</summary>
+              <key>green</key>
+            </healthState>
+            <currentReading>0</currentReading>
+            <unitModifier>0</unitModifier>
+            <baseUnits></baseUnits>
+            <sensorType>Software Components</sensorType>
+          </numericSensorInfo>
+          <numericSensorInfo>
+            <name>VMware ehci-ehci-hcd 1.0-3vmw.600.2.34.3634798 2016-03-08 07:38:45.000</name>
+            <healthState XMLSchema-instance:type="ElementDescription">
+              <label>Green</label>
+              <summary>Sensor is operating under normal conditions</summary>
+              <key>green</key>
+            </healthState>
+            <currentReading>0</currentReading>
+            <unitModifier>0</unitModifier>
+            <baseUnits></baseUnits>
+            <sensorType>Software Components</sensorType>
+          </numericSensorInfo>
+          <numericSensorInfo>
+            <name>VMware lsu-lsi-lsi-mr3-plugin 1.0.0-2vmw.600.2.34.3634798 2016-03-08 07:39:28.000</name>
+            <healthState XMLSchema-instance:type="ElementDescription">
+              <label>Green</label>
+              <summary>Sensor is operating under normal conditions</summary>
+              <key>green</key>
+            </healthState>
+            <currentReading>0</currentReading>
+            <unitModifier>0</unitModifier>
+            <baseUnits></baseUnits>
+            <sensorType>Software Components</sensorType>
+          </numericSensorInfo>
+          <numericSensorInfo>
+            <name>VMware net-ixgbe 3.7.13.7.14iov-20vmw.600.2.34.3634798 2016-03-08 07:38:41.000</name>
+            <healthState XMLSchema-instance:type="ElementDescription">
+              <label>Green</label>
+              <summary>Sensor is operating under normal conditions</summary>
+              <key>green</key>
+            </healthState>
+            <currentReading>0</currentReading>
+            <unitModifier>0</unitModifier>
+            <baseUnits></baseUnits>
+            <sensorType>Software Components</sensorType>
+          </numericSensorInfo>
+          <numericSensorInfo>
+            <name>VMware vsanhealth 6.0.0-3000000.3.0.2.34.3544323 2016-02-12 06:45:30.000</name>
+            <healthState XMLSchema-instance:type="ElementDescription">
+              <label>Green</label>
+              <summary>Sensor is operating under normal conditions</summary>
+              <key>green</key>
+            </healthState>
+            <currentReading>0</currentReading>
+            <unitModifier>0</unitModifier>
+            <baseUnits></baseUnits>
+            <sensorType>Software Components</sensorType>
+          </numericSensorInfo>
+          <numericSensorInfo>
+            <name>VMware net-cnic 1.78.76.v60.13-2vmw.600.2.34.3634798 2016-03-08 07:38:45.000</name>
+            <healthState XMLSchema-instance:type="ElementDescription">
+              <label>Green</label>
+              <summary>Sensor is operating under normal conditions</summary>
+              <key>green</key>
+            </healthState>
+            <currentReading>0</currentReading>
+            <unitModifier>0</unitModifier>
+            <baseUnits></baseUnits>
+            <sensorType>Software Components</sensorType>
+          </numericSensorInfo>
+          <numericSensorInfo>
+            <name>VMware sata-sata-svw 2.3-3vmw.600.2.34.3634798 2016-03-08 07:38:45.000</name>
+            <healthState XMLSchema-instance:type="ElementDescription">
+              <label>Green</label>
+              <summary>Sensor is operating under normal conditions</summary>
+              <key>green</key>
+            </healthState>
+            <currentReading>0</currentReading>
+            <unitModifier>0</unitModifier>
+            <baseUnits></baseUnits>
+            <sensorType>Software Components</sensorType>
+          </numericSensorInfo>
+          <numericSensorInfo>
+            <name>VMware ipmi-ipmi-msghandler 39.1-4vmw.600.2.34.3634798 2016-03-08 07:38:45.000</name>
+            <healthState XMLSchema-instance:type="ElementDescription">
+              <label>Green</label>
+              <summary>Sensor is operating under normal conditions</summary>
+              <key>green</key>
+            </healthState>
+            <currentReading>0</currentReading>
+            <unitModifier>0</unitModifier>
+            <baseUnits></baseUnits>
+            <sensorType>Software Components</sensorType>
+          </numericSensorInfo>
+          <numericSensorInfo>
+            <name>VMware emulex-esx-elxnetcli 10.2.309.6v-2.34.3634798 2016-03-08 07:39:28.000</name>
+            <healthState XMLSchema-instance:type="ElementDescription">
+              <label>Green</label>
+              <summary>Sensor is operating under normal conditions</summary>
+              <key>green</key>
+            </healthState>
+            <currentReading>0</currentReading>
+            <unitModifier>0</unitModifier>
+            <baseUnits></baseUnits>
+            <sensorType>Software Components</sensorType>
+          </numericSensorInfo>
+          <numericSensorInfo>
+            <name>VMware scsi-aic79xx 3.1-5vmw.600.2.34.3634798 2016-03-08 07:38:45.000</name>
+            <healthState XMLSchema-instance:type="ElementDescription">
+              <label>Green</label>
+              <summary>Sensor is operating under normal conditions</summary>
+              <key>green</key>
+            </healthState>
+            <currentReading>0</currentReading>
+            <unitModifier>0</unitModifier>
+            <baseUnits></baseUnits>
+            <sensorType>Software Components</sensorType>
+          </numericSensorInfo>
+          <numericSensorInfo>
+            <name>VMware qlnativefc 2.0.12.0-5vmw.600.2.34.3634798 2016-03-08 07:38:46.000</name>
+            <healthState XMLSchema-instance:type="ElementDescription">
+              <label>Green</label>
+              <summary>Sensor is operating under normal conditions</summary>
+              <key>green</key>
+            </healthState>
+            <currentReading>0</currentReading>
+            <unitModifier>0</unitModifier>
+            <baseUnits></baseUnits>
+            <sensorType>Software Components</sensorType>
+          </numericSensorInfo>
+          <numericSensorInfo>
+            <name>VMware lsu-lsi-lsi-msgpt3-plugin 1.0.0-1vmw.600.2.34.3634798 2016-03-08 07:39:28.000</name>
+            <healthState XMLSchema-instance:type="ElementDescription">
+              <label>Green</label>
+              <summary>Sensor is operating under normal conditions</summary>
+              <key>green</key>
+            </healthState>
+            <currentReading>0</currentReading>
+            <unitModifier>0</unitModifier>
+            <baseUnits></baseUnits>
+            <sensorType>Software Components</sensorType>
+          </numericSensorInfo>
+          <numericSensorInfo>
+            <name>VMware ima-qla4xxx 2.02.18-1vmw.600.2.34.3634798 2016-03-08 07:38:45.000</name>
+            <healthState XMLSchema-instance:type="ElementDescription">
+              <label>Green</label>
+              <summary>Sensor is operating under normal conditions</summary>
+              <key>green</key>
+            </healthState>
+            <currentReading>0</currentReading>
+            <unitModifier>0</unitModifier>
+            <baseUnits></baseUnits>
+            <sensorType>Software Components</sensorType>
+          </numericSensorInfo>
+          <numericSensorInfo>
+            <name>VMware net-mlx4-en 1.9.7.0-1vmw.600.2.34.3634798 2016-03-08 07:38:45.000</name>
+            <healthState XMLSchema-instance:type="ElementDescription">
+              <label>Green</label>
+              <summary>Sensor is operating under normal conditions</summary>
+              <key>green</key>
+            </healthState>
+            <currentReading>0</currentReading>
+            <unitModifier>0</unitModifier>
+            <baseUnits></baseUnits>
+            <sensorType>Software Components</sensorType>
+          </numericSensorInfo>
+          <numericSensorInfo>
+            <name>VMware net-e1000e 3.2.2.1-1vmw.600.2.34.3634798 2016-03-08 07:38:45.000</name>
+            <healthState XMLSchema-instance:type="ElementDescription">
+              <label>Green</label>
+              <summary>Sensor is operating under normal conditions</summary>
+              <key>green</key>
+            </healthState>
+            <currentReading>0</currentReading>
+            <unitModifier>0</unitModifier>
+            <baseUnits></baseUnits>
+            <sensorType>Software Components</sensorType>
+          </numericSensorInfo>
+          <numericSensorInfo>
+            <name>VMware net-tg3 3.131d.v60.4-2vmw.600.2.34.3634798 2016-03-08 07:38:45.000</name>
+            <healthState XMLSchema-instance:type="ElementDescription">
+              <label>Green</label>
+              <summary>Sensor is operating under normal conditions</summary>
+              <key>green</key>
+            </healthState>
+            <currentReading>0</currentReading>
+            <unitModifier>0</unitModifier>
+            <baseUnits></baseUnits>
+            <sensorType>Software Components</sensorType>
+          </numericSensorInfo>
+          <numericSensorInfo>
+            <name>VMware scsi-hpsa 6.0.0.44-4vmw.600.2.34.3634798 2016-03-08 07:38:45.000</name>
+            <healthState XMLSchema-instance:type="ElementDescription">
+              <label>Green</label>
+              <summary>Sensor is operating under normal conditions</summary>
+              <key>green</key>
+            </healthState>
+            <currentReading>0</currentReading>
+            <unitModifier>0</unitModifier>
+            <baseUnits></baseUnits>
+            <sensorType>Software Components</sensorType>
+          </numericSensorInfo>
+          <numericSensorInfo>
+            <name>VMware scsi-bnx2fc 1.78.78.v60.8-1vmw.600.2.34.3634798 2016-03-08 07:38:41.000</name>
+            <healthState XMLSchema-instance:type="ElementDescription">
+              <label>Green</label>
+              <summary>Sensor is operating under normal conditions</summary>
+              <key>green</key>
+            </healthState>
+            <currentReading>0</currentReading>
+            <unitModifier>0</unitModifier>
+            <baseUnits></baseUnits>
+            <sensorType>Software Components</sensorType>
+          </numericSensorInfo>
+          <numericSensorInfo>
+            <name>VMware cpu-microcode 6.0.0-2.34.3634798 2016-03-08 07:39:28.000</name>
+            <healthState XMLSchema-instance:type="ElementDescription">
+              <label>Green</label>
+              <summary>Sensor is operating under normal conditions</summary>
+              <key>green</key>
+            </healthState>
+            <currentReading>0</currentReading>
+            <unitModifier>0</unitModifier>
+            <baseUnits></baseUnits>
+            <sensorType>Software Components</sensorType>
+          </numericSensorInfo>
+          <numericSensorInfo>
+            <name>VMware scsi-fnic 1.5.0.45-3vmw.600.2.34.3634798 2016-03-08 07:38:45.000</name>
+            <healthState XMLSchema-instance:type="ElementDescription">
+              <label>Green</label>
+              <summary>Sensor is operating under normal conditions</summary>
+              <key>green</key>
+            </healthState>
+            <currentReading>0</currentReading>
+            <unitModifier>0</unitModifier>
+            <baseUnits></baseUnits>
+            <sensorType>Software Components</sensorType>
+          </numericSensorInfo>
+          <numericSensorInfo>
+            <name>VMware nmlx4-rdma 3.0.0.0-1vmw.600.2.34.3634798 2016-03-08 07:38:46.000</name>
+            <healthState XMLSchema-instance:type="ElementDescription">
+              <label>Green</label>
+              <summary>Sensor is operating under normal conditions</summary>
+              <key>green</key>
+            </healthState>
+            <currentReading>0</currentReading>
+            <unitModifier>0</unitModifier>
+            <baseUnits></baseUnits>
+            <sensorType>Software Components</sensorType>
+          </numericSensorInfo>
+          <numericSensorInfo>
+            <name>VMware net-vmxnet3 1.1.3.0-3vmw.600.2.34.3634798 2016-03-08 07:38:45.000</name>
+            <healthState XMLSchema-instance:type="ElementDescription">
+              <label>Green</label>
+              <summary>Sensor is operating under normal conditions</summary>
+              <key>green</key>
+            </healthState>
+            <currentReading>0</currentReading>
+            <unitModifier>0</unitModifier>
+            <baseUnits></baseUnits>
+            <sensorType>Software Components</sensorType>
+          </numericSensorInfo>
+          <numericSensorInfo>
+            <name>VMware lpfc 10.2.309.8-2vmw.600.2.34.3634798 2016-03-08 07:38:46.000</name>
+            <healthState XMLSchema-instance:type="ElementDescription">
+              <label>Green</label>
+              <summary>Sensor is operating under normal conditions</summary>
+              <key>green</key>
+            </healthState>
+            <currentReading>0</currentReading>
+            <unitModifier>0</unitModifier>
+            <baseUnits></baseUnits>
+            <sensorType>Software Components</sensorType>
+          </numericSensorInfo>
+          <numericSensorInfo>
+            <name>VMware esx-ui 1.0.0-3617585 2016-03-03 04:52:43.000</name>
+            <healthState XMLSchema-instance:type="ElementDescription">
+              <label>Green</label>
+              <summary>Sensor is operating under normal conditions</summary>
+              <key>green</key>
+            </healthState>
+            <currentReading>0</currentReading>
+            <unitModifier>0</unitModifier>
+            <baseUnits></baseUnits>
+            <sensorType>Software Components</sensorType>
+          </numericSensorInfo>
+          <numericSensorInfo>
+            <name>VMware ata-pata-cmd64x 0.2.5-3vmw.600.2.34.3634798 2016-03-08 07:38:45.000</name>
+            <healthState XMLSchema-instance:type="ElementDescription">
+              <label>Green</label>
+              <summary>Sensor is operating under normal conditions</summary>
+              <key>green</key>
+            </healthState>
+            <currentReading>0</currentReading>
+            <unitModifier>0</unitModifier>
+            <baseUnits></baseUnits>
+            <sensorType>Software Components</sensorType>
+          </numericSensorInfo>
+          <numericSensorInfo>
+            <name>VMware lsi-mr3 6.605.08.00-7vmw.600.2.34.3634798 2016-03-08 07:38:46.000</name>
+            <healthState XMLSchema-instance:type="ElementDescription">
+              <label>Green</label>
+              <summary>Sensor is operating under normal conditions</summary>
+              <key>green</key>
+            </healthState>
+            <currentReading>0</currentReading>
+            <unitModifier>0</unitModifier>
+            <baseUnits></baseUnits>
+            <sensorType>Software Components</sensorType>
+          </numericSensorInfo>
+          <numericSensorInfo>
+            <name>VMware ata-pata-hpt3x2n 0.3.4-3vmw.600.2.34.3634798 2016-03-08 07:38:45.000</name>
+            <healthState XMLSchema-instance:type="ElementDescription">
+              <label>Green</label>
+              <summary>Sensor is operating under normal conditions</summary>
+              <key>green</key>
+            </healthState>
+            <currentReading>0</currentReading>
+            <unitModifier>0</unitModifier>
+            <baseUnits></baseUnits>
+            <sensorType>Software Components</sensorType>
+          </numericSensorInfo>
+          <numericSensorInfo>
+            <name>VMware sata-sata-nv 3.5-4vmw.600.2.34.3634798 2016-03-08 07:38:45.000</name>
+            <healthState XMLSchema-instance:type="ElementDescription">
+              <label>Green</label>
+              <summary>Sensor is operating under normal conditions</summary>
+              <key>green</key>
+            </healthState>
+            <currentReading>0</currentReading>
+            <unitModifier>0</unitModifier>
+            <baseUnits></baseUnits>
+            <sensorType>Software Components</sensorType>
+          </numericSensorInfo>
+          <numericSensorInfo>
+            <name>VMware misc-cnic-register 1.78.75.v60.7-1vmw.600.2.34.3634798 2016-03-08 07:38:45.000</name>
+            <healthState XMLSchema-instance:type="ElementDescription">
+              <label>Green</label>
+              <summary>Sensor is operating under normal conditions</summary>
+              <key>green</key>
+            </healthState>
+            <currentReading>0</currentReading>
+            <unitModifier>0</unitModifier>
+            <baseUnits></baseUnits>
+            <sensorType>Software Components</sensorType>
+          </numericSensorInfo>
+          <numericSensorInfo>
+            <name>VMware lsu-lsi-megaraid-sas-plugin 1.0.0-2vmw.600.2.34.3634798 2016-03-08 07:39:28.000</name>
+            <healthState XMLSchema-instance:type="ElementDescription">
+              <label>Green</label>
+              <summary>Sensor is operating under normal conditions</summary>
+              <key>green</key>
+            </healthState>
+            <currentReading>0</currentReading>
+            <unitModifier>0</unitModifier>
+            <baseUnits></baseUnits>
+            <sensorType>Software Components</sensorType>
+          </numericSensorInfo>
+          <numericSensorInfo>
+            <name>VMware ata-pata-sil680 0.4.8-3vmw.600.2.34.3634798 2016-03-08 07:38:45.000</name>
+            <healthState XMLSchema-instance:type="ElementDescription">
+              <label>Green</label>
+              <summary>Sensor is operating under normal conditions</summary>
+              <key>green</key>
+            </healthState>
+            <currentReading>0</currentReading>
+            <unitModifier>0</unitModifier>
+            <baseUnits></baseUnits>
+            <sensorType>Software Components</sensorType>
+          </numericSensorInfo>
+          <numericSensorInfo>
+            <name>VMware esx-tboot 6.0.0-2.34.3634798 2016-03-08 07:39:27.000</name>
+            <healthState XMLSchema-instance:type="ElementDescription">
+              <label>Green</label>
+              <summary>Sensor is operating under normal conditions</summary>
+              <key>green</key>
+            </healthState>
+            <currentReading>0</currentReading>
+            <unitModifier>0</unitModifier>
+            <baseUnits></baseUnits>
+            <sensorType>Software Components</sensorType>
+          </numericSensorInfo>
+          <numericSensorInfo>
+            <name>VMware xhci-xhci 1.0-3vmw.600.2.34.3634798 2016-03-08 07:38:45.000</name>
+            <healthState XMLSchema-instance:type="ElementDescription">
+              <label>Green</label>
+              <summary>Sensor is operating under normal conditions</summary>
+              <key>green</key>
+            </healthState>
+            <currentReading>0</currentReading>
+            <unitModifier>0</unitModifier>
+            <baseUnits></baseUnits>
+            <sensorType>Software Components</sensorType>
+          </numericSensorInfo>
+          <numericSensorInfo>
+            <name>VMware scsi-ips 7.12.05-4vmw.600.2.34.3634798 2016-03-08 07:38:45.000</name>
+            <healthState XMLSchema-instance:type="ElementDescription">
+              <label>Green</label>
+              <summary>Sensor is operating under normal conditions</summary>
+              <key>green</key>
+            </healthState>
+            <currentReading>0</currentReading>
+            <unitModifier>0</unitModifier>
+            <baseUnits></baseUnits>
+            <sensorType>Software Components</sensorType>
+          </numericSensorInfo>
+          <numericSensorInfo>
+            <name>VMware scsi-adp94xx 1.0.8.12-6vmw.600.2.34.3634798 2016-03-08 07:38:45.000</name>
+            <healthState XMLSchema-instance:type="ElementDescription">
+              <label>Green</label>
+              <summary>Sensor is operating under normal conditions</summary>
+              <key>green</key>
+            </healthState>
+            <currentReading>0</currentReading>
+            <unitModifier>0</unitModifier>
+            <baseUnits></baseUnits>
+            <sensorType>Software Components</sensorType>
+          </numericSensorInfo>
+          <numericSensorInfo>
+            <name>VMware rste 2.0.2.0088-4vmw.600.2.34.3634798 2016-03-08 07:38:46.000</name>
+            <healthState XMLSchema-instance:type="ElementDescription">
+              <label>Green</label>
+              <summary>Sensor is operating under normal conditions</summary>
+              <key>green</key>
+            </healthState>
+            <currentReading>0</currentReading>
+            <unitModifier>0</unitModifier>
+            <baseUnits></baseUnits>
+            <sensorType>Software Components</sensorType>
+          </numericSensorInfo>
+          <numericSensorInfo>
+            <name>VMware ipmi-ipmi-si-drv 39.1-4vmw.600.2.34.3634798 2016-03-08 07:38:45.000</name>
+            <healthState XMLSchema-instance:type="ElementDescription">
+              <label>Green</label>
+              <summary>Sensor is operating under normal conditions</summary>
+              <key>green</key>
+            </healthState>
+            <currentReading>0</currentReading>
+            <unitModifier>0</unitModifier>
+            <baseUnits></baseUnits>
+            <sensorType>Software Components</sensorType>
+          </numericSensorInfo>
+          <numericSensorInfo>
+            <name>VMWARE mtip32xx-native 3.8.5-1vmw.600.2.34.3634798 2016-03-08 07:38:46.000</name>
+            <healthState XMLSchema-instance:type="ElementDescription">
+              <label>Green</label>
+              <summary>Sensor is operating under normal conditions</summary>
+              <key>green</key>
+            </healthState>
+            <currentReading>0</currentReading>
+            <unitModifier>0</unitModifier>
+            <baseUnits></baseUnits>
+            <sensorType>Software Components</sensorType>
+          </numericSensorInfo>
+          <numericSensorInfo>
+            <name>VMware scsi-mpt2sas 19.00.00.00-1vmw.600.2.34.3634798 2016-03-08 07:38:45.000</name>
+            <healthState XMLSchema-instance:type="ElementDescription">
+              <label>Green</label>
+              <summary>Sensor is operating under normal conditions</summary>
+              <key>green</key>
+            </healthState>
+            <currentReading>0</currentReading>
+            <unitModifier>0</unitModifier>
+            <baseUnits></baseUnits>
+            <sensorType>Software Components</sensorType>
+          </numericSensorInfo>
+          <numericSensorInfo>
+            <name>VMware misc-drivers 6.0.0-2.34.3634798 2016-03-08 07:38:41.000</name>
+            <healthState XMLSchema-instance:type="ElementDescription">
+              <label>Green</label>
+              <summary>Sensor is operating under normal conditions</summary>
+              <key>green</key>
+            </healthState>
+            <currentReading>0</currentReading>
+            <unitModifier>0</unitModifier>
+            <baseUnits></baseUnits>
+            <sensorType>Software Components</sensorType>
+          </numericSensorInfo>
+          <numericSensorInfo>
+            <name>VMware nmlx4-core 3.0.0.0-1vmw.600.2.34.3634798 2016-03-08 07:38:46.000</name>
+            <healthState XMLSchema-instance:type="ElementDescription">
+              <label>Green</label>
+              <summary>Sensor is operating under normal conditions</summary>
+              <key>green</key>
+            </healthState>
+            <currentReading>0</currentReading>
+            <unitModifier>0</unitModifier>
+            <baseUnits></baseUnits>
+            <sensorType>Software Components</sensorType>
+          </numericSensorInfo>
+          <numericSensorInfo>
+            <name>VMware sata-sata-sil 2.3-4vmw.600.2.34.3634798 2016-03-08 07:38:45.000</name>
+            <healthState XMLSchema-instance:type="ElementDescription">
+              <label>Green</label>
+              <summary>Sensor is operating under normal conditions</summary>
+              <key>green</key>
+            </healthState>
+            <currentReading>0</currentReading>
+            <unitModifier>0</unitModifier>
+            <baseUnits></baseUnits>
+            <sensorType>Software Components</sensorType>
+          </numericSensorInfo>
+          <numericSensorInfo>
+            <name>VMware esx-base 6.0.0-2.34.3634798 2016-03-08 07:39:18.000</name>
+            <healthState XMLSchema-instance:type="ElementDescription">
+              <label>Green</label>
+              <summary>Sensor is operating under normal conditions</summary>
+              <key>green</key>
+            </healthState>
+            <currentReading>0</currentReading>
+            <unitModifier>0</unitModifier>
+            <baseUnits></baseUnits>
+            <sensorType>Software Components</sensorType>
+          </numericSensorInfo>
+          <numericSensorInfo>
+            <name>VMware scsi-bnx2i 2.78.76.v60.8-1vmw.600.2.34.3634798 2016-03-08 07:38:41.000</name>
+            <healthState XMLSchema-instance:type="ElementDescription">
+              <label>Green</label>
+              <summary>Sensor is operating under normal conditions</summary>
+              <key>green</key>
+            </healthState>
+            <currentReading>0</currentReading>
+            <unitModifier>0</unitModifier>
+            <baseUnits></baseUnits>
+            <sensorType>Software Components</sensorType>
+          </numericSensorInfo>
+          <numericSensorInfo>
+            <name>VMware net-bnx2 2.2.4f.v60.10-1vmw.600.2.34.3634798 2016-03-08 07:38:45.000</name>
+            <healthState XMLSchema-instance:type="ElementDescription">
+              <label>Green</label>
+              <summary>Sensor is operating under normal conditions</summary>
+              <key>green</key>
+            </healthState>
+            <currentReading>0</currentReading>
+            <unitModifier>0</unitModifier>
+            <baseUnits></baseUnits>
+            <sensorType>Software Components</sensorType>
+          </numericSensorInfo>
+          <numericSensorInfo>
+            <name>e1000 driver 8.0.3.1-NAPI</name>
+            <healthState XMLSchema-instance:type="ElementDescription">
+              <label>Green</label>
+              <summary>Sensor is operating under normal conditions</summary>
+              <key>green</key>
+            </healthState>
+            <currentReading>0</currentReading>
+            <unitModifier>0</unitModifier>
+            <baseUnits></baseUnits>
+            <sensorType>Software Components</sensorType>
+          </numericSensorInfo>
+          <numericSensorInfo>
+            <name>e1000 device firmware N/A</name>
+            <healthState XMLSchema-instance:type="ElementDescription">
+              <label>Green</label>
+              <summary>Sensor is operating under normal conditions</summary>
+              <key>green</key>
+            </healthState>
+            <currentReading>0</currentReading>
+            <unitModifier>0</unitModifier>
+            <baseUnits></baseUnits>
+            <sensorType>Software Components</sensorType>
+          </numericSensorInfo>
+        </systemHealthInfo>
+        <hardwareStatusInfo>
+          <cpuStatusInfo XMLSchema-instance:type="HostHardwareElementInfo">
+            <name>CPU socket #0</name>
+            <status XMLSchema-instance:type="ElementDescription">
+              <label>Green</label>
+              <summary>Physical element is functioning as expected</summary>
+              <key>Green</key>
+            </status>
+          </cpuStatusInfo>
+          <cpuStatusInfo XMLSchema-instance:type="HostHardwareElementInfo">
+            <name>CPU socket #1</name>
+            <status XMLSchema-instance:type="ElementDescription">
+              <label>Green</label>
+              <summary>Physical element is functioning as expected</summary>
+              <key>Green</key>
+            </status>
+          </cpuStatusInfo>
+        </hardwareStatusInfo>
+      </healthSystemRuntime>
+      <vsanRuntimeInfo></vsanRuntimeInfo>
+      <networkRuntimeInfo>
+        <netStackInstanceRuntimeInfo>
+          <netStackInstanceKey>defaultTcpipStack</netStackInstanceKey>
+          <state>active</state>
+          <vmknicKeys>vmk0</vmknicKeys>
+          <maxNumberOfConnections>11000</maxNumberOfConnections>
+          <currentIpV6Enabled>true</currentIpV6Enabled>
+        </netStackInstanceRuntimeInfo>
+      </networkRuntimeInfo>
+      <hostMaxVirtualDiskCapacity>68169720922112</hostMaxVirtualDiskCapacity>
+    </val>
+  </propSet>
+  <propSet>
     <name>summary</name>
     <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="HostListSummary">
       <host type="HostSystem">host-23</host>
@@ -116,7 +1239,7 @@
         <powerState>poweredOn</powerState>
         <standbyMode>none</standbyMode>
         <inMaintenanceMode>false</inMaintenanceMode>
-        <bootTime>2023-09-20T08:51:11.019572408+02:00</bootTime>
+        <bootTime>2023-10-25T09:30:27.925430337+02:00</bootTime>
         <healthSystemRuntime>
           <systemHealthInfo>
             <numericSensorInfo>
@@ -4153,6 +5276,7 @@
     <name>vm</name>
     <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="ArrayOfManagedObjectReference">
       <ManagedObjectReference type="VirtualMachine">vm-28</ManagedObjectReference>
+      <ManagedObjectReference type="VirtualMachine">vm-31</ManagedObjectReference>
     </val>
   </propSet>
   <propSet>

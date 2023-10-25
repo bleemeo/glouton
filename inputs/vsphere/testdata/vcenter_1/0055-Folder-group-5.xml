@@ -1,5 +1,5 @@
 <ObjectContent>
-  <obj type="Folder">group-3</obj>
+  <obj type="Folder">group-5</obj>
   <propSet>
     <name>value</name>
     <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="ArrayOfCustomFieldValue"></val>
@@ -40,7 +40,7 @@
   </propSet>
   <propSet>
     <name>name</name>
-    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="xsd:string">vm</val>
+    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="xsd:string">datastore</val>
   </propSet>
   <propSet>
     <name>disabledMethod</name>
@@ -65,16 +65,15 @@
   <propSet>
     <name>childType</name>
     <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="ArrayOfString">
-      <string>VirtualMachine</string>
-      <string>VirtualApp</string>
+      <string>Datastore</string>
+      <string>StoragePod</string>
       <string>Folder</string>
     </val>
   </propSet>
   <propSet>
     <name>childEntity</name>
     <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="ArrayOfManagedObjectReference">
-      <ManagedObjectReference type="VirtualMachine">vm-28</ManagedObjectReference>
-      <ManagedObjectReference type="VirtualMachine">vm-31</ManagedObjectReference>
+      <ManagedObjectReference type="Datastore">datastore-25</ManagedObjectReference>
     </val>
   </propSet>
   <propSet>
@@ -117,7 +116,7 @@
   </propSet>
   <propSet>
     <name>name</name>
-    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="xsd:string">vm</val>
+    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="xsd:string">datastore</val>
   </propSet>
   <propSet>
     <name>disabledMethod</name>
@@ -142,16 +141,15 @@
   <propSet>
     <name>childType</name>
     <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="ArrayOfString">
-      <string>VirtualMachine</string>
-      <string>VirtualApp</string>
+      <string>Datastore</string>
+      <string>StoragePod</string>
       <string>Folder</string>
     </val>
   </propSet>
   <propSet>
     <name>childEntity</name>
     <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="ArrayOfManagedObjectReference">
-      <ManagedObjectReference type="VirtualMachine">vm-28</ManagedObjectReference>
-      <ManagedObjectReference type="VirtualMachine">vm-31</ManagedObjectReference>
+      <ManagedObjectReference type="Datastore">datastore-25</ManagedObjectReference>
     </val>
   </propSet>
 </ObjectContent>

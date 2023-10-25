@@ -94,12 +94,12 @@
     <name>config</name>
     <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="VirtualMachineConfigInfo">
       <changeVersion></changeVersion>
-      <modified>2023-09-20T08:51:11.062767492+02:00</modified>
+      <modified>2023-10-25T09:30:27.968457149+02:00</modified>
       <name>DC0_C0_RP0_VM0</name>
       <guestFullName>otherGuest</guestFullName>
       <version>vmx-13</version>
       <uuid>cd0681bf-2f18-5c00-9b9b-8197c0095348</uuid>
-      <createDate>2023-09-20T08:51:11.06202433+02:00</createDate>
+      <createDate>2023-10-25T09:30:27.967892212+02:00</createDate>
       <instanceUuid>bfff331f-7f07-572d-951e-edd3701dc061</instanceUuid>
       <template>false</template>
       <guestId>otherGuest</guestId>
@@ -228,7 +228,7 @@
             <summary>cdrom-203</summary>
           </deviceInfo>
           <backing XMLSchema-instance:type="VirtualCdromAtapiBackingInfo">
-            <deviceName>cdrom--201-824638216976</deviceName>
+            <deviceName>cdrom--201-824635603088</deviceName>
             <useAutoDetect>false</useAutoDetect>
           </backing>
           <connectable>
@@ -400,7 +400,7 @@
           <fileKey>6</fileKey>
         </chain>
       </disk>
-      <timestamp>2023-09-20T08:51:11.064360487+02:00</timestamp>
+      <timestamp>2023-10-25T09:30:27.969987346+02:00</timestamp>
     </val>
   </propSet>
   <propSet>
@@ -412,7 +412,7 @@
         <uncommitted>10737418240</uncommitted>
         <unshared>0</unshared>
       </perDatastoreUsage>
-      <timestamp>2023-09-20T08:51:11.064360042+02:00</timestamp>
+      <timestamp>2023-10-25T09:30:27.969987179+02:00</timestamp>
     </val>
   </propSet>
   <propSet>
@@ -457,7 +457,7 @@
         <connectionState>connected</connectionState>
         <powerState>poweredOn</powerState>
         <toolsInstallerMounted>false</toolsInstallerMounted>
-        <bootTime>2023-09-20T08:51:11.082291069+02:00</bootTime>
+        <bootTime>2023-10-25T09:30:27.987620755+02:00</bootTime>
         <numMksConnections>0</numMksConnections>
       </runtime>
       <guest>
@@ -481,7 +481,7 @@
         <committed>0</committed>
         <uncommitted>10737418240</uncommitted>
         <unshared>0</unshared>
-        <timestamp>2023-09-20T08:51:11.064360089+02:00</timestamp>
+        <timestamp>2023-10-25T09:30:27.969987216+02:00</timestamp>
       </storage>
       <quickStats>
         <guestHeartbeatStatus>gray</guestHeartbeatStatus>

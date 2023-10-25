@@ -2861,8 +2861,17 @@
           <startDelay>120</startDelay>
           <stopDelay>120</stopDelay>
           <waitForHeartbeat>false</waitForHeartbeat>
-          <stopAction>PowerOff</stopAction>
+          <stopAction>powerOff</stopAction>
         </defaults>
+        <powerInfo>
+          <key type="VirtualMachine">10</key>
+          <startOrder>1</startOrder>
+          <startDelay>10</startDelay>
+          <waitForHeartbeat>systemDefault</waitForHeartbeat>
+          <startAction>powerOn</startAction>
+          <stopDelay>120</stopDelay>
+          <stopAction>systemDefault</stopAction>
+        </powerInfo>
       </autoStart>
       <option XMLSchema-instance:type="OptionValue">
         <key>Annotations.WelcomeMessage</key>
@@ -6714,7 +6723,7 @@
       </option>
       <option XMLSchema-instance:type="OptionValue">
         <key>UserVars.HostClientSessionTimeout</key>
-        <value XMLSchema-instance:type="xsd:long">3600</value>
+        <value XMLSchema-instance:type="xsd:long">7200</value>
       </option>
       <option XMLSchema-instance:type="OptionValue">
         <key>UserVars.HostClientShowOnlyRecentObjects</key>
@@ -21516,6 +21525,14 @@
       <vsanHostConfig>
         <enabled>false</enabled>
         <hostSystem type="HostSystem">ha-host</hostSystem>
+        <clusterInfo></clusterInfo>
+        <storageInfo>
+          <autoClaimStorage>false</autoClaimStorage>
+        </storageInfo>
+        <networkInfo></networkInfo>
+        <faultDomainInfo>
+          <name></name>
+        </faultDomainInfo>
       </vsanHostConfig>
       <scriptCheckSum>VegOffL+MbR7SIVD+0JQ7OTanI0=</scriptCheckSum>
       <hostConfigCheckSum>FHZSijjfgnfUo2MH0edh7V4sSIs=</hostConfigCheckSum>
@@ -21562,7 +21579,7 @@
     <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="ArrayOfEvent">
       <Event XMLSchema-instance:type="LocalTSMEnabledEvent">
         <key>1</key>
-        <chainId>0</chainId>
+        <chainId>-1</chainId>
         <createdTime>1970-01-01T00:00:00Z</createdTime>
         <userName></userName>
         <host>
@@ -21573,7 +21590,7 @@
       </Event>
       <Event XMLSchema-instance:type="RemoteTSMEnabledEvent">
         <key>2</key>
-        <chainId>-1506016862</chainId>
+        <chainId>-910163600</chainId>
         <createdTime>1970-01-01T00:00:00Z</createdTime>
         <userName></userName>
         <host>
@@ -21723,13 +21740,13 @@
         <numCpuPackages>4</numCpuPackages>
         <numCpuCores>4</numCpuCores>
         <numCpuThreads>4</numCpuThreads>
-        <hz>1991964716</hz>
+        <hz>1991966262</hz>
       </cpuInfo>
       <cpuPkg>
         <index>0</index>
         <vendor>intel</vendor>
-        <hz>1991972891</hz>
-        <busHz>1000000300</busHz>
+        <hz>1991973728</hz>
+        <busHz>1000001083</busHz>
         <description>Intel(R) Core(TM) i7-8550U CPU @ 1.80GHz</description>
         <threadId>0</threadId>
         <cpuFeature>
@@ -21771,8 +21788,8 @@
       <cpuPkg>
         <index>1</index>
         <vendor>intel</vendor>
-        <hz>1991963208</hz>
-        <busHz>999996053</busHz>
+        <hz>1991962935</hz>
+        <busHz>999995183</busHz>
         <description>Intel(R) Core(TM) i7-8550U CPU @ 1.80GHz</description>
         <threadId>1</threadId>
         <cpuFeature>
@@ -21814,8 +21831,8 @@
       <cpuPkg>
         <index>2</index>
         <vendor>intel</vendor>
-        <hz>1991961302</hz>
-        <busHz>999993832</busHz>
+        <hz>1991965395</hz>
+        <busHz>999996076</busHz>
         <description>Intel(R) Core(TM) i7-8550U CPU @ 1.80GHz</description>
         <threadId>2</threadId>
         <cpuFeature>
@@ -21857,8 +21874,8 @@
       <cpuPkg>
         <index>3</index>
         <vendor>intel</vendor>
-        <hz>1991961466</hz>
-        <busHz>999994366</busHz>
+        <hz>1991962990</hz>
+        <busHz>999994588</busHz>
         <description>Intel(R) Core(TM) i7-8550U CPU @ 1.80GHz</description>
         <threadId>3</threadId>
         <cpuFeature>
@@ -22092,7 +22109,7 @@
       </resource>
       <resource>
         <key>numVmsStarted</key>
-        <value XMLSchema-instance:type="xsd:long">0</value>
+        <value XMLSchema-instance:type="xsd:long">1</value>
       </resource>
     </val>
   </propSet>
@@ -22128,10 +22145,11 @@
       <connectionState>connected</connectionState>
       <powerState>poweredOn</powerState>
       <inMaintenanceMode>false</inMaintenanceMode>
-      <bootTime>2023-09-20T08:57:22.335576Z</bootTime>
+      <bootTime>2023-10-25T07:12:04.328882Z</bootTime>
       <healthSystemRuntime>
         <systemHealthInfo></systemHealthInfo>
       </healthSystemRuntime>
+      <vsanRuntimeInfo></vsanRuntimeInfo>
       <networkRuntimeInfo>
         <netStackInstanceRuntimeInfo>
           <netStackInstanceKey>defaultTcpipStack</netStackInstanceKey>
@@ -22201,10 +22219,11 @@
         <connectionState>connected</connectionState>
         <powerState>poweredOn</powerState>
         <inMaintenanceMode>false</inMaintenanceMode>
-        <bootTime>2023-09-20T08:57:22.335576Z</bootTime>
+        <bootTime>2023-10-25T07:12:04.328882Z</bootTime>
         <healthSystemRuntime>
           <systemHealthInfo></systemHealthInfo>
         </healthSystemRuntime>
+        <vsanRuntimeInfo></vsanRuntimeInfo>
         <networkRuntimeInfo>
           <netStackInstanceRuntimeInfo>
             <netStackInstanceKey>defaultTcpipStack</netStackInstanceKey>
@@ -22243,9 +22262,9 @@
         <faultToleranceEnabled>true</faultToleranceEnabled>
       </config>
       <quickStats>
-        <overallCpuUsage>50</overallCpuUsage>
-        <overallMemoryUsage>1542</overallMemoryUsage>
-        <uptime>397</uptime>
+        <overallCpuUsage>107</overallCpuUsage>
+        <overallMemoryUsage>1858</overallMemoryUsage>
+        <uptime>16435</uptime>
       </quickStats>
       <overallStatus>gray</overallStatus>
       <rebootRequired>false</rebootRequired>
@@ -22291,7 +22310,7 @@
             <overheadLimit>-1</overheadLimit>
           </cpuAllocation>
           <memoryAllocation>
-            <reservation>1574</reservation>
+            <reservation>1598</reservation>
             <expandableReservation>true</expandableReservation>
             <limit>-1</limit>
             <shares>
@@ -23351,7 +23370,7 @@
             </config>
           </child>
           <child>
-            <key>host/system/drivers/vmkata-40</key>
+            <key>host/system/drivers/vmkusb-40</key>
             <config>
               <cpuAllocation>
                 <reservation>0</reservation>
@@ -23376,7 +23395,7 @@
             </config>
           </child>
           <child>
-            <key>host/system/drivers/vmkusb-41</key>
+            <key>host/system/drivers/vmkata-41</key>
             <config>
               <cpuAllocation>
                 <reservation>0</reservation>
@@ -24700,7 +24719,7 @@
               </config>
             </child>
             <child>
-              <key>host/system/visorfs/ramdisks/hostdstats</key>
+              <key>host/system/visorfs/ramdisks/snmptraps</key>
               <config>
                 <cpuAllocation>
                   <reservation>0</reservation>
@@ -24715,7 +24734,7 @@
                 <memoryAllocation>
                   <reservation>0</reservation>
                   <expandableReservation>true</expandableReservation>
-                  <limit>69</limit>
+                  <limit>1</limit>
                   <shares>
                     <shares>0</shares>
                     <level>normal</level>
@@ -24925,7 +24944,7 @@
               </memoryAllocation>
             </config>
             <child>
-              <key>host/vim/vmvisor/apiForwarder/sh.66685</key>
+              <key>host/vim/vmvisor/apiForwarder/sh.66635</key>
               <config>
                 <cpuAllocation>
                   <reservation>0</reservation>
@@ -24950,7 +24969,7 @@
               </config>
             </child>
             <child>
-              <key>host/vim/vmvisor/apiForwarder/apiForwarder.66700</key>
+              <key>host/vim/vmvisor/apiForwarder/apiForwarder.66741</key>
               <config>
                 <cpuAllocation>
                   <reservation>0</reservation>
@@ -25175,7 +25194,7 @@
               </memoryAllocation>
             </config>
             <child>
-              <key>host/vim/vmvisor/crond/busybox.66072</key>
+              <key>host/vim/vmvisor/crond/busybox.66071</key>
               <config>
                 <cpuAllocation>
                   <reservation>0</reservation>
@@ -25225,7 +25244,7 @@
               </memoryAllocation>
             </config>
             <child>
-              <key>host/vim/vmvisor/dcui/dcui.67518</key>
+              <key>host/vim/vmvisor/dcui/dcui.67751</key>
               <config>
                 <cpuAllocation>
                   <reservation>0</reservation>
@@ -25275,7 +25294,7 @@
               </memoryAllocation>
             </config>
             <child>
-              <key>host/vim/vmvisor/dhclient/dhclient-uw.66000</key>
+              <key>host/vim/vmvisor/dhclient/dhclient-uw.65996</key>
               <config>
                 <cpuAllocation>
                   <reservation>0</reservation>
@@ -25375,7 +25394,7 @@
               </memoryAllocation>
             </config>
             <child>
-              <key>host/vim/vmvisor/envoy/sh.66395</key>
+              <key>host/vim/vmvisor/envoy/sh.66373</key>
               <config>
                 <cpuAllocation>
                   <reservation>0</reservation>
@@ -25400,7 +25419,7 @@
               </config>
             </child>
             <child>
-              <key>host/vim/vmvisor/envoy/envoy.66411</key>
+              <key>host/vim/vmvisor/envoy/envoy.66404</key>
               <config>
                 <cpuAllocation>
                   <reservation>0</reservation>
@@ -25475,7 +25494,7 @@
               </config>
             </child>
             <child>
-              <key>host/vim/vmvisor/esxgdpd/esxgdpd.66294</key>
+              <key>host/vim/vmvisor/esxgdpd/esxgdpd.66289</key>
               <config>
                 <cpuAllocation>
                   <reservation>0</reservation>
@@ -25539,9 +25558,9 @@
                 <overheadLimit>-1</overheadLimit>
               </cpuAllocation>
               <memoryAllocation>
-                <reservation>28</reservation>
+                <reservation>0</reservation>
                 <expandableReservation>true</expandableReservation>
-                <limit>28</limit>
+                <limit>0</limit>
                 <shares>
                   <shares>0</shares>
                   <level>normal</level>
@@ -25575,7 +25594,7 @@
               </memoryAllocation>
             </config>
             <child>
-              <key>host/vim/vmvisor/esxtokend/sh.66554</key>
+              <key>host/vim/vmvisor/esxtokend/sh.66561</key>
               <config>
                 <cpuAllocation>
                   <reservation>0</reservation>
@@ -25600,7 +25619,7 @@
               </config>
             </child>
             <child>
-              <key>host/vim/vmvisor/esxtokend/esxtokend.66572</key>
+              <key>host/vim/vmvisor/esxtokend/esxtokend.66628</key>
               <config>
                 <cpuAllocation>
                   <reservation>0</reservation>
@@ -25689,9 +25708,9 @@
                 <overheadLimit>-1</overheadLimit>
               </cpuAllocation>
               <memoryAllocation>
-                <reservation>50</reservation>
+                <reservation>0</reservation>
                 <expandableReservation>true</expandableReservation>
-                <limit>50</limit>
+                <limit>0</limit>
                 <shares>
                   <shares>0</shares>
                   <level>normal</level>
@@ -25724,6 +25743,56 @@
                 <overheadLimit>-1</overheadLimit>
               </memoryAllocation>
             </config>
+            <child>
+              <key>host/vim/vmvisor/healthd/sh.67268</key>
+              <config>
+                <cpuAllocation>
+                  <reservation>0</reservation>
+                  <expandableReservation>false</expandableReservation>
+                  <limit>-1</limit>
+                  <shares>
+                    <shares>1000</shares>
+                    <level>custom</level>
+                  </shares>
+                  <overheadLimit>0</overheadLimit>
+                </cpuAllocation>
+                <memoryAllocation>
+                  <reservation>0</reservation>
+                  <expandableReservation>true</expandableReservation>
+                  <limit>-1</limit>
+                  <shares>
+                    <shares>0</shares>
+                    <level>normal</level>
+                  </shares>
+                  <overheadLimit>-1</overheadLimit>
+                </memoryAllocation>
+              </config>
+            </child>
+            <child>
+              <key>host/vim/vmvisor/healthd/healthd.67306</key>
+              <config>
+                <cpuAllocation>
+                  <reservation>0</reservation>
+                  <expandableReservation>false</expandableReservation>
+                  <limit>-1</limit>
+                  <shares>
+                    <shares>1000</shares>
+                    <level>custom</level>
+                  </shares>
+                  <overheadLimit>0</overheadLimit>
+                </cpuAllocation>
+                <memoryAllocation>
+                  <reservation>0</reservation>
+                  <expandableReservation>true</expandableReservation>
+                  <limit>-1</limit>
+                  <shares>
+                    <shares>0</shares>
+                    <level>normal</level>
+                  </shares>
+                  <overheadLimit>-1</overheadLimit>
+                </memoryAllocation>
+              </config>
+            </child>
           </child>
           <child>
             <key>host/vim/vmvisor/healthd-plugins</key>
@@ -25775,7 +25844,7 @@
               </memoryAllocation>
             </config>
             <child>
-              <key>host/vim/vmvisor/hostd/sh.67094</key>
+              <key>host/vim/vmvisor/hostd/sh.66874</key>
               <config>
                 <cpuAllocation>
                   <reservation>0</reservation>
@@ -25800,7 +25869,7 @@
               </config>
             </child>
             <child>
-              <key>host/vim/vmvisor/hostd/hostd.67117</key>
+              <key>host/vim/vmvisor/hostd/hostd.66884</key>
               <config>
                 <cpuAllocation>
                   <reservation>0</reservation>
@@ -26023,7 +26092,7 @@
                   </memoryAllocation>
                 </config>
                 <child>
-                  <key>host/vim/vmvisor/hostd-probe/stats/probe/hostd-probe.67563</key>
+                  <key>host/vim/vmvisor/hostd-probe/stats/probe/hostd-probe.67955</key>
                   <config>
                     <cpuAllocation>
                       <reservation>0</reservation>
@@ -26175,7 +26244,7 @@
               </memoryAllocation>
             </config>
             <child>
-              <key>host/vim/vmvisor/hostdCgiServer/sh.66538</key>
+              <key>host/vim/vmvisor/hostdCgiServer/sh.66541</key>
               <config>
                 <cpuAllocation>
                   <reservation>0</reservation>
@@ -26200,7 +26269,7 @@
               </config>
             </child>
             <child>
-              <key>host/vim/vmvisor/hostdCgiServer/hostdCgiServer.66562</key>
+              <key>host/vim/vmvisor/hostdCgiServer/hostdCgiServer.66569</key>
               <config>
                 <cpuAllocation>
                   <reservation>0</reservation>
@@ -26250,7 +26319,7 @@
               </memoryAllocation>
             </config>
             <child>
-              <key>host/vim/vmvisor/inetd/busybox.66002</key>
+              <key>host/vim/vmvisor/inetd/busybox.66000</key>
               <config>
                 <cpuAllocation>
                   <reservation>0</reservation>
@@ -28375,7 +28444,7 @@
               </memoryAllocation>
             </config>
             <child>
-              <key>host/vim/vmvisor/kmxa/sh.66016</key>
+              <key>host/vim/vmvisor/kmxa/sh.66014</key>
               <config>
                 <cpuAllocation>
                   <reservation>0</reservation>
@@ -28400,7 +28469,7 @@
               </config>
             </child>
             <child>
-              <key>host/vim/vmvisor/kmxa/kmxa.66026</key>
+              <key>host/vim/vmvisor/kmxa/kmxa.66023</key>
               <config>
                 <cpuAllocation>
                   <reservation>0</reservation>
@@ -28475,7 +28544,7 @@
               </memoryAllocation>
             </config>
             <child>
-              <key>host/vim/vmvisor/lacpd/sh.65982</key>
+              <key>host/vim/vmvisor/lacpd/sh.65980</key>
               <config>
                 <cpuAllocation>
                   <reservation>0</reservation>
@@ -28500,7 +28569,7 @@
               </config>
             </child>
             <child>
-              <key>host/vim/vmvisor/lacpd/net-lacp.65991</key>
+              <key>host/vim/vmvisor/lacpd/net-lacp.65989</key>
               <config>
                 <cpuAllocation>
                   <reservation>0</reservation>
@@ -28550,7 +28619,7 @@
               </memoryAllocation>
             </config>
             <child>
-              <key>host/vim/vmvisor/lbt/sh.66633</key>
+              <key>host/vim/vmvisor/lbt/sh.66600</key>
               <config>
                 <cpuAllocation>
                   <reservation>0</reservation>
@@ -28575,7 +28644,7 @@
               </config>
             </child>
             <child>
-              <key>host/vim/vmvisor/lbt/net-lbt.66684</key>
+              <key>host/vim/vmvisor/lbt/net-lbt.66639</key>
               <config>
                 <cpuAllocation>
                   <reservation>0</reservation>
@@ -28725,7 +28794,7 @@
               </config>
             </child>
             <child>
-              <key>host/vim/vmvisor/logging/vmsyslogd.65760</key>
+              <key>host/vim/vmvisor/logging/vmsyslogd.65761</key>
               <config>
                 <cpuAllocation>
                   <reservation>0</reservation>
@@ -28774,6 +28843,56 @@
                 <overheadLimit>-1</overheadLimit>
               </memoryAllocation>
             </config>
+            <child>
+              <key>host/vim/vmvisor/lsud/sh.67439</key>
+              <config>
+                <cpuAllocation>
+                  <reservation>0</reservation>
+                  <expandableReservation>false</expandableReservation>
+                  <limit>-1</limit>
+                  <shares>
+                    <shares>1000</shares>
+                    <level>custom</level>
+                  </shares>
+                  <overheadLimit>0</overheadLimit>
+                </cpuAllocation>
+                <memoryAllocation>
+                  <reservation>0</reservation>
+                  <expandableReservation>true</expandableReservation>
+                  <limit>-1</limit>
+                  <shares>
+                    <shares>0</shares>
+                    <level>normal</level>
+                  </shares>
+                  <overheadLimit>-1</overheadLimit>
+                </memoryAllocation>
+              </config>
+            </child>
+            <child>
+              <key>host/vim/vmvisor/lsud/lsud.67449</key>
+              <config>
+                <cpuAllocation>
+                  <reservation>0</reservation>
+                  <expandableReservation>false</expandableReservation>
+                  <limit>-1</limit>
+                  <shares>
+                    <shares>1000</shares>
+                    <level>custom</level>
+                  </shares>
+                  <overheadLimit>0</overheadLimit>
+                </cpuAllocation>
+                <memoryAllocation>
+                  <reservation>0</reservation>
+                  <expandableReservation>true</expandableReservation>
+                  <limit>-1</limit>
+                  <shares>
+                    <shares>0</shares>
+                    <level>normal</level>
+                  </shares>
+                  <overheadLimit>-1</overheadLimit>
+                </memoryAllocation>
+              </config>
+            </child>
           </child>
           <child>
             <key>host/vim/vmvisor/net-daemons</key>
@@ -28799,6 +28918,106 @@
                 <overheadLimit>-1</overheadLimit>
               </memoryAllocation>
             </config>
+            <child>
+              <key>host/vim/vmvisor/net-daemons/sh.67034</key>
+              <config>
+                <cpuAllocation>
+                  <reservation>0</reservation>
+                  <expandableReservation>false</expandableReservation>
+                  <limit>-1</limit>
+                  <shares>
+                    <shares>1000</shares>
+                    <level>custom</level>
+                  </shares>
+                  <overheadLimit>0</overheadLimit>
+                </cpuAllocation>
+                <memoryAllocation>
+                  <reservation>0</reservation>
+                  <expandableReservation>true</expandableReservation>
+                  <limit>-1</limit>
+                  <shares>
+                    <shares>0</shares>
+                    <level>normal</level>
+                  </shares>
+                  <overheadLimit>-1</overheadLimit>
+                </memoryAllocation>
+              </config>
+            </child>
+            <child>
+              <key>host/vim/vmvisor/net-daemons/sh.67042</key>
+              <config>
+                <cpuAllocation>
+                  <reservation>0</reservation>
+                  <expandableReservation>false</expandableReservation>
+                  <limit>-1</limit>
+                  <shares>
+                    <shares>1000</shares>
+                    <level>custom</level>
+                  </shares>
+                  <overheadLimit>0</overheadLimit>
+                </cpuAllocation>
+                <memoryAllocation>
+                  <reservation>0</reservation>
+                  <expandableReservation>true</expandableReservation>
+                  <limit>-1</limit>
+                  <shares>
+                    <shares>0</shares>
+                    <level>normal</level>
+                  </shares>
+                  <overheadLimit>-1</overheadLimit>
+                </memoryAllocation>
+              </config>
+            </child>
+            <child>
+              <key>host/vim/vmvisor/net-daemons/net-cdp.67063</key>
+              <config>
+                <cpuAllocation>
+                  <reservation>0</reservation>
+                  <expandableReservation>false</expandableReservation>
+                  <limit>-1</limit>
+                  <shares>
+                    <shares>1000</shares>
+                    <level>custom</level>
+                  </shares>
+                  <overheadLimit>0</overheadLimit>
+                </cpuAllocation>
+                <memoryAllocation>
+                  <reservation>0</reservation>
+                  <expandableReservation>true</expandableReservation>
+                  <limit>-1</limit>
+                  <shares>
+                    <shares>0</shares>
+                    <level>normal</level>
+                  </shares>
+                  <overheadLimit>-1</overheadLimit>
+                </memoryAllocation>
+              </config>
+            </child>
+            <child>
+              <key>host/vim/vmvisor/net-daemons/dcbd.67080</key>
+              <config>
+                <cpuAllocation>
+                  <reservation>0</reservation>
+                  <expandableReservation>false</expandableReservation>
+                  <limit>-1</limit>
+                  <shares>
+                    <shares>1000</shares>
+                    <level>custom</level>
+                  </shares>
+                  <overheadLimit>0</overheadLimit>
+                </cpuAllocation>
+                <memoryAllocation>
+                  <reservation>0</reservation>
+                  <expandableReservation>true</expandableReservation>
+                  <limit>-1</limit>
+                  <shares>
+                    <shares>0</shares>
+                    <level>normal</level>
+                  </shares>
+                  <overheadLimit>-1</overheadLimit>
+                </memoryAllocation>
+              </config>
+            </child>
           </child>
           <child>
             <key>host/vim/vmvisor/netcpa</key>
@@ -28889,9 +29108,9 @@
                 <overheadLimit>-1</overheadLimit>
               </cpuAllocation>
               <memoryAllocation>
-                <reservation>0</reservation>
+                <reservation>25</reservation>
                 <expandableReservation>true</expandableReservation>
-                <limit>0</limit>
+                <limit>25</limit>
                 <shares>
                   <shares>0</shares>
                   <level>normal</level>
@@ -28899,6 +29118,56 @@
                 <overheadLimit>-1</overheadLimit>
               </memoryAllocation>
             </config>
+            <child>
+              <key>host/vim/vmvisor/nicmgmtd/sh.67200</key>
+              <config>
+                <cpuAllocation>
+                  <reservation>0</reservation>
+                  <expandableReservation>false</expandableReservation>
+                  <limit>-1</limit>
+                  <shares>
+                    <shares>1000</shares>
+                    <level>custom</level>
+                  </shares>
+                  <overheadLimit>0</overheadLimit>
+                </cpuAllocation>
+                <memoryAllocation>
+                  <reservation>0</reservation>
+                  <expandableReservation>true</expandableReservation>
+                  <limit>-1</limit>
+                  <shares>
+                    <shares>0</shares>
+                    <level>normal</level>
+                  </shares>
+                  <overheadLimit>-1</overheadLimit>
+                </memoryAllocation>
+              </config>
+            </child>
+            <child>
+              <key>host/vim/vmvisor/nicmgmtd/nicmgmtd.67210</key>
+              <config>
+                <cpuAllocation>
+                  <reservation>0</reservation>
+                  <expandableReservation>false</expandableReservation>
+                  <limit>-1</limit>
+                  <shares>
+                    <shares>1000</shares>
+                    <level>custom</level>
+                  </shares>
+                  <overheadLimit>0</overheadLimit>
+                </cpuAllocation>
+                <memoryAllocation>
+                  <reservation>0</reservation>
+                  <expandableReservation>true</expandableReservation>
+                  <limit>-1</limit>
+                  <shares>
+                    <shares>0</shares>
+                    <level>normal</level>
+                  </shares>
+                  <overheadLimit>-1</overheadLimit>
+                </memoryAllocation>
+              </config>
+            </child>
           </child>
           <child>
             <key>host/vim/vmvisor/nscd</key>
@@ -28924,6 +29193,56 @@
                 <overheadLimit>-1</overheadLimit>
               </memoryAllocation>
             </config>
+            <child>
+              <key>host/vim/vmvisor/nscd/sh.67028</key>
+              <config>
+                <cpuAllocation>
+                  <reservation>0</reservation>
+                  <expandableReservation>false</expandableReservation>
+                  <limit>-1</limit>
+                  <shares>
+                    <shares>1000</shares>
+                    <level>custom</level>
+                  </shares>
+                  <overheadLimit>0</overheadLimit>
+                </cpuAllocation>
+                <memoryAllocation>
+                  <reservation>0</reservation>
+                  <expandableReservation>true</expandableReservation>
+                  <limit>-1</limit>
+                  <shares>
+                    <shares>0</shares>
+                    <level>normal</level>
+                  </shares>
+                  <overheadLimit>-1</overheadLimit>
+                </memoryAllocation>
+              </config>
+            </child>
+            <child>
+              <key>host/vim/vmvisor/nscd/nscd.67065</key>
+              <config>
+                <cpuAllocation>
+                  <reservation>0</reservation>
+                  <expandableReservation>false</expandableReservation>
+                  <limit>-1</limit>
+                  <shares>
+                    <shares>1000</shares>
+                    <level>custom</level>
+                  </shares>
+                  <overheadLimit>0</overheadLimit>
+                </cpuAllocation>
+                <memoryAllocation>
+                  <reservation>0</reservation>
+                  <expandableReservation>true</expandableReservation>
+                  <limit>-1</limit>
+                  <shares>
+                    <shares>0</shares>
+                    <level>normal</level>
+                  </shares>
+                  <overheadLimit>-1</overheadLimit>
+                </memoryAllocation>
+              </config>
+            </child>
           </child>
           <child>
             <key>host/vim/vmvisor/ntpd</key>
@@ -28964,9 +29283,9 @@
                 <overheadLimit>-1</overheadLimit>
               </cpuAllocation>
               <memoryAllocation>
-                <reservation>0</reservation>
+                <reservation>25</reservation>
                 <expandableReservation>true</expandableReservation>
-                <limit>0</limit>
+                <limit>25</limit>
                 <shares>
                   <shares>0</shares>
                   <level>normal</level>
@@ -29175,7 +29494,7 @@
               </memoryAllocation>
             </config>
             <child>
-              <key>host/vim/vmvisor/rhttpproxy/sh.66577</key>
+              <key>host/vim/vmvisor/rhttpproxy/sh.66595</key>
               <config>
                 <cpuAllocation>
                   <reservation>0</reservation>
@@ -29200,7 +29519,7 @@
               </config>
             </child>
             <child>
-              <key>host/vim/vmvisor/rhttpproxy/rhttpproxy.66652</key>
+              <key>host/vim/vmvisor/rhttpproxy/rhttpproxy.66664</key>
               <config>
                 <cpuAllocation>
                   <reservation>0</reservation>
@@ -29250,7 +29569,7 @@
               </memoryAllocation>
             </config>
             <child>
-              <key>host/vim/vmvisor/sandboxd/sh.66273</key>
+              <key>host/vim/vmvisor/sandboxd/sh.66282</key>
               <config>
                 <cpuAllocation>
                   <reservation>0</reservation>
@@ -29275,7 +29594,7 @@
               </config>
             </child>
             <child>
-              <key>host/vim/vmvisor/sandboxd/sandboxd.66299</key>
+              <key>host/vim/vmvisor/sandboxd/sandboxd.66308</key>
               <config>
                 <cpuAllocation>
                   <reservation>0</reservation>
@@ -29350,7 +29669,7 @@
               </memoryAllocation>
             </config>
             <child>
-              <key>host/vim/vmvisor/sensord/sh.66734</key>
+              <key>host/vim/vmvisor/sensord/sh.66966</key>
               <config>
                 <cpuAllocation>
                   <reservation>0</reservation>
@@ -29375,7 +29694,7 @@
               </config>
             </child>
             <child>
-              <key>host/vim/vmvisor/sensord/sensord.66757</key>
+              <key>host/vim/vmvisor/sensord/sensord.66975</key>
               <config>
                 <cpuAllocation>
                   <reservation>0</reservation>
@@ -29424,6 +29743,56 @@
                 <overheadLimit>-1</overheadLimit>
               </memoryAllocation>
             </config>
+            <child>
+              <key>host/vim/vmvisor/settingsd/sh.67226</key>
+              <config>
+                <cpuAllocation>
+                  <reservation>0</reservation>
+                  <expandableReservation>false</expandableReservation>
+                  <limit>-1</limit>
+                  <shares>
+                    <shares>1000</shares>
+                    <level>custom</level>
+                  </shares>
+                  <overheadLimit>0</overheadLimit>
+                </cpuAllocation>
+                <memoryAllocation>
+                  <reservation>0</reservation>
+                  <expandableReservation>true</expandableReservation>
+                  <limit>-1</limit>
+                  <shares>
+                    <shares>0</shares>
+                    <level>normal</level>
+                  </shares>
+                  <overheadLimit>-1</overheadLimit>
+                </memoryAllocation>
+              </config>
+            </child>
+            <child>
+              <key>host/vim/vmvisor/settingsd/settingsd.67235</key>
+              <config>
+                <cpuAllocation>
+                  <reservation>0</reservation>
+                  <expandableReservation>false</expandableReservation>
+                  <limit>-1</limit>
+                  <shares>
+                    <shares>1000</shares>
+                    <level>custom</level>
+                  </shares>
+                  <overheadLimit>0</overheadLimit>
+                </cpuAllocation>
+                <memoryAllocation>
+                  <reservation>0</reservation>
+                  <expandableReservation>true</expandableReservation>
+                  <limit>-1</limit>
+                  <shares>
+                    <shares>0</shares>
+                    <level>normal</level>
+                  </shares>
+                  <overheadLimit>-1</overheadLimit>
+                </memoryAllocation>
+              </config>
+            </child>
           </child>
           <child>
             <key>host/vim/vmvisor/settingsd-nontask-forks</key>
@@ -29550,7 +29919,7 @@
               </memoryAllocation>
             </config>
             <child>
-              <key>host/vim/vmvisor/sioc/sh.66588</key>
+              <key>host/vim/vmvisor/sioc/sh.66585</key>
               <config>
                 <cpuAllocation>
                   <reservation>0</reservation>
@@ -29575,7 +29944,7 @@
               </config>
             </child>
             <child>
-              <key>host/vim/vmvisor/sioc/storageRM.66641</key>
+              <key>host/vim/vmvisor/sioc/sh.66592</key>
               <config>
                 <cpuAllocation>
                   <reservation>0</reservation>
@@ -29600,7 +29969,7 @@
               </config>
             </child>
             <child>
-              <key>host/vim/vmvisor/sioc/sh.66646</key>
+              <key>host/vim/vmvisor/sioc/sdrsInjector.66649</key>
               <config>
                 <cpuAllocation>
                   <reservation>0</reservation>
@@ -29625,7 +29994,7 @@
               </config>
             </child>
             <child>
-              <key>host/vim/vmvisor/sioc/sdrsInjector.66682</key>
+              <key>host/vim/vmvisor/sioc/storageRM.66698</key>
               <config>
                 <cpuAllocation>
                   <reservation>0</reservation>
@@ -29699,6 +30068,56 @@
                 <overheadLimit>-1</overheadLimit>
               </memoryAllocation>
             </config>
+            <child>
+              <key>host/vim/vmvisor/smartd/sh.67031</key>
+              <config>
+                <cpuAllocation>
+                  <reservation>0</reservation>
+                  <expandableReservation>false</expandableReservation>
+                  <limit>-1</limit>
+                  <shares>
+                    <shares>1000</shares>
+                    <level>custom</level>
+                  </shares>
+                  <overheadLimit>0</overheadLimit>
+                </cpuAllocation>
+                <memoryAllocation>
+                  <reservation>0</reservation>
+                  <expandableReservation>true</expandableReservation>
+                  <limit>-1</limit>
+                  <shares>
+                    <shares>0</shares>
+                    <level>normal</level>
+                  </shares>
+                  <overheadLimit>-1</overheadLimit>
+                </memoryAllocation>
+              </config>
+            </child>
+            <child>
+              <key>host/vim/vmvisor/smartd/smartd.67077</key>
+              <config>
+                <cpuAllocation>
+                  <reservation>0</reservation>
+                  <expandableReservation>false</expandableReservation>
+                  <limit>-1</limit>
+                  <shares>
+                    <shares>1000</shares>
+                    <level>custom</level>
+                  </shares>
+                  <overheadLimit>0</overheadLimit>
+                </cpuAllocation>
+                <memoryAllocation>
+                  <reservation>0</reservation>
+                  <expandableReservation>true</expandableReservation>
+                  <limit>-1</limit>
+                  <shares>
+                    <shares>0</shares>
+                    <level>normal</level>
+                  </shares>
+                  <overheadLimit>-1</overheadLimit>
+                </memoryAllocation>
+              </config>
+            </child>
           </child>
           <child>
             <key>host/vim/vmvisor/snmpd</key>
@@ -29714,9 +30133,9 @@
                 <overheadLimit>-1</overheadLimit>
               </cpuAllocation>
               <memoryAllocation>
-                <reservation>0</reservation>
+                <reservation>22</reservation>
                 <expandableReservation>true</expandableReservation>
-                <limit>0</limit>
+                <limit>22</limit>
                 <shares>
                   <shares>0</shares>
                   <level>normal</level>
@@ -29724,6 +30143,56 @@
                 <overheadLimit>-1</overheadLimit>
               </memoryAllocation>
             </config>
+            <child>
+              <key>host/vim/vmvisor/snmpd/sh.67408</key>
+              <config>
+                <cpuAllocation>
+                  <reservation>0</reservation>
+                  <expandableReservation>false</expandableReservation>
+                  <limit>-1</limit>
+                  <shares>
+                    <shares>1000</shares>
+                    <level>custom</level>
+                  </shares>
+                  <overheadLimit>0</overheadLimit>
+                </cpuAllocation>
+                <memoryAllocation>
+                  <reservation>0</reservation>
+                  <expandableReservation>true</expandableReservation>
+                  <limit>-1</limit>
+                  <shares>
+                    <shares>0</shares>
+                    <level>normal</level>
+                  </shares>
+                  <overheadLimit>-1</overheadLimit>
+                </memoryAllocation>
+              </config>
+            </child>
+            <child>
+              <key>host/vim/vmvisor/snmpd/snmpd.67418</key>
+              <config>
+                <cpuAllocation>
+                  <reservation>0</reservation>
+                  <expandableReservation>false</expandableReservation>
+                  <limit>-1</limit>
+                  <shares>
+                    <shares>1000</shares>
+                    <level>custom</level>
+                  </shares>
+                  <overheadLimit>0</overheadLimit>
+                </cpuAllocation>
+                <memoryAllocation>
+                  <reservation>0</reservation>
+                  <expandableReservation>true</expandableReservation>
+                  <limit>-1</limit>
+                  <shares>
+                    <shares>0</shares>
+                    <level>normal</level>
+                  </shares>
+                  <overheadLimit>-1</overheadLimit>
+                </memoryAllocation>
+              </config>
+            </child>
           </child>
           <child>
             <key>host/vim/vmvisor/spherelet</key>
@@ -29850,7 +30319,7 @@
               </config>
             </child>
             <child>
-              <key>host/vim/vmvisor/swapobjd/swapobjd.66397</key>
+              <key>host/vim/vmvisor/swapobjd/swapobjd.66421</key>
               <config>
                 <cpuAllocation>
                   <reservation>0</reservation>
@@ -29950,7 +30419,7 @@
               </memoryAllocation>
             </config>
             <child>
-              <key>host/vim/vmvisor/usbArbitrator/sh.66497</key>
+              <key>host/vim/vmvisor/usbArbitrator/sh.66476</key>
               <config>
                 <cpuAllocation>
                   <reservation>0</reservation>
@@ -29975,7 +30444,7 @@
               </config>
             </child>
             <child>
-              <key>host/vim/vmvisor/usbArbitrator/vmware-usbarbitrator.66509</key>
+              <key>host/vim/vmvisor/usbArbitrator/vmware-usbarbitrator.66486</key>
               <config>
                 <cpuAllocation>
                   <reservation>0</reservation>
@@ -30100,7 +30569,7 @@
               </memoryAllocation>
             </config>
             <child>
-              <key>host/vim/vmvisor/vdtc/sh.66336</key>
+              <key>host/vim/vmvisor/vdtc/sh.66300</key>
               <config>
                 <cpuAllocation>
                   <reservation>0</reservation>
@@ -30125,7 +30594,7 @@
               </config>
             </child>
             <child>
-              <key>host/vim/vmvisor/vdtc/vdtc.66367</key>
+              <key>host/vim/vmvisor/vdtc/vdtc.66338</key>
               <config>
                 <cpuAllocation>
                   <reservation>0</reservation>
@@ -30200,7 +30669,7 @@
               </memoryAllocation>
             </config>
             <child>
-              <key>host/vim/vmvisor/vmkdevmgr/vmkdevmgr.65903</key>
+              <key>host/vim/vmvisor/vmkdevmgr/vmkdevmgr.65901</key>
               <config>
                 <cpuAllocation>
                   <reservation>0</reservation>
@@ -30275,7 +30744,7 @@
               </config>
             </child>
             <child>
-              <key>host/vim/vmvisor/vmkeventd/vmkeventd.65803</key>
+              <key>host/vim/vmvisor/vmkeventd/vmkeventd.65802</key>
               <config>
                 <cpuAllocation>
                   <reservation>0</reservation>
@@ -30375,7 +30844,7 @@
               </memoryAllocation>
             </config>
             <child>
-              <key>host/vim/vmvisor/vobd/sh.65812</key>
+              <key>host/vim/vmvisor/vobd/sh.65810</key>
               <config>
                 <cpuAllocation>
                   <reservation>0</reservation>
@@ -30400,7 +30869,7 @@
               </config>
             </child>
             <child>
-              <key>host/vim/vmvisor/vobd/vobd.65823</key>
+              <key>host/vim/vmvisor/vobd/vobd.65820</key>
               <config>
                 <cpuAllocation>
                   <reservation>0</reservation>
@@ -30449,6 +30918,56 @@
                 <overheadLimit>-1</overheadLimit>
               </memoryAllocation>
             </config>
+            <child>
+              <key>host/vim/vmvisor/vpxa/sh.67244</key>
+              <config>
+                <cpuAllocation>
+                  <reservation>0</reservation>
+                  <expandableReservation>false</expandableReservation>
+                  <limit>-1</limit>
+                  <shares>
+                    <shares>1000</shares>
+                    <level>custom</level>
+                  </shares>
+                  <overheadLimit>0</overheadLimit>
+                </cpuAllocation>
+                <memoryAllocation>
+                  <reservation>0</reservation>
+                  <expandableReservation>true</expandableReservation>
+                  <limit>-1</limit>
+                  <shares>
+                    <shares>0</shares>
+                    <level>normal</level>
+                  </shares>
+                  <overheadLimit>-1</overheadLimit>
+                </memoryAllocation>
+              </config>
+            </child>
+            <child>
+              <key>host/vim/vmvisor/vpxa/vpxa.67278</key>
+              <config>
+                <cpuAllocation>
+                  <reservation>0</reservation>
+                  <expandableReservation>false</expandableReservation>
+                  <limit>-1</limit>
+                  <shares>
+                    <shares>1000</shares>
+                    <level>custom</level>
+                  </shares>
+                  <overheadLimit>0</overheadLimit>
+                </cpuAllocation>
+                <memoryAllocation>
+                  <reservation>0</reservation>
+                  <expandableReservation>true</expandableReservation>
+                  <limit>-1</limit>
+                  <shares>
+                    <shares>0</shares>
+                    <level>normal</level>
+                  </shares>
+                  <overheadLimit>-1</overheadLimit>
+                </memoryAllocation>
+              </config>
+            </child>
           </child>
           <child>
             <key>host/vim/vmvisor/vvold</key>
@@ -30464,9 +30983,9 @@
                 <overheadLimit>-1</overheadLimit>
               </cpuAllocation>
               <memoryAllocation>
-                <reservation>200</reservation>
+                <reservation>0</reservation>
                 <expandableReservation>true</expandableReservation>
-                <limit>200</limit>
+                <limit>0</limit>
                 <shares>
                   <shares>0</shares>
                   <level>normal</level>
@@ -30574,7 +31093,7 @@
                 </memoryAllocation>
               </config>
               <child>
-                <key>host/vim/vimuser/terminal/shell/sleep.65719</key>
+                <key>host/vim/vimuser/terminal/shell/sh.67750</key>
                 <config>
                   <cpuAllocation>
                     <reservation>0</reservation>
@@ -30599,32 +31118,7 @@
                 </config>
               </child>
               <child>
-                <key>host/vim/vimuser/terminal/shell/sh.67517</key>
-                <config>
-                  <cpuAllocation>
-                    <reservation>0</reservation>
-                    <expandableReservation>false</expandableReservation>
-                    <limit>-1</limit>
-                    <shares>
-                      <shares>1000</shares>
-                      <level>custom</level>
-                    </shares>
-                    <overheadLimit>0</overheadLimit>
-                  </cpuAllocation>
-                  <memoryAllocation>
-                    <reservation>0</reservation>
-                    <expandableReservation>true</expandableReservation>
-                    <limit>-1</limit>
-                    <shares>
-                      <shares>0</shares>
-                      <level>normal</level>
-                    </shares>
-                    <overheadLimit>-1</overheadLimit>
-                  </memoryAllocation>
-                </config>
-              </child>
-              <child>
-                <key>host/vim/vimuser/terminal/shell/getty.67532</key>
+                <key>host/vim/vimuser/terminal/shell/getty.67761</key>
                 <config>
                   <cpuAllocation>
                     <reservation>0</reservation>
@@ -30751,7 +31245,7 @@
             </memoryAllocation>
           </config>
           <child>
-            <key>host/iofilters/iofiltervpd/sh.66447</key>
+            <key>host/iofilters/iofiltervpd/sh.66428</key>
             <config>
               <cpuAllocation>
                 <reservation>0</reservation>
@@ -30776,7 +31270,7 @@
             </config>
           </child>
           <child>
-            <key>host/iofilters/iofiltervpd/ioFilterVPServer.66460</key>
+            <key>host/iofilters/iofiltervpd/ioFilterVPServer.66441</key>
             <config>
               <cpuAllocation>
                 <reservation>0</reservation>
@@ -31020,8 +31514,9 @@
     <name>vm</name>
     <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="ArrayOfManagedObjectReference">
       <ManagedObjectReference type="VirtualMachine">1</ManagedObjectReference>
-      <ManagedObjectReference type="VirtualMachine">4</ManagedObjectReference>
-      <ManagedObjectReference type="VirtualMachine">7</ManagedObjectReference>
+      <ManagedObjectReference type="VirtualMachine">10</ManagedObjectReference>
+      <ManagedObjectReference type="VirtualMachine">8</ManagedObjectReference>
+      <ManagedObjectReference type="VirtualMachine">9</ManagedObjectReference>
     </val>
   </propSet>
 </ObjectContent>

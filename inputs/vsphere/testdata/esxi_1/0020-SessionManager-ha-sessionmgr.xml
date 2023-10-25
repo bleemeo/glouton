@@ -3,17 +3,17 @@
   <propSet>
     <name>currentSession</name>
     <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="UserSession">
-      <key>525c3d99-345b-fbcf-f628-982ce8336a41</key>
+      <key>52456804-ae0b-52fb-bdd2-fbfc0b9e601a</key>
       <userName>root</userName>
       <fullName>Administrator</fullName>
-      <loginTime>2023-09-20T09:03:43.098976Z</loginTime>
-      <lastActiveTime>2023-09-20T09:04:16.62844Z</lastActiveTime>
+      <loginTime>2023-10-25T11:46:07.628029Z</loginTime>
+      <lastActiveTime>2023-10-25T11:46:07.700055Z</lastActiveTime>
       <locale>en</locale>
       <messageLocale>en</messageLocale>
       <extensionSession>false</extensionSession>
       <ipAddress>192.168.121.1</ipAddress>
       <userAgent>govc/0.0.0</userAgent>
-      <callCount>3</callCount>
+      <callCount>1</callCount>
     </val>
   </propSet>
   <propSet>
@@ -38,37 +38,6 @@
       <string>it</string>
       <string>fr</string>
       <string>zh_CN</string>
-    </val>
-  </propSet>
-  <propSet>
-    <name>sessionList</name>
-    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="ArrayOfUserSession">
-      <UserSession>
-        <key>525c3d99-345b-fbcf-f628-982ce8336a41</key>
-        <userName>root</userName>
-        <fullName>Administrator</fullName>
-        <loginTime>2023-09-20T09:03:43.098976Z</loginTime>
-        <lastActiveTime>2023-09-20T09:04:16.62844Z</lastActiveTime>
-        <locale>en</locale>
-        <messageLocale>en</messageLocale>
-        <extensionSession>false</extensionSession>
-        <ipAddress>192.168.121.1</ipAddress>
-        <userAgent>govc/0.0.0</userAgent>
-        <callCount>3</callCount>
-      </UserSession>
-      <UserSession>
-        <key>527646b1-6257-9a87-9487-461f3de9a159</key>
-        <userName>dcui</userName>
-        <fullName></fullName>
-        <loginTime>2023-09-20T09:00:00.885264Z</loginTime>
-        <lastActiveTime>2023-09-20T09:00:30.887683Z</lastActiveTime>
-        <locale>en</locale>
-        <messageLocale>en</messageLocale>
-        <extensionSession>false</extensionSession>
-        <ipAddress>127.0.0.1</ipAddress>
-        <userAgent>VMware-client/6.5.0</userAgent>
-        <callCount>1</callCount>
-      </UserSession>
     </val>
   </propSet>
   <propSet>
