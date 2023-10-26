@@ -147,7 +147,7 @@ func (vSphere *vSphere) devices(ctx context.Context, deviceChan chan<- bleemeoTy
 	defer cancelDescribe()
 
 	var devs []bleemeoTypes.VSphereDevice
-
+	// TODO: parallelize describing tasks
 	devs = append(devs, vSphere.describeClusters(describeCtx, clusters)...)
 	devs = append(devs, vSphere.describeHosts(describeCtx, hosts)...)
 	describedVMs, labelsMetadata := vSphere.describeVMs(describeCtx, vms)
@@ -546,14 +546,6 @@ func (vSphere *vSphere) renameGlobal(gatherContext internal.GatherContext) (resu
 	tags[types.LabelMetaVSphere] = vSphere.host
 	tags[types.LabelMetaVSphereMOID] = tags["moid"]
 
-	delete(tags, "guest")
-	delete(tags, "guesthostname")
-	delete(tags, "moid")
-	delete(tags, "rpname")
-	delete(tags, "source")
-	delete(tags, "uuid")
-	delete(tags, "vcenter")
-
 	if tags["cpu"] == "*" { // Special case (vcsim)
 		tags["cpu"] = instanceTotal
 	}
@@ -562,6 +554,15 @@ func (vSphere *vSphere) renameGlobal(gatherContext internal.GatherContext) (resu
 	if value, ok := tags["cpu"]; ok && value != instanceTotal {
 		return gatherContext, true
 	}
+
+	delete(tags, "cpu")
+	delete(tags, "guest")
+	delete(tags, "guesthostname")
+	delete(tags, "moid")
+	delete(tags, "rpname")
+	delete(tags, "source")
+	delete(tags, "uuid")
+	delete(tags, "vcenter")
 
 	if value, ok := tags["dsname"]; ok {
 		delete(tags, "dsname")

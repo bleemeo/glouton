@@ -307,8 +307,8 @@ func (s *Synchronizer) purgeVSphereAgents(remoteAgents map[string]types.Agent, s
 		}
 
 		if asso, hasAsso := assosByID[id]; hasAsso {
-			if _, endpointIsFailing := failingEndpoints[asso.Source]; endpointIsFailing {
-				// Spare this device, as its vCenter endpoint can't be reached.
+			if failingEndpoints[asso.Source] {
+				// Spare this device, as its vCenter endpoint is in trouble.
 				continue
 			}
 

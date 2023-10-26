@@ -65,16 +65,20 @@ func (m *Manager) LastChange(ctx context.Context) time.Time {
 
 // EndpointsInError returns the addresses of all the endpoints
 // which couldn't be created or have errors.
-func (m *Manager) EndpointsInError() map[string]struct{} {
+func (m *Manager) EndpointsInError() map[string]bool {
 	m.l.Lock()
 	defer m.l.Unlock()
 
-	endpoints := make(map[string]struct{})
+	endpoints := make(map[string]bool)
 
 	for _, vSphere := range m.vSpheres {
+		vSphere.l.Lock()
+
 		if vSphere.gatherer == nil || vSphere.consecutiveErr > 0 {
-			endpoints[vSphere.host] = struct{}{}
+			endpoints[vSphere.host] = true
 		}
+
+		vSphere.l.Unlock()
 	}
 
 	return endpoints
@@ -177,7 +181,7 @@ func (m *Manager) Devices(ctx context.Context, maxAge time.Duration) []bleemeoTy
 func (m *Manager) FindDevice(ctx context.Context, vSphereHost, moid string) bleemeoTypes.VSphereDevice {
 	// We specify a small max age here, because as metric gathering is done every minute,
 	// there's a good chance to discover new vSphere VMs from the metric gathering.
-	devices := m.Devices(ctx, 5*time.Minute)
+	devices := m.Devices(ctx, time.Minute)
 
 	for _, dev := range devices {
 		if dev.Source() != vSphereHost {

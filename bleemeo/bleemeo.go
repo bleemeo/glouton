@@ -502,21 +502,10 @@ func (c *Connector) RelabelHook(ctx context.Context, labels map[string]string) (
 
 		device := c.option.FindVSphereDevice(ctx, vSphere, moid)
 		if device == nil {
-			// The registration won't last too long, because device discovery has just been done.
-			err := c.sync.VSphereRegisterAndUpdate(c.option.VSphereDevices(ctx, time.Minute))
-			if err == nil {
-				device = c.option.FindVSphereDevice(ctx, vSphere, moid)
-			} else {
-				logger.V(1).Println("Failed to register vSphere devices:", err)
-			}
+			logger.Printf("Did not find vSphere device %q / %q", vSphere, moid) // TODO: remove
 
-			if err != nil || device == nil {
-				logger.Printf("Did not find vSphere device %q / %q", vSphere, moid) // TODO: remove
-
-				return labels, true
-			}
-			// Successfully registered yet-unknown device
-		} //nolint:wsl
+			return labels, true
+		}
 
 		vSphereAgentTypeID, ok := c.sync.GetVSphereAgentType(device.Kind())
 		if !ok {

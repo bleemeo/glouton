@@ -325,9 +325,9 @@ func getVMLabelsMetadata(devices object.VirtualDeviceList) (map[string]string, m
 				logger.Printf("Unknown disk controller: %T", controller) // TODO: remove
 			}
 		case types.BaseVirtualEthernetCard: // VirtualVmxnet, VirtualE1000, ...
-			virtEthCard := dev.GetVirtualEthernetCard()
+			ethernetCard := dev.GetVirtualEthernetCard()
 
-			netInterfaces[strconv.Itoa(int(virtEthCard.Key))] = devices.Name(virtEthCard)
+			netInterfaces[strconv.Itoa(int(ethernetCard.Key))] = devices.Name(ethernetCard)
 		}
 	}
 

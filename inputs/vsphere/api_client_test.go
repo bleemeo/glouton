@@ -528,7 +528,7 @@ func sortDevices[D bleemeoTypes.VSphereDevice](devices []D) {
 	})
 }
 
-// KI/KO: Input/Output Keys | VI/VO: Input/Output Values
+// KI/KO: Input/Output Keys | VI/VO: Input/Output Values.
 func mapMap[KI, KO comparable, VI, VO any](m map[KI]VI, f func(KI, VI) (KO, VO)) map[KO]VO {
 	result := make(map[KO]VO, len(m))
 

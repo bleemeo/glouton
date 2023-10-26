@@ -170,7 +170,7 @@ func (helper *syncTestHelper) initSynchronizer(t *testing.T) {
 			NotifyLabelsUpdate:         helper.NotifyLabelsUpdate,
 			VSphereDevices:             func(context.Context, time.Duration) []bleemeoTypes.VSphereDevice { return helper.devices },
 			LastVSphereChange:          func(ctx context.Context) time.Time { return time.Time{} },
-			VSphereEndpointsInError:    func() map[string]struct{} { return map[string]struct{}{} },
+			VSphereEndpointsInError:    func() map[string]bool { return map[string]bool{} },
 			IsContainerEnabled:         facts.ContainerFilter{}.ContainerEnabled,
 			IsMetricAllowed:            func(_ map[string]string) bool { return true },
 			BlackboxScraperName:        helper.cfg.Blackbox.ScraperName,
