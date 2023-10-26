@@ -244,8 +244,8 @@ func (vSphere *vSphere) describeVMs(ctx context.Context, rawVMs []*object.Virtua
 			continue
 		}
 
-		vm, disks, netInterfaces := describeVM(ctx, vm, vmProps)
-		vms = append(vms, vm)
+		describedVM, disks, netInterfaces := describeVM(ctx, vm, vmProps)
+		vms = append(vms, describedVM)
 		labelsMetadata.disksPerVM[moid] = disks
 		labelsMetadata.netInterfacesPerVM[moid] = netInterfaces
 	}

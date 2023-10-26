@@ -60,7 +60,7 @@
   <propSet>
     <name>config</name>
     <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="VirtualMachineConfigInfo">
-      <changeVersion>2023-10-25T07:12:38.339229Z</changeVersion>
+      <changeVersion>2023-10-26T09:27:03.778393Z</changeVersion>
       <modified>1970-01-01T00:00:00Z</modified>
       <name>alp1</name>
       <guestFullName>Other (32-bit)</guestFullName>
@@ -163,6 +163,11 @@
           <device>500</device>
           <device>12000</device>
           <device>1000</device>
+          <device>1001</device>
+          <device>1002</device>
+          <device>1003</device>
+          <device>15000</device>
+          <device>31000</device>
           <device>4000</device>
         </device>
         <device XMLSchema-instance:type="VirtualSIOController">
@@ -243,6 +248,82 @@
           <sharedBus>noSharing</sharedBus>
           <scsiCtlrUnitNumber>7</scsiCtlrUnitNumber>
         </device>
+        <device XMLSchema-instance:type="VirtualLsiLogicSASController">
+          <key>1001</key>
+          <deviceInfo XMLSchema-instance:type="Description">
+            <label>SCSI controller 1</label>
+            <summary>LSI Logic SAS</summary>
+          </deviceInfo>
+          <slotInfo XMLSchema-instance:type="VirtualDevicePciBusSlotInfo">
+            <pciSlotNumber>192</pciSlotNumber>
+          </slotInfo>
+          <controllerKey>100</controllerKey>
+          <unitNumber>4</unitNumber>
+          <busNumber>1</busNumber>
+          <hotAddRemove>true</hotAddRemove>
+          <sharedBus>noSharing</sharedBus>
+          <scsiCtlrUnitNumber>7</scsiCtlrUnitNumber>
+        </device>
+        <device XMLSchema-instance:type="VirtualBusLogicController">
+          <key>1002</key>
+          <deviceInfo XMLSchema-instance:type="Description">
+            <label>SCSI controller 2</label>
+            <summary>BusLogic</summary>
+          </deviceInfo>
+          <slotInfo XMLSchema-instance:type="VirtualDevicePciBusSlotInfo">
+            <pciSlotNumber>32</pciSlotNumber>
+          </slotInfo>
+          <controllerKey>100</controllerKey>
+          <unitNumber>5</unitNumber>
+          <busNumber>2</busNumber>
+          <hotAddRemove>true</hotAddRemove>
+          <sharedBus>noSharing</sharedBus>
+          <scsiCtlrUnitNumber>7</scsiCtlrUnitNumber>
+        </device>
+        <device XMLSchema-instance:type="ParaVirtualSCSIController">
+          <key>1003</key>
+          <deviceInfo XMLSchema-instance:type="Description">
+            <label>SCSI controller 3</label>
+            <summary>VMware paravirtual SCSI</summary>
+          </deviceInfo>
+          <slotInfo XMLSchema-instance:type="VirtualDevicePciBusSlotInfo">
+            <pciSlotNumber>224</pciSlotNumber>
+          </slotInfo>
+          <controllerKey>100</controllerKey>
+          <unitNumber>6</unitNumber>
+          <busNumber>3</busNumber>
+          <hotAddRemove>true</hotAddRemove>
+          <sharedBus>noSharing</sharedBus>
+          <scsiCtlrUnitNumber>7</scsiCtlrUnitNumber>
+        </device>
+        <device XMLSchema-instance:type="VirtualAHCIController">
+          <key>15000</key>
+          <deviceInfo XMLSchema-instance:type="Description">
+            <label>SATA controller 0</label>
+            <summary>AHCI</summary>
+          </deviceInfo>
+          <slotInfo XMLSchema-instance:type="VirtualDevicePciBusSlotInfo">
+            <pciSlotNumber>33</pciSlotNumber>
+          </slotInfo>
+          <controllerKey>100</controllerKey>
+          <unitNumber>24</unitNumber>
+          <busNumber>0</busNumber>
+          <device>16000</device>
+        </device>
+        <device XMLSchema-instance:type="VirtualNVMEController">
+          <key>31000</key>
+          <deviceInfo XMLSchema-instance:type="Description">
+            <label>NVME controller 0</label>
+            <summary>NVME controller 0</summary>
+          </deviceInfo>
+          <slotInfo XMLSchema-instance:type="VirtualDevicePciBusSlotInfo">
+            <pciSlotNumber>256</pciSlotNumber>
+          </slotInfo>
+          <controllerKey>100</controllerKey>
+          <unitNumber>30</unitNumber>
+          <busNumber>0</busNumber>
+          <device>32000</device>
+        </device>
         <device XMLSchema-instance:type="VirtualCdrom">
           <key>3000</key>
           <deviceInfo XMLSchema-instance:type="Description">
@@ -278,7 +359,7 @@
             <thinProvisioned>true</thinProvisioned>
             <eagerlyScrub>false</eagerlyScrub>
             <uuid>6000C29e-8b6f-e991-3d74-b3cfe5d726dd</uuid>
-            <contentId>e8e3eb49fac5bdf743c5a433ea6c411a</contentId>
+            <contentId>65ae4f5f11403b8a6b01f0443e956709</contentId>
             <digestEnabled>false</digestEnabled>
             <sharing>sharingNone</sharing>
           </backing>
@@ -299,6 +380,82 @@
             <reservation>0</reservation>
           </storageIOAllocation>
           <diskObjectId>10-2000</diskObjectId>
+          <nativeUnmanagedLinkedClone>false</nativeUnmanagedLinkedClone>
+        </device>
+        <device XMLSchema-instance:type="VirtualDisk">
+          <key>16000</key>
+          <deviceInfo XMLSchema-instance:type="Description">
+            <label>Hard disk 2</label>
+            <summary>2,097,152 KB</summary>
+          </deviceInfo>
+          <backing XMLSchema-instance:type="VirtualDiskFlatVer2BackingInfo">
+            <fileName>[datastore1] alp1/alp1_1.vmdk</fileName>
+            <datastore type="Datastore">64d4b065-879077de-6dfb-5254000ed68e</datastore>
+            <diskMode>persistent</diskMode>
+            <split>false</split>
+            <writeThrough>false</writeThrough>
+            <thinProvisioned>true</thinProvisioned>
+            <eagerlyScrub>false</eagerlyScrub>
+            <uuid>6000C295-0e56-2fc6-d3c3-e3baae36cb5b</uuid>
+            <contentId>6698e49729ef5e0e8c870f89fffffffe</contentId>
+            <digestEnabled>false</digestEnabled>
+            <sharing>sharingNone</sharing>
+          </backing>
+          <controllerKey>15000</controllerKey>
+          <unitNumber>0</unitNumber>
+          <capacityInKB>2097152</capacityInKB>
+          <capacityInBytes>2147483648</capacityInBytes>
+          <shares>
+            <shares>1000</shares>
+            <level>normal</level>
+          </shares>
+          <storageIOAllocation>
+            <limit>-1</limit>
+            <shares>
+              <shares>1000</shares>
+              <level>normal</level>
+            </shares>
+            <reservation>0</reservation>
+          </storageIOAllocation>
+          <diskObjectId>10-16000</diskObjectId>
+          <nativeUnmanagedLinkedClone>false</nativeUnmanagedLinkedClone>
+        </device>
+        <device XMLSchema-instance:type="VirtualDisk">
+          <key>32000</key>
+          <deviceInfo XMLSchema-instance:type="Description">
+            <label>Hard disk 3</label>
+            <summary>1,048,576 KB</summary>
+          </deviceInfo>
+          <backing XMLSchema-instance:type="VirtualDiskFlatVer2BackingInfo">
+            <fileName>[datastore1] alp1/alp1_2.vmdk</fileName>
+            <datastore type="Datastore">64d4b065-879077de-6dfb-5254000ed68e</datastore>
+            <diskMode>persistent</diskMode>
+            <split>false</split>
+            <writeThrough>false</writeThrough>
+            <thinProvisioned>true</thinProvisioned>
+            <eagerlyScrub>false</eagerlyScrub>
+            <uuid>6000C29a-e4bd-301f-785c-9ca8bb22811e</uuid>
+            <contentId>7c3d675c6aa0ad8c2504e828fffffffe</contentId>
+            <digestEnabled>false</digestEnabled>
+            <sharing>sharingNone</sharing>
+          </backing>
+          <controllerKey>31000</controllerKey>
+          <unitNumber>0</unitNumber>
+          <capacityInKB>1048576</capacityInKB>
+          <capacityInBytes>1073741824</capacityInBytes>
+          <shares>
+            <shares>1000</shares>
+            <level>normal</level>
+          </shares>
+          <storageIOAllocation>
+            <limit>-1</limit>
+            <shares>
+              <shares>1000</shares>
+              <level>normal</level>
+            </shares>
+            <reservation>0</reservation>
+          </storageIOAllocation>
+          <diskObjectId>10-32000</diskObjectId>
           <nativeUnmanagedLinkedClone>false</nativeUnmanagedLinkedClone>
         </device>
         <device XMLSchema-instance:type="VirtualVmxnet3">
@@ -364,6 +521,10 @@
       <cpuHotAddEnabled>false</cpuHotAddEnabled>
       <cpuHotRemoveEnabled>false</cpuHotRemoveEnabled>
       <hotPlugMemoryLimit>512</hotPlugMemoryLimit>
+      <extraConfig XMLSchema-instance:type="OptionValue">
+        <key>tools.guest.desktop.autolock</key>
+        <value XMLSchema-instance:type="xsd:string">TRUE</value>
+      </extraConfig>
       <extraConfig XMLSchema-instance:type="OptionValue">
         <key>nvram</key>
         <value XMLSchema-instance:type="xsd:string">alp1.nvram</value>
@@ -481,10 +642,6 @@
         <value XMLSchema-instance:type="xsd:string">24</value>
       </extraConfig>
       <extraConfig XMLSchema-instance:type="OptionValue">
-        <key>scsi0:0.redo</key>
-        <value XMLSchema-instance:type="xsd:string"></value>
-      </extraConfig>
-      <extraConfig XMLSchema-instance:type="OptionValue">
         <key>vmotion.checkpointFBSize</key>
         <value XMLSchema-instance:type="xsd:string">4194304</value>
       </extraConfig>
@@ -513,6 +670,30 @@
         <value XMLSchema-instance:type="xsd:string">architecture=&#39;X86&#39; bitness=&#39;64&#39; distroName=&#39;Alpine Linux&#39; distroVersion=&#39;3.15.6&#39; familyName=&#39;Linux&#39; kernelVersion=&#39;5.15.71-0-virt&#39; prettyName=&#39;Alpine Linux v3.15&#39;</value>
       </extraConfig>
       <extraConfig XMLSchema-instance:type="OptionValue">
+        <key>sched.cpu.latencySensitivity</key>
+        <value XMLSchema-instance:type="xsd:string">normal</value>
+      </extraConfig>
+      <extraConfig XMLSchema-instance:type="OptionValue">
+        <key>scsi1.pciSlotNumber</key>
+        <value XMLSchema-instance:type="xsd:string">192</value>
+      </extraConfig>
+      <extraConfig XMLSchema-instance:type="OptionValue">
+        <key>scsi2.pciSlotNumber</key>
+        <value XMLSchema-instance:type="xsd:string">32</value>
+      </extraConfig>
+      <extraConfig XMLSchema-instance:type="OptionValue">
+        <key>scsi3.pciSlotNumber</key>
+        <value XMLSchema-instance:type="xsd:string">224</value>
+      </extraConfig>
+      <extraConfig XMLSchema-instance:type="OptionValue">
+        <key>sata0.pciSlotNumber</key>
+        <value XMLSchema-instance:type="xsd:string">33</value>
+      </extraConfig>
+      <extraConfig XMLSchema-instance:type="OptionValue">
+        <key>nvme0.pciSlotNumber</key>
+        <value XMLSchema-instance:type="xsd:string">256</value>
+      </extraConfig>
+      <extraConfig XMLSchema-instance:type="OptionValue">
         <key>guestinfo.vmtools.description</key>
         <value XMLSchema-instance:type="xsd:string">open-vm-tools 11.3.5 build 18557794</value>
       </extraConfig>
@@ -529,8 +710,20 @@
         <value XMLSchema-instance:type="xsd:string">18557794</value>
       </extraConfig>
       <extraConfig XMLSchema-instance:type="OptionValue">
-        <key>guestinfo.appInfo</key>
-        <value XMLSchema-instance:type="xsd:string">{&#xA;&#34;version&#34;:&#34;1&#34;, &#xA;&#34;updateCounter&#34;:&#34;1&#34;, &#xA;&#34;publishTime&#34;:&#34;2023-10-25T11:08:48.716Z&#34;, &#xA;&#34;applications&#34;:[&#xA;{&#34;a&#34;:&#34;getty&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;kworker/u2:0-events_unbound&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;kworker/u2:2-events_unbound&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;kworker/u2:1-events_unbound&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;getty&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;getty&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;getty&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;getty&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;getty&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;getty&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;sshd: /usr/sbin/sshd [listener] 0 of 10-100 startups&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;crond&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;acpid&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;syslogd&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;udhcpc&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;vmtoolsd&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;ext4-rsv-conver&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;jbd2/sda1-8&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;ipv6_addrconf&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;mld&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;card0-crtc7&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;card0-crtc6&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;card0-crtc5&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;card0-crtc4&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;card0-crtc3&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;card0-crtc2&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;card0-crtc1&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;card0-crtc0&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;irq/16-vmwgfx&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;ttm_swap&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;cryptd&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;ext4-rsv-conver&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;jbd2/sda3-8&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;scsi_tmf_2&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;scsi_eh_2&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;mpt/0&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;mpt_poll_0&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;kworker/u3:0&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;kworker/0:2-events&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;scsi_tmf_1&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;scsi_eh_1&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;scsi_tmf_0&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;scsi_eh_0&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;irq/55-pciehp&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;irq/54-pciehp&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;irq/53-pciehp&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;irq/52-pciehp&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;irq/51-pciehp&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;irq/50-pciehp&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;irq/49-pciehp&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;irq/48-pciehp&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;irq/47-pciehp&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;irq/46-pciehp&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;irq/45-pciehp&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;irq/44-pciehp&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;irq/43-pciehp&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;irq/42-pciehp&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;irq/41-pciehp&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;irq/40-pciehp&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;irq/39-pciehp&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;irq/38-pciehp&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;irq/37-pciehp&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;irq/36-pciehp&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;irq/35-pciehp&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;irq/34-pciehp&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;irq/33-pciehp&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;irq/32-pciehp&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;irq/31-pciehp&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;irq/30-pciehp&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;irq/29-pciehp&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;irq/28-pciehp&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;irq/27-pciehp&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;irq/26-pciehp&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;irq/25-pciehp&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;irq/24-pciehp&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;kthrotld&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;kswapd0&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;watchdogd&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;md&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;ata_sff&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;blkcg_punt_bio&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;kblockd&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;kintegrityd&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;ksmd&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;kcompactd0&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;writeback&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;oom_reaper&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;kauditd&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;inet_frag_wq&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;kdevtmpfs&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;cpuhp/0&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;kworker/0:1-events&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;migration/0&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;rcu_sched&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;ksoftirqd/0&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;rcu_tasks_trace&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;mm_percpu_wq&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;kworker/0:1H-events_highpri&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;kworker/0:0H-events_highpri&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;netns&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;slub_flushwq&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;rcu_par_gp&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;rcu_gp&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;kthreadd&#34;,&#34;v&#34;:&#34;&#34;},&#xA;{&#34;a&#34;:&#34;init&#34;,&#34;v&#34;:&#34;&#34;}]}</value>
+        <key>scsi1.sasWWID</key>
+        <value XMLSchema-instance:type="xsd:string">50 05 05 62 67 8c 5f f0</value>
+      </extraConfig>
+      <extraConfig XMLSchema-instance:type="OptionValue">
+        <key>scsi3.sasWWID</key>
+        <value XMLSchema-instance:type="xsd:string">50 05 05 62 67 8c 5d f0</value>
+      </extraConfig>
+      <extraConfig XMLSchema-instance:type="OptionValue">
+        <key>sata0:0.redo</key>
+        <value XMLSchema-instance:type="xsd:string"></value>
+      </extraConfig>
+      <extraConfig XMLSchema-instance:type="OptionValue">
+        <key>nvme0:0.redo</key>
+        <value XMLSchema-instance:type="xsd:string"></value>
       </extraConfig>
       <extraConfig XMLSchema-instance:type="OptionValue">
         <key>vmware.tools.internalversion</key>
@@ -607,7 +800,7 @@
       <guestAutoLockEnabled>true</guestAutoLockEnabled>
       <memoryReservationLockedToMax>false</memoryReservationLockedToMax>
       <initialOverhead>
-        <initialMemoryReservation>55980032</initialMemoryReservation>
+        <initialMemoryReservation>69099520</initialMemoryReservation>
         <initialSwapReservation>899014656</initialSwapReservation>
       </initialOverhead>
       <nestedHVEnabled>false</nestedHVEnabled>
@@ -616,7 +809,7 @@
         <upgradePolicy>never</upgradePolicy>
         <scheduledHardwareUpgradeStatus>none</scheduledHardwareUpgradeStatus>
       </scheduledHardwareUpgradeInfo>
-      <vmxConfigChecksum>tWcZ8C99LSYAzECz4mAVAeJaNH4=</vmxConfigChecksum>
+      <vmxConfigChecksum>itn1sbzfIxUN4bp/dPnf9sitGG8=</vmxConfigChecksum>
       <messageBusTunnelEnabled>false</messageBusTunnelEnabled>
       <guestIntegrityInfo>
         <enabled>false</enabled>
@@ -849,7 +1042,7 @@
       <disk>
         <diskPath>/</diskPath>
         <capacity>7258877952</capacity>
-        <freeSpace>6811529216</freeSpace>
+        <freeSpace>6811631616</freeSpace>
         <filesystemType>ext4</filesystemType>
         <mappings>
           <key>2000</key>
@@ -890,13 +1083,28 @@
     <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="VirtualMachineFileLayout">
       <configFile>alp1.nvram</configFile>
       <configFile>alp1.vmsd</configFile>
-      <logFile>vmware-1.log</logFile>
+      <logFile>vmware-9.log</logFile>
+      <logFile>vmware-8.log</logFile>
+      <logFile>vmware-5.log</logFile>
+      <logFile>vmware-4.log</logFile>
+      <logFile>vmware-7.log</logFile>
+      <logFile>vmware-6.log</logFile>
       <logFile>vmware-3.log</logFile>
-      <logFile>vmware-2.log</logFile>
+      <logFile>vmware-12.log</logFile>
+      <logFile>vmware-11.log</logFile>
+      <logFile>vmware-10.log</logFile>
       <logFile>vmware.log</logFile>
       <disk>
         <key>2000</key>
         <diskFile>[datastore1] alp1/alp1.vmdk</diskFile>
+      </disk>
+      <disk>
+        <key>16000</key>
+        <diskFile>[datastore1] alp1/alp1_1.vmdk</diskFile>
+      </disk>
+      <disk>
+        <key>32000</key>
+        <diskFile>[datastore1] alp1/alp1_2.vmdk</diskFile>
       </disk>
       <swapFile>[datastore1] alp1/alp1-f4ea6f09.vswp</swapFile>
     </val>
@@ -908,7 +1116,8 @@
         <key>0</key>
         <name>[datastore1] alp1/alp1.vmx</name>
         <type>config</type>
-        <size>0</size>
+        <size>3865</size>
+        <uniqueSize>3865</uniqueSize>
         <accessible>true</accessible>
       </file>
       <file>
@@ -937,40 +1146,36 @@
         <key>4</key>
         <name>[datastore1] alp1/alp1-flat.vmdk</name>
         <type>diskExtent</type>
-        <size>147849216</size>
-        <uniqueSize>147849216</uniqueSize>
+        <size>152043520</size>
+        <uniqueSize>152043520</uniqueSize>
         <accessible>true</accessible>
       </file>
       <file>
         <key>5</key>
-        <name>[datastore1] alp1/vmware-1.log</name>
-        <type>log</type>
-        <size>124798</size>
-        <uniqueSize>124798</uniqueSize>
+        <name>[datastore1] alp1/alp1_1.vmdk</name>
+        <type>diskDescriptor</type>
+        <size>0</size>
         <accessible>true</accessible>
       </file>
       <file>
         <key>6</key>
-        <name>[datastore1] alp1/vmware-3.log</name>
-        <type>log</type>
-        <size>30167</size>
-        <uniqueSize>30167</uniqueSize>
+        <name>[datastore1] alp1/alp1_1-flat.vmdk</name>
+        <type>diskExtent</type>
+        <size>0</size>
         <accessible>true</accessible>
       </file>
       <file>
         <key>7</key>
-        <name>[datastore1] alp1/vmware-2.log</name>
-        <type>log</type>
-        <size>133178</size>
-        <uniqueSize>133178</uniqueSize>
+        <name>[datastore1] alp1/alp1_2.vmdk</name>
+        <type>diskDescriptor</type>
+        <size>0</size>
         <accessible>true</accessible>
       </file>
       <file>
         <key>8</key>
-        <name>[datastore1] alp1/vmware.log</name>
-        <type>log</type>
-        <size>111274</size>
-        <uniqueSize>111274</uniqueSize>
+        <name>[datastore1] alp1/alp1_2-flat.vmdk</name>
+        <type>diskExtent</type>
+        <size>0</size>
         <accessible>true</accessible>
       </file>
       <file>
@@ -989,6 +1194,94 @@
         <uniqueSize>83886080</uniqueSize>
         <accessible>true</accessible>
       </file>
+      <file>
+        <key>11</key>
+        <name>[datastore1] alp1/vmware-9.log</name>
+        <type>log</type>
+        <size>52059</size>
+        <uniqueSize>52059</uniqueSize>
+        <accessible>true</accessible>
+      </file>
+      <file>
+        <key>12</key>
+        <name>[datastore1] alp1/vmware-8.log</name>
+        <type>log</type>
+        <size>34502</size>
+        <uniqueSize>34502</uniqueSize>
+        <accessible>true</accessible>
+      </file>
+      <file>
+        <key>13</key>
+        <name>[datastore1] alp1/vmware-5.log</name>
+        <type>log</type>
+        <size>172545</size>
+        <uniqueSize>172545</uniqueSize>
+        <accessible>true</accessible>
+      </file>
+      <file>
+        <key>14</key>
+        <name>[datastore1] alp1/vmware-4.log</name>
+        <type>log</type>
+        <size>111274</size>
+        <uniqueSize>111274</uniqueSize>
+        <accessible>true</accessible>
+      </file>
+      <file>
+        <key>15</key>
+        <name>[datastore1] alp1/vmware-7.log</name>
+        <type>log</type>
+        <size>34802</size>
+        <uniqueSize>34802</uniqueSize>
+        <accessible>true</accessible>
+      </file>
+      <file>
+        <key>16</key>
+        <name>[datastore1] alp1/vmware-6.log</name>
+        <type>log</type>
+        <size>196108</size>
+        <uniqueSize>196108</uniqueSize>
+        <accessible>true</accessible>
+      </file>
+      <file>
+        <key>17</key>
+        <name>[datastore1] alp1/vmware-3.log</name>
+        <type>log</type>
+        <size>30167</size>
+        <uniqueSize>30167</uniqueSize>
+        <accessible>true</accessible>
+      </file>
+      <file>
+        <key>18</key>
+        <name>[datastore1] alp1/vmware-12.log</name>
+        <type>log</type>
+        <size>52256</size>
+        <uniqueSize>52256</uniqueSize>
+        <accessible>true</accessible>
+      </file>
+      <file>
+        <key>19</key>
+        <name>[datastore1] alp1/vmware-11.log</name>
+        <type>log</type>
+        <size>52256</size>
+        <uniqueSize>52256</uniqueSize>
+        <accessible>true</accessible>
+      </file>
+      <file>
+        <key>20</key>
+        <name>[datastore1] alp1/vmware-10.log</name>
+        <type>log</type>
+        <size>52256</size>
+        <uniqueSize>52256</uniqueSize>
+        <accessible>true</accessible>
+      </file>
+      <file>
+        <key>21</key>
+        <name>[datastore1] alp1/vmware.log</name>
+        <type>log</type>
+        <size>166160</size>
+        <uniqueSize>166160</uniqueSize>
+        <accessible>true</accessible>
+      </file>
       <disk>
         <key>2000</key>
         <chain>
@@ -996,7 +1289,21 @@
           <fileKey>4</fileKey>
         </chain>
       </disk>
-      <timestamp>2023-10-25T07:14:53.375775Z</timestamp>
+      <disk>
+        <key>16000</key>
+        <chain>
+          <fileKey>5</fileKey>
+          <fileKey>6</fileKey>
+        </chain>
+      </disk>
+      <disk>
+        <key>32000</key>
+        <chain>
+          <fileKey>7</fileKey>
+          <fileKey>8</fileKey>
+        </chain>
+      </disk>
+      <timestamp>2023-10-26T09:27:03.849697Z</timestamp>
     </val>
   </propSet>
   <propSet>
@@ -1071,8 +1378,8 @@
       <vmFailoverInProgress>false</vmFailoverInProgress>
       <faultToleranceState>notConfigured</faultToleranceState>
       <toolsInstallerMounted>false</toolsInstallerMounted>
-      <bootTime>2023-10-25T07:14:53Z</bootTime>
-      <maxCpuUsage>1991</maxCpuUsage>
+      <bootTime>2023-10-26T09:05:08Z</bootTime>
+      <maxCpuUsage>1990</maxCpuUsage>
       <maxMemoryUsage>512</maxMemoryUsage>
       <numMksConnections>0</numMksConnections>
       <recordReplayState>inactive</recordReplayState>
@@ -1313,11 +1620,11 @@
     <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="VirtualMachineStorageInfo">
       <perDatastoreUsage>
         <datastore type="Datastore">64d4b065-879077de-6dfb-5254000ed68e</datastore>
-        <committed>769014309</committed>
-        <uncommitted>8442085900</uncommitted>
-        <unshared>769014309</unshared>
+        <committed>773767446</committed>
+        <uncommitted>11659118003</uncommitted>
+        <unshared>773767446</unshared>
       </perDatastoreUsage>
-      <timestamp>2023-10-25T07:14:53.3758Z</timestamp>
+      <timestamp>2023-10-26T09:27:03.849869Z</timestamp>
     </val>
   </propSet>
   <propSet>
@@ -1338,8 +1645,8 @@
         <vmFailoverInProgress>false</vmFailoverInProgress>
         <faultToleranceState>notConfigured</faultToleranceState>
         <toolsInstallerMounted>false</toolsInstallerMounted>
-        <bootTime>2023-10-25T07:14:53Z</bootTime>
-        <maxCpuUsage>1991</maxCpuUsage>
+        <bootTime>2023-10-26T09:05:08Z</bootTime>
+        <maxCpuUsage>1990</maxCpuUsage>
         <maxMemoryUsage>512</maxMemoryUsage>
         <numMksConnections>0</numMksConnections>
         <recordReplayState>inactive</recordReplayState>
@@ -1592,7 +1899,7 @@
         <memorySizeMB>512</memorySizeMB>
         <numCpu>1</numCpu>
         <numEthernetCards>1</numEthernetCards>
-        <numVirtualDisks>1</numVirtualDisks>
+        <numVirtualDisks>3</numVirtualDisks>
         <uuid>564de822-678c-5efd-f01e-bca0da637105</uuid>
         <instanceUuid>523b5ee7-4fda-0dbe-96b0-fda9c0862e31</instanceUuid>
         <guestId>otherGuest</guestId>
@@ -1601,19 +1908,21 @@
         <hwVersion>vmx-14</hwVersion>
       </config>
       <storage>
-        <committed>769014309</committed>
-        <uncommitted>8442085900</uncommitted>
-        <unshared>769014309</unshared>
-        <timestamp>2023-10-25T07:14:53.3758Z</timestamp>
+        <committed>773767446</committed>
+        <uncommitted>11659118003</uncommitted>
+        <unshared>773767446</unshared>
+        <timestamp>2023-10-26T09:27:03.849869Z</timestamp>
       </storage>
       <quickStats>
-        <overallCpuUsage>33</overallCpuUsage>
-        <guestMemoryUsage>5</guestMemoryUsage>
-        <hostMemoryUsage>176</hostMemoryUsage>
+        <overallCpuUsage>41</overallCpuUsage>
+        <guestMemoryUsage>10</guestMemoryUsage>
+        <hostMemoryUsage>186</hostMemoryUsage>
         <guestHeartbeatStatus>green</guestHeartbeatStatus>
-        <grantedMemory>148</grantedMemory>
-        <consumedOverheadMemory>28</consumedOverheadMemory>
-        <uptimeSeconds>16266</uptimeSeconds>
+        <grantedMemory>158</grantedMemory>
+        <privateMemory>157</privateMemory>
+        <sharedMemory>1</sharedMemory>
+        <consumedOverheadMemory>29</consumedOverheadMemory>
+        <uptimeSeconds>4871</uptimeSeconds>
       </quickStats>
       <overallStatus>green</overallStatus>
     </val>

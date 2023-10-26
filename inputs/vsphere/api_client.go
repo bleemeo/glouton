@@ -311,12 +311,18 @@ func getVMLabelsMetadata(devices object.VirtualDeviceList) (map[string]string, m
 		switch dev := device.(type) {
 		case *types.VirtualDisk:
 			if dev.UnitNumber == nil {
-				break
+				continue
 			}
 
-			c := devices.FindByKey(dev.ControllerKey)
-			if scsi, ok := c.(types.BaseVirtualSCSIController); ok {
-				disks[fmt.Sprintf("scsi%d:%d", scsi.GetVirtualSCSIController().BusNumber, *dev.UnitNumber)] = devices.Name(dev)
+			switch controller := devices.FindByKey(dev.ControllerKey).(type) {
+			case types.BaseVirtualSCSIController:
+				disks[fmt.Sprintf("scsi%d:%d", controller.GetVirtualSCSIController().BusNumber, *dev.UnitNumber)] = devices.Name(dev)
+			case types.BaseVirtualSATAController:
+				disks[fmt.Sprintf("sata%d:%d", controller.GetVirtualSATAController().BusNumber, *dev.UnitNumber)] = devices.Name(dev)
+			case *types.VirtualNVMEController:
+				disks[fmt.Sprintf("nvme%d:%d", controller.BusNumber, *dev.UnitNumber)] = devices.Name(dev)
+			default:
+				logger.Printf("Unknown disk controller: %T", controller) // TODO: remove
 			}
 		case types.BaseVirtualEthernetCard: // VirtualVmxnet, VirtualE1000, ...
 			virtEthCard := dev.GetVirtualEthernetCard()

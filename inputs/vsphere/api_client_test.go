@@ -24,6 +24,7 @@ import (
 	"glouton/prometheus/registry"
 	"net/url"
 	"sort"
+	"strings"
 	"testing"
 	"time"
 
@@ -225,11 +226,12 @@ func TestVCenterDescribing(t *testing.T) {
 // but by calling the higher-level method Manager.Devices.
 func TestESXIDescribing(t *testing.T) { //nolint:maintidx
 	testCases := []struct {
-		name             string
-		dirName          string
-		expectedClusters []*Cluster
-		expectedHosts    []*HostSystem
-		expectedVMs      []*VirtualMachine
+		name                   string
+		dirName                string
+		expectedClusters       []*Cluster
+		expectedHosts          []*HostSystem
+		expectedVMs            []*VirtualMachine
+		expectedLabelsMetadata map[string]labelsMetadata
 	}{
 		{
 			name:    "ESXI running on QEMU",
@@ -317,6 +319,21 @@ func TestESXIDescribing(t *testing.T) { //nolint:maintidx
 					inventoryPath: "/ha-datacenter/vm/alp1",
 				},
 			},
+			expectedLabelsMetadata: map[string]labelsMetadata{
+				"127.0.0.1": {
+					datastorePerLUN: map[string]string{},
+					disksPerVM: map[string]map[string]string{
+						"1": nil,
+						"10": {
+							"nvme0:0": "disk-31000-0",
+							"sata0:0": "disk-15000-0",
+							"scsi0:0": "disk-1000-0",
+						},
+						"8": {"scsi0:0": "disk-1000-0"},
+					},
+					netInterfacesPerVM: map[string]map[string]string{"1": nil, "10": {"4000": "ethernet-0"}, "8": {"4000": "ethernet-0"}},
+				},
+			},
 		},
 		{
 			name:    "vCenter vcsim'ulated",
@@ -378,6 +395,13 @@ func TestESXIDescribing(t *testing.T) { //nolint:maintidx
 					inventoryPath: "/DC0/vm/DC0_C0_RP0_VM0",
 				},
 			},
+			expectedLabelsMetadata: map[string]labelsMetadata{
+				"127.0.0.1": {
+					datastorePerLUN:    map[string]string{},
+					disksPerVM:         map[string]map[string]string{"vm-28": {"scsi0:0": "disk-202-0"}},
+					netInterfacesPerVM: map[string]map[string]string{"vm-28": {"4000": "ethernet-0"}},
+				},
+			},
 		},
 		{
 			name:          "vCenter",
@@ -405,6 +429,13 @@ func TestESXIDescribing(t *testing.T) { //nolint:maintidx
 					},
 					UUID:          "d72b7d0e-95e3-4bd1-b788-18da89624595",
 					inventoryPath: "/DC0/vm/app-haproxy2",
+				},
+			},
+			expectedLabelsMetadata: map[string]labelsMetadata{
+				"127.0.0.1": {
+					datastorePerLUN:    map[string]string{},
+					disksPerVM:         map[string]map[string]string{"vm-74": {"scsi0:0": "disk-1000-0"}},
+					netInterfacesPerVM: map[string]map[string]string{"vm-74": {"4000": "ethernet-0"}},
 				},
 			},
 		},
@@ -479,6 +510,13 @@ func TestESXIDescribing(t *testing.T) { //nolint:maintidx
 					t.Errorf("Unexpected VM description (-want +got):\n%s", diff)
 				}
 			}
+
+			labelsMetadataByVSphere := mapMap(manager.vSpheres, func(ki string, vi *vSphere) (string, labelsMetadata) {
+				return strings.Split(ki, ":")[0], vi.labelsMetadata
+			})
+			if diff := cmp.Diff(tc.expectedLabelsMetadata, labelsMetadataByVSphere, cmp.AllowUnexported(labelsMetadata{})); diff != "" {
+				t.Errorf("Unexpected labels metadata (-want +got):\n%s", diff)
+			}
 		})
 	}
 }
@@ -488,4 +526,16 @@ func sortDevices[D bleemeoTypes.VSphereDevice](devices []D) {
 	sort.Slice(devices, func(i, j int) bool {
 		return devices[i].MOID() < devices[j].MOID()
 	})
+}
+
+// KI/KO: Input/Output Keys | VI/VO: Input/Output Values
+func mapMap[KI, KO comparable, VI, VO any](m map[KI]VI, f func(KI, VI) (KO, VO)) map[KO]VO {
+	result := make(map[KO]VO, len(m))
+
+	for ki, vi := range m {
+		ko, vo := f(ki, vi)
+		result[ko] = vo
+	}
+
+	return result
 }
