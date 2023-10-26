@@ -123,8 +123,13 @@ func (gatherer *vSphereGatherer) collectAdditionalMetrics(ctx context.Context, a
 		return err
 	}
 
-	if len(hosts) == 0 && len(vms) == 0 {
+	if len(clusters) == 0 || len(hosts) == 0 && len(vms) == 0 {
 		return nil
+	}
+
+	err = additionalClusterMetrics(ctx, clusters, acc)
+	if err != nil {
+		return err
 	}
 
 	// For each host, we have a list of vm states (running/stopped)
@@ -136,8 +141,11 @@ func (gatherer *vSphereGatherer) collectAdditionalMetrics(ctx context.Context, a
 	}
 
 	err = additionalHostMetrics(ctx, hosts, acc, vmStatesPerHost, objectNames(clusters))
+	if err != nil {
+		return err
+	}
 
-	return err
+	return nil
 }
 
 func (gatherer *vSphereGatherer) stop() {

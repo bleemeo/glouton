@@ -397,6 +397,48 @@ var (
 	additionalHostProps = []string{"parent"}
 )
 
+func additionalClusterMetrics(ctx context.Context, clusters []*object.ClusterComputeResource, acc telegraf.Accumulator) error {
+	for _, cluster := range clusters {
+		hosts, err := cluster.Hosts(ctx)
+		if err != nil {
+			return err
+		}
+
+		var (
+			hostProps        mo.HostSystem
+			running, stopped int
+		)
+
+		for _, host := range hosts {
+			err = host.Properties(ctx, host.Reference(), []string{"runtime.powerState"}, &hostProps)
+			if err != nil {
+				return err
+			}
+
+			if hostProps.Runtime.PowerState == "poweredOn" {
+				running++
+			} else {
+				stopped++
+			}
+		}
+
+		fields := map[string]any{
+			"running_count": running,
+			"stopped_count": stopped,
+		}
+
+		tags := map[string]string{
+			"clustername": cluster.Name(),
+			"dcname":      "", // TODO
+			"moid":        cluster.Reference().Value,
+		}
+
+		acc.AddFields("hosts", fields, tags)
+	}
+
+	return nil
+}
+
 func additionalVMMetrics(ctx context.Context, vms []*object.VirtualMachine, acc telegraf.Accumulator, vmStatePerHost map[string][]bool, hostNames map[string]string) error {
 	for _, vm := range vms {
 		var vmProps mo.VirtualMachine

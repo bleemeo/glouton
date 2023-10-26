@@ -295,6 +295,8 @@ var (
 
 		"vms_running_count",
 		"vms_stopped_count",
+		"hosts_running_count",
+		"hosts_stopped_count",
 	}
 
 	defaultServiceMetrics map[discovery.ServiceName][]string = map[discovery.ServiceName][]string{
