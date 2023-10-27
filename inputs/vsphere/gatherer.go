@@ -37,7 +37,10 @@ import (
 	"github.com/vmware/govmomi/vim25/soap"
 )
 
-const endpointCreationRetryDelay = 5 * time.Minute
+const (
+	endpointCreationRetryDelay = 5 * time.Minute
+	clusterMetricsPeriod       = 5 * time.Minute
+)
 
 type vSphereGatherer struct {
 	cfg *config.VSphere
@@ -53,6 +56,8 @@ type vSphereGatherer struct {
 	buffer     *registry.PointBuffer
 	lastPoints []types.MetricPoint
 	lastErr    error
+
+	lastAdditionalClusterMetricsAt time.Time
 
 	l sync.Mutex
 }
@@ -127,9 +132,16 @@ func (gatherer *vSphereGatherer) collectAdditionalMetrics(ctx context.Context, a
 		return nil
 	}
 
-	err = additionalClusterMetrics(ctx, clusters, acc)
-	if err != nil {
-		return err
+	if time.Since(gatherer.lastAdditionalClusterMetricsAt) >= clusterMetricsPeriod {
+		// The next gathering should run in ~5min, so we schedule it in 4m50s from now to be safe.
+		gatherer.lastAdditionalClusterMetricsAt = time.Now().Add(-10 * time.Second)
+
+		logger.Printf("Gathering additional cluster metrics") // TODO: remove
+
+		err = additionalClusterMetrics(ctx, clusters, acc)
+		if err != nil {
+			return err
+		}
 	}
 
 	// For each host, we have a list of vm states (running/stopped)
@@ -180,8 +192,6 @@ func (gatherer *vSphereGatherer) createEndpoint(ctx context.Context, input *vsph
 
 	err := newEP(gatherer.soapURL)
 	if err == nil {
-		logger.Printf("vSphere endpoint for %q successfully created", gatherer.soapURL.Host) // TODO: remove
-
 		return
 	}
 
@@ -194,10 +204,10 @@ func (gatherer *vSphereGatherer) createEndpoint(ctx context.Context, input *vsph
 
 				err = newEP(&urlWithSlashSDK)
 				if err == nil {
-					logger.V(0).Printf(
+					logger.V(2).Printf(
 						"vSphere endpoint for %q created, but on /sdk instead of %s",
 						gatherer.soapURL.Host, gatherer.soapURL.Path,
-					) // TODO: V(2)
+					)
 
 					gatherer.soapURL = &urlWithSlashSDK
 					gatherer.cfg.URL = urlWithSlashSDK.String()

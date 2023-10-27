@@ -445,6 +445,46 @@ func additionalClusterMetrics(ctx context.Context, clusters []*object.ClusterCom
 	return nil
 }
 
+func additionalHostMetrics(ctx context.Context, hosts []*object.HostSystem, acc telegraf.Accumulator, vmStatesPerHost map[string][]bool, clusterNames map[string]string) error {
+	for _, host := range hosts {
+		moid := host.Reference().Value
+		if vmStates, ok := vmStatesPerHost[moid]; ok {
+			var running, stopped int
+
+			for _, isRunning := range vmStates {
+				if isRunning {
+					running++
+				} else {
+					stopped++
+				}
+			}
+
+			fields := map[string]any{
+				"running_count": running,
+				"stopped_count": stopped,
+			}
+
+			var hostProps mo.HostSystem
+
+			err := host.Properties(ctx, host.Reference(), additionalHostProps, &hostProps)
+			if err != nil {
+				return err
+			}
+
+			tags := map[string]string{
+				"clustername": clusterNames[hostProps.Parent.Value],
+				"dcname":      "", // TODO
+				"esxhostname": host.Name(),
+				"moid":        moid,
+			}
+
+			acc.AddFields("vms", fields, tags)
+		}
+	}
+
+	return nil
+}
+
 func additionalVMMetrics(ctx context.Context, vms []*object.VirtualMachine, acc telegraf.Accumulator, vmStatePerHost map[string][]bool, hostNames map[string]string) error {
 	for _, vm := range vms {
 		var vmProps mo.VirtualMachine
@@ -484,46 +524,6 @@ func additionalVMMetrics(ctx context.Context, vms []*object.VirtualMachine, acc 
 
 				acc.AddFields("vsphere_vm_disk", map[string]any{"used_perc": usage}, tags)
 			}
-		}
-	}
-
-	return nil
-}
-
-func additionalHostMetrics(ctx context.Context, hosts []*object.HostSystem, acc telegraf.Accumulator, vmStatesPerHost map[string][]bool, clusterNames map[string]string) error {
-	for _, host := range hosts {
-		moid := host.Reference().Value
-		if vmStates, ok := vmStatesPerHost[moid]; ok {
-			var running, stopped int
-
-			for _, isRunning := range vmStates {
-				if isRunning {
-					running++
-				} else {
-					stopped++
-				}
-			}
-
-			fields := map[string]any{
-				"running_count": running,
-				"stopped_count": stopped,
-			}
-
-			var hostProps mo.HostSystem
-
-			err := host.Properties(ctx, host.Reference(), additionalHostProps, &hostProps)
-			if err != nil {
-				return err
-			}
-
-			tags := map[string]string{
-				"clustername": clusterNames[hostProps.Parent.Value],
-				"dcname":      "", // TODO
-				"esxhostname": host.Name(),
-				"moid":        moid,
-			}
-
-			acc.AddFields("vms", fields, tags)
 		}
 	}
 

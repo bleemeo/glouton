@@ -162,8 +162,6 @@ func (m *Manager) Devices(ctx context.Context, maxAge time.Duration) []bleemeoTy
 
 	if !reflect.DeepEqual(devices, m.lastDevices) {
 		m.lastChange = time.Now()
-
-		logger.Printf("vSphere devices changed") // TODO: remove
 	}
 
 	m.lastDevices = devices
@@ -222,7 +220,7 @@ func (dev *device) FQDN() string {
 		domain = "." + dev.facts["domain"]
 	}
 
-	return dev.name + domain // TODO: slugify ?
+	return dev.name + domain
 }
 
 func (dev *device) Source() string {

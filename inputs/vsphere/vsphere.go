@@ -126,11 +126,11 @@ func (vSphere *vSphere) devices(ctx context.Context, deviceChan chan<- bleemeoTy
 	findCtx, cancelFind := context.WithTimeout(ctx, 5*time.Second)
 	defer cancelFind()
 
-	logger.Printf("Discovering devices for vSphere %q ...", vSphere.host) // TODO: remove
+	t0 := time.Now()
 
 	finder, err := newDeviceFinder(findCtx, vSphere.opts)
 	if err != nil {
-		logger.V(1).Printf("Can't create vSphere client for %q: %v", vSphere.host, err) // TODO: V(2) ?
+		logger.V(2).Printf("Can't create vSphere client for %q: %v", vSphere.host, err)
 
 		vSphere.setErr(err)
 
@@ -139,14 +139,14 @@ func (vSphere *vSphere) devices(ctx context.Context, deviceChan chan<- bleemeoTy
 
 	clusters, datastores, hosts, vms, err := findDevices(findCtx, finder, true)
 	if err != nil {
-		logger.V(1).Printf("Can't find devices on vSphere %q: %v", vSphere.host, err) // TODO: V(2) ?
+		logger.V(2).Printf("Can't find devices on vSphere %q: %v", vSphere.host, err)
 
 		vSphere.setErr(err)
 
 		return
 	}
 
-	logger.Printf("Found %d hosts and %d vms.", len(hosts), len(vms))
+	logger.V(2).Printf("On vSphere %q, found %d hosts and %d vms in %v.", vSphere.host, len(hosts), len(vms), time.Since(t0))
 
 	describeCtx, cancelDescribe := context.WithTimeout(ctx, 20*time.Second)
 	defer cancelDescribe()
@@ -325,8 +325,8 @@ func (vSphere *vSphere) makeGatherer() (prometheus.Gatherer, registry.Registrati
 		"net.received.average",
 	}
 	vsphereInput.DatastoreMetricInclude = []string{
-		"datastore.write.average",
 		"datastore.read.average",
+		"datastore.write.average",
 		"disk.used.latest",
 		"disk.capacity.latest",
 	}
@@ -491,6 +491,7 @@ func (vSphere *vSphere) modifyLabels(labelPairs []*dto.LabelPair) (shouldBeKept 
 
 	isVM := labels["vmname"].GetValue() != ""
 	isHost := !isVM && labels["esxhostname"].GetValue() != ""
+	isCluster := !isVM && !isHost && labels["dcname"].GetValue() != ""
 
 	switch {
 	case isVM:
@@ -535,7 +536,7 @@ func (vSphere *vSphere) modifyLabels(labelPairs []*dto.LabelPair) (shouldBeKept 
 
 			delete(labels, "interface")
 		}
-	case isHost:
+	case isHost, isCluster:
 		if lunLabel, ok := labels["lun"]; ok {
 			starLabelReplacer(lunLabel, vSphere.labelsMetadata.datastorePerLUN) // TODO: remove
 
