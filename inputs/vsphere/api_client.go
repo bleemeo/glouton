@@ -364,7 +364,7 @@ func objectNames[T commonObject](objects []T) map[string]string {
 
 var isolateLUN = regexp.MustCompile(`.*/([^/]+)/?$`)
 
-func getDatastorePerLUN(ctx context.Context, rawDatastores []*object.Datastore) map[string]string {
+func getDatastorePerLUN(ctx context.Context, rawDatastores []*object.Datastore) (map[string]string, error) {
 	dsPerLUN := make(map[string]string, len(rawDatastores))
 
 	for _, ds := range rawDatastores {
@@ -372,6 +372,10 @@ func getDatastorePerLUN(ctx context.Context, rawDatastores []*object.Datastore) 
 
 		err := ds.Properties(ctx, ds.Reference(), relevantClusterProperties, &dsProps)
 		if err != nil {
+			if errors.Is(err, context.DeadlineExceeded) {
+				return nil, err
+			}
+
 			logger.V(1).Printf("Failed to fetch properties of datastore %q: %v", ds.Reference().Value, err)
 
 			continue
@@ -390,7 +394,7 @@ func getDatastorePerLUN(ctx context.Context, rawDatastores []*object.Datastore) 
 		dsPerLUN[matches[1]] = dsProps.Name
 	}
 
-	return dsPerLUN
+	return dsPerLUN, nil
 }
 
 //nolint:gochecknoglobals

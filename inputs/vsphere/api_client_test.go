@@ -117,14 +117,22 @@ func TestVCenterDescribing(t *testing.T) {
 
 	dummyVSphere := newVSphere(vSphereCfg.URL, vSphereCfg, nil)
 
-	devices := dummyVSphere.describeClusters(ctx, clusters)
-	if len(devices) != 1 {
-		t.Fatalf("Expected 1 cluster to be described, but got %d.", len(devices))
+	describeChan := make(chan bleemeoTypes.VSphereDevice, 1)
+
+	err = dummyVSphere.describeClusters(ctx, clusters, describeChan)
+	if err != nil {
+		t.Fatalf("Failed to describe clusters: %v", err)
 	}
 
-	cluster, ok := devices[0].(*Cluster)
+	if len(describeChan) != 1 {
+		t.Fatalf("Expected 1 cluster to be described, but got %d.", len(describeChan))
+	}
+
+	devCluster := <-describeChan
+
+	cluster, ok := devCluster.(*Cluster)
 	if !ok {
-		t.Fatalf("Expected device to be a Cluster, but is %T.", devices[0])
+		t.Fatalf("Expected device to be a Cluster, but is %T.", devCluster)
 	}
 
 	expectedCluster := Cluster{
@@ -144,14 +152,20 @@ func TestVCenterDescribing(t *testing.T) {
 		t.Fatalf("Unexpected host description (-want +got):\n%s", diff)
 	}
 
-	devices = dummyVSphere.describeHosts(ctx, hosts)
-	if len(devices) != 1 {
-		t.Fatalf("Expected 1 host to be described, but got %d.", len(devices))
+	err = dummyVSphere.describeHosts(ctx, hosts, describeChan)
+	if err != nil {
+		t.Fatalf("Failed to describe hosts: %v", err)
 	}
 
-	host, ok := devices[0].(*HostSystem)
+	if len(describeChan) != 1 {
+		t.Fatalf("Expected 1 host to be described, but got %d.", len(describeChan))
+	}
+
+	devHost := <-describeChan
+
+	host, ok := devHost.(*HostSystem)
 	if !ok {
-		t.Fatalf("Expected device to be a HostSystem, but is %T.", devices[0])
+		t.Fatalf("Expected device to be a HostSystem, but is %T.", devHost)
 	}
 
 	expectedHost := HostSystem{
@@ -180,14 +194,25 @@ func TestVCenterDescribing(t *testing.T) {
 		t.Fatalf("Unexpected host description (-want +got):\n%s", diff)
 	}
 
-	devices, vmLabelsMetadata := dummyVSphere.describeVMs(ctx, vms)
-	if len(devices) != 1 {
-		t.Fatalf("Expected 1 VM to be described, but got %d.", len(devices))
+	metadata := &labelsMetadata{
+		disksPerVM:         make(map[string]map[string]string),
+		netInterfacesPerVM: make(map[string]map[string]string),
 	}
 
-	vm, ok := devices[0].(*VirtualMachine)
+	err = dummyVSphere.describeVMs(ctx, vms, describeChan, metadata)
+	if err != nil {
+		t.Fatalf("Failed to describe : %v", err)
+	}
+
+	if len(describeChan) != 1 {
+		t.Fatalf("Expected 1 VM to be described, but got %d.", len(describeChan))
+	}
+
+	devVM := <-describeChan
+
+	vm, ok := devVM.(*VirtualMachine)
 	if !ok {
-		t.Fatalf("Expected device to be a VirtualMachine, but is %T.", devices)
+		t.Fatalf("Expected device to be a VirtualMachine, but is %T.", devVM)
 	}
 
 	expectedVM := VirtualMachine{
@@ -214,11 +239,11 @@ func TestVCenterDescribing(t *testing.T) {
 		t.Fatalf("Unexpected VM description (-want +got):\n%s", diff)
 	}
 
-	expectedLabelsMetadata := labelsMetadata{
+	expectedLabelsMetadata := &labelsMetadata{
 		disksPerVM:         map[string]map[string]string{"vm-28": {"scsi0:0": "disk-202-0"}},
 		netInterfacesPerVM: map[string]map[string]string{"vm-28": {"4000": "ethernet-0"}},
 	}
-	if diff := cmp.Diff(expectedLabelsMetadata, vmLabelsMetadata, cmp.AllowUnexported(labelsMetadata{})); diff != "" {
+	if diff := cmp.Diff(expectedLabelsMetadata, metadata, cmp.AllowUnexported(labelsMetadata{}), cmpopts.IgnoreFields(labelsMetadata{}, "l")); diff != "" {
 		t.Fatalf("Unexpected labels metadata (-want +got):\n%s", diff)
 	}
 }
@@ -514,9 +539,9 @@ func TestESXIDescribing(t *testing.T) { //nolint:maintidx
 			}
 
 			labelsMetadataByVSphere := mapMap(manager.vSpheres, func(ki string, vi *vSphere) (string, labelsMetadata) {
-				return strings.Split(ki, ":")[0], vi.labelsMetadata
+				return strings.Split(ki, ":")[0], *vi.labelsMetadata //nolint:govet // The lock will no longer be used
 			})
-			if diff := cmp.Diff(tc.expectedLabelsMetadata, labelsMetadataByVSphere, cmp.AllowUnexported(labelsMetadata{})); diff != "" {
+			if diff := cmp.Diff(tc.expectedLabelsMetadata, labelsMetadataByVSphere, cmp.AllowUnexported(labelsMetadata{}), cmpopts.IgnoreFields(labelsMetadata{}, "l")); diff != "" {
 				t.Errorf("Unexpected labels metadata (-want +got):\n%s", diff)
 			}
 		})
