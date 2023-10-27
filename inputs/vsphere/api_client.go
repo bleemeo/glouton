@@ -37,6 +37,8 @@ import (
 	"github.com/vmware/govmomi/vim25/types"
 )
 
+const deviceStatePoweredOn = "poweredOn"
+
 //nolint:gochecknoglobals
 var (
 	relevantClusterProperties []string // An empty list will retrieve all properties.
@@ -154,7 +156,7 @@ func describeCluster(cluster *object.ClusterComputeResource, clusterProps mo.Clu
 		moid:   cluster.Reference().Value,
 		name:   cluster.Name(),
 		facts:  clusterFacts,
-		// TODO: Rename powerState to status and store the cluster's overallStatus ? (green)
+		state:  string(clusterProps.OverallStatus),
 	}
 
 	dev.facts["fqdn"] = dev.FQDN()
@@ -218,11 +220,11 @@ func describeHost(host *object.HostSystem, hostProps mo.HostSystem) *HostSystem 
 	}
 
 	dev := device{
-		source:     host.Client().URL().Host,
-		moid:       host.Reference().Value,
-		name:       fallback(hostFacts["hostname"], host.Reference().Value),
-		facts:      hostFacts,
-		powerState: string(hostProps.Runtime.PowerState),
+		source: host.Client().URL().Host,
+		moid:   host.Reference().Value,
+		name:   fallback(hostFacts["hostname"], host.Reference().Value),
+		facts:  hostFacts,
+		state:  string(hostProps.Runtime.PowerState),
 	}
 
 	dev.facts["fqdn"] = dev.FQDN()
@@ -287,11 +289,11 @@ func describeVM(ctx context.Context, vm *object.VirtualMachine, vmProps mo.Virtu
 	}
 
 	dev := device{
-		source:     vm.Client().URL().Host,
-		moid:       vm.Reference().Value,
-		name:       fallback(vmFacts["vsphere_vm_name"], vm.Reference().Value),
-		facts:      vmFacts,
-		powerState: string(vmProps.Runtime.PowerState),
+		source: vm.Client().URL().Host,
+		moid:   vm.Reference().Value,
+		name:   fallback(vmFacts["vsphere_vm_name"], vm.Reference().Value),
+		facts:  vmFacts,
+		state:  string(vmProps.Runtime.PowerState),
 	}
 
 	dev.facts["fqdn"] = dev.FQDN()
@@ -415,7 +417,7 @@ func additionalClusterMetrics(ctx context.Context, clusters []*object.ClusterCom
 				return err
 			}
 
-			if hostProps.Runtime.PowerState == "poweredOn" {
+			if hostProps.Runtime.PowerState == deviceStatePoweredOn {
 				running++
 			} else {
 				stopped++
@@ -452,7 +454,7 @@ func additionalVMMetrics(ctx context.Context, vms []*object.VirtualMachine, acc 
 
 		if vmProps.Runtime.Host != nil {
 			host := vmProps.Runtime.Host.Value
-			vmState := vmProps.Runtime.PowerState == "poweredOn" // true for running, false for stopped
+			vmState := vmProps.Runtime.PowerState == deviceStatePoweredOn // true for running, false for stopped
 
 			if states, ok := vmStatePerHost[host]; ok {
 				vmStatePerHost[host] = append(states, vmState)

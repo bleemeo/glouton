@@ -207,12 +207,12 @@ func (m *Manager) FindDevice(ctx context.Context, vSphereHost, moid string) blee
 
 type device struct {
 	// The source is the host address of the vCenter/ESXI from which this device was described.
-	source     string
-	moid       string
-	name       string
-	facts      map[string]string
-	powerState string
-	err        error
+	source string
+	moid   string
+	name   string
+	facts  map[string]string
+	state  string
+	err    error
 }
 
 func (dev *device) FQDN() string {
@@ -242,7 +242,7 @@ func (dev *device) Facts() map[string]string {
 }
 
 func (dev *device) IsPoweredOn() bool {
-	return dev.powerState == "poweredOn"
+	return dev.state == deviceStatePoweredOn // for hosts and VMs
 }
 
 func (dev *device) LatestError() error {
@@ -254,8 +254,12 @@ type Cluster struct {
 	datastores []string
 }
 
-func (host *Cluster) Kind() string {
+func (cluster *Cluster) Kind() string {
 	return KindCluster
+}
+
+func (cluster *Cluster) IsPoweredOn() bool {
+	return cluster.state == "green"
 }
 
 type HostSystem struct {

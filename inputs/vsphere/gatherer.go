@@ -123,7 +123,7 @@ func (gatherer *vSphereGatherer) collectAdditionalMetrics(ctx context.Context, a
 		return err
 	}
 
-	if len(clusters) == 0 || len(hosts) == 0 && len(vms) == 0 {
+	if len(clusters) == 0 && len(hosts) == 0 && len(vms) == 0 {
 		return nil
 	}
 
