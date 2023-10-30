@@ -276,9 +276,9 @@ func (vSphere *vSphere) describeVMs(ctx context.Context, rawVMs []*object.Virtua
 
 		moid := vm.Reference().Value
 
-		vSphere.stat.descHost.Get(vm).Start()
+		vSphere.stat.descVM.Get(vm).Start()
 		err := vm.Properties(ctx, vm.Reference(), relevantVMProperties, &vmProps)
-		vSphere.stat.descHost.Get(vm).Stop()
+		vSphere.stat.descVM.Get(vm).Stop()
 		if err != nil {
 			if errors.Is(err, context.DeadlineExceeded) {
 				return err

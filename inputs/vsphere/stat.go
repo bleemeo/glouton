@@ -22,9 +22,9 @@ type SR struct {
 
 func NewStat() *SR {
 	return &SR{
-		descCluster: make(multiWatch),
-		descHost:    make(multiWatch),
-		descVM:      make(multiWatch),
+		descCluster: multiWatch{m: make(map[string]*watch)},
+		descHost:    multiWatch{m: make(map[string]*watch)},
+		descVM:      multiWatch{m: make(map[string]*watch)},
 	}
 }
 
@@ -61,25 +61,35 @@ func (w *watch) total() time.Duration {
 	return w.stop.Sub(w.start)
 }
 
-type multiWatch map[string]*watch
+type multiWatch struct {
+	sync.Mutex
 
-func (mw multiWatch) Get(obj mo.Reference) *watch {
-	if w, ok := mw[obj.Reference().Value]; ok {
+	m map[string]*watch
+}
+
+func (mw *multiWatch) Get(obj mo.Reference) *watch {
+	mw.Lock()
+	defer mw.Unlock()
+
+	if w, ok := mw.m[obj.Reference().Value]; ok {
 		return w
 	}
 
 	w := new(watch)
-	mw[obj.Reference().Value] = w
+	mw.m[obj.Reference().Value] = w
 
 	return w
 }
 
-func (mw multiWatch) display() string {
+func (mw *multiWatch) display() string {
+	mw.Lock()
+	defer mw.Unlock()
+
 	var min, max, sum time.Duration
 	minZero, maxZero := true, true
 	count := 0
 
-	for _, w := range mw {
+	for _, w := range mw.m {
 		if w.stop.IsZero() {
 			continue
 		}
@@ -98,7 +108,11 @@ func (mw multiWatch) display() string {
 		count++
 	}
 
+	if sum < 0 {
+		logger.Printf("Abnormal multiwatch stats: %v", mw.m)
+	}
+
 	avg := time.Duration(float64(sum) / float64(count))
 
-	return fmt.Sprintf("min: %v | max: %v | avg: %v", min, max, avg)
+	return fmt.Sprintf("min: %v | max: %v | avg: %v | total: %v", min, max, avg, sum)
 }
