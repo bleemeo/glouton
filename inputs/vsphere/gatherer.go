@@ -19,6 +19,7 @@ package vsphere
 import (
 	"context"
 	"errors"
+	"fmt"
 	"glouton/config"
 	"glouton/inputs"
 	"glouton/inputs/internal"
@@ -132,13 +133,18 @@ func (gatherer *vSphereGatherer) collectAdditionalMetrics(ctx context.Context, a
 		return nil
 	}
 
+	h, err := hierarchyFrom(ctx, clusters, hosts, vms)
+	if err != nil {
+		return fmt.Errorf("can't describe hierarchy: %w", err)
+	}
+
 	if time.Since(gatherer.lastAdditionalClusterMetricsAt) >= clusterMetricsPeriod {
 		// The next gathering should run in ~5min, so we schedule it in 4m50s from now to be safe.
 		gatherer.lastAdditionalClusterMetricsAt = time.Now().Add(-10 * time.Second)
 
 		logger.Printf("Gathering additional cluster metrics") // TODO: remove
 
-		err = additionalClusterMetrics(ctx, clusters, acc)
+		err = additionalClusterMetrics(ctx, clusters, acc, h)
 		if err != nil {
 			return err
 		}
@@ -147,12 +153,12 @@ func (gatherer *vSphereGatherer) collectAdditionalMetrics(ctx context.Context, a
 	// For each host, we have a list of vm states (running/stopped)
 	vmStatesPerHost := make(map[string][]bool, len(hosts))
 
-	err = additionalVMMetrics(ctx, vms, acc, vmStatesPerHost, objectNames(hosts))
+	err = additionalVMMetrics(ctx, vms, acc, h, vmStatesPerHost, objectNames(hosts))
 	if err != nil {
 		return err
 	}
 
-	err = additionalHostMetrics(ctx, hosts, acc, vmStatesPerHost, objectNames(clusters))
+	err = additionalHostMetrics(ctx, hosts, acc, h, vmStatesPerHost, objectNames(clusters))
 	if err != nil {
 		return err
 	}

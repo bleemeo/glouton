@@ -32,6 +32,7 @@ import (
 	"github.com/vmware/govmomi"
 	"github.com/vmware/govmomi/find"
 	"github.com/vmware/govmomi/object"
+	"github.com/vmware/govmomi/vim25"
 	"github.com/vmware/govmomi/vim25/mo"
 	"github.com/vmware/govmomi/vim25/soap"
 	"github.com/vmware/govmomi/vim25/types"
@@ -403,7 +404,7 @@ var (
 	additionalHostProps = []string{"parent"}
 )
 
-func additionalClusterMetrics(ctx context.Context, clusters []*object.ClusterComputeResource, acc telegraf.Accumulator) error {
+func additionalClusterMetrics(ctx context.Context, clusters []*object.ClusterComputeResource, acc telegraf.Accumulator, h *hierarchy) error {
 	for _, cluster := range clusters {
 		hosts, err := cluster.Hosts(ctx)
 		if err != nil {
@@ -435,7 +436,7 @@ func additionalClusterMetrics(ctx context.Context, clusters []*object.ClusterCom
 
 		tags := map[string]string{
 			"clustername": cluster.Name(),
-			"dcname":      "", // TODO
+			"dcname":      h.parentDCName(cluster),
 			"moid":        cluster.Reference().Value,
 		}
 
@@ -445,7 +446,7 @@ func additionalClusterMetrics(ctx context.Context, clusters []*object.ClusterCom
 	return nil
 }
 
-func additionalHostMetrics(ctx context.Context, hosts []*object.HostSystem, acc telegraf.Accumulator, vmStatesPerHost map[string][]bool, clusterNames map[string]string) error {
+func additionalHostMetrics(ctx context.Context, hosts []*object.HostSystem, acc telegraf.Accumulator, h *hierarchy, vmStatesPerHost map[string][]bool, clusterNames map[string]string) error {
 	for _, host := range hosts {
 		moid := host.Reference().Value
 		if vmStates, ok := vmStatesPerHost[moid]; ok {
@@ -473,7 +474,7 @@ func additionalHostMetrics(ctx context.Context, hosts []*object.HostSystem, acc 
 
 			tags := map[string]string{
 				"clustername": clusterNames[hostProps.Parent.Value],
-				"dcname":      "", // TODO
+				"dcname":      h.parentDCName(host),
 				"esxhostname": host.Name(),
 				"moid":        moid,
 			}
@@ -485,7 +486,7 @@ func additionalHostMetrics(ctx context.Context, hosts []*object.HostSystem, acc 
 	return nil
 }
 
-func additionalVMMetrics(ctx context.Context, vms []*object.VirtualMachine, acc telegraf.Accumulator, vmStatePerHost map[string][]bool, hostNames map[string]string) error {
+func additionalVMMetrics(ctx context.Context, vms []*object.VirtualMachine, acc telegraf.Accumulator, h *hierarchy, vmStatePerHost map[string][]bool, hostNames map[string]string) error {
 	for _, vm := range vms {
 		var vmProps mo.VirtualMachine
 
@@ -515,7 +516,7 @@ func additionalVMMetrics(ctx context.Context, vms []*object.VirtualMachine, acc 
 
 				tags := map[string]string{
 					"clustername": "", // TODO
-					"dcname":      "", // TODO
+					"dcname":      h.parentDCName(vm),
 					"esxhostname": hostname,
 					"item":        disk.DiskPath,
 					"moid":        vm.Reference().Value,
@@ -528,4 +529,101 @@ func additionalVMMetrics(ctx context.Context, vms []*object.VirtualMachine, acc 
 	}
 
 	return nil
+}
+
+type hierarchy struct {
+	deviceNamePerMOID  map[string]string
+	parentPerChildMOID map[string]types.ManagedObjectReference
+}
+
+func hierarchyFrom(ctx context.Context, clusters []*object.ClusterComputeResource, hosts []*object.HostSystem, vms []*object.VirtualMachine) (*hierarchy, error) {
+	h := &hierarchy{
+		deviceNamePerMOID:  make(map[string]string),
+		parentPerChildMOID: make(map[string]types.ManagedObjectReference),
+	}
+
+	for _, vm := range vms {
+		err := h.recurseDescribe(ctx, vm.Client(), vm.Reference())
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	for _, host := range hosts {
+		err := h.recurseDescribe(ctx, host.Client(), host.Reference())
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	for _, cluster := range clusters {
+		err := h.recurseDescribe(ctx, cluster.Client(), cluster.Reference())
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	h.filterParents()
+
+	return h, nil
+}
+
+func (h *hierarchy) recurseDescribe(ctx context.Context, client *vim25.Client, objRef types.ManagedObjectReference) error {
+	if _, alreadyExist := h.deviceNamePerMOID[objRef.Value]; alreadyExist {
+		return nil
+	}
+
+	elements, err := mo.Ancestors(ctx, client, client.ServiceContent.PropertyCollector, objRef)
+	if err != nil || len(elements) == 0 {
+		return err
+	}
+
+	for _, e := range elements {
+		h.deviceNamePerMOID[e.Reference().Value] = e.Name
+
+		if e.Parent != nil {
+			h.parentPerChildMOID[e.Reference().Value] = *e.Parent
+		}
+
+		err = h.recurseDescribe(ctx, client, e.Reference())
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// filterParents removes the folder elements in the hierarchy tree.
+func (h *hierarchy) filterParents() {
+	for child, parent := range h.parentPerChildMOID {
+		needsUpdate := false
+
+		for parent.Type == "Folder" {
+			if grandParent, ok := h.parentPerChildMOID[parent.Value]; ok {
+				delete(h.deviceNamePerMOID, parent.Value) // We will never care about the name of a folder.
+
+				parent = grandParent
+				needsUpdate = true
+			} else {
+				break
+			}
+		}
+
+		if needsUpdate {
+			h.parentPerChildMOID[child] = parent
+		}
+	}
+}
+
+func (h *hierarchy) parentDCName(child mo.Reference) string {
+	if parent, ok := h.parentPerChildMOID[child.Reference().Value]; ok {
+		if parent.Type == "Datacenter" {
+			return h.deviceNamePerMOID[parent.Value]
+		}
+
+		return h.parentDCName(parent)
+	}
+
+	return ""
 }
