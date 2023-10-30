@@ -365,7 +365,7 @@ func objectNames[T commonObject](objects []T) map[string]string {
 
 var isolateLUN = regexp.MustCompile(`.*/([^/]+)/?$`)
 
-func getDatastorePerLUN(ctx context.Context, rawDatastores []*object.Datastore, stat *multiWatch) (map[string]string, error) {
+func getDatastorePerLUN(ctx context.Context, rawDatastores []*object.Datastore, stat *multiWatch) map[string]string {
 	dsPerLUN := make(map[string]string, len(rawDatastores))
 
 	for _, ds := range rawDatastores {
@@ -376,7 +376,7 @@ func getDatastorePerLUN(ctx context.Context, rawDatastores []*object.Datastore, 
 		stat.Get(ds).Stop()
 		if err != nil {
 			if errors.Is(err, context.DeadlineExceeded) {
-				return nil, err
+				return nil
 			}
 
 			logger.V(1).Printf("Failed to fetch properties of datastore %q: %v", ds.Reference().Value, err)
@@ -397,7 +397,7 @@ func getDatastorePerLUN(ctx context.Context, rawDatastores []*object.Datastore, 
 		dsPerLUN[matches[1]] = dsProps.Name
 	}
 
-	return dsPerLUN, nil
+	return dsPerLUN
 }
 
 //nolint:gochecknoglobals

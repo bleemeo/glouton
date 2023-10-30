@@ -18,7 +18,6 @@ package vsphere
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	bleemeoTypes "glouton/bleemeo/types"
 	"glouton/config"
@@ -53,8 +52,6 @@ type labelsMetadata struct {
 	datastorePerLUN    map[string]string
 	disksPerVM         map[string]map[string]string
 	netInterfacesPerVM map[string]map[string]string
-
-	l sync.Mutex
 }
 
 type vSphere struct {
@@ -66,7 +63,7 @@ type vSphere struct {
 	gatherer *vSphereGatherer
 
 	deviceCache      map[string]bleemeoTypes.VSphereDevice
-	labelsMetadata   *labelsMetadata
+	labelsMetadata   labelsMetadata
 	noMetricsSince   map[string]int
 	lastStatuses     map[string]types.Status
 	lastErrorMessage string
@@ -83,7 +80,7 @@ func newVSphere(host string, cfg config.VSphere, state bleemeoTypes.State) *vSph
 		opts:        cfg,
 		state:       state,
 		deviceCache: make(map[string]bleemeoTypes.VSphereDevice),
-		labelsMetadata: &labelsMetadata{
+		labelsMetadata: labelsMetadata{
 			datastorePerLUN:    make(map[string]string),
 			disksPerVM:         make(map[string]map[string]string),
 			netInterfacesPerVM: make(map[string]map[string]string),
@@ -135,9 +132,8 @@ func (vSphere *vSphere) devices(ctx context.Context, deviceChan chan<- bleemeoTy
 
 	finder, err := newDeviceFinder(findCtx, vSphere.opts)
 	if err != nil {
-		logger.V(2).Printf("Can't create vSphere client for %q: %v", vSphere.host, err)
-
 		vSphere.setErr(err)
+		logger.V(1).Printf("Can't create vSphere client for %q: %v", vSphere.host, err) // TODO: V(2) ?
 
 		return
 	}
@@ -146,9 +142,8 @@ func (vSphere *vSphere) devices(ctx context.Context, deviceChan chan<- bleemeoTy
 	clusters, datastores, hosts, vms, err := findDevices(findCtx, finder, true)
 	vSphere.stat.deviceListing.Stop()
 	if err != nil {
-		logger.V(2).Printf("Can't find devices on vSphere %q: %v", vSphere.host, err)
-
 		vSphere.setErr(err)
+		logger.V(1).Printf("Can't find devices on vSphere %q: %v", vSphere.host, err)
 
 		return
 	}
@@ -158,117 +153,92 @@ func (vSphere *vSphere) devices(ctx context.Context, deviceChan chan<- bleemeoTy
 	describeCtx, cancelDescribe := context.WithTimeout(ctx, 20*time.Second)
 	defer cancelDescribe()
 
-	const jobCount = 4
+	var devs []bleemeoTypes.VSphereDevice
 
-	labelsMetadata := labelsMetadata{
-		disksPerVM:         make(map[string]map[string]string),
-		netInterfacesPerVM: make(map[string]map[string]string),
-	}
-	describeChan := make(chan bleemeoTypes.VSphereDevice)
-	wg := new(sync.WaitGroup)
+	devs = append(devs, vSphere.describeClusters(describeCtx, clusters)...)
+	devs = append(devs, vSphere.describeHosts(describeCtx, hosts)...)
+	describedVMs, labelsMetadata := vSphere.describeVMs(describeCtx, vms)
+	devs = append(devs, describedVMs...)
 
-	var errs [jobCount]error // Using an array instead of a slice to get compile errors instead of runtime errors
+	dsPerLUN := getDatastorePerLUN(describeCtx, datastores, &vSphere.stat.descDatastore)
 
-	wg.Add(jobCount)
-
-	go func() {
-		defer wg.Done()
-
-		errs[0] = vSphere.describeClusters(describeCtx, clusters, describeChan)
-	}()
-
-	go func() {
-		defer wg.Done()
-
-		errs[1] = vSphere.describeHosts(describeCtx, hosts, describeChan)
-	}()
-
-	go func() {
-		defer wg.Done()
-
-		errs[2] = vSphere.describeVMs(describeCtx, vms, describeChan, &labelsMetadata)
-	}()
-
-	go func() {
-		defer wg.Done()
-
-		dsPerLUN, err := getDatastorePerLUN(describeCtx, datastores, &vSphere.stat.descDatastore)
-		errs[3] = err
-
-		labelsMetadata.l.Lock()
-		labelsMetadata.datastorePerLUN = dsPerLUN
-		labelsMetadata.l.Unlock()
-	}()
-
-	go func() { wg.Wait(); close(describeChan) }()
-
-	deviceCache := make(map[string]bleemeoTypes.VSphereDevice)
-
-	for dev := range describeChan {
-		deviceCache[dev.MOID()] = dev
-
-		deviceChan <- dev
-	}
-
-	vSphere.stat.global.Stop()
-	vSphere.stat.Display(vSphere.host)
-
-	vSphere.setErr(errors.Join(errs[:]...))
+	vSphere.setErr(nil)
 
 	vSphere.l.Lock()
 	defer vSphere.l.Unlock()
 
-	vSphere.labelsMetadata = &labelsMetadata
-	vSphere.deviceCache = deviceCache
+	labelsMetadata.datastorePerLUN = dsPerLUN
+	vSphere.labelsMetadata = labelsMetadata
+	vSphere.deviceCache = make(map[string]bleemeoTypes.VSphereDevice, len(devs))
+
+	for _, dev := range devs {
+		vSphere.deviceCache[dev.MOID()] = dev
+
+		deviceChan <- dev
+	}
 }
 
-func (vSphere *vSphere) describeClusters(ctx context.Context, rawClusters []*object.ClusterComputeResource, describeChan chan bleemeoTypes.VSphereDevice) error {
+func (vSphere *vSphere) describeClusters(ctx context.Context, rawClusters []*object.ClusterComputeResource) []bleemeoTypes.VSphereDevice {
+	clusters := make([]bleemeoTypes.VSphereDevice, 0, len(rawClusters))
+
 	for _, cluster := range rawClusters {
 		var clusterProps mo.ClusterComputeResource
+
+		moid := cluster.Reference().Value
 
 		vSphere.stat.descCluster.Get(cluster).Start()
 		err := cluster.Properties(ctx, cluster.Reference(), relevantClusterProperties, &clusterProps)
 		vSphere.stat.descCluster.Get(cluster).Stop()
 		if err != nil {
-			if errors.Is(err, context.DeadlineExceeded) {
-				return err
-			}
+			logger.Printf("Failed to fetch cluster props: %v", err) // TODO: remove
 
-			logger.V(1).Printf("Failed to fetch cluster props: %v", err)
+			if dev, ok := vSphere.deviceCache[moid]; ok {
+				dev.(*Cluster).err = err //nolint:forcetypeassert
+			}
 
 			continue
 		}
 
-		describeChan <- describeCluster(cluster, clusterProps)
+		clusters = append(clusters, describeCluster(cluster, clusterProps))
 	}
 
-	return nil
+	return clusters
 }
 
-func (vSphere *vSphere) describeHosts(ctx context.Context, rawHosts []*object.HostSystem, describeChan chan bleemeoTypes.VSphereDevice) error {
+func (vSphere *vSphere) describeHosts(ctx context.Context, rawHosts []*object.HostSystem) []bleemeoTypes.VSphereDevice {
+	hosts := make([]bleemeoTypes.VSphereDevice, 0, len(rawHosts))
+
 	for _, host := range rawHosts {
 		var hostProps mo.HostSystem
+
+		moid := host.Reference().Value
 
 		vSphere.stat.descHost.Get(host).Start()
 		err := host.Properties(ctx, host.Reference(), relevantHostProperties, &hostProps)
 		vSphere.stat.descHost.Get(host).Stop()
 		if err != nil {
-			if errors.Is(err, context.DeadlineExceeded) {
-				return err
-			}
+			logger.Printf("Failed to fetch host props: %v", err) // TODO: remove
 
-			logger.V(1).Printf("Failed to fetch host props: %v", err)
+			if dev, ok := vSphere.deviceCache[moid]; ok {
+				dev.(*HostSystem).err = err //nolint:forcetypeassert
+			}
 
 			continue
 		}
 
-		describeChan <- describeHost(host, hostProps)
+		hosts = append(hosts, describeHost(host, hostProps))
 	}
 
-	return nil
+	return hosts
 }
 
-func (vSphere *vSphere) describeVMs(ctx context.Context, rawVMs []*object.VirtualMachine, describeChan chan bleemeoTypes.VSphereDevice, metadata *labelsMetadata) error {
+func (vSphere *vSphere) describeVMs(ctx context.Context, rawVMs []*object.VirtualMachine) ([]bleemeoTypes.VSphereDevice, labelsMetadata) {
+	vms := make([]bleemeoTypes.VSphereDevice, 0, len(rawVMs))
+	labelsMetadata := labelsMetadata{
+		disksPerVM:         make(map[string]map[string]string),
+		netInterfacesPerVM: make(map[string]map[string]string),
+	}
+
 	for _, vm := range rawVMs {
 		var vmProps mo.VirtualMachine
 
@@ -278,26 +248,22 @@ func (vSphere *vSphere) describeVMs(ctx context.Context, rawVMs []*object.Virtua
 		err := vm.Properties(ctx, vm.Reference(), relevantVMProperties, &vmProps)
 		vSphere.stat.descVM.Get(vm).Stop()
 		if err != nil {
-			if errors.Is(err, context.DeadlineExceeded) {
-				return err
-			}
+			logger.Printf("Failed to fetch VM props: %v", err) // TODO: remove
 
-			logger.V(1).Printf("Failed to fetch VM props: %v", err)
+			if dev, ok := vSphere.deviceCache[moid]; ok {
+				dev.(*VirtualMachine).err = err //nolint:forcetypeassert
+			}
 
 			continue
 		}
 
 		describedVM, disks, netInterfaces := describeVM(ctx, vm, vmProps)
-
-		metadata.l.Lock()
-		metadata.disksPerVM[moid] = disks
-		metadata.netInterfacesPerVM[moid] = netInterfaces
-		metadata.l.Unlock()
-
-		describeChan <- describedVM
+		vms = append(vms, describedVM)
+		labelsMetadata.disksPerVM[moid] = disks
+		labelsMetadata.netInterfacesPerVM[moid] = netInterfaces
 	}
 
-	return nil
+	return vms, labelsMetadata
 }
 
 func (vSphere *vSphere) makeGatherer() (prometheus.Gatherer, registry.RegistrationOption, error) {
