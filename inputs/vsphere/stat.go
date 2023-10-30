@@ -1,12 +1,9 @@
 package vsphere
 
 import (
-	"fmt"
 	"glouton/logger"
 	"sync"
 	"time"
-
-	"github.com/vmware/govmomi/vim25/mo"
 )
 
 // StatRecorder
@@ -15,19 +12,14 @@ type SR struct {
 
 	global        watch
 	deviceListing watch
-	descCluster   multiWatch
-	descDatastore multiWatch
-	descHost      multiWatch
-	descVM        multiWatch
+	descCluster   watch
+	descDatastore watch
+	descHost      watch
+	descVM        watch
 }
 
 func NewStat() *SR {
-	return &SR{
-		descCluster:   multiWatch{m: make(map[string]*watch)},
-		descDatastore: multiWatch{m: make(map[string]*watch)},
-		descHost:      multiWatch{m: make(map[string]*watch)},
-		descVM:        multiWatch{m: make(map[string]*watch)},
-	}
+	return new(SR)
 }
 
 func (sr *SR) Display(host string) {
@@ -42,10 +34,10 @@ func (sr *SR) Display(host string) {
 		host,
 		sr.global.total(),
 		sr.deviceListing.total(),
-		sr.descCluster.display(),
-		sr.descDatastore.display(),
-		sr.descHost.display(),
-		sr.descVM.display(),
+		sr.descCluster.total(),
+		sr.descDatastore.total(),
+		sr.descHost.total(),
+		sr.descVM.total(),
 	)
 }
 
@@ -63,56 +55,4 @@ func (w *watch) Stop() {
 
 func (w *watch) total() time.Duration {
 	return w.stop.Sub(w.start)
-}
-
-type multiWatch struct {
-	sync.Mutex
-
-	m map[string]*watch
-}
-
-func (mw *multiWatch) Get(obj mo.Reference) *watch {
-	mw.Lock()
-	defer mw.Unlock()
-
-	if w, ok := mw.m[obj.Reference().Value]; ok {
-		return w
-	}
-
-	w := new(watch)
-	mw.m[obj.Reference().Value] = w
-
-	return w
-}
-
-func (mw *multiWatch) display() string {
-	mw.Lock()
-	defer mw.Unlock()
-
-	var min, max, sum time.Duration
-	minZero, maxZero := true, true
-	count := 0
-
-	for _, w := range mw.m {
-		if w.stop.IsZero() {
-			continue
-		}
-
-		total := w.total()
-		if total < min || minZero {
-			min = total
-			minZero = false
-		}
-		if total > max || maxZero {
-			max = total
-			maxZero = false
-		}
-
-		sum += total
-		count++
-	}
-
-	avg := time.Duration(float64(sum) / float64(count))
-
-	return fmt.Sprintf("min: %v | max: %v | avg: %v | sum: %v", min, max, avg, sum)
 }

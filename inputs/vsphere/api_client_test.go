@@ -81,7 +81,7 @@ func TestVCenterDescribing(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	finder, err := newDeviceFinder(ctx, vSphereCfg)
+	finder, client, err := newDeviceFinder(ctx, vSphereCfg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -115,10 +115,10 @@ func TestVCenterDescribing(t *testing.T) {
 		t.FailNow()
 	}
 
-	dummyVSphere := newVSphere(vSphereCfg.URL, vSphereCfg, nil)
+	dummyVSphere := newVSphere(vSphereURL.Host, vSphereCfg, nil)
 	dummyVSphere.stat = NewStat()
 
-	devices := dummyVSphere.describeClusters(ctx, clusters)
+	devices := dummyVSphere.describeClusters(ctx, client, clusters)
 	if len(devices) != 1 {
 		t.Fatalf("Expected 1 cluster to be described, but got %d.", len(devices))
 	}
@@ -145,7 +145,7 @@ func TestVCenterDescribing(t *testing.T) {
 		t.Fatalf("Unexpected host description (-want +got):\n%s", diff)
 	}
 
-	devices = dummyVSphere.describeHosts(ctx, hosts)
+	devices = dummyVSphere.describeHosts(ctx, client, hosts)
 	if len(devices) != 1 {
 		t.Fatalf("Expected 1 host to be described, but got %d.", len(devices))
 	}
@@ -181,7 +181,7 @@ func TestVCenterDescribing(t *testing.T) {
 		t.Fatalf("Unexpected host description (-want +got):\n%s", diff)
 	}
 
-	devices, vmLabelsMetadata := dummyVSphere.describeVMs(ctx, vms)
+	devices, vmLabelsMetadata := dummyVSphere.describeVMs(ctx, client, vms)
 	if len(devices) != 1 {
 		t.Fatalf("Expected 1 VM to be described, but got %d.", len(devices))
 	}
@@ -199,7 +199,7 @@ func TestVCenterDescribing(t *testing.T) {
 			facts: map[string]string{
 				"cpu_cores":             "1",
 				"fqdn":                  "DC0_C0_RP0_VM0",
-				"hostname":              "vm-28",
+				"hostname":              "DC0_C0_RP0_VM0",
 				"memory":                "32.00 MB",
 				"vsphere_host":          "host-23",
 				"vsphere_resource_pool": "resgroup-15",
@@ -208,8 +208,6 @@ func TestVCenterDescribing(t *testing.T) {
 			},
 			state: "poweredOn",
 		},
-		UUID:          "cd0681bf-2f18-5c00-9b9b-8197c0095348",
-		inventoryPath: "/DC0/vm/DC0_C0_RP0_VM0",
 	}
 	if diff := cmp.Diff(expectedVM, *vm, cmp.AllowUnexported(VirtualMachine{}, device{})); diff != "" {
 		t.Fatalf("Unexpected VM description (-want +got):\n%s", diff)
@@ -266,16 +264,15 @@ func TestESXIDescribing(t *testing.T) { //nolint:maintidx
 				{
 					device: device{
 						moid: "1",
-						name: "1",
+						name: "vcenter.vmx",
 						facts: map[string]string{
-							"fqdn":                  "1",
-							"hostname":              "1",
+							"fqdn":                  "vcenter.vmx",
+							"hostname":              "vcenter.vmx",
 							"vsphere_host":          "ha-host",
 							"vsphere_resource_pool": "ha-root-pool",
 						},
 						state: "poweredOff",
 					},
-					inventoryPath: "/ha-datacenter/vm/vmfs/volumes/64d4b065-879077de-6dfb-5254000ed68e/vcenter/vcenter.vmx",
 				},
 				{
 					device: device{
@@ -284,7 +281,7 @@ func TestESXIDescribing(t *testing.T) { //nolint:maintidx
 						facts: map[string]string{
 							"cpu_cores":             "2",
 							"fqdn":                  "lunar",
-							"hostname":              "8",
+							"hostname":              "lunar",
 							"memory":                "1.00 GB",
 							"os_pretty_name":        "Ubuntu Linux (64-bit)",
 							"vsphere_datastore":     "datastore1",
@@ -295,8 +292,6 @@ func TestESXIDescribing(t *testing.T) { //nolint:maintidx
 						},
 						state: "poweredOff",
 					},
-					UUID:          "564de3ab-988d-b51c-a5cb-5e1af6f5f313",
-					inventoryPath: "/ha-datacenter/vm/lunar",
 				},
 				{
 					device: device{
@@ -317,8 +312,6 @@ func TestESXIDescribing(t *testing.T) { //nolint:maintidx
 						},
 						state: "poweredOn",
 					},
-					UUID:          "564de822-678c-5efd-f01e-bca0da637105",
-					inventoryPath: "/ha-datacenter/vm/alp1",
 				},
 			},
 			expectedLabelsMetadata: map[string]labelsMetadata{
@@ -385,7 +378,7 @@ func TestESXIDescribing(t *testing.T) { //nolint:maintidx
 						facts: map[string]string{
 							"cpu_cores":             "1",
 							"fqdn":                  "DC0_C0_RP0_VM0",
-							"hostname":              "vm-28",
+							"hostname":              "DC0_C0_RP0_VM0",
 							"memory":                "32.00 MB",
 							"vsphere_host":          "host-23",
 							"vsphere_resource_pool": "resgroup-15",
@@ -394,8 +387,6 @@ func TestESXIDescribing(t *testing.T) { //nolint:maintidx
 						},
 						state: "poweredOn",
 					},
-					UUID:          "cd0681bf-2f18-5c00-9b9b-8197c0095348",
-					inventoryPath: "/DC0/vm/DC0_C0_RP0_VM0",
 				},
 			},
 			expectedLabelsMetadata: map[string]labelsMetadata{
@@ -430,8 +421,6 @@ func TestESXIDescribing(t *testing.T) { //nolint:maintidx
 						},
 						state: "poweredOn",
 					},
-					UUID:          "d72b7d0e-95e3-4bd1-b788-18da89624595",
-					inventoryPath: "/DC0/vm/app-haproxy2",
 				},
 			},
 			expectedLabelsMetadata: map[string]labelsMetadata{

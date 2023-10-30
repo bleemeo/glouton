@@ -17,6 +17,7 @@
 package vsphere
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -25,6 +26,7 @@ import (
 	"glouton/logger"
 	"net/url"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -32,6 +34,7 @@ import (
 	"github.com/vmware/govmomi"
 	"github.com/vmware/govmomi/find"
 	"github.com/vmware/govmomi/object"
+	"github.com/vmware/govmomi/property"
 	"github.com/vmware/govmomi/vim25"
 	"github.com/vmware/govmomi/vim25/mo"
 	"github.com/vmware/govmomi/vim25/soap"
@@ -42,8 +45,16 @@ const deviceStatePoweredOn = "poweredOn"
 
 //nolint:gochecknoglobals
 var (
-	relevantClusterProperties []string // An empty list will retrieve all properties.
-	relevantHostProperties    = []string{
+	relevantClusterProperties = []string{
+		"summary",
+		"datastore",
+		"overallStatus",
+	}
+	relevantDatastoreProperties = []string{
+		"name",
+		"info",
+	}
+	relevantHostProperties = []string{
 		"hardware.cpuInfo.numCpuCores",
 		"summary.hardware.cpuModel",
 		"summary.config.name",
@@ -83,30 +94,30 @@ var (
 	}
 )
 
-func newDeviceFinder(ctx context.Context, vSphereCfg config.VSphere) (*find.Finder, error) {
+func newDeviceFinder(ctx context.Context, vSphereCfg config.VSphere) (*find.Finder, *vim25.Client, error) {
 	u, err := soap.ParseURL(vSphereCfg.URL)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	u.User = url.UserPassword(vSphereCfg.Username, vSphereCfg.Password)
 
 	c, err := govmomi.NewClient(ctx, u, vSphereCfg.InsecureSkipVerify)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	f := find.NewFinder(c.Client, true)
 
 	dc, err := f.DefaultDatacenter(ctx)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	// Make future calls to the local datacenter
 	f.SetDatacenter(dc)
 
-	return f, nil
+	return f, c.Client, nil
 }
 
 func findDevices(ctx context.Context, finder *find.Finder, listDatastores bool) (clusters []*object.ClusterComputeResource, datastores []*object.Datastore, hosts []*object.HostSystem, vms []*object.VirtualMachine, err error) {
@@ -139,7 +150,7 @@ func findDevices(ctx context.Context, finder *find.Finder, listDatastores bool) 
 	return clusters, datastores, hosts, vms, nil
 }
 
-func describeCluster(cluster *object.ClusterComputeResource, clusterProps mo.ClusterComputeResource) *Cluster {
+func describeCluster(source string, rfName refName, clusterProps mo.ClusterComputeResource) *Cluster {
 	clusterFacts := make(map[string]string)
 
 	if resourceSummary := clusterProps.Summary.GetComputeResourceSummary(); resourceSummary != nil {
@@ -153,9 +164,9 @@ func describeCluster(cluster *object.ClusterComputeResource, clusterProps mo.Clu
 	}
 
 	dev := device{
-		source: cluster.Client().URL().Host,
-		moid:   cluster.Reference().Value,
-		name:   cluster.Name(),
+		source: source,
+		moid:   rfName.Reference().Value,
+		name:   rfName.Name(),
 		facts:  clusterFacts,
 		state:  string(clusterProps.OverallStatus),
 	}
@@ -168,7 +179,7 @@ func describeCluster(cluster *object.ClusterComputeResource, clusterProps mo.Clu
 	}
 }
 
-func describeHost(host *object.HostSystem, hostProps mo.HostSystem) *HostSystem {
+func describeHost(source string, rfName refName, hostProps mo.HostSystem) *HostSystem {
 	hostFacts := map[string]string{
 		"cpu_cores":      str(hostProps.Summary.Hardware.NumCpuCores),
 		"cpu_model_name": hostProps.Summary.Hardware.CpuModel,
@@ -221,9 +232,9 @@ func describeHost(host *object.HostSystem, hostProps mo.HostSystem) *HostSystem 
 	}
 
 	dev := device{
-		source: host.Client().URL().Host,
-		moid:   host.Reference().Value,
-		name:   fallback(hostFacts["hostname"], host.Reference().Value),
+		source: source,
+		moid:   rfName.Reference().Value,
+		name:   fallback(hostFacts["hostname"], rfName.Name()),
 		facts:  hostFacts,
 		state:  string(hostProps.Runtime.PowerState),
 	}
@@ -233,7 +244,7 @@ func describeHost(host *object.HostSystem, hostProps mo.HostSystem) *HostSystem 
 	return &HostSystem{dev}
 }
 
-func describeVM(ctx context.Context, vm *object.VirtualMachine, vmProps mo.VirtualMachine) (*VirtualMachine, map[string]string, map[string]string) {
+func describeVM(source string, rfName refName, vmProps mo.VirtualMachine) (*VirtualMachine, map[string]string, map[string]string) {
 	vmFacts := make(map[string]string)
 
 	var (
@@ -286,24 +297,20 @@ func describeVM(ctx context.Context, vm *object.VirtualMachine, vmProps mo.Virtu
 	case vmProps.Summary.Vm != nil:
 		vmFacts["hostname"] = vmProps.Summary.Vm.Value
 	default:
-		vmFacts["hostname"] = vm.Reference().Value
+		vmFacts["hostname"] = rfName.Name()
 	}
 
 	dev := device{
-		source: vm.Client().URL().Host,
-		moid:   vm.Reference().Value,
-		name:   fallback(vmFacts["vsphere_vm_name"], vm.Reference().Value),
+		source: source,
+		moid:   rfName.Reference().Value,
+		name:   fallback(vmFacts["vsphere_vm_name"], rfName.Name()),
 		facts:  vmFacts,
 		state:  string(vmProps.Runtime.PowerState),
 	}
 
 	dev.facts["fqdn"] = dev.FQDN()
 
-	return &VirtualMachine{
-		device:        dev,
-		UUID:          vm.UUID(ctx),
-		inventoryPath: vm.InventoryPath,
-	}, disks, netInterfaces
+	return &VirtualMachine{dev}, disks, netInterfaces
 }
 
 func getVMLabelsMetadata(devices object.VirtualDeviceList) (map[string]string, map[string]string) {
@@ -363,28 +370,76 @@ func objectNames[T commonObject](objects []T) map[string]string {
 	return names
 }
 
+type refName struct {
+	ref  types.ManagedObjectReference
+	name string
+}
+
+func (r refName) Reference() types.ManagedObjectReference {
+	return r.ref
+}
+
+func (r refName) Name() string {
+	return r.name
+}
+
+func retrieveProps[ref commonObject, props mo.Reference](ctx context.Context, client *vim25.Client, objects []ref, ps []string, w *watch) (map[refName]props, error) {
+	if len(objects) == 0 {
+		return map[refName]props{}, nil // Calling property.Collector.Retrieve() with an empty list would cause an error
+	}
+
+	// We sort the list to easily build the result map at the end
+	slices.SortFunc(objects, func(a, b ref) int {
+		return strings.Compare(a.Reference().Value, b.Reference().Value)
+	})
+
+	refs := make([]types.ManagedObjectReference, len(objects))
+	dest := make([]props, 0, len(objects))
+
+	for i, obj := range objects {
+		refs[i] = obj.Reference()
+	}
+
+	w.Start()
+	err := property.DefaultCollector(client).Retrieve(ctx, refs, ps, &dest)
+	w.Stop()
+	if err != nil {
+		return nil, err
+	}
+
+	if len(objects) != len(dest) {
+		return nil, fmt.Errorf("unexpected number of properties: want %d, got %d", len(objects), len(dest))
+	}
+
+	slices.SortFunc(dest, func(a, b props) int {
+		return cmp.Compare(a.Reference().Value, b.Reference().Value)
+	})
+
+	m := make(map[refName]props, len(objects))
+
+	for i := 0; i < len(objects); i++ {
+		obj := objects[i]
+		rfName := refName{obj.Reference(), obj.Name()}
+		m[rfName] = dest[i]
+	}
+
+	return m, nil
+}
+
 var isolateLUN = regexp.MustCompile(`.*/([^/]+)/?$`)
 
-func getDatastorePerLUN(ctx context.Context, rawDatastores []*object.Datastore, stat *multiWatch) map[string]string {
-	dsPerLUN := make(map[string]string, len(rawDatastores))
+func getDatastorePerLUN(ctx context.Context, client *vim25.Client, rawDatastores []*object.Datastore, w *watch) map[string]string {
+	dsProps, err := retrieveProps[*object.Datastore, mo.Datastore](ctx, client, rawDatastores, relevantDatastoreProperties, w)
+	if err != nil {
+		logger.Printf("Failed to retrieve datastore props of %s: %v", client.URL().Host, err)
 
-	for _, ds := range rawDatastores {
-		var dsProps mo.Datastore
+		return map[string]string{} // TODO: return err
+	}
 
-		stat.Get(ds).Start()
-		err := ds.Properties(ctx, ds.Reference(), relevantClusterProperties, &dsProps)
-		stat.Get(ds).Stop()
-		if err != nil {
-			if errors.Is(err, context.DeadlineExceeded) {
-				return nil
-			}
+	dsPerLUN := make(map[string]string, len(dsProps))
 
-			logger.V(1).Printf("Failed to fetch properties of datastore %q: %v", ds.Reference().Value, err)
-
-			continue
-		}
-
-		info := dsProps.Info.GetDatastoreInfo()
+	for ds, props := range dsProps {
+		info := props.Info.GetDatastoreInfo()
 		if info == nil {
 			continue
 		}
@@ -394,7 +449,7 @@ func getDatastorePerLUN(ctx context.Context, rawDatastores []*object.Datastore, 
 			continue
 		}
 
-		dsPerLUN[matches[1]] = dsProps.Name
+		dsPerLUN[matches[1]] = ds.Name()
 	}
 
 	return dsPerLUN

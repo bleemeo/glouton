@@ -119,7 +119,7 @@ func filterErrors(errs []error) []error {
 }
 
 func (gatherer *vSphereGatherer) collectAdditionalMetrics(ctx context.Context, acc telegraf.Accumulator) error {
-	finder, err := newDeviceFinder(ctx, *gatherer.cfg)
+	finder, _, err := newDeviceFinder(ctx, *gatherer.cfg)
 	if err != nil {
 		return err
 	}
@@ -141,8 +141,6 @@ func (gatherer *vSphereGatherer) collectAdditionalMetrics(ctx context.Context, a
 	if time.Since(gatherer.lastAdditionalClusterMetricsAt) >= clusterMetricsPeriod {
 		// The next gathering should run in ~5min, so we schedule it in 4m50s from now to be safe.
 		gatherer.lastAdditionalClusterMetricsAt = time.Now().Add(-10 * time.Second)
-
-		logger.Printf("Gathering additional cluster metrics") // TODO: remove
 
 		err = additionalClusterMetrics(ctx, clusters, acc, h)
 		if err != nil {

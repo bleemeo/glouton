@@ -270,8 +270,6 @@ func (host *HostSystem) Kind() string {
 
 type VirtualMachine struct {
 	device
-	UUID          string
-	inventoryPath string
 }
 
 func (vm *VirtualMachine) Kind() string {
