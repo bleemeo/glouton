@@ -24,7 +24,7 @@ func NewStat() *SR {
 
 func (sr *SR) Display(host string) {
 	logger.Printf(
-		"vSphere devices stat of %s:\n"+
+		"Timing stats of vSphere %s:\n"+
 			"Total: %v\n"+
 			"Device listing: %v\n"+
 			"Cluster desc: %v\n"+

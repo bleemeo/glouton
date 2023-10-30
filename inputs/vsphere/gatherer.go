@@ -119,7 +119,7 @@ func filterErrors(errs []error) []error {
 }
 
 func (gatherer *vSphereGatherer) collectAdditionalMetrics(ctx context.Context, acc telegraf.Accumulator) error {
-	finder, _, err := newDeviceFinder(ctx, *gatherer.cfg)
+	finder, client, err := newDeviceFinder(ctx, *gatherer.cfg)
 	if err != nil {
 		return err
 	}
@@ -142,7 +142,7 @@ func (gatherer *vSphereGatherer) collectAdditionalMetrics(ctx context.Context, a
 		// The next gathering should run in ~5min, so we schedule it in 4m50s from now to be safe.
 		gatherer.lastAdditionalClusterMetricsAt = time.Now().Add(-10 * time.Second)
 
-		err = additionalClusterMetrics(ctx, clusters, acc, h)
+		err = additionalClusterMetrics(ctx, client, clusters, acc, h)
 		if err != nil {
 			return err
 		}
@@ -151,12 +151,12 @@ func (gatherer *vSphereGatherer) collectAdditionalMetrics(ctx context.Context, a
 	// For each host, we have a list of vm states (running/stopped)
 	vmStatesPerHost := make(map[string][]bool, len(hosts))
 
-	err = additionalVMMetrics(ctx, vms, acc, h, vmStatesPerHost, objectNames(hosts))
+	err = additionalVMMetrics(ctx, client, vms, acc, h, vmStatesPerHost, objectNames(hosts))
 	if err != nil {
 		return err
 	}
 
-	err = additionalHostMetrics(ctx, hosts, acc, h, vmStatesPerHost, objectNames(clusters))
+	err = additionalHostMetrics(ctx, client, hosts, acc, h, vmStatesPerHost, objectNames(clusters))
 	if err != nil {
 		return err
 	}

@@ -17,7 +17,6 @@
 package vsphere
 
 import (
-	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -26,7 +25,6 @@ import (
 	"glouton/logger"
 	"net/url"
 	"regexp"
-	"slices"
 	"strconv"
 	"strings"
 
@@ -40,6 +38,8 @@ import (
 	"github.com/vmware/govmomi/vim25/soap"
 	"github.com/vmware/govmomi/vim25/types"
 )
+
+const maxPropertiesBulkSize = 100
 
 const deviceStatePoweredOn = "poweredOn"
 
@@ -388,11 +388,6 @@ func retrieveProps[ref commonObject, props mo.Reference](ctx context.Context, cl
 		return map[refName]props{}, nil // Calling property.Collector.Retrieve() with an empty list would cause an error
 	}
 
-	// We sort the list to easily build the result map at the end
-	slices.SortFunc(objects, func(a, b ref) int {
-		return strings.Compare(a.Reference().Value, b.Reference().Value)
-	})
-
 	refs := make([]types.ManagedObjectReference, len(objects))
 	dest := make([]props, 0, len(objects))
 
@@ -401,26 +396,41 @@ func retrieveProps[ref commonObject, props mo.Reference](ctx context.Context, cl
 	}
 
 	w.Start()
-	err := property.DefaultCollector(client).Retrieve(ctx, refs, ps, &dest)
+	for i := 0; i < len(refs); i += maxPropertiesBulkSize {
+		partialDest := make([]props, 0, min(len(refs), maxPropertiesBulkSize))
+
+		err := property.DefaultCollector(client).Retrieve(ctx, refs, ps, &partialDest)
+		if err != nil {
+			return nil, err
+		}
+
+		dest = append(dest, partialDest...)
+	}
 	w.Stop()
-	if err != nil {
-		return nil, err
-	}
-
-	if len(objects) != len(dest) {
-		return nil, fmt.Errorf("unexpected number of properties: want %d, got %d", len(objects), len(dest))
-	}
-
-	slices.SortFunc(dest, func(a, b props) int {
-		return cmp.Compare(a.Reference().Value, b.Reference().Value)
-	})
 
 	m := make(map[refName]props, len(objects))
 
 	for i := 0; i < len(objects); i++ {
-		obj := objects[i]
+		var (
+			obj   = objects[i]
+			dst   props
+			found bool
+		)
+
+		for _, dst = range dest {
+			if dst.Reference() == obj.Reference() {
+				found = true
+
+				break
+			}
+		}
+
+		if !found {
+			continue
+		}
+
 		rfName := refName{obj.Reference(), obj.Name()}
-		m[rfName] = dest[i]
+		m[rfName] = dst
 	}
 
 	return m, nil
@@ -461,25 +471,22 @@ var (
 	additionalHostProps = []string{"parent"}
 )
 
-func additionalClusterMetrics(ctx context.Context, clusters []*object.ClusterComputeResource, acc telegraf.Accumulator, h *hierarchy) error {
+func additionalClusterMetrics(ctx context.Context, client *vim25.Client, clusters []*object.ClusterComputeResource, acc telegraf.Accumulator, h *hierarchy) error {
 	for _, cluster := range clusters {
 		hosts, err := cluster.Hosts(ctx)
 		if err != nil {
 			return err
 		}
 
-		var (
-			hostProps        mo.HostSystem
-			running, stopped int
-		)
+		hostProps, err := retrieveProps[*object.HostSystem, mo.HostSystem](ctx, client, hosts, []string{"runtime.powerState"}, new(watch))
+		if err != nil {
+			return err
+		}
 
-		for _, host := range hosts {
-			err = host.Properties(ctx, host.Reference(), []string{"runtime.powerState"}, &hostProps)
-			if err != nil {
-				return err
-			}
+		var running, stopped int
 
-			if hostProps.Runtime.PowerState == deviceStatePoweredOn {
+		for _, props := range hostProps {
+			if props.Runtime.PowerState == deviceStatePoweredOn {
 				running++
 			} else {
 				stopped++
@@ -503,8 +510,13 @@ func additionalClusterMetrics(ctx context.Context, clusters []*object.ClusterCom
 	return nil
 }
 
-func additionalHostMetrics(ctx context.Context, hosts []*object.HostSystem, acc telegraf.Accumulator, h *hierarchy, vmStatesPerHost map[string][]bool, clusterNames map[string]string) error {
-	for _, host := range hosts {
+func additionalHostMetrics(ctx context.Context, client *vim25.Client, hosts []*object.HostSystem, acc telegraf.Accumulator, h *hierarchy, vmStatesPerHost map[string][]bool, clusterNames map[string]string) error {
+	hostProps, err := retrieveProps[*object.HostSystem, mo.HostSystem](ctx, client, hosts, additionalHostProps, new(watch))
+	if err != nil {
+		return err
+	}
+
+	for host, props := range hostProps {
 		moid := host.Reference().Value
 		if vmStates, ok := vmStatesPerHost[moid]; ok {
 			var running, stopped int
@@ -522,15 +534,8 @@ func additionalHostMetrics(ctx context.Context, hosts []*object.HostSystem, acc 
 				"stopped_count": stopped,
 			}
 
-			var hostProps mo.HostSystem
-
-			err := host.Properties(ctx, host.Reference(), additionalHostProps, &hostProps)
-			if err != nil {
-				return err
-			}
-
 			tags := map[string]string{
-				"clustername": clusterNames[hostProps.Parent.Value],
+				"clustername": clusterNames[props.Parent.Value],
 				"dcname":      h.parentDCName(host),
 				"esxhostname": host.Name(),
 				"moid":        moid,
@@ -543,20 +548,18 @@ func additionalHostMetrics(ctx context.Context, hosts []*object.HostSystem, acc 
 	return nil
 }
 
-func additionalVMMetrics(ctx context.Context, vms []*object.VirtualMachine, acc telegraf.Accumulator, h *hierarchy, vmStatePerHost map[string][]bool, hostNames map[string]string) error {
-	for _, vm := range vms {
-		var vmProps mo.VirtualMachine
+func additionalVMMetrics(ctx context.Context, client *vim25.Client, vms []*object.VirtualMachine, acc telegraf.Accumulator, h *hierarchy, vmStatePerHost map[string][]bool, hostNames map[string]string) error {
+	vmProps, err := retrieveProps[*object.VirtualMachine, mo.VirtualMachine](ctx, client, vms, additionalVMProps, new(watch))
+	if err != nil {
+		return err
+	}
 
-		err := vm.Properties(ctx, vm.Reference(), additionalVMProps, &vmProps)
-		if err != nil {
-			return err
-		}
-
+	for vm, props := range vmProps {
 		var hostname string
 
-		if vmProps.Runtime.Host != nil {
-			host := vmProps.Runtime.Host.Value
-			vmState := vmProps.Runtime.PowerState == deviceStatePoweredOn // true for running, false for stopped
+		if props.Runtime.Host != nil {
+			host := props.Runtime.Host.Value
+			vmState := props.Runtime.PowerState == deviceStatePoweredOn // true for running, false for stopped
 
 			if states, ok := vmStatePerHost[host]; ok {
 				vmStatePerHost[host] = append(states, vmState)
@@ -567,8 +570,8 @@ func additionalVMMetrics(ctx context.Context, vms []*object.VirtualMachine, acc 
 			hostname = hostNames[host]
 		}
 
-		if vmProps.Guest != nil {
-			for _, disk := range vmProps.Guest.Disk {
+		if props.Guest != nil {
+			for _, disk := range props.Guest.Disk {
 				usage := (float64(disk.FreeSpace) * 100) / float64(disk.Capacity) // Percentage of disk used
 
 				tags := map[string]string{
