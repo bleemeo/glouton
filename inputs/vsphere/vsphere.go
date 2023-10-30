@@ -73,6 +73,8 @@ type vSphere struct {
 	consecutiveErr   int
 
 	l sync.Mutex
+
+	stat *SR
 }
 
 func newVSphere(host string, cfg config.VSphere, state bleemeoTypes.State) *vSphere {
@@ -126,6 +128,14 @@ func (vSphere *vSphere) devices(ctx context.Context, deviceChan chan<- bleemeoTy
 	findCtx, cancelFind := context.WithTimeout(ctx, 5*time.Second)
 	defer cancelFind()
 
+	vSphere.stat = NewStat()
+	vSphere.stat.global.Start()
+
+	defer func() {
+		vSphere.stat.global.Stop()
+		vSphere.stat.Display(vSphere.host)
+	}()
+
 	t0 := time.Now()
 
 	finder, err := newDeviceFinder(findCtx, vSphere.opts)
@@ -137,7 +147,9 @@ func (vSphere *vSphere) devices(ctx context.Context, deviceChan chan<- bleemeoTy
 		return
 	}
 
+	vSphere.stat.deviceListing.Start()
 	clusters, datastores, hosts, vms, err := findDevices(findCtx, finder, true)
+	vSphere.stat.deviceListing.Stop()
 	if err != nil {
 		logger.V(2).Printf("Can't find devices on vSphere %q: %v", vSphere.host, err)
 
@@ -216,7 +228,9 @@ func (vSphere *vSphere) describeClusters(ctx context.Context, rawClusters []*obj
 	for _, cluster := range rawClusters {
 		var clusterProps mo.ClusterComputeResource
 
+		vSphere.stat.descCluster.Get(cluster).Start()
 		err := cluster.Properties(ctx, cluster.Reference(), relevantClusterProperties, &clusterProps)
+		vSphere.stat.descCluster.Get(cluster).Stop()
 		if err != nil {
 			if errors.Is(err, context.DeadlineExceeded) {
 				return err
@@ -237,7 +251,9 @@ func (vSphere *vSphere) describeHosts(ctx context.Context, rawHosts []*object.Ho
 	for _, host := range rawHosts {
 		var hostProps mo.HostSystem
 
+		vSphere.stat.descHost.Get(host).Start()
 		err := host.Properties(ctx, host.Reference(), relevantHostProperties, &hostProps)
+		vSphere.stat.descHost.Get(host).Stop()
 		if err != nil {
 			if errors.Is(err, context.DeadlineExceeded) {
 				return err
@@ -260,7 +276,9 @@ func (vSphere *vSphere) describeVMs(ctx context.Context, rawVMs []*object.Virtua
 
 		moid := vm.Reference().Value
 
+		vSphere.stat.descHost.Get(vm).Start()
 		err := vm.Properties(ctx, vm.Reference(), relevantVMProperties, &vmProps)
+		vSphere.stat.descHost.Get(vm).Stop()
 		if err != nil {
 			if errors.Is(err, context.DeadlineExceeded) {
 				return err
