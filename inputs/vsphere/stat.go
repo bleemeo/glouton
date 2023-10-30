@@ -16,15 +16,17 @@ type SR struct {
 	global        watch
 	deviceListing watch
 	descCluster   multiWatch
+	descDatastore multiWatch
 	descHost      multiWatch
 	descVM        multiWatch
 }
 
 func NewStat() *SR {
 	return &SR{
-		descCluster: multiWatch{m: make(map[string]*watch)},
-		descHost:    multiWatch{m: make(map[string]*watch)},
-		descVM:      multiWatch{m: make(map[string]*watch)},
+		descCluster:   multiWatch{m: make(map[string]*watch)},
+		descDatastore: multiWatch{m: make(map[string]*watch)},
+		descHost:      multiWatch{m: make(map[string]*watch)},
+		descVM:        multiWatch{m: make(map[string]*watch)},
 	}
 }
 
@@ -34,12 +36,14 @@ func (sr *SR) Display(host string) {
 			"Total: %v\n"+
 			"Device listing: %v\n"+
 			"Cluster desc: %v\n"+
+			"Datastore desc: %v\n"+
 			"Host desc: %v\n"+
 			"VM desc: %v\n",
 		host,
 		sr.global.total(),
 		sr.deviceListing.total(),
 		sr.descCluster.display(),
+		sr.descDatastore.display(),
 		sr.descHost.display(),
 		sr.descVM.display(),
 	)
@@ -108,11 +112,7 @@ func (mw *multiWatch) display() string {
 		count++
 	}
 
-	if sum < 0 {
-		logger.Printf("Abnormal multiwatch stats: %v", mw.m)
-	}
-
 	avg := time.Duration(float64(sum) / float64(count))
 
-	return fmt.Sprintf("min: %v | max: %v | avg: %v | total: %v", min, max, avg, sum)
+	return fmt.Sprintf("min: %v | max: %v | avg: %v | sum: %v", min, max, avg, sum)
 }

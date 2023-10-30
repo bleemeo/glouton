@@ -365,13 +365,15 @@ func objectNames[T commonObject](objects []T) map[string]string {
 
 var isolateLUN = regexp.MustCompile(`.*/([^/]+)/?$`)
 
-func getDatastorePerLUN(ctx context.Context, rawDatastores []*object.Datastore) (map[string]string, error) {
+func getDatastorePerLUN(ctx context.Context, rawDatastores []*object.Datastore, stat *multiWatch) (map[string]string, error) {
 	dsPerLUN := make(map[string]string, len(rawDatastores))
 
 	for _, ds := range rawDatastores {
 		var dsProps mo.Datastore
 
+		stat.Get(ds).Start()
 		err := ds.Properties(ctx, ds.Reference(), relevantClusterProperties, &dsProps)
+		stat.Get(ds).Stop()
 		if err != nil {
 			if errors.Is(err, context.DeadlineExceeded) {
 				return nil, err

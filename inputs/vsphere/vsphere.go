@@ -131,11 +131,6 @@ func (vSphere *vSphere) devices(ctx context.Context, deviceChan chan<- bleemeoTy
 	vSphere.stat = NewStat()
 	vSphere.stat.global.Start()
 
-	defer func() {
-		vSphere.stat.global.Stop()
-		vSphere.stat.Display(vSphere.host)
-	}()
-
 	t0 := time.Now()
 
 	finder, err := newDeviceFinder(findCtx, vSphere.opts)
@@ -197,7 +192,7 @@ func (vSphere *vSphere) devices(ctx context.Context, deviceChan chan<- bleemeoTy
 	go func() {
 		defer wg.Done()
 
-		dsPerLUN, err := getDatastorePerLUN(describeCtx, datastores)
+		dsPerLUN, err := getDatastorePerLUN(describeCtx, datastores, &vSphere.stat.descDatastore)
 		errs[3] = err
 
 		labelsMetadata.l.Lock()
@@ -214,6 +209,9 @@ func (vSphere *vSphere) devices(ctx context.Context, deviceChan chan<- bleemeoTy
 
 		deviceChan <- dev
 	}
+
+	vSphere.stat.global.Stop()
+	vSphere.stat.Display(vSphere.host)
 
 	vSphere.setErr(errors.Join(errs[:]...))
 
