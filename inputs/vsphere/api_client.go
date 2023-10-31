@@ -397,14 +397,12 @@ func retrieveProps[ref commonObject, props mo.Reference](ctx context.Context, cl
 
 	w.Start()
 	for i := 0; i < len(refs); i += maxPropertiesBulkSize {
-		partialDest := make([]props, 0, min(len(refs), maxPropertiesBulkSize))
+		bulkSize := min(len(refs)-i, maxPropertiesBulkSize)
 
-		err := property.DefaultCollector(client).Retrieve(ctx, refs, ps, &partialDest)
+		err := property.DefaultCollector(client).Retrieve(ctx, refs[i:i+bulkSize], ps, &dest)
 		if err != nil {
 			return nil, err
 		}
-
-		dest = append(dest, partialDest...)
 	}
 	w.Stop()
 
@@ -660,9 +658,9 @@ func (h *hierarchy) filterParents() {
 		needsUpdate := false
 
 		for parent.Type == "Folder" {
-			if grandParent, ok := h.parentPerChildMOID[parent.Value]; ok {
-				delete(h.deviceNamePerMOID, parent.Value) // We will never care about the name of a folder.
+			delete(h.deviceNamePerMOID, parent.Value) // We will never care about the name of a folder.
 
+			if grandParent, ok := h.parentPerChildMOID[parent.Value]; ok {
 				parent = grandParent
 				needsUpdate = true
 			} else {

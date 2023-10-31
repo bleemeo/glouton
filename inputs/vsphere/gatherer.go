@@ -90,12 +90,22 @@ func (gatherer *vSphereGatherer) GatherWithState(ctx context.Context, state regi
 		acc := gatherer.acc
 		acc.Accumulator = &errAcc
 
+		var collectWatch, collectAddWatch watch
+
+		collectWatch.Start()
 		err := gatherer.endpoint.Collect(ctx, acc)
+		collectWatch.Stop()
+
+		collectAddWatch.Start()
 		errAddMetrics := gatherer.collectAdditionalMetrics(ctx, acc)
+		collectAddWatch.Stop()
+
 		allErrs := errors.Join(filterErrors(append(errAcc.errs, err, errAddMetrics))...)
 
 		gatherer.lastPoints = gatherer.buffer.Points()
 		gatherer.lastErr = allErrs
+
+		logger.Printf("Collection timing stats of %s:\ntelegraf: %v\nadditional: %v", gatherer.soapURL.Host, collectWatch.total(), collectAddWatch.total())
 	}
 
 	mfs := model.MetricPointsToFamilies(gatherer.lastPoints)
