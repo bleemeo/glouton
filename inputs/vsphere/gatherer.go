@@ -64,7 +64,7 @@ type vSphereGatherer struct {
 }
 
 func (gatherer *vSphereGatherer) Gather() ([]*dto.MetricFamily, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), commonTimeout)
 	defer cancel()
 
 	return gatherer.GatherWithState(ctx, registry.GatherState{T0: time.Now()})
@@ -195,7 +195,7 @@ func (gatherer *vSphereGatherer) createEndpoint(ctx context.Context, input *vsph
 	}
 
 	newEP := func(epURL *url.URL) error {
-		epCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		epCtx, cancel := context.WithTimeout(ctx, commonTimeout)
 		defer cancel()
 
 		ep, err := vsphere.NewEndpoint(epCtx, input, epURL, input.Log)

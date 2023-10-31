@@ -395,6 +395,9 @@ func retrieveProps[ref commonObject, props mo.Reference](ctx context.Context, cl
 		refs[i] = obj.Reference()
 	}
 
+	retCtx, cancel := context.WithTimeout(ctx, commonTimeout)
+	defer cancel()
+
 	w.Start()
 	for i := 0; i < len(refs); i += maxPropertiesBulkSize {
 		bulkSize := min(len(refs)-i, maxPropertiesBulkSize)

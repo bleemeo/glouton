@@ -26,7 +26,6 @@ import (
 	"sort"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -78,7 +77,7 @@ func TestVCenterDescribing(t *testing.T) {
 		t.Fatalf("Failed to parse vSphere URL %q: %v", vSphereCfg.URL, err)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), commonTimeout)
 	defer cancel()
 
 	finder, client, err := newDeviceFinder(ctx, vSphereCfg)
@@ -442,7 +441,7 @@ func TestESXIDescribing(t *testing.T) { //nolint:maintidx
 			vSphereCfg, deferFn := setupVSphereAPITest(t, tc.dirName)
 			defer deferFn()
 
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), commonTimeout)
 			defer cancel()
 
 			manager := new(Manager)

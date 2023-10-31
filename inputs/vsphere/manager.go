@@ -282,7 +282,7 @@ func (m *Manager) DiagnosticVSphere(ctx context.Context, archive types.ArchiveWr
 		return err
 	}
 
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, commonTimeout)
 	defer cancel()
 
 	// 10min of max age to reuse devices found by the last metric collection,

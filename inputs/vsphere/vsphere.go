@@ -41,6 +41,8 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+const commonTimeout = 10 * time.Second
+
 const (
 	vCenterConsecutiveErrorsStatusThreshold = 2
 	noMetricsStatusThreshold                = 5
@@ -123,7 +125,7 @@ func (vSphere *vSphere) String() string {
 }
 
 func (vSphere *vSphere) devices(ctx context.Context, deviceChan chan<- bleemeoTypes.VSphereDevice) {
-	findCtx, cancelFind := context.WithTimeout(ctx, 5*time.Second)
+	findCtx, cancelFind := context.WithTimeout(ctx, commonTimeout)
 	defer cancelFind()
 
 	vSphere.stat = NewStat()
@@ -151,22 +153,19 @@ func (vSphere *vSphere) devices(ctx context.Context, deviceChan chan<- bleemeoTy
 
 	logger.V(2).Printf("On vSphere %q, found %d clusters, %d hosts and %d vms in %v.", vSphere.host, len(clusters), len(hosts), len(vms), time.Since(t0))
 
-	describeCtx, cancelDescribe := context.WithTimeout(ctx, 20*time.Second)
-	defer cancelDescribe()
-
 	var devs []bleemeoTypes.VSphereDevice
-
-	devs = append(devs, vSphere.describeClusters(describeCtx, client, clusters)...)
-	devs = append(devs, vSphere.describeHosts(describeCtx, client, hosts)...)
-	describedVMs, labelsMetadata := vSphere.describeVMs(describeCtx, client, vms)
+	// A more precise context will be given by the function that retrieves the device properties.
+	devs = append(devs, vSphere.describeClusters(ctx, client, clusters)...)
+	devs = append(devs, vSphere.describeHosts(ctx, client, hosts)...)
+	describedVMs, labelsMetadata := vSphere.describeVMs(ctx, client, vms)
 	devs = append(devs, describedVMs...)
 
-	dsPerLUN := getDatastorePerLUN(describeCtx, client, datastores, &vSphere.stat.descDatastore)
+	dsPerLUN := getDatastorePerLUN(ctx, client, datastores, &vSphere.stat.descDatastore)
 
 	vSphere.stat.global.Stop()
 	vSphere.stat.Display(vSphere.host)
 
-	vSphere.setErr(describeCtx.Err())
+	vSphere.setErr(ctx.Err())
 
 	vSphere.l.Lock()
 	defer vSphere.l.Unlock()
@@ -334,6 +333,7 @@ func (vSphere *vSphere) gatherModifier(mfs []*dto.MetricFamily, _ error) []*dto.
 		}
 
 		m := 0
+
 		for _, metric := range mf.Metric { //nolint:protogetter
 			for _, label := range metric.GetLabel() {
 				if label.GetName() == types.LabelMetaVSphereMOID {
@@ -350,7 +350,7 @@ func (vSphere *vSphere) gatherModifier(mfs []*dto.MetricFamily, _ error) []*dto.
 			}
 		}
 
-		mf.Metric = mf.Metric[:m]
+		mf.Metric = mf.Metric[:m] //nolint:protogetter
 	}
 
 	vSphereStatus, vSphereMsg := vSphere.getStatus()
