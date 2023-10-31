@@ -32,67 +32,48 @@ import (
 	"github.com/vmware/govmomi"
 	"github.com/vmware/govmomi/find"
 	"github.com/vmware/govmomi/object"
-	"github.com/vmware/govmomi/property"
 	"github.com/vmware/govmomi/vim25"
+	"github.com/vmware/govmomi/vim25/methods"
 	"github.com/vmware/govmomi/vim25/mo"
 	"github.com/vmware/govmomi/vim25/soap"
 	"github.com/vmware/govmomi/vim25/types"
 )
 
-const maxPropertiesBulkSize = 100
+type rt struct {
+	soap.RoundTripper
 
-const deviceStatePoweredOn = "poweredOn"
+	host string
+}
 
-//nolint:gochecknoglobals
-var (
-	relevantClusterProperties = []string{
-		"summary",
-		"datastore",
-		"overallStatus",
-	}
-	relevantDatastoreProperties = []string{
-		"name",
-		"info",
-	}
-	relevantHostProperties = []string{
-		"hardware.cpuInfo.numCpuCores",
-		"summary.hardware.cpuModel",
-		"summary.config.name",
-		"config.option",
-		"hardware.memorySize",
-		"config.product.osType",
-		"summary.hardware.model",
-		"summary.hardware.vendor",
-		"config.dateTimeInfo.timeZone.name",
-		"config.network.dnsConfig.domainName",
-		"config.network.vnic",
-		// config.vmotion.ipConfig.ipAddress ?
-		// config.ipmi.bmcIpAddress ?
-		// config.ipmi.bmcMacAddress ?
-		"config.network.ipV6Enabled",
-		"config.product.version",
-		"summary.config.vmotionEnabled",
+func mapSlice[I, O any](s []I, f func(I) O) []O {
+	so := make([]O, len(s))
 
-		"runtime.powerState", // Only used for generating a status
+	for i, e := range s {
+		so[i] = f(e)
 	}
-	relevantVMProperties = []string{
-		"config.hardware.numCPU",
-		"guest.hostName",
-		"config.hardware.device",
-		"config.hardware.memoryMB",
-		"config.guestFullName",
-		"summary.config.product.name",   // Don't really know if the Product
-		"summary.config.product.vendor", // section is sometime not null...
-		"guest.ipAddress",
-		"runtime.host",
-		"resourcePool",
-		"config.datastoreUrl",
-		"config.version",
-		"config.name",
 
-		"runtime.powerState", // Only used for generating a status
+	return so
+}
+
+func (rt rt) RoundTrip(ctx context.Context, req, res soap.HasFault) error {
+	switch r := req.(type) {
+	case *methods.RetrievePropertiesBody:
+		spec := r.Req.SpecSet[0]
+		propTypes := mapSlice(spec.PropSet, func(e types.PropertySpec) string {
+			return fmt.Sprintf("%s %v", e.Type, e.PathSet)
+		})
+		objTypes := mapSlice(spec.ObjectSet, func(e types.ObjectSpec) string {
+			return e.Obj.String()
+		})
+		logger.Printf("RoundTrip (%s): retrieve %s props of %s", rt.host, strings.Join(propTypes, ", "), strings.Join(objTypes, ", "))
+	default:
+		logger.Printf("RoundTrip (%s): %T", rt.host, r)
 	}
-)
+
+	//time.Sleep(100 * time.Millisecond)
+
+	return rt.RoundTripper.RoundTrip(ctx, req, res)
+}
 
 func newDeviceFinder(ctx context.Context, vSphereCfg config.VSphere) (*find.Finder, *vim25.Client, error) {
 	u, err := soap.ParseURL(vSphereCfg.URL)
@@ -116,6 +97,8 @@ func newDeviceFinder(ctx context.Context, vSphereCfg config.VSphere) (*find.Find
 
 	// Make future calls to the local datacenter
 	f.SetDatacenter(dc)
+
+	c.Client.RoundTripper = rt{c.Client.RoundTripper, u.Host}
 
 	return f, c.Client, nil
 }
@@ -150,16 +133,16 @@ func findDevices(ctx context.Context, finder *find.Finder, listDatastores bool) 
 	return clusters, datastores, hosts, vms, nil
 }
 
-func describeCluster(source string, rfName refName, clusterProps mo.ClusterComputeResource) *Cluster {
+func describeCluster(source string, rfName refName, clusterProps clusterLightProps) *Cluster {
 	clusterFacts := make(map[string]string)
 
-	if resourceSummary := clusterProps.Summary.GetComputeResourceSummary(); resourceSummary != nil {
-		clusterFacts["cpu_cores"] = str(resourceSummary.NumCpuCores)
+	if resourceSummary := clusterProps.ComputeResource.Summary; resourceSummary != nil {
+		clusterFacts["cpu_cores"] = str(resourceSummary.ComputeResourceSummary.NumCpuCores)
 	}
 
-	datastores := make([]string, len(clusterProps.Datastore))
+	datastores := make([]string, len(clusterProps.ComputeResource.Datastore))
 
-	for i, ds := range clusterProps.Datastore {
+	for i, ds := range clusterProps.ComputeResource.Datastore {
 		datastores[i] = ds.Value
 	}
 
@@ -168,7 +151,7 @@ func describeCluster(source string, rfName refName, clusterProps mo.ClusterCompu
 		moid:   rfName.Reference().Value,
 		name:   rfName.Name(),
 		facts:  clusterFacts,
-		state:  string(clusterProps.OverallStatus),
+		state:  string(clusterProps.ComputeResource.ManagedEntity.OverallStatus),
 	}
 
 	dev.facts["fqdn"] = dev.FQDN()
@@ -179,9 +162,8 @@ func describeCluster(source string, rfName refName, clusterProps mo.ClusterCompu
 	}
 }
 
-func describeHost(source string, rfName refName, hostProps mo.HostSystem) *HostSystem {
+func describeHost(source string, rfName refName, hostProps hostLightProps) *HostSystem {
 	hostFacts := map[string]string{
-		"cpu_cores":      str(hostProps.Summary.Hardware.NumCpuCores),
 		"cpu_model_name": hostProps.Summary.Hardware.CpuModel,
 		"hostname":       hostProps.Summary.Config.Name,
 		"product_name":   hostProps.Summary.Hardware.Model,
@@ -219,15 +201,7 @@ func describeHost(source string, rfName refName, hostProps mo.HostSystem) *HostS
 		}
 
 		if hostFacts["hostname"] == "" {
-			for _, opt := range hostProps.Config.Option {
-				if optValue := opt.GetOptionValue(); optValue != nil {
-					if optValue.Key == "Misc.HostName" {
-						hostFacts["hostname"], _ = optValue.Value.(string)
-
-						break
-					}
-				}
-			}
+			hostFacts["hostname"] = hostProps.ManagedEntity.Name
 		}
 	}
 
@@ -244,7 +218,7 @@ func describeHost(source string, rfName refName, hostProps mo.HostSystem) *HostS
 	return &HostSystem{dev}
 }
 
-func describeVM(source string, rfName refName, vmProps mo.VirtualMachine) (*VirtualMachine, map[string]string, map[string]string) {
+func describeVM(source string, rfName refName, vmProps vmLightProps) (*VirtualMachine, map[string]string, map[string]string) {
 	vmFacts := make(map[string]string)
 
 	var (
@@ -287,7 +261,7 @@ func describeVM(source string, rfName refName, vmProps mo.VirtualMachine) (*Virt
 		vmFacts["vsphere_resource_pool"] = vmProps.ResourcePool.Value
 	}
 
-	if vmProps.Guest != nil {
+	if vmProps.Guest != nil && vmProps.Guest.IpAddress != "" {
 		vmFacts["primary_address"] = vmProps.Guest.IpAddress
 	}
 
@@ -370,70 +344,10 @@ func objectNames[T commonObject](objects []T) map[string]string {
 	return names
 }
 
-type refName struct {
-	ref  types.ManagedObjectReference
-	name string
-}
-
-func (r refName) Reference() types.ManagedObjectReference {
-	return r.ref
-}
-
-func (r refName) Name() string {
-	return r.name
-}
-
-func retrieveProps[ref commonObject, props mo.Reference](ctx context.Context, client *vim25.Client, objects []ref, ps []string, w *watch) (map[refName]props, error) {
-	if len(objects) == 0 {
-		return map[refName]props{}, nil // Calling property.Collector.Retrieve() with an empty list would cause an error
-	}
-
-	refs := make([]types.ManagedObjectReference, len(objects))
-	dest := make([]props, 0, len(objects))
-
-	for i, obj := range objects {
-		refs[i] = obj.Reference()
-	}
-
-	retCtx, cancel := context.WithTimeout(ctx, commonTimeout)
-	defer cancel()
-
-	w.Start()
-	for i := 0; i < len(refs); i += maxPropertiesBulkSize {
-		bulkSize := min(len(refs)-i, maxPropertiesBulkSize)
-
-		err := property.DefaultCollector(client).Retrieve(ctx, refs[i:i+bulkSize], ps, &dest)
-		if err != nil {
-			return nil, err
-		}
-	}
-	w.Stop()
-
-	destLookup := make(map[types.ManagedObjectReference]props, len(dest))
-
-	for _, dst := range dest {
-		destLookup[dst.Reference()] = dst
-	}
-
-	m := make(map[refName]props, len(objects))
-
-	for _, obj := range objects {
-		dst, found := destLookup[obj.Reference()]
-		if !found {
-			continue
-		}
-
-		rfName := refName{obj.Reference(), obj.Name()}
-		m[rfName] = dst
-	}
-
-	return m, nil
-}
-
 var isolateLUN = regexp.MustCompile(`.*/([^/]+)/?$`)
 
 func getDatastorePerLUN(ctx context.Context, client *vim25.Client, rawDatastores []*object.Datastore, w *watch) map[string]string {
-	dsProps, err := retrieveProps[*object.Datastore, mo.Datastore](ctx, client, rawDatastores, relevantDatastoreProperties, w)
+	dsProps, err := retrieveProps[*object.Datastore, mo.Datastore, datastoreLightProps](ctx, client, rawDatastores, relevantDatastoreProperties, w)
 	if err != nil {
 		logger.Printf("Failed to retrieve datastore props of %s: %v", client.URL().Host, err)
 
@@ -459,12 +373,6 @@ func getDatastorePerLUN(ctx context.Context, client *vim25.Client, rawDatastores
 	return dsPerLUN
 }
 
-//nolint:gochecknoglobals
-var (
-	additionalVMProps   = []string{"runtime.host", "runtime.powerState", "guest.disk"}
-	additionalHostProps = []string{"parent"}
-)
-
 func additionalClusterMetrics(ctx context.Context, client *vim25.Client, clusters []*object.ClusterComputeResource, acc telegraf.Accumulator, h *hierarchy) error {
 	for _, cluster := range clusters {
 		hosts, err := cluster.Hosts(ctx)
@@ -472,7 +380,7 @@ func additionalClusterMetrics(ctx context.Context, client *vim25.Client, cluster
 			return err
 		}
 
-		hostProps, err := retrieveProps[*object.HostSystem, mo.HostSystem](ctx, client, hosts, []string{"runtime.powerState"}, new(watch))
+		hostProps, err := retrieveProps[*object.HostSystem, mo.HostSystem, hostLightProps](ctx, client, hosts, []string{"runtime.powerState"}, new(watch))
 		if err != nil {
 			return err
 		}
@@ -480,7 +388,7 @@ func additionalClusterMetrics(ctx context.Context, client *vim25.Client, cluster
 		var running, stopped int
 
 		for _, props := range hostProps {
-			if props.Runtime.PowerState == deviceStatePoweredOn {
+			if props.Runtime.PowerState == types.HostSystemPowerStatePoweredOn {
 				running++
 			} else {
 				stopped++
@@ -505,7 +413,7 @@ func additionalClusterMetrics(ctx context.Context, client *vim25.Client, cluster
 }
 
 func additionalHostMetrics(ctx context.Context, client *vim25.Client, hosts []*object.HostSystem, acc telegraf.Accumulator, h *hierarchy, vmStatesPerHost map[string][]bool, clusterNames map[string]string) error {
-	hostProps, err := retrieveProps[*object.HostSystem, mo.HostSystem](ctx, client, hosts, additionalHostProps, new(watch))
+	hostProps, err := retrieveProps[*object.HostSystem, mo.HostSystem, hostLightProps](ctx, client, hosts, relevantHostProperties, new(watch))
 	if err != nil {
 		return err
 	}
@@ -529,7 +437,7 @@ func additionalHostMetrics(ctx context.Context, client *vim25.Client, hosts []*o
 			}
 
 			tags := map[string]string{
-				"clustername": clusterNames[props.Parent.Value],
+				"clustername": clusterNames[props.ManagedEntity.Parent.Value],
 				"dcname":      h.parentDCName(host),
 				"esxhostname": host.Name(),
 				"moid":        moid,
@@ -543,7 +451,7 @@ func additionalHostMetrics(ctx context.Context, client *vim25.Client, hosts []*o
 }
 
 func additionalVMMetrics(ctx context.Context, client *vim25.Client, vms []*object.VirtualMachine, acc telegraf.Accumulator, h *hierarchy, vmStatePerHost map[string][]bool, hostNames map[string]string) error {
-	vmProps, err := retrieveProps[*object.VirtualMachine, mo.VirtualMachine](ctx, client, vms, additionalVMProps, new(watch))
+	vmProps, err := retrieveProps[*object.VirtualMachine, mo.VirtualMachine, vmLightProps](ctx, client, vms, relevantVMProperties, new(watch))
 	if err != nil {
 		return err
 	}
@@ -553,7 +461,7 @@ func additionalVMMetrics(ctx context.Context, client *vim25.Client, vms []*objec
 
 		if props.Runtime.Host != nil {
 			host := props.Runtime.Host.Value
-			vmState := props.Runtime.PowerState == deviceStatePoweredOn // true for running, false for stopped
+			vmState := props.Runtime.PowerState == types.VirtualMachinePowerStatePoweredOn // true for running, false for stopped
 
 			if states, ok := vmStatePerHost[host]; ok {
 				vmStatePerHost[host] = append(states, vmState)

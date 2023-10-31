@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-// StatRecorder
+// SR stands for StatRecorder
 type SR struct {
 	sync.Mutex
 

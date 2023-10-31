@@ -97,7 +97,7 @@ func (gatherer *vSphereGatherer) GatherWithState(ctx context.Context, state regi
 		collectWatch.Stop()
 
 		collectAddWatch.Start()
-		errAddMetrics := gatherer.collectAdditionalMetrics(ctx, acc)
+		errAddMetrics, tmngs := gatherer.collectAdditionalMetrics(ctx, acc, state.T0)
 		collectAddWatch.Stop()
 
 		allErrs := errors.Join(filterErrors(append(errAcc.errs, err, errAddMetrics))...)
@@ -105,7 +105,7 @@ func (gatherer *vSphereGatherer) GatherWithState(ctx context.Context, state regi
 		gatherer.lastPoints = gatherer.buffer.Points()
 		gatherer.lastErr = allErrs
 
-		logger.Printf("Collection timing stats of %s:\ntelegraf: %v\nadditional: %v", gatherer.soapURL.Host, collectWatch.total(), collectAddWatch.total())
+		logger.Printf("Collection timing stats of %s:\ntelegraf: %v\nadditional: %v\n%s", gatherer.soapURL.Host, collectWatch.total(), collectAddWatch.total(), tmngs)
 	}
 
 	mfs := model.MetricPointsToFamilies(gatherer.lastPoints)
@@ -126,50 +126,87 @@ func filterErrors(errs []error) []error {
 	return errs[:n]
 }
 
-func (gatherer *vSphereGatherer) collectAdditionalMetrics(ctx context.Context, acc telegraf.Accumulator) error {
+func (gatherer *vSphereGatherer) collectAdditionalMetrics(ctx context.Context, acc telegraf.Accumulator, t0 time.Time) (error, string) { //nolint: revive
+	var setupWatch, ndfWatch, findWatch, hierarchyWatch watch
+
+	setupWatch.Start()
+	ndfWatch.Start()
 	finder, client, err := newDeviceFinder(ctx, *gatherer.cfg)
+	ndfWatch.Stop()
+	logger.Printf("ndfWatch: %v", ndfWatch.total())
 	if err != nil {
-		return err
+		return err, ""
 	}
 
+	findWatch.Start()
 	clusters, _, hosts, vms, err := findDevices(ctx, finder, false)
+	findWatch.Stop()
+	logger.Printf("findWatch: %v", findWatch.total())
 	if err != nil {
-		return err
+		return err, ""
 	}
 
 	if len(clusters) == 0 && len(hosts) == 0 && len(vms) == 0 {
-		return nil
+		return nil, ""
 	}
 
+	hierarchyWatch.Start()
 	h, err := hierarchyFrom(ctx, clusters, hosts, vms)
+	hierarchyWatch.Stop()
+	logger.Printf("hierarchyWatch: %v", hierarchyWatch.total())
 	if err != nil {
-		return fmt.Errorf("can't describe hierarchy: %w", err)
+		return fmt.Errorf("can't describe hierarchy: %w", err), ""
+	}
+	setupWatch.Stop()
+	logger.Printf("setupWatch: %v", setupWatch.total())
+
+	var clusterWatch, hostWatch, vmWatch watch
+
+	if t0.IsZero() {
+		t0 = time.Now()
 	}
 
-	if time.Since(gatherer.lastAdditionalClusterMetricsAt) >= clusterMetricsPeriod {
+	if t0.Sub(gatherer.lastAdditionalClusterMetricsAt) >= clusterMetricsPeriod {
 		// The next gathering should run in ~5min, so we schedule it in 4m50s from now to be safe.
-		gatherer.lastAdditionalClusterMetricsAt = time.Now().Add(-10 * time.Second)
+		gatherer.lastAdditionalClusterMetricsAt = t0.Add(-10 * time.Second)
 
+		clusterWatch.Start()
 		err = additionalClusterMetrics(ctx, client, clusters, acc, h)
+		clusterWatch.Stop()
+		logger.Printf("clusterWatch: %v", clusterWatch.total())
 		if err != nil {
-			return err
+			return err, ""
 		}
 	}
 
 	// For each host, we have a list of vm states (running/stopped)
 	vmStatesPerHost := make(map[string][]bool, len(hosts))
 
+	vmWatch.Start()
 	err = additionalVMMetrics(ctx, client, vms, acc, h, vmStatesPerHost, objectNames(hosts))
+	vmWatch.Stop()
+	logger.Printf("vmWatch: %v", vmWatch.total())
 	if err != nil {
-		return err
+		return err, ""
 	}
 
+	hostWatch.Start()
 	err = additionalHostMetrics(ctx, client, hosts, acc, h, vmStatesPerHost, objectNames(clusters))
+	hostWatch.Stop()
+	logger.Printf("hostWatch: %v", hostWatch.total())
 	if err != nil {
-		return err
+		return err, ""
 	}
 
-	return nil
+	clusterTotal := clusterWatch.total().String()
+	if clusterWatch.total() == 0 {
+		clusterTotal = "-"
+	}
+
+	return nil, fmt.Sprintf(
+		"  setup: %v\n   ndf: %v\n   find: %v\n   hierarchy: %v\n  cluster: %v\n  host: %v\n  vm: %v",
+		setupWatch.total(), ndfWatch.total(), findWatch.total(), hierarchyWatch.total(), clusterTotal, hostWatch.total(), vmWatch.total(),
+	)
 }
 
 func (gatherer *vSphereGatherer) stop() {

@@ -33,6 +33,7 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
+	vim25types "github.com/vmware/govmomi/vim25/types"
 )
 
 const (
@@ -240,7 +241,9 @@ func (dev *device) Facts() map[string]string {
 }
 
 func (dev *device) IsPoweredOn() bool {
-	return dev.state == deviceStatePoweredOn // for hosts and VMs
+	return dev.state == string(vim25types.ManagedEntityStatusGreen) ||
+		dev.state == string(vim25types.HostSystemPowerStatePoweredOn) ||
+		dev.state == string(vim25types.VirtualMachinePowerStatePoweredOn)
 }
 
 func (dev *device) LatestError() error {
@@ -254,10 +257,6 @@ type Cluster struct {
 
 func (cluster *Cluster) Kind() string {
 	return KindCluster
-}
-
-func (cluster *Cluster) IsPoweredOn() bool {
-	return cluster.state == "green"
 }
 
 type HostSystem struct {

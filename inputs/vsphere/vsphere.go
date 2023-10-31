@@ -66,6 +66,7 @@ type vSphere struct {
 	gatherer *vSphereGatherer
 
 	deviceCache      map[string]bleemeoTypes.VSphereDevice
+	devicePropsCache *propertiesCache
 	labelsMetadata   labelsMetadata
 	noMetricsSince   map[string]int
 	lastStatuses     map[string]types.Status
@@ -182,7 +183,7 @@ func (vSphere *vSphere) devices(ctx context.Context, deviceChan chan<- bleemeoTy
 }
 
 func (vSphere *vSphere) describeClusters(ctx context.Context, client *vim25.Client, rawClusters []*object.ClusterComputeResource) []bleemeoTypes.VSphereDevice {
-	clusterProps, err := retrieveProps[*object.ClusterComputeResource, mo.ClusterComputeResource](ctx, client, rawClusters, relevantClusterProperties, &vSphere.stat.descCluster)
+	clusterProps, err := retrieveProps[*object.ClusterComputeResource, mo.ClusterComputeResource, clusterLightProps](ctx, client, rawClusters, relevantClusterProperties, &vSphere.stat.descCluster)
 	if err != nil {
 		logger.Printf("Failed to retrieve cluster props of %s: %v", vSphere.host, err)
 
@@ -199,7 +200,7 @@ func (vSphere *vSphere) describeClusters(ctx context.Context, client *vim25.Clie
 }
 
 func (vSphere *vSphere) describeHosts(ctx context.Context, client *vim25.Client, rawHosts []*object.HostSystem) []bleemeoTypes.VSphereDevice {
-	hostProps, err := retrieveProps[*object.HostSystem, mo.HostSystem](ctx, client, rawHosts, relevantHostProperties, &vSphere.stat.descHost)
+	hostProps, err := retrieveProps[*object.HostSystem, mo.HostSystem, hostLightProps](ctx, client, rawHosts, relevantHostProperties, &vSphere.stat.descHost)
 	if err != nil {
 		logger.Printf("Failed to retrieve host props of %s: %v", vSphere.host, err)
 
@@ -216,7 +217,7 @@ func (vSphere *vSphere) describeHosts(ctx context.Context, client *vim25.Client,
 }
 
 func (vSphere *vSphere) describeVMs(ctx context.Context, client *vim25.Client, rawVMs []*object.VirtualMachine) ([]bleemeoTypes.VSphereDevice, labelsMetadata) {
-	vmProps, err := retrieveProps[*object.VirtualMachine, mo.VirtualMachine](ctx, client, rawVMs, relevantVMProperties, &vSphere.stat.descVM)
+	vmProps, err := retrieveProps[*object.VirtualMachine, mo.VirtualMachine, vmLightProps](ctx, client, rawVMs, relevantVMProperties, &vSphere.stat.descVM)
 	if err != nil {
 		logger.Printf("Failed to retrieve VM props of %s: %v", vSphere.host, err)
 
