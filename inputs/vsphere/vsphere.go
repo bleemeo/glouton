@@ -333,8 +333,8 @@ func (vSphere *vSphere) gatherModifier(mfs []*dto.MetricFamily, _ error) []*dto.
 			continue
 		}
 
-		for m := 0; m < len(mf.Metric); m++ { //nolint:protogetter
-			metric := mf.Metric[m] //nolint:protogetter
+		m := 0
+		for _, metric := range mf.Metric { //nolint:protogetter
 			for _, label := range metric.GetLabel() {
 				if label.GetName() == types.LabelMetaVSphereMOID {
 					seenDevices[label.GetValue()] = true
@@ -345,11 +345,12 @@ func (vSphere *vSphere) gatherModifier(mfs []*dto.MetricFamily, _ error) []*dto.
 
 			if shouldBeKept, labels := vSphere.modifyLabels(metric.GetLabel()); shouldBeKept {
 				metric.Label = labels
-			} else {
-				mf.Metric = append(mf.Metric[:m], mf.Metric[m+1:]...) //nolint:protogetter
-				m--
+				mf.Metric[m] = metric
+				m++
 			}
 		}
+
+		mf.Metric = mf.Metric[:m]
 	}
 
 	vSphereStatus, vSphereMsg := vSphere.getStatus()

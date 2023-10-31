@@ -114,18 +114,16 @@ func (gatherer *vSphereGatherer) GatherWithState(ctx context.Context, state regi
 }
 
 func filterErrors(errs []error) []error {
-	idx := 0
+	n := 0
 
-	for i := 0; i < len(errs); i++ {
-		if errs[i] == nil || strings.Contains(errs[i].Error(), "A specified parameter was not correct: querySpec[0]") {
-			errs = append(errs[:i], errs[i+1:]...) // remove this error from the list
-			i--
-		} else {
-			idx++
+	for _, err := range errs {
+		if err != nil && !strings.Contains(err.Error(), "A specified parameter was not correct: querySpec[0]") {
+			errs[n] = err
+			n++
 		}
 	}
 
-	return errs[:idx]
+	return errs[:n]
 }
 
 func (gatherer *vSphereGatherer) collectAdditionalMetrics(ctx context.Context, acc telegraf.Accumulator) error {
@@ -192,6 +190,10 @@ func (gatherer *vSphereGatherer) createEndpoint(ctx context.Context, input *vsph
 	gatherer.l.Lock()
 	defer gatherer.l.Unlock()
 
+	if ctx.Err() != nil {
+		return
+	}
+
 	newEP := func(epURL *url.URL) error {
 		epCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 		defer cancel()
@@ -213,6 +215,11 @@ func (gatherer *vSphereGatherer) createEndpoint(ctx context.Context, input *vsph
 	if errors.As(err, &urlErr) {
 		if urlErr.Unwrap().Error() == "400 Bad Request" {
 			if gatherer.soapURL.Path == "/" {
+				// Configuration could be tricky: https://vcenter.example.com and https://vcenter.example.com/ aren't the same.
+				// With the first one (without ending slash), govmomi will automatically add "/sdk" (result in https://vcenter.example.com/sdk).
+				// With the former one (with the ending slash), govmomi will NOT add /sdk (result in https://vcenter.example.com/)
+				// Because that will be confusion to end-user, if he entered the URL with an ending slash (https://vcenter.example.com/)
+				// and it didn't work, retry with /sdk automatically.
 				urlWithSlashSDK := *gatherer.soapURL
 				urlWithSlashSDK.Path = "/sdk"
 
@@ -236,9 +243,7 @@ func (gatherer *vSphereGatherer) createEndpoint(ctx context.Context, input *vsph
 
 	gatherer.lastErr = err
 	gatherer.endpointCreateTimer = time.AfterFunc(endpointCreationRetryDelay, func() {
-		if ctx.Err() == nil {
-			gatherer.createEndpoint(ctx, input)
-		}
+		gatherer.createEndpoint(ctx, input)
 	})
 }
 

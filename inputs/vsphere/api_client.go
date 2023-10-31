@@ -406,23 +406,16 @@ func retrieveProps[ref commonObject, props mo.Reference](ctx context.Context, cl
 	}
 	w.Stop()
 
+	destLookup := make(map[types.ManagedObjectReference]props, len(dest))
+
+	for _, dst := range dest {
+		destLookup[dst.Reference()] = dst
+	}
+
 	m := make(map[refName]props, len(objects))
 
-	for i := 0; i < len(objects); i++ {
-		var (
-			obj   = objects[i]
-			dst   props
-			found bool
-		)
-
-		for _, dst = range dest {
-			if dst.Reference() == obj.Reference() {
-				found = true
-
-				break
-			}
-		}
-
+	for _, obj := range objects {
+		dst, found := destLookup[obj.Reference()]
 		if !found {
 			continue
 		}
