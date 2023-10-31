@@ -208,7 +208,7 @@ func (s *Synchronizer) VSphereRegisterAndUpdate(localDevices []types.VSphereDevi
 	}
 
 	if s.now().After(s.lastVSphereAgentsPurge.Add(vSphereAgentsPurgeMinInterval)) && len(remoteAgentList) > 0 {
-		err := s.purgeVSphereAgents(remoteAgentList, seenDeviceAgents, map[string]bool{hostAgentTypeID: true, vmAgentTypeID: true})
+		err := s.purgeVSphereAgents(remoteAgentList, seenDeviceAgents, map[string]bool{clusterAgentTypeID: true, hostAgentTypeID: true, vmAgentTypeID: true})
 		if err != nil {
 			logger.V(1).Printf("Failed to purge vSphere agents: %v", err)
 		}
