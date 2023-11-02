@@ -33,47 +33,10 @@ import (
 	"github.com/vmware/govmomi/find"
 	"github.com/vmware/govmomi/object"
 	"github.com/vmware/govmomi/vim25"
-	"github.com/vmware/govmomi/vim25/methods"
 	"github.com/vmware/govmomi/vim25/mo"
 	"github.com/vmware/govmomi/vim25/soap"
 	"github.com/vmware/govmomi/vim25/types"
 )
-
-type rt struct {
-	soap.RoundTripper
-
-	host string
-}
-
-func mapSlice[I, O any](s []I, f func(I) O) []O {
-	so := make([]O, len(s))
-
-	for i, e := range s {
-		so[i] = f(e)
-	}
-
-	return so
-}
-
-func (rt rt) RoundTrip(ctx context.Context, req, res soap.HasFault) error {
-	switch r := req.(type) {
-	case *methods.RetrievePropertiesBody:
-		spec := r.Req.SpecSet[0]
-		propTypes := mapSlice(spec.PropSet, func(e types.PropertySpec) string {
-			return fmt.Sprintf("%s %v", e.Type, e.PathSet)
-		})
-		objTypes := mapSlice(spec.ObjectSet, func(e types.ObjectSpec) string {
-			return e.Obj.String()
-		})
-		logger.Printf("RoundTrip (%s): retrieve %s props of %s", rt.host, strings.Join(propTypes, ", "), strings.Join(objTypes, ", "))
-	default:
-		logger.Printf("RoundTrip (%s): %T", rt.host, r)
-	}
-
-	//time.Sleep(100 * time.Millisecond)
-
-	return rt.RoundTripper.RoundTrip(ctx, req, res)
-}
 
 func newDeviceFinder(ctx context.Context, vSphereCfg config.VSphere) (*find.Finder, *vim25.Client, error) {
 	u, err := soap.ParseURL(vSphereCfg.URL)
@@ -97,8 +60,6 @@ func newDeviceFinder(ctx context.Context, vSphereCfg config.VSphere) (*find.Find
 
 	// Make future calls to the local datacenter
 	f.SetDatacenter(dc)
-
-	c.Client.RoundTripper = rt{c.Client.RoundTripper, u.Host}
 
 	return f, c.Client, nil
 }
@@ -164,12 +125,15 @@ func describeCluster(source string, rfName refName, clusterProps clusterLightPro
 
 func describeHost(source string, rfName refName, hostProps hostLightProps) *HostSystem {
 	hostFacts := map[string]string{
-		"cpu_model_name": hostProps.Summary.Hardware.CpuModel,
-		"hostname":       hostProps.Summary.Config.Name,
-		"product_name":   hostProps.Summary.Hardware.Model,
-		"system_vendor":  hostProps.Summary.Hardware.Vendor,
+		"hostname": hostProps.Summary.Config.Name,
 		// custom
 		"vsphere_vmotion_enabled": str(hostProps.Summary.Config.VmotionEnabled),
+	}
+
+	if hostProps.Summary.Hardware != nil {
+		hostFacts["cpu_model_name"] = hostProps.Summary.Hardware.CpuModel
+		hostFacts["product_name"] = hostProps.Summary.Hardware.Model
+		hostFacts["system_vendor"] = hostProps.Summary.Hardware.Vendor
 	}
 
 	if hostProps.Hardware != nil {
@@ -346,8 +310,8 @@ func objectNames[T commonObject](objects []T) map[string]string {
 
 var isolateLUN = regexp.MustCompile(`.*/([^/]+)/?$`)
 
-func getDatastorePerLUN(ctx context.Context, client *vim25.Client, rawDatastores []*object.Datastore, w *watch) map[string]string {
-	dsProps, err := retrieveProps[*object.Datastore, mo.Datastore, datastoreLightProps](ctx, client, rawDatastores, relevantDatastoreProperties, w)
+func getDatastorePerLUN(ctx context.Context, client *vim25.Client, datastores []*object.Datastore, cache *propsCache[datastoreLightProps], w *watch) map[string]string {
+	dsProps, err := retrieveProps(ctx, client, datastores, relevantDatastoreProperties, cache, w)
 	if err != nil {
 		logger.Printf("Failed to retrieve datastore props of %s: %v", client.URL().Host, err)
 
@@ -373,14 +337,14 @@ func getDatastorePerLUN(ctx context.Context, client *vim25.Client, rawDatastores
 	return dsPerLUN
 }
 
-func additionalClusterMetrics(ctx context.Context, client *vim25.Client, clusters []*object.ClusterComputeResource, acc telegraf.Accumulator, h *hierarchy) error {
+func additionalClusterMetrics(ctx context.Context, client *vim25.Client, clusters []*object.ClusterComputeResource, cache *propsCache[hostLightProps], acc telegraf.Accumulator, h *hierarchy) error {
 	for _, cluster := range clusters {
 		hosts, err := cluster.Hosts(ctx)
 		if err != nil {
 			return err
 		}
 
-		hostProps, err := retrieveProps[*object.HostSystem, mo.HostSystem, hostLightProps](ctx, client, hosts, []string{"runtime.powerState"}, new(watch))
+		hostProps, err := retrieveProps(ctx, client, hosts, relevantHostProperties, cache, new(watch))
 		if err != nil {
 			return err
 		}
@@ -412,8 +376,8 @@ func additionalClusterMetrics(ctx context.Context, client *vim25.Client, cluster
 	return nil
 }
 
-func additionalHostMetrics(ctx context.Context, client *vim25.Client, hosts []*object.HostSystem, acc telegraf.Accumulator, h *hierarchy, vmStatesPerHost map[string][]bool, clusterNames map[string]string) error {
-	hostProps, err := retrieveProps[*object.HostSystem, mo.HostSystem, hostLightProps](ctx, client, hosts, relevantHostProperties, new(watch))
+func additionalHostMetrics(ctx context.Context, client *vim25.Client, hosts []*object.HostSystem, cache *propsCache[hostLightProps], acc telegraf.Accumulator, h *hierarchy, vmStatesPerHost map[string][]bool, clusterNames map[string]string) error {
+	hostProps, err := retrieveProps(ctx, client, hosts, relevantHostProperties, cache, new(watch))
 	if err != nil {
 		return err
 	}
@@ -450,8 +414,8 @@ func additionalHostMetrics(ctx context.Context, client *vim25.Client, hosts []*o
 	return nil
 }
 
-func additionalVMMetrics(ctx context.Context, client *vim25.Client, vms []*object.VirtualMachine, acc telegraf.Accumulator, h *hierarchy, vmStatePerHost map[string][]bool, hostNames map[string]string) error {
-	vmProps, err := retrieveProps[*object.VirtualMachine, mo.VirtualMachine, vmLightProps](ctx, client, vms, relevantVMProperties, new(watch))
+func additionalVMMetrics(ctx context.Context, client *vim25.Client, vms []*object.VirtualMachine, cache *propsCache[vmLightProps], acc telegraf.Accumulator, h *hierarchy, vmStatePerHost map[string][]bool, hostNames map[string]string) error {
+	vmProps, err := retrieveProps(ctx, client, vms, relevantVMProperties, cache, new(watch))
 	if err != nil {
 		return err
 	}

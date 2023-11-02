@@ -58,6 +58,8 @@ type vSphereGatherer struct {
 	lastPoints []types.MetricPoint
 	lastErr    error
 
+	devicePropsCache *propsCaches
+
 	lastAdditionalClusterMetricsAt time.Time
 
 	l sync.Mutex
@@ -133,7 +135,6 @@ func (gatherer *vSphereGatherer) collectAdditionalMetrics(ctx context.Context, a
 	ndfWatch.Start()
 	finder, client, err := newDeviceFinder(ctx, *gatherer.cfg)
 	ndfWatch.Stop()
-	logger.Printf("ndfWatch: %v", ndfWatch.total())
 	if err != nil {
 		return err, ""
 	}
@@ -141,7 +142,6 @@ func (gatherer *vSphereGatherer) collectAdditionalMetrics(ctx context.Context, a
 	findWatch.Start()
 	clusters, _, hosts, vms, err := findDevices(ctx, finder, false)
 	findWatch.Stop()
-	logger.Printf("findWatch: %v", findWatch.total())
 	if err != nil {
 		return err, ""
 	}
@@ -153,12 +153,10 @@ func (gatherer *vSphereGatherer) collectAdditionalMetrics(ctx context.Context, a
 	hierarchyWatch.Start()
 	h, err := hierarchyFrom(ctx, clusters, hosts, vms)
 	hierarchyWatch.Stop()
-	logger.Printf("hierarchyWatch: %v", hierarchyWatch.total())
 	if err != nil {
 		return fmt.Errorf("can't describe hierarchy: %w", err), ""
 	}
 	setupWatch.Stop()
-	logger.Printf("setupWatch: %v", setupWatch.total())
 
 	var clusterWatch, hostWatch, vmWatch watch
 
@@ -171,9 +169,8 @@ func (gatherer *vSphereGatherer) collectAdditionalMetrics(ctx context.Context, a
 		gatherer.lastAdditionalClusterMetricsAt = t0.Add(-10 * time.Second)
 
 		clusterWatch.Start()
-		err = additionalClusterMetrics(ctx, client, clusters, acc, h)
+		err = additionalClusterMetrics(ctx, client, clusters, gatherer.devicePropsCache.hostCache, acc, h)
 		clusterWatch.Stop()
-		logger.Printf("clusterWatch: %v", clusterWatch.total())
 		if err != nil {
 			return err, ""
 		}
@@ -183,20 +180,20 @@ func (gatherer *vSphereGatherer) collectAdditionalMetrics(ctx context.Context, a
 	vmStatesPerHost := make(map[string][]bool, len(hosts))
 
 	vmWatch.Start()
-	err = additionalVMMetrics(ctx, client, vms, acc, h, vmStatesPerHost, objectNames(hosts))
+	err = additionalVMMetrics(ctx, client, vms, gatherer.devicePropsCache.vmCache, acc, h, vmStatesPerHost, objectNames(hosts))
 	vmWatch.Stop()
-	logger.Printf("vmWatch: %v", vmWatch.total())
 	if err != nil {
 		return err, ""
 	}
 
 	hostWatch.Start()
-	err = additionalHostMetrics(ctx, client, hosts, acc, h, vmStatesPerHost, objectNames(clusters))
+	err = additionalHostMetrics(ctx, client, hosts, gatherer.devicePropsCache.hostCache, acc, h, vmStatesPerHost, objectNames(clusters))
 	hostWatch.Stop()
-	logger.Printf("hostWatch: %v", hostWatch.total())
 	if err != nil {
 		return err, ""
 	}
+
+	//logger.Printf("Cache stats of %s:\n%s", gatherer.soapURL.Host, gatherer.devicePropsCache.stats())
 
 	clusterTotal := clusterWatch.total().String()
 	if clusterWatch.total() == 0 {
@@ -255,7 +252,7 @@ func (gatherer *vSphereGatherer) createEndpoint(ctx context.Context, input *vsph
 				// Configuration could be tricky: https://vcenter.example.com and https://vcenter.example.com/ aren't the same.
 				// With the first one (without ending slash), govmomi will automatically add "/sdk" (result in https://vcenter.example.com/sdk).
 				// With the former one (with the ending slash), govmomi will NOT add /sdk (result in https://vcenter.example.com/)
-				// Because that will be confusion to end-user, if he entered the URL with an ending slash (https://vcenter.example.com/)
+				// Because that will confuse the end-user, if he entered the URL with an ending slash (https://vcenter.example.com/)
 				// and it didn't work, retry with /sdk automatically.
 				urlWithSlashSDK := *gatherer.soapURL
 				urlWithSlashSDK.Path = "/sdk"
@@ -286,7 +283,7 @@ func (gatherer *vSphereGatherer) createEndpoint(ctx context.Context, input *vsph
 
 // newGatherer creates a vSphere gatherer from the given endpoint.
 // It will return an error if the endpoint URL is not valid.
-func newGatherer(cfg *config.VSphere, input *vsphere.VSphere, acc *internal.Accumulator) (*vSphereGatherer, error) {
+func newGatherer(cfg *config.VSphere, input *vsphere.VSphere, acc *internal.Accumulator, devicePropsCache *propsCaches) (*vSphereGatherer, error) {
 	soapURL, err := soap.ParseURL(cfg.URL)
 	if err != nil {
 		return nil, err
@@ -295,11 +292,12 @@ func newGatherer(cfg *config.VSphere, input *vsphere.VSphere, acc *internal.Accu
 	ctx, cancel := context.WithCancel(context.Background())
 
 	gatherer := &vSphereGatherer{
-		cfg:     cfg,
-		soapURL: soapURL,
-		acc:     acc,
-		buffer:  new(registry.PointBuffer),
-		cancel:  cancel,
+		cfg:              cfg,
+		soapURL:          soapURL,
+		acc:              acc,
+		buffer:           new(registry.PointBuffer),
+		cancel:           cancel,
+		devicePropsCache: devicePropsCache,
 	}
 
 	gatherer.createEndpoint(ctx, input)

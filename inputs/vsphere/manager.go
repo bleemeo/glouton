@@ -36,10 +36,13 @@ import (
 	vim25types "github.com/vmware/govmomi/vim25/types"
 )
 
+type ResourceKind = string
+
 const (
-	KindCluster = "ClusterComputeResource"
-	KindHost    = "HostSystem"
-	KindVM      = "VirtualMachine"
+	KindCluster   ResourceKind = "ClusterComputeResource"
+	KindDatastore ResourceKind = "Datastore"
+	KindHost      ResourceKind = "HostSystem"
+	KindVM        ResourceKind = "VirtualMachine"
 )
 
 type Manager struct {
@@ -255,7 +258,7 @@ type Cluster struct {
 	datastores []string
 }
 
-func (cluster *Cluster) Kind() string {
+func (cluster *Cluster) Kind() ResourceKind {
 	return KindCluster
 }
 
@@ -263,7 +266,7 @@ type HostSystem struct {
 	device
 }
 
-func (host *HostSystem) Kind() string {
+func (host *HostSystem) Kind() ResourceKind {
 	return KindHost
 }
 
@@ -271,7 +274,7 @@ type VirtualMachine struct {
 	device
 }
 
-func (vm *VirtualMachine) Kind() string {
+func (vm *VirtualMachine) Kind() ResourceKind {
 	return KindVM
 }
 

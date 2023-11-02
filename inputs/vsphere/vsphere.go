@@ -37,7 +37,6 @@ import (
 	dto "github.com/prometheus/client_model/go"
 	"github.com/vmware/govmomi/object"
 	"github.com/vmware/govmomi/vim25"
-	"github.com/vmware/govmomi/vim25/mo"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -66,7 +65,7 @@ type vSphere struct {
 	gatherer *vSphereGatherer
 
 	deviceCache      map[string]bleemeoTypes.VSphereDevice
-	devicePropsCache *propertiesCache
+	devicePropsCache *propsCaches
 	labelsMetadata   labelsMetadata
 	noMetricsSince   map[string]int
 	lastStatuses     map[string]types.Status
@@ -80,10 +79,11 @@ type vSphere struct {
 
 func newVSphere(host string, cfg config.VSphere, state bleemeoTypes.State) *vSphere {
 	return &vSphere{
-		host:        host,
-		opts:        cfg,
-		state:       state,
-		deviceCache: make(map[string]bleemeoTypes.VSphereDevice),
+		host:             host,
+		opts:             cfg,
+		state:            state,
+		deviceCache:      make(map[string]bleemeoTypes.VSphereDevice),
+		devicePropsCache: newPropsCaches(),
 		labelsMetadata: labelsMetadata{
 			datastorePerLUN:    make(map[string]string),
 			disksPerVM:         make(map[string]map[string]string),
@@ -161,7 +161,7 @@ func (vSphere *vSphere) devices(ctx context.Context, deviceChan chan<- bleemeoTy
 	describedVMs, labelsMetadata := vSphere.describeVMs(ctx, client, vms)
 	devs = append(devs, describedVMs...)
 
-	dsPerLUN := getDatastorePerLUN(ctx, client, datastores, &vSphere.stat.descDatastore)
+	dsPerLUN := getDatastorePerLUN(ctx, client, datastores, vSphere.devicePropsCache.datastoreCache, &vSphere.stat.descDatastore)
 
 	vSphere.stat.global.Stop()
 	vSphere.stat.Display(vSphere.host)
@@ -180,10 +180,12 @@ func (vSphere *vSphere) devices(ctx context.Context, deviceChan chan<- bleemeoTy
 
 		deviceChan <- dev
 	}
+
+	vSphere.devicePropsCache.purge()
 }
 
 func (vSphere *vSphere) describeClusters(ctx context.Context, client *vim25.Client, rawClusters []*object.ClusterComputeResource) []bleemeoTypes.VSphereDevice {
-	clusterProps, err := retrieveProps[*object.ClusterComputeResource, mo.ClusterComputeResource, clusterLightProps](ctx, client, rawClusters, relevantClusterProperties, &vSphere.stat.descCluster)
+	clusterProps, err := retrieveProps(ctx, client, rawClusters, relevantClusterProperties, vSphere.devicePropsCache.clusterCache, &vSphere.stat.descCluster)
 	if err != nil {
 		logger.Printf("Failed to retrieve cluster props of %s: %v", vSphere.host, err)
 
@@ -200,7 +202,7 @@ func (vSphere *vSphere) describeClusters(ctx context.Context, client *vim25.Clie
 }
 
 func (vSphere *vSphere) describeHosts(ctx context.Context, client *vim25.Client, rawHosts []*object.HostSystem) []bleemeoTypes.VSphereDevice {
-	hostProps, err := retrieveProps[*object.HostSystem, mo.HostSystem, hostLightProps](ctx, client, rawHosts, relevantHostProperties, &vSphere.stat.descHost)
+	hostProps, err := retrieveProps(ctx, client, rawHosts, relevantHostProperties, vSphere.devicePropsCache.hostCache, &vSphere.stat.descHost)
 	if err != nil {
 		logger.Printf("Failed to retrieve host props of %s: %v", vSphere.host, err)
 
@@ -217,7 +219,7 @@ func (vSphere *vSphere) describeHosts(ctx context.Context, client *vim25.Client,
 }
 
 func (vSphere *vSphere) describeVMs(ctx context.Context, client *vim25.Client, rawVMs []*object.VirtualMachine) ([]bleemeoTypes.VSphereDevice, labelsMetadata) {
-	vmProps, err := retrieveProps[*object.VirtualMachine, mo.VirtualMachine, vmLightProps](ctx, client, rawVMs, relevantVMProperties, &vSphere.stat.descVM)
+	vmProps, err := retrieveProps(ctx, client, rawVMs, relevantVMProperties, vSphere.devicePropsCache.vmCache, &vSphere.stat.descVM)
 	if err != nil {
 		logger.Printf("Failed to retrieve VM props of %s: %v", vSphere.host, err)
 
@@ -304,7 +306,7 @@ func (vSphere *vSphere) makeGatherer() (prometheus.Gatherer, registry.Registrati
 		RenameGlobal:     vSphere.renameGlobal,
 	}
 
-	gatherer, err := newGatherer(&vSphere.opts, vsphereInput, acc)
+	gatherer, err := newGatherer(&vSphere.opts, vsphereInput, acc, vSphere.devicePropsCache)
 	if err != nil {
 		return nil, registry.RegistrationOption{}, err
 	}

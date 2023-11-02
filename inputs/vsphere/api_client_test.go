@@ -502,8 +502,8 @@ func TestESXIDescribing(t *testing.T) { //nolint:maintidx
 				}
 			}
 
-			labelsMetadataByVSphere := mapMap(manager.vSpheres, func(ki string, vi *vSphere) (string, labelsMetadata) {
-				return strings.Split(ki, ":")[0], vi.labelsMetadata
+			labelsMetadataByVSphere := mapMap(manager.vSpheres, func(host string, vSphere *vSphere) (string, labelsMetadata) {
+				return strings.Split(host, ":")[0], vSphere.labelsMetadata
 			})
 			if diff := cmp.Diff(tc.expectedLabelsMetadata, labelsMetadataByVSphere, cmp.AllowUnexported(labelsMetadata{})); diff != "" {
 				t.Errorf("Unexpected labels metadata (-want +got):\n%s", diff)

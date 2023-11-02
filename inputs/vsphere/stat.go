@@ -2,14 +2,11 @@ package vsphere
 
 import (
 	"glouton/logger"
-	"sync"
 	"time"
 )
 
 // SR stands for StatRecorder
 type SR struct {
-	sync.Mutex
-
 	global        watch
 	deviceListing watch
 	descCluster   watch
