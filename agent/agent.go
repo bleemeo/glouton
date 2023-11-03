@@ -1284,7 +1284,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 	}
 
 	// Register inputs that are not associated to a service.
-	a.registerInputs()
+	a.registerInputs(ctx)
 
 	// Register components only available on a given system, like node_exporter for unixes.
 	a.registerOSSpecificComponents(a.vethProvider)
@@ -1370,7 +1370,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 }
 
 // Registers inputs that are not associated to a service.
-func (a *agent) registerInputs() {
+func (a *agent) registerInputs(ctx context.Context) {
 	if a.config.NvidiaSMI.Enable {
 		input, opts, err := nvidia.New(a.config.NvidiaSMI.BinPath, a.config.NvidiaSMI.Timeout)
 		a.registerInput("NVIDIA SMI", input, opts, err)
@@ -1403,7 +1403,7 @@ func (a *agent) registerInputs() {
 	input, opts, err := temp.New()
 	a.registerInput("Temp", input, opts, err)
 
-	a.vSphereManager.RegisterGatherers(a.config.VSphere, a.gathererRegistry.RegisterGatherer, a.state)
+	a.vSphereManager.RegisterGatherers(ctx, a.config.VSphere, a.gathererRegistry.RegisterGatherer, a.state)
 }
 
 // Register a single input.

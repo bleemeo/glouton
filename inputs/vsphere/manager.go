@@ -88,7 +88,7 @@ func (m *Manager) EndpointsInError() map[string]bool {
 	return endpoints
 }
 
-func (m *Manager) RegisterGatherers(vSphereCfgs []config.VSphere, registerGatherer func(opt registry.RegistrationOption, gatherer prometheus.Gatherer) (int, error), state bleemeoTypes.State) {
+func (m *Manager) RegisterGatherers(ctx context.Context, vSphereCfgs []config.VSphere, registerGatherer func(opt registry.RegistrationOption, gatherer prometheus.Gatherer) (int, error), state bleemeoTypes.State) {
 	m.l.Lock()
 	defer m.l.Unlock()
 
@@ -108,7 +108,7 @@ func (m *Manager) RegisterGatherers(vSphereCfgs []config.VSphere, registerGather
 
 		vSphere := newVSphere(u.Host, vSphereCfg, state)
 
-		gatherer, opt, err := vSphere.makeGatherer()
+		gatherer, opt, err := vSphere.makeGatherer(ctx)
 		if err != nil {
 			logger.Printf("Failed to create gatherer for %s: %v", vSphere.String(), err)
 

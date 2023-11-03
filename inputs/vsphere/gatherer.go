@@ -229,10 +229,7 @@ func (gatherer *vSphereGatherer) createEndpoint(ctx context.Context, input *vsph
 	}
 
 	newEP := func(epURL *url.URL) error {
-		epCtx, cancel := context.WithTimeout(ctx, commonTimeout)
-		defer cancel()
-
-		ep, err := vsphere.NewEndpoint(epCtx, input, epURL, input.Log)
+		ep, err := vsphere.NewEndpoint(ctx, input, epURL, input.Log)
 		if err == nil {
 			gatherer.endpoint = ep
 		}
@@ -283,13 +280,13 @@ func (gatherer *vSphereGatherer) createEndpoint(ctx context.Context, input *vsph
 
 // newGatherer creates a vSphere gatherer from the given endpoint.
 // It will return an error if the endpoint URL is not valid.
-func newGatherer(cfg *config.VSphere, input *vsphere.VSphere, acc *internal.Accumulator, devicePropsCache *propsCaches) (*vSphereGatherer, error) {
+func newGatherer(ctx context.Context, cfg *config.VSphere, input *vsphere.VSphere, acc *internal.Accumulator, devicePropsCache *propsCaches) (*vSphereGatherer, error) {
 	soapURL, err := soap.ParseURL(cfg.URL)
 	if err != nil {
 		return nil, err
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(ctx)
 
 	gatherer := &vSphereGatherer{
 		cfg:              cfg,

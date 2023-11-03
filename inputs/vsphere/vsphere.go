@@ -242,7 +242,7 @@ func (vSphere *vSphere) describeVMs(ctx context.Context, client *vim25.Client, r
 	return vms, labelsMetadata
 }
 
-func (vSphere *vSphere) makeGatherer() (prometheus.Gatherer, registry.RegistrationOption, error) {
+func (vSphere *vSphere) makeGatherer(ctx context.Context) (prometheus.Gatherer, registry.RegistrationOption, error) {
 	input, ok := telegraf_inputs.Inputs["vsphere"]
 	if !ok {
 		return nil, registry.RegistrationOption{}, inputs.ErrDisabledInput
@@ -306,7 +306,7 @@ func (vSphere *vSphere) makeGatherer() (prometheus.Gatherer, registry.Registrati
 		RenameGlobal:     vSphere.renameGlobal,
 	}
 
-	gatherer, err := newGatherer(&vSphere.opts, vsphereInput, acc, vSphere.devicePropsCache)
+	gatherer, err := newGatherer(ctx, &vSphere.opts, vsphereInput, acc, vSphere.devicePropsCache)
 	if err != nil {
 		return nil, registry.RegistrationOption{}, err
 	}

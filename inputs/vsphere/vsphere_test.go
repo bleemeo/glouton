@@ -17,6 +17,7 @@
 package vsphere
 
 import (
+	"context"
 	"crypto/tls"
 	"glouton/config"
 	"glouton/inputs/internal"
@@ -177,7 +178,7 @@ func setupVSphereTest(t *testing.T, hostsCount int) (vsphereGatherer *vSphereGat
 		},
 	}
 
-	gatherer, _, err := vSphere.makeGatherer()
+	gatherer, _, err := vSphere.makeGatherer(context.Background())
 	if err != nil {
 		t.Fatal("Failed to create vSphere gatherer:", err)
 	}
