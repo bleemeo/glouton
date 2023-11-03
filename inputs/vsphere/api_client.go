@@ -310,8 +310,8 @@ func objectNames[T commonObject](objects []T) map[string]string {
 
 var isolateLUN = regexp.MustCompile(`.*/([^/]+)/?$`)
 
-func getDatastorePerLUN(ctx context.Context, client *vim25.Client, datastores []*object.Datastore, cache *propsCache[datastoreLightProps], w *watch) (map[string]string, error) {
-	dsProps, err := retrieveProps(ctx, client, datastores, relevantDatastoreProperties, cache, w)
+func getDatastorePerLUN(ctx context.Context, client *vim25.Client, datastores []*object.Datastore, cache *propsCache[datastoreLightProps]) (map[string]string, error) {
+	dsProps, err := retrieveProps(ctx, client, datastores, relevantDatastoreProperties, cache)
 	if err != nil {
 		logger.Printf("Failed to retrieve datastore props of %s: %v", client.URL().Host, err)
 
@@ -344,7 +344,7 @@ func additionalClusterMetrics(ctx context.Context, client *vim25.Client, cluster
 			return err
 		}
 
-		hostProps, err := retrieveProps(ctx, client, hosts, relevantHostProperties, cache, new(watch))
+		hostProps, err := retrieveProps(ctx, client, hosts, relevantHostProperties, cache)
 		if err != nil {
 			return err
 		}
@@ -377,7 +377,7 @@ func additionalClusterMetrics(ctx context.Context, client *vim25.Client, cluster
 }
 
 func additionalHostMetrics(ctx context.Context, client *vim25.Client, hosts []*object.HostSystem, cache *propsCache[hostLightProps], acc telegraf.Accumulator, h *hierarchy, vmStatesPerHost map[string][]bool, clusterNames map[string]string) error {
-	hostProps, err := retrieveProps(ctx, client, hosts, relevantHostProperties, cache, new(watch))
+	hostProps, err := retrieveProps(ctx, client, hosts, relevantHostProperties, cache)
 	if err != nil {
 		return err
 	}
@@ -415,7 +415,7 @@ func additionalHostMetrics(ctx context.Context, client *vim25.Client, hosts []*o
 }
 
 func additionalVMMetrics(ctx context.Context, client *vim25.Client, vms []*object.VirtualMachine, cache *propsCache[vmLightProps], acc telegraf.Accumulator, h *hierarchy, vmStatePerHost map[string][]bool, hostNames map[string]string) error {
-	vmProps, err := retrieveProps(ctx, client, vms, relevantVMProperties, cache, new(watch))
+	vmProps, err := retrieveProps(ctx, client, vms, relevantVMProperties, cache)
 	if err != nil {
 		return err
 	}

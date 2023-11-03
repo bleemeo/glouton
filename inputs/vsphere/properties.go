@@ -168,7 +168,7 @@ type cachedProp[propsType any] struct {
 	value      propsType
 }
 
-func retrieveProps[ref commonObject, props any](ctx context.Context, client *vim25.Client, objects []ref, ps []string, cache *propsCache[props], w *watch) (map[refName]props, error) {
+func retrieveProps[ref commonObject, props any](ctx context.Context, client *vim25.Client, objects []ref, ps []string, cache *propsCache[props]) (map[refName]props, error) {
 	if len(objects) == 0 {
 		// Calling property.Collector.Retrieve() with an empty list would cause an error
 		return map[refName]props{}, nil
@@ -189,8 +189,6 @@ func retrieveProps[ref commonObject, props any](ctx context.Context, client *vim
 	refs = slices.Clip(refs)
 	dest := make([]mo.Reference, 0, len(refs))
 
-	w.Start()
-
 	for i := 0; i < len(refs); i += maxPropertiesBulkSize {
 		bulkSize := min(len(refs)-i, maxPropertiesBulkSize)
 		retCtx, cancel := context.WithTimeout(ctx, commonTimeout)
@@ -201,8 +199,6 @@ func retrieveProps[ref commonObject, props any](ctx context.Context, client *vim
 			return nil, err
 		}
 	}
-
-	w.Stop()
 
 	destLookup := make(map[types.ManagedObjectReference]mo.Reference, len(dest))
 

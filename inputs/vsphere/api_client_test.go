@@ -115,7 +115,6 @@ func TestVSphereSteps(t *testing.T) {
 	}
 
 	dummyVSphere := newVSphere(vSphereURL.Host, vSphereCfg, nil)
-	dummyVSphere.stat = NewStat()
 
 	devices, err := dummyVSphere.describeClusters(ctx, client, clusters)
 	if err != nil {

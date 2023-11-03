@@ -75,8 +75,6 @@ type vSphere struct {
 	consecutiveErr   int
 
 	l sync.Mutex
-
-	stat *SR
 }
 
 func newVSphere(host string, cfg config.VSphere, state bleemeoTypes.State) *vSphere {
@@ -131,9 +129,6 @@ func (vSphere *vSphere) devices(ctx context.Context, deviceChan chan<- bleemeoTy
 	findCtx, cancelFind := context.WithTimeout(ctx, commonTimeout)
 	defer cancelFind()
 
-	vSphere.stat = NewStat()
-	vSphere.stat.global.Start()
-
 	t0 := time.Now()
 
 	finder, client, err := newDeviceFinder(findCtx, vSphere.opts)
@@ -144,9 +139,7 @@ func (vSphere *vSphere) devices(ctx context.Context, deviceChan chan<- bleemeoTy
 		return
 	}
 
-	vSphere.stat.deviceListing.Start()
 	clusters, datastores, hosts, vms, err := findDevices(findCtx, finder, true)
-	vSphere.stat.deviceListing.Stop()
 	if err != nil {
 		vSphere.setErr(err)
 		logger.V(1).Printf("Can't find devices on vSphere %q: %v", vSphere.host, err)
@@ -173,11 +166,8 @@ func (vSphere *vSphere) devices(ctx context.Context, deviceChan chan<- bleemeoTy
 	devs = append(devs, describedVMs...)
 	errs = append(errs, err)
 
-	dsPerLUN, err := getDatastorePerLUN(ctx, client, datastores, vSphere.devicePropsCache.datastoreCache, &vSphere.stat.descDatastore)
+	dsPerLUN, err := getDatastorePerLUN(ctx, client, datastores, vSphere.devicePropsCache.datastoreCache)
 	errs = append(errs, err)
-
-	vSphere.stat.global.Stop()
-	vSphere.stat.Display(vSphere.host)
 
 	err = errors.Join(append(errs, ctx.Err())...)
 	vSphere.setErr(err)
@@ -204,7 +194,7 @@ func (vSphere *vSphere) devices(ctx context.Context, deviceChan chan<- bleemeoTy
 }
 
 func (vSphere *vSphere) describeClusters(ctx context.Context, client *vim25.Client, rawClusters []*object.ClusterComputeResource) ([]bleemeoTypes.VSphereDevice, error) {
-	clusterProps, err := retrieveProps(ctx, client, rawClusters, relevantClusterProperties, vSphere.devicePropsCache.clusterCache, &vSphere.stat.descCluster)
+	clusterProps, err := retrieveProps(ctx, client, rawClusters, relevantClusterProperties, vSphere.devicePropsCache.clusterCache)
 	if err != nil {
 		logger.Printf("Failed to retrieve cluster props of %s: %v", vSphere.host, err)
 
@@ -221,7 +211,7 @@ func (vSphere *vSphere) describeClusters(ctx context.Context, client *vim25.Clie
 }
 
 func (vSphere *vSphere) describeHosts(ctx context.Context, client *vim25.Client, rawHosts []*object.HostSystem) ([]bleemeoTypes.VSphereDevice, error) {
-	hostProps, err := retrieveProps(ctx, client, rawHosts, relevantHostProperties, vSphere.devicePropsCache.hostCache, &vSphere.stat.descHost)
+	hostProps, err := retrieveProps(ctx, client, rawHosts, relevantHostProperties, vSphere.devicePropsCache.hostCache)
 	if err != nil {
 		logger.Printf("Failed to retrieve host props of %s: %v", vSphere.host, err)
 
@@ -238,7 +228,7 @@ func (vSphere *vSphere) describeHosts(ctx context.Context, client *vim25.Client,
 }
 
 func (vSphere *vSphere) describeVMs(ctx context.Context, client *vim25.Client, rawVMs []*object.VirtualMachine) ([]bleemeoTypes.VSphereDevice, labelsMetadata, error) {
-	vmProps, err := retrieveProps(ctx, client, rawVMs, relevantVMProperties, vSphere.devicePropsCache.vmCache, &vSphere.stat.descVM)
+	vmProps, err := retrieveProps(ctx, client, rawVMs, relevantVMProperties, vSphere.devicePropsCache.vmCache)
 	if err != nil {
 		logger.Printf("Failed to retrieve VM props of %s: %v", vSphere.host, err)
 
