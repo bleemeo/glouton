@@ -438,7 +438,7 @@ func additionalVMMetrics(ctx context.Context, client *vim25.Client, vms []*objec
 
 		if props.Guest != nil {
 			for _, disk := range props.Guest.Disk {
-				usage := (float64(disk.FreeSpace) * 100) / float64(disk.Capacity) // Percentage of disk used
+				usage := 100 - (float64(disk.FreeSpace)*100)/float64(disk.Capacity) // Percentage of disk used
 
 				tags := map[string]string{
 					"clustername": "", // TODO
