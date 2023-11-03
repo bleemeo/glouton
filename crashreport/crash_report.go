@@ -29,12 +29,12 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"sync"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
-	"k8s.io/utils/strings/slices"
 )
 
 const MaxReportSize = 2 << 20
@@ -187,8 +187,6 @@ func purgeCrashReports(maxReportCount int, preserve []string, stateDir string) {
 
 	// Prevent preserved reports from being purged
 	for _, report := range preserve {
-		// A slices package will be included in the standard library from Go 1.21.
-		// For now, using the one from the k8s API.
 		if idx := slices.Index(existingCrashReports, report); idx >= 0 {
 			// Remove report from the list of crash reports
 			existingCrashReports = append(existingCrashReports[:idx], existingCrashReports[idx+1:]...)
