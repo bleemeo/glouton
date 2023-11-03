@@ -18,6 +18,7 @@ package vsphere
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	bleemeoTypes "glouton/bleemeo/types"
 	"glouton/config"
@@ -155,19 +156,36 @@ func (vSphere *vSphere) devices(ctx context.Context, deviceChan chan<- bleemeoTy
 
 	logger.V(2).Printf("On vSphere %q, found %d clusters, %d hosts and %d vms in %v.", vSphere.host, len(clusters), len(hosts), len(vms), time.Since(t0))
 
-	var devs []bleemeoTypes.VSphereDevice
+	var (
+		devs []bleemeoTypes.VSphereDevice
+		errs []error
+	)
 	// A more precise context will be given by the function that retrieves the device properties.
-	devs = append(devs, vSphere.describeClusters(ctx, client, clusters)...)
-	devs = append(devs, vSphere.describeHosts(ctx, client, hosts)...)
-	describedVMs, labelsMetadata := vSphere.describeVMs(ctx, client, vms)
-	devs = append(devs, describedVMs...)
+	describedClusters, err := vSphere.describeClusters(ctx, client, clusters)
+	devs = append(devs, describedClusters...)
+	errs = append(errs, err)
 
-	dsPerLUN := getDatastorePerLUN(ctx, client, datastores, vSphere.devicePropsCache.datastoreCache, &vSphere.stat.descDatastore)
+	describedHosts, err := vSphere.describeHosts(ctx, client, hosts)
+	devs = append(devs, describedHosts...)
+	errs = append(errs, err)
+
+	describedVMs, labelsMetadata, err := vSphere.describeVMs(ctx, client, vms)
+	devs = append(devs, describedVMs...)
+	errs = append(errs, err)
+
+	dsPerLUN, err := getDatastorePerLUN(ctx, client, datastores, vSphere.devicePropsCache.datastoreCache, &vSphere.stat.descDatastore)
+	errs = append(errs, err)
 
 	vSphere.stat.global.Stop()
 	vSphere.stat.Display(vSphere.host)
 
-	vSphere.setErr(ctx.Err())
+	err = errors.Join(append(errs, ctx.Err())...)
+	vSphere.setErr(err)
+
+	if err != nil {
+		// Don't save a potentially partial list of devices
+		return
+	}
 
 	vSphere.l.Lock()
 	defer vSphere.l.Unlock()
@@ -185,12 +203,12 @@ func (vSphere *vSphere) devices(ctx context.Context, deviceChan chan<- bleemeoTy
 	vSphere.devicePropsCache.purge()
 }
 
-func (vSphere *vSphere) describeClusters(ctx context.Context, client *vim25.Client, rawClusters []*object.ClusterComputeResource) []bleemeoTypes.VSphereDevice {
+func (vSphere *vSphere) describeClusters(ctx context.Context, client *vim25.Client, rawClusters []*object.ClusterComputeResource) ([]bleemeoTypes.VSphereDevice, error) {
 	clusterProps, err := retrieveProps(ctx, client, rawClusters, relevantClusterProperties, vSphere.devicePropsCache.clusterCache, &vSphere.stat.descCluster)
 	if err != nil {
 		logger.Printf("Failed to retrieve cluster props of %s: %v", vSphere.host, err)
 
-		return nil // TODO: return err
+		return nil, err
 	}
 
 	clusters := make([]bleemeoTypes.VSphereDevice, 0, len(clusterProps))
@@ -199,15 +217,15 @@ func (vSphere *vSphere) describeClusters(ctx context.Context, client *vim25.Clie
 		clusters = append(clusters, describeCluster(vSphere.host, cluster, props))
 	}
 
-	return clusters
+	return clusters, nil
 }
 
-func (vSphere *vSphere) describeHosts(ctx context.Context, client *vim25.Client, rawHosts []*object.HostSystem) []bleemeoTypes.VSphereDevice {
+func (vSphere *vSphere) describeHosts(ctx context.Context, client *vim25.Client, rawHosts []*object.HostSystem) ([]bleemeoTypes.VSphereDevice, error) {
 	hostProps, err := retrieveProps(ctx, client, rawHosts, relevantHostProperties, vSphere.devicePropsCache.hostCache, &vSphere.stat.descHost)
 	if err != nil {
 		logger.Printf("Failed to retrieve host props of %s: %v", vSphere.host, err)
 
-		return nil // TODO: return err
+		return nil, err
 	}
 
 	hosts := make([]bleemeoTypes.VSphereDevice, 0, len(hostProps))
@@ -216,15 +234,15 @@ func (vSphere *vSphere) describeHosts(ctx context.Context, client *vim25.Client,
 		hosts = append(hosts, describeHost(vSphere.host, host, props))
 	}
 
-	return hosts
+	return hosts, nil
 }
 
-func (vSphere *vSphere) describeVMs(ctx context.Context, client *vim25.Client, rawVMs []*object.VirtualMachine) ([]bleemeoTypes.VSphereDevice, labelsMetadata) {
+func (vSphere *vSphere) describeVMs(ctx context.Context, client *vim25.Client, rawVMs []*object.VirtualMachine) ([]bleemeoTypes.VSphereDevice, labelsMetadata, error) {
 	vmProps, err := retrieveProps(ctx, client, rawVMs, relevantVMProperties, vSphere.devicePropsCache.vmCache, &vSphere.stat.descVM)
 	if err != nil {
 		logger.Printf("Failed to retrieve VM props of %s: %v", vSphere.host, err)
 
-		return nil, labelsMetadata{} // TODO: return err
+		return nil, labelsMetadata{}, err
 	}
 
 	vms := make([]bleemeoTypes.VSphereDevice, 0, len(vmProps))
@@ -240,7 +258,7 @@ func (vSphere *vSphere) describeVMs(ctx context.Context, client *vim25.Client, r
 		labelsMetadata.netInterfacesPerVM[vm.Reference().Value] = netInterfaces
 	}
 
-	return vms, labelsMetadata
+	return vms, labelsMetadata, nil
 }
 
 func (vSphere *vSphere) makeGatherer(ctx context.Context) (prometheus.Gatherer, registry.RegistrationOption, error) {

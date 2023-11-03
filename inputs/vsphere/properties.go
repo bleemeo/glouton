@@ -237,7 +237,6 @@ func retrieveProps[ref commonObject, props any](ctx context.Context, client *vim
 	return m, nil
 }
 
-/*nolint: revive,stylecheck*/
 type (
 	clusterLightProps struct {
 		ComputeResource struct {
@@ -247,7 +246,7 @@ type (
 			Datastore []types.ManagedObjectReference
 			Summary   *struct {
 				ComputeResourceSummary struct {
-					NumCpuCores int16
+					NumCpuCores int16 //nolint: revive,stylecheck
 				}
 			}
 		}

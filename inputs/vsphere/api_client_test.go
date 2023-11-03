@@ -66,9 +66,9 @@ func setupVSphereAPITest(t *testing.T, dirName string) (vSphereCfg config.VSpher
 	}
 }
 
-// TestVCenterDescribing list and describes the devices of a vCenter,
+// TestVSphereSteps lists and describes the devices of a vCenter,
 // by calling individually each method needed.
-func TestVCenterDescribing(t *testing.T) {
+func TestVSphereSteps(t *testing.T) {
 	vSphereCfg, deferFn := setupVSphereAPITest(t, "vcenter_1")
 	defer deferFn()
 
@@ -117,7 +117,11 @@ func TestVCenterDescribing(t *testing.T) {
 	dummyVSphere := newVSphere(vSphereURL.Host, vSphereCfg, nil)
 	dummyVSphere.stat = NewStat()
 
-	devices := dummyVSphere.describeClusters(ctx, client, clusters)
+	devices, err := dummyVSphere.describeClusters(ctx, client, clusters)
+	if err != nil {
+		t.Fatalf("Got an error while describing clusters: %v", err)
+	}
+
 	if len(devices) != 1 {
 		t.Fatalf("Expected 1 cluster to be described, but got %d.", len(devices))
 	}
@@ -144,7 +148,11 @@ func TestVCenterDescribing(t *testing.T) {
 		t.Fatalf("Unexpected host description (-want +got):\n%s", diff)
 	}
 
-	devices = dummyVSphere.describeHosts(ctx, client, hosts)
+	devices, err = dummyVSphere.describeHosts(ctx, client, hosts)
+	if err != nil {
+		t.Fatalf("Got an error while describing hosts: %v", err)
+	}
+
 	if len(devices) != 1 {
 		t.Fatalf("Expected 1 host to be described, but got %d.", len(devices))
 	}
@@ -180,7 +188,11 @@ func TestVCenterDescribing(t *testing.T) {
 		t.Fatalf("Unexpected host description (-want +got):\n%s", diff)
 	}
 
-	devices, vmLabelsMetadata := dummyVSphere.describeVMs(ctx, client, vms)
+	devices, vmLabelsMetadata, err := dummyVSphere.describeVMs(ctx, client, vms)
+	if err != nil {
+		t.Fatalf("Got an error while describing vms: %v", err)
+	}
+
 	if len(devices) != 1 {
 		t.Fatalf("Expected 1 VM to be described, but got %d.", len(devices))
 	}
@@ -221,9 +233,9 @@ func TestVCenterDescribing(t *testing.T) {
 	}
 }
 
-// TestESXIDescribing lists and describes devices across multiple test cases,
+// TestVSphereLifecycle lists and describes devices across multiple test cases,
 // but by calling the higher-level method Manager.Devices.
-func TestESXIDescribing(t *testing.T) { //nolint:maintidx
+func TestVSphereLifecycle(t *testing.T) { //nolint:maintidx
 	testCases := []struct {
 		name                   string
 		dirName                string
@@ -445,7 +457,7 @@ func TestESXIDescribing(t *testing.T) { //nolint:maintidx
 			defer cancel()
 
 			manager := new(Manager)
-			manager.RegisterGatherers([]config.VSphere{vSphereCfg}, func(opt registry.RegistrationOption, gatherer prometheus.Gatherer) (int, error) { return 0, nil }, nil)
+			manager.RegisterGatherers(ctx, []config.VSphere{vSphereCfg}, func(opt registry.RegistrationOption, gatherer prometheus.Gatherer) (int, error) { return 0, nil }, nil)
 
 			devices := manager.Devices(ctx, 0)
 

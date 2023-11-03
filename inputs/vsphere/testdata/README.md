@@ -10,6 +10,7 @@
 3. Remove the files that aren't needed to run our tests, and only keep:
     - ServiceInstance
     - OptionManager
+    - ViewManager
     - EventManager
     - Folder-*
     - PropertyCollector

@@ -193,8 +193,6 @@ func (gatherer *vSphereGatherer) collectAdditionalMetrics(ctx context.Context, a
 		return err, ""
 	}
 
-	//logger.Printf("Cache stats of %s:\n%s", gatherer.soapURL.Host, gatherer.devicePropsCache.stats())
-
 	clusterTotal := clusterWatch.total().String()
 	if clusterWatch.total() == 0 {
 		clusterTotal = "-"

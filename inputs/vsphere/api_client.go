@@ -310,12 +310,12 @@ func objectNames[T commonObject](objects []T) map[string]string {
 
 var isolateLUN = regexp.MustCompile(`.*/([^/]+)/?$`)
 
-func getDatastorePerLUN(ctx context.Context, client *vim25.Client, datastores []*object.Datastore, cache *propsCache[datastoreLightProps], w *watch) map[string]string {
+func getDatastorePerLUN(ctx context.Context, client *vim25.Client, datastores []*object.Datastore, cache *propsCache[datastoreLightProps], w *watch) (map[string]string, error) {
 	dsProps, err := retrieveProps(ctx, client, datastores, relevantDatastoreProperties, cache, w)
 	if err != nil {
 		logger.Printf("Failed to retrieve datastore props of %s: %v", client.URL().Host, err)
 
-		return map[string]string{} // TODO: return err
+		return map[string]string{}, err
 	}
 
 	dsPerLUN := make(map[string]string, len(dsProps))
@@ -334,7 +334,7 @@ func getDatastorePerLUN(ctx context.Context, client *vim25.Client, datastores []
 		dsPerLUN[matches[1]] = ds.Name()
 	}
 
-	return dsPerLUN
+	return dsPerLUN, nil
 }
 
 func additionalClusterMetrics(ctx context.Context, client *vim25.Client, clusters []*object.ClusterComputeResource, cache *propsCache[hostLightProps], acc telegraf.Accumulator, h *hierarchy) error {

@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-// SR stands for StatRecorder
+// SR stands for StatRecorder.
 type SR struct {
 	global        watch
 	deviceListing watch
