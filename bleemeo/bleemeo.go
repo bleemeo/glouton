@@ -27,7 +27,6 @@ import (
 	"glouton/bleemeo/internal/synchronizer"
 	"glouton/bleemeo/types"
 	"glouton/crashreport"
-	"glouton/inputs/vsphere"
 	"glouton/logger"
 	"glouton/prometheus/exporter/snmp"
 	gloutonTypes "glouton/types"
@@ -797,20 +796,15 @@ func (c *Connector) diagnosticCache(file io.Writer) {
 }
 
 func (c *Connector) GetAllVSphereAssociations(ctx context.Context, devices []types.VSphereDevice) (map[string]string, error) {
-	clusterAgentTypeID, hostAgentTypeID, vmAgentTypeID, ok := c.sync.GetVSphereAgentTypes()
+	vSphereAgentTypes, ok := c.sync.GetVSphereAgentTypes()
 	if !ok {
 		return map[string]string{}, errAgentTypeNotFound
 	}
 
-	agentTypes := map[string]string{
-		vsphere.KindCluster: clusterAgentTypeID,
-		vsphere.KindHost:    hostAgentTypeID,
-		vsphere.KindVM:      vmAgentTypeID,
-	}
 	associations := make(map[string]string, len(devices))
 
 	for _, dev := range devices {
-		agent, err := c.sync.FindVSphereAgent(ctx, dev, agentTypes[dev.Kind()], c.cache.AgentsByUUID())
+		agent, err := c.sync.FindVSphereAgent(ctx, dev, vSphereAgentTypes[dev.Kind()], c.cache.AgentsByUUID())
 		if err != nil {
 			return associations, err
 		}

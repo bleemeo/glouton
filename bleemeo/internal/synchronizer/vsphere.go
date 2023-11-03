@@ -117,7 +117,7 @@ func (s *Synchronizer) FindVSphereAgent(ctx context.Context, device types.VSpher
 }
 
 func (s *Synchronizer) VSphereRegisterAndUpdate(localDevices []types.VSphereDevice) error {
-	clusterAgentTypeID, hostAgentTypeID, vmAgentTypeID, found := s.GetVSphereAgentTypes()
+	vSphereAgentTypes, found := s.GetVSphereAgentTypes()
 	if !found {
 		return errRetryLater
 	}
@@ -135,17 +135,9 @@ func (s *Synchronizer) VSphereRegisterAndUpdate(localDevices []types.VSphereDevi
 	)
 
 	for _, device := range localDevices {
-		var agentTypeID string
-
-		switch kind := device.Kind(); kind {
-		case vsphere.KindCluster:
-			agentTypeID = clusterAgentTypeID
-		case vsphere.KindHost:
-			agentTypeID = hostAgentTypeID
-		case vsphere.KindVM:
-			agentTypeID = vmAgentTypeID
-		default:
-			logger.V(1).Printf("Unknown vSphere kind %q for device %s", kind, device.FQDN())
+		agentTypeID, ok := vSphereAgentTypes[device.Kind()]
+		if !ok {
+			logger.V(1).Printf("Unknown vSphere kind %q for device %s", device.Kind(), device.FQDN())
 
 			continue
 		}
@@ -208,7 +200,13 @@ func (s *Synchronizer) VSphereRegisterAndUpdate(localDevices []types.VSphereDevi
 	}
 
 	if s.now().After(s.lastVSphereAgentsPurge.Add(vSphereAgentsPurgeMinInterval)) && len(remoteAgentList) > 0 {
-		err := s.purgeVSphereAgents(remoteAgentList, seenDeviceAgents, map[string]bool{clusterAgentTypeID: true, hostAgentTypeID: true, vmAgentTypeID: true})
+		agentTypeIDsToPurge := map[string]bool{
+			vSphereAgentTypes[vsphere.KindCluster]: true,
+			vSphereAgentTypes[vsphere.KindHost]:    true,
+			vSphereAgentTypes[vsphere.KindVM]:      true,
+		}
+
+		err := s.purgeVSphereAgents(remoteAgentList, seenDeviceAgents, agentTypeIDsToPurge)
 		if err != nil {
 			logger.V(1).Printf("Failed to purge vSphere agents: %v", err)
 		}
@@ -232,43 +230,36 @@ func (s *Synchronizer) remoteRegisterVSphereDevice(params map[string]string, pay
 	return result, nil
 }
 
-func (s *Synchronizer) GetVSphereAgentTypes() (clusterAgentTypeID, hostAgentTypeID, vmAgentTypeID string, foundAll bool) {
-	agentTypes := s.option.Cache.AgentTypes()
+// GetVSphereAgentTypes returns a map[vSphereKind]=>AgentTypeID of all vSphere resource kinds.
+func (s *Synchronizer) GetVSphereAgentTypes() (map[vsphere.ResourceKind]string, bool) {
+	const vSphereAgentTypesCount = 3
 
-	for i := 0; i < len(agentTypes) && !foundAll; i++ {
+	agentTypes := s.option.Cache.AgentTypes()
+	vSphereAgentTypes := make(map[vsphere.ResourceKind]string, vSphereAgentTypesCount)
+
+	for i := 0; i < len(agentTypes) && len(vSphereAgentTypes) < vSphereAgentTypesCount; i++ {
 		switch a := agentTypes[i]; {
 		case a.Name == types.AgentTypeVSphereCluster:
-			clusterAgentTypeID = a.ID
+			vSphereAgentTypes[vsphere.KindCluster] = a.ID
 		case a.Name == types.AgentTypeVSphereHost:
-			hostAgentTypeID = a.ID
+			vSphereAgentTypes[vsphere.KindHost] = a.ID
 		case a.Name == types.AgentTypeVSphereVM:
-			vmAgentTypeID = a.ID
-		default:
-			continue
+			vSphereAgentTypes[vsphere.KindVM] = a.ID
 		}
-
-		foundAll = clusterAgentTypeID != "" && hostAgentTypeID != "" && vmAgentTypeID != ""
 	}
 
-	return clusterAgentTypeID, hostAgentTypeID, vmAgentTypeID, foundAll
+	return vSphereAgentTypes, len(vSphereAgentTypes) == vSphereAgentTypesCount
 }
 
-func (s *Synchronizer) GetVSphereAgentType(kind string) (agentTypeID string, found bool) {
-	clusterAgentTypeID, hostAgentTypeID, vmAgentTypeID, found := s.GetVSphereAgentTypes()
+func (s *Synchronizer) GetVSphereAgentType(kind vsphere.ResourceKind) (agentTypeID string, found bool) {
+	vSphereAgentTypes, found := s.GetVSphereAgentTypes()
 	if !found {
 		return "", false
 	}
 
-	switch kind {
-	case vsphere.KindCluster:
-		return clusterAgentTypeID, true
-	case vsphere.KindHost:
-		return hostAgentTypeID, true
-	case vsphere.KindVM:
-		return vmAgentTypeID, true
-	default:
-		return "", false
-	}
+	agentTypeID, found = vSphereAgentTypes[kind]
+
+	return agentTypeID, found
 }
 
 func (s *Synchronizer) purgeVSphereAgents(remoteAgents map[string]types.Agent, seenDeviceAgents map[string]string, vSphereAgentTypes map[string]bool) error {
@@ -319,7 +310,7 @@ func (s *Synchronizer) purgeVSphereAgents(remoteAgents map[string]types.Agent, s
 				logger.V(1).Printf("Failed to remove vSphere association from cache: %v", err)
 			}
 		} else {
-			logger.Printf("Device %q/%s has no association ...", agent.DisplayName, id)
+			logger.Printf("Device %q (%s) has no association ...", agent.DisplayName, id) // TODO: remove
 		}
 
 		agentsToRemoveFromCache[id] = true
@@ -347,7 +338,7 @@ func (s *Synchronizer) removeAgentsFromCache(agentsToRemove map[string]bool) {
 		finalAgents = append(finalAgents, agent)
 	}
 
-	slices.Clip(finalAgents)
+	finalAgents = slices.Clip(finalAgents)
 
 	s.option.Cache.SetAgentList(finalAgents)
 }

@@ -249,7 +249,7 @@ type JWT struct {
 }
 
 type VSphereDevice interface {
-	// Kind returns whether this VSphereDevice is a HostSystem or a VirtualMachine.
+	// Kind returns the type of the VSphereDevice (VirtualMachine, HostSystem, ...).
 	Kind() string
 	FQDN() string
 	// Source returns the host address of the vCenter/ESXI from which this VSphereDevice was described.
