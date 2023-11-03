@@ -31,6 +31,7 @@ import (
 	"sync"
 	"time"
 
+	telegraf_config "github.com/influxdata/telegraf/config"
 	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"
 	"github.com/influxdata/telegraf/plugins/inputs/vsphere"
 	"github.com/prometheus/client_golang/prometheus"
@@ -298,6 +299,8 @@ func (vSphere *vSphere) makeGatherer(ctx context.Context) (prometheus.Gatherer, 
 
 	vsphereInput.InsecureSkipVerify = vSphere.opts.InsecureSkipVerify
 
+	vsphereInput.ObjectDiscoveryInterval = telegraf_config.Duration(2 * time.Minute)
+
 	vsphereInput.Log = logger.NewTelegrafLog(vSphere.String())
 
 	acc := &internal.Accumulator{
@@ -467,14 +470,14 @@ func (vSphere *vSphere) modifyLabels(labelPairs []*dto.LabelPair) (shouldBeKept 
 
 				if diskName, ok := vmDisks[diskLabel.GetValue()]; ok {
 					labels["item"] = &dto.LabelPair{Name: ptr("item"), Value: &diskName}
-				} else {
-					shouldBeKept = false
+
+					delete(labels, "disk")
 
 					break
 				}
 			}
 
-			delete(labels, "disk")
+			shouldBeKept = false
 		} else if interfaceLabel, ok := labels["interface"]; ok {
 			if interfaceLabel.GetValue() == instanceTotal {
 				shouldBeKept = false
@@ -487,14 +490,13 @@ func (vSphere *vSphere) modifyLabels(labelPairs []*dto.LabelPair) (shouldBeKept 
 
 				if interfaceName, ok := vmInterfaces[interfaceLabel.GetValue()]; ok {
 					labels["item"] = &dto.LabelPair{Name: ptr("item"), Value: &interfaceName}
-				} else {
-					shouldBeKept = false
+					delete(labels, "interface")
 
 					break
 				}
 			}
 
-			delete(labels, "interface")
+			shouldBeKept = false
 		}
 	case isHost, isCluster:
 		if lunLabel, ok := labels["lun"]; ok {
@@ -502,13 +504,12 @@ func (vSphere *vSphere) modifyLabels(labelPairs []*dto.LabelPair) (shouldBeKept 
 
 			if datastore, ok := vSphere.labelsMetadata.datastorePerLUN[lunLabel.GetValue()]; ok {
 				labels["item"] = &dto.LabelPair{Name: ptr("item"), Value: &datastore}
-			} else {
-				shouldBeKept = false
+				delete(labels, "lun")
 
 				break
 			}
 
-			delete(labels, "lun")
+			shouldBeKept = false
 		}
 	}
 
