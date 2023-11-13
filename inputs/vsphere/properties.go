@@ -235,109 +235,176 @@ func retrieveProps[ref commonObject, props any](ctx context.Context, client *vim
 
 type (
 	clusterLightProps struct {
-		ComputeResource struct {
-			ManagedEntity struct {
-				OverallStatus types.ManagedEntityStatus
-			}
-			Datastore []types.ManagedObjectReference
-			Summary   *struct {
-				ComputeResourceSummary struct {
-					NumCpuCores int16 //nolint: revive,stylecheck
-				}
-			}
-		}
+		ComputeResource clusterLightComputeResource
 	}
+
+	clusterLightComputeResource struct {
+		ManagedEntity clusterLightComputeResourceManagedEntity
+		Datastore     []types.ManagedObjectReference
+		Summary       *clusterLightComputeResourceSummary
+	}
+
+	clusterLightComputeResourceManagedEntity struct {
+		OverallStatus types.ManagedEntityStatus
+	}
+
+	clusterLightComputeResourceSummary struct {
+		ComputeResourceSummary clusterLightComputeResourceSummaryComputeResourceSummary
+	}
+
+	clusterLightComputeResourceSummaryComputeResourceSummary struct {
+		NumCpuCores int16 //nolint: revive,stylecheck
+	}
+
+	// - - - .
 
 	datastoreLightProps struct {
-		ManagedEntity struct {
-			Name string
-		}
-		Info types.BaseDatastoreInfo
+		ManagedEntity datastoreLightManagedEntity
+		Info          types.BaseDatastoreInfo
 	}
+
+	datastoreLightManagedEntity struct {
+		Name string
+	}
+
+	// - - - .
 
 	hostLightProps struct {
-		ManagedEntity struct {
-			Parent *types.ManagedObjectReference
-			Name   string
-		}
-		Runtime struct {
-			PowerState types.HostSystemPowerState
-		}
-		Summary struct {
-			Hardware *struct {
-				Vendor   string
-				Model    string
-				CpuModel string //nolint: revive,stylecheck
-			}
-			Config struct {
-				Name           string
-				VmotionEnabled bool
-			}
-		}
-		Hardware *struct {
-			CpuInfo struct { //nolint: revive,stylecheck
-				NumCpuCores int16 //nolint: revive,stylecheck
-			}
-			MemorySize int64
-		}
-		Config *struct {
-			Product struct {
-				Version string
-				OsType  string
-			}
-			Network *struct {
-				Vnic []struct {
-					Spec struct {
-						Ip *struct { //nolint: revive,stylecheck
-							IpAddress string //nolint: revive,stylecheck
-						}
-					}
-				}
-				DnsConfig   types.BaseHostDnsConfig //nolint: revive,stylecheck
-				IpV6Enabled *bool                   //nolint: revive,stylecheck
-			}
-			DateTimeInfo *struct {
-				TimeZone struct {
-					Name string
-				}
-			}
-		}
+		ManagedEntity hostLightManagedEntity
+		Runtime       hostLightRuntime
+		Summary       hostLightSummary
+		Hardware      *hostLightHardware
+		Config        *hostLightConfig
 	}
 
+	hostLightManagedEntity struct {
+		Parent *types.ManagedObjectReference
+		Name   string
+	}
+
+	hostLightRuntime struct {
+		PowerState types.HostSystemPowerState
+	}
+
+	hostLightSummary struct {
+		Hardware *hostLightSummaryHardware
+		Config   hostLightSummaryConfig
+	}
+
+	hostLightSummaryHardware struct {
+		Vendor   string
+		Model    string
+		CpuModel string //nolint: revive,stylecheck
+	}
+
+	hostLightSummaryConfig struct {
+		Name           string
+		VmotionEnabled bool
+	}
+
+	hostLightHardware struct {
+		CpuInfo    hostLightHardwareCpuInfo //nolint: revive,stylecheck
+		MemorySize int64
+	}
+
+	hostLightHardwareCpuInfo struct { //nolint: revive,stylecheck
+		NumCpuCores int16 //nolint: revive,stylecheck
+	}
+
+	hostLightConfig struct {
+		Product      hostLightConfigProduct
+		Network      *hostLightConfigNetwork
+		DateTimeInfo *hostLightConfigDateTimeInfo
+	}
+
+	hostLightConfigProduct struct {
+		Version string
+		OsType  string
+	}
+
+	hostLightConfigNetwork struct {
+		Vnic        []hostLightConfigNetworkVnic
+		DnsConfig   types.BaseHostDnsConfig //nolint: revive,stylecheck
+		IpV6Enabled *bool                   //nolint: revive,stylecheck
+	}
+
+	hostLightConfigNetworkVnic struct {
+		Spec hostLightConfigNetworkVnicSpec
+	}
+
+	hostLightConfigNetworkVnicSpec struct {
+		Ip *hostLightConfigNetworkVnicSpecIp //nolint: revive,stylecheck
+	}
+
+	hostLightConfigNetworkVnicSpecIp struct { //nolint: revive,stylecheck
+		IpAddress string //nolint: revive,stylecheck
+	}
+
+	hostLightConfigDateTimeInfo struct {
+		TimeZone hostLightConfigDateTimeInfoTimeZone
+	}
+
+	hostLightConfigDateTimeInfoTimeZone struct {
+		Name string
+	}
+
+	// - - - .
+
 	vmLightProps struct {
-		Config *struct {
-			Name          string
-			GuestFullName string
-			Version       string
-			Hardware      struct {
-				NumCPU   int32
-				MemoryMB int32
-				Device   object.VirtualDeviceList
-			}
-			DatastoreUrl []struct{ Name, Url string } //nolint: revive,stylecheck
-		}
+		Config       *vmLightConfig
 		ResourcePool *types.ManagedObjectReference
-		Runtime      struct {
-			Host       *types.ManagedObjectReference
-			PowerState types.VirtualMachinePowerState
-		}
-		Guest *struct {
-			HostName  string
-			IpAddress string //nolint: revive,stylecheck
-			Disk      []struct {
-				DiskPath  string
-				Capacity  int64
-				FreeSpace int64
-			}
-		}
-		Summary struct {
-			Vm     *types.ManagedObjectReference //nolint: revive,stylecheck
-			Config struct {
-				Product *struct {
-					Name   string
-					Vendor string
-				}
-			}
-		}
+		Runtime      vmLightRuntime
+		Guest        *vmLightGuest
+		Summary      vmLightSummary
+	}
+
+	vmLightConfig struct {
+		Name          string
+		GuestFullName string
+		Version       string
+		Hardware      vmLightConfigHardware
+		DatastoreUrl  []vmLightConfigDatastoreUrl //nolint: revive,stylecheck
+	}
+
+	vmLightConfigHardware struct {
+		NumCPU   int32
+		MemoryMB int32
+		Device   object.VirtualDeviceList
+	}
+
+	vmLightConfigDatastoreUrl struct { //nolint: revive,stylecheck
+		Name string
+		Url  string //nolint: revive,stylecheck
+	}
+
+	vmLightRuntime struct {
+		Host       *types.ManagedObjectReference
+		PowerState types.VirtualMachinePowerState
+	}
+
+	vmLightGuest struct {
+		HostName  string
+		IpAddress string //nolint: revive,stylecheck
+		Disk      []vmLightGuestDisk
+	}
+
+	vmLightGuestDisk struct {
+		DiskPath  string
+		Capacity  int64
+		FreeSpace int64
+	}
+
+	vmLightSummary struct {
+		Vm     *types.ManagedObjectReference //nolint: revive,stylecheck
+		Config vmLightSummaryConfig
+	}
+
+	vmLightSummaryConfig struct {
+		Product *vmLightSummaryConfigProduct
+	}
+
+	vmLightSummaryConfigProduct struct {
+		Name   string
+		Vendor string
 	}
 )
