@@ -124,7 +124,8 @@ type propsCache[propsType any] struct {
 
 // get returns the properties corresponding to the given moid,
 // or `ok=false` if the properties weren't found or were outdated.
-func (pc *propsCache[propsType]) get(moid string) (value propsType, ok bool) {
+// If bypassStaleness is given as true, properties will be returned even outdated.
+func (pc *propsCache[propsType]) get(moid string, bypassStaleness ...bool) (value propsType, ok bool) {
 	pc.l.Lock()
 	defer pc.l.Unlock()
 
@@ -133,7 +134,7 @@ func (pc *propsCache[propsType]) get(moid string) (value propsType, ok bool) {
 		return value, false
 	}
 
-	if time.Since(prop.lastUpdate) > maxCachedPropertiesValidity {
+	if time.Since(prop.lastUpdate) > maxCachedPropertiesValidity && !(len(bypassStaleness) == 1 && bypassStaleness[0]) {
 		delete(pc.m, moid) // This property won't be used anymore.
 
 		return value, false
@@ -191,10 +192,13 @@ func retrieveProps[ref commonObject, props any](ctx context.Context, client *vim
 
 	for i := 0; i < len(refs); i += maxPropertiesBulkSize {
 		bulkSize := min(len(refs)-i, maxPropertiesBulkSize)
-		retCtx, cancel := context.WithTimeout(ctx, commonTimeout)
 
-		err := property.DefaultCollector(client).Retrieve(retCtx, refs[i:i+bulkSize], ps, &dest)
-		cancel()
+		err := func() error {
+			retCtx, cancel := context.WithTimeout(ctx, commonTimeout)
+			defer cancel()
+
+			return property.DefaultCollector(client).Retrieve(retCtx, refs[i:i+bulkSize], ps, &dest)
+		}()
 		if err != nil {
 			return nil, err
 		}

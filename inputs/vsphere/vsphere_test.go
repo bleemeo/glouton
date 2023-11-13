@@ -21,6 +21,7 @@ import (
 	"crypto/tls"
 	"glouton/config"
 	"glouton/inputs/internal"
+	"glouton/types"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -93,46 +94,58 @@ func TestTransformMetrics(t *testing.T) {
 		field         string
 		value         float64
 		expectedValue float64
+		tags          map[string]string
 	}{
 		"vsphere_vm_mem": {
 			{
-				"swapped_average",
-				185.64,
-				185640,
+				field:         "active_average",
+				value:         430080,
+				expectedValue: 21,
+				tags:          map[string]string{types.LabelMetaVSphereMOID: "vm-77"},
+				// This case is a special case
+			},
+			{
+				field:         "swapped_average",
+				value:         185.64,
+				expectedValue: 185640,
 			},
 		},
 		"vsphere_vm_disk": {
 			{
-				"read_average",
-				35.432,
-				35432,
+				field:         "read_average",
+				value:         35.432,
+				expectedValue: 35432,
 			},
 			{
-				"write_average",
-				36.68,
-				36680,
+				field:         "write_average",
+				value:         36.68,
+				expectedValue: 36680,
 			},
 		},
 		"vsphere_host_mem": {
 			{
-				"totalCapacity_average",
-				4294.967296,
-				4294967296,
+				field:         "totalCapacity_average",
+				value:         4294.967296,
+				expectedValue: 4294967296,
 			},
 			{
-				"swapout_average",
-				78,
-				78000,
+				field:         "swapout_average",
+				value:         78,
+				expectedValue: 78000,
 			},
 		},
 		"vsphere_host_net": {
 			{
-				"transmitted_average",
-				0.91,
-				7280,
+				field:         "transmitted_average",
+				value:         0.91,
+				expectedValue: 7280,
 			},
 		},
 	}
+
+	dummyVSphere := newVSphere("host", config.VSphere{}, nil)
+	// The VM mem_used_perc (active_average) metric relies on the cache to evaluate its value.
+	dummyVSphere.devicePropsCache.vmCache.set("vm-77", vmLightProps{Config: &vmLightConfig{Hardware: vmLightConfigHardware{MemoryMB: 2048}}})
 
 	for measurement, testCases := range cases {
 		currentContext := internal.GatherContext{Measurement: measurement}
@@ -142,9 +155,13 @@ func TestTransformMetrics(t *testing.T) {
 		for _, testCase := range testCases {
 			fields[testCase.field] = testCase.value
 			expected[testCase.field] = testCase.expectedValue
+
+			if testCase.tags != nil {
+				currentContext.Tags = testCase.tags
+			}
 		}
 
-		resultFields := transformMetrics(currentContext, fields, nil)
+		resultFields := dummyVSphere.transformMetrics(currentContext, fields, nil)
 		if diff := cmp.Diff(expected, resultFields); diff != "" {
 			t.Errorf("Unexpected result of transformMetrics(%q, ...):\n%v", measurement, diff)
 		}

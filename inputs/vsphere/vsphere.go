@@ -28,6 +28,7 @@ import (
 	"glouton/prometheus/registry"
 	"glouton/types"
 	"maps"
+	"math"
 	"strings"
 	"sync"
 	"time"
@@ -273,7 +274,7 @@ func (vSphere *vSphere) makeGatherer(ctx context.Context) (prometheus.Gatherer, 
 	vsphereInput.VMMetricInclude = []string{
 		"cpu.usage.average",
 		"cpu.latency.average",
-		"mem.usage.average",
+		"mem.active.average", // Will be converted to the percentage of used memory
 		"mem.swapped.average",
 		"net.transmitted.average",
 		"net.received.average",
@@ -313,7 +314,7 @@ func (vSphere *vSphere) makeGatherer(ctx context.Context) (prometheus.Gatherer, 
 
 	acc := &internal.Accumulator{
 		RenameMetrics:    renameMetrics,
-		TransformMetrics: transformMetrics,
+		TransformMetrics: vSphere.transformMetrics,
 		RenameGlobal:     vSphere.renameGlobal,
 	}
 
@@ -348,7 +349,9 @@ func (vSphere *vSphere) gatherModifier(mfs []*dto.MetricFamily, _ error) []*dto.
 
 		m := 0
 
-		for _, metric := range mf.Metric { //nolint:protogetter
+		for i := 0; i < len(mf.Metric); i++ { //nolint:protogetter
+			metric := mf.Metric[i] //nolint:protogetter
+
 			for _, label := range metric.GetLabel() {
 				if label.GetName() == types.LabelMetaVSphereMOID {
 					seenDevices[label.GetValue()] = true
@@ -447,8 +450,8 @@ func (vSphere *vSphere) modifyLabels(labelPairs []*dto.LabelPair) (shouldBeKept 
 		}
 	}
 
-	// Once we did everything we wanted if the labels, we rebuild the list
 	defer func() {
+		// Once we did everything we wanted with the labels, we rebuild the list
 		if shouldBeKept {
 			for _, label := range labels {
 				finalLabels = append(finalLabels, label)
@@ -611,6 +614,8 @@ func renameMetrics(currentContext internal.GatherContext, metricName string) (ne
 		default:
 			newMetricName = strings.Replace(newMetricName, "usage", "used_perc", 1)
 			newMetricName = strings.Replace(newMetricName, "totalCapacity", "total", 1)
+			// mem.active is not given as a percentage, but we will transform it later.
+			newMetricName = strings.Replace(newMetricName, "active", "used_perc", 1)
 		}
 	case "disk", "virtualDisk", "datastore":
 		if newMetricName == "read" || newMetricName == "write" {
@@ -628,14 +633,15 @@ func renameMetrics(currentContext internal.GatherContext, metricName string) (ne
 	return newMeasurement, newMetricName
 }
 
-func transformMetrics(currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {
+func (vSphere *vSphere) transformMetrics(currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {
 	_ = originalFields
 
 	// map is: measurement -> field -> factor
 	factors := map[string]map[string]float64{
 		// VM metrics
 		"vsphere_vm_mem": {
-			"swapped_average": 1000, // KB to B
+			"active_average":  math.NaN(), // Special case
+			"swapped_average": 1000,       // KB to B
 		},
 		"vsphere_vm_disk": {
 			"read_average":  1000, // KB/s to B/s
@@ -676,9 +682,38 @@ func transformMetrics(currentContext internal.GatherContext, fields map[string]f
 
 	for field, factor := range factors[currentContext.Measurement] {
 		if value, ok := fields[field]; ok {
-			fields[field] = value * factor
+			if math.IsNaN(factor) {
+				// Special transformation should be applied
+				newValue, keep := vSphere.transformFieldValue(currentContext, field, value)
+				if keep {
+					fields[field] = newValue
+				} else {
+					delete(fields, field)
+				}
+			} else {
+				fields[field] = value * factor
+			}
 		}
 	}
 
 	return fields
+}
+
+func (vSphere *vSphere) transformFieldValue(currentContext internal.GatherContext, field string, value float64) (float64, bool) {
+	if currentContext.Measurement == "vsphere_vm_mem" && field == "active_average" {
+		// The mem_used_perc value is currently in KB; convert it to a percentage.
+		if moid, ok := currentContext.Tags[types.LabelMetaVSphereMOID]; ok {
+			vmProps, ok := vSphere.devicePropsCache.vmCache.get(moid, true)
+			if ok && vmProps.Config != nil {
+				activeMemMB := value / 1000
+				memUsedPerc := (activeMemMB * 100) / float64(vmProps.Config.Hardware.MemoryMB)
+
+				return memUsedPerc, true
+			}
+		}
+	}
+
+	logger.Printf("Did not apply transformation to %s_%s %v (%f)", currentContext.Measurement, field, currentContext.Tags, value)
+
+	return 0, false
 }
