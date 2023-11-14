@@ -28,7 +28,6 @@ import (
 	"net/url"
 	"reflect"
 	"sort"
-	"strings"
 	"sync"
 	"time"
 
@@ -155,15 +154,20 @@ func (m *Manager) Devices(ctx context.Context, maxAge time.Duration) []bleemeoTy
 	go func() { wg.Wait(); close(deviceChan) }()
 
 	var devices []bleemeoTypes.VSphereDevice //nolint:prealloc
-	var moids []string                       //nolint:prealloc,wsl // TODO: remove
 
 	for device := range deviceChan {
 		devices = append(devices, device)
-		moids = append(moids, device.MOID()) // TODO: remove
 	}
 
-	logger.Printf("Found devices: %s", strings.Join(moids, ", ")) // TODO: remove
+	sort.Slice(devices, func(i, j int) bool {
+		// Sort by source, then by MOID
+		if devices[i].Source() == devices[j].Source() {
+			return devices[i].MOID() < devices[j].MOID()
+		}
 
+		return devices[i].Source() < devices[j].Source()
+	})
+	// The device list should be sorted to be correctly compared.
 	if !reflect.DeepEqual(devices, m.lastDevices) {
 		m.lastChange = time.Now()
 	}
@@ -171,7 +175,7 @@ func (m *Manager) Devices(ctx context.Context, maxAge time.Duration) []bleemeoTy
 	m.lastDevices = devices
 	m.lastDevicesUpdate = time.Now()
 
-	logger.Printf("vSphere devices discovery done in %s", time.Since(startTime)) // TODO: V(2)
+	logger.V(2).Printf("vSphere devices discovery done in %s", time.Since(startTime))
 
 	return devices
 }

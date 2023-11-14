@@ -238,6 +238,7 @@ func retrieveProps[ref commonObject, props any](ctx context.Context, client *vim
 }
 
 type (
+	// Lightweight version of mo.ClusterComputeResource.
 	clusterLightProps struct {
 		ComputeResource clusterLightComputeResource
 	}
@@ -260,8 +261,7 @@ type (
 		NumCpuCores int16 //nolint: revive,stylecheck
 	}
 
-	// - - - .
-
+	// Lightweight version of mo.Datastore.
 	datastoreLightProps struct {
 		ManagedEntity datastoreLightManagedEntity
 		Info          types.BaseDatastoreInfo
@@ -271,8 +271,7 @@ type (
 		Name string
 	}
 
-	// - - - .
-
+	// Lightweight version of mo.HostSystem.
 	hostLightProps struct {
 		ManagedEntity hostLightManagedEntity
 		Runtime       hostLightRuntime
@@ -352,8 +351,7 @@ type (
 		Name string
 	}
 
-	// - - - .
-
+	// Lightweight version of mo.VirtualMachine.
 	vmLightProps struct {
 		Config       *vmLightConfig
 		ResourcePool *types.ManagedObjectReference

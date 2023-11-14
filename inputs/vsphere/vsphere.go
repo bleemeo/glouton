@@ -135,7 +135,7 @@ func (vSphere *vSphere) devices(ctx context.Context, deviceChan chan<- bleemeoTy
 	finder, client, err := newDeviceFinder(findCtx, vSphere.opts)
 	if err != nil {
 		vSphere.setErr(err)
-		logger.V(1).Printf("Can't create vSphere client for %q: %v", vSphere.host, err) // TODO: V(2) ?
+		logger.V(1).Printf("Can't create vSphere client for %q: %v", vSphere.host, err)
 
 		return
 	}
@@ -683,7 +683,7 @@ func (vSphere *vSphere) transformMetrics(currentContext internal.GatherContext, 
 	for field, factor := range factors[currentContext.Measurement] {
 		if value, ok := fields[field]; ok {
 			if math.IsNaN(factor) {
-				// Special transformation should be applied
+				// NaN indicates that a special transformation must be applied.
 				newValue, keep := vSphere.transformFieldValue(currentContext, field, value)
 				if keep {
 					fields[field] = newValue
@@ -712,8 +712,6 @@ func (vSphere *vSphere) transformFieldValue(currentContext internal.GatherContex
 			}
 		}
 	}
-
-	logger.Printf("Did not apply transformation to %s_%s %v (%f)", currentContext.Measurement, field, currentContext.Tags, value)
 
 	return 0, false
 }

@@ -33,6 +33,7 @@ import (
 const (
 	tooManyConsecutiveError       = 3
 	vSphereAgentsPurgeMinInterval = 2 * time.Minute
+	vSphereCachePrefix            = "bleemeo:vsphere:"
 )
 
 func (s *Synchronizer) syncVSphere(ctx context.Context, fullSync bool, onlyEssential bool) (updateThresholds bool, err error) {
@@ -70,7 +71,7 @@ func deviceAssoKey(device types.VSphereDevice) string {
 func (s *Synchronizer) FindVSphereAgent(ctx context.Context, device types.VSphereDevice, agentTypeID string, agentsByID map[string]types.Agent) (types.Agent, error) {
 	var association vSphereAssociation
 
-	err := s.option.State.Get("bleemeo:vsphere:"+deviceAssoKey(device), &association)
+	err := s.option.State.Get(vSphereCachePrefix+deviceAssoKey(device), &association)
 	if err != nil {
 		return types.Agent{}, err
 	}
@@ -89,7 +90,7 @@ func (s *Synchronizer) FindVSphereAgent(ctx context.Context, device types.VSpher
 	associatedID := make(map[string]bool, len(devices))
 
 	for _, dev := range devices {
-		err := s.option.State.Get("bleemeo:vsphere:"+deviceAssoKey(dev), &association)
+		err := s.option.State.Get(vSphereCachePrefix+deviceAssoKey(dev), &association)
 		if err != nil {
 			return types.Agent{}, err
 		}
@@ -183,7 +184,7 @@ func (s *Synchronizer) VSphereRegisterAndUpdate(localDevices []types.VSphereDevi
 		newAgents = append(newAgents, registeredAgent)
 		seenDeviceAgents[registeredAgent.ID] = agentTypeID
 
-		err = s.option.State.Set("bleemeo:vsphere:"+deviceAssoKey(device), vSphereAssociation{
+		err = s.option.State.Set(vSphereCachePrefix+deviceAssoKey(device), vSphereAssociation{
 			MOID:   device.MOID(),
 			Source: device.Source(),
 			ID:     registeredAgent.ID,
@@ -263,7 +264,7 @@ func (s *Synchronizer) GetVSphereAgentType(kind vsphere.ResourceKind) (agentType
 }
 
 func (s *Synchronizer) purgeVSphereAgents(remoteAgents map[string]types.Agent, seenDeviceAgents map[string]string, vSphereAgentTypes map[string]bool) error {
-	associations, err := s.option.State.GetByPrefix("bleemeo:vsphere:", vSphereAssociation{})
+	associations, err := s.option.State.GetByPrefix(vSphereCachePrefix, vSphereAssociation{})
 	if err != nil {
 		return err
 	}
@@ -338,7 +339,5 @@ func (s *Synchronizer) removeAgentsFromCache(agentsToRemove map[string]bool) {
 		finalAgents = append(finalAgents, agent)
 	}
 
-	finalAgents = slices.Clip(finalAgents)
-
-	s.option.Cache.SetAgentList(finalAgents)
+	s.option.Cache.SetAgentList(slices.Clip(finalAgents))
 }

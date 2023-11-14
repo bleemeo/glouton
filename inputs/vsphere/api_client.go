@@ -270,7 +270,7 @@ func getVMLabelsMetadata(devices object.VirtualDeviceList) (map[string]string, m
 			case *types.VirtualNVMEController:
 				disks[fmt.Sprintf("nvme%d:%d", controller.BusNumber, *dev.UnitNumber)] = devices.Name(dev)
 			default:
-				logger.Printf("Unknown disk controller: %T", controller) // TODO: remove
+				logger.V(2).Printf("Unknown disk controller: %T", controller)
 			}
 		case types.BaseVirtualEthernetCard: // VirtualVmxnet, VirtualE1000, ...
 			ethernetCard := dev.GetVirtualEthernetCard()
