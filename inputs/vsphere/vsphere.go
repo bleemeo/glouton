@@ -574,6 +574,12 @@ func (vSphere *vSphere) renameGlobal(gatherContext internal.GatherContext) (resu
 		tags["item"] = value
 	}
 
+	if value, ok := tags["interface"]; ok {
+		delete(tags, "interface")
+
+		tags["item"] = value
+	}
+
 	gatherContext.Tags = tags
 
 	return gatherContext, false
