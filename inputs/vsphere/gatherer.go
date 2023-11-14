@@ -133,7 +133,7 @@ func (gatherer *vSphereGatherer) collectAdditionalMetrics(ctx context.Context, a
 		return nil
 	}
 
-	h, err := hierarchyFrom(ctx, clusters, hosts, vms)
+	h, err := hierarchyFrom(ctx, clusters, hosts, vms, gatherer.devicePropsCache.vmCache)
 	if err != nil {
 		return fmt.Errorf("can't describe hierarchy: %w", err)
 	}
@@ -155,12 +155,12 @@ func (gatherer *vSphereGatherer) collectAdditionalMetrics(ctx context.Context, a
 	// For each host, we have a list of vm states (running/stopped)
 	vmStatesPerHost := make(map[string][]bool, len(hosts))
 
-	err = additionalVMMetrics(ctx, client, vms, gatherer.devicePropsCache.vmCache, acc, h, vmStatesPerHost, objectNames(hosts))
+	err = additionalVMMetrics(ctx, client, vms, gatherer.devicePropsCache.vmCache, acc, h, vmStatesPerHost)
 	if err != nil {
 		return err
 	}
 
-	err = additionalHostMetrics(ctx, client, hosts, gatherer.devicePropsCache.hostCache, acc, h, vmStatesPerHost, objectNames(clusters))
+	err = additionalHostMetrics(ctx, client, hosts, acc, h, vmStatesPerHost)
 	if err != nil {
 		return err
 	}

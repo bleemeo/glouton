@@ -30,7 +30,7 @@ func TestGatheringESXI(t *testing.T) {
 	mfsPerVSphere := make(map[string][]*io_prometheus_client.MetricFamily, len(manager.vSpheres))
 
 	for host, vSphere := range manager.vSpheres {
-		mfs, err := vSphere.gatherer.GatherWithState(ctx, registry.GatherState{T0: time.Now(), FromScrapeLoop: true}) // TODO
+		mfs, err := vSphere.gatherer.GatherWithState(ctx, registry.GatherState{T0: time.Now(), FromScrapeLoop: true})
 		if err != nil {
 			t.Fatalf("Got an error while gathering vSphere %q: %v", host, err)
 		}
@@ -48,6 +48,7 @@ func TestGatheringESXI(t *testing.T) {
 					Label: []*io_prometheus_client.LabelPair{
 						{Name: ptr("__meta_vsphere"), Value: ptr("127.0.0.1:xxxxx")},
 						{Name: ptr("__meta_vsphere_moid"), Value: ptr("10")},
+						{Name: ptr("clustername"), Value: ptr("esxi.test")},
 						{Name: ptr("dcname"), Value: ptr("ha-datacenter")},
 						{Name: ptr("esxhostname"), Value: ptr("esxi.test")},
 						{Name: ptr("item"), Value: ptr("/")},
@@ -59,6 +60,7 @@ func TestGatheringESXI(t *testing.T) {
 					Label: []*io_prometheus_client.LabelPair{
 						{Name: ptr("__meta_vsphere"), Value: ptr("127.0.0.1:xxxxx")},
 						{Name: ptr("__meta_vsphere_moid"), Value: ptr("10")},
+						{Name: ptr("clustername"), Value: ptr("esxi.test")},
 						{Name: ptr("dcname"), Value: ptr("ha-datacenter")},
 						{Name: ptr("esxhostname"), Value: ptr("esxi.test")},
 						{Name: ptr("item"), Value: ptr("/boot")},
@@ -77,6 +79,7 @@ func TestGatheringESXI(t *testing.T) {
 					Label: []*io_prometheus_client.LabelPair{
 						{Name: ptr("__meta_vsphere"), Value: ptr("127.0.0.1:xxxxx")},
 						{Name: ptr("__meta_vsphere_moid"), Value: ptr("ha-host")},
+						{Name: ptr("clustername"), Value: ptr("esxi.test")},
 						{Name: ptr("dcname"), Value: ptr("ha-datacenter")},
 						{Name: ptr("esxhostname"), Value: ptr("esxi.test")},
 					},
@@ -93,6 +96,7 @@ func TestGatheringESXI(t *testing.T) {
 					Label: []*io_prometheus_client.LabelPair{
 						{Name: ptr("__meta_vsphere"), Value: ptr("127.0.0.1:xxxxx")},
 						{Name: ptr("__meta_vsphere_moid"), Value: ptr("ha-host")},
+						{Name: ptr("clustername"), Value: ptr("esxi.test")},
 						{Name: ptr("dcname"), Value: ptr("ha-datacenter")},
 						{Name: ptr("esxhostname"), Value: ptr("esxi.test")},
 					},

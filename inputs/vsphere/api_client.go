@@ -366,7 +366,7 @@ func additionalClusterMetrics(ctx context.Context, client *vim25.Client, cluster
 
 		tags := map[string]string{
 			"clustername": cluster.Name(),
-			"dcname":      h.parentDCName(cluster),
+			"dcname":      h.ParentDCName(cluster),
 			"moid":        cluster.Reference().Value,
 		}
 
@@ -376,13 +376,8 @@ func additionalClusterMetrics(ctx context.Context, client *vim25.Client, cluster
 	return nil
 }
 
-func additionalHostMetrics(ctx context.Context, client *vim25.Client, hosts []*object.HostSystem, cache *propsCache[hostLightProps], acc telegraf.Accumulator, h *hierarchy, vmStatesPerHost map[string][]bool, clusterNames map[string]string) error {
-	hostProps, err := retrieveProps(ctx, client, hosts, relevantHostProperties, cache)
-	if err != nil {
-		return err
-	}
-
-	for host, props := range hostProps {
+func additionalHostMetrics(_ context.Context, _ *vim25.Client, hosts []*object.HostSystem, acc telegraf.Accumulator, h *hierarchy, vmStatesPerHost map[string][]bool) error {
+	for _, host := range hosts {
 		moid := host.Reference().Value
 		if vmStates, ok := vmStatesPerHost[moid]; ok {
 			var running, stopped int
@@ -401,8 +396,8 @@ func additionalHostMetrics(ctx context.Context, client *vim25.Client, hosts []*o
 			}
 
 			tags := map[string]string{
-				"clustername": clusterNames[props.ManagedEntity.Parent.Value],
-				"dcname":      h.parentDCName(host),
+				"clustername": h.ParentClusterName(host),
+				"dcname":      h.ParentDCName(host),
 				"esxhostname": host.Name(),
 				"moid":        moid,
 			}
@@ -414,15 +409,13 @@ func additionalHostMetrics(ctx context.Context, client *vim25.Client, hosts []*o
 	return nil
 }
 
-func additionalVMMetrics(ctx context.Context, client *vim25.Client, vms []*object.VirtualMachine, cache *propsCache[vmLightProps], acc telegraf.Accumulator, h *hierarchy, vmStatePerHost map[string][]bool, hostNames map[string]string) error {
+func additionalVMMetrics(ctx context.Context, client *vim25.Client, vms []*object.VirtualMachine, cache *propsCache[vmLightProps], acc telegraf.Accumulator, h *hierarchy, vmStatePerHost map[string][]bool) error {
 	vmProps, err := retrieveProps(ctx, client, vms, relevantVMProperties, cache)
 	if err != nil {
 		return err
 	}
 
 	for vm, props := range vmProps {
-		var hostname string
-
 		if props.Runtime.Host != nil {
 			host := props.Runtime.Host.Value
 			vmState := props.Runtime.PowerState == types.VirtualMachinePowerStatePoweredOn // true for running, false for stopped
@@ -432,8 +425,6 @@ func additionalVMMetrics(ctx context.Context, client *vim25.Client, vms []*objec
 			} else {
 				vmStatePerHost[host] = []bool{vmState}
 			}
-
-			hostname = hostNames[host]
 		}
 
 		if props.Guest != nil {
@@ -441,9 +432,9 @@ func additionalVMMetrics(ctx context.Context, client *vim25.Client, vms []*objec
 				usage := 100 - (float64(disk.FreeSpace)*100)/float64(disk.Capacity) // Percentage of disk used
 
 				tags := map[string]string{
-					"clustername": "", // TODO
-					"dcname":      h.parentDCName(vm),
-					"esxhostname": hostname,
+					"clustername": h.ParentClusterName(vm),
+					"dcname":      h.ParentDCName(vm),
+					"esxhostname": h.ParentHostName(vm),
 					"item":        disk.DiskPath,
 					"moid":        vm.Reference().Value,
 					"vmname":      vm.Name(),
@@ -462,17 +453,21 @@ type hierarchy struct {
 	parentPerChildMOID map[string]types.ManagedObjectReference
 }
 
-func hierarchyFrom(ctx context.Context, clusters []*object.ClusterComputeResource, hosts []*object.HostSystem, vms []*object.VirtualMachine) (*hierarchy, error) {
+func hierarchyFrom(ctx context.Context, clusters []*object.ClusterComputeResource, hosts []*object.HostSystem, vms []*object.VirtualMachine, vmPropsCache *propsCache[vmLightProps]) (*hierarchy, error) {
 	h := &hierarchy{
 		deviceNamePerMOID:  make(map[string]string),
 		parentPerChildMOID: make(map[string]types.ManagedObjectReference),
 	}
+
+	var vmClient *vim25.Client
 
 	for _, vm := range vms {
 		err := h.recurseDescribe(ctx, vm.Client(), vm.Reference())
 		if err != nil {
 			return nil, err
 		}
+
+		vmClient = vm.Client()
 	}
 
 	for _, host := range hosts {
@@ -491,7 +486,24 @@ func hierarchyFrom(ctx context.Context, clusters []*object.ClusterComputeResourc
 
 	h.filterParents()
 
+	if vmClient != nil {
+		vmProps, err := retrieveProps(ctx, vmClient, vms, relevantVMProperties, vmPropsCache)
+		if err != nil {
+			return nil, err
+		}
+
+		h.fixVMParents(vmProps)
+	}
+
 	return h, nil
+}
+
+func (h *hierarchy) fixVMParents(vmProps map[refName]vmLightProps) {
+	for vmRef, props := range vmProps {
+		if host := props.Runtime.Host; host != nil {
+			h.parentPerChildMOID[vmRef.Reference().Value] = *host
+		}
+	}
 }
 
 func (h *hierarchy) recurseDescribe(ctx context.Context, client *vim25.Client, objRef types.ManagedObjectReference) error {
@@ -542,14 +554,26 @@ func (h *hierarchy) filterParents() {
 	}
 }
 
-func (h *hierarchy) parentDCName(child mo.Reference) string {
+func (h *hierarchy) findFirstParentOfType(child mo.Reference, typ string) string {
 	if parent, ok := h.parentPerChildMOID[child.Reference().Value]; ok {
-		if parent.Type == "Datacenter" {
+		if parent.Type == typ {
 			return h.deviceNamePerMOID[parent.Value]
 		}
 
-		return h.parentDCName(parent)
+		return h.findFirstParentOfType(parent, typ)
 	}
 
 	return ""
+}
+
+func (h *hierarchy) ParentHostName(child mo.Reference) string {
+	return h.findFirstParentOfType(child, "HostSystem")
+}
+
+func (h *hierarchy) ParentClusterName(child mo.Reference) string {
+	return h.findFirstParentOfType(child, "ComputeResource")
+}
+
+func (h *hierarchy) ParentDCName(child mo.Reference) string {
+	return h.findFirstParentOfType(child, "Datacenter")
 }
