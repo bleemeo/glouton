@@ -49,8 +49,6 @@ func (s *Synchronizer) syncVSphere(ctx context.Context, fullSync bool, onlyEssen
 		return false, nil
 	}
 
-	logger.Printf("Synchronizing vSphere") // TODO: remove
-
 	return false, s.VSphereRegisterAndUpdate(s.option.VSphereDevices(ctx, time.Hour))
 }
 
@@ -144,7 +142,7 @@ func (s *Synchronizer) VSphereRegisterAndUpdate(localDevices []types.VSphereDevi
 		}
 
 		if a, err := s.FindVSphereAgent(s.ctx, device, agentTypeID, remoteAgentList); err != nil && !errors.Is(err, errNotExist) {
-			logger.V(0).Printf("Skip registration of vSphere agent: %v", err) // TODO: V(2)
+			logger.V(2).Printf("Skip registration of vSphere agent: %v", err)
 
 			continue
 		} else if err == nil {
@@ -190,7 +188,7 @@ func (s *Synchronizer) VSphereRegisterAndUpdate(localDevices []types.VSphereDevi
 			ID:     registeredAgent.ID,
 		})
 		if err != nil {
-			logger.V(0).Printf("Failed to update state: %v", err) // TODO: V(2)
+			logger.V(2).Printf("Failed to update state: %v", err)
 		}
 	}
 
@@ -226,7 +224,7 @@ func (s *Synchronizer) remoteRegisterVSphereDevice(params map[string]string, pay
 		return result, err
 	}
 
-	logger.V(0).Printf("vSphere agent %v registered with UUID %s", payload.DisplayName, result.ID) // TODO: V(2)
+	logger.V(2).Printf("vSphere agent %v registered with UUID %s", payload.DisplayName, result.ID)
 
 	return result, nil
 }
@@ -285,8 +283,6 @@ func (s *Synchronizer) purgeVSphereAgents(remoteAgents map[string]types.Agent, s
 	failingEndpoints := s.option.VSphereEndpointsInError()
 	agentsToRemoveFromCache := make(map[string]bool)
 
-	logger.Printf("Failing endpoints: %v", failingEndpoints) // TODO: remove
-
 	defer s.removeAgentsFromCache(agentsToRemoveFromCache)
 
 	for id, agent := range remoteAgents {
@@ -304,14 +300,11 @@ func (s *Synchronizer) purgeVSphereAgents(remoteAgents map[string]types.Agent, s
 				continue
 			}
 
-			logger.Printf("Endpoint %q is not failing; removing %q", asso.Source, asso.MOID) // TODO: remove
-
 			err = s.option.State.Delete(asso.key)
 			if err != nil {
 				logger.V(1).Printf("Failed to remove vSphere association from cache: %v", err)
 			}
-		} else {
-			logger.Printf("Device %q (%s) has no association ...", agent.DisplayName, id) // TODO: remove
+		} else { //nolint: gocritic
 			// When endpoints are failing, we can't tell which unassociated agents belong to them.
 			// So, we wait to be able to list the devices of all endpoints
 			// to be sure we know which devices have been deleted and which have not.
@@ -321,8 +314,6 @@ func (s *Synchronizer) purgeVSphereAgents(remoteAgents map[string]types.Agent, s
 		}
 
 		agentsToRemoveFromCache[id] = true
-
-		logger.Printf("Deleting agent %q (%s), which is not present locally", agent.DisplayName, id) // TODO: remove
 
 		_, err := s.client.Do(s.ctx, "DELETE", fmt.Sprintf("v1/agent/%s/", id), nil, nil, nil)
 		if err != nil && !client.IsNotFound(err) {

@@ -197,7 +197,7 @@ func (vSphere *vSphere) devices(ctx context.Context, deviceChan chan<- bleemeoTy
 func (vSphere *vSphere) describeClusters(ctx context.Context, client *vim25.Client, rawClusters []*object.ClusterComputeResource) ([]bleemeoTypes.VSphereDevice, error) {
 	clusterProps, err := retrieveProps(ctx, client, rawClusters, relevantClusterProperties, vSphere.devicePropsCache.clusterCache)
 	if err != nil {
-		logger.Printf("Failed to retrieve cluster props of %s: %v", vSphere.host, err)
+		logger.V(1).Printf("Failed to retrieve cluster props of %s: %v", vSphere.host, err)
 
 		return nil, err
 	}
@@ -214,7 +214,7 @@ func (vSphere *vSphere) describeClusters(ctx context.Context, client *vim25.Clie
 func (vSphere *vSphere) describeHosts(ctx context.Context, client *vim25.Client, rawHosts []*object.HostSystem) ([]bleemeoTypes.VSphereDevice, error) {
 	hostProps, err := retrieveProps(ctx, client, rawHosts, relevantHostProperties, vSphere.devicePropsCache.hostCache)
 	if err != nil {
-		logger.Printf("Failed to retrieve host props of %s: %v", vSphere.host, err)
+		logger.V(1).Printf("Failed to retrieve host props of %s: %v", vSphere.host, err)
 
 		return nil, err
 	}
@@ -231,7 +231,7 @@ func (vSphere *vSphere) describeHosts(ctx context.Context, client *vim25.Client,
 func (vSphere *vSphere) describeVMs(ctx context.Context, client *vim25.Client, rawVMs []*object.VirtualMachine) ([]bleemeoTypes.VSphereDevice, labelsMetadata, error) {
 	vmProps, err := retrieveProps(ctx, client, rawVMs, relevantVMProperties, vSphere.devicePropsCache.vmCache)
 	if err != nil {
-		logger.Printf("Failed to retrieve VM props of %s: %v", vSphere.host, err)
+		logger.V(1).Printf("Failed to retrieve VM props of %s: %v", vSphere.host, err)
 
 		return nil, labelsMetadata{}, err
 	}

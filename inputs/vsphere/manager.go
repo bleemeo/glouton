@@ -109,14 +109,14 @@ func (m *Manager) RegisterGatherers(ctx context.Context, vSphereCfgs []config.VS
 
 		gatherer, opt, err := vSphere.makeGatherer(ctx)
 		if err != nil {
-			logger.Printf("Failed to create gatherer for %s: %v", vSphere.String(), err)
+			logger.V(1).Printf("Failed to create gatherer for %s: %v", vSphere.String(), err)
 
 			continue
 		}
 
 		_, err = registerGatherer(opt, gatherer)
 		if err != nil {
-			logger.Printf("Failed to register gatherer for %s: %v", vSphere.String(), err)
+			logger.V(1).Printf("Failed to register gatherer for %s: %v", vSphere.String(), err)
 
 			continue
 		}

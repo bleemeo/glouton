@@ -501,8 +501,6 @@ func (c *Connector) RelabelHook(ctx context.Context, labels map[string]string) (
 
 		device := c.option.FindVSphereDevice(ctx, vSphere, moid)
 		if device == nil {
-			logger.Printf("Did not find vSphere device %q / %q", vSphere, moid) // TODO: remove
-
 			return labels, true
 		}
 

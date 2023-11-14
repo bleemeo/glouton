@@ -297,23 +297,12 @@ type commonObject interface {
 	Name() string
 }
 
-// objectNames returns a map moid -> name of the given objects.
-func objectNames[T commonObject](objects []T) map[string]string {
-	names := make(map[string]string, len(objects))
-
-	for _, obj := range objects {
-		names[obj.Reference().Value] = obj.Name()
-	}
-
-	return names
-}
-
 var isolateLUN = regexp.MustCompile(`.*/([^/]+)/?$`)
 
 func getDatastorePerLUN(ctx context.Context, client *vim25.Client, datastores []*object.Datastore, cache *propsCache[datastoreLightProps]) (map[string]string, error) {
 	dsProps, err := retrieveProps(ctx, client, datastores, relevantDatastoreProperties, cache)
 	if err != nil {
-		logger.Printf("Failed to retrieve datastore props of %s: %v", client.URL().Host, err)
+		logger.V(1).Printf("Failed to retrieve datastore props of %s: %v", client.URL().Host, err)
 
 		return map[string]string{}, err
 	}
