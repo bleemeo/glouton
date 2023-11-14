@@ -517,7 +517,7 @@ func (vSphere *vSphere) modifyLabels(labelPairs []*dto.LabelPair) (shouldBeKept 
 
 			if datastore, ok := vSphere.labelsMetadata.datastorePerLUN[lunLabel.GetValue()]; ok {
 				labels["item"] = &dto.LabelPair{Name: ptr("item"), Value: &datastore}
-				delete(labels, "lun")
+				//delete(labels, "lun") // TODO: uncomment
 
 				break
 			}
