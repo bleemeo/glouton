@@ -510,6 +510,8 @@ func (vSphere *vSphere) modifyLabels(labelPairs []*dto.LabelPair) (shouldBeKept 
 			shouldBeKept = false
 		}
 	case isHost, isCluster:
+		delete(labels, "disk")
+
 		if lunLabel, ok := labels["lun"]; ok {
 			starLabelReplacer(lunLabel, vSphere.labelsMetadata.datastorePerLUN) // TODO: remove
 
