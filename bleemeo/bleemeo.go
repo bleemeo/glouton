@@ -474,7 +474,7 @@ func (c *Connector) RelabelHook(ctx context.Context, labels map[string]string) (
 
 		agent, err := c.sync.FindSNMPAgent(ctx, target, snmpTypeID, c.cache.AgentsByUUID())
 		if err != nil {
-			logger.V(2).Printf("FindSNMPAgent failed: %w", err)
+			logger.V(2).Printf("FindSNMPAgent failed: %v", err)
 
 			return labels, true
 		}
@@ -511,7 +511,7 @@ func (c *Connector) RelabelHook(ctx context.Context, labels map[string]string) (
 
 		agent, err := c.sync.FindVSphereAgent(ctx, device, vSphereAgentTypeID, c.cache.AgentsByUUID())
 		if err != nil {
-			logger.V(2).Printf("FindVSphereAgent failed: %w", err)
+			logger.V(2).Printf("FindVSphereAgent failed: %v", err)
 
 			return labels, true
 		}

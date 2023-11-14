@@ -1396,7 +1396,7 @@ func (a *agent) registerInputs(ctx context.Context) {
 			gatherer,
 		)
 		if err != nil {
-			logger.V(1).Printf("unable to add IPMI input: %w", err)
+			logger.V(1).Printf("unable to add IPMI input: %v", err)
 		}
 	}
 
