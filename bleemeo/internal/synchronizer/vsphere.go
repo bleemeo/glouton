@@ -312,6 +312,12 @@ func (s *Synchronizer) purgeVSphereAgents(remoteAgents map[string]types.Agent, s
 			}
 		} else {
 			logger.Printf("Device %q (%s) has no association ...", agent.DisplayName, id) // TODO: remove
+			// When endpoints are failing, we can't tell which unassociated agents belong to them.
+			// So, we wait to be able to list the devices of all endpoints
+			// to be sure we know which devices have been deleted and which have not.
+			if len(failingEndpoints) != 0 {
+				continue
+			}
 		}
 
 		agentsToRemoveFromCache[id] = true
