@@ -517,7 +517,7 @@ func (vSphere *vSphere) modifyLabels(labelPairs []*dto.LabelPair) (shouldBeKept 
 
 			if datastore, ok := vSphere.labelsMetadata.datastorePerLUN[lunLabel.GetValue()]; ok {
 				labels["item"] = &dto.LabelPair{Name: ptr("item"), Value: &datastore}
-				//delete(labels, "lun") // TODO: uncomment
+				delete(labels, "lun")
 
 				break
 			}
@@ -574,6 +574,10 @@ func (vSphere *vSphere) renameGlobal(gatherContext internal.GatherContext) (resu
 		delete(tags, "dsname")
 
 		tags["item"] = value
+
+		if gatherContext.Measurement == "vsphere_datastore_disk" {
+			logger.Printf("dsname of %s is %q (%v)", tags[types.LabelMetaVSphereMOID], value, gatherContext.OriginalFields)
+		}
 	}
 
 	if value, ok := tags["interface"]; ok {
