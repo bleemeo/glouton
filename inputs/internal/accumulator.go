@@ -370,6 +370,15 @@ func (a *Accumulator) wrapAdd(metricType string) accumulatorFunc {
 // name, fields, and tags (and timestamp). If a timestamp is not provided,
 // then the accumulator sets it to "now".
 func (a *Accumulator) AddFields(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+	if measurement == "vsphere_datastore_disk" {
+		ts := "no"
+		if len(t) == 1 {
+			ts = t[0].Format("15:04:05.000")
+		}
+
+		logger.Printf("[TS=%s] AddFields on datastore disk: %s / %v / %v", ts, measurement, fields, tags)
+	}
+
 	a.processMetrics(a.wrapAdd("fields"), measurement, fields, tags, t...)
 }
 
