@@ -327,10 +327,6 @@ func TestPropsCaches(t *testing.T) { //nolint:maintidx
 func compareLightProps[propsType any](t *testing.T, expected map[string]propsType, cacheMap map[string]cachedProp[propsType]) {
 	t.Helper()
 
-	if expected == nil {
-		t.Fatalf("Expected map not found for kind %T", *(new(propsType)))
-	}
-
 	for dev := range cacheMap {
 		if _, found := expected[dev]; !found {
 			t.Errorf("Found extra device in %T map: %q", *(new(propsType)), dev)

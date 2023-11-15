@@ -14,59 +14,10 @@ import (
 	"github.com/vmware/govmomi/vim25/types"
 )
 
-const maxPropertiesBulkSize = 100
-
 const (
+	maxPropertiesBulkSize        = 100
 	maxCachedPropertiesValidity  = 2 * time.Minute
 	propertiesCachePurgeInterval = 10 * time.Minute
-)
-
-//nolint:gochecknoglobals
-var (
-	relevantClusterProperties = []string{
-		"overallStatus",
-		"datastore",
-		"summary",
-	}
-	relevantDatastoreProperties = []string{
-		"name",
-		"info",
-	}
-	relevantHostProperties = []string{
-		"name",
-		"parent",
-		"runtime.powerState",
-		"summary.hardware.vendor",
-		"summary.hardware.model",
-		"summary.hardware.cpuModel",
-		"summary.config.name",
-		"summary.config.vmotionEnabled",
-		"hardware.cpuInfo.numCpuCores",
-		"hardware.memorySize",
-		"config.product.version",
-		"config.product.osType",
-		"config.network.vnic",
-		"config.network.dnsConfig.domainName",
-		"config.network.ipV6Enabled",
-		"config.dateTimeInfo.timeZone.name",
-	}
-	relevantVMProperties = []string{
-		"config.name",
-		"config.guestFullName",
-		"config.version",
-		"config.hardware.numCPU",
-		"config.hardware.memoryMB",
-		"config.hardware.device",
-		"config.datastoreUrl",
-		"resourcePool",
-		"runtime.host",
-		"runtime.powerState",
-		"guest.hostName",
-		"guest.ipAddress",
-		"guest.disk",
-		"summary.config.product.name",
-		"summary.config.product.vendor",
-	}
 )
 
 type refName struct {
@@ -82,6 +33,7 @@ func (r refName) Name() string {
 	return r.name
 }
 
+// propsCaches holds the caches of object properties from different types.
 type propsCaches struct {
 	clusterCache   *propsCache[clusterLightProps]
 	datastoreCache *propsCache[datastoreLightProps]
@@ -116,6 +68,9 @@ func (propsCache *propsCaches) purge() {
 	propsCache.lastPurge = time.Now()
 }
 
+// propsCache represents a cache that contains the properties
+// of objects of a given `propsType` type.
+// It supports concurrent access.
 type propsCache[propsType any] struct {
 	l sync.Mutex
 
@@ -169,6 +124,9 @@ type cachedProp[propsType any] struct {
 	value      propsType
 }
 
+// retrieveProps fetches the properties `ps` of the given objects and returns them.
+// If an object already has its properties in the given cache, they won't be fetched this time.
+// Otherwise, they will be fetched then stored in the cache for the next time.
 func retrieveProps[ref commonObject, props any](ctx context.Context, client *vim25.Client, objects []ref, ps []string, cache *propsCache[props]) (map[refName]props, error) {
 	if len(objects) == 0 {
 		// Calling property.Collector.Retrieve() with an empty list would cause an error
@@ -237,6 +195,59 @@ func retrieveProps[ref commonObject, props any](ctx context.Context, client *vim
 	return m, nil
 }
 
+//nolint:gochecknoglobals
+var (
+	relevantClusterProperties = []string{
+		"overallStatus",
+		"datastore",
+		"summary",
+	}
+	relevantDatastoreProperties = []string{
+		"name",
+		"info",
+	}
+	relevantHostProperties = []string{
+		"name",
+		"parent",
+		"runtime.powerState",
+		"summary.hardware.vendor",
+		"summary.hardware.model",
+		"summary.hardware.cpuModel",
+		"summary.config.name",
+		"summary.config.vmotionEnabled",
+		"hardware.cpuInfo.numCpuCores",
+		"hardware.memorySize",
+		"config.product.version",
+		"config.product.osType",
+		"config.network.vnic",
+		"config.network.dnsConfig.domainName",
+		"config.network.ipV6Enabled",
+		"config.dateTimeInfo.timeZone.name",
+	}
+	relevantVMProperties = []string{
+		"config.name",
+		"config.guestFullName",
+		"config.version",
+		"config.hardware.numCPU",
+		"config.hardware.memoryMB",
+		"config.hardware.device",
+		"config.datastoreUrl",
+		"resourcePool",
+		"runtime.host",
+		"runtime.powerState",
+		"guest.hostName",
+		"guest.ipAddress",
+		"guest.disk",
+		"summary.config.product.name",
+		"summary.config.product.vendor",
+	}
+)
+
+// The below types are reflecting some types defined in github.com/vmware/govmomi/vim25/mo,
+// but only with the (above) properties we're interested in.
+// This approach has two goals:
+// - reduce the size of the request/response to the vSphere API
+// - reduce the memory used by the cache to store the properties.
 type (
 	// Lightweight version of mo.ClusterComputeResource.
 	clusterLightProps struct {

@@ -61,6 +61,7 @@ func newDeviceFinder(ctx context.Context, vSphereCfg config.VSphere) (*find.Find
 	// Make future calls to the local datacenter
 	f.SetDatacenter(dc)
 
+	// We also return the vim25 client because we can't easily get it from the finder.
 	return f, c.Client, nil
 }
 
@@ -437,6 +438,10 @@ func additionalVMMetrics(ctx context.Context, client *vim25.Client, vms []*objec
 	return nil
 }
 
+// hierarchy represents the structure of a vSphere in a way that suits us.
+// It drops the folder levels to get a hierarchy with a shape like:
+// VM -> Host -> Cluster -> Datacenter
+// It also creates a map like device moid -> device name.
 type hierarchy struct {
 	deviceNamePerMOID  map[string]string
 	parentPerChildMOID map[string]types.ManagedObjectReference

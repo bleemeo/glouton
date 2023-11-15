@@ -591,60 +591,6 @@ func (vSphere *vSphere) renameGlobal(gatherContext internal.GatherContext) (resu
 	return gatherContext, false
 }
 
-func renameMetrics(currentContext internal.GatherContext, metricName string) (newMeasurement string, newMetricName string) {
-	newMeasurement = currentContext.Measurement
-	newMetricName = strings.TrimSuffix(metricName, "_average")
-	newMetricName = strings.TrimSuffix(newMetricName, "_latest")
-
-	// We remove the prefix "vsphere_(vm|host|datastore|cluster)_", except for "vsphere_vm_cpu latency"
-	if newMetricName != "latency" {
-		newMeasurement = strings.TrimPrefix(newMeasurement, "vsphere_")
-		newMeasurement = strings.TrimPrefix(newMeasurement, "vm_")
-	}
-
-	newMeasurement = strings.TrimPrefix(newMeasurement, "host_")
-	newMeasurement = strings.TrimPrefix(newMeasurement, "datastore_")
-	newMeasurement = strings.TrimPrefix(newMeasurement, "cluster_")
-
-	switch newMeasurement {
-	case "cpu", "vsphere_vm_cpu":
-		newMetricName = strings.Replace(newMetricName, "usage", "used", 1)
-		if newMetricName == "latency" {
-			newMetricName = "latency_perc"
-		}
-	case "mem":
-		switch newMetricName {
-		case "swapped", "swapused":
-			newMeasurement = "swap" //nolint:goconst
-			newMetricName = "used"
-		case "swapin":
-			newMeasurement = "swap"
-			newMetricName = "in"
-		case "swapout":
-			newMeasurement = "swap"
-			newMetricName = "out"
-		default:
-			newMetricName = strings.Replace(newMetricName, "usage", "used_perc", 1)
-			newMetricName = strings.Replace(newMetricName, "totalCapacity", "total", 1)
-			// mem.active is not given as a percentage, but we will transform it later.
-			newMetricName = strings.Replace(newMetricName, "active", "used_perc", 1)
-		}
-	case "disk", "virtualDisk", "datastore":
-		if newMetricName == "read" || newMetricName == "write" {
-			newMeasurement = "io"
-			newMetricName = strings.Replace(newMetricName, "read", "read_bytes", 1)
-			newMetricName = strings.Replace(newMetricName, "write", "write_bytes", 1)
-		} else if newMetricName == "capacity" {
-			newMetricName = "total"
-		}
-	case "net":
-		newMetricName = strings.Replace(newMetricName, "received", "bits_recv", 1)
-		newMetricName = strings.Replace(newMetricName, "transmitted", "bits_sent", 1)
-	}
-
-	return newMeasurement, newMetricName
-}
-
 func (vSphere *vSphere) transformMetrics(currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {
 	_ = originalFields
 
@@ -726,4 +672,58 @@ func (vSphere *vSphere) transformFieldValue(currentContext internal.GatherContex
 	}
 
 	return 0, false
+}
+
+func renameMetrics(currentContext internal.GatherContext, metricName string) (newMeasurement string, newMetricName string) {
+	newMeasurement = currentContext.Measurement
+	newMetricName = strings.TrimSuffix(metricName, "_average")
+	newMetricName = strings.TrimSuffix(newMetricName, "_latest")
+
+	// We remove the prefix "vsphere_(vm|host|datastore|cluster)_", except for "vsphere_vm_cpu latency"
+	if newMetricName != "latency" {
+		newMeasurement = strings.TrimPrefix(newMeasurement, "vsphere_")
+		newMeasurement = strings.TrimPrefix(newMeasurement, "vm_")
+	}
+
+	newMeasurement = strings.TrimPrefix(newMeasurement, "host_")
+	newMeasurement = strings.TrimPrefix(newMeasurement, "datastore_")
+	newMeasurement = strings.TrimPrefix(newMeasurement, "cluster_")
+
+	switch newMeasurement {
+	case "cpu", "vsphere_vm_cpu":
+		newMetricName = strings.Replace(newMetricName, "usage", "used", 1)
+		if newMetricName == "latency" {
+			newMetricName = "latency_perc"
+		}
+	case "mem":
+		switch newMetricName {
+		case "swapped", "swapused":
+			newMeasurement = "swap" //nolint:goconst
+			newMetricName = "used"
+		case "swapin":
+			newMeasurement = "swap"
+			newMetricName = "in"
+		case "swapout":
+			newMeasurement = "swap"
+			newMetricName = "out"
+		default:
+			newMetricName = strings.Replace(newMetricName, "usage", "used_perc", 1)
+			newMetricName = strings.Replace(newMetricName, "totalCapacity", "total", 1)
+			// mem.active is not given as a percentage, but we will transform it later.
+			newMetricName = strings.Replace(newMetricName, "active", "used_perc", 1)
+		}
+	case "disk", "virtualDisk", "datastore":
+		if newMetricName == "read" || newMetricName == "write" {
+			newMeasurement = "io"
+			newMetricName = strings.Replace(newMetricName, "read", "read_bytes", 1)
+			newMetricName = strings.Replace(newMetricName, "write", "write_bytes", 1)
+		} else if newMetricName == "capacity" {
+			newMetricName = "total"
+		}
+	case "net":
+		newMetricName = strings.Replace(newMetricName, "received", "bits_recv", 1)
+		newMetricName = strings.Replace(newMetricName, "transmitted", "bits_sent", 1)
+	}
+
+	return newMeasurement, newMetricName
 }

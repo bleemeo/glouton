@@ -125,6 +125,8 @@ func (m *Manager) RegisterGatherers(ctx context.Context, vSphereCfgs []config.VS
 	}
 }
 
+// Devices returns the list of all the vSphere devices that have been found
+// across all the vSphere endpoints of the Manager.
 func (m *Manager) Devices(ctx context.Context, maxAge time.Duration) []bleemeoTypes.VSphereDevice {
 	m.l.Lock()
 	defer m.l.Unlock()
@@ -186,7 +188,7 @@ func (m *Manager) Devices(ctx context.Context, maxAge time.Duration) []bleemeoTy
 // If no matching device is found, it returns nil.
 func (m *Manager) FindDevice(ctx context.Context, vSphereHost, moid string) bleemeoTypes.VSphereDevice {
 	// We specify a small max age here, because as metric gathering is done every minute,
-	// there's a good chance to discover new vSphere VMs from the metric gathering.
+	// there is a good chance to discover new vSphere devices from the metric gathering.
 	devices := m.Devices(ctx, time.Minute)
 
 	for _, dev := range devices {
@@ -300,7 +302,7 @@ func (m *Manager) DiagnosticVSphere(ctx context.Context, archive types.ArchiveWr
 		logger.V(1).Println("Failed to diagnostic vSphere associations:", err)
 	}
 
-	type device struct {
+	type diagnosticDevice struct {
 		Source                 string            `json:"source"`
 		Kind                   string            `json:"kind"`
 		MOID                   string            `json:"moid"`
@@ -310,7 +312,7 @@ func (m *Manager) DiagnosticVSphere(ctx context.Context, archive types.ArchiveWr
 		Facts                  map[string]string `json:"facts"`
 	}
 
-	finalDevices := make([]device, len(devices))
+	finalDevices := make([]diagnosticDevice, len(devices))
 
 	for i, dev := range devices {
 		var deviceError string
@@ -319,7 +321,7 @@ func (m *Manager) DiagnosticVSphere(ctx context.Context, archive types.ArchiveWr
 			deviceError = err.Error()
 		}
 
-		finalDevices[i] = device{
+		finalDevices[i] = diagnosticDevice{
 			Source:                 dev.Source(),
 			Kind:                   dev.Kind(),
 			MOID:                   dev.MOID(),
@@ -346,11 +348,16 @@ func (m *Manager) DiagnosticVSphere(ctx context.Context, archive types.ArchiveWr
 	for host, vSphere := range m.vSpheres {
 		status := "ok"
 
-		if vSphere.lastErrorMessage != "" {
+		vSphere.l.Lock()
+		switch {
+		case vSphere.lastErrorMessage != "":
 			status = vSphere.lastErrorMessage
-		} else if vSphere.gatherer.lastErr != nil {
+		case vSphere.gatherer == nil:
+			status = "gatherer hasn't been initialized yet"
+		case vSphere.gatherer.lastErr != nil:
 			status = vSphere.gatherer.lastErr.Error()
 		}
+		vSphere.l.Unlock()
 
 		endpointStatuses[host] = status
 	}
@@ -358,8 +365,8 @@ func (m *Manager) DiagnosticVSphere(ctx context.Context, archive types.ArchiveWr
 	m.l.Unlock()
 
 	diagnosticContent := struct {
-		Endpoints map[string]string `json:"endpoints"`
-		Devices   []device          `json:"devices"`
+		Endpoints map[string]string  `json:"endpoints"`
+		Devices   []diagnosticDevice `json:"devices"`
 	}{
 		Endpoints: endpointStatuses,
 		Devices:   finalDevices,
