@@ -13,6 +13,7 @@
     - ViewManager
     - EventManager
     - Folder-*
+    - PerformanceManager
     - PropertyCollector
     - SessionManager
     - Datacenter-*

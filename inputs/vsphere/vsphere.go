@@ -512,6 +512,14 @@ func (vSphere *vSphere) modifyLabels(labelPairs []*dto.LabelPair) (shouldBeKept 
 	case isHost, isCluster:
 		delete(labels, "disk")
 
+		if interfaceLabel, ok := labels["interface"]; ok {
+			if interfaceLabel.GetValue() == instanceTotal {
+				shouldBeKept = false
+
+				break
+			}
+		}
+
 		if lunLabel, ok := labels["lun"]; ok {
 			starLabelReplacer(lunLabel, vSphere.labelsMetadata.datastorePerLUN) // TODO: remove
 
@@ -564,6 +572,7 @@ func (vSphere *vSphere) renameGlobal(gatherContext internal.GatherContext) (resu
 	delete(tags, "cpu")
 	delete(tags, "guest")
 	delete(tags, "guesthostname")
+	delete(tags, "instance")
 	delete(tags, "moid")
 	delete(tags, "rpname")
 	delete(tags, "source")
@@ -576,14 +585,8 @@ func (vSphere *vSphere) renameGlobal(gatherContext internal.GatherContext) (resu
 		tags["item"] = value
 
 		if gatherContext.Measurement == "vsphere_datastore_disk" {
-			logger.Printf("dsname of %s is %q (%v)", tags[types.LabelMetaVSphereMOID], value, gatherContext.OriginalFields)
+			logger.Printf("dsname of %s is %q / %v / %v", tags[types.LabelMetaVSphereMOID], value, gatherContext.OriginalFields, tags)
 		}
-	}
-
-	if value, ok := tags["interface"]; ok {
-		delete(tags, "interface")
-
-		tags["item"] = value
 	}
 
 	gatherContext.Tags = tags
