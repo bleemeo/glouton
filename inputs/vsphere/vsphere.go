@@ -310,6 +310,8 @@ func (vSphere *vSphere) makeGatherer(ctx context.Context) (prometheus.Gatherer, 
 
 	vsphereInput.ObjectDiscoveryInterval = telegraf_config.Duration(2 * time.Minute)
 
+	vsphereInput.MetricLookback = 10
+
 	vsphereInput.Log = logger.NewTelegrafLog(vSphere.String())
 
 	acc := &internal.Accumulator{
