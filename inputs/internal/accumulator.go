@@ -373,7 +373,7 @@ func (a *Accumulator) AddFields(measurement string, fields map[string]interface{
 	if measurement == "vsphere_datastore_disk" {
 		ts := "no"
 		if len(t) == 1 {
-			ts = t[0].Format("15:04:05.000")
+			ts = t[0].Format("2006/01/02 15:04:05.000")
 		}
 
 		logger.Printf("[TS=%s] AddFields on datastore disk: %s / %v / %v", ts, measurement, fields, tags)
