@@ -36,6 +36,7 @@ import (
 	telegraf_config "github.com/influxdata/telegraf/config"
 	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"
 	"github.com/influxdata/telegraf/plugins/inputs/vsphere"
+	"github.com/kr/pretty"
 	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
 	"github.com/vmware/govmomi/object"
@@ -310,7 +311,15 @@ func (vSphere *vSphere) makeGatherer(ctx context.Context) (prometheus.Gatherer, 
 
 	vsphereInput.ObjectDiscoveryInterval = telegraf_config.Duration(2 * time.Minute)
 
-	vsphereInput.MetricLookback = 10
+	//vsphereInput.MetricLookback = 3
+	vsphereInput.VMMetricExclude = []string{"*"}
+	vsphereInput.HostMetricExclude = []string{"*"}
+	vsphereInput.ClusterMetricExclude = []string{"*"}
+	vsphereInput.VMInstances = false
+	vsphereInput.HostInstances = false
+	vsphereInput.ClusterInstances = false
+
+	pretty.Log() // Import the package here, so it is usable from vendor
 
 	vsphereInput.Log = logger.NewTelegrafLog(vSphere.String())
 

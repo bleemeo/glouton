@@ -61,7 +61,6 @@ func newDeviceFinder(ctx context.Context, vSphereCfg config.VSphere) (*find.Find
 	// Make future calls to the local datacenter
 	f.SetDatacenter(dc)
 
-	// We also return the vim25 client because we can't easily get it from the finder.
 	return f, c.Client, nil
 }
 
