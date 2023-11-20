@@ -40,15 +40,13 @@ import (
 	"golang.org/x/exp/maps"
 )
 
-const (
-	endpointCreationRetryDelay = 5 * time.Minute
-	clusterMetricsPeriod       = 5 * time.Minute
-)
+const endpointCreationRetryDelay = 5 * time.Minute
 
 type vSphereGatherer struct {
 	// If true, we should only gather cluster & datastore metrics.
 	// Otherwise, we should only gather host & VMs metrics.
 	isHistorical bool
+	interval     time.Duration // TODO: remove
 
 	cfg *config.VSphere
 	// Storing the endpoint's URL, just in case the endpoint can't be
@@ -114,7 +112,9 @@ func (gatherer *vSphereGatherer) GatherWithState(ctx context.Context, state regi
 			}
 		}
 
-		msg := "Past timestamps count (%s / historical: %t):"
+		msg := "Past timestamps count (%s / %s):"
+
+		delete(errAcc.pastTimestamps, 0) // Remove timestamps that haven't been defined
 
 		if len(errAcc.pastTimestamps) == 0 {
 			msg += " none."
@@ -127,7 +127,12 @@ func (gatherer *vSphereGatherer) GatherWithState(ctx context.Context, state regi
 			}
 		}
 
-		logger.Printf(msg, gatherer.soapURL.Host, gatherer.isHistorical)
+		intervalKind := "realtime"
+		if gatherer.isHistorical {
+			intervalKind = "historical " + gatherer.interval.String()
+		}
+
+		logger.Printf(msg, gatherer.soapURL.Host, intervalKind)
 	}
 
 	mfs := model.MetricPointsToFamilies(gatherer.lastPoints)
@@ -280,6 +285,7 @@ func newGatherer(ctx context.Context, isHistorical bool, cfg *config.VSphere, in
 
 	gatherer := &vSphereGatherer{
 		isHistorical:     isHistorical,
+		interval:         time.Duration(input.HistoricalInterval),
 		cfg:              cfg,
 		soapURL:          soapURL,
 		acc:              acc,

@@ -65,8 +65,9 @@ type vSphere struct {
 
 	state bleemeoTypes.State
 
-	realtimeGatherer   *vSphereGatherer
-	historicalGatherer *vSphereGatherer
+	realtimeGatherer        *vSphereGatherer
+	historical5minGatherer  *vSphereGatherer
+	historical30minGatherer *vSphereGatherer
 
 	deviceCache      map[string]bleemeoTypes.VSphereDevice
 	devicePropsCache *propsCaches
@@ -115,10 +116,13 @@ func (vSphere *vSphere) getStatus() (types.Status, string) {
 		return types.StatusCritical, vSphere.lastErrorMessage
 	}
 
-	if vSphere.realtimeGatherer.lastErr != nil {
+	switch {
+	case vSphere.realtimeGatherer.lastErr != nil:
 		return types.StatusCritical, "realtime endpoint error: " + vSphere.realtimeGatherer.lastErr.Error()
-	} else if vSphere.historicalGatherer.lastErr != nil {
-		return types.StatusCritical, "historical endpoint error: " + vSphere.historicalGatherer.lastErr.Error()
+	case vSphere.historical5minGatherer.lastErr != nil:
+		return types.StatusCritical, "historical 5min endpoint error: " + vSphere.historical5minGatherer.lastErr.Error()
+	case vSphere.historical30minGatherer.lastErr != nil:
+		return types.StatusCritical, "historical 30min endpoint error: " + vSphere.historical30minGatherer.lastErr.Error()
 	}
 
 	return types.StatusOk, ""
@@ -331,7 +335,66 @@ func (vSphere *vSphere) makeRealtimeGatherer(ctx context.Context) (prometheus.Ga
 	return gatherer, opt, nil
 }
 
-func (vSphere *vSphere) makeHistoricalGatherer(ctx context.Context) (prometheus.Gatherer, registry.RegistrationOption, error) {
+func (vSphere *vSphere) makeHistorical5minGatherer(ctx context.Context) (prometheus.Gatherer, registry.RegistrationOption, error) {
+	input, ok := telegraf_inputs.Inputs["vsphere"]
+	if !ok {
+		return nil, registry.RegistrationOption{}, inputs.ErrDisabledInput
+	}
+
+	vsphereInput, ok := input().(*vsphere.VSphere)
+	if !ok {
+		return nil, registry.RegistrationOption{}, inputs.ErrUnexpectedType
+	}
+
+	vsphereInput.Username = vSphere.opts.Username
+	vsphereInput.Password = vSphere.opts.Password
+
+	vsphereInput.ClusterInstances = true
+
+	vsphereInput.ClusterMetricInclude = []string{
+		"cpu.usage.average",
+		"mem.usage.average",
+		"mem.swapused.average",
+	}
+
+	vsphereInput.VMMetricExclude = []string{"*"}
+	vsphereInput.HostMetricExclude = []string{"*"}
+	vsphereInput.DatastoreMetricExclude = []string{"*"}
+	vsphereInput.VMInstances = false
+	vsphereInput.HostInstances = false
+	vsphereInput.DatastoreInstances = false
+
+	vsphereInput.InsecureSkipVerify = vSphere.opts.InsecureSkipVerify
+	vsphereInput.HistoricalInterval = telegraf_config.Duration(5 * time.Minute)
+	vsphereInput.ObjectDiscoveryInterval = telegraf_config.Duration(2 * time.Minute)
+
+	vsphereInput.Log = logger.NewTelegrafLog(vSphere.String() + " historical 5min")
+
+	acc := &internal.Accumulator{
+		RenameMetrics:    renameMetrics,
+		TransformMetrics: vSphere.transformMetrics,
+		RenameGlobal:     vSphere.renameGlobal,
+	}
+
+	gatherer, err := newGatherer(ctx, true, &vSphere.opts, vsphereInput, acc, vSphere.devicePropsCache)
+	if err != nil {
+		return nil, registry.RegistrationOption{}, err
+	}
+
+	vSphere.historical5minGatherer = gatherer
+
+	opt := registry.RegistrationOption{
+		Description:         vSphere.String() + " historical 5min",
+		MinInterval:         5 * time.Minute,
+		StopCallback:        gatherer.stop,
+		ApplyDynamicRelabel: true,
+		GatherModifier:      vSphere.gatherModifier,
+	}
+
+	return gatherer, opt, nil
+}
+
+func (vSphere *vSphere) makeHistorical30minGatherer(ctx context.Context) (prometheus.Gatherer, registry.RegistrationOption, error) {
 	input, ok := telegraf_inputs.Inputs["vsphere"]
 	if !ok {
 		return nil, registry.RegistrationOption{}, inputs.ErrDisabledInput
@@ -346,7 +409,6 @@ func (vSphere *vSphere) makeHistoricalGatherer(ctx context.Context) (prometheus.
 	vsphereInput.Password = vSphere.opts.Password
 
 	vsphereInput.DatastoreInstances = true
-	vsphereInput.ClusterInstances = true
 
 	vsphereInput.DatastoreMetricInclude = []string{
 		"datastore.read.average",
@@ -354,22 +416,19 @@ func (vSphere *vSphere) makeHistoricalGatherer(ctx context.Context) (prometheus.
 		"disk.used.latest",
 		"disk.capacity.latest",
 	}
-	vsphereInput.ClusterMetricInclude = []string{
-		"cpu.usage.average",
-		"mem.usage.average",
-		"mem.swapused.average",
-	}
 
 	vsphereInput.VMMetricExclude = []string{"*"}
 	vsphereInput.HostMetricExclude = []string{"*"}
+	vsphereInput.ClusterMetricExclude = []string{"*"}
 	vsphereInput.VMInstances = false
 	vsphereInput.HostInstances = false
+	vsphereInput.ClusterInstances = false
 
 	vsphereInput.InsecureSkipVerify = vSphere.opts.InsecureSkipVerify
-
+	vsphereInput.HistoricalInterval = telegraf_config.Duration(30 * time.Minute)
 	vsphereInput.ObjectDiscoveryInterval = telegraf_config.Duration(2 * time.Minute)
 
-	vsphereInput.Log = logger.NewTelegrafLog(vSphere.String() + " historical")
+	vsphereInput.Log = logger.NewTelegrafLog(vSphere.String() + " historical 30min")
 
 	acc := &internal.Accumulator{
 		RenameMetrics:    renameMetrics,
@@ -382,11 +441,11 @@ func (vSphere *vSphere) makeHistoricalGatherer(ctx context.Context) (prometheus.
 		return nil, registry.RegistrationOption{}, err
 	}
 
-	vSphere.historicalGatherer = gatherer
+	vSphere.historical30minGatherer = gatherer
 
 	opt := registry.RegistrationOption{
-		Description:         vSphere.String() + " historical",
-		MinInterval:         5 * time.Minute,
+		Description:         vSphere.String() + " historical 30min",
+		MinInterval:         30 * time.Minute,
 		StopCallback:        gatherer.stop,
 		ApplyDynamicRelabel: true,
 		GatherModifier:      vSphere.gatherModifier,
