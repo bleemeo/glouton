@@ -37,6 +37,7 @@ import (
 	"github.com/influxdata/telegraf/plugins/inputs/vsphere"
 	dto "github.com/prometheus/client_model/go"
 	"github.com/vmware/govmomi/vim25/soap"
+	"golang.org/x/exp/maps"
 )
 
 const (
@@ -91,6 +92,7 @@ func (gatherer *vSphereGatherer) GatherWithState(ctx context.Context, state regi
 				Pusher:  gatherer.buffer,
 				Context: ctx,
 			},
+			pastTimestamps: make(map[int]int), // TODO: remove
 		}
 		acc := gatherer.acc
 		acc.Accumulator = &errAcc
@@ -111,6 +113,21 @@ func (gatherer *vSphereGatherer) GatherWithState(ctx context.Context, state regi
 				logger.Printf("=> %s: disk_used %v (%f)", point.Time.Format("2006/01/02 15:04:05.000"), point.Labels, point.Value)
 			}
 		}
+
+		msg := "Past timestamps count (%s / historical: %t):"
+
+		if len(errAcc.pastTimestamps) == 0 {
+			msg += " none."
+		} else {
+			timestamps := maps.Keys(errAcc.pastTimestamps)
+			sort.Ints(timestamps)
+
+			for _, ts := range timestamps {
+				msg += fmt.Sprintf("\n%s: %d", time.Unix(int64(ts), 0).Format("2006/01/02 15:04:05.000"), errAcc.pastTimestamps[ts])
+			}
+		}
+
+		logger.Printf(msg, gatherer.soapURL.Host, gatherer.isHistorical)
 	}
 
 	mfs := model.MetricPointsToFamilies(gatherer.lastPoints)
@@ -282,8 +299,18 @@ type errorAccumulator struct {
 	telegraf.Accumulator
 
 	errs []error
+
+	pastTimestamps map[int]int
 }
 
 func (errAcc *errorAccumulator) AddError(err error) {
 	errAcc.errs = append(errAcc.errs, err)
+}
+
+func (errAcc *errorAccumulator) AddFields(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+	if len(t) == 1 { //  && time.Since(t[0]) > time.Hour
+		errAcc.pastTimestamps[int(t[0].Unix())]++ // int is at least sufficient until 2038.
+	}
+
+	errAcc.Accumulator.AddFields(measurement, fields, tags, t...)
 }
