@@ -168,7 +168,7 @@ func TestTransformMetrics(t *testing.T) {
 	}
 }
 
-func setupVSphereTest(t *testing.T, hostsCount int) (vsphereGatherer *vSphereGatherer, deferFn func()) {
+func setupVSphereTest(t *testing.T, hostsCount int) (vsphereRealtimeGatherer, vsphereHistoricalGatherer *vSphereGatherer, deferFn func()) {
 	t.Helper()
 
 	model := simulator.VPX()
@@ -195,14 +195,20 @@ func setupVSphereTest(t *testing.T, hostsCount int) (vsphereGatherer *vSphereGat
 		},
 	}
 
-	gatherer, _, err := vSphere.makeGatherer(context.Background())
+	realtimeGatherer, _, err := vSphere.makeRealtimeGatherer(context.Background())
 	if err != nil {
-		t.Fatal("Failed to create vSphere gatherer:", err)
+		t.Fatal("Failed to create vSphere realtime gatherer:", err)
 	}
 
-	vsphereGatherer = gatherer.(*vSphereGatherer) //nolint:forcetypeassert
+	historicalGatherer, _, err := vSphere.makeRealtimeGatherer(context.Background())
+	if err != nil {
+		t.Fatal("Failed to create vSphere historical gatherer:", err)
+	}
 
-	return vsphereGatherer, func() {
+	vsphereRealtimeGatherer = realtimeGatherer.(*vSphereGatherer)     //nolint:forcetypeassert
+	vsphereHistoricalGatherer = historicalGatherer.(*vSphereGatherer) //nolint:forcetypeassert
+
+	return vsphereRealtimeGatherer, vsphereHistoricalGatherer, func() {
 		model.Remove()
 		server.Close()
 	}
@@ -213,13 +219,15 @@ func TestVSphereInputNoHost(t *testing.T) {
 		t.SkipNow()
 	}
 
-	input, deferFn := setupVSphereTest(t, 0)
+	realtimeInput, historicalInput, deferFn := setupVSphereTest(t, 0)
 	defer deferFn()
 
-	mfs, err := input.Gather()
+	mfs, err := realtimeInput.Gather()
 	if err != nil {
 		t.Fatal("Failed to gather from vSphere gatherer:", err)
 	}
+
+	_ = historicalInput // TODO
 
 	expectedMfs := []*dto.MetricFamily{}
 
@@ -234,13 +242,15 @@ func TestVSphereInputMultipleHosts(t *testing.T) {
 		t.SkipNow()
 	}
 
-	input, deferFn := setupVSphereTest(t, 2)
+	realtimeInput, historicalInput, deferFn := setupVSphereTest(t, 2)
 	defer deferFn()
 
-	mfs, err := input.Gather()
+	mfs, err := realtimeInput.Gather()
 	if err != nil {
 		t.Fatal("Failed to gather from vSphere gatherer:", err)
 	}
+
+	_ = historicalInput // TODO
 
 	expectedMfs := []*dto.MetricFamily{}
 

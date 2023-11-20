@@ -45,6 +45,10 @@ const (
 )
 
 type vSphereGatherer struct {
+	// If true, we should only gather cluster & datastore metrics.
+	// Otherwise, we should only gather host & VMs metrics.
+	isHistorical bool
+
 	cfg *config.VSphere
 	// Storing the endpoint's URL, just in case the endpoint can't be
 	// created at startup and will need to be instanced later.
@@ -60,8 +64,6 @@ type vSphereGatherer struct {
 	lastErr    error
 
 	devicePropsCache *propsCaches
-
-	lastAdditionalClusterMetricsAt time.Time
 
 	l sync.Mutex
 }
@@ -94,7 +96,7 @@ func (gatherer *vSphereGatherer) GatherWithState(ctx context.Context, state regi
 		acc.Accumulator = &errAcc
 
 		err := gatherer.endpoint.Collect(ctx, acc)
-		errAddMetrics := gatherer.collectAdditionalMetrics(ctx, acc, state.T0)
+		errAddMetrics := gatherer.collectAdditionalMetrics(ctx, acc)
 		allErrs := errors.Join(filterErrors(append(errAcc.errs, err, errAddMetrics))...)
 
 		gatherer.lastPoints = gatherer.buffer.Points()
@@ -129,7 +131,7 @@ func filterErrors(errs []error) []error {
 	return errs[:n]
 }
 
-func (gatherer *vSphereGatherer) collectAdditionalMetrics(ctx context.Context, acc telegraf.Accumulator, t0 time.Time) error {
+func (gatherer *vSphereGatherer) collectAdditionalMetrics(ctx context.Context, acc telegraf.Accumulator) error {
 	finder, client, err := newDeviceFinder(ctx, *gatherer.cfg)
 	if err != nil {
 		return err
@@ -149,31 +151,24 @@ func (gatherer *vSphereGatherer) collectAdditionalMetrics(ctx context.Context, a
 		return fmt.Errorf("can't describe hierarchy: %w", err)
 	}
 
-	if t0.IsZero() {
-		t0 = time.Now()
-	}
-
-	if t0.Sub(gatherer.lastAdditionalClusterMetricsAt) >= clusterMetricsPeriod {
-		// The next gathering should run in ~5min, so we schedule it in 4m50s from now to be safe.
-		gatherer.lastAdditionalClusterMetricsAt = t0.Add(-10 * time.Second)
-
+	if gatherer.isHistorical {
 		err = additionalClusterMetrics(ctx, client, clusters, gatherer.devicePropsCache.hostCache, acc, h)
 		if err != nil {
 			return err
 		}
-	}
+	} else {
+		// For each host, we have a list of vm states (running/stopped)
+		vmStatesPerHost := make(map[string][]bool, len(hosts))
 
-	// For each host, we have a list of vm states (running/stopped)
-	vmStatesPerHost := make(map[string][]bool, len(hosts))
+		err = additionalVMMetrics(ctx, client, vms, gatherer.devicePropsCache.vmCache, acc, h, vmStatesPerHost)
+		if err != nil {
+			return err
+		}
 
-	err = additionalVMMetrics(ctx, client, vms, gatherer.devicePropsCache.vmCache, acc, h, vmStatesPerHost)
-	if err != nil {
-		return err
-	}
-
-	err = additionalHostMetrics(ctx, client, hosts, acc, h, vmStatesPerHost)
-	if err != nil {
-		return err
+		err = additionalHostMetrics(ctx, client, hosts, acc, h, vmStatesPerHost)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -243,7 +238,12 @@ func (gatherer *vSphereGatherer) createEndpoint(ctx context.Context, input *vsph
 		}
 	}
 
-	logger.V(1).Printf("Failed to create vSphere endpoint for %q: %v -- will retry in %s.", gatherer.soapURL.Host, err, endpointCreationRetryDelay)
+	metricsKind := "realtime"
+	if gatherer.isHistorical {
+		metricsKind = "historical"
+	}
+
+	logger.V(1).Printf("Failed to create vSphere %s endpoint for %q: %v -- will retry in %s.", metricsKind, gatherer.soapURL.Host, err, endpointCreationRetryDelay)
 
 	gatherer.lastErr = err
 	gatherer.endpointCreateTimer = time.AfterFunc(endpointCreationRetryDelay, func() {
@@ -253,7 +253,7 @@ func (gatherer *vSphereGatherer) createEndpoint(ctx context.Context, input *vsph
 
 // newGatherer creates a vSphere gatherer from the given endpoint.
 // It will return an error if the endpoint URL is not valid.
-func newGatherer(ctx context.Context, cfg *config.VSphere, input *vsphere.VSphere, acc *internal.Accumulator, devicePropsCache *propsCaches) (*vSphereGatherer, error) {
+func newGatherer(ctx context.Context, isHistorical bool, cfg *config.VSphere, input *vsphere.VSphere, acc *internal.Accumulator, devicePropsCache *propsCaches) (*vSphereGatherer, error) {
 	soapURL, err := soap.ParseURL(cfg.URL)
 	if err != nil {
 		return nil, err
@@ -262,6 +262,7 @@ func newGatherer(ctx context.Context, cfg *config.VSphere, input *vsphere.VSpher
 	ctx, cancel := context.WithCancel(ctx)
 
 	gatherer := &vSphereGatherer{
+		isHistorical:     isHistorical,
 		cfg:              cfg,
 		soapURL:          soapURL,
 		acc:              acc,

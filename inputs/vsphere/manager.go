@@ -77,7 +77,7 @@ func (m *Manager) EndpointsInError() map[string]bool {
 	for _, vSphere := range m.vSpheres {
 		vSphere.l.Lock()
 
-		if vSphere.gatherer == nil || vSphere.consecutiveErr > 0 {
+		if vSphere.realtimeGatherer == nil || vSphere.historicalGatherer == nil || vSphere.consecutiveErr > 0 {
 			endpoints[vSphere.host] = true
 		}
 
@@ -107,16 +107,30 @@ func (m *Manager) RegisterGatherers(ctx context.Context, vSphereCfgs []config.VS
 
 		vSphere := newVSphere(u.Host, vSphereCfg, state)
 
-		gatherer, opt, err := vSphere.makeGatherer(ctx)
+		realtimeGatherer, opt, err := vSphere.makeRealtimeGatherer(ctx)
 		if err != nil {
-			logger.V(1).Printf("Failed to create gatherer for %s: %v", vSphere.String(), err)
+			logger.V(1).Printf("Failed to create realtime gatherer for %s: %v", vSphere.String(), err)
 
 			continue
 		}
 
-		_, err = registerGatherer(opt, gatherer)
+		_, err = registerGatherer(opt, realtimeGatherer)
 		if err != nil {
-			logger.V(1).Printf("Failed to register gatherer for %s: %v", vSphere.String(), err)
+			logger.V(1).Printf("Failed to register realtime gatherer for %s: %v", vSphere.String(), err)
+
+			continue
+		}
+
+		historicalGatherer, opt, err := vSphere.makeHistoricalGatherer(ctx)
+		if err != nil {
+			logger.V(1).Printf("Failed to create historical gatherer for %s: %v", vSphere.String(), err)
+
+			continue
+		}
+
+		_, err = registerGatherer(opt, historicalGatherer)
+		if err != nil {
+			logger.V(1).Printf("Failed to register historical gatherer for %s: %v", vSphere.String(), err)
 
 			continue
 		}
@@ -352,10 +366,12 @@ func (m *Manager) DiagnosticVSphere(ctx context.Context, archive types.ArchiveWr
 		switch {
 		case vSphere.lastErrorMessage != "":
 			status = vSphere.lastErrorMessage
-		case vSphere.gatherer == nil:
-			status = "gatherer hasn't been initialized yet"
-		case vSphere.gatherer.lastErr != nil:
-			status = vSphere.gatherer.lastErr.Error()
+		case vSphere.realtimeGatherer == nil || vSphere.historicalGatherer == nil:
+			status = "gatherers haven't been initialized yet"
+		case vSphere.realtimeGatherer.lastErr != nil:
+			status = vSphere.realtimeGatherer.lastErr.Error()
+		case vSphere.historicalGatherer.lastErr != nil:
+			status = vSphere.historicalGatherer.lastErr.Error()
 		}
 		vSphere.l.Unlock()
 

@@ -31,10 +31,12 @@ func TestGatheringESXI(t *testing.T) { //nolint:maintidx
 	mfsPerVSphere := make(map[string][]*io_prometheus_client.MetricFamily, len(manager.vSpheres))
 
 	for host, vSphere := range manager.vSpheres {
-		mfs, err := vSphere.gatherer.GatherWithState(ctx, registry.GatherState{T0: time.Now(), FromScrapeLoop: true})
+		mfs, err := vSphere.realtimeGatherer.GatherWithState(ctx, registry.GatherState{T0: time.Now(), FromScrapeLoop: true})
 		if err != nil {
 			t.Fatalf("Got an error gathering vSphere %q: %v", host, err)
 		}
+
+		// TODO: gather historical metrics
 
 		mfsPerVSphere[strings.Split(host, ":")[0]] = mfs
 	}
