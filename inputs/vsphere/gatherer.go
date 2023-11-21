@@ -316,7 +316,7 @@ func (errAcc *errorAccumulator) AddError(err error) {
 }
 
 func (errAcc *errorAccumulator) AddFields(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	if len(t) == 1 && time.Since(t[0]) > 45*time.Minute {
+	if len(t) == 1 && !t[0].IsZero() && time.Since(t[0]) > 45*time.Minute {
 		errAcc.pastTimestamps[int(t[0].Unix())]++ // int is at least sufficient until 2038.
 	}
 
