@@ -547,6 +547,8 @@ func (vSphere *vSphere) gatherModifier(mfs []*dto.MetricFamily, _ error) []*dto.
 			}
 
 			mfs = append(mfs, vSphereDeviceStatus)
+
+			logger.Printf("Marking agent %s/%s as %s", moid, dev.Name(), deviceStatus.String())
 		}
 
 		vSphere.lastStatuses[moid] = deviceStatus
