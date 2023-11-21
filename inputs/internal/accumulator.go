@@ -377,6 +377,15 @@ func (a *Accumulator) AddFields(measurement string, fields map[string]interface{
 		}
 	}
 
+	if measurement == "vsphere_cluster_cpu" {
+		ts := "-"
+		if len(t) == 1 {
+			ts = t[0].Format("2006/01/02 15:04:05.000")
+		}
+
+		logger.Printf("AddFields on Cluster CPU at %s: %s / %v / %v", ts, measurement, fields, tags)
+	}
+
 	a.processMetrics(a.wrapAdd("fields"), measurement, fields, tags, t...)
 }
 
