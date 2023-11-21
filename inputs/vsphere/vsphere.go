@@ -47,7 +47,7 @@ const commonTimeout = 10 * time.Second
 
 const (
 	vCenterConsecutiveErrorsStatusThreshold = 2
-	noMetricsStatusThreshold                = 10
+	noMetricsStatusThreshold                = 5
 )
 
 // A common label value.
