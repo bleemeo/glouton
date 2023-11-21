@@ -372,7 +372,7 @@ func (a *Accumulator) wrapAdd(metricType string) accumulatorFunc {
 func (a *Accumulator) AddFields(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
 	if len(t) == 1 {
 		ts := t[0]
-		if time.Since(ts) > time.Hour {
+		if time.Since(ts) > 5*time.Minute {
 			logger.Printf("[TS=%s] AddFields with a timestamp %s old: %s / %v / %v", ts.Format("2006/01/02 15:04:05.000"), time.Since(ts), measurement, fields, tags)
 		}
 	}

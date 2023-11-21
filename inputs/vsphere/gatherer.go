@@ -90,7 +90,7 @@ func (gatherer *vSphereGatherer) GatherWithState(ctx context.Context, state regi
 				Pusher:  gatherer.buffer,
 				Context: ctx,
 			},
-			pastTimestamps: make(map[int]int), // TODO: remove
+			timestamps: make(map[int]int), // TODO: remove
 		}
 		acc := gatherer.acc
 		acc.Accumulator = &errAcc
@@ -114,18 +114,18 @@ func (gatherer *vSphereGatherer) GatherWithState(ctx context.Context, state regi
 
 		msg := "Past timestamps count (%s / %s):"
 
-		delete(errAcc.pastTimestamps, 0) // Remove timestamps that haven't been defined
+		delete(errAcc.timestamps, 0) // Remove timestamps that haven't been defined
 
-		if len(errAcc.pastTimestamps) == 0 {
+		if len(errAcc.timestamps) == 0 {
 			msg += " none."
 		} else {
 			now := state.T0.Truncate(time.Second)
-			timestamps := maps.Keys(errAcc.pastTimestamps)
+			timestamps := maps.Keys(errAcc.timestamps)
 			sort.Ints(timestamps)
 
 			for _, ts := range timestamps {
 				age := now.Sub(time.Unix(int64(ts), 0))
-				msg += fmt.Sprintf("\n%d timestamps from %s ago", errAcc.pastTimestamps[ts], age.String())
+				msg += fmt.Sprintf("\n%d timestamps from %s ago", errAcc.timestamps[ts], age.String())
 			}
 		}
 
@@ -308,7 +308,7 @@ type errorAccumulator struct {
 
 	errs []error
 
-	pastTimestamps map[int]int
+	timestamps map[int]int
 }
 
 func (errAcc *errorAccumulator) AddError(err error) {
@@ -316,8 +316,8 @@ func (errAcc *errorAccumulator) AddError(err error) {
 }
 
 func (errAcc *errorAccumulator) AddFields(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	if len(t) == 1 && !t[0].IsZero() && time.Since(t[0]) > 45*time.Minute {
-		errAcc.pastTimestamps[int(t[0].Unix())]++ // int is at least sufficient until 2038.
+	if len(t) == 1 && !t[0].IsZero() {
+		errAcc.timestamps[int(t[0].Unix())]++ // int is at least sufficient until 2038.
 	}
 
 	errAcc.Accumulator.AddFields(measurement, fields, tags, t...)
