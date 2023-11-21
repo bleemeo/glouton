@@ -370,6 +370,8 @@ func (vSphere *vSphere) makeHistorical5minGatherer(ctx context.Context) (prometh
 	vsphereInput.HistoricalInterval = telegraf_config.Duration(5 * time.Minute)
 	vsphereInput.ObjectDiscoveryInterval = telegraf_config.Duration(2 * time.Minute)
 
+	vsphereInput.MetricLookback = 6
+
 	vsphereInput.Log = logger.NewTelegrafLog(vSphere.String() + " historical 5min")
 
 	acc := &internal.Accumulator{
