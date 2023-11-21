@@ -360,9 +360,11 @@ func (vSphere *vSphere) makeHistorical5minGatherer(ctx context.Context) (prometh
 	vsphereInput.VMMetricExclude = []string{"*"}
 	vsphereInput.HostMetricExclude = []string{"*"}
 	vsphereInput.DatastoreMetricExclude = []string{"*"}
+	vsphereInput.ResourcePoolMetricExclude = []string{"*"}
 	vsphereInput.VMInstances = false
 	vsphereInput.HostInstances = false
 	vsphereInput.DatastoreInstances = false
+	vsphereInput.ResourcePoolInstances = false
 
 	vsphereInput.InsecureSkipVerify = vSphere.opts.InsecureSkipVerify
 	vsphereInput.HistoricalInterval = telegraf_config.Duration(5 * time.Minute)
@@ -420,9 +422,11 @@ func (vSphere *vSphere) makeHistorical30minGatherer(ctx context.Context) (promet
 	vsphereInput.VMMetricExclude = []string{"*"}
 	vsphereInput.HostMetricExclude = []string{"*"}
 	vsphereInput.ClusterMetricExclude = []string{"*"}
+	vsphereInput.ResourcePoolMetricExclude = []string{"*"}
 	vsphereInput.VMInstances = false
 	vsphereInput.HostInstances = false
 	vsphereInput.ClusterInstances = false
+	vsphereInput.ResourcePoolInstances = false
 
 	vsphereInput.InsecureSkipVerify = vSphere.opts.InsecureSkipVerify
 	vsphereInput.HistoricalInterval = telegraf_config.Duration(30 * time.Minute)
