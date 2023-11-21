@@ -123,7 +123,12 @@ func (gatherer *vSphereGatherer) GatherWithState(ctx context.Context, state regi
 			sort.Ints(timestamps)
 
 			for _, ts := range timestamps {
-				msg += fmt.Sprintf("\n%s: %d", time.Unix(int64(ts), 0).Format("2006/01/02 15:04:05.000"), errAcc.pastTimestamps[ts])
+				t := time.Unix(int64(ts), 0)
+				if t.Before(time.Date(1, 1, 2, 0, 0, 0, 0, time.UTC)) {
+					continue
+				}
+
+				msg += fmt.Sprintf("\n%s: %d", t.Format("2006/01/02 15:04:05.000"), errAcc.pastTimestamps[ts])
 			}
 		}
 
@@ -260,12 +265,12 @@ func (gatherer *vSphereGatherer) createEndpoint(ctx context.Context, input *vsph
 		}
 	}
 
-	metricsKind := "realtime"
+	intervalKind := "realtime"
 	if gatherer.isHistorical {
-		metricsKind = "historical"
+		intervalKind = "historical " + gatherer.interval.String()
 	}
 
-	logger.V(1).Printf("Failed to create vSphere %s endpoint for %q: %v -- will retry in %s.", metricsKind, gatherer.soapURL.Host, err, endpointCreationRetryDelay)
+	logger.V(1).Printf("Failed to create vSphere %s endpoint for %q: %v -- will retry in %s.", intervalKind, gatherer.soapURL.Host, err, endpointCreationRetryDelay)
 
 	gatherer.lastErr = err
 	gatherer.endpointCreateTimer = time.AfterFunc(endpointCreationRetryDelay, func() {
@@ -314,7 +319,7 @@ func (errAcc *errorAccumulator) AddError(err error) {
 }
 
 func (errAcc *errorAccumulator) AddFields(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	if len(t) == 1 { //  && time.Since(t[0]) > time.Hour
+	if len(t) == 1 && time.Since(t[0]) > time.Hour {
 		errAcc.pastTimestamps[int(t[0].Unix())]++ // int is at least sufficient until 2038.
 	}
 
