@@ -119,16 +119,13 @@ func (gatherer *vSphereGatherer) GatherWithState(ctx context.Context, state regi
 		if len(errAcc.pastTimestamps) == 0 {
 			msg += " none."
 		} else {
+			now := state.T0.Truncate(time.Second)
 			timestamps := maps.Keys(errAcc.pastTimestamps)
 			sort.Ints(timestamps)
 
 			for _, ts := range timestamps {
-				t := time.Unix(int64(ts), 0)
-				if t.Before(time.Date(1, 1, 2, 0, 0, 0, 0, time.UTC)) {
-					continue
-				}
-
-				msg += fmt.Sprintf("\n%s: %d", t.Format("2006/01/02 15:04:05.000"), errAcc.pastTimestamps[ts])
+				age := now.Sub(time.Unix(int64(ts), 0))
+				msg += fmt.Sprintf("\n%d timestamps from %s ago", errAcc.pastTimestamps[ts], age.String())
 			}
 		}
 
@@ -319,7 +316,7 @@ func (errAcc *errorAccumulator) AddError(err error) {
 }
 
 func (errAcc *errorAccumulator) AddFields(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	if len(t) == 1 && time.Since(t[0]) > time.Hour {
+	if len(t) == 1 && time.Since(t[0]) > 45*time.Minute {
 		errAcc.pastTimestamps[int(t[0].Unix())]++ // int is at least sufficient until 2038.
 	}
 
