@@ -296,6 +296,7 @@ func (vSphere *vSphere) makeRealtimeGatherer(ctx context.Context) (prometheus.Ga
 		"net.transmitted.average",
 		"net.received.average",
 	}
+
 	vsphereInput.DatacenterMetricExclude = []string{"*"}
 	vsphereInput.ResourcePoolMetricExclude = []string{"*"}
 	vsphereInput.ClusterMetricExclude = []string{"*"}
@@ -352,7 +353,7 @@ func (vSphere *vSphere) makeHistorical5minGatherer(ctx context.Context) (prometh
 	vsphereInput.ClusterInstances = true
 
 	vsphereInput.ClusterMetricInclude = []string{
-		"cpu.usage.average",
+		//"cpu.usage.average",
 		"mem.usage.average",
 		"mem.swapused.average",
 	}

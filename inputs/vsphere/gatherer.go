@@ -28,6 +28,7 @@ import (
 	"glouton/prometheus/registry"
 	"glouton/types"
 	"net/url"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -36,7 +37,11 @@ import (
 	"github.com/influxdata/telegraf"
 	"github.com/influxdata/telegraf/plugins/inputs/vsphere"
 	dto "github.com/prometheus/client_model/go"
+	"github.com/vmware/govmomi/object"
+	"github.com/vmware/govmomi/performance"
+	"github.com/vmware/govmomi/vim25"
 	"github.com/vmware/govmomi/vim25/soap"
+	vmware_types "github.com/vmware/govmomi/vim25/types"
 	"golang.org/x/exp/maps"
 )
 
@@ -45,8 +50,9 @@ const endpointCreationRetryDelay = 5 * time.Minute
 type vSphereGatherer struct {
 	// If true, we should only gather cluster & datastore metrics.
 	// Otherwise, we should only gather host & VMs metrics.
-	isHistorical bool
-	interval     time.Duration // TODO: remove
+	isHistorical  bool
+	interval      time.Duration // TODO: remove
+	lastCpuSample time.Time
 
 	cfg *config.VSphere
 	// Storing the endpoint's URL, just in case the endpoint can't be
@@ -142,6 +148,88 @@ func (gatherer *vSphereGatherer) GatherWithState(ctx context.Context, state regi
 	return mfs, gatherer.lastErr
 }
 
+func (gatherer *vSphereGatherer) collectClusterCpu(ctx context.Context, client *vim25.Client, clusters []*object.ClusterComputeResource, acc telegraf.Accumulator, h *hierarchy) error {
+	logger.Printf("Collecting clusters CPU ...")
+
+	clusterRefs := make([]vmware_types.ManagedObjectReference, len(clusters))
+
+	for i, cluster := range clusters {
+		clusterRefs[i] = cluster.Reference()
+	}
+
+	perfManager := performance.NewManager(client)
+
+	var startTime *time.Time
+	startStr := "-"
+	if !gatherer.lastCpuSample.IsZero() {
+		startTime = &gatherer.lastCpuSample
+		startStr = startTime.Format("2006/01/02 15:04:05.000")
+	}
+
+	endTime := time.Now().Truncate(time.Minute)
+
+	logger.Printf("Start time: %s / End time: %s", startStr, endTime.Format("2006/01/02 15:04:05.000"))
+
+	spec := vmware_types.PerfQuerySpec{
+		StartTime:  startTime,
+		EndTime:    &endTime,
+		MaxSample:  1,
+		MetricId:   []vmware_types.PerfMetricId{{Instance: "*"}},
+		IntervalId: 300,
+	}
+
+	sample, err := perfManager.SampleByName(ctx, spec, []string{"cpu.usage.average"}, clusterRefs)
+	if err != nil {
+		return fmt.Errorf("can't get sample by name: %w", err)
+	}
+
+	result, err := perfManager.ToMetricSeries(ctx, sample)
+	if err != nil {
+		return fmt.Errorf("can't convert sample to metric series: %w", err)
+	}
+
+	for _, serie := range result {
+		cluster := clusters[slices.Index(clusterRefs, serie.Entity)]
+
+		if len(serie.SampleInfo) != 1 {
+			return fmt.Errorf("invalid number of timestamps: want 1, got %d", len(serie.SampleInfo))
+		}
+
+		if len(serie.Value) != 1 {
+			return fmt.Errorf("invalid number of metrics: want 1, got %d", len(serie.Value))
+		}
+
+		metric := serie.Value[0]
+
+		if len(metric.Value) != 1 {
+			return fmt.Errorf("invalid number of values: want 1, got %d", len(metric.Value))
+		}
+
+		value := metric.Value[0]
+
+		ts := serie.SampleInfo[0].Timestamp
+		if !ts.After(gatherer.lastCpuSample) {
+			logger.Printf("Timestamp %s is not after previous one %s", ts.Format("2006/01/02 15:04:05.000"), gatherer.lastCpuSample.Format("2006/01/02 15:04:05.000"))
+
+			continue
+		}
+
+		gatherer.lastCpuSample = ts
+
+		tags := map[string]string{
+			"clustername": cluster.Name(),
+			"dcname":      h.ParentDCName(cluster),
+			"moid":        cluster.Reference().Value,
+		}
+
+		acc.AddFields("cpu", map[string]any{"usage_average": value}, tags, ts)
+
+		logger.Printf("CPU for cluster %s/%s is %d at %s", cluster.Reference().Value, cluster.Name(), value, ts.Format("2006/01/02 15:04:05.000"))
+	}
+
+	return nil
+}
+
 func filterErrors(errs []error) []error {
 	n := 0
 
@@ -177,6 +265,11 @@ func (gatherer *vSphereGatherer) collectAdditionalMetrics(ctx context.Context, a
 
 	if gatherer.isHistorical {
 		err = additionalClusterMetrics(ctx, client, clusters, gatherer.devicePropsCache.hostCache, acc, h)
+		if err != nil {
+			return err
+		}
+
+		err = gatherer.collectClusterCpu(ctx, client, clusters, acc, h)
 		if err != nil {
 			return err
 		}
