@@ -28,6 +28,7 @@ import (
 	"glouton/prometheus/registry"
 	"glouton/types"
 	"net/url"
+	"reflect"
 	"slices"
 	"sort"
 	"strings"
@@ -36,6 +37,7 @@ import (
 
 	"github.com/influxdata/telegraf"
 	"github.com/influxdata/telegraf/plugins/inputs/vsphere"
+	"github.com/kr/pretty"
 	dto "github.com/prometheus/client_model/go"
 	"github.com/vmware/govmomi/object"
 	"github.com/vmware/govmomi/performance"
@@ -156,6 +158,8 @@ func (gatherer *vSphereGatherer) collectClusterCpu(ctx context.Context, client *
 	for i, cluster := range clusters {
 		clusterRefs[i] = cluster.Reference()
 	}
+
+	client.RoundTripper = &dump{client.RoundTripper}
 
 	perfManager := performance.NewManager(client)
 
@@ -419,4 +423,30 @@ func (errAcc *errorAccumulator) AddFields(measurement string, fields map[string]
 	}
 
 	errAcc.Accumulator.AddFields(measurement, fields, tags, t...)
+}
+
+type dump struct {
+	roundTripper soap.RoundTripper
+}
+
+func (d *dump) RoundTrip(ctx context.Context, req, res soap.HasFault) error {
+	vreq := reflect.ValueOf(req).Elem().FieldByName("Req").Elem()
+	if vreq.Type().Name() != "QueryPerf" {
+		return d.roundTripper.RoundTrip(ctx, req, res)
+	}
+
+	pretty.Printf("%s [REQ] %# v\n", time.Now().Format("2006/01/02 15:04:05.000"), vreq.Interface())
+
+	err := d.roundTripper.RoundTrip(ctx, req, res)
+	if err != nil {
+		if fault := res.Fault(); fault != nil {
+			pretty.Printf("%s [ERR] %# v\n", time.Now().Format("2006/01/02 15:04:05.000"), fault)
+		}
+		return err
+	}
+
+	vres := reflect.ValueOf(res).Elem().FieldByName("Res").Elem()
+	pretty.Printf("%s [RES] %# v\n", time.Now().Format("2006/01/02 15:04:05.000"), vres.Interface())
+
+	return nil
 }
