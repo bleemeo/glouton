@@ -185,12 +185,14 @@ func (gatherer *vSphereGatherer) collectClusterCpu(ctx context.Context, client *
 		return fmt.Errorf("can't get sample by name: %w", err)
 	}
 
-	result, err := perfManager.ToMetricSeries(ctx, sample)
+	series, err := perfManager.ToMetricSeries(ctx, sample)
 	if err != nil {
 		return fmt.Errorf("can't convert sample to metric series: %w", err)
 	}
 
-	for _, serie := range result {
+	logger.Printf("Got %d serie(s) for cluster CPU metric", len(series))
+
+	for _, serie := range series {
 		cluster := clusters[slices.Index(clusterRefs, serie.Entity)]
 
 		if len(serie.SampleInfo) != 1 {
