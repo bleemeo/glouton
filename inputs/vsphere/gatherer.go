@@ -163,23 +163,24 @@ func (gatherer *vSphereGatherer) collectClusterCpu(ctx context.Context, client *
 
 	perfManager := performance.NewManager(client)
 
-	var startTime *time.Time
+	now := time.Now().Truncate(time.Minute)
 
-	startStr := "-"
+	var startTime time.Time
 
 	if !gatherer.lastCpuSample.IsZero() {
-		startTime = &gatherer.lastCpuSample
-		startStr = startTime.Format("2006/01/02 15:04:05.000")
+		startTime = gatherer.lastCpuSample
+	} else {
+		startTime = now.Add(-35 * time.Minute)
 	}
 
-	endTime := time.Now().Truncate(time.Minute)
+	endTime := now
 
-	logger.Printf("Start time: %s / End time: %s", startStr, endTime.Format("2006/01/02 15:04:05.000"))
+	logger.Printf("Start time: %s / End time: %s", startTime.Format("2006/01/02 15:04:05.000"), endTime.Format("2006/01/02 15:04:05.000"))
 
 	spec := vmware_types.PerfQuerySpec{
-		StartTime:  startTime,
+		StartTime:  &startTime,
 		EndTime:    &endTime,
-		MaxSample:  1,
+		MaxSample:  7,
 		MetricId:   []vmware_types.PerfMetricId{{Instance: "*"}},
 		IntervalId: 300,
 	}
@@ -199,8 +200,8 @@ func (gatherer *vSphereGatherer) collectClusterCpu(ctx context.Context, client *
 	for _, serie := range series {
 		cluster := clusters[slices.Index(clusterRefs, serie.Entity)]
 
-		if len(serie.SampleInfo) != 1 {
-			return fmt.Errorf("invalid number of timestamps: want 1, got %d", len(serie.SampleInfo))
+		if len(serie.SampleInfo) < 1 {
+			return fmt.Errorf("invalid number of timestamps: want at least 1, got %d", len(serie.SampleInfo))
 		}
 
 		if len(serie.Value) != 1 {
@@ -209,8 +210,8 @@ func (gatherer *vSphereGatherer) collectClusterCpu(ctx context.Context, client *
 
 		metric := serie.Value[0]
 
-		if len(metric.Value) != 1 {
-			return fmt.Errorf("invalid number of values: want 1, got %d", len(metric.Value))
+		if len(metric.Value) < 1 {
+			return fmt.Errorf("invalid number of values: want at least 1, got %d", len(metric.Value))
 		}
 
 		value := float64(metric.Value[0]) / 100 // Percent values need to be divided by 100.0
@@ -435,18 +436,18 @@ func (d *dump) RoundTrip(ctx context.Context, req, res soap.HasFault) error {
 		return d.roundTripper.RoundTrip(ctx, req, res)
 	}
 
-	pretty.Printf("%s [REQ] %# v\n", time.Now().Format("2006/01/02 15:04:05.000"), vreq.Interface())
+	logger.Printf(pretty.Sprintf("%s [REQ] %# v\n", time.Now().Format("2006/01/02 15:04:05.000"), vreq.Interface()))
 
 	err := d.roundTripper.RoundTrip(ctx, req, res)
 	if err != nil {
 		if fault := res.Fault(); fault != nil {
-			pretty.Printf("%s [ERR] %# v\n", time.Now().Format("2006/01/02 15:04:05.000"), fault)
+			logger.Printf(pretty.Sprintf("%s [ERR] %# v\n", time.Now().Format("2006/01/02 15:04:05.000"), fault))
 		}
 		return err
 	}
 
 	vres := reflect.ValueOf(res).Elem().FieldByName("Res").Elem()
-	pretty.Printf("%s [RES] %# v\n", time.Now().Format("2006/01/02 15:04:05.000"), vres.Interface())
+	logger.Printf(pretty.Sprintf("%s [RES] %# v\n", time.Now().Format("2006/01/02 15:04:05.000"), vres.Interface()))
 
 	return nil
 }
