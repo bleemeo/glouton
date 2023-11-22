@@ -358,7 +358,7 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 				Username:           "root",
 				Password:           "passwd",
 				InsecureSkipVerify: false,
-				MonitorVMs:         true,
+				SkipMonitorVMs:     false,
 			},
 		},
 		Web: Web{

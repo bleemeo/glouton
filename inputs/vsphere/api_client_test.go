@@ -57,7 +57,7 @@ func setupVSphereAPITest(t *testing.T, dirName string) (vSphereCfg config.VSpher
 		Username:           "user",
 		Password:           "pass",
 		InsecureSkipVerify: true,
-		MonitorVMs:         true,
+		SkipMonitorVMs:     false,
 	}
 
 	return vSphereCfg, func() {

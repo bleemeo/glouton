@@ -414,5 +414,5 @@ type VSphere struct {
 	Username           string `yaml:"username"`
 	Password           string `yaml:"password"`
 	InsecureSkipVerify bool   `yaml:"insecure_skip_verify"`
-	MonitorVMs         bool   `yaml:"monitor_vms"`
+	SkipMonitorVMs     bool   `yaml:"skip_monitor_vms"`
 }

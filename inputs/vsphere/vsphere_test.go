@@ -192,7 +192,7 @@ func setupVSphereTest(t *testing.T, hostsCount int) (vsphereRealtimeGatherer, vs
 			Username:           "user",
 			Password:           "pass",
 			InsecureSkipVerify: true,
-			MonitorVMs:         true,
+			SkipMonitorVMs:     false,
 		},
 	}
 

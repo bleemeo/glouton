@@ -170,7 +170,7 @@ func (vSphere *vSphere) devices(ctx context.Context, deviceChan chan<- bleemeoTy
 	devs = append(devs, describedHosts...)
 	errs = append(errs, err)
 
-	if vSphere.opts.MonitorVMs {
+	if !vSphere.opts.SkipMonitorVMs {
 		var describedVMs []bleemeoTypes.VSphereDevice
 
 		describedVMs, labelsMetadata, err = vSphere.describeVMs(ctx, client, vms)
@@ -277,19 +277,24 @@ func (vSphere *vSphere) makeRealtimeGatherer(ctx context.Context) (prometheus.Ga
 	vsphereInput.Username = vSphere.opts.Username
 	vsphereInput.Password = vSphere.opts.Password
 
-	vsphereInput.VMInstances = vSphere.opts.MonitorVMs
+	vsphereInput.VMInstances = !vSphere.opts.SkipMonitorVMs
 	vsphereInput.HostInstances = true
 
-	vsphereInput.VMMetricInclude = []string{
-		"cpu.usage.average",
-		"cpu.latency.average",
-		"mem.active.average", // Will be converted to the percentage of used memory
-		"mem.swapped.average",
-		"net.transmitted.average",
-		"net.received.average",
-		"virtualDisk.read.average",
-		"virtualDisk.write.average",
+	if vSphere.opts.SkipMonitorVMs {
+		vsphereInput.VMMetricExclude = []string{"*"}
+	} else {
+		vsphereInput.VMMetricInclude = []string{
+			"cpu.usage.average",
+			"cpu.latency.average",
+			"mem.active.average", // Will be converted to the percentage of used memory
+			"mem.swapped.average",
+			"net.transmitted.average",
+			"net.received.average",
+			"virtualDisk.read.average",
+			"virtualDisk.write.average",
+		}
 	}
+
 	vsphereInput.HostMetricInclude = []string{
 		"cpu.usage.average",
 		"mem.totalCapacity.average",
@@ -605,7 +610,7 @@ func (vSphere *vSphere) modifyLabels(labelPairs []*dto.LabelPair) (shouldBeKept 
 
 	switch {
 	case isVM:
-		if !vSphere.opts.MonitorVMs {
+		if vSphere.opts.SkipMonitorVMs {
 			shouldBeKept = false
 
 			break
