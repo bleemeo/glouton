@@ -198,10 +198,6 @@ func describeVM(source string, rfName refName, vmProps vmLightProps) (*VirtualMa
 		vmFacts["vsphere_vm_version"] = vmProps.Config.Version
 		vmFacts["vsphere_vm_name"] = vmProps.Config.Name
 
-		if vmProps.Config.GuestFullName != "otherGuest" {
-			vmFacts["os_pretty_name"] = vmProps.Config.GuestFullName
-		}
-
 		if vmProps.Summary.Config.Product != nil {
 			vmFacts["product_name"] = vmProps.Summary.Config.Product.Name
 			vmFacts["system_vendor"] = vmProps.Summary.Config.Product.Vendor
@@ -227,8 +223,16 @@ func describeVM(source string, rfName refName, vmProps vmLightProps) (*VirtualMa
 		vmFacts["vsphere_resource_pool"] = vmProps.ResourcePool.Value
 	}
 
-	if vmProps.Guest != nil && vmProps.Guest.IpAddress != "" {
-		vmFacts["primary_address"] = vmProps.Guest.IpAddress
+	if vmProps.Guest != nil {
+		vmFacts["os_pretty_name"] = vmProps.Guest.GuestFullName
+
+		if vmProps.Guest.IpAddress != "" {
+			vmFacts["primary_address"] = vmProps.Guest.IpAddress
+		}
+	}
+
+	if vmFacts["os_pretty_name"] == "" && vmProps.Config != nil && vmProps.Config.GuestFullName != "otherGuest" {
+		vmFacts["os_pretty_name"] = vmProps.Config.GuestFullName
 	}
 
 	switch {

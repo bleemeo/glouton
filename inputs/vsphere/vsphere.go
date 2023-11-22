@@ -22,6 +22,7 @@ import (
 	"fmt"
 	bleemeoTypes "glouton/bleemeo/types"
 	"glouton/config"
+	"glouton/facts"
 	"glouton/inputs"
 	"glouton/inputs/internal"
 	"glouton/logger"
@@ -215,9 +216,12 @@ func (vSphere *vSphere) describeClusters(ctx context.Context, client *vim25.Clie
 	}
 
 	clusters := make([]bleemeoTypes.VSphereDevice, 0, len(clusterProps))
+	_, fqdn := facts.GetFQDN(ctx)
 
 	for cluster, props := range clusterProps {
-		clusters = append(clusters, describeCluster(vSphere.host, cluster, props))
+		describedCluster := describeCluster(vSphere.host, cluster, props)
+		describedCluster.facts["scraper_fqdn"] = fqdn
+		clusters = append(clusters, describedCluster)
 	}
 
 	return clusters, nil
@@ -232,9 +236,12 @@ func (vSphere *vSphere) describeHosts(ctx context.Context, client *vim25.Client,
 	}
 
 	hosts := make([]bleemeoTypes.VSphereDevice, 0, len(hostProps))
+	_, fqdn := facts.GetFQDN(ctx)
 
 	for host, props := range hostProps {
-		hosts = append(hosts, describeHost(vSphere.host, host, props))
+		describedHost := describeHost(vSphere.host, host, props)
+		describedHost.facts["scraper_fqdn"] = fqdn
+		hosts = append(hosts, describedHost)
 	}
 
 	return hosts, nil
@@ -254,8 +261,11 @@ func (vSphere *vSphere) describeVMs(ctx context.Context, client *vim25.Client, r
 		netInterfacesPerVM: make(map[string]map[string]string),
 	}
 
+	_, fqdn := facts.GetFQDN(ctx)
+
 	for vm, props := range vmProps {
 		describedVM, disks, netInterfaces := describeVM(vSphere.host, vm, props)
+		describedVM.facts["scraper_fqdn"] = fqdn
 		vms = append(vms, describedVM)
 		labelsMetadata.disksPerVM[vm.Reference().Value] = disks
 		labelsMetadata.netInterfacesPerVM[vm.Reference().Value] = netInterfaces

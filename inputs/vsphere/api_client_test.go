@@ -116,6 +116,8 @@ func TestVSphereSteps(t *testing.T) {
 
 	dummyVSphere := newVSphere(vSphereURL.Host, vSphereCfg, nil)
 
+	devComparer := cmp.Comparer(deviceComparer(cmp.AllowUnexported(device{})))
+
 	/*devices, err := dummyVSphere.describeClusters(ctx, client, clusters)
 	if err != nil {
 		t.Fatalf("Got an error while describing clusters: %v", err)
@@ -143,7 +145,7 @@ func TestVSphereSteps(t *testing.T) {
 		},
 		datastores: []string{"datastore-25"},
 	}
-	if diff := cmp.Diff(expectedCluster, *cluster, cmp.AllowUnexported(Cluster{}, device{})); diff != "" {
+	if diff := cmp.Diff(expectedCluster, *cluster, cmp.AllowUnexported(Cluster{}, device=, devComparer "" {
 		t.Fatalf("Unexpected host description (-want +got):\n%s", diff)
 	}*/
 
@@ -183,7 +185,7 @@ func TestVSphereSteps(t *testing.T) {
 			state: "poweredOn",
 		},
 	}
-	if diff := cmp.Diff(expectedHost, *host, cmp.AllowUnexported(HostSystem{}, device{})); diff != "" {
+	if diff := cmp.Diff(expectedHost, *host, cmp.AllowUnexported(HostSystem{}), devComparer); diff != "" {
 		t.Fatalf("Unexpected host description (-want +got):\n%s", diff)
 	}
 
@@ -211,6 +213,7 @@ func TestVSphereSteps(t *testing.T) {
 				"fqdn":                  "DC0_C0_RP0_VM0",
 				"hostname":              "DC0_C0_RP0_VM0",
 				"memory":                "32.00 MB",
+				"os_pretty_name":        "",
 				"vsphere_host":          "host-23",
 				"vsphere_resource_pool": "resgroup-15",
 				"vsphere_vm_name":       "DC0_C0_RP0_VM0",
@@ -219,7 +222,7 @@ func TestVSphereSteps(t *testing.T) {
 			state: "poweredOn",
 		},
 	}
-	if diff := cmp.Diff(expectedVM, *vm, cmp.AllowUnexported(VirtualMachine{}, device{})); diff != "" {
+	if diff := cmp.Diff(expectedVM, *vm, cmp.AllowUnexported(VirtualMachine{}), devComparer); diff != "" {
 		t.Fatalf("Unexpected VM description (-want +got):\n%s", diff)
 	}
 
@@ -278,6 +281,7 @@ func TestVSphereLifecycle(t *testing.T) { //nolint:maintidx
 						facts: map[string]string{
 							"fqdn":                  "vcenter.vmx",
 							"hostname":              "vcenter.vmx",
+							"os_pretty_name":        "",
 							"vsphere_host":          "ha-host",
 							"vsphere_resource_pool": "ha-root-pool",
 						},
@@ -312,7 +316,7 @@ func TestVSphereLifecycle(t *testing.T) { //nolint:maintidx
 							"fqdn":                  "alp1",
 							"hostname":              "alpine",
 							"memory":                "512.00 MB",
-							"os_pretty_name":        "Other (32-bit)",
+							"os_pretty_name":        "Linux 5.15.71-0-virt Alpine Linux v3.15 Alpine Linux 3.15.6",
 							"primary_address":       "192.168.121.117",
 							"vsphere_datastore":     "datastore1",
 							"vsphere_host":          "ha-host",
@@ -390,6 +394,7 @@ func TestVSphereLifecycle(t *testing.T) { //nolint:maintidx
 							"fqdn":                  "DC0_C0_RP0_VM0",
 							"hostname":              "DC0_C0_RP0_VM0",
 							"memory":                "32.00 MB",
+							"os_pretty_name":        "",
 							"vsphere_host":          "host-23",
 							"vsphere_resource_pool": "resgroup-15",
 							"vsphere_vm_name":       "DC0_C0_RP0_VM0",
@@ -421,9 +426,9 @@ func TestVSphereLifecycle(t *testing.T) { //nolint:maintidx
 							"fqdn":                  "app-haproxy2",
 							"hostname":              "app-haproxy2",
 							"memory":                "2.00 GB",
-							"vsphere_host":          "host-11",                     // TODO improve this
-							"vsphere_resource_pool": "resgroup-8",                  // TODO improve this
-							"os_pretty_name":        "Debian GNU/Linux 5 (64-bit)", // TODO: we want "Debian GNU/Linux 11 (64-bit)"
+							"vsphere_host":          "host-11",    // TODO improve this
+							"vsphere_resource_pool": "resgroup-8", // TODO improve this
+							"os_pretty_name":        "Debian GNU/Linux 11 (64-bit)",
 							"primary_address":       "192.168.0.2",
 							"vsphere_datastore":     "Datastore001",
 							"vsphere_vm_name":       "app-haproxy2",
@@ -486,12 +491,13 @@ func TestVSphereLifecycle(t *testing.T) { //nolint:maintidx
 			}
 
 			noSourceCmp := cmpopts.IgnoreFields(device{}, "source")
+			devComparer := cmp.Comparer(deviceComparer(cmp.AllowUnexported(device{}), noSourceCmp))
 
 			sortDevices(tc.expectedClusters)
 			sortDevices(clusters)
 			// We need to compare the clusters, hosts and VMs one by one, otherwise the diff is way harder to analyze.
 			for i, expectedCluster := range tc.expectedClusters {
-				if diff := cmp.Diff(expectedCluster, clusters[i], cmp.AllowUnexported(Cluster{}, device{}), noSourceCmp); diff != "" {
+				if diff := cmp.Diff(expectedCluster, clusters[i], cmp.AllowUnexported(Cluster{}), devComparer); diff != "" {
 					t.Errorf("Unexpected cluster description (-want +got):\n%s", diff)
 				}
 			}
@@ -499,7 +505,7 @@ func TestVSphereLifecycle(t *testing.T) { //nolint:maintidx
 			sortDevices(tc.expectedHosts)
 			sortDevices(hosts)
 			for i, expectedHost := range tc.expectedHosts {
-				if diff := cmp.Diff(expectedHost, hosts[i], cmp.AllowUnexported(HostSystem{}, device{}), noSourceCmp); diff != "" {
+				if diff := cmp.Diff(expectedHost, hosts[i], cmp.AllowUnexported(HostSystem{}), devComparer); diff != "" {
 					t.Errorf("Unexpected host description (-want +got):\n%s", diff)
 				}
 			}
@@ -508,7 +514,7 @@ func TestVSphereLifecycle(t *testing.T) { //nolint:maintidx
 			sortDevices(vms)
 
 			for i, expectedVM := range tc.expectedVMs {
-				if diff := cmp.Diff(expectedVM, vms[i], cmp.AllowUnexported(VirtualMachine{}, device{}), noSourceCmp); diff != "" {
+				if diff := cmp.Diff(expectedVM, vms[i], cmp.AllowUnexported(VirtualMachine{}), devComparer); diff != "" {
 					t.Errorf("Unexpected VM description (-want +got):\n%s", diff)
 				}
 			}
@@ -540,4 +546,13 @@ func mapMap[KI, KO comparable, VI, VO any](m map[KI]VI, f func(KI, VI) (KO, VO))
 	}
 
 	return result
+}
+
+func deviceComparer(opts ...cmp.Option) func(device, device) bool {
+	return func(dev1, dev2 device) bool {
+		delete(dev1.facts, "scraper_fqdn")
+		delete(dev2.facts, "scraper_fqdn")
+
+		return cmp.Equal(dev1, dev2, opts...)
+	}
 }

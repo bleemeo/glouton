@@ -251,6 +251,7 @@ var (
 		"resourcePool",
 		"runtime.host",
 		"runtime.powerState",
+		"guest.guestFullName",
 		"guest.hostName",
 		"guest.ipAddress",
 		"guest.disk",
@@ -412,9 +413,10 @@ type (
 	}
 
 	vmLightGuest struct {
-		HostName  string
-		IpAddress string //nolint: revive,stylecheck
-		Disk      []vmLightGuestDisk
+		GuestFullName string
+		HostName      string
+		IpAddress     string //nolint: revive,stylecheck
+		Disk          []vmLightGuestDisk
 	}
 
 	vmLightGuestDisk struct {
