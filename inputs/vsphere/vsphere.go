@@ -157,8 +157,9 @@ func (vSphere *vSphere) devices(ctx context.Context, deviceChan chan<- bleemeoTy
 	logger.V(2).Printf("On vSphere %q, found %d clusters, %d hosts and %d vms in %v.", vSphere.host, len(clusters), len(hosts), len(vms), time.Since(t0))
 
 	var (
-		devs []bleemeoTypes.VSphereDevice
-		errs []error
+		devs           []bleemeoTypes.VSphereDevice
+		errs           []error
+		labelsMetadata labelsMetadata
 	)
 	// A more precise context will be given by the function that retrieves the device properties.
 	describedClusters, err := vSphere.describeClusters(ctx, client, clusters)
@@ -169,9 +170,13 @@ func (vSphere *vSphere) devices(ctx context.Context, deviceChan chan<- bleemeoTy
 	devs = append(devs, describedHosts...)
 	errs = append(errs, err)
 
-	describedVMs, labelsMetadata, err := vSphere.describeVMs(ctx, client, vms)
-	devs = append(devs, describedVMs...)
-	errs = append(errs, err)
+	if vSphere.opts.MonitorVMs {
+		var describedVMs []bleemeoTypes.VSphereDevice
+
+		describedVMs, labelsMetadata, err = vSphere.describeVMs(ctx, client, vms)
+		devs = append(devs, describedVMs...)
+		errs = append(errs, err)
+	}
 
 	dsPerLUN, err := getDatastorePerLUN(ctx, client, datastores, vSphere.devicePropsCache.datastoreCache)
 	errs = append(errs, err)
@@ -600,6 +605,12 @@ func (vSphere *vSphere) modifyLabels(labelPairs []*dto.LabelPair) (shouldBeKept 
 
 	switch {
 	case isVM:
+		if !vSphere.opts.MonitorVMs {
+			shouldBeKept = false
+
+			break
+		}
+
 		if diskLabel, ok := labels["disk"]; ok {
 			if diskLabel.GetValue() == instanceTotal {
 				shouldBeKept = false
@@ -649,6 +660,11 @@ func (vSphere *vSphere) modifyLabels(labelPairs []*dto.LabelPair) (shouldBeKept 
 
 				break
 			}
+
+			labels["item"] = &dto.LabelPair{Name: ptr("item"), Value: interfaceLabel.Value} //nolint:protogetter
+			delete(labels, "interface")
+
+			break
 		}
 
 		if lunLabel, ok := labels["lun"]; ok {
