@@ -353,7 +353,7 @@ func (vSphere *vSphere) makeHistorical5minGatherer(ctx context.Context) (prometh
 	vsphereInput.ClusterInstances = true
 
 	vsphereInput.ClusterMetricInclude = []string{
-		//"cpu.usage.average",
+		// "cpu.usage.average",
 		"mem.usage.average",
 		"mem.swapused.average",
 	}

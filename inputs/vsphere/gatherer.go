@@ -160,7 +160,9 @@ func (gatherer *vSphereGatherer) collectClusterCpu(ctx context.Context, client *
 	perfManager := performance.NewManager(client)
 
 	var startTime *time.Time
+
 	startStr := "-"
+
 	if !gatherer.lastCpuSample.IsZero() {
 		startTime = &gatherer.lastCpuSample
 		startStr = startTime.Format("2006/01/02 15:04:05.000")
@@ -205,7 +207,7 @@ func (gatherer *vSphereGatherer) collectClusterCpu(ctx context.Context, client *
 			return fmt.Errorf("invalid number of values: want 1, got %d", len(metric.Value))
 		}
 
-		value := metric.Value[0]
+		value := float64(metric.Value[0]) / 100 // Percent values need to be divided by 100.0
 
 		ts := serie.SampleInfo[0].Timestamp
 		if !ts.After(gatherer.lastCpuSample) {
@@ -220,11 +222,12 @@ func (gatherer *vSphereGatherer) collectClusterCpu(ctx context.Context, client *
 			"clustername": cluster.Name(),
 			"dcname":      h.ParentDCName(cluster),
 			"moid":        cluster.Reference().Value,
+			"cpu":         instanceTotal,
 		}
 
 		acc.AddFields("cpu", map[string]any{"usage_average": value}, tags, ts)
 
-		logger.Printf("CPU for cluster %s/%s is %d at %s", cluster.Reference().Value, cluster.Name(), value, ts.Format("2006/01/02 15:04:05.000"))
+		logger.Printf("CPU for cluster %s/%s is %f at %s", cluster.Reference().Value, cluster.Name(), value, ts.Format("2006/01/02 15:04:05.000"))
 	}
 
 	return nil
@@ -263,7 +266,7 @@ func (gatherer *vSphereGatherer) collectAdditionalMetrics(ctx context.Context, a
 		return fmt.Errorf("can't describe hierarchy: %w", err)
 	}
 
-	if gatherer.isHistorical {
+	if gatherer.isHistorical && len(clusters) != 0 {
 		err = additionalClusterMetrics(ctx, client, clusters, gatherer.devicePropsCache.hostCache, acc, h)
 		if err != nil {
 			return err
