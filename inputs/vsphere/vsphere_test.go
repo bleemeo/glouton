@@ -201,7 +201,7 @@ func setupVSphereTest(t *testing.T, hostsCount int) (vsphereRealtimeGatherer, vs
 		t.Fatal("Failed to create vSphere realtime gatherer:", err)
 	}
 
-	historical5minGatherer, _, err := vSphere.makeHistorical5minGatherer(context.Background())
+	/*historical5minGatherer, _, err := vSphere.makeHistorical5minGatherer(context.Background())
 	if err != nil {
 		t.Fatal("Failed to create vSphere historical 5min gatherer:", err)
 	}
@@ -209,11 +209,11 @@ func setupVSphereTest(t *testing.T, hostsCount int) (vsphereRealtimeGatherer, vs
 	historical30minGatherer, _, err := vSphere.makeHistorical30minGatherer(context.Background())
 	if err != nil {
 		t.Fatal("Failed to create vSphere historical 30min gatherer:", err)
-	}
+	}*/
 
-	vsphereRealtimeGatherer = realtimeGatherer.(*vSphereGatherer)               //nolint:forcetypeassert
-	vsphereHistorical5minGatherer = historical5minGatherer.(*vSphereGatherer)   //nolint:forcetypeassert
-	vsphereHistorical30minGatherer = historical30minGatherer.(*vSphereGatherer) //nolint:forcetypeassert
+	vsphereRealtimeGatherer = realtimeGatherer.(*vSphereGatherer) //nolint:forcetypeassert
+	/*vsphereHistorical5minGatherer = historical5minGatherer.(*vSphereGatherer)   //nolint:forcetypeassert
+	vsphereHistorical30minGatherer = historical30minGatherer.(*vSphereGatherer) //nolint:forcetypeassert*/
 
 	return vsphereRealtimeGatherer, vsphereHistorical5minGatherer, vsphereHistorical30minGatherer, func() {
 		model.Remove()

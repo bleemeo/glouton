@@ -85,18 +85,18 @@ func TestVSphereSteps(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	clusters, _, hosts, vms, err := findDevices(ctx, finder, false)
+	_, _, hosts, vms, err := findDevices(ctx, finder, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	fail := false
 
-	if len(clusters) != 1 {
+	/*if len(clusters) != 1 {
 		t.Errorf("Expected 1 cluster, found %d.", len(clusters))
 
 		fail = true
-	}
+	}*/
 
 	if len(hosts) != 1 {
 		t.Errorf("Expected 1 host, found %d.", len(hosts))
@@ -116,7 +116,7 @@ func TestVSphereSteps(t *testing.T) {
 
 	dummyVSphere := newVSphere(vSphereURL.Host, vSphereCfg, nil)
 
-	devices, err := dummyVSphere.describeClusters(ctx, client, clusters)
+	/*devices, err := dummyVSphere.describeClusters(ctx, client, clusters)
 	if err != nil {
 		t.Fatalf("Got an error while describing clusters: %v", err)
 	}
@@ -145,9 +145,9 @@ func TestVSphereSteps(t *testing.T) {
 	}
 	if diff := cmp.Diff(expectedCluster, *cluster, cmp.AllowUnexported(Cluster{}, device{})); diff != "" {
 		t.Fatalf("Unexpected host description (-want +got):\n%s", diff)
-	}
+	}*/
 
-	devices, err = dummyVSphere.describeHosts(ctx, client, hosts)
+	devices, err := dummyVSphere.describeHosts(ctx, client, hosts)
 	if err != nil {
 		t.Fatalf("Got an error while describing hosts: %v", err)
 	}
@@ -343,7 +343,7 @@ func TestVSphereLifecycle(t *testing.T) { //nolint:maintidx
 		{
 			name:    "vCenter vcsim'ulated",
 			dirName: "vcenter_1",
-			expectedClusters: []*Cluster{
+			/*expectedClusters: []*Cluster{
 				{
 					device: device{
 						moid: "domain-c16",
@@ -356,7 +356,7 @@ func TestVSphereLifecycle(t *testing.T) { //nolint:maintidx
 					},
 					datastores: []string{"datastore-25"},
 				},
-			},
+			},*/
 			expectedHosts: []*HostSystem{
 				{
 					device: device{

@@ -66,8 +66,8 @@ type vSphere struct {
 	state bleemeoTypes.State
 
 	realtimeGatherer        *vSphereGatherer
-	historical5minGatherer  *vSphereGatherer
-	historical30minGatherer *vSphereGatherer
+	historical5minGatherer  *vSphereGatherer //nolint: unused
+	historical30minGatherer *vSphereGatherer //nolint: unused
 
 	deviceCache      map[string]bleemeoTypes.VSphereDevice
 	devicePropsCache *propsCaches
@@ -116,14 +116,14 @@ func (vSphere *vSphere) getStatus() (types.Status, string) {
 		return types.StatusCritical, vSphere.lastErrorMessage
 	}
 
-	switch {
+	switch { //nolint: gocritic
 	case vSphere.realtimeGatherer.lastErr != nil:
 		return types.StatusCritical, "realtime endpoint error: " + vSphere.realtimeGatherer.lastErr.Error()
-	case vSphere.historical5minGatherer.lastErr != nil:
-		return types.StatusCritical, "historical 5min endpoint error: " + vSphere.historical5minGatherer.lastErr.Error()
-	case vSphere.historical30minGatherer.lastErr != nil:
-		return types.StatusCritical, "historical 30min endpoint error: " + vSphere.historical30minGatherer.lastErr.Error()
-	}
+		/*case vSphere.historical5minGatherer.lastErr != nil:
+			return types.StatusCritical, "historical 5min endpoint error: " + vSphere.historical5minGatherer.lastErr.Error()
+		case vSphere.historical30minGatherer.lastErr != nil:
+			return types.StatusCritical, "historical 30min endpoint error: " + vSphere.historical30minGatherer.lastErr.Error()*/
+	} //nolint:wsl
 
 	return types.StatusOk, ""
 }
@@ -146,7 +146,7 @@ func (vSphere *vSphere) devices(ctx context.Context, deviceChan chan<- bleemeoTy
 		return
 	}
 
-	clusters, datastores, hosts, vms, err := findDevices(findCtx, finder, true)
+	_, datastores, hosts, vms, err := findDevices(findCtx, finder, true)
 	if err != nil {
 		vSphere.setErr(err)
 		logger.V(1).Printf("Can't find devices on vSphere %q: %v", vSphere.host, err)
@@ -154,7 +154,8 @@ func (vSphere *vSphere) devices(ctx context.Context, deviceChan chan<- bleemeoTy
 		return
 	}
 
-	logger.V(2).Printf("On vSphere %q, found %d clusters, %d hosts and %d vms in %v.", vSphere.host, len(clusters), len(hosts), len(vms), time.Since(t0))
+	/*logger.V(2).Printf("On vSphere %q, found %d clusters, %d hosts and %d vms in %v.", vSphere.host, len(clusters), len(hosts), len(vms), time.Since(t0))*/
+	logger.V(2).Printf("On vSphere %q, found %d hosts and %d vms in %v.", vSphere.host, len(hosts), len(vms), time.Since(t0))
 
 	var (
 		devs           []bleemeoTypes.VSphereDevice
@@ -162,9 +163,9 @@ func (vSphere *vSphere) devices(ctx context.Context, deviceChan chan<- bleemeoTy
 		labelsMetadata labelsMetadata
 	)
 	// A more precise context will be given by the function that retrieves the device properties.
-	describedClusters, err := vSphere.describeClusters(ctx, client, clusters)
+	/*describedClusters, err := vSphere.describeClusters(ctx, client, clusters)
 	devs = append(devs, describedClusters...)
-	errs = append(errs, err)
+	errs = append(errs, err)*/
 
 	describedHosts, err := vSphere.describeHosts(ctx, client, hosts)
 	devs = append(devs, describedHosts...)
@@ -205,7 +206,7 @@ func (vSphere *vSphere) devices(ctx context.Context, deviceChan chan<- bleemeoTy
 	vSphere.devicePropsCache.purge()
 }
 
-func (vSphere *vSphere) describeClusters(ctx context.Context, client *vim25.Client, rawClusters []*object.ClusterComputeResource) ([]bleemeoTypes.VSphereDevice, error) {
+func (vSphere *vSphere) describeClusters(ctx context.Context, client *vim25.Client, rawClusters []*object.ClusterComputeResource) ([]bleemeoTypes.VSphereDevice, error) { //nolint: unused
 	clusterProps, err := retrieveProps(ctx, client, rawClusters, relevantClusterProperties, vSphere.devicePropsCache.clusterCache)
 	if err != nil {
 		logger.V(1).Printf("Failed to retrieve cluster props of %s: %v", vSphere.host, err)
@@ -346,7 +347,7 @@ func (vSphere *vSphere) makeRealtimeGatherer(ctx context.Context) (prometheus.Ga
 	return gatherer, opt, nil
 }
 
-func (vSphere *vSphere) makeHistorical5minGatherer(ctx context.Context) (prometheus.Gatherer, registry.RegistrationOption, error) {
+func (vSphere *vSphere) makeHistorical5minGatherer(ctx context.Context) (prometheus.Gatherer, registry.RegistrationOption, error) { //nolint: unused
 	input, ok := telegraf_inputs.Inputs["vsphere"]
 	if !ok {
 		return nil, registry.RegistrationOption{}, inputs.ErrDisabledInput
@@ -411,7 +412,7 @@ func (vSphere *vSphere) makeHistorical5minGatherer(ctx context.Context) (prometh
 	return gatherer, opt, nil
 }
 
-func (vSphere *vSphere) makeHistorical30minGatherer(ctx context.Context) (prometheus.Gatherer, registry.RegistrationOption, error) {
+func (vSphere *vSphere) makeHistorical30minGatherer(ctx context.Context) (prometheus.Gatherer, registry.RegistrationOption, error) { //nolint: unused
 	input, ok := telegraf_inputs.Inputs["vsphere"]
 	if !ok {
 		return nil, registry.RegistrationOption{}, inputs.ErrDisabledInput
@@ -568,8 +569,6 @@ func (vSphere *vSphere) gatherModifier(mfs []*dto.MetricFamily, _ error) []*dto.
 			}
 
 			mfs = append(mfs, vSphereDeviceStatus)
-
-			logger.Printf("Marking agent %s/%s as %s", moid, dev.Name(), deviceStatus.String())
 		}
 
 		vSphere.lastStatuses[moid] = deviceStatus
@@ -736,10 +735,10 @@ func (vSphere *vSphere) renameGlobal(gatherContext internal.GatherContext) (resu
 
 		tags["item"] = value
 
-		if gatherContext.Measurement == "vsphere_datastore_disk" {
+		/*if gatherContext.Measurement == "vsphere_datastore_disk" {
 			logger.Printf("dsname of %s is %q / %v / %v", tags[types.LabelMetaVSphereMOID], value, gatherContext.OriginalFields, tags)
-		}
-	}
+		}*/
+	} //nolint:wsl
 
 	gatherContext.Tags = tags
 

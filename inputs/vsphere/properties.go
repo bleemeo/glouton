@@ -197,7 +197,7 @@ func retrieveProps[ref commonObject, props any](ctx context.Context, client *vim
 
 //nolint:gochecknoglobals
 var (
-	relevantClusterProperties = []string{
+	relevantClusterProperties = []string{ //nolint: unused
 		"overallStatus",
 		"datastore",
 		"summary",

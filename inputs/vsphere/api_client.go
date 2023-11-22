@@ -27,6 +27,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/influxdata/telegraf"
 	"github.com/vmware/govmomi"
@@ -64,15 +65,16 @@ func newDeviceFinder(ctx context.Context, vSphereCfg config.VSphere) (*find.Find
 	return f, c.Client, nil
 }
 
-func findDevices(ctx context.Context, finder *find.Finder, listDatastores bool) (clusters []*object.ClusterComputeResource, datastores []*object.Datastore, hosts []*object.HostSystem, vms []*object.VirtualMachine, err error) {
+func findDevices(ctx context.Context, finder *find.Finder, listDatastores bool) (clusters []*object.ClusterComputeResource, datastores []*object.Datastore, hosts []*object.HostSystem, vms []*object.VirtualMachine, err error) { //nolint: unparam
 	// The find.NotFoundError is thrown when no devices are found,
 	// even if the path is not restrictive to a particular device.
 	var notFoundError *find.NotFoundError
 
-	clusters, err = finder.ClusterComputeResourceList(ctx, "*")
+	//nolint: dupword
+	/*clusters, err = finder.ClusterComputeResourceList(ctx, "*")
 	if err != nil && !errors.As(err, &notFoundError) {
 		return nil, nil, nil, nil, err
-	}
+	}*/
 
 	if listDatastores {
 		datastores, err = finder.DatastoreList(ctx, "*")
@@ -94,7 +96,7 @@ func findDevices(ctx context.Context, finder *find.Finder, listDatastores bool) 
 	return clusters, datastores, hosts, vms, nil
 }
 
-func describeCluster(source string, rfName refName, clusterProps clusterLightProps) *Cluster {
+func describeCluster(source string, rfName refName, clusterProps clusterLightProps) *Cluster { //nolint: unused
 	clusterFacts := make(map[string]string)
 
 	if resourceSummary := clusterProps.ComputeResource.Summary; resourceSummary != nil {
@@ -326,7 +328,7 @@ func getDatastorePerLUN(ctx context.Context, client *vim25.Client, datastores []
 	return dsPerLUN, nil
 }
 
-func additionalClusterMetrics(ctx context.Context, client *vim25.Client, clusters []*object.ClusterComputeResource, cache *propsCache[hostLightProps], acc telegraf.Accumulator, h *hierarchy) error {
+func additionalClusterMetrics(ctx context.Context, client *vim25.Client, clusters []*object.ClusterComputeResource, cache *propsCache[hostLightProps], acc telegraf.Accumulator, h *hierarchy, t0 time.Time) error {
 	for _, cluster := range clusters {
 		hosts, err := cluster.Hosts(ctx)
 		if err != nil {
@@ -359,13 +361,13 @@ func additionalClusterMetrics(ctx context.Context, client *vim25.Client, cluster
 			"moid":        cluster.Reference().Value,
 		}
 
-		acc.AddFields("hosts", fields, tags)
+		acc.AddFields("hosts", fields, tags, t0)
 	}
 
 	return nil
 }
 
-func additionalHostMetrics(_ context.Context, _ *vim25.Client, hosts []*object.HostSystem, acc telegraf.Accumulator, h *hierarchy, vmStatesPerHost map[string][]bool) error {
+func additionalHostMetrics(_ context.Context, _ *vim25.Client, hosts []*object.HostSystem, acc telegraf.Accumulator, h *hierarchy, vmStatesPerHost map[string][]bool, t0 time.Time) error {
 	for _, host := range hosts {
 		moid := host.Reference().Value
 		if vmStates, ok := vmStatesPerHost[moid]; ok {
@@ -391,14 +393,14 @@ func additionalHostMetrics(_ context.Context, _ *vim25.Client, hosts []*object.H
 				"moid":        moid,
 			}
 
-			acc.AddFields("vms", fields, tags)
+			acc.AddFields("vms", fields, tags, t0)
 		}
 	}
 
 	return nil
 }
 
-func additionalVMMetrics(ctx context.Context, client *vim25.Client, vms []*object.VirtualMachine, cache *propsCache[vmLightProps], acc telegraf.Accumulator, h *hierarchy, vmStatePerHost map[string][]bool) error {
+func additionalVMMetrics(ctx context.Context, client *vim25.Client, vms []*object.VirtualMachine, cache *propsCache[vmLightProps], acc telegraf.Accumulator, h *hierarchy, vmStatePerHost map[string][]bool, t0 time.Time) error {
 	vmProps, err := retrieveProps(ctx, client, vms, relevantVMProperties, cache)
 	if err != nil {
 		return err
@@ -429,7 +431,7 @@ func additionalVMMetrics(ctx context.Context, client *vim25.Client, vms []*objec
 					"vmname":      vm.Name(),
 				}
 
-				acc.AddFields("vsphere_vm_disk", map[string]any{"used_perc": usage}, tags)
+				acc.AddFields("vsphere_vm_disk", map[string]any{"used_perc": usage}, tags, t0)
 			}
 		}
 	}

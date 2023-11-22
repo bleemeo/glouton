@@ -218,8 +218,6 @@ func (ima *inactiveMarkerAccumulator) deactivateUnseenMetrics() {
 				}
 				tagsMap := types.TextToLabels(oldTag)
 
-				logger.Printf("Deactivating metric %s_%s on %s", oldMeasurement, oldField, oldTag)
-
 				if cache.callback != nil {
 					cache.callback(ima.FixedTimeAccumulator, oldMeasurement, fieldsMap, tagsMap, ima.Time)
 				} else {

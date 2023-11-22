@@ -28,8 +28,6 @@ import (
 	"glouton/prometheus/registry"
 	"glouton/types"
 	"net/url"
-	"reflect"
-	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -37,14 +35,8 @@ import (
 
 	"github.com/influxdata/telegraf"
 	"github.com/influxdata/telegraf/plugins/inputs/vsphere"
-	"github.com/kr/pretty"
 	dto "github.com/prometheus/client_model/go"
-	"github.com/vmware/govmomi/object"
-	"github.com/vmware/govmomi/performance"
-	"github.com/vmware/govmomi/vim25"
 	"github.com/vmware/govmomi/vim25/soap"
-	vmware_types "github.com/vmware/govmomi/vim25/types"
-	"golang.org/x/exp/maps"
 )
 
 const endpointCreationRetryDelay = 5 * time.Minute
@@ -52,9 +44,8 @@ const endpointCreationRetryDelay = 5 * time.Minute
 type vSphereGatherer struct {
 	// If true, we should only gather cluster & datastore metrics.
 	// Otherwise, we should only gather host & VMs metrics.
-	isHistorical  bool
-	interval      time.Duration // TODO: remove
-	lastCpuSample time.Time
+	isHistorical bool
+	interval     time.Duration
 
 	cfg *config.VSphere
 	// Storing the endpoint's URL, just in case the endpoint can't be
@@ -98,13 +89,11 @@ func (gatherer *vSphereGatherer) GatherWithState(ctx context.Context, state regi
 				Pusher:  gatherer.buffer,
 				Context: ctx,
 			},
-			timestamps: make(map[int]int), // TODO: remove
 		}
-		acc := gatherer.acc
-		acc.Accumulator = &errAcc
+		gatherer.acc.Accumulator = &errAcc
 
-		err := gatherer.endpoint.Collect(ctx, acc)
-		errAddMetrics := gatherer.collectAdditionalMetrics(ctx, acc)
+		err := gatherer.endpoint.Collect(ctx, gatherer.acc)
+		errAddMetrics := gatherer.collectAdditionalMetrics(ctx, state, gatherer.acc)
 		allErrs := errors.Join(filterErrors(append(errAcc.errs, err, errAddMetrics))...)
 
 		gatherer.lastPoints = gatherer.buffer.Points()
@@ -119,125 +108,11 @@ func (gatherer *vSphereGatherer) GatherWithState(ctx context.Context, state regi
 				logger.Printf("=> %s: disk_used %v (%f)", point.Time.Format("2006/01/02 15:04:05.000"), point.Labels, point.Value)
 			}
 		}
-
-		msg := "Past timestamps count (%s / %s):"
-
-		delete(errAcc.timestamps, 0) // Remove timestamps that haven't been defined
-
-		if len(errAcc.timestamps) == 0 {
-			msg += " none."
-		} else {
-			now := state.T0.Truncate(time.Second)
-			timestamps := maps.Keys(errAcc.timestamps)
-			sort.Ints(timestamps)
-
-			for _, ts := range timestamps {
-				age := now.Sub(time.Unix(int64(ts), 0))
-				msg += fmt.Sprintf("\n%d timestamps from %s ago", errAcc.timestamps[ts], age.String())
-			}
-		}
-
-		intervalKind := "realtime"
-		if gatherer.isHistorical {
-			intervalKind = "historical " + gatherer.interval.String()
-		}
-
-		logger.Printf(msg, gatherer.soapURL.Host, intervalKind)
 	}
 
 	mfs := model.MetricPointsToFamilies(gatherer.lastPoints)
 
 	return mfs, gatherer.lastErr
-}
-
-func (gatherer *vSphereGatherer) collectClusterCpu(ctx context.Context, client *vim25.Client, clusters []*object.ClusterComputeResource, acc telegraf.Accumulator, h *hierarchy) error {
-	logger.Printf("Collecting clusters CPU ...")
-
-	clusterRefs := make([]vmware_types.ManagedObjectReference, len(clusters))
-
-	for i, cluster := range clusters {
-		clusterRefs[i] = cluster.Reference()
-	}
-
-	client.RoundTripper = &dump{client.RoundTripper}
-
-	perfManager := performance.NewManager(client)
-
-	now := time.Now().Truncate(time.Minute)
-
-	var startTime time.Time
-
-	if !gatherer.lastCpuSample.IsZero() {
-		startTime = gatherer.lastCpuSample
-	} else {
-		startTime = now.Add(-35 * time.Minute)
-	}
-
-	endTime := now
-
-	logger.Printf("Start time: %s / End time: %s", startTime.Format("2006/01/02 15:04:05.000"), endTime.Format("2006/01/02 15:04:05.000"))
-
-	spec := vmware_types.PerfQuerySpec{
-		StartTime:  &startTime,
-		EndTime:    &endTime,
-		MaxSample:  7,
-		MetricId:   []vmware_types.PerfMetricId{{Instance: "*"}},
-		IntervalId: 300,
-	}
-
-	sample, err := perfManager.SampleByName(ctx, spec, []string{"cpu.usage.average"}, clusterRefs)
-	if err != nil {
-		return fmt.Errorf("can't get sample by name: %w", err)
-	}
-
-	series, err := perfManager.ToMetricSeries(ctx, sample)
-	if err != nil {
-		return fmt.Errorf("can't convert sample to metric series: %w", err)
-	}
-
-	logger.Printf("Got %d serie(s) for cluster CPU metric", len(series))
-
-	for _, serie := range series {
-		cluster := clusters[slices.Index(clusterRefs, serie.Entity)]
-
-		if len(serie.SampleInfo) < 1 {
-			return fmt.Errorf("invalid number of timestamps: want at least 1, got %d", len(serie.SampleInfo))
-		}
-
-		if len(serie.Value) != 1 {
-			return fmt.Errorf("invalid number of metrics: want 1, got %d", len(serie.Value))
-		}
-
-		metric := serie.Value[0]
-
-		if len(metric.Value) < 1 {
-			return fmt.Errorf("invalid number of values: want at least 1, got %d", len(metric.Value))
-		}
-
-		value := float64(metric.Value[0]) / 100 // Percent values need to be divided by 100.0
-
-		ts := serie.SampleInfo[0].Timestamp
-		if !ts.After(gatherer.lastCpuSample) {
-			logger.Printf("Timestamp %s is not after previous one %s", ts.Format("2006/01/02 15:04:05.000"), gatherer.lastCpuSample.Format("2006/01/02 15:04:05.000"))
-
-			continue
-		}
-
-		gatherer.lastCpuSample = ts
-
-		tags := map[string]string{
-			"clustername": cluster.Name(),
-			"dcname":      h.ParentDCName(cluster),
-			"moid":        cluster.Reference().Value,
-			"cpu":         instanceTotal,
-		}
-
-		acc.AddFields("cpu", map[string]any{"usage_average": value}, tags, ts)
-
-		logger.Printf("CPU for cluster %s/%s is %f at %s", cluster.Reference().Value, cluster.Name(), value, ts.Format("2006/01/02 15:04:05.000"))
-	}
-
-	return nil
 }
 
 func filterErrors(errs []error) []error {
@@ -253,7 +128,7 @@ func filterErrors(errs []error) []error {
 	return errs[:n]
 }
 
-func (gatherer *vSphereGatherer) collectAdditionalMetrics(ctx context.Context, acc telegraf.Accumulator) error {
+func (gatherer *vSphereGatherer) collectAdditionalMetrics(ctx context.Context, state registry.GatherState, acc telegraf.Accumulator) error {
 	finder, client, err := newDeviceFinder(ctx, *gatherer.cfg)
 	if err != nil {
 		return err
@@ -273,26 +148,21 @@ func (gatherer *vSphereGatherer) collectAdditionalMetrics(ctx context.Context, a
 		return fmt.Errorf("can't describe hierarchy: %w", err)
 	}
 
-	if gatherer.isHistorical && len(clusters) != 0 {
-		err = additionalClusterMetrics(ctx, client, clusters, gatherer.devicePropsCache.hostCache, acc, h)
-		if err != nil {
-			return err
-		}
-
-		err = gatherer.collectClusterCpu(ctx, client, clusters, acc, h)
+	if gatherer.isHistorical && gatherer.interval == 5*time.Minute && len(clusters) != 0 {
+		err = additionalClusterMetrics(ctx, client, clusters, gatherer.devicePropsCache.hostCache, acc, h, state.T0)
 		if err != nil {
 			return err
 		}
 	} else {
-		// For each host, we have a list of vm states (running/stopped)
+		// For each host, we want a list of vm states (running/stopped).
 		vmStatesPerHost := make(map[string][]bool, len(hosts))
 
-		err = additionalVMMetrics(ctx, client, vms, gatherer.devicePropsCache.vmCache, acc, h, vmStatesPerHost)
+		err = additionalVMMetrics(ctx, client, vms, gatherer.devicePropsCache.vmCache, acc, h, vmStatesPerHost, state.T0)
 		if err != nil {
 			return err
 		}
 
-		err = additionalHostMetrics(ctx, client, hosts, acc, h, vmStatesPerHost)
+		err = additionalHostMetrics(ctx, client, hosts, acc, h, vmStatesPerHost, state.T0)
 		if err != nil {
 			return err
 		}
@@ -410,44 +280,8 @@ type errorAccumulator struct {
 	telegraf.Accumulator
 
 	errs []error
-
-	timestamps map[int]int
 }
 
 func (errAcc *errorAccumulator) AddError(err error) {
 	errAcc.errs = append(errAcc.errs, err)
-}
-
-func (errAcc *errorAccumulator) AddFields(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	if len(t) == 1 && !t[0].IsZero() {
-		errAcc.timestamps[int(t[0].Unix())]++ // int is at least sufficient until 2038.
-	}
-
-	errAcc.Accumulator.AddFields(measurement, fields, tags, t...)
-}
-
-type dump struct {
-	roundTripper soap.RoundTripper
-}
-
-func (d *dump) RoundTrip(ctx context.Context, req, res soap.HasFault) error {
-	vreq := reflect.ValueOf(req).Elem().FieldByName("Req").Elem()
-	if vreq.Type().Name() != "QueryPerf" {
-		return d.roundTripper.RoundTrip(ctx, req, res)
-	}
-
-	logger.Printf(pretty.Sprintf("%s [REQ] %# v\n", time.Now().Format("2006/01/02 15:04:05.000"), vreq.Interface()))
-
-	err := d.roundTripper.RoundTrip(ctx, req, res)
-	if err != nil {
-		if fault := res.Fault(); fault != nil {
-			logger.Printf(pretty.Sprintf("%s [ERR] %# v\n", time.Now().Format("2006/01/02 15:04:05.000"), fault))
-		}
-		return err
-	}
-
-	vres := reflect.ValueOf(res).Elem().FieldByName("Res").Elem()
-	logger.Printf(pretty.Sprintf("%s [RES] %# v\n", time.Now().Format("2006/01/02 15:04:05.000"), vres.Interface()))
-
-	return nil
 }
