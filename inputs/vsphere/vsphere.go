@@ -278,7 +278,7 @@ func (vSphere *vSphere) describeVMs(ctx context.Context, client *vim25.Client, r
 	return vms, labelsMetadata, nil
 }
 
-func (vSphere *vSphere) makeRealtimeGatherer(ctx context.Context) (prometheus.Gatherer, registry.RegistrationOption, error) {
+func (vSphere *vSphere) makeRealtimeGatherer(ctx context.Context) (registry.GathererWithOrWithoutState, registry.RegistrationOption, error) {
 	input, ok := telegraf_inputs.Inputs["vsphere"]
 	if !ok {
 		return nil, registry.RegistrationOption{}, inputs.ErrDisabledInput
