@@ -216,7 +216,7 @@ func (f *FactProvider) fastUpdateFacts(ctx context.Context) map[string]string {
 
 	newFacts["architecture"] = runtime.GOARCH
 
-	hostname, fqdn := GetFQDN(ctx)
+	hostname, fqdn := getFQDN(ctx)
 	newFacts["fqdn"] = fqdn
 	newFacts["hostname"] = hostname
 
@@ -341,7 +341,7 @@ func tzFromSymlink(target string) string {
 	return ""
 }
 
-func GetFQDN(ctx context.Context) (hostname string, fqdn string) {
+func getFQDN(ctx context.Context) (hostname string, fqdn string) {
 	hostname, _ = os.Hostname()
 
 	fqdn, err := net.DefaultResolver.LookupCNAME(ctx, hostname)

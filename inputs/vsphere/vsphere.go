@@ -22,7 +22,6 @@ import (
 	"fmt"
 	bleemeoTypes "glouton/bleemeo/types"
 	"glouton/config"
-	"glouton/facts"
 	"glouton/inputs"
 	"glouton/inputs/internal"
 	"glouton/logger"
@@ -64,7 +63,8 @@ type vSphere struct {
 	host string
 	opts config.VSphere
 
-	state bleemeoTypes.State
+	state        bleemeoTypes.State
+	factProvider bleemeoTypes.FactProvider
 
 	realtimeGatherer        *vSphereGatherer
 	historical5minGatherer  *vSphereGatherer //nolint: unused
@@ -81,11 +81,12 @@ type vSphere struct {
 	l sync.Mutex
 }
 
-func newVSphere(host string, cfg config.VSphere, state bleemeoTypes.State) *vSphere {
+func newVSphere(host string, cfg config.VSphere, state bleemeoTypes.State, factProvider bleemeoTypes.FactProvider) *vSphere {
 	return &vSphere{
 		host:             host,
 		opts:             cfg,
 		state:            state,
+		factProvider:     factProvider,
 		deviceCache:      make(map[string]bleemeoTypes.VSphereDevice),
 		devicePropsCache: newPropsCaches(),
 		labelsMetadata: labelsMetadata{
@@ -158,24 +159,31 @@ func (vSphere *vSphere) devices(ctx context.Context, deviceChan chan<- bleemeoTy
 	/*logger.V(2).Printf("On vSphere %q, found %d clusters, %d hosts and %d vms in %v.", vSphere.host, len(clusters), len(hosts), len(vms), time.Since(t0))*/
 	logger.V(2).Printf("On vSphere %q, found %d hosts and %d vms in %v.", vSphere.host, len(hosts), len(vms), time.Since(t0))
 
+	scraperFacts, err := vSphere.factProvider.Facts(ctx, time.Hour)
+	if err != nil {
+		vSphere.setErr(err)
+
+		return
+	}
+
 	var (
 		devs           []bleemeoTypes.VSphereDevice
 		errs           []error
 		labelsMetadata labelsMetadata
 	)
 	// A more precise context will be given by the function that retrieves the device properties.
-	/*describedClusters, err := vSphere.describeClusters(ctx, client, clusters)
+	/*describedClusters, err := vSphere.describeClusters(ctx, client, clusters, scraperFacts)
 	devs = append(devs, describedClusters...)
 	errs = append(errs, err)*/
 
-	describedHosts, err := vSphere.describeHosts(ctx, client, hosts)
+	describedHosts, err := vSphere.describeHosts(ctx, client, hosts, scraperFacts)
 	devs = append(devs, describedHosts...)
 	errs = append(errs, err)
 
 	if !vSphere.opts.SkipMonitorVMs {
 		var describedVMs []bleemeoTypes.VSphereDevice
 
-		describedVMs, labelsMetadata, err = vSphere.describeVMs(ctx, client, vms)
+		describedVMs, labelsMetadata, err = vSphere.describeVMs(ctx, client, vms, scraperFacts)
 		devs = append(devs, describedVMs...)
 		errs = append(errs, err)
 	}
@@ -207,7 +215,7 @@ func (vSphere *vSphere) devices(ctx context.Context, deviceChan chan<- bleemeoTy
 	vSphere.devicePropsCache.purge()
 }
 
-func (vSphere *vSphere) describeClusters(ctx context.Context, client *vim25.Client, rawClusters []*object.ClusterComputeResource) ([]bleemeoTypes.VSphereDevice, error) { //nolint: unused
+func (vSphere *vSphere) describeClusters(ctx context.Context, client *vim25.Client, rawClusters []*object.ClusterComputeResource, scraperFacts map[string]string) ([]bleemeoTypes.VSphereDevice, error) { //nolint: unused
 	clusterProps, err := retrieveProps(ctx, client, rawClusters, relevantClusterProperties, vSphere.devicePropsCache.clusterCache)
 	if err != nil {
 		logger.V(1).Printf("Failed to retrieve cluster props of %s: %v", vSphere.host, err)
@@ -216,18 +224,17 @@ func (vSphere *vSphere) describeClusters(ctx context.Context, client *vim25.Clie
 	}
 
 	clusters := make([]bleemeoTypes.VSphereDevice, 0, len(clusterProps))
-	_, fqdn := facts.GetFQDN(ctx)
 
 	for cluster, props := range clusterProps {
 		describedCluster := describeCluster(vSphere.host, cluster, props)
-		describedCluster.facts["scraper_fqdn"] = fqdn
+		describedCluster.facts["scraper_fqdn"] = scraperFacts["fqdn"]
 		clusters = append(clusters, describedCluster)
 	}
 
 	return clusters, nil
 }
 
-func (vSphere *vSphere) describeHosts(ctx context.Context, client *vim25.Client, rawHosts []*object.HostSystem) ([]bleemeoTypes.VSphereDevice, error) {
+func (vSphere *vSphere) describeHosts(ctx context.Context, client *vim25.Client, rawHosts []*object.HostSystem, scraperFacts map[string]string) ([]bleemeoTypes.VSphereDevice, error) {
 	hostProps, err := retrieveProps(ctx, client, rawHosts, relevantHostProperties, vSphere.devicePropsCache.hostCache)
 	if err != nil {
 		logger.V(1).Printf("Failed to retrieve host props of %s: %v", vSphere.host, err)
@@ -236,18 +243,17 @@ func (vSphere *vSphere) describeHosts(ctx context.Context, client *vim25.Client,
 	}
 
 	hosts := make([]bleemeoTypes.VSphereDevice, 0, len(hostProps))
-	_, fqdn := facts.GetFQDN(ctx)
 
 	for host, props := range hostProps {
 		describedHost := describeHost(vSphere.host, host, props)
-		describedHost.facts["scraper_fqdn"] = fqdn
+		describedHost.facts["scraper_fqdn"] = scraperFacts["fqdn"]
 		hosts = append(hosts, describedHost)
 	}
 
 	return hosts, nil
 }
 
-func (vSphere *vSphere) describeVMs(ctx context.Context, client *vim25.Client, rawVMs []*object.VirtualMachine) ([]bleemeoTypes.VSphereDevice, labelsMetadata, error) {
+func (vSphere *vSphere) describeVMs(ctx context.Context, client *vim25.Client, rawVMs []*object.VirtualMachine, scraperFacts map[string]string) ([]bleemeoTypes.VSphereDevice, labelsMetadata, error) {
 	vmProps, err := retrieveProps(ctx, client, rawVMs, relevantVMProperties, vSphere.devicePropsCache.vmCache)
 	if err != nil {
 		logger.V(1).Printf("Failed to retrieve VM props of %s: %v", vSphere.host, err)
@@ -261,11 +267,9 @@ func (vSphere *vSphere) describeVMs(ctx context.Context, client *vim25.Client, r
 		netInterfacesPerVM: make(map[string]map[string]string),
 	}
 
-	_, fqdn := facts.GetFQDN(ctx)
-
 	for vm, props := range vmProps {
 		describedVM, disks, netInterfaces := describeVM(vSphere.host, vm, props)
-		describedVM.facts["scraper_fqdn"] = fqdn
+		describedVM.facts["scraper_fqdn"] = scraperFacts["fqdn"]
 		vms = append(vms, describedVM)
 		labelsMetadata.disksPerVM[vm.Reference().Value] = disks
 		labelsMetadata.netInterfacesPerVM[vm.Reference().Value] = netInterfaces

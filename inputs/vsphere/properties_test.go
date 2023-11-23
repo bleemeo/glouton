@@ -19,6 +19,7 @@ package vsphere
 import (
 	"context"
 	bleemeoTypes "glouton/bleemeo/types"
+	"glouton/facts"
 	"net/url"
 	"testing"
 
@@ -33,7 +34,7 @@ func TestPropsCaches(t *testing.T) { //nolint:maintidx
 
 	u, _ := url.Parse(vSphereCfg.URL)
 
-	vSphere := newVSphere(u.Host, vSphereCfg, nil)
+	vSphere := newVSphere(u.Host, vSphereCfg, nil, facts.NewMockFacter(make(map[string]string)))
 	devChan := make(chan bleemeoTypes.VSphereDevice)
 
 	go func() {

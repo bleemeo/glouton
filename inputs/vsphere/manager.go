@@ -87,7 +87,7 @@ func (m *Manager) EndpointsInError() map[string]bool {
 	return endpoints
 }
 
-func (m *Manager) RegisterGatherers(ctx context.Context, vSphereCfgs []config.VSphere, registerGatherer func(opt registry.RegistrationOption, gatherer prometheus.Gatherer) (int, error), state bleemeoTypes.State) {
+func (m *Manager) RegisterGatherers(ctx context.Context, vSphereCfgs []config.VSphere, registerGatherer func(opt registry.RegistrationOption, gatherer prometheus.Gatherer) (int, error), state bleemeoTypes.State, factProvider bleemeoTypes.FactProvider) {
 	m.l.Lock()
 	defer m.l.Unlock()
 
@@ -105,7 +105,7 @@ func (m *Manager) RegisterGatherers(ctx context.Context, vSphereCfgs []config.VS
 			continue
 		}
 
-		vSphere := newVSphere(u.Host, vSphereCfg, state)
+		vSphere := newVSphere(u.Host, vSphereCfg, state, factProvider)
 
 		realtimeGatherer, opt, err := vSphere.makeRealtimeGatherer(ctx)
 		if err != nil {

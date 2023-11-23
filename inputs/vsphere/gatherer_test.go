@@ -19,6 +19,7 @@ package vsphere
 import (
 	"context"
 	"glouton/config"
+	"glouton/facts"
 	"glouton/prometheus/registry"
 	"glouton/types"
 	"strings"
@@ -40,7 +41,7 @@ func TestGatheringESXI(t *testing.T) { //nolint:maintidx
 	defer cancel()
 
 	manager := new(Manager)
-	manager.RegisterGatherers(ctx, []config.VSphere{vSphereCfg}, func(opt registry.RegistrationOption, gatherer prometheus.Gatherer) (int, error) { return 0, nil }, nil)
+	manager.RegisterGatherers(ctx, []config.VSphere{vSphereCfg}, func(opt registry.RegistrationOption, gatherer prometheus.Gatherer) (int, error) { return 0, nil }, nil, facts.NewMockFacter(make(map[string]string)))
 
 	manager.Devices(ctx, 0)
 

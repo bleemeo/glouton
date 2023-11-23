@@ -102,13 +102,7 @@ func (gatherer *vSphereGatherer) GatherWithState(ctx context.Context, state regi
 		sort.Slice(gatherer.lastPoints, func(i, j int) bool {
 			return gatherer.lastPoints[i].Time.Before(gatherer.lastPoints[j].Time)
 		})
-
-		/*for _, point := range gatherer.lastPoints {
-			if point.Labels[types.LabelName] == "disk_used" && point.Labels["dcname"] != "" {
-				logger.Printf("=> %s: disk_used %v (%f)", point.Time.Format("2006/01/02 15:04:05.000"), point.Labels, point.Value)
-			}
-		}*/
-	} //nolint:wsl
+	}
 
 	mfs := model.MetricPointsToFamilies(gatherer.lastPoints)
 

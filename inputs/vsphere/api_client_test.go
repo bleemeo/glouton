@@ -21,6 +21,7 @@ import (
 	"crypto/tls"
 	bleemeoTypes "glouton/bleemeo/types"
 	"glouton/config"
+	"glouton/facts"
 	"glouton/prometheus/registry"
 	"net/url"
 	"sort"
@@ -114,9 +115,10 @@ func TestVSphereSteps(t *testing.T) {
 		t.FailNow()
 	}
 
-	dummyVSphere := newVSphere(vSphereURL.Host, vSphereCfg, nil)
+	const scraperFQDN = "scraper FQDN"
 
-	devComparer := cmp.Comparer(deviceComparer(cmp.AllowUnexported(device{})))
+	providedFacts := map[string]string{"fqdn": scraperFQDN}
+	dummyVSphere := newVSphere(vSphereURL.Host, vSphereCfg, nil, facts.NewMockFacter(providedFacts))
 
 	/*devices, err := dummyVSphere.describeClusters(ctx, client, clusters)
 	if err != nil {
@@ -145,11 +147,11 @@ func TestVSphereSteps(t *testing.T) {
 		},
 		datastores: []string{"datastore-25"},
 	}
-	if diff := cmp.Diff(expectedCluster, *cluster, cmp.AllowUnexported(Cluster{}, device=, devComparer "" {
+	if diff := cmp.Diff(expectedCluster, *cluster, cmp.AllowUnexported(Cluster{}, device{})); diff != "" {
 		t.Fatalf("Unexpected host description (-want +got):\n%s", diff)
 	}*/
 
-	devices, err := dummyVSphere.describeHosts(ctx, client, hosts)
+	devices, err := dummyVSphere.describeHosts(ctx, client, hosts, providedFacts)
 	if err != nil {
 		t.Fatalf("Got an error while describing hosts: %v", err)
 	}
@@ -178,6 +180,7 @@ func TestVSphereSteps(t *testing.T) {
 				"os_pretty_name":          "vmnix-x86",
 				"primary_address":         "127.0.0.1",
 				"product_name":            "VMware Virtual Platform",
+				"scraper_fqdn":            "scraper FQDN",
 				"system_vendor":           "VMware, Inc. (govmomi simulator)",
 				"vsphere_host_version":    "6.5.0",
 				"vsphere_vmotion_enabled": "false",
@@ -185,11 +188,11 @@ func TestVSphereSteps(t *testing.T) {
 			state: "poweredOn",
 		},
 	}
-	if diff := cmp.Diff(expectedHost, *host, cmp.AllowUnexported(HostSystem{}), devComparer); diff != "" {
+	if diff := cmp.Diff(expectedHost, *host, cmp.AllowUnexported(HostSystem{}, device{})); diff != "" {
 		t.Fatalf("Unexpected host description (-want +got):\n%s", diff)
 	}
 
-	devices, vmLabelsMetadata, err := dummyVSphere.describeVMs(ctx, client, vms)
+	devices, vmLabelsMetadata, err := dummyVSphere.describeVMs(ctx, client, vms, providedFacts)
 	if err != nil {
 		t.Fatalf("Got an error while describing vms: %v", err)
 	}
@@ -214,6 +217,7 @@ func TestVSphereSteps(t *testing.T) {
 				"hostname":              "DC0_C0_RP0_VM0",
 				"memory":                "32.00 MB",
 				"os_pretty_name":        "",
+				"scraper_fqdn":          "scraper FQDN",
 				"vsphere_host":          "host-23",
 				"vsphere_resource_pool": "resgroup-15",
 				"vsphere_vm_name":       "DC0_C0_RP0_VM0",
@@ -222,7 +226,7 @@ func TestVSphereSteps(t *testing.T) {
 			state: "poweredOn",
 		},
 	}
-	if diff := cmp.Diff(expectedVM, *vm, cmp.AllowUnexported(VirtualMachine{}), devComparer); diff != "" {
+	if diff := cmp.Diff(expectedVM, *vm, cmp.AllowUnexported(VirtualMachine{}, device{})); diff != "" {
 		t.Fatalf("Unexpected VM description (-want +got):\n%s", diff)
 	}
 
@@ -238,6 +242,8 @@ func TestVSphereSteps(t *testing.T) {
 // TestVSphereLifecycle lists and describes devices across multiple test cases,
 // but by calling the higher-level method Manager.Devices.
 func TestVSphereLifecycle(t *testing.T) { //nolint:maintidx
+	const scraperFQDN = "scraper FQDN"
+
 	testCases := []struct {
 		name                   string
 		dirName                string
@@ -264,6 +270,7 @@ func TestVSphereLifecycle(t *testing.T) { //nolint:maintidx
 							"os_pretty_name":          "vmnix-x86",
 							"primary_address":         "192.168.121.241",
 							"product_name":            "Standard PC (i440FX + PIIX, 1996)",
+							"scraper_fqdn":            "scraper FQDN",
 							"system_vendor":           "QEMU",
 							"timezone":                "UTC",
 							"vsphere_host_version":    "8.0.1",
@@ -282,6 +289,7 @@ func TestVSphereLifecycle(t *testing.T) { //nolint:maintidx
 							"fqdn":                  "vcenter.vmx",
 							"hostname":              "vcenter.vmx",
 							"os_pretty_name":        "",
+							"scraper_fqdn":          "scraper FQDN",
 							"vsphere_host":          "ha-host",
 							"vsphere_resource_pool": "ha-root-pool",
 						},
@@ -298,6 +306,7 @@ func TestVSphereLifecycle(t *testing.T) { //nolint:maintidx
 							"hostname":              "lunar",
 							"memory":                "1.00 GB",
 							"os_pretty_name":        "Ubuntu Linux (64-bit)",
+							"scraper_fqdn":          "scraper FQDN",
 							"vsphere_datastore":     "datastore1",
 							"vsphere_host":          "ha-host",
 							"vsphere_resource_pool": "ha-root-pool",
@@ -318,6 +327,7 @@ func TestVSphereLifecycle(t *testing.T) { //nolint:maintidx
 							"memory":                "512.00 MB",
 							"os_pretty_name":        "Linux 5.15.71-0-virt Alpine Linux v3.15 Alpine Linux 3.15.6",
 							"primary_address":       "192.168.121.117",
+							"scraper_fqdn":          "scraper FQDN",
 							"vsphere_datastore":     "datastore1",
 							"vsphere_host":          "ha-host",
 							"vsphere_resource_pool": "ha-root-pool",
@@ -353,8 +363,9 @@ func TestVSphereLifecycle(t *testing.T) { //nolint:maintidx
 						moid: "domain-c16",
 						name: "DC0_C0",
 						facts: map[string]string{
-							"cpu_cores": "2",
-							"fqdn":      "DC0_C0",
+							"cpu_cores": 	"2",
+							"fqdn":      	"DC0_C0",
+							"scraper_fqdn": "scraper FQDN",
 						},
 						state: "green",
 					},
@@ -376,6 +387,7 @@ func TestVSphereLifecycle(t *testing.T) { //nolint:maintidx
 							"os_pretty_name":          "vmnix-x86",
 							"primary_address":         "127.0.0.1",
 							"product_name":            "VMware Virtual Platform",
+							"scraper_fqdn":            "scraper FQDN",
 							"system_vendor":           "VMware, Inc. (govmomi simulator)",
 							"vsphere_host_version":    "6.5.0",
 							"vsphere_vmotion_enabled": "false",
@@ -395,6 +407,7 @@ func TestVSphereLifecycle(t *testing.T) { //nolint:maintidx
 							"hostname":              "DC0_C0_RP0_VM0",
 							"memory":                "32.00 MB",
 							"os_pretty_name":        "",
+							"scraper_fqdn":          "scraper FQDN",
 							"vsphere_host":          "host-23",
 							"vsphere_resource_pool": "resgroup-15",
 							"vsphere_vm_name":       "DC0_C0_RP0_VM0",
@@ -430,6 +443,7 @@ func TestVSphereLifecycle(t *testing.T) { //nolint:maintidx
 							"vsphere_resource_pool": "resgroup-8", // TODO improve this
 							"os_pretty_name":        "Debian GNU/Linux 11 (64-bit)",
 							"primary_address":       "192.168.0.2",
+							"scraper_fqdn":          "scraper FQDN",
 							"vsphere_datastore":     "Datastore001",
 							"vsphere_vm_name":       "app-haproxy2",
 							"vsphere_vm_version":    "vmx-07",
@@ -461,7 +475,7 @@ func TestVSphereLifecycle(t *testing.T) { //nolint:maintidx
 			defer cancel()
 
 			manager := new(Manager)
-			manager.RegisterGatherers(ctx, []config.VSphere{vSphereCfg}, func(opt registry.RegistrationOption, gatherer prometheus.Gatherer) (int, error) { return 0, nil }, nil)
+			manager.RegisterGatherers(ctx, []config.VSphere{vSphereCfg}, func(opt registry.RegistrationOption, gatherer prometheus.Gatherer) (int, error) { return 0, nil }, nil, facts.NewMockFacter(map[string]string{"fqdn": scraperFQDN}))
 
 			devices := manager.Devices(ctx, 0)
 
@@ -491,13 +505,12 @@ func TestVSphereLifecycle(t *testing.T) { //nolint:maintidx
 			}
 
 			noSourceCmp := cmpopts.IgnoreFields(device{}, "source")
-			devComparer := cmp.Comparer(deviceComparer(cmp.AllowUnexported(device{}), noSourceCmp))
 
 			sortDevices(tc.expectedClusters)
 			sortDevices(clusters)
 			// We need to compare the clusters, hosts and VMs one by one, otherwise the diff is way harder to analyze.
 			for i, expectedCluster := range tc.expectedClusters {
-				if diff := cmp.Diff(expectedCluster, clusters[i], cmp.AllowUnexported(Cluster{}), devComparer); diff != "" {
+				if diff := cmp.Diff(expectedCluster, clusters[i], cmp.AllowUnexported(Cluster{}, device{}), noSourceCmp); diff != "" {
 					t.Errorf("Unexpected cluster description (-want +got):\n%s", diff)
 				}
 			}
@@ -505,7 +518,7 @@ func TestVSphereLifecycle(t *testing.T) { //nolint:maintidx
 			sortDevices(tc.expectedHosts)
 			sortDevices(hosts)
 			for i, expectedHost := range tc.expectedHosts {
-				if diff := cmp.Diff(expectedHost, hosts[i], cmp.AllowUnexported(HostSystem{}), devComparer); diff != "" {
+				if diff := cmp.Diff(expectedHost, hosts[i], cmp.AllowUnexported(HostSystem{}, device{}), noSourceCmp); diff != "" {
 					t.Errorf("Unexpected host description (-want +got):\n%s", diff)
 				}
 			}
@@ -514,7 +527,7 @@ func TestVSphereLifecycle(t *testing.T) { //nolint:maintidx
 			sortDevices(vms)
 
 			for i, expectedVM := range tc.expectedVMs {
-				if diff := cmp.Diff(expectedVM, vms[i], cmp.AllowUnexported(VirtualMachine{}), devComparer); diff != "" {
+				if diff := cmp.Diff(expectedVM, vms[i], cmp.AllowUnexported(VirtualMachine{}, device{}), noSourceCmp); diff != "" {
 					t.Errorf("Unexpected VM description (-want +got):\n%s", diff)
 				}
 			}
@@ -546,13 +559,4 @@ func mapMap[KI, KO comparable, VI, VO any](m map[KI]VI, f func(KI, VI) (KO, VO))
 	}
 
 	return result
-}
-
-func deviceComparer(opts ...cmp.Option) func(device, device) bool {
-	return func(dev1, dev2 device) bool {
-		delete(dev1.facts, "scraper_fqdn")
-		delete(dev2.facts, "scraper_fqdn")
-
-		return cmp.Equal(dev1, dev2, opts...)
-	}
 }

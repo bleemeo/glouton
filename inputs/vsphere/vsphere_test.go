@@ -20,6 +20,7 @@ import (
 	"context"
 	"crypto/tls"
 	"glouton/config"
+	"glouton/facts"
 	"glouton/inputs/internal"
 	"glouton/types"
 	"testing"
@@ -143,7 +144,7 @@ func TestTransformMetrics(t *testing.T) {
 		},
 	}
 
-	dummyVSphere := newVSphere("host", config.VSphere{}, nil)
+	dummyVSphere := newVSphere("host", config.VSphere{}, nil, facts.NewMockFacter(make(map[string]string)))
 	// The VM mem_used_perc (active_average) metric relies on the cache to evaluate its value.
 	dummyVSphere.devicePropsCache.vmCache.set("vm-77", vmLightProps{Config: &vmLightConfig{Hardware: vmLightConfigHardware{MemoryMB: 2048}}})
 
