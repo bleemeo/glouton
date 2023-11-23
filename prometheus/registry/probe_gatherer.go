@@ -85,14 +85,14 @@ func (p *ProbeGatherer) GatherWithState(ctx context.Context, state GatherState) 
 	}
 
 	for _, mf := range mfs {
-		if *mf.Name == "probe_success" {
-			if len(mf.Metric) == 0 {
+		if mf.GetName() == "probe_success" {
+			if len(mf.GetMetric()) == 0 {
 				logger.V(2).Println("Invalid metric family 'probe_success', got 0 values inside")
 
 				break
 			}
 
-			success := mf.Metric[0].GetGauge().GetValue() == 1.
+			success := mf.GetMetric()[0].GetGauge().GetValue() == 1.
 
 			if !success && p.successLastRun && p.fastUpdateOnFailure && p.scheduleUpdate != nil {
 				// we changed from Ok to not ok and fast update are activated. Schedule an

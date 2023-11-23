@@ -249,12 +249,12 @@ func (c *Containerd) Metrics(ctx context.Context, now time.Time) ([]types.Metric
 			return nil, err
 		}
 
-		for _, metric := range r.Metrics {
-			if metric == nil || metric.Data == nil {
+		for _, metric := range r.GetMetrics() {
+			if metric == nil || metric.GetData() == nil {
 				continue
 			}
 
-			data, err := typeurl.UnmarshalAny(metric.Data)
+			data, err := typeurl.UnmarshalAny(metric.GetData())
 			if err != nil {
 				logger.V(2).Printf("unable to unmarshal metrics value: %v", err)
 
@@ -263,14 +263,14 @@ func (c *Containerd) Metrics(ctx context.Context, now time.Time) ([]types.Metric
 
 			valueMap, err := convertMetric(data)
 			if errors.Is(err, errNotImplemented) {
-				logger.V(2).Printf("unexpected type for metric: %s", metric.Data.TypeUrl)
+				logger.V(2).Printf("unexpected type for metric: %s", metric.GetData().GetTypeUrl())
 
 				continue
 			}
 
 			newValues = append(newValues, metricValue{
 				ContainerNamespace: ns,
-				ContainerID:        metric.ID,
+				ContainerID:        metric.GetID(),
 				Time:               now,
 				Values:             valueMap,
 			})
@@ -533,7 +533,7 @@ func (c *Containerd) Run(ctx context.Context) error {
 			return
 		}
 
-		if strings.Contains(fmt.Sprintf("%v", err), "permission denied") {
+		if strings.Contains(err.Error(), "permission denied") {
 			logger.Printf(
 				"The agent is not permitted to access ContainerD, the ContainerD integration will be disabled.",
 			)
@@ -653,16 +653,16 @@ func (c *Containerd) run(ctx context.Context) error {
 
 			switch value := result.(type) {
 			case *pbEvents.ContainerCreate:
-				gloutonEvent.ContainerID = fmt.Sprintf("%s/%s", event.Namespace, value.ID)
+				gloutonEvent.ContainerID = fmt.Sprintf("%s/%s", event.Namespace, value.GetID())
 				gloutonEvent.Type = facts.EventTypeCreate
 			case *pbEvents.ContainerDelete:
-				gloutonEvent.ContainerID = fmt.Sprintf("%s/%s", event.Namespace, value.ID)
+				gloutonEvent.ContainerID = fmt.Sprintf("%s/%s", event.Namespace, value.GetID())
 				gloutonEvent.Type = facts.EventTypeDelete
 			case *pbEvents.TaskStart:
-				gloutonEvent.ContainerID = fmt.Sprintf("%s/%s", event.Namespace, value.ContainerID)
+				gloutonEvent.ContainerID = fmt.Sprintf("%s/%s", event.Namespace, value.GetContainerID())
 				gloutonEvent.Type = facts.EventTypeStart
 			case *pbEvents.TaskExit:
-				gloutonEvent.ContainerID = fmt.Sprintf("%s/%s", event.Namespace, value.ContainerID)
+				gloutonEvent.ContainerID = fmt.Sprintf("%s/%s", event.Namespace, value.GetContainerID())
 				gloutonEvent.Type = facts.EventTypeStop
 			default:
 				continue

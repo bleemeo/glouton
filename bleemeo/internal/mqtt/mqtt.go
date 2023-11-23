@@ -34,6 +34,7 @@ import (
 	"math"
 	"math/rand"
 	"net"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -390,7 +391,7 @@ func (c *Client) pahoOptions(ctx context.Context) (*paho.ClientOptions, error) {
 		false,
 	)
 
-	brokerURL := net.JoinHostPort(c.opts.Config.Bleemeo.MQTT.Host, fmt.Sprint(c.opts.Config.Bleemeo.MQTT.Port))
+	brokerURL := net.JoinHostPort(c.opts.Config.Bleemeo.MQTT.Host, strconv.Itoa(c.opts.Config.Bleemeo.MQTT.Port))
 
 	if c.opts.Config.Bleemeo.MQTT.SSL {
 		tlsConfig := mqtt.TLSConfig(

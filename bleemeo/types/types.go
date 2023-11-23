@@ -71,6 +71,8 @@ type MonitorManager interface {
 }
 
 // Config is the interface used by Bleemeo to access Config.
+//
+//nolint:inamedparam
 type Config interface {
 	String(string) string
 	StringList(string) []string
@@ -112,8 +114,8 @@ type Store interface {
 	Metrics(filters map[string]string) (result []types.Metric, err error)
 	MetricsCount() int
 	DropMetrics(labelsList []map[string]string)
-	AddNotifiee(func([]types.MetricPoint)) int
-	RemoveNotifiee(int)
+	AddNotifiee(cb func([]types.MetricPoint)) int
+	RemoveNotifiee(id int)
 }
 
 // DisableReason is a list of status why Bleemeo connector may be (temporary) disabled.

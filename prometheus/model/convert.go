@@ -133,8 +133,8 @@ func FamiliesToCollector(families []*dto.MetricFamily) ([]prometheus.Metric, err
 
 			// we assume labels to be unique
 			for _, labelPair := range metric.GetLabel() {
-				labels = append(labels, *labelPair.Name)
-				labelsValues = append(labelsValues, *labelPair.Value)
+				labels = append(labels, labelPair.GetName())
+				labelsValues = append(labelsValues, labelPair.GetValue())
 			}
 
 			desc := prometheus.NewDesc(
@@ -203,17 +203,17 @@ func MetricPointsToFamilies(points []types.MetricPoint) []*dto.MetricFamily {
 				continue
 			}
 
-			metric.Label = append(metric.Label, &dto.LabelPair{
+			metric.Label = append(metric.GetLabel(), &dto.LabelPair{
 				Name:  proto.String(v.Name),
 				Value: proto.String(v.Value),
 			})
 		}
 
-		sort.Slice(metric.Label, func(i, j int) bool {
-			return metric.Label[i].GetName() < metric.Label[j].GetName()
+		sort.Slice(metric.GetLabel(), func(i, j int) bool {
+			return metric.GetLabel()[i].GetName() < metric.GetLabel()[j].GetName()
 		})
 
-		families[idx].Metric = append(families[idx].Metric, metric)
+		families[idx].Metric = append(families[idx].GetMetric(), metric)
 	}
 
 	sort.Slice(families, func(i, j int) bool {
@@ -221,17 +221,17 @@ func MetricPointsToFamilies(points []types.MetricPoint) []*dto.MetricFamily {
 	})
 
 	for _, fam := range families {
-		sort.Slice(fam.Metric, func(i, j int) bool {
+		sort.Slice(fam.GetMetric(), func(i, j int) bool {
 			builder := labels.NewBuilder(nil)
 
-			for _, pair := range fam.Metric[i].Label {
+			for _, pair := range fam.GetMetric()[i].GetLabel() {
 				builder.Set(pair.GetName(), pair.GetValue())
 			}
 
 			lblsA := builder.Labels()
 
 			builder.Reset(nil)
-			for _, pair := range fam.Metric[j].Label {
+			for _, pair := range fam.GetMetric()[j].GetLabel() {
 				builder.Set(pair.GetName(), pair.GetValue())
 			}
 
@@ -269,8 +269,8 @@ func DropMetaLabels(lbls labels.Labels) labels.Labels {
 // The input is modified.
 func DropMetaLabelsFromFamilies(families []*dto.MetricFamily) {
 	for _, mf := range families {
-		for _, m := range mf.Metric {
-			m.Label = dropMetaLabelsFromPair(m.Label)
+		for _, m := range mf.GetMetric() {
+			m.Label = dropMetaLabelsFromPair(m.GetLabel())
 		}
 	}
 }
@@ -333,7 +333,7 @@ func SamplesToMetricFamily(samples []promql.Sample, mType *dto.MetricType) (*dto
 				continue
 			}
 
-			metric.Label = append(metric.Label, &dto.LabelPair{
+			metric.Label = append(metric.GetLabel(), &dto.LabelPair{
 				Name:  proto.String(l.Name),
 				Value: proto.String(l.Value),
 			})
@@ -350,7 +350,7 @@ func SamplesToMetricFamily(samples []promql.Sample, mType *dto.MetricType) (*dto
 			return nil, errUnsupportedType
 		}
 
-		mf.Metric = append(mf.Metric, metric)
+		mf.Metric = append(mf.GetMetric(), metric)
 	}
 
 	return mf, nil
@@ -469,9 +469,9 @@ func metricOnlyHasItem(lbsl labels.Labels) bool {
 }
 
 func DTO2Labels(name string, input *dto.Metric) map[string]string {
-	lbls := make(map[string]string, len(input.Label)+1)
-	for _, lp := range input.Label {
-		lbls[*lp.Name] = *lp.Value
+	lbls := make(map[string]string, len(input.GetLabel())+1)
+	for _, lp := range input.GetLabel() {
+		lbls[lp.GetName()] = lp.GetValue()
 	}
 
 	lbls["__name__"] = name
@@ -483,7 +483,7 @@ func DTO2Labels(name string, input *dto.Metric) map[string]string {
 // Some information may be lost in the process.
 func FamilyConvertType(mf *dto.MetricFamily, targetType dto.MetricType) {
 	mf.Type = &targetType
-	for _, metric := range mf.Metric {
+	for _, metric := range mf.GetMetric() {
 		FixType(metric, targetType)
 	}
 }
@@ -497,20 +497,20 @@ func FixType(m *dto.Metric, wantType dto.MetricType) {
 	)
 
 	switch {
-	case m.Counter != nil:
-		value = m.Counter.Value
+	case m.GetCounter() != nil:
+		value = proto.Float64(m.GetCounter().GetValue())
 		gotType = dto.MetricType_COUNTER
-	case m.Gauge != nil:
-		value = m.Gauge.Value
+	case m.GetGauge() != nil:
+		value = proto.Float64(m.GetGauge().GetValue())
 		gotType = dto.MetricType_GAUGE
-	case m.Histogram != nil:
-		value = m.Histogram.SampleSum
+	case m.GetHistogram() != nil:
+		value = proto.Float64(m.GetHistogram().GetSampleSum())
 		gotType = dto.MetricType_HISTOGRAM
-	case m.Summary != nil:
-		value = m.Summary.SampleSum
+	case m.GetSummary() != nil:
+		value = proto.Float64(m.GetSummary().GetSampleSum())
 		gotType = dto.MetricType_SUMMARY
-	case m.Untyped != nil:
-		value = m.Untyped.Value
+	case m.GetUntyped() != nil:
+		value = proto.Float64(m.GetUntyped().GetValue())
 		gotType = dto.MetricType_UNTYPED
 	}
 

@@ -97,7 +97,7 @@ func (ng nodeGatherer) Gather() ([]*dto.MetricFamily, error) {
 					Value: &containerID,
 				}
 
-				mf.Metric[i].Label = append(mf.Metric[i].Label, containerLabel)
+				mf.Metric[i].Label = append(mf.GetMetric()[i].GetLabel(), containerLabel)
 			}
 		}
 	}

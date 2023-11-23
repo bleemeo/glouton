@@ -424,7 +424,7 @@ func TestRegistry_pushPoint(t *testing.T) {
 	}
 
 	sort.Slice(got, func(i, j int) bool {
-		return *got[i].Name < *got[j].Name
+		return got[i].GetName() < got[j].GetName()
 	})
 
 	if diff := types.DiffMetricFamilies(want, got, false); diff != "" {

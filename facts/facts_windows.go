@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"glouton/logger"
 	"net"
+	"strconv"
 
 	"github.com/StackExchange/wmi"
 	"golang.org/x/sys/windows/registry"
@@ -186,7 +187,7 @@ func (f *FactProvider) platformFacts() map[string]string {
 	default:
 		facts["bios_vendor"] = bios[0].Manufacturer
 		facts["bios_version"] = bios[0].Version
-		facts["serial_number"] = fmt.Sprint(bios[0].SerialNumber)
+		facts["serial_number"] = strconv.Itoa(bios[0].SerialNumber)
 		facts["bios_released_at"] = bios[0].ReleaseDate
 	}
 

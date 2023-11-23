@@ -452,8 +452,8 @@ type store interface {
 	Metrics(filters map[string]string) (result []types.Metric, err error)
 	MetricsCount() int
 	DropMetrics(labelsList []map[string]string)
-	AddNotifiee(func([]types.MetricPoint)) int
-	RemoveNotifiee(int)
+	AddNotifiee(cb func([]types.MetricPoint)) int
+	RemoveNotifiee(id int)
 	PushPoints(ctx context.Context, points []types.MetricPoint)
 }
 

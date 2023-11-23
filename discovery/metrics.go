@@ -574,7 +574,7 @@ func urlForPHPFPM(service Service) string {
 	}
 
 	if service.Config.Port != 0 && service.IPAddress != "" {
-		return fmt.Sprintf("fcgi://%s/status", net.JoinHostPort(service.IPAddress, fmt.Sprint(service.Config.Port)))
+		return fmt.Sprintf("fcgi://%s/status", net.JoinHostPort(service.IPAddress, strconv.Itoa(service.Config.Port)))
 	}
 
 	for _, v := range service.ListenAddresses {

@@ -25,6 +25,7 @@ import (
 	"glouton/mqtt/client"
 	"glouton/types"
 	"net"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -56,8 +57,8 @@ type Options struct {
 
 // Store is the interface used by the client to access the Metric Store.
 type Store interface {
-	AddNotifiee(func([]types.MetricPoint)) int
-	RemoveNotifiee(int)
+	AddNotifiee(cb func([]types.MetricPoint)) int
+	RemoveNotifiee(id int)
 }
 
 type metricPayload struct {
@@ -93,7 +94,7 @@ func (m *MQTT) pahoOptions(_ context.Context) (*paho.ClientOptions, error) {
 	pahoOptions := paho.NewClientOptions()
 
 	for _, host := range m.opts.Config.Hosts {
-		brokerURL := net.JoinHostPort(host, fmt.Sprint(m.opts.Config.Port))
+		brokerURL := net.JoinHostPort(host, strconv.Itoa(m.opts.Config.Port))
 
 		if m.opts.Config.SSL {
 			brokerURL = "ssl://" + brokerURL

@@ -36,6 +36,7 @@ const stateVersion = 1
 
 const (
 	KeyKubernetesCluster = "kubernetes_cluster_name"
+	tmpExt               = ".tmp"
 )
 
 var errVersionIncompatible = errors.New("state.json is incompatible with this glouton")
@@ -228,7 +229,7 @@ func (s *State) save() error {
 	}
 
 	if s.persistent.dirty {
-		w, err := os.OpenFile(s.persistentPath+".tmp", os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
+		w, err := os.OpenFile(s.persistentPath+tmpExt, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
 		if err != nil {
 			return err
 		}
@@ -243,7 +244,7 @@ func (s *State) save() error {
 		_ = w.Sync()
 		w.Close()
 
-		err = os.Rename(s.persistentPath+".tmp", s.persistentPath)
+		err = os.Rename(s.persistentPath+tmpExt, s.persistentPath)
 		if err != nil {
 			return err
 		}
@@ -251,7 +252,7 @@ func (s *State) save() error {
 		s.persistent.dirty = false
 	}
 
-	w, err := os.OpenFile(s.cachePath+".tmp", os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
+	w, err := os.OpenFile(s.cachePath+tmpExt, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
 	if err != nil {
 		return err
 	}
@@ -266,7 +267,7 @@ func (s *State) save() error {
 	_ = w.Sync()
 	w.Close()
 
-	err = os.Rename(s.cachePath+".tmp", s.cachePath)
+	err = os.Rename(s.cachePath+tmpExt, s.cachePath)
 
 	return err
 }

@@ -2229,7 +2229,7 @@ func Test_sortParentFirst(t *testing.T) {
 
 type bOrT interface {
 	Helper()
-	Fatal(...interface{})
+	Fatal(args ...interface{})
 }
 
 // loadProcessTestData convert CSV testdata file to list of Process.

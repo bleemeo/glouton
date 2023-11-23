@@ -269,7 +269,7 @@ func (f *FactProvider) fastUpdateFacts(ctx context.Context) map[string]string {
 			logger.V(1).Printf("Failed to check auto-upgrade status: %v", err)
 		}
 
-		newFacts["auto_upgrade_enabled"] = fmt.Sprint(autoUpgradeEnabled)
+		newFacts["auto_upgrade_enabled"] = strconv.FormatBool(autoUpgradeEnabled)
 	}
 
 	cpu, err := cpu.Info()

@@ -239,6 +239,7 @@ func Test_factFromPoints(t *testing.T) {
 	}
 }
 
+//nolint:goconst
 func Test_humanError(t *testing.T) {
 	tests := []struct {
 		name string
