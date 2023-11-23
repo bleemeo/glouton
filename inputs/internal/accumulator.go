@@ -370,22 +370,6 @@ func (a *Accumulator) wrapAdd(metricType string) accumulatorFunc {
 // name, fields, and tags (and timestamp). If a timestamp is not provided,
 // then the accumulator sets it to "now".
 func (a *Accumulator) AddFields(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	if len(t) == 1 {
-		ts := t[0]
-		if time.Since(ts) > 5*time.Minute {
-			logger.Printf("[TS=%s] AddFields with a timestamp %s old: %s / %v / %v", ts.Format("2006/01/02 15:04:05.000"), time.Since(ts), measurement, fields, tags)
-		}
-	}
-
-	if strings.HasPrefix(measurement, "vsphere_cluster_") {
-		ts := "-"
-		if len(t) == 1 {
-			ts = t[0].Format("2006/01/02 15:04:05.000")
-		}
-
-		logger.Printf("AddFields for cluster at %s: %s / %v / %v", ts, measurement, fields, tags)
-	}
-
 	a.processMetrics(a.wrapAdd("fields"), measurement, fields, tags, t...)
 }
 
