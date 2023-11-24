@@ -1,3 +1,19 @@
+// Copyright 2015-2023 Bleemeo
+//
+// bleemeo.com an infrastructure monitoring solution in the Cloud
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package registry
 
 import (
@@ -166,6 +182,14 @@ func TestFilterPurge(t *testing.T) {
 				{
 					Label: []*io_prometheus_client.LabelPair{
 						{Name: proto.String("__meta_vsphere"), Value: proto.String("127.0.0.1:xxxxx")},
+						{Name: proto.String("__meta_vsphere_moid"), Value: proto.String("5")},
+					},
+					Untyped:     &io_prometheus_client.Untyped{Value: proto.Float64(23.4)},
+					TimestampMs: proto.Int64(1700751600000), // 15:00:00 UTC
+				},
+				{
+					Label: []*io_prometheus_client.LabelPair{
+						{Name: proto.String("__meta_vsphere"), Value: proto.String("127.0.0.1:xxxxx")},
 						{Name: proto.String("__meta_vsphere_moid"), Value: proto.String("10")},
 					},
 					Untyped:     &io_prometheus_client.Untyped{Value: proto.Float64(56.7)},
@@ -198,6 +222,7 @@ func TestFilterPurge(t *testing.T) {
 			10203054987680334317: {timestampMs: 1700751600000, recordedAt: t0}, // 15:00:00 UTC,
 		},
 		"disk_used_perc": {
+			3900352098746294457:  {timestampMs: 1700751600000, recordedAt: t0}, // 15:00:00 UTC,
 			10203054987680334317: {timestampMs: 1700751600000, recordedAt: t0}, // 15:00:00 UTC,
 		},
 	}
@@ -206,7 +231,7 @@ func TestFilterPurge(t *testing.T) {
 	}
 
 	sample[1].Metric[0].TimestampMs = ptr[int64](1700751780000) // 15:03:00 UTC
-	tGatherer.mfsToReturn = sample[:1]                          // No new points for the disk_used_perc metric
+	tGatherer.mfsToReturn = sample[:1]                          // No new points for disk_used_perc metrics
 	gatherer.timeNow = func() time.Time {
 		return t0.Add(4 * time.Minute) // 15:04:00 UTC
 	}
@@ -216,14 +241,15 @@ func TestFilterPurge(t *testing.T) {
 		t.Fatal("Error while gathering:", err)
 	}
 
-	time.Sleep(10 * time.Millisecond)
-	gatherer.l.Lock() // Prevent concurrent access by the purge goroutine
+	time.Sleep(10 * time.Millisecond) // Let a bit of time to the purge goroutine to acquire the lock
+	gatherer.l.Lock()                 // Prevent concurrent access to gatherer.latestPointByLabelsByMetric by the purge goroutine
 
 	expectedCache = map[string]map[uint64]point{
 		"cpu_used": {
 			10203054987680334317: {timestampMs: 1700751600000, recordedAt: t0.Add(4 * time.Minute)}, // 15:04:00 UTC,
 		},
 		"disk_used_perc": {
+			3900352098746294457:  {timestampMs: 1700751600000, recordedAt: t0}, // 15:00:00 UTC,
 			10203054987680334317: {timestampMs: 1700751600000, recordedAt: t0}, // 15:00:00 UTC,
 		},
 	}
@@ -233,7 +259,23 @@ func TestFilterPurge(t *testing.T) {
 
 	gatherer.l.Unlock()
 
-	tGatherer.mfsToReturn = []*io_prometheus_client.MetricFamily{} // No new points for both metrics
+	tGatherer.mfsToReturn = []*io_prometheus_client.MetricFamily{
+		{
+			Name: proto.String("disk_used_perc"),
+			Help: proto.String(""),
+			Type: ptr(io_prometheus_client.MetricType_UNTYPED),
+			Metric: []*io_prometheus_client.Metric{
+				{
+					Label: []*io_prometheus_client.LabelPair{
+						{Name: proto.String("__meta_vsphere"), Value: proto.String("127.0.0.1:xxxxx")},
+						{Name: proto.String("__meta_vsphere_moid"), Value: proto.String("5")},
+					},
+					Untyped:     &io_prometheus_client.Untyped{Value: proto.Float64(25.7)},
+					TimestampMs: proto.Int64(1700752080000), // 15:08:00 UTC
+				},
+			},
+		},
+	}
 	gatherer.timeNow = func() time.Time {
 		return t0.Add(8 * time.Minute) // 15:08:00 UTC
 	}
@@ -249,6 +291,9 @@ func TestFilterPurge(t *testing.T) {
 	expectedCache = map[string]map[uint64]point{
 		"cpu_used": {
 			10203054987680334317: {timestampMs: 1700751600000, recordedAt: t0.Add(4 * time.Minute)}, // 15:04:00 UTC,
+		},
+		"disk_used_perc": {
+			3900352098746294457: {timestampMs: 1700752080000, recordedAt: t0.Add(8 * time.Minute)}, // 15:08:00 UTC,
 		},
 	}
 	if diff := cmp.Diff(expectedCache, gatherer.latestPointByLabelsByMetric, ignoreUnexported, allowUnexported); diff != "" {
