@@ -27,6 +27,8 @@ import (
 	"github.com/google/uuid"
 )
 
+const snmpCachePrefix = "bleemeo:snmp:"
+
 type payloadAgent struct {
 	types.Agent
 	Abstracted         bool   `json:"abstracted"`
@@ -60,7 +62,7 @@ type snmpAssociation struct {
 func (s *Synchronizer) FindSNMPAgent(ctx context.Context, target *snmp.Target, snmpType string, agentsByID map[string]types.Agent) (types.Agent, error) {
 	var association snmpAssociation
 
-	err := s.option.State.Get("bleemeo:snmp:"+target.Address(), &association)
+	err := s.option.State.Get(snmpCachePrefix+target.Address(), &association)
 	if err != nil {
 		return types.Agent{}, err
 	}
@@ -79,7 +81,7 @@ func (s *Synchronizer) FindSNMPAgent(ctx context.Context, target *snmp.Target, s
 	associatedID := make(map[string]bool, len(s.option.SNMP))
 
 	for _, v := range s.option.SNMP {
-		err := s.option.State.Get("bleemeo:snmp:"+v.Address(), &association)
+		err := s.option.State.Get(snmpCachePrefix+v.Address(), &association)
 		if err != nil {
 			return types.Agent{}, err
 		}
@@ -169,7 +171,7 @@ func (s *Synchronizer) snmpRegisterAndUpdate(localTargets []*snmp.Target) error 
 		}
 
 		newAgent = append(newAgent, tmp)
-		err = s.option.State.Set("bleemeo:snmp:"+snmp.Address(), snmpAssociation{
+		err = s.option.State.Set(snmpCachePrefix+snmp.Address(), snmpAssociation{
 			Address: snmp.Address(),
 			ID:      tmp.ID,
 		})

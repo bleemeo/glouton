@@ -79,13 +79,13 @@ type Discovery struct {
 // Collector will gather metrics for added inputs.
 type Collector interface {
 	AddInput(input telegraf.Input, shortName string) (int, error)
-	RemoveInput(int)
+	RemoveInput(id int)
 }
 
 // Registry will contains checks.
 type Registry interface {
 	AddTask(task task.Runner, shortName string) (int, error)
-	RemoveTask(int)
+	RemoveTask(taskID int)
 }
 
 // GathererRegistry allow to register/unregister prometheus Gatherer.

@@ -21,8 +21,8 @@ package facts
 
 import (
 	"context"
-	"fmt"
 	"glouton/version"
+	"strconv"
 	"strings"
 	"time"
 
@@ -63,7 +63,7 @@ func (z PsutilLister) Processes(ctx context.Context, maxAge time.Duration) (proc
 			if version.IsWindows() {
 				uids, err := p.UidsWithContext(ctx)
 				if err == nil && len(uids) > 0 {
-					res.Username = fmt.Sprintf("%d", uids[0])
+					res.Username = strconv.Itoa(int(uids[0]))
 
 					if z.pwdCache != nil {
 						entry, found := z.pwdCache.LookupUserByUid(int(uids[0]))

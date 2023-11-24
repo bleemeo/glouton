@@ -30,7 +30,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/go-chi/chi"
+	"github.com/go-chi/chi/v5"
 	"github.com/go-kit/log"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/prometheus/common/model"

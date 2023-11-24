@@ -802,7 +802,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 			PushPoint:             a.store,
 			ThresholdHandler:      a.threshold,
 			FQDN:                  fqdn,
-			GloutonPort:           fmt.Sprint(a.config.Web.Listener.Port),
+			GloutonPort:           strconv.Itoa(a.config.Web.Listener.Port),
 			MetricFormat:          a.metricFormat,
 			BlackboxSendScraperID: a.config.Blackbox.ScraperSendUUID,
 			Filter:                mFilter,
@@ -1216,7 +1216,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 
 	if a.config.Zabbix.Enable {
 		server := zabbix.New(
-			net.JoinHostPort(a.config.Zabbix.Address, fmt.Sprint(a.config.Zabbix.Port)),
+			net.JoinHostPort(a.config.Zabbix.Address, strconv.Itoa(a.config.Zabbix.Port)),
 			zabbixResponse,
 		)
 		tasks = append(tasks, taskInfo{server.Run, "Zabbix server"})
@@ -1224,7 +1224,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 
 	if a.config.InfluxDB.Enable {
 		server := influxdb.New(
-			fmt.Sprintf("http://%s", net.JoinHostPort(a.config.InfluxDB.Host, fmt.Sprint(a.config.InfluxDB.Port))),
+			fmt.Sprintf("http://%s", net.JoinHostPort(a.config.InfluxDB.Host, strconv.Itoa(a.config.InfluxDB.Port))),
 			a.config.InfluxDB.DBName,
 			a.store,
 			a.config.InfluxDB.Tags,
@@ -1313,7 +1313,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		}
 	}
 
-	a.factProvider.SetFact("statsd_enable", fmt.Sprint(a.config.Telegraf.StatsD.Enable))
+	a.factProvider.SetFact("statsd_enable", strconv.FormatBool(a.config.Telegraf.StatsD.Enable))
 	a.factProvider.SetFact("metrics_format", a.metricFormat.String())
 
 	if a.config.MQTT.Enable {

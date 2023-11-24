@@ -39,7 +39,7 @@ var (
 )
 
 type checkRegistry interface {
-	GetCheckNow(discovery.NameInstance) (discovery.CheckNow, error)
+	GetCheckNow(nameInstance discovery.NameInstance) (discovery.CheckNow, error)
 }
 
 // Responder is used to build the NRPE answer.

@@ -19,7 +19,6 @@ package facts
 import (
 	"context"
 	"errors"
-	"fmt"
 	"glouton/logger"
 	"glouton/version"
 	"os"
@@ -843,7 +842,7 @@ func (p psListerWrapper) CGroupFromPID(pid int) (string, error) {
 		return "", errNotAvailable
 	}
 
-	path := filepath.Join("/proc", fmt.Sprintf("%d", pid), "cgroup")
+	path := filepath.Join("/proc", strconv.Itoa(pid), "cgroup")
 
 	data, err := os.ReadFile(path)
 	if err != nil {

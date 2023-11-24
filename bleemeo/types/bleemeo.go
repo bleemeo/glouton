@@ -19,8 +19,8 @@ package types
 import (
 	"bytes"
 	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
-	"fmt"
 	"glouton/threshold"
 	"math"
 	"time"
@@ -254,7 +254,7 @@ func (mr MetricRegistration) RetryAfter() time.Time {
 // FillInspectHash fill the DockerInspectHash.
 func (c *Container) FillInspectHash() {
 	bin := sha256.Sum256([]byte(c.ContainerInspect))
-	c.InspectHash = fmt.Sprintf("%x", bin)
+	c.InspectHash = hex.EncodeToString(bin[:])
 }
 
 // ToInternalThreshold convert to a threshold.Threshold (use NaN instead of null pointer for unset thresholds).

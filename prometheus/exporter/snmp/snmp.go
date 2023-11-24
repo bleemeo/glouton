@@ -198,18 +198,18 @@ func buildInformationMap(
 	result []*dto.MetricFamily,
 ) (interfaceUp map[string]bool, indexToType map[string]string, totalInterfaces int, connectedInterfaces int) {
 	if len(result) > 0 {
-		indexToType = make(map[string]string, len(result[0].Metric))
+		indexToType = make(map[string]string, len(result[0].GetMetric()))
 	}
 
 	for _, mf := range result {
 		if mf.GetName() == ifTypeInfoMetricName {
-			for _, m := range mf.Metric {
+			for _, m := range mf.GetMetric() {
 				var (
 					idxStr  string
 					typeStr string
 				)
 
-				for _, l := range m.Label {
+				for _, l := range m.GetLabel() {
 					if l.GetName() == ifIndexLabelName {
 						idxStr = l.GetValue()
 					}
@@ -228,15 +228,15 @@ func buildInformationMap(
 		}
 
 		if mf.GetName() == ifOperStatusMetricName {
-			interfaceUp = make(map[string]bool, len(mf.Metric))
+			interfaceUp = make(map[string]bool, len(mf.GetMetric()))
 
-			for _, m := range mf.Metric {
+			for _, m := range mf.GetMetric() {
 				totalInterfaces++
 
 				if m.GetGauge().GetValue() == 1 {
 					connectedInterfaces++
 
-					for _, l := range m.Label {
+					for _, l := range m.GetLabel() {
 						if l.GetName() == ifIndexLabelName {
 							interfaceUp[l.GetValue()] = true
 						}
@@ -293,8 +293,8 @@ func processMFS(
 			continue
 		}
 
-		for _, m := range mf.Metric {
-			for _, l := range m.Label {
+		for _, m := range mf.GetMetric() {
+			for _, l := range m.GetLabel() {
 				if l.GetName() == ifIndexLabelName && indexToType[l.GetValue()] != "" {
 					l.Name = proto.String(ifTypeLabelName)
 					l.Value = proto.String(indexToType[l.GetValue()])
@@ -344,7 +344,7 @@ func mfsFilterInterface(mfs []*dto.MetricFamily, interfaceUp map[string]bool) []
 	for _, mf := range mfs {
 		mfFilterInterface(mf, interfaceUp)
 
-		if len(mf.Metric) > 0 {
+		if len(mf.GetMetric()) > 0 {
 			mfs[i] = mf
 			i++
 		}
@@ -363,10 +363,10 @@ func mfFilterInterface(mf *dto.MetricFamily, interfaceUp map[string]bool) {
 
 	i := 0
 
-	for _, m := range mf.Metric {
+	for _, m := range mf.GetMetric() {
 		var ifIndex string
 
-		for _, l := range m.Label {
+		for _, l := range m.GetLabel() {
 			if l.GetName() == ifIndexLabelName {
 				ifIndex = l.GetValue()
 			}
@@ -378,7 +378,7 @@ func mfFilterInterface(mf *dto.MetricFamily, interfaceUp map[string]bool) {
 		}
 	}
 
-	mf.Metric = mf.Metric[:i]
+	mf.Metric = mf.GetMetric()[:i]
 }
 
 func (t *Target) extraLabels() map[string]string {
@@ -731,7 +731,7 @@ func mockFromFacts(facts map[string]string) map[string][]byte {
 	facts[""] = ""
 
 	for k, v := range facts {
-		mf.Metric = append(mf.Metric, &dto.Metric{
+		mf.Metric = append(mf.GetMetric(), &dto.Metric{
 			Label: []*dto.LabelPair{
 				{Name: proto.String(mockFactLabelKey), Value: proto.String(k)},
 				{Name: proto.String(mockFactLabelValue), Value: proto.String(v)},

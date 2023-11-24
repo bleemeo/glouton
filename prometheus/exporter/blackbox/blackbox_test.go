@@ -47,7 +47,7 @@ type testTarget interface {
 	Close()
 	URL() string
 	Certificate() *x509.Certificate
-	RequestContext(context.Context) context.Context
+	RequestContext(ctx context.Context) context.Context
 }
 
 type testingCerts struct {

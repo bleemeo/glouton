@@ -1233,7 +1233,7 @@ func gatherFromQueryable(ctx context.Context, queryable storage.Queryable, filte
 			Gauge: &dto.Gauge{Value: &lastValue},
 		}
 
-		result[len(result)-1].Metric = append(result[len(result)-1].Metric, metric)
+		result[len(result)-1].Metric = append(result[len(result)-1].GetMetric(), metric)
 	}
 
 	if filter != nil {
@@ -1258,11 +1258,11 @@ func removeMetaLabels(mfs []*dto.MetricFamily) []*dto.MetricFamily {
 			}
 
 			// Prevent memory leak by erasing truncated values.
-			for j := nextFreeIndex; j < len(metric.Label); j++ {
+			for j := nextFreeIndex; j < len(metric.GetLabel()); j++ {
 				metric.Label[j] = nil
 			}
 
-			metric.Label = metric.Label[:nextFreeIndex]
+			metric.Label = metric.GetLabel()[:nextFreeIndex]
 		}
 	}
 

@@ -128,10 +128,10 @@ type mockResource interface {
 	List(r *http.Request) ([]interface{}, error)
 	Create(r *http.Request) (interface{}, error)
 	Patch(id string, r *http.Request) (interface{}, error)
-	SetStore(...interface{})
-	AddStore(...interface{})
+	SetStore(values ...interface{})
+	AddStore(values ...interface{})
 	DelStore(ids ...string)
-	Store(interface{})
+	Store(list interface{})
 }
 
 func newAPI() *mockAPI {

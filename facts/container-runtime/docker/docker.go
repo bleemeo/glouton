@@ -297,7 +297,7 @@ func (d *Docker) Run(ctx context.Context) error {
 			return
 		}
 
-		if strings.Contains(fmt.Sprintf("%v", err), "permission denied") {
+		if strings.Contains(err.Error(), "permission denied") {
 			logger.Printf(
 				"The agent is not permitted to access Docker, the Docker integration will be disabled.",
 			)
@@ -1272,7 +1272,7 @@ func (d *dockerProcessQuerier) processesContainerMap(ctx context.Context, c fact
 		d.containerProcessErr[c.ID()] = nil
 
 		return nil
-	case err != nil && strings.Contains(fmt.Sprintf("%v", err), "is not running"):
+	case err != nil && strings.Contains(err.Error(), "is not running"):
 		d.containerProcessErr[c.ID()] = nil
 
 		return nil

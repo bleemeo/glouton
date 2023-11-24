@@ -94,7 +94,7 @@ func (r *Renamer) RenameMFS(mfs []*dto.MetricFamily) []*dto.MetricFamily {
 
 		i := 0
 
-		for _, m := range mf.Metric {
+		for _, m := range mf.GetMetric() {
 			name := mf.GetName()
 			for _, rule := range rules {
 				m, name, ok = rule.renameMetric(m, name)
@@ -115,7 +115,7 @@ func (r *Renamer) RenameMFS(mfs []*dto.MetricFamily) []*dto.MetricFamily {
 					mfs = append(mfs, &dto.MetricFamily{
 						Name: proto.String(name),
 						Help: proto.String(mf.GetHelp()),
-						Type: mf.Type,
+						Type: mf.Type, //nolint:protogetter
 					})
 					idx = len(mfs) - 1
 
@@ -124,23 +124,23 @@ func (r *Renamer) RenameMFS(mfs []*dto.MetricFamily) []*dto.MetricFamily {
 					model.FixType(m, mfs[idx].GetType())
 				}
 
-				mfs[idx].Metric = append(mfs[idx].Metric, m)
+				mfs[idx].Metric = append(mfs[idx].GetMetric(), m)
 				idToSort[idx] = true
 			}
 		}
 
-		mf.Metric = mf.Metric[:i]
+		mf.Metric = mf.GetMetric()[:i]
 	}
 
 	for idx := range idToSort {
-		sortMetrics(mfs[idx].Metric)
+		sortMetrics(mfs[idx].GetMetric())
 	}
 
 	// Drop empty MF
 	i := 0
 
 	for _, mf := range mfs {
-		if len(mf.Metric) == 0 {
+		if len(mf.GetMetric()) == 0 {
 			continue
 		}
 
@@ -162,24 +162,24 @@ func sortMetrics(input []*dto.Metric) []*dto.Metric {
 		mA := input[i]
 		mB := input[j]
 
-		for i := range mA.Label {
-			if len(mB.Label) <= i {
+		for i := range mA.GetLabel() {
+			if len(mB.GetLabel()) <= i {
 				return false
 			}
 
-			if mA.Label[i].GetName() < mB.Label[i].GetName() {
+			if mA.GetLabel()[i].GetName() < mB.GetLabel()[i].GetName() {
 				return true
 			}
 
-			if mA.Label[i].GetName() > mB.Label[i].GetName() {
+			if mA.GetLabel()[i].GetName() > mB.GetLabel()[i].GetName() {
 				return false
 			}
 
-			if mA.Label[i].GetValue() < mB.Label[i].GetValue() {
+			if mA.GetLabel()[i].GetValue() < mB.GetLabel()[i].GetValue() {
 				return true
 			}
 
-			if mA.Label[i].GetValue() > mB.Label[i].GetValue() {
+			if mA.GetLabel()[i].GetValue() > mB.GetLabel()[i].GetValue() {
 				return false
 			}
 		}
@@ -219,8 +219,8 @@ func (r Rule) rename(point types.MetricPoint) (types.MetricPoint, bool) {
 }
 
 func (r Rule) renameMetric(metric *dto.Metric, name string) (*dto.Metric, string, bool) {
-	lblsMap := make(map[string]string, len(metric.Label))
-	for _, v := range metric.Label {
+	lblsMap := make(map[string]string, len(metric.GetLabel()))
+	for _, v := range metric.GetLabel() {
 		lblsMap[v.GetName()] = v.GetValue()
 	}
 
@@ -253,17 +253,17 @@ func (r Rule) renameMetric(metric *dto.Metric, name string) (*dto.Metric, string
 	name = lblsMap[types.LabelName]
 	delete(lblsMap, types.LabelName)
 
-	metric.Label = metric.Label[:0]
+	metric.Label = metric.GetLabel()[:0]
 
 	for k, v := range lblsMap {
-		metric.Label = append(metric.Label, &dto.LabelPair{
+		metric.Label = append(metric.GetLabel(), &dto.LabelPair{
 			Name:  proto.String(k),
 			Value: proto.String(v),
 		})
 	}
 
-	sort.Slice(metric.Label, func(i, j int) bool {
-		return metric.Label[i].GetName() < metric.Label[j].GetName()
+	sort.Slice(metric.GetLabel(), func(i, j int) bool {
+		return metric.GetLabel()[i].GetName() < metric.GetLabel()[j].GetName()
 	})
 
 	return metric, name, true

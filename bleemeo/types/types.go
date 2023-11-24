@@ -70,15 +70,6 @@ type MonitorManager interface {
 	UpdateDynamicTargets(monitors []types.Monitor) error
 }
 
-// Config is the interface used by Bleemeo to access Config.
-type Config interface {
-	String(string) string
-	StringList(string) []string
-	Int(string) int
-	DurationMap(string) map[string]time.Duration
-	Bool(string) bool
-}
-
 // State is the interface used by Bleemeo to access State.
 type State interface {
 	Set(key string, object interface{}) error
@@ -112,8 +103,8 @@ type Store interface {
 	Metrics(filters map[string]string) (result []types.Metric, err error)
 	MetricsCount() int
 	DropMetrics(labelsList []map[string]string)
-	AddNotifiee(func([]types.MetricPoint)) int
-	RemoveNotifiee(int)
+	AddNotifiee(cb func([]types.MetricPoint)) int
+	RemoveNotifiee(id int)
 }
 
 // DisableReason is a list of status why Bleemeo connector may be (temporary) disabled.

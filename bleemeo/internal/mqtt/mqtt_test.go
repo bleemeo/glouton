@@ -18,12 +18,12 @@ package mqtt
 
 import (
 	"context"
-	"fmt"
 	"glouton/agent/state"
 	"glouton/bleemeo/internal/cache"
 	"glouton/mqtt"
 	"glouton/types"
 	"log"
+	"strconv"
 	"testing"
 	"time"
 
@@ -48,7 +48,7 @@ func TestFailedPointsCache(t *testing.T) {
 
 	// Add 10 metric with labels id=1, id=2, ...
 	for i := 0; i < maxPendingPoints; i++ {
-		labels := map[string]string{labelID: fmt.Sprint(i)}
+		labels := map[string]string{labelID: strconv.Itoa(i)}
 		p := types.MetricPoint{
 			Labels: labels,
 		}
@@ -58,7 +58,7 @@ func TestFailedPointsCache(t *testing.T) {
 
 	// Test that all 10 metrics are present.
 	for i := 0; i < maxPendingPoints; i++ {
-		labels := map[string]string{labelID: fmt.Sprint(i)}
+		labels := map[string]string{labelID: strconv.Itoa(i)}
 		if !failedPoints.Contains(labels) {
 			t.Fatalf("Point %d is not present", i)
 		}
@@ -66,7 +66,7 @@ func TestFailedPointsCache(t *testing.T) {
 
 	// Add 5 more points.
 	for i := maxPendingPoints; i < maxPendingPoints+5; i++ {
-		labels := map[string]string{labelID: fmt.Sprint(i)}
+		labels := map[string]string{labelID: strconv.Itoa(i)}
 		p := types.MetricPoint{
 			Labels: labels,
 		}
@@ -80,7 +80,7 @@ func TestFailedPointsCache(t *testing.T) {
 	}
 
 	for i := 0; i < 6; i++ {
-		labels := map[string]string{labelID: fmt.Sprint(i)}
+		labels := map[string]string{labelID: strconv.Itoa(i)}
 
 		if failedPoints.Contains(labels) {
 			t.Fatalf("Point %d should be deleted", i)
@@ -408,7 +408,7 @@ func BenchmarkFailedPointsDropping(b *testing.B) {
 
 	// Add 10 metrics with labels id=1, id=2, ... with 10000 points each
 	for i := 1; i <= 10; i++ {
-		labels := map[string]string{labelID: fmt.Sprint(i)}
+		labels := map[string]string{labelID: strconv.Itoa(i)}
 
 		for j := 0; j < maxPendingPoints/10; j++ {
 			p := types.MetricPoint{
@@ -424,7 +424,7 @@ func BenchmarkFailedPointsDropping(b *testing.B) {
 	for bn := 0; bn < b.N; bn++ {
 		// Add 100 more points for each metric
 		for i := 1; i <= 10; i++ {
-			labels := map[string]string{labelID: fmt.Sprint(i)}
+			labels := map[string]string{labelID: strconv.Itoa(i)}
 
 			for j := 0; j < cleanupBatchSize/10; j++ {
 				p := types.MetricPoint{

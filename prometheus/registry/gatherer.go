@@ -32,6 +32,7 @@ import (
 	prometheusModel "github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/rules"
+	"google.golang.org/protobuf/proto"
 )
 
 const defaultGatherTimeout = 10 * time.Second
@@ -102,13 +103,13 @@ func GatherStateFromMap(params map[string][]string) GatherState {
 
 // GathererWithState is a generalization of prometheus.Gather.
 type GathererWithState interface {
-	GatherWithState(context.Context, GatherState) ([]*dto.MetricFamily, error)
+	GatherWithState(ctx context.Context, state GatherState) ([]*dto.MetricFamily, error)
 }
 
 // GathererWithScheduleUpdate is a Gatherer that had a ScheduleUpdate (like Probe gatherer).
 // The ScheduleUpdate could be used to trigger an additional gather earlier than default scrape interval.
 type GathererWithScheduleUpdate interface {
-	SetScheduleUpdate(func(runAt time.Time))
+	SetScheduleUpdate(scheduleUpdate func(runAt time.Time))
 }
 
 // GathererWithStateWrapper is a wrapper around GathererWithState that allows to specify a state to forward
@@ -248,8 +249,8 @@ func (g *labeledGatherer) GatherWithState(ctx context.Context, state GatherState
 	}
 
 	for _, mf := range mfs {
-		for i, m := range mf.Metric {
-			m.Label = mergeLabels(m.Label, g.labels)
+		for i, m := range mf.GetMetric() {
+			m.Label = mergeLabels(m.GetLabel(), g.labels)
 			mf.Metric[i] = m
 		}
 	}
@@ -318,13 +319,13 @@ func mergeMFS(mfs []*dto.MetricFamily) ([]*dto.MetricFamily, error) {
 			case existingMF.GetType() == mf.GetType():
 				// Nothing to do.
 			case existingMF.GetType() == dto.MetricType_UNTYPED:
-				existingMF.Type = mf.Type
+				existingMF.Type = mf.Type //nolint:protogetter
 				for i, metric := range existingMF.GetMetric() {
 					model.FixType(metric, *mf.GetType().Enum())
 					existingMF.Metric[i] = metric
 				}
 			case mf.GetType() == dto.MetricType_UNTYPED:
-				mf.Type = existingMF.Type
+				mf.Type = existingMF.Type //nolint:protogetter
 				for i, metric := range mf.GetMetric() {
 					model.FixType(metric, *existingMF.GetType().Enum())
 					mf.Metric[i] = metric
@@ -339,13 +340,13 @@ func mergeMFS(mfs []*dto.MetricFamily) ([]*dto.MetricFamily, error) {
 			}
 		} else {
 			existingMF = &dto.MetricFamily{}
-			existingMF.Name = mf.Name
-			existingMF.Help = mf.Help
-			existingMF.Type = mf.Type
+			existingMF.Name = proto.String(mf.GetName())
+			existingMF.Help = proto.String(mf.GetHelp())
+			existingMF.Type = mf.Type //nolint:protogetter
 			metricFamiliesByName[mf.GetName()] = existingMF
 		}
 
-		existingMF.Metric = append(existingMF.Metric, mf.Metric...)
+		existingMF.Metric = append(existingMF.GetMetric(), mf.GetMetric()...)
 	}
 
 	result := make([]*dto.MetricFamily, 0, len(metricFamiliesByName))
