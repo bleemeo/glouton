@@ -474,7 +474,7 @@ func (c *Connector) RelabelHook(ctx context.Context, labels map[string]string) (
 
 		agent, err := c.sync.FindSNMPAgent(ctx, target, snmpTypeID, c.cache.AgentsByUUID())
 		if err != nil {
-			logger.V(2).Printf("FindSNMPAgent failed: %w", err)
+			logger.V(2).Printf("FindSNMPAgent failed: %v", err)
 
 			return labels, true
 		}
@@ -494,6 +494,29 @@ func (c *Connector) RelabelHook(ctx context.Context, labels map[string]string) (
 
 		labels[gloutonTypes.LabelMetaBleemeoTargetAgent] = clusterName
 		labels[gloutonTypes.LabelMetaBleemeoTargetAgentUUID] = kubernetesAgentID
+	}
+
+	if vSphere := labels[gloutonTypes.LabelMetaVSphere]; vSphere != "" {
+		moid := labels[gloutonTypes.LabelMetaVSphereMOID]
+
+		device := c.option.FindVSphereDevice(ctx, vSphere, moid)
+		if device == nil {
+			return labels, true
+		}
+
+		vSphereAgentTypeID, ok := c.sync.GetVSphereAgentType(device.Kind())
+		if !ok {
+			return labels, true
+		}
+
+		agent, err := c.sync.FindVSphereAgent(ctx, device, vSphereAgentTypeID, c.cache.AgentsByUUID())
+		if err != nil {
+			logger.V(2).Printf("FindVSphereAgent failed: %v", err)
+
+			return labels, true
+		}
+
+		labels[gloutonTypes.LabelMetaBleemeoTargetAgentUUID] = agent.ID
 	}
 
 	return labels, false
@@ -768,6 +791,26 @@ func (c *Connector) diagnosticCache(file io.Writer) {
 	fmt.Fprintf(file, "\n# Cache known %d services\n", len(c.cache.Services()))
 	fmt.Fprintf(file, "\n# Cache known %d containers\n", len(c.cache.Containers()))
 	fmt.Fprintf(file, "\n# Cache known %d monitors\n", len(c.cache.Monitors()))
+}
+
+func (c *Connector) GetAllVSphereAssociations(ctx context.Context, devices []types.VSphereDevice) (map[string]string, error) {
+	vSphereAgentTypes, ok := c.sync.GetVSphereAgentTypes()
+	if !ok {
+		return map[string]string{}, errAgentTypeNotFound
+	}
+
+	associations := make(map[string]string, len(devices))
+
+	for _, dev := range devices {
+		agent, err := c.sync.FindVSphereAgent(ctx, dev, vSphereAgentTypes[dev.Kind()], c.cache.AgentsByUUID())
+		if err != nil {
+			return associations, err
+		}
+
+		associations[dev.Source()+dev.MOID()] = agent.ID
+	}
+
+	return associations, nil
 }
 
 // Tags returns the Tags set on Bleemeo Cloud platform.

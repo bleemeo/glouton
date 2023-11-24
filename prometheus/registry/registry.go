@@ -167,7 +167,7 @@ type RegistrationOption struct {
 	// GatherModifier is a function that can modify the gather result (add/modify/delete). It is called after Rules
 	// are applied, just before ExtraLabels is done.
 	// It could be nil to skip this step.
-	GatherModifier func(mfs []*dto.MetricFamily) []*dto.MetricFamily `json:"-"`
+	GatherModifier gatherModifier `json:"-"`
 	rrules         []*rules.RecordingRule
 }
 

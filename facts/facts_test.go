@@ -65,7 +65,7 @@ func TestByteCountDecimalMaxEB(t *testing.T) {
 
 	want := "4.81 EB" //nolint:ifshort
 
-	if got := byteCountDecimal(in); !reflect.DeepEqual(got, want) {
+	if got := ByteCountDecimal(in); !reflect.DeepEqual(got, want) {
 		t.Errorf("TEstbyteCountDecimal(...) == %s, want %s", got, want)
 	}
 }
@@ -75,7 +75,7 @@ func TestByteCountDecimalB(t *testing.T) {
 
 	want := "0 B" //nolint:ifshort
 
-	if got := byteCountDecimal(in); !reflect.DeepEqual(got, want) {
+	if got := ByteCountDecimal(in); !reflect.DeepEqual(got, want) {
 		t.Errorf("TEstbyteCountDecimal(...) == %s, want %s", got, want)
 	}
 }
@@ -85,7 +85,7 @@ func TestByteCountDecimalKB(t *testing.T) {
 
 	want := "1.00 KB" //nolint:ifshort
 
-	if got := byteCountDecimal(in); !reflect.DeepEqual(got, want) {
+	if got := ByteCountDecimal(in); !reflect.DeepEqual(got, want) {
 		t.Errorf("TEstbyteCountDecimal(...) == %s, want %s", got, want)
 	}
 }
@@ -95,7 +95,7 @@ func TestByteCountDecimalMB(t *testing.T) {
 
 	want := "518.12 MB" //nolint:ifshort
 
-	if got := byteCountDecimal(in); !reflect.DeepEqual(got, want) {
+	if got := ByteCountDecimal(in); !reflect.DeepEqual(got, want) {
 		t.Errorf("TEstbyteCountDecimal(...) == %s, want %s", got, want)
 	}
 }
@@ -105,7 +105,7 @@ func TestByteCountDecimalGB(t *testing.T) {
 
 	want := "4.13 GB" //nolint:ifshort
 
-	if got := byteCountDecimal(in); !reflect.DeepEqual(got, want) {
+	if got := ByteCountDecimal(in); !reflect.DeepEqual(got, want) {
 		t.Errorf("TEstbyteCountDecimal(...) == %s, want %s", got, want)
 	}
 }

@@ -1,0 +1,79 @@
+<ObjectContent>
+  <obj type="EventManager">ha-eventmgr</obj>
+  <propSet>
+    <name>description</name>
+    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="EventDescription">
+      <category XMLSchema-instance:type="ElementDescription">
+        <label>info</label>
+        <summary>Information</summary>
+        <key>info</key>
+      </category>
+      <category XMLSchema-instance:type="ElementDescription">
+        <label>warning</label>
+        <summary>Warning</summary>
+        <key>warning</key>
+      </category>
+      <category XMLSchema-instance:type="ElementDescription">
+        <label>error</label>
+        <summary>Error</summary>
+        <key>error</key>
+      </category>
+      <category XMLSchema-instance:type="ElementDescription">
+        <label>user</label>
+        <summary>User</summary>
+        <key>user</key>
+      </category>
+      <enumeratedTypes>
+        <key>VirtualMachineFaultToleranceState</key>
+        <tags XMLSchema-instance:type="ElementDescription">
+          <label>Not configured</label>
+          <summary>Fault Tolerance has not been configured for this virtual machine</summary>
+          <key>notConfigured</key>
+        </tags>
+        <tags XMLSchema-instance:type="ElementDescription">
+          <label>Disabled</label>
+          <summary>Fault Tolerance is disabled</summary>
+          <key>disabled</key>
+        </tags>
+        <tags XMLSchema-instance:type="ElementDescription">
+          <label>Enabled</label>
+          <summary>Fault Tolerance is enabled</summary>
+          <key>enabled</key>
+        </tags>
+        <tags XMLSchema-instance:type="ElementDescription">
+          <label>Need Secondary VM</label>
+          <summary>Fault Tolerant Secondary VM is not running</summary>
+          <key>needSecondary</key>
+        </tags>
+        <tags XMLSchema-instance:type="ElementDescription">
+          <label>Starting</label>
+          <summary>Fault Tolerance is starting</summary>
+          <key>starting</key>
+        </tags>
+        <tags XMLSchema-instance:type="ElementDescription">
+          <label>Running</label>
+          <summary>Fault Tolerance is running</summary>
+          <key>running</key>
+        </tags>
+      </enumeratedTypes>
+    </val>
+  </propSet>
+  <propSet>
+    <name>latestEvent</name>
+    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="UserLoginSessionEvent">
+      <key>892</key>
+      <chainId>892</chainId>
+      <createdTime>2023-10-25T11:46:07.641554Z</createdTime>
+      <userName>root</userName>
+      <fullFormattedMessage>User root@192.168.121.1 logged in as govc/0.0.0</fullFormattedMessage>
+      <ipAddress>192.168.121.1</ipAddress>
+      <userAgent>govc/0.0.0</userAgent>
+      <locale>en</locale>
+      <sessionId>52456804-ae0b-52fb-bdd2-fbfc0b9e601a</sessionId>
+    </val>
+  </propSet>
+  <propSet>
+    <name>maxCollector</name>
+    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="xsd:int">1000</val>
+  </propSet>
+</ObjectContent>

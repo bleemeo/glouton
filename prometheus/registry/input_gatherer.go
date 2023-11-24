@@ -31,7 +31,7 @@ import (
 // inputGatherer gathers metric from a Telegraf input.
 type inputGatherer struct {
 	input  telegraf.Input
-	buffer *pointBuffer
+	buffer *PointBuffer
 
 	l          sync.Mutex
 	lastPoints []types.MetricPoint
@@ -42,7 +42,7 @@ type inputGatherer struct {
 func newInputGatherer(input telegraf.Input) *inputGatherer {
 	gatherer := &inputGatherer{
 		input:  input,
-		buffer: &pointBuffer{},
+		buffer: &PointBuffer{},
 	}
 
 	return gatherer
@@ -81,18 +81,18 @@ func (i *inputGatherer) GatherWithState(ctx context.Context, state GatherState) 
 	return mfs, i.lastErr
 }
 
-// pointBuffer add points received from PushPoints to a buffer.
-type pointBuffer struct {
+// PointBuffer add points received from PushPoints to a buffer.
+type PointBuffer struct {
 	points []types.MetricPoint
 }
 
 // PushPoints adds points to the buffer.
-func (p *pointBuffer) PushPoints(_ context.Context, points []types.MetricPoint) {
+func (p *PointBuffer) PushPoints(_ context.Context, points []types.MetricPoint) {
 	p.points = append(p.points, points...)
 }
 
 // Points returns the buffer and resets it.
-func (p *pointBuffer) Points() []types.MetricPoint {
+func (p *PointBuffer) Points() []types.MetricPoint {
 	points := p.points
 
 	p.points = p.points[:0]

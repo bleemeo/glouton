@@ -61,6 +61,7 @@ const (
 	syncMethodAccountConfig = "accountconfig"
 	syncMethodMonitor       = "monitor"
 	syncMethodSNMP          = "snmp"
+	syncMethodVSphere       = "vsphere"
 	syncMethodFact          = "facts"
 	syncMethodService       = "service"
 	syncMethodContainer     = "container"
@@ -90,6 +91,8 @@ type Synchronizer struct {
 	lastSync                  time.Time
 	lastFactUpdatedAt         string
 	lastSNMPcount             int
+	lastVSphereUpdate         time.Time
+	lastVSphereAgentsPurge    time.Time
 	lastMetricActivation      time.Time
 	successiveErrors          int
 	warnAccountMismatchDone   bool
@@ -811,6 +814,7 @@ func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) (map[str
 		{name: syncMethodFact, method: s.syncFacts},
 		{name: syncMethodContainer, method: s.syncContainers},
 		{name: syncMethodSNMP, method: s.syncSNMP},
+		{name: syncMethodVSphere, method: s.syncVSphere},
 		{name: syncMethodService, method: s.syncServices},
 		{name: syncMethodMonitor, method: s.syncMonitors, skipOnlyEssential: true},
 		{name: syncMethodMetric, method: s.syncMetrics},
@@ -924,6 +928,7 @@ func (s *Synchronizer) syncToPerform(ctx context.Context) (map[string]bool, bool
 	// Take values that will be used later before taking the lock. This reduce dead-lock risk
 	localFacts, _ := s.option.Facts.Facts(ctx, 24*time.Hour)
 	currentSNMPCount := s.option.SNMPOnlineTarget()
+	lastVSphereChange := s.option.LastVSphereChange(ctx)
 	lastDiscovery := s.option.Discovery.LastUpdate()
 	currentMetricCount := s.option.Store.MetricsCount()
 	mqttIsConnected := s.option.IsMqttConnected()
@@ -956,6 +961,7 @@ func (s *Synchronizer) syncToPerform(ctx context.Context) (map[string]bool, bool
 		syncMethods[syncMethodAccountConfig] = true
 		syncMethods[syncMethodMonitor] = true
 		syncMethods[syncMethodSNMP] = true
+		syncMethods[syncMethodVSphere] = true
 		syncMethods[syncMethodCrashReports] = true
 	}
 
@@ -969,6 +975,11 @@ func (s *Synchronizer) syncToPerform(ctx context.Context) (map[string]bool, bool
 		// TODO: this isn't idea. If the synchronization fail, it won't be retried.
 		// I think the ideal fix would be to always retry all syncMethods that was to synchronize but failed.
 		s.lastSNMPcount = currentSNMPCount
+	}
+
+	if lastVSphereChange.After(s.lastVSphereUpdate) {
+		syncMethods[syncMethodVSphere] = true
+		s.lastVSphereUpdate = lastVSphereChange
 	}
 
 	// After a reload, the config has been changed, so we want to do a fullsync

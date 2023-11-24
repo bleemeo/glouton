@@ -1,0 +1,11 @@
+<ObjectContent>
+  <obj type="OptionManager">HostAgentSettings</obj>
+  <propSet>
+    <name>setting</name>
+    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="ArrayOfOptionValue"></val>
+  </propSet>
+  <propSet>
+    <name>supportedOption</name>
+    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="ArrayOfOptionDef"></val>
+  </propSet>
+</ObjectContent>

@@ -289,6 +289,14 @@ var (
 
 		// Temperature
 		`{__name__="sensor_temperature", sensor=~"coretemp_package_id_.*"}`,
+
+		// vSphere
+		"vsphere_vm_cpu_latency_perc",
+
+		"vms_running_count",
+		"vms_stopped_count",
+		"hosts_running_count",
+		"hosts_stopped_count",
 	}
 
 	defaultServiceMetrics map[discovery.ServiceName][]string = map[discovery.ServiceName][]string{

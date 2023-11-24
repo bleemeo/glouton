@@ -101,7 +101,7 @@ func (s *Synchronizer) agentTypesUpdateList() error {
 
 func (s *Synchronizer) accountConfigUpdateList() error {
 	params := map[string]string{
-		"fields": "id,name,live_process_resolution,live_process,docker_integration,snmp_integration,number_of_custom_metrics,suspended",
+		"fields": "id,name,live_process_resolution,live_process,docker_integration,snmp_integration,vsphere_integration,number_of_custom_metrics,suspended",
 	}
 
 	result, err := s.client.Iter(s.ctx, "accountconfig", params)

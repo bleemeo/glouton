@@ -498,7 +498,7 @@ func (s *FilteredStore) Metrics(filters map[string]string) (result []types.Metri
 func (s *FilteredStore) MetricsCount() int {
 	res, err := s.Metrics(map[string]string{})
 	if err != nil {
-		logger.V(2).Printf("An error occurred while fetching metrics for filtered store: %w", err)
+		logger.V(2).Printf("An error occurred while fetching metrics for filtered store: %v", err)
 	}
 
 	return len(res)

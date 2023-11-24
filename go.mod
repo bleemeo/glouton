@@ -51,6 +51,7 @@ require (
 	github.com/urfave/cli/v2 v2.25.7
 	github.com/vektah/gqlparser/v2 v2.5.9
 	github.com/vishvananda/netlink v1.2.1-beta.2
+	github.com/vmware/govmomi v0.28.1-0.20220921224932-b4b508abf208
 	golang.org/x/sync v0.3.0
 	golang.org/x/sys v0.12.0
 	google.golang.org/protobuf v1.31.0
@@ -59,7 +60,6 @@ require (
 	k8s.io/api v0.28.2
 	k8s.io/apimachinery v0.28.2
 	k8s.io/client-go v0.28.2
-	k8s.io/utils v0.0.0-20230726121419-3b25d923346b
 	sigs.k8s.io/yaml v1.3.0
 )
 
@@ -237,6 +237,7 @@ require (
 	howett.net/plist v1.0.0 // indirect
 	k8s.io/klog/v2 v2.100.1 // indirect
 	k8s.io/kube-openapi v0.0.0-20230905202853-d090da108d2f // indirect
+	k8s.io/utils v0.0.0-20230726121419-3b25d923346b // indirect
 	sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.3.0 // indirect
 )

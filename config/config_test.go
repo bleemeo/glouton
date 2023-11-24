@@ -104,6 +104,7 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 			InitialAgentName:                  "name1",
 			InitialServerGroupName:            "name2",
 			InitialServerGroupNameForSNMP:     "name3",
+			InitialServerGroupNameForVSphere:  "name4",
 			MQTT: BleemeoMQTT{
 				CAFile:      "/myca",
 				Host:        "mqtt.bleemeo.com",
@@ -349,6 +350,15 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 				LowCritical:  newFloatPointer(2),
 				HighWarning:  newFloatPointer(90.5),
 				HighCritical: nil,
+			},
+		},
+		VSphere: []VSphere{
+			{
+				URL:                "https://esxi.test",
+				Username:           "root",
+				Password:           "passwd",
+				InsecureSkipVerify: false,
+				SkipMonitorVMs:     false,
 			},
 		},
 		Web: Web{

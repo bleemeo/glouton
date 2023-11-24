@@ -49,6 +49,7 @@ type Config struct {
 	Tags                     []string             `yaml:"tags"`
 	Telegraf                 Telegraf             `yaml:"telegraf"`
 	Thresholds               map[string]Threshold `yaml:"thresholds"`
+	VSphere                  []VSphere            `yaml:"vsphere"`
 	Web                      Web                  `yaml:"web"`
 	Zabbix                   Zabbix               `yaml:"zabbix"`
 }
@@ -188,6 +189,7 @@ type Bleemeo struct {
 	InitialAgentName                  string      `yaml:"initial_agent_name"`
 	InitialServerGroupName            string      `yaml:"initial_server_group_name"`
 	InitialServerGroupNameForSNMP     string      `yaml:"initial_server_group_name_for_snmp"`
+	InitialServerGroupNameForVSphere  string      `yaml:"initial_server_group_name_for_vsphere"`
 	MQTT                              BleemeoMQTT `yaml:"mqtt"`
 	RegistrationKey                   string      `yaml:"registration_key"`
 	Sentry                            Sentry      `yaml:"sentry"`
@@ -405,4 +407,12 @@ type ContainerRuntime struct {
 type ContainerRuntimeAddresses struct {
 	Addresses      []string `yaml:"addresses"`
 	PrefixHostRoot bool     `yaml:"prefix_hostroot"`
+}
+
+type VSphere struct {
+	URL                string `yaml:"url"`
+	Username           string `yaml:"username"`
+	Password           string `yaml:"password"`
+	InsecureSkipVerify bool   `yaml:"insecure_skip_verify"`
+	SkipMonitorVMs     bool   `yaml:"skip_monitor_vms"`
 }

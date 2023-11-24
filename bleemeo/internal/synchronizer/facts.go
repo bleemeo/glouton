@@ -96,6 +96,17 @@ func (s *Synchronizer) syncFacts(ctx context.Context, fullSync bool, onlyEssenti
 				allAgentFacts[agent.ID] = facts
 			}
 		}
+
+		for _, dev := range s.option.VSphereDevices(ctx, time.Hour) {
+			agentTypeID, found := s.GetVSphereAgentType(dev.Kind())
+			if !found {
+				continue
+			}
+
+			if agent, err := s.FindVSphereAgent(ctx, dev, agentTypeID, remoteAgentList); err == nil {
+				allAgentFacts[agent.ID] = dev.Facts()
+			}
+		}
 	}
 
 	// s.factUpdateList() is already done by checkDuplicated

@@ -106,6 +106,7 @@ func DefaultConfig() Config { //nolint:maintidx
 			InitialAgentName:                  "",
 			InitialServerGroupName:            "",
 			InitialServerGroupNameForSNMP:     "",
+			InitialServerGroupNameForVSphere:  "",
 			MQTT: BleemeoMQTT{
 				CAFile:      "",
 				Host:        "mqtt.bleemeo.com",
@@ -340,6 +341,7 @@ func DefaultConfig() Config { //nolint:maintidx
 			},
 		},
 		Thresholds: map[string]Threshold{},
+		VSphere:    []VSphere{},
 		Web: Web{
 			Enable: true,
 			Endpoints: WebEndpoints{

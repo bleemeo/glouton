@@ -941,12 +941,13 @@ func TestBleemeoPlan(t *testing.T) { //nolint:maintidx
 		{
 			name: "all-enable",
 			accountConfig: bleemeoTypes.AccountConfig{
-				ID:                configID1,
-				Name:              "all-enable",
-				MaxCustomMetrics:  999,
-				LiveProcess:       true,
-				DockerIntegration: true,
-				SNMPIntegration:   true,
+				ID:                 configID1,
+				Name:               "all-enable",
+				MaxCustomMetrics:   999,
+				LiveProcess:        true,
+				DockerIntegration:  true,
+				SNMPIntegration:    true,
+				VSphereIntegration: true,
 			},
 			agentConfigs: []bleemeoTypes.AgentConfig{
 				{
@@ -973,12 +974,13 @@ func TestBleemeoPlan(t *testing.T) { //nolint:maintidx
 		{
 			name: "no-docker",
 			accountConfig: bleemeoTypes.AccountConfig{
-				ID:                configID2,
-				Name:              "no-docker",
-				MaxCustomMetrics:  999,
-				LiveProcess:       true,
-				DockerIntegration: false,
-				SNMPIntegration:   true,
+				ID:                 configID2,
+				Name:               "no-docker",
+				MaxCustomMetrics:   999,
+				LiveProcess:        true,
+				DockerIntegration:  false,
+				SNMPIntegration:    true,
+				VSphereIntegration: true,
 			},
 			agentConfigs: []bleemeoTypes.AgentConfig{
 				{
@@ -1005,12 +1007,13 @@ func TestBleemeoPlan(t *testing.T) { //nolint:maintidx
 		{
 			name: "no-docker-limit-list",
 			accountConfig: bleemeoTypes.AccountConfig{
-				ID:                configID2,
-				Name:              "no-docker-limit-list",
-				MaxCustomMetrics:  999,
-				LiveProcess:       true,
-				DockerIntegration: false,
-				SNMPIntegration:   true,
+				ID:                 configID2,
+				Name:               "no-docker-limit-list",
+				MaxCustomMetrics:   999,
+				LiveProcess:        true,
+				DockerIntegration:  false,
+				SNMPIntegration:    true,
+				VSphereIntegration: true,
 			},
 			agentConfigs: []bleemeoTypes.AgentConfig{
 				{
@@ -1038,12 +1041,13 @@ func TestBleemeoPlan(t *testing.T) { //nolint:maintidx
 		{
 			name: "no-docker-no-snmp-limit-list",
 			accountConfig: bleemeoTypes.AccountConfig{
-				ID:                configID2,
-				Name:              "no-no-no",
-				MaxCustomMetrics:  999,
-				LiveProcess:       false,
-				DockerIntegration: false,
-				SNMPIntegration:   false,
+				ID:                 configID2,
+				Name:               "no-no-no",
+				MaxCustomMetrics:   999,
+				LiveProcess:        false,
+				DockerIntegration:  false,
+				SNMPIntegration:    false,
+				VSphereIntegration: false,
 			},
 			agentConfigs: []bleemeoTypes.AgentConfig{
 				{

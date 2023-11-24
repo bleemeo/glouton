@@ -46,6 +46,7 @@ import (
 	"glouton/inputs/smart"
 	"glouton/inputs/statsd"
 	"glouton/inputs/temp"
+	"glouton/inputs/vsphere"
 	"glouton/jmxtrans"
 	"glouton/logger"
 	"glouton/mqtt"
@@ -152,6 +153,7 @@ type agent struct {
 	mqtt                   *mqtt.MQTT
 	pahoLogWrapper         *client.LogWrapper
 	fluentbitManager       *fluentbit.Manager
+	vSphereManager         *vsphere.Manager
 
 	triggerHandler            *debouncer.Debouncer
 	triggerLock               sync.Mutex
@@ -1019,6 +1021,8 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 	baseRules := fluentbit.PromQLRulesFromInputs(a.config.Log.Inputs)
 	a.rulesManager = rules.NewManager(ctx, a.store, baseRules)
 
+	a.vSphereManager = vsphere.NewManager()
+
 	if a.config.Bleemeo.Enable {
 		scaperName := a.config.Blackbox.ScraperName
 		if scaperName == "" {
@@ -1046,6 +1050,10 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 			NotifyLabelsUpdate:             a.notifyBleemeoUpdateLabels,
 			BlackboxScraperName:            scaperName,
 			ReloadState:                    a.reloadState.Bleemeo(),
+			VSphereDevices:                 a.vSphereManager.Devices,
+			FindVSphereDevice:              a.vSphereManager.FindDevice,
+			LastVSphereChange:              a.vSphereManager.LastChange,
+			VSphereEndpointsInError:        a.vSphereManager.EndpointsInError,
 			IsContainerEnabled:             a.containerFilter.ContainerEnabled,
 			IsContainerNameRecentlyDeleted: a.containerRuntime.IsContainerNameRecentlyDeleted,
 			IsMetricAllowed:                a.metricFilter.isAllowedAndNotDenied,
@@ -1276,7 +1284,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 	}
 
 	// Register inputs that are not associated to a service.
-	a.registerInputs()
+	a.registerInputs(ctx)
 
 	// Register components only available on a given system, like node_exporter for unixes.
 	a.registerOSSpecificComponents(a.vethProvider)
@@ -1362,7 +1370,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 }
 
 // Registers inputs that are not associated to a service.
-func (a *agent) registerInputs() {
+func (a *agent) registerInputs(ctx context.Context) {
 	if a.config.NvidiaSMI.Enable {
 		input, opts, err := nvidia.New(a.config.NvidiaSMI.BinPath, a.config.NvidiaSMI.Timeout)
 		a.registerInput("NVIDIA SMI", input, opts, err)
@@ -1388,12 +1396,14 @@ func (a *agent) registerInputs() {
 			gatherer,
 		)
 		if err != nil {
-			logger.V(1).Printf("unable to add IPMI input: %w", err)
+			logger.V(1).Printf("unable to add IPMI input: %v", err)
 		}
 	}
 
 	input, opts, err := temp.New()
 	a.registerInput("Temp", input, opts, err)
+
+	a.vSphereManager.RegisterGatherers(ctx, a.config.VSphere, a.gathererRegistry.RegisterGatherer, a.state, a.factProvider)
 }
 
 // Register a single input.
@@ -1406,10 +1416,12 @@ func (a *agent) registerInput(name string, input telegraf.Input, opts *inputs.Ga
 
 	_, err = a.gathererRegistry.RegisterInput(
 		registry.RegistrationOption{
-			Description: fmt.Sprintf("Input %s", name),
-			JitterSeed:  baseJitter,
-			Rules:       opts.Rules,
-			MinInterval: opts.MinInterval,
+			Description:         fmt.Sprintf("Input %s", name),
+			JitterSeed:          baseJitter,
+			Rules:               opts.Rules,
+			MinInterval:         opts.MinInterval,
+			ApplyDynamicRelabel: opts.ApplyDynamicRelabel,
+			GatherModifier:      opts.GatherModifier,
 		},
 		input,
 	)
@@ -2124,6 +2136,7 @@ func (a *agent) writeDiagnosticArchive(ctx context.Context, archive types.Archiv
 		a.diagnosticContainers,
 		a.diagnosticSNMP,
 		a.diagnosticFilterResult,
+		a.diagnosticVSphere,
 		a.metricFilter.DiagnosticArchive,
 		a.gathererRegistry.DiagnosticArchive,
 		a.rulesManager.DiagnosticArchive,
@@ -2465,6 +2478,10 @@ func (a *agent) diagnosticFilterResult(_ context.Context, archive types.ArchiveW
 	}
 
 	return nil
+}
+
+func (a *agent) diagnosticVSphere(ctx context.Context, archive types.ArchiveWriter) error {
+	return a.vSphereManager.DiagnosticVSphere(ctx, archive, a.bleemeoConnector.GetAllVSphereAssociations)
 }
 
 // Add a warning for the configuration.

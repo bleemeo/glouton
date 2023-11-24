@@ -1,0 +1,7 @@
+<ObjectContent>
+  <obj type="EventManager">EventManager</obj>
+  <propSet>
+    <name>maxCollector</name>
+    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="xsd:int">1000</val>
+  </propSet>
+</ObjectContent>

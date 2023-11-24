@@ -282,7 +282,7 @@ func (f *FactProvider) fastUpdateFacts(ctx context.Context) map[string]string {
 	mem, err := mem.VirtualMemory()
 
 	if err == nil && mem != nil {
-		newFacts["memory"] = byteCountDecimal(mem.Total)
+		newFacts["memory"] = ByteCountDecimal(mem.Total)
 	}
 
 	for _, c := range callbacks {
@@ -540,7 +540,7 @@ func httpQuery(ctx context.Context, url string, headers []string) string {
 	return string(body)
 }
 
-func byteCountDecimal(b uint64) string {
+func ByteCountDecimal(b uint64) string {
 	const unit = 1024
 	if b < unit {
 		return fmt.Sprintf("%d B", b)
