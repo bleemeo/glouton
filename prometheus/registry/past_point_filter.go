@@ -79,7 +79,9 @@ func (ppf *pastPointFilter) filter(mfs []*dto.MetricFamily, err error) ([]*dto.M
 
 	now := ppf.timeNow().Truncate(time.Second)
 
-	for _, mf := range mfs {
+	f := 0
+
+	for fi, mf := range mfs {
 		if mf == nil {
 			continue
 		}
@@ -91,8 +93,8 @@ func (ppf *pastPointFilter) filter(mfs []*dto.MetricFamily, err error) ([]*dto.M
 
 		m := 0
 
-		for i := 0; i < len(mf.Metric); i++ { //nolint:protogetter
-			metric := mf.Metric[i] //nolint:protogetter
+		for mi := 0; mi < len(mf.Metric); mi++ { //nolint:protogetter
+			metric := mf.Metric[mi] //nolint:protogetter
 			if metric == nil {
 				continue
 			}
@@ -102,7 +104,11 @@ func (ppf *pastPointFilter) filter(mfs []*dto.MetricFamily, err error) ([]*dto.M
 
 			if latestPoint, found := latestPointByLabelSignatures[signature]; found {
 				if latestPoint.timestampMs > currentTimestamp {
-					continue // This metric jumped backward, drop it.
+					// This metric jumped backward, drop it.
+					// We do NOT drop the metric that emitted the same timestamp, this is allowed by design:
+					// the gatherer is allowed to return the same cached result
+					// or return the same value because it is called quicker than its resolution.
+					continue
 				}
 			}
 
@@ -111,19 +117,23 @@ func (ppf *pastPointFilter) filter(mfs []*dto.MetricFamily, err error) ([]*dto.M
 			m++
 		}
 
-		mf.Metric = mf.Metric[:m] //nolint:protogetter
+		if m != 0 {
+			mf.Metric = mf.Metric[:m] //nolint:protogetter
+			mfs[fi] = mf
+			f++
+		}
+
 		ppf.latestPointByLabelsByMetric[mf.GetName()] = latestPointByLabelSignatures
 	}
 
-	go ppf.runPurge(now)
+	mfs = mfs[:f]
+
+	ppf.runPurge(now)
 
 	return mfs, nil
 }
 
 func (ppf *pastPointFilter) runPurge(now time.Time) {
-	ppf.l.Lock()
-	defer ppf.l.Unlock()
-
 	if now.Sub(ppf.lastPurgeAt) < ppf.purgeInterval {
 		return
 	}

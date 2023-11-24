@@ -18,6 +18,7 @@ package registry
 
 import (
 	"context"
+	"glouton/types"
 	"testing"
 	"time"
 
@@ -121,8 +122,6 @@ func TestFilterPastPoints(t *testing.T) {
 		},
 	}
 
-	ignoreUnexported := cmpopts.IgnoreUnexported([]any{io_prometheus_client.MetricFamily{}, io_prometheus_client.Metric{}, io_prometheus_client.LabelPair{}, io_prometheus_client.Untyped{}}...)
-
 	tGatherer := testGatherer{firstSample}
 	gatherer := WithPastPointFilter(&tGatherer, time.Hour)
 
@@ -131,7 +130,7 @@ func TestFilterPastPoints(t *testing.T) {
 		t.Fatal("Error while gathering:", err)
 	}
 
-	if diff := cmp.Diff(firstSample, mfs, ignoreUnexported); diff != "" {
+	if diff := types.DiffMetricFamilies(firstSample, mfs, false); diff != "" {
 		t.Fatalf("Nothing should have been filtered out (-want +got):\n%s", diff)
 	}
 
@@ -144,15 +143,10 @@ func TestFilterPastPoints(t *testing.T) {
 
 	expectedSample := []*io_prometheus_client.MetricFamily{
 		secondSample[0],
-		{
-			Name:   proto.String("disk_used_perc"),
-			Help:   proto.String(""),
-			Type:   ptr(io_prometheus_client.MetricType_UNTYPED),
-			Metric: []*io_prometheus_client.Metric{}, // The sole metric of this family was dropped.
-		},
+		// The whole disk_used_perc metric family was dropped, because its sole metric was removed.
 	}
 
-	if diff := cmp.Diff(expectedSample, mfs, ignoreUnexported); diff != "" {
+	if diff := types.DiffMetricFamilies(expectedSample, mfs, false); diff != "" {
 		t.Fatalf("The second metric should have been filtered out (-want +got):\n%s", diff)
 	}
 }
@@ -170,7 +164,7 @@ func TestFilterPurge(t *testing.T) {
 						{Name: proto.String("__meta_vsphere_moid"), Value: proto.String("10")},
 					},
 					Untyped:     &io_prometheus_client.Untyped{Value: proto.Float64(1.2)},
-					TimestampMs: proto.Int64(1700751600000), // 15:00:00 UTC
+					TimestampMs: proto.Int64(time.Date(2023, 11, 23, 15, 0, 0, 0, time.UTC).UnixMilli()),
 				},
 			},
 		},
@@ -185,7 +179,7 @@ func TestFilterPurge(t *testing.T) {
 						{Name: proto.String("__meta_vsphere_moid"), Value: proto.String("5")},
 					},
 					Untyped:     &io_prometheus_client.Untyped{Value: proto.Float64(23.4)},
-					TimestampMs: proto.Int64(1700751600000), // 15:00:00 UTC
+					TimestampMs: proto.Int64(time.Date(2023, 11, 23, 15, 0, 0, 0, time.UTC).UnixMilli()),
 				},
 				{
 					Label: []*io_prometheus_client.LabelPair{
@@ -193,7 +187,7 @@ func TestFilterPurge(t *testing.T) {
 						{Name: proto.String("__meta_vsphere_moid"), Value: proto.String("10")},
 					},
 					Untyped:     &io_prometheus_client.Untyped{Value: proto.Float64(56.7)},
-					TimestampMs: proto.Int64(1700751600000), // 15:00:00 UTC
+					TimestampMs: proto.Int64(time.Date(2023, 11, 23, 15, 0, 0, 0, time.UTC).UnixMilli()),
 				},
 			},
 		},
@@ -202,7 +196,7 @@ func TestFilterPurge(t *testing.T) {
 	ignoreUnexported := cmpopts.IgnoreUnexported([]any{io_prometheus_client.MetricFamily{}, io_prometheus_client.Metric{}, io_prometheus_client.LabelPair{}, io_prometheus_client.Untyped{}}...)
 	allowUnexported := cmp.AllowUnexported(point{})
 
-	t0 := time.UnixMilli(1700751600000) // 15:00:00 UTC
+	t0 := time.Date(2023, 11, 23, 15, 0, 0, 0, time.UTC)
 
 	tGatherer := testGatherer{sample}
 	gatherer := WithPastPointFilter(&tGatherer, 5*time.Minute).(*pastPointFilter) //nolint: forcetypeassert
@@ -230,8 +224,8 @@ func TestFilterPurge(t *testing.T) {
 		t.Fatalf("Nothing should have been purged (-want +got):\n%s", diff)
 	}
 
-	sample[1].Metric[0].TimestampMs = ptr[int64](1700751780000) // 15:03:00 UTC
-	tGatherer.mfsToReturn = sample[:1]                          // No new points for disk_used_perc metrics
+	sample[1].Metric[0].TimestampMs = ptr[int64](t0.Add(3 * time.Minute).UnixMilli())
+	tGatherer.mfsToReturn = sample[:1] // No new points for disk_used_perc metrics
 	gatherer.timeNow = func() time.Time {
 		return t0.Add(4 * time.Minute) // 15:04:00 UTC
 	}
@@ -241,23 +235,18 @@ func TestFilterPurge(t *testing.T) {
 		t.Fatal("Error while gathering:", err)
 	}
 
-	time.Sleep(10 * time.Millisecond) // Let a bit of time to the purge goroutine to acquire the lock
-	gatherer.l.Lock()                 // Prevent concurrent access to gatherer.latestPointByLabelsByMetric by the purge goroutine
-
 	expectedCache = map[string]map[uint64]point{
 		"cpu_used": {
-			10203054987680334317: {timestampMs: 1700751600000, recordedAt: t0.Add(4 * time.Minute)}, // 15:04:00 UTC,
+			10203054987680334317: {timestampMs: t0.UnixMilli(), recordedAt: t0.Add(4 * time.Minute)},
 		},
 		"disk_used_perc": {
-			3900352098746294457:  {timestampMs: 1700751600000, recordedAt: t0}, // 15:00:00 UTC,
-			10203054987680334317: {timestampMs: 1700751600000, recordedAt: t0}, // 15:00:00 UTC,
+			3900352098746294457:  {timestampMs: t0.UnixMilli(), recordedAt: t0},
+			10203054987680334317: {timestampMs: t0.UnixMilli(), recordedAt: t0},
 		},
 	}
 	if diff := cmp.Diff(expectedCache, gatherer.latestPointByLabelsByMetric, ignoreUnexported, allowUnexported); diff != "" {
 		t.Fatalf("Still nothing should have been purged (-want +got):\n%s", diff)
 	}
-
-	gatherer.l.Unlock()
 
 	tGatherer.mfsToReturn = []*io_prometheus_client.MetricFamily{
 		{
@@ -271,7 +260,7 @@ func TestFilterPurge(t *testing.T) {
 						{Name: proto.String("__meta_vsphere_moid"), Value: proto.String("5")},
 					},
 					Untyped:     &io_prometheus_client.Untyped{Value: proto.Float64(25.7)},
-					TimestampMs: proto.Int64(1700752080000), // 15:08:00 UTC
+					TimestampMs: proto.Int64(t0.Add(8 * time.Minute).UnixMilli()),
 				},
 			},
 		},
@@ -285,22 +274,17 @@ func TestFilterPurge(t *testing.T) {
 		t.Fatal("Error while gathering:", err)
 	}
 
-	time.Sleep(10 * time.Millisecond)
-	gatherer.l.Lock()
-
 	expectedCache = map[string]map[uint64]point{
 		"cpu_used": {
-			10203054987680334317: {timestampMs: 1700751600000, recordedAt: t0.Add(4 * time.Minute)}, // 15:04:00 UTC,
+			10203054987680334317: {timestampMs: t0.UnixMilli(), recordedAt: t0.Add(4 * time.Minute)},
 		},
 		"disk_used_perc": {
-			3900352098746294457: {timestampMs: 1700752080000, recordedAt: t0.Add(8 * time.Minute)}, // 15:08:00 UTC,
+			3900352098746294457: {timestampMs: t0.Add(8 * time.Minute).UnixMilli(), recordedAt: t0.Add(8 * time.Minute)},
 		},
 	}
 	if diff := cmp.Diff(expectedCache, gatherer.latestPointByLabelsByMetric, ignoreUnexported, allowUnexported); diff != "" {
 		t.Fatalf("Still nothing should have been purged (-want +got):\n%s", diff)
 	}
-
-	gatherer.l.Unlock()
 }
 
 func ptr[T any](e T) *T { return &e }
