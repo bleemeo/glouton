@@ -204,6 +204,9 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ContainerID:     "",
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "0.0.0.0", Port: 11211}},
 				IPAddress:       "127.0.0.1",
+				Active:          true,
+				HasNetstatInfo:  true,
+				LastNetstatInfo: t0,
 			},
 		},
 		{
@@ -217,6 +220,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ContainerID:     "",
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 11211}},
 				IPAddress:       "127.0.0.1",
+				Active:          true,
 			},
 		},
 		{
@@ -230,6 +234,9 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ContainerID:     "",
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "192.168.1.1", Port: 11211}},
 				IPAddress:       "192.168.1.1",
+				Active:          true,
+				HasNetstatInfo:  true,
+				LastNetstatInfo: t0,
 			},
 		},
 		{
@@ -243,6 +250,9 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ContainerID:     "",
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "0.0.0.0", Port: 80}},
 				IPAddress:       "127.0.0.1",
+				Active:          true,
+				HasNetstatInfo:  true,
+				LastNetstatInfo: t0,
 			},
 		},
 		{
@@ -259,6 +269,9 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "172.17.0.49", Port: 6379}},
 				IPAddress:       "172.17.0.49",
 				IgnoredPorts:    map[int]bool{},
+				Active:          true,
+				HasNetstatInfo:  true,
+				LastNetstatInfo: t0,
 			},
 		},
 		{
@@ -269,6 +282,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ServiceType:     ElasticSearchService,
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 9200}},
 				IPAddress:       "127.0.0.1",
+				Active:          true,
 			},
 		},
 		{
@@ -288,6 +302,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 					Password: "secret",
 				},
 				IgnoredPorts: map[int]bool{},
+				Active:       true,
 			},
 		},
 		{
@@ -306,6 +321,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 					Password:          "secret",
 					MetricsUnixSocket: "",
 				},
+				Active: true,
 			},
 		},
 		{
@@ -324,6 +340,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 					Password:          "secret",
 					MetricsUnixSocket: "/tmp/file.sock",
 				},
+				Active: true,
 			},
 		},
 		{
@@ -334,6 +351,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ServiceType:     RabbitMQService,
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 5672}},
 				IPAddress:       "127.0.0.1",
+				Active:          true,
 			},
 		},
 		{
@@ -344,6 +362,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ServiceType:     InfluxDBService,
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 8086}},
 				IPAddress:       "127.0.0.1",
+				Active:          true,
 			},
 		},
 		// Service from Ubuntu 16.04, default config
@@ -355,6 +374,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ServiceType:     MySQLService,
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 3306}},
 				IPAddress:       "127.0.0.1",
+				Active:          true,
 			},
 		},
 		{
@@ -365,6 +385,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ServiceType:     NTPService,
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "udp", Address: "127.0.0.1", Port: 123}},
 				IPAddress:       "127.0.0.1",
+				Active:          true,
 			},
 		},
 		{
@@ -375,6 +396,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ServiceType:     OpenLDAPService,
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 389}},
 				IPAddress:       "127.0.0.1",
+				Active:          true,
 			},
 		},
 		{
@@ -385,6 +407,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ServiceType:     ApacheService,
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 80}},
 				IPAddress:       "127.0.0.1",
+				Active:          true,
 			},
 		},
 		{
@@ -395,6 +418,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ServiceType:     AsteriskService,
 				ListenAddresses: nil,
 				IPAddress:       "127.0.0.1",
+				Active:          true,
 			},
 		},
 		{
@@ -405,6 +429,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ServiceType:     BindService,
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 53}},
 				IPAddress:       "127.0.0.1",
+				Active:          true,
 			},
 		},
 		{
@@ -415,6 +440,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ServiceType:     DovecotService,
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 143}},
 				IPAddress:       "127.0.0.1",
+				Active:          true,
 			},
 		},
 		{
@@ -430,6 +456,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ServiceType:     EjabberService,
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 5222}},
 				IPAddress:       "127.0.0.1",
+				Active:          true,
 			},
 		},
 		{
@@ -448,6 +475,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ServiceType:     RabbitMQService,
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 5672}},
 				IPAddress:       "127.0.0.1",
+				Active:          true,
 			},
 		},
 		{
@@ -458,6 +486,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ServiceType:     MongoDBService,
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 27017}},
 				IPAddress:       "127.0.0.1",
+				Active:          true,
 			},
 		},
 		{
@@ -468,6 +497,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ServiceType:     MosquittoService,
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 1883}},
 				IPAddress:       "127.0.0.1",
+				Active:          true,
 			},
 		},
 		{
@@ -478,6 +508,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ServiceType:     RedisService,
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 6379}},
 				IPAddress:       "127.0.0.1",
+				Active:          true,
 			},
 		},
 		{
@@ -488,6 +519,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ServiceType:     MemcachedService,
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 11211}},
 				IPAddress:       "127.0.0.1",
+				Active:          true,
 			},
 		},
 		{
@@ -498,6 +530,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ServiceType:     SquidService,
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 3128}},
 				IPAddress:       "127.0.0.1",
+				Active:          true,
 			},
 		},
 		{
@@ -508,6 +541,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ServiceType:     PostgreSQLService,
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 5432}},
 				IPAddress:       "127.0.0.1",
+				Active:          true,
 			},
 		},
 		{
@@ -523,6 +557,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ServiceType:     ZookeeperService,
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 2181}},
 				IPAddress:       "127.0.0.1",
+				Active:          true,
 			},
 		},
 		{
@@ -533,6 +568,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ServiceType:     SaltMasterService,
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 4505}},
 				IPAddress:       "127.0.0.1",
+				Active:          true,
 			},
 		},
 		{
@@ -543,6 +579,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ServiceType:     PostfixService,
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 25}},
 				IPAddress:       "127.0.0.1",
+				Active:          true,
 			},
 		},
 		{
@@ -553,6 +590,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ServiceType:     NginxService,
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 80}},
 				IPAddress:       "127.0.0.1",
+				Active:          true,
 			},
 		},
 		{
@@ -563,6 +601,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ServiceType:     EximService,
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 25}},
 				IPAddress:       "127.0.0.1",
+				Active:          true,
 			},
 		},
 		{
@@ -573,6 +612,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ServiceType:     FreeradiusService,
 				ListenAddresses: nil,
 				IPAddress:       "127.0.0.1",
+				Active:          true,
 			},
 		},
 		{
@@ -583,6 +623,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ServiceType:     VarnishService,
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 6082}},
 				IPAddress:       "127.0.0.1",
+				Active:          true,
 			},
 		},
 		// Service from Ubunut 16.04, default config
@@ -601,6 +642,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ServiceType:     ElasticSearchService,
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 9200}},
 				IPAddress:       "127.0.0.1",
+				Active:          true,
 			},
 		},
 		{
@@ -611,6 +653,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ServiceType:     SquidService,
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 3128}},
 				IPAddress:       "127.0.0.1",
+				Active:          true,
 			},
 		},
 		{
@@ -621,6 +664,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ServiceType:     OpenVPNService,
 				ListenAddresses: nil,
 				IPAddress:       "127.0.0.1",
+				Active:          true,
 			},
 		},
 		{
@@ -631,6 +675,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ServiceType:     LibvirtService,
 				ListenAddresses: nil,
 				IPAddress:       "127.0.0.1",
+				Active:          true,
 			},
 		},
 		{
@@ -641,6 +686,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ServiceType:     HAProxyService,
 				ListenAddresses: nil,
 				IPAddress:       "127.0.0.1",
+				Active:          true,
 			},
 		},
 		{
@@ -651,6 +697,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ServiceType:     UWSGIService,
 				ListenAddresses: nil,
 				IPAddress:       "127.0.0.1",
+				Active:          true,
 			},
 		},
 		{
@@ -661,6 +708,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ServiceType:     UWSGIService,
 				ListenAddresses: nil,
 				IPAddress:       "127.0.0.1",
+				Active:          true,
 			},
 		},
 		{
@@ -671,6 +719,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ServiceType:     UWSGIService,
 				ListenAddresses: nil,
 				IPAddress:       "127.0.0.1",
+				Active:          true,
 			},
 		},
 		{
@@ -706,6 +755,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ServiceType:     MySQLService,
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 3306}},
 				IPAddress:       "127.0.0.1",
+				Active:          true,
 			},
 		},
 		{
@@ -716,6 +766,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ServiceType:     PHPFPMService,
 				ListenAddresses: nil,
 				IPAddress:       "127.0.0.1",
+				Active:          true,
 			},
 		},
 		{
@@ -740,6 +791,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				IPAddress:       "127.0.0.1",
 				ContainerID:     "817ec63d4b4f9e28947a323f9fbfc4596500b42c842bf07bd6ad9641e6805cb5",
 				IgnoredPorts:    map[int]bool{},
+				Active:          true,
 			},
 		},
 		{
@@ -761,6 +813,9 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				IgnoredPorts: map[int]bool{
 					5701: true,
 				},
+				Active:          true,
+				HasNetstatInfo:  true,
+				LastNetstatInfo: t0,
 			},
 		},
 		{
@@ -787,6 +842,9 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 					5701: true,
 					8080: true,
 				},
+				Active:          true,
+				HasNetstatInfo:  true,
+				LastNetstatInfo: t0,
 			},
 		},
 		{
@@ -811,6 +869,9 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 9092}},
 				IPAddress:       "127.0.0.1",
 				IgnoredPorts:    map[int]bool{},
+				Active:          true,
+				HasNetstatInfo:  true,
+				LastNetstatInfo: t0,
 			},
 		},
 		{
@@ -834,6 +895,9 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				IgnoredPorts:    map[int]bool{},
 				IPAddress:       "127.0.0.1",
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 4222}},
+				Active:          true,
+				HasNetstatInfo:  true,
+				LastNetstatInfo: t0,
 			},
 		},
 		{
@@ -843,6 +907,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				Name:        "fail2ban",
 				ServiceType: Fail2banService,
 				IPAddress:   "127.0.0.1",
+				Active:      true,
 			},
 		},
 		{
@@ -853,6 +918,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ServiceType:     NfsService,
 				ListenAddresses: nil,
 				IPAddress:       "127.0.0.1",
+				Active:          true,
 			},
 		},
 		{
@@ -866,6 +932,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ServiceType:     JenkinsService,
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 8080}},
 				IPAddress:       "127.0.0.1",
+				Active:          true,
 			},
 		},
 		{
@@ -876,6 +943,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ServiceType:     UPSDService,
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 3493}},
 				IPAddress:       "127.0.0.1",
+				Active:          true,
 			},
 		},
 	}
@@ -933,32 +1001,8 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 			continue
 		}
 
-		if srv[0].Name != c.want.Name {
-			t.Errorf("Case %s: Name == %#v, want %#v", c.testName, srv[0].Name, c.want.Name)
-		}
-
-		if srv[0].ServiceType != c.want.ServiceType {
-			t.Errorf("Case %s: ServiceType == %#v, want %#v", c.testName, srv[0].ServiceType, c.want.ServiceType)
-		}
-
-		if srv[0].ContainerID != c.want.ContainerID {
-			t.Errorf("Case %s: ContainerID == %#v, want %#v", c.testName, srv[0].ContainerID, c.want.ContainerID)
-		}
-
-		if srv[0].IPAddress != c.want.IPAddress {
-			t.Errorf("Case %s: IPAddress == %#v, want %#v", c.testName, srv[0].IPAddress, c.want.IPAddress)
-		}
-
-		if !reflect.DeepEqual(srv[0].ListenAddresses, c.want.ListenAddresses) {
-			t.Errorf("Case %s: ListenAddresses == %v, want %v", c.testName, srv[0].ListenAddresses, c.want.ListenAddresses)
-		}
-
-		if !reflect.DeepEqual(srv[0].IgnoredPorts, c.want.IgnoredPorts) {
-			t.Errorf("Case %s: IgnoredPorts == %v, want %v", c.testName, srv[0].IgnoredPorts, c.want.IgnoredPorts)
-		}
-
-		if diff := cmp.Diff(srv[0].Config, c.want.Config); diff != "" {
-			t.Errorf("Case %s: unexpected config:\n%s", c.testName, diff)
+		if diff := cmp.Diff(c.want, srv[0], cmpopts.IgnoreUnexported(Service{})); diff != "" {
+			t.Errorf("Case %s: diff: (-want +got)\n %s", c.testName, diff)
 		}
 	}
 }
