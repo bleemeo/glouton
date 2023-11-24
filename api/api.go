@@ -40,7 +40,7 @@ import (
 
 	"github.com/99designs/gqlgen/graphql/handler"
 	"github.com/99designs/gqlgen/graphql/playground"
-	"github.com/go-chi/chi"
+	"github.com/go-chi/chi/v5"
 	"github.com/rs/cors"
 	_ "github.com/urfave/cli/v2" // Prevent go mod tidy from removing gqlgen dependencies
 )
