@@ -673,8 +673,6 @@ func Test_applyOverride(t *testing.T) { //nolint:maintidx
 					Name:        "redis",
 					ServiceType: RedisService,
 					ListenAddresses: []facts.ListenAddress{
-						// TODO: this is a bug !
-						{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 6380},
 						{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 6380},
 					},
 					IPAddress:       "127.0.0.1",

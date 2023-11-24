@@ -590,9 +590,11 @@ func applyOverride(
 
 				// If an override set the port on a service, make sure this listenAddress isn't used on another service with
 				// another instance (except if this would remove the last listen address).
-				for _, other := range servicesMap {
+				for otherKey, other := range servicesMap {
 					if other.Name == service.Name && other.Instance != service.Instance && len(other.ListenAddresses) > 1 {
 						other.ListenAddresses = filterListenAddress(other.ListenAddresses, listenAddress)
+
+						servicesMap[otherKey] = other
 					}
 				}
 			}
