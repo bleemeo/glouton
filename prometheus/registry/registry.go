@@ -51,6 +51,7 @@ import (
 	"github.com/prometheus/prometheus/promql/parser"
 	"github.com/prometheus/prometheus/rules"
 	"github.com/prometheus/prometheus/storage"
+	"github.com/prometheus/prometheus/tsdb/chunkenc"
 )
 
 const (
@@ -1188,15 +1189,15 @@ func gatherFromQueryable(ctx context.Context, queryable storage.Queryable, filte
 	now := time.Now()
 	mint := now.Add(-5 * time.Minute)
 
-	querier, err := queryable.Querier(ctx, mint.UnixMilli(), now.UnixMilli())
+	querier, err := queryable.Querier(mint.UnixMilli(), now.UnixMilli())
 	if err != nil {
 		return nil, err
 	}
 
-	series := querier.Select(true, nil)
+	series := querier.Select(ctx, true, nil)
 	for series.Next() {
 		lbls := series.At().Labels()
-		iter := series.At().Iterator()
+		iter := series.At().Iterator(nil)
 
 		name := lbls.Get(types.LabelName)
 		if len(result) == 0 || result[len(result)-1].GetName() != name {
@@ -1220,7 +1221,7 @@ func gatherFromQueryable(ctx context.Context, queryable storage.Queryable, filte
 
 		var lastValue float64
 
-		for iter.Next() {
+		for iter.Next() == chunkenc.ValFloat {
 			_, lastValue = iter.At()
 		}
 
@@ -1632,10 +1633,11 @@ func (r *Registry) applyRelabel(
 
 	promLabels := labels.FromMap(input)
 	annotations := gloutonModel.MetaLabelsToAnnotation(promLabels)
-	promLabels = relabel.Process(
-		promLabels,
-		r.relabelConfigs...,
-	)
+
+	promLabels, keep := relabel.Process(promLabels, r.relabelConfigs...)
+	if !keep {
+		return promLabels, annotations, retryLater
+	}
 
 	promLabels = gloutonModel.DropMetaLabels(promLabels)
 

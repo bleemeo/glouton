@@ -62,7 +62,7 @@ func (g *appenderGatherer) GatherWithState(ctx context.Context, state GatherStat
 
 			for _, samples := range app.Committed {
 				for i := range samples {
-					samples[i].Point.T = now.UnixMilli()
+					samples[i].T = now.UnixMilli()
 				}
 			}
 		}

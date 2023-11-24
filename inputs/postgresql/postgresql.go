@@ -21,6 +21,7 @@ import (
 	"glouton/inputs/internal"
 
 	"github.com/influxdata/telegraf"
+	telegraf_config "github.com/influxdata/telegraf/config"
 	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"
 	"github.com/influxdata/telegraf/plugins/inputs/postgresql"
 )
@@ -37,7 +38,7 @@ func New(address string, detailedDatabases []string) (telegraf.Input, error) {
 		return nil, inputs.ErrUnexpectedType
 	}
 
-	postgresqlInput.Address = address
+	postgresqlInput.Address = telegraf_config.NewSecret([]byte(address))
 
 	globalMetricsInput := sumMetrics{
 		input: postgresqlInput,

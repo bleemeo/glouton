@@ -21,7 +21,9 @@ import (
 	"glouton/types"
 
 	"github.com/prometheus/prometheus/model/exemplar"
+	"github.com/prometheus/prometheus/model/histogram"
 	"github.com/prometheus/prometheus/model/labels"
+	"github.com/prometheus/prometheus/model/metadata"
 	"github.com/prometheus/prometheus/promql"
 	"github.com/prometheus/prometheus/storage"
 )
@@ -39,7 +41,7 @@ func NewBufferAppender() *BufferAppender {
 }
 
 func (a *BufferAppender) Append(_ storage.SeriesRef, l labels.Labels, t int64, v float64) (storage.SeriesRef, error) {
-	a.temp = append(a.temp, promql.Sample{Point: promql.Point{T: t, V: v}, Metric: l})
+	a.temp = append(a.temp, promql.Sample{T: t, F: v, Metric: l})
 
 	return 0, nil
 }
@@ -66,5 +68,13 @@ func (a *BufferAppender) Rollback() error {
 }
 
 func (a *BufferAppender) AppendExemplar(storage.SeriesRef, labels.Labels, exemplar.Exemplar) (storage.SeriesRef, error) {
+	return 0, errNotImplemented
+}
+
+func (a *BufferAppender) AppendHistogram(storage.SeriesRef, labels.Labels, int64, *histogram.Histogram, *histogram.FloatHistogram) (storage.SeriesRef, error) {
+	return 0, errNotImplemented
+}
+
+func (a *BufferAppender) UpdateMetadata(storage.SeriesRef, labels.Labels, metadata.Metadata) (storage.SeriesRef, error) {
 	return 0, errNotImplemented
 }

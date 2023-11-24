@@ -23,15 +23,17 @@ import (
 	"sort"
 	"time"
 
+	"github.com/prometheus/prometheus/model/histogram"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/tsdb/chunkenc"
+	"github.com/prometheus/prometheus/util/annotations"
 )
 
 var errNotImplemented = errors.New("not implemented")
 
 // Querier returns a storage.Querier to read from memory store.
-func (s *Store) Querier(_ context.Context, mint, maxt int64) (storage.Querier, error) {
+func (s *Store) Querier(mint, maxt int64) (storage.Querier, error) {
 	return querier{store: s, mint: mint, maxt: maxt}, nil
 }
 
@@ -43,11 +45,8 @@ type querier struct {
 
 // Select returns a set of series that matches the given label matchers.
 // Caller can specify if it requires returned series to be sorted. Prefer not requiring sorting for better performance.
-// It allows passing hints that can help in optimising select, but it's up to implementation how this is used if used at all.
-func (q querier) Select(sortSeries bool, hints *storage.SelectHints, matchers ...*labels.Matcher) storage.SeriesSet {
-	_ = sortSeries
-	_ = hints
-
+// It allows passing hints that can help in optimizing select, but it's up to implementation how this is used if used at all.
+func (q querier) Select(_ context.Context, _ bool, _ *storage.SelectHints, matchers ...*labels.Matcher) storage.SeriesSet {
 	q.store.lock.Lock()
 	defer q.store.lock.Unlock()
 
@@ -83,15 +82,12 @@ outerLoop:
 
 // LabelValues returns all potential values for a label name.
 // It is not safe to use the strings beyond the lifefime of the querier.
-func (q querier) LabelValues(name string, matchers ...*labels.Matcher) ([]string, storage.Warnings, error) {
-	_ = name
-	_ = matchers
-
+func (q querier) LabelValues(context.Context, string, ...*labels.Matcher) ([]string, annotations.Annotations, error) {
 	return nil, nil, errNotImplemented
 }
 
 // LabelNames returns all the unique label names present in the block in sorted order.
-func (q querier) LabelNames(...*labels.Matcher) ([]string, storage.Warnings, error) {
+func (q querier) LabelNames(context.Context, ...*labels.Matcher) ([]string, annotations.Annotations, error) {
 	return nil, nil, errNotImplemented
 }
 
@@ -142,7 +138,7 @@ func (i *seriesIter) Err() error {
 	return i.err
 }
 
-func (i *seriesIter) Warnings() storage.Warnings {
+func (i *seriesIter) Warnings() annotations.Annotations {
 	return nil
 }
 
@@ -155,7 +151,7 @@ func (s series) Labels() labels.Labels {
 	return labels.FromMap(s.labels)
 }
 
-func (s series) Iterator() chunkenc.Iterator {
+func (s series) Iterator(_ chunkenc.Iterator) chunkenc.Iterator {
 	return &seriesSample{
 		data:   s.data,
 		offset: -1,
@@ -168,36 +164,48 @@ type seriesSample struct {
 }
 
 // Next advances the iterator by one.
-func (s *seriesSample) Next() bool {
+func (s *seriesSample) Next() chunkenc.ValueType {
 	if s.offset+1 >= len(s.data) {
-		return false
+		return chunkenc.ValNone
 	}
 
 	s.offset++
 
-	return true
+	return chunkenc.ValFloat
 }
 
 // Seek advances the iterator forward to the first sample with the timestamp equal or greater than t.
 // If current sample found by previous `Next` or `Seek` operation already has this property, Seek has no effect.
 // Seek returns true, if such sample exists, false otherwise.
 // Iterator is exhausted when the Seek returns false.
-func (s *seriesSample) Seek(t int64) bool {
+func (s *seriesSample) Seek(t int64) chunkenc.ValueType {
 	for ; s.offset < len(s.data); s.offset++ {
 		if s.data[s.offset].Time.UnixNano()/1e6 >= t {
-			return true
+			return chunkenc.ValFloat
 		}
 	}
 
 	s.offset = len(s.data) - 1
 
-	return false
+	return chunkenc.ValNone
 }
 
 // At returns the current timestamp/value pair.
 // Before the iterator has advanced At behaviour is unspecified.
 func (s *seriesSample) At() (int64, float64) {
 	return s.data[s.offset].Time.UnixNano() / 1e6, s.data[s.offset].Value
+}
+
+func (s *seriesSample) AtHistogram() (int64, *histogram.Histogram) {
+	return 0, nil
+}
+
+func (s *seriesSample) AtFloatHistogram() (int64, *histogram.FloatHistogram) {
+	return 0, nil
+}
+
+func (s *seriesSample) AtT() int64 {
+	return s.data[s.offset].Time.UnixNano()
 }
 
 // Err returns the current error. It should be used only after iterator is

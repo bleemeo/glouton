@@ -22,6 +22,7 @@ import (
 	"strings"
 
 	"github.com/influxdata/telegraf"
+	telegraf_config "github.com/influxdata/telegraf/config"
 	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"
 	"github.com/influxdata/telegraf/plugins/inputs/mysql"
 )
@@ -38,8 +39,8 @@ func New(server string) (i telegraf.Input, err error) {
 		return nil, inputs.ErrUnexpectedType
 	}
 
-	slice := append(make([]string, 0), server)
-	mysqlInput.Servers = slice
+	secretServer := telegraf_config.NewSecret([]byte(server))
+	mysqlInput.Servers = []*telegraf_config.Secret{&secretServer}
 	mysqlInput.GatherInnoDBMetrics = true
 	mysqlInput.Log = internal.Logger{}
 	i = &internal.Input{

@@ -341,11 +341,11 @@ func SamplesToMetricFamily(samples []promql.Sample, mType *dto.MetricType) (*dto
 
 		switch mType.String() {
 		case dto.MetricType_COUNTER.Enum().String():
-			metric.Counter = &dto.Counter{Value: proto.Float64(pt.V)}
+			metric.Counter = &dto.Counter{Value: proto.Float64(pt.F)}
 		case dto.MetricType_GAUGE.Enum().String():
-			metric.Gauge = &dto.Gauge{Value: proto.Float64(pt.V)}
+			metric.Gauge = &dto.Gauge{Value: proto.Float64(pt.F)}
 		case dto.MetricType_UNTYPED.Enum().String():
-			metric.Untyped = &dto.Untyped{Value: proto.Float64(pt.V)}
+			metric.Untyped = &dto.Untyped{Value: proto.Float64(pt.F)}
 		default:
 			return nil, errUnsupportedType
 		}
