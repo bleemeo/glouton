@@ -277,8 +277,10 @@ func TestDiscoverySingle(t *testing.T) {
 func Test_applyOverride(t *testing.T) { //nolint:maintidx
 	type args struct {
 		discoveredServicesMap map[NameInstance]Service
-		servicesOverride      map[NameInstance]config.Service
+		servicesOverride      []config.Service
 	}
+
+	t0 := time.Now()
 
 	tests := []struct {
 		name string
@@ -324,8 +326,9 @@ func Test_applyOverride(t *testing.T) { //nolint:maintidx
 						ServiceType: ApacheService,
 					},
 				},
-				servicesOverride: map[NameInstance]config.Service{
-					{Name: "apache"}: {
+				servicesOverride: []config.Service{
+					{
+						ID:      "apache",
 						Address: "10.0.1.2",
 					},
 				},
@@ -335,6 +338,7 @@ func Test_applyOverride(t *testing.T) { //nolint:maintidx
 					Name:        "apache",
 					ServiceType: ApacheService,
 					Config: config.Service{
+						ID:      "apache",
 						Address: "10.0.1.2",
 					},
 					ListenAddresses: []facts.ListenAddress{
@@ -357,13 +361,15 @@ func Test_applyOverride(t *testing.T) { //nolint:maintidx
 						ServiceType: ApacheService,
 					},
 				},
-				servicesOverride: map[NameInstance]config.Service{
-					{Name: "myapplication"}: {
+				servicesOverride: []config.Service{
+					{
+						ID:           "myapplication",
 						Port:         8080,
 						CheckType:    customCheckNagios,
 						CheckCommand: "command-to-run",
 					},
-					{Name: "custom_webserver"}: {
+					{
+						ID:   "custom_webserver",
 						Port: 8081,
 					},
 				},
@@ -376,6 +382,7 @@ func Test_applyOverride(t *testing.T) { //nolint:maintidx
 				{Name: "myapplication"}: {
 					ServiceType: CustomService,
 					Config: config.Service{
+						ID:           "myapplication",
 						Address:      "127.0.0.1", // default as soon as port is set
 						Port:         8080,
 						CheckType:    customCheckNagios,
@@ -387,6 +394,7 @@ func Test_applyOverride(t *testing.T) { //nolint:maintidx
 				{Name: "custom_webserver"}: {
 					ServiceType: CustomService,
 					Config: config.Service{
+						ID:        "custom_webserver",
 						Address:   "127.0.0.1", // default as soon as port is set
 						Port:      8081,
 						CheckType: customCheckTCP, // default as soon as port is set,
@@ -400,12 +408,14 @@ func Test_applyOverride(t *testing.T) { //nolint:maintidx
 			name: "bad custom check",
 			args: args{
 				discoveredServicesMap: nil,
-				servicesOverride: map[NameInstance]config.Service{
-					{Name: "myapplication"}: { // the check_command is missing
+				servicesOverride: []config.Service{
+					{ // the check_command is missing
+						ID:        "myapplication",
 						Port:      8080,
 						CheckType: customCheckNagios,
 					},
-					{Name: "custom_webserver"}: { // port is missing
+					{ // port is missing
+						ID:        "custom_webserver",
 						CheckType: customCheckHTTP,
 					},
 				},
@@ -426,8 +436,9 @@ func Test_applyOverride(t *testing.T) { //nolint:maintidx
 						},
 					},
 				},
-				servicesOverride: map[NameInstance]config.Service{
-					{Name: "apache"}: {
+				servicesOverride: []config.Service{
+					{
+						ID:          "apache",
 						IgnorePorts: []int{443, 22},
 					},
 				},
@@ -447,6 +458,7 @@ func Test_applyOverride(t *testing.T) { //nolint:maintidx
 						443: true,
 					},
 					Config: config.Service{
+						ID:          "apache",
 						IgnorePorts: []int{443, 22},
 					},
 				},
@@ -461,8 +473,9 @@ func Test_applyOverride(t *testing.T) { //nolint:maintidx
 						ServiceType: ApacheService,
 					},
 				},
-				servicesOverride: map[NameInstance]config.Service{
-					{Name: "apache"}: {
+				servicesOverride: []config.Service{
+					{
+						ID:          "apache",
 						IgnorePorts: []int{443, 22},
 					},
 				},
@@ -476,6 +489,7 @@ func Test_applyOverride(t *testing.T) { //nolint:maintidx
 						443: true,
 					},
 					Config: config.Service{
+						ID:          "apache",
 						IgnorePorts: []int{443, 22},
 					},
 				},
@@ -490,8 +504,9 @@ func Test_applyOverride(t *testing.T) { //nolint:maintidx
 						ServiceType: ApacheService,
 					},
 				},
-				servicesOverride: map[NameInstance]config.Service{
-					{Name: "apache"}: {
+				servicesOverride: []config.Service{
+					{
+						ID:    "apache",
 						Stack: "website",
 					},
 				},
@@ -502,6 +517,7 @@ func Test_applyOverride(t *testing.T) { //nolint:maintidx
 					ServiceType: ApacheService,
 					Stack:       "website",
 					Config: config.Service{
+						ID:    "apache",
 						Stack: "website",
 					},
 				},
@@ -517,8 +533,9 @@ func Test_applyOverride(t *testing.T) { //nolint:maintidx
 						Stack:       "website",
 					},
 				},
-				servicesOverride: map[NameInstance]config.Service{
-					{Name: "apache"}: {
+				servicesOverride: []config.Service{
+					{
+						ID:    "apache",
 						Stack: "",
 					},
 				},
@@ -529,6 +546,7 @@ func Test_applyOverride(t *testing.T) { //nolint:maintidx
 					ServiceType: ApacheService,
 					Stack:       "website",
 					Config: config.Service{
+						ID:    "apache",
 						Stack: "",
 					},
 				},
@@ -538,8 +556,8 @@ func Test_applyOverride(t *testing.T) { //nolint:maintidx
 			name: "override port from jmx port",
 			args: args{
 				discoveredServicesMap: map[NameInstance]Service{},
-				servicesOverride: map[NameInstance]config.Service{
-					{Name: "jmx_custom"}: {
+				servicesOverride: []config.Service{
+					{
 						ID:      "jmx_custom",
 						JMXPort: 1000,
 					},
@@ -564,8 +582,8 @@ func Test_applyOverride(t *testing.T) { //nolint:maintidx
 			name: "no override port from jmx port",
 			args: args{
 				discoveredServicesMap: map[NameInstance]Service{},
-				servicesOverride: map[NameInstance]config.Service{
-					{Name: "jmx_custom"}: {
+				servicesOverride: []config.Service{
+					{
 						ID:      "jmx_custom",
 						Port:    8000,
 						JMXPort: 1000,
@@ -602,8 +620,8 @@ func Test_applyOverride(t *testing.T) { //nolint:maintidx
 						},
 					},
 				},
-				servicesOverride: map[NameInstance]config.Service{
-					{Name: "kafka"}: {
+				servicesOverride: []config.Service{
+					{
 						ID:      "kafka",
 						Port:    9000,
 						JMXPort: 2000,
@@ -622,13 +640,175 @@ func Test_applyOverride(t *testing.T) { //nolint:maintidx
 				},
 			},
 		},
+		{
+			name: "redis with customized ports",
+			// In this test, we have 2 redis running on host. Using configuration we tells which redis listen
+			// on which ports.
+			args: args{
+				discoveredServicesMap: map[NameInstance]Service{
+					{Name: "redis"}: {
+						Name:        "redis",
+						ServiceType: RedisService,
+						ListenAddresses: []facts.ListenAddress{
+							{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 6379},
+							{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 6380},
+						},
+						IPAddress:       "127.0.0.1",
+						HasNetstatInfo:  true,
+						LastNetstatInfo: t0,
+						Active:          true,
+					},
+				},
+				servicesOverride: []config.Service{
+					{
+						ID:       "redis",
+						Instance: "duplicate",
+						Address:  "127.0.0.1",
+						Port:     6379,
+					},
+				},
+			},
+			want: map[NameInstance]Service{
+				{Name: "redis"}: {
+					Name:        "redis",
+					ServiceType: RedisService,
+					ListenAddresses: []facts.ListenAddress{
+						{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 6380},
+					},
+					IPAddress:       "127.0.0.1",
+					HasNetstatInfo:  true,
+					LastNetstatInfo: t0,
+					Active:          true,
+				},
+				{Name: "redis", Instance: "duplicate"}: {
+					Name:        "redis",
+					Instance:    "duplicate",
+					ServiceType: RedisService,
+					ListenAddresses: []facts.ListenAddress{
+						{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 6379},
+					},
+					IPAddress: "127.0.0.1",
+					Active:    true,
+					Config: config.Service{
+						ID:       "redis",
+						Instance: "duplicate",
+						Address:  "127.0.0.1",
+						Port:     6379,
+					},
+				},
+			},
+		},
+		{
+			name: "nginx-alternative-port-ignore2",
+			args: args{
+				discoveredServicesMap: map[NameInstance]Service{
+					{Name: "nginx", Instance: "nginx_port_alt"}: {
+						Name:          "nginx",
+						Instance:      "nginx_port_alt",
+						ServiceType:   NginxService,
+						ContainerID:   "817ec63d4b4f9e28947a323f9fbfc4596500b42c842bf07bd6ad9641e6805cb5",
+						ContainerName: "nginx_port_alt",
+						// It's not applyOverride which remove ignored ports, but we are in ignored ports
+						ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "172.16.0.2", Port: 80}},
+						IPAddress:       "172.16.0.2",
+						// This test is done in two path. In dynamic.go we add the option to Config.
+						// in discovery (applyOverideInPlance) we apply the config override.
+						// IgnoredPorts: map[int]bool{
+						//	74: true,
+						//	75: true,
+						//	80: true,
+						// },
+						Active:          true,
+						HasNetstatInfo:  true,
+						LastNetstatInfo: t0,
+						Config: config.Service{
+							IgnorePorts: []int{74, 75, 80},
+						},
+					},
+				},
+			},
+			want: map[NameInstance]Service{
+				{Name: "nginx", Instance: "nginx_port_alt"}: {
+					Name:          "nginx",
+					Instance:      "nginx_port_alt",
+					ServiceType:   NginxService,
+					ContainerID:   "817ec63d4b4f9e28947a323f9fbfc4596500b42c842bf07bd6ad9641e6805cb5",
+					ContainerName: "nginx_port_alt",
+					// It's not applyOverride which remove ignored ports, but we are in ignored ports
+					ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "172.16.0.2", Port: 80}},
+					IPAddress:       "172.16.0.2",
+					// This test is done in two path. In dynamic.go we add the option to Config.
+					// in discovery (applyOverideInPlance) we apply the config override.
+					IgnoredPorts: map[int]bool{
+						74: true,
+						75: true,
+						80: true,
+					},
+					Active:          true,
+					HasNetstatInfo:  true,
+					LastNetstatInfo: t0,
+					Config: config.Service{
+						IgnorePorts: []int{74, 75, 80},
+					},
+				},
+			},
+		},
+		{
+			name: "nginx-alternative-port-update",
+			args: args{
+				discoveredServicesMap: map[NameInstance]Service{
+					{Name: "nginx", Instance: "nginx_port_alt"}: {
+						Name:          "nginx",
+						Instance:      "nginx_port_alt",
+						ServiceType:   NginxService,
+						ContainerID:   "817ec63d4b4f9e28947a323f9fbfc4596500b42c842bf07bd6ad9641e6805cb5",
+						ContainerName: "nginx_port_alt",
+						// This test is done in two path. In dynamic.go we add the option to Config.
+						// in discovery (applyOverideInPlance) we apply the config override.
+						ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "172.16.0.2", Port: 80}},
+						IPAddress:       "172.16.0.2",
+						Active:          true,
+						HasNetstatInfo:  true,
+						LastNetstatInfo: t0,
+						Config: config.Service{
+							Port: 8080,
+						},
+					},
+				},
+			},
+			want: map[NameInstance]Service{
+				{Name: "nginx", Instance: "nginx_port_alt"}: {
+					Name:            "nginx",
+					Instance:        "nginx_port_alt",
+					ServiceType:     NginxService,
+					ContainerID:     "817ec63d4b4f9e28947a323f9fbfc4596500b42c842bf07bd6ad9641e6805cb5",
+					ContainerName:   "nginx_port_alt",
+					ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "172.16.0.2", Port: 8080}},
+					IPAddress:       "172.16.0.2",
+					Active:          true,
+					HasNetstatInfo:  true,
+					LastNetstatInfo: t0,
+					Config: config.Service{
+						Port: 8080,
+					},
+				},
+			},
+		},
 	}
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			got := applyOverride(tt.args.discoveredServicesMap, tt.args.servicesOverride)
+			t.Parallel()
+
+			servicesOverrideMap, warnings := validateServices(tt.args.servicesOverride)
+			if warnings != nil {
+				t.Errorf("validateServices had warning: %s", warnings)
+			}
+
+			got := copyAndMergeServiceWithOverride(tt.args.discoveredServicesMap, servicesOverrideMap)
+			applyOverrideInPlace(got)
 			if diff := cmp.Diff(tt.want, got, cmpopts.IgnoreUnexported(Service{})); diff != "" {
-				t.Errorf("applyOverride diff:\n %s", diff)
+				t.Errorf("applyOverride diff: (-want +got)\n %s", diff)
 			}
 		})
 	}
