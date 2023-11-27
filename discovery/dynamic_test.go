@@ -188,6 +188,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 		netstatAddresses   []facts.ListenAddress
 		containerAddresses []facts.ListenAddress
 		containerIP        string
+		containerName      string
 		containerEnv       map[string]string
 		containerLabels    map[string]string
 		want               Service
@@ -946,6 +947,92 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				Active:          true,
 			},
 		},
+		{
+			testName:         "nginx-alternative-port-ignore",
+			cmdLine:          []string{"nginx: master process /usr/sbin/nginx"},
+			containerID:      "817ec63d4b4f9e28947a323f9fbfc4596500b42c842bf07bd6ad9641e6805cb5",
+			containerIP:      "172.16.0.2",
+			netstatAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "172.16.0.2", Port: 80}},
+			containerLabels: map[string]string{
+				"glouton.check.ignore.port.80": "true",
+			},
+			want: Service{
+				Name:        "nginx",
+				ServiceType: NginxService,
+				ContainerID: "817ec63d4b4f9e28947a323f9fbfc4596500b42c842bf07bd6ad9641e6805cb5",
+				// It's not applyOverride which remove ignored ports, but we are in ignored ports
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "172.16.0.2", Port: 80}},
+				IPAddress:       "172.16.0.2",
+				IgnoredPorts: map[int]bool{
+					80: true,
+				},
+				Active:          true,
+				HasNetstatInfo:  true,
+				LastNetstatInfo: t0,
+			},
+		},
+		{
+			testName:         "nginx-alternative-port-ignore2",
+			cmdLine:          []string{"nginx: master process /usr/sbin/nginx"},
+			containerID:      "817ec63d4b4f9e28947a323f9fbfc4596500b42c842bf07bd6ad9641e6805cb5",
+			containerName:    "nginx_port_alt",
+			containerIP:      "172.16.0.2",
+			netstatAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "172.16.0.2", Port: 80}},
+			containerLabels: map[string]string{
+				"glouton.ignore_ports": "74,75,80",
+			},
+			want: Service{
+				Name:          "nginx",
+				Instance:      "nginx_port_alt",
+				ServiceType:   NginxService,
+				ContainerID:   "817ec63d4b4f9e28947a323f9fbfc4596500b42c842bf07bd6ad9641e6805cb5",
+				ContainerName: "nginx_port_alt",
+				// It's not applyOverride which remove ignored ports, but we are in ignored ports
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "172.16.0.2", Port: 80}},
+				IPAddress:       "172.16.0.2",
+				// This test is done in two path. In dynamic.go we add the option to Config.
+				// in discovery (applyOverideInPlance) we apply the config override.
+				// IgnoredPorts: map[int]bool{
+				//	74: true,
+				//	75: true,
+				//	80: true,
+				// },
+				Active:          true,
+				HasNetstatInfo:  true,
+				LastNetstatInfo: t0,
+				Config: config.Service{
+					IgnorePorts: []int{74, 75, 80},
+				},
+			},
+		},
+		{
+			testName:         "nginx-alternative-port-update",
+			cmdLine:          []string{"nginx: master process /usr/sbin/nginx"},
+			containerID:      "817ec63d4b4f9e28947a323f9fbfc4596500b42c842bf07bd6ad9641e6805cb5",
+			containerName:    "nginx_port_alt",
+			containerIP:      "172.16.0.2",
+			netstatAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "172.16.0.2", Port: 80}},
+			containerLabels: map[string]string{
+				"glouton.port": "8080",
+			},
+			want: Service{
+				Name:          "nginx",
+				Instance:      "nginx_port_alt",
+				ServiceType:   NginxService,
+				ContainerID:   "817ec63d4b4f9e28947a323f9fbfc4596500b42c842bf07bd6ad9641e6805cb5",
+				ContainerName: "nginx_port_alt",
+				// This test is done in two path. In dynamic.go we add the option to Config.
+				// in discovery (applyOverideInPlance) we apply the config override.
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "172.16.0.2", Port: 80}},
+				IPAddress:       "172.16.0.2",
+				Active:          true,
+				HasNetstatInfo:  true,
+				LastNetstatInfo: t0,
+				Config: config.Service{
+					Port: 8080,
+				},
+			},
+		},
 	}
 
 	ctx := context.Background()
@@ -955,9 +1042,10 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 			mockProcess{
 				[]facts.Process{
 					{
-						PID:         42,
-						CmdLineList: c.cmdLine,
-						ContainerID: c.containerID,
+						PID:           42,
+						CmdLineList:   c.cmdLine,
+						ContainerID:   c.containerID,
+						ContainerName: c.containerName,
 					},
 				},
 			},
@@ -967,6 +1055,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 			mockContainerInfo{
 				containers: map[string]facts.FakeContainer{
 					c.containerID: {
+						FakeContainerName:   c.containerName,
 						FakePrimaryAddress:  c.containerIP,
 						FakeListenAddresses: c.containerAddresses,
 						FakeEnvironment:     c.containerEnv,
@@ -1001,7 +1090,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 			continue
 		}
 
-		if diff := cmp.Diff(c.want, srv[0], cmpopts.IgnoreUnexported(Service{})); diff != "" {
+		if diff := cmp.Diff(c.want, srv[0], cmpopts.IgnoreUnexported(Service{}), cmpopts.EquateEmpty()); diff != "" {
 			t.Errorf("Case %s: diff: (-want +got)\n %s", c.testName, diff)
 		}
 	}

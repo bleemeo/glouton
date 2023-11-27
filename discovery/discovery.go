@@ -492,7 +492,11 @@ func (d *Discovery) updateDiscovery(ctx context.Context, now time.Time) error {
 	defer d.l.Unlock()
 
 	d.discoveredServicesMap = servicesMap
-	d.servicesMap = applyOverride(servicesMap, d.servicesOverride)
+	serviceMapWithOverride := copyAndMergeServiceWithOverride(servicesMap, d.servicesOverride)
+
+	applyOverrideInPlace(serviceMapWithOverride)
+
+	d.servicesMap = serviceMapWithOverride
 
 	d.ignoreServicesAndPorts()
 
@@ -543,40 +547,85 @@ func (d *Discovery) setServiceActiveAndContainer(service Service) Service {
 	return service
 }
 
-func applyOverride(
-	discoveredServicesMap map[NameInstance]Service,
-	servicesOverride map[NameInstance]config.Service,
-) map[NameInstance]Service {
-	servicesMap := make(map[NameInstance]Service)
+// copyAndMergeServiceWithOverride returns a copy of servicesMap with overrides merged into service.Config.
+// It didn't yet apply the override, use applyOverrideInPlace for that.
+func copyAndMergeServiceWithOverride(servicesMap map[NameInstance]Service, overrides map[NameInstance]config.Service) map[NameInstance]Service {
+	serviceMapWithOverride := make(map[NameInstance]Service)
 
-	for k, v := range discoveredServicesMap {
-		servicesMap[k] = v
+	for k, v := range servicesMap {
+		serviceMapWithOverride[k] = v
 	}
 
-	for serviceKey, override := range servicesOverride {
+	for _, v := range overrides {
+		key := NameInstance{
+			Name:     v.ID,
+			Instance: v.Instance,
+		}
+		service := serviceMapWithOverride[key]
+
+		// Override config.
+		err := mergo.Merge(&service.Config, v, mergo.WithOverride)
+		if err != nil {
+			logger.V(1).Printf("Failed to merge service and override: %s", err)
+		}
+
+		serviceMapWithOverride[key] = service
+	}
+
+	return serviceMapWithOverride
+}
+
+func applyOverrideInPlace(
+	servicesMap map[NameInstance]Service,
+) {
+	serviceKeys := make([]NameInstance, 0, len(servicesMap))
+	for k := range servicesMap {
+		serviceKeys = append(serviceKeys, k)
+	}
+
+	// have stable order in services
+	sort.Slice(serviceKeys, func(i, j int) bool {
+		return serviceKeys[i].Name < serviceKeys[j].Name || (serviceKeys[i].Name == serviceKeys[j].Name && serviceKeys[i].Instance < serviceKeys[j].Instance)
+	})
+
+	var keyToDelete []NameInstance
+
+	for _, serviceKey := range serviceKeys {
 		service := servicesMap[serviceKey]
+
+		if service.Name != service.Config.ID && service.Config.ID != "" {
+			service.Name = service.Config.ID
+			service.ServiceType = ""
+		}
+
 		if service.ServiceType == "" {
-			if _, ok := servicesDiscoveryInfo[ServiceName(serviceKey.Name)]; ok {
-				service.ServiceType = ServiceName(serviceKey.Name)
+			if _, ok := servicesDiscoveryInfo[ServiceName(service.Name)]; ok {
+				service.ServiceType = ServiceName(service.Name)
 			} else {
 				service.ServiceType = CustomService
 			}
 
-			service.Name = serviceKey.Name
-			service.Instance = serviceKey.Instance
+			if service.Config.Instance != "" {
+				service.Instance = service.Config.Instance
+			}
+
 			service.Active = true
 		}
 
 		// If the address or the port is set explicitly in the config, override the listen address.
-		if override.Port != 0 || override.Address != "" {
+		if service.Config.Port != 0 || service.Config.Address != "" {
 			address, port := service.AddressPort()
 
-			if override.Address != "" {
-				address = override.Address
+			if service.Config.Address != "" {
+				address = service.Config.Address
 			}
 
-			if override.Port != 0 {
-				port = override.Port
+			if service.Config.Port != 0 {
+				port = service.Config.Port
+
+				if address == "" {
+					address = service.IPAddress
+				}
 			}
 
 			if address != "" && port != 0 {
@@ -600,32 +649,26 @@ func applyOverride(
 			}
 		}
 
-		if override.Address != "" {
-			service.IPAddress = override.Address
+		if service.Config.Address != "" {
+			service.IPAddress = service.Config.Address
 		}
 
-		if override.Interval != 0 {
-			service.Interval = time.Duration(override.Interval) * time.Second
+		if service.Config.Interval != 0 {
+			service.Interval = time.Duration(service.Config.Interval) * time.Second
 		}
 
-		if len(override.IgnorePorts) > 0 {
+		if len(service.Config.IgnorePorts) > 0 {
 			if service.IgnoredPorts == nil {
-				service.IgnoredPorts = make(map[int]bool, len(override.IgnorePorts))
+				service.IgnoredPorts = make(map[int]bool, len(service.Config.IgnorePorts))
 			}
 
-			for _, p := range override.IgnorePorts {
+			for _, p := range service.Config.IgnorePorts {
 				service.IgnoredPorts[p] = true
 			}
 		}
 
-		if override.Stack != "" {
-			service.Stack = override.Stack
-		}
-
-		// Override config.
-		err := mergo.Merge(&service.Config, override, mergo.WithOverride)
-		if err != nil {
-			logger.V(1).Printf("Failed to merge service and override: %s", err)
+		if service.Config.Stack != "" {
+			service.Stack = service.Config.Stack
 		}
 
 		if service.ServiceType == CustomService {
@@ -642,6 +685,8 @@ func applyOverride(
 				if _, port := service.AddressPort(); port == 0 {
 					logger.V(0).Printf("Bad custom service definition for service %s, port %#v is invalid", service.Name)
 
+					keyToDelete = append(keyToDelete, serviceKey)
+
 					continue
 				}
 			}
@@ -653,17 +698,23 @@ func applyOverride(
 			if service.Config.CheckType == customCheckNagios && service.Config.CheckCommand == "" {
 				logger.V(0).Printf("Bad custom service definition for service %s, check_type is nagios but no check_command set", service.Name)
 
+				keyToDelete = append(keyToDelete, serviceKey)
+
 				continue
 			}
 
 			if service.Config.CheckType == customCheckProcess && service.Config.MatchProcess == "" {
 				logger.V(0).Printf("Bad custom service definition for service %s, check_type is process but no match_process set", service.Name)
 
+				keyToDelete = append(keyToDelete, serviceKey)
+
 				continue
 			}
 
 			if service.Config.CheckType != customCheckNagios && service.Config.CheckType != customCheckProcess && service.Config.Port == 0 {
 				logger.V(0).Printf("Bad custom service definition for service %s, port is unknown so I don't known how to check it", service.Name)
+
+				keyToDelete = append(keyToDelete, serviceKey)
 
 				continue
 			}
@@ -672,7 +723,9 @@ func applyOverride(
 		servicesMap[serviceKey] = service
 	}
 
-	return servicesMap
+	for _, key := range keyToDelete {
+		delete(servicesMap, key)
+	}
 }
 
 func filterListenAddress(list []facts.ListenAddress, drop facts.ListenAddress) []facts.ListenAddress {

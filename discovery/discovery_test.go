@@ -698,6 +698,102 @@ func Test_applyOverride(t *testing.T) { //nolint:maintidx
 				},
 			},
 		},
+		{
+			name: "nginx-alternative-port-ignore2",
+			args: args{
+				discoveredServicesMap: map[NameInstance]Service{
+					{Name: "nginx", Instance: "nginx_port_alt"}: {
+						Name:          "nginx",
+						Instance:      "nginx_port_alt",
+						ServiceType:   NginxService,
+						ContainerID:   "817ec63d4b4f9e28947a323f9fbfc4596500b42c842bf07bd6ad9641e6805cb5",
+						ContainerName: "nginx_port_alt",
+						// It's not applyOverride which remove ignored ports, but we are in ignored ports
+						ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "172.16.0.2", Port: 80}},
+						IPAddress:       "172.16.0.2",
+						// This test is done in two path. In dynamic.go we add the option to Config.
+						// in discovery (applyOverideInPlance) we apply the config override.
+						// IgnoredPorts: map[int]bool{
+						//	74: true,
+						//	75: true,
+						//	80: true,
+						// },
+						Active:          true,
+						HasNetstatInfo:  true,
+						LastNetstatInfo: t0,
+						Config: config.Service{
+							IgnorePorts: []int{74, 75, 80},
+						},
+					},
+				},
+			},
+			want: map[NameInstance]Service{
+				{Name: "nginx", Instance: "nginx_port_alt"}: {
+					Name:          "nginx",
+					Instance:      "nginx_port_alt",
+					ServiceType:   NginxService,
+					ContainerID:   "817ec63d4b4f9e28947a323f9fbfc4596500b42c842bf07bd6ad9641e6805cb5",
+					ContainerName: "nginx_port_alt",
+					// It's not applyOverride which remove ignored ports, but we are in ignored ports
+					ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "172.16.0.2", Port: 80}},
+					IPAddress:       "172.16.0.2",
+					// This test is done in two path. In dynamic.go we add the option to Config.
+					// in discovery (applyOverideInPlance) we apply the config override.
+					IgnoredPorts: map[int]bool{
+						74: true,
+						75: true,
+						80: true,
+					},
+					Active:          true,
+					HasNetstatInfo:  true,
+					LastNetstatInfo: t0,
+					Config: config.Service{
+						IgnorePorts: []int{74, 75, 80},
+					},
+				},
+			},
+		},
+		{
+			name: "nginx-alternative-port-update",
+			args: args{
+				discoveredServicesMap: map[NameInstance]Service{
+					{Name: "nginx", Instance: "nginx_port_alt"}: {
+						Name:          "nginx",
+						Instance:      "nginx_port_alt",
+						ServiceType:   NginxService,
+						ContainerID:   "817ec63d4b4f9e28947a323f9fbfc4596500b42c842bf07bd6ad9641e6805cb5",
+						ContainerName: "nginx_port_alt",
+						// This test is done in two path. In dynamic.go we add the option to Config.
+						// in discovery (applyOverideInPlance) we apply the config override.
+						ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "172.16.0.2", Port: 80}},
+						IPAddress:       "172.16.0.2",
+						Active:          true,
+						HasNetstatInfo:  true,
+						LastNetstatInfo: t0,
+						Config: config.Service{
+							Port: 8080,
+						},
+					},
+				},
+			},
+			want: map[NameInstance]Service{
+				{Name: "nginx", Instance: "nginx_port_alt"}: {
+					Name:            "nginx",
+					Instance:        "nginx_port_alt",
+					ServiceType:     NginxService,
+					ContainerID:     "817ec63d4b4f9e28947a323f9fbfc4596500b42c842bf07bd6ad9641e6805cb5",
+					ContainerName:   "nginx_port_alt",
+					ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "172.16.0.2", Port: 8080}},
+					IPAddress:       "172.16.0.2",
+					Active:          true,
+					HasNetstatInfo:  true,
+					LastNetstatInfo: t0,
+					Config: config.Service{
+						Port: 8080,
+					},
+				},
+			},
+		},
 	}
 	for _, tt := range tests {
 		tt := tt
@@ -709,7 +805,8 @@ func Test_applyOverride(t *testing.T) { //nolint:maintidx
 				t.Errorf("validateServices had warning: %s", warnings)
 			}
 
-			got := applyOverride(tt.args.discoveredServicesMap, servicesOverrideMap)
+			got := copyAndMergeServiceWithOverride(tt.args.discoveredServicesMap, servicesOverrideMap)
+			applyOverrideInPlace(got)
 			if diff := cmp.Diff(tt.want, got, cmpopts.IgnoreUnexported(Service{})); diff != "" {
 				t.Errorf("applyOverride diff: (-want +got)\n %s", diff)
 			}
