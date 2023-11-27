@@ -407,7 +407,9 @@ var (
 			ServicePort:     3493,
 			ServiceProtocol: "tcp",
 		},
-		UWSGIService: {},
+		UWSGIService: {
+			IgnoreHighPort: true,
+		},
 		VarnishService: {
 			ServicePort:     6082,
 			ServiceProtocol: "tcp",
