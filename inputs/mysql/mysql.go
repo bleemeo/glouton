@@ -55,6 +55,8 @@ func New(server string) (i telegraf.Input, err error) {
 		Name: "mysql",
 	}
 
+	inputs.SecretCount.Add(1)
+
 	return
 }
 

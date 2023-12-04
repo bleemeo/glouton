@@ -358,6 +358,8 @@ func (vSphere *vSphere) makeRealtimeGatherer(ctx context.Context) (registry.Gath
 		GatherModifier:      vSphere.gatherModifier,
 	}
 
+	inputs.SecretCount.Add(2)
+
 	return gatherer, opt, nil
 }
 
@@ -423,6 +425,8 @@ func (vSphere *vSphere) makeHistorical5minGatherer(ctx context.Context) (prometh
 		GatherModifier:      vSphere.gatherModifier,
 	}
 
+	inputs.SecretCount.Add(2)
+
 	return gatherer, opt, nil
 }
 
@@ -486,6 +490,8 @@ func (vSphere *vSphere) makeHistorical30minGatherer(ctx context.Context) (promet
 		ApplyDynamicRelabel: true,
 		GatherModifier:      vSphere.gatherModifier,
 	}
+
+	inputs.SecretCount.Add(2)
 
 	return gatherer, opt, nil
 }

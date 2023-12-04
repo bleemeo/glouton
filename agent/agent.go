@@ -1331,6 +1331,8 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		})
 	}
 
+	inputs.CheckLockedMemory()
+
 	// Handle sighup signals only after the agent is completely initialized
 	// to make sure an early signal won't access uninitialized fields.
 	go func() {

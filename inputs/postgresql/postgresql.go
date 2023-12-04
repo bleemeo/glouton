@@ -58,6 +58,8 @@ func New(address string, detailedDatabases []string) (telegraf.Input, error) {
 		Name: "postgresql",
 	}
 
+	inputs.SecretCount.Add(1)
+
 	return internalInput, nil
 }
 
