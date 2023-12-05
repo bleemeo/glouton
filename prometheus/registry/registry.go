@@ -1508,14 +1508,13 @@ fromZero:
 			cancel()
 
 			if err != nil {
-				if ctx.Err() != nil {
-					releaseGates(slotsTaken)
+				releaseGates(slotsTaken)
 
+				if ctx.Err() != nil {
 					return nil, ctx.Err()
 				}
 
 				// Give way to another input ... then retry from zero
-				releaseGates(slotsTaken + 1)
 				time.Sleep(time.Millisecond)
 
 				continue fromZero
