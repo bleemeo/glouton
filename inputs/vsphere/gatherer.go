@@ -66,6 +66,10 @@ type vSphereGatherer struct {
 	l sync.Mutex
 }
 
+func (gatherer *vSphereGatherer) SecretCount() int {
+	return 2 // vSphere inputs each have 2 secrets
+}
+
 func (gatherer *vSphereGatherer) Gather() ([]*dto.MetricFamily, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), commonTimeout)
 	defer cancel()

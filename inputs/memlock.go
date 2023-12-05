@@ -18,21 +18,36 @@ package inputs
 
 import (
 	"glouton/logger"
+	"math"
 	"os"
-	"sync/atomic"
 )
 
-var SecretCount atomic.Int64 //nolint: gochecknoglobals, revive
-
 func CheckLockedMemory() {
-	secretsCount := uint64(SecretCount.Load())
-	required := 2 * secretsCount * uint64(os.Getpagesize())
+	const arbitraryMinInputsCount = 16
+
+	required := 2 * arbitraryMinInputsCount * uint64(os.Getpagesize())
 	available := getLockedMemoryLimit()
 
 	if required > available {
 		required /= 1024
 		available /= 1024
 
-		logger.V(0).Printf("Insufficient lockable memory %dkb when %dkb is required (%d secrets). Please increase this limit", available, required, secretsCount)
+		if MaxParallelSecrets() < 2 { //nolint: revive, staticcheck
+			// We won't be able to run vSphere inputs at all ...
+		}
+
+		logger.V(0).Printf("The amount of lockable memory (%dKB) may be insufficient, and should be at least %dKB.", available, required)
 	}
+}
+
+func MaxParallelSecrets() int {
+	available := float64(getLockedMemoryLimit())
+	pageSize := float64(os.Getpagesize())
+
+	return int(math.Floor(available / (2 * pageSize)))
+}
+
+// SecretfulInput represents an input that potentially contains secrets.
+type SecretfulInput interface {
+	SecretCount() int
 }

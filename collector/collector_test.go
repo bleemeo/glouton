@@ -30,6 +30,7 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/influxdata/telegraf"
 	"github.com/prometheus/prometheus/model/value"
+	"github.com/prometheus/prometheus/util/gate"
 )
 
 type mockInput struct {
@@ -48,7 +49,7 @@ func (m *mockInput) SampleConfig() string {
 }
 
 func TestAddRemove(t *testing.T) {
-	c := New(nil)
+	c := New(nil, gate.New(0))
 	id1, _ := c.AddInput(&mockInput{Name: "input1"}, "input1")
 	id2, _ := c.AddInput(&mockInput{Name: "input2"}, "input2")
 
@@ -70,7 +71,7 @@ func TestAddRemove(t *testing.T) {
 }
 
 func TestRun(t *testing.T) {
-	c := New(nil)
+	c := New(nil, gate.New(0))
 	c.runOnce(time.Now())
 
 	input := &mockInput{Name: "input1"}
@@ -198,7 +199,7 @@ func (s shallowInput) SampleConfig() string {
 
 func TestMarkInactive(t *testing.T) {
 	acc := shallowAcc{fields: make(map[time.Time]msmsa), annotations: make(map[time.Time]map[string]types.MetricAnnotations)}
-	c := New(&acc)
+	c := New(&acc, gate.New(0))
 
 	input1 := shallowInput{measurement: "i1", tag: "i1", fields: map[string]float64{"f1": 1, "f2": 0.2, "f3": 333}}
 	input2 := shallowInput{measurement: "i2", tag: "i2", fields: map[string]float64{"f": 2}}

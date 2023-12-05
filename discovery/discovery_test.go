@@ -32,6 +32,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/influxdata/telegraf"
+	"github.com/prometheus/prometheus/util/gate"
 )
 
 var (
@@ -647,7 +648,7 @@ func TestUpdateMetricsAndCheck(t *testing.T) {
 	}
 	state := mockState{}
 
-	reg, err := registry.New(registry.Option{})
+	reg, err := registry.New(registry.Option{}, gate.New(0))
 	if err != nil {
 		t.Fatal(err)
 	}

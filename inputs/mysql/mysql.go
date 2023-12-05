@@ -28,7 +28,7 @@ import (
 )
 
 // New initialise mysql.Input.
-func New(server string) (i telegraf.Input, err error) {
+func New(server string) (telegraf.Input, error) {
 	input, ok := telegraf_inputs.Inputs["mysql"]
 	if !ok {
 		return nil, inputs.ErrDisabledInput
@@ -43,7 +43,7 @@ func New(server string) (i telegraf.Input, err error) {
 	mysqlInput.Servers = []*telegraf_config.Secret{&secretServer}
 	mysqlInput.GatherInnoDBMetrics = true
 	mysqlInput.Log = internal.Logger{}
-	i = &internal.Input{
+	i := &internal.Input{
 		Input: mysqlWrapper{mysqlInput},
 		Accumulator: internal.Accumulator{
 			DerivatedMetrics: []string{
@@ -55,9 +55,7 @@ func New(server string) (i telegraf.Input, err error) {
 		Name: "mysql",
 	}
 
-	inputs.SecretCount.Add(1)
-
-	return
+	return internal.OneSecretInput{Input: i}, nil
 }
 
 // mysqlWrapper wraps the MySQL Telegraf input and implements telegraf.ServiceInput

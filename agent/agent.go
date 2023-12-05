@@ -84,6 +84,7 @@ import (
 
 	"github.com/getsentry/sentry-go"
 	"github.com/influxdata/telegraf"
+	"github.com/prometheus/prometheus/util/gate"
 	"github.com/shirou/gopsutil/v3/host"
 
 	bleemeoTypes "glouton/bleemeo/types"
@@ -797,6 +798,8 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 	filteredStore := store.NewFilteredStore(a.store, mFilter.FilterPoints, mFilter.filterMetrics)
 	a.threshold = threshold.New(a.state)
 
+	secretInputsGate := gate.New(inputs.MaxParallelSecrets())
+
 	a.gathererRegistry, err = registry.New(
 		registry.Option{
 			PushPoint:             a.store,
@@ -807,7 +810,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 			BlackboxSendScraperID: a.config.Blackbox.ScraperSendUUID,
 			Filter:                mFilter,
 			Queryable:             a.store,
-		})
+		}, secretInputsGate)
 	if err != nil {
 		logger.Printf("Unable to create the metrics registry: %v", err)
 		logger.Printf("The metrics registry is required for Glouton. Exiting.")
@@ -919,7 +922,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		Pusher:  a.gathererRegistry.WithTTL(5 * time.Minute),
 		Context: ctx,
 	}
-	a.collector = collector.New(acc)
+	a.collector = collector.New(acc, secretInputsGate)
 
 	isCheckIgnored := discovery.NewIgnoredService(a.config.ServiceIgnoreCheck).IsServiceIgnored
 	isInputIgnored := discovery.NewIgnoredService(a.config.ServiceIgnoreMetrics).IsServiceIgnored

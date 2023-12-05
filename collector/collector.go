@@ -14,7 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package collector do the metric point gathering for all configured input every fixed time interval
+// Package collector does the metric point gathering for all configured input every fixed time interval
 package collector
 
 import (
@@ -30,6 +30,7 @@ import (
 
 	"github.com/influxdata/telegraf"
 	"github.com/prometheus/prometheus/model/value"
+	"github.com/prometheus/prometheus/util/gate"
 )
 
 var errTooManyInputs = errors.New("too many inputs in the collectors. Unable to find new slot")
@@ -42,20 +43,22 @@ type Collector struct {
 	updateDelayC chan interface{}
 	l            sync.Mutex
 	// map inputID -> measurement -> field name -> tags key/value -> fieldCache
-	fieldCaches map[int]map[string]map[string]map[string]fieldCache
+	fieldCaches      map[int]map[string]map[string]map[string]fieldCache
+	secretInputsGate *gate.Gate
 }
 
 // New returns a Collector with default option
 //
 // By default, no input are added (use AddInput) and collection is done every
 // 10 seconds.
-func New(acc telegraf.Accumulator) *Collector {
+func New(acc telegraf.Accumulator, secretInputsGate *gate.Gate) *Collector {
 	c := &Collector{
-		acc:          acc,
-		inputs:       make(map[int]telegraf.Input),
-		currentDelay: 10 * time.Second,
-		updateDelayC: make(chan interface{}),
-		fieldCaches:  make(map[int]map[string]map[string]map[string]fieldCache),
+		acc:              acc,
+		inputs:           make(map[int]telegraf.Input),
+		currentDelay:     10 * time.Second,
+		updateDelayC:     make(chan interface{}),
+		fieldCaches:      make(map[int]map[string]map[string]map[string]fieldCache),
+		secretInputsGate: secretInputsGate,
 	}
 
 	return c
@@ -164,6 +167,16 @@ func (c *Collector) runOnce(t0 time.Time) {
 			defer crashreport.ProcessPanic()
 			defer wg.Done()
 
+			secretInput, hasSecrets := input.(inputs.SecretfulInput)
+			if hasSecrets && secretInput.SecretCount() > 0 {
+				releaseGate, err := c.waitForSecrets(context.Background(), secretInput.SecretCount())
+				if err != nil {
+					return
+				}
+
+				defer releaseGate()
+			}
+
 			ima := &inactiveMarkerAccumulator{
 				FixedTimeAccumulator: acc,
 				latestValues:         make(map[string]map[string]map[string]fieldCache),
@@ -177,6 +190,48 @@ func (c *Collector) runOnce(t0 time.Time) {
 	}
 
 	wg.Wait()
+}
+
+// waitForSecrets hold the current goroutine until the given number of slots are taken.
+// This is to ensure that too many inputs with secrets don't run at the same time,
+// which would result in exceeding the locked memory limit.
+// waitForSecrets returns a callback to release all the slots taken once the gathering is done,
+// or an error if the given context expired.
+func (c *Collector) waitForSecrets(ctx context.Context, slotsNeeded int) (func(), error) {
+	releaseGates := func(gatesCrossed int) {
+		for i := 0; i < gatesCrossed; i++ {
+			c.secretInputsGate.Done()
+		}
+	}
+
+fromZero:
+	for {
+		for slotsTaken := 0; slotsTaken < slotsNeeded; slotsTaken++ {
+			passGateCtx, cancel := context.WithTimeout(ctx, 1*time.Second)
+
+			err := c.secretInputsGate.Start(passGateCtx)
+
+			cancel()
+
+			if err != nil {
+				if ctx.Err() != nil {
+					releaseGates(slotsTaken)
+
+					return nil, ctx.Err()
+				}
+
+				// Give way to another input ... then retry from zero
+				releaseGates(slotsTaken)
+				time.Sleep(time.Millisecond)
+
+				continue fromZero
+			}
+		}
+
+		break // All the needed slots have been taken
+	}
+
+	return func() { releaseGates(slotsNeeded) }, nil
 }
 
 type accCallback func(acc inputs.FixedTimeAccumulator, measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time)

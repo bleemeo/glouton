@@ -17,6 +17,7 @@
 package internal
 
 import (
+	"glouton/inputs"
 	"glouton/logger"
 
 	"github.com/influxdata/telegraf"
@@ -90,4 +91,22 @@ func (i *Input) Stop() {
 func (i *Input) fixTelegrafInput() {
 	i.logger = logger.NewTelegrafLog(i.Name)
 	models.SetLoggerOnPlugin(i.Input, i.logger)
+}
+
+// SecretCount allows getting the secret count of the underlying input.
+func (i *Input) SecretCount() int {
+	if si, ok := i.Input.(inputs.SecretfulInput); ok {
+		return si.SecretCount()
+	}
+
+	return 0
+}
+
+// OneSecretInput wraps an Input that has one secret.
+type OneSecretInput struct {
+	*Input
+}
+
+func (si OneSecretInput) SecretCount() int {
+	return 1
 }

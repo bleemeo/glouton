@@ -61,6 +61,15 @@ func WithPastPointFilter(gatherer GathererWithOrWithoutState, purgeInterval time
 	}
 }
 
+// SecretCount allows getting the secret count of the underlying gatherer.
+func (ppf *pastPointFilter) SecretCount() int {
+	if si, ok := ppf.gatherer.(interface{ SecretCount() int }); ok {
+		return si.SecretCount()
+	}
+
+	return 0
+}
+
 func (ppf *pastPointFilter) Gather() ([]*dto.MetricFamily, error) {
 	return ppf.filter(ppf.gatherer.Gather())
 }
