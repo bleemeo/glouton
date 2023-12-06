@@ -35,7 +35,7 @@ func CheckLockedMemory() {
 		available /= 1024
 
 		msg := `The amount of lockable memory (%dkB) may be insufficient, and should be at least %dkB.
-Learn more about this limitation at https://docs.bleemeo.com/server-monitoring/installation/#resource-requirements.`
+Learn more about this limitation at https://docs.bleemeo.com/server-monitoring/troubleshoot/#memory-locking.`
 		logger.V(0).Printf(msg, available, required)
 	}
 }
