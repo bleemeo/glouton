@@ -22,7 +22,7 @@ import (
 	"os"
 )
 
-const memoryPagesPerSecret = 3
+const memoryPagesPerSecret = 3 // This value is from looking at telegraf/memguard code and experimentation.
 
 func CheckLockedMemory() {
 	const arbitraryMinSecretsCount uint64 = 16
@@ -34,11 +34,9 @@ func CheckLockedMemory() {
 		required /= 1024
 		available /= 1024
 
-		if MaxParallelSecrets() < 2 { //nolint: revive, staticcheck
-			// We won't be able to run vSphere inputs at all ...
-		}
-
-		logger.V(0).Printf("The amount of lockable memory (%dKB) may be insufficient, and should be at least %dKB.", available, required)
+		msg := `The amount of lockable memory (%dkB) may be insufficient, and should be at least %dkB.
+Learn more about this limitation at https://docs.bleemeo.com/server-monitoring/installation/#resource-requirements.`
+		logger.V(0).Printf(msg, available, required)
 	}
 }
 

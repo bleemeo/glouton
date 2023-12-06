@@ -54,3 +54,14 @@ func JitterDelay(baseDelay time.Duration, factor float64) time.Duration {
 
 	return time.Duration(result) * time.Second
 }
+
+// JitterMs is the same as JitterDelay, but with millisecond precision.
+func JitterMs(baseDelay time.Duration, factor float64) time.Duration {
+	valueMs := baseDelay.Milliseconds()
+	scale := rand.Float64() * 2 * factor //nolint:gosec
+	scale += 1 - factor
+
+	result := int64(float64(valueMs) * scale)
+
+	return time.Duration(result) * time.Millisecond
+}

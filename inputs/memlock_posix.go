@@ -20,15 +20,13 @@ package inputs
 
 import (
 	"glouton/logger"
-	"syscall"
+
+	"golang.org/x/sys/unix"
 )
 
 func getLockedMemoryLimit() uint64 {
-	// From https://elixir.bootlin.com/linux/latest/source/include/uapi/asm-generic/resource.h#L35
-	const rLimitMemlock = 8
-
-	var limit syscall.Rlimit
-	if err := syscall.Getrlimit(rLimitMemlock, &limit); err != nil {
+	var limit unix.Rlimit
+	if err := unix.Getrlimit(unix.RLIMIT_MEMLOCK, &limit); err != nil {
 		logger.V(0).Printf("Cannot get locked memory limit: %v", err)
 
 		return 0

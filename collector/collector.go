@@ -23,6 +23,7 @@ import (
 	"glouton/crashreport"
 	"glouton/inputs"
 	"glouton/logger"
+	"glouton/prometheus/registry"
 	"glouton/types"
 	"math"
 	"sync"
@@ -169,7 +170,7 @@ func (c *Collector) runOnce(t0 time.Time) {
 
 			secretInput, hasSecrets := input.(inputs.SecretfulInput)
 			if hasSecrets && secretInput.SecretCount() > 0 {
-				releaseGate, err := c.waitForSecrets(context.Background(), secretInput.SecretCount())
+				releaseGate, err := registry.WaitForSecrets(context.Background(), c.secretInputsGate, secretInput.SecretCount())
 				if err != nil {
 					return
 				}
@@ -190,47 +191,6 @@ func (c *Collector) runOnce(t0 time.Time) {
 	}
 
 	wg.Wait()
-}
-
-// waitForSecrets hold the current goroutine until the given number of slots are taken.
-// This is to ensure that too many inputs with secrets don't run at the same time,
-// which would result in exceeding the locked memory limit.
-// waitForSecrets returns a callback to release all the slots taken once the gathering is done,
-// or an error if the given context expired.
-func (c *Collector) waitForSecrets(ctx context.Context, slotsNeeded int) (func(), error) {
-	releaseGates := func(gatesCrossed int) {
-		for i := 0; i < gatesCrossed; i++ {
-			c.secretInputsGate.Done()
-		}
-	}
-
-fromZero:
-	for {
-		for slotsTaken := 0; slotsTaken < slotsNeeded; slotsTaken++ {
-			passGateCtx, cancel := context.WithTimeout(ctx, 1*time.Second)
-
-			err := c.secretInputsGate.Start(passGateCtx)
-
-			cancel()
-
-			if err != nil {
-				releaseGates(slotsTaken)
-
-				if ctx.Err() != nil {
-					return nil, ctx.Err()
-				}
-
-				// Give way to another input ... then retry from zero
-				time.Sleep(time.Millisecond)
-
-				continue fromZero
-			}
-		}
-
-		break // All the needed slots have been taken
-	}
-
-	return func() { releaseGates(slotsNeeded) }, nil
 }
 
 type accCallback func(acc inputs.FixedTimeAccumulator, measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time)
