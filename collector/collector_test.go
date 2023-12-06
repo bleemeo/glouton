@@ -389,3 +389,34 @@ func cmpStaleNaN() cmp.Option {
 
 	return cmp.FilterValues(f, cmp.Comparer(comparer))
 }
+
+func TestWaitForSecrets(t *testing.T) {
+	secretsGate := gate.New(2)
+	c := New(nil, secretsGate)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
+
+	_, err := c.waitForSecrets(ctx, 3)
+	if err == nil {
+		t.Fatalf("No slots should have been taken: the context should have expired")
+	}
+
+	ctx, cancel = context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
+
+	releaseFn, err := c.waitForSecrets(ctx, 2)
+	if err != nil {
+		t.Fatalf("No error should have occurred, but: %v", err)
+	}
+
+	defer releaseFn()
+
+	ctx, cancel = context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
+
+	_, err = c.waitForSecrets(ctx, 1)
+	if err == nil {
+		t.Fatalf("No slot should have been taken: the context should have expired")
+	}
+}

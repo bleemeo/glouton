@@ -22,10 +22,12 @@ import (
 	"os"
 )
 
-func CheckLockedMemory() {
-	const arbitraryMinInputsCount = 16
+const memoryPagesPerSecret = 3
 
-	required := 2 * arbitraryMinInputsCount * uint64(os.Getpagesize())
+func CheckLockedMemory() {
+	const arbitraryMinSecretsCount uint64 = 16
+
+	required := memoryPagesPerSecret * arbitraryMinSecretsCount * uint64(os.Getpagesize())
 	available := getLockedMemoryLimit()
 
 	if required > available {
@@ -44,7 +46,7 @@ func MaxParallelSecrets() int {
 	available := float64(getLockedMemoryLimit())
 	pageSize := float64(os.Getpagesize())
 
-	return int(math.Floor(available / (2 * pageSize)))
+	return int(math.Floor(available / (memoryPagesPerSecret * pageSize)))
 }
 
 // SecretfulInput represents an input that potentially contains secrets.
