@@ -65,16 +65,15 @@ func newDeviceFinder(ctx context.Context, vSphereCfg config.VSphere) (*find.Find
 	return f, c.Client, nil
 }
 
-func findDevices(ctx context.Context, finder *find.Finder, listDatastores bool) (clusters []*object.ClusterComputeResource, datastores []*object.Datastore, hosts []*object.HostSystem, vms []*object.VirtualMachine, err error) { //nolint: unparam
+func findDevices(ctx context.Context, finder *find.Finder, listDatastores bool) (clusters []*object.ClusterComputeResource, datastores []*object.Datastore, hosts []*object.HostSystem, vms []*object.VirtualMachine, err error) {
 	// The find.NotFoundError is thrown when no devices are found,
 	// even if the path is not restrictive to a particular device.
 	var notFoundError *find.NotFoundError
 
-	//nolint: dupword
-	/*clusters, err = finder.ClusterComputeResourceList(ctx, "*")
+	clusters, err = finder.ClusterComputeResourceList(ctx, "*")
 	if err != nil && !errors.As(err, &notFoundError) {
 		return nil, nil, nil, nil, err
-	}*/
+	}
 
 	if listDatastores {
 		datastores, err = finder.DatastoreList(ctx, "*")
@@ -96,7 +95,7 @@ func findDevices(ctx context.Context, finder *find.Finder, listDatastores bool) 
 	return clusters, datastores, hosts, vms, nil
 }
 
-func describeCluster(source string, rfName refName, clusterProps clusterLightProps) *Cluster { //nolint: unused
+func describeCluster(source string, rfName refName, clusterProps clusterLightProps) *Cluster {
 	clusterFacts := make(map[string]string)
 
 	if resourceSummary := clusterProps.ComputeResource.Summary; resourceSummary != nil {
