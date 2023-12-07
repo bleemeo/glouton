@@ -1756,7 +1756,7 @@ func WaitForSecrets(ctx context.Context, secretsGate *gate.Gate, slotsNeeded int
 fromZero:
 	for {
 		for slotsTaken := 0; slotsTaken < slotsNeeded; slotsTaken++ {
-			passGateCtx, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
+			passGateCtx, cancel := context.WithTimeout(ctx, 50*time.Millisecond)
 
 			err := secretsGate.Start(passGateCtx)
 

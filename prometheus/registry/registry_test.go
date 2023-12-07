@@ -24,6 +24,7 @@ package registry
 
 import (
 	"context"
+	"fmt"
 	"glouton/prometheus/model"
 	"glouton/types"
 	"io"
@@ -41,6 +42,7 @@ import (
 	"github.com/prometheus/prometheus/model/relabel"
 	"github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/util/gate"
+	"golang.org/x/sync/errgroup"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -2174,19 +2176,25 @@ func TestWaitForSecrets(t *testing.T) {
 			name:                "[5] 20*1",
 			gateSize:            5,
 			secretsDistribution: map[int]int{20: 1}, // 20 inputs of 1 secret each
-			maxAllowedDuration:  50 * time.Millisecond,
+			maxAllowedDuration:  500 * time.Millisecond,
 		},
 		{
 			name:                "[5] 8*3",
 			gateSize:            5,
 			secretsDistribution: map[int]int{8: 3},
-			maxAllowedDuration:  time.Second,
+			maxAllowedDuration:  2 * time.Second,
+		},
+		{
+			name:                "[5] 3*3+10*1",
+			gateSize:            5,
+			secretsDistribution: map[int]int{3: 3, 10: 1},
+			maxAllowedDuration:  750 * time.Millisecond,
 		},
 		{
 			name:                "[5] 3*3+10*10",
 			gateSize:            5,
 			secretsDistribution: map[int]int{3: 3, 10: 10},
-			maxAllowedDuration:  time.Second,
+			maxAllowedDuration:  2 * time.Second,
 			shouldFail:          true,
 		},
 	}
@@ -2203,51 +2211,46 @@ func TestWaitForSecrets(t *testing.T) {
 			defer cancel()
 
 			var (
-				waitGroup     sync.WaitGroup
-				gatherCount   atomic.Int64
-				waitHasFailed atomic.Bool
+				errGrp      errgroup.Group
+				gatherCount atomic.Int64
 
 				expectedGathers int
 			)
 
 			for inputsCount, secretsCount := range tc.secretsDistribution {
+				expectedGathers += inputsCount
 				sCount := secretsCount
 
-				waitGroup.Add(inputsCount)
-
 				for i := 0; i < inputsCount; i++ {
-					go func() {
-						defer waitGroup.Done()
-
+					errGrp.Go(func() error {
 						releaseFn, err := WaitForSecrets(ctx, secretsGate, sCount)
 						if err != nil {
 							if tc.shouldFail {
-								waitHasFailed.Store(true)
-							} else {
-								t.Errorf("%s: couldn't take the %d needed slots: %v", tc.name, sCount, err)
-
-								return
+								return err // but it's ok
 							}
-						} else {
-							defer releaseFn()
+
+							return fmt.Errorf("%s: couldn't take the %d needed slots: %w", tc.name, sCount, err)
 						}
 
-						time.Sleep(time.Millisecond) // Doing some time-consuming gathering
-
+						time.Sleep(100 * time.Millisecond) // Doing some time-consuming gathering
 						gatherCount.Add(1)
-					}()
-				}
+						releaseFn()
 
-				expectedGathers += inputsCount
+						return nil
+					})
+				}
 			}
 
-			waitGroup.Wait()
-
-			if tc.shouldFail {
-				if waitHasFailed.Load() == false {
-					t.Fatal("Should have failed to take all the wanted slots.")
+			err := errGrp.Wait()
+			if err != nil {
+				if !tc.shouldFail {
+					t.Fatalf("Failed: %v", err)
 				}
 			} else {
+				if tc.shouldFail {
+					t.Fatal("Should have failed to take all the wanted slots.")
+				}
+
 				if expectedGathers != int(gatherCount.Load()) {
 					t.Fatalf("Expected %d gatherings to be done, but got %d.", expectedGathers, gatherCount.Load())
 				}
