@@ -72,7 +72,6 @@ type vSphere struct {
 	deviceCache      map[string]bleemeoTypes.VSphereDevice
 	devicePropsCache *propsCaches
 	labelsMetadata   labelsMetadata
-	noMetricsSince   map[string]int
 	lastStatuses     map[string]types.Status
 	lastErrorMessage string
 	consecutiveErr   int
@@ -93,8 +92,7 @@ func newVSphere(host string, cfg config.VSphere, state bleemeoTypes.State, factP
 			disksPerVM:         make(map[string]map[string]string),
 			netInterfacesPerVM: make(map[string]map[string]string),
 		},
-		noMetricsSince: make(map[string]int),
-		lastStatuses:   make(map[string]types.Status),
+		lastStatuses: make(map[string]types.Status),
 	}
 }
 
@@ -349,12 +347,15 @@ func (vSphere *vSphere) makeRealtimeGatherer(ctx context.Context) (registry.Gath
 
 	vSphere.realtimeGatherer = gatherer
 
+	noMetricsSince := make(map[string]int)
 	opt := registry.RegistrationOption{
 		Description:         vSphere.String() + " realtime",
 		MinInterval:         time.Minute,
 		StopCallback:        gatherer.stop,
 		ApplyDynamicRelabel: true,
-		GatherModifier:      vSphere.gatherModifier,
+		GatherModifier: func(mfs []*dto.MetricFamily, _ error) []*dto.MetricFamily {
+			return vSphere.gatherModifier(mfs, noMetricsSince, map[ResourceKind]bool{KindVM: true, KindHost: true})
+		},
 	}
 
 	return gatherer, opt, nil
@@ -414,12 +415,15 @@ func (vSphere *vSphere) makeHistorical5minGatherer(ctx context.Context) (registr
 
 	vSphere.historical5minGatherer = gatherer
 
+	noMetricsSince := make(map[string]int)
 	opt := registry.RegistrationOption{
 		Description:         vSphere.String() + " historical 5min",
 		MinInterval:         5 * time.Minute,
 		StopCallback:        gatherer.stop,
 		ApplyDynamicRelabel: true,
-		GatherModifier:      vSphere.gatherModifier,
+		GatherModifier: func(mfs []*dto.MetricFamily, _ error) []*dto.MetricFamily {
+			return vSphere.gatherModifier(mfs, noMetricsSince, map[ResourceKind]bool{KindCluster: true})
+		},
 	}
 
 	return gatherer, opt, nil
@@ -478,18 +482,21 @@ func (vSphere *vSphere) makeHistorical30minGatherer(ctx context.Context) (regist
 
 	vSphere.historical30minGatherer = gatherer
 
+	noMetricsSince := make(map[string]int)
 	opt := registry.RegistrationOption{
 		Description:         vSphere.String() + " historical 30min",
 		MinInterval:         30 * time.Minute,
 		StopCallback:        gatherer.stop,
 		ApplyDynamicRelabel: true,
-		GatherModifier:      vSphere.gatherModifier,
+		GatherModifier: func(mfs []*dto.MetricFamily, _ error) []*dto.MetricFamily {
+			return vSphere.gatherModifier(mfs, noMetricsSince, map[ResourceKind]bool{KindDatastore: true})
+		},
 	}
 
 	return gatherer, opt, nil
 }
 
-func (vSphere *vSphere) gatherModifier(mfs []*dto.MetricFamily, _ error) []*dto.MetricFamily {
+func (vSphere *vSphere) gatherModifier(mfs []*dto.MetricFamily, noMetricsSince map[string]int, devKinds map[ResourceKind]bool) []*dto.MetricFamily {
 	vSphere.l.Lock()
 	defer vSphere.l.Unlock()
 
@@ -526,6 +533,10 @@ func (vSphere *vSphere) gatherModifier(mfs []*dto.MetricFamily, _ error) []*dto.
 	vSphereStatus, vSphereMsg := vSphere.getStatus()
 
 	for _, dev := range vSphere.deviceCache {
+		if !devKinds[dev.Kind()] {
+			continue // we don't care about this kind of device in this gatherModifier
+		}
+
 		var (
 			deviceStatus types.Status
 			deviceMsg    string
@@ -552,10 +563,10 @@ func (vSphere *vSphere) gatherModifier(mfs []*dto.MetricFamily, _ error) []*dto.
 			}
 		case metricSeen:
 			deviceStatus = types.StatusOk
-			vSphere.noMetricsSince[moid] = 0
+			noMetricsSince[moid] = 0
 		case !metricSeen:
-			vSphere.noMetricsSince[moid]++
-			if vSphere.noMetricsSince[moid] >= noMetricsStatusThreshold {
+			noMetricsSince[moid]++
+			if noMetricsSince[moid] >= noMetricsStatusThreshold {
 				deviceStatus = types.StatusCritical
 				deviceMsg = "No metrics seen since a long time"
 			}
