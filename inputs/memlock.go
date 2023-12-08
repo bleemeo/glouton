@@ -35,7 +35,7 @@ func CheckLockedMemory() {
 		available /= 1024
 
 		msg := `The amount of lockable memory (%dkB) may be insufficient, and should be at least %dkB.
-Learn more about this limitation at https://go.bleemeo.com/l/doc-duplicated-agent.`
+Learn more about this limitation at https://go.bleemeo.com/l/doc-memory-locking.`
 		logger.V(0).Printf(msg, available, required)
 	}
 }
