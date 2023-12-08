@@ -77,7 +77,7 @@ func (m *Manager) EndpointsInError() map[string]bool {
 	for _, vSphere := range m.vSpheres {
 		vSphere.l.Lock()
 
-		if vSphere.realtimeGatherer == nil /*|| vSphere.historical5minGatherer == nil || vSphere.historical30minGatherer == nil*/ || vSphere.consecutiveErr > 0 {
+		if vSphere.realtimeGatherer == nil || vSphere.historical5minGatherer == nil || vSphere.historical30minGatherer == nil || vSphere.consecutiveErr > 0 {
 			endpoints[vSphere.host] = true
 		}
 
