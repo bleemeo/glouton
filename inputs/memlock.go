@@ -22,12 +22,15 @@ import (
 	"os"
 )
 
-const memoryPagesPerSecret = 3 // This value is from looking at telegraf/memguard code and experimentation.
+const (
+	baseMemoryPages      = 3 // The number of pages that are always used by memguard
+	memoryPagesPerSecret = 2 // This value is from looking at telegraf/memguard code and experimentation.
+)
 
 func CheckLockedMemory() {
 	const arbitraryMinSecretsCount uint64 = 16
 
-	required := memoryPagesPerSecret * arbitraryMinSecretsCount * uint64(os.Getpagesize())
+	required := (baseMemoryPages + memoryPagesPerSecret*arbitraryMinSecretsCount) * uint64(os.Getpagesize())
 	available := getLockedMemoryLimit()
 
 	if required > available {
@@ -44,7 +47,7 @@ func MaxParallelSecrets() int {
 	available := float64(getLockedMemoryLimit())
 	pageSize := float64(os.Getpagesize())
 
-	return int(math.Floor(available / (memoryPagesPerSecret * pageSize)))
+	return int(math.Floor(available / ((baseMemoryPages + memoryPagesPerSecret) * pageSize)))
 }
 
 // SecretfulInput represents an input that potentially contains secrets.

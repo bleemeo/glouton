@@ -1770,7 +1770,7 @@ fromZero:
 				}
 
 				// Give way to another input ... then retry from zero
-				time.Sleep(delay.JitterMs(2*time.Millisecond, 2))
+				time.Sleep(delay.JitterMs(3*time.Millisecond, 0.9))
 
 				continue fromZero
 			}
