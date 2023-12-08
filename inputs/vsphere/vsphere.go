@@ -347,6 +347,7 @@ func (vSphere *vSphere) makeRealtimeGatherer(ctx context.Context) (registry.Gath
 
 	vSphere.realtimeGatherer = gatherer
 
+	noMetricsSinceIterations := 0
 	noMetricsSince := make(map[string]int)
 	opt := registry.RegistrationOption{
 		Description:         vSphere.String() + " realtime",
@@ -354,6 +355,8 @@ func (vSphere *vSphere) makeRealtimeGatherer(ctx context.Context) (registry.Gath
 		StopCallback:        gatherer.stop,
 		ApplyDynamicRelabel: true,
 		GatherModifier: func(mfs []*dto.MetricFamily, _ error) []*dto.MetricFamily {
+			vSphere.purgeNoMetricsSinceMap(noMetricsSince, &noMetricsSinceIterations)
+
 			return vSphere.gatherModifier(mfs, noMetricsSince, map[ResourceKind]bool{KindVM: true, KindHost: true})
 		},
 	}
@@ -415,6 +418,7 @@ func (vSphere *vSphere) makeHistorical5minGatherer(ctx context.Context) (registr
 
 	vSphere.historical5minGatherer = gatherer
 
+	noMetricsSinceIterations := 0
 	noMetricsSince := make(map[string]int)
 	opt := registry.RegistrationOption{
 		Description:         vSphere.String() + " historical 5min",
@@ -422,6 +426,8 @@ func (vSphere *vSphere) makeHistorical5minGatherer(ctx context.Context) (registr
 		StopCallback:        gatherer.stop,
 		ApplyDynamicRelabel: true,
 		GatherModifier: func(mfs []*dto.MetricFamily, _ error) []*dto.MetricFamily {
+			vSphere.purgeNoMetricsSinceMap(noMetricsSince, &noMetricsSinceIterations)
+
 			return vSphere.gatherModifier(mfs, noMetricsSince, map[ResourceKind]bool{KindCluster: true})
 		},
 	}
@@ -482,6 +488,7 @@ func (vSphere *vSphere) makeHistorical30minGatherer(ctx context.Context) (regist
 
 	vSphere.historical30minGatherer = gatherer
 
+	noMetricsSinceIterations := 0
 	noMetricsSince := make(map[string]int)
 	opt := registry.RegistrationOption{
 		Description:         vSphere.String() + " historical 30min",
@@ -489,11 +496,32 @@ func (vSphere *vSphere) makeHistorical30minGatherer(ctx context.Context) (regist
 		StopCallback:        gatherer.stop,
 		ApplyDynamicRelabel: true,
 		GatherModifier: func(mfs []*dto.MetricFamily, _ error) []*dto.MetricFamily {
+			vSphere.purgeNoMetricsSinceMap(noMetricsSince, &noMetricsSinceIterations)
+
 			return vSphere.gatherModifier(mfs, noMetricsSince, map[ResourceKind]bool{KindDatastore: true})
 		},
 	}
 
 	return gatherer, opt, nil
+}
+
+func (vSphere *vSphere) purgeNoMetricsSinceMap(noMetricsSince map[string]int, iterations *int) {
+	*iterations++
+
+	if *iterations != 3*noMetricsStatusThreshold {
+		return
+	}
+
+	*iterations = 0
+
+	vSphere.l.Lock()
+	defer vSphere.l.Unlock()
+
+	for moid := range noMetricsSince {
+		if _, exists := vSphere.deviceCache[moid]; !exists {
+			delete(noMetricsSince, moid)
+		}
+	}
 }
 
 func (vSphere *vSphere) gatherModifier(mfs []*dto.MetricFamily, noMetricsSince map[string]int, devKinds map[ResourceKind]bool) []*dto.MetricFamily {
@@ -566,6 +594,7 @@ func (vSphere *vSphere) gatherModifier(mfs []*dto.MetricFamily, noMetricsSince m
 			noMetricsSince[moid] = 0
 		case !metricSeen:
 			noMetricsSince[moid]++
+
 			if noMetricsSince[moid] >= noMetricsStatusThreshold {
 				deviceStatus = types.StatusCritical
 				deviceMsg = "No metrics seen since a long time"
