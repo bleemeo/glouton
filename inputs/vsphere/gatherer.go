@@ -61,6 +61,7 @@ type vSphereGatherer struct {
 	lastPoints []types.MetricPoint
 	lastErr    error
 
+	hierarchy        *Hierarchy
 	devicePropsCache *propsCaches
 
 	l sync.Mutex
@@ -141,13 +142,13 @@ func (gatherer *vSphereGatherer) collectAdditionalMetrics(ctx context.Context, s
 		return nil
 	}
 
-	h, err := hierarchyFrom(ctx, clusters, hosts, vms, gatherer.devicePropsCache.vmCache)
+	err = gatherer.hierarchy.Refresh(ctx, clusters, hosts, vms, gatherer.devicePropsCache.vmCache)
 	if err != nil {
 		return fmt.Errorf("can't describe hierarchy: %w", err)
 	}
 
 	if gatherer.isHistorical && gatherer.interval == 5*time.Minute && len(clusters) != 0 {
-		err = additionalClusterMetrics(ctx, client, clusters, gatherer.devicePropsCache.hostCache, acc, h, state.T0)
+		err = additionalClusterMetrics(ctx, client, clusters, gatherer.devicePropsCache.hostCache, acc, gatherer.hierarchy, state.T0)
 		if err != nil {
 			return err
 		}
@@ -155,12 +156,12 @@ func (gatherer *vSphereGatherer) collectAdditionalMetrics(ctx context.Context, s
 		// For each host, we want a list of vm states (running/stopped).
 		vmStatesPerHost := make(map[string][]bool, len(hosts))
 
-		err = additionalVMMetrics(ctx, client, vms, gatherer.devicePropsCache.vmCache, acc, h, vmStatesPerHost, state.T0)
+		err = additionalVMMetrics(ctx, client, vms, gatherer.devicePropsCache.vmCache, acc, gatherer.hierarchy, vmStatesPerHost, state.T0)
 		if err != nil {
 			return err
 		}
 
-		err = additionalHostMetrics(ctx, client, hosts, acc, h, vmStatesPerHost, state.T0)
+		err = additionalHostMetrics(ctx, client, hosts, acc, gatherer.hierarchy, vmStatesPerHost, state.T0)
 		if err != nil {
 			return err
 		}
@@ -206,29 +207,27 @@ func (gatherer *vSphereGatherer) createEndpoint(ctx context.Context, input *vsph
 	}
 
 	var urlErr *url.Error
-	if errors.As(err, &urlErr) {
-		if urlErr.Unwrap().Error() == "400 Bad Request" {
-			if gatherer.soapURL.Path == "/" {
-				// Configuration could be tricky: https://vcenter.example.com and https://vcenter.example.com/ aren't the same.
-				// With the first one (without ending slash), govmomi will automatically add "/sdk" (result in https://vcenter.example.com/sdk).
-				// With the former one (with the ending slash), govmomi will NOT add /sdk (result in https://vcenter.example.com/)
-				// Because that will confuse the end-user, if he entered the URL with an ending slash (https://vcenter.example.com/)
-				// and it didn't work, retry with /sdk automatically.
-				urlWithSlashSDK := *gatherer.soapURL
-				urlWithSlashSDK.Path = "/sdk"
+	if errors.As(err, &urlErr) && urlErr.Unwrap().Error() == "400 Bad Request" {
+		if gatherer.soapURL.Path == "/" {
+			// Configuration could be tricky: https://vcenter.example.com and https://vcenter.example.com/ aren't the same.
+			// With the first one (without ending slash), govmomi will automatically add "/sdk" (result in https://vcenter.example.com/sdk).
+			// With the former one (with the ending slash), govmomi will NOT add /sdk (result in https://vcenter.example.com/)
+			// Because that will confuse the end-user, if he entered the URL with an ending slash (https://vcenter.example.com/)
+			// and it didn't work, retry with /sdk automatically.
+			urlWithSlashSDK := *gatherer.soapURL
+			urlWithSlashSDK.Path = "/sdk"
 
-				err = newEP(&urlWithSlashSDK)
-				if err == nil {
-					logger.V(2).Printf(
-						"vSphere endpoint for %q created, but on /sdk instead of %s",
-						gatherer.soapURL.Host, gatherer.soapURL.Path,
-					)
+			err = newEP(&urlWithSlashSDK)
+			if err == nil {
+				logger.V(2).Printf(
+					"vSphere endpoint for %q created, but on /sdk instead of %s",
+					gatherer.soapURL.Host, gatherer.soapURL.Path,
+				)
 
-					gatherer.soapURL = &urlWithSlashSDK
-					gatherer.cfg.URL = urlWithSlashSDK.String()
+				gatherer.soapURL = &urlWithSlashSDK
+				gatherer.cfg.URL = urlWithSlashSDK.String()
 
-					return
-				}
+				return
 			}
 		}
 	}
@@ -248,7 +247,7 @@ func (gatherer *vSphereGatherer) createEndpoint(ctx context.Context, input *vsph
 
 // newGatherer creates a vSphere gatherer from the given endpoint.
 // It will return an error if the endpoint URL is not valid.
-func newGatherer(ctx context.Context, isHistorical bool, cfg *config.VSphere, input *vsphere.VSphere, acc *internal.Accumulator, devicePropsCache *propsCaches) (*vSphereGatherer, error) {
+func newGatherer(ctx context.Context, isHistorical bool, cfg *config.VSphere, input *vsphere.VSphere, acc *internal.Accumulator, hierarchy *Hierarchy, devicePropsCache *propsCaches) (*vSphereGatherer, error) {
 	soapURL, err := soap.ParseURL(cfg.URL)
 	if err != nil {
 		return nil, err
@@ -264,6 +263,7 @@ func newGatherer(ctx context.Context, isHistorical bool, cfg *config.VSphere, in
 		acc:              acc,
 		buffer:           new(registry.PointBuffer),
 		cancel:           cancel,
+		hierarchy:        hierarchy,
 		devicePropsCache: devicePropsCache,
 	}
 

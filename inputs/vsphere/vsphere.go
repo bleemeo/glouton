@@ -69,6 +69,7 @@ type vSphere struct {
 	historical5minGatherer  *vSphereGatherer
 	historical30minGatherer *vSphereGatherer
 
+	hierarchy        *Hierarchy
 	deviceCache      map[string]bleemeoTypes.VSphereDevice
 	devicePropsCache *propsCaches
 	labelsMetadata   labelsMetadata
@@ -85,6 +86,7 @@ func newVSphere(host string, cfg config.VSphere, state bleemeoTypes.State, factP
 		opts:             cfg,
 		state:            state,
 		factProvider:     factProvider,
+		hierarchy:        NewHierarchy(),
 		deviceCache:      make(map[string]bleemeoTypes.VSphereDevice),
 		devicePropsCache: newPropsCaches(),
 		labelsMetadata: labelsMetadata{
@@ -156,6 +158,13 @@ func (vSphere *vSphere) devices(ctx context.Context, deviceChan chan<- bleemeoTy
 	logger.V(2).Printf("On vSphere %q, found %d clusters, %d hosts and %d vms in %v.", vSphere.host, len(clusters), len(hosts), len(vms), time.Since(t0))
 
 	scraperFacts, err := vSphere.factProvider.Facts(ctx, time.Hour)
+	if err != nil {
+		vSphere.setErr(err)
+
+		return
+	}
+
+	err = vSphere.hierarchy.Refresh(ctx, clusters, hosts, vms, vSphere.devicePropsCache.vmCache)
 	if err != nil {
 		vSphere.setErr(err)
 
@@ -265,7 +274,7 @@ func (vSphere *vSphere) describeVMs(ctx context.Context, client *vim25.Client, r
 	}
 
 	for vm, props := range vmProps {
-		describedVM, disks, netInterfaces := describeVM(vSphere.host, vm, props)
+		describedVM, disks, netInterfaces := describeVM(vSphere.host, vm, props, vSphere.hierarchy)
 		describedVM.facts["scraper_fqdn"] = scraperFacts["fqdn"]
 		vms = append(vms, describedVM)
 		labelsMetadata.disksPerVM[vm.Reference().Value] = disks
@@ -340,7 +349,7 @@ func (vSphere *vSphere) makeRealtimeGatherer(ctx context.Context) (registry.Gath
 		RenameGlobal:     vSphere.renameGlobal,
 	}
 
-	gatherer, err := newGatherer(ctx, false, &vSphere.opts, vsphereInput, acc, vSphere.devicePropsCache)
+	gatherer, err := newGatherer(ctx, false, &vSphere.opts, vsphereInput, acc, vSphere.hierarchy, vSphere.devicePropsCache)
 	if err != nil {
 		return nil, registry.RegistrationOption{}, err
 	}
@@ -411,7 +420,7 @@ func (vSphere *vSphere) makeHistorical5minGatherer(ctx context.Context) (registr
 		RenameGlobal:     vSphere.renameGlobal,
 	}
 
-	gatherer, err := newGatherer(ctx, true, &vSphere.opts, vsphereInput, acc, vSphere.devicePropsCache)
+	gatherer, err := newGatherer(ctx, true, &vSphere.opts, vsphereInput, acc, vSphere.hierarchy, vSphere.devicePropsCache)
 	if err != nil {
 		return nil, registry.RegistrationOption{}, err
 	}
@@ -481,7 +490,7 @@ func (vSphere *vSphere) makeHistorical30minGatherer(ctx context.Context) (regist
 		RenameGlobal:     vSphere.renameGlobal,
 	}
 
-	gatherer, err := newGatherer(ctx, true, &vSphere.opts, vsphereInput, acc, vSphere.devicePropsCache)
+	gatherer, err := newGatherer(ctx, true, &vSphere.opts, vsphereInput, acc, vSphere.hierarchy, vSphere.devicePropsCache)
 	if err != nil {
 		return nil, registry.RegistrationOption{}, err
 	}
