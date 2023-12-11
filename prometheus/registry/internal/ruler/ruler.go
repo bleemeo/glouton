@@ -123,7 +123,7 @@ func (r *SimpleRuler) ApplyRulesMFS(ctx context.Context, now time.Time, mfs []*d
 
 			mfs[idx].Metric = append(mfs[idx].GetMetric(), &dto.Metric{
 				Label:   lbls,
-				Untyped: &dto.Untyped{Value: proto.Float64(sample.V)},
+				Untyped: &dto.Untyped{Value: proto.Float64(sample.F)},
 			})
 		}
 	}

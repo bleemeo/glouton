@@ -21,7 +21,9 @@ import (
 	"sync"
 
 	"github.com/prometheus/prometheus/model/exemplar"
+	"github.com/prometheus/prometheus/model/histogram"
 	"github.com/prometheus/prometheus/model/labels"
+	"github.com/prometheus/prometheus/model/metadata"
 	"github.com/prometheus/prometheus/storage"
 )
 
@@ -77,4 +79,18 @@ func (a *childrenAppender) AppendExemplar(ref storage.SeriesRef, l labels.Labels
 	defer a.parent.l.Unlock()
 
 	return a.parent.app.AppendExemplar(ref, l, e)
+}
+
+func (a *childrenAppender) AppendHistogram(ref storage.SeriesRef, l labels.Labels, t int64, h *histogram.Histogram, fh *histogram.FloatHistogram) (storage.SeriesRef, error) {
+	a.parent.l.Lock()
+	defer a.parent.l.Unlock()
+
+	return a.parent.app.AppendHistogram(ref, l, t, h, fh)
+}
+
+func (a *childrenAppender) UpdateMetadata(ref storage.SeriesRef, l labels.Labels, m metadata.Metadata) (storage.SeriesRef, error) {
+	a.parent.l.Lock()
+	defer a.parent.l.Unlock()
+
+	return a.parent.app.UpdateMetadata(ref, l, m)
 }

@@ -26,17 +26,18 @@ import (
 	"glouton/logger"
 	"math"
 	"net/http"
-	"regexp"
 	"strconv"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-kit/log"
+	"github.com/grafana/regexp"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/promql"
 	"github.com/prometheus/prometheus/promql/parser"
 	"github.com/prometheus/prometheus/storage"
+	"github.com/prometheus/prometheus/util/annotations"
 	"github.com/prometheus/prometheus/util/httputil"
 	"github.com/prometheus/prometheus/util/stats"
 )
@@ -143,14 +144,14 @@ func (p *PromQL) init() {
 type apiFuncResult struct {
 	data      interface{}
 	err       *apiError
-	warnings  storage.Warnings
+	warnings  annotations.Annotations
 	finalizer func()
 }
 
 type queryData struct {
-	ResultType parser.ValueType  `json:"resultType"`
-	Result     parser.Value      `json:"result"`
-	Stats      *stats.QueryStats `json:"stats,omitempty"`
+	ResultType parser.ValueType `json:"resultType"`
+	Result     parser.Value     `json:"result"`
+	Stats      stats.QueryStats `json:"stats,omitempty"`
 }
 
 type apiError struct {
@@ -259,7 +260,7 @@ func (p *PromQL) queryRange(r *http.Request, st storage.Queryable) (result apiFu
 		defer cancel()
 	}
 
-	qry, err := p.queryEngine.NewRangeQuery(st, r.FormValue("query"), start, end, step)
+	qry, err := p.queryEngine.NewRangeQuery(ctx, st, nil, r.FormValue("query"), start, end, step)
 	if err != nil {
 		return apiFuncResult{nil, &apiError{errorBadData, err}, nil, nil}
 	}
@@ -280,7 +281,7 @@ func (p *PromQL) queryRange(r *http.Request, st storage.Queryable) (result apiFu
 	}
 
 	// Optional stats field in response if parameter "stats" is not empty.
-	var qs *stats.QueryStats
+	var qs stats.QueryStats
 	if r.FormValue("stats") != "" {
 		qs = stats.NewQueryStats(qry.Stats())
 	}
@@ -292,7 +293,7 @@ func (p *PromQL) queryRange(r *http.Request, st storage.Queryable) (result apiFu
 	}, nil, res.Warnings, qry.Close}
 }
 
-func (p *PromQL) respond(w http.ResponseWriter, data interface{}, warnings storage.Warnings) {
+func (p *PromQL) respond(w http.ResponseWriter, data interface{}, warnings annotations.Annotations) {
 	statusMessage := statusSuccess
 	warningStrings := make([]string, 0, len(warnings))
 

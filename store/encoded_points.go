@@ -70,7 +70,7 @@ func (epts *encodedPoints) getPoint(metricID uint64, idx int) types.Point {
 		return types.Point{}
 	}
 
-	for i, it := 0, data.chunk.Iterator(nil); it.Next(); i++ {
+	for i, it := 0, data.chunk.Iterator(nil); it.Next() == chunkenc.ValFloat; i++ {
 		if i != idx {
 			continue
 		}
@@ -97,7 +97,7 @@ func (epts *encodedPoints) getPoints(metricID uint64) ([]types.Point, error) {
 	points := make([]types.Point, 0, data.chunk.NumSamples())
 
 	it := data.chunk.Iterator(nil)
-	for it.Next() {
+	for it.Next() == chunkenc.ValFloat {
 		t, v := it.At()
 
 		points = append(points, types.Point{

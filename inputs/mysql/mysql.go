@@ -22,12 +22,13 @@ import (
 	"strings"
 
 	"github.com/influxdata/telegraf"
+	telegraf_config "github.com/influxdata/telegraf/config"
 	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"
 	"github.com/influxdata/telegraf/plugins/inputs/mysql"
 )
 
 // New initialise mysql.Input.
-func New(server string) (i telegraf.Input, err error) {
+func New(server string) (telegraf.Input, error) {
 	input, ok := telegraf_inputs.Inputs["mysql"]
 	if !ok {
 		return nil, inputs.ErrDisabledInput
@@ -38,11 +39,11 @@ func New(server string) (i telegraf.Input, err error) {
 		return nil, inputs.ErrUnexpectedType
 	}
 
-	slice := append(make([]string, 0), server)
-	mysqlInput.Servers = slice
+	secretServer := telegraf_config.NewSecret([]byte(server))
+	mysqlInput.Servers = []*telegraf_config.Secret{&secretServer}
 	mysqlInput.GatherInnoDBMetrics = true
 	mysqlInput.Log = internal.Logger{}
-	i = &internal.Input{
+	i := &internal.Input{
 		Input: mysqlWrapper{mysqlInput},
 		Accumulator: internal.Accumulator{
 			DerivatedMetrics: []string{
@@ -54,7 +55,7 @@ func New(server string) (i telegraf.Input, err error) {
 		Name: "mysql",
 	}
 
-	return
+	return internal.OneSecretInput{Input: i}, nil
 }
 
 // mysqlWrapper wraps the MySQL Telegraf input and implements telegraf.ServiceInput

@@ -24,12 +24,14 @@ package registry
 
 import (
 	"context"
+	"fmt"
 	"glouton/prometheus/model"
 	"glouton/types"
 	"io"
 	"reflect"
 	"sort"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -39,6 +41,8 @@ import (
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/model/relabel"
 	"github.com/prometheus/prometheus/storage"
+	"github.com/prometheus/prometheus/util/gate"
+	"golang.org/x/sync/errgroup"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -2118,6 +2122,7 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 					GloutonPort:  "8016",
 					MetricFormat: tt.metricFormat,
 				},
+				gate.New(0),
 			)
 			if err != nil {
 				t.Fatal(err)
@@ -2153,6 +2158,102 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 
 			if diff := types.DiffMetricFamilies(wantMFs, got, true); diff != "" {
 				t.Errorf("Gather mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestWaitForSecrets(t *testing.T) {
+	testCases := []struct {
+		name     string
+		gateSize int
+		// map number of inputs -> number of secrets
+		secretsDistribution map[int]int
+		maxAllowedDuration  time.Duration
+		shouldFail          bool
+	}{
+		{
+			name:                "[5] 20*1",
+			gateSize:            5,
+			secretsDistribution: map[int]int{20: 1}, // 20 inputs of 1 secret each
+			maxAllowedDuration:  500 * time.Millisecond,
+		},
+		{
+			name:                "[5] 8*3",
+			gateSize:            5,
+			secretsDistribution: map[int]int{8: 3},
+			maxAllowedDuration:  2 * time.Second,
+		},
+		{
+			name:                "[5] 3*3+10*1",
+			gateSize:            5,
+			secretsDistribution: map[int]int{3: 3, 10: 1},
+			maxAllowedDuration:  750 * time.Millisecond,
+		},
+		{
+			name:                "[5] 3*3+10*10",
+			gateSize:            5,
+			secretsDistribution: map[int]int{3: 3, 10: 10},
+			maxAllowedDuration:  2 * time.Second,
+			shouldFail:          true,
+		},
+	}
+
+	for _, testCase := range testCases {
+		tc := testCase
+
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			secretsGate := gate.New(tc.gateSize)
+
+			ctx, cancel := context.WithTimeout(context.Background(), tc.maxAllowedDuration)
+			defer cancel()
+
+			var (
+				errGrp      errgroup.Group
+				gatherCount atomic.Int64
+
+				expectedGathers int
+			)
+
+			for inputsCount, secretsCount := range tc.secretsDistribution {
+				expectedGathers += inputsCount
+				sCount := secretsCount
+
+				for i := 0; i < inputsCount; i++ {
+					errGrp.Go(func() error {
+						releaseFn, err := WaitForSecrets(ctx, secretsGate, sCount)
+						if err != nil {
+							if tc.shouldFail {
+								return err // but it's ok
+							}
+
+							return fmt.Errorf("%s: couldn't take the %d needed slots: %w", tc.name, sCount, err)
+						}
+
+						time.Sleep(100 * time.Millisecond) // Doing some time-consuming gathering
+						gatherCount.Add(1)
+						releaseFn()
+
+						return nil
+					})
+				}
+			}
+
+			err := errGrp.Wait()
+			if err != nil {
+				if !tc.shouldFail {
+					t.Fatalf("Failed: %v", err)
+				}
+			} else {
+				if tc.shouldFail {
+					t.Fatal("Should have failed to take all the wanted slots.")
+				}
+
+				if expectedGathers != int(gatherCount.Load()) {
+					t.Fatalf("Expected %d gatherings to be done, but got %d.", expectedGathers, gatherCount.Load())
+				}
 			}
 		})
 	}

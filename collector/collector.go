@@ -14,7 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package collector do the metric point gathering for all configured input every fixed time interval
+// Package collector does the metric point gathering for all configured input every fixed time interval
 package collector
 
 import (
@@ -23,6 +23,7 @@ import (
 	"glouton/crashreport"
 	"glouton/inputs"
 	"glouton/logger"
+	"glouton/prometheus/registry"
 	"glouton/types"
 	"math"
 	"sync"
@@ -30,6 +31,7 @@ import (
 
 	"github.com/influxdata/telegraf"
 	"github.com/prometheus/prometheus/model/value"
+	"github.com/prometheus/prometheus/util/gate"
 )
 
 var errTooManyInputs = errors.New("too many inputs in the collectors. Unable to find new slot")
@@ -42,20 +44,22 @@ type Collector struct {
 	updateDelayC chan interface{}
 	l            sync.Mutex
 	// map inputID -> measurement -> field name -> tags key/value -> fieldCache
-	fieldCaches map[int]map[string]map[string]map[string]fieldCache
+	fieldCaches      map[int]map[string]map[string]map[string]fieldCache
+	secretInputsGate *gate.Gate
 }
 
 // New returns a Collector with default option
 //
 // By default, no input are added (use AddInput) and collection is done every
 // 10 seconds.
-func New(acc telegraf.Accumulator) *Collector {
+func New(acc telegraf.Accumulator, secretInputsGate *gate.Gate) *Collector {
 	c := &Collector{
-		acc:          acc,
-		inputs:       make(map[int]telegraf.Input),
-		currentDelay: 10 * time.Second,
-		updateDelayC: make(chan interface{}),
-		fieldCaches:  make(map[int]map[string]map[string]map[string]fieldCache),
+		acc:              acc,
+		inputs:           make(map[int]telegraf.Input),
+		currentDelay:     10 * time.Second,
+		updateDelayC:     make(chan interface{}),
+		fieldCaches:      make(map[int]map[string]map[string]map[string]fieldCache),
+		secretInputsGate: secretInputsGate,
 	}
 
 	return c
@@ -163,6 +167,16 @@ func (c *Collector) runOnce(t0 time.Time) {
 		go func() {
 			defer crashreport.ProcessPanic()
 			defer wg.Done()
+
+			secretInput, hasSecrets := input.(inputs.SecretfulInput)
+			if hasSecrets && secretInput.SecretCount() > 0 {
+				releaseGate, err := registry.WaitForSecrets(context.Background(), c.secretInputsGate, secretInput.SecretCount())
+				if err != nil {
+					return
+				}
+
+				defer releaseGate()
+			}
 
 			ima := &inactiveMarkerAccumulator{
 				FixedTimeAccumulator: acc,

@@ -10,6 +10,7 @@ ExecReload=/bin/kill -HUP $MAINPID
 TimeoutStopSec=15s
 Restart=always
 User=glouton
+LimitMEMLOCK=8M:8M
 
 [Install]
 WantedBy=multi-user.target

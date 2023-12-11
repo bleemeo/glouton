@@ -24,6 +24,7 @@ import (
 
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/storage"
+	"github.com/prometheus/prometheus/util/annotations"
 )
 
 var errNotImplemented = errors.New("not implemented")
@@ -66,8 +67,8 @@ func (q apiQueryable) Metrics(filters map[string]string) (result []types.Metric,
 }
 
 // Querier returns a new Querier on the storage.
-func (q apiQueryable) Querier(ctx context.Context, mint, maxt int64) (storage.Querier, error) {
-	querier, err := q.store.Querier(ctx, mint, maxt)
+func (q apiQueryable) Querier(mint, maxt int64) (storage.Querier, error) {
+	querier, err := q.store.Querier(mint, maxt)
 	if err != nil {
 		return nil, err
 	}
@@ -91,7 +92,7 @@ type apiQuerier struct {
 
 // Select returns a set of series that matches the given label matchers.
 // A matcher is added to match only the main agent.
-func (q apiQuerier) Select(sortSeries bool, hints *storage.SelectHints, matchers ...*labels.Matcher) storage.SeriesSet {
+func (q apiQuerier) Select(ctx context.Context, sortSeries bool, hints *storage.SelectHints, matchers ...*labels.Matcher) storage.SeriesSet {
 	agentMatcher, err := labels.NewMatcher(labels.MatchEqual, types.LabelInstanceUUID, q.agentID)
 	if err != nil {
 		return storage.ErrSeriesSet(err)
@@ -99,7 +100,7 @@ func (q apiQuerier) Select(sortSeries bool, hints *storage.SelectHints, matchers
 
 	matchers = append(matchers, agentMatcher)
 
-	return q.querier.Select(sortSeries, hints, matchers...)
+	return q.querier.Select(ctx, sortSeries, hints, matchers...)
 }
 
 // Close releases the resources of the Querier.
@@ -108,7 +109,7 @@ func (q apiQuerier) Close() error {
 }
 
 // LabelValues is not implemented.
-func (q apiQuerier) LabelValues(name string, matchers ...*labels.Matcher) ([]string, storage.Warnings, error) {
+func (q apiQuerier) LabelValues(_ context.Context, name string, matchers ...*labels.Matcher) ([]string, annotations.Annotations, error) {
 	_ = name
 	_ = matchers
 
@@ -116,7 +117,7 @@ func (q apiQuerier) LabelValues(name string, matchers ...*labels.Matcher) ([]str
 }
 
 // LabelNames is not implemented.
-func (q apiQuerier) LabelNames(matchers ...*labels.Matcher) ([]string, storage.Warnings, error) {
+func (q apiQuerier) LabelNames(_ context.Context, matchers ...*labels.Matcher) ([]string, annotations.Annotations, error) {
 	_ = matchers
 
 	return nil, nil, errNotImplemented

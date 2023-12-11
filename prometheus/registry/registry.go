@@ -26,6 +26,8 @@ import (
 	"errors"
 	"fmt"
 	"glouton/crashreport"
+	"glouton/delay"
+	"glouton/inputs"
 	"glouton/logger"
 	gloutonModel "glouton/prometheus/model"
 	"glouton/prometheus/registry/internal/renamer"
@@ -51,6 +53,8 @@ import (
 	"github.com/prometheus/prometheus/promql/parser"
 	"github.com/prometheus/prometheus/rules"
 	"github.com/prometheus/prometheus/storage"
+	"github.com/prometheus/prometheus/tsdb/chunkenc"
+	"github.com/prometheus/prometheus/util/gate"
 )
 
 const (
@@ -133,6 +137,7 @@ type Registry struct {
 	currentDelay            time.Duration
 	relabelHook             RelabelHook
 	renamer                 *renamer.Renamer
+	secretInputsGate        *gate.Gate
 }
 
 type Option struct {
@@ -358,9 +363,10 @@ func getDefaultRelabelConfig() []*relabel.Config {
 	}
 }
 
-func New(opt Option) (*Registry, error) {
+func New(opt Option, secretInputsGate *gate.Gate) (*Registry, error) {
 	reg := &Registry{
-		option: opt,
+		option:           opt,
+		secretInputsGate: secretInputsGate,
 	}
 
 	reg.init()
@@ -1188,15 +1194,15 @@ func gatherFromQueryable(ctx context.Context, queryable storage.Queryable, filte
 	now := time.Now()
 	mint := now.Add(-5 * time.Minute)
 
-	querier, err := queryable.Querier(ctx, mint.UnixMilli(), now.UnixMilli())
+	querier, err := queryable.Querier(mint.UnixMilli(), now.UnixMilli())
 	if err != nil {
 		return nil, err
 	}
 
-	series := querier.Select(true, nil)
+	series := querier.Select(ctx, true, nil)
 	for series.Next() {
 		lbls := series.At().Labels()
-		iter := series.At().Iterator()
+		iter := series.At().Iterator(nil)
 
 		name := lbls.Get(types.LabelName)
 		if len(result) == 0 || result[len(result)-1].GetName() != name {
@@ -1220,7 +1226,7 @@ func gatherFromQueryable(ctx context.Context, queryable storage.Queryable, filte
 
 		var lastValue float64
 
-		for iter.Next() {
+		for iter.Next() == chunkenc.ValFloat {
 			_, lastValue = iter.At()
 		}
 
@@ -1456,9 +1462,19 @@ func (r *Registry) scrape(ctx context.Context, state GatherState, reg *registrat
 		return nil, 0, nil
 	}
 
+	secretInput, hasSecrets := reg.gatherer.source.(inputs.SecretfulInput)
 	gatherMethod := reg.gatherer.GatherWithState
 
 	reg.l.Unlock()
+
+	if hasSecrets && secretInput.SecretCount() > 0 {
+		releaseGate, err := WaitForSecrets(ctx, r.secretInputsGate, secretInput.SecretCount())
+		if err != nil {
+			return nil, 0, err // The context expired
+		}
+
+		defer releaseGate()
+	}
 
 	start := time.Now()
 
@@ -1632,10 +1648,11 @@ func (r *Registry) applyRelabel(
 
 	promLabels := labels.FromMap(input)
 	annotations := gloutonModel.MetaLabelsToAnnotation(promLabels)
-	promLabels = relabel.Process(
-		promLabels,
-		r.relabelConfigs...,
-	)
+
+	promLabels, keep := relabel.Process(promLabels, r.relabelConfigs...)
+	if !keep {
+		return promLabels, annotations, retryLater
+	}
 
 	promLabels = gloutonModel.DropMetaLabels(promLabels)
 
@@ -1722,4 +1739,45 @@ func fixLabels(lbls map[string]string) (map[string]string, error) {
 	}
 
 	return lbls, nil
+}
+
+// WaitForSecrets hold the current goroutine until the given number of slots are taken.
+// This is to ensure that too many inputs with secrets don't run at the same time,
+// which would result in exceeding the locked memory limit.
+// WaitForSecrets returns a callback to release all the slots taken once the gathering is done,
+// or an error if the given context expired.
+func WaitForSecrets(ctx context.Context, secretsGate *gate.Gate, slotsNeeded int) (func(), error) {
+	releaseGates := func(gatesCrossed int) {
+		for i := 0; i < gatesCrossed; i++ {
+			secretsGate.Done()
+		}
+	}
+
+fromZero:
+	for {
+		for slotsTaken := 0; slotsTaken < slotsNeeded; slotsTaken++ {
+			passGateCtx, cancel := context.WithTimeout(ctx, 50*time.Millisecond)
+
+			err := secretsGate.Start(passGateCtx)
+
+			cancel()
+
+			if err != nil {
+				releaseGates(slotsTaken)
+
+				if ctx.Err() != nil {
+					return nil, ctx.Err()
+				}
+
+				// Give way to another input ... then retry from zero
+				time.Sleep(delay.JitterMs(3*time.Millisecond, 0.9))
+
+				continue fromZero
+			}
+		}
+
+		break // All the needed slots have been taken
+	}
+
+	return func() { releaseGates(slotsNeeded) }, nil
 }

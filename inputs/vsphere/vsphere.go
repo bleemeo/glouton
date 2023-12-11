@@ -289,8 +289,8 @@ func (vSphere *vSphere) makeRealtimeGatherer(ctx context.Context) (registry.Gath
 		return nil, registry.RegistrationOption{}, inputs.ErrUnexpectedType
 	}
 
-	vsphereInput.Username = vSphere.opts.Username
-	vsphereInput.Password = vSphere.opts.Password
+	vsphereInput.Username = telegraf_config.NewSecret([]byte(vSphere.opts.Username))
+	vsphereInput.Password = telegraf_config.NewSecret([]byte(vSphere.opts.Password))
 
 	vsphereInput.VMInstances = !vSphere.opts.SkipMonitorVMs
 	vsphereInput.HostInstances = true
@@ -372,8 +372,8 @@ func (vSphere *vSphere) makeHistorical5minGatherer(ctx context.Context) (prometh
 		return nil, registry.RegistrationOption{}, inputs.ErrUnexpectedType
 	}
 
-	vsphereInput.Username = vSphere.opts.Username
-	vsphereInput.Password = vSphere.opts.Password
+	vsphereInput.Username = telegraf_config.NewSecret([]byte(vSphere.opts.Username))
+	vsphereInput.Password = telegraf_config.NewSecret([]byte(vSphere.opts.Password))
 
 	vsphereInput.ClusterInstances = true
 
@@ -437,8 +437,8 @@ func (vSphere *vSphere) makeHistorical30minGatherer(ctx context.Context) (promet
 		return nil, registry.RegistrationOption{}, inputs.ErrUnexpectedType
 	}
 
-	vsphereInput.Username = vSphere.opts.Username
-	vsphereInput.Password = vSphere.opts.Password
+	vsphereInput.Username = telegraf_config.NewSecret([]byte(vSphere.opts.Username))
+	vsphereInput.Password = telegraf_config.NewSecret([]byte(vSphere.opts.Password))
 
 	vsphereInput.DatastoreInstances = true
 
