@@ -554,13 +554,16 @@ func TestGatheringESXI(t *testing.T) { //nolint:maintidx
 	ignoreUnexported := cmpopts.IgnoreUnexported([]any{io_prometheus_client.MetricFamily{}, io_prometheus_client.Metric{}, io_prometheus_client.LabelPair{}, io_prometheus_client.Untyped{}}...)
 	ignoreUntypedValue := cmpopts.IgnoreFields(io_prometheus_client.Untyped{}, "Value")
 	ignoreTimestamp := cmpopts.IgnoreFields(io_prometheus_client.Metric{}, "TimestampMs")
+	opts := cmp.Options{ignoreUnexported, ignoreUntypedValue, ignoreTimestamp, cmp.Comparer(vSphereLabelComparer)}
 
 	expectedMfsPerVSphere := map[string][]*io_prometheus_client.MetricFamily{"127.0.0.1": expectedMfs}
-	if diff := cmp.Diff(expectedMfsPerVSphere, mfsPerVSphere, ignoreUnexported, ignoreUntypedValue, ignoreTimestamp, cmp.Comparer(vSphereLabelComparer)); diff != "" {
+	if diff := cmp.Diff(expectedMfsPerVSphere, mfsPerVSphere, opts, makeVirtualDiskMetricComparer(opts)); diff != "" {
 		t.Errorf("Unexpected metric families (-want +got):\n%s", diff)
 	}
 }
 
+// vSphereLabelComparer handles the comparison between two "__meta_vsphere" labels,
+// which is unpredictable because the port used by the simulator is random.
 func vSphereLabelComparer(x, y *io_prometheus_client.LabelPair) bool {
 	if x.GetName() == types.LabelMetaVSphere && y.GetName() == types.LabelMetaVSphere {
 		xParts, yParts := strings.Split(x.GetValue(), ":"), strings.Split(y.GetValue(), ":")
@@ -572,4 +575,18 @@ func vSphereLabelComparer(x, y *io_prometheus_client.LabelPair) bool {
 	}
 
 	return cmp.Equal(x, y, cmpopts.IgnoreUnexported(io_prometheus_client.LabelPair{}))
+}
+
+// makeVirtualDiskMetricComparer returns a comparer that tolerates having
+// non-matching metrics within the "io_read_bytes" family.
+// This can happen because the simulator sometimes seems to return 1 extra point,
+// a minute in the past, but only for this particular metric ...
+func makeVirtualDiskMetricComparer(opts []cmp.Option) cmp.Option {
+	return cmp.Comparer(func(x, y *io_prometheus_client.MetricFamily) bool {
+		if x.GetName() == "io_read_bytes" && y.GetName() == "io_read_bytes" {
+			return cmp.Equal(x, y, append(opts, cmpopts.IgnoreFields(io_prometheus_client.MetricFamily{}, "Metric"))...)
+		}
+
+		return cmp.Equal(x, y, opts...)
+	})
 }
