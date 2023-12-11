@@ -32,6 +32,7 @@ const hierarchyMinUpdateInterval = time.Minute
 // Hierarchy represents the structure of a vSphere in a way that suits us.
 // It drops the folder levels to get a hierarchy with a shape like:
 // VM -> Host -> Cluster -> Datacenter
+//
 // It also indexes the device names of VMs, hosts, resource pools, clusters and datacenters.
 type Hierarchy struct {
 	deviceNamePerMOID  map[string]string
@@ -85,6 +86,7 @@ func (h *Hierarchy) Refresh(ctx context.Context, clusters []*object.ClusterCompu
 		}
 	}
 
+	// Resource pools aren't part of the hierarchy, but their name is used in VM facts.
 	for _, resourcePool := range resourcePools {
 		h.deviceNamePerMOID[resourcePool.Reference().Value] = resourcePool.Name()
 	}
@@ -101,14 +103,6 @@ func (h *Hierarchy) Refresh(ctx context.Context, clusters []*object.ClusterCompu
 	}
 
 	return nil
-}
-
-func (h *Hierarchy) fixVMParents(vmProps map[refName]vmLightProps) {
-	for vmRef, props := range vmProps {
-		if host := props.Runtime.Host; host != nil {
-			h.parentPerChildMOID[vmRef.Reference().Value] = *host
-		}
-	}
 }
 
 func (h *Hierarchy) recurseDescribe(ctx context.Context, client *vim25.Client, objRef types.ManagedObjectReference) error {
@@ -155,6 +149,16 @@ func (h *Hierarchy) filterParents() {
 
 		if needsUpdate {
 			h.parentPerChildMOID[child] = parent
+		}
+	}
+}
+
+// fixVMParents tries to use the host defined in the VM's runtime properties
+// (rather than the virtual machines Folder) as the VM parent.
+func (h *Hierarchy) fixVMParents(vmProps map[refName]vmLightProps) {
+	for vmRef, props := range vmProps {
+		if host := props.Runtime.Host; host != nil {
+			h.parentPerChildMOID[vmRef.Reference().Value] = *host
 		}
 	}
 }
