@@ -6557,8 +6557,6 @@ func (ec *executionContext) unmarshalInputLabelInput(ctx context.Context, obj in
 		}
 		switch k {
 		case "key":
-			var err error
-
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("key"))
 			data, err := ec.unmarshalNString2string(ctx, v)
 			if err != nil {
@@ -6566,8 +6564,6 @@ func (ec *executionContext) unmarshalInputLabelInput(ctx context.Context, obj in
 			}
 			it.Key = data
 		case "value":
-			var err error
-
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("value"))
 			data, err := ec.unmarshalNString2string(ctx, v)
 			if err != nil {
@@ -6595,8 +6591,6 @@ func (ec *executionContext) unmarshalInputMetricInput(ctx context.Context, obj i
 		}
 		switch k {
 		case "labels":
-			var err error
-
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("labels"))
 			data, err := ec.unmarshalNLabelInput2ᚕᚖgloutonᚋapiᚐLabelInputᚄ(ctx, v)
 			if err != nil {
@@ -6624,8 +6618,6 @@ func (ec *executionContext) unmarshalInputPagination(ctx context.Context, obj in
 		}
 		switch k {
 		case "offset":
-			var err error
-
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("offset"))
 			data, err := ec.unmarshalNInt2int(ctx, v)
 			if err != nil {
@@ -6633,8 +6625,6 @@ func (ec *executionContext) unmarshalInputPagination(ctx context.Context, obj in
 			}
 			it.Offset = data
 		case "limit":
-			var err error
-
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("limit"))
 			data, err := ec.unmarshalNInt2int(ctx, v)
 			if err != nil {
