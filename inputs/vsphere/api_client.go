@@ -64,34 +64,39 @@ func newDeviceFinder(ctx context.Context, vSphereCfg config.VSphere) (*find.Find
 	return f, c.Client, nil
 }
 
-func findDevices(ctx context.Context, finder *find.Finder, listDatastores bool) (clusters []*object.ClusterComputeResource, datastores []*object.Datastore, hosts []*object.HostSystem, vms []*object.VirtualMachine, err error) {
+func findDevices(ctx context.Context, finder *find.Finder, listDatastores bool) (clusters []*object.ClusterComputeResource, datastores []*object.Datastore, resourcePools []*object.ResourcePool, hosts []*object.HostSystem, vms []*object.VirtualMachine, err error) {
 	// The find.NotFoundError is thrown when no devices are found,
 	// even if the path is not restrictive to a particular device.
 	var notFoundError *find.NotFoundError
 
 	clusters, err = finder.ClusterComputeResourceList(ctx, "*")
 	if err != nil && !errors.As(err, &notFoundError) {
-		return nil, nil, nil, nil, err
+		return nil, nil, nil, nil, nil, err
 	}
 
 	if listDatastores {
 		datastores, err = finder.DatastoreList(ctx, "*")
 		if err != nil && !errors.As(err, &notFoundError) {
-			return nil, nil, nil, nil, err
+			return nil, nil, nil, nil, nil, err
 		}
+	}
+
+	resourcePools, err = finder.ResourcePoolList(ctx, "*")
+	if err != nil && !errors.As(err, &notFoundError) {
+		return nil, nil, nil, nil, nil, err
 	}
 
 	hosts, err = finder.HostSystemList(ctx, "*")
 	if err != nil && !errors.As(err, &notFoundError) {
-		return nil, nil, nil, nil, err
+		return nil, nil, nil, nil, nil, err
 	}
 
 	vms, err = finder.VirtualMachineList(ctx, "*")
 	if err != nil && !errors.As(err, &notFoundError) {
-		return nil, nil, nil, nil, err
+		return nil, nil, nil, nil, nil, err
 	}
 
-	return clusters, datastores, hosts, vms, nil
+	return clusters, datastores, resourcePools, hosts, vms, nil
 }
 
 func describeCluster(source string, rfName refName, clusterProps clusterLightProps) *Cluster {
@@ -223,7 +228,12 @@ func describeVM(source string, rfName refName, vmProps vmLightProps, h *Hierarch
 	}
 
 	if vmProps.ResourcePool != nil {
-		vmFacts["vsphere_resource_pool"] = vmProps.ResourcePool.Value
+		resourcePool := vmProps.ResourcePool.Value
+		if resourcePoolName, ok := h.DeviceName(resourcePool); ok {
+			resourcePool = resourcePoolName
+		}
+
+		vmFacts["vsphere_resource_pool"] = resourcePool
 	}
 
 	if vmProps.Guest != nil {

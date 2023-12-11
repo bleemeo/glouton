@@ -32,7 +32,7 @@ const hierarchyMinUpdateInterval = time.Minute
 // Hierarchy represents the structure of a vSphere in a way that suits us.
 // It drops the folder levels to get a hierarchy with a shape like:
 // VM -> Host -> Cluster -> Datacenter
-// It also indexes the device names.
+// It also indexes the device names of VMs, hosts, resource pools, clusters and datacenters.
 type Hierarchy struct {
 	deviceNamePerMOID  map[string]string
 	parentPerChildMOID map[string]types.ManagedObjectReference
@@ -48,7 +48,7 @@ func NewHierarchy() *Hierarchy {
 	}
 }
 
-func (h *Hierarchy) Refresh(ctx context.Context, clusters []*object.ClusterComputeResource, hosts []*object.HostSystem, vms []*object.VirtualMachine, vmPropsCache *propsCache[vmLightProps]) error {
+func (h *Hierarchy) Refresh(ctx context.Context, clusters []*object.ClusterComputeResource, resourcePools []*object.ResourcePool, hosts []*object.HostSystem, vms []*object.VirtualMachine, vmPropsCache *propsCache[vmLightProps]) error {
 	h.l.Lock()
 	defer h.l.Unlock()
 
@@ -83,6 +83,10 @@ func (h *Hierarchy) Refresh(ctx context.Context, clusters []*object.ClusterCompu
 		if err != nil {
 			return err
 		}
+	}
+
+	for _, resourcePool := range resourcePools {
+		h.deviceNamePerMOID[resourcePool.Reference().Value] = resourcePool.Name()
 	}
 
 	h.filterParents()

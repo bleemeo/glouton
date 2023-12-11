@@ -147,7 +147,7 @@ func (vSphere *vSphere) devices(ctx context.Context, deviceChan chan<- bleemeoTy
 		return
 	}
 
-	clusters, datastores, hosts, vms, err := findDevices(findCtx, finder, true)
+	clusters, datastores, resourcePools, hosts, vms, err := findDevices(findCtx, finder, true)
 	if err != nil {
 		vSphere.setErr(err)
 		logger.V(1).Printf("Can't find devices on vSphere %q: %v", vSphere.host, err)
@@ -164,7 +164,7 @@ func (vSphere *vSphere) devices(ctx context.Context, deviceChan chan<- bleemeoTy
 		return
 	}
 
-	err = vSphere.hierarchy.Refresh(ctx, clusters, hosts, vms, vSphere.devicePropsCache.vmCache)
+	err = vSphere.hierarchy.Refresh(ctx, clusters, resourcePools, hosts, vms, vSphere.devicePropsCache.vmCache)
 	if err != nil {
 		vSphere.setErr(err)
 
@@ -517,7 +517,7 @@ func (vSphere *vSphere) makeHistorical30minGatherer(ctx context.Context) (regist
 func (vSphere *vSphere) purgeNoMetricsSinceMap(noMetricsSince map[string]int, iterations *int) {
 	*iterations++
 
-	if *iterations != 3*noMetricsStatusThreshold {
+	if *iterations < 3*noMetricsStatusThreshold {
 		return
 	}
 

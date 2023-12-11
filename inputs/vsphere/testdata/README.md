@@ -20,5 +20,6 @@
     - ComputeResource-*
     - HostSystem-*
     - VirtualMachine-*
+    - ResourcePool-*
 4. Additionally, some parts of some files can be taken off, e.g., the history of redundant events in the EventManager or
    SessionManager. It prevents from versioning thousands of useless XML lines.

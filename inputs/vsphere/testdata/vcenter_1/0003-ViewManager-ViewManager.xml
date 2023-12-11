@@ -1,0 +1,7 @@
+<ObjectContent>
+  <obj type="ViewManager">ViewManager</obj>
+  <propSet>
+    <name>viewList</name>
+    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="ArrayOfManagedObjectReference"></val>
+  </propSet>
+</ObjectContent>

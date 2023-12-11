@@ -133,7 +133,7 @@ func (gatherer *vSphereGatherer) collectAdditionalMetrics(ctx context.Context, s
 		return err
 	}
 
-	clusters, _, hosts, vms, err := findDevices(ctx, finder, false)
+	clusters, _, resourcePools, hosts, vms, err := findDevices(ctx, finder, false)
 	if err != nil {
 		return err
 	}
@@ -142,7 +142,7 @@ func (gatherer *vSphereGatherer) collectAdditionalMetrics(ctx context.Context, s
 		return nil
 	}
 
-	err = gatherer.hierarchy.Refresh(ctx, clusters, hosts, vms, gatherer.devicePropsCache.vmCache)
+	err = gatherer.hierarchy.Refresh(ctx, clusters, resourcePools, hosts, vms, gatherer.devicePropsCache.vmCache)
 	if err != nil {
 		return fmt.Errorf("can't describe hierarchy: %w", err)
 	}

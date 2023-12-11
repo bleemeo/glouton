@@ -86,7 +86,7 @@ func TestVSphereSteps(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	clusters, _, hosts, vms, err := findDevices(ctx, finder, false)
+	clusters, _, resourcePools, hosts, vms, err := findDevices(ctx, finder, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -119,6 +119,11 @@ func TestVSphereSteps(t *testing.T) {
 
 	providedFacts := map[string]string{"fqdn": scraperFQDN}
 	dummyVSphere := newVSphere(vSphereURL.Host, vSphereCfg, nil, facts.NewMockFacter(providedFacts))
+
+	err = dummyVSphere.hierarchy.Refresh(ctx, clusters, resourcePools, hosts, vms, dummyVSphere.devicePropsCache.vmCache)
+	if err != nil {
+		t.Fatalf("Got an error refreshing the vSphere hierarchy: %v", err)
+	}
 
 	devices, err := dummyVSphere.describeClusters(ctx, client, clusters, providedFacts)
 	if err != nil {
@@ -219,8 +224,8 @@ func TestVSphereSteps(t *testing.T) {
 				"memory":                "32.00 MB",
 				"os_pretty_name":        "",
 				"scraper_fqdn":          "scraper FQDN",
-				"vsphere_host":          "host-23",
-				"vsphere_resource_pool": "resgroup-15",
+				"vsphere_host":          "DC0_C0_H0",
+				"vsphere_resource_pool": "Resources",
 				"vsphere_vm_name":       "DC0_C0_RP0_VM0",
 				"vsphere_vm_version":    "vmx-13",
 			},
@@ -292,7 +297,7 @@ func TestVSphereLifecycle(t *testing.T) { //nolint:maintidx
 							"os_pretty_name":        "",
 							"scraper_fqdn":          "scraper FQDN",
 							"vsphere_host":          "esxi.test",
-							"vsphere_resource_pool": "ha-root-pool",
+							"vsphere_resource_pool": "Resources",
 						},
 						state: "poweredOff",
 					},
@@ -310,7 +315,7 @@ func TestVSphereLifecycle(t *testing.T) { //nolint:maintidx
 							"scraper_fqdn":          "scraper FQDN",
 							"vsphere_datastore":     "datastore1",
 							"vsphere_host":          "esxi.test",
-							"vsphere_resource_pool": "ha-root-pool",
+							"vsphere_resource_pool": "Resources",
 							"vsphere_vm_name":       "lunar",
 							"vsphere_vm_version":    "vmx-10",
 						},
@@ -331,7 +336,7 @@ func TestVSphereLifecycle(t *testing.T) { //nolint:maintidx
 							"scraper_fqdn":          "scraper FQDN",
 							"vsphere_datastore":     "datastore1",
 							"vsphere_host":          "esxi.test",
-							"vsphere_resource_pool": "ha-root-pool",
+							"vsphere_resource_pool": "Resources",
 							"vsphere_vm_name":       "alp1",
 							"vsphere_vm_version":    "vmx-14",
 						},
@@ -410,7 +415,7 @@ func TestVSphereLifecycle(t *testing.T) { //nolint:maintidx
 							"os_pretty_name":        "",
 							"scraper_fqdn":          "scraper FQDN",
 							"vsphere_host":          "DC0_C0_H0",
-							"vsphere_resource_pool": "resgroup-15",
+							"vsphere_resource_pool": "Resources",
 							"vsphere_vm_name":       "DC0_C0_RP0_VM0",
 							"vsphere_vm_version":    "vmx-13",
 						},
