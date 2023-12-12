@@ -114,7 +114,7 @@ func (m *Manager) RegisterGatherers(ctx context.Context, vSphereCfgs []config.VS
 			continue
 		}
 
-		_, err = registerGatherer(opt, registry.WithPastPointFilter(realtimeGatherer, 5*time.Minute))
+		_, err = registerGatherer(opt, registry.WithPastPointFilter(realtimeGatherer, 30*time.Minute))
 		if err != nil {
 			logger.V(1).Printf("Failed to register realtime gatherer for %s: %v", vSphere.String(), err)
 
@@ -128,7 +128,7 @@ func (m *Manager) RegisterGatherers(ctx context.Context, vSphereCfgs []config.VS
 			continue
 		}
 
-		_, err = registerGatherer(opt, registry.WithPastPointFilter(historical5minGatherer, 30*time.Minute))
+		_, err = registerGatherer(opt, registry.WithPastPointFilter(historical5minGatherer, 2*time.Hour))
 		if err != nil {
 			logger.V(1).Printf("Failed to register historical 5min gatherer for %s: %v", vSphere.String(), err)
 
@@ -142,7 +142,7 @@ func (m *Manager) RegisterGatherers(ctx context.Context, vSphereCfgs []config.VS
 			continue
 		}
 
-		_, err = registerGatherer(opt, registry.WithPastPointFilter(historical30minGatherer, time.Hour))
+		_, err = registerGatherer(opt, registry.WithPastPointFilter(historical30minGatherer, 4*time.Hour))
 		if err != nil {
 			logger.V(1).Printf("Failed to register historical 30min gatherer for %s: %v", vSphere.String(), err)
 
