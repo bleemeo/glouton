@@ -1,0 +1,69 @@
+<ObjectContent>
+  <obj type="ClusterComputeResource">domain-c7</obj>
+  <propSet>
+    <name>parent</name>
+    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="ManagedObjectReference" type="Folder">group-4</val>
+  </propSet>
+  <propSet>
+    <name>overallStatus</name>
+    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="ManagedEntityStatus">green</val>
+  </propSet>
+  <propSet>
+    <name>name</name>
+    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="xsd:string">TEST-CL0</val>
+  </propSet>
+  <propSet>
+    <name>resourcePool</name>
+    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="ManagedObjectReference" type="ResourcePool">resgroup-8</val>
+  </propSet>
+  <propSet>
+    <name>host</name>
+    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="ArrayOfManagedObjectReference">
+      <ManagedObjectReference type="HostSystem">host-11</ManagedObjectReference>
+      <ManagedObjectReference type="HostSystem">host-12</ManagedObjectReference>
+    </val>
+  </propSet>
+  <propSet>
+    <name>datastore</name>
+    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="ArrayOfManagedObjectReference">
+      <ManagedObjectReference type="Datastore">datastore-25</ManagedObjectReference>
+      <ManagedObjectReference type="Datastore">datastore-2150</ManagedObjectReference>
+    </val>
+  </propSet>
+  <propSet>
+    <name>summary</name>
+    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="ClusterComputeResourceSummary">
+      <totalCpu>251400</totalCpu>
+      <totalMemory>2472808415232</totalMemory>
+      <numCpuCores>120</numCpuCores>
+      <numCpuThreads>240</numCpuThreads>
+      <effectiveCpu>229290</effectiveCpu>
+      <effectiveMemory>2286538</effectiveMemory>
+      <numHosts>3</numHosts>
+      <numEffectiveHosts>3</numEffectiveHosts>
+      <overallStatus>green</overallStatus>
+      <currentFailoverLevel>1</currentFailoverLevel>
+      <admissionControlInfo XMLSchema-instance:type="ClusterFailoverResourcesAdmissionControlInfo">
+        <currentCpuFailoverResourcesPercent>97</currentCpuFailoverResourcesPercent>
+        <currentMemoryFailoverResourcesPercent>91</currentMemoryFailoverResourcesPercent>
+      </admissionControlInfo>
+      <numVmotions>123</numVmotions>
+      <targetBalance>163</targetBalance>
+      <currentBalance>28</currentBalance>
+      <drsScore>-1</drsScore>
+      <usageSummary>
+        <totalCpuCapacityMhz>229290</totalCpuCapacityMhz>
+        <totalMemCapacityMB>2286538</totalMemCapacityMB>
+        <cpuReservationMhz>4000</cpuReservationMhz>
+        <memReservationMB>198004</memReservationMB>
+        <cpuDemandMhz>30091</cpuDemandMhz>
+        <memDemandMB>224156</memDemandMB>
+        <statsGenNumber>217095</statsGenNumber>
+        <cpuEntitledMhz>26407</cpuEntitledMhz>
+        <memEntitledMB>308497</memEntitledMB>
+        <poweredOffVmCount>5</poweredOffVmCount>
+        <totalVmCount>65</totalVmCount>
+      </usageSummary>
+    </val>
+  </propSet>
+</ObjectContent>
