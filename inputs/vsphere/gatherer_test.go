@@ -50,17 +50,17 @@ func TestGatheringESXI(t *testing.T) { //nolint:maintidx
 	for host, vSphere := range manager.vSpheres {
 		realtimeMfs, err := vSphere.realtimeGatherer.GatherWithState(ctx, registry.GatherState{T0: time.Now(), FromScrapeLoop: true})
 		if err != nil {
-			t.Fatalf("Got an error gathering (realtime) vSphere %q: %v", host, err)
+			t.Fatalf("Got an error gathering (%s) vSphere %q: %v", gatherRT, host, err)
 		}
 
 		histo5minMfs, err := vSphere.historical5minGatherer.GatherWithState(ctx, registry.GatherState{T0: time.Now(), FromScrapeLoop: true})
 		if err != nil {
-			t.Fatalf("Got an error gathering (historical 5min) vSphere %q: %v", host, err)
+			t.Fatalf("Got an error gathering (%s) vSphere %q: %v", gatherHist5m, host, err)
 		}
 
 		histo30minMfs, err := vSphere.historical30minGatherer.GatherWithState(ctx, registry.GatherState{T0: time.Now(), FromScrapeLoop: true})
 		if err != nil {
-			t.Fatalf("Got an error gathering (historical 30min) vSphere %q: %v", host, err)
+			t.Fatalf("Got an error gathering (%s) vSphere %q: %v", gatherHist30m, host, err)
 		}
 
 		mfsPerVSphere[strings.Split(host, ":")[0]] = append(realtimeMfs, append(histo5minMfs, histo30minMfs...)...)

@@ -349,7 +349,7 @@ func (vSphere *vSphere) makeRealtimeGatherer(ctx context.Context) (registry.Gath
 		RenameGlobal:     vSphere.renameGlobal,
 	}
 
-	gatherer, err := newGatherer(ctx, false, &vSphere.opts, vsphereInput, acc, vSphere.hierarchy, vSphere.devicePropsCache)
+	gatherer, err := newGatherer(ctx, gatherRT, &vSphere.opts, vsphereInput, acc, vSphere.hierarchy, vSphere.devicePropsCache)
 	if err != nil {
 		return nil, registry.RegistrationOption{}, err
 	}
@@ -359,7 +359,7 @@ func (vSphere *vSphere) makeRealtimeGatherer(ctx context.Context) (registry.Gath
 	noMetricsSinceIterations := 0
 	noMetricsSince := make(map[string]int)
 	opt := registry.RegistrationOption{
-		Description:         vSphere.String() + " realtime",
+		Description:         fmt.Sprint(vSphere, " ", gatherRT),
 		MinInterval:         time.Minute,
 		StopCallback:        gatherer.stop,
 		ApplyDynamicRelabel: true,
@@ -420,7 +420,7 @@ func (vSphere *vSphere) makeHistorical5minGatherer(ctx context.Context) (registr
 		RenameGlobal:     vSphere.renameGlobal,
 	}
 
-	gatherer, err := newGatherer(ctx, true, &vSphere.opts, vsphereInput, acc, vSphere.hierarchy, vSphere.devicePropsCache)
+	gatherer, err := newGatherer(ctx, gatherHist5m, &vSphere.opts, vsphereInput, acc, vSphere.hierarchy, vSphere.devicePropsCache)
 	if err != nil {
 		return nil, registry.RegistrationOption{}, err
 	}
@@ -430,7 +430,7 @@ func (vSphere *vSphere) makeHistorical5minGatherer(ctx context.Context) (registr
 	noMetricsSinceIterations := 0
 	noMetricsSince := make(map[string]int)
 	opt := registry.RegistrationOption{
-		Description:         vSphere.String() + " historical 5min",
+		Description:         fmt.Sprint(vSphere, " ", gatherHist5m),
 		MinInterval:         5 * time.Minute,
 		StopCallback:        gatherer.stop,
 		ApplyDynamicRelabel: true,
@@ -490,7 +490,7 @@ func (vSphere *vSphere) makeHistorical30minGatherer(ctx context.Context) (regist
 		RenameGlobal:     vSphere.renameGlobal,
 	}
 
-	gatherer, err := newGatherer(ctx, true, &vSphere.opts, vsphereInput, acc, vSphere.hierarchy, vSphere.devicePropsCache)
+	gatherer, err := newGatherer(ctx, gatherHist30m, &vSphere.opts, vsphereInput, acc, vSphere.hierarchy, vSphere.devicePropsCache)
 	if err != nil {
 		return nil, registry.RegistrationOption{}, err
 	}
@@ -500,7 +500,7 @@ func (vSphere *vSphere) makeHistorical30minGatherer(ctx context.Context) (regist
 	noMetricsSinceIterations := 0
 	noMetricsSince := make(map[string]int)
 	opt := registry.RegistrationOption{
-		Description:         vSphere.String() + " historical 30min",
+		Description:         fmt.Sprint(vSphere, " ", gatherHist30m),
 		MinInterval:         30 * time.Minute,
 		StopCallback:        gatherer.stop,
 		ApplyDynamicRelabel: true,

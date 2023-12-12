@@ -41,11 +41,17 @@ import (
 
 const endpointCreationRetryDelay = 5 * time.Minute
 
+type gatherKind string
+
+const (
+	gatherRT      gatherKind = "realtime"         // Hosts and VMs
+	gatherHist5m  gatherKind = "historical 5min"  // Clusters
+	gatherHist30m gatherKind = "historical 30min" // Datastores
+)
+
 type vSphereGatherer struct {
-	// If true, we should only gather cluster & datastore metrics.
-	// Otherwise, we should only gather host & VMs metrics.
-	isHistorical bool
-	interval     time.Duration
+	kind     gatherKind
+	interval time.Duration
 
 	cfg *config.VSphere
 	// Storing the endpoint's URL, just in case the endpoint can't be
@@ -147,12 +153,8 @@ func (gatherer *vSphereGatherer) collectAdditionalMetrics(ctx context.Context, s
 		return fmt.Errorf("can't describe hierarchy: %w", err)
 	}
 
-	if gatherer.isHistorical && gatherer.interval == 5*time.Minute && len(clusters) != 0 {
-		err = additionalClusterMetrics(ctx, client, clusters, gatherer.devicePropsCache.hostCache, acc, gatherer.hierarchy, state.T0)
-		if err != nil {
-			return err
-		}
-	} else {
+	switch gatherer.kind { //nolint:exhaustive
+	case gatherRT:
 		// For each host, we want a list of vm states (running/stopped).
 		vmStatesPerHost := make(map[string][]bool, len(hosts))
 
@@ -162,6 +164,11 @@ func (gatherer *vSphereGatherer) collectAdditionalMetrics(ctx context.Context, s
 		}
 
 		err = additionalHostMetrics(ctx, client, hosts, acc, gatherer.hierarchy, vmStatesPerHost, state.T0)
+		if err != nil {
+			return err
+		}
+	case gatherHist5m:
+		err = additionalClusterMetrics(ctx, client, clusters, gatherer.devicePropsCache.hostCache, acc, gatherer.hierarchy, state.T0)
 		if err != nil {
 			return err
 		}
@@ -232,12 +239,7 @@ func (gatherer *vSphereGatherer) createEndpoint(ctx context.Context, input *vsph
 		}
 	}
 
-	intervalKind := "realtime"
-	if gatherer.isHistorical {
-		intervalKind = "historical " + gatherer.interval.String()
-	}
-
-	logger.V(1).Printf("Failed to create vSphere %s endpoint for %q: %v -- will retry in %s.", intervalKind, gatherer.soapURL.Host, err, endpointCreationRetryDelay)
+	logger.V(1).Printf("Failed to create vSphere %s endpoint for %q: %v -- will retry in %s.", gatherer.kind, gatherer.soapURL.Host, err, endpointCreationRetryDelay)
 
 	gatherer.lastErr = err
 	gatherer.endpointCreateTimer = time.AfterFunc(endpointCreationRetryDelay, func() {
@@ -247,7 +249,7 @@ func (gatherer *vSphereGatherer) createEndpoint(ctx context.Context, input *vsph
 
 // newGatherer creates a vSphere gatherer from the given endpoint.
 // It will return an error if the endpoint URL is not valid.
-func newGatherer(ctx context.Context, isHistorical bool, cfg *config.VSphere, input *vsphere.VSphere, acc *internal.Accumulator, hierarchy *Hierarchy, devicePropsCache *propsCaches) (*vSphereGatherer, error) {
+func newGatherer(ctx context.Context, kind gatherKind, cfg *config.VSphere, input *vsphere.VSphere, acc *internal.Accumulator, hierarchy *Hierarchy, devicePropsCache *propsCaches) (*vSphereGatherer, error) {
 	soapURL, err := soap.ParseURL(cfg.URL)
 	if err != nil {
 		return nil, err
@@ -256,7 +258,7 @@ func newGatherer(ctx context.Context, isHistorical bool, cfg *config.VSphere, in
 	ctx, cancel := context.WithCancel(ctx)
 
 	gatherer := &vSphereGatherer{
-		isHistorical:     isHistorical,
+		kind:             kind,
 		interval:         time.Duration(input.HistoricalInterval),
 		cfg:              cfg,
 		soapURL:          soapURL,
