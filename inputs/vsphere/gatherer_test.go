@@ -29,7 +29,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/prometheus/client_golang/prometheus"
-	io_prometheus_client "github.com/prometheus/client_model/go"
+	dto "github.com/prometheus/client_model/go"
 )
 
 //nolint:dupl
@@ -49,7 +49,7 @@ func TestGatheringESXI(t *testing.T) { //nolint:maintidx
 
 	manager.Devices(ctx, 0)
 
-	var mfs []*io_prometheus_client.MetricFamily
+	var mfs []*dto.MetricFamily
 
 	for host, vSphere := range manager.vSpheres {
 		realtimeMfs, err := vSphere.realtimeGatherer.GatherWithState(ctx, registry.GatherState{T0: time.Now(), FromScrapeLoop: true})
@@ -70,59 +70,59 @@ func TestGatheringESXI(t *testing.T) { //nolint:maintidx
 		mfs = append(realtimeMfs, append(histo5minMfs, histo30minMfs...)...) //nolint: gocritic
 	}
 
-	expectedMfs := []*io_prometheus_client.MetricFamily{
+	expectedMfs := []*dto.MetricFamily{
 		{
 			Name: ptr("cpu_used"),
 			Help: ptr(""),
-			Type: ptr(io_prometheus_client.MetricType_UNTYPED),
-			Metric: []*io_prometheus_client.Metric{
+			Type: dto.MetricType_UNTYPED.Enum(),
+			Metric: []*dto.Metric{
 				{
-					Label: []*io_prometheus_client.LabelPair{
+					Label: []*dto.LabelPair{
 						{Name: ptr("__meta_vsphere"), Value: ptr("127.0.0.1:xxxxx")},
 						{Name: ptr("__meta_vsphere_moid"), Value: ptr("10")},
 						{Name: ptr("dcname"), Value: ptr("ha-datacenter")},
 						{Name: ptr("esxhostname"), Value: ptr("esxi.test")},
 						{Name: ptr("vmname"), Value: ptr("alp1")},
 					},
-					Untyped: &io_prometheus_client.Untyped{Value: ptr(1.)},
+					Untyped: &dto.Untyped{Value: ptr(1.)},
 				},
 				{
-					Label: []*io_prometheus_client.LabelPair{
+					Label: []*dto.LabelPair{
 						{Name: ptr("__meta_vsphere"), Value: ptr("127.0.0.1:xxxxx")},
 						{Name: ptr("__meta_vsphere_moid"), Value: ptr("10")},
 						{Name: ptr("dcname"), Value: ptr("ha-datacenter")},
 						{Name: ptr("esxhostname"), Value: ptr("esxi.test")},
 						{Name: ptr("vmname"), Value: ptr("alp1")},
 					},
-					Untyped: &io_prometheus_client.Untyped{Value: ptr(1.)},
+					Untyped: &dto.Untyped{Value: ptr(1.)},
 				},
 				{
-					Label: []*io_prometheus_client.LabelPair{
+					Label: []*dto.LabelPair{
 						{Name: ptr("__meta_vsphere"), Value: ptr("127.0.0.1:xxxxx")},
 						{Name: ptr("__meta_vsphere_moid"), Value: ptr("ha-host")},
 						{Name: ptr("dcname"), Value: ptr("ha-datacenter")},
 						{Name: ptr("esxhostname"), Value: ptr("esxi.test")},
 					},
-					Untyped: &io_prometheus_client.Untyped{Value: ptr(1.0)},
+					Untyped: &dto.Untyped{Value: ptr(1.0)},
 				},
 				{
-					Label: []*io_prometheus_client.LabelPair{
+					Label: []*dto.LabelPair{
 						{Name: ptr("__meta_vsphere"), Value: ptr("127.0.0.1:xxxxx")},
 						{Name: ptr("__meta_vsphere_moid"), Value: ptr("ha-host")},
 						{Name: ptr("dcname"), Value: ptr("ha-datacenter")},
 						{Name: ptr("esxhostname"), Value: ptr("esxi.test")},
 					},
-					Untyped: &io_prometheus_client.Untyped{Value: ptr(1.)},
+					Untyped: &dto.Untyped{Value: ptr(1.)},
 				},
 			},
 		},
 		{
 			Name: ptr("disk_used_perc"),
 			Help: ptr(""),
-			Type: ptr(io_prometheus_client.MetricType_UNTYPED),
-			Metric: []*io_prometheus_client.Metric{
+			Type: dto.MetricType_UNTYPED.Enum(),
+			Metric: []*dto.Metric{
 				{
-					Label: []*io_prometheus_client.LabelPair{
+					Label: []*dto.LabelPair{
 						{Name: ptr("__meta_vsphere"), Value: ptr("127.0.0.1:xxxxx")},
 						{Name: ptr("__meta_vsphere_moid"), Value: ptr("10")},
 						{Name: ptr("clustername"), Value: ptr("esxi.test")},
@@ -131,10 +131,10 @@ func TestGatheringESXI(t *testing.T) { //nolint:maintidx
 						{Name: ptr("item"), Value: ptr("/")},
 						{Name: ptr("vmname"), Value: ptr("alp1")},
 					},
-					Untyped: &io_prometheus_client.Untyped{Value: ptr(1.)},
+					Untyped: &dto.Untyped{Value: ptr(1.)},
 				},
 				{
-					Label: []*io_prometheus_client.LabelPair{
+					Label: []*dto.LabelPair{
 						{Name: ptr("__meta_vsphere"), Value: ptr("127.0.0.1:xxxxx")},
 						{Name: ptr("__meta_vsphere_moid"), Value: ptr("10")},
 						{Name: ptr("clustername"), Value: ptr("esxi.test")},
@@ -143,17 +143,17 @@ func TestGatheringESXI(t *testing.T) { //nolint:maintidx
 						{Name: ptr("item"), Value: ptr("/boot")},
 						{Name: ptr("vmname"), Value: ptr("alp1")},
 					},
-					Untyped: &io_prometheus_client.Untyped{Value: ptr(1.)},
+					Untyped: &dto.Untyped{Value: ptr(1.)},
 				},
 			},
 		},
 		{
 			Name: ptr("io_read_bytes"),
 			Help: ptr(""),
-			Type: ptr(io_prometheus_client.MetricType_UNTYPED),
-			Metric: []*io_prometheus_client.Metric{
+			Type: dto.MetricType_UNTYPED.Enum(),
+			Metric: []*dto.Metric{
 				{
-					Label: []*io_prometheus_client.LabelPair{
+					Label: []*dto.LabelPair{
 						{Name: ptr("__meta_vsphere"), Value: ptr("127.0.0.1:xxxxx")},
 						{Name: ptr("__meta_vsphere_moid"), Value: ptr("10")},
 						{Name: ptr("dcname"), Value: ptr("ha-datacenter")},
@@ -161,17 +161,17 @@ func TestGatheringESXI(t *testing.T) { //nolint:maintidx
 						{Name: ptr("esxhostname"), Value: ptr("esxi.test")},
 						{Name: ptr("vmname"), Value: ptr("alp1")},
 					},
-					Untyped: &io_prometheus_client.Untyped{Value: ptr(1.)},
+					Untyped: &dto.Untyped{Value: ptr(1.)},
 				},
 			},
 		},
 		{
 			Name: ptr("io_write_bytes"),
 			Help: ptr(""),
-			Type: ptr(io_prometheus_client.MetricType_UNTYPED),
-			Metric: []*io_prometheus_client.Metric{
+			Type: dto.MetricType_UNTYPED.Enum(),
+			Metric: []*dto.Metric{
 				{
-					Label: []*io_prometheus_client.LabelPair{
+					Label: []*dto.LabelPair{
 						{Name: ptr("__meta_vsphere"), Value: ptr("127.0.0.1:xxxxx")},
 						{Name: ptr("__meta_vsphere_moid"), Value: ptr("10")},
 						{Name: ptr("dcname"), Value: ptr("ha-datacenter")},
@@ -179,10 +179,10 @@ func TestGatheringESXI(t *testing.T) { //nolint:maintidx
 						{Name: ptr("esxhostname"), Value: ptr("esxi.test")},
 						{Name: ptr("vmname"), Value: ptr("alp1")},
 					},
-					Untyped: &io_prometheus_client.Untyped{Value: ptr(1.)},
+					Untyped: &dto.Untyped{Value: ptr(1.)},
 				},
 				{
-					Label: []*io_prometheus_client.LabelPair{
+					Label: []*dto.LabelPair{
 						{Name: ptr("__meta_vsphere"), Value: ptr("127.0.0.1:xxxxx")},
 						{Name: ptr("__meta_vsphere_moid"), Value: ptr("10")},
 						{Name: ptr("dcname"), Value: ptr("ha-datacenter")},
@@ -190,87 +190,87 @@ func TestGatheringESXI(t *testing.T) { //nolint:maintidx
 						{Name: ptr("esxhostname"), Value: ptr("esxi.test")},
 						{Name: ptr("vmname"), Value: ptr("alp1")},
 					},
-					Untyped: &io_prometheus_client.Untyped{Value: ptr(1.)},
+					Untyped: &dto.Untyped{Value: ptr(1.)},
 				},
 			},
 		},
 		{
 			Name: ptr("mem_total"),
 			Help: ptr(""),
-			Type: ptr(io_prometheus_client.MetricType_UNTYPED),
-			Metric: []*io_prometheus_client.Metric{
+			Type: dto.MetricType_UNTYPED.Enum(),
+			Metric: []*dto.Metric{
 				{
-					Label: []*io_prometheus_client.LabelPair{
+					Label: []*dto.LabelPair{
 						{Name: ptr("__meta_vsphere"), Value: ptr("127.0.0.1:xxxxx")},
 						{Name: ptr("__meta_vsphere_moid"), Value: ptr("ha-host")},
 						{Name: ptr("dcname"), Value: ptr("ha-datacenter")},
 						{Name: ptr("esxhostname"), Value: ptr("esxi.test")},
 					},
-					Untyped: &io_prometheus_client.Untyped{Value: ptr(1.)},
+					Untyped: &dto.Untyped{Value: ptr(1.)},
 				},
 				{
-					Label: []*io_prometheus_client.LabelPair{
+					Label: []*dto.LabelPair{
 						{Name: ptr("__meta_vsphere"), Value: ptr("127.0.0.1:xxxxx")},
 						{Name: ptr("__meta_vsphere_moid"), Value: ptr("ha-host")},
 						{Name: ptr("dcname"), Value: ptr("ha-datacenter")},
 						{Name: ptr("esxhostname"), Value: ptr("esxi.test")},
 					},
-					Untyped: &io_prometheus_client.Untyped{Value: ptr(1.)},
+					Untyped: &dto.Untyped{Value: ptr(1.)},
 				},
 			},
 		},
 		{
 			Name: ptr("mem_used_perc"),
 			Help: ptr(""),
-			Type: ptr(io_prometheus_client.MetricType_UNTYPED),
-			Metric: []*io_prometheus_client.Metric{
+			Type: dto.MetricType_UNTYPED.Enum(),
+			Metric: []*dto.Metric{
 				{
-					Label: []*io_prometheus_client.LabelPair{
+					Label: []*dto.LabelPair{
 						{Name: ptr("__meta_vsphere"), Value: ptr("127.0.0.1:xxxxx")},
 						{Name: ptr("__meta_vsphere_moid"), Value: ptr("10")},
 						{Name: ptr("dcname"), Value: ptr("ha-datacenter")},
 						{Name: ptr("esxhostname"), Value: ptr("esxi.test")},
 						{Name: ptr("vmname"), Value: ptr("alp1")},
 					},
-					Untyped: &io_prometheus_client.Untyped{Value: ptr(1.)},
+					Untyped: &dto.Untyped{Value: ptr(1.)},
 				},
 				{
-					Label: []*io_prometheus_client.LabelPair{
+					Label: []*dto.LabelPair{
 						{Name: ptr("__meta_vsphere"), Value: ptr("127.0.0.1:xxxxx")},
 						{Name: ptr("__meta_vsphere_moid"), Value: ptr("10")},
 						{Name: ptr("dcname"), Value: ptr("ha-datacenter")},
 						{Name: ptr("esxhostname"), Value: ptr("esxi.test")},
 						{Name: ptr("vmname"), Value: ptr("alp1")},
 					},
-					Untyped: &io_prometheus_client.Untyped{Value: ptr(1.)},
+					Untyped: &dto.Untyped{Value: ptr(1.)},
 				},
 				{
-					Label: []*io_prometheus_client.LabelPair{
+					Label: []*dto.LabelPair{
 						{Name: ptr("__meta_vsphere"), Value: ptr("127.0.0.1:xxxxx")},
 						{Name: ptr("__meta_vsphere_moid"), Value: ptr("ha-host")},
 						{Name: ptr("dcname"), Value: ptr("ha-datacenter")},
 						{Name: ptr("esxhostname"), Value: ptr("esxi.test")},
 					},
-					Untyped: &io_prometheus_client.Untyped{Value: ptr(1.)},
+					Untyped: &dto.Untyped{Value: ptr(1.)},
 				},
 				{
-					Label: []*io_prometheus_client.LabelPair{
+					Label: []*dto.LabelPair{
 						{Name: ptr("__meta_vsphere"), Value: ptr("127.0.0.1:xxxxx")},
 						{Name: ptr("__meta_vsphere_moid"), Value: ptr("ha-host")},
 						{Name: ptr("dcname"), Value: ptr("ha-datacenter")},
 						{Name: ptr("esxhostname"), Value: ptr("esxi.test")},
 					},
-					Untyped: &io_prometheus_client.Untyped{Value: ptr(1.)},
+					Untyped: &dto.Untyped{Value: ptr(1.)},
 				},
 			},
 		},
 		{
 			Name: ptr("net_bits_recv"),
 			Help: ptr(""),
-			Type: ptr(io_prometheus_client.MetricType_UNTYPED),
-			Metric: []*io_prometheus_client.Metric{
+			Type: dto.MetricType_UNTYPED.Enum(),
+			Metric: []*dto.Metric{
 				{
-					Label: []*io_prometheus_client.LabelPair{
+					Label: []*dto.LabelPair{
 						{Name: ptr("__meta_vsphere"), Value: ptr("127.0.0.1:xxxxx")},
 						{Name: ptr("__meta_vsphere_moid"), Value: ptr("10")},
 						{Name: ptr("dcname"), Value: ptr("ha-datacenter")},
@@ -278,10 +278,10 @@ func TestGatheringESXI(t *testing.T) { //nolint:maintidx
 						{Name: ptr("interface"), Value: ptr("*")},
 						{Name: ptr("vmname"), Value: ptr("alp1")},
 					},
-					Untyped: &io_prometheus_client.Untyped{Value: ptr(1.)},
+					Untyped: &dto.Untyped{Value: ptr(1.)},
 				},
 				{
-					Label: []*io_prometheus_client.LabelPair{
+					Label: []*dto.LabelPair{
 						{Name: ptr("__meta_vsphere"), Value: ptr("127.0.0.1:xxxxx")},
 						{Name: ptr("__meta_vsphere_moid"), Value: ptr("10")},
 						{Name: ptr("dcname"), Value: ptr("ha-datacenter")},
@@ -289,37 +289,37 @@ func TestGatheringESXI(t *testing.T) { //nolint:maintidx
 						{Name: ptr("interface"), Value: ptr("*")},
 						{Name: ptr("vmname"), Value: ptr("alp1")},
 					},
-					Untyped: &io_prometheus_client.Untyped{Value: ptr(1.)},
+					Untyped: &dto.Untyped{Value: ptr(1.)},
 				},
 				{
-					Label: []*io_prometheus_client.LabelPair{
+					Label: []*dto.LabelPair{
 						{Name: ptr("__meta_vsphere"), Value: ptr("127.0.0.1:xxxxx")},
 						{Name: ptr("__meta_vsphere_moid"), Value: ptr("ha-host")},
 						{Name: ptr("dcname"), Value: ptr("ha-datacenter")},
 						{Name: ptr("esxhostname"), Value: ptr("esxi.test")},
 						{Name: ptr("interface"), Value: ptr("*")},
 					},
-					Untyped: &io_prometheus_client.Untyped{Value: ptr(1.)},
+					Untyped: &dto.Untyped{Value: ptr(1.)},
 				},
 				{
-					Label: []*io_prometheus_client.LabelPair{
+					Label: []*dto.LabelPair{
 						{Name: ptr("__meta_vsphere"), Value: ptr("127.0.0.1:xxxxx")},
 						{Name: ptr("__meta_vsphere_moid"), Value: ptr("ha-host")},
 						{Name: ptr("dcname"), Value: ptr("ha-datacenter")},
 						{Name: ptr("esxhostname"), Value: ptr("esxi.test")},
 						{Name: ptr("interface"), Value: ptr("*")},
 					},
-					Untyped: &io_prometheus_client.Untyped{Value: ptr(1.)},
+					Untyped: &dto.Untyped{Value: ptr(1.)},
 				},
 			},
 		},
 		{
 			Name: ptr("net_bits_sent"),
 			Help: ptr(""),
-			Type: ptr(io_prometheus_client.MetricType_UNTYPED),
-			Metric: []*io_prometheus_client.Metric{
+			Type: dto.MetricType_UNTYPED.Enum(),
+			Metric: []*dto.Metric{
 				{
-					Label: []*io_prometheus_client.LabelPair{
+					Label: []*dto.LabelPair{
 						{Name: ptr("__meta_vsphere"), Value: ptr("127.0.0.1:xxxxx")},
 						{Name: ptr("__meta_vsphere_moid"), Value: ptr("10")},
 						{Name: ptr("dcname"), Value: ptr("ha-datacenter")},
@@ -327,10 +327,10 @@ func TestGatheringESXI(t *testing.T) { //nolint:maintidx
 						{Name: ptr("interface"), Value: ptr("*")},
 						{Name: ptr("vmname"), Value: ptr("alp1")},
 					},
-					Untyped: &io_prometheus_client.Untyped{Value: ptr(1.)},
+					Untyped: &dto.Untyped{Value: ptr(1.)},
 				},
 				{
-					Label: []*io_prometheus_client.LabelPair{
+					Label: []*dto.LabelPair{
 						{Name: ptr("__meta_vsphere"), Value: ptr("127.0.0.1:xxxxx")},
 						{Name: ptr("__meta_vsphere_moid"), Value: ptr("10")},
 						{Name: ptr("dcname"), Value: ptr("ha-datacenter")},
@@ -338,96 +338,96 @@ func TestGatheringESXI(t *testing.T) { //nolint:maintidx
 						{Name: ptr("interface"), Value: ptr("*")},
 						{Name: ptr("vmname"), Value: ptr("alp1")},
 					},
-					Untyped: &io_prometheus_client.Untyped{Value: ptr(1.)},
+					Untyped: &dto.Untyped{Value: ptr(1.)},
 				},
 				{
-					Label: []*io_prometheus_client.LabelPair{
+					Label: []*dto.LabelPair{
 						{Name: ptr("__meta_vsphere"), Value: ptr("127.0.0.1:xxxxx")},
 						{Name: ptr("__meta_vsphere_moid"), Value: ptr("ha-host")},
 						{Name: ptr("dcname"), Value: ptr("ha-datacenter")},
 						{Name: ptr("esxhostname"), Value: ptr("esxi.test")},
 						{Name: ptr("interface"), Value: ptr("*")},
 					},
-					Untyped: &io_prometheus_client.Untyped{Value: ptr(1.)},
+					Untyped: &dto.Untyped{Value: ptr(1.)},
 				},
 				{
-					Label: []*io_prometheus_client.LabelPair{
+					Label: []*dto.LabelPair{
 						{Name: ptr("__meta_vsphere"), Value: ptr("127.0.0.1:xxxxx")},
 						{Name: ptr("__meta_vsphere_moid"), Value: ptr("ha-host")},
 						{Name: ptr("dcname"), Value: ptr("ha-datacenter")},
 						{Name: ptr("esxhostname"), Value: ptr("esxi.test")},
 						{Name: ptr("interface"), Value: ptr("*")},
 					},
-					Untyped: &io_prometheus_client.Untyped{Value: ptr(1.)},
+					Untyped: &dto.Untyped{Value: ptr(1.)},
 				},
 			},
 		},
 		{
 			Name: ptr("vms_running_count"),
 			Help: ptr(""),
-			Type: ptr(io_prometheus_client.MetricType_UNTYPED),
-			Metric: []*io_prometheus_client.Metric{
+			Type: dto.MetricType_UNTYPED.Enum(),
+			Metric: []*dto.Metric{
 				{
-					Label: []*io_prometheus_client.LabelPair{
+					Label: []*dto.LabelPair{
 						{Name: ptr("__meta_vsphere"), Value: ptr("127.0.0.1:xxxxx")},
 						{Name: ptr("__meta_vsphere_moid"), Value: ptr("ha-host")},
 						{Name: ptr("clustername"), Value: ptr("esxi.test")},
 						{Name: ptr("dcname"), Value: ptr("ha-datacenter")},
 						{Name: ptr("esxhostname"), Value: ptr("esxi.test")},
 					},
-					Untyped: &io_prometheus_client.Untyped{Value: ptr(1.)},
+					Untyped: &dto.Untyped{Value: ptr(1.)},
 				},
 			},
 		},
 		{
 			Name: ptr("vms_stopped_count"),
 			Help: ptr(""),
-			Type: ptr(io_prometheus_client.MetricType_UNTYPED),
-			Metric: []*io_prometheus_client.Metric{
+			Type: dto.MetricType_UNTYPED.Enum(),
+			Metric: []*dto.Metric{
 				{
-					Label: []*io_prometheus_client.LabelPair{
+					Label: []*dto.LabelPair{
 						{Name: ptr("__meta_vsphere"), Value: ptr("127.0.0.1:xxxxx")},
 						{Name: ptr("__meta_vsphere_moid"), Value: ptr("ha-host")},
 						{Name: ptr("clustername"), Value: ptr("esxi.test")},
 						{Name: ptr("dcname"), Value: ptr("ha-datacenter")},
 						{Name: ptr("esxhostname"), Value: ptr("esxi.test")},
 					},
-					Untyped: &io_prometheus_client.Untyped{Value: ptr(1.)},
+					Untyped: &dto.Untyped{Value: ptr(1.)},
 				},
 			},
 		},
 		{
 			Name: ptr("vsphere_vm_cpu_latency_perc"),
 			Help: ptr(""),
-			Type: ptr(io_prometheus_client.MetricType_UNTYPED),
-			Metric: []*io_prometheus_client.Metric{
+			Type: dto.MetricType_UNTYPED.Enum(),
+			Metric: []*dto.Metric{
 				{
-					Label: []*io_prometheus_client.LabelPair{
+					Label: []*dto.LabelPair{
 						{Name: ptr("__meta_vsphere"), Value: ptr("127.0.0.1:xxxxx")},
 						{Name: ptr("__meta_vsphere_moid"), Value: ptr("10")},
 						{Name: ptr("dcname"), Value: ptr("ha-datacenter")},
 						{Name: ptr("esxhostname"), Value: ptr("esxi.test")},
 						{Name: ptr("vmname"), Value: ptr("alp1")},
 					},
-					Untyped: &io_prometheus_client.Untyped{Value: ptr(1.)},
+					Untyped: &dto.Untyped{Value: ptr(1.)},
 				},
 				{
-					Label: []*io_prometheus_client.LabelPair{
+					Label: []*dto.LabelPair{
 						{Name: ptr("__meta_vsphere"), Value: ptr("127.0.0.1:xxxxx")},
 						{Name: ptr("__meta_vsphere_moid"), Value: ptr("10")},
 						{Name: ptr("dcname"), Value: ptr("ha-datacenter")},
 						{Name: ptr("esxhostname"), Value: ptr("esxi.test")},
 						{Name: ptr("vmname"), Value: ptr("alp1")},
 					},
-					Untyped: &io_prometheus_client.Untyped{Value: ptr(1.)},
+					Untyped: &dto.Untyped{Value: ptr(1.)},
 				},
 			},
 		},
 	}
 
-	ignoreUnexported := cmpopts.IgnoreUnexported([]any{io_prometheus_client.MetricFamily{}, io_prometheus_client.Metric{}, io_prometheus_client.LabelPair{}, io_prometheus_client.Untyped{}}...)
-	ignoreUntypedValue := cmpopts.IgnoreFields(io_prometheus_client.Untyped{}, "Value")
-	ignoreTimestamp := cmpopts.IgnoreFields(io_prometheus_client.Metric{}, "TimestampMs")
+	ignoreUnexported := cmpopts.IgnoreUnexported([]any{dto.MetricFamily{}, dto.Metric{}, dto.LabelPair{}, dto.Untyped{}}...)
+	ignoreUntypedValue := cmpopts.IgnoreFields(dto.Untyped{}, "Value")
+	ignoreTimestamp := cmpopts.IgnoreFields(dto.Metric{}, "TimestampMs")
 	opts := cmp.Options{ignoreUnexported, ignoreUntypedValue, ignoreTimestamp, cmp.Comparer(vSphereLabelComparer)}
 
 	if diff := cmp.Diff(expectedMfs, mfs, opts, makeVirtualDiskMetricComparer(opts)); diff != "" {
@@ -437,7 +437,7 @@ func TestGatheringESXI(t *testing.T) { //nolint:maintidx
 
 // vSphereLabelComparer handles the comparison between two "__meta_vsphere" labels,
 // which is unpredictable because the port used by the simulator is random.
-func vSphereLabelComparer(x, y *io_prometheus_client.LabelPair) bool {
+func vSphereLabelComparer(x, y *dto.LabelPair) bool {
 	if x.GetName() == types.LabelMetaVSphere && y.GetName() == types.LabelMetaVSphere {
 		xParts, yParts := strings.Split(x.GetValue(), ":"), strings.Split(y.GetValue(), ":")
 		if len(xParts) != 2 || len(yParts) != 2 {
@@ -447,7 +447,7 @@ func vSphereLabelComparer(x, y *io_prometheus_client.LabelPair) bool {
 		return xParts[0] == yParts[0]
 	}
 
-	return cmp.Equal(x, y, cmpopts.IgnoreUnexported(io_prometheus_client.LabelPair{}))
+	return cmp.Equal(x, y, cmpopts.IgnoreUnexported(dto.LabelPair{}))
 }
 
 // makeVirtualDiskMetricComparer returns a comparer that tolerates having
@@ -455,9 +455,9 @@ func vSphereLabelComparer(x, y *io_prometheus_client.LabelPair) bool {
 // This can happen because the simulator sometimes seems to return 1 extra point,
 // a minute in the past, but only for this particular metric ...
 func makeVirtualDiskMetricComparer(opts []cmp.Option) cmp.Option {
-	return cmp.Comparer(func(x, y *io_prometheus_client.MetricFamily) bool {
+	return cmp.Comparer(func(x, y *dto.MetricFamily) bool {
 		if x.GetName() == "io_read_bytes" && y.GetName() == "io_read_bytes" {
-			return cmp.Equal(x, y, append(opts, cmpopts.IgnoreFields(io_prometheus_client.MetricFamily{}, "Metric"))...)
+			return cmp.Equal(x, y, append(opts, cmpopts.IgnoreFields(dto.MetricFamily{}, "Metric"))...)
 		}
 
 		return cmp.Equal(x, y, opts...)
