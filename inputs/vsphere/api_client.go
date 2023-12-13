@@ -383,11 +383,7 @@ func additionalClusterMetrics(ctx context.Context, client *vim25.Client, cluster
 		acc.AddFields("hosts", fields, tags, t0)
 
 		// Generating cpu used metric
-
-		logger.Printf("Retained: %v", retained["vsphere_cluster_cpu"])
-
 		usagesMHz := retained.get("vsphere_cluster_cpu", "usagemhz_average", func(tags map[string]string, t []time.Time) bool {
-			// the device is the cluster we want && timestamp matches
 			return tags["moid"] == cluster.Reference().Value && (len(t) == 0 || t[0].Equal(t0))
 		})
 
@@ -405,13 +401,13 @@ func additionalClusterMetrics(ctx context.Context, client *vim25.Client, cluster
 		avg := float64(sum) / float64(len(usagesMHz))
 
 		totalMHz := float64(clusterProps.ComputeResource.Summary.ComputeResourceSummary.UsageSummary.TotalCpuCapacityMhz)
-		if totalMHz == 0 { // using dummy value for vcsim, where the total is always 0
+		if totalMHz == 0 {
 			totalMHz = avg * 2
+
+			logger.Printf("Using dummy value for CPU of cluster %s (%s).", cluster.Name(), cluster.Reference().Value) // TODO: remove
 		}
 
 		result := (avg / totalMHz) * 100
-
-		logger.Printf("Retained %d CPU values for %s: avg=%f / result=%f", len(usagesMHz), cluster.Reference().Value, avg, result)
 
 		tags = maps.Clone(tags)
 		tags["cpu"] = instanceTotal
