@@ -23,6 +23,7 @@ import (
 	"glouton/config"
 	"glouton/facts"
 	"glouton/logger"
+	"maps"
 	"net/url"
 	"regexp"
 	"strconv"
@@ -345,14 +346,15 @@ func getDatastorePerLUN(ctx context.Context, client *vim25.Client, datastores []
 	return dsPerLUN, nil
 }
 
-func additionalClusterMetrics(ctx context.Context, client *vim25.Client, clusters []*object.ClusterComputeResource, cache *propsCache[hostLightProps], acc telegraf.Accumulator, h *Hierarchy, t0 time.Time) error {
+func additionalClusterMetrics(ctx context.Context, client *vim25.Client, clusters []*object.ClusterComputeResource, caches *propsCaches, acc telegraf.Accumulator, retained retainedMetrics, h *Hierarchy, t0 time.Time) error {
 	for _, cluster := range clusters {
+		// Generating running & stopped hosts count metrics
 		hosts, err := cluster.Hosts(ctx)
 		if err != nil {
 			return err
 		}
 
-		hostProps, err := retrieveProps(ctx, client, hosts, relevantHostProperties, cache)
+		hostProps, err := retrieveProps(ctx, client, hosts, relevantHostProperties, caches.hostCache)
 		if err != nil {
 			return err
 		}
@@ -379,6 +381,42 @@ func additionalClusterMetrics(ctx context.Context, client *vim25.Client, cluster
 		}
 
 		acc.AddFields("hosts", fields, tags, t0)
+
+		// Generating cpu used metric
+
+		logger.Printf("Retained: %v", retained["vsphere_cluster_cpu"])
+
+		usagesMHz := retained.get("vsphere_cluster_cpu", "usagemhz_average", func(tags map[string]string, t []time.Time) bool {
+			// the device is the cluster we want && timestamp matches
+			return tags["moid"] == cluster.Reference().Value && (len(t) == 0 || t[0].Equal(t0))
+		})
+
+		clusterProps, ok := caches.clusterCache.get(cluster.Reference().Value, true)
+		if len(usagesMHz) == 0 || !ok {
+			return nil
+		}
+
+		var sum int64
+
+		for _, value := range usagesMHz {
+			sum += value.(int64) //nolint: forcetypeassert
+		}
+
+		avg := float64(sum) / float64(len(usagesMHz))
+
+		totalMHz := float64(clusterProps.ComputeResource.Summary.ComputeResourceSummary.UsageSummary.TotalCpuCapacityMhz)
+		if totalMHz == 0 { // using dummy value for vcsim, where the total is always 0
+			totalMHz = avg * 2
+		}
+
+		result := (avg / totalMHz) * 100
+
+		logger.Printf("Retained %d CPU values for %s: avg=%f / result=%f", len(usagesMHz), cluster.Reference().Value, avg, result)
+
+		tags = maps.Clone(tags)
+		tags["cpu"] = instanceTotal
+
+		acc.AddFields("vsphere_cluster_cpu", map[string]any{"usage_average": result}, tags, t0)
 	}
 
 	return nil

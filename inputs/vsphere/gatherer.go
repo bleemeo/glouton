@@ -103,8 +103,14 @@ func (gatherer *vSphereGatherer) GatherWithState(ctx context.Context, state regi
 		}
 		gatherer.acc.Accumulator = &errAcc
 
-		err := gatherer.endpoint.Collect(ctx, gatherer.acc)
-		errAddMetrics := gatherer.collectAdditionalMetrics(ctx, state, gatherer.acc)
+		retAcc := &retainAccumulator{
+			Accumulator:            gatherer.acc,
+			mustRetain:             map[string][]string{"vsphere_cluster_cpu": {"usagemhz_average"}},
+			retainedPerMeasurement: make(retainedMetrics),
+		}
+
+		err := gatherer.endpoint.Collect(ctx, retAcc)
+		errAddMetrics := gatherer.collectAdditionalMetrics(ctx, state, gatherer.acc, retAcc.retainedPerMeasurement)
 		allErrs := errors.Join(filterErrors(append(errAcc.errs, err, errAddMetrics))...)
 
 		gatherer.lastPoints = gatherer.buffer.Points()
@@ -133,7 +139,7 @@ func filterErrors(errs []error) []error {
 	return errs[:n]
 }
 
-func (gatherer *vSphereGatherer) collectAdditionalMetrics(ctx context.Context, state registry.GatherState, acc telegraf.Accumulator) error {
+func (gatherer *vSphereGatherer) collectAdditionalMetrics(ctx context.Context, state registry.GatherState, acc telegraf.Accumulator, retained retainedMetrics) error {
 	finder, client, err := newDeviceFinder(ctx, *gatherer.cfg)
 	if err != nil {
 		return err
@@ -168,7 +174,7 @@ func (gatherer *vSphereGatherer) collectAdditionalMetrics(ctx context.Context, s
 			return err
 		}
 	case gatherHist5m:
-		err = additionalClusterMetrics(ctx, client, clusters, gatherer.devicePropsCache.hostCache, acc, gatherer.hierarchy, state.T0)
+		err = additionalClusterMetrics(ctx, client, clusters, gatherer.devicePropsCache, acc, retained, gatherer.hierarchy, state.T0)
 		if err != nil {
 			return err
 		}
@@ -284,4 +290,61 @@ type errorAccumulator struct {
 
 func (errAcc *errorAccumulator) AddError(err error) {
 	errAcc.errs = append(errAcc.errs, err)
+}
+
+type addedField struct {
+	field string
+	value any
+	tags  map[string]string
+	t     []time.Time
+}
+
+type retainedMetrics map[string][]addedField
+
+func (retMetrics retainedMetrics) get(measurement string, field string, filter func(tags map[string]string, t []time.Time) bool) []any {
+	fields, ok := retMetrics[measurement]
+	if !ok {
+		return nil
+	}
+
+	var values []any //nolint:prealloc
+
+	for _, f := range fields {
+		if f.field != field {
+			continue
+		}
+
+		if !filter(f.tags, f.t) {
+			continue
+		}
+
+		values = append(values, f.value)
+	}
+
+	return values
+}
+
+type retainAccumulator struct {
+	telegraf.Accumulator
+
+	// map measurement -> fields
+	mustRetain             map[string][]string
+	retainedPerMeasurement retainedMetrics
+	l                      sync.Mutex
+}
+
+func (retAcc *retainAccumulator) AddFields(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+	if retFields, ok := retAcc.mustRetain[measurement]; ok {
+		retAcc.l.Lock()
+
+		for _, f := range retFields {
+			if value, ok := fields[f]; ok {
+				retAcc.retainedPerMeasurement[measurement] = append(retAcc.retainedPerMeasurement[measurement], addedField{f, value, tags, t})
+			}
+		}
+
+		retAcc.l.Unlock()
+	}
+
+	retAcc.Accumulator.AddFields(measurement, fields, tags, t...)
 }

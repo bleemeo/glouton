@@ -390,7 +390,7 @@ func (vSphere *vSphere) makeHistorical5minGatherer(ctx context.Context) (registr
 	vsphereInput.ClusterInstances = true
 
 	vsphereInput.ClusterMetricInclude = []string{
-		"cpu.usage.average",
+		"cpu.usagemhz.average", // Will be converted to the percentage of used CPU
 		"mem.usage.average",
 		"mem.swapused.average",
 	}
