@@ -163,13 +163,13 @@ func (h *Hierarchy) fixVMParents(vmProps map[refName]vmLightProps) {
 	}
 }
 
-func (h *Hierarchy) findFirstParentOfType(child mo.Reference, typ string) string {
+func (h *Hierarchy) findFirstParentOfType(child mo.Reference, types map[string]bool) string {
 	if parent, ok := h.parentPerChildMOID[child.Reference().Value]; ok {
-		if parent.Type == typ {
+		if types[parent.Type] {
 			return h.deviceNamePerMOID[parent.Value]
 		}
 
-		return h.findFirstParentOfType(parent, typ)
+		return h.findFirstParentOfType(parent, types)
 	}
 
 	return ""
@@ -179,21 +179,21 @@ func (h *Hierarchy) ParentHostName(child mo.Reference) string {
 	h.l.Lock()
 	defer h.l.Unlock()
 
-	return h.findFirstParentOfType(child, "HostSystem")
+	return h.findFirstParentOfType(child, map[string]bool{"HostSystem": true})
 }
 
 func (h *Hierarchy) ParentClusterName(child mo.Reference) string {
 	h.l.Lock()
 	defer h.l.Unlock()
 
-	return h.findFirstParentOfType(child, "ComputeResource")
+	return h.findFirstParentOfType(child, map[string]bool{"ComputeResource": true, "ClusterComputeResource": true})
 }
 
 func (h *Hierarchy) ParentDCName(child mo.Reference) string {
 	h.l.Lock()
 	defer h.l.Unlock()
 
-	return h.findFirstParentOfType(child, "Datacenter")
+	return h.findFirstParentOfType(child, map[string]bool{"Datacenter": true})
 }
 
 func (h *Hierarchy) DeviceName(moid string) (string, bool) {
