@@ -60,6 +60,7 @@ func TestPropsCaches(t *testing.T) { //nolint:maintidx
 				Summary: &clusterLightComputeResourceSummary{
 					ComputeResourceSummary: clusterLightComputeResourceSummaryComputeResourceSummary{
 						NumCpuCores: 2,
+						TotalCpu:    2294,
 					},
 				},
 			},
