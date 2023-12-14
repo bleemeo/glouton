@@ -334,6 +334,10 @@ type retainAccumulator struct {
 }
 
 func (retAcc *retainAccumulator) AddFields(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+	if tags["dsname"] != "" {
+		logger.Printf("AddFields(%q, %v, %v, %v)", measurement, fields, tags, t)
+	}
+
 	if retFields, ok := retAcc.mustRetain[measurement]; ok {
 		retAcc.l.Lock()
 
