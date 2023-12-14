@@ -28,7 +28,7 @@ import (
 	"github.com/vmware/govmomi/vim25/types"
 )
 
-func additionalClusterMetrics(ctx context.Context, client *vim25.Client, clusters []*object.ClusterComputeResource, caches *propsCaches, acc telegraf.Accumulator, retained retainedMetrics, h *Hierarchy, t0 time.Time) error {
+func additionalClusterMetrics(ctx context.Context, client *vim25.Client, clusters []*object.ClusterComputeResource, datastores []*object.Datastore, caches *propsCaches, acc telegraf.Accumulator, retained retainedMetrics, h *Hierarchy, t0 time.Time) error {
 	for _, cluster := range clusters {
 		// Defining common tags for all metrics in this cluster,
 		// we will clone this map in case extra tags need to be added.
@@ -65,6 +65,31 @@ func additionalClusterMetrics(ctx context.Context, client *vim25.Client, cluster
 		}
 	}
 
+	for _, datastore := range datastores {
+		tags := map[string]string{
+			// "clustername": cluster.Name(),
+			"dcname": h.ParentDCName(datastore),
+			"dsname": datastore.Name(),
+			"moid":   datastore.Reference().Value,
+		}
+
+		hosts, err := datastore.AttachedHosts(ctx)
+		if err != nil {
+			return err
+		}
+
+		hostMOIDs := make(map[string]bool, len(hosts))
+
+		for _, host := range hosts {
+			hostMOIDs[host.Reference().Value] = true
+		}
+
+		errDatastoreIO := additionalDatastoreIO(maps.Clone(tags), hostMOIDs, acc, retained, t0)
+		if errDatastoreIO != nil {
+			return errDatastoreIO
+		}
+	}
+
 	return nil
 }
 
@@ -84,11 +109,16 @@ func additionalClusterCPU(tags map[string]string, cluster *object.ClusterCompute
 		sum += value.(int64) //nolint: forcetypeassert
 	}
 
-	avg := float64(sum) / float64(len(hostUsagesMHz))
 	totalMHz := float64(clusterProps.ComputeResource.Summary.ComputeResourceSummary.TotalCpu)
-	result := (avg / totalMHz) * 100
+	result := (float64(sum) / totalMHz) * 100
 
 	tags["cpu"] = instanceTotal
+
+	logger.Printf("Cluster CPU: (%d / %f) * 100 = %f", sum, totalMHz, result)
+
+	if sum == 0 {
+		logger.Printf("Sum is 0 because: %v", hostUsagesMHz)
+	}
 
 	acc.AddFields("vsphere_cluster_cpu", map[string]any{"usage_average": result}, tags, t0)
 
@@ -154,6 +184,40 @@ func additionalClusterHostsCount(ctx context.Context, tags map[string]string, cl
 	}
 
 	acc.AddFields("hosts", fields, tags, t0)
+
+	return nil
+}
+
+func additionalDatastoreIO(tags map[string]string, hostMOIDs map[string]bool, acc telegraf.Accumulator, retained retainedMetrics, t0 time.Time) error {
+	hostsReadKBps := retained.get("vsphere_host_disk", "read_average", func(tags map[string]string, t []time.Time) bool {
+		return hostMOIDs[tags["moid"]] && (len(t) == 0 || t[0].Equal(t0))
+	})
+	hostsWriteKBps := retained.get("vsphere_host_disk", "write_average", func(tags map[string]string, t []time.Time) bool {
+		return hostMOIDs[tags["moid"]] && (len(t) == 0 || t[0].Equal(t0))
+	})
+
+	if hostsReadKBps == nil || hostsWriteKBps == nil {
+		return nil
+	}
+
+	var readSum, writeSum float64
+
+	for _, read := range hostsReadKBps {
+		readSum += read.(float64)
+	}
+
+	for _, write := range hostsWriteKBps {
+		writeSum += write.(float64)
+	}
+
+	fields := map[string]any{
+		"read_average":  readSum,
+		"write_average": writeSum,
+	}
+
+	logger.Printf("Datastore %q read/write: %f/%f", tags["dsname"], readSum, writeSum)
+
+	acc.AddFields("vsphere_datastore_datastore", fields, tags, t0)
 
 	return nil
 }

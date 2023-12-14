@@ -70,7 +70,8 @@ type vSphereGatherer struct {
 	hierarchy        *Hierarchy
 	devicePropsCache *propsCaches
 
-	ptsCache pointCache
+	ptsCache         pointCache
+	lastInputCollect time.Time
 
 	l sync.Mutex
 }
@@ -108,13 +109,24 @@ func (gatherer *vSphereGatherer) GatherWithState(ctx context.Context, state regi
 		retAcc := &retainAccumulator{
 			Accumulator: gatherer.acc,
 			mustRetain: map[string][]string{
-				"vsphere_host_cpu": {"usagemhz_average"},
-				"vsphere_host_mem": {"usage_average", "swapin_average"},
+				"vsphere_host_cpu":  {"usagemhz_average"},
+				"vsphere_host_mem":  {"usage_average", "swapin_average"},
+				"vsphere_host_disk": {"read_average", "write_average"},
 			},
 			retainedPerMeasurement: make(retainedMetrics),
 		}
 
-		err := gatherer.endpoint.Collect(ctx, retAcc)
+		var err error
+
+		if gatherer.kind != gatherHist30m || state.T0.Sub(gatherer.lastInputCollect) >= 5*time.Minute {
+			err = gatherer.endpoint.Collect(ctx, retAcc)
+			if gatherer.kind == gatherHist30m && err == nil {
+				logger.Printf("Called telegraf input (last time was at %s)", gatherer.lastInputCollect)
+
+				gatherer.lastInputCollect = state.T0
+			}
+		}
+
 		errAddMetrics := gatherer.collectAdditionalMetrics(ctx, state, gatherer.acc, retAcc.retainedPerMeasurement)
 		allErrs := errors.Join(filterErrors(append(errAcc.errs, err, errAddMetrics))...)
 
@@ -155,7 +167,7 @@ func (gatherer *vSphereGatherer) collectAdditionalMetrics(ctx context.Context, s
 		return err
 	}
 
-	clusters, _, resourcePools, hosts, vms, err := findDevices(ctx, finder, false)
+	clusters, datastores, resourcePools, hosts, vms, err := findDevices(ctx, finder, true)
 	if err != nil {
 		return err
 	}
@@ -185,7 +197,7 @@ func (gatherer *vSphereGatherer) collectAdditionalMetrics(ctx context.Context, s
 		}
 
 		// Special case: we aggregate host metrics to get cluster metrics
-		err = additionalClusterMetrics(ctx, client, clusters, gatherer.devicePropsCache, acc, retained, gatherer.hierarchy, state.T0)
+		err = additionalClusterMetrics(ctx, client, clusters, datastores, gatherer.devicePropsCache, acc, retained, gatherer.hierarchy, state.T0)
 		if err != nil {
 			return err
 		}

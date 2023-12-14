@@ -460,8 +460,8 @@ func (vSphere *vSphere) makeHistorical30minGatherer(ctx context.Context) (regist
 	vsphereInput.DatastoreInstances = true
 
 	vsphereInput.DatastoreMetricInclude = []string{
-		"datastore.read.average",
-		"datastore.write.average",
+		// "datastore.read.average",
+		// "datastore.write.average",
 		"disk.used.latest",
 		"disk.capacity.latest",
 	}
@@ -479,7 +479,7 @@ func (vSphere *vSphere) makeHistorical30minGatherer(ctx context.Context) (regist
 
 	vsphereInput.InsecureSkipVerify = vSphere.opts.InsecureSkipVerify
 	vsphereInput.HistoricalInterval = telegraf_config.Duration(30 * time.Minute)
-	vsphereInput.ObjectDiscoveryInterval = telegraf_config.Duration(2 * time.Minute)
+	vsphereInput.ObjectDiscoveryInterval = telegraf_config.Duration(5 * time.Minute)
 
 	vsphereInput.Log = logger.NewTelegrafLog(vSphere.String() + " historical 30min")
 
@@ -500,7 +500,7 @@ func (vSphere *vSphere) makeHistorical30minGatherer(ctx context.Context) (regist
 	noMetricsSince := make(map[string]int)
 	opt := registry.RegistrationOption{
 		Description:         fmt.Sprint(vSphere, " ", gatherHist30m),
-		MinInterval:         5 * time.Minute, // 5 times out of 6, we will re-use the previous point
+		MinInterval:         1 * time.Minute, // 4 times out of 5, we will re-use the previous point
 		StopCallback:        gatherer.stop,
 		ApplyDynamicRelabel: true,
 		GatherModifier: func(mfs []*dto.MetricFamily, _ error) []*dto.MetricFamily {
