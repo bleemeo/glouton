@@ -18,6 +18,7 @@ package vsphere
 
 import (
 	"context"
+	"glouton/logger"
 	"maps"
 	"time"
 
@@ -29,15 +30,36 @@ import (
 
 func additionalClusterMetrics(ctx context.Context, client *vim25.Client, clusters []*object.ClusterComputeResource, caches *propsCaches, acc telegraf.Accumulator, retained retainedMetrics, h *Hierarchy, t0 time.Time) error {
 	for _, cluster := range clusters {
+		// Defining common tags for all metrics in this cluster,
+		// we will clone this map in case extra tags need to be added.
 		tags := map[string]string{
 			"clustername": cluster.Name(),
 			"dcname":      h.ParentDCName(cluster),
 			"moid":        cluster.Reference().Value,
 		}
 
-		additionalClusterCPU(tags, cluster, caches.clusterCache, acc, retained, t0)
+		hosts, err := cluster.Hosts(ctx)
+		if err != nil {
+			return err
+		}
 
-		errHostsCount := additionalClusterHostsCount(ctx, tags, client, cluster, caches.hostCache, acc, t0)
+		hostMOIDs := make(map[string]bool, len(hosts))
+
+		for _, host := range hosts {
+			hostMOIDs[host.Reference().Value] = true
+		}
+
+		errClusterCPU := additionalClusterCPU(maps.Clone(tags), cluster, hostMOIDs, caches.clusterCache, acc, retained, t0)
+		if errClusterCPU != nil {
+			return errClusterCPU
+		}
+
+		errClusterMemory := additionalClusterMemory(maps.Clone(tags), cluster, hostMOIDs, caches, acc, retained, t0)
+		if errClusterMemory != nil {
+			return errClusterMemory
+		}
+
+		errHostsCount := additionalClusterHostsCount(ctx, maps.Clone(tags), client, hosts, caches.hostCache, acc, t0)
 		if errHostsCount != nil {
 			return errHostsCount
 		}
@@ -46,38 +68,71 @@ func additionalClusterMetrics(ctx context.Context, client *vim25.Client, cluster
 	return nil
 }
 
-func additionalClusterCPU(tags map[string]string, cluster *object.ClusterComputeResource, cache *propsCache[clusterLightProps], acc telegraf.Accumulator, retained retainedMetrics, t0 time.Time) {
-	usagesMHz := retained.get("vsphere_cluster_cpu", "usagemhz_average", func(tags map[string]string, t []time.Time) bool {
-		return tags["moid"] == cluster.Reference().Value && (len(t) == 0 || t[0].Equal(t0))
+func additionalClusterCPU(tags map[string]string, cluster *object.ClusterComputeResource, hostMOIDs map[string]bool, cache *propsCache[clusterLightProps], acc telegraf.Accumulator, retained retainedMetrics, t0 time.Time) error {
+	hostUsagesMHz := retained.get("vsphere_host_cpu", "usagemhz_average", func(tags map[string]string, t []time.Time) bool {
+		return hostMOIDs[tags["moid"]] && (len(t) == 0 || t[0].Equal(t0))
 	})
 
 	clusterProps, ok := cache.get(cluster.Reference().Value, true)
-	if len(usagesMHz) == 0 || !ok {
-		return
+	if len(hostUsagesMHz) == 0 || !ok {
+		return nil
 	}
 
 	var sum int64
 
-	for _, value := range usagesMHz {
+	for _, value := range hostUsagesMHz {
 		sum += value.(int64) //nolint: forcetypeassert
 	}
 
-	avg := float64(sum) / float64(len(usagesMHz))
+	avg := float64(sum) / float64(len(hostUsagesMHz))
 	totalMHz := float64(clusterProps.ComputeResource.Summary.ComputeResourceSummary.TotalCpu)
 	result := (avg / totalMHz) * 100
 
-	cpuTags := maps.Clone(tags)
-	cpuTags["cpu"] = instanceTotal
+	tags["cpu"] = instanceTotal
 
-	acc.AddFields("vsphere_cluster_cpu", map[string]any{"usage_average": result}, cpuTags, t0)
+	acc.AddFields("vsphere_cluster_cpu", map[string]any{"usage_average": result}, tags, t0)
+
+	return nil
 }
 
-func additionalClusterHostsCount(ctx context.Context, tags map[string]string, client *vim25.Client, cluster *object.ClusterComputeResource, cache *propsCache[hostLightProps], acc telegraf.Accumulator, t0 time.Time) error {
-	hosts, err := cluster.Hosts(ctx)
-	if err != nil {
-		return err
+func additionalClusterMemory(tags map[string]string, cluster *object.ClusterComputeResource, hostMOIDs map[string]bool, caches *propsCaches, acc telegraf.Accumulator, retained retainedMetrics, t0 time.Time) error {
+	clusterProps, ok := caches.clusterCache.get(cluster.Reference().Value, true)
+	if !ok {
+		return nil
 	}
 
+	hostsUsageMB := retained.reduce("vsphere_host_mem", "usage_average", 0., func(acc, value any, tags map[string]string, t []time.Time) any {
+		moid := tags["moid"]
+		if !hostMOIDs[moid] || len(t) == 0 || !t[0].Equal(t0) {
+			return acc
+		}
+
+		hostProps, ok := caches.hostCache.get(moid, true)
+		if !ok {
+			return acc
+		}
+
+		ac, val := acc.(float64), value.(float64) //nolint: forcetypeassert
+		hostMemMB := val / 100 * float64(hostProps.Hardware.MemorySize)
+
+		return ac + hostMemMB
+	})
+
+	if hostsUsageMB == nil {
+		return nil
+	}
+
+	totalMB := float64(clusterProps.ComputeResource.Summary.ComputeResourceSummary.TotalMemory)
+	result := (hostsUsageMB.(float64) / totalMB) * 100 //nolint: forcetypeassert
+
+	logger.Printf("Cluster memory: (%f / %f) * 100 = %f", hostsUsageMB, totalMB, result)
+
+	acc.AddFields("vsphere_cluster_mem", map[string]any{"used_perc": result}, tags, t0)
+
+	return nil
+}
+
+func additionalClusterHostsCount(ctx context.Context, tags map[string]string, client *vim25.Client, hosts []*object.HostSystem, cache *propsCache[hostLightProps], acc telegraf.Accumulator, t0 time.Time) error {
 	hostProps, err := retrieveProps(ctx, client, hosts, relevantHostProperties, cache)
 	if err != nil {
 		return err

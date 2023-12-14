@@ -288,6 +288,7 @@ type (
 	clusterLightComputeResourceSummaryComputeResourceSummary struct {
 		NumCpuCores int16 //nolint: revive,stylecheck
 		TotalCpu    int32 //nolint: revive,stylecheck
+		TotalMemory int64
 	}
 
 	// Lightweight version of mo.Datastore.

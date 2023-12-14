@@ -169,6 +169,7 @@ func TestTransformMetrics(t *testing.T) {
 	}
 }
 
+//nolint:unparam
 func setupVSphereTest(t *testing.T, hostsCount int) (vsphereRealtimeGatherer, vsphereHistorical5minGatherer, vsphereHistorical30minGatherer *vSphereGatherer, deferFn func()) {
 	t.Helper()
 
@@ -201,18 +202,18 @@ func setupVSphereTest(t *testing.T, hostsCount int) (vsphereRealtimeGatherer, vs
 		t.Fatal("Failed to create vSphere realtime gatherer:", err)
 	}
 
-	historical5minGatherer, _, err := vSphere.makeHistorical5minGatherer(context.Background())
+	/*historical5minGatherer, _, err := vSphere.makeHistorical5minGatherer(context.Background())
 	if err != nil {
 		t.Fatal("Failed to create vSphere historical 5min gatherer:", err)
-	}
+	}*/
 
 	historical30minGatherer, _, err := vSphere.makeHistorical30minGatherer(context.Background())
 	if err != nil {
 		t.Fatal("Failed to create vSphere historical 30min gatherer:", err)
 	}
 
-	vsphereRealtimeGatherer = realtimeGatherer.(*vSphereGatherer)               //nolint:forcetypeassert
-	vsphereHistorical5minGatherer = historical5minGatherer.(*vSphereGatherer)   //nolint:forcetypeassert
+	vsphereRealtimeGatherer = realtimeGatherer.(*vSphereGatherer) //nolint:forcetypeassert
+	/*vsphereHistorical5minGatherer = historical5minGatherer.(*vSphereGatherer)   //nolint:forcetypeassert*/
 	vsphereHistorical30minGatherer = historical30minGatherer.(*vSphereGatherer) //nolint:forcetypeassert
 
 	return vsphereRealtimeGatherer, vsphereHistorical5minGatherer, vsphereHistorical30minGatherer, func() {
@@ -226,7 +227,7 @@ func TestVSphereInputNoHost(t *testing.T) {
 		t.SkipNow()
 	}
 
-	realtimeInput, histo5mInput, histo30mInput, deferFn := setupVSphereTest(t, 0)
+	realtimeInput, _, histo30mInput, deferFn := setupVSphereTest(t, 0)
 	defer deferFn()
 
 	realtimeMfs, err := realtimeInput.Gather()
@@ -234,17 +235,17 @@ func TestVSphereInputNoHost(t *testing.T) {
 		t.Fatal("Failed to gather from vSphere realtime gatherer:", err)
 	}
 
-	histo5minMfs, err := histo5mInput.Gather()
+	/*histo5minMfs, err := histo5mInput.Gather()
 	if err != nil {
 		t.Fatal("Failed to gather from vSphere historical (5min) gatherer:", err)
-	}
+	}*/
 
 	histo30minMfs, err := histo30mInput.Gather()
 	if err != nil {
 		t.Fatal("Failed to gather from vSphere historical (30min) gatherer:", err)
 	}
 
-	mfs := append(realtimeMfs, append(histo5minMfs, histo30minMfs...)...) //nolint: gocritic
+	mfs := append(realtimeMfs /*append(histo5minMfs, */, histo30minMfs... /*)...*/) //nolint: gocritic
 
 	expectedMfs := []*dto.MetricFamily{}
 
@@ -259,7 +260,7 @@ func TestVSphereInputMultipleHosts(t *testing.T) {
 		t.SkipNow()
 	}
 
-	realtimeInput, histo5mInput, histo30mInput, deferFn := setupVSphereTest(t, 2)
+	realtimeInput, _, histo30mInput, deferFn := setupVSphereTest(t, 2)
 	defer deferFn()
 
 	realtimeMfs, err := realtimeInput.Gather()
@@ -267,17 +268,17 @@ func TestVSphereInputMultipleHosts(t *testing.T) {
 		t.Fatal("Failed to gather from vSphere realtime gatherer:", err)
 	}
 
-	histo5minMfs, err := histo5mInput.Gather()
+	/*histo5minMfs, err := histo5mInput.Gather()
 	if err != nil {
 		t.Fatal("Failed to gather from vSphere historical (5min) gatherer:", err)
-	}
+	}*/
 
 	histo30minMfs, err := histo30mInput.Gather()
 	if err != nil {
 		t.Fatal("Failed to gather from vSphere historical (30min) gatherer:", err)
 	}
 
-	mfs := append(realtimeMfs, append(histo5minMfs, histo30minMfs...)...) //nolint: gocritic
+	mfs := append(realtimeMfs /*append(histo5minMfs, */, histo30minMfs... /*)...*/) //nolint: gocritic
 
 	expectedMfs := []*dto.MetricFamily{}
 

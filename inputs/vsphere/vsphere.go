@@ -65,8 +65,8 @@ type vSphere struct {
 	state        bleemeoTypes.State
 	factProvider bleemeoTypes.FactProvider
 
-	realtimeGatherer        *vSphereGatherer
-	historical5minGatherer  *vSphereGatherer
+	realtimeGatherer *vSphereGatherer
+	/*historical5minGatherer  *vSphereGatherer*/
 	historical30minGatherer *vSphereGatherer
 
 	hierarchy        *Hierarchy
@@ -120,8 +120,8 @@ func (vSphere *vSphere) getStatus() (types.Status, string) {
 	switch {
 	case vSphere.realtimeGatherer.lastErr != nil:
 		return types.StatusCritical, "realtime endpoint error: " + vSphere.realtimeGatherer.lastErr.Error()
-	case vSphere.historical5minGatherer.lastErr != nil:
-		return types.StatusCritical, "historical 5min endpoint error: " + vSphere.historical5minGatherer.lastErr.Error()
+	/*case vSphere.historical5minGatherer.lastErr != nil:
+	return types.StatusCritical, "historical 5min endpoint error: " + vSphere.historical5minGatherer.lastErr.Error()*/
 	case vSphere.historical30minGatherer.lastErr != nil:
 		return types.StatusCritical, "historical 30min endpoint error: " + vSphere.historical30minGatherer.lastErr.Error()
 	}
@@ -318,6 +318,7 @@ func (vSphere *vSphere) makeRealtimeGatherer(ctx context.Context) (registry.Gath
 
 	vsphereInput.HostMetricInclude = []string{
 		"cpu.usage.average",
+		"cpu.usagemhz.average", // Will be converted to the percentage for Cluster CPU
 		"mem.totalCapacity.average",
 		"mem.usage.average",
 		"mem.swapin.average",
@@ -373,7 +374,7 @@ func (vSphere *vSphere) makeRealtimeGatherer(ctx context.Context) (registry.Gath
 	return gatherer, opt, nil
 }
 
-func (vSphere *vSphere) makeHistorical5minGatherer(ctx context.Context) (registry.GathererWithOrWithoutState, registry.RegistrationOption, error) {
+/*func (vSphere *vSphere) makeHistorical5minGatherer(ctx context.Context) (registry.GathererWithOrWithoutState, registry.RegistrationOption, error) {
 	input, ok := telegraf_inputs.Inputs["vsphere"]
 	if !ok {
 		return nil, registry.RegistrationOption{}, inputs.ErrDisabledInput
@@ -390,9 +391,7 @@ func (vSphere *vSphere) makeHistorical5minGatherer(ctx context.Context) (registr
 	vsphereInput.ClusterInstances = true
 
 	vsphereInput.ClusterMetricInclude = []string{
-		"cpu.usagemhz.average", // Will be converted to the percentage of used CPU
-		"mem.usage.average",
-		"mem.swapused.average",
+		// "mem.usage.average",
 	}
 
 	vsphereInput.VMMetricExclude = []string{"*"}
@@ -442,7 +441,7 @@ func (vSphere *vSphere) makeHistorical5minGatherer(ctx context.Context) (registr
 	}
 
 	return gatherer, opt, nil
-}
+}*/
 
 func (vSphere *vSphere) makeHistorical30minGatherer(ctx context.Context) (registry.GathererWithOrWithoutState, registry.RegistrationOption, error) {
 	input, ok := telegraf_inputs.Inputs["vsphere"]

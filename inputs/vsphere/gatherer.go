@@ -104,8 +104,11 @@ func (gatherer *vSphereGatherer) GatherWithState(ctx context.Context, state regi
 		gatherer.acc.Accumulator = &errAcc
 
 		retAcc := &retainAccumulator{
-			Accumulator:            gatherer.acc,
-			mustRetain:             map[string][]string{"vsphere_cluster_cpu": {"usagemhz_average"}},
+			Accumulator: gatherer.acc,
+			mustRetain: map[string][]string{
+				"vsphere_host_cpu": {"usagemhz_average"},
+				"vsphere_host_mem": {"usage_average", "swapin_average"},
+			},
 			retainedPerMeasurement: make(retainedMetrics),
 		}
 
@@ -115,6 +118,12 @@ func (gatherer *vSphereGatherer) GatherWithState(ctx context.Context, state regi
 
 		gatherer.lastPoints = gatherer.buffer.Points()
 		gatherer.lastErr = allErrs
+
+		if gatherer.kind != gatherRT {
+			for _, point := range gatherer.lastPoints {
+				point.Time = point.Time.Add(gatherer.interval)
+			}
+		}
 
 		sort.Slice(gatherer.lastPoints, func(i, j int) bool {
 			return gatherer.lastPoints[i].Time.Before(gatherer.lastPoints[j].Time)
@@ -139,6 +148,7 @@ func filterErrors(errs []error) []error {
 	return errs[:n]
 }
 
+// Additional metrics are those that we don't get (or directly get) from the telegraf input.
 func (gatherer *vSphereGatherer) collectAdditionalMetrics(ctx context.Context, state registry.GatherState, acc telegraf.Accumulator, retained retainedMetrics) error {
 	finder, client, err := newDeviceFinder(ctx, *gatherer.cfg)
 	if err != nil {
@@ -159,7 +169,7 @@ func (gatherer *vSphereGatherer) collectAdditionalMetrics(ctx context.Context, s
 		return fmt.Errorf("can't describe hierarchy: %w", err)
 	}
 
-	switch gatherer.kind { //nolint:exhaustive
+	switch gatherer.kind { //nolint:exhaustive,gocritic
 	case gatherRT:
 		// For each host, we want a list of vm states (running/stopped).
 		vmStatesPerHost := make(map[string][]bool, len(hosts))
@@ -173,7 +183,8 @@ func (gatherer *vSphereGatherer) collectAdditionalMetrics(ctx context.Context, s
 		if err != nil {
 			return err
 		}
-	case gatherHist5m:
+
+		// Special case: we aggregate host metrics to get cluster metrics
 		err = additionalClusterMetrics(ctx, client, clusters, gatherer.devicePropsCache, acc, retained, gatherer.hierarchy, state.T0)
 		if err != nil {
 			return err
@@ -322,6 +333,23 @@ func (retMetrics retainedMetrics) get(measurement string, field string, filter f
 	}
 
 	return values
+}
+
+func (retMetrics retainedMetrics) reduce(measurement string, field string, acc any, fn func(acc, value any, tags map[string]string, t []time.Time) any) any {
+	fields, ok := retMetrics[measurement]
+	if !ok {
+		return nil
+	}
+
+	for _, f := range fields {
+		if f.field != field {
+			continue
+		}
+
+		acc = fn(acc, f.value, f.tags, f.t)
+	}
+
+	return acc
 }
 
 type retainAccumulator struct {
