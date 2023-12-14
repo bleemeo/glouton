@@ -65,6 +65,8 @@ func additionalClusterMetrics(ctx context.Context, client *vim25.Client, cluster
 		}
 	}
 
+	logger.Printf("Retained host disk: %v", retained["vsphere_host_disk"])
+
 	for _, datastore := range datastores {
 		tags := map[string]string{
 			// "clustername": cluster.Name(),
@@ -197,6 +199,8 @@ func additionalDatastoreIO(tags map[string]string, hostMOIDs map[string]bool, ac
 	})
 
 	if hostsReadKBps == nil || hostsWriteKBps == nil {
+		logger.Printf("HR=%v / HW=%v", hostsReadKBps, hostsWriteKBps)
+
 		return nil
 	}
 
