@@ -44,9 +44,9 @@ const endpointCreationRetryDelay = 5 * time.Minute
 type gatherKind string
 
 const (
-	gatherRT      gatherKind = "realtime"         // Hosts and VMs
-	gatherHist5m  gatherKind = "historical 5min"  // Clusters
-	gatherHist30m gatherKind = "historical 30min" // Datastores
+	gatherRT gatherKind = "realtime" // Hosts and VMs
+	/*gatherHist5m  gatherKind = "historical 5min"*/ // Clusters
+	gatherHist30m gatherKind = "historical 30min"    // Datastores
 )
 
 type vSphereGatherer struct {
@@ -69,6 +69,8 @@ type vSphereGatherer struct {
 
 	hierarchy        *Hierarchy
 	devicePropsCache *propsCaches
+
+	ptsCache pointCache
 
 	l sync.Mutex
 }
@@ -119,10 +121,8 @@ func (gatherer *vSphereGatherer) GatherWithState(ctx context.Context, state regi
 		gatherer.lastPoints = gatherer.buffer.Points()
 		gatherer.lastErr = allErrs
 
-		if gatherer.kind != gatherRT {
-			for _, point := range gatherer.lastPoints {
-				point.Time = point.Time.Add(gatherer.interval)
-			}
+		if gatherer.kind == gatherHist30m && allErrs == nil {
+			gatherer.lastPoints = gatherer.ptsCache.update(gatherer.lastPoints, state.T0)
 		}
 
 		sort.Slice(gatherer.lastPoints, func(i, j int) bool {
@@ -286,6 +286,10 @@ func newGatherer(ctx context.Context, kind gatherKind, cfg *config.VSphere, inpu
 		devicePropsCache: devicePropsCache,
 	}
 
+	if kind == gatherHist30m {
+		gatherer.ptsCache = make(pointCache)
+	}
+
 	gatherer.createEndpoint(ctx, input)
 
 	return gatherer, nil
@@ -379,4 +383,50 @@ func (retAcc *retainAccumulator) AddFields(measurement string, fields map[string
 	}
 
 	retAcc.Accumulator.AddFields(measurement, fields, tags, t...)
+}
+
+type cachedPoint struct {
+	types.MetricPoint
+
+	recordedAt time.Time
+}
+
+// pointCache is a map labels -> point.
+type pointCache map[string]cachedPoint
+
+func (ptsCache *pointCache) update(lastPoints []types.MetricPoint, t0 time.Time) []types.MetricPoint {
+	ptsCache.purge(t0)
+
+	for _, point := range lastPoints {
+		if cachedPt, exists := (*ptsCache)[types.LabelsToText(point.Labels)]; exists {
+			if point.Time.Before(cachedPt.Time) {
+				continue
+			}
+		}
+
+		(*ptsCache)[types.LabelsToText(point.Labels)] = cachedPoint{point, t0}
+	}
+
+	points := make([]types.MetricPoint, 0, len(*ptsCache))
+
+	for labelsText, point := range *ptsCache {
+		metricPoint := point.MetricPoint
+		metricPoint.Time = t0
+
+		logger.Printf("Using point %s: %f (%s)", labelsText, metricPoint.Value, metricPoint.Time)
+
+		points = append(points, metricPoint)
+	}
+
+	logger.Printf("pointCache: %v", *ptsCache)
+
+	return points
+}
+
+func (ptsCache *pointCache) purge(t0 time.Time) {
+	for labels, point := range *ptsCache {
+		if t0.Sub(point.recordedAt) > time.Hour {
+			delete(*ptsCache, labels)
+		}
+	}
 }

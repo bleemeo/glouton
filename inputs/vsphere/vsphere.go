@@ -500,7 +500,7 @@ func (vSphere *vSphere) makeHistorical30minGatherer(ctx context.Context) (regist
 	noMetricsSince := make(map[string]int)
 	opt := registry.RegistrationOption{
 		Description:         fmt.Sprint(vSphere, " ", gatherHist30m),
-		MinInterval:         30 * time.Minute,
+		MinInterval:         5 * time.Minute, // 5 times out of 6, we will re-use the previous point
 		StopCallback:        gatherer.stop,
 		ApplyDynamicRelabel: true,
 		GatherModifier: func(mfs []*dto.MetricFamily, _ error) []*dto.MetricFamily {
