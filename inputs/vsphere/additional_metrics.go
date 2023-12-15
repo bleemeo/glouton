@@ -65,12 +65,8 @@ func additionalClusterMetrics(ctx context.Context, client *vim25.Client, cluster
 		}
 	}
 
-	logger.Printf("Retained host disk: %v", retained["vsphere_host_disk"])
-
 	for _, datastore := range datastores {
 		tags := map[string]string{
-			// "clustername": cluster.Name(),
-			"dcname": h.ParentDCName(datastore),
 			"dsname": datastore.Name(),
 			"moid":   datastore.Reference().Value,
 		}
@@ -85,6 +81,8 @@ func additionalClusterMetrics(ctx context.Context, client *vim25.Client, cluster
 		for _, host := range hosts {
 			hostMOIDs[host.Reference().Value] = true
 		}
+
+		logger.Printf("Host MOIDs of %s are %v", datastore.Name(), hostMOIDs)
 
 		errDatastoreIO := additionalDatastoreIO(maps.Clone(tags), hostMOIDs, acc, retained, t0)
 		if errDatastoreIO != nil {
@@ -191,27 +189,27 @@ func additionalClusterHostsCount(ctx context.Context, tags map[string]string, cl
 }
 
 func additionalDatastoreIO(tags map[string]string, hostMOIDs map[string]bool, acc telegraf.Accumulator, retained retainedMetrics, t0 time.Time) error {
-	hostsReadKBps := retained.get("vsphere_host_disk", "read_average", func(tags map[string]string, t []time.Time) bool {
-		return hostMOIDs[tags["moid"]] && (len(t) == 0 || t[0].Equal(t0))
+	hostsReadKBps := retained.get("vsphere_host_datastore", "read_average", func(tags map[string]string, t []time.Time) bool {
+		return hostMOIDs[tags["moid"]] && approxTimeEqual(t0, t)
 	})
-	hostsWriteKBps := retained.get("vsphere_host_disk", "write_average", func(tags map[string]string, t []time.Time) bool {
-		return hostMOIDs[tags["moid"]] && (len(t) == 0 || t[0].Equal(t0))
+	hostsWriteKBps := retained.get("vsphere_host_datastore", "write_average", func(tags map[string]string, t []time.Time) bool {
+		return hostMOIDs[tags["moid"]] && approxTimeEqual(t0, t)
 	})
+
+	logger.Printf("%s: HR=%v / HW=%v", tags["dsname"], hostsReadKBps, hostsWriteKBps)
 
 	if hostsReadKBps == nil || hostsWriteKBps == nil {
-		logger.Printf("HR=%v / HW=%v", hostsReadKBps, hostsWriteKBps)
-
 		return nil
 	}
 
-	var readSum, writeSum float64
+	var readSum, writeSum int64
 
 	for _, read := range hostsReadKBps {
-		readSum += read.(float64)
+		readSum += read.(int64)
 	}
 
 	for _, write := range hostsWriteKBps {
-		writeSum += write.(float64)
+		writeSum += write.(int64)
 	}
 
 	fields := map[string]any{
@@ -219,7 +217,7 @@ func additionalDatastoreIO(tags map[string]string, hostMOIDs map[string]bool, ac
 		"write_average": writeSum,
 	}
 
-	logger.Printf("Datastore %q read/write: %f/%f", tags["dsname"], readSum, writeSum)
+	logger.Printf("Datastore %q read/write: %d/%d", tags["dsname"], readSum, writeSum)
 
 	acc.AddFields("vsphere_datastore_datastore", fields, tags, t0)
 
@@ -296,4 +294,12 @@ func additionalVMMetrics(ctx context.Context, client *vim25.Client, vms []*objec
 	}
 
 	return nil
+}
+
+func approxTimeEqual(t0 time.Time, t []time.Time) bool {
+	if len(t) == 0 {
+		return true
+	}
+
+	return t0.Sub(t[0]) <= time.Minute
 }

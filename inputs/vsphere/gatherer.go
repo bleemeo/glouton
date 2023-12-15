@@ -109,9 +109,9 @@ func (gatherer *vSphereGatherer) GatherWithState(ctx context.Context, state regi
 		retAcc := &retainAccumulator{
 			Accumulator: gatherer.acc,
 			mustRetain: map[string][]string{
-				"vsphere_host_cpu":  {"usagemhz_average"},
-				"vsphere_host_mem":  {"usage_average", "swapin_average"},
-				"vsphere_host_disk": {"read_average", "write_average"},
+				"vsphere_host_cpu":       {"usagemhz_average"},
+				"vsphere_host_mem":       {"usage_average", "swapin_average"},
+				"vsphere_host_datastore": {"read_average", "write_average"},
 			},
 			retainedPerMeasurement: make(retainedMetrics),
 		}
