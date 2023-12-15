@@ -133,15 +133,19 @@ func additionalClusterMemory(tags map[string]string, cluster *object.ClusterComp
 		return nil
 	}
 
-	hostsUsageMB := retained.reduce("vsphere_host_mem", "usage_average", 0., func(acc, value any, tags map[string]string, t []time.Time) any {
+	hostsUsageMB := retained.reduce("vsphere_host_mem", "usage_average", nil, func(acc, value any, tags map[string]string, t []time.Time) any {
 		moid := tags["moid"]
-		if !hostMOIDs[moid] || len(t) == 0 || !t[0].Equal(t0) {
+		if !hostMOIDs[moid] || (len(t) != 0 && !t[0].Equal(t0)) {
 			return acc
 		}
 
 		hostProps, ok := caches.hostCache.get(moid, true)
 		if !ok {
 			return acc
+		}
+
+		if acc == nil {
+			acc = 0. // acc was nil until here, in case no valid values were found
 		}
 
 		ac, val := acc.(float64), value.(float64) //nolint: forcetypeassert

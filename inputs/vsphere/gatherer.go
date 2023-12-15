@@ -119,6 +119,10 @@ func (gatherer *vSphereGatherer) GatherWithState(ctx context.Context, state regi
 		var err error
 
 		if gatherer.kind != gatherHist30m || state.T0.Sub(gatherer.lastInputCollect) >= 5*time.Minute {
+			// Registry calls both historical and real-time gatherer every minute, so all vSphere agents produce
+			// a point every minute. But for historical metrics, we don't need to do the real call every minute:
+			// every 5 minutes is enough. We prefer 5 minutes rather than 30 minutes, to get the last data point
+			// a bit sooner (we don't know the delay before that point is available).
 			err = gatherer.endpoint.Collect(ctx, retAcc)
 			if gatherer.kind == gatherHist30m && err == nil {
 				logger.Printf("Called telegraf input (last time was at %s)", gatherer.lastInputCollect)
