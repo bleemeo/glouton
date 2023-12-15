@@ -313,6 +313,8 @@ func (s *Synchronizer) purgeVSphereAgents(remoteAgents map[string]types.Agent, s
 			}
 		}
 
+		logger.V(2).Printf("Deleting vSphere agent %s", id)
+
 		agentsToRemoveFromCache[id] = true
 
 		_, err := s.client.Do(s.ctx, "DELETE", fmt.Sprintf("v1/agent/%s/", id), nil, nil, nil)
