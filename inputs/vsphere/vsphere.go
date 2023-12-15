@@ -460,8 +460,6 @@ func (vSphere *vSphere) makeHistorical30minGatherer(ctx context.Context) (regist
 	vsphereInput.DatastoreInstances = true
 
 	vsphereInput.DatastoreMetricInclude = []string{
-		// "datastore.read.average",
-		// "datastore.write.average",
 		"disk.used.latest",
 		"disk.capacity.latest",
 	}
@@ -806,9 +804,7 @@ func (vSphere *vSphere) renameGlobal(gatherContext internal.GatherContext) (resu
 	return gatherContext, false
 }
 
-func (vSphere *vSphere) transformMetrics(currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {
-	_ = originalFields
-
+func (vSphere *vSphere) transformMetrics(currentContext internal.GatherContext, fields map[string]float64, _ map[string]interface{}) map[string]float64 {
 	// map is: measurement -> field -> factor
 	factors := map[string]map[string]float64{
 		// VM metrics
@@ -830,7 +826,7 @@ func (vSphere *vSphere) transformMetrics(currentContext internal.GatherContext, 
 			"swapin_average":        1000,    // KB to B
 			"swapout_average":       1000,    // KB to B
 		},
-		"vsphere_host_disk": {
+		"vsphere_host_datastore": {
 			"read_average":  1000, // KB/s to B/s
 			"write_average": 1000, // KB/s to B/s
 		},
@@ -840,16 +836,12 @@ func (vSphere *vSphere) transformMetrics(currentContext internal.GatherContext, 
 		},
 		// Datastore metrics
 		"vsphere_datastore_datastore": {
-			"write_average": 8000, // KB/s to b/s
-			"read_average":  8000, // KB/s to b/s
+			"write_average": 1000, // KB/s to B/s
+			"read_average":  1000, // KB/s to B/s
 		},
 		"vsphere_datastore_disk": {
 			"used_latest":     1000, // KB to B
 			"capacity_latest": 1000, // KB to B
-		},
-		// Cluster metrics
-		"vsphere_cluster_mem": {
-			"swapused_average": 1000, // KB to B
 		},
 	}
 

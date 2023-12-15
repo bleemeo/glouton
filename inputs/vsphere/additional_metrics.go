@@ -205,11 +205,11 @@ func additionalDatastoreIO(tags map[string]string, hostMOIDs map[string]bool, ac
 	var readSum, writeSum int64
 
 	for _, read := range hostsReadKBps {
-		readSum += read.(int64)
+		readSum += read.(int64) //nolint: forcetypeassert
 	}
 
 	for _, write := range hostsWriteKBps {
-		writeSum += write.(int64)
+		writeSum += write.(int64) //nolint: forcetypeassert
 	}
 
 	fields := map[string]any{
