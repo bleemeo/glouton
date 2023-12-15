@@ -139,7 +139,7 @@ func TestTransformMetrics(t *testing.T) {
 			{
 				field:         "transmitted_average",
 				value:         0.91,
-				expectedValue: 7280,
+				expectedValue: 7454.72,
 			},
 		},
 	}

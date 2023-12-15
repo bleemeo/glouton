@@ -45,7 +45,7 @@ type gatherKind string
 
 const (
 	gatherRT gatherKind = "realtime" // Hosts and VMs
-	// gatherHist5m  gatherKind = "historical 5min" // Clusters
+	// gatherHist5m  gatherKind = "historical 5min" // Clusters.
 	gatherHist30m gatherKind = "historical 30min" // Datastores
 )
 
