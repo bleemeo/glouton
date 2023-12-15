@@ -65,6 +65,8 @@ func additionalClusterMetrics(ctx context.Context, client *vim25.Client, cluster
 		}
 	}
 
+	retained.sort("vsphere_host_datastore") // Pre-sort points according to timestamp in ascending order
+
 	for _, datastore := range datastores {
 		tags := map[string]string{
 			"dsname": datastore.Name(),
@@ -189,11 +191,20 @@ func additionalClusterHostsCount(ctx context.Context, tags map[string]string, cl
 }
 
 func additionalDatastoreIO(tags map[string]string, hostMOIDs map[string]bool, acc telegraf.Accumulator, retained retainedMetrics, t0 time.Time) error {
-	hostsReadKBps := retained.get("vsphere_host_datastore", "read_average", func(tags map[string]string, t []time.Time) bool {
-		return hostMOIDs[tags["moid"]] && approxTimeEqual(t0, t)
+	// Reducing the points to a map to only get the latest value of each metric
+	hostsReadKBps := retained.reduce("vsphere_host_datastore", "read_average", make(map[string]any), func(acc, value any, tags map[string]string, t []time.Time) any {
+		if hostMOIDs[tags["moid"]] && approxTimeEqual(t0, t) {
+			acc.(map[string]any)[tags["moid"]] = value //nolint: forcetypeassert
+		}
+
+		return acc
 	})
-	hostsWriteKBps := retained.get("vsphere_host_datastore", "write_average", func(tags map[string]string, t []time.Time) bool {
-		return hostMOIDs[tags["moid"]] && approxTimeEqual(t0, t)
+	hostsWriteKBps := retained.reduce("vsphere_host_datastore", "write_average", make(map[string]any), func(acc, value any, tags map[string]string, t []time.Time) any {
+		if hostMOIDs[tags["moid"]] && approxTimeEqual(t0, t) {
+			acc.(map[string]any)[tags["moid"]] = value //nolint: forcetypeassert
+		}
+
+		return acc
 	})
 
 	logger.Printf("%s: HR=%v / HW=%v", tags["dsname"], hostsReadKBps, hostsWriteKBps)
@@ -204,11 +215,11 @@ func additionalDatastoreIO(tags map[string]string, hostMOIDs map[string]bool, ac
 
 	var readSum, writeSum int64
 
-	for _, read := range hostsReadKBps {
+	for _, read := range hostsReadKBps.(map[string]any) { //nolint: forcetypeassert
 		readSum += read.(int64) //nolint: forcetypeassert
 	}
 
-	for _, write := range hostsWriteKBps {
+	for _, write := range hostsWriteKBps.(map[string]any) { //nolint: forcetypeassert
 		writeSum += write.(int64) //nolint: forcetypeassert
 	}
 

@@ -351,6 +351,24 @@ func (retMetrics retainedMetrics) get(measurement string, field string, filter f
 	return values
 }
 
+func (retMetrics retainedMetrics) sort(measurement string) {
+	fields, ok := retMetrics[measurement]
+	if !ok {
+		return
+	}
+
+	sort.Slice(fields, func(i, j int) bool {
+		switch ti, tj := fields[i].t, fields[j].t; {
+		case len(ti) == 0:
+			return true
+		case len(tj) == 0:
+			return false
+		default:
+			return ti[0].Before(tj[0])
+		}
+	})
+}
+
 func (retMetrics retainedMetrics) reduce(measurement string, field string, acc any, fn func(acc, value any, tags map[string]string, t []time.Time) any) any {
 	fields, ok := retMetrics[measurement]
 	if !ok {
@@ -378,15 +396,13 @@ type retainAccumulator struct {
 }
 
 func (retAcc *retainAccumulator) AddFields(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	if tags["dsname"] != "" {
-		logger.Printf("AddFields(%q, %v, %v, %v)", measurement, fields, tags, t)
-	}
-
 	if retFields, ok := retAcc.mustRetain[measurement]; ok {
 		retAcc.l.Lock()
 
 		for _, f := range retFields {
 			if value, ok := fields[f]; ok {
+				logger.Printf("Retaining AddFields(%q, %v, %v, %v)", measurement, fields, tags, t)
+
 				retAcc.retainedPerMeasurement[measurement] = append(retAcc.retainedPerMeasurement[measurement], addedField{f, value, tags, t})
 			}
 		}

@@ -817,8 +817,8 @@ func (vSphere *vSphere) transformMetrics(currentContext internal.GatherContext, 
 			"write_average": 1000, // KB/s to B/s
 		},
 		"vsphere_vm_net": {
-			"received_average":    8000, // KB/s to b/s
-			"transmitted_average": 8000, // KB/s to b/s
+			"received_average":    8192, // KiB/s to b/s
+			"transmitted_average": 8192, // KiB/s to b/s
 		},
 		// Host metrics
 		"vsphere_host_mem": {
@@ -831,8 +831,8 @@ func (vSphere *vSphere) transformMetrics(currentContext internal.GatherContext, 
 			"write_average": 1000, // KB/s to B/s
 		},
 		"vsphere_host_net": {
-			"received_average":    8000, // KB/s to b/s
-			"transmitted_average": 8000, // KB/s to b/s
+			"received_average":    8192, // KiB/s to b/s
+			"transmitted_average": 8192, // KiB/s to b/s
 		},
 		// Datastore metrics
 		"vsphere_datastore_datastore": {
