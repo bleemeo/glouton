@@ -71,9 +71,9 @@ type mockCollector struct {
 	err               error
 }
 
-func (m *mockCollector) AddInput(_ telegraf.Input, name string) (int, error) {
+func (m *mockCollector) AddInput(_ telegraf.Input, name string, group string) (int, error) {
 	if name != m.ExpectedAddedName {
-		m.err = fmt.Errorf("AddInput(_, %s), %w=%s", name, errWantName, m.ExpectedAddedName)
+		m.err = fmt.Errorf("AddInput(_, %s, %s), %w=%s", name, group, errWantName, m.ExpectedAddedName)
 
 		return 0, m.err
 	}

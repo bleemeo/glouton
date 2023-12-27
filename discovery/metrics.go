@@ -80,7 +80,7 @@ func AddDefaultInputs(
 		return err
 	}
 
-	if _, err = coll.AddInput(input, "system"); err != nil {
+	if _, err = coll.AddInput(input, "system", "system"); err != nil {
 		return err
 	}
 
@@ -89,7 +89,7 @@ func AddDefaultInputs(
 		return err
 	}
 
-	if _, err = coll.AddInput(input, "cpu"); err != nil {
+	if _, err = coll.AddInput(input, "cpu", "cpu"); err != nil {
 		return err
 	}
 
@@ -98,7 +98,7 @@ func AddDefaultInputs(
 		return err
 	}
 
-	if _, err = coll.AddInput(input, "net"); err != nil {
+	if _, err = coll.AddInput(input, "net", "network"); err != nil {
 		return err
 	}
 
@@ -108,7 +108,7 @@ func AddDefaultInputs(
 			return err
 		}
 
-		if _, err = coll.AddInput(input, "disk"); err != nil {
+		if _, err = coll.AddInput(input, "disk", "disk"); err != nil {
 			return err
 		}
 	}
@@ -138,7 +138,7 @@ func AddDefaultInputs(
 		return err
 	}
 
-	if _, err = coll.AddInput(input, "diskio"); err != nil {
+	if _, err = coll.AddInput(input, "diskio", "disk"); err != nil {
 		return err
 	}
 
@@ -157,7 +157,7 @@ func addDefaultFromOS(inputsConfig inputs.CollectorConfig, coll *collector.Colle
 			return err
 		}
 
-		_, err = coll.AddInput(input, "win_perf_counters")
+		_, err = coll.AddInput(input, "win_perf_counters", "winperf")
 		if err != nil {
 			return err
 		}
@@ -168,7 +168,7 @@ func addDefaultFromOS(inputsConfig inputs.CollectorConfig, coll *collector.Colle
 			return err
 		}
 
-		if _, err = coll.AddInput(input, "mem"); err != nil {
+		if _, err = coll.AddInput(input, "mem", "memory"); err != nil {
 			return err
 		}
 
@@ -177,7 +177,7 @@ func addDefaultFromOS(inputsConfig inputs.CollectorConfig, coll *collector.Colle
 			return err
 		}
 
-		if _, err = coll.AddInput(input, "swap"); err != nil {
+		if _, err = coll.AddInput(input, "swap", "memory"); err != nil {
 			return err
 		}
 	}
@@ -457,7 +457,7 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 		return d.registerInput(input, gathererOptions, service)
 	}
 
-	return d.addToCollector(input, service)
+	return d.addToCollector(input, service, "services")
 }
 
 func createMySQLInput(service Service) (telegraf.Input, error) {
@@ -483,7 +483,7 @@ func createMySQLInput(service Service) (telegraf.Input, error) {
 }
 
 // addToCollector is deprecated, use registerInput instead.
-func (d *Discovery) addToCollector(input telegraf.Input, service Service) error {
+func (d *Discovery) addToCollector(input telegraf.Input, service Service, group string) error {
 	if d.coll == nil {
 		return nil
 	}
@@ -513,7 +513,7 @@ func (d *Discovery) addToCollector(input telegraf.Input, service Service) error 
 		return labels, annotations
 	})
 
-	inputID, err := d.coll.AddInput(input, service.Name)
+	inputID, err := d.coll.AddInput(input, service.Name, group)
 	if err != nil {
 		return err
 	}

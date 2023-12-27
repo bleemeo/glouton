@@ -50,8 +50,8 @@ func (m *mockInput) SampleConfig() string {
 
 func TestAddRemove(t *testing.T) {
 	c := New(nil, gate.New(0))
-	id1, _ := c.AddInput(&mockInput{Name: "input1"}, "input1")
-	id2, _ := c.AddInput(&mockInput{Name: "input2"}, "input2")
+	id1, _ := c.AddInput(&mockInput{Name: "input1"}, "input1", "grp")
+	id2, _ := c.AddInput(&mockInput{Name: "input2"}, "input2", "grp")
 
 	if len(c.inputs) != 2 {
 		t.Errorf("len(c.inputs) == %v, want %v", len(c.inputs), 2)
@@ -72,22 +72,22 @@ func TestAddRemove(t *testing.T) {
 
 func TestRun(t *testing.T) {
 	c := New(nil, gate.New(0))
-	c.runOnce(time.Now())
+	c.runOnce(time.Now(), "grp")
 
 	input := &mockInput{Name: "input1"}
 
-	_, err := c.AddInput(input, "input1")
+	_, err := c.AddInput(input, "input1", "grp")
 	if err != nil {
 		t.Error(err)
 	}
 
-	c.runOnce(time.Now())
+	c.runOnce(time.Now(), "grp")
 
 	if input.GatherCallCount != 1 {
 		t.Errorf("input.GatherCallCount == %v, want %v", input.GatherCallCount, 1)
 	}
 
-	c.runOnce(time.Now())
+	c.runOnce(time.Now(), "grp")
 
 	if input.GatherCallCount != 2 {
 		t.Errorf("input.GatherCallCount == %v, want %v", input.GatherCallCount, 2)
@@ -210,7 +210,7 @@ func TestMarkInactive(t *testing.T) {
 	}
 
 	for n, input := range []*shallowInput{&input1, &input2, &input2bis, &inputAnnot} {
-		id, err := c.AddInput(input, "shallow")
+		id, err := c.AddInput(input, "shallow", "grp")
 		if err != nil {
 			t.Fatalf("Failed to register input %d: %v", n, err)
 		}
@@ -224,7 +224,7 @@ func TestMarkInactive(t *testing.T) {
 	t1 := t0.Add(10 * time.Second)
 	t2 := t1.Add(10 * time.Second)
 
-	c.RunGather(context.Background(), t0)
+	c.RunGather(context.Background(), t0, "grp")
 
 	expectedCache := map[int]map[string]map[string]map[string]fieldCache{
 		1: {
@@ -260,7 +260,7 @@ func TestMarkInactive(t *testing.T) {
 
 	input2.tag = "I2" // Tags have changed
 
-	c.RunGather(context.Background(), t1)
+	c.RunGather(context.Background(), t1, "grp")
 
 	expectedCache = map[int]map[string]map[string]map[string]fieldCache{
 		1: {
@@ -296,7 +296,7 @@ func TestMarkInactive(t *testing.T) {
 
 	input2bis.fields["f"] = 22.22
 
-	c.RunGather(context.Background(), t2)
+	c.RunGather(context.Background(), t2, "grp")
 
 	// Since StaleNaN is directly given as a float to avoid conversions with a loss of precision,
 	// expected values should also be represented as floats.
