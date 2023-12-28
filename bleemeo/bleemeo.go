@@ -37,6 +37,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"golang.org/x/oauth2"
 )
 
 var (
@@ -50,7 +52,7 @@ type reloadState struct {
 	mqtt          types.MQTTReloadState
 	nextFullSync  time.Time
 	fullSyncCount int
-	jwt           types.JWT
+	token         *oauth2.Token
 }
 
 func NewReloadState() types.BleemeoReloadState {
@@ -81,12 +83,12 @@ func (rs *reloadState) SetFullSyncCount(count int) {
 	rs.fullSyncCount = count
 }
 
-func (rs *reloadState) JWT() types.JWT {
-	return rs.jwt
+func (rs *reloadState) Token() *oauth2.Token {
+	return rs.token
 }
 
-func (rs *reloadState) SetJWT(jwt types.JWT) {
-	rs.jwt = jwt
+func (rs *reloadState) SetToken(token *oauth2.Token) {
+	rs.token = token
 }
 
 func (rs *reloadState) Close() {
@@ -198,7 +200,7 @@ func (c *Connector) initMQTT(previousPoint []gloutonTypes.MetricPoint) {
 			UpdateMaintenance:    c.sync.UpdateMaintenance,
 			UpdateMonitor:        c.sync.UpdateMonitor,
 			InitialPoints:        previousPoint,
-			GetJWT:               c.sync.GetJWT,
+			GetToken:             c.sync.GetToken,
 			LastMetricActivation: c.sync.LastMetricActivation,
 		},
 	)

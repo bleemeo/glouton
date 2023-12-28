@@ -64,8 +64,8 @@ type Option struct {
 	UpdateMonitor func(op string, uuid string)
 	// UpdateMaintenance requests to check for the maintenance mode again
 	UpdateMaintenance func()
-	// GetJWT returns the JWT used to talk with the Bleemeo API.
-	GetJWT func(ctx context.Context) (string, error)
+	// GetToken returns the token used to talk with the Bleemeo API.
+	GetToken func(ctx context.Context) (string, error)
 	// Return date of last metric activation / registration
 	LastMetricActivation func() time.Time
 
@@ -412,12 +412,12 @@ func (c *Client) pahoOptions(ctx context.Context) (*paho.ClientOptions, error) {
 	rs := c.opts.ReloadState.MQTTReloadState()
 	pahoOptions.SetOnConnectHandler(rs.OnConnect)
 
-	password, err := c.opts.GetJWT(ctx)
+	password, err := c.opts.GetToken(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("unable to get JWT: %w", err)
+		return nil, fmt.Errorf("unable to get OAuth token: %w", err)
 	}
 
-	pahoOptions.SetPassword(password)
+	pahoOptions.SetPassword("oauth:" + password) // the API expects the 'oauth:' prefix to handle the password as an OAuth token
 
 	return pahoOptions, nil
 }

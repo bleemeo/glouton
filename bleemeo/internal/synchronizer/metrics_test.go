@@ -553,7 +553,7 @@ func Test_metricComparator_importanceWeight(t *testing.T) {
 
 // TestMetricSimpleSync test "normal" scenario:
 // Agent start and register metrics
-// Some metrics disapear => mark inative
+// Some metrics disappear => mark inactive
 // Some re-appear and some new => mark active & register.
 func TestMetricSimpleSync(t *testing.T) {
 	helper := newHelper(t)

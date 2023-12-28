@@ -60,12 +60,12 @@ var (
 	errNotFound = errors.New("not found")
 )
 
-// mockAPI fake global /v1 API endpoints. Currently only v1/info & v1/jwt-auth
+// mockAPI fake global /v1 API endpoints. Currently only v1/info & o/token
 // Use Handle to add additional endpoints.
 type mockAPI struct {
-	JWTUsername           string
-	JWTPassword           string
-	JWTToken              string
+	Username              string
+	Password              string
+	Token                 string
 	AuthCallback          func(*mockAPI, *http.Request) (interface{}, int, error)
 	PreRequestHook        func(*mockAPI, *http.Request) (interface{}, int, error)
 	resources             map[string]mockResource
@@ -136,7 +136,7 @@ type mockResource interface {
 
 func newAPI() *mockAPI {
 	api := &mockAPI{
-		JWTToken:              "random-value",
+		Token:                 "random-value",
 		PreRequestHook:        nil,
 		now:                   &mockTime{now: time.Now()},
 		RequestPerResource:    make(map[string]int),
@@ -145,7 +145,7 @@ func newAPI() *mockAPI {
 
 	api.AuthCallback = func(ma *mockAPI, r *http.Request) (interface{}, int, error) {
 		if r.Method == "POST" && r.URL.Path == "/v1/agent/" {
-			// POST on agent can be authenticated with either JWT or account registration key
+			// POST on agent can be authenticated with either OAuth token or account registration key
 			basicAuth := "Basic " + base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s@bleemeo.com:%s", accountID, registrationKey)))
 
 			if r.Header.Get("Authorization") == basicAuth {
@@ -153,9 +153,9 @@ func newAPI() *mockAPI {
 			}
 		}
 
-		jwtAuth := "JWT " + ma.JWTToken
-		if r.Header.Get("Authorization") != jwtAuth {
-			body := fmt.Sprintf("JWT token = %#v, want %#v", r.Header.Get("Authorization"), jwtAuth)
+		oAuth := "Bearer " + ma.Token
+		if r.Header.Get("Authorization") != oAuth {
+			body := fmt.Sprintf("Bearer token = %#v, want %#v", r.Header.Get("Authorization"), oAuth)
 
 			return body, http.StatusUnauthorized, nil
 		}
@@ -186,8 +186,8 @@ func newAPI() *mockAPI {
 			}
 
 			if agent.AgentType == agentTypeAgent.ID {
-				api.JWTUsername = fmt.Sprintf("%s@bleemeo.com", agent.ID)
-				api.JWTPassword = agent.InitialPassword
+				api.Username = fmt.Sprintf("%s@bleemeo.com", agent.ID)
+				api.Password = agent.InitialPassword
 			}
 
 			agent.CurrentConfigID = api.AccountConfigNewAgent
@@ -409,23 +409,28 @@ func (api *mockAPI) reply(w http.ResponseWriter, r *http.Request, h apiResponder
 	}
 }
 
-func (api *mockAPI) jwtHandler(r *http.Request) (interface{}, int, error) {
-	decoder := json.NewDecoder(r.Body)
-	values := map[string]string{}
-
-	if err := decoder.Decode(&values); err != nil {
-		return nil, http.StatusInternalServerError, err
+func (api *mockAPI) oauthHandler(r *http.Request) (interface{}, int, error) {
+	err := r.ParseForm()
+	if err != nil {
+		return nil, 0, fmt.Errorf("can't parse form of /o/token/: %w", err)
 	}
 
-	if values["username"] != api.JWTUsername || values["password"] != api.JWTPassword {
-		log.Printf("JWT auth fail: got = %s/%s want %s/%s\n", values["username"], values["password"], api.JWTUsername, api.JWTPassword)
+	values := r.Form
+	if values.Get("grant_type") != "password" {
+		log.Printf("OAuth fail: unexpected grant type: got = %q want \"password\"\n", values.Get("grant_type"))
+
+		return `{"error": "unsupported_grant_type"}`, http.StatusBadRequest, nil
+	}
+
+	if values.Get("username") != api.Username || values.Get("password") != api.Password {
+		log.Printf("OAuth fail: got = %s/%s want %s/%s\n", values.Get("username"), values.Get("password"), api.Username, api.Password)
 
 		return `{"non_field_errors":["Unable to log in with provided credentials."]}`, http.StatusBadRequest, nil
 	}
 
-	api.JWTToken = uuid.New().String()
+	api.Token = uuid.New().String()
 
-	return map[string]string{"token": api.JWTToken}, 200, nil
+	return map[string]any{"access_token": api.Token, "expires_in": 3600}, 200, nil
 }
 
 func (api *mockAPI) ResetCount() {
@@ -506,7 +511,7 @@ func (api *mockAPI) init() {
 	api.resources = make(map[string]mockResource)
 
 	api.serveMux = http.NewServeMux()
-	api.Handle("/v1/jwt-auth/", api.jwtHandler)
+	api.Handle("/o/token/", api.oauthHandler)
 
 	api.Handle("/v1/info/", func(r *http.Request) (interface{}, int, error) {
 		return `{"maintenance": false, "agents": {"minimum_versions": {}}}"`, 200, nil

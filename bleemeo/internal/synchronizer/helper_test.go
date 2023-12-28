@@ -120,8 +120,8 @@ func (helper *syncTestHelper) preregisterAgent(t *testing.T) {
 
 	_ = helper.state.SetBleemeoCredentials(testAgent.ID, password)
 
-	helper.api.JWTPassword = password
-	helper.api.JWTUsername = testAgent.ID + "@bleemeo.com"
+	helper.api.Password = password
+	helper.api.Username = testAgent.ID + "@bleemeo.com"
 
 	helper.api.resources[mockAPIResourceAgent].AddStore(testAgent)
 }

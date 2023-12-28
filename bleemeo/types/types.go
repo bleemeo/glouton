@@ -27,6 +27,7 @@ import (
 	"time"
 
 	paho "github.com/eclipse/paho.mqtt.golang"
+	"golang.org/x/oauth2"
 )
 
 // GlobalOption are option user by most component of bleemeo.Connector.
@@ -204,8 +205,8 @@ type BleemeoReloadState interface {
 	SetNextFullSync(t time.Time)
 	FullSyncCount() int
 	SetFullSyncCount(count int)
-	JWT() JWT
-	SetJWT(jwt JWT)
+	Token() *oauth2.Token
+	SetToken(token *oauth2.Token)
 	Close()
 }
 
@@ -231,12 +232,6 @@ type MQTTClient interface {
 	Disable(until time.Time)
 	DisabledUntil() time.Time
 	Disconnect(timeout time.Duration)
-}
-
-// JWT used to authenticate with the Bleemeo API.
-type JWT struct {
-	Token   string
-	Refresh string
 }
 
 type VSphereDevice interface {
