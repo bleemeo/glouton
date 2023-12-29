@@ -117,8 +117,6 @@ func TestWorkDirCreation(t *testing.T) {
 }
 
 func TestIsWriteInProgress(t *testing.T) {
-	t.Parallel()
-
 	t.Run("In progress", func(t *testing.T) {
 		testDir, delTmpDir := setupTestDir(t)
 		defer delTmpDir()
@@ -146,8 +144,6 @@ func TestIsWriteInProgress(t *testing.T) {
 }
 
 func TestStderrRedirection(t *testing.T) {
-	t.Parallel()
-
 	testDir, delTmpDir := setupTestDir(t)
 	defer delTmpDir()
 
@@ -183,8 +179,6 @@ func TestStderrRedirection(t *testing.T) {
 }
 
 func TestPurgeCrashReports(t *testing.T) {
-	t.Parallel()
-
 	t.Run("Keep the last reports", func(t *testing.T) {
 		testDir, delTmpDir := setupTestDir(t)
 		defer delTmpDir()
@@ -299,8 +293,6 @@ func TestMarkAsDone(t *testing.T) {
 }
 
 func TestGenerateDiagnostic(t *testing.T) {
-	t.Parallel()
-
 	cases := []struct {
 		name               string
 		ctxTimeout         time.Duration
@@ -357,8 +349,6 @@ func TestGenerateDiagnostic(t *testing.T) {
 }
 
 func TestBundleCrashReportFiles(t *testing.T) { //nolint:maintidx
-	t.Parallel()
-
 	// fileCmp allows comparing a filename and
 	// a pattern while knowing which is which.
 	type fileCmp struct {
