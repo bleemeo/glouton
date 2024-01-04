@@ -164,6 +164,11 @@ func NewClient(baseURL string, username string, password string, insecureTLS boo
 		Transport: gloutonTypes.NewHTTPTransport(tlsConfig),
 	}
 
+	tokenURL, err := url.JoinPath(baseURL, "/o/token/")
+	if err != nil {
+		return nil, fmt.Errorf("can't build token URL: %w", err)
+	}
+
 	var token *oauth2.Token
 	if reloadState != nil {
 		token = reloadState.Token()
@@ -179,14 +184,14 @@ func NewClient(baseURL string, username string, password string, insecureTLS boo
 		oauthConfig: oauth2.Config{
 			ClientID: gloutonOAuthClientID,
 			Endpoint: oauth2.Endpoint{
-				TokenURL:  baseURL + "/o/token/",
+				TokenURL:  tokenURL,
 				AuthStyle: oauth2.AuthStyleInParams,
 			},
 		},
 	}, nil
 }
 
-// ThrottleDeadline return the time request should be retryed.
+// ThrottleDeadline return the time request should be retried.
 func (c *HTTPClient) ThrottleDeadline() time.Time {
 	c.l.Lock()
 	defer c.l.Unlock()
