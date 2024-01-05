@@ -180,7 +180,7 @@ func (s *seriesSample) Next() chunkenc.ValueType {
 // Iterator is exhausted when the Seek returns false.
 func (s *seriesSample) Seek(t int64) chunkenc.ValueType {
 	for ; s.offset < len(s.data); s.offset++ {
-		if s.data[s.offset].Time.UnixNano()/1e6 >= t {
+		if s.data[s.offset].Time.UnixMilli() >= t {
 			return chunkenc.ValFloat
 		}
 	}
@@ -193,7 +193,7 @@ func (s *seriesSample) Seek(t int64) chunkenc.ValueType {
 // At returns the current timestamp/value pair.
 // Before the iterator has advanced At behaviour is unspecified.
 func (s *seriesSample) At() (int64, float64) {
-	return s.data[s.offset].Time.UnixNano() / 1e6, s.data[s.offset].Value
+	return s.data[s.offset].Time.UnixMilli(), s.data[s.offset].Value
 }
 
 func (s *seriesSample) AtHistogram() (int64, *histogram.Histogram) {
@@ -205,7 +205,7 @@ func (s *seriesSample) AtFloatHistogram() (int64, *histogram.FloatHistogram) {
 }
 
 func (s *seriesSample) AtT() int64 {
-	return s.data[s.offset].Time.UnixNano()
+	return s.data[s.offset].Time.UnixMilli()
 }
 
 // Err returns the current error. It should be used only after iterator is
