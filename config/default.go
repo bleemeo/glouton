@@ -259,7 +259,7 @@ func DefaultConfig() Config { //nolint:maintidx
 		Logging: Logging{
 			Buffer: LoggingBuffer{
 				HeadSizeBytes: 500000,
-				TailSizeBytes: 500000,
+				TailSizeBytes: 5000000,
 			},
 			Level:         "INFO",
 			Output:        "console",

@@ -30,7 +30,7 @@ const (
 	// Number of line keep at the head/bottom of the buffer.
 	defaultHeadSize = 5000
 	defaultTailSize = 5000
-	tailsCount      = 3
+	tailsCount      = 6
 )
 
 type state int
