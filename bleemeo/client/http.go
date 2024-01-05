@@ -445,7 +445,7 @@ func (c *HTTPClient) GetToken(ctx context.Context) (*oauth2.Token, error) {
 		// A 401 response is received if the refresh token has expired, we only want
 		// to try username/password authentication in this case.
 		var apiError APIError
-		if !(errors.As(err, &apiError) && apiError.StatusCode == 401) {
+		if !(errors.As(err, &apiError) && (apiError.StatusCode == 401 || apiError.Content == "invalid_grant")) {
 			return nil, err
 		}
 	}
@@ -591,7 +591,7 @@ func (c *HTTPClient) sendRequest(ctx context.Context, req *http.Request, result 
 
 	defer func() {
 		// Ensure we read the whole response to avoid "Connection reset by peer" on server
-		// and ensure HTTP connection can be resused
+		// and ensure HTTP connection can be reused
 		_, _ = io.Copy(io.Discard, resp.Body)
 		resp.Body.Close()
 	}()
