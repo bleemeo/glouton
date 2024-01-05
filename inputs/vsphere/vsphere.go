@@ -367,7 +367,7 @@ func (vSphere *vSphere) makeRealtimeGatherer(ctx context.Context) (registry.Gath
 		GatherModifier: func(mfs []*dto.MetricFamily, _ error) []*dto.MetricFamily {
 			vSphere.purgeNoMetricsSinceMap(noMetricsSince, &noMetricsSinceIterations)
 
-			return vSphere.gatherModifier(mfs, noMetricsSince, map[ResourceKind]bool{KindVM: true, KindHost: true})
+			return vSphere.gatherModifier(mfs, noMetricsSince, map[ResourceKind]bool{KindVM: true, KindHost: true, KindCluster: true})
 		},
 	}
 
@@ -652,6 +652,8 @@ func (vSphere *vSphere) modifyLabels(labelPairs []*dto.LabelPair) (shouldBeKept 
 	defer func() {
 		// Once we did everything we wanted with the labels, we rebuild the list
 		if shouldBeKept {
+			finalLabels = make([]*dto.LabelPair, 0, len(labels))
+
 			for _, label := range labels {
 				finalLabels = append(finalLabels, label)
 			}
@@ -685,7 +687,7 @@ func (vSphere *vSphere) modifyLabels(labelPairs []*dto.LabelPair) (shouldBeKept 
 				starLabelReplacer(diskLabel, vmDisks) // TODO: remove
 
 				if diskName, ok := vmDisks[diskLabel.GetValue()]; ok {
-					labels["item"] = &dto.LabelPair{Name: ptr("item"), Value: &diskName}
+					labels["item"] = &dto.LabelPair{Name: proto.String("item"), Value: &diskName}
 
 					delete(labels, "disk")
 
@@ -705,7 +707,7 @@ func (vSphere *vSphere) modifyLabels(labelPairs []*dto.LabelPair) (shouldBeKept 
 				starLabelReplacer(interfaceLabel, vmInterfaces) // TODO: remove
 
 				if interfaceName, ok := vmInterfaces[interfaceLabel.GetValue()]; ok {
-					labels["item"] = &dto.LabelPair{Name: ptr("item"), Value: &interfaceName}
+					labels["item"] = &dto.LabelPair{Name: proto.String("item"), Value: &interfaceName}
 					delete(labels, "interface")
 
 					break
@@ -724,7 +726,7 @@ func (vSphere *vSphere) modifyLabels(labelPairs []*dto.LabelPair) (shouldBeKept 
 				break
 			}
 
-			labels["item"] = &dto.LabelPair{Name: ptr("item"), Value: interfaceLabel.Value} //nolint:protogetter
+			labels["item"] = &dto.LabelPair{Name: proto.String("item"), Value: interfaceLabel.Value} //nolint:protogetter
 			delete(labels, "interface")
 
 			break
@@ -734,7 +736,7 @@ func (vSphere *vSphere) modifyLabels(labelPairs []*dto.LabelPair) (shouldBeKept 
 			starLabelReplacer(lunLabel, vSphere.labelsMetadata.datastorePerLUN) // TODO: remove
 
 			if datastore, ok := vSphere.labelsMetadata.datastorePerLUN[lunLabel.GetValue()]; ok {
-				labels["item"] = &dto.LabelPair{Name: ptr("item"), Value: &datastore}
+				labels["item"] = &dto.LabelPair{Name: proto.String("item"), Value: &datastore}
 				delete(labels, "lun")
 
 				break
