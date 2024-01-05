@@ -26,7 +26,6 @@ import (
 	"glouton/prometheus/registry"
 	"glouton/types"
 	"math"
-	"slices"
 	"sync"
 	"time"
 
@@ -41,7 +40,6 @@ var errTooManyInputs = errors.New("too many inputs in the collectors. Unable to 
 type Collector struct {
 	acc          telegraf.Accumulator
 	inputs       map[int]telegraf.Input
-	groups       map[string][]int
 	currentDelay time.Duration
 	updateDelayC chan interface{}
 	l            sync.Mutex
@@ -58,7 +56,6 @@ func New(acc telegraf.Accumulator, secretInputsGate *gate.Gate) *Collector {
 	c := &Collector{
 		acc:              acc,
 		inputs:           make(map[int]telegraf.Input),
-		groups:           make(map[string][]int),
 		currentDelay:     10 * time.Second,
 		updateDelayC:     make(chan interface{}),
 		fieldCaches:      make(map[int]map[string]map[string]map[string]fieldCache),
@@ -69,7 +66,7 @@ func New(acc telegraf.Accumulator, secretInputsGate *gate.Gate) *Collector {
 }
 
 // AddInput add an input to this collector and return an ID.
-func (c *Collector) AddInput(input telegraf.Input, shortName string, group string) (int, error) {
+func (c *Collector) AddInput(input telegraf.Input, shortName string) (int, error) {
 	_ = shortName
 
 	c.l.Lock()
@@ -95,7 +92,6 @@ func (c *Collector) AddInput(input telegraf.Input, shortName string, group strin
 	}
 
 	c.inputs[id] = input
-	c.groups[group] = append(c.groups[group], id)
 	c.fieldCaches[id] = make(map[string]map[string]map[string]fieldCache)
 
 	if si, ok := input.(telegraf.ServiceInput); ok {
@@ -122,14 +118,6 @@ func (c *Collector) RemoveInput(id int) {
 
 	delete(c.inputs, id)
 	delete(c.fieldCaches, id)
-
-	for group, ids := range c.groups {
-		if idx := slices.Index(ids, id); idx >= 0 {
-			c.groups[group] = append(c.groups[group][:idx], c.groups[group][idx+1:]...)
-
-			break
-		}
-	}
 }
 
 // Close stops all inputs.
@@ -145,32 +133,25 @@ func (c *Collector) Close() {
 }
 
 // RunGather run one gather and send metric through the accumulator.
-func (c *Collector) RunGather(_ context.Context, t0 time.Time, group string) {
-	c.runOnce(t0, group)
+func (c *Collector) RunGather(_ context.Context, t0 time.Time) {
+	c.runOnce(t0)
 }
 
-func (c *Collector) inputsForCollection(ids []int) map[int]telegraf.Input {
+func (c *Collector) inputsForCollection() map[int]telegraf.Input {
 	c.l.Lock()
 	defer c.l.Unlock()
 
-	inputsCopy := make(map[int]telegraf.Input, len(ids))
+	inputsCopy := make(map[int]telegraf.Input, len(c.inputs))
 
-	for _, id := range ids {
-		inputsCopy[id] = c.inputs[id]
+	for id, v := range c.inputs {
+		inputsCopy[id] = v
 	}
 
 	return inputsCopy
 }
 
-func (c *Collector) runOnce(t0 time.Time, group string) {
-	ids, ok := c.groups[group]
-	if !ok {
-		logger.V(1).Printf("Collector group %q not found", group)
-
-		return
-	}
-
-	inputsCopy := c.inputsForCollection(ids)
+func (c *Collector) runOnce(t0 time.Time) {
+	inputsCopy := c.inputsForCollection()
 	acc := inputs.FixedTimeAccumulator{
 		Time: t0,
 		Acc:  c.acc,

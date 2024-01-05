@@ -1095,26 +1095,15 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 	// instance uuid to the bleemeo connector.
 	a.updateSNMPResolution(time.Minute)
 
-	collectorInputGroups := []string{"services", "system", "cpu", "memory", "network", "disk"}
-	if version.IsWindows() {
-		collectorInputGroups = append(collectorInputGroups, "winperf")
-	}
-
-	for _, group := range collectorInputGroups {
-		group := group
-
-		_, err = a.gathererRegistry.RegisterPushPointsCallback(
-			registry.RegistrationOption{
-				Description: group + " metrics",
-				JitterSeed:  baseJitter,
-			},
-			func(ctx context.Context, t time.Time) {
-				a.collector.RunGather(ctx, t, group)
-			},
-		)
-		if err != nil {
-			logger.Printf("unable to add %s metrics: %v", group, err)
-		}
+	_, err = a.gathererRegistry.RegisterPushPointsCallback(
+		registry.RegistrationOption{
+			Description: "system & services metrics",
+			JitterSeed:  baseJitter,
+		},
+		a.collector.RunGather,
+	)
+	if err != nil {
+		logger.Printf("unable to add system metrics: %v", err)
 	}
 
 	if a.metricFormat == types.MetricFormatBleemeo {
@@ -1290,7 +1279,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 			return
 		}
 
-		if err = discovery.AddDefaultInputs(a.gathererRegistry, a.collector, conf, a.vethProvider); err != nil {
+		if err = discovery.AddDefaultInputs(a.gathererRegistry, conf, a.vethProvider); err != nil {
 			logger.Printf("Unable to initialize system collector: %v", err)
 
 			return
@@ -1314,7 +1303,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 			logger.Printf("Unable to create StatsD input: %v", err)
 
 			a.config.Telegraf.StatsD.Enable = false
-		} else if _, err = a.collector.AddInput(input, "statsd", "services"); err != nil {
+		} else if _, err = a.collector.AddInput(input, "statsd"); err != nil {
 			if strings.Contains(err.Error(), "address already in use") {
 				logger.Printf("Unable to listen on StatsD port because another program already use it")
 				logger.Printf("The StatsD integration is now disabled. Restart the agent to try re-enabling it.")
@@ -1973,7 +1962,7 @@ func (a *agent) handleTrigger(ctx context.Context) {
 				logger.V(1).Printf("error when creating Docker input: %v", err)
 			} else {
 				logger.V(2).Printf("Enable Docker metrics")
-				a.dockerInputID, _ = a.collector.AddInput(i, "docker", "services")
+				a.dockerInputID, _ = a.collector.AddInput(i, "docker")
 				a.dockerInputPresent = true
 			}
 		} else if !hasConnection && a.dockerInputPresent {
