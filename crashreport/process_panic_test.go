@@ -31,8 +31,6 @@ import (
 )
 
 func TestTryToGenerateDiagnostic(t *testing.T) {
-	t.Parallel()
-
 	t.Run("No diagnostic", func(t *testing.T) {
 		testDir, delTmpDir := setupTestDir(t)
 		defer delTmpDir()
