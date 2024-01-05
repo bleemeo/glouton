@@ -693,9 +693,9 @@ func (s *Synchronizer) ClearDisable(reasonToClear bleemeoTypes.DisableReason, de
 	}
 }
 
-// GetJWT to talk to the Bleemeo API.
-func (s *Synchronizer) GetJWT(ctx context.Context) (string, error) {
-	return s.realClient.VerifyAndGetJWT(ctx, s.agentID)
+// GetToken to talk to the Bleemeo API.
+func (s *Synchronizer) GetToken(ctx context.Context) (string, error) {
+	return s.realClient.VerifyAndGetToken(ctx, s.agentID)
 }
 
 func (s *Synchronizer) setClient() error {
