@@ -100,18 +100,16 @@ func (pc *propsCache[propsType]) get(moid string, bypassStaleness ...bool) (valu
 	pc.l.Lock()
 	defer pc.l.Unlock()
 
-	prop, ok := pc.m[moid]
+	props, ok := pc.m[moid]
 	if !ok {
 		return value, false
 	}
 
-	if time.Since(prop.lastUpdate) > maxCachedPropertiesValidity && !(len(bypassStaleness) == 1 && bypassStaleness[0]) {
-		delete(pc.m, moid) // This property won't be used anymore.
-
+	if time.Since(props.lastUpdate) > maxCachedPropertiesValidity && !(len(bypassStaleness) == 1 && bypassStaleness[0]) {
 		return value, false
 	}
 
-	return prop.value, true
+	return props.value, true
 }
 
 func (pc *propsCache[propsType]) set(moid string, value propsType) {

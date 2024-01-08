@@ -332,16 +332,22 @@ type addedField struct {
 
 type retainedMetrics map[string][]addedField
 
-func (retMetrics retainedMetrics) get(measurement string, field string, filter func(tags map[string]string, t []time.Time) bool) []any {
+func (retMetrics retainedMetrics) get(measurement string, field string, filter func(tags map[string]string, t []time.Time) bool) map[time.Time][]any {
 	fields, ok := retMetrics[measurement]
 	if !ok {
 		return nil
 	}
 
-	var values []any //nolint:prealloc
+	values := make(map[time.Time][]any)
 
 	for _, f := range fields {
 		if f.field != field {
+			continue
+		}
+
+		if len(f.t) == 0 {
+			logger.Printf("Ignoring %s_%s (%v) because it has no timestamp (value=%v)", measurement, field, f.tags, f.value) // TODO: remove
+
 			continue
 		}
 
@@ -349,28 +355,25 @@ func (retMetrics retainedMetrics) get(measurement string, field string, filter f
 			continue
 		}
 
-		values = append(values, f.value)
+		values[f.t[0]] = append(values[f.t[0]], f.value)
 	}
 
 	return values
 }
 
-func (retMetrics retainedMetrics) sort(measurement string) {
-	fields, ok := retMetrics[measurement]
-	if !ok {
-		return
+func (retMetrics retainedMetrics) sort() {
+	for _, fields := range retMetrics {
+		sort.Slice(fields, func(i, j int) bool {
+			switch ti, tj := fields[i].t, fields[j].t; {
+			case len(ti) == 0:
+				return true
+			case len(tj) == 0:
+				return false
+			default:
+				return ti[0].Before(tj[0])
+			}
+		})
 	}
-
-	sort.Slice(fields, func(i, j int) bool {
-		switch ti, tj := fields[i].t, fields[j].t; {
-		case len(ti) == 0:
-			return true
-		case len(tj) == 0:
-			return false
-		default:
-			return ti[0].Before(tj[0])
-		}
-	})
 }
 
 func (retMetrics retainedMetrics) reduce(measurement string, field string, acc any, fn func(acc, value any, tags map[string]string, t []time.Time) any) any {
@@ -405,8 +408,6 @@ func (retAcc *retainAccumulator) AddFields(measurement string, fields map[string
 
 		for _, f := range retFields {
 			if value, ok := fields[f]; ok {
-				logger.Printf("Retaining AddFields(%q, %v, %v, %v)", measurement, fields, tags, t)
-
 				retAcc.retainedPerMeasurement[measurement] = append(retAcc.retainedPerMeasurement[measurement], addedField{f, value, tags, t})
 			}
 		}
@@ -450,7 +451,7 @@ func (ptsCache *pointCache) update(lastPoints []types.MetricPoint, t0 time.Time)
 		points = append(points, metricPoint)
 	}
 
-	logger.Printf("pointCache: %v", *ptsCache)
+	// logger.Printf("pointCache: %v", *ptsCache) // TODO: remove
 
 	return points
 }

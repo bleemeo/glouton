@@ -1022,3 +1022,85 @@ func makeVirtualDiskMetricComparer(opts []cmp.Option) cmp.Option {
 		return cmp.Equal(x, y, opts...)
 	})
 }
+
+func TestRetainedMetricsSort(t *testing.T) {
+	t0 := time.Date(2024, time.January, 8, 14, 0, 0, 0, time.Local)
+	retained := retainedMetrics{
+		"vsphere_host_cpu": []addedField{
+			{
+				field: "usagemhz_average",
+				value: 2,
+				tags:  map[string]string{"dcname": "ha-datacenter"},
+				t:     []time.Time{t0.Add(time.Minute)},
+			},
+			{
+				field: "usagemhz_average",
+				value: 1,
+				tags:  map[string]string{"dcname": "ha-datacenter"},
+				t:     []time.Time{t0},
+			},
+		},
+		"vsphere_host_mem": []addedField{
+			{
+				field: "usage_average",
+				value: 1,
+				tags:  map[string]string{"dcname": "ha-datacenter"},
+				t:     []time.Time{},
+			},
+			{
+				field: "usage_average",
+				value: 3,
+				tags:  map[string]string{"dcname": "ha-datacenter"},
+				t:     []time.Time{t0},
+			},
+			{
+				field: "usage_average",
+				value: 2,
+				tags:  map[string]string{"dcname": "ha-datacenter"},
+				t:     []time.Time{t0.Add(-1 * time.Minute)},
+			},
+		},
+	}
+	expected := retainedMetrics{
+		"vsphere_host_cpu": []addedField{
+			{
+				field: "usagemhz_average",
+				value: 1,
+				tags:  map[string]string{"dcname": "ha-datacenter"},
+				t:     []time.Time{t0},
+			},
+			{
+				field: "usagemhz_average",
+				value: 2,
+				tags:  map[string]string{"dcname": "ha-datacenter"},
+				t:     []time.Time{t0.Add(time.Minute)},
+			},
+		},
+		"vsphere_host_mem": []addedField{
+			{
+				field: "usage_average",
+				value: 1,
+				tags:  map[string]string{"dcname": "ha-datacenter"},
+				t:     []time.Time{},
+			},
+			{
+				field: "usage_average",
+				value: 2,
+				tags:  map[string]string{"dcname": "ha-datacenter"},
+				t:     []time.Time{t0.Add(-1 * time.Minute)},
+			},
+			{
+				field: "usage_average",
+				value: 3,
+				tags:  map[string]string{"dcname": "ha-datacenter"},
+				t:     []time.Time{t0},
+			},
+		},
+	}
+
+	retained.sort()
+
+	if diff := cmp.Diff(expected, retained, cmp.AllowUnexported(addedField{})); diff != "" {
+		t.Fatalf("Unexpected sort result (-want +got):\n%s", diff)
+	}
+}

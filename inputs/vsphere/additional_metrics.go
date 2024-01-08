@@ -18,8 +18,10 @@ package vsphere
 
 import (
 	"context"
+	"fmt"
 	"glouton/logger"
 	"maps"
+	"strings"
 	"time"
 
 	"github.com/influxdata/telegraf"
@@ -29,6 +31,21 @@ import (
 )
 
 func additionalClusterMetrics(ctx context.Context, client *vim25.Client, clusters []*object.ClusterComputeResource, datastores []*object.Datastore, caches *propsCaches, acc telegraf.Accumulator, retained retainedMetrics, h *Hierarchy, t0 time.Time) error {
+	retained.sort() // Pre-sort points according to timestamp in ascending order
+
+	sb := new(strings.Builder)
+	sb.WriteString("Retained metrics for " + client.URL().Host + ":\n")
+
+	for metric, fields := range retained {
+		sb.WriteString("  " + metric + ":\n")
+
+		for _, field := range fields {
+			sb.WriteString(fmt.Sprintf("    %s (%v): %v @ %v\n", field.field, field.tags, field.value, field.t))
+		}
+	}
+
+	logger.Printf(sb.String()) // TODO: remove
+
 	for _, cluster := range clusters {
 		// Defining common tags for all metrics in this cluster,
 		// we will clone this map in case extra tags need to be added.
@@ -65,8 +82,6 @@ func additionalClusterMetrics(ctx context.Context, client *vim25.Client, cluster
 		}
 	}
 
-	retained.sort("vsphere_host_datastore") // Pre-sort points according to timestamp in ascending order
-
 	for _, datastore := range datastores {
 		tags := map[string]string{
 			"dsname": datastore.Name(),
@@ -96,33 +111,35 @@ func additionalClusterMetrics(ctx context.Context, client *vim25.Client, cluster
 }
 
 func additionalClusterCPU(tags map[string]string, cluster *object.ClusterComputeResource, hostMOIDs map[string]bool, cache *propsCache[clusterLightProps], acc telegraf.Accumulator, retained retainedMetrics, t0 time.Time) error {
-	hostUsagesMHz := retained.get("vsphere_host_cpu", "usagemhz_average", func(tags map[string]string, t []time.Time) bool {
-		return hostMOIDs[tags["moid"]] && (len(t) == 0 || t[0].Equal(t0))
+	hostUsagesMHzPerTs := retained.get("vsphere_host_cpu", "usagemhz_average", func(tags map[string]string, t []time.Time) bool {
+		return hostMOIDs[tags["moid"]] // && (len(t) == 0 || t[0].Equal(t0))
 	})
 
 	clusterProps, ok := cache.get(cluster.Reference().Value, true)
-	if len(hostUsagesMHz) == 0 || !ok {
+	if len(hostUsagesMHzPerTs) == 0 || !ok {
 		return nil
 	}
 
-	var sum int64
+	for ts, hostUsagesMHz := range hostUsagesMHzPerTs {
+		var sum int64
 
-	for _, value := range hostUsagesMHz {
-		sum += value.(int64) //nolint: forcetypeassert
+		for _, value := range hostUsagesMHz {
+			sum += value.(int64) //nolint: forcetypeassert
+		}
+
+		totalMHz := float64(clusterProps.ComputeResource.Summary.ComputeResourceSummary.TotalCpu)
+		result := (float64(sum) / totalMHz) * 100
+
+		tags["cpu"] = instanceTotal
+
+		logger.Printf("Cluster CPU: (%d / %f) * 100 = %f", sum, totalMHz, result)
+
+		if sum == 0 {
+			logger.Printf("Sum is 0 because: %v", hostUsagesMHz)
+		}
+
+		acc.AddFields("vsphere_cluster_cpu", map[string]any{"usage_average": result}, tags, ts)
 	}
-
-	totalMHz := float64(clusterProps.ComputeResource.Summary.ComputeResourceSummary.TotalCpu)
-	result := (float64(sum) / totalMHz) * 100
-
-	tags["cpu"] = instanceTotal
-
-	logger.Printf("Cluster CPU: (%d / %f) * 100 = %f", sum, totalMHz, result)
-
-	if sum == 0 {
-		logger.Printf("Sum is 0 because: %v", hostUsagesMHz)
-	}
-
-	acc.AddFields("vsphere_cluster_cpu", map[string]any{"usage_average": result}, tags, t0)
 
 	return nil
 }
