@@ -142,7 +142,7 @@ func AddDefaultInputs(metricRegistry GathererRegistry, inputsConfig inputs.Colle
 func addInputToRegistry(reg GathererRegistry, input telegraf.Input, name string) error {
 	opt := registry.RegistrationOption{
 		Description: name + " input",
-		Interval:    10 * time.Second,
+		Interval:    defaultInterval,
 	}
 	_, err := reg.RegisterInput(opt, input)
 

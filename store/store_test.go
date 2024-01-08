@@ -63,7 +63,7 @@ func TestLabelsMatchNotExact(t *testing.T) {
 		{
 			map[string]string{
 				types.LabelName: "disk_used",
-				"mountpoint":    "/home",
+				"item":          "/home",
 			},
 			map[string]string{
 				types.LabelName: "disk_used",
@@ -73,7 +73,7 @@ func TestLabelsMatchNotExact(t *testing.T) {
 		{
 			map[string]string{
 				types.LabelName: "disk_used",
-				"mountpoint":    "/home",
+				"item":          "/home",
 			},
 			map[string]string{
 				types.LabelName: "cpu_used",
@@ -83,18 +83,18 @@ func TestLabelsMatchNotExact(t *testing.T) {
 		{
 			map[string]string{
 				types.LabelName: "disk_used",
-				"mountpoint":    "/home",
+				"item":          "/home",
 			},
 			map[string]string{
 				types.LabelName: "disk_used",
-				"mountpoint":    "/",
+				"item":          "/",
 			},
 			false,
 		},
 		{
 			map[string]string{
 				types.LabelName: "disk_used",
-				"mountpoint":    "/home",
+				"item":          "/home",
 			},
 			map[string]string{
 				types.LabelName: "disk_used",
@@ -129,7 +129,7 @@ func TestLabelsMatchExact(t *testing.T) {
 		{
 			map[string]string{
 				types.LabelName: "disk_used",
-				"mountpoint":    "/home",
+				"item":          "/home",
 			},
 			map[string]string{
 				types.LabelName: "disk_used",
@@ -139,7 +139,7 @@ func TestLabelsMatchExact(t *testing.T) {
 		{
 			map[string]string{
 				types.LabelName: "disk_used",
-				"mountpoint":    "/home",
+				"item":          "/home",
 			},
 			map[string]string{
 				types.LabelName: "cpu_used",
@@ -149,33 +149,33 @@ func TestLabelsMatchExact(t *testing.T) {
 		{
 			map[string]string{
 				types.LabelName: "disk_used",
-				"mountpoint":    "/home",
+				"item":          "/home",
 			},
 			map[string]string{
 				types.LabelName: "disk_used",
-				"mountpoint":    "/",
+				"item":          "/",
 			},
 			false,
 		},
 		{
 			map[string]string{
 				types.LabelName: "disk_used",
-				"mountpoint":    "/home",
+				"item":          "/home",
 			},
 			map[string]string{
 				types.LabelName: "disk_used",
-				"mountpoint":    "/home",
+				"item":          "/home",
 			},
 			true,
 		},
 		{
 			map[string]string{
 				types.LabelName: "disk_used",
-				"mountpoint":    "/home",
+				"item":          "/home",
 			},
 			map[string]string{
 				types.LabelName: "disk_used",
-				"mountpoint":    "/home",
+				"item":          "/home",
 				"extra":         "label",
 			},
 			false,
@@ -221,11 +221,11 @@ func TestMetricsMultiple(t *testing.T) {
 	}
 	labels2 := map[string]string{
 		types.LabelName: "disk_used",
-		"mountpoint":    "/home",
+		"item":          "/home",
 	}
 	labels3 := map[string]string{
 		types.LabelName: "disk_used",
-		"mountpoint":    "/srv",
+		"item":          "/srv",
 		"fstype":        "ext4",
 	}
 	db := New(time.Hour, time.Hour)
@@ -256,12 +256,12 @@ func TestMetricsMultiple(t *testing.T) {
 	}
 
 	for _, m := range metrics {
-		if m.Labels()["mountpoint"] != "/home" && m.Labels()["mountpoint"] != "/srv" {
-			t.Errorf("m.Labels()[mountpoint] == %v, want %v or %v", m.Labels()["mountpoint"], "/home", "/srv")
+		if m.Labels()["item"] != "/home" && m.Labels()["item"] != "/srv" {
+			t.Errorf("m.Labels()[item] == %v, want %v or %v", m.Labels()["item"], "/home", "/srv")
 		}
 	}
 
-	metrics, err = db.Metrics(map[string]string{types.LabelName: "disk_used", "mountpoint": "/srv"})
+	metrics, err = db.Metrics(map[string]string{types.LabelName: "disk_used", "item": "/srv"})
 	if err != nil {
 		t.Error(err)
 	}
@@ -452,7 +452,6 @@ func makeMetric(b *testing.B, rnd *rand.Rand, labelCount int) map[string]string 
 		"job",
 		"method",
 		"mode",
-		"mountpoint",
 		"nodename",
 		"op",
 		"port",

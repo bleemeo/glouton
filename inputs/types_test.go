@@ -53,8 +53,8 @@ func TestAccumulator(t *testing.T) {
 		"fieldUint64": uint64(42),
 	}
 	tags := map[string]string{
-		"tag1":       "value1",
-		"mountpoint": "/home",
+		"tag1": "value1",
+		"item": "/home",
 	}
 
 	db := &mockStore{}
@@ -153,8 +153,8 @@ func TestStoreAccumulatorWithStatus(t *testing.T) {
 	}
 
 	tags := map[string]string{
-		"tag1":       "value1",
-		"mountpoint": "/home",
+		"tag1": "value1",
+		"item": "/home",
 	}
 	want := map[string]float64{
 		"cpu_used":        97.0,
