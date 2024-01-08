@@ -21,6 +21,7 @@ import (
 	"glouton/inputs/internal"
 
 	"github.com/influxdata/telegraf"
+	telegraf_config "github.com/influxdata/telegraf/config"
 	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"
 	"github.com/influxdata/telegraf/plugins/inputs/rabbitmq"
 )
@@ -32,8 +33,8 @@ func New(url string, username string, password string) (i telegraf.Input, err er
 		rabbitmqInput, ok := input().(*rabbitmq.RabbitMQ)
 		if ok {
 			rabbitmqInput.URL = url
-			rabbitmqInput.Username = username
-			rabbitmqInput.Password = password
+			rabbitmqInput.Username = telegraf_config.NewSecret([]byte(username))
+			rabbitmqInput.Password = telegraf_config.NewSecret([]byte(password))
 			i = &internal.Input{
 				Input: rabbitmqInput,
 				Accumulator: internal.Accumulator{
