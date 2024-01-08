@@ -437,7 +437,6 @@ func makeMetric(b *testing.B, rnd *rand.Rand, labelCount int) map[string]string 
 		"core",
 		"cpu",
 		"db",
-		"device",
 		"fstype",
 		"generation",
 		"golang_version",

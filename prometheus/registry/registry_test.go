@@ -1942,7 +1942,7 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 				{
 					Labels: map[string]string{
 						types.LabelName: "io_utilization",
-						"device":        "sda",
+						"item":          "sda",
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoItem: "sda",

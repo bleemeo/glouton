@@ -38,7 +38,7 @@ func Test_deduplicate(t *testing.T) { //nolint:maintidx
 					Fields: nil,
 					Tags: map[string]string{
 						"fstype": "ext4",
-						"device": "sda2",
+						"item":   "sda2",
 						"mode":   "ro",
 						"path":   "/boot",
 					},
@@ -48,7 +48,7 @@ func Test_deduplicate(t *testing.T) { //nolint:maintidx
 					Fields: nil,
 					Tags: map[string]string{
 						"fstype": "ext4",
-						"device": "dm-1",
+						"item":   "dm-1",
 						"mode":   "rw",
 						"path":   "/",
 					},
@@ -60,7 +60,7 @@ func Test_deduplicate(t *testing.T) { //nolint:maintidx
 					Fields: nil,
 					Tags: map[string]string{
 						"fstype": "ext4",
-						"device": "sda2",
+						"item":   "sda2",
 						"mode":   "ro",
 						"path":   "/boot",
 					},
@@ -70,7 +70,7 @@ func Test_deduplicate(t *testing.T) { //nolint:maintidx
 					Fields: nil,
 					Tags: map[string]string{
 						"fstype": "ext4",
-						"device": "dm-1",
+						"item":   "dm-1",
 						"mode":   "rw",
 						"path":   "/",
 					},
@@ -86,7 +86,7 @@ func Test_deduplicate(t *testing.T) { //nolint:maintidx
 					Fields: nil,
 					Tags: map[string]string{
 						"fstype": "ext4",
-						"device": "sda2",
+						"item":   "sda2",
 						"mode":   "ro",
 						"path":   "/boot",
 					},
@@ -96,7 +96,7 @@ func Test_deduplicate(t *testing.T) { //nolint:maintidx
 					Fields: nil,
 					Tags: map[string]string{
 						"fstype": "ext4",
-						"device": "dm-1",
+						"item":   "dm-1",
 						"mode":   "rw",
 						"path":   "/",
 					},
@@ -108,7 +108,7 @@ func Test_deduplicate(t *testing.T) { //nolint:maintidx
 					Fields: nil,
 					Tags: map[string]string{
 						"fstype": "ext4",
-						"device": "sda2",
+						"item":   "sda2",
 						"mode":   "ro",
 						"path":   "/boot",
 					},
@@ -118,7 +118,7 @@ func Test_deduplicate(t *testing.T) { //nolint:maintidx
 					Fields: nil,
 					Tags: map[string]string{
 						"fstype": "ext4",
-						"device": "dm-1",
+						"item":   "dm-1",
 						"mode":   "rw",
 						"path":   "/",
 					},
@@ -133,7 +133,7 @@ func Test_deduplicate(t *testing.T) { //nolint:maintidx
 					Fields: nil,
 					Tags: map[string]string{
 						"fstype": "ext4",
-						"device": "dm-1",
+						"item":   "dm-1",
 						"mode":   "rw",
 						"path":   "/mnt/bind",
 					},
@@ -143,7 +143,7 @@ func Test_deduplicate(t *testing.T) { //nolint:maintidx
 					Fields: nil,
 					Tags: map[string]string{
 						"fstype": "ext4",
-						"device": "dm-1",
+						"item":   "dm-1",
 						"mode":   "rw",
 						"path":   "/",
 					},
@@ -153,7 +153,7 @@ func Test_deduplicate(t *testing.T) { //nolint:maintidx
 					Fields: nil,
 					Tags: map[string]string{
 						"fstype": "ext4",
-						"device": "dm-1",
+						"item":   "dm-1",
 						"mode":   "rw",
 						"path":   "/mnt/bind/etc/resolv.conf",
 					},
@@ -165,7 +165,7 @@ func Test_deduplicate(t *testing.T) { //nolint:maintidx
 					Fields: nil,
 					Tags: map[string]string{
 						"fstype": "ext4",
-						"device": "dm-1",
+						"item":   "dm-1",
 						"mode":   "rw",
 						"path":   "/",
 					},
@@ -180,7 +180,7 @@ func Test_deduplicate(t *testing.T) { //nolint:maintidx
 					Fields: nil,
 					Tags: map[string]string{
 						"fstype": "ext4",
-						"device": "nvme0n1p1",
+						"item":   "nvme0n1p1",
 						"mode":   "rw",
 						"path":   "/boot/efi",
 					},
@@ -190,7 +190,7 @@ func Test_deduplicate(t *testing.T) { //nolint:maintidx
 					Fields: nil,
 					Tags: map[string]string{
 						"fstype": "ext4",
-						"device": "dm-3",
+						"item":   "dm-3",
 						"mode":   "rw",
 						"path":   "/boot/efi",
 					},
@@ -202,7 +202,7 @@ func Test_deduplicate(t *testing.T) { //nolint:maintidx
 					Fields: nil,
 					Tags: map[string]string{
 						"fstype": "ext4",
-						"device": "dm-3",
+						"item":   "dm-3",
 						"mode":   "rw",
 						"path":   "/boot/efi",
 					},
@@ -217,7 +217,7 @@ func Test_deduplicate(t *testing.T) { //nolint:maintidx
 					Fields: nil,
 					Tags: map[string]string{
 						"fstype": "ext4",
-						"device": "nvme0n1p1",
+						"item":   "nvme0n1p1",
 						"mode":   "rw",
 						"path":   "/boot/efi",
 					},
@@ -227,7 +227,7 @@ func Test_deduplicate(t *testing.T) { //nolint:maintidx
 					Fields: nil,
 					Tags: map[string]string{
 						"fstype": "ext4",
-						"device": "dm-3",
+						"item":   "dm-3",
 						"mode":   "rw",
 						"path":   "/boot/efi",
 					},
@@ -237,7 +237,7 @@ func Test_deduplicate(t *testing.T) { //nolint:maintidx
 					Fields: nil,
 					Tags: map[string]string{
 						"fstype": "ext4",
-						"device": "dm-3",
+						"item":   "dm-3",
 						"mode":   "rw",
 						"path":   "/mnt/abc", // shorter than /boot/efi
 					},
@@ -249,7 +249,7 @@ func Test_deduplicate(t *testing.T) { //nolint:maintidx
 					Fields: nil,
 					Tags: map[string]string{
 						"fstype": "ext4",
-						"device": "dm-3",
+						"item":   "dm-3",
 						"mode":   "rw",
 						"path":   "/mnt/abc",
 					},
@@ -265,7 +265,7 @@ func Test_deduplicate(t *testing.T) { //nolint:maintidx
 					Fields: nil,
 					Tags: map[string]string{
 						"fstype": "ext4",
-						"device": "nvme0n1p1",
+						"item":   "nvme0n1p1",
 						"mode":   "rw",
 						"path":   "/boot/efi",
 					},
@@ -275,7 +275,7 @@ func Test_deduplicate(t *testing.T) { //nolint:maintidx
 					Fields: nil,
 					Tags: map[string]string{
 						"fstype": "ext4",
-						"device": "dm-3",
+						"item":   "dm-3",
 						"mode":   "rw",
 						"path":   "/boot/efi",
 					},
@@ -285,7 +285,7 @@ func Test_deduplicate(t *testing.T) { //nolint:maintidx
 					Fields: nil,
 					Tags: map[string]string{
 						"fstype": "ext4",
-						"device": "dm-3",
+						"item":   "dm-3",
 						"mode":   "rw",
 						"path":   "/mnt/abc", // shorter than /boot/efi
 					},
@@ -297,7 +297,7 @@ func Test_deduplicate(t *testing.T) { //nolint:maintidx
 					Fields: nil,
 					Tags: map[string]string{
 						"fstype": "ext4",
-						"device": "dm-3",
+						"item":   "dm-3",
 						"mode":   "rw",
 						"path":   "/mnt/abc",
 					},
@@ -313,7 +313,7 @@ func Test_deduplicate(t *testing.T) { //nolint:maintidx
 					Fields: nil,
 					Tags: map[string]string{
 						"fstype": "ext4",
-						"device": "nvme0n1p1",
+						"item":   "nvme0n1p1",
 						"mode":   "rw",
 						"path":   "/boot/efi",
 					},
@@ -323,7 +323,7 @@ func Test_deduplicate(t *testing.T) { //nolint:maintidx
 					Fields: nil,
 					Tags: map[string]string{
 						"fstype": "ext4",
-						"device": "dm-3",
+						"item":   "dm-3",
 						"mode":   "rw",
 						"path":   "/boot/efi",
 					},
@@ -333,7 +333,7 @@ func Test_deduplicate(t *testing.T) { //nolint:maintidx
 					Fields: nil,
 					Tags: map[string]string{
 						"fstype": "ext4",
-						"device": "dm-3",
+						"item":   "dm-3",
 						"mode":   "rw",
 						"path":   "/mnt/abc", // shorter than /boot/efi
 					},
@@ -345,7 +345,7 @@ func Test_deduplicate(t *testing.T) { //nolint:maintidx
 					Fields: nil,
 					Tags: map[string]string{
 						"fstype": "ext4",
-						"device": "dm-3",
+						"item":   "dm-3",
 						"mode":   "rw",
 						"path":   "/mnt/abc",
 					},
@@ -360,7 +360,7 @@ func Test_deduplicate(t *testing.T) { //nolint:maintidx
 					Fields: nil,
 					Tags: map[string]string{
 						"fstype": "ext4",
-						"device": "nvme0n1p1",
+						"item":   "nvme0n1p1",
 						"mode":   "rw",
 						"path":   "/boot/efi",
 					},
@@ -370,7 +370,7 @@ func Test_deduplicate(t *testing.T) { //nolint:maintidx
 					Fields: nil,
 					Tags: map[string]string{
 						"fstype": "ext4",
-						"device": "dm-3",
+						"item":   "dm-3",
 						"mode":   "rw",
 						"path":   "/boot/efi",
 					},
@@ -380,7 +380,7 @@ func Test_deduplicate(t *testing.T) { //nolint:maintidx
 					Fields: nil,
 					Tags: map[string]string{
 						"fstype": "ext4",
-						"device": "dm-3",
+						"item":   "dm-3",
 						"mode":   "rw",
 						"path":   "/abc/abcd", // same length as /boot/efi
 					},
@@ -392,7 +392,7 @@ func Test_deduplicate(t *testing.T) { //nolint:maintidx
 					Fields: nil,
 					Tags: map[string]string{
 						"fstype": "ext4",
-						"device": "dm-3",
+						"item":   "dm-3",
 						"mode":   "rw",
 						"path":   "/boot/efi",
 					},
@@ -408,7 +408,7 @@ func Test_deduplicate(t *testing.T) { //nolint:maintidx
 					Fields: nil,
 					Tags: map[string]string{
 						"fstype": "ext4",
-						"device": "nvme0n1p1",
+						"item":   "nvme0n1p1",
 						"mode":   "rw",
 						"path":   "/etc/hosts",
 					},
@@ -418,7 +418,7 @@ func Test_deduplicate(t *testing.T) { //nolint:maintidx
 					Fields: nil,
 					Tags: map[string]string{
 						"fstype": "ext4",
-						"device": "nvme0n1p1",
+						"item":   "nvme0n1p1",
 						"mode":   "rw",
 						"path":   "/hostroot/tmp/hostpath-provisioner",
 					},
@@ -428,7 +428,7 @@ func Test_deduplicate(t *testing.T) { //nolint:maintidx
 					Fields: nil,
 					Tags: map[string]string{
 						"fstype": "ext4",
-						"device": "nvme0n1p1",
+						"item":   "nvme0n1p1",
 						"mode":   "rw",
 						"path":   "/hostroot/var",
 					},
@@ -438,7 +438,7 @@ func Test_deduplicate(t *testing.T) { //nolint:maintidx
 					Fields: nil,
 					Tags: map[string]string{
 						"fstype": "ext4",
-						"device": "nvme0n1p1",
+						"item":   "nvme0n1p1",
 						"mode":   "rw",
 						"path":   "/hostroot/var/lib",
 					},
@@ -450,7 +450,7 @@ func Test_deduplicate(t *testing.T) { //nolint:maintidx
 					Fields: nil,
 					Tags: map[string]string{
 						"fstype": "ext4",
-						"device": "nvme0n1p1",
+						"item":   "nvme0n1p1",
 						"mode":   "rw",
 						"path":   "/hostroot/var",
 					},
@@ -466,7 +466,7 @@ func Test_deduplicate(t *testing.T) { //nolint:maintidx
 					Fields: nil,
 					Tags: map[string]string{
 						"fstype": "ext4",
-						"device": "mapper/vg0-root",
+						"item":   "mapper/vg0-root",
 						"mode":   "rw",
 						"path":   "/hostroot/tmp/hostpath_pv",
 					},
@@ -476,7 +476,7 @@ func Test_deduplicate(t *testing.T) { //nolint:maintidx
 					Fields: nil,
 					Tags: map[string]string{
 						"fstype": "ext4",
-						"device": "mapper/vg0-root",
+						"item":   "mapper/vg0-root",
 						"mode":   "rw",
 						"path":   "/hostroot/var",
 					},
@@ -486,7 +486,7 @@ func Test_deduplicate(t *testing.T) { //nolint:maintidx
 					Fields: nil,
 					Tags: map[string]string{
 						"fstype": "ext4",
-						"device": "mapper/vg0-root",
+						"item":   "mapper/vg0-root",
 						"mode":   "rw",
 						"path":   "/hostroot/data",
 					},
@@ -496,7 +496,7 @@ func Test_deduplicate(t *testing.T) { //nolint:maintidx
 					Fields: nil,
 					Tags: map[string]string{
 						"fstype": "ext4",
-						"device": "mapper/vg0-root",
+						"item":   "mapper/vg0-root",
 						"mode":   "rw",
 						"path":   "/dev/termination-log",
 					},
@@ -506,7 +506,7 @@ func Test_deduplicate(t *testing.T) { //nolint:maintidx
 					Fields: nil,
 					Tags: map[string]string{
 						"fstype": "ext4",
-						"device": "mapper/vg0-root",
+						"item":   "mapper/vg0-root",
 						"mode":   "rw",
 						"path":   "/etc/hosts",
 					},
@@ -516,7 +516,7 @@ func Test_deduplicate(t *testing.T) { //nolint:maintidx
 					Fields: nil,
 					Tags: map[string]string{
 						"fstype": "ext4",
-						"device": "mapper/vg0-root",
+						"item":   "mapper/vg0-root",
 						"mode":   "rw",
 						"path":   "/var/lib/glouton",
 					},
@@ -528,7 +528,7 @@ func Test_deduplicate(t *testing.T) { //nolint:maintidx
 					Fields: nil,
 					Tags: map[string]string{
 						"fstype": "ext4",
-						"device": "mapper/vg0-root",
+						"item":   "mapper/vg0-root",
 						"mode":   "rw",
 						"path":   "/hostroot/var",
 					},
