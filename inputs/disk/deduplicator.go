@@ -69,7 +69,7 @@ func deduplicate(acc *internal.StoreAccumulator, hostroot string) {
 			continue
 		}
 
-		if oldI, ok := devToIndx[m.Tags["item"]]; ok {
+		if oldI, ok := devToIndx[m.Tags["device"]]; ok {
 			oldIsShortest := len(acc.Measurement[oldI].Tags["path"]) <= len(m.Tags["path"])
 			oldNoHostRootWhileNewHad := !strings.HasPrefix(acc.Measurement[oldI].Tags["path"], hostroot) && strings.HasPrefix(m.Tags["path"], hostroot)
 			newNoHostRootWhileOldHad := !strings.HasPrefix(m.Tags["path"], hostroot) && strings.HasPrefix(acc.Measurement[oldI].Tags["path"], hostroot)
@@ -83,7 +83,7 @@ func deduplicate(acc *internal.StoreAccumulator, hostroot string) {
 			deleted[oldI] = true
 		}
 
-		devToIndx[m.Tags["item"]] = i
+		devToIndx[m.Tags["device"]] = i
 	}
 
 	n := 0
