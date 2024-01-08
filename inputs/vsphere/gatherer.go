@@ -332,35 +332,6 @@ type addedField struct {
 
 type retainedMetrics map[string][]addedField
 
-func (retMetrics retainedMetrics) get(measurement string, field string, filter func(tags map[string]string, t []time.Time) bool) map[time.Time][]any {
-	fields, ok := retMetrics[measurement]
-	if !ok {
-		return nil
-	}
-
-	values := make(map[time.Time][]any)
-
-	for _, f := range fields {
-		if f.field != field {
-			continue
-		}
-
-		if len(f.t) == 0 {
-			logger.Printf("Ignoring %s_%s (%v) because it has no timestamp (value=%v)", measurement, field, f.tags, f.value) // TODO: remove
-
-			continue
-		}
-
-		if !filter(f.tags, f.t) {
-			continue
-		}
-
-		values[f.t[0]] = append(values[f.t[0]], f.value)
-	}
-
-	return values
-}
-
 func (retMetrics retainedMetrics) sort() {
 	for _, fields := range retMetrics {
 		sort.Slice(fields, func(i, j int) bool {
@@ -376,7 +347,38 @@ func (retMetrics retainedMetrics) sort() {
 	}
 }
 
-func (retMetrics retainedMetrics) reduce(measurement string, field string, acc any, fn func(acc, value any, tags map[string]string, t []time.Time) any) any {
+// get returns a map timestamp -> points at this timestamp.
+func (retMetrics retainedMetrics) get(measurement string, field string, filter func(tags map[string]string) bool) map[int64][]any {
+	fields, ok := retMetrics[measurement]
+	if !ok {
+		return nil
+	}
+
+	values := make(map[int64][]any)
+
+	for _, f := range fields {
+		if f.field != field {
+			continue
+		}
+
+		if len(f.t) == 0 {
+			logger.V(2).Printf("Ignoring %s_%s (%v) because it has no timestamp (value=%v)", measurement, field, f.tags, f.value)
+
+			continue
+		}
+
+		if !filter(f.tags) {
+			continue
+		}
+
+		ts := f.t[0].Unix()
+		values[ts] = append(values[ts], f.value)
+	}
+
+	return values
+}
+
+func (retMetrics retainedMetrics) reduce(measurement string, field string, acc any, fn func(acc, value any, tags map[string]string, t time.Time) any) any {
 	fields, ok := retMetrics[measurement]
 	if !ok {
 		return nil
@@ -387,7 +389,13 @@ func (retMetrics retainedMetrics) reduce(measurement string, field string, acc a
 			continue
 		}
 
-		acc = fn(acc, f.value, f.tags, f.t)
+		if len(f.t) == 0 {
+			logger.V(2).Printf("Ignoring %s_%s (%v) because it has no timestamp (value=%v)", measurement, field, f.tags, f.value)
+
+			continue
+		}
+
+		acc = fn(acc, f.value, f.tags, f.t[0])
 	}
 
 	return acc
@@ -450,8 +458,6 @@ func (ptsCache *pointCache) update(lastPoints []types.MetricPoint, t0 time.Time)
 
 		points = append(points, metricPoint)
 	}
-
-	// logger.Printf("pointCache: %v", *ptsCache) // TODO: remove
 
 	return points
 }

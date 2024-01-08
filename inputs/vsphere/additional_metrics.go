@@ -18,10 +18,8 @@ package vsphere
 
 import (
 	"context"
-	"fmt"
 	"glouton/logger"
 	"maps"
-	"strings"
 	"time"
 
 	"github.com/influxdata/telegraf"
@@ -32,19 +30,6 @@ import (
 
 func additionalClusterMetrics(ctx context.Context, client *vim25.Client, clusters []*object.ClusterComputeResource, datastores []*object.Datastore, caches *propsCaches, acc telegraf.Accumulator, retained retainedMetrics, h *Hierarchy, t0 time.Time) error {
 	retained.sort() // Pre-sort points according to timestamp in ascending order
-
-	sb := new(strings.Builder)
-	sb.WriteString("Retained metrics for " + client.URL().Host + ":\n")
-
-	for metric, fields := range retained {
-		sb.WriteString("  " + metric + ":\n")
-
-		for _, field := range fields {
-			sb.WriteString(fmt.Sprintf("    %s (%v): %v @ %v\n", field.field, field.tags, field.value, field.t))
-		}
-	}
-
-	logger.Printf(sb.String()) // TODO: remove
 
 	for _, cluster := range clusters {
 		// Defining common tags for all metrics in this cluster,
@@ -66,12 +51,12 @@ func additionalClusterMetrics(ctx context.Context, client *vim25.Client, cluster
 			hostMOIDs[host.Reference().Value] = true
 		}
 
-		errClusterCPU := additionalClusterCPU(maps.Clone(tags), cluster, hostMOIDs, caches.clusterCache, acc, retained, t0)
+		errClusterCPU := additionalClusterCPU(maps.Clone(tags), cluster, hostMOIDs, caches.clusterCache, acc, retained)
 		if errClusterCPU != nil {
 			return errClusterCPU
 		}
 
-		errClusterMemory := additionalClusterMemory(maps.Clone(tags), cluster, hostMOIDs, caches, acc, retained, t0)
+		errClusterMemory := additionalClusterMemory(maps.Clone(tags), cluster, hostMOIDs, caches, acc, retained)
 		if errClusterMemory != nil {
 			return errClusterMemory
 		}
@@ -99,9 +84,9 @@ func additionalClusterMetrics(ctx context.Context, client *vim25.Client, cluster
 			hostMOIDs[host.Reference().Value] = true
 		}
 
-		logger.Printf("Host MOIDs of %s are %v", datastore.Name(), hostMOIDs)
+		logger.Printf("Host MOIDs of %s are %v", datastore.Name(), hostMOIDs) // TODO: remove
 
-		errDatastoreIO := additionalDatastoreIO(maps.Clone(tags), hostMOIDs, acc, retained, t0)
+		errDatastoreIO := additionalDatastoreIO(maps.Clone(tags), hostMOIDs, acc, retained)
 		if errDatastoreIO != nil {
 			return errDatastoreIO
 		}
@@ -110,17 +95,17 @@ func additionalClusterMetrics(ctx context.Context, client *vim25.Client, cluster
 	return nil
 }
 
-func additionalClusterCPU(tags map[string]string, cluster *object.ClusterComputeResource, hostMOIDs map[string]bool, cache *propsCache[clusterLightProps], acc telegraf.Accumulator, retained retainedMetrics, t0 time.Time) error {
-	hostUsagesMHzPerTs := retained.get("vsphere_host_cpu", "usagemhz_average", func(tags map[string]string, t []time.Time) bool {
-		return hostMOIDs[tags["moid"]] // && (len(t) == 0 || t[0].Equal(t0))
-	})
-
+func additionalClusterCPU(tags map[string]string, cluster *object.ClusterComputeResource, hostMOIDs map[string]bool, cache *propsCache[clusterLightProps], acc telegraf.Accumulator, retained retainedMetrics) error {
 	clusterProps, ok := cache.get(cluster.Reference().Value, true)
-	if len(hostUsagesMHzPerTs) == 0 || !ok {
+	if !ok {
 		return nil
 	}
 
-	for ts, hostUsagesMHz := range hostUsagesMHzPerTs {
+	hostUsagesMHzPerTS := retained.get("vsphere_host_cpu", "usagemhz_average", func(tags map[string]string) bool {
+		return hostMOIDs[tags["moid"]]
+	})
+
+	for ts, hostUsagesMHz := range hostUsagesMHzPerTS {
 		var sum int64
 
 		for _, value := range hostUsagesMHz {
@@ -132,27 +117,27 @@ func additionalClusterCPU(tags map[string]string, cluster *object.ClusterCompute
 
 		tags["cpu"] = instanceTotal
 
-		logger.Printf("Cluster CPU: (%d / %f) * 100 = %f", sum, totalMHz, result)
+		logger.Printf("Cluster CPU @ %s: (%d / %f) * 100 = %f", time.Unix(ts, 0).Format(time.DateTime), sum, totalMHz, result) // TODO: remove
 
 		if sum == 0 {
-			logger.Printf("Sum is 0 because: %v", hostUsagesMHz)
+			logger.Printf("Sum is 0 because: %v", hostUsagesMHz) // TODO: remove
 		}
 
-		acc.AddFields("vsphere_cluster_cpu", map[string]any{"usage_average": result}, tags, ts)
+		acc.AddFields("vsphere_cluster_cpu", map[string]any{"usage_average": result}, tags, time.Unix(ts, 0))
 	}
 
 	return nil
 }
 
-func additionalClusterMemory(tags map[string]string, cluster *object.ClusterComputeResource, hostMOIDs map[string]bool, caches *propsCaches, acc telegraf.Accumulator, retained retainedMetrics, t0 time.Time) error {
+func additionalClusterMemory(tags map[string]string, cluster *object.ClusterComputeResource, hostMOIDs map[string]bool, caches *propsCaches, acc telegraf.Accumulator, retained retainedMetrics) error {
 	clusterProps, ok := caches.clusterCache.get(cluster.Reference().Value, true)
 	if !ok {
 		return nil
 	}
 
-	hostsUsageMB := retained.reduce("vsphere_host_mem", "usage_average", nil, func(acc, value any, tags map[string]string, t []time.Time) any {
+	hostsUsageMBPerTS := retained.reduce("vsphere_host_mem", "usage_average", nil, func(acc any, value any, tags map[string]string, t time.Time) any {
 		moid := tags["moid"]
-		if !hostMOIDs[moid] || (len(t) != 0 && !t[0].Equal(t0)) {
+		if !hostMOIDs[moid] {
 			return acc
 		}
 
@@ -162,25 +147,27 @@ func additionalClusterMemory(tags map[string]string, cluster *object.ClusterComp
 		}
 
 		if acc == nil {
-			acc = 0. // acc was nil until here, in case no valid values were found
+			acc = make(map[int64]float64) // acc was nil until here, in case no valid values were found
 		}
 
-		ac, val := acc.(float64), value.(float64) //nolint: forcetypeassert
-		hostMemMB := val / 100 * float64(hostProps.Hardware.MemorySize)
+		ac, val := acc.(map[int64]float64), value.(float64) //nolint: forcetypeassert
+		ac[t.Unix()] = val / 100 * float64(hostProps.Hardware.MemorySize)
 
-		return ac + hostMemMB
+		return ac
 	})
 
-	if hostsUsageMB == nil {
+	if hostsUsageMBPerTS == nil {
 		return nil
 	}
 
-	totalMB := float64(clusterProps.ComputeResource.Summary.ComputeResourceSummary.TotalMemory)
-	result := (hostsUsageMB.(float64) / totalMB) * 100 //nolint: forcetypeassert
+	for ts, hostsUsageMB := range hostsUsageMBPerTS.(map[int64]float64) { //nolint: forcetypeassert
+		totalMB := float64(clusterProps.ComputeResource.Summary.ComputeResourceSummary.TotalMemory)
+		result := (hostsUsageMB / totalMB) * 100
 
-	logger.Printf("Cluster memory: (%f / %f) * 100 = %f", hostsUsageMB, totalMB, result)
+		logger.Printf("Cluster memory @ %s: (%f / %f) * 100 = %f", time.Unix(ts, 0).Format(time.DateTime), hostsUsageMB, totalMB, result) // TODO: remove
 
-	acc.AddFields("vsphere_cluster_mem", map[string]any{"used_perc": result}, tags, t0)
+		acc.AddFields("vsphere_cluster_mem", map[string]any{"used_perc": result}, tags, time.Unix(ts, 0))
+	}
 
 	return nil
 }
@@ -211,47 +198,61 @@ func additionalClusterHostsCount(ctx context.Context, tags map[string]string, cl
 	return nil
 }
 
-func additionalDatastoreIO(tags map[string]string, hostMOIDs map[string]bool, acc telegraf.Accumulator, retained retainedMetrics, t0 time.Time) error {
-	// Reducing the points to a map to only get the latest value of each metric
-	hostsReadKBps := retained.reduce("vsphere_host_datastore", "read_average", make(map[string]any), func(acc, value any, tags map[string]string, t []time.Time) any {
-		if hostMOIDs[tags["moid"]] && approxTimeEqual(t0, t) {
-			acc.(map[string]any)[tags["moid"]] = value //nolint: forcetypeassert
+func additionalDatastoreIO(tags map[string]string, hostMOIDs map[string]bool, acc telegraf.Accumulator, retained retainedMetrics) error {
+	allTimestamps := make(map[int64]struct{})
+	reducer := func(acc, value any, tags map[string]string, t time.Time) any {
+		if hostMOIDs[tags["moid"]] {
+			ac := acc.(map[int64]map[string]any) //nolint: forcetypeassert
+			ts := t.Unix()
+
+			usagePerHost, ok := ac[ts]
+			if !ok {
+				usagePerHost = make(map[string]any)
+			}
+
+			usagePerHost[tags["moid"]] = value
+			ac[ts] = usagePerHost
+			allTimestamps[ts] = struct{}{}
+
+			return ac
 		}
 
 		return acc
-	})
-	hostsWriteKBps := retained.reduce("vsphere_host_datastore", "write_average", make(map[string]any), func(acc, value any, tags map[string]string, t []time.Time) any {
-		if hostMOIDs[tags["moid"]] && approxTimeEqual(t0, t) {
-			acc.(map[string]any)[tags["moid"]] = value //nolint: forcetypeassert
+	}
+
+	// Reducing the points to a map to get the value of each metric at each timestamp
+	hostsReadKBpsPerTS := retained.reduce("vsphere_host_datastore", "read_average", make(map[int64]map[string]any), reducer)
+	hostsWriteKBpsPerTS := retained.reduce("vsphere_host_datastore", "write_average", make(map[int64]map[string]any), reducer)
+
+	for ts := range allTimestamps {
+		hostsReadKBps, readOk := hostsReadKBpsPerTS.(map[int64]map[string]any)[ts]
+		hostsWriteKBps, writeOk := hostsWriteKBpsPerTS.(map[int64]map[string]any)[ts]
+
+		logger.Printf("%s: HR=%v / HW=%v", tags["dsname"], hostsReadKBps, hostsWriteKBps) // TODO: remove
+
+		if !readOk || !writeOk {
+			return nil
 		}
 
-		return acc
-	})
+		var readSum, writeSum int64
 
-	logger.Printf("%s: HR=%v / HW=%v", tags["dsname"], hostsReadKBps, hostsWriteKBps)
+		for _, read := range hostsReadKBps {
+			readSum += read.(int64) //nolint: forcetypeassert
+		}
 
-	if hostsReadKBps == nil || hostsWriteKBps == nil {
-		return nil
+		for _, write := range hostsWriteKBps {
+			writeSum += write.(int64) //nolint: forcetypeassert
+		}
+
+		fields := map[string]any{
+			"read_average":  readSum,
+			"write_average": writeSum,
+		}
+
+		logger.Printf("Datastore %q read/write @ %s: %d/%d", tags["dsname"], time.Unix(ts, 0).Format(time.DateTime), readSum, writeSum) // TODO: remove
+
+		acc.AddFields("vsphere_datastore_datastore", fields, tags, time.Unix(ts, 0))
 	}
-
-	var readSum, writeSum int64
-
-	for _, read := range hostsReadKBps.(map[string]any) { //nolint: forcetypeassert
-		readSum += read.(int64) //nolint: forcetypeassert
-	}
-
-	for _, write := range hostsWriteKBps.(map[string]any) { //nolint: forcetypeassert
-		writeSum += write.(int64) //nolint: forcetypeassert
-	}
-
-	fields := map[string]any{
-		"read_average":  readSum,
-		"write_average": writeSum,
-	}
-
-	logger.Printf("Datastore %q read/write: %d/%d", tags["dsname"], readSum, writeSum)
-
-	acc.AddFields("vsphere_datastore_datastore", fields, tags, t0)
 
 	return nil
 }
@@ -326,12 +327,4 @@ func additionalVMMetrics(ctx context.Context, client *vim25.Client, vms []*objec
 	}
 
 	return nil
-}
-
-func approxTimeEqual(t0 time.Time, t []time.Time) bool {
-	if len(t) == 0 {
-		return true
-	}
-
-	return t0.Sub(t[0]) <= time.Minute
 }

@@ -510,6 +510,15 @@ func TestGatheringVcsim(t *testing.T) { //nolint:maintidx
 				{
 					Label: []*dto.LabelPair{
 						{Name: ptr("__meta_vsphere"), Value: ptr("127.0.0.1:xxxxx")},
+						{Name: ptr("__meta_vsphere_moid"), Value: ptr("domain-c16")},
+						{Name: ptr("clustername"), Value: ptr("DC0_C0")},
+						{Name: ptr("dcname"), Value: ptr("DC0")},
+					},
+					Untyped: &dto.Untyped{Value: ptr(1.)},
+				},
+				{
+					Label: []*dto.LabelPair{
+						{Name: ptr("__meta_vsphere"), Value: ptr("127.0.0.1:xxxxx")},
 						{Name: ptr("__meta_vsphere_moid"), Value: ptr("host-23")},
 						{Name: ptr("clustername"), Value: ptr("DC0_C0")},
 						{Name: ptr("dcname"), Value: ptr("DC0")},
@@ -704,6 +713,15 @@ func TestGatheringVcsim(t *testing.T) { //nolint:maintidx
 			Help: ptr(""),
 			Type: dto.MetricType_UNTYPED.Enum(),
 			Metric: []*dto.Metric{
+				{
+					Label: []*dto.LabelPair{
+						{Name: ptr("__meta_vsphere"), Value: ptr("127.0.0.1:xxxxx")},
+						{Name: ptr("__meta_vsphere_moid"), Value: ptr("domain-c16")},
+						{Name: ptr("clustername"), Value: ptr("DC0_C0")},
+						{Name: ptr("dcname"), Value: ptr("DC0")},
+					},
+					Untyped: &dto.Untyped{Value: ptr(1.)},
+				},
 				{
 					Label: []*dto.LabelPair{
 						{Name: ptr("__meta_vsphere"), Value: ptr("127.0.0.1:xxxxx")},
