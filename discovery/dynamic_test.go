@@ -627,7 +627,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				Active:          true,
 			},
 		},
-		// Service from Ubunut 16.04, default config
+		// Service from Ubuntu 16.04, default config
 		{
 			testName: "elasticsearch-ubuntu-16.04",
 			cmdLine: []string{
@@ -772,12 +772,12 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 		},
 		{
 			testName: "chrome",
-			cmdLine:  []string{"/opt/google/chrome/chrome http://127.0.0.1:5000/"},
+			cmdLine:  []string{"/opt/google/chrome/chrome", "http://127.0.0.1:5000/"},
 			noMatch:  true,
 		},
 		{
 			testName: "chrome2",
-			cmdLine:  []string{"/opt/ google/chrome/chrome http://127.0.0.1:5000/"},
+			cmdLine:  []string{"/opt/ google/chrome/chrome", "http://127.0.0.1:5000/"},
 			noMatch:  true,
 		},
 		{
@@ -851,14 +851,14 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 		{
 			testName: "kafka",
 			cmdLine: []string{
-				"/usr/local/openjdk-11/bin/java -Xmx1G -Xms1G -server -XX:+UseG1GC -XX:MaxGCPauseMillis=20",
-				"-XX:+ExplicitGCInvokesConcurrent -XX:MaxInlineLevel=15 -Djava.awt.headless=true",
+				"/usr/local/openjdk-11/bin/java", "-Xmx1G", "-Xms1G", "-server", "-XX:+UseG1GC", "-XX:MaxGCPauseMillis=20",
+				"-XX:+ExplicitGCInvokesConcurrent", "-XX:MaxInlineLevel=15", "-Djava.awt.headless=true",
 				"-Xlog:gc*:file=/opt/kafka/bin/../logs/kafkaServer-gc.log:time,tags:filecount=10,filesize=100M",
-				"-Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false",
-				"-Djava.rmi.server.hostname=localhost -Dcom.sun.management.jmxremote.rmi.port=1099 -Dcom.sun.management.jmxremote.port=1099",
-				"-Dkafka.logs.dir=/opt/kafka/bin/../logs -Dlog4j.configuration=file:/opt/kafka/bin/../config/log4j.properties",
-				"-cp /opt/kafka/bin/../libs/activation-1.1.1.jar:/opt/kafka/bin/../libs/aopalliance-repackaged-2.6.1.jar",
-				"kafka.Kafka /opt/kafka/config/server.properties",
+				"-Dcom.sun.management.jmxremote", "-Dcom.sun.management.jmxremote.authenticate=false", "-Dcom.sun.management.jmxremote.ssl=false",
+				"-Djava.rmi.server.hostname=localhost", "-Dcom.sun.management.jmxremote.rmi.port=1099", "-Dcom.sun.management.jmxremote.port=1099",
+				"-Dkafka.logs.dir=/opt/kafka/bin/../logs", "-Dlog4j.configuration=file:/opt/kafka/bin/../config/log4j.properties",
+				"-cp", "/opt/kafka/bin/../libs/activation-1.1.1.jar:/opt/kafka/bin/../libs/aopalliance-repackaged-2.6.1.jar",
+				"kafka.Kafka", "/opt/kafka/config/server.properties",
 			},
 			containerID:      "1234",
 			containerIP:      "127.0.0.1",
@@ -873,11 +873,14 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				Active:          true,
 				HasNetstatInfo:  true,
 				LastNetstatInfo: t0,
+				Config: config.Service{
+					JMXPort: 1099,
+				},
 			},
 		},
 		{
 			testName:         "not kafka",
-			cmdLine:          []string{"java -dconf.kafka.Kafka.address=1.2.3.4 com.bleemeo.myapp"},
+			cmdLine:          []string{"java", "-dconf.kafka.Kafka.address=1.2.3.4", "com.bleemeo.myapp"},
 			containerID:      "1234",
 			containerIP:      "127.0.0.1",
 			netstatAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 9092}},
@@ -885,7 +888,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 		},
 		{
 			testName:         "nats",
-			cmdLine:          []string{"/nats-server --config nats-server.conf"},
+			cmdLine:          []string{"/nats-server", "--config nats-server.conf"},
 			containerID:      "1234",
 			containerIP:      "127.0.0.1",
 			netstatAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 4222}},
@@ -991,7 +994,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "172.16.0.2", Port: 80}},
 				IPAddress:       "172.16.0.2",
 				// This test is done in two path. In dynamic.go we add the option to Config.
-				// in discovery (applyOverideInPlance) we apply the config override.
+				// in discovery (applyOverrideInPlance) we apply the config override.
 				// IgnoredPorts: map[int]bool{
 				//	74: true,
 				//	75: true,
@@ -1022,7 +1025,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ContainerID:   "817ec63d4b4f9e28947a323f9fbfc4596500b42c842bf07bd6ad9641e6805cb5",
 				ContainerName: "nginx_port_alt",
 				// This test is done in two path. In dynamic.go we add the option to Config.
-				// in discovery (applyOverideInPlance) we apply the config override.
+				// in discovery (applyOverrideInPlance) we apply the config override.
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "172.16.0.2", Port: 80}},
 				IPAddress:       "172.16.0.2",
 				Active:          true,
