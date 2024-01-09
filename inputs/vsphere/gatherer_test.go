@@ -64,19 +64,13 @@ func setupGathering(t *testing.T, dirName string) (mfs []*dto.MetricFamily, defe
 		t.Fatalf("Got an error gathering (%s) vSphere: %v", gatherRT, err)
 	}
 
-	/*histo5minMfs, err := vSphere.historical5minGatherer.GatherWithState(ctx, registry.GatherState{T0: t0, FromScrapeLoop: true})
-	if err != nil {
-		deferFn()
-		t.Fatalf("Got an error gathering (%s) vSphere: %v", gatherHist5m, err)
-	}*/
-
 	histo30minMfs, err := vSphere.historical30minGatherer.GatherWithState(ctx, registry.GatherState{T0: t0, FromScrapeLoop: true})
 	if err != nil {
 		deferFn()
 		t.Fatalf("Got an error gathering (%s) vSphere: %v", gatherHist30m, err)
 	}
 
-	mfs = append(realtimeMfs /*append(histo5minMfs, */, histo30minMfs... /*)...*/) //nolint: gocritic
+	mfs = append(realtimeMfs, histo30minMfs...) //nolint: gocritic
 
 	return mfs, deferFn
 }

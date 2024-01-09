@@ -77,7 +77,7 @@ func (m *Manager) EndpointsInError() map[string]bool {
 	for _, vSphere := range m.vSpheres {
 		vSphere.l.Lock()
 
-		if vSphere.realtimeGatherer == nil || /*vSphere.historical5minGatherer == nil ||*/ vSphere.historical30minGatherer == nil || vSphere.consecutiveErr > 0 {
+		if vSphere.realtimeGatherer == nil || vSphere.historical30minGatherer == nil || vSphere.consecutiveErr > 0 {
 			endpoints[vSphere.host] = true
 		}
 
@@ -120,20 +120,6 @@ func (m *Manager) RegisterGatherers(ctx context.Context, vSphereCfgs []config.VS
 
 			continue
 		}
-
-		/*historical5minGatherer, opt, err := vSphere.makeHistorical5minGatherer(ctx)
-		if err != nil {
-			logger.V(1).Printf("Failed to create historical 5min gatherer for %s: %v", vSphere.String(), err)
-
-			continue
-		}
-
-		_, err = registerGatherer(opt, registry.WithPastPointFilter(historical5minGatherer, 2*time.Hour))
-		if err != nil {
-			logger.V(1).Printf("Failed to register historical 5min gatherer for %s: %v", vSphere.String(), err)
-
-			continue
-		}*/
 
 		historical30minGatherer, opt, err := vSphere.makeHistorical30minGatherer(ctx)
 		if err != nil {
@@ -380,12 +366,10 @@ func (m *Manager) DiagnosticVSphere(ctx context.Context, archive types.ArchiveWr
 		switch {
 		case vSphere.lastErrorMessage != "":
 			status = vSphere.lastErrorMessage
-		case vSphere.realtimeGatherer == nil || /*vSphere.historical5minGatherer == nil ||*/ vSphere.historical30minGatherer == nil:
+		case vSphere.realtimeGatherer == nil || vSphere.historical30minGatherer == nil:
 			status = "gatherers haven't been initialized yet"
 		case vSphere.realtimeGatherer.lastErr != nil:
 			status = vSphere.realtimeGatherer.lastErr.Error()
-		/*case vSphere.historical5minGatherer.lastErr != nil:
-		status = vSphere.historical5minGatherer.lastErr.Error()*/
 		case vSphere.historical30minGatherer.lastErr != nil:
 			status = vSphere.historical30minGatherer.lastErr.Error()
 		}
