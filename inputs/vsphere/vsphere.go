@@ -814,7 +814,7 @@ func (vSphere *vSphere) transformMetrics(currentContext internal.GatherContext, 
 			"active_average":  math.NaN(), // Special case
 			"swapped_average": 1000,       // KB to B
 		},
-		"vsphere_vm_disk": {
+		"vsphere_vm_virtualDisk": {
 			"read_average":  1000, // KB/s to B/s
 			"write_average": 1000, // KB/s to B/s
 		},
@@ -894,9 +894,9 @@ func renameMetrics(currentContext internal.GatherContext, metricName string) (ne
 		newMeasurement = strings.TrimPrefix(newMeasurement, "vm_")
 	}
 
-	newMeasurement = strings.TrimPrefix(newMeasurement, "host_")
-	newMeasurement = strings.TrimPrefix(newMeasurement, "datastore_")
 	newMeasurement = strings.TrimPrefix(newMeasurement, "cluster_")
+	newMeasurement = strings.TrimPrefix(newMeasurement, "datastore_")
+	newMeasurement = strings.TrimPrefix(newMeasurement, "host_")
 
 	switch newMeasurement {
 	case "cpu", "vsphere_vm_cpu":

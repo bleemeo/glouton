@@ -111,7 +111,7 @@ func TestTransformMetrics(t *testing.T) {
 				expectedValue: 185640,
 			},
 		},
-		"vsphere_vm_disk": {
+		"vsphere_vm_virtualDisk": {
 			{
 				field:         "read_average",
 				value:         35.432,
