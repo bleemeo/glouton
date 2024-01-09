@@ -44,8 +44,7 @@ const endpointCreationRetryDelay = 5 * time.Minute
 type gatherKind string
 
 const (
-	gatherRT gatherKind = "realtime" // Hosts and VMs
-	// gatherHist5m  gatherKind = "historical 5min" // Clusters.
+	gatherRT      gatherKind = "realtime"         // Hosts and VMs (and Clusters, aggregated from hosts metrics)
 	gatherHist30m gatherKind = "historical 30min" // Datastores
 )
 
@@ -125,8 +124,6 @@ func (gatherer *vSphereGatherer) GatherWithState(ctx context.Context, state regi
 			// a bit sooner (we don't know the delay before that point is available).
 			err = gatherer.endpoint.Collect(ctx, retAcc)
 			if gatherer.kind == gatherHist30m && err == nil {
-				logger.Printf("Called telegraf input (last time was at %s)", gatherer.lastInputCollect)
-
 				gatherer.lastInputCollect = state.T0
 			}
 		}
@@ -450,11 +447,9 @@ func (ptsCache *pointCache) update(lastPoints []types.MetricPoint, t0 time.Time)
 
 	points := make([]types.MetricPoint, 0, len(*ptsCache))
 
-	for labelsText, point := range *ptsCache {
+	for _, point := range *ptsCache {
 		metricPoint := point.MetricPoint
 		metricPoint.Time = t0
-
-		logger.Printf("Using point %s: %f (%s)", labelsText, metricPoint.Value, metricPoint.Time)
 
 		points = append(points, metricPoint)
 	}

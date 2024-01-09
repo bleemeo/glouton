@@ -65,8 +65,7 @@ type vSphere struct {
 	state        bleemeoTypes.State
 	factProvider bleemeoTypes.FactProvider
 
-	realtimeGatherer *vSphereGatherer
-	/*historical5minGatherer  *vSphereGatherer*/
+	realtimeGatherer        *vSphereGatherer
 	historical30minGatherer *vSphereGatherer
 
 	hierarchy        *Hierarchy
@@ -120,8 +119,6 @@ func (vSphere *vSphere) getStatus() (types.Status, string) {
 	switch {
 	case vSphere.realtimeGatherer.lastErr != nil:
 		return types.StatusCritical, "realtime endpoint error: " + vSphere.realtimeGatherer.lastErr.Error()
-	/*case vSphere.historical5minGatherer.lastErr != nil:
-	return types.StatusCritical, "historical 5min endpoint error: " + vSphere.historical5minGatherer.lastErr.Error()*/
 	case vSphere.historical30minGatherer.lastErr != nil:
 		return types.StatusCritical, "historical 30min endpoint error: " + vSphere.historical30minGatherer.lastErr.Error()
 	}
@@ -373,75 +370,6 @@ func (vSphere *vSphere) makeRealtimeGatherer(ctx context.Context) (registry.Gath
 
 	return gatherer, opt, nil
 }
-
-/*func (vSphere *vSphere) makeHistorical5minGatherer(ctx context.Context) (registry.GathererWithOrWithoutState, registry.RegistrationOption, error) {
-	input, ok := telegraf_inputs.Inputs["vsphere"]
-	if !ok {
-		return nil, registry.RegistrationOption{}, inputs.ErrDisabledInput
-	}
-
-	vsphereInput, ok := input().(*vsphere.VSphere)
-	if !ok {
-		return nil, registry.RegistrationOption{}, inputs.ErrUnexpectedType
-	}
-
-	vsphereInput.Username = telegraf_config.NewSecret([]byte(vSphere.opts.Username))
-	vsphereInput.Password = telegraf_config.NewSecret([]byte(vSphere.opts.Password))
-
-	vsphereInput.ClusterInstances = true
-
-	vsphereInput.ClusterMetricInclude = []string{
-		// "mem.usage.average",
-	}
-
-	vsphereInput.VMMetricExclude = []string{"*"}
-	vsphereInput.HostMetricExclude = []string{"*"}
-	vsphereInput.DatastoreMetricExclude = []string{"*"}
-	vsphereInput.ResourcePoolMetricExclude = []string{"*"}
-	vsphereInput.DatacenterMetricExclude = []string{"*"}
-	vsphereInput.VMInstances = false
-	vsphereInput.HostInstances = false
-	vsphereInput.DatastoreInstances = false
-	vsphereInput.ResourcePoolInstances = false
-	vsphereInput.DatacenterInstances = false
-
-	vsphereInput.InsecureSkipVerify = vSphere.opts.InsecureSkipVerify
-	vsphereInput.HistoricalInterval = telegraf_config.Duration(5 * time.Minute)
-	vsphereInput.ObjectDiscoveryInterval = telegraf_config.Duration(2 * time.Minute)
-
-	vsphereInput.MetricLookback = 6
-
-	vsphereInput.Log = logger.NewTelegrafLog(vSphere.String() + " historical 5min")
-
-	acc := &internal.Accumulator{
-		RenameMetrics:    renameMetrics,
-		TransformMetrics: vSphere.transformMetrics,
-		RenameGlobal:     vSphere.renameGlobal,
-	}
-
-	gatherer, err := newGatherer(ctx, gatherHist5m, &vSphere.opts, vsphereInput, acc, vSphere.hierarchy, vSphere.devicePropsCache)
-	if err != nil {
-		return nil, registry.RegistrationOption{}, err
-	}
-
-	vSphere.historical5minGatherer = gatherer
-
-	noMetricsSinceIterations := 0
-	noMetricsSince := make(map[string]int)
-	opt := registry.RegistrationOption{
-		Description:         fmt.Sprint(vSphere, " ", gatherHist5m),
-		MinInterval:         5 * time.Minute,
-		StopCallback:        gatherer.stop,
-		ApplyDynamicRelabel: true,
-		GatherModifier: func(mfs []*dto.MetricFamily, _ error) []*dto.MetricFamily {
-			vSphere.purgeNoMetricsSinceMap(noMetricsSince, &noMetricsSinceIterations)
-
-			return vSphere.gatherModifier(mfs, noMetricsSince, map[ResourceKind]bool{KindCluster: true})
-		},
-	}
-
-	return gatherer, opt, nil
-}*/
 
 func (vSphere *vSphere) makeHistorical30minGatherer(ctx context.Context) (registry.GathererWithOrWithoutState, registry.RegistrationOption, error) {
 	input, ok := telegraf_inputs.Inputs["vsphere"]
@@ -795,10 +723,6 @@ func (vSphere *vSphere) renameGlobal(gatherContext internal.GatherContext) (resu
 		delete(tags, "dsname")
 
 		tags["item"] = value
-
-		if gatherContext.Measurement == "vsphere_datastore_disk" {
-			logger.Printf("dsname of %s is %q / %v / %v", tags[types.LabelMetaVSphereMOID], value, gatherContext.OriginalFields, tags)
-		}
 	}
 
 	gatherContext.Tags = tags

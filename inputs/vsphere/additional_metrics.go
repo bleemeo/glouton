@@ -18,7 +18,6 @@ package vsphere
 
 import (
 	"context"
-	"glouton/logger"
 	"maps"
 	"time"
 
@@ -84,8 +83,6 @@ func additionalClusterMetrics(ctx context.Context, client *vim25.Client, cluster
 			hostMOIDs[host.Reference().Value] = true
 		}
 
-		logger.Printf("Host MOIDs of %s are %v", datastore.Name(), hostMOIDs) // TODO: remove
-
 		errDatastoreIO := additionalDatastoreIO(maps.Clone(tags), hostMOIDs, acc, retained)
 		if errDatastoreIO != nil {
 			return errDatastoreIO
@@ -116,12 +113,6 @@ func additionalClusterCPU(tags map[string]string, cluster *object.ClusterCompute
 		result := (float64(sum) / totalMHz) * 100
 
 		tags["cpu"] = instanceTotal
-
-		logger.Printf("Cluster CPU @ %s: (%d / %f) * 100 = %f", time.Unix(ts, 0).Format(time.DateTime), sum, totalMHz, result) // TODO: remove
-
-		if sum == 0 {
-			logger.Printf("Sum is 0 because: %v", hostUsagesMHz) // TODO: remove
-		}
 
 		acc.AddFields("vsphere_cluster_cpu", map[string]any{"usage_average": result}, tags, time.Unix(ts, 0))
 	}
@@ -163,8 +154,6 @@ func additionalClusterMemory(tags map[string]string, cluster *object.ClusterComp
 	for ts, hostsUsageMB := range hostsUsageMBPerTS.(map[int64]float64) { //nolint: forcetypeassert
 		totalMB := float64(clusterProps.ComputeResource.Summary.ComputeResourceSummary.TotalMemory)
 		result := (hostsUsageMB / totalMB) * 100
-
-		logger.Printf("Cluster memory @ %s: (%f / %f) * 100 = %f", time.Unix(ts, 0).Format(time.DateTime), hostsUsageMB, totalMB, result) // TODO: remove
 
 		acc.AddFields("vsphere_cluster_mem", map[string]any{"used_perc": result}, tags, time.Unix(ts, 0))
 	}
@@ -228,8 +217,6 @@ func additionalDatastoreIO(tags map[string]string, hostMOIDs map[string]bool, ac
 		hostsReadKBps, readOk := hostsReadKBpsPerTS.(map[int64]map[string]any)[ts]
 		hostsWriteKBps, writeOk := hostsWriteKBpsPerTS.(map[int64]map[string]any)[ts]
 
-		logger.Printf("%s: HR=%v / HW=%v", tags["dsname"], hostsReadKBps, hostsWriteKBps) // TODO: remove
-
 		if !readOk || !writeOk {
 			return nil
 		}
@@ -248,8 +235,6 @@ func additionalDatastoreIO(tags map[string]string, hostMOIDs map[string]bool, ac
 			"read_average":  readSum,
 			"write_average": writeSum,
 		}
-
-		logger.Printf("Datastore %q read/write @ %s: %d/%d", tags["dsname"], time.Unix(ts, 0).Format(time.DateTime), readSum, writeSum) // TODO: remove
 
 		acc.AddFields("vsphere_datastore_datastore", fields, tags, time.Unix(ts, 0))
 	}
