@@ -117,9 +117,9 @@ func (vSphere *vSphere) getStatus() (types.Status, string) {
 	}
 
 	switch {
-	case vSphere.realtimeGatherer.lastErr != nil:
+	case vSphere.realtimeGatherer != nil && vSphere.realtimeGatherer.lastErr != nil:
 		return types.StatusCritical, "realtime endpoint error: " + vSphere.realtimeGatherer.lastErr.Error()
-	case vSphere.historical30minGatherer.lastErr != nil:
+	case vSphere.historical30minGatherer != nil && vSphere.historical30minGatherer.lastErr != nil:
 		return types.StatusCritical, "historical 30min endpoint error: " + vSphere.historical30minGatherer.lastErr.Error()
 	}
 
