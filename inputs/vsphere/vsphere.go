@@ -440,6 +440,9 @@ func (vSphere *vSphere) makeHistorical30minGatherer(ctx context.Context) (regist
 }
 
 func (vSphere *vSphere) purgeNoMetricsSinceMap(noMetricsSince map[string]int, iterations *int) {
+	vSphere.l.Lock()
+	defer vSphere.l.Unlock()
+
 	*iterations++
 
 	if *iterations < 3*noMetricsStatusThreshold {
@@ -447,9 +450,6 @@ func (vSphere *vSphere) purgeNoMetricsSinceMap(noMetricsSince map[string]int, it
 	}
 
 	*iterations = 0
-
-	vSphere.l.Lock()
-	defer vSphere.l.Unlock()
 
 	for moid := range noMetricsSince {
 		if _, exists := vSphere.deviceCache[moid]; !exists {
