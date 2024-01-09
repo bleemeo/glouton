@@ -115,24 +115,7 @@ func (t *Target) GatherWithState(ctx context.Context, _ registry.GatherState) ([
 		return nil, fmt.Errorf("read from %s: %w", u.String(), err)
 	}
 
-	reader := bytes.NewReader(body)
-
-	var parser expfmt.TextParser
-
-	resultMap, err := parser.TextToMetricFamilies(reader)
-	if err != nil {
-		return nil, TargetError{
-			DecodeErr: err,
-		}
-	}
-
-	result := make([]*dto.MetricFamily, 0, len(resultMap))
-
-	for _, family := range resultMap {
-		result = append(result, family)
-	}
-
-	return result, nil
+	return parserReader(body)
 }
 
 func (t *Target) readAll(ctx context.Context) ([]byte, error) {
@@ -182,4 +165,23 @@ func (t *Target) readAll(ctx context.Context) ([]byte, error) {
 	}
 
 	return body, err
+}
+
+func parserReader(data []byte) ([]*dto.MetricFamily, error) {
+	var parser expfmt.TextParser
+
+	resultMap, err := parser.TextToMetricFamilies(bytes.NewReader(data))
+	if err != nil {
+		return nil, TargetError{
+			DecodeErr: err,
+		}
+	}
+
+	result := make([]*dto.MetricFamily, 0, len(resultMap))
+
+	for _, family := range resultMap {
+		result = append(result, family)
+	}
+
+	return result, nil
 }

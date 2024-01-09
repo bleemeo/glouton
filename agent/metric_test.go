@@ -850,7 +850,7 @@ func Test_newMetricFilter(t *testing.T) { //nolint:maintidx
 				t.Errorf("FilterPoints missmatch (-want +got):\n%s", diff)
 			}
 
-			if diff := types.DiffMetricFamilies(wantFamilies, gotFamilies, false); diff != "" {
+			if diff := types.DiffMetricFamilies(wantFamilies, gotFamilies, false, false); diff != "" {
 				t.Errorf("FilterFamilies missmatch (-want +got):\n%s", diff)
 			}
 		})

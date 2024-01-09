@@ -586,7 +586,7 @@ func TestConvertion(t *testing.T) { //nolint: maintidx
 
 			gotMFS := MetricPointsToFamilies(tt.input)
 
-			if diff := types.DiffMetricFamilies(tt.wantMFS, gotMFS, false); diff != "" {
+			if diff := types.DiffMetricFamilies(tt.wantMFS, gotMFS, false, false); diff != "" {
 				t.Errorf("MetricPointsToFamilies mismatch (-want +got)\n%s", diff)
 			}
 

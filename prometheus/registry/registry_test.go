@@ -281,7 +281,7 @@ func TestRegistry_Register(t *testing.T) {
 		},
 	}
 
-	if diff := types.DiffMetricFamilies(want, result, false); diff != "" {
+	if diff := types.DiffMetricFamilies(want, result, false, false); diff != "" {
 		t.Errorf("reg.Gather() diff: (-want +got)\n%s", diff)
 	}
 
@@ -431,7 +431,7 @@ func TestRegistry_pushPoint(t *testing.T) {
 		return got[i].GetName() < got[j].GetName()
 	})
 
-	if diff := types.DiffMetricFamilies(want, got, false); diff != "" {
+	if diff := types.DiffMetricFamilies(want, got, false, false); diff != "" {
 		t.Errorf("Gather() missmatch: (-want +got):\n%s", diff)
 	}
 
@@ -488,7 +488,7 @@ func TestRegistry_pushPoint(t *testing.T) {
 		},
 	}
 
-	if diff := types.DiffMetricFamilies(want, got, false); diff != "" {
+	if diff := types.DiffMetricFamilies(want, got, false, false); diff != "" {
 		t.Errorf("Gather() missmatch: (-want +got):\n%s", diff)
 	}
 }
@@ -2156,7 +2156,7 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 			wantMFs := model.MetricPointsToFamilies(want)
 			model.DropMetaLabelsFromFamilies(wantMFs)
 
-			if diff := types.DiffMetricFamilies(wantMFs, got, true); diff != "" {
+			if diff := types.DiffMetricFamilies(wantMFs, got, true, false); diff != "" {
 				t.Errorf("Gather mismatch (-want +got):\n%s", diff)
 			}
 		})
