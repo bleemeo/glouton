@@ -22,6 +22,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"sort"
 	"testing"
 
 	dto "github.com/prometheus/client_model/go"
@@ -55,8 +56,8 @@ func Test_parserReader(t *testing.T) {
 						{
 							TimestampMs: proto.Int64(1395066363000),
 							Label: []*dto.LabelPair{
-								{Name: proto.String("method"), Value: proto.String("post")},
 								{Name: proto.String("code"), Value: proto.String("200")},
+								{Name: proto.String("method"), Value: proto.String("post")},
 							},
 							Counter: &dto.Counter{
 								Value: proto.Float64(1027),
@@ -65,8 +66,8 @@ func Test_parserReader(t *testing.T) {
 						{
 							TimestampMs: proto.Int64(1395066363000),
 							Label: []*dto.LabelPair{
-								{Name: proto.String("method"), Value: proto.String("post")},
 								{Name: proto.String("code"), Value: proto.String("400")},
+								{Name: proto.String("method"), Value: proto.String("post")},
 							},
 							Counter: &dto.Counter{
 								Value: proto.Float64(3),
@@ -82,8 +83,8 @@ func Test_parserReader(t *testing.T) {
 						{
 							TimestampMs: nil,
 							Label: []*dto.LabelPair{
-								{Name: proto.String("path"), Value: proto.String("C:\\DIR\\FILE.TXT")},
 								{Name: proto.String("error"), Value: proto.String("Cannot find file:\n\"FILE.TXT\"")},
+								{Name: proto.String("path"), Value: proto.String("C:\\DIR\\FILE.TXT")},
 							},
 							Untyped: &dto.Untyped{
 								Value: proto.Float64(1.458255915e9),
@@ -110,7 +111,7 @@ func Test_parserReader(t *testing.T) {
 					Type: dto.MetricType_UNTYPED.Enum(),
 					Metric: []*dto.Metric{
 						{
-							TimestampMs: proto.Int64(-3982045),
+							TimestampMs: proto.Int64(3982045),
 							Label: []*dto.LabelPair{
 								{Name: proto.String("problem"), Value: proto.String("division by zero")},
 							},
@@ -198,6 +199,99 @@ func Test_parserReader(t *testing.T) {
 				},
 			},
 		},
+		{
+			filename: "sample2.txt",
+			want: []*dto.MetricFamily{
+				{
+					Name: proto.String("metric1"),
+					Help: proto.String("Help text of metric1"),
+					Type: dto.MetricType_UNTYPED.Enum(),
+					Metric: []*dto.Metric{
+						{
+							TimestampMs: nil,
+							Label: []*dto.LabelPair{
+								{Name: proto.String("occurrence"), Value: proto.String("1")},
+							},
+							Untyped: &dto.Untyped{
+								Value: proto.Float64(1),
+							},
+						},
+						{
+							TimestampMs: nil,
+							Label: []*dto.LabelPair{
+								{Name: proto.String("occurrence"), Value: proto.String("2")},
+							},
+							Untyped: &dto.Untyped{
+								Value: proto.Float64(1.2),
+							},
+						},
+					},
+				},
+				{
+					Name: proto.String("metric2"),
+					Help: proto.String("Help text of metric2 with TYPE"),
+					Type: dto.MetricType_GAUGE.Enum(),
+					Metric: []*dto.Metric{
+						{
+							TimestampMs: nil,
+							Label: []*dto.LabelPair{
+								{Name: proto.String("occurrence"), Value: proto.String("1")},
+							},
+							Gauge: &dto.Gauge{
+								Value: proto.Float64(2),
+							},
+						},
+						{
+							TimestampMs: nil,
+							Label: []*dto.LabelPair{
+								{Name: proto.String("occurrence"), Value: proto.String("2")},
+							},
+							Gauge: &dto.Gauge{
+								Value: proto.Float64(2.2),
+							},
+						},
+					},
+				},
+				{
+					Name: proto.String("metric3"),
+					Help: proto.String("late help for metric3"),
+					Type: dto.MetricType_UNTYPED.Enum(),
+					Metric: []*dto.Metric{
+						{
+							TimestampMs: nil,
+							Label: []*dto.LabelPair{
+								{Name: proto.String("occurrence"), Value: proto.String("1")},
+							},
+							Untyped: &dto.Untyped{
+								Value: proto.Float64(3),
+							},
+						},
+						{
+							TimestampMs: nil,
+							Label: []*dto.LabelPair{
+								{Name: proto.String("occurrence"), Value: proto.String("2")},
+							},
+							Untyped: &dto.Untyped{
+								Value: proto.Float64(3.2),
+							},
+						},
+					},
+				},
+				{
+					Name: proto.String("metric4"),
+					Help: proto.String("help of metric4"),
+					Type: dto.MetricType_COUNTER.Enum(),
+					Metric: []*dto.Metric{
+						{
+							TimestampMs: nil,
+							Counter: &dto.Counter{
+								Value: proto.Float64(4),
+							},
+						},
+					},
+				},
+			},
+		},
 	}
 	for _, tt := range tests {
 		tt := tt
@@ -215,10 +309,23 @@ func Test_parserReader(t *testing.T) {
 				t.Fatalf("parserReader() error = %v", err)
 			}
 
+			// parser.TextToMetricFamilies does not sort labels
+			sortLabels(got)
+
 			if diff := types.DiffMetricFamilies(tt.want, got, false, true); diff != "" {
 				t.Errorf("parserReader missmatch (-want +got):\n%s", diff)
 			}
 		})
+	}
+}
+
+func sortLabels(mfs []*dto.MetricFamily) {
+	for _, mf := range mfs {
+		for _, m := range mf.Metric {
+			sort.Slice(m.Label, func(i, j int) bool {
+				return m.Label[i].GetName() < m.Label[j].GetName()
+			})
+		}
 	}
 }
 

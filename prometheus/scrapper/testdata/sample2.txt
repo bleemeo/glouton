@@ -1,0 +1,19 @@
+# TYPE metric4 counter
+# HELP metric1 Help text of metric1
+metric1{occurrence="1"} 1
+
+# HELP metric2 Help text of metric2 with TYPE
+# TYPE metric2 gauge
+metric2{occurrence="1"} 2
+
+# HELP metric4 help of metric4
+metric3{occurrence="1"} 3
+
+metric1{occurrence="2"} 1.2
+metric2{occurrence="2"} 2.2
+
+# HELP metric3 late help for metric3
+# Note: we can't add type later
+metric3{occurrence="2"} 3.2
+
+metric4 4
