@@ -990,9 +990,7 @@ func Benchmark_filters_no_match(b *testing.B) {
 		b.ResetTimer()
 
 		for i := 0; i < b.N; i++ {
-			b.StopTimer()
 			copy(cop, list1)
-			b.StartTimer()
 
 			metricFilter.FilterPoints(cop)
 		}
@@ -1004,9 +1002,7 @@ func Benchmark_filters_no_match(b *testing.B) {
 		b.ResetTimer()
 
 		for i := 0; i < b.N; i++ {
-			b.StopTimer()
 			copy(cop, list10)
-			b.StartTimer()
 
 			metricFilter.FilterPoints(cop)
 		}
@@ -1018,9 +1014,7 @@ func Benchmark_filters_no_match(b *testing.B) {
 		b.ResetTimer()
 
 		for i := 0; i < b.N; i++ {
-			b.StopTimer()
 			copy(cop, list100)
-			b.StartTimer()
 
 			metricFilter.FilterPoints(cop)
 		}
@@ -1060,9 +1054,7 @@ func Benchmark_filters_one_match_first(b *testing.B) {
 		b.ResetTimer()
 
 		for i := 0; i < b.N; i++ {
-			b.StopTimer()
 			copy(cop, list1)
-			b.StartTimer()
 
 			metricFilter.FilterPoints(cop)
 		}
@@ -1074,9 +1066,7 @@ func Benchmark_filters_one_match_first(b *testing.B) {
 		b.ResetTimer()
 
 		for i := 0; i < b.N; i++ {
-			b.StopTimer()
 			copy(cop, list10)
-			b.StartTimer()
 
 			metricFilter.FilterPoints(cop)
 		}
@@ -1088,9 +1078,7 @@ func Benchmark_filters_one_match_first(b *testing.B) {
 		b.ResetTimer()
 
 		for i := 0; i < b.N; i++ {
-			b.StopTimer()
 			copy(cop, list100)
-			b.StartTimer()
 
 			metricFilter.FilterPoints(cop)
 		}
@@ -1124,9 +1112,7 @@ func Benchmark_filters_one_match_middle(b *testing.B) {
 		b.ResetTimer()
 
 		for i := 0; i < b.N; i++ {
-			b.StopTimer()
 			copy(cop, list10)
-			b.StartTimer()
 
 			metricFilter.FilterPoints(cop)
 		}
@@ -1138,9 +1124,7 @@ func Benchmark_filters_one_match_middle(b *testing.B) {
 		b.ResetTimer()
 
 		for i := 0; i < b.N; i++ {
-			b.StopTimer()
 			copy(cop, list100)
-			b.StartTimer()
 
 			metricFilter.FilterPoints(cop)
 		}
@@ -1170,9 +1154,7 @@ func Benchmark_filters_one_match_last(b *testing.B) {
 		b.ResetTimer()
 
 		for i := 0; i < b.N; i++ {
-			b.StopTimer()
 			copy(cop, list10)
-			b.StartTimer()
 
 			metricFilter.FilterPoints(cop)
 		}
@@ -1184,9 +1166,7 @@ func Benchmark_filters_one_match_last(b *testing.B) {
 		b.ResetTimer()
 
 		for i := 0; i < b.N; i++ {
-			b.StopTimer()
 			copy(cop, list100)
-			b.StartTimer()
 
 			metricFilter.FilterPoints(cop)
 		}
@@ -1208,9 +1188,7 @@ func Benchmark_filters_all(b *testing.B) {
 		b.ResetTimer()
 
 		for i := 0; i < b.N; i++ {
-			b.StopTimer()
 			copy(cop, list10)
-			b.StartTimer()
 
 			metricFilter.FilterPoints(cop)
 		}
@@ -1222,9 +1200,7 @@ func Benchmark_filters_all(b *testing.B) {
 		b.ResetTimer()
 
 		for i := 0; i < b.N; i++ {
-			b.StopTimer()
 			copy(cop, list100)
-			b.StartTimer()
 
 			metricFilter.FilterPoints(cop)
 		}
