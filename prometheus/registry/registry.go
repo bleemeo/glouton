@@ -92,6 +92,23 @@ type metricFilter interface {
 	FilterFamilies(f []*dto.MetricFamily) []*dto.MetricFamily
 }
 
+type stuckCollectors struct {
+	sync.Mutex
+	m          map[string]bool
+	essentials []string
+}
+
+func (sc *stuckCollectors) allEssentialsAreStuck() bool {
+	for _, collector := range sc.essentials {
+		if !sc.m[collector] {
+			// This collector is not stuck (yet)
+			return false
+		}
+	}
+
+	return true
+}
+
 // Registry is a dynamic collection of metrics sources.
 //
 // For the Prometheus metrics source, it mostly a wrapper around prometheus.Gatherers,
@@ -138,6 +155,7 @@ type Registry struct {
 	relabelHook             RelabelHook
 	renamer                 *renamer.Renamer
 	secretInputsGate        *gate.Gate
+	stuckCollectors         *stuckCollectors
 }
 
 type Option struct {
@@ -367,6 +385,10 @@ func New(opt Option, secretInputsGate *gate.Gate) (*Registry, error) {
 	reg := &Registry{
 		option:           opt,
 		secretInputsGate: secretInputsGate,
+		stuckCollectors: &stuckCollectors{
+			m:          make(map[string]bool),
+			essentials: []string{"cpu input", "mem input", "diskio input", "disk input", "net input", "swap input"},
+		},
 	}
 
 	reg.init()
@@ -663,15 +685,27 @@ func (r *Registry) HealthCheck() {
 				)
 
 				if time.Since(lastScrape) > 10*reg.loop.interval && time.Since(lastScrape) > time.Hour {
-					msg := fmt.Sprintf("Metrics collections is blocked for collector %s. Last run at %s and should run every %s. Glouton seems unhealthy, killing myself",
-						reg.option.Description,
-						lastScrape.Format(time.RFC3339),
-						reg.loop.interval.String(),
-					)
+					r.stuckCollectors.Lock()
 
-					// We don't panic immediately. We want to unlock reg before.
-					panicMessage = msg
+					r.stuckCollectors.m[reg.option.Description] = true
+					if r.stuckCollectors.allEssentialsAreStuck() {
+						msg := fmt.Sprintf("Metrics collections is blocked for all essential collectors. Last run of %s was at %s and should run every %s. Glouton seems unhealthy, killing myself",
+							reg.option.Description,
+							lastScrape.Format(time.RFC3339),
+							reg.loop.interval.String(),
+						)
+						// We don't panic immediately. We want to unlock reg before.
+						panicMessage = msg
+					}
+
+					r.stuckCollectors.Unlock()
 				}
+			} else {
+				r.stuckCollectors.Lock()
+
+				delete(r.stuckCollectors.m, reg.option.Description)
+
+				r.stuckCollectors.Unlock()
 			}
 		}
 
