@@ -96,8 +96,11 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 			UserAgent: "my-user-agent",
 		},
 		Bleemeo: Bleemeo{
-			AccountID:                         "myid",
-			APIBase:                           "https://api.bleemeo.com/",
+			AccountID: "myid",
+			APIBase:   "https://api.bleemeo.com/",
+			Cache: BleemeoCache{
+				MetricsKeepDeactivateDays: 200,
+			},
 			APISSLInsecure:                    true,
 			ContainerRegistrationDelaySeconds: 30,
 			Enable:                            true,

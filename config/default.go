@@ -98,10 +98,13 @@ func DefaultConfig() Config { //nolint:maintidx
 			},
 		},
 		Bleemeo: Bleemeo{
-			Enable:                            true,
-			AccountID:                         "",
-			APIBase:                           "https://api.bleemeo.com/",
-			APISSLInsecure:                    false,
+			Enable:         true,
+			AccountID:      "",
+			APIBase:        "https://api.bleemeo.com/",
+			APISSLInsecure: false,
+			Cache: BleemeoCache{
+				MetricsKeepDeactivateDays: 200,
+			},
 			ContainerRegistrationDelaySeconds: 30,
 			InitialAgentName:                  "",
 			InitialServerGroupName:            "",

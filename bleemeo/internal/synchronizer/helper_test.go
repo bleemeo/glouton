@@ -96,8 +96,11 @@ func newHelper(t *testing.T) *syncTestHelper {
 			Level: "debug",
 		},
 		Bleemeo: config.Bleemeo{
-			APIBase:         helper.httpServer.URL,
-			AccountID:       accountID,
+			APIBase:   helper.httpServer.URL,
+			AccountID: accountID,
+			Cache: config.BleemeoCache{
+				MetricsKeepDeactivateDays: 200,
+			},
 			RegistrationKey: registrationKey,
 		},
 		Blackbox: config.Blackbox{
