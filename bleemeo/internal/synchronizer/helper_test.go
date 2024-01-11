@@ -99,7 +99,7 @@ func newHelper(t *testing.T) *syncTestHelper {
 			APIBase:   helper.httpServer.URL,
 			AccountID: accountID,
 			Cache: config.BleemeoCache{
-				KeepDeactivatedMetricsDays: 200,
+				DeactivatedMetricsExpirationDays: 200,
 			},
 			RegistrationKey: registrationKey,
 		},

@@ -1499,7 +1499,7 @@ func (s *Synchronizer) localMetricToMap(localMetrics []types.Metric) map[string]
 
 // metricDeactivate deactivates the registered metrics that didn't receive any points for some time.
 func (s *Synchronizer) metricDeactivate(localMetrics []types.Metric) error {
-	keepDeactivatedMetricsDays := time.Duration(s.option.Config.Bleemeo.Cache.KeepDeactivatedMetricsDays) * 24 * time.Hour
+	deactivatedMetricsExpirationDays := time.Duration(s.option.Config.Bleemeo.Cache.DeactivatedMetricsExpirationDays) * 24 * time.Hour
 
 	duplicatedKey := make(map[string]bool)
 	localByMetricKey := s.localMetricToMap(localMetrics)
@@ -1530,7 +1530,7 @@ func (s *Synchronizer) metricDeactivate(localMetrics []types.Metric) error {
 		}
 
 		if !v.DeactivatedAt.IsZero() {
-			if s.now().Sub(v.DeactivatedAt) > keepDeactivatedMetricsDays {
+			if s.now().Sub(v.DeactivatedAt) > deactivatedMetricsExpirationDays {
 				delete(registeredMetrics, k)
 			}
 

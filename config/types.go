@@ -197,7 +197,7 @@ type Bleemeo struct {
 }
 
 type BleemeoCache struct {
-	KeepDeactivatedMetricsDays int `yaml:"keep_deactivated_metrics_days"`
+	DeactivatedMetricsExpirationDays int `yaml:"deactivated_metrics_expiration_days"`
 }
 
 type Sentry struct {

@@ -99,7 +99,7 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 			AccountID: "myid",
 			APIBase:   "https://api.bleemeo.com/",
 			Cache: BleemeoCache{
-				KeepDeactivatedMetricsDays: 200,
+				DeactivatedMetricsExpirationDays: 200,
 			},
 			APISSLInsecure:                    true,
 			ContainerRegistrationDelaySeconds: 30,

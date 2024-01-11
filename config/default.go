@@ -103,7 +103,7 @@ func DefaultConfig() Config { //nolint:maintidx
 			APIBase:        "https://api.bleemeo.com/",
 			APISSLInsecure: false,
 			Cache: BleemeoCache{
-				KeepDeactivatedMetricsDays: 200,
+				DeactivatedMetricsExpirationDays: 200,
 			},
 			ContainerRegistrationDelaySeconds: 30,
 			InitialAgentName:                  "",
