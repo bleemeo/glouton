@@ -66,6 +66,9 @@ type GatherState struct {
 	FromScrapeLoop bool
 	T0             time.Time
 	NoFilter       bool
+	// HintMetricFilter is an optional filter that gather could use to skip metrics that would be filtered later.
+	// Nothing is mandatory: the HintMetricFilter could be nil and the gatherer could ignore HintMetricFilter even if non-nil.
+	HintMetricFilter func(lbls labels.Labels) bool
 }
 
 func (s GatherState) Now() time.Time {
@@ -149,7 +152,7 @@ func (w *GathererWithStateWrapper) Gather() ([]*dto.MetricFamily, error) {
 	}
 
 	if !w.gatherState.NoFilter {
-		res = w.filter.FilterFamilies(res)
+		res = w.filter.FilterFamilies(res, false)
 	}
 
 	return res, err
@@ -164,12 +167,13 @@ type labeledGatherer struct {
 	ruler    *ruler.SimpleRuler
 	modifier gatherModifier
 	source   prometheus.Gatherer
+	filter   metricFilter
 
 	l      sync.Mutex
 	closed bool
 }
 
-func newLabeledGatherer(g prometheus.Gatherer, extraLabels labels.Labels, rrules []*rules.RecordingRule, modifier gatherModifier) *labeledGatherer {
+func newLabeledGatherer(g prometheus.Gatherer, extraLabels labels.Labels, rrules []*rules.RecordingRule, modifier gatherModifier, filter metricFilter) *labeledGatherer {
 	labels := make([]*dto.LabelPair, 0, len(extraLabels))
 
 	for _, l := range extraLabels {
@@ -187,6 +191,7 @@ func newLabeledGatherer(g prometheus.Gatherer, extraLabels labels.Labels, rrules
 		labels:   labels,
 		ruler:    ruler.New(rrules),
 		modifier: modifier,
+		filter:   filter,
 	}
 }
 
@@ -253,6 +258,10 @@ func (g *labeledGatherer) GatherWithState(ctx context.Context, state GatherState
 			m.Label = mergeLabels(m.GetLabel(), g.labels)
 			mf.Metric[i] = m
 		}
+	}
+
+	if g.filter != nil {
+		mfs = g.filter.FilterFamilies(mfs, true)
 	}
 
 	return mfs, err

@@ -88,8 +88,9 @@ func (f pushFunction) PushPoints(ctx context.Context, points []types.MetricPoint
 }
 
 type metricFilter interface {
-	FilterPoints(points []types.MetricPoint) []types.MetricPoint
-	FilterFamilies(f []*dto.MetricFamily) []*dto.MetricFamily
+	FilterPoints(points []types.MetricPoint, allowNeededByRules bool) []types.MetricPoint
+	FilterFamilies(f []*dto.MetricFamily, allowNeededByRules bool) []*dto.MetricFamily
+	IsMetricAllowed(lbls labels.Labels, allowNeededByRules bool) bool
 }
 
 // Registry is a dynamic collection of metrics sources.
@@ -176,7 +177,11 @@ type RegistrationOption struct {
 	// IsEssential tells whether the corresponding gatherer is considered as 'essential' regarding the agent dashboard.
 	// When all 'essentials' gatherers are stuck, Glouton kills himself (see Registry.HealthCheck).
 	IsEssential bool
-	rrules      []*rules.RecordingRule
+	// AcceptAllowedMetricsOnly will only kept metrics allowed at ends of Gather(), so the
+	// metric not allowed by allow_list (or metric denied) will be dropped. Metrics that are
+	// needed by SimpleRule will still be allowed.
+	AcceptAllowedMetricsOnly bool
+	rrules                   []*rules.RecordingRule
 }
 
 type AppenderRegistrationOption struct {
@@ -1245,7 +1250,7 @@ func gatherFromQueryable(ctx context.Context, queryable storage.Queryable, filte
 	}
 
 	if filter != nil {
-		result = filter.FilterFamilies(result)
+		result = filter.FilterFamilies(result, false)
 	}
 
 	return result, series.Err()
@@ -1402,7 +1407,15 @@ func (r *Registry) scrapeFromLoop(ctx context.Context, t0 time.Time, reg *regist
 	r.scrapeStart()
 	defer r.scrapeDone()
 
-	mfs, duration, err := r.scrape(ctx, GatherState{QueryType: All, FromScrapeLoop: true, T0: t0}, reg)
+	state := GatherState{QueryType: All, FromScrapeLoop: true, T0: t0}
+
+	if reg.option.AcceptAllowedMetricsOnly {
+		state.HintMetricFilter = func(lbls labels.Labels) bool {
+			return r.option.Filter.IsMetricAllowed(lbls, true)
+		}
+	}
+
+	mfs, duration, err := r.scrape(ctx, state, reg)
 	if err != nil {
 		if len(mfs) == 0 {
 			logger.V(1).Printf("Gather of metrics failed on %s: %v", reg.option.Description, err)
@@ -1682,7 +1695,13 @@ func (r *Registry) setupGatherer(reg *registration, source prometheus.Gatherer) 
 		promLabels, annotations, reg.relabelHookSkip = r.applyRelabel(ctxTimeout, extraLabels)
 	}
 
-	g := newLabeledGatherer(source, promLabels, reg.option.rrules, reg.option.GatherModifier)
+	var filter metricFilter
+
+	if reg.option.AcceptAllowedMetricsOnly {
+		filter = r.option.Filter
+	}
+
+	g := newLabeledGatherer(source, promLabels, reg.option.rrules, reg.option.GatherModifier, filter)
 	reg.annotations = annotations
 	reg.gatherer = g
 }

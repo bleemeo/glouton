@@ -328,16 +328,7 @@ func SamplesToMetricFamily(samples []promql.Sample, mType *dto.MetricType) (*dto
 			TimestampMs: ts,
 		}
 
-		for _, l := range pt.Metric {
-			if l.Name == types.LabelName {
-				continue
-			}
-
-			metric.Label = append(metric.GetLabel(), &dto.LabelPair{
-				Name:  proto.String(l.Name),
-				Value: proto.String(l.Value),
-			})
-		}
+		metric.Label = Labels2DTO(pt.Metric)
 
 		switch mType.String() {
 		case dto.MetricType_COUNTER.Enum().String():
@@ -477,6 +468,27 @@ func DTO2Labels(name string, input *dto.Metric) map[string]string {
 	lbls["__name__"] = name
 
 	return lbls
+}
+
+func Labels2DTO(lbls labels.Labels) []*dto.LabelPair {
+	if len(lbls) == 0 {
+		return nil
+	}
+
+	result := make([]*dto.LabelPair, 0, len(lbls)-1)
+
+	for _, l := range lbls {
+		if l.Name == types.LabelName {
+			continue
+		}
+
+		result = append(result, &dto.LabelPair{
+			Name:  proto.String(l.Name),
+			Value: proto.String(l.Value),
+		})
+	}
+
+	return result
 }
 
 // FamilyConvertType convert a MetricFamilty to another type.

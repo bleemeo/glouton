@@ -17,6 +17,7 @@
 package scrapper
 
 import (
+	"fmt"
 	"glouton/types"
 	"math"
 	"net/url"
@@ -26,6 +27,7 @@ import (
 	"testing"
 
 	dto "github.com/prometheus/client_model/go"
+	"github.com/prometheus/prometheus/model/labels"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -38,7 +40,7 @@ func Test_Host_Port(t *testing.T) {
 	}
 }
 
-func Test_parserReader(t *testing.T) {
+func Test_parserReader(t *testing.T) { //nolint:maintidx
 	t.Parallel()
 
 	tests := []struct {
@@ -296,67 +298,249 @@ func Test_parserReader(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 
-		t.Run(tt.filename, func(t *testing.T) {
-			t.Parallel()
+		for _, useTextParser := range []bool{false, true} {
+			useTextParser := useTextParser
+			name := tt.filename
 
-			data, err := os.ReadFile(filepath.Join("testdata", tt.filename))
-			if err != nil {
-				t.Fatal(err)
+			if useTextParser {
+				name += "-with-textparser"
 			}
 
-			got, err := parserReader(data)
-			if err != nil {
-				t.Fatalf("parserReader() error = %v", err)
-			}
+			t.Run(name, func(t *testing.T) {
+				t.Parallel()
 
-			// parser.TextToMetricFamilies does not sort labels
-			sortLabels(got)
+				data, err := os.ReadFile(filepath.Join("testdata", tt.filename))
+				if err != nil {
+					t.Fatal(err)
+				}
 
-			if diff := types.DiffMetricFamilies(tt.want, got, false, true); diff != "" {
-				t.Errorf("parserReader missmatch (-want +got):\n%s", diff)
-			}
-		})
-	}
-}
+				var got []*dto.MetricFamily
 
-func sortLabels(mfs []*dto.MetricFamily) {
-	for _, mf := range mfs {
-		for _, m := range mf.Metric {
-			sort.Slice(m.Label, func(i, j int) bool {
-				return m.Label[i].GetName() < m.Label[j].GetName()
+				if useTextParser {
+					got, err = parserReader2(data, nil)
+				} else {
+					got, err = parserReader(data, nil)
+				}
+
+				if err != nil {
+					t.Fatalf("parserReader() error = %v", err)
+				}
+
+				want := tt.want
+
+				if useTextParser {
+					// testparser don't support histogram & summary
+					want = flattenHistogramAndSummary(want)
+				} else {
+					// parser.TextToMetricFamilies does not sort labels
+					sortLabels(got)
+				}
+
+				if diff := types.DiffMetricFamilies(want, got, false, true); diff != "" {
+					t.Errorf("parserReader missmatch (-want +got):\n%s", diff)
+				}
 			})
 		}
 	}
 }
 
-func Benchmark_parserReader_sample(b *testing.B) {
-	data, err := os.ReadFile(filepath.Join("testdata", "sample.txt"))
-	if err != nil {
-		b.Fatal(err)
-	}
-
-	b.ResetTimer()
-
-	for n := 0; n < b.N; n++ {
-		_, err := parserReader(data)
-		if err != nil {
-			b.Fatal(err)
+func sortLabels(mfs []*dto.MetricFamily) {
+	for _, mf := range mfs {
+		for _, m := range mf.GetMetric() {
+			sort.Slice(m.Label, func(i, j int) bool { //nolint:protogetter
+				return m.Label[i].GetName() < m.Label[j].GetName() //nolint:protogetter
+			})
 		}
 	}
 }
 
-func Benchmark_parserReader_large(b *testing.B) {
-	data, err := os.ReadFile(filepath.Join("testdata", "large.txt"))
-	if err != nil {
-		b.Fatal(err)
+// flattenHistogramAndSummary convert histogram & summary to untype. This function is rather hackish and work only on limited
+// value (mosty have a simple histogram and single summary value).
+func flattenHistogramAndSummary(mfs []*dto.MetricFamily) []*dto.MetricFamily {
+	// When native histogram aren't supported, flatten them
+	flatMFS := make([]*dto.MetricFamily, 0, len(mfs))
+
+	for _, mf := range mfs {
+		if mf.GetType().String() != dto.MetricType_HISTOGRAM.String() && mf.GetType().String() != dto.MetricType_SUMMARY.String() {
+			flatMFS = append(flatMFS, mf)
+
+			continue
+		}
+
+		metric := mf.GetMetric()[0]
+
+		if mf.GetType().String() == dto.MetricType_HISTOGRAM.String() {
+			flatMFS = append(flatMFS, &dto.MetricFamily{
+				Name: proto.String(mf.GetName() + "_sum"),
+				Help: nil,
+				Type: dto.MetricType_UNTYPED.Enum(),
+				Metric: []*dto.Metric{
+					{
+						Label: metric.GetLabel(),
+						Untyped: &dto.Untyped{
+							Value: proto.Float64(metric.GetHistogram().GetSampleSum()),
+						},
+					},
+				},
+			})
+			flatMFS = append(flatMFS, &dto.MetricFamily{
+				Name: proto.String(mf.GetName() + "_count"),
+				Help: nil,
+				Type: dto.MetricType_UNTYPED.Enum(),
+				Metric: []*dto.Metric{
+					{
+						Label: metric.GetLabel(),
+						Untyped: &dto.Untyped{
+							Value: proto.Float64(float64(metric.GetHistogram().GetSampleCount())),
+						},
+					},
+				},
+			})
+
+			bucketMetrics := make([]*dto.Metric, 0, len(metric.GetHistogram().GetBucket()))
+			for _, b := range metric.GetHistogram().GetBucket() {
+				bucketMetrics = append(bucketMetrics, &dto.Metric{
+					Label: append(
+						metric.GetLabel(),
+						&dto.LabelPair{
+							Name:  proto.String("le"),
+							Value: proto.String(fmt.Sprint(b.GetUpperBound())),
+						},
+					),
+					Untyped: &dto.Untyped{
+						Value: proto.Float64(float64(b.GetCumulativeCount())),
+					},
+				})
+			}
+
+			flatMFS = append(flatMFS, &dto.MetricFamily{
+				Name:   proto.String(mf.GetName() + "_bucket"),
+				Help:   nil,
+				Type:   dto.MetricType_UNTYPED.Enum(),
+				Metric: bucketMetrics,
+			})
+		}
+
+		if mf.GetType().String() == dto.MetricType_SUMMARY.String() {
+			flatMFS = append(flatMFS, &dto.MetricFamily{
+				Name: proto.String(mf.GetName() + "_sum"),
+				Help: nil,
+				Type: dto.MetricType_UNTYPED.Enum(),
+				Metric: []*dto.Metric{
+					{
+						Label: metric.GetLabel(),
+						Untyped: &dto.Untyped{
+							Value: proto.Float64(metric.GetSummary().GetSampleSum()),
+						},
+					},
+				},
+			})
+			flatMFS = append(flatMFS, &dto.MetricFamily{
+				Name: proto.String(mf.GetName() + "_count"),
+				Help: nil,
+				Type: dto.MetricType_UNTYPED.Enum(),
+				Metric: []*dto.Metric{
+					{
+						Label: metric.GetLabel(),
+						Untyped: &dto.Untyped{
+							Value: proto.Float64(float64(metric.GetSummary().GetSampleCount())),
+						},
+					},
+				},
+			})
+
+			quantileMetrics := make([]*dto.Metric, 0, len(metric.GetSummary().GetQuantile()))
+			for _, q := range metric.GetSummary().GetQuantile() {
+				quantileMetrics = append(quantileMetrics, &dto.Metric{
+					Label: append(
+						metric.GetLabel(),
+						&dto.LabelPair{
+							Name:  proto.String("quantile"),
+							Value: proto.String(fmt.Sprint(q.GetQuantile())),
+						},
+					),
+					Untyped: &dto.Untyped{
+						Value: proto.Float64(q.GetValue()),
+					},
+				})
+			}
+
+			flatMFS = append(flatMFS, &dto.MetricFamily{
+				Name: proto.String(mf.GetName()),
+				// summary quantile kept the help because the name is unchanged.
+				// This test code is made to match what parser does. But we don't really care
+				// about help or type, only name, labels & value matter.
+				Help:   proto.String(mf.GetHelp()),
+				Type:   dto.MetricType_UNTYPED.Enum(),
+				Metric: quantileMetrics,
+			})
+		}
 	}
 
-	b.ResetTimer()
+	sortLabels(flatMFS)
 
-	for n := 0; n < b.N; n++ {
-		_, err := parserReader(data)
-		if err != nil {
-			b.Fatal(err)
-		}
+	return flatMFS
+}
+
+func Benchmark_parserReader(b *testing.B) {
+	for _, filename := range []string{"sample.txt", "large.txt"} {
+		filename := filename
+		b.Run(filename, func(b *testing.B) {
+			data, err := os.ReadFile(filepath.Join("testdata", filename))
+			if err != nil {
+				b.Fatal(err)
+			}
+
+			b.ResetTimer()
+
+			for n := 0; n < b.N; n++ {
+				_, err := parserReader(data, nil)
+				if err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
+	}
+}
+
+func Benchmark_parserReader2(b *testing.B) {
+	for _, filename := range []string{"sample.txt", "large.txt"} {
+		filename := filename
+		b.Run(filename, func(b *testing.B) {
+			data, err := os.ReadFile(filepath.Join("testdata", filename))
+			if err != nil {
+				b.Fatal(err)
+			}
+
+			b.ResetTimer()
+
+			for n := 0; n < b.N; n++ {
+				_, err := parserReader2(data, nil)
+				if err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
+	}
+}
+
+func Benchmark_parserReader2RejectAll(b *testing.B) {
+	for _, filename := range []string{"sample.txt", "large.txt"} {
+		filename := filename
+		b.Run(filename, func(b *testing.B) {
+			data, err := os.ReadFile(filepath.Join("testdata", filename))
+			if err != nil {
+				b.Fatal(err)
+			}
+
+			b.ResetTimer()
+
+			for n := 0; n < b.N; n++ {
+				_, err := parserReader2(data, func(_ labels.Labels) bool { return false })
+				if err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
 	}
 }

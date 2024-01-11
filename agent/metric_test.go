@@ -263,7 +263,7 @@ func Test_Basic_FilterPoints(t *testing.T) {
 
 	points = append(points, want...)
 
-	newPoints := filter.FilterPoints(points)
+	newPoints := filter.FilterPoints(points, false)
 
 	if len(newPoints) != len(want) {
 		for _, val := range newPoints {
@@ -427,7 +427,7 @@ func Test_Basic_FilterFamilies(t *testing.T) {
 		},
 	}
 
-	got := filter.FilterFamilies(fm)
+	got := filter.FilterFamilies(fm, false)
 
 	res := cmp.Diff(got, want,
 		cmpopts.IgnoreUnexported(dto.MetricFamily{}), cmpopts.IgnoreUnexported(dto.Metric{}),
@@ -579,6 +579,8 @@ func Test_newMetricFilter(t *testing.T) { //nolint:maintidx
 		configIncludeDefault bool
 		metricFormat         types.MetricFormat
 		metrics              []labels.Labels
+		rulesMatchers        []matcher.Matchers
+		allowNeededByRules   bool
 		want                 []labels.Labels
 	}{
 		{
@@ -808,6 +810,192 @@ func Test_newMetricFilter(t *testing.T) { //nolint:maintidx
 				}),
 			},
 		},
+		{
+			name: "No allowNeededByRules",
+			configAllow: []string{
+				`cpu_used`,
+				`disk_used{item="/home"}`,
+				`io_reads`,
+				`io_writes`,
+			},
+			configDeny: []string{
+				`io_writes`,
+				`io_reads{item="/dev/sda"}`,
+			},
+			configIncludeDefault: false,
+			rulesMatchers: []matcher.Matchers{
+				{
+					labels.MustNewMatcher(labels.MatchEqual, types.LabelName, "io_writes"),
+				},
+				{
+					labels.MustNewMatcher(labels.MatchEqual, types.LabelName, "io_reads"),
+				},
+				{
+					labels.MustNewMatcher(labels.MatchEqual, types.LabelName, "mem_used"),
+				},
+				{
+					labels.MustNewMatcher(labels.MatchEqual, types.LabelName, "io_times"),
+					labels.MustNewMatcher(labels.MatchEqual, types.LabelItem, "/dev/sdb"),
+				},
+			},
+			metricFormat: types.MetricFormatBleemeo,
+			metrics: []labels.Labels{
+				labels.FromMap(map[string]string{
+					"__name__": "cpu_used",
+				}),
+				labels.FromMap(map[string]string{
+					"__name__": "mem_used",
+				}),
+				labels.FromMap(map[string]string{
+					"__name__": "disk_used",
+					"item":     "/home",
+				}),
+				labels.FromMap(map[string]string{
+					"__name__": "disk_used",
+					"item":     "/srv",
+				}),
+				labels.FromMap(map[string]string{
+					"__name__": "io_reads",
+					"item":     "/dev/sda",
+				}),
+				labels.FromMap(map[string]string{
+					"__name__": "io_reads",
+					"item":     "/dev/sdb",
+				}),
+				labels.FromMap(map[string]string{
+					"__name__": "io_writes",
+					"item":     "/dev/sda",
+				}),
+				labels.FromMap(map[string]string{
+					"__name__": "io_writes",
+					"item":     "/dev/sdb",
+				}),
+				labels.FromMap(map[string]string{
+					"__name__": "io_times",
+					"item":     "/dev/sda",
+				}),
+				labels.FromMap(map[string]string{
+					"__name__": "io_times",
+					"item":     "/dev/sdb",
+				}),
+			},
+			want: []labels.Labels{
+				labels.FromMap(map[string]string{
+					"__name__": "cpu_used",
+				}),
+				labels.FromMap(map[string]string{
+					"__name__": "disk_used",
+					"item":     "/home",
+				}),
+				labels.FromMap(map[string]string{
+					"__name__": "io_reads",
+					"item":     "/dev/sdb",
+				}),
+			},
+		},
+		{
+			name: "With allowNeededByRules",
+			configAllow: []string{
+				`cpu_used`,
+				`disk_used{item="/home"}`,
+				`io_reads`,
+				`io_writes`,
+			},
+			configDeny: []string{
+				`io_writes`,
+				`io_reads{item="/dev/sda"}`,
+			},
+			configIncludeDefault: false,
+			allowNeededByRules:   true,
+			rulesMatchers: []matcher.Matchers{
+				{
+					labels.MustNewMatcher(labels.MatchEqual, types.LabelName, "io_writes"),
+				},
+				{
+					labels.MustNewMatcher(labels.MatchEqual, types.LabelName, "io_reads"),
+				},
+				{
+					labels.MustNewMatcher(labels.MatchEqual, types.LabelName, "mem_used"),
+				},
+				{
+					labels.MustNewMatcher(labels.MatchEqual, types.LabelName, "io_times"),
+					labels.MustNewMatcher(labels.MatchEqual, types.LabelItem, "/dev/sdb"),
+				},
+			},
+			metricFormat: types.MetricFormatBleemeo,
+			metrics: []labels.Labels{
+				labels.FromMap(map[string]string{
+					"__name__": "cpu_used",
+				}),
+				labels.FromMap(map[string]string{
+					"__name__": "mem_used",
+				}),
+				labels.FromMap(map[string]string{
+					"__name__": "disk_used",
+					"item":     "/home",
+				}),
+				labels.FromMap(map[string]string{
+					"__name__": "disk_used",
+					"item":     "/srv",
+				}),
+				labels.FromMap(map[string]string{
+					"__name__": "io_reads",
+					"item":     "/dev/sda",
+				}),
+				labels.FromMap(map[string]string{
+					"__name__": "io_reads",
+					"item":     "/dev/sdb",
+				}),
+				labels.FromMap(map[string]string{
+					"__name__": "io_writes",
+					"item":     "/dev/sda",
+				}),
+				labels.FromMap(map[string]string{
+					"__name__": "io_writes",
+					"item":     "/dev/sdb",
+				}),
+				labels.FromMap(map[string]string{
+					"__name__": "io_times",
+					"item":     "/dev/sda",
+				}),
+				labels.FromMap(map[string]string{
+					"__name__": "io_times",
+					"item":     "/dev/sdb",
+				}),
+			},
+			want: []labels.Labels{
+				labels.FromMap(map[string]string{
+					"__name__": "cpu_used",
+				}),
+				labels.FromMap(map[string]string{
+					"__name__": "mem_used",
+				}),
+				labels.FromMap(map[string]string{
+					"__name__": "disk_used",
+					"item":     "/home",
+				}),
+				labels.FromMap(map[string]string{
+					"__name__": "io_reads",
+					"item":     "/dev/sda",
+				}),
+				labels.FromMap(map[string]string{
+					"__name__": "io_reads",
+					"item":     "/dev/sdb",
+				}),
+				labels.FromMap(map[string]string{
+					"__name__": "io_writes",
+					"item":     "/dev/sda",
+				}),
+				labels.FromMap(map[string]string{
+					"__name__": "io_writes",
+					"item":     "/dev/sdb",
+				}),
+				labels.FromMap(map[string]string{
+					"__name__": "io_times",
+					"item":     "/dev/sdb",
+				}),
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -831,6 +1019,8 @@ func Test_newMetricFilter(t *testing.T) { //nolint:maintidx
 				return
 			}
 
+			filter.UpdateRulesMatchers(tt.rulesMatchers)
+
 			t0 := time.Now()
 			metrics := makeMetricsFromLabels(tt.metrics)
 			points := makePointsFromLabels(tt.metrics, t0)
@@ -839,11 +1029,15 @@ func Test_newMetricFilter(t *testing.T) { //nolint:maintidx
 			wantPoints := makePointsFromLabels(tt.want, t0)
 			wantFamilies := makeFamiliesFromLabels(tt.want)
 			gotMetrics := filter.filterMetrics(metrics)
-			gotPoints := filter.FilterPoints(points)
-			gotFamilies := filter.FilterFamilies(families)
+			gotPoints := filter.FilterPoints(points, tt.allowNeededByRules)
+			gotFamilies := filter.FilterFamilies(families, tt.allowNeededByRules)
 
-			if !reflect.DeepEqual(wantMetrics, gotMetrics) {
-				t.Errorf("FilterMetrics(): Expected :\n%v\ngot:\n%v", wantMetrics, gotMetrics)
+			if !tt.allowNeededByRules {
+				// filterMetrics only support allowNeededByRules == false, so only test result
+				// in that case.
+				if !reflect.DeepEqual(wantMetrics, gotMetrics) {
+					t.Errorf("FilterMetrics(): Expected :\n%v\ngot:\n%v", wantMetrics, gotMetrics)
+				}
 			}
 
 			if diff := cmp.Diff(wantPoints, gotPoints); diff != "" {
@@ -992,7 +1186,7 @@ func Benchmark_filters_no_match(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			copy(cop, list1)
 
-			metricFilter.FilterPoints(cop)
+			metricFilter.FilterPoints(cop, false)
 		}
 	})
 
@@ -1004,7 +1198,7 @@ func Benchmark_filters_no_match(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			copy(cop, list10)
 
-			metricFilter.FilterPoints(cop)
+			metricFilter.FilterPoints(cop, false)
 		}
 	})
 
@@ -1016,7 +1210,7 @@ func Benchmark_filters_no_match(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			copy(cop, list100)
 
-			metricFilter.FilterPoints(cop)
+			metricFilter.FilterPoints(cop, false)
 		}
 	})
 }
@@ -1056,7 +1250,7 @@ func Benchmark_filters_one_match_first(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			copy(cop, list1)
 
-			metricFilter.FilterPoints(cop)
+			metricFilter.FilterPoints(cop, false)
 		}
 	})
 
@@ -1068,7 +1262,7 @@ func Benchmark_filters_one_match_first(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			copy(cop, list10)
 
-			metricFilter.FilterPoints(cop)
+			metricFilter.FilterPoints(cop, false)
 		}
 	})
 
@@ -1080,7 +1274,7 @@ func Benchmark_filters_one_match_first(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			copy(cop, list100)
 
-			metricFilter.FilterPoints(cop)
+			metricFilter.FilterPoints(cop, false)
 		}
 	})
 }
@@ -1114,7 +1308,7 @@ func Benchmark_filters_one_match_middle(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			copy(cop, list10)
 
-			metricFilter.FilterPoints(cop)
+			metricFilter.FilterPoints(cop, false)
 		}
 	})
 
@@ -1126,7 +1320,7 @@ func Benchmark_filters_one_match_middle(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			copy(cop, list100)
 
-			metricFilter.FilterPoints(cop)
+			metricFilter.FilterPoints(cop, false)
 		}
 	})
 }
@@ -1156,7 +1350,7 @@ func Benchmark_filters_one_match_last(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			copy(cop, list10)
 
-			metricFilter.FilterPoints(cop)
+			metricFilter.FilterPoints(cop, false)
 		}
 	})
 
@@ -1168,7 +1362,7 @@ func Benchmark_filters_one_match_last(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			copy(cop, list100)
 
-			metricFilter.FilterPoints(cop)
+			metricFilter.FilterPoints(cop, false)
 		}
 	})
 }
@@ -1190,7 +1384,7 @@ func Benchmark_filters_all(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			copy(cop, list10)
 
-			metricFilter.FilterPoints(cop)
+			metricFilter.FilterPoints(cop, false)
 		}
 	})
 
@@ -1202,7 +1396,7 @@ func Benchmark_filters_all(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			copy(cop, list100)
 
-			metricFilter.FilterPoints(cop)
+			metricFilter.FilterPoints(cop, false)
 		}
 	})
 }

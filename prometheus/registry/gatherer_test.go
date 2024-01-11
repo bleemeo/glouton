@@ -265,7 +265,7 @@ func Test_labeledGatherer_GatherPoints(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			g := newLabeledGatherer(tt.fields.source, tt.fields.labels, nil, nil)
+			g := newLabeledGatherer(tt.fields.source, tt.fields.labels, nil, nil, nil)
 
 			mfs, err := g.GatherWithState(context.Background(), GatherState{})
 			if (err != nil) != tt.wantErr {

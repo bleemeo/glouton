@@ -61,12 +61,23 @@ type fakeAppenderCallback struct {
 	input []types.MetricPoint
 }
 
-func (f *fakeFilter) FilterPoints(points []types.MetricPoint) []types.MetricPoint {
+func (f *fakeFilter) FilterPoints(points []types.MetricPoint, allowNeededByRules bool) []types.MetricPoint {
+	_ = allowNeededByRules
+
 	return points
 }
 
-func (f *fakeFilter) FilterFamilies(families []*dto.MetricFamily) []*dto.MetricFamily {
+func (f *fakeFilter) FilterFamilies(families []*dto.MetricFamily, allowNeededByRules bool) []*dto.MetricFamily {
+	_ = allowNeededByRules
+
 	return families
+}
+
+func (f *fakeFilter) IsMetricAllowed(lbls labels.Labels, allowNeededByRules bool) bool {
+	_ = lbls
+	_ = allowNeededByRules
+
+	return true
 }
 
 type fakeArchive struct {
