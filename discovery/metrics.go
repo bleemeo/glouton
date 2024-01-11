@@ -19,7 +19,6 @@ package discovery
 import (
 	"errors"
 	"fmt"
-	"glouton/collector"
 	"glouton/facts"
 	"glouton/facts/container-runtime/veth"
 	"glouton/inputs"
@@ -69,18 +68,13 @@ import (
 var errNotSupported = errors.New("service not supported by Prometheus collector")
 
 // AddDefaultInputs adds system inputs to a collector.
-func AddDefaultInputs(
-	metricRegistry GathererRegistry,
-	coll *collector.Collector,
-	inputsConfig inputs.CollectorConfig,
-	vethProvider *veth.Provider,
-) error {
+func AddDefaultInputs(metricRegistry GathererRegistry, inputsConfig inputs.CollectorConfig, vethProvider *veth.Provider) error {
 	input, err := system.New()
 	if err != nil {
 		return err
 	}
 
-	if _, err = coll.AddInput(input, "system"); err != nil {
+	if err = addInputToRegistry(metricRegistry, input, "system"); err != nil {
 		return err
 	}
 
@@ -89,7 +83,7 @@ func AddDefaultInputs(
 		return err
 	}
 
-	if _, err = coll.AddInput(input, "cpu"); err != nil {
+	if err = addInputToRegistry(metricRegistry, input, "cpu"); err != nil {
 		return err
 	}
 
@@ -98,7 +92,7 @@ func AddDefaultInputs(
 		return err
 	}
 
-	if _, err = coll.AddInput(input, "net"); err != nil {
+	if err = addInputToRegistry(metricRegistry, input, "net"); err != nil {
 		return err
 	}
 
@@ -108,7 +102,7 @@ func AddDefaultInputs(
 			return err
 		}
 
-		if _, err = coll.AddInput(input, "disk"); err != nil {
+		if err = addInputToRegistry(metricRegistry, input, "disk"); err != nil {
 			return err
 		}
 	}
@@ -138,14 +132,24 @@ func AddDefaultInputs(
 		return err
 	}
 
-	if _, err = coll.AddInput(input, "diskio"); err != nil {
+	if err = addInputToRegistry(metricRegistry, input, "diskio"); err != nil {
 		return err
 	}
 
-	return addDefaultFromOS(inputsConfig, coll)
+	return addDefaultFromOS(inputsConfig, metricRegistry)
 }
 
-func addDefaultFromOS(inputsConfig inputs.CollectorConfig, coll *collector.Collector) error {
+func addInputToRegistry(reg GathererRegistry, input telegraf.Input, name string) error {
+	opt := registry.RegistrationOption{
+		Description: name + " input",
+		Interval:    defaultInterval,
+	}
+	_, err := reg.RegisterInput(opt, input)
+
+	return err
+}
+
+func addDefaultFromOS(inputsConfig inputs.CollectorConfig, metricRegistry GathererRegistry) error {
 	var input telegraf.Input
 
 	var err error
@@ -157,7 +161,7 @@ func addDefaultFromOS(inputsConfig inputs.CollectorConfig, coll *collector.Colle
 			return err
 		}
 
-		_, err = coll.AddInput(input, "win_perf_counters")
+		err = addInputToRegistry(metricRegistry, input, "win_perf_counters")
 		if err != nil {
 			return err
 		}
@@ -168,7 +172,7 @@ func addDefaultFromOS(inputsConfig inputs.CollectorConfig, coll *collector.Colle
 			return err
 		}
 
-		if _, err = coll.AddInput(input, "mem"); err != nil {
+		if err = addInputToRegistry(metricRegistry, input, "mem"); err != nil {
 			return err
 		}
 
@@ -177,7 +181,7 @@ func addDefaultFromOS(inputsConfig inputs.CollectorConfig, coll *collector.Colle
 			return err
 		}
 
-		if _, err = coll.AddInput(input, "swap"); err != nil {
+		if err = addInputToRegistry(metricRegistry, input, "swap"); err != nil {
 			return err
 		}
 	}

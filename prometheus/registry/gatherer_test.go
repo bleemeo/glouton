@@ -32,13 +32,13 @@ import (
 
 func Test_mergeLabels(t *testing.T) {
 	var (
-		strName       = "name"
-		strValue      = "value"
-		strDC         = "dc"
-		strUSEast     = "us-east"
-		strMountPoint = "mountpoint"
-		strHome       = "/home"
-		strRoot       = "/"
+		strName   = "name"
+		strValue  = "value"
+		strDC     = "dc"
+		strUSEast = "us-east"
+		strItem   = "item"
+		strHome   = "/home"
+		strRoot   = "/"
 	)
 
 	type args struct {
@@ -78,7 +78,7 @@ func Test_mergeLabels(t *testing.T) {
 			args: args{
 				a: []*dto.LabelPair{
 					// Don't forget that labels must be sorted by name
-					{Name: &strMountPoint, Value: &strHome},
+					{Name: &strItem, Value: &strHome},
 					{Name: &strName, Value: &strValue},
 				},
 				b: []*dto.LabelPair{
@@ -87,7 +87,7 @@ func Test_mergeLabels(t *testing.T) {
 			},
 			want: []*dto.LabelPair{
 				{Name: &strDC, Value: &strUSEast},
-				{Name: &strMountPoint, Value: &strHome},
+				{Name: &strItem, Value: &strHome},
 				{Name: &strName, Value: &strValue},
 			},
 		},
@@ -95,17 +95,17 @@ func Test_mergeLabels(t *testing.T) {
 			name: "conflict",
 			args: args{
 				a: []*dto.LabelPair{
-					{Name: &strMountPoint, Value: &strHome},
+					{Name: &strItem, Value: &strHome},
 					{Name: &strName, Value: &strValue},
 				},
 				b: []*dto.LabelPair{
 					{Name: &strDC, Value: &strUSEast},
-					{Name: &strMountPoint, Value: &strRoot},
+					{Name: &strItem, Value: &strRoot},
 				},
 			},
 			want: []*dto.LabelPair{
 				{Name: &strDC, Value: &strUSEast},
-				{Name: &strMountPoint, Value: &strRoot},
+				{Name: &strItem, Value: &strRoot},
 				{Name: &strName, Value: &strValue},
 			},
 		},
@@ -122,14 +122,14 @@ func Test_mergeLabels(t *testing.T) {
 // Test_labeledGatherer_GatherPoints should be converted to call of registry.scrape.
 func Test_labeledGatherer_GatherPoints(t *testing.T) {
 	var (
-		strMetric     = "up"
-		strMountpoint = "mountpoint"
-		strHome       = "/home"
-		strJob        = "job"
-		strValue      = "value"
-		floatValue1   = 42.0
-		floatValue2   = 1337.0
-		timestampMS   = time.Date(2020, 2, 28, 13, 54, 48, 0, time.UTC).UnixNano() / 1e6
+		strMetric   = "up"
+		strItem     = "item"
+		strHome     = "/home"
+		strJob      = "job"
+		strValue    = "value"
+		floatValue1 = 42.0
+		floatValue2 = 1337.0
+		timestampMS = time.Date(2020, 2, 28, 13, 54, 48, 0, time.UTC).UnixNano() / 1e6
 	)
 
 	g := &fakeGatherer{
@@ -141,7 +141,7 @@ func Test_labeledGatherer_GatherPoints(t *testing.T) {
 				Metric: []*dto.Metric{
 					{
 						Label: []*dto.LabelPair{
-							{Name: &strMountpoint, Value: &strHome},
+							{Name: &strItem, Value: &strHome},
 						},
 						TimestampMs: &timestampMS,
 						Counter:     &dto.Counter{Value: &floatValue1},
@@ -177,11 +177,13 @@ func Test_labeledGatherer_GatherPoints(t *testing.T) {
 			},
 			want: []types.MetricPoint{
 				{
-					Point:       types.Point{Time: time.Unix(0, timestampMS*1e6), Value: floatValue1},
-					Annotations: types.MetricAnnotations{},
+					Point: types.Point{Time: time.Unix(0, timestampMS*1e6), Value: floatValue1},
+					Annotations: types.MetricAnnotations{
+						BleemeoItem: "/home",
+					},
 					Labels: map[string]string{
 						types.LabelName: "up",
-						strMountpoint:   strHome,
+						strItem:         strHome,
 					},
 				},
 				{
@@ -211,7 +213,7 @@ func Test_labeledGatherer_GatherPoints(t *testing.T) {
 					Labels: map[string]string{
 						types.LabelName: "up",
 						strJob:          strValue,
-						strMountpoint:   strHome,
+						strItem:         strHome,
 					},
 				},
 				{
@@ -233,27 +235,29 @@ func Test_labeledGatherer_GatherPoints(t *testing.T) {
 				annotations: types.MetricAnnotations{
 					ServiceName: "service-name",
 				},
-				labels: labels.FromStrings(strMountpoint, strJob),
+				labels: labels.FromStrings(strItem, strJob),
 			},
 			want: []types.MetricPoint{
 				{
 					Point: types.Point{Time: time.Unix(0, timestampMS*1e6), Value: floatValue1},
 					Annotations: types.MetricAnnotations{
+						BleemeoItem: strJob,
 						ServiceName: "service-name",
 					},
 					Labels: map[string]string{
 						types.LabelName: "up",
-						strMountpoint:   strJob,
+						strItem:         strJob,
 					},
 				},
 				{
 					Point: types.Point{Time: time.Unix(0, timestampMS*1e6), Value: floatValue2},
 					Annotations: types.MetricAnnotations{
+						BleemeoItem: strJob,
 						ServiceName: "service-name",
 					},
 					Labels: map[string]string{
 						types.LabelName: "up",
-						strMountpoint:   strJob,
+						strItem:         strJob,
 					},
 				},
 			},

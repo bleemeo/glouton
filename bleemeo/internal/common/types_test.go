@@ -32,14 +32,14 @@ func TestMetricLookupFromList(t *testing.T) {
 		{
 			Labels: map[string]string{
 				types.LabelName: "io_reads",
-				"device":        "sda",
+				"item":          "sda",
 			},
 			ID: "index-0",
 		},
 		{
 			Labels: map[string]string{
 				types.LabelName: "io_reads",
-				"device":        "sda",
+				"item":          "sda",
 			},
 			ID:            "index-1",
 			DeactivatedAt: time.Now(),
@@ -47,7 +47,7 @@ func TestMetricLookupFromList(t *testing.T) {
 		{
 			Labels: map[string]string{
 				types.LabelName: "io_reads",
-				"device":        "sdb",
+				"item":          "sdb",
 			},
 			ID:            "index-2",
 			DeactivatedAt: time.Now(),
@@ -55,14 +55,14 @@ func TestMetricLookupFromList(t *testing.T) {
 		{
 			Labels: map[string]string{
 				types.LabelName: "io_reads",
-				"device":        "sdb",
+				"item":          "sdb",
 			},
 			ID: "index-3",
 		},
 		{
 			Labels: map[string]string{
 				types.LabelName: "cpu_user",
-				"device":        "",
+				"item":          "",
 			},
 			ID: "index-4",
 		},

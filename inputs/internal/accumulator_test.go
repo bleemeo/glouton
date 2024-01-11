@@ -352,9 +352,9 @@ func TestDeriveMultipleTag(t *testing.T) {
 	finalFunc2 := func(measurement string, fields map[string]interface{}, tags map[string]string, annotations types.MetricAnnotations, t_ ...time.Time) {
 		var want float64
 
-		if tags["device"] == "sda" {
+		if tags["item"] == "sda" {
 			want = 4.2
-		} else if tags["device"] == "nvme0n1" {
+		} else if tags["item"] == "nvme0n1" {
 			want = 1204.0
 		}
 
@@ -384,7 +384,7 @@ func TestDeriveMultipleTag(t *testing.T) {
 			"io_reads": 100,
 		},
 		map[string]string{
-			"device": "sda",
+			"item": "sda",
 		},
 		t0,
 	)
@@ -395,7 +395,7 @@ func TestDeriveMultipleTag(t *testing.T) {
 			"io_reads": 5748,
 		},
 		map[string]string{
-			"device": "nvme0n1",
+			"item": "nvme0n1",
 		},
 		t0,
 	)
@@ -407,7 +407,7 @@ func TestDeriveMultipleTag(t *testing.T) {
 			"io_reads": 100 + int(4.2*20),
 		},
 		map[string]string{
-			"device": "sda",
+			"item": "sda",
 		},
 		t1,
 	)
@@ -418,7 +418,7 @@ func TestDeriveMultipleTag(t *testing.T) {
 			"io_reads": 5748 + int(1204*20),
 		},
 		map[string]string{
-			"device": "nvme0n1",
+			"item": "nvme0n1",
 		},
 		t1,
 	)

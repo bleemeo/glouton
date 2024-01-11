@@ -584,7 +584,7 @@ func Test_newMetricFilter(t *testing.T) { //nolint:maintidx
 		{
 			name: "mix RE and NRE",
 			configAllow: []string{
-				`{__name__!~"cpu_.*", mountpoint="/home"}`,
+				`{__name__!~"cpu_.*", item="/home"}`,
 				`{__name__=~"cpu_.*"}`,
 			},
 			configIncludeDefault: false,
@@ -621,19 +621,19 @@ func Test_newMetricFilter(t *testing.T) { //nolint:maintidx
 		{
 			name: "Merge EQ",
 			configAllow: []string{
-				`{__name__="cpu_used", mountpoint="/mnt"}`,
-				`{__name__="cpu_used", mountpoint="/home"}`,
+				`{__name__="cpu_used", item="/mnt"}`,
+				`{__name__="cpu_used", item="/home"}`,
 			},
 			configIncludeDefault: false,
 			metricFormat:         types.MetricFormatBleemeo,
 			metrics: []labels.Labels{
 				labels.FromMap(map[string]string{
-					"__name__":   "cpu_used",
-					"mountpoint": "/mnt",
+					"__name__": "cpu_used",
+					"item":     "/mnt",
 				}),
 				labels.FromMap(map[string]string{
-					"__name__":   "cpu_used",
-					"mountpoint": "/home",
+					"__name__": "cpu_used",
+					"item":     "/home",
 				}),
 				labels.FromMap(map[string]string{
 					"__name__": "cpu_used",
@@ -641,35 +641,35 @@ func Test_newMetricFilter(t *testing.T) { //nolint:maintidx
 			},
 			want: []labels.Labels{
 				labels.FromMap(map[string]string{
-					"__name__":   "cpu_used",
-					"mountpoint": "/mnt",
+					"__name__": "cpu_used",
+					"item":     "/mnt",
 				}),
 				labels.FromMap(map[string]string{
-					"__name__":   "cpu_used",
-					"mountpoint": "/home",
+					"__name__": "cpu_used",
+					"item":     "/home",
 				}),
 			},
 		},
 		{
 			name: "Merge RE",
 			configAllow: []string{
-				`{__name__=~"cpu_.*", mountpoint="/mnt"}`,
-				`{__name__=~"cpu_.*", mountpoint="/home"}`,
+				`{__name__=~"cpu_.*", item="/mnt"}`,
+				`{__name__=~"cpu_.*", item="/home"}`,
 			},
 			configIncludeDefault: false,
 			metricFormat:         types.MetricFormatBleemeo,
 			metrics: []labels.Labels{
 				labels.FromMap(map[string]string{
-					"__name__":   "cpu_used",
-					"mountpoint": "/mnt",
+					"__name__": "cpu_used",
+					"item":     "/mnt",
 				}),
 				labels.FromMap(map[string]string{
-					"__name__":   "cpu_used",
-					"mountpoint": "/home",
+					"__name__": "cpu_used",
+					"item":     "/home",
 				}),
 				labels.FromMap(map[string]string{
-					"__name__":   "cpu_used",
-					"mountpoint": "/test",
+					"__name__": "cpu_used",
+					"item":     "/test",
 				}),
 				labels.FromMap(map[string]string{
 					"__name__": "cpu_used",
@@ -677,76 +677,76 @@ func Test_newMetricFilter(t *testing.T) { //nolint:maintidx
 			},
 			want: []labels.Labels{
 				labels.FromMap(map[string]string{
-					"__name__":   "cpu_used",
-					"mountpoint": "/mnt",
+					"__name__": "cpu_used",
+					"item":     "/mnt",
 				}),
 				labels.FromMap(map[string]string{
-					"__name__":   "cpu_used",
-					"mountpoint": "/home",
+					"__name__": "cpu_used",
+					"item":     "/home",
 				}),
 			},
 		},
 		{
 			name: "Merge NRE",
 			configAllow: []string{
-				`{__name__!~"cpu_.*", mountpoint="/mnt"}`,
-				`{__name__!~"cpu_.*", mountpoint="/home"}`,
+				`{__name__!~"cpu_.*", item="/mnt"}`,
+				`{__name__!~"cpu_.*", item="/home"}`,
 			},
 			configIncludeDefault: false,
 			metricFormat:         types.MetricFormatBleemeo,
 			metrics: []labels.Labels{
 				labels.FromMap(map[string]string{
-					"__name__":   "cpu_used",
-					"mountpoint": "/mnt",
+					"__name__": "cpu_used",
+					"item":     "/mnt",
 				}),
 				labels.FromMap(map[string]string{
-					"__name__":   "cpu_used",
-					"mountpoint": "/home",
+					"__name__": "cpu_used",
+					"item":     "/home",
 				}),
 				labels.FromMap(map[string]string{
 					"__name__": "cpu_used",
 				}),
 				labels.FromMap(map[string]string{
-					"__name__":   "memory_used",
-					"mountpoint": "/home",
+					"__name__": "memory_used",
+					"item":     "/home",
 				}),
 			},
 			want: []labels.Labels{
 				labels.FromMap(map[string]string{
-					"__name__":   "memory_used",
-					"mountpoint": "/home",
+					"__name__": "memory_used",
+					"item":     "/home",
 				}),
 			},
 		},
 		{
 			name: "Merge NEQ",
 			configAllow: []string{
-				`{__name__!="cpu_used", mountpoint="/mnt"}`,
-				`{__name__!="cpu_used", mountpoint="/home"}`,
+				`{__name__!="cpu_used", item="/mnt"}`,
+				`{__name__!="cpu_used", item="/home"}`,
 			},
 			configIncludeDefault: false,
 			metricFormat:         types.MetricFormatBleemeo,
 			metrics: []labels.Labels{
 				labels.FromMap(map[string]string{
-					"__name__":   "cpu_used",
-					"mountpoint": "/mnt",
+					"__name__": "cpu_used",
+					"item":     "/mnt",
 				}),
 				labels.FromMap(map[string]string{
-					"__name__":   "cpu_used",
-					"mountpoint": "/home",
+					"__name__": "cpu_used",
+					"item":     "/home",
 				}),
 				labels.FromMap(map[string]string{
 					"__name__": "cpu_used",
 				}),
 				labels.FromMap(map[string]string{
-					"__name__":   "memory_used",
-					"mountpoint": "/home",
+					"__name__": "memory_used",
+					"item":     "/home",
 				}),
 			},
 			want: []labels.Labels{
 				labels.FromMap(map[string]string{
-					"__name__":   "memory_used",
-					"mountpoint": "/home",
+					"__name__": "memory_used",
+					"item":     "/home",
 				}),
 			},
 		},
@@ -756,7 +756,7 @@ func Test_newMetricFilter(t *testing.T) { //nolint:maintidx
 				"cpu_*",
 				"process_used",
 				`node_cpu_seconds_global{mode=~"nice|user|system"}`,
-				`{__name__!="cpu_used", mountpoint="/home"}`,
+				`{__name__!="cpu_used", item="/home"}`,
 			},
 			configDeny: []string{
 				`{__name__=~"node_cpu_seconds_.*",mode="system"}`,
@@ -766,8 +766,8 @@ func Test_newMetricFilter(t *testing.T) { //nolint:maintidx
 			metricFormat:         types.MetricFormatBleemeo,
 			metrics: []labels.Labels{
 				labels.FromMap(map[string]string{
-					"__name__":   "cpu_used",
-					"mountpoint": "/mnt",
+					"__name__": "cpu_used",
+					"item":     "/mnt",
 				}),
 				labels.FromMap(map[string]string{
 					"__name__": "memory_used",
@@ -785,26 +785,26 @@ func Test_newMetricFilter(t *testing.T) { //nolint:maintidx
 					"mode":     "wait",
 				}),
 				labels.FromMap(map[string]string{
-					"__name__":   "memory_used",
-					"mountpoint": "/home",
+					"__name__": "memory_used",
+					"item":     "/home",
 				}),
 				labels.FromMap(map[string]string{
-					"__name__":   "process_count",
-					"mountpoint": "/mnt",
+					"__name__": "process_count",
+					"item":     "/mnt",
 				}),
 			},
 			want: []labels.Labels{
 				labels.FromMap(map[string]string{
-					"__name__":   "cpu_used",
-					"mountpoint": "/mnt",
+					"__name__": "cpu_used",
+					"item":     "/mnt",
 				}),
 				labels.FromMap(map[string]string{
 					"__name__": "node_cpu_seconds_global",
 					"mode":     "user",
 				}),
 				labels.FromMap(map[string]string{
-					"__name__":   "memory_used",
-					"mountpoint": "/home",
+					"__name__": "memory_used",
+					"item":     "/home",
 				}),
 			},
 		},
