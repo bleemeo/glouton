@@ -964,20 +964,8 @@ func (m *metricFilter) FilterPoints(points []types.MetricPoint) []types.MetricPo
 
 	start := time.Now()
 
-	if len(m.denyList) != 0 {
-		for _, point := range points {
-			if !m.isDenied(point.Labels) {
-				points[i] = point
-				i++
-			}
-		}
-
-		points = points[:i]
-		i = 0
-	}
-
 	for _, point := range points {
-		if m.isAllowed(point.Labels) {
+		if m.isAllowedAndNotDeniedNoLock(point.Labels) {
 			points[i] = point
 			i++
 		}
@@ -1004,6 +992,10 @@ func (m *metricFilter) IsDenied(lbls map[string]string) bool {
 }
 
 func (m *metricFilter) isDenied(lbls map[string]string) bool {
+	if len(m.denyList) == 0 {
+		return false
+	}
+
 	for key, denyVals := range m.denyList {
 		if !key.Matches(lbls[types.LabelName]) {
 			continue
@@ -1052,7 +1044,7 @@ func (m *metricFilter) isAllowedAndNotDenied(lbls map[string]string) bool {
 }
 
 func (m *metricFilter) isAllowedAndNotDeniedNoLock(lbls map[string]string) bool {
-	return m.isAllowed(lbls) && !m.isDenied(lbls)
+	return !m.isDenied(lbls) && m.isAllowed(lbls)
 }
 
 func (m *metricFilter) filterMetrics(mt []types.Metric) []types.Metric {
@@ -1061,20 +1053,8 @@ func (m *metricFilter) filterMetrics(mt []types.Metric) []types.Metric {
 	m.l.Lock()
 	defer m.l.Unlock()
 
-	if len(m.denyList) > 0 {
-		for _, metric := range mt {
-			if !m.isDenied(metric.Labels()) {
-				mt[i] = metric
-				i++
-			}
-		}
-
-		mt = mt[:i]
-		i = 0
-	}
-
 	for _, metric := range mt {
-		if m.isAllowed(metric.Labels()) {
+		if m.isAllowedAndNotDeniedNoLock(metric.Labels()) {
 			mt[i] = metric
 			i++
 		}
@@ -1085,42 +1065,34 @@ func (m *metricFilter) filterMetrics(mt []types.Metric) []types.Metric {
 	return mt
 }
 
+func allowedMetric(lbls map[string]string, denyVals []matcher.Matchers, allowVals []matcher.Matchers) bool {
+	if len(denyVals) > 0 {
+		for _, denyVal := range denyVals {
+			if denyVal.Matches(lbls) {
+				return false
+			}
+		}
+	}
+
+	for _, allowVal := range allowVals {
+		if allowVal.Matches(lbls) {
+			return true
+		}
+	}
+
+	return false
+}
+
 func (m *metricFilter) filterFamily(f *dto.MetricFamily) {
 	i := 0
 	denyVals := getMatchersList(m.denyList, f.GetName())
-
-	if len(denyVals) > 0 {
-		for _, metric := range f.GetMetric() {
-			didMatch := false
-
-			for _, denyVal := range denyVals {
-				if denyVal.Matches(model.DTO2Labels(f.GetName(), metric)) {
-					didMatch = true
-
-					break
-				}
-			}
-
-			if !didMatch {
-				f.Metric[i] = metric
-				i++
-			}
-		}
-
-		f.Metric = f.GetMetric()[:i]
-		i = 0
-	}
-
 	allowVals := getMatchersList(m.allowList, f.GetName())
 
 	for _, metric := range f.GetMetric() {
-		for _, allowVal := range allowVals {
-			if allowVal.Matches(model.DTO2Labels(f.GetName(), metric)) {
-				f.Metric[i] = metric
-				i++
-
-				break
-			}
+		lbls := model.DTO2Labels(f.GetName(), metric)
+		if allowedMetric(lbls, denyVals, allowVals) {
+			f.Metric[i] = metric
+			i++
 		}
 	}
 
