@@ -100,18 +100,16 @@ func (pc *propsCache[propsType]) get(moid string, bypassStaleness ...bool) (valu
 	pc.l.Lock()
 	defer pc.l.Unlock()
 
-	prop, ok := pc.m[moid]
+	props, ok := pc.m[moid]
 	if !ok {
 		return value, false
 	}
 
-	if time.Since(prop.lastUpdate) > maxCachedPropertiesValidity && !(len(bypassStaleness) == 1 && bypassStaleness[0]) {
-		delete(pc.m, moid) // This property won't be used anymore.
-
+	if time.Since(props.lastUpdate) > maxCachedPropertiesValidity && !(len(bypassStaleness) == 1 && bypassStaleness[0]) {
 		return value, false
 	}
 
-	return prop.value, true
+	return props.value, true
 }
 
 func (pc *propsCache[propsType]) set(moid string, value propsType) {
@@ -213,7 +211,7 @@ func retrieveProps[ref commonObject, props any](ctx context.Context, client *vim
 
 //nolint:gochecknoglobals
 var (
-	relevantClusterProperties = []string{ //nolint: unused
+	relevantClusterProperties = []string{
 		"overallStatus",
 		"datastore",
 		"summary",
@@ -287,6 +285,8 @@ type (
 
 	clusterLightComputeResourceSummaryComputeResourceSummary struct {
 		NumCpuCores int16 //nolint: revive,stylecheck
+		TotalCpu    int32 //nolint: revive,stylecheck
+		TotalMemory int64
 	}
 
 	// Lightweight version of mo.Datastore.

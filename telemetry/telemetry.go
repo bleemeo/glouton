@@ -83,7 +83,7 @@ func PostInformation(ctx context.Context, telemetryID string, url string, agenti
 		return
 	}
 
-	logger.V(1).Printf("telemetry response Satus: %s", resp.Status)
+	logger.V(1).Printf("telemetry response status: %s", resp.Status)
 
 	defer func() {
 		// Ensure we read the whole response to avoid "Connection reset by peer" on server

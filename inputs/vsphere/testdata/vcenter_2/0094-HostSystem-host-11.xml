@@ -1,5 +1,5 @@
 <ObjectContent>
-  <obj type="HostSystem">host-23</obj>
+  <obj type="HostSystem">host-11</obj>
   <propSet>
     <name>value</name>
     <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="ArrayOfCustomFieldValue"></val>
@@ -10,7 +10,7 @@
   </propSet>
   <propSet>
     <name>parent</name>
-    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="ManagedObjectReference" type="ClusterComputeResource">domain-c16</val>
+    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="ManagedObjectReference" type="ClusterComputeResource">domain-c7</val>
   </propSet>
   <propSet>
     <name>customValue</name>
@@ -40,7 +40,7 @@
   </propSet>
   <propSet>
     <name>name</name>
-    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="xsd:string">DC0_C0_H0</val>
+    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="xsd:string">TEST-CL0</val>
   </propSet>
   <propSet>
     <name>disabledMethod</name>
@@ -71,14 +71,14 @@
   <propSet>
     <name>summary</name>
     <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="HostListSummary">
-      <host type="HostSystem">host-23</host>
+      <host type="HostSystem">host-11</host>
       <hardware>
-        <vendor>VMware, Inc. (govmomi simulator)</vendor>
-        <model>VMware Virtual Platform</model>
+        <vendor>HPE</vendor>
+        <model>ProLiant DL360 Gen10</model>
         <cpuModel>Intel(R) Core(TM) i7-3615QM CPU @ 2.30GHz</cpuModel>
       </hardware>
       <config>
-        <name>DC0_C0_H0</name>
+        <name>192.168.0.203</name>
         <vmotionEnabled>false</vmotionEnabled>
       </config>
     </val>
@@ -87,17 +87,17 @@
     <name>hardware</name>
     <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="HostHardwareInfo">
       <cpuInfo>
-        <numCpuCores>2</numCpuCores>
+        <numCpuCores>40</numCpuCores>
       </cpuInfo>
-      <memorySize>4294430720</memorySize>
+      <memorySize>824269471744</memorySize>
     </val>
   </propSet>
   <propSet>
     <name>config</name>
     <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="HostConfigInfo">
-      <host type="HostSystem">ha-host</host>
+      <host type="HostSystem">host-11</host>
       <product>
-        <version>6.5.0</version>
+        <version>7.0.1</version>
         <osType>vmnix-x86</osType>
       </product>
       <network>
@@ -120,9 +120,9 @@
           <port>key-vim.host.PortGroup.Port-33554436</port>
         </vnic>
         <dnsConfig XMLSchema-instance:type="HostDnsConfig">
-          <domainName>localdomain</domainName>
+          <domainName>test.io</domainName>
         </dnsConfig>
-        <ipV6Enabled>false</ipV6Enabled>
+        <ipV6Enabled>true</ipV6Enabled>
       </network>
     </val>
   </propSet>

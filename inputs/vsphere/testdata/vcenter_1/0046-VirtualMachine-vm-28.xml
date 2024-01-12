@@ -1,121 +1,21 @@
 <ObjectContent>
   <obj type="VirtualMachine">vm-28</obj>
   <propSet>
-    <name>value</name>
-    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="ArrayOfCustomFieldValue"></val>
-  </propSet>
-  <propSet>
-    <name>availableField</name>
-    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="ArrayOfCustomFieldDef"></val>
-  </propSet>
-  <propSet>
     <name>parent</name>
     <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="ManagedObjectReference" type="Folder">group-3</val>
-  </propSet>
-  <propSet>
-    <name>customValue</name>
-    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="ArrayOfCustomFieldValue"></val>
-  </propSet>
-  <propSet>
-    <name>overallStatus</name>
-    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="ManagedEntityStatus">green</val>
-  </propSet>
-  <propSet>
-    <name>configStatus</name>
-    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="ManagedEntityStatus">green</val>
-  </propSet>
-  <propSet>
-    <name>configIssue</name>
-    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="ArrayOfEvent"></val>
-  </propSet>
-  <propSet>
-    <name>effectiveRole</name>
-    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="ArrayOfInt">
-      <int>-1</int>
-    </val>
-  </propSet>
-  <propSet>
-    <name>permission</name>
-    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="ArrayOfPermission"></val>
   </propSet>
   <propSet>
     <name>name</name>
     <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="xsd:string">DC0_C0_RP0_VM0</val>
   </propSet>
   <propSet>
-    <name>disabledMethod</name>
-    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="ArrayOfString"></val>
-  </propSet>
-  <propSet>
-    <name>recentTask</name>
-    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="ArrayOfManagedObjectReference"></val>
-  </propSet>
-  <propSet>
-    <name>declaredAlarmState</name>
-    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="ArrayOfAlarmState"></val>
-  </propSet>
-  <propSet>
-    <name>triggeredAlarmState</name>
-    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="ArrayOfAlarmState"></val>
-  </propSet>
-  <propSet>
-    <name>tag</name>
-    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="ArrayOfTag"></val>
-  </propSet>
-  <propSet>
-    <name>capability</name>
-    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="VirtualMachineCapability">
-      <snapshotOperationsSupported>false</snapshotOperationsSupported>
-      <multipleSnapshotsSupported>false</multipleSnapshotsSupported>
-      <snapshotConfigSupported>false</snapshotConfigSupported>
-      <poweredOffSnapshotsSupported>false</poweredOffSnapshotsSupported>
-      <memorySnapshotsSupported>false</memorySnapshotsSupported>
-      <revertToSnapshotSupported>false</revertToSnapshotSupported>
-      <quiescedSnapshotsSupported>false</quiescedSnapshotsSupported>
-      <disableSnapshotsSupported>false</disableSnapshotsSupported>
-      <lockSnapshotsSupported>false</lockSnapshotsSupported>
-      <consolePreferencesSupported>false</consolePreferencesSupported>
-      <cpuFeatureMaskSupported>false</cpuFeatureMaskSupported>
-      <s1AcpiManagementSupported>false</s1AcpiManagementSupported>
-      <settingScreenResolutionSupported>false</settingScreenResolutionSupported>
-      <toolsAutoUpdateSupported>false</toolsAutoUpdateSupported>
-      <vmNpivWwnSupported>false</vmNpivWwnSupported>
-      <npivWwnOnNonRdmVmSupported>false</npivWwnOnNonRdmVmSupported>
-      <swapPlacementSupported>false</swapPlacementSupported>
-      <toolsSyncTimeSupported>false</toolsSyncTimeSupported>
-      <virtualMmuUsageSupported>false</virtualMmuUsageSupported>
-      <diskSharesSupported>false</diskSharesSupported>
-      <bootOptionsSupported>false</bootOptionsSupported>
-      <settingVideoRamSizeSupported>false</settingVideoRamSizeSupported>
-      <changeTrackingSupported>true</changeTrackingSupported>
-    </val>
-  </propSet>
-  <propSet>
     <name>config</name>
     <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="VirtualMachineConfigInfo">
-      <changeVersion></changeVersion>
-      <modified>2023-10-25T09:30:27.968457149+02:00</modified>
       <name>DC0_C0_RP0_VM0</name>
       <guestFullName>otherGuest</guestFullName>
       <version>vmx-13</version>
-      <uuid>cd0681bf-2f18-5c00-9b9b-8197c0095348</uuid>
-      <createDate>2023-10-25T09:30:27.967892212+02:00</createDate>
-      <instanceUuid>bfff331f-7f07-572d-951e-edd3701dc061</instanceUuid>
-      <template>false</template>
-      <guestId>otherGuest</guestId>
-      <alternateGuestName></alternateGuestName>
-      <files>
-        <vmPathName>[LocalDS_0] DC0_C0_RP0_VM0/DC0_C0_RP0_VM0.vmx</vmPathName>
-        <snapshotDirectory>[LocalDS_0] DC0_C0_RP0_VM0</snapshotDirectory>
-        <suspendDirectory>[LocalDS_0] DC0_C0_RP0_VM0</suspendDirectory>
-        <logDirectory>[LocalDS_0] DC0_C0_RP0_VM0</logDirectory>
-      </files>
-      <tools></tools>
-      <flags></flags>
-      <defaultPowerOps></defaultPowerOps>
       <hardware>
         <numCPU>1</numCPU>
-        <numCoresPerSocket>1</numCoresPerSocket>
         <memoryMB>32</memoryMB>
         <device XMLSchema-instance:type="VirtualIDEController">
           <key>200</key>
@@ -300,124 +200,7 @@
           </resourceAllocation>
         </device>
       </hardware>
-      <cpuAllocation>
-        <reservation>0</reservation>
-        <expandableReservation>true</expandableReservation>
-        <limit>-1</limit>
-        <shares>
-          <shares>0</shares>
-          <level>normal</level>
-        </shares>
-      </cpuAllocation>
-      <memoryAllocation>
-        <reservation>0</reservation>
-        <expandableReservation>true</expandableReservation>
-        <limit>-1</limit>
-        <shares>
-          <shares>0</shares>
-          <level>normal</level>
-        </shares>
-      </memoryAllocation>
-      <latencySensitivity>
-        <level>normal</level>
-      </latencySensitivity>
-      <extraConfig XMLSchema-instance:type="OptionValue">
-        <key>govcsim</key>
-        <value XMLSchema-instance:type="xsd:string">TRUE</value>
-      </extraConfig>
-      <bootOptions></bootOptions>
-      <firmware>bios</firmware>
     </val>
-  </propSet>
-  <propSet>
-    <name>layout</name>
-    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="VirtualMachineFileLayout">
-      <configFile>DC0_C0_RP0_VM0.nvram</configFile>
-      <logFile>vmware.log</logFile>
-      <disk>
-        <key>204</key>
-        <diskFile>[LocalDS_0] DC0_C0_RP0_VM0/disk1.vmdk</diskFile>
-      </disk>
-    </val>
-  </propSet>
-  <propSet>
-    <name>layoutEx</name>
-    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="VirtualMachineFileLayoutEx">
-      <file>
-        <key>0</key>
-        <name>[LocalDS_0] DC0_C0_RP0_VM0.nvram</name>
-        <type>nvram</type>
-        <size>0</size>
-        <accessible>true</accessible>
-      </file>
-      <file>
-        <key>1</key>
-        <name>[LocalDS_0] DC0_C0_RP0_VM0.vmx</name>
-        <type>config</type>
-        <size>0</size>
-        <accessible>true</accessible>
-      </file>
-      <file>
-        <key>2</key>
-        <name>[LocalDS_0] disk1-flat.vmdk</name>
-        <type>diskExtent</type>
-        <size>0</size>
-        <accessible>true</accessible>
-      </file>
-      <file>
-        <key>3</key>
-        <name>[LocalDS_0] disk1.vmdk</name>
-        <type>diskDescriptor</type>
-        <size>0</size>
-        <accessible>true</accessible>
-      </file>
-      <file>
-        <key>4</key>
-        <name>[LocalDS_0] vmware.log</name>
-        <type>log</type>
-        <size>32</size>
-        <uniqueSize>32</uniqueSize>
-        <accessible>true</accessible>
-      </file>
-      <file>
-        <key>5</key>
-        <name>[LocalDS_0] DC0_C0_RP0_VM0/disk1-flat.vmdk</name>
-        <type>diskExtent</type>
-        <size>0</size>
-        <accessible>true</accessible>
-      </file>
-      <file>
-        <key>6</key>
-        <name>[LocalDS_0] DC0_C0_RP0_VM0/disk1.vmdk</name>
-        <type>diskDescriptor</type>
-        <size>0</size>
-        <accessible>true</accessible>
-      </file>
-      <disk>
-        <key>204</key>
-        <chain>
-          <fileKey>5</fileKey>
-          <fileKey>6</fileKey>
-        </chain>
-      </disk>
-      <timestamp>2023-10-25T09:30:27.969987346+02:00</timestamp>
-    </val>
-  </propSet>
-  <propSet>
-    <name>storage</name>
-    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="VirtualMachineStorageInfo">
-      <perDatastoreUsage>
-        <datastore type="Datastore">datastore-25</datastore>
-        <committed>0</committed>
-        <uncommitted>10737418240</uncommitted>
-        <unshared>0</unshared>
-      </perDatastoreUsage>
-      <timestamp>2023-10-25T09:30:27.969987179+02:00</timestamp>
-    </val>
-  </propSet>
-  <propSet>
-    <name>environmentBrowser</name>
-    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="ManagedObjectReference" type="EnvironmentBrowser">envbrowser-14</val>
   </propSet>
   <propSet>
     <name>resourcePool</name>
@@ -427,10 +210,7 @@
     <name>runtime</name>
     <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="VirtualMachineRuntimeInfo">
       <host type="HostSystem">host-23</host>
-      <connectionState>connected</connectionState>
       <powerState>poweredOn</powerState>
-      <toolsInstallerMounted>false</toolsInstallerMounted>
-      <numMksConnections>0</numMksConnections>
     </val>
   </propSet>
   <propSet>
@@ -452,18 +232,6 @@
     <name>summary</name>
     <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="VirtualMachineSummary">
       <vm type="VirtualMachine">vm-28</vm>
-      <runtime>
-        <host type="HostSystem">host-23</host>
-        <connectionState>connected</connectionState>
-        <powerState>poweredOn</powerState>
-        <toolsInstallerMounted>false</toolsInstallerMounted>
-        <bootTime>2023-10-25T09:30:27.987620755+02:00</bootTime>
-        <numMksConnections>0</numMksConnections>
-      </runtime>
-      <guest>
-        <guestId>otherGuest</guestId>
-        <toolsStatus>toolsNotInstalled</toolsStatus>
-      </guest>
       <config>
         <name>DC0_C0_RP0_VM0</name>
         <template>false</template>
@@ -477,32 +245,6 @@
         <guestId>otherGuest</guestId>
         <guestFullName>otherGuest</guestFullName>
       </config>
-      <storage>
-        <committed>0</committed>
-        <uncommitted>10737418240</uncommitted>
-        <unshared>0</unshared>
-        <timestamp>2023-10-25T09:30:27.969987216+02:00</timestamp>
-      </storage>
-      <quickStats>
-        <guestHeartbeatStatus>gray</guestHeartbeatStatus>
-      </quickStats>
-      <overallStatus>green</overallStatus>
     </val>
-  </propSet>
-  <propSet>
-    <name>datastore</name>
-    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="ArrayOfManagedObjectReference">
-      <ManagedObjectReference type="Datastore">datastore-25</ManagedObjectReference>
-    </val>
-  </propSet>
-  <propSet>
-    <name>network</name>
-    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="ArrayOfManagedObjectReference">
-      <ManagedObjectReference type="DistributedVirtualPortgroup">dvportgroup-13</ManagedObjectReference>
-    </val>
-  </propSet>
-  <propSet>
-    <name>rootSnapshot</name>
-    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="ArrayOfManagedObjectReference"></val>
   </propSet>
 </ObjectContent>

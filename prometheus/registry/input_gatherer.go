@@ -84,15 +84,22 @@ func (i *inputGatherer) GatherWithState(ctx context.Context, state GatherState) 
 // PointBuffer add points received from PushPoints to a buffer.
 type PointBuffer struct {
 	points []types.MetricPoint
+	l      sync.Mutex
 }
 
 // PushPoints adds points to the buffer.
 func (p *PointBuffer) PushPoints(_ context.Context, points []types.MetricPoint) {
+	p.l.Lock()
+	defer p.l.Unlock()
+
 	p.points = append(p.points, points...)
 }
 
 // Points returns the buffer and resets it.
 func (p *PointBuffer) Points() []types.MetricPoint {
+	p.l.Lock()
+	defer p.l.Unlock()
+
 	points := p.points
 
 	p.points = p.points[:0]

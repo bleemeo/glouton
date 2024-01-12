@@ -86,18 +86,18 @@ func TestVSphereSteps(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, _, hosts, vms, err := findDevices(ctx, finder, false)
+	clusters, _, resourcePools, hosts, vms, err := findDevices(ctx, finder, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	fail := false
 
-	/*if len(clusters) != 1 {
+	if len(clusters) != 1 {
 		t.Errorf("Expected 1 cluster, found %d.", len(clusters))
 
 		fail = true
-	}*/
+	}
 
 	if len(hosts) != 1 {
 		t.Errorf("Expected 1 host, found %d.", len(hosts))
@@ -120,7 +120,12 @@ func TestVSphereSteps(t *testing.T) {
 	providedFacts := map[string]string{"fqdn": scraperFQDN}
 	dummyVSphere := newVSphere(vSphereURL.Host, vSphereCfg, nil, facts.NewMockFacter(providedFacts))
 
-	/*devices, err := dummyVSphere.describeClusters(ctx, client, clusters)
+	err = dummyVSphere.hierarchy.Refresh(ctx, clusters, resourcePools, hosts, vms, dummyVSphere.devicePropsCache.vmCache)
+	if err != nil {
+		t.Fatalf("Got an error refreshing the vSphere hierarchy: %v", err)
+	}
+
+	devices, err := dummyVSphere.describeClusters(ctx, client, clusters, providedFacts)
 	if err != nil {
 		t.Fatalf("Got an error while describing clusters: %v", err)
 	}
@@ -140,8 +145,9 @@ func TestVSphereSteps(t *testing.T) {
 			moid:   "domain-c16",
 			name:   "DC0_C0",
 			facts: map[string]string{
-				"cpu_cores": "2",
-				"fqdn":      "DC0_C0",
+				"cpu_cores":    "2",
+				"fqdn":         "DC0_C0",
+				"scraper_fqdn": "scraper FQDN",
 			},
 			state: "green",
 		},
@@ -149,9 +155,9 @@ func TestVSphereSteps(t *testing.T) {
 	}
 	if diff := cmp.Diff(expectedCluster, *cluster, cmp.AllowUnexported(Cluster{}, device{})); diff != "" {
 		t.Fatalf("Unexpected host description (-want +got):\n%s", diff)
-	}*/
+	}
 
-	devices, err := dummyVSphere.describeHosts(ctx, client, hosts, providedFacts)
+	devices, err = dummyVSphere.describeHosts(ctx, client, hosts, providedFacts)
 	if err != nil {
 		t.Fatalf("Got an error while describing hosts: %v", err)
 	}
@@ -218,8 +224,8 @@ func TestVSphereSteps(t *testing.T) {
 				"memory":                "32.00 MB",
 				"os_pretty_name":        "",
 				"scraper_fqdn":          "scraper FQDN",
-				"vsphere_host":          "host-23",
-				"vsphere_resource_pool": "resgroup-15",
+				"vsphere_host":          "DC0_C0_H0",
+				"vsphere_resource_pool": "Resources",
 				"vsphere_vm_name":       "DC0_C0_RP0_VM0",
 				"vsphere_vm_version":    "vmx-13",
 			},
@@ -290,8 +296,8 @@ func TestVSphereLifecycle(t *testing.T) { //nolint:maintidx
 							"hostname":              "vcenter.vmx",
 							"os_pretty_name":        "",
 							"scraper_fqdn":          "scraper FQDN",
-							"vsphere_host":          "ha-host",
-							"vsphere_resource_pool": "ha-root-pool",
+							"vsphere_host":          "esxi.test",
+							"vsphere_resource_pool": "Resources",
 						},
 						state: "poweredOff",
 					},
@@ -308,8 +314,8 @@ func TestVSphereLifecycle(t *testing.T) { //nolint:maintidx
 							"os_pretty_name":        "Ubuntu Linux (64-bit)",
 							"scraper_fqdn":          "scraper FQDN",
 							"vsphere_datastore":     "datastore1",
-							"vsphere_host":          "ha-host",
-							"vsphere_resource_pool": "ha-root-pool",
+							"vsphere_host":          "esxi.test",
+							"vsphere_resource_pool": "Resources",
 							"vsphere_vm_name":       "lunar",
 							"vsphere_vm_version":    "vmx-10",
 						},
@@ -329,8 +335,8 @@ func TestVSphereLifecycle(t *testing.T) { //nolint:maintidx
 							"primary_address":       "192.168.121.117",
 							"scraper_fqdn":          "scraper FQDN",
 							"vsphere_datastore":     "datastore1",
-							"vsphere_host":          "ha-host",
-							"vsphere_resource_pool": "ha-root-pool",
+							"vsphere_host":          "esxi.test",
+							"vsphere_resource_pool": "Resources",
 							"vsphere_vm_name":       "alp1",
 							"vsphere_vm_version":    "vmx-14",
 						},
@@ -357,21 +363,21 @@ func TestVSphereLifecycle(t *testing.T) { //nolint:maintidx
 		{
 			name:    "vCenter vcsim'ulated",
 			dirName: "vcenter_1",
-			/*expectedClusters: []*Cluster{
+			expectedClusters: []*Cluster{
 				{
 					device: device{
 						moid: "domain-c16",
 						name: "DC0_C0",
 						facts: map[string]string{
-							"cpu_cores": 	"2",
-							"fqdn":      	"DC0_C0",
+							"cpu_cores":    "2",
+							"fqdn":         "DC0_C0",
 							"scraper_fqdn": "scraper FQDN",
 						},
 						state: "green",
 					},
 					datastores: []string{"datastore-25"},
 				},
-			},*/
+			},
 			expectedHosts: []*HostSystem{
 				{
 					device: device{
@@ -408,8 +414,8 @@ func TestVSphereLifecycle(t *testing.T) { //nolint:maintidx
 							"memory":                "32.00 MB",
 							"os_pretty_name":        "",
 							"scraper_fqdn":          "scraper FQDN",
-							"vsphere_host":          "host-23",
-							"vsphere_resource_pool": "resgroup-15",
+							"vsphere_host":          "DC0_C0_H0",
+							"vsphere_resource_pool": "Resources",
 							"vsphere_vm_name":       "DC0_C0_RP0_VM0",
 							"vsphere_vm_version":    "vmx-13",
 						},

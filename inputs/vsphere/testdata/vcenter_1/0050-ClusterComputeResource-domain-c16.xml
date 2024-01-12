@@ -1,66 +1,16 @@
 <ObjectContent>
   <obj type="ClusterComputeResource">domain-c16</obj>
   <propSet>
-    <name>value</name>
-    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="ArrayOfCustomFieldValue"></val>
-  </propSet>
-  <propSet>
-    <name>availableField</name>
-    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="ArrayOfCustomFieldDef"></val>
-  </propSet>
-  <propSet>
     <name>parent</name>
     <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="ManagedObjectReference" type="Folder">group-4</val>
-  </propSet>
-  <propSet>
-    <name>customValue</name>
-    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="ArrayOfCustomFieldValue"></val>
   </propSet>
   <propSet>
     <name>overallStatus</name>
     <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="ManagedEntityStatus">green</val>
   </propSet>
   <propSet>
-    <name>configStatus</name>
-    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="ManagedEntityStatus">green</val>
-  </propSet>
-  <propSet>
-    <name>configIssue</name>
-    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="ArrayOfEvent"></val>
-  </propSet>
-  <propSet>
-    <name>effectiveRole</name>
-    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="ArrayOfInt">
-      <int>-1</int>
-    </val>
-  </propSet>
-  <propSet>
-    <name>permission</name>
-    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="ArrayOfPermission"></val>
-  </propSet>
-  <propSet>
     <name>name</name>
     <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="xsd:string">DC0_C0</val>
-  </propSet>
-  <propSet>
-    <name>disabledMethod</name>
-    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="ArrayOfString"></val>
-  </propSet>
-  <propSet>
-    <name>recentTask</name>
-    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="ArrayOfManagedObjectReference"></val>
-  </propSet>
-  <propSet>
-    <name>declaredAlarmState</name>
-    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="ArrayOfAlarmState"></val>
-  </propSet>
-  <propSet>
-    <name>triggeredAlarmState</name>
-    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="ArrayOfAlarmState"></val>
-  </propSet>
-  <propSet>
-    <name>tag</name>
-    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="ArrayOfTag"></val>
   </propSet>
   <propSet>
     <name>resourcePool</name>
@@ -76,14 +26,6 @@
     <name>datastore</name>
     <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="ArrayOfManagedObjectReference">
       <ManagedObjectReference type="Datastore">datastore-25</ManagedObjectReference>
-    </val>
-  </propSet>
-  <propSet>
-    <name>network</name>
-    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="ArrayOfManagedObjectReference">
-      <ManagedObjectReference type="Network">network-7</ManagedObjectReference>
-      <ManagedObjectReference type="DistributedVirtualPortgroup">dvportgroup-11</ManagedObjectReference>
-      <ManagedObjectReference type="DistributedVirtualPortgroup">dvportgroup-13</ManagedObjectReference>
     </val>
   </propSet>
   <propSet>
@@ -114,46 +56,5 @@
         <totalVmCount>0</totalVmCount>
       </usageSummary>
     </val>
-  </propSet>
-  <propSet>
-    <name>environmentBrowser</name>
-    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="ManagedObjectReference" type="EnvironmentBrowser">envbrowser-14</val>
-  </propSet>
-  <propSet>
-    <name>configurationEx</name>
-    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="ClusterConfigInfoEx">
-      <vmSwapPlacement>vmDirectory</vmSwapPlacement>
-      <dasConfig></dasConfig>
-      <drsConfig>
-        <enabled>true</enabled>
-      </drsConfig>
-    </val>
-  </propSet>
-  <propSet>
-    <name>configuration</name>
-    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="ClusterConfigInfo">
-      <dasConfig></dasConfig>
-      <drsConfig></drsConfig>
-    </val>
-  </propSet>
-  <propSet>
-    <name>recommendation</name>
-    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="ArrayOfClusterRecommendation"></val>
-  </propSet>
-  <propSet>
-    <name>drsRecommendation</name>
-    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="ArrayOfClusterDrsRecommendation"></val>
-  </propSet>
-  <propSet>
-    <name>migrationHistory</name>
-    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="ArrayOfClusterDrsMigration"></val>
-  </propSet>
-  <propSet>
-    <name>actionHistory</name>
-    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="ArrayOfClusterActionHistory"></val>
-  </propSet>
-  <propSet>
-    <name>drsFault</name>
-    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="ArrayOfClusterDrsFaults"></val>
   </propSet>
 </ObjectContent>

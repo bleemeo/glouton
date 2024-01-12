@@ -45,7 +45,7 @@ func TestPropsCaches(t *testing.T) { //nolint:maintidx
 	vSphere.devices(context.Background(), devChan)
 	close(devChan)
 
-	/*expectedClusters := map[string]clusterLightProps{
+	expectedClusters := map[string]clusterLightProps{
 		"domain-c16": {
 			ComputeResource: clusterLightComputeResource{
 				ManagedEntity: clusterLightComputeResourceManagedEntity{
@@ -60,11 +60,13 @@ func TestPropsCaches(t *testing.T) { //nolint:maintidx
 				Summary: &clusterLightComputeResourceSummary{
 					ComputeResourceSummary: clusterLightComputeResourceSummaryComputeResourceSummary{
 						NumCpuCores: 2,
+						TotalCpu:    2294,
+						TotalMemory: 4294430720,
 					},
 				},
 			},
 		},
-	}*/
+	}
 	expectedHosts := map[string]hostLightProps{
 		"host-23": {
 			ManagedEntity: hostLightManagedEntity{
@@ -336,7 +338,7 @@ func TestPropsCaches(t *testing.T) { //nolint:maintidx
 		},
 	}
 
-	/*compareLightProps(t, expectedClusters, vSphere.devicePropsCache.clusterCache.m)*/
+	compareLightProps(t, expectedClusters, vSphere.devicePropsCache.clusterCache.m)
 	compareLightProps(t, expectedHosts, vSphere.devicePropsCache.hostCache.m)
 	compareLightProps(t, expectedVMs, vSphere.devicePropsCache.vmCache.m)
 }

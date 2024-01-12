@@ -36,7 +36,6 @@ import (
 	telegraf_config "github.com/influxdata/telegraf/config"
 	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"
 	"github.com/influxdata/telegraf/plugins/inputs/vsphere"
-	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
 	"github.com/vmware/govmomi/object"
 	"github.com/vmware/govmomi/vim25"
@@ -67,13 +66,12 @@ type vSphere struct {
 	factProvider bleemeoTypes.FactProvider
 
 	realtimeGatherer        *vSphereGatherer
-	historical5minGatherer  *vSphereGatherer //nolint: unused
-	historical30minGatherer *vSphereGatherer //nolint: unused
+	historical30minGatherer *vSphereGatherer
 
+	hierarchy        *Hierarchy
 	deviceCache      map[string]bleemeoTypes.VSphereDevice
 	devicePropsCache *propsCaches
 	labelsMetadata   labelsMetadata
-	noMetricsSince   map[string]int
 	lastStatuses     map[string]types.Status
 	lastErrorMessage string
 	consecutiveErr   int
@@ -87,6 +85,7 @@ func newVSphere(host string, cfg config.VSphere, state bleemeoTypes.State, factP
 		opts:             cfg,
 		state:            state,
 		factProvider:     factProvider,
+		hierarchy:        NewHierarchy(),
 		deviceCache:      make(map[string]bleemeoTypes.VSphereDevice),
 		devicePropsCache: newPropsCaches(),
 		labelsMetadata: labelsMetadata{
@@ -94,8 +93,7 @@ func newVSphere(host string, cfg config.VSphere, state bleemeoTypes.State, factP
 			disksPerVM:         make(map[string]map[string]string),
 			netInterfacesPerVM: make(map[string]map[string]string),
 		},
-		noMetricsSince: make(map[string]int),
-		lastStatuses:   make(map[string]types.Status),
+		lastStatuses: make(map[string]types.Status),
 	}
 }
 
@@ -118,14 +116,12 @@ func (vSphere *vSphere) getStatus() (types.Status, string) {
 		return types.StatusCritical, vSphere.lastErrorMessage
 	}
 
-	switch { //nolint: gocritic
-	case vSphere.realtimeGatherer.lastErr != nil:
+	switch {
+	case vSphere.realtimeGatherer != nil && vSphere.realtimeGatherer.lastErr != nil:
 		return types.StatusCritical, "realtime endpoint error: " + vSphere.realtimeGatherer.lastErr.Error()
-		/*case vSphere.historical5minGatherer.lastErr != nil:
-			return types.StatusCritical, "historical 5min endpoint error: " + vSphere.historical5minGatherer.lastErr.Error()
-		case vSphere.historical30minGatherer.lastErr != nil:
-			return types.StatusCritical, "historical 30min endpoint error: " + vSphere.historical30minGatherer.lastErr.Error()*/
-	} //nolint:wsl
+	case vSphere.historical30minGatherer != nil && vSphere.historical30minGatherer.lastErr != nil:
+		return types.StatusCritical, "historical 30min endpoint error: " + vSphere.historical30minGatherer.lastErr.Error()
+	}
 
 	return types.StatusOk, ""
 }
@@ -148,7 +144,7 @@ func (vSphere *vSphere) devices(ctx context.Context, deviceChan chan<- bleemeoTy
 		return
 	}
 
-	_, datastores, hosts, vms, err := findDevices(findCtx, finder, true)
+	clusters, datastores, resourcePools, hosts, vms, err := findDevices(findCtx, finder, true)
 	if err != nil {
 		vSphere.setErr(err)
 		logger.V(1).Printf("Can't find devices on vSphere %q: %v", vSphere.host, err)
@@ -156,10 +152,16 @@ func (vSphere *vSphere) devices(ctx context.Context, deviceChan chan<- bleemeoTy
 		return
 	}
 
-	/*logger.V(2).Printf("On vSphere %q, found %d clusters, %d hosts and %d vms in %v.", vSphere.host, len(clusters), len(hosts), len(vms), time.Since(t0))*/
-	logger.V(2).Printf("On vSphere %q, found %d hosts and %d vms in %v.", vSphere.host, len(hosts), len(vms), time.Since(t0))
+	logger.V(2).Printf("On vSphere %q, found %d clusters, %d hosts and %d vms in %v.", vSphere.host, len(clusters), len(hosts), len(vms), time.Since(t0))
 
 	scraperFacts, err := vSphere.factProvider.Facts(ctx, time.Hour)
+	if err != nil {
+		vSphere.setErr(err)
+
+		return
+	}
+
+	err = vSphere.hierarchy.Refresh(ctx, clusters, resourcePools, hosts, vms, vSphere.devicePropsCache.vmCache)
 	if err != nil {
 		vSphere.setErr(err)
 
@@ -171,10 +173,11 @@ func (vSphere *vSphere) devices(ctx context.Context, deviceChan chan<- bleemeoTy
 		errs           []error
 		labelsMetadata labelsMetadata
 	)
+
 	// A more precise context will be given by the function that retrieves the device properties.
-	/*describedClusters, err := vSphere.describeClusters(ctx, client, clusters, scraperFacts)
+	describedClusters, err := vSphere.describeClusters(ctx, client, clusters, scraperFacts)
 	devs = append(devs, describedClusters...)
-	errs = append(errs, err)*/
+	errs = append(errs, err)
 
 	describedHosts, err := vSphere.describeHosts(ctx, client, hosts, scraperFacts)
 	devs = append(devs, describedHosts...)
@@ -215,7 +218,7 @@ func (vSphere *vSphere) devices(ctx context.Context, deviceChan chan<- bleemeoTy
 	vSphere.devicePropsCache.purge()
 }
 
-func (vSphere *vSphere) describeClusters(ctx context.Context, client *vim25.Client, rawClusters []*object.ClusterComputeResource, scraperFacts map[string]string) ([]bleemeoTypes.VSphereDevice, error) { //nolint: unused
+func (vSphere *vSphere) describeClusters(ctx context.Context, client *vim25.Client, rawClusters []*object.ClusterComputeResource, scraperFacts map[string]string) ([]bleemeoTypes.VSphereDevice, error) {
 	clusterProps, err := retrieveProps(ctx, client, rawClusters, relevantClusterProperties, vSphere.devicePropsCache.clusterCache)
 	if err != nil {
 		logger.V(1).Printf("Failed to retrieve cluster props of %s: %v", vSphere.host, err)
@@ -268,7 +271,7 @@ func (vSphere *vSphere) describeVMs(ctx context.Context, client *vim25.Client, r
 	}
 
 	for vm, props := range vmProps {
-		describedVM, disks, netInterfaces := describeVM(vSphere.host, vm, props)
+		describedVM, disks, netInterfaces := describeVM(vSphere.host, vm, props, vSphere.hierarchy)
 		describedVM.facts["scraper_fqdn"] = scraperFacts["fqdn"]
 		vms = append(vms, describedVM)
 		labelsMetadata.disksPerVM[vm.Reference().Value] = disks
@@ -312,6 +315,7 @@ func (vSphere *vSphere) makeRealtimeGatherer(ctx context.Context) (registry.Gath
 
 	vsphereInput.HostMetricInclude = []string{
 		"cpu.usage.average",
+		"cpu.usagemhz.average", // Will be converted to the percentage for Cluster CPU
 		"mem.totalCapacity.average",
 		"mem.usage.average",
 		"mem.swapin.average",
@@ -343,90 +347,31 @@ func (vSphere *vSphere) makeRealtimeGatherer(ctx context.Context) (registry.Gath
 		RenameGlobal:     vSphere.renameGlobal,
 	}
 
-	gatherer, err := newGatherer(ctx, false, &vSphere.opts, vsphereInput, acc, vSphere.devicePropsCache)
+	gatherer, err := newGatherer(ctx, gatherRT, &vSphere.opts, vsphereInput, acc, vSphere.hierarchy, vSphere.devicePropsCache)
 	if err != nil {
 		return nil, registry.RegistrationOption{}, err
 	}
 
 	vSphere.realtimeGatherer = gatherer
 
+	noMetricsSinceIterations := 0
+	noMetricsSince := make(map[string]int)
 	opt := registry.RegistrationOption{
-		Description:         vSphere.String() + " realtime",
+		Description:         fmt.Sprint(vSphere, " ", gatherRT),
 		MinInterval:         time.Minute,
 		StopCallback:        gatherer.stop,
 		ApplyDynamicRelabel: true,
-		GatherModifier:      vSphere.gatherModifier,
+		GatherModifier: func(mfs []*dto.MetricFamily, _ error) []*dto.MetricFamily {
+			vSphere.purgeNoMetricsSinceMap(noMetricsSince, &noMetricsSinceIterations)
+
+			return vSphere.gatherModifier(mfs, noMetricsSince, map[ResourceKind]bool{KindVM: true, KindHost: true, KindCluster: true})
+		},
 	}
 
 	return gatherer, opt, nil
 }
 
-func (vSphere *vSphere) makeHistorical5minGatherer(ctx context.Context) (prometheus.Gatherer, registry.RegistrationOption, error) { //nolint: unused
-	input, ok := telegraf_inputs.Inputs["vsphere"]
-	if !ok {
-		return nil, registry.RegistrationOption{}, inputs.ErrDisabledInput
-	}
-
-	vsphereInput, ok := input().(*vsphere.VSphere)
-	if !ok {
-		return nil, registry.RegistrationOption{}, inputs.ErrUnexpectedType
-	}
-
-	vsphereInput.Username = telegraf_config.NewSecret([]byte(vSphere.opts.Username))
-	vsphereInput.Password = telegraf_config.NewSecret([]byte(vSphere.opts.Password))
-
-	vsphereInput.ClusterInstances = true
-
-	vsphereInput.ClusterMetricInclude = []string{
-		// "cpu.usage.average",
-		"mem.usage.average",
-		"mem.swapused.average",
-	}
-
-	vsphereInput.VMMetricExclude = []string{"*"}
-	vsphereInput.HostMetricExclude = []string{"*"}
-	vsphereInput.DatastoreMetricExclude = []string{"*"}
-	vsphereInput.ResourcePoolMetricExclude = []string{"*"}
-	vsphereInput.DatacenterMetricExclude = []string{"*"}
-	vsphereInput.VMInstances = false
-	vsphereInput.HostInstances = false
-	vsphereInput.DatastoreInstances = false
-	vsphereInput.ResourcePoolInstances = false
-	vsphereInput.DatacenterInstances = false
-
-	vsphereInput.InsecureSkipVerify = vSphere.opts.InsecureSkipVerify
-	vsphereInput.HistoricalInterval = telegraf_config.Duration(5 * time.Minute)
-	vsphereInput.ObjectDiscoveryInterval = telegraf_config.Duration(2 * time.Minute)
-
-	vsphereInput.MetricLookback = 6
-
-	vsphereInput.Log = logger.NewTelegrafLog(vSphere.String() + " historical 5min")
-
-	acc := &internal.Accumulator{
-		RenameMetrics:    renameMetrics,
-		TransformMetrics: vSphere.transformMetrics,
-		RenameGlobal:     vSphere.renameGlobal,
-	}
-
-	gatherer, err := newGatherer(ctx, true, &vSphere.opts, vsphereInput, acc, vSphere.devicePropsCache)
-	if err != nil {
-		return nil, registry.RegistrationOption{}, err
-	}
-
-	vSphere.historical5minGatherer = gatherer
-
-	opt := registry.RegistrationOption{
-		Description:         vSphere.String() + " historical 5min",
-		MinInterval:         5 * time.Minute,
-		StopCallback:        gatherer.stop,
-		ApplyDynamicRelabel: true,
-		GatherModifier:      vSphere.gatherModifier,
-	}
-
-	return gatherer, opt, nil
-}
-
-func (vSphere *vSphere) makeHistorical30minGatherer(ctx context.Context) (prometheus.Gatherer, registry.RegistrationOption, error) { //nolint: unused
+func (vSphere *vSphere) makeHistorical30minGatherer(ctx context.Context) (registry.GathererWithOrWithoutState, registry.RegistrationOption, error) {
 	input, ok := telegraf_inputs.Inputs["vsphere"]
 	if !ok {
 		return nil, registry.RegistrationOption{}, inputs.ErrDisabledInput
@@ -443,8 +388,6 @@ func (vSphere *vSphere) makeHistorical30minGatherer(ctx context.Context) (promet
 	vsphereInput.DatastoreInstances = true
 
 	vsphereInput.DatastoreMetricInclude = []string{
-		"datastore.read.average",
-		"datastore.write.average",
 		"disk.used.latest",
 		"disk.capacity.latest",
 	}
@@ -462,7 +405,7 @@ func (vSphere *vSphere) makeHistorical30minGatherer(ctx context.Context) (promet
 
 	vsphereInput.InsecureSkipVerify = vSphere.opts.InsecureSkipVerify
 	vsphereInput.HistoricalInterval = telegraf_config.Duration(30 * time.Minute)
-	vsphereInput.ObjectDiscoveryInterval = telegraf_config.Duration(2 * time.Minute)
+	vsphereInput.ObjectDiscoveryInterval = telegraf_config.Duration(5 * time.Minute)
 
 	vsphereInput.Log = logger.NewTelegrafLog(vSphere.String() + " historical 30min")
 
@@ -472,25 +415,50 @@ func (vSphere *vSphere) makeHistorical30minGatherer(ctx context.Context) (promet
 		RenameGlobal:     vSphere.renameGlobal,
 	}
 
-	gatherer, err := newGatherer(ctx, true, &vSphere.opts, vsphereInput, acc, vSphere.devicePropsCache)
+	gatherer, err := newGatherer(ctx, gatherHist30m, &vSphere.opts, vsphereInput, acc, vSphere.hierarchy, vSphere.devicePropsCache)
 	if err != nil {
 		return nil, registry.RegistrationOption{}, err
 	}
 
 	vSphere.historical30minGatherer = gatherer
 
+	noMetricsSinceIterations := 0
+	noMetricsSince := make(map[string]int)
 	opt := registry.RegistrationOption{
-		Description:         vSphere.String() + " historical 30min",
-		MinInterval:         30 * time.Minute,
+		Description:         fmt.Sprint(vSphere, " ", gatherHist30m),
+		MinInterval:         1 * time.Minute, // 4 times out of 5, we will re-use the previous point
 		StopCallback:        gatherer.stop,
 		ApplyDynamicRelabel: true,
-		GatherModifier:      vSphere.gatherModifier,
+		GatherModifier: func(mfs []*dto.MetricFamily, _ error) []*dto.MetricFamily {
+			vSphere.purgeNoMetricsSinceMap(noMetricsSince, &noMetricsSinceIterations)
+
+			return vSphere.gatherModifier(mfs, noMetricsSince, map[ResourceKind]bool{KindDatastore: true})
+		},
 	}
 
 	return gatherer, opt, nil
 }
 
-func (vSphere *vSphere) gatherModifier(mfs []*dto.MetricFamily, _ error) []*dto.MetricFamily {
+func (vSphere *vSphere) purgeNoMetricsSinceMap(noMetricsSince map[string]int, iterations *int) {
+	vSphere.l.Lock()
+	defer vSphere.l.Unlock()
+
+	*iterations++
+
+	if *iterations < 3*noMetricsStatusThreshold {
+		return
+	}
+
+	*iterations = 0
+
+	for moid := range noMetricsSince {
+		if _, exists := vSphere.deviceCache[moid]; !exists {
+			delete(noMetricsSince, moid)
+		}
+	}
+}
+
+func (vSphere *vSphere) gatherModifier(mfs []*dto.MetricFamily, noMetricsSince map[string]int, devKinds map[ResourceKind]bool) []*dto.MetricFamily {
 	vSphere.l.Lock()
 	defer vSphere.l.Unlock()
 
@@ -527,6 +495,10 @@ func (vSphere *vSphere) gatherModifier(mfs []*dto.MetricFamily, _ error) []*dto.
 	vSphereStatus, vSphereMsg := vSphere.getStatus()
 
 	for _, dev := range vSphere.deviceCache {
+		if !devKinds[dev.Kind()] {
+			continue // we don't care about this kind of device in this gatherModifier
+		}
+
 		var (
 			deviceStatus types.Status
 			deviceMsg    string
@@ -553,10 +525,11 @@ func (vSphere *vSphere) gatherModifier(mfs []*dto.MetricFamily, _ error) []*dto.
 			}
 		case metricSeen:
 			deviceStatus = types.StatusOk
-			vSphere.noMetricsSince[moid] = 0
+			noMetricsSince[moid] = 0
 		case !metricSeen:
-			vSphere.noMetricsSince[moid]++
-			if vSphere.noMetricsSince[moid] >= noMetricsStatusThreshold {
+			noMetricsSince[moid]++
+
+			if noMetricsSince[moid] >= noMetricsStatusThreshold {
 				deviceStatus = types.StatusCritical
 				deviceMsg = "No metrics seen since a long time"
 			}
@@ -607,6 +580,8 @@ func (vSphere *vSphere) modifyLabels(labelPairs []*dto.LabelPair) (shouldBeKept 
 	defer func() {
 		// Once we did everything we wanted with the labels, we rebuild the list
 		if shouldBeKept {
+			finalLabels = make([]*dto.LabelPair, 0, len(labels))
+
 			for _, label := range labels {
 				finalLabels = append(finalLabels, label)
 			}
@@ -640,7 +615,7 @@ func (vSphere *vSphere) modifyLabels(labelPairs []*dto.LabelPair) (shouldBeKept 
 				starLabelReplacer(diskLabel, vmDisks) // TODO: remove
 
 				if diskName, ok := vmDisks[diskLabel.GetValue()]; ok {
-					labels["item"] = &dto.LabelPair{Name: ptr("item"), Value: &diskName}
+					labels["item"] = &dto.LabelPair{Name: proto.String("item"), Value: &diskName}
 
 					delete(labels, "disk")
 
@@ -660,7 +635,7 @@ func (vSphere *vSphere) modifyLabels(labelPairs []*dto.LabelPair) (shouldBeKept 
 				starLabelReplacer(interfaceLabel, vmInterfaces) // TODO: remove
 
 				if interfaceName, ok := vmInterfaces[interfaceLabel.GetValue()]; ok {
-					labels["item"] = &dto.LabelPair{Name: ptr("item"), Value: &interfaceName}
+					labels["item"] = &dto.LabelPair{Name: proto.String("item"), Value: &interfaceName}
 					delete(labels, "interface")
 
 					break
@@ -679,7 +654,7 @@ func (vSphere *vSphere) modifyLabels(labelPairs []*dto.LabelPair) (shouldBeKept 
 				break
 			}
 
-			labels["item"] = &dto.LabelPair{Name: ptr("item"), Value: interfaceLabel.Value} //nolint:protogetter
+			labels["item"] = &dto.LabelPair{Name: proto.String("item"), Value: interfaceLabel.Value} //nolint:protogetter
 			delete(labels, "interface")
 
 			break
@@ -689,7 +664,7 @@ func (vSphere *vSphere) modifyLabels(labelPairs []*dto.LabelPair) (shouldBeKept 
 			starLabelReplacer(lunLabel, vSphere.labelsMetadata.datastorePerLUN) // TODO: remove
 
 			if datastore, ok := vSphere.labelsMetadata.datastorePerLUN[lunLabel.GetValue()]; ok {
-				labels["item"] = &dto.LabelPair{Name: ptr("item"), Value: &datastore}
+				labels["item"] = &dto.LabelPair{Name: proto.String("item"), Value: &datastore}
 				delete(labels, "lun")
 
 				break
@@ -748,20 +723,14 @@ func (vSphere *vSphere) renameGlobal(gatherContext internal.GatherContext) (resu
 		delete(tags, "dsname")
 
 		tags["item"] = value
-
-		/*if gatherContext.Measurement == "vsphere_datastore_disk" {
-			logger.Printf("dsname of %s is %q / %v / %v", tags[types.LabelMetaVSphereMOID], value, gatherContext.OriginalFields, tags)
-		}*/
-	} //nolint:wsl
+	}
 
 	gatherContext.Tags = tags
 
 	return gatherContext, false
 }
 
-func (vSphere *vSphere) transformMetrics(currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {
-	_ = originalFields
-
+func (vSphere *vSphere) transformMetrics(currentContext internal.GatherContext, fields map[string]float64, _ map[string]interface{}) map[string]float64 {
 	// map is: measurement -> field -> factor
 	factors := map[string]map[string]float64{
 		// VM metrics
@@ -769,13 +738,13 @@ func (vSphere *vSphere) transformMetrics(currentContext internal.GatherContext, 
 			"active_average":  math.NaN(), // Special case
 			"swapped_average": 1000,       // KB to B
 		},
-		"vsphere_vm_disk": {
+		"vsphere_vm_virtualDisk": {
 			"read_average":  1000, // KB/s to B/s
 			"write_average": 1000, // KB/s to B/s
 		},
 		"vsphere_vm_net": {
-			"received_average":    8000, // KB/s to b/s
-			"transmitted_average": 8000, // KB/s to b/s
+			"received_average":    8192, // KiB/s to b/s
+			"transmitted_average": 8192, // KiB/s to b/s
 		},
 		// Host metrics
 		"vsphere_host_mem": {
@@ -783,26 +752,22 @@ func (vSphere *vSphere) transformMetrics(currentContext internal.GatherContext, 
 			"swapin_average":        1000,    // KB to B
 			"swapout_average":       1000,    // KB to B
 		},
-		"vsphere_host_disk": {
+		"vsphere_host_datastore": {
 			"read_average":  1000, // KB/s to B/s
 			"write_average": 1000, // KB/s to B/s
 		},
 		"vsphere_host_net": {
-			"received_average":    8000, // KB/s to b/s
-			"transmitted_average": 8000, // KB/s to b/s
+			"received_average":    8192, // KiB/s to b/s
+			"transmitted_average": 8192, // KiB/s to b/s
 		},
 		// Datastore metrics
 		"vsphere_datastore_datastore": {
-			"write_average": 8000, // KB/s to b/s
-			"read_average":  8000, // KB/s to b/s
+			"write_average": 1000, // KB/s to B/s
+			"read_average":  1000, // KB/s to B/s
 		},
 		"vsphere_datastore_disk": {
 			"used_latest":     1000, // KB to B
 			"capacity_latest": 1000, // KB to B
-		},
-		// Cluster metrics
-		"vsphere_cluster_mem": {
-			"swapused_average": 1000, // KB to B
 		},
 	}
 
@@ -853,9 +818,9 @@ func renameMetrics(currentContext internal.GatherContext, metricName string) (ne
 		newMeasurement = strings.TrimPrefix(newMeasurement, "vm_")
 	}
 
-	newMeasurement = strings.TrimPrefix(newMeasurement, "host_")
-	newMeasurement = strings.TrimPrefix(newMeasurement, "datastore_")
 	newMeasurement = strings.TrimPrefix(newMeasurement, "cluster_")
+	newMeasurement = strings.TrimPrefix(newMeasurement, "datastore_")
+	newMeasurement = strings.TrimPrefix(newMeasurement, "host_")
 
 	switch newMeasurement {
 	case "cpu", "vsphere_vm_cpu":
