@@ -665,10 +665,13 @@ func (r *Registry) HealthCheck() {
 					reg.loop.interval.String(),
 				)
 
-				if reg.option.IsEssential && (time.Since(lastScrape) < 10*reg.loop.interval || time.Since(lastScrape) < time.Minute) {
+				if reg.option.IsEssential && (time.Since(lastScrape) < 10*reg.loop.interval || time.Since(lastScrape) < time.Hour) {
 					// This essential gatherer is not considered as stuck; don't panic for now.
 					shouldPanic = false
 				}
+			} else if reg.option.IsEssential {
+				// This essential gatherer is not stuck at all.
+				shouldPanic = false
 			}
 		}
 
