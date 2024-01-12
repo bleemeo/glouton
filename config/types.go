@@ -181,18 +181,23 @@ type IPMI struct {
 }
 
 type Bleemeo struct {
-	AccountID                         string      `yaml:"account_id"`
-	APIBase                           string      `yaml:"api_base"`
-	APISSLInsecure                    bool        `yaml:"api_ssl_insecure"`
-	ContainerRegistrationDelaySeconds int         `yaml:"container_registration_delay_seconds"`
-	Enable                            bool        `yaml:"enable"`
-	InitialAgentName                  string      `yaml:"initial_agent_name"`
-	InitialServerGroupName            string      `yaml:"initial_server_group_name"`
-	InitialServerGroupNameForSNMP     string      `yaml:"initial_server_group_name_for_snmp"`
-	InitialServerGroupNameForVSphere  string      `yaml:"initial_server_group_name_for_vsphere"`
-	MQTT                              BleemeoMQTT `yaml:"mqtt"`
-	RegistrationKey                   string      `yaml:"registration_key"`
-	Sentry                            Sentry      `yaml:"sentry"`
+	AccountID                         string       `yaml:"account_id"`
+	APIBase                           string       `yaml:"api_base"`
+	APISSLInsecure                    bool         `yaml:"api_ssl_insecure"`
+	Cache                             BleemeoCache `yaml:"cache"`
+	ContainerRegistrationDelaySeconds int          `yaml:"container_registration_delay_seconds"`
+	Enable                            bool         `yaml:"enable"`
+	InitialAgentName                  string       `yaml:"initial_agent_name"`
+	InitialServerGroupName            string       `yaml:"initial_server_group_name"`
+	InitialServerGroupNameForSNMP     string       `yaml:"initial_server_group_name_for_snmp"`
+	InitialServerGroupNameForVSphere  string       `yaml:"initial_server_group_name_for_vsphere"`
+	MQTT                              BleemeoMQTT  `yaml:"mqtt"`
+	RegistrationKey                   string       `yaml:"registration_key"`
+	Sentry                            Sentry       `yaml:"sentry"`
+}
+
+type BleemeoCache struct {
+	DeactivatedMetricsExpirationDays int `yaml:"deactivated_metrics_expiration_days"`
 }
 
 type Sentry struct {
