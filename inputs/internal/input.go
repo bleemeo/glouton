@@ -102,11 +102,12 @@ func (i *Input) SecretCount() int {
 	return 0
 }
 
-// OneSecretInput wraps an Input that has one secret.
-type OneSecretInput struct {
+// InputWithSecrets wraps an Input that has secrets.
+type InputWithSecrets struct {
 	*Input
+	Count int
 }
 
-func (si OneSecretInput) SecretCount() int {
-	return 1
+func (si InputWithSecrets) SecretCount() int {
+	return si.Count
 }

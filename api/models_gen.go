@@ -96,6 +96,9 @@ type Process struct {
 	ContainerID string    `json:"container_id"`
 }
 
+type Query struct {
+}
+
 type Service struct {
 	Name              string   `json:"name"`
 	ContainerID       string   `json:"containerId"`

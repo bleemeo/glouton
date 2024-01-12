@@ -55,7 +55,7 @@ func New(server string) (telegraf.Input, error) {
 		Name: "mysql",
 	}
 
-	return internal.OneSecretInput{Input: i}, nil
+	return internal.InputWithSecrets{Input: i, Count: 1}, nil
 }
 
 // mysqlWrapper wraps the MySQL Telegraf input and implements telegraf.ServiceInput

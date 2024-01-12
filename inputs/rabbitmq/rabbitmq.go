@@ -21,20 +21,23 @@ import (
 	"glouton/inputs/internal"
 
 	"github.com/influxdata/telegraf"
+	telegraf_config "github.com/influxdata/telegraf/config"
 	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"
 	"github.com/influxdata/telegraf/plugins/inputs/rabbitmq"
 )
 
 // New initialise rabbitmq.Input.
-func New(url string, username string, password string) (i telegraf.Input, err error) {
+func New(url string, username string, password string) (telegraf.Input, error) {
+	var err error
+
 	input, ok := telegraf_inputs.Inputs["rabbitmq"]
 	if ok {
 		rabbitmqInput, ok := input().(*rabbitmq.RabbitMQ)
 		if ok {
 			rabbitmqInput.URL = url
-			rabbitmqInput.Username = username
-			rabbitmqInput.Password = password
-			i = &internal.Input{
+			rabbitmqInput.Username = telegraf_config.NewSecret([]byte(username))
+			rabbitmqInput.Password = telegraf_config.NewSecret([]byte(password))
+			i := &internal.Input{
 				Input: rabbitmqInput,
 				Accumulator: internal.Accumulator{
 					RenameGlobal:     renameGlobal,
@@ -43,14 +46,16 @@ func New(url string, username string, password string) (i telegraf.Input, err er
 				},
 				Name: "rabbitmq",
 			}
-		} else {
-			err = inputs.ErrUnexpectedType
+
+			return internal.InputWithSecrets{Input: i, Count: 2}, nil
 		}
+
+		err = inputs.ErrUnexpectedType
 	} else {
 		err = inputs.ErrDisabledInput
 	}
 
-	return
+	return nil, err
 }
 
 func renameGlobal(gatherContext internal.GatherContext) (internal.GatherContext, bool) {

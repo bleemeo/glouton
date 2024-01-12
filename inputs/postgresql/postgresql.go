@@ -58,7 +58,7 @@ func New(address string, detailedDatabases []string) (telegraf.Input, error) {
 		Name: "postgresql",
 	}
 
-	return internal.OneSecretInput{Input: internalInput}, nil
+	return internal.InputWithSecrets{Input: internalInput, Count: 1}, nil
 }
 
 func renameGlobal(detailedDatabases []string) func(internal.GatherContext) (internal.GatherContext, bool) {
