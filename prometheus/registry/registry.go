@@ -191,7 +191,10 @@ type RegistrationOption struct {
 	// are applied, just before ExtraLabels is done.
 	// It could be nil to skip this step.
 	GatherModifier gatherModifier `json:"-"`
-	rrules         []*rules.RecordingRule
+	// IsEssential tells whether the corresponding gatherer is considered as 'essential' regarding the agent dashboard.
+	// When all 'essentials' gatherers are stuck, Glouton kills himself (see Registry.HealthCheck).
+	IsEssential bool
+	rrules      []*rules.RecordingRule
 }
 
 type AppenderRegistrationOption struct {
@@ -386,8 +389,7 @@ func New(opt Option, secretInputsGate *gate.Gate) (*Registry, error) {
 		option:           opt,
 		secretInputsGate: secretInputsGate,
 		stuckCollectors: &stuckCollectors{
-			m:          make(map[string]bool),
-			essentials: []string{"cpu input", "mem input", "diskio input", "disk input", "net input", "swap input"},
+			m: make(map[string]bool),
 		},
 	}
 
@@ -926,6 +928,12 @@ func (r *Registry) addRegistration(reg *registration) (int, error) {
 	reg.addedAt = time.Now()
 
 	r.registrations[id] = reg
+
+	if reg.option.IsEssential {
+		r.stuckCollectors.Lock()
+		r.stuckCollectors.essentials = append(r.stuckCollectors.essentials, reg.option.Description)
+		r.stuckCollectors.Unlock()
+	}
 
 	if !reg.option.DisablePeriodicGather {
 		if g, ok := reg.gatherer.getSource().(GathererWithScheduleUpdate); ok {
