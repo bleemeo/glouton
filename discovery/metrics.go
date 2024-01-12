@@ -74,7 +74,7 @@ func AddDefaultInputs(metricRegistry GathererRegistry, inputsConfig inputs.Colle
 		return err
 	}
 
-	if err = addInputToRegistry(metricRegistry, input, "system"); err != nil {
+	if err = addEssentialInputToRegistry(metricRegistry, input, "system"); err != nil {
 		return err
 	}
 
@@ -83,7 +83,7 @@ func AddDefaultInputs(metricRegistry GathererRegistry, inputsConfig inputs.Colle
 		return err
 	}
 
-	if err = addInputToRegistry(metricRegistry, input, "cpu"); err != nil {
+	if err = addEssentialInputToRegistry(metricRegistry, input, "cpu"); err != nil {
 		return err
 	}
 
@@ -92,7 +92,7 @@ func AddDefaultInputs(metricRegistry GathererRegistry, inputsConfig inputs.Colle
 		return err
 	}
 
-	if err = addInputToRegistry(metricRegistry, input, "net"); err != nil {
+	if err = addEssentialInputToRegistry(metricRegistry, input, "net"); err != nil {
 		return err
 	}
 
@@ -102,7 +102,7 @@ func AddDefaultInputs(metricRegistry GathererRegistry, inputsConfig inputs.Colle
 			return err
 		}
 
-		if err = addInputToRegistry(metricRegistry, input, "disk"); err != nil {
+		if err = addEssentialInputToRegistry(metricRegistry, input, "disk"); err != nil {
 			return err
 		}
 	}
@@ -132,17 +132,18 @@ func AddDefaultInputs(metricRegistry GathererRegistry, inputsConfig inputs.Colle
 		return err
 	}
 
-	if err = addInputToRegistry(metricRegistry, input, "diskio"); err != nil {
+	if err = addEssentialInputToRegistry(metricRegistry, input, "diskio"); err != nil {
 		return err
 	}
 
 	return addDefaultFromOS(inputsConfig, metricRegistry)
 }
 
-func addInputToRegistry(reg GathererRegistry, input telegraf.Input, name string) error {
+func addEssentialInputToRegistry(reg GathererRegistry, input telegraf.Input, name string) error {
 	opt := registry.RegistrationOption{
 		Description: name + " input",
 		Interval:    defaultInterval,
+		IsEssential: true,
 	}
 	_, err := reg.RegisterInput(opt, input)
 
@@ -161,7 +162,7 @@ func addDefaultFromOS(inputsConfig inputs.CollectorConfig, metricRegistry Gather
 			return err
 		}
 
-		err = addInputToRegistry(metricRegistry, input, "win_perf_counters")
+		err = addEssentialInputToRegistry(metricRegistry, input, "win_perf_counters")
 		if err != nil {
 			return err
 		}
@@ -172,7 +173,7 @@ func addDefaultFromOS(inputsConfig inputs.CollectorConfig, metricRegistry Gather
 			return err
 		}
 
-		if err = addInputToRegistry(metricRegistry, input, "mem"); err != nil {
+		if err = addEssentialInputToRegistry(metricRegistry, input, "mem"); err != nil {
 			return err
 		}
 
@@ -181,7 +182,7 @@ func addDefaultFromOS(inputsConfig inputs.CollectorConfig, metricRegistry Gather
 			return err
 		}
 
-		if err = addInputToRegistry(metricRegistry, input, "swap"); err != nil {
+		if err = addEssentialInputToRegistry(metricRegistry, input, "swap"); err != nil {
 			return err
 		}
 	}

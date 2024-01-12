@@ -173,7 +173,10 @@ type RegistrationOption struct {
 	// are applied, just before ExtraLabels is done.
 	// It could be nil to skip this step.
 	GatherModifier gatherModifier `json:"-"`
-	rrules         []*rules.RecordingRule
+	// IsEssential tells whether the corresponding gatherer is considered as 'essential' regarding the agent dashboard.
+	// When all 'essentials' gatherers are stuck, Glouton kills himself (see Registry.HealthCheck).
+	IsEssential bool
+	rrules      []*rules.RecordingRule
 }
 
 type AppenderRegistrationOption struct {
@@ -637,13 +640,13 @@ func (r *Registry) diagnosticState(archive types.ArchiveWriter) error {
 }
 
 // HealthCheck perform some health check and log any issue found.
-// This method could panic when health condition are bad for too long in order to cause a Glouton restart.
+// This method could panic when health conditions are bad for too long in order to cause a Glouton restart.
 func (r *Registry) HealthCheck() {
 	r.l.Lock()
 	defer r.l.Unlock()
 
-	// We only panic if this string is not empty
-	var panicMessage string
+	// This flag will be set to false if at least one essential input is not stuck.
+	shouldPanic := true
 
 	for _, reg := range r.registrations {
 		reg.l.Lock()
@@ -662,15 +665,9 @@ func (r *Registry) HealthCheck() {
 					reg.loop.interval.String(),
 				)
 
-				if time.Since(lastScrape) > 10*reg.loop.interval && time.Since(lastScrape) > time.Hour {
-					msg := fmt.Sprintf("Metrics collections is blocked for collector %s. Last run at %s and should run every %s. Glouton seems unhealthy, killing myself",
-						reg.option.Description,
-						lastScrape.Format(time.RFC3339),
-						reg.loop.interval.String(),
-					)
-
-					// We don't panic immediately. We want to unlock reg before.
-					panicMessage = msg
+				if reg.option.IsEssential && (time.Since(lastScrape) < 10*reg.loop.interval || time.Since(lastScrape) < time.Minute) {
+					// This essential gatherer is not considered as stuck; don't panic for now.
+					shouldPanic = false
 				}
 			}
 		}
@@ -678,10 +675,12 @@ func (r *Registry) HealthCheck() {
 		reg.l.Unlock()
 	}
 
-	if panicMessage != "" {
+	if shouldPanic {
 		r.tooSlowConsecutiveError++
 
 		if r.tooSlowConsecutiveError >= 3 {
+			const panicMessage = "Metrics collections is blocked for all essential collectors. Glouton seems unhealthy, killing myself."
+
 			logger.Printf(panicMessage)
 
 			// We don't know how big the buffer needs to be to collect
