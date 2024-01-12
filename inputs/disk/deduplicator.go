@@ -62,8 +62,8 @@ func deduplicate(acc *internal.StoreAccumulator, hostroot string) {
 		pathToIndx[m.Tags["path"]] = i
 	}
 
-	// when multiple device are mounted on multiple path:
-	// * sortest path win... unless it don't start by hostroot while the other does
+	// when multiple devices are mounted on multiple paths:
+	// * the shortest path wins... unless it doesn't start by the hostroot while the others do
 	for i, m := range acc.Measurement {
 		if deleted[i] {
 			continue

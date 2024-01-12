@@ -1279,7 +1279,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 			return
 		}
 
-		if err = discovery.AddDefaultInputs(a.gathererRegistry, a.collector, conf, a.vethProvider); err != nil {
+		if err = discovery.AddDefaultInputs(a.gathererRegistry, conf, a.vethProvider); err != nil {
 			logger.Printf("Unable to initialize system collector: %v", err)
 
 			return

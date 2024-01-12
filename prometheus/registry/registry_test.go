@@ -1933,7 +1933,7 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 				{
 					Labels: map[string]string{
 						types.LabelName: "disk_used",
-						"mountpoint":    "/home",
+						"item":          "/home",
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoItem: "/home",
@@ -1942,7 +1942,7 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 				{
 					Labels: map[string]string{
 						types.LabelName: "io_utilization",
-						"device":        "sda",
+						"item":          "sda",
 					},
 					Annotations: types.MetricAnnotations{
 						BleemeoItem: "sda",
