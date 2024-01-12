@@ -92,23 +92,6 @@ type metricFilter interface {
 	FilterFamilies(f []*dto.MetricFamily) []*dto.MetricFamily
 }
 
-type stuckCollectors struct {
-	sync.Mutex
-	m          map[string]bool
-	essentials []string
-}
-
-func (sc *stuckCollectors) allEssentialsAreStuck() bool {
-	for _, collector := range sc.essentials {
-		if !sc.m[collector] {
-			// This collector is not stuck (yet)
-			return false
-		}
-	}
-
-	return true
-}
-
 // Registry is a dynamic collection of metrics sources.
 //
 // For the Prometheus metrics source, it mostly a wrapper around prometheus.Gatherers,
@@ -155,7 +138,6 @@ type Registry struct {
 	relabelHook             RelabelHook
 	renamer                 *renamer.Renamer
 	secretInputsGate        *gate.Gate
-	stuckCollectors         *stuckCollectors
 }
 
 type Option struct {
@@ -388,9 +370,6 @@ func New(opt Option, secretInputsGate *gate.Gate) (*Registry, error) {
 	reg := &Registry{
 		option:           opt,
 		secretInputsGate: secretInputsGate,
-		stuckCollectors: &stuckCollectors{
-			m: make(map[string]bool),
-		},
 	}
 
 	reg.init()
@@ -661,13 +640,13 @@ func (r *Registry) diagnosticState(archive types.ArchiveWriter) error {
 }
 
 // HealthCheck perform some health check and log any issue found.
-// This method could panic when health condition are bad for too long in order to cause a Glouton restart.
+// This method could panic when health conditions are bad for too long in order to cause a Glouton restart.
 func (r *Registry) HealthCheck() {
 	r.l.Lock()
 	defer r.l.Unlock()
 
-	// We only panic if this string is not empty
-	var panicMessage string
+	// This flag will be set to false if at least one essential input is not stuck.
+	shouldPanic := true
 
 	for _, reg := range r.registrations {
 		reg.l.Lock()
@@ -686,38 +665,22 @@ func (r *Registry) HealthCheck() {
 					reg.loop.interval.String(),
 				)
 
-				if time.Since(lastScrape) > 10*reg.loop.interval && time.Since(lastScrape) > time.Hour {
-					r.stuckCollectors.Lock()
-
-					r.stuckCollectors.m[reg.option.Description] = true
-					if r.stuckCollectors.allEssentialsAreStuck() {
-						msg := fmt.Sprintf("Metrics collections is blocked for all essential collectors. Last run of %s was at %s and should run every %s. Glouton seems unhealthy, killing myself",
-							reg.option.Description,
-							lastScrape.Format(time.RFC3339),
-							reg.loop.interval.String(),
-						)
-						// We don't panic immediately. We want to unlock reg before.
-						panicMessage = msg
-					}
-
-					r.stuckCollectors.Unlock()
+				if reg.option.IsEssential && (time.Since(lastScrape) < 10*reg.loop.interval || time.Since(lastScrape) < time.Minute) {
+					// This essential gatherer is not considered as stuck; don't panic for now.
+					shouldPanic = false
 				}
-			} else {
-				r.stuckCollectors.Lock()
-
-				delete(r.stuckCollectors.m, reg.option.Description)
-
-				r.stuckCollectors.Unlock()
 			}
 		}
 
 		reg.l.Unlock()
 	}
 
-	if panicMessage != "" {
+	if shouldPanic {
 		r.tooSlowConsecutiveError++
 
 		if r.tooSlowConsecutiveError >= 3 {
+			const panicMessage = "Metrics collections is blocked for all essential collectors. Glouton seems unhealthy, killing myself."
+
 			logger.Printf(panicMessage)
 
 			// We don't know how big the buffer needs to be to collect
@@ -928,12 +891,6 @@ func (r *Registry) addRegistration(reg *registration) (int, error) {
 	reg.addedAt = time.Now()
 
 	r.registrations[id] = reg
-
-	if reg.option.IsEssential {
-		r.stuckCollectors.Lock()
-		r.stuckCollectors.essentials = append(r.stuckCollectors.essentials, reg.option.Description)
-		r.stuckCollectors.Unlock()
-	}
 
 	if !reg.option.DisablePeriodicGather {
 		if g, ok := reg.gatherer.getSource().(GathererWithScheduleUpdate); ok {
