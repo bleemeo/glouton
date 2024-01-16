@@ -17,6 +17,7 @@
 package scrapper
 
 import (
+	"bytes"
 	"fmt"
 	"glouton/types"
 	"math"
@@ -27,6 +28,7 @@ import (
 	"testing"
 
 	dto "github.com/prometheus/client_model/go"
+	"github.com/prometheus/common/expfmt"
 	"github.com/prometheus/prometheus/model/labels"
 	"google.golang.org/protobuf/proto"
 )
@@ -38,6 +40,29 @@ func Test_Host_Port(t *testing.T) {
 	if got := HostPort(url); got != want {
 		t.Errorf("An error occurred: expected %s, got %s", want, got)
 	}
+}
+
+// parserReaderReference is the previous implementation used.
+func parserReaderReference(data []byte, filter func(lbls labels.Labels) bool) ([]*dto.MetricFamily, error) {
+	// filter isn't used by TextToMetricFamilies
+	_ = filter
+
+	var parser expfmt.TextParser
+
+	resultMap, err := parser.TextToMetricFamilies(bytes.NewReader(data))
+	if err != nil {
+		return nil, TargetError{
+			DecodeErr: err,
+		}
+	}
+
+	result := make([]*dto.MetricFamily, 0, len(resultMap))
+
+	for _, family := range resultMap {
+		result = append(result, family)
+	}
+
+	return result, nil
 }
 
 func Test_parserReader(t *testing.T) { //nolint:maintidx
@@ -298,49 +323,44 @@ func Test_parserReader(t *testing.T) { //nolint:maintidx
 	for _, tt := range tests {
 		tt := tt
 
-		for _, useTextParser := range []bool{false, true} {
-			useTextParser := useTextParser
-			name := tt.filename
+		t.Run(tt.filename, func(t *testing.T) {
+			t.Parallel()
 
-			if useTextParser {
-				name += "-with-textparser"
+			data, err := os.ReadFile(filepath.Join("testdata", tt.filename))
+			if err != nil {
+				t.Fatal(err)
 			}
 
-			t.Run(name, func(t *testing.T) {
-				t.Parallel()
+			var got []*dto.MetricFamily
 
-				data, err := os.ReadFile(filepath.Join("testdata", tt.filename))
-				if err != nil {
-					t.Fatal(err)
-				}
+			got, err = parserReader(data, nil)
 
-				var got []*dto.MetricFamily
+			if err != nil {
+				t.Fatalf("parserReader() error = %v", err)
+			}
 
-				if useTextParser {
-					got, err = parserReader2(data, nil)
-				} else {
-					got, err = parserReader(data, nil)
-				}
+			want := tt.want
 
-				if err != nil {
-					t.Fatalf("parserReader() error = %v", err)
-				}
+			referenceGot, err := parserReaderReference(data, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
 
-				want := tt.want
+			// Our parser don't support histogram & summary
+			want = flattenHistogramAndSummary(want)
+			referenceGot = flattenHistogramAndSummary(referenceGot)
 
-				if useTextParser {
-					// testparser don't support histogram & summary
-					want = flattenHistogramAndSummary(want)
-				} else {
-					// parser.TextToMetricFamilies does not sort labels
-					sortLabels(got)
-				}
+			// parser.TextToMetricFamilies does not sort labels
+			sortLabels(referenceGot)
 
-				if diff := types.DiffMetricFamilies(want, got, false, true); diff != "" {
-					t.Errorf("parserReader missmatch (-want +got):\n%s", diff)
-				}
-			})
-		}
+			if diff := types.DiffMetricFamilies(want, got, false, true); diff != "" {
+				t.Errorf("parserReader missmatch (-want +got):\n%s", diff)
+			}
+
+			if diff := types.DiffMetricFamilies(referenceGot, got, false, true); diff != "" {
+				t.Errorf("parserReader missmatch with reference (-want +got):\n%s", diff)
+			}
+		})
 	}
 }
 
@@ -485,62 +505,34 @@ func flattenHistogramAndSummary(mfs []*dto.MetricFamily) []*dto.MetricFamily {
 func Benchmark_parserReader(b *testing.B) {
 	for _, filename := range []string{"sample.txt", "large.txt"} {
 		filename := filename
-		b.Run(filename, func(b *testing.B) {
-			data, err := os.ReadFile(filepath.Join("testdata", filename))
-			if err != nil {
-				b.Fatal(err)
+
+		for _, useRef := range []bool{true, false} {
+			useRef := useRef
+			name := filename
+
+			if useRef {
+				name += "-ref-impl"
 			}
 
-			b.ResetTimer()
-
-			for n := 0; n < b.N; n++ {
-				_, err := parserReader(data, nil)
+			b.Run(name, func(b *testing.B) {
+				data, err := os.ReadFile(filepath.Join("testdata", filename))
 				if err != nil {
 					b.Fatal(err)
 				}
-			}
-		})
-	}
-}
 
-func Benchmark_parserReader2(b *testing.B) {
-	for _, filename := range []string{"sample.txt", "large.txt"} {
-		filename := filename
-		b.Run(filename, func(b *testing.B) {
-			data, err := os.ReadFile(filepath.Join("testdata", filename))
-			if err != nil {
-				b.Fatal(err)
-			}
+				b.ResetTimer()
 
-			b.ResetTimer()
-
-			for n := 0; n < b.N; n++ {
-				_, err := parserReader2(data, nil)
-				if err != nil {
-					b.Fatal(err)
+				for n := 0; n < b.N; n++ {
+					if useRef {
+						_, err = parserReaderReference(data, nil)
+					} else {
+						_, err = parserReader(data, nil)
+					}
+					if err != nil {
+						b.Fatal(err)
+					}
 				}
-			}
-		})
-	}
-}
-
-func Benchmark_parserReader2RejectAll(b *testing.B) {
-	for _, filename := range []string{"sample.txt", "large.txt"} {
-		filename := filename
-		b.Run(filename, func(b *testing.B) {
-			data, err := os.ReadFile(filepath.Join("testdata", filename))
-			if err != nil {
-				b.Fatal(err)
-			}
-
-			b.ResetTimer()
-
-			for n := 0; n < b.N; n++ {
-				_, err := parserReader2(data, func(_ labels.Labels) bool { return false })
-				if err != nil {
-					b.Fatal(err)
-				}
-			}
-		})
+			})
+		}
 	}
 }

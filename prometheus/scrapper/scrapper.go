@@ -17,7 +17,6 @@
 package scrapper
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -34,7 +33,6 @@ import (
 	"time"
 
 	dto "github.com/prometheus/client_model/go"
-	"github.com/prometheus/common/expfmt"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/model/textparse"
 	"google.golang.org/protobuf/proto"
@@ -180,28 +178,6 @@ func (t *Target) readAll(ctx context.Context) ([]byte, error) {
 }
 
 func parserReader(data []byte, filter func(lbls labels.Labels) bool) ([]*dto.MetricFamily, error) {
-	// filter isn't used by TextToMetricFamilies
-	_ = filter
-
-	var parser expfmt.TextParser
-
-	resultMap, err := parser.TextToMetricFamilies(bytes.NewReader(data))
-	if err != nil {
-		return nil, TargetError{
-			DecodeErr: err,
-		}
-	}
-
-	result := make([]*dto.MetricFamily, 0, len(resultMap))
-
-	for _, family := range resultMap {
-		result = append(result, family)
-	}
-
-	return result, nil
-}
-
-func parserReader2(data []byte, filter func(lbls labels.Labels) bool) ([]*dto.MetricFamily, error) {
 	var (
 		et  textparse.Entry
 		err error
