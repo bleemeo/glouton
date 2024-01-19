@@ -114,7 +114,7 @@ func CollectorToFamilies(metrics []prometheus.Metric) ([]*dto.MetricFamily, erro
 	return gatherer.Gather()
 }
 
-// FamiliesToCollector convert metric familly to prometheus.Metric.
+// FamiliesToCollector convert metric family to prometheus.Metric.
 // Note: meta-label are not kept in this conversion.
 func FamiliesToCollector(families []*dto.MetricFamily) ([]prometheus.Metric, error) {
 	var errs prometheus.MultiError
@@ -409,7 +409,7 @@ func AnnotationToMetaLabels(lbls labels.Labels, annotation types.MetricAnnotatio
 	return builder.Labels()
 }
 
-// MetaLabelsToAnnotation extract from meta-labels some annotations. It mostly does the opposit of AnnotationToMetaLabels.
+// MetaLabelsToAnnotation extract from meta-labels some annotations. It mostly does the opposite of AnnotationToMetaLabels.
 // Labels aren't modified.
 func MetaLabelsToAnnotation(lbls labels.Labels) types.MetricAnnotations {
 	annotations := types.MetricAnnotations{
@@ -459,9 +459,9 @@ func metricOnlyHasItem(lbsl labels.Labels) bool {
 	return true
 }
 
-func DTO2Labels(name string, input *dto.Metric) map[string]string {
-	lbls := make(map[string]string, len(input.GetLabel())+1)
-	for _, lp := range input.GetLabel() {
+func DTO2Labels(name string, input []*dto.LabelPair) map[string]string {
+	lbls := make(map[string]string, len(input)+1)
+	for _, lp := range input {
 		lbls[lp.GetName()] = lp.GetValue()
 	}
 

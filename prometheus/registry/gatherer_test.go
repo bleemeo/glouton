@@ -25,6 +25,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
 	"github.com/prometheus/prometheus/model/labels"
@@ -111,9 +113,28 @@ func Test_mergeLabels(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
+		tt := tt
+
 		t.Run(tt.name, func(t *testing.T) {
-			if got := mergeLabels(tt.args.a, tt.args.b); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("mergeLabels() = %v, want %v", got, tt.want)
+			t.Parallel()
+
+			opts := []cmp.Option{
+				cmpopts.IgnoreUnexported(dto.LabelPair{}),
+				cmpopts.EquateEmpty(),
+			}
+
+			inputA := labels.FromMap(model.DTO2Labels("fake_name", tt.args.a))
+			wantLabels := labels.FromMap(model.DTO2Labels("fake_name", tt.want))
+			gotLabels := mergeLabels(inputA, tt.args.b)
+
+			if diff := cmp.Diff(wantLabels, gotLabels); diff != "" {
+				t.Errorf("mergeLabels() mismatch (-want +got)\n%s", diff)
+			}
+
+			got := mergeLabelsDTO(tt.args.a, tt.args.b)
+
+			if diff := cmp.Diff(tt.want, got, opts...); diff != "" {
+				t.Errorf("mergeLabelsDTO() mismatch (-want +got)\n%s", diff)
 			}
 		})
 	}
@@ -265,9 +286,9 @@ func Test_labeledGatherer_GatherPoints(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			g := newLabeledGatherer(tt.fields.source, tt.fields.labels, nil, nil, nil)
+			g := newLabeledGatherer(tt.fields.source, tt.fields.labels, nil, nil)
 
-			mfs, err := g.GatherWithState(context.Background(), GatherState{})
+			mfs, err := g.GatherWithState(context.Background(), GatherState{NoFilter: true})
 			if (err != nil) != tt.wantErr {
 				t.Errorf("labeledGatherer.GatherPoints() error = %v, wantErr %v", err, tt.wantErr)
 

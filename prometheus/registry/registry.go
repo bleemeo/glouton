@@ -180,6 +180,7 @@ type RegistrationOption struct {
 	// AcceptAllowedMetricsOnly will only kept metrics allowed at ends of Gather(), so the
 	// metric not allowed by allow_list (or metric denied) will be dropped. Metrics that are
 	// needed by SimpleRule will still be allowed.
+	// Currently (until Registry.renamer is dropped), this shouldn't be activated on SNMP gatherer.
 	AcceptAllowedMetricsOnly bool
 	rrules                   []*rules.RecordingRule
 }
@@ -1174,6 +1175,10 @@ func (r *Registry) GatherWithState(ctx context.Context, state GatherState) ([]*d
 	// from deleting metrics using reserved labels.
 	mfs = removeMetaLabels(mfs)
 
+	if !state.NoFilter && r.option.Filter != nil {
+		mfs = r.option.Filter.FilterFamilies(mfs, false)
+	}
+
 	// Use prometheus.Gatherers because it will:
 	// * Remove (and complain) about possible duplicate of metric
 	// * sort output
@@ -1409,9 +1414,19 @@ func (r *Registry) scrapeFromLoop(ctx context.Context, t0 time.Time, reg *regist
 
 	state := GatherState{QueryType: All, FromScrapeLoop: true, T0: t0}
 
-	if reg.option.AcceptAllowedMetricsOnly {
+	// Never use HintMetricFilter when GatherModifier is present, because this will be source of
+	// confusion: HintMetricFilter is applied before GatherModifier, so if labels are changed
+	// by GatherModifier, HintMetricFilter will not do what is expected.
+	// Them same apply to ApplyDynamicRelabel.
+	// The Registry.renamer is also effected by this issue. renamer is only used for SNMP, SNMP should not
+	// activate AcceptAllowedMetricsOnly.
+	if reg.option.AcceptAllowedMetricsOnly && reg.option.GatherModifier == nil && !reg.option.ApplyDynamicRelabel {
+		reg.l.Lock()
+		extraLabels := reg.gatherer.labels
+		reg.l.Unlock()
+
 		state.HintMetricFilter = func(lbls labels.Labels) bool {
-			return r.option.Filter.IsMetricAllowed(lbls, true)
+			return r.option.Filter.IsMetricAllowed(mergeLabels(lbls, extraLabels), true)
 		}
 	}
 
@@ -1454,6 +1469,10 @@ func (r *Registry) scrapeFromLoop(ctx context.Context, t0 time.Time, reg *regist
 
 		points, statusPoints = r.option.ThresholdHandler.ApplyThresholds(points)
 		points = append(points, statusPoints...)
+	}
+
+	if reg.option.AcceptAllowedMetricsOnly {
+		points = r.option.Filter.FilterPoints(points, true)
 	}
 
 	if len(points) > 0 && r.option.PushPoint != nil {
@@ -1695,13 +1714,7 @@ func (r *Registry) setupGatherer(reg *registration, source prometheus.Gatherer) 
 		promLabels, annotations, reg.relabelHookSkip = r.applyRelabel(ctxTimeout, extraLabels)
 	}
 
-	var filter metricFilter
-
-	if reg.option.AcceptAllowedMetricsOnly {
-		filter = r.option.Filter
-	}
-
-	g := newLabeledGatherer(source, promLabels, reg.option.rrules, reg.option.GatherModifier, filter)
+	g := newLabeledGatherer(source, promLabels, reg.option.rrules, reg.option.GatherModifier)
 	reg.annotations = annotations
 	reg.gatherer = g
 }

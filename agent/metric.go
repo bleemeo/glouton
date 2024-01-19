@@ -1127,7 +1127,7 @@ func (m *metricFilter) filterFamily(f *dto.MetricFamily, allowNeededByRules bool
 	allowVals := getMatchersList(m.allowList, f.GetName())
 
 	for _, metric := range f.GetMetric() {
-		lbls := model.DTO2Labels(f.GetName(), metric)
+		lbls := model.DTO2Labels(f.GetName(), metric.GetLabel())
 		if allowedMetric(lbls, denyVals, allowVals) {
 			f.Metric[i] = metric
 			i++
