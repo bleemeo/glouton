@@ -505,7 +505,7 @@ func DiffMetricPoints(want []MetricPoint, got []MetricPoint, approximate bool) s
 }
 
 // DiffMetricFamilies return a diff between want and got. Mostly useful in tests.
-func DiffMetricFamilies(want []*dto.MetricFamily, got []*dto.MetricFamily, approximate bool) string {
+func DiffMetricFamilies(want []*dto.MetricFamily, got []*dto.MetricFamily, approximate bool, ignoreFamilyOrder bool) string {
 	opts := []cmp.Option{
 		cmpopts.IgnoreUnexported(dto.MetricFamily{}),
 		cmpopts.IgnoreUnexported(dto.Metric{}),
@@ -520,6 +520,12 @@ func DiffMetricFamilies(want []*dto.MetricFamily, got []*dto.MetricFamily, appro
 		cmpopts.IgnoreUnexported(dto.Bucket{}),
 		cmpopts.IgnoreUnexported(dto.BucketSpan{}),
 		cmpopts.EquateEmpty(),
+	}
+
+	if ignoreFamilyOrder {
+		opts = append(opts, cmpopts.SortSlices(func(x, y *dto.MetricFamily) bool {
+			return x.GetName() < y.GetName()
+		}))
 	}
 
 	if approximate {

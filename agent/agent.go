@@ -795,7 +795,13 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		a.store = store.New(2*time.Minute, 2*time.Hour)
 	}
 
-	filteredStore := store.NewFilteredStore(a.store, mFilter.FilterPoints, mFilter.filterMetrics)
+	filteredStore := store.NewFilteredStore(
+		a.store,
+		func(m []types.MetricPoint) []types.MetricPoint {
+			return mFilter.FilterPoints(m, false)
+		},
+		mFilter.filterMetrics,
+	)
 	a.threshold = threshold.New(a.state)
 
 	secretInputsGate := gate.New(inputs.MaxParallelSecrets())
@@ -1026,6 +1032,8 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 
 	a.vSphereManager = vsphere.NewManager()
 
+	a.metricFilter.UpdateRulesMatchers(a.rulesManager.InputMetricMatchers())
+
 	if a.config.Bleemeo.Enable {
 		scaperName := a.config.Blackbox.ScraperName
 		if scaperName == "" {
@@ -1059,7 +1067,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 			VSphereEndpointsInError:        a.vSphereManager.EndpointsInError,
 			IsContainerEnabled:             a.containerFilter.ContainerEnabled,
 			IsContainerNameRecentlyDeleted: a.containerRuntime.IsContainerNameRecentlyDeleted,
-			IsMetricAllowed:                a.metricFilter.isAllowedAndNotDenied,
+			IsMetricAllowed:                a.metricFilter.isAllowedAndNotDeniedMap,
 			PahoLastPingCheckAt:            a.pahoLogWrapper.LastPingAt,
 			LastMetricAnnotationChange:     a.store.LastAnnotationChange,
 		})
@@ -1185,10 +1193,11 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 	for _, target := range prometheusTargets {
 		_, err = a.gathererRegistry.RegisterGatherer(
 			registry.RegistrationOption{
-				Description: "Prom exporter " + target.URL.String(),
-				JitterSeed:  labels.FromMap(target.ExtraLabels).Hash(),
-				Interval:    defaultInterval,
-				ExtraLabels: target.ExtraLabels,
+				Description:              "Prom exporter " + target.URL.String(),
+				JitterSeed:               labels.FromMap(target.ExtraLabels).Hash(),
+				Interval:                 defaultInterval,
+				ExtraLabels:              target.ExtraLabels,
+				AcceptAllowedMetricsOnly: true,
 			},
 			target,
 		)

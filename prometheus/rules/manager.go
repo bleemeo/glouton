@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"glouton/logger"
+	"glouton/prometheus/matcher"
 	"glouton/prometheus/model"
 	"glouton/types"
 	"runtime"
@@ -37,6 +38,7 @@ import (
 // Manager is a wrapper handling everything related to prometheus recording rules.
 type Manager struct {
 	recordingRules []*rules.Group
+	matchers       []matcher.Matchers
 
 	appendable *dynamicAppendable
 	queryable  storage.Queryable
@@ -114,11 +116,17 @@ func newManager(ctx context.Context, queryable storage.Queryable, defaultRules m
 		},
 	})
 
+	matchers := make([]matcher.Matchers, 0, len(defaultGroupRules))
+	for _, rule := range defaultGroupRules {
+		matchers = append(matchers, MatchersFromQuery(rule.Query())...)
+	}
+
 	rm := Manager{
 		appendable:     app,
 		queryable:      queryable,
 		engine:         engine,
 		recordingRules: []*rules.Group{defaultGroup},
+		matchers:       matchers,
 		logger:         promLogger,
 		agentStarted:   created,
 		now:            time.Now,
@@ -127,8 +135,14 @@ func newManager(ctx context.Context, queryable storage.Queryable, defaultRules m
 	return &rm
 }
 
+// InputMetricMatchers returns a list of matchers for metrics used as input or recording rules.
+// Thoses metrics should pass from input if you expect recording rule to work correctly.
+func (rm *Manager) InputMetricMatchers() []matcher.Matchers {
+	return rm.matchers
+}
+
 // MetricNames returns a list of all recording rules metric names.
-// This is used for dynamic generation of filters.
+// This is used for dynamic generation of metrics filter.
 func (rm *Manager) MetricNames() []string {
 	names := make([]string, 0)
 

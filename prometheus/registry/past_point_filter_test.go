@@ -130,7 +130,7 @@ func TestFilterPastPoints(t *testing.T) {
 		t.Fatal("Error while gathering:", err)
 	}
 
-	if diff := types.DiffMetricFamilies(firstSample, mfs, false); diff != "" {
+	if diff := types.DiffMetricFamilies(firstSample, mfs, false, false); diff != "" {
 		t.Fatalf("Nothing should have been filtered out (-want +got):\n%s", diff)
 	}
 
@@ -146,7 +146,7 @@ func TestFilterPastPoints(t *testing.T) {
 		// The whole disk_used_perc metric family was dropped, because its sole metric was removed.
 	}
 
-	if diff := types.DiffMetricFamilies(expectedSample, mfs, false); diff != "" {
+	if diff := types.DiffMetricFamilies(expectedSample, mfs, false, false); diff != "" {
 		t.Fatalf("The second metric should have been filtered out (-want +got):\n%s", diff)
 	}
 }

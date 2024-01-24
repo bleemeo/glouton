@@ -60,6 +60,22 @@ func NormalizeMetric(metric string) (Matchers, error) {
 	return m, nil
 }
 
+// MatchesAny returns whether at least one matchers matches.
+func MatchesAny(lbls map[string]string, matchers []Matchers) bool {
+	for _, matcher := range matchers {
+		if matcher.Matches(lbls) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// MatchesAnyLabels returns whether at least one matchers matches.
+func MatchesAnyLabels(lbls labels.Labels, matchers []Matchers) bool {
+	return MatchesAny(lbls.Map(), matchers)
+}
+
 // Get returns a matcher with the specided label as Name.
 // nil will be returned if not matcher were found.
 func (m *Matchers) Get(label string) *labels.Matcher {

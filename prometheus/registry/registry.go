@@ -88,8 +88,9 @@ func (f pushFunction) PushPoints(ctx context.Context, points []types.MetricPoint
 }
 
 type metricFilter interface {
-	FilterPoints(points []types.MetricPoint) []types.MetricPoint
-	FilterFamilies(f []*dto.MetricFamily) []*dto.MetricFamily
+	FilterPoints(points []types.MetricPoint, allowNeededByRules bool) []types.MetricPoint
+	FilterFamilies(f []*dto.MetricFamily, allowNeededByRules bool) []*dto.MetricFamily
+	IsMetricAllowed(lbls labels.Labels, allowNeededByRules bool) bool
 }
 
 // Registry is a dynamic collection of metrics sources.
@@ -176,7 +177,12 @@ type RegistrationOption struct {
 	// IsEssential tells whether the corresponding gatherer is considered as 'essential' regarding the agent dashboard.
 	// When all 'essentials' gatherers are stuck, Glouton kills himself (see Registry.HealthCheck).
 	IsEssential bool
-	rrules      []*rules.RecordingRule
+	// AcceptAllowedMetricsOnly will only kept metrics allowed at ends of Gather(), so the
+	// metric not allowed by allow_list (or metric denied) will be dropped. Metrics that are
+	// needed by SimpleRule will still be allowed.
+	// Currently (until Registry.renamer is dropped), this shouldn't be activated on SNMP gatherer.
+	AcceptAllowedMetricsOnly bool
+	rrules                   []*rules.RecordingRule
 }
 
 type AppenderRegistrationOption struct {
@@ -1169,6 +1175,10 @@ func (r *Registry) GatherWithState(ctx context.Context, state GatherState) ([]*d
 	// from deleting metrics using reserved labels.
 	mfs = removeMetaLabels(mfs)
 
+	if !state.NoFilter && r.option.Filter != nil {
+		mfs = r.option.Filter.FilterFamilies(mfs, false)
+	}
+
 	// Use prometheus.Gatherers because it will:
 	// * Remove (and complain) about possible duplicate of metric
 	// * sort output
@@ -1245,7 +1255,7 @@ func gatherFromQueryable(ctx context.Context, queryable storage.Queryable, filte
 	}
 
 	if filter != nil {
-		result = filter.FilterFamilies(result)
+		result = filter.FilterFamilies(result, false)
 	}
 
 	return result, series.Err()
@@ -1402,7 +1412,25 @@ func (r *Registry) scrapeFromLoop(ctx context.Context, t0 time.Time, reg *regist
 	r.scrapeStart()
 	defer r.scrapeDone()
 
-	mfs, duration, err := r.scrape(ctx, GatherState{QueryType: All, FromScrapeLoop: true, T0: t0}, reg)
+	state := GatherState{QueryType: All, FromScrapeLoop: true, T0: t0}
+
+	// Never use HintMetricFilter when GatherModifier is present, because this will be source of
+	// confusion: HintMetricFilter is applied before GatherModifier, so if labels are changed
+	// by GatherModifier, HintMetricFilter will not do what is expected.
+	// Them same apply to ApplyDynamicRelabel.
+	// The Registry.renamer is also effected by this issue. renamer is only used for SNMP, SNMP should not
+	// activate AcceptAllowedMetricsOnly.
+	if reg.option.AcceptAllowedMetricsOnly && reg.option.GatherModifier == nil && !reg.option.ApplyDynamicRelabel {
+		reg.l.Lock()
+		extraLabels := reg.gatherer.labels
+		reg.l.Unlock()
+
+		state.HintMetricFilter = func(lbls labels.Labels) bool {
+			return r.option.Filter.IsMetricAllowed(mergeLabels(lbls, extraLabels), true)
+		}
+	}
+
+	mfs, duration, err := r.scrape(ctx, state, reg)
 	if err != nil {
 		if len(mfs) == 0 {
 			logger.V(1).Printf("Gather of metrics failed on %s: %v", reg.option.Description, err)
@@ -1441,6 +1469,10 @@ func (r *Registry) scrapeFromLoop(ctx context.Context, t0 time.Time, reg *regist
 
 		points, statusPoints = r.option.ThresholdHandler.ApplyThresholds(points)
 		points = append(points, statusPoints...)
+	}
+
+	if reg.option.AcceptAllowedMetricsOnly {
+		points = r.option.Filter.FilterPoints(points, true)
 	}
 
 	if len(points) > 0 && r.option.PushPoint != nil {

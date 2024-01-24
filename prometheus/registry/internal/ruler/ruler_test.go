@@ -2,6 +2,7 @@ package ruler
 
 import (
 	"context"
+	"glouton/prometheus/matcher"
 	"glouton/types"
 	"testing"
 	"time"
@@ -9,6 +10,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	dto "github.com/prometheus/client_model/go"
+	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/promql/parser"
 	"github.com/prometheus/prometheus/rules"
 	"google.golang.org/protobuf/proto"
@@ -164,5 +166,94 @@ func TestApplyRulesMFS(t *testing.T) {
 	ignoreOpts := cmpopts.IgnoreUnexported(dto.MetricFamily{}, dto.Metric{}, dto.LabelPair{}, dto.Untyped{})
 	if diff := cmp.Diff(append(mfs, expectedMfs...), resultMfs, ignoreOpts); diff != "" {
 		t.Fatalf("Unexpected result mfs:\n%v", diff)
+	}
+}
+
+func Test_filterPointsForRules(t *testing.T) {
+	points := []types.MetricPoint{
+		{
+			Labels: map[string]string{
+				types.LabelName: "cpu_used",
+			},
+		},
+		{
+			Labels: map[string]string{
+				types.LabelName: "disk_used",
+				types.LabelItem: "/home",
+			},
+		},
+		{
+			Labels: map[string]string{
+				types.LabelName: "disk_used",
+				types.LabelItem: "/srv",
+			},
+		},
+	}
+
+	tests := []struct {
+		name     string
+		points   []types.MetricPoint
+		matchers []matcher.Matchers
+		want     []types.MetricPoint
+	}{
+		{
+			name:     "nil-matchers",
+			matchers: nil,
+			points:   points,
+			want:     []types.MetricPoint{},
+		},
+		{
+			name:     "empty-matchers",
+			matchers: []matcher.Matchers{},
+			points:   points,
+			want:     []types.MetricPoint{},
+		},
+		{
+			name: "simple",
+			matchers: []matcher.Matchers{
+				{
+					labels.MustNewMatcher(labels.MatchEqual, types.LabelName, "cpu_used"),
+				},
+			},
+			points: points,
+			want: []types.MetricPoint{
+				{
+					Labels: map[string]string{
+						types.LabelName: "cpu_used",
+					},
+				},
+			},
+		},
+		{
+			name: "with-labels",
+			matchers: []matcher.Matchers{
+				{
+					labels.MustNewMatcher(labels.MatchEqual, types.LabelName, "disk_used"),
+					labels.MustNewMatcher(labels.MatchEqual, types.LabelItem, "/home"),
+				},
+			},
+			points: points,
+			want: []types.MetricPoint{
+				{
+					Labels: map[string]string{
+						types.LabelName: "disk_used",
+						types.LabelItem: "/home",
+					},
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			points := make([]types.MetricPoint, len(tt.points))
+			copy(points, tt.points)
+
+			got := filterPointsForRules(points, tt.matchers)
+
+			if diff := types.DiffMetricPoints(tt.want, got, false); diff != "" {
+				t.Errorf("filterPointsForRules() mismatch (-want +got)\n%s", diff)
+			}
+		})
 	}
 }

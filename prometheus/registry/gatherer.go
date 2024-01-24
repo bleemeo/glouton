@@ -55,8 +55,8 @@ const (
 	FromStore
 )
 
-// GatherState is an argument given to gatherers that support it. It allows us to give extra informations
-// to gatherers. Due to the way such objects are contructed when no argument is supplied (when calling
+// GatherState is an argument given to gatherers that support it. It allows us to give extra information
+// to gatherers. Due to the way such objects are constructed when no argument is supplied (when calling
 // Gather() on a GathererWithState, most of the time Gather() will directly call GatherWithState(GatherState{}),
 // please make sure that default values are sensible. For example, NoProbe *must* be the default queryType, as
 // we do not want queries on /metrics to always probe the collectors by default).
@@ -66,6 +66,10 @@ type GatherState struct {
 	FromScrapeLoop bool
 	T0             time.Time
 	NoFilter       bool
+	// HintMetricFilter is an optional filter that gather could use to skip metrics that would be filtered later.
+	// Nothing is mandatory: the HintMetricFilter could be nil and the gatherer could ignore HintMetricFilter even if non-nil.
+	// If used the filter should be applied after any label alteration.
+	HintMetricFilter func(lbls labels.Labels) bool
 }
 
 func (s GatherState) Now() time.Time {
@@ -146,10 +150,6 @@ func (w *GathererWithStateWrapper) Gather() ([]*dto.MetricFamily, error) {
 	res, err := w.gatherer.GatherWithState(w.ctx, w.gatherState)
 	if err != nil {
 		logger.V(2).Printf("Error during gather on /metrics: %v", err)
-	}
-
-	if !w.gatherState.NoFilter {
-		res = w.filter.FilterFamilies(res)
 	}
 
 	return res, err
@@ -250,7 +250,7 @@ func (g *labeledGatherer) GatherWithState(ctx context.Context, state GatherState
 
 	for _, mf := range mfs {
 		for i, m := range mf.GetMetric() {
-			m.Label = mergeLabels(m.GetLabel(), g.labels)
+			m.Label = mergeLabelsDTO(m.GetLabel(), g.labels)
 			mf.Metric[i] = m
 		}
 	}
@@ -271,7 +271,33 @@ func (g *labeledGatherer) getSource() prometheus.Gatherer {
 }
 
 // mergeLabels merge two sorted list of labels. In case of name conflict, value from b wins.
-func mergeLabels(a []*dto.LabelPair, b []*dto.LabelPair) []*dto.LabelPair {
+func mergeLabels(a labels.Labels, b []*dto.LabelPair) labels.Labels {
+	result := make(labels.Labels, 0, len(a)+len(b))
+	aIndex := 0
+
+	for _, bLabel := range b {
+		for aIndex < len(a) && a[aIndex].Name < bLabel.GetName() {
+			result = append(result, a[aIndex])
+			aIndex++
+		}
+
+		if aIndex < len(a) && a[aIndex].Name == bLabel.GetName() {
+			aIndex++
+		}
+
+		result = append(result, labels.Label{Name: bLabel.GetName(), Value: bLabel.GetValue()})
+	}
+
+	for aIndex < len(a) {
+		result = append(result, a[aIndex])
+		aIndex++
+	}
+
+	return result
+}
+
+// mergeLabelsDTO merge two sorted list of labels. In case of name conflict, value from b wins.
+func mergeLabelsDTO(a []*dto.LabelPair, b []*dto.LabelPair) []*dto.LabelPair {
 	result := make([]*dto.LabelPair, 0, len(a)+len(b))
 	aIndex := 0
 
