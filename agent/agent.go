@@ -420,7 +420,7 @@ func Run(ctx context.Context, reloadState ReloadState, configFiles []string, sig
 }
 
 // BleemeoAccountID returns the Account UUID of Bleemeo
-// It return the empty string if the Account UUID is not available (e.g. because Bleemeo is disabled or mis-configured).
+// It return the empty string if the Account UUID is not available (e.g. because Bleemeo is disabled or miss-configured).
 func (a *agent) BleemeoAccountID() string {
 	if a.bleemeoConnector == nil {
 		return ""
@@ -2571,13 +2571,13 @@ func parseIPOutput(content []byte) string {
 // Mostly it make that access to file pass though hostroot.
 func setupContainer(hostRootPath string) {
 	if hostRootPath == "" {
-		logger.Printf("The agent is running in a container but GLOUTON_DF_HOST_MOUNT_POINT is unset. Some informations will be missing")
+		logger.Printf("The agent is running in a container but GLOUTON_DF_HOST_MOUNT_POINT is unset. Some information will be missing")
 
 		return
 	}
 
 	if _, err := os.Stat(hostRootPath); os.IsNotExist(err) {
-		logger.Printf("The agent is running in a container but host / partition is not mounted on %#v. Some informations will be missing", hostRootPath)
+		logger.Printf("The agent is running in a container but host / partition is not mounted on %#v. Some information will be missing", hostRootPath)
 		logger.Printf("Hint: to fix this issue when using Docker, add \"-v /:%v:ro\" when running the agent", hostRootPath)
 
 		return

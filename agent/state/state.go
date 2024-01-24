@@ -74,7 +74,7 @@ func Load(persistentPath string, cachePath string) (*State, error) {
 }
 
 // LoadReadOnly create a state that don't write file. It only read file initially and then work from memory.
-// File could be omitted by using empty string but you should probably omit both or none or state versionning might
+// File could be omitted by using empty string but you should probably omit both or none or state versioning might
 // cause trouble.
 // This function is mostly present for test that need a state mock.
 // SaveTo will use a file and remove the fact that state is only in-memory.
