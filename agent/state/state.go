@@ -285,7 +285,6 @@ func (s *State) save() error {
 		return err
 	}
 
-	_ = w.Sync()
 	w.Close()
 
 	err = os.Rename(s.cachePath+tmpExt, s.cachePath)
