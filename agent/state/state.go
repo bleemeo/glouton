@@ -167,6 +167,27 @@ func (s *State) IsEmpty() bool {
 	return len(s.cache) == 0
 }
 
+// FileSizes return the size of state files persistent & cache.
+func (s *State) FileSizes() (int, int) {
+	s.l.Lock()
+	defer s.l.Unlock()
+
+	sizePersistent := 0
+	sizeCache := 0
+
+	st, err := os.Stat(s.persistentPath)
+	if err == nil {
+		sizePersistent = int(st.Size())
+	}
+
+	st, err = os.Stat(s.cachePath)
+	if err == nil {
+		sizeCache = int(st.Size())
+	}
+
+	return sizePersistent, sizeCache
+}
+
 // KeepOnlyPersistent will delete everything from state but persistent information.
 func (s *State) KeepOnlyPersistent() {
 	s.l.Lock()

@@ -2249,6 +2249,8 @@ func (a *agent) diagnosticGloutonState(_ context.Context, archive types.ArchiveW
 	a.l.Lock()
 	a.triggerLock.Lock()
 
+	persistentSize, cacheSize := a.state.FileSizes()
+
 	obj := struct {
 		HostRootPath              string
 		LastHealthCheck           time.Time
@@ -2261,6 +2263,9 @@ func (a *agent) diagnosticGloutonState(_ context.Context, archive types.ArchiveW
 		DockerInputID             int
 		MetricResolutionSeconds   float64
 		PahoLastPingCheckAt       time.Time
+		PathToStateDir            string
+		PersistentStateSize       int
+		CacheStateSize            int
 	}{
 		HostRootPath:              a.hostRootPath,
 		LastHealthCheck:           a.lastHealthCheck,
@@ -2273,6 +2278,9 @@ func (a *agent) diagnosticGloutonState(_ context.Context, archive types.ArchiveW
 		DockerInputID:             a.dockerInputID,
 		MetricResolutionSeconds:   a.metricResolution.Seconds(),
 		PahoLastPingCheckAt:       a.pahoLogWrapper.LastPingAt(),
+		PathToStateDir:            a.stateDir,
+		PersistentStateSize:       persistentSize,
+		CacheStateSize:            cacheSize,
 	}
 
 	a.triggerLock.Unlock()
