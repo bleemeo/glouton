@@ -17,7 +17,7 @@
 package smart
 
 import (
-	"bytes"
+	"fmt"
 	"glouton/logger"
 	"path/filepath"
 	"strings"
@@ -29,8 +29,11 @@ import (
 
 const storageDevicesPattern = "/dev/sg[0-9]*"
 
+var findStorageDevices = func() ([]string, error) { return filepath.Glob(storageDevicesPattern) } //nolint:gochecknoglobals
+
 type inputWrapper struct {
 	*smart.Smart
+	runCmd runCmdType
 
 	allowedDevices []string
 	// Storage devices are only listed at startup,
@@ -40,60 +43,156 @@ type inputWrapper struct {
 	l sync.Mutex
 }
 
-func newInputWrapper(input *smart.Smart, allowedDevices []string) *inputWrapper {
+func newInputWrapper(input *smart.Smart, allowedDevices []string, specifiedRunCmd ...runCmdType) (*inputWrapper, error) {
 	iw := &inputWrapper{
 		Smart:          input,
 		allowedDevices: allowedDevices,
 	}
 
+	if len(specifiedRunCmd) == 1 {
+		iw.runCmd = specifiedRunCmd[0]
+	} else {
+		iw.runCmd = runCmd
+	}
+
 	if len(allowedDevices) == 0 {
-		sgDevices, err := filepath.Glob(storageDevicesPattern)
+		scanOut, err := iw.runCmd(iw.Smart.Timeout, iw.Smart.UseSudo, iw.PathSmartctl, "--scan")
 		if err != nil {
-			logger.V(1).Printf("SMART: Failed to detect storage devices: %v", err)
-		} else {
-			iw.sgDevices = sgDevices
+			return nil, fmt.Errorf("failed to scan devices: %w", err)
+		}
+
+		_, ignoreStorageDevices := iw.parseScanOutput(scanOut)
+		if !ignoreStorageDevices { // smartctl scan gave no results, trying to find storage devices ...
+			sgDevices, err := findStorageDevices()
+			if err != nil {
+				return nil, fmt.Errorf("failed to detect storage devices: %w", err)
+			}
+
+			for _, sgDev := range sgDevices {
+				info, err := iw.getDeviceInfo(sgDev)
+				if err != nil {
+					return nil, err
+				}
+
+				if shouldIgnoreDevice(info) {
+					continue
+				}
+
+				iw.sgDevices = append(iw.sgDevices, sgDev)
+			}
 		}
 	}
 
-	return iw
+	return iw, nil
 }
 
 func (iw *inputWrapper) Gather(acc telegraf.Accumulator) error {
 	iw.l.Lock()
 	defer iw.l.Unlock()
 
-	out, err := runCmd(iw.Smart.Timeout, iw.Smart.UseSudo, iw.PathSmartctl, "--scan")
+	out, err := iw.runCmd(iw.Smart.Timeout, iw.Smart.UseSudo, iw.PathSmartctl, "--scan")
 	if err != nil {
 		return err
 	}
 
-	iw.Smart.Devices = iw.parseScanOutput(out)
+	iw.Smart.Devices, _ = iw.parseScanOutput(out)
 
 	return iw.Smart.Gather(acc)
 }
 
-func (iw *inputWrapper) parseScanOutput(out []byte) []string {
-	var devices []string
-
-	for _, line := range bytes.Split(out, []byte("\n")) {
-		devWithType := strings.SplitN(string(line), " ", 2)
+func (iw *inputWrapper) parseScanOutput(out []byte) (devices []string, ignoreStorageDevices bool) {
+	for _, line := range strings.Split(string(out), "\n") {
+		devWithType := strings.SplitN(line, " ", 2)
 		if len(devWithType) <= 1 {
 			continue
 		}
 
-		if dev := strings.TrimSpace(devWithType[0]); iw.shouldHandleDevice(dev) {
-			devices = append(devices, dev+deviceTypeFor(devWithType[1]))
+		if dev := strings.TrimSpace(devWithType[0]); iw.isDeviceAllowed(dev) {
+			device := dev + deviceTypeFor(devWithType[1])
+
+			if !ignoreStorageDevices {
+				info, err := iw.getDeviceInfo(device)
+				if err != nil {
+					logger.V(1).Printf("SMART: %v", err)
+
+					continue
+				}
+
+				if shouldIgnoreDevice(info) {
+					continue
+				}
+
+				ignoreStorageDevices = true
+				logger.Printf("%q is OK", device)
+			}
+
+			devices = append(devices, device)
 		}
 	}
 
-	if len(iw.sgDevices) != 0 {
-		// TODO: don't include sg devices if:
-		// - they are duplicates of /dev/sda-like devices | or only if RAID is present ?
-		// - they are a CD/DVD
+	if !ignoreStorageDevices {
 		devices = append(devices, iw.sgDevices...)
 	}
 
-	return devices
+	return devices, ignoreStorageDevices
+}
+
+func (iw *inputWrapper) getDeviceInfo(device string) (deviceInfo, error) {
+	infoArgs := []string{"--info", "--health", "--attributes", "--tolerance=verypermissive", "-n", "standby", "--format=brief"}
+
+	infoOut, err := iw.runCmd(iw.Smart.Timeout, iw.Smart.UseSudo, iw.PathSmartctl, append(infoArgs, device)...)
+	if err != nil {
+		return deviceInfo{}, fmt.Errorf("failed to get info about device %q: %w", device, err)
+	}
+
+	return iw.parseInfoOutput(infoOut), nil
+}
+
+func (iw *inputWrapper) parseInfoOutput(out []byte) deviceInfo {
+	var info deviceInfo
+
+	for _, line := range strings.Split(string(out), "\n") {
+		line = strings.TrimSpace(line)
+
+		if value, ok := tryScan(line, "Device type: %s"); ok {
+			info.deviceType = value
+		} else if value, ok = tryScan(line, "SMART support is: %s"); ok {
+			info.smartSupport = value
+		} else if value, ok = tryScan(line, "SMART overall-health self-assessment test result: %s"); ok {
+			info.overallHealthTest = value
+		}
+	}
+
+	return info
+}
+
+func tryScan(line string, format string) (value string, ok bool) {
+	_, err := fmt.Sscanf(line, format, &value)
+	if err != nil {
+		return "", false
+	}
+
+	return value, true
+}
+
+func (iw *inputWrapper) isDeviceAllowed(device string) bool {
+	if len(iw.allowedDevices) != 0 {
+		for _, dev := range iw.allowedDevices {
+			if device == dev {
+				return true
+			}
+		}
+
+		return false
+	}
+
+	for _, excluded := range iw.Smart.Excludes {
+		if device == excluded {
+			return false
+		}
+	}
+
+	return true
 }
 
 func deviceTypeFor(devType string) string {
@@ -112,22 +211,21 @@ func deviceTypeFor(devType string) string {
 	}
 }
 
-func (iw *inputWrapper) shouldHandleDevice(device string) bool {
-	if len(iw.allowedDevices) != 0 {
-		for _, dev := range iw.allowedDevices {
-			if device == dev {
-				return true
-			}
-		}
+type deviceInfo struct {
+	deviceType        string
+	smartSupport      string
+	overallHealthTest string
+}
 
+func shouldIgnoreDevice(info deviceInfo) bool {
+	switch {
+	case strings.Contains(info.deviceType, "CD/DVD"):
+		return true
+	case (strings.Contains(info.smartSupport, "Unavailable") ||
+		!(strings.Contains(info.smartSupport, "Available") || strings.Contains(info.smartSupport, "Enabled"))) &&
+		!strings.Contains(info.overallHealthTest, "PASSED"):
+		return true
+	default:
 		return false
 	}
-
-	for _, excluded := range iw.Smart.Excludes {
-		if device == excluded {
-			return false
-		}
-	}
-
-	return true
 }
