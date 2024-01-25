@@ -485,12 +485,12 @@ func (r *Registry) run(save bool) {
 	r.cleanExpired()
 
 	if save {
-		jsonList := r.getAsJsonList()
+		jsonList := r.getAsJSONList()
 		_ = r.state.Set(statusCacheKey, jsonList)
 	}
 }
 
-func (r *Registry) getAsJsonList() []jsonState {
+func (r *Registry) getAsJSONList() []jsonState {
 	r.l.Lock()
 	defer r.l.Unlock()
 
