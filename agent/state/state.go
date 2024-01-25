@@ -17,6 +17,7 @@
 package state
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -315,9 +316,13 @@ func (s *State) savePersistentTo(w io.Writer) error {
 
 // Set save an object.
 func (s *State) Set(key string, object interface{}) error {
-	err := s.set(key, object)
+	modified, err := s.set(key, object)
 	if err != nil {
 		return err
+	}
+
+	if !modified {
+		return nil
 	}
 
 	s.l.RLock()
@@ -331,18 +336,21 @@ func (s *State) Set(key string, object interface{}) error {
 	return nil
 }
 
-func (s *State) set(key string, object interface{}) error {
+func (s *State) set(key string, object interface{}) (bool, error) {
 	s.l.Lock()
 	defer s.l.Unlock()
 
 	buffer, err := json.Marshal(object)
 	if err != nil {
-		return err
+		return false, err
 	}
 
+	oldValue := s.cache[key]
 	s.cache[key] = json.RawMessage(buffer)
 
-	return nil
+	modified := !bytes.Equal(oldValue, s.cache[key])
+
+	return modified, nil
 }
 
 // Delete an key from state.
