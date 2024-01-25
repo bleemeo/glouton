@@ -55,7 +55,9 @@ func New(config config.Smart) (telegraf.Input, *inputs.GathererOptions, error) {
 
 	smartInput.TagWithDeviceType = true // TODO: wait for telegraf release
 
-	smartInputWrapper, err := newInputWrapper(smartInput, config.Devices)
+	wrapperOpts := inputWrapperOptions{input: smartInput}
+
+	smartInputWrapper, err := newInputWrapper(wrapperOpts)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -70,7 +72,7 @@ func New(config config.Smart) (telegraf.Input, *inputs.GathererOptions, error) {
 	}
 
 	options := &inputs.GathererOptions{
-		// smartctl might take some time to gather, especially with large number of disk.
+		// smartctl might take some time to gather, especially with a large number of disks.
 		MinInterval: 5 * 60 * time.Second,
 	}
 

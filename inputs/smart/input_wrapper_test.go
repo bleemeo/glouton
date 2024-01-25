@@ -34,7 +34,7 @@ import (
 var errInvalidArguments = errors.New("invalid arguments")
 
 func TestStorageDevicesPattern(t *testing.T) {
-	if _, err := filepath.Match(storageDevicesPattern, "foo"); err != nil {
+	if _, err := filepath.Match(sgDevicesPattern, "foo"); err != nil {
 		t.Fatalf("Storage devices pattern is invalid: %v", err)
 	}
 }
@@ -83,6 +83,8 @@ func TestIsDeviceAllowed(t *testing.T) {
 func TestParseScanOutput(t *testing.T) {
 	testCases := []struct {
 		name                            string
+		noDataFile                      bool
+		configDevices                   []string
 		sgDevices                       []string
 		expectedInitSmartctlInvocations int
 		expectedDevices                 []string
@@ -93,7 +95,8 @@ func TestParseScanOutput(t *testing.T) {
 			name:                            "firewall",
 			sgDevices:                       []string{"/dev/sg0", "/dev/sg1", "/dev/sg2", "/dev/sg3"},
 			expectedInitSmartctlInvocations: 6, // 1 scan + 1 info /dev/sda + 4 info /dev/sg_
-			expectedDevices:                 []string{"/dev/sg2", "/dev/sg3"},
+			//                               /dev/sda is unusable, but the telegraf input with deal with it.
+			expectedDevices:                 []string{"/dev/sda", "/dev/sg2", "/dev/sg3"},
 			expectedToIgnoreStorageDevices:  false,
 			expectedScanSmartctlInvocations: 1,
 		},
@@ -123,17 +126,25 @@ func TestParseScanOutput(t *testing.T) {
 			name:                            "proxmox1",
 			sgDevices:                       []string{"/dev/sg0"},
 			expectedInitSmartctlInvocations: 3,
-			expectedDevices:                 []string{"/dev/bus/0 -d megaraid,0", "/dev/bus/0 -d megaraid,1", "/dev/bus/0 -d megaraid,2", "/dev/bus/0 -d megaraid,3", "/dev/bus/0 -d megaraid,4", "/dev/bus/0 -d megaraid,5", "/dev/bus/0 -d megaraid,6", "/dev/bus/0 -d megaraid,7", "/dev/bus/0 -d megaraid,8", "/dev/bus/0 -d megaraid,9", "/dev/bus/0 -d megaraid,10", "/dev/bus/0 -d megaraid,11", "/dev/bus/0 -d megaraid,12", "/dev/bus/0 -d megaraid,13"}, //nolint:lll
+			expectedDevices:                 []string{"/dev/sda", "/dev/bus/0 -d megaraid,0", "/dev/bus/0 -d megaraid,1", "/dev/bus/0 -d megaraid,2", "/dev/bus/0 -d megaraid,3", "/dev/bus/0 -d megaraid,4", "/dev/bus/0 -d megaraid,5", "/dev/bus/0 -d megaraid,6", "/dev/bus/0 -d megaraid,7", "/dev/bus/0 -d megaraid,8", "/dev/bus/0 -d megaraid,9", "/dev/bus/0 -d megaraid,10", "/dev/bus/0 -d megaraid,11", "/dev/bus/0 -d megaraid,12", "/dev/bus/0 -d megaraid,13"}, //nolint:lll
 			expectedToIgnoreStorageDevices:  true,
-			expectedScanSmartctlInvocations: 2,
+			expectedScanSmartctlInvocations: 1,
 		},
 		{
 			name:                            "proxmox2",
 			sgDevices:                       []string{"/dev/sg0", "/dev/sg1"},
 			expectedInitSmartctlInvocations: 3,
-			expectedDevices:                 []string{"/dev/bus/0 -d megaraid,0", "/dev/bus/0 -d megaraid,1"},
+			expectedDevices:                 []string{"/dev/sda", "/dev/bus/0 -d megaraid,0", "/dev/bus/0 -d megaraid,1"},
 			expectedToIgnoreStorageDevices:  true,
-			expectedScanSmartctlInvocations: 2,
+			expectedScanSmartctlInvocations: 1,
+		},
+		{
+			name:                            "config-devices",
+			noDataFile:                      true,
+			configDevices:                   []string{"/dev/sdf"},
+			expectedInitSmartctlInvocations: 0,
+			expectedDevices:                 []string{"/dev/sdf"},
+			expectedScanSmartctlInvocations: 0,
 		},
 	}
 
@@ -141,18 +152,31 @@ func TestParseScanOutput(t *testing.T) {
 		tc := testCase
 
 		t.Run(tc.name, func(t *testing.T) {
-			smartctlData, err := parseSmartctlData(tc.name)
-			if err != nil {
-				t.Error("Failed to parse smartctl data:", err)
+			var (
+				smartctlData SmartctlData
+				err          error
+			)
 
-				return
+			if !tc.noDataFile {
+				smartctlData, err = parseSmartctlData(tc.name)
+				if err != nil {
+					t.Error("Failed to parse smartctl data:", err)
+
+					return
+				}
 			}
 
-			findStorageDevices = func() ([]string, error) {
-				return tc.sgDevices, nil
+			opts := inputWrapperOptions{
+				input: &smart.Smart{
+					Devices: tc.configDevices,
+				},
+				runCmd: smartctlData.makeRunCmdFor(t),
+				findSGDevices: func() ([]string, error) {
+					return tc.sgDevices, nil
+				},
 			}
 
-			iw, err := newInputWrapper(&smart.Smart{}, nil, smartctlData.makeRunCmdFor(t))
+			iw, err := newInputWrapper(opts)
 			if err != nil {
 				t.Error("Can't initialize SMART input wrapper:", err)
 
@@ -165,21 +189,17 @@ func TestParseScanOutput(t *testing.T) {
 
 			smartctlData.invocationsCount = 0
 
-			devices, ignoreStorageDevices := iw.parseScanOutput([]byte(smartctlData.Scan))
+			devices, err := iw.getDevices()
+			if err != nil {
+				t.Fatal("Failed to get devices:", err)
+			}
+
 			if diff := cmp.Diff(tc.expectedDevices, devices, cmpopts.EquateEmpty()); diff != "" {
 				t.Errorf("Unexpected devices (-want +got):\n%s", diff)
 			}
 
-			if ignoreStorageDevices != tc.expectedToIgnoreStorageDevices {
-				if tc.expectedToIgnoreStorageDevices {
-					t.Error("Should have ignored storage devices, but didn't.")
-				} else {
-					t.Error("Shouldn't have ignored storage devices, but did so.")
-				}
-			}
-
 			if invocCount := smartctlData.invocationsCount; invocCount != tc.expectedScanSmartctlInvocations {
-				t.Errorf("Expected smartctl to be invocated %d times at scan, but was %d times.", tc.expectedInitSmartctlInvocations, invocCount)
+				t.Errorf("Expected smartctl to be invocated %d times at scan, but was %d times.", tc.expectedScanSmartctlInvocations, invocCount)
 			}
 		})
 	}
@@ -219,8 +239,6 @@ Smartctl open device: %s failed: No such device
 
 	return func(_ config.Duration, _ bool, _ string, args ...string) ([]byte, error) {
 		smartctlData.invocationsCount++
-
-		t.Log("smartctl", strings.Join(args, " "))
 
 		switch cmd := args[0]; cmd {
 		case "--scan":

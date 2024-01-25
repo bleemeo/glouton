@@ -18,8 +18,8 @@ package smart
 
 import (
 	"fmt"
-	"glouton/logger"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 
@@ -27,59 +27,88 @@ import (
 	"github.com/influxdata/telegraf/plugins/inputs/smart"
 )
 
-const storageDevicesPattern = "/dev/sg[0-9]*"
-
-var findStorageDevices = func() ([]string, error) { return filepath.Glob(storageDevicesPattern) } //nolint:gochecknoglobals
+const sgDevicesPattern = "/dev/sg[0-9]*"
 
 type inputWrapper struct {
 	*smart.Smart
-	runCmd runCmdType
+	runCmd        runCmdType
+	findSGDevices func() ([]string, error)
 
 	allowedDevices []string
-	// Storage devices are only listed at startup,
+	// '/dev/sg_' devices are only listed at startup,
 	// then reused at each gathering.
 	sgDevices []string
 
 	l sync.Mutex
 }
 
-func newInputWrapper(input *smart.Smart, allowedDevices []string, specifiedRunCmd ...runCmdType) (*inputWrapper, error) {
+type inputWrapperOptions struct {
+	input         *smart.Smart
+	runCmd        runCmdType
+	findSGDevices func() ([]string, error)
+}
+
+func newInputWrapper(opts inputWrapperOptions) (*inputWrapper, error) {
 	iw := &inputWrapper{
-		Smart:          input,
-		allowedDevices: allowedDevices,
+		Smart:          opts.input,
+		allowedDevices: slices.Clone(opts.input.Devices), // We may update input.Devices at each gather
 	}
 
-	if len(specifiedRunCmd) == 1 {
-		iw.runCmd = specifiedRunCmd[0]
+	if opts.runCmd != nil {
+		iw.runCmd = opts.runCmd
 	} else {
 		iw.runCmd = runCmd
 	}
 
-	if len(allowedDevices) == 0 {
-		scanOut, err := iw.runCmd(iw.Smart.Timeout, iw.Smart.UseSudo, iw.PathSmartctl, "--scan")
+	if opts.findSGDevices != nil {
+		iw.findSGDevices = opts.findSGDevices
+	} else {
+		iw.findSGDevices = func() ([]string, error) { return filepath.Glob(sgDevicesPattern) }
+	}
+
+	if len(iw.allowedDevices) != 0 {
+		return iw, nil
+	}
+
+	devices, err := iw.getDevices()
+	if err != nil {
+		return nil, fmt.Errorf("failed to scan devices: %w", err)
+	}
+
+	ignoreSGDevices := false
+
+	for _, device := range devices {
+		info, err := iw.getDeviceInfo(device)
 		if err != nil {
-			return nil, fmt.Errorf("failed to scan devices: %w", err)
+			return nil, err
 		}
 
-		_, ignoreStorageDevices := iw.parseScanOutput(scanOut)
-		if !ignoreStorageDevices { // smartctl scan gave no results, trying to find storage devices ...
-			sgDevices, err := findStorageDevices()
+		if shouldIgnoreDevice(info) {
+			continue
+		}
+
+		ignoreSGDevices = true
+
+		break
+	}
+
+	if !ignoreSGDevices { // smartctl scan gave no results, trying to find /dev/sg_ devices ...
+		sgDevices, err := iw.findSGDevices()
+		if err != nil {
+			return nil, fmt.Errorf("failed to detect /dev/sg_ devices: %w", err)
+		}
+
+		for _, sgDev := range sgDevices {
+			info, err := iw.getDeviceInfo(sgDev)
 			if err != nil {
-				return nil, fmt.Errorf("failed to detect storage devices: %w", err)
+				return nil, err
 			}
 
-			for _, sgDev := range sgDevices {
-				info, err := iw.getDeviceInfo(sgDev)
-				if err != nil {
-					return nil, err
-				}
-
-				if shouldIgnoreDevice(info) {
-					continue
-				}
-
-				iw.sgDevices = append(iw.sgDevices, sgDev)
+			if shouldIgnoreDevice(info) {
+				continue
 			}
+
+			iw.sgDevices = append(iw.sgDevices, sgDev)
 		}
 	}
 
@@ -90,17 +119,30 @@ func (iw *inputWrapper) Gather(acc telegraf.Accumulator) error {
 	iw.l.Lock()
 	defer iw.l.Unlock()
 
-	out, err := iw.runCmd(iw.Smart.Timeout, iw.Smart.UseSudo, iw.PathSmartctl, "--scan")
+	devices, err := iw.getDevices()
 	if err != nil {
 		return err
 	}
 
-	iw.Smart.Devices, _ = iw.parseScanOutput(out)
+	iw.Smart.Devices = devices
 
 	return iw.Smart.Gather(acc)
 }
 
-func (iw *inputWrapper) parseScanOutput(out []byte) (devices []string, ignoreStorageDevices bool) {
+func (iw *inputWrapper) getDevices() ([]string, error) {
+	if len(iw.allowedDevices) != 0 {
+		return iw.allowedDevices, nil
+	}
+
+	out, err := iw.runCmd(iw.Smart.Timeout, iw.Smart.UseSudo, iw.PathSmartctl, "--scan")
+	if err != nil {
+		return nil, err
+	}
+
+	return iw.parseScanOutput(out), nil
+}
+
+func (iw *inputWrapper) parseScanOutput(out []byte) (devices []string) {
 	for _, line := range strings.Split(string(out), "\n") {
 		devWithType := strings.SplitN(line, " ", 2)
 		if len(devWithType) <= 1 {
@@ -109,31 +151,13 @@ func (iw *inputWrapper) parseScanOutput(out []byte) (devices []string, ignoreSto
 
 		if dev := strings.TrimSpace(devWithType[0]); iw.isDeviceAllowed(dev) {
 			device := dev + deviceTypeFor(devWithType[1])
-
-			if !ignoreStorageDevices {
-				info, err := iw.getDeviceInfo(device)
-				if err != nil {
-					logger.V(1).Printf("SMART: %v", err)
-
-					continue
-				}
-
-				if shouldIgnoreDevice(info) {
-					continue
-				}
-
-				ignoreStorageDevices = true
-			}
-
 			devices = append(devices, device)
 		}
 	}
 
-	if !ignoreStorageDevices {
-		devices = append(devices, iw.sgDevices...)
-	}
+	devices = append(devices, iw.sgDevices...)
 
-	return devices, ignoreStorageDevices
+	return devices
 }
 
 func (iw *inputWrapper) getDeviceInfo(device string) (deviceInfo, error) {
