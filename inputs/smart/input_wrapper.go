@@ -123,7 +123,6 @@ func (iw *inputWrapper) parseScanOutput(out []byte) (devices []string, ignoreSto
 				}
 
 				ignoreStorageDevices = true
-				logger.Printf("%q is OK", device)
 			}
 
 			devices = append(devices, device)
@@ -139,8 +138,9 @@ func (iw *inputWrapper) parseScanOutput(out []byte) (devices []string, ignoreSto
 
 func (iw *inputWrapper) getDeviceInfo(device string) (deviceInfo, error) {
 	infoArgs := []string{"--info", "--health", "--attributes", "--tolerance=verypermissive", "-n", "standby", "--format=brief"}
+	infoArgs = append(infoArgs, strings.Split(device, " ")...)
 
-	infoOut, err := iw.runCmd(iw.Smart.Timeout, iw.Smart.UseSudo, iw.PathSmartctl, append(infoArgs, device)...)
+	infoOut, err := iw.runCmd(iw.Smart.Timeout, iw.Smart.UseSudo, iw.PathSmartctl, infoArgs...)
 	if err != nil {
 		return deviceInfo{}, fmt.Errorf("failed to get info about device %q: %w", device, err)
 	}

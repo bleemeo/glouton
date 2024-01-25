@@ -82,50 +82,58 @@ func TestIsDeviceAllowed(t *testing.T) {
 
 func TestParseScanOutput(t *testing.T) {
 	testCases := []struct {
-		name                        string
-		sgDevices                   []string
-		shouldIgnoreStorageDevices  bool
-		expectedDevices             []string
-		expectedSmartctlInvocations int
+		name                            string
+		sgDevices                       []string
+		expectedInitSmartctlInvocations int
+		expectedDevices                 []string
+		expectedToIgnoreStorageDevices  bool
+		expectedScanSmartctlInvocations int
 	}{
 		{
-			name:                        "firewall",
-			sgDevices:                   []string{"/dev/sg0", "/dev/sg1", "/dev/sg2", "/dev/sg3"},
-			shouldIgnoreStorageDevices:  false,
-			expectedDevices:             []string{"/dev/sg2", "/dev/sg3"},
-			expectedSmartctlInvocations: 7,
+			name:                            "firewall",
+			sgDevices:                       []string{"/dev/sg0", "/dev/sg1", "/dev/sg2", "/dev/sg3"},
+			expectedInitSmartctlInvocations: 6, // 1 scan + 1 info /dev/sda + 4 info /dev/sg_
+			expectedDevices:                 []string{"/dev/sg2", "/dev/sg3"},
+			expectedToIgnoreStorageDevices:  false,
+			expectedScanSmartctlInvocations: 1,
 		},
 		{
-			name:                        "home1",
-			shouldIgnoreStorageDevices:  true,
-			expectedDevices:             []string{"/dev/sda", "/dev/nvme0 -d nvme"},
-			expectedSmartctlInvocations: 3,
+			name:                            "home1",
+			expectedInitSmartctlInvocations: 2,
+			expectedDevices:                 []string{"/dev/sda", "/dev/sdb", "/dev/nvme0 -d nvme"},
+			expectedToIgnoreStorageDevices:  true,
+			expectedScanSmartctlInvocations: 1,
 		},
 		{
-			name:                        "home2",
-			sgDevices:                   []string{"/dev/sg0"},
-			shouldIgnoreStorageDevices:  true,
-			expectedDevices:             []string{"/dev/sda"},
-			expectedSmartctlInvocations: 3,
+			name:                            "home2",
+			sgDevices:                       []string{"/dev/sg0"},
+			expectedInitSmartctlInvocations: 2,
+			expectedDevices:                 []string{"/dev/sda"},
+			expectedToIgnoreStorageDevices:  true,
+			expectedScanSmartctlInvocations: 1,
 		},
 		{
-			name:                        "macOS",
-			shouldIgnoreStorageDevices:  true,
-			expectedDevices:             []string{"IOService:/AppleARMPE/arm-io/AppleT600xIO/ans@8F400000/AppleASCWrapV4/iop-ans-nub/RTBuddy(ANS2)/RTBuddyService/AppleANS3NVMeController/NS_01@1 -d nvme"},
-			expectedSmartctlInvocations: 3,
+			name:                            "macOS",
+			expectedInitSmartctlInvocations: 2,
+			expectedDevices:                 []string{"IOService:/AppleARMPE/arm-io/AppleT600xIO/ans@8F400000/AppleASCWrapV4/iop-ans-nub/RTBuddy(ANS2)/RTBuddyService/AppleANS3NVMeController/NS_01@1 -d nvme"}, //nolint:lll
+			expectedToIgnoreStorageDevices:  true,
+			expectedScanSmartctlInvocations: 1,
 		},
 		{
-			name:                        "proxmox1",
-			sgDevices:                   []string{"/dev/sg0"},
-			shouldIgnoreStorageDevices:  true,
-			expectedDevices:             []string{"/dev/sda", "/dev/bus/0 -d megaraid,0", "/dev/bus/0 -d megaraid,1", "/dev/bus/0 -d megaraid,2", "/dev/bus/0 -d megaraid,3", "/dev/bus/0 -d megaraid,4", "/dev/bus/0 -d megaraid,5", "/dev/bus/0 -d megaraid,6", "/dev/bus/0 -d megaraid,7", "/dev/bus/0 -d megaraid,8", "/dev/bus/0 -d megaraid,9", "/dev/bus/0 -d megaraid,10", "/dev/bus/0 -d megaraid,11", "/dev/bus/0 -d megaraid,12", "/dev/bus/0 -d megaraid,13"},
-			expectedSmartctlInvocations: 2,
+			name:                            "proxmox1",
+			sgDevices:                       []string{"/dev/sg0"},
+			expectedInitSmartctlInvocations: 3,
+			expectedDevices:                 []string{"/dev/bus/0 -d megaraid,0", "/dev/bus/0 -d megaraid,1", "/dev/bus/0 -d megaraid,2", "/dev/bus/0 -d megaraid,3", "/dev/bus/0 -d megaraid,4", "/dev/bus/0 -d megaraid,5", "/dev/bus/0 -d megaraid,6", "/dev/bus/0 -d megaraid,7", "/dev/bus/0 -d megaraid,8", "/dev/bus/0 -d megaraid,9", "/dev/bus/0 -d megaraid,10", "/dev/bus/0 -d megaraid,11", "/dev/bus/0 -d megaraid,12", "/dev/bus/0 -d megaraid,13"}, //nolint:lll
+			expectedToIgnoreStorageDevices:  true,
+			expectedScanSmartctlInvocations: 2,
 		},
 		{
-			name:                        "proxmox2",
-			sgDevices:                   []string{"/dev/sg0", "/dev/sg1"},
-			expectedDevices:             []string{"/dev/sda", "/dev/bus/0 -d megaraid,0", "/dev/bus/0 -d megaraid,1", "/dev/sg1"},
-			expectedSmartctlInvocations: 2,
+			name:                            "proxmox2",
+			sgDevices:                       []string{"/dev/sg0", "/dev/sg1"},
+			expectedInitSmartctlInvocations: 3,
+			expectedDevices:                 []string{"/dev/bus/0 -d megaraid,0", "/dev/bus/0 -d megaraid,1"},
+			expectedToIgnoreStorageDevices:  true,
+			expectedScanSmartctlInvocations: 2,
 		},
 	}
 
@@ -151,21 +159,27 @@ func TestParseScanOutput(t *testing.T) {
 				return
 			}
 
+			if invocCount := smartctlData.invocationsCount; invocCount != tc.expectedInitSmartctlInvocations {
+				t.Errorf("Expected smartctl to be invocated %d times at init, but was %d times.", tc.expectedInitSmartctlInvocations, invocCount)
+			}
+
+			smartctlData.invocationsCount = 0
+
 			devices, ignoreStorageDevices := iw.parseScanOutput([]byte(smartctlData.Scan))
 			if diff := cmp.Diff(tc.expectedDevices, devices, cmpopts.EquateEmpty()); diff != "" {
 				t.Errorf("Unexpected devices (-want +got):\n%s", diff)
 			}
 
-			if ignoreStorageDevices != tc.shouldIgnoreStorageDevices {
-				if tc.shouldIgnoreStorageDevices {
+			if ignoreStorageDevices != tc.expectedToIgnoreStorageDevices {
+				if tc.expectedToIgnoreStorageDevices {
 					t.Error("Should have ignored storage devices, but didn't.")
 				} else {
 					t.Error("Shouldn't have ignored storage devices, but did so.")
 				}
 			}
 
-			if invocCount := smartctlData.invocationsCount; invocCount != tc.expectedSmartctlInvocations {
-				t.Errorf("Expected smartctl to be invocated %d times, but was %d times.", tc.expectedSmartctlInvocations, invocCount)
+			if invocCount := smartctlData.invocationsCount; invocCount != tc.expectedScanSmartctlInvocations {
+				t.Errorf("Expected smartctl to be invocated %d times at scan, but was %d times.", tc.expectedInitSmartctlInvocations, invocCount)
 			}
 		})
 	}
@@ -220,13 +234,19 @@ Smartctl open device: %s failed: No such device
 			return nil, err
 		}
 
-		device := args[len(args)-1]
+		var device string
+
+		if args[len(args)-2] == "-d" {
+			device = strings.Join(args[len(args)-3:], " ")
+		} else {
+			device = args[len(args)-1]
+		}
 
 		infoData, found := smartctlData.Info[device]
 		if !found {
 			t.Errorf("Info about device %q not found.", device)
 
-			return []byte(fmt.Sprintf(deviceNotFound, device)), fmt.Errorf("device %q not found", device)
+			return []byte(fmt.Sprintf(deviceNotFound, device)), fmt.Errorf("%w: device %q not found", errInvalidArguments, device)
 		}
 
 		return []byte(infoData), nil
