@@ -111,5 +111,11 @@ func renameGlobal(gatherContext internal.GatherContext) (result internal.GatherC
 	delete(gatherContext.Tags, "enabled")
 	delete(gatherContext.Tags, "power")
 
+	if deviceType, ok := gatherContext.Tags["device_type"]; ok {
+		delete(gatherContext.Tags, "device_type")
+
+		gatherContext.Tags[types.LabelItem] = deviceType
+	}
+
 	return gatherContext, false
 }
