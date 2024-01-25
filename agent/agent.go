@@ -677,6 +677,8 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
+	defer a.state.Close()
+
 	a.cancel = cancel
 	a.metricResolution = 10 * time.Second
 	a.hostRootPath = "/"
