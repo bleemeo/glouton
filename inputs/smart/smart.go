@@ -23,6 +23,8 @@ import (
 	"glouton/inputs/internal"
 	"glouton/types"
 	"os"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -30,6 +32,8 @@ import (
 	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"
 	"github.com/influxdata/telegraf/plugins/inputs/smart"
 )
+
+var megaraidRegexp = regexp.MustCompile(`^megaraid,(\d+)$`)
 
 // New returns a SMART input.
 func New(config config.Smart) (telegraf.Input, *inputs.GathererOptions, error) {
@@ -55,7 +59,10 @@ func New(config config.Smart) (telegraf.Input, *inputs.GathererOptions, error) {
 
 	smartInput.TagWithDeviceType = true // TODO: wait for telegraf release
 
-	wrapperOpts := inputWrapperOptions{input: smartInput}
+	wrapperOpts := inputWrapperOptions{
+		input:         smartInput,
+		configDevices: config.Devices,
+	}
 
 	smartInputWrapper, err := newInputWrapper(wrapperOpts)
 	if err != nil {
@@ -116,8 +123,21 @@ func renameGlobal(gatherContext internal.GatherContext) (result internal.GatherC
 	if deviceType, ok := gatherContext.Tags["device_type"]; ok {
 		delete(gatherContext.Tags, "device_type")
 
-		gatherContext.Tags[types.LabelItem] = deviceType
+		device := gatherContext.Tags["device"]
+		if _, err := strconv.Atoi(device); err == nil {
+			gatherContext.Tags["device"] = overrideDeviceName(device, deviceType)
+		}
 	}
 
 	return gatherContext, false
+}
+
+func overrideDeviceName(device string, deviceType string) string {
+	raidMatches := megaraidRegexp.FindStringSubmatch(deviceType)
+	if len(raidMatches) == 2 {
+		raidIndex := raidMatches[1]
+		device = "RAID Disk " + raidIndex
+	}
+
+	return device
 }

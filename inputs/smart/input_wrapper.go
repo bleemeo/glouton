@@ -19,7 +19,6 @@ package smart
 import (
 	"fmt"
 	"path/filepath"
-	"slices"
 	"strings"
 	"sync"
 
@@ -34,7 +33,7 @@ type inputWrapper struct {
 	runCmd        runCmdType
 	findSGDevices func() ([]string, error)
 
-	allowedDevices []string
+	configDevices []string
 	// '/dev/sg_' devices are only listed at startup,
 	// then reused at each gathering.
 	sgDevices []string
@@ -46,12 +45,14 @@ type inputWrapperOptions struct {
 	input         *smart.Smart
 	runCmd        runCmdType
 	findSGDevices func() ([]string, error)
+
+	configDevices []string
 }
 
 func newInputWrapper(opts inputWrapperOptions) (*inputWrapper, error) {
 	iw := &inputWrapper{
-		Smart:          opts.input,
-		allowedDevices: slices.Clone(opts.input.Devices), // We may update input.Devices at each gather
+		Smart:         opts.input,
+		configDevices: opts.configDevices,
 	}
 
 	if opts.runCmd != nil {
@@ -66,7 +67,7 @@ func newInputWrapper(opts inputWrapperOptions) (*inputWrapper, error) {
 		iw.findSGDevices = func() ([]string, error) { return filepath.Glob(sgDevicesPattern) }
 	}
 
-	if len(iw.allowedDevices) != 0 {
+	if len(iw.configDevices) != 0 {
 		return iw, nil
 	}
 
@@ -130,8 +131,8 @@ func (iw *inputWrapper) Gather(acc telegraf.Accumulator) error {
 }
 
 func (iw *inputWrapper) getDevices() ([]string, error) {
-	if len(iw.allowedDevices) != 0 {
-		return iw.allowedDevices, nil
+	if len(iw.configDevices) != 0 {
+		return iw.configDevices, nil
 	}
 
 	out, err := iw.runCmd(iw.Smart.Timeout, iw.Smart.UseSudo, iw.PathSmartctl, "--scan")
@@ -149,9 +150,9 @@ func (iw *inputWrapper) parseScanOutput(out []byte) (devices []string) {
 			continue
 		}
 
-		if dev := strings.TrimSpace(devWithType[0]); iw.isDeviceAllowed(dev) {
-			device := dev + deviceTypeFor(devWithType[1])
-			devices = append(devices, device)
+		dev := strings.TrimSpace(devWithType[0])
+		if iw.isDeviceAllowed(dev) {
+			devices = append(devices, dev+deviceTypeFor(devWithType[1]))
 		}
 	}
 
@@ -200,16 +201,6 @@ func tryScan(line string, format string) (value string, ok bool) {
 }
 
 func (iw *inputWrapper) isDeviceAllowed(device string) bool {
-	if len(iw.allowedDevices) != 0 {
-		for _, dev := range iw.allowedDevices {
-			if device == dev {
-				return true
-			}
-		}
-
-		return false
-	}
-
 	for _, excluded := range iw.Smart.Excludes {
 		if device == excluded {
 			return false

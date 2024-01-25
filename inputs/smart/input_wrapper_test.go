@@ -167,13 +167,12 @@ func TestParseScanOutput(t *testing.T) {
 			}
 
 			opts := inputWrapperOptions{
-				input: &smart.Smart{
-					Devices: tc.configDevices,
-				},
+				input:  &smart.Smart{},
 				runCmd: smartctlData.makeRunCmdFor(t),
 				findSGDevices: func() ([]string, error) {
 					return tc.sgDevices, nil
 				},
+				configDevices: tc.configDevices,
 			}
 
 			iw, err := newInputWrapper(opts)
