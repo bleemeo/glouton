@@ -56,7 +56,7 @@ type State struct {
 	persistent persistedState
 	cache      map[string]json.RawMessage
 
-	l              sync.Mutex
+	l              sync.RWMutex
 	persistentPath string
 	cachePath      string
 	isInMemory     bool
@@ -161,16 +161,16 @@ func load(readOnly bool, persistentPath string, cachePath string) (*State, error
 
 // IsEmpty return true is the state is empty. This usually only happen when the state file does not exists.
 func (s *State) IsEmpty() bool {
-	s.l.Lock()
-	defer s.l.Unlock()
+	s.l.RLock()
+	defer s.l.RUnlock()
 
 	return len(s.cache) == 0
 }
 
 // FileSizes return the size of state files persistent & cache.
 func (s *State) FileSizes() (int, int) {
-	s.l.Lock()
-	defer s.l.Unlock()
+	s.l.RLock()
+	defer s.l.RUnlock()
 
 	sizePersistent := 0
 	sizeCache := 0
@@ -191,9 +191,11 @@ func (s *State) FileSizes() (int, int) {
 // KeepOnlyPersistent will delete everything from state but persistent information.
 func (s *State) KeepOnlyPersistent() {
 	s.l.Lock()
-	defer s.l.Unlock()
-
 	s.cache = make(map[string]json.RawMessage)
+	s.l.Unlock()
+
+	s.l.RLock()
+	defer s.l.RUnlock()
 
 	if err := s.saveIfPossible(); err != nil {
 		logger.Printf("Unable to save state.json: %v", err)
@@ -205,19 +207,21 @@ func (s *State) KeepOnlyPersistent() {
 // Note that Save() will use the new filename even if this function fail.
 func (s *State) SaveTo(persistentPath string, cachePath string) error {
 	s.l.Lock()
-	defer s.l.Unlock()
-
 	s.persistentPath = persistentPath
 	s.cachePath = cachePath
 	s.isInMemory = false
+	s.l.Unlock()
+
+	s.l.RLock()
+	defer s.l.RUnlock()
 
 	return s.save()
 }
 
 // Save will write back the State to disk.
 func (s *State) Save() error {
-	s.l.Lock()
-	defer s.l.Unlock()
+	s.l.RLock()
+	defer s.l.RUnlock()
 
 	return s.save()
 }
@@ -311,6 +315,23 @@ func (s *State) savePersistentTo(w io.Writer) error {
 
 // Set save an object.
 func (s *State) Set(key string, object interface{}) error {
+	err := s.set(key, object)
+	if err != nil {
+		return err
+	}
+
+	s.l.RLock()
+	defer s.l.RUnlock()
+
+	err = s.saveIfPossible()
+	if err != nil {
+		logger.Printf("Unable to save state.json: %v", err)
+	}
+
+	return nil
+}
+
+func (s *State) set(key string, object interface{}) error {
 	s.l.Lock()
 	defer s.l.Unlock()
 
@@ -321,16 +342,27 @@ func (s *State) Set(key string, object interface{}) error {
 
 	s.cache[key] = json.RawMessage(buffer)
 
-	err = s.saveIfPossible()
+	return nil
+}
+
+// Delete an key from state.
+func (s *State) Delete(key string) error {
+	err := s.delete(key)
 	if err != nil {
+		return err
+	}
+
+	s.l.RLock()
+	defer s.l.RUnlock()
+
+	if err := s.saveIfPossible(); err != nil {
 		logger.Printf("Unable to save state.json: %v", err)
 	}
 
 	return nil
 }
 
-// Delete an key from state.
-func (s *State) Delete(key string) error {
+func (s *State) delete(key string) error {
 	s.l.Lock()
 	defer s.l.Unlock()
 
@@ -340,17 +372,13 @@ func (s *State) Delete(key string) error {
 
 	delete(s.cache, key)
 
-	if err := s.saveIfPossible(); err != nil {
-		logger.Printf("Unable to save state.json: %v", err)
-	}
-
 	return nil
 }
 
 // Get return an object.
 func (s *State) Get(key string, result interface{}) error {
-	s.l.Lock()
-	defer s.l.Unlock()
+	s.l.RLock()
+	defer s.l.RUnlock()
 
 	buffer, ok := s.cache[key]
 	if !ok {
@@ -365,35 +393,66 @@ func (s *State) Get(key string, result interface{}) error {
 // BleemeoCredentials return the Bleemeo agent_uuid and password.
 // They may be empty if unset.
 func (s *State) BleemeoCredentials() (string, string) {
-	s.l.Lock()
-	defer s.l.Unlock()
+	s.l.RLock()
+	defer s.l.RUnlock()
 
 	return s.persistent.BleemeoAgentID, s.persistent.BleemeoPassword
 }
 
 // TelemetryID return a stable ID for the telemetry.
 func (s *State) TelemetryID() string {
-	s.l.Lock()
-	defer s.l.Unlock()
+	s.l.RLock()
+	telemetryID := s.persistent.TelemetryID
+	s.l.RUnlock()
 
+	if telemetryID != "" {
+		return telemetryID
+	}
+
+	// telemetryID is not yet set, generate one
+	telemetryID = s.generateTelemetryID()
+
+	return telemetryID
+}
+
+func (s *State) generateTelemetryID() string {
+	s.l.Lock()
+
+	saveNeeded := false
+
+	// We must re-check that TelemetryID is still unset to avoid any concurrent read-then-set
 	if s.persistent.TelemetryID == "" {
 		s.persistent.TelemetryID = uuid.New().String()
 		s.persistent.dirty = true
+		saveNeeded = true
+	}
 
+	telemetryID := s.persistent.TelemetryID
+
+	s.l.Unlock()
+
+	s.l.RLock()
+	defer s.l.RUnlock()
+
+	if saveNeeded {
 		_ = s.saveIfPossible()
 	}
 
-	return s.persistent.TelemetryID
+	return telemetryID
 }
 
 // SetBleemeoCredentials sets the Bleemeo agent_uuid and password.
 func (s *State) SetBleemeoCredentials(agentUUID string, password string) error {
 	s.l.Lock()
-	defer s.l.Unlock()
 
 	s.persistent.BleemeoAgentID = agentUUID
 	s.persistent.BleemeoPassword = password
 	s.persistent.dirty = true
+
+	s.l.Unlock()
+
+	s.l.RLock()
+	defer s.l.RUnlock()
 
 	return s.saveIfPossible()
 }
@@ -446,8 +505,8 @@ func (s *State) loadFromV0() error {
 // Note that it only searches at the root level of the cache,
 // and resultType must be a map, a struct or a slice.
 func (s *State) GetByPrefix(keyPrefix string, resultType any) (map[string]any, error) {
-	s.l.Lock()
-	defer s.l.Unlock()
+	s.l.RLock()
+	defer s.l.RUnlock()
 
 	resultTyp := reflect.TypeOf(resultType)
 	result := make(map[string]any)
