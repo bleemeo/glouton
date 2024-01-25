@@ -2246,10 +2246,10 @@ func (a *agent) diagnosticGloutonState(_ context.Context, archive types.ArchiveW
 		return err
 	}
 
+	persistentSize, cacheSize := a.state.FileSizes()
+
 	a.l.Lock()
 	a.triggerLock.Lock()
-
-	persistentSize, cacheSize := a.state.FileSizes()
 
 	obj := struct {
 		HostRootPath              string
