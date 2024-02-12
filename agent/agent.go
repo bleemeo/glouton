@@ -42,6 +42,7 @@ import (
 	"glouton/influxdb"
 	"glouton/inputs"
 	"glouton/inputs/docker"
+	"glouton/inputs/mdstat"
 	nvidia "glouton/inputs/nvidia_smi"
 	"glouton/inputs/smart"
 	"glouton/inputs/statsd"
@@ -1387,6 +1388,11 @@ func (a *agent) registerInputs(ctx context.Context) {
 	if a.config.Smart.Enable && (err == nil || a.config.Smart.PathSmartctl != "") {
 		input, opts, err := smart.New(a.config.Smart)
 		a.registerInput("SMART", input, opts, err)
+	}
+
+	if a.config.Mdstat.Enable {
+		input, opts, err := mdstat.New()
+		a.registerInput("mdstat", input, opts, err)
 	}
 
 	if a.config.IPMI.Enable {

@@ -211,6 +211,9 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 			FileName:      "name",
 			PackageLevels: "bleemeo=1",
 		},
+		Mdstat: Mdstat{
+			Enable: true,
+		},
 		Metric: Metric{
 			AllowMetrics:          []string{"allowed"},
 			DenyMetrics:           []string{"denied"},

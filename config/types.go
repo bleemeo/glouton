@@ -36,6 +36,7 @@ type Config struct {
 	Kubernetes               Kubernetes           `yaml:"kubernetes"`
 	Log                      Log                  `yaml:"log"`
 	Logging                  Logging              `yaml:"logging"`
+	Mdstat                   Mdstat               `yaml:"mdstat"`
 	Metric                   Metric               `yaml:"metric"`
 	MQTT                     OpenSourceMQTT       `yaml:"mqtt"`
 	NetworkInterfaceDenylist []string             `yaml:"network_interface_denylist"`
@@ -420,4 +421,8 @@ type VSphere struct {
 	Password           string `yaml:"password"`
 	InsecureSkipVerify bool   `yaml:"insecure_skip_verify"`
 	SkipMonitorVMs     bool   `yaml:"skip_monitor_vms"`
+}
+
+type Mdstat struct {
+	Enable bool `yaml:"enable"`
 }

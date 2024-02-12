@@ -269,6 +269,9 @@ func DefaultConfig() Config { //nolint:maintidx
 			FileName:      "",
 			PackageLevels: "",
 		},
+		Mdstat: Mdstat{
+			Enable: true,
+		},
 		Metric: Metric{
 			Prometheus: Prometheus{
 				Targets: []PrometheusTarget{},

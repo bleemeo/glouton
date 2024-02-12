@@ -263,6 +263,14 @@ var (
 		"smart_device_udma_crc_errors",
 		"smart_device_wear_leveling_count",
 
+		// Mdstat
+		"mdstat_blocks_synced_finish_time_status",
+		"mdstat_disks_activity_state_status",
+		"mdstat_disks_active_count",
+		"mdstat_disks_down_count",
+		"mdstat_disks_failed_count",
+		"mdstat_disks_spare_count",
+
 		// Nvidia SMI
 		"nvidia_smi_fan_speed",
 		"nvidia_smi_fbc_stats_session_count",
