@@ -328,7 +328,7 @@ func Test_GatherWithState(t *testing.T) { //nolint:maintidx
 				cmdDoesNotExists       = []string{"this-command-does-not-exists"}
 			)
 
-			testRunCMD := func(ctx context.Context, searchPath string, useSudo bool, args []string) ([]byte, error) {
+			testRunCMD := func(ctx context.Context, searchPath string, _ bool, args []string) ([]byte, error) {
 				var (
 					cmd      []string
 					disabled bool
@@ -497,6 +497,7 @@ func Test_runCmd(t *testing.T) {
 			t.Parallel()
 
 			ctx := context.Background()
+
 			if tt.ctxTimeout > 0 {
 				var cancel context.CancelFunc
 

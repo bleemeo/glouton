@@ -352,7 +352,7 @@ func isMapKey(key string) (bool, string) {
 	for _, mapKey := range mapKeys() {
 		// For the map key "thresholds", the key corresponds to this map if the keys
 		// are equal or if it begins by the map key and a dot ("thresholds.cpu_used").
-		if key == mapKey || strings.HasPrefix(key, fmt.Sprintf("%s.", mapKey)) {
+		if key == mapKey || strings.HasPrefix(key, mapKey+".") {
 			return true, mapKey
 		}
 	}

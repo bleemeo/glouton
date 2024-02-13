@@ -926,7 +926,7 @@ func TestMetricUnknownError(t *testing.T) {
 
 	// API always reject registering "deny-me" metric
 	metricResource, _ := helper.api.resources[mockAPIResourceMetric].(*genericResource)
-	metricResource.CreateHook = func(r *http.Request, body []byte, valuePtr interface{}) error {
+	metricResource.CreateHook = func(_ *http.Request, body []byte, valuePtr interface{}) error {
 		metric, _ := valuePtr.(*metricPayload)
 		if metric.Name == "deny-me" {
 			return clientError{
@@ -1062,7 +1062,7 @@ func TestMetricPermanentError(t *testing.T) {
 
 			// API always reject registering "deny-me" metric
 			metricResource, _ := helper.api.resources[mockAPIResourceMetric].(*genericResource)
-			metricResource.CreateHook = func(r *http.Request, body []byte, valuePtr interface{}) error {
+			metricResource.CreateHook = func(_ *http.Request, body []byte, valuePtr interface{}) error {
 				metric, _ := valuePtr.(*metricPayload)
 				if metric.Name == "deny-me" || metric.Name == "deny-me-also" {
 					return clientError{
@@ -1111,6 +1111,7 @@ func TestMetricPermanentError(t *testing.T) {
 
 			// After a short delay we do not retry because error is permanent
 			helper.AddTime(31 * time.Second)
+
 			if err := helper.runOnceWithResult(t).CheckMethodNotRun(syncMethodMetric); err != nil {
 				t.Error(err)
 			}
@@ -1137,6 +1138,7 @@ func TestMetricPermanentError(t *testing.T) {
 
 			// Finally long enough to reach fullSync, we will retry ONE
 			helper.SetTimeToNextFullSync()
+
 			if err := helper.runOnceWithResult(t).CheckMethodWithFull(syncMethodMetric); err != nil {
 				t.Error(err)
 			}
@@ -1153,8 +1155,9 @@ func TestMetricPermanentError(t *testing.T) {
 				t.Errorf("len(metrics) = %d, want 2", len(metrics))
 			}
 
-			// Now metric registration will succeeds and retry all
+			// Now metric registration will succeed and retry all
 			metricResource.CreateHook = nil
+
 			helper.SetTimeToNextFullSync()
 			helper.pushPoints(t, []labels.Labels{
 				labels.New(
@@ -1771,7 +1774,7 @@ func TestServiceStatusRename(t *testing.T) { //nolint: maintidx
 			helper.initSynchronizer(t)
 
 			metricResource, _ := helper.api.resources["metric"].(*genericResource)
-			metricResource.CreateHook = func(r *http.Request, body []byte, valuePtr interface{}) error {
+			metricResource.CreateHook = func(_ *http.Request, _ []byte, valuePtr interface{}) error {
 				// API will rename and reuse existing $SERVICE_status metric when registering service_status metrics.
 				// From Glouton point of vue, it the same as if a new metric is created (service_status) and the old is deleted.
 				metric, _ := valuePtr.(*metricPayload)
@@ -1785,8 +1788,9 @@ func TestServiceStatusRename(t *testing.T) { //nolint: maintidx
 				var metrics []metricPayload
 
 				metricResource.Store(&metrics)
+
 				for _, existing := range metrics {
-					if existing.Name == fmt.Sprintf("%s_status", serviceType) && existing.Item == metricCopy.Labels[types.LabelServiceInstance] {
+					if existing.Name == serviceType+"_status" && existing.Item == metricCopy.Labels[types.LabelServiceInstance] {
 						metric.ID = existing.ID
 
 						return reuseIDError{metric.ID}
@@ -1850,6 +1854,7 @@ func TestServiceStatusRename(t *testing.T) { //nolint: maintidx
 			}
 
 			helper.AddTime(time.Minute)
+
 			if run == 0 {
 				helper.pushPoints(t, []labels.Labels{
 					model.AnnotationToMetaLabels(

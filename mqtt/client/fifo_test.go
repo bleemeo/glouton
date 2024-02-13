@@ -145,6 +145,7 @@ func TestMethods(t *testing.T) {
 				if ok != expectedOk {
 					t.Errorf("unexpected ok status: got %t, want %t", ok, expectedOk)
 				}
+
 				if v != expectedValue {
 					t.Errorf("unexpected value: got \"%v\", want \"%v\"", v, expectedValue)
 				}
@@ -301,6 +302,7 @@ func TestRacing(t *testing.T) {
 				if !ok {
 					return errUnexpectedQueueStatus
 				}
+
 				if ts.Before(prev) {
 					return fmt.Errorf("unordered values: got %v, expected more than %v", ts, prev) //nolint:goerr113
 				}
@@ -345,6 +347,7 @@ func TestRacing(t *testing.T) {
 					if !ok {
 						return errUnexpectedQueueStatus
 					}
+
 					if ts.Before(prev) {
 						return fmt.Errorf("unordered values: got %v, expected more than %v", ts, prev) //nolint:goerr113
 					}

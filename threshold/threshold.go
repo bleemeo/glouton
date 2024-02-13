@@ -647,7 +647,7 @@ func (r *Registry) addPointWithThreshold(
 
 	unit := r.units[labelsText]
 	// Consumer expects status description from threshold to start with "Current value:"
-	statusDescription := fmt.Sprintf("Current value: %s", FormatValue(point.Value, unit))
+	statusDescription := "Current value: " + FormatValue(point.Value, unit)
 
 	if newState.CurrentStatus != types.StatusOk {
 		thresholdLimit := math.NaN()

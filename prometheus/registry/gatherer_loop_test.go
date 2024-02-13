@@ -73,6 +73,7 @@ func Test_startScrapeLoop(t *testing.T) {
 			loop.stop()
 
 			notAfter = time.Now()
+
 			l.Lock()
 			lengthAtEnd = len(result)
 			l.Unlock()

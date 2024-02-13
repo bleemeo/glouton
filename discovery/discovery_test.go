@@ -808,6 +808,7 @@ func Test_applyOverride(t *testing.T) { //nolint:maintidx
 
 			got := copyAndMergeServiceWithOverride(tt.args.discoveredServicesMap, servicesOverrideMap)
 			applyOverrideInPlace(got)
+
 			if diff := cmp.Diff(tt.want, got, cmpopts.IgnoreUnexported(Service{})); diff != "" {
 				t.Errorf("applyOverride diff: (-want +got)\n %s", diff)
 			}

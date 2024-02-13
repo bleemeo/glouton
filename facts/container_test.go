@@ -172,6 +172,7 @@ func TestContainerEnabled(t *testing.T) {
 			if gotEnabled != tt.wantEnabled {
 				t.Errorf("ContainerEnabled() gotEnabled = %v, want %v", gotEnabled, tt.wantEnabled)
 			}
+
 			if gotExplicit != tt.wantExplicit {
 				t.Errorf("ContainerEnabled() gotExplicit = %v, want %v", gotExplicit, tt.wantExplicit)
 			}

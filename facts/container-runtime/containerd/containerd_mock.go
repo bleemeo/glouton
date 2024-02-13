@@ -175,8 +175,8 @@ func (j *MockNamespace) fill(ctx context.Context, client *containerd.Client) err
 		mi := MockTask{}
 
 		task, err := c.Task(ctx, nil)
-		mi, err = getTaskInfo(ctx, err, task, mi)
 
+		mi, err = getTaskInfo(ctx, err, task, mi)
 		if err != nil {
 			return err
 		}

@@ -327,8 +327,10 @@ func TestDocker_Run(t *testing.T) {
 			)
 
 			wg.Add(1)
+
 			go func() {
 				defer wg.Done()
+
 				runErr = d.Run(ctx)
 			}()
 
@@ -701,7 +703,7 @@ func TestDocker_ContainerFromCGroup(t *testing.T) { //nolint: maintidx
 					wantErr      bool
 				)
 
-				for run := 0; run < 8; run++ {
+				for run := 0; run < 8; run++ { //nolint: wsl
 					// We have try per check. For run =
 					// * 0 -> shared client / shared querier / no client error
 					// * 1 -> shared client / shared querier / client error
@@ -815,6 +817,7 @@ func TestDocker_ContainerFromCGroup(t *testing.T) { //nolint: maintidx
 						if container.ContainerName() != c.containerName {
 							t.Errorf("ContainerName = %v, want %s", container.ContainerName(), c.containerName)
 						}
+
 						if container.ID() != c.containerID {
 							t.Errorf("ID = %v, want %s", container.ID(), c.containerID)
 						}

@@ -326,6 +326,7 @@ func (a *Accumulator) processMetrics(
 		for k, v := range floatFields {
 			currentMap[k] = v
 		}
+
 		fieldsPerMeasurements[currentContext.Measurement] = currentMap
 	}
 
@@ -359,7 +360,7 @@ func (a *Accumulator) wrapAdd(metricType string) accumulatorFunc {
 		fallbackMethod = a.Accumulator.AddHistogram
 	}
 
-	return func(measurement string, fields map[string]interface{}, tags map[string]string, annotations types.MetricAnnotations, t ...time.Time) {
+	return func(measurement string, fields map[string]interface{}, tags map[string]string, _ types.MetricAnnotations, t ...time.Time) {
 		fallbackMethod(measurement, fields, tags, t...)
 	}
 }

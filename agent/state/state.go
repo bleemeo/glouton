@@ -131,8 +131,8 @@ func load(readOnly bool, persistentPath string, cachePath string) (*State, error
 		f, err := os.Open(cachePath)
 		if err == nil {
 			decoder := json.NewDecoder(f)
-			err = decoder.Decode(&state.cache)
 
+			err = decoder.Decode(&state.cache)
 			if err != nil {
 				logger.V(1).Printf("unable to load state cache: %v", err)
 			}
@@ -387,8 +387,8 @@ func (s *State) loadFromV0() error {
 	defer f.Close()
 
 	decoder := json.NewDecoder(f)
-	err = decoder.Decode(&s.cache)
 
+	err = decoder.Decode(&s.cache)
 	if err != nil {
 		return err
 	}

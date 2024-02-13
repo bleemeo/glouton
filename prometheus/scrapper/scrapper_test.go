@@ -334,7 +334,6 @@ func Test_parserReader(t *testing.T) { //nolint:maintidx
 			var got []*dto.MetricFamily
 
 			got, err = parserReader(data, nil)
-
 			if err != nil {
 				t.Fatalf("parserReader() error = %v", err)
 			}
@@ -528,6 +527,7 @@ func Benchmark_parserReader(b *testing.B) {
 					} else {
 						_, err = parserReader(data, nil)
 					}
+
 					if err != nil {
 						b.Fatal(err)
 					}

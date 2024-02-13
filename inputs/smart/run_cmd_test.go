@@ -83,7 +83,7 @@ Temperature Sensor 2:               43 Celsius
 Temperature Sensor 8:               36 Celsius
 `
 
-	runCmd := func(timeout config.Duration, sudo bool, command string, args ...string) ([]byte, error) {
+	runCmd := func(_ config.Duration, _ bool, _ string, args ...string) ([]byte, error) {
 		l.Lock()
 		defer l.Unlock()
 
@@ -175,7 +175,7 @@ func TestLimitedConcurrentcy(t *testing.T) {
 
 	const maxConcurrency = 5
 
-	runCmd := func(timeout config.Duration, sudo bool, command string, args ...string) ([]byte, error) {
+	runCmd := func(_ config.Duration, _ bool, _ string, _ ...string) ([]byte, error) {
 		l.Lock()
 		execution++
 
@@ -246,7 +246,7 @@ func TestLimitedConcurrentcy(t *testing.T) {
 
 func Test_addStats(t *testing.T) {
 	wrapper := &wrappedRunCmd{}
-	wrapper.reset(func(timeout config.Duration, sudo bool, command string, args ...string) ([]byte, error) {
+	wrapper.reset(func(_ config.Duration, _ bool, _ string, _ ...string) ([]byte, error) {
 		return nil, nil
 	})
 

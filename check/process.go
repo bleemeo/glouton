@@ -80,7 +80,7 @@ func (pc *ProcessCheck) processMainCheck(ctx context.Context) types.StatusDescri
 
 			return types.StatusDescription{
 				CurrentStatus:     types.StatusOk,
-				StatusDescription: fmt.Sprintf("Process found: %s", proc.CmdLine),
+				StatusDescription: "Process found: " + proc.CmdLine,
 			}
 		}
 	}
@@ -88,7 +88,7 @@ func (pc *ProcessCheck) processMainCheck(ctx context.Context) types.StatusDescri
 	if zombieProc.CmdLine != "" {
 		return types.StatusDescription{
 			CurrentStatus:     types.StatusCritical,
-			StatusDescription: fmt.Sprintf("Process found in zombie state: %s", zombieProc.CmdLine),
+			StatusDescription: "Process found in zombie state: " + zombieProc.CmdLine,
 		}
 	}
 

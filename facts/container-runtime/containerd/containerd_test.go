@@ -335,8 +335,10 @@ func TestContainerd_Run(t *testing.T) {
 			)
 
 			wg.Add(1)
+
 			go func() {
 				defer wg.Done()
+
 				runErr = c.Run(ctx)
 			}()
 
@@ -523,6 +525,7 @@ func TestContainerd_ContainerFromCGroup(t *testing.T) {
 					if err != nil {
 						t.Errorf("err = %v want nil", err)
 					}
+
 					if container == nil {
 						t.Errorf("container = nil, want %s", ttt.containerName)
 
@@ -532,6 +535,7 @@ func TestContainerd_ContainerFromCGroup(t *testing.T) {
 					if container.ContainerName() != ttt.containerName {
 						t.Errorf("ContainerName = %v, want %s", container.ContainerName(), ttt.containerName)
 					}
+
 					if container.ID() != ttt.containerID {
 						t.Errorf("ID = %v, want %s", container.ID(), ttt.containerID)
 					}

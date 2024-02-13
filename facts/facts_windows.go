@@ -118,7 +118,7 @@ func getWindowsVersionName(major uint64, minor uint64, isServer bool, servicePac
 	if servicePack != "" {
 		res = fmt.Sprintf("Windows %s SP %s", version, servicePack)
 	} else {
-		res = fmt.Sprintf("Windows %s", version)
+		res = "Windows " + version
 	}
 
 	return res

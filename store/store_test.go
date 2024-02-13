@@ -568,6 +568,7 @@ func Benchmark_metricGetOrCreate(b *testing.B) {
 			}
 
 			b.ResetTimer()
+
 			for n := 0; n < b.N; n++ {
 				for _, lbls := range metricsLabels {
 					db.metricGetOrCreate(lbls)

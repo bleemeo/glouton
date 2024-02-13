@@ -471,7 +471,7 @@ func TestVSphereLifecycle(t *testing.T) { //nolint:maintidx
 	for _, testCase := range testCases {
 		tc := testCase
 
-		t.Run(tc.name, func(t *testing.T) {
+		t.Run(tc.name, func(t *testing.T) { //nolint: wsl
 			// govmomi simulator doesn't seem to like having multiple instances in parallel.
 
 			vSphereCfg, deferFn := setupVSphereAPITest(t, tc.dirName)
@@ -481,7 +481,7 @@ func TestVSphereLifecycle(t *testing.T) { //nolint:maintidx
 			defer cancel()
 
 			manager := new(Manager)
-			manager.RegisterGatherers(ctx, []config.VSphere{vSphereCfg}, func(opt registry.RegistrationOption, gatherer prometheus.Gatherer) (int, error) { return 0, nil }, nil, facts.NewMockFacter(map[string]string{"fqdn": scraperFQDN}))
+			manager.RegisterGatherers(ctx, []config.VSphere{vSphereCfg}, func(_ registry.RegistrationOption, _ prometheus.Gatherer) (int, error) { return 0, nil }, nil, facts.NewMockFacter(map[string]string{"fqdn": scraperFQDN}))
 
 			devices := manager.Devices(ctx, 0)
 
@@ -523,6 +523,7 @@ func TestVSphereLifecycle(t *testing.T) { //nolint:maintidx
 
 			sortDevices(tc.expectedHosts)
 			sortDevices(hosts)
+
 			for i, expectedHost := range tc.expectedHosts {
 				if diff := cmp.Diff(expectedHost, hosts[i], cmp.AllowUnexported(HostSystem{}, device{}), noSourceCmp); diff != "" {
 					t.Errorf("Unexpected host description (-want +got):\n%s", diff)

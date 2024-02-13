@@ -231,6 +231,7 @@ func MetricPointsToFamilies(points []types.MetricPoint) []*dto.MetricFamily {
 			lblsA := builder.Labels()
 
 			builder.Reset(nil)
+
 			for _, pair := range fam.GetMetric()[j].GetLabel() {
 				builder.Set(pair.GetName(), pair.GetValue())
 			}
