@@ -7,6 +7,7 @@ import (
 	"glouton/logger"
 	"glouton/types"
 	"math"
+	"path/filepath"
 	"time"
 
 	"github.com/influxdata/telegraf"
@@ -16,7 +17,11 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-func New() (telegraf.Input, *inputs.GathererOptions, error) {
+const mdstatPath = "/proc/mdstat"
+
+var timeNow = time.Now //nolint:gochecknoglobals
+
+func New(hostroot string) (telegraf.Input, *inputs.GathererOptions, error) {
 	input, ok := telegraf_inputs.Inputs["mdstat"]
 	if !ok {
 		return nil, nil, inputs.ErrDisabledInput
@@ -26,6 +31,8 @@ func New() (telegraf.Input, *inputs.GathererOptions, error) {
 	if !ok {
 		return nil, nil, inputs.ErrUnexpectedType
 	}
+
+	mdstatConfig.FileName = filepath.Join(hostroot, mdstatPath)
 
 	internalInput := &internal.Input{
 		Input: mdstatConfig,
@@ -52,7 +59,7 @@ var fieldsNameMapping = map[string]string{ //nolint:gochecknoglobals
 	"DisksSpare":             "disks_spare_count",
 }
 
-func transformMetrics(gatherCtx internal.GatherContext, fields map[string]float64, _ map[string]interface{}) map[string]float64 {
+func transformMetrics(_ internal.GatherContext, fields map[string]float64, _ map[string]interface{}) map[string]float64 {
 	finalFields := make(map[string]float64)
 
 	for field, value := range fields {
@@ -173,7 +180,7 @@ func generateFinishTimeStatusLabels(minutesLeft float64) (*float64, []*dto.Label
 
 	if minutesLeft > 0 {
 		status = types.StatusWarning
-		estimatedTime := time.Now().Add(time.Duration(minutesLeft) * time.Minute)
+		estimatedTime := timeNow().Add(time.Duration(minutesLeft) * time.Minute)
 		description = fmt.Sprintf(
 			"The disk should be fully synchronized in %dmin (around %s)",
 			int(math.Ceil(minutesLeft)),
@@ -183,7 +190,7 @@ func generateFinishTimeStatusLabels(minutesLeft float64) (*float64, []*dto.Label
 		status = types.StatusOk
 	}
 
-	return proto.Float64(float64(status)), []*dto.LabelPair{
+	return proto.Float64(float64(status.NagiosCode())), []*dto.LabelPair{
 		{Name: proto.String(types.LabelMetaCurrentStatus), Value: proto.String(status.String())},
 		{Name: proto.String(types.LabelMetaCurrentDescription), Value: proto.String(description)},
 	}

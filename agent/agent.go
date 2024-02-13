@@ -1391,7 +1391,7 @@ func (a *agent) registerInputs(ctx context.Context) {
 	}
 
 	if a.config.Mdstat.Enable {
-		input, opts, err := mdstat.New()
+		input, opts, err := mdstat.New(a.hostRootPath)
 		a.registerInput("mdstat", input, opts, err)
 	}
 
