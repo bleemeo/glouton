@@ -260,4 +260,4 @@ require (
 	sigs.k8s.io/structured-merge-diff/v4 v4.4.1 // indirect
 )
 
-replace github.com/influxdata/telegraf => ../telegraf-fork // TODO: revert
+replace github.com/influxdata/telegraf => github.com/Maxi-Mega/telegraf v0.0.0-20240123102217-991fcd0b94bf // TODO: revert
