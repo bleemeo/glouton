@@ -6,4 +6,7 @@ md1 : active raid1 sda2[2](S) sdb2[0] sdc2[1]
       142191616 blocks super 1.2 [2/2] [UU]
       bitmap: 0/2 pages [0KB], 65536KB chunk
 
+md2 : active raid1 sda3[1] sdb3[0]
+      1046528 blocks super 1.2 [2/2] [UU]
+
 unused devices: <none>

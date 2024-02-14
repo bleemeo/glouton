@@ -1,3 +1,19 @@
+// Copyright 2015-2023 Bleemeo
+//
+// bleemeo.com an infrastructure monitoring solution in the Cloud
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package mdstat
 
 import (
@@ -13,6 +29,7 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/influxdata/telegraf"
 	dto "github.com/prometheus/client_model/go"
 )
@@ -88,77 +105,18 @@ func setupMdstatTest(t *testing.T, inputFileName string) (input telegraf.Input, 
 
 func TestGather(t *testing.T) { //nolint:maintidx
 	testCases := []struct {
-		filename        string
-		expectedMetrics metricFamilies
+		filename         string
+		maxSparePerArray map[string]int
+		expectedMetrics  metricFamilies
 	}{
-		{ //nolint: dupl
-			filename: "simple_active.txt",
-			expectedMetrics: map[string][]metric{
-				"mdstat_blocks_synced_finish_time_status": {
-					{
-						Labels: map[string]string{
-							types.LabelItem:                   "md0",
-							types.LabelMetaCurrentStatus:      types.StatusOk.String(),
-							types.LabelMetaCurrentDescription: "",
-						},
-						Value: float64(types.StatusOk.NagiosCode()),
-					},
-				},
-				"mdstat_blocks_synced_pct": {
-					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 0},
-				},
-				"mdstat_disks_active_count": {
-					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 2},
-				},
-				"mdstat_disks_activity_state_status": {
-					{
-						Labels: map[string]string{
-							types.LabelItem:                   "md0",
-							types.LabelMetaCurrentStatus:      types.StatusOk.String(),
-							types.LabelMetaCurrentDescription: "The disk is currently active",
-						},
-						Value: float64(types.StatusOk.NagiosCode()),
-					},
-				},
-				"mdstat_disks_down_count": {
-					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 0},
-				},
-				"mdstat_disks_failed_count": {
-					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 0},
-				},
-				"mdstat_disks_spare_count": {
-					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 0},
-				},
-			},
-		},
 		{
-			filename: "multiple_active.txt",
-			expectedMetrics: map[string][]metric{
-				"mdstat_blocks_synced_finish_time_status": {
-					{
-						Labels: map[string]string{
-							types.LabelItem:                   "md1",
-							types.LabelMetaCurrentStatus:      types.StatusOk.String(),
-							types.LabelMetaCurrentDescription: "",
-						},
-						Value: float64(types.StatusOk.NagiosCode()),
-					},
-					{
-						Labels: map[string]string{
-							types.LabelItem:                   "md2",
-							types.LabelMetaCurrentStatus:      types.StatusOk.String(),
-							types.LabelMetaCurrentDescription: "",
-						},
-						Value: float64(types.StatusOk.NagiosCode()),
-					},
-					{
-						Labels: map[string]string{
-							types.LabelItem:                   "md3",
-							types.LabelMetaCurrentStatus:      types.StatusOk.String(),
-							types.LabelMetaCurrentDescription: "",
-						},
-						Value: float64(types.StatusOk.NagiosCode()),
-					},
+			filename:         "multiple_active.txt",
+			maxSparePerArray: map[string]int{},
+			expectedMetrics: map[string][]metric{ //nolint: dupl
+				"mdstat_blocks_synced_finish_time": {
+					{Labels: map[string]string{types.LabelItem: "md1"}, Value: 0},
+					{Labels: map[string]string{types.LabelItem: "md2"}, Value: 0},
+					{Labels: map[string]string{types.LabelItem: "md3"}, Value: 0},
 				},
 				"mdstat_blocks_synced_pct": {
 					{Labels: map[string]string{types.LabelItem: "md1"}, Value: 0},
@@ -170,114 +128,221 @@ func TestGather(t *testing.T) { //nolint:maintidx
 					{Labels: map[string]string{types.LabelItem: "md2"}, Value: 2},
 					{Labels: map[string]string{types.LabelItem: "md3"}, Value: 10},
 				},
-				"mdstat_disks_activity_state_status": {
+				"mdstat_disks_down_count": {
+					{Labels: map[string]string{types.LabelItem: "md1"}, Value: 0},
+					{Labels: map[string]string{types.LabelItem: "md2"}, Value: 0},
+					{Labels: map[string]string{types.LabelItem: "md3"}, Value: 0},
+				},
+				"mdstat_disks_failed_count": {
+					{Labels: map[string]string{types.LabelItem: "md1"}, Value: 0},
+					{Labels: map[string]string{types.LabelItem: "md2"}, Value: 0},
+					{Labels: map[string]string{types.LabelItem: "md3"}, Value: 0},
+				},
+				"mdstat_disks_spare_count": {
+					{Labels: map[string]string{types.LabelItem: "md1"}, Value: 0},
+					{Labels: map[string]string{types.LabelItem: "md2"}, Value: 0},
+					{Labels: map[string]string{types.LabelItem: "md3"}, Value: 0},
+				},
+				"mdstat_disks_total_count": {
+					{Labels: map[string]string{types.LabelItem: "md1"}, Value: 2},
+					{Labels: map[string]string{types.LabelItem: "md2"}, Value: 2},
+					{Labels: map[string]string{types.LabelItem: "md3"}, Value: 10},
+				},
+				"mdstat_health_status": {
 					{
 						Labels: map[string]string{
 							types.LabelItem:                   "md1",
-							types.LabelMetaCurrentStatus:      "ok",
-							types.LabelMetaCurrentDescription: "The disk is currently active",
+							types.LabelMetaCurrentStatus:      types.StatusOk.String(),
+							types.LabelMetaCurrentDescription: "",
 						},
 						Value: float64(types.StatusOk.NagiosCode()),
 					},
 					{
 						Labels: map[string]string{
 							types.LabelItem:                   "md2",
-							types.LabelMetaCurrentStatus:      "ok",
-							types.LabelMetaCurrentDescription: "The disk is currently active",
+							types.LabelMetaCurrentStatus:      types.StatusOk.String(),
+							types.LabelMetaCurrentDescription: "",
 						},
 						Value: float64(types.StatusOk.NagiosCode()),
 					},
 					{
 						Labels: map[string]string{
 							types.LabelItem:                   "md3",
-							types.LabelMetaCurrentStatus:      "ok",
-							types.LabelMetaCurrentDescription: "The disk is currently active",
+							types.LabelMetaCurrentStatus:      types.StatusOk.String(),
+							types.LabelMetaCurrentDescription: "",
 						},
 						Value: float64(types.StatusOk.NagiosCode()),
 					},
-				},
-				"mdstat_disks_down_count": {
-					{Labels: map[string]string{types.LabelItem: "md1"}, Value: 0},
-					{Labels: map[string]string{types.LabelItem: "md2"}, Value: 0},
-					{Labels: map[string]string{types.LabelItem: "md3"}, Value: 0},
-				},
-				"mdstat_disks_failed_count": {
-					{Labels: map[string]string{types.LabelItem: "md1"}, Value: 0},
-					{Labels: map[string]string{types.LabelItem: "md2"}, Value: 0},
-					{Labels: map[string]string{types.LabelItem: "md3"}, Value: 0},
-				},
-				"mdstat_disks_spare_count": {
-					{Labels: map[string]string{types.LabelItem: "md1"}, Value: 0},
-					{Labels: map[string]string{types.LabelItem: "md2"}, Value: 0},
-					{Labels: map[string]string{types.LabelItem: "md3"}, Value: 0},
 				},
 			},
 		},
 		{
-			filename: "multiple_failed_spare.txt",
-			expectedMetrics: map[string][]metric{
-				"mdstat_blocks_synced_finish_time_status": {
-					{
-						Labels: map[string]string{
-							types.LabelItem:                   "md0",
-							types.LabelMetaCurrentStatus:      types.StatusOk.String(),
-							types.LabelMetaCurrentDescription: "",
-						},
-						Value: float64(types.StatusOk.NagiosCode()),
-					},
-					{
-						Labels: map[string]string{
-							types.LabelItem:                   "md1",
-							types.LabelMetaCurrentStatus:      types.StatusOk.String(),
-							types.LabelMetaCurrentDescription: "",
-						},
-						Value: float64(types.StatusOk.NagiosCode()),
-					},
+			filename:         "multiple_failed_spare.txt",
+			maxSparePerArray: map[string]int{"md2": 1},
+			expectedMetrics: map[string][]metric{ //nolint: dupl
+				"mdstat_blocks_synced_finish_time": {
+					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 0},
+					{Labels: map[string]string{types.LabelItem: "md1"}, Value: 0},
+					{Labels: map[string]string{types.LabelItem: "md2"}, Value: 0},
 				},
 				"mdstat_blocks_synced_pct": {
 					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 0},
 					{Labels: map[string]string{types.LabelItem: "md1"}, Value: 0},
+					{Labels: map[string]string{types.LabelItem: "md2"}, Value: 0},
 				},
 				"mdstat_disks_active_count": {
 					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 1},
 					{Labels: map[string]string{types.LabelItem: "md1"}, Value: 2},
-				},
-				"mdstat_disks_activity_state_status": {
-					{
-						Labels: map[string]string{
-							types.LabelItem:                   "md0",
-							types.LabelMetaCurrentStatus:      "ok",
-							types.LabelMetaCurrentDescription: "The disk is currently active",
-						},
-						Value: float64(types.StatusOk.NagiosCode()),
-					},
-					{
-						Labels: map[string]string{
-							types.LabelItem:                   "md1",
-							types.LabelMetaCurrentStatus:      "ok",
-							types.LabelMetaCurrentDescription: "The disk is currently active",
-						},
-						Value: float64(types.StatusOk.NagiosCode()),
-					},
+					{Labels: map[string]string{types.LabelItem: "md2"}, Value: 2},
 				},
 				"mdstat_disks_down_count": {
 					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 1},
 					{Labels: map[string]string{types.LabelItem: "md1"}, Value: 0},
+					{Labels: map[string]string{types.LabelItem: "md2"}, Value: 0},
 				},
 				"mdstat_disks_failed_count": {
 					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 1},
 					{Labels: map[string]string{types.LabelItem: "md1"}, Value: 0},
+					{Labels: map[string]string{types.LabelItem: "md2"}, Value: 0},
 				},
 				"mdstat_disks_spare_count": {
 					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 0},
 					{Labels: map[string]string{types.LabelItem: "md1"}, Value: 1},
+					{Labels: map[string]string{types.LabelItem: "md2"}, Value: 0},
+				},
+				"mdstat_disks_total_count": {
+					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 2},
+					{Labels: map[string]string{types.LabelItem: "md1"}, Value: 2},
+					{Labels: map[string]string{types.LabelItem: "md2"}, Value: 2},
+				},
+				"mdstat_health_status": {
+					{
+						Labels: map[string]string{
+							types.LabelItem:                   "md0",
+							types.LabelMetaCurrentStatus:      types.StatusWarning.String(),
+							types.LabelMetaCurrentDescription: "1 disk is failed on this array",
+						},
+						Value: float64(types.StatusWarning.NagiosCode()),
+					},
+					{
+						Labels: map[string]string{
+							types.LabelItem:                   "md1",
+							types.LabelMetaCurrentStatus:      types.StatusOk.String(),
+							types.LabelMetaCurrentDescription: "",
+						},
+						Value: float64(types.StatusOk.NagiosCode()),
+					},
+					{
+						Labels: map[string]string{
+							types.LabelItem:                   "md2",
+							types.LabelMetaCurrentStatus:      types.StatusWarning.String(),
+							types.LabelMetaCurrentDescription: "1 spare disk is missing on this array",
+						},
+						Value: float64(types.StatusWarning.NagiosCode()),
+					},
 				},
 			},
 		},
 		{ //nolint: dupl
-			filename: "simple_recovery.txt",
+			filename:         "simple_active.txt",
+			maxSparePerArray: map[string]int{},
 			expectedMetrics: map[string][]metric{
-				"mdstat_blocks_synced_finish_time_status": {
+				"mdstat_blocks_synced_finish_time": {
+					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 0},
+				},
+				"mdstat_blocks_synced_pct": {
+					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 0},
+				},
+				"mdstat_disks_active_count": {
+					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 2},
+				},
+				"mdstat_disks_down_count": {
+					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 0},
+				},
+				"mdstat_disks_failed_count": {
+					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 0},
+				},
+				"mdstat_disks_spare_count": {
+					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 0},
+				},
+				"mdstat_disks_total_count": {
+					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 2},
+				},
+				"mdstat_health_status": {
+					{
+						Labels: map[string]string{
+							types.LabelItem:                   "md0",
+							types.LabelMetaCurrentStatus:      types.StatusOk.String(),
+							types.LabelMetaCurrentDescription: "",
+						},
+						Value: float64(types.StatusOk.NagiosCode()),
+					},
+				},
+			},
+		},
+		{ //nolint: dupl
+			filename:         "simple_failed.txt",
+			maxSparePerArray: map[string]int{},
+			expectedMetrics: map[string][]metric{
+				"mdstat_blocks_synced_finish_time": {
+					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 0},
+				},
+				"mdstat_blocks_synced_pct": {
+					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 0},
+				},
+				"mdstat_disks_active_count": {
+					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 0},
+				},
+				"mdstat_disks_down_count": {
+					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 0},
+				},
+				"mdstat_disks_failed_count": {
+					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 5},
+				},
+				"mdstat_disks_spare_count": {
+					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 0},
+				},
+				"mdstat_disks_total_count": {
+					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 0},
+				},
+				"mdstat_health_status": {
+					{
+						Labels: map[string]string{
+							types.LabelItem:                   "md0",
+							types.LabelMetaCurrentStatus:      types.StatusCritical.String(),
+							types.LabelMetaCurrentDescription: "The array is currently inactive",
+						},
+						Value: float64(types.StatusCritical.NagiosCode()),
+					},
+				},
+			},
+		},
+		{ //nolint: dupl
+			filename:         "simple_recovery.txt",
+			maxSparePerArray: map[string]int{},
+			expectedMetrics: map[string][]metric{
+				"mdstat_blocks_synced_finish_time": {
+					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 2.8},
+				},
+				"mdstat_blocks_synced_pct": {
+					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 9.9},
+				},
+				"mdstat_disks_active_count": {
+					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 1},
+				},
+				"mdstat_disks_down_count": {
+					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 1},
+				},
+				"mdstat_disks_failed_count": {
+					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 0},
+				},
+				"mdstat_disks_spare_count": {
+					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 0},
+				},
+				"mdstat_disks_total_count": {
+					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 2},
+				},
+				"mdstat_health_status": {
 					{
 						Labels: map[string]string{
 							types.LabelItem:                   "md0",
@@ -286,31 +351,6 @@ func TestGather(t *testing.T) { //nolint:maintidx
 						},
 						Value: float64(types.StatusWarning.NagiosCode()),
 					},
-				},
-				"mdstat_blocks_synced_pct": {
-					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 9.9},
-				},
-				"mdstat_disks_active_count": {
-					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 1},
-				},
-				"mdstat_disks_activity_state_status": {
-					{
-						Labels: map[string]string{
-							types.LabelItem:                   "md0",
-							types.LabelMetaCurrentStatus:      types.StatusWarning.String(),
-							types.LabelMetaCurrentDescription: "The disk is currently recovering",
-						},
-						Value: float64(types.StatusWarning.NagiosCode()),
-					},
-				},
-				"mdstat_disks_down_count": {
-					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 1},
-				},
-				"mdstat_disks_failed_count": {
-					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 0},
-				},
-				"mdstat_disks_spare_count": {
-					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 0},
 				},
 			},
 		},
@@ -335,9 +375,10 @@ func TestGather(t *testing.T) { //nolint:maintidx
 			}
 
 			mfs := model.MetricPointsToFamilies(pointBuffer.Points())
-			mfs = gatherModifier(mfs, nil)
+			stat := statPersistence{maxSparePerArray: tc.maxSparePerArray}
+			mfs = stat.gatherModifier(mfs, nil)
 
-			if diff := cmp.Diff(tc.expectedMetrics, convert(mfs)); diff != "" {
+			if diff := cmp.Diff(tc.expectedMetrics, convert(mfs), cmpopts.SortSlices(metricSorter)); diff != "" {
 				t.Fatalf("Unexpected metrics (-want +got):\n%s", diff)
 			}
 		})
@@ -384,4 +425,8 @@ func convert(mfs []*dto.MetricFamily) metricFamilies {
 	}
 
 	return families
+}
+
+func metricSorter(m1, m2 metric) bool {
+	return m1.Labels[types.LabelItem] < m2.Labels[types.LabelItem]
 }

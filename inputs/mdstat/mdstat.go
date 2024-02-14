@@ -1,10 +1,25 @@
+// Copyright 2015-2023 Bleemeo
+//
+// bleemeo.com an infrastructure monitoring solution in the Cloud
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package mdstat
 
 import (
 	"fmt"
 	"glouton/inputs"
 	"glouton/inputs/internal"
-	"glouton/logger"
 	"glouton/types"
 	"math"
 	"path/filepath"
@@ -42,29 +57,35 @@ func New(hostroot string) (telegraf.Input, *inputs.GathererOptions, error) {
 		Name: "mdstat",
 	}
 
+	stat := statPersistence{maxSparePerArray: make(map[string]int)}
+
 	options := &inputs.GathererOptions{
 		MinInterval:    60 * time.Second,
-		GatherModifier: gatherModifier,
+		GatherModifier: stat.gatherModifier,
 	}
 
 	return internalInput, options, nil
 }
 
+type statPersistence struct {
+	maxSparePerArray map[string]int
+}
+
 var fieldsNameMapping = map[string]string{ //nolint:gochecknoglobals
-	"BlocksSyncedFinishTime": "blocks_synced_finish_time_status", // will be used for a metric status
+	"BlocksSyncedFinishTime": "blocks_synced_finish_time", // will be used for a metric status
 	"BlocksSyncedPct":        "blocks_synced_pct",
 	"DisksActive":            "disks_active_count",
 	"DisksDown":              "disks_down_count",
 	"DisksFailed":            "disks_failed_count",
 	"DisksSpare":             "disks_spare_count",
+	"DisksTotal":             "disks_total_count",
 }
 
 func transformMetrics(_ internal.GatherContext, fields map[string]float64, _ map[string]interface{}) map[string]float64 {
-	finalFields := make(map[string]float64)
+	finalFields := make(map[string]float64, len(fieldsNameMapping))
 
 	for field, value := range fields {
 		newName, ok := fieldsNameMapping[field]
-
 		if !ok {
 			continue
 		}
@@ -75,53 +96,67 @@ func transformMetrics(_ internal.GatherContext, fields map[string]float64, _ map
 	return finalFields
 }
 
-func gatherModifier(mfs []*dto.MetricFamily, _ error) []*dto.MetricFamily {
-	disksActivityStateStatus := &dto.MetricFamily{
-		Name:   proto.String("mdstat_disks_activity_state_status"),
-		Type:   dto.MetricType_UNTYPED.Enum(),
-		Metric: make([]*dto.Metric, 0),
-	}
-	activityStatePerItem := make(map[string]bool)
+type arrayInfo struct {
+	timestamp             int64
+	active, failed, spare int
+	activityState         string
+	recoveryMinutes       float64
+}
+
+func (stat *statPersistence) gatherModifier(mfs []*dto.MetricFamily, _ error) []*dto.MetricFamily {
+	infoPerArray := make(map[string]arrayInfo)
 
 	for _, mf := range mfs {
 		if mf == nil {
 			continue
 		}
 
-		metricCount := 0
-
-		for mi := 0; mi < len(mf.Metric); mi++ { //nolint:protogetter
-			m := mf.Metric[mi] //nolint:protogetter
-			if m == nil {
-				continue
-			}
-
-			item, activityState := parseLabels(m.GetLabel())
-
-			if !activityStatePerItem[item] {
-				activityStateStatusMetric := generateActivityStatusMetric(activityState, item, m.GetTimestampMs())
-				disksActivityStateStatus.Metric = append(disksActivityStateStatus.Metric, activityStateStatusMetric) //nolint:protogetter
-				activityStatePerItem[item] = true
-			}
-
+		for mIdx, m := range mf.GetMetric() {
+			array, activityState := parseLabels(m.GetLabel())
 			m.Label = []*dto.LabelPair{
 				{
 					Name:  proto.String(types.LabelItem),
-					Value: proto.String(item),
+					Value: proto.String(array),
 				},
 			}
 
-			if mf.GetName() == "mdstat_blocks_synced_finish_time_status" {
-				status, labels := generateFinishTimeStatusLabels(m.GetUntyped().GetValue())
-				m.Untyped = &dto.Untyped{Value: status}
-				m.Label = append(m.Label, labels...) //nolint:protogetter
+			info, exists := infoPerArray[array]
+			if !exists {
+				info = arrayInfo{
+					timestamp:     m.GetTimestampMs(),
+					activityState: activityState,
+				}
 			}
 
-			mf.Metric[metricCount] = m
-			metricCount++
-		}
+			switch mf.GetName() {
+			case "mdstat_disks_active_count":
+				info.active = int(m.GetUntyped().GetValue())
+			case "mdstat_disks_failed_count":
+				info.failed = int(m.GetUntyped().GetValue())
+			case "mdstat_disks_spare_count":
+				info.spare = int(m.GetUntyped().GetValue())
+			case "mdstat_blocks_synced_finish_time":
+				info.recoveryMinutes = m.GetUntyped().GetValue()
+			}
 
-		mf.Metric = mf.Metric[:metricCount] //nolint:protogetter
+			infoPerArray[array] = info
+			mf.Metric[mIdx] = m
+		}
+	}
+
+	disksActivityStateStatus := &dto.MetricFamily{
+		Name:   proto.String("mdstat_health_status"),
+		Type:   dto.MetricType_UNTYPED.Enum(),
+		Metric: make([]*dto.Metric, 0, len(infoPerArray)),
+	}
+
+	for array, info := range infoPerArray {
+		healthStatusMetric := generateHealthStatusMetric(array, info, stat.maxSparePerArray[array])
+		disksActivityStateStatus.Metric = append(disksActivityStateStatus.Metric, healthStatusMetric) //nolint:protogetter
+
+		if info.spare > stat.maxSparePerArray[array] {
+			stat.maxSparePerArray[array] = info.spare
+		}
 	}
 
 	mfs = append(mfs, disksActivityStateStatus)
@@ -142,56 +177,80 @@ func parseLabels(labels []*dto.LabelPair) (item, activityState string) {
 	return item, activityState
 }
 
-func generateActivityStatusMetric(activityState string, item string, ts int64) *dto.Metric {
-	var status types.Status
-
-	switch activityState {
-	case "active":
-		status = types.StatusOk
-	case "inactive":
-		status = types.StatusCritical
-	case "recovering":
-		status = types.StatusWarning
-	case "checking":
-		status = types.StatusUnset
-	case "resyncing":
-	default:
-		logger.V(2).Printf("Unknown activity state %q on disk %q", activityState, item)
-
-		status = types.StatusUnknown
-	}
-
-	return &dto.Metric{
-		Label: []*dto.LabelPair{
-			{Name: proto.String(types.LabelItem), Value: proto.String(item)},
-			{Name: proto.String(types.LabelMetaCurrentStatus), Value: proto.String(status.String())},
-			{Name: proto.String(types.LabelMetaCurrentDescription), Value: proto.String("The disk is currently " + activityState)},
-		},
-		Untyped:     &dto.Untyped{Value: proto.Float64(float64(status.NagiosCode()))},
-		TimestampMs: proto.Int64(ts),
-	}
-}
-
-func generateFinishTimeStatusLabels(minutesLeft float64) (*float64, []*dto.LabelPair) {
+func generateHealthStatusMetric(array string, info arrayInfo, maxSpareCount int) *dto.Metric {
 	var (
 		status      types.Status
 		description string
 	)
 
-	if minutesLeft > 0 {
-		status = types.StatusWarning
-		estimatedTime := timeNow().Add(time.Duration(minutesLeft) * time.Minute)
-		description = fmt.Sprintf(
-			"The disk should be fully synchronized in %dmin (around %s)",
-			int(math.Ceil(minutesLeft)),
-			estimatedTime.Format(time.TimeOnly),
-		)
-	} else {
+	switch info.activityState {
+	case "active":
 		status = types.StatusOk
+	case "inactive":
+		status = types.StatusCritical
+		description = "The array is currently inactive"
+	case "recovering":
+		status = types.StatusWarning
+		description = generateFinishTimeStatusDescription(info.recoveryMinutes)
+	case "checking":
+		status = types.StatusOk
+	case "resyncing":
+		status = types.StatusWarning
+		description = "The array is currently resyncing"
+	default:
+		status = types.StatusUnknown
+		description = fmt.Sprintf("Unknown activity state %q on disk array %q", info.activityState, array)
 	}
 
-	return proto.Float64(float64(status.NagiosCode())), []*dto.LabelPair{
-		{Name: proto.String(types.LabelMetaCurrentStatus), Value: proto.String(status.String())},
-		{Name: proto.String(types.LabelMetaCurrentDescription), Value: proto.String(description)},
+	if status == types.StatusOk { // maybe not so ok
+		if info.failed > 0 {
+			if info.failed > info.active {
+				status = types.StatusCritical
+			} else {
+				status = types.StatusWarning
+			}
+
+			plural := " is"
+
+			if info.failed > 1 {
+				plural = "s are"
+			}
+
+			description = fmt.Sprintf("%d disk%s failed on this array", info.failed, plural)
+		} else if maxSpareCount > info.spare {
+			status = types.StatusWarning
+			missingSpares := maxSpareCount - info.spare
+			plural := " is"
+
+			if missingSpares > 1 {
+				plural = "s are"
+			}
+
+			description = fmt.Sprintf("%d spare disk%s missing on this array", missingSpares, plural)
+		}
 	}
+
+	return &dto.Metric{
+		Label: []*dto.LabelPair{
+			{Name: proto.String(types.LabelItem), Value: proto.String(array)},
+			{Name: proto.String(types.LabelMetaCurrentStatus), Value: proto.String(status.String())},
+			{Name: proto.String(types.LabelMetaCurrentDescription), Value: proto.String(description)},
+		},
+		Untyped:     &dto.Untyped{Value: proto.Float64(float64(status.NagiosCode()))},
+		TimestampMs: proto.Int64(info.timestamp),
+	}
+}
+
+func generateFinishTimeStatusDescription(minutesLeft float64) string {
+	if minutesLeft <= 0 {
+		return "The array should be fully synchronized in a few moments"
+	}
+
+	estimatedTime := timeNow().Add(time.Duration(minutesLeft) * time.Minute)
+
+	return fmt.Sprintf(
+		"The disk should be fully synchronized in %dmin (around %s)",
+		int(math.Ceil(minutesLeft)),
+		estimatedTime.Format(time.TimeOnly),
+	)
 }
