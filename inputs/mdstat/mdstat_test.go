@@ -220,7 +220,7 @@ func TestGather(t *testing.T) { //nolint:maintidx
 						Labels: map[string]string{
 							types.LabelItem:                   "md0",
 							types.LabelMetaCurrentStatus:      types.StatusWarning.String(),
-							types.LabelMetaCurrentDescription: "1 disk is failed on this array",
+							types.LabelMetaCurrentDescription: "1 disk is failing on this array",
 						},
 						Value: float64(types.StatusWarning.NagiosCode()),
 					},
@@ -235,10 +235,10 @@ func TestGather(t *testing.T) { //nolint:maintidx
 					{
 						Labels: map[string]string{
 							types.LabelItem:                   "md2",
-							types.LabelMetaCurrentStatus:      types.StatusWarning.String(),
-							types.LabelMetaCurrentDescription: "1 spare disk is missing on this array",
+							types.LabelMetaCurrentStatus:      types.StatusOk.String(),
+							types.LabelMetaCurrentDescription: "",
 						},
-						Value: float64(types.StatusWarning.NagiosCode()),
+						Value: float64(types.StatusOk.NagiosCode()),
 					},
 				},
 			},
@@ -375,8 +375,7 @@ func TestGather(t *testing.T) { //nolint:maintidx
 			}
 
 			mfs := model.MetricPointsToFamilies(pointBuffer.Points())
-			stat := statPersistence{maxSparePerArray: tc.maxSparePerArray}
-			mfs = stat.gatherModifier(mfs, nil)
+			mfs = gatherModifier(mfs, nil)
 
 			if diff := cmp.Diff(tc.expectedMetrics, convert(mfs), cmpopts.SortSlices(metricSorter)); diff != "" {
 				t.Fatalf("Unexpected metrics (-want +got):\n%s", diff)

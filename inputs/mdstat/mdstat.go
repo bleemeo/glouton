@@ -20,9 +20,11 @@ import (
 	"fmt"
 	"glouton/inputs"
 	"glouton/inputs/internal"
+	"glouton/logger"
 	"glouton/types"
 	"math"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/influxdata/telegraf"
@@ -34,7 +36,11 @@ import (
 
 const mdstatPath = "/proc/mdstat"
 
-var timeNow = time.Now //nolint:gochecknoglobals
+//nolint:gochecknoglobals
+var (
+	timeNow      = time.Now
+	mdadmDetails = callMdadm
+)
 
 func New(hostroot string) (telegraf.Input, *inputs.GathererOptions, error) {
 	input, ok := telegraf_inputs.Inputs["mdstat"]
@@ -57,18 +63,12 @@ func New(hostroot string) (telegraf.Input, *inputs.GathererOptions, error) {
 		Name: "mdstat",
 	}
 
-	stat := statPersistence{maxSparePerArray: make(map[string]int)}
-
 	options := &inputs.GathererOptions{
 		MinInterval:    60 * time.Second,
-		GatherModifier: stat.gatherModifier,
+		GatherModifier: gatherModifier,
 	}
 
 	return internalInput, options, nil
-}
-
-type statPersistence struct {
-	maxSparePerArray map[string]int
 }
 
 var fieldsNameMapping = map[string]string{ //nolint:gochecknoglobals
@@ -97,13 +97,13 @@ func transformMetrics(_ internal.GatherContext, fields map[string]float64, _ map
 }
 
 type arrayInfo struct {
-	timestamp             int64
-	active, failed, spare int
-	activityState         string
-	recoveryMinutes       float64
+	timestamp                   int64
+	active, down, failed, total int
+	activityState               string
+	recoveryMinutes             float64
 }
 
-func (stat *statPersistence) gatherModifier(mfs []*dto.MetricFamily, _ error) []*dto.MetricFamily {
+func gatherModifier(mfs []*dto.MetricFamily, _ error) []*dto.MetricFamily {
 	infoPerArray := make(map[string]arrayInfo)
 
 	for _, mf := range mfs {
@@ -131,10 +131,12 @@ func (stat *statPersistence) gatherModifier(mfs []*dto.MetricFamily, _ error) []
 			switch mf.GetName() {
 			case "mdstat_disks_active_count":
 				info.active = int(m.GetUntyped().GetValue())
+			case "mdstat_disks_down_count":
+				info.down = int(m.GetUntyped().GetValue())
 			case "mdstat_disks_failed_count":
 				info.failed = int(m.GetUntyped().GetValue())
-			case "mdstat_disks_spare_count":
-				info.spare = int(m.GetUntyped().GetValue())
+			case "mdstat_disks_total_count":
+				info.total = int(m.GetUntyped().GetValue())
 			case "mdstat_blocks_synced_finish_time":
 				info.recoveryMinutes = m.GetUntyped().GetValue()
 			}
@@ -151,12 +153,8 @@ func (stat *statPersistence) gatherModifier(mfs []*dto.MetricFamily, _ error) []
 	}
 
 	for array, info := range infoPerArray {
-		healthStatusMetric := generateHealthStatusMetric(array, info, stat.maxSparePerArray[array])
+		healthStatusMetric := makeHealthStatusMetric(array, info)
 		disksActivityStateStatus.Metric = append(disksActivityStateStatus.Metric, healthStatusMetric) //nolint:protogetter
-
-		if info.spare > stat.maxSparePerArray[array] {
-			stat.maxSparePerArray[array] = info.spare
-		}
 	}
 
 	mfs = append(mfs, disksActivityStateStatus)
@@ -177,7 +175,7 @@ func parseLabels(labels []*dto.LabelPair) (item, activityState string) {
 	return item, activityState
 }
 
-func generateHealthStatusMetric(array string, info arrayInfo, maxSpareCount int) *dto.Metric {
+func makeHealthStatusMetric(array string, info arrayInfo) *dto.Metric {
 	var (
 		status      types.Status
 		description string
@@ -203,30 +201,37 @@ func generateHealthStatusMetric(array string, info arrayInfo, maxSpareCount int)
 	}
 
 	if status == types.StatusOk { // maybe not so ok
-		if info.failed > 0 {
-			if info.failed > info.active {
-				status = types.StatusCritical
-			} else {
-				status = types.StatusWarning
-			}
+		details, err := mdadmDetails(array)
+		if err != nil {
+			logger.V(1).Printf("Mdstat: %v", err)
+		}
 
-			plural := " is"
-
-			if info.failed > 1 {
-				plural = "s are"
-			}
-
-			description = fmt.Sprintf("%d disk%s failed on this array", info.failed, plural)
-		} else if maxSpareCount > info.spare {
+		switch {
+		case strings.Contains(details.state, "degraded"):
 			status = types.StatusWarning
-			missingSpares := maxSpareCount - info.spare
+			description = "The array is degraded"
+		case strings.Contains(details.state, "FAILED"):
+			status = types.StatusCritical
+			description = "The array is failed"
+		case info.active == info.total && info.failed > 0: // spare disks have been used
+			status = types.StatusWarning
+			missingSpares := (info.active + info.failed) - info.total
 			plural := " is"
 
 			if missingSpares > 1 {
 				plural = "s are"
 			}
 
-			description = fmt.Sprintf("%d spare disk%s missing on this array", missingSpares, plural)
+			description = fmt.Sprintf("%d spare disk%s failing on this array", missingSpares, plural)
+		case info.failed > 0:
+			status = types.StatusWarning
+			plural := " is"
+
+			if info.failed > 1 {
+				plural = "s are"
+			}
+
+			description = fmt.Sprintf("%d disk%s failing on this array", info.failed, plural)
 		}
 	}
 
