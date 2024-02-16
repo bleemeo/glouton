@@ -329,7 +329,7 @@ func DefaultConfig() Config { //nolint:maintidx
 		Services:             []Service{},
 		Smart: Smart{
 			Enable:       true,
-			PathSmartctl: "",
+			PathSmartctl: "smartctl",
 			Devices:      []string{},
 			Excludes: []string{
 				"/dev/cd0", // we assume there isn't more than one CDROM on TrueNAS.
