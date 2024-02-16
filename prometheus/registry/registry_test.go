@@ -620,10 +620,12 @@ func TestRegistry_applyRelabel(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			r := &Registry{}
 			r.relabelConfigs = tt.fields.relabelConfigs
+
 			promLabels, annotations, _ := r.applyRelabel(context.Background(), tt.args.input)
 			if !reflect.DeepEqual(promLabels, tt.want) {
 				t.Errorf("Registry.applyRelabel() promLabels = %+v, want %+v", promLabels, tt.want)
 			}
+
 			if !reflect.DeepEqual(annotations, tt.wantAnnotations) {
 				t.Errorf("Registry.applyRelabel() annotations = %+v, want %+v", annotations, tt.wantAnnotations)
 			}
@@ -715,7 +717,8 @@ func TestRegistry_run(t *testing.T) {
 			}
 
 			ctx := context.Background()
-			reg.UpdateRelabelHook(func(ctx context.Context, labels map[string]string) (newLabel map[string]string, retryLater bool) {
+
+			reg.UpdateRelabelHook(func(_ context.Context, labels map[string]string) (newLabel map[string]string, retryLater bool) {
 				labels[types.LabelMetaBleemeoUUID] = testAgentID
 
 				return labels, false
@@ -823,7 +826,7 @@ func registryRunOnce(t *testing.T, now time.Time, reg *Registry, kindToTest sour
 	case kindPushPointCallback:
 		id, err := reg.registerPushPointsCallback(
 			opt,
-			func(c context.Context, t time.Time) {
+			func(c context.Context, _ time.Time) {
 				reg.WithTTL(5*time.Minute).PushPoints(c, input)
 			},
 		)

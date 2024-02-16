@@ -1236,7 +1236,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 
 	if a.config.InfluxDB.Enable {
 		server := influxdb.New(
-			fmt.Sprintf("http://%s", net.JoinHostPort(a.config.InfluxDB.Host, strconv.Itoa(a.config.InfluxDB.Port))),
+			"http://"+net.JoinHostPort(a.config.InfluxDB.Host, strconv.Itoa(a.config.InfluxDB.Port)),
 			a.config.InfluxDB.DBName,
 			a.store,
 			a.config.InfluxDB.Tags,
@@ -1430,7 +1430,7 @@ func (a *agent) registerInput(name string, input telegraf.Input, opts *inputs.Ga
 
 	_, err = a.gathererRegistry.RegisterInput(
 		registry.RegistrationOption{
-			Description:         fmt.Sprintf("Input %s", name),
+			Description:         "Input " + name,
 			JitterSeed:          baseJitter,
 			Rules:               opts.Rules,
 			MinInterval:         opts.MinInterval,
@@ -1439,7 +1439,6 @@ func (a *agent) registerInput(name string, input telegraf.Input, opts *inputs.Ga
 		},
 		input,
 	)
-
 	if err != nil {
 		logger.Printf("Failed to register input %s: %v", name, err)
 	}
@@ -1851,7 +1850,7 @@ func (a *agent) sendDockerContainerHealth(ctx context.Context, container facts.C
 		status.StatusDescription = message
 	default:
 		status.CurrentStatus = types.StatusUnknown
-		status.StatusDescription = fmt.Sprintf("Unknown health status %s", message)
+		status.StatusDescription = "Unknown health status " + message
 	}
 
 	a.gathererRegistry.WithTTL(5*time.Minute).PushPoints(ctx, []types.MetricPoint{
@@ -1952,6 +1951,7 @@ func (a *agent) handleTrigger(ctx context.Context) {
 					logger.V(1).Printf("failed to update JMX configuration: %v", err)
 				}
 			}
+
 			if a.dynamicScrapper != nil {
 				if containers, err := a.containerRuntime.Containers(ctx, time.Hour, false); err == nil {
 					a.dynamicScrapper.Update(containers)
@@ -1971,6 +1971,7 @@ func (a *agent) handleTrigger(ctx context.Context) {
 				logger.V(1).Printf("error when creating Docker input: %v", err)
 			} else {
 				logger.V(2).Printf("Enable Docker metrics")
+
 				a.dockerInputID, _ = a.collector.AddInput(i, "docker")
 				a.dockerInputPresent = true
 			}
@@ -2108,6 +2109,7 @@ func (a *agent) DiagnosticPage(ctx context.Context) string {
 		sort.Strings(lines)
 
 		fmt.Fprintln(builder, "Facts:")
+
 		for _, l := range lines {
 			fmt.Fprintln(builder, l)
 		}

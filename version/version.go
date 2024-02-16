@@ -17,7 +17,6 @@
 package version
 
 import (
-	"fmt"
 	"runtime"
 	"time"
 )
@@ -33,7 +32,7 @@ var (
 
 // UserAgent returns the User-Agent for request performed by the agent.
 func UserAgent() string {
-	return fmt.Sprintf("Glouton %s", Version)
+	return "Glouton " + Version
 }
 
 // IsWindows returns true when the current operating system is Windows.

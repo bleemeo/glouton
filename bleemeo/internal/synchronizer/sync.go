@@ -378,7 +378,7 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 
 				fqdn := s.option.Cache.FactsByKey()[s.agentID]["fqdn"].Value
 				if fqdn != "" {
-					fqdnMessage = fmt.Sprintf(" with fqdn %s", fqdn)
+					fqdnMessage = " with fqdn " + fqdn
 				}
 
 				logger.Printf(
@@ -469,7 +469,7 @@ func (s *Synchronizer) DiagnosticPage() string {
 	if s.diagnosticClient == nil {
 		s.diagnosticClient = &http.Client{
 			Transport: types.NewHTTPTransport(tlsConfig),
-			CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
 				return http.ErrUseLastResponse
 			},
 		}
@@ -699,8 +699,7 @@ func (s *Synchronizer) GetToken(ctx context.Context) (string, error) {
 }
 
 func (s *Synchronizer) setClient() error {
-	username := fmt.Sprintf("%s@bleemeo.com", s.agentID)
-
+	username := s.agentID + "@bleemeo.com" //nolint: goconst
 	_, password := s.option.State.BleemeoCredentials()
 
 	client, err := client.NewClient(
@@ -900,6 +899,7 @@ func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) (map[str
 
 	if fullsync && firstErr == nil {
 		s.option.Cache.Save()
+
 		s.fullSyncCount++
 		s.nextFullSync = s.now().Add(delay.JitterDelay(
 			delay.Exponential(time.Hour, 1.75, s.fullSyncCount, 12*time.Hour),
@@ -1185,7 +1185,7 @@ func (s *Synchronizer) register(ctx context.Context) error {
 			"display_name":              name,
 			"fqdn":                      fqdn,
 		},
-		fmt.Sprintf("%s@bleemeo.com", accountID),
+		accountID+"@bleemeo.com",
 		registrationKey,
 		&objectID,
 	)

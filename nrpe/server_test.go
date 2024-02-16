@@ -132,6 +132,7 @@ func TestDecodeEncode(t *testing.T) {
 			copy(rndBytes[:], c.ReplyRaw[len(c.ReplyRaw)-2:])
 
 			inter, _ = encodeV2(packet, rndBytes)
+
 			if len(packet.buffer) > 1023 {
 				packet.buffer = packet.buffer[:1023]
 			}
@@ -219,7 +220,7 @@ func TestHandleConnection(t *testing.T) {
 		handleConnection(
 			context.TODO(),
 			socket,
-			func(ctx context.Context, command string) (string, int16, error) {
+			func(_ context.Context, _ string) (string, int16, error) {
 				return c.ReplyString, c.ReplyCode, c.ReplyError //nolint:scopelint
 			},
 			rndBytes,

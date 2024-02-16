@@ -325,7 +325,7 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 		}
 	case ElasticSearchService:
 		if ip, port := service.AddressPort(); ip != "" {
-			input, err = elasticsearch.New(fmt.Sprintf("http://%s", net.JoinHostPort(ip, strconv.Itoa(port))))
+			input, err = elasticsearch.New("http://" + net.JoinHostPort(ip, strconv.Itoa(port)))
 		}
 	case Fail2banService:
 		input, gathererOptions, err = fail2ban.New()
@@ -343,7 +343,7 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 		}
 	case MongoDBService:
 		if ip, port := service.AddressPort(); ip != "" {
-			input, err = mongodb.New(fmt.Sprintf("mongodb://%s", net.JoinHostPort(ip, strconv.Itoa(port))))
+			input, err = mongodb.New("mongodb://" + net.JoinHostPort(ip, strconv.Itoa(port)))
 		}
 	case MySQLService:
 		input, err = createMySQLInput(service)
@@ -356,7 +356,7 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 		}
 
 		if ip := service.AddressForPort(port, "tcp", true); ip != "" {
-			url := fmt.Sprintf("http://%s", net.JoinHostPort(service.IPAddress, strconv.Itoa(port)))
+			url := "http://" + net.JoinHostPort(service.IPAddress, strconv.Itoa(port))
 			input, gathererOptions, err = nats.New(url)
 		}
 	case NfsService:
@@ -407,12 +407,12 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 				password = "guest"
 			}
 
-			url := fmt.Sprintf("http://%s", net.JoinHostPort(ip, strconv.Itoa(mgmtPort)))
+			url := "http://" + net.JoinHostPort(ip, strconv.Itoa(mgmtPort))
 			input, err = rabbitmq.New(url, username, password)
 		}
 	case RedisService:
 		if ip, port := service.AddressPort(); ip != "" {
-			input, err = redis.New(fmt.Sprintf("tcp://%s", net.JoinHostPort(ip, strconv.Itoa(port))), service.Config.Password)
+			input, err = redis.New("tcp://"+net.JoinHostPort(ip, strconv.Itoa(port)), service.Config.Password)
 		}
 	case UPSDService:
 		if ip, port := service.AddressPort(); ip != "" {

@@ -209,6 +209,7 @@ func TestConvertionLoop(t *testing.T) {
 				// Expected points are the input points with the date changed if it was empty.
 				// The default behavior is to set the date to now if it was empty.
 				expected := make([]types.MetricPoint, 0, len(tt.points))
+
 				for _, point := range tt.points {
 					if point.Time.IsZero() {
 						point.Time = now
@@ -596,6 +597,7 @@ func TestConvertion(t *testing.T) { //nolint: maintidx
 			}
 
 			gotPromLabels := make([]labels.Labels, 0, len(tt.input))
+
 			for _, pts := range tt.input {
 				promLabels := AnnotationToMetaLabels(labels.FromMap(pts.Labels), pts.Annotations)
 				gotPromLabels = append(gotPromLabels, promLabels)

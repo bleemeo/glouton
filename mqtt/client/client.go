@@ -477,14 +477,14 @@ func (c *Client) DiagnosticArchive(_ context.Context, archive types.ArchiveWrite
 
 	fileID := strings.ToLower(strings.ReplaceAll(c.opts.ID, " ", "-"))
 
-	file, err := archive.Create(fmt.Sprintf("%s-mqtt-stats.txt", fileID))
+	file, err := archive.Create(fileID + "-mqtt-stats.txt")
 	if err != nil {
 		return err
 	}
 
 	fmt.Fprintf(file, "%s", c.stats)
 
-	file, err = archive.Create(fmt.Sprintf("%s-mqtt-client.json", fileID))
+	file, err = archive.Create(fileID + "-mqtt-client.json")
 	if err != nil {
 		return err
 	}

@@ -33,7 +33,7 @@ import (
 // Blackbox implements its own yaml marshaller that sets default values,
 // so we need to unmarshal it to set the default values.
 func blackboxModuleHookFunc() mapstructure.DecodeHookFuncType {
-	return func(source reflect.Type, target reflect.Type, data interface{}) (interface{}, error) {
+	return func(_ reflect.Type, target reflect.Type, data interface{}) (interface{}, error) {
 		module, ok := reflect.New(target).Interface().(*bbConf.Module)
 		if !ok {
 			return data, nil

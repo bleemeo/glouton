@@ -77,7 +77,7 @@ func NewHTTP(
 		httpHost:           httpHost,
 		expectedStatusCode: expectedStatusCode,
 		client: &http.Client{
-			CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
 				return http.ErrUseLastResponse
 			},
 			Transport: types.NewHTTPTransport(tlsConfig),

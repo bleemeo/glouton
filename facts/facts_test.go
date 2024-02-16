@@ -196,6 +196,7 @@ sockaddrs: <DST,GATEWAY,NETMASK,IFP,IFA>
 			if gotIP != tt.wantIP {
 				t.Errorf("decodeFreeBSDRouteGet() IP = %v, want %v", gotIP, tt.wantIP)
 			}
+
 			if gotMac != tt.wantMac {
 				t.Errorf("decodeFreeBSDRouteGet() MAC = %v, want %v", gotMac, tt.wantMac)
 			}

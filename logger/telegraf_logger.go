@@ -99,7 +99,7 @@ func (t *TelegrafLogger) Info(args ...interface{}) {
 
 // addNameToArgs adds the input name to the log, should be used with Print.
 func (t *TelegrafLogger) addNameToArgs(args ...interface{}) string {
-	log := fmt.Sprintf("%s: ", t.name)
+	log := t.name + ": "
 
 	for _, arg := range args {
 		log += fmt.Sprint(arg)

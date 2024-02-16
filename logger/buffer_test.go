@@ -108,6 +108,7 @@ func Test_bufferSize(t *testing.T) {
 			for _, n := range []int{0, 1, 2} {
 				if !seenNumber[n] {
 					t.Errorf("line #%d should be present, but isn't", n)
+
 					hadError = true
 				}
 			}
@@ -131,17 +132,20 @@ func Test_bufferSize(t *testing.T) {
 
 			if headEndAt == 0 {
 				t.Errorf("no absent value. Buffer is too large / test don't write enough")
+
 				hadError = true
 			}
 
 			if tailStartAt == 0 {
 				t.Errorf("no starting tail. This isn't expected. firstAbsent=%d", headEndAt)
+
 				hadError = true
 			}
 
 			for n := headEndAt; n < tailStartAt; n++ {
 				if seenNumber[n] {
 					t.Errorf("line %d is present, but shouldn't (head end=%d, tail start=%d)", n, headEndAt, tailStartAt)
+
 					hadError = true
 
 					break
@@ -151,6 +155,7 @@ func Test_bufferSize(t *testing.T) {
 			for n := tailStartAt; n < maxLine; n++ {
 				if !seenNumber[n] {
 					t.Errorf("line %d isn't present, but should (head end=%d, tail start=%d)", n, headEndAt, tailStartAt)
+
 					hadError = true
 
 					break

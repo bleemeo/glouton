@@ -41,7 +41,7 @@ func setupGathering(t *testing.T, dirName string) (mfs []*dto.MetricFamily, defe
 	deferFn = func() { cancel(); vSphereDeferFn() }
 
 	manager := new(Manager)
-	manager.RegisterGatherers(ctx, []config.VSphere{vSphereCfg}, func(opt registry.RegistrationOption, gatherer prometheus.Gatherer) (int, error) { return 0, nil }, nil, facts.NewMockFacter(make(map[string]string)))
+	manager.RegisterGatherers(ctx, []config.VSphere{vSphereCfg}, func(_ registry.RegistrationOption, _ prometheus.Gatherer) (int, error) { return 0, nil }, nil, facts.NewMockFacter(make(map[string]string)))
 
 	var (
 		vSphere *vSphere

@@ -394,7 +394,7 @@ func (c *HTTPClient) do(ctx context.Context, req *http.Request, result interface
 			}
 		}
 
-		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.token.AccessToken))
+		req.Header.Set("Authorization", "Bearer "+c.token.AccessToken)
 	}
 
 	for {

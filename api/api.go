@@ -149,6 +149,7 @@ func (api *API) init() {
 		diagnosticTmpl, err = template.New("diagnostic").Parse(string(diagnosticBody))
 		if err != nil {
 			diagnosticTmpl = nil
+
 			logger.Printf("Error while loading diagnostic.html. Local UI will be broken: %v", err)
 		}
 	}
@@ -242,7 +243,7 @@ func (api *API) init() {
 	}
 
 	router.Handle("/static/*", http.StripPrefix("/static", &assetsFileServer{fs: http.FileServer(http.FS(staticFolder))}))
-	router.HandleFunc("/*", func(w http.ResponseWriter, r *http.Request) {
+	router.HandleFunc("/*", func(w http.ResponseWriter, _ *http.Request) {
 		var err error
 		if indexTmpl == nil {
 			_, err = w.Write(fallbackIndex)
@@ -256,6 +257,7 @@ func (api *API) init() {
 				StaticCDNURL: staticURL,
 			})
 		}
+
 		if err != nil {
 			logger.V(2).Printf("fail to serve index.html: %v", err)
 		}

@@ -18,6 +18,7 @@ package snmp
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"glouton/config"
 	"glouton/facts"
@@ -266,7 +267,7 @@ func Test_humanError(t *testing.T) {
 		{
 			name: "exporter connection refused",
 			err: scrapper.TargetError{
-				ConnectErr: fmt.Errorf("something like dial tcp 127.0.0.1:9116: connect: connection refused"), //nolint: goerr113
+				ConnectErr: errors.New("something like dial tcp 127.0.0.1:9116: connect: connection refused"), //nolint: goerr113
 			},
 			want: "snmp_exporter didn't respond",
 		},

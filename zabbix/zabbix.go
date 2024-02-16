@@ -258,6 +258,7 @@ func splitData(request string) (string, []string, error) {
 			if strings.LastIndex(joinArgs, `"`) != len(joinArgs)-1 {
 				return key, args, ErrQuotedParamContainsUnquoted
 			}
+
 			if string(joinArgs[j]) == `"` {
 				args = append(args, joinArgs[j+1:len(joinArgs)-1])
 

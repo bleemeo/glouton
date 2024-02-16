@@ -34,8 +34,8 @@ func testMatcher(t *testing.T, matcher types.Matcher, allowedItems []string, den
 
 	if reMatcher, ok := matcher.(types.MatcherRegexp); ok {
 		denyREString := reMatcher.AsDenyRegexp()
-		denyRE, err = regexp.Compile(denyREString)
 
+		denyRE, err = regexp.Compile(denyREString)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -299,6 +299,7 @@ func TestDefaultDFFSTypeIgnore(t *testing.T) {
 			t.Parallel()
 
 			match := true
+
 			for _, v := range cfg.DF.IgnoreFSType {
 				if v == item {
 					match = false

@@ -94,7 +94,7 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 		t.Fatal(err)
 	}
 
-	httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {}))
+	httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {}))
 
 	tests := []testCase{
 		{
@@ -2061,7 +2061,7 @@ func runTest(t *testing.T, test testCase, usePlainTCPOrSSL bool, monitorID, agen
 	reg, err := registry.New(registry.Option{
 		FQDN:        agentFQDN,
 		GloutonPort: "8015",
-		PushPoint: pushFunction(func(ctx context.Context, points []types.MetricPoint) {
+		PushPoint: pushFunction(func(_ context.Context, points []types.MetricPoint) {
 			l.Lock()
 			defer l.Unlock()
 
@@ -2300,7 +2300,7 @@ func (w wrapListenner) Accept() (net.Conn, error) {
 }
 
 func (t *httpTestTarget) Start() {
-	t.srv = httptest.NewUnstartedServer(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+	t.srv = httptest.NewUnstartedServer(http.HandlerFunc(func(rw http.ResponseWriter, _ *http.Request) {
 		if t.HTTPDelay > 0 {
 			time.Sleep(t.HTTPDelay)
 		}
@@ -2380,7 +2380,7 @@ func (t *httpTestTarget) Certificate() *x509.Certificate {
 
 func (t *httpTestTarget) RequestContext(ctx context.Context) context.Context {
 	return httptrace.WithClientTrace(ctx, &httptrace.ClientTrace{
-		TLSHandshakeDone: func(cs tls.ConnectionState, e error) {
+		TLSHandshakeDone: func(_ tls.ConnectionState, _ error) {
 			if t.TimeoutAfterHandshake {
 				time.Sleep(timeoutTime)
 			}
@@ -2401,7 +2401,7 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 		t.Fatal(err)
 	}
 
-	httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {}))
+	httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {}))
 
 	tests := []testCase{
 		{

@@ -18,7 +18,6 @@ package influxdb
 
 import (
 	"context"
-	"fmt"
 	"glouton/logger"
 	"glouton/store"
 	"glouton/types"
@@ -90,7 +89,7 @@ func (c *Client) doConnect() error {
 
 	// Create the database
 	query := influxDBClient.Query{
-		Command: fmt.Sprintf("CREATE DATABASE %s", c.dataBaseName),
+		Command: "CREATE DATABASE " + c.dataBaseName,
 	}
 	answer, err := c.influxClient.Query(query)
 	// If the query creation failed
@@ -199,6 +198,7 @@ func (c *Client) convertPendingPoints() {
 		pt, err := convertMetricPoint(metricPoint, c.additionalTags)
 		if err != nil {
 			logger.V(2).Printf("Error: impossible to create an influxMetricPoint, the %s metric won't be sent to the influxdb server", metricPoint.Labels[types.LabelName])
+
 			nbFailConversion++
 
 			continue

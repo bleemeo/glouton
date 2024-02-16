@@ -248,9 +248,9 @@ func (d *Discovery) createHTTPCheck(
 		return
 	}
 
-	u, err := url.Parse(fmt.Sprintf("http://%s", primaryAddress))
+	u, err := url.Parse("http://" + primaryAddress) //nolint: goconst
 	if err != nil {
-		logger.V(2).Printf("can't parse URL \"%s\" ? This shouldn't happen: %v", fmt.Sprintf("http://%s", primaryAddress), err)
+		logger.V(2).Printf("can't parse URL \"%s\" ? This shouldn't happen: %v", "http://"+primaryAddress, err)
 
 		return
 	}
@@ -342,7 +342,7 @@ func (d *Discovery) addCheck(serviceCheck checker, service Service) {
 	lbls := service.LabelsOfStatus()
 
 	options := registry.RegistrationOption{
-		Description:  fmt.Sprintf("check for %s", service.Name),
+		Description:  "check for " + service.Name,
 		Interval:     service.Interval,
 		ExtraLabels:  lbls,
 		JitterSeed:   labels.FromMap(lbls).Hash(),

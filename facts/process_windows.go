@@ -150,7 +150,7 @@ func retrieveCmdLine(pid uint32) (cmdline string, err error) {
 
 	if bufLen == 0 {
 		// This errors represents a windows specific error realated to the NtQueryInformationProcess
-		return "", fmt.Errorf("NtQueryInformationProcess: empty buffer requested") //nolint:goerr113
+		return "", errors.New("NtQueryInformationProcess: empty buffer requested") //nolint:goerr113
 	}
 
 	buf := make([]byte, bufLen)

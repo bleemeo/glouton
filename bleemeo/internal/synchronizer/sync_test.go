@@ -65,7 +65,7 @@ func TestSync(t *testing.T) {
 	helper.api.resources[mockAPIResourceService].AddStore(newMonitor)
 
 	agentResource, _ := helper.api.resources[mockAPIResourceAgent].(*genericResource)
-	agentResource.CreateHook = func(r *http.Request, body []byte, valuePtr interface{}) error {
+	agentResource.CreateHook = func(_ *http.Request, _ []byte, _ interface{}) error {
 		return fmt.Errorf("%w: agent is already registered, shouldn't re-register", errUnexpectedOperation)
 	}
 

@@ -165,7 +165,7 @@ func newAPI() *mockAPI {
 
 	api.AddResource(mockAPIResourceAgent, &genericResource{
 		Type: payloadAgent{},
-		CreateHook: func(r *http.Request, body []byte, valuePtr interface{}) error {
+		CreateHook: func(_ *http.Request, _ []byte, valuePtr interface{}) error {
 			agent, _ := valuePtr.(*payloadAgent)
 
 			// TODO: Glouton currently don't send the AccountID for SNMP type but do for
@@ -186,7 +186,7 @@ func newAPI() *mockAPI {
 			}
 
 			if agent.AgentType == agentTypeAgent.ID {
-				api.Username = fmt.Sprintf("%s@bleemeo.com", agent.ID)
+				api.Username = agent.ID + "@bleemeo.com"
 				api.Password = agent.InitialPassword
 			}
 
@@ -229,7 +229,7 @@ func newAPI() *mockAPI {
 				return active == m.DeactivatedAt.IsZero(), nil
 			},
 		},
-		PatchHook: func(r *http.Request, body []byte, valuePtr interface{}, oldValue interface{}) error {
+		PatchHook: func(_ *http.Request, body []byte, valuePtr interface{}, _ interface{}) error {
 			var data map[string]interface{}
 
 			metricPtr, _ := valuePtr.(*metricPayload)
@@ -264,7 +264,7 @@ func newAPI() *mockAPI {
 	api.AddResource(mockAPIResourceContainer, &genericResource{
 		Type:        containerPayload{},
 		ValidFilter: []string{"host"},
-		PatchHook: func(r *http.Request, body []byte, valuePtr interface{}, oldValue interface{}) error {
+		PatchHook: func(_ *http.Request, _ []byte, valuePtr interface{}, oldValue interface{}) error {
 			containerPtr, _ := valuePtr.(*containerPayload)
 			oldContainer, _ := oldValue.(containerPayload)
 
@@ -513,7 +513,7 @@ func (api *mockAPI) init() {
 	api.serveMux = http.NewServeMux()
 	api.Handle("/o/token/", api.oauthHandler)
 
-	api.Handle("/v1/info/", func(r *http.Request) (interface{}, int, error) {
+	api.Handle("/v1/info/", func(_ *http.Request) (interface{}, int, error) {
 		return `{"maintenance": false, "agents": {"minimum_versions": {}}}"`, 200, nil
 	})
 

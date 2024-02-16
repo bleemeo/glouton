@@ -256,11 +256,11 @@ func parserReader(data []byte, filter func(lbls labels.Labels) bool) ([]*dto.Met
 		switch et { //nolint:exhaustive
 		case textparse.EntryType:
 			// Can ony set type before receiving first sample and can't be updated
-			if entry.Metric != nil { //nolint:protogetter
+			if entry.Metric != nil {
 				return nil, fmt.Errorf("%w: TYPE for metric %s reported after samples", errParseError, metricName)
 			}
 
-			if entry.Type != nil { //nolint:protogetter
+			if entry.Type != nil {
 				return nil, fmt.Errorf("%w: second TYPE line for metric %s", errParseError, metricName)
 			}
 
@@ -278,7 +278,7 @@ func parserReader(data []byte, filter func(lbls labels.Labels) bool) ([]*dto.Met
 			}
 		case textparse.EntryHelp:
 			// Help can we set later but not updated
-			if entry.Help != nil { //nolint:protogetter
+			if entry.Help != nil {
 				return nil, fmt.Errorf("%w: second HELP line for metric %s", errParseError, metricName)
 			}
 
@@ -292,7 +292,7 @@ func parserReader(data []byte, filter func(lbls labels.Labels) bool) ([]*dto.Met
 				metric.TimestampMs = proto.Int64(*serieTS)
 			}
 
-			if entry.Type == nil { //nolint:protogetter
+			if entry.Type == nil {
 				entry.Type = dto.MetricType_UNTYPED.Enum()
 			}
 
@@ -307,7 +307,7 @@ func parserReader(data []byte, filter func(lbls labels.Labels) bool) ([]*dto.Met
 				metric.Untyped = &dto.Untyped{Value: proto.Float64(serieFloat)}
 			}
 
-			entry.Metric = append(entry.Metric, metric) //nolint:protogetter
+			entry.Metric = append(entry.Metric, metric)
 		}
 	}
 
@@ -322,7 +322,7 @@ func parserReader(data []byte, filter func(lbls labels.Labels) bool) ([]*dto.Met
 				mf.Type = dto.MetricType_UNTYPED.Enum()
 			}
 
-			if mf.Type == nil { //nolint:protogetter
+			if mf.Type == nil {
 				mf.Type = dto.MetricType_UNTYPED.Enum()
 			}
 

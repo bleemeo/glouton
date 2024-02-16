@@ -81,12 +81,12 @@ func (cl *MockDockerClient) ContainerInspect(_ context.Context, container string
 }
 
 // ContainerList list containers from in-memory list.
-func (cl *MockDockerClient) ContainerList(_ context.Context, options dockerTypes.ContainerListOptions) ([]dockerTypes.Container, error) {
+func (cl *MockDockerClient) ContainerList(_ context.Context, options containerTypes.ListOptions) ([]dockerTypes.Container, error) {
 	if cl.ReturnError != nil {
 		return nil, cl.ReturnError
 	}
 
-	if !reflect.DeepEqual(options, dockerTypes.ContainerListOptions{All: true}) {
+	if !reflect.DeepEqual(options, containerTypes.ListOptions{All: true}) {
 		return nil, fmt.Errorf("ContainerList %w with options other than all=True", errNotImplemented)
 	}
 
