@@ -22,7 +22,9 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -73,7 +75,7 @@ func TestBackwardCompatibleV0(t *testing.T) {
 
 	writer := bytes.NewBuffer(nil)
 
-	state, _ := Load("not_found", "not_found")
+	state, _ := load(true, "not_found", "not_found")
 
 	_ = state.SetBleemeoCredentials(agentUUID, password)
 	_ = state.savePersistentTo(writer)
@@ -354,5 +356,292 @@ func TestGetByPrefix(t *testing.T) {
 				t.Errorf("Unexpected result of GetByPrefix(%q, %T): (-want +got)\n%v", tc.prefix, tc.resultType, diff)
 			}
 		})
+	}
+}
+
+// TestBackgroundWriter test that state.cache.json is wrote (by the background thread).
+func TestBackgroundWriter(t *testing.T) {
+	const (
+		cacheKeyString  = "this-should-be-stored-in-cache-file"
+		cacheKeyString2 = "another-marker-value"
+	)
+
+	tmpdir := t.TempDir()
+
+	persistentPath := filepath.Join(tmpdir, "state.json")
+	cachePath := filepath.Join(tmpdir, "state.cache.json")
+
+	state, err := Load(persistentPath, cachePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Need to call first SaveTo() to create state the first time
+	if err := state.SaveTo(persistentPath, cachePath); err != nil {
+		t.Fatal(err)
+	}
+
+	// Wait for state.cache.json to be written a first time by call to SaveTo
+	deadline := time.Now().Add(10 * time.Second)
+	fileCreated := false
+
+	for time.Now().Before(deadline) {
+		if _, err := os.Stat(cachePath); err == nil {
+			fileCreated = true
+
+			break
+		}
+	}
+
+	if !fileCreated {
+		t.Fatalf("cache file not created")
+	}
+
+	// This will cause a persistent writes
+	id := state.TelemetryID()
+
+	data, err := os.ReadFile(persistentPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !bytes.Contains(data, []byte(id)) {
+		t.Errorf("TelemetryID isn't stored in persistent state")
+	}
+
+	// This cause a *background* write to state.cache.json
+	_ = state.Set("key1", cacheKeyString)
+
+	deadline = time.Now().Add(10 * time.Second)
+	valueFound := false
+
+	for time.Now().Before(deadline) {
+		data, err := os.ReadFile(cachePath)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if bytes.Contains(data, []byte(cacheKeyString)) {
+			valueFound = true
+
+			break
+		}
+
+		time.Sleep(250 * time.Millisecond)
+	}
+
+	if !valueFound {
+		t.Errorf("cacheKeyString isn't stored in cache state")
+	}
+
+	_ = state.Set("key2", cacheKeyString2)
+	// Close ensure the background write finish
+	state.Close()
+
+	data, err = os.ReadFile(cachePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !bytes.Contains(data, []byte(cacheKeyString)) {
+		t.Errorf("cacheKeyString isn't stored in cache state")
+	}
+
+	if !bytes.Contains(data, []byte(cacheKeyString2)) {
+		t.Errorf("cacheKeyString2 isn't stored in cache state")
+	}
+}
+
+// TestBackgroundWriterNoCreateWait is similar to TestBackgroundWriter but ensure that even if
+// we don't wait for state.cache.json creation, it will eventually be created.
+func TestBackgroundWriterNoCreateWait(t *testing.T) {
+	const (
+		cacheKeyString  = "this-should-be-stored-in-cache-file"
+		cacheKeyString2 = "another-marker-value"
+	)
+
+	tmpdir := t.TempDir()
+
+	persistentPath := filepath.Join(tmpdir, "state.json")
+	cachePath := filepath.Join(tmpdir, "state.cache.json")
+
+	state, err := Load(persistentPath, cachePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Need to call first SaveTo() to create state the first time
+	if err := state.SaveTo(persistentPath, cachePath); err != nil {
+		t.Fatal(err)
+	}
+
+	id := state.TelemetryID()
+	_ = state.Set("key1", cacheKeyString)
+
+	// persistent is always created.
+	data, err := os.ReadFile(persistentPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !bytes.Contains(data, []byte(id)) {
+		t.Errorf("TelemetryID isn't stored in persistent state")
+	}
+
+	// At this point, state.cache.json might not be created
+	_, err = os.Stat(cachePath)
+	if errors.Is(err, os.ErrNotExist) {
+		t.Log("cache file don't exists, test will fully test that modification done before cache.json created aren't lost")
+	} else {
+		t.Log("cache file already exists, test might not fully test that modification done before cache.json created aren't lost")
+	}
+
+	// Need to wait for state.cache.json to be written at least once
+	deadline := time.Now().Add(10 * time.Second)
+	fileCreated := false
+
+	for time.Now().Before(deadline) {
+		if _, err := os.Stat(cachePath); err == nil {
+			fileCreated = true
+
+			break
+		}
+	}
+
+	if !fileCreated {
+		t.Fatalf("cache file not created")
+	}
+
+	// Cache is allowed to not contains the first key, because the background thread might just write
+	// the empty state requested in SaveTo() and could submitting write asked by Set().
+	// But any additional change to cache will fix the issue
+	_ = state.Set("key2", cacheKeyString2)
+	state.Close()
+
+	data, err = os.ReadFile(cachePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !bytes.Contains(data, []byte(cacheKeyString)) {
+		t.Errorf("cacheKeyString isn't stored in cache state")
+	}
+
+	if !bytes.Contains(data, []byte(cacheKeyString2)) {
+		t.Errorf("cacheKeyString2 isn't stored in cache state")
+	}
+}
+
+// TestSkipCacheWriteIfRemoved make sure that state.cache.json isn't created by Glouton
+// if it was deleted.
+func TestSkipCacheWriteIfRemoved(t *testing.T) {
+	const (
+		cacheKeyString  = "this-should-be-stored-in-cache-file"
+		cacheKeyString2 = "another-marker-value"
+		agentID         = "agent-id"
+		password1       = "password1"
+		password2       = "password2"
+	)
+
+	tmpdir := t.TempDir()
+
+	persistentPath := filepath.Join(tmpdir, "state.json")
+	cachePath := filepath.Join(tmpdir, "state.cache.json")
+
+	state, err := Load(persistentPath, cachePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Need to call first SaveTo() to create state the first time
+	if err := state.SaveTo(persistentPath, cachePath); err != nil {
+		t.Fatal(err)
+	}
+
+	// Wait for state.cache.json to be written a first time by call to SaveTo
+	deadline := time.Now().Add(10 * time.Second)
+	fileCreated := false
+
+	for time.Now().Before(deadline) {
+		if _, err := os.Stat(cachePath); err == nil {
+			fileCreated = true
+
+			break
+		}
+	}
+
+	if !fileCreated {
+		t.Fatalf("cache file not created")
+	}
+
+	_ = state.SetBleemeoCredentials(agentID, password1)
+	_ = state.Set("key1", cacheKeyString)
+
+	data, err := os.ReadFile(persistentPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !bytes.Contains(data, []byte(password1)) {
+		t.Errorf("password1 isn't stored in persistent state")
+	}
+
+	deadline = time.Now().Add(10 * time.Second)
+	valueFound := false
+
+	for time.Now().Before(deadline) {
+		data, err := os.ReadFile(cachePath)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if bytes.Contains(data, []byte(cacheKeyString)) {
+			valueFound = true
+
+			break
+		}
+
+		time.Sleep(250 * time.Millisecond)
+	}
+
+	if !valueFound {
+		t.Errorf("cacheKeyString isn't stored in cache state")
+	}
+
+	// user now remove the state.cache.json
+	os.Remove(cachePath)
+
+	_ = state.SetBleemeoCredentials(agentID, password2)
+	_ = state.Set("key2", cacheKeyString2)
+
+	// persistent get updated, but state.cache.json will not be created at all
+	data, err = os.ReadFile(persistentPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !bytes.Contains(data, []byte(password2)) {
+		t.Errorf("password1 isn't stored in persistent state")
+	}
+
+	deadline = time.Now().Add(3 * time.Second)
+	fileCreated = false
+
+	for time.Now().Before(deadline) {
+		if _, err := os.Stat(cachePath); err == nil {
+			fileCreated = true
+
+			break
+		}
+	}
+
+	if fileCreated {
+		t.Fatalf("cache file IS created")
+	}
+
+	state.Close()
+
+	if _, err := os.Stat(cachePath); err == nil {
+		t.Fatalf("cache file IS created")
 	}
 }

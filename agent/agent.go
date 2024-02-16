@@ -420,7 +420,7 @@ func Run(ctx context.Context, reloadState ReloadState, configFiles []string, sig
 }
 
 // BleemeoAccountID returns the Account UUID of Bleemeo
-// It return the empty string if the Account UUID is not available (e.g. because Bleemeo is disabled or mis-configured).
+// It return the empty string if the Account UUID is not available (e.g. because Bleemeo is disabled or miss-configured).
 func (a *agent) BleemeoAccountID() string {
 	if a.bleemeoConnector == nil {
 		return ""
@@ -676,6 +676,8 @@ func (a *agent) updateThresholds(ctx context.Context, thresholds map[string]thre
 func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:maintidx
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
+
+	defer a.state.Close()
 
 	a.cancel = cancel
 	a.metricResolution = 10 * time.Second
@@ -2248,6 +2250,8 @@ func (a *agent) diagnosticGloutonState(_ context.Context, archive types.ArchiveW
 		return err
 	}
 
+	persistentSize, cacheSize := a.state.FileSizes()
+
 	a.l.Lock()
 	a.triggerLock.Lock()
 
@@ -2263,6 +2267,9 @@ func (a *agent) diagnosticGloutonState(_ context.Context, archive types.ArchiveW
 		DockerInputID             int
 		MetricResolutionSeconds   float64
 		PahoLastPingCheckAt       time.Time
+		PathToStateDir            string
+		PersistentStateSize       int
+		CacheStateSize            int
 	}{
 		HostRootPath:              a.hostRootPath,
 		LastHealthCheck:           a.lastHealthCheck,
@@ -2275,6 +2282,9 @@ func (a *agent) diagnosticGloutonState(_ context.Context, archive types.ArchiveW
 		DockerInputID:             a.dockerInputID,
 		MetricResolutionSeconds:   a.metricResolution.Seconds(),
 		PahoLastPingCheckAt:       a.pahoLogWrapper.LastPingAt(),
+		PathToStateDir:            a.stateDir,
+		PersistentStateSize:       persistentSize,
+		CacheStateSize:            cacheSize,
 	}
 
 	a.triggerLock.Unlock()
@@ -2573,13 +2583,13 @@ func parseIPOutput(content []byte) string {
 // Mostly it make that access to file pass though hostroot.
 func setupContainer(hostRootPath string) {
 	if hostRootPath == "" {
-		logger.Printf("The agent is running in a container but GLOUTON_DF_HOST_MOUNT_POINT is unset. Some informations will be missing")
+		logger.Printf("The agent is running in a container but GLOUTON_DF_HOST_MOUNT_POINT is unset. Some information will be missing")
 
 		return
 	}
 
 	if _, err := os.Stat(hostRootPath); os.IsNotExist(err) {
-		logger.Printf("The agent is running in a container but host / partition is not mounted on %#v. Some informations will be missing", hostRootPath)
+		logger.Printf("The agent is running in a container but host / partition is not mounted on %#v. Some information will be missing", hostRootPath)
 		logger.Printf("Hint: to fix this issue when using Docker, add \"-v /:%v:ro\" when running the agent", hostRootPath)
 
 		return
