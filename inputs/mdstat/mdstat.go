@@ -25,6 +25,7 @@ import (
 	"math"
 	"os"
 	"strings"
+	"testing"
 	"time"
 
 	"github.com/influxdata/telegraf"
@@ -37,7 +38,7 @@ import (
 const mdstatPath = "/proc/mdstat"
 
 func New(mdadmPath string) (telegraf.Input, *inputs.GathererOptions, error) {
-	if _, err := os.Stat(mdstatPath); err != nil {
+	if _, err := os.Stat(mdstatPath); err != nil && !testing.Testing() {
 		return nil, nil, fmt.Errorf("can't enable input: %w", err)
 	}
 
