@@ -109,11 +109,14 @@ func TestLabelsToText(t *testing.T) {
 			if got != tt.want {
 				t.Errorf("LabelsToText() = %v, want %v", got, tt.want)
 			}
+
 			back := TextToLabels(got)
+
 			wantBack := tt.wantBack
 			if tt.wantBack == nil {
 				wantBack = tt.args.labels
 			}
+
 			if !reflect.DeepEqual(back, wantBack) {
 				t.Errorf("TextToLabels(LabelsToText()) = %v, want %v", back, wantBack)
 			}

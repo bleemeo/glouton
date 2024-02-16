@@ -17,10 +17,11 @@
 package scrapper
 
 import (
-	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"glouton/logger"
+	"glouton/prometheus/model"
 	"glouton/prometheus/registry"
 	"glouton/types"
 	"glouton/version"
@@ -28,13 +29,18 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"sort"
 	"time"
 
 	dto "github.com/prometheus/client_model/go"
-	"github.com/prometheus/common/expfmt"
+	"github.com/prometheus/prometheus/model/labels"
+	"github.com/prometheus/prometheus/model/textparse"
+	"google.golang.org/protobuf/proto"
 )
 
 const defaultGatherTimeout = 10 * time.Second
+
+var errParseError = errors.New("text format parsing error: ")
 
 type TargetError struct {
 	// First 32kb of response
@@ -52,6 +58,10 @@ func (e TargetError) Error() string {
 
 	if e.ConnectErr != nil {
 		return e.ConnectErr.Error()
+	}
+
+	if e.DecodeErr != nil {
+		return e.DecodeErr.Error()
 	}
 
 	return fmt.Sprintf("unexpected HTTP status %d", e.StatusCode)
@@ -105,7 +115,7 @@ func (t *Target) Gather() ([]*dto.MetricFamily, error) {
 	return t.GatherWithState(ctx, registry.GatherState{})
 }
 
-func (t *Target) GatherWithState(ctx context.Context, _ registry.GatherState) ([]*dto.MetricFamily, error) {
+func (t *Target) GatherWithState(ctx context.Context, state registry.GatherState) ([]*dto.MetricFamily, error) {
 	u := t.URL
 
 	logger.V(2).Printf("Scrapping Prometheus exporter %s", u.String())
@@ -115,24 +125,7 @@ func (t *Target) GatherWithState(ctx context.Context, _ registry.GatherState) ([
 		return nil, fmt.Errorf("read from %s: %w", u.String(), err)
 	}
 
-	reader := bytes.NewReader(body)
-
-	var parser expfmt.TextParser
-
-	resultMap, err := parser.TextToMetricFamilies(reader)
-	if err != nil {
-		return nil, TargetError{
-			DecodeErr: err,
-		}
-	}
-
-	result := make([]*dto.MetricFamily, 0, len(resultMap))
-
-	for _, family := range resultMap {
-		result = append(result, family)
-	}
-
-	return result, nil
+	return parserReader(body, state.HintMetricFilter)
 }
 
 func (t *Target) readAll(ctx context.Context) ([]byte, error) {
@@ -182,4 +175,163 @@ func (t *Target) readAll(ctx context.Context) ([]byte, error) {
 	}
 
 	return body, err
+}
+
+func parserReader(data []byte, filter func(lbls labels.Labels) bool) ([]*dto.MetricFamily, error) {
+	var (
+		et  textparse.Entry
+		err error
+	)
+
+	p, err := textparse.New(data, "", true)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]*dto.MetricFamily, 0)
+	nameToIdx := make(map[string]int)
+
+	for {
+		et, err = p.Next()
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				err = nil
+			}
+
+			break
+		}
+
+		var (
+			tmp        []byte
+			tmp2       []byte
+			lset       labels.Labels
+			metricName string
+			metricType textparse.MetricType
+			metricHelp string
+			serieTS    *int64
+			serieFloat float64
+		)
+
+		switch et { //nolint:exhaustive
+		case textparse.EntryType:
+			tmp, metricType = p.Type()
+			metricName = string(tmp)
+		case textparse.EntryHelp:
+			tmp, tmp2 = p.Help()
+			metricName = string(tmp)
+			metricHelp = string(tmp2)
+		case textparse.EntrySeries:
+			_, serieTS, serieFloat = p.Series()
+			p.Metric(&lset)
+			metricName = lset.Get(types.LabelName)
+		case textparse.EntryHistogram:
+			// This is native histogram which we don't support
+			continue
+		default:
+			continue
+		}
+
+		sort.Sort(lset)
+
+		if lset != nil && filter != nil && !filter(lset) {
+			continue
+		}
+
+		if metricName == "" {
+			continue
+		}
+
+		idx, entryExists := nameToIdx[metricName]
+		if !entryExists {
+			idx = len(result)
+			nameToIdx[metricName] = idx
+
+			result = append(result, &dto.MetricFamily{
+				Name: &metricName,
+			})
+		}
+
+		entry := result[idx]
+
+		switch et { //nolint:exhaustive
+		case textparse.EntryType:
+			// Can ony set type before receiving first sample and can't be updated
+			if entry.Metric != nil {
+				return nil, fmt.Errorf("%w: TYPE for metric %s reported after samples", errParseError, metricName)
+			}
+
+			if entry.Type != nil {
+				return nil, fmt.Errorf("%w: second TYPE line for metric %s", errParseError, metricName)
+			}
+
+			switch metricType { //nolint:exhaustive
+			case textparse.MetricTypeCounter:
+				entry.Type = dto.MetricType_COUNTER.Enum()
+			case textparse.MetricTypeGauge:
+				entry.Type = dto.MetricType_GAUGE.Enum()
+			case textparse.MetricTypeHistogram:
+				entry.Type = dto.MetricType_HISTOGRAM.Enum()
+			case textparse.MetricTypeSummary:
+				entry.Type = dto.MetricType_SUMMARY.Enum()
+			default:
+				entry.Type = dto.MetricType_UNTYPED.Enum()
+			}
+		case textparse.EntryHelp:
+			// Help can we set later but not updated
+			if entry.Help != nil {
+				return nil, fmt.Errorf("%w: second HELP line for metric %s", errParseError, metricName)
+			}
+
+			entry.Help = &metricHelp
+		case textparse.EntrySeries:
+			metric := &dto.Metric{
+				Label: model.Labels2DTO(lset),
+			}
+
+			if serieTS != nil {
+				metric.TimestampMs = proto.Int64(*serieTS)
+			}
+
+			if entry.Type == nil {
+				entry.Type = dto.MetricType_UNTYPED.Enum()
+			}
+
+			switch entry.GetType().String() {
+			case dto.MetricType_COUNTER.Enum().String():
+				metric.Counter = &dto.Counter{Value: proto.Float64(serieFloat)}
+			case dto.MetricType_GAUGE.Enum().String():
+				metric.Gauge = &dto.Gauge{Value: proto.Float64(serieFloat)}
+			case dto.MetricType_UNTYPED.Enum().String():
+				fallthrough
+			default:
+				metric.Untyped = &dto.Untyped{Value: proto.Float64(serieFloat)}
+			}
+
+			entry.Metric = append(entry.Metric, metric)
+		}
+	}
+
+	// Few fixup:
+	// * Remove all empty family
+	// * Remove type of histogram & summary metrics
+	i := 0
+
+	for _, mf := range result {
+		if len(mf.GetMetric()) > 0 {
+			if mf.GetType().String() == dto.MetricType_SUMMARY.String() || mf.GetType().String() == dto.MetricType_HISTOGRAM.String() {
+				mf.Type = dto.MetricType_UNTYPED.Enum()
+			}
+
+			if mf.Type == nil {
+				mf.Type = dto.MetricType_UNTYPED.Enum()
+			}
+
+			result[i] = mf
+			i++
+		}
+	}
+
+	result = result[:i]
+
+	return result, err
 }

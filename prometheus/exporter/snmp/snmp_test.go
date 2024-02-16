@@ -18,6 +18,7 @@ package snmp
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"glouton/config"
 	"glouton/facts"
@@ -266,7 +267,7 @@ func Test_humanError(t *testing.T) {
 		{
 			name: "exporter connection refused",
 			err: scrapper.TargetError{
-				ConnectErr: fmt.Errorf("something like dial tcp 127.0.0.1:9116: connect: connection refused"), //nolint: goerr113
+				ConnectErr: errors.New("something like dial tcp 127.0.0.1:9116: connect: connection refused"), //nolint: goerr113
 			},
 			want: "snmp_exporter didn't respond",
 		},
@@ -538,7 +539,7 @@ func Test_mfsFilterInterface(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got := mfsFilterInterface(tt.args.mfs, tt.args.interfaceUp)
 
-			if diff := types.DiffMetricFamilies(tt.want, got, false); diff != "" {
+			if diff := types.DiffMetricFamilies(tt.want, got, false, false); diff != "" {
 				t.Errorf("mfsFilterInterface() mismatch (-want +got):\n%s", diff)
 			}
 		})
@@ -589,7 +590,7 @@ func Test_processMFS(t *testing.T) {
 
 			got := processMFS(input, tt.state, tt.status, types.StatusOk, tt.msg)
 
-			if diff := types.DiffMetricFamilies(want, got, false); diff != "" {
+			if diff := types.DiffMetricFamilies(want, got, false, false); diff != "" {
 				t.Errorf("processMFS() mismatch (-want +got):\n%s", diff)
 			}
 		})

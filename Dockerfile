@@ -4,7 +4,7 @@
 # docker run --name="glouton" --net=host --pid=host -v /var/lib/glouton:/var/lib/glouton -v /var/run/docker.sock:/var/run/docker.sock -v /:/hostroot:ro glouton
 #
 
-FROM --platform=$BUILDPLATFORM alpine:3.16 as build
+FROM --platform=$BUILDPLATFORM alpine:3.19 as build
 
 ARG TARGETARCH
 
@@ -15,7 +15,7 @@ COPY dist/glouton_linux_arm_6/glouton /glouton.arm
 RUN cp -p /glouton.$TARGETARCH /glouton
 
 # We use alpine because glouton-veths needs nsenter and ip commands.
-FROM alpine:3.16
+FROM alpine:3.19
 
 LABEL maintainer="Bleemeo Docker Maintainers <packaging-team@bleemeo.com>"
 

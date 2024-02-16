@@ -113,7 +113,7 @@ func (bc *baseCheck) DiagnosticArchive(_ context.Context, archive types.ArchiveW
 
 	disabledPersistent := make([]string, 0)
 
-	bc.disabledPersistent.Range(func(key, value any) bool {
+	bc.disabledPersistent.Range(func(key, _ any) bool {
 		keyStr, ok := key.(string)
 		if !ok {
 			keyStr = fmt.Sprintf("%v", key)

@@ -19,7 +19,9 @@ package ruler
 import (
 	"context"
 	"glouton/logger"
+	"glouton/prometheus/matcher"
 	"glouton/prometheus/model"
+	gloutonRules "glouton/prometheus/rules"
 	"glouton/store"
 	"glouton/types"
 	"sort"
@@ -38,13 +40,20 @@ const pointsMaxAge = 5 * time.Minute
 
 // SimpleRuler is a ruler that run Prometheus rules.
 type SimpleRuler struct {
-	l     sync.Mutex
-	st    *store.Store
-	query rules.QueryFunc
-	rules []*rules.RecordingRule
+	l        sync.Mutex
+	st       *store.Store
+	query    rules.QueryFunc
+	rules    []*rules.RecordingRule
+	matchers []matcher.Matchers
 }
 
 func New(input []*rules.RecordingRule) *SimpleRuler {
+	matchers := make([]matcher.Matchers, 0, len(input))
+
+	for _, rr := range input {
+		matchers = append(matchers, gloutonRules.MatchersFromQuery(rr.Query())...)
+	}
+
 	promLogger := logger.GoKitLoggerWrapper(logger.V(1))
 	engine := promql.NewEngine(promql.EngineOpts{
 		Logger:             log.With(promLogger, "component", "query engine"),
@@ -58,10 +67,29 @@ func New(input []*rules.RecordingRule) *SimpleRuler {
 	st := store.New(pointsMaxAge, pointsMaxAge)
 
 	return &SimpleRuler{
-		st:    st,
-		query: rules.EngineQueryFunc(engine, st),
-		rules: input,
+		st:       st,
+		query:    rules.EngineQueryFunc(engine, st),
+		rules:    input,
+		matchers: matchers,
 	}
+}
+
+// filterPointsForRules only allow points used by one of the queries. Input points is modified.
+func filterPointsForRules(points []types.MetricPoint, matchers []matcher.Matchers) []types.MetricPoint {
+	i := 0
+
+	for _, point := range points {
+		if matcher.MatchesAny(point.Labels, matchers) {
+			points[i] = point
+			i++
+
+			continue
+		}
+	}
+
+	points = points[:i]
+
+	return points
 }
 
 // ApplyRulesMFS applies the rules of this ruler and returns the input metric families with the new points.
@@ -83,6 +111,8 @@ func (r *SimpleRuler) ApplyRulesMFS(ctx context.Context, now time.Time, mfs []*d
 	defer r.l.Unlock()
 
 	r.st.RunOnce()
+
+	points = filterPointsForRules(points, r.matchers)
 	r.st.PushPoints(ctx, points)
 
 	for _, rule := range r.rules {

@@ -514,7 +514,7 @@ func (d *Docker) run(ctx context.Context) error {
 
 				if event.Action == "" {
 					// Docker before 1.10 didn't had Action
-					action = event.Status
+					action = events.Action(event.Status)
 				}
 
 				if event.Actor.ID == "" {
@@ -540,7 +540,7 @@ func (d *Docker) run(ctx context.Context) error {
 					ContainerID: actorID,
 				}
 
-				switch action {
+				switch action { //nolint: exhaustive
 				case "start":
 					event.Type = facts.EventTypeStart
 				case "die":
@@ -553,7 +553,7 @@ func (d *Docker) run(ctx context.Context) error {
 					event.Type = facts.EventTypeUnknown
 				}
 
-				if strings.HasPrefix(action, "health_status:") {
+				if strings.HasPrefix(string(action), "health_status:") {
 					event.Type = facts.EventTypeHealth
 
 					_, err := d.updateContainer(ctx, cl, actorID)
@@ -633,7 +633,7 @@ func (d *Docker) updateContainers(ctx context.Context) error {
 		}
 	}
 
-	dockerContainers, err := cl.ContainerList(ctx, dockerTypes.ContainerListOptions{All: true})
+	dockerContainers, err := cl.ContainerList(ctx, container.ListOptions{All: true})
 	if err != nil {
 		return err
 	}
@@ -823,7 +823,7 @@ type dockerClient interface {
 	ContainerExecAttach(ctx context.Context, execID string, config dockerTypes.ExecStartCheck) (dockerTypes.HijackedResponse, error)
 	ContainerExecCreate(ctx context.Context, container string, config dockerTypes.ExecConfig) (dockerTypes.IDResponse, error)
 	ContainerInspect(ctx context.Context, container string) (dockerTypes.ContainerJSON, error)
-	ContainerList(ctx context.Context, options dockerTypes.ContainerListOptions) ([]dockerTypes.Container, error)
+	ContainerList(ctx context.Context, options container.ListOptions) ([]dockerTypes.Container, error)
 	ContainerTop(ctx context.Context, container string, arguments []string) (container.ContainerTopOKBody, error)
 	Events(ctx context.Context, options dockerTypes.EventsOptions) (<-chan events.Message, <-chan error)
 	NetworkInspect(ctx context.Context, network string, options dockerTypes.NetworkInspectOptions) (dockerTypes.NetworkResource, error)

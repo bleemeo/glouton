@@ -798,7 +798,7 @@ func TestKubernetes_Containers(t *testing.T) { //nolint:maintidx
 			k := &Kubernetes{
 				Runtime:  runtime,
 				NodeName: "minikube",
-				openConnection: func(_ context.Context, kubeConfig string, localNode string) (kubeClient, error) {
+				openConnection: func(_ context.Context, _ string, _ string) (kubeClient, error) {
 					return mockClient, nil
 				},
 				IsContainerIgnored: facts.ContainerFilter{}.ContainerIgnored,
@@ -860,6 +860,7 @@ func TestKubernetes_Containers(t *testing.T) { //nolint:maintidx
 				}
 
 				gotWrapper, ok := got.(wrappedContainer)
+
 				switch {
 				case !ok && want.TestHasPod:
 					t.Errorf("got isn't a wrappedContainer, but it must be assocated to a POD")

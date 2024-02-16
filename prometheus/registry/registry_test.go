@@ -61,12 +61,23 @@ type fakeAppenderCallback struct {
 	input []types.MetricPoint
 }
 
-func (f *fakeFilter) FilterPoints(points []types.MetricPoint) []types.MetricPoint {
+func (f *fakeFilter) FilterPoints(points []types.MetricPoint, allowNeededByRules bool) []types.MetricPoint {
+	_ = allowNeededByRules
+
 	return points
 }
 
-func (f *fakeFilter) FilterFamilies(families []*dto.MetricFamily) []*dto.MetricFamily {
+func (f *fakeFilter) FilterFamilies(families []*dto.MetricFamily, allowNeededByRules bool) []*dto.MetricFamily {
+	_ = allowNeededByRules
+
 	return families
+}
+
+func (f *fakeFilter) IsMetricAllowed(lbls labels.Labels, allowNeededByRules bool) bool {
+	_ = lbls
+	_ = allowNeededByRules
+
+	return true
 }
 
 type fakeArchive struct {
@@ -281,7 +292,7 @@ func TestRegistry_Register(t *testing.T) {
 		},
 	}
 
-	if diff := types.DiffMetricFamilies(want, result, false); diff != "" {
+	if diff := types.DiffMetricFamilies(want, result, false, false); diff != "" {
 		t.Errorf("reg.Gather() diff: (-want +got)\n%s", diff)
 	}
 
@@ -431,7 +442,7 @@ func TestRegistry_pushPoint(t *testing.T) {
 		return got[i].GetName() < got[j].GetName()
 	})
 
-	if diff := types.DiffMetricFamilies(want, got, false); diff != "" {
+	if diff := types.DiffMetricFamilies(want, got, false, false); diff != "" {
 		t.Errorf("Gather() missmatch: (-want +got):\n%s", diff)
 	}
 
@@ -488,7 +499,7 @@ func TestRegistry_pushPoint(t *testing.T) {
 		},
 	}
 
-	if diff := types.DiffMetricFamilies(want, got, false); diff != "" {
+	if diff := types.DiffMetricFamilies(want, got, false, false); diff != "" {
 		t.Errorf("Gather() missmatch: (-want +got):\n%s", diff)
 	}
 }
@@ -609,10 +620,12 @@ func TestRegistry_applyRelabel(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			r := &Registry{}
 			r.relabelConfigs = tt.fields.relabelConfigs
+
 			promLabels, annotations, _ := r.applyRelabel(context.Background(), tt.args.input)
 			if !reflect.DeepEqual(promLabels, tt.want) {
 				t.Errorf("Registry.applyRelabel() promLabels = %+v, want %+v", promLabels, tt.want)
 			}
+
 			if !reflect.DeepEqual(annotations, tt.wantAnnotations) {
 				t.Errorf("Registry.applyRelabel() annotations = %+v, want %+v", annotations, tt.wantAnnotations)
 			}
@@ -704,7 +717,8 @@ func TestRegistry_run(t *testing.T) {
 			}
 
 			ctx := context.Background()
-			reg.UpdateRelabelHook(func(ctx context.Context, labels map[string]string) (newLabel map[string]string, retryLater bool) {
+
+			reg.UpdateRelabelHook(func(_ context.Context, labels map[string]string) (newLabel map[string]string, retryLater bool) {
 				labels[types.LabelMetaBleemeoUUID] = testAgentID
 
 				return labels, false
@@ -812,7 +826,7 @@ func registryRunOnce(t *testing.T, now time.Time, reg *Registry, kindToTest sour
 	case kindPushPointCallback:
 		id, err := reg.registerPushPointsCallback(
 			opt,
-			func(c context.Context, t time.Time) {
+			func(c context.Context, _ time.Time) {
 				reg.WithTTL(5*time.Minute).PushPoints(c, input)
 			},
 		)
@@ -2156,7 +2170,7 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 			wantMFs := model.MetricPointsToFamilies(want)
 			model.DropMetaLabelsFromFamilies(wantMFs)
 
-			if diff := types.DiffMetricFamilies(wantMFs, got, true); diff != "" {
+			if diff := types.DiffMetricFamilies(wantMFs, got, true, false); diff != "" {
 				t.Errorf("Gather mismatch (-want +got):\n%s", diff)
 			}
 		})

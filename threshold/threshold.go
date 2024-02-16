@@ -482,24 +482,38 @@ func (r *Registry) Run(ctx context.Context) error {
 }
 
 func (r *Registry) run(save bool) {
+	r.cleanExpired()
+
+	if save {
+		jsonList := r.getAsJSONList()
+		_ = r.state.Set(statusCacheKey, jsonList)
+	}
+}
+
+func (r *Registry) getAsJSONList() []jsonState {
 	r.l.Lock()
 	defer r.l.Unlock()
 
 	jsonList := make([]jsonState, 0, len(r.states))
 
 	for k, v := range r.states {
-		if time.Since(v.LastUpdate) > statesTTL {
-			delete(r.states, k)
-		} else {
-			jsonList = append(jsonList, jsonState{
-				LabelsText:  k,
-				statusState: v,
-			})
-		}
+		jsonList = append(jsonList, jsonState{
+			LabelsText:  k,
+			statusState: v,
+		})
 	}
 
-	if save {
-		_ = r.state.Set(statusCacheKey, jsonList)
+	return jsonList
+}
+
+func (r *Registry) cleanExpired() {
+	r.l.Lock()
+	defer r.l.Unlock()
+
+	for k, v := range r.states {
+		if time.Since(v.LastUpdate) > statesTTL {
+			delete(r.states, k)
+		}
 	}
 }
 
@@ -647,7 +661,7 @@ func (r *Registry) addPointWithThreshold(
 
 	unit := r.units[labelsText]
 	// Consumer expects status description from threshold to start with "Current value:"
-	statusDescription := fmt.Sprintf("Current value: %s", FormatValue(point.Value, unit))
+	statusDescription := "Current value: " + FormatValue(point.Value, unit)
 
 	if newState.CurrentStatus != types.StatusOk {
 		thresholdLimit := math.NaN()

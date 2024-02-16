@@ -171,11 +171,11 @@ func (s *Synchronizer) snmpRegisterAndUpdate(localTargets []*snmp.Target) error 
 		}
 
 		newAgent = append(newAgent, tmp)
+
 		err = s.option.State.Set(snmpCachePrefix+snmp.Address(), snmpAssociation{
 			Address: snmp.Address(),
 			ID:      tmp.ID,
 		})
-
 		if err != nil {
 			logger.V(2).Printf("failed to update state: %v", err)
 		}

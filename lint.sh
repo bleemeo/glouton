@@ -2,7 +2,7 @@
 
 set -e
 
-LINTER_VERSION=v1.55.2
+LINTER_VERSION=v1.56.2
 
 USER_UID=$(id -u)
 
@@ -15,15 +15,27 @@ case "$1" in
    "lint")
       LINT=1
       ;;
+   "shell")
+      OPEN_SHELL=1
+      ;;
    *)
       echo "Usage: $0 [coverage|lint]"
       echo "  coverage: run test coverage"
       echo "  lint: run linter only, skip tests"
+      echo "  shell: open a shell inside linter container"
       exit 1
 esac
 
 if docker volume ls | grep -q glouton-buildcache; then
    GO_MOUNT_CACHE="-v glouton-buildcache:/go/pkg"
+fi
+
+if [ "${OPEN_SHELL}" = "1" ]; then
+   docker run --rm -ti -v "$(pwd)":/app ${GO_MOUNT_CACHE} -e HOME=/go/pkg \
+      -w /app golangci/golangci-lint:${LINTER_VERSION} \
+      bash
+
+   exit
 fi
 
 if [ "${COVERAGE}" = "1" ]; then

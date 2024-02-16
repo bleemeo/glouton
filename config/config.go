@@ -468,7 +468,7 @@ func migrateMetricsPrometheus(k *koanf.Koanf, config map[string]interface{}) pro
 			"name": key,
 		})
 
-		delete(config, fmt.Sprintf("metric.prometheus.%s", key))
+		delete(config, "metric.prometheus."+key)
 		delete(config, fmt.Sprintf("metric.prometheus.%s.url", key))
 		delete(config, fmt.Sprintf("metric.prometheus.%s.name", key))
 	}

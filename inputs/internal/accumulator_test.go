@@ -29,7 +29,7 @@ import (
 
 func TestDefault(t *testing.T) {
 	called := false
-	finalFunc := func(measurement string, fields map[string]interface{}, tags map[string]string, annotations types.MetricAnnotations, t_ ...time.Time) {
+	finalFunc := func(_ string, fields map[string]interface{}, tags map[string]string, _ types.MetricAnnotations, _ ...time.Time) {
 		if len(fields) != 1 {
 			t.Errorf("len(fields) = %v, want %v", len(fields), 1)
 		}
@@ -62,7 +62,7 @@ func TestDefault(t *testing.T) {
 
 func TestRename(t *testing.T) {
 	called := false
-	transformMetrics := func(currentContext GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {
+	transformMetrics := func(currentContext GatherContext, fields map[string]float64, _ map[string]interface{}) map[string]float64 {
 		if currentContext.Tags["newTag"] != "value" {
 			t.Errorf("tags[newTag] == %#v, want %#v", currentContext.Tags["newTag"], "value")
 		}
@@ -89,7 +89,7 @@ func TestRename(t *testing.T) {
 		return fields
 	}
 
-	renameGlobal := func(originalContext GatherContext) (newContext GatherContext, drop bool) {
+	renameGlobal := func(_ GatherContext) (newContext GatherContext, drop bool) {
 		return GatherContext{
 			Measurement: "cpu2",
 			Tags: map[string]string{
@@ -97,7 +97,7 @@ func TestRename(t *testing.T) {
 			},
 		}, false
 	}
-	finalFunc := func(measurement string, fields map[string]interface{}, tags map[string]string, annotations types.MetricAnnotations, t_ ...time.Time) {
+	finalFunc := func(measurement string, fields map[string]interface{}, tags map[string]string, _ types.MetricAnnotations, _ ...time.Time) {
 		if measurement != "cpu2" {
 			t.Errorf("measurement == %#v, want %#v", measurement, "cpu2")
 		}
@@ -156,7 +156,7 @@ func TestRename(t *testing.T) {
 func TestDerive(t *testing.T) {
 	called1 := false
 	called2 := false
-	finalFunc1 := func(measurement string, fields map[string]interface{}, tags map[string]string, annotations types.MetricAnnotations, t_ ...time.Time) {
+	finalFunc1 := func(_ string, fields map[string]interface{}, _ map[string]string, _ types.MetricAnnotations, _ ...time.Time) {
 		cases := []struct {
 			name  string
 			value float64
@@ -176,7 +176,7 @@ func TestDerive(t *testing.T) {
 		called1 = true
 	}
 
-	finalFunc2 := func(measurement string, fields map[string]interface{}, tags map[string]string, annotations types.MetricAnnotations, t_ ...time.Time) {
+	finalFunc2 := func(_ string, fields map[string]interface{}, _ map[string]string, _ types.MetricAnnotations, _ ...time.Time) {
 		cases := []struct {
 			name  string
 			value float64
@@ -249,7 +249,7 @@ func TestDerive(t *testing.T) {
 func TestDeriveFunc(t *testing.T) {
 	called1 := false
 	called2 := false
-	finalFunc1 := func(measurement string, fields map[string]interface{}, tags map[string]string, annotations types.MetricAnnotations, t_ ...time.Time) {
+	finalFunc1 := func(_ string, fields map[string]interface{}, _ map[string]string, _ types.MetricAnnotations, _ ...time.Time) {
 		cases := []struct {
 			name  string
 			value float64
@@ -269,7 +269,7 @@ func TestDeriveFunc(t *testing.T) {
 
 		called1 = true
 	}
-	finalFunc2 := func(measurement string, fields map[string]interface{}, tags map[string]string, annotations types.MetricAnnotations, t_ ...time.Time) {
+	finalFunc2 := func(_ string, fields map[string]interface{}, _ map[string]string, _ types.MetricAnnotations, _ ...time.Time) {
 		cases := []struct {
 			name  string
 			value float64
@@ -293,7 +293,7 @@ func TestDeriveFunc(t *testing.T) {
 
 		called2 = true
 	}
-	shouldDerivateMetrics := func(currentContext GatherContext, metricName string) bool {
+	shouldDerivateMetrics := func(_ GatherContext, metricName string) bool {
 		return strings.HasSuffix(metricName, "nt")
 	}
 	t0 := time.Now()
@@ -341,7 +341,7 @@ func TestDeriveFunc(t *testing.T) {
 func TestDeriveMultipleTag(t *testing.T) {
 	called1 := 0
 	called2 := 0
-	finalFunc1 := func(measurement string, fields map[string]interface{}, tags map[string]string, annotations types.MetricAnnotations, t_ ...time.Time) {
+	finalFunc1 := func(_ string, fields map[string]interface{}, _ map[string]string, _ types.MetricAnnotations, _ ...time.Time) {
 		called1++
 
 		if len(fields) != 0 {
@@ -349,7 +349,7 @@ func TestDeriveMultipleTag(t *testing.T) {
 		}
 	}
 
-	finalFunc2 := func(measurement string, fields map[string]interface{}, tags map[string]string, annotations types.MetricAnnotations, t_ ...time.Time) {
+	finalFunc2 := func(_ string, fields map[string]interface{}, tags map[string]string, _ types.MetricAnnotations, _ ...time.Time) {
 		var want float64
 
 		if tags["item"] == "sda" {
@@ -367,6 +367,7 @@ func TestDeriveMultipleTag(t *testing.T) {
 		if math.Abs(got-want) > 0.001 {
 			t.Errorf("fields[%#v] == %v, want %v", "io_reads", fields["io_reads"], want)
 		}
+
 		called2++
 	}
 
@@ -434,7 +435,7 @@ func TestDeriveMultipleTag(t *testing.T) {
 
 func TestMeasurementMap(t *testing.T) {
 	called := 0
-	finalFunc := func(measurement string, fields map[string]interface{}, tags map[string]string, annotations types.MetricAnnotations, t_ ...time.Time) {
+	finalFunc := func(measurement string, fields map[string]interface{}, _ map[string]string, _ types.MetricAnnotations, _ ...time.Time) {
 		if len(fields) != 1 {
 			t.Errorf("len(fields) == %v, want 1", len(fields))
 		}
@@ -462,7 +463,7 @@ func TestMeasurementMap(t *testing.T) {
 
 		t.Errorf("fields == %v, want load1, logged or no_match", fields)
 	}
-	renameMetrics := func(currentContext GatherContext, metricName string) (newMeasurement string, newMetricName string) {
+	renameMetrics := func(_ GatherContext, metricName string) (newMeasurement string, newMetricName string) {
 		newMetricName = metricName
 
 		switch metricName {
@@ -503,10 +504,11 @@ func TestRenameCallback(t *testing.T) {
 		"service":      "mysql",
 		"service_name": "mysql_1",
 	}
-	finalFunc := func(measurement string, fields map[string]interface{}, tags map[string]string, annotations types.MetricAnnotations, t_ ...time.Time) {
+	finalFunc := func(_ string, _ map[string]interface{}, tags map[string]string, _ types.MetricAnnotations, _ ...time.Time) {
 		if !reflect.DeepEqual(tags, want) {
 			t.Errorf("tags == %v, want %v", tags, want)
 		}
+
 		called++
 	}
 	t0 := time.Now()
@@ -558,7 +560,7 @@ func TestRenameCallback2(t *testing.T) {
 		BleemeoItem: "postgres_1_dbname",
 		ContainerID: "1234",
 	}
-	finalFunc := func(measurement string, fields map[string]interface{}, tags map[string]string, annotations types.MetricAnnotations, t_ ...time.Time) {
+	finalFunc := func(_ string, _ map[string]interface{}, tags map[string]string, annotations types.MetricAnnotations, _ ...time.Time) {
 		if !reflect.DeepEqual(tags, want) {
 			t.Errorf("tags == %v, want %v", tags, want)
 		}
@@ -629,10 +631,11 @@ func TestLabelsMutation(t *testing.T) {
 		types.LabelContainerName: "name",
 		"db":                     "dbname",
 	}
-	finalFunc := func(measurement string, fields map[string]interface{}, tags map[string]string, annotations types.MetricAnnotations, t_ ...time.Time) {
+	finalFunc := func(_ string, _ map[string]interface{}, tags map[string]string, _ types.MetricAnnotations, _ ...time.Time) {
 		if !reflect.DeepEqual(tags, want) {
 			t.Errorf("tags == %v, want %v", tags, want)
 		}
+
 		called++
 	}
 	t0 := time.Now()
@@ -670,7 +673,7 @@ func TestLabelsMutation(t *testing.T) {
 }
 
 func BenchmarkProcessMetrics(b *testing.B) {
-	finalFunc := func(measurement string, fields map[string]interface{}, tags map[string]string, annotations types.MetricAnnotations, t_ ...time.Time) {
+	finalFunc := func(_ string, _ map[string]interface{}, _ map[string]string, _ types.MetricAnnotations, _ ...time.Time) {
 	}
 	renameGlobal := func(gatherContext GatherContext) (GatherContext, bool) {
 		gatherContext.Tags["added"] = "new"
@@ -678,7 +681,7 @@ func BenchmarkProcessMetrics(b *testing.B) {
 
 		return gatherContext, false
 	}
-	transformMetrics := func(currentContext GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {
+	transformMetrics := func(_ GatherContext, fields map[string]float64, _ map[string]interface{}) map[string]float64 {
 		return fields
 	}
 
@@ -721,9 +724,9 @@ func BenchmarkProcessMetrics(b *testing.B) {
 }
 
 func BenchmarkDeriveFunc(b *testing.B) {
-	finalFunc := func(measurement string, fields map[string]interface{}, tags map[string]string, annotations types.MetricAnnotations, t_ ...time.Time) {
+	finalFunc := func(_ string, _ map[string]interface{}, _ map[string]string, _ types.MetricAnnotations, _ ...time.Time) {
 	}
-	shouldDerivateMetrics := func(currentContext GatherContext, metricName string) bool {
+	shouldDerivateMetrics := func(_ GatherContext, metricName string) bool {
 		return strings.HasSuffix(metricName, "int")
 	}
 

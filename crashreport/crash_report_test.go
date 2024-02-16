@@ -493,7 +493,7 @@ func TestBundleCrashReportFiles(t *testing.T) { //nolint:maintidx
 				f.Close()
 			}
 
-			diagnosticFn := func(ctx context.Context, writer types.ArchiveWriter) error {
+			diagnosticFn := func(_ context.Context, writer types.ArchiveWriter) error {
 				for file, content := range tc.diagnosticContent {
 					w, err := writer.Create(file)
 					if err != nil {

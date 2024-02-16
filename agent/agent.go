@@ -421,7 +421,7 @@ func Run(ctx context.Context, reloadState ReloadState, configFiles []string, sig
 }
 
 // BleemeoAccountID returns the Account UUID of Bleemeo
-// It return the empty string if the Account UUID is not available (e.g. because Bleemeo is disabled or mis-configured).
+// It return the empty string if the Account UUID is not available (e.g. because Bleemeo is disabled or miss-configured).
 func (a *agent) BleemeoAccountID() string {
 	if a.bleemeoConnector == nil {
 		return ""
@@ -678,6 +678,8 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
+	defer a.state.Close()
+
 	a.cancel = cancel
 	a.metricResolution = 10 * time.Second
 	a.hostRootPath = "/"
@@ -796,7 +798,13 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		a.store = store.New(2*time.Minute, 2*time.Hour)
 	}
 
-	filteredStore := store.NewFilteredStore(a.store, mFilter.FilterPoints, mFilter.filterMetrics)
+	filteredStore := store.NewFilteredStore(
+		a.store,
+		func(m []types.MetricPoint) []types.MetricPoint {
+			return mFilter.FilterPoints(m, false)
+		},
+		mFilter.filterMetrics,
+	)
 	a.threshold = threshold.New(a.state)
 
 	secretInputsGate := gate.New(inputs.MaxParallelSecrets())
@@ -1027,6 +1035,8 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 
 	a.vSphereManager = vsphere.NewManager()
 
+	a.metricFilter.UpdateRulesMatchers(a.rulesManager.InputMetricMatchers())
+
 	if a.config.Bleemeo.Enable {
 		scaperName := a.config.Blackbox.ScraperName
 		if scaperName == "" {
@@ -1060,7 +1070,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 			VSphereEndpointsInError:        a.vSphereManager.EndpointsInError,
 			IsContainerEnabled:             a.containerFilter.ContainerEnabled,
 			IsContainerNameRecentlyDeleted: a.containerRuntime.IsContainerNameRecentlyDeleted,
-			IsMetricAllowed:                a.metricFilter.isAllowedAndNotDenied,
+			IsMetricAllowed:                a.metricFilter.isAllowedAndNotDeniedMap,
 			PahoLastPingCheckAt:            a.pahoLogWrapper.LastPingAt,
 			LastMetricAnnotationChange:     a.store.LastAnnotationChange,
 		})
@@ -1186,10 +1196,11 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 	for _, target := range prometheusTargets {
 		_, err = a.gathererRegistry.RegisterGatherer(
 			registry.RegistrationOption{
-				Description: "Prom exporter " + target.URL.String(),
-				JitterSeed:  labels.FromMap(target.ExtraLabels).Hash(),
-				Interval:    defaultInterval,
-				ExtraLabels: target.ExtraLabels,
+				Description:              "Prom exporter " + target.URL.String(),
+				JitterSeed:               labels.FromMap(target.ExtraLabels).Hash(),
+				Interval:                 defaultInterval,
+				ExtraLabels:              target.ExtraLabels,
+				AcceptAllowedMetricsOnly: true,
 			},
 			target,
 		)
@@ -1228,7 +1239,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 
 	if a.config.InfluxDB.Enable {
 		server := influxdb.New(
-			fmt.Sprintf("http://%s", net.JoinHostPort(a.config.InfluxDB.Host, strconv.Itoa(a.config.InfluxDB.Port))),
+			"http://"+net.JoinHostPort(a.config.InfluxDB.Host, strconv.Itoa(a.config.InfluxDB.Port)),
 			a.config.InfluxDB.DBName,
 			a.store,
 			a.config.InfluxDB.Tags,
@@ -1431,7 +1442,7 @@ func (a *agent) registerInput(name string, input telegraf.Input, opts *inputs.Ga
 
 	_, err = a.gathererRegistry.RegisterInput(
 		registry.RegistrationOption{
-			Description:         fmt.Sprintf("Input %s", name),
+			Description:         "Input " + name,
 			JitterSeed:          baseJitter,
 			Rules:               opts.Rules,
 			MinInterval:         opts.MinInterval,
@@ -1440,7 +1451,6 @@ func (a *agent) registerInput(name string, input telegraf.Input, opts *inputs.Ga
 		},
 		input,
 	)
-
 	if err != nil {
 		logger.Printf("Failed to register input %s: %v", name, err)
 	}
@@ -1852,7 +1862,7 @@ func (a *agent) sendDockerContainerHealth(ctx context.Context, container facts.C
 		status.StatusDescription = message
 	default:
 		status.CurrentStatus = types.StatusUnknown
-		status.StatusDescription = fmt.Sprintf("Unknown health status %s", message)
+		status.StatusDescription = "Unknown health status " + message
 	}
 
 	a.gathererRegistry.WithTTL(5*time.Minute).PushPoints(ctx, []types.MetricPoint{
@@ -1953,6 +1963,7 @@ func (a *agent) handleTrigger(ctx context.Context) {
 					logger.V(1).Printf("failed to update JMX configuration: %v", err)
 				}
 			}
+
 			if a.dynamicScrapper != nil {
 				if containers, err := a.containerRuntime.Containers(ctx, time.Hour, false); err == nil {
 					a.dynamicScrapper.Update(containers)
@@ -1972,6 +1983,7 @@ func (a *agent) handleTrigger(ctx context.Context) {
 				logger.V(1).Printf("error when creating Docker input: %v", err)
 			} else {
 				logger.V(2).Printf("Enable Docker metrics")
+
 				a.dockerInputID, _ = a.collector.AddInput(i, "docker")
 				a.dockerInputPresent = true
 			}
@@ -2109,6 +2121,7 @@ func (a *agent) DiagnosticPage(ctx context.Context) string {
 		sort.Strings(lines)
 
 		fmt.Fprintln(builder, "Facts:")
+
 		for _, l := range lines {
 			fmt.Fprintln(builder, l)
 		}
@@ -2247,6 +2260,8 @@ func (a *agent) diagnosticGloutonState(_ context.Context, archive types.ArchiveW
 		return err
 	}
 
+	persistentSize, cacheSize := a.state.FileSizes()
+
 	a.l.Lock()
 	a.triggerLock.Lock()
 
@@ -2262,6 +2277,9 @@ func (a *agent) diagnosticGloutonState(_ context.Context, archive types.ArchiveW
 		DockerInputID             int
 		MetricResolutionSeconds   float64
 		PahoLastPingCheckAt       time.Time
+		PathToStateDir            string
+		PersistentStateSize       int
+		CacheStateSize            int
 	}{
 		HostRootPath:              a.hostRootPath,
 		LastHealthCheck:           a.lastHealthCheck,
@@ -2274,6 +2292,9 @@ func (a *agent) diagnosticGloutonState(_ context.Context, archive types.ArchiveW
 		DockerInputID:             a.dockerInputID,
 		MetricResolutionSeconds:   a.metricResolution.Seconds(),
 		PahoLastPingCheckAt:       a.pahoLogWrapper.LastPingAt(),
+		PathToStateDir:            a.stateDir,
+		PersistentStateSize:       persistentSize,
+		CacheStateSize:            cacheSize,
 	}
 
 	a.triggerLock.Unlock()
@@ -2572,13 +2593,13 @@ func parseIPOutput(content []byte) string {
 // Mostly it make that access to file pass though hostroot.
 func setupContainer(hostRootPath string) {
 	if hostRootPath == "" {
-		logger.Printf("The agent is running in a container but GLOUTON_DF_HOST_MOUNT_POINT is unset. Some informations will be missing")
+		logger.Printf("The agent is running in a container but GLOUTON_DF_HOST_MOUNT_POINT is unset. Some information will be missing")
 
 		return
 	}
 
 	if _, err := os.Stat(hostRootPath); os.IsNotExist(err) {
-		logger.Printf("The agent is running in a container but host / partition is not mounted on %#v. Some informations will be missing", hostRootPath)
+		logger.Printf("The agent is running in a container but host / partition is not mounted on %#v. Some information will be missing", hostRootPath)
 		logger.Printf("Hint: to fix this issue when using Docker, add \"-v /:%v:ro\" when running the agent", hostRootPath)
 
 		return

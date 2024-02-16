@@ -130,7 +130,6 @@ func (k *Kubernetes) Exec(ctx context.Context, containerID string, cmd []string)
 // Containers return all known container, with annotation added.
 func (k *Kubernetes) Containers(ctx context.Context, maxAge time.Duration, includeIgnored bool) (containers []facts.Container, err error) {
 	containers, err = k.Runtime.Containers(ctx, maxAge, includeIgnored)
-
 	if err != nil {
 		return nil, err
 	}
@@ -406,8 +405,8 @@ func (k *Kubernetes) getCertificateExpiration(ctx context.Context, config *rest.
 	defer conn.Close()
 
 	tlsConn := tls.Client(conn, tlsConfig)
-	err = tlsConn.HandshakeContext(ctx)
 
+	err = tlsConn.HandshakeContext(ctx)
 	if err != nil {
 		// Something went wrong with the TLS handshake, we consider the certificate as expired
 		logger.V(2).Println("An error occurred on TLS handshake:", err)
@@ -507,7 +506,7 @@ func (k *Kubernetes) getKubeletPoint(ctx context.Context, cl kubeClient, now tim
 			if cond.Status != corev1.ConditionTrue {
 				point.Annotations.Status = types.StatusDescription{
 					CurrentStatus:     types.StatusCritical,
-					StatusDescription: fmt.Sprintf("node is not ready: %s", cond.Message),
+					StatusDescription: "node is not ready: ",
 				}
 			}
 		case corev1.NodeDiskPressure, corev1.NodeMemoryPressure, corev1.NodePIDPressure:
@@ -526,7 +525,7 @@ func (k *Kubernetes) getKubeletPoint(ctx context.Context, cl kubeClient, now tim
 			if cond.Status == corev1.ConditionTrue {
 				resourceWarning = append(
 					resourceWarning,
-					fmt.Sprintf("node has networking issue: %s", cond.Message),
+					"node has networking issue: "+cond.Message,
 				)
 			}
 		}

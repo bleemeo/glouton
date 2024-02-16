@@ -95,6 +95,7 @@ func TestTryToGenerateDiagnostic(t *testing.T) {
 		defer f.Close()
 
 		tarReader := tar.NewReader(f)
+
 		h, err := tarReader.Next()
 		if err != nil {
 			t.Fatal("Failed to read diagnostic archive:", err)
@@ -119,7 +120,7 @@ func TestTryToGenerateDiagnostic(t *testing.T) {
 
 	t.Run("Diagnostic error", func(t *testing.T) {
 		diagnosticErr := errors.New("some diagnostic generation error") //nolint:goerr113
-		diagnosticFn := func(ctx context.Context, writer types.ArchiveWriter) error {
+		diagnosticFn := func(_ context.Context, _ types.ArchiveWriter) error {
 			return diagnosticErr
 		}
 
