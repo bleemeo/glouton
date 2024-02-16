@@ -154,7 +154,7 @@ func gatherModifier(mdadmPath string, timeNow func() time.Time, mdadmDetails mda
 
 		for array, info := range infoPerArray {
 			healthStatusMetric := makeHealthStatusMetric(array, info, mdadmPath, timeNow, mdadmDetails)
-			disksActivityStateStatus.Metric = append(disksActivityStateStatus.Metric, healthStatusMetric) //nolint:protogetter
+			disksActivityStateStatus.Metric = append(disksActivityStateStatus.Metric, healthStatusMetric)
 		}
 
 		mfs = append(mfs, disksActivityStateStatus)
