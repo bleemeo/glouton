@@ -23,6 +23,7 @@ import (
 	"glouton/logger"
 	"glouton/types"
 	"math"
+	"os"
 	"strings"
 	"time"
 
@@ -36,6 +37,10 @@ import (
 const mdstatPath = "/proc/mdstat"
 
 func New(mdadmPath string) (telegraf.Input, *inputs.GathererOptions, error) {
+	if _, err := os.Stat(mdstatPath); err != nil {
+		return nil, nil, fmt.Errorf("can't enable input: %w", err)
+	}
+
 	input, ok := telegraf_inputs.Inputs["mdstat"]
 	if !ok {
 		return nil, nil, inputs.ErrDisabledInput
