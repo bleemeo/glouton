@@ -181,59 +181,58 @@ func makeHealthStatusMetric(array string, info arrayInfo) *dto.Metric {
 		description string
 	)
 
-	switch info.activityState {
-	case "active":
-		status = types.StatusOk
-	case "inactive":
-		status = types.StatusCritical
-		description = "The array is currently inactive"
-	case "recovering":
-		status = types.StatusWarning
-		description = generateFinishTimeStatusDescription(info.recoveryMinutes)
-	case "checking":
-		status = types.StatusOk
-	case "resyncing":
-		status = types.StatusWarning
-		description = "The array is currently resyncing"
-	default:
-		status = types.StatusUnknown
-		description = fmt.Sprintf("Unknown activity state %q on disk array %q", info.activityState, array)
-	}
-
-	if status == types.StatusOk { // maybe not so ok
+	if info.active != info.total { // Something is going on, and we may not have enough information with /proc/mdstat
 		details, err := mdadmDetails(array)
 		if err != nil {
-			logger.V(1).Printf("Mdstat: %v", err)
+			logger.V(1).Printf("MD: %v", err)
 		}
 
 		switch {
-		case strings.Contains(details.state, "degraded"):
-			status = types.StatusWarning
-			description = "The array is degraded"
 		case strings.Contains(details.state, "FAILED"):
 			status = types.StatusCritical
-			description = "The array is failed"
-		case info.active == info.total && info.failed > 0: // spare disks have been used
+			description = fmt.Sprintf("The array is failed, %d disks are failing", info.failed)
+		case strings.Contains(details.state, "degraded"):
 			status = types.StatusWarning
-			missingSpares := (info.active + info.failed) - info.total
-			plural := " is"
+			s, verb := plural(info.failed)
+			description = fmt.Sprintf("The array is degraded, %d disk%s %s failing", info.failed, s, verb)
 
-			if missingSpares > 1 {
-				plural = "s are"
+			if info.activityState == "recovering" {
+				description += ". " + generateFinishTimeStatusDescription(info.recoveryMinutes)
 			}
-
-			description = fmt.Sprintf("%d spare disk%s failing on this array", missingSpares, plural)
-		case info.failed > 0:
-			status = types.StatusWarning
-			plural := " is"
-
-			if info.failed > 1 {
-				plural = "s are"
-			}
-
-			description = fmt.Sprintf("%d disk%s failing on this array", info.failed, plural)
 		}
 	}
+
+	if status == 0 {
+		switch info.activityState {
+		case "active":
+			status = types.StatusOk
+		case "inactive":
+			status = types.StatusCritical
+			description = "The array is currently inactive"
+		case "recovering":
+			status = types.StatusWarning
+			description = generateFinishTimeStatusDescription(info.recoveryMinutes)
+		case "checking":
+			status = types.StatusOk
+		case "resyncing":
+			status = types.StatusWarning
+			description = "The array is currently resyncing"
+		default:
+			status = types.StatusUnknown
+			description = fmt.Sprintf("Unknown activity state %q on disk array %q", info.activityState, array)
+		}
+	}
+
+	if status == types.StatusOk { // maybe not so ok
+		if info.active == info.total && info.failed > 0 { // spare disks have been used
+			status = types.StatusWarning
+			missingSpares := (info.active + info.failed) - info.total
+			s, verb := plural(missingSpares)
+			description = fmt.Sprintf("%d spare disk%s %s failing on this array", missingSpares, s, verb)
+		}
+	}
+
+	logger.Printf("MD: %s / %s", status, description)
 
 	return &dto.Metric{
 		Label: []*dto.LabelPair{
@@ -258,4 +257,15 @@ func generateFinishTimeStatusDescription(minutesLeft float64) string {
 		int(math.Ceil(minutesLeft)),
 		estimatedTime.Format(time.TimeOnly),
 	)
+}
+
+func plural(n int) (s, verb string) {
+	switch n {
+	case 0:
+		return "", "are"
+	case 1:
+		return "", "is"
+	default:
+		return "s", "are"
+	}
 }
