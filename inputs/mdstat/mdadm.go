@@ -11,18 +11,17 @@ import (
 	"time"
 )
 
-const (
-	mdadmTimeout = 5 * time.Second
-	mdadmPath    = "mdadm"
-)
+const mdadmTimeout = 5 * time.Second
 
 var errStateNotFound = errors.New("array state not found in mdadm output")
+
+type mdadmDetailsFunc func(array, mdadmPath string) (mdadmInfo, error)
 
 type mdadmInfo struct {
 	state string
 }
 
-func callMdadm(array string) (mdadmInfo, error) {
+func callMdadm(array, mdadmPath string) (mdadmInfo, error) {
 	fullCmd := []string{mdadmPath, "--detail", "/dev/" + array}
 
 	if os.Getuid() != 0 {

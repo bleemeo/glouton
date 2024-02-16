@@ -424,5 +424,6 @@ type VSphere struct {
 }
 
 type Mdstat struct {
-	Enable bool `yaml:"enable"`
+	Enable    bool   `yaml:"enable"`
+	PathMdadm string `yaml:"path_mdadm"`
 }

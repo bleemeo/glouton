@@ -18,7 +18,10 @@ package mdstat
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"glouton/inputs"
+	"glouton/inputs/internal"
 	"glouton/prometheus/model"
 	"glouton/prometheus/registry"
 	"glouton/types"
@@ -31,17 +34,14 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/influxdata/telegraf"
+	"github.com/influxdata/telegraf/plugins/inputs/mdstat"
 	dto "github.com/prometheus/client_model/go"
+	"gopkg.in/yaml.v3"
 )
 
-//nolint:gochecknoinits
-func init() {
-	timeNow = func() time.Time {
-		return time.Date(2024, 2, 13, 10, 35, 0, 0, time.Local)
-	}
-}
+var errArrayMdadmDetailsNotFound = errors.New("mdadm details not found for array")
 
-func setupMdstatTest(t *testing.T, inputFileName string) (input telegraf.Input, deferFn func()) {
+func setupMdstatTest(t *testing.T, name string) (input telegraf.Input, mdadmDetailsFn mdadmDetailsFunc, deferFn func()) {
 	t.Helper()
 
 	tempDir, err := os.MkdirTemp("", "mdstat_test")
@@ -72,25 +72,44 @@ func setupMdstatTest(t *testing.T, inputFileName string) (input telegraf.Input, 
 
 	defer mdstatFile.Close()
 
-	inputFile, err := os.Open("testdata/" + inputFileName)
+	mdstatInputFile, err := os.Open(filepath.Join("testdata", "mdstat", name+".txt"))
 	if err != nil {
 		deferFn()
 		t.Fatal("Failed to open testdata file:", err)
 	}
 
-	defer inputFile.Close()
+	defer mdstatInputFile.Close()
 
-	_, err = io.Copy(mdstatFile, inputFile)
+	_, err = io.Copy(mdstatFile, mdstatInputFile)
 	if err != nil {
 		deferFn()
-		t.Fatalf("Failed to copy mdstat data from %s to %s: %v", inputFile.Name(), mdstatFilePath, err)
+		t.Fatalf("Failed to copy mdstat data from %s to %s: %v", mdstatInputFile.Name(), mdstatFilePath, err)
 	}
 
-	mdstatInput, _, err := New(tempDir)
+	mdadmDetailsFile, err := os.Open(filepath.Join("testdata", "mdadm", name+".yml"))
+	if err != nil {
+		deferFn()
+		t.Fatal("Failed to open mdadm details:", err)
+	}
+
+	defer mdadmDetailsFile.Close()
+
+	var mdadmDetails map[string]string
+
+	err = yaml.NewDecoder(mdadmDetailsFile).Decode(&mdadmDetails)
+	if err != nil {
+		deferFn()
+		t.Fatal("Failed to parse mdadm details:", err)
+	}
+
+	mdstatInput, _, err := New("won't be used")
 	if err != nil {
 		deferFn()
 		t.Fatal("Failed to initialize mdstat input:", err)
 	}
+
+	underlyingInput := mdstatInput.(*internal.Input).Input.(*mdstat.MdstatConf) //nolint: forcetypeassert
+	underlyingInput.FileName = mdstatFilePath
 
 	if initInput, ok := mdstatInput.(telegraf.Initializer); ok {
 		err = initInput.Init()
@@ -100,19 +119,26 @@ func setupMdstatTest(t *testing.T, inputFileName string) (input telegraf.Input, 
 		}
 	}
 
-	return mdstatInput, deferFn
+	mdadmDetailsFn = func(array, _ string) (mdadmInfo, error) {
+		mdadmDetailsOutput, ok := mdadmDetails[array]
+		if !ok {
+			return mdadmInfo{}, fmt.Errorf("%w %s", errArrayMdadmDetailsNotFound, array)
+		}
+
+		return parseMdadmOutput(mdadmDetailsOutput)
+	}
+
+	return mdstatInput, mdadmDetailsFn, deferFn
 }
 
 func TestGather(t *testing.T) { //nolint:maintidx
 	testCases := []struct {
-		filename         string
-		maxSparePerArray map[string]int
-		expectedMetrics  metricFamilies
+		name            string
+		expectedMetrics metricFamilies
 	}{
-		{
-			filename:         "multiple_active.txt",
-			maxSparePerArray: map[string]int{},
-			expectedMetrics: map[string][]metric{ //nolint: dupl
+		{ //nolint: dupl
+			name: "multiple_active",
+			expectedMetrics: map[string][]metric{
 				"mdstat_blocks_synced_finish_time": {
 					{Labels: map[string]string{types.LabelItem: "md1"}, Value: 0},
 					{Labels: map[string]string{types.LabelItem: "md2"}, Value: 0},
@@ -176,10 +202,9 @@ func TestGather(t *testing.T) { //nolint:maintidx
 				},
 			},
 		},
-		{
-			filename:         "multiple_failed_spare.txt",
-			maxSparePerArray: map[string]int{"md2": 1},
-			expectedMetrics: map[string][]metric{ //nolint: dupl
+		{ //nolint: dupl
+			name: "multiple_failed_spare",
+			expectedMetrics: map[string][]metric{
 				"mdstat_blocks_synced_finish_time": {
 					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 0},
 					{Labels: map[string]string{types.LabelItem: "md1"}, Value: 0},
@@ -220,7 +245,7 @@ func TestGather(t *testing.T) { //nolint:maintidx
 						Labels: map[string]string{
 							types.LabelItem:                   "md0",
 							types.LabelMetaCurrentStatus:      types.StatusWarning.String(),
-							types.LabelMetaCurrentDescription: "1 disk is failing on this array",
+							types.LabelMetaCurrentDescription: "The array is degraded, 1 disk is failing",
 						},
 						Value: float64(types.StatusWarning.NagiosCode()),
 					},
@@ -244,8 +269,7 @@ func TestGather(t *testing.T) { //nolint:maintidx
 			},
 		},
 		{ //nolint: dupl
-			filename:         "simple_active.txt",
-			maxSparePerArray: map[string]int{},
+			name: "simple_active",
 			expectedMetrics: map[string][]metric{
 				"mdstat_blocks_synced_finish_time": {
 					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 0},
@@ -281,8 +305,7 @@ func TestGather(t *testing.T) { //nolint:maintidx
 			},
 		},
 		{ //nolint: dupl
-			filename:         "simple_failed.txt",
-			maxSparePerArray: map[string]int{},
+			name: "simple_failed",
 			expectedMetrics: map[string][]metric{
 				"mdstat_blocks_synced_finish_time": {
 					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 0},
@@ -318,8 +341,7 @@ func TestGather(t *testing.T) { //nolint:maintidx
 			},
 		},
 		{ //nolint: dupl
-			filename:         "simple_recovery.txt",
-			maxSparePerArray: map[string]int{},
+			name: "simple_recovery",
 			expectedMetrics: map[string][]metric{
 				"mdstat_blocks_synced_finish_time": {
 					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 2.8},
@@ -347,7 +369,7 @@ func TestGather(t *testing.T) { //nolint:maintidx
 						Labels: map[string]string{
 							types.LabelItem:                   "md0",
 							types.LabelMetaCurrentStatus:      types.StatusWarning.String(),
-							types.LabelMetaCurrentDescription: "The disk should be fully synchronized in 3min (around 10:37:00)",
+							types.LabelMetaCurrentDescription: "The array is degraded, 0 disk are failing. The disk should be fully synchronized in 3min (around 10:37:00)",
 						},
 						Value: float64(types.StatusWarning.NagiosCode()),
 					},
@@ -356,11 +378,15 @@ func TestGather(t *testing.T) { //nolint:maintidx
 		},
 	}
 
+	timeNow := func() time.Time {
+		return time.Date(2024, 2, 13, 10, 35, 0, 0, time.Local)
+	}
+
 	for _, testCase := range testCases {
 		tc := testCase
 
-		t.Run(tc.filename, func(t *testing.T) {
-			input, deferFn := setupMdstatTest(t, tc.filename)
+		t.Run(tc.name, func(t *testing.T) {
+			input, mdadmDetailsFn, deferFn := setupMdstatTest(t, tc.name)
 			defer deferFn()
 
 			pointBuffer := new(registry.PointBuffer)
@@ -375,7 +401,7 @@ func TestGather(t *testing.T) { //nolint:maintidx
 			}
 
 			mfs := model.MetricPointsToFamilies(pointBuffer.Points())
-			mfs = gatherModifier(mfs, nil)
+			mfs = gatherModifier("won't be used", timeNow, mdadmDetailsFn)(mfs, nil)
 
 			if diff := cmp.Diff(tc.expectedMetrics, convert(mfs), cmpopts.SortSlices(metricSorter)); diff != "" {
 				t.Fatalf("Unexpected metrics (-want +got):\n%s", diff)

@@ -270,7 +270,8 @@ func DefaultConfig() Config { //nolint:maintidx
 			PackageLevels: "",
 		},
 		Mdstat: Mdstat{
-			Enable: true,
+			Enable:    true,
+			PathMdadm: "mdadm",
 		},
 		Metric: Metric{
 			Prometheus: Prometheus{
