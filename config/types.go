@@ -45,7 +45,6 @@ type Config struct {
 	ServiceIgnoreMetrics     []NameInstance       `yaml:"service_ignore_metrics"`
 	ServiceIgnoreCheck       []NameInstance       `yaml:"service_ignore_check"`
 	Smart                    Smart                `yaml:"smart"`
-	Stack                    string               `yaml:"stack"`
 	Tags                     []string             `yaml:"tags"`
 	Telegraf                 Telegraf             `yaml:"telegraf"`
 	Thresholds               map[string]Threshold `yaml:"thresholds"`
@@ -334,8 +333,6 @@ type Service struct {
 	Address string `yaml:"address"`
 	// The delay between two consecutive checks in seconds.
 	Interval int `yaml:"interval"`
-	// Stack dashboard this service belongs to.
-	Stack string `yaml:"stack"`
 	// Check type used for custom checks.
 	CheckType string `yaml:"check_type"`
 	// The path used for HTTP checks.

@@ -76,7 +76,6 @@ type oldService struct {
 	Active       bool              `json:"active"`
 	NetStatPorts map[string]string `json:"netstat_ports"`
 	ContainerID  string            `json:"container_id"`
-	Stack        string            `json:"stack"`
 }
 
 func (o oldService) toService(instance string) (srv Service, err error) {
@@ -116,7 +115,6 @@ func (o oldService) toService(instance string) (srv Service, err error) {
 		IPAddress:       o.Address,
 		ExePath:         o.ExePath,
 		Active:          o.Active,
-		Stack:           o.Stack,
 		ListenAddresses: listenAddresses,
 	}, nil
 }

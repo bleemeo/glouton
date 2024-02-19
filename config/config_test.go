@@ -271,7 +271,6 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 				IgnorePorts:       []int{8081},
 				Address:           "127.0.0.1",
 				Interval:          60,
-				Stack:             "mystack",
 				CheckType:         "nagios",
 				HTTPPath:          "/check/",
 				HTTPStatusCode:    200,
@@ -331,8 +330,7 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 			Excludes:       []string{"/dev/sdb"},
 			MaxConcurrency: 42,
 		},
-		Stack: "mystack",
-		Tags:  []string{"mytag"},
+		Tags: []string{"mytag"},
 		Telegraf: Telegraf{
 			DockerMetricsEnable: true,
 			StatsD: StatsD{

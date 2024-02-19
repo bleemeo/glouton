@@ -233,7 +233,6 @@ func serviceNeedUpdate(oldService, service Service, oldServiceState facts.Contai
 		oldService.ContainerName != service.ContainerName,
 		oldService.IPAddress != service.IPAddress,
 		oldService.ExePath != service.ExePath,
-		oldService.Stack != service.Stack,
 		oldService.Active != service.Active,
 		oldService.CheckIgnored != service.CheckIgnored,
 		oldService.MetricsIgnored != service.MetricsIgnored,

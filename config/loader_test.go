@@ -172,7 +172,6 @@ func TestLoader(t *testing.T) {
 					"included_items":      nil,
 					"jmx_metrics":         []any{},
 					"match_process":       "",
-					"stack":               "",
 					"starttls":            false,
 					"stats_url":           "",
 					"cert_file":           "",

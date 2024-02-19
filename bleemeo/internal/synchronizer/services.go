@@ -44,7 +44,6 @@ func servicePayloadFromDiscovery(service discovery.Service, listenAddresses stri
 			Instance:        service.Instance,
 			ListenAddresses: listenAddresses,
 			ExePath:         service.ExePath,
-			Stack:           service.Stack,
 			Active:          service.Active,
 		},
 		Account: accountID,
@@ -116,7 +115,7 @@ func (s *Synchronizer) syncServices(ctx context.Context, fullSync bool, onlyEsse
 func (s *Synchronizer) serviceUpdateList() error {
 	params := map[string]string{
 		"agent":  s.agentID,
-		"fields": "id,label,instance,listen_addresses,exe_path,stack,active,created_at",
+		"fields": "id,label,instance,listen_addresses,exe_path,active,created_at",
 	}
 
 	result, err := s.client.Iter(s.ctx, "service", params)
@@ -174,7 +173,7 @@ func (s *Synchronizer) serviceRegisterAndUpdate(localServices []discovery.Servic
 	remoteServicesByKey := common.ServiceLookupFromList(remoteServices)
 	registeredServices := s.option.Cache.ServicesByUUID()
 	params := map[string]string{
-		"fields": "id,label,instance,listen_addresses,exe_path,stack,active,account,agent,created_at",
+		"fields": "id,label,instance,listen_addresses,exe_path,active,account,agent,created_at",
 	}
 
 	for _, srv := range localServices {
@@ -255,8 +254,7 @@ func skipUpdate(remoteFound bool, remoteSrv types.Service, srv discovery.Service
 		remoteSrv.Label == srv.Name &&
 		remoteSrv.ListenAddresses == listenAddresses &&
 		remoteSrv.ExePath == srv.ExePath &&
-		remoteSrv.Active == srv.Active &&
-		remoteSrv.Stack == srv.Stack
+		remoteSrv.Active == srv.Active
 }
 
 // serviceExcludeUnregistrable removes the services that cannot be registered.
@@ -328,7 +326,7 @@ func (s *Synchronizer) serviceDeactivateNonLocal(localServices []discovery.Servi
 // serviceDeactivate makes a PUT request to the Bleemeo API to mark the given service as inactive.
 func (s *Synchronizer) serviceDeactivate(service types.Service) (types.Service, error) {
 	params := map[string]string{
-		"fields": "id,label,instance,listen_addresses,exe_path,stack,active,account,agent,created_at",
+		"fields": "id,label,instance,listen_addresses,exe_path,active,account,agent,created_at",
 	}
 
 	payload := servicePayload{
@@ -338,7 +336,6 @@ func (s *Synchronizer) serviceDeactivate(service types.Service) (types.Service, 
 			Instance:        service.Instance,
 			ListenAddresses: service.ListenAddresses,
 			ExePath:         service.ExePath,
-			Stack:           service.Stack,
 		},
 		Account: s.option.Cache.AccountID(),
 		Agent:   s.agentID,

@@ -28,7 +28,7 @@ import (
 )
 
 const (
-	cacheVersion = 6
+	cacheVersion = 7
 	cacheKey     = "CacheBleemeoConnector"
 )
 
@@ -622,6 +622,7 @@ func Load(state bleemeoTypes.State) *Cache {
 		3: upgradeV3,
 		4: upgradeV4,
 		5: upgradeV5,
+		6: upgradeV6,
 	}
 
 	upgradeCount := 0
@@ -754,6 +755,16 @@ func upgradeV5(state bleemeoTypes.State, newData data) data {
 	}
 
 	newData.Version = 6
+
+	return newData
+}
+
+func upgradeV6(_ bleemeoTypes.State, newData data) data {
+	// Version 7 dropped stack on service. The forward migration
+	// does nothing (it just drop it). But we bump the version
+	// so that backward migration will discard and regenerate the cache
+	// to re-fill the stack value.
+	newData.Version = 7
 
 	return newData
 }

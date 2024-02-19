@@ -117,7 +117,6 @@ type Service struct {
 	IPAddress       string // IPAddress is the IPv4 address to reach service for metrics gathering. If empty, it means IP was not found
 	ListenAddresses []facts.ListenAddress
 	ExePath         string
-	Stack           string
 	IgnoredPorts    map[int]bool
 	Active          bool
 	CheckIgnored    bool

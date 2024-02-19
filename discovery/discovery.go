@@ -667,10 +667,6 @@ func applyOverrideInPlace(
 			}
 		}
 
-		if service.Config.Stack != "" {
-			service.Stack = service.Config.Stack
-		}
-
 		if service.ServiceType == CustomService {
 			// If the port is not set, use the JMX port.
 			if service.Config.Port == 0 {

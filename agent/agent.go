@@ -940,7 +940,6 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		ContainerInfo:      a.containerRuntime,
 		IsContainerIgnored: a.containerFilter.ContainerIgnored,
 		FileReader:         discovery.SudoFileReader{HostRootPath: a.hostRootPath},
-		DefaultStack:       a.config.Stack,
 	})
 
 	a.discovery, warnings = discovery.New(

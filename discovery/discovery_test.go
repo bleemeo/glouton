@@ -497,63 +497,6 @@ func Test_applyOverride(t *testing.T) { //nolint:maintidx
 			},
 		},
 		{
-			name: "override stack",
-			args: args{
-				discoveredServicesMap: map[NameInstance]Service{
-					{Name: "apache"}: {
-						Name:        "apache",
-						ServiceType: ApacheService,
-					},
-				},
-				servicesOverride: []config.Service{
-					{
-						ID:    "apache",
-						Stack: "website",
-					},
-				},
-			},
-			want: map[NameInstance]Service{
-				{Name: "apache"}: {
-					Name:        "apache",
-					ServiceType: ApacheService,
-					Stack:       "website",
-					Config: config.Service{
-						ID:    "apache",
-						Stack: "website",
-					},
-				},
-			},
-		},
-		{
-			name: "no override stack",
-			args: args{
-				discoveredServicesMap: map[NameInstance]Service{
-					{Name: "apache"}: {
-						Name:        "apache",
-						ServiceType: ApacheService,
-						Stack:       "website",
-					},
-				},
-				servicesOverride: []config.Service{
-					{
-						ID:    "apache",
-						Stack: "",
-					},
-				},
-			},
-			want: map[NameInstance]Service{
-				{Name: "apache"}: {
-					Name:        "apache",
-					ServiceType: ApacheService,
-					Stack:       "website",
-					Config: config.Service{
-						ID:    "apache",
-						Stack: "",
-					},
-				},
-			},
-		},
-		{
 			name: "override port from jmx port",
 			args: args{
 				discoveredServicesMap: map[NameInstance]Service{},

@@ -419,7 +419,6 @@ func (dd *DynamicDiscovery) serviceFromProcess(process facts.Process, netstat ma
 		Instance:      process.ContainerName,
 		ExePath:       process.Executable,
 		Active:        true,
-		Stack:         dd.option.DefaultStack,
 	}
 
 	if service.ContainerID != "" {
@@ -427,8 +426,6 @@ func (dd *DynamicDiscovery) serviceFromProcess(process facts.Process, netstat ma
 		if !ok || dd.option.IsContainerIgnored(service.container) {
 			return Service{}, false
 		}
-
-		getContainerStack(&service)
 	}
 
 	di := getDiscoveryInfo(dd.now(), &service, netstat, process.PID)
@@ -440,16 +437,6 @@ func (dd *DynamicDiscovery) serviceFromProcess(process facts.Process, netstat ma
 	dd.guessJMX(&service, process.CmdLineList)
 
 	return service, true
-}
-
-func getContainerStack(service *Service) {
-	if stack, ok := facts.LabelsAndAnnotations(service.container)["bleemeo.stack"]; ok {
-		service.Stack = stack
-	}
-
-	if stack, ok := facts.LabelsAndAnnotations(service.container)["glouton.stack"]; ok {
-		service.Stack = stack
-	}
 }
 
 func getDiscoveryInfo(now time.Time, service *Service, netstat map[int][]facts.ListenAddress, pid int) discoveryInfo {

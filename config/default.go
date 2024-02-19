@@ -333,8 +333,7 @@ func DefaultConfig() Config { //nolint:maintidx
 			},
 			MaxConcurrency: 4,
 		},
-		Stack: "",
-		Tags:  []string{},
+		Tags: []string{},
 		Telegraf: Telegraf{
 			DockerMetricsEnable: true,
 			StatsD: StatsD{

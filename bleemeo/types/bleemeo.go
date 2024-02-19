@@ -131,7 +131,6 @@ type Service struct {
 	Instance        string `json:"instance"`
 	ListenAddresses string `json:"listen_addresses"`
 	ExePath         string `json:"exe_path"`
-	Stack           string `json:"stack"`
 	Active          bool   `json:"active"`
 	CreationDate    string `json:"created_at"`
 }
