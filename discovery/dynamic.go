@@ -73,7 +73,7 @@ type fileReader interface {
 }
 
 // NewDynamic create a new dynamic service discovery which use information from
-// processess and netstat to discovery services.
+// processes and netstat to discovery services.
 func NewDynamic(ps processFact, netstat netstatProvider, containerInfo containerInfoProvider, isContainerIgnored func(facts.Container) bool, fileReader fileReader, defaultStack string) *DynamicDiscovery {
 	dd := &DynamicDiscovery{
 		now:                time.Now,
@@ -214,7 +214,7 @@ var (
 		"uWSGI":        UWSGIService,
 		"varnishd":     VarnishService,
 	}
-	knownIntepretedProcess = []struct {
+	knownInterpretedProcess = []struct {
 		CmdLineMustContains []string
 		ServiceName         ServiceName
 		Interpreter         string
@@ -389,7 +389,7 @@ func (dd *DynamicDiscovery) updateDiscovery(ctx context.Context, maxAge time.Dur
 	}
 
 	// Resolve possible conflict of listen address. If two services are discovered in the same containers, it's
-	// possible for two different service to have the same listenning address... which is unlikely.
+	// possible for two different service to have the same listening address... which is unlikely.
 	// When a conflict occur, only kept port that are associated with the standard port of the service.
 	services := fixListenAddressConflict(servicesMap)
 
@@ -714,7 +714,7 @@ func serviceByInterpreter(name string, cmdLine []string) (serviceName ServiceNam
 	// Need a more general way to manage those case. Every interpreter/VM
 	// language are affected.
 	if name == "java" || strings.HasPrefix(name, "python") || name == "erl" || strings.HasPrefix(name, "beam") {
-		for _, candidate := range knownIntepretedProcess {
+		for _, candidate := range knownInterpretedProcess {
 			switch candidate.Interpreter {
 			case "erlang":
 				if name != "erl" && !strings.HasPrefix(name, "beam") {
@@ -750,7 +750,7 @@ func serviceByInterpreter(name string, cmdLine []string) (serviceName ServiceNam
 	return "", false
 }
 
-// excludeEmptyAddress exlude entry with empty Address IP. It will modify input.
+// excludeEmptyAddress exclude entry with empty Address IP. It will modify input.
 func excludeEmptyAddress(addresses []facts.ListenAddress) []facts.ListenAddress {
 	n := 0
 

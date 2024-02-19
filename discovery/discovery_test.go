@@ -713,7 +713,7 @@ func Test_applyOverride(t *testing.T) { //nolint:maintidx
 						ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "172.16.0.2", Port: 80}},
 						IPAddress:       "172.16.0.2",
 						// This test is done in two path. In dynamic.go we add the option to Config.
-						// in discovery (applyOverideInPlance) we apply the config override.
+						// in discovery (applyOverrideInPlance) we apply the config override.
 						// IgnoredPorts: map[int]bool{
 						//	74: true,
 						//	75: true,
@@ -739,7 +739,7 @@ func Test_applyOverride(t *testing.T) { //nolint:maintidx
 					ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "172.16.0.2", Port: 80}},
 					IPAddress:       "172.16.0.2",
 					// This test is done in two path. In dynamic.go we add the option to Config.
-					// in discovery (applyOverideInPlance) we apply the config override.
+					// in discovery (applyOverrideInPlance) we apply the config override.
 					IgnoredPorts: map[int]bool{
 						74: true,
 						75: true,
@@ -765,7 +765,7 @@ func Test_applyOverride(t *testing.T) { //nolint:maintidx
 						ContainerID:   "817ec63d4b4f9e28947a323f9fbfc4596500b42c842bf07bd6ad9641e6805cb5",
 						ContainerName: "nginx_port_alt",
 						// This test is done in two path. In dynamic.go we add the option to Config.
-						// in discovery (applyOverideInPlance) we apply the config override.
+						// in discovery (applyOverrideInPlance) we apply the config override.
 						ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "172.16.0.2", Port: 80}},
 						IPAddress:       "172.16.0.2",
 						Active:          true,
@@ -1288,7 +1288,7 @@ func Test_servicesFromState(t *testing.T) {
 		},
 		{
 			// This state is likely impossible to produce. fixListenAddressConflict should have remove the
-			// listenning address on one service.
+			// listening address on one service.
 			// This state was made-up but allow to test that migration is only applied when migrating from v0 to v1.
 			name:              "version1-no-two-migration",
 			stateFileBaseName: "version1-no-two-migration",

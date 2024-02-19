@@ -206,9 +206,9 @@ func DefaultConfig() Config { //nolint:maintidx
 		DiskIgnore: []string{
 			// Ignore some devices
 			"^(bcache|cd|dm-|fd|loop|pass|ram|sr|zd|zram)\\d+$",
-			// Ignore parition (sda1 like, not pN)
+			// Ignore partition (sda1 like, not pN)
 			"^((h|rss|s|v|xv)d[a-z]+|fio[a-z]+)\\d+$",
-			// Ignore parition (pN like)
+			// Ignore partition (pN like)
 			"^(drbd|md|mmcblk|nbd|nvme\\d+n|rbd|rsxx|skd)\\d+p\\d+$",
 		},
 		DiskMonitor: []string{

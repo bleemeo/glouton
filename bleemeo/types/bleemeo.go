@@ -160,7 +160,7 @@ type Threshold struct {
 	HighCritical *float64 `json:"threshold_high_critical"`
 }
 
-// Monitor groups all the informations required to write metrics to a monitor.
+// Monitor groups all the information required to write metrics to a monitor.
 type Monitor struct {
 	Service
 	URL     string `json:"monitor_url"`

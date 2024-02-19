@@ -46,7 +46,7 @@ const localhostIP = "127.0.0.1"
 // discoveryTimeout is the time limit for a discovery.
 const discoveryTimeout = time.Minute
 
-// Discovery implement the full discovery mecanisme. It will take informations
+// Discovery implement the full discovery mecanisme. It will take information
 // from both the dynamic discovery (service currently running) and previously
 // detected services.
 // It will configure metrics input and add them to a Collector.
@@ -144,7 +144,7 @@ func New(
 	return discovery, warnings
 }
 
-// validateServies validates the service config.
+// validateServices validates the service config.
 // It returns the services as a map and some warnings.
 func validateServices(services []config.Service) (map[NameInstance]config.Service, prometheus.MultiError) {
 	var warnings prometheus.MultiError
@@ -297,7 +297,7 @@ func (d *Discovery) DiagnosticArchive(ctx context.Context, zipFile types.Archive
 	})
 
 	for _, v := range services {
-		fmt.Fprintf(file, "%s on IP %s, active=%v, instance=%s, container=%s, listenning on %v, type=%s\n", v.Name, v.IPAddress, v.Active, v.Instance, v.ContainerName, v.ListenAddresses, v.ServiceType)
+		fmt.Fprintf(file, "%s on IP %s, active=%v, instance=%s, container=%s, listening on %v, type=%s\n", v.Name, v.IPAddress, v.Active, v.Instance, v.ContainerName, v.ListenAddresses, v.ServiceType)
 	}
 
 	if dd, ok := d.dynamicDiscovery.(*DynamicDiscovery); ok {
@@ -336,7 +336,7 @@ func (d *Discovery) DiagnosticArchive(ctx context.Context, zipFile types.Archive
 		})
 
 		for _, v := range services {
-			fmt.Fprintf(file, "%s on IP %s, active=%v, instance=%s, container=%s, listenning on %v\n", v.Name, v.IPAddress, v.Active, v.Instance, v.ContainerName, v.ListenAddresses)
+			fmt.Fprintf(file, "%s on IP %s, active=%v, instance=%s, container=%s, listening on %v\n", v.Name, v.IPAddress, v.Active, v.Instance, v.ContainerName, v.ListenAddresses)
 		}
 	}
 
@@ -447,7 +447,7 @@ func (d *Discovery) updateDiscovery(ctx context.Context, now time.Time) error {
 	// Make sure we have a container list. This is important for startup, so
 	// that previously known service could get associated with container.
 	// Without this, a service in a stopped container (which should be shown
-	// as critical with "Container Stopped" reason) might disapear.
+	// as critical with "Container Stopped" reason) might disappear.
 	_, err := d.containerInfo.Containers(ctx, 0, false)
 	if err != nil {
 		logger.V(1).Printf("error while updating containers: %v", err)

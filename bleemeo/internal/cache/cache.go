@@ -61,7 +61,7 @@ type data struct {
 }
 
 // dataVersion1 contains fields that have been deleted since the version 1 of the state file, but that we
-// still need to access to generate a newer state file from it, while retaining all pertinent informations
+// still need to access to generate a newer state file from it, while retaining all pertinent information
 // It does *not* contain all the fields of the first version of state files, and should *not* be treated as
 // an earlier version of `data`, and is exclusively manipulated in Load().
 // See Load() for more details on the transformations we will apply to parse old versions.
@@ -671,7 +671,7 @@ func Load(state bleemeoTypes.State) *Cache {
 }
 
 func upgradeV1(state bleemeoTypes.State, newData data) data {
-	// the main change between V1 and V2 was the renaming of AccoutConfig to CurrentAccountConfig, and
+	// the main change between V1 and V2 was the renaming of AccountConfig to CurrentAccountConfig, and
 	// the addition of Monitors and AccountConfigs
 	var oldCache dataVersion1
 

@@ -170,8 +170,8 @@ func servicesFromState(state State) []Service {
 
 	if version < 1 {
 		// Before version 1, fixListenAddressConflict was not applied. This resulted in
-		// servicesFromState that could contains wrong ListenningAddresses with HasNetstatInfo=True. So
-		// even if new dynamic discovery don't return the wrong ListenningAddresses, it would be used from
+		// servicesFromState that could contains wrong ListeningAddresses with HasNetstatInfo=True. So
+		// even if new dynamic discovery don't return the wrong ListeningAddresses, it would be used from
 		// servicesFromState because HasNetstatInfo=True.
 		//
 		// Apply the same fixListenAddressConflict to servicesFromState when upgrading.

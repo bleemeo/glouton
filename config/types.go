@@ -374,7 +374,7 @@ type Service struct {
 	CAFile      string `yaml:"ca_file"`
 	CertFile    string `yaml:"cert_file"`
 	KeyFile     string `yaml:"key_file"`
-	// IncludedItems or exlude specific items (for instance Jenkins jobs).
+	// IncludedItems or exclude specific items (for instance Jenkins jobs).
 	IncludedItems []string `yaml:"included_items"`
 	ExcludedItems []string `yaml:"excluded_items"`
 }
