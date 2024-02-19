@@ -934,7 +934,14 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 
 	isCheckIgnored := discovery.NewIgnoredService(a.config.ServiceIgnoreCheck).IsServiceIgnored
 	isInputIgnored := discovery.NewIgnoredService(a.config.ServiceIgnoreMetrics).IsServiceIgnored
-	dynamicDiscovery := discovery.NewDynamic(psFact, netstat, a.containerRuntime, a.containerFilter.ContainerIgnored, discovery.SudoFileReader{HostRootPath: a.hostRootPath}, a.config.Stack)
+	dynamicDiscovery := discovery.NewDynamic(discovery.Option{
+		PS:                 psFact,
+		Netstat:            netstat,
+		ContainerInfo:      a.containerRuntime,
+		IsContainerIgnored: a.containerFilter.ContainerIgnored,
+		FileReader:         discovery.SudoFileReader{HostRootPath: a.hostRootPath},
+		DefaultStack:       a.config.Stack,
+	})
 
 	a.discovery, warnings = discovery.New(
 		dynamicDiscovery,

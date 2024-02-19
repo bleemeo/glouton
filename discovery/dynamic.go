@@ -43,21 +43,25 @@ const (
 	gloutonContainerLabelPrefix = "glouton."
 )
 
+type Option struct {
+	PS                 processFact
+	Netstat            netstatProvider
+	ContainerInfo      containerInfoProvider
+	IsContainerIgnored func(facts.Container) bool
+	FileReader         fileReader
+	DefaultStack       string
+}
+
 // DynamicDiscovery implement the dynamic discovery. It will only return
 // service dynamically discovery from processes list, containers running, ...
 // It don't include manually configured service or previously detected services.
 type DynamicDiscovery struct {
 	l sync.Mutex
 
-	now                func() time.Time
-	ps                 processFact
-	netstat            netstatProvider
-	containerInfo      containerInfoProvider
-	fileReader         fileReader
-	defaultStack       string
-	isContainerIgnored func(facts.Container) bool
-	pendingUpdateCond  *sync.Cond
-	pendingUpdate      bool
+	option            Option
+	now               func() time.Time
+	pendingUpdateCond *sync.Cond
+	pendingUpdate     bool
 
 	lastDiscoveryUpdate time.Time
 	services            []Service
@@ -74,15 +78,10 @@ type fileReader interface {
 
 // NewDynamic create a new dynamic service discovery which use information from
 // processes and netstat to discovery services.
-func NewDynamic(ps processFact, netstat netstatProvider, containerInfo containerInfoProvider, isContainerIgnored func(facts.Container) bool, fileReader fileReader, defaultStack string) *DynamicDiscovery {
+func NewDynamic(opts Option) *DynamicDiscovery {
 	dd := &DynamicDiscovery{
-		now:                time.Now,
-		ps:                 ps,
-		netstat:            netstat,
-		containerInfo:      containerInfo,
-		fileReader:         fileReader,
-		defaultStack:       defaultStack,
-		isContainerIgnored: isContainerIgnored,
+		now:    time.Now,
+		option: opts,
 	}
 
 	dd.pendingUpdateCond = sync.NewCond(&dd.l)
@@ -153,7 +152,7 @@ func (dd *DynamicDiscovery) ProcessServiceInfo(cmdLine []string, pid int, create
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	processes, err := dd.ps.Processes(ctx, time.Since(createTime))
+	processes, err := dd.option.PS.Processes(ctx, time.Since(createTime))
 	if err != nil {
 		logger.V(1).Printf("unable to list processes: %v", err)
 
@@ -166,8 +165,8 @@ func (dd *DynamicDiscovery) ProcessServiceInfo(cmdLine []string, pid int, create
 	for _, p := range processes {
 		if p.PID == pid && p.CreateTime.Truncate(time.Second).Equal(createTime) {
 			if p.ContainerID != "" {
-				container, ok := dd.containerInfo.CachedContainer(p.ContainerID)
-				if !ok || dd.isContainerIgnored(container) {
+				container, ok := dd.option.ContainerInfo.CachedContainer(p.ContainerID)
+				if !ok || dd.option.IsContainerIgnored(container) {
 					return "", ""
 				}
 			}
@@ -298,12 +297,12 @@ type netstatProvider interface {
 // Only one updateDiscovery should be running at a time (the pendingUpdateCond ensure this).
 // The lock should not be held, updateDiscovery take care of taking lock before access to mutable fields.
 func (dd *DynamicDiscovery) updateDiscovery(ctx context.Context, maxAge time.Duration) error {
-	processes, err := dd.ps.Processes(ctx, maxAge)
+	processes, err := dd.option.PS.Processes(ctx, maxAge)
 	if err != nil {
 		return err
 	}
 
-	netstat, err := dd.netstat.Netstat(ctx, processes)
+	netstat, err := dd.option.Netstat.Netstat(ctx, processes)
 	if err != nil && !os.IsNotExist(err) {
 		logger.V(1).Printf("An error occurred while trying to retrieve netstat information: %v", err)
 	}
@@ -420,12 +419,12 @@ func (dd *DynamicDiscovery) serviceFromProcess(process facts.Process, netstat ma
 		Instance:      process.ContainerName,
 		ExePath:       process.Executable,
 		Active:        true,
-		Stack:         dd.defaultStack,
+		Stack:         dd.option.DefaultStack,
 	}
 
 	if service.ContainerID != "" {
-		service.container, ok = dd.containerInfo.CachedContainer(service.ContainerID)
-		if !ok || dd.isContainerIgnored(service.container) {
+		service.container, ok = dd.option.ContainerInfo.CachedContainer(service.ContainerID)
+		if !ok || dd.option.IsContainerIgnored(service.container) {
 			return Service{}, false
 		}
 
@@ -552,8 +551,8 @@ func (dd *DynamicDiscovery) fillConfig(service *Service) {
 					service.Config.Password = v
 				}
 			}
-		} else if dd.fileReader != nil {
-			if debianCnfRaw, err := dd.fileReader.ReadFile("/etc/mysql/debian.cnf"); err == nil {
+		} else if dd.option.FileReader != nil {
+			if debianCnfRaw, err := dd.option.FileReader.ReadFile("/etc/mysql/debian.cnf"); err == nil {
 				if debianCnf, err := ini.Load(debianCnfRaw); err == nil {
 					section := debianCnf.Section("client")
 					if section != nil {

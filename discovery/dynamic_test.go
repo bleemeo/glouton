@@ -118,8 +118,8 @@ func TestServiceByCommand(t *testing.T) {
 func TestDynamicDiscoverySimple(t *testing.T) {
 	t0 := time.Now()
 
-	dd := NewDynamic(
-		mockProcess{
+	dd := NewDynamic(Option{
+		PS: mockProcess{
 			[]facts.Process{
 				{
 					PID:         1547,
@@ -137,16 +137,14 @@ func TestDynamicDiscoverySimple(t *testing.T) {
 				},
 			},
 		},
-		mockNetstat{result: map[int][]facts.ListenAddress{
+		Netstat: mockNetstat{result: map[int][]facts.ListenAddress{
 			1547: {
 				{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 11211},
 			},
 		}},
-		mockContainerInfo{},
-		facts.ContainerFilter{}.ContainerIgnored,
-		nil,
-		"",
-	)
+		ContainerInfo:      mockContainerInfo{},
+		IsContainerIgnored: facts.ContainerFilter{}.ContainerIgnored,
+	})
 	dd.now = func() time.Time { return t0 }
 
 	ctx := context.Background()
@@ -1041,8 +1039,8 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 	ctx := context.Background()
 
 	for _, c := range cases {
-		dd := NewDynamic(
-			mockProcess{
+		dd := NewDynamic(Option{
+			PS: mockProcess{
 				[]facts.Process{
 					{
 						PID:           42,
@@ -1052,10 +1050,10 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 					},
 				},
 			},
-			mockNetstat{result: map[int][]facts.ListenAddress{
+			Netstat: mockNetstat{result: map[int][]facts.ListenAddress{
 				42: c.netstatAddresses,
 			}},
-			mockContainerInfo{
+			ContainerInfo: mockContainerInfo{
 				containers: map[string]facts.FakeContainer{
 					c.containerID: {
 						FakeContainerName:   c.containerName,
@@ -1066,12 +1064,11 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 					},
 				},
 			},
-			facts.ContainerFilter{}.ContainerIgnored,
-			mockFileReader{
+			IsContainerIgnored: facts.ContainerFilter{}.ContainerIgnored,
+			FileReader: mockFileReader{
 				contents: c.filesContent,
 			},
-			"",
-		)
+		})
 		dd.now = func() time.Time { return t0 }
 
 		srv, err := dd.Discovery(ctx, 0)
@@ -1901,20 +1898,19 @@ func TestDynamicDiscovery(t *testing.T) { //nolint:maintidx
 
 			t.Parallel()
 
-			dd := NewDynamic(
-				mockProcess{
+			dd := NewDynamic(Option{
+				PS: mockProcess{
 					result: c.processes,
 				},
-				mockNetstat{result: c.netstatAddressesPerPID},
-				mockContainerInfo{
+				Netstat: mockNetstat{result: c.netstatAddressesPerPID},
+				ContainerInfo: mockContainerInfo{
 					containers: c.containers,
 				},
-				facts.ContainerFilter{}.ContainerIgnored,
-				mockFileReader{
+				IsContainerIgnored: facts.ContainerFilter{}.ContainerIgnored,
+				FileReader: mockFileReader{
 					contents: c.filesContent,
 				},
-				"",
-			)
+			})
 			dd.now = func() time.Time { return t0 }
 
 			srv, err := dd.Discovery(ctx, 0)
@@ -1957,14 +1953,12 @@ func Test_fillGenericExtraAttributes(t *testing.T) {
 		Address:     "192.168.0.1",
 	}
 
-	dd := NewDynamic(
-		mockProcess{},
-		mockNetstat{},
-		mockContainerInfo{},
-		facts.ContainerFilter{}.ContainerIgnored,
-		nil,
-		"",
-	)
+	dd := NewDynamic(Option{
+		PS:                 mockProcess{},
+		Netstat:            mockNetstat{},
+		ContainerInfo:      mockContainerInfo{},
+		IsContainerIgnored: facts.ContainerFilter{}.ContainerIgnored,
+	})
 
 	dd.fillConfigFromLabels(&service)
 
