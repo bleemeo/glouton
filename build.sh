@@ -20,11 +20,16 @@ case "$1" in
    "no-js")
       SKIP_JS=1
       ;;
+   "docker-fast")
+      ONLY_DOCKER_FAST=1
+      SKIP_JS=1
+      ;;
    *)
       echo "Usage: $0 [go|race|no-js]"
       echo "  go: only compile Go"
       echo "  race: only compile Go with -race"
       echo "  no-js: skip building JS"
+      echo "  docker-fast: build a docker from ./glouton (so you should run ./build.sh go before)"
       exit 1
 esac
 
@@ -33,8 +38,8 @@ if docker volume ls | grep -q glouton-buildcache; then
    NODE_MOUNT_CACHE="-v glouton-buildcache:/go/pkg"
 fi
 
-if [ "${ONLY_GO}" = "1" ]; then
-   echo "Skip cleaning workspace because only Go binary build is enabled"
+if [ "${ONLY_GO}" = "1" -o "${ONLY_DOCKER_FAST}" = "1" ]; then
+   echo "Skip cleaning workspace because only Go binary build is enabled or Docker fast is enabled"
 else
    echo "Cleanup workspace"
    rm -fr webui/dist webui/node_modules api/static/assets/css/ api/static/assets/js/ api/api-bindata.go api/api-packr.go api/packrd/
@@ -68,7 +73,10 @@ export GLOUTON_VERSION
 COMMIT=`git rev-parse --short HEAD || echo "unknown"`
 
 echo "Building Go binary"
-if [ "${ONLY_GO}" = "1" -a "${WITH_RACE}" != "1" ]; then
+if [ "${ONLY_DOCKER_FAST}" = "1" ]; then
+   echo "Building a Docker image using ./glouton"
+   sed 's@COPY dist/glouton_linux_.*/glouton /glouton.@COPY glouton /glouton.@' Dockerfile | docker buildx build ${GLOUTON_BUILDX_OPTION} -f - .
+elif [ "${ONLY_GO}" = "1" -a "${WITH_RACE}" != "1" ]; then
    docker run --rm -e HOME=/go/pkg -e CGO_ENABLED=0 \
       -v $(pwd):/src -w /src ${GO_MOUNT_CACHE} \
       --entrypoint '' \
