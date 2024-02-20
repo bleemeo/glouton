@@ -1930,39 +1930,91 @@ func TestDynamicDiscovery(t *testing.T) { //nolint:maintidx
 }
 
 func Test_fillGenericExtraAttributes(t *testing.T) {
-	service := Service{
-		container: facts.FakeContainer{
-			FakeLabels: map[string]string{
-				"glouton.port":         "8080",
-				"glouton.ignore_ports": "9090,9091",
-				"glouton.http_path":    "/path",
+	cases := []struct {
+		name                        string
+		serviceFromDynamicDiscovery Service
+		expectedConfigResult        config.Service
+	}{
+		{
+			name: "ports-and-http_path",
+			serviceFromDynamicDiscovery: Service{
+				container: facts.FakeContainer{
+					FakeLabels: map[string]string{
+						"glouton.port":         "8080",
+						"glouton.ignore_ports": "9090,9091",
+						"glouton.http_path":    "/path",
+					},
+				},
+				Config: config.Service{
+					// HTTP Path should be overwritten.
+					HTTPPath: "/other",
+					// Address should be kept.
+					Address: "192.168.0.1",
+				},
+			},
+			expectedConfigResult: config.Service{
+				HTTPPath:    "/path",
+				Port:        8080,
+				IgnorePorts: []int{9090, 9091},
+				Address:     "192.168.0.1",
 			},
 		},
-		Config: config.Service{
-			// HTTP Path should be overwritten.
-			HTTPPath: "/other",
-			// Address should be kept.
-			Address: "192.168.0.1",
+		{
+			name: "tags",
+			serviceFromDynamicDiscovery: Service{
+				container: facts.FakeContainer{
+					FakeLabels: map[string]string{
+						"glouton.tags": "tags1,tags2",
+					},
+				},
+				Config: config.Service{
+					// Dynamic discovery won't fill tags by itself,
+					// they always come from container labels/annotations.
+				},
+			},
+			expectedConfigResult: config.Service{
+				Tags: []string{"tags1", "tags2"},
+			},
+		},
+		{
+			name: "from-annotations",
+			serviceFromDynamicDiscovery: Service{
+				container: facts.FakeContainer{
+					FakeAnnotations: map[string]string{
+						"glouton.tags":      "tags1,tags2",
+						"glouton.http_path": "/path",
+					},
+				},
+				Config: config.Service{
+					// Dynamic discovery won't fill tags by itself,
+					// they always come from container labels/annotations.
+				},
+			},
+			expectedConfigResult: config.Service{
+				Tags:     []string{"tags1", "tags2"},
+				HTTPPath: "/path",
+			},
 		},
 	}
 
-	expectedConfig := config.Service{
-		HTTPPath:    "/path",
-		Port:        8080,
-		IgnorePorts: []int{9090, 9091},
-		Address:     "192.168.0.1",
-	}
+	for _, tt := range cases {
+		tt := tt
 
-	dd := NewDynamic(Option{
-		PS:                 mockProcess{},
-		Netstat:            mockNetstat{},
-		ContainerInfo:      mockContainerInfo{},
-		IsContainerIgnored: facts.ContainerFilter{}.ContainerIgnored,
-	})
+		t.Run(tt.name, func(t *testing.T) {
+			service := tt.serviceFromDynamicDiscovery
 
-	dd.fillConfigFromLabels(&service)
+			dd := NewDynamic(Option{
+				PS:                 mockProcess{},
+				Netstat:            mockNetstat{},
+				ContainerInfo:      mockContainerInfo{},
+				IsContainerIgnored: facts.ContainerFilter{}.ContainerIgnored,
+			})
 
-	if diff := cmp.Diff(expectedConfig, service.Config); diff != "" {
-		t.Fatalf("Unexpected config:\n%s", diff)
+			dd.fillConfigFromLabels(&service)
+
+			if diff := cmp.Diff(tt.expectedConfigResult, service.Config); diff != "" {
+				t.Fatalf("Unexpected config:\n%s", diff)
+			}
+		})
 	}
 }

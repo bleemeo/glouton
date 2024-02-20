@@ -497,6 +497,63 @@ func Test_applyOverride(t *testing.T) { //nolint:maintidx
 			},
 		},
 		{
+			name: "create tags list",
+			args: args{
+				discoveredServicesMap: map[NameInstance]Service{
+					{Name: "apache"}: {
+						Name:        "apache",
+						ServiceType: ApacheService,
+					},
+				},
+				servicesOverride: []config.Service{
+					{
+						ID:   "apache",
+						Tags: []string{"website"},
+					},
+				},
+			},
+			want: map[NameInstance]Service{
+				{Name: "apache"}: {
+					Name:        "apache",
+					ServiceType: ApacheService,
+					Tags:        []string{"website"},
+					Config: config.Service{
+						ID:   "apache",
+						Tags: []string{"website"},
+					},
+				},
+			},
+		},
+		{
+			name: "extend tags list",
+			args: args{
+				discoveredServicesMap: map[NameInstance]Service{
+					{Name: "apache"}: {
+						Name:        "apache",
+						ServiceType: ApacheService,
+						Tags:        []string{"tag-from-dynamic-discovery-like-docker-labels"},
+					},
+				},
+				servicesOverride: []config.Service{
+					{
+						ID:   "apache",
+						Tags: []string{"website"},
+					},
+				},
+			},
+			want: map[NameInstance]Service{
+				{Name: "apache"}: {
+					Name:        "apache",
+					ServiceType: ApacheService,
+					Tags:        []string{"tag-from-dynamic-discovery-like-docker-labels", "website"},
+					Config: config.Service{
+						ID:   "apache",
+						Tags: []string{"website"},
+					},
+				},
+			},
+		},
+		{
 			name: "override port from jmx port",
 			args: args{
 				discoveredServicesMap: map[NameInstance]Service{},

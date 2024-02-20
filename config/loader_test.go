@@ -163,6 +163,7 @@ func TestLoader(t *testing.T) {
 			Value: []any{
 				map[string]any{
 					"address":             "",
+					"tags":                nil,
 					"ca_file":             "",
 					"http_host":           "",
 					"nagios_nrpe_name":    "",

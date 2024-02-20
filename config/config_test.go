@@ -270,6 +270,7 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 				Port:              8080,
 				IgnorePorts:       []int{8081},
 				Address:           "127.0.0.1",
+				Tags:              []string{"mytag1", "mytag2"},
 				Interval:          60,
 				CheckType:         "nagios",
 				HTTPPath:          "/check/",
