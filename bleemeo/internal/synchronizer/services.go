@@ -30,6 +30,14 @@ import (
 	"time"
 )
 
+// serviceFields is the fields used on the API for a service, we always use all fields to
+// make sure no Metric object is returned with some empty fields which could create bugs.
+// Write (POST, PUT & PATCH) use account and agent field in addition. During reading we use filter to known the account/agent.
+const (
+	serviceReadFields  = "id,label,instance,listen_addresses,exe_path,active,tags,created_at"
+	serviceWriteFields = serviceReadFields + ",account,agent"
+)
+
 type servicePayload struct {
 	types.Service
 	Account string `json:"account"`
@@ -37,6 +45,14 @@ type servicePayload struct {
 }
 
 func servicePayloadFromDiscovery(service discovery.Service, listenAddresses string, accountID string, agentID string, serviceID string) servicePayload {
+	tags := make([]types.Tag, 0, len(service.Tags))
+
+	for _, t := range service.Tags {
+		if len(t) <= apiTagsLength && t != "" {
+			tags = append(tags, types.Tag{Name: t})
+		}
+	}
+
 	return servicePayload{
 		Service: types.Service{
 			ID:              serviceID,
@@ -45,6 +61,7 @@ func servicePayloadFromDiscovery(service discovery.Service, listenAddresses stri
 			ListenAddresses: listenAddresses,
 			ExePath:         service.ExePath,
 			Active:          service.Active,
+			Tags:            tags,
 		},
 		Account: accountID,
 		Agent:   agentID,
@@ -115,7 +132,7 @@ func (s *Synchronizer) syncServices(ctx context.Context, fullSync bool, onlyEsse
 func (s *Synchronizer) serviceUpdateList() error {
 	params := map[string]string{
 		"agent":  s.agentID,
-		"fields": "id,label,instance,listen_addresses,exe_path,active,created_at",
+		"fields": serviceReadFields,
 	}
 
 	result, err := s.client.Iter(s.ctx, "service", params)
@@ -173,7 +190,7 @@ func (s *Synchronizer) serviceRegisterAndUpdate(localServices []discovery.Servic
 	remoteServicesByKey := common.ServiceLookupFromList(remoteServices)
 	registeredServices := s.option.Cache.ServicesByUUID()
 	params := map[string]string{
-		"fields": "id,label,instance,listen_addresses,exe_path,active,account,agent,created_at",
+		"fields": serviceWriteFields,
 	}
 
 	for _, srv := range localServices {
@@ -254,7 +271,49 @@ func skipUpdate(remoteFound bool, remoteSrv types.Service, srv discovery.Service
 		remoteSrv.Label == srv.Name &&
 		remoteSrv.ListenAddresses == listenAddresses &&
 		remoteSrv.ExePath == srv.ExePath &&
-		remoteSrv.Active == srv.Active
+		remoteSrv.Active == srv.Active &&
+		serviceHadSameTags(remoteSrv.Tags, srv.Tags)
+}
+
+// serviceHadSameTags returns true if the two service had the same tags for glouton provided tags.
+func serviceHadSameTags(remoteTags []types.Tag, localTags []string) bool {
+	localTagsTruncated := make([]string, 0, len(localTags))
+
+	for _, tag := range localTags {
+		if len(tag) <= apiTagsLength && tag != "" {
+			localTagsTruncated = append(localTagsTruncated, tag)
+		}
+	}
+
+	gloutonTagCount := 0
+
+	for _, tag := range remoteTags {
+		if tag.TagType == types.TagTypeIsCreatedByGlouton {
+			gloutonTagCount++
+		}
+	}
+
+	if len(localTagsTruncated) != gloutonTagCount {
+		return false
+	}
+
+	for _, wantedTag := range localTagsTruncated {
+		tagPresent := false
+
+		for _, tag := range remoteTags {
+			if tag.TagType == types.TagTypeIsCreatedByGlouton && tag.Name == wantedTag {
+				tagPresent = true
+
+				break
+			}
+		}
+
+		if !tagPresent {
+			return false
+		}
+	}
+
+	return true
 }
 
 // serviceExcludeUnregistrable removes the services that cannot be registered.
@@ -326,7 +385,7 @@ func (s *Synchronizer) serviceDeactivateNonLocal(localServices []discovery.Servi
 // serviceDeactivate makes a PUT request to the Bleemeo API to mark the given service as inactive.
 func (s *Synchronizer) serviceDeactivate(service types.Service) (types.Service, error) {
 	params := map[string]string{
-		"fields": "id,label,instance,listen_addresses,exe_path,active,account,agent,created_at",
+		"fields": serviceWriteFields,
 	}
 
 	payload := servicePayload{

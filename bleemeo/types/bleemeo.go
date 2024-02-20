@@ -93,12 +93,20 @@ type AgentType struct {
 	DisplayName string `json:"display_name"`
 }
 
+type TagType int
+
+const (
+	TagTypeIsAutomatic        TagType = 0
+	TagTypeIsCreatedByGlouton TagType = 1
+)
+
 // Tag is an Tag object on Bleemeo API.
 type Tag struct {
-	ID           string `json:"id,omitempty"`
-	Name         string `json:"name"`
-	IsAutomatic  bool   `json:"is_automatic,omitempty"`
-	IsServiceTag bool   `json:"is_service_tag,omitempty"`
+	ID           string  `json:"id,omitempty"`
+	Name         string  `json:"name"`
+	IsAutomatic  bool    `json:"is_automatic,omitempty"`
+	IsServiceTag bool    `json:"is_service_tag,omitempty"`
+	TagType      TagType `json:"tag_type"`
 }
 
 // AccountConfig is a configuration of account.
@@ -131,6 +139,7 @@ type Service struct {
 	Instance        string `json:"instance"`
 	ListenAddresses string `json:"listen_addresses"`
 	ExePath         string `json:"exe_path"`
+	Tags            []Tag  `json:"tags"`
 	Active          bool   `json:"active"`
 	CreationDate    string `json:"created_at"`
 }

@@ -111,6 +111,7 @@ type Service struct {
 	Config          config.Service
 	Name            string
 	Instance        string
+	Tags            []string
 	ServiceType     ServiceName
 	ContainerID     string
 	ContainerName   string // If ContainerName is set, Instance must be the same value.
