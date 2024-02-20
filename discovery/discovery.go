@@ -716,6 +716,8 @@ func applyOverrideInPlace(
 			}
 		}
 
+		service.Tags = append(service.Tags, service.Config.Tags...)
+
 		servicesMap[serviceKey] = service
 	}
 

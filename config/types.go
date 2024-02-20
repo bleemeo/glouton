@@ -331,6 +331,8 @@ type Service struct {
 	IgnorePorts []int `yaml:"ignore_ports"`
 	// The address of the service.
 	Address string `yaml:"address"`
+	// Tags associated with this service.
+	Tags []string `yaml:"tags"`
 	// The delay between two consecutive checks in seconds.
 	Interval int `yaml:"interval"`
 	// Check type used for custom checks.
