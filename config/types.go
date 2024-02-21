@@ -321,10 +321,10 @@ type Listener struct {
 }
 
 type Service struct {
-	// The name of the service.
-	ID string `yaml:"id"`
-	// Instance of the service, used to differentiate between services with the same ID.
-	Instance string `yaml:"instance"`
+	// The name of the service type, like "apache", "nginx". For custom service, it could be any value.
+	ServiceType string `yaml:"service_type"`
+	// Instance of the service, used to differentiate between two same services (like two apaches)
+	ServiceInstance string `yaml:"service_instance"`
 	// The port the service is running on.
 	Port int `yaml:"port"`
 	// Ports that should be ignored.

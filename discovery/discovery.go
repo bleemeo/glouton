@@ -153,19 +153,19 @@ func validateServices(services []config.Service) (map[NameInstance]config.Servic
 	replacer := strings.NewReplacer(".", "_", "-", "_")
 
 	for _, srv := range services {
-		if srv.ID == "" {
-			warning := fmt.Errorf("%w: a key \"id\" is missing in one of your service override", config.ErrInvalidValue)
+		if srv.ServiceType == "" {
+			warning := fmt.Errorf("%w: the key \"service_type\" is missing in one of your service override", config.ErrInvalidValue)
 			warnings.Append(warning)
 
 			continue
 		}
 
-		if !model.IsValidMetricName(model.LabelValue(srv.ID)) {
-			newID := replacer.Replace(srv.ID)
-			if !model.IsValidMetricName(model.LabelValue(newID)) {
+		if !model.IsValidMetricName(model.LabelValue(srv.ServiceType)) {
+			newServiceType := replacer.Replace(srv.ServiceType)
+			if !model.IsValidMetricName(model.LabelValue(newServiceType)) {
 				warning := fmt.Errorf(
-					"%w: service id \"%s\" can only contains letters, digits and underscore",
-					config.ErrInvalidValue, srv.ID,
+					"%w: service_type \"%s\" can only contains letters, digits and underscore",
+					config.ErrInvalidValue, srv.ServiceType,
 				)
 				warnings.Append(warning)
 
@@ -173,19 +173,19 @@ func validateServices(services []config.Service) (map[NameInstance]config.Servic
 			}
 
 			warning := fmt.Errorf(
-				"%w: service id \"%s\" can not contains dot (.) or dash (-). Changed to \"%s\"",
-				config.ErrInvalidValue, srv.ID, newID,
+				"%w: service_type \"%s\" can not contains dot (.) or dash (-). Changed to \"%s\"",
+				config.ErrInvalidValue, srv.ServiceType, newServiceType,
 			)
 			warnings.Append(warning)
 
-			srv.ID = newID
+			srv.ServiceType = newServiceType
 		}
 
 		// SSL and StartTLS can't be used at the same time.
 		if srv.SSL && srv.StartTLS {
 			warning := fmt.Errorf(
 				"%w: service '%s' can't set both SSL and StartTLS, StartTLS will be used",
-				config.ErrInvalidValue, srv.ID,
+				config.ErrInvalidValue, srv.ServiceType,
 			)
 			warnings.Append(warning)
 
@@ -198,7 +198,7 @@ func validateServices(services []config.Service) (map[NameInstance]config.Servic
 		default:
 			warning := fmt.Errorf(
 				"%w: service '%s' has an unsupported stats protocol: '%s'",
-				config.ErrInvalidValue, srv.ID, srv.StatsProtocol,
+				config.ErrInvalidValue, srv.ServiceType, srv.StatsProtocol,
 			)
 			warnings.Append(warning)
 
@@ -209,15 +209,15 @@ func validateServices(services []config.Service) (map[NameInstance]config.Servic
 
 		// Check for duplicated overrides.
 		key := NameInstance{
-			Name:     srv.ID,
-			Instance: srv.Instance,
+			Name:     srv.ServiceType,
+			Instance: srv.ServiceInstance,
 		}
 
 		if _, ok := serviceMap[key]; ok {
-			warning := fmt.Sprintf("a service override is duplicated for '%s'", srv.ID)
+			warning := fmt.Sprintf("a service override is duplicated for '%s'", srv.ServiceType)
 
-			if srv.Instance != "" {
-				warning = fmt.Sprintf("%s on instance '%s'", warning, srv.Instance)
+			if srv.ServiceInstance != "" {
+				warning = fmt.Sprintf("%s on instance '%s'", warning, srv.ServiceInstance)
 			}
 
 			warnings.Append(fmt.Errorf("%w: %s", config.ErrInvalidValue, warning))
@@ -558,8 +558,8 @@ func copyAndMergeServiceWithOverride(servicesMap map[NameInstance]Service, overr
 
 	for _, v := range overrides {
 		key := NameInstance{
-			Name:     v.ID,
-			Instance: v.Instance,
+			Name:     v.ServiceType,
+			Instance: v.ServiceInstance,
 		}
 		service := serviceMapWithOverride[key]
 
@@ -593,8 +593,8 @@ func applyOverrideInPlace(
 	for _, serviceKey := range serviceKeys {
 		service := servicesMap[serviceKey]
 
-		if service.Name != service.Config.ID && service.Config.ID != "" {
-			service.Name = service.Config.ID
+		if service.Name != service.Config.ServiceType && service.Config.ServiceType != "" {
+			service.Name = service.Config.ServiceType
 			service.ServiceType = ""
 		}
 
@@ -605,8 +605,8 @@ func applyOverrideInPlace(
 				service.ServiceType = CustomService
 			}
 
-			if service.Config.Instance != "" {
-				service.Instance = service.Config.Instance
+			if service.Config.ServiceInstance != "" {
+				service.Instance = service.Config.ServiceInstance
 			}
 
 			service.Active = true

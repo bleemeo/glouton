@@ -60,8 +60,8 @@ func NewResponse(services []config.Service, checkRegistry checkRegistry, nrpeCon
 		}
 
 		customChecks[service.NagiosNRPEName] = discovery.NameInstance{
-			Name:     service.ID,
-			Instance: service.Instance,
+			Name:     service.ServiceType,
+			Instance: service.ServiceInstance,
 		}
 	}
 
@@ -146,8 +146,8 @@ func (r Responder) responseNRPEConf(ctx context.Context, requestArgs []string) (
 func (r Responder) returnCommand(requestArgs []string) ([]string, error) {
 	nrpeCommand := r.nrpeCommands[requestArgs[0]]
 
-	argPatern := "\\$ARG([0-9])+\\$"
-	regex := regexp.MustCompile(argPatern)
+	argPattern := "\\$ARG([0-9])+\\$"
+	regex := regexp.MustCompile(argPattern)
 
 	argsToReplace := regex.FindAllString(nrpeCommand, -1)
 
@@ -196,11 +196,11 @@ func readNRPEConf(nrpeConfPath []string) (map[string]string, bool) {
 
 // readNRPEConfFile read confBytes and returns an updated version of nrpeConfMap and allowArgument.
 func readNRPEConfFile(confBytes []byte, nrpeConfMap map[string]string) (map[string]string, bool) {
-	commandLinePatern := "^command\\[(.+)\\]( *)=.*$"
-	commandLineRegex := regexp.MustCompile(commandLinePatern)
+	commandLinePattern := "^command\\[(.+)\\]( *)=.*$"
+	commandLineRegex := regexp.MustCompile(commandLinePattern)
 
-	allowArgumentPatern := "^dont_blame_nrpe=( *)[0-1]$"
-	allowArgumentRegex := regexp.MustCompile(allowArgumentPatern)
+	allowArgumentPattern := "^dont_blame_nrpe=( *)[0-1]$"
+	allowArgumentRegex := regexp.MustCompile(allowArgumentPattern)
 
 	confCommandArguments := false
 	confString := string(confBytes)

@@ -265,8 +265,8 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 		},
 		Services: []Service{
 			{
-				ID:                "service1",
-				Instance:          "instance1",
+				ServiceType:       "service1",
+				ServiceInstance:   "instance1",
 				Port:              8080,
 				IgnorePorts:       []int{8081},
 				Address:           "127.0.0.1",
@@ -717,7 +717,7 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 			WantConfig: Config{
 				Services: []Service{
 					{
-						ID:           "service1",
+						ServiceType:  "service1",
 						CheckType:    "nagios",
 						CheckCommand: "/path/to/bin --with-option",
 					},
@@ -832,13 +832,13 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 			Name:  "deprecated cassandra_detailed_tables",
 			Files: []string{"testdata/deprecated_cassandra.conf"},
 			WantWarnings: []string{
-				"testdata/deprecated_cassandra.conf: setting is deprecated: 'cassandra_detailed_tables'" +
+				"testdata/deprecated_cassandra.conf: setting is deprecated in 'service' override: 'cassandra_detailed_tables'" +
 					", use 'detailed_items' instead",
 			},
 			WantConfig: Config{
 				Services: []Service{
 					{
-						ID: "cassandra",
+						ServiceType: "cassandra",
 						DetailedItems: []string{
 							"keyspace.table1",
 							"keyspace.table2",
@@ -851,13 +851,13 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 			Name:  "deprecated mgmt_port",
 			Files: []string{"testdata/deprecated_mgmt_port.conf"},
 			WantWarnings: []string{
-				"testdata/deprecated_mgmt_port.conf: setting is deprecated: 'mgmt_port', use 'stats_port' instead",
+				"testdata/deprecated_mgmt_port.conf: setting is deprecated in 'service' override: 'mgmt_port', use 'stats_port' instead",
 			},
 			WantConfig: Config{
 				Services: []Service{
 					{
-						ID:        "service1",
-						StatsPort: 9090,
+						ServiceType: "service1",
+						StatsPort:   9090,
 					},
 				},
 			},
@@ -871,6 +871,58 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 			},
 			WantConfig: Config{
 				NetworkInterfaceDenylist: []string{"eth0"},
+			},
+		},
+		{
+			Name:  "deprecated_service_id",
+			Files: []string{"testdata/deprecated_service_id.conf"},
+			WantWarnings: []string{
+				"testdata/deprecated_service_id.conf: setting is deprecated in 'service' override: 'id'" +
+					", use 'service_type' instead",
+			},
+			WantConfig: Config{
+				Services: []Service{
+					{
+						ServiceType: "apache",
+						Port:        1234,
+					},
+				},
+			},
+		},
+		{
+			Name:  "deprecated_service_instance",
+			Files: []string{"testdata/deprecated_service_instance.conf"},
+			WantWarnings: []string{
+				"testdata/deprecated_service_instance.conf: setting is deprecated in 'service' override: 'instance'" +
+					", use 'service_instance' instead",
+			},
+			WantConfig: Config{
+				Services: []Service{
+					{
+						ServiceType:     "apache",
+						ServiceInstance: "my_container",
+						Port:            1234,
+					},
+				},
+			},
+		},
+		{
+			Name:  "deprecated_service_id_and_instance",
+			Files: []string{"testdata/deprecated_service_id_and_instance.conf"},
+			WantWarnings: []string{
+				"testdata/deprecated_service_id_and_instance.conf: setting is deprecated in 'service' override: 'id'" +
+					", use 'service_type' instead",
+				"testdata/deprecated_service_id_and_instance.conf: setting is deprecated in 'service' override: 'instance'" +
+					", use 'service_instance' instead",
+			},
+			WantConfig: Config{
+				Services: []Service{
+					{
+						ServiceType:     "apache",
+						ServiceInstance: "my_container",
+						Port:            1234,
+					},
+				},
 			},
 		},
 		{
@@ -1125,13 +1177,13 @@ func TestDump(t *testing.T) {
 		},
 		Services: []Service{
 			{
-				ID:          "in-dump",
+				ServiceType: "in-dump",
 				Password:    "not-in-dump",
 				JMXPassword: "not-in-dump",
 				KeyFile:     "not-in-dump",
 			},
 			{
-				ID:          "in-dump-2",
+				ServiceType: "in-dump-2",
 				Password:    "",
 				JMXPassword: "",
 				KeyFile:     "",
@@ -1149,13 +1201,13 @@ func TestDump(t *testing.T) {
 		},
 		Services: []Service{
 			{
-				ID:          "in-dump",
+				ServiceType: "in-dump",
 				Password:    "*****",
 				JMXPassword: "*****",
 				KeyFile:     "*****",
 			},
 			{
-				ID: "in-dump-2",
+				ServiceType: "in-dump-2",
 				// In dump because these fields were unset.
 				Password:    "",
 				JMXPassword: "",

@@ -544,6 +544,8 @@ func migrateScrapper(k *koanf.Koanf, config map[string]interface{}, deprecatedPa
 func migrateServices(config map[string]interface{}) prometheus.MultiError {
 	migratedOptions := map[string]string{
 		"cassandra_detailed_tables": "detailed_items",
+		"id":                        "service_type",
+		"instance":                  "service_instance",
 		"mgmt_port":                 "stats_port",
 	}
 
@@ -571,7 +573,7 @@ func migrateServices(config map[string]interface{}) prometheus.MultiError {
 			serviceMap[newOpt] = detailedTablesInt
 			delete(serviceMap, deprecatedOpt)
 
-			warnings.Append(fmt.Errorf("%w: '%s', use '%s' instead", errSettingsDeprecated, deprecatedOpt, newOpt))
+			warnings.Append(fmt.Errorf("%w in 'service' override: '%s', use '%s' instead", errSettingsDeprecated, deprecatedOpt, newOpt))
 		}
 	}
 
