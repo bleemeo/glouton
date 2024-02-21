@@ -53,8 +53,8 @@ var (
 		},
 		Services: []config.Service{
 			{
-				ServiceType: "myapplication",
-				JMXPort:     1234,
+				Type:    "myapplication",
+				JMXPort: 1234,
 				JMXMetrics: []config.JmxMetric{
 					{
 						Name:      "heap_size_mb",
@@ -72,11 +72,11 @@ var (
 				},
 			},
 			{
-				ServiceType: "apache",
-				Address:     "127.0.0.1",
-				Port:        80,
-				HTTPPath:    "/",
-				HTTPHost:    "127.0.0.1:80",
+				Type:     "apache",
+				Address:  "127.0.0.1",
+				Port:     80,
+				HTTPPath: "/",
+				HTTPHost: "127.0.0.1:80",
 			},
 		},
 	}

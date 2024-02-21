@@ -60,8 +60,8 @@ func NewResponse(services []config.Service, checkRegistry checkRegistry, nrpeCon
 		}
 
 		customChecks[service.NagiosNRPEName] = discovery.NameInstance{
-			Name:     service.ServiceType,
-			Instance: service.ServiceInstance,
+			Name:     service.Type,
+			Instance: service.Instance,
 		}
 	}
 
