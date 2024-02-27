@@ -180,11 +180,13 @@ export default class AgentProcesses extends React.Component {
     if (top["Processes"] && !isEmpty(top["Memory"])) {
       const filteredProcesses = this.getFilteredProcesses();
       const processesTmp = filteredProcesses.map((process) => {
-        process.mem_percent = parseFloat(
-          d3.format(".2r")((process.memory_rss / top["Memory"]["Total"]) * 100),
-        );
-        process.new_cpu_times = _formatCpuTime(process.cpu_time);
-        return process;
+        return {
+          ...process,
+          mem_percent: parseFloat(
+            d3.format(".2r")((process.memory_rss / top["Memory"]["Total"]) * 100),
+          ),
+          new_cpu_times: _formatCpuTime(process.cpu_time),
+        };
       });
 
       const childrenProcesses = new Map();

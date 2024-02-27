@@ -35,11 +35,13 @@ const DockerProcesses = ({ containerId, name }) => {
           } else {
             let memTotal = result["Memory"]["Total"];
             dockerProcesses.map((process) => {
-              process.mem_percent = d3.format(".2r")(
-                (process.memory_rss / memTotal) * 100,
-              );
-              process.new_cpu_times = _formatCpuTime(process.cpu_time);
-              return process;
+              return {
+                ...process,
+                mem_percent: d3.format(".2r")(
+                  (process.memory_rss / memTotal) * 100,
+                ),
+                new_cpu_times: _formatCpuTime(process.cpu_time),
+              }
             });
             return (
               <div style={{ overflow: "auto" }}>
