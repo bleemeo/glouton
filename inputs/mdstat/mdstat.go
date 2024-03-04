@@ -14,10 +14,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//go:build linux
+
 package mdstat
 
 import (
 	"fmt"
+	"glouton/config"
 	"glouton/inputs"
 	"glouton/inputs/internal"
 	"glouton/logger"
@@ -37,7 +40,7 @@ import (
 
 const mdstatPath = "/proc/mdstat"
 
-func New(mdadmPath string) (telegraf.Input, *inputs.GathererOptions, error) {
+func New(cfg config.Mdstat) (telegraf.Input, *inputs.GathererOptions, error) {
 	if _, err := os.Stat(mdstatPath); err != nil && !testing.Testing() {
 		return nil, nil, fmt.Errorf("can't enable input: %w", err)
 	}
@@ -62,9 +65,14 @@ func New(mdadmPath string) (telegraf.Input, *inputs.GathererOptions, error) {
 		Name: "mdstat",
 	}
 
+	// Never use sudo if we're already root
+	if os.Getuid() == 0 {
+		cfg.UseSudo = false
+	}
+
 	options := &inputs.GathererOptions{
 		MinInterval:    60 * time.Second,
-		GatherModifier: gatherModifier(mdadmPath, time.Now, callMdadm),
+		GatherModifier: gatherModifier(cfg.PathMdadm, cfg.UseSudo, time.Now, callMdadm),
 	}
 
 	return internalInput, options, nil
@@ -102,7 +110,7 @@ type arrayInfo struct {
 	recoveryMinutes             float64
 }
 
-func gatherModifier(mdadmPath string, timeNow func() time.Time, mdadmDetails mdadmDetailsFunc) func(mfs []*dto.MetricFamily, _ error) []*dto.MetricFamily {
+func gatherModifier(mdadmPath string, useSudo bool, timeNow func() time.Time, mdadmDetails mdadmDetailsFunc) func(mfs []*dto.MetricFamily, _ error) []*dto.MetricFamily {
 	return func(mfs []*dto.MetricFamily, _ error) []*dto.MetricFamily {
 		infoPerArray := make(map[string]arrayInfo)
 
@@ -153,7 +161,7 @@ func gatherModifier(mdadmPath string, timeNow func() time.Time, mdadmDetails mda
 		}
 
 		for array, info := range infoPerArray {
-			healthStatusMetric := makeHealthStatusMetric(array, info, mdadmPath, timeNow, mdadmDetails)
+			healthStatusMetric := makeHealthStatusMetric(array, info, mdadmPath, useSudo, timeNow, mdadmDetails)
 			disksActivityStateStatus.Metric = append(disksActivityStateStatus.Metric, healthStatusMetric)
 		}
 
@@ -176,14 +184,14 @@ func parseLabels(labels []*dto.LabelPair) (item, activityState string) {
 	return item, activityState
 }
 
-func makeHealthStatusMetric(array string, info arrayInfo, mdadmPath string, timeNow func() time.Time, mdadmDetails mdadmDetailsFunc) *dto.Metric {
+func makeHealthStatusMetric(array string, info arrayInfo, mdadmPath string, useSudo bool, timeNow func() time.Time, mdadmDetails mdadmDetailsFunc) *dto.Metric {
 	var (
 		status      types.Status
 		description string
 	)
 
 	if info.active != info.total { // Something is going on, and we may not have enough information with /proc/mdstat
-		details, err := mdadmDetails(array, mdadmPath)
+		details, err := mdadmDetails(array, mdadmPath, useSudo)
 		if err != nil {
 			logger.V(1).Printf("MD: %v", err)
 		}
@@ -251,10 +259,13 @@ func generateFinishTimeStatusDescription(minutesLeft float64, timeNow func() tim
 	}
 
 	estimatedTime := timeNow().Add(time.Duration(minutesLeft) * time.Minute)
+	minutes := int(math.Ceil(minutesLeft))
+	s, _ := plural(minutes)
 
 	return fmt.Sprintf(
-		"The disk should be fully synchronized in %dmin (around %s)",
-		int(math.Ceil(minutesLeft)),
+		"The array should be fully synchronized in %d minute%s (around %s)",
+		minutes,
+		s,
 		estimatedTime.Format(time.TimeOnly),
 	)
 }

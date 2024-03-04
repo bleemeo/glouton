@@ -272,6 +272,7 @@ func DefaultConfig() Config { //nolint:maintidx
 		Mdstat: Mdstat{
 			Enable:    true,
 			PathMdadm: "mdadm",
+			UseSudo:   true,
 		},
 		Metric: Metric{
 			Prometheus: Prometheus{

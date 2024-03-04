@@ -214,6 +214,7 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 		Mdstat: Mdstat{
 			Enable:    true,
 			PathMdadm: "mdadm",
+			UseSudo:   true,
 		},
 		Metric: Metric{
 			AllowMetrics:          []string{"allowed"},

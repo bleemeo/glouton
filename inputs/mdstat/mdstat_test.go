@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"glouton/config"
 	"glouton/inputs"
 	"glouton/inputs/internal"
 	"glouton/prometheus/model"
@@ -102,7 +103,7 @@ func setupMdstatTest(t *testing.T, name string) (input telegraf.Input, mdadmDeta
 		t.Fatal("Failed to parse mdadm details:", err)
 	}
 
-	mdstatInput, _, err := New("won't be used")
+	mdstatInput, _, err := New(config.Mdstat{}) // the config won't be used
 	if err != nil {
 		deferFn()
 		t.Fatal("Failed to initialize mdstat input:", err)
@@ -119,7 +120,7 @@ func setupMdstatTest(t *testing.T, name string) (input telegraf.Input, mdadmDeta
 		}
 	}
 
-	mdadmDetailsFn = func(array, _ string) (mdadmInfo, error) {
+	mdadmDetailsFn = func(array, _ string, _ bool) (mdadmInfo, error) {
 		mdadmDetailsOutput, ok := mdadmDetails[array]
 		if !ok {
 			return mdadmInfo{}, fmt.Errorf("%w %s", errArrayMdadmDetailsNotFound, array)
@@ -369,7 +370,7 @@ func TestGather(t *testing.T) { //nolint:maintidx
 						Labels: map[string]string{
 							types.LabelItem:                   "md0",
 							types.LabelMetaCurrentStatus:      types.StatusWarning.String(),
-							types.LabelMetaCurrentDescription: "The array is degraded, 0 disk are failing. The disk should be fully synchronized in 3min (around 10:37:00)",
+							types.LabelMetaCurrentDescription: "The array is degraded, 0 disk are failing. The array should be fully synchronized in 3 minutes (around 10:37:00)",
 						},
 						Value: float64(types.StatusWarning.NagiosCode()),
 					},
@@ -401,7 +402,7 @@ func TestGather(t *testing.T) { //nolint:maintidx
 			}
 
 			mfs := model.MetricPointsToFamilies(pointBuffer.Points())
-			mfs = gatherModifier("won't be used", timeNow, mdadmDetailsFn)(mfs, nil)
+			mfs = gatherModifier("won't be used", false, timeNow, mdadmDetailsFn)(mfs, nil)
 
 			if diff := cmp.Diff(tc.expectedMetrics, convert(mfs), cmpopts.SortSlices(metricSorter)); diff != "" {
 				t.Fatalf("Unexpected metrics (-want +got):\n%s", diff)

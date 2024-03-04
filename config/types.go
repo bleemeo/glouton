@@ -426,4 +426,5 @@ type VSphere struct {
 type Mdstat struct {
 	Enable    bool   `yaml:"enable"`
 	PathMdadm string `yaml:"path_mdadm"`
+	UseSudo   bool   `yaml:"use_sudo"`
 }
