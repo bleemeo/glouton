@@ -19,15 +19,18 @@
 package mdstat
 
 import (
+	"errors"
 	"fmt"
 	"glouton/config"
 	"glouton/inputs"
 	"glouton/inputs/internal"
 	"glouton/logger"
 	"glouton/types"
+	"io/fs"
 	"math"
 	"os"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -194,6 +197,11 @@ func makeHealthStatusMetric(array string, info arrayInfo, mdadmPath string, useS
 		details, err := mdadmDetails(array, mdadmPath, useSudo)
 		if err != nil {
 			logger.V(1).Printf("MD: %v", err)
+
+			if e := new(fs.PathError); errors.As(err, &e) && errors.Is(e.Err, syscall.ENOENT) {
+				// Making a prettier version of "fork/exec <bad path>: no such file or directory"
+				return makeStatusMetric(array, types.StatusWarning, "Can't find mdadm binary at "+e.Path, timeNow().UnixMilli())
+			}
 
 			return makeStatusMetric(array, types.StatusWarning, err.Error(), timeNow().UnixMilli())
 		}

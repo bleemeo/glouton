@@ -54,7 +54,13 @@ func callMdadm(array, mdadmPath string, useSudo bool) (mdadmInfo, error) {
 
 	err := cmd.Run()
 	if err != nil {
-		return mdadmInfo{}, fmt.Errorf("failed to run mdadm on array %s: %w / %s", array, err, stderr.String())
+		var errOutput string
+
+		if stderr.Len() > 0 {
+			errOutput = " (stderr: " + stderr.String() + ")"
+		}
+
+		return mdadmInfo{}, fmt.Errorf("failed to run mdadm on array %s: %w%s", array, err, errOutput)
 	}
 
 	return parseMdadmOutput(stdout.String())
