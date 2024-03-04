@@ -370,7 +370,7 @@ func TestGather(t *testing.T) { //nolint:maintidx
 						Labels: map[string]string{
 							types.LabelItem:                   "md0",
 							types.LabelMetaCurrentStatus:      types.StatusWarning.String(),
-							types.LabelMetaCurrentDescription: "The array is degraded, 0 disk are failing. The array should be fully synchronized in 3 minutes (around 10:37:00)",
+							types.LabelMetaCurrentDescription: "The array is degraded. The array should be fully synchronized in 3 minutes (around 10:37:00)",
 						},
 						Value: float64(types.StatusWarning.NagiosCode()),
 					},

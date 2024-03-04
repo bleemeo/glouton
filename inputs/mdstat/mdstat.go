@@ -194,20 +194,31 @@ func makeHealthStatusMetric(array string, info arrayInfo, mdadmPath string, useS
 		details, err := mdadmDetails(array, mdadmPath, useSudo)
 		if err != nil {
 			logger.V(1).Printf("MD: %v", err)
+
+			return makeStatusMetric(array, types.StatusWarning, err.Error(), timeNow().UnixMilli())
 		}
 
 		switch {
 		case strings.Contains(details.state, "FAILED"),
 			strings.Contains(details.state, "broken"):
 			status = types.StatusCritical
-			description = fmt.Sprintf("The array is failed, %d disks are failing", info.failed)
+			description = "The array is failed"
+
+			if info.failed > 0 {
+				s, verb := plural(info.failed)
+				description += fmt.Sprintf(", %d disk%s %s failing", info.failed, s, verb)
+			}
 		case strings.Contains(details.state, "degraded"):
 			status = types.StatusWarning
-			s, verb := plural(info.failed)
-			description = fmt.Sprintf("The array is degraded, %d disk%s %s failing", info.failed, s, verb)
+			description = "The array is degraded"
+
+			if info.failed > 0 {
+				s, verb := plural(info.failed)
+				description += fmt.Sprintf(", %d disk%s %s failing", info.failed, s, verb)
+			}
 
 			if info.activityState == "recovering" {
-				description += ". " + generateFinishTimeStatusDescription(info.recoveryMinutes, timeNow)
+				description += ". The array should be fully synchronized in " + formatRemainingTime(info.recoveryMinutes, timeNow)
 			}
 		}
 	}
@@ -221,12 +232,12 @@ func makeHealthStatusMetric(array string, info arrayInfo, mdadmPath string, useS
 			description = "The array is currently inactive"
 		case "recovering":
 			status = types.StatusWarning
-			description = generateFinishTimeStatusDescription(info.recoveryMinutes, timeNow)
+			description = "The array should be fully synchronized in " + formatRemainingTime(info.recoveryMinutes, timeNow)
 		case "checking":
 			status = types.StatusOk
 		case "resyncing":
 			status = types.StatusWarning
-			description = "The array is currently resyncing"
+			description = "The array is currently resyncing, which should be done in " + formatRemainingTime(info.recoveryMinutes, timeNow)
 		default:
 			status = types.StatusUnknown
 			description = fmt.Sprintf("Unknown activity state %q on disk array %s", info.activityState, array)
@@ -242,41 +253,37 @@ func makeHealthStatusMetric(array string, info arrayInfo, mdadmPath string, useS
 		}
 	}
 
-	return &dto.Metric{
-		Label: []*dto.LabelPair{
-			{Name: proto.String(types.LabelItem), Value: proto.String(array)},
-			{Name: proto.String(types.LabelMetaCurrentStatus), Value: proto.String(status.String())},
-			{Name: proto.String(types.LabelMetaCurrentDescription), Value: proto.String(description)},
-		},
-		Untyped:     &dto.Untyped{Value: proto.Float64(float64(status.NagiosCode()))},
-		TimestampMs: proto.Int64(info.timestamp),
-	}
+	return makeStatusMetric(array, status, description, info.timestamp)
 }
 
-func generateFinishTimeStatusDescription(minutesLeft float64, timeNow func() time.Time) string {
+func formatRemainingTime(minutesLeft float64, timeNow func() time.Time) string {
 	if minutesLeft <= 0 {
-		return "The array should be fully synchronized in a few moments"
+		return "a few moments"
 	}
 
 	estimatedTime := timeNow().Add(time.Duration(minutesLeft) * time.Minute)
 	minutes := int(math.Ceil(minutesLeft))
 	s, _ := plural(minutes)
 
-	return fmt.Sprintf(
-		"The array should be fully synchronized in %d minute%s (around %s)",
-		minutes,
-		s,
-		estimatedTime.Format(time.TimeOnly),
-	)
+	return fmt.Sprintf("%d minute%s (around %s)", minutes, s, estimatedTime.Format(time.TimeOnly))
 }
 
 func plural(n int) (s, verb string) {
-	switch n {
-	case 0:
-		return "", "are"
-	case 1:
+	if n == 1 {
 		return "", "is"
-	default:
-		return "s", "are"
+	}
+
+	return "s", "are"
+}
+
+func makeStatusMetric(item string, status types.Status, description string, ts int64) *dto.Metric {
+	return &dto.Metric{
+		Label: []*dto.LabelPair{
+			{Name: proto.String(types.LabelItem), Value: proto.String(item)},
+			{Name: proto.String(types.LabelMetaCurrentStatus), Value: proto.String(status.String())},
+			{Name: proto.String(types.LabelMetaCurrentDescription), Value: proto.String(description)},
+		},
+		Untyped:     &dto.Untyped{Value: proto.Float64(float64(status.NagiosCode()))},
+		TimestampMs: proto.Int64(ts),
 	}
 }
