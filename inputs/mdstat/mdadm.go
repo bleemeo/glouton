@@ -21,7 +21,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"os/exec"
 	"strings"
 	"time"
@@ -37,10 +36,10 @@ type mdadmInfo struct {
 	state string
 }
 
-func callMdadm(array, mdadmPath string, _ bool) (mdadmInfo, error) {
+func callMdadm(array, mdadmPath string, useSudo bool) (mdadmInfo, error) {
 	fullCmd := []string{mdadmPath, "--detail", "/dev/" + array}
 
-	if os.Getuid() != 0 {
+	if useSudo {
 		fullCmd = append([]string{"sudo"}, fullCmd...)
 	}
 
