@@ -45,6 +45,8 @@ import (
 	"github.com/docker/docker/errdefs"
 	"github.com/docker/docker/pkg/stdcopy"
 	"github.com/shirou/gopsutil/v3/process"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/metric/noop"
 )
 
 // errors of Docker runtime.
@@ -106,6 +108,9 @@ func newWithOpenner(
 	isContainerIgnored func(facts.Container) bool,
 	openConnection func(ctx context.Context, host string) (cl dockerClient, err error),
 ) *Docker {
+	// This is required to avoid a memory leak https://github.com/open-telemetry/opentelemetry-go-contrib/issues/5190
+	otel.SetMeterProvider(noop.MeterProvider{})
+
 	return &Docker{
 		DockerSockets:             sockets,
 		DeletedContainersCallback: deletedContainersCallback,
