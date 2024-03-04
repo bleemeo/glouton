@@ -18,10 +18,25 @@ Then run Glouton:
 ./glouton
 ```
 
+If you are using Docker, you can quickly build a Docker image that use the Glouton you just build:
+```
+./build.sh docker-fast
+```
+
+This result in an image tag "glouton:latest". You might need to re-tag is to use it with your existing
+docker-compose:
+```
+docker tag glouton:latest bleemeo/bleemeo-agent:proposed
+```
+
+### Linters
+
 Glouton uses golangci-lint as linter. You may run it with:
 ```sh
 ./lint.sh
 ```
+
+### Full build
 
 If you updated GraphQL schema or JS files, rebuild JS files by running build.sh:
 
@@ -29,10 +44,10 @@ If you updated GraphQL schema or JS files, rebuild JS files by running build.sh:
 ./build.sh
 ```
 
-**Note:** on Windows, if you are using the Go compiler without the `build.sh` script and 
+**Note:** on Windows, if you are using the Go compiler without the `build.sh` script and
 get `"gcc": executable file not found"` error, try setting the environment variable `CGO_ENABLED` to 0.
 
-### Developping the local UI
+### Developing the local UI
 
 When working on the JavaScript rebuilding the Javascript bundle could be slow
 and will use minified JavaScript file which are harder to debug.
@@ -65,7 +80,7 @@ Glouton uses prettier too. You may run it with:
 (cd webui; npm run pretify)
 ```
 
-### Developping the Windows installer
+### Developing the Windows installer
 
 `packaging/windows` contains two folders:
 - `installer` contains a [WiX](https://wixtoolset.org/) project
@@ -73,7 +88,7 @@ to build the MSI installer.
 - `chocolatey` contains a [Chocolatey](https://docs.chocolatey.org/en-us/) project.
 
 If you are working on Windows, the folder `packaging/windows/installer` contains a Visual Studio project.
-Visual Studio has a WiX extension that brings auto-completion and WiX templates for easier development. 
+Visual Studio has a WiX extension that brings auto-completion and WiX templates for easier development.
 For the extension you will need to install [.NET 3.5](https://www.microsoft.com/fr-fr/download/details.aspx?id=21)
 and [WiX toolset](https://wixtoolset.org/releases/).
 
