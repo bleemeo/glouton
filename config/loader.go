@@ -116,7 +116,7 @@ func (c *configLoader) Load(path string, provider koanf.Provider, parser koanf.P
 	warnings = append(warnings, moreWarnings...)
 
 	for key, value := range config {
-		if value == nil {
+		if isNil(value) {
 			warnings = append(warnings, fmt.Errorf("%q %w", key, errNullConfigValue))
 
 			continue
@@ -148,6 +148,27 @@ func (c *configLoader) Load(path string, provider koanf.Provider, parser koanf.P
 	}
 
 	return warnings
+}
+
+// isNil returns whether v or its underlying value is nil.
+func isNil(v any) bool {
+	if v == nil { // fast-path
+		return true
+	}
+
+	refV := reflect.ValueOf(v)
+
+	if !map[reflect.Kind]bool{
+		reflect.Map:           true,
+		reflect.Pointer:       true,
+		reflect.UnsafePointer: true,
+		reflect.Interface:     true,
+		reflect.Slice:         true,
+	}[refV.Kind()] {
+		return false // not nillable
+	}
+
+	return refV.IsNil()
 }
 
 func itemTypeFromValue(key string, value interface{}) ItemType {

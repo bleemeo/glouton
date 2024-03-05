@@ -633,6 +633,7 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 			},
 			WantWarnings: []string{
 				`error decoding 'metric.softstatus_period': could not parse map from string: 'cpu_used=10,disk_used'`,
+				`"metric.softstatus_period" config entry has a null value, ignoring it`,
 			},
 		},
 		{
