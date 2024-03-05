@@ -19,11 +19,12 @@
 package mdstat
 
 import (
+	"glouton/config"
 	"glouton/inputs"
 
 	"github.com/influxdata/telegraf"
 )
 
-func New(cfg config.Mdstat) (telegraf.Input, *inputs.GathererOptions, error) {
+func New(_ config.Mdstat) (telegraf.Input, *inputs.GathererOptions, error) {
 	return nil, nil, inputs.ErrDisabledInput
 }
