@@ -456,3 +456,46 @@ func convert(mfs []*dto.MetricFamily) metricFamilies {
 func metricSorter(m1, m2 metric) bool {
 	return m1.Labels[types.LabelItem] < m2.Labels[types.LabelItem]
 }
+
+func TestFormatRemainingTime(t *testing.T) {
+	cases := []struct {
+		timeLeft time.Duration
+		expected string
+	}{
+		{
+			timeLeft: 95 * time.Minute,
+			expected: "95 minutes (around 12:10:00)",
+		},
+		{
+			timeLeft: 5 * time.Minute,
+			expected: "5 minutes (around 10:40:00)",
+		},
+		{
+			timeLeft: 150 * time.Second,
+			expected: "3 minutes (around 10:37:00)",
+		},
+		{
+			timeLeft: 5 * time.Second,
+			expected: "1 minute (around 10:35:00)",
+		},
+		{
+			timeLeft: 0,
+			expected: "a few moments",
+		},
+	}
+
+	timeNow := func() time.Time {
+		return time.Date(2024, 2, 13, 10, 35, 0, 0, time.Local)
+	}
+
+	for _, testCase := range cases {
+		tc := testCase
+
+		t.Run(tc.timeLeft.String(), func(t *testing.T) {
+			result := formatRemainingTime(tc.timeLeft.Minutes(), timeNow)
+			if result != tc.expected {
+				t.Fatalf("Unexpected result of formatRemainingTime(%s, _): want %q, got %q", tc.timeLeft, tc.expected, result)
+			}
+		})
+	}
+}
