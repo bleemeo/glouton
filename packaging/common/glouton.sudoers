@@ -1,6 +1,6 @@
 Defaults:glouton !requiretty, !logfile, !syslog, !pam_session
 
-# Allow Glouton to read the MySQL user credentials needed to access the metrics. 
+# Allow Glouton to read the MySQL user credentials needed to access the metrics.
 glouton     ALL=(root) NOPASSWD: /bin/cat /etc/mysql/debian.cnf
 
 # Allow Glouton to get the container associated to a network interface.
@@ -17,3 +17,6 @@ glouton     ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart bleemeo-agent-logs, /
 
 # Allow Glouton to read IPMI sensors / DCMI power reading.
 glouton     ALL=(ALL) NOPASSWD: /usr/sbin/ipmi-sensors -W discretereading --sdr-cache-recreate, /usr/sbin/ipmi-dcmi --get-enhanced-system-power-statistics, /usr/sbin/ipmi-dcmi --get-system-power-statistics, /usr/bin/ipmitool dcmi power reading
+
+# Allow Glouton to get details about multi-disks arrays.
+glouton     ALL=(ALL) NOPASSWD: /sbin/mdadm --detail, /usr/sbin/mdadm --detail
