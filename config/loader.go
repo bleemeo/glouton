@@ -163,13 +163,13 @@ func isNil(v any) bool {
 	refV := reflect.ValueOf(v)
 
 	if !map[reflect.Kind]bool{
-		reflect.Map:           true,
-		reflect.Pointer:       true,
-		reflect.UnsafePointer: true,
-		reflect.Interface:     true,
-		reflect.Slice:         true,
+		reflect.Map:       true,
+		reflect.Pointer:   true,
+		reflect.Interface: true,
+		reflect.Slice:     true,
 	}[refV.Kind()] {
-		return false // not nillable
+		// Since v doesn't belong to any of the above types, it isn't nillable.
+		return false
 	}
 
 	return refV.IsNil()

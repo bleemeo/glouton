@@ -17,6 +17,7 @@
 package config
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -271,5 +272,46 @@ func TestLoader(t *testing.T) {
 
 	if diff := cmp.Diff(expected, loader.items, cmpopts.SortSlices(lessFunc)); diff != "" {
 		t.Fatalf("diff:\n%s", diff)
+	}
+}
+
+func TestIsNil(t *testing.T) {
+	cases := []struct {
+		value    any
+		expected bool
+	}{
+		{
+			value:    nil,
+			expected: true,
+		},
+		{
+			value:    any(nil),
+			expected: true,
+		},
+		{
+			value:    []string(nil),
+			expected: true,
+		},
+		{
+			value:    []string{},
+			expected: false,
+		},
+		{
+			value:    "",
+			expected: false,
+		},
+	}
+
+	for _, testCase := range cases {
+		tc := testCase
+
+		t.Run(fmt.Sprintf("%#v", tc.value), func(t *testing.T) {
+			t.Parallel()
+
+			result := isNil(tc.value)
+			if result != tc.expected {
+				t.Fatalf("Unexpected result for isNil(%#v): want %t, got %t", tc.value, tc.expected, result)
+			}
+		})
 	}
 }
