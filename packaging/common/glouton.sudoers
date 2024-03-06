@@ -19,4 +19,4 @@ glouton     ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart bleemeo-agent-logs, /
 glouton     ALL=(ALL) NOPASSWD: /usr/sbin/ipmi-sensors -W discretereading --sdr-cache-recreate, /usr/sbin/ipmi-dcmi --get-enhanced-system-power-statistics, /usr/sbin/ipmi-dcmi --get-system-power-statistics, /usr/bin/ipmitool dcmi power reading
 
 # Allow Glouton to get details about multi-disks arrays.
-glouton     ALL=(ALL) NOPASSWD: /sbin/mdadm --detail, /usr/sbin/mdadm --detail
+glouton     ALL=(ALL) NOPASSWD: /sbin/mdadm --detail *, /usr/sbin/mdadm --detail *

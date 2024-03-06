@@ -39,10 +39,15 @@ type mdadmInfo struct {
 }
 
 func callMdadm(array, mdadmPath string, useSudo bool) (mdadmInfo, error) {
-	fullCmd := []string{mdadmPath, "--detail", "/dev/" + array}
+	fullPath, err := exec.LookPath(mdadmPath)
+	if err != nil {
+		return mdadmInfo{}, err
+	}
+
+	fullCmd := []string{fullPath, "--detail", "/dev/" + array}
 
 	if useSudo {
-		fullCmd = append([]string{"sudo"}, fullCmd...)
+		fullCmd = append([]string{"sudo", "-n"}, fullCmd...)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), mdadmTimeout)
@@ -54,7 +59,7 @@ func callMdadm(array, mdadmPath string, useSudo bool) (mdadmInfo, error) {
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 
-	err := cmd.Run()
+	err = cmd.Run()
 	if err != nil {
 		var errOutput string
 
