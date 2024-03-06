@@ -881,6 +881,9 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 				Bleemeo: Bleemeo{
 					APIBase: "not/null",
 				},
+				Smart: Smart{
+					Enable: true,
+				},
 				Web: Web{
 					StaticCDNURL: "/simple",
 				},
