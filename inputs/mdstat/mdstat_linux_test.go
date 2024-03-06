@@ -44,32 +44,19 @@ import (
 
 var errArrayMdadmDetailsNotFound = errors.New("mdadm details not found for array")
 
-func setupMdstatTest(t *testing.T, name string) (input telegraf.Input, mdadmDetailsFn mdadmDetailsFunc, deferFn func()) {
+func setupMdstatTest(t *testing.T, name string) (input telegraf.Input, mdadmDetailsFn mdadmDetailsFunc) {
 	t.Helper()
 
-	tempDir, err := os.MkdirTemp("", "mdstat_test")
-	if err != nil {
-		t.Fatal("Failed to create temporary test dir:", err)
-	}
-
-	deferFn = func() {
-		err := os.RemoveAll(tempDir)
-		if err != nil {
-			t.Logf("Failed to remove test dir at %s: %v", tempDir, err)
-		}
-	}
-
+	tempDir := t.TempDir()
 	mdstatFilePath := filepath.Join(tempDir, mdstatPath)
 
-	err = os.Mkdir(filepath.Dir(mdstatFilePath), 0o700)
+	err := os.Mkdir(filepath.Dir(mdstatFilePath), 0o700)
 	if err != nil {
-		deferFn()
 		t.Fatal("Failed to create test dir:", err)
 	}
 
 	mdstatFile, err := os.Create(mdstatFilePath)
 	if err != nil {
-		deferFn()
 		t.Fatal("Failed to create temporary mdstat file:", err)
 	}
 
@@ -77,7 +64,6 @@ func setupMdstatTest(t *testing.T, name string) (input telegraf.Input, mdadmDeta
 
 	mdstatInputFile, err := os.Open(filepath.Join("testdata", "mdstat", name+".txt"))
 	if err != nil {
-		deferFn()
 		t.Fatal("Failed to open testdata file:", err)
 	}
 
@@ -85,13 +71,11 @@ func setupMdstatTest(t *testing.T, name string) (input telegraf.Input, mdadmDeta
 
 	_, err = io.Copy(mdstatFile, mdstatInputFile)
 	if err != nil {
-		deferFn()
 		t.Fatalf("Failed to copy mdstat data from %s to %s: %v", mdstatInputFile.Name(), mdstatFilePath, err)
 	}
 
 	mdadmDetailsFile, err := os.Open(filepath.Join("testdata", "mdadm", name+".yml"))
 	if err != nil {
-		deferFn()
 		t.Fatal("Failed to open mdadm details:", err)
 	}
 
@@ -101,13 +85,11 @@ func setupMdstatTest(t *testing.T, name string) (input telegraf.Input, mdadmDeta
 
 	err = yaml.NewDecoder(mdadmDetailsFile).Decode(&mdadmDetails)
 	if err != nil {
-		deferFn()
 		t.Fatal("Failed to parse mdadm details:", err)
 	}
 
 	mdstatInput, _, err := New(config.Mdstat{}) // the config won't be used
 	if err != nil {
-		deferFn()
 		t.Fatal("Failed to initialize mdstat input:", err)
 	}
 
@@ -117,7 +99,6 @@ func setupMdstatTest(t *testing.T, name string) (input telegraf.Input, mdadmDeta
 	if initInput, ok := mdstatInput.(telegraf.Initializer); ok {
 		err = initInput.Init()
 		if err != nil {
-			deferFn()
 			t.Fatal("Failed to initialize input:", err)
 		}
 	}
@@ -131,7 +112,7 @@ func setupMdstatTest(t *testing.T, name string) (input telegraf.Input, mdadmDeta
 		return parseMdadmOutput(mdadmDetailsOutput)
 	}
 
-	return mdstatInput, mdadmDetailsFn, deferFn
+	return mdstatInput, mdadmDetailsFn
 }
 
 func TestGather(t *testing.T) { //nolint:maintidx
@@ -389,8 +370,7 @@ func TestGather(t *testing.T) { //nolint:maintidx
 		tc := testCase
 
 		t.Run(tc.name, func(t *testing.T) {
-			input, mdadmDetailsFn, deferFn := setupMdstatTest(t, tc.name)
-			defer deferFn()
+			input, mdadmDetailsFn := setupMdstatTest(t, tc.name)
 
 			pointBuffer := new(registry.PointBuffer)
 			acc := inputs.Accumulator{
