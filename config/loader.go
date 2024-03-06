@@ -116,9 +116,13 @@ func (c *configLoader) Load(path string, provider koanf.Provider, parser koanf.P
 	warnings = append(warnings, moreWarnings...)
 
 	for key, value := range config {
-		if isNil(value) {
+		if value == nil {
 			warnings = append(warnings, fmt.Errorf("%q %w", key, errNullConfigValue))
 
+			continue
+		}
+
+		if isNil(value) {
 			continue
 		}
 
