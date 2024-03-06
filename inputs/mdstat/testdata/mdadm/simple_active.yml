@@ -1,5 +1,13 @@
 md0: |
   /dev/md0:
-    Version : 1.2
-    Raid Level : raid1
-    State : clean
+         Version : 1.2
+      Raid Level : raid1
+           State : clean
+  Rebuild Status : 50% complete
+  
+            Name : ubuntu1:0  (local to host ubuntu1)
+            UUID : d4b4c631:bfb667aa:e51ef0e7:c8911beb
+          Events : 30
+  
+  Number   Major   Minor   RaidDevice State
+     0     253        1        0      active sync set-A   /dev/dm-1

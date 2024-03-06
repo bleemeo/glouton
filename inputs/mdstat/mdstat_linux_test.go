@@ -465,6 +465,13 @@ func TestFormatRemainingTime(t *testing.T) {
 		expected string
 	}{
 		{
+			// This is assumed to be a very high value, likely unreachable
+			// (that duration is a 4 TB raid with 50MB/s synchronization).
+			// For now, we don't show the day even if it changes.
+			timeLeft: 1398 * time.Minute,
+			expected: "1398 minutes (around 09:53:00)",
+		},
+		{
 			timeLeft: 95 * time.Minute,
 			expected: "95 minutes (around 12:10:00)",
 		},
