@@ -801,9 +801,13 @@ func convertToContainerObject(ctx context.Context, ns string, cont containerd.Co
 		return containerObject{}, fmt.Errorf("%w: %s/%s has no spec", errIgnoredContainer, ns, cont.ID())
 	}
 
+	var imgDigest string
+
 	img, err := cont.Image(ctx)
 	if err != nil {
-		return containerObject{}, fmt.Errorf("Image() on %s/%s failed: %w", ns, cont.ID(), err)
+		logger.V(2).Printf("Can't get image %s/%s: %v", ns, cont.ID(), err)
+	} else {
+		imgDigest = img.Target().Digest.String()
 	}
 
 	var spec oci.Spec
@@ -820,7 +824,7 @@ func convertToContainerObject(ctx context.Context, ns string, cont containerd.Co
 			Spec:      &spec,
 		},
 		state:   string(containerd.Unknown),
-		imageID: img.Target().Digest.String(),
+		imageID: imgDigest,
 	}
 
 	task, err := cont.Task(ctx, nil)
