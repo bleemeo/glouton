@@ -30,6 +30,11 @@ import (
 	"path/filepath"
 )
 
+type diagnostic struct {
+	filename string
+	archive  io.Reader
+}
+
 type RemoteCrashReport struct {
 	Name string `json:"name"`
 }
@@ -57,6 +62,11 @@ func (s *Synchronizer) syncCrashReports(
 	_ bool,
 	_ bool,
 ) (updateThresholds bool, err error) {
+	err = s.syncOnDemandDiagnostic(ctx)
+	if err != nil {
+		return false, fmt.Errorf("failed to synchronize on-demand diagnostic: %w", err)
+	}
+
 	stateDir := s.option.Config.Agent.StateDirectory
 	if crashreport.IsWriteInProgress(stateDir) {
 		return false, nil
@@ -145,10 +155,10 @@ func (s *Synchronizer) uploadCrashReport(ctx context.Context, reportPath string)
 		return nil
 	}
 
-	return s.UploadDiagnostic(ctx, filepath.Base(reportPath), reportFile)
+	return s.uploadDiagnostic(ctx, filepath.Base(reportPath), reportFile)
 }
 
-func (s *Synchronizer) UploadDiagnostic(ctx context.Context, filename string, r io.Reader) error {
+func (s *Synchronizer) uploadDiagnostic(ctx context.Context, filename string, r io.Reader) error {
 	buf := new(bytes.Buffer)
 	multipartWriter := multipart.NewWriter(buf)
 
@@ -176,4 +186,33 @@ func (s *Synchronizer) UploadDiagnostic(ctx context.Context, filename string, r 
 	}
 
 	return nil
+}
+
+func (s *Synchronizer) syncOnDemandDiagnostic(ctx context.Context) error {
+	s.onDemandDiagnosticLock.Lock()
+	defer s.onDemandDiagnosticLock.Unlock()
+
+	if s.onDemandDiagnostic == nil {
+		return nil
+	}
+
+	err := s.uploadDiagnostic(ctx, s.onDemandDiagnostic.filename, s.onDemandDiagnostic.archive)
+	if err != nil {
+		return err
+	}
+
+	s.onDemandDiagnostic = nil
+
+	return nil
+}
+
+// ScheduleDiagnosticUpload stores the given diagnostic until the next synchronization,
+// where it will be uploaded to the API.
+// If another call to this method is made before the next synchronization,
+// only the latest diagnostic will be uploaded.
+func (s *Synchronizer) ScheduleDiagnosticUpload(filename string, r io.Reader) {
+	s.onDemandDiagnosticLock.Lock()
+	defer s.onDemandDiagnosticLock.Unlock()
+
+	s.onDemandDiagnostic = &diagnostic{filename, r}
 }

@@ -103,6 +103,9 @@ type Synchronizer struct {
 	currentConfigNotified     string
 	agentID                   string
 
+	onDemandDiagnostic     *diagnostic
+	onDemandDiagnosticLock sync.Mutex
+
 	// configSyncDone is true when the config items were successfully synced.
 	configSyncDone bool
 
@@ -1019,6 +1022,12 @@ func (s *Synchronizer) syncToPerform(ctx context.Context) (map[string]bool, bool
 	if fullSync || s.now().After(s.metricRetryAt) || s.lastSync.Before(lastDiscovery) || s.lastSync.Before(lastAnnotationChange) || s.lastMetricCount != currentMetricCount {
 		syncMethods[syncMethodMetric] = fullSync
 	}
+
+	s.onDemandDiagnosticLock.Lock()
+	if s.onDemandDiagnostic != nil {
+		syncMethods[syncMethodCrashReports] = true
+	}
+	s.onDemandDiagnosticLock.Unlock()
 
 	// when the mqtt connector is not connected, we cannot receive notifications to get out of maintenance
 	// mode, so we poll more often.

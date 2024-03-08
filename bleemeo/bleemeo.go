@@ -1070,10 +1070,7 @@ func (c *Connector) HandleDiagnosticRequest() {
 	archiveBuf := new(bytes.Buffer)
 	archive := archivewriter.NewTarWriter(archiveBuf)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	err := c.option.WriteDiagnosticArchive(ctx, archive)
+	err := c.option.WriteDiagnosticArchive(context.Background(), archive)
 	if err != nil {
 		logger.V(1).Printf("Failed to write diagnostic archive: %v", err)
 
@@ -1081,11 +1078,5 @@ func (c *Connector) HandleDiagnosticRequest() {
 	}
 
 	datetime := time.Now().Format(time.RFC3339)
-
-	err = c.sync.UploadDiagnostic(ctx, "diagnostic_"+datetime+".tar", archiveBuf)
-	if err != nil {
-		logger.V(1).Printf("Failed to upload diagnostic archive: %v", err)
-
-		return
-	}
+	c.sync.ScheduleDiagnosticUpload("diagnostic_"+datetime+".tar", archiveBuf)
 }
