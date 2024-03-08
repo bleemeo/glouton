@@ -49,6 +49,7 @@ type GlobalOption struct {
 	NotifyLabelsUpdate      func()
 	BlackboxScraperName     string
 	ReloadState             BleemeoReloadState
+	WriteDiagnosticArchive  func(ctx context.Context, archive types.ArchiveWriter) error
 	VSphereDevices          func(ctx context.Context, maxAge time.Duration) []VSphereDevice
 	FindVSphereDevice       func(ctx context.Context, vSphere, moid string) VSphereDevice
 	LastVSphereChange       func(ctx context.Context) time.Time

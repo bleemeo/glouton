@@ -64,6 +64,8 @@ type Option struct {
 	UpdateMonitor func(op string, uuid string)
 	// UpdateMaintenance requests to check for the maintenance mode again
 	UpdateMaintenance func()
+	// HandleDiagnosticRequest requests the sending of a diagnostic to the API
+	HandleDiagnosticRequest func()
 	// GetToken returns the token used to talk with the Bleemeo API.
 	GetToken func(ctx context.Context) (string, error)
 	// Return date of last metric activation / registration
@@ -792,6 +794,8 @@ func (c *Client) onNotification(msg paho.Message) {
 		c.opts.UpdateMetrics(payload.MetricUUID)
 	case "monitor-update":
 		c.opts.UpdateMonitor(payload.MonitorOperationType, payload.MonitorUUID)
+	case "diagnostic-request":
+		c.opts.HandleDiagnosticRequest()
 	}
 }
 

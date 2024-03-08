@@ -17,6 +17,7 @@
 package bleemeo
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -30,6 +31,7 @@ import (
 	"glouton/logger"
 	"glouton/prometheus/exporter/snmp"
 	gloutonTypes "glouton/types"
+	"glouton/utils/archivewriter"
 	"io"
 	"math/rand"
 	"runtime"
@@ -191,17 +193,18 @@ func (c *Connector) initMQTT(previousPoint []gloutonTypes.MetricPoint) {
 
 	c.mqtt = mqtt.New(
 		mqtt.Option{
-			GlobalOption:         c.option,
-			Cache:                c.cache,
-			AgentID:              types.AgentID(c.AgentID()),
-			AgentPassword:        password,
-			UpdateConfigCallback: c.sync.NotifyConfigUpdate,
-			UpdateMetrics:        c.sync.UpdateMetrics,
-			UpdateMaintenance:    c.sync.UpdateMaintenance,
-			UpdateMonitor:        c.sync.UpdateMonitor,
-			InitialPoints:        previousPoint,
-			GetToken:             c.sync.GetToken,
-			LastMetricActivation: c.sync.LastMetricActivation,
+			GlobalOption:            c.option,
+			Cache:                   c.cache,
+			AgentID:                 types.AgentID(c.AgentID()),
+			AgentPassword:           password,
+			UpdateConfigCallback:    c.sync.NotifyConfigUpdate,
+			UpdateMetrics:           c.sync.UpdateMetrics,
+			UpdateMaintenance:       c.sync.UpdateMaintenance,
+			UpdateMonitor:           c.sync.UpdateMonitor,
+			HandleDiagnosticRequest: c.HandleDiagnosticRequest,
+			InitialPoints:           previousPoint,
+			GetToken:                c.sync.GetToken,
+			LastMetricActivation:    c.sync.LastMetricActivation,
 		},
 	)
 
@@ -1061,4 +1064,28 @@ func (c *Connector) disableMqtt(mqtt *mqtt.Client, reason types.DisableReason, u
 	}
 
 	mqtt.Disable(until.Add(mqttDisableDelay), reason)
+}
+
+func (c *Connector) HandleDiagnosticRequest() {
+	archiveBuf := new(bytes.Buffer)
+	archive := archivewriter.NewTarWriter(archiveBuf)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	err := c.option.WriteDiagnosticArchive(ctx, archive)
+	if err != nil {
+		logger.V(1).Printf("Failed to write diagnostic archive: %v", err)
+
+		return
+	}
+
+	datetime := time.Now().Format(time.RFC3339)
+
+	err = c.sync.UploadDiagnostic(ctx, "diagnostic_"+datetime+".tar", archiveBuf)
+	if err != nil {
+		logger.V(1).Printf("Failed to upload diagnostic archive: %v", err)
+
+		return
+	}
 }

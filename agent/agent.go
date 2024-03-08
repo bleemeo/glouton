@@ -1063,6 +1063,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 			NotifyLabelsUpdate:             a.notifyBleemeoUpdateLabels,
 			BlackboxScraperName:            scaperName,
 			ReloadState:                    a.reloadState.Bleemeo(),
+			WriteDiagnosticArchive:         a.writeDiagnosticArchive,
 			VSphereDevices:                 a.vSphereManager.Devices,
 			FindVSphereDevice:              a.vSphereManager.FindDevice,
 			LastVSphereChange:              a.vSphereManager.LastChange,
@@ -2508,6 +2509,12 @@ func (a *agent) diagnosticFilterResult(_ context.Context, archive types.ArchiveW
 
 func (a *agent) diagnosticVSphere(ctx context.Context, archive types.ArchiveWriter) error {
 	return a.vSphereManager.DiagnosticVSphere(ctx, archive, a.bleemeoConnector.GetAllVSphereAssociations)
+}
+
+func (a *agent) HandleDiagnosticRequest() error {
+	a.bleemeoConnector.HandleDiagnosticRequest()
+
+	return nil
 }
 
 // Add a warning for the configuration.

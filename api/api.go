@@ -56,6 +56,7 @@ type agentInterface interface {
 	BleemeoRegistrationAt() time.Time
 	BleemeoLastReport() time.Time
 	BleemeoConnected() bool
+	HandleDiagnosticRequest() error
 	Tags() []string
 }
 
@@ -233,6 +234,21 @@ func (api *API) init() {
 			logger.V(1).Printf("failed to serve diagnostic.txt (current file %s): %v", archive.CurrentFileName(), err)
 		}
 	})
+
+	router.HandleFunc("/request-diagnostic", func(w http.ResponseWriter, _ *http.Request) {
+		t0 := time.Now()
+
+		err := api.AgentInfo.HandleDiagnosticRequest()
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			fmt.Fprintln(w, "Can't request diagnostic:", err)
+
+			return
+		}
+
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprintln(w, "Diagnostic request successfully handled in", time.Since(t0))
+	}) // TODO: remove
 
 	if api.Endpoints.DebugEnable {
 		router.Handle("/debug/pprof/*", http.HandlerFunc(pprof.Index))

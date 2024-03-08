@@ -132,6 +132,8 @@ func (s *Synchronizer) uploadCrashReport(ctx context.Context, reportPath string)
 		return err
 	}
 
+	defer reportFile.Close()
+
 	stat, err := reportFile.Stat()
 	if err != nil {
 		return err
@@ -143,15 +145,19 @@ func (s *Synchronizer) uploadCrashReport(ctx context.Context, reportPath string)
 		return nil
 	}
 
+	return s.UploadDiagnostic(ctx, filepath.Base(reportPath), reportFile)
+}
+
+func (s *Synchronizer) UploadDiagnostic(ctx context.Context, filename string, r io.Reader) error {
 	buf := new(bytes.Buffer)
 	multipartWriter := multipart.NewWriter(buf)
 
-	formFile, err := multipartWriter.CreateFormFile("report_archive", filepath.Base(reportPath))
+	formFile, err := multipartWriter.CreateFormFile("report_archive", filename)
 	if err != nil {
 		return err
 	}
 
-	_, err = io.Copy(formFile, reportFile)
+	_, err = io.Copy(formFile, r)
 	if err != nil {
 		return err
 	}
