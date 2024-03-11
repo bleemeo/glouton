@@ -760,11 +760,11 @@ func (c *Client) sendConnectMessage() {
 }
 
 type notificationPayload struct {
-	MessageType                string `json:"message_type"`
-	MetricUUID                 string `json:"metric_uuid,omitempty"`
-	MonitorUUID                string `json:"monitor_uuid,omitempty"`
-	MonitorOperationType       string `json:"monitor_operation_type,omitempty"`
-	DiagnosticDemandByUserUUID string `json:"user_uuid,omitempty"`
+	MessageType            string `json:"message_type"`
+	MetricUUID             string `json:"metric_uuid,omitempty"`
+	MonitorUUID            string `json:"monitor_uuid,omitempty"`
+	MonitorOperationType   string `json:"monitor_operation_type,omitempty"`
+	DiagnosticRequestToken string `json:"request_token,omitempty"`
 }
 
 func (c *Client) onNotification(msg paho.Message) {
@@ -796,7 +796,7 @@ func (c *Client) onNotification(msg paho.Message) {
 	case "monitor-update":
 		c.opts.UpdateMonitor(payload.MonitorOperationType, payload.MonitorUUID)
 	case "diagnostic-request":
-		c.opts.HandleDiagnosticRequest(payload.DiagnosticDemandByUserUUID)
+		c.opts.HandleDiagnosticRequest(payload.DiagnosticRequestToken)
 	}
 }
 

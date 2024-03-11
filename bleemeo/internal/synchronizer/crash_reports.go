@@ -177,7 +177,9 @@ func (s *Synchronizer) uploadDiagnostic(ctx context.Context, filename string, r 
 	}
 
 	if len(userID) == 1 {
-		err = multipartWriter.WriteField("on_demand_by", userID[0])
+		logger.Printf("Request token: %s", userID[0]) // TODO: remove
+
+		err = multipartWriter.WriteField("request_token", userID[0])
 		if err != nil {
 			return err
 		}
