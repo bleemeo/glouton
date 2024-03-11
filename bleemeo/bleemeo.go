@@ -1068,15 +1068,22 @@ func (c *Connector) disableMqtt(mqtt *mqtt.Client, reason types.DisableReason, u
 
 func (c *Connector) HandleDiagnosticRequest() {
 	archiveBuf := new(bytes.Buffer)
-	archive := archivewriter.NewTarWriter(archiveBuf)
+	archive := archivewriter.NewZipWriter(archiveBuf)
 
 	err := c.option.WriteDiagnosticArchive(context.Background(), archive)
 	if err != nil {
-		logger.V(1).Printf("Failed to write diagnostic archive: %v", err)
+		logger.V(1).Printf("Failed to write on-demand diagnostic archive: %v", err)
+
+		return
+	}
+
+	err = archive.Close()
+	if err != nil {
+		logger.V(1).Printf("Failed to close on-demand diagnostic archive: %v", err)
 
 		return
 	}
 
 	datetime := time.Now().Format(time.RFC3339)
-	c.sync.ScheduleDiagnosticUpload("diagnostic_"+datetime+".tar", archiveBuf)
+	c.sync.ScheduleDiagnosticUpload("on_demand_"+datetime+".zip", archiveBuf)
 }

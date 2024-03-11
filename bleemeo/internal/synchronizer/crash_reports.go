@@ -30,14 +30,21 @@ import (
 	"path/filepath"
 )
 
+type RemoteCrashReport struct {
+	Name string `json:"name"`
+}
+
 type diagnostic struct {
 	filename string
 	archive  io.Reader
 }
 
-type RemoteCrashReport struct {
-	Name string `json:"name"`
-}
+type diagnosticType string
+
+const (
+	diagnosticCrashReport diagnosticType = "crash-report"
+	diagnosticOnDemand    diagnosticType = "on-demand"
+)
 
 // sliceDiff returns elements of s1 that are absent from s2.
 func sliceDiff(s1, s2 []string) []string {
@@ -155,10 +162,10 @@ func (s *Synchronizer) uploadCrashReport(ctx context.Context, reportPath string)
 		return nil
 	}
 
-	return s.uploadDiagnostic(ctx, filepath.Base(reportPath), reportFile)
+	return s.uploadDiagnostic(ctx, filepath.Base(reportPath), reportFile, diagnosticCrashReport)
 }
 
-func (s *Synchronizer) uploadDiagnostic(ctx context.Context, filename string, r io.Reader) error {
+func (s *Synchronizer) uploadDiagnostic(ctx context.Context, filename string, r io.Reader, diagnosticType diagnosticType) error {
 	buf := new(bytes.Buffer)
 	multipartWriter := multipart.NewWriter(buf)
 
@@ -175,6 +182,7 @@ func (s *Synchronizer) uploadDiagnostic(ctx context.Context, filename string, r 
 	multipartWriter.Close()
 
 	contentType := multipartWriter.FormDataContentType()
+	_ = diagnosticType // TODO
 
 	statusCode, reqErr := s.client.DoWithBody(ctx, "v1/gloutoncrashreport/", contentType, buf)
 	if reqErr != nil {
@@ -196,7 +204,7 @@ func (s *Synchronizer) syncOnDemandDiagnostic(ctx context.Context) error {
 		return nil
 	}
 
-	err := s.uploadDiagnostic(ctx, s.onDemandDiagnostic.filename, s.onDemandDiagnostic.archive)
+	err := s.uploadDiagnostic(ctx, s.onDemandDiagnostic.filename, s.onDemandDiagnostic.archive, diagnosticOnDemand)
 	if err != nil {
 		return err
 	}
