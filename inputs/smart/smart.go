@@ -57,7 +57,7 @@ func New(config config.Smart) (telegraf.Input, *inputs.GathererOptions, error) {
 	smartInput.Excludes = config.Excludes
 	smartInput.PathSmartctl = config.PathSmartctl
 
-	smartInput.TagWithDeviceType = true // TODO: wait for telegraf release
+	smartInput.TagWithDeviceType = true
 
 	wrapperOpts := inputWrapperOptions{
 		input:         smartInput,
