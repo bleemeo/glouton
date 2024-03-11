@@ -28,6 +28,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 )
 
 type RemoteCrashReport struct {
@@ -39,11 +40,11 @@ type diagnostic struct {
 	archive  io.Reader
 }
 
-type diagnosticType string
+type diagnosticType int
 
 const (
-	diagnosticCrashReport diagnosticType = "crash-report"
-	diagnosticOnDemand    diagnosticType = "on-demand"
+	diagnosticCrashReport diagnosticType = 0
+	diagnosticOnDemand    diagnosticType = 1
 )
 
 // sliceDiff returns elements of s1 that are absent from s2.
@@ -169,6 +170,11 @@ func (s *Synchronizer) uploadDiagnostic(ctx context.Context, filename string, r 
 	buf := new(bytes.Buffer)
 	multipartWriter := multipart.NewWriter(buf)
 
+	err := multipartWriter.WriteField("diagnostic_type", strconv.Itoa(int(diagnosticType)))
+	if err != nil {
+		return err
+	}
+
 	formFile, err := multipartWriter.CreateFormFile("report_archive", filename)
 	if err != nil {
 		return err
@@ -184,7 +190,7 @@ func (s *Synchronizer) uploadDiagnostic(ctx context.Context, filename string, r 
 	contentType := multipartWriter.FormDataContentType()
 	_ = diagnosticType // TODO
 
-	statusCode, reqErr := s.client.DoWithBody(ctx, "v1/gloutoncrashreport/", contentType, buf)
+	statusCode, reqErr := s.client.DoWithBody(ctx, "v1/gloutondiagnostic/", contentType, buf)
 	if reqErr != nil {
 		return reqErr
 	}

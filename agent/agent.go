@@ -2511,12 +2511,6 @@ func (a *agent) diagnosticVSphere(ctx context.Context, archive types.ArchiveWrit
 	return a.vSphereManager.DiagnosticVSphere(ctx, archive, a.bleemeoConnector.GetAllVSphereAssociations)
 }
 
-func (a *agent) HandleDiagnosticRequest() error {
-	a.bleemeoConnector.HandleDiagnosticRequest()
-
-	return nil
-}
-
 // Add a warning for the configuration.
 func (a *agent) addWarnings(warnings ...error) {
 	var warningsStr strings.Builder

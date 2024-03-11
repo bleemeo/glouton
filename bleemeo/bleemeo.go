@@ -1084,6 +1084,6 @@ func (c *Connector) HandleDiagnosticRequest() {
 		return
 	}
 
-	datetime := time.Now().Format(time.RFC3339)
+	datetime := time.Now().Format("20060102-150405")
 	c.sync.ScheduleDiagnosticUpload("on_demand_"+datetime+".zip", archiveBuf)
 }
