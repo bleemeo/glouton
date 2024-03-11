@@ -36,8 +36,9 @@ type RemoteCrashReport struct {
 }
 
 type diagnostic struct {
-	filename string
-	archive  io.Reader
+	filename       string
+	demandByUserID string
+	archive        io.Reader
 }
 
 type diagnosticType int
@@ -166,13 +167,20 @@ func (s *Synchronizer) uploadCrashReport(ctx context.Context, reportPath string)
 	return s.uploadDiagnostic(ctx, filepath.Base(reportPath), reportFile, diagnosticCrashReport)
 }
 
-func (s *Synchronizer) uploadDiagnostic(ctx context.Context, filename string, r io.Reader, diagnosticType diagnosticType) error {
+func (s *Synchronizer) uploadDiagnostic(ctx context.Context, filename string, r io.Reader, diagnosticType diagnosticType, userID ...string) error {
 	buf := new(bytes.Buffer)
 	multipartWriter := multipart.NewWriter(buf)
 
 	err := multipartWriter.WriteField("diagnostic_type", strconv.Itoa(int(diagnosticType)))
 	if err != nil {
 		return err
+	}
+
+	if len(userID) == 1 {
+		err = multipartWriter.WriteField("on_demand_by", userID[0])
+		if err != nil {
+			return err
+		}
 	}
 
 	formFile, err := multipartWriter.CreateFormFile("report_archive", filename)
@@ -210,7 +218,7 @@ func (s *Synchronizer) syncOnDemandDiagnostic(ctx context.Context) error {
 		return nil
 	}
 
-	err := s.uploadDiagnostic(ctx, s.onDemandDiagnostic.filename, s.onDemandDiagnostic.archive, diagnosticOnDemand)
+	err := s.uploadDiagnostic(ctx, s.onDemandDiagnostic.filename, s.onDemandDiagnostic.archive, diagnosticOnDemand, s.onDemandDiagnostic.demandByUserID)
 	if err != nil {
 		return err
 	}
@@ -224,9 +232,9 @@ func (s *Synchronizer) syncOnDemandDiagnostic(ctx context.Context) error {
 // where it will be uploaded to the API.
 // If another call to this method is made before the next synchronization,
 // only the latest diagnostic will be uploaded.
-func (s *Synchronizer) ScheduleDiagnosticUpload(filename string, r io.Reader) {
+func (s *Synchronizer) ScheduleDiagnosticUpload(filename, userID string, r io.Reader) {
 	s.onDemandDiagnosticLock.Lock()
 	defer s.onDemandDiagnosticLock.Unlock()
 
-	s.onDemandDiagnostic = &diagnostic{filename, r}
+	s.onDemandDiagnostic = &diagnostic{filename, userID, r}
 }

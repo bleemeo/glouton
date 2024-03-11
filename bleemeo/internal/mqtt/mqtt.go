@@ -65,7 +65,7 @@ type Option struct {
 	// UpdateMaintenance requests to check for the maintenance mode again
 	UpdateMaintenance func()
 	// HandleDiagnosticRequest requests the sending of a diagnostic to the API
-	HandleDiagnosticRequest func()
+	HandleDiagnosticRequest func(userID string)
 	// GetToken returns the token used to talk with the Bleemeo API.
 	GetToken func(ctx context.Context) (string, error)
 	// Return date of last metric activation / registration
@@ -760,10 +760,11 @@ func (c *Client) sendConnectMessage() {
 }
 
 type notificationPayload struct {
-	MessageType          string `json:"message_type"`
-	MetricUUID           string `json:"metric_uuid,omitempty"`
-	MonitorUUID          string `json:"monitor_uuid,omitempty"`
-	MonitorOperationType string `json:"monitor_operation_type,omitempty"`
+	MessageType                string `json:"message_type"`
+	MetricUUID                 string `json:"metric_uuid,omitempty"`
+	MonitorUUID                string `json:"monitor_uuid,omitempty"`
+	MonitorOperationType       string `json:"monitor_operation_type,omitempty"`
+	DiagnosticDemandByUserUUID string `json:"user_uuid,omitempty"`
 }
 
 func (c *Client) onNotification(msg paho.Message) {
@@ -795,7 +796,7 @@ func (c *Client) onNotification(msg paho.Message) {
 	case "monitor-update":
 		c.opts.UpdateMonitor(payload.MonitorOperationType, payload.MonitorUUID)
 	case "diagnostic-request":
-		c.opts.HandleDiagnosticRequest()
+		c.opts.HandleDiagnosticRequest(payload.DiagnosticDemandByUserUUID)
 	}
 }
 
