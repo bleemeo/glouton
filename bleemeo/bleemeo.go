@@ -1066,7 +1066,7 @@ func (c *Connector) disableMqtt(mqtt *mqtt.Client, reason types.DisableReason, u
 	mqtt.Disable(until.Add(mqttDisableDelay), reason)
 }
 
-func (c *Connector) HandleDiagnosticRequest(userID string) {
+func (c *Connector) HandleDiagnosticRequest(requestToken string) {
 	archiveBuf := new(bytes.Buffer)
 	archive := archivewriter.NewZipWriter(archiveBuf)
 
@@ -1085,5 +1085,5 @@ func (c *Connector) HandleDiagnosticRequest(userID string) {
 	}
 
 	datetime := time.Now().Format("20060102-150405")
-	c.sync.ScheduleDiagnosticUpload("on_demand_"+datetime+".zip", userID, archiveBuf)
+	c.sync.ScheduleDiagnosticUpload("on_demand_"+datetime+".zip", requestToken, archiveBuf)
 }

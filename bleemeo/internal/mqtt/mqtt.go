@@ -65,7 +65,7 @@ type Option struct {
 	// UpdateMaintenance requests to check for the maintenance mode again
 	UpdateMaintenance func()
 	// HandleDiagnosticRequest requests the sending of a diagnostic to the API
-	HandleDiagnosticRequest func(userID string)
+	HandleDiagnosticRequest func(requestToken string)
 	// GetToken returns the token used to talk with the Bleemeo API.
 	GetToken func(ctx context.Context) (string, error)
 	// Return date of last metric activation / registration

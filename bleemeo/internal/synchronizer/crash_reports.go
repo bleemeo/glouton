@@ -36,9 +36,9 @@ type RemoteCrashReport struct {
 }
 
 type diagnostic struct {
-	filename       string
-	demandByUserID string
-	archive        io.Reader
+	filename     string
+	requestToken string
+	archive      io.Reader
 }
 
 type diagnosticType int
@@ -167,7 +167,7 @@ func (s *Synchronizer) uploadCrashReport(ctx context.Context, reportPath string)
 	return s.uploadDiagnostic(ctx, filepath.Base(reportPath), reportFile, diagnosticCrashReport)
 }
 
-func (s *Synchronizer) uploadDiagnostic(ctx context.Context, filename string, r io.Reader, diagnosticType diagnosticType, userID ...string) error {
+func (s *Synchronizer) uploadDiagnostic(ctx context.Context, filename string, r io.Reader, diagnosticType diagnosticType, requestToken ...string) error {
 	buf := new(bytes.Buffer)
 	multipartWriter := multipart.NewWriter(buf)
 
@@ -176,10 +176,8 @@ func (s *Synchronizer) uploadDiagnostic(ctx context.Context, filename string, r 
 		return err
 	}
 
-	if len(userID) == 1 {
-		logger.Printf("Request token: %s", userID[0]) // TODO: remove
-
-		err = multipartWriter.WriteField("request_token", userID[0])
+	if len(requestToken) == 1 {
+		err = multipartWriter.WriteField("request_token", requestToken[0])
 		if err != nil {
 			return err
 		}
@@ -220,7 +218,7 @@ func (s *Synchronizer) syncOnDemandDiagnostic(ctx context.Context) error {
 		return nil
 	}
 
-	err := s.uploadDiagnostic(ctx, s.onDemandDiagnostic.filename, s.onDemandDiagnostic.archive, diagnosticOnDemand, s.onDemandDiagnostic.demandByUserID)
+	err := s.uploadDiagnostic(ctx, s.onDemandDiagnostic.filename, s.onDemandDiagnostic.archive, diagnosticOnDemand, s.onDemandDiagnostic.requestToken)
 	if err != nil {
 		return err
 	}
@@ -234,9 +232,9 @@ func (s *Synchronizer) syncOnDemandDiagnostic(ctx context.Context) error {
 // where it will be uploaded to the API.
 // If another call to this method is made before the next synchronization,
 // only the latest diagnostic will be uploaded.
-func (s *Synchronizer) ScheduleDiagnosticUpload(filename, userID string, r io.Reader) {
+func (s *Synchronizer) ScheduleDiagnosticUpload(filename, requestToken string, r io.Reader) {
 	s.onDemandDiagnosticLock.Lock()
 	defer s.onDemandDiagnosticLock.Unlock()
 
-	s.onDemandDiagnostic = &diagnostic{filename, userID, r}
+	s.onDemandDiagnostic = &diagnostic{filename, requestToken, r}
 }
