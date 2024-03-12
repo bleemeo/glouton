@@ -1066,11 +1066,11 @@ func (c *Connector) disableMqtt(mqtt *mqtt.Client, reason types.DisableReason, u
 	mqtt.Disable(until.Add(mqttDisableDelay), reason)
 }
 
-func (c *Connector) HandleDiagnosticRequest(requestToken string) {
+func (c *Connector) HandleDiagnosticRequest(ctx context.Context, requestToken string) {
 	archiveBuf := new(bytes.Buffer)
 	archive := archivewriter.NewZipWriter(archiveBuf)
 
-	err := c.option.WriteDiagnosticArchive(context.Background(), archive)
+	err := c.option.WriteDiagnosticArchive(ctx, archive)
 	if err != nil {
 		logger.V(1).Printf("Failed to write on-demand diagnostic archive: %v", err)
 
