@@ -64,7 +64,7 @@ if [ -z "${GLOUTON_BUILDX_OPTION}" ]; then
 fi
 
 export GLOUTON_VERSION
-export GOTOOLCHAIN=auto # Enforce the Go version we need.
+export GOTOOLCHAIN=auto # temporary. We need Go >= 1.22 to build and goreleaser doesn't include Go 1.22 yet.
 
 COMMIT=`git rev-parse --short HEAD || echo "unknown"`
 
