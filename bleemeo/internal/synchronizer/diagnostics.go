@@ -85,7 +85,8 @@ func (s *Synchronizer) syncDiagnostics(
 
 	err = s.syncOnDemandDiagnostic(ctx, remoteDiagnostics)
 	if err != nil {
-		return false, fmt.Errorf("failed to synchronize on-demand diagnostic: %w", err)
+		// We "ignore" on-demand diagnostic upload errors for the same reasons as crash diagnostics (see below)
+		logger.V(1).Printf("Failed to synchronize on-demand diagnostics: %v", err)
 	}
 
 	localCrashDiagnostics := crashreport.ListCrashReports(stateDir)
@@ -100,7 +101,7 @@ func (s *Synchronizer) syncDiagnostics(
 
 	if err = s.uploadCrashDiagnostics(ctx, notUploadedYet); err != nil {
 		// We "ignore" error from crash diagnostic upload because:
-		// * they are not essential
+		// * they aren't essential
 		// * by "ignoring" the error, it will be re-tried on next full sync instead of after a short delay,
 		//   which seems better since it could send a rather large payload.
 		logger.V(1).Printf("Upload crash diagnostic: %v", err)
