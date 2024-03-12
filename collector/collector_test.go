@@ -164,6 +164,8 @@ type shallowInput struct {
 	tag         string
 	fields      map[string]float64
 	annotations types.MetricAnnotations
+	// secretCountCb allows running extra code when SecretCount is called.
+	secretCountCb func()
 }
 
 func (s shallowInput) Gather(acc telegraf.Accumulator) error {
@@ -195,6 +197,14 @@ func (s shallowInput) Gather(acc telegraf.Accumulator) error {
 
 func (s shallowInput) SampleConfig() string {
 	return "shallow"
+}
+
+func (s shallowInput) SecretCount() int {
+	if s.secretCountCb != nil {
+		s.secretCountCb()
+	}
+
+	return 0
 }
 
 func TestMarkInactive(t *testing.T) {
@@ -388,4 +398,38 @@ func cmpStaleNaN() cmp.Option {
 	}
 
 	return cmp.FilterValues(f, cmp.Comparer(comparer))
+}
+
+func TestMarkInactiveWhileDroppingInput(t *testing.T) {
+	var id int
+
+	acc := shallowAcc{fields: make(map[time.Time]msmsa), annotations: make(map[time.Time]map[string]types.MetricAnnotations)}
+	c := New(&acc, gate.New(0))
+
+	input := shallowInput{
+		measurement: "i1",
+		tag:         "i1",
+		fields:      map[string]float64{"f1": 1, "f2": 0.2, "f3": 333},
+		secretCountCb: func() {
+			// Simulate another goroutine removing the input during the gathering setup
+			c.RemoveInput(id)
+		},
+	}
+
+	var err error
+
+	id, err = c.AddInput(input, "input")
+	if err != nil {
+		t.Fatal("Failed to add input to collector:", err)
+	}
+
+	c.RunGather(context.Background(), time.Now())
+
+	if _, ok := c.fieldCaches[id]; ok {
+		t.Fatal("The input's fieldCaches should have been removed from the collector.")
+	}
+
+	time.Sleep(10 * time.Millisecond) // Let the other goroutine panic, if necessary
+
+	t.Log("The goroutine did not panic on a nil map assignment - success !")
 }

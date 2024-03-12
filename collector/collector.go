@@ -162,6 +162,15 @@ func (c *Collector) runOnce(t0 time.Time) {
 	for id, input := range inputsCopy {
 		id, input := id, input
 
+		c.l.Lock()
+		// Making a shallow copy of this input's fieldCaches
+		// to prevent its deletion while we're deactivating unseen metrics.
+		// In fact, it doesn't prevent `delete(c.fieldCaches, id)`,
+		// but assigning to `fieldCaches` (the shallow copy of `c.fieldCaches[id]`)
+		// will still be possible (but useless, since it will no longer be referenced).
+		fieldCaches := c.fieldCaches[id]
+		c.l.Unlock()
+
 		wg.Add(1)
 
 		go func() {
@@ -181,7 +190,7 @@ func (c *Collector) runOnce(t0 time.Time) {
 			ima := &inactiveMarkerAccumulator{
 				FixedTimeAccumulator: acc,
 				latestValues:         make(map[string]map[string]map[string]fieldCache),
-				fieldCaches:          c.fieldCaches[id],
+				fieldCaches:          fieldCaches,
 			}
 			// Errors are already logged by the input.
 			_ = input.Gather(ima)
