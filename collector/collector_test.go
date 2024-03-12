@@ -164,8 +164,6 @@ type shallowInput struct {
 	tag         string
 	fields      map[string]float64
 	annotations types.MetricAnnotations
-	// secretCountCb allows running extra code when SecretCount is called.
-	secretCountCb func()
 }
 
 func (s shallowInput) Gather(acc telegraf.Accumulator) error {
@@ -197,14 +195,6 @@ func (s shallowInput) Gather(acc telegraf.Accumulator) error {
 
 func (s shallowInput) SampleConfig() string {
 	return "shallow"
-}
-
-func (s shallowInput) SecretCount() int {
-	if s.secretCountCb != nil {
-		s.secretCountCb()
-	}
-
-	return 0
 }
 
 func TestMarkInactive(t *testing.T) {
@@ -410,10 +400,6 @@ func TestMarkInactiveWhileDroppingInput(t *testing.T) {
 		measurement: "i1",
 		tag:         "i1",
 		fields:      map[string]float64{"f1": 1, "f2": 0.2, "f3": 333},
-		secretCountCb: func() {
-			// Simulate another goroutine removing the input during the gathering setup
-			c.RemoveInput(id)
-		},
 	}
 
 	var err error
@@ -422,6 +408,9 @@ func TestMarkInactiveWhileDroppingInput(t *testing.T) {
 	if err != nil {
 		t.Fatal("Failed to add input to collector:", err)
 	}
+
+	// Simulate another goroutine removing the input during the gathering setup
+	c.RemoveInput(id)
 
 	c.RunGather(context.Background(), time.Now())
 

@@ -137,21 +137,9 @@ func (c *Collector) RunGather(_ context.Context, t0 time.Time) {
 	c.runOnce(t0)
 }
 
-func (c *Collector) inputsForCollection() map[int]telegraf.Input {
-	c.l.Lock()
-	defer c.l.Unlock()
-
-	inputsCopy := make(map[int]telegraf.Input, len(c.inputs))
-
-	for id, v := range c.inputs {
-		inputsCopy[id] = v
-	}
-
-	return inputsCopy
-}
-
 func (c *Collector) runOnce(t0 time.Time) {
-	inputsCopy := c.inputsForCollection()
+	c.l.Lock()
+
 	acc := inputs.FixedTimeAccumulator{
 		Time: t0,
 		Acc:  c.acc,
@@ -159,17 +147,8 @@ func (c *Collector) runOnce(t0 time.Time) {
 
 	var wg sync.WaitGroup
 
-	for id, input := range inputsCopy {
+	for id, input := range c.inputs {
 		id, input := id, input
-
-		c.l.Lock()
-		// Making a shallow copy of this input's fieldCaches
-		// to prevent its deletion while we're deactivating unseen metrics.
-		// In fact, it doesn't prevent `delete(c.fieldCaches, id)`,
-		// but assigning to `fieldCaches` (the shallow copy of `c.fieldCaches[id]`)
-		// will still be possible (but useless, since it will no longer be referenced).
-		fieldCaches := c.fieldCaches[id]
-		c.l.Unlock()
 
 		wg.Add(1)
 
@@ -190,7 +169,7 @@ func (c *Collector) runOnce(t0 time.Time) {
 			ima := &inactiveMarkerAccumulator{
 				FixedTimeAccumulator: acc,
 				latestValues:         make(map[string]map[string]map[string]fieldCache),
-				fieldCaches:          fieldCaches,
+				fieldCaches:          c.fieldCaches[id],
 			}
 			// Errors are already logged by the input.
 			_ = input.Gather(ima)
@@ -198,6 +177,8 @@ func (c *Collector) runOnce(t0 time.Time) {
 			ima.deactivateUnseenMetrics()
 		}()
 	}
+
+	c.l.Unlock()
 
 	wg.Wait()
 }
