@@ -4,7 +4,6 @@ snapshot:
   name_template: '{{ .Env.GLOUTON_VERSION }}'
 builds:
 - env:
-  - GOTOOLCHAIN=go1.22.1
   - CGO_ENABLED=0
   targets:
   - linux_amd64
