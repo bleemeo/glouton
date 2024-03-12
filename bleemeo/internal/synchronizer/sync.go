@@ -821,7 +821,7 @@ func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) (map[str
 		{name: syncMethodMonitor, method: s.syncMonitors, skipOnlyEssential: true},
 		{name: syncMethodMetric, method: s.syncMetrics},
 		{name: syncMethodConfig, method: s.syncConfig},
-		{name: syncMethodCrashReports, method: s.syncCrashReports},
+		{name: syncMethodCrashReports, method: s.syncDiagnostics},
 	}
 
 	var firstErr error
@@ -1025,7 +1025,7 @@ func (s *Synchronizer) syncToPerform(ctx context.Context) (map[string]bool, bool
 
 	s.onDemandDiagnosticLock.Lock()
 	if s.onDemandDiagnostic != nil {
-		syncMethods[syncMethodCrashReports] = true
+		syncMethods[syncMethodCrashReports] = fullSync
 	}
 	s.onDemandDiagnosticLock.Unlock()
 

@@ -31,7 +31,9 @@ import (
 	"strconv"
 )
 
-type RemoteCrashReport struct {
+const diagnosticMaxSize = 5 << 20 // 5MB
+
+type RemoteDiagnostic struct {
 	Name string `json:"name"`
 }
 
@@ -41,11 +43,11 @@ type diagnostic struct {
 	archive      io.Reader
 }
 
-type diagnosticType int
+type diagnosticType = int
 
 const (
-	diagnosticCrashReport diagnosticType = 0
-	diagnosticOnDemand    diagnosticType = 1
+	crashDiagnostic    diagnosticType = 0
+	onDemandDiagnostic diagnosticType = 1
 )
 
 // sliceDiff returns elements of s1 that are absent from s2.
@@ -66,112 +68,112 @@ S1:
 	return d
 }
 
-func (s *Synchronizer) syncCrashReports(
+func (s *Synchronizer) syncDiagnostics(
 	ctx context.Context,
 	_ bool,
 	_ bool,
 ) (updateThresholds bool, err error) {
-	err = s.syncOnDemandDiagnostic(ctx)
-	if err != nil {
-		return false, fmt.Errorf("failed to synchronize on-demand diagnostic: %w", err)
-	}
-
 	stateDir := s.option.Config.Agent.StateDirectory
 	if crashreport.IsWriteInProgress(stateDir) {
 		return false, nil
 	}
 
-	remoteCrashReports, err := s.listRemoteCrashReports(ctx)
+	remoteDiagnostics, err := s.listRemoteDiagnostics(ctx)
 	if err != nil {
-		return false, fmt.Errorf("failed to list remote crash reports: %w", err)
+		return false, fmt.Errorf("failed to list remote diagnostics: %w", err)
 	}
 
-	localCrashReports := crashreport.ListCrashReports(stateDir)
-
-	reportPaths := make([]string, len(remoteCrashReports))
-
-	for i, report := range remoteCrashReports {
-		reportPaths[i] = filepath.Join(stateDir, report.Name)
+	err = s.syncOnDemandDiagnostic(ctx, remoteDiagnostics)
+	if err != nil {
+		return false, fmt.Errorf("failed to synchronize on-demand diagnostic: %w", err)
 	}
 
-	notUploadedYet := sliceDiff(localCrashReports, reportPaths)
+	localCrashDiagnostics := crashreport.ListCrashReports(stateDir)
 
-	if err = s.uploadCrashReports(ctx, notUploadedYet); err != nil {
-		// We "ignore" error from crash report upload because:
+	diagnosticPaths := make([]string, len(remoteDiagnostics))
+
+	for i, diagnostic := range remoteDiagnostics {
+		diagnosticPaths[i] = filepath.Join(stateDir, diagnostic.Name)
+	}
+
+	notUploadedYet := sliceDiff(localCrashDiagnostics, diagnosticPaths)
+
+	if err = s.uploadCrashDiagnostics(ctx, notUploadedYet); err != nil {
+		// We "ignore" error from crash diagnostic upload because:
 		// * they are not essential
 		// * by "ignoring" the error, it will be re-tried on next full sync instead of after a short delay,
 		//   which seems better since it could send a rather large payload.
-		logger.V(1).Printf("Upload crash report: %v", err)
+		logger.V(1).Printf("Upload crash diagnostic: %v", err)
 	}
 
 	return false, nil
 }
 
-func (s *Synchronizer) listRemoteCrashReports(ctx context.Context) ([]RemoteCrashReport, error) {
-	result, err := s.client.Iter(ctx, "gloutoncrashreport", nil)
+func (s *Synchronizer) listRemoteDiagnostics(ctx context.Context) ([]RemoteDiagnostic, error) {
+	result, err := s.client.Iter(ctx, "gloutondiagnostic", nil)
 	if err != nil {
 		return nil, fmt.Errorf("client iter: %w", err)
 	}
 
-	crashReports := make([]RemoteCrashReport, 0, len(result))
+	diagnostics := make([]RemoteDiagnostic, 0, len(result))
 
 	for _, jsonMessage := range result {
-		var report RemoteCrashReport
+		var remoteDiagnostic RemoteDiagnostic
 
-		if err = json.Unmarshal(jsonMessage, &report); err != nil {
-			logger.V(2).Printf("Failed to unmarshal crash report: %v", err)
+		if err = json.Unmarshal(jsonMessage, &remoteDiagnostic); err != nil {
+			logger.V(2).Printf("Failed to unmarshal diagnostic: %v", err)
 
 			continue
 		}
 
-		crashReports = append(crashReports, report)
+		diagnostics = append(diagnostics, remoteDiagnostic)
 	}
 
-	return crashReports, nil
+	return diagnostics, nil
 }
 
-func (s *Synchronizer) uploadCrashReports(ctx context.Context, reports []string) error {
-	for _, report := range reports {
+func (s *Synchronizer) uploadCrashDiagnostics(ctx context.Context, diagnostics []string) error {
+	for _, diagnostic := range diagnostics {
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return ctxErr
 		}
 
-		err := s.uploadCrashReport(ctx, report)
+		err := s.uploadCrashDiagnostic(ctx, diagnostic)
 		if err != nil {
-			return fmt.Errorf("failed to upload crash report %q: %w", report, err)
+			return fmt.Errorf("failed to upload crash diagnostic %q: %w", diagnostic, err)
 		}
 	}
 
 	return nil
 }
 
-func (s *Synchronizer) uploadCrashReport(ctx context.Context, reportPath string) error {
-	reportFile, err := os.Open(reportPath)
+func (s *Synchronizer) uploadCrashDiagnostic(ctx context.Context, diagnosticPath string) error {
+	diagnosticFile, err := os.Open(diagnosticPath)
 	if err != nil {
 		return err
 	}
 
-	defer reportFile.Close()
+	defer diagnosticFile.Close()
 
-	stat, err := reportFile.Stat()
+	stat, err := diagnosticFile.Stat()
 	if err != nil {
 		return err
 	}
 
-	if stat.Size() > crashreport.MaxReportSize {
-		logger.V(2).Printf("Skipping crash report %q which is too big.", reportPath)
+	if stat.Size() > diagnosticMaxSize {
+		logger.V(2).Printf("Skipping crash diagnostic %q which is too big.", diagnosticPath)
 
 		return nil
 	}
 
-	return s.uploadDiagnostic(ctx, filepath.Base(reportPath), reportFile, diagnosticCrashReport)
+	return s.uploadDiagnostic(ctx, filepath.Base(diagnosticPath), diagnosticFile, crashDiagnostic)
 }
 
 func (s *Synchronizer) uploadDiagnostic(ctx context.Context, filename string, r io.Reader, diagnosticType diagnosticType, requestToken ...string) error {
 	buf := new(bytes.Buffer)
 	multipartWriter := multipart.NewWriter(buf)
 
-	err := multipartWriter.WriteField("diagnostic_type", strconv.Itoa(int(diagnosticType)))
+	err := multipartWriter.WriteField("diagnostic_type", strconv.Itoa(diagnosticType))
 	if err != nil {
 		return err
 	}
@@ -196,7 +198,6 @@ func (s *Synchronizer) uploadDiagnostic(ctx context.Context, filename string, r 
 	multipartWriter.Close()
 
 	contentType := multipartWriter.FormDataContentType()
-	_ = diagnosticType // TODO
 
 	statusCode, reqErr := s.client.DoWithBody(ctx, "v1/gloutondiagnostic/", contentType, buf)
 	if reqErr != nil {
@@ -204,13 +205,13 @@ func (s *Synchronizer) uploadDiagnostic(ctx context.Context, filename string, r 
 	}
 
 	if statusCode != http.StatusCreated {
-		logger.V(1).Printf("Crash report upload returned status %d %s", statusCode, http.StatusText(statusCode))
+		logger.V(1).Printf("Diagnostic upload returned status %d %s", statusCode, http.StatusText(statusCode))
 	}
 
 	return nil
 }
 
-func (s *Synchronizer) syncOnDemandDiagnostic(ctx context.Context) error {
+func (s *Synchronizer) syncOnDemandDiagnostic(ctx context.Context, remoteDiagnostics []RemoteDiagnostic) error {
 	s.onDemandDiagnosticLock.Lock()
 	defer s.onDemandDiagnosticLock.Unlock()
 
@@ -218,9 +219,21 @@ func (s *Synchronizer) syncOnDemandDiagnostic(ctx context.Context) error {
 		return nil
 	}
 
-	err := s.uploadDiagnostic(ctx, s.onDemandDiagnostic.filename, s.onDemandDiagnostic.archive, diagnosticOnDemand, s.onDemandDiagnostic.requestToken)
-	if err != nil {
-		return err
+	needUpload := true
+
+	for _, remoteDiagnostic := range remoteDiagnostics {
+		if remoteDiagnostic.Name == s.onDemandDiagnostic.filename {
+			needUpload = false // already on API
+
+			break
+		}
+	}
+
+	if needUpload {
+		err := s.uploadDiagnostic(ctx, s.onDemandDiagnostic.filename, s.onDemandDiagnostic.archive, onDemandDiagnostic, s.onDemandDiagnostic.requestToken)
+		if err != nil {
+			return err
+		}
 	}
 
 	s.onDemandDiagnostic = nil

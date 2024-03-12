@@ -37,8 +37,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-const MaxReportSize = 2 << 20
-
 const (
 	crashReportWorkDir = "crash_report"
 
