@@ -420,7 +420,7 @@ func TestMarkInactiveWhileDroppingInput(t *testing.T) {
 
 	c.RunGather(context.Background(), time.Now())
 
-	<-removeInputDone // Wait for the other goroutine to run
+	<-removeInputDone // Wait for the goroutine removing the input to complete
 
 	c.l.Lock()
 	defer c.l.Unlock()
