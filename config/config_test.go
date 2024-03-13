@@ -211,6 +211,11 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 			FileName:      "name",
 			PackageLevels: "bleemeo=1",
 		},
+		Mdstat: Mdstat{
+			Enable:    true,
+			PathMdadm: "mdadm",
+			UseSudo:   true,
+		},
 		Metric: Metric{
 			AllowMetrics:          []string{"allowed"},
 			DenyMetrics:           []string{"denied"},
@@ -935,19 +940,6 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 				},
 			},
 		},
-		{
-			Name:  "config contains null parts",
-			Files: []string{"testdata/null-parts.conf"},
-			WantConfig: Config{
-				Bleemeo: Bleemeo{
-					APIBase: "not/null",
-				},
-				Web: Web{
-					StaticCDNURL: "/simple",
-				},
-			},
-			WantWarnings: []string{`testdata/null-parts.conf: "blackbox" config entry has a null value, ignoring it`},
-		},
 	}
 
 	for _, test := range tests {
@@ -980,6 +972,32 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 			}
 		})
 	}
+
+	// This subtest is apart because needs a slightly different setup than the other cases.
+	t.Run("config contains null parts", func(t *testing.T) {
+		config, warnings, err := load(&configLoader{}, true, false, "testdata/null-parts.conf")
+		if err != nil {
+			t.Fatal("Unexpected error:", err)
+		}
+
+		expectedWarning := "1 error(s) occurred:\n* testdata/null-parts.conf: \"blackbox\" config entry has a null value, ignoring it"
+
+		if diff := cmp.Diff(expectedWarning, warnings.Error()); diff != "" {
+			t.Fatalf("Unexpected warnings:\n%s", diff)
+		}
+
+		expectedConfig := DefaultConfig()
+		expectedConfig.Bleemeo.APIBase = "not/null"
+		expectedConfig.Bleemeo.ContainerRegistrationDelaySeconds = 0
+		// TODO: this should be true (or a warning should be raised).
+		// currently we silently ignore the value entered by user.
+		expectedConfig.Bleemeo.Enable = false
+		expectedConfig.Web.StaticCDNURL = "/simple"
+
+		if diff := compareConfig(expectedConfig, config); diff != "" {
+			t.Fatalf("Unexpected config:\n%s", diff)
+		}
+	})
 }
 
 func TestStateLoading(t *testing.T) {

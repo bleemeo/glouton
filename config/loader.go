@@ -122,6 +122,10 @@ func (c *configLoader) Load(path string, provider koanf.Provider, parser koanf.P
 			continue
 		}
 
+		if isNil(value) {
+			continue
+		}
+
 		priority := priority(providerType, key, value, c.loadCount)
 
 		// Keep the real type of the value before it's converted to JSON.
@@ -148,6 +152,27 @@ func (c *configLoader) Load(path string, provider koanf.Provider, parser koanf.P
 	}
 
 	return warnings
+}
+
+// isNil returns whether v or its underlying value is nil.
+func isNil(v any) bool {
+	if v == nil { // fast-path
+		return true
+	}
+
+	refV := reflect.ValueOf(v)
+
+	if !map[reflect.Kind]bool{
+		reflect.Map:       true,
+		reflect.Pointer:   true,
+		reflect.Interface: true,
+		reflect.Slice:     true,
+	}[refV.Kind()] {
+		// Since v doesn't belong to any of the above types, it isn't nillable.
+		return false
+	}
+
+	return refV.IsNil()
 }
 
 func itemTypeFromValue(key string, value interface{}) ItemType {

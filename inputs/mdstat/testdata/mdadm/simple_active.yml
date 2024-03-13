@@ -1,0 +1,27 @@
+md0: |
+  /dev/md0:
+             Version : 1.2
+       Creation Time : Tue Aug 28 15:59:48 2018
+          Raid Level : raid1
+          Array Size : 33521664 (31.97 GiB 34.33 GB)
+       Used Dev Size : 33521664 (31.97 GiB 34.33 GB)
+        Raid Devices : 2
+       Total Devices : 2
+         Persistence : Superblock is persistent
+  
+         Update Time : Wed Mar  6 11:03:38 2024
+               State : clean
+      Active Devices : 2
+     Working Devices : 2
+      Failed Devices : 0
+       Spare Devices : 0
+  
+  Consistency Policy : resync
+  
+                Name : ubuntu1:0  (local to host ubuntu1)
+                UUID : d4b4c631:bfb667aa:e51ef0e7:c8911beb
+              Events : 218
+  
+      Number   Major   Minor   RaidDevice State
+         0       8        1        0      active sync   /dev/sda1
+         1       8       17        1      active sync   /dev/sdb1

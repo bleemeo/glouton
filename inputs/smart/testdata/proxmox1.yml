@@ -1,0 +1,71 @@
+scan: |
+  /dev/sda -d scsi # /dev/sda, SCSI device
+  /dev/bus/0 -d megaraid,0 # /dev/bus/0 [megaraid_disk_00], SCSI device
+  /dev/bus/0 -d megaraid,1 # /dev/bus/0 [megaraid_disk_01], SCSI device
+  /dev/bus/0 -d megaraid,2 # /dev/bus/0 [megaraid_disk_02], SCSI device
+  /dev/bus/0 -d megaraid,3 # /dev/bus/0 [megaraid_disk_03], SCSI device
+  /dev/bus/0 -d megaraid,4 # /dev/bus/0 [megaraid_disk_04], SCSI device
+  /dev/bus/0 -d megaraid,5 # /dev/bus/0 [megaraid_disk_05], SCSI device
+  /dev/bus/0 -d megaraid,6 # /dev/bus/0 [megaraid_disk_06], SCSI device
+  /dev/bus/0 -d megaraid,7 # /dev/bus/0 [megaraid_disk_07], SCSI device
+  /dev/bus/0 -d megaraid,8 # /dev/bus/0 [megaraid_disk_08], SCSI device
+  /dev/bus/0 -d megaraid,9 # /dev/bus/0 [megaraid_disk_09], SCSI device
+  /dev/bus/0 -d megaraid,10 # /dev/bus/0 [megaraid_disk_10], SCSI device
+  /dev/bus/0 -d megaraid,11 # /dev/bus/0 [megaraid_disk_11], SCSI device
+  /dev/bus/0 -d megaraid,12 # /dev/bus/0 [megaraid_disk_12], SCSI device
+  /dev/bus/0 -d megaraid,13 # /dev/bus/0 [megaraid_disk_13], SCSI device
+
+info:
+  /dev/sda: |
+    smartctl 7.3 2022-02-28 r5338 [x86_64-linux-6.2.16-12-pve] (local build)
+    Copyright (C) 2002-22, Bruce Allen, Christian Franke, www.smartmontools.org
+    
+    Smartctl open device: /dev/sda failed: DELL or MegaRaid controller, please try adding '-d megaraid,N'
+  /dev/sg0: |
+    smartctl 7.3 2022-02-28 r5338 [x86_64-linux-6.2.16-12-pve] (local build)
+    Copyright (C) 2002-22, Bruce Allen, Christian Franke, www.smartmontools.org
+    
+    Smartctl open device: /dev/sg0 failed: DELL or MegaRaid controller, please try adding '-d megaraid,N'
+  /dev/bus/0 -d megaraid,0: |
+    smartctl 7.3 2022-02-28 r5338 [x86_64-linux-6.2.16-12-pve] (local build)
+    Copyright (C) 2002-22, Bruce Allen, Christian Franke, www.smartmontools.org
+    
+      === START OF INFORMATION SECTION ===
+    Vendor:               SEAGATE
+    Product:              ST3600057SS
+    Revision:             ES66
+    Compliance:           SPC-3
+    User Capacity:        600,127,266,816 bytes [600 GB]
+    Logical block size:   512 bytes
+    Rotation Rate:        15000 rpm
+    Form Factor:          3.5 inches
+    Logical Unit id:      0x5000c50068d15045
+    Serial number:        6SL6Q3F2
+    Device type:          disk
+    Transport protocol:   SAS (SPL-4)
+    Local Time is:        Wed Jan 24 17:18:11 2024 CET
+    SMART support is:     Available - device has SMART capability.
+    SMART support is:     Enabled
+    Temperature Warning:  Disabled or Not Supported
+    Power mode is:        ACTIVE
+    
+      === START OF READ SMART DATA SECTION ===
+    SMART Health Status: OK
+    
+    Current Drive Temperature:     39 C
+    Drive Trip Temperature:        68 C
+    
+      Accumulated power on time, hours:minutes 16296:49
+    Elements in grown defect list: 0
+    
+      Vendor (Seagate Cache) information
+      Blocks sent to initiator = 1248517653
+      Blocks received from initiator = 1550534138
+      Blocks read from cache and sent to initiator = 1731189853
+      Number of read and write commands whose size <= segment size = 371050297
+      Number of read and write commands whose size > segment size = 144
+    
+      Vendor (Seagate/Hitachi) factory information
+      number of hours powered up = 16296.82
+      number of minutes until next internal SMART test = 39
+  # Info about devices like megaraid,[1-13] shouldn't be queried.

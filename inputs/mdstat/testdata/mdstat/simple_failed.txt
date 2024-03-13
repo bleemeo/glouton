@@ -1,0 +1,5 @@
+Personalities : [raid1]
+md0 : inactive sda1[0](F) sdb1[1](F) sdc1[2](F) sdd1[3](F) sde1[4](F)
+      1953525120 blocks super 1.2
+
+unused devices: <none>
