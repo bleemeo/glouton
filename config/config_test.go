@@ -923,6 +923,8 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 		expectedConfig := DefaultConfig()
 		expectedConfig.Bleemeo.APIBase = "not/null"
 		expectedConfig.Bleemeo.ContainerRegistrationDelaySeconds = 0
+       // TODO: this should be true (or a warning should be raised).
+       // currently we silently ignore the value entered by user.
 		expectedConfig.Bleemeo.Enable = false
 		expectedConfig.Web.StaticCDNURL = "/simple"
 
