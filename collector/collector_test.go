@@ -410,17 +410,19 @@ func TestMarkInactiveWhileDroppingInput(t *testing.T) {
 		t.Fatal("Failed to add input to collector:", err)
 	}
 
-	removeInputDone := make(chan struct{})
+	var wg sync.WaitGroup
+
+	wg.Add(1)
 
 	go func() {
 		// Simulate another goroutine removing the input during the gathering setup
 		c.RemoveInput(id)
-		removeInputDone <- struct{}{}
+		wg.Done()
 	}()
 
 	c.RunGather(context.Background(), time.Now())
 
-	<-removeInputDone // Wait for the goroutine removing the input to complete
+	wg.Wait() // Wait for the goroutine removing the input to complete
 
 	c.l.Lock()
 	defer c.l.Unlock()
