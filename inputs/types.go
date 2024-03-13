@@ -106,7 +106,7 @@ func (a *Accumulator) AddError(err error) {
 // AddFieldsWithAnnotations have extra fields for the annotations attached to the measurement and fields
 //
 // Note the annotation are not attached to the measurement, but to the resulting labels set.
-// Resulting labels set are all tags + the metric name which is measurement concatened with field name.
+// Resulting labels set are all tags + the metric name which is measurement concatenated with field name.
 //
 // This also means that if the same measurement (e.g. "cpu") need different annotations (e.g. a status for field "used" but none for field "system"),
 // you must to multiple call to AddFieldsWithAnnotations
@@ -277,6 +277,7 @@ func (a FixedTimeAccumulator) AddFieldsWithAnnotations(measurement string, field
 var (
 	ErrUnexpectedType = errors.New("input does not have the expected type")
 	ErrDisabledInput  = errors.New("input is not enabled in service Telegraf")
+	ErrMissingCommand = errors.New("missing command for input")
 )
 
 type GathererOptions struct {

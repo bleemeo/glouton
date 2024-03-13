@@ -1,0 +1,22 @@
+smartctl 7.3 2022-02-28 r5338 [x86_64-linux-6.2.16-12-pve] (local build)
+Copyright (C) 2002-22, Bruce Allen, Christian Franke, www.smartmontools.org
+
+=== START OF INFORMATION SECTION ===
+Vendor:               TSSTcorp
+Product:              DVD-ROM SN-108BB
+Revision:             D150
+Compliance:           SPC-3
+User Capacity:        9,574,803,471,758,218,068 bytes [9574 PB]
+Logical block size:   1414746964 bytes
+Physical block size:  2846490624 bytes
+Lowest aligned LBA:   12912
+Formatted with type 2 protection
+64 protection information intervals per logical block
+512 bytes of protection information per logical block
+>> Terminate command early due to bad response to IEC mode page
+Power mode is:        ACTIVE
+
+=== START OF READ SMART DATA SECTION ===
+Current Drive Temperature:     0 C
+Drive Trip Temperature:        0 C
+
