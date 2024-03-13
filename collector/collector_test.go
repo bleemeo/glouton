@@ -22,7 +22,6 @@ import (
 	"glouton/inputs"
 	"glouton/types"
 	"math"
-	"runtime"
 	"sync"
 	"testing"
 	"time"
@@ -411,11 +410,17 @@ func TestMarkInactiveWhileDroppingInput(t *testing.T) {
 		t.Fatal("Failed to add input to collector:", err)
 	}
 
-	go c.RemoveInput(id) // Simulate another goroutine removing the input during the gathering setup
+	removeInputDone := make(chan struct{})
+
+	go func() {
+		// Simulate another goroutine removing the input during the gathering setup
+		c.RemoveInput(id)
+		removeInputDone <- struct{}{}
+	}()
 
 	c.RunGather(context.Background(), time.Now())
 
-	runtime.Gosched() // Let other goroutines run, and panic if necessary
+	<-removeInputDone // Wait for the other goroutine to run
 
 	c.l.Lock()
 	defer c.l.Unlock()
