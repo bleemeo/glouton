@@ -22,6 +22,7 @@ import (
 	"glouton/inputs"
 	"glouton/types"
 	"math"
+	"runtime"
 	"sync"
 	"testing"
 	"time"
@@ -410,16 +411,18 @@ func TestMarkInactiveWhileDroppingInput(t *testing.T) {
 		t.Fatal("Failed to add input to collector:", err)
 	}
 
-	// Simulate another goroutine removing the input during the gathering setup
-	c.RemoveInput(id)
+	go c.RemoveInput(id) // Simulate another goroutine removing the input during the gathering setup
 
 	c.RunGather(context.Background(), time.Now())
+
+	runtime.Gosched() // Let other goroutines run, and panic if necessary
+
+	c.l.Lock()
+	defer c.l.Unlock()
 
 	if _, ok := c.fieldCaches[id]; ok {
 		t.Fatal("The input's fieldCaches should have been removed from the collector.")
 	}
-
-	time.Sleep(10 * time.Millisecond) // Let the other goroutine panic, if necessary
 
 	t.Log("The goroutine did not panic on a nil map assignment - success !")
 }

@@ -149,6 +149,7 @@ func (c *Collector) runOnce(ctx context.Context, t0 time.Time) {
 
 	for id, input := range c.inputs {
 		id, input := id, input
+		fieldCaches := c.fieldCaches[id]
 
 		wg.Add(1)
 
@@ -169,7 +170,7 @@ func (c *Collector) runOnce(ctx context.Context, t0 time.Time) {
 			ima := &inactiveMarkerAccumulator{
 				FixedTimeAccumulator: acc,
 				latestValues:         make(map[string]map[string]map[string]fieldCache),
-				fieldCaches:          c.fieldCaches[id],
+				fieldCaches:          fieldCaches,
 			}
 			// Errors are already logged by the input.
 			_ = input.Gather(ima)
