@@ -1,0 +1,17 @@
+md1: |
+  /dev/md1:
+    Version : 1.2
+    Raid Level : raid1
+    State : clean
+
+md2: |
+  /dev/md2:
+    Version : 1.2
+    Raid Level : raid1
+    State : clean
+
+md3: |
+  /dev/md3:
+    Version : 1.2
+    Raid Level : raid5
+    State : clean

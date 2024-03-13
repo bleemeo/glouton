@@ -42,6 +42,7 @@ import (
 	"glouton/influxdb"
 	"glouton/inputs"
 	"glouton/inputs/docker"
+	"glouton/inputs/mdstat"
 	nvidia "glouton/inputs/nvidia_smi"
 	"glouton/inputs/smart"
 	"glouton/inputs/statsd"
@@ -1392,18 +1393,27 @@ func (a *agent) registerInputs(ctx context.Context) {
 		a.registerInput("NVIDIA SMI", input, opts, err)
 	}
 
-	// The SMART input is enabled if "smartctl" is found in
-	// the PATH or if the path was given in the config.
-	_, err := exec.LookPath("smartctl")
-	if a.config.Smart.Enable && (err == nil || a.config.Smart.PathSmartctl != "") {
+	if a.config.Smart.Enable && !strings.ContainsRune(a.config.Smart.PathSmartctl, os.PathSeparator) {
+		// The SMART input is enabled if "smartctl" is found in
+		// the PATH or if the path was given in the config.
+		_, err := exec.LookPath("smartctl")
+		a.config.Smart.Enable = err == nil
+	}
+
+	if a.config.Smart.Enable && a.config.Smart.PathSmartctl != "" {
 		input, opts, err := smart.New(a.config.Smart)
 		a.registerInput("SMART", input, opts, err)
+	}
+
+	if a.config.Mdstat.Enable {
+		input, opts, err := mdstat.New(a.config.Mdstat)
+		a.registerInput("mdstat", input, opts, err)
 	}
 
 	if a.config.IPMI.Enable {
 		gatherer := ipmi.New(a.config.IPMI)
 
-		_, err = a.gathererRegistry.RegisterGatherer(
+		_, err := a.gathererRegistry.RegisterGatherer(
 			registry.RegistrationOption{
 				Description: "IPMI metrics",
 				JitterSeed:  0,

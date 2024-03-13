@@ -1,0 +1,5 @@
+md0: |
+  /dev/md0:
+    Version : 1.2
+    Raid Level : raid0
+    State : inactive

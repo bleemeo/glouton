@@ -157,7 +157,7 @@ func (w *wrappedRunCmd) runCmd(timeout config.Duration, sudo bool, command strin
 
 func (w *wrappedRunCmd) addStats(run smartExecution) {
 	// --scan execution are not added to stats
-	if len(run.args) > 0 && run.args[0] == "--scan" {
+	if len(run.args) > 0 && run.args[0] == "--scan" { //nolint: goconst
 		return
 	}
 
