@@ -58,7 +58,6 @@ func New(config config.Smart) (telegraf.Input, *inputs.GathererOptions, error) {
 
 	if !strings.ContainsRune(config.PathSmartctl, os.PathSeparator) {
 		fullPath, err := exec.LookPath(config.PathSmartctl)
-
 		if err != nil {
 			return nil, nil, fmt.Errorf("%w: \"%s\" not found in $PATH", inputs.ErrMissingCommand, config.PathSmartctl)
 		}
