@@ -186,7 +186,7 @@ func (s *Synchronizer) uploadDiagnostic(ctx context.Context, filename string, r 
 		}
 	}
 
-	formFile, err := multipartWriter.CreateFormFile("report_archive", filename)
+	formFile, err := multipartWriter.CreateFormFile("archive", filename)
 	if err != nil {
 		return err
 	}
