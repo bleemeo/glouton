@@ -1,0 +1,4 @@
+smartctl 7.3 2022-02-28 r5338 [x86_64-linux-6.2.16-12-pve] (local build)
+Copyright (C) 2002-22, Bruce Allen, Christian Franke, www.smartmontools.org
+
+Smartctl open device: /dev/sda failed: DELL or MegaRaid controller, please try adding '-d megaraid,N'

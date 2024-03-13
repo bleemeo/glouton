@@ -1,0 +1,16 @@
+device_scan:
+  /dev/sda:
+    file: smartctl_sda.txt
+    rc: 0
+  /dev/sg0:
+    file: smartctl_sg0.txt
+    rc: 0
+  /dev/sg1:
+    file: smartctl_sg1.txt
+    rc: 0
+  /dev/sg2:
+    file: smartctl_sg2.txt
+    rc: 0
+  /dev/sg3:
+    file: smartctl_sg3.txt
+    rc: 0

@@ -203,15 +203,20 @@ func TestParseScanOutput(t *testing.T) {
 }
 
 type SmartctlData struct {
-	Scan           string            `yaml:"scan"`
-	Info           map[string]string `yaml:"info"`
-	InfoReturnCode map[string]int    `yaml:"info_return_code"`
-
+	DeviceScan       map[string]DeviceScan `yaml:"device_scan"`
+	scanContent      []byte
 	invocationsCount int
 }
 
+type DeviceScan struct {
+	Filename string `yaml:"file"`
+	RC       int    `yaml:"rc"`
+
+	fileContent []byte
+}
+
 func parseSmartctlData(inputName string) (SmartctlData, error) {
-	raw, err := os.ReadFile("./testdata/" + inputName + ".yml")
+	raw, err := os.ReadFile(filepath.Join("testdata", inputName, "index.yml"))
 	if err != nil {
 		return SmartctlData{}, err
 	}
@@ -219,6 +224,20 @@ func parseSmartctlData(inputName string) (SmartctlData, error) {
 	var smartctlData SmartctlData
 
 	err = yaml.Unmarshal(raw, &smartctlData)
+	if err != nil {
+		return SmartctlData{}, err
+	}
+
+	for device, deviceScan := range smartctlData.DeviceScan {
+		deviceScan.fileContent, err = os.ReadFile(filepath.Join("testdata", inputName, deviceScan.Filename))
+		if err != nil {
+			return SmartctlData{}, err
+		}
+
+		smartctlData.DeviceScan[device] = deviceScan
+	}
+
+	smartctlData.scanContent, err = os.ReadFile(filepath.Join("testdata", inputName, "smartctl_scan.txt"))
 	if err != nil {
 		return SmartctlData{}, err
 	}
@@ -234,7 +253,7 @@ func (smartctlData *SmartctlData) makeRunCmdFor(t *testing.T) runCmdType {
 
 		switch cmd := args[0]; cmd {
 		case "--scan":
-			return []byte(smartctlData.Scan), nil
+			return smartctlData.scanContent, nil
 		case "--info":
 		// Handling it below
 		default:
@@ -251,23 +270,21 @@ func (smartctlData *SmartctlData) makeRunCmdFor(t *testing.T) runCmdType {
 			device = args[len(args)-1]
 		}
 
-		infoData, found := smartctlData.Info[device]
+		deviceData, found := smartctlData.DeviceScan[device]
 		if !found {
 			t.Fatalf("Info about device %q not found.", device)
 
 			return nil, errors.New("unreachable code")
 		}
 
-		rc := smartctlData.InfoReturnCode[device]
-
 		var err error
 
-		if rc != 0 {
+		if deviceData.RC != 0 {
 			// we want to build an &exec.ExitError{ProcessState: &os.ProcessState{}}
 			// but we can't because ProcessState{} only had private field
-			err = errors.New("This should be ExitError with rc=" + strconv.Itoa(rc))
+			err = errors.New("This should be ExitError with rc=" + strconv.Itoa(deviceData.RC))
 		}
 
-		return []byte(infoData), err
+		return deviceData.fileContent, err
 	}
 }

@@ -1,0 +1,3 @@
+/dev/sda -d scsi # /dev/sda, SCSI device
+/dev/sdb -d scsi # /dev/sdb, SCSI device
+/dev/nvme0 -d nvme # /dev/nvme0, NVMe device
