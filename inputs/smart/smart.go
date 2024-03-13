@@ -18,11 +18,13 @@ package smart
 
 import (
 	"context"
+	"fmt"
 	"glouton/config"
 	"glouton/inputs"
 	"glouton/inputs/internal"
 	"glouton/types"
 	"os"
+	"os/exec"
 	"regexp"
 	"strconv"
 	"strings"
@@ -48,6 +50,20 @@ func New(config config.Smart) (telegraf.Input, *inputs.GathererOptions, error) {
 	smartInput, ok := input().(*smart.Smart)
 	if !ok {
 		return nil, nil, inputs.ErrUnexpectedType
+	}
+
+	if config.PathSmartctl == "" {
+		config.PathSmartctl = "smartctl"
+	}
+
+	if !strings.ContainsRune(config.PathSmartctl, os.PathSeparator) {
+		fullPath, err := exec.LookPath(config.PathSmartctl)
+
+		if err != nil {
+			return nil, nil, fmt.Errorf("%w: \"%s\" not found in $PATH", inputs.ErrMissingCommand, config.PathSmartctl)
+		}
+
+		config.PathSmartctl = fullPath
 	}
 
 	// Don't use sudo if we are already root. This is mandatory on TrueNAS... because root isn't allowed

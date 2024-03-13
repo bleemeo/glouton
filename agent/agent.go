@@ -72,7 +72,6 @@ import (
 	"net"
 	"net/url"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"reflect"
 	"regexp"
@@ -1393,14 +1392,7 @@ func (a *agent) registerInputs(ctx context.Context) {
 		a.registerInput("NVIDIA SMI", input, opts, err)
 	}
 
-	if a.config.Smart.Enable && !strings.ContainsRune(a.config.Smart.PathSmartctl, os.PathSeparator) {
-		// The SMART input is enabled if "smartctl" is found in
-		// the PATH or if the path was given in the config.
-		_, err := exec.LookPath("smartctl")
-		a.config.Smart.Enable = err == nil
-	}
-
-	if a.config.Smart.Enable && a.config.Smart.PathSmartctl != "" {
+	if a.config.Smart.Enable {
 		input, opts, err := smart.New(a.config.Smart)
 		a.registerInput("SMART", input, opts, err)
 	}
@@ -1435,7 +1427,11 @@ func (a *agent) registerInputs(ctx context.Context) {
 // Register a single input.
 func (a *agent) registerInput(name string, input telegraf.Input, opts *inputs.GathererOptions, err error) {
 	if err != nil {
-		logger.Printf("Failed to create input %s: %v", name, err)
+		if errors.Is(err, inputs.ErrMissingCommand) {
+			logger.V(1).Printf("input %s: %v", name, err)
+		} else {
+			logger.Printf("Failed to create input %s: %v", name, err)
+		}
 
 		return
 	}
