@@ -15,6 +15,10 @@ scan: |
   /dev/bus/0 -d megaraid,12 # /dev/bus/0 [megaraid_disk_12], SCSI device
   /dev/bus/0 -d megaraid,13 # /dev/bus/0 [megaraid_disk_13], SCSI device
 
+info_return_code:
+  /dev/sda: 2
+  /dev/sg0: 2
+  /dev/bus/0 -d megaraid,0: 0
 info:
   /dev/sda: |
     smartctl 7.3 2022-02-28 r5338 [x86_64-linux-6.2.16-12-pve] (local build)

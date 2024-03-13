@@ -1,4 +1,10 @@
 scan: "/dev/sda -d scsi # /dev/sda, SCSI device"
+info_return_code:
+  /dev/sda: 0
+  /dev/sg0: 0
+  /dev/sg1: 0
+  /dev/sg2: 0
+  /dev/sg3: 0
 info:
   /dev/sda: |
     smartctl 7.1 2019-12-30 r5022 [x86_64-linux-5.4.0-65-generic] (local build)
@@ -113,4 +119,3 @@ info:
     Drive Trip Temperature:        0 C
     
     Elements in grown defect list: 26
-

@@ -1,4 +1,7 @@
 scan: "/dev/sda -d scsi # /dev/sda, SCSI device"
+info_return_code:
+  /dev/sda: 0
+  /dev/sg0: 0
 info:
   /dev/sda: |
     smartctl 7.3 2022-02-28 r5338 [x86_64-linux-6.5.11-7-pve] (local build)
@@ -112,4 +115,3 @@ info:
       |||____ S speed/performance
       ||_____ O updated online
       |______ P prefailure warning
-

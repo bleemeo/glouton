@@ -2,7 +2,9 @@ scan: |
   /dev/sda -d scsi # /dev/sda, SCSI device
   /dev/sdb -d scsi # /dev/sdb, SCSI device
   /dev/nvme0 -d nvme # /dev/nvme0, NVMe device
-
+info_return_code:
+  /dev/sda: 0
+  /dev/nvme0 -d nvme: 0
 info:
   /dev/sda: |
     smartctl 7.4 2023-08-01 r5530 [x86_64-linux-6.7.0-arch3-1] (local build)
@@ -54,7 +56,6 @@ info:
       |||____ S speed/performance
       ||_____ O updated online
       |______ P prefailure warning
-  /dev/sdb: # TODO
   /dev/nvme0 -d nvme: |
     smartctl 7.2 2020-12-30 r5155 [x86_64-linux-5.15.0-91-generic] (local build)
     Copyright (C) 2002-20, Bruce Allen, Christian Franke, www.smartmontools.org
@@ -97,4 +98,3 @@ info:
     Warning  Comp. Temperature Time:    0
     Critical Comp. Temperature Time:    0
     Temperature Sensor 1:               55 Celsius
-

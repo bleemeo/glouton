@@ -18,6 +18,7 @@ package smart
 
 import (
 	"fmt"
+	"glouton/logger"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -81,7 +82,9 @@ func newInputWrapper(opts inputWrapperOptions) (*inputWrapper, error) {
 	for _, device := range devices {
 		info, err := iw.getDeviceInfo(device)
 		if err != nil {
-			return nil, err
+			logger.V(2).Printf("failed to get info about device %q: %w", device, err)
+
+			continue
 		}
 
 		if shouldIgnoreDevice(info) {
@@ -167,7 +170,7 @@ func (iw *inputWrapper) getDeviceInfo(device string) (deviceInfo, error) {
 
 	infoOut, err := iw.runCmd(iw.Smart.Timeout, iw.Smart.UseSudo, iw.PathSmartctl, infoArgs...)
 	if err != nil {
-		return deviceInfo{}, fmt.Errorf("failed to get info about device %q: %w", device, err)
+		return deviceInfo{}, err
 	}
 
 	return iw.parseInfoOutput(infoOut), nil

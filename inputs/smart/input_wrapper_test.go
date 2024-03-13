@@ -18,9 +18,9 @@ package smart
 
 import (
 	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -203,8 +203,9 @@ func TestParseScanOutput(t *testing.T) {
 }
 
 type SmartctlData struct {
-	Scan string            `yaml:"scan"`
-	Info map[string]string `yaml:"info"`
+	Scan           string            `yaml:"scan"`
+	Info           map[string]string `yaml:"info"`
+	InfoReturnCode map[string]int    `yaml:"info_return_code"`
 
 	invocationsCount int
 }
@@ -257,6 +258,16 @@ func (smartctlData *SmartctlData) makeRunCmdFor(t *testing.T) runCmdType {
 			return nil, errors.New("unreachable code")
 		}
 
-		return []byte(infoData), nil
+		rc := smartctlData.InfoReturnCode[device]
+
+		var err error
+
+		if rc != 0 {
+			// we want to build an &exec.ExitError{ProcessState: &os.ProcessState{}}
+			// but we can't because ProcessState{} only had private field
+			err = errors.New("This should be ExitError with rc=" + strconv.Itoa(rc))
+		}
+
+		return []byte(infoData), err
 	}
 }
