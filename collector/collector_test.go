@@ -71,8 +71,9 @@ func TestAddRemove(t *testing.T) {
 }
 
 func TestRun(t *testing.T) {
+	ctx := context.Background()
 	c := New(nil, gate.New(0))
-	c.runOnce(time.Now())
+	c.runOnce(ctx, time.Now())
 
 	input := &mockInput{Name: "input1"}
 
@@ -81,13 +82,13 @@ func TestRun(t *testing.T) {
 		t.Error(err)
 	}
 
-	c.runOnce(time.Now())
+	c.runOnce(ctx, time.Now())
 
 	if input.GatherCallCount != 1 {
 		t.Errorf("input.GatherCallCount == %v, want %v", input.GatherCallCount, 1)
 	}
 
-	c.runOnce(time.Now())
+	c.runOnce(ctx, time.Now())
 
 	if input.GatherCallCount != 2 {
 		t.Errorf("input.GatherCallCount == %v, want %v", input.GatherCallCount, 2)

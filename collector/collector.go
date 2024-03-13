@@ -133,11 +133,11 @@ func (c *Collector) Close() {
 }
 
 // RunGather run one gather and send metric through the accumulator.
-func (c *Collector) RunGather(_ context.Context, t0 time.Time) {
-	c.runOnce(t0)
+func (c *Collector) RunGather(ctx context.Context, t0 time.Time) {
+	c.runOnce(ctx, t0)
 }
 
-func (c *Collector) runOnce(t0 time.Time) {
+func (c *Collector) runOnce(ctx context.Context, t0 time.Time) {
 	c.l.Lock()
 
 	acc := inputs.FixedTimeAccumulator{
@@ -158,7 +158,7 @@ func (c *Collector) runOnce(t0 time.Time) {
 
 			secretInput, hasSecrets := input.(inputs.SecretfulInput)
 			if hasSecrets && secretInput.SecretCount() > 0 {
-				releaseGate, err := registry.WaitForSecrets(context.Background(), c.secretInputsGate, secretInput.SecretCount())
+				releaseGate, err := registry.WaitForSecrets(ctx, c.secretInputsGate, secretInput.SecretCount())
 				if err != nil {
 					return
 				}
