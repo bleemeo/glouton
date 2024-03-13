@@ -114,7 +114,7 @@ func TestParseScanOutput(t *testing.T) {
 			expectedScanSmartctlInvocations: 1,
 		},
 		{
-			name:                            "macOS",
+			name:                            "macos",
 			expectedInitSmartctlInvocations: 2,
 			expectedDevices:                 []string{"IOService:/AppleARMPE/arm-io/AppleT600xIO/ans@8F400000/AppleASCWrapV4/iop-ans-nub/RTBuddy(ANS2)/RTBuddyService/AppleANS3NVMeController/NS_01@1 -d nvme"}, //nolint:lll
 			expectedToIgnoreStorageDevices:  true,
