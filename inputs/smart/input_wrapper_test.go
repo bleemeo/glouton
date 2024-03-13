@@ -31,8 +31,6 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-var errInvalidArguments = errors.New("invalid arguments")
-
 func TestStorageDevicesPattern(t *testing.T) {
 	if _, err := filepath.Match(sgDevicesPattern, "foo"); err != nil {
 		t.Fatalf("Storage devices pattern is invalid: %v", err)
@@ -230,13 +228,7 @@ func parseSmartctlData(inputName string) (SmartctlData, error) {
 func (smartctlData *SmartctlData) makeRunCmdFor(t *testing.T) runCmdType {
 	t.Helper()
 
-	const deviceNotFound = `smartctl 7.2 2020-12-30 r5155 [x86_64-linux-5.15.0-91-generic] (local build)
-Copyright (C) 2002-20, Bruce Allen, Christian Franke, www.smartmontools.org
-
-Smartctl open device: %s failed: No such device
-`
-
-	return func(_ config.Duration, _ bool, _ string, args ...string) ([]byte, error) {
+	return func(timeout config.Duration, sudo bool, command string, args ...string) ([]byte, error) {
 		smartctlData.invocationsCount++
 
 		switch cmd := args[0]; cmd {
@@ -245,10 +237,9 @@ Smartctl open device: %s failed: No such device
 		case "--info":
 		// Handling it below
 		default:
-			err := fmt.Errorf("%w: %v", errInvalidArguments, args)
-			t.Error(err)
+			t.Fatalf("unexpected call to runCmd(%v, %v, %v, %s)", timeout, sudo, command, args)
 
-			return nil, err
+			return nil, errors.New("unreachable code")
 		}
 
 		var device string
@@ -261,9 +252,9 @@ Smartctl open device: %s failed: No such device
 
 		infoData, found := smartctlData.Info[device]
 		if !found {
-			t.Errorf("Info about device %q not found.", device)
+			t.Fatalf("Info about device %q not found.", device)
 
-			return []byte(fmt.Sprintf(deviceNotFound, device)), fmt.Errorf("%w: device %q not found", errInvalidArguments, device)
+			return nil, errors.New("unreachable code")
 		}
 
 		return []byte(infoData), nil
