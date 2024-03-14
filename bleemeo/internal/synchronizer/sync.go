@@ -805,7 +805,7 @@ func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) (map[str
 
 	syncStep := []struct {
 		name                   string
-		method                 func(context.Context, bool, bool) (updateThresholds bool, err error)
+		method                 func(ctx context.Context, fullSync, onlyEssential bool) (updateThresholds bool, err error)
 		enabledInMaintenance   bool
 		enabledInSuspendedMode bool
 		skipOnlyEssential      bool // should be true for method that ignore onlyEssential
