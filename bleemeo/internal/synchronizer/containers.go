@@ -75,7 +75,7 @@ func (s *Synchronizer) syncContainers(ctx context.Context, fullSync bool, onlyEs
 	}
 
 	if fullSync {
-		err := s.containerUpdateList()
+		err := s.containerUpdateList(ctx)
 		if err != nil {
 			return false, err
 		}
@@ -87,22 +87,22 @@ func (s *Synchronizer) syncContainers(ctx context.Context, fullSync bool, onlyEs
 	}
 
 	// s.containerDeleteFromRemote(): API don't delete containers
-	if err := s.containerRegisterAndUpdate(localContainers); err != nil {
+	if err := s.containerRegisterAndUpdate(ctx, localContainers); err != nil {
 		return false, err
 	}
 
-	s.containerDeleteFromLocal(localContainers)
+	s.containerDeleteFromLocal(ctx, localContainers)
 
 	return false, err
 }
 
-func (s *Synchronizer) containerUpdateList() error {
+func (s *Synchronizer) containerUpdateList(ctx context.Context) error {
 	params := map[string]string{
 		"host":   s.agentID,
 		"fields": cacheFields,
 	}
 
-	result, err := s.client.Iter(s.ctx, "container", params)
+	result, err := s.client.Iter(ctx, "container", params)
 	if err != nil {
 		return err
 	}
@@ -129,8 +129,8 @@ func (s *Synchronizer) containerUpdateList() error {
 	return nil
 }
 
-func (s *Synchronizer) containerRegisterAndUpdate(localContainers []facts.Container) error {
-	factsMap, err := s.option.Facts.Facts(s.ctx, 24*time.Hour)
+func (s *Synchronizer) containerRegisterAndUpdate(ctx context.Context, localContainers []facts.Container) error {
+	factsMap, err := s.option.Facts.Facts(ctx, 24*time.Hour)
 	if err != nil {
 		return err
 	}
@@ -212,7 +212,7 @@ func (s *Synchronizer) containerRegisterAndUpdate(localContainers []facts.Contai
 			payload.DockerAPIVersion = factsMap["docker_api_version"]
 		}
 
-		err := s.remoteRegister(remoteFound, &remoteContainer, &remoteContainers, payload, remoteIndex)
+		err := s.remoteRegister(ctx, remoteFound, &remoteContainer, &remoteContainers, payload, remoteIndex)
 		if err != nil {
 			return err
 		}
@@ -245,6 +245,7 @@ func (s *Synchronizer) delayedContainerCheck(newDelayedContainer map[string]time
 }
 
 func (s *Synchronizer) remoteRegister(
+	ctx context.Context,
 	remoteFound bool,
 	remoteContainer *types.Container,
 	remoteContainers *[]types.Container,
@@ -258,7 +259,7 @@ func (s *Synchronizer) remoteRegister(
 	}
 
 	if remoteFound {
-		_, err := s.client.Do(s.ctx, "PUT", fmt.Sprintf("v1/container/%s/", remoteContainer.ID), params, payload, &result)
+		_, err := s.client.Do(ctx, "PUT", fmt.Sprintf("v1/container/%s/", remoteContainer.ID), params, payload, &result)
 		if err != nil {
 			return err
 		}
@@ -268,7 +269,7 @@ func (s *Synchronizer) remoteRegister(
 		logger.V(2).Printf("Container %v updated with UUID %s", result.Name, result.ID)
 		(*remoteContainers)[remoteIndex] = result.Container
 	} else {
-		_, err := s.client.Do(s.ctx, "POST", "v1/container/", params, payload, &result)
+		_, err := s.client.Do(ctx, "POST", "v1/container/", params, payload, &result)
 		if err != nil {
 			return err
 		}
@@ -282,7 +283,7 @@ func (s *Synchronizer) remoteRegister(
 	return nil
 }
 
-func (s *Synchronizer) containerDeleteFromLocal(localContainers []facts.Container) {
+func (s *Synchronizer) containerDeleteFromLocal(ctx context.Context, localContainers []facts.Container) {
 	var deletedIDs []string //nolint: prealloc // we don't know the size. empty is the most likely size.
 
 	duplicatedKey := make(map[string]bool)
@@ -305,7 +306,7 @@ func (s *Synchronizer) containerDeleteFromLocal(localContainers []facts.Containe
 		}
 
 		_, err := s.client.Do(
-			s.ctx,
+			ctx,
 			"PATCH",
 			fmt.Sprintf("v1/container/%s/", container.ID),
 			nil,

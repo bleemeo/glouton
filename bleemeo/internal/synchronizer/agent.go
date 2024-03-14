@@ -42,7 +42,7 @@ func (s *Synchronizer) syncAgent(ctx context.Context, fullSync bool, onlyEssenti
 	}
 
 	if fullSync {
-		if err := s.agentsUpdateList(); err != nil {
+		if err := s.agentsUpdateList(ctx); err != nil {
 			return false, err
 		}
 	}
@@ -101,14 +101,14 @@ func (s *Synchronizer) syncMainAgent(ctx context.Context) error {
 	return nil
 }
 
-func (s *Synchronizer) agentsUpdateList() error {
+func (s *Synchronizer) agentsUpdateList(ctx context.Context) error {
 	oldAgents := s.option.Cache.AgentsByUUID()
 
 	params := map[string]string{
 		"fields": agentFields,
 	}
 
-	result, err := s.client.Iter(s.ctx, "agent", params)
+	result, err := s.client.Iter(ctx, "agent", params)
 	if err != nil {
 		return err
 	}

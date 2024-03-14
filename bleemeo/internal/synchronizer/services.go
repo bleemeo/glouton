@@ -100,13 +100,13 @@ func (s *Synchronizer) syncServices(ctx context.Context, fullSync bool, onlyEsse
 	previousServices := s.option.Cache.ServicesByUUID()
 
 	if fullSync {
-		err := s.serviceUpdateList()
+		err := s.serviceUpdateList(ctx)
 		if err != nil {
 			return false, err
 		}
 	}
 
-	s.serviceRemoveDeletedFromRemote(localServices, previousServices)
+	s.serviceRemoveDeletedFromRemote(ctx, localServices, previousServices)
 
 	if onlyEssential {
 		// no essential services, skip registering.
@@ -120,22 +120,22 @@ func (s *Synchronizer) syncServices(ctx context.Context, fullSync bool, onlyEsse
 
 	localServices = s.serviceExcludeUnregistrable(localServices)
 
-	if err := s.serviceRegisterAndUpdate(localServices); err != nil {
+	if err := s.serviceRegisterAndUpdate(ctx, localServices); err != nil {
 		return false, err
 	}
 
-	s.serviceDeactivateNonLocal(localServices)
+	s.serviceDeactivateNonLocal(ctx, localServices)
 
 	return false, nil
 }
 
-func (s *Synchronizer) serviceUpdateList() error {
+func (s *Synchronizer) serviceUpdateList(ctx context.Context) error {
 	params := map[string]string{
 		"agent":  s.agentID,
 		"fields": serviceReadFields,
 	}
 
-	result, err := s.client.Iter(s.ctx, "service", params)
+	result, err := s.client.Iter(ctx, "service", params)
 	if err != nil {
 		return err
 	}
@@ -158,7 +158,7 @@ func (s *Synchronizer) serviceUpdateList() error {
 }
 
 // serviceRemoveDeletedFromRemote removes the local services that were deleted on the API.
-func (s *Synchronizer) serviceRemoveDeletedFromRemote(localServices []discovery.Service, previousServices map[string]types.Service) {
+func (s *Synchronizer) serviceRemoveDeletedFromRemote(ctx context.Context, localServices []discovery.Service, previousServices map[string]types.Service) {
 	newServices := s.option.Cache.ServicesByUUID()
 
 	deletedServiceNameInstance := make(map[common.ServiceNameInstance]bool)
@@ -182,10 +182,10 @@ func (s *Synchronizer) serviceRemoveDeletedFromRemote(localServices []discovery.
 		}
 	}
 
-	s.option.Discovery.RemoveIfNonRunning(s.ctx, localServiceToDelete)
+	s.option.Discovery.RemoveIfNonRunning(ctx, localServiceToDelete)
 }
 
-func (s *Synchronizer) serviceRegisterAndUpdate(localServices []discovery.Service) error {
+func (s *Synchronizer) serviceRegisterAndUpdate(ctx context.Context, localServices []discovery.Service) error {
 	remoteServices := s.option.Cache.Services()
 	remoteServicesByKey := common.ServiceLookupFromList(remoteServices)
 	registeredServices := s.option.Cache.ServicesByUUID()
@@ -218,7 +218,7 @@ func (s *Synchronizer) serviceRegisterAndUpdate(localServices []discovery.Servic
 		var result types.Service
 
 		if remoteFound {
-			_, err := s.client.Do(s.ctx, "PUT", fmt.Sprintf("v1/service/%s/", remoteSrv.ID), params, payload, &result)
+			_, err := s.client.Do(ctx, "PUT", fmt.Sprintf("v1/service/%s/", remoteSrv.ID), params, payload, &result)
 			if err != nil {
 				return err
 			}
@@ -226,7 +226,7 @@ func (s *Synchronizer) serviceRegisterAndUpdate(localServices []discovery.Servic
 			registeredServices[result.ID] = result
 			logger.V(2).Printf("Service %v updated with UUID %s", key, result.ID)
 		} else {
-			_, err := s.client.Do(s.ctx, "POST", "v1/service/", params, payload, &result)
+			_, err := s.client.Do(ctx, "POST", "v1/service/", params, payload, &result)
 			if err != nil {
 				return err
 			}
@@ -342,7 +342,7 @@ func (s *Synchronizer) serviceExcludeUnregistrable(services []discovery.Service)
 }
 
 // serviceDeactivateNonLocal marks inactive the registered services that were not found in the discovery.
-func (s *Synchronizer) serviceDeactivateNonLocal(localServices []discovery.Service) {
+func (s *Synchronizer) serviceDeactivateNonLocal(ctx context.Context, localServices []discovery.Service) {
 	localServiceExists := make(map[common.ServiceNameInstance]bool, len(localServices))
 
 	for _, srv := range localServices {
@@ -369,7 +369,7 @@ func (s *Synchronizer) serviceDeactivateNonLocal(localServices []discovery.Servi
 		logger.V(2).Printf("Mark inactive the service %v (uuid %s)", key, remoteSrv.ID)
 
 		// Deactivate the remote service that is not present locally.
-		result, err := s.serviceDeactivate(remoteSrv)
+		result, err := s.serviceDeactivate(ctx, remoteSrv)
 		if err != nil {
 			logger.V(1).Printf("Failed to deactivate service %v on Bleemeo API: %v", key, err)
 
@@ -383,7 +383,7 @@ func (s *Synchronizer) serviceDeactivateNonLocal(localServices []discovery.Servi
 }
 
 // serviceDeactivate makes a PUT request to the Bleemeo API to mark the given service as inactive.
-func (s *Synchronizer) serviceDeactivate(service types.Service) (types.Service, error) {
+func (s *Synchronizer) serviceDeactivate(ctx context.Context, service types.Service) (types.Service, error) {
 	params := map[string]string{
 		"fields": serviceWriteFields,
 	}
@@ -402,7 +402,7 @@ func (s *Synchronizer) serviceDeactivate(service types.Service) (types.Service, 
 
 	var result types.Service
 
-	_, err := s.client.Do(s.ctx, "PUT", fmt.Sprintf("v1/service/%s/", service.ID), params, payload, &result)
+	_, err := s.client.Do(ctx, "PUT", fmt.Sprintf("v1/service/%s/", service.ID), params, payload, &result)
 
 	return result, err
 }

@@ -73,7 +73,7 @@ func (s *Synchronizer) UpdateMonitor(op string, uuid string) {
 }
 
 // syncMonitors updates the list of monitors accessible to the agent.
-func (s *Synchronizer) syncMonitors(_ context.Context, fullSync bool, onlyEssential bool) (updateThresholds bool, err error) {
+func (s *Synchronizer) syncMonitors(ctx context.Context, fullSync bool, onlyEssential bool) (updateThresholds bool, err error) {
 	_ = onlyEssential
 
 	if !s.option.Config.Blackbox.Enable {
@@ -106,12 +106,12 @@ func (s *Synchronizer) syncMonitors(_ context.Context, fullSync bool, onlyEssent
 	var monitors []bleemeoTypes.Monitor
 
 	if fullSync {
-		monitors, err = s.getMonitorsFromAPI()
+		monitors, err = s.getMonitorsFromAPI(ctx)
 		if err != nil {
 			return false, err
 		}
 	} else {
-		monitors, err = s.getListOfMonitorsFromAPI(pendingMonitorsUpdate)
+		monitors, err = s.getListOfMonitorsFromAPI(ctx, pendingMonitorsUpdate)
 		if err != nil {
 			return false, err
 		}
@@ -206,14 +206,14 @@ func (s *Synchronizer) ApplyMonitorUpdate() error {
 	return nil
 }
 
-func (s *Synchronizer) getMonitorsFromAPI() ([]bleemeoTypes.Monitor, error) {
+func (s *Synchronizer) getMonitorsFromAPI(ctx context.Context) ([]bleemeoTypes.Monitor, error) {
 	params := map[string]string{
 		"monitor": "true",
 		"active":  "true",
 		"fields":  fieldList,
 	}
 
-	result, err := s.client.Iter(s.ctx, "service", params)
+	result, err := s.client.Iter(ctx, "service", params)
 	if err != nil {
 		return nil, err
 	}
@@ -234,7 +234,7 @@ func (s *Synchronizer) getMonitorsFromAPI() ([]bleemeoTypes.Monitor, error) {
 }
 
 // should we try to modify as much monitors as possible, and return a list of errors, instead of failing early ?
-func (s *Synchronizer) getListOfMonitorsFromAPI(pendingMonitorsUpdate []MonitorUpdate) ([]bleemeoTypes.Monitor, error) {
+func (s *Synchronizer) getListOfMonitorsFromAPI(ctx context.Context, pendingMonitorsUpdate []MonitorUpdate) ([]bleemeoTypes.Monitor, error) {
 	params := map[string]string{
 		"fields": fieldList,
 	}
@@ -256,7 +256,7 @@ OuterBreak:
 		}
 
 		var result bleemeoTypes.Monitor
-		statusCode, err := s.client.Do(s.ctx, "GET", fmt.Sprintf("v1/service/%s/", m.uuid), params, nil, &result)
+		statusCode, err := s.client.Do(ctx, "GET", fmt.Sprintf("v1/service/%s/", m.uuid), params, nil, &result)
 		if err != nil {
 			// Delete the monitor locally if it was not found on the API.
 			if client.IsNotFound(err) {

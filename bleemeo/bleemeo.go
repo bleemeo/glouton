@@ -225,7 +225,7 @@ func (c *Connector) initMQTT(previousPoint []gloutonTypes.MetricPoint) {
 	}
 }
 
-func (c *Connector) setMaintenance(maintenance bool) {
+func (c *Connector) setMaintenance(ctx context.Context, maintenance bool) {
 	if maintenance {
 		logger.V(0).Println("Bleemeo: read only/maintenance mode enabled")
 	} else if !maintenance && c.sync.IsMaintenance() {
@@ -235,7 +235,7 @@ func (c *Connector) setMaintenance(maintenance bool) {
 	c.l.RLock()
 	defer c.l.RUnlock()
 
-	c.sync.SetMaintenance(maintenance)
+	c.sync.SetMaintenance(ctx, maintenance)
 
 	if c.mqtt != nil {
 		c.mqtt.SuspendSending(maintenance)

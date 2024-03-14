@@ -33,15 +33,15 @@ func (s *Synchronizer) syncAccountConfig(ctx context.Context, fullSync bool, onl
 	if fullSync {
 		currentConfig, _ := s.option.Cache.CurrentAccountConfig()
 
-		if err := s.agentTypesUpdateList(); err != nil {
+		if err := s.agentTypesUpdateList(ctx); err != nil {
 			return false, err
 		}
 
-		if err := s.accountConfigUpdateList(); err != nil {
+		if err := s.accountConfigUpdateList(ctx); err != nil {
 			return false, err
 		}
 
-		if err := s.agentConfigUpdateList(); err != nil {
+		if err := s.agentConfigUpdateList(ctx); err != nil {
 			return false, err
 		}
 
@@ -72,12 +72,12 @@ func (s *Synchronizer) syncAccountConfig(ctx context.Context, fullSync bool, onl
 	return false, nil
 }
 
-func (s *Synchronizer) agentTypesUpdateList() error {
+func (s *Synchronizer) agentTypesUpdateList(ctx context.Context) error {
 	params := map[string]string{
 		"fields": "id,name,display_name",
 	}
 
-	result, err := s.client.Iter(s.ctx, "agenttype", params)
+	result, err := s.client.Iter(ctx, "agenttype", params)
 	if err != nil {
 		return err
 	}
@@ -99,12 +99,12 @@ func (s *Synchronizer) agentTypesUpdateList() error {
 	return nil
 }
 
-func (s *Synchronizer) accountConfigUpdateList() error {
+func (s *Synchronizer) accountConfigUpdateList(ctx context.Context) error {
 	params := map[string]string{
 		"fields": "id,name,live_process_resolution,live_process,docker_integration,snmp_integration,vsphere_integration,number_of_custom_metrics,suspended",
 	}
 
-	result, err := s.client.Iter(s.ctx, "accountconfig", params)
+	result, err := s.client.Iter(ctx, "accountconfig", params)
 	if err != nil {
 		return err
 	}
@@ -126,12 +126,12 @@ func (s *Synchronizer) accountConfigUpdateList() error {
 	return nil
 }
 
-func (s *Synchronizer) agentConfigUpdateList() error {
+func (s *Synchronizer) agentConfigUpdateList(ctx context.Context) error {
 	params := map[string]string{
 		"fields": "id,account_config,agent_type,metrics_allowlist,metrics_resolution",
 	}
 
-	result, err := s.client.Iter(s.ctx, "agentconfig", params)
+	result, err := s.client.Iter(ctx, "agentconfig", params)
 	if apiErr, ok := err.(client.APIError); ok {
 		mediatype, _, err := mime.ParseMediaType(apiErr.ContentType)
 		if err == nil && mediatype == "text/html" && strings.Contains(apiErr.FinalURL, "login") {

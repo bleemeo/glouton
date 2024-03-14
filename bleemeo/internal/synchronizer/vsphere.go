@@ -49,7 +49,7 @@ func (s *Synchronizer) syncVSphere(ctx context.Context, fullSync bool, onlyEssen
 		return false, nil
 	}
 
-	return false, s.VSphereRegisterAndUpdate(s.option.VSphereDevices(ctx, time.Hour))
+	return false, s.VSphereRegisterAndUpdate(ctx, s.option.VSphereDevices(ctx, time.Hour))
 }
 
 // When modifying this type, ensure to keep the compatibility with the code of
@@ -115,7 +115,7 @@ func (s *Synchronizer) FindVSphereAgent(ctx context.Context, device types.VSpher
 	return types.Agent{}, errNotExist
 }
 
-func (s *Synchronizer) VSphereRegisterAndUpdate(localDevices []types.VSphereDevice) error {
+func (s *Synchronizer) VSphereRegisterAndUpdate(ctx context.Context, localDevices []types.VSphereDevice) error {
 	vSphereAgentTypes, found := s.GetVSphereAgentTypes()
 	if !found {
 		return errRetryLater
@@ -141,7 +141,7 @@ func (s *Synchronizer) VSphereRegisterAndUpdate(localDevices []types.VSphereDevi
 			continue
 		}
 
-		if a, err := s.FindVSphereAgent(s.ctx, device, agentTypeID, remoteAgentList); err != nil && !errors.Is(err, errNotExist) {
+		if a, err := s.FindVSphereAgent(ctx, device, agentTypeID, remoteAgentList); err != nil && !errors.Is(err, errNotExist) {
 			logger.V(2).Printf("Skip registration of vSphere agent: %v", err)
 
 			continue
@@ -168,7 +168,7 @@ func (s *Synchronizer) VSphereRegisterAndUpdate(localDevices []types.VSphereDevi
 			InitialServerGroup: serverGroup,
 		}
 
-		registeredAgent, err := s.remoteRegisterVSphereDevice(params, payload)
+		registeredAgent, err := s.remoteRegisterVSphereDevice(ctx, params, payload)
 		if err != nil {
 			errs = append(errs, err)
 
@@ -205,7 +205,7 @@ func (s *Synchronizer) VSphereRegisterAndUpdate(localDevices []types.VSphereDevi
 			vSphereAgentTypes[vsphere.KindVM]:      true,
 		}
 
-		err := s.purgeVSphereAgents(remoteAgentList, seenDeviceAgents, agentTypeIDsToPurge)
+		err := s.purgeVSphereAgents(ctx, remoteAgentList, seenDeviceAgents, agentTypeIDsToPurge)
 		if err != nil {
 			logger.V(1).Printf("Failed to purge vSphere agents: %v", err)
 		}
@@ -216,10 +216,10 @@ func (s *Synchronizer) VSphereRegisterAndUpdate(localDevices []types.VSphereDevi
 	return errors.Join(errs...)
 }
 
-func (s *Synchronizer) remoteRegisterVSphereDevice(params map[string]string, payload payloadAgent) (types.Agent, error) {
+func (s *Synchronizer) remoteRegisterVSphereDevice(ctx context.Context, params map[string]string, payload payloadAgent) (types.Agent, error) {
 	var result types.Agent
 
-	_, err := s.client.Do(s.ctx, "POST", "v1/agent/", params, payload, &result)
+	_, err := s.client.Do(ctx, "POST", "v1/agent/", params, payload, &result)
 	if err != nil {
 		return result, err
 	}
@@ -261,7 +261,7 @@ func (s *Synchronizer) GetVSphereAgentType(kind vsphere.ResourceKind) (agentType
 	return agentTypeID, found
 }
 
-func (s *Synchronizer) purgeVSphereAgents(remoteAgents map[string]types.Agent, seenDeviceAgents map[string]string, vSphereAgentTypes map[string]bool) error {
+func (s *Synchronizer) purgeVSphereAgents(ctx context.Context, remoteAgents map[string]types.Agent, seenDeviceAgents map[string]string, vSphereAgentTypes map[string]bool) error {
 	associations, err := s.option.State.GetByPrefix(vSphereCachePrefix, vSphereAssociation{})
 	if err != nil {
 		return err
@@ -317,7 +317,7 @@ func (s *Synchronizer) purgeVSphereAgents(remoteAgents map[string]types.Agent, s
 
 		agentsToRemoveFromCache[id] = true
 
-		_, err := s.client.Do(s.ctx, "DELETE", fmt.Sprintf("v1/agent/%s/", id), nil, nil, nil)
+		_, err := s.client.Do(ctx, "DELETE", fmt.Sprintf("v1/agent/%s/", id), nil, nil, nil)
 		if err != nil && !client.IsNotFound(err) {
 			return err
 		}

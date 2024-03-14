@@ -73,7 +73,6 @@ const (
 
 // Synchronizer synchronize object with Bleemeo.
 type Synchronizer struct {
-	ctx    context.Context //nolint:containedctx
 	option Option
 	now    func() time.Time
 	inTest bool
@@ -166,7 +165,7 @@ type Option struct {
 	IsMqttConnected func() bool
 
 	// SetBleemeoInMaintenanceMode makes the bleemeo connector wait a day before checking again for maintenance.
-	SetBleemeoInMaintenanceMode func(maintenance bool)
+	SetBleemeoInMaintenanceMode func(ctx context.Context, maintenance bool)
 
 	// SetBleemeoInSuspendedMode sets the suspended mode. While Bleemeo is suspended the agent doesn't
 	// create or update objects on the API and stops sending points on MQTT. The suspended mode differs
@@ -286,7 +285,6 @@ func (s *Synchronizer) DiagnosticArchive(_ context.Context, archive types.Archiv
 
 // Run runs the Synchronizer.
 func (s *Synchronizer) Run(ctx context.Context) error {
-	s.ctx = ctx
 	s.startedAt = s.now()
 
 	firstSync := true
@@ -1085,7 +1083,7 @@ func (s *Synchronizer) checkDuplicated(ctx context.Context) error {
 		"last_duplication_date": time.Now(),
 	}
 
-	_, err := s.client.Do(s.ctx, "PATCH", fmt.Sprintf("v1/agent/%s/", s.agentID), params, data, nil)
+	_, err := s.client.Do(ctx, "PATCH", fmt.Sprintf("v1/agent/%s/", s.agentID), params, data, nil)
 	if err != nil {
 		logger.V(1).Printf("Failed to update duplication date: %s", err)
 	}

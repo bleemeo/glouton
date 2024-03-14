@@ -38,7 +38,7 @@ type payloadAgent struct {
 
 // TODO the deletion need to be done
 
-func (s *Synchronizer) syncSNMP(_ context.Context, fullSync bool, onlyEssential bool) (updateThresholds bool, err error) {
+func (s *Synchronizer) syncSNMP(ctx context.Context, fullSync bool, onlyEssential bool) (updateThresholds bool, err error) {
 	_ = fullSync
 
 	cfg, ok := s.option.Cache.CurrentAccountConfig()
@@ -51,7 +51,7 @@ func (s *Synchronizer) syncSNMP(_ context.Context, fullSync bool, onlyEssential 
 		return false, nil
 	}
 
-	return false, s.snmpRegisterAndUpdate(s.option.SNMP)
+	return false, s.snmpRegisterAndUpdate(ctx, s.option.SNMP)
 }
 
 type snmpAssociation struct {
@@ -108,7 +108,7 @@ func (s *Synchronizer) FindSNMPAgent(ctx context.Context, target *snmp.Target, s
 	return types.Agent{}, errNotExist
 }
 
-func (s *Synchronizer) snmpRegisterAndUpdate(localTargets []*snmp.Target) error {
+func (s *Synchronizer) snmpRegisterAndUpdate(ctx context.Context, localTargets []*snmp.Target) error {
 	var newAgent []types.Agent //nolint: prealloc
 
 	remoteAgentList := s.option.Cache.AgentsByUUID()
@@ -123,7 +123,7 @@ func (s *Synchronizer) snmpRegisterAndUpdate(localTargets []*snmp.Target) error 
 	}
 
 	for _, snmp := range localTargets {
-		if _, err := s.FindSNMPAgent(s.ctx, snmp, agentTypeID, remoteAgentList); err != nil && !errors.Is(err, errNotExist) {
+		if _, err := s.FindSNMPAgent(ctx, snmp, agentTypeID, remoteAgentList); err != nil && !errors.Is(err, errNotExist) {
 			logger.V(2).Printf("skip registration of SNMP agent: %v", err)
 
 			continue
@@ -131,14 +131,14 @@ func (s *Synchronizer) snmpRegisterAndUpdate(localTargets []*snmp.Target) error 
 			continue
 		}
 
-		facts, err := snmp.Facts(s.ctx, 24*time.Hour)
+		facts, err := snmp.Facts(ctx, 24*time.Hour)
 		if err != nil {
 			logger.V(2).Printf("skip registration of SNMP agent: %v", err)
 
 			continue
 		}
 
-		name, err := snmp.Name(s.ctx)
+		name, err := snmp.Name(ctx)
 		if err != nil {
 			return err
 		}
@@ -165,7 +165,7 @@ func (s *Synchronizer) snmpRegisterAndUpdate(localTargets []*snmp.Target) error 
 			InitialServerGroup: serverGroup,
 		}
 
-		tmp, err := s.remoteRegisterSNMP(params, payload)
+		tmp, err := s.remoteRegisterSNMP(ctx, params, payload)
 		if err != nil {
 			return err
 		}
@@ -190,10 +190,10 @@ func (s *Synchronizer) snmpRegisterAndUpdate(localTargets []*snmp.Target) error 
 	return nil
 }
 
-func (s *Synchronizer) remoteRegisterSNMP(params map[string]string, payload payloadAgent) (types.Agent, error) {
+func (s *Synchronizer) remoteRegisterSNMP(ctx context.Context, params map[string]string, payload payloadAgent) (types.Agent, error) {
 	var result types.Agent
 
-	_, err := s.client.Do(s.ctx, "POST", "v1/agent/", params, payload, &result)
+	_, err := s.client.Do(ctx, "POST", "v1/agent/", params, payload, &result)
 	if err != nil {
 		return result, err
 	}

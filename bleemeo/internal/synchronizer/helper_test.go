@@ -187,7 +187,6 @@ func (helper *syncTestHelper) initSynchronizer(t *testing.T) {
 	helper.s = s
 
 	// Do actions done by s.Run()
-	s.ctx = context.Background()
 	s.startedAt = helper.api.now.Now()
 
 	if err = s.setClient(); err != nil {

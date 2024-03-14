@@ -491,7 +491,7 @@ func (s *Synchronizer) findUnregisteredMetrics(metrics []types.Metric) []types.M
 	return result
 }
 
-func (s *Synchronizer) syncMetrics(_ context.Context, fullSync bool, onlyEssential bool) (updateThresholds bool, err error) {
+func (s *Synchronizer) syncMetrics(ctx context.Context, fullSync bool, onlyEssential bool) (updateThresholds bool, err error) {
 	localMetrics, err := s.option.Store.Metrics(nil)
 	if err != nil {
 		return false, err
@@ -534,7 +534,7 @@ func (s *Synchronizer) syncMetrics(_ context.Context, fullSync bool, onlyEssenti
 		fullSync = true
 	}
 
-	err = s.metricUpdatePendingOrSync(fullSync, &pendingMetricsUpdate)
+	err = s.metricUpdatePendingOrSync(ctx, fullSync, &pendingMetricsUpdate)
 	if err != nil {
 		return false, err
 	}
@@ -544,7 +544,7 @@ func (s *Synchronizer) syncMetrics(_ context.Context, fullSync bool, onlyEssenti
 
 	logger.V(2).Printf("Searching %d metrics that may be inactive", len(unregisteredMetrics))
 
-	err = s.metricUpdateInactiveList(unregisteredMetrics, fullSync)
+	err = s.metricUpdateInactiveList(ctx, unregisteredMetrics, fullSync)
 	if err != nil {
 		return false, err
 	}
@@ -562,7 +562,7 @@ func (s *Synchronizer) syncMetrics(_ context.Context, fullSync bool, onlyEssenti
 	filteredMetrics = s.filterMetrics(localMetrics)
 	filteredMetrics = prioritizeAndFilterMetrics(s.option.MetricFormat, filteredMetrics, onlyEssential)
 
-	if err := newMetricRegisterer(s).registerMetrics(filteredMetrics); err != nil {
+	if err := newMetricRegisterer(s).registerMetrics(ctx, filteredMetrics); err != nil {
 		return updateThresholds, err
 	}
 
@@ -570,11 +570,11 @@ func (s *Synchronizer) syncMetrics(_ context.Context, fullSync bool, onlyEssenti
 		return updateThresholds, nil
 	}
 
-	if err := s.metricDeleteIgnoredServices(); err != nil {
+	if err := s.metricDeleteIgnoredServices(ctx); err != nil {
 		return updateThresholds, err
 	}
 
-	if err := s.metricDeactivate(filteredMetrics); err != nil {
+	if err := s.metricDeactivate(ctx, filteredMetrics); err != nil {
 		return updateThresholds, err
 	}
 
@@ -586,9 +586,9 @@ func (s *Synchronizer) syncMetrics(_ context.Context, fullSync bool, onlyEssenti
 	return updateThresholds, nil
 }
 
-func (s *Synchronizer) metricUpdatePendingOrSync(fullSync bool, pendingMetricsUpdate *[]string) error {
+func (s *Synchronizer) metricUpdatePendingOrSync(ctx context.Context, fullSync bool, pendingMetricsUpdate *[]string) error {
 	if fullSync {
-		err := s.metricUpdateAll(false)
+		err := s.metricUpdateAll(ctx, false)
 		if err != nil {
 			// Re-add the metric on the pending update
 			s.UpdateMetrics(*pendingMetricsUpdate...)
@@ -598,7 +598,7 @@ func (s *Synchronizer) metricUpdatePendingOrSync(fullSync bool, pendingMetricsUp
 	} else if len(*pendingMetricsUpdate) > 0 {
 		logger.V(2).Printf("Update %d metrics by UUID", len(*pendingMetricsUpdate))
 
-		if err := s.metricUpdateListUUID(*pendingMetricsUpdate); err != nil {
+		if err := s.metricUpdateListUUID(ctx, *pendingMetricsUpdate); err != nil {
 			// Re-add the metric on the pending update
 			s.UpdateMetrics(*pendingMetricsUpdate...)
 
@@ -700,7 +700,7 @@ func (s *Synchronizer) isOwnedMetric(metric metricPayload) bool {
 }
 
 // metricsListWithAgentID fetches the list of all metrics for a given agent, and returns a UUID:metric mapping.
-func (s *Synchronizer) metricsListWithAgentID(fetchInactive bool) (map[string]bleemeoTypes.Metric, error) {
+func (s *Synchronizer) metricsListWithAgentID(ctx context.Context, fetchInactive bool) (map[string]bleemeoTypes.Metric, error) {
 	params := map[string]string{
 		"fields": metricFields,
 	}
@@ -711,7 +711,7 @@ func (s *Synchronizer) metricsListWithAgentID(fetchInactive bool) (map[string]bl
 		params["active"] = stringTrue
 	}
 
-	result, err := s.client.Iter(s.ctx, "metric", params)
+	result, err := s.client.Iter(ctx, "metric", params)
 	if err != nil {
 		return nil, err
 	}
@@ -743,8 +743,8 @@ func (s *Synchronizer) metricsListWithAgentID(fetchInactive bool) (map[string]bl
 	return metricsByUUID, nil
 }
 
-func (s *Synchronizer) metricUpdateAll(fetchInactive bool) error {
-	metricsMap, err := s.metricsListWithAgentID(fetchInactive)
+func (s *Synchronizer) metricUpdateAll(ctx context.Context, fetchInactive bool) error {
+	metricsMap, err := s.metricsListWithAgentID(ctx, fetchInactive)
 	if err != nil {
 		return err
 	}
@@ -764,9 +764,9 @@ func (s *Synchronizer) metricUpdateAll(fetchInactive bool) error {
 //
 // if allowList is true, this function may fetches all inactive metrics. This should only
 // be true if the full list of active metrics was fetched just before.
-func (s *Synchronizer) metricUpdateInactiveList(metrics []types.Metric, allowList bool) error {
+func (s *Synchronizer) metricUpdateInactiveList(ctx context.Context, metrics []types.Metric, allowList bool) error {
 	if len(metrics) < 10 || !allowList {
-		return s.metricUpdateList(metrics)
+		return s.metricUpdateList(ctx, metrics)
 	}
 
 	result := struct {
@@ -774,7 +774,7 @@ func (s *Synchronizer) metricUpdateInactiveList(metrics []types.Metric, allowLis
 	}{}
 
 	_, err := s.client.Do(
-		s.ctx,
+		ctx,
 		"GET",
 		"v1/metric/",
 		map[string]string{
@@ -791,15 +791,15 @@ func (s *Synchronizer) metricUpdateInactiveList(metrics []types.Metric, allowLis
 
 	if len(metrics) <= result.Count/100 {
 		// should be faster with one HTTP request per metrics
-		return s.metricUpdateList(metrics)
+		return s.metricUpdateList(ctx, metrics)
 	}
 
 	// fewer query with fetching the whole list
-	return s.metricUpdateAll(true)
+	return s.metricUpdateAll(ctx, true)
 }
 
 // metricUpdateList fetches a list of metrics, and updates the cache.
-func (s *Synchronizer) metricUpdateList(metrics []types.Metric) error {
+func (s *Synchronizer) metricUpdateList(ctx context.Context, metrics []types.Metric) error {
 	if len(metrics) == 0 {
 		return nil
 	}
@@ -825,7 +825,7 @@ func (s *Synchronizer) metricUpdateList(metrics []types.Metric) error {
 			delete(params, "labels_text")
 		}
 
-		result, err := s.client.Iter(s.ctx, "metric", params)
+		result, err := s.client.Iter(ctx, "metric", params)
 		if err != nil {
 			return err
 		}
@@ -866,7 +866,7 @@ func (s *Synchronizer) metricUpdateList(metrics []types.Metric) error {
 	return nil
 }
 
-func (s *Synchronizer) metricUpdateListUUID(requests []string) error {
+func (s *Synchronizer) metricUpdateListUUID(ctx context.Context, requests []string) error {
 	metricsByUUID := s.option.Cache.MetricsByUUID()
 
 	for _, key := range requests {
@@ -877,7 +877,7 @@ func (s *Synchronizer) metricUpdateListUUID(requests []string) error {
 		}
 
 		_, err := s.client.Do(
-			s.ctx,
+			ctx,
 			"GET",
 			fmt.Sprintf("v1/metric/%s/", key),
 			params,
@@ -979,8 +979,8 @@ func newMetricRegisterer(s *Synchronizer) *metricRegisterer {
 	}
 }
 
-func (mr *metricRegisterer) registerMetrics(localMetrics []types.Metric) error {
-	err := mr.do(localMetrics)
+func (mr *metricRegisterer) registerMetrics(ctx context.Context, localMetrics []types.Metric) error {
+	err := mr.do(ctx, localMetrics)
 
 	metrics := make([]bleemeoTypes.Metric, 0, len(mr.registeredMetricsByUUID))
 
@@ -1066,7 +1066,7 @@ func (mr *metricRegisterer) logTooManyMetrics(nbFailedStandardMetrics, nbFailedC
 	}
 }
 
-func (mr *metricRegisterer) do(localMetrics []types.Metric) error {
+func (mr *metricRegisterer) do(ctx context.Context, localMetrics []types.Metric) error {
 	for state := metricPassAgentStatus; state <= metricPassRetry; state++ {
 		var currentList []types.Metric
 
@@ -1089,7 +1089,7 @@ func (mr *metricRegisterer) do(localMetrics []types.Metric) error {
 
 				mr.s.option.Cache.SetMetrics(metrics)
 
-				if err := mr.s.metricUpdateList(mr.needReregisterMetrics); err != nil {
+				if err := mr.s.metricUpdateList(ctx, mr.needReregisterMetrics); err != nil {
 					return err
 				}
 
@@ -1100,7 +1100,7 @@ func (mr *metricRegisterer) do(localMetrics []types.Metric) error {
 			currentList = mr.retryMetrics
 		}
 
-		if err := mr.doOnePass(currentList, state); err != nil {
+		if err := mr.doOnePass(ctx, currentList, state); err != nil {
 			return err
 		}
 	}
@@ -1108,11 +1108,11 @@ func (mr *metricRegisterer) do(localMetrics []types.Metric) error {
 	return mr.pendingErr
 }
 
-func (mr *metricRegisterer) doOnePass(currentList []types.Metric, state metricRegisterPass) error {
+func (mr *metricRegisterer) doOnePass(ctx context.Context, currentList []types.Metric, state metricRegisterPass) error {
 	logger.V(3).Printf("Metric registration phase %v start with %d metrics to process", state, len(currentList))
 
 	for _, metric := range currentList {
-		if mr.s.ctx.Err() != nil {
+		if ctx.Err() != nil {
 			break
 		}
 
@@ -1131,7 +1131,7 @@ func (mr *metricRegisterer) doOnePass(currentList []types.Metric, state metricRe
 			}
 		}
 
-		err := mr.metricRegisterAndUpdateOne(metric)
+		err := mr.metricRegisterAndUpdateOne(ctx, metric)
 		if err != nil && errors.Is(err, errRetryLater) && state < metricPassRetry {
 			mr.retryMetrics = append(mr.retryMetrics, metric)
 
@@ -1198,10 +1198,10 @@ func (mr *metricRegisterer) doOnePass(currentList []types.Metric, state metricRe
 		}
 	}
 
-	return mr.s.ctx.Err()
+	return ctx.Err()
 }
 
-func (mr *metricRegisterer) metricRegisterAndUpdateOne(metric types.Metric) error {
+func (mr *metricRegisterer) metricRegisterAndUpdateOne(ctx context.Context, metric types.Metric) error {
 	params := map[string]string{
 		"fields": metricFields,
 	}
@@ -1211,7 +1211,7 @@ func (mr *metricRegisterer) metricRegisterAndUpdateOne(metric types.Metric) erro
 	remoteMetric, remoteFound := mr.registeredMetricsByKey[key]
 
 	if remoteFound {
-		result, err := mr.s.metricUpdateOne(metric, remoteMetric)
+		result, err := mr.s.metricUpdateOne(ctx, metric, remoteMetric)
 		if err != nil {
 			return err
 		}
@@ -1234,7 +1234,7 @@ func (mr *metricRegisterer) metricRegisterAndUpdateOne(metric types.Metric) erro
 
 	var result metricPayload
 
-	_, err = mr.s.client.Do(mr.s.ctx, "POST", "v1/metric/", params, payload, &result)
+	_, err = mr.s.client.Do(ctx, "POST", "v1/metric/", params, payload, &result)
 	if err != nil {
 		return err
 	}
@@ -1356,13 +1356,13 @@ func (s *Synchronizer) prepareMetricPayloadOtherAgent(payload *metricPayload, ag
 	}
 
 	// This is not an error: either this is a metric from a local monitor, and it should
-	// never be registred, or this is from a monitor that is not yet loaded, and it is
+	// never be registered, or this is from a monitor that is not yet loaded, and it is
 	// not an issue per se as it will get registered when monitors are loaded, as it will
 	// trigger a metric synchronization.
 	return errIgnore
 }
 
-func (s *Synchronizer) metricUpdateOne(metric types.Metric, remoteMetric bleemeoTypes.Metric) (bleemeoTypes.Metric, error) {
+func (s *Synchronizer) metricUpdateOne(ctx context.Context, metric types.Metric, remoteMetric bleemeoTypes.Metric) (bleemeoTypes.Metric, error) {
 	updates := make(map[string]string)
 
 	if !remoteMetric.DeactivatedAt.IsZero() {
@@ -1398,7 +1398,7 @@ func (s *Synchronizer) metricUpdateOne(metric types.Metric, remoteMetric bleemeo
 		}
 
 		_, err := s.client.Do(
-			s.ctx,
+			ctx,
 			"PATCH",
 			fmt.Sprintf("v1/metric/%s/", remoteMetric.ID),
 			map[string]string{"fields": strings.Join(fields, ",")},
@@ -1416,8 +1416,8 @@ func (s *Synchronizer) metricUpdateOne(metric types.Metric, remoteMetric bleemeo
 }
 
 // metricDeleteIgnoredServices deletes the metrics $SERVICE_NAME_status from services in service_ignore_check.
-func (s *Synchronizer) metricDeleteIgnoredServices() error {
-	localServices, err := s.option.Discovery.Discovery(s.ctx, 24*time.Hour)
+func (s *Synchronizer) metricDeleteIgnoredServices(ctx context.Context) error {
+	localServices, err := s.option.Discovery.Discovery(ctx, 24*time.Hour)
 	if err != nil {
 		return err
 	}
@@ -1436,7 +1436,7 @@ func (s *Synchronizer) metricDeleteIgnoredServices() error {
 		metricKey := s.metricKey(labels, srv.AnnotationsOfStatus())
 
 		if metric, ok := registeredMetricsByKey[metricKey]; ok {
-			_, err := s.client.Do(s.ctx, "DELETE", fmt.Sprintf("v1/metric/%s/", metric.ID), nil, nil, nil)
+			_, err := s.client.Do(ctx, "DELETE", fmt.Sprintf("v1/metric/%s/", metric.ID), nil, nil, nil)
 
 			// If the metric was not found it has already been deleted.
 			if err != nil && !client.IsNotFound(err) {
@@ -1498,7 +1498,7 @@ func (s *Synchronizer) localMetricToMap(localMetrics []types.Metric) map[string]
 }
 
 // metricDeactivate deactivates the registered metrics that didn't receive any points for some time.
-func (s *Synchronizer) metricDeactivate(localMetrics []types.Metric) error {
+func (s *Synchronizer) metricDeactivate(ctx context.Context, localMetrics []types.Metric) error {
 	deactivatedMetricsExpirationDays := time.Duration(s.option.Config.Bleemeo.Cache.DeactivatedMetricsExpirationDays) * 24 * time.Hour
 
 	duplicatedKey := make(map[string]bool)
@@ -1555,7 +1555,7 @@ func (s *Synchronizer) metricDeactivate(localMetrics []types.Metric) error {
 		logger.V(2).Printf("Mark inactive the metric %v (uuid %s)", key, v.ID)
 
 		_, err := s.client.Do(
-			s.ctx,
+			ctx,
 			"PATCH",
 			fmt.Sprintf("v1/metric/%s/", v.ID),
 			map[string]string{"fields": "active"},

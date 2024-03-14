@@ -110,9 +110,9 @@ func (s *Synchronizer) syncFacts(ctx context.Context, fullSync bool, onlyEssenti
 	}
 
 	// s.factUpdateList() is already done by checkDuplicated
-	// s.serviceDeleteFromRemote() is uneeded, API don't delete facts
+	// s.serviceDeleteFromRemote() is unneeded, API don't delete facts
 
-	if err := s.factRegister(allAgentFacts); err != nil {
+	if err := s.factRegister(ctx, allAgentFacts); err != nil {
 		return false, err
 	}
 
@@ -121,7 +121,7 @@ func (s *Synchronizer) syncFacts(ctx context.Context, fullSync bool, onlyEssenti
 		return false, nil
 	}
 
-	if err := s.factDeleteFromLocal(allAgentFacts); err != nil {
+	if err := s.factDeleteFromLocal(ctx, allAgentFacts); err != nil {
 		return false, err
 	}
 
@@ -155,7 +155,7 @@ func (s *Synchronizer) factsUpdateList(ctx context.Context) error {
 	return nil
 }
 
-func (s *Synchronizer) factRegister(allAgentFacts map[string]map[string]string) error {
+func (s *Synchronizer) factRegister(ctx context.Context, allAgentFacts map[string]map[string]string) error {
 	registeredFacts := s.option.Cache.FactsByKey()
 	facts := s.option.Cache.Facts()
 
@@ -177,7 +177,7 @@ func (s *Synchronizer) factRegister(allAgentFacts map[string]map[string]string) 
 
 			var response types.AgentFact
 
-			_, err := s.client.Do(s.ctx, "POST", "v1/agentfact/", nil, payload, &response)
+			_, err := s.client.Do(ctx, "POST", "v1/agentfact/", nil, payload, &response)
 			if err != nil {
 				return err
 			}
@@ -192,7 +192,7 @@ func (s *Synchronizer) factRegister(allAgentFacts map[string]map[string]string) 
 	return nil
 }
 
-func (s *Synchronizer) factDeleteFromLocal(allAgentFacts map[string]map[string]string) error {
+func (s *Synchronizer) factDeleteFromLocal(ctx context.Context, allAgentFacts map[string]map[string]string) error {
 	duplicatedKey := make(map[string]bool)
 	registeredFacts := s.option.Cache.FactsByUUID()
 
@@ -206,7 +206,7 @@ func (s *Synchronizer) factDeleteFromLocal(allAgentFacts map[string]map[string]s
 			continue
 		}
 
-		_, err := s.client.Do(s.ctx, "DELETE", fmt.Sprintf("v1/agentfact/%s/", v.ID), nil, nil, nil)
+		_, err := s.client.Do(ctx, "DELETE", fmt.Sprintf("v1/agentfact/%s/", v.ID), nil, nil, nil)
 		// If the fact was not found it has already been deleted.
 		if err != nil && !client.IsNotFound(err) {
 			return err

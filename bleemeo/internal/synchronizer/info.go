@@ -78,13 +78,13 @@ func (s *Synchronizer) syncInfoReal(ctx context.Context, disableOnTimeDrift bool
 		}
 	}
 
-	err = s.updateMQTTStatus()
+	err = s.updateMQTTStatus(ctx)
 	if err != nil {
 		return false, err
 	}
 
 	if s.option.SetBleemeoInMaintenanceMode != nil {
-		s.option.SetBleemeoInMaintenanceMode(globalInfo.MaintenanceEnabled)
+		s.option.SetBleemeoInMaintenanceMode(ctx, globalInfo.MaintenanceEnabled)
 	}
 
 	if globalInfo.CurrentTime != 0 {
@@ -172,10 +172,10 @@ func (s *Synchronizer) IsTimeDriftTooLarge() bool {
 
 // SetMaintenance allows to trigger the maintenance mode for the synchronize.
 // When running in maintenance mode, only the general infos, the agent and its configuration are synced.
-func (s *Synchronizer) SetMaintenance(maintenance bool) {
+func (s *Synchronizer) SetMaintenance(ctx context.Context, maintenance bool) {
 	if s.IsMaintenance() && !maintenance {
 		// getting out of maintenance, let's check for a duplicated state.json file
-		err := s.checkDuplicated(s.ctx)
+		err := s.checkDuplicated(ctx)
 		if err != nil {
 			// it's not a critical error at all, we will perform this check again on the next synchronization pass
 			logger.V(2).Printf("Couldn't check for duplicated agent: %v", err)
@@ -196,7 +196,7 @@ func (s *Synchronizer) UpdateMaintenance() {
 	s.forceSync[syncMethodInfo] = false
 }
 
-func (s *Synchronizer) updateMQTTStatus() error {
+func (s *Synchronizer) updateMQTTStatus(ctx context.Context) error {
 	s.l.Lock()
 	isMQTTConnected := s.isMQTTConnected != nil && *s.isMQTTConnected
 	shouldUpdate := s.shouldUpdateMQTTStatus
@@ -240,7 +240,7 @@ func (s *Synchronizer) updateMQTTStatus() error {
 		}
 
 		_, err := s.client.Do(
-			s.ctx,
+			ctx,
 			"PATCH",
 			fmt.Sprintf("v1/metric/%s/", metric.ID),
 			map[string]string{"fields": "current_status,status_descriptions"},
