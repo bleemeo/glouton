@@ -78,3 +78,7 @@ func (a errAppender) AppendHistogram(storage.SeriesRef, labels.Labels, int64, *h
 func (a errAppender) UpdateMetadata(storage.SeriesRef, labels.Labels, metadata.Metadata) (storage.SeriesRef, error) {
 	return 0, errNotAvailable
 }
+
+func (a errAppender) AppendCTZeroSample(_ storage.SeriesRef, _ labels.Labels, _, _ int64) (storage.SeriesRef, error) {
+	return 0, errNotAvailable
+}

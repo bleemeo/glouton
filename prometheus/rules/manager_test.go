@@ -107,6 +107,10 @@ func (a *mockAppender) UpdateMetadata(storage.SeriesRef, labels.Labels, metadata
 	return 0, errNotImplemented
 }
 
+func (a *mockAppender) AppendCTZeroSample(_ storage.SeriesRef, _ labels.Labels, _, _ int64) (storage.SeriesRef, error) {
+	return 0, errNotImplemented
+}
+
 func TestManager(t *testing.T) {
 	t0 := time.Now().Add(-time.Minute).Round(time.Millisecond)
 	t1 := t0.Add(time.Second)

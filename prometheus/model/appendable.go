@@ -94,3 +94,10 @@ func (a *childrenAppender) UpdateMetadata(ref storage.SeriesRef, l labels.Labels
 
 	return a.parent.app.UpdateMetadata(ref, l, m)
 }
+
+func (a *childrenAppender) AppendCTZeroSample(ref storage.SeriesRef, l labels.Labels, t, ct int64) (storage.SeriesRef, error) {
+	a.parent.l.Lock()
+	defer a.parent.l.Unlock()
+
+	return a.parent.app.AppendCTZeroSample(ref, l, t, ct)
+}

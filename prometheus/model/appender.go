@@ -78,3 +78,7 @@ func (a *BufferAppender) AppendHistogram(storage.SeriesRef, labels.Labels, int64
 func (a *BufferAppender) UpdateMetadata(storage.SeriesRef, labels.Labels, metadata.Metadata) (storage.SeriesRef, error) {
 	return 0, errNotImplemented
 }
+
+func (a *BufferAppender) AppendCTZeroSample(_ storage.SeriesRef, _ labels.Labels, _, _ int64) (storage.SeriesRef, error) {
+	return 0, errNotImplemented
+}

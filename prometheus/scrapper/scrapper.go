@@ -33,6 +33,7 @@ import (
 	"time"
 
 	dto "github.com/prometheus/client_model/go"
+	prometheusModel "github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/model/textparse"
 	"google.golang.org/protobuf/proto"
@@ -206,7 +207,7 @@ func parserReader(data []byte, filter func(lbls labels.Labels) bool) ([]*dto.Met
 			tmp2       []byte
 			lset       labels.Labels
 			metricName string
-			metricType textparse.MetricType
+			metricType prometheusModel.MetricType
 			metricHelp string
 			serieTS    *int64
 			serieFloat float64
@@ -265,13 +266,13 @@ func parserReader(data []byte, filter func(lbls labels.Labels) bool) ([]*dto.Met
 			}
 
 			switch metricType { //nolint:exhaustive
-			case textparse.MetricTypeCounter:
+			case prometheusModel.MetricTypeCounter:
 				entry.Type = dto.MetricType_COUNTER.Enum()
-			case textparse.MetricTypeGauge:
+			case prometheusModel.MetricTypeGauge:
 				entry.Type = dto.MetricType_GAUGE.Enum()
-			case textparse.MetricTypeHistogram:
+			case prometheusModel.MetricTypeHistogram:
 				entry.Type = dto.MetricType_HISTOGRAM.Enum()
-			case textparse.MetricTypeSummary:
+			case prometheusModel.MetricTypeSummary:
 				entry.Type = dto.MetricType_SUMMARY.Enum()
 			default:
 				entry.Type = dto.MetricType_UNTYPED.Enum()
