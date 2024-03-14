@@ -67,7 +67,7 @@ const (
 	syncMethodContainer     = "container"
 	syncMethodMetric        = "metric"
 	syncMethodConfig        = "config"
-	syncMethodCrashReports  = "crashreports"
+	syncMethodDiagnostics   = "diagnostics"
 )
 
 // Synchronizer synchronize object with Bleemeo.
@@ -821,7 +821,7 @@ func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) (map[str
 		{name: syncMethodMonitor, method: s.syncMonitors, skipOnlyEssential: true},
 		{name: syncMethodMetric, method: s.syncMetrics},
 		{name: syncMethodConfig, method: s.syncConfig},
-		{name: syncMethodCrashReports, method: s.syncDiagnostics},
+		{name: syncMethodDiagnostics, method: s.syncDiagnostics},
 	}
 
 	var firstErr error
@@ -965,7 +965,7 @@ func (s *Synchronizer) syncToPerform(ctx context.Context) (map[string]bool, bool
 		syncMethods[syncMethodMonitor] = true
 		syncMethods[syncMethodSNMP] = true
 		syncMethods[syncMethodVSphere] = true
-		syncMethods[syncMethodCrashReports] = true
+		syncMethods[syncMethodDiagnostics] = true
 	}
 
 	if fullSync || s.lastFactUpdatedAt != localFacts[facts.FactUpdatedAt] {
@@ -1022,12 +1022,6 @@ func (s *Synchronizer) syncToPerform(ctx context.Context) (map[string]bool, bool
 	if fullSync || s.now().After(s.metricRetryAt) || s.lastSync.Before(lastDiscovery) || s.lastSync.Before(lastAnnotationChange) || s.lastMetricCount != currentMetricCount {
 		syncMethods[syncMethodMetric] = fullSync
 	}
-
-	s.onDemandDiagnosticLock.Lock()
-	if s.onDemandDiagnostic != nil {
-		syncMethods[syncMethodCrashReports] = fullSync
-	}
-	s.onDemandDiagnosticLock.Unlock()
 
 	// when the mqtt connector is not connected, we cannot receive notifications to get out of maintenance
 	// mode, so we poll more often.
