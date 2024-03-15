@@ -509,7 +509,7 @@ func Test_metricComparator_importanceWeight(t *testing.T) {
 			name:         "high cardinality before custom",
 			format:       types.MetricFormatBleemeo,
 			metricBefore: `__name__="net_bits_recv",item="tap150"`,
-			metricAfter:  `__name__="custome_metric"`,
+			metricAfter:  `__name__="custom_metric"`,
 		},
 		{
 			name:         "essential without item first",
@@ -850,7 +850,7 @@ func TestMetricDeleted(t *testing.T) {
 		),
 	})
 
-	helper.s.forceSync[syncMethodMetric] = true
+	helper.s.requestSynchronizationLocked(syncMethodMetric, true)
 
 	if err := helper.runOnceWithResult(t).CheckMethodWithFull(syncMethodMetric); err != nil {
 		t.Error(err)
@@ -1303,7 +1303,7 @@ func TestMetricTooMany(t *testing.T) { //nolint:maintidx
 		t.Error(err)
 	}
 
-	// We need two sync: one to deactivate the metric, one to regsiter another one
+	// We need two sync: one to deactivate the metric, one to register another one
 	helper.AddTime(15 * time.Second)
 
 	if err := helper.runOnceWithResult(t).CheckMethodWithoutFull(syncMethodMetric); err != nil {
@@ -1941,7 +1941,7 @@ func TestServiceStatusRename(t *testing.T) { //nolint: maintidx
 			}
 
 			if run == 0 {
-				// run 0 is a bit special: we simulate an imposible situation: Glouton is running and change during runtime
+				// run 0 is a bit special: we simulate an impossible situation: Glouton is running and change during runtime
 				// from old metric to new metric. One consequences is that old apache_status get deactivated immediately
 				want2[1].DeactivatedAt = helper.Now()
 			}
@@ -2168,7 +2168,7 @@ func TestMonitorPrivate(t *testing.T) {
 	helper.assertMetricsInAPI(t, want)
 }
 
-// TestKubernetesMetrics test for kubernetes clutser metrics.
+// TestKubernetesMetrics test for kubernetes cluster metrics.
 func TestKubernetesMetrics(t *testing.T) {
 	helper := newHelper(t)
 	defer helper.Close()

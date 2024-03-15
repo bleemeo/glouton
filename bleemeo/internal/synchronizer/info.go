@@ -73,7 +73,7 @@ func (s *Synchronizer) syncInfoReal(ctx context.Context, disableOnTimeDrift bool
 
 			// force syncing the version again when the synchronizer runs again
 			s.l.Lock()
-			s.forceSync[syncMethodInfo] = true
+			s.requestSynchronizationLocked(syncMethodInfo, true)
 			s.l.Unlock()
 		}
 	}
@@ -113,7 +113,7 @@ func (s *Synchronizer) syncInfoReal(ctx context.Context, disableOnTimeDrift bool
 
 			// force syncing the version again when the synchronizer runs again
 			s.l.Lock()
-			s.forceSync[syncMethodInfo] = true
+			s.requestSynchronizationLocked(syncMethodInfo, true)
 			s.l.Unlock()
 		}
 	}
@@ -193,7 +193,7 @@ func (s *Synchronizer) UpdateMaintenance() {
 	s.l.Lock()
 	defer s.l.Unlock()
 
-	s.forceSync[syncMethodInfo] = false
+	s.requestSynchronizationLocked(syncMethodInfo, false)
 }
 
 func (s *Synchronizer) updateMQTTStatus(ctx context.Context) error {

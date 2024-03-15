@@ -545,18 +545,18 @@ func (s *Synchronizer) NotifyConfigUpdate(immediate bool) {
 	s.l.Lock()
 	defer s.l.Unlock()
 
-	s.forceSync[syncMethodInfo] = true
-	s.forceSync[syncMethodAgent] = true
-	s.forceSync[syncMethodFact] = true
-	s.forceSync[syncMethodAccountConfig] = true
+	s.requestSynchronizationLocked(syncMethodInfo, true)
+	s.requestSynchronizationLocked(syncMethodAgent, true)
+	s.requestSynchronizationLocked(syncMethodFact, true)
+	s.requestSynchronizationLocked(syncMethodAccountConfig, true)
 
 	if !immediate {
 		return
 	}
 
-	s.forceSync[syncMethodMetric] = true
-	s.forceSync[syncMethodContainer] = true
-	s.forceSync[syncMethodMonitor] = true
+	s.requestSynchronizationLocked(syncMethodMetric, true)
+	s.requestSynchronizationLocked(syncMethodContainer, true)
+	s.requestSynchronizationLocked(syncMethodMonitor, true)
 }
 
 // LastMetricActivation return the date at which last metric was activated/registrered.
@@ -574,7 +574,7 @@ func (s *Synchronizer) UpdateMetrics(metricUUID ...string) {
 
 	if len(metricUUID) == 1 && metricUUID[0] == "" {
 		// We don't known the metric to update. Update all
-		s.forceSync[syncMethodMetric] = true
+		s.requestSynchronizationLocked(syncMethodMetric, true)
 		s.pendingMetricsUpdate = nil
 
 		return
@@ -582,7 +582,7 @@ func (s *Synchronizer) UpdateMetrics(metricUUID ...string) {
 
 	s.pendingMetricsUpdate = append(s.pendingMetricsUpdate, metricUUID...)
 
-	s.forceSync[syncMethodMetric] = false
+	s.requestSynchronizationLocked(syncMethodMetric, false)
 }
 
 // UpdateContainers request to update a containers.
@@ -590,7 +590,7 @@ func (s *Synchronizer) UpdateContainers() {
 	s.l.Lock()
 	defer s.l.Unlock()
 
-	s.forceSync[syncMethodContainer] = false
+	s.requestSynchronizationLocked(syncMethodContainer, false)
 }
 
 // UpdateInfo request to update a info, which include the time_drift.
@@ -598,7 +598,7 @@ func (s *Synchronizer) UpdateInfo() {
 	s.l.Lock()
 	defer s.l.Unlock()
 
-	s.forceSync[syncMethodInfo] = false
+	s.requestSynchronizationLocked(syncMethodInfo, false)
 }
 
 // UpdateMonitors requests to update all the monitors.
@@ -606,8 +606,8 @@ func (s *Synchronizer) UpdateMonitors() {
 	s.l.Lock()
 	defer s.l.Unlock()
 
-	s.forceSync[syncMethodAccountConfig] = true
-	s.forceSync[syncMethodMonitor] = true
+	s.requestSynchronizationLocked(syncMethodAccountConfig, true)
+	s.requestSynchronizationLocked(syncMethodMonitor, true)
 }
 
 func (s *Synchronizer) popPendingMetricsUpdate() []string {
@@ -853,7 +853,7 @@ func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) (map[str
 			// objects that should have been synced in that period.
 			if full, ok := syncMethods[step.name]; ok {
 				s.l.Lock()
-				s.forceSync[step.name] = full || s.forceSync[step.name]
+				s.requestSynchronizationLocked(step.name, full)
 				s.l.Unlock()
 			}
 
@@ -879,7 +879,7 @@ func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) (map[str
 				// We registered only essential object. Make sure all other
 				// objects are registered on the second run.
 				s.l.Lock()
-				s.forceSync[step.name] = false || s.forceSync[step.name]
+				s.requestSynchronizationLocked(step.name, false)
 				s.l.Unlock()
 			}
 		}
@@ -1026,7 +1026,7 @@ func (s *Synchronizer) syncToPerform(ctx context.Context) (map[string]bool, bool
 	// when the mqtt connector is not connected, we cannot receive notifications to get out of maintenance
 	// mode, so we poll more often.
 	if s.maintenanceMode && !mqttIsConnected && s.now().After(s.lastMaintenanceSync.Add(15*time.Minute)) {
-		s.forceSync[syncMethodInfo] = false
+		s.requestSynchronizationLocked(syncMethodInfo, false)
 
 		s.lastMaintenanceSync = s.now()
 	}
@@ -1261,7 +1261,15 @@ func (s *Synchronizer) SetMQTTConnected(isConnected bool) {
 	s.isMQTTConnected = &isConnected
 
 	if shouldUpdateStatus {
-		s.forceSync[syncMethodInfo] = false || s.forceSync[syncMethodInfo]
+		s.requestSynchronizationLocked(syncMethodInfo, false)
 		s.shouldUpdateMQTTStatus = true
+	}
+}
+
+// requestSynchronizationLocked request specified entity to be synchronized on next synchronization execution.
+// Caller must hold the lock s.l.
+func (s *Synchronizer) requestSynchronizationLocked(entityName string, forceCacheRefresh bool) {
+	if !s.forceSync[entityName] {
+		s.forceSync[entityName] = forceCacheRefresh
 	}
 }

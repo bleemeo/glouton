@@ -69,7 +69,7 @@ func (s *Synchronizer) UpdateMonitor(op string, uuid string) {
 	}
 
 	s.pendingMonitorsUpdate = append(s.pendingMonitorsUpdate, mu)
-	s.forceSync[syncMethodMonitor] = false
+	s.requestSynchronizationLocked(syncMethodMonitor, false)
 }
 
 // syncMonitors updates the list of monitors accessible to the agent.
@@ -92,9 +92,7 @@ func (s *Synchronizer) syncMonitors(ctx context.Context, fullSync bool, onlyEsse
 	if len(pendingMonitorsUpdate) > 5 {
 		fullSync = true
 		// force metric synchronization
-		if _, forceSync := s.forceSync[syncMethodMetric]; !forceSync {
-			s.forceSync[syncMethodMetric] = false
-		}
+		s.requestSynchronizationLocked(syncMethodMetric, false)
 	}
 
 	s.l.Unlock()
@@ -137,7 +135,7 @@ func (s *Synchronizer) syncMonitors(ctx context.Context, fullSync bool, onlyEsse
 	if needConfigUpdate {
 		s.l.Lock()
 
-		s.forceSync[syncMethodAccountConfig] = true
+		s.requestSynchronizationLocked(syncMethodAccountConfig, true)
 
 		s.l.Unlock()
 	}
@@ -241,12 +239,6 @@ func (s *Synchronizer) getListOfMonitorsFromAPI(ctx context.Context, pendingMoni
 
 	currentMonitors := s.option.Cache.Monitors()
 
-	s.l.Lock()
-
-	_, forceSync := s.forceSync[syncMethodMetric]
-
-	s.l.Unlock()
-
 OuterBreak:
 	for _, m := range pendingMonitorsUpdate {
 		if m.op == Delete {
@@ -283,12 +275,9 @@ OuterBreak:
 					// We could trigger metrics synchronisation even less often, by checking if the linked account config really changed,
 					// but that would required to compare unordered lists or to do some complex machinery, and I'm not sure it's worth
 					// the added complexity.
-					if !forceSync {
-						s.l.Lock()
-						s.forceSync[syncMethodMetric] = false
-						forceSync = true
-						s.l.Unlock()
-					}
+					s.l.Lock()
+					s.requestSynchronizationLocked(syncMethodMetric, false)
+					s.l.Unlock()
 
 					currentMonitors[k] = result
 

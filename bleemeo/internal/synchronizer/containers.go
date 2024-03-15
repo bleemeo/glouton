@@ -370,6 +370,6 @@ func (s *Synchronizer) containerDeleteFromLocal(ctx context.Context, localContai
 		s.l.Lock()
 		defer s.l.Unlock()
 
-		s.forceSync[syncMethodService] = true
+		s.requestSynchronizationLocked(syncMethodService, true)
 	}
 }
