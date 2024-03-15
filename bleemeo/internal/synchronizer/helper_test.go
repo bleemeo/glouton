@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"glouton/bleemeo/internal/cache"
+	"glouton/bleemeo/internal/synchronizer/types"
 	bleemeoTypes "glouton/bleemeo/types"
 	"glouton/config"
 	"glouton/discovery"
@@ -28,7 +29,7 @@ import (
 	"glouton/prometheus/exporter/snmp"
 	"glouton/prometheus/model"
 	"glouton/store"
-	"glouton/types"
+	gloutonTypes "glouton/types"
 	"net/http/httptest"
 	"sort"
 	"testing"
@@ -66,7 +67,7 @@ type syncTestHelper struct {
 
 	// Following fields are options used by some method
 	SNMP               []*snmp.Target
-	MetricFormat       types.MetricFormat
+	MetricFormat       gloutonTypes.MetricFormat
 	NotifyLabelsUpdate func()
 }
 
@@ -86,7 +87,7 @@ func newHelper(t *testing.T) *syncTestHelper {
 			UpdatedAt: api.now.Now(),
 		},
 
-		MetricFormat: types.MetricFormatBleemeo,
+		MetricFormat: gloutonTypes.MetricFormatBleemeo,
 	}
 
 	helper.httpServer = helper.api.Server()
@@ -154,7 +155,7 @@ func (helper *syncTestHelper) initSynchronizer(t *testing.T) {
 		docker = &mockDocker{helper: helper}
 	}
 
-	s, err := newForTest(Option{
+	s, err := newForTest(types.Option{
 		Cache:           helper.cache,
 		IsMqttConnected: func() bool { return false },
 		GlobalOption: bleemeoTypes.GlobalOption{
@@ -202,15 +203,15 @@ func (helper *syncTestHelper) initSynchronizer(t *testing.T) {
 func (helper *syncTestHelper) pushPoints(t *testing.T, metrics []labels.Labels) {
 	t.Helper()
 
-	points := make([]types.MetricPoint, 0, len(metrics))
+	points := make([]gloutonTypes.MetricPoint, 0, len(metrics))
 
 	for _, m := range metrics {
 		mCopy := labels.New(m...)
 		annotations := model.MetaLabelsToAnnotation(mCopy)
 		mCopy = model.DropMetaLabels(mCopy)
 
-		points = append(points, types.MetricPoint{
-			Point: types.Point{
+		points = append(points, gloutonTypes.MetricPoint{
+			Point: gloutonTypes.Point{
 				Time:  helper.api.now.Now(),
 				Value: 42.0,
 			},
@@ -220,7 +221,7 @@ func (helper *syncTestHelper) pushPoints(t *testing.T, metrics []labels.Labels) 
 	}
 
 	if helper.store == nil {
-		t.Fatal("pushPoints called before store is initilized")
+		t.Fatal("pushPoints called before store is initialized")
 	}
 
 	helper.store.PushPoints(context.Background(), points)
@@ -292,7 +293,7 @@ func (helper *syncTestHelper) runOnceNoReset(t *testing.T) runOnceResult {
 	}
 
 	result.runCount++
-	result.syncMethod, result.err = helper.s.runOnce(ctx, false)
+	result.syncPerEntity, result.err = helper.s.runOnce(ctx, false)
 
 	return result
 }
@@ -561,56 +562,60 @@ func (helper *syncTestHelper) assertFactsInAPI(t *testing.T, want []bleemeoTypes
 }
 
 type runOnceResult struct {
-	err        error
-	runCount   int
-	syncMethod map[string]bool
+	err           error
+	runCount      int
+	syncPerEntity map[types.EntityName]types.SyncType
 }
 
 func (r runOnceResult) Check() error {
 	return r.err
 }
 
-func (r runOnceResult) CheckMethodWithFull(method string) error {
+func (r runOnceResult) CheckMethodWithFull(method types.EntityName) error {
 	if r.err != nil {
 		return r.err
 	}
 
-	got, present := r.syncMethod[method]
+	got, present := r.syncPerEntity[method]
 	if !present {
 		return fmt.Errorf("%w: method %s", errMethodNotCalled, method)
 	}
 
-	if !got {
+	if got != types.SyncTypeForceCacheRefresh {
 		return fmt.Errorf("%w: method %s", errMethodCalledWithoutFull, method)
 	}
 
 	return nil
 }
 
-func (r runOnceResult) CheckMethodWithoutFull(method string) error {
+func (r runOnceResult) CheckMethodWithoutFull(method types.EntityName) error {
 	if r.err != nil {
 		return r.err
 	}
 
-	got, present := r.syncMethod[method]
+	got, present := r.syncPerEntity[method]
 	if !present {
 		return fmt.Errorf("%w: method %s", errMethodNotCalled, method)
 	}
 
-	if got {
+	if got != types.SyncTypeNormal {
 		return fmt.Errorf("%w: method %s", errMethodCalledWithFull, method)
 	}
 
 	return nil
 }
 
-func (r runOnceResult) CheckMethodNotRun(method string) error {
+func (r runOnceResult) CheckMethodNotRun(method types.EntityName) error {
 	if r.err != nil {
 		return r.err
 	}
 
-	_, present := r.syncMethod[method]
+	got, present := r.syncPerEntity[method]
 	if present {
+		return fmt.Errorf("%w: method %s", errMethodCalled, method)
+	}
+
+	if got != types.SyncTypeNone {
 		return fmt.Errorf("%w: method %s", errMethodCalled, method)
 	}
 
@@ -623,17 +628,25 @@ func mergeResult(r1 runOnceResult, r2 runOnceResult) runOnceResult {
 		r1.err = r2.err
 	}
 
-	syncMethod := make(map[string]bool)
+	syncMethod := make(map[types.EntityName]types.SyncType)
 
-	for k, v := range r1.syncMethod {
-		syncMethod[k] = syncMethod[k] || v
+	for k, v := range r1.syncPerEntity {
+		if v == types.SyncTypeForceCacheRefresh {
+			syncMethod[k] = types.SyncTypeForceCacheRefresh
+		} else if syncMethod[k] == types.SyncTypeNone {
+			syncMethod[k] = v
+		}
 	}
 
-	for k, v := range r2.syncMethod {
-		syncMethod[k] = syncMethod[k] || v
+	for k, v := range r2.syncPerEntity {
+		if v == types.SyncTypeForceCacheRefresh {
+			syncMethod[k] = types.SyncTypeForceCacheRefresh
+		} else if syncMethod[k] == types.SyncTypeNone {
+			syncMethod[k] = v
+		}
 	}
 
-	r1.syncMethod = syncMethod
+	r1.syncPerEntity = syncMethod
 
 	return r1
 }

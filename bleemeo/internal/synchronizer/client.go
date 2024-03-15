@@ -21,15 +21,16 @@ import (
 	"encoding/json"
 	"fmt"
 	"glouton/bleemeo/client"
+	"glouton/bleemeo/internal/synchronizer/types"
 	"io"
 	"time"
 )
 
 type wrapperClient struct {
-	s                *Synchronizer
 	client           *client.HTTPClient
 	duplicateError   error
 	duplicateChecked bool
+	checkDuplicated  func(context.Context, types.RawClient) error
 }
 
 func (cl *wrapperClient) ThrottleDeadline() time.Time {
@@ -47,7 +48,7 @@ func (cl *wrapperClient) Do(ctx context.Context, method string, path string, par
 
 	if !cl.duplicateChecked {
 		cl.duplicateChecked = true
-		cl.duplicateError = cl.s.checkDuplicated(ctx)
+		cl.duplicateError = cl.checkDuplicated(ctx, cl)
 	}
 
 	if cl.duplicateError != nil {
@@ -64,7 +65,7 @@ func (cl *wrapperClient) Iter(ctx context.Context, resource string, params map[s
 
 	if !cl.duplicateChecked {
 		cl.duplicateChecked = true
-		cl.duplicateError = cl.s.checkDuplicated(ctx)
+		cl.duplicateError = cl.checkDuplicated(ctx, cl)
 	}
 
 	if cl.duplicateError != nil {

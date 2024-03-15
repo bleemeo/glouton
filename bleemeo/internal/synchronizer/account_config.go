@@ -20,28 +20,30 @@ import (
 	"context"
 	"encoding/json"
 	"glouton/bleemeo/client"
-	"glouton/bleemeo/types"
+	"glouton/bleemeo/internal/synchronizer/types"
+	gloutonTypes "glouton/bleemeo/types"
 	"glouton/logger"
 	"mime"
 	"reflect"
 	"strings"
 )
 
-func (s *Synchronizer) syncAccountConfig(ctx context.Context, fullSync bool, onlyEssential bool) (updateThresholds bool, err error) {
+func (s *Synchronizer) syncAccountConfig(ctx context.Context, syncType types.SyncType, onlyEssential bool) (updateThresholds bool, err error) {
 	_ = onlyEssential
 
-	if fullSync {
+	if syncType == types.SyncTypeForceCacheRefresh {
 		currentConfig, _ := s.option.Cache.CurrentAccountConfig()
+		apiClient := s.client
 
-		if err := s.agentTypesUpdateList(ctx); err != nil {
+		if err := s.agentTypesUpdateList(ctx, apiClient); err != nil {
 			return false, err
 		}
 
-		if err := s.accountConfigUpdateList(ctx); err != nil {
+		if err := s.accountConfigUpdateList(ctx, apiClient); err != nil {
 			return false, err
 		}
 
-		if err := s.agentConfigUpdateList(ctx); err != nil {
+		if err := s.agentConfigUpdateList(ctx, apiClient); err != nil {
 			return false, err
 		}
 
@@ -72,20 +74,20 @@ func (s *Synchronizer) syncAccountConfig(ctx context.Context, fullSync bool, onl
 	return false, nil
 }
 
-func (s *Synchronizer) agentTypesUpdateList(ctx context.Context) error {
+func (s *Synchronizer) agentTypesUpdateList(ctx context.Context, apiClient types.RawClient) error {
 	params := map[string]string{
 		"fields": "id,name,display_name",
 	}
 
-	result, err := s.client.Iter(ctx, "agenttype", params)
+	result, err := apiClient.Iter(ctx, "agenttype", params)
 	if err != nil {
 		return err
 	}
 
-	agentTypes := make([]types.AgentType, len(result))
+	agentTypes := make([]gloutonTypes.AgentType, len(result))
 
 	for i, jsonMessage := range result {
-		var agentType types.AgentType
+		var agentType gloutonTypes.AgentType
 
 		if err := json.Unmarshal(jsonMessage, &agentType); err != nil {
 			continue
@@ -99,20 +101,20 @@ func (s *Synchronizer) agentTypesUpdateList(ctx context.Context) error {
 	return nil
 }
 
-func (s *Synchronizer) accountConfigUpdateList(ctx context.Context) error {
+func (s *Synchronizer) accountConfigUpdateList(ctx context.Context, apiClient types.RawClient) error {
 	params := map[string]string{
 		"fields": "id,name,live_process_resolution,live_process,docker_integration,snmp_integration,vsphere_integration,number_of_custom_metrics,suspended",
 	}
 
-	result, err := s.client.Iter(ctx, "accountconfig", params)
+	result, err := apiClient.Iter(ctx, "accountconfig", params)
 	if err != nil {
 		return err
 	}
 
-	configs := make([]types.AccountConfig, len(result))
+	configs := make([]gloutonTypes.AccountConfig, len(result))
 
 	for i, jsonMessage := range result {
-		var config types.AccountConfig
+		var config gloutonTypes.AccountConfig
 
 		if err := json.Unmarshal(jsonMessage, &config); err != nil {
 			continue
@@ -126,12 +128,12 @@ func (s *Synchronizer) accountConfigUpdateList(ctx context.Context) error {
 	return nil
 }
 
-func (s *Synchronizer) agentConfigUpdateList(ctx context.Context) error {
+func (s *Synchronizer) agentConfigUpdateList(ctx context.Context, apiClient types.RawClient) error {
 	params := map[string]string{
 		"fields": "id,account_config,agent_type,metrics_allowlist,metrics_resolution",
 	}
 
-	result, err := s.client.Iter(ctx, "agentconfig", params)
+	result, err := apiClient.Iter(ctx, "agentconfig", params)
 	if apiErr, ok := err.(client.APIError); ok {
 		mediatype, _, err := mime.ParseMediaType(apiErr.ContentType)
 		if err == nil && mediatype == "text/html" && strings.Contains(apiErr.FinalURL, "login") {
@@ -146,10 +148,10 @@ func (s *Synchronizer) agentConfigUpdateList(ctx context.Context) error {
 		return err
 	}
 
-	configs := make([]types.AgentConfig, len(result))
+	configs := make([]gloutonTypes.AgentConfig, len(result))
 
 	for i, jsonMessage := range result {
-		var config types.AgentConfig
+		var config gloutonTypes.AgentConfig
 
 		if err := json.Unmarshal(jsonMessage, &config); err != nil {
 			continue

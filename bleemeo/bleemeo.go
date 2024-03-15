@@ -26,6 +26,7 @@ import (
 	"glouton/bleemeo/internal/filter"
 	"glouton/bleemeo/internal/mqtt"
 	"glouton/bleemeo/internal/synchronizer"
+	synchronizerTypes "glouton/bleemeo/internal/synchronizer/types"
 	"glouton/bleemeo/types"
 	"glouton/crashreport"
 	"glouton/logger"
@@ -133,7 +134,7 @@ func New(option types.GlobalOption) (c *Connector, err error) {
 		pushAppender: model.NewBufferAppender(),
 	}
 
-	c.sync, err = synchronizer.New(synchronizer.Option{
+	c.sync, err = synchronizer.New(synchronizerTypes.Option{
 		GlobalOption:                c.option,
 		PushAppender:                c.pushAppender,
 		Cache:                       c.cache,

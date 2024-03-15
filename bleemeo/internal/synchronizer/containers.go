@@ -22,7 +22,8 @@ import (
 	"fmt"
 	"glouton/bleemeo/client"
 	"glouton/bleemeo/internal/common"
-	"glouton/bleemeo/types"
+	"glouton/bleemeo/internal/synchronizer/types"
+	bleemeoTypes "glouton/bleemeo/types"
 	"glouton/facts"
 	containerTypes "glouton/facts/container-runtime/types"
 	"glouton/logger"
@@ -42,17 +43,17 @@ const (
 )
 
 type containerPayload struct {
-	types.Container
-	Host             string         `json:"host"`
-	Command          string         `json:"command"`
-	StartedAt        types.NullTime `json:"container_started_at"`
-	FinishedAt       types.NullTime `json:"container_finished_at"`
-	ImageID          string         `json:"container_image_id"`
-	ImageName        string         `json:"container_image_name"`
-	DockerAPIVersion string         `json:"docker_api_version"`
+	bleemeoTypes.Container
+	Host             string                `json:"host"`
+	Command          string                `json:"command"`
+	StartedAt        bleemeoTypes.NullTime `json:"container_started_at"`
+	FinishedAt       bleemeoTypes.NullTime `json:"container_finished_at"`
+	ImageID          string                `json:"container_image_id"`
+	ImageName        string                `json:"container_image_name"`
+	DockerAPIVersion string                `json:"docker_api_version"`
 }
 
-func (s *Synchronizer) syncContainers(ctx context.Context, fullSync bool, onlyEssential bool) (updateThresholds bool, err error) {
+func (s *Synchronizer) syncContainers(ctx context.Context, syncType types.SyncType, onlyEssential bool) (updateThresholds bool, err error) {
 	var localContainers []facts.Container
 
 	cfg, ok := s.option.Cache.CurrentAccountConfig()
@@ -71,11 +72,13 @@ func (s *Synchronizer) syncContainers(ctx context.Context, fullSync bool, onlyEs
 
 	if s.successiveErrors == 3 {
 		// After 3 error, try to force a full synchronization to see if it solve the issue.
-		fullSync = true
+		syncType = types.SyncTypeForceCacheRefresh
 	}
 
-	if fullSync {
-		err := s.containerUpdateList(ctx)
+	apiClient := s.client
+
+	if syncType == types.SyncTypeForceCacheRefresh {
+		err := s.containerUpdateList(ctx, apiClient)
 		if err != nil {
 			return false, err
 		}
@@ -87,28 +90,28 @@ func (s *Synchronizer) syncContainers(ctx context.Context, fullSync bool, onlyEs
 	}
 
 	// s.containerDeleteFromRemote(): API don't delete containers
-	if err := s.containerRegisterAndUpdate(ctx, localContainers); err != nil {
+	if err := s.containerRegisterAndUpdate(ctx, apiClient, localContainers); err != nil {
 		return false, err
 	}
 
-	s.containerDeleteFromLocal(ctx, localContainers)
+	s.containerDeleteFromLocal(ctx, apiClient, localContainers)
 
 	return false, err
 }
 
-func (s *Synchronizer) containerUpdateList(ctx context.Context) error {
+func (s *Synchronizer) containerUpdateList(ctx context.Context, apiClient types.RawClient) error {
 	params := map[string]string{
 		"host":   s.agentID,
 		"fields": cacheFields,
 	}
 
-	result, err := s.client.Iter(ctx, "container", params)
+	result, err := apiClient.Iter(ctx, "container", params)
 	if err != nil {
 		return err
 	}
 
 	containersByUUID := s.option.Cache.ContainersByUUID()
-	containers := make([]types.Container, 0, len(result))
+	containers := make([]bleemeoTypes.Container, 0, len(result))
 
 	for _, jsonMessage := range result {
 		var container containerPayload
@@ -129,7 +132,7 @@ func (s *Synchronizer) containerUpdateList(ctx context.Context) error {
 	return nil
 }
 
-func (s *Synchronizer) containerRegisterAndUpdate(ctx context.Context, localContainers []facts.Container) error {
+func (s *Synchronizer) containerRegisterAndUpdate(ctx context.Context, apiClient types.RawClient, localContainers []facts.Container) error {
 	factsMap, err := s.option.Facts.Facts(ctx, 24*time.Hour)
 	if err != nil {
 		return err
@@ -163,13 +166,13 @@ func (s *Synchronizer) containerRegisterAndUpdate(ctx context.Context, localCont
 
 		remoteIndex, remoteFound := remoteIndexByName[name]
 
-		var remoteContainer types.Container
+		var remoteContainer bleemeoTypes.Container
 
 		if remoteFound {
 			remoteContainer = remoteContainers[remoteIndex]
 		}
 
-		payloadContainer := types.Container{
+		payloadContainer := bleemeoTypes.Container{
 			Name:             name,
 			ContainerID:      container.ID(),
 			ContainerInspect: container.ContainerJSON(),
@@ -202,8 +205,8 @@ func (s *Synchronizer) containerRegisterAndUpdate(ctx context.Context, localCont
 			Container:  payloadContainer,
 			Host:       s.agentID,
 			Command:    strings.Join(container.Command(), " "),
-			StartedAt:  types.NullTime(container.StartedAt()),
-			FinishedAt: types.NullTime(container.FinishedAt()),
+			StartedAt:  bleemeoTypes.NullTime(container.StartedAt()),
+			FinishedAt: bleemeoTypes.NullTime(container.FinishedAt()),
 			ImageID:    container.ImageID(),
 			ImageName:  container.ImageName(),
 		}
@@ -212,7 +215,7 @@ func (s *Synchronizer) containerRegisterAndUpdate(ctx context.Context, localCont
 			payload.DockerAPIVersion = factsMap["docker_api_version"]
 		}
 
-		err := s.remoteRegister(ctx, remoteFound, &remoteContainer, &remoteContainers, payload, remoteIndex)
+		err := s.remoteRegister(ctx, apiClient, remoteFound, &remoteContainer, &remoteContainers, payload, remoteIndex)
 		if err != nil {
 			return err
 		}
@@ -246,9 +249,10 @@ func (s *Synchronizer) delayedContainerCheck(newDelayedContainer map[string]time
 
 func (s *Synchronizer) remoteRegister(
 	ctx context.Context,
+	apiClient types.RawClient,
 	remoteFound bool,
-	remoteContainer *types.Container,
-	remoteContainers *[]types.Container,
+	remoteContainer *bleemeoTypes.Container,
+	remoteContainers *[]bleemeoTypes.Container,
 	payload containerPayload,
 	remoteIndex int,
 ) error {
@@ -259,7 +263,7 @@ func (s *Synchronizer) remoteRegister(
 	}
 
 	if remoteFound {
-		_, err := s.client.Do(ctx, "PUT", fmt.Sprintf("v1/container/%s/", remoteContainer.ID), params, payload, &result)
+		_, err := apiClient.Do(ctx, "PUT", fmt.Sprintf("v1/container/%s/", remoteContainer.ID), params, payload, &result)
 		if err != nil {
 			return err
 		}
@@ -269,7 +273,7 @@ func (s *Synchronizer) remoteRegister(
 		logger.V(2).Printf("Container %v updated with UUID %s", result.Name, result.ID)
 		(*remoteContainers)[remoteIndex] = result.Container
 	} else {
-		_, err := s.client.Do(ctx, "POST", "v1/container/", params, payload, &result)
+		_, err := apiClient.Do(ctx, "POST", "v1/container/", params, payload, &result)
 		if err != nil {
 			return err
 		}
@@ -283,7 +287,7 @@ func (s *Synchronizer) remoteRegister(
 	return nil
 }
 
-func (s *Synchronizer) containerDeleteFromLocal(ctx context.Context, localContainers []facts.Container) {
+func (s *Synchronizer) containerDeleteFromLocal(ctx context.Context, apiClient types.RawClient, localContainers []facts.Container) {
 	var deletedIDs []string //nolint: prealloc // we don't know the size. empty is the most likely size.
 
 	duplicatedKey := make(map[string]bool)
@@ -305,14 +309,14 @@ func (s *Synchronizer) containerDeleteFromLocal(ctx context.Context, localContai
 			continue
 		}
 
-		_, err := s.client.Do(
+		_, err := apiClient.Do(
 			ctx,
 			"PATCH",
 			fmt.Sprintf("v1/container/%s/", container.ID),
 			nil,
 			struct {
-				DeletedAt types.NullTime `json:"deleted_at"`
-			}{types.NullTime(s.now())},
+				DeletedAt bleemeoTypes.NullTime `json:"deleted_at"`
+			}{bleemeoTypes.NullTime(s.now())},
 			nil,
 		)
 		if err != nil {
@@ -329,14 +333,14 @@ func (s *Synchronizer) containerDeleteFromLocal(ctx context.Context, localContai
 		}
 
 		logger.V(2).Printf("Container %v deleted (UUID %s)", container.Name, container.ID)
-		container.DeletedAt = types.NullTime(s.now())
+		container.DeletedAt = bleemeoTypes.NullTime(s.now())
 
 		registeredContainers[container.ID] = container
 
 		deletedIDs = append(deletedIDs, container.ID)
 	}
 
-	containers := make([]types.Container, 0, len(registeredContainers))
+	containers := make([]bleemeoTypes.Container, 0, len(registeredContainers))
 
 	for _, v := range registeredContainers {
 		containers = append(containers, v)
@@ -370,6 +374,6 @@ func (s *Synchronizer) containerDeleteFromLocal(ctx context.Context, localContai
 		s.l.Lock()
 		defer s.l.Unlock()
 
-		s.requestSynchronizationLocked(syncMethodService, true)
+		s.requestSynchronizationLocked(types.EntityService, true)
 	}
 }

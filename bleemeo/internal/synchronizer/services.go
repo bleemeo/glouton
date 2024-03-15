@@ -21,7 +21,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"glouton/bleemeo/internal/common"
-	"glouton/bleemeo/types"
+	"glouton/bleemeo/internal/synchronizer/types"
+	bleemeoTypes "glouton/bleemeo/types"
 	"glouton/discovery"
 	"glouton/facts"
 	"glouton/logger"
@@ -39,22 +40,22 @@ const (
 )
 
 type servicePayload struct {
-	types.Service
+	bleemeoTypes.Service
 	Account string `json:"account"`
 	Agent   string `json:"agent"`
 }
 
 func servicePayloadFromDiscovery(service discovery.Service, listenAddresses string, accountID string, agentID string, serviceID string) servicePayload {
-	tags := make([]types.Tag, 0, len(service.Tags))
+	tags := make([]bleemeoTypes.Tag, 0, len(service.Tags))
 
 	for _, t := range service.Tags {
 		if len(t) <= apiTagsLength && t != "" {
-			tags = append(tags, types.Tag{Name: t})
+			tags = append(tags, bleemeoTypes.Tag{Name: t})
 		}
 	}
 
 	return servicePayload{
-		Service: types.Service{
+		Service: bleemeoTypes.Service{
 			ID:              serviceID,
 			Label:           service.Name,
 			Instance:        service.Instance,
@@ -84,7 +85,7 @@ func getListenAddress(addresses []facts.ListenAddress) string {
 	return strings.Join(stringList, ",")
 }
 
-func (s *Synchronizer) syncServices(ctx context.Context, fullSync bool, onlyEssential bool) (updateThresholds bool, err error) {
+func (s *Synchronizer) syncServices(ctx context.Context, syncType types.SyncType, onlyEssential bool) (updateThresholds bool, err error) {
 	localServices, err := s.option.Discovery.Discovery(ctx, 24*time.Hour)
 	if err != nil {
 		return false, err
@@ -94,13 +95,14 @@ func (s *Synchronizer) syncServices(ctx context.Context, fullSync bool, onlyEsse
 
 	if s.successiveErrors == 3 {
 		// After 3 error, try to force a full synchronization to see if it solve the issue.
-		fullSync = true
+		syncType = types.SyncTypeForceCacheRefresh
 	}
 
 	previousServices := s.option.Cache.ServicesByUUID()
+	apiClient := s.client
 
-	if fullSync {
-		err := s.serviceUpdateList(ctx)
+	if syncType == types.SyncTypeForceCacheRefresh {
+		err := s.serviceUpdateList(ctx, apiClient)
 		if err != nil {
 			return false, err
 		}
@@ -120,30 +122,30 @@ func (s *Synchronizer) syncServices(ctx context.Context, fullSync bool, onlyEsse
 
 	localServices = s.serviceExcludeUnregistrable(localServices)
 
-	if err := s.serviceRegisterAndUpdate(ctx, localServices); err != nil {
+	if err := s.serviceRegisterAndUpdate(ctx, apiClient, localServices); err != nil {
 		return false, err
 	}
 
-	s.serviceDeactivateNonLocal(ctx, localServices)
+	s.serviceDeactivateNonLocal(ctx, apiClient, localServices)
 
 	return false, nil
 }
 
-func (s *Synchronizer) serviceUpdateList(ctx context.Context) error {
+func (s *Synchronizer) serviceUpdateList(ctx context.Context, apiClient types.RawClient) error {
 	params := map[string]string{
 		"agent":  s.agentID,
 		"fields": serviceReadFields,
 	}
 
-	result, err := s.client.Iter(ctx, "service", params)
+	result, err := apiClient.Iter(ctx, "service", params)
 	if err != nil {
 		return err
 	}
 
-	services := make([]types.Service, 0, len(result))
+	services := make([]bleemeoTypes.Service, 0, len(result))
 
 	for _, jsonMessage := range result {
-		var service types.Service
+		var service bleemeoTypes.Service
 
 		if err := json.Unmarshal(jsonMessage, &service); err != nil {
 			continue
@@ -158,7 +160,7 @@ func (s *Synchronizer) serviceUpdateList(ctx context.Context) error {
 }
 
 // serviceRemoveDeletedFromRemote removes the local services that were deleted on the API.
-func (s *Synchronizer) serviceRemoveDeletedFromRemote(ctx context.Context, localServices []discovery.Service, previousServices map[string]types.Service) {
+func (s *Synchronizer) serviceRemoveDeletedFromRemote(ctx context.Context, localServices []discovery.Service, previousServices map[string]bleemeoTypes.Service) {
 	newServices := s.option.Cache.ServicesByUUID()
 
 	deletedServiceNameInstance := make(map[common.ServiceNameInstance]bool)
@@ -185,7 +187,7 @@ func (s *Synchronizer) serviceRemoveDeletedFromRemote(ctx context.Context, local
 	s.option.Discovery.RemoveIfNonRunning(ctx, localServiceToDelete)
 }
 
-func (s *Synchronizer) serviceRegisterAndUpdate(ctx context.Context, localServices []discovery.Service) error {
+func (s *Synchronizer) serviceRegisterAndUpdate(ctx context.Context, apiClient types.RawClient, localServices []discovery.Service) error {
 	remoteServices := s.option.Cache.Services()
 	remoteServicesByKey := common.ServiceLookupFromList(remoteServices)
 	registeredServices := s.option.Cache.ServicesByUUID()
@@ -215,10 +217,10 @@ func (s *Synchronizer) serviceRegisterAndUpdate(ctx context.Context, localServic
 
 		payload := servicePayloadFromDiscovery(srv, listenAddresses, s.option.Cache.AccountID(), s.agentID, "")
 
-		var result types.Service
+		var result bleemeoTypes.Service
 
 		if remoteFound {
-			_, err := s.client.Do(ctx, "PUT", fmt.Sprintf("v1/service/%s/", remoteSrv.ID), params, payload, &result)
+			_, err := apiClient.Do(ctx, "PUT", fmt.Sprintf("v1/service/%s/", remoteSrv.ID), params, payload, &result)
 			if err != nil {
 				return err
 			}
@@ -226,7 +228,7 @@ func (s *Synchronizer) serviceRegisterAndUpdate(ctx context.Context, localServic
 			registeredServices[result.ID] = result
 			logger.V(2).Printf("Service %v updated with UUID %s", key, result.ID)
 		} else {
-			_, err := s.client.Do(ctx, "POST", "v1/service/", params, payload, &result)
+			_, err := apiClient.Do(ctx, "POST", "v1/service/", params, payload, &result)
 			if err != nil {
 				return err
 			}
@@ -254,7 +256,7 @@ func (s *Synchronizer) serviceRegisterAndUpdate(ctx context.Context, localServic
 		}
 	}
 
-	finalServices := make([]types.Service, 0, len(registeredServices))
+	finalServices := make([]bleemeoTypes.Service, 0, len(registeredServices))
 
 	for _, srv := range registeredServices {
 		finalServices = append(finalServices, srv)
@@ -266,7 +268,7 @@ func (s *Synchronizer) serviceRegisterAndUpdate(ctx context.Context, localServic
 }
 
 // skipUpdate returns true if the service found by the discovery is up to date with the remote service on the API.
-func skipUpdate(remoteFound bool, remoteSrv types.Service, srv discovery.Service, listenAddresses string) bool {
+func skipUpdate(remoteFound bool, remoteSrv bleemeoTypes.Service, srv discovery.Service, listenAddresses string) bool {
 	return remoteFound &&
 		remoteSrv.Label == srv.Name &&
 		remoteSrv.ListenAddresses == listenAddresses &&
@@ -276,7 +278,7 @@ func skipUpdate(remoteFound bool, remoteSrv types.Service, srv discovery.Service
 }
 
 // serviceHadSameTags returns true if the two service had the same tags for glouton provided tags.
-func serviceHadSameTags(remoteTags []types.Tag, localTags []string) bool {
+func serviceHadSameTags(remoteTags []bleemeoTypes.Tag, localTags []string) bool {
 	localTagsTruncated := make([]string, 0, len(localTags))
 
 	for _, tag := range localTags {
@@ -288,7 +290,7 @@ func serviceHadSameTags(remoteTags []types.Tag, localTags []string) bool {
 	gloutonTagCount := 0
 
 	for _, tag := range remoteTags {
-		if tag.TagType == types.TagTypeIsCreatedByGlouton {
+		if tag.TagType == bleemeoTypes.TagTypeIsCreatedByGlouton {
 			gloutonTagCount++
 		}
 	}
@@ -301,7 +303,7 @@ func serviceHadSameTags(remoteTags []types.Tag, localTags []string) bool {
 		tagPresent := false
 
 		for _, tag := range remoteTags {
-			if tag.TagType == types.TagTypeIsCreatedByGlouton && tag.Name == wantedTag {
+			if tag.TagType == bleemeoTypes.TagTypeIsCreatedByGlouton && tag.Name == wantedTag {
 				tagPresent = true
 
 				break
@@ -342,7 +344,7 @@ func (s *Synchronizer) serviceExcludeUnregistrable(services []discovery.Service)
 }
 
 // serviceDeactivateNonLocal marks inactive the registered services that were not found in the discovery.
-func (s *Synchronizer) serviceDeactivateNonLocal(ctx context.Context, localServices []discovery.Service) {
+func (s *Synchronizer) serviceDeactivateNonLocal(ctx context.Context, apiClient types.RawClient, localServices []discovery.Service) {
 	localServiceExists := make(map[common.ServiceNameInstance]bool, len(localServices))
 
 	for _, srv := range localServices {
@@ -356,7 +358,7 @@ func (s *Synchronizer) serviceDeactivateNonLocal(ctx context.Context, localServi
 
 	registeredServices := s.option.Cache.Services()
 	remoteServicesByKey := common.ServiceLookupFromList(registeredServices)
-	finalServices := make([]types.Service, 0, len(registeredServices))
+	finalServices := make([]bleemeoTypes.Service, 0, len(registeredServices))
 
 	for _, remoteSrv := range registeredServices {
 		key := common.ServiceNameInstance{Name: remoteSrv.Label, Instance: remoteSrv.Instance}
@@ -369,7 +371,7 @@ func (s *Synchronizer) serviceDeactivateNonLocal(ctx context.Context, localServi
 		logger.V(2).Printf("Mark inactive the service %v (uuid %s)", key, remoteSrv.ID)
 
 		// Deactivate the remote service that is not present locally.
-		result, err := s.serviceDeactivate(ctx, remoteSrv)
+		result, err := s.serviceDeactivate(ctx, apiClient, remoteSrv)
 		if err != nil {
 			logger.V(1).Printf("Failed to deactivate service %v on Bleemeo API: %v", key, err)
 
@@ -383,13 +385,13 @@ func (s *Synchronizer) serviceDeactivateNonLocal(ctx context.Context, localServi
 }
 
 // serviceDeactivate makes a PUT request to the Bleemeo API to mark the given service as inactive.
-func (s *Synchronizer) serviceDeactivate(ctx context.Context, service types.Service) (types.Service, error) {
+func (s *Synchronizer) serviceDeactivate(ctx context.Context, apiClient types.RawClient, service bleemeoTypes.Service) (bleemeoTypes.Service, error) {
 	params := map[string]string{
 		"fields": serviceWriteFields,
 	}
 
 	payload := servicePayload{
-		Service: types.Service{
+		Service: bleemeoTypes.Service{
 			Active:          false,
 			Label:           service.Label,
 			Instance:        service.Instance,
@@ -400,9 +402,9 @@ func (s *Synchronizer) serviceDeactivate(ctx context.Context, service types.Serv
 		Agent:   s.agentID,
 	}
 
-	var result types.Service
+	var result bleemeoTypes.Service
 
-	_, err := s.client.Do(ctx, "PUT", fmt.Sprintf("v1/service/%s/", service.ID), params, payload, &result)
+	_, err := apiClient.Do(ctx, "PUT", fmt.Sprintf("v1/service/%s/", service.ID), params, payload, &result)
 
 	return result, err
 }

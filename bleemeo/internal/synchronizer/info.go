@@ -19,10 +19,11 @@ package synchronizer
 import (
 	"context"
 	"fmt"
+	"glouton/bleemeo/internal/synchronizer/types"
 	bleemeoTypes "glouton/bleemeo/types"
 	"glouton/delay"
 	"glouton/logger"
-	"glouton/types"
+	gloutonTypes "glouton/types"
 	"glouton/version"
 	"net"
 	"strconv"
@@ -33,8 +34,9 @@ import (
 )
 
 // syncInfo retrieves the minimum supported glouton version the API supports.
-func (s *Synchronizer) syncInfo(ctx context.Context, _ bool, onlyEssential bool) (updateThresholds bool, err error) {
+func (s *Synchronizer) syncInfo(ctx context.Context, syncType types.SyncType, onlyEssential bool) (updateThresholds bool, err error) {
 	_ = onlyEssential
+	_ = syncType
 
 	return s.syncInfoReal(ctx, true)
 }
@@ -42,6 +44,8 @@ func (s *Synchronizer) syncInfo(ctx context.Context, _ bool, onlyEssential bool)
 // syncInfoReal retrieves the minimum supported glouton version the API supports.
 func (s *Synchronizer) syncInfoReal(ctx context.Context, disableOnTimeDrift bool) (updateThresholds bool, err error) {
 	var globalInfo bleemeoTypes.GlobalInfo
+
+	apiClient := s.client
 
 	statusCode, err := s.realClient.DoUnauthenticated(ctx, "GET", "v1/info/", nil, nil, &globalInfo)
 	if err != nil && strings.Contains(err.Error(), "certificate has expired") {
@@ -73,12 +77,12 @@ func (s *Synchronizer) syncInfoReal(ctx context.Context, disableOnTimeDrift bool
 
 			// force syncing the version again when the synchronizer runs again
 			s.l.Lock()
-			s.requestSynchronizationLocked(syncMethodInfo, true)
+			s.requestSynchronizationLocked(types.EntityInfo, true)
 			s.l.Unlock()
 		}
 	}
 
-	err = s.updateMQTTStatus(ctx)
+	err = s.updateMQTTStatus(ctx, apiClient)
 	if err != nil {
 		return false, err
 	}
@@ -93,7 +97,7 @@ func (s *Synchronizer) syncInfoReal(ctx context.Context, disableOnTimeDrift bool
 		_, err := s.option.PushAppender.Append(
 			0,
 			labels.FromMap(map[string]string{
-				types.LabelName: "time_drift",
+				gloutonTypes.LabelName: "time_drift",
 			}),
 			globalInfo.BleemeoTime().Truncate(time.Second).UnixMilli(),
 			delta.Seconds(),
@@ -113,7 +117,7 @@ func (s *Synchronizer) syncInfoReal(ctx context.Context, disableOnTimeDrift bool
 
 			// force syncing the version again when the synchronizer runs again
 			s.l.Lock()
-			s.requestSynchronizationLocked(syncMethodInfo, true)
+			s.requestSynchronizationLocked(types.EntityInfo, true)
 			s.l.Unlock()
 		}
 	}
@@ -123,8 +127,8 @@ func (s *Synchronizer) syncInfoReal(ctx context.Context, disableOnTimeDrift bool
 
 	if globalInfo.IsTimeDriftTooLarge() && !s.lastInfo.IsTimeDriftTooLarge() {
 		// Mark the agent_status as disconnected with reason being the time drift.
-		metricKey := types.LabelsToText(
-			map[string]string{types.LabelName: "agent_status", types.LabelInstanceUUID: s.agentID},
+		metricKey := gloutonTypes.LabelsToText(
+			map[string]string{gloutonTypes.LabelName: "agent_status", gloutonTypes.LabelInstanceUUID: s.agentID},
 		)
 		if metric, ok := s.option.Cache.MetricLookupFromList()[metricKey]; ok {
 			type payloadType struct {
@@ -132,7 +136,7 @@ func (s *Synchronizer) syncInfoReal(ctx context.Context, disableOnTimeDrift bool
 				StatusDescription []string `json:"status_descriptions"`
 			}
 
-			_, err := s.client.Do(
+			_, err := apiClient.Do(
 				ctx,
 				"PATCH",
 				fmt.Sprintf("v1/metric/%s/", metric.ID),
@@ -175,7 +179,7 @@ func (s *Synchronizer) IsTimeDriftTooLarge() bool {
 func (s *Synchronizer) SetMaintenance(ctx context.Context, maintenance bool) {
 	if s.IsMaintenance() && !maintenance {
 		// getting out of maintenance, let's check for a duplicated state.json file
-		err := s.checkDuplicated(ctx)
+		err := s.checkDuplicated(ctx, s.realClient)
 		if err != nil {
 			// it's not a critical error at all, we will perform this check again on the next synchronization pass
 			logger.V(2).Printf("Couldn't check for duplicated agent: %v", err)
@@ -193,10 +197,10 @@ func (s *Synchronizer) UpdateMaintenance() {
 	s.l.Lock()
 	defer s.l.Unlock()
 
-	s.requestSynchronizationLocked(syncMethodInfo, false)
+	s.requestSynchronizationLocked(types.EntityInfo, false)
 }
 
-func (s *Synchronizer) updateMQTTStatus(ctx context.Context) error {
+func (s *Synchronizer) updateMQTTStatus(ctx context.Context, apiClient types.RawClient) error {
 	s.l.Lock()
 	isMQTTConnected := s.isMQTTConnected != nil && *s.isMQTTConnected
 	shouldUpdate := s.shouldUpdateMQTTStatus
@@ -230,8 +234,8 @@ func (s *Synchronizer) updateMQTTStatus(ctx context.Context) error {
 	logger.Printf(msg)
 
 	// Mark the agent_status as disconnected because MQTT is not accessible.
-	metricKey := types.LabelsToText(
-		map[string]string{types.LabelName: "agent_status", types.LabelInstanceUUID: s.agentID},
+	metricKey := gloutonTypes.LabelsToText(
+		map[string]string{gloutonTypes.LabelName: "agent_status", gloutonTypes.LabelInstanceUUID: s.agentID},
 	)
 	if metric, ok := s.option.Cache.MetricLookupFromList()[metricKey]; ok {
 		type payloadType struct {
@@ -239,7 +243,7 @@ func (s *Synchronizer) updateMQTTStatus(ctx context.Context) error {
 			StatusDescription []string `json:"status_descriptions"`
 		}
 
-		_, err := s.client.Do(
+		_, err := apiClient.Do(
 			ctx,
 			"PATCH",
 			fmt.Sprintf("v1/metric/%s/", metric.ID),

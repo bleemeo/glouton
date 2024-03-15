@@ -22,10 +22,11 @@ import (
 	"errors"
 	"fmt"
 	"glouton/bleemeo/client"
+	"glouton/bleemeo/internal/synchronizer/types"
 	bleemeoTypes "glouton/bleemeo/types"
 	"glouton/logger"
 	"glouton/prometheus/exporter/blackbox"
-	"glouton/types"
+	gloutonTypes "glouton/types"
 	"time"
 
 	"github.com/cespare/xxhash/v2"
@@ -69,11 +70,11 @@ func (s *Synchronizer) UpdateMonitor(op string, uuid string) {
 	}
 
 	s.pendingMonitorsUpdate = append(s.pendingMonitorsUpdate, mu)
-	s.requestSynchronizationLocked(syncMethodMonitor, false)
+	s.requestSynchronizationLocked(types.EntityMonitor, false)
 }
 
 // syncMonitors updates the list of monitors accessible to the agent.
-func (s *Synchronizer) syncMonitors(ctx context.Context, fullSync bool, onlyEssential bool) (updateThresholds bool, err error) {
+func (s *Synchronizer) syncMonitors(ctx context.Context, syncType types.SyncType, onlyEssential bool) (updateThresholds bool, err error) {
 	_ = onlyEssential
 
 	if !s.option.Config.Blackbox.Enable {
@@ -90,21 +91,23 @@ func (s *Synchronizer) syncMonitors(ctx context.Context, fullSync bool, onlyEsse
 	// 5 is definitely a random heuristic, but we consider more than five simultaneous updates as more
 	// costly that a single full sync, due to the cost of updateMonitorManager()
 	if len(pendingMonitorsUpdate) > 5 {
-		fullSync = true
+		syncType = types.SyncTypeForceCacheRefresh
 		// force metric synchronization
-		s.requestSynchronizationLocked(syncMethodMetric, false)
+		s.requestSynchronizationLocked(types.EntityMetric, false)
 	}
 
 	s.l.Unlock()
 
-	if !fullSync && len(pendingMonitorsUpdate) == 0 {
+	if syncType != types.SyncTypeForceCacheRefresh && len(pendingMonitorsUpdate) == 0 {
 		return false, nil
 	}
 
 	var monitors []bleemeoTypes.Monitor
 
-	if fullSync {
-		monitors, err = s.getMonitorsFromAPI(ctx)
+	apiClient := s.client
+
+	if syncType == types.SyncTypeForceCacheRefresh {
+		monitors, err = s.getMonitorsFromAPI(ctx, apiClient)
 		if err != nil {
 			return false, err
 		}
@@ -135,7 +138,7 @@ func (s *Synchronizer) syncMonitors(ctx context.Context, fullSync bool, onlyEsse
 	if needConfigUpdate {
 		s.l.Lock()
 
-		s.requestSynchronizationLocked(syncMethodAccountConfig, true)
+		s.requestSynchronizationLocked(types.EntityAccountConfig, true)
 
 		s.l.Unlock()
 	}
@@ -155,7 +158,7 @@ func (s *Synchronizer) ApplyMonitorUpdate() error {
 	monitors := s.option.Cache.Monitors()
 
 	accountConfigs := s.option.Cache.AccountConfigsByUUID()
-	processedMonitors := make([]types.Monitor, 0, len(monitors))
+	processedMonitors := make([]gloutonTypes.Monitor, 0, len(monitors))
 	agentIDHash := time.Duration(xxhash.Sum64String(s.agentID)%16000)*time.Millisecond - 8*time.Second
 
 	for _, monitor := range monitors {
@@ -180,7 +183,7 @@ func (s *Synchronizer) ApplyMonitorUpdate() error {
 			jitterCreationDate = creationDate.Add(-agentIDHash)
 		}
 
-		processedMonitors = append(processedMonitors, types.Monitor{
+		processedMonitors = append(processedMonitors, gloutonTypes.Monitor{
 			ID:                      monitor.ID,
 			MetricMonitorResolution: conf.AgentConfigByName[bleemeoTypes.AgentTypeMonitor].MetricResolution,
 			CreationDate:            jitterCreationDate,
@@ -204,14 +207,14 @@ func (s *Synchronizer) ApplyMonitorUpdate() error {
 	return nil
 }
 
-func (s *Synchronizer) getMonitorsFromAPI(ctx context.Context) ([]bleemeoTypes.Monitor, error) {
+func (s *Synchronizer) getMonitorsFromAPI(ctx context.Context, apiClient types.RawClient) ([]bleemeoTypes.Monitor, error) {
 	params := map[string]string{
 		"monitor": "true",
 		"active":  "true",
 		"fields":  fieldList,
 	}
 
-	result, err := s.client.Iter(ctx, "service", params)
+	result, err := apiClient.Iter(ctx, "service", params)
 	if err != nil {
 		return nil, err
 	}
@@ -238,6 +241,7 @@ func (s *Synchronizer) getListOfMonitorsFromAPI(ctx context.Context, pendingMoni
 	}
 
 	currentMonitors := s.option.Cache.Monitors()
+	apiClient := s.client
 
 OuterBreak:
 	for _, m := range pendingMonitorsUpdate {
@@ -248,7 +252,7 @@ OuterBreak:
 		}
 
 		var result bleemeoTypes.Monitor
-		statusCode, err := s.client.Do(ctx, "GET", fmt.Sprintf("v1/service/%s/", m.uuid), params, nil, &result)
+		statusCode, err := apiClient.Do(ctx, "GET", fmt.Sprintf("v1/service/%s/", m.uuid), params, nil, &result)
 		if err != nil {
 			// Delete the monitor locally if it was not found on the API.
 			if client.IsNotFound(err) {
@@ -276,7 +280,7 @@ OuterBreak:
 					// but that would required to compare unordered lists or to do some complex machinery, and I'm not sure it's worth
 					// the added complexity.
 					s.l.Lock()
-					s.requestSynchronizationLocked(syncMethodMetric, false)
+					s.requestSynchronizationLocked(types.EntityMetric, false)
 					s.l.Unlock()
 
 					currentMonitors[k] = result

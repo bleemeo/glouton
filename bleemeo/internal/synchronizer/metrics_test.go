@@ -20,13 +20,14 @@ package synchronizer
 import (
 	"fmt"
 	"glouton/bleemeo/internal/cache"
+	"glouton/bleemeo/internal/synchronizer/types"
 	bleemeoTypes "glouton/bleemeo/types"
 	"glouton/config"
 	"glouton/discovery"
 	"glouton/facts"
 	"glouton/prometheus/exporter/snmp"
 	"glouton/prometheus/model"
-	"glouton/types"
+	gloutonTypes "glouton/types"
 	"net/http"
 	"reflect"
 	"sort"
@@ -76,8 +77,8 @@ func TestPrioritizeAndFilterMetrics(t *testing.T) {
 	}
 	isHighPriority := make(map[string]bool)
 	countHighPriority := 0
-	metrics := make([]types.Metric, len(inputNames))
-	metrics2 := make([]types.Metric, len(inputNames))
+	metrics := make([]gloutonTypes.Metric, len(inputNames))
+	metrics2 := make([]gloutonTypes.Metric, len(inputNames))
 
 	for i, n := range inputNames {
 		metrics[i] = mockMetric{Name: n.Name}
@@ -90,22 +91,22 @@ func TestPrioritizeAndFilterMetrics(t *testing.T) {
 		}
 	}
 
-	metrics = prioritizeAndFilterMetrics(types.MetricFormatBleemeo, metrics, false)
-	metrics2 = prioritizeAndFilterMetrics(types.MetricFormatBleemeo, metrics2, true)
+	metrics = prioritizeAndFilterMetrics(gloutonTypes.MetricFormatBleemeo, metrics, false)
+	metrics2 = prioritizeAndFilterMetrics(gloutonTypes.MetricFormatBleemeo, metrics2, true)
 
 	for i, m := range metrics {
-		if !isHighPriority[m.Labels()[types.LabelName]] && i < countHighPriority {
-			t.Errorf("Found metrics %#v at index %d, want after %d", m.Labels()[types.LabelName], i, countHighPriority)
+		if !isHighPriority[m.Labels()[gloutonTypes.LabelName]] && i < countHighPriority {
+			t.Errorf("Found metrics %#v at index %d, want after %d", m.Labels()[gloutonTypes.LabelName], i, countHighPriority)
 		}
 
-		if isHighPriority[m.Labels()[types.LabelName]] && i >= countHighPriority {
-			t.Errorf("Found metrics %#v at index %d, want before %d", m.Labels()[types.LabelName], i, countHighPriority)
+		if isHighPriority[m.Labels()[gloutonTypes.LabelName]] && i >= countHighPriority {
+			t.Errorf("Found metrics %#v at index %d, want before %d", m.Labels()[gloutonTypes.LabelName], i, countHighPriority)
 		}
 	}
 
 	for i, m := range metrics2 {
-		if !isHighPriority[m.Labels()[types.LabelName]] {
-			t.Errorf("Found metrics %#v at index %d, but it's not prioritary", m.Labels()[types.LabelName], i)
+		if !isHighPriority[m.Labels()[gloutonTypes.LabelName]] {
+			t.Errorf("Found metrics %#v at index %d, but it's not prioritary", m.Labels()[gloutonTypes.LabelName], i)
 		}
 	}
 }
@@ -119,7 +120,7 @@ func TestPrioritizeAndFilterMetrics2(t *testing.T) {
 	cases := []struct {
 		name   string
 		inputs []string
-		format types.MetricFormat
+		format gloutonTypes.MetricFormat
 		order  []order
 	}{
 		{
@@ -130,7 +131,7 @@ func TestPrioritizeAndFilterMetrics2(t *testing.T) {
 				`__name__="net_bits_sent",item="eth0"`,
 				`__name__="mem_used"`,
 			},
-			format: types.MetricFormatBleemeo,
+			format: gloutonTypes.MetricFormatBleemeo,
 			order: []order{
 				{LabelBefore: `__name__="cpu_used"`, LabelAfter: `__name__="net_bits_recv",item="eth0"`},
 				{LabelBefore: `__name__="cpu_used"`, LabelAfter: `__name__="net_bits_sent",item="eth0"`},
@@ -148,7 +149,7 @@ func TestPrioritizeAndFilterMetrics2(t *testing.T) {
 				`__name__="disk_used_perc",item="the_item"`,
 				`__name__="io_utilization",item="the_item"`,
 			},
-			format: types.MetricFormatBleemeo,
+			format: gloutonTypes.MetricFormatBleemeo,
 			order: []order{
 				{LabelBefore: `__name__="io_reads",item="the_item"`, LabelAfter: `__name__="net_bits_recv",item="the_item"`},
 				{LabelBefore: `__name__="io_writes",item="the_item"`, LabelAfter: `__name__="net_bits_recv",item="the_item"`},
@@ -171,7 +172,7 @@ func TestPrioritizeAndFilterMetrics2(t *testing.T) {
 				`__name__="io_reads",item="the_item"`,
 				`__name__="custom_metric2"`,
 			},
-			format: types.MetricFormatBleemeo,
+			format: gloutonTypes.MetricFormatBleemeo,
 			order: []order{
 				{LabelBefore: `__name__="cpu_used"`, LabelAfter: `__name__="custom_metric_item",item="the_item"`},
 				{LabelBefore: `__name__="cpu_used"`, LabelAfter: `__name__="custom_metric2"`},
@@ -200,7 +201,7 @@ func TestPrioritizeAndFilterMetrics2(t *testing.T) {
 				`__name__="net_bits_recv",item="br-1"`,
 				`__name__="net_bits_recv",item="br-0"`,
 			},
-			format: types.MetricFormatBleemeo,
+			format: gloutonTypes.MetricFormatBleemeo,
 			order: []order{
 				{LabelBefore: `__name__="net_bits_recv",item="eth0"`, LabelAfter: `__name__="net_bits_recv",item="the_item"`},
 				{LabelBefore: `__name__="net_bits_recv",item="eth0"`, LabelAfter: `__name__="net_bits_recv",item="br-0"`},
@@ -235,7 +236,7 @@ func TestPrioritizeAndFilterMetrics2(t *testing.T) {
 				`__name__="container_net_bits_sent",item="my_memcached"`,
 				`__name__="container_net_bits_sent",item="my_rabbitmq"`,
 			},
-			format: types.MetricFormatBleemeo,
+			format: gloutonTypes.MetricFormatBleemeo,
 			order: []order{
 				// What we only want is the item are together. Currently item are sorted in lexical order
 				{LabelBefore: `__name__="container_net_bits_sent",item="my_memcached"`, LabelAfter: `__name__="container_net_bits_sent",item="my_redis"`},
@@ -266,10 +267,10 @@ func TestPrioritizeAndFilterMetrics2(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			metrics := make([]types.Metric, 0, len(tt.inputs))
+			metrics := make([]gloutonTypes.Metric, 0, len(tt.inputs))
 
 			for _, lbls := range tt.inputs {
-				metrics = append(metrics, mockMetric{labels: types.TextToLabels(lbls)})
+				metrics = append(metrics, mockMetric{labels: gloutonTypes.TextToLabels(lbls)})
 			}
 
 			result := prioritizeAndFilterMetrics(tt.format, metrics, false)
@@ -279,7 +280,7 @@ func TestPrioritizeAndFilterMetrics2(t *testing.T) {
 				secondIdx := -1
 
 				for i, m := range result {
-					if reflect.DeepEqual(m.Labels(), types.TextToLabels(ord.LabelBefore)) {
+					if reflect.DeepEqual(m.Labels(), gloutonTypes.TextToLabels(ord.LabelBefore)) {
 						if firstIdx == -1 {
 							firstIdx = i
 						} else {
@@ -287,7 +288,7 @@ func TestPrioritizeAndFilterMetrics2(t *testing.T) {
 						}
 					}
 
-					if reflect.DeepEqual(m.Labels(), types.TextToLabels(ord.LabelAfter)) {
+					if reflect.DeepEqual(m.Labels(), gloutonTypes.TextToLabels(ord.LabelAfter)) {
 						if secondIdx == -1 {
 							secondIdx = i
 						} else {
@@ -384,7 +385,7 @@ func Test_metricComparator_IsSignificantItem(t *testing.T) {
 		t.Run(tt.item, func(t *testing.T) {
 			t.Parallel()
 
-			m := newComparator(types.MetricFormatBleemeo)
+			m := newComparator(gloutonTypes.MetricFormatBleemeo)
 			if got := m.IsSignificantItem(tt.item); got != tt.want {
 				t.Errorf("metricComparator.IsSignificantItem() = %v, want %v", got, tt.want)
 			}
@@ -395,37 +396,37 @@ func Test_metricComparator_IsSignificantItem(t *testing.T) {
 func Test_metricComparator_SkipInOnlyEssential(t *testing.T) {
 	tests := []struct {
 		name                string
-		format              types.MetricFormat
+		format              gloutonTypes.MetricFormat
 		metric              string
 		keepInOnlyEssential bool
 	}{
 		{
 			name:                "default dashboard metrics are essential 1",
-			format:              types.MetricFormatBleemeo,
+			format:              gloutonTypes.MetricFormatBleemeo,
 			metric:              `__name__="cpu_used"`,
 			keepInOnlyEssential: true,
 		},
 		{
 			name:                "default dashboard metrics are essential 2",
-			format:              types.MetricFormatBleemeo,
+			format:              gloutonTypes.MetricFormatBleemeo,
 			metric:              `__name__="io_reads",item="nvme0"`,
 			keepInOnlyEssential: true,
 		},
 		{
 			name:                "default dashboard metrics are essential 3",
-			format:              types.MetricFormatBleemeo,
+			format:              gloutonTypes.MetricFormatBleemeo,
 			metric:              `__name__="net_bits_recv",item="eth0"`,
 			keepInOnlyEssential: true,
 		},
 		{
 			name:                "high cardinality aren't essential",
-			format:              types.MetricFormatBleemeo,
+			format:              gloutonTypes.MetricFormatBleemeo,
 			metric:              `__name__="net_bits_recv",item="the_item"`,
 			keepInOnlyEssential: false,
 		},
 		{
 			name:                "high cardinality aren't essential",
-			format:              types.MetricFormatBleemeo,
+			format:              gloutonTypes.MetricFormatBleemeo,
 			metric:              `__name__="net_bits_recv",item="br-2a4d1a465acd"`,
 			keepInOnlyEssential: false,
 		},
@@ -435,7 +436,7 @@ func Test_metricComparator_SkipInOnlyEssential(t *testing.T) {
 			t.Parallel()
 
 			m := newComparator(tt.format)
-			metric := types.TextToLabels(tt.metric)
+			metric := gloutonTypes.TextToLabels(tt.metric)
 
 			if got := m.KeepInOnlyEssential(metric); got != tt.keepInOnlyEssential {
 				t.Errorf("metricComparator.KeepInOnlyEssential() = %v, want %v", got, tt.keepInOnlyEssential)
@@ -447,79 +448,79 @@ func Test_metricComparator_SkipInOnlyEssential(t *testing.T) {
 func Test_metricComparator_importanceWeight(t *testing.T) {
 	tests := []struct {
 		name         string
-		format       types.MetricFormat
+		format       gloutonTypes.MetricFormat
 		metricBefore string
 		metricAfter  string
 	}{
 		{
 			name:         "metric of system dashboard are first 1",
-			format:       types.MetricFormatBleemeo,
+			format:       gloutonTypes.MetricFormatBleemeo,
 			metricBefore: `__name__="cpu_used"`,
 			metricAfter:  `__name__="custom_metric"`,
 		},
 		{
 			name:         "metric of system dashboard are first 2",
-			format:       types.MetricFormatBleemeo,
+			format:       gloutonTypes.MetricFormatBleemeo,
 			metricBefore: `__name__="net_bits_recv",item="eth0"`,
 			metricAfter:  `__name__="custom_metric"`,
 		},
 		{
 			name:         "metric of system dashboard are first 3",
-			format:       types.MetricFormatBleemeo,
+			format:       gloutonTypes.MetricFormatBleemeo,
 			metricBefore: `__name__="net_bits_recv",item="the_item"`,
 			metricAfter:  `__name__="custom_metric"`,
 		},
 		{
 			name:         "metric of system dashboard are first 4",
-			format:       types.MetricFormatBleemeo,
+			format:       gloutonTypes.MetricFormatBleemeo,
 			metricBefore: `__name__="io_reads",item="nvme0"`,
 			metricAfter:  `__name__="custom_metric"`,
 		},
 		{
 			name:         "metric of system dashboard are first 5",
-			format:       types.MetricFormatPrometheus,
+			format:       gloutonTypes.MetricFormatPrometheus,
 			metricBefore: `__name__="node_cpu_seconds_global",mode="idle"`,
 			metricAfter:  `__name__="custom_metric"`,
 		},
 		{
 			name:         "high cardinality after important",
-			format:       types.MetricFormatBleemeo,
+			format:       gloutonTypes.MetricFormatBleemeo,
 			metricBefore: `__name__="system_pending_security_updates"`,
 			metricAfter:  `__name__="disk_used_perc",item="/random-value"`,
 		},
 		{
 			name:         "good item before important",
-			format:       types.MetricFormatBleemeo,
+			format:       gloutonTypes.MetricFormatBleemeo,
 			metricBefore: `__name__="disk_used_perc",item="/home"`,
 			metricAfter:  `__name__="system_pending_security_updates"`,
 		},
 		{
 			name:         "high cardinality after status",
-			format:       types.MetricFormatBleemeo,
+			format:       gloutonTypes.MetricFormatBleemeo,
 			metricBefore: `__name__="service_status"`,
 			metricAfter:  `__name__="net_bits_recv",item="tap150"`,
 		},
 		{
 			name:         "good item before status",
-			format:       types.MetricFormatBleemeo,
+			format:       gloutonTypes.MetricFormatBleemeo,
 			metricBefore: `__name__="net_bits_recv",item="eth0"`,
 			metricAfter:  `__name__="service_status"`,
 		},
 		{
 			name:         "high cardinality before custom",
-			format:       types.MetricFormatBleemeo,
+			format:       gloutonTypes.MetricFormatBleemeo,
 			metricBefore: `__name__="net_bits_recv",item="tap150"`,
 			metricAfter:  `__name__="custom_metric"`,
 		},
 		{
 			name:         "essential without item first",
-			format:       types.MetricFormatBleemeo,
+			format:       gloutonTypes.MetricFormatBleemeo,
 			metricBefore: `__name__="cpu_used"`,
 			metricAfter:  `__name__="cpu_used",item="value"`,
 		},
 		{
 			name:         "essential without item first 2",
-			format:       types.MetricFormatBleemeo,
+			format:       gloutonTypes.MetricFormatBleemeo,
 			metricBefore: `__name__="cpu_used"`,
 			metricAfter:  `__name__="io_reads",item="/dev/sda"`,
 		},
@@ -530,8 +531,8 @@ func Test_metricComparator_importanceWeight(t *testing.T) {
 
 			m := newComparator(tt.format)
 
-			metricA := types.TextToLabels(tt.metricBefore)
-			metricB := types.TextToLabels(tt.metricAfter)
+			metricA := gloutonTypes.TextToLabels(tt.metricBefore)
+			metricB := gloutonTypes.TextToLabels(tt.metricAfter)
 
 			weightA := m.importanceWeight(metricA)
 			weightB := m.importanceWeight(metricB)
@@ -555,7 +556,7 @@ func TestMetricSimpleSync(t *testing.T) {
 	helper.initSynchronizer(t)
 	helper.AddTime(time.Minute)
 
-	if err := helper.runOnceWithResult(t).CheckMethodWithFull(syncMethodMetric); err != nil {
+	if err := helper.runOnceWithResult(t).CheckMethodWithFull(types.EntityMetric); err != nil {
 		t.Error(err)
 	}
 
@@ -583,12 +584,12 @@ func TestMetricSimpleSync(t *testing.T) {
 	helper.AddTime(5 * time.Minute)
 	helper.pushPoints(t, []labels.Labels{
 		labels.New(
-			labels.Label{Name: types.LabelName, Value: "cpu_system"},
-			labels.Label{Name: types.LabelInstanceUUID, Value: idAgentMain},
+			labels.Label{Name: gloutonTypes.LabelName, Value: "cpu_system"},
+			labels.Label{Name: gloutonTypes.LabelInstanceUUID, Value: idAgentMain},
 		),
 	})
 
-	if err := helper.runOnceWithResult(t).CheckMethodWithoutFull(syncMethodMetric); err != nil {
+	if err := helper.runOnceWithResult(t).CheckMethodWithoutFull(types.EntityMetric); err != nil {
 		t.Error(err)
 	}
 
@@ -626,15 +627,15 @@ func TestMetricSimpleSync(t *testing.T) {
 	for n := range 1000 {
 		helper.pushPoints(t, []labels.Labels{
 			labels.New(
-				labels.Label{Name: types.LabelName, Value: "metric"},
-				labels.Label{Name: types.LabelItem, Value: strconv.FormatInt(int64(n), 10)},
-				labels.Label{Name: types.LabelMetaBleemeoItem, Value: strconv.FormatInt(int64(n), 10)},
-				labels.Label{Name: types.LabelInstanceUUID, Value: idAgentMain},
+				labels.Label{Name: gloutonTypes.LabelName, Value: "metric"},
+				labels.Label{Name: gloutonTypes.LabelItem, Value: strconv.FormatInt(int64(n), 10)},
+				labels.Label{Name: gloutonTypes.LabelMetaBleemeoItem, Value: strconv.FormatInt(int64(n), 10)},
+				labels.Label{Name: gloutonTypes.LabelInstanceUUID, Value: idAgentMain},
 			),
 		})
 	}
 
-	if err := helper.runOnceWithResult(t).CheckMethodWithoutFull(syncMethodMetric); err != nil {
+	if err := helper.runOnceWithResult(t).CheckMethodWithoutFull(types.EntityMetric); err != nil {
 		t.Error(err)
 	}
 
@@ -649,7 +650,7 @@ func TestMetricSimpleSync(t *testing.T) {
 	helper.AddTime(5 * time.Minute)
 	helper.store.DropAllMetrics()
 
-	if err := helper.runOnceWithResult(t).CheckMethodWithoutFull(syncMethodMetric); err != nil {
+	if err := helper.runOnceWithResult(t).CheckMethodWithoutFull(types.EntityMetric); err != nil {
 		t.Error(err)
 	}
 
@@ -676,18 +677,18 @@ func TestMetricSimpleSync(t *testing.T) {
 	// re-activate one metric + register one
 	helper.pushPoints(t, []labels.Labels{
 		labels.New(
-			labels.Label{Name: types.LabelName, Value: "cpu_system"},
-			labels.Label{Name: types.LabelInstanceUUID, Value: idAgentMain},
+			labels.Label{Name: gloutonTypes.LabelName, Value: "cpu_system"},
+			labels.Label{Name: gloutonTypes.LabelInstanceUUID, Value: idAgentMain},
 		),
 		labels.New(
-			labels.Label{Name: types.LabelName, Value: "disk_used"},
-			labels.Label{Name: types.LabelItem, Value: "/home"},
-			labels.Label{Name: types.LabelMetaBleemeoItem, Value: "/home"},
-			labels.Label{Name: types.LabelInstanceUUID, Value: idAgentMain},
+			labels.Label{Name: gloutonTypes.LabelName, Value: "disk_used"},
+			labels.Label{Name: gloutonTypes.LabelItem, Value: "/home"},
+			labels.Label{Name: gloutonTypes.LabelMetaBleemeoItem, Value: "/home"},
+			labels.Label{Name: gloutonTypes.LabelInstanceUUID, Value: idAgentMain},
 		),
 	})
 
-	if err := helper.runOnceWithResult(t).CheckMethodWithoutFull(syncMethodMetric); err != nil {
+	if err := helper.runOnceWithResult(t).CheckMethodWithoutFull(types.EntityMetric); err != nil {
 		t.Error(err)
 	}
 
@@ -730,17 +731,17 @@ func TestMetricDeleted(t *testing.T) {
 
 	helper.pushPoints(t, []labels.Labels{
 		labels.New(
-			labels.Label{Name: types.LabelName, Value: "metric1"},
+			labels.Label{Name: gloutonTypes.LabelName, Value: "metric1"},
 		),
 		labels.New(
-			labels.Label{Name: types.LabelName, Value: "metric2"},
+			labels.Label{Name: gloutonTypes.LabelName, Value: "metric2"},
 		),
 		labels.New(
-			labels.Label{Name: types.LabelName, Value: "metric3"},
+			labels.Label{Name: gloutonTypes.LabelName, Value: "metric3"},
 		),
 	})
 
-	if err := helper.runOnceWithResult(t).CheckMethodWithFull(syncMethodMetric); err != nil {
+	if err := helper.runOnceWithResult(t).CheckMethodWithFull(types.EntityMetric); err != nil {
 		t.Error(err)
 	}
 
@@ -757,13 +758,13 @@ func TestMetricDeleted(t *testing.T) {
 	helper.AddTime(90 * time.Minute)
 	helper.pushPoints(t, []labels.Labels{
 		labels.New(
-			labels.Label{Name: types.LabelName, Value: "metric1"},
+			labels.Label{Name: gloutonTypes.LabelName, Value: "metric1"},
 		),
 		labels.New(
-			labels.Label{Name: types.LabelName, Value: "metric2"},
+			labels.Label{Name: gloutonTypes.LabelName, Value: "metric2"},
 		),
 		labels.New(
-			labels.Label{Name: types.LabelName, Value: "metric3"},
+			labels.Label{Name: gloutonTypes.LabelName, Value: "metric3"},
 		),
 	})
 
@@ -774,7 +775,7 @@ func TestMetricDeleted(t *testing.T) {
 		}
 	}
 
-	if err := helper.runOnceWithResult(t).CheckMethodWithFull(syncMethodMetric); err != nil {
+	if err := helper.runOnceWithResult(t).CheckMethodWithFull(types.EntityMetric); err != nil {
 		t.Error(err)
 	}
 
@@ -783,11 +784,11 @@ func TestMetricDeleted(t *testing.T) {
 	// metric1 is still alive
 	helper.pushPoints(t, []labels.Labels{
 		labels.New(
-			labels.Label{Name: types.LabelName, Value: "metric1"},
+			labels.Label{Name: gloutonTypes.LabelName, Value: "metric1"},
 		),
 	})
 
-	if err := helper.runOnceWithResult(t).CheckMethodWithoutFull(syncMethodMetric); err != nil {
+	if err := helper.runOnceWithResult(t).CheckMethodWithoutFull(types.EntityMetric); err != nil {
 		t.Error(err)
 	}
 
@@ -810,7 +811,7 @@ func TestMetricDeleted(t *testing.T) {
 	}
 
 	// all metrics are inactive
-	if err := helper.runOnceWithResult(t).CheckMethodWithoutFull(syncMethodMetric); err != nil {
+	if err := helper.runOnceWithResult(t).CheckMethodWithoutFull(types.EntityMetric); err != nil {
 		t.Error(err)
 	}
 
@@ -840,19 +841,19 @@ func TestMetricDeleted(t *testing.T) {
 
 	helper.pushPoints(t, []labels.Labels{
 		labels.New(
-			labels.Label{Name: types.LabelName, Value: "metric1"},
+			labels.Label{Name: gloutonTypes.LabelName, Value: "metric1"},
 		),
 		labels.New(
-			labels.Label{Name: types.LabelName, Value: "metric2"},
+			labels.Label{Name: gloutonTypes.LabelName, Value: "metric2"},
 		),
 		labels.New(
-			labels.Label{Name: types.LabelName, Value: "metric3"},
+			labels.Label{Name: gloutonTypes.LabelName, Value: "metric3"},
 		),
 	})
 
-	helper.s.requestSynchronizationLocked(syncMethodMetric, true)
+	helper.s.requestSynchronizationLocked(types.EntityMetric, true)
 
-	if err := helper.runOnceWithResult(t).CheckMethodWithFull(syncMethodMetric); err != nil {
+	if err := helper.runOnceWithResult(t).CheckMethodWithFull(types.EntityMetric); err != nil {
 		t.Error(err)
 	}
 
@@ -888,17 +889,17 @@ func TestMetricError(t *testing.T) {
 
 	helper.pushPoints(t, []labels.Labels{
 		labels.New(
-			labels.Label{Name: types.LabelName, Value: "metric1"},
+			labels.Label{Name: gloutonTypes.LabelName, Value: "metric1"},
 		),
 		labels.New(
-			labels.Label{Name: types.LabelName, Value: "metric2"},
+			labels.Label{Name: gloutonTypes.LabelName, Value: "metric2"},
 		),
 		labels.New(
-			labels.Label{Name: types.LabelName, Value: "metric3"},
+			labels.Label{Name: gloutonTypes.LabelName, Value: "metric3"},
 		),
 	})
 
-	if err := helper.runUntilNoError(t, 20, 20*time.Second).CheckMethodWithFull(syncMethodMetric); err != nil {
+	if err := helper.runUntilNoError(t, 20, 20*time.Second).CheckMethodWithFull(types.EntityMetric); err != nil {
 		t.Error(err)
 	}
 
@@ -936,14 +937,14 @@ func TestMetricUnknownError(t *testing.T) {
 
 	helper.pushPoints(t, []labels.Labels{
 		labels.New(
-			labels.Label{Name: types.LabelName, Value: "metric1"},
+			labels.Label{Name: gloutonTypes.LabelName, Value: "metric1"},
 		),
 		labels.New(
-			labels.Label{Name: types.LabelName, Value: "deny-me"},
+			labels.Label{Name: gloutonTypes.LabelName, Value: "deny-me"},
 		),
 	})
 
-	if err := helper.runOnceWithResult(t).CheckMethodWithFull(syncMethodMetric); err != nil {
+	if err := helper.runOnceWithResult(t).CheckMethodWithFull(types.EntityMetric); err != nil {
 		t.Error(err)
 	}
 
@@ -960,7 +961,7 @@ func TestMetricUnknownError(t *testing.T) {
 	}
 
 	// immediately re-run: should not run at all
-	if err := helper.runOnceWithResult(t).CheckMethodNotRun(syncMethodMetric); err != nil {
+	if err := helper.runOnceWithResult(t).CheckMethodNotRun(types.EntityMetric); err != nil {
 		t.Error(err)
 	}
 
@@ -970,7 +971,7 @@ func TestMetricUnknownError(t *testing.T) {
 
 	// we expect few retry in quick time
 	for range 3 {
-		if err := helper.runOnceWithResult(t).CheckMethodWithoutFull(syncMethodMetric); err != nil {
+		if err := helper.runOnceWithResult(t).CheckMethodWithoutFull(types.EntityMetric); err != nil {
 			t.Error(err)
 		}
 
@@ -993,7 +994,7 @@ func TestMetricUnknownError(t *testing.T) {
 		helper.AddTime(15 * time.Minute)
 	}
 
-	if err := helper.runOnceWithResult(t).CheckMethodNotRun(syncMethodMetric); err != nil {
+	if err := helper.runOnceWithResult(t).CheckMethodNotRun(types.EntityMetric); err != nil {
 		t.Errorf("After more than 8 retry, we still try to register deny-me metric")
 	}
 
@@ -1001,14 +1002,14 @@ func TestMetricUnknownError(t *testing.T) {
 	helper.SetTime(helper.s.nextFullSync.Add(5 * time.Second))
 	helper.pushPoints(t, []labels.Labels{
 		labels.New(
-			labels.Label{Name: types.LabelName, Value: "metric1"},
+			labels.Label{Name: gloutonTypes.LabelName, Value: "metric1"},
 		),
 		labels.New(
-			labels.Label{Name: types.LabelName, Value: "deny-me"},
+			labels.Label{Name: gloutonTypes.LabelName, Value: "deny-me"},
 		),
 	})
 
-	if err := helper.runOnceWithResult(t).CheckMethodWithFull(syncMethodMetric); err != nil {
+	if err := helper.runOnceWithResult(t).CheckMethodWithFull(types.EntityMetric); err != nil {
 		t.Error(err)
 	}
 
@@ -1070,17 +1071,17 @@ func TestMetricPermanentError(t *testing.T) {
 
 			helper.pushPoints(t, []labels.Labels{
 				labels.New(
-					labels.Label{Name: types.LabelName, Value: "metric1"},
+					labels.Label{Name: gloutonTypes.LabelName, Value: "metric1"},
 				),
 				labels.New(
-					labels.Label{Name: types.LabelName, Value: "deny-me"},
+					labels.Label{Name: gloutonTypes.LabelName, Value: "deny-me"},
 				),
 				labels.New(
-					labels.Label{Name: types.LabelName, Value: "deny-me-also"},
+					labels.Label{Name: gloutonTypes.LabelName, Value: "deny-me-also"},
 				),
 			})
 
-			if err := helper.runOnceWithResult(t).CheckMethodWithFull(syncMethodMetric); err != nil {
+			if err := helper.runOnceWithResult(t).CheckMethodWithFull(types.EntityMetric); err != nil {
 				t.Error(err)
 			}
 
@@ -1097,14 +1098,14 @@ func TestMetricPermanentError(t *testing.T) {
 			}
 
 			// immediately re-run: should not run at all
-			if err := helper.runOnceWithResult(t).CheckMethodNotRun(syncMethodMetric); err != nil {
+			if err := helper.runOnceWithResult(t).CheckMethodNotRun(types.EntityMetric); err != nil {
 				t.Error(err)
 			}
 
 			// After a short delay we do not retry because error is permanent
 			helper.AddTime(31 * time.Second)
 
-			if err := helper.runOnceWithResult(t).CheckMethodNotRun(syncMethodMetric); err != nil {
+			if err := helper.runOnceWithResult(t).CheckMethodNotRun(types.EntityMetric); err != nil {
 				t.Error(err)
 			}
 
@@ -1114,24 +1115,24 @@ func TestMetricPermanentError(t *testing.T) {
 			helper.s.nextFullSync = helper.Now().Add(time.Hour)
 			helper.pushPoints(t, []labels.Labels{
 				labels.New(
-					labels.Label{Name: types.LabelName, Value: "metric1"},
+					labels.Label{Name: gloutonTypes.LabelName, Value: "metric1"},
 				),
 				labels.New(
-					labels.Label{Name: types.LabelName, Value: "deny-me"},
+					labels.Label{Name: gloutonTypes.LabelName, Value: "deny-me"},
 				),
 				labels.New(
-					labels.Label{Name: types.LabelName, Value: "deny-me-also"},
+					labels.Label{Name: gloutonTypes.LabelName, Value: "deny-me-also"},
 				),
 			})
 
-			if err := helper.runOnceWithResult(t).CheckMethodNotRun(syncMethodMetric); err != nil {
+			if err := helper.runOnceWithResult(t).CheckMethodNotRun(types.EntityMetric); err != nil {
 				t.Error(err)
 			}
 
 			// Finally long enough to reach fullSync, we will retry ONE
 			helper.SetTimeToNextFullSync()
 
-			if err := helper.runOnceWithResult(t).CheckMethodWithFull(syncMethodMetric); err != nil {
+			if err := helper.runOnceWithResult(t).CheckMethodWithFull(types.EntityMetric); err != nil {
 				t.Error(err)
 			}
 
@@ -1153,17 +1154,17 @@ func TestMetricPermanentError(t *testing.T) {
 			helper.SetTimeToNextFullSync()
 			helper.pushPoints(t, []labels.Labels{
 				labels.New(
-					labels.Label{Name: types.LabelName, Value: "metric1"},
+					labels.Label{Name: gloutonTypes.LabelName, Value: "metric1"},
 				),
 				labels.New(
-					labels.Label{Name: types.LabelName, Value: "deny-me"},
+					labels.Label{Name: gloutonTypes.LabelName, Value: "deny-me"},
 				),
 				labels.New(
-					labels.Label{Name: types.LabelName, Value: "deny-me-also"},
+					labels.Label{Name: gloutonTypes.LabelName, Value: "deny-me-also"},
 				),
 			})
 
-			if err := helper.runOnceWithResult(t).CheckMethodWithFull(syncMethodMetric); err != nil {
+			if err := helper.runOnceWithResult(t).CheckMethodWithFull(types.EntityMetric); err != nil {
 				t.Error(err)
 			}
 
@@ -1232,14 +1233,14 @@ func TestMetricTooMany(t *testing.T) { //nolint:maintidx
 	helper.AddTime(time.Minute)
 	helper.pushPoints(t, []labels.Labels{
 		labels.New(
-			labels.Label{Name: types.LabelName, Value: "metric1"},
+			labels.Label{Name: gloutonTypes.LabelName, Value: "metric1"},
 		),
 		labels.New(
-			labels.Label{Name: types.LabelName, Value: "metric2"},
+			labels.Label{Name: gloutonTypes.LabelName, Value: "metric2"},
 		),
 	})
 
-	if err := helper.runOnceWithResult(t).CheckMethodWithFull(syncMethodMetric); err != nil {
+	if err := helper.runOnceWithResult(t).CheckMethodWithFull(types.EntityMetric); err != nil {
 		t.Error(err)
 	}
 
@@ -1254,14 +1255,14 @@ func TestMetricTooMany(t *testing.T) { //nolint:maintidx
 	helper.AddTime(5 * time.Minute)
 	helper.pushPoints(t, []labels.Labels{
 		labels.New(
-			labels.Label{Name: types.LabelName, Value: "metric3"},
+			labels.Label{Name: gloutonTypes.LabelName, Value: "metric3"},
 		),
 		labels.New(
-			labels.Label{Name: types.LabelName, Value: "metric4"},
+			labels.Label{Name: gloutonTypes.LabelName, Value: "metric4"},
 		),
 	})
 
-	if err := helper.runOnceWithResult(t).CheckMethodWithoutFull(syncMethodMetric); err != nil {
+	if err := helper.runOnceWithResult(t).CheckMethodWithoutFull(types.EntityMetric); err != nil {
 		t.Error(err)
 	}
 
@@ -1279,7 +1280,7 @@ func TestMetricTooMany(t *testing.T) { //nolint:maintidx
 
 	helper.AddTime(5 * time.Minute)
 
-	if err := helper.runOnceWithResult(t).CheckMethodNotRun(syncMethodMetric); err != nil {
+	if err := helper.runOnceWithResult(t).CheckMethodNotRun(types.EntityMetric); err != nil {
 		t.Error(err)
 	}
 
@@ -1289,24 +1290,24 @@ func TestMetricTooMany(t *testing.T) { //nolint:maintidx
 	helper.store.DropAllMetrics()
 	helper.pushPoints(t, []labels.Labels{
 		labels.New(
-			labels.Label{Name: types.LabelName, Value: "metric2"},
+			labels.Label{Name: gloutonTypes.LabelName, Value: "metric2"},
 		),
 		labels.New(
-			labels.Label{Name: types.LabelName, Value: "metric3"},
+			labels.Label{Name: gloutonTypes.LabelName, Value: "metric3"},
 		),
 		labels.New(
-			labels.Label{Name: types.LabelName, Value: "metric4"},
+			labels.Label{Name: gloutonTypes.LabelName, Value: "metric4"},
 		),
 	})
 
-	if err := helper.runOnceWithResult(t).CheckMethodWithFull(syncMethodMetric); err != nil {
+	if err := helper.runOnceWithResult(t).CheckMethodWithFull(types.EntityMetric); err != nil {
 		t.Error(err)
 	}
 
 	// We need two sync: one to deactivate the metric, one to register another one
 	helper.AddTime(15 * time.Second)
 
-	if err := helper.runOnceWithResult(t).CheckMethodWithoutFull(syncMethodMetric); err != nil {
+	if err := helper.runOnceWithResult(t).CheckMethodWithoutFull(types.EntityMetric); err != nil {
 		t.Error(err)
 	}
 
@@ -1328,11 +1329,11 @@ func TestMetricTooMany(t *testing.T) { //nolint:maintidx
 	helper.AddTime(5 * time.Minute)
 	helper.pushPoints(t, []labels.Labels{
 		labels.New(
-			labels.Label{Name: types.LabelName, Value: "metric1"},
+			labels.Label{Name: gloutonTypes.LabelName, Value: "metric1"},
 		),
 	})
 
-	if err := helper.runOnceWithResult(t).CheckMethodWithoutFull(syncMethodMetric); err != nil {
+	if err := helper.runOnceWithResult(t).CheckMethodWithoutFull(types.EntityMetric); err != nil {
 		t.Error(err)
 	}
 
@@ -1358,7 +1359,7 @@ func TestMetricTooMany(t *testing.T) { //nolint:maintidx
 	// We do not retry to register them
 	helper.AddTime(5 * time.Minute)
 
-	if err := helper.runOnceWithResult(t).CheckMethodNotRun(syncMethodMetric); err != nil {
+	if err := helper.runOnceWithResult(t).CheckMethodNotRun(types.EntityMetric); err != nil {
 		t.Error(err)
 	}
 
@@ -1366,17 +1367,17 @@ func TestMetricTooMany(t *testing.T) { //nolint:maintidx
 	helper.SetTimeToNextFullSync()
 	helper.pushPoints(t, []labels.Labels{
 		labels.New(
-			labels.Label{Name: types.LabelName, Value: "metric2"},
+			labels.Label{Name: gloutonTypes.LabelName, Value: "metric2"},
 		),
 		labels.New(
-			labels.Label{Name: types.LabelName, Value: "metric3"},
+			labels.Label{Name: gloutonTypes.LabelName, Value: "metric3"},
 		),
 		labels.New(
-			labels.Label{Name: types.LabelName, Value: "metric4"},
+			labels.Label{Name: gloutonTypes.LabelName, Value: "metric4"},
 		),
 	})
 
-	if err := helper.runOnceWithResult(t).CheckMethodWithFull(syncMethodMetric); err != nil {
+	if err := helper.runOnceWithResult(t).CheckMethodWithFull(types.EntityMetric); err != nil {
 		t.Error(err)
 	}
 
@@ -1437,7 +1438,7 @@ func TestMetricLongItem(t *testing.T) {
 		model.AnnotationToMetaLabels(labels.FromMap(srvRedis2.LabelsOfStatus()), srvRedis2.AnnotationsOfStatus()),
 	})
 
-	if err := helper.runOnceWithResult(t).CheckMethodWithFull(syncMethodMetric); err != nil {
+	if err := helper.runOnceWithResult(t).CheckMethodWithFull(types.EntityMetric); err != nil {
 		t.Error(err)
 	}
 
@@ -1454,7 +1455,7 @@ func TestMetricLongItem(t *testing.T) {
 		model.AnnotationToMetaLabels(labels.FromMap(srvRedis2.LabelsOfStatus()), srvRedis2.AnnotationsOfStatus()),
 	})
 
-	if err := helper.runOnceWithResult(t).CheckMethodWithFull(syncMethodMetric); err != nil {
+	if err := helper.runOnceWithResult(t).CheckMethodWithFull(types.EntityMetric); err != nil {
 		t.Error(err)
 	}
 
@@ -1485,22 +1486,22 @@ func TestWithSNMP(t *testing.T) {
 
 	helper.pushPoints(t, []labels.Labels{
 		labels.New(
-			labels.Label{Name: types.LabelName, Value: "cpu_system"},
+			labels.Label{Name: gloutonTypes.LabelName, Value: "cpu_system"},
 		),
 		labels.New(
-			labels.Label{Name: types.LabelName, Value: "ifOutOctets"},
-			labels.Label{Name: types.LabelSNMPTarget, Value: snmpAddress},
-			labels.Label{Name: types.LabelMetaBleemeoTargetAgentUUID, Value: idAgentSNMP},
+			labels.Label{Name: gloutonTypes.LabelName, Value: "ifOutOctets"},
+			labels.Label{Name: gloutonTypes.LabelSNMPTarget, Value: snmpAddress},
+			labels.Label{Name: gloutonTypes.LabelMetaBleemeoTargetAgentUUID, Value: idAgentSNMP},
 		),
 	})
 
 	result := helper.runOnceWithResult(t)
 
-	if err := result.CheckMethodWithFull(syncMethodSNMP); err != nil {
+	if err := result.CheckMethodWithFull(types.EntitySNMP); err != nil {
 		t.Error(err)
 	}
 
-	if err := result.CheckMethodWithFull(syncMethodMetric); err != nil {
+	if err := result.CheckMethodWithFull(types.EntityMetric); err != nil {
 		t.Error(err)
 	}
 
@@ -1626,25 +1627,25 @@ func TestMonitorDeactivation(t *testing.T) {
 
 	pushedPoints := []labels.Labels{
 		labels.New(
-			labels.Label{Name: types.LabelName, Value: "probe_success"},
-			labels.Label{Name: types.LabelScraper, Value: "paris"},
-			labels.Label{Name: types.LabelInstance, Value: "http://localhost:8000/"},
-			labels.Label{Name: types.LabelInstanceUUID, Value: newMonitor.AgentID},
-			labels.Label{Name: types.LabelMetaBleemeoTargetAgentUUID, Value: newMonitor.AgentID},
+			labels.Label{Name: gloutonTypes.LabelName, Value: "probe_success"},
+			labels.Label{Name: gloutonTypes.LabelScraper, Value: "paris"},
+			labels.Label{Name: gloutonTypes.LabelInstance, Value: "http://localhost:8000/"},
+			labels.Label{Name: gloutonTypes.LabelInstanceUUID, Value: newMonitor.AgentID},
+			labels.Label{Name: gloutonTypes.LabelMetaBleemeoTargetAgentUUID, Value: newMonitor.AgentID},
 		),
 		labels.New(
-			labels.Label{Name: types.LabelName, Value: "probe_duration"},
-			labels.Label{Name: types.LabelScraper, Value: "paris"},
-			labels.Label{Name: types.LabelInstance, Value: "http://localhost:8000/"},
-			labels.Label{Name: types.LabelInstanceUUID, Value: newMonitor.AgentID},
-			labels.Label{Name: types.LabelMetaBleemeoTargetAgentUUID, Value: newMonitor.AgentID},
+			labels.Label{Name: gloutonTypes.LabelName, Value: "probe_duration"},
+			labels.Label{Name: gloutonTypes.LabelScraper, Value: "paris"},
+			labels.Label{Name: gloutonTypes.LabelInstance, Value: "http://localhost:8000/"},
+			labels.Label{Name: gloutonTypes.LabelInstanceUUID, Value: newMonitor.AgentID},
+			labels.Label{Name: gloutonTypes.LabelMetaBleemeoTargetAgentUUID, Value: newMonitor.AgentID},
 		),
 	}
 
 	helper.SetAPIMetrics(initialMetrics...)
 	helper.pushPoints(t, pushedPoints)
 
-	if err := helper.runOnceWithResult(t).CheckMethodWithFull(syncMethodMetric); err != nil {
+	if err := helper.runOnceWithResult(t).CheckMethodWithFull(types.EntityMetric); err != nil {
 		t.Error(err)
 	}
 
@@ -1681,7 +1682,7 @@ func TestMonitorDeactivation(t *testing.T) {
 	helper.SetTimeToNextFullSync()
 	helper.pushPoints(t, pushedPoints)
 
-	if err := helper.runOnceWithResult(t).CheckMethodWithFull(syncMethodMetric); err != nil {
+	if err := helper.runOnceWithResult(t).CheckMethodWithFull(types.EntityMetric); err != nil {
 		t.Error(err)
 	}
 
@@ -1694,7 +1695,7 @@ func TestMonitorDeactivation(t *testing.T) {
 	helper.SetTimeToNextFullSync()
 	helper.AddTime(60 * time.Minute)
 
-	if err := helper.runOnceWithResult(t).CheckMethodWithFull(syncMethodMetric); err != nil {
+	if err := helper.runOnceWithResult(t).CheckMethodWithFull(types.EntityMetric); err != nil {
 		t.Error(err)
 	}
 
@@ -1769,7 +1770,7 @@ func TestServiceStatusRename(t *testing.T) { //nolint: maintidx
 				// From Glouton point of vue, it the same as if a new metric is created (service_status) and the old is deleted.
 				metric, _ := valuePtr.(*metricPayload)
 				metricCopy := metric.metricFromAPI(helper.s.now())
-				serviceType := metricCopy.Labels[types.LabelService]
+				serviceType := metricCopy.Labels[gloutonTypes.LabelService]
 
 				if metric.Name != "service_status" || serviceType == "" {
 					return nil
@@ -1780,7 +1781,7 @@ func TestServiceStatusRename(t *testing.T) { //nolint: maintidx
 				metricResource.Store(&metrics)
 
 				for _, existing := range metrics {
-					if existing.Name == serviceType+"_status" && existing.Item == metricCopy.Labels[types.LabelServiceInstance] {
+					if existing.Name == serviceType+"_status" && existing.Item == metricCopy.Labels[gloutonTypes.LabelServiceInstance] {
 						metric.ID = existing.ID
 
 						return reuseIDError{metric.ID}
@@ -1849,27 +1850,27 @@ func TestServiceStatusRename(t *testing.T) { //nolint: maintidx
 				helper.pushPoints(t, []labels.Labels{
 					model.AnnotationToMetaLabels(
 						labels.New(
-							labels.Label{Name: types.LabelName, Value: "apache_status"},
+							labels.Label{Name: gloutonTypes.LabelName, Value: "apache_status"},
 						),
-						types.MetricAnnotations{
+						gloutonTypes.MetricAnnotations{
 							ServiceName:     srvApache.Name,
 							ServiceInstance: srvApache.Instance,
 						},
 					),
 					model.AnnotationToMetaLabels(
 						labels.New(
-							labels.Label{Name: types.LabelName, Value: "nginx_status"},
-							labels.Label{Name: types.LabelItem, Value: "container1"},
-							labels.Label{Name: types.LabelMetaBleemeoItem, Value: "container1"},
+							labels.Label{Name: gloutonTypes.LabelName, Value: "nginx_status"},
+							labels.Label{Name: gloutonTypes.LabelItem, Value: "container1"},
+							labels.Label{Name: gloutonTypes.LabelMetaBleemeoItem, Value: "container1"},
 						),
-						types.MetricAnnotations{
+						gloutonTypes.MetricAnnotations{
 							ServiceName:     srvNginx.Name,
 							ServiceInstance: srvNginx.Instance,
 						},
 					),
 				})
 
-				if err := helper.runOnceWithResult(t).CheckMethodWithFull(syncMethodMetric); err != nil {
+				if err := helper.runOnceWithResult(t).CheckMethodWithFull(types.EntityMetric); err != nil {
 					t.Error(err)
 				}
 
@@ -1888,7 +1889,7 @@ func TestServiceStatusRename(t *testing.T) { //nolint: maintidx
 
 			// Newer agent no longer allow apache_status & nginx_status by default.
 			helper.s.option.IsMetricAllowed = func(lbls map[string]string) bool {
-				if lbls[types.LabelName] == "apache_status" || lbls[types.LabelName] == "nginx_status" {
+				if lbls[gloutonTypes.LabelName] == "apache_status" || lbls[gloutonTypes.LabelName] == "nginx_status" {
 					return false
 				}
 
@@ -1907,7 +1908,7 @@ func TestServiceStatusRename(t *testing.T) { //nolint: maintidx
 				model.AnnotationToMetaLabels(labels.FromMap(srvNginx.LabelsOfStatus()), srvNginx.AnnotationsOfStatus()),
 			})
 
-			if err := helper.runOnceWithResult(t).CheckMethodWithFull(syncMethodMetric); err != nil {
+			if err := helper.runOnceWithResult(t).CheckMethodWithFull(types.EntityMetric); err != nil {
 				t.Error(err)
 			}
 
@@ -2044,18 +2045,18 @@ func TestMonitorPrivate(t *testing.T) {
 
 	pushedPoints := []labels.Labels{
 		labels.New(
-			labels.Label{Name: types.LabelName, Value: "probe_success"},
-			labels.Label{Name: types.LabelScraperUUID, Value: idAgentMain},
-			labels.Label{Name: types.LabelInstance, Value: newMonitor.URL},
-			labels.Label{Name: types.LabelInstanceUUID, Value: newMonitor.AgentID},
-			labels.Label{Name: types.LabelMetaBleemeoTargetAgentUUID, Value: newMonitor.AgentID},
+			labels.Label{Name: gloutonTypes.LabelName, Value: "probe_success"},
+			labels.Label{Name: gloutonTypes.LabelScraperUUID, Value: idAgentMain},
+			labels.Label{Name: gloutonTypes.LabelInstance, Value: newMonitor.URL},
+			labels.Label{Name: gloutonTypes.LabelInstanceUUID, Value: newMonitor.AgentID},
+			labels.Label{Name: gloutonTypes.LabelMetaBleemeoTargetAgentUUID, Value: newMonitor.AgentID},
 		),
 		labels.New(
-			labels.Label{Name: types.LabelName, Value: "probe_duration"},
-			labels.Label{Name: types.LabelScraperUUID, Value: idAgentMain},
-			labels.Label{Name: types.LabelInstance, Value: newMonitor.URL},
-			labels.Label{Name: types.LabelInstanceUUID, Value: newMonitor.AgentID},
-			labels.Label{Name: types.LabelMetaBleemeoTargetAgentUUID, Value: newMonitor.AgentID},
+			labels.Label{Name: gloutonTypes.LabelName, Value: "probe_duration"},
+			labels.Label{Name: gloutonTypes.LabelScraperUUID, Value: idAgentMain},
+			labels.Label{Name: gloutonTypes.LabelInstance, Value: newMonitor.URL},
+			labels.Label{Name: gloutonTypes.LabelInstanceUUID, Value: newMonitor.AgentID},
+			labels.Label{Name: gloutonTypes.LabelMetaBleemeoTargetAgentUUID, Value: newMonitor.AgentID},
 		),
 	}
 
@@ -2223,7 +2224,7 @@ func TestKubernetesMetrics(t *testing.T) {
 
 	helper.AddTime(10 * time.Second)
 
-	if err := helper.runOnceWithResult(t).CheckMethodWithFull(syncMethodAgent); err != nil {
+	if err := helper.runOnceWithResult(t).CheckMethodWithFull(types.EntityAgent); err != nil {
 		t.Error(err)
 	}
 
@@ -2233,34 +2234,34 @@ func TestKubernetesMetrics(t *testing.T) {
 
 	pushedPoints := []labels.Labels{
 		labels.New(
-			labels.Label{Name: types.LabelName, Value: "kubernetes_kubelet_status"},
+			labels.Label{Name: gloutonTypes.LabelName, Value: "kubernetes_kubelet_status"},
 		),
 		labels.New(
-			labels.Label{Name: types.LabelName, Value: "cpu_used"},
+			labels.Label{Name: gloutonTypes.LabelName, Value: "cpu_used"},
 		),
 		// Note: we have both meta-label & normal label because we need to simulare Registry.applyRelabel()
 		// (we need both annotation & getDefaultRelabelConfig())
 		labels.New(
-			labels.Label{Name: types.LabelName, Value: "kubernetes_cpu_limits"},
-			labels.Label{Name: types.LabelOwnerKind, Value: "daemonset"},
-			labels.Label{Name: types.LabelOwnerName, Value: "glouton"},
-			labels.Label{Name: types.LabelNamespace, Value: "default"},
-			labels.Label{Name: types.LabelMetaKubernetesCluster, Value: testK8SClusterName},
-			labels.Label{Name: types.LabelMetaBleemeoTargetAgent, Value: testK8SClusterName},
-			labels.Label{Name: types.LabelMetaBleemeoTargetAgentUUID, Value: testK8SAgent.ID},
-			labels.Label{Name: types.LabelInstance, Value: testK8SClusterName},
-			labels.Label{Name: types.LabelInstanceUUID, Value: testK8SAgent.ID},
+			labels.Label{Name: gloutonTypes.LabelName, Value: "kubernetes_cpu_limits"},
+			labels.Label{Name: gloutonTypes.LabelOwnerKind, Value: "daemonset"},
+			labels.Label{Name: gloutonTypes.LabelOwnerName, Value: "glouton"},
+			labels.Label{Name: gloutonTypes.LabelNamespace, Value: "default"},
+			labels.Label{Name: gloutonTypes.LabelMetaKubernetesCluster, Value: testK8SClusterName},
+			labels.Label{Name: gloutonTypes.LabelMetaBleemeoTargetAgent, Value: testK8SClusterName},
+			labels.Label{Name: gloutonTypes.LabelMetaBleemeoTargetAgentUUID, Value: testK8SAgent.ID},
+			labels.Label{Name: gloutonTypes.LabelInstance, Value: testK8SClusterName},
+			labels.Label{Name: gloutonTypes.LabelInstanceUUID, Value: testK8SAgent.ID},
 		),
 		labels.New(
-			labels.Label{Name: types.LabelName, Value: "kubernetes_cpu_requests"},
-			labels.Label{Name: types.LabelOwnerKind, Value: "daemonset"},
-			labels.Label{Name: types.LabelOwnerName, Value: "glouton"},
-			labels.Label{Name: types.LabelNamespace, Value: "default"},
-			labels.Label{Name: types.LabelMetaKubernetesCluster, Value: testK8SClusterName},
-			labels.Label{Name: types.LabelMetaBleemeoTargetAgent, Value: testK8SClusterName},
-			labels.Label{Name: types.LabelMetaBleemeoTargetAgentUUID, Value: testK8SAgent.ID},
-			labels.Label{Name: types.LabelInstance, Value: testK8SClusterName},
-			labels.Label{Name: types.LabelInstanceUUID, Value: testK8SAgent.ID},
+			labels.Label{Name: gloutonTypes.LabelName, Value: "kubernetes_cpu_requests"},
+			labels.Label{Name: gloutonTypes.LabelOwnerKind, Value: "daemonset"},
+			labels.Label{Name: gloutonTypes.LabelOwnerName, Value: "glouton"},
+			labels.Label{Name: gloutonTypes.LabelNamespace, Value: "default"},
+			labels.Label{Name: gloutonTypes.LabelMetaKubernetesCluster, Value: testK8SClusterName},
+			labels.Label{Name: gloutonTypes.LabelMetaBleemeoTargetAgent, Value: testK8SClusterName},
+			labels.Label{Name: gloutonTypes.LabelMetaBleemeoTargetAgentUUID, Value: testK8SAgent.ID},
+			labels.Label{Name: gloutonTypes.LabelInstance, Value: testK8SClusterName},
+			labels.Label{Name: gloutonTypes.LabelInstanceUUID, Value: testK8SAgent.ID},
 		),
 	}
 
@@ -2366,10 +2367,10 @@ func TestKubernetesMetrics(t *testing.T) {
 	// Therefor Glouton stop emitting all kubernetes global metric, but it won't change which metrics is active or not
 	pushedPoints = []labels.Labels{
 		labels.New(
-			labels.Label{Name: types.LabelName, Value: "kubernetes_kubelet_status"},
+			labels.Label{Name: gloutonTypes.LabelName, Value: "kubernetes_kubelet_status"},
 		),
 		labels.New(
-			labels.Label{Name: types.LabelName, Value: "cpu_used"},
+			labels.Label{Name: gloutonTypes.LabelName, Value: "cpu_used"},
 		),
 	}
 

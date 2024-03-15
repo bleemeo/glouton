@@ -24,16 +24,15 @@ import (
 	"errors"
 	"fmt"
 	"glouton/bleemeo/client"
-	"glouton/bleemeo/internal/cache"
 	"glouton/bleemeo/internal/common"
+	"glouton/bleemeo/internal/synchronizer/types"
 	bleemeoTypes "glouton/bleemeo/types"
 	"glouton/crashreport"
 	"glouton/delay"
 	"glouton/facts"
 	"glouton/logger"
-	"glouton/prometheus/model"
 	"glouton/threshold"
-	"glouton/types"
+	gloutonTypes "glouton/types"
 	"glouton/version"
 	"math/big"
 	"net/http"
@@ -56,24 +55,9 @@ var (
 	errNotExist                   = errors.New("does not exist")
 )
 
-const (
-	syncMethodInfo          = "info"
-	syncMethodAgent         = "agent"
-	syncMethodAccountConfig = "accountconfig"
-	syncMethodMonitor       = "monitor"
-	syncMethodSNMP          = "snmp"
-	syncMethodVSphere       = "vsphere"
-	syncMethodFact          = "facts"
-	syncMethodService       = "service"
-	syncMethodContainer     = "container"
-	syncMethodMetric        = "metric"
-	syncMethodConfig        = "config"
-	syncMethodDiagnostics   = "diagnostics"
-)
-
 // Synchronizer synchronize object with Bleemeo.
 type Synchronizer struct {
-	option Option
+	option types.Option
 	now    func() time.Time
 	inTest bool
 
@@ -122,7 +106,7 @@ type Synchronizer struct {
 	l                      sync.Mutex
 	disabledUntil          time.Time
 	disableReason          bleemeoTypes.DisableReason
-	forceSync              map[string]bool
+	forceSync              map[types.EntityName]types.SyncType
 	pendingMetricsUpdate   []string
 	pendingMonitorsUpdate  []MonitorUpdate
 	thresholdOverrides     map[thresholdOverrideKey]threshold.Threshold
@@ -142,43 +126,12 @@ type thresholdOverrideKey struct {
 	AgentID    string
 }
 
-// Option are parameters for the synchronizer.
-type Option struct {
-	bleemeoTypes.GlobalOption
-	Cache        *cache.Cache
-	PushAppender *model.BufferAppender
-
-	// DisableCallback is a function called when Synchronizer request Bleemeo connector to be disabled
-	// reason state why it's disabled and until set for how long it should be disabled.
-	DisableCallback func(reason bleemeoTypes.DisableReason, until time.Time)
-
-	// UpdateConfigCallback is a function called when Synchronizer detected a AccountConfiguration change
-	UpdateConfigCallback func(ctx context.Context, nameChanged bool)
-
-	// SetInitialized tells the bleemeo connector that the MQTT module can be started
-	SetInitialized func()
-
-	// IsMqttConnected returns whether the MQTT connector is operating nominally, and specifically
-	// that it can receive mqtt notifications. It is useful for the fallback on http polling
-	// described above Synchronizer.lastMaintenanceSync definition.
-	// Note: returns false when the mqtt connector is not enabled.
-	IsMqttConnected func() bool
-
-	// SetBleemeoInMaintenanceMode makes the bleemeo connector wait a day before checking again for maintenance.
-	SetBleemeoInMaintenanceMode func(ctx context.Context, maintenance bool)
-
-	// SetBleemeoInSuspendedMode sets the suspended mode. While Bleemeo is suspended the agent doesn't
-	// create or update objects on the API and stops sending points on MQTT. The suspended mode differs
-	// from the maintenance mode because we stop buffering points to send on MQTT and just drop them.
-	SetBleemeoInSuspendedMode func(suspended bool)
-}
-
 // New return a new Synchronizer.
-func New(option Option) (*Synchronizer, error) {
+func New(option types.Option) (*Synchronizer, error) {
 	return newWithNow(option, time.Now)
 }
 
-func newForTest(option Option, now func() time.Time) (*Synchronizer, error) {
+func newForTest(option types.Option, now func() time.Time) (*Synchronizer, error) {
 	s, err := newWithNow(option, now)
 	if err != nil {
 		return s, err
@@ -189,7 +142,7 @@ func newForTest(option Option, now func() time.Time) (*Synchronizer, error) {
 	return s, nil
 }
 
-func newWithNow(option Option, now func() time.Time) (*Synchronizer, error) {
+func newWithNow(option types.Option, now func() time.Time) (*Synchronizer, error) {
 	nextFullSync := now()
 	fullSyncCount := 0
 
@@ -205,7 +158,7 @@ func newWithNow(option Option, now func() time.Time) (*Synchronizer, error) {
 		option: option,
 		now:    now,
 
-		forceSync:              make(map[string]bool),
+		forceSync:              make(map[types.EntityName]types.SyncType),
 		nextFullSync:           nextFullSync,
 		fullSyncCount:          fullSyncCount,
 		retryableMetricFailure: make(map[bleemeoTypes.FailureKind]bool),
@@ -216,7 +169,7 @@ func newWithNow(option Option, now func() time.Time) (*Synchronizer, error) {
 	return s, nil
 }
 
-func (s *Synchronizer) DiagnosticArchive(_ context.Context, archive types.ArchiveWriter) error {
+func (s *Synchronizer) DiagnosticArchive(_ context.Context, archive gloutonTypes.ArchiveWriter) error {
 	file, err := archive.Create("bleemeo-sync-state.json")
 	if err != nil {
 		return err
@@ -242,7 +195,7 @@ func (s *Synchronizer) DiagnosticArchive(_ context.Context, archive types.Archiv
 		LastMaintenanceSync        time.Time
 		DisabledUntil              time.Time
 		DisableReason              bleemeoTypes.DisableReason
-		ForceSync                  map[string]bool
+		ForceSync                  map[types.EntityName]types.SyncType
 		PendingMetricsUpdateCount  int
 		PendingMonitorsUpdateCount int
 		DelayedContainer           map[string]time.Time
@@ -436,7 +389,7 @@ func (s *Synchronizer) scheduleMetricSync(ctx context.Context, delay time.Durati
 
 		select {
 		case <-timer.C:
-			_, err := s.syncMetrics(ctx, false, false)
+			_, err := s.syncMetrics(ctx, types.SyncTypeNormal, false)
 			if err != nil {
 				logger.V(1).Printf("Delayed metrics sync failed: %v", err)
 			}
@@ -471,7 +424,7 @@ func (s *Synchronizer) DiagnosticPage() string {
 
 	if s.diagnosticClient == nil {
 		s.diagnosticClient = &http.Client{
-			Transport: types.NewHTTPTransport(tlsConfig),
+			Transport: gloutonTypes.NewHTTPTransport(tlsConfig),
 			CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
 				return http.ErrUseLastResponse
 			},
@@ -545,18 +498,18 @@ func (s *Synchronizer) NotifyConfigUpdate(immediate bool) {
 	s.l.Lock()
 	defer s.l.Unlock()
 
-	s.requestSynchronizationLocked(syncMethodInfo, true)
-	s.requestSynchronizationLocked(syncMethodAgent, true)
-	s.requestSynchronizationLocked(syncMethodFact, true)
-	s.requestSynchronizationLocked(syncMethodAccountConfig, true)
+	s.requestSynchronizationLocked(types.EntityInfo, true)
+	s.requestSynchronizationLocked(types.EntityAgent, true)
+	s.requestSynchronizationLocked(types.EntityFact, true)
+	s.requestSynchronizationLocked(types.EntityAccountConfig, true)
 
 	if !immediate {
 		return
 	}
 
-	s.requestSynchronizationLocked(syncMethodMetric, true)
-	s.requestSynchronizationLocked(syncMethodContainer, true)
-	s.requestSynchronizationLocked(syncMethodMonitor, true)
+	s.requestSynchronizationLocked(types.EntityMetric, true)
+	s.requestSynchronizationLocked(types.EntityContainer, true)
+	s.requestSynchronizationLocked(types.EntityMonitor, true)
 }
 
 // LastMetricActivation return the date at which last metric was activated/registrered.
@@ -574,7 +527,7 @@ func (s *Synchronizer) UpdateMetrics(metricUUID ...string) {
 
 	if len(metricUUID) == 1 && metricUUID[0] == "" {
 		// We don't known the metric to update. Update all
-		s.requestSynchronizationLocked(syncMethodMetric, true)
+		s.requestSynchronizationLocked(types.EntityMetric, true)
 		s.pendingMetricsUpdate = nil
 
 		return
@@ -582,7 +535,7 @@ func (s *Synchronizer) UpdateMetrics(metricUUID ...string) {
 
 	s.pendingMetricsUpdate = append(s.pendingMetricsUpdate, metricUUID...)
 
-	s.requestSynchronizationLocked(syncMethodMetric, false)
+	s.requestSynchronizationLocked(types.EntityMetric, false)
 }
 
 // UpdateContainers request to update a containers.
@@ -590,7 +543,7 @@ func (s *Synchronizer) UpdateContainers() {
 	s.l.Lock()
 	defer s.l.Unlock()
 
-	s.requestSynchronizationLocked(syncMethodContainer, false)
+	s.requestSynchronizationLocked(types.EntityContainer, false)
 }
 
 // UpdateInfo request to update a info, which include the time_drift.
@@ -598,7 +551,7 @@ func (s *Synchronizer) UpdateInfo() {
 	s.l.Lock()
 	defer s.l.Unlock()
 
-	s.requestSynchronizationLocked(syncMethodInfo, false)
+	s.requestSynchronizationLocked(types.EntityInfo, false)
 }
 
 // UpdateMonitors requests to update all the monitors.
@@ -606,8 +559,8 @@ func (s *Synchronizer) UpdateMonitors() {
 	s.l.Lock()
 	defer s.l.Unlock()
 
-	s.requestSynchronizationLocked(syncMethodAccountConfig, true)
-	s.requestSynchronizationLocked(syncMethodMonitor, true)
+	s.requestSynchronizationLocked(types.EntityAccountConfig, true)
+	s.requestSynchronizationLocked(types.EntityMonitor, true)
 }
 
 func (s *Synchronizer) popPendingMetricsUpdate() []string {
@@ -638,13 +591,13 @@ func (s *Synchronizer) waitCPUMetric(ctx context.Context) {
 
 	metrics := s.option.Cache.Metrics()
 	for _, m := range metrics {
-		if m.Labels[types.LabelName] == "cpu_used" || m.Labels[types.LabelName] == "node_cpu_seconds_total" {
+		if m.Labels[gloutonTypes.LabelName] == "cpu_used" || m.Labels[gloutonTypes.LabelName] == "node_cpu_seconds_total" {
 			return
 		}
 	}
 
-	filter := map[string]string{types.LabelName: "cpu_used"}
-	filter2 := map[string]string{types.LabelName: "node_cpu_seconds_total"}
+	filter := map[string]string{gloutonTypes.LabelName: "cpu_used"}
+	filter2 := map[string]string{gloutonTypes.LabelName: "node_cpu_seconds_total"}
 	count := 0
 
 	for ctx.Err() == nil && count < 20 {
@@ -762,7 +715,7 @@ func (s *Synchronizer) HealthCheck() bool {
 	return true
 }
 
-func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) (map[string]bool, error) {
+func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) (map[types.EntityName]types.SyncType, error) {
 	var wasCreation, updateThresholds bool
 
 	startAt := s.now()
@@ -781,47 +734,47 @@ func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) (map[str
 		s.option.NotifyFirstRegistration()
 		// Do one pass of metric registration to register agent_status.
 		// MQTT connection require this metric to exists before connecting
-		_, _ = s.syncMetrics(ctx, false, true)
+		_, _ = s.syncMetrics(ctx, types.SyncTypeNormal, true)
 
 		// Also do syncAgent, because agent configuration is also required for MQTT connection
-		_, _ = s.syncAgent(ctx, false, true)
+		_, _ = s.syncAgent(ctx, types.SyncTypeNormal, true)
 
 		// Then wait CPU (which should arrive the all other system metrics)
 		// before continuing to process.
 		s.waitCPUMetric(ctx)
 	}
 
-	syncMethods, fullsync := s.syncToPerform(ctx)
+	syncMethods, forceCacheRefresh := s.syncToPerform(ctx)
 
 	if len(syncMethods) == 0 {
 		return syncMethods, nil
 	}
 
 	s.client = &wrapperClient{
-		s:      s,
-		client: s.realClient,
+		checkDuplicated: s.checkDuplicated,
+		client:          s.realClient,
 	}
 	previousCount := s.realClient.RequestsCount()
 
 	syncStep := []struct {
-		name                   string
-		method                 func(ctx context.Context, fullSync, onlyEssential bool) (updateThresholds bool, err error)
+		name                   types.EntityName
+		method                 func(context.Context, types.SyncType, bool) (updateThresholds bool, err error)
 		enabledInMaintenance   bool
 		enabledInSuspendedMode bool
 		skipOnlyEssential      bool // should be true for method that ignore onlyEssential
 	}{
-		{name: syncMethodInfo, method: s.syncInfo, enabledInMaintenance: true, skipOnlyEssential: true},
-		{name: syncMethodAgent, method: s.syncAgent, enabledInSuspendedMode: true, skipOnlyEssential: true},
-		{name: syncMethodAccountConfig, method: s.syncAccountConfig, enabledInSuspendedMode: true, skipOnlyEssential: true},
-		{name: syncMethodFact, method: s.syncFacts},
-		{name: syncMethodContainer, method: s.syncContainers},
-		{name: syncMethodSNMP, method: s.syncSNMP},
-		{name: syncMethodVSphere, method: s.syncVSphere},
-		{name: syncMethodService, method: s.syncServices},
-		{name: syncMethodMonitor, method: s.syncMonitors, skipOnlyEssential: true},
-		{name: syncMethodMetric, method: s.syncMetrics},
-		{name: syncMethodConfig, method: s.syncConfig},
-		{name: syncMethodDiagnostics, method: s.syncDiagnostics},
+		{name: types.EntityInfo, method: s.syncInfo, enabledInMaintenance: true, skipOnlyEssential: true},
+		{name: types.EntityAgent, method: s.syncAgent, enabledInSuspendedMode: true, skipOnlyEssential: true},
+		{name: types.EntityAccountConfig, method: s.syncAccountConfig, enabledInSuspendedMode: true, skipOnlyEssential: true},
+		{name: types.EntityFact, method: s.syncFacts},
+		{name: types.EntityContainer, method: s.syncContainers},
+		{name: types.EntitySNMP, method: s.syncSNMP},
+		{name: types.EntityVSphere, method: s.syncVSphere},
+		{name: types.EntityService, method: s.syncServices},
+		{name: types.EntityMonitor, method: s.syncMonitors, skipOnlyEssential: true},
+		{name: types.EntityMetric, method: s.syncMetrics},
+		{name: types.EntityConfig, method: s.syncConfig},
+		{name: types.EntityDiagnostics, method: s.syncDiagnostics},
 	}
 
 	var firstErr error
@@ -851,9 +804,9 @@ func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) (map[str
 			// maintenance.
 			// This ensures that if the maintenance takes a long time, we will still update the
 			// objects that should have been synced in that period.
-			if full, ok := syncMethods[step.name]; ok {
+			if syncType := syncMethods[step.name]; syncType != types.SyncTypeNone {
 				s.l.Lock()
-				s.requestSynchronizationLocked(step.name, full)
+				s.requestSynchronizationLocked(step.name, syncType == types.SyncTypeForceCacheRefresh)
 				s.l.Unlock()
 			}
 
@@ -900,7 +853,7 @@ func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) (map[str
 		s.UpdateUnitsAndThresholds(ctx, false)
 	}
 
-	if fullsync && firstErr == nil {
+	if forceCacheRefresh && firstErr == nil {
 		s.option.Cache.Save()
 
 		s.fullSyncCount++
@@ -927,7 +880,7 @@ func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) (map[str
 // syncToPerform returns the methods that should be synced in a map. For each method
 // in the map, the value indicates whether a fullsync should be performed.
 // It also returns true if the current sync is a full sync.
-func (s *Synchronizer) syncToPerform(ctx context.Context) (map[string]bool, bool) {
+func (s *Synchronizer) syncToPerform(ctx context.Context) (map[types.EntityName]types.SyncType, bool) {
 	// Take values that will be used later before taking the lock. This reduce dead-lock risk
 	localFacts, _ := s.option.Facts.Facts(ctx, 24*time.Hour)
 	currentSNMPCount := s.option.SNMPOnlineTarget()
@@ -940,11 +893,14 @@ func (s *Synchronizer) syncToPerform(ctx context.Context) (map[string]bool, bool
 	s.l.Lock()
 	defer s.l.Unlock()
 
-	syncMethods := make(map[string]bool)
+	syncMethods := make(map[types.EntityName]types.SyncType)
 
 	fullSync := false
+	syncRequest := types.SyncTypeNormal
+
 	if s.nextFullSync.Before(s.now()) {
 		fullSync = true
+		syncRequest = types.SyncTypeForceCacheRefresh
 	}
 
 	agent := s.option.Cache.Agent()
@@ -952,43 +908,44 @@ func (s *Synchronizer) syncToPerform(ctx context.Context) (map[string]bool, bool
 	nextConfigAt := agent.NextConfigAt
 	if !nextConfigAt.IsZero() && nextConfigAt.Before(s.now()) {
 		fullSync = true
+		syncRequest = types.SyncTypeForceCacheRefresh
 	}
 
 	if s.currentConfigNotified != agent.CurrentConfigID {
-		syncMethods[syncMethodAccountConfig] = true
+		syncMethods[types.EntityAccountConfig] = types.SyncTypeForceCacheRefresh
 	}
 
 	if fullSync {
-		syncMethods[syncMethodInfo] = true
-		syncMethods[syncMethodAgent] = true
-		syncMethods[syncMethodAccountConfig] = true
-		syncMethods[syncMethodMonitor] = true
-		syncMethods[syncMethodSNMP] = true
-		syncMethods[syncMethodVSphere] = true
-		syncMethods[syncMethodDiagnostics] = true
+		syncMethods[types.EntityInfo] = types.SyncTypeForceCacheRefresh
+		syncMethods[types.EntityAgent] = types.SyncTypeForceCacheRefresh
+		syncMethods[types.EntityAccountConfig] = types.SyncTypeForceCacheRefresh
+		syncMethods[types.EntityMonitor] = types.SyncTypeForceCacheRefresh
+		syncMethods[types.EntitySNMP] = types.SyncTypeForceCacheRefresh
+		syncMethods[types.EntityVSphere] = types.SyncTypeForceCacheRefresh
+		syncMethods[types.EntityDiagnostics] = types.SyncTypeForceCacheRefresh
 	}
 
 	if fullSync || s.lastFactUpdatedAt != localFacts[facts.FactUpdatedAt] {
-		syncMethods[syncMethodFact] = fullSync
+		syncMethods[types.EntityFact] = syncRequest
 	}
 
 	if s.lastSNMPcount != currentSNMPCount {
-		syncMethods[syncMethodFact] = fullSync
-		syncMethods[syncMethodSNMP] = fullSync
+		syncMethods[types.EntityFact] = syncRequest
+		syncMethods[types.EntitySNMP] = syncRequest
 		// TODO: this isn't idea. If the synchronization fail, it won't be retried.
 		// I think the ideal fix would be to always retry all syncMethods that was to synchronize but failed.
 		s.lastSNMPcount = currentSNMPCount
 	}
 
 	if lastVSphereChange.After(s.lastVSphereUpdate) {
-		syncMethods[syncMethodVSphere] = true
+		syncMethods[types.EntityVSphere] = types.SyncTypeForceCacheRefresh
 		s.lastVSphereUpdate = lastVSphereChange
 	}
 
 	// After a reload, the config has been changed, so we want to do a fullsync
 	// without waiting the nextFullSync that is kept between reload.
 	if fullSync || !s.configSyncDone {
-		syncMethods[syncMethodConfig] = true
+		syncMethods[types.EntityConfig] = types.SyncTypeForceCacheRefresh
 	}
 
 	minDelayed := time.Time{}
@@ -1000,39 +957,44 @@ func (s *Synchronizer) syncToPerform(ctx context.Context) (map[string]bool, bool
 	}
 
 	if fullSync || s.lastSync.Before(lastDiscovery) || (!minDelayed.IsZero() && s.now().After(minDelayed)) {
-		syncMethods[syncMethodService] = fullSync
-		syncMethods[syncMethodContainer] = fullSync
+		syncMethods[types.EntityService] = syncRequest
+		syncMethods[types.EntityContainer] = syncRequest
 	}
 
-	if _, ok := syncMethods[syncMethodService]; ok {
+	if syncMethods[types.EntityService] != types.SyncTypeNone {
 		// Metrics registration may need services to be synced, trigger metrics synchronization
-		syncMethods[syncMethodMetric] = false
+		syncMethods[types.EntityMetric] = types.SyncTypeNormal
 	}
 
-	if _, ok := syncMethods[syncMethodContainer]; ok {
+	if syncMethods[types.EntityContainer] != types.SyncTypeNone {
 		// Metrics registration may need containers to be synced, trigger metrics synchronization
-		syncMethods[syncMethodMetric] = false
+		syncMethods[types.EntityMetric] = types.SyncTypeNormal
 	}
 
-	if _, ok := syncMethods[syncMethodMonitor]; ok {
+	if syncMethods[types.EntityMonitor] != types.SyncTypeNone {
 		// Metrics registration may need monitors to be synced, trigger metrics synchronization
-		syncMethods[syncMethodMetric] = false
+		syncMethods[types.EntityMetric] = types.SyncTypeNormal
 	}
 
 	if fullSync || s.now().After(s.metricRetryAt) || s.lastSync.Before(lastDiscovery) || s.lastSync.Before(lastAnnotationChange) || s.lastMetricCount != currentMetricCount {
-		syncMethods[syncMethodMetric] = fullSync
+		syncMethods[types.EntityMetric] = syncRequest
 	}
 
 	// when the mqtt connector is not connected, we cannot receive notifications to get out of maintenance
 	// mode, so we poll more often.
 	if s.maintenanceMode && !mqttIsConnected && s.now().After(s.lastMaintenanceSync.Add(15*time.Minute)) {
-		s.requestSynchronizationLocked(syncMethodInfo, false)
+		s.requestSynchronizationLocked(types.EntityInfo, false)
 
 		s.lastMaintenanceSync = s.now()
 	}
 
 	for k, full := range s.forceSync {
-		syncMethods[k] = full || syncMethods[k]
+		if full == types.SyncTypeForceCacheRefresh {
+			syncMethods[k] = types.SyncTypeForceCacheRefresh
+		} else if syncMethods[k] == types.SyncTypeNone {
+			syncMethods[k] = types.SyncTypeNormal
+		}
+
 		delete(s.forceSync, k)
 	}
 
@@ -1040,17 +1002,19 @@ func (s *Synchronizer) syncToPerform(ctx context.Context) (map[string]bool, bool
 		// Ensure lastInfo is enough up-to-date.
 		// This will help detection quickly a change on /v1/info/ and will ensure the
 		// metric time_drift is updated recently to avoid unwanted deactivation.
-		syncMethods[syncMethodInfo] = false || syncMethods[syncMethodInfo]
+		if syncMethods[types.EntityInfo] == types.SyncTypeNone {
+			syncMethods[types.EntityInfo] = types.SyncTypeNormal
+		}
 	}
 
 	return syncMethods, fullSync
 }
 
 // checkDuplicated checks if another glouton is running with the same ID.
-func (s *Synchronizer) checkDuplicated(ctx context.Context) error {
+func (s *Synchronizer) checkDuplicated(ctx context.Context, client types.RawClient) error {
 	oldFacts := s.option.Cache.FactsByKey()
 
-	if err := s.factsUpdateList(ctx); err != nil {
+	if err := s.factsUpdateList(ctx, client); err != nil {
 		return fmt.Errorf("update facts list: %w", err)
 	}
 
@@ -1083,7 +1047,7 @@ func (s *Synchronizer) checkDuplicated(ctx context.Context) error {
 		"last_duplication_date": time.Now(),
 	}
 
-	_, err := s.client.Do(ctx, "PATCH", fmt.Sprintf("v1/agent/%s/", s.agentID), params, data, nil)
+	_, err := client.Do(ctx, "PATCH", fmt.Sprintf("v1/agent/%s/", s.agentID), params, data, nil)
 	if err != nil {
 		logger.V(1).Printf("Failed to update duplication date: %s", err)
 	}
@@ -1261,15 +1225,17 @@ func (s *Synchronizer) SetMQTTConnected(isConnected bool) {
 	s.isMQTTConnected = &isConnected
 
 	if shouldUpdateStatus {
-		s.requestSynchronizationLocked(syncMethodInfo, false)
+		s.requestSynchronizationLocked(types.EntityInfo, false)
 		s.shouldUpdateMQTTStatus = true
 	}
 }
 
 // requestSynchronizationLocked request specified entity to be synchronized on next synchronization execution.
 // Caller must hold the lock s.l.
-func (s *Synchronizer) requestSynchronizationLocked(entityName string, forceCacheRefresh bool) {
-	if !s.forceSync[entityName] {
-		s.forceSync[entityName] = forceCacheRefresh
+func (s *Synchronizer) requestSynchronizationLocked(entityName types.EntityName, forceCacheRefresh bool) {
+	if forceCacheRefresh {
+		s.forceSync[entityName] = types.SyncTypeForceCacheRefresh
+	} else if s.forceSync[entityName] == types.SyncTypeNone {
+		s.forceSync[entityName] = types.SyncTypeNormal
 	}
 }

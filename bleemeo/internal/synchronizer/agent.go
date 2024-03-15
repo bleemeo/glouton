@@ -21,7 +21,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"glouton/bleemeo/types"
+	"glouton/bleemeo/internal/synchronizer/types"
+	bleemeoTypes "glouton/bleemeo/types"
 	"glouton/logger"
 )
 
@@ -32,8 +33,10 @@ const (
 	agentFields   = "account,agent_type,created_at,current_config,display_name,fqdn,id,is_cluster_leader,next_config_at,tags"
 )
 
-func (s *Synchronizer) syncAgent(ctx context.Context, fullSync bool, onlyEssential bool) (updateThresholds bool, err error) {
-	if err := s.syncMainAgent(ctx); err != nil {
+func (s *Synchronizer) syncAgent(ctx context.Context, syncType types.SyncType, onlyEssential bool) (updateThresholds bool, err error) {
+	apiClient := s.client
+
+	if err := s.syncMainAgent(ctx, apiClient); err != nil {
 		return false, err
 	}
 
@@ -41,8 +44,8 @@ func (s *Synchronizer) syncAgent(ctx context.Context, fullSync bool, onlyEssenti
 		return false, nil
 	}
 
-	if fullSync {
-		if err := s.agentsUpdateList(ctx); err != nil {
+	if syncType == types.SyncTypeForceCacheRefresh {
+		if err := s.agentsUpdateList(ctx, apiClient); err != nil {
 			return false, err
 		}
 	}
@@ -50,25 +53,25 @@ func (s *Synchronizer) syncAgent(ctx context.Context, fullSync bool, onlyEssenti
 	return false, nil
 }
 
-func (s *Synchronizer) syncMainAgent(ctx context.Context) error {
-	var agent types.Agent
+func (s *Synchronizer) syncMainAgent(ctx context.Context, apiClient types.RawClient) error {
+	var agent bleemeoTypes.Agent
 
 	params := map[string]string{
 		"fields": agentFields,
 	}
-	data := map[string][]types.Tag{
-		"tags": make([]types.Tag, 0),
+	data := map[string][]bleemeoTypes.Tag{
+		"tags": make([]bleemeoTypes.Tag, 0),
 	}
 
 	for _, t := range s.option.Config.Tags {
 		if len(t) <= apiTagsLength && t != "" {
-			data["tags"] = append(data["tags"], types.Tag{Name: t})
+			data["tags"] = append(data["tags"], bleemeoTypes.Tag{Name: t})
 		}
 	}
 
 	previousAgent := s.option.Cache.Agent()
 
-	_, err := s.client.Do(ctx, "PATCH", fmt.Sprintf("v1/agent/%s/", s.agentID), params, data, &agent)
+	_, err := apiClient.Do(ctx, "PATCH", fmt.Sprintf("v1/agent/%s/", s.agentID), params, data, &agent)
 	if err != nil {
 		return err
 	}
@@ -101,22 +104,22 @@ func (s *Synchronizer) syncMainAgent(ctx context.Context) error {
 	return nil
 }
 
-func (s *Synchronizer) agentsUpdateList(ctx context.Context) error {
+func (s *Synchronizer) agentsUpdateList(ctx context.Context, apiClient types.RawClient) error {
 	oldAgents := s.option.Cache.AgentsByUUID()
 
 	params := map[string]string{
 		"fields": agentFields,
 	}
 
-	result, err := s.client.Iter(ctx, "agent", params)
+	result, err := apiClient.Iter(ctx, "agent", params)
 	if err != nil {
 		return err
 	}
 
-	agents := make([]types.Agent, len(result))
+	agents := make([]bleemeoTypes.Agent, len(result))
 
 	for i, jsonMessage := range result {
-		var agent types.Agent
+		var agent bleemeoTypes.Agent
 
 		if err := json.Unmarshal(jsonMessage, &agent); err != nil {
 			continue

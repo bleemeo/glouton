@@ -21,7 +21,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"glouton/bleemeo/client"
-	"glouton/bleemeo/types"
+	"glouton/bleemeo/internal/synchronizer/types"
+	bleemeoTypes "glouton/bleemeo/types"
 	"glouton/facts"
 	"glouton/logger"
 	"time"
@@ -44,8 +45,8 @@ func getEssentialFacts() map[string]bool {
 	}
 }
 
-func (s *Synchronizer) syncFacts(ctx context.Context, fullSync bool, onlyEssential bool) (updateThresholds bool, err error) {
-	_ = fullSync
+func (s *Synchronizer) syncFacts(ctx context.Context, syncType types.SyncType, onlyEssential bool) (updateThresholds bool, err error) {
+	_ = syncType
 
 	localFacts, err := s.option.Facts.Facts(ctx, 24*time.Hour)
 	if err != nil {
@@ -71,7 +72,7 @@ func (s *Synchronizer) syncFacts(ctx context.Context, fullSync bool, onlyEssenti
 	allAgentFacts[s.agentID] = localFacts
 
 	if !onlyEssential {
-		agentTypeID, found := s.getAgentType(types.AgentTypeSNMP)
+		agentTypeID, found := s.getAgentType(bleemeoTypes.AgentTypeSNMP)
 		if !found {
 			return false, errRetryLater
 		}
@@ -109,10 +110,12 @@ func (s *Synchronizer) syncFacts(ctx context.Context, fullSync bool, onlyEssenti
 		}
 	}
 
+	apiClient := s.client
+
 	// s.factUpdateList() is already done by checkDuplicated
 	// s.serviceDeleteFromRemote() is unneeded, API don't delete facts
 
-	if err := s.factRegister(ctx, allAgentFacts); err != nil {
+	if err := s.factRegister(ctx, apiClient, allAgentFacts); err != nil {
 		return false, err
 	}
 
@@ -121,7 +124,7 @@ func (s *Synchronizer) syncFacts(ctx context.Context, fullSync bool, onlyEssenti
 		return false, nil
 	}
 
-	if err := s.factDeleteFromLocal(ctx, allAgentFacts); err != nil {
+	if err := s.factDeleteFromLocal(ctx, apiClient, allAgentFacts); err != nil {
 		return false, err
 	}
 
@@ -130,18 +133,18 @@ func (s *Synchronizer) syncFacts(ctx context.Context, fullSync bool, onlyEssenti
 	return false, nil
 }
 
-func (s *Synchronizer) factsUpdateList(ctx context.Context) error {
+func (s *Synchronizer) factsUpdateList(ctx context.Context, apiClient types.RawClient) error {
 	params := map[string]string{}
 
-	result, err := s.client.Iter(ctx, "agentfact", params)
+	result, err := apiClient.Iter(ctx, "agentfact", params)
 	if err != nil {
 		return err
 	}
 
-	facts := make([]types.AgentFact, 0, len(result))
+	facts := make([]bleemeoTypes.AgentFact, 0, len(result))
 
 	for _, jsonMessage := range result {
-		var fact types.AgentFact
+		var fact bleemeoTypes.AgentFact
 
 		if err := json.Unmarshal(jsonMessage, &fact); err != nil {
 			continue
@@ -155,7 +158,7 @@ func (s *Synchronizer) factsUpdateList(ctx context.Context) error {
 	return nil
 }
 
-func (s *Synchronizer) factRegister(ctx context.Context, allAgentFacts map[string]map[string]string) error {
+func (s *Synchronizer) factRegister(ctx context.Context, apiClient types.RawClient, allAgentFacts map[string]map[string]string) error {
 	registeredFacts := s.option.Cache.FactsByKey()
 	facts := s.option.Cache.Facts()
 
@@ -175,9 +178,9 @@ func (s *Synchronizer) factRegister(ctx context.Context, allAgentFacts map[strin
 				"value": value,
 			}
 
-			var response types.AgentFact
+			var response bleemeoTypes.AgentFact
 
-			_, err := s.client.Do(ctx, "POST", "v1/agentfact/", nil, payload, &response)
+			_, err := apiClient.Do(ctx, "POST", "v1/agentfact/", nil, payload, &response)
 			if err != nil {
 				return err
 			}
@@ -192,7 +195,7 @@ func (s *Synchronizer) factRegister(ctx context.Context, allAgentFacts map[strin
 	return nil
 }
 
-func (s *Synchronizer) factDeleteFromLocal(ctx context.Context, allAgentFacts map[string]map[string]string) error {
+func (s *Synchronizer) factDeleteFromLocal(ctx context.Context, apiClient types.RawClient, allAgentFacts map[string]map[string]string) error {
 	duplicatedKey := make(map[string]bool)
 	registeredFacts := s.option.Cache.FactsByUUID()
 
@@ -206,7 +209,7 @@ func (s *Synchronizer) factDeleteFromLocal(ctx context.Context, allAgentFacts ma
 			continue
 		}
 
-		_, err := s.client.Do(ctx, "DELETE", fmt.Sprintf("v1/agentfact/%s/", v.ID), nil, nil, nil)
+		_, err := apiClient.Do(ctx, "DELETE", fmt.Sprintf("v1/agentfact/%s/", v.ID), nil, nil, nil)
 		// If the fact was not found it has already been deleted.
 		if err != nil && !client.IsNotFound(err) {
 			return err
@@ -216,7 +219,7 @@ func (s *Synchronizer) factDeleteFromLocal(ctx context.Context, allAgentFacts ma
 		delete(registeredFacts, k)
 	}
 
-	facts := make([]types.AgentFact, 0, len(registeredFacts))
+	facts := make([]bleemeoTypes.AgentFact, 0, len(registeredFacts))
 
 	for _, v := range registeredFacts {
 		facts = append(facts, v)
