@@ -122,7 +122,6 @@ func (s *Synchronizer) syncDiagnostics(ctx context.Context, _, _ bool) (updateTh
 	}
 
 	s.onDemandDiagnosticLock.Lock()
-	defer s.onDemandDiagnosticLock.Unlock()
 
 	if s.onDemandDiagnostic != nil {
 		needUpload := true
@@ -145,6 +144,8 @@ func (s *Synchronizer) syncDiagnostics(ctx context.Context, _, _ bool) (updateTh
 			}
 		}
 	}
+
+	s.onDemandDiagnosticLock.Unlock()
 
 	if err = s.uploadDiagnostics(ctx, localDiagnostics); err != nil {
 		// We "ignore" error from diagnostics upload because:
