@@ -29,7 +29,7 @@ import (
 	"time"
 
 	"github.com/AstromechZA/etcpwdparse"
-	"github.com/cespare/xxhash"
+	"github.com/cespare/xxhash/v2"
 	"github.com/shirou/gopsutil/v3/cpu"
 	"github.com/shirou/gopsutil/v3/host"
 	"github.com/shirou/gopsutil/v3/mem"

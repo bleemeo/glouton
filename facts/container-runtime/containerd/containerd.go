@@ -34,8 +34,8 @@ import (
 	"sync"
 	"time"
 
-	v1 "github.com/containerd/cgroups/stats/v1"
-	v2 "github.com/containerd/cgroups/v2/stats"
+	v1 "github.com/containerd/cgroups/v3/cgroup1/stats"
+	v2 "github.com/containerd/cgroups/v3/cgroup2/stats"
 	"github.com/containerd/containerd"
 	pbEvents "github.com/containerd/containerd/api/events"
 	"github.com/containerd/containerd/api/services/tasks/v1"
@@ -291,49 +291,49 @@ func convertMetric(data interface{}) (map[string]uint64, error) {
 
 	switch value := data.(type) {
 	case *v1.Metrics:
-		for _, row := range value.Network {
+		for _, row := range value.GetNetwork() {
 			if row != nil {
-				valueMap["container_net_bits_sent"] += row.TxBytes * 8
-				valueMap["container_net_bits_recv"] += row.RxBytes * 8
+				valueMap["container_net_bits_sent"] += row.GetTxBytes() * 8
+				valueMap["container_net_bits_recv"] += row.GetRxBytes() * 8
 			}
 		}
 
-		if value.CPU != nil && value.CPU.Usage != nil {
+		if value.GetCPU() != nil && value.GetCPU().GetUsage() != nil {
 			// Convert value from nano-seconds to micro-second
-			valueMap["container_cpu_used"] = value.CPU.Usage.Total / 1e3
+			valueMap["container_cpu_used"] = value.GetCPU().GetUsage().GetTotal() / 1e3
 		}
 
-		if value.Blkio != nil {
-			for _, row := range value.Blkio.IoServiceBytesRecursive {
-				if row != nil && row.Op == "Read" {
-					valueMap["container_io_read_bytes"] += row.Value
-				} else if row != nil && row.Op == "Write" {
-					valueMap["container_io_write_bytes"] += row.Value
+		if value.GetBlkio() != nil {
+			for _, row := range value.GetBlkio().GetIoServiceBytesRecursive() {
+				if row != nil && row.GetOp() == "Read" {
+					valueMap["container_io_read_bytes"] += row.GetValue()
+				} else if row != nil && row.GetOp() == "Write" {
+					valueMap["container_io_write_bytes"] += row.GetValue()
 				}
 			}
 		}
 
-		if value.Memory != nil && value.Memory.Usage != nil {
-			valueMap["container_mem_used"] = value.Memory.Usage.Usage
-			valueMap["container_mem_limit"] = value.Memory.Usage.Limit
+		if value.GetMemory() != nil && value.GetMemory().GetUsage() != nil {
+			valueMap["container_mem_used"] = value.GetMemory().GetUsage().GetUsage()
+			valueMap["container_mem_limit"] = value.GetMemory().GetUsage().GetLimit()
 		}
 	case *v2.Metrics:
-		if value.CPU != nil {
-			valueMap["container_cpu_used"] = value.CPU.UsageUsec
+		if value.GetCPU() != nil {
+			valueMap["container_cpu_used"] = value.GetCPU().GetUsageUsec()
 		}
 
-		if value.Io != nil {
-			for _, row := range value.Io.Usage {
+		if value.GetIo() != nil {
+			for _, row := range value.GetIo().GetUsage() {
 				if row != nil {
-					valueMap["container_io_read_bytes"] += row.Rbytes
-					valueMap["container_io_write_bytes"] += row.Wbytes
+					valueMap["container_io_read_bytes"] += row.GetRbytes()
+					valueMap["container_io_write_bytes"] += row.GetWbytes()
 				}
 			}
 		}
 
-		if value.Memory != nil {
-			valueMap["container_mem_used"] = value.Memory.Usage
-			valueMap["container_mem_limit"] = value.Memory.UsageLimit
+		if value.GetMemory() != nil {
+			valueMap["container_mem_used"] = value.GetMemory().GetUsage()
+			valueMap["container_mem_limit"] = value.GetMemory().GetUsageLimit()
 		}
 	default:
 		return nil, errNotImplemented
