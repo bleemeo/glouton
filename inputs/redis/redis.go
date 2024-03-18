@@ -25,10 +25,10 @@ import (
 	"reflect"
 	"unsafe"
 
-	goredis "github.com/go-redis/redis"
 	"github.com/influxdata/telegraf"
 	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"
 	"github.com/influxdata/telegraf/plugins/inputs/redis"
+	goredis "github.com/redis/go-redis/v9"
 )
 
 var (

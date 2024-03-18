@@ -196,11 +196,11 @@ func (s *seriesSample) At() (int64, float64) {
 	return s.data[s.offset].Time.UnixMilli(), s.data[s.offset].Value
 }
 
-func (s *seriesSample) AtHistogram() (int64, *histogram.Histogram) {
+func (s *seriesSample) AtHistogram(*histogram.Histogram) (int64, *histogram.Histogram) {
 	return 0, nil
 }
 
-func (s *seriesSample) AtFloatHistogram() (int64, *histogram.FloatHistogram) {
+func (s *seriesSample) AtFloatHistogram(*histogram.FloatHistogram) (int64, *histogram.FloatHistogram) {
 	return 0, nil
 }
 

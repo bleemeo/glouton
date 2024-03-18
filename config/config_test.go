@@ -23,8 +23,8 @@ import (
 	"dario.cat/mergo"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
-	"github.com/knadh/koanf"
 	"github.com/knadh/koanf/providers/structs"
+	"github.com/knadh/koanf/v2"
 	bbConf "github.com/prometheus/blackbox_exporter/config"
 	"github.com/prometheus/common/config"
 )
