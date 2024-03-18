@@ -202,7 +202,7 @@ func (s *Synchronizer) uploadDiagnostic(ctx context.Context, diagnostic diagnost
 	buf := new(bytes.Buffer)
 	multipartWriter := multipart.NewWriter(buf)
 
-	err := multipartWriter.WriteField("diagnostic_type", strconv.Itoa(diagnostic.diagnosticType))
+	err := multipartWriter.WriteField("type", strconv.Itoa(diagnostic.diagnosticType))
 	if err != nil {
 		return err
 	}
