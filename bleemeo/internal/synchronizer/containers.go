@@ -145,7 +145,7 @@ func (s *Synchronizer) containerRegisterAndUpdate(ctx context.Context, apiClient
 		remoteIndexByName[v.Name] = i
 	}
 
-	newDelayedContainer := make(map[string]time.Time, len(s.delayedContainer))
+	newDelayedContainer := make(map[string]time.Time, len(s.state.delayedContainer))
 
 	for _, container := range localContainers {
 		if s.delayedContainerCheck(newDelayedContainer, container) {
@@ -222,7 +222,10 @@ func (s *Synchronizer) containerRegisterAndUpdate(ctx context.Context, apiClient
 	}
 
 	s.option.Cache.SetContainers(remoteContainers)
-	s.delayedContainer = newDelayedContainer
+
+	s.state.l.Lock()
+	s.state.delayedContainer = newDelayedContainer
+	s.state.l.Unlock()
 
 	return nil
 }

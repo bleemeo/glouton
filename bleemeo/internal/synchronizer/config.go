@@ -78,7 +78,9 @@ func (s *Synchronizer) syncConfig(
 		return false, err
 	}
 
-	s.configSyncDone = true
+	s.state.l.Lock()
+	s.state.configSyncDone = true
+	s.state.l.Unlock()
 
 	return false, nil
 }

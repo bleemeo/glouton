@@ -581,10 +581,10 @@ func (s *Synchronizer) syncMetrics(ctx context.Context, syncType types.SyncType,
 		return updateThresholds, err
 	}
 
-	s.l.Lock()
-	defer s.l.Unlock()
+	s.state.l.Lock()
+	defer s.state.l.Unlock()
 
-	s.lastMetricCount = len(localMetrics)
+	s.state.lastMetricCount = len(localMetrics)
 
 	return updateThresholds, nil
 }
@@ -1022,15 +1022,15 @@ func (mr *metricRegisterer) registerMetrics(ctx context.Context, localMetrics []
 		failedRegistrations = append(failedRegistrations, failedRegistration)
 	}
 
-	mr.s.l.Lock()
+	mr.s.state.l.Lock()
 
-	mr.s.metricRetryAt = minRetryAt
+	mr.s.state.metricRetryAt = minRetryAt
 
 	if mr.doneAtLeastOne {
-		mr.s.lastMetricActivation = mr.s.now()
+		mr.s.state.lastMetricActivation = mr.s.now()
 	}
 
-	mr.s.l.Unlock()
+	mr.s.state.l.Unlock()
 
 	mr.s.option.Cache.SetMetricRegistrationsFail(failedRegistrations)
 
@@ -1583,9 +1583,9 @@ func (s *Synchronizer) metricDeactivate(ctx context.Context, apiClient types.Raw
 		s.retryableMetricFailure[bleemeoTypes.FailureTooManyStandardMetrics] = true
 
 		if len(s.option.Cache.MetricRegistrationsFail()) > 0 {
-			s.l.Lock()
-			s.metricRetryAt = s.now()
-			s.l.Unlock()
+			s.state.l.Lock()
+			s.state.metricRetryAt = s.now()
+			s.state.l.Unlock()
 		}
 	}
 

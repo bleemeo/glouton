@@ -105,15 +105,15 @@ func (s *Synchronizer) syncDiagnostics(ctx context.Context, syncType types.SyncT
 }
 
 func (s *Synchronizer) listOnDemandDiagnostics() []diagnosticWithBleemeoInfo {
-	s.onDemandDiagnosticLock.Lock()
-	defer s.onDemandDiagnosticLock.Unlock()
+	s.state.l.Lock()
+	defer s.state.l.Unlock()
 
-	if s.onDemandDiagnostic.filename != "" {
+	if s.state.onDemandDiagnostic.filename != "" {
 		return []diagnosticWithBleemeoInfo{
 			{
 				diagnosticType: onDemandDiagnostic,
-				requestToken:   s.onDemandDiagnostic.requestToken,
-				DiagnosticFile: s.onDemandDiagnostic,
+				requestToken:   s.state.onDemandDiagnostic.requestToken,
+				DiagnosticFile: s.state.onDemandDiagnostic,
 			},
 		}
 	}
@@ -241,15 +241,15 @@ func (r readerWithLen) Close() error {
 }
 
 func (diag synchronizerOnDemandDiagnostic) MarkUploaded() error {
-	diag.s.onDemandDiagnosticLock.Lock()
-	defer diag.s.onDemandDiagnosticLock.Unlock()
+	diag.s.state.l.Lock()
+	defer diag.s.state.l.Unlock()
 
-	if diag.filename != diag.s.onDemandDiagnostic.filename {
+	if diag.filename != diag.s.state.onDemandDiagnostic.filename {
 		// Another diagnostic replaced ourself in the synchronizer. Don't remove it
 		return nil
 	}
 
-	diag.s.onDemandDiagnostic = synchronizerOnDemandDiagnostic{}
+	diag.s.state.onDemandDiagnostic = synchronizerOnDemandDiagnostic{}
 
 	return nil
 }
@@ -261,11 +261,11 @@ func (diag synchronizerOnDemandDiagnostic) MarkUploaded() error {
 func (s *Synchronizer) ScheduleDiagnosticUpload(filename, requestToken string, contents []byte) {
 	s.l.Lock()
 	defer s.l.Unlock()
-	s.onDemandDiagnosticLock.Lock()
-	defer s.onDemandDiagnosticLock.Unlock()
+	s.state.l.Lock()
+	defer s.state.l.Unlock()
 
 	s.requestSynchronizationLocked(types.EntityDiagnostics, false)
-	s.onDemandDiagnostic = synchronizerOnDemandDiagnostic{
+	s.state.onDemandDiagnostic = synchronizerOnDemandDiagnostic{
 		filename:     filepath.Base(filename),
 		archive:      contents,
 		s:            s,

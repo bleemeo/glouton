@@ -60,6 +60,7 @@ type Synchronizer struct {
 	option types.Option
 	now    func() time.Time
 	inTest bool
+	state  *synchronizerState
 
 	realClient       *client.HTTPClient
 	client           *wrapperClient
@@ -73,31 +74,13 @@ type Synchronizer struct {
 	syncHeartbeat             time.Time
 	heartbeatConsecutiveError int
 	lastSync                  time.Time
-	lastFactUpdatedAt         string
-	lastSNMPcount             int
-	lastVSphereUpdate         time.Time
 	lastVSphereAgentsPurge    time.Time
-	lastMetricActivation      time.Time
 	successiveErrors          int
 	warnAccountMismatchDone   bool
 	maintenanceMode           bool
 	suspendedMode             bool
 	callUpdateLabels          bool
-	lastMetricCount           int
-	currentConfigNotified     string
 	agentID                   string
-
-	onDemandDiagnostic     synchronizerOnDemandDiagnostic
-	onDemandDiagnosticLock sync.Mutex
-
-	// configSyncDone is true when the config items were successfully synced.
-	configSyncDone bool
-
-	// An edge case occurs when an agent is spawned while the maintenance mode is enabled on the backend:
-	// the agent cannot register agent_status, thus the MQTT connector cannot start, and we cannot receive
-	// notifications to tell us the backend is out of maintenance. So we resort to HTTP polling every 15
-	// minutes to check whether we are still in maintenance of not.
-	lastMaintenanceSync time.Time
 
 	// logOnce is used to log that the limit of metrics has been reached.
 	logOnce             sync.Once
@@ -110,9 +93,7 @@ type Synchronizer struct {
 	pendingMetricsUpdate   []string
 	pendingMonitorsUpdate  []MonitorUpdate
 	thresholdOverrides     map[thresholdOverrideKey]threshold.Threshold
-	delayedContainer       map[string]time.Time
 	retryableMetricFailure map[bleemeoTypes.FailureKind]bool
-	metricRetryAt          time.Time
 	lastInfo               bleemeoTypes.GlobalInfo
 	// Whether the agent MQTT status should be synced. This is used to avoid syncing
 	// the MQTT status too soon before the agent has tried to connect to MQTT.
@@ -146,6 +127,8 @@ func newWithNow(option types.Option, now func() time.Time) (*Synchronizer, error
 	nextFullSync := now()
 	fullSyncCount := 0
 
+	state := &synchronizerState{}
+
 	if option.ReloadState != nil {
 		if option.ReloadState.NextFullSync().After(nextFullSync) {
 			nextFullSync = option.ReloadState.NextFullSync()
@@ -162,6 +145,7 @@ func newWithNow(option types.Option, now func() time.Time) (*Synchronizer, error
 		nextFullSync:           nextFullSync,
 		fullSyncCount:          fullSyncCount,
 		retryableMetricFailure: make(map[bleemeoTypes.FailureKind]bool),
+		state:                  state,
 	}
 
 	s.agentID, _ = s.option.State.BleemeoCredentials()
@@ -177,6 +161,9 @@ func (s *Synchronizer) DiagnosticArchive(_ context.Context, archive gloutonTypes
 
 	s.l.Lock()
 	defer s.l.Unlock()
+
+	s.state.l.Lock()
+	defer s.state.l.Unlock()
 
 	obj := struct {
 		NextFullSync               time.Time
@@ -210,22 +197,22 @@ func (s *Synchronizer) DiagnosticArchive(_ context.Context, archive gloutonTypes
 		FullSyncCount:              s.fullSyncCount,
 		StartedAt:                  s.startedAt,
 		LastSync:                   s.lastSync,
-		LastFactUpdatedAt:          s.lastFactUpdatedAt,
-		LastMetricActivation:       s.lastMetricActivation,
+		LastFactUpdatedAt:          s.state.lastFactUpdatedAt,
+		LastMetricActivation:       s.state.lastMetricActivation,
 		SuccessiveErrors:           s.successiveErrors,
 		WarnAccountMismatchDone:    s.warnAccountMismatchDone,
 		MaintenanceMode:            s.maintenanceMode,
-		LastMetricCount:            s.lastMetricCount,
+		LastMetricCount:            s.state.lastMetricCount,
 		AgentID:                    s.agentID,
-		LastMaintenanceSync:        s.lastMaintenanceSync,
+		LastMaintenanceSync:        s.state.lastMaintenanceSync,
 		DisabledUntil:              s.disabledUntil,
 		DisableReason:              s.disableReason,
 		ForceSync:                  s.forceSync,
 		PendingMetricsUpdateCount:  len(s.pendingMetricsUpdate),
 		PendingMonitorsUpdateCount: len(s.pendingMonitorsUpdate),
-		DelayedContainer:           s.delayedContainer,
+		DelayedContainer:           s.state.delayedContainer,
 		RetryableMetricFailure:     s.retryableMetricFailure,
-		MetricRetryAt:              s.metricRetryAt,
+		MetricRetryAt:              s.state.metricRetryAt,
 		LastInfo:                   s.lastInfo,
 		ThresholdOverrides:         fmt.Sprintf("%v", s.thresholdOverrides),
 	}
@@ -254,7 +241,7 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 
 	cfg, ok := s.option.Cache.CurrentAccountConfig()
 	if ok {
-		s.currentConfigNotified = cfg.ID
+		s.state.currentConfigNotified = cfg.ID
 	}
 
 	// syncInfo early because MQTT connection will establish or not depending on it (maintenance & outdated agent).
@@ -514,10 +501,10 @@ func (s *Synchronizer) NotifyConfigUpdate(immediate bool) {
 
 // LastMetricActivation return the date at which last metric was activated/registrered.
 func (s *Synchronizer) LastMetricActivation() time.Time {
-	s.l.Lock()
-	defer s.l.Unlock()
+	s.state.l.Lock()
+	defer s.state.l.Unlock()
 
-	return s.lastMetricActivation
+	return s.state.lastMetricActivation
 }
 
 // UpdateMetrics request to update a specific metrics.
@@ -893,6 +880,9 @@ func (s *Synchronizer) syncToPerform(ctx context.Context) (map[types.EntityName]
 	s.l.Lock()
 	defer s.l.Unlock()
 
+	s.state.l.Lock()
+	defer s.state.l.Unlock()
+
 	syncMethods := make(map[types.EntityName]types.SyncType)
 
 	fullSync := false
@@ -911,7 +901,7 @@ func (s *Synchronizer) syncToPerform(ctx context.Context) (map[types.EntityName]
 		syncRequest = types.SyncTypeForceCacheRefresh
 	}
 
-	if s.currentConfigNotified != agent.CurrentConfigID {
+	if s.state.currentConfigNotified != agent.CurrentConfigID {
 		syncMethods[types.EntityAccountConfig] = types.SyncTypeForceCacheRefresh
 	}
 
@@ -925,32 +915,32 @@ func (s *Synchronizer) syncToPerform(ctx context.Context) (map[types.EntityName]
 		syncMethods[types.EntityDiagnostics] = types.SyncTypeForceCacheRefresh
 	}
 
-	if fullSync || s.lastFactUpdatedAt != localFacts[facts.FactUpdatedAt] {
+	if fullSync || s.state.lastFactUpdatedAt != localFacts[facts.FactUpdatedAt] {
 		syncMethods[types.EntityFact] = syncRequest
 	}
 
-	if s.lastSNMPcount != currentSNMPCount {
+	if s.state.lastSNMPcount != currentSNMPCount {
 		syncMethods[types.EntityFact] = syncRequest
 		syncMethods[types.EntitySNMP] = syncRequest
 		// TODO: this isn't idea. If the synchronization fail, it won't be retried.
 		// I think the ideal fix would be to always retry all syncMethods that was to synchronize but failed.
-		s.lastSNMPcount = currentSNMPCount
+		s.state.lastSNMPcount = currentSNMPCount
 	}
 
-	if lastVSphereChange.After(s.lastVSphereUpdate) {
+	if lastVSphereChange.After(s.state.lastVSphereUpdate) {
 		syncMethods[types.EntityVSphere] = types.SyncTypeForceCacheRefresh
-		s.lastVSphereUpdate = lastVSphereChange
+		s.state.lastVSphereUpdate = lastVSphereChange
 	}
 
 	// After a reload, the config has been changed, so we want to do a fullsync
 	// without waiting the nextFullSync that is kept between reload.
-	if fullSync || !s.configSyncDone {
+	if fullSync || !s.state.configSyncDone {
 		syncMethods[types.EntityConfig] = types.SyncTypeForceCacheRefresh
 	}
 
 	minDelayed := time.Time{}
 
-	for _, delay := range s.delayedContainer {
+	for _, delay := range s.state.delayedContainer {
 		if minDelayed.IsZero() || delay.Before(minDelayed) {
 			minDelayed = delay
 		}
@@ -976,16 +966,16 @@ func (s *Synchronizer) syncToPerform(ctx context.Context) (map[types.EntityName]
 		syncMethods[types.EntityMetric] = types.SyncTypeNormal
 	}
 
-	if fullSync || s.now().After(s.metricRetryAt) || s.lastSync.Before(lastDiscovery) || s.lastSync.Before(lastAnnotationChange) || s.lastMetricCount != currentMetricCount {
+	if fullSync || s.now().After(s.state.metricRetryAt) || s.lastSync.Before(lastDiscovery) || s.lastSync.Before(lastAnnotationChange) || s.state.lastMetricCount != currentMetricCount {
 		syncMethods[types.EntityMetric] = syncRequest
 	}
 
 	// when the mqtt connector is not connected, we cannot receive notifications to get out of maintenance
 	// mode, so we poll more often.
-	if s.maintenanceMode && !mqttIsConnected && s.now().After(s.lastMaintenanceSync.Add(15*time.Minute)) {
+	if s.maintenanceMode && !mqttIsConnected && s.now().After(s.state.lastMaintenanceSync.Add(15*time.Minute)) {
 		s.requestSynchronizationLocked(types.EntityInfo, false)
 
-		s.lastMaintenanceSync = s.now()
+		s.state.lastMaintenanceSync = s.now()
 	}
 
 	for k, full := range s.forceSync {

@@ -128,7 +128,9 @@ func (s *Synchronizer) syncFacts(ctx context.Context, syncType types.SyncType, o
 		return false, err
 	}
 
-	s.lastFactUpdatedAt = localFacts[facts.FactUpdatedAt]
+	s.state.l.Lock()
+	s.state.lastFactUpdatedAt = localFacts[facts.FactUpdatedAt]
+	s.state.l.Unlock()
 
 	return false, nil
 }

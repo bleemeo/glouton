@@ -52,7 +52,7 @@ func (s *Synchronizer) syncAccountConfig(ctx context.Context, syncType types.Syn
 			hasChanged := !reflect.DeepEqual(currentConfig, newConfig)
 			nameHasChanged := currentConfig.Name != newConfig.Name
 
-			if s.currentConfigNotified != newConfig.ID {
+			if s.state.currentConfigNotified != newConfig.ID {
 				hasChanged = true
 				nameHasChanged = true
 			}
@@ -62,7 +62,9 @@ func (s *Synchronizer) syncAccountConfig(ctx context.Context, syncType types.Syn
 			}
 		}
 
-		s.currentConfigNotified = newConfig.ID
+		s.state.l.Lock()
+		s.state.currentConfigNotified = newConfig.ID
+		s.state.l.Unlock()
 
 		// Set suspended mode if it changed.
 		if s.suspendedMode != newConfig.Suspended {

@@ -196,7 +196,7 @@ func (s *Synchronizer) serviceRegisterAndUpdate(ctx context.Context, apiClient t
 	}
 
 	for _, srv := range localServices {
-		if _, ok := s.delayedContainer[srv.ContainerID]; ok {
+		if _, ok := s.state.delayedContainer[srv.ContainerID]; ok {
 			logger.V(2).Printf("Skip service %v due to delayedContainer", srv)
 
 			continue
