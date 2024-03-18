@@ -64,6 +64,8 @@ type Option struct {
 	UpdateMonitor func(op string, uuid string)
 	// UpdateMaintenance requests to check for the maintenance mode again
 	UpdateMaintenance func()
+	// HandleDiagnosticRequest requests the sending of a diagnostic to the API
+	HandleDiagnosticRequest func(ctx context.Context, requestToken string)
 	// GetToken returns the token used to talk with the Bleemeo API.
 	GetToken func(ctx context.Context) (string, error)
 	// Return date of last metric activation / registration
@@ -758,13 +760,14 @@ func (c *Client) sendConnectMessage() {
 }
 
 type notificationPayload struct {
-	MessageType          string `json:"message_type"`
-	MetricUUID           string `json:"metric_uuid,omitempty"`
-	MonitorUUID          string `json:"monitor_uuid,omitempty"`
-	MonitorOperationType string `json:"monitor_operation_type,omitempty"`
+	MessageType            string `json:"message_type"`
+	MetricUUID             string `json:"metric_uuid,omitempty"`
+	MonitorUUID            string `json:"monitor_uuid,omitempty"`
+	MonitorOperationType   string `json:"monitor_operation_type,omitempty"`
+	DiagnosticRequestToken string `json:"request_token,omitempty"`
 }
 
-func (c *Client) onNotification(msg paho.Message) {
+func (c *Client) onNotification(ctx context.Context, msg paho.Message) {
 	if len(msg.Payload()) > 1024*60 {
 		logger.V(1).Printf("Ignoring abnormally big MQTT message")
 
@@ -792,6 +795,11 @@ func (c *Client) onNotification(msg paho.Message) {
 		c.opts.UpdateMetrics(payload.MetricUUID)
 	case "monitor-update":
 		c.opts.UpdateMonitor(payload.MonitorOperationType, payload.MonitorUUID)
+	case "diagnostic-request":
+		go func() {
+			defer crashreport.ProcessPanic()
+			c.opts.HandleDiagnosticRequest(ctx, payload.DiagnosticRequestToken)
+		}()
 	}
 }
 
@@ -867,7 +875,7 @@ func (c *Client) receiveEvents(ctx context.Context) {
 	for {
 		select {
 		case msg := <-rs.NotificationChannel():
-			c.onNotification(msg)
+			c.onNotification(ctx, msg)
 		case client := <-rs.ConnectChannel():
 			// We can't use c.mqtt here because it is either nil or outdated,
 			// c.mqtt is updated only after a successful connection.

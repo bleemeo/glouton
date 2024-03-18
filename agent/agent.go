@@ -1063,6 +1063,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 			NotifyLabelsUpdate:             a.notifyBleemeoUpdateLabels,
 			BlackboxScraperName:            scaperName,
 			ReloadState:                    a.reloadState.Bleemeo(),
+			WriteDiagnosticArchive:         a.writeDiagnosticArchive,
 			VSphereDevices:                 a.vSphereManager.Devices,
 			FindVSphereDevice:              a.vSphereManager.FindDevice,
 			LastVSphereChange:              a.vSphereManager.LastChange,

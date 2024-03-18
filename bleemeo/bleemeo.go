@@ -17,6 +17,7 @@
 package bleemeo
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -30,6 +31,7 @@ import (
 	"glouton/logger"
 	"glouton/prometheus/exporter/snmp"
 	gloutonTypes "glouton/types"
+	"glouton/utils/archivewriter"
 	"io"
 	"math/rand"
 	"runtime"
@@ -191,17 +193,18 @@ func (c *Connector) initMQTT(previousPoint []gloutonTypes.MetricPoint) {
 
 	c.mqtt = mqtt.New(
 		mqtt.Option{
-			GlobalOption:         c.option,
-			Cache:                c.cache,
-			AgentID:              types.AgentID(c.AgentID()),
-			AgentPassword:        password,
-			UpdateConfigCallback: c.sync.NotifyConfigUpdate,
-			UpdateMetrics:        c.sync.UpdateMetrics,
-			UpdateMaintenance:    c.sync.UpdateMaintenance,
-			UpdateMonitor:        c.sync.UpdateMonitor,
-			InitialPoints:        previousPoint,
-			GetToken:             c.sync.GetToken,
-			LastMetricActivation: c.sync.LastMetricActivation,
+			GlobalOption:            c.option,
+			Cache:                   c.cache,
+			AgentID:                 types.AgentID(c.AgentID()),
+			AgentPassword:           password,
+			UpdateConfigCallback:    c.sync.NotifyConfigUpdate,
+			UpdateMetrics:           c.sync.UpdateMetrics,
+			UpdateMaintenance:       c.sync.UpdateMaintenance,
+			UpdateMonitor:           c.sync.UpdateMonitor,
+			HandleDiagnosticRequest: c.HandleDiagnosticRequest,
+			InitialPoints:           previousPoint,
+			GetToken:                c.sync.GetToken,
+			LastMetricActivation:    c.sync.LastMetricActivation,
 		},
 	)
 
@@ -1061,4 +1064,26 @@ func (c *Connector) disableMqtt(mqtt *mqtt.Client, reason types.DisableReason, u
 	}
 
 	mqtt.Disable(until.Add(mqttDisableDelay), reason)
+}
+
+func (c *Connector) HandleDiagnosticRequest(ctx context.Context, requestToken string) {
+	archiveBuf := new(bytes.Buffer)
+	archive := archivewriter.NewZipWriter(archiveBuf)
+
+	err := c.option.WriteDiagnosticArchive(ctx, archive)
+	if err != nil {
+		logger.V(1).Printf("Failed to write on-demand diagnostic archive: %v", err)
+
+		return
+	}
+
+	err = archive.Close()
+	if err != nil {
+		logger.V(1).Printf("Failed to close on-demand diagnostic archive: %v", err)
+
+		return
+	}
+
+	datetime := time.Now().Format("20060102-150405")
+	c.sync.ScheduleDiagnosticUpload("on_demand_"+datetime+".zip", requestToken, archiveBuf)
 }

@@ -67,7 +67,7 @@ const (
 	syncMethodContainer     = "container"
 	syncMethodMetric        = "metric"
 	syncMethodConfig        = "config"
-	syncMethodCrashReports  = "crashreports"
+	syncMethodDiagnostics   = "diagnostics"
 )
 
 // Synchronizer synchronize object with Bleemeo.
@@ -102,6 +102,9 @@ type Synchronizer struct {
 	lastMetricCount           int
 	currentConfigNotified     string
 	agentID                   string
+
+	onDemandDiagnostic     *diagnostic
+	onDemandDiagnosticLock sync.Mutex
 
 	// configSyncDone is true when the config items were successfully synced.
 	configSyncDone bool
@@ -802,7 +805,7 @@ func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) (map[str
 
 	syncStep := []struct {
 		name                   string
-		method                 func(context.Context, bool, bool) (updateThresholds bool, err error)
+		method                 func(ctx context.Context, fullSync, onlyEssential bool) (updateThresholds bool, err error)
 		enabledInMaintenance   bool
 		enabledInSuspendedMode bool
 		skipOnlyEssential      bool // should be true for method that ignore onlyEssential
@@ -818,7 +821,7 @@ func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) (map[str
 		{name: syncMethodMonitor, method: s.syncMonitors, skipOnlyEssential: true},
 		{name: syncMethodMetric, method: s.syncMetrics},
 		{name: syncMethodConfig, method: s.syncConfig},
-		{name: syncMethodCrashReports, method: s.syncCrashReports},
+		{name: syncMethodDiagnostics, method: s.syncDiagnostics},
 	}
 
 	var firstErr error
@@ -962,7 +965,7 @@ func (s *Synchronizer) syncToPerform(ctx context.Context) (map[string]bool, bool
 		syncMethods[syncMethodMonitor] = true
 		syncMethods[syncMethodSNMP] = true
 		syncMethods[syncMethodVSphere] = true
-		syncMethods[syncMethodCrashReports] = true
+		syncMethods[syncMethodDiagnostics] = true
 	}
 
 	if fullSync || s.lastFactUpdatedAt != localFacts[facts.FactUpdatedAt] {
