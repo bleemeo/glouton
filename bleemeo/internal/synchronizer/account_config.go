@@ -28,12 +28,10 @@ import (
 	"strings"
 )
 
-func (s *Synchronizer) syncAccountConfig(ctx context.Context, syncType types.SyncType, onlyEssential bool) (updateThresholds bool, err error) {
-	_ = onlyEssential
-
+func (s *Synchronizer) syncAccountConfig(ctx context.Context, syncType types.SyncType, execution types.SynchronizationExecution) (updateThresholds bool, err error) {
 	if syncType == types.SyncTypeForceCacheRefresh {
 		currentConfig, _ := s.option.Cache.CurrentAccountConfig()
-		apiClient := s.client
+		apiClient := execution.BleemeoAPIClient()
 
 		if err := s.agentTypesUpdateList(ctx, apiClient); err != nil {
 			return false, err

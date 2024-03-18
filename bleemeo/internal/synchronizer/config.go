@@ -50,14 +50,14 @@ type configItemValue struct {
 func (s *Synchronizer) syncConfig(
 	ctx context.Context,
 	syncType types.SyncType,
-	onlyEssential bool,
+	execution types.SynchronizationExecution,
 ) (updateThresholds bool, err error) {
 	// The config is not essential and can be registered later.
-	if onlyEssential || syncType != types.SyncTypeForceCacheRefresh {
+	if execution.IsOnlyEssential() || syncType != types.SyncTypeForceCacheRefresh {
 		return false, nil
 	}
 
-	apiClient := s.client
+	apiClient := execution.BleemeoAPIClient()
 
 	remoteConfigItems, err := s.fetchAllConfigItems(ctx, apiClient)
 	if err != nil {

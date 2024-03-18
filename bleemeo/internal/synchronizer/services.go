@@ -85,7 +85,7 @@ func getListenAddress(addresses []facts.ListenAddress) string {
 	return strings.Join(stringList, ",")
 }
 
-func (s *Synchronizer) syncServices(ctx context.Context, syncType types.SyncType, onlyEssential bool) (updateThresholds bool, err error) {
+func (s *Synchronizer) syncServices(ctx context.Context, syncType types.SyncType, execution types.SynchronizationExecution) (updateThresholds bool, err error) {
 	localServices, err := s.option.Discovery.Discovery(ctx, 24*time.Hour)
 	if err != nil {
 		return false, err
@@ -99,7 +99,7 @@ func (s *Synchronizer) syncServices(ctx context.Context, syncType types.SyncType
 	}
 
 	previousServices := s.option.Cache.ServicesByUUID()
-	apiClient := s.client
+	apiClient := execution.BleemeoAPIClient()
 
 	if syncType == types.SyncTypeForceCacheRefresh {
 		err := s.serviceUpdateList(ctx, apiClient)
@@ -110,7 +110,7 @@ func (s *Synchronizer) syncServices(ctx context.Context, syncType types.SyncType
 
 	s.serviceRemoveDeletedFromRemote(ctx, localServices, previousServices)
 
-	if onlyEssential {
+	if execution.IsOnlyEssential() {
 		// no essential services, skip registering.
 		return false, nil
 	}

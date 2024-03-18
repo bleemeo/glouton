@@ -29,7 +29,6 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
-	"path/filepath"
 	"strconv"
 )
 
@@ -54,10 +53,10 @@ const (
 	onDemandDiagnostic diagnosticType = 1
 )
 
-func (s *Synchronizer) syncDiagnostics(ctx context.Context, syncType types.SyncType, _ bool) (updateThresholds bool, err error) {
+func (s *Synchronizer) syncDiagnostics(ctx context.Context, syncType types.SyncType, execution types.SynchronizationExecution) (updateThresholds bool, err error) {
 	_ = syncType
 
-	apiClient := s.client
+	apiClient := execution.BleemeoAPIClient()
 
 	remoteDiagnostics, err := s.listRemoteDiagnostics(ctx, apiClient)
 	if err != nil {
@@ -252,25 +251,6 @@ func (diag synchronizerOnDemandDiagnostic) MarkUploaded() error {
 	diag.s.state.onDemandDiagnostic = synchronizerOnDemandDiagnostic{}
 
 	return nil
-}
-
-// ScheduleDiagnosticUpload stores the given diagnostic until the next synchronization,
-// where it will be uploaded to the API.
-// If another call to this method is made before the next synchronization,
-// only the latest diagnostic will be uploaded.
-func (s *Synchronizer) ScheduleDiagnosticUpload(filename, requestToken string, contents []byte) {
-	s.l.Lock()
-	defer s.l.Unlock()
-	s.state.l.Lock()
-	defer s.state.l.Unlock()
-
-	s.requestSynchronizationLocked(types.EntityDiagnostics, false)
-	s.state.onDemandDiagnostic = synchronizerOnDemandDiagnostic{
-		filename:     filepath.Base(filename),
-		archive:      contents,
-		s:            s,
-		requestToken: requestToken,
-	}
 }
 
 func addType(diagnostics []gloutonTypes.DiagnosticFile, fixedType diagnosticType) []diagnosticWithBleemeoInfo {

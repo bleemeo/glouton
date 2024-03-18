@@ -37,7 +37,7 @@ const (
 	vSphereCachePrefix            = "bleemeo:vsphere:"
 )
 
-func (s *Synchronizer) syncVSphere(ctx context.Context, syncType types.SyncType, onlyEssential bool) (updateThresholds bool, err error) {
+func (s *Synchronizer) syncVSphere(ctx context.Context, syncType types.SyncType, execution types.SynchronizationExecution) (updateThresholds bool, err error) {
 	_ = syncType
 
 	cfg, ok := s.option.Cache.CurrentAccountConfig()
@@ -45,12 +45,12 @@ func (s *Synchronizer) syncVSphere(ctx context.Context, syncType types.SyncType,
 		return false, nil
 	}
 
-	if onlyEssential {
+	if execution.IsOnlyEssential() {
 		// no essential vSphere, skip registering.
 		return false, nil
 	}
 
-	return false, s.VSphereRegisterAndUpdate(ctx, s.client, s.option.VSphereDevices(ctx, time.Hour))
+	return false, s.VSphereRegisterAndUpdate(ctx, execution.BleemeoAPIClient(), s.option.VSphereDevices(ctx, time.Hour))
 }
 
 // When modifying this type, ensure to keep the compatibility with the code of

@@ -55,28 +55,8 @@ type MonitorUpdate struct {
 	uuid string
 }
 
-// UpdateMonitor requests to update a monitor, identified by its UUID. It allows for adding, updating and removing a monitor.
-func (s *Synchronizer) UpdateMonitor(op string, uuid string) {
-	s.l.Lock()
-	defer s.l.Unlock()
-
-	mu := MonitorUpdate{uuid: uuid}
-
-	switch op {
-	case "change":
-		mu.op = Change
-	case "delete":
-		mu.op = Delete
-	}
-
-	s.pendingMonitorsUpdate = append(s.pendingMonitorsUpdate, mu)
-	s.requestSynchronizationLocked(types.EntityMonitor, false)
-}
-
 // syncMonitors updates the list of monitors accessible to the agent.
-func (s *Synchronizer) syncMonitors(ctx context.Context, syncType types.SyncType, onlyEssential bool) (updateThresholds bool, err error) {
-	_ = onlyEssential
-
+func (s *Synchronizer) syncMonitors(ctx context.Context, syncType types.SyncType, execution types.SynchronizationExecution) (updateThresholds bool, err error) {
 	if !s.option.Config.Blackbox.Enable {
 		// prevent a tiny memory leak
 		s.pendingMonitorsUpdate = nil
@@ -93,7 +73,7 @@ func (s *Synchronizer) syncMonitors(ctx context.Context, syncType types.SyncType
 	if len(pendingMonitorsUpdate) > 5 {
 		syncType = types.SyncTypeForceCacheRefresh
 		// force metric synchronization
-		s.requestSynchronizationLocked(types.EntityMetric, false)
+		execution.RequestSynchronization(types.EntityMetric, false)
 	}
 
 	s.l.Unlock()
@@ -104,7 +84,7 @@ func (s *Synchronizer) syncMonitors(ctx context.Context, syncType types.SyncType
 
 	var monitors []bleemeoTypes.Monitor
 
-	apiClient := s.client
+	apiClient := execution.BleemeoAPIClient()
 
 	if syncType == types.SyncTypeForceCacheRefresh {
 		monitors, err = s.getMonitorsFromAPI(ctx, apiClient)
@@ -112,7 +92,7 @@ func (s *Synchronizer) syncMonitors(ctx context.Context, syncType types.SyncType
 			return false, err
 		}
 	} else {
-		monitors, err = s.getListOfMonitorsFromAPI(ctx, pendingMonitorsUpdate)
+		monitors, err = s.getListOfMonitorsFromAPI(ctx, execution, pendingMonitorsUpdate)
 		if err != nil {
 			return false, err
 		}
@@ -136,11 +116,7 @@ func (s *Synchronizer) syncMonitors(ctx context.Context, syncType types.SyncType
 	}
 
 	if needConfigUpdate {
-		s.l.Lock()
-
-		s.requestSynchronizationLocked(types.EntityAccountConfig, true)
-
-		s.l.Unlock()
+		execution.RequestSynchronization(types.EntityAccountConfig, true)
 	}
 
 	return false, s.ApplyMonitorUpdate()
@@ -235,13 +211,14 @@ func (s *Synchronizer) getMonitorsFromAPI(ctx context.Context, apiClient types.R
 }
 
 // should we try to modify as much monitors as possible, and return a list of errors, instead of failing early ?
-func (s *Synchronizer) getListOfMonitorsFromAPI(ctx context.Context, pendingMonitorsUpdate []MonitorUpdate) ([]bleemeoTypes.Monitor, error) {
+func (s *Synchronizer) getListOfMonitorsFromAPI(ctx context.Context, execution types.SynchronizationExecution, pendingMonitorsUpdate []MonitorUpdate) ([]bleemeoTypes.Monitor, error) {
 	params := map[string]string{
 		"fields": fieldList,
 	}
 
 	currentMonitors := s.option.Cache.Monitors()
-	apiClient := s.client
+	forceSync := execution.IsSynchronizationExplicitlyRequested(types.EntityMetric)
+	apiClient := execution.BleemeoAPIClient()
 
 OuterBreak:
 	for _, m := range pendingMonitorsUpdate {
@@ -279,9 +256,10 @@ OuterBreak:
 					// We could trigger metrics synchronisation even less often, by checking if the linked account config really changed,
 					// but that would required to compare unordered lists or to do some complex machinery, and I'm not sure it's worth
 					// the added complexity.
-					s.l.Lock()
-					s.requestSynchronizationLocked(types.EntityMetric, false)
-					s.l.Unlock()
+					if !forceSync {
+						execution.RequestSynchronization(types.EntityMetric, false)
+						forceSync = true
+					}
 
 					currentMonitors[k] = result
 

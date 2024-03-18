@@ -33,19 +33,19 @@ const (
 	agentFields   = "account,agent_type,created_at,current_config,display_name,fqdn,id,is_cluster_leader,next_config_at,tags"
 )
 
-func (s *Synchronizer) syncAgent(ctx context.Context, syncType types.SyncType, onlyEssential bool) (updateThresholds bool, err error) {
-	apiClient := s.client
+func (s *Synchronizer) syncAgent(ctx context.Context, syncType types.SyncType, execution types.SynchronizationExecution) (updateThresholds bool, err error) {
+	apiClient := execution.BleemeoAPIClient()
 
 	if err := s.syncMainAgent(ctx, apiClient); err != nil {
 		return false, err
 	}
 
-	if onlyEssential {
+	if execution.IsOnlyEssential() {
 		return false, nil
 	}
 
 	if syncType == types.SyncTypeForceCacheRefresh {
-		if err := s.agentsUpdateList(ctx, apiClient); err != nil {
+		if err := s.agentsUpdateList(ctx, execution, apiClient); err != nil {
 			return false, err
 		}
 	}
@@ -104,7 +104,7 @@ func (s *Synchronizer) syncMainAgent(ctx context.Context, apiClient types.RawCli
 	return nil
 }
 
-func (s *Synchronizer) agentsUpdateList(ctx context.Context, apiClient types.RawClient) error {
+func (s *Synchronizer) agentsUpdateList(ctx context.Context, execution types.SynchronizationExecution, apiClient types.RawClient) error {
 	oldAgents := s.option.Cache.AgentsByUUID()
 
 	params := map[string]string{
@@ -136,7 +136,7 @@ func (s *Synchronizer) agentsUpdateList(ctx context.Context, apiClient types.Raw
 	newAgents := s.option.Cache.AgentsByUUID()
 	for id := range oldAgents {
 		if _, ok := newAgents[id]; !ok {
-			s.callUpdateLabels = true
+			execution.RequestNotifyLabelsUpdate()
 		}
 	}
 

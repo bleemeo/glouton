@@ -39,7 +39,7 @@ type payloadAgent struct {
 
 // TODO the deletion need to be done
 
-func (s *Synchronizer) syncSNMP(ctx context.Context, syncType types.SyncType, onlyEssential bool) (updateThresholds bool, err error) {
+func (s *Synchronizer) syncSNMP(ctx context.Context, syncType types.SyncType, execution types.SynchronizationExecution) (updateThresholds bool, err error) {
 	_ = syncType
 
 	cfg, ok := s.option.Cache.CurrentAccountConfig()
@@ -47,12 +47,12 @@ func (s *Synchronizer) syncSNMP(ctx context.Context, syncType types.SyncType, on
 		return false, nil
 	}
 
-	if onlyEssential {
+	if execution.IsOnlyEssential() {
 		// no essential snmp, skip registering.
 		return false, nil
 	}
 
-	return false, s.snmpRegisterAndUpdate(ctx, s.option.SNMP)
+	return false, s.snmpRegisterAndUpdate(ctx, execution, s.option.SNMP)
 }
 
 type snmpAssociation struct {
@@ -109,7 +109,7 @@ func (s *Synchronizer) FindSNMPAgent(ctx context.Context, target *snmp.Target, s
 	return bleemeoTypes.Agent{}, errNotExist
 }
 
-func (s *Synchronizer) snmpRegisterAndUpdate(ctx context.Context, localTargets []*snmp.Target) error {
+func (s *Synchronizer) snmpRegisterAndUpdate(ctx context.Context, execution types.SynchronizationExecution, localTargets []*snmp.Target) error {
 	var newAgent []bleemeoTypes.Agent //nolint: prealloc
 
 	remoteAgentList := s.option.Cache.AgentsByUUID()
@@ -166,7 +166,7 @@ func (s *Synchronizer) snmpRegisterAndUpdate(ctx context.Context, localTargets [
 			InitialServerGroup: serverGroup,
 		}
 
-		tmp, err := s.remoteRegisterSNMP(ctx, s.client, params, payload)
+		tmp, err := s.remoteRegisterSNMP(ctx, execution.BleemeoAPIClient(), params, payload)
 		if err != nil {
 			return err
 		}

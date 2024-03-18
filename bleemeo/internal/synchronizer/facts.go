@@ -45,7 +45,7 @@ func getEssentialFacts() map[string]bool {
 	}
 }
 
-func (s *Synchronizer) syncFacts(ctx context.Context, syncType types.SyncType, onlyEssential bool) (updateThresholds bool, err error) {
+func (s *Synchronizer) syncFacts(ctx context.Context, syncType types.SyncType, execution types.SynchronizationExecution) (updateThresholds bool, err error) {
 	_ = syncType
 
 	localFacts, err := s.option.Facts.Facts(ctx, 24*time.Hour)
@@ -53,7 +53,7 @@ func (s *Synchronizer) syncFacts(ctx context.Context, syncType types.SyncType, o
 		return false, err
 	}
 
-	if onlyEssential {
+	if execution.IsOnlyEssential() {
 		essentialFacts := getEssentialFacts()
 		copyFacts := make(map[string]string)
 
@@ -71,7 +71,7 @@ func (s *Synchronizer) syncFacts(ctx context.Context, syncType types.SyncType, o
 	allAgentFacts := make(map[string]map[string]string, 1+len(s.option.SNMP))
 	allAgentFacts[s.agentID] = localFacts
 
-	if !onlyEssential {
+	if !execution.IsOnlyEssential() {
 		agentTypeID, found := s.getAgentType(bleemeoTypes.AgentTypeSNMP)
 		if !found {
 			return false, errRetryLater
@@ -110,7 +110,7 @@ func (s *Synchronizer) syncFacts(ctx context.Context, syncType types.SyncType, o
 		}
 	}
 
-	apiClient := s.client
+	apiClient := execution.BleemeoAPIClient()
 
 	// s.factUpdateList() is already done by checkDuplicated
 	// s.serviceDeleteFromRemote() is unneeded, API don't delete facts
@@ -119,7 +119,7 @@ func (s *Synchronizer) syncFacts(ctx context.Context, syncType types.SyncType, o
 		return false, err
 	}
 
-	if onlyEssential {
+	if execution.IsOnlyEssential() {
 		// localFacts was filtered, can't delete
 		return false, nil
 	}

@@ -492,7 +492,7 @@ func (s *Synchronizer) findUnregisteredMetrics(metrics []gloutonTypes.Metric) []
 	return result
 }
 
-func (s *Synchronizer) syncMetrics(ctx context.Context, syncType types.SyncType, onlyEssential bool) (updateThresholds bool, err error) {
+func (s *Synchronizer) syncMetrics(ctx context.Context, syncType types.SyncType, execution types.SynchronizationExecution) (updateThresholds bool, err error) {
 	localMetrics, err := s.option.Store.Metrics(nil)
 	if err != nil {
 		return false, err
@@ -535,7 +535,7 @@ func (s *Synchronizer) syncMetrics(ctx context.Context, syncType types.SyncType,
 		syncType = types.SyncTypeForceCacheRefresh
 	}
 
-	apiClient := s.client
+	apiClient := execution.BleemeoAPIClient()
 
 	err = s.metricUpdatePendingOrSync(ctx, apiClient, syncType == types.SyncTypeForceCacheRefresh, &pendingMetricsUpdate)
 	if err != nil {
@@ -563,13 +563,13 @@ func (s *Synchronizer) syncMetrics(ctx context.Context, syncType types.SyncType,
 	}
 
 	filteredMetrics = s.filterMetrics(localMetrics)
-	filteredMetrics = prioritizeAndFilterMetrics(s.option.MetricFormat, filteredMetrics, onlyEssential)
+	filteredMetrics = prioritizeAndFilterMetrics(s.option.MetricFormat, filteredMetrics, execution.IsOnlyEssential())
 
 	if err := newMetricRegisterer(s, apiClient).registerMetrics(ctx, filteredMetrics); err != nil {
 		return updateThresholds, err
 	}
 
-	if onlyEssential {
+	if execution.IsOnlyEssential() {
 		return updateThresholds, nil
 	}
 

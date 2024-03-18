@@ -53,7 +53,7 @@ type containerPayload struct {
 	DockerAPIVersion string                `json:"docker_api_version"`
 }
 
-func (s *Synchronizer) syncContainers(ctx context.Context, syncType types.SyncType, onlyEssential bool) (updateThresholds bool, err error) {
+func (s *Synchronizer) syncContainers(ctx context.Context, syncType types.SyncType, execution types.SynchronizationExecution) (updateThresholds bool, err error) {
 	var localContainers []facts.Container
 
 	cfg, ok := s.option.Cache.CurrentAccountConfig()
@@ -75,7 +75,7 @@ func (s *Synchronizer) syncContainers(ctx context.Context, syncType types.SyncTy
 		syncType = types.SyncTypeForceCacheRefresh
 	}
 
-	apiClient := s.client
+	apiClient := execution.BleemeoAPIClient()
 
 	if syncType == types.SyncTypeForceCacheRefresh {
 		err := s.containerUpdateList(ctx, apiClient)
@@ -84,7 +84,7 @@ func (s *Synchronizer) syncContainers(ctx context.Context, syncType types.SyncTy
 		}
 	}
 
-	if onlyEssential {
+	if execution.IsOnlyEssential() {
 		// no essential containers, skip registering.
 		return false, nil
 	}
@@ -94,7 +94,7 @@ func (s *Synchronizer) syncContainers(ctx context.Context, syncType types.SyncTy
 		return false, err
 	}
 
-	s.containerDeleteFromLocal(ctx, apiClient, localContainers)
+	s.containerDeleteFromLocal(ctx, execution, apiClient, localContainers)
 
 	return false, err
 }
@@ -290,7 +290,7 @@ func (s *Synchronizer) remoteRegister(
 	return nil
 }
 
-func (s *Synchronizer) containerDeleteFromLocal(ctx context.Context, apiClient types.RawClient, localContainers []facts.Container) {
+func (s *Synchronizer) containerDeleteFromLocal(ctx context.Context, execution types.SynchronizationExecution, apiClient types.RawClient, localContainers []facts.Container) {
 	var deletedIDs []string //nolint: prealloc // we don't know the size. empty is the most likely size.
 
 	duplicatedKey := make(map[string]bool)
@@ -373,10 +373,6 @@ func (s *Synchronizer) containerDeleteFromLocal(ctx context.Context, apiClient t
 		}
 
 		s.option.Cache.SetMetrics(metrics)
-
-		s.l.Lock()
-		defer s.l.Unlock()
-
-		s.requestSynchronizationLocked(types.EntityService, true)
+		execution.RequestSynchronization(types.EntityService, true)
 	}
 }

@@ -292,8 +292,20 @@ func (helper *syncTestHelper) runOnceNoReset(t *testing.T) runOnceResult {
 		return result
 	}
 
+	var execution *Execution
+
 	result.runCount++
-	result.syncPerEntity, result.err = helper.s.runOnce(ctx, false)
+	execution, result.err = helper.s.runOnce(ctx, false)
+
+	result.syncPerEntity = make(map[types.EntityName]types.SyncType, len(execution.entities))
+
+	for _, ee := range execution.entities {
+		if ee.syncType == types.SyncTypeNone {
+			continue
+		}
+
+		result.syncPerEntity[ee.entity.Name()] = ee.syncType
+	}
 
 	return result
 }
