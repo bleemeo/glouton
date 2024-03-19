@@ -118,7 +118,7 @@ func newManager(ctx context.Context, queryable storage.Queryable, defaultRules m
 
 	matchers := make([]matcher.Matchers, 0, len(defaultGroupRules))
 	for _, rule := range defaultGroupRules {
-		matchers = append(matchers, MatchersFromQuery(rule.Query())...)
+		matchers = append(matchers, matcher.MatchersFromQuery(rule.Query())...)
 	}
 
 	rm := Manager{
@@ -136,7 +136,7 @@ func newManager(ctx context.Context, queryable storage.Queryable, defaultRules m
 }
 
 // InputMetricMatchers returns a list of matchers for metrics used as input or recording rules.
-// Thoses metrics should pass from input if you expect recording rule to work correctly.
+// Those metrics should pass from input if you expect recording rule to work correctly.
 func (rm *Manager) InputMetricMatchers() []matcher.Matchers {
 	return rm.matchers
 }
