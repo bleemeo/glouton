@@ -90,7 +90,7 @@ func (s *Synchronizer) syncContainers(ctx context.Context, syncType types.SyncTy
 	}
 
 	// s.containerDeleteFromRemote(): API don't delete containers
-	if err := s.containerRegisterAndUpdate(ctx, apiClient, localContainers); err != nil {
+	if err := s.containerRegisterAndUpdate(ctx, execution, localContainers); err != nil {
 		return false, err
 	}
 
@@ -132,7 +132,7 @@ func (s *Synchronizer) containerUpdateList(ctx context.Context, apiClient types.
 	return nil
 }
 
-func (s *Synchronizer) containerRegisterAndUpdate(ctx context.Context, apiClient types.RawClient, localContainers []facts.Container) error {
+func (s *Synchronizer) containerRegisterAndUpdate(ctx context.Context, execution types.SynchronizationExecution, localContainers []facts.Container) error {
 	factsMap, err := s.option.Facts.Facts(ctx, 24*time.Hour)
 	if err != nil {
 		return err
@@ -145,10 +145,13 @@ func (s *Synchronizer) containerRegisterAndUpdate(ctx context.Context, apiClient
 		remoteIndexByName[v.Name] = i
 	}
 
-	newDelayedContainer := make(map[string]time.Time, len(s.state.delayedContainer))
+	// I'm not sure this really belong here. This update is here because it was here,
+	// but this might be better being called by Synchronizer.runOnce()
+	execution.GlobalState().UpdateDelayedContainers(localContainers)
+	delayedContainer, _ := execution.GlobalState().DelayedContainers()
 
 	for _, container := range localContainers {
-		if s.delayedContainerCheck(newDelayedContainer, container) {
+		if _, ok := delayedContainer[container.ID()]; ok {
 			continue
 		}
 
@@ -215,7 +218,7 @@ func (s *Synchronizer) containerRegisterAndUpdate(ctx context.Context, apiClient
 			payload.DockerAPIVersion = factsMap["docker_api_version"]
 		}
 
-		err := s.remoteRegister(ctx, apiClient, remoteFound, &remoteContainer, &remoteContainers, payload, remoteIndex)
+		err := s.remoteRegister(ctx, execution.BleemeoAPIClient(), remoteFound, &remoteContainer, &remoteContainers, payload, remoteIndex)
 		if err != nil {
 			return err
 		}
@@ -223,31 +226,7 @@ func (s *Synchronizer) containerRegisterAndUpdate(ctx context.Context, apiClient
 
 	s.option.Cache.SetContainers(remoteContainers)
 
-	s.state.l.Lock()
-	s.state.delayedContainer = newDelayedContainer
-	s.state.l.Unlock()
-
 	return nil
-}
-
-func (s *Synchronizer) delayedContainerCheck(newDelayedContainer map[string]time.Time, container facts.Container) bool {
-	delay := time.Duration(s.option.Config.Bleemeo.ContainerRegistrationDelaySeconds) * time.Second
-
-	// if the container (name) was recently seen, don't delay it.
-	if s.option.IsContainerNameRecentlyDeleted != nil && s.option.IsContainerNameRecentlyDeleted(container.ContainerName()) {
-		return false
-	}
-
-	if s.now().Sub(container.CreatedAt()) < delay {
-		enable, explicit := s.option.IsContainerEnabled(container)
-		if !enable || !explicit {
-			newDelayedContainer[container.ID()] = container.CreatedAt().Add(delay)
-
-			return true
-		}
-	}
-
-	return false
 }
 
 func (s *Synchronizer) remoteRegister(

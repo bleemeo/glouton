@@ -34,7 +34,6 @@ type synchronizerState struct {
 	lastVSphereUpdate     time.Time
 	metricRetryAt         time.Time
 	lastMetricCount       int
-	delayedContainer      map[string]time.Time
 	lastMetricActivation  time.Time
 
 	onDemandDiagnostic synchronizerOnDemandDiagnostic
@@ -166,13 +165,7 @@ func compatibilitySyncToPerform(ctx context.Context, execution types.Synchroniza
 		execution.RequestSynchronization(types.EntityConfig, true)
 	}
 
-	minDelayed := time.Time{}
-
-	for _, delay := range state.delayedContainer {
-		if minDelayed.IsZero() || delay.Before(minDelayed) {
-			minDelayed = delay
-		}
-	}
+	_, minDelayed := execution.GlobalState().DelayedContainers()
 
 	if execution.LastSync().Before(lastDiscovery) || (!minDelayed.IsZero() && execution.StartedAt().After(minDelayed)) {
 		execution.RequestSynchronization(types.EntityService, false)

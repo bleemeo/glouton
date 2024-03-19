@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"glouton/bleemeo/internal/cache"
 	bleemeoTypes "glouton/bleemeo/types"
+	"glouton/facts"
 	"glouton/prometheus/model"
 	"io"
 	"time"
@@ -125,6 +126,8 @@ type RawClient interface {
 
 type SynchronizedGlobalState interface {
 	IsMaintenance() bool
+	DelayedContainers() (delayedByID map[string]time.Time, minDelayed time.Time)
+	UpdateDelayedContainers(localContainers []facts.Container)
 }
 
 // Option are parameters for the synchronizer.

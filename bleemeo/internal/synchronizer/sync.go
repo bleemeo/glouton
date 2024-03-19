@@ -81,6 +81,7 @@ type Synchronizer struct {
 	maintenanceMode           bool
 	suspendedMode             bool
 	agentID                   string
+	delayedContainer          map[string]time.Time
 
 	// logOnce is used to log that the limit of metrics has been reached.
 	logOnce             sync.Once
@@ -174,6 +175,8 @@ func (s *Synchronizer) DiagnosticArchive(_ context.Context, archive gloutonTypes
 		return err
 	}
 
+	delayedContainer, _ := s.DelayedContainers()
+
 	s.l.Lock()
 	defer s.l.Unlock()
 
@@ -225,7 +228,7 @@ func (s *Synchronizer) DiagnosticArchive(_ context.Context, archive gloutonTypes
 		ForceSync:                  s.forceSync,
 		PendingMetricsUpdateCount:  len(s.pendingMetricsUpdate),
 		PendingMonitorsUpdateCount: len(s.pendingMonitorsUpdate),
-		DelayedContainer:           s.state.delayedContainer,
+		DelayedContainer:           delayedContainer,
 		RetryableMetricFailure:     s.retryableMetricFailure,
 		MetricRetryAt:              s.state.metricRetryAt,
 		LastInfo:                   s.lastInfo,
@@ -619,6 +622,45 @@ func (s *Synchronizer) IsMaintenance() bool {
 	defer s.l.Unlock()
 
 	return s.maintenanceMode
+}
+
+func (s *Synchronizer) UpdateDelayedContainers(localContainers []facts.Container) {
+	s.l.Lock()
+	newDelayedContainer := make(map[string]time.Time, len(s.delayedContainer))
+	s.l.Unlock()
+
+	delay := time.Duration(s.option.Config.Bleemeo.ContainerRegistrationDelaySeconds) * time.Second
+
+	for _, container := range localContainers {
+		// if the container (name) was recently seen, don't delay it.
+		if s.option.IsContainerNameRecentlyDeleted != nil && s.option.IsContainerNameRecentlyDeleted(container.ContainerName()) {
+			continue
+		}
+
+		if s.now().Sub(container.CreatedAt()) < delay {
+			enable, explicit := s.option.IsContainerEnabled(container)
+			if !enable || !explicit {
+				newDelayedContainer[container.ID()] = container.CreatedAt().Add(delay)
+			}
+		}
+	}
+
+	s.l.Lock()
+	defer s.l.Unlock()
+	s.delayedContainer = newDelayedContainer
+}
+
+func (s *Synchronizer) DelayedContainers() (delayedByID map[string]time.Time, minDelayed time.Time) {
+	s.l.Lock()
+	defer s.l.Unlock()
+
+	for _, delay := range s.delayedContainer {
+		if minDelayed.IsZero() || delay.Before(minDelayed) {
+			minDelayed = delay
+		}
+	}
+
+	return s.delayedContainer, minDelayed
 }
 
 // ScheduleDiagnosticUpload stores the given diagnostic until the next synchronization,

@@ -122,7 +122,7 @@ func (s *Synchronizer) syncServices(ctx context.Context, syncType types.SyncType
 
 	localServices = s.serviceExcludeUnregistrable(localServices)
 
-	if err := s.serviceRegisterAndUpdate(ctx, apiClient, localServices); err != nil {
+	if err := s.serviceRegisterAndUpdate(ctx, execution, localServices); err != nil {
 		return false, err
 	}
 
@@ -187,16 +187,19 @@ func (s *Synchronizer) serviceRemoveDeletedFromRemote(ctx context.Context, local
 	s.option.Discovery.RemoveIfNonRunning(ctx, localServiceToDelete)
 }
 
-func (s *Synchronizer) serviceRegisterAndUpdate(ctx context.Context, apiClient types.RawClient, localServices []discovery.Service) error {
+func (s *Synchronizer) serviceRegisterAndUpdate(ctx context.Context, execution types.SynchronizationExecution, localServices []discovery.Service) error {
 	remoteServices := s.option.Cache.Services()
 	remoteServicesByKey := common.ServiceLookupFromList(remoteServices)
 	registeredServices := s.option.Cache.ServicesByUUID()
 	params := map[string]string{
 		"fields": serviceWriteFields,
 	}
+	apiClient := execution.BleemeoAPIClient()
+
+	delayedContainer, _ := execution.GlobalState().DelayedContainers()
 
 	for _, srv := range localServices {
-		if _, ok := s.state.delayedContainer[srv.ContainerID]; ok {
+		if _, ok := delayedContainer[srv.ContainerID]; ok {
 			logger.V(2).Printf("Skip service %v due to delayedContainer", srv)
 
 			continue
