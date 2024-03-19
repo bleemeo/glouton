@@ -426,6 +426,25 @@ func (r *Registry) Run(ctx context.Context) error {
 	return ctx.Err()
 }
 
+// RegisterGatherer add a new gatherer to the list of metric sources.
+func (r *Registry) RegisterGatherer(opt RegistrationOption, gatherer prometheus.Gatherer) (int, error) {
+	r.init()
+
+	if err := opt.buildRules(); err != nil {
+		return 0, err
+	}
+
+	r.l.Lock()
+	defer r.l.Unlock()
+
+	reg := &registration{
+		option: opt,
+	}
+	r.setupGatherer(reg, gatherer)
+
+	return r.addRegistration(reg)
+}
+
 // RegisterPushPointsCallback add a callback that should push points to the registry.
 // This callback will be called for each collection period. It's mostly used to
 // add Telegraf input (using glouton/collector).
@@ -863,25 +882,6 @@ func (r *Registry) scrapeDone() {
 	r.countScrape--
 	r.condition.Broadcast()
 	r.l.Unlock()
-}
-
-// RegisterGatherer add a new gatherer to the list of metric sources.
-func (r *Registry) RegisterGatherer(opt RegistrationOption, gatherer prometheus.Gatherer) (int, error) {
-	r.init()
-
-	if err := opt.buildRules(); err != nil {
-		return 0, err
-	}
-
-	r.l.Lock()
-	defer r.l.Unlock()
-
-	reg := &registration{
-		option: opt,
-	}
-	r.setupGatherer(reg, gatherer)
-
-	return r.addRegistration(reg)
 }
 
 func (r *Registry) addRegistration(reg *registration) (int, error) {
