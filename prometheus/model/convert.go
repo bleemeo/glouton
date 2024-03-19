@@ -42,16 +42,12 @@ var (
 )
 
 func FamiliesToMetricPoints(
-	now time.Time,
+	defaultTS time.Time,
 	families []*dto.MetricFamily,
 	dropMetaLabels bool,
 ) []types.MetricPoint {
-	if now.IsZero() {
-		now = time.UnixMilli(0)
-	}
-
 	samples, err := expfmt.ExtractSamples(
-		&expfmt.DecodeOptions{Timestamp: model.TimeFromUnixNano(now.UnixNano())},
+		&expfmt.DecodeOptions{Timestamp: model.Time(defaultTS.UnixMilli())},
 		families...,
 	)
 	if err != nil {
@@ -76,7 +72,7 @@ func FamiliesToMetricPoints(
 
 		ts := sample.Timestamp.Time()
 		if sample.Timestamp == 0 {
-			ts = time.Time{}
+			ts = defaultTS
 		}
 
 		result[i] = types.MetricPoint{
@@ -181,7 +177,7 @@ func MetricPointsToFamilies(points []types.MetricPoint) []*dto.MetricFamily {
 		lbls := AnnotationToMetaLabels(labels.FromMap(p.Labels), p.Annotations)
 
 		ts := proto.Int64(p.Time.UnixMilli())
-		if p.Time.IsZero() {
+		if p.Time.IsZero() || p.Time.UnixMilli() == 0 {
 			ts = nil
 		}
 

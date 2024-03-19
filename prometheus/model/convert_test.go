@@ -34,15 +34,18 @@ func TestConversionLoop(t *testing.T) {
 	now := time.Date(2022, 1, 25, 11, 21, 27, 0, time.UTC)
 
 	cases := []struct {
-		name   string
-		points []types.MetricPoint
+		name      string
+		defaultTS time.Time
+		points    []types.MetricPoint
 	}{
 		{
-			name:   "empty",
-			points: nil,
+			name:      "empty",
+			defaultTS: now,
+			points:    nil,
 		},
 		{
-			name: "one points",
+			name:      "one points",
+			defaultTS: now,
 			points: []types.MetricPoint{
 				{
 					Point:  types.Point{Time: now, Value: 42.1},
@@ -51,7 +54,8 @@ func TestConversionLoop(t *testing.T) {
 			},
 		},
 		{
-			name: "with annotations",
+			name:      "with annotations",
+			defaultTS: now,
 			points: []types.MetricPoint{
 				{
 					Point:  types.Point{Time: now, Value: 0.42},
@@ -71,7 +75,8 @@ func TestConversionLoop(t *testing.T) {
 			},
 		},
 		{
-			name: "newline in status description",
+			name:      "newline in status description",
+			defaultTS: now,
 			points: []types.MetricPoint{
 				{
 					Point:  types.Point{Time: now, Value: 1.24},
@@ -86,7 +91,8 @@ func TestConversionLoop(t *testing.T) {
 			},
 		},
 		{
-			name: "multiple-points",
+			name:      "multiple-points",
+			defaultTS: now,
 			points: []types.MetricPoint{
 				{
 					Point:  types.Point{Time: now, Value: 0},
@@ -152,10 +158,21 @@ func TestConversionLoop(t *testing.T) {
 			},
 		},
 		{
-			name: "zero-time",
+			name:      "zero-time",
+			defaultTS: now,
 			points: []types.MetricPoint{
 				{
 					Point:  types.Point{Time: time.Time{}, Value: 1},
+					Labels: map[string]string{types.LabelName: "name"},
+				},
+			},
+		},
+		{
+			name:      "epoc-time",
+			defaultTS: now,
+			points: []types.MetricPoint{
+				{
+					Point:  types.Point{Time: time.UnixMilli(0), Value: 1},
 					Labels: map[string]string{types.LabelName: "name"},
 				},
 			},
@@ -202,26 +219,26 @@ func TestConversionLoop(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				// Expected points are the input points with the date changed if it was empty.
-				// The default behavior is to set the date to now if it was empty.
+				// Expected points are the input points with the date changed if it was unset.
+				// Unset means time.Time{} or Unix epoc. In both case they are replaced by defaultTS.
 				expected := make([]types.MetricPoint, 0, len(tt.points))
 
 				for _, point := range tt.points {
-					if point.Time.IsZero() {
-						point.Time = now
+					if point.Time.IsZero() || point.Time.Equal(time.UnixMilli(0)) {
+						point.Time = tt.defaultTS
 					}
 
 					expected = append(expected, point)
 				}
 
-				got := FamiliesToMetricPoints(now, mfs, true)
+				got := FamiliesToMetricPoints(tt.defaultTS, mfs, true)
 
 				if diff := types.DiffMetricPoints(expected, got, false); diff != "" {
 					t.Errorf("conversion mismatch: (-want +got)\n:%s", diff)
 				}
 
 				mfs = MetricPointsToFamilies(tt.points)
-				got = FamiliesToMetricPoints(now, mfs, true)
+				got = FamiliesToMetricPoints(tt.defaultTS, mfs, true)
 
 				if diff := types.DiffMetricPoints(expected, got, false); diff != "" {
 					t.Errorf("conversion mismatch: (-want +got)\n:%s", diff)
@@ -236,6 +253,7 @@ func TestConversion(t *testing.T) { //nolint: maintidx
 
 	cases := []struct {
 		name           string
+		defaultTS      time.Time
 		input          []types.MetricPoint
 		wantMFS        []*dto.MetricFamily
 		wantPromLabels []labels.Labels
@@ -243,13 +261,15 @@ func TestConversion(t *testing.T) { //nolint: maintidx
 	}{
 		{
 			name:           "empty",
+			defaultTS:      now,
 			input:          nil,
 			wantMFS:        nil,
 			wantPromLabels: nil,
 			wantPoints:     nil,
 		},
 		{
-			name: "one-points",
+			name:      "one-points",
+			defaultTS: now,
 			input: []types.MetricPoint{
 				{
 					Point:  types.Point{Time: now, Value: 42.1},
@@ -284,7 +304,8 @@ func TestConversion(t *testing.T) { //nolint: maintidx
 			},
 		},
 		{
-			name: "zero-time",
+			name:      "zero-time",
+			defaultTS: now,
 			input: []types.MetricPoint{
 				{
 					Point:  types.Point{Time: time.Time{}, Value: 42.1},
@@ -318,7 +339,183 @@ func TestConversion(t *testing.T) { //nolint: maintidx
 			},
 		},
 		{
-			name: "annotations-in-annotations",
+			name:      "epoc-time",
+			defaultTS: now,
+			input: []types.MetricPoint{
+				{
+					Point:  types.Point{Time: time.UnixMilli(0), Value: 42.1},
+					Labels: map[string]string{types.LabelName: "cpu_used"},
+				},
+			},
+			wantMFS: []*dto.MetricFamily{
+				{
+					Name: proto.String("cpu_used"),
+					Help: proto.String(""),
+					Type: dto.MetricType_UNTYPED.Enum(),
+					Metric: []*dto.Metric{
+						{
+							Untyped: &dto.Untyped{
+								Value: proto.Float64(42.1),
+							},
+						},
+					},
+				},
+			},
+			wantPromLabels: []labels.Labels{
+				labels.FromMap(map[string]string{
+					types.LabelName: "cpu_used",
+				}),
+			},
+			wantPoints: []types.MetricPoint{
+				{
+					Point:  types.Point{Time: now, Value: 42.1},
+					Labels: map[string]string{types.LabelName: "cpu_used"},
+				},
+			},
+		},
+		{
+			name:      "zero-time-to-0",
+			defaultTS: time.Time{},
+			input: []types.MetricPoint{
+				{
+					Point:  types.Point{Time: time.Time{}, Value: 42.1},
+					Labels: map[string]string{types.LabelName: "cpu_used"},
+				},
+			},
+			wantMFS: []*dto.MetricFamily{
+				{
+					Name: proto.String("cpu_used"),
+					Help: proto.String(""),
+					Type: dto.MetricType_UNTYPED.Enum(),
+					Metric: []*dto.Metric{
+						{
+							Untyped: &dto.Untyped{
+								Value: proto.Float64(42.1),
+							},
+						},
+					},
+				},
+			},
+			wantPromLabels: []labels.Labels{
+				labels.FromMap(map[string]string{
+					types.LabelName: "cpu_used",
+				}),
+			},
+			wantPoints: []types.MetricPoint{
+				{
+					Point:  types.Point{Time: time.Time{}, Value: 42.1},
+					Labels: map[string]string{types.LabelName: "cpu_used"},
+				},
+			},
+		},
+		{
+			name:      "epoc-time-to-0",
+			defaultTS: time.Time{},
+			input: []types.MetricPoint{
+				{
+					Point:  types.Point{Time: time.UnixMilli(0), Value: 42.1},
+					Labels: map[string]string{types.LabelName: "cpu_used"},
+				},
+			},
+			wantMFS: []*dto.MetricFamily{
+				{
+					Name: proto.String("cpu_used"),
+					Help: proto.String(""),
+					Type: dto.MetricType_UNTYPED.Enum(),
+					Metric: []*dto.Metric{
+						{
+							Untyped: &dto.Untyped{
+								Value: proto.Float64(42.1),
+							},
+						},
+					},
+				},
+			},
+			wantPromLabels: []labels.Labels{
+				labels.FromMap(map[string]string{
+					types.LabelName: "cpu_used",
+				}),
+			},
+			wantPoints: []types.MetricPoint{
+				{
+					Point:  types.Point{Time: time.Time{}, Value: 42.1},
+					Labels: map[string]string{types.LabelName: "cpu_used"},
+				},
+			},
+		},
+		{
+			name:      "zero-time-to-epoc",
+			defaultTS: time.UnixMilli(0),
+			input: []types.MetricPoint{
+				{
+					Point:  types.Point{Time: time.Time{}, Value: 42.1},
+					Labels: map[string]string{types.LabelName: "cpu_used"},
+				},
+			},
+			wantMFS: []*dto.MetricFamily{
+				{
+					Name: proto.String("cpu_used"),
+					Help: proto.String(""),
+					Type: dto.MetricType_UNTYPED.Enum(),
+					Metric: []*dto.Metric{
+						{
+							Untyped: &dto.Untyped{
+								Value: proto.Float64(42.1),
+							},
+						},
+					},
+				},
+			},
+			wantPromLabels: []labels.Labels{
+				labels.FromMap(map[string]string{
+					types.LabelName: "cpu_used",
+				}),
+			},
+			wantPoints: []types.MetricPoint{
+				{
+					Point:  types.Point{Time: time.UnixMilli(0), Value: 42.1},
+					Labels: map[string]string{types.LabelName: "cpu_used"},
+				},
+			},
+		},
+		{
+			name:      "epoc-time-to-epoc",
+			defaultTS: time.UnixMilli(0),
+			input: []types.MetricPoint{
+				{
+					Point:  types.Point{Time: time.UnixMilli(0), Value: 42.1},
+					Labels: map[string]string{types.LabelName: "cpu_used"},
+				},
+			},
+			wantMFS: []*dto.MetricFamily{
+				{
+					Name: proto.String("cpu_used"),
+					Help: proto.String(""),
+					Type: dto.MetricType_UNTYPED.Enum(),
+					Metric: []*dto.Metric{
+						{
+							Untyped: &dto.Untyped{
+								Value: proto.Float64(42.1),
+							},
+						},
+					},
+				},
+			},
+			wantPromLabels: []labels.Labels{
+				labels.FromMap(map[string]string{
+					types.LabelName: "cpu_used",
+				}),
+			},
+			wantPoints: []types.MetricPoint{
+				{
+					Point:  types.Point{Time: time.UnixMilli(0), Value: 42.1},
+					Labels: map[string]string{types.LabelName: "cpu_used"},
+				},
+			},
+		},
+		{
+			name:      "annotations-in-annotations",
+			defaultTS: now,
 			input: []types.MetricPoint{
 				{
 					Point: types.Point{Time: now, Value: 42.1},
@@ -450,7 +647,8 @@ func TestConversion(t *testing.T) { //nolint: maintidx
 			},
 		},
 		{
-			name: "annotations-in-labels",
+			name:      "annotations-in-labels",
+			defaultTS: now,
 			input: []types.MetricPoint{
 				{
 					Point: types.Point{Time: now, Value: 42.1},
@@ -587,7 +785,7 @@ func TestConversion(t *testing.T) { //nolint: maintidx
 				t.Errorf("MetricPointsToFamilies mismatch (-want +got)\n%s", diff)
 			}
 
-			got := FamiliesToMetricPoints(now, gotMFS, true)
+			got := FamiliesToMetricPoints(tt.defaultTS, gotMFS, true)
 			if diff := types.DiffMetricPoints(tt.wantPoints, got, false); diff != "" {
 				t.Errorf("FamiliesToMetricPoints mismatch (-want +got)\n%s", diff)
 			}
