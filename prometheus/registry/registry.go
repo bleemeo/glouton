@@ -1354,16 +1354,6 @@ func (r *Registry) WithTTL(ttl time.Duration) types.PointPusher {
 	})
 }
 
-// WithTTLAndFormat return a AddMetricPointFunction with TTL on pushed points and a metric format.
-// The returned function bypasses the metric format contained in the registry options.
-func (r *Registry) WithTTLAndFormat(ttl time.Duration, format types.MetricFormat) types.PointPusher {
-	r.init()
-
-	return pushFunction(func(ctx context.Context, points []types.MetricPoint) {
-		r.pushPoint(ctx, points, ttl, format)
-	})
-}
-
 // UpdateDelay change the delay between metric gather.
 func (r *Registry) UpdateDelay(delay time.Duration) {
 	r.init()
