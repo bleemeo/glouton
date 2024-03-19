@@ -60,11 +60,7 @@ func (g *appenderGatherer) GatherWithState(ctx context.Context, state GatherStat
 				now = time.Now().Truncate(time.Second)
 			}
 
-			for _, samples := range app.Committed {
-				for i := range samples {
-					samples[i].T = now.UnixMilli()
-				}
-			}
+			app.FixSampleTimestamp(now)
 		}
 
 		g.l.Lock()
@@ -79,13 +75,9 @@ func (g *appenderGatherer) GatherWithState(ctx context.Context, state GatherStat
 	var mfs []*dto.MetricFamily
 
 	if g.lastApp != nil {
-		for _, samples := range g.lastApp.Committed {
-			mf, err := model.SamplesToMetricFamily(samples, nil)
-			if err != nil {
-				return nil, err
-			}
-
-			mfs = append(mfs, mf)
+		mfs, err = g.lastApp.AsMF()
+		if err != nil {
+			return nil, err
 		}
 	}
 

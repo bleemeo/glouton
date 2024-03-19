@@ -30,7 +30,7 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-func TestConvertionLoop(t *testing.T) {
+func TestConversionLoop(t *testing.T) {
 	now := time.Date(2022, 1, 25, 11, 21, 27, 0, time.UTC)
 
 	cases := []struct {
@@ -197,13 +197,9 @@ func TestConvertionLoop(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				for _, samples := range app.Committed {
-					mf, err := SamplesToMetricFamily(samples, nil)
-					if err != nil {
-						t.Fatal(err)
-					}
-
-					mfs = append(mfs, mf)
+				mfs, err := app.AsMF()
+				if err != nil {
+					t.Fatal(err)
 				}
 
 				// Expected points are the input points with the date changed if it was empty.
@@ -235,7 +231,7 @@ func TestConvertionLoop(t *testing.T) {
 	}
 }
 
-func TestConvertion(t *testing.T) { //nolint: maintidx
+func TestConversion(t *testing.T) { //nolint: maintidx
 	now := time.UnixMilli(time.Now().UnixMilli())
 
 	cases := []struct {
@@ -337,7 +333,7 @@ func TestConvertion(t *testing.T) { //nolint: maintidx
 						ServiceName: "apache",
 						Status: types.StatusDescription{
 							CurrentStatus:     types.StatusCritical,
-							StatusDescription: "decription",
+							StatusDescription: "description",
 						},
 					},
 				},
@@ -353,7 +349,7 @@ func TestConvertion(t *testing.T) { //nolint: maintidx
 						ServiceName: "apache",
 						Status: types.StatusDescription{
 							CurrentStatus:     types.StatusCritical,
-							StatusDescription: "decription",
+							StatusDescription: "description",
 						},
 					},
 				},
@@ -369,7 +365,7 @@ func TestConvertion(t *testing.T) { //nolint: maintidx
 							Label: []*dto.LabelPair{
 								{Name: proto.String(types.LabelMetaBleemeoItem), Value: proto.String("value1")},
 								{Name: proto.String(types.LabelMetaContainerID), Value: proto.String("123456")},
-								{Name: proto.String(types.LabelMetaCurrentDescription), Value: proto.String("decription")},
+								{Name: proto.String(types.LabelMetaCurrentDescription), Value: proto.String("description")},
 								{Name: proto.String(types.LabelMetaCurrentStatus), Value: proto.String("critical")},
 								{Name: proto.String(types.LabelMetaServiceName), Value: proto.String("apache")},
 								{Name: proto.String("alabel"), Value: proto.String("test")},
@@ -384,7 +380,7 @@ func TestConvertion(t *testing.T) { //nolint: maintidx
 							Label: []*dto.LabelPair{
 								{Name: proto.String(types.LabelMetaBleemeoItem), Value: proto.String("value2")},
 								{Name: proto.String(types.LabelMetaContainerID), Value: proto.String("7890")},
-								{Name: proto.String(types.LabelMetaCurrentDescription), Value: proto.String("decription")},
+								{Name: proto.String(types.LabelMetaCurrentDescription), Value: proto.String("description")},
 								{Name: proto.String(types.LabelMetaCurrentStatus), Value: proto.String("critical")},
 								{Name: proto.String(types.LabelMetaServiceName), Value: proto.String("apache")},
 								{Name: proto.String("alabel"), Value: proto.String("test3")},
@@ -403,7 +399,7 @@ func TestConvertion(t *testing.T) { //nolint: maintidx
 					"zlabel":                          "test2",
 					types.LabelMetaBleemeoItem:        "value1",
 					types.LabelMetaContainerID:        "123456",
-					types.LabelMetaCurrentDescription: "decription",
+					types.LabelMetaCurrentDescription: "description",
 					types.LabelMetaCurrentStatus:      "critical",
 					types.LabelMetaServiceName:        "apache",
 				}),
@@ -412,7 +408,7 @@ func TestConvertion(t *testing.T) { //nolint: maintidx
 					"alabel":                          "test3",
 					types.LabelMetaBleemeoItem:        "value2",
 					types.LabelMetaContainerID:        "7890",
-					types.LabelMetaCurrentDescription: "decription",
+					types.LabelMetaCurrentDescription: "description",
 					types.LabelMetaCurrentStatus:      "critical",
 					types.LabelMetaServiceName:        "apache",
 				}),
@@ -431,7 +427,7 @@ func TestConvertion(t *testing.T) { //nolint: maintidx
 						ServiceName: "apache",
 						Status: types.StatusDescription{
 							CurrentStatus:     types.StatusCritical,
-							StatusDescription: "decription",
+							StatusDescription: "description",
 						},
 					},
 				},
@@ -447,7 +443,7 @@ func TestConvertion(t *testing.T) { //nolint: maintidx
 						ServiceName: "apache",
 						Status: types.StatusDescription{
 							CurrentStatus:     types.StatusCritical,
-							StatusDescription: "decription",
+							StatusDescription: "description",
 						},
 					},
 				},
@@ -464,7 +460,7 @@ func TestConvertion(t *testing.T) { //nolint: maintidx
 						"zlabel":                          "test2",
 						types.LabelMetaBleemeoItem:        "value1",
 						types.LabelMetaContainerID:        "123456",
-						types.LabelMetaCurrentDescription: "decription",
+						types.LabelMetaCurrentDescription: "description",
 						types.LabelMetaCurrentStatus:      "critical",
 						types.LabelMetaServiceName:        "apache",
 					},
@@ -476,7 +472,7 @@ func TestConvertion(t *testing.T) { //nolint: maintidx
 						"alabel":                          "test3",
 						types.LabelMetaBleemeoItem:        "value2",
 						types.LabelMetaContainerID:        "7890",
-						types.LabelMetaCurrentDescription: "decription",
+						types.LabelMetaCurrentDescription: "description",
 						types.LabelMetaCurrentStatus:      "critical",
 						types.LabelMetaServiceName:        "apache",
 					},
@@ -493,7 +489,7 @@ func TestConvertion(t *testing.T) { //nolint: maintidx
 							Label: []*dto.LabelPair{
 								{Name: proto.String(types.LabelMetaBleemeoItem), Value: proto.String("value1")},
 								{Name: proto.String(types.LabelMetaContainerID), Value: proto.String("123456")},
-								{Name: proto.String(types.LabelMetaCurrentDescription), Value: proto.String("decription")},
+								{Name: proto.String(types.LabelMetaCurrentDescription), Value: proto.String("description")},
 								{Name: proto.String(types.LabelMetaCurrentStatus), Value: proto.String("critical")},
 								{Name: proto.String(types.LabelMetaServiceName), Value: proto.String("apache")},
 								{Name: proto.String("alabel"), Value: proto.String("test")},
@@ -508,7 +504,7 @@ func TestConvertion(t *testing.T) { //nolint: maintidx
 							Label: []*dto.LabelPair{
 								{Name: proto.String(types.LabelMetaBleemeoItem), Value: proto.String("value2")},
 								{Name: proto.String(types.LabelMetaContainerID), Value: proto.String("7890")},
-								{Name: proto.String(types.LabelMetaCurrentDescription), Value: proto.String("decription")},
+								{Name: proto.String(types.LabelMetaCurrentDescription), Value: proto.String("description")},
 								{Name: proto.String(types.LabelMetaCurrentStatus), Value: proto.String("critical")},
 								{Name: proto.String(types.LabelMetaServiceName), Value: proto.String("apache")},
 								{Name: proto.String("alabel"), Value: proto.String("test3")},
@@ -527,7 +523,7 @@ func TestConvertion(t *testing.T) { //nolint: maintidx
 					"zlabel":                          "test2",
 					types.LabelMetaBleemeoItem:        "value1",
 					types.LabelMetaContainerID:        "123456",
-					types.LabelMetaCurrentDescription: "decription",
+					types.LabelMetaCurrentDescription: "description",
 					types.LabelMetaCurrentStatus:      "critical",
 					types.LabelMetaServiceName:        "apache",
 				}),
@@ -536,7 +532,7 @@ func TestConvertion(t *testing.T) { //nolint: maintidx
 					"alabel":                          "test3",
 					types.LabelMetaBleemeoItem:        "value2",
 					types.LabelMetaContainerID:        "7890",
-					types.LabelMetaCurrentDescription: "decription",
+					types.LabelMetaCurrentDescription: "description",
 					types.LabelMetaCurrentStatus:      "critical",
 					types.LabelMetaServiceName:        "apache",
 				}),
@@ -555,7 +551,7 @@ func TestConvertion(t *testing.T) { //nolint: maintidx
 						ServiceName: "apache",
 						Status: types.StatusDescription{
 							CurrentStatus:     types.StatusCritical,
-							StatusDescription: "decription",
+							StatusDescription: "description",
 						},
 					},
 				},
@@ -571,7 +567,7 @@ func TestConvertion(t *testing.T) { //nolint: maintidx
 						ServiceName: "apache",
 						Status: types.StatusDescription{
 							CurrentStatus:     types.StatusCritical,
-							StatusDescription: "decription",
+							StatusDescription: "description",
 						},
 					},
 				},
