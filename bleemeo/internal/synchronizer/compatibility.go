@@ -168,13 +168,7 @@ func compatibilitySyncToPerform(ctx context.Context, execution types.Synchroniza
 	_, minDelayed := execution.GlobalState().DelayedContainers()
 
 	if execution.LastSync().Before(lastDiscovery) || (!minDelayed.IsZero() && execution.StartedAt().After(minDelayed)) {
-		execution.RequestSynchronization(types.EntityService, false)
 		execution.RequestSynchronization(types.EntityContainer, false)
-	}
-
-	if execution.IsSynchronizationExplicitlyRequested(types.EntityService) {
-		// Metrics registration may need services to be synced, trigger metrics synchronization
-		execution.RequestSynchronization(types.EntityMetric, false)
 	}
 
 	if execution.IsSynchronizationExplicitlyRequested(types.EntityContainer) {

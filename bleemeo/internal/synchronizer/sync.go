@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"glouton/bleemeo/client"
 	"glouton/bleemeo/internal/common"
+	"glouton/bleemeo/internal/synchronizer/syncservices"
 	"glouton/bleemeo/internal/synchronizer/types"
 	bleemeoTypes "glouton/bleemeo/types"
 	"glouton/crashreport"
@@ -157,7 +158,7 @@ func newWithNow(option types.Option, now func() time.Time) (*Synchronizer, error
 		&CompatibilityWrapper{state: state, name: types.EntityContainer, method: s.syncContainers},
 		&CompatibilityWrapper{state: state, name: types.EntitySNMP, method: s.syncSNMP},
 		&CompatibilityWrapper{state: state, name: types.EntityVSphere, method: s.syncVSphere},
-		&CompatibilityWrapper{state: state, name: types.EntityService, method: s.syncServices},
+		syncservices.New(),
 		&CompatibilityWrapper{state: state, name: types.EntityMonitor, method: s.syncMonitors, skipOnlyEssential: true},
 		&CompatibilityWrapper{state: state, name: types.EntityMetric, method: s.syncMetrics},
 		&CompatibilityWrapper{state: state, name: types.EntityConfig, method: s.syncConfig},
@@ -661,6 +662,13 @@ func (s *Synchronizer) DelayedContainers() (delayedByID map[string]time.Time, mi
 	}
 
 	return s.delayedContainer, minDelayed
+}
+
+func (s *Synchronizer) SuccessiveErrors() int {
+	s.l.Lock()
+	defer s.l.Unlock()
+
+	return s.successiveErrors
 }
 
 // ScheduleDiagnosticUpload stores the given diagnostic until the next synchronization,

@@ -19,6 +19,7 @@ package synchronizer
 import (
 	"errors"
 	"fmt"
+	"glouton/bleemeo/internal/synchronizer/bleemeoapi"
 	bleemeoTypes "glouton/bleemeo/types"
 	"glouton/config"
 	"glouton/discovery"
@@ -49,12 +50,6 @@ var (
 	errServerError         = errors.New("had server error")
 	errClientError         = errors.New("had client error")
 )
-
-type serviceMonitor struct {
-	bleemeoTypes.Monitor
-	Account   string `json:"account"`
-	IsMonitor bool   `json:"monitor"`
-}
 
 func TestSync(t *testing.T) {
 	helper := newHelper(t)
@@ -103,7 +98,7 @@ func TestSync(t *testing.T) {
 
 	optMetricSort := cmpopts.SortSlices(func(x bleemeoTypes.Metric, y bleemeoTypes.Metric) bool { return x.ID < y.ID })
 	if diff := cmp.Diff(want, syncedMetrics, optMetricSort); diff != "" {
-		t.Errorf("metrics mistmatch (-want +got)\n%s", diff)
+		t.Errorf("metrics mismatch (-want +got)\n%s", diff)
 	}
 
 	// Did we sync and enable the monitor present in the configuration ?
@@ -113,7 +108,7 @@ func TestSync(t *testing.T) {
 	}
 
 	if diff := cmp.Diff(wantMonitor, syncedMonitors); diff != "" {
-		t.Errorf("monitors mistmatch (-want +got)\n%s", diff)
+		t.Errorf("monitors mismatch (-want +got)\n%s", diff)
 	}
 }
 
@@ -614,7 +609,7 @@ func TestContainerSync(t *testing.T) {
 	}
 
 	if diff := cmp.Diff(wantContainer, containers); diff != "" {
-		t.Errorf("container mistmatch (-want +got)\n%s", diff)
+		t.Errorf("container mismatch (-want +got)\n%s", diff)
 	}
 
 	var metrics []metricPayload
@@ -672,7 +667,7 @@ func TestContainerSync(t *testing.T) {
 	}
 
 	if diff := cmp.Diff(wantContainer, containers); diff != "" {
-		t.Errorf("container mistmatch (-want +got)\n%s", diff)
+		t.Errorf("container mismatch (-want +got)\n%s", diff)
 	}
 
 	helper.api.resources[mockAPIResourceMetric].Store(&metrics)
@@ -742,7 +737,7 @@ func TestContainerSync(t *testing.T) {
 	}
 
 	if diff := cmp.Diff(wantContainer, containers); diff != "" {
-		t.Errorf("container mistmatch (-want +got)\n%s", diff)
+		t.Errorf("container mismatch (-want +got)\n%s", diff)
 	}
 
 	helper.api.resources[mockAPIResourceMetric].Store(&metrics)
@@ -1185,7 +1180,7 @@ func TestBleemeoPlan(t *testing.T) { //nolint:maintidx
 
 			helper.assertAgentsInAPI(t, wantAgents)
 
-			helper.assertServicesInAPI(t, []serviceMonitor{
+			helper.assertServicesInAPI(t, []bleemeoapi.ServicePayload{
 				monitor,
 				{
 					Account: accountID,

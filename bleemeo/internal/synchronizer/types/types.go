@@ -19,6 +19,7 @@ package types
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"glouton/bleemeo/internal/cache"
 	bleemeoTypes "glouton/bleemeo/types"
 	"glouton/facts"
@@ -51,6 +52,8 @@ const (
 	SyncTypeNormal            SyncType = 1
 	SyncTypeForceCacheRefresh SyncType = 2
 )
+
+var ErrUnexpectedWorkflow = errors.New("unexpected synchroniztion workflow")
 
 type EntitySynchronizer interface {
 	Name() EntityName
@@ -127,6 +130,7 @@ type RawClient interface {
 type SynchronizedGlobalState interface {
 	IsMaintenance() bool
 	DelayedContainers() (delayedByID map[string]time.Time, minDelayed time.Time)
+	SuccessiveErrors() int
 	UpdateDelayedContainers(localContainers []facts.Container)
 }
 

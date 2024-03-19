@@ -14,6 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//nolint:dupl
 package synchronizer
 
 import (
@@ -21,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"glouton/bleemeo/internal/cache"
+	"glouton/bleemeo/internal/synchronizer/bleemeoapi"
 	"glouton/bleemeo/internal/synchronizer/types"
 	bleemeoTypes "glouton/bleemeo/types"
 	"glouton/config"
@@ -131,7 +133,7 @@ func (helper *syncTestHelper) preregisterAgent(t *testing.T) {
 }
 
 // addMonitorOnAPI pre-create a monitor in the API.
-func (helper *syncTestHelper) addMonitorOnAPI(t *testing.T) serviceMonitor {
+func (helper *syncTestHelper) addMonitorOnAPI(t *testing.T) bleemeoapi.ServicePayload {
 	t.Helper()
 
 	newMonitorCopy := newMonitor
@@ -350,18 +352,11 @@ func (helper *syncTestHelper) SetAPIMetrics(metrics ...metricPayload) {
 }
 
 // SetAPIServices define the list of service present on Bleemeo API mock.
-func (helper *syncTestHelper) SetAPIServices(services ...servicePayload) {
+func (helper *syncTestHelper) SetAPIServices(services ...bleemeoapi.ServicePayload) {
 	tmp := make([]interface{}, 0, len(services))
 
 	for _, m := range services {
-		tmp = append(tmp, serviceMonitor{
-			Monitor: bleemeoTypes.Monitor{
-				Service: m.Service,
-				AgentID: m.Agent,
-			},
-			Account:   m.Account,
-			IsMonitor: false,
-		})
+		tmp = append(tmp, m)
 	}
 
 	helper.api.resources[mockAPIResourceService].SetStore(tmp...)
@@ -430,8 +425,8 @@ func (helper *syncTestHelper) FactsFromAPI() []bleemeoTypes.AgentFact {
 }
 
 // ServicesFromAPI returns services present on Bleemeo API mock.
-func (helper *syncTestHelper) ServicesFromAPI() []serviceMonitor {
-	var services []serviceMonitor
+func (helper *syncTestHelper) ServicesFromAPI() []bleemeoapi.ServicePayload {
+	var services []bleemeoapi.ServicePayload
 
 	helper.api.resources[mockAPIResourceService].Store(&services)
 	sort.Slice(services, func(i, j int) bool {
@@ -478,12 +473,12 @@ func (helper *syncTestHelper) assertAgentsInAPI(t *testing.T, want []payloadAgen
 // This is mostly a wrapper around cmp.Diff which also do:
 // * replace idAny by corresponding ID (match service by same name, instance, url)
 // * sort list by ID.
-func (helper *syncTestHelper) assertServicesInAPI(t *testing.T, want []serviceMonitor) {
+func (helper *syncTestHelper) assertServicesInAPI(t *testing.T, want []bleemeoapi.ServicePayload) {
 	t.Helper()
 
 	services := helper.ServicesFromAPI()
 
-	copyWant := make([]serviceMonitor, 0, len(want))
+	copyWant := make([]bleemeoapi.ServicePayload, 0, len(want))
 
 	for _, x := range want {
 		if x.ID == idAny {
@@ -501,7 +496,7 @@ func (helper *syncTestHelper) assertServicesInAPI(t *testing.T, want []serviceMo
 		copyWant = append(copyWant, x)
 	}
 
-	optSort := cmpopts.SortSlices(func(x serviceMonitor, y serviceMonitor) bool { return x.ID < y.ID })
+	optSort := cmpopts.SortSlices(func(x bleemeoapi.ServicePayload, y bleemeoapi.ServicePayload) bool { return x.ID < y.ID })
 	if diff := cmp.Diff(copyWant, services, cmpopts.EquateEmpty(), optSort); diff != "" {
 		t.Errorf("services mismatch (-want +got)\n%s", diff)
 	}

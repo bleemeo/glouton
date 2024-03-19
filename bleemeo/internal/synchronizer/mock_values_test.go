@@ -18,12 +18,13 @@ package synchronizer
 
 import (
 	"fmt"
+	"glouton/bleemeo/internal/synchronizer/bleemeoapi"
 	bleemeoTypes "glouton/bleemeo/types"
 	"time"
 )
 
 const (
-	// fixed "random" values are enought for tests.
+	// fixed "random" values are enough for tests.
 	accountID          string = "9da59f53-1d90-4441-ae58-42c661cfea83"
 	agentID            string = "33708da4-28d4-45aa-b811-49c82b594627"
 	registrationKey    string = "e2c22e59-0621-49e6-b5dd-bdb02cbac9f1"
@@ -163,7 +164,7 @@ var (
 		InitialPassword: "password already set",
 	}
 
-	newMonitor = serviceMonitor{
+	newMonitor = bleemeoapi.ServicePayload{
 		Monitor: bleemeoTypes.Monitor{
 			Service: bleemeoTypes.Service{
 				ID:            "fdd9d999-e2ff-45d3-af2b-6519cf8e3e70",

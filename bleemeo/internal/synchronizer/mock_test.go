@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"glouton/bleemeo/internal/synchronizer/bleemeoapi"
 	bleemeoTypes "glouton/bleemeo/types"
 	"glouton/facts"
 	"glouton/types"
@@ -291,7 +292,7 @@ func newAPI() *mockAPI {
 		},
 	})
 	api.AddResource(mockAPIResourceService, &genericResource{
-		Type:        serviceMonitor{},
+		Type:        bleemeoapi.ServicePayload{},
 		ValidFilter: []string{"agent", "active", "monitor"},
 	})
 	api.AddResource(mockAPIGloutonConfigItem, &genericResource{

@@ -1427,8 +1427,6 @@ func (s *Synchronizer) metricDeleteIgnoredServices(ctx context.Context, apiClien
 		return err
 	}
 
-	localServices = s.serviceExcludeUnregistrable(localServices)
-
 	registeredMetrics := s.option.Cache.MetricsByUUID()
 	registeredMetricsByKey := s.option.Cache.MetricLookupFromList()
 

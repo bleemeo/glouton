@@ -14,13 +14,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package synchronizer
+package syncservices
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
 	"glouton/bleemeo/internal/common"
+	"glouton/bleemeo/internal/synchronizer/bleemeoapi"
 	"glouton/bleemeo/internal/synchronizer/types"
 	bleemeoTypes "glouton/bleemeo/types"
 	"glouton/discovery"
@@ -39,33 +40,118 @@ const (
 	serviceWriteFields = serviceReadFields + ",account,agent"
 )
 
-type servicePayload struct {
-	bleemeoTypes.Service
-	Account string `json:"account"`
-	Agent   string `json:"agent"`
+type SyncServices struct {
+	currentExecution    types.SynchronizationExecution
+	lastDenyReasonLogAt time.Time
 }
 
-func servicePayloadFromDiscovery(service discovery.Service, listenAddresses string, accountID string, agentID string, serviceID string) servicePayload {
+func New() *SyncServices {
+	return &SyncServices{}
+}
+
+func (s *SyncServices) Name() types.EntityName {
+	return types.EntityService
+}
+
+func (s *SyncServices) EnabledInMaintenance() bool {
+	return false
+}
+
+func (s *SyncServices) EnabledInSuspendedMode() bool {
+	return false
+}
+
+func (s *SyncServices) PrepareExecution(_ context.Context, execution types.SynchronizationExecution) (types.EntitySynchronizerExecution, error) {
+	s.currentExecution = execution
+
+	return s, nil
+}
+
+func (s *SyncServices) NeedSynchronization(_ context.Context) bool {
+	if s.currentExecution == nil {
+		return false
+	}
+
+	lastDiscovery := s.currentExecution.Option().Discovery.LastUpdate()
+	_, minDelayed := s.currentExecution.GlobalState().DelayedContainers()
+
+	if s.currentExecution.LastSync().Before(lastDiscovery) || (!minDelayed.IsZero() && s.currentExecution.StartedAt().After(minDelayed)) {
+		// Metrics registration may need services to be synced, trigger metrics synchronization to be sure any
+		// possible blocked metrics get registered after service are registered
+		s.currentExecution.RequestSynchronization(types.EntityMetric, false)
+
+		return true
+	}
+
+	return false
+}
+
+func (s *SyncServices) RefreshCache(ctx context.Context, syncType types.SyncType) error {
+	if s.currentExecution == nil {
+		return fmt.Errorf("%w: currentExecution is nil", types.ErrUnexpectedWorkflow)
+	}
+
+	if s.currentExecution.GlobalState().SuccessiveErrors() == 3 {
+		// After 3 error, try to force a full synchronization to see if it solve the issue.
+		syncType = types.SyncTypeForceCacheRefresh
+	}
+
+	if syncType == types.SyncTypeForceCacheRefresh {
+		err := serviceUpdateList(ctx, s.currentExecution)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (s *SyncServices) SyncRemoteAndLocal(ctx context.Context, syncType types.SyncType) error {
+	_ = syncType
+
+	if s.currentExecution == nil {
+		return fmt.Errorf("%w: currentExecution is nil", types.ErrUnexpectedWorkflow)
+	}
+
+	return s.syncRemoteAndLocal(ctx, s.currentExecution)
+}
+
+func (s *SyncServices) FinishExecution(_ context.Context) {
+	s.currentExecution = nil
+}
+
+// logThrottle logs a message at most once per hour, all other logs are dropped to prevent spam.
+func (s *SyncServices) logThrottle(msg string) {
+	if time.Since(s.lastDenyReasonLogAt) > time.Hour {
+		logger.V(1).Println(msg)
+
+		s.lastDenyReasonLogAt = time.Now()
+	}
+}
+
+func ServicePayloadFromDiscovery(service discovery.Service, listenAddresses string, accountID string, agentID string, serviceID string) bleemeoapi.ServicePayload {
 	tags := make([]bleemeoTypes.Tag, 0, len(service.Tags))
 
 	for _, t := range service.Tags {
-		if len(t) <= apiTagsLength && t != "" {
+		if len(t) <= bleemeoapi.APITagsLength && t != "" {
 			tags = append(tags, bleemeoTypes.Tag{Name: t})
 		}
 	}
 
-	return servicePayload{
-		Service: bleemeoTypes.Service{
-			ID:              serviceID,
-			Label:           service.Name,
-			Instance:        service.Instance,
-			ListenAddresses: listenAddresses,
-			ExePath:         service.ExePath,
-			Active:          service.Active,
-			Tags:            tags,
+	return bleemeoapi.ServicePayload{
+		Monitor: bleemeoTypes.Monitor{
+			Service: bleemeoTypes.Service{
+				ID:              serviceID,
+				Label:           service.Name,
+				Instance:        service.Instance,
+				ListenAddresses: listenAddresses,
+				ExePath:         service.ExePath,
+				Active:          service.Active,
+				Tags:            tags,
+			},
+			AgentID: agentID,
 		},
 		Account: accountID,
-		Agent:   agentID,
 	}
 }
 
@@ -85,55 +171,44 @@ func getListenAddress(addresses []facts.ListenAddress) string {
 	return strings.Join(stringList, ",")
 }
 
-func (s *Synchronizer) syncServices(ctx context.Context, syncType types.SyncType, execution types.SynchronizationExecution) (updateThresholds bool, err error) {
-	localServices, err := s.option.Discovery.Discovery(ctx, 24*time.Hour)
+func (s *SyncServices) syncRemoteAndLocal(ctx context.Context, execution types.SynchronizationExecution) error {
+	localServices, err := execution.Option().Discovery.Discovery(ctx, 24*time.Hour)
 	if err != nil {
-		return false, err
+		return err
 	}
 
 	localServices = s.serviceExcludeUnregistrable(localServices)
+	previousServices := execution.Option().Cache.ServicesByUUID()
 
-	if s.successiveErrors == 3 {
-		// After 3 error, try to force a full synchronization to see if it solve the issue.
-		syncType = types.SyncTypeForceCacheRefresh
-	}
-
-	previousServices := s.option.Cache.ServicesByUUID()
-	apiClient := execution.BleemeoAPIClient()
-
-	if syncType == types.SyncTypeForceCacheRefresh {
-		err := s.serviceUpdateList(ctx, apiClient)
-		if err != nil {
-			return false, err
-		}
-	}
-
-	s.serviceRemoveDeletedFromRemote(ctx, localServices, previousServices)
+	serviceRemoveDeletedFromRemote(ctx, execution, localServices, previousServices)
 
 	if execution.IsOnlyEssential() {
 		// no essential services, skip registering.
-		return false, nil
+		return nil
 	}
 
-	localServices, err = s.option.Discovery.Discovery(ctx, 24*time.Hour)
+	localServices, err = execution.Option().Discovery.Discovery(ctx, 24*time.Hour)
 	if err != nil {
-		return false, err
+		return err
 	}
 
 	localServices = s.serviceExcludeUnregistrable(localServices)
 
 	if err := s.serviceRegisterAndUpdate(ctx, execution, localServices); err != nil {
-		return false, err
+		return err
 	}
 
-	s.serviceDeactivateNonLocal(ctx, apiClient, localServices)
+	serviceDeactivateNonLocal(ctx, execution, localServices)
 
-	return false, nil
+	return nil
 }
 
-func (s *Synchronizer) serviceUpdateList(ctx context.Context, apiClient types.RawClient) error {
+func serviceUpdateList(ctx context.Context, execution types.SynchronizationExecution) error {
+	agentID, _ := execution.Option().State.BleemeoCredentials()
+	apiClient := execution.BleemeoAPIClient()
+
 	params := map[string]string{
-		"agent":  s.agentID,
+		"agent":  agentID,
 		"fields": serviceReadFields,
 	}
 
@@ -154,14 +229,14 @@ func (s *Synchronizer) serviceUpdateList(ctx context.Context, apiClient types.Ra
 		services = append(services, service)
 	}
 
-	s.option.Cache.SetServices(services)
+	execution.Option().Cache.SetServices(services)
 
 	return nil
 }
 
 // serviceRemoveDeletedFromRemote removes the local services that were deleted on the API.
-func (s *Synchronizer) serviceRemoveDeletedFromRemote(ctx context.Context, localServices []discovery.Service, previousServices map[string]bleemeoTypes.Service) {
-	newServices := s.option.Cache.ServicesByUUID()
+func serviceRemoveDeletedFromRemote(ctx context.Context, execution types.SynchronizationExecution, localServices []discovery.Service, previousServices map[string]bleemeoTypes.Service) {
+	newServices := execution.Option().Cache.ServicesByUUID()
 
 	deletedServiceNameInstance := make(map[common.ServiceNameInstance]bool)
 
@@ -184,19 +259,19 @@ func (s *Synchronizer) serviceRemoveDeletedFromRemote(ctx context.Context, local
 		}
 	}
 
-	s.option.Discovery.RemoveIfNonRunning(ctx, localServiceToDelete)
+	execution.Option().Discovery.RemoveIfNonRunning(ctx, localServiceToDelete)
 }
 
-func (s *Synchronizer) serviceRegisterAndUpdate(ctx context.Context, execution types.SynchronizationExecution, localServices []discovery.Service) error {
-	remoteServices := s.option.Cache.Services()
+func (s *SyncServices) serviceRegisterAndUpdate(ctx context.Context, execution types.SynchronizationExecution, localServices []discovery.Service) error {
+	remoteServices := execution.Option().Cache.Services()
 	remoteServicesByKey := common.ServiceLookupFromList(remoteServices)
-	registeredServices := s.option.Cache.ServicesByUUID()
+	registeredServices := execution.Option().Cache.ServicesByUUID()
 	params := map[string]string{
 		"fields": serviceWriteFields,
 	}
-	apiClient := execution.BleemeoAPIClient()
-
 	delayedContainer, _ := execution.GlobalState().DelayedContainers()
+	apiClient := execution.BleemeoAPIClient()
+	agentID, _ := execution.Option().State.BleemeoCredentials()
 
 	for _, srv := range localServices {
 		if _, ok := delayedContainer[srv.ContainerID]; ok {
@@ -218,7 +293,7 @@ func (s *Synchronizer) serviceRegisterAndUpdate(ctx context.Context, execution t
 			continue
 		}
 
-		payload := servicePayloadFromDiscovery(srv, listenAddresses, s.option.Cache.AccountID(), s.agentID, "")
+		payload := ServicePayloadFromDiscovery(srv, listenAddresses, execution.Option().Cache.AccountID(), agentID, "")
 
 		var result bleemeoTypes.Service
 
@@ -245,17 +320,17 @@ func (s *Synchronizer) serviceRegisterAndUpdate(ctx context.Context, execution t
 			var newDeactivatedAt time.Time
 
 			if !result.Active {
-				newDeactivatedAt = s.now()
+				newDeactivatedAt = execution.StartedAt()
 			}
 
-			metrics := s.option.Cache.Metrics()
+			metrics := execution.Option().Cache.Metrics()
 			for i, m := range metrics {
 				if m.ServiceID == result.ID {
 					metrics[i].DeactivatedAt = newDeactivatedAt
 				}
 			}
 
-			s.option.Cache.SetMetrics(metrics)
+			execution.Option().Cache.SetMetrics(metrics)
 		}
 	}
 
@@ -265,7 +340,7 @@ func (s *Synchronizer) serviceRegisterAndUpdate(ctx context.Context, execution t
 		finalServices = append(finalServices, srv)
 	}
 
-	s.option.Cache.SetServices(finalServices)
+	execution.Option().Cache.SetServices(finalServices)
 
 	return nil
 }
@@ -285,7 +360,7 @@ func serviceHadSameTags(remoteTags []bleemeoTypes.Tag, localTags []string) bool 
 	localTagsTruncated := make([]string, 0, len(localTags))
 
 	for _, tag := range localTags {
-		if len(tag) <= apiTagsLength && tag != "" {
+		if len(tag) <= bleemeoapi.APITagsLength && tag != "" {
 			localTagsTruncated = append(localTagsTruncated, tag)
 		}
 	}
@@ -322,7 +397,7 @@ func serviceHadSameTags(remoteTags []bleemeoTypes.Tag, localTags []string) bool 
 }
 
 // serviceExcludeUnregistrable removes the services that cannot be registered.
-func (s *Synchronizer) serviceExcludeUnregistrable(services []discovery.Service) []discovery.Service {
+func (s *SyncServices) serviceExcludeUnregistrable(services []discovery.Service) []discovery.Service {
 	i := 0
 
 	for _, service := range services {
@@ -347,7 +422,7 @@ func (s *Synchronizer) serviceExcludeUnregistrable(services []discovery.Service)
 }
 
 // serviceDeactivateNonLocal marks inactive the registered services that were not found in the discovery.
-func (s *Synchronizer) serviceDeactivateNonLocal(ctx context.Context, apiClient types.RawClient, localServices []discovery.Service) {
+func serviceDeactivateNonLocal(ctx context.Context, execution types.SynchronizationExecution, localServices []discovery.Service) {
 	localServiceExists := make(map[common.ServiceNameInstance]bool, len(localServices))
 
 	for _, srv := range localServices {
@@ -359,7 +434,7 @@ func (s *Synchronizer) serviceDeactivateNonLocal(ctx context.Context, apiClient 
 		localServiceExists[key] = true
 	}
 
-	registeredServices := s.option.Cache.Services()
+	registeredServices := execution.Option().Cache.Services()
 	remoteServicesByKey := common.ServiceLookupFromList(registeredServices)
 	finalServices := make([]bleemeoTypes.Service, 0, len(registeredServices))
 
@@ -374,7 +449,7 @@ func (s *Synchronizer) serviceDeactivateNonLocal(ctx context.Context, apiClient 
 		logger.V(2).Printf("Mark inactive the service %v (uuid %s)", key, remoteSrv.ID)
 
 		// Deactivate the remote service that is not present locally.
-		result, err := s.serviceDeactivate(ctx, apiClient, remoteSrv)
+		result, err := serviceDeactivate(ctx, execution, remoteSrv)
 		if err != nil {
 			logger.V(1).Printf("Failed to deactivate service %v on Bleemeo API: %v", key, err)
 
@@ -384,30 +459,33 @@ func (s *Synchronizer) serviceDeactivateNonLocal(ctx context.Context, apiClient 
 		finalServices = append(finalServices, result)
 	}
 
-	s.option.Cache.SetServices(finalServices)
+	execution.Option().Cache.SetServices(finalServices)
 }
 
 // serviceDeactivate makes a PUT request to the Bleemeo API to mark the given service as inactive.
-func (s *Synchronizer) serviceDeactivate(ctx context.Context, apiClient types.RawClient, service bleemeoTypes.Service) (bleemeoTypes.Service, error) {
+func serviceDeactivate(ctx context.Context, execution types.SynchronizationExecution, service bleemeoTypes.Service) (bleemeoTypes.Service, error) {
+	agentID, _ := execution.Option().State.BleemeoCredentials()
 	params := map[string]string{
 		"fields": serviceWriteFields,
 	}
 
-	payload := servicePayload{
-		Service: bleemeoTypes.Service{
-			Active:          false,
-			Label:           service.Label,
-			Instance:        service.Instance,
-			ListenAddresses: service.ListenAddresses,
-			ExePath:         service.ExePath,
+	payload := bleemeoapi.ServicePayload{
+		Monitor: bleemeoTypes.Monitor{
+			Service: bleemeoTypes.Service{
+				Active:          false,
+				Label:           service.Label,
+				Instance:        service.Instance,
+				ListenAddresses: service.ListenAddresses,
+				ExePath:         service.ExePath,
+			},
+			AgentID: agentID,
 		},
-		Account: s.option.Cache.AccountID(),
-		Agent:   s.agentID,
+		Account: execution.Option().Cache.AccountID(),
 	}
 
 	var result bleemeoTypes.Service
 
-	_, err := apiClient.Do(ctx, "PUT", fmt.Sprintf("v1/service/%s/", service.ID), params, payload, &result)
+	_, err := execution.BleemeoAPIClient().Do(ctx, "PUT", fmt.Sprintf("v1/service/%s/", service.ID), params, payload, &result)
 
 	return result, err
 }
