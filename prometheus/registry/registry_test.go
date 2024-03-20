@@ -30,6 +30,7 @@ import (
 	"io"
 	"reflect"
 	"sort"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -37,6 +38,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"github.com/influxdata/telegraf"
 	dto "github.com/prometheus/client_model/go"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/model/relabel"
@@ -48,6 +50,10 @@ import (
 
 const testAgentID = "fcdc81a8-5bce-4305-8108-8e1e75439329"
 
+// nilTime is a time that is replaced by "no timestamp" when the input support it.
+// When not supported, it fallback on zero and/or epoc timestamp
+var nilTime = time.Date(1980, 1, 2, 3, 4, 5, 7, time.UTC)
+
 type fakeGatherer struct {
 	l         sync.Mutex
 	name      string
@@ -58,6 +64,10 @@ type fakeGatherer struct {
 type fakeFilter struct{}
 
 type fakeAppenderCallback struct {
+	input []types.MetricPoint
+}
+
+type fakeInput struct {
 	input []types.MetricPoint
 }
 
@@ -150,6 +160,48 @@ func (cb fakeAppenderCallback) Collect(_ context.Context, app storage.Appender) 
 	}
 
 	return app.Commit()
+}
+
+func (cb fakeInput) SampleConfig() string {
+	return ""
+}
+
+func (cb fakeInput) Gather(acc telegraf.Accumulator) error {
+	for _, pts := range cb.input {
+		part := strings.SplitN(pts.Labels[types.LabelName], "_", 2)
+
+		var (
+			measurement string
+			fieldName   string
+		)
+		if len(part) == 1 {
+			// If there is zero "_" in the metric name, we use
+			// empty measurement.
+			// This is a bit an hack but match behavior of glouton/inputs/Accumulator
+			measurement = ""
+			fieldName = part[0]
+		} else {
+			measurement = part[0]
+			fieldName = part[1]
+		}
+
+		if pts.Time.Equal(nilTime) {
+			acc.AddGauge(
+				measurement,
+				map[string]interface{}{fieldName: pts.Value},
+				pts.Labels, // no meta-label. No Input send meta-label today
+			)
+		} else {
+			acc.AddGauge(
+				measurement,
+				map[string]interface{}{fieldName: pts.Value},
+				pts.Labels, // no meta-label. No Input send meta-label today
+				pts.Time,
+			)
+		}
+	}
+
+	return nil
 }
 
 func TestRegistry_Register(t *testing.T) {
@@ -815,6 +867,7 @@ const (
 	kindPushPointCallback sourceKind = "pushpointCallback"
 	kindAppenderCallback  sourceKind = "appenderCallback"
 	kindGatherer          sourceKind = "gatherer"
+	kindInput             sourceKind = "input"
 )
 
 func registryRunOnce(t *testing.T, now time.Time, reg *Registry, kindToTest sourceKind, opt RegistrationOption, input []types.MetricPoint) error {
@@ -851,7 +904,7 @@ func registryRunOnce(t *testing.T, now time.Time, reg *Registry, kindToTest sour
 		id, err := reg.RegisterGatherer(
 			opt,
 			&fakeGatherer{
-				response: model.MetricPointsToFamilies(input),
+				response: dropNilTime(model.MetricPointsToFamilies(input)),
 			},
 		)
 		if err != nil {
@@ -859,9 +912,35 @@ func registryRunOnce(t *testing.T, now time.Time, reg *Registry, kindToTest sour
 		}
 
 		reg.InternalRunScrape(context.Background(), now, id)
+	case kindInput:
+		id, err := reg.RegisterInput(
+			opt,
+			fakeInput{
+				input: input,
+			},
+		)
+		if err != nil {
+			return err
+		}
+
+		reg.InternalRunScrape(context.Background(), now, id)
+	default:
+		t.Fatalf("unknown kind: %s", kindToTest)
 	}
 
 	return nil
+}
+
+func dropNilTime(in []*dto.MetricFamily) []*dto.MetricFamily {
+	for _, mf := range in {
+		for _, m := range mf.GetMetric() {
+			if m.GetTimestampMs() == nilTime.UnixMilli() {
+				m.TimestampMs = nil
+			}
+		}
+	}
+
+	return in
 }
 
 type metricPointTimeOverride struct {
@@ -1278,6 +1357,96 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 				{
 					Labels: map[string]string{
 						types.LabelName:     "cpu_used",
+						types.LabelInstance: "server.bleemeo.com:8016",
+					},
+					Point: types.Point{
+						Time:  now,
+						Value: 42,
+					},
+					TimeOnGather: now,
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:     "disk_used",
+						types.LabelItem:     "/home",
+						types.LabelInstance: "server.bleemeo.com:8016",
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoItem: "/home",
+					},
+					Point: types.Point{
+						Time:  now,
+						Value: 42,
+					},
+					TimeOnGather: now,
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:     "disk_used_perc",
+						types.LabelItem:     "/srv",
+						types.LabelInstance: "server.bleemeo.com:8016",
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoItem: "/srv",
+					},
+					Point: types.Point{
+						Time:  now,
+						Value: 42,
+					},
+					TimeOnGather: now,
+				},
+			},
+		},
+		{
+			name:         "input",
+			kindToTest:   kindInput,
+			metricFormat: types.MetricFormatBleemeo,
+			input: []types.MetricPoint{
+				{
+					Labels: map[string]string{
+						types.LabelName: "cpu_used",
+						"anyOther":      "label",
+					},
+					Point: types.Point{
+						Time:  now,
+						Value: 42,
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName: "disk_used",
+						types.LabelItem: "/home",
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoItem: "/home",
+					},
+					Point: types.Point{
+						Time:  now,
+						Value: 42,
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName: "disk_used_perc",
+						types.LabelItem: "/srv",
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoItem: "annotation are ignored in input mode in the test",
+					},
+					Point: types.Point{
+						Time:  now,
+						Value: 42,
+					},
+				},
+			},
+			opt: RegistrationOption{
+				DisablePeriodicGather: true,
+			},
+			want: []metricPointTimeOverride{
+				{
+					Labels: map[string]string{
+						types.LabelName:     "cpu_used",
+						"anyOther":          "label",
 						types.LabelInstance: "server.bleemeo.com:8016",
 					},
 					Point: types.Point{
