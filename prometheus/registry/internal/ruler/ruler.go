@@ -151,8 +151,9 @@ func (r *SimpleRuler) ApplyRulesMFS(ctx context.Context, now time.Time, mfs []*d
 			}
 
 			mfs[idx].Metric = append(mfs[idx].GetMetric(), &dto.Metric{
-				Label:   lbls,
-				Untyped: &dto.Untyped{Value: proto.Float64(sample.F)},
+				Label:       lbls,
+				TimestampMs: proto.Int64(now.UnixMilli()),
+				Untyped:     &dto.Untyped{Value: proto.Float64(sample.F)},
 			})
 		}
 	}
