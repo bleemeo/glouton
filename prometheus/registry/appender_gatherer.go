@@ -54,10 +54,22 @@ func (g *appenderGatherer) GatherWithState(ctx context.Context, state GatherStat
 			_ = app.Commit()
 		}
 
+		// Unless wrappedGatherer implement CallForMetricsEndpoint, we need to do
+		// the HonorTimestamp processing here in addition to the one in wrappedGatherer:
+		// When CallForMetricsEndpoint is false and HonorTimestamp is false, we need to store the
+		// time when this call of g.cb.Collect was made. The result is stored in g.lastApp and
+		// could be reused multiple time.
 		if !g.opt.HonorTimestamp {
 			now := state.T0
 			if now.IsZero() {
 				now = time.Now().Truncate(time.Second)
+			}
+
+			if g.opt.CallForMetricsEndpoint {
+				// If the callback is used for all invocation of /metrics,
+				// we can use "no timestamp" since metric points will be more recent
+				// data.
+				now = time.Time{}
 			}
 
 			app.FixSampleTimestamp(now)

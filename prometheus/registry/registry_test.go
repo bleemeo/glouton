@@ -51,8 +51,8 @@ import (
 const testAgentID = "fcdc81a8-5bce-4305-8108-8e1e75439329"
 
 // nilTime is a time that is replaced by "no timestamp" when the input support it.
-// When not supported, it fallback on zero and/or epoc timestamp
-var nilTime = time.Date(1980, 1, 2, 3, 4, 5, 7, time.UTC)
+// When not supported, it fallback on zero and/or epoc timestamp.
+var nilTime = time.Date(1980, 1, 2, 3, 4, 5, 7, time.UTC) //nolint:gochecknoglobals
 
 type fakeGatherer struct {
 	l         sync.Mutex
@@ -174,6 +174,7 @@ func (cb fakeInput) Gather(acc telegraf.Accumulator) error {
 			measurement string
 			fieldName   string
 		)
+
 		if len(part) == 1 {
 			// If there is zero "_" in the metric name, we use
 			// empty measurement.
@@ -799,7 +800,7 @@ func TestRegistry_run(t *testing.T) {
 				t.Error(err)
 			}
 
-			id3, err := reg.RegisterPushPointsCallback(RegistrationOption{}, func(_ context.Context, t time.Time) {
+			id3, err := reg.RegisterPushPointsCallback(RegistrationOption{HonorTimestamp: true}, func(_ context.Context, t time.Time) {
 				l.Lock()
 				t0 = t
 				l.Unlock()
@@ -1047,6 +1048,7 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 			metricFormat: types.MetricFormatBleemeo,
 			opt: RegistrationOption{
 				DisablePeriodicGather: true,
+				HonorTimestamp:        true,
 			},
 			input: []types.MetricPoint{
 				{
@@ -1309,6 +1311,7 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 			metricFormat: types.MetricFormatBleemeo,
 			opt: RegistrationOption{
 				DisablePeriodicGather: true,
+				HonorTimestamp:        true,
 			},
 			input: []types.MetricPoint{
 				{
@@ -1397,6 +1400,7 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 			metricFormat: types.MetricFormatBleemeo,
 			opt: RegistrationOption{
 				DisablePeriodicGather: true,
+				HonorTimestamp:        true,
 			},
 			input: []types.MetricPoint{
 				{
@@ -1492,6 +1496,7 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 				},
 				Rules:                 DefaultSNMPRules(time.Minute),
 				DisablePeriodicGather: true,
+				HonorTimestamp:        true,
 			},
 			input: []types.MetricPoint{
 				{
@@ -1535,6 +1540,7 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 				},
 				Rules:                 DefaultSNMPRules(time.Minute),
 				DisablePeriodicGather: true,
+				HonorTimestamp:        true,
 			},
 			input: []types.MetricPoint{
 				{
@@ -1698,6 +1704,7 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 				},
 				Rules:                 DefaultSNMPRules(time.Minute),
 				DisablePeriodicGather: true,
+				HonorTimestamp:        true,
 			},
 			input: []types.MetricPoint{
 				{
@@ -1784,6 +1791,7 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 				},
 				Rules:                 DefaultSNMPRules(time.Minute),
 				DisablePeriodicGather: true,
+				HonorTimestamp:        true,
 			},
 			input: []types.MetricPoint{
 				{
@@ -1923,6 +1931,7 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 				},
 				Rules:                 DefaultSNMPRules(time.Minute),
 				DisablePeriodicGather: true,
+				HonorTimestamp:        true,
 			},
 			input: []types.MetricPoint{
 				{
@@ -1993,6 +2002,7 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 				},
 				Rules:                 DefaultSNMPRules(time.Minute),
 				DisablePeriodicGather: true,
+				HonorTimestamp:        true,
 			},
 			input: []types.MetricPoint{
 				{
@@ -2288,6 +2298,7 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 				},
 				Rules:                 DefaultSNMPRules(time.Minute),
 				DisablePeriodicGather: true,
+				HonorTimestamp:        true,
 			},
 			input: []types.MetricPoint{
 				{
@@ -2430,6 +2441,7 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 			opt: RegistrationOption{
 				DisablePeriodicGather: true,
 				ApplyDynamicRelabel:   true,
+				HonorTimestamp:        true,
 			},
 			input: []types.MetricPoint{
 				{
@@ -2469,6 +2481,7 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 			metricFormat: types.MetricFormatBleemeo,
 			opt: RegistrationOption{
 				DisablePeriodicGather: true,
+				HonorTimestamp:        true,
 			},
 			input: []types.MetricPoint{
 				{
@@ -2648,6 +2661,7 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 			kindToTest: kindGatherer,
 			opt: RegistrationOption{
 				DisablePeriodicGather: true,
+				HonorTimestamp:        true,
 			},
 			input: []types.MetricPoint{
 				{
@@ -3166,6 +3180,465 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						Value: 42,
 					},
 					TimeOnGather: now.Add(-42 * time.Minute),
+				},
+			},
+		},
+		{
+			name:         "appender-time-no-honor-timestamp",
+			kindToTest:   kindAppenderCallback,
+			metricFormat: types.MetricFormatBleemeo,
+			opt: RegistrationOption{
+				DisablePeriodicGather: true,
+				HonorTimestamp:        false,
+			},
+			input: []types.MetricPoint{
+				{
+					Labels: map[string]string{
+						types.LabelName: "metric_time",
+						types.LabelItem: "zero",
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoItem: "zero",
+					},
+					Point: types.Point{
+						Time:  time.Time{},
+						Value: 42,
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName: "metric_time",
+						types.LabelItem: "epoc",
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoItem: "epoc",
+					},
+					Point: types.Point{
+						Time:  time.UnixMilli(0),
+						Value: 42,
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName: "metric_time",
+						types.LabelItem: "now",
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoItem: "now",
+					},
+					Point: types.Point{
+						Time:  now,
+						Value: 42,
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName: "metric_time",
+						types.LabelItem: "future",
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoItem: "future",
+					},
+					Point: types.Point{
+						Time:  now.Add(42 * time.Minute),
+						Value: 42,
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName: "metric_time",
+						types.LabelItem: "past",
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoItem: "past",
+					},
+					Point: types.Point{
+						Time:  now.Add(-42 * time.Minute),
+						Value: 42,
+					},
+				},
+			},
+			want: []metricPointTimeOverride{
+				{
+					Labels: map[string]string{
+						types.LabelName:     "metric_time",
+						types.LabelItem:     "zero",
+						types.LabelInstance: "server.bleemeo.com:8016",
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoItem: "zero",
+					},
+					Point: types.Point{
+						Time:  now,
+						Value: 42,
+					},
+					TimeOnGather: now, // a timestamp is used, because CallForMetricsEndpoint isn't used
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:     "metric_time",
+						types.LabelItem:     "epoc",
+						types.LabelInstance: "server.bleemeo.com:8016",
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoItem: "epoc",
+					},
+					Point: types.Point{
+						Time:  now,
+						Value: 42,
+					},
+					TimeOnGather: now,
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:     "metric_time",
+						types.LabelItem:     "now",
+						types.LabelInstance: "server.bleemeo.com:8016",
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoItem: "now",
+					},
+					Point: types.Point{
+						Time:  now,
+						Value: 42,
+					},
+					TimeOnGather: now,
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:     "metric_time",
+						types.LabelItem:     "future",
+						types.LabelInstance: "server.bleemeo.com:8016",
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoItem: "future",
+					},
+					Point: types.Point{
+						Time:  now,
+						Value: 42,
+					},
+					TimeOnGather: now,
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:     "metric_time",
+						types.LabelItem:     "past",
+						types.LabelInstance: "server.bleemeo.com:8016",
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoItem: "past",
+					},
+					Point: types.Point{
+						Time:  now,
+						Value: 42,
+					},
+					TimeOnGather: now,
+				},
+			},
+		},
+		{
+			name:         "gatherer-bleemeo-time-no-honor-timestamp",
+			kindToTest:   kindGatherer,
+			metricFormat: types.MetricFormatBleemeo,
+			opt: RegistrationOption{
+				DisablePeriodicGather: true,
+				HonorTimestamp:        false,
+			},
+			input: []types.MetricPoint{
+				{
+					Labels: map[string]string{
+						types.LabelName: "metric_time",
+						types.LabelItem: "zero",
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoItem: "zero",
+					},
+					Point: types.Point{
+						Time:  time.Time{},
+						Value: 42,
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName: "metric_time",
+						types.LabelItem: "epoc",
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoItem: "epoc",
+					},
+					Point: types.Point{
+						Time:  time.UnixMilli(0),
+						Value: 42,
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName: "metric_time",
+						types.LabelItem: "now",
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoItem: "now",
+					},
+					Point: types.Point{
+						Time:  now,
+						Value: 42,
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName: "metric_time",
+						types.LabelItem: "future",
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoItem: "future",
+					},
+					Point: types.Point{
+						Time:  now.Add(42 * time.Minute),
+						Value: 42,
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName: "metric_time",
+						types.LabelItem: "past",
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoItem: "past",
+					},
+					Point: types.Point{
+						Time:  now.Add(-42 * time.Minute),
+						Value: 42,
+					},
+				},
+			},
+			want: []metricPointTimeOverride{
+				{
+					Labels: map[string]string{
+						types.LabelName:     "metric_time",
+						types.LabelItem:     "zero",
+						types.LabelInstance: "server.bleemeo.com:8016",
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoItem: "zero",
+					},
+					Point: types.Point{
+						Time:  now,
+						Value: 42,
+					},
+					TimeOnGather: time.Time{},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:     "metric_time",
+						types.LabelItem:     "epoc",
+						types.LabelInstance: "server.bleemeo.com:8016",
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoItem: "epoc",
+					},
+					Point: types.Point{
+						Time:  now,
+						Value: 42,
+					},
+					TimeOnGather: time.Time{},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:     "metric_time",
+						types.LabelItem:     "now",
+						types.LabelInstance: "server.bleemeo.com:8016",
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoItem: "now",
+					},
+					Point: types.Point{
+						Time:  now,
+						Value: 42,
+					},
+					TimeOnGather: time.Time{},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:     "metric_time",
+						types.LabelItem:     "future",
+						types.LabelInstance: "server.bleemeo.com:8016",
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoItem: "future",
+					},
+					Point: types.Point{
+						Time:  now,
+						Value: 42,
+					},
+					TimeOnGather: time.Time{},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:     "metric_time",
+						types.LabelItem:     "past",
+						types.LabelInstance: "server.bleemeo.com:8016",
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoItem: "past",
+					},
+					Point: types.Point{
+						Time:  now,
+						Value: 42,
+					},
+					TimeOnGather: time.Time{},
+				},
+			},
+		},
+		{
+			name:         "input-time-no-honor-timestamp",
+			kindToTest:   kindInput,
+			metricFormat: types.MetricFormatBleemeo,
+			opt: RegistrationOption{
+				DisablePeriodicGather: true,
+				HonorTimestamp:        false,
+			},
+			input: []types.MetricPoint{
+				{
+					Labels: map[string]string{
+						types.LabelName: "metric_time",
+						types.LabelItem: "zero",
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoItem: "zero",
+					},
+					Point: types.Point{
+						Time:  time.Time{},
+						Value: 42,
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName: "metric_time",
+						types.LabelItem: "epoc",
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoItem: "epoc",
+					},
+					Point: types.Point{
+						Time:  time.UnixMilli(0),
+						Value: 42,
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName: "metric_time",
+						types.LabelItem: "now",
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoItem: "now",
+					},
+					Point: types.Point{
+						Time:  now,
+						Value: 42,
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName: "metric_time",
+						types.LabelItem: "future",
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoItem: "future",
+					},
+					Point: types.Point{
+						Time:  now.Add(42 * time.Minute),
+						Value: 42,
+					},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName: "metric_time",
+						types.LabelItem: "past",
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoItem: "past",
+					},
+					Point: types.Point{
+						Time:  now.Add(-42 * time.Minute),
+						Value: 42,
+					},
+				},
+			},
+			want: []metricPointTimeOverride{
+				{
+					Labels: map[string]string{
+						types.LabelName:     "metric_time",
+						types.LabelItem:     "zero",
+						types.LabelInstance: "server.bleemeo.com:8016",
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoItem: "zero",
+					},
+					Point: types.Point{
+						Time:  now,
+						Value: 42,
+					},
+					TimeOnGather: time.Time{},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:     "metric_time",
+						types.LabelItem:     "epoc",
+						types.LabelInstance: "server.bleemeo.com:8016",
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoItem: "epoc",
+					},
+					Point: types.Point{
+						Time:  now,
+						Value: 42,
+					},
+					TimeOnGather: time.Time{},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:     "metric_time",
+						types.LabelItem:     "now",
+						types.LabelInstance: "server.bleemeo.com:8016",
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoItem: "now",
+					},
+					Point: types.Point{
+						Time:  now,
+						Value: 42,
+					},
+					TimeOnGather: time.Time{},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:     "metric_time",
+						types.LabelItem:     "future",
+						types.LabelInstance: "server.bleemeo.com:8016",
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoItem: "future",
+					},
+					Point: types.Point{
+						Time:  now,
+						Value: 42,
+					},
+					TimeOnGather: time.Time{},
+				},
+				{
+					Labels: map[string]string{
+						types.LabelName:     "metric_time",
+						types.LabelItem:     "past",
+						types.LabelInstance: "server.bleemeo.com:8016",
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoItem: "past",
+					},
+					Point: types.Point{
+						Time:  now,
+						Value: 42,
+					},
+					TimeOnGather: time.Time{},
 				},
 			},
 		},

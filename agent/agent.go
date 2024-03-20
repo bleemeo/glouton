@@ -1089,9 +1089,10 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 
 		_, err = a.gathererRegistry.RegisterPushPointsCallback(
 			registry.RegistrationOption{
-				Description: "Bleemeo connector",
-				JitterSeed:  baseJitter,
-				Interval:    defaultInterval,
+				Description:    "Bleemeo connector",
+				JitterSeed:     baseJitter,
+				Interval:       defaultInterval,
+				HonorTimestamp: true,
 			},
 			a.bleemeoConnector.EmitInternalMetric,
 		)
@@ -1108,8 +1109,9 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 
 	_, err = a.gathererRegistry.RegisterPushPointsCallback(
 		registry.RegistrationOption{
-			Description: "system & services metrics",
-			JitterSeed:  baseJitter,
+			Description:    "system & services metrics",
+			JitterSeed:     baseJitter,
+			HonorTimestamp: true,
 		},
 		a.collector.RunGather,
 	)
@@ -1197,6 +1199,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 				Interval:                 defaultInterval,
 				ExtraLabels:              target.ExtraLabels,
 				AcceptAllowedMetricsOnly: true,
+				HonorTimestamp:           true,
 			},
 			target,
 		)

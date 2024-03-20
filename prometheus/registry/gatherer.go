@@ -225,7 +225,7 @@ func (g *wrappedGatherer) GatherWithState(ctx context.Context, state GatherState
 		err error
 	)
 
-	now := time.Now()
+	now := time.Now().Truncate(time.Second)
 
 	if !state.T0.IsZero() {
 		now = state.T0
@@ -251,6 +251,29 @@ func (g *wrappedGatherer) GatherWithState(ctx context.Context, state GatherState
 		for i, m := range mf.GetMetric() {
 			m.Label = mergeLabelsDTO(m.GetLabel(), g.labels)
 			mf.Metric[i] = m
+		}
+	}
+
+	if !g.opt.HonorTimestamp {
+		forcedTimestamp := now.UnixMilli()
+
+		// CallForMetricsEndpoint is currently not implemented and it's
+		// always enable on Gatherer (e.g. we always call the Gather() method).
+		if g.opt.CallForMetricsEndpoint || true {
+			// If the callback is used for all invocation of /metrics,
+			// we can use "no timestamp" since metric points will be more recent
+			// data.
+			forcedTimestamp = 0
+		}
+
+		for _, mf := range mfs {
+			for _, m := range mf.GetMetric() {
+				if forcedTimestamp == 0 {
+					m.TimestampMs = nil
+				} else {
+					m.TimestampMs = proto.Int64(forcedTimestamp)
+				}
+			}
 		}
 	}
 

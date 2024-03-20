@@ -190,7 +190,6 @@ type RegistrationOption struct {
 	HonorTimestamp bool
 	// CallForMetricsEndpoint indicate whether the callback must be called for /metrics or
 	// cached result from last periodic collection is used.
-	// This is currently only implemented for AppenderCallback.
 	CallForMetricsEndpoint bool
 	rrules                 []*rules.RecordingRule
 }
@@ -460,6 +459,10 @@ func (r *Registry) RegisterPushPointsCallback(opt RegistrationOption, f func(con
 func (r *Registry) registerPushPointsCallback(opt RegistrationOption, f func(context.Context, time.Time)) (int, error) {
 	r.init()
 
+	if !opt.HonorTimestamp {
+		return 0, fmt.Errorf("%w: PushPoint will always HonorTimestamp", errors.ErrUnsupported)
+	}
+
 	if err := opt.buildRules(); err != nil {
 		return 0, err
 	}
@@ -487,8 +490,13 @@ func (r *Registry) RegisterAppenderCallback(
 	r.l.Lock()
 	defer r.l.Unlock()
 
+	// appenderGatherer take care of implementing HonorTimestamp, don't
+	// re-do it in wrappedGatherer.
+	appOpt := opt
+	opt.HonorTimestamp = true
+
 	reg := &registration{option: opt}
-	r.setupGatherer(reg, &appenderGatherer{cb: cb, opt: opt})
+	r.setupGatherer(reg, &appenderGatherer{cb: cb, opt: appOpt})
 
 	return r.addRegistration(reg)
 }
