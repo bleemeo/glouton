@@ -28,6 +28,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/prometheus/prometheus/model/labels"
 )
 
 // syncInfo retrieves the minimum supported glouton version the API supports.
@@ -49,13 +51,13 @@ func (s *Synchronizer) syncInfoReal(ctx context.Context, disableOnTimeDrift bool
 	}
 
 	if err != nil {
-		logger.V(2).Printf("Couldn't retrieve global informations, got '%v'", err)
+		logger.V(2).Printf("Couldn't retrieve global information, got '%v'", err)
 
 		return false, nil
 	}
 
 	if statusCode >= 300 {
-		logger.V(2).Printf("Couldn't retrieve global informations, got HTTP status code %d", statusCode)
+		logger.V(2).Printf("Couldn't retrieve global information, got HTTP status code %d", statusCode)
 
 		return false, nil
 	}
@@ -88,17 +90,22 @@ func (s *Synchronizer) syncInfoReal(ctx context.Context, disableOnTimeDrift bool
 	if globalInfo.CurrentTime != 0 {
 		delta := globalInfo.TimeDrift()
 
-		s.option.PushPoints.PushPoints(ctx, []types.MetricPoint{
-			{
-				Point: types.Point{
-					Time:  globalInfo.BleemeoTime().Truncate(time.Second),
-					Value: delta.Seconds(),
-				},
-				Labels: map[string]string{
-					types.LabelName: "time_drift",
-				},
-			},
-		})
+		_, err := s.option.PushAppender.Append(
+			0,
+			labels.FromMap(map[string]string{
+				types.LabelName: "time_drift",
+			}),
+			globalInfo.BleemeoTime().Truncate(time.Second).UnixMilli(),
+			delta.Seconds(),
+		)
+		if err != nil {
+			logger.V(2).Printf("unable to append time_drift to PushAppender")
+		}
+
+		err = s.option.PushAppender.Commit()
+		if err != nil {
+			logger.V(2).Printf("unable to commit on PushAppender")
+		}
 
 		if disableOnTimeDrift && globalInfo.IsTimeDriftTooLarge() {
 			delay := delay.JitterDelay(30*time.Minute, 0.1)

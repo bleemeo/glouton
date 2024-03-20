@@ -41,7 +41,6 @@ type GlobalOption struct {
 	SNMP                    []*snmp.Target
 	SNMPOnlineTarget        func() int
 	Store                   Store
-	PushPoints              types.PointPusher
 	Discovery               discovery.PersistentDiscoverer
 	MonitorManager          MonitorManager
 	MetricFormat            types.MetricFormat

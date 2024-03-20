@@ -80,7 +80,7 @@ func Test_factFromPoints(t *testing.T) {
 				"fqdn":            "bleemeo-linux01",
 				"agent_version":   "21.11.08.123456",
 				"glouton_version": "21.11.08.123456",
-				"something":        "else",
+				"something":       "else",
 			},
 			want: map[string]string{
 				"fqdn":                "bleemeo-switch01",

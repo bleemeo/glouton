@@ -1052,7 +1052,6 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 			Store:                          filteredStore,
 			SNMP:                           a.snmpManager.Targets(),
 			SNMPOnlineTarget:               a.snmpManager.OnlineCount,
-			PushPoints:                     a.gathererRegistry.WithTTL(5 * time.Minute),
 			Discovery:                      a.discovery,
 			MonitorManager:                 a.monitorManager,
 			UpdateMetricResolution:         a.updateMetricResolution,
@@ -1087,14 +1086,14 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		a.gathererRegistry.UpdateRelabelHook(a.bleemeoConnector.RelabelHook)
 		tasks = append(tasks, taskInfo{a.bleemeoConnector.Run, "Bleemeo SAAS connector"})
 
-		_, err = a.gathererRegistry.RegisterPushPointsCallback(
+		_, err = a.gathererRegistry.RegisterAppenderCallback(
 			registry.RegistrationOption{
 				Description:    "Bleemeo connector",
 				JitterSeed:     baseJitter,
 				Interval:       defaultInterval,
-				HonorTimestamp: true,
+				HonorTimestamp: true, // time_drift metric emit point with the time from Bleemeo API
 			},
-			a.bleemeoConnector.EmitInternalMetric,
+			registry.AppenderFunc(a.bleemeoConnector.EmitInternalMetric),
 		)
 		if err != nil {
 			logger.Printf("unable to add bleemeo connector metrics: %v", err)

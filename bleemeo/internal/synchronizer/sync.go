@@ -31,6 +31,7 @@ import (
 	"glouton/delay"
 	"glouton/facts"
 	"glouton/logger"
+	"glouton/prometheus/model"
 	"glouton/threshold"
 	"glouton/types"
 	"glouton/version"
@@ -145,7 +146,8 @@ type thresholdOverrideKey struct {
 // Option are parameters for the synchronizer.
 type Option struct {
 	bleemeoTypes.GlobalOption
-	Cache *cache.Cache
+	Cache        *cache.Cache
+	PushAppender *model.BufferAppender
 
 	// DisableCallback is a function called when Synchronizer request Bleemeo connector to be disabled
 	// reason state why it's disabled and until set for how long it should be disabled.
@@ -157,7 +159,7 @@ type Option struct {
 	// SetInitialized tells the bleemeo connector that the MQTT module can be started
 	SetInitialized func()
 
-	// IsMqttConnected returns wether the MQTT connector is operating nominally, and specifically
+	// IsMqttConnected returns whether the MQTT connector is operating nominally, and specifically
 	// that it can receive mqtt notifications. It is useful for the fallback on http polling
 	// described above Synchronizer.lastMaintenanceSync definition.
 	// Note: returns false when the mqtt connector is not enabled.
