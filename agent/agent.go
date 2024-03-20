@@ -938,7 +938,6 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 
 	a.discovery, warnings = discovery.New(
 		dynamicDiscovery,
-		a.collector,
 		a.gathererRegistry,
 		a.state,
 		a.containerRuntime,
@@ -1424,7 +1423,7 @@ func (a *agent) registerInputs(ctx context.Context) {
 }
 
 // Register a single input.
-func (a *agent) registerInput(name string, input telegraf.Input, opts *inputs.GathererOptions, err error) {
+func (a *agent) registerInput(name string, input telegraf.Input, opts registry.RegistrationOption, err error) {
 	if err != nil {
 		if errors.Is(err, inputs.ErrMissingCommand) {
 			logger.V(1).Printf("input %s: %v", name, err)
@@ -1435,15 +1434,12 @@ func (a *agent) registerInput(name string, input telegraf.Input, opts *inputs.Ga
 		return
 	}
 
+	if opts.Description == "" {
+		opts.Description = "Input " + name
+	}
+
 	_, err = a.gathererRegistry.RegisterInput(
-		registry.RegistrationOption{
-			Description:         "Input " + name,
-			JitterSeed:          baseJitter,
-			Rules:               opts.Rules,
-			MinInterval:         opts.MinInterval,
-			ApplyDynamicRelabel: opts.ApplyDynamicRelabel,
-			GatherModifier:      opts.GatherModifier,
-		},
+		opts,
 		input,
 	)
 	if err != nil {

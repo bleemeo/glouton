@@ -32,7 +32,6 @@ import (
 	"glouton/inputs/jenkins"
 	"glouton/inputs/mem"
 	"glouton/inputs/memcached"
-	"glouton/inputs/modify"
 	"glouton/inputs/mongodb"
 	"glouton/inputs/mysql"
 	"glouton/inputs/nats"
@@ -258,17 +257,11 @@ func serviceNeedUpdate(oldService, service Service, oldServiceState facts.Contai
 }
 
 func (d *Discovery) removeInput(key NameInstance) {
-	if d.coll == nil {
-		return
-	}
-
 	if collector, ok := d.activeCollector[key]; ok {
 		logger.V(2).Printf("Remove input for service %v on instance %s", key.Name, key.Instance)
 		delete(d.activeCollector, key)
 
-		if collector.gathererID == 0 {
-			d.coll.RemoveInput(collector.inputID)
-		} else if !d.metricRegistry.Unregister(collector.gathererID) {
+		if !d.metricRegistry.Unregister(collector.gathererID) {
 			logger.V(2).Printf("The gatherer wasn't present")
 		}
 	}
@@ -309,8 +302,14 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 		input telegraf.Input
 		// Inputs that return gatherer options will use an input gatherer instead of the collector,
 		// this means all labels will be kept and not only the item.
-		gathererOptions *inputs.GathererOptions
 	)
+
+	// Most input use the compatibility naming with only name + item.
+	// Inputs that what more flexibility could return their own gathererOptions.
+	// Note that some fields have default anyway see code of registerInput.
+	gathererOptions := registry.RegistrationOption{
+		CompatibilityNameItem: true,
+	}
 
 	switch service.ServiceType { //nolint:exhaustive
 	case ApacheService:
@@ -457,12 +456,7 @@ func (d *Discovery) createInput(service Service) error { //nolint:maintidx
 
 	logger.V(2).Printf("Add input for service %v instance %s", service.Name, service.Instance)
 
-	// If gatherer options are used, use an input gatherer instead of the default collector.
-	if gathererOptions != nil {
-		return d.registerInput(input, gathererOptions, service)
-	}
-
-	return d.addToCollector(input, service)
+	return d.registerInput(input, gathererOptions, service)
 }
 
 func createMySQLInput(service Service) (telegraf.Input, error) {
@@ -487,54 +481,7 @@ func createMySQLInput(service Service) (telegraf.Input, error) {
 	return nil, nil
 }
 
-// addToCollector is deprecated, use registerInput instead.
-func (d *Discovery) addToCollector(input telegraf.Input, service Service) error {
-	if d.coll == nil {
-		return nil
-	}
-
-	input = modify.AddRenameCallback(input, func(labels map[string]string, annotations types.MetricAnnotations) (map[string]string, types.MetricAnnotations) {
-		annotations.ServiceName = service.Name
-		annotations.ServiceInstance = service.Instance
-		annotations.ContainerID = service.ContainerID
-
-		_, port := service.AddressPort()
-		if port != 0 {
-			labels[types.LabelMetaServicePort] = strconv.FormatInt(int64(port), 10)
-		}
-
-		if service.Instance != "" {
-			if annotations.BleemeoItem != "" {
-				annotations.BleemeoItem = service.Instance + "_" + annotations.BleemeoItem
-			} else {
-				annotations.BleemeoItem = service.Instance
-			}
-		}
-
-		if annotations.BleemeoItem != "" {
-			labels[types.LabelItem] = annotations.BleemeoItem
-		}
-
-		return labels, annotations
-	})
-
-	inputID, err := d.coll.AddInput(input, service.Name)
-	if err != nil {
-		return err
-	}
-
-	key := NameInstance{
-		Name:     service.Name,
-		Instance: service.Instance,
-	}
-	d.activeCollector[key] = collectorDetails{
-		inputID: inputID,
-	}
-
-	return nil
-}
-
-func (d *Discovery) registerInput(input telegraf.Input, opts *inputs.GathererOptions, service Service) error {
+func (d *Discovery) registerInput(input telegraf.Input, opts registry.RegistrationOption, service Service) error {
 	extraLabels := map[string]string{
 		types.LabelMetaServiceName:     service.Name,
 		types.LabelMetaServiceInstance: service.Instance,
@@ -549,15 +496,16 @@ func (d *Discovery) registerInput(input telegraf.Input, opts *inputs.GathererOpt
 		extraLabels[types.LabelItem] = service.Instance
 	}
 
+	if opts.Description == "" {
+		opts.Description = fmt.Sprintf("Service input %s %s", service.Name, service.Instance)
+	}
+
+	if opts.ExtraLabels == nil {
+		opts.ExtraLabels = extraLabels
+	}
+
 	gathererID, err := d.metricRegistry.RegisterInput(
-		registry.RegistrationOption{
-			Description:    fmt.Sprintf("Service input %s %s", service.Name, service.Instance),
-			JitterSeed:     0,
-			Rules:          opts.Rules,
-			GatherModifier: opts.GatherModifier,
-			MinInterval:    opts.MinInterval,
-			ExtraLabels:    extraLabels,
-		},
+		opts,
 		input,
 	)
 

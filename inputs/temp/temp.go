@@ -19,6 +19,7 @@ package temp
 import (
 	"glouton/inputs"
 	"glouton/inputs/internal"
+	"glouton/prometheus/registry"
 
 	"github.com/influxdata/telegraf"
 	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"
@@ -26,15 +27,15 @@ import (
 )
 
 // New returns a temperature input.
-func New() (telegraf.Input, *inputs.GathererOptions, error) {
+func New() (telegraf.Input, registry.RegistrationOption, error) {
 	input, ok := telegraf_inputs.Inputs["temp"]
 	if !ok {
-		return nil, nil, inputs.ErrDisabledInput
+		return nil, registry.RegistrationOption{}, inputs.ErrDisabledInput
 	}
 
 	tempInput, ok := input().(*temp.Temperature)
 	if !ok {
-		return nil, nil, inputs.ErrUnexpectedType
+		return nil, registry.RegistrationOption{}, inputs.ErrUnexpectedType
 	}
 
 	internalInput := &internal.Input{
@@ -46,7 +47,7 @@ func New() (telegraf.Input, *inputs.GathererOptions, error) {
 		Name: "Temp",
 	}
 
-	return internalInput, &inputs.GathererOptions{}, nil
+	return internalInput, registry.RegistrationOption{}, nil
 }
 
 // Rename "temp" measurement to "sensor".

@@ -26,13 +26,14 @@ import (
 	"glouton/prometheus/registry"
 	"glouton/types"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/influxdata/telegraf"
-	"github.com/prometheus/prometheus/util/gate"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 var (
@@ -64,46 +65,80 @@ func (ms mockState) Get(key string, object interface{}) error {
 	return errNotImplemented
 }
 
-type mockCollector struct {
-	ExpectedAddedName string
-	NewID             int
-	ExpectedRemoveID  int
-	err               error
+type mockRegistry struct {
+	ExpectedAddedContains []string
+	NewIDs                []int
+	ExpectedRemoveIDs     []int
+	err                   error
 }
 
-func (m *mockCollector) AddInput(_ telegraf.Input, name string) (int, error) {
-	if name != m.ExpectedAddedName {
-		m.err = fmt.Errorf("AddInput(_, %s), %w=%s", name, errWantName, m.ExpectedAddedName)
+func (m *mockRegistry) RegisterGatherer(opt registry.RegistrationOption, gatherer prometheus.Gatherer) (int, error) {
+	_ = gatherer
+
+	if len(m.ExpectedAddedContains) == 0 {
+		m.err = fmt.Errorf("%w: RegisterGatherer() ExpectedAddedContains empty when called with description %s", errWantName, opt.Description)
+	}
+
+	if !strings.Contains(opt.Description, m.ExpectedAddedContains[0]) {
+		m.err = fmt.Errorf("%w: RegisterGatherer() Description=%s, want %s", errWantName, opt.Description, m.ExpectedAddedContains[0])
 
 		return 0, m.err
 	}
 
-	m.ExpectedAddedName = ""
+	newID := m.NewIDs[0]
+	m.ExpectedAddedContains = m.ExpectedAddedContains[1:]
+	m.NewIDs = m.NewIDs[1:]
 
-	return m.NewID, nil
+	return newID, nil
 }
 
-func (m *mockCollector) RemoveInput(id int) {
-	if id != m.ExpectedRemoveID {
-		m.err = fmt.Errorf("RemoveInput(%d), %w=%d", id, errWantName, m.ExpectedRemoveID)
+func (m *mockRegistry) RegisterInput(opt registry.RegistrationOption, input telegraf.Input) (int, error) {
+	_ = input
 
-		return
+	if len(m.ExpectedAddedContains) == 0 {
+		m.err = fmt.Errorf("%w: RegisterInput() ExpectedAddedContains empty when called with description %s", errWantName, opt.Description)
 	}
 
-	m.ExpectedRemoveID = 0
+	if !strings.Contains(opt.Description, m.ExpectedAddedContains[0]) {
+		m.err = fmt.Errorf("%w: RegisterInput() Description=%s, want %s", errWantName, opt.Description, m.ExpectedAddedContains[0])
+
+		return 0, m.err
+	}
+
+	newID := m.NewIDs[0]
+	m.ExpectedAddedContains = m.ExpectedAddedContains[1:]
+	m.NewIDs = m.NewIDs[1:]
+
+	return newID, nil
 }
 
-func (m *mockCollector) ExpectationFullified() error {
+func (m *mockRegistry) Unregister(id int) bool {
+	if len(m.ExpectedRemoveIDs) == 0 {
+		m.err = fmt.Errorf("%w: Unregister() ExpectedRemoveIDs empty when called with id %d", errWantName, id)
+	}
+
+	if id != m.ExpectedRemoveIDs[0] {
+		m.err = fmt.Errorf("%w: Unregister(%d) want %d", errWantName, id, m.ExpectedRemoveIDs[0])
+
+		return true
+	}
+
+	m.ExpectedRemoveIDs = m.ExpectedRemoveIDs[1:]
+
+	return true
+}
+
+func (m *mockRegistry) ExpectationFullified() error {
 	if m.err != nil {
 		return m.err
 	}
 
-	if m.ExpectedAddedName != "" {
-		return fmt.Errorf("AddInput() %w with name=%s", errNotCalled, m.ExpectedAddedName)
+	if len(m.ExpectedAddedContains) > 0 {
+		return fmt.Errorf("%w: Register*() missing: %v", errNotCalled, m.ExpectedAddedContains)
 	}
 
-	if m.ExpectedRemoveID != 0 {
-		return fmt.Errorf("RemoveInput() %w with id=%d", errNotCalled, m.ExpectedRemoveID)
+	if len(m.ExpectedRemoveIDs) > 0 {
+		return fmt.Errorf("%w: Unregister() missing: %v", errNotCalled, m.ExpectedRemoveIDs)
 	}
 
 	return nil
@@ -238,7 +273,7 @@ func TestDiscoverySingle(t *testing.T) {
 		state := mockState{
 			DiscoveredService: previousService,
 		}
-		disc, _ := New(&MockDiscoverer{result: []Service{c.dynamicResult}}, nil, nil, state, mockContainerInfo{}, nil, nil, nil, facts.ContainerFilter{}.ContainerIgnored, types.MetricFormatBleemeo, nil)
+		disc, _ := New(&MockDiscoverer{result: []Service{c.dynamicResult}}, nil, state, mockContainerInfo{}, nil, nil, nil, facts.ContainerFilter{}.ContainerIgnored, types.MetricFormatBleemeo, nil)
 
 		srv, err := disc.Discovery(ctx, 0)
 		if err != nil {
@@ -713,7 +748,7 @@ func Test_applyOverride(t *testing.T) { //nolint:maintidx
 						ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "172.16.0.2", Port: 80}},
 						IPAddress:       "172.16.0.2",
 						// This test is done in two path. In dynamic.go we add the option to Config.
-						// in discovery (applyOverideInPlance) we apply the config override.
+						// in discovery (applyOverrideInPlance) we apply the config override.
 						// IgnoredPorts: map[int]bool{
 						//	74: true,
 						//	75: true,
@@ -739,7 +774,7 @@ func Test_applyOverride(t *testing.T) { //nolint:maintidx
 					ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "172.16.0.2", Port: 80}},
 					IPAddress:       "172.16.0.2",
 					// This test is done in two path. In dynamic.go we add the option to Config.
-					// in discovery (applyOverideInPlance) we apply the config override.
+					// in discovery (applyOverrideInPlance) we apply the config override.
 					IgnoredPorts: map[int]bool{
 						74: true,
 						75: true,
@@ -765,7 +800,7 @@ func Test_applyOverride(t *testing.T) { //nolint:maintidx
 						ContainerID:   "817ec63d4b4f9e28947a323f9fbfc4596500b42c842bf07bd6ad9641e6805cb5",
 						ContainerName: "nginx_port_alt",
 						// This test is done in two path. In dynamic.go we add the option to Config.
-						// in discovery (applyOverideInPlance) we apply the config override.
+						// in discovery (applyOverrideInPlance) we apply the config override.
 						ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "172.16.0.2", Port: 80}},
 						IPAddress:       "172.16.0.2",
 						Active:          true,
@@ -817,9 +852,9 @@ func Test_applyOverride(t *testing.T) { //nolint:maintidx
 }
 
 func TestUpdateMetricsAndCheck(t *testing.T) {
-	fakeCollector := &mockCollector{
-		ExpectedAddedName: "nginx",
-		NewID:             42,
+	reg := &mockRegistry{
+		ExpectedAddedContains: []string{"Service input nginx", "check for nginx"},
+		NewIDs:                []int{42, 43},
 	}
 	mockDynamic := &MockDiscoverer{}
 	docker := mockContainerInfo{
@@ -829,12 +864,7 @@ func TestUpdateMetricsAndCheck(t *testing.T) {
 	}
 	state := mockState{}
 
-	reg, err := registry.New(registry.Option{}, gate.New(0))
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	disc, _ := New(mockDynamic, fakeCollector, reg, state, nil, nil, nil, nil, facts.ContainerFilter{}.ContainerIgnored, types.MetricFormatBleemeo, nil)
+	disc, _ := New(mockDynamic, reg, state, nil, nil, nil, nil, facts.ContainerFilter{}.ContainerIgnored, types.MetricFormatBleemeo, nil)
 	disc.containerInfo = docker
 
 	mockDynamic.result = []Service{
@@ -854,7 +884,7 @@ func TestUpdateMetricsAndCheck(t *testing.T) {
 		t.Error(err)
 	}
 
-	if err := fakeCollector.ExpectationFullified(); err != nil {
+	if err := reg.ExpectationFullified(); err != nil {
 		t.Error(err)
 	}
 
@@ -878,14 +908,14 @@ func TestUpdateMetricsAndCheck(t *testing.T) {
 			ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 11211}},
 		},
 	}
-	fakeCollector.ExpectedAddedName = "memcached"
-	fakeCollector.NewID = 1337
+	reg.ExpectedAddedContains = []string{"Service input memcached", "check for memcached"}
+	reg.NewIDs = []int{1337, 666}
 
 	if _, err := disc.Discovery(context.Background(), 0); err != nil {
 		t.Error(err)
 	}
 
-	if err := fakeCollector.ExpectationFullified(); err != nil {
+	if err := reg.ExpectationFullified(); err != nil {
 		t.Error(err)
 	}
 
@@ -912,15 +942,16 @@ func TestUpdateMetricsAndCheck(t *testing.T) {
 			ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 11211}},
 		},
 	}
-	fakeCollector.ExpectedAddedName = "nginx"
-	fakeCollector.NewID = 9999
-	fakeCollector.ExpectedRemoveID = 42
+
+	reg.ExpectedAddedContains = []string{"Service input nginx", "check for nginx"}
+	reg.NewIDs = []int{9999, 99999}
+	reg.ExpectedRemoveIDs = []int{42, 43}
 
 	if _, err := disc.Discovery(context.Background(), 0); err != nil {
 		t.Error(err)
 	}
 
-	if err := fakeCollector.ExpectationFullified(); err != nil {
+	if err := reg.ExpectationFullified(); err != nil {
 		t.Error(err)
 	}
 }
@@ -1288,7 +1319,7 @@ func Test_servicesFromState(t *testing.T) {
 		},
 		{
 			// This state is likely impossible to produce. fixListenAddressConflict should have remove the
-			// listenning address on one service.
+			// listening address on one service.
 			// This state was made-up but allow to test that migration is only applied when migrating from v0 to v1.
 			name:              "version1-no-two-migration",
 			stateFileBaseName: "version1-no-two-migration",

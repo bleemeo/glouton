@@ -19,6 +19,7 @@ package uwsgi
 import (
 	"glouton/inputs"
 	"glouton/inputs/internal"
+	"glouton/prometheus/registry"
 	"glouton/types"
 
 	"github.com/influxdata/telegraf"
@@ -27,15 +28,15 @@ import (
 )
 
 // New returns a uWSGI input.
-func New(url string) (telegraf.Input, *inputs.GathererOptions, error) {
+func New(url string) (telegraf.Input, registry.RegistrationOption, error) {
 	input, ok := telegraf_inputs.Inputs["uwsgi"]
 	if !ok {
-		return nil, nil, inputs.ErrDisabledInput
+		return nil, registry.RegistrationOption{}, inputs.ErrDisabledInput
 	}
 
 	uwsgiInput, ok := input().(*uwsgi.Uwsgi)
 	if !ok {
-		return nil, nil, inputs.ErrUnexpectedType
+		return nil, registry.RegistrationOption{}, inputs.ErrUnexpectedType
 	}
 
 	uwsgiInput.Servers = []string{url}
@@ -53,7 +54,7 @@ func New(url string) (telegraf.Input, *inputs.GathererOptions, error) {
 		Name: "uWSGI",
 	}
 
-	options := &inputs.GathererOptions{
+	options := registry.RegistrationOption{
 		Rules: []types.SimpleRule{
 			{
 				TargetName:  "uwsgi_requests",

@@ -22,6 +22,7 @@ import (
 	"glouton/config"
 	"glouton/inputs"
 	"glouton/inputs/internal"
+	"glouton/prometheus/registry"
 	"glouton/types"
 	"os"
 	"os/exec"
@@ -38,18 +39,18 @@ import (
 var megaraidRegexp = regexp.MustCompile(`^megaraid,(\d+)$`)
 
 // New returns a SMART input.
-func New(config config.Smart) (telegraf.Input, *inputs.GathererOptions, error) {
+func New(config config.Smart) (telegraf.Input, registry.RegistrationOption, error) {
 	SetupGlobalWrapper()
 	globalRunCmd.SetConcurrency(config.MaxConcurrency)
 
 	input, ok := telegraf_inputs.Inputs["smart"]
 	if !ok {
-		return nil, nil, inputs.ErrDisabledInput
+		return nil, registry.RegistrationOption{}, inputs.ErrDisabledInput
 	}
 
 	smartInput, ok := input().(*smart.Smart)
 	if !ok {
-		return nil, nil, inputs.ErrUnexpectedType
+		return nil, registry.RegistrationOption{}, inputs.ErrUnexpectedType
 	}
 
 	if config.PathSmartctl == "" {
@@ -59,7 +60,7 @@ func New(config config.Smart) (telegraf.Input, *inputs.GathererOptions, error) {
 	if !strings.ContainsRune(config.PathSmartctl, os.PathSeparator) {
 		fullPath, err := exec.LookPath(config.PathSmartctl)
 		if err != nil {
-			return nil, nil, fmt.Errorf("%w: \"%s\" not found in $PATH", inputs.ErrMissingCommand, config.PathSmartctl)
+			return nil, registry.RegistrationOption{}, fmt.Errorf("%w: \"%s\" not found in $PATH", inputs.ErrMissingCommand, config.PathSmartctl)
 		}
 
 		config.PathSmartctl = fullPath
@@ -81,7 +82,7 @@ func New(config config.Smart) (telegraf.Input, *inputs.GathererOptions, error) {
 
 	smartInputWrapper, err := newInputWrapper(wrapperOpts)
 	if err != nil {
-		return nil, nil, err
+		return nil, registry.RegistrationOption{}, err
 	}
 
 	internalInput := &internal.Input{
@@ -93,7 +94,7 @@ func New(config config.Smart) (telegraf.Input, *inputs.GathererOptions, error) {
 		Name: "SMART",
 	}
 
-	options := &inputs.GathererOptions{
+	options := registry.RegistrationOption{
 		// smartctl might take some time to gather, especially with a large number of disks.
 		MinInterval: 5 * 60 * time.Second,
 	}

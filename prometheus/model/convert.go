@@ -313,7 +313,6 @@ func FamiliesToNameAndItem(families []*dto.MetricFamily) { // TODO test
 			}
 
 			m.Label = itemAndMetaLabel(m.GetLabel(), annotation.BleemeoItem)
-			logger.Printf("%v from %v", m.Label, lbls)
 		}
 	}
 }
