@@ -22,6 +22,7 @@ import (
 	"glouton/logger"
 	"glouton/prometheus/matcher"
 	"glouton/prometheus/model"
+	"glouton/prometheus/registry"
 	"glouton/types"
 	"runtime"
 	"sync"
@@ -158,8 +159,8 @@ func (rm *Manager) MetricNames() []string {
 	return names
 }
 
-func (rm *Manager) Collect(ctx context.Context, app storage.Appender) error {
-	now := rm.now()
+func (rm *Manager) CollectWithState(ctx context.Context, state registry.GatherState, app storage.Appender) error {
+	now := state.T0
 
 	rm.appendable.SetAppendable(model.NewFromAppender(app))
 	defer rm.appendable.SetAppendable(nil)

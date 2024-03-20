@@ -22,6 +22,7 @@ import (
 	"context"
 	"fmt"
 	"glouton/prometheus/model"
+	"glouton/prometheus/registry"
 	"glouton/types"
 	"time"
 
@@ -38,8 +39,8 @@ type bleemeoExporter struct {
 }
 
 // Collect sends process metrics to the Appender.
-func (b *bleemeoExporter) Collect(_ context.Context, app storage.Appender) error {
-	points, err := b.points(time.Now())
+func (b *bleemeoExporter) CollectWithState(_ context.Context, state registry.GatherState, app storage.Appender) error {
+	points, err := b.points(state.T0)
 	if err != nil {
 		return err
 	}

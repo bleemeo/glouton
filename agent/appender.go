@@ -23,6 +23,7 @@ import (
 	crTypes "glouton/facts/container-runtime/types"
 	"glouton/logger"
 	"glouton/prometheus/model"
+	"glouton/prometheus/registry"
 	"glouton/store"
 	"glouton/types"
 	"sort"
@@ -37,10 +38,8 @@ type miscAppender struct {
 	containerRuntime crTypes.RuntimeInterface
 }
 
-func (ma miscAppender) Collect(ctx context.Context, app storage.Appender) error {
-	now := time.Now()
-
-	points, err := ma.containerRuntime.Metrics(ctx, now)
+func (ma miscAppender) CollectWithState(ctx context.Context, state registry.GatherState, app storage.Appender) error {
+	points, err := ma.containerRuntime.Metrics(ctx, state.T0)
 	if err != nil {
 		logger.V(2).Printf("container Runtime metrics gather failed: %v", err)
 	}
@@ -61,7 +60,7 @@ func (ma miscAppender) Collect(ctx context.Context, app storage.Appender) error 
 	}
 
 	points = append(points, types.MetricPoint{
-		Point: types.Point{Time: now, Value: float64(countRunning)},
+		Point: types.Point{Time: state.T0, Value: float64(countRunning)},
 		Labels: map[string]string{
 			types.LabelName: "containers_count",
 		},
@@ -84,10 +83,8 @@ type miscAppenderMinute struct {
 	getConfigWarnings func() prometheus.MultiError
 }
 
-func (ma miscAppenderMinute) Collect(ctx context.Context, app storage.Appender) error {
-	now := time.Now()
-
-	points, err := ma.containerRuntime.MetricsMinute(ctx, now)
+func (ma miscAppenderMinute) CollectWithState(ctx context.Context, state registry.GatherState, app storage.Appender) error {
+	points, err := ma.containerRuntime.MetricsMinute(ctx, state.T0)
 	if err != nil {
 		logger.V(2).Printf("container Runtime metrics gather failed: %v", err)
 	}
@@ -175,7 +172,7 @@ func (ma miscAppenderMinute) Collect(ctx context.Context, app storage.Appender) 
 	points = append(points, types.MetricPoint{
 		Point: types.Point{
 			Value: float64(status.NagiosCode()),
-			Time:  now,
+			Time:  state.T0,
 		},
 		Labels: map[string]string{
 			types.LabelName: "agent_config_warning",
@@ -191,11 +188,11 @@ func (ma miscAppenderMinute) Collect(ctx context.Context, app storage.Appender) 
 	// Add SMART status and UPSD battery status metrics.
 	points = append(
 		points,
-		statusFromLastPoint(now, ma.store, "smart_device_health_ok", map[string]string{types.LabelName: "smart_device_health_status"}, smartHealthStatus)...,
+		statusFromLastPoint(state.T0, ma.store, "smart_device_health_ok", map[string]string{types.LabelName: "smart_device_health_status"}, smartHealthStatus)...,
 	)
 	points = append(
 		points,
-		statusFromLastPoint(now, ma.store, "upsd_status_flags", map[string]string{types.LabelName: "upsd_battery_status"}, upsdBatteryStatus)...,
+		statusFromLastPoint(state.T0, ma.store, "upsd_status_flags", map[string]string{types.LabelName: "upsd_battery_status"}, upsdBatteryStatus)...,
 	)
 
 	err = model.SendPointsToAppender(points, app)

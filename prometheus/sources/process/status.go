@@ -22,6 +22,7 @@ import (
 	"glouton/facts"
 	"glouton/logger"
 	"glouton/prometheus/model"
+	"glouton/prometheus/registry"
 	"glouton/types"
 	"time"
 
@@ -45,7 +46,7 @@ func NewStatusSource(ps processProvider) StatusSource {
 }
 
 // Collect sends process metrics to the Appender.
-func (s StatusSource) Collect(ctx context.Context, app storage.Appender) error {
+func (s StatusSource) CollectWithState(ctx context.Context, state registry.GatherState, app storage.Appender) error {
 	proc, err := s.ps.Processes(ctx, maxAge)
 	if err != nil {
 		return fmt.Errorf("unable to gather process metrics: %w", err)
@@ -92,7 +93,7 @@ func (s StatusSource) Collect(ctx context.Context, app storage.Appender) error {
 		totalThreads += p.NumThreads
 	}
 
-	now := time.Now()
+	now := state.T0
 	points := []types.MetricPoint{
 		{
 			Labels: map[string]string{

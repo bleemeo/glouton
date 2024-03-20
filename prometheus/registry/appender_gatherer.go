@@ -49,7 +49,7 @@ func (g *appenderGatherer) GatherWithState(ctx context.Context, state GatherStat
 	if state.FromScrapeLoop || g.opt.CallForMetricsEndpoint {
 		app := model.NewBufferAppender()
 
-		err = g.cb.Collect(ctx, app)
+		err = g.cb.CollectWithState(ctx, state, app)
 		if err == nil {
 			_ = app.Commit()
 		}

@@ -197,7 +197,13 @@ type RegistrationOption struct {
 type AppenderCallback interface {
 	// Collect collects point and write them into Appender. The appender must not be used once Collect returned.
 	// If you omit to Commit() on the appender, it will be automatically done when Collect return without error.
-	Collect(ctx context.Context, app storage.Appender) error
+	CollectWithState(ctx context.Context, state GatherState, app storage.Appender) error
+}
+
+type AppenderFunc func(ctx context.Context, state GatherState, app storage.Appender) error
+
+func (af AppenderFunc) CollectWithState(ctx context.Context, state GatherState, app storage.Appender) error {
+	return af(ctx, state, app)
 }
 
 type ThresholdHandler interface {

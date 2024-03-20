@@ -19,6 +19,7 @@ package rules
 import (
 	"context"
 	"errors"
+	"glouton/prometheus/registry"
 	"glouton/store"
 	"glouton/types"
 	"sort"
@@ -193,7 +194,7 @@ func TestManager(t *testing.T) {
 
 			mgr := NewManager(context.Background(), tt.queryable, nil)
 
-			err := mgr.Collect(context.Background(), app.Appender(context.Background()))
+			err := mgr.CollectWithState(context.Background(), registry.GatherState{}, app.Appender(context.Background()))
 			if err != nil {
 				t.Error(err)
 			}
