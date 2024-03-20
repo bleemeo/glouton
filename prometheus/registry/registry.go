@@ -1090,7 +1090,7 @@ func (r *Registry) Gather() ([]*dto.MetricFamily, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultGatherTimeout)
 	defer cancel()
 
-	return r.GatherWithState(ctx, GatherState{})
+	return r.GatherWithState(ctx, GatherState{T0: time.Now()})
 }
 
 // GatherWithState implements GathererGatherWithState.

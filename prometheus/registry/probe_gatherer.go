@@ -58,7 +58,7 @@ func (p *ProbeGatherer) Gather() ([]*dto.MetricFamily, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultGatherTimeout)
 	defer cancel()
 
-	return p.GatherWithState(ctx, GatherState{})
+	return p.GatherWithState(ctx, GatherState{T0: time.Now()})
 }
 
 // GatherWithState uses the specified gather state along the gatherer to retrieve a set of metrics.

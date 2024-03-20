@@ -45,7 +45,7 @@ func NewStatusSource(ps processProvider) StatusSource {
 	return StatusSource{ps: ps}
 }
 
-// Collect sends process metrics to the Appender.
+// CollectWithState sends process metrics to the Appender.
 func (s StatusSource) CollectWithState(ctx context.Context, state registry.GatherState, app storage.Appender) error {
 	proc, err := s.ps.Processes(ctx, maxAge)
 	if err != nil {

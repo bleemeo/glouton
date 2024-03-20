@@ -80,7 +80,7 @@ func Test_factFromPoints(t *testing.T) {
 				"fqdn":            "bleemeo-linux01",
 				"agent_version":   "21.11.08.123456",
 				"glouton_version": "21.11.08.123456",
-				"somthing":        "else",
+				"something":        "else",
 			},
 			want: map[string]string{
 				"fqdn":                "bleemeo-switch01",
@@ -230,11 +230,11 @@ func Test_factFromPoints(t *testing.T) {
 			}
 
 			if diff := cmp.Diff(tt.want, got); diff != "" {
-				t.Errorf("factFromPoints() missmatch (-want +got):\n%s", diff)
+				t.Errorf("factFromPoints() mismatch (-want +got):\n%s", diff)
 			}
 
 			if diff := cmp.Diff(tt.want, got2); diff != "" {
-				t.Errorf("Facts() missmatch (-want +got):\n%s", diff)
+				t.Errorf("Facts() mismatch (-want +got):\n%s", diff)
 			}
 		})
 	}
@@ -557,7 +557,7 @@ func Test_processMFS(t *testing.T) {
 	}{
 		{
 			name:      "linux snmpd",
-			state:     registry.GatherState{},
+			state:     registry.GatherState{T0: time.Now()},
 			status:    types.StatusOk,
 			msg:       "",
 			inputFile: "linux-snmpd.input",
@@ -565,7 +565,7 @@ func Test_processMFS(t *testing.T) {
 		},
 		{
 			name:      "linux snmpd noFilter",
-			state:     registry.GatherState{NoFilter: true},
+			state:     registry.GatherState{T0: time.Now(), NoFilter: true},
 			status:    types.StatusOk,
 			msg:       "",
 			inputFile: "linux-snmpd.input",

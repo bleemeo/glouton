@@ -81,7 +81,7 @@ func (s GatherState) Now() time.Time {
 
 // GatherStateFromMap creates a GatherState from a state passed as a map.
 func GatherStateFromMap(params map[string][]string) GatherState {
-	state := GatherState{}
+	state := GatherState{T0: time.Now()}
 
 	// TODO: add this in some user-facing documentation
 	if _, includeProbes := params["includeMonitors"]; includeProbes {

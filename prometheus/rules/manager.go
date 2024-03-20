@@ -47,7 +47,6 @@ type Manager struct {
 	logger     log.Logger
 
 	l            sync.Mutex
-	now          func() time.Time
 	agentStarted time.Time
 }
 
@@ -130,7 +129,6 @@ func newManager(ctx context.Context, queryable storage.Queryable, defaultRules m
 		matchers:       matchers,
 		logger:         promLogger,
 		agentStarted:   created,
-		now:            time.Now,
 	}
 
 	return &rm

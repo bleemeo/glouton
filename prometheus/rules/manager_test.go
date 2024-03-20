@@ -194,7 +194,7 @@ func TestManager(t *testing.T) {
 
 			mgr := NewManager(context.Background(), tt.queryable, nil)
 
-			err := mgr.CollectWithState(context.Background(), registry.GatherState{}, app.Appender(context.Background()))
+			err := mgr.CollectWithState(context.Background(), registry.GatherState{T0: time.Now()}, app.Appender(context.Background()))
 			if err != nil {
 				t.Error(err)
 			}

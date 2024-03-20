@@ -125,7 +125,7 @@ func TestFilterPastPoints(t *testing.T) {
 	tGatherer := testGatherer{firstSample}
 	gatherer := WithPastPointFilter(&tGatherer, time.Hour)
 
-	mfs, err := gatherer.GatherWithState(context.Background(), GatherState{})
+	mfs, err := gatherer.GatherWithState(context.Background(), GatherState{T0: time.Now()})
 	if err != nil {
 		t.Fatal("Error while gathering:", err)
 	}
@@ -136,7 +136,7 @@ func TestFilterPastPoints(t *testing.T) {
 
 	tGatherer.mfsToReturn = secondSample
 
-	mfs, err = gatherer.GatherWithState(context.Background(), GatherState{})
+	mfs, err = gatherer.GatherWithState(context.Background(), GatherState{T0: time.Now()})
 	if err != nil {
 		t.Fatal("Error while gathering:", err)
 	}
@@ -206,7 +206,7 @@ func TestFilterPurge(t *testing.T) {
 		return t0 // 15:00:00 UTC
 	}
 
-	_, err := gatherer.GatherWithState(context.Background(), GatherState{})
+	_, err := gatherer.GatherWithState(context.Background(), GatherState{T0: gatherer.timeNow()})
 	if err != nil {
 		t.Fatal("Error while gathering:", err)
 	}
@@ -230,7 +230,7 @@ func TestFilterPurge(t *testing.T) {
 		return t0.Add(4 * time.Minute) // 15:04:00 UTC
 	}
 
-	_, err = gatherer.GatherWithState(context.Background(), GatherState{})
+	_, err = gatherer.GatherWithState(context.Background(), GatherState{T0: gatherer.timeNow()})
 	if err != nil {
 		t.Fatal("Error while gathering:", err)
 	}
@@ -269,7 +269,7 @@ func TestFilterPurge(t *testing.T) {
 		return t0.Add(8 * time.Minute) // 15:08:00 UTC
 	}
 
-	_, err = gatherer.GatherWithState(context.Background(), GatherState{})
+	_, err = gatherer.GatherWithState(context.Background(), GatherState{T0: gatherer.timeNow()})
 	if err != nil {
 		t.Fatal("Error while gathering:", err)
 	}
