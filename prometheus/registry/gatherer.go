@@ -31,7 +31,6 @@ import (
 	dto "github.com/prometheus/client_model/go"
 	prometheusModel "github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/model/labels"
-	"github.com/prometheus/prometheus/rules"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -157,19 +156,19 @@ func (w *GathererWithStateWrapper) Gather() ([]*dto.MetricFamily, error) {
 
 type gatherModifier func(mfs []*dto.MetricFamily, gatherError error) []*dto.MetricFamily
 
-// labeledGatherer provides a gatherer that will add provided labels to all metrics.
-// It also allows to gather to MetricPoints.
-type labeledGatherer struct {
-	labels   []*dto.LabelPair
-	ruler    *ruler.SimpleRuler
-	modifier gatherModifier
-	source   prometheus.Gatherer
+// wrappedGatherer wraps a gatherer to apply Registry change and apply RegistrationOption.
+// For example, it will add provided labels to all metrics and/or change timestamps.
+type wrappedGatherer struct {
+	labels []*dto.LabelPair
+	opt    RegistrationOption
+	ruler  *ruler.SimpleRuler
+	source prometheus.Gatherer
 
 	l      sync.Mutex
 	closed bool
 }
 
-func newLabeledGatherer(g prometheus.Gatherer, extraLabels labels.Labels, rrules []*rules.RecordingRule, modifier gatherModifier) *labeledGatherer {
+func newWrappedGatherer(g prometheus.Gatherer, extraLabels labels.Labels, opt RegistrationOption) *wrappedGatherer {
 	labels := make([]*dto.LabelPair, 0, len(extraLabels))
 
 	for _, l := range extraLabels {
@@ -182,11 +181,11 @@ func newLabeledGatherer(g prometheus.Gatherer, extraLabels labels.Labels, rrules
 		}
 	}
 
-	return &labeledGatherer{
-		source:   g,
-		labels:   labels,
-		ruler:    ruler.New(rrules),
-		modifier: modifier,
+	return &wrappedGatherer{
+		source: g,
+		labels: labels,
+		ruler:  ruler.New(opt.rrules),
+		opt:    opt,
 	}
 }
 
@@ -200,7 +199,7 @@ func dtoLabelToMap(lbls []*dto.LabelPair) map[string]string {
 }
 
 // Gather implements prometheus.Gather.
-func (g *labeledGatherer) Gather() ([]*dto.MetricFamily, error) {
+func (g *wrappedGatherer) Gather() ([]*dto.MetricFamily, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultGatherTimeout)
 	defer cancel()
 
@@ -208,7 +207,7 @@ func (g *labeledGatherer) Gather() ([]*dto.MetricFamily, error) {
 }
 
 // GatherWithState implements GathererWithState.
-func (g *labeledGatherer) GatherWithState(ctx context.Context, state GatherState) ([]*dto.MetricFamily, error) {
+func (g *wrappedGatherer) GatherWithState(ctx context.Context, state GatherState) ([]*dto.MetricFamily, error) {
 	g.l.Lock()
 	defer g.l.Unlock()
 
@@ -240,8 +239,8 @@ func (g *labeledGatherer) GatherWithState(ctx context.Context, state GatherState
 
 	mfs = g.ruler.ApplyRulesMFS(ctx, now, mfs)
 
-	if g.modifier != nil {
-		mfs = g.modifier(mfs, err)
+	if g.opt.GatherModifier != nil {
+		mfs = g.opt.GatherModifier(mfs, err)
 	}
 
 	if len(g.labels) == 0 {
@@ -259,14 +258,14 @@ func (g *labeledGatherer) GatherWithState(ctx context.Context, state GatherState
 }
 
 // close waits for the current gather to finish and deletes the gatherer.
-func (g *labeledGatherer) close() {
+func (g *wrappedGatherer) close() {
 	g.l.Lock()
 	defer g.l.Unlock()
 
 	g.closed = true
 }
 
-func (g *labeledGatherer) getSource() prometheus.Gatherer {
+func (g *wrappedGatherer) getSource() prometheus.Gatherer {
 	return g.source
 }
 

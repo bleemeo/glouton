@@ -255,7 +255,7 @@ type registration struct {
 	addedAt              time.Time
 	loop                 *scrapeLoop
 	lastScrapes          []scrapeRun
-	gatherer             *labeledGatherer
+	gatherer             *wrappedGatherer
 	annotations          types.MetricAnnotations
 	relabelHookSkip      bool
 	lastRelabelHookRetry time.Time
@@ -1704,7 +1704,7 @@ func (r *Registry) setupGatherer(reg *registration, source prometheus.Gatherer) 
 		promLabels, annotations, reg.relabelHookSkip = r.applyRelabel(ctxTimeout, extraLabels)
 	}
 
-	g := newLabeledGatherer(source, promLabels, reg.option.rrules, reg.option.GatherModifier)
+	g := newWrappedGatherer(source, promLabels, reg.option)
 	reg.annotations = annotations
 	reg.gatherer = g
 }
