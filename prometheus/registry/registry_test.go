@@ -963,6 +963,7 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 			name:         "pushpoint-bleemeo",
 			kindToTest:   kindPushPoint,
 			metricFormat: types.MetricFormatBleemeo,
+			opt:          RegistrationOption{}, // unused for pushpoint
 			input: []types.MetricPoint{
 				{
 					Labels: map[string]string{
@@ -998,9 +999,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						Value: 1.2,
 					},
 				},
-			},
-			opt: RegistrationOption{
-				DisablePeriodicGather: true,
 			},
 			want: []metricPointTimeOverride{
 				{
@@ -1047,6 +1045,9 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 			name:         "pushpointCallback-bleemeo",
 			kindToTest:   kindPushPointCallback,
 			metricFormat: types.MetricFormatBleemeo,
+			opt: RegistrationOption{
+				DisablePeriodicGather: true,
+			},
 			input: []types.MetricPoint{
 				{
 					Labels: map[string]string{
@@ -1082,9 +1083,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						Value: 42,
 					},
 				},
-			},
-			opt: RegistrationOption{
-				DisablePeriodicGather: true,
 			},
 			want: []metricPointTimeOverride{
 				{
@@ -1131,6 +1129,7 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 			name:         "pushpoint-prometheus",
 			kindToTest:   kindPushPoint,
 			metricFormat: types.MetricFormatPrometheus,
+			opt:          RegistrationOption{}, // unused for pushpoint
 			input: []types.MetricPoint{
 				{
 					Labels: map[string]string{
@@ -1168,9 +1167,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						Value: 42,
 					},
 				},
-			},
-			opt: RegistrationOption{
-				DisablePeriodicGather: true,
 			},
 			want: []metricPointTimeOverride{
 				{
@@ -1221,6 +1217,9 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 			name:         "appender",
 			kindToTest:   kindAppenderCallback,
 			metricFormat: types.MetricFormatBleemeo,
+			opt: RegistrationOption{
+				DisablePeriodicGather: true,
+			},
 			input: []types.MetricPoint{
 				{
 					Labels: map[string]string{
@@ -1258,9 +1257,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						Value: 42,
 					},
 				},
-			},
-			opt: RegistrationOption{
-				DisablePeriodicGather: true,
 			},
 			want: []metricPointTimeOverride{
 				{
@@ -1311,6 +1307,9 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 			name:         "gatherer-bleemeo",
 			kindToTest:   kindGatherer,
 			metricFormat: types.MetricFormatBleemeo,
+			opt: RegistrationOption{
+				DisablePeriodicGather: true,
+			},
 			input: []types.MetricPoint{
 				{
 					Labels: map[string]string{
@@ -1347,9 +1346,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						Value: 42,
 					},
 				},
-			},
-			opt: RegistrationOption{
-				DisablePeriodicGather: true,
 			},
 			want: []metricPointTimeOverride{
 				{
@@ -1399,6 +1395,9 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 			name:         "input",
 			kindToTest:   kindInput,
 			metricFormat: types.MetricFormatBleemeo,
+			opt: RegistrationOption{
+				DisablePeriodicGather: true,
+			},
 			input: []types.MetricPoint{
 				{
 					Labels: map[string]string{
@@ -1436,9 +1435,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						Value: 42,
 					},
 				},
-			},
-			opt: RegistrationOption{
-				DisablePeriodicGather: true,
 			},
 			want: []metricPointTimeOverride{
 				{
@@ -1489,6 +1485,14 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 			name:         "gatherer-extralabels",
 			kindToTest:   kindGatherer,
 			metricFormat: types.MetricFormatBleemeo,
+			opt: RegistrationOption{
+				ExtraLabels: map[string]string{
+					types.LabelMetaSNMPTarget: "1.2.3.4:8080",
+					"another":                 "value",
+				},
+				Rules:                 DefaultSNMPRules(time.Minute),
+				DisablePeriodicGather: true,
+			},
 			input: []types.MetricPoint{
 				{
 					Labels: map[string]string{
@@ -1500,14 +1504,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						Value: 42,
 					},
 				},
-			},
-			opt: RegistrationOption{
-				ExtraLabels: map[string]string{
-					types.LabelMetaSNMPTarget: "1.2.3.4:8080",
-					"another":                 "value",
-				},
-				Rules:                 DefaultSNMPRules(time.Minute),
-				DisablePeriodicGather: true,
 			},
 			want: []metricPointTimeOverride{
 				{
@@ -1533,6 +1529,13 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 			name:         "metric-rename-simple-gatherer",
 			kindToTest:   kindGatherer,
 			metricFormat: types.MetricFormatBleemeo,
+			opt: RegistrationOption{
+				ExtraLabels: map[string]string{
+					types.LabelMetaSNMPTarget: "192.168.1.2",
+				},
+				Rules:                 DefaultSNMPRules(time.Minute),
+				DisablePeriodicGather: true,
+			},
 			input: []types.MetricPoint{
 				{
 					Labels: map[string]string{
@@ -1585,13 +1588,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						Value: 1,
 					},
 				},
-			},
-			opt: RegistrationOption{
-				ExtraLabels: map[string]string{
-					types.LabelMetaSNMPTarget: "192.168.1.2",
-				},
-				Rules:                 DefaultSNMPRules(time.Minute),
-				DisablePeriodicGather: true,
 			},
 			want: []metricPointTimeOverride{
 				{
@@ -1695,6 +1691,14 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 			name:         "metric-rename-simple-pushpoint",
 			kindToTest:   kindPushPointCallback,
 			metricFormat: types.MetricFormatPrometheus,
+			opt: RegistrationOption{
+				ExtraLabels: map[string]string{
+					types.LabelMetaSNMPTarget: "192.168.1.2",
+					"extranLabels":            "are ignored by pushpoints. So snmp target will be ignored, like rules",
+				},
+				Rules:                 DefaultSNMPRules(time.Minute),
+				DisablePeriodicGather: true,
+			},
 			input: []types.MetricPoint{
 				{
 					Labels: map[string]string{
@@ -1727,14 +1731,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						Value: 42,
 					},
 				},
-			},
-			opt: RegistrationOption{
-				ExtraLabels: map[string]string{
-					types.LabelMetaSNMPTarget: "192.168.1.2",
-					"extranLabels":            "are ignored by pushpoints. So snmp target will be ignored, like rules",
-				},
-				Rules:                 DefaultSNMPRules(time.Minute),
-				DisablePeriodicGather: true,
 			},
 			want: []metricPointTimeOverride{
 				{
@@ -1782,6 +1778,13 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 			name:         "metric-rename-simple-2",
 			kindToTest:   kindGatherer,
 			metricFormat: types.MetricFormatBleemeo,
+			opt: RegistrationOption{
+				ExtraLabels: map[string]string{
+					types.LabelMetaSNMPTarget: "192.168.1.2",
+				},
+				Rules:                 DefaultSNMPRules(time.Minute),
+				DisablePeriodicGather: true,
+			},
 			input: []types.MetricPoint{
 				{
 					Labels: map[string]string{
@@ -1813,13 +1816,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						Value: 7,
 					},
 				},
-			},
-			opt: RegistrationOption{
-				ExtraLabels: map[string]string{
-					types.LabelMetaSNMPTarget: "192.168.1.2",
-				},
-				Rules:                 DefaultSNMPRules(time.Minute),
-				DisablePeriodicGather: true,
 			},
 			want: []metricPointTimeOverride{
 				{
@@ -1921,6 +1917,13 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 			name:         "metric-rename-multiple-1",
 			kindToTest:   kindGatherer,
 			metricFormat: types.MetricFormatBleemeo,
+			opt: RegistrationOption{
+				ExtraLabels: map[string]string{
+					types.LabelMetaSNMPTarget: "192.168.1.2",
+				},
+				Rules:                 DefaultSNMPRules(time.Minute),
+				DisablePeriodicGather: true,
+			},
 			input: []types.MetricPoint{
 				{
 					Labels: map[string]string{
@@ -1944,13 +1947,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						Value: 42,
 					},
 				},
-			},
-			opt: RegistrationOption{
-				ExtraLabels: map[string]string{
-					types.LabelMetaSNMPTarget: "192.168.1.2",
-				},
-				Rules:                 DefaultSNMPRules(time.Minute),
-				DisablePeriodicGather: true,
 			},
 			want: []metricPointTimeOverride{
 				{
@@ -1991,6 +1987,13 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 			name:         "metric-rename-multiple-2",
 			kindToTest:   kindGatherer,
 			metricFormat: types.MetricFormatBleemeo,
+			opt: RegistrationOption{
+				ExtraLabels: map[string]string{
+					types.LabelMetaSNMPTarget: "192.168.1.2",
+				},
+				Rules:                 DefaultSNMPRules(time.Minute),
+				DisablePeriodicGather: true,
+			},
 			input: []types.MetricPoint{
 				{
 					Labels: map[string]string{
@@ -2090,13 +2093,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						Value: 42,
 					},
 				},
-			},
-			opt: RegistrationOption{
-				ExtraLabels: map[string]string{
-					types.LabelMetaSNMPTarget: "192.168.1.2",
-				},
-				Rules:                 DefaultSNMPRules(time.Minute),
-				DisablePeriodicGather: true,
 			},
 			want: []metricPointTimeOverride{
 				{
@@ -2286,6 +2282,13 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 			name:         "metric-rule-and-rename",
 			kindToTest:   kindGatherer,
 			metricFormat: types.MetricFormatBleemeo,
+			opt: RegistrationOption{
+				ExtraLabels: map[string]string{
+					types.LabelMetaSNMPTarget: "192.168.1.2",
+				},
+				Rules:                 DefaultSNMPRules(time.Minute),
+				DisablePeriodicGather: true,
+			},
 			input: []types.MetricPoint{
 				{
 					Labels: map[string]string{
@@ -2320,13 +2323,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						Value: 8.385008e+06,
 					},
 				},
-			},
-			opt: RegistrationOption{
-				ExtraLabels: map[string]string{
-					types.LabelMetaSNMPTarget: "192.168.1.2",
-				},
-				Rules:                 DefaultSNMPRules(time.Minute),
-				DisablePeriodicGather: true,
 			},
 			want: []metricPointTimeOverride{
 				{
@@ -2431,6 +2427,10 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 			name:         "gatherer-with-relabel",
 			kindToTest:   kindGatherer,
 			metricFormat: types.MetricFormatBleemeo,
+			opt: RegistrationOption{
+				DisablePeriodicGather: true,
+				ApplyDynamicRelabel:   true,
+			},
 			input: []types.MetricPoint{
 				{
 					Labels: map[string]string{
@@ -2443,10 +2443,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						Value: 1024.0,
 					},
 				},
-			},
-			opt: RegistrationOption{
-				DisablePeriodicGather: true,
-				ApplyDynamicRelabel:   true,
 			},
 			want: []metricPointTimeOverride{
 				{
@@ -2471,6 +2467,9 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 			name:         "telegraf-input",
 			kindToTest:   kindPushPointCallback,
 			metricFormat: types.MetricFormatBleemeo,
+			opt: RegistrationOption{
+				DisablePeriodicGather: true,
+			},
 			input: []types.MetricPoint{
 				{
 					Labels: map[string]string{
@@ -2521,9 +2520,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						Value: 42,
 					},
 				},
-			},
-			opt: RegistrationOption{
-				DisablePeriodicGather: true,
 			},
 			want: []metricPointTimeOverride{
 				{
@@ -2585,6 +2581,10 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 			// Test output from miscAppender
 			name:       "miscAppender",
 			kindToTest: kindAppenderCallback,
+			opt: RegistrationOption{
+				DisablePeriodicGather: true,
+				ApplyDynamicRelabel:   true,
+			},
 			input: []types.MetricPoint{
 				{
 					Labels: map[string]string{
@@ -2611,10 +2611,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						Value: 42,
 					},
 				},
-			},
-			opt: RegistrationOption{
-				DisablePeriodicGather: true,
-				ApplyDynamicRelabel:   true,
 			},
 			want: []metricPointTimeOverride{
 				{
@@ -2650,6 +2646,9 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 			// Test output from node_exporter for /metrics (for example/prometheus)
 			name:       "node_exporter",
 			kindToTest: kindGatherer,
+			opt: RegistrationOption{
+				DisablePeriodicGather: true,
+			},
 			input: []types.MetricPoint{
 				{
 					Labels: map[string]string{
@@ -2677,9 +2676,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						Value: 42,
 					},
 				},
-			},
-			opt: RegistrationOption{
-				DisablePeriodicGather: true,
 			},
 			want: []metricPointTimeOverride{
 				{
@@ -2718,6 +2714,10 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 			name:         "appender-time",
 			kindToTest:   kindAppenderCallback,
 			metricFormat: types.MetricFormatBleemeo,
+			opt: RegistrationOption{
+				DisablePeriodicGather: true,
+				HonorTimestamp:        true,
+			},
 			input: []types.MetricPoint{
 				{
 					Labels: map[string]string{
@@ -2784,10 +2784,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						Value: 42,
 					},
 				},
-			},
-			opt: RegistrationOption{
-				DisablePeriodicGather: true,
-				HonorTimestamp:        true,
 			},
 			want: []metricPointTimeOverride{
 				{
@@ -2871,6 +2867,10 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 			name:         "gatherer-bleemeo-time",
 			kindToTest:   kindGatherer,
 			metricFormat: types.MetricFormatBleemeo,
+			opt: RegistrationOption{
+				DisablePeriodicGather: true,
+				HonorTimestamp:        true,
+			},
 			input: []types.MetricPoint{
 				{
 					Labels: map[string]string{
@@ -2937,10 +2937,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						Value: 42,
 					},
 				},
-			},
-			opt: RegistrationOption{
-				DisablePeriodicGather: true,
-				HonorTimestamp:        true,
 			},
 			want: []metricPointTimeOverride{
 				{
@@ -3024,6 +3020,10 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 			name:         "input-time",
 			kindToTest:   kindInput,
 			metricFormat: types.MetricFormatBleemeo,
+			opt: RegistrationOption{
+				DisablePeriodicGather: true,
+				HonorTimestamp:        true,
+			},
 			input: []types.MetricPoint{
 				{
 					Labels: map[string]string{
@@ -3090,10 +3090,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 						Value: 42,
 					},
 				},
-			},
-			opt: RegistrationOption{
-				DisablePeriodicGather: true,
-				HonorTimestamp:        true,
 			},
 			want: []metricPointTimeOverride{
 				{
