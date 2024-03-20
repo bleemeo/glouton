@@ -838,7 +838,6 @@ func registryRunOnce(t *testing.T, now time.Time, reg *Registry, kindToTest sour
 	case kindAppenderCallback:
 		id, err := reg.RegisterAppenderCallback(
 			opt,
-			AppenderRegistrationOption{},
 			fakeAppenderCallback{
 				input: input,
 			},

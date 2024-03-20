@@ -182,16 +182,17 @@ type RegistrationOption struct {
 	// needed by SimpleRule will still be allowed.
 	// Currently (until Registry.renamer is dropped), this shouldn't be activated on SNMP gatherer.
 	AcceptAllowedMetricsOnly bool
-	rrules                   []*rules.RecordingRule
-}
-
-type AppenderRegistrationOption struct {
-	// CallForMetricsEndpoint indicate whether the callback must be called for /metrics or
-	// cached result from last periodic is used.
-	CallForMetricsEndpoint bool
-	// HonorTimestamp indicate whether timestamp given to Appender are used or if a timestamp
+	// HonorTimestamp indicate whether timestamp associated with each metric points is used or if a timestamp
 	// decided by the Registry is used. Using the timestamp of the registry is preferred as its more stable.
+	// If you need mixed timestamp decided by the Registry and timestamp associated with some points, use a
+	// zero time (time.Time{}, Unix epoc or nil) on point that need to use the Registry's timestamp.
+	// This is currently only implemented for AppenderCallback.
 	HonorTimestamp bool
+	// CallForMetricsEndpoint indicate whether the callback must be called for /metrics or
+	// cached result from last periodic collection is used.
+	// This is currently only implemented for AppenderCallback.
+	CallForMetricsEndpoint bool
+	rrules                 []*rules.RecordingRule
 }
 
 type AppenderCallback interface {
@@ -475,7 +476,6 @@ func (r *Registry) registerPushPointsCallback(opt RegistrationOption, f func(con
 // RegisterAppenderCallback add a callback that use an Appender to write points to the registry.
 func (r *Registry) RegisterAppenderCallback(
 	opt RegistrationOption,
-	appOpt AppenderRegistrationOption,
 	cb AppenderCallback,
 ) (int, error) {
 	r.init()
@@ -488,7 +488,7 @@ func (r *Registry) RegisterAppenderCallback(
 	defer r.l.Unlock()
 
 	reg := &registration{option: opt}
-	r.setupGatherer(reg, &appenderGatherer{cb: cb, opt: appOpt})
+	r.setupGatherer(reg, &appenderGatherer{cb: cb, opt: opt})
 
 	return r.addRegistration(reg)
 }

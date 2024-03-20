@@ -29,7 +29,7 @@ import (
 // appenderGatherer call a AppenderCallback.
 type appenderGatherer struct {
 	cb      AppenderCallback
-	opt     AppenderRegistrationOption
+	opt     RegistrationOption
 	lastApp *model.BufferAppender
 	lastErr error
 	l       sync.Mutex

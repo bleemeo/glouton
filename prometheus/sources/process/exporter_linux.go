@@ -79,7 +79,6 @@ func RegisterExporter(
 				Interval:    defaultInterval,
 				JitterSeed:  defaultJitter,
 			},
-			registry.AppenderRegistrationOption{},
 			&bleemeoExporter{exporter: processExporter},
 		)
 		if err != nil {
@@ -100,14 +99,14 @@ func newExporter(psLister interface{}, processQuerier *discovery.DynamicDiscover
 	return nil
 }
 
-type processerQuerier interface {
+type processorQuerier interface {
 	ProcessServiceInfo(cmdLine []string, pid int, createTime time.Time) (serviceName discovery.ServiceName, containerName string)
 }
 
 // Exporter is a Prometheus exporter to export processes metrics.
 // It based on github.com/ncabatoff/process-exporter.
 type Exporter struct {
-	ProcessQuerier processerQuerier
+	ProcessQuerier processorQuerier
 	Source         proc.Source
 
 	l sync.Mutex
@@ -274,7 +273,7 @@ func (e *Exporter) init() {
 	e.scrapeProcReadErrors += colErrs.Read
 }
 
-// Describe implment Describe of a Prometheus collector.
+// Describe implement Describe of a Prometheus collector.
 func (e *Exporter) Describe(ch chan<- *prometheus.Desc) {
 	e.init()
 
@@ -296,7 +295,7 @@ func (e *Exporter) Describe(ch chan<- *prometheus.Desc) {
 	ch <- e.scrapePartialErrorsDesc
 }
 
-// Collect implment Collect of a Prometheus collector.
+// Collect implement Collect of a Prometheus collector.
 func (e *Exporter) Collect(ch chan<- prometheus.Metric) {
 	e.init()
 
@@ -389,7 +388,7 @@ func (e *Exporter) Collect(ch chan<- prometheus.Metric) {
 }
 
 type matchNamer struct {
-	querier processerQuerier
+	querier processorQuerier
 }
 
 func (m matchNamer) MatchAndName(attr common.ProcAttributes) (bool, string) {

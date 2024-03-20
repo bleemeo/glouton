@@ -1123,7 +1123,6 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 				Description: "process status metrics",
 				JitterSeed:  baseJitter,
 			},
-			registry.AppenderRegistrationOption{},
 			processSource.NewStatusSource(psFact),
 		)
 		if err != nil {
@@ -1139,7 +1138,6 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 			// Container metrics contain meta labels that needs to be relabeled.
 			ApplyDynamicRelabel: true,
 		},
-		registry.AppenderRegistrationOption{},
 		miscAppender{
 			containerRuntime: a.containerRuntime,
 		},
@@ -1158,7 +1156,6 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 			// Container metrics contain meta labels that needs to be relabeled.
 			ApplyDynamicRelabel: true,
 		},
-		registry.AppenderRegistrationOption{},
 		miscAppenderMinute{
 			containerRuntime:  a.containerRuntime,
 			discovery:         a.discovery,
@@ -1177,7 +1174,6 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 			JitterSeed:         baseJitterPlus,
 			NoLabelsAlteration: true,
 		},
-		registry.AppenderRegistrationOption{},
 		a.rulesManager,
 	)
 	if err != nil {
