@@ -13,7 +13,7 @@ require (
 	github.com/containerd/cgroups/v3 v3.0.3
 	github.com/containerd/containerd v1.7.14
 	github.com/containerd/typeurl/v2 v2.1.1
-	github.com/docker/docker v25.0.4+incompatible
+	github.com/docker/docker v25.0.5+incompatible
 	github.com/eclipse/paho.mqtt.golang v1.4.3
 	github.com/fsnotify/fsnotify v1.7.0
 	github.com/getsentry/sentry-go v0.27.0
