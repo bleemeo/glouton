@@ -164,6 +164,11 @@ type RegistrationOption struct {
 	// NoLabelsAlteration disable (most) alteration of labels. It don't apply to PushPoints.
 	// Meta labels (starting with __) are still dropped and (if applicable) converted to annotations.
 	NoLabelsAlteration bool
+	// CompatibilityNameItem enable renaming metrics labels to just name + item (from Annotations.BleemeoItem).
+	// This should eventually be dropped once all metrics are produced with right name + item directly rather than using
+	// Annotations.BleemeoItem. This compatibility was mostly needed when Bleemeo didn't supported labels and only had
+	// name + item. If dropped, we should be careful to don't change existing metrics.
+	CompatibilityNameItem bool
 	// DisablePeriodicGather skip the periodic calls which forward gathered points to r.PushPoint.
 	// The periodic call use the Interval. When Interval is 0, the dynamic interval set by UpdateDelay is used.
 	DisablePeriodicGather bool
@@ -458,6 +463,7 @@ func (r *Registry) RegisterGatherer(opt RegistrationOption, gatherer prometheus.
 // Note: before being able to drop pushpoint & registerpushpoint, we likely need:
 //   - support for "GathererWithScheduleUpdate-like" on RegisterAppenderCallback (needed by service check, when they trigger check on TCP close)
 //   - support for conversion of all annotation to meta-label and vise-vera (model/convert.go)
+//   - support for TTL ?
 func (r *Registry) RegisterPushPointsCallback(opt RegistrationOption, f func(context.Context, time.Time)) (int, error) {
 	return r.registerPushPointsCallback(opt, f)
 }
@@ -1512,6 +1518,10 @@ func (r *Registry) scrape(ctx context.Context, state GatherState, reg *registrat
 	start := time.Now()
 
 	mfs, err := gatherMethod(ctx, state)
+
+	if reg.option.CompatibilityNameItem {
+		gloutonModel.FamiliesToNameAndItem(mfs)
+	}
 
 	if !reg.option.NoLabelsAlteration {
 		mfs = r.renamer.RenameMFS(mfs)

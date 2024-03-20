@@ -291,6 +291,57 @@ func dropMetaLabelsFromPair(lbls []*dto.LabelPair) []*dto.LabelPair {
 	return lbls[:i]
 }
 
+// FamiliesToNameAndItem converts labels of each metrics to just name + item. It kept
+// meta-label unchanged.
+// The input is modified.
+func FamiliesToNameAndItem(families []*dto.MetricFamily) { // TODO test
+	builder := labels.NewBuilder(nil)
+
+	for _, mf := range families {
+		for _, m := range mf.GetMetric() {
+			builder.Reset(nil)
+
+			for _, lblPair := range m.GetLabel() {
+				builder.Set(lblPair.GetName(), lblPair.GetValue())
+			}
+
+			lbls := builder.Labels()
+			annotation := MetaLabelsToAnnotation(lbls)
+
+			if annotation.BleemeoItem == "" {
+				annotation.BleemeoItem = lbls.Get(types.LabelItem)
+			}
+
+			m.Label = itemAndMetaLabel(m.GetLabel(), annotation.BleemeoItem)
+			logger.Printf("%v from %v", m.Label, lbls)
+		}
+	}
+}
+
+func itemAndMetaLabel(lbls []*dto.LabelPair, itemAnnotation string) []*dto.LabelPair {
+	i := 0
+
+	for _, l := range lbls {
+		if !strings.HasPrefix(l.GetName(), model.ReservedLabelPrefix) {
+			continue
+		}
+
+		lbls[i] = l
+		i++
+	}
+
+	if itemAnnotation != "" {
+		lbls[i] = &dto.LabelPair{
+			Name:  proto.String(types.LabelItem),
+			Value: &itemAnnotation,
+		}
+
+		i++
+	}
+
+	return lbls[:i]
+}
+
 // SamplesToMetricFamily convert a list of sample to a MetricFamilty of given type.
 // The mType could be nil which will use the default of MetricType_UNTYPED.
 // All samples must belong to the same family, that is have the same name.
