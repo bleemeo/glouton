@@ -3668,7 +3668,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 					GloutonPort:  "8016",
 					MetricFormat: tt.metricFormat,
 				},
-				gate.New(0),
 			)
 			if err != nil {
 				t.Fatal(err)

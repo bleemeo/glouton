@@ -74,7 +74,10 @@ const (
 // and it registry should retry later. Points or gatherer associated will be dropped.
 type RelabelHook func(ctx context.Context, labels map[string]string) (newLabel map[string]string, retryLater bool)
 
-var errInvalidName = errors.New("invalid metric name or label name")
+var (
+	errInvalidName = errors.New("invalid metric name or label name")
+	ErrBadArgument = errors.New("bad argument")
+)
 
 type pushFunction func(ctx context.Context, points []types.MetricPoint)
 
@@ -138,7 +141,6 @@ type Registry struct {
 	currentDelay            time.Duration
 	relabelHook             RelabelHook
 	renamer                 *renamer.Renamer
-	secretInputsGate        *gate.Gate
 }
 
 type Option struct {
@@ -150,6 +152,7 @@ type Option struct {
 	MetricFormat          types.MetricFormat
 	BlackboxSendScraperID bool
 	Filter                metricFilter
+	SecretInputsGate      *gate.Gate
 }
 
 type RegistrationOption struct {
@@ -383,10 +386,9 @@ func getDefaultRelabelConfig() []*relabel.Config {
 	}
 }
 
-func New(opt Option, secretInputsGate *gate.Gate) (*Registry, error) {
+func New(opt Option) (*Registry, error) {
 	reg := &Registry{
-		option:           opt,
-		secretInputsGate: secretInputsGate,
+		option: opt,
 	}
 
 	reg.init()
@@ -1507,7 +1509,11 @@ func (r *Registry) scrape(ctx context.Context, state GatherState, reg *registrat
 	reg.l.Unlock()
 
 	if hasSecrets && secretInput.SecretCount() > 0 {
-		releaseGate, err := WaitForSecrets(ctx, r.secretInputsGate, secretInput.SecretCount())
+		if r.option.SecretInputsGate == nil {
+			return nil, 0, fmt.Errorf("%w: no secretInputsGate but input had SecretCount()", ErrBadArgument)
+		}
+
+		releaseGate, err := WaitForSecrets(ctx, r.option.SecretInputsGate, secretInput.SecretCount())
 		if err != nil {
 			return nil, 0, err // The context expired
 		}

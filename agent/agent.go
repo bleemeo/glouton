@@ -818,7 +818,8 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 			BlackboxSendScraperID: a.config.Blackbox.ScraperSendUUID,
 			Filter:                mFilter,
 			Queryable:             a.store,
-		}, secretInputsGate)
+			SecretInputsGate:      secretInputsGate,
+		})
 	if err != nil {
 		logger.Printf("Unable to create the metrics registry: %v", err)
 		logger.Printf("The metrics registry is required for Glouton. Exiting.")
