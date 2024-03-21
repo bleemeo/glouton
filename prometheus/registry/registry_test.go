@@ -208,12 +208,14 @@ func (cb fakeInput) Gather(acc telegraf.Accumulator) error {
 }
 
 func TestRegistry_Register(t *testing.T) {
-	reg := &Registry{}
+	reg, err := New(Option{})
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	var (
 		id1 int
 		id2 int
-		err error
 	)
 
 	gather1 := &fakeGatherer{
@@ -357,8 +359,11 @@ func TestRegistry_Register(t *testing.T) {
 }
 
 func TestRegistryDiagnostic(t *testing.T) {
-	reg := &Registry{}
-	reg.init()
+	reg, err := New(Option{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	reg.UpdateDelay(250 * time.Millisecond)
 
 	gather1 := &fakeGatherer{
@@ -403,10 +408,9 @@ func TestRegistryDiagnostic(t *testing.T) {
 }
 
 func TestRegistry_pushPoint(t *testing.T) {
-	reg := &Registry{
-		option: Option{
-			Filter: &fakeFilter{},
-		},
+	reg, err := New(Option{Filter: &fakeFilter{}})
+	if err != nil {
+		t.Fatal(err)
 	}
 
 	t0 := time.Date(2020, 3, 2, 10, 30, 0, 0, time.UTC)
@@ -671,7 +675,11 @@ func TestRegistry_applyRelabel(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			r := &Registry{}
+			r, err := New(Option{})
+			if err != nil {
+				t.Fatal(err)
+			}
+
 			r.relabelConfigs = tt.fields.relabelConfigs
 
 			promLabels, annotations, _ := r.applyRelabel(context.Background(), tt.args.input)
@@ -732,7 +740,11 @@ func BenchmarkRegistry_applyRelabel(b *testing.B) {
 		tt := tt
 
 		b.Run(tt.name, func(b *testing.B) {
-			r := &Registry{}
+			r, err := New(Option{})
+			if err != nil {
+				b.Fatal(err)
+			}
+
 			r.relabelConfigs = getDefaultRelabelConfig()
 
 			b.ResetTimer()
@@ -755,18 +767,20 @@ func TestRegistry_run(t *testing.T) {
 				points []types.MetricPoint
 			)
 
-			reg := &Registry{
-				option: Option{
-					MetricFormat: format,
-					PushPoint: pushFunction(func(_ context.Context, pts []types.MetricPoint) {
-						l.Lock()
-						points = append(points, pts...)
-						l.Unlock()
-					}),
-					FQDN:        "example.com",
-					GloutonPort: "1234",
-					Filter:      &fakeFilter{},
-				},
+			reg, err := New(Option{
+				MetricFormat: format,
+				PushPoint: pushFunction(func(_ context.Context, pts []types.MetricPoint) {
+					l.Lock()
+					points = append(points, pts...)
+					l.Unlock()
+				}),
+				FQDN:        "example.com",
+				GloutonPort: "1234",
+				Filter:      &fakeFilter{},
+			},
+			)
+			if err != nil {
+				t.Fatal(err)
 			}
 
 			ctx := context.Background()

@@ -441,8 +441,6 @@ func (r *Registry) Run(ctx context.Context) error {
 
 // RegisterGatherer add a new gatherer to the list of metric sources.
 func (r *Registry) RegisterGatherer(opt RegistrationOption, gatherer prometheus.Gatherer) (int, error) {
-	r.init()
-
 	if err := opt.buildRules(); err != nil {
 		return 0, err
 	}
@@ -471,8 +469,6 @@ func (r *Registry) RegisterPushPointsCallback(opt RegistrationOption, f func(con
 }
 
 func (r *Registry) registerPushPointsCallback(opt RegistrationOption, f func(context.Context, time.Time)) (int, error) {
-	r.init()
-
 	if !opt.HonorTimestamp {
 		return 0, fmt.Errorf("%w: PushPoint will always HonorTimestamp", errors.ErrUnsupported)
 	}
@@ -495,8 +491,6 @@ func (r *Registry) RegisterAppenderCallback(
 	opt RegistrationOption,
 	cb AppenderCallback,
 ) (int, error) {
-	r.init()
-
 	if err := opt.buildRules(); err != nil {
 		return 0, err
 	}
@@ -520,8 +514,6 @@ func (r *Registry) RegisterInput(
 	opt RegistrationOption,
 	input telegraf.Input,
 ) (int, error) {
-	r.init()
-
 	if err := opt.buildRules(); err != nil {
 		return 0, err
 	}
@@ -570,8 +562,6 @@ func (r *Registry) RegisterInput(
 // The hook is assumed to be idempotent, that is for a given labels input the result is the same.
 // If the hook want break this idempotence, UpdateRelabelHook() should be re-called to force update of existings Gatherer.
 func (r *Registry) UpdateRelabelHook(hook RelabelHook) {
-	r.init()
-
 	r.l.Lock()
 	defer r.l.Unlock()
 
@@ -1061,9 +1051,7 @@ func (r *Registry) checkReschedule(ctx context.Context) time.Duration {
 
 // Unregister remove a Gatherer or PushPointCallback from the list of metric sources.
 func (r *Registry) Unregister(id int) bool {
-	r.init()
 	r.l.Lock()
-
 	reg, ok := r.registrations[id]
 
 	if !ok {
@@ -1103,8 +1091,6 @@ func (r *Registry) Gather() ([]*dto.MetricFamily, error) {
 
 // GatherWithState implements GathererGatherWithState.
 func (r *Registry) GatherWithState(ctx context.Context, state GatherState) ([]*dto.MetricFamily, error) {
-	r.init()
-
 	if state.QueryType == FromStore {
 		if r.option.Queryable == nil {
 			return nil, nil
@@ -1318,8 +1304,6 @@ func (l prefixLogger) Println(v ...interface{}) {
 // GoCollector and ProcessCollector like the prometheus.DefaultRegisterer
 // Internal registry which contains all glouton metrics.
 func (r *Registry) AddDefaultCollector() {
-	r.init()
-
 	r.internalRegistry.MustRegister(collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
 	r.internalRegistry.MustRegister(collectors.NewGoCollector())
 
@@ -1364,8 +1348,6 @@ func (r *Registry) Exporter() http.Handler {
 
 // WithTTL return a AddMetricPointFunction with TTL on pushed points.
 func (r *Registry) WithTTL(ttl time.Duration) types.PointPusher {
-	r.init()
-
 	return pushFunction(func(ctx context.Context, points []types.MetricPoint) {
 		r.pushPoint(ctx, points, ttl, r.option.MetricFormat)
 	})
@@ -1373,7 +1355,6 @@ func (r *Registry) WithTTL(ttl time.Duration) types.PointPusher {
 
 // UpdateDelay change the delay between metric gather.
 func (r *Registry) UpdateDelay(delay time.Duration) {
-	r.init()
 	r.l.Lock()
 	defer r.l.Unlock()
 

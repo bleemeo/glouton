@@ -40,7 +40,10 @@ func TestConfigParsing(t *testing.T) {
 		t.Fatalf("Got warnings loading config: %v", warnings)
 	}
 
-	registry := &registry.Registry{}
+	registry, err := registry.New(registry.Option{})
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	bbManager, err := New(registry, config.Blackbox, types.MetricFormatPrometheus)
 	if err != nil {
