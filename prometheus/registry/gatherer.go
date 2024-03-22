@@ -224,6 +224,7 @@ func (g *wrappedGatherer) GatherWithState(ctx context.Context, state GatherState
 		// Make sure to signal before exiting. If two gorouting were blocked on
 		// the condition, we need to make sure the other one get wake-up.
 		g.cond.Signal()
+
 		return nil, errGatherOnNilGatherer
 	}
 
@@ -232,6 +233,7 @@ func (g *wrappedGatherer) GatherWithState(ctx context.Context, state GatherState
 		// Make sure to signal before exiting. If two gorouting were blocked on
 		// the condition, we need to make sure the other one get wake-up.
 		g.cond.Signal()
+
 		return nil, nil
 	}
 

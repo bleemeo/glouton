@@ -1039,10 +1039,11 @@ func (r *Registry) restartScrapeLoop(reg *registration, registryCurrentDelay tim
 	reg.restartInProgress = true
 
 	if reg.loop != nil {
+		loop := reg.loop
 		reg.loop = nil
 
 		reg.l.Unlock()
-		reg.loop.stop()
+		loop.stop()
 		reg.l.Lock()
 	}
 
