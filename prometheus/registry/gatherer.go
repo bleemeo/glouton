@@ -221,11 +221,17 @@ func (g *wrappedGatherer) GatherWithState(ctx context.Context, state GatherState
 	}
 
 	if g.closed || g.source == nil {
+		// Make sure to signal before exiting. If two gorouting were blocked on
+		// the condition, we need to make sure the other one get wake-up.
+		g.cond.Signal()
 		return nil, errGatherOnNilGatherer
 	}
 
 	// do not collect non-probes metrics when the user only wants probes
 	if _, probe := g.source.(*ProbeGatherer); !probe && state.QueryType == OnlyProbes {
+		// Make sure to signal before exiting. If two gorouting were blocked on
+		// the condition, we need to make sure the other one get wake-up.
+		g.cond.Signal()
 		return nil, nil
 	}
 
