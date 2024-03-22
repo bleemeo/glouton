@@ -45,7 +45,6 @@ import (
 	"github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/util/gate"
 	"golang.org/x/sync/errgroup"
-	"google.golang.org/protobuf/proto"
 )
 
 const testAgentID = "fcdc81a8-5bce-4305-8108-8e1e75439329"
@@ -145,25 +144,7 @@ func (g *fakeGatherer) Gather() ([]*dto.MetricFamily, error) {
 		<-g.hangCtx.Done()
 	}
 
-	result := make([]*dto.MetricFamily, len(g.response))
-
-	for i, mf := range g.response {
-		b, err := proto.Marshal(mf)
-		if err != nil {
-			panic(err)
-		}
-
-		var tmp dto.MetricFamily
-
-		err = proto.Unmarshal(b, &tmp)
-		if err != nil {
-			panic(err)
-		}
-
-		result[i] = &tmp
-	}
-
-	return result, nil
+	return model.FamiliesDeepCopy(g.response), nil
 }
 
 func (cb fakeAppenderCallback) CollectWithState(_ context.Context, state GatherState, app storage.Appender) error {

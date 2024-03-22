@@ -889,3 +889,219 @@ func TestFamiliesToCollector(t *testing.T) {
 		}
 	}
 }
+
+func TestFamiliesToNameAndItem(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		input []*dto.MetricFamily
+		want  []*dto.MetricFamily
+	}{
+		{
+			name: "just-name",
+			input: []*dto.MetricFamily{
+				{
+					Name: proto.String("cpu_used"),
+					Help: proto.String(""),
+					Type: dto.MetricType_UNTYPED.Enum(),
+					Metric: []*dto.Metric{
+						{
+							Untyped: &dto.Untyped{
+								Value: proto.Float64(42.1),
+							},
+						},
+					},
+				},
+			},
+			want: []*dto.MetricFamily{
+				{
+					Name: proto.String("cpu_used"),
+					Help: proto.String(""),
+					Type: dto.MetricType_UNTYPED.Enum(),
+					Metric: []*dto.Metric{
+						{
+							Untyped: &dto.Untyped{
+								Value: proto.Float64(42.1),
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "just-one-item",
+			input: []*dto.MetricFamily{
+				{
+					Name: proto.String("disk_used"),
+					Help: proto.String(""),
+					Type: dto.MetricType_UNTYPED.Enum(),
+					Metric: []*dto.Metric{
+						{
+							Label: []*dto.LabelPair{
+								{Name: proto.String(types.LabelItem), Value: proto.String("/home")},
+							},
+							Untyped: &dto.Untyped{
+								Value: proto.Float64(42.1),
+							},
+						},
+					},
+				},
+			},
+			want: []*dto.MetricFamily{
+				{
+					Name: proto.String("disk_used"),
+					Help: proto.String(""),
+					Type: dto.MetricType_UNTYPED.Enum(),
+					Metric: []*dto.Metric{
+						{
+							Label: []*dto.LabelPair{
+								{Name: proto.String(types.LabelItem), Value: proto.String("/home")},
+							},
+							Untyped: &dto.Untyped{
+								Value: proto.Float64(42.1),
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "annotation-with-over-item",
+			input: []*dto.MetricFamily{
+				{
+					Name: proto.String("disk_used"),
+					Help: proto.String(""),
+					Type: dto.MetricType_UNTYPED.Enum(),
+					Metric: []*dto.Metric{
+						{
+							Label: []*dto.LabelPair{
+								{Name: proto.String(types.LabelMetaBleemeoItem), Value: proto.String("/srv")},
+								{Name: proto.String(types.LabelItem), Value: proto.String("/home")},
+							},
+							Untyped: &dto.Untyped{
+								Value: proto.Float64(42.1),
+							},
+						},
+					},
+				},
+			},
+			want: []*dto.MetricFamily{
+				{
+					Name: proto.String("disk_used"),
+					Help: proto.String(""),
+					Type: dto.MetricType_UNTYPED.Enum(),
+					Metric: []*dto.Metric{
+						{
+							Label: []*dto.LabelPair{
+								{Name: proto.String(types.LabelMetaBleemeoItem), Value: proto.String("/srv")},
+								{Name: proto.String(types.LabelItem), Value: proto.String("/srv")},
+							},
+							Untyped: &dto.Untyped{
+								Value: proto.Float64(42.1),
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "annotation-is-enough",
+			input: []*dto.MetricFamily{
+				{
+					Name: proto.String("disk_used"),
+					Help: proto.String(""),
+					Type: dto.MetricType_UNTYPED.Enum(),
+					Metric: []*dto.Metric{
+						{
+							Label: []*dto.LabelPair{
+								{Name: proto.String(types.LabelMetaBleemeoItem), Value: proto.String("/srv")},
+							},
+							Untyped: &dto.Untyped{
+								Value: proto.Float64(42.1),
+							},
+						},
+					},
+				},
+			},
+			want: []*dto.MetricFamily{
+				{
+					Name: proto.String("disk_used"),
+					Help: proto.String(""),
+					Type: dto.MetricType_UNTYPED.Enum(),
+					Metric: []*dto.Metric{
+						{
+							Label: []*dto.LabelPair{
+								{Name: proto.String(types.LabelMetaBleemeoItem), Value: proto.String("/srv")},
+								{Name: proto.String(types.LabelItem), Value: proto.String("/srv")},
+							},
+							Untyped: &dto.Untyped{
+								Value: proto.Float64(42.1),
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "only_meta_labels_are_kept",
+			input: []*dto.MetricFamily{
+				{
+					Name: proto.String("disk_used"),
+					Help: proto.String(""),
+					Type: dto.MetricType_UNTYPED.Enum(),
+					Metric: []*dto.Metric{
+						{
+							Label: []*dto.LabelPair{
+								{Name: proto.String(types.LabelMetaBleemeoItem), Value: proto.String("/srv")},
+								{Name: proto.String(types.LabelMetaBleemeoUUID), Value: proto.String("kept")},
+								{Name: proto.String(types.LabelMetaProbeScraperName), Value: proto.String("kept2")},
+								{Name: proto.String(types.LabelDevice), Value: proto.String("remove")},
+								{Name: proto.String(types.LabelInstance), Value: proto.String("remove2")},
+								{Name: proto.String(types.LabelInstanceUUID), Value: proto.String("remove3")},
+							},
+							Untyped: &dto.Untyped{
+								Value: proto.Float64(42.1),
+							},
+						},
+					},
+				},
+			},
+			want: []*dto.MetricFamily{
+				{
+					Name: proto.String("disk_used"),
+					Help: proto.String(""),
+					Type: dto.MetricType_UNTYPED.Enum(),
+					Metric: []*dto.Metric{
+						{
+							Label: []*dto.LabelPair{
+								{Name: proto.String(types.LabelMetaBleemeoItem), Value: proto.String("/srv")},
+								{Name: proto.String(types.LabelMetaBleemeoUUID), Value: proto.String("kept")},
+								{Name: proto.String(types.LabelMetaProbeScraperName), Value: proto.String("kept2")},
+								{Name: proto.String(types.LabelItem), Value: proto.String("/srv")},
+							},
+							Untyped: &dto.Untyped{
+								Value: proto.Float64(42.1),
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := FamiliesDeepCopy(tt.input)
+			FamiliesToNameAndItem(got)
+
+			if diff := types.DiffMetricFamilies(tt.want, got, false, false); diff != "" {
+				t.Errorf("FamiliesToNameAndItem() mismatch (-want +got)\n%s", diff)
+			}
+		})
+	}
+}

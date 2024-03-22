@@ -291,10 +291,32 @@ func dropMetaLabelsFromPair(lbls []*dto.LabelPair) []*dto.LabelPair {
 	return lbls[:i]
 }
 
+func FamiliesDeepCopy(families []*dto.MetricFamily) []*dto.MetricFamily {
+	result := make([]*dto.MetricFamily, len(families))
+
+	for i, mf := range families {
+		b, err := proto.Marshal(mf)
+		if err != nil {
+			panic(err)
+		}
+
+		var tmp dto.MetricFamily
+
+		err = proto.Unmarshal(b, &tmp)
+		if err != nil {
+			panic(err)
+		}
+
+		result[i] = &tmp
+	}
+
+	return result
+}
+
 // FamiliesToNameAndItem converts labels of each metrics to just name + item. It kept
 // meta-label unchanged.
 // The input is modified.
-func FamiliesToNameAndItem(families []*dto.MetricFamily) { // TODO test
+func FamiliesToNameAndItem(families []*dto.MetricFamily) {
 	builder := labels.NewBuilder(nil)
 
 	for _, mf := range families {
@@ -330,6 +352,10 @@ func itemAndMetaLabel(lbls []*dto.LabelPair, itemAnnotation string) []*dto.Label
 	}
 
 	if itemAnnotation != "" {
+		if len(lbls) == i {
+			lbls = append(lbls, nil)
+		}
+
 		lbls[i] = &dto.LabelPair{
 			Name:  proto.String(types.LabelItem),
 			Value: &itemAnnotation,
