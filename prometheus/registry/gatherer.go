@@ -164,8 +164,10 @@ type wrappedGatherer struct {
 	ruler  *ruler.SimpleRuler
 	source prometheus.Gatherer
 
-	l      sync.Mutex
-	closed bool
+	l       sync.Mutex
+	closed  bool
+	running bool
+	cond    *sync.Cond
 }
 
 func newWrappedGatherer(g prometheus.Gatherer, extraLabels labels.Labels, opt RegistrationOption) *wrappedGatherer {
@@ -181,12 +183,15 @@ func newWrappedGatherer(g prometheus.Gatherer, extraLabels labels.Labels, opt Re
 		}
 	}
 
-	return &wrappedGatherer{
+	wrap := &wrappedGatherer{
 		source: g,
 		labels: labels,
 		ruler:  ruler.New(opt.rrules),
 		opt:    opt,
 	}
+	wrap.cond = sync.NewCond(&wrap.l)
+
+	return wrap
 }
 
 func dtoLabelToMap(lbls []*dto.LabelPair) map[string]string {
@@ -211,6 +216,10 @@ func (g *wrappedGatherer) GatherWithState(ctx context.Context, state GatherState
 	g.l.Lock()
 	defer g.l.Unlock()
 
+	for g.running {
+		g.cond.Wait()
+	}
+
 	if g.closed || g.source == nil {
 		return nil, errGatherOnNilGatherer
 	}
@@ -231,11 +240,18 @@ func (g *wrappedGatherer) GatherWithState(ctx context.Context, state GatherState
 		now = state.T0
 	}
 
+	g.running = true
+	g.l.Unlock()
+
 	if cg, ok := g.source.(GathererWithState); ok {
 		mfs, err = cg.GatherWithState(ctx, state)
 	} else {
 		mfs, err = g.source.Gather()
 	}
+
+	g.l.Lock()
+	g.running = false
+	g.cond.Signal()
 
 	mfs = g.ruler.ApplyRulesMFS(ctx, now, mfs)
 

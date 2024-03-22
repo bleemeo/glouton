@@ -127,9 +127,13 @@ type Registry struct {
 	condition               *sync.Cond
 	countScrape             int
 	countPushPoints         int
-	blockScrape             bool
 	blockPushPoint          bool
 	tooSlowConsecutiveError int
+	running                 bool
+	restarting              int
+	restartingNeedToStart   bool
+	startStopInProgress     bool
+	startStopCond           *sync.Cond
 
 	reschedules             []reschedule
 	relabelConfigs          []*relabel.Config
@@ -153,6 +157,7 @@ type Option struct {
 	BlackboxSendScraperID bool
 	Filter                metricFilter
 	SecretInputsGate      *gate.Gate
+	ShutdownDeadline      time.Duration
 }
 
 type RegistrationOption struct {
@@ -266,12 +271,35 @@ type registration struct {
 	l                    sync.Mutex
 	option               RegistrationOption
 	addedAt              time.Time
+	removalRequested     bool
+	restartInProgress    bool
+	runOnStart           bool
 	loop                 *scrapeLoop
 	lastScrapes          []scrapeRun
 	gatherer             *wrappedGatherer
 	annotations          types.MetricAnnotations
 	relabelHookSkip      bool
 	lastRelabelHookRetry time.Time
+}
+
+// RunNow will trigger an run of the scrapeLoop. If the registry isn't running,
+// the run will be delayed until the registry is started. In other case it will be run
+// as quickly as possible.
+// Only registration using the periodic gather are handler, other are ignored.
+func (reg *registration) RunNow() {
+	reg.l.Lock()
+	defer reg.l.Unlock()
+
+	if reg.option.DisablePeriodicGather {
+		// RunNow is only supported with a scapeLoop
+		return
+	}
+
+	if reg.loop == nil {
+		reg.runOnStart = true
+	} else {
+		reg.loop.Trigger()
+	}
 }
 
 type reschedule struct {
@@ -387,6 +415,10 @@ func getDefaultRelabelConfig() []*relabel.Config {
 }
 
 func New(opt Option) (*Registry, error) {
+	if opt.ShutdownDeadline == 0 {
+		opt.ShutdownDeadline = time.Minute
+	}
+
 	reg := &Registry{
 		option: opt,
 	}
@@ -398,15 +430,14 @@ func New(opt Option) (*Registry, error) {
 
 func (r *Registry) init() {
 	r.l.Lock()
+	defer r.l.Unlock()
 
 	if r.registrations != nil {
-		r.l.Unlock()
-
 		return
 	}
 
 	r.condition = sync.NewCond(&r.l)
-
+	r.startStopCond = sync.NewCond(&r.l)
 	r.registrations = make(map[int]*registration)
 	r.internalRegistry = prometheus.NewRegistry()
 	r.pushedPoints = make(map[string]types.MetricPoint)
@@ -414,17 +445,17 @@ func (r *Registry) init() {
 	r.currentDelay = 10 * time.Second
 	r.relabelConfigs = getDefaultRelabelConfig()
 	r.renamer = renamer.LoadRules(renamer.GetDefaultRules())
-
-	r.l.Unlock()
 }
 
 func (r *Registry) Run(ctx context.Context) error {
+	r.startLoops()
+
 	for ctx.Err() == nil {
 		if ctx.Err() != nil {
 			break
 		}
 
-		delay := r.checkReschedule(ctx)
+		delay := r.checkReschedule()
 		select {
 		case <-time.After(delay):
 		case <-ctx.Done():
@@ -432,11 +463,136 @@ func (r *Registry) Run(ctx context.Context) error {
 	}
 
 	// Stop all scrape loops.
+	r.stopAllLoops()
+
+	// And unregister them to call Close() method on gatherer
 	for id := range r.registrations {
 		r.Unregister(id)
 	}
 
 	return ctx.Err()
+}
+
+func (r *Registry) restartLoops(actionDuringStop func()) {
+	r.l.Lock()
+
+	r.restarting++
+
+	if r.running {
+		r.restartingNeedToStart = true
+	}
+
+	r.l.Unlock()
+
+	r.stopAllLoops()
+
+	actionDuringStop()
+
+	r.l.Lock()
+	r.restarting--
+
+	needToStart := false
+	if r.restarting == 0 && r.restartingNeedToStart {
+		needToStart = true
+		r.restartingNeedToStart = false
+		r.running = true
+	}
+	r.l.Unlock()
+
+	if needToStart {
+		r.startLoops()
+	}
+}
+
+func (r *Registry) startLoops() {
+	r.l.Lock()
+	defer r.l.Unlock()
+
+	for r.startStopInProgress {
+		r.startStopCond.Wait()
+	}
+
+	if r.restarting > 0 {
+		// Some restart are in progress. Don't restart loop now.
+		// The restart will start loop at the ends
+		r.restartingNeedToStart = true
+
+		return
+	}
+
+	// Use that boolean because while doing restartScrapeLoop we need to release the
+	// r.l lock, but we don't want another stop/stop to run in the same time.
+	r.startStopInProgress = true
+	r.running = true
+
+	regToStart := make([]*registration, 0, len(r.registrations))
+
+	for _, reg := range r.registrations {
+		reg := reg
+		if !reg.option.DisablePeriodicGather {
+			regToStart = append(regToStart, reg)
+		}
+	}
+
+	currentDelay := r.currentDelay
+
+	r.l.Unlock()
+
+	for _, reg := range regToStart {
+		r.restartScrapeLoop(reg, currentDelay)
+	}
+
+	r.l.Lock()
+
+	r.startStopInProgress = false
+	r.startStopCond.Signal()
+}
+
+// stopAllLoops make sure ALL loops are stopped (and disable starting new loop).
+// You will need to call startLoops() to restart all loops including re-enable start of new loop.
+// r.l lock must NOT be held.
+func (r *Registry) stopAllLoops() {
+	r.l.Lock()
+	defer r.l.Unlock()
+
+	for r.startStopInProgress {
+		r.startStopCond.Wait()
+	}
+
+	r.startStopInProgress = true
+	r.running = false
+
+	runningLoops := make([]*scrapeLoop, 0, len(r.registrations))
+
+	for _, reg := range r.registrations {
+		reg.l.Lock()
+		if reg.loop == nil {
+			reg.l.Unlock()
+
+			continue
+		}
+
+		reg.loop.stopNoWait()
+		runningLoops = append(runningLoops, reg.loop)
+
+		reg.loop = nil
+
+		reg.l.Unlock()
+	}
+
+	// release the lock to call stop(). This allow Gatherer that need to call Registry() (e.g. pushpoint callback)
+	// to don't block on a deadlock.
+	// We also need to don't hold reg.l lock, because to complete, scrapeFromLoop will acquire the reg.l lock.
+	r.l.Unlock()
+
+	for _, loop := range runningLoops {
+		loop.stop()
+	}
+
+	r.l.Lock()
+
+	r.startStopInProgress = false
+	r.startStopCond.Signal()
 }
 
 // RegisterGatherer add a new gatherer to the list of metric sources.
@@ -562,18 +718,12 @@ func (r *Registry) RegisterInput(
 // The hook is assumed to be idempotent, that is for a given labels input the result is the same.
 // If the hook want break this idempotence, UpdateRelabelHook() should be re-called to force update of existings Gatherer.
 func (r *Registry) UpdateRelabelHook(hook RelabelHook) {
+	r.restartLoops(func() { r.updateRelabelHook(hook) })
+}
+
+func (r *Registry) updateRelabelHook(hook RelabelHook) {
 	r.l.Lock()
 	defer r.l.Unlock()
-
-	r.blockScrape = true
-
-	// Wait for scrapes to finish since it may sent points with old labels.
-	// We use a two step lock (first scrapes, then also pushPoints) because
-	// scrapes trigger update of pushed points so while runOnce we can't block
-	// pushPoints
-	for r.countScrape > 0 {
-		r.condition.Wait()
-	}
 
 	r.blockPushPoint = true
 
@@ -595,7 +745,6 @@ func (r *Registry) UpdateRelabelHook(hook RelabelHook) {
 		reg.l.Unlock()
 	}
 
-	r.blockScrape = false
 	r.blockPushPoint = false
 
 	r.condition.Broadcast()
@@ -643,12 +792,12 @@ func (r *Registry) diagnosticState(archive types.ArchiveWriter) error {
 	}
 
 	r.l.Lock()
+	defer r.l.Unlock()
 
 	obj := struct {
 		Option                  Option
 		CountScrape             int
 		CountPushPoints         int
-		BlockScrape             bool
 		BlockPushPoint          bool
 		Reschedules             []reschedule
 		LastPushedPointsCleanup time.Time
@@ -659,7 +808,6 @@ func (r *Registry) diagnosticState(archive types.ArchiveWriter) error {
 		Option:                  r.option,
 		CountScrape:             r.countScrape,
 		CountPushPoints:         r.countPushPoints,
-		BlockScrape:             r.blockScrape,
 		BlockPushPoint:          r.blockPushPoint,
 		Reschedules:             r.reschedules,
 		LastPushedPointsCleanup: r.lastPushedPointsCleanup,
@@ -667,8 +815,6 @@ func (r *Registry) diagnosticState(archive types.ArchiveWriter) error {
 		PushedPointsCount:       len(r.pushedPoints),
 		TooSlowConsecutiveError: r.tooSlowConsecutiveError,
 	}
-
-	defer r.l.Unlock()
 
 	enc := json.NewEncoder(file)
 	enc.SetIndent("", "  ")
@@ -876,26 +1022,7 @@ func (r *Registry) writeMetricsSelf(file io.Writer) error {
 	return nil
 }
 
-// scrapeStart block until scraping is allowed.
-func (r *Registry) scrapeStart() {
-	r.l.Lock()
-
-	for r.blockScrape {
-		r.condition.Wait()
-	}
-
-	r.countScrape++
-	r.l.Unlock()
-}
-
-// scrapeDone must be called for each srapeStart call.
-func (r *Registry) scrapeDone() {
-	r.l.Lock()
-	r.countScrape--
-	r.condition.Broadcast()
-	r.l.Unlock()
-}
-
+// addRegistration assume r.l lock is held.
 func (r *Registry) addRegistration(reg *registration) (int, error) {
 	id := 1
 
@@ -920,24 +1047,42 @@ func (r *Registry) addRegistration(reg *registration) (int, error) {
 			})
 		}
 
-		r.restartScrapeLoop(reg)
+		if r.running {
+			r.restartScrapeLoop(reg, r.currentDelay)
+		}
 	}
 
 	return id, nil
 }
 
 // restartScrapeLoop start a scrapeLoop for this registration after stop previous loop if it exists.
-// r.lock must be hold before calling this method.
-func (r *Registry) restartScrapeLoop(reg *registration) {
+// reg.l must NOT be held.
+// r.l lock should NOT be held or a deadlock could occur during stop.
+func (r *Registry) restartScrapeLoop(reg *registration, registryCurrentDelay time.Duration) {
+	reg.l.Lock()
+	defer reg.l.Unlock()
+
+	if reg.removalRequested {
+		return
+	}
+
+	if reg.restartInProgress {
+		return
+	}
+
+	reg.restartInProgress = true
+
 	if reg.loop != nil {
-		r.l.Unlock()
+		reg.loop = nil
+
+		reg.l.Unlock()
 		reg.loop.stop()
-		r.l.Lock()
+		reg.l.Lock()
 	}
 
 	interval := reg.option.Interval
 	if interval == 0 {
-		interval = r.currentDelay
+		interval = registryCurrentDelay
 	}
 
 	if reg.option.MinInterval != 0 && interval < reg.option.MinInterval {
@@ -953,11 +1098,14 @@ func (r *Registry) restartScrapeLoop(reg *registration) {
 		interval,
 		timeout,
 		reg.option.JitterSeed,
-		func(ctx context.Context, t0 time.Time) {
-			r.scrapeFromLoop(ctx, t0, reg)
+		func(ctx context.Context, loopCtx context.Context, t0 time.Time) {
+			r.scrapeFromLoop(ctx, loopCtx, t0, reg)
 		},
 		reg.option.Description,
+		reg.runOnStart,
 	)
+	reg.runOnStart = false
+	reg.restartInProgress = false
 }
 
 func (r *Registry) ScheduleScrape(id int, runAt time.Time) {
@@ -998,7 +1146,7 @@ func (r *Registry) scheduleUpdate(id int, reg *registration, runAt time.Time) {
 	}()
 }
 
-func (r *Registry) checkReschedule(ctx context.Context) time.Duration {
+func (r *Registry) checkReschedule() time.Duration {
 	r.l.Lock()
 	defer r.l.Unlock()
 
@@ -1017,15 +1165,7 @@ func (r *Registry) checkReschedule(ctx context.Context) time.Duration {
 		}
 
 		reg := value.Reg
-
-		go func() {
-			defer crashreport.ProcessPanic()
-
-			ctx, cancel := context.WithTimeout(ctx, defaultGatherTimeout)
-			defer cancel()
-
-			r.scrapeFromLoop(ctx, now.Truncate(time.Second), reg)
-		}()
+		reg.RunNow()
 	}
 
 	if firstInFuture == -1 {
@@ -1054,23 +1194,27 @@ func (r *Registry) Unregister(id int) bool {
 	r.l.Lock()
 	reg, ok := r.registrations[id]
 
-	if !ok {
-		r.l.Unlock()
-
-		return false
-	}
-
-	if reg.loop != nil {
-		r.l.Unlock()
-		reg.loop.stop()
-		r.l.Lock()
-	}
-
 	// Remove reference to original gatherer first, because some gatherer
 	// stopCallback will rely on runtime.GC() to cleanup resource.
 	delete(r.registrations, id)
 
 	r.l.Unlock()
+
+	if !ok {
+		return false
+	}
+
+	reg.l.Lock()
+
+	reg.removalRequested = true
+	loop := reg.loop
+	reg.loop = nil
+
+	reg.l.Unlock()
+
+	if loop != nil {
+		loop.stop()
+	}
 
 	reg.gatherer.close()
 
@@ -1355,36 +1499,30 @@ func (r *Registry) WithTTL(ttl time.Duration) types.PointPusher {
 
 // UpdateDelay change the delay between metric gather.
 func (r *Registry) UpdateDelay(delay time.Duration) {
+	if r.updateDelay(delay) {
+		r.restartLoops(func() {})
+	}
+}
+
+func (r *Registry) updateDelay(delay time.Duration) bool {
 	r.l.Lock()
 	defer r.l.Unlock()
 
 	if r.currentDelay == delay {
-		return
+		return false
 	}
 
 	logger.V(2).Printf("Change metric collector delay to %v", delay)
 
 	r.currentDelay = delay
 
-	for _, reg := range r.registrations {
-		reg := reg
-
-		if reg.option.Interval != 0 {
-			continue
-		}
-
-		if reg.option.DisablePeriodicGather {
-			continue
-		}
-
-		r.restartScrapeLoop(reg)
-	}
+	return true
 }
 
 // InternalRunScrape run a scrape/gathering on given registration id (from RegisterGatherer & co).
 // Points gatherer are processed at if a periodic gather occurred.
 // This should only be used in test.
-func (r *Registry) InternalRunScrape(ctx context.Context, t0 time.Time, id int) {
+func (r *Registry) InternalRunScrape(ctx context.Context, loopCtx context.Context, t0 time.Time, id int) {
 	r.l.Lock()
 
 	reg, ok := r.registrations[id]
@@ -1392,14 +1530,13 @@ func (r *Registry) InternalRunScrape(ctx context.Context, t0 time.Time, id int) 
 	r.l.Unlock()
 
 	if ok {
-		r.scrapeFromLoop(ctx, t0, reg)
+		r.scrapeFromLoop(ctx, loopCtx, t0, reg)
 	}
 }
 
-func (r *Registry) scrapeFromLoop(ctx context.Context, t0 time.Time, reg *registration) {
-	r.scrapeStart()
-	defer r.scrapeDone()
-
+// ctx must be a sub-context of loopCtx. If the gatherer method don't finished within ShutdownDeadline after
+// loopCtx expired, we abandon it behind and finish anyway.
+func (r *Registry) scrapeFromLoop(ctx context.Context, loopCtx context.Context, t0 time.Time, reg *registration) {
 	state := GatherState{QueryType: All, FromScrapeLoop: true, T0: t0}
 
 	// Never use HintMetricFilter when GatherModifier is present, because this will be source of
@@ -1418,7 +1555,38 @@ func (r *Registry) scrapeFromLoop(ctx context.Context, t0 time.Time, reg *regist
 		}
 	}
 
-	mfs, duration, err := r.scrape(ctx, state, reg)
+	goroutingFinished := make(chan interface{})
+
+	var (
+		mfs      []*dto.MetricFamily
+		duration time.Duration
+		err      error
+	)
+
+	go func() {
+		defer crashreport.ProcessPanic()
+		defer close(goroutingFinished)
+
+		mfs, duration, err = r.scrape(ctx, state, reg)
+	}()
+
+	// We use a gorouting and not a WaitGroup because we want to wait with a maximum deadline.
+	// If the gorouting don't want to finish (e.g. don't honor context), we left it behind.
+	select {
+	case <-goroutingFinished:
+	case <-loopCtx.Done():
+		deadlineTimer := time.NewTimer(r.option.ShutdownDeadline)
+		defer deadlineTimer.Stop()
+
+		select {
+		case <-deadlineTimer.C:
+			logger.V(2).Printf("%s didn't finished on time, abandon the gorouting", reg.option.Description)
+
+			return
+		case <-goroutingFinished:
+		}
+	}
+
 	if err != nil {
 		if len(mfs) == 0 {
 			logger.V(1).Printf("Gather of metrics failed on %s: %v", reg.option.Description, err)
@@ -1689,6 +1857,7 @@ func (r *Registry) applyRelabel(
 	return promLabels, annotations, retryLater
 }
 
+// setupGatherer assume reg.l and r.l locks are held.
 func (r *Registry) setupGatherer(reg *registration, source prometheus.Gatherer) {
 	var (
 		promLabels  labels.Labels

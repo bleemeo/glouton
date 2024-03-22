@@ -819,6 +819,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 			Filter:                mFilter,
 			Queryable:             a.store,
 			SecretInputsGate:      secretInputsGate,
+			ShutdownDeadline:      15 * time.Second,
 		})
 	if err != nil {
 		logger.Printf("Unable to create the metrics registry: %v", err)

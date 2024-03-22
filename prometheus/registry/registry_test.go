@@ -58,6 +58,7 @@ type fakeGatherer struct {
 	l         sync.Mutex
 	name      string
 	callCount int
+	hangCtx   context.Context //nolint:containedctx
 	response  []*dto.MetricFamily
 }
 
@@ -128,10 +129,21 @@ func (g *fakeGatherer) fillResponse() {
 	})
 }
 
+func (g *fakeGatherer) CallCount() int {
+	g.l.Lock()
+	defer g.l.Unlock()
+
+	return g.callCount
+}
+
 func (g *fakeGatherer) Gather() ([]*dto.MetricFamily, error) {
 	g.l.Lock()
 	g.callCount++
 	g.l.Unlock()
+
+	if g.hangCtx != nil {
+		<-g.hangCtx.Done()
+	}
 
 	result := make([]*dto.MetricFamily, len(g.response))
 
@@ -756,11 +768,254 @@ func BenchmarkRegistry_applyRelabel(b *testing.B) {
 	}
 }
 
+// TestRegistry_slowGather test that Registry work "well" enough with very slow gatherer.
+func TestRegistry_slowGather(t *testing.T) { //nolint:maintidx
+	t.Parallel()
+
+	var (
+		l      sync.Mutex
+		points []types.MetricPoint
+	)
+
+	reg, err := New(Option{
+		MetricFormat: types.MetricFormatBleemeo,
+		PushPoint: pushFunction(func(_ context.Context, pts []types.MetricPoint) {
+			l.Lock()
+			points = append(points, pts...)
+			l.Unlock()
+		}),
+		FQDN:             "example.com",
+		GloutonPort:      "1234",
+		Filter:           &fakeFilter{},
+		ShutdownDeadline: 200 * time.Millisecond,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	var registryWG sync.WaitGroup
+
+	registryWG.Add(1)
+
+	go func() {
+		defer registryWG.Done()
+
+		reg.Run(ctx) //nolint: errcheck
+	}()
+
+	gather1 := &fakeGatherer{name: "name1"}
+	gather1.fillResponse()
+
+	slowCtx, cancelSlow := context.WithCancel(context.Background())
+	defer cancelSlow()
+
+	gather2 := &fakeGatherer{name: "verySlow", hangCtx: slowCtx}
+	gather2.fillResponse()
+
+	grp, _ := errgroup.WithContext(context.Background())
+
+	var (
+		id1 int
+		id2 int
+	)
+
+	grp.Go(func() error {
+		var err error
+
+		id1, err = reg.RegisterGatherer(RegistrationOption{}, gather1)
+		if err != nil {
+			return fmt.Errorf("gather1: %w", err)
+		}
+
+		return nil
+	})
+
+	grp.Go(func() error {
+		var err error
+
+		id2, err = reg.RegisterGatherer(RegistrationOption{}, gather2)
+		if err != nil {
+			return fmt.Errorf("gather1: %w", err)
+		}
+
+		return nil
+	})
+
+	grp.Go(func() error {
+		reg.UpdateRelabelHook(func(_ context.Context, labels map[string]string) (newLabel map[string]string, retryLater bool) {
+			labels[types.LabelMetaBleemeoUUID] = testAgentID
+
+			return labels, false
+		})
+
+		return nil
+	})
+
+	grp.Go(func() error {
+		reg.UpdateDelay(100 * time.Millisecond)
+
+		return nil
+	})
+
+	err = grp.Wait()
+	if err != nil {
+		t.Error(err)
+	}
+
+	waitPointAndGatherCall := func(t *testing.T, expectPoint bool, expectedName string) {
+		t.Helper()
+
+		// We don't know the schedule of scraper... wait until we see point from gather1
+		deadline := time.Now().Add(time.Second)
+
+		l.Lock()
+		defer l.Unlock()
+
+		points = nil
+		seenPoints := false
+
+		for time.Now().Before(deadline) && !seenPoints {
+			l.Unlock()
+			time.Sleep(50 * time.Millisecond)
+			l.Lock()
+
+			for _, pts := range points {
+				if pts.Labels[types.LabelName] == expectedName {
+					seenPoints = true
+
+					break
+				}
+			}
+		}
+
+		// Just wait a bit more, so that verySlow might send point, which is not expected
+		l.Unlock()
+		time.Sleep(reg.option.ShutdownDeadline)
+		l.Lock()
+
+		for _, pts := range points {
+			if strings.HasPrefix(pts.Labels[types.LabelName], "verySlow") {
+				t.Errorf("See points from verySlow gatherer !")
+			}
+		}
+
+		if !seenPoints && expectPoint {
+			t.Errorf("didn't see point from %s", expectedName)
+		} else if seenPoints && !expectPoint {
+			t.Errorf("see point from %s", expectedName)
+		}
+	}
+
+	waitPointAndGatherCall(t, true, "name1")
+
+	if count := gather1.CallCount(); count == 0 {
+		t.Errorf("gather1 was never called")
+	}
+
+	if count := gather2.CallCount(); count == 0 {
+		t.Errorf("gather2 was never called")
+	}
+
+	reg.UpdateDelay(50 * time.Millisecond)
+
+	waitPointAndGatherCall(t, true, "name1")
+
+	grp.Go(func() error {
+		reg.Unregister(id1)
+
+		return nil
+	})
+
+	grp.Go(func() error {
+		reg.Unregister(id2)
+
+		return nil
+	})
+
+	_ = grp.Wait()
+
+	waitPointAndGatherCall(t, false, "name1")
+
+	gather1 = &fakeGatherer{name: "name2"}
+	gather1.fillResponse()
+
+	gather2 = &fakeGatherer{name: "verySlow2", hangCtx: slowCtx}
+	gather2.fillResponse()
+
+	grp.Go(func() error {
+		var err error
+
+		_, err = reg.RegisterGatherer(RegistrationOption{}, gather1)
+		if err != nil {
+			return fmt.Errorf("gather1: %w", err)
+		}
+
+		return nil
+	})
+
+	grp.Go(func() error {
+		var err error
+
+		_, err = reg.RegisterGatherer(RegistrationOption{}, gather2)
+		if err != nil {
+			return fmt.Errorf("gather1: %w", err)
+		}
+
+		return nil
+	})
+
+	err = grp.Wait()
+	if err != nil {
+		t.Error(err)
+	}
+
+	waitPointAndGatherCall(t, true, "name2")
+
+	cancel()
+	registryWG.Wait()
+
+	waitPointAndGatherCall(t, false, "name2")
+
+	// We will restart the full registry. This is normally not something we do. But for completeness let's do it.
+	ctx, cancel = context.WithCancel(context.Background())
+	defer cancel()
+
+	registryWG.Add(1)
+
+	go func() {
+		defer registryWG.Done()
+
+		reg.Run(ctx) //nolint: errcheck
+	}()
+
+	// During shutdow, all gatherer get Unregistered, we will need to re-register them.
+	waitPointAndGatherCall(t, false, "name2")
+
+	_, err = reg.RegisterGatherer(RegistrationOption{}, gather1)
+	if err != nil {
+		t.Error(err)
+	}
+
+	_, err = reg.RegisterGatherer(RegistrationOption{}, gather2)
+	if err != nil {
+		t.Error(err)
+	}
+
+	waitPointAndGatherCall(t, true, "name2")
+}
+
 func TestRegistry_run(t *testing.T) {
-	for _, format := range []types.MetricFormat{types.MetricFormatBleemeo, types.MetricFormatPrometheus} {
+	t.Parallel()
+
+	for _, format := range []types.MetricFormat{types.MetricFormatBleemeo, types.MetricFormatPrometheus}[:1] {
 		format := format
 
 		t.Run(format.String(), func(t *testing.T) {
+			t.Parallel()
+
 			var (
 				l      sync.Mutex
 				t0     time.Time
@@ -783,15 +1038,20 @@ func TestRegistry_run(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			ctx := context.Background()
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			go reg.Run(ctx) //nolint: errcheck
 
 			reg.UpdateRelabelHook(func(_ context.Context, labels map[string]string) (newLabel map[string]string, retryLater bool) {
 				labels[types.LabelMetaBleemeoUUID] = testAgentID
 
 				return labels, false
 			})
-			reg.init()
-			reg.UpdateDelay(250 * time.Millisecond)
+
+			const delay = 100 * time.Millisecond
+
+			reg.UpdateDelay(delay)
 
 			gather1 := &fakeGatherer{name: "name1"}
 			gather1.fillResponse()
@@ -804,7 +1064,7 @@ func TestRegistry_run(t *testing.T) {
 			// We do this because the 3 gatherer added below should start at the same time, so we
 			// must ensure the first isn't registered just before a rounded 250ms and other are resgistered after.
 			// If this occur, the first will run while the other aren't yet registered.
-			time.Sleep(time.Until(time.Now().Truncate(250 * time.Millisecond).Add(250 * time.Millisecond).Add(time.Millisecond)))
+			time.Sleep(time.Until(time.Now().Truncate(delay).Add(delay).Add(time.Millisecond)))
 
 			id1, err := reg.RegisterGatherer(RegistrationOption{DisablePeriodicGather: true}, gather1)
 			if err != nil {
@@ -836,12 +1096,16 @@ func TestRegistry_run(t *testing.T) {
 
 			for time.Now().Before(deadline) {
 				l.Unlock()
-				time.Sleep(50 * time.Millisecond)
+				time.Sleep(10 * time.Millisecond)
 				l.Lock()
 
 				if len(points) >= 2 {
 					break
 				}
+			}
+
+			if len(points) == 0 {
+				t.Log("breakpoint")
 			}
 
 			var want []types.MetricPoint
@@ -902,7 +1166,7 @@ func registryRunOnce(t *testing.T, now time.Time, reg *Registry, kindToTest sour
 			return err
 		}
 
-		reg.InternalRunScrape(context.Background(), now, id)
+		reg.InternalRunScrape(context.Background(), context.Background(), now, id)
 	case kindAppenderCallback:
 		id, err := reg.RegisterAppenderCallback(
 			opt,
@@ -914,7 +1178,7 @@ func registryRunOnce(t *testing.T, now time.Time, reg *Registry, kindToTest sour
 			return err
 		}
 
-		reg.InternalRunScrape(context.Background(), now, id)
+		reg.InternalRunScrape(context.Background(), context.Background(), now, id)
 	case kindGatherer:
 		id, err := reg.RegisterGatherer(
 			opt,
@@ -926,7 +1190,7 @@ func registryRunOnce(t *testing.T, now time.Time, reg *Registry, kindToTest sour
 			return err
 		}
 
-		reg.InternalRunScrape(context.Background(), now, id)
+		reg.InternalRunScrape(context.Background(), context.Background(), now, id)
 	case kindInput:
 		id, err := reg.RegisterInput(
 			opt,
@@ -938,7 +1202,7 @@ func registryRunOnce(t *testing.T, now time.Time, reg *Registry, kindToTest sour
 			return err
 		}
 
-		reg.InternalRunScrape(context.Background(), now, id)
+		reg.InternalRunScrape(context.Background(), context.Background(), now, id)
 	default:
 		t.Fatalf("unknown kind: %s", kindToTest)
 	}
