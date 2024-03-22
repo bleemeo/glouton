@@ -130,10 +130,7 @@ type Registry struct {
 	blockPushPoint          bool
 	tooSlowConsecutiveError int
 	running                 bool
-	restarting              int
-	restartingNeedToStart   bool
-	startStopInProgress     bool
-	startStopCond           *sync.Cond
+	startStopLock           sync.Mutex
 
 	reschedules             []reschedule
 	relabelConfigs          []*relabel.Config
@@ -437,7 +434,6 @@ func (r *Registry) init() {
 	}
 
 	r.condition = sync.NewCond(&r.l)
-	r.startStopCond = sync.NewCond(&r.l)
 	r.registrations = make(map[int]*registration)
 	r.internalRegistry = prometheus.NewRegistry()
 	r.pushedPoints = make(map[string]types.MetricPoint)
@@ -473,56 +469,35 @@ func (r *Registry) Run(ctx context.Context) error {
 	return ctx.Err()
 }
 
+// stopAllLoops, run the action while loops are stopped then restart them.
+// You can NOT stop or start loops from the actionDuringStop.
 func (r *Registry) restartLoops(actionDuringStop func()) {
+	r.startStopLock.Lock()
+	defer r.startStopLock.Unlock()
+
 	r.l.Lock()
-
-	r.restarting++
-
-	if r.running {
-		r.restartingNeedToStart = true
-	}
-
+	needToStart := r.running
 	r.l.Unlock()
 
-	r.stopAllLoops()
+	r.stopAllLoopsInner()
 
 	actionDuringStop()
 
-	r.l.Lock()
-	r.restarting--
-
-	needToStart := false
-	if r.restarting == 0 && r.restartingNeedToStart {
-		needToStart = true
-		r.restartingNeedToStart = false
-		r.running = true
-	}
-	r.l.Unlock()
-
 	if needToStart {
-		r.startLoops()
+		r.startLoopsInner()
 	}
 }
 
 func (r *Registry) startLoops() {
+	r.startStopLock.Lock()
+	defer r.startStopLock.Unlock()
+
+	r.startLoopsInner()
+}
+
+func (r *Registry) startLoopsInner() {
 	r.l.Lock()
-	defer r.l.Unlock()
 
-	for r.startStopInProgress {
-		r.startStopCond.Wait()
-	}
-
-	if r.restarting > 0 {
-		// Some restart are in progress. Don't restart loop now.
-		// The restart will start loop at the ends
-		r.restartingNeedToStart = true
-
-		return
-	}
-
-	// Use that boolean because while doing restartScrapeLoop we need to release the
-	// r.l lock, but we don't want another stop/stop to run in the same time.
-	r.startStopInProgress = true
 	r.running = true
 
 	regToStart := make([]*registration, 0, len(r.registrations))
@@ -541,25 +516,21 @@ func (r *Registry) startLoops() {
 	for _, reg := range regToStart {
 		r.restartScrapeLoop(reg, currentDelay)
 	}
-
-	r.l.Lock()
-
-	r.startStopInProgress = false
-	r.startStopCond.Signal()
 }
 
 // stopAllLoops make sure ALL loops are stopped (and disable starting new loop).
 // You will need to call startLoops() to restart all loops including re-enable start of new loop.
 // r.l lock must NOT be held.
 func (r *Registry) stopAllLoops() {
+	r.startStopLock.Lock()
+	defer r.startStopLock.Unlock()
+
+	r.stopAllLoopsInner()
+}
+
+func (r *Registry) stopAllLoopsInner() {
 	r.l.Lock()
-	defer r.l.Unlock()
 
-	for r.startStopInProgress {
-		r.startStopCond.Wait()
-	}
-
-	r.startStopInProgress = true
 	r.running = false
 
 	runningLoops := make([]*scrapeLoop, 0, len(r.registrations))
@@ -588,11 +559,6 @@ func (r *Registry) stopAllLoops() {
 	for _, loop := range runningLoops {
 		loop.stop()
 	}
-
-	r.l.Lock()
-
-	r.startStopInProgress = false
-	r.startStopCond.Signal()
 }
 
 // RegisterGatherer add a new gatherer to the list of metric sources.
