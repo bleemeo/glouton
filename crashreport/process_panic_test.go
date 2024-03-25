@@ -32,8 +32,7 @@ import (
 
 func TestTryToGenerateDiagnostic(t *testing.T) {
 	t.Run("No diagnostic", func(t *testing.T) {
-		testDir, delTmpDir := setupTestDir(t)
-		defer delTmpDir()
+		testDir := t.TempDir()
 
 		tryToGenerateDiagnostic(time.Second, testDir, nil)
 
@@ -78,8 +77,7 @@ func TestTryToGenerateDiagnostic(t *testing.T) {
 			return nil
 		}
 
-		testDir, delTmpDir := setupTestDir(t)
-		defer delTmpDir()
+		testDir := t.TempDir()
 
 		tryToGenerateDiagnostic(timeout, testDir, diagnosticFn)
 
@@ -124,8 +122,7 @@ func TestTryToGenerateDiagnostic(t *testing.T) {
 			return diagnosticErr
 		}
 
-		testDir, delTmpDir := setupTestDir(t)
-		defer delTmpDir()
+		testDir := t.TempDir()
 
 		setupStderrRedirection(testDir) // For reading errors produced by tryToGenerateDiagnostic()
 
