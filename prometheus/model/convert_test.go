@@ -19,6 +19,7 @@ package model
 import (
 	"context"
 	"glouton/types"
+	"maps"
 	"testing"
 	"time"
 
@@ -608,14 +609,8 @@ func copyPoints(input []types.MetricPoint) []types.MetricPoint {
 	result := make([]types.MetricPoint, 0, len(input))
 
 	for _, p := range input {
-		work := p //nolint:copyloopvar
-		work.Labels = make(map[string]string, len(p.Labels))
-
-		for k, v := range p.Labels {
-			work.Labels[k] = v
-		}
-
-		result = append(result, work)
+		p.Labels = maps.Clone(p.Labels)
+		result = append(result, p)
 	}
 
 	return result

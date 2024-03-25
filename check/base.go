@@ -253,12 +253,12 @@ func (bc *baseCheck) openSockets(scheduleUpdate func(runAt time.Time)) {
 
 		bc.wg.Add(1)
 
-		go func(addr string) {
+		go func() {
 			defer crashreport.ProcessPanic()
 			defer bc.wg.Done()
 
 			bc.openSocket(ctx, addr, scheduleUpdate)
-		}(addr)
+		}()
 	}
 }
 

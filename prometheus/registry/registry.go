@@ -1225,13 +1225,11 @@ func gatherFromQueryable(ctx context.Context, queryable storage.Queryable, filte
 		dtoLabels := make([]*dto.LabelPair, 0, len(lbls)-1)
 
 		for _, l := range lbls {
-			l := l //nolint:copyloopvar
-
 			if l.Name == types.LabelName {
 				continue
 			}
 
-			dtoLabels = append(dtoLabels, &dto.LabelPair{Name: &l.Name, Value: &l.Value})
+			dtoLabels = append(dtoLabels, &dto.LabelPair{Name: &l.Name, Value: &l.Value}) //nolint: gosec,exportloopref
 		}
 
 		var lastValue float64

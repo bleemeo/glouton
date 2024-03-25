@@ -495,7 +495,7 @@ func makeMetrics(b *testing.B, rnd *rand.Rand, metricsCount int, labelsCount int
 
 		for try := range 3 {
 			lbls = makeMetric(b, rnd, labelsCount)
-			duplicate := false //nolint:copyloopvar
+			duplicate := false //nolint:copyloopvar // false-positive
 
 			for _, v := range metricsLabels {
 				if reflect.DeepEqual(v, lbls) {

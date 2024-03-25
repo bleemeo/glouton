@@ -1106,9 +1106,8 @@ func TestStateLoading(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		tc := tc //nolint:copyloopvar
 		// This action is not specific to the current test case.
-		err := mergo.Merge(&tc.WantConfig, agentCfg)
+		err := mergo.Merge(&tc.WantConfig, agentCfg) //nolint: gosec
 		if err != nil {
 			t.Fatal("Failed to merge default agent config:", err)
 		}
