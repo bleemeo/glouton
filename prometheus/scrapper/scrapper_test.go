@@ -321,8 +321,6 @@ func Test_parserReader(t *testing.T) { //nolint:maintidx
 		},
 	}
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.filename, func(t *testing.T) {
 			t.Parallel()
 
@@ -503,10 +501,7 @@ func flattenHistogramAndSummary(mfs []*dto.MetricFamily) []*dto.MetricFamily {
 
 func Benchmark_parserReader(b *testing.B) {
 	for _, filename := range []string{"sample.txt", "large.txt"} {
-		filename := filename
-
 		for _, useRef := range []bool{true, false} {
-			useRef := useRef
 			name := filename
 
 			if useRef {
@@ -521,7 +516,7 @@ func Benchmark_parserReader(b *testing.B) {
 
 				b.ResetTimer()
 
-				for n := 0; n < b.N; n++ {
+				for range b.N {
 					if useRef {
 						_, err = parserReaderReference(data, nil)
 					} else {

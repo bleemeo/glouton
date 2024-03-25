@@ -471,7 +471,7 @@ func (vSphere *vSphere) gatherModifier(mfs []*dto.MetricFamily, noMetricsSince m
 
 		m := 0
 
-		for i := 0; i < len(mf.Metric); i++ { //nolint:protogetter
+		for i := range len(mf.Metric) { //nolint:protogetter
 			metric := mf.Metric[i] //nolint:protogetter
 
 			for _, label := range metric.GetLabel() {

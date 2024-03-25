@@ -230,9 +230,6 @@ func (r *Runtime) Run(ctx context.Context) error {
 	wg.Add(len(r.Runtimes) * 2)
 
 	for i, cr := range r.Runtimes {
-		i := i
-		cr := cr
-
 		go func() {
 			defer crashreport.ProcessPanic()
 			defer wg.Done()

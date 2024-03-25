@@ -247,20 +247,18 @@ func (bc *baseCheck) openSockets(scheduleUpdate func(runAt time.Time)) {
 	bc.cancel = cancel
 
 	for _, addr := range bc.tcpAddresses {
-		addr := addr
-
 		if _, ok := bc.disabledPersistent.Load(addr); ok {
 			continue
 		}
 
 		bc.wg.Add(1)
 
-		go func() {
+		go func(addr string) {
 			defer crashreport.ProcessPanic()
 			defer bc.wg.Done()
 
 			bc.openSocket(ctx, addr, scheduleUpdate)
-		}()
+		}(addr)
 	}
 }
 

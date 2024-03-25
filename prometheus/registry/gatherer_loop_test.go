@@ -46,7 +46,6 @@ func Test_startScrapeLoop(t *testing.T) {
 		{interval: 1 * time.Second},
 	}
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.interval.String(), func(t *testing.T) {
 			t.Parallel()
 

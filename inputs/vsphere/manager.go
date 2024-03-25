@@ -155,7 +155,7 @@ func (m *Manager) Devices(ctx context.Context, maxAge time.Duration) []bleemeoTy
 	wg := new(sync.WaitGroup)
 
 	for _, vSphere := range m.vSpheres {
-		vSphere := vSphere
+		vSphere := vSphere //nolint:copyloopvar
 
 		wg.Add(1)
 

@@ -1936,8 +1936,6 @@ func TestUpdateProccesesTime(t *testing.T) { //nolint: maintidx
 	}
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -2181,8 +2179,6 @@ func Test_sortParentFirst(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			want := tt.want
 
@@ -2313,10 +2309,8 @@ func Benchmark_sortParentFirst(b *testing.B) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
-
 		b.Run(tt.name, func(b *testing.B) {
-			for n := 0; n < b.N; n++ {
+			for range b.N {
 				b.StopTimer()
 
 				processes := tt.processesFactory(b)
@@ -2340,7 +2334,7 @@ func makeProcesses(count int, seed int64, sameTime bool, sorted bool) []Process 
 	procMap := make(map[int]Process, count)
 	ts0 := time.Now().UnixMilli()
 
-	for n := 0; n < count; n++ {
+	for range count {
 		var (
 			pid  int
 			ppid int

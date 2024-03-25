@@ -60,8 +60,6 @@ func TestContainerd_RuntimeFact(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			cl, err := NewMockFromFile(filepath.Join(tt.dir, "containerd.json"))
 			if err != nil {
@@ -146,8 +144,6 @@ func TestContainerd_Containers(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			cl, err := NewMockFromFile(filepath.Join(tt.dir, "containerd.json"))
 			if err != nil {
@@ -235,8 +231,6 @@ func TestContainerd_Run(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
@@ -488,8 +482,6 @@ func TestContainerd_ContainerFromCGroup(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			cl, err := NewMockFromFile(filepath.Join(tt.dir, "containerd.json"))
 			if err != nil {
@@ -504,8 +496,6 @@ func TestContainerd_ContainerFromCGroup(t *testing.T) {
 			defer cancel()
 
 			for _, ttt := range tt.wants {
-				ttt := ttt
-
 				t.Run(ttt.name, func(t *testing.T) {
 					querier := c.ProcessWithCache()
 					container, err := querier.ContainerFromCGroup(ctx, testutil.Unindent(ttt.cgroupData))
@@ -577,8 +567,6 @@ func TestContainerd_ContainerFromPID(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			cl, err := NewMockFromFile(filepath.Join(tt.dir, "containerd.json"))
 			if err != nil {

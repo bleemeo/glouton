@@ -1108,8 +1108,6 @@ func (r *Registry) GatherWithState(ctx context.Context, state GatherState) ([]*d
 	wg := sync.WaitGroup{}
 
 	for _, reg := range r.registrations {
-		reg := reg
-
 		wg.Add(1)
 
 		go func() {
@@ -1227,7 +1225,7 @@ func gatherFromQueryable(ctx context.Context, queryable storage.Queryable, filte
 		dtoLabels := make([]*dto.LabelPair, 0, len(lbls)-1)
 
 		for _, l := range lbls {
-			l := l
+			l := l //nolint:copyloopvar
 
 			if l.Name == types.LabelName {
 				continue
@@ -1379,8 +1377,6 @@ func (r *Registry) UpdateDelay(delay time.Duration) {
 	r.currentDelay = delay
 
 	for _, reg := range r.registrations {
-		reg := reg
-
 		if reg.option.Interval != 0 {
 			continue
 		}
@@ -1782,14 +1778,14 @@ func fixLabels(lbls map[string]string) (map[string]string, error) {
 // or an error if the given context expired.
 func WaitForSecrets(ctx context.Context, secretsGate *gate.Gate, slotsNeeded int) (func(), error) {
 	releaseGates := func(gatesCrossed int) {
-		for i := 0; i < gatesCrossed; i++ {
+		for range gatesCrossed {
 			secretsGate.Done()
 		}
 	}
 
 fromZero:
 	for {
-		for slotsTaken := 0; slotsTaken < slotsNeeded; slotsTaken++ {
+		for slotsTaken := range slotsNeeded {
 			passGateCtx, cancel := context.WithTimeout(ctx, 50*time.Millisecond)
 
 			err := secretsGate.Start(passGateCtx)

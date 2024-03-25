@@ -467,7 +467,7 @@ func makeMetric(b *testing.B, rnd *rand.Rand, labelCount int) map[string]string 
 
 	lbls := make(map[string]string, labelCount)
 
-	for n := 0; n < labelCount; n++ {
+	for n := range labelCount {
 		if n == 0 {
 			lbls[types.LabelName] = metricNames[rnd.Intn(len(metricNames))]
 		} else {
@@ -490,12 +490,12 @@ func makeMetrics(b *testing.B, rnd *rand.Rand, metricsCount int, labelsCount int
 
 	metricsLabels := make([]map[string]string, 0, metricsCount)
 
-	for n := 0; n < metricsCount; n++ {
+	for range metricsCount {
 		var lbls map[string]string
 
-		for try := 0; try < 3; try++ {
+		for try := range 3 {
 			lbls = makeMetric(b, rnd, labelsCount)
-			duplicate := false
+			duplicate := false //nolint:copyloopvar
 
 			for _, v := range metricsLabels {
 				if reflect.DeepEqual(v, lbls) {
@@ -554,8 +554,6 @@ func Benchmark_metricGetOrCreate(b *testing.B) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
-
 		b.Run(tt.name, func(b *testing.B) {
 			db := New(time.Hour, time.Hour)
 
@@ -569,7 +567,7 @@ func Benchmark_metricGetOrCreate(b *testing.B) {
 
 			b.ResetTimer()
 
-			for n := 0; n < b.N; n++ {
+			for range b.N {
 				for _, lbls := range metricsLabels {
 					db.metricGetOrCreate(lbls)
 				}

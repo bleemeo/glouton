@@ -1106,7 +1106,7 @@ func TestStateLoading(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		tc := tc
+		tc := tc //nolint:copyloopvar
 		// This action is not specific to the current test case.
 		err := mergo.Merge(&tc.WantConfig, agentCfg)
 		if err != nil {

@@ -676,15 +676,13 @@ func BenchmarkRegistry_applyRelabel(b *testing.B) {
 	}
 
 	for _, tt := range cases {
-		tt := tt
-
 		b.Run(tt.name, func(b *testing.B) {
 			r := &Registry{}
 			r.relabelConfigs = getDefaultRelabelConfig()
 
 			b.ResetTimer()
 
-			for n := 0; n < b.N; n++ {
+			for range b.N {
 				r.applyRelabel(context.Background(), tt.labels)
 			}
 		})
@@ -693,8 +691,6 @@ func BenchmarkRegistry_applyRelabel(b *testing.B) {
 
 func TestRegistry_run(t *testing.T) {
 	for _, format := range []types.MetricFormat{types.MetricFormatBleemeo, types.MetricFormatPrometheus} {
-		format := format
-
 		t.Run(format.String(), func(t *testing.T) {
 			var (
 				l      sync.Mutex
@@ -2115,8 +2111,6 @@ func TestRegistry_pointsAlteration(t *testing.T) { //nolint:maintidx
 	}
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -2213,9 +2207,7 @@ func TestWaitForSecrets(t *testing.T) {
 		},
 	}
 
-	for _, testCase := range testCases {
-		tc := testCase
-
+	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -2233,17 +2225,16 @@ func TestWaitForSecrets(t *testing.T) {
 
 			for inputsCount, secretsCount := range tc.secretsDistribution {
 				expectedGathers += inputsCount
-				sCount := secretsCount
 
-				for i := 0; i < inputsCount; i++ {
+				for range inputsCount {
 					errGrp.Go(func() error {
-						releaseFn, err := WaitForSecrets(ctx, secretsGate, sCount)
+						releaseFn, err := WaitForSecrets(ctx, secretsGate, secretsCount)
 						if err != nil {
 							if tc.shouldFail {
 								return err // but it's ok
 							}
 
-							return fmt.Errorf("%s: couldn't take the %d needed slots: %w", tc.name, sCount, err)
+							return fmt.Errorf("%s: couldn't take the %d needed slots: %w", tc.name, secretsCount, err)
 						}
 
 						time.Sleep(100 * time.Millisecond) // Doing some time-consuming gathering
