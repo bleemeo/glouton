@@ -686,8 +686,6 @@ func BenchmarkProcessMetrics(b *testing.B) {
 	}
 
 	for _, metricCount := range []int{3, 30, 300} {
-		metricCount := metricCount
-
 		b.Run(fmt.Sprintf("metricCount-%d", metricCount), func(b *testing.B) {
 			acc := Accumulator{
 				RenameGlobal:     renameGlobal,
@@ -697,12 +695,12 @@ func BenchmarkProcessMetrics(b *testing.B) {
 
 			b.ResetTimer()
 
-			for n := 0; n < b.N; n++ {
+			for range b.N {
 				t0 = t0.Add(time.Second)
 
 				acc.PrepareGather()
 
-				for i := 0; i < metricCount/3; i++ {
+				for i := range metricCount / 3 {
 					acc.processMetrics(
 						finalFunc,
 						"cpu",
@@ -731,13 +729,11 @@ func BenchmarkDeriveFunc(b *testing.B) {
 	}
 
 	for _, metricCount := range []int{3, 30, 300} {
-		metricCount := metricCount
-
 		b.Run(fmt.Sprintf("metricCount-%d", metricCount), func(b *testing.B) {
 			metrics := make(map[string]interface{}, metricCount)
 			derivatedMetrics := make([]string, 0, metricCount/3)
 
-			for i := 0; i < metricCount/3; i++ {
+			for i := range metricCount / 3 {
 				name := fmt.Sprintf("metricDeriveFloat-%d", i)
 				derivatedMetrics = append(derivatedMetrics, name)
 				metrics[name] = 42.0 + i
@@ -757,7 +753,7 @@ func BenchmarkDeriveFunc(b *testing.B) {
 
 			b.ResetTimer()
 
-			for n := 0; n < b.N; n++ {
+			for range b.N {
 				t0 = t0.Add(time.Second)
 
 				acc.PrepareGather()

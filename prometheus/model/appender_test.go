@@ -517,8 +517,6 @@ func TestBufferAppender(t *testing.T) { //nolint: maintidx
 		},
 	}
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -618,7 +616,7 @@ func TestBufferAppender_Race(t *testing.T) {
 	ptsChannel := make(chan []types.MetricPoint)
 	grp, ctx := errgroup.WithContext(context.Background())
 
-	for grpNumber := 0; grpNumber < 5; grpNumber++ {
+	for range 5 {
 		grp.Go(func() error {
 			refByLabelsHash := make(map[uint64]storage.SeriesRef)
 
@@ -655,7 +653,7 @@ func TestBufferAppender_Race(t *testing.T) {
 	wantPoints := make([]types.MetricPoint, 0)
 	t0 := time.Now().Truncate(time.Millisecond)
 
-	for batchCount := 0; batchCount < 100; batchCount++ {
+	for batchCount := range 100 {
 		batchSize := batchCount % 4
 
 		batch := make([]types.MetricPoint, batchSize)

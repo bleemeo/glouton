@@ -148,7 +148,6 @@ func (c *Collector) runOnce(ctx context.Context, t0 time.Time) {
 	var wg sync.WaitGroup
 
 	for id, input := range c.inputs {
-		id, input := id, input
 		fieldCaches := c.fieldCaches[id]
 
 		wg.Add(1)

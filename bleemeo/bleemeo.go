@@ -1100,5 +1100,5 @@ func (c *Connector) HandleDiagnosticRequest(ctx context.Context, requestToken st
 	}
 
 	datetime := time.Now().Format("20060102-150405")
-	c.sync.ScheduleDiagnosticUpload("on_demand_"+datetime+".zip", requestToken, archiveBuf)
+	c.sync.ScheduleDiagnosticUpload("on_demand_"+datetime+".zip", requestToken, archiveBuf.Bytes())
 }

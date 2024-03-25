@@ -184,7 +184,7 @@ func parserReader(data []byte, filter func(lbls labels.Labels) bool) ([]*dto.Met
 		err error
 	)
 
-	p, err := textparse.New(data, "", true)
+	p, err := textparse.New(data, "", true, nil)
 	if err != nil {
 		return nil, err
 	}

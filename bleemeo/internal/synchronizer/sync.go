@@ -104,7 +104,7 @@ type Synchronizer struct {
 	currentConfigNotified     string
 	agentID                   string
 
-	onDemandDiagnostic     *diagnostic
+	onDemandDiagnostic     synchronizerOnDemandDiagnostic
 	onDemandDiagnosticLock sync.Mutex
 
 	// configSyncDone is true when the config items were successfully synced.

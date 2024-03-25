@@ -123,15 +123,13 @@ func Test_NormalizeMetric(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		localTest := test
-
-		t.Run(localTest.name, func(t *testing.T) {
-			got, err := NormalizeMetric(localTest.allowListString)
+		t.Run(test.name, func(t *testing.T) {
+			got, err := NormalizeMetric(test.allowListString)
 			if err != nil {
 				t.Errorf("Invalid result Got error => %v ", err)
 			}
 
-			res := cmp.Diff(got, localTest.want, cmpopts.IgnoreUnexported(labels.Matcher{}))
+			res := cmp.Diff(got, test.want, cmpopts.IgnoreUnexported(labels.Matcher{}))
 			if res != "" {
 				t.Errorf("got() != expected(): =%s", res)
 			}
@@ -436,8 +434,6 @@ func Test_Matches_Basic_Point(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		test := test
-
 		t.Run(test.name, func(t *testing.T) {
 			got := test.matchers.Matches(test.point.Labels)
 
@@ -670,8 +666,6 @@ func Test_Matches_Basic_Family(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		test := test
-
 		t.Run(test.name, func(t *testing.T) {
 			got := test.matchers.Matches(model.DTO2Labels(test.metricName, test.metric.GetLabel()))
 

@@ -834,7 +834,7 @@ func (res *genericResource) Patch(id string, r *http.Request) (interface{}, erro
 
 	currentValue := reflect.ValueOf(current)
 
-	for n := 0; n < currentValue.NumField(); n++ {
+	for n := range currentValue.NumField() {
 		v := currentValue.Field(n)
 		name := currentValue.Type().Field(n).Name
 		valueReflect.Elem().FieldByName(name).Set(v)

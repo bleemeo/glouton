@@ -537,8 +537,6 @@ func Test_deduplicate(t *testing.T) { //nolint:maintidx
 		},
 	}
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			acc := &internal.StoreAccumulator{Measurement: tt.input}
 

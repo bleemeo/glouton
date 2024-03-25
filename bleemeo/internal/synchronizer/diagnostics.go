@@ -20,28 +20,30 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"glouton/crashreport"
 	"glouton/logger"
+	gloutonTypes "glouton/types"
 	"io"
 	"mime/multipart"
 	"net/http"
-	"os"
 	"path/filepath"
 	"strconv"
 )
 
 const diagnosticMaxSize = 5 << 20 // 5MB
 
+var errUploadFailed = errors.New("upload failed")
+
 type RemoteDiagnostic struct {
 	Name string `json:"name"`
 }
 
-type diagnostic struct {
-	filename       string
+type diagnosticWithBleemeoInfo struct {
+	gloutonTypes.DiagnosticFile
 	diagnosticType diagnosticType
 	requestToken   string
-	archive        io.Reader
 }
 
 type diagnosticType = int
@@ -50,24 +52,6 @@ const (
 	crashDiagnostic    diagnosticType = 0
 	onDemandDiagnostic diagnosticType = 1
 )
-
-// sliceDiff returns elements of s1 that are absent from s2.
-func sliceDiff(s1, s2 []string) []string {
-	var d []string
-
-S1:
-	for _, e1 := range s1 {
-		for _, e2 := range s2 {
-			if e1 == e2 {
-				continue S1
-			}
-		}
-		// e1 was not found in s2
-		d = append(d, e1)
-	}
-
-	return d
-}
 
 func (s *Synchronizer) syncDiagnostics(ctx context.Context, _, _ bool) (updateThresholds bool, err error) {
 	remoteDiagnostics, err := s.listRemoteDiagnostics(ctx)
@@ -80,84 +64,56 @@ func (s *Synchronizer) syncDiagnostics(ctx context.Context, _, _ bool) (updateTh
 		return false, nil
 	}
 
-	localCrashDiagnostics := crashreport.ListCrashReports(stateDir)
+	localDiagnostics := addType(crashreport.ListUnUploadedCrashReports(stateDir), crashDiagnostic)
+	localDiagnostics = append(localDiagnostics, s.listOnDemandDiagnostics()...)
+	diagnosticsToUpload := make([]diagnosticWithBleemeoInfo, 0, len(localDiagnostics))
 
-	diagnosticPaths := make([]string, len(remoteDiagnostics))
-
-	for i, diagnostic := range remoteDiagnostics {
-		diagnosticPaths[i] = filepath.Join(stateDir, diagnostic.Name)
-	}
-
-	notUploadedYet := sliceDiff(localCrashDiagnostics, diagnosticPaths)
-	localDiagnostics := make([]diagnostic, 0, len(notUploadedYet))
-
-	for _, localDiagnostic := range notUploadedYet {
-		diagnosticFile, err := os.Open(localDiagnostic)
-		if err != nil {
-			logger.V(1).Printf("Can't open crash diagnostic %q: %v", localDiagnostic, err)
-
-			continue
-		}
-
-		defer diagnosticFile.Close()
-
-		stat, err := diagnosticFile.Stat()
-		if err != nil {
-			logger.V(1).Printf("Can't stat crash diagnostic %q: %v", localDiagnostic, err)
-
-			continue
-		}
-
-		if stat.Size() > diagnosticMaxSize {
-			logger.V(2).Printf("Skipping crash diagnostic %q which is too big.", localDiagnostic)
-
-			continue
-		}
-
-		localDiagnostics = append(localDiagnostics, diagnostic{
-			filename:       localDiagnostic,
-			diagnosticType: crashDiagnostic,
-			archive:        diagnosticFile,
-		})
-	}
-
-	s.onDemandDiagnosticLock.Lock()
-
-	if s.onDemandDiagnostic != nil {
+	for _, diagnostic := range localDiagnostics {
 		needUpload := true
 
 		for _, remoteDiagnostic := range remoteDiagnostics {
-			if remoteDiagnostic.Name == s.onDemandDiagnostic.filename {
-				needUpload = false // already on API
+			if remoteDiagnostic.Name == diagnostic.Filename() {
+				needUpload = false
 
 				break
 			}
 		}
 
-		if needUpload {
-			// The on-demand diagnostic archive is a bytes.Buffer, which supports the Len() method.
-			archiveBuffer, ok := s.onDemandDiagnostic.archive.(interface{ Len() int })
-			if ok && archiveBuffer.Len() > diagnosticMaxSize {
-				logger.V(2).Printf("Skipping on-demand diagnostic which is too big.")
-			} else {
-				localDiagnostics = append(localDiagnostics, *s.onDemandDiagnostic)
+		if !needUpload {
+			if err := diagnostic.MarkUploaded(); err != nil {
+				logger.V(1).Printf("Failed to mark diagnostic uploaded: %v", err)
 			}
+		} else {
+			diagnosticsToUpload = append(diagnosticsToUpload, diagnostic)
 		}
 	}
 
-	s.onDemandDiagnosticLock.Unlock()
-
-	if err = s.uploadDiagnostics(ctx, localDiagnostics); err != nil {
+	if err = s.uploadDiagnostics(ctx, diagnosticsToUpload); err != nil {
 		// We "ignore" error from diagnostics upload because:
 		// * they aren't essential
 		// * by "ignoring" the error, it will be re-tried on next full sync instead of after a short delay,
 		//   which seems better since it could send a rather large payload.
 		logger.V(1).Printf("Upload crash diagnostic: %v", err)
-	} else {
-		s.onDemandDiagnostic = nil
 	}
 
 	return false, nil
+}
+
+func (s *Synchronizer) listOnDemandDiagnostics() []diagnosticWithBleemeoInfo {
+	s.onDemandDiagnosticLock.Lock()
+	defer s.onDemandDiagnosticLock.Unlock()
+
+	if s.onDemandDiagnostic.filename != "" {
+		return []diagnosticWithBleemeoInfo{
+			{
+				diagnosticType: onDemandDiagnostic,
+				requestToken:   s.onDemandDiagnostic.requestToken,
+				DiagnosticFile: s.onDemandDiagnostic,
+			},
+		}
+	}
+
+	return nil
 }
 
 func (s *Synchronizer) listRemoteDiagnostics(ctx context.Context) ([]RemoteDiagnostic, error) {
@@ -183,26 +139,38 @@ func (s *Synchronizer) listRemoteDiagnostics(ctx context.Context) ([]RemoteDiagn
 	return diagnostics, nil
 }
 
-func (s *Synchronizer) uploadDiagnostics(ctx context.Context, diagnostics []diagnostic) error {
+func (s *Synchronizer) uploadDiagnostics(ctx context.Context, diagnostics []diagnosticWithBleemeoInfo) error {
 	for _, diagnostic := range diagnostics {
-		if ctxErr := ctx.Err(); ctxErr != nil {
-			return ctxErr
-		}
-
-		err := s.uploadDiagnostic(ctx, diagnostic)
-		if err != nil {
-			return fmt.Errorf("failed to upload crash diagnostic %q: %w", diagnostic, err)
+		if err := s.uploadDiagnostic(ctx, diagnostic); err != nil {
+			return fmt.Errorf("failed to upload crash diagnostic %s: %w", diagnostic.Filename(), err)
 		}
 	}
 
 	return nil
 }
 
-func (s *Synchronizer) uploadDiagnostic(ctx context.Context, diagnostic diagnostic) error {
+func (s *Synchronizer) uploadDiagnostic(ctx context.Context, diagnostic diagnosticWithBleemeoInfo) error {
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return ctxErr
+	}
+
+	reader, err := diagnostic.Reader()
+	if err != nil {
+		return err
+	}
+
+	defer reader.Close()
+
+	if reader.Len() > diagnosticMaxSize {
+		logger.V(2).Printf("Skipping crash diagnostic %s which is too big.", diagnostic.Filename())
+
+		return diagnostic.MarkUploaded()
+	}
+
 	buf := new(bytes.Buffer)
 	multipartWriter := multipart.NewWriter(buf)
 
-	err := multipartWriter.WriteField("type", strconv.Itoa(diagnostic.diagnosticType))
+	err = multipartWriter.WriteField("type", strconv.Itoa(diagnostic.diagnosticType))
 	if err != nil {
 		return err
 	}
@@ -214,12 +182,12 @@ func (s *Synchronizer) uploadDiagnostic(ctx context.Context, diagnostic diagnost
 		}
 	}
 
-	formFile, err := multipartWriter.CreateFormFile("archive", diagnostic.filename)
+	formFile, err := multipartWriter.CreateFormFile("archive", diagnostic.Filename())
 	if err != nil {
 		return err
 	}
 
-	_, err = io.Copy(formFile, diagnostic.archive)
+	_, err = io.Copy(formFile, reader)
 	if err != nil {
 		return err
 	}
@@ -234,8 +202,49 @@ func (s *Synchronizer) uploadDiagnostic(ctx context.Context, diagnostic diagnost
 	}
 
 	if statusCode != http.StatusCreated {
-		logger.V(1).Printf("Diagnostic upload returned status %d %s", statusCode, http.StatusText(statusCode))
+		return fmt.Errorf("%w: status %d %s", errUploadFailed, statusCode, http.StatusText(statusCode))
 	}
+
+	return diagnostic.MarkUploaded()
+}
+
+type synchronizerOnDemandDiagnostic struct {
+	filename     string
+	archive      []byte
+	requestToken string
+	s            *Synchronizer
+}
+
+func (diag synchronizerOnDemandDiagnostic) Filename() string {
+	return diag.filename
+}
+
+func (diag synchronizerOnDemandDiagnostic) Reader() (gloutonTypes.ReaderWithLen, error) {
+	return readerWithLen{Reader: bytes.NewReader(diag.archive)}, nil
+}
+
+type readerWithLen struct {
+	*bytes.Reader
+}
+
+func (r readerWithLen) Len() int {
+	return r.Reader.Len()
+}
+
+func (r readerWithLen) Close() error {
+	return nil
+}
+
+func (diag synchronizerOnDemandDiagnostic) MarkUploaded() error {
+	diag.s.onDemandDiagnosticLock.Lock()
+	defer diag.s.onDemandDiagnosticLock.Unlock()
+
+	if diag.filename != diag.s.onDemandDiagnostic.filename {
+		// Another diagnostic replaced ourself in the synchronizer. Don't remove it
+		return nil
+	}
+
+	diag.s.onDemandDiagnostic = synchronizerOnDemandDiagnostic{}
 
 	return nil
 }
@@ -244,17 +253,31 @@ func (s *Synchronizer) uploadDiagnostic(ctx context.Context, diagnostic diagnost
 // where it will be uploaded to the API.
 // If another call to this method is made before the next synchronization,
 // only the latest diagnostic will be uploaded.
-func (s *Synchronizer) ScheduleDiagnosticUpload(filename, requestToken string, r io.Reader) {
+func (s *Synchronizer) ScheduleDiagnosticUpload(filename, requestToken string, contents []byte) {
 	s.l.Lock()
 	defer s.l.Unlock()
 	s.onDemandDiagnosticLock.Lock()
 	defer s.onDemandDiagnosticLock.Unlock()
 
 	s.forceSync[syncMethodDiagnostics] = false
-	s.onDemandDiagnostic = &diagnostic{
-		filename:       filename,
-		diagnosticType: onDemandDiagnostic,
-		requestToken:   requestToken,
-		archive:        r,
+	s.onDemandDiagnostic = synchronizerOnDemandDiagnostic{
+		filename:     filepath.Base(filename),
+		archive:      contents,
+		s:            s,
+		requestToken: requestToken,
 	}
+}
+
+func addType(diagnostics []gloutonTypes.DiagnosticFile, fixedType diagnosticType) []diagnosticWithBleemeoInfo {
+	result := make([]diagnosticWithBleemeoInfo, 0, len(diagnostics))
+
+	for _, diagnostic := range diagnostics {
+		result = append(result, diagnosticWithBleemeoInfo{
+			DiagnosticFile: diagnostic,
+			diagnosticType: fixedType,
+			requestToken:   "",
+		})
+	}
+
+	return result
 }

@@ -413,8 +413,6 @@ pool_001	ONLINE	9663676416	107520	9663568896
 	}
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
