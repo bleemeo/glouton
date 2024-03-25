@@ -31,7 +31,6 @@ import (
 	dto "github.com/prometheus/client_model/go"
 	prometheusModel "github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/model/labels"
-	"github.com/prometheus/prometheus/rules"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -82,7 +81,7 @@ func (s GatherState) Now() time.Time {
 
 // GatherStateFromMap creates a GatherState from a state passed as a map.
 func GatherStateFromMap(params map[string][]string) GatherState {
-	state := GatherState{}
+	state := GatherState{T0: time.Now()}
 
 	// TODO: add this in some user-facing documentation
 	if _, includeProbes := params["includeMonitors"]; includeProbes {
@@ -157,19 +156,21 @@ func (w *GathererWithStateWrapper) Gather() ([]*dto.MetricFamily, error) {
 
 type gatherModifier func(mfs []*dto.MetricFamily, gatherError error) []*dto.MetricFamily
 
-// labeledGatherer provides a gatherer that will add provided labels to all metrics.
-// It also allows to gather to MetricPoints.
-type labeledGatherer struct {
-	labels   []*dto.LabelPair
-	ruler    *ruler.SimpleRuler
-	modifier gatherModifier
-	source   prometheus.Gatherer
+// wrappedGatherer wraps a gatherer to apply Registry change and apply RegistrationOption.
+// For example, it will add provided labels to all metrics and/or change timestamps.
+type wrappedGatherer struct {
+	labels []*dto.LabelPair
+	opt    RegistrationOption
+	ruler  *ruler.SimpleRuler
+	source prometheus.Gatherer
 
-	l      sync.Mutex
-	closed bool
+	l       sync.Mutex
+	closed  bool
+	running bool
+	cond    *sync.Cond
 }
 
-func newLabeledGatherer(g prometheus.Gatherer, extraLabels labels.Labels, rrules []*rules.RecordingRule, modifier gatherModifier) *labeledGatherer {
+func newWrappedGatherer(g prometheus.Gatherer, extraLabels labels.Labels, opt RegistrationOption) *wrappedGatherer {
 	labels := make([]*dto.LabelPair, 0, len(extraLabels))
 
 	for _, l := range extraLabels {
@@ -181,12 +182,15 @@ func newLabeledGatherer(g prometheus.Gatherer, extraLabels labels.Labels, rrules
 		}
 	}
 
-	return &labeledGatherer{
-		source:   g,
-		labels:   labels,
-		ruler:    ruler.New(rrules),
-		modifier: modifier,
+	wrap := &wrappedGatherer{
+		source: g,
+		labels: labels,
+		ruler:  ruler.New(opt.rrules),
+		opt:    opt,
 	}
+	wrap.cond = sync.NewCond(&wrap.l)
+
+	return wrap
 }
 
 func dtoLabelToMap(lbls []*dto.LabelPair) map[string]string {
@@ -199,7 +203,7 @@ func dtoLabelToMap(lbls []*dto.LabelPair) map[string]string {
 }
 
 // Gather implements prometheus.Gather.
-func (g *labeledGatherer) Gather() ([]*dto.MetricFamily, error) {
+func (g *wrappedGatherer) Gather() ([]*dto.MetricFamily, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultGatherTimeout)
 	defer cancel()
 
@@ -207,16 +211,28 @@ func (g *labeledGatherer) Gather() ([]*dto.MetricFamily, error) {
 }
 
 // GatherWithState implements GathererWithState.
-func (g *labeledGatherer) GatherWithState(ctx context.Context, state GatherState) ([]*dto.MetricFamily, error) {
+func (g *wrappedGatherer) GatherWithState(ctx context.Context, state GatherState) ([]*dto.MetricFamily, error) {
 	g.l.Lock()
 	defer g.l.Unlock()
 
+	for g.running {
+		g.cond.Wait()
+	}
+
 	if g.closed || g.source == nil {
+		// Make sure to signal before exiting. If two gorouting were blocked on
+		// the condition, we need to make sure the other one get wake-up.
+		g.cond.Signal()
+
 		return nil, errGatherOnNilGatherer
 	}
 
 	// do not collect non-probes metrics when the user only wants probes
 	if _, probe := g.source.(*ProbeGatherer); !probe && state.QueryType == OnlyProbes {
+		// Make sure to signal before exiting. If two gorouting were blocked on
+		// the condition, we need to make sure the other one get wake-up.
+		g.cond.Signal()
+
 		return nil, nil
 	}
 
@@ -225,11 +241,14 @@ func (g *labeledGatherer) GatherWithState(ctx context.Context, state GatherState
 		err error
 	)
 
-	now := time.Now()
+	now := time.Now().Truncate(time.Second)
 
 	if !state.T0.IsZero() {
 		now = state.T0
 	}
+
+	g.running = true
+	g.l.Unlock()
 
 	if cg, ok := g.source.(GathererWithState); ok {
 		mfs, err = cg.GatherWithState(ctx, state)
@@ -237,10 +256,14 @@ func (g *labeledGatherer) GatherWithState(ctx context.Context, state GatherState
 		mfs, err = g.source.Gather()
 	}
 
+	g.l.Lock()
+	g.running = false
+	g.cond.Signal()
+
 	mfs = g.ruler.ApplyRulesMFS(ctx, now, mfs)
 
-	if g.modifier != nil {
-		mfs = g.modifier(mfs, err)
+	if g.opt.GatherModifier != nil {
+		mfs = g.opt.GatherModifier(mfs, err)
 	}
 
 	if len(g.labels) == 0 {
@@ -254,18 +277,41 @@ func (g *labeledGatherer) GatherWithState(ctx context.Context, state GatherState
 		}
 	}
 
+	if !g.opt.HonorTimestamp {
+		forcedTimestamp := now.UnixMilli()
+
+		// CallForMetricsEndpoint is currently not implemented and it's
+		// always enable on Gatherer (e.g. we always call the Gather() method).
+		if g.opt.CallForMetricsEndpoint || true {
+			// If the callback is used for all invocation of /metrics,
+			// we can use "no timestamp" since metric points will be more recent
+			// data.
+			forcedTimestamp = 0
+		}
+
+		for _, mf := range mfs {
+			for _, m := range mf.GetMetric() {
+				if forcedTimestamp == 0 {
+					m.TimestampMs = nil
+				} else {
+					m.TimestampMs = proto.Int64(forcedTimestamp)
+				}
+			}
+		}
+	}
+
 	return mfs, err
 }
 
 // close waits for the current gather to finish and deletes the gatherer.
-func (g *labeledGatherer) close() {
+func (g *wrappedGatherer) close() {
 	g.l.Lock()
 	defer g.l.Unlock()
 
 	g.closed = true
 }
 
-func (g *labeledGatherer) getSource() prometheus.Gatherer {
+func (g *wrappedGatherer) getSource() prometheus.Gatherer {
 	return g.source
 }
 

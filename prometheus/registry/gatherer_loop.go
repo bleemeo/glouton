@@ -29,7 +29,8 @@ import (
 type scrapeLoop struct {
 	cancel   context.CancelFunc
 	stopped  chan struct{}
-	callback func(context.Context, time.Time)
+	trigger  chan interface{}
+	callback func(ctx context.Context, loopCtx context.Context, t0 time.Time)
 	interval time.Duration
 	// description is useful for debugging.
 	description string
@@ -38,8 +39,9 @@ type scrapeLoop struct {
 func startScrapeLoop(
 	interval, timeout time.Duration,
 	jitterSeed uint64,
-	callback func(ctx context.Context, t0 time.Time),
+	callback func(ctx context.Context, loopCtx context.Context, t0 time.Time),
 	description string,
+	triggerImmediate bool,
 ) *scrapeLoop {
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -48,21 +50,54 @@ func startScrapeLoop(
 		callback:    callback,
 		interval:    interval,
 		stopped:     make(chan struct{}),
+		trigger:     make(chan interface{}, 1),
 		description: description,
 	}
 
 	go func() {
 		defer crashreport.ProcessPanic()
-		sl.run(ctx, interval, timeout, jitterSeed)
+		sl.run(ctx, interval, timeout, jitterSeed, triggerImmediate)
 	}()
 
 	return sl
 }
 
-func (sl *scrapeLoop) run(ctx context.Context, interval, timeout time.Duration, jitterSeed uint64) {
+func (sl *scrapeLoop) runOnce(ctx context.Context, interval time.Duration, timeout time.Duration, alignedScrapeTime time.Time) time.Time {
+	select {
+	case <-sl.trigger:
+	default:
+	}
+
+	scrapeTime := time.Now().Round(0)
+
+	// For some reason, a tick might have been skipped, in which case we
+	// would call alignedScrapeTime.Add(interval) multiple times.
+	for scrapeTime.Sub(alignedScrapeTime) >= interval {
+		alignedScrapeTime = alignedScrapeTime.Add(interval)
+	}
+
+	// Align the scrape time if we are in the tolerance boundaries.
+	// The tolerance is 25% of the interval
+	if scrapeTime.Sub(alignedScrapeTime) <= interval/4 {
+		scrapeTime = alignedScrapeTime
+	}
+
+	subCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	sl.callback(subCtx, ctx, scrapeTime)
+
+	return alignedScrapeTime
+}
+
+func (sl *scrapeLoop) run(ctx context.Context, interval, timeout time.Duration, jitterSeed uint64, triggerImmediate bool) {
 	defer close(sl.stopped)
 
 	alignedScrapeTime := sl.offset(interval, jitterSeed).Round(0)
+
+	if triggerImmediate {
+		alignedScrapeTime = sl.runOnce(ctx, interval, timeout, alignedScrapeTime)
+	}
 
 	select {
 	case <-time.After(time.Until(alignedScrapeTime)):
@@ -78,32 +113,26 @@ func (sl *scrapeLoop) run(ctx context.Context, interval, timeout time.Duration, 
 	defer ticker.Stop()
 
 	for ctx.Err() == nil {
-		scrapeTime := time.Now().Round(0)
-
-		// For some reason, a tick might have been skipped, in which case we
-		// would call alignedScrapeTime.Add(interval) multiple times.
-		for scrapeTime.Sub(alignedScrapeTime) >= interval {
-			alignedScrapeTime = alignedScrapeTime.Add(interval)
-		}
-
-		// Align the scrape time if we are in the tolerance boundaries.
-		// The tolerance is 25% of the interval
-		if scrapeTime.Sub(alignedScrapeTime) <= interval/4 {
-			scrapeTime = alignedScrapeTime
-		}
-
-		subCtx, cancel := context.WithTimeout(ctx, timeout)
-
-		sl.callback(subCtx, scrapeTime)
-
-		cancel()
+		alignedScrapeTime = sl.runOnce(ctx, interval, timeout, alignedScrapeTime)
 
 		select {
 		case <-ctx.Done():
 			return
+		case <-sl.trigger:
 		case <-ticker.C:
 		}
 	}
+}
+
+func (sl *scrapeLoop) Trigger() {
+	select {
+	case sl.trigger <- nil:
+	default:
+	}
+}
+
+func (sl *scrapeLoop) stopNoWait() {
+	sl.cancel()
 }
 
 func (sl *scrapeLoop) stop() {

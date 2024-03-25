@@ -40,7 +40,6 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/prometheus/prometheus/util/gate"
 )
 
 type testTarget interface {
@@ -2065,7 +2064,7 @@ func runTest(t *testing.T, test testCase, usePlainTCPOrSSL bool, monitorID, agen
 
 			resPoints = append(resPoints, points...)
 		}),
-	}, gate.New(0))
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2096,7 +2095,7 @@ func runTest(t *testing.T, test testCase, usePlainTCPOrSSL bool, monitorID, agen
 		t.Fatal(err)
 	}
 
-	reg.InternalRunScrape(test.target.RequestContext(ctx), t0, id)
+	reg.InternalRunScrape(test.target.RequestContext(ctx), context.Background(), t0, id)
 
 	gotMap := make(map[string]int, len(resPoints))
 	for i, got := range resPoints {

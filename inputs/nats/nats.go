@@ -21,6 +21,7 @@ package nats
 import (
 	"glouton/inputs"
 	"glouton/inputs/internal"
+	"glouton/prometheus/registry"
 	"glouton/types"
 
 	"github.com/influxdata/telegraf"
@@ -29,15 +30,15 @@ import (
 )
 
 // New returns a NATS input.
-func New(url string) (telegraf.Input, *inputs.GathererOptions, error) {
+func New(url string) (telegraf.Input, registry.RegistrationOption, error) {
 	input, ok := telegraf_inputs.Inputs["nats"]
 	if !ok {
-		return nil, nil, inputs.ErrDisabledInput
+		return nil, registry.RegistrationOption{}, inputs.ErrDisabledInput
 	}
 
 	natsInput, ok := input().(*nats.Nats)
 	if !ok {
-		return nil, nil, inputs.ErrUnexpectedType
+		return nil, registry.RegistrationOption{}, inputs.ErrUnexpectedType
 	}
 
 	natsInput.Server = url
@@ -50,7 +51,7 @@ func New(url string) (telegraf.Input, *inputs.GathererOptions, error) {
 		Name: "nats",
 	}
 
-	options := &inputs.GathererOptions{
+	options := registry.RegistrationOption{
 		Rules: []types.SimpleRule{
 			{
 				TargetName:  "nats_uptime_seconds",

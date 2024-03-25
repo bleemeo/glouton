@@ -86,7 +86,7 @@ func (cg *Gatherer) Gather() ([]*dto.MetricFamily, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultGatherTimeout)
 	defer cancel()
 
-	return cg.GatherWithState(ctx, registry.GatherState{})
+	return cg.GatherWithState(ctx, registry.GatherState{T0: time.Now()})
 }
 
 // SetScheduleUpdate implements GathererWithScheduleUpdate.

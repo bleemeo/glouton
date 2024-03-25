@@ -18,6 +18,8 @@ import (
 
 func TestApplyRulesMFS(t *testing.T) {
 	t0 := time.Date(2024, time.January, 3, 15, 0, 0, 0, time.Local)
+	now := t0.Add(5 * time.Minute) // 5min because we have 5 samples 1min apart each
+
 	mfs := []*dto.MetricFamily{
 		{
 			Name: proto.String("ifInOctets"),
@@ -133,7 +135,8 @@ func TestApplyRulesMFS(t *testing.T) {
 							Value: proto.String("softwareLoopback"),
 						},
 					},
-					Untyped: &dto.Untyped{Value: proto.Float64(13420.4)},
+					Untyped:     &dto.Untyped{Value: proto.Float64(13420.4)},
+					TimestampMs: proto.Int64(now.UnixMilli()),
 				},
 			},
 		},
@@ -159,7 +162,6 @@ func TestApplyRulesMFS(t *testing.T) {
 
 	ruler := New(rrules)
 	ctx := context.Background()
-	now := t0.Add(5 * time.Minute) // 5min because we have 5 samples 1min apart each
 
 	resultMfs := ruler.ApplyRulesMFS(ctx, now, mfs)
 

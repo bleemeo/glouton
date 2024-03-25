@@ -95,14 +95,14 @@ type powerReading struct {
 }
 
 // New returns a new IPMI gatherer.
-// The Gatherer will probe for IPMI availability on first call and if unavaialble will
+// The Gatherer will probe for IPMI availability on first call and if unavailable will
 // do nothing on subsequent calls. It will use either freeipmi (preferred) or ipmitool.
 func New(cfg config.IPMI) *Gatherer {
 	return newGatherer(cfg, runCmd)
 }
 
 func (g *Gatherer) Gather() ([]*dto.MetricFamily, error) {
-	return g.GatherWithState(context.Background(), registry.GatherState{})
+	return g.GatherWithState(context.Background(), registry.GatherState{T0: time.Now()})
 }
 
 func (g *Gatherer) GatherWithState(ctx context.Context, _ registry.GatherState) ([]*dto.MetricFamily, error) {

@@ -26,7 +26,6 @@ import (
 	"time"
 
 	"github.com/influxdata/telegraf"
-	dto "github.com/prometheus/client_model/go"
 )
 
 var (
@@ -279,18 +278,3 @@ var (
 	ErrDisabledInput  = errors.New("input is not enabled in service Telegraf")
 	ErrMissingCommand = errors.New("missing command for input")
 )
-
-type GathererOptions struct {
-	// Recording rules evaluated in the input gatherer. KeepLabels must
-	// be true if recording rules are used. They are evaluated after
-	// the metrics are renamed in the accumulator.
-	Rules []types.SimpleRule
-	// GatherModifier is a function that can modify the gather result (add/modify/delete).
-	// It could be nil to skip this step.
-	GatherModifier func(mfs []*dto.MetricFamily, gatherError error) []*dto.MetricFamily
-	// The delay to wait for between gathers.
-	MinInterval time.Duration
-
-	// ApplyDynamicRelabel controls whether the metrics should go through the relabel hook.
-	ApplyDynamicRelabel bool
-}

@@ -31,6 +31,7 @@ import (
 	"glouton/delay"
 	"glouton/facts"
 	"glouton/logger"
+	"glouton/prometheus/model"
 	"glouton/threshold"
 	"glouton/types"
 	"glouton/version"
@@ -145,7 +146,8 @@ type thresholdOverrideKey struct {
 // Option are parameters for the synchronizer.
 type Option struct {
 	bleemeoTypes.GlobalOption
-	Cache *cache.Cache
+	Cache        *cache.Cache
+	PushAppender *model.BufferAppender
 
 	// DisableCallback is a function called when Synchronizer request Bleemeo connector to be disabled
 	// reason state why it's disabled and until set for how long it should be disabled.

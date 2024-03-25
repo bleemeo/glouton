@@ -21,10 +21,11 @@ package mdstat
 import (
 	"glouton/config"
 	"glouton/inputs"
+	"glouton/prometheus/registry"
 
 	"github.com/influxdata/telegraf"
 )
 
-func New(_ config.Mdstat) (telegraf.Input, *inputs.GathererOptions, error) {
-	return nil, nil, inputs.ErrDisabledInput
+func New(_ config.Mdstat) (telegraf.Input, registry.RegistrationOption, error) {
+	return nil, registry.RegistrationOption{}, inputs.ErrDisabledInput
 }

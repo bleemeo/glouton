@@ -20,11 +20,12 @@ package nats
 
 import (
 	"glouton/inputs"
+	"glouton/prometheus/registry"
 
 	"github.com/influxdata/telegraf"
 )
 
 // New returns a NATS input.
-func New(string) (telegraf.Input, *inputs.GathererOptions, error) {
-	return nil, nil, inputs.ErrDisabledInput
+func New(string) (telegraf.Input, registry.RegistrationOption, error) {
+	return nil, registry.RegistrationOption{}, inputs.ErrDisabledInput
 }

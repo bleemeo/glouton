@@ -19,6 +19,7 @@ package nfs
 import (
 	"glouton/inputs"
 	"glouton/inputs/internal"
+	"glouton/prometheus/registry"
 	"glouton/types"
 
 	"github.com/influxdata/telegraf"
@@ -27,15 +28,15 @@ import (
 )
 
 // New returns a NFS client input.
-func New() (telegraf.Input, *inputs.GathererOptions, error) {
+func New() (telegraf.Input, registry.RegistrationOption, error) {
 	input, ok := telegraf_inputs.Inputs["nfsclient"]
 	if !ok {
-		return nil, nil, inputs.ErrDisabledInput
+		return nil, registry.RegistrationOption{}, inputs.ErrDisabledInput
 	}
 
 	nfsInput, ok := input().(*nfsclient.NFSClient)
 	if !ok {
-		return nil, nil, inputs.ErrUnexpectedType
+		return nil, registry.RegistrationOption{}, inputs.ErrUnexpectedType
 	}
 
 	// Limit metric to read and write operations.
@@ -55,7 +56,7 @@ func New() (telegraf.Input, *inputs.GathererOptions, error) {
 		Name: "nfsclient",
 	}
 
-	options := &inputs.GathererOptions{
+	options := registry.RegistrationOption{
 		Rules: []types.SimpleRule{
 			{
 				TargetName:  "nfs_transmitted_bits",

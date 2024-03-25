@@ -21,7 +21,6 @@ import (
 	"context"
 	"glouton/prometheus/model"
 	"glouton/types"
-	"reflect"
 	"testing"
 	"time"
 
@@ -284,9 +283,9 @@ func Test_labeledGatherer_GatherPoints(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			g := newLabeledGatherer(tt.fields.source, tt.fields.labels, nil, nil)
+			g := newWrappedGatherer(tt.fields.source, tt.fields.labels, RegistrationOption{HonorTimestamp: true})
 
-			mfs, err := g.GatherWithState(context.Background(), GatherState{NoFilter: true})
+			mfs, err := g.GatherWithState(context.Background(), GatherState{T0: time.Now(), NoFilter: true})
 			if (err != nil) != tt.wantErr {
 				t.Errorf("labeledGatherer.GatherPoints() error = %v, wantErr %v", err, tt.wantErr)
 
@@ -300,8 +299,8 @@ func Test_labeledGatherer_GatherPoints(t *testing.T) {
 				}
 			}
 
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("labeledGatherer.GatherPoints() = %v, want %v", got, tt.want)
+			if diff := types.DiffMetricPoints(tt.want, got, false); diff != "" {
+				t.Errorf("labeledGatherer.GatherPoints() mismatch (-want +got)\n%s", diff)
 			}
 		})
 	}

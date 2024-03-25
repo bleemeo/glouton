@@ -25,6 +25,7 @@ import (
 	"glouton/inputs"
 	"glouton/inputs/internal"
 	"glouton/logger"
+	"glouton/prometheus/registry"
 	"glouton/types"
 	"io/fs"
 	"math"
@@ -43,19 +44,19 @@ import (
 
 const mdstatPath = "/proc/mdstat"
 
-func New(cfg config.Mdstat) (telegraf.Input, *inputs.GathererOptions, error) {
+func New(cfg config.Mdstat) (telegraf.Input, registry.RegistrationOption, error) {
 	if _, err := os.Stat(mdstatPath); err != nil && !testing.Testing() {
-		return nil, nil, fmt.Errorf("can't enable input: %w", err)
+		return nil, registry.RegistrationOption{}, fmt.Errorf("can't enable input: %w", err)
 	}
 
 	input, ok := telegraf_inputs.Inputs["mdstat"]
 	if !ok {
-		return nil, nil, inputs.ErrDisabledInput
+		return nil, registry.RegistrationOption{}, inputs.ErrDisabledInput
 	}
 
 	mdstatConfig, ok := input().(*mdstat.MdstatConf)
 	if !ok {
-		return nil, nil, inputs.ErrUnexpectedType
+		return nil, registry.RegistrationOption{}, inputs.ErrUnexpectedType
 	}
 
 	mdstatConfig.FileName = mdstatPath
@@ -73,7 +74,7 @@ func New(cfg config.Mdstat) (telegraf.Input, *inputs.GathererOptions, error) {
 		cfg.UseSudo = false
 	}
 
-	options := &inputs.GathererOptions{
+	options := registry.RegistrationOption{
 		MinInterval:    60 * time.Second,
 		GatherModifier: gatherModifier(cfg.PathMdadm, cfg.UseSudo, time.Now, callMdadm),
 	}

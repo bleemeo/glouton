@@ -22,6 +22,7 @@ import (
 	"glouton/logger"
 	"glouton/prometheus/matcher"
 	"glouton/prometheus/model"
+	"glouton/prometheus/registry"
 	"glouton/types"
 	"runtime"
 	"sync"
@@ -46,7 +47,6 @@ type Manager struct {
 	logger     log.Logger
 
 	l            sync.Mutex
-	now          func() time.Time
 	agentStarted time.Time
 }
 
@@ -118,7 +118,7 @@ func newManager(ctx context.Context, queryable storage.Queryable, defaultRules m
 
 	matchers := make([]matcher.Matchers, 0, len(defaultGroupRules))
 	for _, rule := range defaultGroupRules {
-		matchers = append(matchers, MatchersFromQuery(rule.Query())...)
+		matchers = append(matchers, matcher.MatchersFromQuery(rule.Query())...)
 	}
 
 	rm := Manager{
@@ -129,14 +129,13 @@ func newManager(ctx context.Context, queryable storage.Queryable, defaultRules m
 		matchers:       matchers,
 		logger:         promLogger,
 		agentStarted:   created,
-		now:            time.Now,
 	}
 
 	return &rm
 }
 
 // InputMetricMatchers returns a list of matchers for metrics used as input or recording rules.
-// Thoses metrics should pass from input if you expect recording rule to work correctly.
+// Those metrics should pass from input if you expect recording rule to work correctly.
 func (rm *Manager) InputMetricMatchers() []matcher.Matchers {
 	return rm.matchers
 }
@@ -158,8 +157,8 @@ func (rm *Manager) MetricNames() []string {
 	return names
 }
 
-func (rm *Manager) Collect(ctx context.Context, app storage.Appender) error {
-	now := rm.now()
+func (rm *Manager) CollectWithState(ctx context.Context, state registry.GatherState, app storage.Appender) error {
+	now := state.T0
 
 	rm.appendable.SetAppendable(model.NewFromAppender(app))
 	defer rm.appendable.SetAppendable(nil)

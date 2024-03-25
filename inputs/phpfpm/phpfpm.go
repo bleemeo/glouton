@@ -22,8 +22,10 @@ import (
 	"glouton/inputs"
 	"glouton/inputs/internal"
 	"reflect"
+	"time"
 
 	"github.com/influxdata/telegraf"
+	"github.com/influxdata/telegraf/config"
 	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"
 	_ "github.com/influxdata/telegraf/plugins/inputs/phpfpm" // we use it
 )
@@ -35,6 +37,9 @@ func reflectSet(url string, input telegraf.Input) {
 	inputValue := reflect.Indirect(reflect.ValueOf(input))
 	serverValue := inputValue.FieldByName("Urls")
 	serverValue.Set(reflect.ValueOf(append(make([]string, 0), url)))
+
+	timeoutValue := inputValue.FieldByName("Timeout")
+	timeoutValue.Set(reflect.ValueOf(config.Duration(10 * time.Second)))
 }
 
 // New initialise phpfpm.Input.

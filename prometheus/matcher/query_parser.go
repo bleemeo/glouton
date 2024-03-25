@@ -14,15 +14,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package rules
+package matcher
 
 import (
-	"glouton/prometheus/matcher"
-
 	"github.com/prometheus/prometheus/promql/parser"
 )
 
-func MatchersFromQuery(query parser.Expr) []matcher.Matchers {
+func MatchersFromQuery(query parser.Expr) []Matchers {
 	switch node := query.(type) {
 	case *parser.AggregateExpr:
 		result := MatchersFromQuery(node.Expr)
@@ -35,7 +33,7 @@ func MatchersFromQuery(query parser.Expr) []matcher.Matchers {
 
 		return result
 	case *parser.Call:
-		result := make([]matcher.Matchers, 0)
+		result := make([]Matchers, 0)
 		for _, arg := range node.Args {
 			result = append(result, MatchersFromQuery(arg)...)
 		}
@@ -46,7 +44,7 @@ func MatchersFromQuery(query parser.Expr) []matcher.Matchers {
 	case *parser.SubqueryExpr:
 		return MatchersFromQuery(node.Expr)
 	case *parser.VectorSelector:
-		return []matcher.Matchers{node.LabelMatchers}
+		return []Matchers{node.LabelMatchers}
 	case *parser.NumberLiteral:
 		return nil
 	case *parser.ParenExpr:

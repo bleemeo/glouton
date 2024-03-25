@@ -29,7 +29,7 @@ import (
 // appenderGatherer call a AppenderCallback.
 type appenderGatherer struct {
 	cb      AppenderCallback
-	opt     AppenderRegistrationOption
+	opt     RegistrationOption
 	lastApp *model.BufferAppender
 	lastErr error
 	l       sync.Mutex
@@ -49,22 +49,30 @@ func (g *appenderGatherer) GatherWithState(ctx context.Context, state GatherStat
 	if state.FromScrapeLoop || g.opt.CallForMetricsEndpoint {
 		app := model.NewBufferAppender()
 
-		err = g.cb.Collect(ctx, app)
+		err = g.cb.CollectWithState(ctx, state, app)
 		if err == nil {
 			_ = app.Commit()
 		}
 
+		// Unless wrappedGatherer implement CallForMetricsEndpoint, we need to do
+		// the HonorTimestamp processing here in addition to the one in wrappedGatherer:
+		// When CallForMetricsEndpoint is false and HonorTimestamp is false, we need to store the
+		// time when this call of g.cb.Collect was made. The result is stored in g.lastApp and
+		// could be reused multiple time.
 		if !g.opt.HonorTimestamp {
 			now := state.T0
 			if now.IsZero() {
 				now = time.Now().Truncate(time.Second)
 			}
 
-			for _, samples := range app.Committed {
-				for i := range samples {
-					samples[i].T = now.UnixMilli()
-				}
+			if g.opt.CallForMetricsEndpoint {
+				// If the callback is used for all invocation of /metrics,
+				// we can use "no timestamp" since metric points will be more recent
+				// data.
+				now = time.Time{}
 			}
+
+			app.FixSampleTimestamp(now)
 		}
 
 		g.l.Lock()
@@ -79,13 +87,9 @@ func (g *appenderGatherer) GatherWithState(ctx context.Context, state GatherStat
 	var mfs []*dto.MetricFamily
 
 	if g.lastApp != nil {
-		for _, samples := range g.lastApp.Committed {
-			mf, err := model.SamplesToMetricFamily(samples, nil)
-			if err != nil {
-				return nil, err
-			}
-
-			mfs = append(mfs, mf)
+		mfs, err = g.lastApp.AsMF()
+		if err != nil {
+			return nil, err
 		}
 	}
 

@@ -47,7 +47,6 @@ type CheckDetails struct {
 // collectorDetails contains information about a collector.
 // It could be a Telegraf input of a Prometheus collector.
 type collectorDetails struct {
-	inputID    int
 	gathererID int
 }
 

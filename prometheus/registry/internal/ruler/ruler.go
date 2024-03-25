@@ -21,7 +21,6 @@ import (
 	"glouton/logger"
 	"glouton/prometheus/matcher"
 	"glouton/prometheus/model"
-	gloutonRules "glouton/prometheus/rules"
 	"glouton/store"
 	"glouton/types"
 	"sort"
@@ -51,7 +50,7 @@ func New(input []*rules.RecordingRule) *SimpleRuler {
 	matchers := make([]matcher.Matchers, 0, len(input))
 
 	for _, rr := range input {
-		matchers = append(matchers, gloutonRules.MatchersFromQuery(rr.Query())...)
+		matchers = append(matchers, matcher.MatchersFromQuery(rr.Query())...)
 	}
 
 	promLogger := logger.GoKitLoggerWrapper(logger.V(1))
@@ -152,8 +151,9 @@ func (r *SimpleRuler) ApplyRulesMFS(ctx context.Context, now time.Time, mfs []*d
 			}
 
 			mfs[idx].Metric = append(mfs[idx].GetMetric(), &dto.Metric{
-				Label:   lbls,
-				Untyped: &dto.Untyped{Value: proto.Float64(sample.F)},
+				Label:       lbls,
+				TimestampMs: proto.Int64(now.UnixMilli()),
+				Untyped:     &dto.Untyped{Value: proto.Float64(sample.F)},
 			})
 		}
 	}
