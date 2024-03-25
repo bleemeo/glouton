@@ -62,7 +62,6 @@ type Discovery struct {
 	lastConfigservicesMap map[NameInstance]Service
 	activeCollector       map[NameInstance]collectorDetails
 	activeCheck           map[NameInstance]CheckDetails
-	coll                  Collector
 	metricRegistry        GathererRegistry
 	containerInfo         containerInfoProvider
 	state                 State
@@ -98,7 +97,6 @@ type GathererRegistry interface {
 // New returns a new Discovery and some warnings.
 func New(
 	dynamicDiscovery Discoverer,
-	coll Collector,
 	metricRegistry GathererRegistry,
 	state State,
 	containerInfo containerInfoProvider,
@@ -125,7 +123,6 @@ func New(
 	discovery := &Discovery{
 		dynamicDiscovery:      dynamicDiscovery,
 		discoveredServicesMap: discoveredServicesMap,
-		coll:                  coll,
 		metricRegistry:        metricRegistry,
 		containerInfo:         containerInfo,
 		activeCollector:       make(map[NameInstance]collectorDetails),

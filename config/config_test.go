@@ -23,8 +23,8 @@ import (
 	"dario.cat/mergo"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
-	"github.com/knadh/koanf"
 	"github.com/knadh/koanf/providers/structs"
+	"github.com/knadh/koanf/v2"
 	bbConf "github.com/prometheus/blackbox_exporter/config"
 	"github.com/prometheus/common/config"
 )
@@ -1167,9 +1167,8 @@ func TestStateLoading(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		tc := tc
 		// This action is not specific to the current test case.
-		err := mergo.Merge(&tc.WantConfig, agentCfg)
+		err := mergo.Merge(&tc.WantConfig, agentCfg) //nolint: gosec
 		if err != nil {
 			t.Fatal("Failed to merge default agent config:", err)
 		}

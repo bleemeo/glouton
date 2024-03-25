@@ -1,0 +1,19 @@
+smartctl 7.1 2019-12-30 r5022 [x86_64-linux-5.4.0-65-generic] (local build)
+Copyright (C) 2002-19, Bruce Allen, Christian Franke, www.smartmontools.org
+
+=== START OF INFORMATION SECTION ===
+Vendor:               Dell
+Product:              Virtual Disk
+Revision:             1028
+Compliance:           SPC-4
+User Capacity:        299,439,751,168 bytes [299 GB]
+Logical block size:   512 bytes
+Logical Unit id:      0x600508e0000000004e4ea1c788c94584
+Device type:          disk
+Local Time is:        Tue Jan 23 15:13:13 2024 CET
+SMART support is:     Unavailable - device lacks SMART capability.
+
+=== START OF READ SMART DATA SECTION ===
+Current Drive Temperature:     0 C
+Drive Trip Temperature:        0 C
+

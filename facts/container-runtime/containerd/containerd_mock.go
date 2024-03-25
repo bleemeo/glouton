@@ -138,8 +138,8 @@ func DumpToJSON(ctx context.Context, address string) ([]byte, error) {
 
 	// Set to nil all typeurl.Any fields.
 	// These fields prevent unmarshalling from the JSON file.
-	for i := 0; i < len(result.Namespaces); i++ {
-		for j := 0; j < len(result.Namespaces[i].MockContainers); j++ {
+	for i := range len(result.Namespaces) {
+		for j := range len(result.Namespaces[i].MockContainers) {
 			result.Namespaces[i].MockContainers[j].MockInfo.Container.Runtime.Options = nil
 			result.Namespaces[i].MockContainers[j].MockInfo.Container.Extensions = nil
 		}

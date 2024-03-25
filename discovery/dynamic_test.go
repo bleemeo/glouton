@@ -1891,8 +1891,6 @@ func TestDynamicDiscovery(t *testing.T) { //nolint:maintidx
 	}
 
 	for _, c := range cases {
-		c := c
-
 		t.Run(c.name, func(t *testing.T) {
 			ctx := context.Background()
 

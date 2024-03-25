@@ -25,10 +25,10 @@ import (
 	"reflect"
 	"unsafe"
 
-	goredis "github.com/go-redis/redis"
 	"github.com/influxdata/telegraf"
 	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"
 	"github.com/influxdata/telegraf/plugins/inputs/redis"
+	goredis "github.com/redis/go-redis/v9"
 )
 
 var (
@@ -140,36 +140,34 @@ func transformMetrics(currentContext internal.GatherContext, fields map[string]f
 	newFields := make(map[string]float64)
 
 	for metricName, value := range fields {
-		finalMetricName := metricName
-
 		switch metricName {
 		case "evicted_keys", "expired_keys", "keyspace_hits", "keyspace_misses":
 			// Keep name unchanged.
 		case "keyspace_hitrate", "pubsub_channels", "pubsub_patterns", "uptime":
 			// Keep name unchanged.
 		case "connected_slaves":
-			finalMetricName = "current_connections_slaves"
+			metricName = "current_connections_slaves"
 		case "clients":
-			finalMetricName = "current_connections_clients"
+			metricName = "current_connections_clients"
 		case "used_memory":
-			finalMetricName = "memory"
+			metricName = "memory"
 		case "used_memory_lua":
-			finalMetricName = "memory_lua"
+			metricName = "memory_lua"
 		case "used_memory_peak":
-			finalMetricName = "memory_peak"
+			metricName = "memory_peak"
 		case "used_memory_rss":
-			finalMetricName = "memory_rss"
+			metricName = "memory_rss"
 		case "total_connections_received":
-			finalMetricName = "total_connections"
+			metricName = "total_connections"
 		case "total_commands_processed":
-			finalMetricName = "total_operations"
+			metricName = "total_operations"
 		case "rdb_changes_since_last_save":
-			finalMetricName = "volatile_changes"
+			metricName = "volatile_changes"
 		default:
 			continue
 		}
 
-		newFields[finalMetricName] = value
+		newFields[metricName] = value
 	}
 
 	return newFields

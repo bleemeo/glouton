@@ -33,6 +33,7 @@ import (
 	"time"
 
 	dto "github.com/prometheus/client_model/go"
+	prometheusModel "github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/model/textparse"
 	"google.golang.org/protobuf/proto"
@@ -112,7 +113,7 @@ func (t *Target) Gather() ([]*dto.MetricFamily, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultGatherTimeout)
 	defer cancel()
 
-	return t.GatherWithState(ctx, registry.GatherState{})
+	return t.GatherWithState(ctx, registry.GatherState{T0: time.Now()})
 }
 
 func (t *Target) GatherWithState(ctx context.Context, state registry.GatherState) ([]*dto.MetricFamily, error) {
@@ -183,7 +184,7 @@ func parserReader(data []byte, filter func(lbls labels.Labels) bool) ([]*dto.Met
 		err error
 	)
 
-	p, err := textparse.New(data, "", true)
+	p, err := textparse.New(data, "", true, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -202,14 +203,14 @@ func parserReader(data []byte, filter func(lbls labels.Labels) bool) ([]*dto.Met
 		}
 
 		var (
-			tmp        []byte
-			tmp2       []byte
-			lset       labels.Labels
-			metricName string
-			metricType textparse.MetricType
-			metricHelp string
-			serieTS    *int64
-			serieFloat float64
+			tmp         []byte
+			tmp2        []byte
+			lset        labels.Labels
+			metricName  string
+			metricType  prometheusModel.MetricType
+			metricHelp  string
+			seriesTS    *int64
+			seriesFloat float64
 		)
 
 		switch et { //nolint:exhaustive
@@ -221,7 +222,7 @@ func parserReader(data []byte, filter func(lbls labels.Labels) bool) ([]*dto.Met
 			metricName = string(tmp)
 			metricHelp = string(tmp2)
 		case textparse.EntrySeries:
-			_, serieTS, serieFloat = p.Series()
+			_, seriesTS, seriesFloat = p.Series()
 			p.Metric(&lset)
 			metricName = lset.Get(types.LabelName)
 		case textparse.EntryHistogram:
@@ -255,7 +256,7 @@ func parserReader(data []byte, filter func(lbls labels.Labels) bool) ([]*dto.Met
 
 		switch et { //nolint:exhaustive
 		case textparse.EntryType:
-			// Can ony set type before receiving first sample and can't be updated
+			// Can only set type before receiving first sample and can't be updated
 			if entry.Metric != nil {
 				return nil, fmt.Errorf("%w: TYPE for metric %s reported after samples", errParseError, metricName)
 			}
@@ -265,13 +266,13 @@ func parserReader(data []byte, filter func(lbls labels.Labels) bool) ([]*dto.Met
 			}
 
 			switch metricType { //nolint:exhaustive
-			case textparse.MetricTypeCounter:
+			case prometheusModel.MetricTypeCounter:
 				entry.Type = dto.MetricType_COUNTER.Enum()
-			case textparse.MetricTypeGauge:
+			case prometheusModel.MetricTypeGauge:
 				entry.Type = dto.MetricType_GAUGE.Enum()
-			case textparse.MetricTypeHistogram:
+			case prometheusModel.MetricTypeHistogram:
 				entry.Type = dto.MetricType_HISTOGRAM.Enum()
-			case textparse.MetricTypeSummary:
+			case prometheusModel.MetricTypeSummary:
 				entry.Type = dto.MetricType_SUMMARY.Enum()
 			default:
 				entry.Type = dto.MetricType_UNTYPED.Enum()
@@ -288,8 +289,8 @@ func parserReader(data []byte, filter func(lbls labels.Labels) bool) ([]*dto.Met
 				Label: model.Labels2DTO(lset),
 			}
 
-			if serieTS != nil {
-				metric.TimestampMs = proto.Int64(*serieTS)
+			if seriesTS != nil {
+				metric.TimestampMs = proto.Int64(*seriesTS)
 			}
 
 			if entry.Type == nil {
@@ -298,13 +299,13 @@ func parserReader(data []byte, filter func(lbls labels.Labels) bool) ([]*dto.Met
 
 			switch entry.GetType().String() {
 			case dto.MetricType_COUNTER.Enum().String():
-				metric.Counter = &dto.Counter{Value: proto.Float64(serieFloat)}
+				metric.Counter = &dto.Counter{Value: proto.Float64(seriesFloat)}
 			case dto.MetricType_GAUGE.Enum().String():
-				metric.Gauge = &dto.Gauge{Value: proto.Float64(serieFloat)}
+				metric.Gauge = &dto.Gauge{Value: proto.Float64(seriesFloat)}
 			case dto.MetricType_UNTYPED.Enum().String():
 				fallthrough
 			default:
-				metric.Untyped = &dto.Untyped{Value: proto.Float64(serieFloat)}
+				metric.Untyped = &dto.Untyped{Value: proto.Float64(seriesFloat)}
 			}
 
 			entry.Metric = append(entry.Metric, metric)

@@ -46,7 +46,6 @@ func Test_startScrapeLoop(t *testing.T) {
 		{interval: 1 * time.Second},
 	}
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.interval.String(), func(t *testing.T) {
 			t.Parallel()
 
@@ -60,13 +59,13 @@ func Test_startScrapeLoop(t *testing.T) {
 			deadlineCtx, cancel := context.WithTimeout(context.Background(), testDuration)
 			defer cancel()
 
-			callback := func(_ context.Context, t0 time.Time) {
+			callback := func(_ context.Context, _ context.Context, t0 time.Time) {
 				l.Lock()
 				result = append(result, t0)
 				l.Unlock()
 			}
 
-			loop := startScrapeLoop(tt.interval, tt.interval, 0, callback, "")
+			loop := startScrapeLoop(tt.interval, tt.interval, 0, callback, "", false)
 
 			<-deadlineCtx.Done()
 

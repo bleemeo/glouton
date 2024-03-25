@@ -20,6 +20,7 @@ Then run Glouton:
 
 If you are using Docker, you can quickly build a Docker image that use the Glouton you just build:
 ```
+# Remember to run ./build.sh go before
 ./build.sh docker-fast
 ```
 
@@ -27,6 +28,20 @@ This result in an image tag "glouton:latest". You might need to re-tag is to use
 docker-compose:
 ```
 docker tag glouton:latest bleemeo/bleemeo-agent:proposed
+```
+
+### One-time rebuild UI
+
+If you need to build the UI once, follow those instruction. If you develop on the local UI,
+you probably want to follow "Developing the local UI" a bit later which will allow to iterate faster.
+
+To run a single build of UI do:
+```
+./build.sh only-js
+./build.sh go
+
+# If using Docker
+./build.sh docker-fast
 ```
 
 ### Linters

@@ -40,7 +40,6 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/prometheus/prometheus/util/gate"
 )
 
 type testTarget interface {
@@ -1995,8 +1994,6 @@ func Test_Collect_HTTPS(t *testing.T) { //nolint:maintidx
 	t.Parallel()
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			runTest(t, tt, false, monitorID, agentID, agentFQDN, t0)
 		})
@@ -2067,7 +2064,7 @@ func runTest(t *testing.T, test testCase, usePlainTCPOrSSL bool, monitorID, agen
 
 			resPoints = append(resPoints, points...)
 		}),
-	}, gate.New(0))
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2098,7 +2095,7 @@ func runTest(t *testing.T, test testCase, usePlainTCPOrSSL bool, monitorID, agen
 		t.Fatal(err)
 	}
 
-	reg.InternalRunScrape(test.target.RequestContext(ctx), t0, id)
+	reg.InternalRunScrape(test.target.RequestContext(ctx), context.Background(), t0, id)
 
 	gotMap := make(map[string]int, len(resPoints))
 	for i, got := range resPoints {
@@ -3551,8 +3548,6 @@ func Test_Collect_TCP(t *testing.T) { //nolint:maintidx
 	t.Parallel()
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			runTest(t, tt, true, monitorID, agentID, agentFQDN, t0)
 		})

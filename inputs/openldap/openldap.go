@@ -20,6 +20,7 @@ import (
 	"glouton/config"
 	"glouton/inputs"
 	"glouton/inputs/internal"
+	"glouton/prometheus/registry"
 
 	"github.com/influxdata/telegraf"
 	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"
@@ -27,15 +28,15 @@ import (
 )
 
 // New returns a OpenLDAP input.
-func New(host string, port int, config config.Service) (telegraf.Input, *inputs.GathererOptions, error) {
+func New(host string, port int, config config.Service) (telegraf.Input, registry.RegistrationOption, error) {
 	input, ok := telegraf_inputs.Inputs["openldap"]
 	if !ok {
-		return nil, nil, inputs.ErrDisabledInput
+		return nil, registry.RegistrationOption{}, inputs.ErrDisabledInput
 	}
 
 	ldapInput, ok := input().(*openldap.Openldap)
 	if !ok {
-		return nil, nil, inputs.ErrUnexpectedType
+		return nil, registry.RegistrationOption{}, inputs.ErrUnexpectedType
 	}
 
 	ldapInput.Host = host
@@ -71,5 +72,5 @@ func New(host string, port int, config config.Service) (telegraf.Input, *inputs.
 		Name: "openldap",
 	}
 
-	return internalInput, &inputs.GathererOptions{}, nil
+	return internalInput, registry.RegistrationOption{}, nil
 }

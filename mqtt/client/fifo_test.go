@@ -41,7 +41,7 @@ func TestSize(t *testing.T) {
 				t.Fatalf("Unexpected queue length: got %d, want 0.", length)
 			}
 
-			for i := 0; i < size-1; i++ {
+			for i := range size - 1 {
 				queue.Put(ctx, i)
 			}
 
@@ -284,9 +284,9 @@ func TestRacing(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		g, errCtx := errgroup.WithContext(ctx)
 
-		for w := 0; w < 10; w++ {
+		for range 10 {
 			g.Go(func() error {
-				for i := 0; i < 1000; i++ {
+				for range 1000 {
 					queue.Put(errCtx, time.Now())
 				}
 
@@ -297,7 +297,7 @@ func TestRacing(t *testing.T) {
 		g.Go(func() error {
 			var prev time.Time
 
-			for i := 0; i < 10000; i++ {
+			for range 10000 {
 				ts, ok := queue.Get(errCtx)
 				if !ok {
 					return errUnexpectedQueueStatus
@@ -331,18 +331,18 @@ func TestRacing(t *testing.T) {
 		g, errCtx := errgroup.WithContext(ctx)
 
 		g.Go(func() error {
-			for i := 0; i < 10000; i++ {
+			for range 10000 {
 				queue.Put(errCtx, time.Now())
 			}
 
 			return nil
 		})
 
-		for r := 0; r < 10; r++ {
+		for range 10 {
 			g.Go(func() error {
 				var prev time.Time
 
-				for i := 0; i < 1000; i++ {
+				for range 1000 {
 					ts, ok := queue.Get(errCtx)
 					if !ok {
 						return errUnexpectedQueueStatus

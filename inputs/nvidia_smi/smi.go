@@ -19,6 +19,7 @@ package nvidia
 import (
 	"glouton/inputs"
 	"glouton/inputs/internal"
+	"glouton/prometheus/registry"
 	"time"
 
 	"github.com/influxdata/telegraf"
@@ -29,15 +30,15 @@ import (
 
 // New returns a NVIDIA SMI input, given the path to the
 // nvidia-smi binary and the timeout used for GPU polling in seconds.
-func New(binPath string, timeout int) (telegraf.Input, *inputs.GathererOptions, error) {
+func New(binPath string, timeout int) (telegraf.Input, registry.RegistrationOption, error) {
 	input, ok := telegraf_inputs.Inputs["nvidia_smi"]
 	if !ok {
-		return nil, nil, inputs.ErrDisabledInput
+		return nil, registry.RegistrationOption{}, inputs.ErrDisabledInput
 	}
 
 	nvidiaInput, ok := input().(*nvidia_smi.NvidiaSMI)
 	if !ok {
-		return nil, nil, inputs.ErrUnexpectedType
+		return nil, registry.RegistrationOption{}, inputs.ErrUnexpectedType
 	}
 
 	if binPath != "" {
@@ -57,7 +58,7 @@ func New(binPath string, timeout int) (telegraf.Input, *inputs.GathererOptions, 
 		Name: "nvidia-smi",
 	}
 
-	return internalInput, &inputs.GathererOptions{}, nil
+	return internalInput, registry.RegistrationOption{}, nil
 }
 
 func renameGlobal(gatherContext internal.GatherContext) (result internal.GatherContext, drop bool) {

@@ -72,7 +72,6 @@ import (
 	"net"
 	"net/url"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"reflect"
 	"regexp"
@@ -819,7 +818,9 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 			BlackboxSendScraperID: a.config.Blackbox.ScraperSendUUID,
 			Filter:                mFilter,
 			Queryable:             a.store,
-		}, secretInputsGate)
+			SecretInputsGate:      secretInputsGate,
+			ShutdownDeadline:      15 * time.Second,
+		})
 	if err != nil {
 		logger.Printf("Unable to create the metrics registry: %v", err)
 		logger.Printf("The metrics registry is required for Glouton. Exiting.")
@@ -945,7 +946,6 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 
 	a.discovery, warnings = discovery.New(
 		dynamicDiscovery,
-		a.collector,
 		a.gathererRegistry,
 		a.state,
 		a.containerRuntime,
@@ -1059,7 +1059,6 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 			Store:                          filteredStore,
 			SNMP:                           a.snmpManager.Targets(),
 			SNMPOnlineTarget:               a.snmpManager.OnlineCount,
-			PushPoints:                     a.gathererRegistry.WithTTL(5 * time.Minute),
 			Discovery:                      a.discovery,
 			MonitorManager:                 a.monitorManager,
 			UpdateMetricResolution:         a.updateMetricResolution,
@@ -1070,6 +1069,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 			NotifyLabelsUpdate:             a.notifyBleemeoUpdateLabels,
 			BlackboxScraperName:            scaperName,
 			ReloadState:                    a.reloadState.Bleemeo(),
+			WriteDiagnosticArchive:         a.writeDiagnosticArchive,
 			VSphereDevices:                 a.vSphereManager.Devices,
 			FindVSphereDevice:              a.vSphereManager.FindDevice,
 			LastVSphereChange:              a.vSphereManager.LastChange,
@@ -1093,13 +1093,14 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		a.gathererRegistry.UpdateRelabelHook(a.bleemeoConnector.RelabelHook)
 		tasks = append(tasks, taskInfo{a.bleemeoConnector.Run, "Bleemeo SAAS connector"})
 
-		_, err = a.gathererRegistry.RegisterPushPointsCallback(
+		_, err = a.gathererRegistry.RegisterAppenderCallback(
 			registry.RegistrationOption{
-				Description: "Bleemeo connector",
-				JitterSeed:  baseJitter,
-				Interval:    defaultInterval,
+				Description:    "Bleemeo connector",
+				JitterSeed:     baseJitter,
+				Interval:       defaultInterval,
+				HonorTimestamp: true, // time_drift metric emit point with the time from Bleemeo API
 			},
-			a.bleemeoConnector.EmitInternalMetric,
+			registry.AppenderFunc(a.bleemeoConnector.EmitInternalMetric),
 		)
 		if err != nil {
 			logger.Printf("unable to add bleemeo connector metrics: %v", err)
@@ -1114,8 +1115,9 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 
 	_, err = a.gathererRegistry.RegisterPushPointsCallback(
 		registry.RegistrationOption{
-			Description: "system & services metrics",
-			JitterSeed:  baseJitter,
+			Description:    "system & services metrics",
+			JitterSeed:     baseJitter,
+			HonorTimestamp: true,
 		},
 		a.collector.RunGather,
 	)
@@ -1129,7 +1131,6 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 				Description: "process status metrics",
 				JitterSeed:  baseJitter,
 			},
-			registry.AppenderRegistrationOption{},
 			processSource.NewStatusSource(psFact),
 		)
 		if err != nil {
@@ -1145,7 +1146,6 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 			// Container metrics contain meta labels that needs to be relabeled.
 			ApplyDynamicRelabel: true,
 		},
-		registry.AppenderRegistrationOption{},
 		miscAppender{
 			containerRuntime: a.containerRuntime,
 		},
@@ -1164,7 +1164,6 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 			// Container metrics contain meta labels that needs to be relabeled.
 			ApplyDynamicRelabel: true,
 		},
-		registry.AppenderRegistrationOption{},
 		miscAppenderMinute{
 			containerRuntime:  a.containerRuntime,
 			discovery:         a.discovery,
@@ -1183,7 +1182,6 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 			JitterSeed:         baseJitterPlus,
 			NoLabelsAlteration: true,
 		},
-		registry.AppenderRegistrationOption{},
 		a.rulesManager,
 	)
 	if err != nil {
@@ -1207,6 +1205,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 				Interval:                 defaultInterval,
 				ExtraLabels:              target.ExtraLabels,
 				AcceptAllowedMetricsOnly: true,
+				HonorTimestamp:           true,
 			},
 			target,
 		)
@@ -1399,14 +1398,7 @@ func (a *agent) registerInputs(ctx context.Context) {
 		a.registerInput("NVIDIA SMI", input, opts, err)
 	}
 
-	if a.config.Smart.Enable && !strings.ContainsRune(a.config.Smart.PathSmartctl, os.PathSeparator) {
-		// The SMART input is enabled if "smartctl" is found in
-		// the PATH or if the path was given in the config.
-		_, err := exec.LookPath("smartctl")
-		a.config.Smart.Enable = err == nil
-	}
-
-	if a.config.Smart.Enable && a.config.Smart.PathSmartctl != "" {
+	if a.config.Smart.Enable {
 		input, opts, err := smart.New(a.config.Smart)
 		a.registerInput("SMART", input, opts, err)
 	}
@@ -1439,22 +1431,23 @@ func (a *agent) registerInputs(ctx context.Context) {
 }
 
 // Register a single input.
-func (a *agent) registerInput(name string, input telegraf.Input, opts *inputs.GathererOptions, err error) {
+func (a *agent) registerInput(name string, input telegraf.Input, opts registry.RegistrationOption, err error) {
 	if err != nil {
-		logger.Printf("Failed to create input %s: %v", name, err)
+		if errors.Is(err, inputs.ErrMissingCommand) {
+			logger.V(1).Printf("input %s: %v", name, err)
+		} else {
+			logger.Printf("Failed to create input %s: %v", name, err)
+		}
 
 		return
 	}
 
+	if opts.Description == "" {
+		opts.Description = "Input " + name
+	}
+
 	_, err = a.gathererRegistry.RegisterInput(
-		registry.RegistrationOption{
-			Description:         "Input " + name,
-			JitterSeed:          baseJitter,
-			Rules:               opts.Rules,
-			MinInterval:         opts.MinInterval,
-			ApplyDynamicRelabel: opts.ApplyDynamicRelabel,
-			GatherModifier:      opts.GatherModifier,
-		},
+		opts,
 		input,
 	)
 	if err != nil {
@@ -1609,12 +1602,8 @@ func (a *agent) miscTasks(ctx context.Context) error {
 }
 
 func (a *agent) crashReportManagement(ctx context.Context) error {
-	createdReportDir := crashreport.BundleCrashReportFiles(ctx, a.config.Agent.MaxCrashReportsCount)
-
-	// We protect the report generated just now to be sure it won't be purged.
-	// Without that, the purge would only be based on filename (generation datetime),
-	// and if the time moves backward, the report we generated just now could be the one with the oldest time.
-	crashreport.PurgeCrashReports(a.config.Agent.MaxCrashReportsCount, createdReportDir)
+	crashreport.BundleCrashReportFiles(ctx, a.config.Agent.MaxCrashReportsCount)
+	crashreport.PurgeCrashReports(a.config.Agent.MaxCrashReportsCount)
 
 	return nil
 }

@@ -71,8 +71,9 @@ func TestAddRemove(t *testing.T) {
 }
 
 func TestRun(t *testing.T) {
+	ctx := context.Background()
 	c := New(nil, gate.New(0))
-	c.runOnce(time.Now())
+	c.runOnce(ctx, time.Now())
 
 	input := &mockInput{Name: "input1"}
 
@@ -81,13 +82,13 @@ func TestRun(t *testing.T) {
 		t.Error(err)
 	}
 
-	c.runOnce(time.Now())
+	c.runOnce(ctx, time.Now())
 
 	if input.GatherCallCount != 1 {
 		t.Errorf("input.GatherCallCount == %v, want %v", input.GatherCallCount, 1)
 	}
 
-	c.runOnce(time.Now())
+	c.runOnce(ctx, time.Now())
 
 	if input.GatherCallCount != 2 {
 		t.Errorf("input.GatherCallCount == %v, want %v", input.GatherCallCount, 2)
@@ -388,4 +389,47 @@ func cmpStaleNaN() cmp.Option {
 	}
 
 	return cmp.FilterValues(f, cmp.Comparer(comparer))
+}
+
+func TestMarkInactiveWhileDroppingInput(t *testing.T) {
+	var id int
+
+	acc := shallowAcc{fields: make(map[time.Time]msmsa), annotations: make(map[time.Time]map[string]types.MetricAnnotations)}
+	c := New(&acc, gate.New(0))
+
+	input := shallowInput{
+		measurement: "i1",
+		tag:         "i1",
+		fields:      map[string]float64{"f1": 1, "f2": 0.2, "f3": 333},
+	}
+
+	var err error
+
+	id, err = c.AddInput(input, "input")
+	if err != nil {
+		t.Fatal("Failed to add input to collector:", err)
+	}
+
+	var wg sync.WaitGroup
+
+	wg.Add(1)
+
+	go func() {
+		// Simulate another goroutine removing the input during the gathering setup
+		c.RemoveInput(id)
+		wg.Done()
+	}()
+
+	c.RunGather(context.Background(), time.Now())
+
+	wg.Wait() // Wait for the goroutine removing the input to complete
+
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	if _, ok := c.fieldCaches[id]; ok {
+		t.Fatal("The input's fieldCaches should have been removed from the collector.")
+	}
+
+	t.Log("The goroutine did not panic on a nil map assignment - success !")
 }

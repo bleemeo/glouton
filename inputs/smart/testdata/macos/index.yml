@@ -1,0 +1,4 @@
+device_scan:
+  IOService:/AppleARMPE/arm-io/AppleT600xIO/ans@8F400000/AppleASCWrapV4/iop-ans-nub/RTBuddy(ANS2)/RTBuddyService/AppleANS3NVMeController/NS_01@1 -d nvme:
+    file: smartctl_nvme.txt
+    rc: 0

@@ -263,8 +263,6 @@ func TestPrioritizeAndFilterMetrics2(t *testing.T) {
 	}
 
 	for _, tt := range cases {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -383,8 +381,6 @@ func Test_metricComparator_IsSignificantItem(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.item, func(t *testing.T) {
 			t.Parallel()
 
@@ -435,8 +431,6 @@ func Test_metricComparator_SkipInOnlyEssential(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -531,8 +525,6 @@ func Test_metricComparator_importanceWeight(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -631,7 +623,7 @@ func TestMetricSimpleSync(t *testing.T) {
 	helper.AddTime(5 * time.Minute)
 
 	// Register 1000 metrics
-	for n := 0; n < 1000; n++ {
+	for n := range 1000 {
 		helper.pushPoints(t, []labels.Labels{
 			labels.New(
 				labels.Label{Name: types.LabelName, Value: "metric"},
@@ -977,7 +969,7 @@ func TestMetricUnknownError(t *testing.T) {
 	helper.AddTime(31 * time.Second)
 
 	// we expect few retry in quick time
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		if err := helper.runOnceWithResult(t).CheckMethodWithoutFull(syncMethodMetric); err != nil {
 			t.Error(err)
 		}
@@ -989,7 +981,7 @@ func TestMetricUnknownError(t *testing.T) {
 	}
 
 	// After few retry, we stop re-trying
-	for i := 0; i < 8; i++ {
+	for range 8 {
 		if err := helper.runOnceWithResult(t).Check(); err != nil {
 			t.Error(err)
 		}
@@ -1761,9 +1753,7 @@ func TestServiceStatusRename(t *testing.T) { //nolint: maintidx
 	//       happen on real glouton, because on same run we don't have both old & then new)
 	// run 1 has old metric pre-create in API and in cache and only create new metric
 	// run 2 has old metric pre-create in API and not in cache and only create new metric
-	for run := 0; run < 3; run++ {
-		run := run
-
+	for run := range 3 {
 		t.Run(fmt.Sprintf("run-%d", run), func(t *testing.T) {
 			t.Parallel()
 

@@ -20,6 +20,9 @@ case "$1" in
    "no-js")
       SKIP_JS=1
       ;;
+   "only-js")
+      ONLY_JS=1
+      ;;
    "docker-fast")
       ONLY_DOCKER_FAST=1
       SKIP_JS=1
@@ -29,9 +32,15 @@ case "$1" in
       echo "  go: only compile Go"
       echo "  race: only compile Go with -race"
       echo "  no-js: skip building JS"
+      echo "  only-js: just JS (and go generate)"
       echo "  docker-fast: build a docker from ./glouton (so you should run ./build.sh go before)"
       exit 1
 esac
+
+if [ "$2" != "" ]; then
+   echo "This script don't support multiple option"
+   exit 1
+fi
 
 if docker volume ls | grep -q glouton-buildcache; then
    GO_MOUNT_CACHE="-v glouton-buildcache:/go/pkg"
@@ -72,6 +81,26 @@ export GLOUTON_VERSION
 export GOTOOLCHAIN=auto # temporary. We need Go >= 1.22 to build and goreleaser doesn't include Go 1.22 yet.
 
 COMMIT=`git rev-parse --short HEAD || echo "unknown"`
+
+
+if [ "${ONLY_JS}" = "1" ]; then
+   echo "Run go generate to pack JS ui into Go files"
+
+   docker run --rm -e HOME=/go/pkg -e CGO_ENABLED=0 \
+      -v $(pwd):/src -w /src ${GO_MOUNT_CACHE} \
+      -v /var/run/docker.sock:/var/run/docker.sock \
+      --entrypoint '' \
+      -e GLOUTON_VERSION \
+      -e GOTOOLCHAIN \
+      -e GORELEASER_PREVIOUS_TAG=0.1.0 \
+      -e GORELEASER_CURRENT_TAG=0.1.1 \
+      goreleaser/goreleaser:${GORELEASER_VERSION} \
+      tini -g -- sh -exc "
+      mkdir -p /go/pkg
+      go generate ./...
+      chown -R $USER_UID api/models_gen.go"
+   exit 0
+fi
 
 echo "Building Go binary"
 if [ "${ONLY_DOCKER_FAST}" = "1" ]; then

@@ -47,7 +47,7 @@ func TestFailedPointsCache(t *testing.T) {
 	}
 
 	// Add 10 metric with labels id=1, id=2, ...
-	for i := 0; i < maxPendingPoints; i++ {
+	for i := range maxPendingPoints {
 		labels := map[string]string{labelID: strconv.Itoa(i)}
 		p := types.MetricPoint{
 			Labels: labels,
@@ -57,7 +57,7 @@ func TestFailedPointsCache(t *testing.T) {
 	}
 
 	// Test that all 10 metrics are present.
-	for i := 0; i < maxPendingPoints; i++ {
+	for i := range maxPendingPoints {
 		labels := map[string]string{labelID: strconv.Itoa(i)}
 		if !failedPoints.Contains(labels) {
 			t.Fatalf("Point %d is not present", i)
@@ -79,7 +79,7 @@ func TestFailedPointsCache(t *testing.T) {
 		t.Fatal("Failed points should contain 9 points")
 	}
 
-	for i := 0; i < 6; i++ {
+	for i := range 6 {
 		labels := map[string]string{labelID: strconv.Itoa(i)}
 
 		if failedPoints.Contains(labels) {
@@ -410,7 +410,7 @@ func BenchmarkFailedPointsDropping(b *testing.B) {
 	for i := 1; i <= 10; i++ {
 		labels := map[string]string{labelID: strconv.Itoa(i)}
 
-		for j := 0; j < maxPendingPoints/10; j++ {
+		for range maxPendingPoints / 10 {
 			p := types.MetricPoint{
 				Labels: labels,
 			}
@@ -421,12 +421,12 @@ func BenchmarkFailedPointsDropping(b *testing.B) {
 
 	b.ResetTimer()
 
-	for bn := 0; bn < b.N; bn++ {
+	for range b.N {
 		// Add 100 more points for each metric
 		for i := 1; i <= 10; i++ {
 			labels := map[string]string{labelID: strconv.Itoa(i)}
 
-			for j := 0; j < cleanupBatchSize/10; j++ {
+			for range cleanupBatchSize / 10 {
 				p := types.MetricPoint{
 					Labels: labels,
 				}

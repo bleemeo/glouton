@@ -19,6 +19,7 @@ package rules
 import (
 	"context"
 	"errors"
+	"glouton/prometheus/registry"
 	"glouton/store"
 	"glouton/types"
 	"sort"
@@ -107,6 +108,10 @@ func (a *mockAppender) UpdateMetadata(storage.SeriesRef, labels.Labels, metadata
 	return 0, errNotImplemented
 }
 
+func (a *mockAppender) AppendCTZeroSample(_ storage.SeriesRef, _ labels.Labels, _, _ int64) (storage.SeriesRef, error) {
+	return 0, errNotImplemented
+}
+
 func TestManager(t *testing.T) {
 	t0 := time.Now().Add(-time.Minute).Round(time.Millisecond)
 	t1 := t0.Add(time.Second)
@@ -180,8 +185,6 @@ func TestManager(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -189,7 +192,7 @@ func TestManager(t *testing.T) {
 
 			mgr := NewManager(context.Background(), tt.queryable, nil)
 
-			err := mgr.Collect(context.Background(), app.Appender(context.Background()))
+			err := mgr.CollectWithState(context.Background(), registry.GatherState{T0: time.Now()}, app.Appender(context.Background()))
 			if err != nil {
 				t.Error(err)
 			}

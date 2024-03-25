@@ -148,7 +148,7 @@ func (t *Target) Gather() ([]*dto.MetricFamily, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultGatherTimeout)
 	defer cancel()
 
-	return t.GatherWithState(ctx, registry.GatherState{})
+	return t.GatherWithState(ctx, registry.GatherState{T0: time.Now()})
 }
 
 func (t *Target) GatherWithState(ctx context.Context, state registry.GatherState) ([]*dto.MetricFamily, error) {
@@ -485,7 +485,7 @@ func (t *Target) facts(ctx context.Context, maxAge time.Duration) (facts map[str
 
 	tgt := t.buildScraper(snmpDiscoveryModule)
 
-	tmp, err := tgt.GatherWithState(ctx, registry.GatherState{})
+	tmp, err := tgt.GatherWithState(ctx, registry.GatherState{T0: time.Now()})
 	if err != nil {
 		t.lastFactErrAt = t.now()
 		t.lastFactErr = err

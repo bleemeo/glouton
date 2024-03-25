@@ -20,6 +20,7 @@ import (
 	"context"
 	"glouton/prometheus/registry"
 	"sync"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
@@ -45,7 +46,7 @@ func newGatherer(target configTarget) (*gathererWithContext, error) {
 }
 
 func (g *gathererWithContext) Gather() ([]*dto.MetricFamily, error) {
-	return g.GatherWithState(context.Background(), registry.GatherState{})
+	return g.GatherWithState(context.Background(), registry.GatherState{T0: time.Now()})
 }
 
 func (g *gathererWithContext) GatherWithState(ctx context.Context, _ registry.GatherState) ([]*dto.MetricFamily, error) {

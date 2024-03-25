@@ -24,7 +24,7 @@ import (
 	"net"
 	"strconv"
 
-	"github.com/StackExchange/wmi"
+	"github.com/yusufpapurcu/wmi"
 	"golang.org/x/sys/windows/registry"
 )
 

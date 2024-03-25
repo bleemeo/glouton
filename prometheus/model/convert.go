@@ -42,16 +42,12 @@ var (
 )
 
 func FamiliesToMetricPoints(
-	now time.Time,
+	defaultTS time.Time,
 	families []*dto.MetricFamily,
 	dropMetaLabels bool,
 ) []types.MetricPoint {
-	if now.IsZero() {
-		now = time.UnixMilli(0)
-	}
-
 	samples, err := expfmt.ExtractSamples(
-		&expfmt.DecodeOptions{Timestamp: model.TimeFromUnixNano(now.UnixNano())},
+		&expfmt.DecodeOptions{Timestamp: model.Time(defaultTS.UnixMilli())},
 		families...,
 	)
 	if err != nil {
@@ -76,7 +72,7 @@ func FamiliesToMetricPoints(
 
 		ts := sample.Timestamp.Time()
 		if sample.Timestamp == 0 {
-			ts = time.Time{}
+			ts = defaultTS
 		}
 
 		result[i] = types.MetricPoint{
@@ -181,7 +177,7 @@ func MetricPointsToFamilies(points []types.MetricPoint) []*dto.MetricFamily {
 		lbls := AnnotationToMetaLabels(labels.FromMap(p.Labels), p.Annotations)
 
 		ts := proto.Int64(p.Time.UnixMilli())
-		if p.Time.IsZero() {
+		if p.Time.IsZero() || p.Time.UnixMilli() == 0 {
 			ts = nil
 		}
 
@@ -289,6 +285,82 @@ func dropMetaLabelsFromPair(lbls []*dto.LabelPair) []*dto.LabelPair {
 		}
 
 		lbls[i] = l
+		i++
+	}
+
+	return lbls[:i]
+}
+
+func FamiliesDeepCopy(families []*dto.MetricFamily) []*dto.MetricFamily {
+	result := make([]*dto.MetricFamily, len(families))
+
+	for i, mf := range families {
+		b, err := proto.Marshal(mf)
+		if err != nil {
+			panic(err)
+		}
+
+		var tmp dto.MetricFamily
+
+		err = proto.Unmarshal(b, &tmp)
+		if err != nil {
+			panic(err)
+		}
+
+		result[i] = &tmp
+	}
+
+	return result
+}
+
+// FamiliesToNameAndItem converts labels of each metrics to just name + item. It kept
+// meta-label unchanged.
+// The input is modified.
+func FamiliesToNameAndItem(families []*dto.MetricFamily) {
+	builder := labels.NewBuilder(nil)
+
+	for _, mf := range families {
+		for _, m := range mf.GetMetric() {
+			builder.Reset(nil)
+
+			for _, lblPair := range m.GetLabel() {
+				builder.Set(lblPair.GetName(), lblPair.GetValue())
+			}
+
+			lbls := builder.Labels()
+			annotation := MetaLabelsToAnnotation(lbls)
+
+			if annotation.BleemeoItem == "" {
+				annotation.BleemeoItem = lbls.Get(types.LabelItem)
+			}
+
+			m.Label = itemAndMetaLabel(m.GetLabel(), annotation.BleemeoItem)
+		}
+	}
+}
+
+func itemAndMetaLabel(lbls []*dto.LabelPair, itemAnnotation string) []*dto.LabelPair {
+	i := 0
+
+	for _, l := range lbls {
+		if !strings.HasPrefix(l.GetName(), model.ReservedLabelPrefix) {
+			continue
+		}
+
+		lbls[i] = l
+		i++
+	}
+
+	if itemAnnotation != "" {
+		if len(lbls) == i {
+			lbls = append(lbls, nil)
+		}
+
+		lbls[i] = &dto.LabelPair{
+			Name:  proto.String(types.LabelItem),
+			Value: &itemAnnotation,
+		}
+
 		i++
 	}
 

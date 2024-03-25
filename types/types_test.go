@@ -175,8 +175,6 @@ func Test_MultiError_Is(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			if got := tt.errs.Is(tt.target); got != tt.want {
 				t.Errorf("MultiError.Is() = %v, want %v", got, tt.want)

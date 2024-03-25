@@ -28,7 +28,7 @@ import (
 	"glouton/types"
 	"time"
 
-	"github.com/cespare/xxhash"
+	"github.com/cespare/xxhash/v2"
 )
 
 var (

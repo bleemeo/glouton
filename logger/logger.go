@@ -233,7 +233,7 @@ func (wrapper GoKitLoggerWrapper) Log(keyvals ...interface{}) error {
 
 	var res strings.Builder
 
-	for i := 0; i < len(keyvals)/2; i++ {
+	for i := range len(keyvals) / 2 {
 		fmt.Fprintf(&res, "%v=\"%v\"", keyvals[2*i], keyvals[2*i+1])
 
 		if i != len(keyvals)/2-1 {

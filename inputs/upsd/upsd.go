@@ -19,6 +19,7 @@ package upsd
 import (
 	"glouton/inputs"
 	"glouton/inputs/internal"
+	"glouton/prometheus/registry"
 	"glouton/types"
 	"strings"
 
@@ -28,15 +29,15 @@ import (
 )
 
 // New returns a UPSD input.
-func New(server string, port int, username, password string) (telegraf.Input, *inputs.GathererOptions, error) {
+func New(server string, port int, username, password string) (telegraf.Input, registry.RegistrationOption, error) {
 	input, ok := telegraf_inputs.Inputs["upsd"]
 	if !ok {
-		return nil, nil, inputs.ErrDisabledInput
+		return nil, registry.RegistrationOption{}, inputs.ErrDisabledInput
 	}
 
 	upsdInput, ok := input().(*upsd.Upsd)
 	if !ok {
-		return nil, nil, inputs.ErrUnexpectedType
+		return nil, registry.RegistrationOption{}, inputs.ErrUnexpectedType
 	}
 
 	upsdInput.Server = server
@@ -52,7 +53,7 @@ func New(server string, port int, username, password string) (telegraf.Input, *i
 		Name: "UPSD",
 	}
 
-	options := &inputs.GathererOptions{
+	options := registry.RegistrationOption{
 		Rules: []types.SimpleRule{
 			{
 				TargetName:  "upsd_time_left_seconds",

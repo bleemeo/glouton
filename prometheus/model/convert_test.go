@@ -19,6 +19,7 @@ package model
 import (
 	"context"
 	"glouton/types"
+	"maps"
 	"testing"
 	"time"
 
@@ -30,19 +31,22 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-func TestConvertionLoop(t *testing.T) {
+func TestConversionLoop(t *testing.T) {
 	now := time.Date(2022, 1, 25, 11, 21, 27, 0, time.UTC)
 
 	cases := []struct {
-		name   string
-		points []types.MetricPoint
+		name      string
+		defaultTS time.Time
+		points    []types.MetricPoint
 	}{
 		{
-			name:   "empty",
-			points: nil,
+			name:      "empty",
+			defaultTS: now,
+			points:    nil,
 		},
 		{
-			name: "one points",
+			name:      "one points",
+			defaultTS: now,
 			points: []types.MetricPoint{
 				{
 					Point:  types.Point{Time: now, Value: 42.1},
@@ -51,7 +55,8 @@ func TestConvertionLoop(t *testing.T) {
 			},
 		},
 		{
-			name: "with annotations",
+			name:      "with annotations",
+			defaultTS: now,
 			points: []types.MetricPoint{
 				{
 					Point:  types.Point{Time: now, Value: 0.42},
@@ -71,7 +76,8 @@ func TestConvertionLoop(t *testing.T) {
 			},
 		},
 		{
-			name: "newline in status description",
+			name:      "newline in status description",
+			defaultTS: now,
 			points: []types.MetricPoint{
 				{
 					Point:  types.Point{Time: now, Value: 1.24},
@@ -86,7 +92,8 @@ func TestConvertionLoop(t *testing.T) {
 			},
 		},
 		{
-			name: "multiple-points",
+			name:      "multiple-points",
+			defaultTS: now,
 			points: []types.MetricPoint{
 				{
 					Point:  types.Point{Time: now, Value: 0},
@@ -152,7 +159,8 @@ func TestConvertionLoop(t *testing.T) {
 			},
 		},
 		{
-			name: "zero-time",
+			name:      "zero-time",
+			defaultTS: now,
 			points: []types.MetricPoint{
 				{
 					Point:  types.Point{Time: time.Time{}, Value: 1},
@@ -160,14 +168,20 @@ func TestConvertionLoop(t *testing.T) {
 				},
 			},
 		},
+		{
+			name:      "epoc-time",
+			defaultTS: now,
+			points: []types.MetricPoint{
+				{
+					Point:  types.Point{Time: time.UnixMilli(0), Value: 1},
+					Labels: map[string]string{types.LabelName: "name"},
+				},
+			},
+		},
 	}
 
 	for _, tt := range cases {
-		tt := tt
-
-		for _, useAppenable := range []bool{false, true} {
-			useAppendable := useAppenable
-
+		for _, useAppendable := range []bool{false, true} {
 			fullName := tt.name + "WithoutAppendable"
 			if useAppendable {
 				fullName = tt.name + "WithAppendable"
@@ -197,35 +211,31 @@ func TestConvertionLoop(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				for _, samples := range app.Committed {
-					mf, err := SamplesToMetricFamily(samples, nil)
-					if err != nil {
-						t.Fatal(err)
-					}
-
-					mfs = append(mfs, mf)
+				mfs, err := app.AsMF()
+				if err != nil {
+					t.Fatal(err)
 				}
 
-				// Expected points are the input points with the date changed if it was empty.
-				// The default behavior is to set the date to now if it was empty.
+				// Expected points are the input points with the date changed if it was unset.
+				// Unset means time.Time{} or Unix epoc. In both case they are replaced by defaultTS.
 				expected := make([]types.MetricPoint, 0, len(tt.points))
 
 				for _, point := range tt.points {
-					if point.Time.IsZero() {
-						point.Time = now
+					if point.Time.IsZero() || point.Time.Equal(time.UnixMilli(0)) {
+						point.Time = tt.defaultTS
 					}
 
 					expected = append(expected, point)
 				}
 
-				got := FamiliesToMetricPoints(now, mfs, true)
+				got := FamiliesToMetricPoints(tt.defaultTS, mfs, true)
 
 				if diff := types.DiffMetricPoints(expected, got, false); diff != "" {
 					t.Errorf("conversion mismatch: (-want +got)\n:%s", diff)
 				}
 
 				mfs = MetricPointsToFamilies(tt.points)
-				got = FamiliesToMetricPoints(now, mfs, true)
+				got = FamiliesToMetricPoints(tt.defaultTS, mfs, true)
 
 				if diff := types.DiffMetricPoints(expected, got, false); diff != "" {
 					t.Errorf("conversion mismatch: (-want +got)\n:%s", diff)
@@ -235,11 +245,12 @@ func TestConvertionLoop(t *testing.T) {
 	}
 }
 
-func TestConvertion(t *testing.T) { //nolint: maintidx
+func TestConversion(t *testing.T) { //nolint: maintidx
 	now := time.UnixMilli(time.Now().UnixMilli())
 
 	cases := []struct {
 		name           string
+		defaultTS      time.Time
 		input          []types.MetricPoint
 		wantMFS        []*dto.MetricFamily
 		wantPromLabels []labels.Labels
@@ -247,13 +258,15 @@ func TestConvertion(t *testing.T) { //nolint: maintidx
 	}{
 		{
 			name:           "empty",
+			defaultTS:      now,
 			input:          nil,
 			wantMFS:        nil,
 			wantPromLabels: nil,
 			wantPoints:     nil,
 		},
 		{
-			name: "one-points",
+			name:      "one-points",
+			defaultTS: now,
 			input: []types.MetricPoint{
 				{
 					Point:  types.Point{Time: now, Value: 42.1},
@@ -288,7 +301,8 @@ func TestConvertion(t *testing.T) { //nolint: maintidx
 			},
 		},
 		{
-			name: "zero-time",
+			name:      "zero-time",
+			defaultTS: now,
 			input: []types.MetricPoint{
 				{
 					Point:  types.Point{Time: time.Time{}, Value: 42.1},
@@ -322,7 +336,183 @@ func TestConvertion(t *testing.T) { //nolint: maintidx
 			},
 		},
 		{
-			name: "annotations-in-annotations",
+			name:      "epoc-time",
+			defaultTS: now,
+			input: []types.MetricPoint{
+				{
+					Point:  types.Point{Time: time.UnixMilli(0), Value: 42.1},
+					Labels: map[string]string{types.LabelName: "cpu_used"},
+				},
+			},
+			wantMFS: []*dto.MetricFamily{
+				{
+					Name: proto.String("cpu_used"),
+					Help: proto.String(""),
+					Type: dto.MetricType_UNTYPED.Enum(),
+					Metric: []*dto.Metric{
+						{
+							Untyped: &dto.Untyped{
+								Value: proto.Float64(42.1),
+							},
+						},
+					},
+				},
+			},
+			wantPromLabels: []labels.Labels{
+				labels.FromMap(map[string]string{
+					types.LabelName: "cpu_used",
+				}),
+			},
+			wantPoints: []types.MetricPoint{
+				{
+					Point:  types.Point{Time: now, Value: 42.1},
+					Labels: map[string]string{types.LabelName: "cpu_used"},
+				},
+			},
+		},
+		{
+			name:      "zero-time-to-0",
+			defaultTS: time.Time{},
+			input: []types.MetricPoint{
+				{
+					Point:  types.Point{Time: time.Time{}, Value: 42.1},
+					Labels: map[string]string{types.LabelName: "cpu_used"},
+				},
+			},
+			wantMFS: []*dto.MetricFamily{
+				{
+					Name: proto.String("cpu_used"),
+					Help: proto.String(""),
+					Type: dto.MetricType_UNTYPED.Enum(),
+					Metric: []*dto.Metric{
+						{
+							Untyped: &dto.Untyped{
+								Value: proto.Float64(42.1),
+							},
+						},
+					},
+				},
+			},
+			wantPromLabels: []labels.Labels{
+				labels.FromMap(map[string]string{
+					types.LabelName: "cpu_used",
+				}),
+			},
+			wantPoints: []types.MetricPoint{
+				{
+					Point:  types.Point{Time: time.Time{}, Value: 42.1},
+					Labels: map[string]string{types.LabelName: "cpu_used"},
+				},
+			},
+		},
+		{
+			name:      "epoc-time-to-0",
+			defaultTS: time.Time{},
+			input: []types.MetricPoint{
+				{
+					Point:  types.Point{Time: time.UnixMilli(0), Value: 42.1},
+					Labels: map[string]string{types.LabelName: "cpu_used"},
+				},
+			},
+			wantMFS: []*dto.MetricFamily{
+				{
+					Name: proto.String("cpu_used"),
+					Help: proto.String(""),
+					Type: dto.MetricType_UNTYPED.Enum(),
+					Metric: []*dto.Metric{
+						{
+							Untyped: &dto.Untyped{
+								Value: proto.Float64(42.1),
+							},
+						},
+					},
+				},
+			},
+			wantPromLabels: []labels.Labels{
+				labels.FromMap(map[string]string{
+					types.LabelName: "cpu_used",
+				}),
+			},
+			wantPoints: []types.MetricPoint{
+				{
+					Point:  types.Point{Time: time.Time{}, Value: 42.1},
+					Labels: map[string]string{types.LabelName: "cpu_used"},
+				},
+			},
+		},
+		{
+			name:      "zero-time-to-epoc",
+			defaultTS: time.UnixMilli(0),
+			input: []types.MetricPoint{
+				{
+					Point:  types.Point{Time: time.Time{}, Value: 42.1},
+					Labels: map[string]string{types.LabelName: "cpu_used"},
+				},
+			},
+			wantMFS: []*dto.MetricFamily{
+				{
+					Name: proto.String("cpu_used"),
+					Help: proto.String(""),
+					Type: dto.MetricType_UNTYPED.Enum(),
+					Metric: []*dto.Metric{
+						{
+							Untyped: &dto.Untyped{
+								Value: proto.Float64(42.1),
+							},
+						},
+					},
+				},
+			},
+			wantPromLabels: []labels.Labels{
+				labels.FromMap(map[string]string{
+					types.LabelName: "cpu_used",
+				}),
+			},
+			wantPoints: []types.MetricPoint{
+				{
+					Point:  types.Point{Time: time.UnixMilli(0), Value: 42.1},
+					Labels: map[string]string{types.LabelName: "cpu_used"},
+				},
+			},
+		},
+		{
+			name:      "epoc-time-to-epoc",
+			defaultTS: time.UnixMilli(0),
+			input: []types.MetricPoint{
+				{
+					Point:  types.Point{Time: time.UnixMilli(0), Value: 42.1},
+					Labels: map[string]string{types.LabelName: "cpu_used"},
+				},
+			},
+			wantMFS: []*dto.MetricFamily{
+				{
+					Name: proto.String("cpu_used"),
+					Help: proto.String(""),
+					Type: dto.MetricType_UNTYPED.Enum(),
+					Metric: []*dto.Metric{
+						{
+							Untyped: &dto.Untyped{
+								Value: proto.Float64(42.1),
+							},
+						},
+					},
+				},
+			},
+			wantPromLabels: []labels.Labels{
+				labels.FromMap(map[string]string{
+					types.LabelName: "cpu_used",
+				}),
+			},
+			wantPoints: []types.MetricPoint{
+				{
+					Point:  types.Point{Time: time.UnixMilli(0), Value: 42.1},
+					Labels: map[string]string{types.LabelName: "cpu_used"},
+				},
+			},
+		},
+		{
+			name:      "annotations-in-annotations",
+			defaultTS: now,
 			input: []types.MetricPoint{
 				{
 					Point: types.Point{Time: now, Value: 42.1},
@@ -337,7 +527,7 @@ func TestConvertion(t *testing.T) { //nolint: maintidx
 						ServiceName: "apache",
 						Status: types.StatusDescription{
 							CurrentStatus:     types.StatusCritical,
-							StatusDescription: "decription",
+							StatusDescription: "description",
 						},
 					},
 				},
@@ -353,7 +543,7 @@ func TestConvertion(t *testing.T) { //nolint: maintidx
 						ServiceName: "apache",
 						Status: types.StatusDescription{
 							CurrentStatus:     types.StatusCritical,
-							StatusDescription: "decription",
+							StatusDescription: "description",
 						},
 					},
 				},
@@ -369,7 +559,7 @@ func TestConvertion(t *testing.T) { //nolint: maintidx
 							Label: []*dto.LabelPair{
 								{Name: proto.String(types.LabelMetaBleemeoItem), Value: proto.String("value1")},
 								{Name: proto.String(types.LabelMetaContainerID), Value: proto.String("123456")},
-								{Name: proto.String(types.LabelMetaCurrentDescription), Value: proto.String("decription")},
+								{Name: proto.String(types.LabelMetaCurrentDescription), Value: proto.String("description")},
 								{Name: proto.String(types.LabelMetaCurrentStatus), Value: proto.String("critical")},
 								{Name: proto.String(types.LabelMetaServiceName), Value: proto.String("apache")},
 								{Name: proto.String("alabel"), Value: proto.String("test")},
@@ -384,7 +574,7 @@ func TestConvertion(t *testing.T) { //nolint: maintidx
 							Label: []*dto.LabelPair{
 								{Name: proto.String(types.LabelMetaBleemeoItem), Value: proto.String("value2")},
 								{Name: proto.String(types.LabelMetaContainerID), Value: proto.String("7890")},
-								{Name: proto.String(types.LabelMetaCurrentDescription), Value: proto.String("decription")},
+								{Name: proto.String(types.LabelMetaCurrentDescription), Value: proto.String("description")},
 								{Name: proto.String(types.LabelMetaCurrentStatus), Value: proto.String("critical")},
 								{Name: proto.String(types.LabelMetaServiceName), Value: proto.String("apache")},
 								{Name: proto.String("alabel"), Value: proto.String("test3")},
@@ -403,7 +593,7 @@ func TestConvertion(t *testing.T) { //nolint: maintidx
 					"zlabel":                          "test2",
 					types.LabelMetaBleemeoItem:        "value1",
 					types.LabelMetaContainerID:        "123456",
-					types.LabelMetaCurrentDescription: "decription",
+					types.LabelMetaCurrentDescription: "description",
 					types.LabelMetaCurrentStatus:      "critical",
 					types.LabelMetaServiceName:        "apache",
 				}),
@@ -412,7 +602,7 @@ func TestConvertion(t *testing.T) { //nolint: maintidx
 					"alabel":                          "test3",
 					types.LabelMetaBleemeoItem:        "value2",
 					types.LabelMetaContainerID:        "7890",
-					types.LabelMetaCurrentDescription: "decription",
+					types.LabelMetaCurrentDescription: "description",
 					types.LabelMetaCurrentStatus:      "critical",
 					types.LabelMetaServiceName:        "apache",
 				}),
@@ -431,7 +621,7 @@ func TestConvertion(t *testing.T) { //nolint: maintidx
 						ServiceName: "apache",
 						Status: types.StatusDescription{
 							CurrentStatus:     types.StatusCritical,
-							StatusDescription: "decription",
+							StatusDescription: "description",
 						},
 					},
 				},
@@ -447,14 +637,15 @@ func TestConvertion(t *testing.T) { //nolint: maintidx
 						ServiceName: "apache",
 						Status: types.StatusDescription{
 							CurrentStatus:     types.StatusCritical,
-							StatusDescription: "decription",
+							StatusDescription: "description",
 						},
 					},
 				},
 			},
 		},
 		{
-			name: "annotations-in-labels",
+			name:      "annotations-in-labels",
+			defaultTS: now,
 			input: []types.MetricPoint{
 				{
 					Point: types.Point{Time: now, Value: 42.1},
@@ -464,7 +655,7 @@ func TestConvertion(t *testing.T) { //nolint: maintidx
 						"zlabel":                          "test2",
 						types.LabelMetaBleemeoItem:        "value1",
 						types.LabelMetaContainerID:        "123456",
-						types.LabelMetaCurrentDescription: "decription",
+						types.LabelMetaCurrentDescription: "description",
 						types.LabelMetaCurrentStatus:      "critical",
 						types.LabelMetaServiceName:        "apache",
 					},
@@ -476,7 +667,7 @@ func TestConvertion(t *testing.T) { //nolint: maintidx
 						"alabel":                          "test3",
 						types.LabelMetaBleemeoItem:        "value2",
 						types.LabelMetaContainerID:        "7890",
-						types.LabelMetaCurrentDescription: "decription",
+						types.LabelMetaCurrentDescription: "description",
 						types.LabelMetaCurrentStatus:      "critical",
 						types.LabelMetaServiceName:        "apache",
 					},
@@ -493,7 +684,7 @@ func TestConvertion(t *testing.T) { //nolint: maintidx
 							Label: []*dto.LabelPair{
 								{Name: proto.String(types.LabelMetaBleemeoItem), Value: proto.String("value1")},
 								{Name: proto.String(types.LabelMetaContainerID), Value: proto.String("123456")},
-								{Name: proto.String(types.LabelMetaCurrentDescription), Value: proto.String("decription")},
+								{Name: proto.String(types.LabelMetaCurrentDescription), Value: proto.String("description")},
 								{Name: proto.String(types.LabelMetaCurrentStatus), Value: proto.String("critical")},
 								{Name: proto.String(types.LabelMetaServiceName), Value: proto.String("apache")},
 								{Name: proto.String("alabel"), Value: proto.String("test")},
@@ -508,7 +699,7 @@ func TestConvertion(t *testing.T) { //nolint: maintidx
 							Label: []*dto.LabelPair{
 								{Name: proto.String(types.LabelMetaBleemeoItem), Value: proto.String("value2")},
 								{Name: proto.String(types.LabelMetaContainerID), Value: proto.String("7890")},
-								{Name: proto.String(types.LabelMetaCurrentDescription), Value: proto.String("decription")},
+								{Name: proto.String(types.LabelMetaCurrentDescription), Value: proto.String("description")},
 								{Name: proto.String(types.LabelMetaCurrentStatus), Value: proto.String("critical")},
 								{Name: proto.String(types.LabelMetaServiceName), Value: proto.String("apache")},
 								{Name: proto.String("alabel"), Value: proto.String("test3")},
@@ -527,7 +718,7 @@ func TestConvertion(t *testing.T) { //nolint: maintidx
 					"zlabel":                          "test2",
 					types.LabelMetaBleemeoItem:        "value1",
 					types.LabelMetaContainerID:        "123456",
-					types.LabelMetaCurrentDescription: "decription",
+					types.LabelMetaCurrentDescription: "description",
 					types.LabelMetaCurrentStatus:      "critical",
 					types.LabelMetaServiceName:        "apache",
 				}),
@@ -536,7 +727,7 @@ func TestConvertion(t *testing.T) { //nolint: maintidx
 					"alabel":                          "test3",
 					types.LabelMetaBleemeoItem:        "value2",
 					types.LabelMetaContainerID:        "7890",
-					types.LabelMetaCurrentDescription: "decription",
+					types.LabelMetaCurrentDescription: "description",
 					types.LabelMetaCurrentStatus:      "critical",
 					types.LabelMetaServiceName:        "apache",
 				}),
@@ -555,7 +746,7 @@ func TestConvertion(t *testing.T) { //nolint: maintidx
 						ServiceName: "apache",
 						Status: types.StatusDescription{
 							CurrentStatus:     types.StatusCritical,
-							StatusDescription: "decription",
+							StatusDescription: "description",
 						},
 					},
 				},
@@ -571,7 +762,7 @@ func TestConvertion(t *testing.T) { //nolint: maintidx
 						ServiceName: "apache",
 						Status: types.StatusDescription{
 							CurrentStatus:     types.StatusCritical,
-							StatusDescription: "decription",
+							StatusDescription: "description",
 						},
 					},
 				},
@@ -580,8 +771,6 @@ func TestConvertion(t *testing.T) { //nolint: maintidx
 	}
 
 	for _, tt := range cases {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -591,7 +780,7 @@ func TestConvertion(t *testing.T) { //nolint: maintidx
 				t.Errorf("MetricPointsToFamilies mismatch (-want +got)\n%s", diff)
 			}
 
-			got := FamiliesToMetricPoints(now, gotMFS, true)
+			got := FamiliesToMetricPoints(tt.defaultTS, gotMFS, true)
 			if diff := types.DiffMetricPoints(tt.wantPoints, got, false); diff != "" {
 				t.Errorf("FamiliesToMetricPoints mismatch (-want +got)\n%s", diff)
 			}
@@ -614,14 +803,8 @@ func copyPoints(input []types.MetricPoint) []types.MetricPoint {
 	result := make([]types.MetricPoint, 0, len(input))
 
 	for _, p := range input {
-		work := p
-		work.Labels = make(map[string]string, len(p.Labels))
-
-		for k, v := range p.Labels {
-			work.Labels[k] = v
-		}
-
-		result = append(result, work)
+		p.Labels = maps.Clone(p.Labels)
+		result = append(result, p)
 	}
 
 	return result
@@ -663,11 +846,7 @@ func TestFamiliesToCollector(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		tt := tt
-
 		for _, targetType := range []dto.MetricType{dto.MetricType_GAUGE, dto.MetricType_COUNTER} {
-			targetType := targetType
-
 			name := tt.name + "-" + targetType.String()
 
 			t.Run(name, func(t *testing.T) {
@@ -693,5 +872,219 @@ func TestFamiliesToCollector(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+func TestFamiliesToNameAndItem(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		input []*dto.MetricFamily
+		want  []*dto.MetricFamily
+	}{
+		{
+			name: "just-name",
+			input: []*dto.MetricFamily{
+				{
+					Name: proto.String("cpu_used"),
+					Help: proto.String(""),
+					Type: dto.MetricType_UNTYPED.Enum(),
+					Metric: []*dto.Metric{
+						{
+							Untyped: &dto.Untyped{
+								Value: proto.Float64(42.1),
+							},
+						},
+					},
+				},
+			},
+			want: []*dto.MetricFamily{
+				{
+					Name: proto.String("cpu_used"),
+					Help: proto.String(""),
+					Type: dto.MetricType_UNTYPED.Enum(),
+					Metric: []*dto.Metric{
+						{
+							Untyped: &dto.Untyped{
+								Value: proto.Float64(42.1),
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "just-one-item",
+			input: []*dto.MetricFamily{
+				{
+					Name: proto.String("disk_used"),
+					Help: proto.String(""),
+					Type: dto.MetricType_UNTYPED.Enum(),
+					Metric: []*dto.Metric{
+						{
+							Label: []*dto.LabelPair{
+								{Name: proto.String(types.LabelItem), Value: proto.String("/home")},
+							},
+							Untyped: &dto.Untyped{
+								Value: proto.Float64(42.1),
+							},
+						},
+					},
+				},
+			},
+			want: []*dto.MetricFamily{
+				{
+					Name: proto.String("disk_used"),
+					Help: proto.String(""),
+					Type: dto.MetricType_UNTYPED.Enum(),
+					Metric: []*dto.Metric{
+						{
+							Label: []*dto.LabelPair{
+								{Name: proto.String(types.LabelItem), Value: proto.String("/home")},
+							},
+							Untyped: &dto.Untyped{
+								Value: proto.Float64(42.1),
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "annotation-with-over-item",
+			input: []*dto.MetricFamily{
+				{
+					Name: proto.String("disk_used"),
+					Help: proto.String(""),
+					Type: dto.MetricType_UNTYPED.Enum(),
+					Metric: []*dto.Metric{
+						{
+							Label: []*dto.LabelPair{
+								{Name: proto.String(types.LabelMetaBleemeoItem), Value: proto.String("/srv")},
+								{Name: proto.String(types.LabelItem), Value: proto.String("/home")},
+							},
+							Untyped: &dto.Untyped{
+								Value: proto.Float64(42.1),
+							},
+						},
+					},
+				},
+			},
+			want: []*dto.MetricFamily{
+				{
+					Name: proto.String("disk_used"),
+					Help: proto.String(""),
+					Type: dto.MetricType_UNTYPED.Enum(),
+					Metric: []*dto.Metric{
+						{
+							Label: []*dto.LabelPair{
+								{Name: proto.String(types.LabelMetaBleemeoItem), Value: proto.String("/srv")},
+								{Name: proto.String(types.LabelItem), Value: proto.String("/srv")},
+							},
+							Untyped: &dto.Untyped{
+								Value: proto.Float64(42.1),
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "annotation-is-enough",
+			input: []*dto.MetricFamily{
+				{
+					Name: proto.String("disk_used"),
+					Help: proto.String(""),
+					Type: dto.MetricType_UNTYPED.Enum(),
+					Metric: []*dto.Metric{
+						{
+							Label: []*dto.LabelPair{
+								{Name: proto.String(types.LabelMetaBleemeoItem), Value: proto.String("/srv")},
+							},
+							Untyped: &dto.Untyped{
+								Value: proto.Float64(42.1),
+							},
+						},
+					},
+				},
+			},
+			want: []*dto.MetricFamily{
+				{
+					Name: proto.String("disk_used"),
+					Help: proto.String(""),
+					Type: dto.MetricType_UNTYPED.Enum(),
+					Metric: []*dto.Metric{
+						{
+							Label: []*dto.LabelPair{
+								{Name: proto.String(types.LabelMetaBleemeoItem), Value: proto.String("/srv")},
+								{Name: proto.String(types.LabelItem), Value: proto.String("/srv")},
+							},
+							Untyped: &dto.Untyped{
+								Value: proto.Float64(42.1),
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "only_meta_labels_are_kept",
+			input: []*dto.MetricFamily{
+				{
+					Name: proto.String("disk_used"),
+					Help: proto.String(""),
+					Type: dto.MetricType_UNTYPED.Enum(),
+					Metric: []*dto.Metric{
+						{
+							Label: []*dto.LabelPair{
+								{Name: proto.String(types.LabelMetaBleemeoItem), Value: proto.String("/srv")},
+								{Name: proto.String(types.LabelMetaBleemeoUUID), Value: proto.String("kept")},
+								{Name: proto.String(types.LabelMetaProbeScraperName), Value: proto.String("kept2")},
+								{Name: proto.String(types.LabelDevice), Value: proto.String("remove")},
+								{Name: proto.String(types.LabelInstance), Value: proto.String("remove2")},
+								{Name: proto.String(types.LabelInstanceUUID), Value: proto.String("remove3")},
+							},
+							Untyped: &dto.Untyped{
+								Value: proto.Float64(42.1),
+							},
+						},
+					},
+				},
+			},
+			want: []*dto.MetricFamily{
+				{
+					Name: proto.String("disk_used"),
+					Help: proto.String(""),
+					Type: dto.MetricType_UNTYPED.Enum(),
+					Metric: []*dto.Metric{
+						{
+							Label: []*dto.LabelPair{
+								{Name: proto.String(types.LabelMetaBleemeoItem), Value: proto.String("/srv")},
+								{Name: proto.String(types.LabelMetaBleemeoUUID), Value: proto.String("kept")},
+								{Name: proto.String(types.LabelMetaProbeScraperName), Value: proto.String("kept2")},
+								{Name: proto.String(types.LabelItem), Value: proto.String("/srv")},
+							},
+							Untyped: &dto.Untyped{
+								Value: proto.Float64(42.1),
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := FamiliesDeepCopy(tt.input)
+			FamiliesToNameAndItem(got)
+
+			if diff := types.DiffMetricFamilies(tt.want, got, false, false); diff != "" {
+				t.Errorf("FamiliesToNameAndItem() mismatch (-want +got)\n%s", diff)
+			}
+		})
 	}
 }

@@ -19,6 +19,7 @@ package fail2ban
 import (
 	"glouton/inputs"
 	"glouton/inputs/internal"
+	"glouton/prometheus/registry"
 	"time"
 
 	"github.com/influxdata/telegraf"
@@ -27,15 +28,15 @@ import (
 )
 
 // New returns a Fail2ban input.
-func New() (telegraf.Input, *inputs.GathererOptions, error) {
+func New() (telegraf.Input, registry.RegistrationOption, error) {
 	input, ok := telegraf_inputs.Inputs["fail2ban"]
 	if !ok {
-		return nil, nil, inputs.ErrDisabledInput
+		return nil, registry.RegistrationOption{}, inputs.ErrDisabledInput
 	}
 
 	fail2banInput, ok := input().(*fail2ban.Fail2ban)
 	if !ok {
-		return nil, nil, inputs.ErrUnexpectedType
+		return nil, registry.RegistrationOption{}, inputs.ErrUnexpectedType
 	}
 
 	// The input uses "sudo fail2ban-client status myjail" to retrieve the metrics.
@@ -47,7 +48,7 @@ func New() (telegraf.Input, *inputs.GathererOptions, error) {
 		Name:        "fail2ban",
 	}
 
-	options := &inputs.GathererOptions{
+	options := registry.RegistrationOption{
 		// The input uses an external command with sudo so we gather metrics less often.
 		MinInterval: 60 * time.Second,
 	}

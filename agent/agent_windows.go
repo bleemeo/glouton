@@ -25,7 +25,7 @@ import (
 	"glouton/logger"
 	"os"
 
-	"github.com/StackExchange/wmi"
+	"github.com/yusufpapurcu/wmi"
 	"golang.org/x/sys/windows/svc"
 )
 

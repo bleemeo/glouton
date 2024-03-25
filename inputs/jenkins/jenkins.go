@@ -20,6 +20,7 @@ import (
 	"glouton/config"
 	"glouton/inputs"
 	"glouton/inputs/internal"
+	"glouton/prometheus/registry"
 	"glouton/types"
 	"time"
 
@@ -30,15 +31,15 @@ import (
 )
 
 // New returns a Jenkins input.
-func New(config config.Service) (telegraf.Input, *inputs.GathererOptions, error) {
+func New(config config.Service) (telegraf.Input, registry.RegistrationOption, error) {
 	input, ok := telegraf_inputs.Inputs["jenkins"]
 	if !ok {
-		return nil, nil, inputs.ErrDisabledInput
+		return nil, registry.RegistrationOption{}, inputs.ErrDisabledInput
 	}
 
 	jenkinsInput, ok := input().(*jenkins.Jenkins)
 	if !ok {
-		return nil, nil, inputs.ErrUnexpectedType
+		return nil, registry.RegistrationOption{}, inputs.ErrUnexpectedType
 	}
 
 	jenkinsInput.URL = config.StatsURL
@@ -66,7 +67,7 @@ func New(config config.Service) (telegraf.Input, *inputs.GathererOptions, error)
 		Name:        "jenkins",
 	}
 
-	options := &inputs.GathererOptions{
+	options := registry.RegistrationOption{
 		MinInterval: 60 * time.Second,
 		Rules: []types.SimpleRule{
 			{

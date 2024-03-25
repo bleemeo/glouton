@@ -366,9 +366,7 @@ func TestGather(t *testing.T) { //nolint:maintidx
 		return time.Date(2024, 2, 13, 10, 35, 0, 0, time.Local)
 	}
 
-	for _, testCase := range testCases {
-		tc := testCase
-
+	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			input, mdadmDetailsFn := setupMdstatTest(t, tc.name)
 
@@ -477,9 +475,7 @@ func TestFormatRemainingTime(t *testing.T) {
 		return time.Date(2024, 2, 13, 10, 35, 0, 0, time.Local)
 	}
 
-	for _, testCase := range cases {
-		tc := testCase
-
+	for _, tc := range cases {
 		t.Run(tc.timeLeft.String(), func(t *testing.T) {
 			result := formatRemainingTime(tc.timeLeft.Minutes(), timeNow)
 			if result != tc.expected {

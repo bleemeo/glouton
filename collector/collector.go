@@ -133,25 +133,13 @@ func (c *Collector) Close() {
 }
 
 // RunGather run one gather and send metric through the accumulator.
-func (c *Collector) RunGather(_ context.Context, t0 time.Time) {
-	c.runOnce(t0)
+func (c *Collector) RunGather(ctx context.Context, t0 time.Time) {
+	c.runOnce(ctx, t0)
 }
 
-func (c *Collector) inputsForCollection() map[int]telegraf.Input {
+func (c *Collector) runOnce(ctx context.Context, t0 time.Time) {
 	c.l.Lock()
-	defer c.l.Unlock()
 
-	inputsCopy := make(map[int]telegraf.Input, len(c.inputs))
-
-	for id, v := range c.inputs {
-		inputsCopy[id] = v
-	}
-
-	return inputsCopy
-}
-
-func (c *Collector) runOnce(t0 time.Time) {
-	inputsCopy := c.inputsForCollection()
 	acc := inputs.FixedTimeAccumulator{
 		Time: t0,
 		Acc:  c.acc,
@@ -159,8 +147,8 @@ func (c *Collector) runOnce(t0 time.Time) {
 
 	var wg sync.WaitGroup
 
-	for id, input := range inputsCopy {
-		id, input := id, input
+	for id, input := range c.inputs {
+		fieldCaches := c.fieldCaches[id]
 
 		wg.Add(1)
 
@@ -170,7 +158,7 @@ func (c *Collector) runOnce(t0 time.Time) {
 
 			secretInput, hasSecrets := input.(inputs.SecretfulInput)
 			if hasSecrets && secretInput.SecretCount() > 0 {
-				releaseGate, err := registry.WaitForSecrets(context.Background(), c.secretInputsGate, secretInput.SecretCount())
+				releaseGate, err := registry.WaitForSecrets(ctx, c.secretInputsGate, secretInput.SecretCount())
 				if err != nil {
 					return
 				}
@@ -181,7 +169,7 @@ func (c *Collector) runOnce(t0 time.Time) {
 			ima := &inactiveMarkerAccumulator{
 				FixedTimeAccumulator: acc,
 				latestValues:         make(map[string]map[string]map[string]fieldCache),
-				fieldCaches:          c.fieldCaches[id],
+				fieldCaches:          fieldCaches,
 			}
 			// Errors are already logged by the input.
 			_ = input.Gather(ima)
@@ -189,6 +177,8 @@ func (c *Collector) runOnce(t0 time.Time) {
 			ima.deactivateUnseenMetrics()
 		}()
 	}
+
+	c.l.Unlock()
 
 	wg.Wait()
 }

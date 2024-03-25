@@ -31,6 +31,7 @@ import (
 	"glouton/delay"
 	"glouton/facts"
 	"glouton/logger"
+	"glouton/prometheus/model"
 	"glouton/threshold"
 	"glouton/types"
 	"glouton/version"
@@ -67,7 +68,7 @@ const (
 	syncMethodContainer     = "container"
 	syncMethodMetric        = "metric"
 	syncMethodConfig        = "config"
-	syncMethodCrashReports  = "crashreports"
+	syncMethodDiagnostics   = "diagnostics"
 )
 
 // Synchronizer synchronize object with Bleemeo.
@@ -102,6 +103,9 @@ type Synchronizer struct {
 	lastMetricCount           int
 	currentConfigNotified     string
 	agentID                   string
+
+	onDemandDiagnostic     synchronizerOnDemandDiagnostic
+	onDemandDiagnosticLock sync.Mutex
 
 	// configSyncDone is true when the config items were successfully synced.
 	configSyncDone bool
@@ -142,7 +146,8 @@ type thresholdOverrideKey struct {
 // Option are parameters for the synchronizer.
 type Option struct {
 	bleemeoTypes.GlobalOption
-	Cache *cache.Cache
+	Cache        *cache.Cache
+	PushAppender *model.BufferAppender
 
 	// DisableCallback is a function called when Synchronizer request Bleemeo connector to be disabled
 	// reason state why it's disabled and until set for how long it should be disabled.
@@ -154,7 +159,7 @@ type Option struct {
 	// SetInitialized tells the bleemeo connector that the MQTT module can be started
 	SetInitialized func()
 
-	// IsMqttConnected returns wether the MQTT connector is operating nominally, and specifically
+	// IsMqttConnected returns whether the MQTT connector is operating nominally, and specifically
 	// that it can receive mqtt notifications. It is useful for the fallback on http polling
 	// described above Synchronizer.lastMaintenanceSync definition.
 	// Note: returns false when the mqtt connector is not enabled.
@@ -802,7 +807,7 @@ func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) (map[str
 
 	syncStep := []struct {
 		name                   string
-		method                 func(context.Context, bool, bool) (updateThresholds bool, err error)
+		method                 func(ctx context.Context, fullSync, onlyEssential bool) (updateThresholds bool, err error)
 		enabledInMaintenance   bool
 		enabledInSuspendedMode bool
 		skipOnlyEssential      bool // should be true for method that ignore onlyEssential
@@ -818,7 +823,7 @@ func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) (map[str
 		{name: syncMethodMonitor, method: s.syncMonitors, skipOnlyEssential: true},
 		{name: syncMethodMetric, method: s.syncMetrics},
 		{name: syncMethodConfig, method: s.syncConfig},
-		{name: syncMethodCrashReports, method: s.syncCrashReports},
+		{name: syncMethodDiagnostics, method: s.syncDiagnostics},
 	}
 
 	var firstErr error
@@ -962,7 +967,7 @@ func (s *Synchronizer) syncToPerform(ctx context.Context) (map[string]bool, bool
 		syncMethods[syncMethodMonitor] = true
 		syncMethods[syncMethodSNMP] = true
 		syncMethods[syncMethodVSphere] = true
-		syncMethods[syncMethodCrashReports] = true
+		syncMethods[syncMethodDiagnostics] = true
 	}
 
 	if fullSync || s.lastFactUpdatedAt != localFacts[facts.FactUpdatedAt] {

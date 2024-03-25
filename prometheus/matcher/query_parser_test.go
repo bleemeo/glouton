@@ -14,10 +14,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package rules
+package matcher
 
 import (
-	"glouton/prometheus/matcher"
 	"glouton/types"
 	"testing"
 
@@ -31,12 +30,12 @@ func TestMatchersFromQuery(t *testing.T) {
 	tests := []struct {
 		name  string
 		query string
-		want  []matcher.Matchers
+		want  []Matchers
 	}{
 		{
 			name:  "simple",
 			query: "cpu_used",
-			want: []matcher.Matchers{
+			want: []Matchers{
 				{
 					&labels.Matcher{
 						Type:  labels.MatchEqual,
@@ -49,7 +48,7 @@ func TestMatchersFromQuery(t *testing.T) {
 		{
 			name:  "operation",
 			query: "cpu_user + cpu_system",
-			want: []matcher.Matchers{
+			want: []Matchers{
 				{
 					&labels.Matcher{
 						Type:  labels.MatchEqual,
@@ -69,7 +68,7 @@ func TestMatchersFromQuery(t *testing.T) {
 		{
 			name:  "aggregation",
 			query: "sum(disk_used_perc)",
-			want: []matcher.Matchers{
+			want: []Matchers{
 				{
 					&labels.Matcher{
 						Type:  labels.MatchEqual,
@@ -82,7 +81,7 @@ func TestMatchersFromQuery(t *testing.T) {
 		{
 			name:  "rate",
 			query: "rate(request_per_seconds_total[1m])",
-			want: []matcher.Matchers{
+			want: []Matchers{
 				{
 					&labels.Matcher{
 						Type:  labels.MatchEqual,
@@ -95,7 +94,7 @@ func TestMatchersFromQuery(t *testing.T) {
 		{
 			name:  "subquery",
 			query: "rate(request_per_seconds_total[1m:10s])",
-			want: []matcher.Matchers{
+			want: []Matchers{
 				{
 					&labels.Matcher{
 						Type:  labels.MatchEqual,
@@ -108,7 +107,7 @@ func TestMatchersFromQuery(t *testing.T) {
 		{
 			name:  "plus_one",
 			query: "uptime+1",
-			want: []matcher.Matchers{
+			want: []Matchers{
 				{
 					&labels.Matcher{
 						Type:  labels.MatchEqual,
@@ -121,7 +120,7 @@ func TestMatchersFromQuery(t *testing.T) {
 		{
 			name:  "parenthesis",
 			query: "(uptime+1)",
-			want: []matcher.Matchers{
+			want: []Matchers{
 				{
 					&labels.Matcher{
 						Type:  labels.MatchEqual,
@@ -134,7 +133,7 @@ func TestMatchersFromQuery(t *testing.T) {
 		{
 			name:  "minus",
 			query: "-uptime",
-			want: []matcher.Matchers{
+			want: []Matchers{
 				{
 					&labels.Matcher{
 						Type:  labels.MatchEqual,
@@ -147,7 +146,7 @@ func TestMatchersFromQuery(t *testing.T) {
 		{
 			name:  "matcher_label",
 			query: `disk_used_perc{item="/home"}`,
-			want: []matcher.Matchers{
+			want: []Matchers{
 				{
 					&labels.Matcher{
 						Type:  labels.MatchEqual,
@@ -165,7 +164,7 @@ func TestMatchersFromQuery(t *testing.T) {
 		{
 			name:  "matcher_noteq",
 			query: `disk_used_perc{item!="/home"}`,
-			want: []matcher.Matchers{
+			want: []Matchers{
 				{
 					&labels.Matcher{
 						Type:  labels.MatchNotEqual,
@@ -183,7 +182,7 @@ func TestMatchersFromQuery(t *testing.T) {
 		{
 			name:  "matcher_re",
 			query: `disk_used_perc{item=~"(/home|/)"}`,
-			want: []matcher.Matchers{
+			want: []Matchers{
 				{
 					&labels.Matcher{
 						Type:  labels.MatchRegexp,
@@ -201,7 +200,7 @@ func TestMatchersFromQuery(t *testing.T) {
 		{
 			name:  "re_name",
 			query: `{__name__=~"disk_used.*"}`,
-			want: []matcher.Matchers{
+			want: []Matchers{
 				{
 					&labels.Matcher{
 						Type:  labels.MatchRegexp,
@@ -214,7 +213,7 @@ func TestMatchersFromQuery(t *testing.T) {
 		{
 			name:  "complex",
 			query: `1/(max(avg_over_time(request_total{status="200"}[1m] offset 5m))) * (max(uptime{instance="host",item!~"ok?"}) + min_over_time(plop_total[1m:10s] offset 1m))`,
-			want: []matcher.Matchers{
+			want: []Matchers{
 				{
 					&labels.Matcher{
 						Type:  labels.MatchEqual,
@@ -255,8 +254,6 @@ func TestMatchersFromQuery(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 

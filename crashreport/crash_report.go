@@ -29,15 +29,12 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"slices"
 	"sort"
 	"sync"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 )
-
-const MaxReportSize = 2 << 20
 
 const (
 	crashReportWorkDir = "crash_report"
@@ -47,8 +44,9 @@ const (
 
 	panicDiagnosticArchive = "crash_diagnostic.tar"
 
-	crashReportArchiveFormat  = "crashreport_20060102-150405.zip"
-	crashReportArchivePattern = "crashreport_[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]-[0-9][0-9][0-9][0-9][0-9][0-9].zip"
+	crashReportArchiveFormat   = "crashreport_20060102-150405.zip"
+	crashReportArchivePattern  = "crashreport_[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]-[0-9][0-9][0-9][0-9][0-9][0-9].zip"
+	crashReportUploadedPattern = "crashreport_[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]-[0-9][0-9][0-9][0-9][0-9][0-9].uploaded.zip"
 
 	writeInProgressFlag = "crash_report_in_progress"
 )
@@ -148,8 +146,7 @@ func setupStderrRedirection(stateDir string) {
 	os.Stderr = newStderrFile
 }
 
-// ListCrashReports returns all crash reports present in stateDir.
-func ListCrashReports(stateDir string) []string {
+func listCrashReportFilenames(stateDir string) []string {
 	crashReports, err := filepath.Glob(filepath.Join(stateDir, crashReportArchivePattern))
 	if err != nil {
 		// filepath.Glob's documentation states that "Glob ignores file system errors [...]".
@@ -158,6 +155,29 @@ func ListCrashReports(stateDir string) []string {
 	}
 
 	return crashReports
+}
+
+func listUploadedCrashReportFilenames(stateDir string) []string {
+	crashReports, err := filepath.Glob(filepath.Join(stateDir, crashReportUploadedPattern))
+	if err != nil {
+		// filepath.Glob's documentation states that "Glob ignores file system errors [...]".
+		// The only possible returned error is ErrBadPattern, and the above pattern is known to be valid.
+		return nil
+	}
+
+	return crashReports
+}
+
+// ListUnUploadedCrashReports returns all crash reports present in stateDir.
+func ListUnUploadedCrashReports(stateDir string) []types.DiagnosticFile {
+	crashReports := listCrashReportFilenames(stateDir)
+	diagnostics := make([]types.DiagnosticFile, 0, len(crashReports))
+
+	for _, filename := range crashReports {
+		diagnostics = append(diagnostics, diagnosticFile{filename: filename})
+	}
+
+	return diagnostics
 }
 
 // Remove deletes all the given crash reports from stateDir.
@@ -172,49 +192,44 @@ func Remove(reports ...string) {
 
 // PurgeCrashReports deletes oldest crash reports present in 'stateDir'
 // and only keeps the 'maxReportCount' most recent ones.
-// Crash reports specified as 'preserve' won't be deleted.
-func PurgeCrashReports(maxReportCount int, preserve ...string) {
+func PurgeCrashReports(maxReportCount int) {
 	lock.Lock()
 	stateDir := dir
 	lock.Unlock()
 
-	purgeCrashReports(maxReportCount, preserve, stateDir)
+	purgeCrashReports(maxReportCount, stateDir)
 }
 
-func purgeCrashReports(maxReportCount int, preserve []string, stateDir string) {
-	existingCrashReports := ListCrashReports(stateDir)
-	crashReportCount := len(existingCrashReports)
+func purgeCrashReports(maxReportCount int, stateDir string) {
+	uploadedCrashReports := listUploadedCrashReportFilenames(stateDir)
+	existingCrashReports := listCrashReportFilenames(stateDir)
 
-	// Prevent preserved reports from being purged
-	for _, report := range preserve {
-		if idx := slices.Index(existingCrashReports, report); idx >= 0 {
-			// Remove report from the list of crash reports
-			existingCrashReports = append(existingCrashReports[:idx], existingCrashReports[idx+1:]...)
-		}
-	}
-
-	if crashReportCount <= maxReportCount {
+	if len(existingCrashReports)+len(uploadedCrashReports) <= maxReportCount {
 		return
 	}
 
 	// Remove the oldest excess crash reports
+	sort.Strings(uploadedCrashReports)
 	sort.Strings(existingCrashReports)
 
-	Remove(existingCrashReports[:len(existingCrashReports)-maxReportCount]...)
+	removeOrder := uploadedCrashReports
+	removeOrder = append(removeOrder, existingCrashReports...)
+
+	Remove(removeOrder[:len(removeOrder)-maxReportCount]...)
 }
 
 // BundleCrashReportFiles creates a crash report archive with the current datetime in its name,
 // then moves the previous stderr log file to it, and creates a flag file to prevent any upload,
 // as the crash report is not complete (the flag will be removed once the diagnostic is created).
 // It returns the path to the created crash report (or an empty string if not created).
-func BundleCrashReportFiles(ctx context.Context, maxReportCount int) (reportPath string) {
+func BundleCrashReportFiles(ctx context.Context, maxReportCount int) {
 	lock.Lock()
 	stateDir := dir
 	enabled := !disabled
 	diagnosticFn := diagnostic
 	lock.Unlock()
 
-	return bundleCrashReportFiles(ctx, maxReportCount, stateDir, enabled, diagnosticFn)
+	bundleCrashReportFiles(ctx, maxReportCount, stateDir, enabled, diagnosticFn)
 }
 
 func bundleCrashReportFiles(ctx context.Context, maxReportCount int, stateDir string, enabled bool, diagnosticFn diagnosticFunc) (reportPath string) {
@@ -425,4 +440,49 @@ func generateDiagnostic(ctx context.Context, writer types.ArchiveWriter, diagnos
 	case <-ctx.Done():
 		return ctx.Err()
 	}
+}
+
+type diagnosticFile struct {
+	filename string
+}
+
+func (d diagnosticFile) Filename() string {
+	return filepath.Base(d.filename)
+}
+
+func (d diagnosticFile) Reader() (types.ReaderWithLen, error) {
+	diagnosticFile, err := os.Open(d.filename)
+	if err != nil {
+		return nil, err
+	}
+
+	stat, err := diagnosticFile.Stat()
+	if err != nil {
+		diagnosticFile.Close()
+
+		return nil, err
+	}
+
+	return readerWithLen{File: diagnosticFile, len: int(stat.Size())}, nil
+}
+
+type readerWithLen struct {
+	*os.File
+	len int
+}
+
+func (f readerWithLen) Len() int {
+	return f.len
+}
+
+func (d diagnosticFile) MarkUploaded() error {
+	return markUploaded(d.filename)
+}
+
+func markUploaded(filename string) error {
+	ext := filepath.Ext(filename)
+	withoutExt := filename[:len(filename)-len(ext)]
+	targetName := withoutExt + ".uploaded" + ext
+
+	return os.Rename(filename, targetName)
 }

@@ -1,0 +1,10 @@
+device_scan:
+  /dev/sda:
+    file: smartctl_sda.txt
+    rc: 2
+  /dev/sg0:
+    file: smartctl_sg0.txt
+    rc: 2
+  /dev/bus/0 -d megaraid,0:
+    file: smartctl_disk0.txt
+    rc: 0

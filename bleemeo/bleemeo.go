@@ -17,6 +17,7 @@
 package bleemeo
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -29,7 +30,10 @@ import (
 	"glouton/crashreport"
 	"glouton/logger"
 	"glouton/prometheus/exporter/snmp"
+	"glouton/prometheus/model"
+	"glouton/prometheus/registry"
 	gloutonTypes "glouton/types"
+	"glouton/utils/archivewriter"
 	"io"
 	"math/rand"
 	"runtime"
@@ -38,6 +42,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/prometheus/prometheus/model/labels"
+	"github.com/prometheus/prometheus/storage"
 	"golang.org/x/oauth2"
 )
 
@@ -101,10 +107,11 @@ func (rs *reloadState) Close() {
 type Connector struct {
 	option types.GlobalOption
 
-	cache       *cache.Cache
-	sync        *synchronizer.Synchronizer
-	mqtt        *mqtt.Client
-	mqttRestart chan interface{}
+	cache        *cache.Cache
+	pushAppender *model.BufferAppender
+	sync         *synchronizer.Synchronizer
+	mqtt         *mqtt.Client
+	mqttRestart  chan interface{}
 
 	l                          sync.RWMutex
 	lastKnownReport            time.Time
@@ -120,13 +127,15 @@ type Connector struct {
 // New create a new Connector.
 func New(option types.GlobalOption) (c *Connector, err error) {
 	c = &Connector{
-		option:      option,
-		cache:       cache.Load(option.State),
-		mqttRestart: make(chan interface{}, 1),
+		option:       option,
+		cache:        cache.Load(option.State),
+		mqttRestart:  make(chan interface{}, 1),
+		pushAppender: model.NewBufferAppender(),
 	}
 
 	c.sync, err = synchronizer.New(synchronizer.Option{
 		GlobalOption:                c.option,
+		PushAppender:                c.pushAppender,
 		Cache:                       c.cache,
 		UpdateConfigCallback:        c.updateConfig,
 		DisableCallback:             c.disableCallback,
@@ -191,17 +200,18 @@ func (c *Connector) initMQTT(previousPoint []gloutonTypes.MetricPoint) {
 
 	c.mqtt = mqtt.New(
 		mqtt.Option{
-			GlobalOption:         c.option,
-			Cache:                c.cache,
-			AgentID:              types.AgentID(c.AgentID()),
-			AgentPassword:        password,
-			UpdateConfigCallback: c.sync.NotifyConfigUpdate,
-			UpdateMetrics:        c.sync.UpdateMetrics,
-			UpdateMaintenance:    c.sync.UpdateMaintenance,
-			UpdateMonitor:        c.sync.UpdateMonitor,
-			InitialPoints:        previousPoint,
-			GetToken:             c.sync.GetToken,
-			LastMetricActivation: c.sync.LastMetricActivation,
+			GlobalOption:            c.option,
+			Cache:                   c.cache,
+			AgentID:                 types.AgentID(c.AgentID()),
+			AgentPassword:           password,
+			UpdateConfigCallback:    c.sync.NotifyConfigUpdate,
+			UpdateMetrics:           c.sync.UpdateMetrics,
+			UpdateMaintenance:       c.sync.UpdateMaintenance,
+			UpdateMonitor:           c.sync.UpdateMonitor,
+			HandleDiagnosticRequest: c.HandleDiagnosticRequest,
+			InitialPoints:           previousPoint,
+			GetToken:                c.sync.GetToken,
+			LastMetricActivation:    c.sync.LastMetricActivation,
 		},
 	)
 
@@ -951,23 +961,31 @@ func (c *Connector) HealthCheck() bool {
 	return ok
 }
 
-func (c *Connector) EmitInternalMetric(ctx context.Context, now time.Time) {
+func (c *Connector) EmitInternalMetric(_ context.Context, state registry.GatherState, app storage.Appender) error {
+	_ = state
+
 	c.l.RLock()
 	defer c.l.RUnlock()
 
 	if c.mqtt != nil && c.mqtt.Connected() {
-		c.option.PushPoints.PushPoints(ctx, []gloutonTypes.MetricPoint{
-			{
-				Point: gloutonTypes.Point{
-					Time:  now,
-					Value: 1.0,
-				},
-				Labels: map[string]string{
-					gloutonTypes.LabelName: "agent_status",
-				},
-			},
-		})
+		if err := c.pushAppender.CommitCopyAndReset(app); err != nil {
+			return err
+		}
+
+		_, err := app.Append(
+			0,
+			labels.FromMap(map[string]string{
+				gloutonTypes.LabelName: "agent_status",
+			}),
+			0, // Use time from Registry
+			1.0,
+		)
+		if err != nil {
+			return err
+		}
 	}
+
+	return app.Commit()
 }
 
 func (c *Connector) IsMetricAllowed(metric gloutonTypes.LabelsAndAnnotation) (bool, types.DenyReason, error) {
@@ -1061,4 +1079,26 @@ func (c *Connector) disableMqtt(mqtt *mqtt.Client, reason types.DisableReason, u
 	}
 
 	mqtt.Disable(until.Add(mqttDisableDelay), reason)
+}
+
+func (c *Connector) HandleDiagnosticRequest(ctx context.Context, requestToken string) {
+	archiveBuf := new(bytes.Buffer)
+	archive := archivewriter.NewZipWriter(archiveBuf)
+
+	err := c.option.WriteDiagnosticArchive(ctx, archive)
+	if err != nil {
+		logger.V(1).Printf("Failed to write on-demand diagnostic archive: %v", err)
+
+		return
+	}
+
+	err = archive.Close()
+	if err != nil {
+		logger.V(1).Printf("Failed to close on-demand diagnostic archive: %v", err)
+
+		return
+	}
+
+	datetime := time.Now().Format("20060102-150405")
+	c.sync.ScheduleDiagnosticUpload("on_demand_"+datetime+".zip", requestToken, archiveBuf.Bytes())
 }

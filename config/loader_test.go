@@ -302,9 +302,7 @@ func TestIsNil(t *testing.T) {
 		},
 	}
 
-	for _, testCase := range cases {
-		tc := testCase
-
+	for _, tc := range cases {
 		t.Run(fmt.Sprintf("%#v", tc.value), func(t *testing.T) {
 			t.Parallel()
 

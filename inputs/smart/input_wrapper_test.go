@@ -18,9 +18,9 @@ package smart
 
 import (
 	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -30,8 +30,6 @@ import (
 	"github.com/influxdata/telegraf/plugins/inputs/smart"
 	"gopkg.in/yaml.v3"
 )
-
-var errInvalidArguments = errors.New("invalid arguments")
 
 func TestStorageDevicesPattern(t *testing.T) {
 	if _, err := filepath.Match(sgDevicesPattern, "foo"); err != nil {
@@ -116,7 +114,7 @@ func TestParseScanOutput(t *testing.T) {
 			expectedScanSmartctlInvocations: 1,
 		},
 		{
-			name:                            "macOS",
+			name:                            "macos",
 			expectedInitSmartctlInvocations: 2,
 			expectedDevices:                 []string{"IOService:/AppleARMPE/arm-io/AppleT600xIO/ans@8F400000/AppleASCWrapV4/iop-ans-nub/RTBuddy(ANS2)/RTBuddyService/AppleANS3NVMeController/NS_01@1 -d nvme"}, //nolint:lll
 			expectedToIgnoreStorageDevices:  true,
@@ -148,9 +146,7 @@ func TestParseScanOutput(t *testing.T) {
 		},
 	}
 
-	for _, testCase := range testCases {
-		tc := testCase
-
+	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			var (
 				smartctlData SmartctlData
@@ -205,14 +201,20 @@ func TestParseScanOutput(t *testing.T) {
 }
 
 type SmartctlData struct {
-	Scan string            `yaml:"scan"`
-	Info map[string]string `yaml:"info"`
-
+	DeviceScan       map[string]DeviceScan `yaml:"device_scan"`
+	scanContent      []byte
 	invocationsCount int
 }
 
+type DeviceScan struct {
+	Filename string `yaml:"file"`
+	RC       int    `yaml:"rc"`
+
+	fileContent []byte
+}
+
 func parseSmartctlData(inputName string) (SmartctlData, error) {
-	raw, err := os.ReadFile("./testdata/" + inputName + ".yml")
+	raw, err := os.ReadFile(filepath.Join("testdata", inputName, "index.yml"))
 	if err != nil {
 		return SmartctlData{}, err
 	}
@@ -224,31 +226,38 @@ func parseSmartctlData(inputName string) (SmartctlData, error) {
 		return SmartctlData{}, err
 	}
 
+	for device, deviceScan := range smartctlData.DeviceScan {
+		deviceScan.fileContent, err = os.ReadFile(filepath.Join("testdata", inputName, deviceScan.Filename))
+		if err != nil {
+			return SmartctlData{}, err
+		}
+
+		smartctlData.DeviceScan[device] = deviceScan
+	}
+
+	smartctlData.scanContent, err = os.ReadFile(filepath.Join("testdata", inputName, "smartctl_scan.txt"))
+	if err != nil {
+		return SmartctlData{}, err
+	}
+
 	return smartctlData, nil
 }
 
 func (smartctlData *SmartctlData) makeRunCmdFor(t *testing.T) runCmdType {
 	t.Helper()
 
-	const deviceNotFound = `smartctl 7.2 2020-12-30 r5155 [x86_64-linux-5.15.0-91-generic] (local build)
-Copyright (C) 2002-20, Bruce Allen, Christian Franke, www.smartmontools.org
-
-Smartctl open device: %s failed: No such device
-`
-
-	return func(_ config.Duration, _ bool, _ string, args ...string) ([]byte, error) {
+	return func(timeout config.Duration, sudo bool, command string, args ...string) ([]byte, error) {
 		smartctlData.invocationsCount++
 
 		switch cmd := args[0]; cmd {
 		case "--scan":
-			return []byte(smartctlData.Scan), nil
+			return smartctlData.scanContent, nil
 		case "--info":
 		// Handling it below
 		default:
-			err := fmt.Errorf("%w: %v", errInvalidArguments, args)
-			t.Error(err)
+			t.Fatalf("unexpected call to runCmd(%v, %v, %v, %s)", timeout, sudo, command, args)
 
-			return nil, err
+			return nil, errors.New("unreachable code") //nolint: goerr113 // we purposely make this error not re-usable
 		}
 
 		var device string
@@ -259,13 +268,21 @@ Smartctl open device: %s failed: No such device
 			device = args[len(args)-1]
 		}
 
-		infoData, found := smartctlData.Info[device]
+		deviceData, found := smartctlData.DeviceScan[device]
 		if !found {
-			t.Errorf("Info about device %q not found.", device)
+			t.Fatalf("Info about device %q not found.", device)
 
-			return []byte(fmt.Sprintf(deviceNotFound, device)), fmt.Errorf("%w: device %q not found", errInvalidArguments, device)
+			return nil, errors.New("unreachable code") //nolint: goerr113 // we purposely make this error not re-usable
 		}
 
-		return []byte(infoData), nil
+		var err error
+
+		if deviceData.RC != 0 {
+			// we want to build an &exec.ExitError{ProcessState: &os.ProcessState{}}
+			// but we can't because ProcessState{} only had private field
+			err = errors.New("This should be ExitError with rc=" + strconv.Itoa(deviceData.RC)) //nolint: goerr113 // we can't use the true ExitError. This error shouldn't be re-used
+		}
+
+		return deviceData.fileContent, err
 	}
 }

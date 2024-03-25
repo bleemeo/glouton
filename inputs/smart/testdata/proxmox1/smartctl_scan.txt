@@ -1,0 +1,15 @@
+/dev/sda -d scsi # /dev/sda, SCSI device
+/dev/bus/0 -d megaraid,0 # /dev/bus/0 [megaraid_disk_00], SCSI device
+/dev/bus/0 -d megaraid,1 # /dev/bus/0 [megaraid_disk_01], SCSI device
+/dev/bus/0 -d megaraid,2 # /dev/bus/0 [megaraid_disk_02], SCSI device
+/dev/bus/0 -d megaraid,3 # /dev/bus/0 [megaraid_disk_03], SCSI device
+/dev/bus/0 -d megaraid,4 # /dev/bus/0 [megaraid_disk_04], SCSI device
+/dev/bus/0 -d megaraid,5 # /dev/bus/0 [megaraid_disk_05], SCSI device
+/dev/bus/0 -d megaraid,6 # /dev/bus/0 [megaraid_disk_06], SCSI device
+/dev/bus/0 -d megaraid,7 # /dev/bus/0 [megaraid_disk_07], SCSI device
+/dev/bus/0 -d megaraid,8 # /dev/bus/0 [megaraid_disk_08], SCSI device
+/dev/bus/0 -d megaraid,9 # /dev/bus/0 [megaraid_disk_09], SCSI device
+/dev/bus/0 -d megaraid,10 # /dev/bus/0 [megaraid_disk_10], SCSI device
+/dev/bus/0 -d megaraid,11 # /dev/bus/0 [megaraid_disk_11], SCSI device
+/dev/bus/0 -d megaraid,12 # /dev/bus/0 [megaraid_disk_12], SCSI device
+/dev/bus/0 -d megaraid,13 # /dev/bus/0 [megaraid_disk_13], SCSI device

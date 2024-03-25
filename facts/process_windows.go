@@ -251,7 +251,7 @@ func parseProcessData(process *SystemProcessInformationStruct) (res Process, ok 
 		if err == nil {
 			var i int32
 
-			for i = 0; i < argc; i++ {
+			for i = range argc {
 				res.CmdLineList = append(res.CmdLineList, windows.UTF16PtrToString((*uint16)(unsafe.Pointer(&argv[i][0]))))
 			}
 		} else {

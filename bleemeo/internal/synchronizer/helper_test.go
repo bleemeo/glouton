@@ -308,7 +308,7 @@ func (helper *syncTestHelper) runUntilNoError(t *testing.T, maxRun int, timeStep
 
 	result := runOnceResult{}
 
-	for run := 0; run < maxRun; run++ {
+	for range maxRun {
 		tmp := helper.runOnceNoReset(t)
 		result = mergeResult(result, tmp)
 
