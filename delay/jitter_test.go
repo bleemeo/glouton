@@ -89,7 +89,6 @@ func TestExponential(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -150,11 +149,10 @@ func TestExponentialMax(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			for n := 0; n < maxIter; n++ {
+			for n := range maxIter {
 				got := Exponential(tt.args.base, tt.args.powerFactor, n, tt.args.max)
 
 				if got > tt.wantLessThan {

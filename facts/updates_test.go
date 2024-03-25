@@ -475,8 +475,6 @@ Para ver estas actualizaciones adicionales, ejecute: apt list --upgradable
 		},
 	}
 	for _, c := range cases {
-		c := c
-
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
 

@@ -247,8 +247,6 @@ func (bc *baseCheck) openSockets(scheduleUpdate func(runAt time.Time)) {
 	bc.cancel = cancel
 
 	for _, addr := range bc.tcpAddresses {
-		addr := addr
-
 		if _, ok := bc.disabledPersistent.Load(addr); ok {
 			continue
 		}

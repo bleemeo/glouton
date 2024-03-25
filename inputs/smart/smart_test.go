@@ -20,9 +20,7 @@ func TestOverrideDeviceName(t *testing.T) {
 		},
 	}
 
-	for _, testCase := range testCases {
-		tc := testCase
-
+	for _, tc := range testCases {
 		t.Run(tc.deviceName+"/"+tc.deviceType, func(t *testing.T) {
 			result := overrideDeviceName(tc.deviceName, tc.deviceType)
 			if result != tc.expectedName {

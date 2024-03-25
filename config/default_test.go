@@ -46,9 +46,6 @@ func testMatcher(t *testing.T, matcher types.Matcher, allowedItems []string, den
 	allItems = append(allItems, deniedItem...)
 
 	for i, item := range allItems {
-		i := i
-		item := item
-
 		t.Run(item, func(t *testing.T) {
 			t.Parallel()
 
@@ -292,9 +289,6 @@ func TestDefaultDFFSTypeIgnore(t *testing.T) {
 	allItems = append(allItems, deniedType...)
 
 	for i, item := range allItems {
-		i := i
-		item := item
-
 		t.Run(item, func(t *testing.T) {
 			t.Parallel()
 

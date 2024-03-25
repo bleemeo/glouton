@@ -207,7 +207,7 @@ func TestLimitedConcurrentcy(t *testing.T) {
 		}
 
 		// First test maxConcurrency call, all should be fast
-		for i := 0; i < runCmdCount; i++ {
+		for range runCmdCount {
 			wg.Add(1)
 
 			go func() {
@@ -254,7 +254,7 @@ func Test_addStats(t *testing.T) {
 
 	const outputValue = "something in output"
 
-	for i := 0; i < 5000; i++ {
+	for range 5000 {
 		currentTime = currentTime.Add(time.Minute)
 		wrapper.addStats(smartExecution{
 			args:              []string{"ok", "ok"},

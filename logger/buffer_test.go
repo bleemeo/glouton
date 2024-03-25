@@ -41,7 +41,7 @@ func Test_bufferSize(t *testing.T) {
 
 	var tailAlreadyPresent bool
 
-	for lineNumber := 0; lineNumber < maxLine; lineNumber++ {
+	for lineNumber := range maxLine {
 		line := fmt.Sprintf("this is line #%d. This random is to reduce compression %d%d%d\n", lineNumber, rand.Int(), rand.Int(), rand.Int()) //nolint: gosec
 
 		n, err := b.write(time.Now(), []byte(line))
@@ -118,7 +118,7 @@ func Test_bufferSize(t *testing.T) {
 				tailStartAt int
 			)
 
-			for n := 0; n < maxLine; n++ {
+			for n := range maxLine {
 				if !seenNumber[n] && headEndAt == 0 {
 					headEndAt = n
 				}
@@ -306,8 +306,6 @@ func Test_bufferOrder(t *testing.T) { //nolint: maintidx
 	}
 
 	for _, tt := range cases {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 

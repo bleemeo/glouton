@@ -154,15 +154,13 @@ func (m *Manager) Devices(ctx context.Context, maxAge time.Duration) []bleemeoTy
 	deviceChan := make(chan bleemeoTypes.VSphereDevice)
 	wg := new(sync.WaitGroup)
 
-	for _, vSphere := range m.vSpheres {
-		vSphere := vSphere
-
+	for name := range m.vSpheres {
 		wg.Add(1)
 
 		go func() {
 			defer crashreport.ProcessPanic()
 
-			vSphere.devices(ctx, deviceChan)
+			m.vSpheres[name].devices(ctx, deviceChan)
 			wg.Done()
 		}()
 	}

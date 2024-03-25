@@ -102,7 +102,7 @@ func (ppf *pastPointFilter) filter(mfs []*dto.MetricFamily, err error) ([]*dto.M
 
 		m := 0
 
-		for mi := 0; mi < len(mf.Metric); mi++ { //nolint:protogetter
+		for mi := range len(mf.Metric) { //nolint:protogetter
 			metric := mf.Metric[mi] //nolint:protogetter
 			if metric == nil {
 				continue

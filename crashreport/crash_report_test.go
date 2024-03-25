@@ -154,7 +154,7 @@ func TestPurgeCrashReports(t *testing.T) {
 		const keep = 2
 		mostRecentReports := make([]string, keep)
 
-		for i := 0; i < 10; i++ {
+		for i := range 10 {
 			reportTime := time.Now().Add(time.Duration(-i) * time.Hour).Add(time.Duration(i*7) * time.Second)
 			crashReportPath := filepath.Join(testDir, reportTime.Format(crashReportArchiveFormat))
 
@@ -200,7 +200,7 @@ func TestPurgeCrashReports(t *testing.T) {
 
 		var reportsToKeep []string
 
-		for i := 0; i < 10; i++ {
+		for i := range 10 {
 			reportTime := time.Now().Add(time.Duration(-i) * time.Hour).Add(time.Duration(i*7) * time.Second)
 			crashReportPath := filepath.Join(testDir, reportTime.Format(crashReportArchiveFormat))
 
@@ -298,9 +298,7 @@ func TestGenerateDiagnostic(t *testing.T) {
 		},
 	}
 
-	for _, testCase := range cases {
-		tc := testCase
-
+	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			diagnosticFn := func(context.Context, types.ArchiveWriter) error {
 				time.Sleep(tc.diagnosticDuration) // Simulates processing
@@ -411,9 +409,7 @@ func TestBundleCrashReportFiles(t *testing.T) { //nolint:maintidx
 		},
 	}
 
-	for _, testCase := range cases {
-		tc := testCase
-
+	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			stateDir := t.TempDir()
 
