@@ -34,32 +34,6 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
-func setupTestDir(t *testing.T) (testDir string, delTestDir func()) {
-	t.Helper()
-
-	testDir, err := os.MkdirTemp("", "testworkdir_")
-	if err != nil {
-		t.Skip("Could not create test directory:", err)
-	}
-
-	delTestDir = func() {
-		err := os.RemoveAll(testDir)
-		if err != nil {
-			t.Logf("Failed to remove test dir %q", testDir)
-		}
-	}
-
-	if tmpInfo, err := os.Stat(testDir); err != nil {
-		delTestDir()
-		t.Skip("Failed to", err)
-	} else if tmpInfo.Mode().Perm()&0o200 == 0 {
-		delTestDir()
-		t.Skipf("Missing write permission for temp dir %q", testDir)
-	}
-
-	return testDir, delTestDir
-}
-
 func TestCrashReportArchivePattern(t *testing.T) {
 	t.Parallel()
 
@@ -97,15 +71,13 @@ func TestWorkDirCreation(t *testing.T) {
 	}
 
 	t.Run("Work dir not existing", func(t *testing.T) {
-		testDir, delTmpDir := setupTestDir(t)
-		defer delTmpDir()
+		testDir := t.TempDir()
 
 		wrapper(t, testDir)
 	})
 
 	t.Run("Work dir already existing", func(t *testing.T) {
-		testDir, delTmpDir := setupTestDir(t)
-		defer delTmpDir()
+		testDir := t.TempDir()
 
 		err := os.Mkdir(filepath.Join(testDir, crashReportWorkDir), 0o700)
 		if err != nil && !os.IsExist(err) {
@@ -118,8 +90,7 @@ func TestWorkDirCreation(t *testing.T) {
 
 func TestIsWriteInProgress(t *testing.T) {
 	t.Run("In progress", func(t *testing.T) {
-		testDir, delTmpDir := setupTestDir(t)
-		defer delTmpDir()
+		testDir := t.TempDir()
 
 		f, err := os.Create(filepath.Join(testDir, writeInProgressFlag))
 		if err != nil {
@@ -134,8 +105,7 @@ func TestIsWriteInProgress(t *testing.T) {
 	})
 
 	t.Run("Not in progress", func(t *testing.T) {
-		testDir, delTmpDir := setupTestDir(t)
-		defer delTmpDir()
+		testDir := t.TempDir()
 
 		if IsWriteInProgress(testDir) {
 			t.Fatal("Write is not in progress but was considered to be in progress.")
@@ -144,8 +114,7 @@ func TestIsWriteInProgress(t *testing.T) {
 }
 
 func TestStderrRedirection(t *testing.T) {
-	testDir, delTmpDir := setupTestDir(t)
-	defer delTmpDir()
+	testDir := t.TempDir()
 
 	setupStderrRedirection(testDir)
 
@@ -180,19 +149,14 @@ func TestStderrRedirection(t *testing.T) {
 
 func TestPurgeCrashReports(t *testing.T) {
 	t.Run("Keep the last reports", func(t *testing.T) {
-		testDir, delTmpDir := setupTestDir(t)
-		defer delTmpDir()
+		testDir := t.TempDir()
 
 		const keep = 2
 		mostRecentReports := make([]string, keep)
 
-		for i := range 5 {
+		for i := range 10 {
 			reportTime := time.Now().Add(time.Duration(-i) * time.Hour).Add(time.Duration(i*7) * time.Second)
 			crashReportPath := filepath.Join(testDir, reportTime.Format(crashReportArchiveFormat))
-
-			if i < keep {
-				mostRecentReports[i] = crashReportPath // Save it for later check
-			}
 
 			f, err := os.Create(crashReportPath)
 			if err != nil {
@@ -200,26 +164,39 @@ func TestPurgeCrashReports(t *testing.T) {
 			}
 
 			f.Close()
+
+			if i < keep {
+				mostRecentReports[i] = crashReportPath // Save it for later check
+			} else if i%2 == 0 {
+				// 50% of the remaining are marked as uploaded
+				if err := markUploaded(crashReportPath); err != nil {
+					t.Fatal(err)
+				}
+			}
 		}
 
-		purgeCrashReports(keep, []string{}, testDir)
+		purgeCrashReports(keep, testDir)
 
-		allReports, err := filepath.Glob(filepath.Join(testDir, crashReportArchivePattern))
-		if err != nil {
-			t.Fatal("Invalid pattern for `crashReportArchivePattern`:", err)
-		}
+		allReports := listCrashReportFilenames(testDir)
 
 		sort.Strings(mostRecentReports)
 
-		if diff := cmp.Diff(allReports, mostRecentReports); diff != "" {
-			t.Log(diff)
-			t.Fatal("Unexpected crash report purge result.")
+		if diff := cmp.Diff(mostRecentReports, allReports); diff != "" {
+			t.Errorf("listCrashReportFilenames() mismatch (-want +got)\n%s", diff)
+		}
+
+		allFiles, err := filepath.Glob(filepath.Join(testDir, "*"))
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if diff := cmp.Diff(mostRecentReports, allFiles); diff != "" {
+			t.Errorf("allFiles mismatch (-want +got)\n%s", diff)
 		}
 	})
 
-	t.Run("Keep preserved reports", func(t *testing.T) {
-		testDir, delTmpDir := setupTestDir(t)
-		defer delTmpDir()
+	t.Run("Delete uploaded first", func(t *testing.T) {
+		testDir := t.TempDir()
 
 		var reportsToKeep []string
 
@@ -227,31 +204,30 @@ func TestPurgeCrashReports(t *testing.T) {
 			reportTime := time.Now().Add(time.Duration(-i) * time.Hour).Add(time.Duration(i*7) * time.Second)
 			crashReportPath := filepath.Join(testDir, reportTime.Format(crashReportArchiveFormat))
 
-			if i%3 == 0 {
-				reportsToKeep = append(reportsToKeep, crashReportPath) // Save it for later check
-			}
-
 			f, err := os.Create(crashReportPath)
 			if err != nil {
 				t.Fatal("Failed to create fake crash report:", err)
 			}
 
 			f.Close()
+
+			if i%3 == 0 {
+				reportsToKeep = append(reportsToKeep, crashReportPath)
+			} else {
+				if err := markUploaded(crashReportPath); err != nil {
+					t.Fatal(err)
+				}
+			}
 		}
 
-		// The max report count doesn't matter when some reports should be preserved.
-		purgeCrashReports(0, reportsToKeep, testDir)
+		purgeCrashReports(len(reportsToKeep), testDir)
 
-		allReports, err := filepath.Glob(filepath.Join(testDir, crashReportArchivePattern))
-		if err != nil {
-			t.Fatal("Invalid pattern for `crashReportArchivePattern`:", err)
-		}
+		allReports := listCrashReportFilenames(testDir)
 
 		sort.Strings(reportsToKeep)
 
-		if diff := cmp.Diff(allReports, reportsToKeep); diff != "" {
-			t.Log(diff)
-			t.Fatal("Unexpected crash report purge result.")
+		if diff := cmp.Diff(reportsToKeep, allReports); diff != "" {
+			t.Errorf("listCrashReportFilenames() mismatch (-want +got)\n%s", diff)
 		}
 	})
 }
@@ -259,8 +235,7 @@ func TestPurgeCrashReports(t *testing.T) {
 func TestMarkAsDone(t *testing.T) {
 	t.Parallel()
 
-	testDir, delTmpDir := setupTestDir(t)
-	defer delTmpDir()
+	testDir := t.TempDir()
 
 	err := createWorkDirIfNotExist(testDir)
 	if err != nil {
@@ -436,8 +411,7 @@ func TestBundleCrashReportFiles(t *testing.T) { //nolint:maintidx
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			stateDir, delTmpDir := setupTestDir(t)
-			defer delTmpDir()
+			stateDir := t.TempDir()
 
 			if tc.previousStderr || tc.previousDiagnostic {
 				err := os.Mkdir(filepath.Join(stateDir, crashReportWorkDir), 0o700)

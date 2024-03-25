@@ -53,7 +53,7 @@ type MetricFormat int
 // List of known metrics format.
 // Currently only Bleemeo and Prometheus are supported.
 // The Bleemeo format is the initial format supported. It provide fewer metrics
-// which are usually directly queriable (e.g. disk_used_perc instead of a free bytes and total bytes)
+// which are usually directly queryable (e.g. disk_used_perc instead of a free bytes and total bytes)
 // The Prometheus format use same format as node_exporter and try to be as close as Prometheus way.
 const (
 	MetricFormatUnknown MetricFormat = iota
@@ -473,6 +473,17 @@ type Matcher interface {
 type MatcherRegexp interface {
 	Matcher
 	AsDenyRegexp() string
+}
+
+type ReaderWithLen interface {
+	io.ReadCloser
+	Len() int
+}
+
+type DiagnosticFile interface {
+	Filename() string
+	Reader() (ReaderWithLen, error)
+	MarkUploaded() error
 }
 
 // DiffMetricPoints return a diff between want and got. Mostly useful in tests.

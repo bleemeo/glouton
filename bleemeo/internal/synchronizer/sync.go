@@ -103,7 +103,7 @@ type Synchronizer struct {
 	currentConfigNotified     string
 	agentID                   string
 
-	onDemandDiagnostic     *diagnostic
+	onDemandDiagnostic     synchronizerOnDemandDiagnostic
 	onDemandDiagnosticLock sync.Mutex
 
 	// configSyncDone is true when the config items were successfully synced.
@@ -157,7 +157,7 @@ type Option struct {
 	// SetInitialized tells the bleemeo connector that the MQTT module can be started
 	SetInitialized func()
 
-	// IsMqttConnected returns wether the MQTT connector is operating nominally, and specifically
+	// IsMqttConnected returns whether the MQTT connector is operating nominally, and specifically
 	// that it can receive mqtt notifications. It is useful for the fallback on http polling
 	// described above Synchronizer.lastMaintenanceSync definition.
 	// Note: returns false when the mqtt connector is not enabled.
