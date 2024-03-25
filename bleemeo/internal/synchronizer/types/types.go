@@ -31,18 +31,18 @@ import (
 type EntityName string
 
 const (
-	EntityInfo          EntityName = "info"
-	EntityAgent         EntityName = "agent"
 	EntityAccountConfig EntityName = "accountconfig"
+	EntityAgent         EntityName = "agent"
+	EntityConfig        EntityName = "config"
+	EntityContainer     EntityName = "container"
+	EntityDiagnostics   EntityName = "diagnostics"
+	EntityFact          EntityName = "facts"
+	EntityInfo          EntityName = "info"
+	EntityMetric        EntityName = "metric"
 	EntityMonitor       EntityName = "monitor"
+	EntityService       EntityName = "service"
 	EntitySNMP          EntityName = "snmp"
 	EntityVSphere       EntityName = "vsphere"
-	EntityFact          EntityName = "facts"
-	EntityService       EntityName = "service"
-	EntityContainer     EntityName = "container"
-	EntityMetric        EntityName = "metric"
-	EntityConfig        EntityName = "config"
-	EntityDiagnostics   EntityName = "diagnostics"
 )
 
 type SyncType int
