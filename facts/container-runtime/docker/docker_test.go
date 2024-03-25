@@ -52,8 +52,6 @@ func TestDocker_RuntimeFact(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			cl, err := NewDockerMock(tt.dir)
 			if err != nil {
@@ -173,8 +171,6 @@ func TestDocker_Containers(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			cl, err := NewDockerMock(tt.dir)
 			if err != nil {
@@ -264,8 +260,6 @@ func TestDocker_Run(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
@@ -680,8 +674,6 @@ func TestDocker_ContainerFromCGroup(t *testing.T) { //nolint: maintidx
 		},
 	}
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			cl, err := NewDockerMock(tt.dir)
 			if err != nil {
@@ -703,7 +695,7 @@ func TestDocker_ContainerFromCGroup(t *testing.T) { //nolint: maintidx
 					wantErr      bool
 				)
 
-				for run := 0; run < 8; run++ { //nolint: wsl
+				for run := range 8 { //nolint: wsl
 					// We have try per check. For run =
 					// * 0 -> shared client / shared querier / no client error
 					// * 1 -> shared client / shared querier / client error
@@ -758,10 +750,6 @@ func TestDocker_ContainerFromCGroup(t *testing.T) { //nolint: maintidx
 						cl.ReturnError = docker.ErrorConnectionFailed("value")
 						wantErr = true
 					}
-
-					c := c
-					run := run
-					querier := querier
 
 					t.Run(fmt.Sprintf("%s-%d", c.name, run), func(t *testing.T) {
 						container, err := querier.ContainerFromCGroup(ctx, testutil.Unindent(c.cgroupData))
@@ -935,8 +923,6 @@ func TestDocker_Processes(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		tt := tt
-
 		subTest := []struct {
 			name             string
 			recreateQuerier  bool
@@ -999,8 +985,6 @@ func TestDocker_Processes(t *testing.T) {
 		}
 
 		for _, subTT := range subTest {
-			subTT := subTT
-
 			t.Run(tt.name+"-"+subTT.name, func(t *testing.T) {
 				cl, err := NewDockerMock(tt.dir)
 				if err != nil {
@@ -1193,8 +1177,6 @@ func TestContainer_ListenAddresses(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 			defer cancel()

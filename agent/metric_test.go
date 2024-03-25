@@ -999,8 +999,6 @@ func Test_newMetricFilter(t *testing.T) { //nolint:maintidx
 	}
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -1136,7 +1134,7 @@ func sortMatchers(matchers []matcher.Matchers) []matcher.Matchers {
 func generatePoints(nb int, lbls map[string]string) []types.MetricPoint {
 	list := make([]types.MetricPoint, nb)
 
-	for i := 0; i < nb; i++ {
+	for i := range nb {
 		point := types.MetricPoint{
 			Labels: lbls,
 		}
@@ -1183,7 +1181,7 @@ func Benchmark_filters_no_match(b *testing.B) {
 
 		b.ResetTimer()
 
-		for i := 0; i < b.N; i++ {
+		for range b.N {
 			copy(cop, list1)
 
 			metricFilter.FilterPoints(cop, false)
@@ -1195,7 +1193,7 @@ func Benchmark_filters_no_match(b *testing.B) {
 
 		b.ResetTimer()
 
-		for i := 0; i < b.N; i++ {
+		for range b.N {
 			copy(cop, list10)
 
 			metricFilter.FilterPoints(cop, false)
@@ -1207,7 +1205,7 @@ func Benchmark_filters_no_match(b *testing.B) {
 
 		b.ResetTimer()
 
-		for i := 0; i < b.N; i++ {
+		for range b.N {
 			copy(cop, list100)
 
 			metricFilter.FilterPoints(cop, false)
@@ -1247,7 +1245,7 @@ func Benchmark_filters_one_match_first(b *testing.B) {
 
 		b.ResetTimer()
 
-		for i := 0; i < b.N; i++ {
+		for range b.N {
 			copy(cop, list1)
 
 			metricFilter.FilterPoints(cop, false)
@@ -1259,7 +1257,7 @@ func Benchmark_filters_one_match_first(b *testing.B) {
 
 		b.ResetTimer()
 
-		for i := 0; i < b.N; i++ {
+		for range b.N {
 			copy(cop, list10)
 
 			metricFilter.FilterPoints(cop, false)
@@ -1271,7 +1269,7 @@ func Benchmark_filters_one_match_first(b *testing.B) {
 
 		b.ResetTimer()
 
-		for i := 0; i < b.N; i++ {
+		for range b.N {
 			copy(cop, list100)
 
 			metricFilter.FilterPoints(cop, false)
@@ -1305,7 +1303,7 @@ func Benchmark_filters_one_match_middle(b *testing.B) {
 
 		b.ResetTimer()
 
-		for i := 0; i < b.N; i++ {
+		for range b.N {
 			copy(cop, list10)
 
 			metricFilter.FilterPoints(cop, false)
@@ -1317,7 +1315,7 @@ func Benchmark_filters_one_match_middle(b *testing.B) {
 
 		b.ResetTimer()
 
-		for i := 0; i < b.N; i++ {
+		for range b.N {
 			copy(cop, list100)
 
 			metricFilter.FilterPoints(cop, false)
@@ -1347,7 +1345,7 @@ func Benchmark_filters_one_match_last(b *testing.B) {
 
 		b.ResetTimer()
 
-		for i := 0; i < b.N; i++ {
+		for range b.N {
 			copy(cop, list10)
 
 			metricFilter.FilterPoints(cop, false)
@@ -1359,7 +1357,7 @@ func Benchmark_filters_one_match_last(b *testing.B) {
 
 		b.ResetTimer()
 
-		for i := 0; i < b.N; i++ {
+		for range b.N {
 			copy(cop, list100)
 
 			metricFilter.FilterPoints(cop, false)
@@ -1381,7 +1379,7 @@ func Benchmark_filters_all(b *testing.B) {
 
 		b.ResetTimer()
 
-		for i := 0; i < b.N; i++ {
+		for range b.N {
 			copy(cop, list10)
 
 			metricFilter.FilterPoints(cop, false)
@@ -1393,7 +1391,7 @@ func Benchmark_filters_all(b *testing.B) {
 
 		b.ResetTimer()
 
-		for i := 0; i < b.N; i++ {
+		for range b.N {
 			copy(cop, list100)
 
 			metricFilter.FilterPoints(cop, false)

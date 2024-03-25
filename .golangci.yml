@@ -1,8 +1,6 @@
 run:
   go: "1.22"
   timeout: 5m
-  skip-dirs:
-    - work
 
 linters:
   enable-all: true
@@ -80,3 +78,5 @@ issues:
 
   max-issues-per-linter: 0
   max-same-issues: 0
+  exclude-dirs:
+    - work

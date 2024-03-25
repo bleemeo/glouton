@@ -146,9 +146,7 @@ func TestParseScanOutput(t *testing.T) {
 		},
 	}
 
-	for _, testCase := range testCases {
-		tc := testCase
-
+	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			var (
 				smartctlData SmartctlData

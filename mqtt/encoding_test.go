@@ -109,7 +109,7 @@ func BenchmarkTopinfoEncoding(b *testing.B) {
 
 	b.ResetTimer()
 
-	for n := 0; n < b.N; n++ {
+	for range b.N {
 		_, err := encoder.Encode(topinfo)
 		if err != nil {
 			b.Error(err)
@@ -128,7 +128,7 @@ func BenchmarkTopinfoDecoding(b *testing.B) {
 
 	b.ResetTimer()
 
-	for n := 0; n < b.N; n++ {
+	for range b.N {
 		var value facts.TopInfo
 
 		err := encoder.Decode(encoded, &value)

@@ -173,11 +173,10 @@ func newLabeledGatherer(g prometheus.Gatherer, extraLabels labels.Labels, rrules
 	labels := make([]*dto.LabelPair, 0, len(extraLabels))
 
 	for _, l := range extraLabels {
-		l := l
 		if !strings.HasPrefix(l.Name, prometheusModel.ReservedLabelPrefix) {
 			labels = append(labels, &dto.LabelPair{
-				Name:  &l.Name,
-				Value: &l.Value,
+				Name:  &l.Name,  //nolint: gosec,exportloopref
+				Value: &l.Value, //nolint: gosec,exportloopref
 			})
 		}
 	}

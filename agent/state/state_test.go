@@ -341,9 +341,7 @@ func TestGetByPrefix(t *testing.T) {
 		},
 	}
 
-	for i, testCase := range testCases {
-		tc := testCase
-
+	for i, tc := range testCases {
 		t.Run(fmt.Sprint("n°", i+1), func(t *testing.T) {
 			t.Parallel()
 

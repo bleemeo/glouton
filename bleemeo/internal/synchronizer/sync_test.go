@@ -251,7 +251,6 @@ func TestSyncWithSNMP(t *testing.T) {
 	helper.initSynchronizer(t)
 
 	for n := 1; n <= 2; n++ {
-		n := n
 		t.Run(fmt.Sprintf("sub-run-%d", n), func(t *testing.T) {
 			helper.api.now.Advance(time.Second)
 
@@ -821,7 +820,6 @@ func TestSyncServerGroup(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -1070,7 +1068,6 @@ func TestBleemeoPlan(t *testing.T) { //nolint:maintidx
 	}
 
 	for _, tt := range cases {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -2039,7 +2036,6 @@ func Test_isDuplicatedUsingFacts(t *testing.T) { //nolint:maintidx
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 

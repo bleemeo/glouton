@@ -19,6 +19,7 @@ package model
 import (
 	"context"
 	"glouton/types"
+	"maps"
 	"testing"
 	"time"
 
@@ -163,11 +164,7 @@ func TestConvertionLoop(t *testing.T) {
 	}
 
 	for _, tt := range cases {
-		tt := tt
-
-		for _, useAppenable := range []bool{false, true} {
-			useAppendable := useAppenable
-
+		for _, useAppendable := range []bool{false, true} {
 			fullName := tt.name + "WithoutAppendable"
 			if useAppendable {
 				fullName = tt.name + "WithAppendable"
@@ -580,8 +577,6 @@ func TestConvertion(t *testing.T) { //nolint: maintidx
 	}
 
 	for _, tt := range cases {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -614,14 +609,8 @@ func copyPoints(input []types.MetricPoint) []types.MetricPoint {
 	result := make([]types.MetricPoint, 0, len(input))
 
 	for _, p := range input {
-		work := p
-		work.Labels = make(map[string]string, len(p.Labels))
-
-		for k, v := range p.Labels {
-			work.Labels[k] = v
-		}
-
-		result = append(result, work)
+		p.Labels = maps.Clone(p.Labels)
+		result = append(result, p)
 	}
 
 	return result
@@ -663,11 +652,7 @@ func TestFamiliesToCollector(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		tt := tt
-
 		for _, targetType := range []dto.MetricType{dto.MetricType_GAUGE, dto.MetricType_COUNTER} {
-			targetType := targetType
-
 			name := tt.name + "-" + targetType.String()
 
 			t.Run(name, func(t *testing.T) {

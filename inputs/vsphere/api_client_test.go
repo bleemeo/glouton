@@ -468,9 +468,7 @@ func TestVSphereLifecycle(t *testing.T) { //nolint:maintidx
 		},
 	}
 
-	for _, testCase := range testCases {
-		tc := testCase
-
+	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) { //nolint: wsl
 			// govmomi simulator doesn't seem to like having multiple instances in parallel.
 

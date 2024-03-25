@@ -778,8 +778,6 @@ func TestKubernetes_Containers(t *testing.T) { //nolint:maintidx
 		},
 	}
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			mockClient, err := newKubernetesMock(tt.dir)
 			if err != nil {
