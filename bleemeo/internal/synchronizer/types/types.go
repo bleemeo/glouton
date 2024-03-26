@@ -106,6 +106,10 @@ type SynchronizationExecution interface {
 	// cause the synchronization of application if service are synchronized. This don't imply the other way.
 	// This function could only be called during NeedSynchronization.
 	RequestLinkedSynchronization(targetEntityName EntityName, triggerEntiryName EntityName) error
+	// FailOtherEntity will cause execution of the synchronization of another entity to not
+	// be run in this execution and fail with provided error. This is useful if one entity
+	// must be created/updated before another entity synchronization runs.
+	FailOtherEntity(entityName EntityName, reason error)
 	// RequestSynchronizationForAll calls RequestSynchronization for all known entities.
 	RequestSynchronizationForAll(requestFull bool)
 	// IsSynchronizationRequested return whether a synchronization was requested for the

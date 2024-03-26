@@ -202,6 +202,18 @@ func (e *Execution) RequestLinkedSynchronization(targetEntityName types.EntityNa
 	return nil
 }
 
+func (e *Execution) FailOtherEntity(entityName types.EntityName, reason error) {
+	for idx, row := range e.entities {
+		if row.entity.Name() == entityName {
+			if row.err == nil {
+				e.entities[idx].err = reason
+			}
+
+			break
+		}
+	}
+}
+
 func (e *Execution) RequestSynchronizationForAll(forceCacheRefresh bool) {
 	for _, row := range e.entities {
 		e.RequestSynchronization(row.entity.Name(), forceCacheRefresh)
