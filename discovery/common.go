@@ -106,12 +106,25 @@ const (
 	CustomService ServiceName = "__custom__"
 )
 
+type ApplicationType int
+
+const (
+	ApplicationUnset         ApplicationType = 0
+	ApplicationDockerCompose ApplicationType = 1
+)
+
+type Application struct {
+	Name string
+	Type ApplicationType
+}
+
 // Service is the information found about a given service.
 type Service struct {
 	Config          config.Service
 	Name            string
 	Instance        string
 	Tags            []string
+	Applications    []Application
 	ServiceType     ServiceName
 	ContainerID     string
 	ContainerName   string // If ContainerName is set, Instance must be the same value.

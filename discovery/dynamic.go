@@ -434,6 +434,7 @@ func (dd *DynamicDiscovery) serviceFromProcess(process facts.Process, netstat ma
 
 	dd.fillConfig(&service)
 	dd.fillConfigFromLabels(&service)
+	dd.discoveryFromLabels(&service)
 	dd.guessJMX(&service, process.CmdLineList)
 
 	return service, true
@@ -617,6 +618,22 @@ func (dd *DynamicDiscovery) fillConfigFromLabels(service *Service) {
 	err = mergo.Merge(&service.Config, override, mergo.WithOverride)
 	if err != nil {
 		logger.V(1).Printf("Failed to merge service and override: %s", err)
+	}
+}
+
+// discoveryFromLabels look labels on containers that add information on service.
+func (dd *DynamicDiscovery) discoveryFromLabels(service *Service) {
+	if service.container == nil {
+		return
+	}
+
+	labels := facts.LabelsAndAnnotations(service.container)
+
+	if composeProject := labels["com.docker.compose.project"]; composeProject != "" {
+		service.Applications = append(service.Applications, Application{
+			Name: composeProject,
+			Type: ApplicationDockerCompose,
+		})
 	}
 }
 
