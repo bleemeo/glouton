@@ -53,6 +53,19 @@ const (
 	SyncTypeForceCacheRefresh SyncType = 2
 )
 
+func (t SyncType) String() string {
+	switch t {
+	case SyncTypeNone:
+		return "sync-none"
+	case SyncTypeNormal:
+		return "sync-normal"
+	case SyncTypeForceCacheRefresh:
+		return "sync-forced"
+	default:
+		return strconv.Itoa(int(t))
+	}
+}
+
 var ErrUnexpectedWorkflow = errors.New("unexpected synchroniztion workflow")
 
 type EntitySynchronizer interface {
