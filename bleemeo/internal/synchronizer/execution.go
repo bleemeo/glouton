@@ -43,10 +43,11 @@ type Execution struct {
 }
 
 type EntityExecution struct {
-	entity       types.EntitySynchronizer
-	synchronizer types.EntitySynchronizerExecution
-	syncType     types.SyncType
-	err          error
+	entity            types.EntitySynchronizer
+	synchronizer      types.EntitySynchronizerExecution
+	syncType          types.SyncType
+	err               error
+	linkedSyncTargets []types.EntityName
 }
 
 var errSkippedExecution = errors.New("execution skipped to due maintenance mode or similar reason")
@@ -154,6 +155,21 @@ func (e *Execution) RequestSynchronization(entityName types.EntityName, forceCac
 	if e.syncListStarted {
 		e.synchronizer.l.Lock()
 		e.synchronizer.requestSynchronizationLocked(entityName, forceCacheRefresh)
+
+		// linked synchronization are only checked in the e.syncListStarted branch.
+		// e.checkLinkedSynchronization() take care of everything before e.syncListStarted.
+		// At this point e.expandLinkedTarget() is called, we don't need to do any recursion for
+		// indirectly linked entity.
+		for _, row := range e.entities {
+			if row.entity.Name() == entityName {
+				for _, target := range row.linkedSyncTargets {
+					e.synchronizer.requestSynchronizationLocked(target, forceCacheRefresh)
+				}
+
+				break
+			}
+		}
+
 		e.synchronizer.l.Unlock()
 	} else {
 		for idx, row := range e.entities {
@@ -170,16 +186,33 @@ func (e *Execution) RequestSynchronization(entityName types.EntityName, forceCac
 	}
 }
 
+func (e *Execution) RequestLinkedSynchronization(targetEntityName types.EntityName, triggerEntiryName types.EntityName) error {
+	if e.syncListStarted {
+		return fmt.Errorf("%w: RequestLinkedSynchronization must be called during RequestSynchronization()", types.ErrUnexpectedWorkflow)
+	}
+
+	for idx, ee := range e.entities {
+		if ee.entity.Name() != triggerEntiryName {
+			continue
+		}
+
+		e.entities[idx].linkedSyncTargets = append(e.entities[idx].linkedSyncTargets, targetEntityName)
+	}
+
+	return nil
+}
+
 func (e *Execution) RequestSynchronizationForAll(forceCacheRefresh bool) {
 	for _, row := range e.entities {
 		e.RequestSynchronization(row.entity.Name(), forceCacheRefresh)
 	}
 }
 
-// IsSynchronizationExplicitlyRequested return whether a synchronization was request for the
+// IsSynchronizationRequested return whether a synchronization was request for the
 // specific entity.
-// Note: even if this method return false, a synchronization might occur when ForceCacheRefreshForAll() is true.
-func (e *Execution) IsSynchronizationExplicitlyRequested(entityName types.EntityName) bool {
+// Note: even if this method return false, a synchronization might occur if someone call RequestSynchronize later.
+// Use RequestLinkedSynchronization to overcome this limitation.
+func (e *Execution) IsSynchronizationRequested(entityName types.EntityName) bool {
 	for _, row := range e.entities {
 		if row.entity.Name() == entityName {
 			return row.syncType != types.SyncTypeNone
@@ -236,21 +269,13 @@ func (e *Execution) BleemeoAPIClient() types.Client {
 // (cf EnabledInMaintenance and EnabledInSuspendedMode) will be called.
 func (e *Execution) run(ctx context.Context) error {
 	if !e.isLimitedExecution {
-		compatibilitySyncToPerform(ctx, e, e.synchronizer.state)
-
 		if e.forceCacheRefreshForAll() {
 			e.RequestSynchronizationForAll(true)
 		}
 
-		e.synchronizersCall(ctx, e.entities, func(ctx context.Context, ee EntityExecution) EntityExecution {
-			if ee.synchronizer.NeedSynchronization(ctx) {
-				if ee.syncType == types.SyncTypeNone {
-					ee.syncType = types.SyncTypeNormal
-				}
-			}
+		compatibilitySyncToPerform(ctx, e, e.synchronizer.state)
 
-			return ee
-		})
+		e.applyNeedSynchronization(ctx)
 
 		if e.hadWork() && e.synchronizer.now().Sub(e.synchronizer.lastInfo.FetchedAt) > 30*time.Minute {
 			// Ensure lastInfo is enough up-to-date.
@@ -260,6 +285,7 @@ func (e *Execution) run(ctx context.Context) error {
 		}
 	}
 
+	e.checkLinkedSynchronization()
 	e.syncListStarted = true
 
 	e.synchronizersCall(ctx, e.entities, func(ctx context.Context, ee EntityExecution) EntityExecution {
@@ -348,6 +374,99 @@ func (e *Execution) executePostRunCalls(ctx context.Context) {
 		e.synchronizer.UpdateUnitsAndThresholds(ctx, true)
 	} else if e.updateThresholds {
 		e.synchronizer.UpdateUnitsAndThresholds(ctx, false)
+	}
+}
+
+func (e *Execution) applyNeedSynchronization(ctx context.Context) {
+	e.synchronizersCall(ctx, e.entities, func(ctx context.Context, ee EntityExecution) EntityExecution {
+		need, err := ee.synchronizer.NeedSynchronization(ctx)
+		if err != nil {
+			ee.err = err
+
+			return ee
+		}
+
+		if need {
+			if ee.syncType == types.SyncTypeNone {
+				ee.syncType = types.SyncTypeNormal
+			}
+		}
+
+		return ee
+	})
+}
+
+func (e *Execution) checkLinkedSynchronization() {
+	nameToIdx := make(map[types.EntityName]int, len(e.entities))
+
+	for idx, ee := range e.entities {
+		nameToIdx[ee.entity.Name()] = idx
+	}
+
+	e.expandLinkedTarget(nameToIdx)
+
+	for _, ee := range e.entities {
+		if ee.syncType == types.SyncTypeNone {
+			continue
+		}
+
+		for _, target := range ee.linkedSyncTargets {
+			idx, ok := nameToIdx[target]
+			if !ok {
+				continue
+			}
+
+			if ee.syncType == types.SyncTypeForceCacheRefresh {
+				e.entities[idx].syncType = types.SyncTypeForceCacheRefresh
+			} else if e.entities[idx].syncType == types.SyncTypeNone {
+				e.entities[idx].syncType = types.SyncTypeNormal
+			}
+		}
+	}
+}
+
+// expandLinkedTarget expend the EntityExecution.linkedSyncTargets.
+// Since entity name A could trigger a synchronization on entity B which could itself trigger on entity C, etc.
+// This function expend the list of A to contains B and C.
+// This is a graph and we expand to all target including indirect. Obviously we stop when a cycle is detected.
+func (e *Execution) expandLinkedTarget(nameToIdx map[types.EntityName]int) {
+	for idx, ee := range e.entities {
+		targetsEntities := make(map[types.EntityName]struct{}, len(e.entities))
+
+		e.recursiveExpand(nameToIdx, ee.entity.Name(), targetsEntities, ee.linkedSyncTargets)
+
+		targetLists := make([]types.EntityName, 0, len(targetsEntities))
+
+		for name := range targetsEntities {
+			targetLists = append(targetLists, name)
+		}
+
+		e.entities[idx].linkedSyncTargets = targetLists
+	}
+}
+
+func (e *Execution) recursiveExpand(nameToIdx map[types.EntityName]int, originalType types.EntityName, targetsEntities map[types.EntityName]struct{}, syncTargets []types.EntityName) {
+	newTargets := make([]types.EntityName, 0)
+
+	for _, target := range syncTargets {
+		if target == originalType {
+			continue
+		}
+
+		if _, ok := targetsEntities[target]; ok {
+			continue
+		}
+
+		targetsEntities[target] = struct{}{}
+
+		if idx, ok := nameToIdx[target]; ok {
+			extraTargets := e.entities[idx].linkedSyncTargets
+			newTargets = append(newTargets, extraTargets...)
+		}
+	}
+
+	if len(newTargets) > 0 {
+		e.recursiveExpand(nameToIdx, originalType, targetsEntities, newTargets)
 	}
 }
 

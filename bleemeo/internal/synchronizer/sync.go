@@ -165,7 +165,9 @@ func newWithNow(option types.Option, now func() time.Time) (*Synchronizer, error
 		&CompatibilityWrapper{state: state, name: types.EntityDiagnostics, method: s.syncDiagnostics},
 	}
 
-	s.agentID, _ = s.option.State.BleemeoCredentials()
+	if s.option.State != nil {
+		s.agentID, _ = s.option.State.BleemeoCredentials()
+	}
 
 	return s, nil
 }

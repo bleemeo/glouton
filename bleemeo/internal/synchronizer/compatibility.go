@@ -109,10 +109,10 @@ func (cw CompatibilityWrapperExecution) SyncLocal(ctx context.Context) error {
 	return nil
 }
 
-func (cw CompatibilityWrapperExecution) NeedSynchronization(ctx context.Context) bool {
+func (cw CompatibilityWrapperExecution) NeedSynchronization(ctx context.Context) (bool, error) {
 	_ = ctx
 
-	return false
+	return false, nil
 }
 
 func compatibilitySyncToPerform(ctx context.Context, execution types.SynchronizationExecution, state *synchronizerState) {
@@ -171,12 +171,12 @@ func compatibilitySyncToPerform(ctx context.Context, execution types.Synchroniza
 		execution.RequestSynchronization(types.EntityContainer, false)
 	}
 
-	if execution.IsSynchronizationExplicitlyRequested(types.EntityContainer) {
+	if execution.IsSynchronizationRequested(types.EntityContainer) {
 		// Metrics registration may need containers to be synced, trigger metrics synchronization
 		execution.RequestSynchronization(types.EntityMetric, false)
 	}
 
-	if execution.IsSynchronizationExplicitlyRequested(types.EntityMonitor) {
+	if execution.IsSynchronizationRequested(types.EntityMonitor) {
 		// Metrics registration may need monitors to be synced, trigger metrics synchronization
 		execution.RequestSynchronization(types.EntityMetric, false)
 	}

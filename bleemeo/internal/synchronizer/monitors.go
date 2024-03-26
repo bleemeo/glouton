@@ -217,7 +217,7 @@ func (s *Synchronizer) getListOfMonitorsFromAPI(ctx context.Context, execution t
 	}
 
 	currentMonitors := s.option.Cache.Monitors()
-	forceSync := execution.IsSynchronizationExplicitlyRequested(types.EntityMetric)
+	forceSync := execution.IsSynchronizationRequested(types.EntityMetric)
 	apiClient := execution.BleemeoAPIClient()
 
 OuterBreak:

@@ -67,9 +67,9 @@ func (s *SyncServices) PrepareExecution(_ context.Context, execution types.Synch
 	return s, nil
 }
 
-func (s *SyncServices) NeedSynchronization(_ context.Context) bool {
+func (s *SyncServices) NeedSynchronization(_ context.Context) (bool, error) {
 	if s.currentExecution == nil {
-		return false
+		return false, fmt.Errorf("%w: currentExecution is nil", types.ErrUnexpectedWorkflow)
 	}
 
 	lastDiscovery := s.currentExecution.Option().Discovery.LastUpdate()
@@ -80,10 +80,10 @@ func (s *SyncServices) NeedSynchronization(_ context.Context) bool {
 		// possible blocked metrics get registered after service are registered
 		s.currentExecution.RequestSynchronization(types.EntityMetric, false)
 
-		return true
+		return true, nil
 	}
 
-	return false
+	return false, nil
 }
 
 func (s *SyncServices) RefreshCache(ctx context.Context, syncType types.SyncType) error {

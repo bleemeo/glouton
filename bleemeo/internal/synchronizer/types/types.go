@@ -72,7 +72,7 @@ type EntitySynchronizerExecution interface {
 	// mostly in case a RequestSynchronization() was called.
 	// It could also NOT call it even if the method return true, mostly in case an error occurred in another
 	// synchronizer.
-	NeedSynchronization(ctx context.Context) bool
+	NeedSynchronization(ctx context.Context) (bool, error)
 
 	// RefreshCache update the cache with information from Bleemeo API. This could no nothing
 	// if the cache is still valid.
@@ -99,12 +99,18 @@ type SynchronizationExecution interface {
 	// current execution of synchronization (no guarantee, e.g. on error).
 	// If called later, once SyncRemote start being called, it will be run during *next* execution.
 	RequestSynchronization(entityName EntityName, requestFull bool)
+	// RequestLinkedSynchronization ask for an execution of synchronization of specified entity,
+	// if another entity will be synchronized. This is better than using IsSynchronizationRequested,
+	// because if later something request synchronization of the other entity it will be updated.
+	// For example RequestSynchronization(EntityApplication, EntityService) will
+	// cause the synchronization of application if service are synchronized. This don't imply the other way.
+	// This function could only be called during NeedSynchronization.
+	RequestLinkedSynchronization(targetEntityName EntityName, triggerEntiryName EntityName) error
 	// RequestSynchronizationForAll calls RequestSynchronization for all known entities.
 	RequestSynchronizationForAll(requestFull bool)
-	// IsSynchronizationExplicitlyRequested return whether a synchronization was requested for the
+	// IsSynchronizationRequested return whether a synchronization was requested for the
 	// specific entity during current execution.
-	// Note: even if this method return false, a synchronization might occur when ForceCacheRefreshForAll() is true
-	IsSynchronizationExplicitlyRequested(entityName EntityName) bool
+	IsSynchronizationRequested(entityName EntityName) bool
 	RequestUpdateThresholds()
 	RequestNotifyLabelsUpdate()
 	Option() Option
