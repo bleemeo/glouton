@@ -263,12 +263,20 @@ func (e *Execution) run(ctx context.Context) error {
 	e.syncListStarted = true
 
 	e.synchronizersCall(ctx, e.entities, func(ctx context.Context, ee EntityExecution) EntityExecution {
+		if ee.syncType == types.SyncTypeNone {
+			return ee
+		}
+
 		ee.err = ee.synchronizer.RefreshCache(ctx, ee.syncType)
 
 		return ee
 	})
 
 	e.synchronizersCall(ctx, e.entities, func(ctx context.Context, ee EntityExecution) EntityExecution {
+		if ee.syncType == types.SyncTypeNone {
+			return ee
+		}
+
 		ee.err = ee.synchronizer.SyncRemoteAndLocal(ctx, ee.syncType)
 
 		return ee
@@ -425,7 +433,7 @@ func (e *Execution) synchronizersCall(ctx context.Context, synchronizersExecutio
 			continue
 		}
 
-		if ee.syncType != types.SyncTypeNone && ee.synchronizer != nil {
+		if ee.synchronizer != nil {
 			e.entities[idx] = f(ctx, ee)
 		}
 	}
