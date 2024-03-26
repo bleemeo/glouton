@@ -17,90 +17,95 @@
 package syncservices
 
 import (
-	"glouton/bleemeo/types"
+	bleemeoTypes "glouton/bleemeo/types"
+	"glouton/discovery"
 	"testing"
+
+	"github.com/google/go-cmp/cmp"
 )
 
 func Test_serviceHadSameTags(t *testing.T) {
 	tests := []struct {
-		name       string
-		remoteTags []types.Tag
-		localTags  []string
-		want       bool
+		name          string
+		remoteTags    []bleemeoTypes.Tag
+		localServices discovery.Service
+		want          bool
 	}{
 		{
-			name:       "empty-list",
-			remoteTags: []types.Tag{},
-			localTags:  []string{},
-			want:       true,
+			name:          "empty-list",
+			remoteTags:    []bleemeoTypes.Tag{},
+			localServices: discovery.Service{},
+			want:          true,
 		},
 		{
-			name:       "nil-empty",
-			remoteTags: nil,
-			localTags:  []string{}, want: true,
+			name:          "nil-empty",
+			remoteTags:    nil,
+			localServices: discovery.Service{}, want: true,
 		},
 		{
 			name: "one-tag",
-			remoteTags: []types.Tag{
+			remoteTags: []bleemeoTypes.Tag{
 				{
 					ID:      "dedd669b-f139-4517-a410-4c6d3f66f85f",
 					Name:    "tag-one",
-					TagType: types.TagTypeIsCreatedByGlouton,
+					TagType: bleemeoTypes.TagTypeIsCreatedByGlouton,
 				},
 			},
-			localTags: []string{
-				"tag-one",
+			localServices: discovery.Service{
+				Tags: []string{"tag-one"},
 			},
 			want: true,
 		},
 		{
 			name:       "missing-tag",
-			remoteTags: []types.Tag{},
-			localTags: []string{
-				"tag-one",
+			remoteTags: []bleemeoTypes.Tag{},
+			localServices: discovery.Service{
+				Tags: []string{"tag-one"},
 			},
 			want: false,
 		},
 		{
 			name: "mismatch-tag",
-			remoteTags: []types.Tag{
+			remoteTags: []bleemeoTypes.Tag{
 				{
 					ID:      "dedd669b-f139-4517-a410-4c6d3f66f85f",
 					Name:    "tag-one",
-					TagType: types.TagTypeIsCreatedByGlouton,
+					TagType: bleemeoTypes.TagTypeIsCreatedByGlouton,
 				},
 			},
-			localTags: []string{
-				"tag-two",
+			localServices: discovery.Service{
+				Tags: []string{"tag-two"},
 			},
 			want: false,
 		},
 		{
 			name: "not-glouton-tag",
-			remoteTags: []types.Tag{
+			remoteTags: []bleemeoTypes.Tag{
 				{
 					ID:      "dedd669b-f139-4517-a410-4c6d3f66f85f",
 					Name:    "tag-one",
-					TagType: types.TagTypeIsAutomatic,
+					TagType: bleemeoTypes.TagTypeIsAutomatic,
 				},
 			},
-			localTags: []string{
-				"tag-one",
+			localServices: discovery.Service{
+				Tags: []string{"tag-one"},
 			},
 			want: false,
 		},
 		{
 			name: "truncated-local-tag",
-			remoteTags: []types.Tag{
+			remoteTags: []bleemeoTypes.Tag{
 				{
 					ID:      "dedd669b-f139-4517-a410-4c6d3f66f85f",
 					Name:    "tag-one",
-					TagType: types.TagTypeIsCreatedByGlouton,
+					TagType: bleemeoTypes.TagTypeIsCreatedByGlouton,
 				},
 			},
-			localTags: []string{
-				"tag-one",
-				"tag-longer-than-100-character-are-ignored-since-bleemeo-api-dont-support-them---filler-to-reach-100-char",
+			localServices: discovery.Service{
+				Tags: []string{
+					"tag-one",
+					"tag-longer-than-100-character-are-ignored-since-bleemeo-api-dont-support-them---filler-to-reach-100-char",
+				},
 			},
 			want: true,
 		},
@@ -109,8 +114,117 @@ func Test_serviceHadSameTags(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			if got := serviceHadSameTags(tt.remoteTags, tt.localTags); got != tt.want {
+			if got := serviceHadSameTags(tt.remoteTags, tt.localServices); got != tt.want {
 				t.Errorf("serviceHadSameTags() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func Test_getTagsFromLocal(t *testing.T) {
+	tests := []struct {
+		name    string
+		service discovery.Service
+		want    []bleemeoTypes.Tag
+	}{
+		{
+			name: "no-tags",
+			service: discovery.Service{
+				Tags:         nil,
+				Applications: nil,
+			},
+			want: []bleemeoTypes.Tag{},
+		},
+		{
+			name: "custom-tag",
+			service: discovery.Service{
+				Tags: []string{
+					"tag-user1",
+				},
+				Applications: nil,
+			},
+			want: []bleemeoTypes.Tag{
+				{
+					Name:    "tag-user1",
+					TagType: bleemeoTypes.TagTypeIsCreatedByGlouton,
+				},
+			},
+		},
+		{
+			name: "app-tag",
+			service: discovery.Service{
+				Tags: []string{},
+				Applications: []discovery.Application{
+					{
+						Name: "my_compose_project",
+						Type: discovery.ApplicationDockerCompose,
+					},
+				},
+			},
+			want: []bleemeoTypes.Tag{
+				{
+					Name:    "docker-compose-my-compose-project",
+					TagType: bleemeoTypes.TagTypeIsAutomaticByGlouton,
+				},
+			},
+		},
+		{
+			name: "both-tag",
+			service: discovery.Service{
+				Tags: []string{
+					"tag-user1",
+				},
+				Applications: []discovery.Application{
+					{
+						Name: "my_compose_project",
+						Type: discovery.ApplicationDockerCompose,
+					},
+				},
+			},
+			want: []bleemeoTypes.Tag{
+				{
+					Name:    "tag-user1",
+					TagType: bleemeoTypes.TagTypeIsCreatedByGlouton,
+				},
+				{
+					Name:    "docker-compose-my-compose-project",
+					TagType: bleemeoTypes.TagTypeIsAutomaticByGlouton,
+				},
+			},
+		},
+		{
+			name: "same-tag",
+			service: discovery.Service{
+				Tags: []string{
+					"docker-compose-my-compose-project",
+				},
+				Applications: []discovery.Application{
+					{
+						Name: "my_compose_project",
+						Type: discovery.ApplicationDockerCompose,
+					},
+				},
+			},
+			want: []bleemeoTypes.Tag{
+				{
+					Name:    "docker-compose-my-compose-project",
+					TagType: bleemeoTypes.TagTypeIsCreatedByGlouton,
+				},
+				{
+					Name:    "docker-compose-my-compose-project",
+					TagType: bleemeoTypes.TagTypeIsAutomaticByGlouton,
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := getTagsFromLocal(tt.service)
+
+			if diff := cmp.Diff(tt.want, got); diff != "" {
+				t.Errorf("getTagsFromLocal() mismatch (-want +got)\n%s", diff)
 			}
 		})
 	}

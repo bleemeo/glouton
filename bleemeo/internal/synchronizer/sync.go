@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"glouton/bleemeo/client"
 	"glouton/bleemeo/internal/common"
+	"glouton/bleemeo/internal/synchronizer/syncapplications"
 	"glouton/bleemeo/internal/synchronizer/syncservices"
 	"glouton/bleemeo/internal/synchronizer/types"
 	bleemeoTypes "glouton/bleemeo/types"
@@ -158,6 +159,7 @@ func newWithNow(option types.Option, now func() time.Time) (*Synchronizer, error
 		&CompatibilityWrapper{state: state, name: types.EntityContainer, method: s.syncContainers},
 		&CompatibilityWrapper{state: state, name: types.EntitySNMP, method: s.syncSNMP},
 		&CompatibilityWrapper{state: state, name: types.EntityVSphere, method: s.syncVSphere},
+		syncapplications.New(),
 		syncservices.New(),
 		&CompatibilityWrapper{state: state, name: types.EntityMonitor, method: s.syncMonitors, skipOnlyEssential: true},
 		&CompatibilityWrapper{state: state, name: types.EntityMetric, method: s.syncMetrics},

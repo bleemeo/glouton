@@ -96,8 +96,9 @@ type AgentType struct {
 type TagType int
 
 const (
-	TagTypeIsAutomatic        TagType = 0
-	TagTypeIsCreatedByGlouton TagType = 1
+	TagTypeIsAutomatic          TagType = 0
+	TagTypeIsCreatedByGlouton   TagType = 1
+	TagTypeIsAutomaticByGlouton TagType = 3
 )
 
 // Tag is an Tag object on Bleemeo API.
@@ -129,6 +130,13 @@ type AgentConfig struct {
 	MetricResolution int    `json:"metrics_resolution"`
 	AccountConfig    string `json:"account_config"`
 	AgentType        string `json:"agent_type"`
+}
+
+// Application is a group of services.
+type Application struct {
+	ID   string `json:"id,omitempty"`
+	Name string `json:"name"`
+	Tag  string `json:"tag"`
 }
 
 // Service is a Service object on Bleemeo API.

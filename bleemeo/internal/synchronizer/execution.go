@@ -80,11 +80,8 @@ func (s *Synchronizer) newExecution(onlyEssential bool, isNewAgent bool) *Execut
 	defer s.l.Unlock()
 
 	execution := &Execution{
-		synchronizer: s,
-		client: &wrapperClient{
-			checkDuplicated: s.checkDuplicated,
-			client:          s.realClient,
-		},
+		synchronizer:        s,
+		client:              s.newClient(),
 		initialRequestCount: s.realClient.RequestsCount(),
 		startedAt:           s.now(),
 		onlyEssential:       onlyEssential,
@@ -102,11 +99,8 @@ func (s *Synchronizer) newExecution(onlyEssential bool, isNewAgent bool) *Execut
 // It won't call NeedSynchronization. It will also ignore maintenance & suspended mode.
 func (s *Synchronizer) newLimitedExecution(onlyEssential bool, entities map[types.EntityName]types.SyncType) *Execution {
 	execution := &Execution{
-		synchronizer: s,
-		client: &wrapperClient{
-			checkDuplicated: s.checkDuplicated,
-			client:          s.realClient,
-		},
+		synchronizer:        s,
+		client:              s.newClient(),
 		initialRequestCount: s.realClient.RequestsCount(),
 		startedAt:           s.now(),
 		onlyEssential:       onlyEssential,

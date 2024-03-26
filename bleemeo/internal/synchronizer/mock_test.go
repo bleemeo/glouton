@@ -49,6 +49,7 @@ const (
 	mockAPIResourceMetric        = "metric"
 	mockAPIResourceAccountConfig = "accountconfig"
 	mockAPIResourceAgentConfig   = "agentconfig"
+	mockAPIResourceApplication   = "application"
 	mockAPIResourceService       = "service"
 	mockAPIGloutonConfigItem     = "gloutonconfigitem"
 	mockAPIGloutonDiagnostic     = "gloutondiagnostic"
@@ -212,6 +213,10 @@ func newAPI() *mockAPI {
 	})
 	api.AddResource(mockAPIResourceAgentConfig, &genericResource{
 		Type:     bleemeoTypes.AgentConfig{},
+		ReadOnly: true,
+	})
+	api.AddResource(mockAPIResourceApplication, &genericResource{
+		Type:     bleemeoTypes.Application{},
 		ReadOnly: true,
 	})
 	api.AddResource(mockAPIResourceMetric, &genericResource{

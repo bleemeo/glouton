@@ -130,13 +130,7 @@ func (s *SyncServices) logThrottle(msg string) {
 }
 
 func ServicePayloadFromDiscovery(service discovery.Service, listenAddresses string, accountID string, agentID string, serviceID string) bleemeoapi.ServicePayload {
-	tags := make([]bleemeoTypes.Tag, 0, len(service.Tags))
-
-	for _, t := range service.Tags {
-		if len(t) <= bleemeoapi.APITagsLength && t != "" {
-			tags = append(tags, bleemeoTypes.Tag{Name: t})
-		}
-	}
+	tags := getTagsFromLocal(service)
 
 	return bleemeoapi.ServicePayload{
 		Monitor: bleemeoTypes.Monitor{
@@ -177,7 +171,7 @@ func (s *SyncServices) syncRemoteAndLocal(ctx context.Context, execution types.S
 		return err
 	}
 
-	localServices = s.serviceExcludeUnregistrable(localServices)
+	localServices = ServiceExcludeUnregistrable(localServices, s.logThrottle)
 	previousServices := execution.Option().Cache.ServicesByUUID()
 
 	serviceRemoveDeletedFromRemote(ctx, execution, localServices, previousServices)
@@ -192,7 +186,7 @@ func (s *SyncServices) syncRemoteAndLocal(ctx context.Context, execution types.S
 		return err
 	}
 
-	localServices = s.serviceExcludeUnregistrable(localServices)
+	localServices = ServiceExcludeUnregistrable(localServices, s.logThrottle)
 
 	if err := s.serviceRegisterAndUpdate(ctx, execution, localServices); err != nil {
 		return err
@@ -352,43 +346,52 @@ func skipUpdate(remoteFound bool, remoteSrv bleemeoTypes.Service, srv discovery.
 		remoteSrv.ListenAddresses == listenAddresses &&
 		remoteSrv.ExePath == srv.ExePath &&
 		remoteSrv.Active == srv.Active &&
-		serviceHadSameTags(remoteSrv.Tags, srv.Tags)
+		serviceHadSameTags(remoteSrv.Tags, srv)
+}
+
+func getTagsFromLocal(service discovery.Service) []bleemeoTypes.Tag {
+	tags := make([]bleemeoTypes.Tag, 0, len(service.Tags)+len(service.Applications))
+
+	for _, t := range service.Tags {
+		if len(t) <= bleemeoapi.APITagsLength && t != "" {
+			tags = append(tags, bleemeoTypes.Tag{Name: t, TagType: bleemeoTypes.TagTypeIsCreatedByGlouton})
+		}
+	}
+
+	for _, app := range service.Applications {
+		_, appTag := types.AutomaticApplicationName(app)
+
+		if len(appTag) <= bleemeoapi.APITagsLength && appTag != "" {
+			tags = append(tags, bleemeoTypes.Tag{Name: appTag, TagType: bleemeoTypes.TagTypeIsAutomaticByGlouton})
+		}
+	}
+
+	return tags
 }
 
 // serviceHadSameTags returns true if the two service had the same tags for glouton provided tags.
-func serviceHadSameTags(remoteTags []bleemeoTypes.Tag, localTags []string) bool {
-	localTagsTruncated := make([]string, 0, len(localTags))
-
-	for _, tag := range localTags {
-		if len(tag) <= bleemeoapi.APITagsLength && tag != "" {
-			localTagsTruncated = append(localTagsTruncated, tag)
-		}
-	}
-
-	gloutonTagCount := 0
+func serviceHadSameTags(remoteTags []bleemeoTypes.Tag, localService discovery.Service) bool {
+	localTags := getTagsFromLocal(localService)
+	remoteTagsNoID := make(map[bleemeoTypes.Tag]bool, len(remoteTags))
 
 	for _, tag := range remoteTags {
-		if tag.TagType == bleemeoTypes.TagTypeIsCreatedByGlouton {
-			gloutonTagCount++
+		if tag.TagType != bleemeoTypes.TagTypeIsAutomaticByGlouton && tag.TagType != bleemeoTypes.TagTypeIsCreatedByGlouton {
+			continue
 		}
+
+		reducedTag := bleemeoTypes.Tag{
+			Name:    tag.Name,
+			TagType: tag.TagType,
+		}
+		remoteTagsNoID[reducedTag] = true
 	}
 
-	if len(localTagsTruncated) != gloutonTagCount {
+	if len(remoteTagsNoID) != len(localTags) {
 		return false
 	}
 
-	for _, wantedTag := range localTagsTruncated {
-		tagPresent := false
-
-		for _, tag := range remoteTags {
-			if tag.TagType == bleemeoTypes.TagTypeIsCreatedByGlouton && tag.Name == wantedTag {
-				tagPresent = true
-
-				break
-			}
-		}
-
-		if !tagPresent {
+	for _, wantedTag := range localTags {
+		if !remoteTagsNoID[wantedTag] {
 			return false
 		}
 	}
@@ -396,8 +399,8 @@ func serviceHadSameTags(remoteTags []bleemeoTypes.Tag, localTags []string) bool 
 	return true
 }
 
-// serviceExcludeUnregistrable removes the services that cannot be registered.
-func (s *SyncServices) serviceExcludeUnregistrable(services []discovery.Service) []discovery.Service {
+// ServiceExcludeUnregistrable removes the services that cannot be registered.
+func ServiceExcludeUnregistrable(services []discovery.Service, logThrottle func(string)) []discovery.Service {
 	i := 0
 
 	for _, service := range services {
@@ -408,7 +411,7 @@ func (s *SyncServices) serviceExcludeUnregistrable(services []discovery.Service)
 				service.Name, service.Instance, common.APIServiceInstanceLength,
 			)
 
-			s.logThrottle(msg)
+			logThrottle(msg)
 
 			continue
 		}

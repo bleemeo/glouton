@@ -22,9 +22,13 @@ import (
 	"errors"
 	"glouton/bleemeo/internal/cache"
 	bleemeoTypes "glouton/bleemeo/types"
+	"glouton/discovery"
 	"glouton/facts"
 	"glouton/prometheus/model"
 	"io"
+	"regexp"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -33,6 +37,7 @@ type EntityName string
 const (
 	EntityAccountConfig EntityName = "accountconfig"
 	EntityAgent         EntityName = "agent"
+	EntityApplication   EntityName = "application"
 	EntityConfig        EntityName = "config"
 	EntityContainer     EntityName = "container"
 	EntityDiagnostics   EntityName = "diagnostics"
@@ -140,6 +145,7 @@ type SynchronizationExecution interface {
 
 type Client interface {
 	RawClient
+	ApplicationClient
 }
 
 // RawClient a client doing generic HTTP call to Bleemeo API.
@@ -148,6 +154,11 @@ type RawClient interface {
 	Do(ctx context.Context, method string, path string, params map[string]string, data interface{}, result interface{}) (statusCode int, err error)
 	DoWithBody(ctx context.Context, path string, contentType string, body io.Reader) (statusCode int, err error)
 	Iter(ctx context.Context, resource string, params map[string]string) ([]json.RawMessage, error)
+}
+
+type ApplicationClient interface {
+	ListApplications(ctx context.Context) ([]bleemeoTypes.Application, error)
+	CreateApplication(ctx context.Context, app bleemeoTypes.Application) (bleemeoTypes.Application, error)
 }
 
 type SynchronizedGlobalState interface {
@@ -186,4 +197,26 @@ type Option struct {
 	// create or update objects on the API and stops sending points on MQTT. The suspended mode differs
 	// from the maintenance mode because we stop buffering points to send on MQTT and just drop them.
 	SetBleemeoInSuspendedMode func(suspended bool)
+}
+
+// AutomaticApplicationName return the application name and the tag name from a local Application.
+func AutomaticApplicationName(localApp discovery.Application) (string, string) {
+	var name string
+
+	switch localApp.Type { //nolint:exhaustive
+	case discovery.ApplicationDockerCompose:
+		name = "Docker compose " + localApp.Name
+	default:
+		name = localApp.Name
+	}
+
+	return name, taggify(name)
+}
+
+var nonAlphanumericRegex = regexp.MustCompile(`[^a-zA-Z0-9-]+`)
+
+func taggify(name string) string {
+	tag := strings.ToLower(name)
+
+	return nonAlphanumericRegex.ReplaceAllString(tag, "-")
 }

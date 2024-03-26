@@ -51,6 +51,7 @@ type data struct {
 	Containers              []bleemeoTypes.Container
 	Agents                  []bleemeoTypes.Agent
 	AgentTypes              []bleemeoTypes.AgentType
+	Applications            []bleemeoTypes.Application
 	Metrics                 []bleemeoTypes.Metric
 	MetricRegistrationsFail []bleemeoTypes.MetricRegistration
 	Agent                   bleemeoTypes.Agent
@@ -134,6 +135,15 @@ func (c *Cache) SetAgentTypes(agentTypes []bleemeoTypes.AgentType) {
 	defer c.l.Unlock()
 
 	c.data.AgentTypes = agentTypes
+	c.dirty = true
+}
+
+// SetApplications update the Applications list.
+func (c *Cache) SetApplications(applications []bleemeoTypes.Application) {
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	c.data.Applications = applications
 	c.dirty = true
 }
 
@@ -271,6 +281,18 @@ func (c *Cache) AccountConfigsByUUID() map[string]bleemeoTypes.GloutonAccountCon
 
 		result[accountConfig.ID] = config
 	}
+
+	return result
+}
+
+// Applications returns a (copy) of the Applications.
+func (c *Cache) Applications() []bleemeoTypes.Application {
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	result := make([]bleemeoTypes.Application, len(c.data.Applications))
+
+	copy(result, c.data.Applications)
 
 	return result
 }
