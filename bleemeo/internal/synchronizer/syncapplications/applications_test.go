@@ -118,6 +118,30 @@ func Test_syncRemoteAndLocal(t *testing.T) {
 			wantCreateApplication: []bleemeoTypes.Application{},
 		},
 		{
+			name: "manually-created-application",
+			localServices: []discovery.Service{
+				{
+					Name: "redis",
+					Tags: []string{"user-tag"},
+					Applications: []discovery.Application{
+						{
+							Name: "my-compose",
+							Type: discovery.ApplicationDockerCompose,
+						},
+					},
+				},
+			},
+			remoteServices: []bleemeoTypes.Service{},
+			remoteApplication: []bleemeoTypes.Application{
+				{
+					ID:   "1",
+					Name: "Docker compose my-compose",
+					Tag:  "custom-tag",
+				},
+			},
+			wantCreateApplication: []bleemeoTypes.Application{},
+		},
+		{
 			// Glouton only create the application if its the there is not already
 			// a service with this automatic tag.
 			// This is an approximation of first time that tag is seen.
