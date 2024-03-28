@@ -867,8 +867,9 @@ func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) (*Execut
 		execution := s.newLimitedExecution(
 			true,
 			map[types.EntityName]types.SyncType{
-				types.EntityMetric: types.SyncTypeNormal,
-				types.EntityAgent:  types.SyncTypeNormal,
+				types.EntityAccountConfig: types.SyncTypeForceCacheRefresh,
+				types.EntityMetric:        types.SyncTypeNormal,
+				types.EntityAgent:         types.SyncTypeNormal,
 			},
 		)
 		_ = execution.run(ctx)
