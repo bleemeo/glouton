@@ -2,7 +2,7 @@
 
 set -e
 
-GORELEASER_VERSION="v1.24.0"
+GORELEASER_VERSION="v1.25.1"
 USER_UID=$(id -u)
 
 rm -fr work
@@ -78,7 +78,6 @@ if [ -z "${GLOUTON_BUILDX_OPTION}" ]; then
 fi
 
 export GLOUTON_VERSION
-export GOTOOLCHAIN=auto # temporary. We need Go >= 1.22 to build and goreleaser doesn't include Go 1.22 yet.
 
 COMMIT=`git rev-parse --short HEAD || echo "unknown"`
 
@@ -91,7 +90,6 @@ if [ "${ONLY_JS}" = "1" ]; then
       -v /var/run/docker.sock:/var/run/docker.sock \
       --entrypoint '' \
       -e GLOUTON_VERSION \
-      -e GOTOOLCHAIN \
       -e GORELEASER_PREVIOUS_TAG=0.1.0 \
       -e GORELEASER_CURRENT_TAG=0.1.1 \
       goreleaser/goreleaser:${GORELEASER_VERSION} \
@@ -110,7 +108,6 @@ elif [ "${ONLY_GO}" = "1" -a "${WITH_RACE}" != "1" ]; then
    docker run --rm -e HOME=/go/pkg -e CGO_ENABLED=0 \
       -v $(pwd):/src -w /src ${GO_MOUNT_CACHE} \
       --entrypoint '' \
-      -e GOTOOLCHAIN \
       goreleaser/goreleaser:${GORELEASER_VERSION} \
       tini -g -- sh -exc "
       go build -ldflags='-X main.version=${GLOUTON_VERSION} -X main.commit=${COMMIT}' .
@@ -120,7 +117,6 @@ elif [ "${ONLY_GO}" = "1" -a "${WITH_RACE}" = "1" ]; then
    docker run --rm -e HOME=/go/pkg -e CGO_ENABLED=1 \
       -v $(pwd):/src -w /src ${GO_MOUNT_CACHE} \
       --entrypoint '' \
-      -e GOTOOLCHAIN \
       goreleaser/goreleaser:${GORELEASER_VERSION} \
       tini -g -- sh -exc "
       go build -ldflags='-X main.version=${GLOUTON_VERSION} -X main.commit=${COMMIT} -linkmode external -extldflags=-static' -race .
@@ -132,7 +128,6 @@ else
       -v /var/run/docker.sock:/var/run/docker.sock \
       --entrypoint '' \
       -e GLOUTON_VERSION \
-      -e GOTOOLCHAIN \
       -e GORELEASER_PREVIOUS_TAG=0.1.0 \
       -e GORELEASER_CURRENT_TAG=0.1.1 \
       goreleaser/goreleaser:${GORELEASER_VERSION} \
