@@ -107,6 +107,8 @@ spec:
         - name: hostroot
           mountPath: /hostroot
           readOnly: true
+          # See any mount done after Glouton start
+          mountPropagation: HostToContainer
         # We used another folder than "conf.d" because we want to merge existing
         # file from conf.d and file coming from Kubernetes glouton-config.
         - name: glouton-config
