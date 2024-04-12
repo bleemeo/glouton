@@ -14,46 +14,70 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package mqtt
+package client
 
 import (
 	"bytes"
 	"compress/zlib"
 	"encoding/json"
 	"io"
+	"sync"
 )
 
-type Encoder struct {
-	encoder *zlib.Writer
-	buffer  bytes.Buffer
+type encoder struct {
+	bufferPool sync.Pool
+	zlibWriter *zlib.Writer
 }
 
 // Encode is NOT thread-safe.
-func (enc *Encoder) Encode(obj interface{}) ([]byte, error) {
-	if enc.encoder == nil {
-		enc.encoder = zlib.NewWriter(&enc.buffer)
+func (e *encoder) Encode(obj interface{}) ([]byte, error) {
+	backingBuffer := e.getBuffer()
+	buffer := bytes.NewBuffer(backingBuffer)
+
+	if e.zlibWriter == nil {
+		e.zlibWriter = zlib.NewWriter(buffer)
+	} else {
+		e.zlibWriter.Reset(buffer)
 	}
 
-	enc.buffer.Reset()
-	enc.encoder.Reset(&enc.buffer)
-
-	err := json.NewEncoder(enc.encoder).Encode(obj)
+	err := json.NewEncoder(e.zlibWriter).Encode(obj)
 	if err != nil {
-		return nil, err
+		return buffer.Bytes(), err
 	}
 
-	err = enc.encoder.Close()
+	err = e.zlibWriter.Close()
 	if err != nil {
-		return nil, err
+		return buffer.Bytes(), err
 	}
 
-	clone := make([]byte, enc.buffer.Len())
-	copy(clone, enc.buffer.Bytes())
-
-	return clone, nil
+	return buffer.Bytes(), nil
 }
 
-func (enc *Encoder) Decode(input []byte, obj interface{}) error {
+func (e *encoder) getBuffer() []byte {
+	pbuffer, ok := e.bufferPool.Get().(*[]byte)
+
+	var buffer []byte
+	if ok {
+		buffer = (*pbuffer)[:0]
+	}
+
+	return buffer
+}
+
+func (e *encoder) PutBuffer(v []byte) {
+	if v == nil {
+		return
+	}
+
+	// Don't kept too large buffer in the pool
+	if len(v) > 256*1024 {
+		return
+	}
+
+	e.bufferPool.Put(&v)
+}
+
+func decode(input []byte, obj interface{}) error {
 	decoder, err := zlib.NewReader(bytes.NewReader(input))
 	if err != nil {
 		return err

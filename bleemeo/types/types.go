@@ -224,7 +224,7 @@ type MQTTReloadState interface {
 }
 
 type MQTTClient interface {
-	Publish(topic string, payload []byte, retry bool)
+	Publish(topic string, payload any, retry bool) error
 	Run(ctx context.Context)
 	IsConnectionOpen() bool
 	DiagnosticArchive(ctx context.Context, archive types.ArchiveWriter) error
