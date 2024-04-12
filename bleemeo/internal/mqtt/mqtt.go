@@ -183,7 +183,7 @@ func (c *Client) Disable(until time.Time, reason bleemeoTypes.DisableReason) {
 		c.mqtt.Disable(until)
 
 		if reason == bleemeoTypes.DisableTimeDrift {
-			_ = c.shutdownTimeDrift()
+			c.shutdownTimeDrift()
 		}
 
 		c.disableReason = reason
@@ -423,7 +423,7 @@ func (c *Client) pahoOptions(ctx context.Context) (*paho.ClientOptions, error) {
 	return pahoOptions, nil
 }
 
-func (c *Client) shutdownTimeDrift() error {
+func (c *Client) shutdownTimeDrift() {
 	deadline := time.Now().Add(5 * time.Second)
 
 	if c.mqtt.IsConnectionOpen() {
@@ -435,8 +435,6 @@ func (c *Client) shutdownTimeDrift() error {
 	}
 
 	c.mqtt.Disconnect(time.Until(deadline))
-
-	return nil
 }
 
 // SuspendSending sets whether the MQTT client should stop sending metrics (and topinfo).
