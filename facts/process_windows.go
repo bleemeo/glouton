@@ -14,6 +14,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//go:build windows
+
 package facts
 
 import (
@@ -30,7 +32,7 @@ import (
 )
 
 var (
-	errCannotRetrieveInfo      = errors.New("cannot retrieve the command line informations for the process")
+	errCannotRetrieveInfo      = errors.New("cannot retrieve the command line information for the process")
 	errCannotRetrieveToken     = errors.New("cannot retrieve the token for the process")
 	errCannotRetrieveUserToken = errors.New("cannot retrieve the user token for the process")
 )
