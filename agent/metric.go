@@ -90,8 +90,8 @@ var (
 		"container_net_bits_sent",
 
 		// Prometheus scrapper
-		"process_cpu_seconds_total",
-		"process_resident_memory_bytes",
+		"process_cpu_seconds_total{scrape_job!=\"\"}",
+		"process_resident_memory_bytes{scrape_job!=\"\"}",
 
 		// Probes
 		"probe_duration_seconds",
