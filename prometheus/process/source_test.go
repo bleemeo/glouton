@@ -15,7 +15,6 @@
 // limitations under the License.
 
 //go:build linux
-// +build linux
 
 package process
 
@@ -39,11 +38,11 @@ func Test_reflection(t *testing.T) {
 	}
 
 	testAllProcs(t, source)
-	testProcessses(t, source, 0)
+	testProcesses(t, source, 0)
 	testAllProcs(t, source)
 
 	for _, maxAge := range []time.Duration{0, time.Hour} {
-		for _, testName := range []string{"AllProcs", "Processses", "mixed"} {
+		for _, testName := range []string{"AllProcs", "Processes", "mixed"} {
 			for n := range 5 {
 				source := &Processes{
 					HostRootPath:    "/",
@@ -57,7 +56,7 @@ func Test_reflection(t *testing.T) {
 					case testName == "AllProcs" || (testName == "mixed" && n%2 == 0):
 						testAllProcs(t, source)
 					default:
-						testProcessses(t, source, maxAge)
+						testProcesses(t, source, maxAge)
 					}
 				})
 			}
@@ -89,7 +88,7 @@ func testAllProcs(t *testing.T, source proc.Source) {
 	}
 }
 
-func testProcessses(t *testing.T, source facts.ProcessLister, maxAge time.Duration) {
+func testProcesses(t *testing.T, source facts.ProcessLister, maxAge time.Duration) {
 	t.Helper()
 
 	myPID := os.Getpid()
