@@ -20,7 +20,6 @@
 // logrus) to our own logger.
 
 //go:build windows
-// +build windows
 
 package windows
 

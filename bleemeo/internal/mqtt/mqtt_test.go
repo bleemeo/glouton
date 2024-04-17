@@ -18,11 +18,11 @@ package mqtt
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"glouton/agent/state"
 	"glouton/bleemeo/internal/cache"
-	"glouton/mqtt"
 	"glouton/types"
-	"log"
 	"strconv"
 	"testing"
 	"time"
@@ -96,22 +96,22 @@ func TestFailedPointsCache(t *testing.T) {
 }
 
 type mockMQTTClient struct {
-	encoder         mqtt.Encoder
 	publishedPoints []metricPayload
 }
 
-func (m *mockMQTTClient) Publish(topic string, payload []byte, retry bool) {
-	var metrics []metricPayload
-
+func (m *mockMQTTClient) Publish(topic string, payload any, retry bool) error {
 	_ = topic
 	_ = retry
 
-	err := m.encoder.Decode(payload, &metrics)
-	if err != nil {
-		log.Printf("Failed to decode payload: %s\n", err)
+	metrics, ok := payload.([]metricPayload)
+
+	if !ok {
+		return fmt.Errorf("%w: Payload is not a list of metrics", errors.ErrUnsupported)
 	}
 
 	m.publishedPoints = append(m.publishedPoints, metrics...)
+
+	return nil
 }
 
 func (*mockMQTTClient) Run(context.Context)    {}

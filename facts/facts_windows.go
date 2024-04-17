@@ -14,6 +14,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//go:build windows
+
 package facts
 
 import (
@@ -167,7 +169,7 @@ func (f *FactProvider) platformFacts() map[string]string {
 
 	switch {
 	case err != nil:
-		logger.V(1).Printf("unable to read wmi informations: %v", err)
+		logger.V(1).Printf("unable to read wmi information: %v", err)
 	case len(system) == 0:
 		logger.V(1).Printf("the WMI request returned 0 result")
 	default:
@@ -181,7 +183,7 @@ func (f *FactProvider) platformFacts() map[string]string {
 
 	switch {
 	case err != nil:
-		logger.V(1).Printf("unable to read wmi informations: %v", err)
+		logger.V(1).Printf("unable to read wmi information: %v", err)
 	case len(bios) == 0:
 		logger.V(1).Printf("the WMI request returned 0 result")
 	default:
@@ -209,7 +211,7 @@ func (f *FactProvider) primaryAddress(context.Context) (ipAddress string, macAdd
 
 	switch {
 	case err != nil:
-		logger.V(1).Printf("unable to read wmi informations: %v", err)
+		logger.V(1).Printf("unable to read wmi information: %v", err)
 
 		return "", ""
 	case len(route) == 0:
@@ -261,7 +263,7 @@ func getCPULoads() ([]float64, error) {
 
 	switch {
 	case err != nil:
-		return nil, fmt.Errorf("unable to read wmi informations: %w", err)
+		return nil, fmt.Errorf("unable to read wmi information: %w", err)
 	case len(process) == 0:
 		return nil, errNoResults
 	}
@@ -272,7 +274,7 @@ func getCPULoads() ([]float64, error) {
 
 	switch {
 	case err != nil:
-		return nil, fmt.Errorf("unable to read wmi informations: %w", err)
+		return nil, fmt.Errorf("unable to read wmi information: %w", err)
 	case len(system) == 0:
 		return nil, errNoResults
 	}

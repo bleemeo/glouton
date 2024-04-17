@@ -15,7 +15,6 @@
 // limitations under the License.
 
 //go:build windows
-// +build windows
 
 package agent
 
@@ -65,7 +64,7 @@ loop:
 }
 
 func initOSSpecificParts(stop chan<- os.Signal) {
-	// IsAnInteractiveSession is deprecated but its remplacement (IsWindowsService)
+	// IsAnInteractiveSession is deprecated but its replacement (IsWindowsService)
 	// does not works and fail with an access denied error.
 	isInteractive, err := svc.IsAnInteractiveSession() //nolint:staticcheck
 	if err != nil {
@@ -111,4 +110,8 @@ func (a *agent) registerOSSpecificComponents(*veth.Provider) {
 			logger.Printf("Unable to start windows_exporter, system metrics will be missing: %v", err)
 		}
 	}
+}
+
+func getResidentMemoryOfSelf() uint64 {
+	return 0
 }

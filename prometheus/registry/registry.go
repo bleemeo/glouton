@@ -1415,10 +1415,9 @@ func (r *Registry) AddDefaultCollector() {
 
 	_, _ = r.RegisterGatherer(
 		RegistrationOption{
-			Description:           "go & process collector",
-			JitterSeed:            baseJitter,
-			Interval:              defaultInterval,
-			DisablePeriodicGather: r.option.MetricFormat != types.MetricFormatPrometheus,
+			Description: "go & process collector",
+			JitterSeed:  baseJitter,
+			Interval:    defaultInterval,
 		},
 		r.internalRegistry,
 	)

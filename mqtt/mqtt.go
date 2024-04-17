@@ -37,9 +37,8 @@ const pointsBatchSize = 1000
 
 // MQTT sends points from the store to a MQTT server.
 type MQTT struct {
-	opts    Options
-	client  *client.Client
-	encoder Encoder
+	opts   Options
+	client *client.Client
 
 	l             sync.Mutex
 	pendingPoints []types.MetricPoint
@@ -179,14 +178,9 @@ func (m *MQTT) sendPoints() {
 			end = len(payload)
 		}
 
-		buffer, err := m.encoder.Encode(payload[i:end])
-		if err != nil {
-			logger.V(1).Printf("Unable to encode points: %v", err)
-
-			return
+		if err := m.client.Publish(fmt.Sprintf("v1/agent/%s/data", m.opts.FQDN), payload[i:end], true); err != nil {
+			logger.V(1).Printf("Unable to publish points: %v", err)
 		}
-
-		m.client.Publish(fmt.Sprintf("v1/agent/%s/data", m.opts.FQDN), buffer, true)
 	}
 }
 

@@ -14,7 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// +build !amd64,!386
+//go:build !amd64 && !386
 
 package facts
 

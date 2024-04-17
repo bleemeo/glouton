@@ -81,7 +81,6 @@ type Client struct {
 	// Those variable are only written once or read/written exclusively from the Run() goroutine. No lock needed
 	ctx                        context.Context //nolint:containedctx
 	mqtt                       bleemeoTypes.MQTTClient
-	encoder                    mqtt.Encoder
 	failedPoints               failedPointsCache
 	lastRegisteredMetricsCount int
 	lastFailedPointsRetry      time.Time
@@ -184,7 +183,7 @@ func (c *Client) Disable(until time.Time, reason bleemeoTypes.DisableReason) {
 		c.mqtt.Disable(until)
 
 		if reason == bleemeoTypes.DisableTimeDrift {
-			_ = c.shutdownTimeDrift()
+			c.shutdownTimeDrift()
 		}
 
 		c.disableReason = reason
@@ -424,21 +423,18 @@ func (c *Client) pahoOptions(ctx context.Context) (*paho.ClientOptions, error) {
 	return pahoOptions, nil
 }
 
-func (c *Client) shutdownTimeDrift() error {
+func (c *Client) shutdownTimeDrift() {
 	deadline := time.Now().Add(5 * time.Second)
 
 	if c.mqtt.IsConnectionOpen() {
-		payload, err := json.Marshal(map[string]string{"disconnect-cause": "Clean shutdown, time drift"})
-		if err != nil {
-			return err
-		}
+		payload := map[string]string{"disconnect-cause": "Clean shutdown, time drift"}
 
-		c.mqtt.Publish(fmt.Sprintf("v1/agent/%s/disconnect", c.opts.AgentID), payload, true)
+		if err := c.mqtt.Publish(fmt.Sprintf("v1/agent/%s/disconnect", c.opts.AgentID), payload, true); err != nil {
+			logger.V(1).Printf("Unable to publish on disconnect topic: %v", err)
+		}
 	}
 
 	c.mqtt.Disconnect(time.Until(deadline))
-
-	return nil
 }
 
 // SuspendSending sets whether the MQTT client should stop sending metrics (and topinfo).
@@ -558,14 +554,9 @@ func (c *Client) sendPoints() {
 				end = len(agentPayload)
 			}
 
-			buffer, err := c.encoder.Encode(agentPayload[i:end])
-			if err != nil {
-				logger.V(1).Printf("Unable to encode points: %v", err)
-
-				return
+			if err := c.mqtt.Publish(fmt.Sprintf("v1/agent/%s/data", agentID), agentPayload[i:end], true); err != nil {
+				logger.V(1).Printf("Unable to publish points: %v", err)
 			}
-
-			c.mqtt.Publish(fmt.Sprintf("v1/agent/%s/data", agentID), buffer, true)
 		}
 	}
 }
@@ -749,14 +740,11 @@ func (c *Client) sendConnectMessage() {
 		logger.V(2).Printf("Unable to get facts: %v", err)
 	}
 
-	payload, err := json.Marshal(map[string]string{"public_ip": facts["public_ip"]})
-	if err != nil {
-		logger.V(2).Printf("Unable to encode connect message: %v", err)
+	payload := map[string]string{"public_ip": facts["public_ip"]}
 
-		return
+	if err := c.mqtt.Publish(fmt.Sprintf("v1/agent/%s/connect", c.opts.AgentID), payload, true); err != nil {
+		logger.V(1).Printf("Unable to publish on connect topic: %v", err)
 	}
-
-	c.mqtt.Publish(fmt.Sprintf("v1/agent/%s/connect", c.opts.AgentID), payload, true)
 }
 
 type notificationPayload struct {
@@ -813,14 +801,9 @@ func (c *Client) sendTopinfo(ctx context.Context, cfg bleemeoTypes.GloutonAccoun
 
 	topic := fmt.Sprintf("v1/agent/%s/top_info", c.opts.AgentID)
 
-	compressed, err := c.encoder.Encode(topinfo)
-	if err != nil {
-		logger.V(1).Printf("Unable to encode topinfo: %v", err)
-
-		return
+	if err := c.mqtt.Publish(topic, topinfo, false); err != nil {
+		logger.V(1).Printf("Unable to publish on topinfo topic: %v", err)
 	}
-
-	c.mqtt.Publish(topic, compressed, false)
 }
 
 func (c *Client) filterPoints(input []types.MetricPoint) []types.MetricPoint {
