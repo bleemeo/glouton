@@ -247,6 +247,8 @@ func parseProcessData(process *SystemProcessInformationStruct) (res Process, ok 
 		} else {
 			res.CmdLineList = []string{res.CmdLine}
 		}
+
+		windows.LocalFree(windows.Handle(uintptr(unsafe.Pointer(argv)))) //nolint:errcheck // there is nothing we could do
 	} else {
 		res.CmdLineList = []string{res.CmdLine}
 	}
