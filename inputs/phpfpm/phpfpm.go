@@ -38,7 +38,10 @@ func reflectSet(url string, input telegraf.Input) {
 	serverValue := inputValue.FieldByName("Urls")
 	serverValue.Set(reflect.ValueOf(append(make([]string, 0), url)))
 
-	timeoutValue := inputValue.FieldByName("Timeout")
+	// Temporary disabled until Telegraf 1.30.2 is released.
+	return //nolint:revive
+
+	timeoutValue := inputValue.FieldByName("Timeout") //nolint:govet
 	timeoutValue.Set(reflect.ValueOf(config.Duration(10 * time.Second)))
 }
 
