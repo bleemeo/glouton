@@ -19,6 +19,11 @@ spec:
     spec:
       {{- if eq .Values.run_on_master true }}
       tolerations:
+        - key: node-role.kubernetes.io/control-plane
+          effect: NoSchedule
+        - key: node-role.kubernetes.io/etcd
+          effect: NoExecute
+        #  "master nodes" was the previous name for "control plane nodes" before Kubernetes ~1.24
         - key: node-role.kubernetes.io/master
           effect: NoSchedule
       {{- end }}
@@ -40,6 +45,8 @@ spec:
         - name: hostroot
           mountPath: /hostroot
           readOnly: true
+          # See any mount done after Glouton start
+          mountPropagation: HostToContainer
         # We used another folder than "conf.d" because we want to merge existing
         # file from conf.d and file coming from Kubernetes glouton-config.
         - name: glouton-config

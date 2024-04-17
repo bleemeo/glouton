@@ -85,8 +85,15 @@ spec:
         app: glouton
     spec:
       tolerations:
+      # this toleration is to have the daemonset runnable on control plane nodes
+      # remove it if your control plane nodes can't run pods
+      - key: node-role.kubernetes.io/control-plane
+        effect: NoSchedule
+      - key: node-role.kubernetes.io/etcd
+        effect: NoExecute
       # this toleration is to have the daemonset runnable on master nodes
       # remove it if your masters can't run pods
+      # "master nodes" was the previous name for "control plane nodes" before Kubernetes ~1.24
       - key: node-role.kubernetes.io/master
         effect: NoSchedule
       serviceAccountName: glouton
@@ -107,6 +114,8 @@ spec:
         - name: hostroot
           mountPath: /hostroot
           readOnly: true
+          # See any mount done after Glouton start
+          mountPropagation: HostToContainer
         # We used another folder than "conf.d" because we want to merge existing
         # file from conf.d and file coming from Kubernetes glouton-config.
         - name: glouton-config
