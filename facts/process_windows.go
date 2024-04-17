@@ -78,7 +78,7 @@ func (z PsutilLister) Processes(context.Context, time.Duration) ([]Process, erro
 	buf := make([]byte, bufLen)
 
 	for {
-		ret, _, err := procNtQuerySystemInformation.Call(
+		ret, _, err = procNtQuerySystemInformation.Call(
 			uintptr(SystemProcessInformation),
 			uintptr(unsafe.Pointer(&buf[0])),
 			uintptr(bufLen),
