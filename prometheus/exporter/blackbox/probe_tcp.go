@@ -23,7 +23,7 @@ import (
 	"crypto/x509"
 	"errors"
 	"fmt"
-	"glouton/logger"
+	"github.com/bleemeo/glouton/logger"
 	"net"
 	"strings"
 	"time"

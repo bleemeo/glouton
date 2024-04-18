@@ -18,7 +18,7 @@ package smart
 
 import (
 	"fmt"
-	"glouton/logger"
+	"github.com/bleemeo/glouton/logger"
 	"path/filepath"
 	"strings"
 	"sync"

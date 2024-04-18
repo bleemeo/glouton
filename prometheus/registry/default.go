@@ -18,7 +18,7 @@ package registry
 
 import (
 	"fmt"
-	"glouton/types"
+	"github.com/bleemeo/glouton/types"
 	"strings"
 	"time"
 )

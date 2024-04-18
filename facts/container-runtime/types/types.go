@@ -18,9 +18,9 @@ package types
 
 import (
 	"context"
-	"glouton/config"
-	"glouton/facts"
-	"glouton/types"
+	"github.com/bleemeo/glouton/config"
+	"github.com/bleemeo/glouton/facts"
+	"github.com/bleemeo/glouton/types"
 	"path/filepath"
 	"strings"
 	"time"

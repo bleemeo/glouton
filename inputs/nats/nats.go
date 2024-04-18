@@ -19,10 +19,10 @@
 package nats
 
 import (
-	"glouton/inputs"
-	"glouton/inputs/internal"
-	"glouton/prometheus/registry"
-	"glouton/types"
+	"github.com/bleemeo/glouton/inputs"
+	"github.com/bleemeo/glouton/inputs/internal"
+	"github.com/bleemeo/glouton/prometheus/registry"
+	"github.com/bleemeo/glouton/types"
 
 	"github.com/influxdata/telegraf"
 	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"

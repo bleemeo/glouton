@@ -21,7 +21,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"glouton/types"
+	"github.com/bleemeo/glouton/types"
 	"io"
 	"os"
 	"path/filepath"

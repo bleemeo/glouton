@@ -19,9 +19,9 @@ package check
 import (
 	"context"
 	"fmt"
-	"glouton/facts"
-	"glouton/logger"
-	"glouton/types"
+	"github.com/bleemeo/glouton/facts"
+	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/types"
 	"regexp"
 	"time"
 )

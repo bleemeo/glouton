@@ -21,8 +21,8 @@ package winperfcounters
 import (
 	"errors"
 	"fmt"
-	"glouton/inputs"
-	"glouton/inputs/internal"
+	"github.com/bleemeo/glouton/inputs"
+	"github.com/bleemeo/glouton/inputs/internal"
 	"math"
 	"sort"
 	"strconv"

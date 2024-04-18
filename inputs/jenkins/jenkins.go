@@ -17,11 +17,11 @@
 package jenkins
 
 import (
-	"glouton/config"
-	"glouton/inputs"
-	"glouton/inputs/internal"
-	"glouton/prometheus/registry"
-	"glouton/types"
+	"github.com/bleemeo/glouton/config"
+	"github.com/bleemeo/glouton/inputs"
+	"github.com/bleemeo/glouton/inputs/internal"
+	"github.com/bleemeo/glouton/prometheus/registry"
+	"github.com/bleemeo/glouton/types"
 	"time"
 
 	"github.com/influxdata/telegraf"

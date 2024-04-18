@@ -19,8 +19,8 @@ package model
 import (
 	"errors"
 	"fmt"
-	"glouton/logger"
-	"glouton/types"
+	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/types"
 	"sort"
 	"strings"
 	"time"

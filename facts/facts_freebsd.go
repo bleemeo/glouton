@@ -20,7 +20,7 @@ package facts
 
 import (
 	"context"
-	"glouton/logger"
+	"github.com/bleemeo/glouton/logger"
 	"os"
 	"os/exec"
 

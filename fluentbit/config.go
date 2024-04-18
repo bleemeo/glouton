@@ -19,7 +19,7 @@ package fluentbit
 import (
 	_ "embed"
 	"fmt"
-	containerTypes "glouton/facts/container-runtime/types"
+	containerTypes "github.com/bleemeo/glouton/facts/container-runtime/types"
 	"os"
 	"strings"
 )

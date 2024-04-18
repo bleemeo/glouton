@@ -20,8 +20,8 @@ package jmxtrans
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"glouton/config"
-	"glouton/discovery"
+	"github.com/bleemeo/glouton/config"
+	"github.com/bleemeo/glouton/discovery"
 	"reflect"
 	"testing"
 	"time"

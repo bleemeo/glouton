@@ -17,8 +17,8 @@
 package rabbitmq
 
 import (
-	"glouton/inputs"
-	"glouton/inputs/internal"
+	"github.com/bleemeo/glouton/inputs"
+	"github.com/bleemeo/glouton/inputs/internal"
 
 	"github.com/influxdata/telegraf"
 	telegraf_config "github.com/influxdata/telegraf/config"

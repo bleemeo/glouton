@@ -19,9 +19,9 @@
 package registry
 
 import (
-	"glouton/inputs"
-	"glouton/prometheus/exporter/windows"
-	"glouton/types"
+	"github.com/bleemeo/glouton/inputs"
+	"github.com/bleemeo/glouton/prometheus/exporter/windows"
+	"github.com/bleemeo/glouton/types"
 
 	"github.com/prometheus/client_golang/prometheus"
 )

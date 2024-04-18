@@ -17,7 +17,7 @@
 package smart
 
 import (
-	"glouton/inputs/internal"
+	"github.com/bleemeo/glouton/inputs/internal"
 	"math"
 	"sync"
 	"testing"

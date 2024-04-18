@@ -20,7 +20,7 @@ package process
 
 import (
 	"context"
-	"glouton/facts"
+	"github.com/bleemeo/glouton/facts"
 	"os"
 	"reflect"
 	"runtime"

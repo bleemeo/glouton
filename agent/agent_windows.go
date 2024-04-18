@@ -19,9 +19,9 @@
 package agent
 
 import (
-	"glouton/crashreport"
-	"glouton/facts/container-runtime/veth"
-	"glouton/logger"
+	"github.com/bleemeo/glouton/crashreport"
+	"github.com/bleemeo/glouton/facts/container-runtime/veth"
+	"github.com/bleemeo/glouton/logger"
 	"os"
 
 	"github.com/yusufpapurcu/wmi"

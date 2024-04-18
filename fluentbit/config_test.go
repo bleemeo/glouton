@@ -17,9 +17,9 @@
 package fluentbit
 
 import (
-	"glouton/config"
-	"glouton/facts"
-	containerTypes "glouton/facts/container-runtime/types"
+	"github.com/bleemeo/glouton/config"
+	"github.com/bleemeo/glouton/facts"
+	containerTypes "github.com/bleemeo/glouton/facts/container-runtime/types"
 	"io"
 	"os"
 	"testing"

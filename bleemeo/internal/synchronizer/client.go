@@ -20,7 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"glouton/bleemeo/client"
+	"github.com/bleemeo/glouton/bleemeo/client"
 	"io"
 	"time"
 )

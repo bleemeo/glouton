@@ -19,9 +19,9 @@ package main
 import (
 	"flag"
 	"fmt"
-	"glouton/agent"
-	"glouton/config"
-	versionPkg "glouton/version"
+	"github.com/bleemeo/glouton/agent"
+	"github.com/bleemeo/glouton/config"
+	versionPkg "github.com/bleemeo/glouton/version"
 	"os"
 	"strings"
 )

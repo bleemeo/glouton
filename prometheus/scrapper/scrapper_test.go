@@ -19,7 +19,7 @@ package scrapper
 import (
 	"bytes"
 	"fmt"
-	"glouton/types"
+	"github.com/bleemeo/glouton/types"
 	"math"
 	"net/url"
 	"os"

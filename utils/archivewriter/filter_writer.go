@@ -17,7 +17,7 @@
 package archivewriter
 
 import (
-	"glouton/types"
+	"github.com/bleemeo/glouton/types"
 	"io"
 	"path"
 )

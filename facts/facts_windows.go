@@ -22,7 +22,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"glouton/logger"
+	"github.com/bleemeo/glouton/logger"
 	"net"
 	"strconv"
 

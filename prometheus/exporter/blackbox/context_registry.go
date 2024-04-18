@@ -18,7 +18,7 @@ package blackbox
 
 import (
 	"context"
-	"glouton/prometheus/registry"
+	"github.com/bleemeo/glouton/prometheus/registry"
 	"sync"
 	"time"
 

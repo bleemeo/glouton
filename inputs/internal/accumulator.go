@@ -19,9 +19,9 @@ package internal
 import (
 	"errors"
 	"fmt"
-	"glouton/inputs"
-	"glouton/logger"
-	"glouton/types"
+	"github.com/bleemeo/glouton/inputs"
+	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/types"
 	"sort"
 	"strings"
 	"sync"

@@ -19,7 +19,7 @@ package store
 import (
 	"context"
 	"fmt"
-	"glouton/types"
+	"github.com/bleemeo/glouton/types"
 	"math"
 	"math/rand"
 	"reflect"

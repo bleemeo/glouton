@@ -19,10 +19,10 @@ package discovery
 
 import (
 	"context"
-	"glouton/config"
-	"glouton/facts"
-	"glouton/logger"
-	"glouton/version"
+	"github.com/bleemeo/glouton/config"
+	"github.com/bleemeo/glouton/facts"
+	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/version"
 	"net"
 	"os"
 	"path/filepath"

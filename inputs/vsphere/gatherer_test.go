@@ -18,10 +18,10 @@ package vsphere
 
 import (
 	"context"
-	"glouton/config"
-	"glouton/facts"
-	"glouton/prometheus/registry"
-	"glouton/types"
+	"github.com/bleemeo/glouton/config"
+	"github.com/bleemeo/glouton/facts"
+	"github.com/bleemeo/glouton/prometheus/registry"
+	"github.com/bleemeo/glouton/types"
 	"net/url"
 	"strings"
 	"testing"

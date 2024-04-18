@@ -18,7 +18,7 @@
 package common_test
 
 import (
-	"glouton/prometheus/exporter/common"
+	"github.com/bleemeo/glouton/prometheus/exporter/common"
 	"regexp"
 	"testing"
 )

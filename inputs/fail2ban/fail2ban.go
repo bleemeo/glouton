@@ -17,9 +17,9 @@
 package fail2ban
 
 import (
-	"glouton/inputs"
-	"glouton/inputs/internal"
-	"glouton/prometheus/registry"
+	"github.com/bleemeo/glouton/inputs"
+	"github.com/bleemeo/glouton/inputs/internal"
+	"github.com/bleemeo/glouton/prometheus/registry"
 	"time"
 
 	"github.com/influxdata/telegraf"

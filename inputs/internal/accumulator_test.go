@@ -18,7 +18,7 @@ package internal
 
 import (
 	"fmt"
-	"glouton/types"
+	"github.com/bleemeo/glouton/types"
 	"math"
 	"reflect"
 	"strconv"

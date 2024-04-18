@@ -17,7 +17,7 @@
 package discovery
 
 import (
-	"glouton/logger"
+	"github.com/bleemeo/glouton/logger"
 	"os"
 	"os/exec"
 	"path/filepath"

@@ -19,9 +19,9 @@
 package mdstat
 
 import (
-	"glouton/config"
-	"glouton/inputs"
-	"glouton/prometheus/registry"
+	"github.com/bleemeo/glouton/config"
+	"github.com/bleemeo/glouton/inputs"
+	"github.com/bleemeo/glouton/prometheus/registry"
 
 	"github.com/influxdata/telegraf"
 )

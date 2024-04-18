@@ -19,10 +19,10 @@
 package agent
 
 import (
-	"glouton/config"
-	"glouton/facts/container-runtime/veth"
-	"glouton/logger"
-	"glouton/prometheus/exporter/node"
+	"github.com/bleemeo/glouton/config"
+	"github.com/bleemeo/glouton/facts/container-runtime/veth"
+	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/prometheus/exporter/node"
 	"os"
 
 	"github.com/prometheus/procfs"

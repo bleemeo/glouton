@@ -19,8 +19,8 @@ package registry
 
 import (
 	"context"
-	"glouton/prometheus/model"
-	"glouton/types"
+	"github.com/bleemeo/glouton/prometheus/model"
+	"github.com/bleemeo/glouton/types"
 	"testing"
 	"time"
 

@@ -19,7 +19,7 @@ package store
 import (
 	"context"
 	"errors"
-	"glouton/types"
+	"github.com/bleemeo/glouton/types"
 	"sort"
 	"time"
 

@@ -17,7 +17,7 @@
 package node
 
 import (
-	"glouton/config"
+	"github.com/bleemeo/glouton/config"
 	"reflect"
 	"regexp"
 	"testing"

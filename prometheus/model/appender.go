@@ -18,7 +18,7 @@ package model
 
 import (
 	"errors"
-	"glouton/types"
+	"github.com/bleemeo/glouton/types"
 	"sync"
 	"time"
 

@@ -17,7 +17,7 @@
 package client
 
 import (
-	"glouton/logger"
+	"github.com/bleemeo/glouton/logger"
 	"sync"
 	"time"
 

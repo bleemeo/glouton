@@ -17,8 +17,8 @@
 package jmxtrans
 
 import (
-	"glouton/config"
-	"glouton/discovery"
+	"github.com/bleemeo/glouton/config"
+	"github.com/bleemeo/glouton/discovery"
 	"strings"
 )
 

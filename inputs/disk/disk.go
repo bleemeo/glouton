@@ -17,10 +17,10 @@
 package disk
 
 import (
-	"glouton/inputs"
-	"glouton/inputs/internal"
-	"glouton/types"
-	"glouton/version"
+	"github.com/bleemeo/glouton/inputs"
+	"github.com/bleemeo/glouton/inputs/internal"
+	"github.com/bleemeo/glouton/types"
+	"github.com/bleemeo/glouton/version"
 	"os"
 	"strings"
 

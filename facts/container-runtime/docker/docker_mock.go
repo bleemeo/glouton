@@ -21,7 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"glouton/facts"
+	"github.com/bleemeo/glouton/facts"
 	"os"
 	"path/filepath"
 	"reflect"

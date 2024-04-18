@@ -20,7 +20,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	gloutonContainerd "glouton/facts/container-runtime/containerd"
+	gloutonContainerd "github.com/bleemeo/glouton/facts/container-runtime/containerd"
 	"log"
 
 	"github.com/containerd/containerd"

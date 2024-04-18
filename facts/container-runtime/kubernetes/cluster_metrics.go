@@ -18,7 +18,7 @@ package kubernetes
 
 import (
 	"context"
-	"glouton/types"
+	"github.com/bleemeo/glouton/types"
 	"strings"
 	"time"
 

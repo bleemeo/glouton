@@ -17,8 +17,8 @@
 package internal
 
 import (
-	"glouton/inputs"
-	"glouton/logger"
+	"github.com/bleemeo/glouton/inputs"
+	"github.com/bleemeo/glouton/logger"
 
 	"github.com/influxdata/telegraf"
 	"github.com/influxdata/telegraf/models"

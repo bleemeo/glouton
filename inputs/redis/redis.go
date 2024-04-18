@@ -19,9 +19,9 @@ package redis
 import (
 	"errors"
 	"fmt"
-	"glouton/inputs"
-	"glouton/inputs/internal"
-	"glouton/logger"
+	"github.com/bleemeo/glouton/inputs"
+	"github.com/bleemeo/glouton/inputs/internal"
+	"github.com/bleemeo/glouton/logger"
 	"reflect"
 	"unsafe"
 

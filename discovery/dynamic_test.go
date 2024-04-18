@@ -18,8 +18,8 @@ package discovery
 
 import (
 	"context"
-	"glouton/config"
-	"glouton/facts"
+	"github.com/bleemeo/glouton/config"
+	"github.com/bleemeo/glouton/facts"
 	"os"
 	"reflect"
 	"testing"

@@ -20,8 +20,8 @@ package windows
 
 import (
 	"fmt"
-	"glouton/inputs"
-	"glouton/logger"
+	"github.com/bleemeo/glouton/inputs"
+	"github.com/bleemeo/glouton/logger"
 	"time"
 
 	"github.com/alecthomas/kingpin/v2"

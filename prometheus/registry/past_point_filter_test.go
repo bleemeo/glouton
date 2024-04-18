@@ -18,7 +18,7 @@ package registry
 
 import (
 	"context"
-	"glouton/types"
+	"github.com/bleemeo/glouton/types"
 	"testing"
 	"time"
 

@@ -17,7 +17,7 @@
 package discovery
 
 import (
-	"glouton/config"
+	"github.com/bleemeo/glouton/config"
 	"path/filepath"
 	"strings"
 )

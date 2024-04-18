@@ -18,7 +18,7 @@ package registry
 
 import (
 	"context"
-	"glouton/logger"
+	"github.com/bleemeo/glouton/logger"
 	"sync"
 	"time"
 

@@ -20,7 +20,7 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
-	"glouton/logger"
+	"github.com/bleemeo/glouton/logger"
 	"io"
 	"net/http"
 	"sort"

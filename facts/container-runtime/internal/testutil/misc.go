@@ -19,7 +19,7 @@ package testutil
 import (
 	"errors"
 	"fmt"
-	"glouton/facts"
+	"github.com/bleemeo/glouton/facts"
 )
 
 var errDuplicatedID = errors.New("duplicated ID")

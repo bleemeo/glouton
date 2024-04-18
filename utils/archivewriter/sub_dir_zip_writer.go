@@ -18,7 +18,7 @@ package archivewriter
 
 import (
 	"archive/zip"
-	"glouton/types"
+	"github.com/bleemeo/glouton/types"
 	"io"
 	"strings"
 	"time"

@@ -18,8 +18,8 @@ package check
 
 import (
 	"context"
-	"glouton/facts"
-	"glouton/types"
+	"github.com/bleemeo/glouton/facts"
+	"github.com/bleemeo/glouton/types"
 	"testing"
 	"time"
 )

@@ -19,8 +19,8 @@
 package windows
 
 import (
-	"glouton/config"
-	"glouton/inputs"
+	"github.com/bleemeo/glouton/config"
+	"github.com/bleemeo/glouton/inputs"
 	"testing"
 
 	"github.com/alecthomas/kingpin/v2"

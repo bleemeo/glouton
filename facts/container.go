@@ -19,7 +19,7 @@ package facts
 import (
 	"context"
 	"errors"
-	"glouton/logger"
+	"github.com/bleemeo/glouton/logger"
 	"path/filepath"
 	"strconv"
 	"strings"

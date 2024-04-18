@@ -17,8 +17,8 @@
 package common
 
 import (
-	bleemeoTypes "glouton/bleemeo/types"
-	"glouton/types"
+	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
+	"github.com/bleemeo/glouton/types"
 	"reflect"
 	"testing"
 	"time"

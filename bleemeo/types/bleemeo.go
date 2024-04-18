@@ -21,7 +21,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"glouton/threshold"
+	"github.com/bleemeo/glouton/threshold"
 	"math"
 	"time"
 )

@@ -19,9 +19,9 @@ package rules
 import (
 	"context"
 	"errors"
-	"glouton/prometheus/registry"
-	"glouton/store"
-	"glouton/types"
+	"github.com/bleemeo/glouton/prometheus/registry"
+	"github.com/bleemeo/glouton/store"
+	"github.com/bleemeo/glouton/types"
 	"sort"
 	"sync"
 	"testing"

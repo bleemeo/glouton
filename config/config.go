@@ -19,7 +19,7 @@ package config
 import (
 	"errors"
 	"fmt"
-	"glouton/logger"
+	"github.com/bleemeo/glouton/logger"
 	"os"
 	"path/filepath"
 	"strings"

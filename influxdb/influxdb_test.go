@@ -18,7 +18,7 @@ package influxdb
 
 import (
 	"fmt"
-	"glouton/types"
+	"github.com/bleemeo/glouton/types"
 	"reflect"
 	"testing"
 	"time"

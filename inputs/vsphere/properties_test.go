@@ -18,8 +18,8 @@ package vsphere
 
 import (
 	"context"
-	bleemeoTypes "glouton/bleemeo/types"
-	"glouton/facts"
+	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
+	"github.com/bleemeo/glouton/facts"
 	"net/url"
 	"testing"
 

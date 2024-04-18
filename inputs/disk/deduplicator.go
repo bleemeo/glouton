@@ -17,7 +17,7 @@
 package disk
 
 import (
-	"glouton/inputs/internal"
+	"github.com/bleemeo/glouton/inputs/internal"
 	"strings"
 
 	"github.com/influxdata/telegraf"

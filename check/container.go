@@ -18,7 +18,7 @@ package check
 
 import (
 	"context"
-	"glouton/types"
+	"github.com/bleemeo/glouton/types"
 )
 
 func NewContainerStopped(

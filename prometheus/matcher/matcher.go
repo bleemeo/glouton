@@ -18,7 +18,7 @@ package matcher
 
 import (
 	"fmt"
-	"glouton/types"
+	"github.com/bleemeo/glouton/types"
 	"strings"
 
 	"github.com/prometheus/prometheus/model/labels"

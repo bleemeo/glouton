@@ -19,8 +19,8 @@ package merge
 import (
 	"context"
 	"errors"
-	"glouton/facts"
-	"glouton/types"
+	"github.com/bleemeo/glouton/facts"
+	"github.com/bleemeo/glouton/types"
 	"io"
 	"testing"
 )

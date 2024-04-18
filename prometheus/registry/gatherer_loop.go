@@ -18,7 +18,7 @@ package registry
 
 import (
 	"context"
-	"glouton/crashreport"
+	"github.com/bleemeo/glouton/crashreport"
 	"time"
 )
 

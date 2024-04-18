@@ -17,9 +17,9 @@
 package cpu
 
 import (
-	"glouton/inputs"
-	"glouton/inputs/internal"
-	"glouton/version"
+	"github.com/bleemeo/glouton/inputs"
+	"github.com/bleemeo/glouton/inputs/internal"
+	"github.com/bleemeo/glouton/version"
 	"strings"
 
 	"github.com/influxdata/telegraf"

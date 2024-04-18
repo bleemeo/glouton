@@ -17,9 +17,9 @@
 package cache
 
 import (
-	"glouton/agent/state"
-	"glouton/bleemeo/types"
-	"glouton/threshold"
+	"github.com/bleemeo/glouton/agent/state"
+	"github.com/bleemeo/glouton/bleemeo/types"
+	"github.com/bleemeo/glouton/threshold"
 	"reflect"
 	"testing"
 

@@ -19,9 +19,9 @@ package synchronizer
 import (
 	"context"
 	"encoding/json"
-	"glouton/bleemeo/client"
-	"glouton/bleemeo/types"
-	"glouton/logger"
+	"github.com/bleemeo/glouton/bleemeo/client"
+	"github.com/bleemeo/glouton/bleemeo/types"
+	"github.com/bleemeo/glouton/logger"
 	"mime"
 	"reflect"
 	"strings"

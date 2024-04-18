@@ -17,7 +17,7 @@
 package config
 
 import (
-	"glouton/types"
+	"github.com/bleemeo/glouton/types"
 	"regexp"
 	"testing"
 

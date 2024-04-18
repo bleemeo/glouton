@@ -17,11 +17,11 @@
 package agent
 
 import (
-	"glouton/config"
-	"glouton/discovery"
-	"glouton/prometheus/matcher"
-	"glouton/prometheus/model"
-	"glouton/types"
+	"github.com/bleemeo/glouton/config"
+	"github.com/bleemeo/glouton/discovery"
+	"github.com/bleemeo/glouton/prometheus/matcher"
+	"github.com/bleemeo/glouton/prometheus/model"
+	"github.com/bleemeo/glouton/types"
 	"reflect"
 	"sort"
 	"testing"

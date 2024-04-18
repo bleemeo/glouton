@@ -18,8 +18,8 @@ package blackbox
 
 import (
 	"crypto/x509"
-	"glouton/prometheus/registry"
-	"glouton/types"
+	"github.com/bleemeo/glouton/prometheus/registry"
+	"github.com/bleemeo/glouton/types"
 	"sync"
 	"time"
 

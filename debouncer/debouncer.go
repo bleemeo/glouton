@@ -18,7 +18,7 @@ package debouncer
 
 import (
 	"context"
-	"glouton/crashreport"
+	"github.com/bleemeo/glouton/crashreport"
 	"sync"
 	"time"
 )

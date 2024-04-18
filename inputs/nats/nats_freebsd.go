@@ -19,8 +19,8 @@
 package nats
 
 import (
-	"glouton/inputs"
-	"glouton/prometheus/registry"
+	"github.com/bleemeo/glouton/inputs"
+	"github.com/bleemeo/glouton/prometheus/registry"
 
 	"github.com/influxdata/telegraf"
 )

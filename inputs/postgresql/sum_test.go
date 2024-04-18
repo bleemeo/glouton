@@ -17,7 +17,7 @@
 package postgresql
 
 import (
-	"glouton/inputs/internal"
+	"github.com/bleemeo/glouton/inputs/internal"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"

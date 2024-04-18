@@ -17,7 +17,7 @@
 package store
 
 import (
-	"glouton/types"
+	"github.com/bleemeo/glouton/types"
 	"testing"
 	"time"
 )

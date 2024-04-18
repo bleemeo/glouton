@@ -18,14 +18,14 @@ package mqtt
 
 import (
 	"fmt"
-	"glouton/bleemeo/types"
-	"glouton/logger"
-	"glouton/mqtt/client"
+	"github.com/bleemeo/glouton/bleemeo/types"
+	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/mqtt/client"
 	"os"
 	"sync"
 	"time"
 
-	gloutonTypes "glouton/types"
+	gloutonTypes "github.com/bleemeo/glouton/types"
 
 	paho "github.com/eclipse/paho.mqtt.golang"
 )

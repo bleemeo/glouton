@@ -17,8 +17,8 @@
 package modify
 
 import (
-	"glouton/inputs/internal"
-	"glouton/types"
+	"github.com/bleemeo/glouton/inputs/internal"
+	"github.com/bleemeo/glouton/types"
 	"strings"
 
 	"github.com/influxdata/telegraf"

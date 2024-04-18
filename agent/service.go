@@ -19,7 +19,7 @@ package agent
 import (
 	"context"
 	"errors"
-	"glouton/discovery"
+	"github.com/bleemeo/glouton/discovery"
 	"os/exec"
 	"regexp"
 	"strconv"

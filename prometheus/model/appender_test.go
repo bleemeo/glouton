@@ -18,7 +18,7 @@ package model
 
 import (
 	"context"
-	"glouton/types"
+	"github.com/bleemeo/glouton/types"
 	"strconv"
 	"testing"
 	"time"

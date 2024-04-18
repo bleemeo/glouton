@@ -18,8 +18,8 @@
 package threshold
 
 import (
-	"glouton/config"
-	"glouton/types"
+	"github.com/bleemeo/glouton/config"
+	"github.com/bleemeo/glouton/types"
 	"math"
 	"reflect"
 	"testing"

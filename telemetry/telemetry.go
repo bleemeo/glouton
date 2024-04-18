@@ -20,7 +20,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"glouton/logger"
+	"github.com/bleemeo/glouton/logger"
 	"io"
 	"net/http"
 	"time"

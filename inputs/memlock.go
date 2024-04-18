@@ -17,7 +17,7 @@
 package inputs
 
 import (
-	"glouton/logger"
+	"github.com/bleemeo/glouton/logger"
 	"math"
 	"os"
 )

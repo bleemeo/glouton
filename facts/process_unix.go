@@ -20,7 +20,7 @@ package facts
 
 import (
 	"context"
-	"glouton/version"
+	"github.com/bleemeo/glouton/version"
 	"strconv"
 	"strings"
 	"time"

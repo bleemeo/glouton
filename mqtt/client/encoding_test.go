@@ -20,7 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"glouton/facts"
+	"github.com/bleemeo/glouton/facts"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"

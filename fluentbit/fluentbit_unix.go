@@ -19,8 +19,8 @@
 package fluentbit
 
 import (
-	"glouton/config"
-	crTypes "glouton/facts/container-runtime/types"
+	"github.com/bleemeo/glouton/config"
+	crTypes "github.com/bleemeo/glouton/facts/container-runtime/types"
 )
 
 // New returns an initialized Fluent Bit manager and config warnings.

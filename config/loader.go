@@ -20,7 +20,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"glouton/logger"
+	"github.com/bleemeo/glouton/logger"
 	"math"
 	"reflect"
 	"strings"

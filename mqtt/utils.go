@@ -20,7 +20,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
-	"glouton/logger"
+	"github.com/bleemeo/glouton/logger"
 	"os"
 )
 

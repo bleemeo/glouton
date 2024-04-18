@@ -18,7 +18,7 @@ package registry
 
 import (
 	"context"
-	"glouton/prometheus/model"
+	"github.com/bleemeo/glouton/prometheus/model"
 	"sort"
 	"sync"
 	"time"

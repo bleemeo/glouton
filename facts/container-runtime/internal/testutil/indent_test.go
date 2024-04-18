@@ -17,7 +17,7 @@
 package testutil_test
 
 import (
-	"glouton/facts/container-runtime/internal/testutil"
+	"github.com/bleemeo/glouton/facts/container-runtime/internal/testutil"
 	"testing"
 )
 

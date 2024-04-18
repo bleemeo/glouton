@@ -25,8 +25,8 @@ package registry
 import (
 	"context"
 	"fmt"
-	"glouton/prometheus/model"
-	"glouton/types"
+	"github.com/bleemeo/glouton/prometheus/model"
+	"github.com/bleemeo/glouton/types"
 	"io"
 	"reflect"
 	"sort"

@@ -20,8 +20,8 @@ package process
 
 import (
 	"context"
-	"glouton/discovery"
-	"glouton/prometheus/registry"
+	"github.com/bleemeo/glouton/discovery"
+	"github.com/bleemeo/glouton/prometheus/registry"
 )
 
 // RegisterExporter does nothing, process_exporter is not supported on this platform.

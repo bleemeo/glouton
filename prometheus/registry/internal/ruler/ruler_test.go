@@ -2,8 +2,8 @@ package ruler
 
 import (
 	"context"
-	"glouton/prometheus/matcher"
-	"glouton/types"
+	"github.com/bleemeo/glouton/prometheus/matcher"
+	"github.com/bleemeo/glouton/types"
 	"testing"
 	"time"
 

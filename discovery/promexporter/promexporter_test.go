@@ -18,9 +18,9 @@
 package promexporter
 
 import (
-	"glouton/facts"
-	"glouton/prometheus/scrapper"
-	"glouton/types"
+	"github.com/bleemeo/glouton/facts"
+	"github.com/bleemeo/glouton/prometheus/scrapper"
+	"github.com/bleemeo/glouton/types"
 	"net/url"
 	"testing"
 

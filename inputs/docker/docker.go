@@ -17,11 +17,11 @@
 package docker
 
 import (
-	"glouton/facts"
-	crTypes "glouton/facts/container-runtime/types"
-	"glouton/inputs"
-	"glouton/inputs/internal"
-	"glouton/types"
+	"github.com/bleemeo/glouton/facts"
+	crTypes "github.com/bleemeo/glouton/facts/container-runtime/types"
+	"github.com/bleemeo/glouton/inputs"
+	"github.com/bleemeo/glouton/inputs/internal"
+	"github.com/bleemeo/glouton/types"
 	"strings"
 
 	"github.com/influxdata/telegraf"

@@ -18,11 +18,11 @@ package node
 
 import (
 	"fmt"
-	"glouton/logger"
-	"glouton/prometheus/exporter/buildinfo"
-	"glouton/prometheus/exporter/common"
-	"glouton/types"
-	"glouton/version"
+	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/prometheus/exporter/buildinfo"
+	"github.com/bleemeo/glouton/prometheus/exporter/common"
+	"github.com/bleemeo/glouton/types"
+	"github.com/bleemeo/glouton/version"
 	"strings"
 	_ "unsafe" // using hack with go linkname to access private variable :)
 

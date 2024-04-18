@@ -19,8 +19,8 @@ package facts
 import (
 	"context"
 	"errors"
-	"glouton/logger"
-	"glouton/version"
+	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/version"
 	"os"
 	"path/filepath"
 	"sort"

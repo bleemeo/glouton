@@ -18,10 +18,10 @@ package common
 
 import (
 	"fmt"
-	bleemeoTypes "glouton/bleemeo/types"
-	"glouton/logger"
-	"glouton/types"
-	"glouton/utils/metricutils"
+	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
+	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/types"
+	"github.com/bleemeo/glouton/utils/metricutils"
 	"time"
 )
 

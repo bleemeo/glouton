@@ -20,9 +20,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"glouton/crashreport"
-	"glouton/logger"
-	"glouton/types"
+	"github.com/bleemeo/glouton/crashreport"
+	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/types"
 	"sort"
 	"sync"
 )

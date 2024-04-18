@@ -18,8 +18,8 @@ package client
 
 import (
 	"context"
-	"glouton/logger"
-	"glouton/types"
+	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/types"
 	"sync"
 	"time"
 

@@ -25,8 +25,8 @@ package windows
 
 import (
 	"fmt"
-	"glouton/crashreport"
-	"glouton/logger"
+	"github.com/bleemeo/glouton/crashreport"
+	"github.com/bleemeo/glouton/logger"
 	"sync"
 	"time"
 

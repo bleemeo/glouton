@@ -18,11 +18,11 @@ package ruler
 
 import (
 	"context"
-	"glouton/logger"
-	"glouton/prometheus/matcher"
-	"glouton/prometheus/model"
-	"glouton/store"
-	"glouton/types"
+	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/prometheus/matcher"
+	"github.com/bleemeo/glouton/prometheus/model"
+	"github.com/bleemeo/glouton/store"
+	"github.com/bleemeo/glouton/types"
 	"sort"
 	"sync"
 	"time"

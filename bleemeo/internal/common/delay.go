@@ -18,8 +18,8 @@ package common
 
 import (
 	"context"
-	"glouton/bleemeo/types"
-	"glouton/logger"
+	"github.com/bleemeo/glouton/bleemeo/types"
+	"github.com/bleemeo/glouton/logger"
 	"time"
 )
 

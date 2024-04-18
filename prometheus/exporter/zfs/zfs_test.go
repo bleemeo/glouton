@@ -18,7 +18,7 @@
 package zfs
 
 import (
-	"glouton/types"
+	"github.com/bleemeo/glouton/types"
 	"testing"
 )
 

@@ -19,9 +19,9 @@ package synchronizer
 import (
 	"context"
 	"errors"
-	"glouton/bleemeo/types"
-	"glouton/logger"
-	"glouton/prometheus/exporter/snmp"
+	"github.com/bleemeo/glouton/bleemeo/types"
+	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/prometheus/exporter/snmp"
 	"time"
 
 	"github.com/google/uuid"

@@ -19,7 +19,7 @@ package smart
 import (
 	"context"
 	"encoding/json"
-	"glouton/types"
+	"github.com/bleemeo/glouton/types"
 	"strings"
 	"sync"
 	"time"

@@ -18,7 +18,7 @@ package inputs
 
 import (
 	"context"
-	"glouton/types"
+	"github.com/bleemeo/glouton/types"
 	"reflect"
 	"strings"
 	"testing"

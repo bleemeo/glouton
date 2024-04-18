@@ -18,9 +18,9 @@ package influxdb
 
 import (
 	"context"
-	"glouton/logger"
-	"glouton/store"
-	"glouton/types"
+	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/store"
+	"github.com/bleemeo/glouton/types"
 	"math"
 	"sync"
 	"time"

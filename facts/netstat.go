@@ -19,7 +19,7 @@ package facts
 import (
 	"context"
 	"fmt"
-	"glouton/logger"
+	"github.com/bleemeo/glouton/logger"
 	"net"
 	"os"
 	"regexp"

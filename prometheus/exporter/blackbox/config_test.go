@@ -17,9 +17,9 @@
 package blackbox
 
 import (
-	"glouton/config"
-	"glouton/prometheus/registry"
-	"glouton/types"
+	"github.com/bleemeo/glouton/config"
+	"github.com/bleemeo/glouton/prometheus/registry"
+	"github.com/bleemeo/glouton/types"
 	"reflect"
 	"testing"
 	"time"

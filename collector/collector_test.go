@@ -19,8 +19,8 @@ package collector
 import (
 	"context"
 	"errors"
-	"glouton/inputs"
-	"glouton/types"
+	"github.com/bleemeo/glouton/inputs"
+	"github.com/bleemeo/glouton/types"
 	"math"
 	"sync"
 	"testing"

@@ -17,8 +17,8 @@
 package memcached
 
 import (
-	"glouton/inputs"
-	"glouton/inputs/internal"
+	"github.com/bleemeo/glouton/inputs"
+	"github.com/bleemeo/glouton/inputs/internal"
 	"strings"
 
 	"github.com/influxdata/telegraf"

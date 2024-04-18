@@ -20,10 +20,10 @@ package process
 
 import (
 	"context"
-	"glouton/discovery"
-	"glouton/logger"
-	"glouton/prometheus/process"
-	"glouton/prometheus/registry"
+	"github.com/bleemeo/glouton/discovery"
+	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/prometheus/process"
+	"github.com/bleemeo/glouton/prometheus/registry"
 	"sync"
 	"time"
 

@@ -16,7 +16,7 @@
 
 package internal
 
-import "glouton/logger"
+import "github.com/bleemeo/glouton/logger"
 
 // Logger is an implementation of telegraf.Logger.
 type Logger struct{}

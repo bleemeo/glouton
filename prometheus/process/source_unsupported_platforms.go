@@ -19,7 +19,7 @@
 package process
 
 import (
-	"glouton/facts"
+	"github.com/bleemeo/glouton/facts"
 	"time"
 )
 
