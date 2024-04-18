@@ -21,13 +21,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
+	"sync"
+	"time"
+
 	"github.com/bleemeo/glouton/crashreport"
 	"github.com/bleemeo/glouton/delay"
 	"github.com/bleemeo/glouton/logger"
 	"github.com/bleemeo/glouton/types"
-	"strings"
-	"sync"
-	"time"
 
 	paho "github.com/eclipse/paho.mqtt.golang"
 )

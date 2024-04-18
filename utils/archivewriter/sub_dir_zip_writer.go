@@ -18,10 +18,11 @@ package archivewriter
 
 import (
 	"archive/zip"
-	"github.com/bleemeo/glouton/types"
 	"io"
 	"strings"
 	"time"
+
+	"github.com/bleemeo/glouton/types"
 )
 
 type subDirZipWriter struct {

@@ -23,9 +23,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
-	"github.com/bleemeo/glouton/facts"
-	"github.com/bleemeo/glouton/types"
 	"io"
 	"log"
 	"net/http"
@@ -36,6 +33,10 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
+	"github.com/bleemeo/glouton/facts"
+	"github.com/bleemeo/glouton/types"
 
 	"github.com/google/uuid"
 )

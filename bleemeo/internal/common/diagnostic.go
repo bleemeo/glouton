@@ -21,13 +21,14 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
-	"github.com/bleemeo/glouton/crashreport"
-	"github.com/bleemeo/glouton/version"
 	"io"
 	"net"
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/bleemeo/glouton/crashreport"
+	"github.com/bleemeo/glouton/version"
 )
 
 var errHandshakeTimeout = errors.New("TLS handshake timeout")

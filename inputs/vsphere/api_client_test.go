@@ -19,14 +19,15 @@ package vsphere
 import (
 	"context"
 	"crypto/tls"
-	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
-	"github.com/bleemeo/glouton/config"
-	"github.com/bleemeo/glouton/facts"
-	"github.com/bleemeo/glouton/prometheus/registry"
 	"net/url"
 	"sort"
 	"strings"
 	"testing"
+
+	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
+	"github.com/bleemeo/glouton/config"
+	"github.com/bleemeo/glouton/facts"
+	"github.com/bleemeo/glouton/prometheus/registry"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"

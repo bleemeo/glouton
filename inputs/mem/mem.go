@@ -18,6 +18,7 @@ package mem
 
 import (
 	"fmt"
+
 	"github.com/bleemeo/glouton/inputs"
 	"github.com/bleemeo/glouton/inputs/internal"
 	"github.com/bleemeo/glouton/version"

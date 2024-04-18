@@ -19,12 +19,13 @@ package snmp
 import (
 	"context"
 	"fmt"
-	"github.com/bleemeo/glouton/config"
-	"github.com/bleemeo/glouton/crashreport"
-	"github.com/bleemeo/glouton/logger"
 	"net/url"
 	"sync"
 	"time"
+
+	"github.com/bleemeo/glouton/config"
+	"github.com/bleemeo/glouton/crashreport"
+	"github.com/bleemeo/glouton/logger"
 
 	"github.com/prometheus/client_golang/prometheus"
 )

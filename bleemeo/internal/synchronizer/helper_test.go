@@ -20,6 +20,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http/httptest"
+	"sort"
+	"testing"
+	"time"
+
 	"github.com/bleemeo/glouton/bleemeo/internal/cache"
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/config"
@@ -29,10 +34,6 @@ import (
 	"github.com/bleemeo/glouton/prometheus/model"
 	"github.com/bleemeo/glouton/store"
 	"github.com/bleemeo/glouton/types"
-	"net/http/httptest"
-	"sort"
-	"testing"
-	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"

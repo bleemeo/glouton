@@ -20,11 +20,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
+	"sync"
+
 	"github.com/bleemeo/glouton/crashreport"
 	"github.com/bleemeo/glouton/logger"
 	"github.com/bleemeo/glouton/types"
-	"sort"
-	"sync"
 )
 
 var errAlreadyClosed = errors.New("registry already closed")

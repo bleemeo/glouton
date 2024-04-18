@@ -21,13 +21,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/bleemeo/glouton/types"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/bleemeo/glouton/types"
 )
 
 func TestTryToGenerateDiagnostic(t *testing.T) {

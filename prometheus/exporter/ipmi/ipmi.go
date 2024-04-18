@@ -21,17 +21,18 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/bleemeo/glouton/config"
-	"github.com/bleemeo/glouton/logger"
-	"github.com/bleemeo/glouton/prometheus/model"
-	"github.com/bleemeo/glouton/prometheus/registry"
-	"github.com/bleemeo/glouton/types"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/bleemeo/glouton/config"
+	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/prometheus/model"
+	"github.com/bleemeo/glouton/prometheus/registry"
+	"github.com/bleemeo/glouton/types"
 
 	dto "github.com/prometheus/client_model/go"
 )

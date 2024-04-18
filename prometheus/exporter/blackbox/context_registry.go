@@ -18,9 +18,10 @@ package blackbox
 
 import (
 	"context"
-	"github.com/bleemeo/glouton/prometheus/registry"
 	"sync"
 	"time"
+
+	"github.com/bleemeo/glouton/prometheus/registry"
 
 	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"

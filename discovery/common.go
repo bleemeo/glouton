@@ -19,13 +19,14 @@ package discovery
 import (
 	"context"
 	"fmt"
+	"net"
+	"strconv"
+	"time"
+
 	"github.com/bleemeo/glouton/config"
 	"github.com/bleemeo/glouton/facts"
 	"github.com/bleemeo/glouton/logger"
 	"github.com/bleemeo/glouton/types"
-	"net"
-	"strconv"
-	"time"
 
 	"dario.cat/mergo"
 )

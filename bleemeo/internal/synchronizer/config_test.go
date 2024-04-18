@@ -1,8 +1,9 @@
 package synchronizer
 
 import (
-	"github.com/bleemeo/glouton/config"
 	"testing"
+
+	"github.com/bleemeo/glouton/config"
 
 	"github.com/google/go-cmp/cmp"
 )

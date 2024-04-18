@@ -18,10 +18,11 @@ package model
 
 import (
 	"context"
-	"github.com/bleemeo/glouton/types"
 	"strconv"
 	"testing"
 	"time"
+
+	"github.com/bleemeo/glouton/types"
 
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/storage"

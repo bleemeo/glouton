@@ -18,12 +18,13 @@ package check
 
 import (
 	"context"
+	"sync"
+	"time"
+
 	"github.com/bleemeo/glouton/logger"
 	"github.com/bleemeo/glouton/prometheus/model"
 	"github.com/bleemeo/glouton/prometheus/registry"
 	"github.com/bleemeo/glouton/types"
-	"sync"
-	"time"
 
 	dto "github.com/prometheus/client_model/go"
 )

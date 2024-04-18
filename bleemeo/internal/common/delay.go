@@ -18,9 +18,10 @@ package common
 
 import (
 	"context"
+	"time"
+
 	"github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/logger"
-	"time"
 )
 
 // WaitDeadline will wait for a deadline to pass.

@@ -26,8 +26,6 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
-	"github.com/bleemeo/glouton/prometheus/registry"
-	"github.com/bleemeo/glouton/types"
 	"math"
 	"math/big"
 	"net"
@@ -38,6 +36,9 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/bleemeo/glouton/prometheus/registry"
+	"github.com/bleemeo/glouton/types"
 
 	"github.com/google/go-cmp/cmp"
 )

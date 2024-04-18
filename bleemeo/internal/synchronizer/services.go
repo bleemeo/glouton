@@ -20,14 +20,15 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
+	"strings"
+	"time"
+
 	"github.com/bleemeo/glouton/bleemeo/internal/common"
 	"github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/discovery"
 	"github.com/bleemeo/glouton/facts"
 	"github.com/bleemeo/glouton/logger"
-	"sort"
-	"strings"
-	"time"
 )
 
 type servicePayload struct {

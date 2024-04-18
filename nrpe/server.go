@@ -28,15 +28,16 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"github.com/bleemeo/glouton/crashreport"
-	"github.com/bleemeo/glouton/logger"
-	"github.com/bleemeo/glouton/version"
 	"hash/crc32"
 	"io"
 	"math/big"
 	"net"
 	"sync"
 	"time"
+
+	"github.com/bleemeo/glouton/crashreport"
+	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/version"
 )
 
 var errWrongValue = errors.New("wrong value for crc32")

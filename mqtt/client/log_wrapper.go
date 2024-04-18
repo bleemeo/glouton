@@ -17,9 +17,10 @@
 package client
 
 import (
-	"github.com/bleemeo/glouton/logger"
 	"sync"
 	"time"
+
+	"github.com/bleemeo/glouton/logger"
 
 	paho "github.com/eclipse/paho.mqtt.golang"
 )

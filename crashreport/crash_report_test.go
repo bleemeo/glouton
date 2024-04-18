@@ -21,8 +21,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/bleemeo/glouton/types"
-	"github.com/bleemeo/glouton/utils/archivewriter"
 	"io"
 	"os"
 	"path"
@@ -30,6 +28,9 @@ import (
 	"sort"
 	"testing"
 	"time"
+
+	"github.com/bleemeo/glouton/types"
+	"github.com/bleemeo/glouton/utils/archivewriter"
 
 	"github.com/google/go-cmp/cmp"
 )

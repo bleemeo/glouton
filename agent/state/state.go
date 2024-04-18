@@ -21,13 +21,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/bleemeo/glouton/logger"
 	"io"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"sync"
+
+	"github.com/bleemeo/glouton/logger"
 
 	"github.com/google/uuid"
 	"github.com/mitchellh/mapstructure"

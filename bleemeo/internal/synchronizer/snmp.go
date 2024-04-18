@@ -19,10 +19,11 @@ package synchronizer
 import (
 	"context"
 	"errors"
+	"time"
+
 	"github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/logger"
 	"github.com/bleemeo/glouton/prometheus/exporter/snmp"
-	"time"
 
 	"github.com/google/uuid"
 )

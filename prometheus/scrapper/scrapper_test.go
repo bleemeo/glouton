@@ -19,13 +19,14 @@ package scrapper
 import (
 	"bytes"
 	"fmt"
-	"github.com/bleemeo/glouton/types"
 	"math"
 	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
 	"testing"
+
+	"github.com/bleemeo/glouton/types"
 
 	dto "github.com/prometheus/client_model/go"
 	"github.com/prometheus/common/expfmt"

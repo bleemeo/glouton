@@ -17,10 +17,11 @@
 package fail2ban
 
 import (
+	"time"
+
 	"github.com/bleemeo/glouton/inputs"
 	"github.com/bleemeo/glouton/inputs/internal"
 	"github.com/bleemeo/glouton/prometheus/registry"
-	"time"
 
 	"github.com/influxdata/telegraf"
 	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"

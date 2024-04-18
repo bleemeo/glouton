@@ -18,8 +18,9 @@ package buildinfo
 
 import (
 	"fmt"
-	"github.com/bleemeo/glouton/prometheus/exporter/collectors"
 	"runtime"
+
+	"github.com/bleemeo/glouton/prometheus/exporter/collectors"
 
 	"github.com/prometheus/client_golang/prometheus"
 )

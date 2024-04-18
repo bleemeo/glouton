@@ -18,9 +18,10 @@ package debouncer
 
 import (
 	"context"
-	"github.com/bleemeo/glouton/crashreport"
 	"sync"
 	"time"
+
+	"github.com/bleemeo/glouton/crashreport"
 )
 
 // Debouncer make sure target function is not called too often. Run() must be called to works.

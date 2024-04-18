@@ -18,12 +18,13 @@ package types
 
 import (
 	"context"
-	"github.com/bleemeo/glouton/config"
-	"github.com/bleemeo/glouton/facts"
-	"github.com/bleemeo/glouton/types"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/bleemeo/glouton/config"
+	"github.com/bleemeo/glouton/facts"
+	"github.com/bleemeo/glouton/types"
 )
 
 const (

@@ -19,10 +19,11 @@ package merge
 import (
 	"context"
 	"errors"
-	"github.com/bleemeo/glouton/facts"
-	"github.com/bleemeo/glouton/types"
 	"io"
 	"testing"
+
+	"github.com/bleemeo/glouton/facts"
+	"github.com/bleemeo/glouton/types"
 )
 
 func Test_fixMultiError(t *testing.T) {

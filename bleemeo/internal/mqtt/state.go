@@ -18,12 +18,13 @@ package mqtt
 
 import (
 	"fmt"
-	"github.com/bleemeo/glouton/bleemeo/types"
-	"github.com/bleemeo/glouton/logger"
-	"github.com/bleemeo/glouton/mqtt/client"
 	"os"
 	"sync"
 	"time"
+
+	"github.com/bleemeo/glouton/bleemeo/types"
+	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/mqtt/client"
 
 	gloutonTypes "github.com/bleemeo/glouton/types"
 

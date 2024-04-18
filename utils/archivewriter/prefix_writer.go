@@ -17,8 +17,9 @@
 package archivewriter
 
 import (
-	"github.com/bleemeo/glouton/types"
 	"io"
+
+	"github.com/bleemeo/glouton/types"
 )
 
 type prefixWriter struct {

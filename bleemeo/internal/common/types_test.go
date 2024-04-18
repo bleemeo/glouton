@@ -17,11 +17,12 @@
 package common
 
 import (
-	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
-	"github.com/bleemeo/glouton/types"
 	"reflect"
 	"testing"
 	"time"
+
+	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
+	"github.com/bleemeo/glouton/types"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"

@@ -19,10 +19,6 @@ package discovery
 
 import (
 	"context"
-	"github.com/bleemeo/glouton/config"
-	"github.com/bleemeo/glouton/facts"
-	"github.com/bleemeo/glouton/logger"
-	"github.com/bleemeo/glouton/version"
 	"net"
 	"os"
 	"path/filepath"
@@ -32,6 +28,11 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/bleemeo/glouton/config"
+	"github.com/bleemeo/glouton/facts"
+	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/version"
 
 	"dario.cat/mergo"
 	"github.com/mitchellh/mapstructure"

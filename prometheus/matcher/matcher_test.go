@@ -17,9 +17,10 @@
 package matcher
 
 import (
+	"testing"
+
 	"github.com/bleemeo/glouton/prometheus/model"
 	"github.com/bleemeo/glouton/types"
-	"testing"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"

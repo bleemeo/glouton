@@ -19,6 +19,7 @@ package filter
 import (
 	"errors"
 	"fmt"
+
 	"github.com/bleemeo/glouton/bleemeo/internal/cache"
 	"github.com/bleemeo/glouton/bleemeo/internal/common"
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"

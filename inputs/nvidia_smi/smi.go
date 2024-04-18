@@ -17,10 +17,11 @@
 package nvidia
 
 import (
+	"time"
+
 	"github.com/bleemeo/glouton/inputs"
 	"github.com/bleemeo/glouton/inputs/internal"
 	"github.com/bleemeo/glouton/prometheus/registry"
-	"time"
 
 	"github.com/influxdata/telegraf"
 	"github.com/influxdata/telegraf/config"

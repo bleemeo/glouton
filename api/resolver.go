@@ -20,13 +20,14 @@ package api
 
 import (
 	"context"
-	"github.com/bleemeo/glouton/facts"
-	"github.com/bleemeo/glouton/logger"
-	"github.com/bleemeo/glouton/types"
 	"math"
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/bleemeo/glouton/facts"
+	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/types"
 
 	"github.com/vektah/gqlparser/v2/gqlerror"
 )

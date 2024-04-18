@@ -20,12 +20,13 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
-	"github.com/bleemeo/glouton/logger"
 	"io"
 	"net/http"
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/bleemeo/glouton/logger"
 
 	paho "github.com/eclipse/paho.mqtt.golang"
 	"github.com/google/go-cmp/cmp"

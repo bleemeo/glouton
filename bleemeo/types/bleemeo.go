@@ -21,9 +21,10 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"github.com/bleemeo/glouton/threshold"
 	"math"
 	"time"
+
+	"github.com/bleemeo/glouton/threshold"
 )
 
 const (

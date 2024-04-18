@@ -19,6 +19,7 @@ package testutil
 import (
 	"errors"
 	"fmt"
+
 	"github.com/bleemeo/glouton/facts"
 )
 

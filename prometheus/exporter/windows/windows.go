@@ -20,9 +20,10 @@ package windows
 
 import (
 	"fmt"
+	"time"
+
 	"github.com/bleemeo/glouton/inputs"
 	"github.com/bleemeo/glouton/logger"
-	"time"
 
 	"github.com/alecthomas/kingpin/v2"
 	"github.com/go-kit/log"

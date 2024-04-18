@@ -18,10 +18,11 @@ package check
 
 import (
 	"context"
-	"github.com/bleemeo/glouton/facts"
-	"github.com/bleemeo/glouton/types"
 	"testing"
 	"time"
+
+	"github.com/bleemeo/glouton/facts"
+	"github.com/bleemeo/glouton/types"
 )
 
 type mockProcessProvider struct{}

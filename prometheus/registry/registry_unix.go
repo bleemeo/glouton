@@ -19,11 +19,12 @@
 package registry
 
 import (
+	"strings"
+
 	"github.com/bleemeo/glouton/facts/container-runtime/veth"
 	"github.com/bleemeo/glouton/logger"
 	"github.com/bleemeo/glouton/prometheus/exporter/node"
 	"github.com/bleemeo/glouton/types"
-	"strings"
 
 	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"

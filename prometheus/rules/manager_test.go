@@ -19,13 +19,14 @@ package rules
 import (
 	"context"
 	"errors"
-	"github.com/bleemeo/glouton/prometheus/registry"
-	"github.com/bleemeo/glouton/store"
-	"github.com/bleemeo/glouton/types"
 	"sort"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/bleemeo/glouton/prometheus/registry"
+	"github.com/bleemeo/glouton/store"
+	"github.com/bleemeo/glouton/types"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/prometheus/prometheus/model/exemplar"

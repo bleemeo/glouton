@@ -17,12 +17,13 @@
 package jenkins
 
 import (
+	"time"
+
 	"github.com/bleemeo/glouton/config"
 	"github.com/bleemeo/glouton/inputs"
 	"github.com/bleemeo/glouton/inputs/internal"
 	"github.com/bleemeo/glouton/prometheus/registry"
 	"github.com/bleemeo/glouton/types"
-	"time"
 
 	"github.com/influxdata/telegraf"
 	tConfig "github.com/influxdata/telegraf/config"

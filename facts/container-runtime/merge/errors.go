@@ -18,6 +18,7 @@ package merge
 
 import (
 	"errors"
+
 	"github.com/bleemeo/glouton/facts"
 	"github.com/bleemeo/glouton/types"
 )

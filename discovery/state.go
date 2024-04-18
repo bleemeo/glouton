@@ -20,11 +20,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/bleemeo/glouton/facts"
-	"github.com/bleemeo/glouton/logger"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/bleemeo/glouton/facts"
+	"github.com/bleemeo/glouton/logger"
 )
 
 var (

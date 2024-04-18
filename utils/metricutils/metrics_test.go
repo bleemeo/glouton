@@ -17,8 +17,9 @@
 package metricutils
 
 import (
-	"github.com/bleemeo/glouton/types"
 	"testing"
+
+	"github.com/bleemeo/glouton/types"
 )
 
 func TestMetricOnlyHasItem(t *testing.T) {

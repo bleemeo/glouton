@@ -20,12 +20,13 @@ package facts
 
 import (
 	"context"
-	"github.com/bleemeo/glouton/logger"
 	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/bleemeo/glouton/logger"
 
 	"github.com/shirou/gopsutil/v3/load"
 	psutilNet "github.com/shirou/gopsutil/v3/net"

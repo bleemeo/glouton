@@ -18,12 +18,13 @@ package discovery
 
 import (
 	"fmt"
-	"github.com/bleemeo/glouton/logger"
-	"github.com/bleemeo/glouton/prometheus/registry"
-	"github.com/bleemeo/glouton/types"
 	"runtime"
 	"strconv"
 	"time"
+
+	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/prometheus/registry"
+	"github.com/bleemeo/glouton/types"
 
 	"github.com/go-kit/log"
 	"github.com/prometheus/client_golang/prometheus"

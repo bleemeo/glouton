@@ -19,9 +19,10 @@ package statsd
 import (
 	"errors"
 	"fmt"
+	"reflect"
+
 	"github.com/bleemeo/glouton/inputs"
 	"github.com/bleemeo/glouton/inputs/internal"
-	"reflect"
 
 	"github.com/influxdata/telegraf"
 	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"

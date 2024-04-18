@@ -20,8 +20,9 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
-	"github.com/bleemeo/glouton/logger"
 	"os"
+
+	"github.com/bleemeo/glouton/logger"
 )
 
 var errNotPem = errors.New("not a PEM file")

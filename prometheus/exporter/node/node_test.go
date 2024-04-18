@@ -17,11 +17,12 @@
 package node
 
 import (
-	"github.com/bleemeo/glouton/config"
 	"reflect"
 	"regexp"
 	"testing"
 	"unsafe"
+
+	"github.com/bleemeo/glouton/config"
 
 	"github.com/alecthomas/kingpin/v2"
 )

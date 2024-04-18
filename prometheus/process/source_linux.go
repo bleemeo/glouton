@@ -22,8 +22,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/bleemeo/glouton/facts"
-	"github.com/bleemeo/glouton/logger"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -34,6 +32,9 @@ import (
 	"syscall"
 	"time"
 	"unsafe"
+
+	"github.com/bleemeo/glouton/facts"
+	"github.com/bleemeo/glouton/logger"
 
 	"github.com/AstromechZA/etcpwdparse"
 	"github.com/ncabatoff/process-exporter/proc"

@@ -18,13 +18,14 @@ package types
 
 import (
 	"context"
+	"time"
+
 	"github.com/bleemeo/glouton/config"
 	"github.com/bleemeo/glouton/discovery"
 	"github.com/bleemeo/glouton/facts"
 	"github.com/bleemeo/glouton/prometheus/exporter/snmp"
 	"github.com/bleemeo/glouton/threshold"
 	"github.com/bleemeo/glouton/types"
-	"time"
 
 	paho "github.com/eclipse/paho.mqtt.golang"
 	"golang.org/x/oauth2"

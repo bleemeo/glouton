@@ -22,10 +22,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/bleemeo/glouton/logger"
 	"strings"
 	"time"
 	"unsafe"
+
+	"github.com/bleemeo/glouton/logger"
 
 	"golang.org/x/sys/windows"
 )

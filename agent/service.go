@@ -19,11 +19,12 @@ package agent
 import (
 	"context"
 	"errors"
-	"github.com/bleemeo/glouton/discovery"
 	"os/exec"
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/bleemeo/glouton/discovery"
 )
 
 var (

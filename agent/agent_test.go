@@ -19,13 +19,14 @@ package agent
 
 import (
 	"context"
+	"net/url"
+	"testing"
+	"time"
+
 	"github.com/bleemeo/glouton/config"
 	"github.com/bleemeo/glouton/prometheus/scrapper"
 	"github.com/bleemeo/glouton/store"
 	"github.com/bleemeo/glouton/types"
-	"net/url"
-	"testing"
-	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"

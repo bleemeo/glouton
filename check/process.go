@@ -19,11 +19,12 @@ package check
 import (
 	"context"
 	"fmt"
+	"regexp"
+	"time"
+
 	"github.com/bleemeo/glouton/facts"
 	"github.com/bleemeo/glouton/logger"
 	"github.com/bleemeo/glouton/types"
-	"regexp"
-	"time"
 )
 
 // Processes are updated only if they are older than processMaxAge.

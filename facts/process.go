@@ -19,14 +19,15 @@ package facts
 import (
 	"context"
 	"errors"
-	"github.com/bleemeo/glouton/logger"
-	"github.com/bleemeo/glouton/version"
 	"os"
 	"path/filepath"
 	"sort"
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/version"
 
 	"github.com/AstromechZA/etcpwdparse"
 	"github.com/cespare/xxhash/v2"

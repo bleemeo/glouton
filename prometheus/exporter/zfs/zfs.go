@@ -20,14 +20,15 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"github.com/bleemeo/glouton/logger"
-	"github.com/bleemeo/glouton/prometheus/model"
-	"github.com/bleemeo/glouton/types"
 	"os/exec"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/prometheus/model"
+	"github.com/bleemeo/glouton/types"
 
 	dto "github.com/prometheus/client_model/go"
 )

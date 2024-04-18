@@ -17,9 +17,10 @@
 package discovery
 
 import (
-	"github.com/bleemeo/glouton/config"
 	"path/filepath"
 	"strings"
+
+	"github.com/bleemeo/glouton/config"
 )
 
 // IgnoredService saves the ignored checks or metrics imported from the configuration file.

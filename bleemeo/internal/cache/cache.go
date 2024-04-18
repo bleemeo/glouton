@@ -17,14 +17,15 @@
 package cache
 
 import (
-	"github.com/bleemeo/glouton/bleemeo/internal/common"
-	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
-	"github.com/bleemeo/glouton/logger"
-	"github.com/bleemeo/glouton/types"
 	"strings"
 	"sync"
 	"time"
 	"unicode"
+
+	"github.com/bleemeo/glouton/bleemeo/internal/common"
+	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
+	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/types"
 )
 
 const (

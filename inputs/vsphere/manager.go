@@ -19,17 +19,18 @@ package vsphere
 import (
 	"context"
 	"encoding/json"
+	"net/url"
+	"reflect"
+	"sort"
+	"sync"
+	"time"
+
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/config"
 	"github.com/bleemeo/glouton/crashreport"
 	"github.com/bleemeo/glouton/logger"
 	"github.com/bleemeo/glouton/prometheus/registry"
 	"github.com/bleemeo/glouton/types"
-	"net/url"
-	"reflect"
-	"sort"
-	"sync"
-	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	vim25types "github.com/vmware/govmomi/vim25/types"

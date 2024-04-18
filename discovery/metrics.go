@@ -19,6 +19,12 @@ package discovery
 import (
 	"errors"
 	"fmt"
+	"net"
+	"os"
+	"reflect"
+	"strconv"
+	"time"
+
 	"github.com/bleemeo/glouton/facts"
 	"github.com/bleemeo/glouton/facts/container-runtime/veth"
 	"github.com/bleemeo/glouton/inputs"
@@ -54,11 +60,6 @@ import (
 	"github.com/bleemeo/glouton/prometheus/registry"
 	"github.com/bleemeo/glouton/types"
 	"github.com/bleemeo/glouton/version"
-	"net"
-	"os"
-	"reflect"
-	"strconv"
-	"time"
 
 	"github.com/influxdata/telegraf"
 	"github.com/prometheus/client_golang/prometheus"

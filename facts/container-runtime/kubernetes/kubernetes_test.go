@@ -19,6 +19,11 @@ package kubernetes
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
+	"testing"
+	"time"
+
 	"github.com/bleemeo/glouton/facts"
 	"github.com/bleemeo/glouton/facts/container-runtime/containerd"
 	"github.com/bleemeo/glouton/facts/container-runtime/docker"
@@ -26,10 +31,6 @@ import (
 	crTypes "github.com/bleemeo/glouton/facts/container-runtime/types"
 	"github.com/bleemeo/glouton/prometheus/model"
 	"github.com/bleemeo/glouton/types"
-	"os"
-	"path/filepath"
-	"testing"
-	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"

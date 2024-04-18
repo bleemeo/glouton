@@ -17,8 +17,9 @@
 package testutil_test
 
 import (
-	"github.com/bleemeo/glouton/facts/container-runtime/internal/testutil"
 	"testing"
+
+	"github.com/bleemeo/glouton/facts/container-runtime/internal/testutil"
 )
 
 // TestUnindent check that helper function unindent works as intended.

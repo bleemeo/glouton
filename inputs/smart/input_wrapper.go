@@ -18,10 +18,11 @@ package smart
 
 import (
 	"fmt"
-	"github.com/bleemeo/glouton/logger"
 	"path/filepath"
 	"strings"
 	"sync"
+
+	"github.com/bleemeo/glouton/logger"
 
 	"github.com/influxdata/telegraf"
 	"github.com/influxdata/telegraf/plugins/inputs/smart"

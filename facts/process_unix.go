@@ -20,10 +20,11 @@ package facts
 
 import (
 	"context"
-	"github.com/bleemeo/glouton/version"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/bleemeo/glouton/version"
 
 	"github.com/shirou/gopsutil/v3/process"
 )

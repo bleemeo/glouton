@@ -20,13 +20,14 @@ package process
 
 import (
 	"context"
-	"github.com/bleemeo/glouton/facts"
 	"os"
 	"reflect"
 	"runtime"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/bleemeo/glouton/facts"
 
 	"github.com/ncabatoff/process-exporter/proc"
 )

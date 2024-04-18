@@ -21,9 +21,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	ctypes "github.com/bleemeo/glouton/facts/container-runtime/types"
-	"github.com/bleemeo/glouton/logger"
-	"github.com/bleemeo/glouton/types"
 	"os"
 	"os/exec"
 	"sort"
@@ -31,6 +28,10 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	ctypes "github.com/bleemeo/glouton/facts/container-runtime/types"
+	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/types"
 )
 
 const cacheUpdateInterval = 10 * time.Minute

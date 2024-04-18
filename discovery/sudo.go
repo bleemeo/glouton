@@ -17,10 +17,11 @@
 package discovery
 
 import (
-	"github.com/bleemeo/glouton/logger"
 	"os"
 	"os/exec"
 	"path/filepath"
+
+	"github.com/bleemeo/glouton/logger"
 )
 
 // SudoFileReader read file using sudo cat (or direct read if running as root).

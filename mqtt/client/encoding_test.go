@@ -20,8 +20,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/bleemeo/glouton/facts"
 	"testing"
+
+	"github.com/bleemeo/glouton/facts"
 
 	"github.com/google/go-cmp/cmp"
 )

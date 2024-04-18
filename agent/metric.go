@@ -19,6 +19,13 @@ package agent
 import (
 	"context"
 	"fmt"
+	"io"
+	"runtime"
+	"sort"
+	"strings"
+	"sync"
+	"time"
+
 	"github.com/bleemeo/glouton/config"
 	"github.com/bleemeo/glouton/discovery"
 	"github.com/bleemeo/glouton/jmxtrans"
@@ -26,12 +33,6 @@ import (
 	"github.com/bleemeo/glouton/prometheus/matcher"
 	"github.com/bleemeo/glouton/prometheus/model"
 	"github.com/bleemeo/glouton/types"
-	"io"
-	"runtime"
-	"sort"
-	"strings"
-	"sync"
-	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"

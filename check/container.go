@@ -18,6 +18,7 @@ package check
 
 import (
 	"context"
+
 	"github.com/bleemeo/glouton/types"
 )
 

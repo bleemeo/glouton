@@ -19,12 +19,13 @@ package store
 import (
 	"context"
 	"fmt"
-	"github.com/bleemeo/glouton/types"
 	"math"
 	"math/rand"
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/bleemeo/glouton/types"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/prometheus/prometheus/model/value"

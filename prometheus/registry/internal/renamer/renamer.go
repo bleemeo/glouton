@@ -17,9 +17,10 @@
 package renamer
 
 import (
+	"sort"
+
 	"github.com/bleemeo/glouton/prometheus/model"
 	"github.com/bleemeo/glouton/types"
-	"sort"
 
 	dto "github.com/prometheus/client_model/go"
 	"github.com/prometheus/prometheus/model/labels"

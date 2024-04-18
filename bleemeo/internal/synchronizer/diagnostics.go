@@ -22,14 +22,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/bleemeo/glouton/crashreport"
-	"github.com/bleemeo/glouton/logger"
-	gloutonTypes "github.com/bleemeo/glouton/types"
 	"io"
 	"mime/multipart"
 	"net/http"
 	"path/filepath"
 	"strconv"
+
+	"github.com/bleemeo/glouton/crashreport"
+	"github.com/bleemeo/glouton/logger"
+	gloutonTypes "github.com/bleemeo/glouton/types"
 )
 
 const diagnosticMaxSize = 5 << 20 // 5MB

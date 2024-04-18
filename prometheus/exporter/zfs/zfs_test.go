@@ -18,8 +18,9 @@
 package zfs
 
 import (
-	"github.com/bleemeo/glouton/types"
 	"testing"
+
+	"github.com/bleemeo/glouton/types"
 )
 
 func Test_decodeZpool(t *testing.T) { //nolint:maintidx

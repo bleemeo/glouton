@@ -20,11 +20,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
+
 	"github.com/bleemeo/glouton/bleemeo/client"
 	"github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/facts"
 	"github.com/bleemeo/glouton/logger"
-	"time"
 )
 
 func getEssentialFacts() map[string]bool {

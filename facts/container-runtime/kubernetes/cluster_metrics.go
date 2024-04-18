@@ -18,9 +18,10 @@ package kubernetes
 
 import (
 	"context"
-	"github.com/bleemeo/glouton/types"
 	"strings"
 	"time"
+
+	"github.com/bleemeo/glouton/types"
 
 	"github.com/prometheus/client_golang/prometheus"
 	corev1 "k8s.io/api/core/v1"

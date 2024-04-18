@@ -18,8 +18,9 @@ package registry
 
 import (
 	"context"
-	"github.com/bleemeo/glouton/crashreport"
 	"time"
+
+	"github.com/bleemeo/glouton/crashreport"
 )
 
 // scrapeLoop allow to run metric scraping at regular interval.

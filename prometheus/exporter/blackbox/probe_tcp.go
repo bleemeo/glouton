@@ -23,11 +23,12 @@ import (
 	"crypto/x509"
 	"errors"
 	"fmt"
-	"github.com/bleemeo/glouton/logger"
 	"net"
 	"strings"
 	"time"
 	"unsafe"
+
+	"github.com/bleemeo/glouton/logger"
 
 	"github.com/go-kit/log"
 	"github.com/go-kit/log/level"

@@ -18,10 +18,11 @@ package model
 
 import (
 	"context"
-	"github.com/bleemeo/glouton/types"
 	"maps"
 	"testing"
 	"time"
+
+	"github.com/bleemeo/glouton/types"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"

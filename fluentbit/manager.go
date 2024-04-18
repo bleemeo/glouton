@@ -21,13 +21,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/bleemeo/glouton/config"
-	"github.com/bleemeo/glouton/facts"
-	crTypes "github.com/bleemeo/glouton/facts/container-runtime/types"
-	"github.com/bleemeo/glouton/logger"
-	"github.com/bleemeo/glouton/prometheus/registry"
-	"github.com/bleemeo/glouton/prometheus/scrapper"
-	"github.com/bleemeo/glouton/types"
 	"net/url"
 	"os/exec"
 	"path/filepath"
@@ -35,6 +28,14 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/bleemeo/glouton/config"
+	"github.com/bleemeo/glouton/facts"
+	crTypes "github.com/bleemeo/glouton/facts/container-runtime/types"
+	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/prometheus/registry"
+	"github.com/bleemeo/glouton/prometheus/scrapper"
+	"github.com/bleemeo/glouton/types"
 
 	"github.com/prometheus/client_golang/prometheus"
 )

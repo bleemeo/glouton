@@ -18,8 +18,9 @@ package store
 
 import (
 	"context"
-	"github.com/bleemeo/glouton/types"
 	"time"
+
+	"github.com/bleemeo/glouton/types"
 
 	"github.com/prometheus/prometheus/model/exemplar"
 	"github.com/prometheus/prometheus/model/histogram"

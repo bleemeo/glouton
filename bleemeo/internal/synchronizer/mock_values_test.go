@@ -18,8 +18,9 @@ package synchronizer
 
 import (
 	"fmt"
-	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"time"
+
+	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 )
 
 const (

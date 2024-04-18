@@ -19,12 +19,13 @@ package process
 import (
 	"context"
 	"fmt"
+	"time"
+
 	"github.com/bleemeo/glouton/facts"
 	"github.com/bleemeo/glouton/logger"
 	"github.com/bleemeo/glouton/prometheus/model"
 	"github.com/bleemeo/glouton/prometheus/registry"
 	"github.com/bleemeo/glouton/types"
-	"time"
 
 	"github.com/prometheus/prometheus/storage"
 )

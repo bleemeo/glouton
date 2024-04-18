@@ -20,14 +20,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/bleemeo/glouton/facts"
-	"github.com/bleemeo/glouton/facts/container-runtime/internal/testutil"
 	"reflect"
 	"sort"
 	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/bleemeo/glouton/facts"
+	"github.com/bleemeo/glouton/facts/container-runtime/internal/testutil"
 
 	containerTypes "github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/events"

@@ -20,11 +20,12 @@ package jmxtrans
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"github.com/bleemeo/glouton/config"
-	"github.com/bleemeo/glouton/discovery"
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/bleemeo/glouton/config"
+	"github.com/bleemeo/glouton/discovery"
 )
 
 func Test_jmxtransConfig_CurrentConfig(t *testing.T) {

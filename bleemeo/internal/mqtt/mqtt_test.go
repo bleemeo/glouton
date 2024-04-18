@@ -20,12 +20,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/bleemeo/glouton/agent/state"
-	"github.com/bleemeo/glouton/bleemeo/internal/cache"
-	"github.com/bleemeo/glouton/types"
 	"strconv"
 	"testing"
 	"time"
+
+	"github.com/bleemeo/glouton/agent/state"
+	"github.com/bleemeo/glouton/bleemeo/internal/cache"
+	"github.com/bleemeo/glouton/types"
 
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 )

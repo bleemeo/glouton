@@ -21,10 +21,11 @@ package process
 import (
 	"context"
 	"fmt"
+	"time"
+
 	"github.com/bleemeo/glouton/prometheus/model"
 	"github.com/bleemeo/glouton/prometheus/registry"
 	"github.com/bleemeo/glouton/types"
-	"time"
 
 	"github.com/ncabatoff/process-exporter/proc"
 	"github.com/prometheus/prometheus/storage"

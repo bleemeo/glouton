@@ -20,13 +20,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/bleemeo/glouton/config"
-	"github.com/bleemeo/glouton/facts"
-	"github.com/bleemeo/glouton/logger"
 	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/bleemeo/glouton/config"
+	"github.com/bleemeo/glouton/facts"
+	"github.com/bleemeo/glouton/logger"
 
 	"github.com/vmware/govmomi"
 	"github.com/vmware/govmomi/find"

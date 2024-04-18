@@ -19,10 +19,11 @@
 package agent
 
 import (
+	"os"
+
 	"github.com/bleemeo/glouton/crashreport"
 	"github.com/bleemeo/glouton/facts/container-runtime/veth"
 	"github.com/bleemeo/glouton/logger"
-	"os"
 
 	"github.com/yusufpapurcu/wmi"
 	"golang.org/x/sys/windows/svc"

@@ -21,12 +21,13 @@ package winperfcounters
 import (
 	"errors"
 	"fmt"
-	"github.com/bleemeo/glouton/inputs"
-	"github.com/bleemeo/glouton/inputs/internal"
 	"math"
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/bleemeo/glouton/inputs"
+	"github.com/bleemeo/glouton/inputs/internal"
 
 	"github.com/influxdata/telegraf"
 	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"

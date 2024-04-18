@@ -20,14 +20,15 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"github.com/bleemeo/glouton/crashreport"
-	"github.com/bleemeo/glouton/discovery"
-	"github.com/bleemeo/glouton/logger"
-	"github.com/bleemeo/glouton/types"
 	"net"
 	"os"
 	"sync"
 	"time"
+
+	"github.com/bleemeo/glouton/crashreport"
+	"github.com/bleemeo/glouton/discovery"
+	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/types"
 )
 
 const (

@@ -19,11 +19,12 @@ package crashreport
 import (
 	"context"
 	"fmt"
-	"github.com/bleemeo/glouton/logger"
-	"github.com/bleemeo/glouton/utils/archivewriter"
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/utils/archivewriter"
 
 	"github.com/getsentry/sentry-go"
 )

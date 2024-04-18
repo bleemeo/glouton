@@ -19,10 +19,11 @@ package config
 import (
 	"errors"
 	"fmt"
-	"github.com/bleemeo/glouton/logger"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/bleemeo/glouton/logger"
 
 	"github.com/go-viper/mapstructure/v2"
 	yamlParser "github.com/knadh/koanf/parsers/yaml"

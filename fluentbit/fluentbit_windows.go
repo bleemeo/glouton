@@ -20,6 +20,7 @@ package fluentbit
 
 import (
 	"errors"
+
 	"github.com/bleemeo/glouton/config"
 	crTypes "github.com/bleemeo/glouton/facts/container-runtime/types"
 )

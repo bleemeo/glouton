@@ -20,12 +20,13 @@ package process
 
 import (
 	"context"
+	"sync"
+	"time"
+
 	"github.com/bleemeo/glouton/discovery"
 	"github.com/bleemeo/glouton/logger"
 	"github.com/bleemeo/glouton/prometheus/process"
 	"github.com/bleemeo/glouton/prometheus/registry"
-	"sync"
-	"time"
 
 	common "github.com/ncabatoff/process-exporter"
 	"github.com/ncabatoff/process-exporter/proc"

@@ -19,11 +19,12 @@ package main
 import (
 	"flag"
 	"fmt"
+	"os"
+	"strings"
+
 	"github.com/bleemeo/glouton/agent"
 	"github.com/bleemeo/glouton/config"
 	versionPkg "github.com/bleemeo/glouton/version"
-	"os"
-	"strings"
 )
 
 //nolint:gochecknoglobals

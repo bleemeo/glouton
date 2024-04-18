@@ -17,8 +17,9 @@
 package collectors
 
 import (
-	"github.com/bleemeo/glouton/crashreport"
 	"sync"
+
+	"github.com/bleemeo/glouton/crashreport"
 
 	"github.com/prometheus/client_golang/prometheus"
 )

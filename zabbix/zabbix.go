@@ -22,13 +22,14 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"github.com/bleemeo/glouton/crashreport"
-	"github.com/bleemeo/glouton/logger"
 	"io"
 	"net"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/bleemeo/glouton/crashreport"
+	"github.com/bleemeo/glouton/logger"
 )
 
 var (

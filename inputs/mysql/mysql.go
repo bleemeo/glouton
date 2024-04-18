@@ -17,9 +17,10 @@
 package mysql
 
 import (
+	"strings"
+
 	"github.com/bleemeo/glouton/inputs"
 	"github.com/bleemeo/glouton/inputs/internal"
-	"strings"
 
 	"github.com/influxdata/telegraf"
 	telegraf_config "github.com/influxdata/telegraf/config"

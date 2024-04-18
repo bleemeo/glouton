@@ -17,9 +17,10 @@
 package inputs
 
 import (
-	"github.com/bleemeo/glouton/logger"
 	"math"
 	"os"
+
+	"github.com/bleemeo/glouton/logger"
 )
 
 const (

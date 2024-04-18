@@ -20,12 +20,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
+	"time"
+
 	"github.com/bleemeo/glouton/bleemeo/client"
 	"github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/inputs/vsphere"
 	"github.com/bleemeo/glouton/logger"
-	"slices"
-	"time"
 
 	"github.com/google/uuid"
 )

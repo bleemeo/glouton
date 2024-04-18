@@ -21,10 +21,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/bleemeo/glouton/facts"
 	"os"
 	"path/filepath"
 	"reflect"
+
+	"github.com/bleemeo/glouton/facts"
 
 	dockerTypes "github.com/docker/docker/api/types"
 	containerTypes "github.com/docker/docker/api/types/container"

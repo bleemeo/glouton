@@ -21,6 +21,14 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"math"
+	"math/rand"
+	"net"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+
 	"github.com/bleemeo/glouton/bleemeo/internal/cache"
 	"github.com/bleemeo/glouton/bleemeo/internal/common"
 	"github.com/bleemeo/glouton/bleemeo/internal/filter"
@@ -31,13 +39,6 @@ import (
 	"github.com/bleemeo/glouton/mqtt/client"
 	"github.com/bleemeo/glouton/types"
 	"github.com/bleemeo/glouton/utils/metricutils"
-	"math"
-	"math/rand"
-	"net"
-	"strconv"
-	"strings"
-	"sync"
-	"time"
 
 	paho "github.com/eclipse/paho.mqtt.golang"
 )

@@ -20,6 +20,7 @@ package process
 
 import (
 	"context"
+
 	"github.com/bleemeo/glouton/discovery"
 	"github.com/bleemeo/glouton/prometheus/registry"
 )

@@ -18,14 +18,15 @@ package ruler
 
 import (
 	"context"
+	"sort"
+	"sync"
+	"time"
+
 	"github.com/bleemeo/glouton/logger"
 	"github.com/bleemeo/glouton/prometheus/matcher"
 	"github.com/bleemeo/glouton/prometheus/model"
 	"github.com/bleemeo/glouton/store"
 	"github.com/bleemeo/glouton/types"
-	"sort"
-	"sync"
-	"time"
 
 	"github.com/go-kit/log"
 	dto "github.com/prometheus/client_model/go"

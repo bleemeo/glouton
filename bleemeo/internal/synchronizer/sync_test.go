@@ -19,6 +19,11 @@ package synchronizer
 import (
 	"errors"
 	"fmt"
+	"net/http"
+	"sync"
+	"testing"
+	"time"
+
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/config"
 	"github.com/bleemeo/glouton/discovery"
@@ -26,10 +31,6 @@ import (
 	"github.com/bleemeo/glouton/prometheus/exporter/snmp"
 	"github.com/bleemeo/glouton/prometheus/model"
 	"github.com/bleemeo/glouton/types"
-	"net/http"
-	"sync"
-	"testing"
-	"time"
 
 	"dario.cat/mergo"
 	"github.com/google/go-cmp/cmp"

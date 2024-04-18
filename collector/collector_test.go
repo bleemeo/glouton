@@ -19,12 +19,13 @@ package collector
 import (
 	"context"
 	"errors"
-	"github.com/bleemeo/glouton/inputs"
-	"github.com/bleemeo/glouton/types"
 	"math"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/bleemeo/glouton/inputs"
+	"github.com/bleemeo/glouton/types"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"

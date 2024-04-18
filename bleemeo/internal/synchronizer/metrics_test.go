@@ -19,6 +19,13 @@ package synchronizer
 
 import (
 	"fmt"
+	"net/http"
+	"reflect"
+	"sort"
+	"strconv"
+	"testing"
+	"time"
+
 	"github.com/bleemeo/glouton/bleemeo/internal/cache"
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/config"
@@ -27,12 +34,6 @@ import (
 	"github.com/bleemeo/glouton/prometheus/exporter/snmp"
 	"github.com/bleemeo/glouton/prometheus/model"
 	"github.com/bleemeo/glouton/types"
-	"net/http"
-	"reflect"
-	"sort"
-	"strconv"
-	"testing"
-	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"

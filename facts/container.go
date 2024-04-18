@@ -19,11 +19,12 @@ package facts
 import (
 	"context"
 	"errors"
-	"github.com/bleemeo/glouton/logger"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/bleemeo/glouton/logger"
 
 	"github.com/google/go-cmp/cmp"
 )

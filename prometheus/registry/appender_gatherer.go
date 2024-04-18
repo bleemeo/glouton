@@ -18,10 +18,11 @@ package registry
 
 import (
 	"context"
-	"github.com/bleemeo/glouton/prometheus/model"
 	"sort"
 	"sync"
 	"time"
+
+	"github.com/bleemeo/glouton/prometheus/model"
 
 	dto "github.com/prometheus/client_model/go"
 )

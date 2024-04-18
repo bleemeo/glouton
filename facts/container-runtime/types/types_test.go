@@ -17,9 +17,10 @@
 package types_test
 
 import (
+	"testing"
+
 	"github.com/bleemeo/glouton/config"
 	"github.com/bleemeo/glouton/facts/container-runtime/types"
-	"testing"
 
 	"github.com/google/go-cmp/cmp"
 )

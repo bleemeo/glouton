@@ -18,9 +18,10 @@ package registry
 
 import (
 	"fmt"
-	"github.com/bleemeo/glouton/types"
 	"strings"
 	"time"
+
+	"github.com/bleemeo/glouton/types"
 )
 
 func DefaultSNMPRules(resolution time.Duration) []types.SimpleRule {
