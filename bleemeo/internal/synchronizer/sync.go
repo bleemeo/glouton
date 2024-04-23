@@ -704,7 +704,7 @@ func (s *Synchronizer) GetToken(ctx context.Context) (string, error) {
 }
 
 func (s *Synchronizer) setClient() error {
-	username := s.agentID + "@bleemeo.com" //nolint: goconst
+	username := s.agentID + "@bleemeo.com"
 	_, password := s.option.State.BleemeoCredentials()
 
 	client, err := client.NewClient(
