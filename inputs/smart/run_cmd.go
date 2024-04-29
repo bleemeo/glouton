@@ -19,11 +19,12 @@ package smart
 import (
 	"context"
 	"encoding/json"
-	"glouton/types"
 	"strings"
 	"sync"
 	"time"
 	_ "unsafe" // using hack with go linkname to access private variable :)
+
+	"github.com/bleemeo/glouton/types"
 
 	"github.com/influxdata/telegraf/config"
 )

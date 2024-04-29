@@ -21,16 +21,17 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"glouton/config"
-	"glouton/discovery"
-	"glouton/logger"
-	"glouton/types"
 	"io"
 	"math"
 	"net"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/bleemeo/glouton/config"
+	"github.com/bleemeo/glouton/discovery"
+	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/types"
 )
 
 type jmxtransClient struct {

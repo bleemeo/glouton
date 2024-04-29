@@ -20,14 +20,15 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"glouton/crashreport"
-	"glouton/logger"
 	"net"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/bleemeo/glouton/crashreport"
+	"github.com/bleemeo/glouton/logger"
 )
 
 type azureTag struct {

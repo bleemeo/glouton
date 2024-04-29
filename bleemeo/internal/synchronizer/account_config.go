@@ -19,12 +19,13 @@ package synchronizer
 import (
 	"context"
 	"encoding/json"
-	"glouton/bleemeo/client"
-	"glouton/bleemeo/types"
-	"glouton/logger"
 	"mime"
 	"reflect"
 	"strings"
+
+	"github.com/bleemeo/glouton/bleemeo/client"
+	"github.com/bleemeo/glouton/bleemeo/types"
+	"github.com/bleemeo/glouton/logger"
 )
 
 func (s *Synchronizer) syncAccountConfig(ctx context.Context, fullSync bool, onlyEssential bool) (updateThresholds bool, err error) {

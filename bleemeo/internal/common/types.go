@@ -18,11 +18,12 @@ package common
 
 import (
 	"fmt"
-	bleemeoTypes "glouton/bleemeo/types"
-	"glouton/logger"
-	"glouton/types"
-	"glouton/utils/metricutils"
 	"time"
+
+	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
+	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/types"
+	"github.com/bleemeo/glouton/utils/metricutils"
 )
 
 // Maximal length of fields on Bleemeo API.

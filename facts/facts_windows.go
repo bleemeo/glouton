@@ -22,9 +22,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"glouton/logger"
 	"net"
 	"strconv"
+
+	"github.com/bleemeo/glouton/logger"
 
 	"github.com/yusufpapurcu/wmi"
 	"golang.org/x/sys/windows/registry"

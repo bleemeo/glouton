@@ -17,8 +17,8 @@
 package blackbox
 
 import (
-	"glouton/logger"
-	"glouton/prometheus/model"
+	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/prometheus/model"
 
 	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"

@@ -18,12 +18,13 @@ package influxdb
 
 import (
 	"context"
-	"glouton/logger"
-	"glouton/store"
-	"glouton/types"
 	"math"
 	"sync"
 	"time"
+
+	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/store"
+	"github.com/bleemeo/glouton/types"
 
 	influxDBClient "github.com/influxdata/influxdb1-client/v2"
 )

@@ -25,10 +25,6 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"glouton/facts"
-	crTypes "glouton/facts/container-runtime/types"
-	"glouton/logger"
-	"glouton/types"
 	"net"
 	"net/url"
 	"os"
@@ -37,6 +33,11 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/bleemeo/glouton/facts"
+	crTypes "github.com/bleemeo/glouton/facts/container-runtime/types"
+	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/types"
 
 	"github.com/prometheus/client_golang/prometheus"
 	appsv1 "k8s.io/api/apps/v1"

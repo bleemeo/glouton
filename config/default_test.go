@@ -17,9 +17,10 @@
 package config
 
 import (
-	"glouton/types"
 	"regexp"
 	"testing"
+
+	"github.com/bleemeo/glouton/types"
 
 	"github.com/google/go-cmp/cmp/cmpopts"
 )

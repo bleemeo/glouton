@@ -18,12 +18,13 @@
 package threshold
 
 import (
-	"glouton/config"
-	"glouton/types"
 	"math"
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/bleemeo/glouton/config"
+	"github.com/bleemeo/glouton/types"
 
 	"github.com/google/go-cmp/cmp"
 )

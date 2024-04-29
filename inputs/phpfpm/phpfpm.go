@@ -19,10 +19,11 @@ package phpfpm
 import (
 	"errors"
 	"fmt"
-	"glouton/inputs"
-	"glouton/inputs/internal"
 	"reflect"
 	"time"
+
+	"github.com/bleemeo/glouton/inputs"
+	"github.com/bleemeo/glouton/inputs/internal"
 
 	"github.com/influxdata/telegraf"
 	"github.com/influxdata/telegraf/config"

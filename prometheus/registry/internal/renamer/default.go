@@ -17,7 +17,7 @@
 package renamer
 
 import (
-	"glouton/types"
+	"github.com/bleemeo/glouton/types"
 
 	"github.com/prometheus/prometheus/model/labels"
 )

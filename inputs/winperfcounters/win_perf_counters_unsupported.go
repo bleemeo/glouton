@@ -20,7 +20,8 @@ package winperfcounters
 
 import (
 	"errors"
-	"glouton/inputs"
+
+	"github.com/bleemeo/glouton/inputs"
 
 	"github.com/influxdata/telegraf"
 )

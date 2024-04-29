@@ -23,11 +23,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"glouton/logger"
 	"math"
 	"net/http"
 	"strconv"
 	"time"
+
+	"github.com/bleemeo/glouton/logger"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-kit/log"

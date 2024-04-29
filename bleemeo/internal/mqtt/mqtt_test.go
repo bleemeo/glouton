@@ -20,14 +20,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"glouton/agent/state"
-	"glouton/bleemeo/internal/cache"
-	"glouton/types"
 	"strconv"
 	"testing"
 	"time"
 
-	bleemeoTypes "glouton/bleemeo/types"
+	"github.com/bleemeo/glouton/agent/state"
+	"github.com/bleemeo/glouton/bleemeo/internal/cache"
+	"github.com/bleemeo/glouton/types"
+
+	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 )
 
 func TestFailedPointsCache(t *testing.T) {

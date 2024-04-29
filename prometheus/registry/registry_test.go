@@ -25,8 +25,6 @@ package registry
 import (
 	"context"
 	"fmt"
-	"glouton/prometheus/model"
-	"glouton/types"
 	"io"
 	"reflect"
 	"sort"
@@ -35,6 +33,9 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/bleemeo/glouton/prometheus/model"
+	"github.com/bleemeo/glouton/types"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"

@@ -18,13 +18,14 @@ package internal
 
 import (
 	"fmt"
-	"glouton/types"
 	"math"
 	"reflect"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/bleemeo/glouton/types"
 )
 
 func TestDefault(t *testing.T) {

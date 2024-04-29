@@ -19,14 +19,15 @@ package discovery
 import (
 	"context"
 	"fmt"
-	"glouton/check"
-	"glouton/facts"
-	"glouton/logger"
-	"glouton/prometheus/registry"
-	"glouton/types"
 	"net"
 	"net/url"
 	"time"
+
+	"github.com/bleemeo/glouton/check"
+	"github.com/bleemeo/glouton/facts"
+	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/prometheus/registry"
+	"github.com/bleemeo/glouton/types"
 
 	"github.com/prometheus/prometheus/model/labels"
 )

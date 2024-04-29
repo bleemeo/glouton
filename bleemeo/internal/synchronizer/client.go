@@ -20,9 +20,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"glouton/bleemeo/client"
 	"io"
 	"time"
+
+	"github.com/bleemeo/glouton/bleemeo/client"
 )
 
 type wrapperClient struct {

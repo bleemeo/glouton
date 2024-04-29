@@ -19,8 +19,9 @@
 package process
 
 import (
-	"glouton/facts"
 	"time"
+
+	"github.com/bleemeo/glouton/facts"
 )
 
 func NewProcessLister(string, time.Duration) facts.ProcessLister {

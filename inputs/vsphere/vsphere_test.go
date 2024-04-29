@@ -19,11 +19,12 @@ package vsphere
 import (
 	"context"
 	"crypto/tls"
-	"glouton/config"
-	"glouton/facts"
-	"glouton/inputs/internal"
-	"glouton/types"
 	"testing"
+
+	"github.com/bleemeo/glouton/config"
+	"github.com/bleemeo/glouton/facts"
+	"github.com/bleemeo/glouton/inputs/internal"
+	"github.com/bleemeo/glouton/types"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"

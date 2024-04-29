@@ -21,12 +21,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"glouton/bleemeo/client"
-	bleemeoTypes "glouton/bleemeo/types"
-	"glouton/logger"
-	"glouton/prometheus/exporter/blackbox"
-	"glouton/types"
 	"time"
+
+	"github.com/bleemeo/glouton/bleemeo/client"
+	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
+	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/prometheus/exporter/blackbox"
+	"github.com/bleemeo/glouton/types"
 
 	"github.com/cespare/xxhash/v2"
 )

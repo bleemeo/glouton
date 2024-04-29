@@ -19,16 +19,17 @@ package mqtt
 import (
 	"context"
 	"fmt"
-	"glouton/config"
-	"glouton/crashreport"
-	"glouton/logger"
-	"glouton/mqtt/client"
-	"glouton/types"
 	"net"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/bleemeo/glouton/config"
+	"github.com/bleemeo/glouton/crashreport"
+	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/mqtt/client"
+	"github.com/bleemeo/glouton/types"
 
 	paho "github.com/eclipse/paho.mqtt.golang"
 )

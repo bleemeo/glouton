@@ -20,12 +20,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"glouton/bleemeo/client"
-	"glouton/bleemeo/internal/common"
-	bleemeoTypes "glouton/bleemeo/types"
-	"glouton/config"
-	"glouton/logger"
 	"reflect"
+
+	"github.com/bleemeo/glouton/bleemeo/client"
+	"github.com/bleemeo/glouton/bleemeo/internal/common"
+	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
+	"github.com/bleemeo/glouton/config"
+	"github.com/bleemeo/glouton/logger"
 )
 
 // The number of item Glouton can register in a single request.

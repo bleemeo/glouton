@@ -20,15 +20,16 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"glouton/config"
-	"glouton/logger"
-	"glouton/types"
-	"glouton/utils/metricutils"
 	"math"
 	"sort"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/bleemeo/glouton/config"
+	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/types"
+	"github.com/bleemeo/glouton/utils/metricutils"
 )
 
 const (

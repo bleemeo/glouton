@@ -19,13 +19,14 @@ package containerd
 import (
 	"context"
 	"errors"
-	"glouton/facts"
-	"glouton/facts/container-runtime/internal/testutil"
 	"path/filepath"
 	"reflect"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/bleemeo/glouton/facts"
+	"github.com/bleemeo/glouton/facts/container-runtime/internal/testutil"
 
 	"github.com/containerd/containerd"
 	pbEvents "github.com/containerd/containerd/api/events"

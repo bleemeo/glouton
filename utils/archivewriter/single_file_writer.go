@@ -17,8 +17,9 @@
 package archivewriter
 
 import (
-	"glouton/types"
 	"io"
+
+	"github.com/bleemeo/glouton/types"
 )
 
 type singlefileWriter struct {

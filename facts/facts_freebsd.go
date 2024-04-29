@@ -20,9 +20,10 @@ package facts
 
 import (
 	"context"
-	"glouton/logger"
 	"os"
 	"os/exec"
+
+	"github.com/bleemeo/glouton/logger"
 
 	"github.com/shirou/gopsutil/v3/load"
 	"golang.org/x/sys/unix"

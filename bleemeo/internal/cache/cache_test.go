@@ -17,11 +17,12 @@
 package cache
 
 import (
-	"glouton/agent/state"
-	"glouton/bleemeo/types"
-	"glouton/threshold"
 	"reflect"
 	"testing"
+
+	"github.com/bleemeo/glouton/agent/state"
+	"github.com/bleemeo/glouton/bleemeo/types"
+	"github.com/bleemeo/glouton/threshold"
 
 	"github.com/google/go-cmp/cmp"
 )

@@ -19,13 +19,14 @@ package internal
 import (
 	"errors"
 	"fmt"
-	"glouton/inputs"
-	"glouton/logger"
-	"glouton/types"
 	"sort"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/bleemeo/glouton/inputs"
+	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/types"
 
 	"github.com/influxdata/telegraf"
 )

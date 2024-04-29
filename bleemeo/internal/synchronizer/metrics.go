@@ -21,19 +21,20 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"glouton/bleemeo/client"
-	"glouton/bleemeo/internal/common"
-	"glouton/bleemeo/internal/filter"
-	bleemeoTypes "glouton/bleemeo/types"
-	"glouton/logger"
-	"glouton/threshold"
-	"glouton/types"
-	"glouton/utils/metricutils"
 	"regexp"
 	"runtime"
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/bleemeo/glouton/bleemeo/client"
+	"github.com/bleemeo/glouton/bleemeo/internal/common"
+	"github.com/bleemeo/glouton/bleemeo/internal/filter"
+	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
+	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/threshold"
+	"github.com/bleemeo/glouton/types"
+	"github.com/bleemeo/glouton/utils/metricutils"
 )
 
 // agentStatusName is the name of the special metrics used to store the agent connection status.

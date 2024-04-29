@@ -18,11 +18,12 @@ package registry
 
 import (
 	"context"
-	"glouton/inputs"
-	"glouton/prometheus/model"
-	"glouton/types"
 	"sync"
 	"time"
+
+	"github.com/bleemeo/glouton/inputs"
+	"github.com/bleemeo/glouton/prometheus/model"
+	"github.com/bleemeo/glouton/types"
 
 	"github.com/influxdata/telegraf"
 	dto "github.com/prometheus/client_model/go"

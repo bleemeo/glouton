@@ -19,7 +19,7 @@
 package inputs
 
 import (
-	"glouton/logger"
+	"github.com/bleemeo/glouton/logger"
 
 	"golang.org/x/sys/unix"
 )

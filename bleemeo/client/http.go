@@ -23,10 +23,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"glouton/bleemeo/types"
-	"glouton/logger"
-	gloutonTypes "glouton/types"
-	"glouton/version"
 	"io"
 	"net/http"
 	"net/url"
@@ -34,6 +30,11 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/bleemeo/glouton/bleemeo/types"
+	"github.com/bleemeo/glouton/logger"
+	gloutonTypes "github.com/bleemeo/glouton/types"
+	"github.com/bleemeo/glouton/version"
 
 	"golang.org/x/oauth2"
 )

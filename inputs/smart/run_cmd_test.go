@@ -17,12 +17,13 @@
 package smart
 
 import (
-	"glouton/inputs/internal"
 	"math"
 	"sync"
 	"testing"
 	"time"
 	_ "unsafe"
+
+	"github.com/bleemeo/glouton/inputs/internal"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/influxdata/telegraf/config"

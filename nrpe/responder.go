@@ -20,15 +20,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"glouton/config"
-	"glouton/discovery"
-	"glouton/logger"
 	"os"
 	"os/exec"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/bleemeo/glouton/config"
+	"github.com/bleemeo/glouton/discovery"
+	"github.com/bleemeo/glouton/logger"
 
 	"github.com/google/shlex"
 )

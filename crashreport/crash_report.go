@@ -23,15 +23,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"glouton/logger"
-	"glouton/types"
-	"glouton/utils/archivewriter"
 	"io"
 	"os"
 	"path/filepath"
 	"sort"
 	"sync"
 	"time"
+
+	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/types"
+	"github.com/bleemeo/glouton/utils/archivewriter"
 
 	"github.com/prometheus/client_golang/prometheus"
 )

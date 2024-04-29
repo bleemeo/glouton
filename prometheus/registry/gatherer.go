@@ -20,12 +20,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"glouton/logger"
-	"glouton/prometheus/model"
-	"glouton/prometheus/registry/internal/ruler"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/prometheus/model"
+	"github.com/bleemeo/glouton/prometheus/registry/internal/ruler"
 
 	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"

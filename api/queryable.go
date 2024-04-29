@@ -19,8 +19,9 @@ package api
 import (
 	"context"
 	"errors"
-	"glouton/store"
-	"glouton/types"
+
+	"github.com/bleemeo/glouton/store"
+	"github.com/bleemeo/glouton/types"
 
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/storage"

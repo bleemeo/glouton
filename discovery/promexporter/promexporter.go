@@ -19,18 +19,19 @@ package promexporter
 
 import (
 	"fmt"
-	"glouton/config"
-	"glouton/facts"
-	"glouton/logger"
-	"glouton/prometheus/registry"
-	"glouton/prometheus/scrapper"
-	"glouton/types"
 	"net"
 	"net/url"
 	"reflect"
 	"strconv"
 	"strings"
 	"sync"
+
+	"github.com/bleemeo/glouton/config"
+	"github.com/bleemeo/glouton/facts"
+	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/prometheus/registry"
+	"github.com/bleemeo/glouton/prometheus/scrapper"
+	"github.com/bleemeo/glouton/types"
 
 	"github.com/prometheus/prometheus/model/labels"
 )

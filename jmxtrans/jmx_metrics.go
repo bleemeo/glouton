@@ -17,9 +17,10 @@
 package jmxtrans
 
 import (
-	"glouton/config"
-	"glouton/discovery"
 	"strings"
+
+	"github.com/bleemeo/glouton/config"
+	"github.com/bleemeo/glouton/discovery"
 )
 
 //nolint:gochecknoglobals

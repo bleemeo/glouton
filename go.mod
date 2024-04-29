@@ -1,4 +1,4 @@
-module glouton
+module github.com/bleemeo/glouton
 
 go 1.22.0
 

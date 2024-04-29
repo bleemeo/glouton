@@ -21,10 +21,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"glouton/facts"
 	"os"
 	"reflect"
 	"syscall"
+
+	"github.com/bleemeo/glouton/facts"
 
 	"github.com/containerd/containerd"
 	"github.com/containerd/containerd/api/services/tasks/v1"

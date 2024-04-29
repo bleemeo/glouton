@@ -22,11 +22,12 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"glouton/config"
-	"glouton/discovery"
-	"glouton/logger"
 	"sync"
 	"time"
+
+	"github.com/bleemeo/glouton/config"
+	"github.com/bleemeo/glouton/discovery"
+	"github.com/bleemeo/glouton/logger"
 )
 
 type jmxtransConfig struct {

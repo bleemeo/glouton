@@ -22,8 +22,6 @@ import (
 	"crypto/x509"
 	"errors"
 	"fmt"
-	"glouton/logger"
-	"glouton/prometheus/registry"
 	"net"
 	"net/http/httptrace"
 	"net/url"
@@ -31,6 +29,9 @@ import (
 	"reflect"
 	"sync"
 	"time"
+
+	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/prometheus/registry"
 
 	"github.com/go-kit/log"
 	"github.com/prometheus/blackbox_exporter/prober"

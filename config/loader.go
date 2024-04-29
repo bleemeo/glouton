@@ -20,11 +20,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"glouton/logger"
 	"math"
 	"reflect"
 	"strings"
 	"time"
+
+	"github.com/bleemeo/glouton/logger"
 
 	"github.com/go-viper/mapstructure/v2"
 	"github.com/knadh/koanf/providers/confmap"

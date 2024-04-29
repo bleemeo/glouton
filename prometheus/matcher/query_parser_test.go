@@ -17,8 +17,9 @@
 package matcher
 
 import (
-	"glouton/types"
 	"testing"
+
+	"github.com/bleemeo/glouton/types"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"

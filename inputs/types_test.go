@@ -18,11 +18,12 @@ package inputs
 
 import (
 	"context"
-	"glouton/types"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/bleemeo/glouton/types"
 )
 
 type mockStore struct {

@@ -895,7 +895,7 @@ func (ec *executionContext) field_Query_containers_args(ctx context.Context, raw
 	var arg0 *Pagination
 	if tmp, ok := rawArgs["input"]; ok {
 		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("input"))
-		arg0, err = ec.unmarshalOPagination2ᚖgloutonᚋapiᚐPagination(ctx, tmp)
+		arg0, err = ec.unmarshalOPagination2ᚖgithubᚗcomᚋbleemeoᚋgloutonᚋapiᚐPagination(ctx, tmp)
 		if err != nil {
 			return nil, err
 		}
@@ -2411,7 +2411,7 @@ func (ec *executionContext) _Containers_containers(ctx context.Context, field gr
 	}
 	res := resTmp.([]*Container)
 	fc.Result = res
-	return ec.marshalNContainer2ᚕᚖgloutonᚋapiᚐContainerᚄ(ctx, field.Selections, res)
+	return ec.marshalNContainer2ᚕᚖgithubᚗcomᚋbleemeoᚋgloutonᚋapiᚐContainerᚄ(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) fieldContext_Containers_containers(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
@@ -3323,7 +3323,7 @@ func (ec *executionContext) _Query_containers(ctx context.Context, field graphql
 	}
 	res := resTmp.(*Containers)
 	fc.Result = res
-	return ec.marshalNContainers2ᚖgloutonᚋapiᚐContainers(ctx, field.Selections, res)
+	return ec.marshalNContainers2ᚖgithubᚗcomᚋbleemeoᚋgloutonᚋapiᚐContainers(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) fieldContext_Query_containers(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
@@ -3386,7 +3386,7 @@ func (ec *executionContext) _Query_processes(ctx context.Context, field graphql.
 	}
 	res := resTmp.(*Topinfo)
 	fc.Result = res
-	return ec.marshalNTopinfo2ᚖgloutonᚋapiᚐTopinfo(ctx, field.Selections, res)
+	return ec.marshalNTopinfo2ᚖgithubᚗcomᚋbleemeoᚋgloutonᚋapiᚐTopinfo(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) fieldContext_Query_processes(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
@@ -3459,7 +3459,7 @@ func (ec *executionContext) _Query_facts(ctx context.Context, field graphql.Coll
 	}
 	res := resTmp.([]*Fact)
 	fc.Result = res
-	return ec.marshalNFact2ᚕᚖgloutonᚋapiᚐFactᚄ(ctx, field.Selections, res)
+	return ec.marshalNFact2ᚕᚖgithubᚗcomᚋbleemeoᚋgloutonᚋapiᚐFactᚄ(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) fieldContext_Query_facts(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
@@ -3509,7 +3509,7 @@ func (ec *executionContext) _Query_services(ctx context.Context, field graphql.C
 	}
 	res := resTmp.([]*Service)
 	fc.Result = res
-	return ec.marshalNService2ᚕᚖgloutonᚋapiᚐServiceᚄ(ctx, field.Selections, res)
+	return ec.marshalNService2ᚕᚖgithubᚗcomᚋbleemeoᚋgloutonᚋapiᚐServiceᚄ(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) fieldContext_Query_services(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
@@ -3582,7 +3582,7 @@ func (ec *executionContext) _Query_agentInformation(ctx context.Context, field g
 	}
 	res := resTmp.(*AgentInfo)
 	fc.Result = res
-	return ec.marshalNAgentInfo2ᚖgloutonᚋapiᚐAgentInfo(ctx, field.Selections, res)
+	return ec.marshalNAgentInfo2ᚖgithubᚗcomᚋbleemeoᚋgloutonᚋapiᚐAgentInfo(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) fieldContext_Query_agentInformation(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
@@ -3634,7 +3634,7 @@ func (ec *executionContext) _Query_tags(ctx context.Context, field graphql.Colle
 	}
 	res := resTmp.([]*Tag)
 	fc.Result = res
-	return ec.marshalNTag2ᚕᚖgloutonᚋapiᚐTagᚄ(ctx, field.Selections, res)
+	return ec.marshalNTag2ᚕᚖgithubᚗcomᚋbleemeoᚋgloutonᚋapiᚐTagᚄ(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) fieldContext_Query_tags(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
@@ -3682,7 +3682,7 @@ func (ec *executionContext) _Query_agentStatus(ctx context.Context, field graphq
 	}
 	res := resTmp.(*AgentStatus)
 	fc.Result = res
-	return ec.marshalNAgentStatus2ᚖgloutonᚋapiᚐAgentStatus(ctx, field.Selections, res)
+	return ec.marshalNAgentStatus2ᚖgithubᚗcomᚋbleemeoᚋgloutonᚋapiᚐAgentStatus(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) fieldContext_Query_agentStatus(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
@@ -4562,7 +4562,7 @@ func (ec *executionContext) _Topinfo_Processes(ctx context.Context, field graphq
 	}
 	res := resTmp.([]*Process)
 	fc.Result = res
-	return ec.marshalNProcess2ᚕᚖgloutonᚋapiᚐProcessᚄ(ctx, field.Selections, res)
+	return ec.marshalNProcess2ᚕᚖgithubᚗcomᚋbleemeoᚋgloutonᚋapiᚐProcessᚄ(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) fieldContext_Topinfo_Processes(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
@@ -4629,7 +4629,7 @@ func (ec *executionContext) _Topinfo_CPU(ctx context.Context, field graphql.Coll
 	}
 	res := resTmp.(*CPUUsage)
 	fc.Result = res
-	return ec.marshalOCPUUsage2ᚖgloutonᚋapiᚐCPUUsage(ctx, field.Selections, res)
+	return ec.marshalOCPUUsage2ᚖgithubᚗcomᚋbleemeoᚋgloutonᚋapiᚐCPUUsage(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) fieldContext_Topinfo_CPU(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
@@ -4692,7 +4692,7 @@ func (ec *executionContext) _Topinfo_Memory(ctx context.Context, field graphql.C
 	}
 	res := resTmp.(*MemoryUsage)
 	fc.Result = res
-	return ec.marshalOMemoryUsage2ᚖgloutonᚋapiᚐMemoryUsage(ctx, field.Selections, res)
+	return ec.marshalOMemoryUsage2ᚖgithubᚗcomᚋbleemeoᚋgloutonᚋapiᚐMemoryUsage(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) fieldContext_Topinfo_Memory(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
@@ -4745,7 +4745,7 @@ func (ec *executionContext) _Topinfo_Swap(ctx context.Context, field graphql.Col
 	}
 	res := resTmp.(*SwapUsage)
 	fc.Result = res
-	return ec.marshalOSwapUsage2ᚖgloutonᚋapiᚐSwapUsage(ctx, field.Selections, res)
+	return ec.marshalOSwapUsage2ᚖgithubᚗcomᚋbleemeoᚋgloutonᚋapiᚐSwapUsage(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) fieldContext_Topinfo_Swap(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
@@ -6592,7 +6592,7 @@ func (ec *executionContext) unmarshalInputMetricInput(ctx context.Context, obj i
 		switch k {
 		case "labels":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("labels"))
-			data, err := ec.unmarshalNLabelInput2ᚕᚖgloutonᚋapiᚐLabelInputᚄ(ctx, v)
+			data, err := ec.unmarshalNLabelInput2ᚕᚖgithubᚗcomᚋbleemeoᚋgloutonᚋapiᚐLabelInputᚄ(ctx, v)
 			if err != nil {
 				return it, err
 			}
@@ -7916,11 +7916,11 @@ func (ec *executionContext) ___Type(ctx context.Context, sel ast.SelectionSet, o
 
 // region    ***************************** type.gotpl *****************************
 
-func (ec *executionContext) marshalNAgentInfo2gloutonᚋapiᚐAgentInfo(ctx context.Context, sel ast.SelectionSet, v AgentInfo) graphql.Marshaler {
+func (ec *executionContext) marshalNAgentInfo2githubᚗcomᚋbleemeoᚋgloutonᚋapiᚐAgentInfo(ctx context.Context, sel ast.SelectionSet, v AgentInfo) graphql.Marshaler {
 	return ec._AgentInfo(ctx, sel, &v)
 }
 
-func (ec *executionContext) marshalNAgentInfo2ᚖgloutonᚋapiᚐAgentInfo(ctx context.Context, sel ast.SelectionSet, v *AgentInfo) graphql.Marshaler {
+func (ec *executionContext) marshalNAgentInfo2ᚖgithubᚗcomᚋbleemeoᚋgloutonᚋapiᚐAgentInfo(ctx context.Context, sel ast.SelectionSet, v *AgentInfo) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
 			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
@@ -7930,11 +7930,11 @@ func (ec *executionContext) marshalNAgentInfo2ᚖgloutonᚋapiᚐAgentInfo(ctx c
 	return ec._AgentInfo(ctx, sel, v)
 }
 
-func (ec *executionContext) marshalNAgentStatus2gloutonᚋapiᚐAgentStatus(ctx context.Context, sel ast.SelectionSet, v AgentStatus) graphql.Marshaler {
+func (ec *executionContext) marshalNAgentStatus2githubᚗcomᚋbleemeoᚋgloutonᚋapiᚐAgentStatus(ctx context.Context, sel ast.SelectionSet, v AgentStatus) graphql.Marshaler {
 	return ec._AgentStatus(ctx, sel, &v)
 }
 
-func (ec *executionContext) marshalNAgentStatus2ᚖgloutonᚋapiᚐAgentStatus(ctx context.Context, sel ast.SelectionSet, v *AgentStatus) graphql.Marshaler {
+func (ec *executionContext) marshalNAgentStatus2ᚖgithubᚗcomᚋbleemeoᚋgloutonᚋapiᚐAgentStatus(ctx context.Context, sel ast.SelectionSet, v *AgentStatus) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
 			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
@@ -7959,7 +7959,7 @@ func (ec *executionContext) marshalNBoolean2bool(ctx context.Context, sel ast.Se
 	return res
 }
 
-func (ec *executionContext) marshalNContainer2ᚕᚖgloutonᚋapiᚐContainerᚄ(ctx context.Context, sel ast.SelectionSet, v []*Container) graphql.Marshaler {
+func (ec *executionContext) marshalNContainer2ᚕᚖgithubᚗcomᚋbleemeoᚋgloutonᚋapiᚐContainerᚄ(ctx context.Context, sel ast.SelectionSet, v []*Container) graphql.Marshaler {
 	ret := make(graphql.Array, len(v))
 	var wg sync.WaitGroup
 	isLen1 := len(v) == 1
@@ -7983,7 +7983,7 @@ func (ec *executionContext) marshalNContainer2ᚕᚖgloutonᚋapiᚐContainerᚄ
 			if !isLen1 {
 				defer wg.Done()
 			}
-			ret[i] = ec.marshalNContainer2ᚖgloutonᚋapiᚐContainer(ctx, sel, v[i])
+			ret[i] = ec.marshalNContainer2ᚖgithubᚗcomᚋbleemeoᚋgloutonᚋapiᚐContainer(ctx, sel, v[i])
 		}
 		if isLen1 {
 			f(i)
@@ -8003,7 +8003,7 @@ func (ec *executionContext) marshalNContainer2ᚕᚖgloutonᚋapiᚐContainerᚄ
 	return ret
 }
 
-func (ec *executionContext) marshalNContainer2ᚖgloutonᚋapiᚐContainer(ctx context.Context, sel ast.SelectionSet, v *Container) graphql.Marshaler {
+func (ec *executionContext) marshalNContainer2ᚖgithubᚗcomᚋbleemeoᚋgloutonᚋapiᚐContainer(ctx context.Context, sel ast.SelectionSet, v *Container) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
 			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
@@ -8013,11 +8013,11 @@ func (ec *executionContext) marshalNContainer2ᚖgloutonᚋapiᚐContainer(ctx c
 	return ec._Container(ctx, sel, v)
 }
 
-func (ec *executionContext) marshalNContainers2gloutonᚋapiᚐContainers(ctx context.Context, sel ast.SelectionSet, v Containers) graphql.Marshaler {
+func (ec *executionContext) marshalNContainers2githubᚗcomᚋbleemeoᚋgloutonᚋapiᚐContainers(ctx context.Context, sel ast.SelectionSet, v Containers) graphql.Marshaler {
 	return ec._Containers(ctx, sel, &v)
 }
 
-func (ec *executionContext) marshalNContainers2ᚖgloutonᚋapiᚐContainers(ctx context.Context, sel ast.SelectionSet, v *Containers) graphql.Marshaler {
+func (ec *executionContext) marshalNContainers2ᚖgithubᚗcomᚋbleemeoᚋgloutonᚋapiᚐContainers(ctx context.Context, sel ast.SelectionSet, v *Containers) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
 			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
@@ -8027,7 +8027,7 @@ func (ec *executionContext) marshalNContainers2ᚖgloutonᚋapiᚐContainers(ctx
 	return ec._Containers(ctx, sel, v)
 }
 
-func (ec *executionContext) marshalNFact2ᚕᚖgloutonᚋapiᚐFactᚄ(ctx context.Context, sel ast.SelectionSet, v []*Fact) graphql.Marshaler {
+func (ec *executionContext) marshalNFact2ᚕᚖgithubᚗcomᚋbleemeoᚋgloutonᚋapiᚐFactᚄ(ctx context.Context, sel ast.SelectionSet, v []*Fact) graphql.Marshaler {
 	ret := make(graphql.Array, len(v))
 	var wg sync.WaitGroup
 	isLen1 := len(v) == 1
@@ -8051,7 +8051,7 @@ func (ec *executionContext) marshalNFact2ᚕᚖgloutonᚋapiᚐFactᚄ(ctx conte
 			if !isLen1 {
 				defer wg.Done()
 			}
-			ret[i] = ec.marshalNFact2ᚖgloutonᚋapiᚐFact(ctx, sel, v[i])
+			ret[i] = ec.marshalNFact2ᚖgithubᚗcomᚋbleemeoᚋgloutonᚋapiᚐFact(ctx, sel, v[i])
 		}
 		if isLen1 {
 			f(i)
@@ -8071,7 +8071,7 @@ func (ec *executionContext) marshalNFact2ᚕᚖgloutonᚋapiᚐFactᚄ(ctx conte
 	return ret
 }
 
-func (ec *executionContext) marshalNFact2ᚖgloutonᚋapiᚐFact(ctx context.Context, sel ast.SelectionSet, v *Fact) graphql.Marshaler {
+func (ec *executionContext) marshalNFact2ᚖgithubᚗcomᚋbleemeoᚋgloutonᚋapiᚐFact(ctx context.Context, sel ast.SelectionSet, v *Fact) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
 			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
@@ -8143,7 +8143,7 @@ func (ec *executionContext) marshalNInt2int(ctx context.Context, sel ast.Selecti
 	return res
 }
 
-func (ec *executionContext) unmarshalNLabelInput2ᚕᚖgloutonᚋapiᚐLabelInputᚄ(ctx context.Context, v interface{}) ([]*LabelInput, error) {
+func (ec *executionContext) unmarshalNLabelInput2ᚕᚖgithubᚗcomᚋbleemeoᚋgloutonᚋapiᚐLabelInputᚄ(ctx context.Context, v interface{}) ([]*LabelInput, error) {
 	var vSlice []interface{}
 	if v != nil {
 		vSlice = graphql.CoerceList(v)
@@ -8152,7 +8152,7 @@ func (ec *executionContext) unmarshalNLabelInput2ᚕᚖgloutonᚋapiᚐLabelInpu
 	res := make([]*LabelInput, len(vSlice))
 	for i := range vSlice {
 		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
-		res[i], err = ec.unmarshalNLabelInput2ᚖgloutonᚋapiᚐLabelInput(ctx, vSlice[i])
+		res[i], err = ec.unmarshalNLabelInput2ᚖgithubᚗcomᚋbleemeoᚋgloutonᚋapiᚐLabelInput(ctx, vSlice[i])
 		if err != nil {
 			return nil, err
 		}
@@ -8160,12 +8160,12 @@ func (ec *executionContext) unmarshalNLabelInput2ᚕᚖgloutonᚋapiᚐLabelInpu
 	return res, nil
 }
 
-func (ec *executionContext) unmarshalNLabelInput2ᚖgloutonᚋapiᚐLabelInput(ctx context.Context, v interface{}) (*LabelInput, error) {
+func (ec *executionContext) unmarshalNLabelInput2ᚖgithubᚗcomᚋbleemeoᚋgloutonᚋapiᚐLabelInput(ctx context.Context, v interface{}) (*LabelInput, error) {
 	res, err := ec.unmarshalInputLabelInput(ctx, v)
 	return &res, graphql.ErrorOnPath(ctx, err)
 }
 
-func (ec *executionContext) marshalNProcess2ᚕᚖgloutonᚋapiᚐProcessᚄ(ctx context.Context, sel ast.SelectionSet, v []*Process) graphql.Marshaler {
+func (ec *executionContext) marshalNProcess2ᚕᚖgithubᚗcomᚋbleemeoᚋgloutonᚋapiᚐProcessᚄ(ctx context.Context, sel ast.SelectionSet, v []*Process) graphql.Marshaler {
 	ret := make(graphql.Array, len(v))
 	var wg sync.WaitGroup
 	isLen1 := len(v) == 1
@@ -8189,7 +8189,7 @@ func (ec *executionContext) marshalNProcess2ᚕᚖgloutonᚋapiᚐProcessᚄ(ctx
 			if !isLen1 {
 				defer wg.Done()
 			}
-			ret[i] = ec.marshalNProcess2ᚖgloutonᚋapiᚐProcess(ctx, sel, v[i])
+			ret[i] = ec.marshalNProcess2ᚖgithubᚗcomᚋbleemeoᚋgloutonᚋapiᚐProcess(ctx, sel, v[i])
 		}
 		if isLen1 {
 			f(i)
@@ -8209,7 +8209,7 @@ func (ec *executionContext) marshalNProcess2ᚕᚖgloutonᚋapiᚐProcessᚄ(ctx
 	return ret
 }
 
-func (ec *executionContext) marshalNProcess2ᚖgloutonᚋapiᚐProcess(ctx context.Context, sel ast.SelectionSet, v *Process) graphql.Marshaler {
+func (ec *executionContext) marshalNProcess2ᚖgithubᚗcomᚋbleemeoᚋgloutonᚋapiᚐProcess(ctx context.Context, sel ast.SelectionSet, v *Process) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
 			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
@@ -8219,7 +8219,7 @@ func (ec *executionContext) marshalNProcess2ᚖgloutonᚋapiᚐProcess(ctx conte
 	return ec._Process(ctx, sel, v)
 }
 
-func (ec *executionContext) marshalNService2ᚕᚖgloutonᚋapiᚐServiceᚄ(ctx context.Context, sel ast.SelectionSet, v []*Service) graphql.Marshaler {
+func (ec *executionContext) marshalNService2ᚕᚖgithubᚗcomᚋbleemeoᚋgloutonᚋapiᚐServiceᚄ(ctx context.Context, sel ast.SelectionSet, v []*Service) graphql.Marshaler {
 	ret := make(graphql.Array, len(v))
 	var wg sync.WaitGroup
 	isLen1 := len(v) == 1
@@ -8243,7 +8243,7 @@ func (ec *executionContext) marshalNService2ᚕᚖgloutonᚋapiᚐServiceᚄ(ctx
 			if !isLen1 {
 				defer wg.Done()
 			}
-			ret[i] = ec.marshalNService2ᚖgloutonᚋapiᚐService(ctx, sel, v[i])
+			ret[i] = ec.marshalNService2ᚖgithubᚗcomᚋbleemeoᚋgloutonᚋapiᚐService(ctx, sel, v[i])
 		}
 		if isLen1 {
 			f(i)
@@ -8263,7 +8263,7 @@ func (ec *executionContext) marshalNService2ᚕᚖgloutonᚋapiᚐServiceᚄ(ctx
 	return ret
 }
 
-func (ec *executionContext) marshalNService2ᚖgloutonᚋapiᚐService(ctx context.Context, sel ast.SelectionSet, v *Service) graphql.Marshaler {
+func (ec *executionContext) marshalNService2ᚖgithubᚗcomᚋbleemeoᚋgloutonᚋapiᚐService(ctx context.Context, sel ast.SelectionSet, v *Service) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
 			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
@@ -8320,7 +8320,7 @@ func (ec *executionContext) marshalNString2ᚕstringᚄ(ctx context.Context, sel
 	return ret
 }
 
-func (ec *executionContext) marshalNTag2ᚕᚖgloutonᚋapiᚐTagᚄ(ctx context.Context, sel ast.SelectionSet, v []*Tag) graphql.Marshaler {
+func (ec *executionContext) marshalNTag2ᚕᚖgithubᚗcomᚋbleemeoᚋgloutonᚋapiᚐTagᚄ(ctx context.Context, sel ast.SelectionSet, v []*Tag) graphql.Marshaler {
 	ret := make(graphql.Array, len(v))
 	var wg sync.WaitGroup
 	isLen1 := len(v) == 1
@@ -8344,7 +8344,7 @@ func (ec *executionContext) marshalNTag2ᚕᚖgloutonᚋapiᚐTagᚄ(ctx context
 			if !isLen1 {
 				defer wg.Done()
 			}
-			ret[i] = ec.marshalNTag2ᚖgloutonᚋapiᚐTag(ctx, sel, v[i])
+			ret[i] = ec.marshalNTag2ᚖgithubᚗcomᚋbleemeoᚋgloutonᚋapiᚐTag(ctx, sel, v[i])
 		}
 		if isLen1 {
 			f(i)
@@ -8364,7 +8364,7 @@ func (ec *executionContext) marshalNTag2ᚕᚖgloutonᚋapiᚐTagᚄ(ctx context
 	return ret
 }
 
-func (ec *executionContext) marshalNTag2ᚖgloutonᚋapiᚐTag(ctx context.Context, sel ast.SelectionSet, v *Tag) graphql.Marshaler {
+func (ec *executionContext) marshalNTag2ᚖgithubᚗcomᚋbleemeoᚋgloutonᚋapiᚐTag(ctx context.Context, sel ast.SelectionSet, v *Tag) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
 			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
@@ -8389,11 +8389,11 @@ func (ec *executionContext) marshalNTime2timeᚐTime(ctx context.Context, sel as
 	return res
 }
 
-func (ec *executionContext) marshalNTopinfo2gloutonᚋapiᚐTopinfo(ctx context.Context, sel ast.SelectionSet, v Topinfo) graphql.Marshaler {
+func (ec *executionContext) marshalNTopinfo2githubᚗcomᚋbleemeoᚋgloutonᚋapiᚐTopinfo(ctx context.Context, sel ast.SelectionSet, v Topinfo) graphql.Marshaler {
 	return ec._Topinfo(ctx, sel, &v)
 }
 
-func (ec *executionContext) marshalNTopinfo2ᚖgloutonᚋapiᚐTopinfo(ctx context.Context, sel ast.SelectionSet, v *Topinfo) graphql.Marshaler {
+func (ec *executionContext) marshalNTopinfo2ᚖgithubᚗcomᚋbleemeoᚋgloutonᚋapiᚐTopinfo(ctx context.Context, sel ast.SelectionSet, v *Topinfo) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
 			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
@@ -8682,21 +8682,21 @@ func (ec *executionContext) marshalOBoolean2ᚖbool(ctx context.Context, sel ast
 	return res
 }
 
-func (ec *executionContext) marshalOCPUUsage2ᚖgloutonᚋapiᚐCPUUsage(ctx context.Context, sel ast.SelectionSet, v *CPUUsage) graphql.Marshaler {
+func (ec *executionContext) marshalOCPUUsage2ᚖgithubᚗcomᚋbleemeoᚋgloutonᚋapiᚐCPUUsage(ctx context.Context, sel ast.SelectionSet, v *CPUUsage) graphql.Marshaler {
 	if v == nil {
 		return graphql.Null
 	}
 	return ec._CPUUsage(ctx, sel, v)
 }
 
-func (ec *executionContext) marshalOMemoryUsage2ᚖgloutonᚋapiᚐMemoryUsage(ctx context.Context, sel ast.SelectionSet, v *MemoryUsage) graphql.Marshaler {
+func (ec *executionContext) marshalOMemoryUsage2ᚖgithubᚗcomᚋbleemeoᚋgloutonᚋapiᚐMemoryUsage(ctx context.Context, sel ast.SelectionSet, v *MemoryUsage) graphql.Marshaler {
 	if v == nil {
 		return graphql.Null
 	}
 	return ec._MemoryUsage(ctx, sel, v)
 }
 
-func (ec *executionContext) unmarshalOPagination2ᚖgloutonᚋapiᚐPagination(ctx context.Context, v interface{}) (*Pagination, error) {
+func (ec *executionContext) unmarshalOPagination2ᚖgithubᚗcomᚋbleemeoᚋgloutonᚋapiᚐPagination(ctx context.Context, v interface{}) (*Pagination, error) {
 	if v == nil {
 		return nil, nil
 	}
@@ -8720,7 +8720,7 @@ func (ec *executionContext) marshalOString2ᚖstring(ctx context.Context, sel as
 	return res
 }
 
-func (ec *executionContext) marshalOSwapUsage2ᚖgloutonᚋapiᚐSwapUsage(ctx context.Context, sel ast.SelectionSet, v *SwapUsage) graphql.Marshaler {
+func (ec *executionContext) marshalOSwapUsage2ᚖgithubᚗcomᚋbleemeoᚋgloutonᚋapiᚐSwapUsage(ctx context.Context, sel ast.SelectionSet, v *SwapUsage) graphql.Marshaler {
 	if v == nil {
 		return graphql.Null
 	}

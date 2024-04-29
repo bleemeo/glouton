@@ -19,11 +19,12 @@ package redis
 import (
 	"errors"
 	"fmt"
-	"glouton/inputs"
-	"glouton/inputs/internal"
-	"glouton/logger"
 	"reflect"
 	"unsafe"
+
+	"github.com/bleemeo/glouton/inputs"
+	"github.com/bleemeo/glouton/inputs/internal"
+	"github.com/bleemeo/glouton/logger"
 
 	"github.com/influxdata/telegraf"
 	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"

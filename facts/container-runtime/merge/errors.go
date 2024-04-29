@@ -18,8 +18,9 @@ package merge
 
 import (
 	"errors"
-	"glouton/facts"
-	"glouton/types"
+
+	"github.com/bleemeo/glouton/facts"
+	"github.com/bleemeo/glouton/types"
 )
 
 // fixMultiError ensure that NoRuntimeError isn't lost by MultiErrors.
