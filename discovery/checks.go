@@ -247,7 +247,7 @@ func (d *Discovery) createHTTPCheck(
 		return
 	}
 
-	u, err := url.Parse("http://" + primaryAddress) //nolint: goconst
+	u, err := url.Parse("http://" + primaryAddress)
 	if err != nil {
 		logger.V(2).Printf("can't parse URL \"%s\" ? This shouldn't happen: %v", "http://"+primaryAddress, err)
 
