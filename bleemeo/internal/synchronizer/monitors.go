@@ -183,6 +183,15 @@ func (s *Synchronizer) ApplyMonitorUpdate() error {
 			jitterCreationDate = creationDate.Add(-agentIDHash)
 		}
 
+		// The API task to compute quorum of probes starts at the beginning of every minute,
+		// if we run the probe too late in the minute (e.g. 8h20m55s), the new points may
+		// not be received by the API on the next quorum (e.g. 8h21m00s). This means the API
+		// could use points from the last run (e.g. 8h15m55s), which are more than 5 minutes old.
+		// To avoid this problem, we don't run the probes on the last 15 seconds of every minute.
+		if jitterCreationDate.Second() >= 45 {
+			jitterCreationDate = jitterCreationDate.Add(-15 * time.Second)
+		}
+
 		processedMonitors = append(processedMonitors, types.Monitor{
 			ID:                      monitor.ID,
 			MetricMonitorResolution: conf.AgentConfigByName[bleemeoTypes.AgentTypeMonitor].MetricResolution,
