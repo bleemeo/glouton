@@ -146,6 +146,32 @@ func (s *Synchronizer) syncMonitors(_ context.Context, fullSync bool, onlyEssent
 	return false, s.ApplyMonitorUpdate()
 }
 
+func applyJitterToMonitorCreationDate(monitor bleemeoTypes.Monitor, agentIDHash uint64) (time.Time, error) {
+	creationDate, err := time.Parse(time.RFC3339, monitor.CreationDate)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("invalid created_at: %w", err)
+	}
+
+	jitterCreationDate := creationDate.Add(time.Duration(agentIDHash%16000)*time.Millisecond - 8*time.Second)
+	if creationDate.Minute() != jitterCreationDate.Minute() {
+		// We want to kept the minute unchanged. This is required for monitor with
+		// resolution of 5 minutes because Bleemeo assume that the monitor metrics are
+		// send at the beginning of the minute after creationDate + N * 5 minutes.
+		jitterCreationDate = creationDate.Add(-(time.Duration(agentIDHash%16000)*time.Millisecond - 8*time.Second))
+	}
+
+	// The API task to compute quorum of probes starts at the beginning of every minute,
+	// if we run the probe too late in the minute (e.g. 8h20m55s), the new points may
+	// not be received by the API on the next quorum (e.g. 8h21m00s). This means the API
+	// could use points from the last run (e.g. 8h15m55s), which are more than 5 minutes old.
+	// To avoid this problem, we don't run the probes on the last 15 seconds of every minute.
+	if jitterCreationDate.Second() >= 45 {
+		jitterCreationDate = jitterCreationDate.Add(-15 * time.Second)
+	}
+
+	return jitterCreationDate, nil
+}
+
 // ApplyMonitorUpdate preprocesses monitors and updates blackbox target list.
 // `forceAccountConfigsReload` determine whether account configurations should be updated via the API.
 func (s *Synchronizer) ApplyMonitorUpdate() error {
@@ -159,7 +185,8 @@ func (s *Synchronizer) ApplyMonitorUpdate() error {
 
 	accountConfigs := s.option.Cache.AccountConfigsByUUID()
 	processedMonitors := make([]types.Monitor, 0, len(monitors))
-	agentIDHash := time.Duration(xxhash.Sum64String(s.agentID)%16000)*time.Millisecond - 8*time.Second
+	// agentIDHash := time.Duration(xxhash.Sum64String(s.agentID)%16000)*time.Millisecond - 8*time.Second
+	agentIDHash := xxhash.Sum64String(s.agentID)
 
 	for _, monitor := range monitors {
 		// try to retrieve the account config associated with this monitor
@@ -168,28 +195,11 @@ func (s *Synchronizer) ApplyMonitorUpdate() error {
 			return fmt.Errorf("%w '%s' for probe '%s'", errMissingAccountConf, monitor.AccountConfig, monitor.URL)
 		}
 
-		creationDate, err := time.Parse(time.RFC3339, monitor.CreationDate)
+		jitterCreationDate, err := applyJitterToMonitorCreationDate(monitor, agentIDHash)
 		if err != nil {
-			logger.V(1).Printf("Ignore monitor %s (id=%s) due to invalid created_at: %s", monitor.URL, monitor.ID, monitor.CreationDate)
+			logger.V(1).Printf("Ignore monitor %s (id=%s): %s", monitor.URL, monitor.ID, err)
 
 			continue
-		}
-
-		jitterCreationDate := creationDate.Add(agentIDHash)
-		if creationDate.Minute() != jitterCreationDate.Minute() {
-			// We want to kept the minute unchanged. This is required for monitor with
-			// resolution of 5 minutes because Bleemeo assume that the monitor metrics are
-			// send at the beginning of the minute after creationDate + N * 5 minutes.
-			jitterCreationDate = creationDate.Add(-agentIDHash)
-		}
-
-		// The API task to compute quorum of probes starts at the beginning of every minute,
-		// if we run the probe too late in the minute (e.g. 8h20m55s), the new points may
-		// not be received by the API on the next quorum (e.g. 8h21m00s). This means the API
-		// could use points from the last run (e.g. 8h15m55s), which are more than 5 minutes old.
-		// To avoid this problem, we don't run the probes on the last 15 seconds of every minute.
-		if jitterCreationDate.Second() >= 45 {
-			jitterCreationDate = jitterCreationDate.Add(-15 * time.Second)
 		}
 
 		processedMonitors = append(processedMonitors, types.Monitor{
