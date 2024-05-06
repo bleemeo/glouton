@@ -24,6 +24,119 @@ import (
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 )
 
+func Test_applyJitterToMonitorCreationDate_fixedProbe(t *testing.T) {
+	// This test ensure that some probes set yield enough randomization.
+	// Those ID should be ID of real probes.
+	tests := []struct {
+		name     string
+		probeIDs []string
+		// remember than wantMinDelta is the smaller delta between two probes.
+		// So the more their is probeIDs, the smaller this delta will be.
+		// Theoretically, the best value should be spreadRange / (len(probeIDs)-1)
+		wantMinDelta time.Duration
+	}{
+		// Those are an examples with random uuid (and low wantDelta).
+		// Real case should use true agent ID and high wantDelta.
+		{
+			name: "default-europe",
+			probeIDs: []string{
+				"7c6ab4b8-fc54-4615-8e9e-d83750666b90",
+				"cf173500-530b-473b-a45f-39d85ef148f9",
+				"4cf13deb-94d5-40a8-a279-df0e7bfd4146",
+			},
+			wantMinDelta: 0,
+		},
+		{
+			name: "old-default",
+			probeIDs: []string{
+				"7c6ab4b8-fc54-4615-8e9e-d83750666b90",
+				"61680075-9af4-4318-824d-c5ae87ace0d5",
+				"68ac67fe-ad18-40ee-88fc-5debc553562d",
+			},
+			wantMinDelta: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+
+			for range 10 {
+				good := true
+				probesRuns := make([]time.Time, 0, len(tt.probeIDs))
+
+				createDate := time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC).Add(time.Duration(rand.Int63n(int64(365 * 24 * time.Hour)))) //nolint:gosec
+				monitor := bleemeoTypes.Monitor{
+					Service: bleemeoTypes.Service{
+						CreationDate: createDate.Format(time.RFC3339),
+					},
+				}
+
+				for _, id := range tt.probeIDs {
+					agentHash := hashAgentID(id)
+					got, err := applyJitterToMonitorCreationDate(monitor, agentHash)
+					if err != nil {
+						t.Fatal(err)
+					}
+
+					probesRuns = append(probesRuns, got)
+				}
+
+				for i, firstTime := range probesRuns {
+					for j, secondTime := range probesRuns[i+1:] {
+						delta := secondTime.Sub(firstTime)
+						if delta < 0 {
+							delta = -delta
+						}
+
+						if delta < tt.wantMinDelta {
+							t.Errorf("applyJitterToMonitorCreationDate() delta = %s, want >= %s (i=%d j=%d)", delta, tt.wantMinDelta, i, j+i+1)
+							good = false
+						}
+					}
+				}
+
+				if !good {
+					break
+				}
+			}
+		})
+	}
+}
+
+func Test_applyJitterToMonitorCreationDate_different(t *testing.T) {
+	// For one probe, not all monitor run at the same time
+	monitor1 := bleemeoTypes.Monitor{
+		Service: bleemeoTypes.Service{
+			CreationDate: time.Date(2020, 1, 1, 12, 54, 7, 4, time.UTC).Format(time.RFC3339),
+		},
+	}
+	monitor2 := bleemeoTypes.Monitor{
+		Service: bleemeoTypes.Service{
+			CreationDate: time.Date(2020, 1, 1, 12, 54, 30, 0, time.UTC).Format(time.RFC3339),
+		},
+	}
+	agentID := "0943c46b-c4e3-4234-b99d-a6548296056e"
+
+	got1, err := applyJitterToMonitorCreationDate(monitor1, hashAgentID(agentID))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got2, err := applyJitterToMonitorCreationDate(monitor2, hashAgentID(agentID))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	delta := got1.Sub(got2)
+	if delta < 0 {
+		delta = -delta
+	}
+
+	// 20s should be reached, the two monitor create date are 23s apart.
+	if delta < 20*time.Second {
+		t.Fatalf("applyJitterToMonitorCreationDate() delta = %s, want >= 20s", delta)
+	}
+}
+
 func Test_applyJitterToMonitorCreationDate(t *testing.T) {
 	for range 10 {
 		createDate := time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC).Add(time.Duration(rand.Int63n(int64(365 * 24 * time.Hour)))) //nolint:gosec

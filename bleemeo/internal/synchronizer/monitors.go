@@ -146,6 +146,11 @@ func (s *Synchronizer) syncMonitors(_ context.Context, fullSync bool, onlyEssent
 	return false, s.ApplyMonitorUpdate()
 }
 
+func hashAgentID(agentID string) uint64 {
+	// The "@bleemeo.com" suffix is here to produce good jitter with existing default probe's agent ID.
+	return xxhash.Sum64String(agentID + "@bleemeo.com")
+}
+
 func applyJitterToMonitorCreationDate(monitor bleemeoTypes.Monitor, agentIDHash uint64) (time.Time, error) {
 	creationDate, err := time.Parse(time.RFC3339, monitor.CreationDate)
 	if err != nil {
@@ -172,8 +177,7 @@ func (s *Synchronizer) ApplyMonitorUpdate() error {
 
 	accountConfigs := s.option.Cache.AccountConfigsByUUID()
 	processedMonitors := make([]types.Monitor, 0, len(monitors))
-	// agentIDHash := time.Duration(xxhash.Sum64String(s.agentID)%16000)*time.Millisecond - 8*time.Second
-	agentIDHash := xxhash.Sum64String(s.agentID)
+	agentIDHash := hashAgentID(s.agentID)
 
 	for _, monitor := range monitors {
 		// try to retrieve the account config associated with this monitor
