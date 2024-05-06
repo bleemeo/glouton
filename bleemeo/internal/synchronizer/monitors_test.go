@@ -59,7 +59,6 @@ func Test_applyJitterToMonitorCreationDate_fixedProbe(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-
 			for range 10 {
 				good := true
 				probesRuns := make([]time.Time, 0, len(tt.probeIDs))
@@ -73,6 +72,7 @@ func Test_applyJitterToMonitorCreationDate_fixedProbe(t *testing.T) {
 
 				for _, id := range tt.probeIDs {
 					agentHash := hashAgentID(id)
+
 					got, err := applyJitterToMonitorCreationDate(monitor, agentHash)
 					if err != nil {
 						t.Fatal(err)
@@ -90,6 +90,7 @@ func Test_applyJitterToMonitorCreationDate_fixedProbe(t *testing.T) {
 
 						if delta < tt.wantMinDelta {
 							t.Errorf("applyJitterToMonitorCreationDate() delta = %s, want >= %s (i=%d j=%d)", delta, tt.wantMinDelta, i, j+i+1)
+
 							good = false
 						}
 					}
@@ -121,6 +122,7 @@ func Test_applyJitterToMonitorCreationDate_different(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	got2, err := applyJitterToMonitorCreationDate(monitor2, hashAgentID(agentID))
 	if err != nil {
 		t.Fatal(err)
