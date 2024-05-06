@@ -46,10 +46,6 @@ func Test_applyJitterToMonitorCreationDate(t *testing.T) {
 		// enough to avoid flaky test.
 		wantDelta -= time.Second
 
-		// Currently spread is wrong and could result in only 8 seconds range
-		// TODO: fix the code
-		wantDelta = 8*time.Second - time.Second
-
 		for range runCount {
 			got, err := applyJitterToMonitorCreationDate(monitor, uint64(rand.Int63())) //nolint:gosec
 			if err != nil {
@@ -57,7 +53,9 @@ func Test_applyJitterToMonitorCreationDate(t *testing.T) {
 			}
 
 			// The jitterCreateDate must be within the same minute as original createDate.
-			// This is needed for the API task that compute quorum and for monitor run less than every minutes.
+			// We want to kept the minute unchanged. This is required for monitor with
+			// resolution of 5 minutes because for the quorum Bleemeo assume that the monitor metrics are
+			// send at the beginning of the minute after creationDate + N * 5 minutes.
 			createDateMinute := createDate.Truncate(time.Minute)
 			gotMinute := got.Truncate(time.Minute)
 
@@ -66,6 +64,11 @@ func Test_applyJitterToMonitorCreationDate(t *testing.T) {
 			}
 
 			// The jitterCreateDate must be within the first 45 seconds of the minutes
+			// The API task to compute quorum of probes starts at the beginning of every minute,
+			// if we run the probe too late in the minute (e.g. 8h20m55s), the new points may
+			// not be received by the API on the next quorum (e.g. 8h21m00s). This means the API
+			// could use points from the last run (e.g. 8h15m55s), which are more than 5 minutes old.
+			// To avoid this problem, we don't run the probes on the last 15 seconds of every minute.
 			if got.Second() > 45 {
 				t.Fatalf("applyJitterToMonitorCreationDate().Second() = %d, want <= 45", got.Second())
 			}
@@ -104,8 +107,7 @@ func Test_applyJitterToMonitorCreationDate(t *testing.T) {
 		}
 
 		// applyJitterToMonitorCreationDate should have uniform distribution
-		// TODO: one second is much more present than other, need to fix code.
-		if maxPerBucket-minPerBucket > runCount/10 && false {
+		if maxPerBucket-minPerBucket > runCount/10 {
 			t.Fatalf("maxPerBucket - minPerBucket = %d, want <= %d\ncountPerTimestamp: %v", maxPerBucket-minPerBucket, runCount/10, countPerTimestamp)
 		}
 	}
@@ -127,7 +129,7 @@ func Test_applyJitterToMonitorCreationDateFixedValue(t *testing.T) {
 	// What this test check is that wanted value don't change too often, especially between
 	// different run and when time.Now() changes.
 	// If applyJitterToMonitorCreationDate need to be updated, the wanted value could change.
-	want := time.Date(2024, 4, 30, 16, 32, 39, 42000000, time.UTC)
+	want := time.Date(2024, 4, 30, 16, 32, 32, 42000000, time.UTC)
 
 	if !got.Equal(want) {
 		t.Errorf("applyJitterToMonitorCreationDate() = %s, want %s", got, want)

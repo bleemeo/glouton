@@ -152,22 +152,9 @@ func applyJitterToMonitorCreationDate(monitor bleemeoTypes.Monitor, agentIDHash 
 		return time.Time{}, fmt.Errorf("invalid created_at: %w", err)
 	}
 
-	jitterCreationDate := creationDate.Add(time.Duration(agentIDHash%16000)*time.Millisecond - 8*time.Second)
-	if creationDate.Minute() != jitterCreationDate.Minute() {
-		// We want to kept the minute unchanged. This is required for monitor with
-		// resolution of 5 minutes because Bleemeo assume that the monitor metrics are
-		// send at the beginning of the minute after creationDate + N * 5 minutes.
-		jitterCreationDate = creationDate.Add(-(time.Duration(agentIDHash%16000)*time.Millisecond - 8*time.Second))
-	}
-
-	// The API task to compute quorum of probes starts at the beginning of every minute,
-	// if we run the probe too late in the minute (e.g. 8h20m55s), the new points may
-	// not be received by the API on the next quorum (e.g. 8h21m00s). This means the API
-	// could use points from the last run (e.g. 8h15m55s), which are more than 5 minutes old.
-	// To avoid this problem, we don't run the probes on the last 15 seconds of every minute.
-	if jitterCreationDate.Second() >= 45 {
-		jitterCreationDate = jitterCreationDate.Add(-15 * time.Second)
-	}
+	creationDateBase := creationDate.Truncate(time.Minute)
+	millisecondInMinute := (uint64(creationDate.UnixMilli()) + agentIDHash) % 45000
+	jitterCreationDate := creationDateBase.Add(time.Duration(millisecondInMinute) * time.Millisecond)
 
 	return jitterCreationDate, nil
 }
