@@ -19,18 +19,52 @@ package synchronizer
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"net/http"
+	"net/url"
+	"path"
+	"strings"
+	"sync"
 	"time"
 
-	"github.com/bleemeo/glouton/bleemeo/client"
+	"github.com/bleemeo/bleemeo-go"
+)
+
+const gloutonOAuthClientID = "5c31cbfc-254a-4fb9-822d-e55c681a3d4f"
+
+var (
+	errInvalidAgentID      = errors.New("got an invalid agent ID")
+	errClientUninitialized = fmt.Errorf("%w: HTTP client", errUninitialized)
 )
 
 type wrapperClient struct {
 	s                *Synchronizer
-	client           *client.HTTPClient
+	client           *bleemeo.Client
+	checkDuplicateFn func() error
+
+	l                sync.Mutex
 	duplicateError   error
 	duplicateChecked bool
+	// TODO: throttling
+	throttleDeadline    time.Time
+	throttleConsecutive int
+}
+
+func (cl *wrapperClient) dupCheck() error {
+	cl.l.Lock()
+
+	if !cl.duplicateChecked {
+		cl.duplicateChecked = true
+		cl.l.Unlock()
+
+		cl.duplicateError = cl.checkDuplicateFn()
+	} else {
+		cl.l.Unlock()
+	}
+
+	return cl.duplicateError
 }
 
 func (cl *wrapperClient) ThrottleDeadline() time.Time {
@@ -38,43 +72,189 @@ func (cl *wrapperClient) ThrottleDeadline() time.Time {
 		return time.Time{}
 	}
 
-	return cl.client.ThrottleDeadline()
+	cl.l.Lock()
+	defer cl.l.Unlock()
+
+	return cl.throttleDeadline
 }
 
-func (cl *wrapperClient) Do(ctx context.Context, method string, path string, params map[string]string, data interface{}, result interface{}) (statusCode int, err error) {
+func (cl *wrapperClient) Get(ctx context.Context, resource bleemeo.Resource, id string, fields string, result any) error {
 	if cl == nil {
-		return 0, fmt.Errorf("%w: HTTP client", errUninitialized)
+		return errClientUninitialized
 	}
 
-	if !cl.duplicateChecked {
-		cl.duplicateChecked = true
-		cl.duplicateError = cl.s.checkDuplicated(ctx)
+	if err := cl.dupCheck(); err != nil {
+		return err
 	}
 
-	if cl.duplicateError != nil {
-		return 0, cl.duplicateError
+	respBody, err := cl.client.Get(ctx, resource, id, strings.Split(fields, ",")...)
+	if err != nil {
+		return err
 	}
 
-	return cl.client.Do(ctx, method, path, params, data, result)
+	return json.Unmarshal(respBody, result)
 }
 
-func (cl *wrapperClient) Iter(ctx context.Context, resource string, params map[string]string) ([]json.RawMessage, error) {
+func (cl *wrapperClient) Count(ctx context.Context, resource bleemeo.Resource, params url.Values) (int, error) {
 	if cl == nil {
-		return nil, fmt.Errorf("%w: HTTP client", errUninitialized)
+		return 0, errClientUninitialized
 	}
 
-	if !cl.duplicateChecked {
-		cl.duplicateChecked = true
-		cl.duplicateError = cl.s.checkDuplicated(ctx)
+	if err := cl.dupCheck(); err != nil {
+		return 0, err
 	}
 
-	if cl.duplicateError != nil {
-		return nil, cl.duplicateError
-	}
-
-	return cl.client.Iter(ctx, resource, params)
+	return cl.client.Count(ctx, resource, params)
 }
 
-func (cl *wrapperClient) DoWithBody(ctx context.Context, path string, contentType string, body io.Reader) (statusCode int, err error) {
-	return cl.client.DoWithBody(ctx, path, contentType, body)
+func (cl *wrapperClient) Iterator(resource bleemeo.Resource, params url.Values) bleemeo.Iterator {
+	if cl == nil {
+		return errorIterator{errClientUninitialized}
+	}
+
+	if err := cl.dupCheck(); err != nil {
+		return errorIterator{err}
+	}
+
+	return cl.client.Iterator(resource, params)
+}
+
+func (cl *wrapperClient) Create(ctx context.Context, resource bleemeo.Resource, body any, fields string, result any) error {
+	if cl == nil {
+		return errClientUninitialized
+	}
+
+	if err := cl.dupCheck(); err != nil {
+		return err
+	}
+
+	respBody, err := cl.client.Create(ctx, resource, body, strings.Split(fields, ",")...)
+	if err != nil {
+		return err
+	}
+
+	if result != nil {
+		return json.Unmarshal(respBody, result)
+	}
+
+	return nil
+}
+
+func (cl *wrapperClient) Update(ctx context.Context, resource bleemeo.Resource, id string, body any, fields string, result any) error {
+	if cl == nil {
+		return errClientUninitialized
+	}
+
+	if err := cl.dupCheck(); err != nil {
+		return err
+	}
+
+	respBody, err := cl.client.Update(ctx, resource, id, body, strings.Split(fields, ",")...)
+	if err != nil {
+		return err
+	}
+
+	if result != nil {
+		return json.Unmarshal(respBody, result)
+	}
+
+	return nil
+}
+
+func (cl *wrapperClient) Delete(ctx context.Context, resource bleemeo.Resource, id string) error {
+	if cl == nil {
+		return errClientUninitialized
+	}
+
+	if err := cl.dupCheck(); err != nil {
+		return err
+	}
+
+	return cl.client.Delete(ctx, resource, id)
+}
+
+func (cl *wrapperClient) DoWithBody(ctx context.Context, reqURI string, contentType string, body io.Reader) (statusCode int, err error) {
+	if cl == nil {
+		return 0, errClientUninitialized
+	}
+
+	if err = cl.dupCheck(); err != nil {
+		return 0, err
+	}
+
+	if !path.IsAbs(reqURI) {
+		reqURI = "/" + reqURI
+	}
+
+	req, err := cl.client.ParseRequest(http.MethodPost, reqURI, http.Header{"Content-Type": {contentType}}, nil, body)
+	if err != nil {
+		return 0, err //nolint:wrapcheck
+	}
+
+	resp, err := cl.client.DoRequest(ctx, req, true)
+	if err != nil {
+		return 0, err //nolint:wrapcheck
+	}
+
+	_ = resp.Body.Close()
+
+	return resp.StatusCode, nil
+}
+
+// VerifyAndGetToken is used to get a valid token.
+// It differs from GetToken because the token is only renewed if necessary.
+func (cl *wrapperClient) VerifyAndGetToken(ctx context.Context, agentID string) (string, error) {
+	if cl == nil {
+		return "", errClientUninitialized
+	}
+
+	if err := cl.dupCheck(); err != nil {
+		return "", err
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	var res struct {
+		ID string `json:"id"`
+	}
+
+	// Low-cost API endpoint, used to test the validity of our token.
+	// We rely on the client to renew the token if it has expired.
+	err := cl.Get(ctx, bleemeo.ResourceAgent, agentID, "id", &res)
+	if err != nil {
+		return "", err
+	}
+
+	if res.ID != agentID {
+		return "", errInvalidAgentID
+	}
+
+	token, err := cl.client.GetToken(ctx)
+	if err != nil {
+		return "", err
+	}
+
+	return token.AccessToken, nil
+}
+
+// errorIterator implements [bleemeo.Iterator] but only returns an error.
+type errorIterator struct {
+	err error
+}
+
+func (errIter errorIterator) Count(context.Context) (int, error) {
+	return 0, errIter.err
+}
+
+func (errIter errorIterator) Next(context.Context) bool {
+	return false
+}
+
+func (errIter errorIterator) At() json.RawMessage {
+	return nil
+}
+
+func (errIter errorIterator) Err() error {
+	return errIter.err
 }

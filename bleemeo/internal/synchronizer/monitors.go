@@ -21,8 +21,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"time"
 
+	"github.com/bleemeo/bleemeo-go"
 	"github.com/bleemeo/glouton/bleemeo/client"
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/logger"
@@ -46,7 +48,7 @@ const (
 	Delete
 )
 
-const fieldList string = "id,account_config,agent,created_at,monitor_url,monitor_expected_content," +
+const monitorFields string = "id,account_config,agent,created_at,monitor_url,monitor_expected_content," +
 	"monitor_expected_response_code,monitor_unexpected_content,monitor_ca_file,monitor_headers"
 
 // MonitorUpdate represents an operation to execute on a monitor.
@@ -208,27 +210,33 @@ func (s *Synchronizer) ApplyMonitorUpdate() error {
 }
 
 func (s *Synchronizer) getMonitorsFromAPI() ([]bleemeoTypes.Monitor, error) {
-	params := map[string]string{
-		"monitor": "true",
-		"active":  "true",
-		"fields":  fieldList,
+	params := url.Values{
+		"monitor": {"true"},
+		"active":  {"true"},
+		"fields":  {monitorFields},
 	}
 
-	result, err := s.client.Iter(s.ctx, "service", params)
+	iter := s.client.Iterator(bleemeo.ResourceService, params)
+
+	count, err := iter.Count(s.ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	monitors := make([]bleemeoTypes.Monitor, 0, len(result))
+	monitors := make([]bleemeoTypes.Monitor, 0, count)
 
-	for _, jsonMessage := range result {
+	for iter.Next(s.ctx) {
 		var monitor bleemeoTypes.Monitor
 
-		if err := json.Unmarshal(jsonMessage, &monitor); err != nil {
-			return nil, fmt.Errorf("%w %v", errCannotParse, jsonMessage)
+		if err = json.Unmarshal(iter.At(), &monitor); err != nil {
+			return nil, fmt.Errorf("%w %v", errCannotParse, string(iter.At()))
 		}
 
 		monitors = append(monitors, monitor)
+	}
+
+	if iter.Err() != nil {
+		return nil, iter.Err()
 	}
 
 	return monitors, nil
@@ -236,10 +244,6 @@ func (s *Synchronizer) getMonitorsFromAPI() ([]bleemeoTypes.Monitor, error) {
 
 // should we try to modify as much monitors as possible, and return a list of errors, instead of failing early ?
 func (s *Synchronizer) getListOfMonitorsFromAPI(pendingMonitorsUpdate []MonitorUpdate) ([]bleemeoTypes.Monitor, error) {
-	params := map[string]string{
-		"fields": fieldList,
-	}
-
 	currentMonitors := s.option.Cache.Monitors()
 
 	s.l.Lock()
@@ -257,7 +261,7 @@ OuterBreak:
 		}
 
 		var result bleemeoTypes.Monitor
-		statusCode, err := s.client.Do(s.ctx, "GET", fmt.Sprintf("v1/service/%s/", m.uuid), params, nil, &result)
+		err := s.client.Get(s.ctx, bleemeo.ResourceService, m.uuid, monitorFields, &result)
 		if err != nil {
 			// Delete the monitor locally if it was not found on the API.
 			if client.IsNotFound(err) {
@@ -270,13 +274,6 @@ OuterBreak:
 		}
 
 		if m.op == Change {
-			// we couldn't fetch that object ? let's skip it
-			if statusCode < 200 || statusCode >= 300 {
-				logger.V(2).Printf("probes: couldn't update service '%s', got HTTP %d", m.uuid, statusCode)
-
-				continue
-			}
-
 			for k, v := range currentMonitors {
 				if v.ID == m.uuid {
 					// syncing metrics is necessary when an account in which there is a probe is downgraded to a plan with

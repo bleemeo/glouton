@@ -19,10 +19,10 @@ package synchronizer
 import (
 	"context"
 	"errors"
-	"fmt"
 	"slices"
 	"time"
 
+	"github.com/bleemeo/bleemeo-go"
 	"github.com/bleemeo/glouton/bleemeo/client"
 	"github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/inputs/vsphere"
@@ -124,9 +124,7 @@ func (s *Synchronizer) VSphereRegisterAndUpdate(localDevices []types.VSphereDevi
 
 	remoteAgentList := s.option.Cache.AgentsByUUID()
 
-	params := map[string]string{
-		"fields": "id,display_name,account,agent_type,abstracted,fqdn,initial_password,created_at,next_config_at,current_config,tags,initial_server_group_name",
-	}
+	vSphereAgentFields := "id,display_name,account,agent_type,abstracted,fqdn,initial_password,created_at,next_config_at,current_config,tags,initial_server_group_name"
 	seenDeviceAgents := make(map[string]string, len(localDevices))
 
 	var ( //nolint: prealloc
@@ -169,7 +167,7 @@ func (s *Synchronizer) VSphereRegisterAndUpdate(localDevices []types.VSphereDevi
 			InitialServerGroup: serverGroup,
 		}
 
-		registeredAgent, err := s.remoteRegisterVSphereDevice(params, payload)
+		registeredAgent, err := s.remoteRegisterVSphereDevice(vSphereAgentFields, payload)
 		if err != nil {
 			errs = append(errs, err)
 
@@ -217,10 +215,10 @@ func (s *Synchronizer) VSphereRegisterAndUpdate(localDevices []types.VSphereDevi
 	return errors.Join(errs...)
 }
 
-func (s *Synchronizer) remoteRegisterVSphereDevice(params map[string]string, payload payloadAgent) (types.Agent, error) {
+func (s *Synchronizer) remoteRegisterVSphereDevice(fields string, payload payloadAgent) (types.Agent, error) {
 	var result types.Agent
 
-	_, err := s.client.Do(s.ctx, "POST", "v1/agent/", params, payload, &result)
+	err := s.client.Create(s.ctx, bleemeo.ResourceAgent, payload, fields, &result)
 	if err != nil {
 		return result, err
 	}
@@ -308,7 +306,7 @@ func (s *Synchronizer) purgeVSphereAgents(remoteAgents map[string]types.Agent, s
 		} else { //nolint: gocritic
 			// When endpoints are failing, we can't tell which unassociated agents belong to them.
 			// So, we wait to be able to list the devices of all endpoints
-			// to be sure we know which devices have been deleted and which have not.
+			// to be sure we know which devices have been deleted and which haven't.
 			if len(failingEndpoints) != 0 {
 				continue
 			}
@@ -318,7 +316,7 @@ func (s *Synchronizer) purgeVSphereAgents(remoteAgents map[string]types.Agent, s
 
 		agentsToRemoveFromCache[id] = true
 
-		_, err := s.client.Do(s.ctx, "DELETE", fmt.Sprintf("v1/agent/%s/", id), nil, nil, nil)
+		err = s.client.Delete(s.ctx, bleemeo.ResourceAgent, id)
 		if err != nil && !client.IsNotFound(err) {
 			return err
 		}

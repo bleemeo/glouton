@@ -24,6 +24,7 @@ import (
 	"net/http"
 	"sort"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/bleemeo/glouton/logger"
@@ -427,12 +428,31 @@ type ArchiveWriter interface {
 	CurrentFileName() string
 }
 
+type transportCounter struct {
+	counter   *atomic.Uint32
+	transport http.RoundTripper
+}
+
+func (tc *transportCounter) RoundTrip(r *http.Request) (*http.Response, error) {
+	tc.counter.Add(1)
+
+	return tc.transport.RoundTrip(r)
+}
+
 // NewHTTPTransport returns a default Transport with a modified TLSClientConfig.
-func NewHTTPTransport(tlsConfig *tls.Config) http.RoundTripper {
+// If a requestCounter is provided, it will be incremented for each HTTP transaction.
+func NewHTTPTransport(tlsConfig *tls.Config, requestCounter *atomic.Uint32) http.RoundTripper {
 	dt, _ := http.DefaultTransport.(*http.Transport)
 
 	t := dt.Clone()
 	t.TLSClientConfig = tlsConfig
+
+	if requestCounter != nil {
+		return &transportCounter{
+			counter:   requestCounter,
+			transport: t,
+		}
+	}
 
 	return t
 }

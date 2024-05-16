@@ -21,12 +21,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"regexp"
 	"runtime"
 	"sort"
 	"strings"
 	"time"
 
+	"github.com/bleemeo/bleemeo-go"
 	"github.com/bleemeo/glouton/bleemeo/client"
 	"github.com/bleemeo/glouton/bleemeo/internal/common"
 	"github.com/bleemeo/glouton/bleemeo/internal/filter"
@@ -702,22 +704,24 @@ func (s *Synchronizer) isOwnedMetric(metric metricPayload) bool {
 
 // metricsListWithAgentID fetches the list of all metrics for a given agent, and returns a UUID:metric mapping.
 func (s *Synchronizer) metricsListWithAgentID(fetchInactive bool) (map[string]bleemeoTypes.Metric, error) {
-	params := map[string]string{
-		"fields": metricFields,
+	params := url.Values{
+		"fields": {metricFields},
 	}
 
 	if fetchInactive {
-		params["active"] = stringFalse
+		params.Set("active", stringFalse)
 	} else {
-		params["active"] = stringTrue
+		params.Set("active", stringTrue)
 	}
 
-	result, err := s.client.Iter(s.ctx, "metric", params)
+	iter := s.client.Iterator(bleemeo.ResourceMetric, params)
+
+	count, err := iter.Count(s.ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	metricsByUUID := make(map[string]bleemeoTypes.Metric, len(result))
+	metricsByUUID := make(map[string]bleemeoTypes.Metric, count)
 
 	for _, m := range s.option.Cache.Metrics() {
 		if m.DeactivatedAt.IsZero() == fetchInactive {
@@ -725,10 +729,10 @@ func (s *Synchronizer) metricsListWithAgentID(fetchInactive bool) (map[string]bl
 		}
 	}
 
-	for _, jsonMessage := range result {
+	for iter.Next(s.ctx) {
 		var metric metricPayload
 
-		if err := json.Unmarshal(jsonMessage, &metric); err != nil {
+		if err = json.Unmarshal(iter.At(), &metric); err != nil {
 			continue
 		}
 
@@ -739,6 +743,10 @@ func (s *Synchronizer) metricsListWithAgentID(fetchInactive bool) (map[string]bl
 		}
 
 		metricsByUUID[metric.ID] = metric.metricFromAPI(metricsByUUID[metric.ID].FirstSeenAt)
+	}
+
+	if iter.Err() != nil {
+		return nil, iter.Err()
 	}
 
 	return metricsByUUID, nil
@@ -770,27 +778,19 @@ func (s *Synchronizer) metricUpdateInactiveList(metrics []types.Metric, allowLis
 		return s.metricUpdateList(metrics)
 	}
 
-	result := struct {
-		Count int
-	}{}
-
-	_, err := s.client.Do(
+	count, err := s.client.Count(
 		s.ctx,
-		"GET",
-		"v1/metric/",
-		map[string]string{
-			"fields":    "id",
-			"active":    "False",
-			"page_size": "0",
+		bleemeo.ResourceMetric,
+		url.Values{
+			"fields": {"id"},
+			"active": {"False"},
 		},
-		nil,
-		&result,
 	)
 	if err != nil {
 		return err
 	}
 
-	if len(metrics) <= result.Count/100 {
+	if len(metrics) <= count/100 {
 		// should be faster with one HTTP request per metrics
 		return s.metricUpdateList(metrics)
 	}
@@ -813,28 +813,24 @@ func (s *Synchronizer) metricUpdateList(metrics []types.Metric) error {
 			agentID = metric.Annotations().BleemeoAgentID
 		}
 
-		params := map[string]string{
-			"labels_text": types.LabelsToText(metric.Labels()),
-			"agent":       agentID,
-			"fields":      metricFields,
+		params := url.Values{
+			"labels_text": {types.LabelsToText(metric.Labels())},
+			"agent":       {agentID},
+			"fields":      {metricFields},
 		}
 
 		if s.option.MetricFormat == types.MetricFormatBleemeo && metricutils.MetricOnlyHasItem(metric.Labels(), agentID) {
 			annotations := metric.Annotations()
-			params["label"] = metric.Labels()[types.LabelName]
-			params["item"] = annotations.BleemeoItem
-			delete(params, "labels_text")
+			params.Set("label", metric.Labels()[types.LabelName])
+			params.Set("item", annotations.BleemeoItem)
+			params.Del("labels_text")
 		}
 
-		result, err := s.client.Iter(s.ctx, "metric", params)
-		if err != nil {
-			return err
-		}
-
-		for _, jsonMessage := range result {
+		iter := s.client.Iterator(bleemeo.ResourceMetric, params)
+		for iter.Next(s.ctx) {
 			var metric metricPayload
 
-			if err := json.Unmarshal(jsonMessage, &metric); err != nil {
+			if err := json.Unmarshal(iter.At(), &metric); err != nil {
 				continue
 			}
 
@@ -853,6 +849,10 @@ func (s *Synchronizer) metricUpdateList(metrics []types.Metric) error {
 			}
 
 			metricsByUUID[metric.ID] = metric.metricFromAPI(metricsByUUID[metric.ID].FirstSeenAt)
+		}
+
+		if iter.Err() != nil {
+			return iter.Err()
 		}
 	}
 
@@ -873,16 +873,11 @@ func (s *Synchronizer) metricUpdateListUUID(requests []string) error {
 	for _, key := range requests {
 		var metric metricPayload
 
-		params := map[string]string{
-			"fields": metricFields,
-		}
-
-		_, err := s.client.Do(
+		err := s.client.Get(
 			s.ctx,
-			"GET",
-			fmt.Sprintf("v1/metric/%s/", key),
-			params,
-			nil,
+			bleemeo.ResourceMetric,
+			key,
+			metricFields,
 			&metric,
 		)
 		if err != nil && client.IsNotFound(err) {
@@ -1203,9 +1198,6 @@ func (mr *metricRegisterer) doOnePass(currentList []types.Metric, state metricRe
 }
 
 func (mr *metricRegisterer) metricRegisterAndUpdateOne(metric types.Metric) error {
-	params := map[string]string{
-		"fields": metricFields,
-	}
 	labels := metric.Labels()
 	annotations := metric.Annotations()
 	key := mr.s.metricKey(labels, annotations)
@@ -1235,7 +1227,7 @@ func (mr *metricRegisterer) metricRegisterAndUpdateOne(metric types.Metric) erro
 
 	var result metricPayload
 
-	_, err = mr.s.client.Do(mr.s.ctx, "POST", "v1/metric/", params, payload, &result)
+	err = mr.s.client.Create(mr.s.ctx, bleemeo.ResourceMetric, payload, metricFields, &result)
 	if err != nil {
 		return err
 	}
@@ -1398,14 +1390,7 @@ func (s *Synchronizer) metricUpdateOne(metric types.Metric, remoteMetric bleemeo
 			fields = append(fields, k)
 		}
 
-		_, err := s.client.Do(
-			s.ctx,
-			"PATCH",
-			fmt.Sprintf("v1/metric/%s/", remoteMetric.ID),
-			map[string]string{"fields": strings.Join(fields, ",")},
-			updates,
-			nil,
-		)
+		err := s.client.Update(s.ctx, bleemeo.ResourceMetric, remoteMetric.ID, updates, strings.Join(fields, ","), nil)
 		if err != nil && client.IsNotFound(err) {
 			return remoteMetric, needRegisterError{remoteMetric: remoteMetric}
 		} else if err != nil {
@@ -1437,7 +1422,7 @@ func (s *Synchronizer) metricDeleteIgnoredServices() error {
 		metricKey := s.metricKey(labels, srv.AnnotationsOfStatus())
 
 		if metric, ok := registeredMetricsByKey[metricKey]; ok {
-			_, err := s.client.Do(s.ctx, "DELETE", fmt.Sprintf("v1/metric/%s/", metric.ID), nil, nil, nil)
+			err = s.client.Delete(s.ctx, bleemeo.ResourceMetric, metric.ID)
 
 			// If the metric was not found it has already been deleted.
 			if err != nil && !client.IsNotFound(err) {
@@ -1555,14 +1540,7 @@ func (s *Synchronizer) metricDeactivate(localMetrics []types.Metric) error {
 
 		logger.V(2).Printf("Mark inactive the metric %v (uuid %s)", key, v.ID)
 
-		_, err := s.client.Do(
-			s.ctx,
-			"PATCH",
-			fmt.Sprintf("v1/metric/%s/", v.ID),
-			map[string]string{"fields": "active"},
-			map[string]string{"active": stringFalse},
-			nil,
-		)
+		err := s.client.Update(s.ctx, bleemeo.ResourceMetric, v.ID, map[string]string{"active": stringFalse}, "active", nil)
 		if err != nil && client.IsNotFound(err) {
 			delete(registeredMetrics, k)
 

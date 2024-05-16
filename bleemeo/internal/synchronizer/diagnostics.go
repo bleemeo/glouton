@@ -28,6 +28,7 @@ import (
 	"path/filepath"
 	"strconv"
 
+	"github.com/bleemeo/bleemeo-go"
 	"github.com/bleemeo/glouton/crashreport"
 	"github.com/bleemeo/glouton/logger"
 	gloutonTypes "github.com/bleemeo/glouton/types"
@@ -118,23 +119,29 @@ func (s *Synchronizer) listOnDemandDiagnostics() []diagnosticWithBleemeoInfo {
 }
 
 func (s *Synchronizer) listRemoteDiagnostics(ctx context.Context) ([]RemoteDiagnostic, error) {
-	result, err := s.client.Iter(ctx, "gloutondiagnostic", nil)
+	iter := s.client.Iterator(bleemeo.ResourceGloutonDiagnostic, nil)
+
+	count, err := iter.Count(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("client iter: %w", err)
+		return nil, fmt.Errorf("client iter count: %w", err)
 	}
 
-	diagnostics := make([]RemoteDiagnostic, 0, len(result))
+	diagnostics := make([]RemoteDiagnostic, 0, count)
 
-	for _, jsonMessage := range result {
+	for iter.Next(ctx) {
 		var remoteDiagnostic RemoteDiagnostic
 
-		if err = json.Unmarshal(jsonMessage, &remoteDiagnostic); err != nil {
+		if err = json.Unmarshal(iter.At(), &remoteDiagnostic); err != nil {
 			logger.V(2).Printf("Failed to unmarshal diagnostic: %v", err)
 
 			continue
 		}
 
 		diagnostics = append(diagnostics, remoteDiagnostic)
+	}
+
+	if iter.Err() != nil {
+		return nil, iter.Err()
 	}
 
 	return diagnostics, nil
@@ -197,7 +204,7 @@ func (s *Synchronizer) uploadDiagnostic(ctx context.Context, diagnostic diagnost
 
 	contentType := multipartWriter.FormDataContentType()
 
-	statusCode, reqErr := s.client.DoWithBody(ctx, "v1/gloutondiagnostic/", contentType, buf)
+	statusCode, reqErr := s.client.DoWithBody(ctx, bleemeo.ResourceGloutonDiagnostic, contentType, buf)
 	if reqErr != nil {
 		return reqErr
 	}

@@ -162,7 +162,7 @@ func NewClient(baseURL string, username string, password string, insecureTLS boo
 	}
 
 	cl := &http.Client{
-		Transport: gloutonTypes.NewHTTPTransport(tlsConfig),
+		Transport: gloutonTypes.NewHTTPTransport(tlsConfig, nil),
 	}
 
 	tokenURL, err := url.JoinPath(baseURL, "/o/token/")
@@ -579,7 +579,7 @@ func (c *HTTPClient) sendRequest(ctx context.Context, req *http.Request, result 
 		}
 
 		client = &http.Client{
-			Transport: gloutonTypes.NewHTTPTransport(tlsConfig),
+			Transport: gloutonTypes.NewHTTPTransport(tlsConfig, nil),
 		}
 	}
 

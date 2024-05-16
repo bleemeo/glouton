@@ -20,10 +20,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"sort"
 	"strings"
 	"time"
 
+	"github.com/bleemeo/bleemeo-go"
 	"github.com/bleemeo/glouton/bleemeo/internal/common"
 	"github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/discovery"
@@ -115,26 +117,32 @@ func (s *Synchronizer) syncServices(ctx context.Context, fullSync bool, onlyEsse
 }
 
 func (s *Synchronizer) serviceUpdateList() error {
-	params := map[string]string{
-		"agent":  s.agentID,
-		"fields": "id,label,instance,listen_addresses,exe_path,stack,active,created_at",
+	params := url.Values{
+		"agent":  {s.agentID},
+		"fields": {"id,label,instance,listen_addresses,exe_path,stack,active,created_at"},
 	}
 
-	result, err := s.client.Iter(s.ctx, "service", params)
+	iter := s.client.Iterator(bleemeo.ResourceService, params)
+
+	count, err := iter.Count(s.ctx)
 	if err != nil {
 		return err
 	}
 
-	services := make([]types.Service, 0, len(result))
+	services := make([]types.Service, 0, count)
 
-	for _, jsonMessage := range result {
+	for iter.Next(s.ctx) {
 		var service types.Service
 
-		if err := json.Unmarshal(jsonMessage, &service); err != nil {
+		if err = json.Unmarshal(iter.At(), &service); err != nil {
 			continue
 		}
 
 		services = append(services, service)
+	}
+
+	if iter.Err() != nil {
+		return iter.Err()
 	}
 
 	s.option.Cache.SetServices(services)
@@ -174,9 +182,7 @@ func (s *Synchronizer) serviceRegisterAndUpdate(localServices []discovery.Servic
 	remoteServices := s.option.Cache.Services()
 	remoteServicesByKey := common.ServiceLookupFromList(remoteServices)
 	registeredServices := s.option.Cache.ServicesByUUID()
-	params := map[string]string{
-		"fields": "id,label,instance,listen_addresses,exe_path,stack,active,account,agent,created_at",
-	}
+	serviceFields := "id,label,instance,listen_addresses,exe_path,stack,active,account,agent,created_at"
 
 	for _, srv := range localServices {
 		if _, ok := s.delayedContainer[srv.ContainerID]; ok {
@@ -203,7 +209,7 @@ func (s *Synchronizer) serviceRegisterAndUpdate(localServices []discovery.Servic
 		var result types.Service
 
 		if remoteFound {
-			_, err := s.client.Do(s.ctx, "PUT", fmt.Sprintf("v1/service/%s/", remoteSrv.ID), params, payload, &result)
+			err := s.client.Update(s.ctx, bleemeo.ResourceService, remoteSrv.ID, payload, serviceFields, &result)
 			if err != nil {
 				return err
 			}
@@ -211,7 +217,7 @@ func (s *Synchronizer) serviceRegisterAndUpdate(localServices []discovery.Servic
 			registeredServices[result.ID] = result
 			logger.V(2).Printf("Service %v updated with UUID %s", key, result.ID)
 		} else {
-			_, err := s.client.Do(s.ctx, "POST", "v1/service/", params, payload, &result)
+			err := s.client.Create(s.ctx, bleemeo.ResourceService, payload, serviceFields, &result)
 			if err != nil {
 				return err
 			}
@@ -328,10 +334,7 @@ func (s *Synchronizer) serviceDeactivateNonLocal(localServices []discovery.Servi
 
 // serviceDeactivate makes a PUT request to the Bleemeo API to mark the given service as inactive.
 func (s *Synchronizer) serviceDeactivate(service types.Service) (types.Service, error) {
-	params := map[string]string{
-		"fields": "id,label,instance,listen_addresses,exe_path,stack,active,account,agent,created_at",
-	}
-
+	fields := "id,label,instance,listen_addresses,exe_path,stack,active,account,agent,created_at"
 	payload := servicePayload{
 		Service: types.Service{
 			Active:          false,
@@ -347,7 +350,7 @@ func (s *Synchronizer) serviceDeactivate(service types.Service) (types.Service, 
 
 	var result types.Service
 
-	_, err := s.client.Do(s.ctx, "PUT", fmt.Sprintf("v1/service/%s/", service.ID), params, payload, &result)
+	err := s.client.Update(s.ctx, bleemeo.ResourceService, service.ID, payload, fields, &result)
 
 	return result, err
 }

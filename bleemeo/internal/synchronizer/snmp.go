@@ -21,6 +21,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/bleemeo/bleemeo-go"
 	"github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/logger"
 	"github.com/bleemeo/glouton/prometheus/exporter/snmp"
@@ -119,9 +120,7 @@ func (s *Synchronizer) snmpRegisterAndUpdate(localTargets []*snmp.Target) error 
 		return errRetryLater
 	}
 
-	params := map[string]string{
-		"fields": "id,display_name,account,agent_type,abstracted,fqdn,initial_password,created_at,next_config_at,current_config,tags,initial_server_group_name",
-	}
+	snmpAgentFields := "id,display_name,account,agent_type,abstracted,fqdn,initial_password,created_at,next_config_at,current_config,tags,initial_server_group_name"
 
 	for _, snmp := range localTargets {
 		if _, err := s.FindSNMPAgent(s.ctx, snmp, agentTypeID, remoteAgentList); err != nil && !errors.Is(err, errNotExist) {
@@ -166,7 +165,7 @@ func (s *Synchronizer) snmpRegisterAndUpdate(localTargets []*snmp.Target) error 
 			InitialServerGroup: serverGroup,
 		}
 
-		tmp, err := s.remoteRegisterSNMP(params, payload)
+		tmp, err := s.remoteRegisterSNMP(snmpAgentFields, payload)
 		if err != nil {
 			return err
 		}
@@ -191,10 +190,10 @@ func (s *Synchronizer) snmpRegisterAndUpdate(localTargets []*snmp.Target) error 
 	return nil
 }
 
-func (s *Synchronizer) remoteRegisterSNMP(params map[string]string, payload payloadAgent) (types.Agent, error) {
+func (s *Synchronizer) remoteRegisterSNMP(fields string, payload payloadAgent) (types.Agent, error) {
 	var result types.Agent
 
-	_, err := s.client.Do(s.ctx, "POST", "v1/agent/", params, payload, &result)
+	err := s.client.Create(s.ctx, bleemeo.ResourceAgent, payload, fields, &result)
 	if err != nil {
 		return result, err
 	}

@@ -19,9 +19,9 @@ package synchronizer
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"time"
 
+	"github.com/bleemeo/bleemeo-go"
 	"github.com/bleemeo/glouton/bleemeo/client"
 	"github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/facts"
@@ -132,23 +132,27 @@ func (s *Synchronizer) syncFacts(ctx context.Context, fullSync bool, onlyEssenti
 }
 
 func (s *Synchronizer) factsUpdateList(ctx context.Context) error {
-	params := map[string]string{}
+	iter := s.client.Iterator(bleemeo.ResourceAgentFact, nil)
 
-	result, err := s.client.Iter(ctx, "agentfact", params)
+	count, err := iter.Count(ctx)
 	if err != nil {
 		return err
 	}
 
-	facts := make([]types.AgentFact, 0, len(result))
+	facts := make([]types.AgentFact, 0, count)
 
-	for _, jsonMessage := range result {
+	for iter.Next(ctx) {
 		var fact types.AgentFact
 
-		if err := json.Unmarshal(jsonMessage, &fact); err != nil {
+		if err = json.Unmarshal(iter.At(), &fact); err != nil {
 			continue
 		}
 
 		facts = append(facts, fact)
+	}
+
+	if iter.Err() != nil {
+		return iter.Err()
 	}
 
 	s.option.Cache.SetFacts(facts)
@@ -178,7 +182,7 @@ func (s *Synchronizer) factRegister(allAgentFacts map[string]map[string]string) 
 
 			var response types.AgentFact
 
-			_, err := s.client.Do(s.ctx, "POST", "v1/agentfact/", nil, payload, &response)
+			err := s.client.Create(s.ctx, bleemeo.ResourceAgentFact, payload, "", &response)
 			if err != nil {
 				return err
 			}
@@ -207,7 +211,7 @@ func (s *Synchronizer) factDeleteFromLocal(allAgentFacts map[string]map[string]s
 			continue
 		}
 
-		_, err := s.client.Do(s.ctx, "DELETE", fmt.Sprintf("v1/agentfact/%s/", v.ID), nil, nil, nil)
+		err := s.client.Delete(s.ctx, bleemeo.ResourceAgentFact, v.ID)
 		// If the fact was not found it has already been deleted.
 		if err != nil && !client.IsNotFound(err) {
 			return err

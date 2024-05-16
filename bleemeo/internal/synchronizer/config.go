@@ -20,8 +20,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"reflect"
 
+	"github.com/bleemeo/bleemeo-go"
 	"github.com/bleemeo/glouton/bleemeo/client"
 	"github.com/bleemeo/glouton/bleemeo/internal/common"
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
@@ -83,22 +85,24 @@ func (s *Synchronizer) syncConfig(
 
 // fetchAllConfigItems returns the remote config items in a map of config value by comparableConfigItem.
 func (s *Synchronizer) fetchAllConfigItems(ctx context.Context) (map[comparableConfigItem]configItemValue, error) {
-	params := map[string]string{
-		"fields": "id,agent,key,value,priority,source,path,type",
-		"agent":  s.agentID,
+	params := url.Values{
+		"fields": {"id,agent,key,value,priority,source,path,type"},
+		"agent":  {s.agentID},
 	}
 
-	result, err := s.client.Iter(ctx, "gloutonconfigitem", params)
+	iter := s.client.Iterator(bleemeo.ResourceGloutonConfigItem, params)
+
+	count, err := iter.Count(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("client iter: %w", err)
 	}
 
-	items := make(map[comparableConfigItem]configItemValue, len(result))
+	items := make(map[comparableConfigItem]configItemValue, count)
 
-	for _, jsonMessage := range result {
+	for iter.Next(ctx) {
 		var item bleemeoTypes.GloutonConfigItem
 
-		if err := json.Unmarshal(jsonMessage, &item); err != nil {
+		if err = json.Unmarshal(iter.At(), &item); err != nil {
 			logger.V(2).Printf("Failed to unmarshal config item: %v", err)
 
 			continue
@@ -116,6 +120,10 @@ func (s *Synchronizer) fetchAllConfigItems(ctx context.Context) (map[comparableC
 			ID:    item.ID,
 			Value: item.Value,
 		}
+	}
+
+	if iter.Err() != nil {
+		return nil, iter.Err()
 	}
 
 	return items, nil
@@ -243,7 +251,7 @@ func (s *Synchronizer) registerLocalConfigItems(
 			end = len(itemsToRegister)
 		}
 
-		_, err := s.client.Do(ctx, "POST", "v1/gloutonconfigitem/", nil, itemsToRegister[start:end], nil)
+		err := s.client.Create(ctx, bleemeo.ResourceGloutonConfigItem, itemsToRegister[start:end], "", nil)
 		if err != nil {
 			return err
 		}
@@ -272,7 +280,7 @@ func (s *Synchronizer) removeRemoteConfigItems(
 			continue
 		}
 
-		_, err := s.client.Do(ctx, "DELETE", fmt.Sprintf("v1/gloutonconfigitem/%s/", remoteItem.ID), nil, nil, nil)
+		err := s.client.Delete(ctx, bleemeo.ResourceGloutonConfigItem, remoteItem.ID)
 		if err != nil {
 			// Ignore the error if the item has already been deleted.
 			if client.IsNotFound(err) {

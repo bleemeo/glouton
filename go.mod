@@ -9,6 +9,7 @@ require (
 	github.com/99designs/gqlgen v0.17.45
 	github.com/AstromechZA/etcpwdparse v0.0.0-20170319193008-f0e5f0779716
 	github.com/alecthomas/kingpin/v2 v2.4.0
+	github.com/bleemeo/bleemeo-go v0.0.0-00010101000000-000000000000
 	github.com/cespare/xxhash/v2 v2.3.0
 	github.com/containerd/cgroups/v3 v3.0.3
 	github.com/containerd/containerd v1.7.15
@@ -54,7 +55,7 @@ require (
 	github.com/yusufpapurcu/wmi v1.2.4
 	go.opentelemetry.io/otel v1.25.0
 	go.opentelemetry.io/otel/metric v1.25.0
-	golang.org/x/oauth2 v0.19.0
+	golang.org/x/oauth2 v0.20.0
 	golang.org/x/sync v0.7.0
 	golang.org/x/sys v0.19.0
 	google.golang.org/protobuf v1.33.0
@@ -262,3 +263,5 @@ require (
 	sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.4.1 // indirect
 )
+
+replace github.com/bleemeo/bleemeo-go => ../bleemeo-go // TODO: remove once bleemeo-go is published
