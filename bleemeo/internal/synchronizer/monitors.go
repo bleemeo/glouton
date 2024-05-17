@@ -18,13 +18,10 @@ package synchronizer
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"net/url"
 	"time"
 
-	"github.com/bleemeo/bleemeo-go"
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/logger"
 	"github.com/bleemeo/glouton/prometheus/exporter/blackbox"
@@ -108,7 +105,7 @@ func (s *Synchronizer) syncMonitors(_ context.Context, fullSync bool, onlyEssent
 	var monitors []bleemeoTypes.Monitor
 
 	if fullSync {
-		monitors, err = s.getMonitorsFromAPI()
+		monitors, err = s.client.listMonitors(s.ctx)
 		if err != nil {
 			return false, err
 		}
@@ -208,39 +205,6 @@ func (s *Synchronizer) ApplyMonitorUpdate() error {
 	return nil
 }
 
-func (s *Synchronizer) getMonitorsFromAPI() ([]bleemeoTypes.Monitor, error) {
-	params := url.Values{
-		"monitor": {"true"},
-		"active":  {"true"},
-		"fields":  {monitorFields},
-	}
-
-	iter := s.client.Iterator(bleemeo.ResourceService, params)
-
-	count, err := iter.Count(s.ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	monitors := make([]bleemeoTypes.Monitor, 0, count)
-
-	for iter.Next(s.ctx) {
-		var monitor bleemeoTypes.Monitor
-
-		if err = json.Unmarshal(iter.At(), &monitor); err != nil {
-			return nil, fmt.Errorf("%w %v", errCannotParse, string(iter.At()))
-		}
-
-		monitors = append(monitors, monitor)
-	}
-
-	if iter.Err() != nil {
-		return nil, iter.Err()
-	}
-
-	return monitors, nil
-}
-
 // should we try to modify as much monitors as possible, and return a list of errors, instead of failing early ?
 func (s *Synchronizer) getListOfMonitorsFromAPI(pendingMonitorsUpdate []MonitorUpdate) ([]bleemeoTypes.Monitor, error) {
 	currentMonitors := s.option.Cache.Monitors()
@@ -259,8 +223,7 @@ OuterBreak:
 			continue
 		}
 
-		var result bleemeoTypes.Monitor
-		err := s.client.Get(s.ctx, bleemeo.ResourceService, m.uuid, monitorFields, &result)
+		result, err := s.client.getMonitorByID(s.ctx, m.uuid)
 		if err != nil {
 			// Delete the monitor locally if it was not found on the API.
 			if IsNotFound(err) {

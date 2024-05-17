@@ -18,11 +18,8 @@ package synchronizer
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
-	"net/url"
 
-	"github.com/bleemeo/bleemeo-go"
 	"github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/logger"
 )
@@ -53,8 +50,6 @@ func (s *Synchronizer) syncAgent(ctx context.Context, fullSync bool, onlyEssenti
 }
 
 func (s *Synchronizer) syncMainAgent(ctx context.Context) error {
-	var agent types.Agent
-
 	data := map[string][]types.Tag{
 		"tags": make([]types.Tag, 0),
 	}
@@ -67,7 +62,7 @@ func (s *Synchronizer) syncMainAgent(ctx context.Context) error {
 
 	previousAgent := s.option.Cache.Agent()
 
-	err := s.client.Update(ctx, bleemeo.ResourceAgent, s.agentID, data, agentFields, &agent)
+	agent, err := s.client.updateAgent(ctx, s.agentID, data)
 	if err != nil {
 		return err
 	}
@@ -103,31 +98,9 @@ func (s *Synchronizer) syncMainAgent(ctx context.Context) error {
 func (s *Synchronizer) agentsUpdateList() error {
 	oldAgents := s.option.Cache.AgentsByUUID()
 
-	params := url.Values{
-		"fields": {agentFields},
-	}
-
-	iter := s.client.Iterator(bleemeo.ResourceAgent, params)
-
-	count, err := iter.Count(s.ctx)
+	agents, err := s.client.listAgents(s.ctx)
 	if err != nil {
 		return err
-	}
-
-	agents := make([]types.Agent, 0, count)
-
-	for iter.Next(s.ctx) {
-		var agent types.Agent
-
-		if err = json.Unmarshal(iter.At(), &agent); err != nil {
-			continue
-		}
-
-		agents = append(agents, agent)
-	}
-
-	if iter.Err() != nil {
-		return iter.Err()
 	}
 
 	s.option.Cache.SetAgentList(agents)

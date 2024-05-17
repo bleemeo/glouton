@@ -201,43 +201,6 @@ func (cl *wrapperClient) DoWithBody(ctx context.Context, reqURI string, contentT
 	return resp.StatusCode, nil
 }
 
-// VerifyAndGetToken is used to get a valid token.
-// It differs from GetToken because the token is only renewed if necessary.
-func (cl *wrapperClient) VerifyAndGetToken(ctx context.Context, agentID string) (string, error) {
-	if cl == nil {
-		return "", errClientUninitialized
-	}
-
-	if err := cl.dupCheck(); err != nil {
-		return "", err
-	}
-
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
-
-	var res struct {
-		ID string `json:"id"`
-	}
-
-	// Low-cost API endpoint, used to test the validity of our token.
-	// We rely on the client to renew the token if it has expired.
-	err := cl.Get(ctx, bleemeo.ResourceAgent, agentID, "id", &res)
-	if err != nil {
-		return "", err
-	}
-
-	if res.ID != agentID {
-		return "", errInvalidAgentID
-	}
-
-	token, err := cl.client.GetToken(ctx)
-	if err != nil {
-		return "", err
-	}
-
-	return token.AccessToken, nil
-}
-
 // errorIterator implements [bleemeo.Iterator] but only returns an error.
 type errorIterator struct {
 	err error

@@ -159,7 +159,7 @@ func (s *Synchronizer) syncInfoReal(ctx context.Context, disableOnTimeDrift bool
 				StatusDescription: []string{"Agent local time too different from actual time"},
 			}
 
-			err = s.client.Update(ctx, bleemeo.ResourceMetric, metric.ID, payload, mqttUpdateResponseFields, nil)
+			err = s.client.updateMetric(ctx, metric.ID, payload, mqttUpdateResponseFields)
 			if err != nil {
 				return false, err
 			}
@@ -256,7 +256,7 @@ func (s *Synchronizer) updateMQTTStatus() error {
 			StatusDescription: []string{msg},
 		}
 
-		err := s.client.Update(s.ctx, bleemeo.ResourceMetric, metric.ID, payload, mqttUpdateResponseFields, nil)
+		err := s.client.updateMetric(s.ctx, metric.ID, payload, mqttUpdateResponseFields)
 		if err != nil {
 			return err
 		}

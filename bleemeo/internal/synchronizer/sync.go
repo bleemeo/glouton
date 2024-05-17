@@ -702,9 +702,37 @@ func (s *Synchronizer) ClearDisable(reasonToClear bleemeoTypes.DisableReason, de
 	}
 }
 
-// GetToken to talk to the Bleemeo API.
-func (s *Synchronizer) GetToken(ctx context.Context) (string, error) {
-	return s.client.VerifyAndGetToken(ctx, s.agentID)
+// VerifyAndGetToken is used to get a valid token.
+func (s *Synchronizer) VerifyAndGetToken(ctx context.Context) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	// Low-cost API endpoint, used to test the validity of our token.
+	// We rely on the client to renew the token if it has expired.
+	result, err := s.realClient.Get(ctx, bleemeo.ResourceAgent, s.agentID, "id")
+	if err != nil {
+		return "", err
+	}
+
+	var res struct {
+		ID string `json:"id"`
+	}
+
+	err = json.Unmarshal(result, &res)
+	if err != nil {
+		return "", err
+	}
+
+	if res.ID != s.agentID {
+		return "", errInvalidAgentID
+	}
+
+	token, err := s.realClient.GetToken(ctx)
+	if err != nil {
+		return "", err
+	}
+
+	return token.AccessToken, nil
 }
 
 func (s *Synchronizer) setClient() error {
@@ -1102,11 +1130,7 @@ func (s *Synchronizer) checkDuplicated(ctx context.Context) error {
 	}
 
 	// The agent is duplicated, update the last duplication date on the API.
-	data := map[string]time.Time{
-		"last_duplication_date": time.Now(),
-	}
-
-	err := s.client.Update(s.ctx, bleemeo.ResourceAgent, s.agentID, data, "last_duplication_date", nil)
+	err := s.client.updateAgentLastDuplicationDate(s.ctx, s.agentID, time.Now())
 	if err != nil {
 		logger.V(1).Printf("Failed to update duplication date: %s", err)
 	}

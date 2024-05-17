@@ -89,19 +89,13 @@ func (s *Synchronizer) fetchAllConfigItems(ctx context.Context) (map[comparableC
 		"agent":  {s.agentID},
 	}
 
+	items := make(map[comparableConfigItem]configItemValue)
+
 	iter := s.client.Iterator(bleemeo.ResourceGloutonConfigItem, params)
-
-	count, err := iter.Count(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("client iter: %w", err)
-	}
-
-	items := make(map[comparableConfigItem]configItemValue, count)
-
 	for iter.Next(ctx) {
 		var item bleemeoTypes.GloutonConfigItem
 
-		if err = json.Unmarshal(iter.At(), &item); err != nil {
+		if err := json.Unmarshal(iter.At(), &item); err != nil {
 			logger.V(2).Printf("Failed to unmarshal config item: %v", err)
 
 			continue
@@ -250,7 +244,7 @@ func (s *Synchronizer) registerLocalConfigItems(
 			end = len(itemsToRegister)
 		}
 
-		err := s.client.Create(ctx, bleemeo.ResourceGloutonConfigItem, itemsToRegister[start:end], "", nil)
+		err := s.client.registerGloutonConfigItems(ctx, itemsToRegister[start:end])
 		if err != nil {
 			return err
 		}
@@ -279,7 +273,7 @@ func (s *Synchronizer) removeRemoteConfigItems(
 			continue
 		}
 
-		err := s.client.Delete(ctx, bleemeo.ResourceGloutonConfigItem, remoteItem.ID)
+		err := s.client.deleteGloutonConfigItem(ctx, remoteItem.ID)
 		if err != nil {
 			// Ignore the error if the item has already been deleted.
 			if IsNotFound(err) {

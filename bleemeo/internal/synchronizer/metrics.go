@@ -18,7 +18,6 @@ package synchronizer
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/url"
@@ -28,7 +27,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bleemeo/bleemeo-go"
 	"github.com/bleemeo/glouton/bleemeo/internal/common"
 	"github.com/bleemeo/glouton/bleemeo/internal/filter"
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
@@ -703,49 +701,21 @@ func (s *Synchronizer) isOwnedMetric(metric metricPayload) bool {
 
 // metricsListWithAgentID fetches the list of all metrics for a given agent, and returns a UUID:metric mapping.
 func (s *Synchronizer) metricsListWithAgentID(fetchInactive bool) (map[string]bleemeoTypes.Metric, error) {
-	params := url.Values{
-		"fields": {metricFields},
-	}
-
-	if fetchInactive {
-		params.Set("active", stringFalse)
-	} else {
-		params.Set("active", stringTrue)
-	}
-
-	iter := s.client.Iterator(bleemeo.ResourceMetric, params)
-
-	count, err := iter.Count(s.ctx)
+	// If the metric is associated with another agent, make sure we "own" the metric.
+	// This may not be the case for monitor because multiple agents will process such metrics.
+	metricsByUUID, err := s.client.listActiveMetrics(s.ctx, !fetchInactive, s.isOwnedMetric)
 	if err != nil {
 		return nil, err
 	}
 
-	metricsByUUID := make(map[string]bleemeoTypes.Metric, count)
-
 	for _, m := range s.option.Cache.Metrics() {
+		if _, found := metricsByUUID[m.ID]; found {
+			continue
+		}
+
 		if m.DeactivatedAt.IsZero() == fetchInactive {
 			metricsByUUID[m.ID] = m
 		}
-	}
-
-	for iter.Next(s.ctx) {
-		var metric metricPayload
-
-		if err = json.Unmarshal(iter.At(), &metric); err != nil {
-			continue
-		}
-
-		// If the metric is associated with another agent, make sure we "own" the metric.
-		// This may not be the case for monitor because multiple agent will process such metrics.
-		if !s.isOwnedMetric(metric) {
-			continue
-		}
-
-		metricsByUUID[metric.ID] = metric.metricFromAPI(metricsByUUID[metric.ID].FirstSeenAt)
-	}
-
-	if iter.Err() != nil {
-		return nil, iter.Err()
 	}
 
 	return metricsByUUID, nil
@@ -777,14 +747,7 @@ func (s *Synchronizer) metricUpdateInactiveList(metrics []types.Metric, allowLis
 		return s.metricUpdateList(metrics)
 	}
 
-	count, err := s.client.Count(
-		s.ctx,
-		bleemeo.ResourceMetric,
-		url.Values{
-			"fields": {"id"},
-			"active": {"False"},
-		},
-	)
+	count, err := s.client.countInactiveMetrics(s.ctx)
 	if err != nil {
 		return err
 	}
@@ -825,33 +788,30 @@ func (s *Synchronizer) metricUpdateList(metrics []types.Metric) error {
 			params.Del("labels_text")
 		}
 
-		iter := s.client.Iterator(bleemeo.ResourceMetric, params)
-		for iter.Next(s.ctx) {
-			var metric metricPayload
-
-			if err := json.Unmarshal(iter.At(), &metric); err != nil {
-				continue
-			}
-
-			// Do not modify metrics declared by other agents when the target agent is a monitor
-			agentUUID, present := types.TextToLabels(metric.LabelsText)[types.LabelScraperUUID]
-
+		metricFilter := func(m metricPayload) bool {
+			// Don't modify metrics declared by other agents when the target agent is a monitor
+			agentUUID, present := types.TextToLabels(m.LabelsText)[types.LabelScraperUUID]
 			if present && agentUUID != s.agentID {
-				continue
+				return false
 			}
 
 			if !present {
-				scraperName, present := types.TextToLabels(metric.LabelsText)[types.LabelScraper]
+				scraperName, present := types.TextToLabels(m.LabelsText)[types.LabelScraper]
 				if present && scraperName != s.option.BlackboxScraperName {
-					continue
+					return false
 				}
 			}
 
-			metricsByUUID[metric.ID] = metric.metricFromAPI(metricsByUUID[metric.ID].FirstSeenAt)
+			return true
 		}
 
-		if iter.Err() != nil {
-			return iter.Err()
+		listedMetrics, err := s.client.listMetricsBy(s.ctx, params, metricFilter)
+		if err != nil {
+			return err
+		}
+
+		for id, metric := range listedMetrics {
+			metricsByUUID[id] = metric
 		}
 	}
 
@@ -870,15 +830,7 @@ func (s *Synchronizer) metricUpdateListUUID(requests []string) error {
 	metricsByUUID := s.option.Cache.MetricsByUUID()
 
 	for _, key := range requests {
-		var metric metricPayload
-
-		err := s.client.Get(
-			s.ctx,
-			bleemeo.ResourceMetric,
-			key,
-			metricFields,
-			&metric,
-		)
+		metric, err := s.client.getMetricByID(s.ctx, key)
 		if err != nil && IsNotFound(err) {
 			delete(metricsByUUID, key)
 
@@ -1226,7 +1178,7 @@ func (mr *metricRegisterer) metricRegisterAndUpdateOne(metric types.Metric) erro
 
 	var result metricPayload
 
-	err = mr.s.client.Create(mr.s.ctx, bleemeo.ResourceMetric, payload, metricFields, &result)
+	err = mr.s.client.registerMetric(mr.s.ctx, payload, &result)
 	if err != nil {
 		return err
 	}
@@ -1389,7 +1341,7 @@ func (s *Synchronizer) metricUpdateOne(metric types.Metric, remoteMetric bleemeo
 			fields = append(fields, k)
 		}
 
-		err := s.client.Update(s.ctx, bleemeo.ResourceMetric, remoteMetric.ID, updates, strings.Join(fields, ","), nil)
+		err := s.client.updateMetric(s.ctx, remoteMetric.ID, updates, strings.Join(fields, ","))
 		if err != nil && IsNotFound(err) {
 			return remoteMetric, needRegisterError{remoteMetric: remoteMetric}
 		} else if err != nil {
@@ -1421,7 +1373,7 @@ func (s *Synchronizer) metricDeleteIgnoredServices() error {
 		metricKey := s.metricKey(labels, srv.AnnotationsOfStatus())
 
 		if metric, ok := registeredMetricsByKey[metricKey]; ok {
-			err = s.client.Delete(s.ctx, bleemeo.ResourceMetric, metric.ID)
+			err = s.client.deleteMetric(s.ctx, metric.ID)
 
 			// If the metric wasn't found, it has already been deleted.
 			if err != nil && !IsNotFound(err) {
@@ -1539,7 +1491,7 @@ func (s *Synchronizer) metricDeactivate(localMetrics []types.Metric) error {
 
 		logger.V(2).Printf("Mark inactive the metric %v (uuid %s)", key, v.ID)
 
-		err := s.client.Update(s.ctx, bleemeo.ResourceMetric, v.ID, map[string]string{"active": stringFalse}, "active", nil)
+		err := s.client.deactivateMetric(s.ctx, v.ID)
 		if err != nil && IsNotFound(err) {
 			delete(registeredMetrics, k)
 

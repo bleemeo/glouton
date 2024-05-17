@@ -22,7 +22,6 @@ import (
 	"slices"
 	"time"
 
-	"github.com/bleemeo/bleemeo-go"
 	"github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/inputs/vsphere"
 	"github.com/bleemeo/glouton/logger"
@@ -34,6 +33,7 @@ const (
 	tooManyConsecutiveError       = 3
 	vSphereAgentsPurgeMinInterval = 2 * time.Minute
 	vSphereCachePrefix            = "bleemeo:vsphere:"
+	vSphereAgentFields            = "id,display_name,account,agent_type,abstracted,fqdn,initial_password,created_at,next_config_at,current_config,tags,initial_server_group_name"
 )
 
 func (s *Synchronizer) syncVSphere(ctx context.Context, fullSync bool, onlyEssential bool) (updateThresholds bool, err error) {
@@ -123,7 +123,6 @@ func (s *Synchronizer) VSphereRegisterAndUpdate(localDevices []types.VSphereDevi
 
 	remoteAgentList := s.option.Cache.AgentsByUUID()
 
-	vSphereAgentFields := "id,display_name,account,agent_type,abstracted,fqdn,initial_password,created_at,next_config_at,current_config,tags,initial_server_group_name"
 	seenDeviceAgents := make(map[string]string, len(localDevices))
 
 	var ( //nolint: prealloc
@@ -166,7 +165,7 @@ func (s *Synchronizer) VSphereRegisterAndUpdate(localDevices []types.VSphereDevi
 			InitialServerGroup: serverGroup,
 		}
 
-		registeredAgent, err := s.remoteRegisterVSphereDevice(vSphereAgentFields, payload)
+		registeredAgent, err := s.remoteRegisterVSphereDevice(payload)
 		if err != nil {
 			errs = append(errs, err)
 
@@ -214,10 +213,8 @@ func (s *Synchronizer) VSphereRegisterAndUpdate(localDevices []types.VSphereDevi
 	return errors.Join(errs...)
 }
 
-func (s *Synchronizer) remoteRegisterVSphereDevice(fields string, payload payloadAgent) (types.Agent, error) {
-	var result types.Agent
-
-	err := s.client.Create(s.ctx, bleemeo.ResourceAgent, payload, fields, &result)
+func (s *Synchronizer) remoteRegisterVSphereDevice(payload payloadAgent) (types.Agent, error) {
+	result, err := s.client.registerVSphereAgent(s.ctx, payload)
 	if err != nil {
 		return result, err
 	}
@@ -315,7 +312,7 @@ func (s *Synchronizer) purgeVSphereAgents(remoteAgents map[string]types.Agent, s
 
 		agentsToRemoveFromCache[id] = true
 
-		err = s.client.Delete(s.ctx, bleemeo.ResourceAgent, id)
+		err = s.client.deleteAgent(s.ctx, id)
 		if err != nil && !IsNotFound(err) {
 			return err
 		}

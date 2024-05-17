@@ -18,14 +18,9 @@ package synchronizer
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
-	"mime"
-	"net/url"
 	"reflect"
 
-	"github.com/bleemeo/bleemeo-go"
-	"github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/logger"
 )
 
@@ -75,31 +70,9 @@ func (s *Synchronizer) syncAccountConfig(ctx context.Context, fullSync bool, onl
 }
 
 func (s *Synchronizer) agentTypesUpdateList() error {
-	params := url.Values{
-		"fields": {"id,name,display_name"},
-	}
-
-	iter := s.client.Iterator(bleemeo.ResourceAgentType, params)
-
-	count, err := iter.Count(s.ctx)
+	agentTypes, err := s.client.listAgentTypes(s.ctx)
 	if err != nil {
 		return err
-	}
-
-	agentTypes := make([]types.AgentType, 0, count)
-
-	for iter.Next(s.ctx) {
-		var agentType types.AgentType
-
-		if err = json.Unmarshal(iter.At(), &agentType); err != nil {
-			continue
-		}
-
-		agentTypes = append(agentTypes, agentType)
-	}
-
-	if iter.Err() != nil {
-		return iter.Err()
 	}
 
 	s.option.Cache.SetAgentTypes(agentTypes)
@@ -108,31 +81,9 @@ func (s *Synchronizer) agentTypesUpdateList() error {
 }
 
 func (s *Synchronizer) accountConfigUpdateList() error {
-	params := url.Values{
-		"fields": {"id,name,live_process_resolution,live_process,docker_integration,snmp_integration,vsphere_integration,number_of_custom_metrics,suspended"},
-	}
-
-	iter := s.client.Iterator(bleemeo.ResourceAccountConfig, params)
-
-	count, err := iter.Count(s.ctx)
+	configs, err := s.client.listAccountConfigs(s.ctx)
 	if err != nil {
 		return err
-	}
-
-	configs := make([]types.AccountConfig, 0, count)
-
-	for iter.Next(s.ctx) {
-		var config types.AccountConfig
-
-		if err = json.Unmarshal(iter.At(), &config); err != nil {
-			continue
-		}
-
-		configs = append(configs, config)
-	}
-
-	if iter.Err() != nil {
-		return iter.Err()
 	}
 
 	s.option.Cache.SetAccountConfigs(configs)
@@ -141,41 +92,16 @@ func (s *Synchronizer) accountConfigUpdateList() error {
 }
 
 func (s *Synchronizer) agentConfigUpdateList() error {
-	params := url.Values{
-		"fields": {"id,account_config,agent_type,metrics_allowlist,metrics_resolution"},
-	}
-
-	iter := s.client.Iterator(bleemeo.ResourceAgentConfig, params)
-
-	count, err := iter.Count(s.ctx)
-	if apiErr := new(bleemeo.APIError); errors.As(err, &apiErr) {
-		mediatype, _, err := mime.ParseMediaType(apiErr.ContentType)
-		if err == nil && mediatype == "text/html" {
-			logger.V(2).Printf("Bleemeo API doesn't support AgentConfig")
+	configs, err := s.client.listAgentConfigs(s.ctx)
+	if err != nil {
+		if errors.Is(err, errAgentConfigNotSupported) {
+			logger.V(2).Printf(err.Error())
 			s.option.Cache.SetAgentConfigs(nil)
 
 			return nil
 		}
-	}
 
-	if err != nil {
 		return err
-	}
-
-	configs := make([]types.AgentConfig, 0, count)
-
-	for iter.Next(s.ctx) {
-		var config types.AgentConfig
-
-		if err = json.Unmarshal(iter.At(), &config); err != nil {
-			continue
-		}
-
-		configs = append(configs, config)
-	}
-
-	if iter.Err() != nil {
-		return iter.Err()
 	}
 
 	s.option.Cache.SetAgentConfigs(configs)

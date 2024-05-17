@@ -19,16 +19,13 @@ package synchronizer
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"mime/multipart"
-	"net/http"
 	"path/filepath"
 	"strconv"
 
-	"github.com/bleemeo/bleemeo-go"
 	"github.com/bleemeo/glouton/crashreport"
 	"github.com/bleemeo/glouton/logger"
 	gloutonTypes "github.com/bleemeo/glouton/types"
@@ -56,7 +53,7 @@ const (
 )
 
 func (s *Synchronizer) syncDiagnostics(ctx context.Context, _, _ bool) (updateThresholds bool, err error) {
-	remoteDiagnostics, err := s.listRemoteDiagnostics(ctx)
+	remoteDiagnostics, err := s.client.listDiagnostics(ctx)
 	if err != nil {
 		return false, fmt.Errorf("failed to list remote diagnostics: %w", err)
 	}
@@ -118,35 +115,6 @@ func (s *Synchronizer) listOnDemandDiagnostics() []diagnosticWithBleemeoInfo {
 	return nil
 }
 
-func (s *Synchronizer) listRemoteDiagnostics(ctx context.Context) ([]RemoteDiagnostic, error) {
-	iter := s.client.Iterator(bleemeo.ResourceGloutonDiagnostic, nil)
-
-	count, err := iter.Count(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("client iter count: %w", err)
-	}
-
-	diagnostics := make([]RemoteDiagnostic, 0, count)
-
-	for iter.Next(ctx) {
-		var remoteDiagnostic RemoteDiagnostic
-
-		if err = json.Unmarshal(iter.At(), &remoteDiagnostic); err != nil {
-			logger.V(2).Printf("Failed to unmarshal diagnostic: %v", err)
-
-			continue
-		}
-
-		diagnostics = append(diagnostics, remoteDiagnostic)
-	}
-
-	if iter.Err() != nil {
-		return nil, iter.Err()
-	}
-
-	return diagnostics, nil
-}
-
 func (s *Synchronizer) uploadDiagnostics(ctx context.Context, diagnostics []diagnosticWithBleemeoInfo) error {
 	for _, diagnostic := range diagnostics {
 		if err := s.uploadDiagnostic(ctx, diagnostic); err != nil {
@@ -202,15 +170,9 @@ func (s *Synchronizer) uploadDiagnostic(ctx context.Context, diagnostic diagnost
 
 	multipartWriter.Close()
 
-	contentType := multipartWriter.FormDataContentType()
-
-	statusCode, reqErr := s.client.DoWithBody(ctx, bleemeo.ResourceGloutonDiagnostic, contentType, buf)
-	if reqErr != nil {
-		return reqErr
-	}
-
-	if statusCode != http.StatusCreated {
-		return fmt.Errorf("%w: status %d %s", errUploadFailed, statusCode, http.StatusText(statusCode))
+	err = s.client.uploadDiagnostic(ctx, multipartWriter.FormDataContentType(), buf)
+	if err != nil {
+		return err
 	}
 
 	return diagnostic.MarkUploaded()

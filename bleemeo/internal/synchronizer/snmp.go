@@ -21,7 +21,6 @@ import (
 	"errors"
 	"time"
 
-	"github.com/bleemeo/bleemeo-go"
 	"github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/logger"
 	"github.com/bleemeo/glouton/prometheus/exporter/snmp"
@@ -29,7 +28,10 @@ import (
 	"github.com/google/uuid"
 )
 
-const snmpCachePrefix = "bleemeo:snmp:"
+const (
+	snmpCachePrefix = "bleemeo:snmp:"
+	snmpAgentFields = "id,display_name,account,agent_type,abstracted,fqdn,initial_password,created_at,next_config_at,current_config,tags,initial_server_group_name"
+)
 
 type payloadAgent struct {
 	types.Agent
@@ -120,8 +122,6 @@ func (s *Synchronizer) snmpRegisterAndUpdate(localTargets []*snmp.Target) error 
 		return errRetryLater
 	}
 
-	snmpAgentFields := "id,display_name,account,agent_type,abstracted,fqdn,initial_password,created_at,next_config_at,current_config,tags,initial_server_group_name"
-
 	for _, snmp := range localTargets {
 		if _, err := s.FindSNMPAgent(s.ctx, snmp, agentTypeID, remoteAgentList); err != nil && !errors.Is(err, errNotExist) {
 			logger.V(2).Printf("skip registration of SNMP agent: %v", err)
@@ -165,7 +165,7 @@ func (s *Synchronizer) snmpRegisterAndUpdate(localTargets []*snmp.Target) error 
 			InitialServerGroup: serverGroup,
 		}
 
-		tmp, err := s.remoteRegisterSNMP(snmpAgentFields, payload)
+		tmp, err := s.remoteRegisterSNMP(payload)
 		if err != nil {
 			return err
 		}
@@ -190,10 +190,8 @@ func (s *Synchronizer) snmpRegisterAndUpdate(localTargets []*snmp.Target) error 
 	return nil
 }
 
-func (s *Synchronizer) remoteRegisterSNMP(fields string, payload payloadAgent) (types.Agent, error) {
-	var result types.Agent
-
-	err := s.client.Create(s.ctx, bleemeo.ResourceAgent, payload, fields, &result)
+func (s *Synchronizer) remoteRegisterSNMP(payload payloadAgent) (types.Agent, error) {
+	result, err := s.client.registerSNMPAgent(s.ctx, payload)
 	if err != nil {
 		return result, err
 	}

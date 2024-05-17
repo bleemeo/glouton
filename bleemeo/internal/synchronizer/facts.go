@@ -18,10 +18,8 @@ package synchronizer
 
 import (
 	"context"
-	"encoding/json"
 	"time"
 
-	"github.com/bleemeo/bleemeo-go"
 	"github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/facts"
 	"github.com/bleemeo/glouton/logger"
@@ -131,27 +129,9 @@ func (s *Synchronizer) syncFacts(ctx context.Context, fullSync bool, onlyEssenti
 }
 
 func (s *Synchronizer) factsUpdateList(ctx context.Context) error {
-	iter := s.client.Iterator(bleemeo.ResourceAgentFact, nil)
-
-	count, err := iter.Count(ctx)
+	facts, err := s.client.listFacts(ctx)
 	if err != nil {
 		return err
-	}
-
-	facts := make([]types.AgentFact, 0, count)
-
-	for iter.Next(ctx) {
-		var fact types.AgentFact
-
-		if err = json.Unmarshal(iter.At(), &fact); err != nil {
-			continue
-		}
-
-		facts = append(facts, fact)
-	}
-
-	if iter.Err() != nil {
-		return iter.Err()
 	}
 
 	s.option.Cache.SetFacts(facts)
@@ -179,15 +159,15 @@ func (s *Synchronizer) factRegister(allAgentFacts map[string]map[string]string) 
 				"value": value,
 			}
 
-			var response types.AgentFact
+			var result types.AgentFact
 
-			err := s.client.Create(s.ctx, bleemeo.ResourceAgentFact, payload, "", &response)
+			err := s.client.registerFact(s.ctx, payload, &result)
 			if err != nil {
 				return err
 			}
 
-			facts = append(facts, response)
-			logger.V(2).Printf("Send fact %s:%s, stored with uuid %s", agentID, key, response.ID)
+			facts = append(facts, result)
+			logger.V(2).Printf("Send fact %s:%s, stored with uuid %s", agentID, key, result.ID)
 		}
 	}
 
@@ -210,7 +190,7 @@ func (s *Synchronizer) factDeleteFromLocal(allAgentFacts map[string]map[string]s
 			continue
 		}
 
-		err := s.client.Delete(s.ctx, bleemeo.ResourceAgentFact, v.ID)
+		err := s.client.deleteFact(s.ctx, v.ID)
 		// If the fact wasn't found, it has already been deleted.
 		if err != nil && !IsNotFound(err) {
 			return err

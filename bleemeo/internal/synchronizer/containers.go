@@ -18,13 +18,10 @@ package synchronizer
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"net/url"
 	"strings"
 	"time"
 
-	"github.com/bleemeo/bleemeo-go"
 	"github.com/bleemeo/glouton/bleemeo/internal/common"
 	"github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/facts"
@@ -99,37 +96,19 @@ func (s *Synchronizer) syncContainers(ctx context.Context, fullSync bool, onlyEs
 }
 
 func (s *Synchronizer) containerUpdateList() error {
-	params := url.Values{
-		"host":   {s.agentID},
-		"fields": {containerCacheFields},
-	}
-
-	iter := s.client.Iterator(bleemeo.ResourceContainer, params)
-
-	count, err := iter.Count(s.ctx)
+	containers, err := s.client.listContainers(s.ctx, s.agentID)
 	if err != nil {
 		return err
 	}
 
 	containersByUUID := s.option.Cache.ContainersByUUID()
-	containers := make([]types.Container, 0, count)
 
-	for iter.Next(s.ctx) {
-		var container containerPayload
-
-		if err = json.Unmarshal(iter.At(), &container); err != nil {
-			continue
-		}
-
+	for i, container := range containers {
 		// we don't need to keep the full inspect in memory
 		container.FillInspectHash()
 		container.ContainerInspect = ""
 		container.GloutonLastUpdatedAt = containersByUUID[container.ID].GloutonLastUpdatedAt
-		containers = append(containers, container.Container)
-	}
-
-	if iter.Err() != nil {
-		return iter.Err()
+		containers[i] = container
 	}
 
 	s.option.Cache.SetContainers(containers)
@@ -262,7 +241,7 @@ func (s *Synchronizer) remoteRegister(
 	var result containerPayload
 
 	if remoteFound {
-		err := s.client.Update(s.ctx, bleemeo.ResourceContainer, remoteContainer.ID, payload, containerRegisterFields, &result)
+		err := s.client.updateContainer(s.ctx, remoteContainer.ID, payload, &result)
 		if err != nil {
 			return err
 		}
@@ -272,7 +251,7 @@ func (s *Synchronizer) remoteRegister(
 		logger.V(2).Printf("Container %v updated with UUID %s", result.Name, result.ID)
 		(*remoteContainers)[remoteIndex] = result.Container
 	} else {
-		err := s.client.Create(s.ctx, bleemeo.ResourceContainer, payload, containerRegisterFields, &result)
+		err := s.client.registerContainer(s.ctx, payload, &result)
 		if err != nil {
 			return err
 		}
@@ -310,7 +289,7 @@ func (s *Synchronizer) containerDeleteFromLocal(localContainers []facts.Containe
 
 		body := map[string]any{"deleted_at": types.NullTime(s.now())}
 
-		err := s.client.Update(s.ctx, bleemeo.ResourceContainer, container.ID, body, "", nil)
+		err := s.client.updateContainer(s.ctx, container.ID, body, nil)
 		if err != nil {
 			// If the container wasn't found, it has already been deleted.
 			if IsNotFound(err) {
