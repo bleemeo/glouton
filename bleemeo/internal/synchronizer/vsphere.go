@@ -23,7 +23,6 @@ import (
 	"time"
 
 	"github.com/bleemeo/bleemeo-go"
-	"github.com/bleemeo/glouton/bleemeo/client"
 	"github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/inputs/vsphere"
 	"github.com/bleemeo/glouton/logger"
@@ -317,7 +316,7 @@ func (s *Synchronizer) purgeVSphereAgents(remoteAgents map[string]types.Agent, s
 		agentsToRemoveFromCache[id] = true
 
 		err = s.client.Delete(s.ctx, bleemeo.ResourceAgent, id)
-		if err != nil && !client.IsNotFound(err) {
+		if err != nil && !IsNotFound(err) {
 			return err
 		}
 	}

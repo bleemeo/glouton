@@ -25,7 +25,6 @@ import (
 	"time"
 
 	"github.com/bleemeo/bleemeo-go"
-	"github.com/bleemeo/glouton/bleemeo/client"
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/logger"
 	"github.com/bleemeo/glouton/prometheus/exporter/blackbox"
@@ -264,7 +263,7 @@ OuterBreak:
 		err := s.client.Get(s.ctx, bleemeo.ResourceService, m.uuid, monitorFields, &result)
 		if err != nil {
 			// Delete the monitor locally if it was not found on the API.
-			if client.IsNotFound(err) {
+			if IsNotFound(err) {
 				currentMonitors = deleteMonitorByUUID(currentMonitors, m.uuid)
 
 				continue

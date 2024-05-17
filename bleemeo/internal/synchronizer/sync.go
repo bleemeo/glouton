@@ -35,7 +35,6 @@ import (
 	"time"
 
 	"github.com/bleemeo/bleemeo-go"
-	"github.com/bleemeo/glouton/bleemeo/client"
 	"github.com/bleemeo/glouton/bleemeo/internal/cache"
 	"github.com/bleemeo/glouton/bleemeo/internal/common"
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
@@ -355,18 +354,18 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 			s.successiveErrors++
 			s.l.Unlock()
 
-			if client.IsAuthError(err) {
+			if IsAuthError(err) {
 				successiveAuthErrors++
 			}
 
 			switch {
-			case client.IsAuthError(err) && successiveAuthErrors >= 3:
+			case IsAuthError(err) && successiveAuthErrors >= 3:
 				delay := delay.JitterDelay(
 					delay.Exponential(60*time.Second, 1.55, successiveAuthErrors, 6*time.Hour),
 					0.1,
 				)
 				s.option.DisableCallback(bleemeoTypes.DisableAuthenticationError, s.now().Add(delay))
-			case client.IsThrottleError(err):
+			case IsThrottleError(err):
 				deadline := s.client.ThrottleDeadline().Add(delay.JitterDelay(15*time.Second, 0.3))
 				s.Disable(deadline, bleemeoTypes.DisableTooManyRequests)
 			default:
@@ -376,14 +375,14 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 				)
 				s.Disable(s.now().Add(delay), bleemeoTypes.DisableTooManyErrors)
 
-				if client.IsAuthError(err) && successiveAuthErrors == 1 {
+				if IsAuthError(err) && successiveAuthErrors == 1 {
 					// we disable only to trigger a reconnection on MQTT
 					s.option.DisableCallback(bleemeoTypes.DisableAuthenticationError, s.now().Add(10*time.Second))
 				}
 			}
 
 			switch {
-			case client.IsAuthError(err) && s.agentID != "":
+			case IsAuthError(err) && s.agentID != "":
 				fqdnMessage := ""
 
 				fqdn := s.option.Cache.FactsByKey()[s.agentID]["fqdn"].Value
@@ -396,7 +395,7 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 					s.agentID,
 					fqdnMessage,
 				)
-			case client.IsAuthError(err):
+			case IsAuthError(err):
 				registrationKey := []rune(s.option.Config.Bleemeo.RegistrationKey)
 				for i := range registrationKey {
 					if i >= 6 && i < len(registrationKey)-4 {
@@ -895,7 +894,7 @@ func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) (map[str
 
 				if firstErr == nil {
 					firstErr = err
-				} else if !client.IsAuthError(firstErr) && client.IsAuthError(err) {
+				} else if !IsAuthError(firstErr) && IsAuthError(err) {
 					// Prefer returning Authentication error than other errors.
 					firstErr = err
 				}

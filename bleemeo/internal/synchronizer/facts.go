@@ -22,7 +22,6 @@ import (
 	"time"
 
 	"github.com/bleemeo/bleemeo-go"
-	"github.com/bleemeo/glouton/bleemeo/client"
 	"github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/facts"
 	"github.com/bleemeo/glouton/logger"
@@ -212,8 +211,8 @@ func (s *Synchronizer) factDeleteFromLocal(allAgentFacts map[string]map[string]s
 		}
 
 		err := s.client.Delete(s.ctx, bleemeo.ResourceAgentFact, v.ID)
-		// If the fact was not found it has already been deleted.
-		if err != nil && !client.IsNotFound(err) {
+		// If the fact wasn't found, it has already been deleted.
+		if err != nil && !IsNotFound(err) {
 			return err
 		}
 

@@ -258,3 +258,58 @@ func (errIter errorIterator) At() json.RawMessage {
 func (errIter errorIterator) Err() error {
 	return errIter.err
 }
+
+// IsAuthError return true if the error is an APIError due to authentication failure.
+func IsAuthError(err error) bool {
+	apiError := new(bleemeo.AuthError)
+
+	return errors.As(err, &apiError)
+}
+
+// IsNotFound return true if the error is an APIError due to 404.
+func IsNotFound(err error) bool {
+	if apiError := new(bleemeo.APIError); errors.As(err, &apiError) {
+		return apiError.StatusCode == 404
+	}
+
+	return false
+}
+
+// IsBadRequest return true if the error is an APIError due to 400.
+func IsBadRequest(err error) bool {
+	if apiError := new(bleemeo.APIError); errors.As(err, &apiError) {
+		return apiError.StatusCode == 400
+	}
+
+	return false
+}
+
+// IsServerError return true if the error is an APIError due to 5xx.
+func IsServerError(err error) bool {
+	if apiError := new(bleemeo.APIError); errors.As(err, &apiError) {
+		return apiError.StatusCode >= 500
+	}
+
+	return false
+}
+
+// IsThrottleError return true if the error is an APIError due to 429 - Too many request.
+//
+// ThrottleDeadline could be used to get recommended retry deadline.
+func IsThrottleError(err error) bool {
+	if apiError := new(bleemeo.APIError); errors.As(err, &apiError) {
+		return apiError.StatusCode == 429
+	}
+
+	return false
+}
+
+// APIErrorContent return the API error response, if the error is an APIError.
+// Return an empty string if the error isn't an APIError.
+func APIErrorContent(err error) string {
+	if apiError := new(bleemeo.APIError); errors.As(err, &apiError) {
+		return string(apiError.Response)
+	}
+
+	return ""
+}

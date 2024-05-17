@@ -25,7 +25,6 @@ import (
 	"time"
 
 	"github.com/bleemeo/bleemeo-go"
-	"github.com/bleemeo/glouton/bleemeo/client"
 	"github.com/bleemeo/glouton/bleemeo/internal/common"
 	"github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/facts"
@@ -314,7 +313,7 @@ func (s *Synchronizer) containerDeleteFromLocal(localContainers []facts.Containe
 		err := s.client.Update(s.ctx, bleemeo.ResourceContainer, container.ID, body, "", nil)
 		if err != nil {
 			// If the container wasn't found, it has already been deleted.
-			if client.IsNotFound(err) {
+			if IsNotFound(err) {
 				delete(registeredContainers, container.ID)
 
 				deletedIDs = append(deletedIDs, container.ID)

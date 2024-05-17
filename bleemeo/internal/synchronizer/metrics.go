@@ -29,7 +29,6 @@ import (
 	"time"
 
 	"github.com/bleemeo/bleemeo-go"
-	"github.com/bleemeo/glouton/bleemeo/client"
 	"github.com/bleemeo/glouton/bleemeo/internal/common"
 	"github.com/bleemeo/glouton/bleemeo/internal/filter"
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
@@ -880,7 +879,7 @@ func (s *Synchronizer) metricUpdateListUUID(requests []string) error {
 			metricFields,
 			&metric,
 		)
-		if err != nil && client.IsNotFound(err) {
+		if err != nil && IsNotFound(err) {
 			delete(metricsByUUID, key)
 
 			continue
@@ -1144,12 +1143,12 @@ func (mr *metricRegisterer) doOnePass(currentList []types.Metric, state metricRe
 		}
 
 		if err != nil {
-			if client.IsServerError(err) {
+			if IsServerError(err) {
 				return err
 			}
 
-			if client.IsBadRequest(err) {
-				content := client.APIErrorContent(err)
+			if IsBadRequest(err) {
+				content := APIErrorContent(err)
 				registration.LastFailKind = httpResponseToMetricFailureKind(content)
 				registration.LastFailAt = mr.s.now()
 				registration.FailCounter++
@@ -1391,7 +1390,7 @@ func (s *Synchronizer) metricUpdateOne(metric types.Metric, remoteMetric bleemeo
 		}
 
 		err := s.client.Update(s.ctx, bleemeo.ResourceMetric, remoteMetric.ID, updates, strings.Join(fields, ","), nil)
-		if err != nil && client.IsNotFound(err) {
+		if err != nil && IsNotFound(err) {
 			return remoteMetric, needRegisterError{remoteMetric: remoteMetric}
 		} else if err != nil {
 			return remoteMetric, err
@@ -1424,8 +1423,8 @@ func (s *Synchronizer) metricDeleteIgnoredServices() error {
 		if metric, ok := registeredMetricsByKey[metricKey]; ok {
 			err = s.client.Delete(s.ctx, bleemeo.ResourceMetric, metric.ID)
 
-			// If the metric was not found it has already been deleted.
-			if err != nil && !client.IsNotFound(err) {
+			// If the metric wasn't found, it has already been deleted.
+			if err != nil && !IsNotFound(err) {
 				return err
 			}
 
@@ -1541,7 +1540,7 @@ func (s *Synchronizer) metricDeactivate(localMetrics []types.Metric) error {
 		logger.V(2).Printf("Mark inactive the metric %v (uuid %s)", key, v.ID)
 
 		err := s.client.Update(s.ctx, bleemeo.ResourceMetric, v.ID, map[string]string{"active": stringFalse}, "active", nil)
-		if err != nil && client.IsNotFound(err) {
+		if err != nil && IsNotFound(err) {
 			delete(registeredMetrics, k)
 
 			continue

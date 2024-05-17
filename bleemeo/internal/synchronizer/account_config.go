@@ -19,13 +19,12 @@ package synchronizer
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"mime"
 	"net/url"
 	"reflect"
-	"strings"
 
 	"github.com/bleemeo/bleemeo-go"
-	"github.com/bleemeo/glouton/bleemeo/client"
 	"github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/logger"
 )
@@ -146,13 +145,13 @@ func (s *Synchronizer) agentConfigUpdateList() error {
 		"fields": {"id,account_config,agent_type,metrics_allowlist,metrics_resolution"},
 	}
 
-	iter := s.client.Iterator("agentconfig", params)
+	iter := s.client.Iterator(bleemeo.ResourceAgentConfig, params)
 
 	count, err := iter.Count(s.ctx)
-	if apiErr, ok := err.(client.APIError); ok {
+	if apiErr := new(bleemeo.APIError); errors.As(err, &apiErr) {
 		mediatype, _, err := mime.ParseMediaType(apiErr.ContentType)
-		if err == nil && mediatype == "text/html" && strings.Contains(apiErr.FinalURL, "login") {
-			logger.V(2).Printf("Bleemeo API don't support AgentConfig")
+		if err == nil && mediatype == "text/html" {
+			logger.V(2).Printf("Bleemeo API doesn't support AgentConfig")
 			s.option.Cache.SetAgentConfigs(nil)
 
 			return nil

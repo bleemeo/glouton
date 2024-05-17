@@ -24,7 +24,6 @@ import (
 	"reflect"
 
 	"github.com/bleemeo/bleemeo-go"
-	"github.com/bleemeo/glouton/bleemeo/client"
 	"github.com/bleemeo/glouton/bleemeo/internal/common"
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/config"
@@ -283,7 +282,7 @@ func (s *Synchronizer) removeRemoteConfigItems(
 		err := s.client.Delete(ctx, bleemeo.ResourceGloutonConfigItem, remoteItem.ID)
 		if err != nil {
 			// Ignore the error if the item has already been deleted.
-			if client.IsNotFound(err) {
+			if IsNotFound(err) {
 				continue
 			}
 
