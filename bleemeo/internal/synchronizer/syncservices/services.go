@@ -129,8 +129,8 @@ func (s *SyncServices) logThrottle(msg string) {
 	}
 }
 
-func ServicePayloadFromDiscovery(service discovery.Service, listenAddresses string, accountID string, agentID string, serviceID string) bleemeoapi.ServicePayload {
-	tags := getTagsFromLocal(service)
+func ServicePayloadFromDiscovery(service discovery.Service, listenAddresses string, accountID string, agentID string, serviceID string, apiSupportServiceTags bool) bleemeoapi.ServicePayload {
+	tags := getTagsFromLocal(service, apiSupportServiceTags)
 
 	return bleemeoapi.ServicePayload{
 		Monitor: bleemeoTypes.Monitor{
@@ -267,6 +267,8 @@ func (s *SyncServices) serviceRegisterAndUpdate(ctx context.Context, execution t
 	apiClient := execution.BleemeoAPIClient()
 	agentID, _ := execution.Option().State.BleemeoCredentials()
 
+	apiSupportServiceTags := execution.GlobalState().APIHasFeature(types.APIFeatureApplication)
+
 	for _, srv := range localServices {
 		if _, ok := delayedContainer[srv.ContainerID]; ok {
 			logger.V(2).Printf("Skip service %v due to delayedContainer", srv)
@@ -283,11 +285,33 @@ func (s *SyncServices) serviceRegisterAndUpdate(ctx context.Context, execution t
 
 		// Skip updating the remote service if the service is already up to date.
 		listenAddresses := getListenAddress(srv.ListenAddresses)
-		if skipUpdate(remoteFound, remoteSrv, srv, listenAddresses) {
+		if skipUpdate(remoteFound, remoteSrv, srv, listenAddresses, apiSupportServiceTags) {
 			continue
 		}
 
-		payload := ServicePayloadFromDiscovery(srv, listenAddresses, execution.Option().Cache.AccountID(), agentID, "")
+		var payload any
+
+		realPayload := ServicePayloadFromDiscovery(srv, listenAddresses, execution.Option().Cache.AccountID(), agentID, "", apiSupportServiceTags)
+
+		if !apiSupportServiceTags {
+			tmp, err := json.Marshal(realPayload)
+			if err != nil {
+				return err
+			}
+
+			var strAny map[string]any
+
+			err = json.Unmarshal(tmp, &strAny)
+			if err != nil {
+				return err
+			}
+
+			delete(strAny, "tags")
+
+			payload = strAny
+		} else {
+			payload = realPayload
+		}
 
 		var result bleemeoTypes.Service
 
@@ -340,16 +364,20 @@ func (s *SyncServices) serviceRegisterAndUpdate(ctx context.Context, execution t
 }
 
 // skipUpdate returns true if the service found by the discovery is up to date with the remote service on the API.
-func skipUpdate(remoteFound bool, remoteSrv bleemeoTypes.Service, srv discovery.Service, listenAddresses string) bool {
+func skipUpdate(remoteFound bool, remoteSrv bleemeoTypes.Service, srv discovery.Service, listenAddresses string, apiSupportServiceTags bool) bool {
 	return remoteFound &&
 		remoteSrv.Label == srv.Name &&
 		remoteSrv.ListenAddresses == listenAddresses &&
 		remoteSrv.ExePath == srv.ExePath &&
 		remoteSrv.Active == srv.Active &&
-		serviceHadSameTags(remoteSrv.Tags, srv)
+		serviceHadSameTags(remoteSrv.Tags, srv, apiSupportServiceTags)
 }
 
-func getTagsFromLocal(service discovery.Service) []bleemeoTypes.Tag {
+func getTagsFromLocal(service discovery.Service, apiSupportServiceTags bool) []bleemeoTypes.Tag {
+	if !apiSupportServiceTags {
+		return nil
+	}
+
 	tags := make([]bleemeoTypes.Tag, 0, len(service.Tags)+len(service.Applications))
 
 	for _, t := range service.Tags {
@@ -370,8 +398,12 @@ func getTagsFromLocal(service discovery.Service) []bleemeoTypes.Tag {
 }
 
 // serviceHadSameTags returns true if the two service had the same tags for glouton provided tags.
-func serviceHadSameTags(remoteTags []bleemeoTypes.Tag, localService discovery.Service) bool {
-	localTags := getTagsFromLocal(localService)
+func serviceHadSameTags(remoteTags []bleemeoTypes.Tag, localService discovery.Service, apiSupportServiceTags bool) bool {
+	if !apiSupportServiceTags {
+		return true
+	}
+
+	localTags := getTagsFromLocal(localService, apiSupportServiceTags)
 	remoteTagsNoID := make(map[bleemeoTypes.Tag]bool, len(remoteTags))
 
 	for _, tag := range remoteTags {

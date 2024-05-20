@@ -65,6 +65,7 @@ type Synchronizer struct {
 	inTest        bool
 	synchronizers []types.EntitySynchronizer
 	state         *synchronizerState
+	hasFeature    map[types.APIFeature]bool
 
 	realClient       *client.HTTPClient
 	diagnosticClient *http.Client
@@ -213,6 +214,7 @@ func (s *Synchronizer) DiagnosticArchive(_ context.Context, archive gloutonTypes
 		MetricRetryAt              time.Time
 		LastInfo                   bleemeoTypes.GlobalInfo
 		ThresholdOverrides         string
+		APIFeatures                map[string]bool
 	}{
 		NextFullSync:               s.nextFullSync,
 		HeartBeat:                  s.syncHeartbeat,
@@ -238,6 +240,11 @@ func (s *Synchronizer) DiagnosticArchive(_ context.Context, archive gloutonTypes
 		MetricRetryAt:              s.state.metricRetryAt,
 		LastInfo:                   s.lastInfo,
 		ThresholdOverrides:         fmt.Sprintf("%v", s.thresholdOverrides),
+		APIFeatures:                make(map[string]bool, len(s.hasFeature)),
+	}
+
+	for k, v := range s.hasFeature {
+		obj.APIFeatures[k.String()] = v
 	}
 
 	enc := json.NewEncoder(file)
@@ -666,6 +673,24 @@ func (s *Synchronizer) DelayedContainers() (delayedByID map[string]time.Time, mi
 	}
 
 	return s.delayedContainer, minDelayed
+}
+
+func (s *Synchronizer) APIHasFeature(feature types.APIFeature) bool {
+	s.l.Lock()
+	defer s.l.Unlock()
+
+	return s.hasFeature[feature]
+}
+
+func (s *Synchronizer) SetAPIHasFeature(feature types.APIFeature, has bool) {
+	s.l.Lock()
+	defer s.l.Unlock()
+
+	if s.hasFeature == nil {
+		s.hasFeature = make(map[types.APIFeature]bool)
+	}
+
+	s.hasFeature[feature] = has
 }
 
 func (s *Synchronizer) SuccessiveErrors() int {

@@ -1809,8 +1809,8 @@ func TestServiceStatusRename(t *testing.T) { //nolint: maintidx
 			srvNginxID := "809bc83b-2f28-43f1-9fb7-a84445ca1bc0"
 
 			helper.SetAPIServices(
-				syncservices.ServicePayloadFromDiscovery(srvApache, "", testAgent.AccountID, testAgent.ID, srvApacheID),
-				syncservices.ServicePayloadFromDiscovery(srvNginx, "", testAgent.AccountID, testAgent.ID, srvNginxID),
+				syncservices.ServicePayloadFromDiscovery(srvApache, "", testAgent.AccountID, testAgent.ID, srvApacheID, true),
+				syncservices.ServicePayloadFromDiscovery(srvNginx, "", testAgent.AccountID, testAgent.ID, srvNginxID, true),
 			)
 
 			helper.discovery.SetResult([]discovery.Service{srvApache, srvNginx}, nil)

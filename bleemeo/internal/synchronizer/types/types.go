@@ -71,6 +71,21 @@ func (t SyncType) String() string {
 	}
 }
 
+type APIFeature int
+
+const (
+	APIFeatureApplication APIFeature = iota
+)
+
+func (t APIFeature) String() string {
+	switch t {
+	case APIFeatureApplication:
+		return "application"
+	default:
+		return strconv.Itoa(int(t))
+	}
+}
+
 var ErrUnexpectedWorkflow = errors.New("unexpected synchroniztion workflow")
 
 type EntitySynchronizer interface {
@@ -166,6 +181,10 @@ type SynchronizedGlobalState interface {
 	DelayedContainers() (delayedByID map[string]time.Time, minDelayed time.Time)
 	SuccessiveErrors() int
 	UpdateDelayedContainers(localContainers []facts.Container)
+	// Test if API had or not some feature. The default until a call to SetAPIHasFeature() is to assume
+	// feature is NOT available.
+	APIHasFeature(feature APIFeature) bool
+	SetAPIHasFeature(feature APIFeature, has bool)
 }
 
 // Option are parameters for the synchronizer.
