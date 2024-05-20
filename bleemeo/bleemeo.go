@@ -144,6 +144,7 @@ func New(option types.GlobalOption) (c *Connector, err error) {
 		SetBleemeoInMaintenanceMode: c.setMaintenance,
 		SetBleemeoInSuspendedMode:   c.setSuspended,
 		IsMqttConnected:             c.Connected,
+		ProvideClientWrapper:        synchronizer.ClientWrapperProvider,
 	})
 
 	if option.SNMPOnlineTarget == nil {

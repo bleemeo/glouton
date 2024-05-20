@@ -8,6 +8,7 @@ linters:
     # Base linters disabled for all projects.
     - funlen
     - gomnd  # Too picky. For example it says that 1000 (used in number of ms in one second) is a magic number.
+    - mnd # Same as above.
     - exhaustivestruct # This linter is meant to be used only for special cases. It is not recommended to use it for all files in a project.
     - exhaustruct # Same as above.
     - gci # Conflicts with gofumpt.

@@ -26,7 +26,6 @@ import (
 	"net/url"
 	"path"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/bleemeo/bleemeo-go"
@@ -44,7 +43,6 @@ type wrapperClient struct {
 	client           *bleemeo.Client
 	checkDuplicateFn func() error
 
-	l                sync.Mutex
 	duplicateError   error
 	duplicateChecked bool
 	// TODO: throttling
@@ -53,15 +51,9 @@ type wrapperClient struct {
 }
 
 func (cl *wrapperClient) dupCheck() error {
-	cl.l.Lock()
-
 	if !cl.duplicateChecked {
 		cl.duplicateChecked = true
-		cl.l.Unlock()
-
 		cl.duplicateError = cl.checkDuplicateFn()
-	} else {
-		cl.l.Unlock()
 	}
 
 	return cl.duplicateError
@@ -71,9 +63,6 @@ func (cl *wrapperClient) ThrottleDeadline() time.Time {
 	if cl == nil {
 		return time.Time{}
 	}
-
-	cl.l.Lock()
-	defer cl.l.Unlock()
 
 	return cl.throttleDeadline
 }

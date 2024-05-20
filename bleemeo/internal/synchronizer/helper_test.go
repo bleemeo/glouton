@@ -53,17 +53,18 @@ var (
 )
 
 type syncTestHelper struct {
-	api        *mockAPI
-	s          *Synchronizer
-	cfg        config.Config
-	facts      *facts.FactProviderMock
-	containers []facts.Container
-	cache      *cache.Cache
-	state      *stateMock
-	discovery  *discovery.MockDiscoverer
-	store      *store.Store
-	httpServer *httptest.Server
-	devices    []bleemeoTypes.VSphereDevice
+	api               *mockAPI
+	wrapperClientMock *wrapperClientMock
+	s                 *Synchronizer
+	cfg               config.Config
+	facts             *facts.FactProviderMock
+	containers        []facts.Container
+	cache             *cache.Cache
+	state             *stateMock
+	discovery         *discovery.MockDiscoverer
+	store             *store.Store
+	httpServer        *httptest.Server
+	devices           []bleemeoTypes.VSphereDevice
 
 	// Following fields are options used by some method
 	SNMP               []*snmp.Target
@@ -90,6 +91,32 @@ func newHelper(t *testing.T) *syncTestHelper {
 		MetricFormat: types.MetricFormatBleemeo,
 	}
 
+	helper.wrapperClientMock = &wrapperClientMock{
+		helper:        helper,
+		requestCounts: make(map[string]int),
+		data: dataHolder{
+			agenttypes: []bleemeoTypes.AgentType{
+				agentTypeAgent,
+				agentTypeSNMP,
+				agentTypeMonitor,
+				agentTypeKubernetes,
+				agentTypeVSphereHost,
+				agentTypeVSphereVM,
+			},
+			accountconfigs: []bleemeoTypes.AccountConfig{
+				newAccountConfig,
+			},
+			agentconfigs: []bleemeoTypes.AgentConfig{
+				agentConfigAgent,
+				agentConfigSNMP,
+				agentConfigMonitor,
+				agentConfigKubernetes,
+				agentConfigVSphereCluster,
+				agentConfigVSphereHost,
+				agentConfigVSphereVM,
+			},
+		},
+	}
 	helper.httpServer = helper.api.Server()
 
 	helper.cfg = config.Config{
@@ -128,6 +155,7 @@ func (helper *syncTestHelper) preregisterAgent(t *testing.T) {
 	helper.api.Username = testAgent.ID + "@bleemeo.com"
 
 	helper.api.resources[mockAPIResourceAgent].AddStore(testAgent)
+	helper.wrapperClientMock.data.agents = []bleemeoTypes.Agent{testAgent.Agent}
 }
 
 // addMonitorOnAPI pre-create a monitor in the API.
@@ -138,6 +166,7 @@ func (helper *syncTestHelper) addMonitorOnAPI(t *testing.T) serviceMonitor {
 	newMonitorCopy.AccountConfig = helper.api.AccountConfigNewAgent
 
 	helper.api.resources[mockAPIResourceService].AddStore(newMonitorCopy)
+	helper.wrapperClientMock.data.services = append(helper.wrapperClientMock.data.services, newMonitorCopy.Service)
 
 	return newMonitorCopy
 }
@@ -156,8 +185,9 @@ func (helper *syncTestHelper) initSynchronizer(t *testing.T) {
 	}
 
 	s, err := newForTest(Option{
-		Cache:           helper.cache,
-		IsMqttConnected: func() bool { return false },
+		Cache:                helper.cache,
+		IsMqttConnected:      func() bool { return false },
+		ProvideClientWrapper: func(context.Context, *Synchronizer) clientWrapper { return helper.wrapperClientMock },
 		GlobalOption: bleemeoTypes.GlobalOption{
 			Config:                     helper.cfg,
 			Facts:                      helper.facts,
@@ -276,6 +306,8 @@ func (helper *syncTestHelper) runOnceWithResult(t *testing.T) runOnceResult {
 	t.Helper()
 
 	helper.api.ResetCount()
+	helper.wrapperClientMock.requestCounts = make(map[string]int)
+	helper.wrapperClientMock.data.metrics = []metricW{}
 
 	return helper.runOnceNoReset(t)
 }
@@ -361,6 +393,7 @@ func (helper *syncTestHelper) SetAPIServices(services ...servicePayload) {
 func (helper *syncTestHelper) SetAPIAccountConfig(accountConfig bleemeoTypes.AccountConfig, agentConfigs []bleemeoTypes.AgentConfig) {
 	helper.api.AccountConfigNewAgent = accountConfig.ID
 	helper.api.resources[mockAPIResourceAccountConfig].SetStore(accountConfig)
+	helper.wrapperClientMock.data.accountconfigs = append(helper.wrapperClientMock.data.accountconfigs, accountConfig)
 
 	tmp := make([]interface{}, 0, len(agentConfigs))
 
@@ -369,6 +402,7 @@ func (helper *syncTestHelper) SetAPIAccountConfig(accountConfig bleemeoTypes.Acc
 	}
 
 	helper.api.resources[mockAPIResourceAgentConfig].SetStore(tmp...)
+	helper.wrapperClientMock.data.agentconfigs = append(helper.wrapperClientMock.data.agentconfigs, agentConfigs...)
 }
 
 // SetCacheMetrics define the list of metric present in Glouton cache.
@@ -386,7 +420,10 @@ func (helper *syncTestHelper) SetCacheMetrics(metrics ...metricPayload) {
 func (helper *syncTestHelper) MetricsFromAPI() []metricPayload {
 	var metrics []metricPayload
 
-	helper.api.resources[mockAPIResourceMetric].Store(&metrics)
+	// helper.api.resources[mockAPIResourceMetric].Store(&metrics)
+	for _, m := range helper.wrapperClientMock.data.metrics {
+		metrics = append(metrics, m.metricPayload)
+	}
 	sort.Slice(metrics, func(i, j int) bool {
 		return metrics[i].ID < metrics[j].ID
 	})

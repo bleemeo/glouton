@@ -83,7 +83,7 @@ type Synchronizer struct {
 
 	requestCounter   atomic.Uint32
 	realClient       *bleemeo.Client
-	client           *wrapperClient
+	client           clientWrapper
 	diagnosticClient *http.Client
 
 	// These fields should always be set in the reload state after being modified.
@@ -160,6 +160,8 @@ type Option struct {
 	// UpdateConfigCallback is a function called when Synchronizer detected a AccountConfiguration change
 	UpdateConfigCallback func(ctx context.Context, nameChanged bool)
 
+	ProvideClientWrapper func(ctx context.Context, s *Synchronizer) clientWrapper
+
 	// SetInitialized tells the bleemeo connector that the MQTT module can be started
 	SetInitialized func()
 
@@ -176,6 +178,16 @@ type Option struct {
 	// create or update objects on the API and stops sending points on MQTT. The suspended mode differs
 	// from the maintenance mode because we stop buffering points to send on MQTT and just drop them.
 	SetBleemeoInSuspendedMode func(suspended bool)
+}
+
+func ClientWrapperProvider(ctx context.Context, s *Synchronizer) clientWrapper {
+	return &wrapperClient{
+		s:      s,
+		client: s.realClient,
+		checkDuplicateFn: func() error {
+			return s.checkDuplicated(ctx)
+		},
+	}
 }
 
 // New return a new Synchronizer.
@@ -849,13 +861,7 @@ func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) (map[str
 		return syncMethods, nil
 	}
 
-	s.client = &wrapperClient{
-		s:      s,
-		client: s.realClient,
-		checkDuplicateFn: func() error {
-			return s.checkDuplicated(ctx)
-		},
-	}
+	s.client = s.option.ProvideClientWrapper(ctx, s)
 	previousCount := s.requestCounter.Load()
 
 	syncStep := []struct {
