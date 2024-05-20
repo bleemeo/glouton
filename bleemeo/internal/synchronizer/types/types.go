@@ -20,16 +20,17 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"glouton/bleemeo/internal/cache"
-	bleemeoTypes "glouton/bleemeo/types"
-	"glouton/discovery"
-	"glouton/facts"
-	"glouton/prometheus/model"
 	"io"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/bleemeo/glouton/bleemeo/internal/cache"
+	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
+	"github.com/bleemeo/glouton/discovery"
+	"github.com/bleemeo/glouton/facts"
+	"github.com/bleemeo/glouton/prometheus/model"
 )
 
 type EntityName string

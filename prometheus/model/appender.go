@@ -18,9 +18,10 @@ package model
 
 import (
 	"errors"
-	"glouton/types"
 	"sync"
 	"time"
+
+	"github.com/bleemeo/glouton/types"
 
 	dto "github.com/prometheus/client_model/go"
 	"github.com/prometheus/prometheus/model/exemplar"

@@ -17,7 +17,7 @@
 package config
 
 import (
-	"glouton/version"
+	"github.com/bleemeo/glouton/version"
 
 	bbConf "github.com/prometheus/blackbox_exporter/config"
 )

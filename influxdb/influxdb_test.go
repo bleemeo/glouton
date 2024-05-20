@@ -18,10 +18,11 @@ package influxdb
 
 import (
 	"fmt"
-	"glouton/types"
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/bleemeo/glouton/types"
 
 	influxDBClient "github.com/influxdata/influxdb1-client/v2"
 )

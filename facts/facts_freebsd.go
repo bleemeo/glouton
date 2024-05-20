@@ -14,13 +14,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//go:build freebsd
+
 package facts
 
 import (
 	"context"
-	"glouton/logger"
 	"os"
 	"os/exec"
+
+	"github.com/bleemeo/glouton/logger"
 
 	"github.com/shirou/gopsutil/v3/load"
 	"golang.org/x/sys/unix"

@@ -20,8 +20,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"glouton/logger"
-	"glouton/version"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -29,6 +27,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/version"
 )
 
 const maxAge = 2 * 24 * time.Hour

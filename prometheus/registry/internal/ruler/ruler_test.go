@@ -2,10 +2,11 @@ package ruler
 
 import (
 	"context"
-	"glouton/prometheus/matcher"
-	"glouton/types"
 	"testing"
 	"time"
+
+	"github.com/bleemeo/glouton/prometheus/matcher"
+	"github.com/bleemeo/glouton/types"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"

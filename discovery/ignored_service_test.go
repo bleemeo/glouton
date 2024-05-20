@@ -17,8 +17,9 @@
 package discovery
 
 import (
-	"glouton/config"
 	"testing"
+
+	"github.com/bleemeo/glouton/config"
 )
 
 func TestIsCheckIgnored(t *testing.T) { //nolint:maintidx

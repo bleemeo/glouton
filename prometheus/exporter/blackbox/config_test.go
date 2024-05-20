@@ -17,12 +17,13 @@
 package blackbox
 
 import (
-	"glouton/config"
-	"glouton/prometheus/registry"
-	"glouton/types"
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/bleemeo/glouton/config"
+	"github.com/bleemeo/glouton/prometheus/registry"
+	"github.com/bleemeo/glouton/types"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"

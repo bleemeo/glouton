@@ -15,19 +15,19 @@
 // limitations under the License.
 
 //go:build windows
-// +build windows
 
 package winperfcounters
 
 import (
 	"errors"
 	"fmt"
-	"glouton/inputs"
-	"glouton/inputs/internal"
 	"math"
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/bleemeo/glouton/inputs"
+	"github.com/bleemeo/glouton/inputs/internal"
 
 	"github.com/influxdata/telegraf"
 	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"

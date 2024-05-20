@@ -20,16 +20,16 @@
 // logrus) to our own logger.
 
 //go:build windows
-// +build windows
 
 package windows
 
 import (
 	"fmt"
-	"glouton/crashreport"
-	"glouton/logger"
 	"sync"
 	"time"
+
+	"github.com/bleemeo/glouton/crashreport"
+	"github.com/bleemeo/glouton/logger"
 
 	"github.com/prometheus-community/windows_exporter/collector"
 	"github.com/prometheus/client_golang/prometheus"

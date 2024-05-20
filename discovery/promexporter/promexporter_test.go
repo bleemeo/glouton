@@ -18,11 +18,12 @@
 package promexporter
 
 import (
-	"glouton/facts"
-	"glouton/prometheus/scrapper"
-	"glouton/types"
 	"net/url"
 	"testing"
+
+	"github.com/bleemeo/glouton/facts"
+	"github.com/bleemeo/glouton/prometheus/scrapper"
+	"github.com/bleemeo/glouton/types"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"

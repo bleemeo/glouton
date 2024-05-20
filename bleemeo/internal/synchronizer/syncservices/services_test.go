@@ -17,9 +17,10 @@
 package syncservices
 
 import (
-	bleemeoTypes "glouton/bleemeo/types"
-	"glouton/discovery"
 	"testing"
+
+	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
+	"github.com/bleemeo/glouton/discovery"
 
 	"github.com/google/go-cmp/cmp"
 )

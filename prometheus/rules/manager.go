@@ -19,14 +19,15 @@ package rules
 import (
 	"context"
 	"fmt"
-	"glouton/logger"
-	"glouton/prometheus/matcher"
-	"glouton/prometheus/model"
-	"glouton/prometheus/registry"
-	"glouton/types"
 	"runtime"
 	"sync"
 	"time"
+
+	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/prometheus/matcher"
+	"github.com/bleemeo/glouton/prometheus/model"
+	"github.com/bleemeo/glouton/prometheus/registry"
+	"github.com/bleemeo/glouton/types"
 
 	"github.com/go-kit/log"
 	"github.com/prometheus/prometheus/model/labels"

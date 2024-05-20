@@ -20,14 +20,15 @@ package merge
 import (
 	"context"
 	"errors"
-	"glouton/crashreport"
-	"glouton/facts"
-	crTypes "glouton/facts/container-runtime/types"
-	"glouton/logger"
-	"glouton/types"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/bleemeo/glouton/crashreport"
+	"github.com/bleemeo/glouton/facts"
+	crTypes "github.com/bleemeo/glouton/facts/container-runtime/types"
+	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/types"
 )
 
 var errNoRuntimeAvailable = errors.New("no container-runtime available")

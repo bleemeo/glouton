@@ -20,13 +20,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"glouton/bleemeo/client"
-	"glouton/bleemeo/internal/synchronizer/types"
-	bleemeoTypes "glouton/bleemeo/types"
-	"glouton/inputs/vsphere"
-	"glouton/logger"
 	"slices"
 	"time"
+
+	"github.com/bleemeo/glouton/bleemeo/client"
+	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
+	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
+	"github.com/bleemeo/glouton/inputs/vsphere"
+	"github.com/bleemeo/glouton/logger"
 
 	"github.com/google/uuid"
 )

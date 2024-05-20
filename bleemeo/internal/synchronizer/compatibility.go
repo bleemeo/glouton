@@ -18,10 +18,11 @@ package synchronizer
 
 import (
 	"context"
-	"glouton/bleemeo/internal/synchronizer/types"
-	"glouton/facts"
 	"sync"
 	"time"
+
+	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
+	"github.com/bleemeo/glouton/facts"
 )
 
 // Those state should be moved to each entity-synchronizer as needed.

@@ -17,9 +17,10 @@
 package store
 
 import (
-	"glouton/types"
 	"testing"
 	"time"
+
+	"github.com/bleemeo/glouton/types"
 )
 
 const pointsPerMetric = 360

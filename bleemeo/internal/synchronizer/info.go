@@ -19,16 +19,17 @@ package synchronizer
 import (
 	"context"
 	"fmt"
-	"glouton/bleemeo/internal/synchronizer/types"
-	bleemeoTypes "glouton/bleemeo/types"
-	"glouton/delay"
-	"glouton/logger"
-	gloutonTypes "glouton/types"
-	"glouton/version"
 	"net"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
+	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
+	"github.com/bleemeo/glouton/delay"
+	"github.com/bleemeo/glouton/logger"
+	gloutonTypes "github.com/bleemeo/glouton/types"
+	"github.com/bleemeo/glouton/version"
 
 	"github.com/prometheus/prometheus/model/labels"
 )

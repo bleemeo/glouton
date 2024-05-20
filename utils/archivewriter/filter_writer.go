@@ -17,9 +17,10 @@
 package archivewriter
 
 import (
-	"glouton/types"
 	"io"
 	"path"
+
+	"github.com/bleemeo/glouton/types"
 )
 
 type filterWriter struct {

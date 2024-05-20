@@ -20,15 +20,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"glouton/config"
-	"glouton/prometheus/model"
-	"glouton/types"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/bleemeo/glouton/config"
+	"github.com/bleemeo/glouton/prometheus/model"
+	"github.com/bleemeo/glouton/types"
 
 	"github.com/google/go-cmp/cmp"
 )

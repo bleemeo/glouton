@@ -17,8 +17,9 @@
 package disk
 
 import (
-	"glouton/inputs/internal"
 	"testing"
+
+	"github.com/bleemeo/glouton/inputs/internal"
 
 	"github.com/google/go-cmp/cmp"
 )

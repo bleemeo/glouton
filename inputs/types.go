@@ -20,10 +20,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"glouton/logger"
-	"glouton/types"
 	"reflect"
 	"time"
+
+	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/types"
 
 	"github.com/influxdata/telegraf"
 )

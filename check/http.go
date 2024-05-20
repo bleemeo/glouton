@@ -21,12 +21,13 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
-	"glouton/logger"
-	"glouton/types"
-	"glouton/version"
 	"net/http"
 	"net/url"
 	"time"
+
+	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/types"
+	"github.com/bleemeo/glouton/version"
 )
 
 // HTTPCheck perform a HTTP check.

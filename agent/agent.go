@@ -23,50 +23,6 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
-	"glouton/agent/state"
-	"glouton/api"
-	"glouton/bleemeo"
-	"glouton/collector"
-	"glouton/config"
-	"glouton/crashreport"
-	"glouton/debouncer"
-	"glouton/delay"
-	"glouton/discovery"
-	"glouton/discovery/promexporter"
-	"glouton/facts"
-	"glouton/facts/container-runtime/containerd"
-	"glouton/facts/container-runtime/kubernetes"
-	"glouton/facts/container-runtime/merge"
-	"glouton/facts/container-runtime/veth"
-	"glouton/fluentbit"
-	"glouton/influxdb"
-	"glouton/inputs"
-	"glouton/inputs/docker"
-	"glouton/inputs/mdstat"
-	nvidia "glouton/inputs/nvidia_smi"
-	"glouton/inputs/smart"
-	"glouton/inputs/statsd"
-	"glouton/inputs/temp"
-	"glouton/inputs/vsphere"
-	"glouton/jmxtrans"
-	"glouton/logger"
-	"glouton/mqtt"
-	"glouton/mqtt/client"
-	"glouton/nrpe"
-	"glouton/prometheus/exporter/blackbox"
-	"glouton/prometheus/exporter/ipmi"
-	"glouton/prometheus/exporter/snmp"
-	"glouton/prometheus/process"
-	"glouton/prometheus/registry"
-	"glouton/prometheus/rules"
-	"glouton/prometheus/scrapper"
-	"glouton/store"
-	"glouton/task"
-	"glouton/telemetry"
-	"glouton/threshold"
-	"glouton/types"
-	"glouton/version"
-	"glouton/zabbix"
 	"io"
 	"math"
 	"net"
@@ -82,18 +38,63 @@ import (
 	"sync"
 	"time"
 
+	"github.com/bleemeo/glouton/agent/state"
+	"github.com/bleemeo/glouton/api"
+	"github.com/bleemeo/glouton/bleemeo"
+	"github.com/bleemeo/glouton/collector"
+	"github.com/bleemeo/glouton/config"
+	"github.com/bleemeo/glouton/crashreport"
+	"github.com/bleemeo/glouton/debouncer"
+	"github.com/bleemeo/glouton/delay"
+	"github.com/bleemeo/glouton/discovery"
+	"github.com/bleemeo/glouton/discovery/promexporter"
+	"github.com/bleemeo/glouton/facts"
+	"github.com/bleemeo/glouton/facts/container-runtime/containerd"
+	"github.com/bleemeo/glouton/facts/container-runtime/kubernetes"
+	"github.com/bleemeo/glouton/facts/container-runtime/merge"
+	"github.com/bleemeo/glouton/facts/container-runtime/veth"
+	"github.com/bleemeo/glouton/fluentbit"
+	"github.com/bleemeo/glouton/influxdb"
+	"github.com/bleemeo/glouton/inputs"
+	"github.com/bleemeo/glouton/inputs/docker"
+	"github.com/bleemeo/glouton/inputs/mdstat"
+	nvidia "github.com/bleemeo/glouton/inputs/nvidia_smi"
+	"github.com/bleemeo/glouton/inputs/smart"
+	"github.com/bleemeo/glouton/inputs/statsd"
+	"github.com/bleemeo/glouton/inputs/temp"
+	"github.com/bleemeo/glouton/inputs/vsphere"
+	"github.com/bleemeo/glouton/jmxtrans"
+	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/mqtt"
+	"github.com/bleemeo/glouton/mqtt/client"
+	"github.com/bleemeo/glouton/nrpe"
+	"github.com/bleemeo/glouton/prometheus/exporter/blackbox"
+	"github.com/bleemeo/glouton/prometheus/exporter/ipmi"
+	"github.com/bleemeo/glouton/prometheus/exporter/snmp"
+	"github.com/bleemeo/glouton/prometheus/process"
+	"github.com/bleemeo/glouton/prometheus/registry"
+	"github.com/bleemeo/glouton/prometheus/rules"
+	"github.com/bleemeo/glouton/prometheus/scrapper"
+	"github.com/bleemeo/glouton/store"
+	"github.com/bleemeo/glouton/task"
+	"github.com/bleemeo/glouton/telemetry"
+	"github.com/bleemeo/glouton/threshold"
+	"github.com/bleemeo/glouton/types"
+	"github.com/bleemeo/glouton/version"
+	"github.com/bleemeo/glouton/zabbix"
+
 	"github.com/getsentry/sentry-go"
 	"github.com/influxdata/telegraf"
 	"github.com/prometheus/prometheus/util/gate"
 	"github.com/shirou/gopsutil/v3/host"
 
-	bleemeoTypes "glouton/bleemeo/types"
+	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 
-	dockerRuntime "glouton/facts/container-runtime/docker"
+	dockerRuntime "github.com/bleemeo/glouton/facts/container-runtime/docker"
 
-	crTypes "glouton/facts/container-runtime/types"
+	crTypes "github.com/bleemeo/glouton/facts/container-runtime/types"
 
-	processSource "glouton/prometheus/sources/process"
+	processSource "github.com/bleemeo/glouton/prometheus/sources/process"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/prometheus/model/labels"
@@ -2236,12 +2237,102 @@ func (a *agent) diagnosticGlobalInfo(ctx context.Context, archive types.ArchiveW
 
 	fmt.Fprintf(file, "-- Log size = %d, compressed = %d (ratio: %.2f)\n", len(tmp), compressedSize, float64(compressedSize)/float64(len(tmp)))
 
+	file, err = archive.Create("memstats.txt")
+	if err != nil {
+		return err
+	}
+
+	if err := writeMemstat(file); err != nil {
+		return err
+	}
+
 	file, err = archive.Create("diagnostic.txt")
 	if err != nil {
 		return err
 	}
 
 	_, err = file.Write([]byte(a.DiagnosticPage(ctx)))
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func formatBytes(size uint64) string {
+	scales := []string{"bytes", "KiB", "MiB", "GiB", "TiB", "PiB"}
+
+	value := float64(size)
+
+	i := 0
+	for i < len(scales)-1 && math.Abs(value) >= 1024 {
+		i++
+
+		value /= 1024
+	}
+
+	return fmt.Sprintf("%.2f %s", value, scales[i])
+}
+
+func writeMemstat(writer io.Writer) error {
+	var stat runtime.MemStats
+
+	runtime.ReadMemStats(&stat)
+
+	_, err := fmt.Fprintf(writer, "Heap in-use %s, object in-use %d\n", formatBytes(stat.HeapAlloc), stat.HeapObjects)
+	if err != nil {
+		return err
+	}
+
+	_, err = fmt.Fprintf(writer, "Total allocated %s, object %d\n", formatBytes(stat.TotalAlloc), stat.Mallocs)
+	if err != nil {
+		return err
+	}
+
+	_, err = fmt.Fprintf(
+		writer,
+		"Heap details Sys (OS allocated) %s, InUse %s, Idle %s (released %s)\n",
+		formatBytes(stat.HeapSys),
+		formatBytes(stat.HeapInuse),
+		formatBytes(stat.HeapIdle),
+		formatBytes(stat.HeapReleased),
+	)
+	if err != nil {
+		return err
+	}
+
+	_, err = fmt.Fprintf(
+		writer,
+		"Other memory Sys (OS allocated) / InUse: Stack %s / %s; MSpans %s / %s; MCache %s / %s\n",
+		formatBytes(stat.StackSys),
+		formatBytes(stat.StackInuse),
+		formatBytes(stat.MSpanSys),
+		formatBytes(stat.MSpanInuse),
+		formatBytes(stat.MCacheSys),
+		formatBytes(stat.MCacheInuse),
+	)
+	if err != nil {
+		return err
+	}
+
+	_, err = fmt.Fprintf(
+		writer,
+		"Other memory BuckHashSys %s, GCSys %s, OtherSys %s\n",
+		formatBytes(stat.BuckHashSys),
+		formatBytes(stat.GCSys),
+		formatBytes(stat.OtherSys),
+	)
+	if err != nil {
+		return err
+	}
+
+	_, err = fmt.Fprintf(
+		writer,
+		"Total: Sys %s; Sum of all *Sys %s, RSS %s\n",
+		formatBytes(stat.Sys),
+		formatBytes(stat.HeapSys+stat.StackSys+stat.MSpanSys+stat.MCacheSys+stat.BuckHashSys+stat.GCSys+stat.OtherSys),
+		formatBytes(getResidentMemoryOfSelf()),
+	)
 	if err != nil {
 		return err
 	}

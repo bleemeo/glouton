@@ -20,14 +20,15 @@ package collector
 import (
 	"context"
 	"errors"
-	"glouton/crashreport"
-	"glouton/inputs"
-	"glouton/logger"
-	"glouton/prometheus/registry"
-	"glouton/types"
 	"math"
 	"sync"
 	"time"
+
+	"github.com/bleemeo/glouton/crashreport"
+	"github.com/bleemeo/glouton/inputs"
+	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/prometheus/registry"
+	"github.com/bleemeo/glouton/types"
 
 	"github.com/influxdata/telegraf"
 	"github.com/prometheus/prometheus/model/value"

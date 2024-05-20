@@ -18,14 +18,15 @@ package vsphere
 
 import (
 	"context"
-	"glouton/config"
-	"glouton/facts"
-	"glouton/prometheus/registry"
-	"glouton/types"
 	"net/url"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/bleemeo/glouton/config"
+	"github.com/bleemeo/glouton/facts"
+	"github.com/bleemeo/glouton/prometheus/registry"
+	"github.com/bleemeo/glouton/types"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"

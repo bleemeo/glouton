@@ -15,16 +15,16 @@
 // limitations under the License.
 
 //go:build !windows
-// +build !windows
 
 package facts
 
 import (
 	"context"
-	"glouton/version"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/bleemeo/glouton/version"
 
 	"github.com/shirou/gopsutil/v3/process"
 )

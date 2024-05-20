@@ -17,15 +17,16 @@
 package mqtt
 
 import (
-	"encoding/json"
 	"fmt"
-	"glouton/bleemeo/types"
-	"glouton/mqtt/client"
 	"os"
 	"sync"
 	"time"
 
-	gloutonTypes "glouton/types"
+	"github.com/bleemeo/glouton/bleemeo/types"
+	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/mqtt/client"
+
+	gloutonTypes "github.com/bleemeo/glouton/types"
 
 	paho "github.com/eclipse/paho.mqtt.golang"
 )
@@ -148,9 +149,10 @@ func (rs *reloadState) Close() {
 			cause = "Auto upgrade"
 		}
 
-		payload, _ := json.Marshal(disconnectCause{cause}) //nolint:errchkjson // False positive.
+		if err := rs.mqtt.Publish(fmt.Sprintf("v1/agent/%s/disconnect", rs.agentID), disconnectCause{cause}, false); err != nil {
+			logger.V(1).Printf("Unable to publish on disconnect topic: %v", err)
+		}
 
-		rs.mqtt.Publish(fmt.Sprintf("v1/agent/%s/disconnect", rs.agentID), payload, false)
 		rs.mqtt.Disconnect(5 * time.Second)
 	}
 

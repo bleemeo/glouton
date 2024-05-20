@@ -20,17 +20,18 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"glouton/config"
-	"glouton/facts"
-	"glouton/prometheus/model"
-	"glouton/prometheus/registry"
-	"glouton/prometheus/scrapper"
-	"glouton/types"
 	"os"
 	"path/filepath"
 	"sort"
 	"testing"
 	"time"
+
+	"github.com/bleemeo/glouton/config"
+	"github.com/bleemeo/glouton/facts"
+	"github.com/bleemeo/glouton/prometheus/model"
+	"github.com/bleemeo/glouton/prometheus/registry"
+	"github.com/bleemeo/glouton/prometheus/scrapper"
+	"github.com/bleemeo/glouton/types"
 
 	"github.com/google/go-cmp/cmp"
 	dto "github.com/prometheus/client_model/go"
@@ -239,7 +240,6 @@ func Test_factFromPoints(t *testing.T) {
 	}
 }
 
-//nolint:goconst
 func Test_humanError(t *testing.T) {
 	tests := []struct {
 		name string

@@ -19,14 +19,16 @@ package client
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"glouton/crashreport"
-	"glouton/delay"
-	"glouton/logger"
-	"glouton/types"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/bleemeo/glouton/crashreport"
+	"github.com/bleemeo/glouton/delay"
+	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/types"
 
 	paho "github.com/eclipse/paho.mqtt.golang"
 )
@@ -45,11 +47,14 @@ const (
 	maxDelayWithoutPing = 90 * time.Second
 )
 
+var ErrPayloadTooLarge = errors.New("payload is too large")
+
 type Client struct {
 	opts           Options
 	connectionLost chan interface{}
 	stats          *mqttStats
 	disableNotify  chan interface{}
+	encoder        *encoder
 
 	l    sync.Mutex
 	mqtt paho.Client
@@ -81,6 +86,7 @@ func New(opts Options) *Client {
 		stats:          newMQTTStats(),
 		disableNotify:  make(chan interface{}),
 		connectionLost: make(chan interface{}),
+		encoder:        &encoder{},
 	}
 
 	return client
@@ -143,18 +149,29 @@ func (c *Client) setupMQTT(ctx context.Context) (paho.Client, error) {
 // Publish sends the payload to MQTT on the given topic.
 // If retry is set to true and MQTT is currently unreachable, the client will
 // retry to send the message later, else it will be dropped.
-func (c *Client) Publish(topic string, payload []byte, retry bool) {
-	if len(payload) > maxPayloadSize {
-		logger.V(1).Printf("%s: drop too large message to MQTT topic %s, it size is %d", c.opts.ID, topic, len(payload))
+func (c *Client) Publish(topic string, payload interface{}, retry bool) error {
+	payloadBuffer, err := c.encoder.Encode(payload)
+	if err != nil {
+		c.encoder.PutBuffer(payloadBuffer)
 
-		return
+		return err
 	}
 
-	msg, ok := c.publish(topic, payload, retry)
+	if len(payloadBuffer) > maxPayloadSize {
+		c.encoder.PutBuffer(payloadBuffer)
+
+		return fmt.Errorf("%w: size is %d which is > %d", ErrPayloadTooLarge, len(payloadBuffer), maxPayloadSize)
+	}
+
+	msg, ok := c.publish(topic, payloadBuffer, retry)
 
 	if ok {
 		c.opts.ReloadState.AddPendingMessage(context.Background(), msg, true)
+	} else {
+		c.encoder.PutBuffer(payloadBuffer)
 	}
+
+	return nil
 }
 
 func (c *Client) publish(topic string, payload []byte, retry bool) (types.Message, bool) {
@@ -391,6 +408,7 @@ func (c *Client) ackOne(msg types.Message, timeout time.Duration) error {
 
 		err = msg.Token.Error()
 		if err != nil {
+			c.encoder.PutBuffer(msg.Payload)
 			c.stats.ackFailed(msg.Token)
 		}
 	}
@@ -434,6 +452,8 @@ func (c *Client) ackOne(msg types.Message, timeout time.Duration) error {
 	}
 
 	now := time.Now()
+
+	c.encoder.PutBuffer(msg.Payload)
 	c.stats.ackReceived(msg.Token, now)
 
 	c.l.Lock()
@@ -513,7 +533,7 @@ func (c *Client) DiagnosticArchive(_ context.Context, archive types.ArchiveWrite
 	return enc.Encode(obj)
 }
 
-// LastReport returns the date of last acknowlegment received.
+// LastReport returns the date of last acknowledgment received.
 func (c *Client) LastReport() time.Time {
 	c.l.Lock()
 	defer c.l.Unlock()

@@ -20,11 +20,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"glouton/bleemeo/internal/synchronizer/types"
-	bleemeoTypes "glouton/bleemeo/types"
-	"glouton/logger"
 	"strings"
 	"time"
+
+	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
+	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
+	"github.com/bleemeo/glouton/logger"
 )
 
 type Execution struct {

@@ -17,7 +17,7 @@
 package bleemeoapi
 
 import (
-	bleemeoTypes "glouton/bleemeo/types"
+	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 )
 
 type ServicePayload struct {

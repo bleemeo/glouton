@@ -19,8 +19,9 @@ package check
 import (
 	"context"
 	"fmt"
-	"glouton/types"
 	"os/exec"
+
+	"github.com/bleemeo/glouton/types"
 
 	"github.com/google/shlex"
 )

@@ -21,13 +21,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"glouton/bleemeo/client"
-	"glouton/bleemeo/internal/synchronizer/types"
-	bleemeoTypes "glouton/bleemeo/types"
-	"glouton/logger"
-	"glouton/prometheus/exporter/blackbox"
-	gloutonTypes "glouton/types"
 	"time"
+
+	"github.com/bleemeo/glouton/bleemeo/client"
+	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
+	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
+	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/prometheus/exporter/blackbox"
+	gloutonTypes "github.com/bleemeo/glouton/types"
 
 	"github.com/cespare/xxhash/v2"
 )

@@ -20,16 +20,17 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"glouton/bleemeo/client"
-	"glouton/bleemeo/internal/cache"
-	"glouton/bleemeo/internal/synchronizer/syncservices"
-	"glouton/bleemeo/internal/synchronizer/types"
-	bleemeoTypes "glouton/bleemeo/types"
-	"glouton/discovery"
-	"glouton/logger"
 	"mime"
 	"strings"
 	"time"
+
+	"github.com/bleemeo/glouton/bleemeo/client"
+	"github.com/bleemeo/glouton/bleemeo/internal/cache"
+	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/syncservices"
+	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
+	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
+	"github.com/bleemeo/glouton/discovery"
+	"github.com/bleemeo/glouton/logger"
 )
 
 var ErrApplicationFirst = errors.New("application need to be created before service")

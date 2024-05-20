@@ -20,12 +20,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"glouton/logger"
-	"glouton/prometheus/model"
-	"glouton/prometheus/registry/internal/ruler"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/prometheus/model"
+	"github.com/bleemeo/glouton/prometheus/registry/internal/ruler"
 
 	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
@@ -182,10 +183,16 @@ func newWrappedGatherer(g prometheus.Gatherer, extraLabels labels.Labels, opt Re
 		}
 	}
 
+	var sruler *ruler.SimpleRuler
+
+	if len(opt.rrules) > 0 {
+		sruler = ruler.New(opt.rrules)
+	}
+
 	wrap := &wrappedGatherer{
 		source: g,
 		labels: labels,
-		ruler:  ruler.New(opt.rrules),
+		ruler:  sruler,
 		opt:    opt,
 	}
 	wrap.cond = sync.NewCond(&wrap.l)
@@ -260,7 +267,9 @@ func (g *wrappedGatherer) GatherWithState(ctx context.Context, state GatherState
 	g.running = false
 	g.cond.Signal()
 
-	mfs = g.ruler.ApplyRulesMFS(ctx, now, mfs)
+	if g.ruler != nil {
+		mfs = g.ruler.ApplyRulesMFS(ctx, now, mfs)
+	}
 
 	if g.opt.GatherModifier != nil {
 		mfs = g.opt.GatherModifier(mfs, err)

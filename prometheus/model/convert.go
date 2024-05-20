@@ -19,11 +19,12 @@ package model
 import (
 	"errors"
 	"fmt"
-	"glouton/logger"
-	"glouton/types"
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/types"
 
 	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"

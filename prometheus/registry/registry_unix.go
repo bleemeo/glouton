@@ -15,16 +15,16 @@
 // limitations under the License.
 
 //go:build !windows
-// +build !windows
 
 package registry
 
 import (
-	"glouton/facts/container-runtime/veth"
-	"glouton/logger"
-	"glouton/prometheus/exporter/node"
-	"glouton/types"
 	"strings"
+
+	"github.com/bleemeo/glouton/facts/container-runtime/veth"
+	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/prometheus/exporter/node"
+	"github.com/bleemeo/glouton/types"
 
 	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"

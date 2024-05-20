@@ -18,12 +18,13 @@ package discovery
 
 import (
 	"context"
-	"glouton/config"
-	"glouton/facts"
 	"os"
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/bleemeo/glouton/config"
+	"github.com/bleemeo/glouton/facts"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"

@@ -19,10 +19,11 @@ package registry
 
 import (
 	"context"
-	"glouton/prometheus/model"
-	"glouton/types"
 	"testing"
 	"time"
+
+	"github.com/bleemeo/glouton/prometheus/model"
+	"github.com/bleemeo/glouton/types"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"

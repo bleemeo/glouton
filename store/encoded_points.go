@@ -17,8 +17,9 @@
 package store
 
 import (
-	"glouton/types"
 	"time"
+
+	"github.com/bleemeo/glouton/types"
 
 	"github.com/prometheus/prometheus/tsdb/chunkenc"
 )

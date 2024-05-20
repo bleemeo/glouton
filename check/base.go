@@ -20,12 +20,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"glouton/crashreport"
-	"glouton/logger"
-	"glouton/types"
 	"net"
 	"sync"
 	"time"
+
+	"github.com/bleemeo/glouton/crashreport"
+	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/types"
 )
 
 // baseCheck perform a service check.

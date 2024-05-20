@@ -19,15 +19,16 @@ package agent
 import (
 	"context"
 	"fmt"
-	"glouton/discovery"
-	crTypes "glouton/facts/container-runtime/types"
-	"glouton/logger"
-	"glouton/prometheus/model"
-	"glouton/prometheus/registry"
-	"glouton/store"
-	"glouton/types"
 	"sort"
 	"time"
+
+	"github.com/bleemeo/glouton/discovery"
+	crTypes "github.com/bleemeo/glouton/facts/container-runtime/types"
+	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/prometheus/model"
+	"github.com/bleemeo/glouton/prometheus/registry"
+	"github.com/bleemeo/glouton/store"
+	"github.com/bleemeo/glouton/types"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/prometheus/storage"

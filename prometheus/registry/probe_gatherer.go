@@ -18,9 +18,10 @@ package registry
 
 import (
 	"context"
-	"glouton/logger"
 	"sync"
 	"time"
+
+	"github.com/bleemeo/glouton/logger"
 
 	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"

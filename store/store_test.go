@@ -19,12 +19,13 @@ package store
 import (
 	"context"
 	"fmt"
-	"glouton/types"
 	"math"
 	"math/rand"
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/bleemeo/glouton/types"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/prometheus/prometheus/model/value"
@@ -495,7 +496,7 @@ func makeMetrics(b *testing.B, rnd *rand.Rand, metricsCount int, labelsCount int
 
 		for try := range 3 {
 			lbls = makeMetric(b, rnd, labelsCount)
-			duplicate := false //nolint:copyloopvar // false-positive
+			duplicate := false
 
 			for _, v := range metricsLabels {
 				if reflect.DeepEqual(v, lbls) {

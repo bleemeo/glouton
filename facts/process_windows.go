@@ -14,23 +14,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//go:build windows
+
 package facts
 
 import (
 	"context"
 	"errors"
 	"fmt"
-	"glouton/logger"
 	"strings"
-	"syscall"
 	"time"
 	"unsafe"
+
+	"github.com/bleemeo/glouton/logger"
 
 	"golang.org/x/sys/windows"
 )
 
 var (
-	errCannotRetrieveInfo      = errors.New("cannot retrieve the command line informations for the process")
+	errCannotRetrieveInfo      = errors.New("cannot retrieve the command line information for the process")
 	errCannotRetrieveToken     = errors.New("cannot retrieve the token for the process")
 	errCannotRetrieveUserToken = errors.New("cannot retrieve the user token for the process")
 )
@@ -76,7 +78,7 @@ func (z PsutilLister) Processes(context.Context, time.Duration) ([]Process, erro
 	buf := make([]byte, bufLen)
 
 	for {
-		ret, _, err := procNtQuerySystemInformation.Call(
+		ret, _, err = procNtQuerySystemInformation.Call(
 			uintptr(SystemProcessInformation),
 			uintptr(unsafe.Pointer(&buf[0])),
 			uintptr(bufLen),
@@ -128,12 +130,7 @@ func (z PsutilLister) Processes(context.Context, time.Duration) ([]Process, erro
 	}
 }
 
-func retrieveCmdLine(pid uint32) (cmdline string, err error) {
-	h, err := windows.OpenProcess(windows.PROCESS_QUERY_LIMITED_INFORMATION, false, pid)
-	if err != nil {
-		return "", err
-	}
-
+func retrieveCmdLine(h windows.Handle) (cmdline string, err error) {
 	var bufLen uint32
 
 	ret, _, err := procNtQueryInformationProcess.Call(
@@ -145,7 +142,7 @@ func retrieveCmdLine(pid uint32) (cmdline string, err error) {
 	)
 
 	if ret >= 0x80000000 && ret != StatusInfoLengthMismatch && ret != StatusBufferTooSmall && ret != StatusBufferOverflow {
-		return "", fmt.Errorf("%w %d, system call 'NtQueryInformationProcess' failed: %v", errCannotRetrieveInfo, pid, err)
+		return "", fmt.Errorf("%w, system call 'NtQueryInformationProcess' failed: %v", errCannotRetrieveInfo, err)
 	}
 
 	if bufLen == 0 {
@@ -163,38 +160,30 @@ func retrieveCmdLine(pid uint32) (cmdline string, err error) {
 	)
 	// the return value isn't a success type or an informational type (according to https://docs.microsoft.com/en-us/windows-hardware/drivers/kernel/using-ntstatus-values)
 	if ret >= 0x80000000 {
-		return "", fmt.Errorf("%w %d, system call 'NtQueryInformationProcess' failed: %v", errCannotRetrieveInfo, pid, err)
+		return "", fmt.Errorf("%w, system call 'NtQueryInformationProcess' failed: %v", errCannotRetrieveInfo, err)
 	}
-
-	_ = syscall.CloseHandle(syscall.Handle(h))
 
 	str := *(*UnicodeString)(unsafe.Pointer(&buf[0]))
 
 	return windows.UTF16PtrToString((*uint16)(str.Buffer)), nil
 }
 
-func retrieveUsername(pid uint32) (string, error) {
-	h, err := windows.OpenProcess(windows.PROCESS_QUERY_LIMITED_INFORMATION, false, pid)
-	if err != nil {
-		return "", err
-	}
-
+func retrieveUsername(h windows.Handle) (string, error) {
 	var token windows.Token
 
-	err = windows.OpenProcessToken(h, windows.TOKEN_QUERY, &token)
+	err := windows.OpenProcessToken(h, windows.TOKEN_QUERY, &token)
 	if err != nil {
-		return "", fmt.Errorf("%w %d: %v", errCannotRetrieveToken, pid, err)
+		return "", fmt.Errorf("%w: %v", errCannotRetrieveToken, err)
 	}
+
+	defer windows.CloseHandle(windows.Handle(token)) //nolint:errcheck // there is nothing we could do
 
 	userToken, err := token.GetTokenUser()
 	if err != nil {
-		return "", fmt.Errorf("%w %d: %v", errCannotRetrieveUserToken, pid, err)
+		return "", fmt.Errorf("%w: %v", errCannotRetrieveUserToken, err)
 	}
 
 	res, _, _, err := userToken.User.Sid.LookupAccount("")
-
-	_ = windows.CloseHandle(windows.Handle(token))
-	_ = windows.CloseHandle(h)
 
 	return res, err
 }
@@ -211,10 +200,6 @@ func parseProcessData(process *SystemProcessInformationStruct) (res Process, ok 
 
 	res.CreateTime = windowsTimeToTime(process.CreateTime)
 	res.CreateTimestamp = res.CreateTime.Unix()
-
-	if user, err := retrieveUsername(uint32(process.UniqueProcessID)); err == nil {
-		res.Username = user
-	}
 
 	// this is the best approximation of the parent process we can get cheaply
 	res.PPID = int(process.InheritedFromUniqueProcessID)
@@ -234,11 +219,17 @@ func parseProcessData(process *SystemProcessInformationStruct) (res Process, ok 
 		res.Name = exec[len(exec)-1]
 	}
 
-	var err error
+	if processHandle, err := windows.OpenProcess(windows.PROCESS_QUERY_LIMITED_INFORMATION, false, uint32(process.UniqueProcessID)); err == nil {
+		if user, err := retrieveUsername(processHandle); err == nil {
+			res.Username = user
+		}
 
-	res.CmdLine, err = retrieveCmdLine(uint32(process.UniqueProcessID))
-	if err != nil || len(res.CmdLine) == 0 {
-		res.CmdLine = res.Name
+		res.CmdLine, err = retrieveCmdLine(processHandle)
+		if err != nil || len(res.CmdLine) == 0 {
+			res.CmdLine = res.Name
+		}
+
+		windows.CloseHandle(processHandle) //nolint:errcheck // there is nothing we could do
 	}
 
 	// Split the input arguments.
@@ -257,6 +248,8 @@ func parseProcessData(process *SystemProcessInformationStruct) (res Process, ok 
 		} else {
 			res.CmdLineList = []string{res.CmdLine}
 		}
+
+		windows.LocalFree(windows.Handle(uintptr(unsafe.Pointer(argv)))) //nolint:errcheck // there is nothing we could do
 	} else {
 		res.CmdLineList = []string{res.CmdLine}
 	}

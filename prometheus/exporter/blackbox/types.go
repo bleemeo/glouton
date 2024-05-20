@@ -18,10 +18,11 @@ package blackbox
 
 import (
 	"crypto/x509"
-	"glouton/prometheus/registry"
-	"glouton/types"
 	"sync"
 	"time"
+
+	"github.com/bleemeo/glouton/prometheus/registry"
+	"github.com/bleemeo/glouton/types"
 
 	bbConf "github.com/prometheus/blackbox_exporter/config"
 	"github.com/prometheus/client_golang/prometheus"

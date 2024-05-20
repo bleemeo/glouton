@@ -16,7 +16,7 @@
 
 package metricutils
 
-import "glouton/types"
+import "github.com/bleemeo/glouton/types"
 
 // MetricOnlyHasItem returns true if the metric only has a name and an item (which could be empty).
 // Said otherwise, the metric doesn't need to use labels_text on Bleemeo API to store its labels.

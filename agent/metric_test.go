@@ -17,15 +17,16 @@
 package agent
 
 import (
-	"glouton/config"
-	"glouton/discovery"
-	"glouton/prometheus/matcher"
-	"glouton/prometheus/model"
-	"glouton/types"
 	"reflect"
 	"sort"
 	"testing"
 	"time"
+
+	"github.com/bleemeo/glouton/config"
+	"github.com/bleemeo/glouton/discovery"
+	"github.com/bleemeo/glouton/prometheus/matcher"
+	"github.com/bleemeo/glouton/prometheus/model"
+	"github.com/bleemeo/glouton/types"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"

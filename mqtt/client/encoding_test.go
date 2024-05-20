@@ -14,14 +14,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package mqtt
+package client
 
 import (
 	"context"
 	"encoding/json"
-	"glouton/facts"
-	"reflect"
+	"fmt"
 	"testing"
+
+	"github.com/bleemeo/glouton/facts"
 
 	"github.com/google/go-cmp/cmp"
 )
@@ -54,74 +55,72 @@ func getTopinfo() facts.TopInfo {
 
 func TestTopinfoEncoding(t *testing.T) {
 	topinfo := getTopinfo()
-	encoder := &Encoder{}
 
-	var (
-		decoded  facts.TopInfo
-		decoded2 facts.TopInfo
-	)
-
-	encoded, err := encoder.Encode(topinfo)
-	if err != nil {
-		t.Fatal(err)
+	cases := []facts.TopInfo{
+		topinfo,
+		{},
+		{
+			Time:   12345679,
+			Uptime: 1,
+			Loads:  []float64{8},
+			Users:  3,
+		},
 	}
 
-	err = encoder.Decode(encoded, &decoded)
-	if err != nil {
-		t.Fatal(err)
+	enc := &encoder{}
+
+	for _, withPool := range []bool{true} {
+		for idx, value := range cases {
+			name := fmt.Sprintf("case-%d-withpool-%v", idx, withPool)
+
+			t.Run(name, func(t *testing.T) {
+				var decoded facts.TopInfo
+
+				encoded, err := enc.Encode(value)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				err = decode(encoded, &decoded)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				if diff := cmp.Diff(value, decoded); diff != "" {
+					t.Errorf("decoded does not match (-want +got):\n%s", diff)
+				}
+
+				if withPool {
+					enc.PutBuffer(encoded)
+				}
+
+				t.Logf("compressed size = %d", len(encoded))
+			})
+		}
 	}
-
-	if diff := cmp.Diff(topinfo, decoded); diff != "" {
-		t.Errorf("decoded does not match: %v", diff)
-
-		return
-	}
-
-	encoded2, err := encoder.Encode(facts.TopInfo{})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	err = encoder.Decode(encoded, &decoded)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if !reflect.DeepEqual(topinfo, decoded) {
-		t.Errorf("encoded output buffer seems to be reused between Encode call")
-	}
-
-	err = encoder.Decode(encoded2, &decoded2)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if !reflect.DeepEqual(facts.TopInfo{}, decoded2) {
-		t.Errorf("encoded output buffer seems to be reused between Encode call")
-	}
-
-	t.Logf("compressed size = %d", len(encoded))
 }
 
 func BenchmarkTopinfoEncoding(b *testing.B) {
 	topinfo := getTopinfo()
-	encoder := &Encoder{}
+	enc := &encoder{}
 
 	b.ResetTimer()
 
 	for range b.N {
-		_, err := encoder.Encode(topinfo)
+		result, err := enc.Encode(topinfo)
 		if err != nil {
 			b.Error(err)
 		}
+
+		enc.PutBuffer(result)
 	}
 }
 
 func BenchmarkTopinfoDecoding(b *testing.B) {
 	topinfo := getTopinfo()
-	encoder := &Encoder{}
+	enc := &encoder{}
 
-	encoded, err := encoder.Encode(topinfo)
+	encoded, err := enc.Encode(topinfo)
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -131,7 +130,7 @@ func BenchmarkTopinfoDecoding(b *testing.B) {
 	for range b.N {
 		var value facts.TopInfo
 
-		err := encoder.Decode(encoded, &value)
+		err := decode(encoded, &value)
 		if err != nil {
 			b.Error(err)
 		}

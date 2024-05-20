@@ -21,12 +21,6 @@ package mdstat
 import (
 	"errors"
 	"fmt"
-	"glouton/config"
-	"glouton/inputs"
-	"glouton/inputs/internal"
-	"glouton/logger"
-	"glouton/prometheus/registry"
-	"glouton/types"
 	"io/fs"
 	"math"
 	"os"
@@ -34,6 +28,13 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/bleemeo/glouton/config"
+	"github.com/bleemeo/glouton/inputs"
+	"github.com/bleemeo/glouton/inputs/internal"
+	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/prometheus/registry"
+	"github.com/bleemeo/glouton/types"
 
 	"github.com/influxdata/telegraf"
 	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"

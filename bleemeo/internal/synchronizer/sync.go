@@ -23,19 +23,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"glouton/bleemeo/client"
-	"glouton/bleemeo/internal/common"
-	"glouton/bleemeo/internal/synchronizer/syncapplications"
-	"glouton/bleemeo/internal/synchronizer/syncservices"
-	"glouton/bleemeo/internal/synchronizer/types"
-	bleemeoTypes "glouton/bleemeo/types"
-	"glouton/crashreport"
-	"glouton/delay"
-	"glouton/facts"
-	"glouton/logger"
-	"glouton/threshold"
-	gloutonTypes "glouton/types"
-	"glouton/version"
 	"math/big"
 	"net/http"
 	"net/url"
@@ -45,6 +32,20 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/bleemeo/glouton/bleemeo/client"
+	"github.com/bleemeo/glouton/bleemeo/internal/common"
+	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/syncapplications"
+	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/syncservices"
+	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
+	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
+	"github.com/bleemeo/glouton/crashreport"
+	"github.com/bleemeo/glouton/delay"
+	"github.com/bleemeo/glouton/facts"
+	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/threshold"
+	gloutonTypes "github.com/bleemeo/glouton/types"
+	"github.com/bleemeo/glouton/version"
 
 	"github.com/getsentry/sentry-go"
 )
@@ -811,7 +812,7 @@ func (s *Synchronizer) GetToken(ctx context.Context) (string, error) {
 }
 
 func (s *Synchronizer) setClient() error {
-	username := s.agentID + "@bleemeo.com" //nolint: goconst
+	username := s.agentID + "@bleemeo.com"
 	_, password := s.option.State.BleemeoCredentials()
 
 	client, err := client.NewClient(

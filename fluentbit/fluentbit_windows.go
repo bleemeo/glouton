@@ -20,8 +20,9 @@ package fluentbit
 
 import (
 	"errors"
-	"glouton/config"
-	crTypes "glouton/facts/container-runtime/types"
+
+	"github.com/bleemeo/glouton/config"
+	crTypes "github.com/bleemeo/glouton/facts/container-runtime/types"
 )
 
 var errNotSupported = errors.New("log inputs are not supported on Windows")

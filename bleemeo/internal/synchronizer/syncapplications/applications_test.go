@@ -18,11 +18,12 @@ package syncapplications
 
 import (
 	"context"
-	"glouton/bleemeo/internal/cache"
-	bleemeoTypes "glouton/bleemeo/types"
-	"glouton/discovery"
 	"strconv"
 	"testing"
+
+	"github.com/bleemeo/glouton/bleemeo/internal/cache"
+	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
+	"github.com/bleemeo/glouton/discovery"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"

@@ -15,16 +15,18 @@
 // limitations under the License.
 
 //go:build !windows
-// +build !windows
 
 package agent
 
 import (
-	"glouton/config"
-	"glouton/facts/container-runtime/veth"
-	"glouton/logger"
-	"glouton/prometheus/exporter/node"
 	"os"
+
+	"github.com/bleemeo/glouton/config"
+	"github.com/bleemeo/glouton/facts/container-runtime/veth"
+	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/prometheus/exporter/node"
+
+	"github.com/prometheus/procfs"
 )
 
 func initOSSpecificParts(chan<- os.Signal) {
@@ -53,4 +55,18 @@ func (a *agent) registerOSSpecificComponents(vethProvider *veth.Provider) {
 			logger.Printf("Unable to start node_exporter, system metrics will be missing: %v", err)
 		}
 	}
+}
+
+func getResidentMemoryOfSelf() uint64 {
+	p, err := procfs.NewProc(os.Getpid())
+	if err != nil {
+		return 0
+	}
+
+	s, err := p.Stat()
+	if err != nil {
+		return 0
+	}
+
+	return uint64(s.ResidentMemory())
 }

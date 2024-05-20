@@ -19,14 +19,15 @@ package discovery
 import (
 	"context"
 	"fmt"
-	"glouton/check"
-	"glouton/facts"
-	"glouton/logger"
-	"glouton/prometheus/registry"
-	"glouton/types"
 	"net"
 	"net/url"
 	"time"
+
+	"github.com/bleemeo/glouton/check"
+	"github.com/bleemeo/glouton/facts"
+	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/prometheus/registry"
+	"github.com/bleemeo/glouton/types"
 
 	"github.com/prometheus/prometheus/model/labels"
 )
@@ -247,7 +248,7 @@ func (d *Discovery) createHTTPCheck(
 		return
 	}
 
-	u, err := url.Parse("http://" + primaryAddress) //nolint: goconst
+	u, err := url.Parse("http://" + primaryAddress)
 	if err != nil {
 		logger.V(2).Printf("can't parse URL \"%s\" ? This shouldn't happen: %v", "http://"+primaryAddress, err)
 

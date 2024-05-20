@@ -19,19 +19,20 @@ package agent
 import (
 	"context"
 	"fmt"
-	"glouton/config"
-	"glouton/discovery"
-	"glouton/jmxtrans"
-	"glouton/logger"
-	"glouton/prometheus/matcher"
-	"glouton/prometheus/model"
-	"glouton/types"
 	"io"
 	"runtime"
 	"sort"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/bleemeo/glouton/config"
+	"github.com/bleemeo/glouton/discovery"
+	"github.com/bleemeo/glouton/jmxtrans"
+	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/prometheus/matcher"
+	"github.com/bleemeo/glouton/prometheus/model"
+	"github.com/bleemeo/glouton/types"
 
 	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
@@ -90,8 +91,8 @@ var (
 		"container_net_bits_sent",
 
 		// Prometheus scrapper
-		"process_cpu_seconds_total",
-		"process_resident_memory_bytes",
+		"process_cpu_seconds_total{scrape_job!=\"\"}",
+		"process_resident_memory_bytes{scrape_job!=\"\"}",
 
 		// Probes
 		"probe_duration_seconds",

@@ -19,12 +19,13 @@ package jmxtrans
 
 import (
 	"context"
-	"glouton/config"
-	"glouton/discovery"
-	"glouton/logger"
-	"glouton/types"
 	"testing"
 	"time"
+
+	"github.com/bleemeo/glouton/config"
+	"github.com/bleemeo/glouton/discovery"
+	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/types"
 )
 
 type fakeStore struct {

@@ -19,7 +19,6 @@ package facts
 import (
 	"context"
 	"fmt"
-	"glouton/logger"
 	"net"
 	"os"
 	"regexp"
@@ -27,6 +26,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/bleemeo/glouton/logger"
 
 	psutilNet "github.com/shirou/gopsutil/v3/net"
 )

@@ -17,11 +17,11 @@
 package net
 
 import (
-	"glouton/facts/container-runtime/veth"
-	"glouton/inputs"
-	"glouton/inputs/internal"
-	"glouton/logger"
-	"glouton/types"
+	"github.com/bleemeo/glouton/facts/container-runtime/veth"
+	"github.com/bleemeo/glouton/inputs"
+	"github.com/bleemeo/glouton/inputs/internal"
+	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/types"
 
 	"github.com/influxdata/telegraf"
 	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"

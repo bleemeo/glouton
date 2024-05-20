@@ -15,15 +15,15 @@
 // limitations under the License.
 
 //go:build windows
-// +build windows
 
 package windows
 
 import (
 	"fmt"
-	"glouton/inputs"
-	"glouton/logger"
 	"time"
+
+	"github.com/bleemeo/glouton/inputs"
+	"github.com/bleemeo/glouton/logger"
 
 	"github.com/alecthomas/kingpin/v2"
 	"github.com/go-kit/log"

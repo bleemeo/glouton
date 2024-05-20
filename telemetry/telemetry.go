@@ -20,10 +20,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"glouton/logger"
 	"io"
 	"net/http"
 	"time"
+
+	"github.com/bleemeo/glouton/logger"
 )
 
 type information struct {

@@ -18,9 +18,10 @@
 package common_test
 
 import (
-	"glouton/prometheus/exporter/common"
 	"regexp"
 	"testing"
+
+	"github.com/bleemeo/glouton/prometheus/exporter/common"
 )
 
 func TestMergeREs(t *testing.T) {

@@ -19,10 +19,11 @@ package filter
 import (
 	"errors"
 	"fmt"
-	"glouton/bleemeo/internal/cache"
-	"glouton/bleemeo/internal/common"
-	bleemeoTypes "glouton/bleemeo/types"
-	"glouton/types"
+
+	"github.com/bleemeo/glouton/bleemeo/internal/cache"
+	"github.com/bleemeo/glouton/bleemeo/internal/common"
+	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
+	"github.com/bleemeo/glouton/types"
 )
 
 var ErrConfigNotFound = errors.New("configuration not found")

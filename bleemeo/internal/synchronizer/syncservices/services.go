@@ -20,16 +20,17 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"glouton/bleemeo/internal/common"
-	"glouton/bleemeo/internal/synchronizer/bleemeoapi"
-	"glouton/bleemeo/internal/synchronizer/types"
-	bleemeoTypes "glouton/bleemeo/types"
-	"glouton/discovery"
-	"glouton/facts"
-	"glouton/logger"
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/bleemeo/glouton/bleemeo/internal/common"
+	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/bleemeoapi"
+	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
+	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
+	"github.com/bleemeo/glouton/discovery"
+	"github.com/bleemeo/glouton/facts"
+	"github.com/bleemeo/glouton/logger"
 )
 
 // serviceFields is the fields used on the API for a service, we always use all fields to

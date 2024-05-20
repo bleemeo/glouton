@@ -14,16 +14,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//go:build linux
+
 package facts
 
 import (
 	"context"
-	"glouton/logger"
 	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/bleemeo/glouton/logger"
 
 	"github.com/shirou/gopsutil/v3/load"
 	psutilNet "github.com/shirou/gopsutil/v3/net"

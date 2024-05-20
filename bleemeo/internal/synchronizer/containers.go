@@ -20,15 +20,16 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"glouton/bleemeo/client"
-	"glouton/bleemeo/internal/common"
-	"glouton/bleemeo/internal/synchronizer/types"
-	bleemeoTypes "glouton/bleemeo/types"
-	"glouton/facts"
-	containerTypes "glouton/facts/container-runtime/types"
-	"glouton/logger"
 	"strings"
 	"time"
+
+	"github.com/bleemeo/glouton/bleemeo/client"
+	"github.com/bleemeo/glouton/bleemeo/internal/common"
+	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
+	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
+	"github.com/bleemeo/glouton/facts"
+	containerTypes "github.com/bleemeo/glouton/facts/container-runtime/types"
+	"github.com/bleemeo/glouton/logger"
 )
 
 const (

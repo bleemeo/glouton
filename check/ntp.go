@@ -21,11 +21,12 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
-	"glouton/logger"
-	"glouton/types"
 	"math"
 	"net"
 	"time"
+
+	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/types"
 )
 
 // NTPCheck perform a NTP check.

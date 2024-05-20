@@ -18,10 +18,11 @@ package vsphere
 
 import (
 	"context"
-	bleemeoTypes "glouton/bleemeo/types"
-	"glouton/facts"
 	"net/url"
 	"testing"
+
+	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
+	"github.com/bleemeo/glouton/facts"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/vmware/govmomi/object"

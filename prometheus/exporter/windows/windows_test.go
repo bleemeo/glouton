@@ -15,14 +15,14 @@
 // limitations under the License.
 
 //go:build windows
-// +build windows
 
 package windows
 
 import (
-	"glouton/config"
-	"glouton/inputs"
 	"testing"
+
+	"github.com/bleemeo/glouton/config"
+	"github.com/bleemeo/glouton/inputs"
 
 	"github.com/alecthomas/kingpin/v2"
 )

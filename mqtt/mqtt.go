@@ -19,16 +19,17 @@ package mqtt
 import (
 	"context"
 	"fmt"
-	"glouton/config"
-	"glouton/crashreport"
-	"glouton/logger"
-	"glouton/mqtt/client"
-	"glouton/types"
 	"net"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/bleemeo/glouton/config"
+	"github.com/bleemeo/glouton/crashreport"
+	"github.com/bleemeo/glouton/logger"
+	"github.com/bleemeo/glouton/mqtt/client"
+	"github.com/bleemeo/glouton/types"
 
 	paho "github.com/eclipse/paho.mqtt.golang"
 )
@@ -37,9 +38,8 @@ const pointsBatchSize = 1000
 
 // MQTT sends points from the store to a MQTT server.
 type MQTT struct {
-	opts    Options
-	client  *client.Client
-	encoder Encoder
+	opts   Options
+	client *client.Client
 
 	l             sync.Mutex
 	pendingPoints []types.MetricPoint
@@ -179,14 +179,9 @@ func (m *MQTT) sendPoints() {
 			end = len(payload)
 		}
 
-		buffer, err := m.encoder.Encode(payload[i:end])
-		if err != nil {
-			logger.V(1).Printf("Unable to encode points: %v", err)
-
-			return
+		if err := m.client.Publish(fmt.Sprintf("v1/agent/%s/data", m.opts.FQDN), payload[i:end], true); err != nil {
+			logger.V(1).Printf("Unable to publish points: %v", err)
 		}
-
-		m.client.Publish(fmt.Sprintf("v1/agent/%s/data", m.opts.FQDN), buffer, true)
 	}
 }
 

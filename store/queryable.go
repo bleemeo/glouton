@@ -19,9 +19,10 @@ package store
 import (
 	"context"
 	"errors"
-	"glouton/types"
 	"sort"
 	"time"
+
+	"github.com/bleemeo/glouton/types"
 
 	"github.com/prometheus/prometheus/model/histogram"
 	"github.com/prometheus/prometheus/model/labels"
