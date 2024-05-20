@@ -18,12 +18,9 @@ package synchronizer
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"net/url"
 	"reflect"
 
-	"github.com/bleemeo/bleemeo-go"
 	"github.com/bleemeo/glouton/bleemeo/internal/common"
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/config"
@@ -58,7 +55,7 @@ func (s *Synchronizer) syncConfig(
 		return false, nil
 	}
 
-	remoteConfigItems, err := s.fetchAllConfigItems(ctx)
+	remoteConfigItems, err := s.client.listGloutonConfigItems(ctx, s.agentID)
 	if err != nil {
 		return false, fmt.Errorf("failed to fetch config items: %w", err)
 	}
@@ -80,46 +77,6 @@ func (s *Synchronizer) syncConfig(
 	s.configSyncDone = true
 
 	return false, nil
-}
-
-// fetchAllConfigItems returns the remote config items in a map of config value by comparableConfigItem.
-func (s *Synchronizer) fetchAllConfigItems(ctx context.Context) (map[comparableConfigItem]configItemValue, error) {
-	params := url.Values{
-		"fields": {"id,agent,key,value,priority,source,path,type"},
-		"agent":  {s.agentID},
-	}
-
-	items := make(map[comparableConfigItem]configItemValue)
-
-	iter := s.client.Iterator(bleemeo.ResourceGloutonConfigItem, params)
-	for iter.Next(ctx) {
-		var item bleemeoTypes.GloutonConfigItem
-
-		if err := json.Unmarshal(iter.At(), &item); err != nil {
-			logger.V(2).Printf("Failed to unmarshal config item: %v", err)
-
-			continue
-		}
-
-		key := comparableConfigItem{
-			Key:      item.Key,
-			Priority: item.Priority,
-			Source:   item.Source,
-			Path:     item.Path,
-			Type:     item.Type,
-		}
-
-		items[key] = configItemValue{
-			ID:    item.ID,
-			Value: item.Value,
-		}
-	}
-
-	if iter.Err() != nil {
-		return nil, iter.Err()
-	}
-
-	return items, nil
 }
 
 // localConfigItems returns the local config items in a map of config value by comparableConfigItem.

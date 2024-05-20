@@ -224,7 +224,7 @@ func (s *Synchronizer) updateMQTTStatus() error {
 		return nil
 	}
 
-	// When the agent is not connected check whether MQTT is accessible.
+	// When the agent is not connected, check whether MQTT is accessible.
 	if !isMQTTConnected {
 		mqttAddress := net.JoinHostPort(s.option.Config.Bleemeo.MQTT.Host, strconv.Itoa(s.option.Config.Bleemeo.MQTT.Port))
 

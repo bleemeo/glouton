@@ -18,6 +18,44 @@ import (
 
 var errAgentConfigNotSupported = errors.New("Bleemeo API doesn't support AgentConfig")
 
+type clientWrapper interface {
+	ThrottleDeadline() time.Time
+
+	listAgentTypes(ctx context.Context) ([]types.AgentType, error)
+	listAccountConfigs(ctx context.Context) ([]types.AccountConfig, error)
+	listAgentConfigs(ctx context.Context) ([]types.AgentConfig, error)
+	listAgents(ctx context.Context) ([]types.Agent, error)
+	updateAgent(ctx context.Context, id string, data any) (types.Agent, error)
+	deleteAgent(ctx context.Context, id string) error
+	listGloutonConfigItems(ctx context.Context, agentID string) (map[comparableConfigItem]configItemValue, error)
+	registerGloutonConfigItems(ctx context.Context, items []types.GloutonConfigItem) error
+	deleteGloutonConfigItem(ctx context.Context, id string) error
+	listContainers(ctx context.Context, agentID string) ([]types.Container, error)
+	updateContainer(ctx context.Context, id string, payload any, result *containerPayload) error
+	registerContainer(ctx context.Context, payload containerPayload, result *containerPayload) error
+	listDiagnostics(ctx context.Context) ([]RemoteDiagnostic, error)
+	uploadDiagnostic(ctx context.Context, contentType string, content io.Reader) error
+	listFacts(ctx context.Context) ([]types.AgentFact, error)
+	registerFact(ctx context.Context, payload any, result *types.AgentFact) error
+	deleteFact(ctx context.Context, id string) error
+	updateMetric(ctx context.Context, id string, payload any, fields string) error
+	listActiveMetrics(ctx context.Context, active bool, filter func(payload metricPayload) bool) (map[string]types.Metric, error)
+	countInactiveMetrics(ctx context.Context) (int, error)
+	listMetricsBy(ctx context.Context, params url.Values, filter func(payload metricPayload) bool) (map[string]types.Metric, error)
+	getMetricByID(ctx context.Context, id string) (metricPayload, error)
+	registerMetric(ctx context.Context, payload metricPayload, result *metricPayload) error
+	deleteMetric(ctx context.Context, id string) error
+	deactivateMetric(ctx context.Context, id string) error
+	listMonitors(ctx context.Context) ([]types.Monitor, error)
+	getMonitorByID(ctx context.Context, id string) (types.Monitor, error)
+	listServices(ctx context.Context, agentID string) ([]types.Service, error)
+	updateService(ctx context.Context, id string, payload servicePayload) (types.Service, error)
+	registerService(ctx context.Context, payload servicePayload) (types.Service, error)
+	registerSNMPAgent(ctx context.Context, payload payloadAgent) (types.Agent, error)
+	updateAgentLastDuplicationDate(ctx context.Context, agentID string, lastDuplicationDate time.Time) error
+	registerVSphereAgent(ctx context.Context, payload payloadAgent) (types.Agent, error)
+}
+
 func (cl *wrapperClient) listAgentTypes(ctx context.Context) ([]types.AgentType, error) {
 	params := url.Values{
 		"fields": {"id,name,display_name"},
@@ -119,6 +157,46 @@ func (cl *wrapperClient) updateAgent(ctx context.Context, id string, data any) (
 	err := cl.Update(ctx, bleemeo.ResourceAgent, id, data, agentFields, &agent)
 
 	return agent, err
+}
+
+func (cl *wrapperClient) deleteAgent(ctx context.Context, id string) error {
+	return cl.Delete(ctx, bleemeo.ResourceAgent, id)
+}
+
+// listGloutonConfigItems returns the remote config items in a map of config value by comparableConfigItem.
+func (cl *wrapperClient) listGloutonConfigItems(ctx context.Context, agentID string) (map[comparableConfigItem]configItemValue, error) {
+	params := url.Values{
+		"fields": {"id,agent,key,value,priority,source,path,type"},
+		"agent":  {agentID},
+	}
+
+	items := make(map[comparableConfigItem]configItemValue)
+
+	iter := cl.Iterator(bleemeo.ResourceGloutonConfigItem, params)
+	for iter.Next(ctx) {
+		var item types.GloutonConfigItem
+
+		if err := json.Unmarshal(iter.At(), &item); err != nil {
+			logger.V(2).Printf("Failed to unmarshal config item: %v", err)
+
+			continue
+		}
+
+		key := comparableConfigItem{
+			Key:      item.Key,
+			Priority: item.Priority,
+			Source:   item.Source,
+			Path:     item.Path,
+			Type:     item.Type,
+		}
+
+		items[key] = configItemValue{
+			ID:    item.ID,
+			Value: item.Value,
+		}
+	}
+
+	return items, iter.Err()
 }
 
 func (cl *wrapperClient) registerGloutonConfigItems(ctx context.Context, items []types.GloutonConfigItem) error {
@@ -381,8 +459,4 @@ func (cl *wrapperClient) registerVSphereAgent(ctx context.Context, payload paylo
 	var result types.Agent
 
 	return result, cl.Create(ctx, bleemeo.ResourceAgent, payload, vSphereAgentFields, &result)
-}
-
-func (cl *wrapperClient) deleteAgent(ctx context.Context, id string) error {
-	return cl.Delete(ctx, bleemeo.ResourceAgent, id)
 }
