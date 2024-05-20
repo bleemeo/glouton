@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
+
 	"github.com/google/go-cmp/cmp"
 )
 

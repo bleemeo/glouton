@@ -25,7 +25,7 @@ import (
 
 	"github.com/bleemeo/glouton/bleemeo/client"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
-	gloutonTypes "github.com/bleemeo/glouton/bleemeo/types"
+	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/logger"
 )
 
@@ -85,10 +85,10 @@ func (s *Synchronizer) agentTypesUpdateList(ctx context.Context, apiClient types
 		return err
 	}
 
-	agentTypes := make([]gloutonTypes.AgentType, len(result))
+	agentTypes := make([]bleemeoTypes.AgentType, len(result))
 
 	for i, jsonMessage := range result {
-		var agentType gloutonTypes.AgentType
+		var agentType bleemeoTypes.AgentType
 
 		if err := json.Unmarshal(jsonMessage, &agentType); err != nil {
 			continue
@@ -112,10 +112,10 @@ func (s *Synchronizer) accountConfigUpdateList(ctx context.Context, apiClient ty
 		return err
 	}
 
-	configs := make([]gloutonTypes.AccountConfig, len(result))
+	configs := make([]bleemeoTypes.AccountConfig, len(result))
 
 	for i, jsonMessage := range result {
-		var config gloutonTypes.AccountConfig
+		var config bleemeoTypes.AccountConfig
 
 		if err := json.Unmarshal(jsonMessage, &config); err != nil {
 			continue
@@ -149,10 +149,10 @@ func (s *Synchronizer) agentConfigUpdateList(ctx context.Context, apiClient type
 		return err
 	}
 
-	configs := make([]gloutonTypes.AgentConfig, len(result))
+	configs := make([]bleemeoTypes.AgentConfig, len(result))
 
 	for i, jsonMessage := range result {
-		var config gloutonTypes.AgentConfig
+		var config bleemeoTypes.AgentConfig
 
 		if err := json.Unmarshal(jsonMessage, &config); err != nil {
 			continue
