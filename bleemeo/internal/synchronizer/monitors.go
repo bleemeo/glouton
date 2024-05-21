@@ -123,6 +123,24 @@ func (s *Synchronizer) syncMonitors(ctx context.Context, syncType types.SyncType
 	return false, s.ApplyMonitorUpdate()
 }
 
+func hashAgentID(agentID string) uint64 {
+	// The "@bleemeo.com" suffix is here to produce good jitter with existing default probe's agent ID.
+	return xxhash.Sum64String(agentID + "@bleemeo.com")
+}
+
+func applyJitterToMonitorCreationDate(monitor bleemeoTypes.Monitor, agentIDHash uint64) (time.Time, error) {
+	creationDate, err := time.Parse(time.RFC3339, monitor.CreationDate)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("invalid created_at: %w", err)
+	}
+
+	creationDateBase := creationDate.Truncate(time.Minute)
+	millisecondInMinute := (uint64(creationDate.UnixMilli()) + agentIDHash) % 45000
+	jitterCreationDate := creationDateBase.Add(time.Duration(millisecondInMinute) * time.Millisecond)
+
+	return jitterCreationDate, nil
+}
+
 // ApplyMonitorUpdate preprocesses monitors and updates blackbox target list.
 // `forceAccountConfigsReload` determine whether account configurations should be updated via the API.
 func (s *Synchronizer) ApplyMonitorUpdate() error {
@@ -136,7 +154,7 @@ func (s *Synchronizer) ApplyMonitorUpdate() error {
 
 	accountConfigs := s.option.Cache.AccountConfigsByUUID()
 	processedMonitors := make([]gloutonTypes.Monitor, 0, len(monitors))
-	agentIDHash := time.Duration(xxhash.Sum64String(s.agentID)%16000)*time.Millisecond - 8*time.Second
+	agentIDHash := hashAgentID(s.agentID)
 
 	for _, monitor := range monitors {
 		// try to retrieve the account config associated with this monitor
@@ -145,19 +163,11 @@ func (s *Synchronizer) ApplyMonitorUpdate() error {
 			return fmt.Errorf("%w '%s' for probe '%s'", errMissingAccountConf, monitor.AccountConfig, monitor.URL)
 		}
 
-		creationDate, err := time.Parse(time.RFC3339, monitor.CreationDate)
+		jitterCreationDate, err := applyJitterToMonitorCreationDate(monitor, agentIDHash)
 		if err != nil {
-			logger.V(1).Printf("Ignore monitor %s (id=%s) due to invalid created_at: %s", monitor.URL, monitor.ID, monitor.CreationDate)
+			logger.V(1).Printf("Ignore monitor %s (id=%s): %s", monitor.URL, monitor.ID, err)
 
 			continue
-		}
-
-		jitterCreationDate := creationDate.Add(agentIDHash)
-		if creationDate.Minute() != jitterCreationDate.Minute() {
-			// We want to kept the minute unchanged. This is required for monitor with
-			// resolution of 5 minutes because Bleemeo assume that the monitor metrics are
-			// send at the beginning of the minute after creationDate + N * 5 minutes.
-			jitterCreationDate = creationDate.Add(-agentIDHash)
 		}
 
 		processedMonitors = append(processedMonitors, gloutonTypes.Monitor{

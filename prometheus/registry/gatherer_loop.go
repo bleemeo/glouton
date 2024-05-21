@@ -94,7 +94,7 @@ func (sl *scrapeLoop) runOnce(ctx context.Context, interval time.Duration, timeo
 func (sl *scrapeLoop) run(ctx context.Context, interval, timeout time.Duration, jitterSeed uint64, triggerImmediate bool) {
 	defer close(sl.stopped)
 
-	alignedScrapeTime := sl.offset(interval, jitterSeed).Round(0)
+	alignedScrapeTime := scrapeLoopOffset(time.Now(), interval, jitterSeed).Round(0)
 
 	if triggerImmediate {
 		alignedScrapeTime = sl.runOnce(ctx, interval, timeout, alignedScrapeTime)
@@ -141,11 +141,11 @@ func (sl *scrapeLoop) stop() {
 	<-sl.stopped
 }
 
-func (sl *scrapeLoop) offset(interval time.Duration, jitterSeed uint64) time.Time {
-	now := time.Now().UnixNano()
+func scrapeLoopOffset(now time.Time, interval time.Duration, jitterSeed uint64) time.Time {
+	nowNano := now.UnixNano()
 
 	var (
-		base   = int64(interval) - now%int64(interval)
+		base   = int64(interval) - nowNano%int64(interval)
 		offset = jitterSeed % uint64(interval)
 		next   = base + int64(offset)
 	)
@@ -154,5 +154,10 @@ func (sl *scrapeLoop) offset(interval time.Duration, jitterSeed uint64) time.Tim
 		next -= int64(interval)
 	}
 
-	return time.Unix(0, now+next)
+	return time.Unix(0, nowNano+next)
+}
+
+// JitterForTime return a Jitter such as scrape run at align + N * interval.
+func JitterForTime(align time.Time, interval time.Duration) uint64 {
+	return uint64(align.UnixNano()) % uint64(interval)
 }
