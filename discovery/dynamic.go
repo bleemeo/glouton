@@ -44,21 +44,25 @@ const (
 	gloutonContainerLabelPrefix = "glouton."
 )
 
+type Option struct {
+	PS                 processFact
+	Netstat            netstatProvider
+	ContainerInfo      containerInfoProvider
+	IsContainerIgnored func(facts.Container) bool
+	FileReader         fileReader
+	DefaultStack       string
+}
+
 // DynamicDiscovery implement the dynamic discovery. It will only return
 // service dynamically discovery from processes list, containers running, ...
 // It don't include manually configured service or previously detected services.
 type DynamicDiscovery struct {
 	l sync.Mutex
 
-	now                func() time.Time
-	ps                 processFact
-	netstat            netstatProvider
-	containerInfo      containerInfoProvider
-	fileReader         fileReader
-	defaultStack       string
-	isContainerIgnored func(facts.Container) bool
-	pendingUpdateCond  *sync.Cond
-	pendingUpdate      bool
+	option            Option
+	now               func() time.Time
+	pendingUpdateCond *sync.Cond
+	pendingUpdate     bool
 
 	lastDiscoveryUpdate time.Time
 	services            []Service
@@ -74,16 +78,11 @@ type fileReader interface {
 }
 
 // NewDynamic create a new dynamic service discovery which use information from
-// processess and netstat to discovery services.
-func NewDynamic(ps processFact, netstat netstatProvider, containerInfo containerInfoProvider, isContainerIgnored func(facts.Container) bool, fileReader fileReader, defaultStack string) *DynamicDiscovery {
+// processes and netstat to discovery services.
+func NewDynamic(opts Option) *DynamicDiscovery {
 	dd := &DynamicDiscovery{
-		now:                time.Now,
-		ps:                 ps,
-		netstat:            netstat,
-		containerInfo:      containerInfo,
-		fileReader:         fileReader,
-		defaultStack:       defaultStack,
-		isContainerIgnored: isContainerIgnored,
+		now:    time.Now,
+		option: opts,
 	}
 
 	dd.pendingUpdateCond = sync.NewCond(&dd.l)
@@ -154,7 +153,7 @@ func (dd *DynamicDiscovery) ProcessServiceInfo(cmdLine []string, pid int, create
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	processes, err := dd.ps.Processes(ctx, time.Since(createTime))
+	processes, err := dd.option.PS.Processes(ctx, time.Since(createTime))
 	if err != nil {
 		logger.V(1).Printf("unable to list processes: %v", err)
 
@@ -167,8 +166,8 @@ func (dd *DynamicDiscovery) ProcessServiceInfo(cmdLine []string, pid int, create
 	for _, p := range processes {
 		if p.PID == pid && p.CreateTime.Truncate(time.Second).Equal(createTime) {
 			if p.ContainerID != "" {
-				container, ok := dd.containerInfo.CachedContainer(p.ContainerID)
-				if !ok || dd.isContainerIgnored(container) {
+				container, ok := dd.option.ContainerInfo.CachedContainer(p.ContainerID)
+				if !ok || dd.option.IsContainerIgnored(container) {
 					return "", ""
 				}
 			}
@@ -215,7 +214,7 @@ var (
 		"uWSGI":        UWSGIService,
 		"varnishd":     VarnishService,
 	}
-	knownIntepretedProcess = []struct {
+	knownInterpretedProcess = []struct {
 		CmdLineMustContains []string
 		ServiceName         ServiceName
 		Interpreter         string
@@ -299,12 +298,12 @@ type netstatProvider interface {
 // Only one updateDiscovery should be running at a time (the pendingUpdateCond ensure this).
 // The lock should not be held, updateDiscovery take care of taking lock before access to mutable fields.
 func (dd *DynamicDiscovery) updateDiscovery(ctx context.Context, maxAge time.Duration) error {
-	processes, err := dd.ps.Processes(ctx, maxAge)
+	processes, err := dd.option.PS.Processes(ctx, maxAge)
 	if err != nil {
 		return err
 	}
 
-	netstat, err := dd.netstat.Netstat(ctx, processes)
+	netstat, err := dd.option.Netstat.Netstat(ctx, processes)
 	if err != nil && !os.IsNotExist(err) {
 		logger.V(1).Printf("An error occurred while trying to retrieve netstat information: %v", err)
 	}
@@ -390,7 +389,7 @@ func (dd *DynamicDiscovery) updateDiscovery(ctx context.Context, maxAge time.Dur
 	}
 
 	// Resolve possible conflict of listen address. If two services are discovered in the same containers, it's
-	// possible for two different service to have the same listenning address... which is unlikely.
+	// possible for two different service to have the same listening address... which is unlikely.
 	// When a conflict occur, only kept port that are associated with the standard port of the service.
 	services := fixListenAddressConflict(servicesMap)
 
@@ -421,16 +420,13 @@ func (dd *DynamicDiscovery) serviceFromProcess(process facts.Process, netstat ma
 		Instance:      process.ContainerName,
 		ExePath:       process.Executable,
 		Active:        true,
-		Stack:         dd.defaultStack,
 	}
 
 	if service.ContainerID != "" {
-		service.container, ok = dd.containerInfo.CachedContainer(service.ContainerID)
-		if !ok || dd.isContainerIgnored(service.container) {
+		service.container, ok = dd.option.ContainerInfo.CachedContainer(service.ContainerID)
+		if !ok || dd.option.IsContainerIgnored(service.container) {
 			return Service{}, false
 		}
-
-		getContainerStack(&service)
 	}
 
 	di := getDiscoveryInfo(dd.now(), &service, netstat, process.PID)
@@ -439,19 +435,10 @@ func (dd *DynamicDiscovery) serviceFromProcess(process facts.Process, netstat ma
 
 	dd.fillConfig(&service)
 	dd.fillConfigFromLabels(&service)
+	dd.discoveryFromLabels(&service)
 	dd.guessJMX(&service, process.CmdLineList)
 
 	return service, true
-}
-
-func getContainerStack(service *Service) {
-	if stack, ok := facts.LabelsAndAnnotations(service.container)["bleemeo.stack"]; ok {
-		service.Stack = stack
-	}
-
-	if stack, ok := facts.LabelsAndAnnotations(service.container)["glouton.stack"]; ok {
-		service.Stack = stack
-	}
 }
 
 func getDiscoveryInfo(now time.Time, service *Service, netstat map[int][]facts.ListenAddress, pid int) discoveryInfo {
@@ -553,8 +540,8 @@ func (dd *DynamicDiscovery) fillConfig(service *Service) {
 					service.Config.Password = v
 				}
 			}
-		} else if dd.fileReader != nil {
-			if debianCnfRaw, err := dd.fileReader.ReadFile("/etc/mysql/debian.cnf"); err == nil {
+		} else if dd.option.FileReader != nil {
+			if debianCnfRaw, err := dd.option.FileReader.ReadFile("/etc/mysql/debian.cnf"); err == nil {
 				if debianCnf, err := ini.Load(debianCnfRaw); err == nil {
 					section := debianCnf.Section("client")
 					if section != nil {
@@ -632,6 +619,22 @@ func (dd *DynamicDiscovery) fillConfigFromLabels(service *Service) {
 	err = mergo.Merge(&service.Config, override, mergo.WithOverride)
 	if err != nil {
 		logger.V(1).Printf("Failed to merge service and override: %s", err)
+	}
+}
+
+// discoveryFromLabels look labels on containers that add information on service.
+func (dd *DynamicDiscovery) discoveryFromLabels(service *Service) {
+	if service.container == nil {
+		return
+	}
+
+	labels := facts.LabelsAndAnnotations(service.container)
+
+	if composeProject := labels["com.docker.compose.project"]; composeProject != "" {
+		service.Applications = append(service.Applications, Application{
+			Name: composeProject,
+			Type: ApplicationDockerCompose,
+		})
 	}
 }
 
@@ -715,7 +718,7 @@ func serviceByInterpreter(name string, cmdLine []string) (serviceName ServiceNam
 	// Need a more general way to manage those case. Every interpreter/VM
 	// language are affected.
 	if name == "java" || strings.HasPrefix(name, "python") || name == "erl" || strings.HasPrefix(name, "beam") {
-		for _, candidate := range knownIntepretedProcess {
+		for _, candidate := range knownInterpretedProcess {
 			switch candidate.Interpreter {
 			case "erlang":
 				if name != "erl" && !strings.HasPrefix(name, "beam") {
@@ -751,7 +754,7 @@ func serviceByInterpreter(name string, cmdLine []string) (serviceName ServiceNam
 	return "", false
 }
 
-// excludeEmptyAddress exlude entry with empty Address IP. It will modify input.
+// excludeEmptyAddress exclude entry with empty Address IP. It will modify input.
 func excludeEmptyAddress(addresses []facts.ListenAddress) []facts.ListenAddress {
 	n := 0
 

@@ -24,25 +24,25 @@ import (
 	"strings"
 
 	"github.com/bleemeo/glouton/bleemeo/client"
-	"github.com/bleemeo/glouton/bleemeo/types"
+	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
+	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/logger"
 )
 
-func (s *Synchronizer) syncAccountConfig(ctx context.Context, fullSync bool, onlyEssential bool) (updateThresholds bool, err error) {
-	_ = onlyEssential
-
-	if fullSync {
+func (s *Synchronizer) syncAccountConfig(ctx context.Context, syncType types.SyncType, execution types.SynchronizationExecution) (updateThresholds bool, err error) {
+	if syncType == types.SyncTypeForceCacheRefresh {
 		currentConfig, _ := s.option.Cache.CurrentAccountConfig()
+		apiClient := execution.BleemeoAPIClient()
 
-		if err := s.agentTypesUpdateList(); err != nil {
+		if err := s.agentTypesUpdateList(ctx, apiClient); err != nil {
 			return false, err
 		}
 
-		if err := s.accountConfigUpdateList(); err != nil {
+		if err := s.accountConfigUpdateList(ctx, apiClient); err != nil {
 			return false, err
 		}
 
-		if err := s.agentConfigUpdateList(); err != nil {
+		if err := s.agentConfigUpdateList(ctx, apiClient); err != nil {
 			return false, err
 		}
 
@@ -51,7 +51,7 @@ func (s *Synchronizer) syncAccountConfig(ctx context.Context, fullSync bool, onl
 			hasChanged := !reflect.DeepEqual(currentConfig, newConfig)
 			nameHasChanged := currentConfig.Name != newConfig.Name
 
-			if s.currentConfigNotified != newConfig.ID {
+			if s.state.currentConfigNotified != newConfig.ID {
 				hasChanged = true
 				nameHasChanged = true
 			}
@@ -61,7 +61,9 @@ func (s *Synchronizer) syncAccountConfig(ctx context.Context, fullSync bool, onl
 			}
 		}
 
-		s.currentConfigNotified = newConfig.ID
+		s.state.l.Lock()
+		s.state.currentConfigNotified = newConfig.ID
+		s.state.l.Unlock()
 
 		// Set suspended mode if it changed.
 		if s.suspendedMode != newConfig.Suspended {
@@ -73,20 +75,20 @@ func (s *Synchronizer) syncAccountConfig(ctx context.Context, fullSync bool, onl
 	return false, nil
 }
 
-func (s *Synchronizer) agentTypesUpdateList() error {
+func (s *Synchronizer) agentTypesUpdateList(ctx context.Context, apiClient types.RawClient) error {
 	params := map[string]string{
 		"fields": "id,name,display_name",
 	}
 
-	result, err := s.client.Iter(s.ctx, "agenttype", params)
+	result, err := apiClient.Iter(ctx, "agenttype", params)
 	if err != nil {
 		return err
 	}
 
-	agentTypes := make([]types.AgentType, len(result))
+	agentTypes := make([]bleemeoTypes.AgentType, len(result))
 
 	for i, jsonMessage := range result {
-		var agentType types.AgentType
+		var agentType bleemeoTypes.AgentType
 
 		if err := json.Unmarshal(jsonMessage, &agentType); err != nil {
 			continue
@@ -100,20 +102,20 @@ func (s *Synchronizer) agentTypesUpdateList() error {
 	return nil
 }
 
-func (s *Synchronizer) accountConfigUpdateList() error {
+func (s *Synchronizer) accountConfigUpdateList(ctx context.Context, apiClient types.RawClient) error {
 	params := map[string]string{
 		"fields": "id,name,live_process_resolution,live_process,docker_integration,snmp_integration,vsphere_integration,number_of_custom_metrics,suspended",
 	}
 
-	result, err := s.client.Iter(s.ctx, "accountconfig", params)
+	result, err := apiClient.Iter(ctx, "accountconfig", params)
 	if err != nil {
 		return err
 	}
 
-	configs := make([]types.AccountConfig, len(result))
+	configs := make([]bleemeoTypes.AccountConfig, len(result))
 
 	for i, jsonMessage := range result {
-		var config types.AccountConfig
+		var config bleemeoTypes.AccountConfig
 
 		if err := json.Unmarshal(jsonMessage, &config); err != nil {
 			continue
@@ -127,12 +129,12 @@ func (s *Synchronizer) accountConfigUpdateList() error {
 	return nil
 }
 
-func (s *Synchronizer) agentConfigUpdateList() error {
+func (s *Synchronizer) agentConfigUpdateList(ctx context.Context, apiClient types.RawClient) error {
 	params := map[string]string{
 		"fields": "id,account_config,agent_type,metrics_allowlist,metrics_resolution",
 	}
 
-	result, err := s.client.Iter(s.ctx, "agentconfig", params)
+	result, err := apiClient.Iter(ctx, "agentconfig", params)
 	if apiErr, ok := err.(client.APIError); ok {
 		mediatype, _, err := mime.ParseMediaType(apiErr.ContentType)
 		if err == nil && mediatype == "text/html" && strings.Contains(apiErr.FinalURL, "login") {
@@ -147,10 +149,10 @@ func (s *Synchronizer) agentConfigUpdateList() error {
 		return err
 	}
 
-	configs := make([]types.AgentConfig, len(result))
+	configs := make([]bleemeoTypes.AgentConfig, len(result))
 
 	for i, jsonMessage := range result {
-		var config types.AgentConfig
+		var config bleemeoTypes.AgentConfig
 
 		if err := json.Unmarshal(jsonMessage, &config); err != nil {
 			continue

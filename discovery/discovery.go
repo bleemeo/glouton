@@ -151,19 +151,19 @@ func validateServices(services []config.Service) (map[NameInstance]config.Servic
 	replacer := strings.NewReplacer(".", "_", "-", "_")
 
 	for _, srv := range services {
-		if srv.ID == "" {
-			warning := fmt.Errorf("%w: a key \"id\" is missing in one of your service override", config.ErrInvalidValue)
+		if srv.Type == "" {
+			warning := fmt.Errorf("%w: the key \"type\" is missing in one of your service override", config.ErrInvalidValue)
 			warnings.Append(warning)
 
 			continue
 		}
 
-		if !model.IsValidMetricName(model.LabelValue(srv.ID)) {
-			newID := replacer.Replace(srv.ID)
-			if !model.IsValidMetricName(model.LabelValue(newID)) {
+		if !model.IsValidMetricName(model.LabelValue(srv.Type)) {
+			newServiceType := replacer.Replace(srv.Type)
+			if !model.IsValidMetricName(model.LabelValue(newServiceType)) {
 				warning := fmt.Errorf(
-					"%w: service id \"%s\" can only contains letters, digits and underscore",
-					config.ErrInvalidValue, srv.ID,
+					"%w: service type \"%s\" can only contains letters, digits and underscore",
+					config.ErrInvalidValue, srv.Type,
 				)
 				warnings.Append(warning)
 
@@ -171,19 +171,19 @@ func validateServices(services []config.Service) (map[NameInstance]config.Servic
 			}
 
 			warning := fmt.Errorf(
-				"%w: service id \"%s\" can not contains dot (.) or dash (-). Changed to \"%s\"",
-				config.ErrInvalidValue, srv.ID, newID,
+				"%w: service type \"%s\" can not contains dot (.) or dash (-). Changed to \"%s\"",
+				config.ErrInvalidValue, srv.Type, newServiceType,
 			)
 			warnings.Append(warning)
 
-			srv.ID = newID
+			srv.Type = newServiceType
 		}
 
 		// SSL and StartTLS can't be used at the same time.
 		if srv.SSL && srv.StartTLS {
 			warning := fmt.Errorf(
 				"%w: service '%s' can't set both SSL and StartTLS, StartTLS will be used",
-				config.ErrInvalidValue, srv.ID,
+				config.ErrInvalidValue, srv.Type,
 			)
 			warnings.Append(warning)
 
@@ -196,7 +196,7 @@ func validateServices(services []config.Service) (map[NameInstance]config.Servic
 		default:
 			warning := fmt.Errorf(
 				"%w: service '%s' has an unsupported stats protocol: '%s'",
-				config.ErrInvalidValue, srv.ID, srv.StatsProtocol,
+				config.ErrInvalidValue, srv.Type, srv.StatsProtocol,
 			)
 			warnings.Append(warning)
 
@@ -207,12 +207,12 @@ func validateServices(services []config.Service) (map[NameInstance]config.Servic
 
 		// Check for duplicated overrides.
 		key := NameInstance{
-			Name:     srv.ID,
+			Name:     srv.Type,
 			Instance: srv.Instance,
 		}
 
 		if _, ok := serviceMap[key]; ok {
-			warning := fmt.Sprintf("a service override is duplicated for '%s'", srv.ID)
+			warning := fmt.Sprintf("a service override is duplicated for '%s'", srv.Type)
 
 			if srv.Instance != "" {
 				warning = fmt.Sprintf("%s on instance '%s'", warning, srv.Instance)
@@ -299,7 +299,7 @@ func (d *Discovery) DiagnosticArchive(ctx context.Context, zipFile types.Archive
 	}
 
 	if dd, ok := d.dynamicDiscovery.(*DynamicDiscovery); ok {
-		procs, err := dd.ps.Processes(ctx, time.Hour)
+		procs, err := dd.option.PS.Processes(ctx, time.Hour)
 		if err != nil {
 			return err
 		}
@@ -556,7 +556,7 @@ func copyAndMergeServiceWithOverride(servicesMap map[NameInstance]Service, overr
 
 	for _, v := range overrides {
 		key := NameInstance{
-			Name:     v.ID,
+			Name:     v.Type,
 			Instance: v.Instance,
 		}
 		service := serviceMapWithOverride[key]
@@ -591,8 +591,8 @@ func applyOverrideInPlace(
 	for _, serviceKey := range serviceKeys {
 		service := servicesMap[serviceKey]
 
-		if service.Name != service.Config.ID && service.Config.ID != "" {
-			service.Name = service.Config.ID
+		if service.Name != service.Config.Type && service.Config.Type != "" {
+			service.Name = service.Config.Type
 			service.ServiceType = ""
 		}
 
@@ -665,10 +665,6 @@ func applyOverrideInPlace(
 			}
 		}
 
-		if service.Config.Stack != "" {
-			service.Stack = service.Config.Stack
-		}
-
 		if service.ServiceType == CustomService {
 			// If the port is not set, use the JMX port.
 			if service.Config.Port == 0 {
@@ -717,6 +713,8 @@ func applyOverrideInPlace(
 				continue
 			}
 		}
+
+		service.Tags = append(service.Tags, service.Config.Tags...)
 
 		servicesMap[serviceKey] = service
 	}

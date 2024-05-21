@@ -46,7 +46,6 @@ type Config struct {
 	ServiceIgnoreMetrics     []NameInstance       `yaml:"service_ignore_metrics"`
 	ServiceIgnoreCheck       []NameInstance       `yaml:"service_ignore_check"`
 	Smart                    Smart                `yaml:"smart"`
-	Stack                    string               `yaml:"stack"`
 	Tags                     []string             `yaml:"tags"`
 	Telegraf                 Telegraf             `yaml:"telegraf"`
 	Thresholds               map[string]Threshold `yaml:"thresholds"`
@@ -323,9 +322,9 @@ type Listener struct {
 }
 
 type Service struct {
-	// The name of the service.
-	ID string `yaml:"id"`
-	// Instance of the service, used to differentiate between services with the same ID.
+	// The name of the service type, like "apache", "nginx". For custom service, it could be any value.
+	Type string `yaml:"type"`
+	// Instance of the service, used to differentiate between two same services (like two apaches)
 	Instance string `yaml:"instance"`
 	// The port the service is running on.
 	Port int `yaml:"port"`
@@ -333,10 +332,10 @@ type Service struct {
 	IgnorePorts []int `yaml:"ignore_ports"`
 	// The address of the service.
 	Address string `yaml:"address"`
+	// Tags associated with this service.
+	Tags []string `yaml:"tags"`
 	// The delay between two consecutive checks in seconds.
 	Interval int `yaml:"interval"`
-	// Stack dashboard this service belongs to.
-	Stack string `yaml:"stack"`
 	// Check type used for custom checks.
 	CheckType string `yaml:"check_type"`
 	// The path used for HTTP checks.
@@ -375,7 +374,7 @@ type Service struct {
 	CAFile      string `yaml:"ca_file"`
 	CertFile    string `yaml:"cert_file"`
 	KeyFile     string `yaml:"key_file"`
-	// IncludedItems or exlude specific items (for instance Jenkins jobs).
+	// IncludedItems or exclude specific items (for instance Jenkins jobs).
 	IncludedItems []string `yaml:"included_items"`
 	ExcludedItems []string `yaml:"excluded_items"`
 }

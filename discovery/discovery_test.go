@@ -365,7 +365,7 @@ func Test_applyOverride(t *testing.T) { //nolint:maintidx
 				},
 				servicesOverride: []config.Service{
 					{
-						ID:      "apache",
+						Type:    "apache",
 						Address: "10.0.1.2",
 					},
 				},
@@ -375,7 +375,7 @@ func Test_applyOverride(t *testing.T) { //nolint:maintidx
 					Name:        "apache",
 					ServiceType: ApacheService,
 					Config: config.Service{
-						ID:      "apache",
+						Type:    "apache",
 						Address: "10.0.1.2",
 					},
 					ListenAddresses: []facts.ListenAddress{
@@ -400,13 +400,13 @@ func Test_applyOverride(t *testing.T) { //nolint:maintidx
 				},
 				servicesOverride: []config.Service{
 					{
-						ID:           "myapplication",
+						Type:         "myapplication",
 						Port:         8080,
 						CheckType:    customCheckNagios,
 						CheckCommand: "command-to-run",
 					},
 					{
-						ID:   "custom_webserver",
+						Type: "custom_webserver",
 						Port: 8081,
 					},
 				},
@@ -419,7 +419,7 @@ func Test_applyOverride(t *testing.T) { //nolint:maintidx
 				{Name: "myapplication"}: {
 					ServiceType: CustomService,
 					Config: config.Service{
-						ID:           "myapplication",
+						Type:         "myapplication",
 						Address:      "127.0.0.1", // default as soon as port is set
 						Port:         8080,
 						CheckType:    customCheckNagios,
@@ -431,7 +431,7 @@ func Test_applyOverride(t *testing.T) { //nolint:maintidx
 				{Name: "custom_webserver"}: {
 					ServiceType: CustomService,
 					Config: config.Service{
-						ID:        "custom_webserver",
+						Type:      "custom_webserver",
 						Address:   "127.0.0.1", // default as soon as port is set
 						Port:      8081,
 						CheckType: customCheckTCP, // default as soon as port is set,
@@ -447,12 +447,12 @@ func Test_applyOverride(t *testing.T) { //nolint:maintidx
 				discoveredServicesMap: nil,
 				servicesOverride: []config.Service{
 					{ // the check_command is missing
-						ID:        "myapplication",
+						Type:      "myapplication",
 						Port:      8080,
 						CheckType: customCheckNagios,
 					},
 					{ // port is missing
-						ID:        "custom_webserver",
+						Type:      "custom_webserver",
 						CheckType: customCheckHTTP,
 					},
 				},
@@ -475,7 +475,7 @@ func Test_applyOverride(t *testing.T) { //nolint:maintidx
 				},
 				servicesOverride: []config.Service{
 					{
-						ID:          "apache",
+						Type:        "apache",
 						IgnorePorts: []int{443, 22},
 					},
 				},
@@ -495,7 +495,7 @@ func Test_applyOverride(t *testing.T) { //nolint:maintidx
 						443: true,
 					},
 					Config: config.Service{
-						ID:          "apache",
+						Type:        "apache",
 						IgnorePorts: []int{443, 22},
 					},
 				},
@@ -512,7 +512,7 @@ func Test_applyOverride(t *testing.T) { //nolint:maintidx
 				},
 				servicesOverride: []config.Service{
 					{
-						ID:          "apache",
+						Type:        "apache",
 						IgnorePorts: []int{443, 22},
 					},
 				},
@@ -526,14 +526,14 @@ func Test_applyOverride(t *testing.T) { //nolint:maintidx
 						443: true,
 					},
 					Config: config.Service{
-						ID:          "apache",
+						Type:        "apache",
 						IgnorePorts: []int{443, 22},
 					},
 				},
 			},
 		},
 		{
-			name: "override stack",
+			name: "create tags list",
 			args: args{
 				discoveredServicesMap: map[NameInstance]Service{
 					{Name: "apache"}: {
@@ -543,8 +543,8 @@ func Test_applyOverride(t *testing.T) { //nolint:maintidx
 				},
 				servicesOverride: []config.Service{
 					{
-						ID:    "apache",
-						Stack: "website",
+						Type: "apache",
+						Tags: []string{"website"},
 					},
 				},
 			},
@@ -552,28 +552,28 @@ func Test_applyOverride(t *testing.T) { //nolint:maintidx
 				{Name: "apache"}: {
 					Name:        "apache",
 					ServiceType: ApacheService,
-					Stack:       "website",
+					Tags:        []string{"website"},
 					Config: config.Service{
-						ID:    "apache",
-						Stack: "website",
+						Type: "apache",
+						Tags: []string{"website"},
 					},
 				},
 			},
 		},
 		{
-			name: "no override stack",
+			name: "extend tags list",
 			args: args{
 				discoveredServicesMap: map[NameInstance]Service{
 					{Name: "apache"}: {
 						Name:        "apache",
 						ServiceType: ApacheService,
-						Stack:       "website",
+						Tags:        []string{"tag-from-dynamic-discovery-like-docker-labels"},
 					},
 				},
 				servicesOverride: []config.Service{
 					{
-						ID:    "apache",
-						Stack: "",
+						Type: "apache",
+						Tags: []string{"website"},
 					},
 				},
 			},
@@ -581,10 +581,10 @@ func Test_applyOverride(t *testing.T) { //nolint:maintidx
 				{Name: "apache"}: {
 					Name:        "apache",
 					ServiceType: ApacheService,
-					Stack:       "website",
+					Tags:        []string{"tag-from-dynamic-discovery-like-docker-labels", "website"},
 					Config: config.Service{
-						ID:    "apache",
-						Stack: "",
+						Type: "apache",
+						Tags: []string{"website"},
 					},
 				},
 			},
@@ -595,7 +595,7 @@ func Test_applyOverride(t *testing.T) { //nolint:maintidx
 				discoveredServicesMap: map[NameInstance]Service{},
 				servicesOverride: []config.Service{
 					{
-						ID:      "jmx_custom",
+						Type:    "jmx_custom",
 						JMXPort: 1000,
 					},
 				},
@@ -605,7 +605,7 @@ func Test_applyOverride(t *testing.T) { //nolint:maintidx
 					Name:        "jmx_custom",
 					ServiceType: CustomService,
 					Config: config.Service{
-						ID:        "jmx_custom",
+						Type:      "jmx_custom",
 						Address:   "127.0.0.1",
 						Port:      1000,
 						JMXPort:   1000,
@@ -621,7 +621,7 @@ func Test_applyOverride(t *testing.T) { //nolint:maintidx
 				discoveredServicesMap: map[NameInstance]Service{},
 				servicesOverride: []config.Service{
 					{
-						ID:      "jmx_custom",
+						Type:    "jmx_custom",
 						Port:    8000,
 						JMXPort: 1000,
 					},
@@ -632,7 +632,7 @@ func Test_applyOverride(t *testing.T) { //nolint:maintidx
 					Name:        "jmx_custom",
 					ServiceType: CustomService,
 					Config: config.Service{
-						ID:        "jmx_custom",
+						Type:      "jmx_custom",
 						Address:   "127.0.0.1",
 						Port:      8000,
 						JMXPort:   1000,
@@ -659,7 +659,7 @@ func Test_applyOverride(t *testing.T) { //nolint:maintidx
 				},
 				servicesOverride: []config.Service{
 					{
-						ID:      "kafka",
+						Type:    "kafka",
 						Port:    9000,
 						JMXPort: 2000,
 					},
@@ -670,7 +670,7 @@ func Test_applyOverride(t *testing.T) { //nolint:maintidx
 					Name:        "kafka",
 					ServiceType: KafkaService,
 					Config: config.Service{
-						ID:      "kafka",
+						Type:    "kafka",
 						Port:    9000,
 						JMXPort: 2000,
 					},
@@ -698,7 +698,7 @@ func Test_applyOverride(t *testing.T) { //nolint:maintidx
 				},
 				servicesOverride: []config.Service{
 					{
-						ID:       "redis",
+						Type:     "redis",
 						Instance: "duplicate",
 						Address:  "127.0.0.1",
 						Port:     6379,
@@ -727,7 +727,7 @@ func Test_applyOverride(t *testing.T) { //nolint:maintidx
 					IPAddress: "127.0.0.1",
 					Active:    true,
 					Config: config.Service{
-						ID:       "redis",
+						Type:     "redis",
 						Instance: "duplicate",
 						Address:  "127.0.0.1",
 						Port:     6379,
@@ -1032,7 +1032,7 @@ func Test_usePreviousNetstat(t *testing.T) {
 func TestValidateServices(t *testing.T) {
 	services := []config.Service{
 		{
-			ID:       "apache",
+			Type:     "apache",
 			Instance: "",
 			Port:     80,
 			Address:  "127.0.0.1",
@@ -1040,7 +1040,7 @@ func TestValidateServices(t *testing.T) {
 			HTTPHost: "127.0.0.1:80",
 		},
 		{
-			ID:       "apache",
+			Type:     "apache",
 			Instance: "",
 			Port:     81,
 			Address:  "127.0.0.1",
@@ -1048,7 +1048,7 @@ func TestValidateServices(t *testing.T) {
 			HTTPHost: "127.0.0.1:80",
 		},
 		{
-			ID:       "apache",
+			Type:     "apache",
 			Instance: "CONTAINER_NAME",
 			Port:     80,
 			Address:  "127.17.0.2",
@@ -1056,7 +1056,7 @@ func TestValidateServices(t *testing.T) {
 			HTTPHost: "127.0.0.1:80",
 		},
 		{
-			ID:       "apache",
+			Type:     "apache",
 			Instance: "CONTAINER_NAME",
 			Port:     81,
 			Address:  "127.17.0.2",
@@ -1068,37 +1068,37 @@ func TestValidateServices(t *testing.T) {
 			CheckCommand: "azerty",
 		},
 		{
-			ID:           "myapplication",
+			Type:         "myapplication",
 			Port:         80,
 			CheckType:    "nagios",
 			CheckCommand: "command-to-run",
 		},
 		{
-			ID:           " not fixable@",
+			Type:         " not fixable@",
 			CheckType:    "nagios",
 			CheckCommand: "azerty",
 		},
 		{
-			ID:        "custom_webserver",
+			Type:      "custom_webserver",
 			Port:      8181,
 			CheckType: "http",
 		},
 		{
-			ID:           "custom-bad.name",
+			Type:         "custom-bad.name",
 			CheckType:    "nagios",
 			CheckCommand: "azerty",
 		},
 		{
-			ID:       "ssl_and_starttls",
+			Type:     "ssl_and_starttls",
 			SSL:      true,
 			StartTLS: true,
 		},
 		{
-			ID:            "good_stats_protocol",
+			Type:          "good_stats_protocol",
 			StatsProtocol: "http",
 		},
 		{
-			ID:            "bad_stats_protocol",
+			Type:          "bad_stats_protocol",
 			StatsProtocol: "bad",
 		},
 	}
@@ -1106,9 +1106,9 @@ func TestValidateServices(t *testing.T) {
 	wantWarnings := []string{
 		"invalid config value: a service override is duplicated for 'apache'",
 		"invalid config value: a service override is duplicated for 'apache' on instance 'CONTAINER_NAME'",
-		"invalid config value: a key \"id\" is missing in one of your service override",
-		"invalid config value: service id \" not fixable@\" can only contains letters, digits and underscore",
-		"invalid config value: service id \"custom-bad.name\" can not contains dot (.) or dash (-). Changed to \"custom_bad_name\"",
+		"invalid config value: the key \"type\" is missing in one of your service override",
+		"invalid config value: service type \" not fixable@\" can only contains letters, digits and underscore",
+		"invalid config value: service type \"custom-bad.name\" can not contains dot (.) or dash (-). Changed to \"custom_bad_name\"",
 		"invalid config value: service 'ssl_and_starttls' can't set both SSL and StartTLS, StartTLS will be used",
 		"invalid config value: service 'bad_stats_protocol' has an unsupported stats protocol: 'bad'",
 	}
@@ -1118,7 +1118,7 @@ func TestValidateServices(t *testing.T) {
 			Name:     "apache",
 			Instance: "",
 		}: {
-			ID:       "apache",
+			Type:     "apache",
 			Instance: "",
 			Port:     81,
 			Address:  "127.0.0.1",
@@ -1129,7 +1129,7 @@ func TestValidateServices(t *testing.T) {
 			Name:     "apache",
 			Instance: "CONTAINER_NAME",
 		}: {
-			ID:       "apache",
+			Type:     "apache",
 			Instance: "CONTAINER_NAME",
 			Port:     81,
 			Address:  "127.17.0.2",
@@ -1140,7 +1140,7 @@ func TestValidateServices(t *testing.T) {
 			Name:     "myapplication",
 			Instance: "",
 		}: {
-			ID:           "myapplication",
+			Type:         "myapplication",
 			Port:         80,
 			CheckType:    "nagios",
 			CheckCommand: "command-to-run",
@@ -1149,7 +1149,7 @@ func TestValidateServices(t *testing.T) {
 			Name:     "custom_webserver",
 			Instance: "",
 		}: {
-			ID:        "custom_webserver",
+			Type:      "custom_webserver",
 			Port:      8181,
 			CheckType: "http",
 		},
@@ -1157,27 +1157,27 @@ func TestValidateServices(t *testing.T) {
 			Name:     "custom_bad_name",
 			Instance: "",
 		}: {
-			ID:           "custom_bad_name",
+			Type:         "custom_bad_name",
 			CheckType:    "nagios",
 			CheckCommand: "azerty",
 		},
 		{
 			Name: "ssl_and_starttls",
 		}: {
-			ID:       "ssl_and_starttls",
+			Type:     "ssl_and_starttls",
 			SSL:      false,
 			StartTLS: true,
 		},
 		{
 			Name: "good_stats_protocol",
 		}: {
-			ID:            "good_stats_protocol",
+			Type:          "good_stats_protocol",
 			StatsProtocol: "http",
 		},
 		{
 			Name: "bad_stats_protocol",
 		}: {
-			ID:            "bad_stats_protocol",
+			Type:          "bad_stats_protocol",
 			StatsProtocol: "",
 		},
 	}

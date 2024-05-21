@@ -270,13 +270,13 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 		},
 		Services: []Service{
 			{
-				ID:                "service1",
+				Type:              "service1",
 				Instance:          "instance1",
 				Port:              8080,
 				IgnorePorts:       []int{8081},
 				Address:           "127.0.0.1",
+				Tags:              []string{"mytag1", "mytag2"},
 				Interval:          60,
-				Stack:             "mystack",
 				CheckType:         "nagios",
 				HTTPPath:          "/check/",
 				HTTPStatusCode:    200,
@@ -336,8 +336,7 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 			Excludes:       []string{"/dev/sdb"},
 			MaxConcurrency: 42,
 		},
-		Stack: "mystack",
-		Tags:  []string{"mytag"},
+		Tags: []string{"mytag"},
 		Telegraf: Telegraf{
 			DockerMetricsEnable: true,
 			StatsD: StatsD{
@@ -723,7 +722,7 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 			WantConfig: Config{
 				Services: []Service{
 					{
-						ID:           "service1",
+						Type:         "service1",
 						CheckType:    "nagios",
 						CheckCommand: "/path/to/bin --with-option",
 					},
@@ -838,13 +837,13 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 			Name:  "deprecated cassandra_detailed_tables",
 			Files: []string{"testdata/deprecated_cassandra.conf"},
 			WantWarnings: []string{
-				"testdata/deprecated_cassandra.conf: setting is deprecated: 'cassandra_detailed_tables'" +
+				"testdata/deprecated_cassandra.conf: setting is deprecated in 'service' override for cassandra: 'cassandra_detailed_tables'" +
 					", use 'detailed_items' instead",
 			},
 			WantConfig: Config{
 				Services: []Service{
 					{
-						ID: "cassandra",
+						Type: "cassandra",
 						DetailedItems: []string{
 							"keyspace.table1",
 							"keyspace.table2",
@@ -857,12 +856,12 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 			Name:  "deprecated mgmt_port",
 			Files: []string{"testdata/deprecated_mgmt_port.conf"},
 			WantWarnings: []string{
-				"testdata/deprecated_mgmt_port.conf: setting is deprecated: 'mgmt_port', use 'stats_port' instead",
+				"testdata/deprecated_mgmt_port.conf: setting is deprecated in 'service' override for service1: 'mgmt_port', use 'stats_port' instead",
 			},
 			WantConfig: Config{
 				Services: []Service{
 					{
-						ID:        "service1",
+						Type:      "service1",
 						StatsPort: 9090,
 					},
 				},
@@ -877,6 +876,68 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 			},
 			WantConfig: Config{
 				NetworkInterfaceDenylist: []string{"eth0"},
+			},
+		},
+		{
+			Name:  "deprecated_service_id",
+			Files: []string{"testdata/deprecated_service_id.conf"},
+			WantWarnings: []string{
+				"testdata/deprecated_service_id.conf: setting is deprecated in 'service' override for apache: 'id', use 'type' instead",
+			},
+			WantConfig: Config{
+				Services: []Service{
+					{
+						Type: "apache",
+						Port: 1234,
+					},
+				},
+			},
+		},
+		{
+			Name:  "deprecated_service_id_with_instance",
+			Files: []string{"testdata/deprecated_service_id_with_instance.conf"},
+			WantWarnings: []string{
+				"testdata/deprecated_service_id_with_instance.conf: setting is deprecated in 'service' override for apache: 'id', use 'type' instead",
+			},
+			WantConfig: Config{
+				Services: []Service{
+					{
+						Type:     "apache",
+						Instance: "my_container",
+						Port:     1234,
+					},
+				},
+			},
+		},
+		{
+			Name:  "multiple_deprecated_same_file",
+			Files: []string{"testdata/multiple_deprecated_same_file.conf", "testdata/multiple_deprecated_same_file2.conf"},
+			WantWarnings: []string{
+				"testdata/multiple_deprecated_same_file.conf: setting is deprecated in 'service' override for apache: 'id', use 'type' instead",
+				"testdata/multiple_deprecated_same_file.conf: setting is deprecated in 'service' override for nginx: 'id', use 'type' instead",
+				"testdata/multiple_deprecated_same_file.conf: setting is deprecated in 'service' override for cassandra: 'cassandra_detailed_tables', use 'detailed_items' instead",
+				"testdata/multiple_deprecated_same_file2.conf: setting is deprecated in 'service' override for mysql: 'id', use 'type' instead",
+			},
+			WantConfig: Config{
+				Services: []Service{
+					{
+						Type: "apache",
+						Port: 1234,
+					},
+					{
+						Type: "nginx",
+						Port: 1235,
+					},
+					{
+						Type:          "cassandra",
+						Port:          1236,
+						DetailedItems: []string{"table1"},
+					},
+					{
+						Type: "mysql",
+						Port: 1237,
+					},
+				},
 			},
 		},
 	}
@@ -1143,13 +1204,13 @@ func TestDump(t *testing.T) {
 		},
 		Services: []Service{
 			{
-				ID:          "in-dump",
+				Type:        "in-dump",
 				Password:    "not-in-dump",
 				JMXPassword: "not-in-dump",
 				KeyFile:     "not-in-dump",
 			},
 			{
-				ID:          "in-dump-2",
+				Type:        "in-dump-2",
 				Password:    "",
 				JMXPassword: "",
 				KeyFile:     "",
@@ -1167,13 +1228,13 @@ func TestDump(t *testing.T) {
 		},
 		Services: []Service{
 			{
-				ID:          "in-dump",
+				Type:        "in-dump",
 				Password:    "*****",
 				JMXPassword: "*****",
 				KeyFile:     "*****",
 			},
 			{
-				ID: "in-dump-2",
+				Type: "in-dump-2",
 				// In dump because these fields were unset.
 				Password:    "",
 				JMXPassword: "",
