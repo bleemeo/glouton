@@ -22,7 +22,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/bleemeo/glouton/bleemeo/types"
+	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
+	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/logger"
 )
 
@@ -33,17 +34,19 @@ const (
 	agentFields   = "account,agent_type,created_at,current_config,display_name,fqdn,id,is_cluster_leader,next_config_at,tags"
 )
 
-func (s *Synchronizer) syncAgent(ctx context.Context, fullSync bool, onlyEssential bool) (updateThresholds bool, err error) {
-	if err := s.syncMainAgent(ctx); err != nil {
+func (s *Synchronizer) syncAgent(ctx context.Context, syncType types.SyncType, execution types.SynchronizationExecution) (updateThresholds bool, err error) {
+	apiClient := execution.BleemeoAPIClient()
+
+	if err := s.syncMainAgent(ctx, apiClient); err != nil {
 		return false, err
 	}
 
-	if onlyEssential {
+	if execution.IsOnlyEssential() {
 		return false, nil
 	}
 
-	if fullSync {
-		if err := s.agentsUpdateList(); err != nil {
+	if syncType == types.SyncTypeForceCacheRefresh {
+		if err := s.agentsUpdateList(ctx, execution, apiClient); err != nil {
 			return false, err
 		}
 	}
@@ -51,25 +54,25 @@ func (s *Synchronizer) syncAgent(ctx context.Context, fullSync bool, onlyEssenti
 	return false, nil
 }
 
-func (s *Synchronizer) syncMainAgent(ctx context.Context) error {
-	var agent types.Agent
+func (s *Synchronizer) syncMainAgent(ctx context.Context, apiClient types.RawClient) error {
+	var agent bleemeoTypes.Agent
 
 	params := map[string]string{
 		"fields": agentFields,
 	}
-	data := map[string][]types.Tag{
-		"tags": make([]types.Tag, 0),
+	data := map[string][]bleemeoTypes.Tag{
+		"tags": make([]bleemeoTypes.Tag, 0),
 	}
 
 	for _, t := range s.option.Config.Tags {
 		if len(t) <= apiTagsLength && t != "" {
-			data["tags"] = append(data["tags"], types.Tag{Name: t})
+			data["tags"] = append(data["tags"], bleemeoTypes.Tag{Name: t})
 		}
 	}
 
 	previousAgent := s.option.Cache.Agent()
 
-	_, err := s.client.Do(ctx, "PATCH", fmt.Sprintf("v1/agent/%s/", s.agentID), params, data, &agent)
+	_, err := apiClient.Do(ctx, "PATCH", fmt.Sprintf("v1/agent/%s/", s.agentID), params, data, &agent)
 	if err != nil {
 		return err
 	}
@@ -102,22 +105,22 @@ func (s *Synchronizer) syncMainAgent(ctx context.Context) error {
 	return nil
 }
 
-func (s *Synchronizer) agentsUpdateList() error {
+func (s *Synchronizer) agentsUpdateList(ctx context.Context, execution types.SynchronizationExecution, apiClient types.RawClient) error {
 	oldAgents := s.option.Cache.AgentsByUUID()
 
 	params := map[string]string{
 		"fields": agentFields,
 	}
 
-	result, err := s.client.Iter(s.ctx, "agent", params)
+	result, err := apiClient.Iter(ctx, "agent", params)
 	if err != nil {
 		return err
 	}
 
-	agents := make([]types.Agent, len(result))
+	agents := make([]bleemeoTypes.Agent, len(result))
 
 	for i, jsonMessage := range result {
-		var agent types.Agent
+		var agent bleemeoTypes.Agent
 
 		if err := json.Unmarshal(jsonMessage, &agent); err != nil {
 			continue
@@ -134,7 +137,7 @@ func (s *Synchronizer) agentsUpdateList() error {
 	newAgents := s.option.Cache.AgentsByUUID()
 	for id := range oldAgents {
 		if _, ok := newAgents[id]; !ok {
-			s.callUpdateLabels = true
+			execution.RequestNotifyLabelsUpdate()
 		}
 	}
 

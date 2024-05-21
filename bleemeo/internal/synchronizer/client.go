@@ -24,13 +24,22 @@ import (
 	"time"
 
 	"github.com/bleemeo/glouton/bleemeo/client"
+	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
+	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 )
 
 type wrapperClient struct {
-	s                *Synchronizer
 	client           *client.HTTPClient
 	duplicateError   error
 	duplicateChecked bool
+	checkDuplicated  func(context.Context, types.RawClient) error
+}
+
+func (s *Synchronizer) newClient() *wrapperClient {
+	return &wrapperClient{
+		checkDuplicated: s.checkDuplicated,
+		client:          s.realClient,
+	}
 }
 
 func (cl *wrapperClient) ThrottleDeadline() time.Time {
@@ -48,7 +57,7 @@ func (cl *wrapperClient) Do(ctx context.Context, method string, path string, par
 
 	if !cl.duplicateChecked {
 		cl.duplicateChecked = true
-		cl.duplicateError = cl.s.checkDuplicated(ctx)
+		cl.duplicateError = cl.checkDuplicated(ctx, cl)
 	}
 
 	if cl.duplicateError != nil {
@@ -65,7 +74,7 @@ func (cl *wrapperClient) Iter(ctx context.Context, resource string, params map[s
 
 	if !cl.duplicateChecked {
 		cl.duplicateChecked = true
-		cl.duplicateError = cl.s.checkDuplicated(ctx)
+		cl.duplicateError = cl.checkDuplicated(ctx, cl)
 	}
 
 	if cl.duplicateError != nil {
@@ -77,4 +86,38 @@ func (cl *wrapperClient) Iter(ctx context.Context, resource string, params map[s
 
 func (cl *wrapperClient) DoWithBody(ctx context.Context, path string, contentType string, body io.Reader) (statusCode int, err error) {
 	return cl.client.DoWithBody(ctx, path, contentType, body)
+}
+
+func (cl *wrapperClient) ListApplications(ctx context.Context) ([]bleemeoTypes.Application, error) {
+	result, err := cl.Iter(ctx, "application", map[string]string{})
+	if err != nil {
+		return nil, err
+	}
+
+	applications := make([]bleemeoTypes.Application, 0, len(result))
+
+	for _, jsonMessage := range result {
+		var application bleemeoTypes.Application
+
+		if err := json.Unmarshal(jsonMessage, &application); err != nil {
+			continue
+		}
+
+		applications = append(applications, application)
+	}
+
+	return applications, nil
+}
+
+func (cl *wrapperClient) CreateApplication(ctx context.Context, app bleemeoTypes.Application) (bleemeoTypes.Application, error) {
+	var result bleemeoTypes.Application
+
+	app.ID = "" // ID isn't allowed in creation
+
+	_, err := cl.Do(ctx, "POST", "v1/application/", map[string]string{}, app, &result)
+	if err != nil {
+		return bleemeoTypes.Application{}, err
+	}
+
+	return result, nil
 }

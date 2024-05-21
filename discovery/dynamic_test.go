@@ -119,8 +119,8 @@ func TestServiceByCommand(t *testing.T) {
 func TestDynamicDiscoverySimple(t *testing.T) {
 	t0 := time.Now()
 
-	dd := NewDynamic(
-		mockProcess{
+	dd := NewDynamic(Option{
+		PS: mockProcess{
 			[]facts.Process{
 				{
 					PID:         1547,
@@ -138,16 +138,14 @@ func TestDynamicDiscoverySimple(t *testing.T) {
 				},
 			},
 		},
-		mockNetstat{result: map[int][]facts.ListenAddress{
+		Netstat: mockNetstat{result: map[int][]facts.ListenAddress{
 			1547: {
 				{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 11211},
 			},
 		}},
-		mockContainerInfo{},
-		facts.ContainerFilter{}.ContainerIgnored,
-		nil,
-		"",
-	)
+		ContainerInfo:      mockContainerInfo{},
+		IsContainerIgnored: facts.ContainerFilter{}.ContainerIgnored,
+	})
 	dd.now = func() time.Time { return t0 }
 
 	ctx := context.Background()
@@ -1042,8 +1040,8 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 	ctx := context.Background()
 
 	for _, c := range cases {
-		dd := NewDynamic(
-			mockProcess{
+		dd := NewDynamic(Option{
+			PS: mockProcess{
 				[]facts.Process{
 					{
 						PID:           42,
@@ -1053,10 +1051,10 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 					},
 				},
 			},
-			mockNetstat{result: map[int][]facts.ListenAddress{
+			Netstat: mockNetstat{result: map[int][]facts.ListenAddress{
 				42: c.netstatAddresses,
 			}},
-			mockContainerInfo{
+			ContainerInfo: mockContainerInfo{
 				containers: map[string]facts.FakeContainer{
 					c.containerID: {
 						FakeContainerName:   c.containerName,
@@ -1067,12 +1065,11 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 					},
 				},
 			},
-			facts.ContainerFilter{}.ContainerIgnored,
-			mockFileReader{
+			IsContainerIgnored: facts.ContainerFilter{}.ContainerIgnored,
+			FileReader: mockFileReader{
 				contents: c.filesContent,
 			},
-			"",
-		)
+		})
 		dd.now = func() time.Time { return t0 }
 
 		srv, err := dd.Discovery(ctx, 0)
@@ -1900,20 +1897,19 @@ func TestDynamicDiscovery(t *testing.T) { //nolint:maintidx
 
 			t.Parallel()
 
-			dd := NewDynamic(
-				mockProcess{
+			dd := NewDynamic(Option{
+				PS: mockProcess{
 					result: c.processes,
 				},
-				mockNetstat{result: c.netstatAddressesPerPID},
-				mockContainerInfo{
+				Netstat: mockNetstat{result: c.netstatAddressesPerPID},
+				ContainerInfo: mockContainerInfo{
 					containers: c.containers,
 				},
-				facts.ContainerFilter{}.ContainerIgnored,
-				mockFileReader{
+				IsContainerIgnored: facts.ContainerFilter{}.ContainerIgnored,
+				FileReader: mockFileReader{
 					contents: c.filesContent,
 				},
-				"",
-			)
+			})
 			dd.now = func() time.Time { return t0 }
 
 			srv, err := dd.Discovery(ctx, 0)
@@ -1933,41 +1929,89 @@ func TestDynamicDiscovery(t *testing.T) { //nolint:maintidx
 }
 
 func Test_fillGenericExtraAttributes(t *testing.T) {
-	service := Service{
-		container: facts.FakeContainer{
-			FakeLabels: map[string]string{
-				"glouton.port":         "8080",
-				"glouton.ignore_ports": "9090,9091",
-				"glouton.http_path":    "/path",
+	cases := []struct {
+		name                        string
+		serviceFromDynamicDiscovery Service
+		expectedConfigResult        config.Service
+	}{
+		{
+			name: "ports-and-http_path",
+			serviceFromDynamicDiscovery: Service{
+				container: facts.FakeContainer{
+					FakeLabels: map[string]string{
+						"glouton.port":         "8080",
+						"glouton.ignore_ports": "9090,9091",
+						"glouton.http_path":    "/path",
+					},
+				},
+				Config: config.Service{
+					// HTTP Path should be overwritten.
+					HTTPPath: "/other",
+					// Address should be kept.
+					Address: "192.168.0.1",
+				},
+			},
+			expectedConfigResult: config.Service{
+				HTTPPath:    "/path",
+				Port:        8080,
+				IgnorePorts: []int{9090, 9091},
+				Address:     "192.168.0.1",
 			},
 		},
-		Config: config.Service{
-			// HTTP Path should be overwritten.
-			HTTPPath: "/other",
-			// Address should be kept.
-			Address: "192.168.0.1",
+		{
+			name: "tags",
+			serviceFromDynamicDiscovery: Service{
+				container: facts.FakeContainer{
+					FakeLabels: map[string]string{
+						"glouton.tags": "tags1,tags2",
+					},
+				},
+				Config: config.Service{
+					// Dynamic discovery won't fill tags by itself,
+					// they always come from container labels/annotations.
+				},
+			},
+			expectedConfigResult: config.Service{
+				Tags: []string{"tags1", "tags2"},
+			},
+		},
+		{
+			name: "from-annotations",
+			serviceFromDynamicDiscovery: Service{
+				container: facts.FakeContainer{
+					FakeAnnotations: map[string]string{
+						"glouton.tags":      "tags1,tags2",
+						"glouton.http_path": "/path",
+					},
+				},
+				Config: config.Service{
+					// Dynamic discovery won't fill tags by itself,
+					// they always come from container labels/annotations.
+				},
+			},
+			expectedConfigResult: config.Service{
+				Tags:     []string{"tags1", "tags2"},
+				HTTPPath: "/path",
+			},
 		},
 	}
 
-	expectedConfig := config.Service{
-		HTTPPath:    "/path",
-		Port:        8080,
-		IgnorePorts: []int{9090, 9091},
-		Address:     "192.168.0.1",
-	}
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			service := tt.serviceFromDynamicDiscovery
 
-	dd := NewDynamic(
-		mockProcess{},
-		mockNetstat{},
-		mockContainerInfo{},
-		facts.ContainerFilter{}.ContainerIgnored,
-		nil,
-		"",
-	)
+			dd := NewDynamic(Option{
+				PS:                 mockProcess{},
+				Netstat:            mockNetstat{},
+				ContainerInfo:      mockContainerInfo{},
+				IsContainerIgnored: facts.ContainerFilter{}.ContainerIgnored,
+			})
 
-	dd.fillConfigFromLabels(&service)
+			dd.fillConfigFromLabels(&service)
 
-	if diff := cmp.Diff(expectedConfig, service.Config); diff != "" {
-		t.Fatalf("Unexpected config:\n%s", diff)
+			if diff := cmp.Diff(tt.expectedConfigResult, service.Config); diff != "" {
+				t.Fatalf("Unexpected config:\n%s", diff)
+			}
+		})
 	}
 }

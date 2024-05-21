@@ -25,9 +25,9 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
-	"path/filepath"
 	"strconv"
 
+	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
 	"github.com/bleemeo/glouton/crashreport"
 	"github.com/bleemeo/glouton/logger"
 	gloutonTypes "github.com/bleemeo/glouton/types"
@@ -54,8 +54,12 @@ const (
 	onDemandDiagnostic diagnosticType = 1
 )
 
-func (s *Synchronizer) syncDiagnostics(ctx context.Context, _, _ bool) (updateThresholds bool, err error) {
-	remoteDiagnostics, err := s.listRemoteDiagnostics(ctx)
+func (s *Synchronizer) syncDiagnostics(ctx context.Context, syncType types.SyncType, execution types.SynchronizationExecution) (updateThresholds bool, err error) {
+	_ = syncType
+
+	apiClient := execution.BleemeoAPIClient()
+
+	remoteDiagnostics, err := s.listRemoteDiagnostics(ctx, apiClient)
 	if err != nil {
 		return false, fmt.Errorf("failed to list remote diagnostics: %w", err)
 	}
@@ -89,7 +93,7 @@ func (s *Synchronizer) syncDiagnostics(ctx context.Context, _, _ bool) (updateTh
 		}
 	}
 
-	if err = s.uploadDiagnostics(ctx, diagnosticsToUpload); err != nil {
+	if err = s.uploadDiagnostics(ctx, apiClient, diagnosticsToUpload); err != nil {
 		// We "ignore" error from diagnostics upload because:
 		// * they aren't essential
 		// * by "ignoring" the error, it will be re-tried on next full sync instead of after a short delay,
@@ -101,15 +105,15 @@ func (s *Synchronizer) syncDiagnostics(ctx context.Context, _, _ bool) (updateTh
 }
 
 func (s *Synchronizer) listOnDemandDiagnostics() []diagnosticWithBleemeoInfo {
-	s.onDemandDiagnosticLock.Lock()
-	defer s.onDemandDiagnosticLock.Unlock()
+	s.state.l.Lock()
+	defer s.state.l.Unlock()
 
-	if s.onDemandDiagnostic.filename != "" {
+	if s.state.onDemandDiagnostic.filename != "" {
 		return []diagnosticWithBleemeoInfo{
 			{
 				diagnosticType: onDemandDiagnostic,
-				requestToken:   s.onDemandDiagnostic.requestToken,
-				DiagnosticFile: s.onDemandDiagnostic,
+				requestToken:   s.state.onDemandDiagnostic.requestToken,
+				DiagnosticFile: s.state.onDemandDiagnostic,
 			},
 		}
 	}
@@ -117,8 +121,8 @@ func (s *Synchronizer) listOnDemandDiagnostics() []diagnosticWithBleemeoInfo {
 	return nil
 }
 
-func (s *Synchronizer) listRemoteDiagnostics(ctx context.Context) ([]RemoteDiagnostic, error) {
-	result, err := s.client.Iter(ctx, "gloutondiagnostic", nil)
+func (s *Synchronizer) listRemoteDiagnostics(ctx context.Context, apiClient types.RawClient) ([]RemoteDiagnostic, error) {
+	result, err := apiClient.Iter(ctx, "gloutondiagnostic", nil)
 	if err != nil {
 		return nil, fmt.Errorf("client iter: %w", err)
 	}
@@ -140,9 +144,9 @@ func (s *Synchronizer) listRemoteDiagnostics(ctx context.Context) ([]RemoteDiagn
 	return diagnostics, nil
 }
 
-func (s *Synchronizer) uploadDiagnostics(ctx context.Context, diagnostics []diagnosticWithBleemeoInfo) error {
+func (s *Synchronizer) uploadDiagnostics(ctx context.Context, apiClient types.RawClient, diagnostics []diagnosticWithBleemeoInfo) error {
 	for _, diagnostic := range diagnostics {
-		if err := s.uploadDiagnostic(ctx, diagnostic); err != nil {
+		if err := s.uploadDiagnostic(ctx, apiClient, diagnostic); err != nil {
 			return fmt.Errorf("failed to upload crash diagnostic %s: %w", diagnostic.Filename(), err)
 		}
 	}
@@ -150,7 +154,7 @@ func (s *Synchronizer) uploadDiagnostics(ctx context.Context, diagnostics []diag
 	return nil
 }
 
-func (s *Synchronizer) uploadDiagnostic(ctx context.Context, diagnostic diagnosticWithBleemeoInfo) error {
+func (s *Synchronizer) uploadDiagnostic(ctx context.Context, apiClient types.RawClient, diagnostic diagnosticWithBleemeoInfo) error {
 	if ctxErr := ctx.Err(); ctxErr != nil {
 		return ctxErr
 	}
@@ -197,7 +201,7 @@ func (s *Synchronizer) uploadDiagnostic(ctx context.Context, diagnostic diagnost
 
 	contentType := multipartWriter.FormDataContentType()
 
-	statusCode, reqErr := s.client.DoWithBody(ctx, "v1/gloutondiagnostic/", contentType, buf)
+	statusCode, reqErr := apiClient.DoWithBody(ctx, "v1/gloutondiagnostic/", contentType, buf)
 	if reqErr != nil {
 		return reqErr
 	}
@@ -237,36 +241,17 @@ func (r readerWithLen) Close() error {
 }
 
 func (diag synchronizerOnDemandDiagnostic) MarkUploaded() error {
-	diag.s.onDemandDiagnosticLock.Lock()
-	defer diag.s.onDemandDiagnosticLock.Unlock()
+	diag.s.state.l.Lock()
+	defer diag.s.state.l.Unlock()
 
-	if diag.filename != diag.s.onDemandDiagnostic.filename {
+	if diag.filename != diag.s.state.onDemandDiagnostic.filename {
 		// Another diagnostic replaced ourself in the synchronizer. Don't remove it
 		return nil
 	}
 
-	diag.s.onDemandDiagnostic = synchronizerOnDemandDiagnostic{}
+	diag.s.state.onDemandDiagnostic = synchronizerOnDemandDiagnostic{}
 
 	return nil
-}
-
-// ScheduleDiagnosticUpload stores the given diagnostic until the next synchronization,
-// where it will be uploaded to the API.
-// If another call to this method is made before the next synchronization,
-// only the latest diagnostic will be uploaded.
-func (s *Synchronizer) ScheduleDiagnosticUpload(filename, requestToken string, contents []byte) {
-	s.l.Lock()
-	defer s.l.Unlock()
-	s.onDemandDiagnosticLock.Lock()
-	defer s.onDemandDiagnosticLock.Unlock()
-
-	s.forceSync[syncMethodDiagnostics] = false
-	s.onDemandDiagnostic = synchronizerOnDemandDiagnostic{
-		filename:     filepath.Base(filename),
-		archive:      contents,
-		s:            s,
-		requestToken: requestToken,
-	}
 }
 
 func addType(diagnostics []gloutonTypes.DiagnosticFile, fixedType diagnosticType) []diagnosticWithBleemeoInfo {

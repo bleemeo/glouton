@@ -24,6 +24,7 @@ import (
 
 	"github.com/bleemeo/glouton/bleemeo/client"
 	"github.com/bleemeo/glouton/bleemeo/internal/common"
+	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/config"
 	"github.com/bleemeo/glouton/logger"
@@ -49,15 +50,17 @@ type configItemValue struct {
 
 func (s *Synchronizer) syncConfig(
 	ctx context.Context,
-	fullSync bool,
-	onlyEssential bool,
+	syncType types.SyncType,
+	execution types.SynchronizationExecution,
 ) (updateThresholds bool, err error) {
 	// The config is not essential and can be registered later.
-	if onlyEssential || !fullSync {
+	if execution.IsOnlyEssential() || syncType != types.SyncTypeForceCacheRefresh {
 		return false, nil
 	}
 
-	remoteConfigItems, err := s.fetchAllConfigItems(ctx)
+	apiClient := execution.BleemeoAPIClient()
+
+	remoteConfigItems, err := s.fetchAllConfigItems(ctx, apiClient)
 	if err != nil {
 		return false, fmt.Errorf("failed to fetch config items: %w", err)
 	}
@@ -65,30 +68,32 @@ func (s *Synchronizer) syncConfig(
 	localConfigItems := s.localConfigItems()
 
 	// Registers local config items not present on the API.
-	err = s.registerLocalConfigItems(ctx, localConfigItems, remoteConfigItems)
+	err = s.registerLocalConfigItems(ctx, apiClient, localConfigItems, remoteConfigItems)
 	if err != nil {
 		return false, err
 	}
 
 	// Remove remote config items not present locally.
-	err = s.removeRemoteConfigItems(ctx, localConfigItems, remoteConfigItems)
+	err = s.removeRemoteConfigItems(ctx, apiClient, localConfigItems, remoteConfigItems)
 	if err != nil {
 		return false, err
 	}
 
-	s.configSyncDone = true
+	s.state.l.Lock()
+	s.state.configSyncDone = true
+	s.state.l.Unlock()
 
 	return false, nil
 }
 
 // fetchAllConfigItems returns the remote config items in a map of config value by comparableConfigItem.
-func (s *Synchronizer) fetchAllConfigItems(ctx context.Context) (map[comparableConfigItem]configItemValue, error) {
+func (s *Synchronizer) fetchAllConfigItems(ctx context.Context, apiClient types.RawClient) (map[comparableConfigItem]configItemValue, error) {
 	params := map[string]string{
 		"fields": "id,agent,key,value,priority,source,path,type",
 		"agent":  s.agentID,
 	}
 
-	result, err := s.client.Iter(ctx, "gloutonconfigitem", params)
+	result, err := apiClient.Iter(ctx, "gloutonconfigitem", params)
 	if err != nil {
 		return nil, fmt.Errorf("client iter: %w", err)
 	}
@@ -208,6 +213,7 @@ func bleemeoItemTypeFromConfigType(source config.ItemType) bleemeoTypes.ConfigIt
 // registerLocalConfigItems registers local config items not present on the API.
 func (s *Synchronizer) registerLocalConfigItems(
 	ctx context.Context,
+	apiClient types.RawClient,
 	localConfigItems map[comparableConfigItem]interface{},
 	remoteConfigItems map[comparableConfigItem]configItemValue,
 ) error {
@@ -243,7 +249,7 @@ func (s *Synchronizer) registerLocalConfigItems(
 			end = len(itemsToRegister)
 		}
 
-		_, err := s.client.Do(ctx, "POST", "v1/gloutonconfigitem/", nil, itemsToRegister[start:end], nil)
+		_, err := apiClient.Do(ctx, "POST", "v1/gloutonconfigitem/", nil, itemsToRegister[start:end], nil)
 		if err != nil {
 			return err
 		}
@@ -255,6 +261,7 @@ func (s *Synchronizer) registerLocalConfigItems(
 // removeRemoteConfigItems removes remote config items not present locally.
 func (s *Synchronizer) removeRemoteConfigItems(
 	ctx context.Context,
+	apiClient types.RawClient,
 	localConfigItems map[comparableConfigItem]interface{},
 	remoteConfigItems map[comparableConfigItem]configItemValue,
 ) error {
@@ -272,7 +279,7 @@ func (s *Synchronizer) removeRemoteConfigItems(
 			continue
 		}
 
-		_, err := s.client.Do(ctx, "DELETE", fmt.Sprintf("v1/gloutonconfigitem/%s/", remoteItem.ID), nil, nil, nil)
+		_, err := apiClient.Do(ctx, "DELETE", fmt.Sprintf("v1/gloutonconfigitem/%s/", remoteItem.ID), nil, nil, nil)
 		if err != nil {
 			// Ignore the error if the item has already been deleted.
 			if client.IsNotFound(err) {

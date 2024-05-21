@@ -164,6 +164,7 @@ func TestLoader(t *testing.T) {
 			Value: []any{
 				map[string]any{
 					"address":             "",
+					"tags":                nil,
 					"ca_file":             "",
 					"http_host":           "",
 					"nagios_nrpe_name":    "",
@@ -173,7 +174,6 @@ func TestLoader(t *testing.T) {
 					"included_items":      nil,
 					"jmx_metrics":         []any{},
 					"match_process":       "",
-					"stack":               "",
 					"starttls":            false,
 					"stats_url":           "",
 					"cert_file":           "",
@@ -185,7 +185,7 @@ func TestLoader(t *testing.T) {
 					"stats_protocol":      "",
 					"check_type":          "",
 					"ignore_ports":        nil,
-					"id":                  "service1",
+					"type":                "service1",
 					"instance":            "instance1",
 					"port":                0.0,
 					"stats_port":          0.0,

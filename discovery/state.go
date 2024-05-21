@@ -77,7 +77,6 @@ type oldService struct {
 	Active       bool              `json:"active"`
 	NetStatPorts map[string]string `json:"netstat_ports"`
 	ContainerID  string            `json:"container_id"`
-	Stack        string            `json:"stack"`
 }
 
 func (o oldService) toService(instance string) (srv Service, err error) {
@@ -117,7 +116,6 @@ func (o oldService) toService(instance string) (srv Service, err error) {
 		IPAddress:       o.Address,
 		ExePath:         o.ExePath,
 		Active:          o.Active,
-		Stack:           o.Stack,
 		ListenAddresses: listenAddresses,
 	}, nil
 }
@@ -171,8 +169,8 @@ func servicesFromState(state State) []Service {
 
 	if version < 1 {
 		// Before version 1, fixListenAddressConflict was not applied. This resulted in
-		// servicesFromState that could contains wrong ListenningAddresses with HasNetstatInfo=True. So
-		// even if new dynamic discovery don't return the wrong ListenningAddresses, it would be used from
+		// servicesFromState that could contains wrong ListeningAddresses with HasNetstatInfo=True. So
+		// even if new dynamic discovery don't return the wrong ListeningAddresses, it would be used from
 		// servicesFromState because HasNetstatInfo=True.
 		//
 		// Apply the same fixListenAddressConflict to servicesFromState when upgrading.
