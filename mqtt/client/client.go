@@ -408,7 +408,6 @@ func (c *Client) ackOne(msg types.Message, timeout time.Duration) error {
 
 		err = msg.Token.Error()
 		if err != nil {
-			c.encoder.PutBuffer(msg.Payload)
 			c.stats.ackFailed(msg.Token)
 		}
 	}
@@ -416,6 +415,8 @@ func (c *Client) ackOne(msg types.Message, timeout time.Duration) error {
 	// Retry publishing the message if there was an error.
 	if msg.Token == nil || msg.Token.Error() != nil {
 		if !msg.Retry {
+			c.encoder.PutBuffer(msg.Payload)
+
 			return err
 		}
 
