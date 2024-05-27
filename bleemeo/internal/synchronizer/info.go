@@ -31,7 +31,7 @@ import (
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/delay"
 	"github.com/bleemeo/glouton/logger"
-	"github.com/bleemeo/glouton/types"
+	gloutonTypes "github.com/bleemeo/glouton/types"
 	"github.com/bleemeo/glouton/version"
 
 	"github.com/prometheus/prometheus/model/labels"
@@ -59,7 +59,7 @@ func (s *Synchronizer) syncInfoReal(ctx context.Context, disableOnTimeDrift bool
 		// Since this request is unauthenticated, we can retry it with insecure TLS
 		insecureClient, cErr := bleemeo.NewClient(
 			bleemeo.WithEndpoint(s.option.Config.Bleemeo.APIBase),
-			bleemeo.WithHTTPClient(&http.Client{Transport: types.NewHTTPTransport(&tls.Config{InsecureSkipVerify: true}, &s.requestCounter)}), //nolint:gosec
+			bleemeo.WithHTTPClient(&http.Client{Transport: gloutonTypes.NewHTTPTransport(&tls.Config{InsecureSkipVerify: true}, &s.requestCounter)}), //nolint:gosec
 		)
 		if cErr != nil {
 			return false, cErr
@@ -120,7 +120,7 @@ func (s *Synchronizer) syncInfoReal(ctx context.Context, disableOnTimeDrift bool
 		_, err := s.option.PushAppender.Append(
 			0,
 			labels.FromMap(map[string]string{
-				types.LabelName: "time_drift",
+				gloutonTypes.LabelName: "time_drift",
 			}),
 			globalInfo.BleemeoTime().Truncate(time.Second).UnixMilli(),
 			delta.Seconds(),
@@ -150,8 +150,8 @@ func (s *Synchronizer) syncInfoReal(ctx context.Context, disableOnTimeDrift bool
 
 	if globalInfo.IsTimeDriftTooLarge() && !s.lastInfo.IsTimeDriftTooLarge() {
 		// Mark the agent_status as disconnected with reason being the time drift.
-		metricKey := types.LabelsToText(
-			map[string]string{types.LabelName: "agent_status", types.LabelInstanceUUID: s.agentID},
+		metricKey := gloutonTypes.LabelsToText(
+			map[string]string{gloutonTypes.LabelName: "agent_status", gloutonTypes.LabelInstanceUUID: s.agentID},
 		)
 		if metric, ok := s.option.Cache.MetricLookupFromList()[metricKey]; ok {
 			payload := mqttUpdatePayload{
@@ -247,8 +247,8 @@ func (s *Synchronizer) updateMQTTStatus() error {
 	logger.Printf(msg)
 
 	// Mark the agent_status as disconnected because MQTT is not accessible.
-	metricKey := types.LabelsToText(
-		map[string]string{types.LabelName: "agent_status", types.LabelInstanceUUID: s.agentID},
+	metricKey := gloutonTypes.LabelsToText(
+		map[string]string{gloutonTypes.LabelName: "agent_status", gloutonTypes.LabelInstanceUUID: s.agentID},
 	)
 	if metric, ok := s.option.Cache.MetricLookupFromList()[metricKey]; ok {
 		payload := mqttUpdatePayload{

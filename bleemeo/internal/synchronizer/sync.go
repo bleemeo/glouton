@@ -44,7 +44,7 @@ import (
 	"github.com/bleemeo/glouton/logger"
 	"github.com/bleemeo/glouton/prometheus/model"
 	"github.com/bleemeo/glouton/threshold"
-	"github.com/bleemeo/glouton/types"
+	gloutonTypes "github.com/bleemeo/glouton/types"
 	"github.com/bleemeo/glouton/version"
 
 	"github.com/getsentry/sentry-go"
@@ -233,7 +233,7 @@ func newWithNow(option Option, now func() time.Time) (*Synchronizer, error) {
 	return s, nil
 }
 
-func (s *Synchronizer) DiagnosticArchive(_ context.Context, archive types.ArchiveWriter) error {
+func (s *Synchronizer) DiagnosticArchive(_ context.Context, archive gloutonTypes.ArchiveWriter) error {
 	file, err := archive.Create("bleemeo-sync-state.json")
 	if err != nil {
 		return err
@@ -489,7 +489,7 @@ func (s *Synchronizer) DiagnosticPage() string {
 
 	if s.diagnosticClient == nil {
 		s.diagnosticClient = &http.Client{
-			Transport: types.NewHTTPTransport(tlsConfig, &s.requestCounter),
+			Transport: gloutonTypes.NewHTTPTransport(tlsConfig, &s.requestCounter),
 			CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
 				return http.ErrUseLastResponse
 			},
@@ -656,13 +656,13 @@ func (s *Synchronizer) waitCPUMetric(ctx context.Context) {
 
 	metrics := s.option.Cache.Metrics()
 	for _, m := range metrics {
-		if m.Labels[types.LabelName] == "cpu_used" || m.Labels[types.LabelName] == "node_cpu_seconds_total" {
+		if m.Labels[gloutonTypes.LabelName] == "cpu_used" || m.Labels[gloutonTypes.LabelName] == "node_cpu_seconds_total" {
 			return
 		}
 	}
 
-	filter := map[string]string{types.LabelName: "cpu_used"}
-	filter2 := map[string]string{types.LabelName: "node_cpu_seconds_total"}
+	filter := map[string]string{gloutonTypes.LabelName: "cpu_used"}
+	filter2 := map[string]string{gloutonTypes.LabelName: "node_cpu_seconds_total"}
 	count := 0
 
 	for ctx.Err() == nil && count < 20 {
@@ -765,7 +765,7 @@ func (s *Synchronizer) setClient() error {
 		InsecureSkipVerify: s.option.Config.Bleemeo.APISSLInsecure, //nolint:gosec
 	}
 	cl := &http.Client{
-		Transport: types.NewHTTPTransport(tlsConfig, &s.requestCounter),
+		Transport: gloutonTypes.NewHTTPTransport(tlsConfig, &s.requestCounter),
 	}
 
 	client, err := bleemeo.NewClient(

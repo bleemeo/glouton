@@ -25,7 +25,7 @@ import (
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/logger"
 	"github.com/bleemeo/glouton/prometheus/exporter/blackbox"
-	"github.com/bleemeo/glouton/types"
+	gloutonTypes "github.com/bleemeo/glouton/types"
 
 	"github.com/cespare/xxhash/v2"
 )
@@ -156,7 +156,7 @@ func (s *Synchronizer) ApplyMonitorUpdate() error {
 	monitors := s.option.Cache.Monitors()
 
 	accountConfigs := s.option.Cache.AccountConfigsByUUID()
-	processedMonitors := make([]types.Monitor, 0, len(monitors))
+	processedMonitors := make([]gloutonTypes.Monitor, 0, len(monitors))
 	agentIDHash := time.Duration(xxhash.Sum64String(s.agentID)%16000)*time.Millisecond - 8*time.Second
 
 	for _, monitor := range monitors {
@@ -181,7 +181,7 @@ func (s *Synchronizer) ApplyMonitorUpdate() error {
 			jitterCreationDate = creationDate.Add(-agentIDHash)
 		}
 
-		processedMonitors = append(processedMonitors, types.Monitor{
+		processedMonitors = append(processedMonitors, gloutonTypes.Monitor{
 			ID:                      monitor.ID,
 			MetricMonitorResolution: conf.AgentConfigByName[bleemeoTypes.AgentTypeMonitor].MetricResolution,
 			CreationDate:            jitterCreationDate,

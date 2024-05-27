@@ -33,7 +33,7 @@ import (
 	"github.com/bleemeo/glouton/prometheus/exporter/snmp"
 	"github.com/bleemeo/glouton/prometheus/model"
 	"github.com/bleemeo/glouton/store"
-	"github.com/bleemeo/glouton/types"
+	gloutonTypes "github.com/bleemeo/glouton/types"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -68,7 +68,7 @@ type syncTestHelper struct {
 
 	// Following fields are options used by some method
 	SNMP               []*snmp.Target
-	MetricFormat       types.MetricFormat
+	MetricFormat       gloutonTypes.MetricFormat
 	NotifyLabelsUpdate func()
 }
 
@@ -88,7 +88,7 @@ func newHelper(t *testing.T) *syncTestHelper {
 			UpdatedAt: api.now.Now(),
 		},
 
-		MetricFormat: types.MetricFormatBleemeo,
+		MetricFormat: gloutonTypes.MetricFormatBleemeo,
 	}
 
 	helper.wrapperClientMock = &wrapperClientMock{
@@ -234,15 +234,15 @@ func (helper *syncTestHelper) initSynchronizer(t *testing.T) {
 func (helper *syncTestHelper) pushPoints(t *testing.T, metrics []labels.Labels) {
 	t.Helper()
 
-	points := make([]types.MetricPoint, 0, len(metrics))
+	points := make([]gloutonTypes.MetricPoint, 0, len(metrics))
 
 	for _, m := range metrics {
 		mCopy := labels.New(m...)
 		annotations := model.MetaLabelsToAnnotation(mCopy)
 		mCopy = model.DropMetaLabels(mCopy)
 
-		points = append(points, types.MetricPoint{
-			Point: types.Point{
+		points = append(points, gloutonTypes.MetricPoint{
+			Point: gloutonTypes.Point{
 				Time:  helper.api.now.Now(),
 				Value: 42.0,
 			},

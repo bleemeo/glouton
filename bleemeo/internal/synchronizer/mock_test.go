@@ -36,7 +36,7 @@ import (
 
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/facts"
-	"github.com/bleemeo/glouton/types"
+	gloutonTypes "github.com/bleemeo/glouton/types"
 
 	"github.com/google/uuid"
 )
@@ -879,14 +879,14 @@ func (m mockMetric) Labels() map[string]string {
 		return m.labels
 	}
 
-	return map[string]string{types.LabelName: m.Name}
+	return map[string]string{gloutonTypes.LabelName: m.Name}
 }
 
-func (m mockMetric) Annotations() types.MetricAnnotations {
-	return types.MetricAnnotations{}
+func (m mockMetric) Annotations() gloutonTypes.MetricAnnotations {
+	return gloutonTypes.MetricAnnotations{}
 }
 
-func (m mockMetric) Points(start, end time.Time) ([]types.Point, error) {
+func (m mockMetric) Points(start, end time.Time) ([]gloutonTypes.Point, error) {
 	_ = start
 	_ = end
 
@@ -920,7 +920,7 @@ func (d mockDocker) LastUpdate() time.Time {
 	return d.helper.s.now()
 }
 
-func (m mockMonitorManager) UpdateDynamicTargets([]types.Monitor) error {
+func (m mockMonitorManager) UpdateDynamicTargets([]gloutonTypes.Monitor) error {
 	return nil
 }
 

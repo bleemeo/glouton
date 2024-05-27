@@ -30,7 +30,7 @@ import (
 	"github.com/bleemeo/glouton/facts"
 	"github.com/bleemeo/glouton/prometheus/exporter/snmp"
 	"github.com/bleemeo/glouton/prometheus/model"
-	"github.com/bleemeo/glouton/types"
+	gloutonTypes "github.com/bleemeo/glouton/types"
 
 	"dario.cat/mergo"
 	"github.com/google/go-cmp/cmp"
@@ -73,7 +73,7 @@ func TestSync(t *testing.T) {
 	helper.initSynchronizer(t)
 
 	helper.pushPoints(t, []labels.Labels{
-		labels.New(labels.Label{Name: types.LabelName, Value: "cpu_used"}),
+		labels.New(labels.Label{Name: gloutonTypes.LabelName, Value: "cpu_used"}),
 	})
 
 	if err := helper.runOnce(t); err != nil {
@@ -125,12 +125,12 @@ func TestSyncWithSNMP(t *testing.T) {
 	helper.SNMP = []*snmp.Target{
 		snmp.NewMock(config.SNMPTarget{InitialName: "Z-The-Initial-Name", Target: snmpAddress}, map[string]string{}),
 	}
-	helper.MetricFormat = types.MetricFormatPrometheus
+	helper.MetricFormat = gloutonTypes.MetricFormatPrometheus
 
 	helper.initSynchronizer(t)
 
 	helper.pushPoints(t, []labels.Labels{
-		labels.New(labels.Label{Name: types.LabelName, Value: "cpu_used"}),
+		labels.New(labels.Label{Name: gloutonTypes.LabelName, Value: "cpu_used"}),
 	})
 
 	if err := helper.runOnce(t); err != nil {
@@ -191,11 +191,11 @@ func TestSyncWithSNMP(t *testing.T) {
 	}
 
 	helper.pushPoints(t, []labels.Labels{
-		labels.New(labels.Label{Name: types.LabelName, Value: "cpu_used"}),
+		labels.New(labels.Label{Name: gloutonTypes.LabelName, Value: "cpu_used"}),
 		labels.New(
-			labels.Label{Name: types.LabelName, Value: "ifOutOctets"},
-			labels.Label{Name: types.LabelSNMPTarget, Value: snmpAddress},
-			labels.Label{Name: types.LabelMetaBleemeoTargetAgentUUID, Value: idAgentSNMP},
+			labels.Label{Name: gloutonTypes.LabelName, Value: "ifOutOctets"},
+			labels.Label{Name: gloutonTypes.LabelSNMPTarget, Value: snmpAddress},
+			labels.Label{Name: gloutonTypes.LabelMetaBleemeoTargetAgentUUID, Value: idAgentSNMP},
 		),
 	})
 
@@ -256,11 +256,11 @@ func TestSyncWithSNMP(t *testing.T) {
 			helper.api.now.Advance(time.Second)
 
 			helper.pushPoints(t, []labels.Labels{
-				labels.New(labels.Label{Name: types.LabelName, Value: "cpu_used"}),
+				labels.New(labels.Label{Name: gloutonTypes.LabelName, Value: "cpu_used"}),
 				labels.New(
-					labels.Label{Name: types.LabelName, Value: "ifOutOctets"},
-					labels.Label{Name: types.LabelSNMPTarget, Value: snmpAddress},
-					labels.Label{Name: types.LabelMetaBleemeoTargetAgentUUID, Value: idAgentSNMP},
+					labels.Label{Name: gloutonTypes.LabelName, Value: "ifOutOctets"},
+					labels.Label{Name: gloutonTypes.LabelSNMPTarget, Value: snmpAddress},
+					labels.Label{Name: gloutonTypes.LabelMetaBleemeoTargetAgentUUID, Value: idAgentSNMP},
 				),
 			})
 
@@ -354,7 +354,7 @@ func TestSyncWithSNMPDelete(t *testing.T) {
 	helper.SNMP = []*snmp.Target{
 		snmp.NewMock(config.SNMPTarget{InitialName: "Z-The-Initial-Name", Target: snmpAddress}, map[string]string{}),
 	}
-	helper.MetricFormat = types.MetricFormatPrometheus
+	helper.MetricFormat = gloutonTypes.MetricFormatPrometheus
 	helper.NotifyLabelsUpdate = func() {
 		l.Lock()
 		defer l.Unlock()
@@ -365,7 +365,7 @@ func TestSyncWithSNMPDelete(t *testing.T) {
 	helper.initSynchronizer(t)
 
 	helper.pushPoints(t, []labels.Labels{
-		labels.New(labels.Label{Name: types.LabelName, Value: "cpu_used"}),
+		labels.New(labels.Label{Name: gloutonTypes.LabelName, Value: "cpu_used"}),
 	})
 
 	if err := helper.runOnce(t); err != nil {
@@ -426,11 +426,11 @@ func TestSyncWithSNMPDelete(t *testing.T) {
 	}
 
 	helper.pushPoints(t, []labels.Labels{
-		labels.New(labels.Label{Name: types.LabelName, Value: "cpu_used"}),
+		labels.New(labels.Label{Name: gloutonTypes.LabelName, Value: "cpu_used"}),
 		labels.New(
-			labels.Label{Name: types.LabelName, Value: "ifOutOctets"},
-			labels.Label{Name: types.LabelSNMPTarget, Value: snmpAddress},
-			labels.Label{Name: types.LabelMetaBleemeoTargetAgentUUID, Value: idAgentSNMP},
+			labels.Label{Name: gloutonTypes.LabelName, Value: "ifOutOctets"},
+			labels.Label{Name: gloutonTypes.LabelSNMPTarget, Value: snmpAddress},
+			labels.Label{Name: gloutonTypes.LabelMetaBleemeoTargetAgentUUID, Value: idAgentSNMP},
 		),
 	})
 
@@ -495,7 +495,7 @@ func TestSyncWithSNMPDelete(t *testing.T) {
 	helper.api.now.Advance(time.Second)
 
 	helper.pushPoints(t, []labels.Labels{
-		labels.New(labels.Label{Name: types.LabelName, Value: "cpu_used"}),
+		labels.New(labels.Label{Name: gloutonTypes.LabelName, Value: "cpu_used"}),
 	})
 
 	if err := helper.runOnce(t); err != nil {
@@ -534,11 +534,11 @@ func TestSyncWithSNMPDelete(t *testing.T) {
 	helper.api.now.Advance(time.Second)
 
 	helper.pushPoints(t, []labels.Labels{
-		labels.New(labels.Label{Name: types.LabelName, Value: "cpu_used"}),
+		labels.New(labels.Label{Name: gloutonTypes.LabelName, Value: "cpu_used"}),
 		labels.New(
-			labels.Label{Name: types.LabelName, Value: "ifOutOctets"},
-			labels.Label{Name: types.LabelSNMPTarget, Value: snmpAddress},
-			labels.Label{Name: types.LabelMetaBleemeoTargetAgentUUID, Value: idAgentSNMP},
+			labels.Label{Name: gloutonTypes.LabelName, Value: "ifOutOctets"},
+			labels.Label{Name: gloutonTypes.LabelSNMPTarget, Value: snmpAddress},
+			labels.Label{Name: gloutonTypes.LabelMetaBleemeoTargetAgentUUID, Value: idAgentSNMP},
 		),
 	})
 
@@ -585,10 +585,10 @@ func TestContainerSync(t *testing.T) {
 
 	helper.pushPoints(t, []labels.Labels{
 		labels.New(
-			labels.Label{Name: types.LabelName, Value: types.MetricServiceStatus},
-			labels.Label{Name: types.LabelService, Value: "redis"},
-			labels.Label{Name: types.LabelServiceInstance, Value: "my_redis_1"},
-			labels.Label{Name: types.LabelMetaContainerID, Value: containerID},
+			labels.Label{Name: gloutonTypes.LabelName, Value: gloutonTypes.MetricServiceStatus},
+			labels.Label{Name: gloutonTypes.LabelService, Value: "redis"},
+			labels.Label{Name: gloutonTypes.LabelServiceInstance, Value: "my_redis_1"},
+			labels.Label{Name: gloutonTypes.LabelMetaContainerID, Value: containerID},
 		),
 	})
 
@@ -638,7 +638,7 @@ func TestContainerSync(t *testing.T) {
 				LabelsText:  `__name__="service_status",service="redis",service_instance="my_redis_1"`,
 				ContainerID: "1",
 			},
-			Name: types.MetricServiceStatus,
+			Name: gloutonTypes.MetricServiceStatus,
 			Item: "",
 		},
 	}
@@ -695,7 +695,7 @@ func TestContainerSync(t *testing.T) {
 				ContainerID:   "1",
 				DeactivatedAt: helper.s.now(),
 			},
-			Name: types.MetricServiceStatus,
+			Name: gloutonTypes.MetricServiceStatus,
 			Item: "",
 		},
 	}
@@ -716,10 +716,10 @@ func TestContainerSync(t *testing.T) {
 
 	helper.pushPoints(t, []labels.Labels{
 		labels.New(
-			labels.Label{Name: types.LabelName, Value: types.MetricServiceStatus},
-			labels.Label{Name: types.LabelService, Value: "redis"},
-			labels.Label{Name: types.LabelServiceInstance, Value: "my_redis_1"},
-			labels.Label{Name: types.LabelMetaContainerID, Value: containerID2},
+			labels.Label{Name: gloutonTypes.LabelName, Value: gloutonTypes.MetricServiceStatus},
+			labels.Label{Name: gloutonTypes.LabelService, Value: "redis"},
+			labels.Label{Name: gloutonTypes.LabelServiceInstance, Value: "my_redis_1"},
+			labels.Label{Name: gloutonTypes.LabelMetaContainerID, Value: containerID2},
 		),
 	})
 
@@ -764,7 +764,7 @@ func TestContainerSync(t *testing.T) {
 				LabelsText:  `__name__="service_status",service="redis",service_instance="my_redis_1"`,
 				ContainerID: "1",
 			},
-			Name: types.MetricServiceStatus,
+			Name: gloutonTypes.MetricServiceStatus,
 			Item: "",
 		},
 	}
@@ -839,7 +839,7 @@ func TestSyncServerGroup(t *testing.T) {
 			helper.initSynchronizer(t)
 
 			helper.pushPoints(t, []labels.Labels{
-				labels.New(labels.Label{Name: types.LabelName, Value: "cpu_used"}),
+				labels.New(labels.Label{Name: gloutonTypes.LabelName, Value: "cpu_used"}),
 			})
 
 			if err := helper.runOnce(t); err != nil {
@@ -1123,28 +1123,28 @@ func TestBleemeoPlan(t *testing.T) { //nolint:maintidx
 			}
 
 			helper.pushPoints(t, []labels.Labels{
-				labels.New(labels.Label{Name: types.LabelName, Value: "cpu_used"}),
-				labels.New(labels.Label{Name: types.LabelName, Value: "custom_metric"}),
+				labels.New(labels.Label{Name: gloutonTypes.LabelName, Value: "cpu_used"}),
+				labels.New(labels.Label{Name: gloutonTypes.LabelName, Value: "custom_metric"}),
 				model.AnnotationToMetaLabels(labels.FromMap(srvRedis1.LabelsOfStatus()), srvRedis1.AnnotationsOfStatus()),
 				labels.New(
-					labels.Label{Name: types.LabelName, Value: "probe_success"},
-					labels.Label{Name: types.LabelScraperUUID, Value: idAgentMain},
-					labels.Label{Name: types.LabelInstance, Value: newMonitor.URL},
-					labels.Label{Name: types.LabelInstanceUUID, Value: newMonitor.AgentID},
-					labels.Label{Name: types.LabelMetaBleemeoTargetAgentUUID, Value: newMonitor.AgentID},
+					labels.Label{Name: gloutonTypes.LabelName, Value: "probe_success"},
+					labels.Label{Name: gloutonTypes.LabelScraperUUID, Value: idAgentMain},
+					labels.Label{Name: gloutonTypes.LabelInstance, Value: newMonitor.URL},
+					labels.Label{Name: gloutonTypes.LabelInstanceUUID, Value: newMonitor.AgentID},
+					labels.Label{Name: gloutonTypes.LabelMetaBleemeoTargetAgentUUID, Value: newMonitor.AgentID},
 				),
 				labels.New(
-					labels.Label{Name: types.LabelName, Value: "ifOutOctets"},
-					labels.Label{Name: types.LabelSNMPTarget, Value: snmpAddress},
-					labels.Label{Name: types.LabelMetaBleemeoTargetAgentUUID, Value: idAgentSNMP},
+					labels.Label{Name: gloutonTypes.LabelName, Value: "ifOutOctets"},
+					labels.Label{Name: gloutonTypes.LabelSNMPTarget, Value: snmpAddress},
+					labels.Label{Name: gloutonTypes.LabelMetaBleemeoTargetAgentUUID, Value: idAgentSNMP},
 				),
 				labels.New(
-					labels.Label{Name: types.LabelName, Value: "redis_commands"},
-					labels.Label{Name: types.LabelMetaServiceName, Value: "redis"},
-					labels.Label{Name: types.LabelMetaServiceInstance, Value: "short-redis-container-name"},
-					labels.Label{Name: types.LabelMetaContainerID, Value: "1234"},
-					labels.Label{Name: types.LabelMetaBleemeoItem, Value: "short-redis-container-name"},
-					labels.Label{Name: types.LabelItem, Value: "short-redis-container-name"},
+					labels.Label{Name: gloutonTypes.LabelName, Value: "redis_commands"},
+					labels.Label{Name: gloutonTypes.LabelMetaServiceName, Value: "redis"},
+					labels.Label{Name: gloutonTypes.LabelMetaServiceInstance, Value: "short-redis-container-name"},
+					labels.Label{Name: gloutonTypes.LabelMetaContainerID, Value: "1234"},
+					labels.Label{Name: gloutonTypes.LabelMetaBleemeoItem, Value: "short-redis-container-name"},
+					labels.Label{Name: gloutonTypes.LabelItem, Value: "short-redis-container-name"},
 				),
 			})
 
