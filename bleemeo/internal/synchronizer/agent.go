@@ -20,7 +20,7 @@ import (
 	"context"
 	"errors"
 
-	"github.com/bleemeo/glouton/bleemeo/types"
+	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/logger"
 )
 
@@ -50,13 +50,13 @@ func (s *Synchronizer) syncAgent(ctx context.Context, fullSync bool, onlyEssenti
 }
 
 func (s *Synchronizer) syncMainAgent(ctx context.Context) error {
-	data := map[string][]types.Tag{
-		"tags": make([]types.Tag, 0),
+	data := map[string][]bleemeoTypes.Tag{
+		"tags": make([]bleemeoTypes.Tag, 0),
 	}
 
 	for _, t := range s.option.Config.Tags {
 		if len(t) <= apiTagsLength && t != "" {
-			data["tags"] = append(data["tags"], types.Tag{Name: t})
+			data["tags"] = append(data["tags"], bleemeoTypes.Tag{Name: t})
 		}
 	}
 

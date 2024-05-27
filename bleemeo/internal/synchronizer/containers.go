@@ -23,7 +23,7 @@ import (
 	"time"
 
 	"github.com/bleemeo/glouton/bleemeo/internal/common"
-	"github.com/bleemeo/glouton/bleemeo/types"
+	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/facts"
 	containerTypes "github.com/bleemeo/glouton/facts/container-runtime/types"
 	"github.com/bleemeo/glouton/logger"
@@ -41,14 +41,14 @@ const (
 )
 
 type containerPayload struct {
-	types.Container
-	Host             string         `json:"host"`
-	Command          string         `json:"command"`
-	StartedAt        types.NullTime `json:"container_started_at"`
-	FinishedAt       types.NullTime `json:"container_finished_at"`
-	ImageID          string         `json:"container_image_id"`
-	ImageName        string         `json:"container_image_name"`
-	DockerAPIVersion string         `json:"docker_api_version"`
+	bleemeoTypes.Container
+	Host             string                `json:"host"`
+	Command          string                `json:"command"`
+	StartedAt        bleemeoTypes.NullTime `json:"container_started_at"`
+	FinishedAt       bleemeoTypes.NullTime `json:"container_finished_at"`
+	ImageID          string                `json:"container_image_id"`
+	ImageName        string                `json:"container_image_name"`
+	DockerAPIVersion string                `json:"docker_api_version"`
 }
 
 func (s *Synchronizer) syncContainers(ctx context.Context, fullSync bool, onlyEssential bool) (updateThresholds bool, err error) {
@@ -150,13 +150,13 @@ func (s *Synchronizer) containerRegisterAndUpdate(localContainers []facts.Contai
 
 		remoteIndex, remoteFound := remoteIndexByName[name]
 
-		var remoteContainer types.Container
+		var remoteContainer bleemeoTypes.Container
 
 		if remoteFound {
 			remoteContainer = remoteContainers[remoteIndex]
 		}
 
-		payloadContainer := types.Container{
+		payloadContainer := bleemeoTypes.Container{
 			Name:             name,
 			ContainerID:      container.ID(),
 			ContainerInspect: container.ContainerJSON(),
@@ -189,8 +189,8 @@ func (s *Synchronizer) containerRegisterAndUpdate(localContainers []facts.Contai
 			Container:  payloadContainer,
 			Host:       s.agentID,
 			Command:    strings.Join(container.Command(), " "),
-			StartedAt:  types.NullTime(container.StartedAt()),
-			FinishedAt: types.NullTime(container.FinishedAt()),
+			StartedAt:  bleemeoTypes.NullTime(container.StartedAt()),
+			FinishedAt: bleemeoTypes.NullTime(container.FinishedAt()),
 			ImageID:    container.ImageID(),
 			ImageName:  container.ImageName(),
 		}
@@ -233,8 +233,8 @@ func (s *Synchronizer) delayedContainerCheck(newDelayedContainer map[string]time
 
 func (s *Synchronizer) remoteRegister(
 	remoteFound bool,
-	remoteContainer *types.Container,
-	remoteContainers *[]types.Container,
+	remoteContainer *bleemeoTypes.Container,
+	remoteContainers *[]bleemeoTypes.Container,
 	payload containerPayload,
 	remoteIndex int,
 ) error {
@@ -287,7 +287,7 @@ func (s *Synchronizer) containerDeleteFromLocal(localContainers []facts.Containe
 			continue
 		}
 
-		body := map[string]any{"deleted_at": types.NullTime(s.now())}
+		body := map[string]any{"deleted_at": bleemeoTypes.NullTime(s.now())}
 
 		err := s.client.updateContainer(s.ctx, container.ID, body, nil)
 		if err != nil {
@@ -304,14 +304,14 @@ func (s *Synchronizer) containerDeleteFromLocal(localContainers []facts.Containe
 		}
 
 		logger.V(2).Printf("Container %v deleted (UUID %s)", container.Name, container.ID)
-		container.DeletedAt = types.NullTime(s.now())
+		container.DeletedAt = bleemeoTypes.NullTime(s.now())
 
 		registeredContainers[container.ID] = container
 
 		deletedIDs = append(deletedIDs, container.ID)
 	}
 
-	containers := make([]types.Container, 0, len(registeredContainers))
+	containers := make([]bleemeoTypes.Container, 0, len(registeredContainers))
 
 	for _, v := range registeredContainers {
 		containers = append(containers, v)

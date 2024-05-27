@@ -21,7 +21,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/bleemeo/glouton/bleemeo/types"
+	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/logger"
 	"github.com/bleemeo/glouton/prometheus/exporter/snmp"
 
@@ -34,7 +34,7 @@ const (
 )
 
 type payloadAgent struct {
-	types.Agent
+	bleemeoTypes.Agent
 	Abstracted         bool   `json:"abstracted"`
 	InitialPassword    string `json:"initial_password"`
 	InitialServerGroup string `json:"initial_server_group_name,omitempty"`
@@ -63,12 +63,12 @@ type snmpAssociation struct {
 	ID      string
 }
 
-func (s *Synchronizer) FindSNMPAgent(ctx context.Context, target *snmp.Target, snmpType string, agentsByID map[string]types.Agent) (types.Agent, error) {
+func (s *Synchronizer) FindSNMPAgent(ctx context.Context, target *snmp.Target, snmpType string, agentsByID map[string]bleemeoTypes.Agent) (bleemeoTypes.Agent, error) {
 	var association snmpAssociation
 
 	err := s.option.State.Get(snmpCachePrefix+target.Address(), &association)
 	if err != nil {
-		return types.Agent{}, err
+		return bleemeoTypes.Agent{}, err
 	}
 
 	if agent, ok := agentsByID[association.ID]; ok && association.ID != "" {
@@ -79,7 +79,7 @@ func (s *Synchronizer) FindSNMPAgent(ctx context.Context, target *snmp.Target, s
 
 	facts, err := target.Facts(ctx, 24*time.Hour)
 	if err != nil {
-		return types.Agent{}, err
+		return bleemeoTypes.Agent{}, err
 	}
 
 	associatedID := make(map[string]bool, len(s.option.SNMP))
@@ -87,7 +87,7 @@ func (s *Synchronizer) FindSNMPAgent(ctx context.Context, target *snmp.Target, s
 	for _, v := range s.option.SNMP {
 		err := s.option.State.Get(snmpCachePrefix+v.Address(), &association)
 		if err != nil {
-			return types.Agent{}, err
+			return bleemeoTypes.Agent{}, err
 		}
 
 		if association.ID != "" {
@@ -109,15 +109,15 @@ func (s *Synchronizer) FindSNMPAgent(ctx context.Context, target *snmp.Target, s
 		}
 	}
 
-	return types.Agent{}, errNotExist
+	return bleemeoTypes.Agent{}, errNotExist
 }
 
 func (s *Synchronizer) snmpRegisterAndUpdate(localTargets []*snmp.Target) error {
-	var newAgent []types.Agent //nolint: prealloc
+	var newAgent []bleemeoTypes.Agent //nolint: prealloc
 
 	remoteAgentList := s.option.Cache.AgentsByUUID()
 
-	agentTypeID, found := s.getAgentType(types.AgentTypeSNMP)
+	agentTypeID, found := s.getAgentType(bleemeoTypes.AgentTypeSNMP)
 	if !found {
 		return errRetryLater
 	}
@@ -154,11 +154,11 @@ func (s *Synchronizer) snmpRegisterAndUpdate(localTargets []*snmp.Target) error 
 		}
 
 		payload := payloadAgent{
-			Agent: types.Agent{
+			Agent: bleemeoTypes.Agent{
 				FQDN:        fqdn,
 				DisplayName: name,
 				AgentType:   agentTypeID,
-				Tags:        []types.Tag{},
+				Tags:        []bleemeoTypes.Tag{},
 			},
 			Abstracted:         true,
 			InitialPassword:    uuid.New().String(),
@@ -190,7 +190,7 @@ func (s *Synchronizer) snmpRegisterAndUpdate(localTargets []*snmp.Target) error 
 	return nil
 }
 
-func (s *Synchronizer) remoteRegisterSNMP(payload payloadAgent) (types.Agent, error) {
+func (s *Synchronizer) remoteRegisterSNMP(payload payloadAgent) (bleemeoTypes.Agent, error) {
 	result, err := s.client.registerSNMPAgent(s.ctx, payload)
 	if err != nil {
 		return result, err

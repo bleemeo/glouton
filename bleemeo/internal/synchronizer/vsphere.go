@@ -22,7 +22,7 @@ import (
 	"slices"
 	"time"
 
-	"github.com/bleemeo/glouton/bleemeo/types"
+	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/inputs/vsphere"
 	"github.com/bleemeo/glouton/logger"
 
@@ -62,16 +62,16 @@ type vSphereAssociation struct {
 	key string
 }
 
-func deviceAssoKey(device types.VSphereDevice) string {
+func deviceAssoKey(device bleemeoTypes.VSphereDevice) string {
 	return device.MOID() + "__" + device.Source()
 }
 
-func (s *Synchronizer) FindVSphereAgent(ctx context.Context, device types.VSphereDevice, agentTypeID string, agentsByID map[string]types.Agent) (types.Agent, error) {
+func (s *Synchronizer) FindVSphereAgent(ctx context.Context, device bleemeoTypes.VSphereDevice, agentTypeID string, agentsByID map[string]bleemeoTypes.Agent) (bleemeoTypes.Agent, error) {
 	var association vSphereAssociation
 
 	err := s.option.State.Get(vSphereCachePrefix+deviceAssoKey(device), &association)
 	if err != nil {
-		return types.Agent{}, err
+		return bleemeoTypes.Agent{}, err
 	}
 
 	if agent, ok := agentsByID[association.ID]; ok && association.ID != "" {
@@ -90,7 +90,7 @@ func (s *Synchronizer) FindVSphereAgent(ctx context.Context, device types.VSpher
 	for _, dev := range devices {
 		err := s.option.State.Get(vSphereCachePrefix+deviceAssoKey(dev), &association)
 		if err != nil {
-			return types.Agent{}, err
+			return bleemeoTypes.Agent{}, err
 		}
 
 		if association.ID != "" {
@@ -112,10 +112,10 @@ func (s *Synchronizer) FindVSphereAgent(ctx context.Context, device types.VSpher
 		}
 	}
 
-	return types.Agent{}, errNotExist
+	return bleemeoTypes.Agent{}, errNotExist
 }
 
-func (s *Synchronizer) VSphereRegisterAndUpdate(localDevices []types.VSphereDevice) error {
+func (s *Synchronizer) VSphereRegisterAndUpdate(localDevices []bleemeoTypes.VSphereDevice) error {
 	vSphereAgentTypes, found := s.GetVSphereAgentTypes()
 	if !found {
 		return errRetryLater
@@ -126,7 +126,7 @@ func (s *Synchronizer) VSphereRegisterAndUpdate(localDevices []types.VSphereDevi
 	seenDeviceAgents := make(map[string]string, len(localDevices))
 
 	var ( //nolint: prealloc
-		newAgents []types.Agent
+		newAgents []bleemeoTypes.Agent
 		errs      []error
 	)
 
@@ -154,11 +154,11 @@ func (s *Synchronizer) VSphereRegisterAndUpdate(localDevices []types.VSphereDevi
 		}
 
 		payload := payloadAgent{
-			Agent: types.Agent{
+			Agent: bleemeoTypes.Agent{
 				FQDN:        device.FQDN(),
 				DisplayName: device.Name(),
 				AgentType:   agentTypeID,
-				Tags:        []types.Tag{},
+				Tags:        []bleemeoTypes.Tag{},
 			},
 			Abstracted:         true,
 			InitialPassword:    uuid.New().String(),
@@ -213,7 +213,7 @@ func (s *Synchronizer) VSphereRegisterAndUpdate(localDevices []types.VSphereDevi
 	return errors.Join(errs...)
 }
 
-func (s *Synchronizer) remoteRegisterVSphereDevice(payload payloadAgent) (types.Agent, error) {
+func (s *Synchronizer) remoteRegisterVSphereDevice(payload payloadAgent) (bleemeoTypes.Agent, error) {
 	result, err := s.client.registerVSphereAgent(s.ctx, payload)
 	if err != nil {
 		return result, err
@@ -233,11 +233,11 @@ func (s *Synchronizer) GetVSphereAgentTypes() (map[vsphere.ResourceKind]string, 
 
 	for i := 0; i < len(agentTypes) && len(vSphereAgentTypes) < vSphereAgentTypesCount; i++ {
 		switch a := agentTypes[i]; {
-		case a.Name == types.AgentTypeVSphereCluster:
+		case a.Name == bleemeoTypes.AgentTypeVSphereCluster:
 			vSphereAgentTypes[vsphere.KindCluster] = a.ID
-		case a.Name == types.AgentTypeVSphereHost:
+		case a.Name == bleemeoTypes.AgentTypeVSphereHost:
 			vSphereAgentTypes[vsphere.KindHost] = a.ID
-		case a.Name == types.AgentTypeVSphereVM:
+		case a.Name == bleemeoTypes.AgentTypeVSphereVM:
 			vSphereAgentTypes[vsphere.KindVM] = a.ID
 		}
 	}
@@ -256,7 +256,7 @@ func (s *Synchronizer) GetVSphereAgentType(kind vsphere.ResourceKind) (agentType
 	return agentTypeID, found
 }
 
-func (s *Synchronizer) purgeVSphereAgents(remoteAgents map[string]types.Agent, seenDeviceAgents map[string]string, vSphereAgentTypes map[string]bool) error {
+func (s *Synchronizer) purgeVSphereAgents(remoteAgents map[string]bleemeoTypes.Agent, seenDeviceAgents map[string]string, vSphereAgentTypes map[string]bool) error {
 	associations, err := s.option.State.GetByPrefix(vSphereCachePrefix, vSphereAssociation{})
 	if err != nil {
 		return err
@@ -323,7 +323,7 @@ func (s *Synchronizer) purgeVSphereAgents(remoteAgents map[string]types.Agent, s
 
 func (s *Synchronizer) removeAgentsFromCache(agentsToRemove map[string]bool) {
 	agents := s.option.Cache.Agents()
-	finalAgents := make([]types.Agent, 0, len(agents)-len(agentsToRemove))
+	finalAgents := make([]bleemeoTypes.Agent, 0, len(agents)-len(agentsToRemove))
 
 	for _, agent := range agents {
 		if agentsToRemove[agent.ID] {

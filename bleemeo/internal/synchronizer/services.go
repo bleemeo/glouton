@@ -24,7 +24,7 @@ import (
 	"time"
 
 	"github.com/bleemeo/glouton/bleemeo/internal/common"
-	"github.com/bleemeo/glouton/bleemeo/types"
+	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/discovery"
 	"github.com/bleemeo/glouton/facts"
 	"github.com/bleemeo/glouton/logger"
@@ -33,14 +33,14 @@ import (
 const serviceFields = "id,label,instance,listen_addresses,exe_path,stack,active,account,agent,created_at"
 
 type servicePayload struct {
-	types.Service
+	bleemeoTypes.Service
 	Account string `json:"account"`
 	Agent   string `json:"agent"`
 }
 
 func servicePayloadFromDiscovery(service discovery.Service, listenAddresses string, accountID string, agentID string, serviceID string) servicePayload {
 	return servicePayload{
-		Service: types.Service{
+		Service: bleemeoTypes.Service{
 			ID:              serviceID,
 			Label:           service.Name,
 			Instance:        service.Instance,
@@ -127,7 +127,7 @@ func (s *Synchronizer) serviceUpdateList() error {
 }
 
 // serviceRemoveDeletedFromRemote removes the local services that were deleted on the API.
-func (s *Synchronizer) serviceRemoveDeletedFromRemote(localServices []discovery.Service, previousServices map[string]types.Service) {
+func (s *Synchronizer) serviceRemoveDeletedFromRemote(localServices []discovery.Service, previousServices map[string]bleemeoTypes.Service) {
 	newServices := s.option.Cache.ServicesByUUID()
 
 	deletedServiceNameInstance := make(map[common.ServiceNameInstance]bool)
@@ -182,7 +182,7 @@ func (s *Synchronizer) serviceRegisterAndUpdate(localServices []discovery.Servic
 		payload := servicePayloadFromDiscovery(srv, listenAddresses, s.option.Cache.AccountID(), s.agentID, "")
 
 		var (
-			result types.Service
+			result bleemeoTypes.Service
 			err    error
 		)
 
@@ -223,7 +223,7 @@ func (s *Synchronizer) serviceRegisterAndUpdate(localServices []discovery.Servic
 		}
 	}
 
-	finalServices := make([]types.Service, 0, len(registeredServices))
+	finalServices := make([]bleemeoTypes.Service, 0, len(registeredServices))
 
 	for _, srv := range registeredServices {
 		finalServices = append(finalServices, srv)
@@ -235,7 +235,7 @@ func (s *Synchronizer) serviceRegisterAndUpdate(localServices []discovery.Servic
 }
 
 // skipUpdate returns true if the service found by the discovery is up to date with the remote service on the API.
-func skipUpdate(remoteFound bool, remoteSrv types.Service, srv discovery.Service, listenAddresses string) bool {
+func skipUpdate(remoteFound bool, remoteSrv bleemeoTypes.Service, srv discovery.Service, listenAddresses string) bool {
 	return remoteFound &&
 		remoteSrv.Label == srv.Name &&
 		remoteSrv.ListenAddresses == listenAddresses &&
@@ -284,7 +284,7 @@ func (s *Synchronizer) serviceDeactivateNonLocal(localServices []discovery.Servi
 
 	registeredServices := s.option.Cache.Services()
 	remoteServicesByKey := common.ServiceLookupFromList(registeredServices)
-	finalServices := make([]types.Service, 0, len(registeredServices))
+	finalServices := make([]bleemeoTypes.Service, 0, len(registeredServices))
 
 	for _, remoteSrv := range registeredServices {
 		key := common.ServiceNameInstance{Name: remoteSrv.Label, Instance: remoteSrv.Instance}
@@ -311,9 +311,9 @@ func (s *Synchronizer) serviceDeactivateNonLocal(localServices []discovery.Servi
 }
 
 // serviceDeactivate makes a PUT request to the Bleemeo API to mark the given service as inactive.
-func (s *Synchronizer) serviceDeactivate(service types.Service) (types.Service, error) {
+func (s *Synchronizer) serviceDeactivate(service bleemeoTypes.Service) (bleemeoTypes.Service, error) {
 	payload := servicePayload{
-		Service: types.Service{
+		Service: bleemeoTypes.Service{
 			Active:          false,
 			Label:           service.Label,
 			Instance:        service.Instance,

@@ -20,7 +20,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/bleemeo/glouton/bleemeo/types"
+	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/facts"
 	"github.com/bleemeo/glouton/logger"
 )
@@ -69,7 +69,7 @@ func (s *Synchronizer) syncFacts(ctx context.Context, fullSync bool, onlyEssenti
 	allAgentFacts[s.agentID] = localFacts
 
 	if !onlyEssential {
-		agentTypeID, found := s.getAgentType(types.AgentTypeSNMP)
+		agentTypeID, found := s.getAgentType(bleemeoTypes.AgentTypeSNMP)
 		if !found {
 			return false, errRetryLater
 		}
@@ -159,7 +159,7 @@ func (s *Synchronizer) factRegister(allAgentFacts map[string]map[string]string) 
 				"value": value,
 			}
 
-			var result types.AgentFact
+			var result bleemeoTypes.AgentFact
 
 			err := s.client.registerFact(s.ctx, payload, &result)
 			if err != nil {
@@ -200,7 +200,7 @@ func (s *Synchronizer) factDeleteFromLocal(allAgentFacts map[string]map[string]s
 		delete(registeredFacts, k)
 	}
 
-	facts := make([]types.AgentFact, 0, len(registeredFacts))
+	facts := make([]bleemeoTypes.AgentFact, 0, len(registeredFacts))
 
 	for _, v := range registeredFacts {
 		facts = append(facts, v)
