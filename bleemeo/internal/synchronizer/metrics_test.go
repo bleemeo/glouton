@@ -562,7 +562,7 @@ func TestMetricSimpleSync(t *testing.T) {
 
 	// list metrics and register agent_status
 	// helper.api.AssertCallPerResource(t, mockAPIResourceMetric, 2)
-	helper.wrapperClientMock.AssertCallPerResource(t, mockAPIResourceMetric, 2)
+	helper.wrapperClientMock.AssertCallsPerResource(t, mockAPIResourceMetric, 2)
 
 	idAgentMain, _ := helper.state.BleemeoCredentials()
 
@@ -597,7 +597,7 @@ func TestMetricSimpleSync(t *testing.T) {
 	// We do 2 request: list metrics, list inactive metrics
 	// and register new metric
 	// helper.api.AssertCallPerResource(t, mockAPIResourceMetric, 3)
-	helper.wrapperClientMock.AssertCallPerResource(t, mockAPIResourceMetric, 3)
+	helper.wrapperClientMock.AssertCallsPerResource(t, mockAPIResourceMetric, 3)
 
 	metrics = helper.MetricsFromAPI()
 	want = []metricPayload{
@@ -643,7 +643,7 @@ func TestMetricSimpleSync(t *testing.T) {
 
 	// We do 1003 request: 3 for listing and 1000 registration
 	// helper.api.AssertCallPerResource(t, mockAPIResourceMetric, 1003)
-	helper.wrapperClientMock.AssertCallPerResource(t, mockAPIResourceMetric, 1003)
+	helper.wrapperClientMock.AssertCallsPerResource(t, mockAPIResourceMetric, 1003)
 
 	metrics = helper.MetricsFromAPI()
 	if len(metrics) != 1002 {
@@ -659,7 +659,7 @@ func TestMetricSimpleSync(t *testing.T) {
 
 	// We do 1001 request: 1001 to mark inactive all metrics but agent_status
 	// helper.api.AssertCallPerResource(t, mockAPIResourceMetric, 1001)
-	helper.wrapperClientMock.AssertCallPerResource(t, mockAPIResourceMetric, 1001)
+	helper.wrapperClientMock.AssertCallsPerResource(t, mockAPIResourceMetric, 1001)
 
 	metrics = helper.MetricsFromAPI()
 	if len(metrics) != 1002 {
@@ -699,7 +699,7 @@ func TestMetricSimpleSync(t *testing.T) {
 	// We do 3 request: 1 to re-enable metric,
 	// 1 search for metric before registration, 1 to register metric
 	// helper.api.AssertCallPerResource(t, mockAPIResourceMetric, 3)
-	helper.wrapperClientMock.AssertCallPerResource(t, mockAPIResourceMetric, 3)
+	helper.wrapperClientMock.AssertCallsPerResource(t, mockAPIResourceMetric, 3)
 
 	metrics = helper.MetricsFromAPI()
 	if len(metrics) != 1003 {

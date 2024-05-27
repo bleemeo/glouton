@@ -45,20 +45,22 @@ func newMapstructJSONDecoder(target any, decodeHook mapstructure.DecodeHookFunc)
 	return decoder
 }
 
-func findResource[T any](all []T, predicate func(T) bool) *T {
-	for i, e := range all {
+type resSlice[T any] []T
+
+func (s *resSlice[T]) findResource(predicate func(T) bool) *T {
+	for i, e := range *s {
 		if predicate(e) {
-			return &all[i]
+			return &(*s)[i]
 		}
 	}
 
 	return nil
 }
 
-func filterResources[T any](all []T, predicate func(T) bool) []T {
+func (s *resSlice[T]) filterResources(predicate func(T) bool) []T {
 	var result []T
 
-	for _, e := range all {
+	for _, e := range *s {
 		if predicate(e) {
 			result = append(result, e)
 		}
@@ -67,13 +69,13 @@ func filterResources[T any](all []T, predicate func(T) bool) []T {
 	return result
 }
 
-func deleteResource[T any](all *[]T, predicate func(T) bool) error {
-	idx := slices.IndexFunc(*all, predicate)
+func (s *resSlice[T]) deleteResource(predicate func(T) bool) error {
+	idx := slices.IndexFunc(*s, predicate)
 	if idx < 0 {
 		return errNotFound
 	}
 
-	*all = slices.Delete(*all, idx, idx+1)
+	*s = slices.Delete(*s, idx, idx+1)
 
 	return nil
 }
@@ -84,17 +86,17 @@ type metricW struct {
 }
 
 type dataHolder struct {
-	agents             []types.Agent
-	agentfacts         []types.AgentFact
-	agenttypes         []types.AgentType
-	containers         []types.Container
-	metrics            []metricW
-	accountconfigs     []types.AccountConfig
-	agentconfigs       []types.AgentConfig
-	monitors           []types.Monitor
-	services           []types.Service
-	gloutonconfigitems []types.GloutonConfigItem
-	gloutondiagnostics []RemoteDiagnostic
+	agents             resSlice[types.Agent]
+	agentfacts         resSlice[types.AgentFact]
+	agenttypes         resSlice[types.AgentType]
+	containers         resSlice[types.Container]
+	metrics            resSlice[metricW]
+	accountconfigs     resSlice[types.AccountConfig]
+	agentconfigs       resSlice[types.AgentConfig]
+	monitors           resSlice[types.Monitor]
+	services           resSlice[types.Service]
+	gloutonconfigitems resSlice[types.GloutonConfigItem]
+	gloutondiagnostics resSlice[RemoteDiagnostic]
 }
 
 type wrapperClientMock struct {
@@ -135,7 +137,7 @@ func (wcm *wrapperClientMock) listAgents(context.Context) ([]types.Agent, error)
 func (wcm *wrapperClientMock) updateAgent(_ context.Context, id string, data any) (types.Agent, error) {
 	wcm.requestCounts[mockAPIResourceAgent]++
 
-	agent := findResource(wcm.data.agents, func(a types.Agent) bool { return a.ID == id })
+	agent := wcm.data.agents.findResource(func(a types.Agent) bool { return a.ID == id })
 	if agent == nil {
 		return types.Agent{}, fmt.Errorf("agent with id %q %w", id, errNotFound)
 	}
@@ -146,7 +148,7 @@ func (wcm *wrapperClientMock) updateAgent(_ context.Context, id string, data any
 func (wcm *wrapperClientMock) deleteAgent(_ context.Context, id string) error {
 	wcm.requestCounts[mockAPIResourceAgent]++
 
-	return deleteResource(&wcm.data.agents, func(a types.Agent) bool { return a.ID == id })
+	return wcm.data.agents.deleteResource(func(a types.Agent) bool { return a.ID == id })
 }
 
 func (wcm *wrapperClientMock) listGloutonConfigItems(_ context.Context, agentID string) (map[comparableConfigItem]configItemValue, error) {
@@ -154,7 +156,7 @@ func (wcm *wrapperClientMock) listGloutonConfigItems(_ context.Context, agentID 
 
 	result := make(map[comparableConfigItem]configItemValue, len(wcm.data.gloutonconfigitems))
 
-	items := filterResources(wcm.data.gloutonconfigitems, func(i types.GloutonConfigItem) bool { return i.Agent == agentID })
+	items := wcm.data.gloutonconfigitems.filterResources(func(i types.GloutonConfigItem) bool { return i.Agent == agentID })
 	for _, item := range items {
 		key := comparableConfigItem{
 			Key:      item.Key,
@@ -243,7 +245,7 @@ func (wcm *wrapperClientMock) deleteFact(ctx context.Context, id string) error {
 func (wcm *wrapperClientMock) updateMetric(_ context.Context, id string, payload any, _ string) error {
 	wcm.requestCounts[mockAPIResourceMetric]++
 
-	metric := findResource(wcm.data.metrics, func(m metricW) bool { return m.ID == id })
+	metric := wcm.data.metrics.findResource(func(m metricW) bool { return m.ID == id })
 	if metric == nil {
 		return fmt.Errorf("metric with id %q %w", id, errNotFound)
 	}
@@ -261,9 +263,8 @@ func (wcm *wrapperClientMock) updateMetric(_ context.Context, id string, payload
 func (wcm *wrapperClientMock) listActiveMetrics(_ context.Context, active bool, filter func(payload metricPayload) bool) (map[string]types.Metric, error) {
 	wcm.requestCounts[mockAPIResourceMetric]++
 
-	metrics := filterResources(wcm.data.metrics, func(m metricW) bool { return m.Active == active })
-	metrics = filterResources(metrics, func(m metricW) bool {
-		return filter(m.metricPayload)
+	metrics := wcm.data.metrics.filterResources(func(m metricW) bool {
+		return m.Active == active && filter(m.metricPayload)
 	})
 	result := make(map[string]types.Metric, len(metrics))
 
@@ -277,13 +278,13 @@ func (wcm *wrapperClientMock) listActiveMetrics(_ context.Context, active bool, 
 func (wcm *wrapperClientMock) countInactiveMetrics(context.Context) (int, error) {
 	wcm.requestCounts[mockAPIResourceMetric]++
 
-	return len(filterResources(wcm.data.metrics, func(m metricW) bool { return !m.Active })), nil
+	return len(wcm.data.metrics.filterResources(func(m metricW) bool { return !m.Active })), nil
 }
 
 func (wcm *wrapperClientMock) listMetricsBy(_ context.Context, params url.Values, filter func(payload metricPayload) bool) (map[string]types.Metric, error) {
 	wcm.requestCounts[mockAPIResourceMetric]++
 
-	metrics := filterResources(wcm.data.metrics, func(m metricW) bool {
+	metrics := wcm.data.metrics.filterResources(func(m metricW) bool {
 		if params.Has("labels_text") && m.LabelsText != params.Get("labels_text") {
 			return false
 		}
@@ -338,7 +339,7 @@ func (wcm *wrapperClientMock) deactivateMetric(_ context.Context, id string) err
 
 	predicate := func(m metricW) bool { return m.ID == id }
 
-	metric := findResource(wcm.data.metrics, predicate)
+	metric := wcm.data.metrics.findResource(predicate)
 	if metric == nil {
 		return fmt.Errorf("metric with id %q %w", id, errNotFound)
 	}
@@ -369,7 +370,7 @@ func (wcm *wrapperClientMock) listServices(context.Context, string) ([]types.Ser
 func (wcm *wrapperClientMock) updateService(_ context.Context, id string, payload servicePayload) (types.Service, error) {
 	wcm.requestCounts[mockAPIResourceService]++
 
-	service := findResource(wcm.data.services, func(s types.Service) bool { return s.ID == id })
+	service := wcm.data.services.findResource(func(s types.Service) bool { return s.ID == id })
 	if service == nil {
 		return types.Service{}, fmt.Errorf("service with id %q %w", id, errNotFound)
 	}
@@ -403,7 +404,7 @@ func (wcm *wrapperClientMock) registerVSphereAgent(ctx context.Context, payload 
 	panic("implement me")
 }
 
-func (wcm *wrapperClientMock) AssertCallPerResource(t *testing.T, resource string, expected int) {
+func (wcm *wrapperClientMock) AssertCallsPerResource(t *testing.T, resource string, expected int) {
 	t.Helper()
 
 	if count := wcm.requestCounts[resource]; count != expected {
