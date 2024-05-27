@@ -20,11 +20,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"mime"
-	"strings"
 	"time"
 
-	"github.com/bleemeo/glouton/bleemeo/client"
 	"github.com/bleemeo/glouton/bleemeo/internal/cache"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/syncservices"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
@@ -66,10 +63,6 @@ func (s *SyncApplications) NeedSynchronization(_ context.Context) (bool, error) 
 		return false, fmt.Errorf("%w: currentExecution is nil", types.ErrUnexpectedWorkflow)
 	}
 
-	if !s.currentExecution.GlobalState().APIHasFeature(types.APIFeatureApplication) {
-		return false, nil
-	}
-
 	// Same synchronization criteria as Services.
 	return false, s.currentExecution.RequestLinkedSynchronization(types.EntityApplication, types.EntityService)
 }
@@ -81,27 +74,11 @@ func (s *SyncApplications) RefreshCache(ctx context.Context, syncType types.Sync
 
 	if syncType == types.SyncTypeForceCacheRefresh {
 		err := refreshCache(ctx, s.currentExecution.BleemeoAPIClient(), s.currentExecution.Option().Cache)
-
-		if apiErr := (client.APIError{}); errors.As(err, &apiErr) {
-			mediatype, _, err := mime.ParseMediaType(apiErr.ContentType)
-			if err == nil && mediatype == "text/html" && strings.Contains(apiErr.FinalURL, "login") {
-				// If we receive an error with an HTTP 200, it's very likely means that API don't yet support
-				// application. Disable this feature
-				s.currentExecution.GlobalState().SetAPIHasFeature(types.APIFeatureApplication, false)
-
-				// and ignore the error
-				return nil
-			}
-		}
-
 		if err != nil {
 			s.currentExecution.FailOtherEntity(types.EntityService, ErrApplicationFirst)
 
 			return err
 		}
-
-		// no error -> application feature is available
-		s.currentExecution.GlobalState().SetAPIHasFeature(types.APIFeatureApplication, true)
 	}
 
 	return nil
@@ -112,10 +89,6 @@ func (s *SyncApplications) SyncRemoteAndLocal(ctx context.Context, syncType type
 
 	if s.currentExecution == nil {
 		return fmt.Errorf("%w: currentExecution is nil", types.ErrUnexpectedWorkflow)
-	}
-
-	if !s.currentExecution.GlobalState().APIHasFeature(types.APIFeatureApplication) {
-		return nil
 	}
 
 	localServices, err := s.currentExecution.Option().Discovery.Discovery(ctx, 24*time.Hour)

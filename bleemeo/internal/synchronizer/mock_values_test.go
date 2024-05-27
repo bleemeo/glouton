@@ -127,7 +127,7 @@ var (
 		MetricResolution: 60,
 	}
 
-	testAgent = payloadAgent{
+	testAgent = bleemeoapi.AgentPayload{
 		Agent: bleemeoTypes.Agent{
 			ID:        agentID,
 			AccountID: accountID,
@@ -140,7 +140,7 @@ var (
 		Abstracted:      false,
 		InitialPassword: "password already set",
 	}
-	newMonitorAgent = payloadAgent{
+	newMonitorAgent = bleemeoapi.AgentPayload{
 		Agent: bleemeoTypes.Agent{
 			ID:              "6b0ba586-0111-4a72-9cc7-f19d4f6558b9",
 			AccountID:       accountID,
@@ -152,7 +152,7 @@ var (
 		Abstracted:      true,
 		InitialPassword: "password already set",
 	}
-	testK8SAgent = payloadAgent{
+	testK8SAgent = bleemeoapi.AgentPayload{
 		Agent: bleemeoTypes.Agent{
 			ID:              "efb48b0a-b03d-4ba6-b643-534e81a0acaa",
 			AccountID:       accountID,
@@ -179,7 +179,7 @@ var (
 		IsMonitor: true,
 	}
 
-	testAgentMetric1 = metricPayload{
+	testAgentMetric1 = bleemeoapi.MetricPayload{
 		Metric: bleemeoTypes.Metric{
 			ID:            "decce8cf-c2f7-43c3-b66e-10429debd994",
 			AgentID:       testAgent.ID,
@@ -189,7 +189,7 @@ var (
 		},
 		Name: "some_metric_1",
 	}
-	testAgentMetric2 = metricPayload{
+	testAgentMetric2 = bleemeoapi.MetricPayload{
 		Metric: bleemeoTypes.Metric{
 			ID:          "055af752-5c01-4abc-9bb2-9d64032ef970",
 			AgentID:     testAgent.ID,
@@ -198,7 +198,7 @@ var (
 		},
 		Name: "some_metric_2",
 	}
-	testMonitorMetricPrivateProbe = metricPayload{
+	testMonitorMetricPrivateProbe = bleemeoapi.MetricPayload{
 		Metric: bleemeoTypes.Metric{
 			ID:      "52b9c46e-00b9-4e80-a852-781426a3a193",
 			AgentID: newMonitor.AgentID,

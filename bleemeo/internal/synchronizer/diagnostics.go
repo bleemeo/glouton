@@ -25,19 +25,14 @@ import (
 	"mime/multipart"
 	"strconv"
 
+	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/bleemeoapi"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
 	"github.com/bleemeo/glouton/crashreport"
 	"github.com/bleemeo/glouton/logger"
 	gloutonTypes "github.com/bleemeo/glouton/types"
 )
 
-const diagnosticMaxSize = 5 << 20 // 5MB
-
 var errUploadFailed = errors.New("upload failed")
-
-type RemoteDiagnostic struct {
-	Name string `json:"name"`
-}
 
 type diagnosticWithBleemeoInfo struct {
 	gloutonTypes.DiagnosticFile
@@ -57,7 +52,7 @@ func (s *Synchronizer) syncDiagnostics(ctx context.Context, syncType types.SyncT
 
 	apiClient := execution.BleemeoAPIClient()
 
-	remoteDiagnostics, err := s.client.listDiagnostics(ctx, apiClient)
+	remoteDiagnostics, err := apiClient.ListDiagnostics(ctx)
 	if err != nil {
 		return false, fmt.Errorf("failed to list remote diagnostics: %w", err)
 	}
@@ -119,7 +114,7 @@ func (s *Synchronizer) listOnDemandDiagnostics() []diagnosticWithBleemeoInfo {
 	return nil
 }
 
-func (s *Synchronizer) uploadDiagnostics(ctx context.Context, diagnostics []diagnosticWithBleemeoInfo) error {
+func (s *Synchronizer) uploadDiagnostics(ctx context.Context, apiClient types.DiagnosticClient, diagnostics []diagnosticWithBleemeoInfo) error {
 	for _, diagnostic := range diagnostics {
 		if err := s.uploadDiagnostic(ctx, apiClient, diagnostic); err != nil {
 			return fmt.Errorf("failed to upload crash diagnostic %s: %w", diagnostic.Filename(), err)
@@ -129,7 +124,7 @@ func (s *Synchronizer) uploadDiagnostics(ctx context.Context, diagnostics []diag
 	return nil
 }
 
-func (s *Synchronizer) uploadDiagnostic(ctx context.Context, apiClient types.RawClient, diagnostic diagnosticWithBleemeoInfo) error {
+func (s *Synchronizer) uploadDiagnostic(ctx context.Context, apiClient types.DiagnosticClient, diagnostic diagnosticWithBleemeoInfo) error {
 	if ctxErr := ctx.Err(); ctxErr != nil {
 		return ctxErr
 	}
@@ -141,7 +136,7 @@ func (s *Synchronizer) uploadDiagnostic(ctx context.Context, apiClient types.Raw
 
 	defer reader.Close()
 
-	if reader.Len() > diagnosticMaxSize {
+	if reader.Len() > bleemeoapi.DiagnosticMaxSize {
 		logger.V(2).Printf("Skipping crash diagnostic %s which is too big.", diagnostic.Filename())
 
 		return diagnostic.MarkUploaded()
@@ -174,7 +169,7 @@ func (s *Synchronizer) uploadDiagnostic(ctx context.Context, apiClient types.Raw
 
 	multipartWriter.Close()
 
-	err = apiClient.uploadDiagnostic(ctx, multipartWriter.FormDataContentType(), buf)
+	err = apiClient.UploadDiagnostic(ctx, multipartWriter.FormDataContentType(), buf)
 	if err != nil {
 		return err
 	}

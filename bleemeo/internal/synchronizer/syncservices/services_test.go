@@ -115,7 +115,7 @@ func Test_serviceHadSameTags(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			if got := serviceHadSameTags(tt.remoteTags, tt.localServices, true); got != tt.want {
+			if got := serviceHadSameTags(tt.remoteTags, tt.localServices); got != tt.want {
 				t.Errorf("serviceHadSameTags() = %v, want %v", got, tt.want)
 			}
 		})
@@ -222,7 +222,7 @@ func Test_getTagsFromLocal(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			got := getTagsFromLocal(tt.service, true)
+			got := getTagsFromLocal(tt.service)
 
 			if diff := cmp.Diff(tt.want, got); diff != "" {
 				t.Errorf("getTagsFromLocal() mismatch (-want +got)\n%s", diff)

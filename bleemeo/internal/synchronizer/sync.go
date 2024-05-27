@@ -115,16 +115,6 @@ type thresholdOverrideKey struct {
 	AgentID    string
 }
 
-func ClientWrapperProvider(ctx context.Context, s *Synchronizer) clientWrapper {
-	return &wrapperClient{
-		s:      s,
-		client: s.realClient,
-		checkDuplicateFn: func() error {
-			return s.checkDuplicated(ctx)
-		},
-	}
-}
-
 // New return a new Synchronizer.
 func New(option types.Option) (*Synchronizer, error) {
 	return newWithNow(option, time.Now)
@@ -187,6 +177,18 @@ func newWithNow(option types.Option, now func() time.Time) (*Synchronizer, error
 	}
 
 	return s, nil
+}
+
+func (s *Synchronizer) newClient() types.Client {
+	if s.option.ProvideClient != nil {
+		// Allows tests to inject mock clients
+		return s.option.ProvideClient()
+	}
+
+	return &wrapperClient{
+		client:           s.realClient,
+		checkDuplicateFn: s.checkDuplicated,
+	}
 }
 
 func (s *Synchronizer) DiagnosticArchive(_ context.Context, archive gloutonTypes.ArchiveWriter) error {
@@ -348,7 +350,7 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 				)
 				s.option.DisableCallback(bleemeoTypes.DisableAuthenticationError, s.now().Add(delay))
 			case IsThrottleError(err):
-				deadline := s.realClient.ThrottleDeadline().Add(delay.JitterDelay(15*time.Second, 0.3))
+				deadline := exec.client.ThrottleDeadline().Add(delay.JitterDelay(15*time.Second, 0.3))
 				s.Disable(deadline, bleemeoTypes.DisableTooManyRequests)
 			default:
 				delay := delay.JitterDelay(
@@ -510,12 +512,7 @@ func (s *Synchronizer) DiagnosticPage() string {
 	}
 	s.l.Unlock()
 
-	var count uint32
-
-	if s.client != nil {
-		count = s.requestCounter.Load()
-	}
-
+	count := s.requestCounter.Load()
 	builder.WriteString(fmt.Sprintf(
 		"Did %d requests since start time at %s (%v ago). Avg of %.2f request/minute\n",
 		count,
@@ -611,7 +608,7 @@ func (s *Synchronizer) UpdateMaintenance() {
 func (s *Synchronizer) SetMaintenance(ctx context.Context, maintenance bool) {
 	if s.IsMaintenance() && !maintenance {
 		// getting out of maintenance, let's check for a duplicated state.json file
-		err := s.checkDuplicated(ctx, s.realClient)
+		err := s.checkDuplicated(ctx, s.newClient())
 		if err != nil {
 			// it's not a critical error at all, we will perform this check again on the next synchronization pass
 			logger.V(2).Printf("Couldn't check for duplicated agent: %v", err)
@@ -992,7 +989,7 @@ func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) (*Execut
 }
 
 // checkDuplicated checks if another glouton is running with the same ID.
-func (s *Synchronizer) checkDuplicated(ctx context.Context, client types.RawClient) error {
+func (s *Synchronizer) checkDuplicated(ctx context.Context, client types.Client) error {
 	oldFacts := s.option.Cache.FactsByKey()
 
 	if err := s.factsUpdateList(ctx, client); err != nil {
@@ -1020,7 +1017,7 @@ func (s *Synchronizer) checkDuplicated(ctx context.Context, client types.RawClie
 	}
 
 	// The agent is duplicated, update the last duplication date on the API.
-	err := client.updateAgentLastDuplicationDate(ctx, s.agentID, time.Now())
+	err := client.UpdateAgentLastDuplicationDate(ctx, s.agentID, time.Now())
 	if err != nil {
 		logger.V(1).Printf("Failed to update duplication date: %s", err)
 	}

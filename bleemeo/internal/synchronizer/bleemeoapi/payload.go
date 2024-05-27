@@ -25,3 +25,31 @@ type ServicePayload struct {
 	Account   string `json:"account"`
 	IsMonitor bool   `json:"monitor"`
 }
+
+type ContainerPayload struct {
+	bleemeoTypes.Container
+	Host             string                `json:"host"`
+	Command          string                `json:"command"`
+	StartedAt        bleemeoTypes.NullTime `json:"container_started_at"`
+	FinishedAt       bleemeoTypes.NullTime `json:"container_finished_at"`
+	ImageID          string                `json:"container_image_id"`
+	ImageName        string                `json:"container_image_name"`
+	DockerAPIVersion string                `json:"docker_api_version"`
+}
+
+type MetricPayload struct {
+	bleemeoTypes.Metric
+	Name string `json:"label,omitempty"`
+	Item string `json:"item,omitempty"`
+}
+
+type AgentPayload struct {
+	bleemeoTypes.Agent
+	Abstracted         bool   `json:"abstracted"`
+	InitialPassword    string `json:"initial_password"`
+	InitialServerGroup string `json:"initial_server_group_name,omitempty"`
+}
+
+type RemoteDiagnostic struct {
+	Name string `json:"name"`
+}

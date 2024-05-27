@@ -21,7 +21,8 @@ import (
 	"errors"
 	"time"
 
-	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
+	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/bleemeoapi"
+	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/logger"
 	"github.com/bleemeo/glouton/prometheus/exporter/snmp"
@@ -33,13 +34,6 @@ const (
 	snmpCachePrefix = "bleemeo:snmp:"
 	snmpAgentFields = "id,display_name,account,agent_type,abstracted,fqdn,initial_password,created_at,next_config_at,current_config,tags,initial_server_group_name"
 )
-
-type payloadAgent struct {
-	bleemeoTypes.Agent
-	Abstracted         bool   `json:"abstracted"`
-	InitialPassword    string `json:"initial_password"`
-	InitialServerGroup string `json:"initial_server_group_name,omitempty"`
-}
 
 // TODO the deletion need to be done
 
@@ -154,7 +148,7 @@ func (s *Synchronizer) snmpRegisterAndUpdate(ctx context.Context, execution type
 			serverGroup = s.option.Config.Bleemeo.InitialServerGroupName
 		}
 
-		payload := payloadAgent{
+		payload := bleemeoapi.AgentPayload{
 			Agent: bleemeoTypes.Agent{
 				FQDN:        fqdn,
 				DisplayName: name,
@@ -166,7 +160,7 @@ func (s *Synchronizer) snmpRegisterAndUpdate(ctx context.Context, execution type
 			InitialServerGroup: serverGroup,
 		}
 
-		tmp, err := s.remoteRegisterSNMP(ctx, execution.BleemeoAPIClient(), params, payload)
+		tmp, err := s.remoteRegisterSNMP(ctx, execution.BleemeoAPIClient(), payload)
 		if err != nil {
 			return err
 		}
@@ -191,8 +185,8 @@ func (s *Synchronizer) snmpRegisterAndUpdate(ctx context.Context, execution type
 	return nil
 }
 
-func (s *Synchronizer) remoteRegisterSNMP(payload payloadAgent) (bleemeoTypes.Agent, error) {
-	result, err := s.client.registerSNMPAgent(s.ctx, payload)
+func (s *Synchronizer) remoteRegisterSNMP(ctx context.Context, apiClient types.SNMPClient, payload bleemeoapi.AgentPayload) (bleemeoTypes.Agent, error) {
+	result, err := apiClient.RegisterSNMPAgent(ctx, payload)
 	if err != nil {
 		return result, err
 	}

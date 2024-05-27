@@ -18,15 +18,17 @@ package types
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"io"
+	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/bleemeo/bleemeo-go"
 	"github.com/bleemeo/glouton/bleemeo/internal/cache"
+	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/bleemeoapi"
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/discovery"
 	"github.com/bleemeo/glouton/facts"
@@ -74,20 +76,16 @@ func (t SyncType) String() string {
 
 type APIFeature int
 
-const (
-	APIFeatureApplication APIFeature = iota
-)
+// There are currently no features in this list
 
 func (t APIFeature) String() string {
 	switch t {
-	case APIFeatureApplication:
-		return "application"
 	default:
 		return strconv.Itoa(int(t))
 	}
 }
 
-var ErrUnexpectedWorkflow = errors.New("unexpected synchroniztion workflow")
+var ErrUnexpectedWorkflow = errors.New("unexpected synchronization workflow")
 
 type EntitySynchronizer interface {
 	Name() EntityName
@@ -100,11 +98,11 @@ type EntitySynchronizer interface {
 }
 
 type EntitySynchronizerExecution interface {
-	// NeedSynchronization returns True if the entity need to be synchronized. This could depends
-	// on various state of the Glouton.
+	// NeedSynchronization returns True if the entity needs to be synchronized.
+	// This could depend on various states of the Glouton.
 	// Note that the synchronized could call the entity synchronizer even if the method return false,
 	// mostly in case a RequestSynchronization() was called.
-	// It could also NOT call it even if the method return true, mostly in case an error occurred in another
+	// It could also NOT call it even if the method returns true, mostly in case an error occurred in another
 	// synchronizer.
 	NeedSynchronization(ctx context.Context) (bool, error)
 
@@ -113,13 +111,13 @@ type EntitySynchronizerExecution interface {
 	RefreshCache(ctx context.Context, syncType SyncType) error
 
 	// SyncRemoteAndLocal update the Bleemeo API and/or the local entity list: create, update or delete entries.
-	// RefreshCache normally update the Bleemeo API *cache*, not the Glouton local entity list.
-	// For example for services entity, the cache the a view of Bleemeo API and the local list is the output of
+	// RefreshCache normally updates the Bleemeo API *cache*, not the Glouton local entity list.
+	// For example, for services entity, the cache is a view of Bleemeo API and the local list is the output of
 	// discovery.
 	SyncRemoteAndLocal(ctx context.Context, syncType SyncType) error
 
-	// FinishExecution is called at the end of execution of all entities synchronization (NeedSynchronization,
-	// RefreshCache and SyncRemoteAndLocal).
+	// FinishExecution is called at the end of the execution of all entities synchronization (NeedSynchronization,
+	// RefreshCache, and SyncRemoteAndLocal).
 	// It's called unconditionally if PrepareExecution() returned non-nil value. Even if NeedSynchronization() returned false,
 	// or a function had error.
 	FinishExecution(ctx context.Context)
@@ -128,18 +126,18 @@ type EntitySynchronizerExecution interface {
 type SynchronizationExecution interface {
 	BleemeoAPIClient() Client
 	IsOnlyEssential() bool
-	// RequestSynchronization ask for a execution of synchronization of specified entity.
-	// If this is called during calls to NeedSynchronization, it's tried to be run during
-	// current execution of synchronization (no guarantee, e.g. on error).
-	// If called later, once SyncRemote start being called, it will be run during *next* execution.
+	// RequestSynchronization ask for an execution of synchronization of the specified entity.
+	// If this is called during calls to NeedSynchronization, it is tried to be run during
+	// the current execution of synchronization (no guarantee, e.g., on error).
+	// If called later, once SyncRemote starts being called, it will be run during *next* execution.
 	RequestSynchronization(entityName EntityName, requestFull bool)
-	// RequestLinkedSynchronization ask for an execution of synchronization of specified entity,
+	// RequestLinkedSynchronization ask for an execution of synchronization of the specified entity,
 	// if another entity will be synchronized. This is better than using IsSynchronizationRequested,
-	// because if later something request synchronization of the other entity it will be updated.
-	// For example RequestSynchronization(EntityApplication, EntityService) will
-	// cause the synchronization of application if service are synchronized. This don't imply the other way.
+	// because if later something requests synchronization of the other entity, it will be updated.
+	// For example, RequestSynchronization(EntityApplication, EntityService) will
+	// cause the synchronization of application if services are synchronized. This doesn't imply the other way.
 	// This function could only be called during NeedSynchronization.
-	RequestLinkedSynchronization(targetEntityName EntityName, triggerEntiryName EntityName) error
+	RequestLinkedSynchronization(targetEntityName EntityName, triggerEntityName EntityName) error
 	// FailOtherEntity will cause execution of the synchronization of another entity to not
 	// be run in this execution and fail with provided error. This is useful if one entity
 	// must be created/updated before another entity synchronization runs.
@@ -147,14 +145,14 @@ type SynchronizationExecution interface {
 	// RequestSynchronizationForAll calls RequestSynchronization for all known entities.
 	RequestSynchronizationForAll(requestFull bool)
 	// IsSynchronizationRequested return whether a synchronization was requested for the
-	// specific entity during current execution.
+	// specific entity during the current execution.
 	IsSynchronizationRequested(entityName EntityName) bool
 	RequestUpdateThresholds()
 	RequestNotifyLabelsUpdate()
 	Option() Option
-	// Time the last synchronization started and completed without error on all entities.
+	// LastSync returns the time the last synchronization started at and completed without error on all entities.
 	LastSync() time.Time
-	// Time this synchronization started
+	// StartedAt returns the time this synchronization started at.
 	StartedAt() time.Time
 	GlobalState() SynchronizedGlobalState
 }
@@ -162,19 +160,97 @@ type SynchronizationExecution interface {
 type Client interface {
 	RawClient
 	ApplicationClient
+	AccountConfigClient
+	AgentClient
+	GloutonConfigItemClient
+	ContainerClient
+	DiagnosticClient
+	FactClient
+	MetricClient
+	MonitorClient
+	ServiceClient
+	SNMPClient
+	VSphereClient
 }
 
 // RawClient a client doing generic HTTP call to Bleemeo API.
 // Ideally synchronizer of entity should move to higher level interface, which will make mocking easier (like ListActiveMetrics, CreateService...)
 type RawClient interface {
-	Do(ctx context.Context, method string, path string, params map[string]string, data interface{}, result interface{}) (statusCode int, err error)
+	Do(ctx context.Context, method string, path string, params url.Values, authenticated bool, body io.Reader, result any) (statusCode int, err error)
 	DoWithBody(ctx context.Context, path string, contentType string, body io.Reader) (statusCode int, err error)
-	Iter(ctx context.Context, resource string, params map[string]string) ([]json.RawMessage, error)
+	Iterator(resource bleemeo.Resource, params url.Values) bleemeo.Iterator
+	ThrottleDeadline() time.Time
 }
 
 type ApplicationClient interface {
 	ListApplications(ctx context.Context) ([]bleemeoTypes.Application, error)
 	CreateApplication(ctx context.Context, app bleemeoTypes.Application) (bleemeoTypes.Application, error)
+}
+
+type AccountConfigClient interface {
+	ListAgentTypes(ctx context.Context) ([]bleemeoTypes.AgentType, error)
+	ListAccountConfigs(ctx context.Context) ([]bleemeoTypes.AccountConfig, error)
+	ListAgentConfigs(ctx context.Context) ([]bleemeoTypes.AgentConfig, error)
+}
+
+type AgentClient interface {
+	ListAgents(ctx context.Context) ([]bleemeoTypes.Agent, error)
+	UpdateAgent(ctx context.Context, id string, data any) (bleemeoTypes.Agent, error)
+	UpdateAgentLastDuplicationDate(ctx context.Context, agentID string, lastDuplicationDate time.Time) error
+}
+
+type GloutonConfigItemClient interface {
+	ListGloutonConfigItems(ctx context.Context, agentID string) ([]bleemeoTypes.GloutonConfigItem, error)
+	RegisterGloutonConfigItems(ctx context.Context, items []bleemeoTypes.GloutonConfigItem) error
+	DeleteGloutonConfigItem(ctx context.Context, id string) error
+}
+
+type ContainerClient interface {
+	ListContainers(ctx context.Context, agentID string) ([]bleemeoTypes.Container, error)
+	UpdateContainer(ctx context.Context, id string, payload any, result *bleemeoapi.ContainerPayload) error
+	RegisterContainer(ctx context.Context, payload bleemeoapi.ContainerPayload, result *bleemeoapi.ContainerPayload) error
+}
+
+type DiagnosticClient interface {
+	ListDiagnostics(ctx context.Context) ([]bleemeoapi.RemoteDiagnostic, error)
+	UploadDiagnostic(ctx context.Context, contentType string, content io.Reader) error
+}
+
+type FactClient interface {
+	ListFacts(ctx context.Context) ([]bleemeoTypes.AgentFact, error)
+	RegisterFact(ctx context.Context, payload any, result *bleemeoTypes.AgentFact) error
+	DeleteFact(ctx context.Context, id string) error
+}
+
+type MetricClient interface {
+	UpdateMetric(ctx context.Context, id string, payload any, fields string) error
+	ListActiveMetrics(ctx context.Context, active bool, filter func(payload bleemeoapi.MetricPayload) bool) (map[string]bleemeoTypes.Metric, error)
+	CountInactiveMetrics(ctx context.Context) (int, error)
+	ListMetricsBy(ctx context.Context, params url.Values, filter func(payload bleemeoapi.MetricPayload) bool) (map[string]bleemeoTypes.Metric, error)
+	GetMetricByID(ctx context.Context, id string) (bleemeoapi.MetricPayload, error)
+	RegisterMetric(ctx context.Context, payload bleemeoapi.MetricPayload, result *bleemeoapi.MetricPayload) error
+	DeleteMetric(ctx context.Context, id string) error
+	DeactivateMetric(ctx context.Context, id string) error
+}
+
+type MonitorClient interface {
+	ListMonitors(ctx context.Context) ([]bleemeoTypes.Monitor, error)
+	GetMonitorByID(ctx context.Context, id string) (bleemeoTypes.Monitor, error)
+}
+
+type ServiceClient interface {
+	ListServices(ctx context.Context, agentID string, fields string) ([]bleemeoTypes.Service, error)
+	UpdateService(ctx context.Context, id string, payload bleemeoapi.ServicePayload, fields string) (bleemeoTypes.Service, error)
+	RegisterService(ctx context.Context, payload bleemeoapi.ServicePayload, fields string) (bleemeoTypes.Service, error)
+}
+
+type SNMPClient interface {
+	RegisterSNMPAgent(ctx context.Context, payload bleemeoapi.AgentPayload) (bleemeoTypes.Agent, error)
+}
+
+type VSphereClient interface {
+	RegisterVSphereAgent(ctx context.Context, payload bleemeoapi.AgentPayload) (bleemeoTypes.Agent, error)
+	DeleteAgent(ctx context.Context, id string) error
 }
 
 type SynchronizedGlobalState interface {
@@ -200,6 +276,9 @@ type Option struct {
 
 	// UpdateConfigCallback is a function called when Synchronizer detected a AccountConfiguration change
 	UpdateConfigCallback func(ctx context.Context, nameChanged bool)
+
+	// ProvideClient may be used to provide an alternative Bleemeo API client.
+	ProvideClient func() Client
 
 	// SetInitialized tells the bleemeo connector that the MQTT module can be started
 	SetInitialized func()

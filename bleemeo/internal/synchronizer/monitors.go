@@ -86,7 +86,7 @@ func (s *Synchronizer) syncMonitors(ctx context.Context, syncType types.SyncType
 	apiClient := execution.BleemeoAPIClient()
 
 	if syncType == types.SyncTypeForceCacheRefresh {
-		monitors, err = s.client.listMonitors(ctx, apiClient)
+		monitors, err = apiClient.ListMonitors(ctx)
 		if err != nil {
 			return false, err
 		}
@@ -206,7 +206,7 @@ OuterBreak:
 			continue
 		}
 
-		result, err := apiClient.getMonitorByID(ctx, m.uuid)
+		result, err := apiClient.GetMonitorByID(ctx, m.uuid)
 		if err != nil {
 			// Delete the monitor locally if it was not found on the API.
 			if IsNotFound(err) {

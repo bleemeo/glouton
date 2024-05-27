@@ -167,9 +167,9 @@ func newAPI() *mockAPI {
 	}
 
 	api.AddResource(mockAPIResourceAgent, &genericResource{
-		Type: payloadAgent{},
+		Type: bleemeoapi.AgentPayload{},
 		CreateHook: func(_ *http.Request, _ []byte, valuePtr interface{}) error {
-			agent, _ := valuePtr.(*payloadAgent)
+			agent, _ := valuePtr.(*bleemeoapi.AgentPayload)
 
 			// TODO: Glouton currently don't send the AccountID for SNMP type but do for
 			// the main agent. We should be consistent (and API should NOT trust the value
@@ -221,13 +221,13 @@ func newAPI() *mockAPI {
 		ReadOnly: true,
 	})
 	api.AddResource(mockAPIResourceMetric, &genericResource{
-		Type:        metricPayload{},
+		Type:        bleemeoapi.MetricPayload{},
 		ValidFilter: []string{"agent", "active", "labels_text", "item", "label"},
 		FilterHook: map[string]func(x interface{}, value string) (bool, error){
 			"active": func(x interface{}, value string) (bool, error) {
-				m, ok := x.(metricPayload)
+				m, ok := x.(bleemeoapi.MetricPayload)
 				if !ok {
-					return false, fmt.Errorf("%w: %T isn't type metricPayload", errUnexpectedOperation, x)
+					return false, fmt.Errorf("%w: %T isn't type bleemeoapi.MetricPayload", errUnexpectedOperation, x)
 				}
 
 				value = strings.ToLower(value)
@@ -239,7 +239,7 @@ func newAPI() *mockAPI {
 		PatchHook: func(_ *http.Request, body []byte, valuePtr interface{}, _ interface{}) error {
 			var data map[string]interface{}
 
-			metricPtr, _ := valuePtr.(*metricPayload)
+			metricPtr, _ := valuePtr.(*bleemeoapi.MetricPayload)
 
 			err := json.NewDecoder(bytes.NewReader(body)).Decode(&data)
 
@@ -269,15 +269,15 @@ func newAPI() *mockAPI {
 		},
 	})
 	api.AddResource(mockAPIResourceContainer, &genericResource{
-		Type:        containerPayload{},
+		Type:        bleemeoapi.ContainerPayload{},
 		ValidFilter: []string{"host"},
 		PatchHook: func(_ *http.Request, _ []byte, valuePtr interface{}, oldValue interface{}) error {
-			containerPtr, _ := valuePtr.(*containerPayload)
-			oldContainer, _ := oldValue.(containerPayload)
+			containerPtr, _ := valuePtr.(*bleemeoapi.ContainerPayload)
+			oldContainer, _ := oldValue.(bleemeoapi.ContainerPayload)
 
 			if !time.Time(containerPtr.DeletedAt).IsZero() && time.Time(oldContainer.DeletedAt).IsZero() {
 				// The container was deactivated. Do what API does, it deactivate all metrics associated.
-				var metrics []metricPayload
+				var metrics []bleemeoapi.MetricPayload
 
 				api.resources[mockAPIResourceMetric].Store(&metrics)
 
@@ -306,7 +306,7 @@ func newAPI() *mockAPI {
 		ValidFilter: []string{"agent"},
 	})
 	api.AddResource(mockAPIGloutonDiagnostic, &genericResource{
-		Type: RemoteDiagnostic{},
+		Type: bleemeoapi.RemoteDiagnostic{},
 	})
 
 	api.resources[mockAPIResourceAgentType].SetStore(

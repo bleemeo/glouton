@@ -188,9 +188,9 @@ func (helper *syncTestHelper) initSynchronizer(t *testing.T) {
 	}
 
 	s, err := newForTest(types.Option{
-		Cache:                helper.cache,
-		IsMqttConnected:      func() bool { return false },
-		ProvideClientWrapper: func(context.Context, *Synchronizer) clientWrapper { return helper.wrapperClientMock },
+		Cache:           helper.cache,
+		IsMqttConnected: func() bool { return false },
+		ProvideClient:   func() types.Client { return helper.wrapperClientMock },
 		GlobalOption: bleemeoTypes.GlobalOption{
 			Config:                     helper.cfg,
 			Facts:                      helper.facts,
@@ -374,7 +374,7 @@ func (helper *syncTestHelper) runUntilNoError(t *testing.T, maxRun int, timeStep
 }
 
 // SetAPIMetrics define the list of metric present on Bleemeo API mock.
-func (helper *syncTestHelper) SetAPIMetrics(metrics ...metricPayload) {
+func (helper *syncTestHelper) SetAPIMetrics(metrics ...bleemeoapi.MetricPayload) {
 	tmp := make([]interface{}, 0, len(metrics))
 
 	for _, m := range metrics {
@@ -413,23 +413,23 @@ func (helper *syncTestHelper) SetAPIAccountConfig(accountConfig bleemeoTypes.Acc
 }
 
 // SetCacheMetrics define the list of metric present in Glouton cache.
-func (helper *syncTestHelper) SetCacheMetrics(metrics ...metricPayload) {
+func (helper *syncTestHelper) SetCacheMetrics(metrics ...bleemeoapi.MetricPayload) {
 	tmp := make([]bleemeoTypes.Metric, 0, len(metrics))
 
 	for _, m := range metrics {
-		tmp = append(tmp, m.metricFromAPI(helper.Now()))
+		tmp = append(tmp, metricFromAPI(m, helper.Now()))
 	}
 
 	helper.s.option.Cache.SetMetrics(tmp)
 }
 
 // MetricsFromAPI returns metrics present on Bleemeo API mock.
-func (helper *syncTestHelper) MetricsFromAPI() []metricPayload {
-	var metrics []metricPayload
+func (helper *syncTestHelper) MetricsFromAPI() []bleemeoapi.MetricPayload {
+	var metrics []bleemeoapi.MetricPayload
 
 	// helper.api.resources[mockAPIResourceMetric].Store(&metrics)
 	for _, m := range helper.wrapperClientMock.data.metrics {
-		metrics = append(metrics, m.metricPayload)
+		metrics = append(metrics, m.MetricPayload)
 	}
 	sort.Slice(metrics, func(i, j int) bool {
 		return metrics[i].ID < metrics[j].ID
@@ -439,8 +439,8 @@ func (helper *syncTestHelper) MetricsFromAPI() []metricPayload {
 }
 
 // AgentsFromAPI returns agents present on Bleemeo API mock.
-func (helper *syncTestHelper) AgentsFromAPI() []payloadAgent {
-	var agents []payloadAgent
+func (helper *syncTestHelper) AgentsFromAPI() []bleemeoapi.AgentPayload {
+	var agents []bleemeoapi.AgentPayload
 
 	helper.api.resources[mockAPIResourceAgent].Store(&agents)
 	sort.Slice(agents, func(i, j int) bool {
@@ -478,12 +478,12 @@ func (helper *syncTestHelper) ServicesFromAPI() []bleemeoapi.ServicePayload {
 // This is mostly a wrapper around cmp.Diff which also do:
 // * replace idAny by corresponding ID (match metric by same fqdn)
 // * sort list by ID.
-func (helper *syncTestHelper) assertAgentsInAPI(t *testing.T, want []payloadAgent) {
+func (helper *syncTestHelper) assertAgentsInAPI(t *testing.T, want []bleemeoapi.AgentPayload) {
 	t.Helper()
 
 	agents := helper.AgentsFromAPI()
 
-	copyWant := make([]payloadAgent, 0, len(want))
+	copyWant := make([]bleemeoapi.AgentPayload, 0, len(want))
 
 	for _, x := range want {
 		if x.ID == idAny {
@@ -501,7 +501,7 @@ func (helper *syncTestHelper) assertAgentsInAPI(t *testing.T, want []payloadAgen
 		copyWant = append(copyWant, x)
 	}
 
-	optSort := cmpopts.SortSlices(func(x payloadAgent, y payloadAgent) bool { return x.ID < y.ID })
+	optSort := cmpopts.SortSlices(func(x, y bleemeoapi.AgentPayload) bool { return x.ID < y.ID })
 	if diff := cmp.Diff(copyWant, agents, cmpopts.EquateEmpty(), optSort); diff != "" {
 		t.Errorf("agents mismatch (-want +got)\n%s", diff)
 	}
@@ -544,12 +544,12 @@ func (helper *syncTestHelper) assertServicesInAPI(t *testing.T, want []bleemeoap
 // This is mostly a wrapper around cmp.Diff which also do:
 // * replace idAny by corresponding ID (match metric by same agentID, label, item & labels_text)
 // * sort list by ID.
-func (helper *syncTestHelper) assertMetricsInAPI(t *testing.T, want []metricPayload) {
+func (helper *syncTestHelper) assertMetricsInAPI(t *testing.T, want []bleemeoapi.MetricPayload) {
 	t.Helper()
 
 	metrics := helper.MetricsFromAPI()
 
-	copyWant := make([]metricPayload, 0, len(want))
+	copyWant := make([]bleemeoapi.MetricPayload, 0, len(want))
 
 	for _, m := range want {
 		if m.ID == idAny {
@@ -567,7 +567,7 @@ func (helper *syncTestHelper) assertMetricsInAPI(t *testing.T, want []metricPayl
 		copyWant = append(copyWant, m)
 	}
 
-	optSort := cmpopts.SortSlices(func(x metricPayload, y metricPayload) bool { return x.ID < y.ID })
+	optSort := cmpopts.SortSlices(func(x, y bleemeoapi.MetricPayload) bool { return x.ID < y.ID })
 	if diff := cmp.Diff(copyWant, metrics, cmpopts.EquateEmpty(), optSort); diff != "" {
 		t.Errorf("metrics mismatch (-want +got)\n%s", diff)
 	}

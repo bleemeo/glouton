@@ -78,23 +78,23 @@ func TestSync(t *testing.T) {
 	// Did we store all the metrics ?
 	syncedMetrics := helper.s.option.Cache.Metrics()
 	want := []bleemeoTypes.Metric{
-		testAgentMetric1.metricFromAPI(time.Time{}),
-		testAgentMetric2.metricFromAPI(time.Time{}),
-		testMonitorMetricPrivateProbe.metricFromAPI(time.Time{}),
-		metricPayload{
+		metricFromAPI(testAgentMetric1, time.Time{}),
+		metricFromAPI(testAgentMetric2, time.Time{}),
+		metricFromAPI(testMonitorMetricPrivateProbe, time.Time{}),
+		metricFromAPI(bleemeoapi.MetricPayload{
 			Metric: bleemeoTypes.Metric{
 				ID:      "1",
 				AgentID: testAgent.ID,
 			},
 			Name: "agent_status",
-		}.metricFromAPI(time.Time{}),
-		metricPayload{
+		}, time.Time{}),
+		metricFromAPI(bleemeoapi.MetricPayload{
 			Metric: bleemeoTypes.Metric{
 				ID:      "2",
 				AgentID: testAgent.ID,
 			},
 			Name: "cpu_used",
-		}.metricFromAPI(time.Time{}),
+		}, time.Time{}),
 	}
 
 	optMetricSort := cmpopts.SortSlices(func(x bleemeoTypes.Metric, y bleemeoTypes.Metric) bool { return x.ID < y.ID })
@@ -132,7 +132,7 @@ func TestSyncWithSNMP(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var agents []payloadAgent
+	var agents []bleemeoapi.AgentPayload
 
 	helper.api.resources[mockAPIResourceAgent].Store(&agents)
 
@@ -151,7 +151,7 @@ func TestSyncWithSNMP(t *testing.T) {
 		}
 	}
 
-	wantAgents := []payloadAgent{
+	wantAgents := []bleemeoapi.AgentPayload{
 		{
 			Agent: bleemeoTypes.Agent{
 				ID:              idAgentMain,
@@ -180,7 +180,7 @@ func TestSyncWithSNMP(t *testing.T) {
 		},
 	}
 
-	optAgentSort := cmpopts.SortSlices(func(x payloadAgent, y payloadAgent) bool { return x.ID < y.ID })
+	optAgentSort := cmpopts.SortSlices(func(x, y bleemeoapi.AgentPayload) bool { return x.ID < y.ID })
 	if diff := cmp.Diff(wantAgents, agents, cmpopts.EquateEmpty(), optAgentSort); diff != "" {
 		t.Errorf("agents mismatch (-want +got)\n%s", diff)
 	}
@@ -200,11 +200,11 @@ func TestSyncWithSNMP(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var metrics []metricPayload
+	var metrics []bleemeoapi.MetricPayload
 
 	helper.api.resources[mockAPIResourceMetric].Store(&metrics)
 
-	wantMetrics := []metricPayload{
+	wantMetrics := []bleemeoapi.MetricPayload{
 		{
 			Metric: bleemeoTypes.Metric{
 				ID:      "1",
@@ -237,7 +237,7 @@ func TestSyncWithSNMP(t *testing.T) {
 		},
 	}
 
-	optMetricSort := cmpopts.SortSlices(func(x metricPayload, y metricPayload) bool { return x.ID < y.ID })
+	optMetricSort := cmpopts.SortSlices(func(x, y bleemeoapi.MetricPayload) bool { return x.ID < y.ID })
 	if diff := cmp.Diff(wantMetrics, metrics, cmpopts.EquateEmpty(), optMetricSort); diff != "" {
 		t.Errorf("metrics mismatch (-want +got)\n%s", diff)
 	}
@@ -271,7 +271,7 @@ func TestSyncWithSNMP(t *testing.T) {
 		})
 	}
 
-	helper.api.resources[mockAPIResourceMetric].AddStore(metricPayload{
+	helper.api.resources[mockAPIResourceMetric].AddStore(bleemeoapi.MetricPayload{
 		Metric: bleemeoTypes.Metric{
 			ID:         "4",
 			AgentID:    idAgentSNMP,
@@ -288,7 +288,7 @@ func TestSyncWithSNMP(t *testing.T) {
 
 	helper.api.resources[mockAPIResourceMetric].Store(&metrics)
 
-	wantMetrics = []metricPayload{
+	wantMetrics = []bleemeoapi.MetricPayload{
 		{
 			Metric: bleemeoTypes.Metric{
 				ID:      "1",
@@ -367,7 +367,7 @@ func TestSyncWithSNMPDelete(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var agents []payloadAgent
+	var agents []bleemeoapi.AgentPayload
 
 	helper.api.resources[mockAPIResourceAgent].Store(&agents)
 
@@ -386,7 +386,7 @@ func TestSyncWithSNMPDelete(t *testing.T) {
 		}
 	}
 
-	wantAgents := []payloadAgent{
+	wantAgents := []bleemeoapi.AgentPayload{
 		{
 			Agent: bleemeoTypes.Agent{
 				ID:              idAgentMain,
@@ -415,7 +415,7 @@ func TestSyncWithSNMPDelete(t *testing.T) {
 		},
 	}
 
-	optAgentSort := cmpopts.SortSlices(func(x payloadAgent, y payloadAgent) bool { return x.ID < y.ID })
+	optAgentSort := cmpopts.SortSlices(func(x, y bleemeoapi.AgentPayload) bool { return x.ID < y.ID })
 	if diff := cmp.Diff(wantAgents, agents, cmpopts.EquateEmpty(), optAgentSort); diff != "" {
 		t.Errorf("agents mismatch (-want +got)\n%s", diff)
 	}
@@ -435,11 +435,11 @@ func TestSyncWithSNMPDelete(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var metrics []metricPayload
+	var metrics []bleemeoapi.MetricPayload
 
 	helper.api.resources[mockAPIResourceMetric].Store(&metrics)
 
-	wantMetrics := []metricPayload{
+	wantMetrics := []bleemeoapi.MetricPayload{
 		{
 			Metric: bleemeoTypes.Metric{
 				ID:      "1",
@@ -472,7 +472,7 @@ func TestSyncWithSNMPDelete(t *testing.T) {
 		},
 	}
 
-	optMetricSort := cmpopts.SortSlices(func(x metricPayload, y metricPayload) bool { return x.ID < y.ID })
+	optMetricSort := cmpopts.SortSlices(func(x, y bleemeoapi.MetricPayload) bool { return x.ID < y.ID })
 	if diff := cmp.Diff(wantMetrics, metrics, cmpopts.EquateEmpty(), optMetricSort); diff != "" {
 		t.Errorf("metrics mismatch (-want +got)\n%s", diff)
 	}
@@ -505,7 +505,7 @@ func TestSyncWithSNMPDelete(t *testing.T) {
 		}
 	}
 
-	wantAgents = []payloadAgent{
+	wantAgents = []bleemeoapi.AgentPayload{
 		wantAgents[0],
 		{
 			Agent: bleemeoTypes.Agent{
@@ -541,7 +541,7 @@ func TestSyncWithSNMPDelete(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	wantMetrics[2] = metricPayload{
+	wantMetrics[2] = bleemeoapi.MetricPayload{
 		Metric: bleemeoTypes.Metric{
 			ID:         "4",
 			AgentID:    idAgentSNMP,
@@ -592,11 +592,11 @@ func TestContainerSync(t *testing.T) {
 	}
 
 	// Did we store container & metrics?
-	var containers []containerPayload
+	var containers []bleemeoapi.ContainerPayload
 
 	helper.api.resources[mockAPIResourceContainer].Store(&containers)
 
-	wantContainer := []containerPayload{
+	wantContainer := []bleemeoapi.ContainerPayload{
 		{
 			Container: bleemeoTypes.Container{
 				ID:          "1",
@@ -613,11 +613,11 @@ func TestContainerSync(t *testing.T) {
 		t.Errorf("container mismatch (-want +got)\n%s", diff)
 	}
 
-	var metrics []metricPayload
+	var metrics []bleemeoapi.MetricPayload
 
 	helper.api.resources[mockAPIResourceMetric].Store(&metrics)
 
-	wantMetrics := []metricPayload{
+	wantMetrics := []bleemeoapi.MetricPayload{
 		{
 			Metric: bleemeoTypes.Metric{
 				ID:         "1",
@@ -638,7 +638,7 @@ func TestContainerSync(t *testing.T) {
 		},
 	}
 
-	optMetricSort := cmpopts.SortSlices(func(x metricPayload, y metricPayload) bool { return x.ID < y.ID })
+	optMetricSort := cmpopts.SortSlices(func(x, y bleemeoapi.MetricPayload) bool { return x.ID < y.ID })
 	if diff := cmp.Diff(wantMetrics, metrics, cmpopts.EquateEmpty(), optMetricSort); diff != "" {
 		t.Errorf("metrics mismatch (-want +got)\n%s", diff)
 	}
@@ -653,7 +653,7 @@ func TestContainerSync(t *testing.T) {
 
 	helper.api.resources[mockAPIResourceContainer].Store(&containers)
 
-	wantContainer = []containerPayload{
+	wantContainer = []bleemeoapi.ContainerPayload{
 		{
 			Container: bleemeoTypes.Container{
 				ID:          "1",
@@ -673,7 +673,7 @@ func TestContainerSync(t *testing.T) {
 
 	helper.api.resources[mockAPIResourceMetric].Store(&metrics)
 
-	wantMetrics = []metricPayload{
+	wantMetrics = []bleemeoapi.MetricPayload{
 		{
 			Metric: bleemeoTypes.Metric{
 				ID:         "1",
@@ -724,7 +724,7 @@ func TestContainerSync(t *testing.T) {
 
 	helper.api.resources[mockAPIResourceContainer].Store(&containers)
 
-	wantContainer = []containerPayload{
+	wantContainer = []bleemeoapi.ContainerPayload{
 		{
 			Container: bleemeoTypes.Container{
 				ID:          "1",
@@ -743,7 +743,7 @@ func TestContainerSync(t *testing.T) {
 
 	helper.api.resources[mockAPIResourceMetric].Store(&metrics)
 
-	wantMetrics = []metricPayload{
+	wantMetrics = []bleemeoapi.MetricPayload{
 		{
 			Metric: bleemeoTypes.Metric{
 				ID:         "1",
@@ -841,7 +841,7 @@ func TestSyncServerGroup(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			var agents []payloadAgent
+			var agents []bleemeoapi.AgentPayload
 
 			helper.api.resources[mockAPIResourceAgent].Store(&agents)
 
@@ -860,7 +860,7 @@ func TestSyncServerGroup(t *testing.T) {
 				}
 			}
 
-			wantAgents := []payloadAgent{
+			wantAgents := []bleemeoapi.AgentPayload{
 				{
 					Agent: bleemeoTypes.Agent{
 						ID:              idAgentMain,
@@ -891,7 +891,7 @@ func TestSyncServerGroup(t *testing.T) {
 				},
 			}
 
-			optAgentSort := cmpopts.SortSlices(func(x payloadAgent, y payloadAgent) bool { return x.ID < y.ID })
+			optAgentSort := cmpopts.SortSlices(func(x, y bleemeoapi.AgentPayload) bool { return x.ID < y.ID })
 			if diff := cmp.Diff(wantAgents, agents, cmpopts.EquateEmpty(), optAgentSort); diff != "" {
 				t.Errorf("agents mismatch (-want +got)\n%s", diff)
 			}
@@ -1147,7 +1147,7 @@ func TestBleemeoPlan(t *testing.T) { //nolint:maintidx
 				t.Error(err)
 			}
 
-			wantAgents := []payloadAgent{
+			wantAgents := []bleemeoapi.AgentPayload{
 				{
 					Agent: bleemeoTypes.Agent{
 						ID:              idAgentMain,
@@ -1164,7 +1164,7 @@ func TestBleemeoPlan(t *testing.T) { //nolint:maintidx
 			}
 
 			if tt.wantSNMP {
-				wantAgents = append(wantAgents, payloadAgent{
+				wantAgents = append(wantAgents, bleemeoapi.AgentPayload{
 					Agent: bleemeoTypes.Agent{
 						ID:              idAny,
 						CreatedAt:       helper.Now(),
@@ -1197,7 +1197,7 @@ func TestBleemeoPlan(t *testing.T) { //nolint:maintidx
 				},
 			})
 
-			wantMetrics := []metricPayload{
+			wantMetrics := []bleemeoapi.MetricPayload{
 				{
 					Metric: bleemeoTypes.Metric{
 						ID:      idAny,
@@ -1228,7 +1228,7 @@ func TestBleemeoPlan(t *testing.T) { //nolint:maintidx
 				},
 			}
 
-			redisMetric := metricPayload{
+			redisMetric := bleemeoapi.MetricPayload{
 				Metric: bleemeoTypes.Metric{
 					ID:          idAny,
 					AgentID:     idAgentMain,
@@ -1247,7 +1247,7 @@ func TestBleemeoPlan(t *testing.T) { //nolint:maintidx
 			wantMetrics = append(wantMetrics, redisMetric)
 
 			if tt.wantContainerMetric {
-				wantMetrics = append(wantMetrics, metricPayload{
+				wantMetrics = append(wantMetrics, bleemeoapi.MetricPayload{
 					Metric: bleemeoTypes.Metric{
 						ID:          idAny,
 						AgentID:     idAgentMain,
@@ -1260,7 +1260,7 @@ func TestBleemeoPlan(t *testing.T) { //nolint:maintidx
 			}
 
 			if tt.wantCustomMetric {
-				wantMetrics = append(wantMetrics, metricPayload{
+				wantMetrics = append(wantMetrics, bleemeoapi.MetricPayload{
 					Metric: bleemeoTypes.Metric{
 						ID:      idAny,
 						AgentID: idAgentMain,
@@ -1270,7 +1270,7 @@ func TestBleemeoPlan(t *testing.T) { //nolint:maintidx
 			}
 
 			if tt.wantSNMP {
-				wantMetrics = append(wantMetrics, metricPayload{
+				wantMetrics = append(wantMetrics, bleemeoapi.MetricPayload{
 					Metric: bleemeoTypes.Metric{
 						ID:         idAny,
 						AgentID:    idAgentSNMP,

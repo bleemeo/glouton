@@ -17,5 +17,6 @@
 package bleemeoapi
 
 const (
-	APITagsLength = 100
+	APITagsLength     = 100
+	DiagnosticMaxSize = 5 << 20 // 5MB
 )

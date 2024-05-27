@@ -32,7 +32,7 @@ import (
 const gloutonConfigItemBatchSize = 100
 
 // comparableConfigItem is a modified GloutonConfigItem without the
-// interface{} value to make it comparable.
+// `any` value to make it comparable.
 type comparableConfigItem struct {
 	Key      string
 	Priority int
@@ -43,7 +43,28 @@ type comparableConfigItem struct {
 
 type configItemValue struct {
 	ID    string
-	Value interface{}
+	Value any
+}
+
+func configItemsToMap(items []bleemeoTypes.GloutonConfigItem) map[comparableConfigItem]configItemValue {
+	itemsMap := make(map[comparableConfigItem]configItemValue, len(items))
+
+	for _, item := range items {
+		key := comparableConfigItem{
+			Key:      item.Key,
+			Priority: item.Priority,
+			Source:   item.Source,
+			Path:     item.Path,
+			Type:     item.Type,
+		}
+
+		itemsMap[key] = configItemValue{
+			ID:    item.ID,
+			Value: item.Value,
+		}
+	}
+
+	return itemsMap
 }
 
 func (s *Synchronizer) syncConfig(
@@ -56,11 +77,14 @@ func (s *Synchronizer) syncConfig(
 		return false, nil
 	}
 
-	remoteConfigItems, err := s.client.listGloutonConfigItems(ctx, s.agentID)
+	apiClient := execution.BleemeoAPIClient()
+
+	remoteConfigItemsList, err := apiClient.ListGloutonConfigItems(ctx, s.agentID)
 	if err != nil {
 		return false, fmt.Errorf("failed to fetch config items: %w", err)
 	}
 
+	remoteConfigItems := configItemsToMap(remoteConfigItemsList)
 	localConfigItems := s.localConfigItems()
 
 	// Registers local config items not present on the API.
@@ -83,8 +107,8 @@ func (s *Synchronizer) syncConfig(
 }
 
 // localConfigItems returns the local config items in a map of config value by comparableConfigItem.
-func (s *Synchronizer) localConfigItems() map[comparableConfigItem]interface{} {
-	items := make(map[comparableConfigItem]interface{}, len(s.option.ConfigItems))
+func (s *Synchronizer) localConfigItems() map[comparableConfigItem]any {
+	items := make(map[comparableConfigItem]any, len(s.option.ConfigItems))
 
 	for _, item := range s.option.ConfigItems {
 		// Ignore items with key or path too long because we won't be able to register them.
@@ -169,8 +193,8 @@ func bleemeoItemTypeFromConfigType(source config.ItemType) bleemeoTypes.ConfigIt
 // registerLocalConfigItems registers local config items not present on the API.
 func (s *Synchronizer) registerLocalConfigItems(
 	ctx context.Context,
-	apiClient types.RawClient,
-	localConfigItems map[comparableConfigItem]interface{},
+	apiClient types.GloutonConfigItemClient,
+	localConfigItems map[comparableConfigItem]any,
 	remoteConfigItems map[comparableConfigItem]configItemValue,
 ) error {
 	var itemsToRegister []bleemeoTypes.GloutonConfigItem //nolint:prealloc
@@ -205,7 +229,7 @@ func (s *Synchronizer) registerLocalConfigItems(
 			end = len(itemsToRegister)
 		}
 
-		err := apiClient.registerGloutonConfigItems(ctx, itemsToRegister[start:end])
+		err := apiClient.RegisterGloutonConfigItems(ctx, itemsToRegister[start:end])
 		if err != nil {
 			return err
 		}
@@ -217,8 +241,8 @@ func (s *Synchronizer) registerLocalConfigItems(
 // removeRemoteConfigItems removes remote config items not present locally.
 func (s *Synchronizer) removeRemoteConfigItems(
 	ctx context.Context,
-	apiClient types.RawClient,
-	localConfigItems map[comparableConfigItem]interface{},
+	apiClient types.GloutonConfigItemClient,
+	localConfigItems map[comparableConfigItem]any,
 	remoteConfigItems map[comparableConfigItem]configItemValue,
 ) error {
 	// Find and remove remote items that are not present locally.
@@ -235,7 +259,7 @@ func (s *Synchronizer) removeRemoteConfigItems(
 			continue
 		}
 
-		err := apiClient.deleteGloutonConfigItem(ctx, remoteItem.ID)
+		err := apiClient.DeleteGloutonConfigItem(ctx, remoteItem.ID)
 		if err != nil {
 			// Ignore the error if the item has already been deleted.
 			if IsNotFound(err) {

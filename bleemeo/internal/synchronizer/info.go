@@ -58,7 +58,7 @@ func (s *Synchronizer) syncInfoReal(ctx context.Context, execution types.Synchro
 
 	apiClient := execution.BleemeoAPIClient()
 
-	statusCode, err := s.realClient.DoUnauthenticated(ctx, "GET", "v1/info/", nil, nil, &globalInfo)
+	statusCode, err := apiClient.Do(ctx, http.MethodGet, "v1/info/", nil, false, nil, &globalInfo)
 	if err != nil && strings.Contains(err.Error(), "certificate has expired") {
 		// This could happen when local time is really too far away from real time.
 		// Since this request is unauthenticated, we can retry it with insecure TLS
@@ -70,20 +70,21 @@ func (s *Synchronizer) syncInfoReal(ctx context.Context, execution types.Synchro
 			return false, cErr
 		}
 
+		var respBody []byte
+
 		statusCode, respBody, err = insecureClient.Do(ctx, http.MethodGet, "/v1/info/", nil, false, nil)
+		if err == nil && statusCode == 200 {
+			err = json.Unmarshal(respBody, &globalInfo)
+			if err != nil {
+				logger.V(2).Printf("Couldn't unmarshal global information, got '%v'", err)
+
+				return false, nil
+			}
+		}
 	}
 
 	if err != nil {
 		logger.V(2).Printf("Couldn't retrieve global information, got '%v'", err)
-
-		return false, nil
-	}
-
-	var globalInfo bleemeoTypes.GlobalInfo
-
-	err = json.Unmarshal(respBody, &globalInfo)
-	if err != nil {
-		logger.V(2).Printf("Couldn't unmarshal global information, got '%v'", err)
 
 		return false, nil
 	}
@@ -160,7 +161,7 @@ func (s *Synchronizer) syncInfoReal(ctx context.Context, execution types.Synchro
 				StatusDescription: []string{"Agent local time too different from actual time"},
 			}
 
-			err = s.client.updateMetric(ctx, metric.ID, payload, mqttUpdateResponseFields)
+			err = apiClient.UpdateMetric(ctx, metric.ID, payload, mqttUpdateResponseFields)
 			if err != nil {
 				return false, err
 			}
@@ -172,7 +173,7 @@ func (s *Synchronizer) syncInfoReal(ctx context.Context, execution types.Synchro
 	return false, nil
 }
 
-func (s *Synchronizer) updateMQTTStatus(ctx context.Context, apiClient types.RawClient) error {
+func (s *Synchronizer) updateMQTTStatus(ctx context.Context, apiClient types.MetricClient) error {
 	s.l.Lock()
 	isMQTTConnected := s.isMQTTConnected != nil && *s.isMQTTConnected
 	shouldUpdate := s.shouldUpdateMQTTStatus
@@ -215,7 +216,7 @@ func (s *Synchronizer) updateMQTTStatus(ctx context.Context, apiClient types.Raw
 			StatusDescription: []string{msg},
 		}
 
-		err := s.client.updateMetric(s.ctx, metric.ID, payload, mqttUpdateResponseFields)
+		err := apiClient.UpdateMetric(ctx, metric.ID, payload, mqttUpdateResponseFields)
 		if err != nil {
 			return err
 		}

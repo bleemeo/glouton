@@ -41,7 +41,8 @@ var (
 
 type wrapperClient struct {
 	client           *bleemeo.Client
-	checkDuplicateFn func(context.Context, types.RawClient) error
+	checkDuplicateFn func(context.Context, types.Client) error
+
 	duplicateError   error
 	duplicateChecked bool
 	// TODO: throttling
@@ -52,7 +53,7 @@ type wrapperClient struct {
 func (cl *wrapperClient) dupCheck() error {
 	if !cl.duplicateChecked {
 		cl.duplicateChecked = true
-		cl.duplicateError = cl.checkDuplicateFn()
+		cl.duplicateError = cl.checkDuplicateFn(context.TODO(), cl)
 	}
 
 	return cl.duplicateError
@@ -161,6 +162,19 @@ func (cl *wrapperClient) Delete(ctx context.Context, resource bleemeo.Resource, 
 	return cl.client.Delete(ctx, resource, id)
 }
 
+func (cl *wrapperClient) Do(ctx context.Context, method, reqURI string, params url.Values, authenticated bool, body io.Reader, result any) (statusCode int, err error) {
+	statusCode, respBody, err := cl.client.Do(ctx, method, reqURI, params, authenticated, body)
+	if err != nil {
+		return 0, err
+	}
+
+	if result != nil {
+		err = json.Unmarshal(respBody, result)
+	}
+
+	return statusCode, err
+}
+
 func (cl *wrapperClient) DoWithBody(ctx context.Context, reqURI string, contentType string, body io.Reader) (statusCode int, err error) {
 	if cl == nil {
 		return 0, errClientUninitialized
@@ -192,10 +206,6 @@ func (cl *wrapperClient) DoWithBody(ctx context.Context, reqURI string, contentT
 // errorIterator implements [bleemeo.Iterator] but only returns an error.
 type errorIterator struct {
 	err error
-}
-
-func (errIter errorIterator) Count(context.Context) (int, error) {
-	return 0, errIter.err
 }
 
 func (errIter errorIterator) Next(context.Context) bool {
@@ -263,38 +273,4 @@ func APIErrorContent(err error) string {
 	}
 
 	return ""
-}
-
-func (cl *wrapperClient) ListApplications(ctx context.Context) ([]bleemeoTypes.Application, error) {
-	result, err := cl.Iter(ctx, "application", map[string]string{})
-	if err != nil {
-		return nil, err
-	}
-
-	applications := make([]bleemeoTypes.Application, 0, len(result))
-
-	for _, jsonMessage := range result {
-		var application bleemeoTypes.Application
-
-		if err := json.Unmarshal(jsonMessage, &application); err != nil {
-			continue
-		}
-
-		applications = append(applications, application)
-	}
-
-	return applications, nil
-}
-
-func (cl *wrapperClient) CreateApplication(ctx context.Context, app bleemeoTypes.Application) (bleemeoTypes.Application, error) {
-	var result bleemeoTypes.Application
-
-	app.ID = "" // ID isn't allowed in creation
-
-	_, err := cl.Do(ctx, "POST", "v1/application/", map[string]string{}, app, &result)
-	if err != nil {
-		return bleemeoTypes.Application{}, err
-	}
-
-	return result, nil
 }

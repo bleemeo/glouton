@@ -19,7 +19,6 @@ package synchronizer
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -27,51 +26,42 @@ import (
 	"time"
 
 	"github.com/bleemeo/bleemeo-go"
+	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/bleemeoapi"
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/logger"
 )
 
-var errAgentConfigNotSupported = errors.New("Bleemeo API doesn't support AgentConfig")
+func (cl *wrapperClient) ListApplications(ctx context.Context) ([]bleemeoTypes.Application, error) {
+	applications := make([]bleemeoTypes.Application, 0)
 
-type clientWrapper interface {
-	ThrottleDeadline() time.Time
+	iter := cl.Iterator("application", nil)
+	for iter.Next(ctx) {
+		var application bleemeoTypes.Application
 
-	listAgentTypes(ctx context.Context) ([]bleemeoTypes.AgentType, error)
-	listAccountConfigs(ctx context.Context) ([]bleemeoTypes.AccountConfig, error)
-	listAgentConfigs(ctx context.Context) ([]bleemeoTypes.AgentConfig, error)
-	listAgents(ctx context.Context) ([]bleemeoTypes.Agent, error)
-	updateAgent(ctx context.Context, id string, data any) (bleemeoTypes.Agent, error)
-	deleteAgent(ctx context.Context, id string) error
-	listGloutonConfigItems(ctx context.Context, agentID string) (map[comparableConfigItem]configItemValue, error)
-	registerGloutonConfigItems(ctx context.Context, items []bleemeoTypes.GloutonConfigItem) error
-	deleteGloutonConfigItem(ctx context.Context, id string) error
-	listContainers(ctx context.Context, agentID string) ([]bleemeoTypes.Container, error)
-	updateContainer(ctx context.Context, id string, payload any, result *containerPayload) error
-	registerContainer(ctx context.Context, payload containerPayload, result *containerPayload) error
-	listDiagnostics(ctx context.Context) ([]RemoteDiagnostic, error)
-	uploadDiagnostic(ctx context.Context, contentType string, content io.Reader) error
-	listFacts(ctx context.Context) ([]bleemeoTypes.AgentFact, error)
-	registerFact(ctx context.Context, payload any, result *bleemeoTypes.AgentFact) error
-	deleteFact(ctx context.Context, id string) error
-	updateMetric(ctx context.Context, id string, payload any, fields string) error
-	listActiveMetrics(ctx context.Context, active bool, filter func(payload metricPayload) bool) (map[string]bleemeoTypes.Metric, error)
-	countInactiveMetrics(ctx context.Context) (int, error)
-	listMetricsBy(ctx context.Context, params url.Values, filter func(payload metricPayload) bool) (map[string]bleemeoTypes.Metric, error)
-	getMetricByID(ctx context.Context, id string) (metricPayload, error)
-	registerMetric(ctx context.Context, payload metricPayload, result *metricPayload) error
-	deleteMetric(ctx context.Context, id string) error
-	deactivateMetric(ctx context.Context, id string) error
-	listMonitors(ctx context.Context) ([]bleemeoTypes.Monitor, error)
-	getMonitorByID(ctx context.Context, id string) (bleemeoTypes.Monitor, error)
-	listServices(ctx context.Context, agentID string) ([]bleemeoTypes.Service, error)
-	updateService(ctx context.Context, id string, payload servicePayload) (bleemeoTypes.Service, error)
-	registerService(ctx context.Context, payload servicePayload) (bleemeoTypes.Service, error)
-	registerSNMPAgent(ctx context.Context, payload payloadAgent) (bleemeoTypes.Agent, error)
-	updateAgentLastDuplicationDate(ctx context.Context, agentID string, lastDuplicationDate time.Time) error
-	registerVSphereAgent(ctx context.Context, payload payloadAgent) (bleemeoTypes.Agent, error)
+		if err := json.Unmarshal(iter.At(), &application); err != nil {
+			continue
+		}
+
+		applications = append(applications, application)
+	}
+
+	return applications, iter.Err()
 }
 
-func (cl *wrapperClient) listAgentTypes(ctx context.Context) ([]bleemeoTypes.AgentType, error) {
+func (cl *wrapperClient) CreateApplication(ctx context.Context, app bleemeoTypes.Application) (bleemeoTypes.Application, error) {
+	var result bleemeoTypes.Application
+
+	app.ID = "" // ID isn't allowed in creation
+
+	err := cl.Create(ctx, bleemeo.ResourceApplication, app, "id,name,tag", &result)
+	if err != nil {
+		return bleemeoTypes.Application{}, err
+	}
+
+	return result, nil
+}
+
+func (cl *wrapperClient) ListAgentTypes(ctx context.Context) ([]bleemeoTypes.AgentType, error) {
 	params := url.Values{
 		"fields": {"id,name,display_name"},
 	}
@@ -92,7 +82,7 @@ func (cl *wrapperClient) listAgentTypes(ctx context.Context) ([]bleemeoTypes.Age
 	return agentTypes, iter.Err()
 }
 
-func (cl *wrapperClient) listAccountConfigs(ctx context.Context) ([]bleemeoTypes.AccountConfig, error) {
+func (cl *wrapperClient) ListAccountConfigs(ctx context.Context) ([]bleemeoTypes.AccountConfig, error) {
 	params := url.Values{
 		"fields": {"id,name,live_process_resolution,live_process,docker_integration,snmp_integration,vsphere_integration,number_of_custom_metrics,suspended"},
 	}
@@ -113,7 +103,7 @@ func (cl *wrapperClient) listAccountConfigs(ctx context.Context) ([]bleemeoTypes
 	return configs, iter.Err()
 }
 
-func (cl *wrapperClient) listAgentConfigs(ctx context.Context) ([]bleemeoTypes.AgentConfig, error) {
+func (cl *wrapperClient) ListAgentConfigs(ctx context.Context) ([]bleemeoTypes.AgentConfig, error) {
 	params := url.Values{
 		"fields": {"id,account_config,agent_type,metrics_allowlist,metrics_resolution"},
 	}
@@ -134,7 +124,7 @@ func (cl *wrapperClient) listAgentConfigs(ctx context.Context) ([]bleemeoTypes.A
 	return configs, iter.Err()
 }
 
-func (cl *wrapperClient) listAgents(ctx context.Context) ([]bleemeoTypes.Agent, error) {
+func (cl *wrapperClient) ListAgents(ctx context.Context) ([]bleemeoTypes.Agent, error) {
 	params := url.Values{
 		"fields": {agentFields},
 	}
@@ -155,7 +145,7 @@ func (cl *wrapperClient) listAgents(ctx context.Context) ([]bleemeoTypes.Agent, 
 	return agents, iter.Err()
 }
 
-func (cl *wrapperClient) updateAgent(ctx context.Context, id string, data any) (bleemeoTypes.Agent, error) {
+func (cl *wrapperClient) UpdateAgent(ctx context.Context, id string, data any) (bleemeoTypes.Agent, error) {
 	var agent bleemeoTypes.Agent
 
 	err := cl.Update(ctx, bleemeo.ResourceAgent, id, data, agentFields, &agent)
@@ -163,18 +153,17 @@ func (cl *wrapperClient) updateAgent(ctx context.Context, id string, data any) (
 	return agent, err
 }
 
-func (cl *wrapperClient) deleteAgent(ctx context.Context, id string) error {
+func (cl *wrapperClient) DeleteAgent(ctx context.Context, id string) error {
 	return cl.Delete(ctx, bleemeo.ResourceAgent, id)
 }
 
-// listGloutonConfigItems returns the remote config items in a map of config value by comparableConfigItem.
-func (cl *wrapperClient) listGloutonConfigItems(ctx context.Context, agentID string) (map[comparableConfigItem]configItemValue, error) {
+func (cl *wrapperClient) ListGloutonConfigItems(ctx context.Context, agentID string) ([]bleemeoTypes.GloutonConfigItem, error) {
 	params := url.Values{
 		"fields": {"id,agent,key,value,priority,source,path,type"},
 		"agent":  {agentID},
 	}
 
-	items := make(map[comparableConfigItem]configItemValue)
+	items := make([]bleemeoTypes.GloutonConfigItem, 0)
 
 	iter := cl.Iterator(bleemeo.ResourceGloutonConfigItem, params)
 	for iter.Next(ctx) {
@@ -186,32 +175,21 @@ func (cl *wrapperClient) listGloutonConfigItems(ctx context.Context, agentID str
 			continue
 		}
 
-		key := comparableConfigItem{
-			Key:      item.Key,
-			Priority: item.Priority,
-			Source:   item.Source,
-			Path:     item.Path,
-			Type:     item.Type,
-		}
-
-		items[key] = configItemValue{
-			ID:    item.ID,
-			Value: item.Value,
-		}
+		items = append(items, item)
 	}
 
 	return items, iter.Err()
 }
 
-func (cl *wrapperClient) registerGloutonConfigItems(ctx context.Context, items []bleemeoTypes.GloutonConfigItem) error {
+func (cl *wrapperClient) RegisterGloutonConfigItems(ctx context.Context, items []bleemeoTypes.GloutonConfigItem) error {
 	return cl.Create(ctx, bleemeo.ResourceGloutonConfigItem, items, "", nil)
 }
 
-func (cl *wrapperClient) deleteGloutonConfigItem(ctx context.Context, id string) error {
+func (cl *wrapperClient) DeleteGloutonConfigItem(ctx context.Context, id string) error {
 	return cl.Delete(ctx, bleemeo.ResourceGloutonConfigItem, id)
 }
 
-func (cl *wrapperClient) listContainers(ctx context.Context, agentID string) ([]bleemeoTypes.Container, error) {
+func (cl *wrapperClient) ListContainers(ctx context.Context, agentID string) ([]bleemeoTypes.Container, error) {
 	params := url.Values{
 		"host":   {agentID},
 		"fields": {containerCacheFields},
@@ -221,7 +199,7 @@ func (cl *wrapperClient) listContainers(ctx context.Context, agentID string) ([]
 
 	iter := cl.Iterator(bleemeo.ResourceContainer, params)
 	for iter.Next(ctx) {
-		var container containerPayload
+		var container bleemeoapi.ContainerPayload
 
 		if err := json.Unmarshal(iter.At(), &container); err != nil {
 			continue
@@ -233,20 +211,20 @@ func (cl *wrapperClient) listContainers(ctx context.Context, agentID string) ([]
 	return containers, iter.Err()
 }
 
-func (cl *wrapperClient) updateContainer(ctx context.Context, id string, payload any, result *containerPayload) error {
+func (cl *wrapperClient) UpdateContainer(ctx context.Context, id string, payload any, result *bleemeoapi.ContainerPayload) error {
 	return cl.Update(ctx, bleemeo.ResourceContainer, id, payload, containerRegisterFields, result)
 }
 
-func (cl *wrapperClient) registerContainer(ctx context.Context, payload containerPayload, result *containerPayload) error {
+func (cl *wrapperClient) RegisterContainer(ctx context.Context, payload bleemeoapi.ContainerPayload, result *bleemeoapi.ContainerPayload) error {
 	return cl.Create(ctx, bleemeo.ResourceContainer, payload, containerRegisterFields, &result)
 }
 
-func (cl *wrapperClient) listDiagnostics(ctx context.Context) ([]RemoteDiagnostic, error) {
-	var diagnostics []RemoteDiagnostic
+func (cl *wrapperClient) ListDiagnostics(ctx context.Context) ([]bleemeoapi.RemoteDiagnostic, error) {
+	var diagnostics []bleemeoapi.RemoteDiagnostic
 
 	iter := cl.Iterator(bleemeo.ResourceGloutonDiagnostic, nil)
 	for iter.Next(ctx) {
-		var remoteDiagnostic RemoteDiagnostic
+		var remoteDiagnostic bleemeoapi.RemoteDiagnostic
 
 		if err := json.Unmarshal(iter.At(), &remoteDiagnostic); err != nil {
 			logger.V(2).Printf("Failed to unmarshal diagnostic: %v", err)
@@ -260,7 +238,7 @@ func (cl *wrapperClient) listDiagnostics(ctx context.Context) ([]RemoteDiagnosti
 	return diagnostics, iter.Err()
 }
 
-func (cl *wrapperClient) uploadDiagnostic(ctx context.Context, contentType string, content io.Reader) error {
+func (cl *wrapperClient) UploadDiagnostic(ctx context.Context, contentType string, content io.Reader) error {
 	statusCode, reqErr := cl.DoWithBody(ctx, bleemeo.ResourceGloutonDiagnostic, contentType, content)
 	if reqErr != nil {
 		return reqErr
@@ -273,7 +251,7 @@ func (cl *wrapperClient) uploadDiagnostic(ctx context.Context, contentType strin
 	return nil
 }
 
-func (cl *wrapperClient) listFacts(ctx context.Context) ([]bleemeoTypes.AgentFact, error) {
+func (cl *wrapperClient) ListFacts(ctx context.Context) ([]bleemeoTypes.AgentFact, error) {
 	var facts []bleemeoTypes.AgentFact
 
 	iter := cl.Iterator(bleemeo.ResourceAgentFact, nil)
@@ -290,20 +268,20 @@ func (cl *wrapperClient) listFacts(ctx context.Context) ([]bleemeoTypes.AgentFac
 	return facts, iter.Err()
 }
 
-func (cl *wrapperClient) registerFact(ctx context.Context, payload any, result *bleemeoTypes.AgentFact) error {
+func (cl *wrapperClient) RegisterFact(ctx context.Context, payload any, result *bleemeoTypes.AgentFact) error {
 	return cl.Create(ctx, bleemeo.ResourceAgentFact, payload, "", result)
 }
 
-func (cl *wrapperClient) deleteFact(ctx context.Context, id string) error {
+func (cl *wrapperClient) DeleteFact(ctx context.Context, id string) error {
 	return cl.Delete(ctx, bleemeo.ResourceAgentFact, id)
 }
 
-func (cl *wrapperClient) updateMetric(ctx context.Context, id string, payload any, fields string) error {
+func (cl *wrapperClient) UpdateMetric(ctx context.Context, id string, payload any, fields string) error {
 
 	return cl.Update(ctx, bleemeo.ResourceMetric, id, payload, fields, nil)
 }
 
-func (cl *wrapperClient) listActiveMetrics(ctx context.Context, active bool, filter func(payload metricPayload) bool) (map[string]bleemeoTypes.Metric, error) {
+func (cl *wrapperClient) ListActiveMetrics(ctx context.Context, active bool, filter func(payload bleemeoapi.MetricPayload) bool) (map[string]bleemeoTypes.Metric, error) {
 	params := url.Values{
 		"fields": {metricFields},
 	}
@@ -318,7 +296,7 @@ func (cl *wrapperClient) listActiveMetrics(ctx context.Context, active bool, fil
 
 	iter := cl.Iterator(bleemeo.ResourceMetric, params)
 	for iter.Next(ctx) {
-		var metric metricPayload
+		var metric bleemeoapi.MetricPayload
 
 		if err := json.Unmarshal(iter.At(), &metric); err != nil {
 			continue
@@ -328,13 +306,13 @@ func (cl *wrapperClient) listActiveMetrics(ctx context.Context, active bool, fil
 			continue
 		}
 
-		metricsByUUID[metric.ID] = metric.metricFromAPI(metricsByUUID[metric.ID].FirstSeenAt)
+		metricsByUUID[metric.ID] = metricFromAPI(metric, metricsByUUID[metric.ID].FirstSeenAt)
 	}
 
 	return metricsByUUID, iter.Err()
 }
 
-func (cl *wrapperClient) countInactiveMetrics(ctx context.Context) (int, error) {
+func (cl *wrapperClient) CountInactiveMetrics(ctx context.Context) (int, error) {
 	return cl.Count(
 		ctx,
 		bleemeo.ResourceMetric,
@@ -345,12 +323,12 @@ func (cl *wrapperClient) countInactiveMetrics(ctx context.Context) (int, error) 
 	)
 }
 
-func (cl *wrapperClient) listMetricsBy(ctx context.Context, params url.Values, filter func(payload metricPayload) bool) (map[string]bleemeoTypes.Metric, error) {
+func (cl *wrapperClient) ListMetricsBy(ctx context.Context, params url.Values, filter func(payload bleemeoapi.MetricPayload) bool) (map[string]bleemeoTypes.Metric, error) {
 	metricsByUUID := make(map[string]bleemeoTypes.Metric)
 
 	iter := cl.Iterator(bleemeo.ResourceMetric, params)
 	for iter.Next(ctx) {
-		var metric metricPayload
+		var metric bleemeoapi.MetricPayload
 
 		if err := json.Unmarshal(iter.At(), &metric); err != nil {
 			continue
@@ -360,31 +338,31 @@ func (cl *wrapperClient) listMetricsBy(ctx context.Context, params url.Values, f
 			continue
 		}
 
-		metricsByUUID[metric.ID] = metric.metricFromAPI(metricsByUUID[metric.ID].FirstSeenAt)
+		metricsByUUID[metric.ID] = metricFromAPI(metric, metricsByUUID[metric.ID].FirstSeenAt)
 	}
 
 	return metricsByUUID, iter.Err()
 }
 
-func (cl *wrapperClient) getMetricByID(ctx context.Context, id string) (metricPayload, error) {
-	var metric metricPayload
+func (cl *wrapperClient) GetMetricByID(ctx context.Context, id string) (bleemeoapi.MetricPayload, error) {
+	var metric bleemeoapi.MetricPayload
 
 	return metric, cl.Get(ctx, bleemeo.ResourceMetric, id, metricFields, &metric)
 }
 
-func (cl *wrapperClient) registerMetric(ctx context.Context, payload metricPayload, result *metricPayload) error {
+func (cl *wrapperClient) RegisterMetric(ctx context.Context, payload bleemeoapi.MetricPayload, result *bleemeoapi.MetricPayload) error {
 	return cl.Create(ctx, bleemeo.ResourceMetric, payload, metricFields, result)
 }
 
-func (cl *wrapperClient) deleteMetric(ctx context.Context, id string) error {
+func (cl *wrapperClient) DeleteMetric(ctx context.Context, id string) error {
 	return cl.Delete(ctx, bleemeo.ResourceMetric, id)
 }
 
-func (cl *wrapperClient) deactivateMetric(ctx context.Context, id string) error {
+func (cl *wrapperClient) DeactivateMetric(ctx context.Context, id string) error {
 	return cl.Update(ctx, bleemeo.ResourceMetric, id, map[string]string{"active": stringFalse}, "active", nil)
 }
 
-func (cl *wrapperClient) listMonitors(ctx context.Context) ([]bleemeoTypes.Monitor, error) {
+func (cl *wrapperClient) ListMonitors(ctx context.Context) ([]bleemeoTypes.Monitor, error) {
 	params := url.Values{
 		"monitor": {"true"},
 		"active":  {"true"},
@@ -407,16 +385,16 @@ func (cl *wrapperClient) listMonitors(ctx context.Context) ([]bleemeoTypes.Monit
 	return monitors, iter.Err()
 }
 
-func (cl *wrapperClient) getMonitorByID(ctx context.Context, id string) (bleemeoTypes.Monitor, error) {
+func (cl *wrapperClient) GetMonitorByID(ctx context.Context, id string) (bleemeoTypes.Monitor, error) {
 	var result bleemeoTypes.Monitor
 
 	return result, cl.Get(ctx, bleemeo.ResourceService, id, monitorFields, &result)
 }
 
-func (cl *wrapperClient) listServices(ctx context.Context, agentID string) ([]bleemeoTypes.Service, error) {
+func (cl *wrapperClient) ListServices(ctx context.Context, agentID string, fields string) ([]bleemeoTypes.Service, error) {
 	params := url.Values{
 		"agent":  {agentID},
-		"fields": {"id,label,instance,listen_addresses,exe_path,stack,active,created_at"},
+		"fields": {fields},
 	}
 
 	var services []bleemeoTypes.Service
@@ -435,31 +413,31 @@ func (cl *wrapperClient) listServices(ctx context.Context, agentID string) ([]bl
 	return services, iter.Err()
 }
 
-func (cl *wrapperClient) updateService(ctx context.Context, id string, payload servicePayload) (bleemeoTypes.Service, error) {
+func (cl *wrapperClient) UpdateService(ctx context.Context, id string, payload bleemeoapi.ServicePayload, fields string) (bleemeoTypes.Service, error) {
 	var result bleemeoTypes.Service
 
-	return result, cl.Update(ctx, bleemeo.ResourceService, id, payload, serviceFields, &result)
+	return result, cl.Update(ctx, bleemeo.ResourceService, id, payload, fields, &result)
 }
 
-func (cl *wrapperClient) registerService(ctx context.Context, payload servicePayload) (bleemeoTypes.Service, error) {
+func (cl *wrapperClient) RegisterService(ctx context.Context, payload bleemeoapi.ServicePayload, fields string) (bleemeoTypes.Service, error) {
 	var result bleemeoTypes.Service
 
-	return result, cl.Create(ctx, bleemeo.ResourceService, payload, serviceFields, &result)
+	return result, cl.Create(ctx, bleemeo.ResourceService, payload, fields, &result)
 }
 
-func (cl *wrapperClient) registerSNMPAgent(ctx context.Context, payload payloadAgent) (bleemeoTypes.Agent, error) {
+func (cl *wrapperClient) RegisterSNMPAgent(ctx context.Context, payload bleemeoapi.AgentPayload) (bleemeoTypes.Agent, error) {
 	var result bleemeoTypes.Agent
 
 	return result, cl.Create(ctx, bleemeo.ResourceAgent, payload, snmpAgentFields, &result)
 }
 
-func (cl *wrapperClient) updateAgentLastDuplicationDate(ctx context.Context, agentID string, lastDuplicationDate time.Time) error {
+func (cl *wrapperClient) UpdateAgentLastDuplicationDate(ctx context.Context, agentID string, lastDuplicationDate time.Time) error {
 	payload := map[string]time.Time{"last_duplication_date": lastDuplicationDate}
 
 	return cl.Update(ctx, bleemeo.ResourceAgent, agentID, payload, "last_duplication_date", nil)
 }
 
-func (cl *wrapperClient) registerVSphereAgent(ctx context.Context, payload payloadAgent) (bleemeoTypes.Agent, error) {
+func (cl *wrapperClient) RegisterVSphereAgent(ctx context.Context, payload bleemeoapi.AgentPayload) (bleemeoTypes.Agent, error) {
 	var result bleemeoTypes.Agent
 
 	return result, cl.Create(ctx, bleemeo.ResourceAgent, payload, vSphereAgentFields, &result)

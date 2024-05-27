@@ -23,7 +23,8 @@ import (
 	"time"
 
 	"github.com/bleemeo/glouton/bleemeo/internal/common"
-	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
+	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/bleemeoapi"
+	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/facts"
 	containerTypes "github.com/bleemeo/glouton/facts/container-runtime/types"
@@ -40,17 +41,6 @@ const (
 	// Fields used to register a container on the API.
 	containerRegisterFields = containerCacheFields + ",host,command,container_started_at,container_finished_at,container_image_id,container_image_name,docker_api_version"
 )
-
-type containerPayload struct {
-	bleemeoTypes.Container
-	Host             string                `json:"host"`
-	Command          string                `json:"command"`
-	StartedAt        bleemeoTypes.NullTime `json:"container_started_at"`
-	FinishedAt       bleemeoTypes.NullTime `json:"container_finished_at"`
-	ImageID          string                `json:"container_image_id"`
-	ImageName        string                `json:"container_image_name"`
-	DockerAPIVersion string                `json:"docker_api_version"`
-}
 
 func (s *Synchronizer) syncContainers(ctx context.Context, syncType types.SyncType, execution types.SynchronizationExecution) (updateThresholds bool, err error) {
 	var localContainers []facts.Container
@@ -98,8 +88,8 @@ func (s *Synchronizer) syncContainers(ctx context.Context, syncType types.SyncTy
 	return false, err
 }
 
-func (s *Synchronizer) containerUpdateList(ctx context.Context, apiClient types.RawClient) error {
-	containers, err := apiClient.listContainers(ctx, s.agentID)
+func (s *Synchronizer) containerUpdateList(ctx context.Context, apiClient types.ContainerClient) error {
+	containers, err := apiClient.ListContainers(ctx, s.agentID)
 	if err != nil {
 		return err
 	}
@@ -191,7 +181,7 @@ func (s *Synchronizer) containerRegisterAndUpdate(ctx context.Context, execution
 
 		payloadContainer.InspectHash = ""                   // we don't send inspect hash to API
 		payloadContainer.GloutonLastUpdatedAt = time.Time{} // we don't send this time, only used internally
-		payload := containerPayload{
+		payload := bleemeoapi.ContainerPayload{
 			Container:  payloadContainer,
 			Host:       s.agentID,
 			Command:    strings.Join(container.Command(), " "),
@@ -218,17 +208,17 @@ func (s *Synchronizer) containerRegisterAndUpdate(ctx context.Context, execution
 
 func (s *Synchronizer) remoteRegister(
 	ctx context.Context,
-	apiClient types.RawClient,
+	apiClient types.ContainerClient,
 	remoteFound bool,
 	remoteContainer *bleemeoTypes.Container,
 	remoteContainers *[]bleemeoTypes.Container,
-	payload containerPayload,
+	payload bleemeoapi.ContainerPayload,
 	remoteIndex int,
 ) error {
-	var result containerPayload
+	var result bleemeoapi.ContainerPayload
 
 	if remoteFound {
-		err := apiClient.updateContainer(ctx, remoteContainer.ID, payload, &result)
+		err := apiClient.UpdateContainer(ctx, remoteContainer.ID, payload, &result)
 		if err != nil {
 			return err
 		}
@@ -238,7 +228,7 @@ func (s *Synchronizer) remoteRegister(
 		logger.V(2).Printf("Container %v updated with UUID %s", result.Name, result.ID)
 		(*remoteContainers)[remoteIndex] = result.Container
 	} else {
-		err := apiClient.registerContainer(ctx, payload, &result)
+		err := apiClient.RegisterContainer(ctx, payload, &result)
 		if err != nil {
 			return err
 		}
@@ -252,7 +242,7 @@ func (s *Synchronizer) remoteRegister(
 	return nil
 }
 
-func (s *Synchronizer) containerDeleteFromLocal(ctx context.Context, execution types.SynchronizationExecution, apiClient types.RawClient, localContainers []facts.Container) {
+func (s *Synchronizer) containerDeleteFromLocal(ctx context.Context, execution types.SynchronizationExecution, apiClient types.ContainerClient, localContainers []facts.Container) {
 	var deletedIDs []string //nolint: prealloc // we don't know the size. empty is the most likely size.
 
 	duplicatedKey := make(map[string]bool)
@@ -276,7 +266,7 @@ func (s *Synchronizer) containerDeleteFromLocal(ctx context.Context, execution t
 
 		body := map[string]any{"deleted_at": bleemeoTypes.NullTime(s.now())}
 
-		err := s.client.updateContainer(s.ctx, container.ID, body, nil)
+		err := apiClient.UpdateContainer(ctx, container.ID, body, nil)
 		if err != nil {
 			// If the container wasn't found, it has already been deleted.
 			if IsNotFound(err) {

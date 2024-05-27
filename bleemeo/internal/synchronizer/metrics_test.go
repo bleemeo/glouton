@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/bleemeo/glouton/bleemeo/internal/cache"
+	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/bleemeoapi"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/syncservices"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
@@ -569,7 +570,7 @@ func TestMetricSimpleSync(t *testing.T) {
 	idAgentMain, _ := helper.state.BleemeoCredentials()
 
 	metrics := helper.MetricsFromAPI()
-	want := []metricPayload{
+	want := []bleemeoapi.MetricPayload{
 		{
 			Metric: bleemeoTypes.Metric{
 				ID:         "1",
@@ -602,7 +603,7 @@ func TestMetricSimpleSync(t *testing.T) {
 	helper.wrapperClientMock.AssertCallsPerResource(t, mockAPIResourceMetric, 3)
 
 	metrics = helper.MetricsFromAPI()
-	want = []metricPayload{
+	want = []bleemeoapi.MetricPayload{
 		{
 			Metric: bleemeoTypes.Metric{
 				ID:         "1",
@@ -927,7 +928,7 @@ func TestMetricUnknownError(t *testing.T) {
 	// API always reject registering "deny-me" metric
 	metricResource, _ := helper.api.resources[mockAPIResourceMetric].(*genericResource)
 	metricResource.CreateHook = func(_ *http.Request, body []byte, valuePtr interface{}) error {
-		metric, _ := valuePtr.(*metricPayload)
+		metric, _ := valuePtr.(*bleemeoapi.MetricPayload)
 		if metric.Name == "deny-me" {
 			return clientError{
 				body:       "no information about whether the error is permanent or not",
@@ -1063,7 +1064,7 @@ func TestMetricPermanentError(t *testing.T) {
 			// API always reject registering "deny-me" metric
 			metricResource, _ := helper.api.resources[mockAPIResourceMetric].(*genericResource)
 			metricResource.CreateHook = func(_ *http.Request, body []byte, valuePtr interface{}) error {
-				metric, _ := valuePtr.(*metricPayload)
+				metric, _ := valuePtr.(*bleemeoapi.MetricPayload)
 				if metric.Name == "deny-me" || metric.Name == "deny-me-also" {
 					return clientError{
 						body:       tt.content,
@@ -1210,7 +1211,7 @@ func TestMetricTooMany(t *testing.T) { //nolint:maintidx
 			}
 		}
 
-		metric, _ := valuePtr.(*metricPayload)
+		metric, _ := valuePtr.(*bleemeoapi.MetricPayload)
 
 		if metric.DeactivatedAt.IsZero() {
 			metrics := helper.MetricsFromAPI()
@@ -1513,7 +1514,7 @@ func TestWithSNMP(t *testing.T) {
 	}
 
 	agents := helper.AgentsFromAPI()
-	wantAgents := []payloadAgent{
+	wantAgents := []bleemeoapi.AgentPayload{
 		{
 			Agent: bleemeoTypes.Agent{
 				ID:              idAgentMain,
@@ -1541,13 +1542,13 @@ func TestWithSNMP(t *testing.T) {
 		},
 	}
 
-	optAgentSort := cmpopts.SortSlices(func(x payloadAgent, y payloadAgent) bool { return x.ID < y.ID })
+	optAgentSort := cmpopts.SortSlices(func(x, y bleemeoapi.AgentPayload) bool { return x.ID < y.ID })
 	if diff := cmp.Diff(wantAgents, agents, cmpopts.EquateEmpty(), optAgentSort); diff != "" {
 		t.Errorf("agents mismatch (-want +got)\n%s", diff)
 	}
 
 	metrics := helper.MetricsFromAPI()
-	want := []metricPayload{
+	want := []bleemeoapi.MetricPayload{
 		{
 			Metric: bleemeoTypes.Metric{
 				ID:         "1",
@@ -1596,7 +1597,7 @@ func TestMonitorDeactivation(t *testing.T) {
 
 	idAgentMain, _ := helper.state.BleemeoCredentials()
 
-	initialMetrics := []metricPayload{
+	initialMetrics := []bleemeoapi.MetricPayload{
 		{
 			Metric: bleemeoTypes.Metric{
 				ID:      "90c6459c-851d-4bb4-957c-afbc695c2201",
@@ -1657,7 +1658,7 @@ func TestMonitorDeactivation(t *testing.T) {
 	}
 
 	metrics := helper.MetricsFromAPI()
-	want := []metricPayload{
+	want := []bleemeoapi.MetricPayload{
 		{
 			Metric: bleemeoTypes.Metric{
 				ID:         "1",
@@ -1708,7 +1709,7 @@ func TestMonitorDeactivation(t *testing.T) {
 
 	metrics = helper.MetricsFromAPI()
 
-	want = []metricPayload{
+	want = []bleemeoapi.MetricPayload{
 		{
 			Metric: bleemeoTypes.Metric{
 				ID:         "1",
@@ -1775,15 +1776,15 @@ func TestServiceStatusRename(t *testing.T) { //nolint: maintidx
 			metricResource.CreateHook = func(_ *http.Request, _ []byte, valuePtr interface{}) error {
 				// API will rename and reuse existing $SERVICE_status metric when registering service_status metrics.
 				// From Glouton point of vue, it the same as if a new metric is created (service_status) and the old is deleted.
-				metric, _ := valuePtr.(*metricPayload)
-				metricCopy := metric.metricFromAPI(helper.s.now())
+				metric, _ := valuePtr.(*bleemeoapi.MetricPayload)
+				metricCopy := metricFromAPI(*metric, helper.s.now())
 				serviceType := metricCopy.Labels[gloutonTypes.LabelService]
 
 				if metric.Name != "service_status" || serviceType == "" {
 					return nil
 				}
 
-				var metrics []metricPayload
+				var metrics []bleemeoapi.MetricPayload
 
 				metricResource.Store(&metrics)
 
@@ -1815,13 +1816,13 @@ func TestServiceStatusRename(t *testing.T) { //nolint: maintidx
 			srvNginxID := "809bc83b-2f28-43f1-9fb7-a84445ca1bc0"
 
 			helper.SetAPIServices(
-				syncservices.ServicePayloadFromDiscovery(srvApache, "", testAgent.AccountID, testAgent.ID, srvApacheID, true),
-				syncservices.ServicePayloadFromDiscovery(srvNginx, "", testAgent.AccountID, testAgent.ID, srvNginxID, true),
+				syncservices.ServicePayloadFromDiscovery(srvApache, "", testAgent.AccountID, testAgent.ID, srvApacheID),
+				syncservices.ServicePayloadFromDiscovery(srvNginx, "", testAgent.AccountID, testAgent.ID, srvNginxID),
 			)
 
 			helper.discovery.SetResult([]discovery.Service{srvApache, srvNginx}, nil)
 
-			want1 := []metricPayload{
+			want1 := []bleemeoapi.MetricPayload{
 				{
 					Metric: bleemeoTypes.Metric{
 						ID:         "1",
@@ -1919,7 +1920,7 @@ func TestServiceStatusRename(t *testing.T) { //nolint: maintidx
 				t.Error(err)
 			}
 
-			want2 := []metricPayload{
+			want2 := []bleemeoapi.MetricPayload{
 				{
 					Metric: bleemeoTypes.Metric{
 						ID:         "1",
@@ -1972,7 +1973,7 @@ func TestServiceStatusRename(t *testing.T) { //nolint: maintidx
 
 			helper.AddTime(1 * time.Minute)
 
-			want3 := []metricPayload{
+			want3 := []bleemeoapi.MetricPayload{
 				{
 					Metric: bleemeoTypes.Metric{
 						ID:         "1",
@@ -2032,7 +2033,7 @@ func TestMonitorPrivate(t *testing.T) {
 		t.Fatal("idAgentMain == '', want something")
 	}
 
-	initialMetrics := []metricPayload{
+	initialMetrics := []bleemeoapi.MetricPayload{
 		// Metric from other probe are NOT present in API, because glouton private probe aren't allow to view them.
 		{
 			Metric: bleemeoTypes.Metric{
@@ -2074,7 +2075,7 @@ func TestMonitorPrivate(t *testing.T) {
 		t.Error(err)
 	}
 
-	want := []metricPayload{
+	want := []bleemeoapi.MetricPayload{
 		{
 			Metric: bleemeoTypes.Metric{
 				ID:         idAny,
@@ -2132,7 +2133,7 @@ func TestMonitorPrivate(t *testing.T) {
 		t.Error(err)
 	}
 
-	want = []metricPayload{
+	want = []bleemeoapi.MetricPayload{
 		{
 			Metric: bleemeoTypes.Metric{
 				ID:         idAny,
@@ -2278,7 +2279,7 @@ func TestKubernetesMetrics(t *testing.T) {
 		t.Error(err)
 	}
 
-	want := []metricPayload{
+	want := []bleemeoapi.MetricPayload{
 		{
 			Metric: bleemeoTypes.Metric{
 				ID:         idAny,
@@ -2479,7 +2480,7 @@ func Test_MergeFirstSeenAt(t *testing.T) {
 
 	cache.SetMetrics(want)
 
-	metrics := []metricPayload{
+	metrics := []bleemeoapi.MetricPayload{
 		{
 			Metric: bleemeoTypes.Metric{
 				ID:          "1",
@@ -2514,7 +2515,7 @@ func Test_MergeFirstSeenAt(t *testing.T) {
 	metricsByUUID := cache.MetricsByUUID()
 
 	for _, val := range metrics {
-		metricsByUUID[val.ID] = val.metricFromAPI(metricsByUUID[val.ID].FirstSeenAt)
+		metricsByUUID[val.ID] = metricFromAPI(val, metricsByUUID[val.ID].FirstSeenAt)
 	}
 
 	for _, val := range metricsByUUID {

@@ -20,7 +20,7 @@ import (
 	"context"
 	"errors"
 
-	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
+	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/logger"
 )
@@ -34,7 +34,6 @@ const (
 
 func (s *Synchronizer) syncAgent(ctx context.Context, syncType types.SyncType, execution types.SynchronizationExecution) (updateThresholds bool, err error) {
 	apiClient := execution.BleemeoAPIClient()
-
 	if err := s.syncMainAgent(ctx, apiClient); err != nil {
 		return false, err
 	}
@@ -52,7 +51,7 @@ func (s *Synchronizer) syncAgent(ctx context.Context, syncType types.SyncType, e
 	return false, nil
 }
 
-func (s *Synchronizer) syncMainAgent(ctx context.Context) error {
+func (s *Synchronizer) syncMainAgent(ctx context.Context, apiClient types.AgentClient) error {
 	data := map[string][]bleemeoTypes.Tag{
 		"tags": make([]bleemeoTypes.Tag, 0),
 	}
@@ -65,7 +64,7 @@ func (s *Synchronizer) syncMainAgent(ctx context.Context) error {
 
 	previousAgent := s.option.Cache.Agent()
 
-	agent, err := apiClient.updateAgent(ctx, s.agentID, data)
+	agent, err := apiClient.UpdateAgent(ctx, s.agentID, data)
 	if err != nil {
 		return err
 	}
@@ -98,10 +97,10 @@ func (s *Synchronizer) syncMainAgent(ctx context.Context) error {
 	return nil
 }
 
-func (s *Synchronizer) agentsUpdateList(ctx context.Context, execution types.SynchronizationExecution, apiClient types.RawClient) error {
+func (s *Synchronizer) agentsUpdateList(ctx context.Context, execution types.SynchronizationExecution, apiClient types.AgentClient) error {
 	oldAgents := s.option.Cache.AgentsByUUID()
 
-	agents, err := apiClient.listAgents(ctx)
+	agents, err := apiClient.ListAgents(ctx)
 	if err != nil {
 		return err
 	}

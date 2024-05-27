@@ -20,7 +20,7 @@ import (
 	"context"
 	"time"
 
-	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
+	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/facts"
 	"github.com/bleemeo/glouton/logger"
@@ -133,8 +133,8 @@ func (s *Synchronizer) syncFacts(ctx context.Context, syncType types.SyncType, e
 	return false, nil
 }
 
-func (s *Synchronizer) factsUpdateList(ctx context.Context, apiClient types.RawClient) error {
-	facts, err := apiClient.listFacts(ctx)
+func (s *Synchronizer) factsUpdateList(ctx context.Context, apiClient types.FactClient) error {
+	facts, err := apiClient.ListFacts(ctx)
 	if err != nil {
 		return err
 	}
@@ -144,7 +144,7 @@ func (s *Synchronizer) factsUpdateList(ctx context.Context, apiClient types.RawC
 	return nil
 }
 
-func (s *Synchronizer) factRegister(ctx context.Context, apiClient types.RawClient, allAgentFacts map[string]map[string]string) error {
+func (s *Synchronizer) factRegister(ctx context.Context, apiClient types.FactClient, allAgentFacts map[string]map[string]string) error {
 	registeredFacts := s.option.Cache.FactsByKey()
 	facts := s.option.Cache.Facts()
 
@@ -166,7 +166,7 @@ func (s *Synchronizer) factRegister(ctx context.Context, apiClient types.RawClie
 
 			var result bleemeoTypes.AgentFact
 
-			err := apiClient.registerFact(ctx, payload, &result)
+			err := apiClient.RegisterFact(ctx, payload, &result)
 			if err != nil {
 				return err
 			}
@@ -181,7 +181,7 @@ func (s *Synchronizer) factRegister(ctx context.Context, apiClient types.RawClie
 	return nil
 }
 
-func (s *Synchronizer) factDeleteFromLocal(ctx context.Context, apiClient types.RawClient, allAgentFacts map[string]map[string]string) error {
+func (s *Synchronizer) factDeleteFromLocal(ctx context.Context, apiClient types.FactClient, allAgentFacts map[string]map[string]string) error {
 	duplicatedKey := make(map[string]bool)
 	registeredFacts := s.option.Cache.FactsByUUID()
 
@@ -195,7 +195,7 @@ func (s *Synchronizer) factDeleteFromLocal(ctx context.Context, apiClient types.
 			continue
 		}
 
-		err := apiClient.deleteFact(ctx, v.ID)
+		err := apiClient.DeleteFact(ctx, v.ID)
 		// If the fact wasn't found, it has already been deleted.
 		if err != nil && !IsNotFound(err) {
 			return err

@@ -18,11 +18,9 @@ package synchronizer
 
 import (
 	"context"
-	"errors"
 	"reflect"
 
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
-	"github.com/bleemeo/glouton/logger"
 )
 
 func (s *Synchronizer) syncAccountConfig(ctx context.Context, syncType types.SyncType, execution types.SynchronizationExecution) (updateThresholds bool, err error) {
@@ -71,8 +69,8 @@ func (s *Synchronizer) syncAccountConfig(ctx context.Context, syncType types.Syn
 	return false, nil
 }
 
-func (s *Synchronizer) agentTypesUpdateList(ctx context.Context, apiClient types.RawClient) error {
-	agentTypes, err := apiClient.listAgentTypes(ctx)
+func (s *Synchronizer) agentTypesUpdateList(ctx context.Context, apiClient types.AccountConfigClient) error {
+	agentTypes, err := apiClient.ListAgentTypes(ctx)
 	if err != nil {
 		return err
 	}
@@ -82,8 +80,8 @@ func (s *Synchronizer) agentTypesUpdateList(ctx context.Context, apiClient types
 	return nil
 }
 
-func (s *Synchronizer) accountConfigUpdateList(ctx context.Context, apiClient types.RawClient) error {
-	configs, err := apiClient.listAccountConfigs(ctx)
+func (s *Synchronizer) accountConfigUpdateList(ctx context.Context, apiClient types.AccountConfigClient) error {
+	configs, err := apiClient.ListAccountConfigs(ctx)
 	if err != nil {
 		return err
 	}
@@ -93,16 +91,9 @@ func (s *Synchronizer) accountConfigUpdateList(ctx context.Context, apiClient ty
 	return nil
 }
 
-func (s *Synchronizer) agentConfigUpdateList(ctx context.Context, apiClient types.RawClient) error {
-	configs, err := apiClient.listAgentConfigs(ctx)
+func (s *Synchronizer) agentConfigUpdateList(ctx context.Context, apiClient types.AccountConfigClient) error {
+	configs, err := apiClient.ListAgentConfigs(ctx)
 	if err != nil {
-		if errors.Is(err, errAgentConfigNotSupported) {
-			logger.V(2).Printf(err.Error())
-			s.option.Cache.SetAgentConfigs(nil)
-
-			return nil
-		}
-
 		return err
 	}
 
