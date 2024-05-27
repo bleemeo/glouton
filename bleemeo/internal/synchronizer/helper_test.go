@@ -14,6 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//nolint:dupl
 package synchronizer
 
 import (
@@ -26,6 +27,8 @@ import (
 	"time"
 
 	"github.com/bleemeo/glouton/bleemeo/internal/cache"
+	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/bleemeoapi"
+	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/config"
 	"github.com/bleemeo/glouton/discovery"
@@ -159,7 +162,7 @@ func (helper *syncTestHelper) preregisterAgent(t *testing.T) {
 }
 
 // addMonitorOnAPI pre-create a monitor in the API.
-func (helper *syncTestHelper) addMonitorOnAPI(t *testing.T) serviceMonitor {
+func (helper *syncTestHelper) addMonitorOnAPI(t *testing.T) bleemeoapi.ServicePayload {
 	t.Helper()
 
 	newMonitorCopy := newMonitor
@@ -184,7 +187,7 @@ func (helper *syncTestHelper) initSynchronizer(t *testing.T) {
 		docker = &mockDocker{helper: helper}
 	}
 
-	s, err := newForTest(Option{
+	s, err := newForTest(types.Option{
 		Cache:                helper.cache,
 		IsMqttConnected:      func() bool { return false },
 		ProvideClientWrapper: func(context.Context, *Synchronizer) clientWrapper { return helper.wrapperClientMock },
@@ -218,7 +221,6 @@ func (helper *syncTestHelper) initSynchronizer(t *testing.T) {
 	helper.s = s
 
 	// Do actions done by s.Run()
-	s.ctx = context.Background()
 	s.startedAt = helper.api.now.Now()
 
 	if err = s.setClient(); err != nil {
@@ -252,7 +254,7 @@ func (helper *syncTestHelper) pushPoints(t *testing.T, metrics []labels.Labels) 
 	}
 
 	if helper.store == nil {
-		t.Fatal("pushPoints called before store is initilized")
+		t.Fatal("pushPoints called before store is initialized")
 	}
 
 	helper.store.PushPoints(context.Background(), points)
@@ -325,8 +327,20 @@ func (helper *syncTestHelper) runOnceNoReset(t *testing.T) runOnceResult {
 		return result
 	}
 
+	var execution *Execution
+
 	result.runCount++
-	result.syncMethod, result.err = helper.s.runOnce(ctx, false)
+	execution, result.err = helper.s.runOnce(ctx, false)
+
+	result.syncPerEntity = make(map[types.EntityName]types.SyncType, len(execution.entities))
+
+	for _, ee := range execution.entities {
+		if ee.syncType == types.SyncTypeNone {
+			continue
+		}
+
+		result.syncPerEntity[ee.entity.Name()] = ee.syncType
+	}
 
 	return result
 }
@@ -371,18 +385,11 @@ func (helper *syncTestHelper) SetAPIMetrics(metrics ...metricPayload) {
 }
 
 // SetAPIServices define the list of service present on Bleemeo API mock.
-func (helper *syncTestHelper) SetAPIServices(services ...servicePayload) {
+func (helper *syncTestHelper) SetAPIServices(services ...bleemeoapi.ServicePayload) {
 	tmp := make([]interface{}, 0, len(services))
 
 	for _, m := range services {
-		tmp = append(tmp, serviceMonitor{
-			Monitor: bleemeoTypes.Monitor{
-				Service: m.Service,
-				AgentID: m.Agent,
-			},
-			Account:   m.Account,
-			IsMonitor: false,
-		})
+		tmp = append(tmp, m)
 	}
 
 	helper.api.resources[mockAPIResourceService].SetStore(tmp...)
@@ -456,8 +463,8 @@ func (helper *syncTestHelper) FactsFromAPI() []bleemeoTypes.AgentFact {
 }
 
 // ServicesFromAPI returns services present on Bleemeo API mock.
-func (helper *syncTestHelper) ServicesFromAPI() []serviceMonitor {
-	var services []serviceMonitor
+func (helper *syncTestHelper) ServicesFromAPI() []bleemeoapi.ServicePayload {
+	var services []bleemeoapi.ServicePayload
 
 	helper.api.resources[mockAPIResourceService].Store(&services)
 	sort.Slice(services, func(i, j int) bool {
@@ -504,12 +511,12 @@ func (helper *syncTestHelper) assertAgentsInAPI(t *testing.T, want []payloadAgen
 // This is mostly a wrapper around cmp.Diff which also do:
 // * replace idAny by corresponding ID (match service by same name, instance, url)
 // * sort list by ID.
-func (helper *syncTestHelper) assertServicesInAPI(t *testing.T, want []serviceMonitor) {
+func (helper *syncTestHelper) assertServicesInAPI(t *testing.T, want []bleemeoapi.ServicePayload) {
 	t.Helper()
 
 	services := helper.ServicesFromAPI()
 
-	copyWant := make([]serviceMonitor, 0, len(want))
+	copyWant := make([]bleemeoapi.ServicePayload, 0, len(want))
 
 	for _, x := range want {
 		if x.ID == idAny {
@@ -527,7 +534,7 @@ func (helper *syncTestHelper) assertServicesInAPI(t *testing.T, want []serviceMo
 		copyWant = append(copyWant, x)
 	}
 
-	optSort := cmpopts.SortSlices(func(x serviceMonitor, y serviceMonitor) bool { return x.ID < y.ID })
+	optSort := cmpopts.SortSlices(func(x bleemeoapi.ServicePayload, y bleemeoapi.ServicePayload) bool { return x.ID < y.ID })
 	if diff := cmp.Diff(copyWant, services, cmpopts.EquateEmpty(), optSort); diff != "" {
 		t.Errorf("services mismatch (-want +got)\n%s", diff)
 	}
@@ -600,56 +607,60 @@ func (helper *syncTestHelper) assertFactsInAPI(t *testing.T, want []bleemeoTypes
 }
 
 type runOnceResult struct {
-	err        error
-	runCount   int
-	syncMethod map[string]bool
+	err           error
+	runCount      int
+	syncPerEntity map[types.EntityName]types.SyncType
 }
 
 func (r runOnceResult) Check() error {
 	return r.err
 }
 
-func (r runOnceResult) CheckMethodWithFull(method string) error {
+func (r runOnceResult) CheckMethodWithFull(method types.EntityName) error {
 	if r.err != nil {
 		return r.err
 	}
 
-	got, present := r.syncMethod[method]
+	got, present := r.syncPerEntity[method]
 	if !present {
 		return fmt.Errorf("%w: method %s", errMethodNotCalled, method)
 	}
 
-	if !got {
+	if got != types.SyncTypeForceCacheRefresh {
 		return fmt.Errorf("%w: method %s", errMethodCalledWithoutFull, method)
 	}
 
 	return nil
 }
 
-func (r runOnceResult) CheckMethodWithoutFull(method string) error {
+func (r runOnceResult) CheckMethodWithoutFull(method types.EntityName) error {
 	if r.err != nil {
 		return r.err
 	}
 
-	got, present := r.syncMethod[method]
+	got, present := r.syncPerEntity[method]
 	if !present {
 		return fmt.Errorf("%w: method %s", errMethodNotCalled, method)
 	}
 
-	if got {
+	if got != types.SyncTypeNormal {
 		return fmt.Errorf("%w: method %s", errMethodCalledWithFull, method)
 	}
 
 	return nil
 }
 
-func (r runOnceResult) CheckMethodNotRun(method string) error {
+func (r runOnceResult) CheckMethodNotRun(method types.EntityName) error {
 	if r.err != nil {
 		return r.err
 	}
 
-	_, present := r.syncMethod[method]
+	got, present := r.syncPerEntity[method]
 	if present {
+		return fmt.Errorf("%w: method %s", errMethodCalled, method)
+	}
+
+	if got != types.SyncTypeNone {
 		return fmt.Errorf("%w: method %s", errMethodCalled, method)
 	}
 
@@ -662,17 +673,25 @@ func mergeResult(r1 runOnceResult, r2 runOnceResult) runOnceResult {
 		r1.err = r2.err
 	}
 
-	syncMethod := make(map[string]bool)
+	syncMethod := make(map[types.EntityName]types.SyncType)
 
-	for k, v := range r1.syncMethod {
-		syncMethod[k] = syncMethod[k] || v
+	for k, v := range r1.syncPerEntity {
+		if v == types.SyncTypeForceCacheRefresh {
+			syncMethod[k] = types.SyncTypeForceCacheRefresh
+		} else if syncMethod[k] == types.SyncTypeNone {
+			syncMethod[k] = v
+		}
 	}
 
-	for k, v := range r2.syncMethod {
-		syncMethod[k] = syncMethod[k] || v
+	for k, v := range r2.syncPerEntity {
+		if v == types.SyncTypeForceCacheRefresh {
+			syncMethod[k] = types.SyncTypeForceCacheRefresh
+		} else if syncMethod[k] == types.SyncTypeNone {
+			syncMethod[k] = v
+		}
 	}
 
-	r1.syncMethod = syncMethod
+	r1.syncPerEntity = syncMethod
 
 	return r1
 }

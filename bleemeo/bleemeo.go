@@ -34,6 +34,7 @@ import (
 	"github.com/bleemeo/glouton/bleemeo/internal/filter"
 	"github.com/bleemeo/glouton/bleemeo/internal/mqtt"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer"
+	synchronizerTypes "github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
 	"github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/crashreport"
 	"github.com/bleemeo/glouton/logger"
@@ -134,7 +135,7 @@ func New(option types.GlobalOption) (c *Connector, err error) {
 		pushAppender: model.NewBufferAppender(),
 	}
 
-	c.sync, err = synchronizer.New(synchronizer.Option{
+	c.sync, err = synchronizer.New(synchronizerTypes.Option{
 		GlobalOption:                c.option,
 		PushAppender:                c.pushAppender,
 		Cache:                       c.cache,
@@ -227,7 +228,7 @@ func (c *Connector) initMQTT(previousPoint []gloutonTypes.MetricPoint) {
 	}
 }
 
-func (c *Connector) setMaintenance(maintenance bool) {
+func (c *Connector) setMaintenance(ctx context.Context, maintenance bool) {
 	if maintenance {
 		logger.V(0).Println("Bleemeo: read only/maintenance mode enabled")
 	} else if !maintenance && c.sync.IsMaintenance() {
@@ -237,7 +238,7 @@ func (c *Connector) setMaintenance(maintenance bool) {
 	c.l.RLock()
 	defer c.l.RUnlock()
 
-	c.sync.SetMaintenance(maintenance)
+	c.sync.SetMaintenance(ctx, maintenance)
 
 	if c.mqtt != nil {
 		c.mqtt.SuspendSending(maintenance)

@@ -34,6 +34,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/bleemeoapi"
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/facts"
 	gloutonTypes "github.com/bleemeo/glouton/types"
@@ -49,6 +50,7 @@ const (
 	mockAPIResourceMetric        = "metric"
 	mockAPIResourceAccountConfig = "accountconfig"
 	mockAPIResourceAgentConfig   = "agentconfig"
+	mockAPIResourceApplication   = "application"
 	mockAPIResourceService       = "service"
 	mockAPIGloutonConfigItem     = "gloutonconfigitem"
 	mockAPIGloutonDiagnostic     = "gloutondiagnostic"
@@ -214,6 +216,10 @@ func newAPI() *mockAPI {
 		Type:     bleemeoTypes.AgentConfig{},
 		ReadOnly: true,
 	})
+	api.AddResource(mockAPIResourceApplication, &genericResource{
+		Type:     bleemeoTypes.Application{},
+		ReadOnly: true,
+	})
 	api.AddResource(mockAPIResourceMetric, &genericResource{
 		Type:        metricPayload{},
 		ValidFilter: []string{"agent", "active", "labels_text", "item", "label"},
@@ -292,7 +298,7 @@ func newAPI() *mockAPI {
 		},
 	})
 	api.AddResource(mockAPIResourceService, &genericResource{
-		Type:        serviceMonitor{},
+		Type:        bleemeoapi.ServicePayload{},
 		ValidFilter: []string{"agent", "active", "monitor"},
 	})
 	api.AddResource(mockAPIGloutonConfigItem, &genericResource{

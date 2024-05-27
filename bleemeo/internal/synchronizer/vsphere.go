@@ -22,6 +22,7 @@ import (
 	"slices"
 	"time"
 
+	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/inputs/vsphere"
 	"github.com/bleemeo/glouton/logger"
@@ -36,20 +37,20 @@ const (
 	vSphereAgentFields            = "id,display_name,account,agent_type,abstracted,fqdn,initial_password,created_at,next_config_at,current_config,tags,initial_server_group_name"
 )
 
-func (s *Synchronizer) syncVSphere(ctx context.Context, fullSync bool, onlyEssential bool) (updateThresholds bool, err error) {
-	_ = fullSync
+func (s *Synchronizer) syncVSphere(ctx context.Context, syncType types.SyncType, execution types.SynchronizationExecution) (updateThresholds bool, err error) {
+	_ = syncType
 
 	cfg, ok := s.option.Cache.CurrentAccountConfig()
 	if !ok || !cfg.VSphereIntegration {
 		return false, nil
 	}
 
-	if onlyEssential {
+	if execution.IsOnlyEssential() {
 		// no essential vSphere, skip registering.
 		return false, nil
 	}
 
-	return false, s.VSphereRegisterAndUpdate(s.option.VSphereDevices(ctx, time.Hour))
+	return false, s.VSphereRegisterAndUpdate(ctx, execution.BleemeoAPIClient(), s.option.VSphereDevices(ctx, time.Hour))
 }
 
 // When modifying this type, ensure to keep the compatibility with the code of
@@ -115,7 +116,7 @@ func (s *Synchronizer) FindVSphereAgent(ctx context.Context, device bleemeoTypes
 	return bleemeoTypes.Agent{}, errNotExist
 }
 
-func (s *Synchronizer) VSphereRegisterAndUpdate(localDevices []bleemeoTypes.VSphereDevice) error {
+func (s *Synchronizer) VSphereRegisterAndUpdate(ctx context.Context, apiClient types.RawClient, localDevices []bleemeoTypes.VSphereDevice) error {
 	vSphereAgentTypes, found := s.GetVSphereAgentTypes()
 	if !found {
 		return errRetryLater
@@ -138,7 +139,7 @@ func (s *Synchronizer) VSphereRegisterAndUpdate(localDevices []bleemeoTypes.VSph
 			continue
 		}
 
-		if a, err := s.FindVSphereAgent(s.ctx, device, agentTypeID, remoteAgentList); err != nil && !errors.Is(err, errNotExist) {
+		if a, err := s.FindVSphereAgent(ctx, device, agentTypeID, remoteAgentList); err != nil && !errors.Is(err, errNotExist) {
 			logger.V(2).Printf("Skip registration of vSphere agent: %v", err)
 
 			continue
@@ -165,7 +166,7 @@ func (s *Synchronizer) VSphereRegisterAndUpdate(localDevices []bleemeoTypes.VSph
 			InitialServerGroup: serverGroup,
 		}
 
-		registeredAgent, err := s.remoteRegisterVSphereDevice(payload)
+		registeredAgent, err := s.remoteRegisterVSphereDevice(ctx, apiClient, params, payload)
 		if err != nil {
 			errs = append(errs, err)
 
@@ -202,7 +203,7 @@ func (s *Synchronizer) VSphereRegisterAndUpdate(localDevices []bleemeoTypes.VSph
 			vSphereAgentTypes[vsphere.KindVM]:      true,
 		}
 
-		err := s.purgeVSphereAgents(remoteAgentList, seenDeviceAgents, agentTypeIDsToPurge)
+		err := s.purgeVSphereAgents(ctx, apiClient, remoteAgentList, seenDeviceAgents, agentTypeIDsToPurge)
 		if err != nil {
 			logger.V(1).Printf("Failed to purge vSphere agents: %v", err)
 		}
@@ -256,7 +257,7 @@ func (s *Synchronizer) GetVSphereAgentType(kind vsphere.ResourceKind) (agentType
 	return agentTypeID, found
 }
 
-func (s *Synchronizer) purgeVSphereAgents(remoteAgents map[string]bleemeoTypes.Agent, seenDeviceAgents map[string]string, vSphereAgentTypes map[string]bool) error {
+func (s *Synchronizer) purgeVSphereAgents(ctx context.Context, apiClient types.RawClient, remoteAgents map[string]bleemeoTypes.Agent, seenDeviceAgents map[string]string, vSphereAgentTypes map[string]bool) error {
 	associations, err := s.option.State.GetByPrefix(vSphereCachePrefix, vSphereAssociation{})
 	if err != nil {
 		return err
@@ -312,7 +313,7 @@ func (s *Synchronizer) purgeVSphereAgents(remoteAgents map[string]bleemeoTypes.A
 
 		agentsToRemoveFromCache[id] = true
 
-		err = s.client.deleteAgent(s.ctx, id)
+		err = apiClient.deleteAgent(ctx, id)
 		if err != nil && !IsNotFound(err) {
 			return err
 		}

@@ -20,6 +20,7 @@ import (
 	"context"
 	"time"
 
+	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/facts"
 	"github.com/bleemeo/glouton/logger"
@@ -42,15 +43,15 @@ func getEssentialFacts() map[string]bool {
 	}
 }
 
-func (s *Synchronizer) syncFacts(ctx context.Context, fullSync bool, onlyEssential bool) (updateThresholds bool, err error) {
-	_ = fullSync
+func (s *Synchronizer) syncFacts(ctx context.Context, syncType types.SyncType, execution types.SynchronizationExecution) (updateThresholds bool, err error) {
+	_ = syncType
 
 	localFacts, err := s.option.Facts.Facts(ctx, 24*time.Hour)
 	if err != nil {
 		return false, err
 	}
 
-	if onlyEssential {
+	if execution.IsOnlyEssential() {
 		essentialFacts := getEssentialFacts()
 		copyFacts := make(map[string]string)
 
@@ -68,7 +69,7 @@ func (s *Synchronizer) syncFacts(ctx context.Context, fullSync bool, onlyEssenti
 	allAgentFacts := make(map[string]map[string]string, 1+len(s.option.SNMP))
 	allAgentFacts[s.agentID] = localFacts
 
-	if !onlyEssential {
+	if !execution.IsOnlyEssential() {
 		agentTypeID, found := s.getAgentType(bleemeoTypes.AgentTypeSNMP)
 		if !found {
 			return false, errRetryLater
@@ -107,29 +108,33 @@ func (s *Synchronizer) syncFacts(ctx context.Context, fullSync bool, onlyEssenti
 		}
 	}
 
-	// s.factUpdateList() is already done by checkDuplicated
-	// s.serviceDeleteFromRemote() is uneeded, API don't delete facts
+	apiClient := execution.BleemeoAPIClient()
 
-	if err := s.factRegister(allAgentFacts); err != nil {
+	// s.factUpdateList() is already done by checkDuplicated
+	// s.serviceDeleteFromRemote() is unneeded, API don't delete facts
+
+	if err := s.factRegister(ctx, apiClient, allAgentFacts); err != nil {
 		return false, err
 	}
 
-	if onlyEssential {
+	if execution.IsOnlyEssential() {
 		// localFacts was filtered, can't delete
 		return false, nil
 	}
 
-	if err := s.factDeleteFromLocal(allAgentFacts); err != nil {
+	if err := s.factDeleteFromLocal(ctx, apiClient, allAgentFacts); err != nil {
 		return false, err
 	}
 
-	s.lastFactUpdatedAt = localFacts[facts.FactUpdatedAt]
+	s.state.l.Lock()
+	s.state.lastFactUpdatedAt = localFacts[facts.FactUpdatedAt]
+	s.state.l.Unlock()
 
 	return false, nil
 }
 
-func (s *Synchronizer) factsUpdateList(ctx context.Context) error {
-	facts, err := s.client.listFacts(ctx)
+func (s *Synchronizer) factsUpdateList(ctx context.Context, apiClient types.RawClient) error {
+	facts, err := apiClient.listFacts(ctx)
 	if err != nil {
 		return err
 	}
@@ -139,7 +144,7 @@ func (s *Synchronizer) factsUpdateList(ctx context.Context) error {
 	return nil
 }
 
-func (s *Synchronizer) factRegister(allAgentFacts map[string]map[string]string) error {
+func (s *Synchronizer) factRegister(ctx context.Context, apiClient types.RawClient, allAgentFacts map[string]map[string]string) error {
 	registeredFacts := s.option.Cache.FactsByKey()
 	facts := s.option.Cache.Facts()
 
@@ -161,7 +166,7 @@ func (s *Synchronizer) factRegister(allAgentFacts map[string]map[string]string) 
 
 			var result bleemeoTypes.AgentFact
 
-			err := s.client.registerFact(s.ctx, payload, &result)
+			err := apiClient.registerFact(ctx, payload, &result)
 			if err != nil {
 				return err
 			}
@@ -176,7 +181,7 @@ func (s *Synchronizer) factRegister(allAgentFacts map[string]map[string]string) 
 	return nil
 }
 
-func (s *Synchronizer) factDeleteFromLocal(allAgentFacts map[string]map[string]string) error {
+func (s *Synchronizer) factDeleteFromLocal(ctx context.Context, apiClient types.RawClient, allAgentFacts map[string]map[string]string) error {
 	duplicatedKey := make(map[string]bool)
 	registeredFacts := s.option.Cache.FactsByUUID()
 
@@ -190,7 +195,7 @@ func (s *Synchronizer) factDeleteFromLocal(allAgentFacts map[string]map[string]s
 			continue
 		}
 
-		err := s.client.deleteFact(s.ctx, v.ID)
+		err := apiClient.deleteFact(ctx, v.ID)
 		// If the fact wasn't found, it has already been deleted.
 		if err != nil && !IsNotFound(err) {
 			return err

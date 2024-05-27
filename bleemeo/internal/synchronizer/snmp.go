@@ -21,6 +21,7 @@ import (
 	"errors"
 	"time"
 
+	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/logger"
 	"github.com/bleemeo/glouton/prometheus/exporter/snmp"
@@ -42,20 +43,20 @@ type payloadAgent struct {
 
 // TODO the deletion need to be done
 
-func (s *Synchronizer) syncSNMP(_ context.Context, fullSync bool, onlyEssential bool) (updateThresholds bool, err error) {
-	_ = fullSync
+func (s *Synchronizer) syncSNMP(ctx context.Context, syncType types.SyncType, execution types.SynchronizationExecution) (updateThresholds bool, err error) {
+	_ = syncType
 
 	cfg, ok := s.option.Cache.CurrentAccountConfig()
 	if !ok || !cfg.SNMPIntegration {
 		return false, nil
 	}
 
-	if onlyEssential {
+	if execution.IsOnlyEssential() {
 		// no essential snmp, skip registering.
 		return false, nil
 	}
 
-	return false, s.snmpRegisterAndUpdate(s.option.SNMP)
+	return false, s.snmpRegisterAndUpdate(ctx, execution, s.option.SNMP)
 }
 
 type snmpAssociation struct {
@@ -112,7 +113,7 @@ func (s *Synchronizer) FindSNMPAgent(ctx context.Context, target *snmp.Target, s
 	return bleemeoTypes.Agent{}, errNotExist
 }
 
-func (s *Synchronizer) snmpRegisterAndUpdate(localTargets []*snmp.Target) error {
+func (s *Synchronizer) snmpRegisterAndUpdate(ctx context.Context, execution types.SynchronizationExecution, localTargets []*snmp.Target) error {
 	var newAgent []bleemeoTypes.Agent //nolint: prealloc
 
 	remoteAgentList := s.option.Cache.AgentsByUUID()
@@ -123,7 +124,7 @@ func (s *Synchronizer) snmpRegisterAndUpdate(localTargets []*snmp.Target) error 
 	}
 
 	for _, snmp := range localTargets {
-		if _, err := s.FindSNMPAgent(s.ctx, snmp, agentTypeID, remoteAgentList); err != nil && !errors.Is(err, errNotExist) {
+		if _, err := s.FindSNMPAgent(ctx, snmp, agentTypeID, remoteAgentList); err != nil && !errors.Is(err, errNotExist) {
 			logger.V(2).Printf("skip registration of SNMP agent: %v", err)
 
 			continue
@@ -131,14 +132,14 @@ func (s *Synchronizer) snmpRegisterAndUpdate(localTargets []*snmp.Target) error 
 			continue
 		}
 
-		facts, err := snmp.Facts(s.ctx, 24*time.Hour)
+		facts, err := snmp.Facts(ctx, 24*time.Hour)
 		if err != nil {
 			logger.V(2).Printf("skip registration of SNMP agent: %v", err)
 
 			continue
 		}
 
-		name, err := snmp.Name(s.ctx)
+		name, err := snmp.Name(ctx)
 		if err != nil {
 			return err
 		}
@@ -165,7 +166,7 @@ func (s *Synchronizer) snmpRegisterAndUpdate(localTargets []*snmp.Target) error 
 			InitialServerGroup: serverGroup,
 		}
 
-		tmp, err := s.remoteRegisterSNMP(payload)
+		tmp, err := s.remoteRegisterSNMP(ctx, execution.BleemeoAPIClient(), params, payload)
 		if err != nil {
 			return err
 		}

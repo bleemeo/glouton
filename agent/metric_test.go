@@ -54,7 +54,7 @@ var (
 		},
 		Services: []config.Service{
 			{
-				ID:      "myapplication",
+				Type:    "myapplication",
 				JMXPort: 1234,
 				JMXMetrics: []config.JmxMetric{
 					{
@@ -73,7 +73,7 @@ var (
 				},
 			},
 			{
-				ID:       "apache",
+				Type:     "apache",
 				Address:  "127.0.0.1",
 				Port:     80,
 				HTTPPath: "/",
@@ -1040,11 +1040,11 @@ func Test_newMetricFilter(t *testing.T) { //nolint:maintidx
 			}
 
 			if diff := cmp.Diff(wantPoints, gotPoints); diff != "" {
-				t.Errorf("FilterPoints missmatch (-want +got):\n%s", diff)
+				t.Errorf("FilterPoints mismatch (-want +got):\n%s", diff)
 			}
 
 			if diff := types.DiffMetricFamilies(wantFamilies, gotFamilies, false, false); diff != "" {
-				t.Errorf("FilterFamilies missmatch (-want +got):\n%s", diff)
+				t.Errorf("FilterFamilies mismatch (-want +got):\n%s", diff)
 			}
 		})
 	}

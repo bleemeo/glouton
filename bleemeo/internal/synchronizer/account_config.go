@@ -21,24 +21,24 @@ import (
 	"errors"
 	"reflect"
 
+	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
 	"github.com/bleemeo/glouton/logger"
 )
 
-func (s *Synchronizer) syncAccountConfig(ctx context.Context, fullSync bool, onlyEssential bool) (updateThresholds bool, err error) {
-	_ = onlyEssential
-
-	if fullSync {
+func (s *Synchronizer) syncAccountConfig(ctx context.Context, syncType types.SyncType, execution types.SynchronizationExecution) (updateThresholds bool, err error) {
+	if syncType == types.SyncTypeForceCacheRefresh {
 		currentConfig, _ := s.option.Cache.CurrentAccountConfig()
+		apiClient := execution.BleemeoAPIClient()
 
-		if err := s.agentTypesUpdateList(); err != nil {
+		if err := s.agentTypesUpdateList(ctx, apiClient); err != nil {
 			return false, err
 		}
 
-		if err := s.accountConfigUpdateList(); err != nil {
+		if err := s.accountConfigUpdateList(ctx, apiClient); err != nil {
 			return false, err
 		}
 
-		if err := s.agentConfigUpdateList(); err != nil {
+		if err := s.agentConfigUpdateList(ctx, apiClient); err != nil {
 			return false, err
 		}
 
@@ -47,7 +47,7 @@ func (s *Synchronizer) syncAccountConfig(ctx context.Context, fullSync bool, onl
 			hasChanged := !reflect.DeepEqual(currentConfig, newConfig)
 			nameHasChanged := currentConfig.Name != newConfig.Name
 
-			if s.currentConfigNotified != newConfig.ID {
+			if s.state.currentConfigNotified != newConfig.ID {
 				hasChanged = true
 				nameHasChanged = true
 			}
@@ -57,7 +57,9 @@ func (s *Synchronizer) syncAccountConfig(ctx context.Context, fullSync bool, onl
 			}
 		}
 
-		s.currentConfigNotified = newConfig.ID
+		s.state.l.Lock()
+		s.state.currentConfigNotified = newConfig.ID
+		s.state.l.Unlock()
 
 		// Set suspended mode if it changed.
 		if s.suspendedMode != newConfig.Suspended {
@@ -69,8 +71,8 @@ func (s *Synchronizer) syncAccountConfig(ctx context.Context, fullSync bool, onl
 	return false, nil
 }
 
-func (s *Synchronizer) agentTypesUpdateList() error {
-	agentTypes, err := s.client.listAgentTypes(s.ctx)
+func (s *Synchronizer) agentTypesUpdateList(ctx context.Context, apiClient types.RawClient) error {
+	agentTypes, err := apiClient.listAgentTypes(ctx)
 	if err != nil {
 		return err
 	}
@@ -80,8 +82,8 @@ func (s *Synchronizer) agentTypesUpdateList() error {
 	return nil
 }
 
-func (s *Synchronizer) accountConfigUpdateList() error {
-	configs, err := s.client.listAccountConfigs(s.ctx)
+func (s *Synchronizer) accountConfigUpdateList(ctx context.Context, apiClient types.RawClient) error {
+	configs, err := apiClient.listAccountConfigs(ctx)
 	if err != nil {
 		return err
 	}
@@ -91,8 +93,8 @@ func (s *Synchronizer) accountConfigUpdateList() error {
 	return nil
 }
 
-func (s *Synchronizer) agentConfigUpdateList() error {
-	configs, err := s.client.listAgentConfigs(s.ctx)
+func (s *Synchronizer) agentConfigUpdateList(ctx context.Context, apiClient types.RawClient) error {
+	configs, err := apiClient.listAgentConfigs(ctx)
 	if err != nil {
 		if errors.Is(err, errAgentConfigNotSupported) {
 			logger.V(2).Printf(err.Error())

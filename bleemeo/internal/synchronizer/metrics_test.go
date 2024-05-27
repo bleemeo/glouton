@@ -27,6 +27,8 @@ import (
 	"time"
 
 	"github.com/bleemeo/glouton/bleemeo/internal/cache"
+	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/syncservices"
+	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/config"
 	"github.com/bleemeo/glouton/discovery"
@@ -510,7 +512,7 @@ func Test_metricComparator_importanceWeight(t *testing.T) {
 			name:         "high cardinality before custom",
 			format:       gloutonTypes.MetricFormatBleemeo,
 			metricBefore: `__name__="net_bits_recv",item="tap150"`,
-			metricAfter:  `__name__="custome_metric"`,
+			metricAfter:  `__name__="custom_metric"`,
 		},
 		{
 			name:         "essential without item first",
@@ -556,7 +558,7 @@ func TestMetricSimpleSync(t *testing.T) {
 	helper.initSynchronizer(t)
 	helper.AddTime(time.Minute)
 
-	if err := helper.runOnceWithResult(t).CheckMethodWithFull(syncMethodMetric); err != nil {
+	if err := helper.runOnceWithResult(t).CheckMethodWithFull(types.EntityMetric); err != nil {
 		t.Error(err)
 	}
 
@@ -590,7 +592,7 @@ func TestMetricSimpleSync(t *testing.T) {
 		),
 	})
 
-	if err := helper.runOnceWithResult(t).CheckMethodWithoutFull(syncMethodMetric); err != nil {
+	if err := helper.runOnceWithResult(t).CheckMethodWithoutFull(types.EntityMetric); err != nil {
 		t.Error(err)
 	}
 
@@ -637,7 +639,7 @@ func TestMetricSimpleSync(t *testing.T) {
 		})
 	}
 
-	if err := helper.runOnceWithResult(t).CheckMethodWithoutFull(syncMethodMetric); err != nil {
+	if err := helper.runOnceWithResult(t).CheckMethodWithoutFull(types.EntityMetric); err != nil {
 		t.Error(err)
 	}
 
@@ -653,7 +655,7 @@ func TestMetricSimpleSync(t *testing.T) {
 	helper.AddTime(5 * time.Minute)
 	helper.store.DropAllMetrics()
 
-	if err := helper.runOnceWithResult(t).CheckMethodWithoutFull(syncMethodMetric); err != nil {
+	if err := helper.runOnceWithResult(t).CheckMethodWithoutFull(types.EntityMetric); err != nil {
 		t.Error(err)
 	}
 
@@ -692,7 +694,7 @@ func TestMetricSimpleSync(t *testing.T) {
 		),
 	})
 
-	if err := helper.runOnceWithResult(t).CheckMethodWithoutFull(syncMethodMetric); err != nil {
+	if err := helper.runOnceWithResult(t).CheckMethodWithoutFull(types.EntityMetric); err != nil {
 		t.Error(err)
 	}
 
@@ -746,7 +748,7 @@ func TestMetricDeleted(t *testing.T) {
 		),
 	})
 
-	if err := helper.runOnceWithResult(t).CheckMethodWithFull(syncMethodMetric); err != nil {
+	if err := helper.runOnceWithResult(t).CheckMethodWithFull(types.EntityMetric); err != nil {
 		t.Error(err)
 	}
 
@@ -780,7 +782,7 @@ func TestMetricDeleted(t *testing.T) {
 		}
 	}
 
-	if err := helper.runOnceWithResult(t).CheckMethodWithFull(syncMethodMetric); err != nil {
+	if err := helper.runOnceWithResult(t).CheckMethodWithFull(types.EntityMetric); err != nil {
 		t.Error(err)
 	}
 
@@ -793,7 +795,7 @@ func TestMetricDeleted(t *testing.T) {
 		),
 	})
 
-	if err := helper.runOnceWithResult(t).CheckMethodWithoutFull(syncMethodMetric); err != nil {
+	if err := helper.runOnceWithResult(t).CheckMethodWithoutFull(types.EntityMetric); err != nil {
 		t.Error(err)
 	}
 
@@ -816,7 +818,7 @@ func TestMetricDeleted(t *testing.T) {
 	}
 
 	// all metrics are inactive
-	if err := helper.runOnceWithResult(t).CheckMethodWithoutFull(syncMethodMetric); err != nil {
+	if err := helper.runOnceWithResult(t).CheckMethodWithoutFull(types.EntityMetric); err != nil {
 		t.Error(err)
 	}
 
@@ -856,9 +858,9 @@ func TestMetricDeleted(t *testing.T) {
 		),
 	})
 
-	helper.s.forceSync[syncMethodMetric] = true
+	helper.s.requestSynchronizationLocked(types.EntityMetric, true)
 
-	if err := helper.runOnceWithResult(t).CheckMethodWithFull(syncMethodMetric); err != nil {
+	if err := helper.runOnceWithResult(t).CheckMethodWithFull(types.EntityMetric); err != nil {
 		t.Error(err)
 	}
 
@@ -904,7 +906,7 @@ func TestMetricError(t *testing.T) {
 		),
 	})
 
-	if err := helper.runUntilNoError(t, 20, 20*time.Second).CheckMethodWithFull(syncMethodMetric); err != nil {
+	if err := helper.runUntilNoError(t, 20, 20*time.Second).CheckMethodWithFull(types.EntityMetric); err != nil {
 		t.Error(err)
 	}
 
@@ -949,7 +951,7 @@ func TestMetricUnknownError(t *testing.T) {
 		),
 	})
 
-	if err := helper.runOnceWithResult(t).CheckMethodWithFull(syncMethodMetric); err != nil {
+	if err := helper.runOnceWithResult(t).CheckMethodWithFull(types.EntityMetric); err != nil {
 		t.Error(err)
 	}
 
@@ -966,7 +968,7 @@ func TestMetricUnknownError(t *testing.T) {
 	}
 
 	// immediately re-run: should not run at all
-	if err := helper.runOnceWithResult(t).CheckMethodNotRun(syncMethodMetric); err != nil {
+	if err := helper.runOnceWithResult(t).CheckMethodNotRun(types.EntityMetric); err != nil {
 		t.Error(err)
 	}
 
@@ -976,7 +978,7 @@ func TestMetricUnknownError(t *testing.T) {
 
 	// we expect few retry in quick time
 	for range 3 {
-		if err := helper.runOnceWithResult(t).CheckMethodWithoutFull(syncMethodMetric); err != nil {
+		if err := helper.runOnceWithResult(t).CheckMethodWithoutFull(types.EntityMetric); err != nil {
 			t.Error(err)
 		}
 
@@ -999,7 +1001,7 @@ func TestMetricUnknownError(t *testing.T) {
 		helper.AddTime(15 * time.Minute)
 	}
 
-	if err := helper.runOnceWithResult(t).CheckMethodNotRun(syncMethodMetric); err != nil {
+	if err := helper.runOnceWithResult(t).CheckMethodNotRun(types.EntityMetric); err != nil {
 		t.Errorf("After more than 8 retry, we still try to register deny-me metric")
 	}
 
@@ -1014,7 +1016,7 @@ func TestMetricUnknownError(t *testing.T) {
 		),
 	})
 
-	if err := helper.runOnceWithResult(t).CheckMethodWithFull(syncMethodMetric); err != nil {
+	if err := helper.runOnceWithResult(t).CheckMethodWithFull(types.EntityMetric); err != nil {
 		t.Error(err)
 	}
 
@@ -1086,7 +1088,7 @@ func TestMetricPermanentError(t *testing.T) {
 				),
 			})
 
-			if err := helper.runOnceWithResult(t).CheckMethodWithFull(syncMethodMetric); err != nil {
+			if err := helper.runOnceWithResult(t).CheckMethodWithFull(types.EntityMetric); err != nil {
 				t.Error(err)
 			}
 
@@ -1103,14 +1105,14 @@ func TestMetricPermanentError(t *testing.T) {
 			}
 
 			// immediately re-run: should not run at all
-			if err := helper.runOnceWithResult(t).CheckMethodNotRun(syncMethodMetric); err != nil {
+			if err := helper.runOnceWithResult(t).CheckMethodNotRun(types.EntityMetric); err != nil {
 				t.Error(err)
 			}
 
 			// After a short delay we do not retry because error is permanent
 			helper.AddTime(31 * time.Second)
 
-			if err := helper.runOnceWithResult(t).CheckMethodNotRun(syncMethodMetric); err != nil {
+			if err := helper.runOnceWithResult(t).CheckMethodNotRun(types.EntityMetric); err != nil {
 				t.Error(err)
 			}
 
@@ -1130,14 +1132,14 @@ func TestMetricPermanentError(t *testing.T) {
 				),
 			})
 
-			if err := helper.runOnceWithResult(t).CheckMethodNotRun(syncMethodMetric); err != nil {
+			if err := helper.runOnceWithResult(t).CheckMethodNotRun(types.EntityMetric); err != nil {
 				t.Error(err)
 			}
 
 			// Finally long enough to reach fullSync, we will retry ONE
 			helper.SetTimeToNextFullSync()
 
-			if err := helper.runOnceWithResult(t).CheckMethodWithFull(syncMethodMetric); err != nil {
+			if err := helper.runOnceWithResult(t).CheckMethodWithFull(types.EntityMetric); err != nil {
 				t.Error(err)
 			}
 
@@ -1169,7 +1171,7 @@ func TestMetricPermanentError(t *testing.T) {
 				),
 			})
 
-			if err := helper.runOnceWithResult(t).CheckMethodWithFull(syncMethodMetric); err != nil {
+			if err := helper.runOnceWithResult(t).CheckMethodWithFull(types.EntityMetric); err != nil {
 				t.Error(err)
 			}
 
@@ -1245,7 +1247,7 @@ func TestMetricTooMany(t *testing.T) { //nolint:maintidx
 		),
 	})
 
-	if err := helper.runOnceWithResult(t).CheckMethodWithFull(syncMethodMetric); err != nil {
+	if err := helper.runOnceWithResult(t).CheckMethodWithFull(types.EntityMetric); err != nil {
 		t.Error(err)
 	}
 
@@ -1267,7 +1269,7 @@ func TestMetricTooMany(t *testing.T) { //nolint:maintidx
 		),
 	})
 
-	if err := helper.runOnceWithResult(t).CheckMethodWithoutFull(syncMethodMetric); err != nil {
+	if err := helper.runOnceWithResult(t).CheckMethodWithoutFull(types.EntityMetric); err != nil {
 		t.Error(err)
 	}
 
@@ -1285,7 +1287,7 @@ func TestMetricTooMany(t *testing.T) { //nolint:maintidx
 
 	helper.AddTime(5 * time.Minute)
 
-	if err := helper.runOnceWithResult(t).CheckMethodNotRun(syncMethodMetric); err != nil {
+	if err := helper.runOnceWithResult(t).CheckMethodNotRun(types.EntityMetric); err != nil {
 		t.Error(err)
 	}
 
@@ -1305,14 +1307,14 @@ func TestMetricTooMany(t *testing.T) { //nolint:maintidx
 		),
 	})
 
-	if err := helper.runOnceWithResult(t).CheckMethodWithFull(syncMethodMetric); err != nil {
+	if err := helper.runOnceWithResult(t).CheckMethodWithFull(types.EntityMetric); err != nil {
 		t.Error(err)
 	}
 
-	// We need two sync: one to deactivate the metric, one to regsiter another one
+	// We need two sync: one to deactivate the metric, one to register another one
 	helper.AddTime(15 * time.Second)
 
-	if err := helper.runOnceWithResult(t).CheckMethodWithoutFull(syncMethodMetric); err != nil {
+	if err := helper.runOnceWithResult(t).CheckMethodWithoutFull(types.EntityMetric); err != nil {
 		t.Error(err)
 	}
 
@@ -1338,7 +1340,7 @@ func TestMetricTooMany(t *testing.T) { //nolint:maintidx
 		),
 	})
 
-	if err := helper.runOnceWithResult(t).CheckMethodWithoutFull(syncMethodMetric); err != nil {
+	if err := helper.runOnceWithResult(t).CheckMethodWithoutFull(types.EntityMetric); err != nil {
 		t.Error(err)
 	}
 
@@ -1364,7 +1366,7 @@ func TestMetricTooMany(t *testing.T) { //nolint:maintidx
 	// We do not retry to register them
 	helper.AddTime(5 * time.Minute)
 
-	if err := helper.runOnceWithResult(t).CheckMethodNotRun(syncMethodMetric); err != nil {
+	if err := helper.runOnceWithResult(t).CheckMethodNotRun(types.EntityMetric); err != nil {
 		t.Error(err)
 	}
 
@@ -1382,7 +1384,7 @@ func TestMetricTooMany(t *testing.T) { //nolint:maintidx
 		),
 	})
 
-	if err := helper.runOnceWithResult(t).CheckMethodWithFull(syncMethodMetric); err != nil {
+	if err := helper.runOnceWithResult(t).CheckMethodWithFull(types.EntityMetric); err != nil {
 		t.Error(err)
 	}
 
@@ -1443,7 +1445,7 @@ func TestMetricLongItem(t *testing.T) {
 		model.AnnotationToMetaLabels(labels.FromMap(srvRedis2.LabelsOfStatus()), srvRedis2.AnnotationsOfStatus()),
 	})
 
-	if err := helper.runOnceWithResult(t).CheckMethodWithFull(syncMethodMetric); err != nil {
+	if err := helper.runOnceWithResult(t).CheckMethodWithFull(types.EntityMetric); err != nil {
 		t.Error(err)
 	}
 
@@ -1460,7 +1462,7 @@ func TestMetricLongItem(t *testing.T) {
 		model.AnnotationToMetaLabels(labels.FromMap(srvRedis2.LabelsOfStatus()), srvRedis2.AnnotationsOfStatus()),
 	})
 
-	if err := helper.runOnceWithResult(t).CheckMethodWithFull(syncMethodMetric); err != nil {
+	if err := helper.runOnceWithResult(t).CheckMethodWithFull(types.EntityMetric); err != nil {
 		t.Error(err)
 	}
 
@@ -1502,11 +1504,11 @@ func TestWithSNMP(t *testing.T) {
 
 	result := helper.runOnceWithResult(t)
 
-	if err := result.CheckMethodWithFull(syncMethodSNMP); err != nil {
+	if err := result.CheckMethodWithFull(types.EntitySNMP); err != nil {
 		t.Error(err)
 	}
 
-	if err := result.CheckMethodWithFull(syncMethodMetric); err != nil {
+	if err := result.CheckMethodWithFull(types.EntityMetric); err != nil {
 		t.Error(err)
 	}
 
@@ -1650,7 +1652,7 @@ func TestMonitorDeactivation(t *testing.T) {
 	helper.SetAPIMetrics(initialMetrics...)
 	helper.pushPoints(t, pushedPoints)
 
-	if err := helper.runOnceWithResult(t).CheckMethodWithFull(syncMethodMetric); err != nil {
+	if err := helper.runOnceWithResult(t).CheckMethodWithFull(types.EntityMetric); err != nil {
 		t.Error(err)
 	}
 
@@ -1687,7 +1689,7 @@ func TestMonitorDeactivation(t *testing.T) {
 	helper.SetTimeToNextFullSync()
 	helper.pushPoints(t, pushedPoints)
 
-	if err := helper.runOnceWithResult(t).CheckMethodWithFull(syncMethodMetric); err != nil {
+	if err := helper.runOnceWithResult(t).CheckMethodWithFull(types.EntityMetric); err != nil {
 		t.Error(err)
 	}
 
@@ -1700,7 +1702,7 @@ func TestMonitorDeactivation(t *testing.T) {
 	helper.SetTimeToNextFullSync()
 	helper.AddTime(60 * time.Minute)
 
-	if err := helper.runOnceWithResult(t).CheckMethodWithFull(syncMethodMetric); err != nil {
+	if err := helper.runOnceWithResult(t).CheckMethodWithFull(types.EntityMetric); err != nil {
 		t.Error(err)
 	}
 
@@ -1813,8 +1815,8 @@ func TestServiceStatusRename(t *testing.T) { //nolint: maintidx
 			srvNginxID := "809bc83b-2f28-43f1-9fb7-a84445ca1bc0"
 
 			helper.SetAPIServices(
-				servicePayloadFromDiscovery(srvApache, "", testAgent.AccountID, testAgent.ID, srvApacheID),
-				servicePayloadFromDiscovery(srvNginx, "", testAgent.AccountID, testAgent.ID, srvNginxID),
+				syncservices.ServicePayloadFromDiscovery(srvApache, "", testAgent.AccountID, testAgent.ID, srvApacheID, true),
+				syncservices.ServicePayloadFromDiscovery(srvNginx, "", testAgent.AccountID, testAgent.ID, srvNginxID, true),
 			)
 
 			helper.discovery.SetResult([]discovery.Service{srvApache, srvNginx}, nil)
@@ -1875,7 +1877,7 @@ func TestServiceStatusRename(t *testing.T) { //nolint: maintidx
 					),
 				})
 
-				if err := helper.runOnceWithResult(t).CheckMethodWithFull(syncMethodMetric); err != nil {
+				if err := helper.runOnceWithResult(t).CheckMethodWithFull(types.EntityMetric); err != nil {
 					t.Error(err)
 				}
 
@@ -1913,7 +1915,7 @@ func TestServiceStatusRename(t *testing.T) { //nolint: maintidx
 				model.AnnotationToMetaLabels(labels.FromMap(srvNginx.LabelsOfStatus()), srvNginx.AnnotationsOfStatus()),
 			})
 
-			if err := helper.runOnceWithResult(t).CheckMethodWithFull(syncMethodMetric); err != nil {
+			if err := helper.runOnceWithResult(t).CheckMethodWithFull(types.EntityMetric); err != nil {
 				t.Error(err)
 			}
 
@@ -1947,7 +1949,7 @@ func TestServiceStatusRename(t *testing.T) { //nolint: maintidx
 			}
 
 			if run == 0 {
-				// run 0 is a bit special: we simulate an imposible situation: Glouton is running and change during runtime
+				// run 0 is a bit special: we simulate an impossible situation: Glouton is running and change during runtime
 				// from old metric to new metric. One consequences is that old apache_status get deactivated immediately
 				want2[1].DeactivatedAt = helper.Now()
 			}
@@ -2174,7 +2176,7 @@ func TestMonitorPrivate(t *testing.T) {
 	helper.assertMetricsInAPI(t, want)
 }
 
-// TestKubernetesMetrics test for kubernetes clutser metrics.
+// TestKubernetesMetrics test for kubernetes cluster metrics.
 func TestKubernetesMetrics(t *testing.T) {
 	helper := newHelper(t)
 	defer helper.Close()
@@ -2229,7 +2231,7 @@ func TestKubernetesMetrics(t *testing.T) {
 
 	helper.AddTime(10 * time.Second)
 
-	if err := helper.runOnceWithResult(t).CheckMethodWithFull(syncMethodAgent); err != nil {
+	if err := helper.runOnceWithResult(t).CheckMethodWithFull(types.EntityAgent); err != nil {
 		t.Error(err)
 	}
 

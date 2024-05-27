@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/bleemeo/bleemeo-go"
+	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
 )
 
 const gloutonOAuthClientID = "5c31cbfc-254a-4fb9-822d-e55c681a3d4f"
@@ -39,10 +40,8 @@ var (
 )
 
 type wrapperClient struct {
-	s                *Synchronizer
 	client           *bleemeo.Client
-	checkDuplicateFn func() error
-
+	checkDuplicateFn func(context.Context, types.RawClient) error
 	duplicateError   error
 	duplicateChecked bool
 	// TODO: throttling
@@ -264,4 +263,38 @@ func APIErrorContent(err error) string {
 	}
 
 	return ""
+}
+
+func (cl *wrapperClient) ListApplications(ctx context.Context) ([]bleemeoTypes.Application, error) {
+	result, err := cl.Iter(ctx, "application", map[string]string{})
+	if err != nil {
+		return nil, err
+	}
+
+	applications := make([]bleemeoTypes.Application, 0, len(result))
+
+	for _, jsonMessage := range result {
+		var application bleemeoTypes.Application
+
+		if err := json.Unmarshal(jsonMessage, &application); err != nil {
+			continue
+		}
+
+		applications = append(applications, application)
+	}
+
+	return applications, nil
+}
+
+func (cl *wrapperClient) CreateApplication(ctx context.Context, app bleemeoTypes.Application) (bleemeoTypes.Application, error) {
+	var result bleemeoTypes.Application
+
+	app.ID = "" // ID isn't allowed in creation
+
+	_, err := cl.Do(ctx, "POST", "v1/application/", map[string]string{}, app, &result)
+	if err != nil {
+		return bleemeoTypes.Application{}, err
+	}
+
+	return result, nil
 }

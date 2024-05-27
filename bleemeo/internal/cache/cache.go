@@ -29,7 +29,7 @@ import (
 )
 
 const (
-	cacheVersion = 6
+	cacheVersion = 7
 	cacheKey     = "CacheBleemeoConnector"
 )
 
@@ -52,6 +52,7 @@ type data struct {
 	Containers              []bleemeoTypes.Container
 	Agents                  []bleemeoTypes.Agent
 	AgentTypes              []bleemeoTypes.AgentType
+	Applications            []bleemeoTypes.Application
 	Metrics                 []bleemeoTypes.Metric
 	MetricRegistrationsFail []bleemeoTypes.MetricRegistration
 	Agent                   bleemeoTypes.Agent
@@ -62,7 +63,7 @@ type data struct {
 }
 
 // dataVersion1 contains fields that have been deleted since the version 1 of the state file, but that we
-// still need to access to generate a newer state file from it, while retaining all pertinent informations
+// still need to access to generate a newer state file from it, while retaining all pertinent information
 // It does *not* contain all the fields of the first version of state files, and should *not* be treated as
 // an earlier version of `data`, and is exclusively manipulated in Load().
 // See Load() for more details on the transformations we will apply to parse old versions.
@@ -135,6 +136,15 @@ func (c *Cache) SetAgentTypes(agentTypes []bleemeoTypes.AgentType) {
 	defer c.l.Unlock()
 
 	c.data.AgentTypes = agentTypes
+	c.dirty = true
+}
+
+// SetApplications update the Applications list.
+func (c *Cache) SetApplications(applications []bleemeoTypes.Application) {
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	c.data.Applications = applications
 	c.dirty = true
 }
 
@@ -272,6 +282,18 @@ func (c *Cache) AccountConfigsByUUID() map[string]bleemeoTypes.GloutonAccountCon
 
 		result[accountConfig.ID] = config
 	}
+
+	return result
+}
+
+// Applications returns a (copy) of the Applications.
+func (c *Cache) Applications() []bleemeoTypes.Application {
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	result := make([]bleemeoTypes.Application, len(c.data.Applications))
+
+	copy(result, c.data.Applications)
 
 	return result
 }
@@ -623,6 +645,7 @@ func Load(state bleemeoTypes.State) *Cache {
 		3: upgradeV3,
 		4: upgradeV4,
 		5: upgradeV5,
+		6: upgradeV6,
 	}
 
 	upgradeCount := 0
@@ -672,7 +695,7 @@ func Load(state bleemeoTypes.State) *Cache {
 }
 
 func upgradeV1(state bleemeoTypes.State, newData data) data {
-	// the main change between V1 and V2 was the renaming of AccoutConfig to CurrentAccountConfig, and
+	// the main change between V1 and V2 was the renaming of AccountConfig to CurrentAccountConfig, and
 	// the addition of Monitors and AccountConfigs
 	var oldCache dataVersion1
 
@@ -755,6 +778,16 @@ func upgradeV5(state bleemeoTypes.State, newData data) data {
 	}
 
 	newData.Version = 6
+
+	return newData
+}
+
+func upgradeV6(_ bleemeoTypes.State, newData data) data {
+	// Version 7 dropped stack on service. The forward migration
+	// does nothing (it just drop it). But we bump the version
+	// so that backward migration will discard and regenerate the cache
+	// to re-fill the stack value.
+	newData.Version = 7
 
 	return newData
 }

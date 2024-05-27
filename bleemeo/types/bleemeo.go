@@ -94,12 +94,21 @@ type AgentType struct {
 	DisplayName string `json:"display_name"`
 }
 
+type TagType int
+
+const (
+	TagTypeIsAutomatic          TagType = 0
+	TagTypeIsCreatedByGlouton   TagType = 1
+	TagTypeIsAutomaticByGlouton TagType = 3
+)
+
 // Tag is an Tag object on Bleemeo API.
 type Tag struct {
-	ID           string `json:"id,omitempty"`
-	Name         string `json:"name"`
-	IsAutomatic  bool   `json:"is_automatic,omitempty"`
-	IsServiceTag bool   `json:"is_service_tag,omitempty"`
+	ID           string  `json:"id,omitempty"`
+	Name         string  `json:"name"`
+	IsAutomatic  bool    `json:"is_automatic,omitempty"`
+	IsServiceTag bool    `json:"is_service_tag,omitempty"`
+	TagType      TagType `json:"tag_type"`
 }
 
 // AccountConfig is a configuration of account.
@@ -124,6 +133,13 @@ type AgentConfig struct {
 	AgentType        string `json:"agent_type"`
 }
 
+// Application is a group of services.
+type Application struct {
+	ID   string `json:"id,omitempty"`
+	Name string `json:"name"`
+	Tag  string `json:"tag"`
+}
+
 // Service is a Service object on Bleemeo API.
 type Service struct {
 	ID              string `json:"id"`
@@ -132,7 +148,7 @@ type Service struct {
 	Instance        string `json:"instance"`
 	ListenAddresses string `json:"listen_addresses"`
 	ExePath         string `json:"exe_path"`
-	Stack           string `json:"stack"`
+	Tags            []Tag  `json:"tags"`
 	Active          bool   `json:"active"`
 	CreationDate    string `json:"created_at"`
 }
@@ -161,7 +177,7 @@ type Threshold struct {
 	HighCritical *float64 `json:"threshold_high_critical"`
 }
 
-// Monitor groups all the informations required to write metrics to a monitor.
+// Monitor groups all the information required to write metrics to a monitor.
 type Monitor struct {
 	Service
 	URL     string `json:"monitor_url"`

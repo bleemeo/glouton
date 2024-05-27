@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/bleemeo/bleemeo-go"
+	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/delay"
 	"github.com/bleemeo/glouton/logger"
@@ -45,15 +46,19 @@ type mqttUpdatePayload struct {
 const mqttUpdateResponseFields = "current_status,status_descriptions"
 
 // syncInfo retrieves the minimum supported glouton version the API supports.
-func (s *Synchronizer) syncInfo(ctx context.Context, _ bool, onlyEssential bool) (updateThresholds bool, err error) {
-	_ = onlyEssential
+func (s *Synchronizer) syncInfo(ctx context.Context, syncType types.SyncType, execution types.SynchronizationExecution) (updateThresholds bool, err error) {
+	_ = syncType
 
-	return s.syncInfoReal(ctx, true)
+	return s.syncInfoReal(ctx, execution, true)
 }
 
 // syncInfoReal retrieves the minimum supported glouton version the API supports.
-func (s *Synchronizer) syncInfoReal(ctx context.Context, disableOnTimeDrift bool) (updateThresholds bool, err error) {
-	statusCode, respBody, err := s.realClient.Do(ctx, http.MethodGet, "/v1/info/", nil, false, nil)
+func (s *Synchronizer) syncInfoReal(ctx context.Context, execution types.SynchronizationExecution, disableOnTimeDrift bool) (updateThresholds bool, err error) {
+	var globalInfo bleemeoTypes.GlobalInfo
+
+	apiClient := execution.BleemeoAPIClient()
+
+	statusCode, err := s.realClient.DoUnauthenticated(ctx, "GET", "v1/info/", nil, nil, &globalInfo)
 	if err != nil && strings.Contains(err.Error(), "certificate has expired") {
 		// This could happen when local time is really too far away from real time.
 		// Since this request is unauthenticated, we can retry it with insecure TLS
@@ -99,19 +104,17 @@ func (s *Synchronizer) syncInfoReal(ctx context.Context, disableOnTimeDrift bool
 			s.option.DisableCallback(bleemeoTypes.DisableAgentTooOld, s.now().Add(delay))
 
 			// force syncing the version again when the synchronizer runs again
-			s.l.Lock()
-			s.forceSync[syncMethodInfo] = true
-			s.l.Unlock()
+			execution.RequestSynchronization(types.EntityInfo, true)
 		}
 	}
 
-	err = s.updateMQTTStatus()
+	err = s.updateMQTTStatus(ctx, apiClient)
 	if err != nil {
 		return false, err
 	}
 
 	if s.option.SetBleemeoInMaintenanceMode != nil {
-		s.option.SetBleemeoInMaintenanceMode(globalInfo.MaintenanceEnabled)
+		s.option.SetBleemeoInMaintenanceMode(ctx, globalInfo.MaintenanceEnabled)
 	}
 
 	if globalInfo.CurrentTime != 0 {
@@ -139,9 +142,7 @@ func (s *Synchronizer) syncInfoReal(ctx context.Context, disableOnTimeDrift bool
 			s.option.DisableCallback(bleemeoTypes.DisableTimeDrift, s.now().Add(delay))
 
 			// force syncing the version again when the synchronizer runs again
-			s.l.Lock()
-			s.forceSync[syncMethodInfo] = true
-			s.l.Unlock()
+			execution.RequestSynchronization(types.EntityInfo, true)
 		}
 	}
 
@@ -171,49 +172,7 @@ func (s *Synchronizer) syncInfoReal(ctx context.Context, disableOnTimeDrift bool
 	return false, nil
 }
 
-// IsMaintenance returns whether the synchronizer is currently in maintenance mode (not making any request except info/agent).
-func (s *Synchronizer) IsMaintenance() bool {
-	s.l.Lock()
-	defer s.l.Unlock()
-
-	return s.maintenanceMode
-}
-
-// IsTimeDriftTooLarge returns whether the local time it too wrong and Bleemeo connection should be disabled.
-func (s *Synchronizer) IsTimeDriftTooLarge() bool {
-	s.l.Lock()
-	defer s.l.Unlock()
-
-	return s.lastInfo.IsTimeDriftTooLarge()
-}
-
-// SetMaintenance allows to trigger the maintenance mode for the synchronize.
-// When running in maintenance mode, only the general infos, the agent and its configuration are synced.
-func (s *Synchronizer) SetMaintenance(maintenance bool) {
-	if s.IsMaintenance() && !maintenance {
-		// getting out of maintenance, let's check for a duplicated state.json file
-		err := s.checkDuplicated(s.ctx)
-		if err != nil {
-			// it's not a critical error at all, we will perform this check again on the next synchronization pass
-			logger.V(2).Printf("Couldn't check for duplicated agent: %v", err)
-		}
-	}
-
-	s.l.Lock()
-	defer s.l.Unlock()
-
-	s.maintenanceMode = maintenance
-}
-
-// UpdateMaintenance requests to check for the maintenance mode again.
-func (s *Synchronizer) UpdateMaintenance() {
-	s.l.Lock()
-	defer s.l.Unlock()
-
-	s.forceSync[syncMethodInfo] = false
-}
-
-func (s *Synchronizer) updateMQTTStatus() error {
+func (s *Synchronizer) updateMQTTStatus(ctx context.Context, apiClient types.RawClient) error {
 	s.l.Lock()
 	isMQTTConnected := s.isMQTTConnected != nil && *s.isMQTTConnected
 	shouldUpdate := s.shouldUpdateMQTTStatus

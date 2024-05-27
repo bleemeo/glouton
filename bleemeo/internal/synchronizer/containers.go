@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/bleemeo/glouton/bleemeo/internal/common"
+	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/facts"
 	containerTypes "github.com/bleemeo/glouton/facts/container-runtime/types"
@@ -51,7 +52,7 @@ type containerPayload struct {
 	DockerAPIVersion string                `json:"docker_api_version"`
 }
 
-func (s *Synchronizer) syncContainers(ctx context.Context, fullSync bool, onlyEssential bool) (updateThresholds bool, err error) {
+func (s *Synchronizer) syncContainers(ctx context.Context, syncType types.SyncType, execution types.SynchronizationExecution) (updateThresholds bool, err error) {
 	var localContainers []facts.Container
 
 	cfg, ok := s.option.Cache.CurrentAccountConfig()
@@ -70,33 +71,35 @@ func (s *Synchronizer) syncContainers(ctx context.Context, fullSync bool, onlyEs
 
 	if s.successiveErrors == 3 {
 		// After 3 error, try to force a full synchronization to see if it solve the issue.
-		fullSync = true
+		syncType = types.SyncTypeForceCacheRefresh
 	}
 
-	if fullSync {
-		err := s.containerUpdateList()
+	apiClient := execution.BleemeoAPIClient()
+
+	if syncType == types.SyncTypeForceCacheRefresh {
+		err := s.containerUpdateList(ctx, apiClient)
 		if err != nil {
 			return false, err
 		}
 	}
 
-	if onlyEssential {
+	if execution.IsOnlyEssential() {
 		// no essential containers, skip registering.
 		return false, nil
 	}
 
 	// s.containerDeleteFromRemote(): API don't delete containers
-	if err := s.containerRegisterAndUpdate(localContainers); err != nil {
+	if err := s.containerRegisterAndUpdate(ctx, execution, localContainers); err != nil {
 		return false, err
 	}
 
-	s.containerDeleteFromLocal(localContainers)
+	s.containerDeleteFromLocal(ctx, execution, apiClient, localContainers)
 
 	return false, err
 }
 
-func (s *Synchronizer) containerUpdateList() error {
-	containers, err := s.client.listContainers(s.ctx, s.agentID)
+func (s *Synchronizer) containerUpdateList(ctx context.Context, apiClient types.RawClient) error {
+	containers, err := apiClient.listContainers(ctx, s.agentID)
 	if err != nil {
 		return err
 	}
@@ -116,8 +119,8 @@ func (s *Synchronizer) containerUpdateList() error {
 	return nil
 }
 
-func (s *Synchronizer) containerRegisterAndUpdate(localContainers []facts.Container) error {
-	factsMap, err := s.option.Facts.Facts(s.ctx, 24*time.Hour)
+func (s *Synchronizer) containerRegisterAndUpdate(ctx context.Context, execution types.SynchronizationExecution, localContainers []facts.Container) error {
+	factsMap, err := s.option.Facts.Facts(ctx, 24*time.Hour)
 	if err != nil {
 		return err
 	}
@@ -129,10 +132,13 @@ func (s *Synchronizer) containerRegisterAndUpdate(localContainers []facts.Contai
 		remoteIndexByName[v.Name] = i
 	}
 
-	newDelayedContainer := make(map[string]time.Time, len(s.delayedContainer))
+	// I'm not sure this really belong here. This update is here because it was here,
+	// but this might be better being called by Synchronizer.runOnce()
+	execution.GlobalState().UpdateDelayedContainers(localContainers)
+	delayedContainer, _ := execution.GlobalState().DelayedContainers()
 
 	for _, container := range localContainers {
-		if s.delayedContainerCheck(newDelayedContainer, container) {
+		if _, ok := delayedContainer[container.ID()]; ok {
 			continue
 		}
 
@@ -199,39 +205,20 @@ func (s *Synchronizer) containerRegisterAndUpdate(localContainers []facts.Contai
 			payload.DockerAPIVersion = factsMap["docker_api_version"]
 		}
 
-		err := s.remoteRegister(remoteFound, &remoteContainer, &remoteContainers, payload, remoteIndex)
+		err := s.remoteRegister(ctx, execution.BleemeoAPIClient(), remoteFound, &remoteContainer, &remoteContainers, payload, remoteIndex)
 		if err != nil {
 			return err
 		}
 	}
 
 	s.option.Cache.SetContainers(remoteContainers)
-	s.delayedContainer = newDelayedContainer
 
 	return nil
 }
 
-func (s *Synchronizer) delayedContainerCheck(newDelayedContainer map[string]time.Time, container facts.Container) bool {
-	delay := time.Duration(s.option.Config.Bleemeo.ContainerRegistrationDelaySeconds) * time.Second
-
-	// if the container (name) was recently seen, don't delay it.
-	if s.option.IsContainerNameRecentlyDeleted != nil && s.option.IsContainerNameRecentlyDeleted(container.ContainerName()) {
-		return false
-	}
-
-	if s.now().Sub(container.CreatedAt()) < delay {
-		enable, explicit := s.option.IsContainerEnabled(container)
-		if !enable || !explicit {
-			newDelayedContainer[container.ID()] = container.CreatedAt().Add(delay)
-
-			return true
-		}
-	}
-
-	return false
-}
-
 func (s *Synchronizer) remoteRegister(
+	ctx context.Context,
+	apiClient types.RawClient,
 	remoteFound bool,
 	remoteContainer *bleemeoTypes.Container,
 	remoteContainers *[]bleemeoTypes.Container,
@@ -241,7 +228,7 @@ func (s *Synchronizer) remoteRegister(
 	var result containerPayload
 
 	if remoteFound {
-		err := s.client.updateContainer(s.ctx, remoteContainer.ID, payload, &result)
+		err := apiClient.updateContainer(ctx, remoteContainer.ID, payload, &result)
 		if err != nil {
 			return err
 		}
@@ -251,7 +238,7 @@ func (s *Synchronizer) remoteRegister(
 		logger.V(2).Printf("Container %v updated with UUID %s", result.Name, result.ID)
 		(*remoteContainers)[remoteIndex] = result.Container
 	} else {
-		err := s.client.registerContainer(s.ctx, payload, &result)
+		err := apiClient.registerContainer(ctx, payload, &result)
 		if err != nil {
 			return err
 		}
@@ -265,7 +252,7 @@ func (s *Synchronizer) remoteRegister(
 	return nil
 }
 
-func (s *Synchronizer) containerDeleteFromLocal(localContainers []facts.Container) {
+func (s *Synchronizer) containerDeleteFromLocal(ctx context.Context, execution types.SynchronizationExecution, apiClient types.RawClient, localContainers []facts.Container) {
 	var deletedIDs []string //nolint: prealloc // we don't know the size. empty is the most likely size.
 
 	duplicatedKey := make(map[string]bool)
@@ -341,10 +328,6 @@ func (s *Synchronizer) containerDeleteFromLocal(localContainers []facts.Containe
 		}
 
 		s.option.Cache.SetMetrics(metrics)
-
-		s.l.Lock()
-		defer s.l.Unlock()
-
-		s.forceSync[syncMethodService] = true
+		execution.RequestSynchronization(types.EntityService, true)
 	}
 }
