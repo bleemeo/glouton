@@ -177,8 +177,8 @@ func newWrappedGatherer(g prometheus.Gatherer, extraLabels labels.Labels, opt Re
 	for _, l := range extraLabels {
 		if !strings.HasPrefix(l.Name, prometheusModel.ReservedLabelPrefix) {
 			labels = append(labels, &dto.LabelPair{
-				Name:  &l.Name,  //nolint: gosec,exportloopref
-				Value: &l.Value, //nolint: gosec,exportloopref
+				Name:  &l.Name,  //nolint: exportloopref
+				Value: &l.Value, //nolint: exportloopref
 			})
 		}
 	}

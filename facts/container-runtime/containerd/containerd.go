@@ -1189,7 +1189,7 @@ func (q *containerdProcessQuerier) ContainerFromCGroup(ctx context.Context, cgro
 	}
 
 	if cgroupPath == "" {
-		return nil, nil
+		return nil, nil //nolint: nilnil
 	}
 
 	q.c.l.Lock()
@@ -1205,7 +1205,7 @@ func (q *containerdProcessQuerier) ContainerFromCGroup(ctx context.Context, cgro
 
 		if err := q.c.updateContainers(ctx); err != nil {
 			if !q.c.workedOnce {
-				return nil, nil
+				return nil, nil //nolint: nilnil
 			}
 
 			q.containersUpdateErr = err
@@ -1273,7 +1273,7 @@ func (q *containerdProcessQuerier) ContainerFromPID(ctx context.Context, parentC
 	if q.containersToQueryPIDS == nil {
 		if err := q.listContainers(ctx); err != nil {
 			if !q.c.workedOnce {
-				return nil, nil
+				return nil, nil //nolint: nilnil
 			}
 
 			q.containersToQueryErr = err
@@ -1335,7 +1335,7 @@ func (q *containerdProcessQuerier) containerFromPID(ctx context.Context, pid int
 
 		if err := q.c.updateContainers(ctx); err != nil {
 			if !q.c.workedOnce {
-				return nil, nil
+				return nil, nil //nolint: nilnil
 			}
 
 			q.containersUpdateErr = err

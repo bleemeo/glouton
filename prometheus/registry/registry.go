@@ -1343,7 +1343,7 @@ func gatherFromQueryable(ctx context.Context, queryable storage.Queryable, filte
 				continue
 			}
 
-			dtoLabels = append(dtoLabels, &dto.LabelPair{Name: &l.Name, Value: &l.Value}) //nolint: gosec,exportloopref
+			dtoLabels = append(dtoLabels, &dto.LabelPair{Name: &l.Name, Value: &l.Value}) //nolint: exportloopref
 		}
 
 		var lastValue float64
