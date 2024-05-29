@@ -25,14 +25,18 @@ import (
 )
 
 type encoder struct {
+	l          sync.Mutex
 	bufferPool sync.Pool
 	zlibWriter *zlib.Writer
 }
 
-// Encode is NOT thread-safe.
+// Encode is thread-safe.
 func (e *encoder) Encode(obj interface{}) ([]byte, error) {
 	backingBuffer := e.getBuffer()
 	buffer := bytes.NewBuffer(backingBuffer)
+
+	e.l.Lock()
+	defer e.l.Unlock()
 
 	if e.zlibWriter == nil {
 		e.zlibWriter = zlib.NewWriter(buffer)
