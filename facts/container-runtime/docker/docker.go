@@ -1,4 +1,4 @@
-// Copyright 2015-2023 Bleemeo
+// Copyright 2015-2024 Bleemeo
 //
 // bleemeo.com an infrastructure monitoring solution in the Cloud
 //
@@ -1557,7 +1557,7 @@ func (d *dockerProcessQuerier) ContainerFromCGroup(ctx context.Context, cgroupDa
 	}
 
 	if containerID == "" {
-		return nil, nil
+		return nil, nil //nolint: nilnil
 	}
 
 	if err := d.fillContainers(ctx); err != nil {
@@ -1589,5 +1589,5 @@ func (d *dockerProcessQuerier) ContainerFromPID(ctx context.Context, parentConta
 		return container, nil
 	}
 
-	return nil, nil
+	return nil, nil //nolint: nilnil
 }

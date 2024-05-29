@@ -1,4 +1,4 @@
-// Copyright 2015-2023 Bleemeo
+// Copyright 2015-2024 Bleemeo
 //
 // bleemeo.com an infrastructure monitoring solution in the Cloud
 //
@@ -410,7 +410,7 @@ func (m mergeProcessQuerier) ContainerFromCGroup(ctx context.Context, cgroupData
 		return nil, fixMultiError(errs)
 	}
 
-	return nil, nil
+	return nil, nil //nolint: nilnil
 }
 
 func (m mergeProcessQuerier) ContainerFromPID(ctx context.Context, parentContainerID string, pid int) (facts.Container, error) {
@@ -442,5 +442,5 @@ func (m mergeProcessQuerier) ContainerFromPID(ctx context.Context, parentContain
 		return nil, fixMultiError(errs)
 	}
 
-	return nil, nil
+	return nil, nil //nolint: nilnil
 }

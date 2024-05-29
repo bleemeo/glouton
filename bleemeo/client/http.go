@@ -1,4 +1,4 @@
-// Copyright 2015-2023 Bleemeo
+// Copyright 2015-2024 Bleemeo
 //
 // bleemeo.com an infrastructure monitoring solution in the Cloud
 //
@@ -295,7 +295,7 @@ func (c *HTTPClient) prepareRequest(method string, path string, params map[strin
 	}
 
 	if bodyReader != nil {
-		req.Header.Add("Content-type", "application/json")
+		req.Header.Add("Content-Type", "application/json")
 	}
 
 	if len(params) > 0 {
@@ -652,7 +652,7 @@ func fieldsFromResponse(resp *http.Response, err APIError) APIError {
 	}
 
 	if resp.Header != nil {
-		err.ContentType = resp.Header.Get("content-type")
+		err.ContentType = resp.Header.Get("Content-Type")
 	}
 
 	err.StatusCode = resp.StatusCode
