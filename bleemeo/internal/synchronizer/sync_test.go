@@ -19,7 +19,6 @@ package synchronizer
 import (
 	"errors"
 	"fmt"
-	"net/http"
 	"sync"
 	"testing"
 	"time"
@@ -41,14 +40,8 @@ import (
 )
 
 var (
-	errUnknownURLFormat    = errors.New("unknown URL format")
-	errUnknownResource     = errors.New("unknown resource")
-	errUnknownBool         = errors.New("unknown boolean")
-	errUnknownRequestType  = errors.New("type of request unknown")
-	errIncorrectID         = errors.New("incorrect id")
 	errInvalidAccountID    = errors.New("invalid accountId supplied")
 	errUnexpectedOperation = errors.New("unexpected action")
-	errServerError         = errors.New("had server error")
 	errClientError         = errors.New("had client error")
 )
 
@@ -57,11 +50,10 @@ func TestSync(t *testing.T) {
 	defer helper.Close()
 
 	helper.preregisterAgent(t)
-	helper.api.resources[mockAPIResourceMetric].AddStore(testAgentMetric1, testAgentMetric2, testMonitorMetricPrivateProbe)
-	helper.api.resources[mockAPIResourceService].AddStore(newMonitor)
+	helper.wrapperClientMock.resources.metrics.add(testAgentMetric1, testAgentMetric2, testMonitorMetricPrivateProbe)
+	helper.wrapperClientMock.resources.monitors.add(newMonitor.Monitor)
 
-	agentResource, _ := helper.api.resources[mockAPIResourceAgent].(*genericResource)
-	agentResource.CreateHook = func(_ *http.Request, _ []byte, _ interface{}) error {
+	helper.wrapperClientMock.resources.agents.createHook = func(*bleemeoapi.AgentPayload) error {
 		return fmt.Errorf("%w: agent is already registered, shouldn't re-register", errUnexpectedOperation)
 	}
 
@@ -132,15 +124,12 @@ func TestSyncWithSNMP(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var agents []bleemeoapi.AgentPayload
-
-	helper.api.resources[mockAPIResourceAgent].Store(&agents)
-
 	var (
 		idAgentMain string
 		idAgentSNMP string
 	)
 
+	agents := helper.wrapperClientMock.resources.agents.clone()
 	for _, a := range agents {
 		if a.FQDN == testAgentFQDN {
 			idAgentMain = a.ID
@@ -155,7 +144,7 @@ func TestSyncWithSNMP(t *testing.T) {
 		{
 			Agent: bleemeoTypes.Agent{
 				ID:              idAgentMain,
-				CreatedAt:       helper.api.now.Now(),
+				CreatedAt:       helper.Now(),
 				AccountID:       accountID,
 				CurrentConfigID: newAccountConfig.ID,
 				AgentType:       agentTypeAgent.ID,
@@ -168,7 +157,7 @@ func TestSyncWithSNMP(t *testing.T) {
 		{
 			Agent: bleemeoTypes.Agent{
 				ID:              idAgentSNMP,
-				CreatedAt:       helper.api.now.Now(),
+				CreatedAt:       helper.Now(),
 				AccountID:       accountID,
 				CurrentConfigID: newAccountConfig.ID,
 				AgentType:       agentTypeSNMP.ID,
@@ -194,7 +183,7 @@ func TestSyncWithSNMP(t *testing.T) {
 		),
 	})
 
-	helper.api.now.Advance(time.Second)
+	helper.AddTime(time.Second)
 
 	if err := helper.runOnce(t); err != nil {
 		t.Fatal(err)
@@ -202,7 +191,7 @@ func TestSyncWithSNMP(t *testing.T) {
 
 	var metrics []bleemeoapi.MetricPayload
 
-	helper.api.resources[mockAPIResourceMetric].Store(&metrics)
+	metrics = helper.wrapperClientMock.resources.metrics.clone()
 
 	wantMetrics := []bleemeoapi.MetricPayload{
 		{
@@ -242,13 +231,13 @@ func TestSyncWithSNMP(t *testing.T) {
 		t.Errorf("metrics mismatch (-want +got)\n%s", diff)
 	}
 
-	helper.api.now.Advance(10 * time.Second)
+	helper.AddTime(10 * time.Second)
 
 	helper.initSynchronizer(t)
 
 	for n := 1; n <= 2; n++ {
 		t.Run(fmt.Sprintf("sub-run-%d", n), func(t *testing.T) {
-			helper.api.now.Advance(time.Second)
+			helper.AddTime(time.Second)
 
 			helper.pushPoints(t, []labels.Labels{
 				labels.New(labels.Label{Name: gloutonTypes.LabelName, Value: "cpu_used"}),
@@ -263,7 +252,7 @@ func TestSyncWithSNMP(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			helper.api.resources[mockAPIResourceMetric].Store(&metrics)
+			metrics = helper.wrapperClientMock.resources.metrics.clone()
 
 			if diff := cmp.Diff(wantMetrics, metrics, cmpopts.EquateEmpty(), optMetricSort); diff != "" {
 				t.Errorf("metrics mismatch (-want +got)\n%s", diff)
@@ -271,7 +260,7 @@ func TestSyncWithSNMP(t *testing.T) {
 		})
 	}
 
-	helper.api.resources[mockAPIResourceMetric].AddStore(bleemeoapi.MetricPayload{
+	helper.wrapperClientMock.resources.metrics.add(bleemeoapi.MetricPayload{
 		Metric: bleemeoTypes.Metric{
 			ID:         "4",
 			AgentID:    idAgentSNMP,
@@ -280,13 +269,13 @@ func TestSyncWithSNMP(t *testing.T) {
 		Name: "ifInOctets",
 	})
 
-	helper.api.now.Advance(2 * time.Hour)
+	helper.AddTime(2 * time.Hour)
 
 	if err := helper.runOnce(t); err != nil {
 		t.Fatal(err)
 	}
 
-	helper.api.resources[mockAPIResourceMetric].Store(&metrics)
+	metrics = helper.wrapperClientMock.resources.metrics.clone()
 
 	wantMetrics = []bleemeoapi.MetricPayload{
 		{
@@ -308,7 +297,7 @@ func TestSyncWithSNMP(t *testing.T) {
 					`__name__="cpu_used",instance_uuid="%s"`,
 					idAgentMain,
 				),
-				DeactivatedAt: helper.api.now.Now(),
+				DeactivatedAt: helper.Now(),
 			},
 			Name: "cpu_used",
 		},
@@ -317,7 +306,7 @@ func TestSyncWithSNMP(t *testing.T) {
 				ID:            "3",
 				AgentID:       idAgentSNMP,
 				LabelsText:    fmt.Sprintf(`__name__="ifOutOctets",snmp_target="%s"`, snmpAddress),
-				DeactivatedAt: helper.api.now.Now(),
+				DeactivatedAt: helper.Now(),
 			},
 			Name: "ifOutOctets",
 		},
@@ -326,7 +315,7 @@ func TestSyncWithSNMP(t *testing.T) {
 				ID:            "4",
 				AgentID:       idAgentSNMP,
 				LabelsText:    fmt.Sprintf(`__name__="ifInOctets",snmp_target="%s"`, snmpAddress),
-				DeactivatedAt: helper.api.now.Now(),
+				DeactivatedAt: helper.Now(),
 			},
 			Name: "ifInOctets",
 		},
@@ -369,7 +358,7 @@ func TestSyncWithSNMPDelete(t *testing.T) {
 
 	var agents []bleemeoapi.AgentPayload
 
-	helper.api.resources[mockAPIResourceAgent].Store(&agents)
+	agents = helper.wrapperClientMock.resources.agents.clone()
 
 	var (
 		idAgentMain string
@@ -390,7 +379,7 @@ func TestSyncWithSNMPDelete(t *testing.T) {
 		{
 			Agent: bleemeoTypes.Agent{
 				ID:              idAgentMain,
-				CreatedAt:       helper.api.now.Now(),
+				CreatedAt:       helper.Now(),
 				AccountID:       accountID,
 				CurrentConfigID: newAccountConfig.ID,
 				AgentType:       agentTypeAgent.ID,
@@ -403,7 +392,7 @@ func TestSyncWithSNMPDelete(t *testing.T) {
 		{
 			Agent: bleemeoTypes.Agent{
 				ID:              idAgentSNMP,
-				CreatedAt:       helper.api.now.Now(),
+				CreatedAt:       helper.Now(),
 				AccountID:       accountID,
 				CurrentConfigID: newAccountConfig.ID,
 				AgentType:       agentTypeSNMP.ID,
@@ -429,7 +418,7 @@ func TestSyncWithSNMPDelete(t *testing.T) {
 		),
 	})
 
-	helper.api.now.Advance(time.Second)
+	helper.AddTime(time.Second)
 
 	if err := helper.runOnce(t); err != nil {
 		t.Fatal(err)
@@ -437,7 +426,7 @@ func TestSyncWithSNMPDelete(t *testing.T) {
 
 	var metrics []bleemeoapi.MetricPayload
 
-	helper.api.resources[mockAPIResourceMetric].Store(&metrics)
+	metrics = helper.wrapperClientMock.resources.metrics.clone()
 
 	wantMetrics := []bleemeoapi.MetricPayload{
 		{
@@ -477,17 +466,17 @@ func TestSyncWithSNMPDelete(t *testing.T) {
 		t.Errorf("metrics mismatch (-want +got)\n%s", diff)
 	}
 
-	helper.api.now.Advance(10 * time.Second)
+	helper.AddTime(10 * time.Second)
 
 	// Delete the SNMP agent on API.
 	callCountBefore := updateLabelsCallCount
 
-	helper.api.resources[mockAPIResourceAgent].DelStore(idAgentSNMP)
-	helper.api.resources[mockAPIResourceMetric].DelStore("3")
+	helper.wrapperClientMock.resources.agents.dropByID(idAgentSNMP)
+	helper.wrapperClientMock.resources.metrics.dropByID("3")
 
 	helper.initSynchronizer(t)
 
-	helper.api.now.Advance(time.Second)
+	helper.AddTime(time.Second)
 
 	helper.pushPoints(t, []labels.Labels{
 		labels.New(labels.Label{Name: gloutonTypes.LabelName, Value: "cpu_used"}),
@@ -497,7 +486,7 @@ func TestSyncWithSNMPDelete(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	helper.api.resources[mockAPIResourceAgent].Store(&agents)
+	agents = helper.wrapperClientMock.resources.agents.clone()
 
 	for _, a := range agents {
 		if a.FQDN == snmpAddress {
@@ -510,7 +499,7 @@ func TestSyncWithSNMPDelete(t *testing.T) {
 		{
 			Agent: bleemeoTypes.Agent{
 				ID:              idAgentSNMP,
-				CreatedAt:       helper.api.now.Now(),
+				CreatedAt:       helper.Now(),
 				AccountID:       accountID,
 				CurrentConfigID: newAccountConfig.ID,
 				AgentType:       agentTypeSNMP.ID,
@@ -526,7 +515,7 @@ func TestSyncWithSNMPDelete(t *testing.T) {
 		t.Errorf("agents mismatch (-want +got)\n%s", diff)
 	}
 
-	helper.api.now.Advance(time.Second)
+	helper.AddTime(time.Second)
 
 	helper.pushPoints(t, []labels.Labels{
 		labels.New(labels.Label{Name: gloutonTypes.LabelName, Value: "cpu_used"}),
@@ -550,7 +539,7 @@ func TestSyncWithSNMPDelete(t *testing.T) {
 		Name: "ifOutOctets",
 	}
 
-	helper.api.resources[mockAPIResourceMetric].Store(&metrics)
+	metrics = helper.wrapperClientMock.resources.metrics.clone()
 
 	if diff := cmp.Diff(wantMetrics, metrics, cmpopts.EquateEmpty(), optMetricSort); diff != "" {
 		t.Errorf("metrics mismatch (-want +got)\n%s", diff)
@@ -594,7 +583,7 @@ func TestContainerSync(t *testing.T) {
 	// Did we store container & metrics?
 	var containers []bleemeoapi.ContainerPayload
 
-	helper.api.resources[mockAPIResourceContainer].Store(&containers)
+	containers = helper.wrapperClientMock.resources.containers.clone()
 
 	wantContainer := []bleemeoapi.ContainerPayload{
 		{
@@ -615,7 +604,7 @@ func TestContainerSync(t *testing.T) {
 
 	var metrics []bleemeoapi.MetricPayload
 
-	helper.api.resources[mockAPIResourceMetric].Store(&metrics)
+	metrics = helper.wrapperClientMock.resources.metrics.clone()
 
 	wantMetrics := []bleemeoapi.MetricPayload{
 		{
@@ -643,7 +632,7 @@ func TestContainerSync(t *testing.T) {
 		t.Errorf("metrics mismatch (-want +got)\n%s", diff)
 	}
 
-	helper.api.now.Advance(time.Minute)
+	helper.AddTime(time.Minute)
 	helper.containers = []facts.Container{}
 	helper.discovery.UpdatedAt = helper.s.now()
 
@@ -651,7 +640,7 @@ func TestContainerSync(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	helper.api.resources[mockAPIResourceContainer].Store(&containers)
+	containers = helper.wrapperClientMock.resources.containers.clone()
 
 	wantContainer = []bleemeoapi.ContainerPayload{
 		{
@@ -671,7 +660,7 @@ func TestContainerSync(t *testing.T) {
 		t.Errorf("container mismatch (-want +got)\n%s", diff)
 	}
 
-	helper.api.resources[mockAPIResourceMetric].Store(&metrics)
+	metrics = helper.wrapperClientMock.resources.metrics.clone()
 
 	wantMetrics = []bleemeoapi.MetricPayload{
 		{
@@ -699,7 +688,7 @@ func TestContainerSync(t *testing.T) {
 		t.Errorf("metrics mismatch (-want +got)\n%s", diff)
 	}
 
-	helper.api.now.Advance(2 * time.Hour)
+	helper.AddTime(2 * time.Hour)
 	helper.containers = []facts.Container{
 		facts.FakeContainer{
 			FakeContainerName: "my_redis_1",
@@ -722,7 +711,7 @@ func TestContainerSync(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	helper.api.resources[mockAPIResourceContainer].Store(&containers)
+	containers = helper.wrapperClientMock.resources.containers.clone()
 
 	wantContainer = []bleemeoapi.ContainerPayload{
 		{
@@ -741,7 +730,7 @@ func TestContainerSync(t *testing.T) {
 		t.Errorf("container mismatch (-want +got)\n%s", diff)
 	}
 
-	helper.api.resources[mockAPIResourceMetric].Store(&metrics)
+	metrics = helper.wrapperClientMock.resources.metrics.clone()
 
 	wantMetrics = []bleemeoapi.MetricPayload{
 		{
@@ -841,15 +830,12 @@ func TestSyncServerGroup(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			var agents []bleemeoapi.AgentPayload
-
-			helper.api.resources[mockAPIResourceAgent].Store(&agents)
-
 			var (
 				idAgentMain string
 				idAgentSNMP string
 			)
 
+			agents := helper.wrapperClientMock.resources.agents.clone()
 			for _, a := range agents {
 				if a.FQDN == testAgentFQDN {
 					idAgentMain = a.ID
@@ -864,7 +850,7 @@ func TestSyncServerGroup(t *testing.T) {
 				{
 					Agent: bleemeoTypes.Agent{
 						ID:              idAgentMain,
-						CreatedAt:       helper.api.now.Now(),
+						CreatedAt:       helper.Now(),
 						AccountID:       accountID,
 						CurrentConfigID: newAccountConfig.ID,
 						AgentType:       agentTypeAgent.ID,
@@ -878,7 +864,7 @@ func TestSyncServerGroup(t *testing.T) {
 				{
 					Agent: bleemeoTypes.Agent{
 						ID:              idAgentSNMP,
-						CreatedAt:       helper.api.now.Now(),
+						CreatedAt:       helper.Now(),
 						AccountID:       accountID,
 						CurrentConfigID: newAccountConfig.ID,
 						AgentType:       agentTypeSNMP.ID,
@@ -1182,7 +1168,6 @@ func TestBleemeoPlan(t *testing.T) { //nolint:maintidx
 			helper.assertAgentsInAPI(t, wantAgents)
 
 			helper.assertServicesInAPI(t, []bleemeoapi.ServicePayload{
-				monitor,
 				{
 					Account: accountID,
 					Monitor: bleemeoTypes.Monitor{
@@ -1196,6 +1181,11 @@ func TestBleemeoPlan(t *testing.T) { //nolint:maintidx
 					},
 				},
 			})
+
+			optSort := cmpopts.SortSlices(func(x bleemeoapi.ServicePayload, y bleemeoapi.ServicePayload) bool { return x.ID < y.ID })
+			if diff := cmp.Diff([]bleemeoTypes.Monitor{monitor.Monitor}, helper.wrapperClientMock.resources.monitors.clone(), optSort); diff != "" {
+				t.Errorf("monitors mismatch (-want +got)\n%s", diff)
+			}
 
 			wantMetrics := []bleemeoapi.MetricPayload{
 				{
