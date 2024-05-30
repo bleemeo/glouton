@@ -76,7 +76,7 @@ func (e needRegisterError) Error() string {
 	return fmt.Sprintf("metric %v was deleted from API, it need to be re-registered", e.remoteMetric.LabelsText)
 }
 
-// The metric registration function is done in 4 pass
+// The metric registration function is done in four passes
 // * first will only ensure agent_status is registered (this metric is required before connecting to MQTT and is produced once connected to MQTT...).
 // * main pass will do the bulk of the jobs. But some metric may fail and will be done in Recreate and Retry pass.
 // * The Recreate pass is for metric that failed (to update) because they were deleted from API.
@@ -476,7 +476,6 @@ func (s *Synchronizer) findUnregisteredMetrics(metrics []gloutonTypes.Metric) []
 
 	for _, v := range metrics {
 		key := s.metricKey(v.Labels(), v.Annotations())
-
 		if _, ok := registeredMetricsByKey[key]; ok {
 			continue
 		}
@@ -517,8 +516,8 @@ func (s *Synchronizer) syncMetrics(ctx context.Context, syncType types.SyncType,
 	pendingMetricsUpdate := s.popPendingMetricsUpdate()
 	if len(pendingMetricsUpdate) > activeMetricsCount*3/100 {
 		// If more than 3% of known active metrics needs update, do a full
-		// update. 3% is arbitrary choose, based on assumption request for
-		// one page of (100) metrics is cheaper than 3 request for
+		// update. 3% is arbitrarily chosen, based on assumption request for
+		// one page of (100) metrics is cheaper than 3 requests for
 		// one metric.
 		syncType = types.SyncTypeForceCacheRefresh
 	}
@@ -560,7 +559,7 @@ func (s *Synchronizer) syncMetrics(ctx context.Context, syncType types.SyncType,
 	filteredMetrics = s.filterMetrics(localMetrics)
 	filteredMetrics = prioritizeAndFilterMetrics(s.option.MetricFormat, filteredMetrics, execution.IsOnlyEssential())
 
-	if err := newMetricRegisterer(s, apiClient).registerMetrics(ctx, filteredMetrics); err != nil {
+	if err = newMetricRegisterer(s, apiClient).registerMetrics(ctx, filteredMetrics); err != nil {
 		return updateThresholds, err
 	}
 
@@ -701,19 +700,27 @@ func (s *Synchronizer) isOwnedMetric(metric bleemeoapi.MetricPayload) bool {
 func (s *Synchronizer) metricsListWithAgentID(ctx context.Context, apiClient types.MetricClient, fetchInactive bool) (map[string]bleemeoTypes.Metric, error) {
 	// If the metric is associated with another agent, make sure we "own" the metric.
 	// This may not be the case for monitor because multiple agents will process such metrics.
-	metricsByUUID, err := apiClient.ListActiveMetrics(ctx, !fetchInactive, s.isOwnedMetric)
+	result, err := apiClient.ListActiveMetrics(ctx, !fetchInactive)
 	if err != nil {
 		return nil, err
 	}
 
-	for _, m := range s.option.Cache.Metrics() {
-		if _, found := metricsByUUID[m.ID]; found {
-			continue
-		}
+	metricsByUUID := make(map[string]bleemeoTypes.Metric, len(result))
 
+	for _, m := range s.option.Cache.Metrics() {
 		if m.DeactivatedAt.IsZero() == fetchInactive {
 			metricsByUUID[m.ID] = m
 		}
+	}
+
+	for _, metric := range result {
+		// If the metric is associated with another agent, make sure we "own" the metric.
+		// This may not be the case for monitor because multiple agent will process such metrics.
+		if !s.isOwnedMetric(metric) {
+			continue
+		}
+
+		metricsByUUID[metric.ID] = metricFromAPI(metric, metricsByUUID[metric.ID].FirstSeenAt)
 	}
 
 	return metricsByUUID, nil
@@ -786,29 +793,25 @@ func (s *Synchronizer) metricUpdateList(ctx context.Context, apiClient types.Met
 			params.Del("labels_text")
 		}
 
-		metricFilter := func(m bleemeoapi.MetricPayload) bool {
-			// Don't modify metrics declared by other agents when the target agent is a monitor
-			agentUUID, present := gloutonTypes.TextToLabels(m.LabelsText)[gloutonTypes.LabelScraperUUID]
-			if present && agentUUID != s.agentID {
-				return false
-			}
-
-			if !present {
-				scraperName, present := gloutonTypes.TextToLabels(m.LabelsText)[gloutonTypes.LabelScraper]
-				if present && scraperName != s.option.BlackboxScraperName {
-					return false
-				}
-			}
-
-			return true
-		}
-
-		listedMetrics, err := apiClient.ListMetricsBy(ctx, params, metricFilter)
+		listedMetrics, err := apiClient.ListMetricsBy(ctx, params)
 		if err != nil {
 			return err
 		}
 
 		for id, metric := range listedMetrics {
+			// Don't modify metrics declared by other agents when the target agent is a monitor
+			agentUUID, present := gloutonTypes.TextToLabels(metric.LabelsText)[gloutonTypes.LabelScraperUUID]
+			if present && agentUUID != s.agentID {
+				continue
+			}
+
+			if !present {
+				scraperName, present := gloutonTypes.TextToLabels(metric.LabelsText)[gloutonTypes.LabelScraper]
+				if present && scraperName != s.option.BlackboxScraperName {
+					continue
+				}
+			}
+
 			metricsByUUID[id] = metric
 		}
 	}
@@ -1085,7 +1088,7 @@ func (mr *metricRegisterer) doOnePass(ctx context.Context, currentList []glouton
 			continue
 		}
 
-		if errReReg, ok := err.(needRegisterError); ok && err != nil && state < metricPassRecreate {
+		if errReReg := new(needRegisterError); errors.As(err, errReReg) && state < metricPassRecreate {
 			mr.needReregisterMetrics = append(mr.needReregisterMetrics, metric)
 
 			delete(mr.registeredMetricsByUUID, errReReg.remoteMetric.ID)
@@ -1307,7 +1310,7 @@ func (s *Synchronizer) prepareMetricPayloadOtherAgent(payload *bleemeoapi.Metric
 }
 
 func (s *Synchronizer) metricUpdateOne(ctx context.Context, apiClient types.MetricClient, metric gloutonTypes.Metric, remoteMetric bleemeoTypes.Metric) (bleemeoTypes.Metric, error) {
-	updates := make(map[string]string)
+	shouldMarkActive := false
 
 	if !remoteMetric.DeactivatedAt.IsZero() {
 		points, err := metric.Points(s.now().Add(-10*time.Minute), s.now())
@@ -1330,18 +1333,13 @@ func (s *Synchronizer) metricUpdateOne(ctx context.Context, apiClient types.Metr
 		if maxTime.After(remoteMetric.DeactivatedAt.Add(10 * time.Second)) {
 			logger.V(2).Printf("Mark active the metric %v (uuid %s)", remoteMetric.LabelsText, remoteMetric.ID)
 
-			updates["active"] = stringTrue
+			shouldMarkActive = true
 			remoteMetric.DeactivatedAt = time.Time{}
 		}
 	}
 
-	if len(updates) > 0 {
-		fields := make([]string, 0, len(updates))
-		for k := range updates {
-			fields = append(fields, k)
-		}
-
-		err := apiClient.UpdateMetric(ctx, remoteMetric.ID, updates, strings.Join(fields, ","))
+	if shouldMarkActive {
+		err := apiClient.SetMetricActive(ctx, remoteMetric.ID, true)
 		if err != nil && IsNotFound(err) {
 			return remoteMetric, needRegisterError{remoteMetric: remoteMetric}
 		} else if err != nil {
@@ -1489,7 +1487,7 @@ func (s *Synchronizer) metricDeactivate(ctx context.Context, apiClient types.Met
 
 		logger.V(2).Printf("Mark inactive the metric %v (uuid %s)", key, v.ID)
 
-		err := apiClient.DeactivateMetric(ctx, v.ID)
+		err := apiClient.SetMetricActive(ctx, v.ID, false)
 		if err != nil && IsNotFound(err) {
 			delete(registeredMetrics, k)
 

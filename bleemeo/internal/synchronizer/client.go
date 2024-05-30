@@ -25,6 +25,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"reflect"
 	"strings"
 	"time"
 
@@ -47,7 +48,7 @@ type wrapperClient struct {
 	duplicateChecked bool
 	// TODO: throttling
 	throttleDeadline    time.Time
-	throttleConsecutive int
+	throttleConsecutive int //nolint: unused
 }
 
 func (cl *wrapperClient) dupCheck() error {
@@ -122,7 +123,8 @@ func (cl *wrapperClient) Create(ctx context.Context, resource bleemeo.Resource, 
 		return err
 	}
 
-	if result != nil {
+	// Basic comparison will nil fails when the underlying type of `result` is actually an interface.
+	if result == nil || !reflect.ValueOf(result).IsNil() {
 		return json.Unmarshal(respBody, result)
 	}
 
@@ -143,7 +145,8 @@ func (cl *wrapperClient) Update(ctx context.Context, resource bleemeo.Resource, 
 		return err
 	}
 
-	if result != nil {
+	// Basic comparison will nil fails when the underlying type of `result` is actually an interface.
+	if result == nil || !reflect.ValueOf(result).IsNil() {
 		return json.Unmarshal(respBody, result)
 	}
 
@@ -168,7 +171,8 @@ func (cl *wrapperClient) Do(ctx context.Context, method, reqURI string, params u
 		return 0, err
 	}
 
-	if result != nil {
+	// Basic comparison will nil fails when the underlying type of `result` is actually an interface.
+	if result == nil || !reflect.ValueOf(result).IsNil() {
 		err = json.Unmarshal(respBody, result)
 	}
 
@@ -201,6 +205,10 @@ func (cl *wrapperClient) DoWithBody(ctx context.Context, reqURI string, contentT
 	_ = resp.Body.Close()
 
 	return resp.StatusCode, nil
+}
+
+func (cl *wrapperClient) DoRequest(ctx context.Context, req *http.Request, authenticated bool) (*http.Response, error) {
+	return cl.client.DoRequest(ctx, req, authenticated)
 }
 
 // errorIterator implements [bleemeo.Iterator] but only returns an error.
@@ -254,7 +262,7 @@ func IsServerError(err error) bool {
 	return false
 }
 
-// IsThrottleError return true if the error is an APIError due to 429 - Too many request.
+// IsThrottleError return true if the error is an APIError due to 429 - Too many requests.
 //
 // ThrottleDeadline could be used to get recommended retry deadline.
 func IsThrottleError(err error) bool {

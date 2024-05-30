@@ -131,7 +131,7 @@ func newForTest(option types.Option, now func() time.Time) (*Synchronizer, error
 	return s, nil
 }
 
-func newWithNow(option types.Option, now func() time.Time) (*Synchronizer, error) {
+func newWithNow(option types.Option, now func() time.Time) (*Synchronizer, error) { // TODO: is returning an error useful ?
 	nextFullSync := now()
 	fullSyncCount := 0
 
@@ -1127,7 +1127,7 @@ func (s *Synchronizer) register(ctx context.Context) error {
 
 	req.SetBasicAuth(accountID+"@bleemeo.com", registrationKey)
 
-	resp, err := s.realClient.DoRequest(ctx, req, false)
+	resp, err := s.newClient().DoRequest(ctx, req, false)
 	if err != nil {
 		return err
 	}
@@ -1137,7 +1137,7 @@ func (s *Synchronizer) register(ctx context.Context) error {
 		_ = resp.Body.Close()
 	}()
 
-	if resp.StatusCode != 201 {
+	if resp.StatusCode != http.StatusCreated {
 		return fmt.Errorf("%w: got %v, want 201", errIncorrectStatusCode, resp.StatusCode)
 	}
 

@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"net/http"
 	"net/url"
 	"regexp"
 	"strconv"
@@ -79,7 +80,7 @@ type APIFeature int
 // There are currently no features in this list
 
 func (t APIFeature) String() string {
-	switch t {
+	switch t { //nolint: gocritic // more cases may exist
 	default:
 		return strconv.Itoa(int(t))
 	}
@@ -178,6 +179,7 @@ type Client interface {
 type RawClient interface {
 	Do(ctx context.Context, method string, path string, params url.Values, authenticated bool, body io.Reader, result any) (statusCode int, err error)
 	DoWithBody(ctx context.Context, path string, contentType string, body io.Reader) (statusCode int, err error)
+	DoRequest(ctx context.Context, req *http.Request, authenticated bool) (*http.Response, error)
 	Iterator(resource bleemeo.Resource, params url.Values) bleemeo.Iterator
 	ThrottleDeadline() time.Time
 }
@@ -224,13 +226,13 @@ type FactClient interface {
 
 type MetricClient interface {
 	UpdateMetric(ctx context.Context, id string, payload any, fields string) error
-	ListActiveMetrics(ctx context.Context, active bool, filter func(payload bleemeoapi.MetricPayload) bool) (map[string]bleemeoTypes.Metric, error)
+	ListActiveMetrics(ctx context.Context, active bool) ([]bleemeoapi.MetricPayload, error)
 	CountInactiveMetrics(ctx context.Context) (int, error)
-	ListMetricsBy(ctx context.Context, params url.Values, filter func(payload bleemeoapi.MetricPayload) bool) (map[string]bleemeoTypes.Metric, error)
+	ListMetricsBy(ctx context.Context, params url.Values) (map[string]bleemeoTypes.Metric, error)
 	GetMetricByID(ctx context.Context, id string) (bleemeoapi.MetricPayload, error)
 	RegisterMetric(ctx context.Context, payload bleemeoapi.MetricPayload, result *bleemeoapi.MetricPayload) error
 	DeleteMetric(ctx context.Context, id string) error
-	DeactivateMetric(ctx context.Context, id string) error
+	SetMetricActive(ctx context.Context, id string, active bool) error
 }
 
 type MonitorClient interface {

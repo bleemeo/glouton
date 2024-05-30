@@ -1,4 +1,4 @@
-// Copyright 2015-2023 Bleemeo
+// Copyright 2015-2024 Bleemeo
 //
 // bleemeo.com an infrastructure monitoring solution in the Cloud
 //
@@ -34,7 +34,7 @@ import (
 func (cl *wrapperClient) ListApplications(ctx context.Context) ([]bleemeoTypes.Application, error) {
 	applications := make([]bleemeoTypes.Application, 0)
 
-	iter := cl.Iterator("application", nil)
+	iter := cl.Iterator(bleemeo.ResourceApplication, nil)
 	for iter.Next(ctx) {
 		var application bleemeoTypes.Application
 
@@ -277,11 +277,10 @@ func (cl *wrapperClient) DeleteFact(ctx context.Context, id string) error {
 }
 
 func (cl *wrapperClient) UpdateMetric(ctx context.Context, id string, payload any, fields string) error {
-
 	return cl.Update(ctx, bleemeo.ResourceMetric, id, payload, fields, nil)
 }
 
-func (cl *wrapperClient) ListActiveMetrics(ctx context.Context, active bool, filter func(payload bleemeoapi.MetricPayload) bool) (map[string]bleemeoTypes.Metric, error) {
+func (cl *wrapperClient) ListActiveMetrics(ctx context.Context, active bool) ([]bleemeoapi.MetricPayload, error) {
 	params := url.Values{
 		"fields": {metricFields},
 	}
@@ -292,7 +291,7 @@ func (cl *wrapperClient) ListActiveMetrics(ctx context.Context, active bool, fil
 		params.Set("active", stringTrue)
 	}
 
-	metricsByUUID := make(map[string]bleemeoTypes.Metric)
+	metrics := make([]bleemeoapi.MetricPayload, 0)
 
 	iter := cl.Iterator(bleemeo.ResourceMetric, params)
 	for iter.Next(ctx) {
@@ -302,14 +301,10 @@ func (cl *wrapperClient) ListActiveMetrics(ctx context.Context, active bool, fil
 			continue
 		}
 
-		if !filter(metric) {
-			continue
-		}
-
-		metricsByUUID[metric.ID] = metricFromAPI(metric, metricsByUUID[metric.ID].FirstSeenAt)
+		metrics = append(metrics, metric)
 	}
 
-	return metricsByUUID, iter.Err()
+	return metrics, iter.Err()
 }
 
 func (cl *wrapperClient) CountInactiveMetrics(ctx context.Context) (int, error) {
@@ -323,7 +318,7 @@ func (cl *wrapperClient) CountInactiveMetrics(ctx context.Context) (int, error) 
 	)
 }
 
-func (cl *wrapperClient) ListMetricsBy(ctx context.Context, params url.Values, filter func(payload bleemeoapi.MetricPayload) bool) (map[string]bleemeoTypes.Metric, error) {
+func (cl *wrapperClient) ListMetricsBy(ctx context.Context, params url.Values) (map[string]bleemeoTypes.Metric, error) {
 	metricsByUUID := make(map[string]bleemeoTypes.Metric)
 
 	iter := cl.Iterator(bleemeo.ResourceMetric, params)
@@ -331,10 +326,6 @@ func (cl *wrapperClient) ListMetricsBy(ctx context.Context, params url.Values, f
 		var metric bleemeoapi.MetricPayload
 
 		if err := json.Unmarshal(iter.At(), &metric); err != nil {
-			continue
-		}
-
-		if !filter(metric) {
 			continue
 		}
 
@@ -358,8 +349,16 @@ func (cl *wrapperClient) DeleteMetric(ctx context.Context, id string) error {
 	return cl.Delete(ctx, bleemeo.ResourceMetric, id)
 }
 
-func (cl *wrapperClient) DeactivateMetric(ctx context.Context, id string) error {
-	return cl.Update(ctx, bleemeo.ResourceMetric, id, map[string]string{"active": stringFalse}, "active", nil)
+func (cl *wrapperClient) SetMetricActive(ctx context.Context, id string, active bool) error {
+	var activeStr string
+
+	if active {
+		activeStr = stringTrue
+	} else {
+		activeStr = stringFalse
+	}
+
+	return cl.Update(ctx, bleemeo.ResourceMetric, id, map[string]string{"active": activeStr}, "active", nil)
 }
 
 func (cl *wrapperClient) ListMonitors(ctx context.Context) ([]bleemeoTypes.Monitor, error) {

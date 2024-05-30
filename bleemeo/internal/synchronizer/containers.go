@@ -275,7 +275,7 @@ func (s *Synchronizer) containerDeleteFromLocal(ctx context.Context, execution t
 				deletedIDs = append(deletedIDs, container.ID)
 			}
 
-			logger.V(1).Printf("Failed to delete container %v on Bleemeo API: %v", container.Name, err)
+			logger.V(1).Printf("Failed to delete container %q on Bleemeo API: %v", container.Name, err)
 
 			continue
 		}
