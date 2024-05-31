@@ -1,4 +1,4 @@
-// Copyright 2015-2023 Bleemeo
+// Copyright 2015-2024 Bleemeo
 //
 // bleemeo.com an infrastructure monitoring solution in the Cloud
 //
@@ -478,7 +478,7 @@ func createMySQLInput(service Service) (telegraf.Input, error) {
 		return mysql.New(fmt.Sprintf("%s:%s@tcp(%s:%d)/", username, service.Config.Password, ip, port))
 	}
 
-	return nil, nil
+	return nil, nil //nolint: nilnil
 }
 
 func (d *Discovery) registerInput(input telegraf.Input, opts registry.RegistrationOption, service Service) error {

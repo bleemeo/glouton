@@ -1,4 +1,4 @@
-// Copyright 2015-2023 Bleemeo
+// Copyright 2015-2024 Bleemeo
 //
 // bleemeo.com an infrastructure monitoring solution in the Cloud
 //
@@ -1168,7 +1168,7 @@ func TestStateLoading(t *testing.T) {
 
 	for _, tc := range cases {
 		// This action is not specific to the current test case.
-		err := mergo.Merge(&tc.WantConfig, agentCfg) //nolint: gosec
+		err := mergo.Merge(&tc.WantConfig, agentCfg)
 		if err != nil {
 			t.Fatal("Failed to merge default agent config:", err)
 		}

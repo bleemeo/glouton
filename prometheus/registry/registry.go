@@ -1,4 +1,4 @@
-// Copyright 2015-2023 Bleemeo
+// Copyright 2015-2024 Bleemeo
 //
 // bleemeo.com an infrastructure monitoring solution in the Cloud
 //
@@ -1343,7 +1343,7 @@ func gatherFromQueryable(ctx context.Context, queryable storage.Queryable, filte
 				continue
 			}
 
-			dtoLabels = append(dtoLabels, &dto.LabelPair{Name: &l.Name, Value: &l.Value}) //nolint: gosec,exportloopref
+			dtoLabels = append(dtoLabels, &dto.LabelPair{Name: &l.Name, Value: &l.Value}) //nolint: exportloopref
 		}
 
 		var lastValue float64
