@@ -62,9 +62,14 @@ func (s *Synchronizer) syncInfoReal(ctx context.Context, execution types.Synchro
 	if err != nil && strings.Contains(err.Error(), "certificate has expired") {
 		// This could happen when local time is really too far away from real time.
 		// Since this request is unauthenticated, we can retry it with insecure TLS
+		transportOpts := &gloutonTypes.CustomTransportOptions{
+			UserAgentHeader: version.UserAgent(),
+			RequestCounter:  &s.requestCounter,
+		}
+
 		insecureClient, cErr := bleemeo.NewClient(
 			bleemeo.WithEndpoint(s.option.Config.Bleemeo.APIBase),
-			bleemeo.WithHTTPClient(&http.Client{Transport: gloutonTypes.NewHTTPTransport(&tls.Config{InsecureSkipVerify: true}, &s.requestCounter)}), //nolint:gosec
+			bleemeo.WithHTTPClient(&http.Client{Transport: gloutonTypes.NewHTTPTransport(&tls.Config{InsecureSkipVerify: true}, transportOpts)}), //nolint:gosec
 		)
 		if cErr != nil {
 			return false, cErr

@@ -460,8 +460,12 @@ func (s *Synchronizer) DiagnosticPage() string {
 	s.l.Lock()
 
 	if s.diagnosticClient == nil {
+		transportOpts := &gloutonTypes.CustomTransportOptions{
+			UserAgentHeader: version.UserAgent(),
+			RequestCounter:  &s.requestCounter,
+		}
 		s.diagnosticClient = &http.Client{
-			Transport: gloutonTypes.NewHTTPTransport(tlsConfig, &s.requestCounter),
+			Transport: gloutonTypes.NewHTTPTransport(tlsConfig, transportOpts),
 			CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
 				return http.ErrUseLastResponse
 			},
@@ -866,8 +870,12 @@ func (s *Synchronizer) setClient() error {
 	tlsConfig := &tls.Config{
 		InsecureSkipVerify: s.option.Config.Bleemeo.APISSLInsecure, //nolint:gosec
 	}
+	transportOpts := &gloutonTypes.CustomTransportOptions{
+		UserAgentHeader: version.UserAgent(),
+		RequestCounter:  &s.requestCounter,
+	}
 	cl := &http.Client{
-		Transport: gloutonTypes.NewHTTPTransport(tlsConfig, &s.requestCounter),
+		Transport: gloutonTypes.NewHTTPTransport(tlsConfig, transportOpts),
 	}
 
 	client, err := bleemeo.NewClient(
