@@ -70,9 +70,8 @@ type Synchronizer struct {
 	state         *synchronizerState
 	hasFeature    map[types.APIFeature]bool
 
-	requestCounter   atomic.Uint32
-	realClient       *bleemeo.Client
-	diagnosticClient *http.Client
+	requestCounter atomic.Uint32
+	realClient     *bleemeo.Client
 
 	// These fields should always be set in the reload state after being modified.
 	nextFullSync  time.Time
@@ -454,20 +453,20 @@ func (s *Synchronizer) DiagnosticPage() string {
 		port = 443
 	}
 
+	var apiClient *bleemeo.Client
+
 	s.l.Lock()
 
-	if s.diagnosticClient == nil {
-		transportOpts := &gloutonTypes.CustomTransportOptions{
-			UserAgentHeader: version.UserAgent(),
-			RequestCounter:  &s.requestCounter,
-		}
-		s.diagnosticClient = &http.Client{
-			Transport: gloutonTypes.NewHTTPTransport(tlsConfig, transportOpts),
-			CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
-				return http.ErrUseLastResponse
-			},
+	if s.realClient == nil {
+		err = s.setClient()
+		if err != nil {
+			fmt.Fprintf(builder, "Can't initialize the API client: %v\n", err)
+
+			return builder.String()
 		}
 	}
+
+	apiClient = s.realClient
 
 	s.l.Unlock()
 
@@ -494,7 +493,7 @@ func (s *Synchronizer) DiagnosticPage() string {
 	go func() {
 		defer crashreport.ProcessPanic()
 
-		httpMessage <- common.DiagnosticHTTP(s.diagnosticClient, u.String())
+		httpMessage <- common.DiagnosticHTTP(apiClient)
 	}()
 
 	builder.WriteString(<-tcpMessage)
