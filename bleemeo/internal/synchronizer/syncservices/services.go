@@ -23,6 +23,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/bleemeo/bleemeo-go"
 	"github.com/bleemeo/glouton/bleemeo/internal/common"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/bleemeoapi"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
@@ -337,7 +338,7 @@ func getTagsFromLocal(service discovery.Service) []bleemeoTypes.Tag {
 
 	for _, t := range service.Tags {
 		if len(t) <= bleemeoapi.APITagsLength && t != "" {
-			tags = append(tags, bleemeoTypes.Tag{Name: t, TagType: bleemeoTypes.TagTypeIsCreatedByGlouton})
+			tags = append(tags, bleemeoTypes.Tag{Name: t, TagType: bleemeo.TagType_CreatedByGlouton})
 		}
 	}
 
@@ -345,7 +346,7 @@ func getTagsFromLocal(service discovery.Service) []bleemeoTypes.Tag {
 		_, appTag := types.AutomaticApplicationName(app)
 
 		if len(appTag) <= bleemeoapi.APITagsLength && appTag != "" {
-			tags = append(tags, bleemeoTypes.Tag{Name: appTag, TagType: bleemeoTypes.TagTypeIsAutomaticByGlouton})
+			tags = append(tags, bleemeoTypes.Tag{Name: appTag, TagType: bleemeo.TagType_AutomaticGlouton})
 		}
 	}
 
@@ -358,7 +359,7 @@ func serviceHadSameTags(remoteTags []bleemeoTypes.Tag, localService discovery.Se
 	remoteTagsNoID := make(map[bleemeoTypes.Tag]bool, len(remoteTags))
 
 	for _, tag := range remoteTags {
-		if tag.TagType != bleemeoTypes.TagTypeIsAutomaticByGlouton && tag.TagType != bleemeoTypes.TagTypeIsCreatedByGlouton {
+		if tag.TagType != bleemeo.TagType_AutomaticGlouton && tag.TagType != bleemeo.TagType_CreatedByGlouton {
 			continue
 		}
 

@@ -20,6 +20,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/bleemeo/bleemeo-go"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/facts"
@@ -70,7 +71,7 @@ func (s *Synchronizer) syncFacts(ctx context.Context, syncType types.SyncType, e
 	allAgentFacts[s.agentID] = localFacts
 
 	if !execution.IsOnlyEssential() {
-		agentTypeID, found := s.getAgentType(bleemeoTypes.AgentTypeSNMP)
+		agentTypeID, found := s.getAgentType(bleemeo.AgentType_SNMP)
 		if !found {
 			return false, errRetryLater
 		}

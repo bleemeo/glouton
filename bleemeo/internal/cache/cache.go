@@ -22,6 +22,7 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/bleemeo/bleemeo-go"
 	"github.com/bleemeo/glouton/bleemeo/internal/common"
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/logger"
@@ -184,7 +185,7 @@ func (c *Cache) CurrentAccountConfig() (bleemeoTypes.GloutonAccountConfig, bool)
 
 	result, ok := searchMap[c.data.Agent.CurrentConfigID]
 
-	if _, ok := result.AgentConfigByName[bleemeoTypes.AgentTypeAgent]; !ok {
+	if _, ok := result.AgentConfigByName[bleemeo.AgentType_Agent]; !ok {
 		return result, false
 	}
 
@@ -248,7 +249,7 @@ func (c *Cache) AccountConfigsByUUID() map[string]bleemeoTypes.GloutonAccountCon
 			SNMPIntegration:       accountConfig.SNMPIntegration,
 			VSphereIntegration:    accountConfig.VSphereIntegration,
 			Suspended:             accountConfig.Suspended,
-			AgentConfigByName:     make(map[string]bleemeoTypes.GloutonAgentConfig),
+			AgentConfigByName:     make(map[bleemeo.AgentType]bleemeoTypes.GloutonAgentConfig),
 			AgentConfigByID:       make(map[string]bleemeoTypes.GloutonAgentConfig),
 			MaxCustomMetrics:      accountConfig.MaxCustomMetrics,
 		}
@@ -268,13 +269,13 @@ func (c *Cache) AccountConfigsByUUID() map[string]bleemeoTypes.GloutonAccountCon
 			}
 		}
 
-		if _, ok := config.AgentConfigByName[bleemeoTypes.AgentTypeSNMP]; !ok {
+		if _, ok := config.AgentConfigByName[bleemeo.AgentType_SNMP]; !ok {
 			config.SNMPIntegration = false
 		}
 
-		_, isVM := config.AgentConfigByName[bleemeoTypes.AgentTypeVSphereVM]
-		_, isHost := config.AgentConfigByName[bleemeoTypes.AgentTypeVSphereHost]
-		_, isCluster := config.AgentConfigByName[bleemeoTypes.AgentTypeVSphereCluster]
+		_, isVM := config.AgentConfigByName[bleemeo.AgentType_vSphereVM]
+		_, isHost := config.AgentConfigByName[bleemeo.AgentType_vSphereHost]
+		_, isCluster := config.AgentConfigByName[bleemeo.AgentType_vSphereCluster]
 
 		if !(isVM || isHost || isCluster) {
 			config.VSphereIntegration = false

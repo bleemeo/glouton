@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/bleemeo/bleemeo-go"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/bleemeoapi"
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 )
@@ -48,40 +49,40 @@ var (
 		DockerIntegration: true,
 	}
 
-	agentTypeAgent bleemeoTypes.AgentType = bleemeoTypes.AgentType{
+	agentTypeAgent = bleemeoTypes.AgentType{
 		DisplayName: "A server monitored with Bleemeo agent",
 		ID:          "61zb6a83-d90a-4165-bf04-944e0b2g2a10",
-		Name:        bleemeoTypes.AgentTypeAgent,
+		Name:        bleemeo.AgentType_Agent,
 	}
-	agentTypeSNMP bleemeoTypes.AgentType = bleemeoTypes.AgentType{
+	agentTypeSNMP = bleemeoTypes.AgentType{
 		DisplayName: "A server monitored with SNMP agent",
 		ID:          "823b6a83-d70a-4768-be64-50450b282a30",
-		Name:        bleemeoTypes.AgentTypeSNMP,
+		Name:        bleemeo.AgentType_SNMP,
 	}
-	agentTypeMonitor bleemeoTypes.AgentType = bleemeoTypes.AgentType{
+	agentTypeMonitor = bleemeoTypes.AgentType{
 		DisplayName: "A website monitored with connection check",
 		ID:          "41afe63c-fa1c-4b84-b92b-028269101fde",
-		Name:        bleemeoTypes.AgentTypeMonitor,
+		Name:        bleemeo.AgentType_Monitor,
 	}
-	agentTypeKubernetes bleemeoTypes.AgentType = bleemeoTypes.AgentType{
+	agentTypeKubernetes = bleemeoTypes.AgentType{
 		DisplayName: "k8s",
 		ID:          "f8477dcd-36d8-489f-a6b8-e52f6bc013d2",
-		Name:        bleemeoTypes.AgentTypeKubernetes,
+		Name:        bleemeo.AgentType_K8s,
 	}
-	agentTypeVSphereCluster bleemeoTypes.AgentType = bleemeoTypes.AgentType{
+	agentTypeVSphereCluster = bleemeoTypes.AgentType{
 		DisplayName: "A vSphere cluster",
 		ID:          "a424f3d1-5824-49c2-a4c7-08ebb58f1e1c",
-		Name:        bleemeoTypes.AgentTypeVSphereCluster,
+		Name:        bleemeo.AgentType_vSphereCluster,
 	}
-	agentTypeVSphereHost bleemeoTypes.AgentType = bleemeoTypes.AgentType{
+	agentTypeVSphereHost = bleemeoTypes.AgentType{
 		DisplayName: "A vSphere host",
 		ID:          "eef9553e-f6f8-483d-9360-979ae24974af",
-		Name:        bleemeoTypes.AgentTypeVSphereHost,
+		Name:        bleemeo.AgentType_vSphereHost,
 	}
-	agentTypeVSphereVM bleemeoTypes.AgentType = bleemeoTypes.AgentType{
+	agentTypeVSphereVM = bleemeoTypes.AgentType{
 		DisplayName: "A vSphere VM",
 		ID:          "ae5d4581-e74a-4c11-8c9d-fde62a7073e5",
-		Name:        bleemeoTypes.AgentTypeVSphereVM,
+		Name:        bleemeo.AgentType_vSphereVM,
 	}
 
 	agentConfigAgent = bleemeoTypes.AgentConfig{

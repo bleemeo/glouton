@@ -20,6 +20,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/bleemeo/bleemeo-go"
 	"github.com/bleemeo/glouton/config"
 	"github.com/bleemeo/glouton/discovery"
 	"github.com/bleemeo/glouton/facts"
@@ -109,12 +110,12 @@ type Store interface {
 	RemoveNotifiee(id int)
 }
 
-// DisableReason is a list of status why Bleemeo connector may be (temporary) disabled.
-type DisableReason int
-
 // AgentID is an agent UUID.
 // This type exists for the sole purpose of making type definitions clearer.
 type AgentID string
+
+// DisableReason is a list of status why Bleemeo connector may be (temporary) disabled.
+type DisableReason int
 
 // List of possible value for DisableReason.
 const (
@@ -188,7 +189,7 @@ type GloutonAccountConfig struct {
 	SNMPIntegration       bool
 	VSphereIntegration    bool
 	Suspended             bool
-	AgentConfigByName     map[string]GloutonAgentConfig
+	AgentConfigByName     map[bleemeo.AgentType]GloutonAgentConfig
 	AgentConfigByID       map[string]GloutonAgentConfig
 	MaxCustomMetrics      int
 }

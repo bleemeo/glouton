@@ -24,6 +24,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/bleemeo/bleemeo-go"
 	"github.com/bleemeo/glouton/agent/state"
 	"github.com/bleemeo/glouton/bleemeo/internal/cache"
 	"github.com/bleemeo/glouton/types"
@@ -147,8 +148,8 @@ func mockClient(t *testing.T) *Client {
 	// Set agent config with the metric allowlist.
 	cache.SetAccountConfigs([]bleemeoTypes.AccountConfig{
 		{
-			Name: bleemeoTypes.AgentTypeAgent,
 			ID:   accountConfigID,
+			Name: "agent",
 		},
 	})
 
@@ -163,7 +164,7 @@ func mockClient(t *testing.T) *Client {
 	cache.SetAgentTypes([]bleemeoTypes.AgentType{
 		{
 			ID:   agentTypeID,
-			Name: bleemeoTypes.AgentTypeAgent,
+			Name: bleemeo.AgentType_Agent,
 		},
 	})
 

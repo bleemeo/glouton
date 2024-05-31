@@ -39,8 +39,8 @@ import (
 )
 
 type mqttUpdatePayload struct {
-	CurrentStatus     int      `json:"current_status"`
-	StatusDescription []string `json:"status_descriptions"`
+	CurrentStatus     bleemeo.Status `json:"current_status"`
+	StatusDescription []string       `json:"status_descriptions"`
 }
 
 const mqttUpdateResponseFields = "current_status,status_descriptions"
@@ -58,7 +58,7 @@ func (s *Synchronizer) syncInfoReal(ctx context.Context, execution types.Synchro
 
 	apiClient := execution.BleemeoAPIClient()
 
-	statusCode, err := apiClient.Do(ctx, http.MethodGet, "v1/info/", nil, false, nil, &globalInfo)
+	statusCode, err := apiClient.Do(ctx, http.MethodGet, "/v1/info/", nil, false, nil, &globalInfo)
 	if err != nil && strings.Contains(err.Error(), "certificate has expired") {
 		// This could happen when local time is really too far away from real time.
 		// Since this request is unauthenticated, we can retry it with insecure TLS
@@ -162,7 +162,7 @@ func (s *Synchronizer) syncInfoReal(ctx context.Context, execution types.Synchro
 		)
 		if metric, ok := s.option.Cache.MetricLookupFromList()[metricKey]; ok {
 			payload := mqttUpdatePayload{
-				CurrentStatus:     2, // critical
+				CurrentStatus:     bleemeo.Status_Critical,
 				StatusDescription: []string{"Agent local time too different from actual time"},
 			}
 
@@ -217,7 +217,7 @@ func (s *Synchronizer) updateMQTTStatus(ctx context.Context, apiClient types.Met
 	)
 	if metric, ok := s.option.Cache.MetricLookupFromList()[metricKey]; ok {
 		payload := mqttUpdatePayload{
-			CurrentStatus:     2, // critical
+			CurrentStatus:     bleemeo.Status_Critical,
 			StatusDescription: []string{msg},
 		}
 

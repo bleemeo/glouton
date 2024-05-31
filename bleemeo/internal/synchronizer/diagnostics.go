@@ -25,6 +25,7 @@ import (
 	"mime/multipart"
 	"strconv"
 
+	"github.com/bleemeo/bleemeo-go"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/bleemeoapi"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
 	"github.com/bleemeo/glouton/crashreport"
@@ -36,16 +37,9 @@ var errUploadFailed = errors.New("upload failed")
 
 type diagnosticWithBleemeoInfo struct {
 	gloutonTypes.DiagnosticFile
-	diagnosticType diagnosticType
+	diagnosticType bleemeo.GloutonDiagnostic
 	requestToken   string
 }
-
-type diagnosticType = int
-
-const (
-	crashDiagnostic    diagnosticType = 0
-	onDemandDiagnostic diagnosticType = 1
-)
 
 func (s *Synchronizer) syncDiagnostics(ctx context.Context, syncType types.SyncType, execution types.SynchronizationExecution) (updateThresholds bool, err error) {
 	_ = syncType
@@ -62,7 +56,7 @@ func (s *Synchronizer) syncDiagnostics(ctx context.Context, syncType types.SyncT
 		return false, nil
 	}
 
-	localDiagnostics := addType(crashreport.ListUnUploadedCrashReports(stateDir), crashDiagnostic)
+	localDiagnostics := addType(crashreport.ListUnUploadedCrashReports(stateDir), bleemeo.GloutonDiagnostic_Crash)
 	localDiagnostics = append(localDiagnostics, s.listOnDemandDiagnostics()...)
 	diagnosticsToUpload := make([]diagnosticWithBleemeoInfo, 0, len(localDiagnostics))
 
@@ -104,7 +98,7 @@ func (s *Synchronizer) listOnDemandDiagnostics() []diagnosticWithBleemeoInfo {
 	if s.state.onDemandDiagnostic.filename != "" {
 		return []diagnosticWithBleemeoInfo{
 			{
-				diagnosticType: onDemandDiagnostic,
+				diagnosticType: bleemeo.GloutonDiagnostic_OnDemand,
 				requestToken:   s.state.onDemandDiagnostic.requestToken,
 				DiagnosticFile: s.state.onDemandDiagnostic,
 			},
@@ -145,7 +139,7 @@ func (s *Synchronizer) uploadDiagnostic(ctx context.Context, apiClient types.Dia
 	buf := new(bytes.Buffer)
 	multipartWriter := multipart.NewWriter(buf)
 
-	err = multipartWriter.WriteField("type", strconv.Itoa(diagnostic.diagnosticType))
+	err = multipartWriter.WriteField("type", strconv.Itoa(int(diagnostic.diagnosticType)))
 	if err != nil {
 		return err
 	}
@@ -218,7 +212,7 @@ func (diag synchronizerOnDemandDiagnostic) MarkUploaded() error {
 	return nil
 }
 
-func addType(diagnostics []gloutonTypes.DiagnosticFile, fixedType diagnosticType) []diagnosticWithBleemeoInfo {
+func addType(diagnostics []gloutonTypes.DiagnosticFile, fixedType bleemeo.GloutonDiagnostic) []diagnosticWithBleemeoInfo {
 	result := make([]diagnosticWithBleemeoInfo, 0, len(diagnostics))
 
 	for _, diagnostic := range diagnostics {

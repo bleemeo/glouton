@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/bleemeo/bleemeo-go"
 	"github.com/bleemeo/glouton/bleemeo/internal/cache"
 	"github.com/bleemeo/glouton/bleemeo/internal/common"
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
@@ -96,7 +97,7 @@ func allowListForMetric(
 				return nil, fmt.Errorf("%w for monitor with config ID=%s", ErrConfigNotFound, monitor.AccountConfig)
 			}
 
-			allowlist = accountConfig.AgentConfigByName[bleemeoTypes.AgentTypeMonitor].MetricsAllowlist
+			allowlist = accountConfig.AgentConfigByName[bleemeo.AgentType_Monitor].MetricsAllowlist
 		} else {
 			agent, present := agents[annotations.BleemeoAgentID]
 			if !present {
@@ -119,9 +120,9 @@ func allowListForMetric(
 		return allowlist, nil
 	}
 
-	tmp, ok := configs[defaultConfigID].AgentConfigByName[bleemeoTypes.AgentTypeAgent]
+	tmp, ok := configs[defaultConfigID].AgentConfigByName[bleemeo.AgentType_Agent]
 	if !ok {
-		return nil, fmt.Errorf("%w: missing agent config for type Name=%s", ErrConfigNotFound, bleemeoTypes.AgentTypeAgent)
+		return nil, fmt.Errorf("%w: missing agent config for type Name=%s", ErrConfigNotFound, bleemeo.AgentType_Agent)
 	}
 
 	return tmp.MetricsAllowlist, nil

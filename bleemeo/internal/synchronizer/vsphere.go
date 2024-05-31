@@ -22,6 +22,7 @@ import (
 	"slices"
 	"time"
 
+	"github.com/bleemeo/bleemeo-go"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/bleemeoapi"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
@@ -235,11 +236,11 @@ func (s *Synchronizer) GetVSphereAgentTypes() (map[vsphere.ResourceKind]string, 
 
 	for i := 0; i < len(agentTypes) && len(vSphereAgentTypes) < vSphereAgentTypesCount; i++ {
 		switch a := agentTypes[i]; {
-		case a.Name == bleemeoTypes.AgentTypeVSphereCluster:
+		case a.Name == bleemeo.AgentType_vSphereCluster:
 			vSphereAgentTypes[vsphere.KindCluster] = a.ID
-		case a.Name == bleemeoTypes.AgentTypeVSphereHost:
+		case a.Name == bleemeo.AgentType_vSphereHost:
 			vSphereAgentTypes[vsphere.KindHost] = a.ID
-		case a.Name == bleemeoTypes.AgentTypeVSphereVM:
+		case a.Name == bleemeo.AgentType_vSphereVM:
 			vSphereAgentTypes[vsphere.KindVM] = a.ID
 		}
 	}

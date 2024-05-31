@@ -30,6 +30,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/bleemeo/bleemeo-go"
 	"github.com/bleemeo/glouton/bleemeo/internal/cache"
 	"github.com/bleemeo/glouton/bleemeo/internal/filter"
 	"github.com/bleemeo/glouton/bleemeo/internal/mqtt"
@@ -189,8 +190,8 @@ func (c *Connector) ApplyCachedConfiguration(ctx context.Context) {
 
 	currentConfig, ok := c.cache.CurrentAccountConfig()
 
-	if ok && c.option.UpdateMetricResolution != nil && currentConfig.AgentConfigByName[types.AgentTypeAgent].MetricResolution != 0 {
-		c.option.UpdateMetricResolution(ctx, currentConfig.AgentConfigByName[types.AgentTypeAgent].MetricResolution, currentConfig.AgentConfigByName[types.AgentTypeSNMP].MetricResolution)
+	if ok && c.option.UpdateMetricResolution != nil && currentConfig.AgentConfigByName[bleemeo.AgentType_Agent].MetricResolution != 0 {
+		c.option.UpdateMetricResolution(ctx, currentConfig.AgentConfigByName[bleemeo.AgentType_Agent].MetricResolution, currentConfig.AgentConfigByName[bleemeo.AgentType_SNMP].MetricResolution)
 	}
 }
 
@@ -481,7 +482,7 @@ func (c *Connector) RelabelHook(ctx context.Context, labels map[string]string) (
 			return labels, true
 		}
 
-		snmpTypeID, err := c.agentTypeID(types.AgentTypeSNMP)
+		snmpTypeID, err := c.agentTypeID(bleemeo.AgentType_SNMP)
 		if err != nil {
 			return labels, true
 		}
@@ -537,7 +538,7 @@ func (c *Connector) RelabelHook(ctx context.Context, labels map[string]string) (
 }
 
 func (c *Connector) kubernetesAgentID(clusterName string) (string, error) {
-	kubernetesAgentType, err := c.agentTypeID(types.AgentTypeKubernetes)
+	kubernetesAgentType, err := c.agentTypeID(bleemeo.AgentType_K8s)
 	if err != nil {
 		return "", err
 	}
@@ -556,7 +557,7 @@ func (c *Connector) kubernetesAgentID(clusterName string) (string, error) {
 }
 
 // agentTypeID returns the ID of the given agent type.
-func (c *Connector) agentTypeID(agentType string) (string, error) {
+func (c *Connector) agentTypeID(agentType bleemeo.AgentType) (string, error) {
 	for _, t := range c.cache.AgentTypes() {
 		if t.Name == agentType {
 			return t.ID, nil
@@ -706,7 +707,7 @@ func (c *Connector) DiagnosticSNMPAssociation(ctx context.Context, file io.Write
 	var snmpTypeID string
 
 	for _, t := range c.cache.AgentTypes() {
-		if t.Name == types.AgentTypeSNMP {
+		if t.Name == bleemeo.AgentType_SNMP {
 			snmpTypeID = t.ID
 
 			break
@@ -998,7 +999,7 @@ func (c *Connector) IsMetricAllowed(metric gloutonTypes.LabelsAndAnnotation) (bo
 
 func (c *Connector) updateConfig(ctx context.Context, nameChanged bool) {
 	currentConfig, ok := c.cache.CurrentAccountConfig()
-	if !ok || currentConfig.AgentConfigByName[types.AgentTypeAgent].MetricResolution == 0 {
+	if !ok || currentConfig.AgentConfigByName[bleemeo.AgentType_Agent].MetricResolution == 0 {
 		return
 	}
 
@@ -1007,7 +1008,7 @@ func (c *Connector) updateConfig(ctx context.Context, nameChanged bool) {
 	}
 
 	if c.option.UpdateMetricResolution != nil {
-		c.option.UpdateMetricResolution(ctx, currentConfig.AgentConfigByName[types.AgentTypeAgent].MetricResolution, currentConfig.AgentConfigByName[types.AgentTypeSNMP].MetricResolution)
+		c.option.UpdateMetricResolution(ctx, currentConfig.AgentConfigByName[bleemeo.AgentType_Agent].MetricResolution, currentConfig.AgentConfigByName[bleemeo.AgentType_SNMP].MetricResolution)
 	}
 }
 

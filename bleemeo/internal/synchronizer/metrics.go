@@ -27,6 +27,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/bleemeo/bleemeo-go"
 	"github.com/bleemeo/glouton/bleemeo/internal/common"
 	"github.com/bleemeo/glouton/bleemeo/internal/filter"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/bleemeoapi"
@@ -685,7 +686,7 @@ func (s *Synchronizer) isOwnedMetric(metric bleemeoapi.MetricPayload) bool {
 	}
 
 	// Only monitors have metric that are owned by multiple agents
-	agentTypeID, found := s.getAgentType(bleemeoTypes.AgentTypeMonitor)
+	agentTypeID, found := s.getAgentType(bleemeo.AgentType_Monitor)
 	if found {
 		agents := s.option.Cache.AgentsByUUID()
 		if agentTypeID == agents[metric.AgentID].AgentType {
@@ -1400,7 +1401,7 @@ func (s *Synchronizer) undeactivableMetric(v bleemeoTypes.Metric, agents map[str
 	agent := agents[v.AgentID]
 
 	if v.Labels[gloutonTypes.LabelName] == agentStatusName {
-		snmpTypeID, found := s.getAgentType(bleemeoTypes.AgentTypeSNMP)
+		snmpTypeID, found := s.getAgentType(bleemeo.AgentType_SNMP)
 
 		// We only skip deactivation of agent_status when it not an SNMP agent.
 		// On SNMP agent, "agent_status" isn't special.
@@ -1409,7 +1410,7 @@ func (s *Synchronizer) undeactivableMetric(v bleemeoTypes.Metric, agents map[str
 		}
 	}
 
-	kubernetesTypeID, found := s.getAgentType(bleemeoTypes.AgentTypeKubernetes)
+	kubernetesTypeID, found := s.getAgentType(bleemeo.AgentType_K8s)
 	if found && agent.AgentType == kubernetesTypeID && !s.option.Cache.Agent().IsClusterLeader {
 		// Can't deactivate Kubernetes metrics if I'm not the leader.
 		return true

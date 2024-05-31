@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/bleemeo/bleemeo-go"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/logger"
@@ -107,7 +108,7 @@ func (s *Synchronizer) syncMonitors(ctx context.Context, syncType types.SyncType
 			needConfigUpdate = true
 
 			break
-		} else if _, ok := cfg.AgentConfigByName[bleemeoTypes.AgentTypeMonitor]; !ok {
+		} else if _, ok := cfg.AgentConfigByName[bleemeo.AgentType_Monitor]; !ok {
 			needConfigUpdate = true
 
 			break
@@ -170,7 +171,7 @@ func (s *Synchronizer) ApplyMonitorUpdate() error {
 
 		processedMonitors = append(processedMonitors, gloutonTypes.Monitor{
 			ID:                      monitor.ID,
-			MetricMonitorResolution: conf.AgentConfigByName[bleemeoTypes.AgentTypeMonitor].MetricResolution,
+			MetricMonitorResolution: conf.AgentConfigByName[bleemeo.AgentType_Monitor].MetricResolution,
 			CreationDate:            jitterCreationDate,
 			URL:                     monitor.URL,
 			BleemeoAgentID:          monitor.AgentID,

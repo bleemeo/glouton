@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/bleemeo/bleemeo-go"
 	"github.com/bleemeo/glouton/bleemeo/internal/cache"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/syncservices"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
@@ -140,7 +141,7 @@ func syncRemoteAndLocal(ctx context.Context, localServices []discovery.Service, 
 
 		for _, tags := range srv.Tags {
 			// we assume that any automatic tags is an application tags
-			if tags.TagType != bleemeoTypes.TagTypeIsAutomaticByGlouton {
+			if tags.TagType != bleemeo.TagType_AutomaticGlouton {
 				continue
 			}
 

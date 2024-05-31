@@ -21,6 +21,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/bleemeo/bleemeo-go"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/bleemeoapi"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
@@ -112,7 +113,7 @@ func (s *Synchronizer) snmpRegisterAndUpdate(ctx context.Context, execution type
 
 	remoteAgentList := s.option.Cache.AgentsByUUID()
 
-	agentTypeID, found := s.getAgentType(bleemeoTypes.AgentTypeSNMP)
+	agentTypeID, found := s.getAgentType(bleemeo.AgentType_SNMP)
 	if !found {
 		return errRetryLater
 	}
@@ -196,7 +197,7 @@ func (s *Synchronizer) remoteRegisterSNMP(ctx context.Context, apiClient types.S
 	return result, nil
 }
 
-func (s *Synchronizer) getAgentType(name string) (id string, found bool) {
+func (s *Synchronizer) getAgentType(name bleemeo.AgentType) (id string, found bool) {
 	agentTypes := s.option.Cache.AgentTypes()
 
 	for _, a := range agentTypes {

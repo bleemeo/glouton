@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"reflect"
 
+	"github.com/bleemeo/bleemeo-go"
 	"github.com/bleemeo/glouton/bleemeo/internal/common"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
@@ -36,9 +37,9 @@ const gloutonConfigItemBatchSize = 100
 type comparableConfigItem struct {
 	Key      string
 	Priority int
-	Source   bleemeoTypes.ConfigItemSource
+	Source   bleemeo.ConfigItemSource
 	Path     string
-	Type     bleemeoTypes.ConfigItemType
+	Type     bleemeo.ConfigItemType
 }
 
 type configItemValue struct {
@@ -135,58 +136,58 @@ func (s *Synchronizer) localConfigItems() map[comparableConfigItem]any {
 }
 
 // Convert a config item source to a Bleemeo config item source.
-func bleemeoItemSourceFromConfigSource(source config.ItemSource) bleemeoTypes.ConfigItemSource {
+func bleemeoItemSourceFromConfigSource(source config.ItemSource) bleemeo.ConfigItemSource {
 	switch source {
 	case config.SourceFile:
-		return bleemeoTypes.SourceFile
+		return bleemeo.ConfigItemSource_File
 	case config.SourceEnv:
-		return bleemeoTypes.SourceEnv
+		return bleemeo.ConfigItemSource_Env
 	case config.SourceDefault:
-		return bleemeoTypes.SourceDefault
+		return bleemeo.ConfigItemSource_Default
 	default:
-		return bleemeoTypes.SourceUnknown
+		return bleemeo.ConfigItemSource_Unknown
 	}
 }
 
 // Convert a config item type to a Bleemeo config item type.
 // Both enums are very similar, but they are duplicated to not
 // put any Bleemeo API specific types in the config.
-func bleemeoItemTypeFromConfigType(source config.ItemType) bleemeoTypes.ConfigItemType {
+func bleemeoItemTypeFromConfigType(source config.ItemType) bleemeo.ConfigItemType {
 	switch source {
 	case config.TypeBool:
-		return bleemeoTypes.TypeBool
+		return bleemeo.ConfigItemType_Bool
 	case config.TypeFloat:
-		return bleemeoTypes.TypeFloat
+		return bleemeo.ConfigItemType_Float
 	case config.TypeInt:
-		return bleemeoTypes.TypeInt
+		return bleemeo.ConfigItemType_Int
 	case config.TypeString:
-		return bleemeoTypes.TypeString
+		return bleemeo.ConfigItemType_String
 	case config.TypeListString:
-		return bleemeoTypes.TypeListString
+		return bleemeo.ConfigItemType_ListString
 	case config.TypeListInt:
-		return bleemeoTypes.TypeListInt
+		return bleemeo.ConfigItemType_ListInt
 	case config.TypeMapStrStr:
-		return bleemeoTypes.TypeMapStrStr
+		return bleemeo.ConfigItemType_MapStrStr
 	case config.TypeMapStrInt:
-		return bleemeoTypes.TypeMapStrInt
+		return bleemeo.ConfigItemType_MapStrInt
 	case config.TypeThresholds:
-		return bleemeoTypes.TypeThresholds
+		return bleemeo.ConfigItemType_Thresholds
 	case config.TypeServices:
-		return bleemeoTypes.TypeServices
+		return bleemeo.ConfigItemType_Services
 	case config.TypeNameInstances:
-		return bleemeoTypes.TypeNameInstances
+		return bleemeo.ConfigItemType_NameInstances
 	case config.TypeBlackboxTargets:
-		return bleemeoTypes.TypeBlackboxTargets
+		return bleemeo.ConfigItemType_BlackboxTargets
 	case config.TypePrometheusTargets:
-		return bleemeoTypes.TypePrometheusTargets
+		return bleemeo.ConfigItemType_PrometheusTargets
 	case config.TypeSNMPTargets:
-		return bleemeoTypes.TypeSNMPTargets
+		return bleemeo.ConfigItemType_SNMPTargets
 	case config.TypeLogInputs:
-		return bleemeoTypes.TypeLogInputs
+		return bleemeo.ConfigItemType_LogInputs
 	case config.TypeAny:
-		return bleemeoTypes.TypeAny
+		return bleemeo.ConfigItemType_Any
 	default:
-		return bleemeoTypes.TypeAny
+		return bleemeo.ConfigItemType_Any
 	}
 }
 
@@ -220,7 +221,7 @@ func (s *Synchronizer) registerLocalConfigItems(
 			},
 		)
 
-		logger.V(2).Printf(`Registering config item "%s" from %s %s`, localItem.Key, localItem.Source, localItem.Path)
+		logger.V(2).Printf(`Registering config item "%s" from %s %s`, localItem.Key, bleemeoTypes.FormatConfigItemSource(localItem.Source), localItem.Path)
 	}
 
 	for start := 0; start < len(itemsToRegister); start += gloutonConfigItemBatchSize {
@@ -248,7 +249,7 @@ func (s *Synchronizer) removeRemoteConfigItems(
 	// Find and remove remote items that are not present locally.
 	for remoteKey, remoteItem := range remoteConfigItems {
 		// Skip API source, these items are managed by the API itself.
-		if remoteKey.Source == bleemeoTypes.SourceAPI {
+		if remoteKey.Source == bleemeo.ConfigItemSource_API {
 			continue
 		}
 
@@ -271,7 +272,7 @@ func (s *Synchronizer) removeRemoteConfigItems(
 
 		logger.V(2).Printf(
 			`Config item %s ("%s" from %s %s) deleted`,
-			remoteItem.ID, remoteKey.Key, remoteKey.Source, remoteKey.Path,
+			remoteItem.ID, remoteKey.Key, bleemeoTypes.FormatConfigItemSource(remoteKey.Source), remoteKey.Path,
 		)
 	}
 
