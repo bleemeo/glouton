@@ -127,8 +127,8 @@ func syncRemoteAndLocal(ctx context.Context, localServices []discovery.Service, 
 	// we can discard the logThrottle message, it will be logged by syncservices itself if needed.
 	localServices = syncservices.ServiceExcludeUnregistrable(localServices, func(string) {})
 	previousServices := cache.Services()
-	alreadyExistingApplicationTags := make(map[string]interface{})
-	alreadyExistingApplicationName := make(map[string]interface{})
+	alreadyExistingApplicationTags := make(map[string]any)
+	alreadyExistingApplicationName := make(map[string]any)
 
 	// we only create an new application the first time this tag is seen on active service.
 	// we don't create new application is a service already exists with that tag, because that means

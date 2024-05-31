@@ -1150,7 +1150,6 @@ func TestMetricPermanentError(t *testing.T) {
 			}
 
 			// Now metric registration will succeed and retry all
-			// metricResource.CreateHook = nil
 			helper.wrapperClientMock.resources.metrics.createHook = nil
 
 			helper.SetTimeToNextFullSync()
@@ -1224,9 +1223,6 @@ func TestMetricTooMany(t *testing.T) { //nolint:maintidx
 		return nil
 	}
 
-	/*metricResource.CreateHook = func(r *http.Request, body []byte, valuePtr interface{}) error {
-		return metricResource.PatchHook(r, body, valuePtr, nil)
-	}*/
 	helper.wrapperClientMock.resources.metrics.createHook = func(metric *bleemeoapi.MetricPayload) error {
 		return helper.wrapperClientMock.resources.metrics.patchHook(metric)
 	}

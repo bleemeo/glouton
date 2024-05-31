@@ -65,7 +65,7 @@ type mockDocker struct {
 type mockMonitorManager struct{}
 
 type stateMock struct {
-	data      map[string]interface{}
+	data      map[string]any
 	agentUUID string
 	password  string
 }
@@ -164,13 +164,13 @@ func (m mockProcessLister) TopInfo(_ context.Context, maxAge time.Duration) (top
 
 func newStateMock() *stateMock {
 	return &stateMock{
-		data: map[string]interface{}{},
+		data: map[string]any{},
 	}
 }
 
 // Set updates an object.
 // No json or anything there, just stupid objects.
-func (s *stateMock) Set(key string, object interface{}) error {
+func (s *stateMock) Set(key string, object any) error {
 	s.data[key] = object
 
 	return nil
@@ -199,7 +199,7 @@ func (s *stateMock) SetBleemeoCredentials(agentUUID string, password string) err
 }
 
 // Get returns an object.
-func (s *stateMock) Get(key string, result interface{}) error {
+func (s *stateMock) Get(key string, result any) error {
 	val, ok := s.data[key]
 	if ok {
 		reflect.ValueOf(result).Elem().Set(reflect.ValueOf(val))
