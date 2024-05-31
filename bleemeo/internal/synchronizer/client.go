@@ -51,10 +51,10 @@ type wrapperClient struct {
 	throttleConsecutive int //nolint: unused
 }
 
-func (cl *wrapperClient) dupCheck() error {
+func (cl *wrapperClient) dupCheck(ctx context.Context) error {
 	if !cl.duplicateChecked {
 		cl.duplicateChecked = true
-		cl.duplicateError = cl.checkDuplicateFn(context.TODO(), cl)
+		cl.duplicateError = cl.checkDuplicateFn(ctx, cl)
 	}
 
 	return cl.duplicateError
@@ -73,7 +73,7 @@ func (cl *wrapperClient) Get(ctx context.Context, resource bleemeo.Resource, id 
 		return errClientUninitialized
 	}
 
-	if err := cl.dupCheck(); err != nil {
+	if err := cl.dupCheck(ctx); err != nil {
 		return err
 	}
 
@@ -90,19 +90,19 @@ func (cl *wrapperClient) Count(ctx context.Context, resource bleemeo.Resource, p
 		return 0, errClientUninitialized
 	}
 
-	if err := cl.dupCheck(); err != nil {
+	if err := cl.dupCheck(ctx); err != nil {
 		return 0, err
 	}
 
 	return cl.client.Count(ctx, resource, params)
 }
 
-func (cl *wrapperClient) Iterator(resource bleemeo.Resource, params url.Values) bleemeo.Iterator {
+func (cl *wrapperClient) Iterator(ctx context.Context, resource bleemeo.Resource, params url.Values) bleemeo.Iterator {
 	if cl == nil {
 		return errorIterator{errClientUninitialized}
 	}
 
-	if err := cl.dupCheck(); err != nil {
+	if err := cl.dupCheck(ctx); err != nil {
 		return errorIterator{err}
 	}
 
@@ -114,7 +114,7 @@ func (cl *wrapperClient) Create(ctx context.Context, resource bleemeo.Resource, 
 		return errClientUninitialized
 	}
 
-	if err := cl.dupCheck(); err != nil {
+	if err := cl.dupCheck(ctx); err != nil {
 		return err
 	}
 
@@ -124,7 +124,7 @@ func (cl *wrapperClient) Create(ctx context.Context, resource bleemeo.Resource, 
 	}
 
 	// Basic comparison will nil fails when the underlying type of `result` is actually an interface.
-	if result == nil || !reflect.ValueOf(result).IsNil() {
+	if result != nil && !reflect.ValueOf(result).IsNil() {
 		return json.Unmarshal(respBody, result)
 	}
 
@@ -136,7 +136,7 @@ func (cl *wrapperClient) Update(ctx context.Context, resource bleemeo.Resource, 
 		return errClientUninitialized
 	}
 
-	if err := cl.dupCheck(); err != nil {
+	if err := cl.dupCheck(ctx); err != nil {
 		return err
 	}
 
@@ -146,7 +146,7 @@ func (cl *wrapperClient) Update(ctx context.Context, resource bleemeo.Resource, 
 	}
 
 	// Basic comparison will nil fails when the underlying type of `result` is actually an interface.
-	if result == nil || !reflect.ValueOf(result).IsNil() {
+	if result != nil && !reflect.ValueOf(result).IsNil() {
 		return json.Unmarshal(respBody, result)
 	}
 
@@ -158,7 +158,7 @@ func (cl *wrapperClient) Delete(ctx context.Context, resource bleemeo.Resource, 
 		return errClientUninitialized
 	}
 
-	if err := cl.dupCheck(); err != nil {
+	if err := cl.dupCheck(ctx); err != nil {
 		return err
 	}
 
@@ -172,7 +172,7 @@ func (cl *wrapperClient) Do(ctx context.Context, method, reqURI string, params u
 	}
 
 	// Basic comparison will nil fails when the underlying type of `result` is actually an interface.
-	if result == nil || !reflect.ValueOf(result).IsNil() {
+	if result != nil && !reflect.ValueOf(result).IsNil() {
 		err = json.Unmarshal(respBody, result)
 	}
 
@@ -184,7 +184,7 @@ func (cl *wrapperClient) DoWithBody(ctx context.Context, reqURI string, contentT
 		return 0, errClientUninitialized
 	}
 
-	if err = cl.dupCheck(); err != nil {
+	if err = cl.dupCheck(ctx); err != nil {
 		return 0, err
 	}
 

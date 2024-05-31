@@ -105,7 +105,7 @@ func (rs *reloadState) Close() {
 	}
 }
 
-// Connector manager the connection between the Agent and Bleemeo.
+// Connector manages the connection between the Agent and Bleemeo.
 type Connector struct {
 	option types.GlobalOption
 
@@ -122,11 +122,11 @@ type Connector struct {
 	disabledUntil              time.Time
 	disableReason              types.DisableReason
 
-	// initialized indicates whether the mqtt connetcor can be started
+	// initialized indicates whether the mqtt connector can be started
 	initialized bool
 }
 
-// New create a new Connector.
+// New creates a new Connector.
 func New(option types.GlobalOption) (c *Connector, err error) {
 	c = &Connector{
 		option:       option,
@@ -135,7 +135,7 @@ func New(option types.GlobalOption) (c *Connector, err error) {
 		pushAppender: model.NewBufferAppender(),
 	}
 
-	c.sync, err = synchronizer.New(synchronizerTypes.Option{
+	c.sync = synchronizer.New(synchronizerTypes.Option{
 		GlobalOption:                c.option,
 		PushAppender:                c.pushAppender,
 		Cache:                       c.cache,
@@ -151,7 +151,7 @@ func New(option types.GlobalOption) (c *Connector, err error) {
 		return c, fmt.Errorf("%w: missing SNMPOnlineTarget function", errBadOption)
 	}
 
-	return c, err
+	return c, nil
 }
 
 func (c *Connector) setInitialized() {

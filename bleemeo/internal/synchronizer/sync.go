@@ -116,22 +116,19 @@ type thresholdOverrideKey struct {
 }
 
 // New return a new Synchronizer.
-func New(option types.Option) (*Synchronizer, error) {
+func New(option types.Option) *Synchronizer {
 	return newWithNow(option, time.Now)
 }
 
-func newForTest(option types.Option, now func() time.Time) (*Synchronizer, error) {
-	s, err := newWithNow(option, now)
-	if err != nil {
-		return s, err
-	}
+func newForTest(option types.Option, now func() time.Time) *Synchronizer {
+	s := newWithNow(option, now)
 
 	s.inTest = true
 
-	return s, nil
+	return s
 }
 
-func newWithNow(option types.Option, now func() time.Time) (*Synchronizer, error) { // TODO: is returning an error useful ?
+func newWithNow(option types.Option, now func() time.Time) *Synchronizer {
 	nextFullSync := now()
 	fullSyncCount := 0
 
@@ -176,7 +173,7 @@ func newWithNow(option types.Option, now func() time.Time) (*Synchronizer, error
 		s.agentID, _ = s.option.State.BleemeoCredentials()
 	}
 
-	return s, nil
+	return s
 }
 
 func (s *Synchronizer) newClient() types.Client {
@@ -1025,7 +1022,7 @@ func (s *Synchronizer) checkDuplicated(ctx context.Context, client types.Client)
 	}
 
 	// The agent is duplicated, update the last duplication date on the API.
-	err := client.UpdateAgentLastDuplicationDate(ctx, s.agentID, time.Now())
+	err := client.UpdateAgentLastDuplicationDate(ctx, s.agentID, s.now())
 	if err != nil {
 		logger.V(1).Printf("Failed to update duplication date: %s", err)
 	}

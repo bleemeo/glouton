@@ -156,7 +156,7 @@ func (helper *syncTestHelper) initSynchronizer(t *testing.T) {
 		docker = &mockDocker{helper: helper}
 	}
 
-	s, err := newForTest(types.Option{
+	s := newForTest(types.Option{
 		Cache:           helper.cache,
 		IsMqttConnected: func() bool { return false },
 		ProvideClient:   func() types.Client { return helper.wrapperClientMock },
@@ -183,16 +183,13 @@ func (helper *syncTestHelper) initSynchronizer(t *testing.T) {
 			LastMetricAnnotationChange: func() time.Time { return time.Time{} },
 		},
 	}, helper.Now)
-	if err != nil {
-		t.Fatalf("newWithNow failed: %v", err)
-	}
 
 	helper.s = s
 
 	// Do actions done by s.Run()
 	s.startedAt = helper.Now()
 
-	if err = s.setClient(); err != nil {
+	if err := s.setClient(); err != nil {
 		t.Fatalf("setClient failed: %v", err)
 	}
 

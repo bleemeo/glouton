@@ -33,8 +33,11 @@ import (
 
 func (cl *wrapperClient) ListApplications(ctx context.Context) ([]bleemeoTypes.Application, error) {
 	applications := make([]bleemeoTypes.Application, 0)
+	params := url.Values{
+		"fields": {"id,name,tag"},
+	}
 
-	iter := cl.Iterator(bleemeo.ResourceApplication, nil)
+	iter := cl.Iterator(ctx, bleemeo.ResourceApplication, params)
 	for iter.Next(ctx) {
 		var application bleemeoTypes.Application
 
@@ -68,7 +71,7 @@ func (cl *wrapperClient) ListAgentTypes(ctx context.Context) ([]bleemeoTypes.Age
 
 	var agentTypes []bleemeoTypes.AgentType
 
-	iter := cl.Iterator(bleemeo.ResourceAgentType, params)
+	iter := cl.Iterator(ctx, bleemeo.ResourceAgentType, params)
 	for iter.Next(ctx) {
 		var agentType bleemeoTypes.AgentType
 
@@ -89,7 +92,7 @@ func (cl *wrapperClient) ListAccountConfigs(ctx context.Context) ([]bleemeoTypes
 
 	var configs []bleemeoTypes.AccountConfig
 
-	iter := cl.Iterator(bleemeo.ResourceAccountConfig, params)
+	iter := cl.Iterator(ctx, bleemeo.ResourceAccountConfig, params)
 	for iter.Next(ctx) {
 		var config bleemeoTypes.AccountConfig
 
@@ -110,7 +113,7 @@ func (cl *wrapperClient) ListAgentConfigs(ctx context.Context) ([]bleemeoTypes.A
 
 	var configs []bleemeoTypes.AgentConfig
 
-	iter := cl.Iterator(bleemeo.ResourceAgentConfig, params)
+	iter := cl.Iterator(ctx, bleemeo.ResourceAgentConfig, params)
 	for iter.Next(ctx) {
 		var config bleemeoTypes.AgentConfig
 
@@ -131,7 +134,7 @@ func (cl *wrapperClient) ListAgents(ctx context.Context) ([]bleemeoTypes.Agent, 
 
 	var agents []bleemeoTypes.Agent
 
-	iter := cl.Iterator(bleemeo.ResourceAgent, params)
+	iter := cl.Iterator(ctx, bleemeo.ResourceAgent, params)
 	for iter.Next(ctx) {
 		var agent bleemeoTypes.Agent
 
@@ -165,7 +168,7 @@ func (cl *wrapperClient) ListGloutonConfigItems(ctx context.Context, agentID str
 
 	items := make([]bleemeoTypes.GloutonConfigItem, 0)
 
-	iter := cl.Iterator(bleemeo.ResourceGloutonConfigItem, params)
+	iter := cl.Iterator(ctx, bleemeo.ResourceGloutonConfigItem, params)
 	for iter.Next(ctx) {
 		var item bleemeoTypes.GloutonConfigItem
 
@@ -197,7 +200,7 @@ func (cl *wrapperClient) ListContainers(ctx context.Context, agentID string) ([]
 
 	var containers []bleemeoTypes.Container
 
-	iter := cl.Iterator(bleemeo.ResourceContainer, params)
+	iter := cl.Iterator(ctx, bleemeo.ResourceContainer, params)
 	for iter.Next(ctx) {
 		var container bleemeoapi.ContainerPayload
 
@@ -222,7 +225,7 @@ func (cl *wrapperClient) RegisterContainer(ctx context.Context, payload bleemeoa
 func (cl *wrapperClient) ListDiagnostics(ctx context.Context) ([]bleemeoapi.RemoteDiagnostic, error) {
 	var diagnostics []bleemeoapi.RemoteDiagnostic
 
-	iter := cl.Iterator(bleemeo.ResourceGloutonDiagnostic, nil)
+	iter := cl.Iterator(ctx, bleemeo.ResourceGloutonDiagnostic, nil)
 	for iter.Next(ctx) {
 		var remoteDiagnostic bleemeoapi.RemoteDiagnostic
 
@@ -254,7 +257,7 @@ func (cl *wrapperClient) UploadDiagnostic(ctx context.Context, contentType strin
 func (cl *wrapperClient) ListFacts(ctx context.Context) ([]bleemeoTypes.AgentFact, error) {
 	var facts []bleemeoTypes.AgentFact
 
-	iter := cl.Iterator(bleemeo.ResourceAgentFact, nil)
+	iter := cl.Iterator(ctx, bleemeo.ResourceAgentFact, nil)
 	for iter.Next(ctx) {
 		var fact bleemeoTypes.AgentFact
 
@@ -293,7 +296,7 @@ func (cl *wrapperClient) ListActiveMetrics(ctx context.Context, active bool) ([]
 
 	metrics := make([]bleemeoapi.MetricPayload, 0)
 
-	iter := cl.Iterator(bleemeo.ResourceMetric, params)
+	iter := cl.Iterator(ctx, bleemeo.ResourceMetric, params)
 	for iter.Next(ctx) {
 		var metric bleemeoapi.MetricPayload
 
@@ -321,7 +324,7 @@ func (cl *wrapperClient) CountInactiveMetrics(ctx context.Context) (int, error) 
 func (cl *wrapperClient) ListMetricsBy(ctx context.Context, params url.Values) (map[string]bleemeoTypes.Metric, error) {
 	metricsByUUID := make(map[string]bleemeoTypes.Metric)
 
-	iter := cl.Iterator(bleemeo.ResourceMetric, params)
+	iter := cl.Iterator(ctx, bleemeo.ResourceMetric, params)
 	for iter.Next(ctx) {
 		var metric bleemeoapi.MetricPayload
 
@@ -370,7 +373,7 @@ func (cl *wrapperClient) ListMonitors(ctx context.Context) ([]bleemeoTypes.Monit
 
 	var monitors []bleemeoTypes.Monitor
 
-	iter := cl.Iterator(bleemeo.ResourceService, params)
+	iter := cl.Iterator(ctx, bleemeo.ResourceService, params)
 	for iter.Next(ctx) {
 		var monitor bleemeoTypes.Monitor
 
@@ -398,7 +401,7 @@ func (cl *wrapperClient) ListServices(ctx context.Context, agentID string, field
 
 	var services []bleemeoTypes.Service
 
-	iter := cl.Iterator(bleemeo.ResourceService, params)
+	iter := cl.Iterator(ctx, bleemeo.ResourceService, params)
 	for iter.Next(ctx) {
 		var service bleemeoTypes.Service
 

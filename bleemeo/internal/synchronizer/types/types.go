@@ -180,7 +180,7 @@ type RawClient interface {
 	Do(ctx context.Context, method string, path string, params url.Values, authenticated bool, body io.Reader, result any) (statusCode int, err error)
 	DoWithBody(ctx context.Context, path string, contentType string, body io.Reader) (statusCode int, err error)
 	DoRequest(ctx context.Context, req *http.Request, authenticated bool) (*http.Response, error)
-	Iterator(resource bleemeo.Resource, params url.Values) bleemeo.Iterator
+	Iterator(ctx context.Context, resource bleemeo.Resource, params url.Values) bleemeo.Iterator
 	ThrottleDeadline() time.Time
 }
 

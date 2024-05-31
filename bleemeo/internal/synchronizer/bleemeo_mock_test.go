@@ -174,7 +174,7 @@ func (wcm *wrapperClientMock) DoRequest(_ context.Context, req *http.Request, au
 	return http.ReadResponse(bufio.NewReader(bytes.NewReader(respData)), req)
 }
 
-func (wcm *wrapperClientMock) Iterator(resource bleemeo.Resource, params url.Values) bleemeo.Iterator { //nolint: revive
+func (wcm *wrapperClientMock) Iterator(ctx context.Context, resource bleemeo.Resource, params url.Values) bleemeo.Iterator { //nolint: revive
 	panic("implement me")
 }
 
