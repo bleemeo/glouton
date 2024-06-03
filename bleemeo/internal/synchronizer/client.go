@@ -46,9 +46,6 @@ type wrapperClient struct {
 
 	duplicateError   error
 	duplicateChecked bool
-	// TODO: throttling
-	throttleDeadline    time.Time
-	throttleConsecutive int //nolint: unused
 }
 
 func (cl *wrapperClient) dupCheck(ctx context.Context) error {
@@ -65,7 +62,7 @@ func (cl *wrapperClient) ThrottleDeadline() time.Time {
 		return time.Time{}
 	}
 
-	return cl.throttleDeadline
+	return cl.client.ThrottleDeadline()
 }
 
 func (cl *wrapperClient) Get(ctx context.Context, resource bleemeo.Resource, id string, fields string, result any) error {
@@ -202,6 +199,7 @@ func (cl *wrapperClient) DoWithBody(ctx context.Context, reqURI string, contentT
 		return 0, err //nolint:wrapcheck
 	}
 
+	_, _ = io.Copy(io.Discard, resp.Body)
 	_ = resp.Body.Close()
 
 	return resp.StatusCode, nil
@@ -228,14 +226,14 @@ func (errIter errorIterator) Err() error {
 	return errIter.err
 }
 
-// IsAuthError return true if the error is an APIError due to authentication failure.
+// IsAuthError returns true if the error is an APIError due to authentication failure.
 func IsAuthError(err error) bool {
 	apiError := new(bleemeo.AuthError)
 
 	return errors.As(err, &apiError)
 }
 
-// IsNotFound return true if the error is an APIError due to 404.
+// IsNotFound returns true if the error is an APIError due to 404.
 func IsNotFound(err error) bool {
 	if apiError := new(bleemeo.APIError); errors.As(err, &apiError) {
 		return apiError.StatusCode == 404
@@ -244,7 +242,7 @@ func IsNotFound(err error) bool {
 	return false
 }
 
-// IsBadRequest return true if the error is an APIError due to 400.
+// IsBadRequest returns true if the error is an APIError due to 400.
 func IsBadRequest(err error) bool {
 	if apiError := new(bleemeo.APIError); errors.As(err, &apiError) {
 		return apiError.StatusCode == 400
@@ -253,7 +251,7 @@ func IsBadRequest(err error) bool {
 	return false
 }
 
-// IsServerError return true if the error is an APIError due to 5xx.
+// IsServerError returns true if the error is an APIError due to 5xx.
 func IsServerError(err error) bool {
 	if apiError := new(bleemeo.APIError); errors.As(err, &apiError) {
 		return apiError.StatusCode >= 500
@@ -262,18 +260,16 @@ func IsServerError(err error) bool {
 	return false
 }
 
-// IsThrottleError return true if the error is an APIError due to 429 - Too many requests.
+// IsThrottleError returns true if the error is an APIError due to 429 - Too many requests.
 //
 // ThrottleDeadline could be used to get recommended retry deadline.
 func IsThrottleError(err error) bool {
-	if apiError := new(bleemeo.APIError); errors.As(err, &apiError) {
-		return apiError.StatusCode == 429
-	}
+	throttleError := new(bleemeo.ThrottleError)
 
-	return false
+	return errors.As(err, &throttleError)
 }
 
-// APIErrorContent return the API error response, if the error is an APIError.
+// APIErrorContent returns the API error response, if the error is an APIError.
 // Return an empty string if the error isn't an APIError.
 func APIErrorContent(err error) string {
 	if apiError := new(bleemeo.APIError); errors.As(err, &apiError) {
