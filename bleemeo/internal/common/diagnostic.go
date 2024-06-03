@@ -29,7 +29,6 @@ import (
 
 	"github.com/bleemeo/bleemeo-go"
 	"github.com/bleemeo/glouton/crashreport"
-	"github.com/bleemeo/glouton/version"
 )
 
 var errHandshakeTimeout = errors.New("TLS handshake timeout")
@@ -120,11 +119,7 @@ func diagnosticTLS(builder io.Writer, tlsConfig *tls.Config, host string, hostPo
 
 // DiagnosticHTTP return information about the ability to execute an HTTP request against the Bleemeo API.
 func DiagnosticHTTP(apiClient *bleemeo.Client) string {
-	headers := http.Header{
-		"User-Agent": {version.UserAgent()},
-	}
-
-	req, err := apiClient.ParseRequest(http.MethodGet, "/v1/info/", headers, nil, nil)
+	req, err := apiClient.ParseRequest(http.MethodGet, "/v1/info/", nil, nil, nil)
 	if err != nil {
 		return fmt.Sprintf("can't make diagnostic request: %v\n", err)
 	}
