@@ -31,10 +31,21 @@ import (
 	"github.com/bleemeo/glouton/logger"
 )
 
+const (
+	applicationFields   = "id,name,tag"
+	agentTypeFields     = "id,name,display_name"
+	accountConfigFields = "id,name,live_process_resolution,live_process,docker_integration,snmp_integration,vsphere_integration,number_of_custom_metrics,suspended"
+	agentConfigFields   = "id,account_config,agent_type,metrics_allowlist,metrics_resolution"
+	agentFields         = "account,agent_type,created_at,current_config,display_name,fqdn,id,is_cluster_leader,next_config_at,tags"
+	configItemFields    = "id,agent,key,value,priority,source,path,type"
+	diagnosticFields    = "name"
+	agentFactFields     = "id,agent,key,value"
+)
+
 func (cl *wrapperClient) ListApplications(ctx context.Context) ([]bleemeoTypes.Application, error) {
 	applications := make([]bleemeoTypes.Application, 0)
 	params := url.Values{
-		"fields": {"id,name,tag"},
+		"fields": {applicationFields},
 	}
 
 	iter := cl.Iterator(ctx, bleemeo.ResourceApplication, params)
@@ -56,7 +67,7 @@ func (cl *wrapperClient) CreateApplication(ctx context.Context, app bleemeoTypes
 
 	app.ID = "" // ID isn't allowed in creation
 
-	err := cl.Create(ctx, bleemeo.ResourceApplication, app, "id,name,tag", &result)
+	err := cl.Create(ctx, bleemeo.ResourceApplication, app, applicationFields, &result)
 	if err != nil {
 		return bleemeoTypes.Application{}, err
 	}
@@ -66,7 +77,7 @@ func (cl *wrapperClient) CreateApplication(ctx context.Context, app bleemeoTypes
 
 func (cl *wrapperClient) ListAgentTypes(ctx context.Context) ([]bleemeoTypes.AgentType, error) {
 	params := url.Values{
-		"fields": {"id,name,display_name"},
+		"fields": {agentTypeFields},
 	}
 
 	var agentTypes []bleemeoTypes.AgentType
@@ -87,7 +98,7 @@ func (cl *wrapperClient) ListAgentTypes(ctx context.Context) ([]bleemeoTypes.Age
 
 func (cl *wrapperClient) ListAccountConfigs(ctx context.Context) ([]bleemeoTypes.AccountConfig, error) {
 	params := url.Values{
-		"fields": {"id,name,live_process_resolution,live_process,docker_integration,snmp_integration,vsphere_integration,number_of_custom_metrics,suspended"},
+		"fields": {accountConfigFields},
 	}
 
 	var configs []bleemeoTypes.AccountConfig
@@ -108,7 +119,7 @@ func (cl *wrapperClient) ListAccountConfigs(ctx context.Context) ([]bleemeoTypes
 
 func (cl *wrapperClient) ListAgentConfigs(ctx context.Context) ([]bleemeoTypes.AgentConfig, error) {
 	params := url.Values{
-		"fields": {"id,account_config,agent_type,metrics_allowlist,metrics_resolution"},
+		"fields": {agentConfigFields},
 	}
 
 	var configs []bleemeoTypes.AgentConfig
@@ -162,7 +173,7 @@ func (cl *wrapperClient) DeleteAgent(ctx context.Context, id string) error {
 
 func (cl *wrapperClient) ListGloutonConfigItems(ctx context.Context, agentID string) ([]bleemeoTypes.GloutonConfigItem, error) {
 	params := url.Values{
-		"fields": {"id,agent,key,value,priority,source,path,type"},
+		"fields": {configItemFields},
 		"agent":  {agentID},
 	}
 
@@ -185,6 +196,7 @@ func (cl *wrapperClient) ListGloutonConfigItems(ctx context.Context, agentID str
 }
 
 func (cl *wrapperClient) RegisterGloutonConfigItems(ctx context.Context, items []bleemeoTypes.GloutonConfigItem) error {
+	// There are no fields and no result, because it creates a LIST of GloutonConfigItem.
 	return cl.Create(ctx, bleemeo.ResourceGloutonConfigItem, items, "", nil)
 }
 
@@ -223,9 +235,13 @@ func (cl *wrapperClient) RegisterContainer(ctx context.Context, payload bleemeoa
 }
 
 func (cl *wrapperClient) ListDiagnostics(ctx context.Context) ([]bleemeoapi.RemoteDiagnostic, error) {
+	params := url.Values{
+		"fields": {diagnosticFields},
+	}
+
 	var diagnostics []bleemeoapi.RemoteDiagnostic
 
-	iter := cl.Iterator(ctx, bleemeo.ResourceGloutonDiagnostic, nil)
+	iter := cl.Iterator(ctx, bleemeo.ResourceGloutonDiagnostic, params)
 	for iter.Next(ctx) {
 		var remoteDiagnostic bleemeoapi.RemoteDiagnostic
 
@@ -255,9 +271,13 @@ func (cl *wrapperClient) UploadDiagnostic(ctx context.Context, contentType strin
 }
 
 func (cl *wrapperClient) ListFacts(ctx context.Context) ([]bleemeoTypes.AgentFact, error) {
+	params := url.Values{
+		"fields": {agentFactFields},
+	}
+
 	var facts []bleemeoTypes.AgentFact
 
-	iter := cl.Iterator(ctx, bleemeo.ResourceAgentFact, nil)
+	iter := cl.Iterator(ctx, bleemeo.ResourceAgentFact, params)
 	for iter.Next(ctx) {
 		var fact bleemeoTypes.AgentFact
 
@@ -272,7 +292,7 @@ func (cl *wrapperClient) ListFacts(ctx context.Context) ([]bleemeoTypes.AgentFac
 }
 
 func (cl *wrapperClient) RegisterFact(ctx context.Context, payload any, result *bleemeoTypes.AgentFact) error {
-	return cl.Create(ctx, bleemeo.ResourceAgentFact, payload, "", result)
+	return cl.Create(ctx, bleemeo.ResourceAgentFact, payload, agentFactFields, result)
 }
 
 func (cl *wrapperClient) DeleteFact(ctx context.Context, id string) error {

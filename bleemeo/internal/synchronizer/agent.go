@@ -27,10 +27,7 @@ import (
 
 var errNoConfig = errors.New("agent don't have any configuration on Bleemeo Cloud platform. Please contact support@bleemeo.com about this issue")
 
-const (
-	apiTagsLength = 100
-	agentFields   = "account,agent_type,created_at,current_config,display_name,fqdn,id,is_cluster_leader,next_config_at,tags"
-)
+const apiTagsLength = 100
 
 func (s *Synchronizer) syncAgent(ctx context.Context, syncType types.SyncType, execution types.SynchronizationExecution) (updateThresholds bool, err error) {
 	apiClient := execution.BleemeoAPIClient()
