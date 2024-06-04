@@ -255,6 +255,12 @@ func Test_basic_build_default(t *testing.T) {
 				"sensor":   "coretemp_package_id_0",
 			},
 		},
+		{
+			Labels: map[string]string{
+				"__name__": "sensor_temperature",
+				"sensor":   "k10temp_tctl",
+			},
+		},
 	}
 
 	deniedPoints := []types.MetricPoint{
@@ -273,6 +279,12 @@ func Test_basic_build_default(t *testing.T) {
 			Labels: map[string]string{
 				"__name__": "sensor_temperature",
 				"sensor":   "coretemp_core_0",
+			},
+		},
+		{
+			Labels: map[string]string{
+				"__name__": "sensor_temperature",
+				"sensor":   "k10temp_tccd1",
 			},
 		},
 		// Service metrics are only allowed when the service is discovered. This

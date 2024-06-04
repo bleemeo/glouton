@@ -298,6 +298,7 @@ var (
 
 		// Temperature
 		`{__name__="sensor_temperature", sensor=~"coretemp_package_id_.*"}`,
+		`{__name__="sensor_temperature", sensor="k10temp_tctl"}`,
 
 		// vSphere
 		"vsphere_vm_cpu_latency_perc",
