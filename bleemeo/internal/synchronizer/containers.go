@@ -215,10 +215,13 @@ func (s *Synchronizer) remoteRegister(
 	payload bleemeoapi.ContainerPayload,
 	remoteIndex int,
 ) error {
-	var result bleemeoapi.ContainerPayload
+	var (
+		result bleemeoapi.ContainerPayload
+		err    error
+	)
 
 	if remoteFound {
-		err := apiClient.UpdateContainer(ctx, remoteContainer.ID, payload, &result)
+		result, err = apiClient.UpdateContainer(ctx, remoteContainer.ID, payload)
 		if err != nil {
 			return err
 		}
@@ -228,7 +231,7 @@ func (s *Synchronizer) remoteRegister(
 		logger.V(2).Printf("Container %v updated with UUID %s", result.Name, result.ID)
 		(*remoteContainers)[remoteIndex] = result.Container
 	} else {
-		err := apiClient.RegisterContainer(ctx, payload, &result)
+		result, err = apiClient.RegisterContainer(ctx, payload)
 		if err != nil {
 			return err
 		}
@@ -266,7 +269,7 @@ func (s *Synchronizer) containerDeleteFromLocal(ctx context.Context, execution t
 
 		body := map[string]any{"deleted_at": bleemeoTypes.NullTime(s.now())}
 
-		err := apiClient.UpdateContainer(ctx, container.ID, body, nil)
+		_, err := apiClient.UpdateContainer(ctx, container.ID, body)
 		if err != nil {
 			// If the container wasn't found, it has already been deleted.
 			if IsNotFound(err) {

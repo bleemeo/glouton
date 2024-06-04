@@ -1180,9 +1180,7 @@ func (mr *metricRegisterer) metricRegisterAndUpdateOne(ctx context.Context, metr
 		return err
 	}
 
-	var result bleemeoapi.MetricPayload
-
-	err = mr.apiClient.RegisterMetric(ctx, payload, &result)
+	result, err := mr.apiClient.RegisterMetric(ctx, payload)
 	if err != nil {
 		return err
 	}

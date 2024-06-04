@@ -303,12 +303,12 @@ func (wcm *wrapperClientMock) ListContainers(context.Context, string) ([]bleemeo
 	return containers, nil
 }
 
-func (wcm *wrapperClientMock) UpdateContainer(_ context.Context, id string, payload any, result *bleemeoapi.ContainerPayload) error {
+func (wcm *wrapperClientMock) UpdateContainer(_ context.Context, id string, payload any) (bleemeoapi.ContainerPayload, error) {
 	wcm.requestCounts[mockAPIResourceContainer]++
 
 	container := wcm.resources.containers.findResource(func(m bleemeoapi.ContainerPayload) bool { return m.ID == id })
 	if container == nil {
-		return &bleemeo.APIError{
+		return bleemeoapi.ContainerPayload{}, &bleemeo.APIError{
 			StatusCode: http.StatusNotFound,
 			Err:        fmt.Errorf("%w: container with id %q", bleemeo.ErrResourceNotFound, id),
 		}
@@ -318,7 +318,7 @@ func (wcm *wrapperClientMock) UpdateContainer(_ context.Context, id string, payl
 
 	err := newMapstructJSONDecoder(container, nil).Decode(payload)
 	if err != nil {
-		return err
+		return bleemeoapi.ContainerPayload{}, err
 	}
 
 	if container.ID == "" {
@@ -337,27 +337,26 @@ func (wcm *wrapperClientMock) UpdateContainer(_ context.Context, id string, payl
 
 	err = wcm.resources.containers.applyPatchHook(container, &wcm.errorsCount)
 	if err != nil {
-		return err
+		return bleemeoapi.ContainerPayload{}, err
 	}
 
-	if result != nil {
-		*result = *container
-	}
-
-	return nil
+	return *container, nil
 }
 
-func (wcm *wrapperClientMock) RegisterContainer(_ context.Context, payload bleemeoapi.ContainerPayload, result *bleemeoapi.ContainerPayload) error {
+func (wcm *wrapperClientMock) RegisterContainer(_ context.Context, payload bleemeoapi.ContainerPayload) (bleemeoapi.ContainerPayload, error) {
 	wcm.requestCounts[mockAPIResourceContainer]++
 
-	err := newMapstructJSONDecoder(result, nil).Decode(payload)
+	var result bleemeoapi.ContainerPayload
+
+	err := newMapstructJSONDecoder(&result, nil).Decode(payload)
 	if err != nil {
-		return err
+		return bleemeoapi.ContainerPayload{}, err
 	}
 
 	result.ID = wcm.resources.containers.incID()
+	err = wcm.resources.containers.createResource(&result, &wcm.errorsCount)
 
-	return wcm.resources.containers.createResource(result, &wcm.errorsCount)
+	return result, err
 }
 
 func (wcm *wrapperClientMock) ListDiagnostics(context.Context) ([]bleemeoapi.RemoteDiagnostic, error) {
@@ -378,17 +377,20 @@ func (wcm *wrapperClientMock) ListFacts(context.Context) ([]bleemeoTypes.AgentFa
 	return wcm.resources.agentFacts.clone(), nil
 }
 
-func (wcm *wrapperClientMock) RegisterFact(_ context.Context, payload any, result *bleemeoTypes.AgentFact) error {
+func (wcm *wrapperClientMock) RegisterFact(_ context.Context, payload bleemeoTypes.AgentFact) (bleemeoTypes.AgentFact, error) {
 	wcm.requestCounts[mockAPIResourceAgentFact]++
 
-	err := newMapstructJSONDecoder(result, nil).Decode(payload)
+	var result bleemeoTypes.AgentFact
+
+	err := newMapstructJSONDecoder(&result, nil).Decode(payload)
 	if err != nil {
-		return err
+		return bleemeoTypes.AgentFact{}, err
 	}
 
 	result.ID = wcm.resources.agentFacts.incID()
+	err = wcm.resources.agentFacts.createResource(&result, &wcm.errorsCount)
 
-	return wcm.resources.agentFacts.createResource(result, &wcm.errorsCount)
+	return result, err
 }
 
 func (wcm *wrapperClientMock) DeleteFact(ctx context.Context, id string) error { //nolint: revive
@@ -496,17 +498,20 @@ func (wcm *wrapperClientMock) GetMetricByID(ctx context.Context, id string) (ble
 	panic("implement me")
 }
 
-func (wcm *wrapperClientMock) RegisterMetric(_ context.Context, payload bleemeoapi.MetricPayload, result *bleemeoapi.MetricPayload) error {
+func (wcm *wrapperClientMock) RegisterMetric(_ context.Context, payload bleemeoapi.MetricPayload) (bleemeoapi.MetricPayload, error) {
 	wcm.requestCounts[mockAPIResourceMetric]++
 
-	err := newMapstructJSONDecoder(result, nil).Decode(payload)
+	var result bleemeoapi.MetricPayload
+
+	err := newMapstructJSONDecoder(&result, nil).Decode(payload)
 	if err != nil {
-		return err
+		return bleemeoapi.MetricPayload{}, err
 	}
 
 	result.Metric.ID = wcm.resources.metrics.incID()
+	err = wcm.resources.metrics.createResource(&result, &wcm.errorsCount)
 
-	return wcm.resources.metrics.createResource(result, &wcm.errorsCount)
+	return result, err
 }
 
 func (wcm *wrapperClientMock) DeleteMetric(ctx context.Context, id string) error { //nolint: revive
@@ -599,7 +604,7 @@ func (wcm *wrapperClientMock) UpdateService(_ context.Context, id string, payloa
 	return service.Service, wcm.resources.services.applyPatchHook(service, &wcm.errorsCount)
 }
 
-func (wcm *wrapperClientMock) RegisterService(_ context.Context, payload bleemeoapi.ServicePayload, _ string) (bleemeoTypes.Service, error) {
+func (wcm *wrapperClientMock) RegisterService(_ context.Context, payload bleemeoapi.ServicePayload) (bleemeoTypes.Service, error) {
 	wcm.requestCounts[mockAPIResourceService]++
 
 	payload.ID = wcm.resources.services.incID()

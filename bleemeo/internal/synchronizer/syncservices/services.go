@@ -284,7 +284,7 @@ func (s *SyncServices) serviceRegisterAndUpdate(ctx context.Context, execution t
 			registeredServices[result.ID] = result
 			logger.V(2).Printf("Service %v updated with UUID %s", key, result.ID)
 		} else {
-			result, err = apiClient.RegisterService(ctx, payload, serviceWriteFields)
+			result, err = apiClient.RegisterService(ctx, payload)
 			if err != nil {
 				return err
 			}

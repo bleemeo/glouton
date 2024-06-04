@@ -132,7 +132,7 @@ func (cl *wrapperClient) Create(ctx context.Context, resource bleemeo.Resource, 
 	}
 
 	// Basic comparison will nil fails when the underlying type of `result` is actually an interface.
-	if result != nil && !reflect.ValueOf(result).IsNil() {
+	if notNil(result) {
 		return json.Unmarshal(respBody, result)
 	}
 
@@ -154,7 +154,7 @@ func (cl *wrapperClient) Update(ctx context.Context, resource bleemeo.Resource, 
 	}
 
 	// Basic comparison will nil fails when the underlying type of `result` is actually an interface.
-	if result != nil && !reflect.ValueOf(result).IsNil() {
+	if notNil(result) {
 		return json.Unmarshal(respBody, result)
 	}
 
@@ -180,7 +180,7 @@ func (cl *wrapperClient) Do(ctx context.Context, method, reqURI string, params u
 	}
 
 	// Basic comparison will nil fails when the underlying type of `result` is actually an interface.
-	if result != nil && !reflect.ValueOf(result).IsNil() {
+	if notNil(result) {
 		err = json.Unmarshal(respBody, result)
 	}
 
@@ -218,6 +218,17 @@ func (cl *wrapperClient) DoWithBody(ctx context.Context, reqURI string, contentT
 
 func (cl *wrapperClient) DoRequest(ctx context.Context, req *http.Request, authenticated bool) (*http.Response, error) {
 	return cl.client.DoRequest(ctx, req, authenticated)
+}
+
+// notNil returns whether v or its underlying value aren't nil.
+func notNil(v any) bool {
+	if v == nil {
+		return false
+	}
+
+	refV := reflect.ValueOf(v)
+
+	return refV.Kind() == reflect.Pointer && !refV.IsNil()
 }
 
 // errorIterator implements [bleemeo.Iterator] but only returns an error.

@@ -209,8 +209,8 @@ type GloutonConfigItemClient interface {
 
 type ContainerClient interface {
 	ListContainers(ctx context.Context, agentID string) ([]bleemeoTypes.Container, error)
-	UpdateContainer(ctx context.Context, id string, payload any, result *bleemeoapi.ContainerPayload) error
-	RegisterContainer(ctx context.Context, payload bleemeoapi.ContainerPayload, result *bleemeoapi.ContainerPayload) error
+	UpdateContainer(ctx context.Context, id string, payload any) (bleemeoapi.ContainerPayload, error)
+	RegisterContainer(ctx context.Context, payload bleemeoapi.ContainerPayload) (bleemeoapi.ContainerPayload, error)
 }
 
 type DiagnosticClient interface {
@@ -220,7 +220,7 @@ type DiagnosticClient interface {
 
 type FactClient interface {
 	ListFacts(ctx context.Context) ([]bleemeoTypes.AgentFact, error)
-	RegisterFact(ctx context.Context, payload any, result *bleemeoTypes.AgentFact) error
+	RegisterFact(ctx context.Context, payload bleemeoTypes.AgentFact) (bleemeoTypes.AgentFact, error)
 	DeleteFact(ctx context.Context, id string) error
 }
 
@@ -230,7 +230,7 @@ type MetricClient interface {
 	CountInactiveMetrics(ctx context.Context) (int, error)
 	ListMetricsBy(ctx context.Context, params url.Values) (map[string]bleemeoTypes.Metric, error)
 	GetMetricByID(ctx context.Context, id string) (bleemeoapi.MetricPayload, error)
-	RegisterMetric(ctx context.Context, payload bleemeoapi.MetricPayload, result *bleemeoapi.MetricPayload) error
+	RegisterMetric(ctx context.Context, payload bleemeoapi.MetricPayload) (bleemeoapi.MetricPayload, error)
 	DeleteMetric(ctx context.Context, id string) error
 	SetMetricActive(ctx context.Context, id string, active bool) error
 }
@@ -243,7 +243,7 @@ type MonitorClient interface {
 type ServiceClient interface {
 	ListServices(ctx context.Context, agentID string, fields string) ([]bleemeoTypes.Service, error)
 	UpdateService(ctx context.Context, id string, payload bleemeoapi.ServicePayload, fields string) (bleemeoTypes.Service, error)
-	RegisterService(ctx context.Context, payload bleemeoapi.ServicePayload, fields string) (bleemeoTypes.Service, error)
+	RegisterService(ctx context.Context, payload bleemeoapi.ServicePayload) (bleemeoTypes.Service, error)
 }
 
 type SNMPClient interface {

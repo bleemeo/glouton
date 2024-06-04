@@ -159,15 +159,13 @@ func (s *Synchronizer) factRegister(ctx context.Context, apiClient types.FactCli
 			logger.V(3).Printf("fact %s:%#v changed from %#v to %#v", agentID, key, remoteValue.Value, value)
 
 			// Agent can't update fact. We delete and re-create the facts
-			payload := map[string]string{
-				"agent": agentID,
-				"key":   key,
-				"value": value,
+			payload := bleemeoTypes.AgentFact{
+				AgentID: agentID,
+				Key:     key,
+				Value:   value,
 			}
 
-			var result bleemeoTypes.AgentFact
-
-			err := apiClient.RegisterFact(ctx, payload, &result)
+			result, err := apiClient.RegisterFact(ctx, payload)
 			if err != nil {
 				return err
 			}
