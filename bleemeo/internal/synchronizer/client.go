@@ -216,10 +216,6 @@ func (cl *wrapperClient) DoWithBody(ctx context.Context, reqURI string, contentT
 	return resp.StatusCode, nil
 }
 
-func (cl *wrapperClient) DoRequest(ctx context.Context, req *http.Request, authenticated bool) (*http.Response, error) {
-	return cl.client.DoRequest(ctx, req, authenticated)
-}
-
 // notNil returns whether v or its underlying value aren't nil.
 func notNil(v any) bool {
 	if v == nil {

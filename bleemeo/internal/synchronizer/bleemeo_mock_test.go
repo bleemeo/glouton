@@ -17,10 +17,7 @@
 package synchronizer
 
 import (
-	"bufio"
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -83,6 +80,9 @@ func newClientMock(helper *syncTestHelper) *wrapperClientMock {
 	}
 
 	clientMock.resources.agents.createHook = func(agent *bleemeoapi.AgentPayload) error {
+		// TODO: Glouton currently doesn't send the AccountID for SNMP type but does for
+		// the main agent. We should be consistent (and API should NOT trust the value
+		// from Glouton, so likely drop it ?).
 		if agent.AccountID == "" && agent.AgentType == agentTypeSNMP.ID {
 			agent.AccountID = accountID
 		}
@@ -121,61 +121,25 @@ func (wcm *wrapperClientMock) ThrottleDeadline() time.Time {
 	return wcm.helper.s.now()
 }
 
-func (wcm *wrapperClientMock) Do(_ context.Context, method string, reqURI string, params url.Values, authenticated bool, body io.Reader, result any) (statusCode int, err error) { //nolint: revive
-	switch reqURI {
-	case "v1/info/":
-		return 200, nil
-	default:
-		return 404, nil
-	}
+func (wcm *wrapperClientMock) GetGlobalInfo(context.Context) (bleemeoTypes.GlobalInfo, error) {
+	return bleemeoTypes.GlobalInfo{}, nil
 }
 
-func (wcm *wrapperClientMock) DoWithBody(ctx context.Context, reqURI string, contentType string, body io.Reader) (statusCode int, err error) { //nolint: revive
-	panic("implement me")
-}
-
-func (wcm *wrapperClientMock) DoRequest(_ context.Context, req *http.Request, authenticated bool) (*http.Response, error) { //nolint: revive
-	var (
-		reqBody any
-
-		statusCode int
-		respBody   any
-	)
-
-	err := json.NewDecoder(req.Body).Decode(&reqBody)
-	if err != nil {
-		return nil, err
+func (wcm *wrapperClientMock) RegisterSelf(_ context.Context, accountID, password, initialServerGroupName, name, fqdn, _ string) (id string, err error) {
+	payload := bleemeoapi.AgentPayload{
+		Agent: bleemeoTypes.Agent{
+			AccountID:   accountID,
+			DisplayName: name,
+			FQDN:        fqdn,
+		},
+		InitialPassword:    password,
+		InitialServerGroup: initialServerGroupName,
 	}
 
-	switch req.URL.Path {
-	case "/v1/agent/":
-		switch req.Method {
-		case http.MethodPost:
-			respBody, err = wcm.registerAgent(reqBody)
-			if err != nil {
-				return nil, err
-			}
+	payload.ID = wcm.resources.agents.incID()
+	err = wcm.resources.agents.createResource(&payload, &wcm.errorsCount)
 
-			statusCode = http.StatusCreated
-		default:
-			statusCode = http.StatusMethodNotAllowed
-		}
-	default:
-		statusCode = http.StatusNotFound
-	}
-
-	bodyData, err := json.Marshal(respBody)
-	if err != nil {
-		return nil, err
-	}
-
-	respData := append([]byte(fmt.Sprintf("HTTP/1.1 %d %s\r\n\n", statusCode, http.StatusText(statusCode))), bodyData...)
-
-	return http.ReadResponse(bufio.NewReader(bytes.NewReader(respData)), req)
-}
-
-func (wcm *wrapperClientMock) Iterator(ctx context.Context, resource bleemeo.Resource, params url.Values) bleemeo.Iterator { //nolint: revive
-	panic("implement me")
+	return payload.ID, err
 }
 
 func (wcm *wrapperClientMock) ListApplications(context.Context) ([]bleemeoTypes.Application, error) {
@@ -226,21 +190,6 @@ func (wcm *wrapperClientMock) ListAgents(context.Context) ([]bleemeoTypes.Agent,
 	}
 
 	return agents, nil
-}
-
-func (wcm *wrapperClientMock) registerAgent(payload any) (bleemeoTypes.Agent, error) {
-	wcm.requestCounts[mockAPIResourceAgent]++
-
-	var result bleemeoapi.AgentPayload
-
-	err := newMapstructJSONDecoder(&result, nil).Decode(payload)
-	if err != nil {
-		return bleemeoTypes.Agent{}, err
-	}
-
-	result.ID = wcm.resources.agents.incID()
-
-	return result.Agent, wcm.resources.agents.createResource(&result, &wcm.errorsCount)
 }
 
 func (wcm *wrapperClientMock) UpdateAgent(_ context.Context, id string, data any) (bleemeoTypes.Agent, error) {

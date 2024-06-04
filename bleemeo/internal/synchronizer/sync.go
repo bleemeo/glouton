@@ -23,7 +23,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"math/big"
 	"net/http"
 	"net/url"
@@ -277,7 +276,11 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 		firstSync = false
 	}
 
-	if err := s.setClient(); err != nil {
+	s.l.Lock()
+	err := s.setClient()
+	s.l.Unlock()
+
+	if err != nil {
 		return fmt.Errorf("unable to create Bleemeo HTTP client. Is the API base URL correct ? (error is %w)", err)
 	}
 
@@ -291,7 +294,7 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 	// we want it to perform registration and creation of agent_status in order to mark this agent as "bad time" on Bleemeo.
 	exec := s.newLimitedExecution(false, nil)
 
-	_, err := s.syncInfoReal(ctx, exec, !firstSync)
+	_, err = s.syncInfoReal(ctx, exec, !firstSync)
 	if err != nil {
 		logger.V(1).Printf("bleemeo: pre-run checks: couldn't sync the global config: %v", err)
 	}
@@ -817,6 +820,7 @@ func (s *Synchronizer) ClearDisable(reasonToClear bleemeoTypes.DisableReason, de
 }
 
 // VerifyAndGetToken is used to get a valid token.
+// Should only be called after the synchronized had called SetInitialized and AgentID is filled in State.
 func (s *Synchronizer) VerifyAndGetToken(ctx context.Context) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
@@ -1113,48 +1117,12 @@ func (s *Synchronizer) register(ctx context.Context) error {
 		return err
 	}
 
-	reqBody, err := bleemeo.JSONReaderFrom(map[string]string{
-		"account":                   accountID,
-		"initial_password":          password,
-		"initial_server_group_name": s.option.Config.Bleemeo.InitialServerGroupName,
-		"display_name":              name,
-		"fqdn":                      fqdn,
-	})
+	agentID, err := s.newClient().RegisterSelf(ctx, accountID, password, s.option.Config.Bleemeo.InitialServerGroupName, name, fqdn, registrationKey)
 	if err != nil {
 		return err
 	}
 
-	req, err := s.realClient.ParseRequest(http.MethodPost, bleemeo.ResourceAgent, nil, nil, reqBody)
-	if err != nil {
-		return err
-	}
-
-	req.SetBasicAuth(accountID+"@bleemeo.com", registrationKey)
-
-	resp, err := s.newClient().DoRequest(ctx, req, false)
-	if err != nil {
-		return err
-	}
-
-	defer func() {
-		_, _ = io.Copy(io.Discard, resp.Body)
-		_ = resp.Body.Close()
-	}()
-
-	if resp.StatusCode != http.StatusCreated {
-		return fmt.Errorf("%w: got %v, want 201", errIncorrectStatusCode, resp.StatusCode)
-	}
-
-	var objectID struct {
-		ID string `json:"id"`
-	}
-
-	err = json.NewDecoder(resp.Body).Decode(&objectID)
-	if err != nil {
-		return err
-	}
-
-	s.agentID = objectID.ID
+	s.agentID = agentID
 
 	sentry.ConfigureScope(func(scope *sentry.Scope) {
 		scope.SetContext("agent", map[string]any{
@@ -1163,15 +1131,16 @@ func (s *Synchronizer) register(ctx context.Context) error {
 		})
 	})
 
-	if err := s.option.State.SetBleemeoCredentials(objectID.ID, password); err != nil {
+	if err := s.option.State.SetBleemeoCredentials(agentID, password); err != nil {
 		logger.Printf("Failed to persist Bleemeo credentials. The agent may register itself multiple-time: %v", err)
 	}
 
-	logger.V(1).Printf("Registration successful with UUID %v", objectID.ID)
+	logger.V(1).Printf("Registration successful with UUID %v", agentID)
 
-	_ = s.setClient()
+	s.l.Lock()
+	defer s.l.Unlock()
 
-	return nil
+	return s.setClient()
 }
 
 func generatePassword(length int) (string, error) {

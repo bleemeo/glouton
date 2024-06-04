@@ -41,6 +41,66 @@ const (
 	agentFactFields     = "id,agent,key,value"
 )
 
+func (cl *wrapperClient) GetGlobalInfo(ctx context.Context) (bleemeoTypes.GlobalInfo, error) {
+	var globalInfo bleemeoTypes.GlobalInfo
+
+	statusCode, err := cl.Do(ctx, http.MethodGet, "/v1/info/", nil, false, nil, &globalInfo)
+	if err != nil {
+		return bleemeoTypes.GlobalInfo{}, err
+	}
+
+	if statusCode != http.StatusOK {
+		logger.V(2).Printf("Couldn't retrieve global information, got HTTP status code %d", statusCode)
+	}
+
+	return globalInfo, nil
+}
+
+func (cl *wrapperClient) RegisterSelf(ctx context.Context, accountID, password, initialServerGroupName, name, fqdn, registrationKey string) (id string, err error) {
+	reqBody, err := bleemeo.JSONReaderFrom(map[string]string{
+		"account":                   accountID,
+		"initial_password":          password,
+		"initial_server_group_name": initialServerGroupName,
+		"display_name":              name,
+		"fqdn":                      fqdn,
+	})
+	if err != nil {
+		return "", err
+	}
+
+	req, err := cl.client.ParseRequest(http.MethodPost, bleemeo.ResourceAgent, nil, nil, reqBody)
+	if err != nil {
+		return "", err
+	}
+
+	req.SetBasicAuth(accountID+"@bleemeo.com", registrationKey)
+
+	resp, err := cl.client.DoRequest(ctx, req, false)
+	if err != nil {
+		return "", err
+	}
+
+	defer func() {
+		_, _ = io.Copy(io.Discard, resp.Body)
+		_ = resp.Body.Close()
+	}()
+
+	if resp.StatusCode != http.StatusCreated {
+		return "", fmt.Errorf("%w: got %v, want 201", errIncorrectStatusCode, resp.StatusCode)
+	}
+
+	var objectID struct {
+		ID string `json:"id"`
+	}
+
+	err = json.NewDecoder(resp.Body).Decode(&objectID)
+	if err != nil {
+		return "", err
+	}
+
+	return objectID.ID, nil
+}
+
 func (cl *wrapperClient) ListApplications(ctx context.Context) ([]bleemeoTypes.Application, error) {
 	applications := make([]bleemeoTypes.Application, 0)
 	params := url.Values{

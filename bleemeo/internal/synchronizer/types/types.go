@@ -20,14 +20,12 @@ import (
 	"context"
 	"errors"
 	"io"
-	"net/http"
 	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/bleemeo/bleemeo-go"
 	"github.com/bleemeo/glouton/bleemeo/internal/cache"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/bleemeoapi"
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
@@ -160,6 +158,7 @@ type SynchronizationExecution interface {
 
 type Client interface {
 	RawClient
+	MetaClient
 	ApplicationClient
 	AccountConfigClient
 	AgentClient
@@ -177,11 +176,12 @@ type Client interface {
 // RawClient a client doing generic HTTP call to Bleemeo API.
 // Ideally synchronizer of entity should move to higher level interface, which will make mocking easier (like ListActiveMetrics, CreateService...)
 type RawClient interface {
-	Do(ctx context.Context, method string, path string, params url.Values, authenticated bool, body io.Reader, result any) (statusCode int, err error)
-	DoWithBody(ctx context.Context, path string, contentType string, body io.Reader) (statusCode int, err error)
-	DoRequest(ctx context.Context, req *http.Request, authenticated bool) (*http.Response, error)
-	Iterator(ctx context.Context, resource bleemeo.Resource, params url.Values) bleemeo.Iterator
 	ThrottleDeadline() time.Time
+}
+
+type MetaClient interface {
+	GetGlobalInfo(ctx context.Context) (bleemeoTypes.GlobalInfo, error)
+	RegisterSelf(ctx context.Context, accountID, password, initialServerGroupName, name, fqdn, registrationKey string) (id string, err error)
 }
 
 type ApplicationClient interface {

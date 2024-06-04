@@ -54,11 +54,9 @@ func (s *Synchronizer) syncInfo(ctx context.Context, syncType types.SyncType, ex
 
 // syncInfoReal retrieves the minimum supported glouton version the API supports.
 func (s *Synchronizer) syncInfoReal(ctx context.Context, execution types.SynchronizationExecution, disableOnTimeDrift bool) (updateThresholds bool, err error) {
-	var globalInfo bleemeoTypes.GlobalInfo
-
 	apiClient := execution.BleemeoAPIClient()
 
-	statusCode, err := apiClient.Do(ctx, http.MethodGet, "/v1/info/", nil, false, nil, &globalInfo)
+	globalInfo, err := apiClient.GetGlobalInfo(ctx)
 	if err != nil && strings.Contains(err.Error(), "certificate has expired") {
 		// This could happen when local time is really too far away from real time.
 		// Since this request is unauthenticated, we can retry it with insecure TLS
@@ -77,7 +75,7 @@ func (s *Synchronizer) syncInfoReal(ctx context.Context, execution types.Synchro
 
 		var respBody []byte
 
-		statusCode, respBody, err = insecureClient.Do(ctx, http.MethodGet, "/v1/info/", nil, false, nil)
+		statusCode, respBody, err := insecureClient.Do(ctx, http.MethodGet, "/v1/info/", nil, false, nil)
 		if err == nil && statusCode == 200 {
 			err = json.Unmarshal(respBody, &globalInfo)
 			if err != nil {
@@ -85,17 +83,15 @@ func (s *Synchronizer) syncInfoReal(ctx context.Context, execution types.Synchro
 
 				return false, nil
 			}
+		} else if statusCode >= 300 {
+			logger.V(2).Printf("Couldn't retrieve global information, got HTTP status code %d", statusCode)
+
+			return false, nil
 		}
 	}
 
 	if err != nil {
 		logger.V(2).Printf("Couldn't retrieve global information, got '%v'", err)
-
-		return false, nil
-	}
-
-	if statusCode >= 300 {
-		logger.V(2).Printf("Couldn't retrieve global information, got HTTP status code %d", statusCode)
 
 		return false, nil
 	}
