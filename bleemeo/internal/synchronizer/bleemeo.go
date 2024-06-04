@@ -32,13 +32,16 @@ import (
 )
 
 const (
-	applicationFields   = "id,name,tag"
-	agentTypeFields     = "id,name,display_name"
 	accountConfigFields = "id,name,live_process_resolution,live_process,docker_integration,snmp_integration,vsphere_integration,number_of_custom_metrics,suspended"
 	agentConfigFields   = "id,account_config,agent_type,metrics_allowlist,metrics_resolution"
-	agentFields         = "id,account,agent_type,created_at,current_config,display_name,fqdn,is_cluster_leader,next_config_at,tags"
-	configItemFields    = "id,agent,key,value,priority,source,path,type"
 	agentFactFields     = "id,agent,key,value"
+	agentFields         = "id,account,agent_type,created_at,current_config,display_name,fqdn,is_cluster_leader,next_config_at,tags"
+	agentTypeFields     = "id,name,display_name"
+	applicationFields   = "id,name,tag"
+	configItemFields    = "id,agent,key,value,priority,source,path,type"
+	diagnosticFields    = "name"
+	monitorFields       = "id,account_config,agent,created_at,monitor_url,monitor_expected_content,monitor_expected_response_code,monitor_unexpected_content,monitor_ca_file,monitor_headers"
+	serviceFields       = "id,account_config,label,instance,listen_addresses,exe_path,tags,active,created_at"
 )
 
 func (cl *wrapperClient) GetGlobalInfo(ctx context.Context) (bleemeoTypes.GlobalInfo, error) {
@@ -126,7 +129,7 @@ func (cl *wrapperClient) CreateApplication(ctx context.Context, app bleemeoTypes
 
 	app.ID = "" // ID isn't allowed in creation
 
-	err := cl.Create(ctx, bleemeo.ResourceApplication, app, "", &result)
+	err := cl.Create(ctx, bleemeo.ResourceApplication, app, applicationFields, &result)
 	if err != nil {
 		return bleemeoTypes.Application{}, err
 	}
@@ -296,15 +299,19 @@ func (cl *wrapperClient) UpdateContainer(ctx context.Context, id string, payload
 func (cl *wrapperClient) RegisterContainer(ctx context.Context, payload bleemeoapi.ContainerPayload) (bleemeoapi.ContainerPayload, error) {
 	var result bleemeoapi.ContainerPayload
 
-	err := cl.Create(ctx, bleemeo.ResourceContainer, payload, "", &result)
+	err := cl.Create(ctx, bleemeo.ResourceContainer, payload, containerRegisterFields, &result)
 
 	return result, err
 }
 
 func (cl *wrapperClient) ListDiagnostics(ctx context.Context) ([]bleemeoapi.RemoteDiagnostic, error) {
+	params := url.Values{
+		"fields": {diagnosticFields},
+	}
+
 	var diagnostics []bleemeoapi.RemoteDiagnostic
 
-	iter := cl.Iterator(ctx, bleemeo.ResourceGloutonDiagnostic, nil)
+	iter := cl.Iterator(ctx, bleemeo.ResourceGloutonDiagnostic, params)
 	for iter.Next(ctx) {
 		var remoteDiagnostic bleemeoapi.RemoteDiagnostic
 
@@ -357,7 +364,7 @@ func (cl *wrapperClient) ListFacts(ctx context.Context) ([]bleemeoTypes.AgentFac
 func (cl *wrapperClient) RegisterFact(ctx context.Context, payload bleemeoTypes.AgentFact) (bleemeoTypes.AgentFact, error) {
 	var result bleemeoTypes.AgentFact
 
-	err := cl.Create(ctx, bleemeo.ResourceAgentFact, payload, "", &result)
+	err := cl.Create(ctx, bleemeo.ResourceAgentFact, payload, agentFactFields, &result)
 
 	return result, err
 }
@@ -436,7 +443,7 @@ func (cl *wrapperClient) GetMetricByID(ctx context.Context, id string) (bleemeoa
 func (cl *wrapperClient) RegisterMetric(ctx context.Context, payload bleemeoapi.MetricPayload) (bleemeoapi.MetricPayload, error) {
 	var result bleemeoapi.MetricPayload
 
-	err := cl.Create(ctx, bleemeo.ResourceMetric, payload, "", &result)
+	err := cl.Create(ctx, bleemeo.ResourceMetric, payload, metricFields, &result)
 
 	return result, err
 }
@@ -521,7 +528,7 @@ func (cl *wrapperClient) UpdateService(ctx context.Context, id string, payload b
 func (cl *wrapperClient) RegisterService(ctx context.Context, payload bleemeoapi.ServicePayload) (bleemeoTypes.Service, error) {
 	var result bleemeoTypes.Service
 
-	err := cl.Create(ctx, bleemeo.ResourceService, payload, "", &result)
+	err := cl.Create(ctx, bleemeo.ResourceService, payload, serviceFields, &result)
 
 	return result, err
 }
@@ -529,7 +536,7 @@ func (cl *wrapperClient) RegisterService(ctx context.Context, payload bleemeoapi
 func (cl *wrapperClient) RegisterSNMPAgent(ctx context.Context, payload bleemeoapi.AgentPayload) (bleemeoTypes.Agent, error) {
 	var result bleemeoTypes.Agent
 
-	err := cl.Create(ctx, bleemeo.ResourceAgent, payload, "", &result)
+	err := cl.Create(ctx, bleemeo.ResourceAgent, payload, agentFields, &result)
 
 	return result, err
 }
@@ -543,7 +550,7 @@ func (cl *wrapperClient) UpdateAgentLastDuplicationDate(ctx context.Context, age
 func (cl *wrapperClient) RegisterVSphereAgent(ctx context.Context, payload bleemeoapi.AgentPayload) (bleemeoTypes.Agent, error) {
 	var result bleemeoTypes.Agent
 
-	err := cl.Create(ctx, bleemeo.ResourceAgent, payload, "", &result)
+	err := cl.Create(ctx, bleemeo.ResourceAgent, payload, agentFields, &result)
 
 	return result, err
 }
