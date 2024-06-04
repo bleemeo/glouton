@@ -33,10 +33,7 @@ import (
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
 )
 
-const (
-	gloutonOAuthClientID    = "5c31cbfc-254a-4fb9-822d-e55c681a3d4f"
-	defaultIteratorPageSize = "10000"
-)
+const gloutonOAuthClientID = "5c31cbfc-254a-4fb9-822d-e55c681a3d4f"
 
 var (
 	errInvalidAgentID      = errors.New("got an invalid agent ID")
@@ -104,14 +101,6 @@ func (cl *wrapperClient) Iterator(ctx context.Context, resource bleemeo.Resource
 
 	if err := cl.dupCheck(ctx); err != nil {
 		return errorIterator{err}
-	}
-
-	if !params.Has("page_size") {
-		if params == nil {
-			params = url.Values{"page_size": {defaultIteratorPageSize}}
-		} else {
-			params.Set("page_size", defaultIteratorPageSize)
-		}
 	}
 
 	return cl.client.Iterator(resource, params)
