@@ -9,3 +9,9 @@ md2: |
     Version : 1.2
     Raid Level : raid1
     State : active, checking
+
+md3: |
+  /dev/md3:
+    Version : 1.2
+    Raid Level : raid1
+    State : clean, resyncing

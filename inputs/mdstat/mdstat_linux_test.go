@@ -193,30 +193,37 @@ func TestGather(t *testing.T) { //nolint:maintidx
 				"mdstat_blocks_synced_finish_time": {
 					{Labels: map[string]string{types.LabelItem: "md1"}},
 					{Labels: map[string]string{types.LabelItem: "md2"}, Value: 147.6},
+					{Labels: map[string]string{types.LabelItem: "md3"}, Value: 0.9},
 				},
 				"mdstat_blocks_synced": {
-					{Labels: map[string]string{types.LabelItem: "md1"}},
+					{Labels: map[string]string{types.LabelItem: "md1"}, Value: 0}, // <- important
 					{Labels: map[string]string{types.LabelItem: "md2"}, Value: 4.238336e+07},
+					{Labels: map[string]string{types.LabelItem: "md3"}, Value: 38528},
 				},
 				"mdstat_disks_active_count": {
 					{Labels: map[string]string{types.LabelItem: "md1"}, Value: 2},
 					{Labels: map[string]string{types.LabelItem: "md2"}, Value: 2},
+					{Labels: map[string]string{types.LabelItem: "md3"}, Value: 2},
 				},
 				"mdstat_disks_down_count": {
 					{Labels: map[string]string{types.LabelItem: "md1"}},
 					{Labels: map[string]string{types.LabelItem: "md2"}},
+					{Labels: map[string]string{types.LabelItem: "md3"}},
 				},
 				"mdstat_disks_failed_count": {
 					{Labels: map[string]string{types.LabelItem: "md1"}},
 					{Labels: map[string]string{types.LabelItem: "md2"}},
+					{Labels: map[string]string{types.LabelItem: "md3"}},
 				},
 				"mdstat_disks_spare_count": {
 					{Labels: map[string]string{types.LabelItem: "md1"}},
 					{Labels: map[string]string{types.LabelItem: "md2"}},
+					{Labels: map[string]string{types.LabelItem: "md3"}},
 				},
 				"mdstat_disks_total_count": {
 					{Labels: map[string]string{types.LabelItem: "md1"}, Value: 2},
 					{Labels: map[string]string{types.LabelItem: "md2"}, Value: 2},
+					{Labels: map[string]string{types.LabelItem: "md3"}, Value: 2},
 				},
 				"mdstat_health_status": {
 					{
@@ -232,6 +239,14 @@ func TestGather(t *testing.T) { //nolint:maintidx
 							types.LabelMetaCurrentStatus:      "ok",
 							types.LabelMetaCurrentDescription: "",
 						},
+					},
+					{
+						Labels: map[string]string{
+							types.LabelItem:                   "md3",
+							types.LabelMetaCurrentStatus:      "warning",
+							types.LabelMetaCurrentDescription: "The array is currently resyncing, which should be done in 1 minute (around 10:35:00)",
+						},
+						Value: float64(types.StatusWarning.NagiosCode()),
 					},
 				},
 			},
