@@ -129,10 +129,10 @@ func TestGather(t *testing.T) { //nolint:maintidx
 					{Labels: map[string]string{types.LabelItem: "md2"}, Value: 0},
 					{Labels: map[string]string{types.LabelItem: "md3"}, Value: 0},
 				},
-				"mdstat_blocks_synced_pct": {
-					{Labels: map[string]string{types.LabelItem: "md1"}, Value: 0},
-					{Labels: map[string]string{types.LabelItem: "md2"}, Value: 0},
-					{Labels: map[string]string{types.LabelItem: "md3"}, Value: 0},
+				"mdstat_blocks_synced": {
+					{Labels: map[string]string{types.LabelItem: "md1"}, Value: 136448},
+					{Labels: map[string]string{types.LabelItem: "md2"}, Value: 1.29596288e+08},
+					{Labels: map[string]string{types.LabelItem: "md3"}, Value: 1.318680576e+09},
 				},
 				"mdstat_disks_active_count": {
 					{Labels: map[string]string{types.LabelItem: "md1"}, Value: 2},
@@ -187,6 +187,55 @@ func TestGather(t *testing.T) { //nolint:maintidx
 				},
 			},
 		},
+		{
+			name: "multiple_delayed",
+			expectedMetrics: map[string][]metric{
+				"mdstat_blocks_synced_finish_time": {
+					{Labels: map[string]string{types.LabelItem: "md1"}},
+					{Labels: map[string]string{types.LabelItem: "md2"}, Value: 147.6},
+				},
+				"mdstat_blocks_synced": {
+					{Labels: map[string]string{types.LabelItem: "md1"}},
+					{Labels: map[string]string{types.LabelItem: "md2"}, Value: 4.238336e+07},
+				},
+				"mdstat_disks_active_count": {
+					{Labels: map[string]string{types.LabelItem: "md1"}, Value: 2},
+					{Labels: map[string]string{types.LabelItem: "md2"}, Value: 2},
+				},
+				"mdstat_disks_down_count": {
+					{Labels: map[string]string{types.LabelItem: "md1"}},
+					{Labels: map[string]string{types.LabelItem: "md2"}},
+				},
+				"mdstat_disks_failed_count": {
+					{Labels: map[string]string{types.LabelItem: "md1"}},
+					{Labels: map[string]string{types.LabelItem: "md2"}},
+				},
+				"mdstat_disks_spare_count": {
+					{Labels: map[string]string{types.LabelItem: "md1"}},
+					{Labels: map[string]string{types.LabelItem: "md2"}},
+				},
+				"mdstat_disks_total_count": {
+					{Labels: map[string]string{types.LabelItem: "md1"}, Value: 2},
+					{Labels: map[string]string{types.LabelItem: "md2"}, Value: 2},
+				},
+				"mdstat_health_status": {
+					{
+						Labels: map[string]string{
+							types.LabelItem:                   "md1",
+							types.LabelMetaCurrentStatus:      "ok",
+							types.LabelMetaCurrentDescription: "",
+						},
+					},
+					{
+						Labels: map[string]string{
+							types.LabelItem:                   "md2",
+							types.LabelMetaCurrentStatus:      "ok",
+							types.LabelMetaCurrentDescription: "",
+						},
+					},
+				},
+			},
+		},
 		{ //nolint: dupl
 			name: "multiple_failed_spare",
 			expectedMetrics: map[string][]metric{
@@ -195,10 +244,10 @@ func TestGather(t *testing.T) { //nolint:maintidx
 					{Labels: map[string]string{types.LabelItem: "md1"}, Value: 0},
 					{Labels: map[string]string{types.LabelItem: "md2"}, Value: 0},
 				},
-				"mdstat_blocks_synced_pct": {
-					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 0},
-					{Labels: map[string]string{types.LabelItem: "md1"}, Value: 0},
-					{Labels: map[string]string{types.LabelItem: "md2"}, Value: 0},
+				"mdstat_blocks_synced": {
+					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 9.76773168e+08},
+					{Labels: map[string]string{types.LabelItem: "md1"}, Value: 1.42191616e+08},
+					{Labels: map[string]string{types.LabelItem: "md2"}, Value: 1.046528e+06},
 				},
 				"mdstat_disks_active_count": {
 					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 1},
@@ -259,8 +308,8 @@ func TestGather(t *testing.T) { //nolint:maintidx
 				"mdstat_blocks_synced_finish_time": {
 					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 0},
 				},
-				"mdstat_blocks_synced_pct": {
-					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 0},
+				"mdstat_blocks_synced": {
+					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 1.046528e+06},
 				},
 				"mdstat_disks_active_count": {
 					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 2},
@@ -295,8 +344,8 @@ func TestGather(t *testing.T) { //nolint:maintidx
 				"mdstat_blocks_synced_finish_time": {
 					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 0},
 				},
-				"mdstat_blocks_synced_pct": {
-					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 0},
+				"mdstat_blocks_synced": {
+					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 1.95352512e+09},
 				},
 				"mdstat_disks_active_count": {
 					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 0},
@@ -331,8 +380,8 @@ func TestGather(t *testing.T) { //nolint:maintidx
 				"mdstat_blocks_synced_finish_time": {
 					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 2.8},
 				},
-				"mdstat_blocks_synced_pct": {
-					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 9.9},
+				"mdstat_blocks_synced": {
+					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 2.423168e+06},
 				},
 				"mdstat_disks_active_count": {
 					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 1},

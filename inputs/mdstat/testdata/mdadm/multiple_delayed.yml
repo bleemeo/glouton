@@ -1,0 +1,11 @@
+md1: |
+  /dev/md1:
+    Version : 1.2
+    Raid Level : raid1
+    State : clean, resyncing (DELAYED)
+
+md2: |
+  /dev/md2:
+    Version : 1.2
+    Raid Level : raid1
+    State : active, checking
