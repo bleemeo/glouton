@@ -246,8 +246,7 @@ func makeHealthStatusMetric(array string, info arrayInfo, mdadmPath string, useS
 		case "checking":
 			status = types.StatusOk
 		case "resyncing":
-			status = types.StatusWarning
-			description = "The array is currently resyncing, which should be done in " + formatRemainingTime(info.recoveryMinutes, timeNow)
+			status = types.StatusOk
 		default:
 			status = types.StatusUnknown
 			description = fmt.Sprintf("Unknown activity state %q on disk array %s", info.activityState, array)
