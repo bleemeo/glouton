@@ -1,17 +1,89 @@
 md1: |
   /dev/md1:
-    Version : 1.2
-    Raid Level : raid1
-    State : clean, resyncing (DELAYED)
+             Version : 1.2
+       Creation Time : Wed Jun 29 08:52:34 2022
+          Raid Level : raid1
+          Array Size : 1046528 (1022.00 MiB 1071.64 MB)
+       Used Dev Size : 1046528 (1022.00 MiB 1071.64 MB)
+        Raid Devices : 2
+       Total Devices : 2
+         Persistence : Superblock is persistent
+  
+         Update Time : Wed Jun  5 06:46:18 2024
+               State : clean, resyncing (DELAYED)
+      Active Devices : 2
+     Working Devices : 2
+      Failed Devices : 0
+       Spare Devices : 0
+  
+  Consistency Policy : resync
+  
+                Name : rescue:1
+                UUID : removed
+              Events : 126
+  
+      Number   Major   Minor   RaidDevice State
+      0     259        2        0      active sync   /dev/nvme0n1p2
+      1     259        6        1      active sync   /dev/nvme1n1p2
 
 md2: |
   /dev/md2:
-    Version : 1.2
-    Raid Level : raid1
-    State : active, checking
+             Version : 1.2
+       Creation Time : Wed Jun 29 08:52:35 2022
+          Raid Level : raid1
+          Array Size : 1869997376 (1783.37 GiB 1914.88 GB)
+       Used Dev Size : 1869997376 (1783.37 GiB 1914.88 GB)
+        Raid Devices : 2
+       Total Devices : 2
+         Persistence : Superblock is persistent
+  
+       Intent Bitmap : Internal
+  
+         Update Time : Wed Jun  5 09:53:55 2024
+               State : active, checking
+      Active Devices : 2
+     Working Devices : 2
+      Failed Devices : 0
+       Spare Devices : 0
+  
+  Consistency Policy : bitmap
+  
+        Check Status : 10% complete
+  
+                Name : rescue:2
+                UUID : removed
+              Events : 60991
+  
+      Number   Major   Minor   RaidDevice State
+         0     259        3        0      active sync   /dev/nvme0n1p3
+         1     259        7        1      active sync   /dev/nvme1n1p3
 
 md3: |
-  /dev/md3:
-    Version : 1.2
-    Raid Level : raid1
-    State : clean, resyncing
+  /dev/md0:
+             Version : 1.2
+       Creation Time : Wed Jun  5 17:36:17 2024
+          Raid Level : raid1
+          Array Size : 101376 (99.00 MiB 103.81 MB)
+       Used Dev Size : 101376 (99.00 MiB 103.81 MB)
+        Raid Devices : 2
+       Total Devices : 2
+         Persistence : Superblock is persistent
+  
+         Update Time : Wed Jun  5 17:36:17 2024
+               State : clean, resyncing 
+      Active Devices : 2
+     Working Devices : 2
+      Failed Devices : 0
+       Spare Devices : 0
+  
+  Consistency Policy : resync
+  
+       Resync Status : 2% complete
+  
+                Name : rescue:3
+                UUID : removed
+              Events : 0
+  
+      Number   Major   Minor   RaidDevice State
+         0     253        3        0      active sync   /dev/dm-3
+         1     253        4        1      active sync   /dev/dm-4
