@@ -233,7 +233,8 @@ func makeHealthStatusMetric(array string, info arrayInfo, mdadmPath string, useS
 			if info.activityState == "recovering" {
 				description += ". The array should be fully synchronized in " + formatRemainingTime(info.recoveryMinutes, timeNow)
 			}
-		case strings.Contains(details.state, "DELAYED"):
+		case strings.Contains(details.state, "clean, resyncing (DELAYED)"),
+			strings.Contains(details.state, "active, resyncing (DELAYED)"):
 			status = types.StatusOk
 		}
 	}
