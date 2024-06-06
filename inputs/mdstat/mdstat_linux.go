@@ -86,6 +86,7 @@ func New(cfg config.Mdstat) (telegraf.Input, registry.RegistrationOption, error)
 var fieldsNameMapping = map[string]string{ //nolint:gochecknoglobals
 	"BlocksSyncedFinishTime": "blocks_synced_finish_time", // will be used for a metric status
 	"BlocksSynced":           "blocks_synced",             // used to determine whether the resync is delayed or not
+	"BlocksSyncedPct":        "blocks_synced_pct",
 	"DisksActive":            "disks_active_count",
 	"DisksDown":              "disks_down_count",
 	"DisksFailed":            "disks_failed_count",

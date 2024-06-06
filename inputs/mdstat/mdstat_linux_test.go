@@ -139,6 +139,11 @@ func TestGather(t *testing.T) { //nolint:maintidx
 					{Labels: map[string]string{types.LabelItem: "md2"}, Value: 1.29596288e+08},
 					{Labels: map[string]string{types.LabelItem: "md3"}, Value: 1.318680576e+09},
 				},
+				"mdstat_blocks_synced_pct": {
+					{Labels: map[string]string{types.LabelItem: "md1"}},
+					{Labels: map[string]string{types.LabelItem: "md2"}},
+					{Labels: map[string]string{types.LabelItem: "md3"}},
+				},
 				"mdstat_disks_active_count": {
 					{Labels: map[string]string{types.LabelItem: "md1"}, Value: 2},
 					{Labels: map[string]string{types.LabelItem: "md2"}, Value: 2},
@@ -205,6 +210,11 @@ func TestGather(t *testing.T) { //nolint:maintidx
 					{Labels: map[string]string{types.LabelItem: "md2"}, Value: 4.238336e+07},
 					{Labels: map[string]string{types.LabelItem: "md3"}, Value: 38528},
 				},
+				"mdstat_blocks_synced_pct": {
+					{Labels: map[string]string{types.LabelItem: "md1"}},
+					{Labels: map[string]string{types.LabelItem: "md2"}, Value: 2.2},
+					{Labels: map[string]string{types.LabelItem: "md3"}, Value: 37.6},
+				},
 				"mdstat_disks_active_count": {
 					{Labels: map[string]string{types.LabelItem: "md1"}, Value: 2},
 					{Labels: map[string]string{types.LabelItem: "md2"}, Value: 2},
@@ -269,6 +279,11 @@ func TestGather(t *testing.T) { //nolint:maintidx
 					{Labels: map[string]string{types.LabelItem: "md1"}, Value: 1.42191616e+08},
 					{Labels: map[string]string{types.LabelItem: "md2"}, Value: 1.046528e+06},
 				},
+				"mdstat_blocks_synced_pct": {
+					{Labels: map[string]string{types.LabelItem: "md0"}},
+					{Labels: map[string]string{types.LabelItem: "md1"}},
+					{Labels: map[string]string{types.LabelItem: "md2"}},
+				},
 				"mdstat_disks_active_count": {
 					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 1},
 					{Labels: map[string]string{types.LabelItem: "md1"}, Value: 2},
@@ -331,6 +346,9 @@ func TestGather(t *testing.T) { //nolint:maintidx
 				"mdstat_blocks_synced": {
 					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 1.046528e+06},
 				},
+				"mdstat_blocks_synced_pct": {
+					{Labels: map[string]string{types.LabelItem: "md0"}},
+				},
 				"mdstat_disks_active_count": {
 					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 2},
 				},
@@ -367,6 +385,9 @@ func TestGather(t *testing.T) { //nolint:maintidx
 				"mdstat_blocks_synced": {
 					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 1.95352512e+09},
 				},
+				"mdstat_blocks_synced_pct": {
+					{Labels: map[string]string{types.LabelItem: "md0"}},
+				},
 				"mdstat_disks_active_count": {
 					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 0},
 				},
@@ -394,7 +415,7 @@ func TestGather(t *testing.T) { //nolint:maintidx
 				},
 			},
 		},
-		{ //nolint: dupl
+		{
 			name: "simple_recovery",
 			expectedMetrics: map[string][]metric{
 				"mdstat_blocks_synced_finish_time": {
@@ -402,6 +423,9 @@ func TestGather(t *testing.T) { //nolint:maintidx
 				},
 				"mdstat_blocks_synced": {
 					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 2.423168e+06},
+				},
+				"mdstat_blocks_synced_pct": {
+					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 9.9},
 				},
 				"mdstat_disks_active_count": {
 					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 1},
