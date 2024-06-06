@@ -1289,19 +1289,17 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		Runtime:      a.containerRuntime,
 	}
 
-	if a.metricFormat == types.MetricFormatBleemeo {
-		conf, err := a.buildCollectorsConfig()
-		if err != nil {
-			logger.V(0).Printf("Unable to initialize system collector: %v", err)
+	conf, err := a.buildCollectorsConfig()
+	if err != nil {
+		logger.V(0).Printf("Unable to initialize system collector: %v", err)
 
-			return
-		}
+		return
+	}
 
-		if err = discovery.AddDefaultInputs(a.gathererRegistry, conf, a.vethProvider); err != nil {
-			logger.Printf("Unable to initialize system collector: %v", err)
+	if err = discovery.AddDefaultInputs(a.gathererRegistry, conf, a.vethProvider); err != nil {
+		logger.Printf("Unable to initialize system collector: %v", err)
 
-			return
-		}
+		return
 	}
 
 	// Register inputs that are not associated to a service.
