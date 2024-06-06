@@ -2603,7 +2603,15 @@ func (a *agent) diagnosticFilterResult(_ context.Context, archive types.ArchiveW
 }
 
 func (a *agent) diagnosticVSphere(ctx context.Context, archive types.ArchiveWriter) error {
-	return a.vSphereManager.DiagnosticVSphere(ctx, archive, a.bleemeoConnector.GetAllVSphereAssociations)
+	associationFn := func(context.Context, []bleemeoTypes.VSphereDevice) (map[string]string, error) {
+		return nil, nil //nolint:nilnil
+	}
+
+	if a.bleemeoConnector != nil {
+		associationFn = a.bleemeoConnector.GetAllVSphereAssociations
+	}
+
+	return a.vSphereManager.DiagnosticVSphere(ctx, archive, associationFn)
 }
 
 // Add a warning for the configuration.
