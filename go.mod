@@ -9,7 +9,7 @@ require (
 	github.com/99designs/gqlgen v0.17.47
 	github.com/AstromechZA/etcpwdparse v0.0.0-20170319193008-f0e5f0779716
 	github.com/alecthomas/kingpin/v2 v2.4.0
-	github.com/bleemeo/bleemeo-go v0.0.0-00010101000000-000000000000
+	github.com/bleemeo/bleemeo-go v0.0.0-20240612090427-06f5eed9afe1
 	github.com/cespare/xxhash/v2 v2.3.0
 	github.com/containerd/cgroups/v3 v3.0.3
 	github.com/containerd/containerd v1.7.17
@@ -263,5 +263,3 @@ require (
 	sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.4.1 // indirect
 )
-
-replace github.com/bleemeo/bleemeo-go => ../bleemeo-go // TODO: remove once bleemeo-go is published
