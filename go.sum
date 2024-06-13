@@ -158,6 +158,8 @@ github.com/beorn7/perks v1.0.1/go.mod h1:G2ZrVWU2WbWT9wwq4/hrbKbnv/1ERSJQ0ibhJ6r
 github.com/bgentry/speakeasy v0.1.0/go.mod h1:+zsyZBPWlz7T6j88CTgSN5bM796AkVf0kBD4zp0CCIs=
 github.com/bleemeo/bleemeo-go v0.0.0-20240612090427-06f5eed9afe1 h1:5Gbk6SZ9Tn3wS520KJAyKPj/kdUAjpvlFGt18Lk5hJo=
 github.com/bleemeo/bleemeo-go v0.0.0-20240612090427-06f5eed9afe1/go.mod h1:T3mMawPqLLqgHg0S/96dsuF0MBPzF32V53eqAmiONVU=
+github.com/bleemeo/bleemeo-go v0.0.0-20240613094357-8d3bf117f67f h1:krwv4uAEyk5Yw1+0k9Xl3F1iF+wyhiGUeGUZVRnt8Jw=
+github.com/bleemeo/bleemeo-go v0.0.0-20240613094357-8d3bf117f67f/go.mod h1:T3mMawPqLLqgHg0S/96dsuF0MBPzF32V53eqAmiONVU=
 github.com/blues/jsonata-go v1.5.4 h1:XCsXaVVMrt4lcpKeJw6mNJHqQpWU751cnHdCFUq3xd8=
 github.com/blues/jsonata-go v1.5.4/go.mod h1:uns2jymDrnI7y+UFYCqsRTEiAH22GyHnNXrkupAVFWI=
 github.com/bmatcuk/doublestar/v3 v3.0.0 h1:TQtVPlDnAYwcrVNB2JiGuMc++H5qzWZd9PhkNo5WyHI=
