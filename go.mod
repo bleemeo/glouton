@@ -9,7 +9,7 @@ require (
 	github.com/99designs/gqlgen v0.17.47
 	github.com/AstromechZA/etcpwdparse v0.0.0-20170319193008-f0e5f0779716
 	github.com/alecthomas/kingpin/v2 v2.4.0
-	github.com/bleemeo/bleemeo-go v0.0.0-20240612090427-06f5eed9afe1
+	github.com/bleemeo/bleemeo-go v0.0.0-20240613094357-8d3bf117f67f
 	github.com/cespare/xxhash/v2 v2.3.0
 	github.com/containerd/cgroups/v3 v3.0.3
 	github.com/containerd/containerd v1.7.17

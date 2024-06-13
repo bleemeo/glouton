@@ -100,7 +100,7 @@ func DefaultConfig() Config { //nolint:maintidx
 		Bleemeo: Bleemeo{
 			Enable:         true,
 			AccountID:      "",
-			APIBase:        "https://api.bleemeo.com/",
+			APIBase:        "https://api.bleemeo.com",
 			APISSLInsecure: false,
 			Cache: BleemeoCache{
 				DeactivatedMetricsExpirationDays: 200,
