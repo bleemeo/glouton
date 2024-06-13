@@ -17,6 +17,7 @@
 package agent
 
 import (
+	"math/rand"
 	"reflect"
 	"sort"
 	"testing"
@@ -197,15 +198,118 @@ func Test_Basic_Build(t *testing.T) {
 }
 
 func Test_basic_build_default(t *testing.T) {
-	filter, err := newMetricFilter(defaultConf, false, true, types.MetricFormatBleemeo)
+	filter, err := newMetricFilter(defaultConf, true, true, types.MetricFormatBleemeo)
 	if err != nil {
 		t.Error(err)
 	}
 
-	wantLen := len(bleemeoDefaultSystemMetrics) + len(bleemeoSwapMetrics) + len(commonDefaultSystemMetrics) + len(inputMetrics)
+	allowedPoints := []types.MetricPoint{
+		{
+			Labels: map[string]string{
+				"__name__":        "process_cpu_seconds_total",
+				"label_not_read":  "value_not_read",
+				"scrape_instance": "localhost:2113",
+				"scrape_job":      "my_application123",
+			},
+		},
+		{
+			Labels: map[string]string{
+				"__name__": "cpu_used",
+			},
+		},
+		{
+			Labels: map[string]string{
+				"__name__": "agent_status",
+			},
+		},
+		{
+			Labels: map[string]string{
+				"__name__": "process_context_switch",
+			},
+		},
+		{
+			Labels: map[string]string{
+				"__name__": "swap_free",
+			},
+		},
+		{
+			Labels: map[string]string{
+				"__name__":    "sysUpTime",
+				"snmp_target": "printer.local",
+			},
+		},
+		{
+			Labels: map[string]string{
+				"__name__": "smart_device_health_status",
+			},
+		},
+		{
+			Labels: map[string]string{
+				"__name__": "sensor_temperature",
+				"sensor":   "coretemp_package_id_0",
+			},
+		},
+		{
+			Labels: map[string]string{
+				"__name__": "sensor_temperature",
+				"sensor":   "coretemp_package_id_0",
+			},
+		},
+		{
+			Labels: map[string]string{
+				"__name__": "sensor_temperature",
+				"sensor":   "k10temp_tctl",
+			},
+		},
+	}
 
-	if len(filter.allowList) != wantLen {
-		t.Errorf("Unexpected number of matcher: expected %d, got %d", wantLen, len(filter.allowList))
+	deniedPoints := []types.MetricPoint{
+		{
+			Labels: map[string]string{
+				"__name__": "memcached_command_flush",
+				"item":     "redis-memcached-1",
+			},
+		},
+		{
+			Labels: map[string]string{
+				"__name__": "node_load1",
+			},
+		},
+		{
+			Labels: map[string]string{
+				"__name__": "sensor_temperature",
+				"sensor":   "coretemp_core_0",
+			},
+		},
+		{
+			Labels: map[string]string{
+				"__name__": "sensor_temperature",
+				"sensor":   "k10temp_tccd1",
+			},
+		},
+		// Service metrics are only allowed when the service is discovered. This
+		// test the default filter without any discovered services.
+		{
+			Labels: map[string]string{
+				"__name__": "apache_requests",
+			},
+		},
+	}
+
+	sendPoints := make([]types.MetricPoint, len(allowedPoints)+len(deniedPoints))
+	copy(sendPoints[:len(allowedPoints)], allowedPoints)
+	copy(sendPoints[len(allowedPoints):len(allowedPoints)+len(deniedPoints)], deniedPoints)
+
+	// Shuffle array to mix allowed & denied points
+	rnd := rand.New(rand.NewSource(42)) //nolint: gosec
+	rnd.Shuffle(len(sendPoints), func(i, j int) {
+		sendPoints[i], sendPoints[j] = sendPoints[j], sendPoints[i]
+	})
+
+	gotPoints := filter.FilterPoints(sendPoints, false)
+
+	if diff := types.DiffMetricPoints(allowedPoints, gotPoints, false); diff != "" {
+		t.Errorf("FilterPoints mismatch (-want +got)\n%s", diff)
 	}
 }
 
@@ -266,22 +370,8 @@ func Test_Basic_FilterPoints(t *testing.T) {
 
 	newPoints := filter.FilterPoints(points, false)
 
-	if len(newPoints) != len(want) {
-		for _, val := range newPoints {
-			t.Log(val.Labels)
-		}
-
-		t.Errorf("Invalid length of result: expected %d, got %d", len(want), len(newPoints))
-
-		return
-	}
-
-	for idx, p := range newPoints {
-		for key, val := range p.Labels {
-			if val != want[idx].Labels[key] {
-				t.Errorf("Invalid value of label %s: expected %s, got %s", key, want[idx].Labels[key], val)
-			}
-		}
+	if diff := cmp.Diff(want, newPoints); diff != "" {
+		t.Errorf("FilterPoints mismatch (-want +got)\n%s", diff)
 	}
 }
 
