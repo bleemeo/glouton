@@ -85,6 +85,7 @@ func New(cfg config.Mdstat) (telegraf.Input, registry.RegistrationOption, error)
 
 var fieldsNameMapping = map[string]string{ //nolint:gochecknoglobals
 	"BlocksSyncedFinishTime": "blocks_synced_finish_time", // will be used for a metric status
+	"BlocksSynced":           "blocks_synced",             // used to determine whether the resync is delayed or not
 	"BlocksSyncedPct":        "blocks_synced_pct",
 	"DisksActive":            "disks_active_count",
 	"DisksDown":              "disks_down_count",
@@ -113,6 +114,7 @@ type arrayInfo struct {
 	active, down, failed, total int
 	activityState               string
 	recoveryMinutes             float64
+	syncedBlocks                int64
 }
 
 func gatherModifier(mdadmPath string, useSudo bool, timeNow func() time.Time, mdadmDetails mdadmDetailsFunc) func(mfs []*dto.MetricFamily, _ error) []*dto.MetricFamily {
@@ -152,6 +154,8 @@ func gatherModifier(mdadmPath string, useSudo bool, timeNow func() time.Time, md
 					info.total = int(m.GetUntyped().GetValue())
 				case "mdstat_blocks_synced_finish_time":
 					info.recoveryMinutes = m.GetUntyped().GetValue()
+				case "mdstat_blocks_synced":
+					info.syncedBlocks = int64(m.GetUntyped().GetValue())
 				}
 
 				infoPerArray[array] = info
@@ -195,7 +199,7 @@ func makeHealthStatusMetric(array string, info arrayInfo, mdadmPath string, useS
 		description string
 	)
 
-	if info.active != info.total { // Something is going on, and we may not have enough information with /proc/mdstat
+	if info.active != info.total || info.syncedBlocks == 0 { // Something is going on, and we may not have enough information with /proc/mdstat
 		details, err := mdadmDetails(array, mdadmPath, useSudo)
 		if err != nil {
 			logger.V(1).Printf("MD: %v", err)
@@ -230,6 +234,9 @@ func makeHealthStatusMetric(array string, info arrayInfo, mdadmPath string, useS
 			if info.activityState == "recovering" {
 				description += ". The array should be fully synchronized in " + formatRemainingTime(info.recoveryMinutes, timeNow)
 			}
+		case strings.Contains(details.state, "clean, resyncing (DELAYED)"),
+			strings.Contains(details.state, "active, resyncing (DELAYED)"):
+			status = types.StatusOk
 		}
 	}
 

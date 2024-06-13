@@ -43,7 +43,12 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-var errArrayMdadmDetailsNotFound = errors.New("mdadm details not found for array")
+var errArrayMdadmDetailsNotFound = errors.New("mdadm details not found")
+
+// timeNow always returns the same timestamp: February 13, 2024, at 10:35am.
+func timeNow() time.Time {
+	return time.Date(2024, 2, 13, 10, 35, 0, 0, time.Local)
+}
 
 func setupMdstatTest(t *testing.T, name string) (input telegraf.Input, mdadmDetailsFn mdadmDetailsFunc) {
 	t.Helper()
@@ -107,7 +112,7 @@ func setupMdstatTest(t *testing.T, name string) (input telegraf.Input, mdadmDeta
 	mdadmDetailsFn = func(array, _ string, _ bool) (mdadmInfo, error) {
 		mdadmDetailsOutput, ok := mdadmDetails[array]
 		if !ok {
-			return mdadmInfo{}, fmt.Errorf("%w %s", errArrayMdadmDetailsNotFound, array)
+			return mdadmInfo{}, fmt.Errorf("%w for array %s", errArrayMdadmDetailsNotFound, array)
 		}
 
 		return parseMdadmOutput(mdadmDetailsOutput)
@@ -129,10 +134,15 @@ func TestGather(t *testing.T) { //nolint:maintidx
 					{Labels: map[string]string{types.LabelItem: "md2"}, Value: 0},
 					{Labels: map[string]string{types.LabelItem: "md3"}, Value: 0},
 				},
+				"mdstat_blocks_synced": {
+					{Labels: map[string]string{types.LabelItem: "md1"}, Value: 136448},
+					{Labels: map[string]string{types.LabelItem: "md2"}, Value: 1.29596288e+08},
+					{Labels: map[string]string{types.LabelItem: "md3"}, Value: 1.318680576e+09},
+				},
 				"mdstat_blocks_synced_pct": {
-					{Labels: map[string]string{types.LabelItem: "md1"}, Value: 0},
-					{Labels: map[string]string{types.LabelItem: "md2"}, Value: 0},
-					{Labels: map[string]string{types.LabelItem: "md3"}, Value: 0},
+					{Labels: map[string]string{types.LabelItem: "md1"}},
+					{Labels: map[string]string{types.LabelItem: "md2"}},
+					{Labels: map[string]string{types.LabelItem: "md3"}},
 				},
 				"mdstat_disks_active_count": {
 					{Labels: map[string]string{types.LabelItem: "md1"}, Value: 2},
@@ -187,6 +197,75 @@ func TestGather(t *testing.T) { //nolint:maintidx
 				},
 			},
 		},
+		{
+			name: "multiple_delayed",
+			expectedMetrics: map[string][]metric{
+				"mdstat_blocks_synced_finish_time": {
+					{Labels: map[string]string{types.LabelItem: "md1"}},
+					{Labels: map[string]string{types.LabelItem: "md2"}, Value: 147.6},
+					{Labels: map[string]string{types.LabelItem: "md3"}, Value: 0.9},
+				},
+				"mdstat_blocks_synced": {
+					{Labels: map[string]string{types.LabelItem: "md1"}, Value: 0}, // <- important: 0 means delayed
+					{Labels: map[string]string{types.LabelItem: "md2"}, Value: 4.238336e+07},
+					{Labels: map[string]string{types.LabelItem: "md3"}, Value: 38528},
+				},
+				"mdstat_blocks_synced_pct": {
+					{Labels: map[string]string{types.LabelItem: "md1"}},
+					{Labels: map[string]string{types.LabelItem: "md2"}, Value: 2.2},
+					{Labels: map[string]string{types.LabelItem: "md3"}, Value: 37.6},
+				},
+				"mdstat_disks_active_count": {
+					{Labels: map[string]string{types.LabelItem: "md1"}, Value: 2},
+					{Labels: map[string]string{types.LabelItem: "md2"}, Value: 2},
+					{Labels: map[string]string{types.LabelItem: "md3"}, Value: 2},
+				},
+				"mdstat_disks_down_count": {
+					{Labels: map[string]string{types.LabelItem: "md1"}},
+					{Labels: map[string]string{types.LabelItem: "md2"}},
+					{Labels: map[string]string{types.LabelItem: "md3"}},
+				},
+				"mdstat_disks_failed_count": {
+					{Labels: map[string]string{types.LabelItem: "md1"}},
+					{Labels: map[string]string{types.LabelItem: "md2"}},
+					{Labels: map[string]string{types.LabelItem: "md3"}},
+				},
+				"mdstat_disks_spare_count": {
+					{Labels: map[string]string{types.LabelItem: "md1"}},
+					{Labels: map[string]string{types.LabelItem: "md2"}},
+					{Labels: map[string]string{types.LabelItem: "md3"}},
+				},
+				"mdstat_disks_total_count": {
+					{Labels: map[string]string{types.LabelItem: "md1"}, Value: 2},
+					{Labels: map[string]string{types.LabelItem: "md2"}, Value: 2},
+					{Labels: map[string]string{types.LabelItem: "md3"}, Value: 2},
+				},
+				"mdstat_health_status": {
+					{
+						Labels: map[string]string{
+							types.LabelItem:                   "md1",
+							types.LabelMetaCurrentStatus:      types.StatusOk.String(),
+							types.LabelMetaCurrentDescription: "",
+						},
+					},
+					{
+						Labels: map[string]string{
+							types.LabelItem:                   "md2",
+							types.LabelMetaCurrentStatus:      types.StatusOk.String(),
+							types.LabelMetaCurrentDescription: "",
+						},
+					},
+					{
+						Labels: map[string]string{
+							types.LabelItem:                   "md3",
+							types.LabelMetaCurrentStatus:      types.StatusWarning.String(),
+							types.LabelMetaCurrentDescription: "The array is currently resyncing, which should be done in 1 minute (around 10:35:00)",
+						},
+						Value: float64(types.StatusWarning.NagiosCode()),
+					},
+				},
+			},
+		},
 		{ //nolint: dupl
 			name: "multiple_failed_spare",
 			expectedMetrics: map[string][]metric{
@@ -195,10 +274,15 @@ func TestGather(t *testing.T) { //nolint:maintidx
 					{Labels: map[string]string{types.LabelItem: "md1"}, Value: 0},
 					{Labels: map[string]string{types.LabelItem: "md2"}, Value: 0},
 				},
+				"mdstat_blocks_synced": {
+					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 9.76773168e+08},
+					{Labels: map[string]string{types.LabelItem: "md1"}, Value: 1.42191616e+08},
+					{Labels: map[string]string{types.LabelItem: "md2"}, Value: 1.046528e+06},
+				},
 				"mdstat_blocks_synced_pct": {
-					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 0},
-					{Labels: map[string]string{types.LabelItem: "md1"}, Value: 0},
-					{Labels: map[string]string{types.LabelItem: "md2"}, Value: 0},
+					{Labels: map[string]string{types.LabelItem: "md0"}},
+					{Labels: map[string]string{types.LabelItem: "md1"}},
+					{Labels: map[string]string{types.LabelItem: "md2"}},
 				},
 				"mdstat_disks_active_count": {
 					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 1},
@@ -259,8 +343,11 @@ func TestGather(t *testing.T) { //nolint:maintidx
 				"mdstat_blocks_synced_finish_time": {
 					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 0},
 				},
+				"mdstat_blocks_synced": {
+					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 1.046528e+06},
+				},
 				"mdstat_blocks_synced_pct": {
-					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 0},
+					{Labels: map[string]string{types.LabelItem: "md0"}},
 				},
 				"mdstat_disks_active_count": {
 					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 2},
@@ -295,8 +382,11 @@ func TestGather(t *testing.T) { //nolint:maintidx
 				"mdstat_blocks_synced_finish_time": {
 					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 0},
 				},
+				"mdstat_blocks_synced": {
+					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 1.95352512e+09},
+				},
 				"mdstat_blocks_synced_pct": {
-					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 0},
+					{Labels: map[string]string{types.LabelItem: "md0"}},
 				},
 				"mdstat_disks_active_count": {
 					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 0},
@@ -325,11 +415,14 @@ func TestGather(t *testing.T) { //nolint:maintidx
 				},
 			},
 		},
-		{ //nolint: dupl
+		{
 			name: "simple_recovery",
 			expectedMetrics: map[string][]metric{
 				"mdstat_blocks_synced_finish_time": {
 					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 2.8},
+				},
+				"mdstat_blocks_synced": {
+					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 2.423168e+06},
 				},
 				"mdstat_blocks_synced_pct": {
 					{Labels: map[string]string{types.LabelItem: "md0"}, Value: 9.9},
@@ -361,10 +454,6 @@ func TestGather(t *testing.T) { //nolint:maintidx
 				},
 			},
 		},
-	}
-
-	timeNow := func() time.Time {
-		return time.Date(2024, 2, 13, 10, 35, 0, 0, time.Local)
 	}
 
 	for _, tc := range testCases {
@@ -470,10 +559,6 @@ func TestFormatRemainingTime(t *testing.T) {
 			timeLeft: 0,
 			expected: "a few moments",
 		},
-	}
-
-	timeNow := func() time.Time {
-		return time.Date(2024, 2, 13, 10, 35, 0, 0, time.Local)
 	}
 
 	for _, tc := range cases {
