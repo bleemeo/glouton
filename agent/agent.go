@@ -1289,19 +1289,17 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		Runtime:      a.containerRuntime,
 	}
 
-	if a.metricFormat == types.MetricFormatBleemeo {
-		conf, err := a.buildCollectorsConfig()
-		if err != nil {
-			logger.V(0).Printf("Unable to initialize system collector: %v", err)
+	conf, err := a.buildCollectorsConfig()
+	if err != nil {
+		logger.V(0).Printf("Unable to initialize system collector: %v", err)
 
-			return
-		}
+		return
+	}
 
-		if err = discovery.AddDefaultInputs(a.gathererRegistry, conf, a.vethProvider); err != nil {
-			logger.Printf("Unable to initialize system collector: %v", err)
+	if err = discovery.AddDefaultInputs(a.gathererRegistry, conf, a.vethProvider); err != nil {
+		logger.Printf("Unable to initialize system collector: %v", err)
 
-			return
-		}
+		return
 	}
 
 	// Register inputs that are not associated to a service.
@@ -2603,7 +2601,15 @@ func (a *agent) diagnosticFilterResult(_ context.Context, archive types.ArchiveW
 }
 
 func (a *agent) diagnosticVSphere(ctx context.Context, archive types.ArchiveWriter) error {
-	return a.vSphereManager.DiagnosticVSphere(ctx, archive, a.bleemeoConnector.GetAllVSphereAssociations)
+	associationFn := func(context.Context, []bleemeoTypes.VSphereDevice) (map[string]string, error) {
+		return nil, nil //nolint:nilnil
+	}
+
+	if a.bleemeoConnector != nil {
+		associationFn = a.bleemeoConnector.GetAllVSphereAssociations
+	}
+
+	return a.vSphereManager.DiagnosticVSphere(ctx, archive, associationFn)
 }
 
 // Add a warning for the configuration.
