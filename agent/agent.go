@@ -1649,11 +1649,11 @@ func (a *agent) watchdog(ctx context.Context) error {
 		a.l.Unlock()
 
 		switch {
-		case time.Since(lastHealthCheck) > 15*time.Minute && failingCount < 2:
+		case time.Since(lastHealthCheck) > 15*time.Minute && failingCount < 3:
 			logger.V(2).Printf("Healthcheck are no longer running. Last run was at %s", lastHealthCheck.Format(time.RFC3339))
 
 			failingCount++
-		case time.Since(lastHealthCheck) > 15*time.Minute && failingCount >= 2:
+		case time.Since(lastHealthCheck) > 15*time.Minute && failingCount >= 3:
 			logger.Printf("Healthcheck are no longer running. Last run was at %s", lastHealthCheck.Format(time.RFC3339))
 			// We don't know how big the buffer needs to be to collect
 			// all the goroutines. Use 2MB buffer which hopefully is enough
