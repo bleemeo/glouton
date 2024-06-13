@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/bleemeo/bleemeo-go"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/bleemeoapi"
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 )
@@ -48,40 +49,40 @@ var (
 		DockerIntegration: true,
 	}
 
-	agentTypeAgent bleemeoTypes.AgentType = bleemeoTypes.AgentType{
+	agentTypeAgent = bleemeoTypes.AgentType{
 		DisplayName: "A server monitored with Bleemeo agent",
 		ID:          "61zb6a83-d90a-4165-bf04-944e0b2g2a10",
-		Name:        bleemeoTypes.AgentTypeAgent,
+		Name:        bleemeo.AgentType_Agent,
 	}
-	agentTypeSNMP bleemeoTypes.AgentType = bleemeoTypes.AgentType{
+	agentTypeSNMP = bleemeoTypes.AgentType{
 		DisplayName: "A server monitored with SNMP agent",
 		ID:          "823b6a83-d70a-4768-be64-50450b282a30",
-		Name:        bleemeoTypes.AgentTypeSNMP,
+		Name:        bleemeo.AgentType_SNMP,
 	}
-	agentTypeMonitor bleemeoTypes.AgentType = bleemeoTypes.AgentType{
+	agentTypeMonitor = bleemeoTypes.AgentType{
 		DisplayName: "A website monitored with connection check",
 		ID:          "41afe63c-fa1c-4b84-b92b-028269101fde",
-		Name:        bleemeoTypes.AgentTypeMonitor,
+		Name:        bleemeo.AgentType_Monitor,
 	}
-	agentTypeKubernetes bleemeoTypes.AgentType = bleemeoTypes.AgentType{
+	agentTypeKubernetes = bleemeoTypes.AgentType{
 		DisplayName: "k8s",
 		ID:          "f8477dcd-36d8-489f-a6b8-e52f6bc013d2",
-		Name:        bleemeoTypes.AgentTypeKubernetes,
+		Name:        bleemeo.AgentType_K8s,
 	}
-	agentTypeVSphereCluster bleemeoTypes.AgentType = bleemeoTypes.AgentType{
+	agentTypeVSphereCluster = bleemeoTypes.AgentType{
 		DisplayName: "A vSphere cluster",
 		ID:          "a424f3d1-5824-49c2-a4c7-08ebb58f1e1c",
-		Name:        bleemeoTypes.AgentTypeVSphereCluster,
+		Name:        bleemeo.AgentType_vSphereCluster,
 	}
-	agentTypeVSphereHost bleemeoTypes.AgentType = bleemeoTypes.AgentType{
+	agentTypeVSphereHost = bleemeoTypes.AgentType{
 		DisplayName: "A vSphere host",
 		ID:          "eef9553e-f6f8-483d-9360-979ae24974af",
-		Name:        bleemeoTypes.AgentTypeVSphereHost,
+		Name:        bleemeo.AgentType_vSphereHost,
 	}
-	agentTypeVSphereVM bleemeoTypes.AgentType = bleemeoTypes.AgentType{
+	agentTypeVSphereVM = bleemeoTypes.AgentType{
 		DisplayName: "A vSphere VM",
 		ID:          "ae5d4581-e74a-4c11-8c9d-fde62a7073e5",
-		Name:        bleemeoTypes.AgentTypeVSphereVM,
+		Name:        bleemeo.AgentType_vSphereVM,
 	}
 
 	agentConfigAgent = bleemeoTypes.AgentConfig{
@@ -127,7 +128,7 @@ var (
 		MetricResolution: 60,
 	}
 
-	testAgent = payloadAgent{
+	testAgent = bleemeoapi.AgentPayload{
 		Agent: bleemeoTypes.Agent{
 			ID:        agentID,
 			AccountID: accountID,
@@ -140,7 +141,7 @@ var (
 		Abstracted:      false,
 		InitialPassword: "password already set",
 	}
-	newMonitorAgent = payloadAgent{
+	newMonitorAgent = bleemeoapi.AgentPayload{
 		Agent: bleemeoTypes.Agent{
 			ID:              "6b0ba586-0111-4a72-9cc7-f19d4f6558b9",
 			AccountID:       accountID,
@@ -152,7 +153,7 @@ var (
 		Abstracted:      true,
 		InitialPassword: "password already set",
 	}
-	testK8SAgent = payloadAgent{
+	testK8SAgent = bleemeoapi.AgentPayload{
 		Agent: bleemeoTypes.Agent{
 			ID:              "efb48b0a-b03d-4ba6-b643-534e81a0acaa",
 			AccountID:       accountID,
@@ -179,7 +180,7 @@ var (
 		IsMonitor: true,
 	}
 
-	testAgentMetric1 = metricPayload{
+	testAgentMetric1 = bleemeoapi.MetricPayload{
 		Metric: bleemeoTypes.Metric{
 			ID:            "decce8cf-c2f7-43c3-b66e-10429debd994",
 			AgentID:       testAgent.ID,
@@ -189,7 +190,7 @@ var (
 		},
 		Name: "some_metric_1",
 	}
-	testAgentMetric2 = metricPayload{
+	testAgentMetric2 = bleemeoapi.MetricPayload{
 		Metric: bleemeoTypes.Metric{
 			ID:          "055af752-5c01-4abc-9bb2-9d64032ef970",
 			AgentID:     testAgent.ID,
@@ -198,7 +199,7 @@ var (
 		},
 		Name: "some_metric_2",
 	}
-	testMonitorMetricPrivateProbe = metricPayload{
+	testMonitorMetricPrivateProbe = bleemeoapi.MetricPayload{
 		Metric: bleemeoTypes.Metric{
 			ID:      "52b9c46e-00b9-4e80-a852-781426a3a193",
 			AgentID: newMonitor.AgentID,

@@ -18,11 +18,10 @@ package synchronizer
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"reflect"
 
-	"github.com/bleemeo/glouton/bleemeo/client"
+	"github.com/bleemeo/bleemeo-go"
 	"github.com/bleemeo/glouton/bleemeo/internal/common"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
@@ -34,18 +33,39 @@ import (
 const gloutonConfigItemBatchSize = 100
 
 // comparableConfigItem is a modified GloutonConfigItem without the
-// interface{} value to make it comparable.
+// `any` value to make it comparable.
 type comparableConfigItem struct {
 	Key      string
 	Priority int
-	Source   bleemeoTypes.ConfigItemSource
+	Source   bleemeo.ConfigItemSource
 	Path     string
-	Type     bleemeoTypes.ConfigItemType
+	Type     bleemeo.ConfigItemType
 }
 
 type configItemValue struct {
 	ID    string
-	Value interface{}
+	Value any
+}
+
+func configItemsToMap(items []bleemeoTypes.GloutonConfigItem) map[comparableConfigItem]configItemValue {
+	itemsMap := make(map[comparableConfigItem]configItemValue, len(items))
+
+	for _, item := range items {
+		key := comparableConfigItem{
+			Key:      item.Key,
+			Priority: item.Priority,
+			Source:   item.Source,
+			Path:     item.Path,
+			Type:     item.Type,
+		}
+
+		itemsMap[key] = configItemValue{
+			ID:    item.ID,
+			Value: item.Value,
+		}
+	}
+
+	return itemsMap
 }
 
 func (s *Synchronizer) syncConfig(
@@ -60,11 +80,12 @@ func (s *Synchronizer) syncConfig(
 
 	apiClient := execution.BleemeoAPIClient()
 
-	remoteConfigItems, err := s.fetchAllConfigItems(ctx, apiClient)
+	remoteConfigItemsList, err := apiClient.ListGloutonConfigItems(ctx, s.agentID)
 	if err != nil {
 		return false, fmt.Errorf("failed to fetch config items: %w", err)
 	}
 
+	remoteConfigItems := configItemsToMap(remoteConfigItemsList)
 	localConfigItems := s.localConfigItems()
 
 	// Registers local config items not present on the API.
@@ -86,49 +107,9 @@ func (s *Synchronizer) syncConfig(
 	return false, nil
 }
 
-// fetchAllConfigItems returns the remote config items in a map of config value by comparableConfigItem.
-func (s *Synchronizer) fetchAllConfigItems(ctx context.Context, apiClient types.RawClient) (map[comparableConfigItem]configItemValue, error) {
-	params := map[string]string{
-		"fields": "id,agent,key,value,priority,source,path,type",
-		"agent":  s.agentID,
-	}
-
-	result, err := apiClient.Iter(ctx, "gloutonconfigitem", params)
-	if err != nil {
-		return nil, fmt.Errorf("client iter: %w", err)
-	}
-
-	items := make(map[comparableConfigItem]configItemValue, len(result))
-
-	for _, jsonMessage := range result {
-		var item bleemeoTypes.GloutonConfigItem
-
-		if err := json.Unmarshal(jsonMessage, &item); err != nil {
-			logger.V(2).Printf("Failed to unmarshal config item: %v", err)
-
-			continue
-		}
-
-		key := comparableConfigItem{
-			Key:      item.Key,
-			Priority: item.Priority,
-			Source:   item.Source,
-			Path:     item.Path,
-			Type:     item.Type,
-		}
-
-		items[key] = configItemValue{
-			ID:    item.ID,
-			Value: item.Value,
-		}
-	}
-
-	return items, nil
-}
-
 // localConfigItems returns the local config items in a map of config value by comparableConfigItem.
-func (s *Synchronizer) localConfigItems() map[comparableConfigItem]interface{} {
-	items := make(map[comparableConfigItem]interface{}, len(s.option.ConfigItems))
+func (s *Synchronizer) localConfigItems() map[comparableConfigItem]any {
+	items := make(map[comparableConfigItem]any, len(s.option.ConfigItems))
 
 	for _, item := range s.option.ConfigItems {
 		// Ignore items with key or path too long because we won't be able to register them.
@@ -155,66 +136,66 @@ func (s *Synchronizer) localConfigItems() map[comparableConfigItem]interface{} {
 }
 
 // Convert a config item source to a Bleemeo config item source.
-func bleemeoItemSourceFromConfigSource(source config.ItemSource) bleemeoTypes.ConfigItemSource {
+func bleemeoItemSourceFromConfigSource(source config.ItemSource) bleemeo.ConfigItemSource {
 	switch source {
 	case config.SourceFile:
-		return bleemeoTypes.SourceFile
+		return bleemeo.ConfigItemSource_File
 	case config.SourceEnv:
-		return bleemeoTypes.SourceEnv
+		return bleemeo.ConfigItemSource_Env
 	case config.SourceDefault:
-		return bleemeoTypes.SourceDefault
+		return bleemeo.ConfigItemSource_Default
 	default:
-		return bleemeoTypes.SourceUnknown
+		return bleemeo.ConfigItemSource_Unknown
 	}
 }
 
 // Convert a config item type to a Bleemeo config item type.
 // Both enums are very similar, but they are duplicated to not
 // put any Bleemeo API specific types in the config.
-func bleemeoItemTypeFromConfigType(source config.ItemType) bleemeoTypes.ConfigItemType {
+func bleemeoItemTypeFromConfigType(source config.ItemType) bleemeo.ConfigItemType {
 	switch source {
 	case config.TypeBool:
-		return bleemeoTypes.TypeBool
+		return bleemeo.ConfigItemType_Bool
 	case config.TypeFloat:
-		return bleemeoTypes.TypeFloat
+		return bleemeo.ConfigItemType_Float
 	case config.TypeInt:
-		return bleemeoTypes.TypeInt
+		return bleemeo.ConfigItemType_Int
 	case config.TypeString:
-		return bleemeoTypes.TypeString
+		return bleemeo.ConfigItemType_String
 	case config.TypeListString:
-		return bleemeoTypes.TypeListString
+		return bleemeo.ConfigItemType_ListString
 	case config.TypeListInt:
-		return bleemeoTypes.TypeListInt
+		return bleemeo.ConfigItemType_ListInt
 	case config.TypeMapStrStr:
-		return bleemeoTypes.TypeMapStrStr
+		return bleemeo.ConfigItemType_MapStrStr
 	case config.TypeMapStrInt:
-		return bleemeoTypes.TypeMapStrInt
+		return bleemeo.ConfigItemType_MapStrInt
 	case config.TypeThresholds:
-		return bleemeoTypes.TypeThresholds
+		return bleemeo.ConfigItemType_Thresholds
 	case config.TypeServices:
-		return bleemeoTypes.TypeServices
+		return bleemeo.ConfigItemType_Services
 	case config.TypeNameInstances:
-		return bleemeoTypes.TypeNameInstances
+		return bleemeo.ConfigItemType_NameInstances
 	case config.TypeBlackboxTargets:
-		return bleemeoTypes.TypeBlackboxTargets
+		return bleemeo.ConfigItemType_BlackboxTargets
 	case config.TypePrometheusTargets:
-		return bleemeoTypes.TypePrometheusTargets
+		return bleemeo.ConfigItemType_PrometheusTargets
 	case config.TypeSNMPTargets:
-		return bleemeoTypes.TypeSNMPTargets
+		return bleemeo.ConfigItemType_SNMPTargets
 	case config.TypeLogInputs:
-		return bleemeoTypes.TypeLogInputs
+		return bleemeo.ConfigItemType_LogInputs
 	case config.TypeAny:
-		return bleemeoTypes.TypeAny
+		return bleemeo.ConfigItemType_Any
 	default:
-		return bleemeoTypes.TypeAny
+		return bleemeo.ConfigItemType_Any
 	}
 }
 
 // registerLocalConfigItems registers local config items not present on the API.
 func (s *Synchronizer) registerLocalConfigItems(
 	ctx context.Context,
-	apiClient types.RawClient,
-	localConfigItems map[comparableConfigItem]interface{},
+	apiClient types.GloutonConfigItemClient,
+	localConfigItems map[comparableConfigItem]any,
 	remoteConfigItems map[comparableConfigItem]configItemValue,
 ) error {
 	var itemsToRegister []bleemeoTypes.GloutonConfigItem //nolint:prealloc
@@ -240,7 +221,7 @@ func (s *Synchronizer) registerLocalConfigItems(
 			},
 		)
 
-		logger.V(2).Printf(`Registering config item "%s" from %s %s`, localItem.Key, localItem.Source, localItem.Path)
+		logger.V(2).Printf(`Registering config item "%s" from %s %s`, localItem.Key, bleemeoTypes.FormatConfigItemSource(localItem.Source), localItem.Path)
 	}
 
 	for start := 0; start < len(itemsToRegister); start += gloutonConfigItemBatchSize {
@@ -249,7 +230,7 @@ func (s *Synchronizer) registerLocalConfigItems(
 			end = len(itemsToRegister)
 		}
 
-		_, err := apiClient.Do(ctx, "POST", "v1/gloutonconfigitem/", nil, itemsToRegister[start:end], nil)
+		err := apiClient.RegisterGloutonConfigItems(ctx, itemsToRegister[start:end])
 		if err != nil {
 			return err
 		}
@@ -261,14 +242,14 @@ func (s *Synchronizer) registerLocalConfigItems(
 // removeRemoteConfigItems removes remote config items not present locally.
 func (s *Synchronizer) removeRemoteConfigItems(
 	ctx context.Context,
-	apiClient types.RawClient,
-	localConfigItems map[comparableConfigItem]interface{},
+	apiClient types.GloutonConfigItemClient,
+	localConfigItems map[comparableConfigItem]any,
 	remoteConfigItems map[comparableConfigItem]configItemValue,
 ) error {
 	// Find and remove remote items that are not present locally.
 	for remoteKey, remoteItem := range remoteConfigItems {
 		// Skip API source, these items are managed by the API itself.
-		if remoteKey.Source == bleemeoTypes.SourceAPI {
+		if remoteKey.Source == bleemeo.ConfigItemSource_API {
 			continue
 		}
 
@@ -279,10 +260,10 @@ func (s *Synchronizer) removeRemoteConfigItems(
 			continue
 		}
 
-		_, err := apiClient.Do(ctx, "DELETE", fmt.Sprintf("v1/gloutonconfigitem/%s/", remoteItem.ID), nil, nil, nil)
+		err := apiClient.DeleteGloutonConfigItem(ctx, remoteItem.ID)
 		if err != nil {
 			// Ignore the error if the item has already been deleted.
-			if client.IsNotFound(err) {
+			if IsNotFound(err) {
 				continue
 			}
 
@@ -291,7 +272,7 @@ func (s *Synchronizer) removeRemoteConfigItems(
 
 		logger.V(2).Printf(
 			`Config item %s ("%s" from %s %s) deleted`,
-			remoteItem.ID, remoteKey.Key, remoteKey.Source, remoteKey.Path,
+			remoteItem.ID, remoteKey.Key, bleemeoTypes.FormatConfigItemSource(remoteKey.Source), remoteKey.Path,
 		)
 	}
 

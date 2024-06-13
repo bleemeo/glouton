@@ -26,7 +26,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/bleemeo/bleemeo-go"
 	"github.com/bleemeo/glouton/bleemeo/internal/cache"
+	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/bleemeoapi"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/syncservices"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
@@ -563,12 +565,12 @@ func TestMetricSimpleSync(t *testing.T) {
 	}
 
 	// list metrics and register agent_status
-	helper.api.AssertCallPerResource(t, mockAPIResourceMetric, 2)
+	helper.wrapperClientMock.AssertCallsPerResource(t, mockAPIResourceMetric, 2)
 
 	idAgentMain, _ := helper.state.BleemeoCredentials()
 
 	metrics := helper.MetricsFromAPI()
-	want := []metricPayload{
+	want := []bleemeoapi.MetricPayload{
 		{
 			Metric: bleemeoTypes.Metric{
 				ID:         "1",
@@ -595,12 +597,11 @@ func TestMetricSimpleSync(t *testing.T) {
 		t.Error(err)
 	}
 
-	// We do 2 request: list metrics, list inactive metrics
-	// and register new metric
-	helper.api.AssertCallPerResource(t, mockAPIResourceMetric, 3)
+	// We do 3 requests: list metrics, list inactive metrics and register new metric.
+	helper.wrapperClientMock.AssertCallsPerResource(t, mockAPIResourceMetric, 3)
 
 	metrics = helper.MetricsFromAPI()
-	want = []metricPayload{
+	want = []bleemeoapi.MetricPayload{
 		{
 			Metric: bleemeoTypes.Metric{
 				ID:         "1",
@@ -642,7 +643,7 @@ func TestMetricSimpleSync(t *testing.T) {
 	}
 
 	// We do 1003 request: 3 for listing and 1000 registration
-	helper.api.AssertCallPerResource(t, mockAPIResourceMetric, 1003)
+	helper.wrapperClientMock.AssertCallsPerResource(t, mockAPIResourceMetric, 1003)
 
 	metrics = helper.MetricsFromAPI()
 	if len(metrics) != 1002 {
@@ -657,7 +658,7 @@ func TestMetricSimpleSync(t *testing.T) {
 	}
 
 	// We do 1001 request: 1001 to mark inactive all metrics but agent_status
-	helper.api.AssertCallPerResource(t, mockAPIResourceMetric, 1001)
+	helper.wrapperClientMock.AssertCallsPerResource(t, mockAPIResourceMetric, 1001)
 
 	metrics = helper.MetricsFromAPI()
 	if len(metrics) != 1002 {
@@ -696,7 +697,7 @@ func TestMetricSimpleSync(t *testing.T) {
 
 	// We do 3 request: 1 to re-enable metric,
 	// 1 search for metric before registration, 1 to register metric
-	helper.api.AssertCallPerResource(t, mockAPIResourceMetric, 3)
+	helper.wrapperClientMock.AssertCallsPerResource(t, mockAPIResourceMetric, 3)
 
 	metrics = helper.MetricsFromAPI()
 	if len(metrics) != 1003 {
@@ -750,7 +751,7 @@ func TestMetricDeleted(t *testing.T) {
 	// list of active metrics,
 	// 2 query per metric to register (one to find potential inactive, one to register)
 	// + 1 to register agent_status
-	helper.api.AssertCallPerResource(t, mockAPIResourceMetric, 8)
+	helper.wrapperClientMock.AssertCallsPerResource(t, mockAPIResourceMetric, 8)
 
 	metrics := helper.MetricsFromAPI()
 	if len(metrics) != 4 { // 3 + agent_status
@@ -773,7 +774,7 @@ func TestMetricDeleted(t *testing.T) {
 	// API deleted metric1
 	for _, m := range metrics {
 		if m.Name == "metric1" {
-			helper.api.resources[mockAPIResourceMetric].DelStore(m.ID)
+			helper.wrapperClientMock.resources.metrics.dropByID(m.ID)
 		}
 	}
 
@@ -795,7 +796,7 @@ func TestMetricDeleted(t *testing.T) {
 	}
 
 	// We list active metrics, 2 query to re-register metric
-	helper.api.AssertCallPerResource(t, mockAPIResourceMetric, 3)
+	helper.wrapperClientMock.AssertCallsPerResource(t, mockAPIResourceMetric, 3)
 
 	metrics = helper.MetricsFromAPI()
 	if len(metrics) != 4 { // 3 + agent_status
@@ -808,7 +809,7 @@ func TestMetricDeleted(t *testing.T) {
 	// API deleted metric2
 	for _, m := range metrics {
 		if m.Name == "metric2" {
-			helper.api.resources[mockAPIResourceMetric].DelStore(m.ID)
+			helper.wrapperClientMock.resources.metrics.dropByID(m.ID)
 		}
 	}
 
@@ -837,7 +838,7 @@ func TestMetricDeleted(t *testing.T) {
 	// API deleted metric3
 	for _, m := range metrics {
 		if m.Name == "metric3" {
-			helper.api.resources[mockAPIResourceMetric].DelStore(m.ID)
+			helper.wrapperClientMock.resources.metrics.dropByID(m.ID)
 		}
 	}
 
@@ -880,12 +881,14 @@ func TestMetricError(t *testing.T) {
 	helper.initSynchronizer(t)
 
 	// API fail 1/6th of the time
-	helper.api.PreRequestHook = func(ma *mockAPI, h *http.Request) (interface{}, int, error) {
-		if resourceName, _ := ma.resourceNameID(h.URL); resourceName == mockAPIResourceMetric && ma.RequestPerResource[mockAPIResourceMetric]%6 == 0 {
-			return nil, http.StatusInternalServerError, nil
+	helper.wrapperClientMock.resources.metrics.createHook = func(*bleemeoapi.MetricPayload) error {
+		if helper.wrapperClientMock.requestCounts[mockAPIResourceMetric]%6 == 0 {
+			return &bleemeo.APIError{
+				StatusCode: http.StatusInternalServerError,
+			}
 		}
 
-		return nil, 0, nil
+		return nil
 	}
 	helper.AddTime(time.Minute)
 
@@ -905,8 +908,8 @@ func TestMetricError(t *testing.T) {
 		t.Error(err)
 	}
 
-	if helper.api.ServerErrorCount == 0 {
-		t.Errorf("We should have some error, had %d", helper.api.ServerErrorCount)
+	if helper.wrapperClientMock.errorsCount == 0 {
+		t.Errorf("We should have some error, had %d", helper.wrapperClientMock.errorsCount)
 	}
 
 	if metrics := helper.MetricsFromAPI(); len(metrics) != 4 { // 3 + agent_status
@@ -920,9 +923,7 @@ func TestMetricUnknownError(t *testing.T) {
 	defer helper.Close()
 
 	// API always reject registering "deny-me" metric
-	metricResource, _ := helper.api.resources[mockAPIResourceMetric].(*genericResource)
-	metricResource.CreateHook = func(_ *http.Request, body []byte, valuePtr interface{}) error {
-		metric, _ := valuePtr.(*metricPayload)
+	helper.wrapperClientMock.resources.metrics.createHook = func(metric *bleemeoapi.MetricPayload) error {
 		if metric.Name == "deny-me" {
 			return clientError{
 				body:       "no information about whether the error is permanent or not",
@@ -950,12 +951,12 @@ func TestMetricUnknownError(t *testing.T) {
 		t.Error(err)
 	}
 
-	if helper.api.ClientErrorCount == 0 {
-		t.Errorf("We should have some client error, had %d", helper.api.ClientErrorCount)
+	if helper.wrapperClientMock.errorsCount == 0 {
+		t.Errorf("We should have some client error, had %d", helper.wrapperClientMock.errorsCount)
 	}
 
 	// list active metrics, register agent_status + 2x metrics to register
-	helper.api.AssertCallPerResource(t, mockAPIResourceMetric, 6)
+	helper.wrapperClientMock.AssertCallsPerResource(t, mockAPIResourceMetric, 6)
 
 	metrics := helper.MetricsFromAPI()
 	if len(metrics) != 2 { // 1 + agent_status
@@ -978,7 +979,7 @@ func TestMetricUnknownError(t *testing.T) {
 		}
 
 		// Each retry had 3 requests
-		helper.api.AssertCallPerResource(t, mockAPIResourceMetric, 3)
+		helper.wrapperClientMock.AssertCallsPerResource(t, mockAPIResourceMetric, 3)
 
 		helper.AddTime(15 * time.Minute)
 	}
@@ -989,7 +990,7 @@ func TestMetricUnknownError(t *testing.T) {
 			t.Error(err)
 		}
 
-		if helper.api.RequestPerResource[mockAPIResourceMetric] == 0 {
+		if helper.wrapperClientMock.requestCounts[mockAPIResourceMetric] == 0 {
 			break
 		}
 
@@ -1015,12 +1016,12 @@ func TestMetricUnknownError(t *testing.T) {
 		t.Error(err)
 	}
 
-	if helper.api.ClientErrorCount == 0 {
-		t.Errorf("We should have some client error, had %d", helper.api.ClientErrorCount)
+	if helper.wrapperClientMock.errorsCount == 0 {
+		t.Errorf("We should have some client error, had %d", helper.wrapperClientMock.errorsCount)
 	}
 
 	// list active metrics, 2 for registration
-	helper.api.AssertCallPerResource(t, mockAPIResourceMetric, 3)
+	helper.wrapperClientMock.AssertCallsPerResource(t, mockAPIResourceMetric, 3)
 
 	metrics = helper.MetricsFromAPI()
 	if len(metrics) != 2 { // 1 + agent_status
@@ -1056,9 +1057,7 @@ func TestMetricPermanentError(t *testing.T) {
 			helper.initSynchronizer(t)
 
 			// API always reject registering "deny-me" metric
-			metricResource, _ := helper.api.resources[mockAPIResourceMetric].(*genericResource)
-			metricResource.CreateHook = func(_ *http.Request, body []byte, valuePtr interface{}) error {
-				metric, _ := valuePtr.(*metricPayload)
+			helper.wrapperClientMock.resources.metrics.createHook = func(metric *bleemeoapi.MetricPayload) error {
 				if metric.Name == "deny-me" || metric.Name == "deny-me-also" {
 					return clientError{
 						body:       tt.content,
@@ -1087,12 +1086,12 @@ func TestMetricPermanentError(t *testing.T) {
 				t.Error(err)
 			}
 
-			if helper.api.ClientErrorCount == 0 {
-				t.Errorf("We should have some client error, had %d", helper.api.ClientErrorCount)
+			if helper.wrapperClientMock.errorsCount == 0 {
+				t.Errorf("We should have some client error, had %d", helper.wrapperClientMock.errorsCount)
 			}
 
 			// list active metrics, register agent_status + 2x metrics to register
-			helper.api.AssertCallPerResource(t, mockAPIResourceMetric, 8)
+			helper.wrapperClientMock.AssertCallsPerResource(t, mockAPIResourceMetric, 8)
 
 			metrics := helper.MetricsFromAPI()
 			if len(metrics) != 2 { // 1 + agent_status
@@ -1138,12 +1137,12 @@ func TestMetricPermanentError(t *testing.T) {
 				t.Error(err)
 			}
 
-			if helper.api.ClientErrorCount == 0 {
-				t.Errorf("We should have some client error, had %d", helper.api.ClientErrorCount)
+			if helper.wrapperClientMock.errorsCount == 0 {
+				t.Errorf("We should have some client error, had %d", helper.wrapperClientMock.errorsCount)
 			}
 
 			// list active metrics, retry ONE register (but for now query for existence of the 2 metrics)
-			helper.api.AssertCallPerResource(t, mockAPIResourceMetric, 4)
+			helper.wrapperClientMock.AssertCallsPerResource(t, mockAPIResourceMetric, 4)
 
 			metrics = helper.MetricsFromAPI()
 			if len(metrics) != 2 { // 1 + agent_status
@@ -1151,7 +1150,7 @@ func TestMetricPermanentError(t *testing.T) {
 			}
 
 			// Now metric registration will succeed and retry all
-			metricResource.CreateHook = nil
+			helper.wrapperClientMock.resources.metrics.createHook = nil
 
 			helper.SetTimeToNextFullSync()
 			helper.pushPoints(t, []labels.Labels{
@@ -1170,12 +1169,12 @@ func TestMetricPermanentError(t *testing.T) {
 				t.Error(err)
 			}
 
-			if helper.api.ClientErrorCount != 0 {
-				t.Errorf("had %d client error, want 0", helper.api.ClientErrorCount)
+			if helper.wrapperClientMock.errorsCount != 0 {
+				t.Errorf("had %d client error, want 0", helper.wrapperClientMock.errorsCount)
 			}
 
 			// list active metrics, retry two register
-			helper.api.AssertCallPerResource(t, mockAPIResourceMetric, 5)
+			helper.wrapperClientMock.AssertCallsPerResource(t, mockAPIResourceMetric, 5)
 
 			metrics = helper.MetricsFromAPI()
 			if len(metrics) != 4 { // 3 + agent_status
@@ -1193,25 +1192,21 @@ func TestMetricTooMany(t *testing.T) { //nolint:maintidx
 	helper.preregisterAgent(t)
 	helper.initSynchronizer(t)
 
-	metricResource, _ := helper.api.resources[mockAPIResourceMetric].(*genericResource)
-	defaultPatchHook := metricResource.PatchHook
+	defaultPatchHook := helper.wrapperClientMock.resources.metrics.patchHook
 
 	// API always reject more than 3 active metrics
-	metricResource.PatchHook = func(r *http.Request, body []byte, valuePtr interface{}, oldValue interface{}) error {
+	helper.wrapperClientMock.resources.metrics.patchHook = func(metric *bleemeoapi.MetricPayload) error {
 		if defaultPatchHook != nil {
-			err := defaultPatchHook(r, body, valuePtr, oldValue)
+			err := defaultPatchHook(metric)
 			if err != nil {
 				return err
 			}
 		}
 
-		metric, _ := valuePtr.(*metricPayload)
-
 		if metric.DeactivatedAt.IsZero() {
-			metrics := helper.MetricsFromAPI()
 			countActive := 0
 
-			for _, m := range metrics {
+			for _, m := range helper.wrapperClientMock.resources.metrics.elems {
 				if m.DeactivatedAt.IsZero() && m.ID != metric.ID {
 					countActive++
 				}
@@ -1228,8 +1223,8 @@ func TestMetricTooMany(t *testing.T) { //nolint:maintidx
 		return nil
 	}
 
-	metricResource.CreateHook = func(r *http.Request, body []byte, valuePtr interface{}) error {
-		return metricResource.PatchHook(r, body, valuePtr, nil)
+	helper.wrapperClientMock.resources.metrics.createHook = func(metric *bleemeoapi.MetricPayload) error {
+		return helper.wrapperClientMock.resources.metrics.patchHook(metric)
 	}
 
 	helper.AddTime(time.Minute)
@@ -1247,7 +1242,7 @@ func TestMetricTooMany(t *testing.T) { //nolint:maintidx
 	}
 
 	// list active metrics, register agent_status + 2x metrics to register
-	helper.api.AssertCallPerResource(t, mockAPIResourceMetric, 6)
+	helper.wrapperClientMock.AssertCallsPerResource(t, mockAPIResourceMetric, 6)
 
 	metrics := helper.MetricsFromAPI()
 	if len(metrics) != 3 { // 2 + agent_status
@@ -1268,12 +1263,12 @@ func TestMetricTooMany(t *testing.T) { //nolint:maintidx
 		t.Error(err)
 	}
 
-	if helper.api.ClientErrorCount == 0 {
-		t.Errorf("We should have some client error, had %d", helper.api.ClientErrorCount)
+	if helper.wrapperClientMock.errorsCount == 0 {
+		t.Errorf("We should have some client error, had %d", helper.wrapperClientMock.errorsCount)
 	}
 
 	// list active metrics + 2x metrics to register
-	helper.api.AssertCallPerResource(t, mockAPIResourceMetric, 5)
+	helper.wrapperClientMock.AssertCallsPerResource(t, mockAPIResourceMetric, 5)
 
 	metrics = helper.MetricsFromAPI()
 	if len(metrics) != 3 { // 2 + agent_status
@@ -1339,8 +1334,8 @@ func TestMetricTooMany(t *testing.T) { //nolint:maintidx
 		t.Error(err)
 	}
 
-	if helper.api.ClientErrorCount == 0 {
-		t.Errorf("We should have some client error, had %d", helper.api.ClientErrorCount)
+	if helper.wrapperClientMock.errorsCount == 0 {
+		t.Errorf("We should have some client error, had %d", helper.wrapperClientMock.errorsCount)
 	}
 
 	metrics = helper.MetricsFromAPI()
@@ -1383,8 +1378,8 @@ func TestMetricTooMany(t *testing.T) { //nolint:maintidx
 		t.Error(err)
 	}
 
-	if helper.api.ClientErrorCount != 1 {
-		t.Errorf("had %d client error, want 1", helper.api.ClientErrorCount)
+	if helper.wrapperClientMock.errorsCount != 1 {
+		t.Errorf("had %d client error, want 1", helper.wrapperClientMock.errorsCount)
 	}
 
 	metrics = helper.MetricsFromAPI()
@@ -1404,7 +1399,7 @@ func TestMetricTooMany(t *testing.T) { //nolint:maintidx
 
 	// list active metrics + check existence of the metric we want to reg +
 	// retry to register
-	helper.api.AssertCallPerResource(t, mockAPIResourceMetric, 3)
+	helper.wrapperClientMock.AssertCallsPerResource(t, mockAPIResourceMetric, 3)
 }
 
 // TestMetricLongItem test that metric with very long item works.
@@ -1462,7 +1457,7 @@ func TestMetricLongItem(t *testing.T) {
 	}
 
 	// We do 1 request: list metrics.
-	helper.api.AssertCallPerResource(t, mockAPIResourceMetric, 1)
+	helper.wrapperClientMock.AssertCallsPerResource(t, mockAPIResourceMetric, 1)
 
 	metrics = helper.MetricsFromAPI()
 	// No new metrics
@@ -1508,7 +1503,7 @@ func TestWithSNMP(t *testing.T) {
 	}
 
 	agents := helper.AgentsFromAPI()
-	wantAgents := []payloadAgent{
+	wantAgents := []bleemeoapi.AgentPayload{
 		{
 			Agent: bleemeoTypes.Agent{
 				ID:              idAgentMain,
@@ -1524,7 +1519,7 @@ func TestWithSNMP(t *testing.T) {
 		{
 			Agent: bleemeoTypes.Agent{
 				ID:              idAgentSNMP,
-				CreatedAt:       helper.api.now.Now(),
+				CreatedAt:       helper.Now(),
 				AccountID:       accountID,
 				CurrentConfigID: newAccountConfig.ID,
 				AgentType:       agentTypeSNMP.ID,
@@ -1536,13 +1531,13 @@ func TestWithSNMP(t *testing.T) {
 		},
 	}
 
-	optAgentSort := cmpopts.SortSlices(func(x payloadAgent, y payloadAgent) bool { return x.ID < y.ID })
+	optAgentSort := cmpopts.SortSlices(func(x, y bleemeoapi.AgentPayload) bool { return x.ID < y.ID })
 	if diff := cmp.Diff(wantAgents, agents, cmpopts.EquateEmpty(), optAgentSort); diff != "" {
 		t.Errorf("agents mismatch (-want +got)\n%s", diff)
 	}
 
 	metrics := helper.MetricsFromAPI()
-	want := []metricPayload{
+	want := []bleemeoapi.MetricPayload{
 		{
 			Metric: bleemeoTypes.Metric{
 				ID:         "1",
@@ -1587,11 +1582,11 @@ func TestMonitorDeactivation(t *testing.T) {
 	// This should NOT be needed. Glouton should not need to be able to read the
 	// monitor agent to works.
 	// Currently Glouton public probe are allowed to view such agent. Glouton private probe aren't.
-	helper.api.resources["agent"].AddStore(newMonitorAgent)
+	helper.wrapperClientMock.resources.agents.add(newMonitorAgent)
 
 	idAgentMain, _ := helper.state.BleemeoCredentials()
 
-	initialMetrics := []metricPayload{
+	initialMetrics := []bleemeoapi.MetricPayload{
 		{
 			Metric: bleemeoTypes.Metric{
 				ID:      "90c6459c-851d-4bb4-957c-afbc695c2201",
@@ -1652,7 +1647,7 @@ func TestMonitorDeactivation(t *testing.T) {
 	}
 
 	metrics := helper.MetricsFromAPI()
-	want := []metricPayload{
+	want := []bleemeoapi.MetricPayload{
 		{
 			Metric: bleemeoTypes.Metric{
 				ID:         "1",
@@ -1703,7 +1698,7 @@ func TestMonitorDeactivation(t *testing.T) {
 
 	metrics = helper.MetricsFromAPI()
 
-	want = []metricPayload{
+	want = []bleemeoapi.MetricPayload{
 		{
 			Metric: bleemeoTypes.Metric{
 				ID:         "1",
@@ -1766,27 +1761,21 @@ func TestServiceStatusRename(t *testing.T) { //nolint: maintidx
 			helper.preregisterAgent(t)
 			helper.initSynchronizer(t)
 
-			metricResource, _ := helper.api.resources["metric"].(*genericResource)
-			metricResource.CreateHook = func(_ *http.Request, _ []byte, valuePtr interface{}) error {
-				// API will rename and reuse existing $SERVICE_status metric when registering service_status metrics.
-				// From Glouton point of vue, it the same as if a new metric is created (service_status) and the old is deleted.
-				metric, _ := valuePtr.(*metricPayload)
-				metricCopy := metric.metricFromAPI(helper.s.now())
+			helper.wrapperClientMock.resources.metrics.createHook = func(metric *bleemeoapi.MetricPayload) error {
+				// API will rename and reuse the existing $SERVICE_status metric when registering service_status metrics.
+				// From Glouton point of vue, it is the same as if a new metric is created (service_status) and the old is deleted.
+				metricCopy := metricFromAPI(*metric, helper.s.now())
 				serviceType := metricCopy.Labels[gloutonTypes.LabelService]
 
 				if metric.Name != "service_status" || serviceType == "" {
 					return nil
 				}
 
-				var metrics []metricPayload
-
-				metricResource.Store(&metrics)
-
-				for _, existing := range metrics {
+				for idx, existing := range helper.wrapperClientMock.resources.metrics.elems {
 					if existing.Name == serviceType+"_status" && existing.Item == metricCopy.Labels[gloutonTypes.LabelServiceInstance] {
 						metric.ID = existing.ID
 
-						return reuseIDError{metric.ID}
+						return reuseIDError{idx}
 					}
 				}
 
@@ -1810,13 +1799,13 @@ func TestServiceStatusRename(t *testing.T) { //nolint: maintidx
 			srvNginxID := "809bc83b-2f28-43f1-9fb7-a84445ca1bc0"
 
 			helper.SetAPIServices(
-				syncservices.ServicePayloadFromDiscovery(srvApache, "", testAgent.AccountID, testAgent.ID, srvApacheID, true),
-				syncservices.ServicePayloadFromDiscovery(srvNginx, "", testAgent.AccountID, testAgent.ID, srvNginxID, true),
+				syncservices.ServicePayloadFromDiscovery(srvApache, "", testAgent.AccountID, testAgent.ID, srvApacheID),
+				syncservices.ServicePayloadFromDiscovery(srvNginx, "", testAgent.AccountID, testAgent.ID, srvNginxID),
 			)
 
 			helper.discovery.SetResult([]discovery.Service{srvApache, srvNginx}, nil)
 
-			want1 := []metricPayload{
+			want1 := []bleemeoapi.MetricPayload{
 				{
 					Metric: bleemeoTypes.Metric{
 						ID:         "1",
@@ -1877,7 +1866,7 @@ func TestServiceStatusRename(t *testing.T) { //nolint: maintidx
 				}
 
 				// list of active metrics, 2*N query to register metric + 1 to register agent_status
-				helper.api.AssertCallPerResource(t, mockAPIResourceMetric, 6)
+				helper.wrapperClientMock.AssertCallsPerResource(t, mockAPIResourceMetric, 6)
 
 				metrics := helper.MetricsFromAPI()
 
@@ -1914,7 +1903,7 @@ func TestServiceStatusRename(t *testing.T) { //nolint: maintidx
 				t.Error(err)
 			}
 
-			want2 := []metricPayload{
+			want2 := []bleemeoapi.MetricPayload{
 				{
 					Metric: bleemeoTypes.Metric{
 						ID:         "1",
@@ -1945,12 +1934,11 @@ func TestServiceStatusRename(t *testing.T) { //nolint: maintidx
 
 			if run == 0 {
 				// run 0 is a bit special: we simulate an impossible situation: Glouton is running and change during runtime
-				// from old metric to new metric. One consequences is that old apache_status get deactivated immediately
+				// from old metric to new metric. One consequence is that old apache_status gets deactivated immediately
 				want2[1].DeactivatedAt = helper.Now()
 			}
 
 			metrics := helper.MetricsFromAPI()
-
 			if diff := cmp.Diff(want2, metrics); diff != "" {
 				t.Errorf("metrics mismatch (-want +got):\n%s", diff)
 			}
@@ -1967,7 +1955,7 @@ func TestServiceStatusRename(t *testing.T) { //nolint: maintidx
 
 			helper.AddTime(1 * time.Minute)
 
-			want3 := []metricPayload{
+			want3 := []bleemeoapi.MetricPayload{
 				{
 					Metric: bleemeoTypes.Metric{
 						ID:         "1",
@@ -2027,7 +2015,7 @@ func TestMonitorPrivate(t *testing.T) {
 		t.Fatal("idAgentMain == '', want something")
 	}
 
-	initialMetrics := []metricPayload{
+	initialMetrics := []bleemeoapi.MetricPayload{
 		// Metric from other probe are NOT present in API, because glouton private probe aren't allow to view them.
 		{
 			Metric: bleemeoTypes.Metric{
@@ -2069,7 +2057,7 @@ func TestMonitorPrivate(t *testing.T) {
 		t.Error(err)
 	}
 
-	want := []metricPayload{
+	want := []bleemeoapi.MetricPayload{
 		{
 			Metric: bleemeoTypes.Metric{
 				ID:         idAny,
@@ -2127,7 +2115,7 @@ func TestMonitorPrivate(t *testing.T) {
 		t.Error(err)
 	}
 
-	want = []metricPayload{
+	want = []bleemeoapi.MetricPayload{
 		{
 			Metric: bleemeoTypes.Metric{
 				ID:         idAny,
@@ -2209,20 +2197,18 @@ func TestKubernetesMetrics(t *testing.T) {
 	// API does a lead-election and notify us that we are leader
 	helper.AddTime(time.Second)
 
-	for _, agent := range helper.AgentsFromAPI() {
-		if agent.ID == idAgentMain {
-			agent.IsClusterLeader = true
-			helper.api.resources[mockAPIResourceAgent].AddStore(agent)
+	agent := helper.wrapperClientMock.resources.agents.findResource(func(agent bleemeoapi.AgentPayload) bool {
+		return agent.ID == idAgentMain
+	})
+	if agent != nil {
+		agent.IsClusterLeader = true
 
-			// Currently on leader status change, API sent "config-changed" message
-			helper.s.NotifyConfigUpdate(true)
-
-			break
-		}
+		// Currently on leader status change, API sent "config-changed" message
+		helper.s.NotifyConfigUpdate(true)
 	}
 
 	// API create a global Kubernetes agent
-	helper.api.resources[mockAPIResourceAgent].AddStore(testK8SAgent)
+	helper.wrapperClientMock.resources.agents.add(testK8SAgent)
 
 	helper.AddTime(10 * time.Second)
 
@@ -2273,7 +2259,7 @@ func TestKubernetesMetrics(t *testing.T) {
 		t.Error(err)
 	}
 
-	want := []metricPayload{
+	want := []bleemeoapi.MetricPayload{
 		{
 			Metric: bleemeoTypes.Metric{
 				ID:         idAny,
@@ -2354,16 +2340,14 @@ func TestKubernetesMetrics(t *testing.T) {
 	// I'm no longer leader
 	helper.AddTime(time.Second)
 
-	for _, agent := range helper.AgentsFromAPI() {
-		if agent.ID == idAgentMain {
-			agent.IsClusterLeader = false
-			helper.api.resources[mockAPIResourceAgent].AddStore(agent)
+	agent = helper.wrapperClientMock.resources.agents.findResource(func(agent bleemeoapi.AgentPayload) bool {
+		return agent.ID == idAgentMain
+	})
+	if agent != nil {
+		agent.IsClusterLeader = false
 
-			// Currently on leader status change, API sent "config-changed" message
-			helper.s.NotifyConfigUpdate(true)
-
-			break
-		}
+		// Currently on leader status change, API sent "config-changed" message
+		helper.s.NotifyConfigUpdate(true)
 	}
 
 	// Therefor Glouton stop emitting all kubernetes global metric, but it won't change which metrics is active or not
@@ -2474,7 +2458,7 @@ func Test_MergeFirstSeenAt(t *testing.T) {
 
 	cache.SetMetrics(want)
 
-	metrics := []metricPayload{
+	metrics := []bleemeoapi.MetricPayload{
 		{
 			Metric: bleemeoTypes.Metric{
 				ID:          "1",
@@ -2509,7 +2493,7 @@ func Test_MergeFirstSeenAt(t *testing.T) {
 	metricsByUUID := cache.MetricsByUUID()
 
 	for _, val := range metrics {
-		metricsByUUID[val.ID] = val.metricFromAPI(metricsByUUID[val.ID].FirstSeenAt)
+		metricsByUUID[val.ID] = metricFromAPI(val, metricsByUUID[val.ID].FirstSeenAt)
 	}
 
 	for _, val := range metricsByUUID {

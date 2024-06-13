@@ -29,8 +29,8 @@ import (
 )
 
 type Execution struct {
-	client              *wrapperClient
-	initialRequestCount int
+	client              types.Client
+	initialRequestCount uint32
 	startedAt           time.Time
 	onlyEssential       bool
 	isNewAgent          bool
@@ -83,7 +83,7 @@ func (s *Synchronizer) newExecution(onlyEssential bool, isNewAgent bool) *Execut
 	execution := &Execution{
 		synchronizer:        s,
 		client:              s.newClient(),
-		initialRequestCount: s.realClient.RequestsCount(),
+		initialRequestCount: s.requestCounter.Load(),
 		startedAt:           s.now(),
 		onlyEssential:       onlyEssential,
 		isNewAgent:          isNewAgent,
@@ -95,14 +95,14 @@ func (s *Synchronizer) newExecution(onlyEssential bool, isNewAgent bool) *Execut
 	return execution
 }
 
-// newLimitedExecution returns an synchronization execution for calling
+// newLimitedExecution returns a synchronization execution for calling
 // only some entity synchronizer outside the synchronization loop.
 // It won't call NeedSynchronization. It will also ignore maintenance & suspended mode.
 func (s *Synchronizer) newLimitedExecution(onlyEssential bool, entities map[types.EntityName]types.SyncType) *Execution {
 	execution := &Execution{
 		synchronizer:        s,
 		client:              s.newClient(),
-		initialRequestCount: s.realClient.RequestsCount(),
+		initialRequestCount: s.requestCounter.Load(),
 		startedAt:           s.now(),
 		onlyEssential:       onlyEssential,
 		entities:            s.getEntityExecution(entities, true),
@@ -181,13 +181,13 @@ func (e *Execution) RequestSynchronization(entityName types.EntityName, forceCac
 	}
 }
 
-func (e *Execution) RequestLinkedSynchronization(targetEntityName types.EntityName, triggerEntiryName types.EntityName) error {
+func (e *Execution) RequestLinkedSynchronization(targetEntityName types.EntityName, triggerEntityName types.EntityName) error {
 	if e.syncListStarted {
 		return fmt.Errorf("%w: RequestLinkedSynchronization must be called during RequestSynchronization()", types.ErrUnexpectedWorkflow)
 	}
 
 	for idx, ee := range e.entities {
-		if ee.entity.Name() != triggerEntiryName {
+		if ee.entity.Name() != triggerEntityName {
 			continue
 		}
 
@@ -358,7 +358,7 @@ func (e *Execution) run(ctx context.Context) error {
 			"Synchronization took %v for %v (and did %d requests)",
 			duration,
 			syncDone,
-			e.client.client.RequestsCount()-e.initialRequestCount,
+			e.synchronizer.requestCounter.Load()-e.initialRequestCount,
 		)
 	}
 
@@ -368,7 +368,7 @@ func (e *Execution) run(ctx context.Context) error {
 }
 
 // executePostRunCalls runs any RequestXXX called on Execution (like RequestUpdateThresholds).
-// RequestSynchronization are not handled by this function, they are always either applied in
+// RequestSynchronization aren't handled by this function, they're always either applied in
 // current execution run() or directly forwarded to Synchronizer.forceSync.
 func (e *Execution) executePostRunCalls(ctx context.Context) {
 	if e.callUpdateLabels {

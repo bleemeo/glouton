@@ -24,17 +24,8 @@ import (
 	"math"
 	"time"
 
+	"github.com/bleemeo/bleemeo-go"
 	"github.com/bleemeo/glouton/threshold"
-)
-
-const (
-	AgentTypeSNMP           = "snmp"
-	AgentTypeAgent          = "agent"
-	AgentTypeMonitor        = "connection_check"
-	AgentTypeKubernetes     = "kubernetes"
-	AgentTypeVSphereCluster = "vsphere_cluster"
-	AgentTypeVSphereHost    = "vsphere_host"
-	AgentTypeVSphereVM      = "vsphere_vm"
 )
 
 type NullTime time.Time
@@ -89,26 +80,18 @@ type Agent struct {
 
 // AgentType is an AgentType object on Bleemeo API.
 type AgentType struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	DisplayName string `json:"display_name"`
+	ID          string            `json:"id"`
+	Name        bleemeo.AgentType `json:"name"`
+	DisplayName string            `json:"display_name"`
 }
-
-type TagType int
-
-const (
-	TagTypeIsAutomatic          TagType = 0
-	TagTypeIsCreatedByGlouton   TagType = 1
-	TagTypeIsAutomaticByGlouton TagType = 3
-)
 
 // Tag is an Tag object on Bleemeo API.
 type Tag struct {
-	ID           string  `json:"id,omitempty"`
-	Name         string  `json:"name"`
-	IsAutomatic  bool    `json:"is_automatic,omitempty"`
-	IsServiceTag bool    `json:"is_service_tag,omitempty"`
-	TagType      TagType `json:"tag_type"`
+	ID           string          `json:"id,omitempty"`
+	Name         string          `json:"name"`
+	IsAutomatic  bool            `json:"is_automatic,omitempty"`
+	IsServiceTag bool            `json:"is_service_tag,omitempty"`
+	TagType      bleemeo.TagType `json:"tag_type"`
 }
 
 // AccountConfig is a configuration of account.
@@ -345,64 +328,29 @@ func (i GlobalInfo) IsTimeDriftTooLarge() bool {
 
 // GloutonConfigItem object on the Bleemeo API.
 type GloutonConfigItem struct {
-	ID       string           `json:"id"`
-	Agent    string           `json:"agent"`
-	Key      string           `json:"key"`
-	Value    interface{}      `json:"value"`
-	Priority int              `json:"priority"`
-	Source   ConfigItemSource `json:"source"`
-	Path     string           `json:"path"`
-	Type     ConfigItemType   `json:"type"`
+	ID       string                   `json:"id"`
+	Agent    string                   `json:"agent"`
+	Key      string                   `json:"key"`
+	Value    interface{}              `json:"value"`
+	Priority int                      `json:"priority"`
+	Source   bleemeo.ConfigItemSource `json:"source"`
+	Path     string                   `json:"path"`
+	Type     bleemeo.ConfigItemType   `json:"type"`
 }
 
-// ConfigItemSource enumeration on the Bleemeo API.
-// This should always be the same as the enumeration on the API.
-type ConfigItemSource int
-
-const (
-	SourceUnknown ConfigItemSource = 0
-	SourceDefault ConfigItemSource = 1
-	SourceFile    ConfigItemSource = 2
-	SourceEnv     ConfigItemSource = 3
-	SourceAPI     ConfigItemSource = 4
-)
-
-func (c ConfigItemSource) String() string {
+func FormatConfigItemSource(c bleemeo.ConfigItemSource) string {
 	switch c {
-	case SourceFile:
+	case bleemeo.ConfigItemSource_File:
 		return "file"
-	case SourceEnv:
+	case bleemeo.ConfigItemSource_Env:
 		return "env"
-	case SourceDefault:
+	case bleemeo.ConfigItemSource_Default:
 		return "default"
-	case SourceAPI:
+	case bleemeo.ConfigItemSource_API:
 		return "api"
-	case SourceUnknown:
+	case bleemeo.ConfigItemSource_Unknown:
 		return "unknown"
 	default:
 		return "unknown"
 	}
 }
-
-// ConfigItemType enumeration on the Bleemeo API.
-// This should always be the same as the enumeration on the API.
-type ConfigItemType int
-
-const (
-	TypeAny               ConfigItemType = 0
-	TypeInt               ConfigItemType = 1
-	TypeFloat             ConfigItemType = 2
-	TypeBool              ConfigItemType = 3
-	TypeString            ConfigItemType = 4
-	TypeListString        ConfigItemType = 10
-	TypeListInt           ConfigItemType = 11
-	TypeMapStrStr         ConfigItemType = 20
-	TypeMapStrInt         ConfigItemType = 21
-	TypeThresholds        ConfigItemType = 30
-	TypeServices          ConfigItemType = 31
-	TypeNameInstances     ConfigItemType = 32
-	TypeBlackboxTargets   ConfigItemType = 33
-	TypePrometheusTargets ConfigItemType = 34
-	TypeSNMPTargets       ConfigItemType = 35
-	TypeLogInputs         ConfigItemType = 36
-)

@@ -29,6 +29,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/bleemeo/bleemeo-go"
 	"github.com/bleemeo/glouton/bleemeo/internal/cache"
 	"github.com/bleemeo/glouton/bleemeo/internal/common"
 	"github.com/bleemeo/glouton/bleemeo/internal/filter"
@@ -836,7 +837,7 @@ func (c *Client) filterPoints(input []types.MetricPoint) []types.MetricPoint {
 
 func (c *Client) ready() bool {
 	cfg, ok := c.opts.Cache.CurrentAccountConfig()
-	if !ok || cfg.LiveProcessResolution == 0 || cfg.AgentConfigByName[bleemeoTypes.AgentTypeAgent].MetricResolution == 0 {
+	if !ok || cfg.LiveProcessResolution == 0 || cfg.AgentConfigByName[bleemeo.AgentType_Agent].MetricResolution == 0 {
 		logger.V(2).Printf("MQTT not ready, Agent has no configuration")
 
 		return false

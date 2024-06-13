@@ -56,17 +56,18 @@ var (
 )
 
 type syncTestHelper struct {
-	api        *mockAPI
-	s          *Synchronizer
-	cfg        config.Config
-	facts      *facts.FactProviderMock
-	containers []facts.Container
-	cache      *cache.Cache
-	state      *stateMock
-	discovery  *discovery.MockDiscoverer
-	store      *store.Store
-	httpServer *httptest.Server
-	devices    []bleemeoTypes.VSphereDevice
+	now               *mockTime
+	wrapperClientMock *wrapperClientMock
+	s                 *Synchronizer
+	cfg               config.Config
+	facts             *facts.FactProviderMock
+	containers        []facts.Container
+	cache             *cache.Cache
+	state             *stateMock
+	discovery         *discovery.MockDiscoverer
+	store             *store.Store
+	httpServer        *httptest.Server
+	devices           []bleemeoTypes.VSphereDevice
 
 	// Following fields are options used by some method
 	SNMP               []*snmp.Target
@@ -79,40 +80,37 @@ type syncTestHelper struct {
 func newHelper(t *testing.T) *syncTestHelper {
 	t.Helper()
 
-	api := newAPI()
+	now := &mockTime{now: time.Now()}
 
 	helper := &syncTestHelper{
-		api:   api,
+		now:   now,
 		facts: facts.NewMockFacter(nil),
 		cache: &cache.Cache{},
 		state: newStateMock(),
 		discovery: &discovery.MockDiscoverer{
-			UpdatedAt: api.now.Now(),
+			UpdatedAt: now.Now(),
 		},
-
 		MetricFormat: gloutonTypes.MetricFormatBleemeo,
-	}
-
-	helper.httpServer = helper.api.Server()
-
-	helper.cfg = config.Config{
-		Logging: config.Logging{
-			Level: "debug",
-		},
-		Bleemeo: config.Bleemeo{
-			APIBase:   helper.httpServer.URL,
-			AccountID: accountID,
-			Cache: config.BleemeoCache{
-				DeactivatedMetricsExpirationDays: 200,
+		cfg: config.Config{
+			Logging: config.Logging{
+				Level: "debug",
 			},
-			RegistrationKey: registrationKey,
-		},
-		Blackbox: config.Blackbox{
-			Enable:      true,
-			ScraperName: "paris",
+			Bleemeo: config.Bleemeo{
+				APIBase:   "we don't care for tests",
+				AccountID: accountID,
+				Cache: config.BleemeoCache{
+					DeactivatedMetricsExpirationDays: 200,
+				},
+				RegistrationKey: registrationKey,
+			},
+			Blackbox: config.Blackbox{
+				Enable:      true,
+				ScraperName: "paris",
+			},
 		},
 	}
 
+	helper.wrapperClientMock = newClientMock(helper)
 	helper.facts.SetFact("fqdn", testAgentFQDN)
 
 	return helper
@@ -127,10 +125,10 @@ func (helper *syncTestHelper) preregisterAgent(t *testing.T) {
 
 	_ = helper.state.SetBleemeoCredentials(testAgent.ID, password)
 
-	helper.api.Password = password
-	helper.api.Username = testAgent.ID + "@bleemeo.com"
+	helper.wrapperClientMock.password = password
+	helper.wrapperClientMock.username = testAgent.ID + "@bleemeo.com"
 
-	helper.api.resources[mockAPIResourceAgent].AddStore(testAgent)
+	helper.wrapperClientMock.resources.agents.elems = []bleemeoapi.AgentPayload{testAgent}
 }
 
 // addMonitorOnAPI pre-create a monitor in the API.
@@ -138,29 +136,30 @@ func (helper *syncTestHelper) addMonitorOnAPI(t *testing.T) bleemeoapi.ServicePa
 	t.Helper()
 
 	newMonitorCopy := newMonitor
-	newMonitorCopy.AccountConfig = helper.api.AccountConfigNewAgent
+	newMonitorCopy.AccountConfig = helper.wrapperClientMock.accountConfigNewAgent
 
-	helper.api.resources[mockAPIResourceService].AddStore(newMonitorCopy)
+	helper.wrapperClientMock.resources.monitors.add(newMonitorCopy.Monitor)
 
 	return newMonitorCopy
 }
 
-// Create or re-create the Synchronizer. It also reset the store.
+// Create or re-create the Synchronizer. It also resets the store.
 func (helper *syncTestHelper) initSynchronizer(t *testing.T) {
 	t.Helper()
 
 	helper.store = store.New(time.Hour, 2*time.Hour)
 
-	helper.store.InternalSetNowAndRunOnce(helper.api.now.Now)
+	helper.store.InternalSetNowAndRunOnce(helper.Now)
 
 	var docker bleemeoTypes.DockerProvider
 	if helper.containers != nil {
 		docker = &mockDocker{helper: helper}
 	}
 
-	s, err := newForTest(types.Option{
+	s := newForTest(types.Option{
 		Cache:           helper.cache,
 		IsMqttConnected: func() bool { return false },
+		ProvideClient:   func() types.Client { return helper.wrapperClientMock },
 		GlobalOption: bleemeoTypes.GlobalOption{
 			Config:                     helper.cfg,
 			Facts:                      helper.facts,
@@ -183,22 +182,19 @@ func (helper *syncTestHelper) initSynchronizer(t *testing.T) {
 			BlackboxScraperName:        helper.cfg.Blackbox.ScraperName,
 			LastMetricAnnotationChange: func() time.Time { return time.Time{} },
 		},
-	}, helper.api.now.Now)
-	if err != nil {
-		t.Fatalf("newWithNow failed: %v", err)
-	}
+	}, helper.Now)
 
 	helper.s = s
 
 	// Do actions done by s.Run()
-	s.startedAt = helper.api.now.Now()
+	s.startedAt = helper.Now()
 
-	if err = s.setClient(); err != nil {
+	if err := s.setClient(); err != nil {
 		t.Fatalf("setClient failed: %v", err)
 	}
 
 	// Some part of synchronizer don't like having *exact* same time for Now() & startedAt
-	helper.api.now.Advance(time.Microsecond)
+	helper.AddTime(time.Microsecond)
 }
 
 // pushPoints write points to the store with current time.
@@ -215,7 +211,7 @@ func (helper *syncTestHelper) pushPoints(t *testing.T, metrics []labels.Labels) 
 
 		points = append(points, gloutonTypes.MetricPoint{
 			Point: gloutonTypes.Point{
-				Time:  helper.api.now.Now(),
+				Time:  helper.Now(),
 				Value: 42.0,
 			},
 			Labels:      mCopy.Map(),
@@ -239,19 +235,19 @@ func (helper *syncTestHelper) Close() {
 }
 
 func (helper *syncTestHelper) AddTime(d time.Duration) {
-	helper.api.now.Advance(d)
+	helper.now.Advance(d)
 }
 
 func (helper *syncTestHelper) SetTime(now time.Time) {
-	helper.api.now.now = now
+	helper.now.now = now
 }
 
 func (helper *syncTestHelper) SetTimeToNextFullSync() {
-	helper.api.now.now = helper.s.nextFullSync.Add(time.Second)
+	helper.now.now = helper.s.nextFullSync.Add(time.Second)
 }
 
 func (helper *syncTestHelper) Now() time.Time {
-	return helper.api.now.Now()
+	return helper.now.Now()
 }
 
 func (helper *syncTestHelper) runOnce(t *testing.T) error {
@@ -263,12 +259,8 @@ func (helper *syncTestHelper) runOnce(t *testing.T) error {
 		return fmt.Errorf("runOnce failed: %w", result.err)
 	}
 
-	if helper.api.ServerErrorCount > 0 {
-		return fmt.Errorf("%w: %d server error, last %v", errServerError, helper.api.ServerErrorCount, helper.api.LastServerError)
-	}
-
-	if helper.api.ClientErrorCount > 0 {
-		return fmt.Errorf("%w: %d client error", errClientError, helper.api.ClientErrorCount)
+	if helper.wrapperClientMock.errorsCount > 0 {
+		return fmt.Errorf("%w: %d API error(s)", errClientError, helper.wrapperClientMock.errorsCount)
 	}
 
 	return nil
@@ -277,7 +269,7 @@ func (helper *syncTestHelper) runOnce(t *testing.T) error {
 func (helper *syncTestHelper) runOnceWithResult(t *testing.T) runOnceResult {
 	t.Helper()
 
-	helper.api.ResetCount()
+	helper.wrapperClientMock.resetCount()
 
 	return helper.runOnceNoReset(t)
 }
@@ -300,26 +292,28 @@ func (helper *syncTestHelper) runOnceNoReset(t *testing.T) runOnceResult {
 	result.runCount++
 	execution, result.err = helper.s.runOnce(ctx, false)
 
-	result.syncPerEntity = make(map[types.EntityName]types.SyncType, len(execution.entities))
+	if execution != nil {
+		result.syncPerEntity = make(map[types.EntityName]types.SyncType, len(execution.entities))
 
-	for _, ee := range execution.entities {
-		if ee.syncType == types.SyncTypeNone {
-			continue
+		for _, ee := range execution.entities {
+			if ee.syncType == types.SyncTypeNone {
+				continue
+			}
+
+			result.syncPerEntity[ee.entity.Name()] = ee.syncType
 		}
-
-		result.syncPerEntity[ee.entity.Name()] = ee.syncType
 	}
 
 	return result
 }
 
-// runUntilNoError run runOnceWithResult until it don't return error (or maxRun is reached).
+// runUntilNoError run runOnceWithResult until it no longer returns error (or maxRun is reached).
 // Each additional run, clock advance of timeStep.
 // runOnceResult contains merges from all runs.
 func (helper *syncTestHelper) runUntilNoError(t *testing.T, maxRun int, timeStep time.Duration) runOnceResult {
 	t.Helper()
 
-	helper.api.ResetCount()
+	helper.wrapperClientMock.resetCount()
 
 	result := runOnceResult{}
 
@@ -342,58 +336,37 @@ func (helper *syncTestHelper) runUntilNoError(t *testing.T, maxRun int, timeStep
 }
 
 // SetAPIMetrics define the list of metric present on Bleemeo API mock.
-func (helper *syncTestHelper) SetAPIMetrics(metrics ...metricPayload) {
-	tmp := make([]interface{}, 0, len(metrics))
-
-	for _, m := range metrics {
-		tmp = append(tmp, m)
-	}
-
-	helper.api.resources[mockAPIResourceMetric].SetStore(tmp...)
+func (helper *syncTestHelper) SetAPIMetrics(metrics ...bleemeoapi.MetricPayload) {
+	helper.wrapperClientMock.resources.metrics.elems = metrics
 }
 
 // SetAPIServices define the list of service present on Bleemeo API mock.
 func (helper *syncTestHelper) SetAPIServices(services ...bleemeoapi.ServicePayload) {
-	tmp := make([]interface{}, 0, len(services))
-
-	for _, m := range services {
-		tmp = append(tmp, m)
-	}
-
-	helper.api.resources[mockAPIResourceService].SetStore(tmp...)
+	helper.wrapperClientMock.resources.services.elems = services
 }
 
 // SetAPIAccountConfig define the list of AccountConfig and AgentConfig present on Bleemeo API mock.
 // It also enable using the AccountConfig as default config for new Agent.
 func (helper *syncTestHelper) SetAPIAccountConfig(accountConfig bleemeoTypes.AccountConfig, agentConfigs []bleemeoTypes.AgentConfig) {
-	helper.api.AccountConfigNewAgent = accountConfig.ID
-	helper.api.resources[mockAPIResourceAccountConfig].SetStore(accountConfig)
-
-	tmp := make([]interface{}, 0, len(agentConfigs))
-
-	for _, x := range agentConfigs {
-		tmp = append(tmp, x)
-	}
-
-	helper.api.resources[mockAPIResourceAgentConfig].SetStore(tmp...)
+	helper.wrapperClientMock.accountConfigNewAgent = accountConfig.ID
+	helper.wrapperClientMock.resources.accountConfigs.elems = []bleemeoTypes.AccountConfig{accountConfig}
+	helper.wrapperClientMock.resources.agentConfigs.elems = agentConfigs
 }
 
 // SetCacheMetrics define the list of metric present in Glouton cache.
-func (helper *syncTestHelper) SetCacheMetrics(metrics ...metricPayload) {
+func (helper *syncTestHelper) SetCacheMetrics(metrics ...bleemeoapi.MetricPayload) {
 	tmp := make([]bleemeoTypes.Metric, 0, len(metrics))
 
 	for _, m := range metrics {
-		tmp = append(tmp, m.metricFromAPI(helper.Now()))
+		tmp = append(tmp, metricFromAPI(m, helper.Now()))
 	}
 
 	helper.s.option.Cache.SetMetrics(tmp)
 }
 
 // MetricsFromAPI returns metrics present on Bleemeo API mock.
-func (helper *syncTestHelper) MetricsFromAPI() []metricPayload {
-	var metrics []metricPayload
-
-	helper.api.resources[mockAPIResourceMetric].Store(&metrics)
+func (helper *syncTestHelper) MetricsFromAPI() []bleemeoapi.MetricPayload {
+	metrics := helper.wrapperClientMock.resources.metrics.clone()
 	sort.Slice(metrics, func(i, j int) bool {
 		return metrics[i].ID < metrics[j].ID
 	})
@@ -402,10 +375,8 @@ func (helper *syncTestHelper) MetricsFromAPI() []metricPayload {
 }
 
 // AgentsFromAPI returns agents present on Bleemeo API mock.
-func (helper *syncTestHelper) AgentsFromAPI() []payloadAgent {
-	var agents []payloadAgent
-
-	helper.api.resources[mockAPIResourceAgent].Store(&agents)
+func (helper *syncTestHelper) AgentsFromAPI() []bleemeoapi.AgentPayload {
+	agents := helper.wrapperClientMock.resources.agents.clone()
 	sort.Slice(agents, func(i, j int) bool {
 		return agents[i].ID < agents[j].ID
 	})
@@ -415,9 +386,7 @@ func (helper *syncTestHelper) AgentsFromAPI() []payloadAgent {
 
 // FactsFromAPI returns facts present on Bleemeo API mock.
 func (helper *syncTestHelper) FactsFromAPI() []bleemeoTypes.AgentFact {
-	var facts []bleemeoTypes.AgentFact
-
-	helper.api.resources[mockAPIResourceAgentFact].Store(&facts)
+	facts := helper.wrapperClientMock.resources.agentFacts.clone()
 	sort.Slice(facts, func(i, j int) bool {
 		return facts[i].ID < facts[j].ID
 	})
@@ -427,9 +396,7 @@ func (helper *syncTestHelper) FactsFromAPI() []bleemeoTypes.AgentFact {
 
 // ServicesFromAPI returns services present on Bleemeo API mock.
 func (helper *syncTestHelper) ServicesFromAPI() []bleemeoapi.ServicePayload {
-	var services []bleemeoapi.ServicePayload
-
-	helper.api.resources[mockAPIResourceService].Store(&services)
+	services := helper.wrapperClientMock.resources.services.clone()
 	sort.Slice(services, func(i, j int) bool {
 		return services[i].ID < services[j].ID
 	})
@@ -441,12 +408,12 @@ func (helper *syncTestHelper) ServicesFromAPI() []bleemeoapi.ServicePayload {
 // This is mostly a wrapper around cmp.Diff which also do:
 // * replace idAny by corresponding ID (match metric by same fqdn)
 // * sort list by ID.
-func (helper *syncTestHelper) assertAgentsInAPI(t *testing.T, want []payloadAgent) {
+func (helper *syncTestHelper) assertAgentsInAPI(t *testing.T, want []bleemeoapi.AgentPayload) {
 	t.Helper()
 
 	agents := helper.AgentsFromAPI()
 
-	copyWant := make([]payloadAgent, 0, len(want))
+	copyWant := make([]bleemeoapi.AgentPayload, 0, len(want))
 
 	for _, x := range want {
 		if x.ID == idAny {
@@ -464,7 +431,7 @@ func (helper *syncTestHelper) assertAgentsInAPI(t *testing.T, want []payloadAgen
 		copyWant = append(copyWant, x)
 	}
 
-	optSort := cmpopts.SortSlices(func(x payloadAgent, y payloadAgent) bool { return x.ID < y.ID })
+	optSort := cmpopts.SortSlices(func(x, y bleemeoapi.AgentPayload) bool { return x.ID < y.ID })
 	if diff := cmp.Diff(copyWant, agents, cmpopts.EquateEmpty(), optSort); diff != "" {
 		t.Errorf("agents mismatch (-want +got)\n%s", diff)
 	}
@@ -507,12 +474,12 @@ func (helper *syncTestHelper) assertServicesInAPI(t *testing.T, want []bleemeoap
 // This is mostly a wrapper around cmp.Diff which also do:
 // * replace idAny by corresponding ID (match metric by same agentID, label, item & labels_text)
 // * sort list by ID.
-func (helper *syncTestHelper) assertMetricsInAPI(t *testing.T, want []metricPayload) {
+func (helper *syncTestHelper) assertMetricsInAPI(t *testing.T, want []bleemeoapi.MetricPayload) {
 	t.Helper()
 
 	metrics := helper.MetricsFromAPI()
 
-	copyWant := make([]metricPayload, 0, len(want))
+	copyWant := make([]bleemeoapi.MetricPayload, 0, len(want))
 
 	for _, m := range want {
 		if m.ID == idAny {
@@ -530,7 +497,7 @@ func (helper *syncTestHelper) assertMetricsInAPI(t *testing.T, want []metricPayl
 		copyWant = append(copyWant, m)
 	}
 
-	optSort := cmpopts.SortSlices(func(x metricPayload, y metricPayload) bool { return x.ID < y.ID })
+	optSort := cmpopts.SortSlices(func(x, y bleemeoapi.MetricPayload) bool { return x.ID < y.ID })
 	if diff := cmp.Diff(copyWant, metrics, cmpopts.EquateEmpty(), optSort); diff != "" {
 		t.Errorf("metrics mismatch (-want +got)\n%s", diff)
 	}

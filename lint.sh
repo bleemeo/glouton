@@ -19,7 +19,7 @@ case "$1" in
       OPEN_SHELL=1
       ;;
    *)
-      echo "Usage: $0 [coverage|lint]"
+      echo "Usage: $0 [coverage|lint|shell]"
       echo "  coverage: run test coverage"
       echo "  lint: run linter only, skip tests"
       echo "  shell: open a shell inside linter container"

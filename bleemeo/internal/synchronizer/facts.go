@@ -18,11 +18,9 @@ package synchronizer
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
 	"time"
 
-	"github.com/bleemeo/glouton/bleemeo/client"
+	"github.com/bleemeo/bleemeo-go"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/facts"
@@ -73,7 +71,7 @@ func (s *Synchronizer) syncFacts(ctx context.Context, syncType types.SyncType, e
 	allAgentFacts[s.agentID] = localFacts
 
 	if !execution.IsOnlyEssential() {
-		agentTypeID, found := s.getAgentType(bleemeoTypes.AgentTypeSNMP)
+		agentTypeID, found := s.getAgentType(bleemeo.AgentType_SNMP)
 		if !found {
 			return false, errRetryLater
 		}
@@ -136,24 +134,10 @@ func (s *Synchronizer) syncFacts(ctx context.Context, syncType types.SyncType, e
 	return false, nil
 }
 
-func (s *Synchronizer) factsUpdateList(ctx context.Context, apiClient types.RawClient) error {
-	params := map[string]string{}
-
-	result, err := apiClient.Iter(ctx, "agentfact", params)
+func (s *Synchronizer) factsUpdateList(ctx context.Context, apiClient types.FactClient) error {
+	facts, err := apiClient.ListFacts(ctx)
 	if err != nil {
 		return err
-	}
-
-	facts := make([]bleemeoTypes.AgentFact, 0, len(result))
-
-	for _, jsonMessage := range result {
-		var fact bleemeoTypes.AgentFact
-
-		if err := json.Unmarshal(jsonMessage, &fact); err != nil {
-			continue
-		}
-
-		facts = append(facts, fact)
 	}
 
 	s.option.Cache.SetFacts(facts)
@@ -161,7 +145,7 @@ func (s *Synchronizer) factsUpdateList(ctx context.Context, apiClient types.RawC
 	return nil
 }
 
-func (s *Synchronizer) factRegister(ctx context.Context, apiClient types.RawClient, allAgentFacts map[string]map[string]string) error {
+func (s *Synchronizer) factRegister(ctx context.Context, apiClient types.FactClient, allAgentFacts map[string]map[string]string) error {
 	registeredFacts := s.option.Cache.FactsByKey()
 	facts := s.option.Cache.Facts()
 
@@ -175,21 +159,19 @@ func (s *Synchronizer) factRegister(ctx context.Context, apiClient types.RawClie
 			logger.V(3).Printf("fact %s:%#v changed from %#v to %#v", agentID, key, remoteValue.Value, value)
 
 			// Agent can't update fact. We delete and re-create the facts
-			payload := map[string]string{
-				"agent": agentID,
-				"key":   key,
-				"value": value,
+			payload := bleemeoTypes.AgentFact{
+				AgentID: agentID,
+				Key:     key,
+				Value:   value,
 			}
 
-			var response bleemeoTypes.AgentFact
-
-			_, err := apiClient.Do(ctx, "POST", "v1/agentfact/", nil, payload, &response)
+			result, err := apiClient.RegisterFact(ctx, payload)
 			if err != nil {
 				return err
 			}
 
-			facts = append(facts, response)
-			logger.V(2).Printf("Send fact %s:%s, stored with uuid %s", agentID, key, response.ID)
+			facts = append(facts, result)
+			logger.V(2).Printf("Send fact %s:%s, stored with uuid %s", agentID, key, result.ID)
 		}
 	}
 
@@ -198,7 +180,7 @@ func (s *Synchronizer) factRegister(ctx context.Context, apiClient types.RawClie
 	return nil
 }
 
-func (s *Synchronizer) factDeleteFromLocal(ctx context.Context, apiClient types.RawClient, allAgentFacts map[string]map[string]string) error {
+func (s *Synchronizer) factDeleteFromLocal(ctx context.Context, apiClient types.FactClient, allAgentFacts map[string]map[string]string) error {
 	duplicatedKey := make(map[string]bool)
 	registeredFacts := s.option.Cache.FactsByUUID()
 
@@ -212,9 +194,9 @@ func (s *Synchronizer) factDeleteFromLocal(ctx context.Context, apiClient types.
 			continue
 		}
 
-		_, err := apiClient.Do(ctx, "DELETE", fmt.Sprintf("v1/agentfact/%s/", v.ID), nil, nil, nil)
-		// If the fact was not found it has already been deleted.
-		if err != nil && !client.IsNotFound(err) {
+		err := apiClient.DeleteFact(ctx, v.ID)
+		// If the fact wasn't found, it has already been deleted.
+		if err != nil && !IsNotFound(err) {
 			return err
 		}
 

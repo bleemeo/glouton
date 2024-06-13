@@ -499,10 +499,7 @@ func getMockEntityExecution(s *Synchronizer, entityReplyToNeedSynchronization ma
 }
 
 func newTestExecution(entityReplyToNeedSynchronization map[types.EntityName]bool) *Execution {
-	synchronizer, err := newForTest(types.Option{}, time.Now)
-	if err != nil {
-		panic(err)
-	}
+	synchronizer := newForTest(types.Option{}, time.Now)
 
 	execution := &Execution{
 		synchronizer:        synchronizer,

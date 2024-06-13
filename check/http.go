@@ -81,7 +81,7 @@ func NewHTTP(
 			CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
 				return http.ErrUseLastResponse
 			},
-			Transport: types.NewHTTPTransport(tlsConfig),
+			Transport: types.NewHTTPTransport(tlsConfig, nil),
 		},
 	}
 

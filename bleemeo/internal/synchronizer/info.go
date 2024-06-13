@@ -18,12 +18,16 @@ package synchronizer
 
 import (
 	"context"
+	"crypto/tls"
+	"encoding/json"
 	"fmt"
 	"net"
+	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/bleemeo/bleemeo-go"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/delay"
@@ -34,6 +38,13 @@ import (
 	"github.com/prometheus/prometheus/model/labels"
 )
 
+type mqttUpdatePayload struct {
+	CurrentStatus     bleemeo.Status `json:"current_status"`
+	StatusDescription []string       `json:"status_descriptions"`
+}
+
+const mqttUpdateResponseFields = "current_status,status_descriptions"
+
 // syncInfo retrieves the minimum supported glouton version the API supports.
 func (s *Synchronizer) syncInfo(ctx context.Context, syncType types.SyncType, execution types.SynchronizationExecution) (updateThresholds bool, err error) {
 	_ = syncType
@@ -43,25 +54,44 @@ func (s *Synchronizer) syncInfo(ctx context.Context, syncType types.SyncType, ex
 
 // syncInfoReal retrieves the minimum supported glouton version the API supports.
 func (s *Synchronizer) syncInfoReal(ctx context.Context, execution types.SynchronizationExecution, disableOnTimeDrift bool) (updateThresholds bool, err error) {
-	var globalInfo bleemeoTypes.GlobalInfo
-
 	apiClient := execution.BleemeoAPIClient()
 
-	statusCode, err := s.realClient.DoUnauthenticated(ctx, "GET", "v1/info/", nil, nil, &globalInfo)
+	globalInfo, err := apiClient.GetGlobalInfo(ctx)
 	if err != nil && strings.Contains(err.Error(), "certificate has expired") {
-		// This could happen when local time is really to far away from real time.
-		// Since this request is unauthenticated we retry it with insecure TLS
-		statusCode, err = s.realClient.DoTLSInsecure(ctx, "GET", "v1/info/", nil, nil, &globalInfo)
+		// This could happen when local time is really too far away from real time.
+		// Since this request is unauthenticated, we can retry it with insecure TLS
+		transportOpts := &gloutonTypes.CustomTransportOptions{
+			UserAgentHeader: version.UserAgent(),
+			RequestCounter:  &s.requestCounter,
+		}
+
+		insecureClient, cErr := bleemeo.NewClient(
+			bleemeo.WithEndpoint(s.option.Config.Bleemeo.APIBase),
+			bleemeo.WithHTTPClient(&http.Client{Transport: gloutonTypes.NewHTTPTransport(&tls.Config{InsecureSkipVerify: true}, transportOpts)}), //nolint:gosec
+		)
+		if cErr != nil {
+			return false, cErr
+		}
+
+		var respBody []byte
+
+		statusCode, respBody, err := insecureClient.Do(ctx, http.MethodGet, "/v1/info/", nil, false, nil)
+		if err == nil && statusCode == 200 {
+			err = json.Unmarshal(respBody, &globalInfo)
+			if err != nil {
+				logger.V(2).Printf("Couldn't unmarshal global information, got '%v'", err)
+
+				return false, nil
+			}
+		} else if statusCode >= 300 {
+			logger.V(2).Printf("Couldn't retrieve global information, got HTTP status code %d", statusCode)
+
+			return false, nil
+		}
 	}
 
 	if err != nil {
 		logger.V(2).Printf("Couldn't retrieve global information, got '%v'", err)
-
-		return false, nil
-	}
-
-	if statusCode >= 300 {
-		logger.V(2).Printf("Couldn't retrieve global information, got HTTP status code %d", statusCode)
 
 		return false, nil
 	}
@@ -127,22 +157,12 @@ func (s *Synchronizer) syncInfoReal(ctx context.Context, execution types.Synchro
 			map[string]string{gloutonTypes.LabelName: "agent_status", gloutonTypes.LabelInstanceUUID: s.agentID},
 		)
 		if metric, ok := s.option.Cache.MetricLookupFromList()[metricKey]; ok {
-			type payloadType struct {
-				CurrentStatus     int      `json:"current_status"`
-				StatusDescription []string `json:"status_descriptions"`
+			payload := mqttUpdatePayload{
+				CurrentStatus:     bleemeo.Status_Critical,
+				StatusDescription: []string{"Agent local time too different from actual time"},
 			}
 
-			_, err := apiClient.Do(
-				ctx,
-				"PATCH",
-				fmt.Sprintf("v1/metric/%s/", metric.ID),
-				map[string]string{"fields": "current_status,status_descriptions"},
-				payloadType{
-					CurrentStatus:     2, // critical
-					StatusDescription: []string{"Agent local time too different from actual time"},
-				},
-				nil,
-			)
+			err = apiClient.UpdateMetric(ctx, metric.ID, payload, mqttUpdateResponseFields)
 			if err != nil {
 				return false, err
 			}
@@ -154,7 +174,7 @@ func (s *Synchronizer) syncInfoReal(ctx context.Context, execution types.Synchro
 	return false, nil
 }
 
-func (s *Synchronizer) updateMQTTStatus(ctx context.Context, apiClient types.RawClient) error {
+func (s *Synchronizer) updateMQTTStatus(ctx context.Context, apiClient types.MetricClient) error {
 	s.l.Lock()
 	isMQTTConnected := s.isMQTTConnected != nil && *s.isMQTTConnected
 	shouldUpdate := s.shouldUpdateMQTTStatus
@@ -165,7 +185,7 @@ func (s *Synchronizer) updateMQTTStatus(ctx context.Context, apiClient types.Raw
 		return nil
 	}
 
-	// When the agent is not connected check whether MQTT is accessible.
+	// When the agent is not connected, check whether MQTT is accessible.
 	if !isMQTTConnected {
 		mqttAddress := net.JoinHostPort(s.option.Config.Bleemeo.MQTT.Host, strconv.Itoa(s.option.Config.Bleemeo.MQTT.Port))
 
@@ -192,22 +212,12 @@ func (s *Synchronizer) updateMQTTStatus(ctx context.Context, apiClient types.Raw
 		map[string]string{gloutonTypes.LabelName: "agent_status", gloutonTypes.LabelInstanceUUID: s.agentID},
 	)
 	if metric, ok := s.option.Cache.MetricLookupFromList()[metricKey]; ok {
-		type payloadType struct {
-			CurrentStatus     int      `json:"current_status"`
-			StatusDescription []string `json:"status_descriptions"`
+		payload := mqttUpdatePayload{
+			CurrentStatus:     bleemeo.Status_Critical,
+			StatusDescription: []string{msg},
 		}
 
-		_, err := apiClient.Do(
-			ctx,
-			"PATCH",
-			fmt.Sprintf("v1/metric/%s/", metric.ID),
-			map[string]string{"fields": "current_status,status_descriptions"},
-			payloadType{
-				CurrentStatus:     2, // critical
-				StatusDescription: []string{msg},
-			},
-			nil,
-		)
+		err := apiClient.UpdateMetric(ctx, metric.ID, payload, mqttUpdateResponseFields)
 		if err != nil {
 			return err
 		}

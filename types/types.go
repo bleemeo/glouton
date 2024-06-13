@@ -24,6 +24,7 @@ import (
 	"net/http"
 	"sort"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/bleemeo/glouton/logger"
@@ -427,12 +428,39 @@ type ArchiveWriter interface {
 	CurrentFileName() string
 }
 
+type CustomTransportOptions struct {
+	// UserAgentHeader will be used as the User-Agent for each HTTP request.
+	UserAgentHeader string
+	// RequestCounter will be incremented for each HTTP transaction.
+	RequestCounter *atomic.Uint32
+}
+
+type customTransport struct {
+	opts      CustomTransportOptions
+	transport http.RoundTripper
+}
+
+func (tc *customTransport) RoundTrip(r *http.Request) (*http.Response, error) {
+	r.Header.Set("User-Agent", tc.opts.UserAgentHeader)
+	tc.opts.RequestCounter.Add(1)
+
+	return tc.transport.RoundTrip(r)
+}
+
 // NewHTTPTransport returns a default Transport with a modified TLSClientConfig.
-func NewHTTPTransport(tlsConfig *tls.Config) http.RoundTripper {
+// If options are provided, both UserAgentHeader and RequestCounter must be defined.
+func NewHTTPTransport(tlsConfig *tls.Config, options *CustomTransportOptions) http.RoundTripper {
 	dt, _ := http.DefaultTransport.(*http.Transport)
 
 	t := dt.Clone()
 	t.TLSClientConfig = tlsConfig
+
+	if options != nil {
+		return &customTransport{
+			opts:      *options,
+			transport: t,
+		}
+	}
 
 	return t
 }

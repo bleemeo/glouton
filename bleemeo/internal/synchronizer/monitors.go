@@ -18,12 +18,11 @@ package synchronizer
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
 
-	"github.com/bleemeo/glouton/bleemeo/client"
+	"github.com/bleemeo/bleemeo-go"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/logger"
@@ -46,9 +45,6 @@ const (
 	// Delete specifies the monitor should be deleted.
 	Delete
 )
-
-const fieldList string = "id,account_config,agent,created_at,monitor_url,monitor_expected_content," +
-	"monitor_expected_response_code,monitor_unexpected_content,monitor_ca_file,monitor_headers"
 
 // MonitorUpdate represents an operation to execute on a monitor.
 type MonitorUpdate struct {
@@ -88,7 +84,7 @@ func (s *Synchronizer) syncMonitors(ctx context.Context, syncType types.SyncType
 	apiClient := execution.BleemeoAPIClient()
 
 	if syncType == types.SyncTypeForceCacheRefresh {
-		monitors, err = s.getMonitorsFromAPI(ctx, apiClient)
+		monitors, err = apiClient.ListMonitors(ctx)
 		if err != nil {
 			return false, err
 		}
@@ -109,7 +105,7 @@ func (s *Synchronizer) syncMonitors(ctx context.Context, syncType types.SyncType
 			needConfigUpdate = true
 
 			break
-		} else if _, ok := cfg.AgentConfigByName[bleemeoTypes.AgentTypeMonitor]; !ok {
+		} else if _, ok := cfg.AgentConfigByName[bleemeo.AgentType_Monitor]; !ok {
 			needConfigUpdate = true
 
 			break
@@ -172,7 +168,7 @@ func (s *Synchronizer) ApplyMonitorUpdate() error {
 
 		processedMonitors = append(processedMonitors, gloutonTypes.Monitor{
 			ID:                      monitor.ID,
-			MetricMonitorResolution: conf.AgentConfigByName[bleemeoTypes.AgentTypeMonitor].MetricResolution,
+			MetricMonitorResolution: conf.AgentConfigByName[bleemeo.AgentType_Monitor].MetricResolution,
 			CreationDate:            jitterCreationDate,
 			URL:                     monitor.URL,
 			BleemeoAgentID:          monitor.AgentID,
@@ -194,39 +190,8 @@ func (s *Synchronizer) ApplyMonitorUpdate() error {
 	return nil
 }
 
-func (s *Synchronizer) getMonitorsFromAPI(ctx context.Context, apiClient types.RawClient) ([]bleemeoTypes.Monitor, error) {
-	params := map[string]string{
-		"monitor": "true",
-		"active":  "true",
-		"fields":  fieldList,
-	}
-
-	result, err := apiClient.Iter(ctx, "service", params)
-	if err != nil {
-		return nil, err
-	}
-
-	monitors := make([]bleemeoTypes.Monitor, 0, len(result))
-
-	for _, jsonMessage := range result {
-		var monitor bleemeoTypes.Monitor
-
-		if err := json.Unmarshal(jsonMessage, &monitor); err != nil {
-			return nil, fmt.Errorf("%w %v", errCannotParse, jsonMessage)
-		}
-
-		monitors = append(monitors, monitor)
-	}
-
-	return monitors, nil
-}
-
 // should we try to modify as much monitors as possible, and return a list of errors, instead of failing early ?
 func (s *Synchronizer) getListOfMonitorsFromAPI(ctx context.Context, execution types.SynchronizationExecution, pendingMonitorsUpdate []MonitorUpdate) ([]bleemeoTypes.Monitor, error) {
-	params := map[string]string{
-		"fields": fieldList,
-	}
-
 	currentMonitors := s.option.Cache.Monitors()
 	forceSync := execution.IsSynchronizationRequested(types.EntityMetric)
 	apiClient := execution.BleemeoAPIClient()
@@ -239,11 +204,10 @@ OuterBreak:
 			continue
 		}
 
-		var result bleemeoTypes.Monitor
-		statusCode, err := apiClient.Do(ctx, "GET", fmt.Sprintf("v1/service/%s/", m.uuid), params, nil, &result)
+		result, err := apiClient.GetMonitorByID(ctx, m.uuid)
 		if err != nil {
 			// Delete the monitor locally if it was not found on the API.
-			if client.IsNotFound(err) {
+			if IsNotFound(err) {
 				currentMonitors = deleteMonitorByUUID(currentMonitors, m.uuid)
 
 				continue
@@ -253,13 +217,6 @@ OuterBreak:
 		}
 
 		if m.op == Change {
-			// we couldn't fetch that object ? let's skip it
-			if statusCode < 200 || statusCode >= 300 {
-				logger.V(2).Printf("probes: couldn't update service '%s', got HTTP %d", m.uuid, statusCode)
-
-				continue
-			}
-
 			for k, v := range currentMonitors {
 				if v.ID == m.uuid {
 					// syncing metrics is necessary when an account in which there is a probe is downgraded to a plan with

@@ -18,12 +18,12 @@ package syncservices
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
 	"time"
 
+	"github.com/bleemeo/bleemeo-go"
 	"github.com/bleemeo/glouton/bleemeo/internal/common"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/bleemeoapi"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
@@ -130,8 +130,8 @@ func (s *SyncServices) logThrottle(msg string) {
 	}
 }
 
-func ServicePayloadFromDiscovery(service discovery.Service, listenAddresses string, accountID string, agentID string, serviceID string, apiSupportServiceTags bool) bleemeoapi.ServicePayload {
-	tags := getTagsFromLocal(service, apiSupportServiceTags)
+func ServicePayloadFromDiscovery(service discovery.Service, listenAddresses string, accountID string, agentID string, serviceID string) bleemeoapi.ServicePayload {
+	tags := getTagsFromLocal(service)
 
 	return bleemeoapi.ServicePayload{
 		Monitor: bleemeoTypes.Monitor{
@@ -199,29 +199,12 @@ func (s *SyncServices) syncRemoteAndLocal(ctx context.Context, execution types.S
 }
 
 func serviceUpdateList(ctx context.Context, execution types.SynchronizationExecution) error {
-	agentID, _ := execution.Option().State.BleemeoCredentials()
 	apiClient := execution.BleemeoAPIClient()
+	agentID, _ := execution.Option().State.BleemeoCredentials()
 
-	params := map[string]string{
-		"agent":  agentID,
-		"fields": serviceReadFields,
-	}
-
-	result, err := apiClient.Iter(ctx, "service", params)
+	services, err := apiClient.ListServices(ctx, agentID, serviceReadFields)
 	if err != nil {
 		return err
-	}
-
-	services := make([]bleemeoTypes.Service, 0, len(result))
-
-	for _, jsonMessage := range result {
-		var service bleemeoTypes.Service
-
-		if err := json.Unmarshal(jsonMessage, &service); err != nil {
-			continue
-		}
-
-		services = append(services, service)
 	}
 
 	execution.Option().Cache.SetServices(services)
@@ -261,14 +244,9 @@ func (s *SyncServices) serviceRegisterAndUpdate(ctx context.Context, execution t
 	remoteServices := execution.Option().Cache.Services()
 	remoteServicesByKey := common.ServiceLookupFromList(remoteServices)
 	registeredServices := execution.Option().Cache.ServicesByUUID()
-	params := map[string]string{
-		"fields": serviceWriteFields,
-	}
 	delayedContainer, _ := execution.GlobalState().DelayedContainers()
 	apiClient := execution.BleemeoAPIClient()
 	agentID, _ := execution.Option().State.BleemeoCredentials()
-
-	apiSupportServiceTags := execution.GlobalState().APIHasFeature(types.APIFeatureApplication)
 
 	for _, srv := range localServices {
 		if _, ok := delayedContainer[srv.ContainerID]; ok {
@@ -286,38 +264,19 @@ func (s *SyncServices) serviceRegisterAndUpdate(ctx context.Context, execution t
 
 		// Skip updating the remote service if the service is already up to date.
 		listenAddresses := getListenAddress(srv.ListenAddresses)
-		if skipUpdate(remoteFound, remoteSrv, srv, listenAddresses, apiSupportServiceTags) {
+		if skipUpdate(remoteFound, remoteSrv, srv, listenAddresses) {
 			continue
 		}
 
-		var payload any
+		payload := ServicePayloadFromDiscovery(srv, listenAddresses, execution.Option().Cache.AccountID(), agentID, "")
 
-		realPayload := ServicePayloadFromDiscovery(srv, listenAddresses, execution.Option().Cache.AccountID(), agentID, "", apiSupportServiceTags)
-
-		if !apiSupportServiceTags {
-			tmp, err := json.Marshal(realPayload)
-			if err != nil {
-				return err
-			}
-
-			var strAny map[string]any
-
-			err = json.Unmarshal(tmp, &strAny)
-			if err != nil {
-				return err
-			}
-
-			delete(strAny, "tags")
-
-			payload = strAny
-		} else {
-			payload = realPayload
-		}
-
-		var result bleemeoTypes.Service
+		var (
+			result bleemeoTypes.Service
+			err    error
+		)
 
 		if remoteFound {
-			_, err := apiClient.Do(ctx, "PUT", fmt.Sprintf("v1/service/%s/", remoteSrv.ID), params, payload, &result)
+			result, err = apiClient.UpdateService(ctx, remoteSrv.ID, payload, serviceWriteFields)
 			if err != nil {
 				return err
 			}
@@ -325,7 +284,7 @@ func (s *SyncServices) serviceRegisterAndUpdate(ctx context.Context, execution t
 			registeredServices[result.ID] = result
 			logger.V(2).Printf("Service %v updated with UUID %s", key, result.ID)
 		} else {
-			_, err := apiClient.Do(ctx, "POST", "v1/service/", params, payload, &result)
+			result, err = apiClient.RegisterService(ctx, payload)
 			if err != nil {
 				return err
 			}
@@ -365,25 +324,21 @@ func (s *SyncServices) serviceRegisterAndUpdate(ctx context.Context, execution t
 }
 
 // skipUpdate returns true if the service found by the discovery is up to date with the remote service on the API.
-func skipUpdate(remoteFound bool, remoteSrv bleemeoTypes.Service, srv discovery.Service, listenAddresses string, apiSupportServiceTags bool) bool {
+func skipUpdate(remoteFound bool, remoteSrv bleemeoTypes.Service, srv discovery.Service, listenAddresses string) bool {
 	return remoteFound &&
 		remoteSrv.Label == srv.Name &&
 		remoteSrv.ListenAddresses == listenAddresses &&
 		remoteSrv.ExePath == srv.ExePath &&
 		remoteSrv.Active == srv.Active &&
-		serviceHadSameTags(remoteSrv.Tags, srv, apiSupportServiceTags)
+		serviceHadSameTags(remoteSrv.Tags, srv)
 }
 
-func getTagsFromLocal(service discovery.Service, apiSupportServiceTags bool) []bleemeoTypes.Tag {
-	if !apiSupportServiceTags {
-		return nil
-	}
-
+func getTagsFromLocal(service discovery.Service) []bleemeoTypes.Tag {
 	tags := make([]bleemeoTypes.Tag, 0, len(service.Tags)+len(service.Applications))
 
 	for _, t := range service.Tags {
 		if len(t) <= bleemeoapi.APITagsLength && t != "" {
-			tags = append(tags, bleemeoTypes.Tag{Name: t, TagType: bleemeoTypes.TagTypeIsCreatedByGlouton})
+			tags = append(tags, bleemeoTypes.Tag{Name: t, TagType: bleemeo.TagType_CreatedByGlouton})
 		}
 	}
 
@@ -391,7 +346,7 @@ func getTagsFromLocal(service discovery.Service, apiSupportServiceTags bool) []b
 		_, appTag := types.AutomaticApplicationName(app)
 
 		if len(appTag) <= bleemeoapi.APITagsLength && appTag != "" {
-			tags = append(tags, bleemeoTypes.Tag{Name: appTag, TagType: bleemeoTypes.TagTypeIsAutomaticByGlouton})
+			tags = append(tags, bleemeoTypes.Tag{Name: appTag, TagType: bleemeo.TagType_AutomaticGlouton})
 		}
 	}
 
@@ -399,16 +354,12 @@ func getTagsFromLocal(service discovery.Service, apiSupportServiceTags bool) []b
 }
 
 // serviceHadSameTags returns true if the two service had the same tags for glouton provided tags.
-func serviceHadSameTags(remoteTags []bleemeoTypes.Tag, localService discovery.Service, apiSupportServiceTags bool) bool {
-	if !apiSupportServiceTags {
-		return true
-	}
-
-	localTags := getTagsFromLocal(localService, apiSupportServiceTags)
+func serviceHadSameTags(remoteTags []bleemeoTypes.Tag, localService discovery.Service) bool {
+	localTags := getTagsFromLocal(localService)
 	remoteTagsNoID := make(map[bleemeoTypes.Tag]bool, len(remoteTags))
 
 	for _, tag := range remoteTags {
-		if tag.TagType != bleemeoTypes.TagTypeIsAutomaticByGlouton && tag.TagType != bleemeoTypes.TagTypeIsCreatedByGlouton {
+		if tag.TagType != bleemeo.TagType_AutomaticGlouton && tag.TagType != bleemeo.TagType_CreatedByGlouton {
 			continue
 		}
 
@@ -501,10 +452,6 @@ func serviceDeactivateNonLocal(ctx context.Context, execution types.Synchronizat
 // serviceDeactivate makes a PUT request to the Bleemeo API to mark the given service as inactive.
 func serviceDeactivate(ctx context.Context, execution types.SynchronizationExecution, service bleemeoTypes.Service) (bleemeoTypes.Service, error) {
 	agentID, _ := execution.Option().State.BleemeoCredentials()
-	params := map[string]string{
-		"fields": serviceWriteFields,
-	}
-
 	payload := bleemeoapi.ServicePayload{
 		Monitor: bleemeoTypes.Monitor{
 			Service: bleemeoTypes.Service{
@@ -519,9 +466,5 @@ func serviceDeactivate(ctx context.Context, execution types.SynchronizationExecu
 		Account: execution.Option().Cache.AccountID(),
 	}
 
-	var result bleemeoTypes.Service
-
-	_, err := execution.BleemeoAPIClient().Do(ctx, "PUT", fmt.Sprintf("v1/service/%s/", service.ID), params, payload, &result)
-
-	return result, err
+	return execution.BleemeoAPIClient().UpdateService(ctx, service.ID, payload, serviceWriteFields)
 }

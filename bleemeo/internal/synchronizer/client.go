@@ -19,27 +19,42 @@ package synchronizer
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"net/http"
+	"net/url"
+	"path"
+	"reflect"
+	"strings"
 	"time"
 
-	"github.com/bleemeo/glouton/bleemeo/client"
+	"github.com/bleemeo/bleemeo-go"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
-	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
+)
+
+const gloutonOAuthClientID = "5c31cbfc-254a-4fb9-822d-e55c681a3d4f"
+
+var (
+	errInvalidAgentID      = errors.New("got an invalid agent ID")
+	errClientUninitialized = fmt.Errorf("%w: HTTP client", errUninitialized)
 )
 
 type wrapperClient struct {
-	client           *client.HTTPClient
+	client           *bleemeo.Client
+	checkDuplicateFn func(context.Context, types.Client) error
+
 	duplicateError   error
 	duplicateChecked bool
-	checkDuplicated  func(context.Context, types.RawClient) error
 }
 
-func (s *Synchronizer) newClient() *wrapperClient {
-	return &wrapperClient{
-		checkDuplicated: s.checkDuplicated,
-		client:          s.realClient,
+func (cl *wrapperClient) dupCheck(ctx context.Context) error {
+	if !cl.duplicateChecked {
+		cl.duplicateChecked = true
+		cl.duplicateError = cl.checkDuplicateFn(ctx, cl)
 	}
+
+	return cl.duplicateError
 }
 
 func (cl *wrapperClient) ThrottleDeadline() time.Time {
@@ -50,74 +65,223 @@ func (cl *wrapperClient) ThrottleDeadline() time.Time {
 	return cl.client.ThrottleDeadline()
 }
 
-func (cl *wrapperClient) Do(ctx context.Context, method string, path string, params map[string]string, data interface{}, result interface{}) (statusCode int, err error) {
+func (cl *wrapperClient) Get(ctx context.Context, resource bleemeo.Resource, id string, fields string, result any) error {
 	if cl == nil {
-		return 0, fmt.Errorf("%w: HTTP client", errUninitialized)
+		return errClientUninitialized
 	}
 
-	if !cl.duplicateChecked {
-		cl.duplicateChecked = true
-		cl.duplicateError = cl.checkDuplicated(ctx, cl)
+	if err := cl.dupCheck(ctx); err != nil {
+		return err
 	}
 
-	if cl.duplicateError != nil {
-		return 0, cl.duplicateError
+	respBody, err := cl.client.Get(ctx, resource, id, strings.Split(fields, ",")...)
+	if err != nil {
+		return err
 	}
 
-	return cl.client.Do(ctx, method, path, params, data, result)
+	return json.Unmarshal(respBody, result)
 }
 
-func (cl *wrapperClient) Iter(ctx context.Context, resource string, params map[string]string) ([]json.RawMessage, error) {
+func (cl *wrapperClient) Count(ctx context.Context, resource bleemeo.Resource, params url.Values) (int, error) {
 	if cl == nil {
-		return nil, fmt.Errorf("%w: HTTP client", errUninitialized)
+		return 0, errClientUninitialized
 	}
 
-	if !cl.duplicateChecked {
-		cl.duplicateChecked = true
-		cl.duplicateError = cl.checkDuplicated(ctx, cl)
+	if err := cl.dupCheck(ctx); err != nil {
+		return 0, err
 	}
 
-	if cl.duplicateError != nil {
-		return nil, cl.duplicateError
-	}
-
-	return cl.client.Iter(ctx, resource, params)
+	return cl.client.Count(ctx, resource, params)
 }
 
-func (cl *wrapperClient) DoWithBody(ctx context.Context, path string, contentType string, body io.Reader) (statusCode int, err error) {
-	return cl.client.DoWithBody(ctx, path, contentType, body)
+func (cl *wrapperClient) Iterator(ctx context.Context, resource bleemeo.Resource, params url.Values) bleemeo.Iterator {
+	if cl == nil {
+		return errorIterator{errClientUninitialized}
+	}
+
+	if err := cl.dupCheck(ctx); err != nil {
+		return errorIterator{err}
+	}
+
+	return cl.client.Iterator(resource, params)
 }
 
-func (cl *wrapperClient) ListApplications(ctx context.Context) ([]bleemeoTypes.Application, error) {
-	result, err := cl.Iter(ctx, "application", map[string]string{})
+func (cl *wrapperClient) Create(ctx context.Context, resource bleemeo.Resource, body any, fields string, result any) error {
+	if cl == nil {
+		return errClientUninitialized
+	}
+
+	if err := cl.dupCheck(ctx); err != nil {
+		return err
+	}
+
+	respBody, err := cl.client.Create(ctx, resource, body, strings.Split(fields, ",")...)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	applications := make([]bleemeoTypes.Application, 0, len(result))
-
-	for _, jsonMessage := range result {
-		var application bleemeoTypes.Application
-
-		if err := json.Unmarshal(jsonMessage, &application); err != nil {
-			continue
-		}
-
-		applications = append(applications, application)
+	// Basic comparison will nil fails when the underlying type of `result` is actually an interface.
+	if notNil(result) {
+		return json.Unmarshal(respBody, result)
 	}
 
-	return applications, nil
+	return nil
 }
 
-func (cl *wrapperClient) CreateApplication(ctx context.Context, app bleemeoTypes.Application) (bleemeoTypes.Application, error) {
-	var result bleemeoTypes.Application
-
-	app.ID = "" // ID isn't allowed in creation
-
-	_, err := cl.Do(ctx, "POST", "v1/application/", map[string]string{}, app, &result)
-	if err != nil {
-		return bleemeoTypes.Application{}, err
+func (cl *wrapperClient) Update(ctx context.Context, resource bleemeo.Resource, id string, body any, fields string, result any) error {
+	if cl == nil {
+		return errClientUninitialized
 	}
 
-	return result, nil
+	if err := cl.dupCheck(ctx); err != nil {
+		return err
+	}
+
+	respBody, err := cl.client.Update(ctx, resource, id, body, strings.Split(fields, ",")...)
+	if err != nil {
+		return err
+	}
+
+	// Basic comparison will nil fails when the underlying type of `result` is actually an interface.
+	if notNil(result) {
+		return json.Unmarshal(respBody, result)
+	}
+
+	return nil
+}
+
+func (cl *wrapperClient) Delete(ctx context.Context, resource bleemeo.Resource, id string) error {
+	if cl == nil {
+		return errClientUninitialized
+	}
+
+	if err := cl.dupCheck(ctx); err != nil {
+		return err
+	}
+
+	return cl.client.Delete(ctx, resource, id)
+}
+
+func (cl *wrapperClient) Do(ctx context.Context, method, reqURI string, params url.Values, authenticated bool, body io.Reader, result any) (statusCode int, err error) {
+	statusCode, respBody, err := cl.client.Do(ctx, method, reqURI, params, authenticated, body)
+	if err != nil {
+		return 0, err
+	}
+
+	// Basic comparison will nil fails when the underlying type of `result` is actually an interface.
+	if notNil(result) {
+		err = json.Unmarshal(respBody, result)
+	}
+
+	return statusCode, err
+}
+
+func (cl *wrapperClient) DoWithBody(ctx context.Context, reqURI string, contentType string, body io.Reader) (statusCode int, err error) {
+	if cl == nil {
+		return 0, errClientUninitialized
+	}
+
+	if err = cl.dupCheck(ctx); err != nil {
+		return 0, err
+	}
+
+	if !path.IsAbs(reqURI) {
+		reqURI = "/" + reqURI
+	}
+
+	req, err := cl.client.ParseRequest(http.MethodPost, reqURI, http.Header{"Content-Type": {contentType}}, nil, body)
+	if err != nil {
+		return 0, err //nolint:wrapcheck
+	}
+
+	resp, err := cl.client.DoRequest(ctx, req, true)
+	if err != nil {
+		return 0, err //nolint:wrapcheck
+	}
+
+	_, _ = io.Copy(io.Discard, resp.Body)
+	_ = resp.Body.Close()
+
+	return resp.StatusCode, nil
+}
+
+// notNil returns whether v or its underlying value aren't nil.
+func notNil(v any) bool {
+	if v == nil {
+		return false
+	}
+
+	refV := reflect.ValueOf(v)
+
+	return refV.Kind() == reflect.Pointer && !refV.IsNil()
+}
+
+// errorIterator implements [bleemeo.Iterator] but only returns an error.
+type errorIterator struct {
+	err error
+}
+
+func (errIter errorIterator) Next(context.Context) bool {
+	return false
+}
+
+func (errIter errorIterator) At() json.RawMessage {
+	return nil
+}
+
+func (errIter errorIterator) Err() error {
+	return errIter.err
+}
+
+// IsAuthError returns true if the error is an APIError due to authentication failure.
+func IsAuthError(err error) bool {
+	apiError := new(bleemeo.AuthError)
+
+	return errors.As(err, &apiError)
+}
+
+// IsNotFound returns true if the error is an APIError due to 404.
+func IsNotFound(err error) bool {
+	if apiError := new(bleemeo.APIError); errors.As(err, &apiError) {
+		return apiError.StatusCode == 404
+	}
+
+	return false
+}
+
+// IsBadRequest returns true if the error is an APIError due to 400.
+func IsBadRequest(err error) bool {
+	if apiError := new(bleemeo.APIError); errors.As(err, &apiError) {
+		return apiError.StatusCode == 400
+	}
+
+	return false
+}
+
+// IsServerError returns true if the error is an APIError due to 5xx.
+func IsServerError(err error) bool {
+	if apiError := new(bleemeo.APIError); errors.As(err, &apiError) {
+		return apiError.StatusCode >= 500
+	}
+
+	return false
+}
+
+// IsThrottleError returns true if the error is an APIError due to 429 - Too many requests.
+//
+// ThrottleDeadline could be used to get recommended retry deadline.
+func IsThrottleError(err error) bool {
+	throttleError := new(bleemeo.ThrottleError)
+
+	return errors.As(err, &throttleError)
+}
+
+// APIErrorContent returns the API error response, if the error is an APIError.
+// Return an empty string if the error isn't an APIError.
+func APIErrorContent(err error) string {
+	if apiError := new(bleemeo.APIError); errors.As(err, &apiError) {
+		return string(apiError.Response)
+	}
+
+	return ""
 }

@@ -19,7 +19,6 @@ package synchronizer
 import (
 	"errors"
 	"fmt"
-	"net/http"
 	"sync"
 	"testing"
 	"time"
@@ -31,7 +30,7 @@ import (
 	"github.com/bleemeo/glouton/facts"
 	"github.com/bleemeo/glouton/prometheus/exporter/snmp"
 	"github.com/bleemeo/glouton/prometheus/model"
-	"github.com/bleemeo/glouton/types"
+	gloutonTypes "github.com/bleemeo/glouton/types"
 
 	"dario.cat/mergo"
 	"github.com/google/go-cmp/cmp"
@@ -41,14 +40,8 @@ import (
 )
 
 var (
-	errUnknownURLFormat    = errors.New("unknown URL format")
-	errUnknownResource     = errors.New("unknown resource")
-	errUnknownBool         = errors.New("unknown boolean")
-	errUnknownRequestType  = errors.New("type of request unknown")
-	errIncorrectID         = errors.New("incorrect id")
 	errInvalidAccountID    = errors.New("invalid accountId supplied")
 	errUnexpectedOperation = errors.New("unexpected action")
-	errServerError         = errors.New("had server error")
 	errClientError         = errors.New("had client error")
 )
 
@@ -57,18 +50,17 @@ func TestSync(t *testing.T) {
 	defer helper.Close()
 
 	helper.preregisterAgent(t)
-	helper.api.resources[mockAPIResourceMetric].AddStore(testAgentMetric1, testAgentMetric2, testMonitorMetricPrivateProbe)
-	helper.api.resources[mockAPIResourceService].AddStore(newMonitor)
+	helper.wrapperClientMock.resources.metrics.add(testAgentMetric1, testAgentMetric2, testMonitorMetricPrivateProbe)
+	helper.wrapperClientMock.resources.monitors.add(newMonitor.Monitor)
 
-	agentResource, _ := helper.api.resources[mockAPIResourceAgent].(*genericResource)
-	agentResource.CreateHook = func(_ *http.Request, _ []byte, _ interface{}) error {
+	helper.wrapperClientMock.resources.agents.createHook = func(*bleemeoapi.AgentPayload) error {
 		return fmt.Errorf("%w: agent is already registered, shouldn't re-register", errUnexpectedOperation)
 	}
 
 	helper.initSynchronizer(t)
 
 	helper.pushPoints(t, []labels.Labels{
-		labels.New(labels.Label{Name: types.LabelName, Value: "cpu_used"}),
+		labels.New(labels.Label{Name: gloutonTypes.LabelName, Value: "cpu_used"}),
 	})
 
 	if err := helper.runOnce(t); err != nil {
@@ -78,23 +70,23 @@ func TestSync(t *testing.T) {
 	// Did we store all the metrics ?
 	syncedMetrics := helper.s.option.Cache.Metrics()
 	want := []bleemeoTypes.Metric{
-		testAgentMetric1.metricFromAPI(time.Time{}),
-		testAgentMetric2.metricFromAPI(time.Time{}),
-		testMonitorMetricPrivateProbe.metricFromAPI(time.Time{}),
-		metricPayload{
+		metricFromAPI(testAgentMetric1, time.Time{}),
+		metricFromAPI(testAgentMetric2, time.Time{}),
+		metricFromAPI(testMonitorMetricPrivateProbe, time.Time{}),
+		metricFromAPI(bleemeoapi.MetricPayload{
 			Metric: bleemeoTypes.Metric{
 				ID:      "1",
 				AgentID: testAgent.ID,
 			},
 			Name: "agent_status",
-		}.metricFromAPI(time.Time{}),
-		metricPayload{
+		}, time.Time{}),
+		metricFromAPI(bleemeoapi.MetricPayload{
 			Metric: bleemeoTypes.Metric{
 				ID:      "2",
 				AgentID: testAgent.ID,
 			},
 			Name: "cpu_used",
-		}.metricFromAPI(time.Time{}),
+		}, time.Time{}),
 	}
 
 	optMetricSort := cmpopts.SortSlices(func(x bleemeoTypes.Metric, y bleemeoTypes.Metric) bool { return x.ID < y.ID })
@@ -120,27 +112,24 @@ func TestSyncWithSNMP(t *testing.T) {
 	helper.SNMP = []*snmp.Target{
 		snmp.NewMock(config.SNMPTarget{InitialName: "Z-The-Initial-Name", Target: snmpAddress}, map[string]string{}),
 	}
-	helper.MetricFormat = types.MetricFormatPrometheus
+	helper.MetricFormat = gloutonTypes.MetricFormatPrometheus
 
 	helper.initSynchronizer(t)
 
 	helper.pushPoints(t, []labels.Labels{
-		labels.New(labels.Label{Name: types.LabelName, Value: "cpu_used"}),
+		labels.New(labels.Label{Name: gloutonTypes.LabelName, Value: "cpu_used"}),
 	})
 
 	if err := helper.runOnce(t); err != nil {
 		t.Fatal(err)
 	}
 
-	var agents []payloadAgent
-
-	helper.api.resources[mockAPIResourceAgent].Store(&agents)
-
 	var (
 		idAgentMain string
 		idAgentSNMP string
 	)
 
+	agents := helper.wrapperClientMock.resources.agents.clone()
 	for _, a := range agents {
 		if a.FQDN == testAgentFQDN {
 			idAgentMain = a.ID
@@ -151,11 +140,11 @@ func TestSyncWithSNMP(t *testing.T) {
 		}
 	}
 
-	wantAgents := []payloadAgent{
+	wantAgents := []bleemeoapi.AgentPayload{
 		{
 			Agent: bleemeoTypes.Agent{
 				ID:              idAgentMain,
-				CreatedAt:       helper.api.now.Now(),
+				CreatedAt:       helper.Now(),
 				AccountID:       accountID,
 				CurrentConfigID: newAccountConfig.ID,
 				AgentType:       agentTypeAgent.ID,
@@ -168,7 +157,7 @@ func TestSyncWithSNMP(t *testing.T) {
 		{
 			Agent: bleemeoTypes.Agent{
 				ID:              idAgentSNMP,
-				CreatedAt:       helper.api.now.Now(),
+				CreatedAt:       helper.Now(),
 				AccountID:       accountID,
 				CurrentConfigID: newAccountConfig.ID,
 				AgentType:       agentTypeSNMP.ID,
@@ -180,31 +169,31 @@ func TestSyncWithSNMP(t *testing.T) {
 		},
 	}
 
-	optAgentSort := cmpopts.SortSlices(func(x payloadAgent, y payloadAgent) bool { return x.ID < y.ID })
+	optAgentSort := cmpopts.SortSlices(func(x, y bleemeoapi.AgentPayload) bool { return x.ID < y.ID })
 	if diff := cmp.Diff(wantAgents, agents, cmpopts.EquateEmpty(), optAgentSort); diff != "" {
 		t.Errorf("agents mismatch (-want +got)\n%s", diff)
 	}
 
 	helper.pushPoints(t, []labels.Labels{
-		labels.New(labels.Label{Name: types.LabelName, Value: "cpu_used"}),
+		labels.New(labels.Label{Name: gloutonTypes.LabelName, Value: "cpu_used"}),
 		labels.New(
-			labels.Label{Name: types.LabelName, Value: "ifOutOctets"},
-			labels.Label{Name: types.LabelSNMPTarget, Value: snmpAddress},
-			labels.Label{Name: types.LabelMetaBleemeoTargetAgentUUID, Value: idAgentSNMP},
+			labels.Label{Name: gloutonTypes.LabelName, Value: "ifOutOctets"},
+			labels.Label{Name: gloutonTypes.LabelSNMPTarget, Value: snmpAddress},
+			labels.Label{Name: gloutonTypes.LabelMetaBleemeoTargetAgentUUID, Value: idAgentSNMP},
 		),
 	})
 
-	helper.api.now.Advance(time.Second)
+	helper.AddTime(time.Second)
 
 	if err := helper.runOnce(t); err != nil {
 		t.Fatal(err)
 	}
 
-	var metrics []metricPayload
+	var metrics []bleemeoapi.MetricPayload
 
-	helper.api.resources[mockAPIResourceMetric].Store(&metrics)
+	metrics = helper.wrapperClientMock.resources.metrics.clone()
 
-	wantMetrics := []metricPayload{
+	wantMetrics := []bleemeoapi.MetricPayload{
 		{
 			Metric: bleemeoTypes.Metric{
 				ID:      "1",
@@ -237,25 +226,25 @@ func TestSyncWithSNMP(t *testing.T) {
 		},
 	}
 
-	optMetricSort := cmpopts.SortSlices(func(x metricPayload, y metricPayload) bool { return x.ID < y.ID })
+	optMetricSort := cmpopts.SortSlices(func(x, y bleemeoapi.MetricPayload) bool { return x.ID < y.ID })
 	if diff := cmp.Diff(wantMetrics, metrics, cmpopts.EquateEmpty(), optMetricSort); diff != "" {
 		t.Errorf("metrics mismatch (-want +got)\n%s", diff)
 	}
 
-	helper.api.now.Advance(10 * time.Second)
+	helper.AddTime(10 * time.Second)
 
 	helper.initSynchronizer(t)
 
 	for n := 1; n <= 2; n++ {
 		t.Run(fmt.Sprintf("sub-run-%d", n), func(t *testing.T) {
-			helper.api.now.Advance(time.Second)
+			helper.AddTime(time.Second)
 
 			helper.pushPoints(t, []labels.Labels{
-				labels.New(labels.Label{Name: types.LabelName, Value: "cpu_used"}),
+				labels.New(labels.Label{Name: gloutonTypes.LabelName, Value: "cpu_used"}),
 				labels.New(
-					labels.Label{Name: types.LabelName, Value: "ifOutOctets"},
-					labels.Label{Name: types.LabelSNMPTarget, Value: snmpAddress},
-					labels.Label{Name: types.LabelMetaBleemeoTargetAgentUUID, Value: idAgentSNMP},
+					labels.Label{Name: gloutonTypes.LabelName, Value: "ifOutOctets"},
+					labels.Label{Name: gloutonTypes.LabelSNMPTarget, Value: snmpAddress},
+					labels.Label{Name: gloutonTypes.LabelMetaBleemeoTargetAgentUUID, Value: idAgentSNMP},
 				),
 			})
 
@@ -263,7 +252,7 @@ func TestSyncWithSNMP(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			helper.api.resources[mockAPIResourceMetric].Store(&metrics)
+			metrics = helper.wrapperClientMock.resources.metrics.clone()
 
 			if diff := cmp.Diff(wantMetrics, metrics, cmpopts.EquateEmpty(), optMetricSort); diff != "" {
 				t.Errorf("metrics mismatch (-want +got)\n%s", diff)
@@ -271,7 +260,7 @@ func TestSyncWithSNMP(t *testing.T) {
 		})
 	}
 
-	helper.api.resources[mockAPIResourceMetric].AddStore(metricPayload{
+	helper.wrapperClientMock.resources.metrics.add(bleemeoapi.MetricPayload{
 		Metric: bleemeoTypes.Metric{
 			ID:         "4",
 			AgentID:    idAgentSNMP,
@@ -280,15 +269,15 @@ func TestSyncWithSNMP(t *testing.T) {
 		Name: "ifInOctets",
 	})
 
-	helper.api.now.Advance(2 * time.Hour)
+	helper.AddTime(2 * time.Hour)
 
 	if err := helper.runOnce(t); err != nil {
 		t.Fatal(err)
 	}
 
-	helper.api.resources[mockAPIResourceMetric].Store(&metrics)
+	metrics = helper.wrapperClientMock.resources.metrics.clone()
 
-	wantMetrics = []metricPayload{
+	wantMetrics = []bleemeoapi.MetricPayload{
 		{
 			Metric: bleemeoTypes.Metric{
 				ID:      "1",
@@ -308,7 +297,7 @@ func TestSyncWithSNMP(t *testing.T) {
 					`__name__="cpu_used",instance_uuid="%s"`,
 					idAgentMain,
 				),
-				DeactivatedAt: helper.api.now.Now(),
+				DeactivatedAt: helper.Now(),
 			},
 			Name: "cpu_used",
 		},
@@ -317,7 +306,7 @@ func TestSyncWithSNMP(t *testing.T) {
 				ID:            "3",
 				AgentID:       idAgentSNMP,
 				LabelsText:    fmt.Sprintf(`__name__="ifOutOctets",snmp_target="%s"`, snmpAddress),
-				DeactivatedAt: helper.api.now.Now(),
+				DeactivatedAt: helper.Now(),
 			},
 			Name: "ifOutOctets",
 		},
@@ -326,7 +315,7 @@ func TestSyncWithSNMP(t *testing.T) {
 				ID:            "4",
 				AgentID:       idAgentSNMP,
 				LabelsText:    fmt.Sprintf(`__name__="ifInOctets",snmp_target="%s"`, snmpAddress),
-				DeactivatedAt: helper.api.now.Now(),
+				DeactivatedAt: helper.Now(),
 			},
 			Name: "ifInOctets",
 		},
@@ -349,7 +338,7 @@ func TestSyncWithSNMPDelete(t *testing.T) {
 	helper.SNMP = []*snmp.Target{
 		snmp.NewMock(config.SNMPTarget{InitialName: "Z-The-Initial-Name", Target: snmpAddress}, map[string]string{}),
 	}
-	helper.MetricFormat = types.MetricFormatPrometheus
+	helper.MetricFormat = gloutonTypes.MetricFormatPrometheus
 	helper.NotifyLabelsUpdate = func() {
 		l.Lock()
 		defer l.Unlock()
@@ -360,16 +349,16 @@ func TestSyncWithSNMPDelete(t *testing.T) {
 	helper.initSynchronizer(t)
 
 	helper.pushPoints(t, []labels.Labels{
-		labels.New(labels.Label{Name: types.LabelName, Value: "cpu_used"}),
+		labels.New(labels.Label{Name: gloutonTypes.LabelName, Value: "cpu_used"}),
 	})
 
 	if err := helper.runOnce(t); err != nil {
 		t.Fatal(err)
 	}
 
-	var agents []payloadAgent
+	var agents []bleemeoapi.AgentPayload
 
-	helper.api.resources[mockAPIResourceAgent].Store(&agents)
+	agents = helper.wrapperClientMock.resources.agents.clone()
 
 	var (
 		idAgentMain string
@@ -386,11 +375,11 @@ func TestSyncWithSNMPDelete(t *testing.T) {
 		}
 	}
 
-	wantAgents := []payloadAgent{
+	wantAgents := []bleemeoapi.AgentPayload{
 		{
 			Agent: bleemeoTypes.Agent{
 				ID:              idAgentMain,
-				CreatedAt:       helper.api.now.Now(),
+				CreatedAt:       helper.Now(),
 				AccountID:       accountID,
 				CurrentConfigID: newAccountConfig.ID,
 				AgentType:       agentTypeAgent.ID,
@@ -403,7 +392,7 @@ func TestSyncWithSNMPDelete(t *testing.T) {
 		{
 			Agent: bleemeoTypes.Agent{
 				ID:              idAgentSNMP,
-				CreatedAt:       helper.api.now.Now(),
+				CreatedAt:       helper.Now(),
 				AccountID:       accountID,
 				CurrentConfigID: newAccountConfig.ID,
 				AgentType:       agentTypeSNMP.ID,
@@ -415,31 +404,31 @@ func TestSyncWithSNMPDelete(t *testing.T) {
 		},
 	}
 
-	optAgentSort := cmpopts.SortSlices(func(x payloadAgent, y payloadAgent) bool { return x.ID < y.ID })
+	optAgentSort := cmpopts.SortSlices(func(x, y bleemeoapi.AgentPayload) bool { return x.ID < y.ID })
 	if diff := cmp.Diff(wantAgents, agents, cmpopts.EquateEmpty(), optAgentSort); diff != "" {
 		t.Errorf("agents mismatch (-want +got)\n%s", diff)
 	}
 
 	helper.pushPoints(t, []labels.Labels{
-		labels.New(labels.Label{Name: types.LabelName, Value: "cpu_used"}),
+		labels.New(labels.Label{Name: gloutonTypes.LabelName, Value: "cpu_used"}),
 		labels.New(
-			labels.Label{Name: types.LabelName, Value: "ifOutOctets"},
-			labels.Label{Name: types.LabelSNMPTarget, Value: snmpAddress},
-			labels.Label{Name: types.LabelMetaBleemeoTargetAgentUUID, Value: idAgentSNMP},
+			labels.Label{Name: gloutonTypes.LabelName, Value: "ifOutOctets"},
+			labels.Label{Name: gloutonTypes.LabelSNMPTarget, Value: snmpAddress},
+			labels.Label{Name: gloutonTypes.LabelMetaBleemeoTargetAgentUUID, Value: idAgentSNMP},
 		),
 	})
 
-	helper.api.now.Advance(time.Second)
+	helper.AddTime(time.Second)
 
 	if err := helper.runOnce(t); err != nil {
 		t.Fatal(err)
 	}
 
-	var metrics []metricPayload
+	var metrics []bleemeoapi.MetricPayload
 
-	helper.api.resources[mockAPIResourceMetric].Store(&metrics)
+	metrics = helper.wrapperClientMock.resources.metrics.clone()
 
-	wantMetrics := []metricPayload{
+	wantMetrics := []bleemeoapi.MetricPayload{
 		{
 			Metric: bleemeoTypes.Metric{
 				ID:      "1",
@@ -472,32 +461,32 @@ func TestSyncWithSNMPDelete(t *testing.T) {
 		},
 	}
 
-	optMetricSort := cmpopts.SortSlices(func(x metricPayload, y metricPayload) bool { return x.ID < y.ID })
+	optMetricSort := cmpopts.SortSlices(func(x, y bleemeoapi.MetricPayload) bool { return x.ID < y.ID })
 	if diff := cmp.Diff(wantMetrics, metrics, cmpopts.EquateEmpty(), optMetricSort); diff != "" {
 		t.Errorf("metrics mismatch (-want +got)\n%s", diff)
 	}
 
-	helper.api.now.Advance(10 * time.Second)
+	helper.AddTime(10 * time.Second)
 
 	// Delete the SNMP agent on API.
 	callCountBefore := updateLabelsCallCount
 
-	helper.api.resources[mockAPIResourceAgent].DelStore(idAgentSNMP)
-	helper.api.resources[mockAPIResourceMetric].DelStore("3")
+	helper.wrapperClientMock.resources.agents.dropByID(idAgentSNMP)
+	helper.wrapperClientMock.resources.metrics.dropByID("3")
 
 	helper.initSynchronizer(t)
 
-	helper.api.now.Advance(time.Second)
+	helper.AddTime(time.Second)
 
 	helper.pushPoints(t, []labels.Labels{
-		labels.New(labels.Label{Name: types.LabelName, Value: "cpu_used"}),
+		labels.New(labels.Label{Name: gloutonTypes.LabelName, Value: "cpu_used"}),
 	})
 
 	if err := helper.runOnce(t); err != nil {
 		t.Fatal(err)
 	}
 
-	helper.api.resources[mockAPIResourceAgent].Store(&agents)
+	agents = helper.wrapperClientMock.resources.agents.clone()
 
 	for _, a := range agents {
 		if a.FQDN == snmpAddress {
@@ -505,12 +494,12 @@ func TestSyncWithSNMPDelete(t *testing.T) {
 		}
 	}
 
-	wantAgents = []payloadAgent{
+	wantAgents = []bleemeoapi.AgentPayload{
 		wantAgents[0],
 		{
 			Agent: bleemeoTypes.Agent{
 				ID:              idAgentSNMP,
-				CreatedAt:       helper.api.now.Now(),
+				CreatedAt:       helper.Now(),
 				AccountID:       accountID,
 				CurrentConfigID: newAccountConfig.ID,
 				AgentType:       agentTypeSNMP.ID,
@@ -526,14 +515,14 @@ func TestSyncWithSNMPDelete(t *testing.T) {
 		t.Errorf("agents mismatch (-want +got)\n%s", diff)
 	}
 
-	helper.api.now.Advance(time.Second)
+	helper.AddTime(time.Second)
 
 	helper.pushPoints(t, []labels.Labels{
-		labels.New(labels.Label{Name: types.LabelName, Value: "cpu_used"}),
+		labels.New(labels.Label{Name: gloutonTypes.LabelName, Value: "cpu_used"}),
 		labels.New(
-			labels.Label{Name: types.LabelName, Value: "ifOutOctets"},
-			labels.Label{Name: types.LabelSNMPTarget, Value: snmpAddress},
-			labels.Label{Name: types.LabelMetaBleemeoTargetAgentUUID, Value: idAgentSNMP},
+			labels.Label{Name: gloutonTypes.LabelName, Value: "ifOutOctets"},
+			labels.Label{Name: gloutonTypes.LabelSNMPTarget, Value: snmpAddress},
+			labels.Label{Name: gloutonTypes.LabelMetaBleemeoTargetAgentUUID, Value: idAgentSNMP},
 		),
 	})
 
@@ -541,7 +530,7 @@ func TestSyncWithSNMPDelete(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	wantMetrics[2] = metricPayload{
+	wantMetrics[2] = bleemeoapi.MetricPayload{
 		Metric: bleemeoTypes.Metric{
 			ID:         "4",
 			AgentID:    idAgentSNMP,
@@ -550,7 +539,7 @@ func TestSyncWithSNMPDelete(t *testing.T) {
 		Name: "ifOutOctets",
 	}
 
-	helper.api.resources[mockAPIResourceMetric].Store(&metrics)
+	metrics = helper.wrapperClientMock.resources.metrics.clone()
 
 	if diff := cmp.Diff(wantMetrics, metrics, cmpopts.EquateEmpty(), optMetricSort); diff != "" {
 		t.Errorf("metrics mismatch (-want +got)\n%s", diff)
@@ -580,10 +569,10 @@ func TestContainerSync(t *testing.T) {
 
 	helper.pushPoints(t, []labels.Labels{
 		labels.New(
-			labels.Label{Name: types.LabelName, Value: types.MetricServiceStatus},
-			labels.Label{Name: types.LabelService, Value: "redis"},
-			labels.Label{Name: types.LabelServiceInstance, Value: "my_redis_1"},
-			labels.Label{Name: types.LabelMetaContainerID, Value: containerID},
+			labels.Label{Name: gloutonTypes.LabelName, Value: gloutonTypes.MetricServiceStatus},
+			labels.Label{Name: gloutonTypes.LabelService, Value: "redis"},
+			labels.Label{Name: gloutonTypes.LabelServiceInstance, Value: "my_redis_1"},
+			labels.Label{Name: gloutonTypes.LabelMetaContainerID, Value: containerID},
 		),
 	})
 
@@ -592,11 +581,11 @@ func TestContainerSync(t *testing.T) {
 	}
 
 	// Did we store container & metrics?
-	var containers []containerPayload
+	var containers []bleemeoapi.ContainerPayload
 
-	helper.api.resources[mockAPIResourceContainer].Store(&containers)
+	containers = helper.wrapperClientMock.resources.containers.clone()
 
-	wantContainer := []containerPayload{
+	wantContainer := []bleemeoapi.ContainerPayload{
 		{
 			Container: bleemeoTypes.Container{
 				ID:          "1",
@@ -613,11 +602,11 @@ func TestContainerSync(t *testing.T) {
 		t.Errorf("container mismatch (-want +got)\n%s", diff)
 	}
 
-	var metrics []metricPayload
+	var metrics []bleemeoapi.MetricPayload
 
-	helper.api.resources[mockAPIResourceMetric].Store(&metrics)
+	metrics = helper.wrapperClientMock.resources.metrics.clone()
 
-	wantMetrics := []metricPayload{
+	wantMetrics := []bleemeoapi.MetricPayload{
 		{
 			Metric: bleemeoTypes.Metric{
 				ID:         "1",
@@ -633,17 +622,17 @@ func TestContainerSync(t *testing.T) {
 				LabelsText:  `__name__="service_status",service="redis",service_instance="my_redis_1"`,
 				ContainerID: "1",
 			},
-			Name: types.MetricServiceStatus,
+			Name: gloutonTypes.MetricServiceStatus,
 			Item: "",
 		},
 	}
 
-	optMetricSort := cmpopts.SortSlices(func(x metricPayload, y metricPayload) bool { return x.ID < y.ID })
+	optMetricSort := cmpopts.SortSlices(func(x, y bleemeoapi.MetricPayload) bool { return x.ID < y.ID })
 	if diff := cmp.Diff(wantMetrics, metrics, cmpopts.EquateEmpty(), optMetricSort); diff != "" {
 		t.Errorf("metrics mismatch (-want +got)\n%s", diff)
 	}
 
-	helper.api.now.Advance(time.Minute)
+	helper.AddTime(time.Minute)
 	helper.containers = []facts.Container{}
 	helper.discovery.UpdatedAt = helper.s.now()
 
@@ -651,9 +640,9 @@ func TestContainerSync(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	helper.api.resources[mockAPIResourceContainer].Store(&containers)
+	containers = helper.wrapperClientMock.resources.containers.clone()
 
-	wantContainer = []containerPayload{
+	wantContainer = []bleemeoapi.ContainerPayload{
 		{
 			Container: bleemeoTypes.Container{
 				ID:          "1",
@@ -671,9 +660,9 @@ func TestContainerSync(t *testing.T) {
 		t.Errorf("container mismatch (-want +got)\n%s", diff)
 	}
 
-	helper.api.resources[mockAPIResourceMetric].Store(&metrics)
+	metrics = helper.wrapperClientMock.resources.metrics.clone()
 
-	wantMetrics = []metricPayload{
+	wantMetrics = []bleemeoapi.MetricPayload{
 		{
 			Metric: bleemeoTypes.Metric{
 				ID:         "1",
@@ -690,7 +679,7 @@ func TestContainerSync(t *testing.T) {
 				ContainerID:   "1",
 				DeactivatedAt: helper.s.now(),
 			},
-			Name: types.MetricServiceStatus,
+			Name: gloutonTypes.MetricServiceStatus,
 			Item: "",
 		},
 	}
@@ -699,7 +688,7 @@ func TestContainerSync(t *testing.T) {
 		t.Errorf("metrics mismatch (-want +got)\n%s", diff)
 	}
 
-	helper.api.now.Advance(2 * time.Hour)
+	helper.AddTime(2 * time.Hour)
 	helper.containers = []facts.Container{
 		facts.FakeContainer{
 			FakeContainerName: "my_redis_1",
@@ -711,10 +700,10 @@ func TestContainerSync(t *testing.T) {
 
 	helper.pushPoints(t, []labels.Labels{
 		labels.New(
-			labels.Label{Name: types.LabelName, Value: types.MetricServiceStatus},
-			labels.Label{Name: types.LabelService, Value: "redis"},
-			labels.Label{Name: types.LabelServiceInstance, Value: "my_redis_1"},
-			labels.Label{Name: types.LabelMetaContainerID, Value: containerID2},
+			labels.Label{Name: gloutonTypes.LabelName, Value: gloutonTypes.MetricServiceStatus},
+			labels.Label{Name: gloutonTypes.LabelService, Value: "redis"},
+			labels.Label{Name: gloutonTypes.LabelServiceInstance, Value: "my_redis_1"},
+			labels.Label{Name: gloutonTypes.LabelMetaContainerID, Value: containerID2},
 		),
 	})
 
@@ -722,9 +711,9 @@ func TestContainerSync(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	helper.api.resources[mockAPIResourceContainer].Store(&containers)
+	containers = helper.wrapperClientMock.resources.containers.clone()
 
-	wantContainer = []containerPayload{
+	wantContainer = []bleemeoapi.ContainerPayload{
 		{
 			Container: bleemeoTypes.Container{
 				ID:          "1",
@@ -741,9 +730,9 @@ func TestContainerSync(t *testing.T) {
 		t.Errorf("container mismatch (-want +got)\n%s", diff)
 	}
 
-	helper.api.resources[mockAPIResourceMetric].Store(&metrics)
+	metrics = helper.wrapperClientMock.resources.metrics.clone()
 
-	wantMetrics = []metricPayload{
+	wantMetrics = []bleemeoapi.MetricPayload{
 		{
 			Metric: bleemeoTypes.Metric{
 				ID:         "1",
@@ -759,7 +748,7 @@ func TestContainerSync(t *testing.T) {
 				LabelsText:  `__name__="service_status",service="redis",service_instance="my_redis_1"`,
 				ContainerID: "1",
 			},
-			Name: types.MetricServiceStatus,
+			Name: gloutonTypes.MetricServiceStatus,
 			Item: "",
 		},
 	}
@@ -834,22 +823,19 @@ func TestSyncServerGroup(t *testing.T) {
 			helper.initSynchronizer(t)
 
 			helper.pushPoints(t, []labels.Labels{
-				labels.New(labels.Label{Name: types.LabelName, Value: "cpu_used"}),
+				labels.New(labels.Label{Name: gloutonTypes.LabelName, Value: "cpu_used"}),
 			})
 
 			if err := helper.runOnce(t); err != nil {
 				t.Fatal(err)
 			}
 
-			var agents []payloadAgent
-
-			helper.api.resources[mockAPIResourceAgent].Store(&agents)
-
 			var (
 				idAgentMain string
 				idAgentSNMP string
 			)
 
+			agents := helper.wrapperClientMock.resources.agents.clone()
 			for _, a := range agents {
 				if a.FQDN == testAgentFQDN {
 					idAgentMain = a.ID
@@ -860,11 +846,11 @@ func TestSyncServerGroup(t *testing.T) {
 				}
 			}
 
-			wantAgents := []payloadAgent{
+			wantAgents := []bleemeoapi.AgentPayload{
 				{
 					Agent: bleemeoTypes.Agent{
 						ID:              idAgentMain,
-						CreatedAt:       helper.api.now.Now(),
+						CreatedAt:       helper.Now(),
 						AccountID:       accountID,
 						CurrentConfigID: newAccountConfig.ID,
 						AgentType:       agentTypeAgent.ID,
@@ -878,7 +864,7 @@ func TestSyncServerGroup(t *testing.T) {
 				{
 					Agent: bleemeoTypes.Agent{
 						ID:              idAgentSNMP,
-						CreatedAt:       helper.api.now.Now(),
+						CreatedAt:       helper.Now(),
 						AccountID:       accountID,
 						CurrentConfigID: newAccountConfig.ID,
 						AgentType:       agentTypeSNMP.ID,
@@ -891,7 +877,7 @@ func TestSyncServerGroup(t *testing.T) {
 				},
 			}
 
-			optAgentSort := cmpopts.SortSlices(func(x payloadAgent, y payloadAgent) bool { return x.ID < y.ID })
+			optAgentSort := cmpopts.SortSlices(func(x, y bleemeoapi.AgentPayload) bool { return x.ID < y.ID })
 			if diff := cmp.Diff(wantAgents, agents, cmpopts.EquateEmpty(), optAgentSort); diff != "" {
 				t.Errorf("agents mismatch (-want +got)\n%s", diff)
 			}
@@ -1118,28 +1104,28 @@ func TestBleemeoPlan(t *testing.T) { //nolint:maintidx
 			}
 
 			helper.pushPoints(t, []labels.Labels{
-				labels.New(labels.Label{Name: types.LabelName, Value: "cpu_used"}),
-				labels.New(labels.Label{Name: types.LabelName, Value: "custom_metric"}),
+				labels.New(labels.Label{Name: gloutonTypes.LabelName, Value: "cpu_used"}),
+				labels.New(labels.Label{Name: gloutonTypes.LabelName, Value: "custom_metric"}),
 				model.AnnotationToMetaLabels(labels.FromMap(srvRedis1.LabelsOfStatus()), srvRedis1.AnnotationsOfStatus()),
 				labels.New(
-					labels.Label{Name: types.LabelName, Value: "probe_success"},
-					labels.Label{Name: types.LabelScraperUUID, Value: idAgentMain},
-					labels.Label{Name: types.LabelInstance, Value: newMonitor.URL},
-					labels.Label{Name: types.LabelInstanceUUID, Value: newMonitor.AgentID},
-					labels.Label{Name: types.LabelMetaBleemeoTargetAgentUUID, Value: newMonitor.AgentID},
+					labels.Label{Name: gloutonTypes.LabelName, Value: "probe_success"},
+					labels.Label{Name: gloutonTypes.LabelScraperUUID, Value: idAgentMain},
+					labels.Label{Name: gloutonTypes.LabelInstance, Value: newMonitor.URL},
+					labels.Label{Name: gloutonTypes.LabelInstanceUUID, Value: newMonitor.AgentID},
+					labels.Label{Name: gloutonTypes.LabelMetaBleemeoTargetAgentUUID, Value: newMonitor.AgentID},
 				),
 				labels.New(
-					labels.Label{Name: types.LabelName, Value: "ifOutOctets"},
-					labels.Label{Name: types.LabelSNMPTarget, Value: snmpAddress},
-					labels.Label{Name: types.LabelMetaBleemeoTargetAgentUUID, Value: idAgentSNMP},
+					labels.Label{Name: gloutonTypes.LabelName, Value: "ifOutOctets"},
+					labels.Label{Name: gloutonTypes.LabelSNMPTarget, Value: snmpAddress},
+					labels.Label{Name: gloutonTypes.LabelMetaBleemeoTargetAgentUUID, Value: idAgentSNMP},
 				),
 				labels.New(
-					labels.Label{Name: types.LabelName, Value: "redis_commands"},
-					labels.Label{Name: types.LabelMetaServiceName, Value: "redis"},
-					labels.Label{Name: types.LabelMetaServiceInstance, Value: "short-redis-container-name"},
-					labels.Label{Name: types.LabelMetaContainerID, Value: "1234"},
-					labels.Label{Name: types.LabelMetaBleemeoItem, Value: "short-redis-container-name"},
-					labels.Label{Name: types.LabelItem, Value: "short-redis-container-name"},
+					labels.Label{Name: gloutonTypes.LabelName, Value: "redis_commands"},
+					labels.Label{Name: gloutonTypes.LabelMetaServiceName, Value: "redis"},
+					labels.Label{Name: gloutonTypes.LabelMetaServiceInstance, Value: "short-redis-container-name"},
+					labels.Label{Name: gloutonTypes.LabelMetaContainerID, Value: "1234"},
+					labels.Label{Name: gloutonTypes.LabelMetaBleemeoItem, Value: "short-redis-container-name"},
+					labels.Label{Name: gloutonTypes.LabelItem, Value: "short-redis-container-name"},
 				),
 			})
 
@@ -1147,7 +1133,7 @@ func TestBleemeoPlan(t *testing.T) { //nolint:maintidx
 				t.Error(err)
 			}
 
-			wantAgents := []payloadAgent{
+			wantAgents := []bleemeoapi.AgentPayload{
 				{
 					Agent: bleemeoTypes.Agent{
 						ID:              idAgentMain,
@@ -1164,7 +1150,7 @@ func TestBleemeoPlan(t *testing.T) { //nolint:maintidx
 			}
 
 			if tt.wantSNMP {
-				wantAgents = append(wantAgents, payloadAgent{
+				wantAgents = append(wantAgents, bleemeoapi.AgentPayload{
 					Agent: bleemeoTypes.Agent{
 						ID:              idAny,
 						CreatedAt:       helper.Now(),
@@ -1182,7 +1168,6 @@ func TestBleemeoPlan(t *testing.T) { //nolint:maintidx
 			helper.assertAgentsInAPI(t, wantAgents)
 
 			helper.assertServicesInAPI(t, []bleemeoapi.ServicePayload{
-				monitor,
 				{
 					Account: accountID,
 					Monitor: bleemeoTypes.Monitor{
@@ -1197,7 +1182,12 @@ func TestBleemeoPlan(t *testing.T) { //nolint:maintidx
 				},
 			})
 
-			wantMetrics := []metricPayload{
+			optSort := cmpopts.SortSlices(func(x bleemeoapi.ServicePayload, y bleemeoapi.ServicePayload) bool { return x.ID < y.ID })
+			if diff := cmp.Diff([]bleemeoTypes.Monitor{monitor.Monitor}, helper.wrapperClientMock.resources.monitors.clone(), optSort); diff != "" {
+				t.Errorf("monitors mismatch (-want +got)\n%s", diff)
+			}
+
+			wantMetrics := []bleemeoapi.MetricPayload{
 				{
 					Metric: bleemeoTypes.Metric{
 						ID:      idAny,
@@ -1228,7 +1218,7 @@ func TestBleemeoPlan(t *testing.T) { //nolint:maintidx
 				},
 			}
 
-			redisMetric := metricPayload{
+			redisMetric := bleemeoapi.MetricPayload{
 				Metric: bleemeoTypes.Metric{
 					ID:          idAny,
 					AgentID:     idAgentMain,
@@ -1247,7 +1237,7 @@ func TestBleemeoPlan(t *testing.T) { //nolint:maintidx
 			wantMetrics = append(wantMetrics, redisMetric)
 
 			if tt.wantContainerMetric {
-				wantMetrics = append(wantMetrics, metricPayload{
+				wantMetrics = append(wantMetrics, bleemeoapi.MetricPayload{
 					Metric: bleemeoTypes.Metric{
 						ID:          idAny,
 						AgentID:     idAgentMain,
@@ -1260,7 +1250,7 @@ func TestBleemeoPlan(t *testing.T) { //nolint:maintidx
 			}
 
 			if tt.wantCustomMetric {
-				wantMetrics = append(wantMetrics, metricPayload{
+				wantMetrics = append(wantMetrics, bleemeoapi.MetricPayload{
 					Metric: bleemeoTypes.Metric{
 						ID:      idAny,
 						AgentID: idAgentMain,
@@ -1270,7 +1260,7 @@ func TestBleemeoPlan(t *testing.T) { //nolint:maintidx
 			}
 
 			if tt.wantSNMP {
-				wantMetrics = append(wantMetrics, metricPayload{
+				wantMetrics = append(wantMetrics, bleemeoapi.MetricPayload{
 					Metric: bleemeoTypes.Metric{
 						ID:         idAny,
 						AgentID:    idAgentSNMP,

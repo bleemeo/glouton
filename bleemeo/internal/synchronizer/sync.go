@@ -31,9 +31,10 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
-	"github.com/bleemeo/glouton/bleemeo/client"
+	"github.com/bleemeo/bleemeo-go"
 	"github.com/bleemeo/glouton/bleemeo/internal/common"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/syncapplications"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/syncservices"
@@ -68,8 +69,8 @@ type Synchronizer struct {
 	state         *synchronizerState
 	hasFeature    map[types.APIFeature]bool
 
-	realClient       *client.HTTPClient
-	diagnosticClient *http.Client
+	requestCounter atomic.Uint32
+	realClient     *bleemeo.Client
 
 	// These fields should always be set in the reload state after being modified.
 	nextFullSync  time.Time
@@ -113,22 +114,19 @@ type thresholdOverrideKey struct {
 }
 
 // New return a new Synchronizer.
-func New(option types.Option) (*Synchronizer, error) {
+func New(option types.Option) *Synchronizer {
 	return newWithNow(option, time.Now)
 }
 
-func newForTest(option types.Option, now func() time.Time) (*Synchronizer, error) {
-	s, err := newWithNow(option, now)
-	if err != nil {
-		return s, err
-	}
+func newForTest(option types.Option, now func() time.Time) *Synchronizer {
+	s := newWithNow(option, now)
 
 	s.inTest = true
 
-	return s, nil
+	return s
 }
 
-func newWithNow(option types.Option, now func() time.Time) (*Synchronizer, error) {
+func newWithNow(option types.Option, now func() time.Time) *Synchronizer {
 	nextFullSync := now()
 	fullSyncCount := 0
 
@@ -173,7 +171,19 @@ func newWithNow(option types.Option, now func() time.Time) (*Synchronizer, error
 		s.agentID, _ = s.option.State.BleemeoCredentials()
 	}
 
-	return s, nil
+	return s
+}
+
+func (s *Synchronizer) newClient() types.Client {
+	if s.option.ProvideClient != nil {
+		// Allows tests to inject mock clients
+		return s.option.ProvideClient()
+	}
+
+	return &wrapperClient{
+		client:           s.realClient,
+		checkDuplicateFn: s.checkDuplicated,
+	}
 }
 
 func (s *Synchronizer) DiagnosticArchive(_ context.Context, archive gloutonTypes.ArchiveWriter) error {
@@ -266,7 +276,11 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 		firstSync = false
 	}
 
-	if err := s.setClient(); err != nil {
+	s.l.Lock()
+	err := s.setClient()
+	s.l.Unlock()
+
+	if err != nil {
 		return fmt.Errorf("unable to create Bleemeo HTTP client. Is the API base URL correct ? (error is %w)", err)
 	}
 
@@ -280,7 +294,7 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 	// we want it to perform registration and creation of agent_status in order to mark this agent as "bad time" on Bleemeo.
 	exec := s.newLimitedExecution(false, nil)
 
-	_, err := s.syncInfoReal(ctx, exec, !firstSync)
+	_, err = s.syncInfoReal(ctx, exec, !firstSync)
 	if err != nil {
 		logger.V(1).Printf("bleemeo: pre-run checks: couldn't sync the global config: %v", err)
 	}
@@ -323,19 +337,19 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 			s.successiveErrors++
 			s.l.Unlock()
 
-			if client.IsAuthError(err) {
+			if IsAuthError(err) {
 				successiveAuthErrors++
 			}
 
 			switch {
-			case client.IsAuthError(err) && successiveAuthErrors >= 3:
+			case IsAuthError(err) && successiveAuthErrors >= 3:
 				delay := delay.JitterDelay(
 					delay.Exponential(60*time.Second, 1.55, successiveAuthErrors, 6*time.Hour),
 					0.1,
 				)
 				s.option.DisableCallback(bleemeoTypes.DisableAuthenticationError, s.now().Add(delay))
-			case client.IsThrottleError(err):
-				deadline := s.realClient.ThrottleDeadline().Add(delay.JitterDelay(15*time.Second, 0.3))
+			case IsThrottleError(err):
+				deadline := exec.client.ThrottleDeadline().Add(delay.JitterDelay(15*time.Second, 0.3))
 				s.Disable(deadline, bleemeoTypes.DisableTooManyRequests)
 			default:
 				delay := delay.JitterDelay(
@@ -344,14 +358,14 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 				)
 				s.Disable(s.now().Add(delay), bleemeoTypes.DisableTooManyErrors)
 
-				if client.IsAuthError(err) && successiveAuthErrors == 1 {
+				if IsAuthError(err) && successiveAuthErrors == 1 {
 					// we disable only to trigger a reconnection on MQTT
 					s.option.DisableCallback(bleemeoTypes.DisableAuthenticationError, s.now().Add(10*time.Second))
 				}
 			}
 
 			switch {
-			case client.IsAuthError(err) && s.agentID != "":
+			case IsAuthError(err) && s.agentID != "":
 				fqdnMessage := ""
 
 				fqdn := s.option.Cache.FactsByKey()[s.agentID]["fqdn"].Value
@@ -364,7 +378,7 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 					s.agentID,
 					fqdnMessage,
 				)
-			case client.IsAuthError(err):
+			case IsAuthError(err):
 				registrationKey := []rune(s.option.Config.Bleemeo.RegistrationKey)
 				for i := range registrationKey {
 					if i >= 6 && i < len(registrationKey)-4 {
@@ -442,16 +456,20 @@ func (s *Synchronizer) DiagnosticPage() string {
 		port = 443
 	}
 
+	var apiClient *bleemeo.Client
+
 	s.l.Lock()
 
-	if s.diagnosticClient == nil {
-		s.diagnosticClient = &http.Client{
-			Transport: gloutonTypes.NewHTTPTransport(tlsConfig),
-			CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
-				return http.ErrUseLastResponse
-			},
+	if s.realClient == nil {
+		err = s.setClient()
+		if err != nil {
+			fmt.Fprintf(builder, "Can't initialize the API client: %v\n", err)
+
+			return builder.String()
 		}
 	}
+
+	apiClient = s.realClient
 
 	s.l.Unlock()
 
@@ -478,7 +496,7 @@ func (s *Synchronizer) DiagnosticPage() string {
 	go func() {
 		defer crashreport.ProcessPanic()
 
-		httpMessage <- common.DiagnosticHTTP(s.diagnosticClient, u.String())
+		httpMessage <- common.DiagnosticHTTP(apiClient)
 	}()
 
 	builder.WriteString(<-tcpMessage)
@@ -497,12 +515,7 @@ func (s *Synchronizer) DiagnosticPage() string {
 	}
 	s.l.Unlock()
 
-	var count int
-
-	if s.realClient != nil {
-		count = s.realClient.RequestsCount()
-	}
-
+	count := s.requestCounter.Load()
 	builder.WriteString(fmt.Sprintf(
 		"Did %d requests since start time at %s (%v ago). Avg of %.2f request/minute\n",
 		count,
@@ -598,7 +611,7 @@ func (s *Synchronizer) UpdateMaintenance() {
 func (s *Synchronizer) SetMaintenance(ctx context.Context, maintenance bool) {
 	if s.IsMaintenance() && !maintenance {
 		// getting out of maintenance, let's check for a duplicated state.json file
-		err := s.checkDuplicated(ctx, s.realClient)
+		err := s.checkDuplicated(ctx, s.newClient())
 		if err != nil {
 			// it's not a critical error at all, we will perform this check again on the next synchronization pass
 			logger.V(2).Printf("Couldn't check for duplicated agent: %v", err)
@@ -806,21 +819,72 @@ func (s *Synchronizer) ClearDisable(reasonToClear bleemeoTypes.DisableReason, de
 	}
 }
 
-// GetToken to talk to the Bleemeo API.
-func (s *Synchronizer) GetToken(ctx context.Context) (string, error) {
-	return s.realClient.VerifyAndGetToken(ctx, s.agentID)
+// VerifyAndGetToken is used to get a valid token.
+// Should only be called after the synchronized had called SetInitialized and AgentID is filled in State.
+func (s *Synchronizer) VerifyAndGetToken(ctx context.Context) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	// Low-cost API endpoint, used to test the validity of our token.
+	// We rely on the client to renew the token if it has expired.
+	result, err := s.realClient.Get(ctx, bleemeo.ResourceAgent, s.agentID, "id")
+	if err != nil {
+		return "", err
+	}
+
+	var res struct {
+		ID string `json:"id"`
+	}
+
+	err = json.Unmarshal(result, &res)
+	if err != nil {
+		return "", err
+	}
+
+	if res.ID != s.agentID {
+		return "", errInvalidAgentID
+	}
+
+	token, err := s.realClient.GetToken(ctx)
+	if err != nil {
+		return "", err
+	}
+
+	return token.AccessToken, nil
 }
 
 func (s *Synchronizer) setClient() error {
 	username := s.agentID + "@bleemeo.com"
 	_, password := s.option.State.BleemeoCredentials()
 
-	client, err := client.NewClient(
-		s.option.Config.Bleemeo.APIBase,
-		username,
-		password,
-		s.option.Config.Bleemeo.APISSLInsecure,
-		s.option.ReloadState,
+	var initialRefreshTokenOpt, newOAuthTokenCallbackOpt bleemeo.ClientOption
+
+	if s.option.ReloadState != nil {
+		if tk := s.option.ReloadState.Token(); tk.Valid() && tk.RefreshToken != "" {
+			initialRefreshTokenOpt = bleemeo.WithInitialOAuthRefreshToken(tk.RefreshToken)
+		}
+
+		newOAuthTokenCallbackOpt = bleemeo.WithNewOAuthTokenCallback(s.option.ReloadState.SetToken)
+	}
+
+	tlsConfig := &tls.Config{
+		InsecureSkipVerify: s.option.Config.Bleemeo.APISSLInsecure, //nolint:gosec
+	}
+	transportOpts := &gloutonTypes.CustomTransportOptions{
+		UserAgentHeader: version.UserAgent(),
+		RequestCounter:  &s.requestCounter,
+	}
+	cl := &http.Client{
+		Transport: gloutonTypes.NewHTTPTransport(tlsConfig, transportOpts),
+	}
+
+	client, err := bleemeo.NewClient(
+		bleemeo.WithCredentials(username, password),
+		bleemeo.WithOAuthClient(gloutonOAuthClientID, ""),
+		bleemeo.WithEndpoint(s.option.Config.Bleemeo.APIBase),
+		initialRefreshTokenOpt,
+		bleemeo.WithHTTPClient(cl),
+		newOAuthTokenCallbackOpt,
 	)
 	if err != nil {
 		return err
@@ -832,25 +896,25 @@ func (s *Synchronizer) setClient() error {
 }
 
 // HealthCheck perform some health check and log any issue found.
-// This method could panic when health condition are bad for too long in order to cause a Glouton restart.
+// This method could panic when health conditions are bad for too long, in order to cause a Glouton restart.
 func (s *Synchronizer) HealthCheck() bool {
 	s.l.Lock()
 	defer s.l.Unlock()
 
-	syncHearthbeat := s.syncHeartbeat
-	if syncHearthbeat.IsZero() {
-		syncHearthbeat = s.startedAt
+	syncHeartbeat := s.syncHeartbeat
+	if syncHeartbeat.IsZero() {
+		syncHeartbeat = s.startedAt
 	}
 
 	if s.now().Before(s.disabledUntil) {
-		// synchronization is still disabled, don't check syncHearthbeat
+		// synchronization is still disabled, don't check syncHeartbeat
 		return true
 	}
 
-	if s.now().Sub(syncHearthbeat) > time.Hour {
-		logger.Printf("Bleemeo API communication didn't run since %s. This should be a Glouton bug", syncHearthbeat.Format(time.RFC3339))
+	if s.now().Sub(syncHeartbeat) > time.Hour {
+		logger.Printf("Bleemeo API communication didn't run since %s. This should be a Glouton bug", syncHeartbeat.Format(time.RFC3339))
 
-		if s.now().Sub(syncHearthbeat) > 6*time.Hour {
+		if s.now().Sub(syncHeartbeat) > 6*time.Hour {
 			s.heartbeatConsecutiveError++
 
 			if s.heartbeatConsecutiveError >= 3 {
@@ -933,7 +997,7 @@ func (s *Synchronizer) runOnce(ctx context.Context, onlyEssential bool) (*Execut
 }
 
 // checkDuplicated checks if another glouton is running with the same ID.
-func (s *Synchronizer) checkDuplicated(ctx context.Context, client types.RawClient) error {
+func (s *Synchronizer) checkDuplicated(ctx context.Context, client types.Client) error {
 	oldFacts := s.option.Cache.FactsByKey()
 
 	if err := s.factsUpdateList(ctx, client); err != nil {
@@ -961,15 +1025,7 @@ func (s *Synchronizer) checkDuplicated(ctx context.Context, client types.RawClie
 	}
 
 	// The agent is duplicated, update the last duplication date on the API.
-	params := map[string]string{
-		"fields": "last_duplication_date",
-	}
-
-	data := map[string]time.Time{
-		"last_duplication_date": time.Now(),
-	}
-
-	_, err := client.Do(ctx, "PATCH", fmt.Sprintf("v1/agent/%s/", s.agentID), params, data, nil)
+	err := client.UpdateAgentLastDuplicationDate(ctx, s.agentID, s.now())
 	if err != nil {
 		logger.V(1).Printf("Failed to update duplication date: %s", err)
 	}
@@ -1055,55 +1111,36 @@ func (s *Synchronizer) register(ctx context.Context) error {
 		return err
 	}
 
-	var objectID struct {
-		ID string
-	}
 	// We save an empty agent_uuid before doing the API POST to validate that
 	// State can save value.
 	if err := s.option.State.SetBleemeoCredentials("", ""); err != nil {
 		return err
 	}
 
-	statusCode, err := s.realClient.PostAuth(
-		ctx,
-		"v1/agent/",
-		map[string]string{
-			"account":                   accountID,
-			"initial_password":          password,
-			"initial_server_group_name": s.option.Config.Bleemeo.InitialServerGroupName,
-			"display_name":              name,
-			"fqdn":                      fqdn,
-		},
-		accountID+"@bleemeo.com",
-		registrationKey,
-		&objectID,
-	)
+	agentID, err := s.newClient().RegisterSelf(ctx, accountID, password, s.option.Config.Bleemeo.InitialServerGroupName, name, fqdn, registrationKey)
 	if err != nil {
 		return err
 	}
 
-	if statusCode != 201 {
-		return fmt.Errorf("%w: got %v, want 201", errIncorrectStatusCode, statusCode)
-	}
-
-	s.agentID = objectID.ID
+	s.agentID = agentID
 
 	sentry.ConfigureScope(func(scope *sentry.Scope) {
-		scope.SetContext("agent", map[string]interface{}{
+		scope.SetContext("agent", map[string]any{
 			"agent_id":        s.agentID,
 			"glouton_version": version.Version,
 		})
 	})
 
-	if err := s.option.State.SetBleemeoCredentials(objectID.ID, password); err != nil {
+	if err := s.option.State.SetBleemeoCredentials(agentID, password); err != nil {
 		logger.Printf("Failed to persist Bleemeo credentials. The agent may register itself multiple-time: %v", err)
 	}
 
-	logger.V(1).Printf("Registration successful with UUID %v", objectID.ID)
+	logger.V(1).Printf("Registration successful with UUID %v", agentID)
 
-	_ = s.setClient()
+	s.l.Lock()
+	defer s.l.Unlock()
 
-	return nil
+	return s.setClient()
 }
 
 func generatePassword(length int) (string, error) {

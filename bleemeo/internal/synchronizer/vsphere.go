@@ -19,11 +19,11 @@ package synchronizer
 import (
 	"context"
 	"errors"
-	"fmt"
 	"slices"
 	"time"
 
-	"github.com/bleemeo/glouton/bleemeo/client"
+	"github.com/bleemeo/bleemeo-go"
+	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/bleemeoapi"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/inputs/vsphere"
@@ -36,6 +36,7 @@ const (
 	tooManyConsecutiveError       = 3
 	vSphereAgentsPurgeMinInterval = 2 * time.Minute
 	vSphereCachePrefix            = "bleemeo:vsphere:"
+	vSphereAgentFields            = "id,display_name,account,agent_type,abstracted,fqdn,initial_password,created_at,next_config_at,current_config,tags,initial_server_group_name"
 )
 
 func (s *Synchronizer) syncVSphere(ctx context.Context, syncType types.SyncType, execution types.SynchronizationExecution) (updateThresholds bool, err error) {
@@ -55,7 +56,7 @@ func (s *Synchronizer) syncVSphere(ctx context.Context, syncType types.SyncType,
 }
 
 // When modifying this type, ensure to keep the compatibility with the code of
-// vSphere.statusesWhenNoDevices(), in inputs/vsphere/vsphere.go.
+// vSphere.statusesWhenNoDevices(), in inputs/vsphere/vsphere.go. // TODO: is comment still relevant ?
 type vSphereAssociation struct {
 	MOID   string
 	Source string
@@ -117,7 +118,7 @@ func (s *Synchronizer) FindVSphereAgent(ctx context.Context, device bleemeoTypes
 	return bleemeoTypes.Agent{}, errNotExist
 }
 
-func (s *Synchronizer) VSphereRegisterAndUpdate(ctx context.Context, apiClient types.RawClient, localDevices []bleemeoTypes.VSphereDevice) error {
+func (s *Synchronizer) VSphereRegisterAndUpdate(ctx context.Context, apiClient types.VSphereClient, localDevices []bleemeoTypes.VSphereDevice) error {
 	vSphereAgentTypes, found := s.GetVSphereAgentTypes()
 	if !found {
 		return errRetryLater
@@ -125,9 +126,6 @@ func (s *Synchronizer) VSphereRegisterAndUpdate(ctx context.Context, apiClient t
 
 	remoteAgentList := s.option.Cache.AgentsByUUID()
 
-	params := map[string]string{
-		"fields": "id,display_name,account,agent_type,abstracted,fqdn,initial_password,created_at,next_config_at,current_config,tags,initial_server_group_name",
-	}
 	seenDeviceAgents := make(map[string]string, len(localDevices))
 
 	var ( //nolint: prealloc
@@ -158,7 +156,7 @@ func (s *Synchronizer) VSphereRegisterAndUpdate(ctx context.Context, apiClient t
 			serverGroup = s.option.Config.Bleemeo.InitialServerGroupName
 		}
 
-		payload := payloadAgent{
+		payload := bleemeoapi.AgentPayload{
 			Agent: bleemeoTypes.Agent{
 				FQDN:        device.FQDN(),
 				DisplayName: device.Name(),
@@ -170,7 +168,7 @@ func (s *Synchronizer) VSphereRegisterAndUpdate(ctx context.Context, apiClient t
 			InitialServerGroup: serverGroup,
 		}
 
-		registeredAgent, err := s.remoteRegisterVSphereDevice(ctx, apiClient, params, payload)
+		registeredAgent, err := s.remoteRegisterVSphereDevice(ctx, apiClient, payload)
 		if err != nil {
 			errs = append(errs, err)
 
@@ -218,10 +216,8 @@ func (s *Synchronizer) VSphereRegisterAndUpdate(ctx context.Context, apiClient t
 	return errors.Join(errs...)
 }
 
-func (s *Synchronizer) remoteRegisterVSphereDevice(ctx context.Context, apiClient types.RawClient, params map[string]string, payload payloadAgent) (bleemeoTypes.Agent, error) {
-	var result bleemeoTypes.Agent
-
-	_, err := apiClient.Do(ctx, "POST", "v1/agent/", params, payload, &result)
+func (s *Synchronizer) remoteRegisterVSphereDevice(ctx context.Context, apiClient types.VSphereClient, payload bleemeoapi.AgentPayload) (bleemeoTypes.Agent, error) {
+	result, err := apiClient.RegisterVSphereAgent(ctx, payload)
 	if err != nil {
 		return result, err
 	}
@@ -240,11 +236,11 @@ func (s *Synchronizer) GetVSphereAgentTypes() (map[vsphere.ResourceKind]string, 
 
 	for i := 0; i < len(agentTypes) && len(vSphereAgentTypes) < vSphereAgentTypesCount; i++ {
 		switch a := agentTypes[i]; {
-		case a.Name == bleemeoTypes.AgentTypeVSphereCluster:
+		case a.Name == bleemeo.AgentType_vSphereCluster:
 			vSphereAgentTypes[vsphere.KindCluster] = a.ID
-		case a.Name == bleemeoTypes.AgentTypeVSphereHost:
+		case a.Name == bleemeo.AgentType_vSphereHost:
 			vSphereAgentTypes[vsphere.KindHost] = a.ID
-		case a.Name == bleemeoTypes.AgentTypeVSphereVM:
+		case a.Name == bleemeo.AgentType_vSphereVM:
 			vSphereAgentTypes[vsphere.KindVM] = a.ID
 		}
 	}
@@ -263,7 +259,7 @@ func (s *Synchronizer) GetVSphereAgentType(kind vsphere.ResourceKind) (agentType
 	return agentTypeID, found
 }
 
-func (s *Synchronizer) purgeVSphereAgents(ctx context.Context, apiClient types.RawClient, remoteAgents map[string]bleemeoTypes.Agent, seenDeviceAgents map[string]string, vSphereAgentTypes map[string]bool) error {
+func (s *Synchronizer) purgeVSphereAgents(ctx context.Context, apiClient types.VSphereClient, remoteAgents map[string]bleemeoTypes.Agent, seenDeviceAgents map[string]string, vSphereAgentTypes map[string]bool) error {
 	associations, err := s.option.State.GetByPrefix(vSphereCachePrefix, vSphereAssociation{})
 	if err != nil {
 		return err
@@ -309,7 +305,7 @@ func (s *Synchronizer) purgeVSphereAgents(ctx context.Context, apiClient types.R
 		} else { //nolint: gocritic
 			// When endpoints are failing, we can't tell which unassociated agents belong to them.
 			// So, we wait to be able to list the devices of all endpoints
-			// to be sure we know which devices have been deleted and which have not.
+			// to be sure we know which devices have been deleted and which haven't.
 			if len(failingEndpoints) != 0 {
 				continue
 			}
@@ -319,8 +315,8 @@ func (s *Synchronizer) purgeVSphereAgents(ctx context.Context, apiClient types.R
 
 		agentsToRemoveFromCache[id] = true
 
-		_, err := apiClient.Do(ctx, "DELETE", fmt.Sprintf("v1/agent/%s/", id), nil, nil, nil)
-		if err != nil && !client.IsNotFound(err) {
+		err = apiClient.DeleteAgent(ctx, id)
+		if err != nil && !IsNotFound(err) {
 			return err
 		}
 	}

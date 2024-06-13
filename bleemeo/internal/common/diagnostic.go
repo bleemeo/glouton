@@ -27,8 +27,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/bleemeo/bleemeo-go"
 	"github.com/bleemeo/glouton/crashreport"
-	"github.com/bleemeo/glouton/version"
 )
 
 var errHandshakeTimeout = errors.New("TLS handshake timeout")
@@ -117,28 +117,25 @@ func diagnosticTLS(builder io.Writer, tlsConfig *tls.Config, host string, hostPo
 	}
 }
 
-// DiagnosticHTTP return information about the ability to do a HTTP request.
-func DiagnosticHTTP(cl *http.Client, u string) string {
-	req, err := http.NewRequest(http.MethodGet, u, nil)
+// DiagnosticHTTP return information about the ability to execute an HTTP request against the Bleemeo API.
+func DiagnosticHTTP(apiClient *bleemeo.Client) string {
+	req, err := apiClient.ParseRequest(http.MethodGet, "/v1/info/", nil, nil, nil)
 	if err != nil {
-		return fmt.Sprintf("Bad URL %#v: %v\n", u, err)
+		return fmt.Sprintf("can't make diagnostic request: %v\n", err)
 	}
 
-	req.Header.Add("X-Requested-With", "XMLHttpRequest")
-	req.Header.Add("User-Agent", version.UserAgent())
+	urlWithoutPath := strings.TrimSuffix(req.URL.String(), "/v1/info/")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	req = req.WithContext(ctx)
-
-	resp, err := cl.Do(req)
+	resp, err := apiClient.DoRequest(ctx, req, false)
 	if err != nil {
-		return fmt.Sprintf("Glouton is NOT able to perform HTTP request to %#v: %v\n", u, err)
+		return fmt.Sprintf("Glouton is NOT able to perform HTTP request to %q: %v\n", urlWithoutPath, err)
 	}
 
 	_, _ = io.Copy(io.Discard, resp.Body)
-	defer resp.Body.Close()
+	_ = resp.Body.Close()
 
-	return fmt.Sprintf("Glouton is able to perform HTTP request to %#v\n", u)
+	return fmt.Sprintf("Glouton is able to perform HTTP request to %q\n", urlWithoutPath)
 }

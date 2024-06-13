@@ -18,18 +18,19 @@ package synchronizer
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"regexp"
 	"runtime"
 	"sort"
 	"strings"
 	"time"
 
-	"github.com/bleemeo/glouton/bleemeo/client"
+	"github.com/bleemeo/bleemeo-go"
 	"github.com/bleemeo/glouton/bleemeo/internal/common"
 	"github.com/bleemeo/glouton/bleemeo/internal/filter"
+	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/bleemeoapi"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/logger"
@@ -76,7 +77,7 @@ func (e needRegisterError) Error() string {
 	return fmt.Sprintf("metric %v was deleted from API, it need to be re-registered", e.remoteMetric.LabelsText)
 }
 
-// The metric registration function is done in 4 pass
+// The metric registration function is done in four passes
 // * first will only ensure agent_status is registered (this metric is required before connecting to MQTT and is produced once connected to MQTT...).
 // * main pass will do the bulk of the jobs. But some metric may fail and will be done in Recreate and Retry pass.
 // * The Recreate pass is for metric that failed (to update) because they were deleted from API.
@@ -127,14 +128,8 @@ func (m fakeMetric) Labels() map[string]string {
 	}
 }
 
-type metricPayload struct {
-	bleemeoTypes.Metric
-	Name string `json:"label,omitempty"`
-	Item string `json:"item,omitempty"`
-}
-
 // metricFromAPI convert a metricPayload received from API to a bleemeoTypes.Metric.
-func (mp metricPayload) metricFromAPI(lastTime time.Time) bleemeoTypes.Metric {
+func metricFromAPI(mp bleemeoapi.MetricPayload, lastTime time.Time) bleemeoTypes.Metric {
 	if mp.LabelsText == "" {
 		mp.Labels = map[string]string{
 			gloutonTypes.LabelName:         mp.Name,
@@ -482,7 +477,6 @@ func (s *Synchronizer) findUnregisteredMetrics(metrics []gloutonTypes.Metric) []
 
 	for _, v := range metrics {
 		key := s.metricKey(v.Labels(), v.Annotations())
-
 		if _, ok := registeredMetricsByKey[key]; ok {
 			continue
 		}
@@ -523,8 +517,8 @@ func (s *Synchronizer) syncMetrics(ctx context.Context, syncType types.SyncType,
 	pendingMetricsUpdate := s.popPendingMetricsUpdate()
 	if len(pendingMetricsUpdate) > activeMetricsCount*3/100 {
 		// If more than 3% of known active metrics needs update, do a full
-		// update. 3% is arbitrary choose, based on assumption request for
-		// one page of (100) metrics is cheaper than 3 request for
+		// update. 3% is arbitrarily chosen, based on assumption request for
+		// one page of (100) metrics is cheaper than 3 requests for
 		// one metric.
 		syncType = types.SyncTypeForceCacheRefresh
 	}
@@ -566,7 +560,7 @@ func (s *Synchronizer) syncMetrics(ctx context.Context, syncType types.SyncType,
 	filteredMetrics = s.filterMetrics(localMetrics)
 	filteredMetrics = prioritizeAndFilterMetrics(s.option.MetricFormat, filteredMetrics, execution.IsOnlyEssential())
 
-	if err := newMetricRegisterer(s, apiClient).registerMetrics(ctx, filteredMetrics); err != nil {
+	if err = newMetricRegisterer(s, apiClient).registerMetrics(ctx, filteredMetrics); err != nil {
 		return updateThresholds, err
 	}
 
@@ -590,7 +584,7 @@ func (s *Synchronizer) syncMetrics(ctx context.Context, syncType types.SyncType,
 	return updateThresholds, nil
 }
 
-func (s *Synchronizer) metricUpdatePendingOrSync(ctx context.Context, apiClient types.RawClient, fullSync bool, pendingMetricsUpdate *[]string) error {
+func (s *Synchronizer) metricUpdatePendingOrSync(ctx context.Context, apiClient types.MetricClient, fullSync bool, pendingMetricsUpdate *[]string) error {
 	if fullSync {
 		err := s.metricUpdateAll(ctx, apiClient, false)
 		if err != nil {
@@ -675,7 +669,7 @@ func (s *Synchronizer) UpdateUnitsAndThresholds(ctx context.Context, firstUpdate
 	}
 }
 
-func (s *Synchronizer) isOwnedMetric(metric metricPayload) bool {
+func (s *Synchronizer) isOwnedMetric(metric bleemeoapi.MetricPayload) bool {
 	if metric.AgentID == s.agentID {
 		return true
 	}
@@ -692,7 +686,7 @@ func (s *Synchronizer) isOwnedMetric(metric metricPayload) bool {
 	}
 
 	// Only monitors have metric that are owned by multiple agents
-	agentTypeID, found := s.getAgentType(bleemeoTypes.AgentTypeMonitor)
+	agentTypeID, found := s.getAgentType(bleemeo.AgentType_Monitor)
 	if found {
 		agents := s.option.Cache.AgentsByUUID()
 		if agentTypeID == agents[metric.AgentID].AgentType {
@@ -704,18 +698,10 @@ func (s *Synchronizer) isOwnedMetric(metric metricPayload) bool {
 }
 
 // metricsListWithAgentID fetches the list of all metrics for a given agent, and returns a UUID:metric mapping.
-func (s *Synchronizer) metricsListWithAgentID(ctx context.Context, apiClient types.RawClient, fetchInactive bool) (map[string]bleemeoTypes.Metric, error) {
-	params := map[string]string{
-		"fields": metricFields,
-	}
-
-	if fetchInactive {
-		params["active"] = stringFalse
-	} else {
-		params["active"] = stringTrue
-	}
-
-	result, err := apiClient.Iter(ctx, "metric", params)
+func (s *Synchronizer) metricsListWithAgentID(ctx context.Context, apiClient types.MetricClient, fetchInactive bool) (map[string]bleemeoTypes.Metric, error) {
+	// If the metric is associated with another agent, make sure we "own" the metric.
+	// This may not be the case for monitor because multiple agents will process such metrics.
+	result, err := apiClient.ListActiveMetrics(ctx, !fetchInactive)
 	if err != nil {
 		return nil, err
 	}
@@ -728,26 +714,20 @@ func (s *Synchronizer) metricsListWithAgentID(ctx context.Context, apiClient typ
 		}
 	}
 
-	for _, jsonMessage := range result {
-		var metric metricPayload
-
-		if err := json.Unmarshal(jsonMessage, &metric); err != nil {
-			continue
-		}
-
+	for _, metric := range result {
 		// If the metric is associated with another agent, make sure we "own" the metric.
 		// This may not be the case for monitor because multiple agent will process such metrics.
 		if !s.isOwnedMetric(metric) {
 			continue
 		}
 
-		metricsByUUID[metric.ID] = metric.metricFromAPI(metricsByUUID[metric.ID].FirstSeenAt)
+		metricsByUUID[metric.ID] = metricFromAPI(metric, metricsByUUID[metric.ID].FirstSeenAt)
 	}
 
 	return metricsByUUID, nil
 }
 
-func (s *Synchronizer) metricUpdateAll(ctx context.Context, apiClient types.RawClient, fetchInactive bool) error {
+func (s *Synchronizer) metricUpdateAll(ctx context.Context, apiClient types.MetricClient, fetchInactive bool) error {
 	metricsMap, err := s.metricsListWithAgentID(ctx, apiClient, fetchInactive)
 	if err != nil {
 		return err
@@ -768,32 +748,17 @@ func (s *Synchronizer) metricUpdateAll(ctx context.Context, apiClient types.RawC
 //
 // if allowList is true, this function may fetches all inactive metrics. This should only
 // be true if the full list of active metrics was fetched just before.
-func (s *Synchronizer) metricUpdateInactiveList(ctx context.Context, apiClient types.RawClient, metrics []gloutonTypes.Metric, allowList bool) error {
+func (s *Synchronizer) metricUpdateInactiveList(ctx context.Context, apiClient types.MetricClient, metrics []gloutonTypes.Metric, allowList bool) error {
 	if len(metrics) < 10 || !allowList {
 		return s.metricUpdateList(ctx, apiClient, metrics)
 	}
 
-	result := struct {
-		Count int
-	}{}
-
-	_, err := apiClient.Do(
-		ctx,
-		"GET",
-		"v1/metric/",
-		map[string]string{
-			"fields":    "id",
-			"active":    "False",
-			"page_size": "0",
-		},
-		nil,
-		&result,
-	)
+	count, err := apiClient.CountInactiveMetrics(ctx)
 	if err != nil {
 		return err
 	}
 
-	if len(metrics) <= result.Count/100 {
+	if len(metrics) <= count/100 {
 		// should be faster with one HTTP request per metrics
 		return s.metricUpdateList(ctx, apiClient, metrics)
 	}
@@ -803,7 +768,7 @@ func (s *Synchronizer) metricUpdateInactiveList(ctx context.Context, apiClient t
 }
 
 // metricUpdateList fetches a list of metrics, and updates the cache.
-func (s *Synchronizer) metricUpdateList(ctx context.Context, apiClient types.RawClient, metrics []gloutonTypes.Metric) error {
+func (s *Synchronizer) metricUpdateList(ctx context.Context, apiClient types.MetricClient, metrics []gloutonTypes.Metric) error {
 	if len(metrics) == 0 {
 		return nil
 	}
@@ -816,34 +781,27 @@ func (s *Synchronizer) metricUpdateList(ctx context.Context, apiClient types.Raw
 			agentID = metric.Annotations().BleemeoAgentID
 		}
 
-		params := map[string]string{
-			"labels_text": gloutonTypes.LabelsToText(metric.Labels()),
-			"agent":       agentID,
-			"fields":      metricFields,
+		params := url.Values{
+			"labels_text": {gloutonTypes.LabelsToText(metric.Labels())},
+			"agent":       {agentID},
+			"fields":      {metricFields},
 		}
 
 		if s.option.MetricFormat == gloutonTypes.MetricFormatBleemeo && metricutils.MetricOnlyHasItem(metric.Labels(), agentID) {
 			annotations := metric.Annotations()
-			params["label"] = metric.Labels()[gloutonTypes.LabelName]
-			params["item"] = annotations.BleemeoItem
-			delete(params, "labels_text")
+			params.Set("label", metric.Labels()[gloutonTypes.LabelName])
+			params.Set("item", annotations.BleemeoItem)
+			params.Del("labels_text")
 		}
 
-		result, err := apiClient.Iter(ctx, "metric", params)
+		listedMetrics, err := apiClient.ListMetricsBy(ctx, params)
 		if err != nil {
 			return err
 		}
 
-		for _, jsonMessage := range result {
-			var metric metricPayload
-
-			if err := json.Unmarshal(jsonMessage, &metric); err != nil {
-				continue
-			}
-
-			// Do not modify metrics declared by other agents when the target agent is a monitor
+		for id, metric := range listedMetrics {
+			// Don't modify metrics declared by other agents when the target agent is a monitor
 			agentUUID, present := gloutonTypes.TextToLabels(metric.LabelsText)[gloutonTypes.LabelScraperUUID]
-
 			if present && agentUUID != s.agentID {
 				continue
 			}
@@ -855,7 +813,7 @@ func (s *Synchronizer) metricUpdateList(ctx context.Context, apiClient types.Raw
 				}
 			}
 
-			metricsByUUID[metric.ID] = metric.metricFromAPI(metricsByUUID[metric.ID].FirstSeenAt)
+			metricsByUUID[id] = metric
 		}
 	}
 
@@ -870,25 +828,12 @@ func (s *Synchronizer) metricUpdateList(ctx context.Context, apiClient types.Raw
 	return nil
 }
 
-func (s *Synchronizer) metricUpdateListUUID(ctx context.Context, apiClient types.RawClient, requests []string) error {
+func (s *Synchronizer) metricUpdateListUUID(ctx context.Context, apiClient types.MetricClient, requests []string) error {
 	metricsByUUID := s.option.Cache.MetricsByUUID()
 
 	for _, key := range requests {
-		var metric metricPayload
-
-		params := map[string]string{
-			"fields": metricFields,
-		}
-
-		_, err := apiClient.Do(
-			ctx,
-			"GET",
-			fmt.Sprintf("v1/metric/%s/", key),
-			params,
-			nil,
-			&metric,
-		)
-		if err != nil && client.IsNotFound(err) {
+		metric, err := apiClient.GetMetricByID(ctx, key)
+		if err != nil && IsNotFound(err) {
 			delete(metricsByUUID, key)
 
 			continue
@@ -896,7 +841,7 @@ func (s *Synchronizer) metricUpdateListUUID(ctx context.Context, apiClient types
 			return err
 		}
 
-		metricsByUUID[metric.ID] = metric.metricFromAPI(metricsByUUID[metric.ID].FirstSeenAt)
+		metricsByUUID[metric.ID] = metricFromAPI(metric, metricsByUUID[metric.ID].FirstSeenAt)
 	}
 
 	metrics := make([]bleemeoTypes.Metric, 0, len(metricsByUUID))
@@ -942,7 +887,7 @@ func (s *Synchronizer) metricRemoveDeletedFromRemote(
 
 type metricRegisterer struct {
 	s                       *Synchronizer
-	apiClient               types.RawClient
+	apiClient               types.MetricClient
 	registeredMetricsByUUID map[string]bleemeoTypes.Metric
 	registeredMetricsByKey  map[string]bleemeoTypes.Metric
 	containersByContainerID map[string]bleemeoTypes.Container
@@ -961,7 +906,7 @@ type metricRegisterer struct {
 	doneAtLeastOne       bool
 }
 
-func newMetricRegisterer(s *Synchronizer, apiClient types.RawClient) *metricRegisterer {
+func newMetricRegisterer(s *Synchronizer, apiClient types.MetricClient) *metricRegisterer {
 	fails := s.option.Cache.MetricRegistrationsFail()
 	servicesByKey := s.option.Cache.ServiceLookupFromList()
 	failedRegistrationByKey := make(map[string]bleemeoTypes.MetricRegistration, len(fails))
@@ -1144,7 +1089,7 @@ func (mr *metricRegisterer) doOnePass(ctx context.Context, currentList []glouton
 			continue
 		}
 
-		if errReReg, ok := err.(needRegisterError); ok && err != nil && state < metricPassRecreate {
+		if errReReg := new(needRegisterError); errors.As(err, errReReg) && state < metricPassRecreate {
 			mr.needReregisterMetrics = append(mr.needReregisterMetrics, metric)
 
 			delete(mr.registeredMetricsByUUID, errReReg.remoteMetric.ID)
@@ -1154,12 +1099,12 @@ func (mr *metricRegisterer) doOnePass(ctx context.Context, currentList []glouton
 		}
 
 		if err != nil {
-			if client.IsServerError(err) {
+			if IsServerError(err) {
 				return err
 			}
 
-			if client.IsBadRequest(err) {
-				content := client.APIErrorContent(err)
+			if IsBadRequest(err) {
+				content := APIErrorContent(err)
 				registration.LastFailKind = httpResponseToMetricFailureKind(content)
 				registration.LastFailAt = mr.s.now()
 				registration.FailCounter++
@@ -1208,9 +1153,6 @@ func (mr *metricRegisterer) doOnePass(ctx context.Context, currentList []glouton
 }
 
 func (mr *metricRegisterer) metricRegisterAndUpdateOne(ctx context.Context, metric gloutonTypes.Metric) error {
-	params := map[string]string{
-		"fields": metricFields,
-	}
 	labels := metric.Labels()
 	annotations := metric.Annotations()
 	key := mr.s.metricKey(labels, annotations)
@@ -1238,16 +1180,14 @@ func (mr *metricRegisterer) metricRegisterAndUpdateOne(ctx context.Context, metr
 		return err
 	}
 
-	var result metricPayload
-
-	_, err = mr.apiClient.Do(ctx, "POST", "v1/metric/", params, payload, &result)
+	result, err := mr.apiClient.RegisterMetric(ctx, payload)
 	if err != nil {
 		return err
 	}
 
 	logger.V(2).Printf("Metric %v registered with UUID %s", key, result.ID)
-	mr.registeredMetricsByKey[key] = result.metricFromAPI(mr.registeredMetricsByKey[result.ID].FirstSeenAt)
-	mr.registeredMetricsByUUID[result.ID] = result.metricFromAPI(mr.registeredMetricsByKey[result.ID].FirstSeenAt)
+	mr.registeredMetricsByKey[key] = metricFromAPI(result, mr.registeredMetricsByKey[result.ID].FirstSeenAt)
+	mr.registeredMetricsByUUID[result.ID] = metricFromAPI(result, mr.registeredMetricsByKey[result.ID].FirstSeenAt)
 	mr.doneAtLeastOne = true
 
 	return nil
@@ -1259,12 +1199,12 @@ func (s *Synchronizer) prepareMetricPayload(
 	containersByContainerID map[string]bleemeoTypes.Container,
 	servicesByKey map[common.ServiceNameInstance]bleemeoTypes.Service,
 	monitors []bleemeoTypes.Monitor,
-) (metricPayload, error) {
+) (bleemeoapi.MetricPayload, error) {
 	labels := metric.Labels()
 	annotations := metric.Annotations()
 	key := s.metricKey(labels, annotations)
 
-	payload := metricPayload{
+	payload := bleemeoapi.MetricPayload{
 		Metric: bleemeoTypes.Metric{
 			LabelsText: key,
 			AgentID:    s.agentID,
@@ -1340,7 +1280,7 @@ func (s *Synchronizer) prepareMetricPayload(
 	return payload, nil
 }
 
-func (s *Synchronizer) prepareMetricPayloadOtherAgent(payload *metricPayload, agentID string, labels map[string]string, monitors []bleemeoTypes.Monitor) error {
+func (s *Synchronizer) prepareMetricPayloadOtherAgent(payload *bleemeoapi.MetricPayload, agentID string, labels map[string]string, monitors []bleemeoTypes.Monitor) error {
 	if scaperID := labels[gloutonTypes.LabelScraperUUID]; scaperID != "" && scaperID != s.agentID {
 		return fmt.Errorf("%w: %s, want %s", errAttemptToSpoof, scaperID, s.agentID)
 	}
@@ -1368,8 +1308,8 @@ func (s *Synchronizer) prepareMetricPayloadOtherAgent(payload *metricPayload, ag
 	return errIgnore
 }
 
-func (s *Synchronizer) metricUpdateOne(ctx context.Context, apiClient types.RawClient, metric gloutonTypes.Metric, remoteMetric bleemeoTypes.Metric) (bleemeoTypes.Metric, error) {
-	updates := make(map[string]string)
+func (s *Synchronizer) metricUpdateOne(ctx context.Context, apiClient types.MetricClient, metric gloutonTypes.Metric, remoteMetric bleemeoTypes.Metric) (bleemeoTypes.Metric, error) {
+	shouldMarkActive := false
 
 	if !remoteMetric.DeactivatedAt.IsZero() {
 		points, err := metric.Points(s.now().Add(-10*time.Minute), s.now())
@@ -1392,26 +1332,14 @@ func (s *Synchronizer) metricUpdateOne(ctx context.Context, apiClient types.RawC
 		if maxTime.After(remoteMetric.DeactivatedAt.Add(10 * time.Second)) {
 			logger.V(2).Printf("Mark active the metric %v (uuid %s)", remoteMetric.LabelsText, remoteMetric.ID)
 
-			updates["active"] = stringTrue
+			shouldMarkActive = true
 			remoteMetric.DeactivatedAt = time.Time{}
 		}
 	}
 
-	if len(updates) > 0 {
-		fields := make([]string, 0, len(updates))
-		for k := range updates {
-			fields = append(fields, k)
-		}
-
-		_, err := apiClient.Do(
-			ctx,
-			"PATCH",
-			fmt.Sprintf("v1/metric/%s/", remoteMetric.ID),
-			map[string]string{"fields": strings.Join(fields, ",")},
-			updates,
-			nil,
-		)
-		if err != nil && client.IsNotFound(err) {
+	if shouldMarkActive {
+		err := apiClient.SetMetricActive(ctx, remoteMetric.ID, true)
+		if err != nil && IsNotFound(err) {
 			return remoteMetric, needRegisterError{remoteMetric: remoteMetric}
 		} else if err != nil {
 			return remoteMetric, err
@@ -1422,7 +1350,7 @@ func (s *Synchronizer) metricUpdateOne(ctx context.Context, apiClient types.RawC
 }
 
 // metricDeleteIgnoredServices deletes the metrics $SERVICE_NAME_status from services in service_ignore_check.
-func (s *Synchronizer) metricDeleteIgnoredServices(ctx context.Context, apiClient types.RawClient) error {
+func (s *Synchronizer) metricDeleteIgnoredServices(ctx context.Context, apiClient types.MetricClient) error {
 	localServices, err := s.option.Discovery.Discovery(ctx, 24*time.Hour)
 	if err != nil {
 		return err
@@ -1440,10 +1368,10 @@ func (s *Synchronizer) metricDeleteIgnoredServices(ctx context.Context, apiClien
 		metricKey := s.metricKey(labels, srv.AnnotationsOfStatus())
 
 		if metric, ok := registeredMetricsByKey[metricKey]; ok {
-			_, err := apiClient.Do(ctx, "DELETE", fmt.Sprintf("v1/metric/%s/", metric.ID), nil, nil, nil)
+			err = apiClient.DeleteMetric(ctx, metric.ID)
 
-			// If the metric was not found it has already been deleted.
-			if err != nil && !client.IsNotFound(err) {
+			// If the metric wasn't found, it has already been deleted.
+			if err != nil && !IsNotFound(err) {
 				return err
 			}
 
@@ -1471,7 +1399,7 @@ func (s *Synchronizer) undeactivableMetric(v bleemeoTypes.Metric, agents map[str
 	agent := agents[v.AgentID]
 
 	if v.Labels[gloutonTypes.LabelName] == agentStatusName {
-		snmpTypeID, found := s.getAgentType(bleemeoTypes.AgentTypeSNMP)
+		snmpTypeID, found := s.getAgentType(bleemeo.AgentType_SNMP)
 
 		// We only skip deactivation of agent_status when it not an SNMP agent.
 		// On SNMP agent, "agent_status" isn't special.
@@ -1480,7 +1408,7 @@ func (s *Synchronizer) undeactivableMetric(v bleemeoTypes.Metric, agents map[str
 		}
 	}
 
-	kubernetesTypeID, found := s.getAgentType(bleemeoTypes.AgentTypeKubernetes)
+	kubernetesTypeID, found := s.getAgentType(bleemeo.AgentType_K8s)
 	if found && agent.AgentType == kubernetesTypeID && !s.option.Cache.Agent().IsClusterLeader {
 		// Can't deactivate Kubernetes metrics if I'm not the leader.
 		return true
@@ -1502,7 +1430,7 @@ func (s *Synchronizer) localMetricToMap(localMetrics []gloutonTypes.Metric) map[
 }
 
 // metricDeactivate deactivates the registered metrics that didn't receive any points for some time.
-func (s *Synchronizer) metricDeactivate(ctx context.Context, apiClient types.RawClient, localMetrics []gloutonTypes.Metric) error {
+func (s *Synchronizer) metricDeactivate(ctx context.Context, apiClient types.MetricClient, localMetrics []gloutonTypes.Metric) error {
 	deactivatedMetricsExpirationDays := time.Duration(s.option.Config.Bleemeo.Cache.DeactivatedMetricsExpirationDays) * 24 * time.Hour
 
 	duplicatedKey := make(map[string]bool)
@@ -1558,15 +1486,8 @@ func (s *Synchronizer) metricDeactivate(ctx context.Context, apiClient types.Raw
 
 		logger.V(2).Printf("Mark inactive the metric %v (uuid %s)", key, v.ID)
 
-		_, err := apiClient.Do(
-			ctx,
-			"PATCH",
-			fmt.Sprintf("v1/metric/%s/", v.ID),
-			map[string]string{"fields": "active"},
-			map[string]string{"active": stringFalse},
-			nil,
-		)
-		if err != nil && client.IsNotFound(err) {
+		err := apiClient.SetMetricActive(ctx, v.ID, false)
+		if err != nil && IsNotFound(err) {
 			delete(registeredMetrics, k)
 
 			continue

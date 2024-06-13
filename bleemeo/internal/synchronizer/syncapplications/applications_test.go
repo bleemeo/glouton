@@ -21,6 +21,7 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/bleemeo/bleemeo-go"
 	"github.com/bleemeo/glouton/bleemeo/internal/cache"
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
 	"github.com/bleemeo/glouton/discovery"
@@ -64,7 +65,7 @@ func Test_syncRemoteAndLocal(t *testing.T) {
 					Active: true,
 					Label:  "redis",
 					Tags: []bleemeoTypes.Tag{
-						{ID: "1", Name: "tag-arent-application", TagType: bleemeoTypes.TagTypeIsCreatedByGlouton},
+						{ID: "1", Name: "tag-arent-application", TagType: bleemeo.TagType_CreatedByGlouton},
 					},
 				},
 			},
@@ -169,7 +170,7 @@ func Test_syncRemoteAndLocal(t *testing.T) {
 						{
 							ID:      "1",
 							Name:    "docker-compose-my-compose",
-							TagType: bleemeoTypes.TagTypeIsAutomaticByGlouton,
+							TagType: bleemeo.TagType_AutomaticGlouton,
 						},
 					},
 				},

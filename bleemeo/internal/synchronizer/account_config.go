@@ -18,15 +18,9 @@ package synchronizer
 
 import (
 	"context"
-	"encoding/json"
-	"mime"
 	"reflect"
-	"strings"
 
-	"github.com/bleemeo/glouton/bleemeo/client"
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
-	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
-	"github.com/bleemeo/glouton/logger"
 )
 
 func (s *Synchronizer) syncAccountConfig(ctx context.Context, syncType types.SyncType, execution types.SynchronizationExecution) (updateThresholds bool, err error) {
@@ -75,26 +69,10 @@ func (s *Synchronizer) syncAccountConfig(ctx context.Context, syncType types.Syn
 	return false, nil
 }
 
-func (s *Synchronizer) agentTypesUpdateList(ctx context.Context, apiClient types.RawClient) error {
-	params := map[string]string{
-		"fields": "id,name,display_name",
-	}
-
-	result, err := apiClient.Iter(ctx, "agenttype", params)
+func (s *Synchronizer) agentTypesUpdateList(ctx context.Context, apiClient types.AccountConfigClient) error {
+	agentTypes, err := apiClient.ListAgentTypes(ctx)
 	if err != nil {
 		return err
-	}
-
-	agentTypes := make([]bleemeoTypes.AgentType, len(result))
-
-	for i, jsonMessage := range result {
-		var agentType bleemeoTypes.AgentType
-
-		if err := json.Unmarshal(jsonMessage, &agentType); err != nil {
-			continue
-		}
-
-		agentTypes[i] = agentType
 	}
 
 	s.option.Cache.SetAgentTypes(agentTypes)
@@ -102,26 +80,10 @@ func (s *Synchronizer) agentTypesUpdateList(ctx context.Context, apiClient types
 	return nil
 }
 
-func (s *Synchronizer) accountConfigUpdateList(ctx context.Context, apiClient types.RawClient) error {
-	params := map[string]string{
-		"fields": "id,name,live_process_resolution,live_process,docker_integration,snmp_integration,vsphere_integration,number_of_custom_metrics,suspended",
-	}
-
-	result, err := apiClient.Iter(ctx, "accountconfig", params)
+func (s *Synchronizer) accountConfigUpdateList(ctx context.Context, apiClient types.AccountConfigClient) error {
+	configs, err := apiClient.ListAccountConfigs(ctx)
 	if err != nil {
 		return err
-	}
-
-	configs := make([]bleemeoTypes.AccountConfig, len(result))
-
-	for i, jsonMessage := range result {
-		var config bleemeoTypes.AccountConfig
-
-		if err := json.Unmarshal(jsonMessage, &config); err != nil {
-			continue
-		}
-
-		configs[i] = config
 	}
 
 	s.option.Cache.SetAccountConfigs(configs)
@@ -129,36 +91,10 @@ func (s *Synchronizer) accountConfigUpdateList(ctx context.Context, apiClient ty
 	return nil
 }
 
-func (s *Synchronizer) agentConfigUpdateList(ctx context.Context, apiClient types.RawClient) error {
-	params := map[string]string{
-		"fields": "id,account_config,agent_type,metrics_allowlist,metrics_resolution",
-	}
-
-	result, err := apiClient.Iter(ctx, "agentconfig", params)
-	if apiErr, ok := err.(client.APIError); ok {
-		mediatype, _, err := mime.ParseMediaType(apiErr.ContentType)
-		if err == nil && mediatype == "text/html" && strings.Contains(apiErr.FinalURL, "login") {
-			logger.V(2).Printf("Bleemeo API don't support AgentConfig")
-			s.option.Cache.SetAgentConfigs(nil)
-
-			return nil
-		}
-	}
-
+func (s *Synchronizer) agentConfigUpdateList(ctx context.Context, apiClient types.AccountConfigClient) error {
+	configs, err := apiClient.ListAgentConfigs(ctx)
 	if err != nil {
 		return err
-	}
-
-	configs := make([]bleemeoTypes.AgentConfig, len(result))
-
-	for i, jsonMessage := range result {
-		var config bleemeoTypes.AgentConfig
-
-		if err := json.Unmarshal(jsonMessage, &config); err != nil {
-			continue
-		}
-
-		configs[i] = config
 	}
 
 	s.option.Cache.SetAgentConfigs(configs)

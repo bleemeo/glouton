@@ -18,9 +18,7 @@ package synchronizer
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
-	"fmt"
 
 	"github.com/bleemeo/glouton/bleemeo/internal/synchronizer/types"
 	bleemeoTypes "github.com/bleemeo/glouton/bleemeo/types"
@@ -29,14 +27,10 @@ import (
 
 var errNoConfig = errors.New("agent don't have any configuration on Bleemeo Cloud platform. Please contact support@bleemeo.com about this issue")
 
-const (
-	apiTagsLength = 100
-	agentFields   = "account,agent_type,created_at,current_config,display_name,fqdn,id,is_cluster_leader,next_config_at,tags"
-)
+const apiTagsLength = 100
 
 func (s *Synchronizer) syncAgent(ctx context.Context, syncType types.SyncType, execution types.SynchronizationExecution) (updateThresholds bool, err error) {
 	apiClient := execution.BleemeoAPIClient()
-
 	if err := s.syncMainAgent(ctx, apiClient); err != nil {
 		return false, err
 	}
@@ -54,12 +48,7 @@ func (s *Synchronizer) syncAgent(ctx context.Context, syncType types.SyncType, e
 	return false, nil
 }
 
-func (s *Synchronizer) syncMainAgent(ctx context.Context, apiClient types.RawClient) error {
-	var agent bleemeoTypes.Agent
-
-	params := map[string]string{
-		"fields": agentFields,
-	}
+func (s *Synchronizer) syncMainAgent(ctx context.Context, apiClient types.AgentClient) error {
 	data := map[string][]bleemeoTypes.Tag{
 		"tags": make([]bleemeoTypes.Tag, 0),
 	}
@@ -72,7 +61,7 @@ func (s *Synchronizer) syncMainAgent(ctx context.Context, apiClient types.RawCli
 
 	previousAgent := s.option.Cache.Agent()
 
-	_, err := apiClient.Do(ctx, "PATCH", fmt.Sprintf("v1/agent/%s/", s.agentID), params, data, &agent)
+	agent, err := apiClient.UpdateAgent(ctx, s.agentID, data)
 	if err != nil {
 		return err
 	}
@@ -105,28 +94,12 @@ func (s *Synchronizer) syncMainAgent(ctx context.Context, apiClient types.RawCli
 	return nil
 }
 
-func (s *Synchronizer) agentsUpdateList(ctx context.Context, execution types.SynchronizationExecution, apiClient types.RawClient) error {
+func (s *Synchronizer) agentsUpdateList(ctx context.Context, execution types.SynchronizationExecution, apiClient types.AgentClient) error {
 	oldAgents := s.option.Cache.AgentsByUUID()
 
-	params := map[string]string{
-		"fields": agentFields,
-	}
-
-	result, err := apiClient.Iter(ctx, "agent", params)
+	agents, err := apiClient.ListAgents(ctx)
 	if err != nil {
 		return err
-	}
-
-	agents := make([]bleemeoTypes.Agent, len(result))
-
-	for i, jsonMessage := range result {
-		var agent bleemeoTypes.Agent
-
-		if err := json.Unmarshal(jsonMessage, &agent); err != nil {
-			continue
-		}
-
-		agents[i] = agent
 	}
 
 	s.option.Cache.SetAgentList(agents)
