@@ -323,24 +323,59 @@ func unwrapErrors(errs prometheus.MultiError) prometheus.MultiError {
 	unwrapped := make(prometheus.MultiError, 0, len(errs))
 
 	for _, err := range errs {
-		var (
-			mapErr  *mapstructure.Error
-			yamlErr *yaml.TypeError
-		)
-
-		switch {
-		case errors.As(err, &mapErr):
-			unwrapped = append(unwrapped, mapErr.WrappedErrors()...)
-		case errors.As(err, &yamlErr):
-			for _, wrappedErr := range yamlErr.Errors {
-				unwrapped.Append(errors.New(wrappedErr)) //nolint:goerr113
+		for _, subErr := range unwrapRecurse(err) {
+			var yamlErr *yaml.TypeError
+			if errors.As(subErr, &yamlErr) {
+				for _, wrappedErr := range yamlErr.Errors {
+					unwrapped.Append(errors.New(wrappedErr)) //nolint:goerr113
+				}
+			} else {
+				unwrapped.Append(subErr)
 			}
-		default:
-			unwrapped.Append(err)
 		}
 	}
 
 	return unwrapped
+}
+
+func unwrapRecurse(err error) []error {
+	wrapError, isWrapErr := err.(interface{ Unwrap() error })
+	if isWrapErr {
+		unwrappedErr := wrapError.Unwrap()
+		// If err is just an fmt.wrapError that doesn't contain multiple errors, return it as-is.
+		if !isMultiUnwrap(unwrappedErr) {
+			return []error{err}
+		}
+
+		return unwrapRecurse(unwrappedErr)
+	}
+
+	joinError, isJoinErr := err.(interface{ Unwrap() []error })
+	if isJoinErr {
+		var subErrs []error
+
+		for _, subErr := range joinError.Unwrap() {
+			subErrs = append(subErrs, unwrapRecurse(subErr)...)
+		}
+
+		return subErrs
+	}
+
+	return []error{err}
+}
+
+func isMultiUnwrap(err error) bool {
+	_, isMulti := err.(interface{ Unwrap() []error })
+	if isMulti {
+		return true
+	}
+
+	wrapped, isWrapped := err.(interface{ Unwrap() error })
+	if isWrapped {
+		return isMultiUnwrap(wrapped.Unwrap())
+	}
+
+	return false
 }
 
 // movedKeys return all keys that were moved. The map is old key => new key.

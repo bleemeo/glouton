@@ -38,6 +38,7 @@ import (
 	containerTypes "github.com/bleemeo/glouton/facts/container-runtime/types"
 	"github.com/bleemeo/glouton/logger"
 	"github.com/bleemeo/glouton/types"
+	"github.com/docker/docker/api/types/network"
 
 	dockerTypes "github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
@@ -375,7 +376,7 @@ func (d *Docker) Exec(ctx context.Context, containerID string, cmd []string) ([]
 		return nil, err
 	}
 
-	id, err := cl.ContainerExecCreate(ctx, containerID, dockerTypes.ExecConfig{
+	id, err := cl.ContainerExecCreate(ctx, containerID, container.ExecOptions{
 		Cmd:          cmd,
 		AttachStdout: true,
 		AttachStderr: true,
@@ -384,7 +385,7 @@ func (d *Docker) Exec(ctx context.Context, containerID string, cmd []string) ([]
 		return nil, err
 	}
 
-	resp, err := cl.ContainerExecAttach(ctx, id.ID, dockerTypes.ExecStartCheck{})
+	resp, err := cl.ContainerExecAttach(ctx, id.ID, container.ExecAttachOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -481,7 +482,7 @@ func (d *Docker) run(ctx context.Context) error {
 	ctx2, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	eventC, errC := cl.Events(ctx2, dockerTypes.EventsOptions{Since: d.lastEventAt.Format(time.RFC3339Nano)})
+	eventC, errC := cl.Events(ctx2, events.ListOptions{Since: d.lastEventAt.Format(time.RFC3339Nano)})
 
 	var lastCleanup time.Time
 
@@ -619,7 +620,7 @@ func (d *Docker) updateContainers(ctx context.Context) error {
 	bridgeNetworks := make(map[string]interface{})
 	containerAddressOnDockerBridge := make(map[string]string)
 
-	if networks, err := cl.NetworkList(ctx, dockerTypes.NetworkListOptions{}); err == nil {
+	if networks, err := cl.NetworkList(ctx, network.ListOptions{}); err == nil {
 		for _, n := range networks {
 			if n.Name == "" {
 				continue
@@ -631,7 +632,7 @@ func (d *Docker) updateContainers(ctx context.Context) error {
 		}
 	}
 
-	if network, err := cl.NetworkInspect(ctx, "docker_gwbridge", dockerTypes.NetworkInspectOptions{}); err == nil {
+	if network, err := cl.NetworkInspect(ctx, "docker_gwbridge", network.InspectOptions{}); err == nil {
 		for containerID, endpoint := range network.Containers {
 			// IPv4Address is an CIDR (like "172.17.0.4/24")
 			address := strings.Split(endpoint.IPv4Address, "/")[0]
@@ -826,14 +827,14 @@ func (d *Docker) getClient(ctx context.Context) (cl dockerClient, err error) {
 }
 
 type dockerClient interface {
-	ContainerExecAttach(ctx context.Context, execID string, config dockerTypes.ExecStartCheck) (dockerTypes.HijackedResponse, error)
-	ContainerExecCreate(ctx context.Context, container string, config dockerTypes.ExecConfig) (dockerTypes.IDResponse, error)
+	ContainerExecAttach(ctx context.Context, execID string, config container.ExecAttachOptions) (dockerTypes.HijackedResponse, error)
+	ContainerExecCreate(ctx context.Context, container string, config container.ExecOptions) (dockerTypes.IDResponse, error)
 	ContainerInspect(ctx context.Context, container string) (dockerTypes.ContainerJSON, error)
 	ContainerList(ctx context.Context, options container.ListOptions) ([]dockerTypes.Container, error)
 	ContainerTop(ctx context.Context, container string, arguments []string) (container.ContainerTopOKBody, error)
-	Events(ctx context.Context, options dockerTypes.EventsOptions) (<-chan events.Message, <-chan error)
-	NetworkInspect(ctx context.Context, network string, options dockerTypes.NetworkInspectOptions) (dockerTypes.NetworkResource, error)
-	NetworkList(ctx context.Context, options dockerTypes.NetworkListOptions) ([]dockerTypes.NetworkResource, error)
+	Events(ctx context.Context, options events.ListOptions) (<-chan events.Message, <-chan error)
+	NetworkInspect(ctx context.Context, network string, options network.InspectOptions) (network.Inspect, error)
+	NetworkList(ctx context.Context, options network.ListOptions) ([]network.Summary, error)
 	Ping(ctx context.Context) (dockerTypes.Ping, error)
 	ServerVersion(ctx context.Context) (dockerTypes.Version, error)
 	Close() error
