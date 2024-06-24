@@ -9,7 +9,7 @@ linters:
     - funlen
     - gomnd  # Too picky. For example it says that 1000 (used in number of ms in one second) is a magic number.
     - mnd # Same as above
-    - exhaustruct # Same as above.
+    - exhaustruct # This linter is meant to be used only for special cases. It is not recommended to use it for all files in a project.
     - gci # Conflicts with gofumpt.
     - ireturn # Complain that interface A implementation method return an interface B... it's a requirement of interface A that is unavoidable.
     - nonamedreturns # Warn for every named return, not useful.
@@ -39,8 +39,6 @@ linters:
 
 linters-settings:
   nolintlint:
-    # Ensure that nolint directives don't have a leading space.
-    allow-leading-space: false
     # Require nolint directives to mention the specific linter being suppressed.
     require-specific: true
 
