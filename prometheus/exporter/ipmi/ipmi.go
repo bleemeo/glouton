@@ -49,10 +49,8 @@ const (
 )
 
 var (
-	ErrUnknownOutput        = errors.New("unknown ipmi-sensors output")
 	ErrLineFormatUnexpected = errors.New("ignoring unexpected line")
 	ErrUnknownUnit          = errors.New("unknown unit")
-	ErrOutputTooLarge       = errors.New("command output is too large")
 	ErrUnknownMethod        = errors.New("unknown method to collect IPMI metrics")
 )
 
@@ -156,7 +154,7 @@ func (g *Gatherer) GatherWithState(ctx context.Context, _ registry.GatherState) 
 
 		logger.V(1).Printf("All IPMI method failed or timed-out. IPMI metrics are not available")
 
-		return nil, nil //nolint:nilerr
+		return nil, nil
 	}
 
 	ctx, cancel := context.WithTimeout(ctx, time.Duration(g.cfg.Timeout)*time.Second)
