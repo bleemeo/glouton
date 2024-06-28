@@ -116,7 +116,7 @@ func (r *SimpleRuler) ApplyRulesMFS(ctx context.Context, now time.Time, mfs []*d
 	r.st.PushPoints(ctx, points)
 
 	for _, rule := range r.rules {
-		vector, err := rule.Eval(ctx, now, r.query, nil, 100)
+		vector, err := rule.Eval(ctx, 0, now, r.query, nil, 100)
 		if err != nil {
 			logger.V(2).Printf("rule %v failed: %v", rule.Query().String(), err)
 

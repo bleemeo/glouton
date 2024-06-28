@@ -30,6 +30,7 @@ import (
 	dockerTypes "github.com/docker/docker/api/types"
 	containerTypes "github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/events"
+	"github.com/docker/docker/api/types/network"
 )
 
 // MockDockerClient is a fake Docker client that could be used during test.
@@ -51,18 +52,12 @@ var (
 )
 
 // ContainerExecAttach is not implemented.
-func (cl *MockDockerClient) ContainerExecAttach(_ context.Context, execID string, config dockerTypes.ExecStartCheck) (dockerTypes.HijackedResponse, error) {
-	_ = execID
-	_ = config
-
+func (cl *MockDockerClient) ContainerExecAttach(context.Context, string, containerTypes.ExecAttachOptions) (dockerTypes.HijackedResponse, error) {
 	return dockerTypes.HijackedResponse{}, errNotImplemented
 }
 
 // ContainerExecCreate is not implemented.
-func (cl *MockDockerClient) ContainerExecCreate(_ context.Context, container string, config dockerTypes.ExecConfig) (dockerTypes.IDResponse, error) {
-	_ = container
-	_ = config
-
+func (cl *MockDockerClient) ContainerExecCreate(context.Context, string, containerTypes.ExecOptions) (dockerTypes.IDResponse, error) {
 	return dockerTypes.IDResponse{}, errNotImplemented
 }
 
@@ -125,7 +120,7 @@ func (cl *MockDockerClient) ContainerTop(_ context.Context, container string, ar
 }
 
 // Events do events.
-func (cl *MockDockerClient) Events(context.Context, dockerTypes.EventsOptions) (<-chan events.Message, <-chan error) {
+func (cl *MockDockerClient) Events(context.Context, events.ListOptions) (<-chan events.Message, <-chan error) {
 	if cl.ReturnError != nil {
 		ch := make(chan error, 1)
 		ch <- cl.ReturnError
@@ -144,15 +139,12 @@ func (cl *MockDockerClient) Events(context.Context, dockerTypes.EventsOptions) (
 }
 
 // NetworkInspect is not implemented.
-func (cl *MockDockerClient) NetworkInspect(_ context.Context, network string, options dockerTypes.NetworkInspectOptions) (dockerTypes.NetworkResource, error) {
-	_ = network
-	_ = options
-
-	return dockerTypes.NetworkResource{}, fmt.Errorf("NetworkInspect %w", errNotImplemented)
+func (cl *MockDockerClient) NetworkInspect(context.Context, string, network.InspectOptions) (network.Inspect, error) {
+	return network.Inspect{}, fmt.Errorf("NetworkInspect %w", errNotImplemented)
 }
 
 // NetworkList is not implemented.
-func (cl *MockDockerClient) NetworkList(context.Context, dockerTypes.NetworkListOptions) ([]dockerTypes.NetworkResource, error) {
+func (cl *MockDockerClient) NetworkList(context.Context, network.ListOptions) ([]network.Inspect, error) {
 	return nil, fmt.Errorf("NetworkList %w", errNotImplemented)
 }
 

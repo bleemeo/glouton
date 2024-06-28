@@ -117,7 +117,7 @@ func (c *configLoader) Load(path string, provider koanf.Provider, parser koanf.P
 	warnings = append(warnings, moreWarnings...)
 
 	for key, value := range config {
-		if value == nil {
+		if value == nil && !isNilAllowedFor(key) {
 			warnings = append(warnings, fmt.Errorf("%q %w", key, errNullConfigValue))
 
 			continue
@@ -153,6 +153,15 @@ func (c *configLoader) Load(path string, provider koanf.Provider, parser koanf.P
 	}
 
 	return warnings
+}
+
+// isNilAllowedFor returns whether the given key must escape the not-null-validation or not.
+// Those exceptions are to avoid that some config fields, such as pointers,
+// are warned as null just because they're absent from the config file.
+func isNilAllowedFor(key string) bool {
+	return map[string]bool{
+		"blackbox.modules.http.http.http_client_config.http_headers": true,
+	}[key]
 }
 
 // isNil returns whether v or its underlying value is nil.

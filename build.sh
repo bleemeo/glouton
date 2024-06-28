@@ -2,7 +2,7 @@
 
 set -e
 
-GORELEASER_VERSION="v1.26.2"
+GORELEASER_VERSION="v2.0.1"
 USER_UID=$(id -u)
 
 rm -fr work
@@ -28,7 +28,7 @@ case "$1" in
       SKIP_JS=1
       ;;
    *)
-      echo "Usage: $0 [go|race|no-js]"
+      echo "Usage: $0 [go|race|no-js|only-js|docker-fast]"
       echo "  go: only compile Go"
       echo "  race: only compile Go with -race"
       echo "  no-js: skip building JS"
