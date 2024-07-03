@@ -160,6 +160,16 @@ func (api *API) init() {
 	router.Handle("/metrics", api.PrometheurExporter)
 	router.Handle("/playground", playground.Handler("GraphQL playground", "/graphql"))
 	router.Handle("/graphql", handler.NewDefaultServer(NewExecutableSchema(Config{Resolvers: &Resolver{api: api}})))
+
+	// Register the API endpoints for data fetching
+	data := Data{api}
+	router.Get("/docker-containers", data.Containers)
+	router.Get("/topinfo", data.Processes)
+	router.Get("/facts", data.Facts)
+	router.Get("/services", data.Services)
+	router.Get("/agent-informations", data.AgentInformation)
+	router.Get("/agent-status", data.AgentStatus)
+
 	router.HandleFunc("/diagnostic", func(w http.ResponseWriter, r *http.Request) {
 		content := api.DiagnosticPage(r.Context())
 
