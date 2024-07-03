@@ -1,6 +1,7 @@
 ## Build cache (optional)
 
 Enable the cache to speed-up build and lint.
+
 ```sh
 docker volume create glouton-buildcache
 ```
@@ -9,16 +10,19 @@ docker volume create glouton-buildcache
 
 To build binary you may use the `build.sh` script. For example to just
 compile a Go binary (skip building JS, Docker image and Windows installer):
+
 ```sh
 ./build.sh go
 ```
 
 Then run Glouton:
+
 ```sh
 ./glouton
 ```
 
 If you are using Docker, you can quickly build a Docker image that use the Glouton you just build:
+
 ```
 # Remember to run ./build.sh go before
 ./build.sh docker-fast
@@ -26,8 +30,17 @@ If you are using Docker, you can quickly build a Docker image that use the Glout
 
 This result in an image tag "glouton:latest". You might need to re-tag is to use it with your existing
 docker-compose:
+
 ```
 docker tag glouton:latest bleemeo/bleemeo-agent:proposed
+```
+
+### Developing on MacOS
+If you can't run `./glouton` because it is a Linux binary, you can simply run `go run main.go`.
+
+When loading the UI, if Glouton is not able to discover your Docker containers, try changing the Docker socket with :
+```sh
+export CONTAINER_RUNTIME_DOCKER_ADDRESSES=unix:///Users/{your username}/.docker/run/docker.sock
 ```
 
 ### One-time rebuild UI
@@ -36,6 +49,7 @@ If you need to build the UI once, follow those instruction. If you develop on th
 you probably want to follow "Developing the local UI" a bit later which will allow to iterate faster.
 
 To run a single build of UI do:
+
 ```
 ./build.sh only-js
 ./build.sh go
@@ -62,7 +76,7 @@ If you updated GraphQL schema or JS files, rebuild JS files by running build.sh:
 **Note:** on Windows, if you are using the Go compiler without the `build.sh` script and
 get `"gcc": executable file not found"` error, try setting the environment variable `CGO_ENABLED` to 0.
 
-### Developing the local UI
+#### Developing the local UI
 
 When working on the JavaScript rebuilding the Javascript bundle could be slow
 and will use minified JavaScript file which are harder to debug.
@@ -73,10 +87,19 @@ any JavaScript files, you will only need to refresh the page on your browser.
 
 To run with this configuration, start webpack-dev-server:
 ```sh
-docker run --net host --rm -ti -u $UID -e HOME=/tmp/home \
+docker run --rm -ti -u $UID -e HOME=/tmp/home \
    -v $(pwd):/src -w /src/webui \
    node:16 \
    sh -c 'npm install && npm start'
+```
+
+If you encounter any npm dependencies issues, start it with the `--legacy-peer-deps` tag :
+
+```sh
+docker run --rm -ti -u $UID -e HOME=/tmp/home
+   -v $(pwd):/src -w /src/webui
+   node:16
+   sh -c 'npm install --legacy-peer-deps && npm start'
 ```
 
 Then tell Glouton to use JavaScript file from webpack-dev-server:
@@ -86,11 +109,13 @@ export GLOUTON_WEB_STATIC_CDN_URL=http://localhost:3015
 ```
 
 Glouton uses eslint as linter. You may run it with:
+
 ```sh
 (cd webui; npm run lint)
 ```
 
 Glouton uses prettier too. You may run it with:
+
 ```sh
 (cd webui; npm run pretify)
 ```
@@ -98,8 +123,9 @@ Glouton uses prettier too. You may run it with:
 ### Developing the Windows installer
 
 `packaging/windows` contains two folders:
+
 - `installer` contains a [WiX](https://wixtoolset.org/) project
-to build the MSI installer.
+  to build the MSI installer.
 - `chocolatey` contains a [Chocolatey](https://docs.chocolatey.org/en-us/) project.
 
 If you are working on Windows, the folder `packaging/windows/installer` contains a Visual Studio project.
@@ -117,12 +143,14 @@ On Linux, the `build.sh` script will build the MSI and the chocolatey package.
 Our release version will be set from the current date.
 
 The release build will
+
 * Build the local UI written in ReactJS using npm and webpack.
 * Compile the Go binary for supported systems
 * Build Docker image using Docker buildx
 * Build an Windows installer using NSIS
 
 A builder needs to be created to build multi-arch images if it doesn't exist.
+
 ```sh
 docker buildx create --name glouton-builder
 ```
@@ -130,6 +158,7 @@ docker buildx create --name glouton-builder
 ### Test release
 
 To do a test release, run:
+
 ```sh
 export GLOUTON_VERSION="$(date -u +%y.%m.%d.%H%M%S)"
 export GLOUTON_BUILDX_OPTION="--builder glouton-builder -t glouton:latest --load"
@@ -145,6 +174,7 @@ The release files are created in the `dist/` folder and a Docker image named `gl
 For production releases, you will want to build the Docker image for multiple architecture, which requires to
 push the image into a registry. Set image tags ("-t" options) to the wanted destination and ensure you
 are authorized to push to the destination registry:
+
 ```sh
 export GLOUTON_VERSION="$(date -u +%y.%m.%d.%H%M%S)"
 export GLOUTON_BUILDX_OPTION="--builder glouton-builder --platform linux/amd64,linux/arm64/v8,linux/arm/v7 -t glouton:latest -t glouton:${GLOUTON_VERSION} --push"
