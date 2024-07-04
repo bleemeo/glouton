@@ -13,7 +13,6 @@ import (
 	"github.com/bleemeo/glouton/logger"
 	"github.com/bleemeo/glouton/types"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/render"
 )
 
@@ -31,27 +30,27 @@ func (d *Data) Containers(w http.ResponseWriter, r *http.Request) {
 
 	offset, limit := 0, -1
 
-	if offsetParam := chi.URLParam(r, "offset"); offsetParam != "" {
+	if offsetParam := r.URL.Query().Get("offset"); offsetParam != "" {
 		offsetValue, err := strconv.Atoi(offsetParam)
 		if err == nil {
 			offset = offsetValue
 		}
 	}
 
-	if limitParam := chi.URLParam(r, "limit"); limitParam != "" {
+	if limitParam := r.URL.Query().Get("limit"); limitParam != "" {
 		limitValue, err := strconv.Atoi(limitParam)
 		if err == nil {
 			limit = limitValue
 		}
 	}
 
-	allContainers, err := strconv.ParseBool(chi.URLParam(r, "allContainers"))
+	allContainers, err := strconv.ParseBool(r.URL.Query().Get("allContainers"))
 	if err != nil {
 		allContainers = false
 	}
 
 	var search string
-	if searchParam := chi.URLParam(r, "search"); searchParam != "" {
+	if searchParam := r.URL.Query().Get("search"); searchParam != "" {
 		search = searchParam
 	}
 
@@ -217,7 +216,7 @@ func (d *Data) Processes(w http.ResponseWriter, r *http.Request) {
 	// - search (string) : The search string to filter processes
 
 	var containerID *string
-	if containerIDParam := chi.URLParam(r, "search"); containerIDParam == "" {
+	if containerIDParam := r.URL.Query().Get("search"); containerIDParam == "" {
 		containerID = &containerIDParam
 	}
 
@@ -324,7 +323,7 @@ func (d *Data) Facts(w http.ResponseWriter, r *http.Request) {
 func (d *Data) Services(w http.ResponseWriter, r *http.Request) {
 
 	var isActive bool
-	if isActiveParam := chi.URLParam(r, "isActive"); isActiveParam == "" {
+	if isActiveParam := r.URL.Query().Get("isActive"); isActiveParam == "" {
 		isActiveParamValue, err := strconv.ParseBool(isActiveParam)
 		if err == nil {
 			isActive = isActiveParamValue
