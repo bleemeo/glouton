@@ -36,11 +36,13 @@ docker tag glouton:latest bleemeo/bleemeo-agent:proposed
 ```
 
 ### Developing on MacOS
+
 If you can't run `./glouton` because it is a Linux binary, you can simply run `go run main.go`.
 
 When loading the UI, if Glouton is not able to discover your Docker containers, try changing the Docker socket with :
+
 ```sh
-export CONTAINER_RUNTIME_DOCKER_ADDRESSES=unix:///Users/{your username}/.docker/run/docker.sock
+export GLOUTON_CONTAINER_RUNTIME_DOCKER_ADDRESSES=unix:///Users/{your username}/.docker/run/docker.sock
 ```
 
 ### One-time rebuild UI
@@ -61,6 +63,7 @@ To run a single build of UI do:
 ### Linters
 
 Glouton uses golangci-lint as linter. You may run it with:
+
 ```sh
 ./lint.sh
 ```
@@ -86,6 +89,7 @@ JavaScript file and rebuild the JavaScript bundle on the file. When doing a chan
 any JavaScript files, you will only need to refresh the page on your browser.
 
 To run with this configuration, start webpack-dev-server:
+
 ```sh
 docker run --rm -ti -u $UID -e HOME=/tmp/home \
    -v $(pwd):/src -w /src/webui \
@@ -103,6 +107,7 @@ docker run --rm -ti -u $UID -e HOME=/tmp/home
 ```
 
 Then tell Glouton to use JavaScript file from webpack-dev-server:
+
 ```sh
 export GLOUTON_WEB_STATIC_CDN_URL=http://localhost:3015
 ./glouton
