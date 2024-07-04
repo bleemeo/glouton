@@ -26,7 +26,7 @@ const QueryError = ({ style, noBorder }) => {
 
 QueryError.propTypes = {
   style: PropTypes.object,
-  noBorder: PropTypes.boolean,
+  noBorder: PropTypes.bool,
 };
 
 export default QueryError;
