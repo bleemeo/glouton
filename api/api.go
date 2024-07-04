@@ -163,12 +163,14 @@ func (api *API) init() {
 
 	// Register the API endpoints for data fetching
 	data := Data{api}
-	router.Get("/docker-containers", data.Containers)
-	router.Get("/topinfo", data.Processes)
-	router.Get("/facts", data.Facts)
-	router.Get("/services", data.Services)
-	router.Get("/agent-informations", data.AgentInformation)
-	router.Get("/agent-status", data.AgentStatus)
+	router.Get("/data/docker-containers", data.Containers)
+	router.Get("/data/topinfo", data.Processes)
+	router.Get("/data/facts", data.Facts)
+	router.Get("/data/services", data.Services)
+	router.Get("/data/agent-informations", data.AgentInformation)
+	router.Get("/data/agent-status", data.AgentStatus)
+	router.Get("/data/tags", data.Tags)
+	router.Get("/data/processes", data.Processes)
 
 	router.HandleFunc("/diagnostic", func(w http.ResponseWriter, r *http.Request) {
 		content := api.DiagnosticPage(r.Context())
