@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import React, { FC, useState, useEffect, useMemo, useCallback, useRef } from "react";
 
 import Docker from "./Docker";
 import Loading from "../UI/Loading";
@@ -8,16 +8,18 @@ import Toggle from "../UI/Toggle";
 import QueryError from "../UI/QueryError";
 import { useHTTPDataFetch } from "../utils/hooks";
 import { CONTAINERS_URL } from "../utils/dataRoutes";
+import { Container, Containers } from "../Data/data.interface";
 
 const PAGE_SIZE = 10;
 
-const AgentDockerList = () => {
-  const [offset, setOffset] = useState(0);
-  const [allContainers, setAllContainers] = useState(false);
-  const [search, setSearch] = useState("");
-  const [nbContainers, setNbContainers] = useState(0);
 
-  const containersRef = useRef([]);
+const AgentDockerList: FC = () => {
+  const [offset, setOffset] = useState<number>(0);
+  const [allContainers, setAllContainers] = useState<boolean>(false);
+  const [search, setSearch] = useState<string>("");
+  const [nbContainers, setNbContainers] = useState<number>(0);
+
+  const containersRef = useRef<Container[]>([]);
   const parameters = useMemo(() => ({
     limit: PAGE_SIZE,
     offset,
@@ -25,41 +27,43 @@ const AgentDockerList = () => {
     allContainers
   }), [offset, search, allContainers]);
 
-  const { isLoading, error, data, isFetching } = useHTTPDataFetch(CONTAINERS_URL, parameters, 10000);
+  const { isLoading, error, data: containers, isFetching } = useHTTPDataFetch<Containers>(CONTAINERS_URL, parameters, 10000);
   
   useEffect(() => {
-    if (data && nbContainers !== data.count) {
-      setNbContainers(data.count);
+    if (containers && nbContainers !== containers.count) {
+      setNbContainers(containers.count);
     }
-    if (data && data.containers) {
-      containersRef.current = data.containers;
+    if (containers && containers.containers) {
+      containersRef.current = containers.containers;
     }
-  }, [data, nbContainers]);
+  }, [containers, nbContainers]);
 
-  const handleOffsetChange = useCallback((newOffset) => {
+  const handleOffsetChange = useCallback((newOffset: React.SetStateAction<number>) => {
     setOffset(newOffset);
   }, []);
 
-  const handleAllContainersToggle = useCallback((option) => {
+  const handleAllContainersToggle = useCallback((option: number) => {
     setAllContainers(option === 1);
     setOffset(0);
   }, []);
 
-  const handleSearchChange = useCallback((e) => {
+  const handleSearchChange = useCallback((e: { target: { value: React.SetStateAction<string>; }; }) => {
     setSearch(e.target.value);
     setOffset(0);
   }, []);
 
-  let displayContainers;
+  let displayContainers: React.JSX.Element | null = null;
+  
   if (isLoading && !isFetching) { // Only show loading if initial load is happening
     displayContainers = <Loading size="xl" />;
   } else if (error || !containersRef.current || containersRef.current.length === 0) {
     displayContainers = <QueryError />;
-  } else {
+  } else if (containers) {
     const containersList = containersRef.current;
-    const currentCountContainers = data.currentCount;
+    const currentCountContainers = containers.currentCount;
 
-    const pages = [];
+    const pages: React.JSX.Element[] = [];
+
     if (Math.ceil(currentCountContainers / PAGE_SIZE) > 1) {
       for (let i = 0; i < Math.ceil(currentCountContainers / PAGE_SIZE); i++) {
         pages.push(
@@ -104,7 +108,7 @@ const AgentDockerList = () => {
     );
 
     const renderContainers = containersList.map((container) => {
-      let date = null;
+      let date: React.ReactNode;
       if (container.startedAt === null) {
         date = (
           <span>

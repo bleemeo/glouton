@@ -13,10 +13,15 @@ import FetchSuspense from "../UI/FetchSuspense";
 import { PROCESSES_URL } from "../utils/dataRoutes";
 import Modal from "../UI/Modal";
 import A from "../UI/A";
+import { Container, Topinfo } from "../Data/data.interface";
 
-const DockerProcesses = ({ containerId, name }) => {
-  const { isLoading, error, data } = useHTTPDataFetch(PROCESSES_URL, { containerId }, 10000);
-  const processes = data;
+type DockerProcessesProps = {
+  containerId: string;
+  name: string;
+};
+
+const DockerProcesses = ({ containerId, name }: DockerProcessesProps) => {
+  const { isLoading, error, data: processes } = useHTTPDataFetch<Topinfo>(PROCESSES_URL, { containerId }, 10000);
 
   return (
     <div
@@ -59,23 +64,26 @@ const DockerProcesses = ({ containerId, name }) => {
   );
 };
 
-DockerProcesses.propTypes = {
-  containerId: PropTypes.string.isRequired,
-  name: PropTypes.string.isRequired,
+type DockerProps = {
+  container: Container;
+  date: React.ReactNode;
 };
 
+interface DockerInspect {
+  name: string;
+  inspect: string;
+}
 
 const Docker = ({ container, date }) => {
-  const [dockerInspect, setDockerInspect] = useState(null);
-  const [showProcesses, setShowProcesses] = useState(false);
+  const [dockerInspect, setDockerInspect] = useState<DockerInspect | null>(null);
+  const [showProcesses, setShowProcesses] = useState<boolean>(false);
 
-  let modal = null;
+  let modal: React.ReactNode = null;
   if (dockerInspect) {
     modal = (
       <Modal
         title={dockerInspect.name}
         closeAction={() => setDockerInspect(null)}
-        closeLabel="Cancel"
         className=" modal-xlg"
       >
         <pre
@@ -186,25 +194,6 @@ const Docker = ({ container, date }) => {
       </div>
     </>
   );
-};
-
-Docker.propTypes = {
-  container: PropTypes.shape({
-    id: PropTypes.string.isRequired,
-    state: PropTypes.string.isRequired,
-    name: PropTypes.string.isRequired,
-    command: PropTypes.string.isRequired,
-    inspectJSON: PropTypes.string.isRequired,
-    image: PropTypes.string.isRequired,
-    createdAt: PropTypes.string.isRequired,
-    memUsedPerc: PropTypes.number.isRequired,
-    cpuUsedPerc: PropTypes.number.isRequired,
-    netBitsRecv: PropTypes.number.isRequired,
-    netBitsSent: PropTypes.number.isRequired,
-    ioReadBytes: PropTypes.number.isRequired,
-    ioWriteBytes: PropTypes.number.isRequired,
-  }).isRequired,
-  date: PropTypes.element.isRequired,
 };
 
 export default Docker;

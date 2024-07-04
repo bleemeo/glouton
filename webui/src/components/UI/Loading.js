@@ -3,7 +3,7 @@ import PropTypes from "prop-types";
 
 import FaIcon from "./FaIcon";
 
-const Loading = ({ size, message }) => {
+const Loading = ({ size = "l", message = "Loading" }) => {
   const spin = <FaIcon icon="fas fa-sync fa-spin" />;
   switch (size) {
     case "s":
@@ -36,11 +36,6 @@ const Loading = ({ size, message }) => {
 Loading.propTypes = {
   size: PropTypes.string,
   message: PropTypes.string,
-};
-
-Loading.defaultProps = {
-  size: "l",
-  message: "Loading",
 };
 
 export default Loading;

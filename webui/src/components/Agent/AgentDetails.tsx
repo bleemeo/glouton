@@ -1,45 +1,57 @@
 /* eslint-disable camelcase */
+import React, { FC, useState } from "react";
 import * as d3 from "d3";
-import React, { useState } from "react";
-import PropTypes from "prop-types";
 import { Grid } from "tabler-react";
 import { Tooltip } from "react-tooltip";
-import Panel from "../UI/Panel";
-import { cssClassForStatus, textForStatus } from "../utils/converter";
-import FaIcon from "../UI/FaIcon";
-import ServiceDetailsModal from "../Service/ServiceDetailsModal";
-import { useHTTPDataFetch } from "../utils/hooks";
-import { formatDateTimeWithSeconds } from "../utils/formater";
-import Smiley from "../UI/Smiley";
-import { Problems, isNullOrUndefined } from "../utils";
-import FetchSuspense from "../UI/FetchSuspense";
-import { SERVICES_URL } from "../utils/dataRoutes";
-import { AGENT_INFORMATIONS_URL } from "../utils/dataRoutes";
-import { AGENT_STATUS_URL } from "../utils/dataRoutes";
-import { TAGS_URL } from "../utils/dataRoutes";
 import "react-tooltip/dist/react-tooltip.css";
+import { AxiosError } from "axios";
 
-const AgentDetails = ({ facts }) => {
-  const [showServiceDetails, setShowServiceDetails] = useState(null);
+import Panel from "../UI/Panel";
+import FaIcon from "../UI/FaIcon";
+import Smiley from "../UI/Smiley";
+import FetchSuspense from "../UI/FetchSuspense";
+import ServiceDetailsModal from "../Service/ServiceDetailsModal";
 
-  const factUpdatedAt = facts.find((f) => f.name === "fact_updated_at").value;
-  let factUpdatedAtDate;
+import { useHTTPDataFetch } from "../utils/hooks";
+import { isNullOrUndefined, Problems } from "../utils";
+import { cssClassForStatus, textForStatus } from "../utils/converter";
+import { formatDateTimeWithSeconds } from "../utils/formater";
+import { SERVICES_URL, AGENT_INFORMATIONS_URL, AGENT_STATUS_URL, TAGS_URL } from "../utils/dataRoutes";
+
+import { AgentInfo, AgentStatus, Fact, Service, Tag } from "../Data/data.interface";
+
+
+type AgentDetailsProps = {
+  facts: Fact[];
+};
+
+const AgentDetails: FC<AgentDetailsProps> = ({ facts }) => {
+  const [showServiceDetails, setShowServiceDetails] = useState<Service | null>(null);
+
+  const factUpdatedAt: string | undefined = facts.find((f: { name: string; }) => f.name === "fact_updated_at")?.value;
+
+  let factUpdatedAtDate: Date | null = null;
+
   if (factUpdatedAt) {
     factUpdatedAtDate = new Date(factUpdatedAt);
   }
 
-  let expireAgentBanner = null;
-  let agentDate = null;
-  const agentVersion = facts.find((f) => f.name === "glouton_version").value;
+  let expireAgentBanner: JSX.Element | null = null;
+  let agentDate: Date | null = null;
+
+  const agentVersion: string | undefined = facts.find((f: { name: string; }) => f.name === "glouton_version")?.value;
+  
   if (agentVersion) {
-    const expDate = new Date();
+    const expDate: Date = new Date();
     expDate.setDate(expDate.getDate() - 60);
+
     // First try new format (e.g. 18.03.21.134432)
     agentDate = d3.timeParse(agentVersion.slice(0, 15));
     if (!agentDate) {
       // then old format (0.20180321.134432)
       agentDate = d3.timeParse(agentVersion.slice(0, 17));
     }
+
     if (agentDate && agentDate < expDate) {
       expireAgentBanner = (
         <div className="row">
@@ -62,7 +74,7 @@ const AgentDetails = ({ facts }) => {
     }
   }
 
-  let serviceDetailsModal = null;
+  let serviceDetailsModal: JSX.Element | null = null;
   if (showServiceDetails) {
     serviceDetailsModal = (
       <ServiceDetailsModal
@@ -72,20 +84,41 @@ const AgentDetails = ({ facts }) => {
     );
   }
 
-  const { isLoading: isLoadingServices, error: errorServices, data: servicesData } = useHTTPDataFetch(SERVICES_URL, null, 60000);
-  const { isLoading: isLoadingTags, error: errorTags, data: tagsData } = useHTTPDataFetch(TAGS_URL, null, 60000);
-  const { isLoading: isLoadingAgentInformation, error: errorAgentInformation, data: agentInformationData } = useHTTPDataFetch(AGENT_INFORMATIONS_URL, null, 60000);
-  const { isLoading: isLoadingAgentStatus, error: errorAgentStatus, data: agentStatusData } = useHTTPDataFetch(AGENT_STATUS_URL, null, 60000);
-  const isLoading = isLoadingServices || isLoadingTags || isLoadingAgentInformation || isLoadingAgentStatus;
-  const error = errorServices || errorTags || errorAgentInformation || errorAgentStatus;
-  
-  const services = servicesData;
-  const tags = tagsData;
-  const agentInformation = agentInformationData;
-  const agentStatus = agentStatusData;
+  const { 
+    isLoading: isLoadingServices, 
+    error: errorServices, 
+    data: servicesData 
+  } = useHTTPDataFetch<Service>(SERVICES_URL, null, 60000);
 
-  let tooltipType = "info";
-  let problems = null;
+  const { 
+    isLoading: isLoadingTags, 
+    error: errorTags, 
+    data: tagsData 
+  } = useHTTPDataFetch<Tag>(TAGS_URL, null, 60000);
+
+  const { 
+    isLoading: isLoadingAgentInformation, 
+    error: errorAgentInformation, 
+    data: agentInformationData 
+  } = useHTTPDataFetch<AgentInfo>(AGENT_INFORMATIONS_URL, null, 60000);
+  
+  const { 
+    isLoading: isLoadingAgentStatus, 
+    error: errorAgentStatus, 
+    data: agentStatusData 
+  } = useHTTPDataFetch<AgentStatus>(AGENT_STATUS_URL, null, 60000);
+  
+  const isLoading: boolean = isLoadingServices || isLoadingTags || isLoadingAgentInformation || isLoadingAgentStatus;
+  const error: AxiosError<unknown, any> | null = errorServices || errorTags || errorAgentInformation || errorAgentStatus;
+  
+  const services: Service | null = servicesData;
+  const tags: Tag | null = tagsData;
+  const agentInformation: AgentInfo | null = agentInformationData;
+  const agentStatus: AgentStatus | null = agentStatusData;
+
+  let tooltipType: string = "info";
+  let problems: JSX.Element | null = null;
+
   if (agentStatus) {
     switch (agentStatus.status) {
       case 0:
@@ -111,9 +144,9 @@ const AgentDetails = ({ facts }) => {
         {agentStatus.statusDescription && agentStatus.statusDescription.length > 0 ? (
           <Tooltip
             place="bottom"
-            anchorId="agentStatus"
-            effect="solid"
-            type={tooltipType}
+            anchorSelect="agentStatus"
+            // effect="solid"
+            data-tooltip-variant={tooltipType}
           >
             <div style={{ maxWidth: "80rem", wordBreak: "break-all" }}>
               <Problems problems={agentStatus.statusDescription} />
@@ -236,7 +269,7 @@ const AgentDetails = ({ facts }) => {
             {({ tags }) => (
               <Panel>
                 <div className="marginOffset">
-                  Tags for {facts.find((f) => f.name === "fqdn").value}:
+                  Tags for {facts.find((f) => f.name === "fqdn")?.value}:
                   {tags.length > 0 ? (
                     <ul className="list-inline">
                       {tags.map((tag) => (
@@ -283,10 +316,6 @@ const AgentDetails = ({ facts }) => {
       </Grid.Row>
     </div>
   );
-};
-
-AgentDetails.propTypes = {
-  facts: PropTypes.instanceOf(Array).isRequired,
 };
 
 export default AgentDetails;

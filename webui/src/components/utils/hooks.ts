@@ -1,29 +1,39 @@
 import { useEffect, useState } from "react";
-import axios from "axios";
+import axios, { AxiosError } from "axios";
 
-export const useHTTPDataFetch = (url, parameters, pollInterval = 0) => {
-  
-  const [data, setData] = useState(null);
+interface FetchParameters {
+  [key: string]: any;
+}
+
+interface FetchResult<T> {
+  data: T | null;
+  isLoading: boolean;
+  error: AxiosError | null;
+  isFetching: boolean;
+}
+
+export const useHTTPDataFetch = <T,>(url: string, parameters: FetchParameters | null, pollInterval = 0): FetchResult<T> => {
+  const [data, setData] = useState<T | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setIsError] = useState(null);
-  const [isFetching, setIsFetching] = useState(false); // New state to track ongoing fetch
+  const [error, setIsError] = useState<AxiosError | null>(null);
+  const [isFetching, setIsFetching] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
-      setIsFetching(true); // Set fetching to true
+      setIsFetching(true);
       setIsError(null);
-      
+
       try {
-        const result = await axios.get(url, { params: parameters });
+        const result = await axios.get<T>(url, { params: parameters });
         setData(result.data);
       } catch (error) {
-        setIsError(error);
+        setIsError(error as AxiosError);
       } finally {
-        setIsLoading(false); // Set loading to false only when the initial fetch completes
-        setIsFetching(false); // Set fetching to false after fetch completes
+        setIsLoading(false);
+        setIsFetching(false);
       }
     };
-    
+
     fetchData();
 
     const intervalId = pollInterval > 0 ? setInterval(fetchData, pollInterval) : null;
@@ -32,12 +42,12 @@ export const useHTTPDataFetch = (url, parameters, pollInterval = 0) => {
     };
   }, [url, JSON.stringify(parameters), pollInterval]);
 
-  return { isLoading, error, data, isFetching }; // Return isFetching as well
+  return { isLoading, error, data, isFetching };
 };
 
 
 export const useHTTPPromFetch = (urls, delay = 3000) => {
-  const [data, setData] = useState([]);
+  const [data, setData] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setIsError] = useState(null);
   const [delayState, setIsDelayState] = useState(false);
@@ -59,7 +69,7 @@ export const useHTTPPromFetch = (urls, delay = 3000) => {
             setIsError(error);
           }
         };
-        let array_tmp = [];
+        let array_tmp: any[] = [];
         for (let idx in values) {
           const arrayData = await fetchData(values[idx]);
           for (let value in arrayData) {

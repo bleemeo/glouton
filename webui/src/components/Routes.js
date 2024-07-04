@@ -56,13 +56,11 @@ const MyRoutes = () => {
                       path="/dashboard"
                       element={<AgentSystemDashboard facts={facts} />}
                     />
-                    {facts.some((f) => f.name === "container_runtime") ? (
-                      <Route
-                        exact
-                        path="/docker"
-                        element={<AgentDockerListContainer />}
-                      />
-                    ) : null}
+                    <Route
+                      exact
+                      path="/docker"
+                      element={<AgentDockerListContainer />}
+                    />
                     <Route
                       exact
                       path="/processes"

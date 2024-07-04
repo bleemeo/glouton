@@ -1,10 +1,17 @@
-import React from "react";
+import React, { FC } from "react";
 import PropTypes from "prop-types";
 import * as d3 from "d3";
 import { bytesToString, formatDateTimeWithSeconds } from "../utils/formater";
 import { chartColorMap } from "../utils/colors";
+import { Topinfo } from "../Data/data.interface";
 
-const PercentBar = ({ color, title, percent }) => (
+type PercentBarProps = {
+  color: string;
+  title: string;
+  percent: number;
+};
+
+const PercentBar: FC<PercentBarProps> = ({ color, title, percent }) => (
   <div
     className="percent-bar"
     title={title}
@@ -13,13 +20,7 @@ const PercentBar = ({ color, title, percent }) => (
   />
 );
 
-PercentBar.propTypes = {
-  color: PropTypes.string.isRequired,
-  title: PropTypes.string.isRequired,
-  percent: PropTypes.number.isRequired,
-};
-
-const formatUptime = (uptimeSeconds) => {
+const formatUptime = (uptimeSeconds: number) => {
   const uptimeDays = Math.trunc(uptimeSeconds / (24 * 60 * 60));
   const uptimeHours = Math.trunc((uptimeSeconds % (24 * 60 * 60)) / (60 * 60));
   const uptimeMinutes = Math.trunc((uptimeSeconds % (60 * 60)) / 60);
@@ -40,22 +41,35 @@ const formatUptime = (uptimeSeconds) => {
   return uptimeString;
 };
 
-const AgentProcessesInfo = ({ top }) => {
+type AgentProcessesInfoProps = {
+  top: Topinfo
+};
+
+const AgentProcessesInfo: FC<AgentProcessesInfoProps> = ({ top }) => {
+
+  if (!top || !top.CPU || !top.Memory || !top.Swap || !top.Loads || !top.Processes) {
+    return <div>Error: No data available</div>;
+  } else {
+    
+  }
+
   const timeDate = new Date(top["Time"]);
 
   // sometimes the sum of all CPU percentage make more than 100%
   // which broke the bar, so we have to re-compute them
-  const cpuTotal =
-    top["CPU"]["System"] +
-    top["CPU"]["User"] +
-    top["CPU"]["Nice"] +
-    top["CPU"]["IOWait"] +
-    top["CPU"]["Idle"];
-  const cpuSystemPerc = (top["CPU"]["System"] / cpuTotal) * 100;
-  const cpuUserPerc = (top["CPU"]["User"] / cpuTotal) * 100;
-  const cpuNicePerc = (top["CPU"]["Nice"] / cpuTotal) * 100;
-  const cpuWaitPerc = (top["CPU"]["IOWait"] / cpuTotal) * 100;
-  const cpuIdlePerc = (top["CPU"]["Idle"] / cpuTotal) * 100;
+
+  const cpuTotal = 
+    top.CPU.System +
+    top.CPU.User +
+    top.CPU.Nice +
+    top.CPU.IOWait +
+    top.CPU.Idle;
+    
+  const cpuSystemPerc = (top.CPU.System / cpuTotal) * 100;
+  const cpuUserPerc = (top.CPU.User / cpuTotal) * 100;
+  const cpuNicePerc = (top.CPU.Nice / cpuTotal) * 100;
+  const cpuWaitPerc = (top.CPU.IOWait / cpuTotal) * 100;
+  const cpuIdlePerc = (top.CPU.Idle / cpuTotal) * 100;
 
   const cpuTooltipMsg =
     `${d3.format(".2r")(cpuSystemPerc)}% system` +
@@ -63,33 +77,34 @@ const AgentProcessesInfo = ({ top }) => {
     ` ‒ ${d3.format(".2r")(cpuNicePerc)}% nice` +
     ` ‒ ${d3.format(".2r")(cpuWaitPerc)}% wait` +
     ` ‒ ${d3.format(".2r")(cpuIdlePerc)}% idle`;
-  let memTotal =
-    top["Memory"]["Used"] +
-    top["Memory"]["Free"] +
-    top["Memory"]["Buffers"] +
-    top["Memory"]["Cached"];
 
-  let memUsed = top["Memory"]["Used"];
+  let memTotal =
+    top.Memory.Used +
+    top.Memory.Free +
+    top.Memory.Buffers +
+    top.Memory.Cached;
+
+  let memUsed = top.Memory.Used;
   const memUsedPerc = (memUsed / memTotal) * 100;
-  const memFreePerc = (top["Memory"]["Free"] / memTotal) * 100;
-  const memBuffersPerc = (top["Memory"]["Buffers"] / memTotal) * 100;
-  const memCachedPerc = (top["Memory"]["Cached"] / memTotal) * 100;
+  const memFreePerc = (top.Memory.Free / memTotal) * 100;
+  const memBuffersPerc = (top.Memory.Buffers / memTotal) * 100;
+  const memCachedPerc = (top.Memory.Cached / memTotal) * 100;
 
   const memTooltipMsg =
     `${bytesToString(memUsed * 1024)} used` +
-    ` ‒ ${bytesToString(top["Memory"]["Buffers"] * 1024)} buffers` +
-    ` ‒ ${bytesToString(top["Memory"]["Cached"] * 1024)} cached` +
-    ` ‒ ${bytesToString(top["Memory"]["Free"] * 1024)} free`;
+    ` ‒ ${bytesToString(top.Memory.Buffers * 1024)} buffers` +
+    ` ‒ ${bytesToString(top.Memory.Cached * 1024)} cached` +
+    ` ‒ ${bytesToString(top.Memory.Free * 1024)} free`;
 
-  const swapUsedPerc = (top["Swap"]["Used"] / top["Swap"]["Total"]) * 100;
-  const swapFreePerc = (top["Swap"]["Free"] / top["Swap"]["Total"]) * 100;
+  const swapUsedPerc = (top.Swap.Used / top.Swap.Total) * 100;
+  const swapFreePerc = (top.Swap.Free / top.Swap.Total) * 100;
 
   const swapTooltipMsg =
-    `${bytesToString(top["Swap"]["Used"] * 1024)} used` +
-    ` ‒ ${bytesToString(top["Swap"]["Free"] * 1024)} free`;
-  const maxLoad = Math.max(...top["Loads"]);
+    `${bytesToString(top.Swap.Used * 1024)} used` +
+    ` ‒ ${bytesToString(top.Swap.Free * 1024)} free`;
+  const maxLoad = Math.max(...top.Loads);
   const loadTooltipMdg =
-    top["Loads"][0] + "\n" + top["Loads"][1] + "\n" + top["Loads"][2];
+    top.Loads[0] + "\n" + top.Loads[1] + "\n" + top.Loads[2];
   return (
     <div className="row">
       <div className="col-lg-8">
@@ -190,7 +205,7 @@ const AgentProcessesInfo = ({ top }) => {
         >
           <tbody>
             <tr>
-              <td colSpan="5">
+              <td colSpan={5}>
                 <h4 style={{ marginBottom: 0 }}>
                   <strong style={{ fontSize: "medium" }}>Last update: </strong>
                   <span className="badge badge-secondary">
@@ -200,17 +215,17 @@ const AgentProcessesInfo = ({ top }) => {
               </td>
             </tr>
             <tr>
-              <td colSpan="5">
-                <strong>Users:</strong> {top["Users"]}
+              <td colSpan={5}>
+                <strong>Users:</strong> {top.Users}
               </td>
             </tr>
             <tr>
-              <td colSpan="5">
-                <strong>Uptime:</strong> {formatUptime(top["Uptime"])}
+              <td colSpan={5}>
+                <strong>Uptime:</strong> {formatUptime(top.Uptime)}
               </td>
             </tr>
             <tr>
-              <td colSpan="5">
+              <td colSpan={5}>
                 <div
                   style={{
                     display: "flex",
@@ -234,21 +249,21 @@ const AgentProcessesInfo = ({ top }) => {
                     <div className="percent-bars" style={{ height: "8px" }}>
                       <PercentBar
                         color={chartColorMap(0)}
-                        percent={(top["Loads"][0] / maxLoad) * 100}
+                        percent={(top.Loads[0] / maxLoad) * 100}
                         title={loadTooltipMdg}
                       />
                     </div>
                     <div className="percent-bars" style={{ height: "8px" }}>
                       <PercentBar
                         color={chartColorMap(1)}
-                        percent={(top["Loads"][1] / maxLoad) * 100}
+                        percent={(top.Loads[1] / maxLoad) * 100}
                         title={loadTooltipMdg}
                       />
                     </div>
                     <div className="percent-bars" style={{ height: "8px" }}>
                       <PercentBar
                         color={chartColorMap(2)}
-                        percent={(top["Loads"][2] / maxLoad) * 100}
+                        percent={(top.Loads[2] / maxLoad) * 100}
                         title={loadTooltipMdg}
                       />
                     </div>
@@ -257,7 +272,7 @@ const AgentProcessesInfo = ({ top }) => {
               </td>
             </tr>
             <tr>
-              <td colSpan="5">
+              <td colSpan={5}>
                 <strong>Tasks:</strong>
               </td>
             </tr>
@@ -266,36 +281,36 @@ const AgentProcessesInfo = ({ top }) => {
         <table className="table table-sm" style={{ marginBottom: 0 }}>
           <tbody>
             <tr>
-              <td>{top["Processes"].length} total</td>
+              <td>{top.Processes.length} total</td>
               <td>
                 {
-                  top["Processes"].filter((p) => p["status"] === "running")
+                  top.Processes.filter((p) => p.status === "running")
                     .length
                 }{" "}
                 running
               </td>
               <td>
                 {
-                  top["Processes"].filter(
+                  top.Processes.filter(
                     (p) =>
-                      p["status"] === "sleeping" ||
-                      p["status"] === "?" ||
-                      p["status"] === "idle" ||
-                      p["status"] === "disk-sleep",
+                      p.status=== "sleeping" ||
+                      p.status=== "?" ||
+                      p.status=== "idle" ||
+                      p.status=== "disk-sleep",
                   ).length
                 }{" "}
                 sleeping
               </td>
               <td>
                 {
-                  top["Processes"].filter((p) => p["status"] === "stopped")
+                  top.Processes.filter((p) => p.status=== "stopped")
                     .length
                 }{" "}
                 stopped
               </td>
               <td>
                 {
-                  top["Processes"].filter((p) => p["status"] === "zombie")
+                  top.Processes.filter((p) => p.status=== "zombie")
                     .length
                 }{" "}
                 zombie
@@ -306,10 +321,6 @@ const AgentProcessesInfo = ({ top }) => {
       </div>
     </div>
   );
-};
-
-AgentProcessesInfo.propTypes = {
-  top: PropTypes.object.isRequired,
 };
 
 export default AgentProcessesInfo;

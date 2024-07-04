@@ -30,8 +30,9 @@ const DonutPieChart = ({
   value,
   segmentsColor,
   segmentsStep,
-  fontSize,
+  fontSize = 19.5,
   formattedValue,
+  color = "#467FCF",
 }) => {
   const arcCmpts = [];
   let totalValuesTau = 0.0;
@@ -126,11 +127,6 @@ DonutPieChart.propTypes = {
   segmentsStep: PropTypes.array.isRequired,
   fontSize: PropTypes.number.isRequired,
   formattedValue: PropTypes.string.isRequired,
-};
-
-DonutPieChart.defaultProps = {
-  color: "#467FCF",
-  fontSize: 19.5,
 };
 
 export default DonutPieChart;

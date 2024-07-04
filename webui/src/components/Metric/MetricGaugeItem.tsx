@@ -6,17 +6,19 @@ import Loading from "../UI/Loading";
 import QueryError from "../UI/QueryError";
 import { colorForStatus } from "../utils/converter";
 
-const MetricGaugeItem = ({
-  unit,
-  value,
-  name,
-  style = null,
-  fontSize = 15,
-  titleFontSize = 30,
-  loading,
-  hasError,
-  thresholds,
-}) => {
+type MetricGaugeItemProps = {
+  unit?: number,
+  value?: number,
+  name: string,
+  style?: object,
+  fontSize?: number,
+  titleFontSize?: number,
+  loading: boolean,
+  hasError?: object,
+  thresholds?: any,
+};
+
+const MetricGaugeItem = ({ unit, value, name, style, fontSize, titleFontSize, loading, hasError, thresholds }: MetricGaugeItemProps) => {
   if (loading) {
     return (
       <div className="card card-body widgetLoading" style={style}>
@@ -34,8 +36,9 @@ const MetricGaugeItem = ({
       </div>
     );
   }
-  const segmentsStep = [];
+  const segmentsStep: number[] = [0];
   const segmentsColor = ["#" + colorForStatus(0)];
+
   if (thresholds) {
     if (thresholds.highWarning) {
       segmentsStep.push(thresholds.highWarning);
@@ -46,7 +49,9 @@ const MetricGaugeItem = ({
       segmentsColor.push("#" + colorForStatus(2));
     }
   }
+
   segmentsStep.push(100);
+
   return (
     <div className="card card-body widget" style={style}>
       <div
@@ -68,19 +73,6 @@ const MetricGaugeItem = ({
       </div>
     </div>
   );
-};
-
-MetricGaugeItem.propTypes = {
-  unit: PropTypes.number,
-  value: PropTypes.number,
-  name: PropTypes.oneOfType([PropTypes.object, PropTypes.string]),
-  style: PropTypes.object,
-  fontSize: PropTypes.number,
-  titleFontSize: PropTypes.number,
-  loading: PropTypes.bool,
-  hasError: PropTypes.object,
-  status: PropTypes.number,
-  thresholds: PropTypes.object,
 };
 
 export default MetricGaugeItem;

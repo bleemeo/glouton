@@ -1,8 +1,8 @@
-import React, { useEffect } from "react";
+import React, { FC, useEffect } from "react";
 import Panel from "../UI/Panel";
 import AgentDockerList from "./AgentDockerList";
 
-const AgentDockerListContainer = () => {
+const AgentDockerListContainer: FC = () => {
   useEffect(() => {
     document.title = "Docker | Glouton";
   }, []);

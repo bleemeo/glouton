@@ -1,6 +1,20 @@
 import { chartTypes, UNIT_PERCENTAGE, UNIT_BYTE, UNIT_NUMBER } from "../utils";
 
-export const gaugesBarPrometheusLinux = [
+interface Metric {
+  query: string;
+  color?: string;
+  legend?: string;
+}
+
+export interface GaugeBar {
+  title: string;
+  type?: string
+  metrics: Metric[];
+  unit: number;
+  mountpoint?: string;
+}
+
+export const gaugesBarPrometheusLinux: GaugeBar[] = [
   {
     title: "CPU",
     metrics: [
@@ -84,7 +98,7 @@ export const gaugesBarPrometheusWindows = [
   },
 ];
 
-export const gaugesBarBLEEMEO = [
+export const gaugesBarBLEEMEO: GaugeBar[] = [
   {
     title: "CPU",
     metrics: [{ query: "cpu_used" }],
@@ -108,7 +122,7 @@ export const gaugesBarBLEEMEO = [
   },
 ];
 
-export const widgetsBLEEMEO = [
+export const widgetsBLEEMEO: GaugeBar[] = [
   {
     title: "Processor Usage",
     type: chartTypes[1],

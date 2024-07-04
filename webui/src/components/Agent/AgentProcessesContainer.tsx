@@ -8,14 +8,14 @@ import { useHTTPDataFetch } from "../utils/hooks";
 import { isNullOrUndefined } from "../utils";
 import FetchSuspense from "../UI/FetchSuspense";
 import { PROCESSES_URL } from "../utils/dataRoutes";
+import { Topinfo } from "../Data/data.interface";
 
 const AgentProcessesContainer = () => {
   useEffect(() => {
     document.title = "Processes | Glouton";
   }, []);
 
-  const { isLoading, isUpdating, error, data } = useHTTPDataFetch(PROCESSES_URL, null, 10000);
-  const processes = data;
+  const { isLoading, isFetching, error, data: processes } = useHTTPDataFetch<Topinfo>(PROCESSES_URL, null, 10000);
 
   return (
     <FetchSuspense
@@ -34,7 +34,7 @@ const AgentProcessesContainer = () => {
           <Panel>
             <AgentProcesses top={processes} sizePage={20} />
           </Panel>
-          {isUpdating && (
+          {isFetching && (
             <div className="d-flex justify-content-center align-items-center">
               <Loading size="sm" />
             </div>
