@@ -7,8 +7,6 @@ import { DebounceInput } from "react-debounce-input";
 import Toggle from "../UI/Toggle";
 import QueryError from "../UI/QueryError";
 import { useHTTPDataFetch } from "../utils/hooks";
-import { isNullOrUndefined } from "../utils";
-import { CONTAINERS_DETAILS } from "../utils/gqlRequests";
 import { CONTAINERS_URL } from "../utils/dataRoutes";
 
 const PAGE_SIZE = 10;

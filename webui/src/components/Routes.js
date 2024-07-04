@@ -12,7 +12,6 @@ import "rc-switch/assets/index.css";
 import Fallback from "./UI/Fallback";
 import FetchSuspense from "./UI/FetchSuspense";
 import { useHTTPDataFetch } from "./utils/hooks";
-import { FACTS } from "./utils/gqlRequests";
 import { FACTS_URL } from "./utils/dataRoutes";
 import SideNavBar from "./App/SideNavbar";
 

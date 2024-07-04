@@ -13,7 +13,6 @@ import { formatDateTimeWithSeconds } from "../utils/formater";
 import Smiley from "../UI/Smiley";
 import { Problems, isNullOrUndefined } from "../utils";
 import FetchSuspense from "../UI/FetchSuspense";
-import { AGENT_DETAILS } from "../utils/gqlRequests";
 import { SERVICES_URL } from "../utils/dataRoutes";
 import { AGENT_INFORMATIONS_URL } from "../utils/dataRoutes";
 import { AGENT_STATUS_URL } from "../utils/dataRoutes";
