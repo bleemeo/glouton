@@ -3,22 +3,21 @@ import React, { useState } from "react";
 import PropTypes from "prop-types";
 
 import FaIcon from "../UI/FaIcon";
-import { formatDateTime, _formatCpuTime } from "../utils/formater";
+import { _formatCpuTime } from "../utils/formater";
+import { formatDateTime } from "../utils/formater";
 import { renderDisk } from "./utils";
 import { renderNetwork, renderDonutDocker } from "../UI";
+import ProcessesTable from "../UI/ProcessesTable";
+import { useHTTPDataFetch } from "../utils/hooks";
+import FetchSuspense from "../UI/FetchSuspense";
+import { PROCESSES_URL } from "../utils/dataRoutes";
 import Modal from "../UI/Modal";
 import A from "../UI/A";
-import ProcessesTable from "../UI/ProcessesTable";
-import { useFetch } from "../utils/hooks";
-import FetchSuspense from "../UI/FetchSuspense";
-import { CONTAINER_PROCESSES } from "../utils/gqlRequests";
 
 const DockerProcesses = ({ containerId, name }) => {
-  const { isLoading, error, processes } = useFetch(
-    CONTAINER_PROCESSES,
-    { containerId },
-    10000,
-  );
+  const { isLoading, error, data } = useHTTPDataFetch(PROCESSES_URL, { containerId }, 10000);
+  const processes = data;
+
   return (
     <div
       className="d-flex flex-column align-items-center mt-3"
@@ -41,7 +40,7 @@ const DockerProcesses = ({ containerId, name }) => {
                   (process.memory_rss / memTotal) * 100,
                 ),
                 new_cpu_times: _formatCpuTime(process.cpu_time),
-              }
+              };
             });
             return (
               <div style={{ overflow: "auto" }}>
@@ -64,6 +63,7 @@ DockerProcesses.propTypes = {
   containerId: PropTypes.string.isRequired,
   name: PropTypes.string.isRequired,
 };
+
 
 const Docker = ({ container, date }) => {
   const [dockerInspect, setDockerInspect] = useState(null);

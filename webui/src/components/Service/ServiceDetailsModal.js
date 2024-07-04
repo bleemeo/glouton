@@ -3,14 +3,14 @@ import PropTypes from "prop-types";
 
 import Modal from "../UI/Modal";
 import { cssClassForStatus, textForStatus } from "../utils/converter";
-import { useFetch } from "../utils/hooks";
+import { useHTTPDataFetch } from "../utils/hooks";
 import FetchSuspense from "../UI/FetchSuspense";
-import { CONTAINER_SERVICE } from "../utils/gqlRequests";
+import { CONTAINERS_URL } from "../utils/dataRoutes";
 
 const ServiceContainer = ({ containerId }) => {
-  const { isLoading, error, containers } = useFetch(CONTAINER_SERVICE, {
-    containerId,
-  });
+  const { isLoading, error, data } = useHTTPDataFetch(CONTAINERS_URL, { search: containerId });
+  const containers = data;
+
   return (
     <FetchSuspense isLoading={isLoading} error={error} containers={containers}>
       {({ containers }) => {

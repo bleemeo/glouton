@@ -11,8 +11,9 @@ import PanelErrorBoundary from "./UI/PanelErrorBoundary";
 import "rc-switch/assets/index.css";
 import Fallback from "./UI/Fallback";
 import FetchSuspense from "./UI/FetchSuspense";
-import { useFetch } from "./utils/hooks";
+import { useHTTPDataFetch } from "./utils/hooks";
 import { FACTS } from "./utils/gqlRequests";
+import { FACTS_URL } from "./utils/dataRoutes";
 import SideNavBar from "./App/SideNavbar";
 
 const ScrollToTopComponent = (props) => {
@@ -39,13 +40,14 @@ const AgentProcessesContainer = lazy(() =>
 const AgentDetails = lazy(() => import("./Agent/AgentDetails"));
 
 const MyRoutes = () => {
-  const { isLoading, error, facts } = useFetch(FACTS);
+  const { isLoading, error, data } = useHTTPDataFetch(FACTS_URL, null);
+  const facts = data
   return (
     <Router>
       <ScrollToTop>
         <PanelErrorBoundary>
           <Suspense fallback={<Fallback />}>
-            <FetchSuspense isLoading={isLoading} error={error} facts={facts}>
+              <FetchSuspense isLoading={isLoading} error={error} facts={facts}>
               {({ facts }) => (
                 <>
                   <SideNavBar />

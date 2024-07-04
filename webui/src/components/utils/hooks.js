@@ -1,27 +1,42 @@
-import { useQuery } from "@apollo/client/react";
 import { useEffect, useState } from "react";
 import axios from "axios";
 
-export const POLL = 6;
+export const useHTTPDataFetch = (url, parameters, pollInterval = 0) => {
+  
+  const [data, setData] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setIsError] = useState(null);
+  const [isFetching, setIsFetching] = useState(false); // New state to track ongoing fetch
 
-export const useFetch = (query, variables, pollInterval = 0) => {
-  const fetchConfig = {
-    fetchPolicy: "network-only",
-  };
-  if (variables) fetchConfig.variables = variables;
-  if (pollInterval) {
-    fetchConfig.pollInterval = pollInterval;
-    fetchConfig.notifyOnNetworkStatusChange = true;
-  }
-  const { loading, error, data, networkStatus } = useQuery(query, fetchConfig);
-  let isLoading = loading;
-  if (pollInterval && networkStatus) {
-    isLoading = loading && networkStatus !== POLL;
-  }
-  return { isLoading, error, ...data, networkStatus };
+  useEffect(() => {
+    const fetchData = async () => {
+      setIsFetching(true); // Set fetching to true
+      setIsError(null);
+      
+      try {
+        const result = await axios.get(url, { params: parameters });
+        setData(result.data);
+      } catch (error) {
+        setIsError(error);
+      } finally {
+        setIsLoading(false); // Set loading to false only when the initial fetch completes
+        setIsFetching(false); // Set fetching to false after fetch completes
+      }
+    };
+    
+    fetchData();
+
+    const intervalId = pollInterval > 0 ? setInterval(fetchData, pollInterval) : null;
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [url, JSON.stringify(parameters), pollInterval]);
+
+  return { isLoading, error, data, isFetching }; // Return isFetching as well
 };
 
-export const useHTTPFetch = (urls, delay = 3000) => {
+
+export const useHTTPPromFetch = (urls, delay = 3000) => {
   const [data, setData] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setIsError] = useState(null);

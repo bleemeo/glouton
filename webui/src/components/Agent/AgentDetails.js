@@ -8,12 +8,16 @@ import Panel from "../UI/Panel";
 import { cssClassForStatus, textForStatus } from "../utils/converter";
 import FaIcon from "../UI/FaIcon";
 import ServiceDetailsModal from "../Service/ServiceDetailsModal";
-import { useFetch } from "../utils/hooks";
+import { useHTTPDataFetch } from "../utils/hooks";
 import { formatDateTimeWithSeconds } from "../utils/formater";
 import Smiley from "../UI/Smiley";
 import { Problems, isNullOrUndefined } from "../utils";
 import FetchSuspense from "../UI/FetchSuspense";
 import { AGENT_DETAILS } from "../utils/gqlRequests";
+import { SERVICES_URL } from "../utils/dataRoutes";
+import { AGENT_INFORMATIONS_URL } from "../utils/dataRoutes";
+import { AGENT_STATUS_URL } from "../utils/dataRoutes";
+import { TAGS_URL } from "../utils/dataRoutes";
 import "react-tooltip/dist/react-tooltip.css";
 
 const AgentDetails = ({ facts }) => {
@@ -69,8 +73,18 @@ const AgentDetails = ({ facts }) => {
     );
   }
 
-  const { isLoading, error, services, tags, agentInformation, agentStatus } =
-    useFetch(AGENT_DETAILS, null, 60000);
+  const { isLoading: isLoadingServices, error: errorServices, data: servicesData } = useHTTPDataFetch(SERVICES_URL, null, 60000);
+  const { isLoading: isLoadingTags, error: errorTags, data: tagsData } = useHTTPDataFetch(TAGS_URL, null, 60000);
+  const { isLoading: isLoadingAgentInformation, error: errorAgentInformation, data: agentInformationData } = useHTTPDataFetch(AGENT_INFORMATIONS_URL, null, 60000);
+  const { isLoading: isLoadingAgentStatus, error: errorAgentStatus, data: agentStatusData } = useHTTPDataFetch(AGENT_STATUS_URL, null, 60000);
+  const isLoading = isLoadingServices || isLoadingTags || isLoadingAgentInformation || isLoadingAgentStatus;
+  const error = errorServices || errorTags || errorAgentInformation || errorAgentStatus;
+  
+  const services = servicesData;
+  const tags = tagsData;
+  const agentInformation = agentInformationData;
+  const agentStatus = agentStatusData;
+
   let tooltipType = "info";
   let problems = null;
   if (agentStatus) {
@@ -95,7 +109,7 @@ const AgentDetails = ({ facts }) => {
           <Smiley status={agentStatus.status} />
         </p>
         <p className="text-center">{textForStatus(agentStatus.status)}</p>
-        {agentStatus.statusDescription.length > 0 ? (
+        {agentStatus.statusDescription && agentStatus.statusDescription.length > 0 ? (
           <Tooltip
             place="bottom"
             anchorId="agentStatus"
@@ -160,7 +174,7 @@ const AgentDetails = ({ facts }) => {
               </Panel>
             )}
           </FetchSuspense>
-          {agentInformation ? (
+          {agentInformation && Object.keys(agentInformation).length > 0 ? (
             <Panel>
               <div className="marginOffset">
                 <ul className="list-unstyled">

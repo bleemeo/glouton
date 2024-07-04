@@ -19,19 +19,15 @@ import {
 
 const AgentSystemDashboard = ({ facts }) => {
   let gaugesBar = [];
-  let widgets = [];
   if (facts.find((f) => f.name === "metrics_format").value === "Bleemeo") {
     gaugesBar = gaugesBarBLEEMEO;
-    widgets = widgetsBLEEMEO;
   } else if (
     facts.find((f) => f.name === "metrics_format").value == "Prometheus"
   ) {
     if (facts.find((f) => f.name === "kernel").value == "Linux") {
       gaugesBar = gaugesBarPrometheusLinux;
-      widgets = widgetsPrometheusLinux;
     } else {
       gaugesBar = gaugesBarPrometheusWindows;
-      widgets = widgetsPrometheusWindows;
     }
   }
   const [period, setPeriod] = useState({ minutes: 60 });
@@ -44,20 +40,6 @@ const AgentSystemDashboard = ({ facts }) => {
     setStorageItem("period", period);
   }, [period]);
   const windowWidth = useWindowWidth();
-
-  //  let periodText = "";
-  //  if (period.minutes) {
-  //    const range = lastQuickRanges.find((p) => p.value === period.minutes);
-  //    if (range) periodText = range.label;
-  //  } else if (period.from && period.to) {
-  //    periodText =
-  //      "from " +
-  //      formatDateTime(period.from) +
-  //      " to " +
-  //      formatDateTime(period.to);
-  //  }
-
-  //  const onPeriodClick = () => setShowEditPeriodMal(true);
 
   const handleBackwardForwardFunc = (isForward = false) => {
     let startDate = new Date();
@@ -146,7 +128,7 @@ const AgentSystemDashboard = ({ facts }) => {
               </VisibilitySensor>
             </div>
           ))}
-          {widgets.map((widget) => (
+          {/* {widgets.map((widget) => (
             <div
               className="col-sm-12"
               style={{ marginTop: "1rem" }}
@@ -179,7 +161,7 @@ const AgentSystemDashboard = ({ facts }) => {
                 }}
               </VisibilitySensor>
             </div>
-          ))}
+          ))} */}
         </div>
       </div>
     </>

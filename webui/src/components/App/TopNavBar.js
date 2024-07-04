@@ -1,10 +1,12 @@
 import React from "react";
-import { useFetch } from "../utils/hooks";
-import { FACTS } from "../utils/gqlRequests";
+import { useHTTPDataFetch } from "../utils/hooks";
 import FetchSuspense from "../UI/FetchSuspense";
+import { FACTS_URL } from "../utils/dataRoutes";
 
 const TopNavBar = () => {
-  const { isLoading, error, facts } = useFetch(FACTS);
+  const { isLoading, error, data } = useHTTPDataFetch(FACTS_URL, null, 10000);
+  const facts = data;
+
   return (
     <nav
       className="navbar navbar-expand-lg

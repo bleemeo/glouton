@@ -4,21 +4,19 @@ import AgentProcesses from "./AgentProcesses";
 import Loading from "../UI/Loading";
 import Panel from "../UI/Panel";
 import QueryError from "../UI/QueryError";
-import { useFetch } from "../utils/hooks";
+import { useHTTPDataFetch } from "../utils/hooks";
 import { isNullOrUndefined } from "../utils";
 import FetchSuspense from "../UI/FetchSuspense";
-import { PROCESSES } from "../utils/gqlRequests";
+import { PROCESSES_URL } from "../utils/dataRoutes";
 
 const AgentProcessesContainer = () => {
   useEffect(() => {
     document.title = "Processes | Glouton";
   }, []);
 
-  const { isLoading, error, points, processes } = useFetch(
-    PROCESSES,
-    null,
-    10000,
-  );
+  const { isLoading, isUpdating, error, data } = useHTTPDataFetch(PROCESSES_URL, null, 10000);
+  const processes = data;
+
   return (
     <FetchSuspense
       isLoading={isLoading}
@@ -30,17 +28,19 @@ const AgentProcessesContainer = () => {
       }
       fallbackComponent={<QueryError noBorder />}
       processes={processes}
-      points={points}
     >
-      {({ processes }) => {
-        return (
-          <div style={{ marginTop: "1.5rem" }}>
-            <Panel>
-              <AgentProcesses top={processes} sizePage={20} />
-            </Panel>
-          </div>
-        );
-      }}
+      {({ processes }) => (
+        <div style={{ marginTop: "1.5rem" }}>
+          <Panel>
+            <AgentProcesses top={processes} sizePage={20} />
+          </Panel>
+          {isUpdating && (
+            <div className="d-flex justify-content-center align-items-center">
+              <Loading size="sm" />
+            </div>
+          )}
+        </div>
+      )}
     </FetchSuspense>
   );
 };

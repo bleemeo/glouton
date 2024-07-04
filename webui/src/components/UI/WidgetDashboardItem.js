@@ -3,7 +3,7 @@ import PropTypes from "prop-types";
 import MetricGaugeItem from "../Metric/MetricGaugeItem";
 import { chartTypes, isShallowEqual } from "../utils";
 import LineChart from "./LineChart";
-import { useHTTPFetch } from "../utils/hooks";
+import { useHTTPPromFetch } from "../utils/hooks";
 import FetchSuspense from "./FetchSuspense";
 
 const WidgetDashboardItem = ({
@@ -98,7 +98,7 @@ const WidgetDashboardItem = ({
     return urls;
   };
 
-  const { isLoading, data, error } = useHTTPFetch(urls(metrics, period), 10000);
+  const { isLoading, data, error } = useHTTPPromFetch(urls(metrics, period), 10000);
   const points = data;
   let hasError = error;
   if (previousError.current && !error) {
