@@ -6,7 +6,6 @@ toolchain go1.22.1
 
 require (
 	dario.cat/mergo v1.0.0
-	github.com/99designs/gqlgen v0.17.49
 	github.com/AstromechZA/etcpwdparse v0.0.0-20170319193008-f0e5f0779716
 	github.com/alecthomas/kingpin/v2 v2.4.0
 	github.com/bleemeo/bleemeo-go v0.0.0-20240613094357-8d3bf117f67f
@@ -49,7 +48,6 @@ require (
 	github.com/rs/cors v1.11.0
 	github.com/shirou/gopsutil/v3 v3.24.5
 	github.com/urfave/cli/v2 v2.27.2
-	github.com/vektah/gqlparser/v2 v2.5.16
 	github.com/vishvananda/netlink v1.2.1-beta.2
 	github.com/vmware/govmomi v0.37.3
 	github.com/yusufpapurcu/wmi v1.2.4

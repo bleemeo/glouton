@@ -126,7 +126,7 @@ func (d *Data) Containers(w http.ResponseWriter, r *http.Request) {
 	render.Render(w, r, &Containers{Containers: containersRes, Count: nbContainers, CurrentCount: nbCurrentContainers})
 }
 
-func (d *Data) paginateInformation(input *Pagination, containersRes []*Container) []*Container {
+func paginateInformation(input *Pagination, containersRes []*Container) []*Container {
 	if input != nil {
 		if len(containersRes) > input.Offset {
 			to := input.Offset + input.Limit

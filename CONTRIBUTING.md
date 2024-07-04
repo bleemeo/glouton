@@ -70,7 +70,7 @@ Glouton uses golangci-lint as linter. You may run it with:
 
 ### Full build
 
-If you updated GraphQL schema or JS files, rebuild JS files by running build.sh:
+If you updated JS files, rebuild them by running build.sh:
 
 ```sh
 ./build.sh
