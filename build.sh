@@ -95,8 +95,7 @@ if [ "${ONLY_JS}" = "1" ]; then
       goreleaser/goreleaser:${GORELEASER_VERSION} \
       tini -g -- sh -exc "
       mkdir -p /go/pkg
-      go generate ./...
-      chown -R $USER_UID api/models_gen.go"
+      go generate ./..."
    exit 0
 fi
 
@@ -138,7 +137,6 @@ else
       go generate ./...
       go test ./...
       goreleaser --clean --snapshot --parallelism 2
-      chown -R $USER_UID dist api/models_gen.go
       "
 
    echo $GLOUTON_VERSION > dist/VERSION
