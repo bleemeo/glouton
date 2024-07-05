@@ -1,4 +1,11 @@
-import React, { FC, useState, useEffect, useMemo, useCallback, useRef } from "react";
+import React, {
+  FC,
+  useState,
+  useEffect,
+  useMemo,
+  useCallback,
+  useRef,
+} from "react";
 
 import Docker from "./Docker";
 import Loading from "../UI/Loading";
@@ -12,7 +19,6 @@ import { Container, Containers } from "../Data/data.interface";
 
 const PAGE_SIZE = 10;
 
-
 const AgentDockerList: FC = () => {
   const [offset, setOffset] = useState<number>(0);
   const [allContainers, setAllContainers] = useState<boolean>(false);
@@ -20,15 +26,23 @@ const AgentDockerList: FC = () => {
   const [nbContainers, setNbContainers] = useState<number>(0);
 
   const containersRef = useRef<Container[]>([]);
-  const parameters = useMemo(() => ({
-    limit: PAGE_SIZE,
-    offset,
-    search,
-    allContainers
-  }), [offset, search, allContainers]);
+  const parameters = useMemo(
+    () => ({
+      limit: PAGE_SIZE,
+      offset,
+      search,
+      allContainers,
+    }),
+    [offset, search, allContainers],
+  );
 
-  const { isLoading, error, data: containers, isFetching } = useHTTPDataFetch<Containers>(CONTAINERS_URL, parameters, 10000);
-  
+  const {
+    isLoading,
+    error,
+    data: containers,
+    isFetching,
+  } = useHTTPDataFetch<Containers>(CONTAINERS_URL, parameters, 10000);
+
   useEffect(() => {
     if (containers && nbContainers !== containers.count) {
       setNbContainers(containers.count);
@@ -38,25 +52,36 @@ const AgentDockerList: FC = () => {
     }
   }, [containers, nbContainers]);
 
-  const handleOffsetChange = useCallback((newOffset: React.SetStateAction<number>) => {
-    setOffset(newOffset);
-  }, []);
+  const handleOffsetChange = useCallback(
+    (newOffset: React.SetStateAction<number>) => {
+      setOffset(newOffset);
+    },
+    [],
+  );
 
   const handleAllContainersToggle = useCallback((option: number) => {
     setAllContainers(option === 1);
     setOffset(0);
   }, []);
 
-  const handleSearchChange = useCallback((e: { target: { value: React.SetStateAction<string>; }; }) => {
-    setSearch(e.target.value);
-    setOffset(0);
-  }, []);
+  const handleSearchChange = useCallback(
+    (e: { target: { value: React.SetStateAction<string> } }) => {
+      setSearch(e.target.value);
+      setOffset(0);
+    },
+    [],
+  );
 
   let displayContainers: React.JSX.Element | null = null;
-  
-  if (isLoading && !isFetching) { // Only show loading if initial load is happening
+
+  if (isLoading && !isFetching) {
+    // Only show loading if initial load is happening
     displayContainers = <Loading size="xl" />;
-  } else if (error || !containersRef.current || containersRef.current.length === 0) {
+  } else if (
+    error ||
+    !containersRef.current ||
+    containersRef.current.length === 0
+  ) {
     displayContainers = <QueryError />;
   } else if (containers) {
     const containersList = containersRef.current;
@@ -71,7 +96,10 @@ const AgentDockerList: FC = () => {
             className={`page-item ${i === offset / PAGE_SIZE ? "active" : ""}`}
             key={i.toString()}
           >
-            <a className="page-link" onClick={() => handleOffsetChange(i * PAGE_SIZE)}>
+            <a
+              className="page-link"
+              onClick={() => handleOffsetChange(i * PAGE_SIZE)}
+            >
               {i + 1}
             </a>
           </li>,
@@ -98,7 +126,8 @@ const AgentDockerList: FC = () => {
             className="page-link"
             aria-label="Next"
             onClick={() => {
-              if (offset + PAGE_SIZE < currentCountContainers) handleOffsetChange(offset + PAGE_SIZE);
+              if (offset + PAGE_SIZE < currentCountContainers)
+                handleOffsetChange(offset + PAGE_SIZE);
             }}
           >
             <span aria-hidden="true">&raquo;</span>

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import React, { useEffect, useState } from "react";
 import VisibilitySensor from "react-visibility-sensor";
 import PropTypes from "prop-types";
@@ -49,43 +50,6 @@ const AgentSystemDashboard = ({ facts }: AgentSystemDashboardProps) => {
     setStorageItem("period", period);
   }, [period]);
 
-  const windowWidth = useWindowWidth();
-
-  const handleBackwardForwardFunc = (isForward = false) => {
-    let startDate = new Date();
-    let endDate = new Date();
-    if (period.minutes) {
-
-      startDate.setUTCMinutes(startDate.getUTCMinutes() - period.minutes);
-      const res: any = computeBackwardForward(
-        period.minutes,
-        startDate,
-        endDate,
-        isForward,
-      );
-      startDate = res.startDate;
-      endDate = res.endDate;
-
-    } else if (period.from && period.to) {
-      const nbMinutes = Math.floor(
-        Math.abs(Number(new Date(period.to)) - Number(new Date(period.from))) / 1000 / 60,
-      );
-      startDate = new Date(period.from);
-      endDate = new Date(period.to);
-
-      const res = computeBackwardForward(
-        nbMinutes,
-        startDate,
-        endDate,
-        isForward,
-      );
-      
-      startDate = res.startDate;
-      endDate = res.endDate;
-    }
-    setPeriod({ minutes: period.minutes, from: startDate, to: endDate });
-  };
-
   let refetchTime = 10080;
   if (period.minutes) {
     refetchTime = period.minutes / 6;
@@ -120,7 +84,6 @@ const AgentSystemDashboard = ({ facts }: AgentSystemDashboardProps) => {
                         title={gaugeItem.title}
                         metrics={gaugeItem.metrics}
                         unit={gaugeItem.unit}
-                        refetchTime={refetchTime}
                         period={period}
                       />
                     );

@@ -21,6 +21,6 @@ const category20 = [
   "#9edae5",
 ];
 
-export const chartColorMap = (idx) => {
+export const chartColorMap = (idx: number) => {
   return category20[idx % category20.length];
 };

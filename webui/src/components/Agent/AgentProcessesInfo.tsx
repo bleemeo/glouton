@@ -1,5 +1,4 @@
 import React, { FC } from "react";
-import PropTypes from "prop-types";
 import * as d3 from "d3";
 import { bytesToString, formatDateTimeWithSeconds } from "../utils/formater";
 import { chartColorMap } from "../utils/colors";
@@ -42,15 +41,19 @@ const formatUptime = (uptimeSeconds: number) => {
 };
 
 type AgentProcessesInfoProps = {
-  top: Topinfo
+  top: Topinfo;
 };
 
 const AgentProcessesInfo: FC<AgentProcessesInfoProps> = ({ top }) => {
-
-  if (!top || !top.CPU || !top.Memory || !top.Swap || !top.Loads || !top.Processes) {
+  if (
+    !top ||
+    !top.CPU ||
+    !top.Memory ||
+    !top.Swap ||
+    !top.Loads ||
+    !top.Processes
+  ) {
     return <div>Error: No data available</div>;
-  } else {
-    
   }
 
   const timeDate = new Date(top["Time"]);
@@ -58,13 +61,13 @@ const AgentProcessesInfo: FC<AgentProcessesInfoProps> = ({ top }) => {
   // sometimes the sum of all CPU percentage make more than 100%
   // which broke the bar, so we have to re-compute them
 
-  const cpuTotal = 
+  const cpuTotal =
     top.CPU.System +
     top.CPU.User +
     top.CPU.Nice +
     top.CPU.IOWait +
     top.CPU.Idle;
-    
+
   const cpuSystemPerc = (top.CPU.System / cpuTotal) * 100;
   const cpuUserPerc = (top.CPU.User / cpuTotal) * 100;
   const cpuNicePerc = (top.CPU.Nice / cpuTotal) * 100;
@@ -78,13 +81,10 @@ const AgentProcessesInfo: FC<AgentProcessesInfoProps> = ({ top }) => {
     ` ‒ ${d3.format(".2r")(cpuWaitPerc)}% wait` +
     ` ‒ ${d3.format(".2r")(cpuIdlePerc)}% idle`;
 
-  let memTotal =
-    top.Memory.Used +
-    top.Memory.Free +
-    top.Memory.Buffers +
-    top.Memory.Cached;
+  const memTotal =
+    top.Memory.Used + top.Memory.Free + top.Memory.Buffers + top.Memory.Cached;
 
-  let memUsed = top.Memory.Used;
+  const memUsed = top.Memory.Used;
   const memUsedPerc = (memUsed / memTotal) * 100;
   const memFreePerc = (top.Memory.Free / memTotal) * 100;
   const memBuffersPerc = (top.Memory.Buffers / memTotal) * 100;
@@ -283,36 +283,27 @@ const AgentProcessesInfo: FC<AgentProcessesInfoProps> = ({ top }) => {
             <tr>
               <td>{top.Processes.length} total</td>
               <td>
-                {
-                  top.Processes.filter((p) => p.status === "running")
-                    .length
-                }{" "}
+                {top.Processes.filter((p) => p.status === "running").length}{" "}
                 running
               </td>
               <td>
                 {
                   top.Processes.filter(
                     (p) =>
-                      p.status=== "sleeping" ||
-                      p.status=== "?" ||
-                      p.status=== "idle" ||
-                      p.status=== "disk-sleep",
+                      p.status === "sleeping" ||
+                      p.status === "?" ||
+                      p.status === "idle" ||
+                      p.status === "disk-sleep",
                   ).length
                 }{" "}
                 sleeping
               </td>
               <td>
-                {
-                  top.Processes.filter((p) => p.status=== "stopped")
-                    .length
-                }{" "}
+                {top.Processes.filter((p) => p.status === "stopped").length}{" "}
                 stopped
               </td>
               <td>
-                {
-                  top.Processes.filter((p) => p.status=== "zombie")
-                    .length
-                }{" "}
+                {top.Processes.filter((p) => p.status === "zombie").length}{" "}
                 zombie
               </td>
             </tr>

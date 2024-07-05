@@ -20,5 +20,5 @@ root.render(
     <Suspense fallback={<PanelLoading />}>
       <App />
     </Suspense>
-  </PanelErrorBoundary>
+  </PanelErrorBoundary>,
 );

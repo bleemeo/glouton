@@ -1,7 +1,8 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import React, { useRef, useEffect, useState } from "react";
-import PropTypes from "prop-types";
 import { Card } from "tabler-react";
 import * as echarts from "echarts";
+import { EChartOption } from "echarts";
 import cn from "classnames";
 import {
   formatToFrenchTime,
@@ -17,8 +18,13 @@ import FaIcon from "./FaIcon";
 import QueryError from "./QueryError";
 import { chartColorMap } from "../utils/colors";
 
-export const getOptions = (series, stacked, funcConverter, unit) => ({
-  colors: series.map((serie) => serie.color),
+export const getOptions = (
+  series: echarts.EChartOption.SeriesCustom[],
+  stacked: boolean,
+  funcConverter: any,
+  unit: number,
+): echarts.EChartOption => ({
+  color: series.map((serie) => serie.itemStyle?.color?.toString() || "#000"),
   animation: false,
   grid: {
     top: "3%",
@@ -35,7 +41,7 @@ export const getOptions = (series, stacked, funcConverter, unit) => ({
       axisLabel: {
         formatter: function (value) {
           // Formatted to be month/day; display year only in the first label
-          var date = new Date(value);
+          const date = new Date(value);
           return tickFormatDate(date);
         },
         color: "#000",
@@ -57,9 +63,9 @@ export const getOptions = (series, stacked, funcConverter, unit) => ({
       type: "value",
       show: true,
       min: 0,
-      max: unit === UNIT_PERCENTAGE ? 100 : null,
+      max: unit === UNIT_PERCENTAGE ? 100 : undefined,
       axisLabel: {
-        formatter: function (value) {
+        formatter: function (value: any) {
           // Formatted to be month/day; display year only in the first label
           return funcConverter(value);
         },
@@ -94,36 +100,62 @@ export const getOptions = (series, stacked, funcConverter, unit) => ({
       let total = -1;
       if (stacked) {
         total = 0;
-        params.map((p) => {
-          if (p.data[1] !== null && p.data[1] !== undefined) {
-            total += Number(p.data[1]);
-          }
-          return params;
-        });
+        if (Array.isArray(params)) {
+          params.map((p) => {
+            if (p.data[1] !== null && p.data[1] !== undefined) {
+              total += Number(p.data[1]);
+            }
+            return params;
+          });
+        } else {
+          total = params.data[1];
+        }
       }
       let html = `<div">${formatToFrenchTime(params[0].data[0])}</div>`;
       html += "<table><tbody>";
-      params.map(
-        (p) =>
-          (html += `<tr>
+
+      if (Array.isArray(params)) {
+        params.map(
+          (p) =>
+            (html += `<tr>
+                  <td>
+                    <div style="width: 12px; height: 12px; border-radius: 6px; background-color: ${
+                      p.color
+                    }"/>
+                  </td>
+                  <td>
+                    ${p.seriesName}
+                  </td>
+                  <td>
+                    <b>${
+                      p.data[1] !== null && p.data[1] !== undefined
+                        ? funcConverter(p.data[1])
+                        : "N/A"
+                    }</b>
+                  </td>
+                </tr>
+              `),
+        );
+      } else {
+        html += `<tr>
                 <td>
                   <div style="width: 12px; height: 12px; border-radius: 6px; background-color: ${
-                    p.color
+                    params.color
                   }"/>
                 </td>
                 <td>
-                  ${p.seriesName}
+                  ${params.seriesName}
                 </td>
                 <td>
                   <b>${
-                    p.data[1] !== null && p.data[1] !== undefined
-                      ? funcConverter(p.data[1])
+                    params.data[1] !== null && params.data[1] !== undefined
+                      ? funcConverter(params.data[1])
                       : "N/A"
                   }</b>
                 </td>
               </tr>
-            `),
-      );
+            `;
+      }
       html +=
         total > -1
           ? `
@@ -165,8 +197,11 @@ const selectUnitConverter = (unit) => {
   }
 };
 
-export const renderLegend = (series, noPointer = true) => {
-  let legend = null;
+export const renderLegend = (
+  series: EChartOption.SeriesCustom[],
+  noPointer = true,
+) => {
+  let legend: JSX.Element | null = null;
   if (series.length > 0) {
     legend = (
       <div className="chart-legend">
@@ -178,11 +213,11 @@ export const renderLegend = (series, noPointer = true) => {
             <div
               className="legend-pill no-selection"
               style={{
-                backgroundColor: s.color,
-                borderColor: s.color,
+                backgroundColor: s.itemStyle?.color?.toString(),
+                borderColor: s.itemStyle?.color?.toString(),
               }}
             />
-            {s.seriesName}
+            {s.name}
           </span>
         ))}
       </div>
@@ -191,7 +226,20 @@ export const renderLegend = (series, noPointer = true) => {
   return legend;
 };
 
-const LineChart = ({
+type LineChartProps = {
+  stacked?: boolean;
+  metrics?: any[];
+  metrics_param: any[];
+  title?: string;
+  unit?: number;
+  loading?: boolean;
+  hasError?: any;
+  period?: any;
+  handleBackwardForward?: any;
+  windowWidth?: number;
+};
+
+const LineChart: React.FC<LineChartProps> = ({
   stacked,
   metrics,
   metrics_param,
@@ -203,8 +251,8 @@ const LineChart = ({
   handleBackwardForward,
   windowWidth,
 }) => {
-  const svgChart = useRef(null);
-  const [series, setSeries] = useState([]);
+  const svgChart = useRef<HTMLDivElement | null>(null);
+  const [series, setSeries] = useState<EChartOption.SeriesCustom[]>([]);
 
   useEffect(() => {
     if (
@@ -215,7 +263,7 @@ const LineChart = ({
       metrics[0].values.length > 1 &&
       metrics[0].metric
     ) {
-      const series = [];
+      const series: EChartOption.SeriesCustom[] = [];
       /* eslint-enable indent */
       metrics.forEach((metric, idx) => {
         const nameDisplay = composeMetricName(
@@ -228,8 +276,8 @@ const LineChart = ({
         if (title === "Processor Usage" || title === "Memory Usage") {
           color = metrics_param[idx].color;
         }
-        series.push({
-          id: idx,
+        const serie: EChartOption.SeriesCustom = {
+          id: idx.toString(),
           type: "line",
           color: color,
           name: nameDisplay,
@@ -239,15 +287,21 @@ const LineChart = ({
           areaStyle: stacked ? { opacity: 0.9 } : null,
           lineStyle: { width: 1 },
           stack: stacked ? "stack" : null,
-        });
+        } as EChartOption.SeriesCustom;
+
+        series.push(serie);
       });
       const svg = echarts.init(svgChart.current);
-      setSeries(series);
-      svg.setOption(
-        getOptions(series, stacked, selectUnitConverter(unit), unit),
+      const opts = getOptions(
+        series,
+        stacked ? stacked : false,
+        selectUnitConverter(unit),
+        unit ? unit : 0,
       );
+      setSeries(series);
+      svg.setOption(opts);
     }
-  }, [svgChart.current, metrics]);
+  }, [svgChart.current, metrics, series]);
 
   useEffect(() => {
     if (svgChart.current) {
@@ -419,9 +473,11 @@ const LineChart = ({
             <div
               ref={svgChart}
               style={{
-                width: svgChart.current
-                  ? svgChart.current.parentNode.offsetWidth - 100 + "px"
-                  : "92%",
+                width:
+                  svgChart.current &&
+                  svgChart.current.parentElement?.offsetWidth
+                    ? svgChart.current.parentElement?.offsetWidth - 100 + "px"
+                    : "92%",
                 height: "100%",
                 marginLeft: "2.5rem",
                 marginTop: "0.4rem",
@@ -434,19 +490,6 @@ const LineChart = ({
       </Card.Body>
     </Card>
   );
-};
-
-LineChart.propTypes = {
-  stacked: PropTypes.bool,
-  metrics: PropTypes.instanceOf(Array),
-  metrics_param: PropTypes.instanceOf(Array),
-  title: PropTypes.string.isRequired,
-  unit: PropTypes.number,
-  loading: PropTypes.bool,
-  hasError: PropTypes.object,
-  period: PropTypes.object,
-  handleBackwardForward: PropTypes.func,
-  windowWidth: PropTypes.number,
 };
 
 export default LineChart;

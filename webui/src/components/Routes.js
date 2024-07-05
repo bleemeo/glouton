@@ -30,23 +30,23 @@ const ScrollToTopComponent = (props) => {
 const ScrollToTop = ScrollToTopComponent;
 
 const AgentSystemDashboard = lazy(() => import("./Agent/AgentSystemDashboard"));
-const AgentDockerListContainer = lazy(() =>
-  import("./Agent/AgentDockerListContainer"),
+const AgentDockerListContainer = lazy(
+  () => import("./Agent/AgentDockerListContainer"),
 );
-const AgentProcessesContainer = lazy(() =>
-  import("./Agent/AgentProcessesContainer"),
+const AgentProcessesContainer = lazy(
+  () => import("./Agent/AgentProcessesContainer"),
 );
 const AgentDetails = lazy(() => import("./Agent/AgentDetails"));
 
 const MyRoutes = () => {
   const { isLoading, error, data } = useHTTPDataFetch(FACTS_URL, null);
-  const facts = data
+  const facts = data;
   return (
     <Router>
       <ScrollToTop>
         <PanelErrorBoundary>
           <Suspense fallback={<Fallback />}>
-              <FetchSuspense isLoading={isLoading} error={error} facts={facts}>
+            <FetchSuspense isLoading={isLoading} error={error} facts={facts}>
               {({ facts }) => (
                 <>
                   <SideNavBar />

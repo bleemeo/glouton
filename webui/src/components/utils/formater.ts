@@ -1,14 +1,15 @@
 import * as d3 from "d3";
 import { isNullOrUndefined } from ".";
 
-let dayFormater,
-  monthFormater,
-  yearFormater,
-  hoursMinutesFormater,
-  hoursMinutesSecondsFormater,
-  monthFormater2Digit,
-  yearFormater4Digit,
-  fullMonthFormater;
+let dayFormater: (arg0: Date) => any,
+  monthFormater: (arg0: Date) => any,
+  yearFormater: (arg0: Date) => any,
+  hoursMinutesFormater: (arg0: Date) => any,
+  hoursMinutesSecondsFormater: (arg0: Date) => any,
+  monthFormater2Digit: (arg0: Date) => any,
+  yearFormater4Digit: (arg0: Date) => any,
+  fullMonthFormater: (arg0: Date) => any;
+  
 // some browser (FF mobile) doesn't support yet the Intl API
 if (window.Intl) {
   // 2 digits day of month
@@ -80,7 +81,7 @@ if (window.Intl) {
   hoursMinutesSecondsFormater = d3.timeFormat("%I:%M:%S%p");
 }
 
-export const formatDate = (date) => {
+export const formatDate = (date: string | number | Date) => {
   const d = date instanceof Date ? date : new Date(date);
 
   const day = dayFormater(d);
@@ -92,7 +93,7 @@ export const formatDate = (date) => {
   return `${day}/${month}/${year}`;
 };
 
-export const formatDateFullYear = (date) => {
+export const formatDateFullYear = (date: string | number | Date) => {
   const d = date instanceof Date ? date : new Date(date);
 
   const day = dayFormater(d);
@@ -104,11 +105,11 @@ export const formatDateFullYear = (date) => {
   return `${day}/${month}/${year}`;
 };
 
-const convertToUTC = (d) => {
+const convertToUTC = (d: Date) => {
   return new Date(d.getTime() + d.getTimezoneOffset() * 60000);
 };
 
-export const formathYearMonth = (date) => {
+export const formathYearMonth = (date: string | number | Date) => {
   const d = date instanceof Date ? date : new Date(date);
   const utc = convertToUTC(d);
   const month = monthFormater2Digit(utc);
@@ -116,7 +117,7 @@ export const formathYearMonth = (date) => {
   return `${month}/${year}`;
 };
 
-export const formatToFullMonthYear = (date) => {
+export const formatToFullMonthYear = (date: string | number | Date) => {
   const d = date instanceof Date ? date : new Date(date);
   const utc = convertToUTC(d);
   const month = fullMonthFormater(utc);
@@ -124,7 +125,10 @@ export const formatToFullMonthYear = (date) => {
   return `${month} ${year}`;
 };
 
-export const formatDateTime = (date) => {
+export const formatDateTime = (date: string | number | Date | undefined) => {
+  if (!date) {
+    return "";
+  }
   const d = date instanceof Date ? date : new Date(date);
 
   const day = dayFormater(d);
@@ -138,7 +142,7 @@ export const formatDateTime = (date) => {
   return `${day}/${month}/${year} ${hoursMinutes}`;
 };
 
-export const formatDateTimeWithSeconds = (date) => {
+export const formatDateTimeWithSeconds = (date: string | number | Date) => {
   const d = date instanceof Date ? date : new Date(date);
   const day = dayFormater(d);
   const month = monthFormater(d);
@@ -155,7 +159,7 @@ export const formatDateTimeWithSeconds = (date) => {
   return `${day}/${month}/${year} ${time}`;
 };
 
-export const formatToFrenchTime = (date) => {
+export const formatToFrenchTime = (date: string | number | Date) => {
   const d = date instanceof Date ? date : new Date(date);
   const seconds = d.getSeconds();
   const minutes = d.getMinutes();
@@ -169,7 +173,7 @@ export const formatToFrenchTime = (date) => {
   );
 };
 
-export const formatDateWithSecond = (date) => {
+export const formatDateWithSecond = (date: string | number | Date) => {
   const d = date instanceof Date ? date : new Date(date);
 
   const day = dayFormater(d);
@@ -187,7 +191,7 @@ const formatTimeHMS = d3.timeFormat("%H:%M:%S");
 const formatTimeHM = d3.timeFormat("%H:%M");
 const formatTimeFull = d3.timeFormat("%a %d %b");
 
-export const tickFormatDate = (d) => {
+export const tickFormatDate = (d: Date) => {
   if (d.getMinutes() || d.getHours()) {
     return formatTimeHM(d);
   }
@@ -195,7 +199,7 @@ export const tickFormatDate = (d) => {
   return formatTimeFull(d);
 };
 
-export const tooltipFormatDate = (d) => {
+export const tooltipFormatDate = (d: Date) => {
   if (d.getSeconds() || d.getMinutes() || d.getHours()) {
     return formatTimeHMS(d);
   }
@@ -203,12 +207,12 @@ export const tooltipFormatDate = (d) => {
   return formatTimeFull(d);
 };
 
-const d3FormaterHandlingNull = (formatter, suffix = "") => {
+const d3FormaterHandlingNull = (formatter: string, suffix = "") => {
   const fmt = d3.format(formatter);
-  return (value) => (isNullOrUndefined(value) ? "N/A" : fmt(value) + suffix);
+  return (value: any) => (isNullOrUndefined(value) ? "N/A" : fmt(value) + suffix);
 };
 
-export const bytesToString = function (bytes) {
+export const bytesToString = function (bytes: number) {
   const fmt = d3FormaterHandlingNull(".3r");
   const units = ["B", "kB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"];
 
@@ -219,7 +223,7 @@ export const bytesToString = function (bytes) {
   }
 };
 
-export const formatToBytes = function (bytes) {
+export const formatToBytes = function (bytes: number) {
   const fmt = d3FormaterHandlingNull(".3r");
   const units = ["B", "kB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"];
 
@@ -230,7 +234,7 @@ export const formatToBytes = function (bytes) {
   }
 };
 
-export const bitsToString = (bits) => {
+export const bitsToString = (bits: number) => {
   const fmt = d3FormaterHandlingNull(".3r");
   const units = ["", "k", "M", "G", "T", "P", "E", "Z", "Y"];
 
@@ -241,7 +245,7 @@ export const bitsToString = (bits) => {
   }
 };
 
-export const formatToBits = (bits) => {
+export const formatToBits = (bits: number) => {
   const fmt = d3FormaterHandlingNull(".3r");
   const units = ["", "k", "M", "G", "T", "P", "E", "Z", "Y"];
 
@@ -252,7 +256,7 @@ export const formatToBits = (bits) => {
   }
 };
 
-export const percentToString = function (percent) {
+export const percentToString = function (percent: number) {
   const formatter =
     Math.trunc(percent) > 0
       ? d3FormaterHandlingNull(".3r")
@@ -260,7 +264,7 @@ export const percentToString = function (percent) {
   return formatter(percent) + " %";
 };
 
-export const percentToString2Digits = (percent) => {
+export const percentToString2Digits = (percent: number) => {
   const formatter =
     Math.trunc(percent) > 0
       ? d3FormaterHandlingNull(".2r")
@@ -268,15 +272,15 @@ export const percentToString2Digits = (percent) => {
   return formatter(percent) + " %";
 };
 
-export const iopsToString = function (iops) {
+export const iopsToString = function (iops?: number) {
   return d3FormaterHandlingNull(".3r")(iops) + " IOps";
 };
 
-export const defaultToString = function (value) {
-  return value === null ? "N/A" : d3.format(".3")(value);
+export const defaultToString = function (value?: number) {
+  return value ? "N/A" : d3.format(".3")(value!);
 };
 
-export const twoDigitsWithMetricPrefix = (value) => {
+export const twoDigitsWithMetricPrefix = (value: number) => {
   const fmt = d3FormaterHandlingNull(".2f");
   const units = ["", "k", "M", "G", "T", "P", "E", "Z", "Y"];
 
@@ -287,10 +291,10 @@ export const twoDigitsWithMetricPrefix = (value) => {
   }
 };
 
-export const secondToString = (value) =>
+export const secondToString = (value: any) =>
   d3FormaterHandlingNull(".3s", "s")(value);
 
-export const unitFormatCallback = function (unit) {
+export const unitFormatCallback = function (unit?: number) : (arg0?: number) => (string | string[] | undefined) {
   // UNIT_UNIT = 0
   // UNIT_PERCENTAGE = 1
   // UNIT_BYTE = 2
@@ -311,7 +315,7 @@ export const unitFormatCallback = function (unit) {
   }
 };
 
-export const formatDateAgo = (date) => {
+export const formatDateAgo = (date: string | number | Date) => {
   const dateTS =
     date instanceof Date ? date.getTime() : new Date(date).getTime();
   const nowTS = new Date().getTime();
@@ -335,16 +339,16 @@ export const formatDateAgo = (date) => {
   }
 };
 
-export function _formatCpuTime(time) {
+export function _formatCpuTime(time: number) {
   const minutes = Math.trunc(time / 60);
   return `${minutes}:${d3.format(".2f")(time % 60)}`;
 }
 
-export const formatMetricName = (metricName) => {
+export const formatMetricName = (metricName: string) => {
   metricName = metricName.replace(/_used_perc$/, "");
   const metricNameSplitted = metricName.split("_");
   let result = "";
-  metricNameSplitted.forEach((metricNamePart) => {
+  metricNameSplitted.forEach((metricNamePart: string) => {
     result +=
       metricNamePart.substring(0, 1).toUpperCase() +
       metricNamePart.substring(1) +

@@ -1,6 +1,5 @@
 import * as d3 from "d3";
 import React, { useState } from "react";
-import PropTypes from "prop-types";
 
 import FaIcon from "../UI/FaIcon";
 import { _formatCpuTime } from "../utils/formater";
@@ -21,7 +20,11 @@ type DockerProcessesProps = {
 };
 
 const DockerProcesses = ({ containerId, name }: DockerProcessesProps) => {
-  const { isLoading, error, data: processes } = useHTTPDataFetch<Topinfo>(PROCESSES_URL, { containerId }, 10000);
+  const {
+    isLoading,
+    error,
+    data: processes,
+  } = useHTTPDataFetch<Topinfo>(PROCESSES_URL, { containerId }, 10000);
 
   return (
     <div
@@ -37,7 +40,7 @@ const DockerProcesses = ({ containerId, name }: DockerProcessesProps) => {
           if (!dockerProcesses || dockerProcesses.length === 0) {
             return <h4>There are no processes related to {name}</h4>;
           } else {
-            let memTotal = result["Memory"]["Total"];
+            const memTotal = result["Memory"]["Total"];
             dockerProcesses.map((process) => {
               return {
                 ...process,
@@ -74,8 +77,10 @@ interface DockerInspect {
   inspect: string;
 }
 
-const Docker = ({ container, date }) => {
-  const [dockerInspect, setDockerInspect] = useState<DockerInspect | null>(null);
+const Docker: React.FC<DockerProps> = ({ container, date }) => {
+  const [dockerInspect, setDockerInspect] = useState<DockerInspect | null>(
+    null,
+  );
   const [showProcesses, setShowProcesses] = useState<boolean>(false);
 
   let modal: React.ReactNode = null;

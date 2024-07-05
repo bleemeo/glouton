@@ -1,7 +1,10 @@
 import React from "react";
-import PropTypes from "prop-types";
 
-const ErrorBlock = ({ error }) => {
+type ErrorBlockProps = {
+  error: Array<string>;
+};
+
+const ErrorBlock: React.FC<ErrorBlockProps> = ({ error }) => {
   if (!error) {
     return null;
   }
@@ -22,10 +25,6 @@ const ErrorBlock = ({ error }) => {
       </div>
     </div>
   );
-};
-
-ErrorBlock.propTypes = {
-  error: PropTypes.instanceOf(Array),
 };
 
 export default ErrorBlock;

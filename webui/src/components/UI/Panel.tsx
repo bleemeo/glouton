@@ -1,8 +1,16 @@
 import React from "react";
 import { Grid, Card } from "tabler-react";
-import PropTypes from "prop-types";
 
-const Panel = ({
+type PanelProps = {
+  children: React.ReactNode;
+  className?: string;
+  xl?: number;
+  md?: number;
+  offset?: number;
+  noBorder?: boolean;
+};
+
+const Panel: React.FC<PanelProps> = ({
   children,
   className = "",
   xl = 12,
@@ -22,14 +30,5 @@ const Panel = ({
     </Grid.Col>
   </Grid.Row>
 );
-
-Panel.propTypes = {
-  children: PropTypes.any.isRequired,
-  className: PropTypes.string,
-  xl: PropTypes.number,
-  md: PropTypes.number,
-  offset: PropTypes.number,
-  noBorder: PropTypes.bool,
-};
 
 export default Panel;

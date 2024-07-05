@@ -1,36 +1,48 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import React, { useRef } from "react";
-import PropTypes from "prop-types";
 import MetricGaugeItem from "../Metric/MetricGaugeItem";
-import { chartTypes, isShallowEqual } from "../utils";
+import { chartTypes } from "../utils";
 import LineChart from "./LineChart";
 import { useHTTPPromFetch } from "../utils/hooks";
 import FetchSuspense from "./FetchSuspense";
 
-const WidgetDashboardItem = ({
+type WidgetDashboardItemProps = {
+  type: string;
+  title: string;
+  metrics: any;
+  unit: number;
+  period: any;
+  handleBackwardForward?: (isForward: boolean) => void;
+  windowWidth?: number;
+};
+
+const WidgetDashboardItem: React.FC<WidgetDashboardItemProps> = ({
   type,
   title,
   metrics,
   unit,
   period,
-  refetchTime,
   handleBackwardForward,
   windowWidth,
 }) => {
-  const previousError = useRef(null);
+  const previousError = useRef<any | null>(null);
   const handleBackwardForwardFunc = (isForward = false) => {
-    handleBackwardForward(isForward);
+    handleBackwardForward ? handleBackwardForward(isForward) : null;
   };
 
   const displayWidget = (points) => {
     switch (type) {
       case chartTypes[0]: {
-        let lastPoint = null;
+        let lastPoint: number = 0;
         if (points[0]) {
           lastPoint = parseFloat(
             points[0].values[points[0].values.length - 1][1],
           );
         }
-        let thresholds = null;
+        const thresholds: {
+          highWarning?: number;
+          highCritical?: number;
+        } = {};
         return (
           <MetricGaugeItem
             unit={unit}
@@ -50,7 +62,6 @@ const WidgetDashboardItem = ({
             title={title}
             unit={unit}
             period={period}
-            refetchTime={refetchTime}
             handleBackwardForward={handleBackwardForwardFunc}
             windowWidth={windowWidth}
           />
@@ -65,9 +76,9 @@ const WidgetDashboardItem = ({
             title={title}
             unit={unit}
             period={period}
-            refetchTime={refetchTime}
             handleBackwardForward={handleBackwardForwardFunc}
             windowWidth={windowWidth}
+            stacked={false}
           />
         );
       }
@@ -75,18 +86,18 @@ const WidgetDashboardItem = ({
   };
 
   const urls = (metrics, period) => {
-    let start = period.from
+    const start = period.from
       ? new Date(period.from).toISOString()
       : new Date(
           new Date().setMinutes(new Date().getMinutes() - period.minutes),
         ).toISOString();
-    let end = period.to
+    const end = period.to
       ? new Date(period.to).toISOString()
       : new Date().toISOString();
-    let step = 10;
-    let urls = [];
+    const step = 10;
+    const urls: string[] = [];
 
-    for (let idx in metrics) {
+    for (const idx in metrics) {
       urls.push(
         `/api/v1/query_range?query=${encodeURIComponent(
           metrics[idx].query,
@@ -98,7 +109,10 @@ const WidgetDashboardItem = ({
     return urls;
   };
 
-  const { isLoading, data, error } = useHTTPPromFetch(urls(metrics, period), 10000);
+  const { isLoading, data, error } = useHTTPPromFetch(
+    urls(metrics, period),
+    10000,
+  );
   const points = data;
   let hasError = error;
   if (previousError.current && !error) {
@@ -120,7 +134,10 @@ const WidgetDashboardItem = ({
         }
         fallbackComponent={
           type === chartTypes[0] ? (
-            <MetricGaugeItem hasError={hasError} name={title} />
+            <MetricGaugeItem
+              hasError={hasError ? hasError : undefined}
+              name={title}
+            />
           ) : (
             <LineChart
               title={title}
@@ -135,46 +152,6 @@ const WidgetDashboardItem = ({
       </FetchSuspense>
     </div>
   );
-  /* let displayWidgetItem
-  if (isLoading || !points) {
-    switch (type) {
-      case chartTypes[0]:
-        displayWidgetItem = <MetricGaugeItem loading name={title} />
-        break
-      default:
-        displayWidgetItem = <LineChart title={title} loading />
-        break
-    }
-  } else if (hasError) {
-    switch (type) {
-      case chartTypes[0]:
-        displayWidgetItem = <MetricGaugeItem hasError={hasError} name={title} />
-        break
-      default:
-        displayWidgetItem = <LineChart title={title} hasError={hasError} />
-        break
-    }
-  } else {
-  } */
 };
 
-WidgetDashboardItem.propTypes = {
-  type: PropTypes.string.isRequired,
-  title: PropTypes.string.isRequired,
-  metrics: PropTypes.any,
-  mountpoins: PropTypes.string,
-  labels: PropTypes.instanceOf(Array),
-  unit: PropTypes.number,
-  refetchTime: PropTypes.number.isRequired,
-  period: PropTypes.object.isRequired,
-  handleBackwardForward: PropTypes.func,
-  windowWidth: PropTypes.number,
-};
-
-export default React.memo(
-  WidgetDashboardItem,
-  (prevProps, nextProps) =>
-    isShallowEqual(nextProps.period, prevProps.period) &&
-    prevProps.isVisible === nextProps.isVisible &&
-    prevProps.windowWidth === nextProps.windowWidth,
-);
+export default WidgetDashboardItem;

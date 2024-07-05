@@ -1,7 +1,8 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import React, { ReactNode } from "react";
 import QueryError from "./QueryError";
 import Loading from "./Loading";
-import { Axios, AxiosError } from "axios";
+import { AxiosError } from "axios";
 
 // Définir l'interface pour les props
 interface FetchSuspenseProps {

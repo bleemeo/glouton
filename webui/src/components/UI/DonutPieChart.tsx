@@ -1,6 +1,6 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import * as d3 from "d3";
 import React from "react";
-import PropTypes from "prop-types";
 
 const tau = Math.PI * 1.6;
 const size = 100;
@@ -10,40 +10,56 @@ const innerRadius = radius - radius / 2;
 const strokeWidth = radius / 3;
 const outerRadius = radius - strokeWidth;
 
-const backgroundArc = d3
-  .arc()
-  .innerRadius(innerRadius)
-  .outerRadius(outerRadius)
-  .startAngle(0)
-  .endAngle(tau);
+const backgroundArc = d3.arc()({
+  innerRadius: innerRadius,
+  outerRadius: outerRadius,
+  startAngle: 0,
+  endAngle: tau,
+});
+// .innerRadius(innerRadius)
+// .outerRadius(outerRadius)
+// .startAngle(0)
+// .endAngle(tau);
 
-const createArcPath = (x, total) => {
-  return d3
-    .arc()
-    .innerRadius(innerRadius)
-    .outerRadius(outerRadius)
-    .startAngle(total)
-    .endAngle(total + x);
+const createArcPath = (x: number, total: number) => {
+  return d3.arc()({
+    innerRadius: innerRadius,
+    outerRadius: outerRadius,
+    startAngle: total,
+    endAngle: total + x,
+  });
+  // .innerRadius(innerRadius)
+  // .outerRadius(outerRadius)
+  // .startAngle(total)
+  // .endAngle(total + x);
 };
 
-const DonutPieChart = ({
+type DonutPieChartProps = {
+  value: number;
+  segmentsColor: string[];
+  segmentsStep: number[];
+  fontSize: number;
+  formattedValue: string | string[];
+};
+
+const DonutPieChart: React.FC<DonutPieChartProps> = ({
   value,
   segmentsColor,
   segmentsStep,
-  fontSize = 19.5,
+  fontSize,
   formattedValue,
-  color = "#467FCF",
 }) => {
-  const arcCmpts = [];
+  const arcCmpts: JSX.Element[] = [];
   let totalValuesTau = 0.0;
   let previousStep = 0;
-  let textCmpt = null;
+  let textCmpt: JSX.Element | undefined;
+
   // segmentsStep indicates the number of steps that compose gauge
   // For example, if you have [25, 50, 100]
   // That you have a path from 0 to 25, a path from 25 to 50 and a path from 50 to 100
   segmentsStep.forEach((item, idx) => {
     if (typeof item === "number" && !isNaN(item)) {
-      const tauValues = [];
+      const tauValues: { value: number; isTransparent: boolean }[] = [];
       // These conditions are here to give transparency for each path
       if (value > previousStep) {
         if (value < item) {
@@ -69,13 +85,19 @@ const DonutPieChart = ({
         });
       }
       tauValues.forEach((tauValue, idxTau) => {
-        const arc = createArcPath(tauValue.value, totalValuesTau);
+        const arc =
+          createArcPath(tauValue.value, totalValuesTau) === null
+            ? undefined
+            : createArcPath(tauValue.value, totalValuesTau);
         const opacity = tauValue.isTransparent ? "55" : "ff";
         arcCmpts.push(
           <path
             key={idx.toString() + idxTau.toString()}
-            style={{ fill: segmentsColor[idx] + opacity }}
-            d={arc()}
+            //fill={segmentsColor[idx] + opacity}
+            style={
+              segmentsColor[idx] ? { fill: segmentsColor[idx] + opacity } : {}
+            }
+            d={arc!}
           />,
         );
         totalValuesTau += tauValue.value;
@@ -83,17 +105,16 @@ const DonutPieChart = ({
       previousStep = item;
     }
   });
+
   if (typeof value === "number" && !isNaN(value)) {
     textCmpt = (
       <text
-        fontSize={`${
-          typeof InstallTrigger !== "undefined" ? fontSize - 3 : fontSize - 3
-        }`}
         textAnchor="middle"
         style={{
           dominantBaseline: "middle",
           fontWeight: "bold",
           fill: "#000",
+          fontSize: `${fontSize}px`,
         }}
         transform="rotate(144)"
       >
@@ -112,21 +133,13 @@ const DonutPieChart = ({
         style={{ display: "block" }}
       >
         <g transform={`translate(${radius},${radius}) scale(1.5) rotate(216)`}>
-          <path className="gaugeBg" d={backgroundArc()} />
+          <path className="gaugeBg" d={backgroundArc!} />
           {arcCmpts.map((arcCmpt) => arcCmpt)}
           {textCmpt}
         </g>
       </svg>
     </div>
   );
-};
-
-DonutPieChart.propTypes = {
-  value: PropTypes.number,
-  segmentsColor: PropTypes.array.isRequired,
-  segmentsStep: PropTypes.array.isRequired,
-  fontSize: PropTypes.number.isRequired,
-  formattedValue: PropTypes.string.isRequired,
 };
 
 export default DonutPieChart;

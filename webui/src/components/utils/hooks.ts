@@ -1,18 +1,23 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useEffect, useState } from "react";
 import axios, { AxiosError } from "axios";
 
-interface FetchParameters {
+interface FetchDataParameters {
   [key: string]: any;
 }
 
-interface FetchResult<T> {
+interface FetchDataResult<T> {
   data: T | null;
   isLoading: boolean;
   error: AxiosError | null;
   isFetching: boolean;
 }
 
-export const useHTTPDataFetch = <T,>(url: string, parameters: FetchParameters | null, pollInterval = 0): FetchResult<T> => {
+export const useHTTPDataFetch = <T>(
+  url: string,
+  parameters: FetchDataParameters | null,
+  pollInterval = 0,
+): FetchDataResult<T> => {
   const [data, setData] = useState<T | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setIsError] = useState<AxiosError | null>(null);
@@ -36,7 +41,8 @@ export const useHTTPDataFetch = <T,>(url: string, parameters: FetchParameters | 
 
     fetchData();
 
-    const intervalId = pollInterval > 0 ? setInterval(fetchData, pollInterval) : null;
+    const intervalId =
+      pollInterval > 0 ? setInterval(fetchData, pollInterval) : null;
     return () => {
       if (intervalId) clearInterval(intervalId);
     };
@@ -45,13 +51,21 @@ export const useHTTPDataFetch = <T,>(url: string, parameters: FetchParameters | 
   return { isLoading, error, data, isFetching };
 };
 
+interface FetchResult<T> {
+  data: T[] | null;
+  isLoading: boolean;
+  error: AxiosError | null;
+}
 
-export const useHTTPPromFetch = (urls, delay = 3000) => {
-  const [data, setData] = useState<any[]>([]);
+export const useHTTPPromFetch = <T>(
+  urls: string[],
+  delay = 3000,
+): FetchResult<T> => {
+  const [data, setData] = useState<T[] | null>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setIsError] = useState(null);
   const [delayState, setIsDelayState] = useState(false);
-  let time;
+  let time: any;
 
   useEffect(() => {
     async function fetchData() {
@@ -69,10 +83,10 @@ export const useHTTPPromFetch = (urls, delay = 3000) => {
             setIsError(error);
           }
         };
-        let array_tmp: any[] = [];
-        for (let idx in values) {
+        const array_tmp: any[] = [];
+        for (const idx in values) {
           const arrayData = await fetchData(values[idx]);
-          for (let value in arrayData) {
+          for (const value in arrayData) {
             arrayData[value].metric.legendId = idx;
             array_tmp.push(arrayData[value]);
           }

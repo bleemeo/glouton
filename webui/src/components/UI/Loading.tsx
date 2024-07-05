@@ -1,9 +1,15 @@
 import React from "react";
-import PropTypes from "prop-types";
-
 import FaIcon from "./FaIcon";
 
-const Loading = ({ size = "l", message = "Loading" }) => {
+type LoadingProps = {
+  size?: string;
+  message?: string;
+};
+
+const Loading: React.FC<LoadingProps> = ({
+  size = "l",
+  message = "Loading...",
+}) => {
   const spin = <FaIcon icon="fas fa-sync fa-spin" />;
   switch (size) {
     case "s":
@@ -31,11 +37,6 @@ const Loading = ({ size = "l", message = "Loading" }) => {
         </h2>
       );
   }
-};
-
-Loading.propTypes = {
-  size: PropTypes.string,
-  message: PropTypes.string,
 };
 
 export default Loading;

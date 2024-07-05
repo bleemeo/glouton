@@ -2,7 +2,11 @@ import React from "react";
 
 import { formatToBytes, formatToBits } from "../utils/formater";
 
-export const renderNetwork = (name: string, sentValue: number, recvValue: number) => {
+export const renderNetwork = (
+  name: string,
+  sentValue: number,
+  recvValue: number,
+) => {
   const formattedSentValue =
     sentValue !== null ? formatToBits(sentValue) : null;
   const formattedRecvValue =
@@ -53,7 +57,11 @@ export const renderNetwork = (name: string, sentValue: number, recvValue: number
   }
 };
 
-export const renderDisk = (name: string, writeValue: number, readValue: number) => {
+export const renderDisk = (
+  name: string,
+  writeValue: number,
+  readValue: number,
+) => {
   const formattedWriteValue =
     writeValue !== null ? formatToBytes(writeValue) : null;
   const formattedReadValue =

@@ -1,5 +1,4 @@
 import React from "react";
-import PropTypes from "prop-types";
 import DonutPieChart from "../UI/DonutPieChart";
 import { unitFormatCallback } from "../utils/formater";
 import Loading from "../UI/Loading";
@@ -7,18 +6,31 @@ import QueryError from "../UI/QueryError";
 import { colorForStatus } from "../utils/converter";
 
 type MetricGaugeItemProps = {
-  unit?: number,
-  value?: number,
-  name: string,
-  style?: object,
-  fontSize?: number,
-  titleFontSize?: number,
-  loading: boolean,
-  hasError?: object,
-  thresholds?: any,
+  unit?: number;
+  value?: number;
+  name: string;
+  style?: object;
+  fontSize?: number;
+  titleFontSize?: number;
+  loading?: boolean;
+  hasError?: object;
+  thresholds?: {
+    highWarning?: number;
+    highCritical?: number;
+  };
 };
 
-const MetricGaugeItem = ({ unit, value, name, style, fontSize, titleFontSize, loading, hasError, thresholds }: MetricGaugeItemProps) => {
+const MetricGaugeItem = ({
+  unit,
+  value,
+  name,
+  style,
+  fontSize,
+  titleFontSize = 30,
+  loading,
+  hasError,
+  thresholds,
+}: MetricGaugeItemProps) => {
   if (loading) {
     return (
       <div className="card card-body widgetLoading" style={style}>
@@ -51,6 +63,7 @@ const MetricGaugeItem = ({ unit, value, name, style, fontSize, titleFontSize, lo
   }
 
   segmentsStep.push(100);
+  segmentsColor.push("#" + colorForStatus(3));
 
   return (
     <div className="card card-body widget" style={style}>
@@ -59,11 +72,15 @@ const MetricGaugeItem = ({ unit, value, name, style, fontSize, titleFontSize, lo
         style={{ height: "100%" }}
       >
         <DonutPieChart
-          value={value}
-          fontSize={fontSize}
+          value={value ? value : 0}
+          fontSize={fontSize ? fontSize : 12}
           segmentsStep={segmentsStep}
           segmentsColor={segmentsColor}
-          formattedValue={unitFormatCallback(unit)(value)}
+          formattedValue={
+            unitFormatCallback(unit)(value)
+              ? unitFormatCallback(unit)(value)!
+              : "N/A"
+          }
         />
         <div>
           <b style={{ fontSize: titleFontSize, textOverflow: "ellipsis" }}>

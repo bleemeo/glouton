@@ -21,8 +21,20 @@ type ModalProps = {
   children: React.ReactNode;
 };
 
-export default function Modal({ title, disabledMainBtn = false, disabledCloseBtn = false, mainBtnLabel, mainBtnAction, closeLabel, closeAction, mainBtnActionType, className, size, children }: ModalProps) {
-  const [isOpen, setIsOpen] = useState(true)
+export default function Modal({
+  title,
+  disabledMainBtn = false,
+  disabledCloseBtn = false,
+  mainBtnLabel,
+  mainBtnAction,
+  closeLabel,
+  closeAction,
+  mainBtnActionType,
+  className,
+  size,
+  children,
+}: ModalProps) {
+  const [isOpen, setIsOpen] = useState(true);
 
   function handleToggle() {
     setIsOpen(!isOpen);
@@ -74,14 +86,14 @@ export default function Modal({ title, disabledMainBtn = false, disabledCloseBtn
       toggle={handleToggle}
       className={classnames(`modal-dialog ${className}`)}
       size={size}
-      >
-        <ModalHeader toggle={handleToggle}>
-          <span className="modal-title" id="myModalLabel">
-            {typeof title === "string" ? <h4>{title}</h4> : title}
-          </span>
-        </ModalHeader>
-        <ModalBody>{children}</ModalBody>
-        {footer}
+    >
+      <ModalHeader toggle={handleToggle}>
+        <span className="modal-title" id="myModalLabel">
+          {typeof title === "string" ? <h4>{title}</h4> : title}
+        </span>
+      </ModalHeader>
+      <ModalBody>{children}</ModalBody>
+      {footer}
     </ModalStrap>
-  )
+  );
 }

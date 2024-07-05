@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import * as d3 from "d3";
 import React, { FC, useState } from "react";
 import PropTypes from "prop-types";
@@ -24,14 +25,12 @@ const PercentBar = ({ color, title, percent }: PercentBarProps) => (
   />
 );
 
-
 type AgentProcessesProps = {
-  top: Topinfo
+  top: Topinfo;
   sizePage: number;
 };
 
 const AgentProcesses: FC<AgentProcessesProps> = ({ top, sizePage }) => {
-
   const [filter, setFilter] = useState<string>("");
   const [field, setField] = useState<string>("cpu_percent");
   const [order, setOrder] = useState<string>("asc");
@@ -53,12 +52,14 @@ const AgentProcesses: FC<AgentProcessesProps> = ({ top, sizePage }) => {
     });
   };
 
-  const showRowDetail = (row: { ppid: number; }) => {
+  const showRowDetail = (row: { ppid: number }) => {
     const filteredProcesses = getFilteredProcesses();
     const processesWithSamePPID = filteredProcesses.filter(
       (p) => row.ppid === p.ppid,
     );
-    const processParent: Process | undefined = top.Processes.find((p) => row.ppid === p.pid);
+    const processParent: Process | undefined = top.Processes.find(
+      (p) => row.ppid === p.pid,
+    );
 
     processesWithSamePPID.sort((a, b) => {
       if (typeof a[field] === "string" && typeof b[field] === "string") {
@@ -89,14 +90,14 @@ const AgentProcesses: FC<AgentProcessesProps> = ({ top, sizePage }) => {
                 <td style={{ width: "5rem" }}>{processParent.status}</td>
                 <td style={{ width: "7rem" }}>
                   {!isNullOrUndefined(processParent.cpu_percent) &&
-                    !isNaN(processParent.cpu_percent) ? (
+                  !isNaN(processParent.cpu_percent) ? (
                     <GraphCell value={processParent.cpu_percent} />
                   ) : null}
                 </td>
                 <td style={{ width: "7rem" }}>
                   {!isNullOrUndefined(processParent.mem_percent) &&
-                    processParent.mem_percent &&
-                    !isNaN(processParent.mem_percent) ? (
+                  processParent.mem_percent &&
+                  !isNaN(processParent.mem_percent) ? (
                     <GraphCell value={processParent.mem_percent} />
                   ) : null}
                 </td>
@@ -130,14 +131,14 @@ const AgentProcesses: FC<AgentProcessesProps> = ({ top, sizePage }) => {
                 <td style={{ width: "5rem" }}>{process.status}</td>
                 <td style={{ width: "7rem" }}>
                   {!isNullOrUndefined(process.cpu_percent) &&
-                    !isNaN(process.cpu_percent) ? (
+                  !isNaN(process.cpu_percent) ? (
                     <GraphCell value={process.cpu_percent} />
                   ) : null}
                 </td>
                 <td style={{ width: "7rem" }}>
                   {!isNullOrUndefined(process.mem_percent) &&
-                    process.mem_percent &&
-                    !isNaN(process.mem_percent) ? (
+                  process.mem_percent &&
+                  !isNaN(process.mem_percent) ? (
                     <GraphCell value={process.mem_percent} />
                   ) : null}
                 </td>
@@ -172,7 +173,6 @@ const AgentProcesses: FC<AgentProcessesProps> = ({ top, sizePage }) => {
     );
   };
 
-
   let processesTable: React.ReactNode = null;
 
   if (top.Processes && !isEmpty(top.Memory) && top.Memory) {
@@ -192,8 +192,7 @@ const AgentProcesses: FC<AgentProcessesProps> = ({ top, sizePage }) => {
 
     processesTmp.map((process) => {
       if (process.ppid !== undefined) {
-        const nodeProcessChildrens =
-          childrenProcesses.get(process.ppid) || [];
+        const nodeProcessChildrens = childrenProcesses.get(process.ppid) || [];
         nodeProcessChildrens.push(process);
         childrenProcesses.set(process.ppid, nodeProcessChildrens);
       }
@@ -204,7 +203,9 @@ const AgentProcesses: FC<AgentProcessesProps> = ({ top, sizePage }) => {
     const finalProcesses: Process[] = [];
 
     processesTmp.map((process) => {
-      const siblingsProcesses: Process[] | undefined = childrenProcesses.get(process.ppid);
+      const siblingsProcesses: Process[] | undefined = childrenProcesses.get(
+        process.ppid,
+      );
 
       if (
         process.ppid === undefined ||
@@ -230,7 +231,8 @@ const AgentProcesses: FC<AgentProcessesProps> = ({ top, sizePage }) => {
     const previousProcesses: number[] = [];
 
     processesLeaves.map((process) => {
-      const processesWithSameParents: Process[] = childrenProcesses.get(process.ppid) || [];
+      const processesWithSameParents: Process[] =
+        childrenProcesses.get(process.ppid) || [];
       const processParent: Process | undefined = top.Processes.find(
         (p) => process.ppid === p.pid,
       );
@@ -253,11 +255,16 @@ const AgentProcesses: FC<AgentProcessesProps> = ({ top, sizePage }) => {
 
         const totalMem = [...processesWithSameParents, processParent]
           .map((p) =>
-            !isNullOrUndefined(p.mem_percent) && p.mem_percent && !isNaN(p.mem_percent)
+            !isNullOrUndefined(p.mem_percent) &&
+            p.mem_percent &&
+            !isNaN(p.mem_percent)
               ? p.mem_percent
               : 0,
           )
-          .reduce((acc, val) => parseFloat(acc.toString()) + parseFloat(val.toString()));
+          .reduce(
+            (acc, val) =>
+              parseFloat(acc.toString()) + parseFloat(val.toString()),
+          );
 
         finalProcesses.push({
           ...process,
@@ -323,7 +330,10 @@ const AgentProcesses: FC<AgentProcessesProps> = ({ top, sizePage }) => {
         sizePage={sizePage}
         expandRow={expandRow}
         borderless
-        onSortTable={(field, order) => { setField(field); setOrder(order); }}
+        onSortTable={(field, order) => {
+          setField(field);
+          setOrder(order);
+        }}
         renderLoadMoreButton
         classNames="fontSmaller"
       />
@@ -333,11 +343,9 @@ const AgentProcesses: FC<AgentProcessesProps> = ({ top, sizePage }) => {
   return (
     <div>
       <AgentProcessesInfo top={top} />
-      <div className="marginOffset">
-        {processesTable}
-      </div>
+      <div className="marginOffset">{processesTable}</div>
     </div>
   );
-}
+};
 
 export default AgentProcesses;

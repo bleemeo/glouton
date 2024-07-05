@@ -15,7 +15,12 @@ const AgentProcessesContainer = () => {
     document.title = "Processes | Glouton";
   }, []);
 
-  const { isLoading, isFetching, error, data: processes } = useHTTPDataFetch<Topinfo>(PROCESSES_URL, null, 10000);
+  const {
+    isLoading,
+    isFetching,
+    error,
+    data: processes,
+  } = useHTTPDataFetch<Topinfo>(PROCESSES_URL, null, 10000);
 
   return (
     <FetchSuspense

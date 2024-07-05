@@ -1,4 +1,4 @@
-export const cssClassForStatus = (status) => {
+export const cssClassForStatus = (status: number | string | undefined) => {
   switch (status) {
     case 0:
     case "OK":
@@ -19,7 +19,7 @@ export const cssClassForStatus = (status) => {
 };
 
 // TODO to remove once the API branch PRODUCT-101 has been merge into master
-export const textForStatus = (status) => {
+export const textForStatus = (status: number | string | undefined) => {
   switch (status) {
     case 0:
       return "OK";
@@ -35,7 +35,7 @@ export const textForStatus = (status) => {
   }
 };
 
-export const colorForStatus = (status) => {
+export const colorForStatus = (status: number | string) => {
   switch (status) {
     case 0:
       return "28A745";

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { memo } from "react";
 import PropTypes from "prop-types";
 
 import Modal from "../UI/Modal";
@@ -6,9 +6,19 @@ import { cssClassForStatus, textForStatus } from "../utils/converter";
 import { useHTTPDataFetch } from "../utils/hooks";
 import FetchSuspense from "../UI/FetchSuspense";
 import { CONTAINERS_URL } from "../utils/dataRoutes";
+import { Containers, Service } from "../Data/data.interface";
 
-const ServiceContainer = ({ containerId }) => {
-  const { isLoading, error, data } = useHTTPDataFetch(CONTAINERS_URL, { search: containerId });
+type ServiceContainerProps = {
+  containerId: string;
+};
+
+const ServiceContainer: React.FC<ServiceContainerProps> = ({ containerId }) => {
+  const { isLoading, error, data } = useHTTPDataFetch<Containers>(
+    CONTAINERS_URL,
+    {
+      search: containerId,
+    },
+  );
   const containers = data;
 
   return (
@@ -31,7 +41,11 @@ ServiceContainer.propTypes = {
 };
 
 /* eslint-disable react/no-multi-comp */
-const ServiceDetails = ({ service }) => {
+type ServiceDetailsProps = {
+  service: Service;
+};
+
+const ServiceDetails: React.FC<ServiceDetailsProps> = ({ service }) => {
   if (!service) {
     return null;
   }
@@ -79,32 +93,24 @@ const ServiceDetails = ({ service }) => {
   );
 };
 
-ServiceDetails.propTypes = {
-  service: PropTypes.object.isRequired,
+type ServiceDetailsModalProps = {
+  service: Service;
+  closeAction: () => void;
 };
 
-export default class ServiceDetailsModal extends React.PureComponent {
-  static propTypes = {
-    actions: PropTypes.object,
-    service: PropTypes.object.isRequired,
-    closeAction: PropTypes.func.isRequired,
-  };
-
-  render() {
-    const { service, closeAction } = this.props;
-
-    if (!service) {
-      return null;
-    }
-
-    return (
-      <Modal
-        title={`${service.name}`}
-        closeAction={closeAction}
-        closeOnBackdropClick
-      >
-        <ServiceDetails {...this.props} />
-      </Modal>
-    );
+const ServiceDetailsModal = memo(function ServiceDetailsModal({
+  service,
+  closeAction,
+}: ServiceDetailsModalProps) {
+  if (!service) {
+    return null;
   }
-}
+
+  return (
+    <Modal title={`${service.name}`} closeAction={closeAction}>
+      <ServiceDetails service={service} />
+    </Modal>
+  );
+});
+
+export default ServiceDetailsModal;

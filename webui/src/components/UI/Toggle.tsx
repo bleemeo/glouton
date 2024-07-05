@@ -1,8 +1,16 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import React, { useEffect, useState, useRef } from "react";
-import PropTypes from "prop-types";
 import FaIcon from "./FaIcon";
 
-const Toggle = ({
+type ToggleProps = {
+  firstOption: string;
+  secondOption: string;
+  onClick: (option: number) => void;
+  type?: "sm" | "md" | "lg";
+  defaultOption?: 0 | 1;
+};
+
+const Toggle: React.FC<ToggleProps> = ({
   firstOption,
   secondOption,
   onClick,
@@ -10,9 +18,9 @@ const Toggle = ({
   defaultOption = 0,
 }) => {
   const [option, setOption] = useState(defaultOption);
-  const firstSpan = useRef(null);
-  const secondSpan = useRef(null);
-  const flap = useRef(null);
+  const firstSpan = useRef<any | null>(null);
+  const secondSpan = useRef<any | null>(null);
+  const flap = useRef<any | null>(null);
 
   const navFlipStyle = (firstSpanOpacity, secondSpanOpacity) => {
     if (firstSpan.current === null || secondSpan.current === null) {
@@ -46,7 +54,7 @@ const Toggle = ({
     }
   }, [option]);
 
-  const liStyle = {};
+  const liStyle: React.CSSProperties = {};
 
   switch (type) {
     case "sm":
@@ -97,14 +105,6 @@ const Toggle = ({
       </div>
     </div>
   );
-};
-
-Toggle.propTypes = {
-  firstOption: PropTypes.string.isRequired,
-  secondOption: PropTypes.string.isRequired,
-  onClick: PropTypes.func.isRequired,
-  type: PropTypes.oneOf(["sm", "md", "lg"]),
-  defaultOption: PropTypes.oneOf([0, 1]),
 };
 
 export default Toggle;

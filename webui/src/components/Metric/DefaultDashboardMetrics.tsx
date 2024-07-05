@@ -8,7 +8,7 @@ interface Metric {
 
 export interface GaugeBar {
   title: string;
-  type?: string
+  type?: string;
   metrics: Metric[];
   unit: number;
   mountpoint?: string;

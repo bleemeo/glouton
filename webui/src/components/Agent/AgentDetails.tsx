@@ -16,19 +16,33 @@ import { useHTTPDataFetch } from "../utils/hooks";
 import { isNullOrUndefined, Problems } from "../utils";
 import { cssClassForStatus, textForStatus } from "../utils/converter";
 import { formatDateTimeWithSeconds } from "../utils/formater";
-import { SERVICES_URL, AGENT_INFORMATIONS_URL, AGENT_STATUS_URL, TAGS_URL } from "../utils/dataRoutes";
+import {
+  SERVICES_URL,
+  AGENT_INFORMATIONS_URL,
+  AGENT_STATUS_URL,
+  TAGS_URL,
+} from "../utils/dataRoutes";
 
-import { AgentInfo, AgentStatus, Fact, Service, Tag } from "../Data/data.interface";
-
+import {
+  AgentInfo,
+  AgentStatus,
+  Fact,
+  Service,
+  Tag,
+} from "../Data/data.interface";
 
 type AgentDetailsProps = {
   facts: Fact[];
 };
 
 const AgentDetails: FC<AgentDetailsProps> = ({ facts }) => {
-  const [showServiceDetails, setShowServiceDetails] = useState<Service | null>(null);
+  const [showServiceDetails, setShowServiceDetails] = useState<Service | null>(
+    null,
+  );
 
-  const factUpdatedAt: string | undefined = facts.find((f: { name: string; }) => f.name === "fact_updated_at")?.value;
+  const factUpdatedAt: string | undefined = facts.find(
+    (f: { name: string }) => f.name === "fact_updated_at",
+  )?.value;
 
   let factUpdatedAtDate: Date | null = null;
 
@@ -39,17 +53,19 @@ const AgentDetails: FC<AgentDetailsProps> = ({ facts }) => {
   let expireAgentBanner: JSX.Element | null = null;
   let agentDate: Date | null = null;
 
-  const agentVersion: string | undefined = facts.find((f: { name: string; }) => f.name === "glouton_version")?.value;
-  
+  const agentVersion: string | undefined = facts.find(
+    (f: { name: string }) => f.name === "glouton_version",
+  )?.value;
+
   if (agentVersion) {
     const expDate: Date = new Date();
     expDate.setDate(expDate.getDate() - 60);
 
     // First try new format (e.g. 18.03.21.134432)
-    agentDate = d3.timeParse(agentVersion.slice(0, 15));
+    agentDate = d3.timeParse(".%L")(agentVersion.slice(0, 15));
     if (!agentDate) {
       // then old format (0.20180321.134432)
-      agentDate = d3.timeParse(agentVersion.slice(0, 17));
+      agentDate = d3.timeParse(".%L")(agentVersion.slice(0, 17));
     }
 
     if (agentDate && agentDate < expDate) {
@@ -84,33 +100,39 @@ const AgentDetails: FC<AgentDetailsProps> = ({ facts }) => {
     );
   }
 
-  const { 
-    isLoading: isLoadingServices, 
-    error: errorServices, 
-    data: servicesData 
+  const {
+    isLoading: isLoadingServices,
+    error: errorServices,
+    data: servicesData,
   } = useHTTPDataFetch<Service>(SERVICES_URL, null, 60000);
 
-  const { 
-    isLoading: isLoadingTags, 
-    error: errorTags, 
-    data: tagsData 
+  const {
+    isLoading: isLoadingTags,
+    error: errorTags,
+    data: tagsData,
   } = useHTTPDataFetch<Tag>(TAGS_URL, null, 60000);
 
-  const { 
-    isLoading: isLoadingAgentInformation, 
-    error: errorAgentInformation, 
-    data: agentInformationData 
+  const {
+    isLoading: isLoadingAgentInformation,
+    error: errorAgentInformation,
+    data: agentInformationData,
   } = useHTTPDataFetch<AgentInfo>(AGENT_INFORMATIONS_URL, null, 60000);
-  
-  const { 
-    isLoading: isLoadingAgentStatus, 
-    error: errorAgentStatus, 
-    data: agentStatusData 
+
+  const {
+    isLoading: isLoadingAgentStatus,
+    error: errorAgentStatus,
+    data: agentStatusData,
   } = useHTTPDataFetch<AgentStatus>(AGENT_STATUS_URL, null, 60000);
-  
-  const isLoading: boolean = isLoadingServices || isLoadingTags || isLoadingAgentInformation || isLoadingAgentStatus;
-  const error: AxiosError<unknown, any> | null = errorServices || errorTags || errorAgentInformation || errorAgentStatus;
-  
+
+  const isLoading: boolean =
+    isLoadingServices ||
+    isLoadingTags ||
+    isLoadingAgentInformation ||
+    isLoadingAgentStatus;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const error: AxiosError<unknown, any> | null =
+    errorServices || errorTags || errorAgentInformation || errorAgentStatus;
+
   const services: Service | null = servicesData;
   const tags: Tag | null = tagsData;
   const agentInformation: AgentInfo | null = agentInformationData;
@@ -141,7 +163,8 @@ const AgentDetails: FC<AgentDetailsProps> = ({ facts }) => {
           <Smiley status={agentStatus.status} />
         </p>
         <p className="text-center">{textForStatus(agentStatus.status)}</p>
-        {agentStatus.statusDescription && agentStatus.statusDescription.length > 0 ? (
+        {agentStatus.statusDescription &&
+        agentStatus.statusDescription.length > 0 ? (
           <Tooltip
             place="bottom"
             anchorSelect="agentStatus"

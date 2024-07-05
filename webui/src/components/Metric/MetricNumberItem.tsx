@@ -1,25 +1,40 @@
 import React, { useEffect, useRef } from "react";
-import PropTypes from "prop-types";
 
 import { twoDigitsWithMetricPrefix } from "../utils/formater";
 
 const SIZE = 100;
 
-const MetricNumberItem = ({ value, title, titleFontSize = 30 }) => {
-  const svgElem = useRef(null);
-  const textElem = useRef(null);
+type MetricNumberItemProps = {
+  value: number;
+  title: string;
+  titleFontSize?: number;
+};
+
+const MetricNumberItem: React.FC<MetricNumberItemProps> = ({
+  value,
+  title,
+  titleFontSize = 30,
+}) => {
+  const svgElem = useRef<SVGSVGElement | null>(null);
+  const textElem = useRef<SVGTextElement | null>(null);
 
   const resize = () => {
     if (svgElem.current && textElem.current) {
       const svg = svgElem.current;
       const svgCTM = svg.getScreenCTM();
       const textBBox = textElem.current.getBBox();
-      const svgHeight = svg.parentNode.clientHeight / svgCTM.a;
-      const svgWidth = svg.parentNode.clientWidth / svgCTM.a;
+      if (!svgCTM) {
+        return;
+      }
+      const svgHeight =
+        (svg.parentNode as HTMLElement)?.clientHeight / svgCTM.a;
+      const svgWidth = (svg.parentNode as HTMLElement)?.clientWidth / svgCTM.a;
+
       let textHeight = textBBox.height;
       if (textHeight === 0) {
         textHeight = 1;
       }
+
       let textWidth = textBBox.width;
       if (textWidth === 0) {
         textWidth = 1;
@@ -76,12 +91,6 @@ const MetricNumberItem = ({ value, title, titleFontSize = 30 }) => {
       </div>
     </div>
   );
-};
-
-MetricNumberItem.propTypes = {
-  value: PropTypes.number.isRequired,
-  title: PropTypes.oneOfType([PropTypes.object, PropTypes.string]).isRequired,
-  titleFontSize: PropTypes.number,
 };
 
 export default MetricNumberItem;
