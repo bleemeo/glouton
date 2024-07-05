@@ -29,12 +29,6 @@ export const PercentBar: React.FC<PercentBarProps> = ({ color, title, percent })
   />
 );
 
-PercentBar.propTypes = {
-  color: PropTypes.string.isRequired,
-  title: PropTypes.string,
-  percent: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
-};
-
 export const GraphCell = ({ value }) => (
   <div
     style={{
