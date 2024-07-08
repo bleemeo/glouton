@@ -792,11 +792,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 
 	a.metricFilter = mFilter
 
-	if a.config.Web.LocalUI.Enable {
-		a.store = store.New(time.Hour, 2*time.Hour)
-	} else {
-		a.store = store.New(2*time.Minute, 2*time.Hour)
-	}
+	a.store = store.New(3*time.Minute, 2*time.Hour)
 
 	filteredStore := store.NewFilteredStore(
 		a.store,
