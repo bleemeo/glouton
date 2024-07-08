@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import { formatToBytes, percentToString2Digits } from "../utils/formater";
 import {
   ColumnDef,
@@ -172,12 +172,11 @@ const ProcessesTable: React.FC<ProcessesTableProps> = ({
   data,
   widthLastColumn,
 }) => {
-  const [processes, setProcesses] = useState<ProcessTableData[]>(data);
   const [sorting, setSorting] = useState<SortingState>([]);
   const [expanded, setExpanded] = useState<ExpandedState>({});
 
   const getProcessesWithSamePPID = (ppid: number) => {
-    const processesWithSamePPID = processes.filter((p) => ppid === p.ppid);
+    const processesWithSamePPID = data.filter((p) => ppid === p.ppid);
 
     if (sorting[0] !== undefined) {
       processesWithSamePPID.sort((a, b) => {
@@ -199,15 +198,12 @@ const ProcessesTable: React.FC<ProcessesTableProps> = ({
     else return processesWithSamePPID;
   };
 
-  useEffect(() => {
-    const processesData = data.map((p) => {
-      return {
-        ...p,
-        subRows: getProcessesWithSamePPID(p.ppid),
-      };
-    });
-    setProcesses(processesData);
-  }, []);
+  const processes = data.map((p) => {
+    return {
+      ...p,
+      subRows: getProcessesWithSamePPID(p.ppid),
+    };
+  });
 
   const columnHelper = createColumnHelper<ProcessTableData>();
 

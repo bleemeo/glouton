@@ -208,9 +208,9 @@ const AgentProcessesInfo: FC<AgentProcessesInfoProps> = ({ top }) => {
               <td colSpan={5}>
                 <h4 style={{ marginBottom: 0 }}>
                   <strong style={{ fontSize: "medium" }}>Last update: </strong>
-                  <span className="badge badge-secondary">
+                  <div style={{ fontSize: "medium" }}>
                     {formatDateTimeWithSeconds(timeDate)}
-                  </span>
+                  </div>
                 </h4>
               </td>
             </tr>
