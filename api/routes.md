@@ -18,6 +18,5 @@
 /diagnostic.zip
 
 /metrics
-/playground
 /static/*
 /*
