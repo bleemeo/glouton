@@ -19,7 +19,13 @@ const TopNavBar = () => {
     >
       <FetchSuspense isLoading={isLoading} error={error} facts={facts}>
         {({ facts }) => (
-          <h2 style={{ marginBlockEnd: "0rem", marginLeft: "1rem" }}>
+          <h2
+            style={{
+              marginBlockEnd: "0rem",
+              marginLeft: "1rem",
+              marginRight: "1rem",
+            }}
+          >
             {facts.find((f: Fact) => f.name === "fqdn").value}
           </h2>
         )}

@@ -1,4 +1,4 @@
-import React, { lazy, Suspense, useEffect } from "react";
+import React, { Suspense, useEffect } from "react";
 import {
   BrowserRouter as Router,
   Route,
@@ -6,17 +6,23 @@ import {
   Navigate,
 } from "react-router-dom";
 import { useLocation } from "react-router";
-
-import PanelErrorBoundary from "./UI/PanelErrorBoundary";
-import "rc-switch/assets/index.css";
-import Fallback from "./UI/Fallback";
-import FetchSuspense from "./UI/FetchSuspense";
 import { useHTTPDataFetch } from "./utils/hooks";
 import { FACTS_URL } from "./utils/dataRoutes";
+
+import PanelErrorBoundary from "./UI/PanelErrorBoundary";
+import Fallback from "./UI/Fallback";
+import FetchSuspense from "./UI/FetchSuspense";
 import SideNavBar from "./App/SideNavbar";
 
+import "rc-switch/assets/index.css";
+
+import AgentSystemDashboard from "./Agent/AgentSystemDashboard";
+import AgentDockerListContainer from "./Agent/AgentDockerListContainer";
+import AgentProcessesContainer from "./Agent/AgentProcessesContainer";
+import AgentDetails from "./Agent/AgentDetails";
+
 const ScrollToTopComponent = (props) => {
-  let location = useLocation();
+  const location = useLocation();
   useEffect(() => {
     window.scroll({
       top: 0,
@@ -28,15 +34,6 @@ const ScrollToTopComponent = (props) => {
 };
 
 const ScrollToTop = ScrollToTopComponent;
-
-const AgentSystemDashboard = lazy(() => import("./Agent/AgentSystemDashboard"));
-const AgentDockerListContainer = lazy(
-  () => import("./Agent/AgentDockerListContainer"),
-);
-const AgentProcessesContainer = lazy(
-  () => import("./Agent/AgentProcessesContainer"),
-);
-const AgentDetails = lazy(() => import("./Agent/AgentDetails"));
 
 const MyRoutes = () => {
   const { isLoading, error, data } = useHTTPDataFetch(FACTS_URL, null);
@@ -52,30 +49,22 @@ const MyRoutes = () => {
                   <SideNavBar />
                   <Routes>
                     <Route
-                      exact
                       path="/dashboard"
                       element={<AgentSystemDashboard facts={facts} />}
                     />
                     <Route
-                      exact
                       path="/docker"
                       element={<AgentDockerListContainer />}
                     />
                     <Route
-                      exact
                       path="/processes"
                       element={<AgentProcessesContainer />}
                     />
                     <Route
-                      exact
                       path="/informations"
                       element={<AgentDetails facts={facts} />}
                     />
-                    <Route
-                      exact
-                      path="/"
-                      element={<Navigate to="/dashboard" />}
-                    />
+                    <Route path="/" element={<Navigate to="/dashboard" />} />
                   </Routes>
                 </>
               )}

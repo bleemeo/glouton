@@ -1,12 +1,8 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
-import React, { useEffect, useState } from "react";
+import React, { useEffect } from "react";
 import VisibilitySensor from "react-visibility-sensor";
-import PropTypes from "prop-types";
 import WidgetDashboardItem from "../UI/WidgetDashboardItem";
 import { chartTypes } from "../utils";
 import MetricGaugeItem from "../Metric/MetricGaugeItem";
-import { useWindowWidth } from "../utils/hooks";
-import { setStorageItem } from "../utils/storage";
 import {
   GaugeBar,
   gaugesBarBLEEMEO,
@@ -17,12 +13,6 @@ import { Fact } from "../Data/data.interface";
 
 type AgentSystemDashboardProps = {
   facts: Fact[];
-};
-
-type Period = {
-  minutes: number;
-  from?: Date;
-  to?: Date;
 };
 
 const AgentSystemDashboard = ({ facts }: AgentSystemDashboardProps) => {
@@ -39,20 +29,9 @@ const AgentSystemDashboard = ({ facts }: AgentSystemDashboardProps) => {
       gaugesBar = gaugesBarPrometheusWindows;
     }
   }
-  const [period, setPeriod] = useState<Period>({ minutes: 60 });
-
   useEffect(() => {
     document.title = "Dashboard | Glouton";
   }, []);
-
-  useEffect(() => {
-    setStorageItem("period", period);
-  }, [period]);
-
-  let refetchTime = 10080;
-  if (period.minutes) {
-    refetchTime = period.minutes / 6;
-  }
 
   return (
     <>
@@ -83,7 +62,7 @@ const AgentSystemDashboard = ({ facts }: AgentSystemDashboardProps) => {
                         title={gaugeItem.title}
                         metrics={gaugeItem.metrics}
                         unit={gaugeItem.unit}
-                        period={period}
+                        period={{ minutes: 60 }}
                       />
                     );
                   } else {
@@ -97,10 +76,6 @@ const AgentSystemDashboard = ({ facts }: AgentSystemDashboardProps) => {
       </div>
     </>
   );
-};
-
-AgentSystemDashboard.propTypes = {
-  facts: PropTypes.instanceOf(Array).isRequired,
 };
 
 export default AgentSystemDashboard;

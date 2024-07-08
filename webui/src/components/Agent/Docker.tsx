@@ -2,10 +2,13 @@ import * as d3 from "d3";
 import React, { useState } from "react";
 
 import FaIcon from "../UI/FaIcon";
-import { _formatCpuTime } from "../utils/formater";
-import { formatDateTime } from "../utils/formater";
-import { renderDisk } from "./utils";
-import { renderNetwork, renderDonutDocker } from "../UI";
+import {
+  _formatCpuTime,
+  formatDateTime,
+  formatToBits,
+  formatToBytes,
+  unitFormatCallback,
+} from "../utils/formater";
 import ProcessesTable from "../UI/ProcessesTable";
 import { useHTTPDataFetch } from "../utils/hooks";
 import FetchSuspense from "../UI/FetchSuspense";
@@ -13,6 +16,9 @@ import { PROCESSES_URL } from "../utils/dataRoutes";
 import Modal from "../UI/Modal";
 import A from "../UI/A";
 import { Container, Topinfo } from "../Data/data.interface";
+import DonutPieChart from "../UI/DonutPieChart";
+import { colorForStatus } from "../utils/converter";
+import { UNIT_PERCENTAGE } from "../utils";
 
 type DockerProcessesProps = {
   containerId: string;
@@ -83,6 +89,129 @@ const Docker: React.FC<DockerProps> = ({ container, date }) => {
     null,
   );
   const [showProcesses, setShowProcesses] = useState<boolean>(false);
+
+  const renderDonutDocker = (name: string, value: number) => (
+    <div className="small-widget">
+      <div className="content">
+        <DonutPieChart
+          value={value}
+          fontSize={15}
+          segmentsColor={["#" + colorForStatus(0)]}
+          segmentsStep={[100]}
+          formattedValue={
+            unitFormatCallback(UNIT_PERCENTAGE)(value)
+              ? unitFormatCallback(UNIT_PERCENTAGE)(value)!
+              : "N/A"
+          }
+        />
+      </div>
+      <div className="title">{name}</div>
+    </div>
+  );
+
+  const renderNetwork = (name, sentValue, recvValue) => {
+    const formattedSentValue =
+      sentValue !== null ? formatToBits(sentValue) : null;
+    const formattedRecvValue =
+      recvValue !== null ? formatToBits(recvValue) : null;
+    if (!formattedSentValue && !formattedRecvValue) {
+      return (
+        <div className="small-widget">
+          <div className="content wide">
+            <div className="content-row">
+              <p style={{ fontSize: "80%", paddingTop: "15%" }}>N/A</p>
+            </div>
+          </div>
+          <div className="title">{name}</div>
+        </div>
+      );
+    } else {
+      return (
+        <div className="small-widget">
+          <div className="content wide">
+            <div className="content-row">
+              {formattedSentValue ? (
+                <span>
+                  {formattedSentValue[0]}
+                  <small>
+                    &nbsp;
+                    {formattedSentValue[1]}
+                    /s sent
+                  </small>
+                </span>
+              ) : null}
+            </div>
+            <div className="content-row">
+              {formattedRecvValue ? (
+                <span>
+                  {formattedRecvValue[0]}
+                  <small>
+                    &nbsp;
+                    {formattedRecvValue[1]}
+                    /s receive
+                  </small>
+                </span>
+              ) : null}
+            </div>
+          </div>
+          <div className="title">{name}</div>
+        </div>
+      );
+    }
+  };
+
+  const renderDisk = (name, writeValue, readValue) => {
+    const formattedWriteValue =
+      writeValue !== null ? formatToBytes(writeValue) : null;
+    const formattedReadValue =
+      readValue !== null ? formatToBytes(readValue) : null;
+    if (!formattedReadValue && !formattedWriteValue) {
+      return (
+        <div className="small-widget">
+          <div className="content wide">
+            <div className="content-row">
+              <p style={{ fontSize: "80%", paddingTop: "15%" }}>N/A</p>
+            </div>
+          </div>
+          <div className="title">{name}</div>
+        </div>
+      );
+    } else {
+      return (
+        <div className="small-widget">
+          <div className="content wide">
+            <div className="content-row">
+              {formattedWriteValue !== null &&
+              formattedWriteValue !== undefined ? (
+                <span>
+                  {formattedWriteValue[0]}
+                  <small>
+                    &nbsp;
+                    {formattedWriteValue[1]}
+                    /s write
+                  </small>
+                </span>
+              ) : null}
+            </div>
+            <div className="content-row">
+              {formattedReadValue !== null &&
+              formattedReadValue !== undefined ? (
+                <span>
+                  {formattedReadValue[0]}
+                  <small>
+                    &nbsp;
+                    {formattedReadValue[1]}
+                    /s read
+                  </small>
+                </span>
+              ) : null}
+            </div>
+          </div>
+          <div className="title">{name}</div>
+        </div>
+      );
+    }
+  };
 
   let modal: React.ReactNode = null;
   if (dockerInspect) {

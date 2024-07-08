@@ -1,25 +1,26 @@
 /* eslint-disable indent */
 import React from "react";
-import PropTypes from "prop-types";
-
-export const createFilterFn = (input) => {
-  const i = input.toLowerCase();
-  return (text) => text.toLowerCase().includes(i);
-};
 
 export const chartTypes = ["gauge", "stacked", "line"];
 export const UNIT_PERCENTAGE = 1;
 export const UNIT_BYTE = 2;
 export const UNIT_NUMBER = 0;
-
 export const LabelName = "__name__";
 
-export const isNullOrUndefined = (variable) =>
+export const createFilterFn = (input: string) => {
+  const i = input.toLowerCase();
+  return (text: string) => text.toLowerCase().includes(i);
+};
+
+export const isNullOrUndefined = (variable: unknown) =>
   variable === null || variable === undefined;
 
 export const isUndefined = (variable) => variable === undefined;
 
-export const Problems = ({ problems }) => (
+type ProblemsProps = {
+  problems: string[];
+};
+export const Problems: React.FC<ProblemsProps> = ({ problems }) => (
   <div>
     <ul className="list-unstyled mb-0">
       {problems
@@ -29,11 +30,12 @@ export const Problems = ({ problems }) => (
   </div>
 );
 
-Problems.propTypes = {
-  problems: PropTypes.instanceOf(Array).isRequired,
+type MetricDescriptionProps = {
+  description: string;
 };
-
-export const MetricDescription = ({ description }) => {
+export const MetricDescription: React.FC<MetricDescriptionProps> = ({
+  description,
+}) => {
   if (description === undefined) {
     return <noscript />;
   }
@@ -52,34 +54,38 @@ export const MetricDescription = ({ description }) => {
   );
 };
 
-MetricDescription.propTypes = {
-  description: PropTypes.string.isRequired,
-};
-
-export const copyToClipboard = (cmd) => {
+export const copyToClipboard = (cmd: string) => {
   const el = document.createElement("textarea");
   el.value = cmd;
-  document.getElementById("copy").appendChild(el);
-  el.select();
-  document.execCommand("Copy");
-  document.getElementById("copy").removeChild(el);
+  const copyElement = document.getElementById("copy");
+  if (copyElement !== null) {
+    copyElement.appendChild(el);
+    el.select();
+    document.execCommand("Copy");
+    copyElement.removeChild(el);
+  }
 };
 
-export const isDarkTheme = (theme) => theme === "dark";
+export const isDarkTheme = (theme: string) => theme === "dark";
 
-export const getThemeBackgroundColorsSelect = (theme) =>
+export const getThemeBackgroundColorsSelect = (theme: string) =>
   isDarkTheme(theme)
     ? ["#045FB4", "#0B3861", "#3a3a3a"]
     : ["#A9D0F5", "#EFF5FB", "#FFF"];
 
-export const computeStart = (type, period) => {
+type Period = {
+  minutes: number;
+  from?: Date;
+  to?: Date;
+};
+export const computeStart = (type: string, period: Period) => {
   if (chartTypes[0] === type) {
     if (period.minutes) {
       return new Date(
         new Date().setMinutes(new Date().getMinutes() - 1),
       ).toISOString();
     } else {
-      const end = new Date(period.to);
+      const end = period.to ? new Date(period.to) : new Date();
       return new Date(
         new Date().setMinutes(end.getMinutes() - 1),
       ).toISOString();
@@ -90,20 +96,25 @@ export const computeStart = (type, period) => {
         new Date().setMinutes(new Date().getMinutes() - period.minutes),
       ).toISOString();
     } else {
-      return new Date(period.from).toISOString();
+      return period.from
+        ? new Date(period.from).toISOString()
+        : new Date().toISOString();
     }
   }
 };
 
-export const computeEnd = (type, period) => {
+export const computeEnd = (type: string, period: Period) => {
   if (period.minutes) {
     return new Date().toISOString();
   } else {
-    return new Date(period.to).toISOString();
+    return period.to
+      ? new Date(period.to).toISOString()
+      : new Date().toISOString();
   }
 };
 
-export const fillEmptyPoints = (data, period) => {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const fillEmptyPoints = (data: any, period: Period) => {
   const resampling = period.minutes ? period.minutes : 10080;
   const start = computeStart(chartTypes[1], period);
   const end = computeEnd(chartTypes[1], period);
@@ -142,14 +153,16 @@ export const fillEmptyPoints = (data, period) => {
   );
 };
 
-export const isEmpty = (obj) => {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const isEmpty = (obj: any) => {
   for (const key in obj) {
     if (Object.prototype.hasOwnProperty.call(obj, key)) return false;
   }
   return true;
 };
 
-export function composeMetricName(metric, name) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function composeMetricName(metric: any, name: string) {
   let metricName = name;
 
   if (metricName.indexOf("{{ device }}") > -1) {
