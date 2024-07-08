@@ -95,18 +95,16 @@ docker run --rm -ti -u $UID -e HOME=/tmp/home \
    -v $(pwd):/src -w /src/webui \
    -p 127.0.0.1:3015:3015 \
    node:18 \
-   sh -c 'npm install --legacy-peer-deps && npm start'
-   -v $(pwd):/src -w /src/webui \
-   node:16 \
    sh -c 'npm install && npm start'
 ```
 
 If you encounter any npm dependencies issues, start it with the `--legacy-peer-deps` tag :
 
 ```sh
-docker run --rm -ti -u $UID -e HOME=/tmp/home
-   -v $(pwd):/src -w /src/webui
-   node:16
+docker run --rm -ti -u $UID -e HOME=/tmp/home \
+   -v $(pwd):/src -w /src/webui \
+   -p 127.0.0.1:3015:3015 \
+   node:18 \
    sh -c 'npm install --legacy-peer-deps && npm start'
 ```
 

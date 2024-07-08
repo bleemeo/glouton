@@ -1,16 +1,20 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-/* eslint-disable prettier/prettier */
-import React, { memo, useState } from "react";
-import BootstrapTable from "react-bootstrap-table-next";
-import paginationFactory, {
-  PaginationProvider,
-} from "react-bootstrap-table2-paginator";
-import PropTypes from "prop-types";
-import cn from "classnames";
+import React, { useEffect, useMemo, useState } from "react";
 import { formatToBytes, percentToString2Digits } from "../utils/formater";
-import { isNullOrUndefined } from "../utils";
-import "react-bootstrap-table-next/dist/react-bootstrap-table2.min.css";
-import FaIcon from "./FaIcon";
+import {
+  ColumnDef,
+  createColumnHelper,
+  ExpandedState,
+  flexRender,
+  getCoreRowModel,
+  getExpandedRowModel,
+  getFilteredRowModel,
+  getSortedRowModel,
+  SortingState,
+  useReactTable,
+} from "@tanstack/react-table";
+import { Table as BTable } from "react-bootstrap";
+import { Process } from "../Data/data.interface";
 
 const cmdLineCommand = ["#C9B202", "#2ecc71", "#3498db"];
 
@@ -20,7 +24,11 @@ type PercentBarProps = {
   percent: string | number;
 };
 
-export const PercentBar: React.FC<PercentBarProps> = ({ color, title, percent }) => (
+export const PercentBar: React.FC<PercentBarProps> = ({
+  color,
+  title,
+  percent,
+}) => (
   <div
     className="percent-bar"
     title={title}
@@ -29,7 +37,11 @@ export const PercentBar: React.FC<PercentBarProps> = ({ color, title, percent })
   />
 );
 
-export const GraphCell = ({ value }) => (
+type GraphCellProps = {
+  value: number;
+};
+
+export const GraphCell: React.FC<GraphCellProps> = ({ value }) => (
   <div
     style={{
       display: "flex",
@@ -54,17 +66,22 @@ export const GraphCell = ({ value }) => (
   </div>
 );
 
-GraphCell.propTypes = {
-  value: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
+type FormatCmdLineProps = {
+  input: string;
+  widthLastColumn?: number;
+  expandable?: boolean;
 };
 
-export const formatCmdLine = (input, widthLastColumn, expandable = false) => {
+export const formatCmdLine: React.FC<FormatCmdLineProps> = ({
+  input,
+  widthLastColumn,
+  expandable,
+}) => {
   if (expandable) {
     return (
       <div
-        className="cellEllipsis"
         style={{
-          maxWidth: widthLastColumn ? widthLastColumn + "rem" : "59rem",
+          maxWidth: widthLastColumn ? widthLastColumn + "rem" : "10rem",
           width: "auto",
           color: cmdLineCommand[1],
         }}
@@ -82,8 +99,9 @@ export const formatCmdLine = (input, widthLastColumn, expandable = false) => {
   return (
     <div
       className="cellEllipsis"
+      id="cmdlineDiv"
       style={{
-        maxWidth: widthLastColumn ? widthLastColumn + "rem" : "59rem",
+        maxWidth: widthLastColumn ? widthLastColumn + "rem" : "10rem",
         width: "auto",
       }}
     >
@@ -137,255 +155,242 @@ export const formatCmdLine = (input, widthLastColumn, expandable = false) => {
   );
 };
 
+interface ProcessTableData extends Process {
+  subRows?: Process[];
+}
+
 type ProcessesTableProps = {
-  data: Array<object>;
+  data: Process[];
   sizePage: number;
   classNames: string;
   widthLastColumn?: number;
-  borderless?: boolean;
-  expandRow?: object;
   renderLoadMoreButton?: boolean;
-  onSortTable?: any;
 };
 
-const ProcessesTable = memo(function ProcessesTable({
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const ProcessesTable: React.FC<ProcessesTableProps> = ({
   data,
-  sizePage,
   widthLastColumn,
-  borderless,
-  expandRow,
-  classNames,
-  renderLoadMoreButton,
-  onSortTable,
-}: ProcessesTableProps) {
-  const [displayAll, setDisplayAll] = useState(false);
+}) => {
+  const [processes, setProcesses] = useState<ProcessTableData[]>(data);
+  const [sorting, setSorting] = useState<SortingState>([]);
+  const [expanded, setExpanded] = useState<ExpandedState>({});
 
-  const _handleDisplayAll = ({ page, onSizePerPageChange }) => {
-    setDisplayAll(!displayAll);
-    onSizePerPageChange(displayAll ? data.length : 20, page);
-  };
+  const getProcessesWithSamePPID = (ppid: number) => {
+    const processesWithSamePPID = processes.filter((p) => ppid === p.ppid);
 
-  const onSort = (field: any, order: any) => {
-    if (onSortTable) onSortTable({ field, order });
-  };
-
-  const renderSortCarets = (order: string) => {
-    if (!order) {
-      return (
-        <span>
-          {" "}
-          <FaIcon icon="fa fa-caret-down" />
-          <FaIcon icon="fa fa-caret-up" />
-        </span>
-      );
-    } else if (order === "asc") {
-      return (
-        <span style={{ color: "black" }}>
-          {" "}
-          <FaIcon icon="fa fa-caret-up" />
-        </span>
-      );
-    } else if (order === "desc") {
-      return (
-        <span style={{ color: "black" }}>
-          {" "}
-          <FaIcon icon="fa fa-caret-down" />
-        </span>
-      );
+    if (sorting[0] !== undefined) {
+      processesWithSamePPID.sort((a, b) => {
+        if (
+          typeof a[sorting[0].id] === "string" &&
+          typeof b[sorting[0].id] === "string"
+        ) {
+          return !sorting[0].desc
+            ? a[sorting[0].id].localeCompare(b[sorting[0].id])
+            : b[sorting[0].id].localeCompare(a[sorting[0].id]);
+        } else {
+          return !sorting[0].desc
+            ? a[sorting[0].id] - b[sorting[0].id]
+            : b[sorting[0].id] - a[sorting[0].id];
+        }
+      });
     }
-    return null;
+    if (processesWithSamePPID.length === 1) return undefined;
+    else return processesWithSamePPID;
   };
 
+  useEffect(() => {
+    const processesData = data.map((p) => {
+      return {
+        ...p,
+        subRows: getProcessesWithSamePPID(p.ppid),
+      };
+    });
+    setProcesses(processesData);
+  }, []);
 
-  const columns = [
-    {
-      dataField: "pid",
-      text: "PID",
-      headerTitle: function callback() {
-        return "Process ID";
-      },
-      formatter: (cell, row) => {
-        if (row.expandable) return "...";
-        else return cell;
-      },
-      sort: true,
-      onSort: onSort,
-      sortCaret: renderSortCarets,
-      headerClasses: "text",
-      headerStyle: { width: "5rem" },
+  const columnHelper = createColumnHelper<ProcessTableData>();
+
+  const columns = useMemo<ColumnDef<ProcessTableData>[]>(
+    () => [
+      columnHelper.accessor("pid", {
+        id: "pid",
+        header: "PID",
+        cell: ({ row, getValue }) => {
+          return (
+            <div
+              style={{
+                paddingLeft: `${row.depth * 3}rem`,
+              }}
+            >
+              <div>
+                {row.getCanExpand() ? (
+                  <a
+                    {...{
+                      onClick: row.getToggleExpandedHandler(),
+                      style: { cursor: "pointer" },
+                    }}
+                  >
+                    {row.getIsExpanded() ? "▼" : "▶ "}
+                  </a>
+                ) : (
+                  ""
+                )}{" "}
+                {row.depth > 0 ? "▷ " : ""}
+                {row.getCanExpand() ? "..." : getValue()}
+              </div>
+            </div>
+          );
+        },
+      }),
+      columnHelper.accessor("username", {
+        id: "username",
+        header: "User",
+        cell: (info) => {
+          return (
+            <div
+              className="cellEllipsis"
+              style={{ width: "auto", maxWidth: "5rem" }}
+            >
+              {info.getValue()}
+            </div>
+          );
+        },
+      }),
+      columnHelper.accessor("memory_rss", {
+        id: "memory_rss",
+        header: "RES",
+        cell: (info) =>
+          formatToBytes((info.getValue() as number) * 1000)?.join(" "),
+      }),
+      columnHelper.accessor("status", {
+        id: "status",
+        header: "Status",
+        cell: (info) =>
+          info.getValue() === "?" ||
+          info.getValue() === "idle" ||
+          info.getValue() === "disk-sleep"
+            ? "sleeping"
+            : info.getValue(),
+      }),
+      columnHelper.accessor("cpu_percent", {
+        id: "cpu_percent",
+        header: "%CPU",
+        cell: (info) => <GraphCell value={info.getValue() as number} />,
+      }),
+      columnHelper.accessor("mem_percent", {
+        id: "mem_percent",
+        header: "%MEM",
+        cell: (info) => <GraphCell value={info.getValue() as number} />,
+      }),
+      columnHelper.accessor("new_cpu_times", {
+        id: "new_cpu_times",
+        header: "TIME+",
+        cell: (info) => info.getValue(),
+      }),
+      columnHelper.accessor("cmdline", {
+        id: "cmdline",
+        header: "Name",
+        cell: (info) =>
+          formatCmdLine({
+            input: info.getValue() as string,
+            widthLastColumn: widthLastColumn,
+          }),
+      }),
+    ],
+    [],
+  );
+
+  const table = useReactTable({
+    data: processes,
+    columns: columns,
+    getCoreRowModel: getCoreRowModel(),
+    defaultColumn: {
+      minSize: 0,
+      size: 0,
     },
-    {
-      dataField: "username",
-      text: "User",
-      headerTitle: function callback() {
-        return "User name";
-      },
-      sort: true,
-      formatter: (cell) => {
-        return (
-          <div className="cellEllipsis" style={{ width: "7rem" }}>
-            {cell}
-          </div>
-        );
-      },
-      onSort: onSort,
-      sortCaret: renderSortCarets,
-      headerClasses: "text",
-      headerStyle: { width: "7rem" },
+    state: {
+      expanded,
+      sorting,
     },
-    {
-      dataField: "memory_rss",
-      text: "RES",
-      headerClasses: "text",
-      headerTitle: function callback() {
-        return "Resident Memory Size";
-      },
-      sort: true,
-      onSort: onSort,
-      sortCaret: renderSortCarets,
-      formatter: (cell) => (
-        <div>
-          {cell && !isNaN(cell) ? formatToBytes(cell * 1000)?.join(" ") : ""}
-        </div>
-      ),
-      headerStyle: { width: "5rem" },
+    initialState: {
+      sorting: [
+        {
+          id: "cpu_percent",
+          desc: true,
+        },
+      ],
     },
-    {
-      dataField: "status",
-      text: "Status",
-      headerTitle: function callback() {
-        return "Process status";
-      },
-      formatter: (cell) =>
-        cell === "?" || cell === "idle" || cell === "disk-sleep"
-          ? "sleeping"
-          : cell,
-      sort: true,
-      onSort: onSort,
-      sortCaret: renderSortCarets,
-      headerClasses: "text",
-      headerStyle: { width: "5rem" },
-    },
-    {
-      dataField: "cpu_percent",
-      text: "%CPU",
-      headerTitle: function callback() {
-        return "CPU Usage";
-      },
-      formatter: (cell) => {
-        return !isNullOrUndefined(cell) && !isNaN(cell) ? (
-          <GraphCell value={cell} />
-        ) : null;
-      },
-      sort: true,
-      onSort: onSort,
-      sortCaret: renderSortCarets,
-      headerClasses: "text",
-      headerStyle: { width: "7rem" },
-    },
-    {
-      dataField: "mem_percent",
-      text: "%MEM",
-      headerTitle: function callback() {
-        return "Memory Usage";
-      },
-      formatter: (cell) => {
-        return !isNullOrUndefined(cell) && !isNaN(cell) ? (
-          <GraphCell value={cell} />
-        ) : null;
-      },
-      sort: true,
-      onSort: onSort,
-      sortCaret: renderSortCarets,
-      headerClasses: "text",
-      headerStyle: { width: "7rem" },
-    },
-    {
-      dataField: "new_cpu_times",
-      text: "TIME+",
-      headerTitle: function callback() {
-        return "CPU Time, hundredths";
-      },
-      sort: true,
-      sortFunc: (a, b, order, dataField, rowA, rowB) => {
-        if (order === "asc") return rowA.cpu_times - rowB.cpu_times;
-        else return rowB.cpu_times - rowA.cpu_times;
-      },
-      onSort: onSort,
-      sortCaret: renderSortCarets,
-      headerClasses: "text",
-      headerStyle: { width: "5rem" },
-    },
-    {
-      dataField: "cmdline",
-      text: "Name",
-      headerTitle: function callback() {
-        return "Command line";
-      },
-      formatter: (cell, row) => {
-        return formatCmdLine(cell, widthLastColumn, row.expandable);
-      },
-      sort: true,
-      onSort: onSort,
-      sortCaret: renderSortCarets,
-      headerClasses: "text",
-    },
-  ];
-  const defaultSorted = [
-    {
-      dataField: "cpu_percent",
-      order: "desc",
-    },
-  ];
+    getSubRows: (row) => row.subRows,
+    onExpandedChange: setExpanded,
+    getSortedRowModel: getSortedRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
+    getExpandedRowModel: getExpandedRowModel(),
+    onSortingChange: setSorting,
+  });
 
   return (
-    <div>
-      <PaginationProvider
-        pagination={paginationFactory({
-          custom: true,
-          sizePerPage: displayAll ? data.length : 20,
-          totalSize: data.length,
-          page: 1,
-        })}
-      >
-        {({ paginationProps, paginationTableProps }) => (
-          <div>
-            <div className="d-flex justify-content-center text-truncate borderless">
-              <BootstrapTable
-                classes={"table " + classNames ? classNames : ""}
-                rowClasses={cn("rowHeightReduced", {
-                  borderless: borderless,
-                })}
-                rowStyle={{ color: "#000" }}
-                bordered={false}
-                bootstrap4
-                hover
-                keyField="pid"
-                data={data}
-                columns={columns}
-                defaultSorted={defaultSorted}
-                expandRow={expandRow}
-                {...paginationTableProps}
-              />
-            </div>
-            {renderLoadMoreButton && data.length > sizePage ? (
-              <div className="fixed-bottom text-center">
-                <button
-                  type="button"
-                  className="btn btn-primary"
-                  style={{ marginBottom: ".5rem" }}
-                  onClick={() => _handleDisplayAll(paginationProps)}
-                >
-                  {displayAll ? "Show less processes" : "Show all processes"}
-                </button>
-              </div>
-            ) : null}
-          </div>
-        )}
-      </PaginationProvider>
+    <div className="p-2">
+      <BTable striped bordered hover responsive size="sm">
+        <thead>
+          {table.getHeaderGroups().map((headerGroup) => (
+            <tr key={headerGroup.id}>
+              {headerGroup.headers.map((header) => {
+                return (
+                  <th key={header.id} colSpan={header.colSpan}>
+                    <div
+                      {...{
+                        className: header.column.getCanSort()
+                          ? "cursor-pointer select-none"
+                          : "",
+                        onClick: header.column.getToggleSortingHandler(),
+                      }}
+                    >
+                      {flexRender(
+                        header.column.columnDef.header,
+                        header.getContext(),
+                      )}
+                      {{
+                        asc: " ▲",
+                        desc: " ▼",
+                      }[header.column.getIsSorted() as string] ?? null}
+                    </div>
+                  </th>
+                );
+              })}
+            </tr>
+          ))}
+        </thead>
+        <tbody>
+          {table.getRowModel().rows.map((row) => (
+            <tr key={row.id}>
+              {row.getVisibleCells().map((cell) => (
+                <td key={cell.id}>
+                  {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+        <tfoot>
+          {table.getFooterGroups().map((footerGroup) => (
+            <tr key={footerGroup.id}>
+              {footerGroup.headers.map((header) => (
+                <th key={header.id} colSpan={header.colSpan}>
+                  {header.isPlaceholder
+                    ? null
+                    : flexRender(
+                        header.column.columnDef.footer,
+                        header.getContext(),
+                      )}
+                </th>
+              ))}
+            </tr>
+          ))}
+        </tfoot>
+      </BTable>
     </div>
   );
-});
-
+};
 
 export default ProcessesTable;

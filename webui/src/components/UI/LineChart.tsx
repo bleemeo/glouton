@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import React, { useRef, useEffect, useState } from "react";
-import { Card } from "tabler-react";
+import Card from "react-bootstrap/Card";
 import * as echarts from "echarts";
 import type { EChartsOption, CustomSeriesOption } from "echarts";
 import cn from "classnames";

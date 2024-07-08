@@ -1,7 +1,6 @@
 /* eslint-disable camelcase */
 import React, { FC, useState } from "react";
 import * as d3 from "d3";
-import { Grid } from "tabler-react";
 import { Tooltip } from "react-tooltip";
 import "react-tooltip/dist/react-tooltip.css";
 import { AxiosError } from "axios";
@@ -11,6 +10,9 @@ import FaIcon from "../UI/FaIcon";
 import Smiley from "../UI/Smiley";
 import FetchSuspense from "../UI/FetchSuspense";
 import ServiceDetailsModal from "../Service/ServiceDetailsModal";
+import Row from "react-bootstrap/Row";
+import Col from "react-bootstrap/Col";
+import Container from "react-bootstrap/Container";
 
 import { useHTTPDataFetch } from "../utils/hooks";
 import { isNullOrUndefined, Problems } from "../utils";
@@ -186,157 +188,159 @@ const AgentDetails: FC<AgentDetailsProps> = ({ facts }) => {
 
       {expireAgentBanner}
 
-      <Grid.Row>
-        <Grid.Col xl={4}>
-          <FetchSuspense
-            isLoading={isLoading}
-            error={
-              error ||
-              isNullOrUndefined(services) ||
-              isNullOrUndefined(tags) ||
-              isNullOrUndefined(agentInformation) ||
-              isNullOrUndefined(agentStatus)
-            }
-            services={services}
-          >
-            {({ services }) => (
+      <Container>
+        <Row>
+          <Col sm={4}>
+            <FetchSuspense
+              isLoading={isLoading}
+              error={
+                error ||
+                isNullOrUndefined(services) ||
+                isNullOrUndefined(tags) ||
+                isNullOrUndefined(agentInformation) ||
+                isNullOrUndefined(agentStatus)
+              }
+              services={services}
+            >
+              {({ services }) => (
+                <Panel>
+                  <div className="marginOffset">
+                    Services running on this agent:
+                    <ul className="list-inline">
+                      {services
+                        .filter((service) => service.active)
+                        .sort((a, b) => a.name.localeCompare(b.name))
+                        .map((service, idx) => {
+                          return (
+                            <li key={idx} className="list-inline-item">
+                              <button
+                                className={`btn blee-label btn-${cssClassForStatus(
+                                  service.status,
+                                )}`}
+                                onClick={() => setShowServiceDetails(service)}
+                              >
+                                {service.name}
+                                &nbsp;
+                                <FaIcon icon="fas fa-info-circle" />
+                              </button>
+                            </li>
+                          );
+                        })}
+                    </ul>
+                  </div>
+                </Panel>
+              )}
+            </FetchSuspense>
+            {agentInformation && Object.keys(agentInformation).length > 0 ? (
               <Panel>
                 <div className="marginOffset">
-                  Services running on this agent:
-                  <ul className="list-inline">
-                    {services
-                      .filter((service) => service.active)
-                      .sort((a, b) => a.name.localeCompare(b.name))
-                      .map((service, idx) => {
-                        return (
-                          <li key={idx} className="list-inline-item">
-                            <button
-                              // TODO : Change in favor of service status
-                              className={`btn blee-label btn-${cssClassForStatus(
-                                service.status,
-                              )}`}
-                              onClick={() => setShowServiceDetails(service)}
-                            >
-                              {service.name}
-                              &nbsp;
-                              <FaIcon icon="fas fa-info-circle" />
-                            </button>
-                          </li>
-                        );
-                      })}
+                  <ul className="list-unstyled">
+                    {agentInformation.registrationAt &&
+                    new Date(agentInformation.registrationAt).getFullYear() !==
+                      1 ? (
+                      <li>
+                        <b>Glouton registration at:</b>{" "}
+                        {formatDateTimeWithSeconds(
+                          agentInformation.registrationAt,
+                        )}
+                      </li>
+                    ) : null}
+                    {agentInformation.lastReport &&
+                    new Date(agentInformation.lastReport).getFullYear() !==
+                      1 ? (
+                      <li>
+                        <b>Glouton last report:</b>{" "}
+                        {formatDateTimeWithSeconds(agentInformation.lastReport)}
+                      </li>
+                    ) : null}
+                    <li>
+                      <div className="d-flex flex-row align-items-center">
+                        <b style={{ marginRight: "0.4rem" }}>
+                          Connected to Bleemeo ?
+                        </b>
+                        <div
+                          className={
+                            agentInformation.isConnected
+                              ? "isConnected"
+                              : "isNotConnected"
+                          }
+                        />
+                      </div>
+                    </li>
+                    <li>
+                      <div className="d-flex flex-row align-items-center">
+                        <b>
+                          Need to troubleshoot ?{" "}
+                          <a href="/diagnostic">/diagnostic</a> may help you.
+                        </b>
+                      </div>
+                    </li>
                   </ul>
                 </div>
               </Panel>
-            )}
-          </FetchSuspense>
-          {agentInformation && Object.keys(agentInformation).length > 0 ? (
+            ) : null}
+          </Col>
+          <Col sm={4}>
+            <FetchSuspense
+              isLoading={isLoading}
+              error={
+                error ||
+                isNullOrUndefined(services) ||
+                isNullOrUndefined(tags) ||
+                isNullOrUndefined(agentInformation) ||
+                isNullOrUndefined(agentStatus)
+              }
+              tags={tags}
+            >
+              {({ tags }) => (
+                <Panel>
+                  <div className="marginOffset">
+                    Tags for {facts.find((f) => f.name === "fqdn")?.value}:
+                    {tags.length > 0 ? (
+                      <ul className="list-inline">
+                        {tags.map((tag) => (
+                          <li key={tag.tagName} className="list-inline-item">
+                            <span className="badge badge-info blee-label">
+                              {tag.tagName}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <h4>There is no tag to display</h4>
+                    )}
+                  </div>
+                </Panel>
+              )}
+            </FetchSuspense>
+            <Row>
+              <Col xl={6} offset={3}>
+                {problems ? <Panel>{problems}</Panel> : null}
+              </Col>
+            </Row>
+          </Col>
+          <Col sm={4}>
             <Panel>
               <div className="marginOffset">
+                <h5>Information retrieved from the agent</h5>
+                {factUpdatedAtDate ? (
+                  <p>(last update: {factUpdatedAtDate.toLocaleString()})</p>
+                ) : null}
                 <ul className="list-unstyled">
-                  {agentInformation.registrationAt &&
-                  new Date(agentInformation.registrationAt).getFullYear() !==
-                    1 ? (
-                    <li>
-                      <b>Glouton registration at:</b>{" "}
-                      {formatDateTimeWithSeconds(
-                        agentInformation.registrationAt,
-                      )}
-                    </li>
-                  ) : null}
-                  {agentInformation.lastReport &&
-                  new Date(agentInformation.lastReport).getFullYear() !== 1 ? (
-                    <li>
-                      <b>Glouton last report:</b>{" "}
-                      {formatDateTimeWithSeconds(agentInformation.lastReport)}
-                    </li>
-                  ) : null}
-                  <li>
-                    <div className="d-flex flex-row align-items-center">
-                      <b style={{ marginRight: "0.4rem" }}>
-                        Connected to Bleemeo ?
-                      </b>
-                      <div
-                        className={
-                          agentInformation.isConnected
-                            ? "isConnected"
-                            : "isNotConnected"
-                        }
-                      />
-                    </div>
-                  </li>
-                  <li>
-                    <div className="d-flex flex-row align-items-center">
-                      <b>
-                        Need to troubleshoot ?{" "}
-                        <a href="/diagnostic">/diagnostic</a> may help you.
-                      </b>
-                    </div>
-                  </li>
+                  {facts
+                    .filter((f) => f.name !== "fact_updated_at")
+                    .sort((a, b) => a.name.localeCompare(b.name))
+                    .map((fact) => (
+                      <li key={fact.name}>
+                        <b>{fact.name}:</b> {fact.value}
+                      </li>
+                    ))}
                 </ul>
               </div>
             </Panel>
-          ) : null}
-        </Grid.Col>
-        <Grid.Col x={4}>
-          <FetchSuspense
-            isLoading={isLoading}
-            error={
-              error ||
-              isNullOrUndefined(services) ||
-              isNullOrUndefined(tags) ||
-              isNullOrUndefined(agentInformation) ||
-              isNullOrUndefined(agentStatus)
-            }
-            tags={tags}
-          >
-            {({ tags }) => (
-              <Panel>
-                <div className="marginOffset">
-                  Tags for {facts.find((f) => f.name === "fqdn")?.value}:
-                  {tags.length > 0 ? (
-                    <ul className="list-inline">
-                      {tags.map((tag) => (
-                        <li key={tag.tagName} className="list-inline-item">
-                          <span className="badge badge-info blee-label">
-                            {tag.tagName}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <h4>There is no tag to display</h4>
-                  )}
-                </div>
-              </Panel>
-            )}
-          </FetchSuspense>
-          <Grid.Row>
-            <Grid.Col xl={6} offset={3}>
-              {problems ? <Panel>{problems}</Panel> : null}
-            </Grid.Col>
-          </Grid.Row>
-        </Grid.Col>
-        <Grid.Col xl={4}>
-          <Panel>
-            <div className="marginOffset">
-              <h5>Information retrieved from the agent</h5>
-              {factUpdatedAtDate ? (
-                <p>(last update: {factUpdatedAtDate.toLocaleString()})</p>
-              ) : null}
-              <ul className="list-unstyled">
-                {facts
-                  .filter((f) => f.name !== "fact_updated_at")
-                  .sort((a, b) => a.name.localeCompare(b.name))
-                  .map((fact) => (
-                    <li key={fact.name}>
-                      <b>{fact.name}:</b> {fact.value}
-                    </li>
-                  ))}
-              </ul>
-            </div>
-          </Panel>
-        </Grid.Col>
-      </Grid.Row>
+          </Col>
+        </Row>
+      </Container>
     </div>
   );
 };

@@ -57,6 +57,7 @@ const DockerProcesses = ({ containerId, name }: DockerProcessesProps) => {
                   sizePage={10}
                   classNames="dockerTable"
                   widthLastColumn={40}
+                  renderLoadMoreButton={false}
                 />
               </div>
             );

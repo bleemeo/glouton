@@ -1,5 +1,7 @@
 import React from "react";
-import { Grid, Card } from "tabler-react";
+import Row from "react-bootstrap/Row";
+import Col from "react-bootstrap/Col";
+import Card from "react-bootstrap/Card";
 
 type PanelProps = {
   children: React.ReactNode;
@@ -18,17 +20,20 @@ const Panel: React.FC<PanelProps> = ({
   offset = 0,
   noBorder = false,
 }) => (
-  <Grid.Row>
-    <Grid.Col xl={xl} md={md} offset={offset}>
-      <Card className={noBorder ? "no-border" : null}>
+  <Row>
+    <Col xl={xl} md={md} offset={offset}>
+      <Card
+        className={noBorder ? "no-border" : undefined}
+        style={{ margin: "4px" }}
+      >
         <div style={{ marginTop: "-0.8rem" }}>
           <Card.Body>
             <div className={className}>{children}</div>
           </Card.Body>
         </div>
       </Card>
-    </Grid.Col>
-  </Grid.Row>
+    </Col>
+  </Row>
 );
 
 export default Panel;

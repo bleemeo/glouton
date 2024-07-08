@@ -8,7 +8,6 @@ import "core-js/es/object/values";
 import "core-js/es/object/entries";
 
 import "./styles/bootstrap.scss";
-import "tabler-react/dist/Tabler.css";
 
 const App = lazy(() => import("./components/Root"));
 

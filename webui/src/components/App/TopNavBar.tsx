@@ -2,10 +2,14 @@ import React from "react";
 import { useHTTPDataFetch } from "../utils/hooks";
 import FetchSuspense from "../UI/FetchSuspense";
 import { FACTS_URL } from "../utils/dataRoutes";
+import { Fact } from "../Data/data.interface";
 
 const TopNavBar = () => {
-  const { isLoading, error, data } = useHTTPDataFetch(FACTS_URL, null, 10000);
-  const facts = data;
+  const {
+    isLoading,
+    error,
+    data: facts,
+  } = useHTTPDataFetch<Fact[]>(FACTS_URL, null, 10000);
 
   return (
     <nav
@@ -16,7 +20,7 @@ const TopNavBar = () => {
       <FetchSuspense isLoading={isLoading} error={error} facts={facts}>
         {({ facts }) => (
           <h2 style={{ marginBlockEnd: "0rem", marginLeft: "1rem" }}>
-            {facts.find((f) => f.name === "fqdn").value}
+            {facts.find((f: Fact) => f.name === "fqdn").value}
           </h2>
         )}
       </FetchSuspense>
