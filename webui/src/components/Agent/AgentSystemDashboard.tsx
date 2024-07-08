@@ -4,7 +4,6 @@ import VisibilitySensor from "react-visibility-sensor";
 import PropTypes from "prop-types";
 import WidgetDashboardItem from "../UI/WidgetDashboardItem";
 import { chartTypes } from "../utils";
-import { computeBackwardForward } from "../utils/ComputeBackwarForward";
 import MetricGaugeItem from "../Metric/MetricGaugeItem";
 import { useWindowWidth } from "../utils/hooks";
 import { setStorageItem } from "../utils/storage";
