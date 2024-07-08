@@ -1,11 +1,4 @@
-import React, {
-  FC,
-  useState,
-  useEffect,
-  useMemo,
-  useCallback,
-  useRef,
-} from "react";
+import React, { FC, useState, useEffect, useMemo, useCallback } from "react";
 
 import Docker from "./Docker";
 import Loading from "../UI/Loading";
@@ -15,7 +8,7 @@ import Toggle from "../UI/Toggle";
 import QueryError from "../UI/QueryError";
 import { useHTTPDataFetch } from "../utils/hooks";
 import { CONTAINERS_URL } from "../utils/dataRoutes";
-import { Container, Containers } from "../Data/data.interface";
+import { Containers } from "../Data/data.interface";
 
 const PAGE_SIZE = 10;
 
@@ -25,7 +18,6 @@ const AgentDockerList: FC = () => {
   const [search, setSearch] = useState<string>("");
   const [nbContainers, setNbContainers] = useState<number>(0);
 
-  const containersRef = useRef<Container[]>([]);
   const parameters = useMemo(
     () => ({
       limit: PAGE_SIZE,
@@ -41,14 +33,11 @@ const AgentDockerList: FC = () => {
     error,
     data: containers,
     isFetching,
-  } = useHTTPDataFetch<Containers>(CONTAINERS_URL, parameters, 10000);
+  } = useHTTPDataFetch<Containers>(CONTAINERS_URL, parameters, 2000);
 
   useEffect(() => {
     if (containers && nbContainers !== containers.count) {
       setNbContainers(containers.count);
-    }
-    if (containers && containers.containers) {
-      containersRef.current = containers.containers;
     }
   }, [containers, nbContainers]);
 
@@ -77,14 +66,10 @@ const AgentDockerList: FC = () => {
   if (isLoading && !isFetching) {
     // Only show loading if initial load is happening
     displayContainers = <Loading size="xl" />;
-  } else if (
-    error ||
-    !containersRef.current ||
-    containersRef.current.length === 0
-  ) {
+  } else if (error) {
     displayContainers = <QueryError />;
   } else if (containers) {
-    const containersList = containersRef.current;
+    const containersList = containers.containers;
     const currentCountContainers = containers.currentCount;
 
     const pages: React.JSX.Element[] = [];

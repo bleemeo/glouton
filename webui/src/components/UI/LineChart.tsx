@@ -2,7 +2,7 @@
 import React, { useRef, useEffect, useState } from "react";
 import { Card } from "tabler-react";
 import * as echarts from "echarts";
-import { EChartOption } from "echarts";
+import type { EChartsOption, CustomSeriesOption } from "echarts";
 import cn from "classnames";
 import {
   formatToFrenchTime,
@@ -19,11 +19,11 @@ import QueryError from "./QueryError";
 import { chartColorMap } from "../utils/colors";
 
 export const getOptions = (
-  series: echarts.EChartOption.SeriesCustom[],
+  series: CustomSeriesOption[],
   stacked: boolean,
   funcConverter: any,
   unit: number,
-): echarts.EChartOption => ({
+): EChartsOption => ({
   color: series.map((serie) => serie.itemStyle?.color?.toString() || "#000"),
   animation: false,
   grid: {
@@ -36,7 +36,6 @@ export const getOptions = (
   xAxis: [
     {
       type: "time",
-      boundaryGap: false,
       splitNumber: 10,
       axisLabel: {
         formatter: function (value) {
@@ -198,7 +197,7 @@ const selectUnitConverter = (unit) => {
 };
 
 export const renderLegend = (
-  series: EChartOption.SeriesCustom[],
+  series: CustomSeriesOption[],
   noPointer = true,
 ) => {
   let legend: JSX.Element | null = null;
@@ -252,7 +251,7 @@ const LineChart: React.FC<LineChartProps> = ({
   windowWidth,
 }) => {
   const svgChart = useRef<HTMLDivElement | null>(null);
-  const [series, setSeries] = useState<EChartOption.SeriesCustom[]>([]);
+  const [series, setSeries] = useState<CustomSeriesOption[]>([]);
 
   useEffect(() => {
     if (
@@ -263,7 +262,7 @@ const LineChart: React.FC<LineChartProps> = ({
       metrics[0].values.length > 1 &&
       metrics[0].metric
     ) {
-      const series: EChartOption.SeriesCustom[] = [];
+      const series: CustomSeriesOption[] = [];
       /* eslint-enable indent */
       metrics.forEach((metric, idx) => {
         const nameDisplay = composeMetricName(
@@ -276,7 +275,7 @@ const LineChart: React.FC<LineChartProps> = ({
         if (title === "Processor Usage" || title === "Memory Usage") {
           color = metrics_param[idx].color;
         }
-        const serie: EChartOption.SeriesCustom = {
+        const serie: CustomSeriesOption = {
           id: idx.toString(),
           type: "line",
           color: color,
@@ -287,7 +286,7 @@ const LineChart: React.FC<LineChartProps> = ({
           areaStyle: stacked ? { opacity: 0.9 } : null,
           lineStyle: { width: 1 },
           stack: stacked ? "stack" : null,
-        } as EChartOption.SeriesCustom;
+        } as unknown as CustomSeriesOption;
 
         series.push(serie);
       });
