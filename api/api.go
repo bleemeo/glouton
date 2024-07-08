@@ -158,7 +158,9 @@ func (api *API) init() {
 
 	// Register the API endpoints for data fetching
 	data := Data{api}
+    if !api.LocalUIDisabled {
 	router.Get("/data/docker-containers", data.Containers)
+    [...]
 	router.Get("/data/topinfo", data.Processes)
 	router.Get("/data/facts", data.Facts)
 	router.Get("/data/services", data.Services)
