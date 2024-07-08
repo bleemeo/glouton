@@ -42,7 +42,7 @@ If you can't run `./glouton` because it is a Linux binary, you can simply run `g
 When loading the UI, if Glouton is not able to discover your Docker containers, try changing the Docker socket with :
 
 ```sh
-export GLOUTON_CONTAINER_RUNTIME_DOCKER_ADDRESSES=unix:///Users/{your username}/.docker/run/docker.sock
+export GLOUTON_CONTAINER_RUNTIME_DOCKER_ADDRESSES="unix://${HOME}/.docker/run/docker.sock"
 ```
 
 ### One-time rebuild UI
