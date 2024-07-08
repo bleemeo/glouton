@@ -11,7 +11,7 @@ type AgentInfo struct {
 	IsConnected    bool       `json:"isConnected"`
 }
 
-func (a *AgentInfo) Render(w http.ResponseWriter, r *http.Request) error {
+func (a *AgentInfo) Render(_ http.ResponseWriter, _ *http.Request) error {
 	return nil
 }
 
@@ -20,7 +20,7 @@ type AgentStatus struct {
 	StatusDescription []string `json:"statusDescription"`
 }
 
-func (a *AgentStatus) Render(w http.ResponseWriter, r *http.Request) error {
+func (a *AgentStatus) Render(_ http.ResponseWriter, _ *http.Request) error {
 	return nil
 }
 
@@ -61,7 +61,7 @@ type Containers struct {
 	Containers   []*Container `json:"containers"`
 }
 
-func (c *Containers) Render(w http.ResponseWriter, r *http.Request) error {
+func (c *Containers) Render(_ http.ResponseWriter, _ *http.Request) error {
 	return nil
 }
 
@@ -70,7 +70,7 @@ type Fact struct {
 	Value string `json:"value"`
 }
 
-func (f *Fact) Render(w http.ResponseWriter, r *http.Request) error {
+func (f *Fact) Render(_ http.ResponseWriter, _ *http.Request) error {
 	return nil
 }
 
@@ -111,9 +111,6 @@ type Process struct {
 	ContainerID string    `json:"container_id"`
 }
 
-type Query struct {
-}
-
 type Service struct {
 	Name              string   `json:"name"`
 	ContainerID       string   `json:"containerId"`
@@ -125,7 +122,7 @@ type Service struct {
 	StatusDescription *string  `json:"statusDescription,omitempty"`
 }
 
-func (s *Service) Render(w http.ResponseWriter, r *http.Request) error {
+func (s *Service) Render(_ http.ResponseWriter, _ *http.Request) error {
 	return nil
 }
 
@@ -139,7 +136,7 @@ type Tag struct {
 	TagName string `json:"tagName"`
 }
 
-func (t *Tag) Render(w http.ResponseWriter, r *http.Request) error {
+func (t *Tag) Render(_ http.ResponseWriter, _ *http.Request) error {
 	return nil
 }
 
@@ -154,6 +151,6 @@ type Topinfo struct {
 	Swap      *SwapUsage   `json:"Swap,omitempty"`
 }
 
-func (t *Topinfo) Render(w http.ResponseWriter, r *http.Request) error {
+func (t *Topinfo) Render(_ http.ResponseWriter, _ *http.Request) error {
 	return nil
 }

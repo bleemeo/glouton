@@ -36,18 +36,30 @@ type Data struct {
 	api *API
 }
 
+var (
+	errContainerRuntime = errors.New("container runtime is not available")
+	errContainer        = errors.New("can not retrieve containers")
+	errProcesses        = errors.New("can not retrieve processes")
+	errFacts            = errors.New("can not retrieve facts")
+	errServices         = errors.New("can not retrieve services")
+	errAgentInformation = errors.New("can not retrieve agent information")
+	errTags             = errors.New("can not retrieve tags")
+	errAgentStatus      = errors.New("can not retrieve agent status")
+	errMetrics          = errors.New("can not retrieve metrics")
+	errPoints           = errors.New("can not retrieve points")
+)
+
+// Containers have 4 query parameters :
+// - offset (string) : The offset of the first element to return.
+// - limit (string) : The maximum number of elements to return.
+// - allContainers (bool) : If true, return all containers, otherwise only running containers.
+// - search (string) : The search string to filter containers.
 func (d *Data) Containers(w http.ResponseWriter, r *http.Request) {
-
-	// 4 query parameters :
-	// - offset (string) : The offset of the first element to return
-	// - limit (string) : The maximum number of elements to return
-	// - allContainers (bool) : If true, return all containers, otherwise only running containers
-	// - search (string) : The search string to filter containers
-
 	offset, limit := 0, -1
 
 	if offsetParam := r.URL.Query().Get("offset"); offsetParam != "" {
 		offsetValue, err := strconv.Atoi(offsetParam)
+
 		if err == nil {
 			offset = offsetValue
 		}
@@ -55,6 +67,7 @@ func (d *Data) Containers(w http.ResponseWriter, r *http.Request) {
 
 	if limitParam := r.URL.Query().Get("limit"); limitParam != "" {
 		limitValue, err := strconv.Atoi(limitParam)
+
 		if err == nil {
 			limit = limitValue
 		}
@@ -72,16 +85,24 @@ func (d *Data) Containers(w http.ResponseWriter, r *http.Request) {
 
 	if d.api.ContainerRuntime == nil {
 		logger.V(2).Printf("Container runtime is not available")
-		cerr := errors.New("Container runtime is not available")
-		render.Render(w, r, ErrInternalServerError(cerr))
+
+		err := render.Render(w, r, ErrInternalServerError(errContainerRuntime))
+		if err != nil {
+			logger.V(2).Printf("Can not render error: %v", err)
+		}
+
 		return
 	}
 
 	containers, err := d.api.ContainerRuntime.Containers(r.Context(), time.Hour, false)
 	if err != nil {
 		logger.V(2).Printf("Can not retrieve containers: %v", err)
-		cerr := errors.New("Can not retrieve containers")
-		render.Render(w, r, ErrInternalServerError(cerr))
+
+		err := render.Render(w, r, ErrInternalServerError(errContainer))
+		if err != nil {
+			logger.V(2).Printf("Can not render error: %v", err)
+		}
+
 		return
 	}
 
@@ -120,7 +141,11 @@ func (d *Data) Containers(w http.ResponseWriter, r *http.Request) {
 
 			c, err = d.containerInformation(container, c)
 			if err != nil {
-				render.Render(w, r, ErrInternalServerError(err))
+				err := render.Render(w, r, ErrInternalServerError(err))
+				if err != nil {
+					logger.V(2).Printf("Can not render error: %v", err)
+				}
+
 				return
 			}
 
@@ -139,7 +164,10 @@ func (d *Data) Containers(w http.ResponseWriter, r *http.Request) {
 
 	containersRes = paginateInformation(&pagination, containersRes)
 
-	render.Render(w, r, &Containers{Containers: containersRes, Count: nbContainers, CurrentCount: nbCurrentContainers})
+	err = render.Render(w, r, &Containers{Containers: containersRes, Count: nbContainers, CurrentCount: nbCurrentContainers})
+	if err != nil {
+		logger.V(2).Printf("Can not render error: %v", err)
+	}
 }
 
 func paginateInformation(input *Pagination, containersRes []*Container) []*Container {
@@ -187,7 +215,7 @@ func (d *Data) containerInformation(container facts.Container, c *Container) (*C
 		if err != nil {
 			logger.V(2).Printf("Can not retrieve metrics: %v", err)
 
-			return c, errors.New("Can not retrieve metrics")
+			return c, errMetrics
 		}
 
 		if len(metrics) > 0 {
@@ -195,7 +223,7 @@ func (d *Data) containerInformation(container facts.Container, c *Container) (*C
 			if err != nil {
 				logger.V(2).Printf("Can not retrieve points: %v", err)
 
-				return c, errors.New("Can not retrieve points")
+				return c, errPoints
 			}
 
 			var point float64
@@ -224,29 +252,32 @@ func (d *Data) containerInformation(container facts.Container, c *Container) (*C
 	return c, nil
 }
 
-// Processes returns a list of topInfo
-// They can be filtered by container's ID.
+// Processes returns a list of topInfo, they have 1 query parameter :
+// - search (string) : The container ID to filter processes.
 func (d *Data) Processes(w http.ResponseWriter, r *http.Request) {
-
-	// 1 query parameter :
-	// - search (string) : The search string to filter processes
-
 	var containerID *string
 	if containerIDParam := r.URL.Query().Get("search"); containerIDParam == "" {
 		containerID = &containerIDParam
 	}
 
 	if d.api.PsFact == nil {
-		cerr := errors.New("Can not retrieve processes at this moment. Please try later")
-		render.Render(w, r, ErrInternalServerError(cerr))
+		err := render.Render(w, r, ErrInternalServerError(errProcesses))
+		if err != nil {
+			logger.V(2).Printf("Can not render error: %v", err)
+		}
+
 		return
 	}
 
 	topInfo, err := d.api.PsFact.TopInfo(r.Context(), time.Second*15)
 	if err != nil {
 		logger.V(2).Printf("Can not retrieve processes: %v", err)
-		cerr := errors.New("Can not retrieve processes")
-		render.Render(w, r, ErrInternalServerError(cerr))
+
+		err := render.Render(w, r, ErrInternalServerError(errProcesses))
+		if err != nil {
+			logger.V(2).Printf("Can not render error: %v", err)
+		}
+
 		return
 	}
 
@@ -298,26 +329,35 @@ func (d *Data) Processes(w http.ResponseWriter, r *http.Request) {
 		Used:  topInfo.Swap.Used,
 	}
 
-	render.Render(w, r, &Topinfo{
+	err = render.Render(w, r, &Topinfo{
 		Time: time.Unix(topInfo.Time, topInfo.Time), Uptime: topInfo.Uptime, Loads: topInfo.Loads, Users: topInfo.Users,
 		CPU: cpuRes, Memory: memoryRes, Swap: swapRes, Processes: processesRes,
 	})
+	if err != nil {
+		logger.V(2).Printf("Can not render error: %v", err)
+	}
 }
 
 // Facts returns a list of facts discovered by agent.
 func (d *Data) Facts(w http.ResponseWriter, r *http.Request) {
-
 	if d.api.FactProvider == nil {
-		cerr := errors.New("Can not retrieve facts at this moment. Please try later")
-		render.Render(w, r, ErrInternalServerError(cerr))
+		err := render.Render(w, r, ErrInternalServerError(errFacts))
+		if err != nil {
+			logger.V(2).Printf("Can not render error: %v", err)
+		}
+
 		return
 	}
 
 	facts, err := d.api.FactProvider.Facts(r.Context(), time.Hour)
 	if err != nil {
 		logger.V(2).Printf("Can not retrieve facts: %v", err)
-		cerr := errors.New("Can not retrieve facts")
-		render.Render(w, r, ErrInternalServerError(cerr))
+
+		err := render.Render(w, r, ErrInternalServerError(errFacts))
+		if err != nil {
+			logger.V(2).Printf("Can not render error: %v", err)
+		}
+
 		return
 	}
 
@@ -331,24 +371,33 @@ func (d *Data) Facts(w http.ResponseWriter, r *http.Request) {
 		factsRes = append(factsRes, f)
 	}
 
-	render.RenderList(w, r, factsRes)
+	err = render.RenderList(w, r, factsRes)
+	if err != nil {
+		logger.V(2).Printf("Can not render error: %v", err)
+	}
 }
 
 // Services returns a list services discovered by agent
 // They can be filtered by active flag.
 func (d *Data) Services(w http.ResponseWriter, r *http.Request) {
-
 	var isActive bool
-	if isActiveParam := r.URL.Query().Get("isActive"); isActiveParam == "" {
-		isActiveParamValue, err := strconv.ParseBool(isActiveParam)
-		if err == nil {
-			isActive = isActiveParamValue
-		}
+
+	isActiveParam := r.URL.Query().Get("isActive")
+	if isActiveParam == "" {
+		isActive = true
+	}
+
+	isActiveParamValue, err := strconv.ParseBool(isActiveParam)
+	if err == nil {
+		isActive = isActiveParamValue
 	}
 
 	if d.api.Discovery == nil {
-		cerr := errors.New("Can not retrieve services at this moment. Please try later")
-		render.Render(w, r, ErrInternalServerError(cerr))
+		err := render.Render(w, r, ErrInternalServerError(errServices))
+		if err != nil {
+			logger.V(2).Printf("Can not render error: %v", err)
+		}
+
 		return
 	}
 
@@ -356,8 +405,11 @@ func (d *Data) Services(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		logger.V(2).Printf("Can not retrieve facts: %v", err)
 
-		cerr := errors.New("Can not retrieve facts")
-		render.Render(w, r, ErrInternalServerError(cerr))
+		err := render.Render(w, r, ErrInternalServerError(errFacts))
+		if err != nil {
+			logger.V(2).Printf("Can not render error: %v", err)
+		}
+
 		return
 	}
 
@@ -384,8 +436,11 @@ func (d *Data) Services(w http.ResponseWriter, r *http.Request) {
 			if err != nil {
 				logger.V(2).Printf("Can not retrieve services: %v", err)
 
-				cerr := errors.New("Can not retrieve services")
-				render.Render(w, r, ErrInternalServerError(cerr))
+				err := render.Render(w, r, ErrInternalServerError(errServices))
+				if err != nil {
+					logger.V(2).Printf("Can not render error: %v", err)
+				}
+
 				return
 			}
 
@@ -401,14 +456,20 @@ func (d *Data) Services(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	render.RenderList(w, r, servicesRes)
+	err = render.RenderList(w, r, servicesRes)
+	if err != nil {
+		logger.V(2).Printf("Can not render error: %v", err)
+	}
 }
 
 // AgentInformation returns some informations about agent registration to Bleemeo Cloud.
 func (d *Data) AgentInformation(w http.ResponseWriter, r *http.Request) {
 	if d.api.AgentInfo == nil {
-		cerr := errors.New("Can not retrieve agent information at this moment. Please try later")
-		render.Render(w, r, ErrInternalServerError(cerr))
+		err := render.Render(w, r, ErrInternalServerError(errAgentInformation))
+		if err != nil {
+			logger.V(2).Printf("Can not render error: %v", err)
+		}
+
 		return
 	}
 
@@ -421,14 +482,20 @@ func (d *Data) AgentInformation(w http.ResponseWriter, r *http.Request) {
 		IsConnected:    connected,
 	}
 
-	render.Render(w, r, agentInfo)
+	err := render.Render(w, r, agentInfo)
+	if err != nil {
+		logger.V(2).Printf("Can not render error: %v", err)
+	}
 }
 
 // Tags returns a list of tags from system.
 func (d *Data) Tags(w http.ResponseWriter, r *http.Request) {
 	if d.api.AgentInfo == nil {
-		cerr := errors.New("Can not retrieve tags at this moment. Please try later")
-		render.Render(w, r, ErrInternalServerError(cerr))
+		err := render.Render(w, r, ErrInternalServerError(errTags))
+		if err != nil {
+			logger.V(2).Printf("Can not render error: %v", err)
+		}
+
 		return
 	}
 
@@ -442,14 +509,20 @@ func (d *Data) Tags(w http.ResponseWriter, r *http.Request) {
 		tagsResult = append(tagsResult, t)
 	}
 
-	render.RenderList(w, r, tagsResult)
+	err := render.RenderList(w, r, tagsResult)
+	if err != nil {
+		logger.V(2).Printf("Can not render error: %v", err)
+	}
 }
 
 // AgentStatus returns an integer that represent global server status over several metrics.
 func (d *Data) AgentStatus(w http.ResponseWriter, r *http.Request) {
 	if d.api.DB == nil {
-		cerr := errors.New("Can not retrieve agent status at this moment. Please try later")
-		render.Render(w, r, ErrInternalServerError(cerr))
+		err := render.Render(w, r, ErrInternalServerError(errAgentStatus))
+		if err != nil {
+			logger.V(2).Printf("Can not render error: %v", err)
+		}
+
 		return
 	}
 
@@ -457,8 +530,11 @@ func (d *Data) AgentStatus(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		logger.V(2).Printf("Can not retrieve metrics: %v", err)
 
-		cerr := errors.New("Can not retrieve metrics from agent status")
-		render.Render(w, r, ErrInternalServerError(cerr))
+		err := render.Render(w, r, ErrInternalServerError(errAgentStatus))
+		if err != nil {
+			logger.V(2).Printf("Can not render error: %v", err)
+		}
+
 		return
 	}
 
@@ -484,7 +560,10 @@ func (d *Data) AgentStatus(w http.ResponseWriter, r *http.Request) {
 		finalStatus = math.Max(status, finalStatus)
 	}
 
-	render.Render(w, r, &AgentStatus{Status: finalStatus, StatusDescription: statusDescription})
+	err = render.Render(w, r, &AgentStatus{Status: finalStatus, StatusDescription: statusDescription})
+	if err != nil {
+		logger.V(2).Printf("Can not render error: %v", err)
+	}
 }
 
 type ErrResponse struct {
@@ -496,8 +575,9 @@ type ErrResponse struct {
 	ErrorText  string `json:"error,omitempty"` // application-level error message, for debugging
 }
 
-func (e *ErrResponse) Render(w http.ResponseWriter, r *http.Request) error {
+func (e *ErrResponse) Render(_ http.ResponseWriter, r *http.Request) error {
 	render.Status(r, e.HTTPStatusCode)
+
 	return nil
 }
 
