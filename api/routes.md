@@ -17,7 +17,6 @@
 /diagnostic.txt/*
 /diagnostic.zip
 
-/graphql
 /metrics
 /playground
 /static/*
