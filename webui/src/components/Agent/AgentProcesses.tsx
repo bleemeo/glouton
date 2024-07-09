@@ -145,9 +145,28 @@ const AgentProcesses: FC<AgentProcessesProps> = ({ top, sizePage }) => {
         });
       });
 
+    const getProcessesWithSamePPID = (ppid: number) => {
+      console.log(
+        "starting getProcessesWithSamePPID at time ",
+        new Date().getTime().toLocaleString(),
+      );
+      const processesWithSamePPID = finalProcesses.filter(
+        (p) => ppid === p.ppid,
+      );
+      if (processesWithSamePPID.length === 1) return undefined;
+      else return processesWithSamePPID;
+    };
+
+    const processesTableData = finalProcesses.map((p: Process) => {
+      return {
+        ...p,
+        subRows: getProcessesWithSamePPID(p.ppid),
+      };
+    });
+
     processesTable = (
       <ProcessesTable
-        data={finalProcesses}
+        data={processesTableData}
         sizePage={sizePage}
         renderLoadMoreButton
         classNames="fontSmaller"

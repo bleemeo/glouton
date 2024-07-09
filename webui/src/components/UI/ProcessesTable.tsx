@@ -8,7 +8,9 @@ import {
   getCoreRowModel,
   getExpandedRowModel,
   getFilteredRowModel,
+  getPaginationRowModel,
   getSortedRowModel,
+  PaginationState,
   SortingState,
   useReactTable,
 } from "@tanstack/react-table";
@@ -152,12 +154,12 @@ export const formatCmdLine: FC<FormatCmdLineProps> = ({
   );
 };
 
-interface ProcessTableData extends Process {
+interface ProcessesTableData extends Process {
   subRows?: Process[];
 }
 
 type ProcessesTableProps = {
-  data: Process[];
+  data: ProcessesTableData[];
   sizePage: number;
   classNames: string;
   widthLastColumn?: number;
@@ -167,40 +169,14 @@ type ProcessesTableProps = {
 const ProcessesTable: FC<ProcessesTableProps> = ({ data, widthLastColumn }) => {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [expanded, setExpanded] = useState<ExpandedState>({});
-
-  const getProcessesWithSamePPID = (ppid: number) => {
-    const processesWithSamePPID = data.filter((p) => ppid === p.ppid);
-
-    if (sorting[0] !== undefined) {
-      processesWithSamePPID.sort((a, b) => {
-        if (
-          typeof a[sorting[0].id] === "string" &&
-          typeof b[sorting[0].id] === "string"
-        ) {
-          return !sorting[0].desc
-            ? a[sorting[0].id].localeCompare(b[sorting[0].id])
-            : b[sorting[0].id].localeCompare(a[sorting[0].id]);
-        } else {
-          return !sorting[0].desc
-            ? a[sorting[0].id] - b[sorting[0].id]
-            : b[sorting[0].id] - a[sorting[0].id];
-        }
-      });
-    }
-    if (processesWithSamePPID.length === 1) return undefined;
-    else return processesWithSamePPID;
-  };
-
-  const processes = data.map((p) => {
-    return {
-      ...p,
-      subRows: getProcessesWithSamePPID(p.ppid),
-    };
+  const [pagination, setPagination] = useState<PaginationState>({
+    pageIndex: 0,
+    pageSize: 10,
   });
 
-  const columnHelper = createColumnHelper<ProcessTableData>();
+  const columnHelper = createColumnHelper<ProcessesTableData>();
 
-  const columns = useMemo<ColumnDef<ProcessTableData>[]>(
+  const columns = useMemo<ColumnDef<ProcessesTableData>[]>(
     () => [
       columnHelper.accessor("pid", {
         id: "pid",
@@ -291,7 +267,7 @@ const ProcessesTable: FC<ProcessesTableProps> = ({ data, widthLastColumn }) => {
   );
 
   const table = useReactTable({
-    data: processes,
+    data: data,
     columns: columns,
     getCoreRowModel: getCoreRowModel(),
     defaultColumn: {
@@ -301,6 +277,7 @@ const ProcessesTable: FC<ProcessesTableProps> = ({ data, widthLastColumn }) => {
     state: {
       expanded,
       sorting,
+      pagination,
     },
     initialState: {
       sorting: [
@@ -315,7 +292,10 @@ const ProcessesTable: FC<ProcessesTableProps> = ({ data, widthLastColumn }) => {
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getExpandedRowModel: getExpandedRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+    onPaginationChange: setPagination,
     onSortingChange: setSorting,
+    paginateExpandedRows: false,
   });
 
   return (
@@ -378,6 +358,55 @@ const ProcessesTable: FC<ProcessesTableProps> = ({ data, widthLastColumn }) => {
           ))}
         </tfoot>
       </BTable>
+      <div className="flex items-center gap-2">
+        <button
+          className="border rounded p-1"
+          onClick={() => table.firstPage()}
+          disabled={!table.getCanPreviousPage()}
+        >
+          {"<<"}
+        </button>
+        <button
+          className="border rounded p-1"
+          onClick={() => table.previousPage()}
+          disabled={!table.getCanPreviousPage()}
+        >
+          {"<"}
+        </button>
+        <button
+          className="border rounded p-1"
+          onClick={() => table.nextPage()}
+          disabled={!table.getCanNextPage()}
+        >
+          {">"}
+        </button>
+        <button
+          className="border rounded p-1"
+          onClick={() => table.lastPage()}
+          disabled={!table.getCanNextPage()}
+        >
+          {">>"}
+        </button>
+        <span className="flex items-center gap-1">
+          <div>Page</div>
+          <strong>
+            {table.getState().pagination.pageIndex + 1} of{" "}
+            {table.getPageCount().toLocaleString()}
+          </strong>
+        </span>
+        <span className="flex items-center gap-1">
+          | Go to page:
+          <input
+            type="number"
+            defaultValue={table.getState().pagination.pageIndex + 1}
+            onChange={(e) => {
+              const page = e.target.value ? Number(e.target.value) - 1 : 0;
+              table.setPageIndex(page);
+            }}
+            className="border p-1 rounded w-16"
+          />
+        </span>
+      </div>
     </div>
   );
 };
