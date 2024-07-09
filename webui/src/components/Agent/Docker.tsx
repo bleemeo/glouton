@@ -2,7 +2,6 @@ import * as d3 from "d3";
 import React, { FC, useState } from "react";
 
 import FaIcon from "../UI/FaIcon";
-import Modal from "../UI/Modal";
 import A from "../UI/A";
 import DonutPieChart from "../UI/DonutPieChart";
 import FetchSuspense from "../UI/FetchSuspense";
@@ -20,6 +19,17 @@ import { PROCESSES_URL } from "../utils/dataRoutes";
 import { Container, Process, Topinfo } from "../Data/data.interface";
 import { colorForStatus } from "../utils/converter";
 import { UNIT_PERCENTAGE } from "../utils";
+import {
+  Button,
+  Modal,
+  ModalBody,
+  ModalCloseButton,
+  ModalContent,
+  ModalFooter,
+  ModalHeader,
+  ModalOverlay,
+  useDisclosure,
+} from "@chakra-ui/react";
 
 type DockerProcessesProps = {
   containerId: string;
@@ -218,29 +228,43 @@ const Docker: FC<DockerProps> = ({ container, date }) => {
     }
   };
 
-  let modal: React.ReactNode = null;
-  if (dockerInspect) {
-    modal = (
-      <Modal
-        title={dockerInspect.name}
-        closeAction={() => setDockerInspect(null)}
-        className=" modal-xlg"
-      >
-        <pre
-          style={{
-            maxHeight: "76vh",
-            overflowY: "auto",
-          }}
-        >
-          {JSON.stringify(JSON.parse(dockerInspect.inspect), null, 2)}
-        </pre>
+  const {
+    isOpen: isOpenModal,
+    onOpen: onOpenModal,
+    onClose: onCloseModal,
+  } = useDisclosure();
+  const dockerModal = dockerInspect ? (
+    <>
+      <Modal size="xl" isOpen={isOpenModal} onClose={onCloseModal}>
+        <ModalOverlay />
+        <ModalContent>
+          <ModalHeader>{dockerInspect?.name}</ModalHeader>
+          <ModalCloseButton />
+          <ModalBody>
+            <pre
+              style={{
+                maxHeight: "60vh",
+                overflowY: "auto",
+              }}
+            >
+              {JSON.stringify(JSON.parse(dockerInspect.inspect), null, 2)}
+            </pre>
+          </ModalBody>
+
+          <ModalFooter>
+            <Button colorScheme="blue" mr={3} onClick={onCloseModal}>
+              Close
+            </Button>
+          </ModalFooter>
+        </ModalContent>
       </Modal>
-    );
-  }
+    </>
+  ) : null;
 
   return (
     <>
-      {modal}
+      {dockerModal}
+
       <div className="dockerItem list-group-item">
         <div
           className={`item-left-border ${
@@ -315,12 +339,13 @@ const Docker: FC<DockerProps> = ({ container, date }) => {
             }}
           >
             <A
-              onClick={() =>
+              onClick={() => {
                 setDockerInspect({
                   name: container.name,
                   inspect: container.inspectJSON,
-                })
-              }
+                });
+                onOpenModal();
+              }}
             >
               <FaIcon icon="fa fa-search-plus fa-2x" />
             </A>

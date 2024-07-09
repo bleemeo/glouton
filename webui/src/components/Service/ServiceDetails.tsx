@@ -1,9 +1,9 @@
-import React, { FC, memo } from "react";
+import React, { FC } from "react";
 
-import Modal from "../UI/Modal";
 import FetchSuspense from "../UI/FetchSuspense";
+import { Badge } from "@chakra-ui/react";
 
-import { cssClassForStatus, textForStatus } from "../utils/converter";
+import { badgeColorSchemeForStatus, textForStatus } from "../utils/converter";
 import { useHTTPDataFetch } from "../utils/hooks";
 import { CONTAINERS_URL } from "../utils/dataRoutes";
 import { Containers, Service } from "../Data/data.interface";
@@ -52,13 +52,9 @@ const ServiceDetails: FC<ServiceDetailsProps> = ({ service }) => {
       <ul className="list-unstyled">
         <li>
           <strong>Current status : </strong>
-          <span
-            className={`badge badge-${cssClassForStatus(
-              currentStatus ? currentStatus : undefined,
-            )}`}
-          >
+          <Badge colorScheme={badgeColorSchemeForStatus(currentStatus)}>
             {textForStatus(currentStatus ? currentStatus : undefined)}
-          </span>
+          </Badge>
         </li>
         {service.containerId ? (
           <ServiceContainer containerId={service.containerId} />
@@ -88,24 +84,4 @@ const ServiceDetails: FC<ServiceDetailsProps> = ({ service }) => {
   );
 };
 
-type ServiceDetailsModalProps = {
-  service: Service;
-  closeAction: () => void;
-};
-
-const ServiceDetailsModal = memo(function ServiceDetailsModal({
-  service,
-  closeAction,
-}: ServiceDetailsModalProps) {
-  if (!service) {
-    return null;
-  }
-
-  return (
-    <Modal title={`${service.name}`} closeAction={closeAction}>
-      <ServiceDetails service={service} />
-    </Modal>
-  );
-});
-
-export default ServiceDetailsModal;
+export default ServiceDetails;

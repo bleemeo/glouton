@@ -1,5 +1,5 @@
 /* eslint-disable camelcase */
-import React, { FC, useState } from "react";
+import React, { FC, useEffect, useState } from "react";
 import * as d3 from "d3";
 import { Tooltip } from "react-tooltip";
 import "react-tooltip/dist/react-tooltip.css";
@@ -9,7 +9,6 @@ import Panel from "../UI/Panel";
 import FaIcon from "../UI/FaIcon";
 import Smiley from "../UI/Smiley";
 import FetchSuspense from "../UI/FetchSuspense";
-import ServiceDetailsModal from "../Service/ServiceDetailsModal";
 import Row from "react-bootstrap/Row";
 import Col from "react-bootstrap/Col";
 import Container from "react-bootstrap/Container";
@@ -31,6 +30,18 @@ import {
   Service,
   Tag,
 } from "../Data/data.interface";
+import {
+  Modal,
+  ModalOverlay,
+  ModalContent,
+  ModalCloseButton,
+  useDisclosure,
+  Button,
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
+} from "@chakra-ui/react";
+import ServiceDetails from "../Service/ServiceDetails";
 
 type AgentDetailsProps = {
   facts: Fact[];
@@ -89,16 +100,6 @@ const AgentDetails: FC<AgentDetailsProps> = ({ facts }) => {
         </div>
       );
     }
-  }
-
-  let serviceDetailsModal: JSX.Element | null = null;
-  if (showServiceDetails) {
-    serviceDetailsModal = (
-      <ServiceDetailsModal
-        service={showServiceDetails}
-        closeAction={() => setShowServiceDetails(null)}
-      />
-    );
   }
 
   const {
@@ -181,9 +182,40 @@ const AgentDetails: FC<AgentDetailsProps> = ({ facts }) => {
     );
   }
 
+  const {
+    isOpen: isOpenModal,
+    onOpen: onOpenModal,
+    onClose: onCloseModal,
+  } = useDisclosure();
+
+  useEffect(() => {
+    console.log("isOpenModal", isOpenModal);
+  }, [isOpenModal]);
+
+  const serviceModal = (
+    <Modal isOpen={isOpenModal} onClose={onCloseModal}>
+      <ModalOverlay />
+      <ModalContent>
+        <ModalHeader>{showServiceDetails?.name}</ModalHeader>
+        <ModalCloseButton />
+        <ModalBody>
+          {showServiceDetails ? (
+            <ServiceDetails service={showServiceDetails} />
+          ) : null}
+        </ModalBody>
+
+        <ModalFooter>
+          <Button colorScheme="blue" mr={3} onClick={onCloseModal}>
+            Close
+          </Button>
+        </ModalFooter>
+      </ModalContent>
+    </Modal>
+  );
+
   return (
     <div id="page-wrapper" style={{ marginTop: "1.5rem" }}>
-      {serviceDetailsModal}
+      {serviceModal}
 
       {expireAgentBanner}
 
@@ -216,7 +248,10 @@ const AgentDetails: FC<AgentDetailsProps> = ({ facts }) => {
                                 className={`btn blee-label btn-${cssClassForStatus(
                                   service.status,
                                 )}`}
-                                onClick={() => setShowServiceDetails(service)}
+                                onClick={() => {
+                                  setShowServiceDetails(service);
+                                  onOpenModal();
+                                }}
                               >
                                 {service.name}
                                 &nbsp;

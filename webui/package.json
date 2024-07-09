@@ -19,6 +19,9 @@
   "author": "Tom Darneix",
   "license": "ISC",
   "dependencies": {
+    "@chakra-ui/react": "^2.8.2",
+    "@emotion/react": "^11.11.4",
+    "@emotion/styled": "^11.11.5",
     "@tanstack/react-table": "^8.19.2",
     "@types/d3": "^7.4.3",
     "@types/d3-time-format": "^4.0.3",
@@ -29,6 +32,7 @@
     "core-js": "^3.35.0",
     "d3": "^7.8.5",
     "echarts": "^5.4.3",
+    "framer-motion": "^11.2.13",
     "history": "^5.3.0",
     "lodash": "^4.17.21",
     "prop-types": "^15.8.1",
@@ -44,7 +48,6 @@
     "react-router-dom": "^6.21.1",
     "react-tooltip": "^5.25.1",
     "react-visibility-sensor": "^5.1.1",
-    "reactstrap": "^9.2.1",
     "serialize-javascript": "^6.0.2"
   },
   "devDependencies": {

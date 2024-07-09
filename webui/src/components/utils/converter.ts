@@ -18,6 +18,28 @@ export const cssClassForStatus = (status: number | string | undefined) => {
   }
 };
 
+export const badgeColorSchemeForStatus = (
+  status: number | string | undefined,
+) => {
+  switch (status) {
+    case 0:
+    case "OK":
+      return "green";
+    case 1:
+    case "WARNING":
+      return "yellow";
+    case 2:
+    case "CRITICAL":
+      return "red";
+    // STATUS_UNKNOWN = 3
+    case 10:
+    case "INFO":
+      return "blue";
+    default:
+      return "green"; // or 'blue' ??
+  }
+};
+
 // TODO to remove once the API branch PRODUCT-101 has been merge into master
 export const textForStatus = (status: number | string | undefined) => {
   switch (status) {
