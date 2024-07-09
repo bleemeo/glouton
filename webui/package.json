@@ -9,7 +9,7 @@
   ],
   "scripts": {
     "start": "webpack serve --mode development",
-    "build": "npm run clean && webpack build --mode production && rm dist/*.svg",
+    "build": "npm run clean && webpack build --mode production",
     "deploy": "npm run build && npm run cleanOldJsFiles && mkdir -p ../api/static/assets/js && mkdir -p ../api/static/assets/css && for f in $(find ./dist/js -name '*.js'); do cat $f | gzip > ../api/static/assets/js/$(basename $f); done && cp -r ./dist/css/ ../api/static/assets/",
     "cleanOldJsFiles": "rm -rf ../api/static/assets/js && rm -rf ../api/static/assets/css",
     "clean": "rm -rf dist",
