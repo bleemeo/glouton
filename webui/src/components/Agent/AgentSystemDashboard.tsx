@@ -40,13 +40,6 @@ const AgentSystemDashboard: FC<AgentSystemDashboardProps> = ({ facts }) => {
 
   return (
     <>
-      <div className="row">
-        <div className="col-xl-12">
-          <div className="btn-toolbar float-right" id="copy">
-            <div className="btn btn-outline-dark">Last 1 hour</div>
-          </div>
-        </div>
-      </div>
       <div className="marginOffset">
         <div className="row">
           {gaugesBar.map((gaugeItem) => (
