@@ -1,5 +1,4 @@
 import React, { memo } from "react";
-import PropTypes from "prop-types";
 
 import Modal from "../UI/Modal";
 import { cssClassForStatus, textForStatus } from "../utils/converter";
@@ -36,11 +35,6 @@ const ServiceContainer: React.FC<ServiceContainerProps> = ({ containerId }) => {
   );
 };
 
-ServiceContainer.propTypes = {
-  containerId: PropTypes.string.isRequired,
-};
-
-/* eslint-disable react/no-multi-comp */
 type ServiceDetailsProps = {
   service: Service;
 };
