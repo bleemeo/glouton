@@ -1,7 +1,6 @@
-import React, { useEffect } from "react";
-import VisibilitySensor from "react-visibility-sensor";
+import React, { useEffect, useRef } from "react";
 import WidgetDashboardItem from "../UI/WidgetDashboardItem";
-import { chartTypes } from "../utils";
+import { chartTypes, useIntersection } from "../utils";
 import MetricGaugeItem from "../Metric/MetricGaugeItem";
 import {
   GaugeBar,
@@ -29,6 +28,10 @@ const AgentSystemDashboard = ({ facts }: AgentSystemDashboardProps) => {
       gaugesBar = gaugesBarPrometheusWindows;
     }
   }
+
+  const triggerRef = useRef<HTMLDivElement>(null);
+  const isVisible = useIntersection(triggerRef, "0px");
+
   useEffect(() => {
     document.title = "Dashboard | Glouton";
   }, []);
@@ -45,31 +48,18 @@ const AgentSystemDashboard = ({ facts }: AgentSystemDashboardProps) => {
       <div className="marginOffset">
         <div className="row">
           {gaugesBar.map((gaugeItem) => (
-            <div className="col-sm-3" key={gaugeItem.title}>
-              <VisibilitySensor
-                partialVisibility
-                offset={{ top: -460, bottom: -460 }}
-                scrollCheck
-                intervalCheck
-                intervalDelay={10000}
-                resizeCheck
-              >
-                {(renderProps) => {
-                  if (renderProps.isVisible) {
-                    return (
-                      <WidgetDashboardItem
-                        type={chartTypes[0]}
-                        title={gaugeItem.title}
-                        metrics={gaugeItem.metrics}
-                        unit={gaugeItem.unit}
-                        period={{ minutes: 60 }}
-                      />
-                    );
-                  } else {
-                    return <MetricGaugeItem name={gaugeItem.title} loading />;
-                  }
-                }}
-              </VisibilitySensor>
+            <div ref={triggerRef} className="col-sm-3" key={gaugeItem.title}>
+              {isVisible ? (
+                <WidgetDashboardItem
+                  type={chartTypes[0]}
+                  title={gaugeItem.title}
+                  metrics={gaugeItem.metrics}
+                  unit={gaugeItem.unit}
+                  period={{ minutes: 60 }}
+                />
+              ) : (
+                <MetricGaugeItem name={gaugeItem.title} loading />
+              )}
             </div>
           ))}
         </div>

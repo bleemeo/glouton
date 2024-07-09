@@ -1,5 +1,5 @@
 /* eslint-disable indent */
-import React from "react";
+import React, { RefObject } from "react";
 
 export const chartTypes = ["gauge", "stacked", "line"];
 export const UNIT_PERCENTAGE = 1;
@@ -197,3 +197,23 @@ export function isShallowEqual(v, o) {
 
   return true;
 }
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const useIntersection = (element: RefObject<any>, rootMargin) => {
+  const [isVisible, setIsVisible] = React.useState(false);
+
+  React.useEffect(() => {
+    const current = element?.current;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        setIsVisible(entry.isIntersecting);
+      },
+      { rootMargin },
+    );
+    current && observer?.observe(current);
+
+    return () => current && observer.unobserve(current);
+  }, []);
+
+  return isVisible;
+};
