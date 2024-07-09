@@ -83,19 +83,6 @@ COMMIT=`git rev-parse --short HEAD || echo "unknown"`
 
 
 if [ "${ONLY_JS}" = "1" ]; then
-   echo "Run go generate to pack JS ui into Go files"
-
-   docker run --rm -e HOME=/go/pkg -e CGO_ENABLED=0 \
-      -v $(pwd):/src -w /src ${GO_MOUNT_CACHE} \
-      -v /var/run/docker.sock:/var/run/docker.sock \
-      --entrypoint '' \
-      -e GLOUTON_VERSION \
-      -e GORELEASER_PREVIOUS_TAG=0.1.0 \
-      -e GORELEASER_CURRENT_TAG=0.1.1 \
-      goreleaser/goreleaser:${GORELEASER_VERSION} \
-      tini -g -- sh -exc "
-      mkdir -p /go/pkg
-      go generate ./..."
    exit 0
 fi
 
