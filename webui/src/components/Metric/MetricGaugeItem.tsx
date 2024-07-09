@@ -1,9 +1,11 @@
 import React from "react";
+
 import DonutPieChart from "../UI/DonutPieChart";
-import { unitFormatCallback } from "../utils/formater";
 import Loading from "../UI/Loading";
 import QueryError from "../UI/QueryError";
+
 import { colorForStatus } from "../utils/converter";
+import { unitFormatCallback } from "../utils/formater";
 
 type MetricGaugeItemProps = {
   unit?: number;

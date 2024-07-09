@@ -1,7 +1,13 @@
 import * as d3 from "d3";
-import React, { useState } from "react";
+import React, { FC, useState } from "react";
 
 import FaIcon from "../UI/FaIcon";
+import Modal from "../UI/Modal";
+import A from "../UI/A";
+import DonutPieChart from "../UI/DonutPieChart";
+import FetchSuspense from "../UI/FetchSuspense";
+import ProcessesTable from "../UI/ProcessesTable";
+
 import {
   _formatCpuTime,
   formatDateTime,
@@ -9,14 +15,9 @@ import {
   formatToBytes,
   unitFormatCallback,
 } from "../utils/formater";
-import ProcessesTable from "../UI/ProcessesTable";
 import { useHTTPDataFetch } from "../utils/hooks";
-import FetchSuspense from "../UI/FetchSuspense";
 import { PROCESSES_URL } from "../utils/dataRoutes";
-import Modal from "../UI/Modal";
-import A from "../UI/A";
-import { Container, Topinfo } from "../Data/data.interface";
-import DonutPieChart from "../UI/DonutPieChart";
+import { Container, Process, Topinfo } from "../Data/data.interface";
 import { colorForStatus } from "../utils/converter";
 import { UNIT_PERCENTAGE } from "../utils";
 
@@ -25,7 +26,7 @@ type DockerProcessesProps = {
   name: string;
 };
 
-const DockerProcesses = ({ containerId, name }: DockerProcessesProps) => {
+const DockerProcesses: FC<DockerProcessesProps> = ({ containerId, name }) => {
   const {
     isLoading,
     error,
@@ -47,7 +48,7 @@ const DockerProcesses = ({ containerId, name }: DockerProcessesProps) => {
             return <h4>There are no processes related to {name}</h4>;
           } else {
             const memTotal = result["Memory"]["Total"];
-            dockerProcesses.map((process) => {
+            dockerProcesses.map((process: Process) => {
               return {
                 ...process,
                 mem_percent: d3.format(".2r")(
@@ -84,7 +85,7 @@ interface DockerInspect {
   inspect: string;
 }
 
-const Docker: React.FC<DockerProps> = ({ container, date }) => {
+const Docker: FC<DockerProps> = ({ container, date }) => {
   const [dockerInspect, setDockerInspect] = useState<DockerInspect | null>(
     null,
   );
@@ -109,7 +110,11 @@ const Docker: React.FC<DockerProps> = ({ container, date }) => {
     </div>
   );
 
-  const renderNetwork = (name, sentValue, recvValue) => {
+  const renderNetwork = (
+    name: string,
+    sentValue: number,
+    recvValue: number,
+  ) => {
     const formattedSentValue =
       sentValue !== null ? formatToBits(sentValue) : null;
     const formattedRecvValue =
@@ -160,7 +165,7 @@ const Docker: React.FC<DockerProps> = ({ container, date }) => {
     }
   };
 
-  const renderDisk = (name, writeValue, readValue) => {
+  const renderDisk = (name: string, writeValue: number, readValue: number) => {
     const formattedWriteValue =
       writeValue !== null ? formatToBytes(writeValue) : null;
     const formattedReadValue =

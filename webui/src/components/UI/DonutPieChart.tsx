@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import * as d3 from "d3";
-import React from "react";
+import React, { FC } from "react";
 
 const tau = Math.PI * 1.6;
 const size = 100;
@@ -16,10 +16,6 @@ const backgroundArc = d3.arc()({
   startAngle: 0,
   endAngle: tau,
 });
-// .innerRadius(innerRadius)
-// .outerRadius(outerRadius)
-// .startAngle(0)
-// .endAngle(tau);
 
 const createArcPath = (x: number, total: number) => {
   return d3.arc()({
@@ -28,10 +24,6 @@ const createArcPath = (x: number, total: number) => {
     startAngle: total,
     endAngle: total + x,
   });
-  // .innerRadius(innerRadius)
-  // .outerRadius(outerRadius)
-  // .startAngle(total)
-  // .endAngle(total + x);
 };
 
 type DonutPieChartProps = {
@@ -42,7 +34,7 @@ type DonutPieChartProps = {
   formattedValue: string | string[];
 };
 
-const DonutPieChart: React.FC<DonutPieChartProps> = ({
+const DonutPieChart: FC<DonutPieChartProps> = ({
   value,
   segmentsColor,
   segmentsStep,

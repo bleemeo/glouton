@@ -1,15 +1,16 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import * as d3 from "d3";
 import { isNullOrUndefined } from ".";
 
-let dayFormater: (arg0: Date) => any,
-  monthFormater: (arg0: Date) => any,
-  yearFormater: (arg0: Date) => any,
-  hoursMinutesFormater: (arg0: Date) => any,
-  hoursMinutesSecondsFormater: (arg0: Date) => any,
-  monthFormater2Digit: (arg0: Date) => any,
-  yearFormater4Digit: (arg0: Date) => any,
-  fullMonthFormater: (arg0: Date) => any;
-  
+let dayFormater: (arg0: Date) => string,
+  monthFormater: (arg0: Date) => string,
+  yearFormater: (arg0: Date) => string,
+  hoursMinutesFormater: (arg0: Date) => string,
+  hoursMinutesSecondsFormater: (arg0: Date) => string,
+  monthFormater2Digit: (arg0: Date) => string,
+  yearFormater4Digit: (arg0: Date) => string,
+  fullMonthFormater: (arg0: Date) => string;
+
 // some browser (FF mobile) doesn't support yet the Intl API
 if (window.Intl) {
   // 2 digits day of month
@@ -209,7 +210,8 @@ export const tooltipFormatDate = (d: Date) => {
 
 const d3FormaterHandlingNull = (formatter: string, suffix = "") => {
   const fmt = d3.format(formatter);
-  return (value: any) => (isNullOrUndefined(value) ? "N/A" : fmt(value) + suffix);
+  return (value: any) =>
+    isNullOrUndefined(value) ? "N/A" : fmt(value) + suffix;
 };
 
 export const bytesToString = function (bytes: number) {
@@ -294,7 +296,9 @@ export const twoDigitsWithMetricPrefix = (value: number) => {
 export const secondToString = (value: any) =>
   d3FormaterHandlingNull(".3s", "s")(value);
 
-export const unitFormatCallback = function (unit?: number) : (arg0?: number) => (string | string[] | undefined) {
+export const unitFormatCallback = function (
+  unit?: number,
+): (arg0?: number) => string | string[] | undefined {
   // UNIT_UNIT = 0
   // UNIT_PERCENTAGE = 1
   // UNIT_BYTE = 2

@@ -1,10 +1,12 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import React, { useRef } from "react";
-import MetricGaugeItem from "../Metric/MetricGaugeItem";
-import { chartTypes } from "../utils";
-import LineChart from "./LineChart";
-import { useHTTPPromFetch } from "../utils/hooks";
+import React, { FC, useRef } from "react";
+
 import FetchSuspense from "./FetchSuspense";
+import MetricGaugeItem from "../Metric/MetricGaugeItem";
+import LineChart from "./LineChart";
+
+import { useHTTPPromFetch } from "../utils/hooks";
+import { chartTypes } from "../utils";
 
 type WidgetDashboardItemProps = {
   type: string;
@@ -16,7 +18,7 @@ type WidgetDashboardItemProps = {
   windowWidth?: number;
 };
 
-const WidgetDashboardItem: React.FC<WidgetDashboardItemProps> = ({
+const WidgetDashboardItem: FC<WidgetDashboardItemProps> = ({
   type,
   title,
   metrics,

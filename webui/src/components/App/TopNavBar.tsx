@@ -1,10 +1,10 @@
-import React from "react";
+import React, { FC } from "react";
 import { useHTTPDataFetch } from "../utils/hooks";
 import FetchSuspense from "../UI/FetchSuspense";
 import { FACTS_URL } from "../utils/dataRoutes";
 import { Fact } from "../Data/data.interface";
 
-const TopNavBar = () => {
+const TopNavBar: FC = () => {
   const {
     isLoading,
     error,

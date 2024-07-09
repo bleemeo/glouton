@@ -1,10 +1,10 @@
-import React from "react";
+import React, { FC } from "react";
 
 type FaIconProps = {
   icon: string;
 };
 
-const FaIcon: React.FC<FaIconProps> = ({ icon }) => (
+const FaIcon: FC<FaIconProps> = ({ icon }) => (
   <i className={`${icon}`} aria-hidden="true" />
 );
 

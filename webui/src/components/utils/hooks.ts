@@ -71,7 +71,7 @@ export const useHTTPPromFetch = <T>(
     async function fetchData() {
       time = setTimeout(() => setIsDelayState(true), delay);
       const res = await Promise.all(urls).then(async (values) => {
-        const fetchData = async (url) => {
+        const fetchData = async (url: string) => {
           setIsError(null);
 
           try {

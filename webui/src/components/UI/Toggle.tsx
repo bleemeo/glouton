@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, FC } from "react";
+
 import FaIcon from "./FaIcon";
 
 type ToggleProps = {
@@ -10,7 +11,7 @@ type ToggleProps = {
   defaultOption?: 0 | 1;
 };
 
-const Toggle: React.FC<ToggleProps> = ({
+const Toggle: FC<ToggleProps> = ({
   firstOption,
   secondOption,
   onClick,

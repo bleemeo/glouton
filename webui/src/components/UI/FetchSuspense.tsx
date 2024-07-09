@@ -1,8 +1,9 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import React, { ReactNode } from "react";
+import React, { FC, ReactNode } from "react";
+import { AxiosError } from "axios";
+
 import QueryError from "./QueryError";
 import Loading from "./Loading";
-import { AxiosError } from "axios";
 
 // Définir l'interface pour les props
 interface FetchSuspenseProps {
@@ -15,7 +16,7 @@ interface FetchSuspenseProps {
 }
 
 // Composant fonctionnel en TypeScript
-const FetchSuspense: React.FC<FetchSuspenseProps> = ({
+const FetchSuspense: FC<FetchSuspenseProps> = ({
   children,
   isLoading,
   error,

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { FC, useEffect, useRef } from "react";
 
 import { twoDigitsWithMetricPrefix } from "../utils/formater";
 
@@ -10,7 +10,7 @@ type MetricNumberItemProps = {
   titleFontSize?: number;
 };
 
-const MetricNumberItem: React.FC<MetricNumberItemProps> = ({
+const MetricNumberItem: FC<MetricNumberItemProps> = ({
   value,
   title,
   titleFontSize = 30,

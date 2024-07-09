@@ -1,9 +1,10 @@
-import React, { Suspense } from "react";
+import React, { FC, Suspense } from "react";
 import { Link } from "react-router-dom";
+
 import Fallback from "../UI/Fallback";
 import PanelErrorBoundary from "../UI/PanelErrorBoundary";
 
-const SideNavBar = () => (
+const SideNavBar: FC = () => (
   <PanelErrorBoundary>
     <Suspense fallback={<Fallback />}>
       <>

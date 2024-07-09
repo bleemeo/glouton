@@ -1,16 +1,17 @@
-import React, { useEffect } from "react";
+import React, { FC, useEffect } from "react";
 
 import AgentProcesses from "./AgentProcesses";
 import Loading from "../UI/Loading";
 import Panel from "../UI/Panel";
 import QueryError from "../UI/QueryError";
-import { useHTTPDataFetch } from "../utils/hooks";
-import { isNullOrUndefined } from "../utils";
 import FetchSuspense from "../UI/FetchSuspense";
+
 import { PROCESSES_URL } from "../utils/dataRoutes";
 import { Topinfo } from "../Data/data.interface";
+import { useHTTPDataFetch } from "../utils/hooks";
+import { isNullOrUndefined } from "../utils";
 
-const AgentProcessesContainer = () => {
+const AgentProcessesContainer: FC = () => {
   useEffect(() => {
     document.title = "Processes | Glouton";
   }, []);

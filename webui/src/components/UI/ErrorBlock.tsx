@@ -1,10 +1,10 @@
-import React from "react";
+import React, { FC } from "react";
 
 type ErrorBlockProps = {
   error: Array<string>;
 };
 
-const ErrorBlock: React.FC<ErrorBlockProps> = ({ error }) => {
+const ErrorBlock: FC<ErrorBlockProps> = ({ error }) => {
   if (!error) {
     return null;
   }

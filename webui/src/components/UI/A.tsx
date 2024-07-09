@@ -1,6 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import React from "react";
-import PropTypes from "prop-types";
 
 /*
   Several articles said that <a> should only be used to link to another page
@@ -41,12 +40,6 @@ const A = (props: {
       {children}
     </a>
   );
-};
-
-A.propTypes = {
-  className: PropTypes.string,
-  onClick: PropTypes.func,
-  children: PropTypes.object,
 };
 
 export default A;

@@ -24,7 +24,6 @@ import {
   AGENT_STATUS_URL,
   TAGS_URL,
 } from "../utils/dataRoutes";
-
 import {
   AgentInfo,
   AgentStatus,

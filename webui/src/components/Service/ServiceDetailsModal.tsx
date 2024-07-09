@@ -1,9 +1,10 @@
-import React, { memo } from "react";
+import React, { FC, memo } from "react";
 
 import Modal from "../UI/Modal";
+import FetchSuspense from "../UI/FetchSuspense";
+
 import { cssClassForStatus, textForStatus } from "../utils/converter";
 import { useHTTPDataFetch } from "../utils/hooks";
-import FetchSuspense from "../UI/FetchSuspense";
 import { CONTAINERS_URL } from "../utils/dataRoutes";
 import { Containers, Service } from "../Data/data.interface";
 
@@ -11,7 +12,7 @@ type ServiceContainerProps = {
   containerId: string;
 };
 
-const ServiceContainer: React.FC<ServiceContainerProps> = ({ containerId }) => {
+const ServiceContainer: FC<ServiceContainerProps> = ({ containerId }) => {
   const { isLoading, error, data } = useHTTPDataFetch<Containers>(
     CONTAINERS_URL,
     {
@@ -39,7 +40,7 @@ type ServiceDetailsProps = {
   service: Service;
 };
 
-const ServiceDetails: React.FC<ServiceDetailsProps> = ({ service }) => {
+const ServiceDetails: FC<ServiceDetailsProps> = ({ service }) => {
   if (!service) {
     return null;
   }

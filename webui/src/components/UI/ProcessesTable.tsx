@@ -1,6 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import React, { useMemo, useState } from "react";
-import { formatToBytes, percentToString2Digits } from "../utils/formater";
+import React, { FC, useMemo, useState } from "react";
 import {
   ColumnDef,
   createColumnHelper,
@@ -14,7 +13,9 @@ import {
   useReactTable,
 } from "@tanstack/react-table";
 import { Table as BTable } from "react-bootstrap";
+
 import { Process } from "../Data/data.interface";
+import { formatToBytes, percentToString2Digits } from "../utils/formater";
 
 const cmdLineCommand = ["#C9B202", "#2ecc71", "#3498db"];
 
@@ -24,11 +25,7 @@ type PercentBarProps = {
   percent: string | number;
 };
 
-export const PercentBar: React.FC<PercentBarProps> = ({
-  color,
-  title,
-  percent,
-}) => (
+export const PercentBar: FC<PercentBarProps> = ({ color, title, percent }) => (
   <div
     className="percent-bar"
     title={title}
@@ -41,7 +38,7 @@ type GraphCellProps = {
   value: number;
 };
 
-export const GraphCell: React.FC<GraphCellProps> = ({ value }) => (
+export const GraphCell: FC<GraphCellProps> = ({ value }) => (
   <div
     style={{
       display: "flex",
@@ -72,7 +69,7 @@ type FormatCmdLineProps = {
   expandable?: boolean;
 };
 
-export const formatCmdLine: React.FC<FormatCmdLineProps> = ({
+export const formatCmdLine: FC<FormatCmdLineProps> = ({
   input,
   widthLastColumn,
   expandable,
@@ -167,11 +164,7 @@ type ProcessesTableProps = {
   renderLoadMoreButton?: boolean;
 };
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const ProcessesTable: React.FC<ProcessesTableProps> = ({
-  data,
-  widthLastColumn,
-}) => {
+const ProcessesTable: FC<ProcessesTableProps> = ({ data, widthLastColumn }) => {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [expanded, setExpanded] = useState<ExpandedState>({});
 

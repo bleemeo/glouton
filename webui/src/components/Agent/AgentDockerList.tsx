@@ -1,11 +1,12 @@
 import React, { FC, useState, useEffect, useMemo, useCallback } from "react";
-
-import Docker from "./Docker";
-import Loading from "../UI/Loading";
-import { formatDateTime } from "../utils/formater";
 import { DebounceInput } from "react-debounce-input";
+
 import Toggle from "../UI/Toggle";
 import QueryError from "../UI/QueryError";
+import Docker from "./Docker";
+import Loading from "../UI/Loading";
+
+import { formatDateTime } from "../utils/formater";
 import { useHTTPDataFetch } from "../utils/hooks";
 import { CONTAINERS_URL } from "../utils/dataRoutes";
 import { Containers } from "../Data/data.interface";

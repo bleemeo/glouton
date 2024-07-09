@@ -1,4 +1,4 @@
-import React from "react";
+import React, { FC } from "react";
 
 // SVG of Font Awesome taken from: https://github.com/encharm/Font-Awesome-SVG-PNG
 
@@ -16,9 +16,9 @@ type SmileyProps = {
   status: number | string;
 };
 
-const Smiley: React.FC<SmileyProps> = ({ status }) => {
-  let color;
-  let path;
+const Smiley: FC<SmileyProps> = ({ status }) => {
+  let color: string;
+  let path: string;
 
   /* eslint-disable semi-spacing */
   switch (status) {

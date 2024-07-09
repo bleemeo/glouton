@@ -1,10 +1,11 @@
 import * as d3 from "d3";
 import React, { FC } from "react";
 
-import { isNullOrUndefined, isEmpty } from "../utils";
-import { _formatCpuTime } from "../utils/formater";
 import ProcessesTable from "../UI/ProcessesTable";
 import AgentProcessesInfo from "./AgentProcessesInfo";
+
+import { isNullOrUndefined, isEmpty } from "../utils";
+import { _formatCpuTime } from "../utils/formater";
 import { Process, Topinfo } from "../Data/data.interface";
 
 type AgentProcessesProps = {

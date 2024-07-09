@@ -1,4 +1,5 @@
-import React from "react";
+import React, { FC } from "react";
+
 import FaIcon from "./FaIcon";
 
 type LoadingProps = {
@@ -6,10 +7,7 @@ type LoadingProps = {
   message?: string;
 };
 
-const Loading: React.FC<LoadingProps> = ({
-  size = "l",
-  message = "Loading...",
-}) => {
+const Loading: FC<LoadingProps> = ({ size = "l", message = "Loading..." }) => {
   const spin = <FaIcon icon="fas fa-sync fa-spin" />;
   switch (size) {
     case "s":

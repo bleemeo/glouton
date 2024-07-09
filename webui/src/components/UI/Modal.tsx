@@ -1,5 +1,5 @@
+import React, { FC, useState } from "react";
 import classnames from "classnames";
-import React, { useState } from "react";
 import {
   Modal as ModalStrap,
   ModalHeader,
@@ -21,7 +21,7 @@ type ModalProps = {
   children: React.ReactNode;
 };
 
-export default function Modal({
+const Modal: FC<ModalProps> = ({
   title,
   disabledMainBtn = false,
   disabledCloseBtn = false,
@@ -33,7 +33,7 @@ export default function Modal({
   className,
   size,
   children,
-}: ModalProps) {
+}) => {
   const [isOpen, setIsOpen] = useState(true);
 
   function handleToggle() {
@@ -96,4 +96,6 @@ export default function Modal({
       {footer}
     </ModalStrap>
   );
-}
+};
+
+export default Modal;

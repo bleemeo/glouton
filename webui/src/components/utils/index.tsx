@@ -1,5 +1,4 @@
-/* eslint-disable indent */
-import React, { RefObject } from "react";
+import React, { FC, RefObject } from "react";
 
 export const chartTypes = ["gauge", "stacked", "line"];
 export const UNIT_PERCENTAGE = 1;
@@ -20,7 +19,7 @@ export const isUndefined = (variable) => variable === undefined;
 type ProblemsProps = {
   problems: string[];
 };
-export const Problems: React.FC<ProblemsProps> = ({ problems }) => (
+export const Problems: FC<ProblemsProps> = ({ problems }) => (
   <div>
     <ul className="list-unstyled mb-0">
       {problems
@@ -33,7 +32,7 @@ export const Problems: React.FC<ProblemsProps> = ({ problems }) => (
 type MetricDescriptionProps = {
   description: string;
 };
-export const MetricDescription: React.FC<MetricDescriptionProps> = ({
+export const MetricDescription: FC<MetricDescriptionProps> = ({
   description,
 }) => {
   if (description === undefined) {

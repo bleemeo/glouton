@@ -1,7 +1,8 @@
-import React from "react";
+import React, { FC } from "react";
+
 import FaIcon from "./FaIcon";
 
-const PanelLoading = () => {
+const PanelLoading: FC = () => {
   return (
     <div
       style={{

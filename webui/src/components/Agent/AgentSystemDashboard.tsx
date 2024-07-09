@@ -1,20 +1,22 @@
-import React, { useEffect, useRef } from "react";
+import React, { FC, useEffect, useRef } from "react";
+
 import WidgetDashboardItem from "../UI/WidgetDashboardItem";
-import { chartTypes, useIntersection } from "../utils";
 import MetricGaugeItem from "../Metric/MetricGaugeItem";
+
 import {
   GaugeBar,
   gaugesBarBLEEMEO,
   gaugesBarPrometheusLinux,
   gaugesBarPrometheusWindows,
 } from "../Metric/DefaultDashboardMetrics";
+import { chartTypes, useIntersection } from "../utils";
 import { Fact } from "../Data/data.interface";
 
 type AgentSystemDashboardProps = {
   facts: Fact[];
 };
 
-const AgentSystemDashboard = ({ facts }: AgentSystemDashboardProps) => {
+const AgentSystemDashboard: FC<AgentSystemDashboardProps> = ({ facts }) => {
   let gaugesBar: GaugeBar[] = [];
 
   if (facts.find((f) => f.name === "metrics_format")?.value === "Bleemeo") {

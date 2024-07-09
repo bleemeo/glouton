@@ -1,9 +1,14 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import React, { useRef, useEffect, useState } from "react";
+import React, { useRef, useEffect, useState, FC } from "react";
 import Card from "react-bootstrap/Card";
 import * as echarts from "echarts";
 import type { EChartsOption, CustomSeriesOption } from "echarts";
 import cn from "classnames";
+
+import Loading from "./Loading";
+import FaIcon from "./FaIcon";
+import QueryError from "./QueryError";
+
 import {
   formatToFrenchTime,
   tickFormatDate,
@@ -12,10 +17,7 @@ import {
   bitsToString,
   iopsToString,
 } from "../utils/formater";
-import Loading from "./Loading";
 import { fillEmptyPoints, UNIT_PERCENTAGE, composeMetricName } from "../utils";
-import FaIcon from "./FaIcon";
-import QueryError from "./QueryError";
 import { chartColorMap } from "../utils/colors";
 
 export const getOptions = (
@@ -238,7 +240,7 @@ type LineChartProps = {
   windowWidth?: number;
 };
 
-const LineChart: React.FC<LineChartProps> = ({
+const LineChart: FC<LineChartProps> = ({
   stacked,
   metrics,
   metrics_param,

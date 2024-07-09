@@ -1,14 +1,15 @@
-import React from "react";
+import React, { CSSProperties, FC } from "react";
+
 import Panel from "./Panel";
 import FaIcon from "./FaIcon";
 import A from "./A";
 
 type QueryErrorProps = {
-  style?: React.CSSProperties;
+  style?: CSSProperties;
   noBorder?: boolean;
 };
 
-const QueryError: React.FC<QueryErrorProps> = ({ style, noBorder }) => {
+const QueryError: FC<QueryErrorProps> = ({ style, noBorder }) => {
   const errorElement = (
     <div
       className="d-flex flex-column justify-content-end align-items-center"

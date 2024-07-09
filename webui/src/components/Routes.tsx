@@ -5,21 +5,21 @@ import {
   Routes,
   Navigate,
 } from "react-router-dom";
-import { useLocation } from "react-router";
-import { useHTTPDataFetch } from "./utils/hooks";
-import { FACTS_URL } from "./utils/dataRoutes";
+import "rc-switch/assets/index.css";
 
 import PanelErrorBoundary from "./UI/PanelErrorBoundary";
 import Fallback from "./UI/Fallback";
 import FetchSuspense from "./UI/FetchSuspense";
 import SideNavBar from "./App/SideNavbar";
-
-import "rc-switch/assets/index.css";
-
 import AgentSystemDashboard from "./Agent/AgentSystemDashboard";
 import AgentDockerListContainer from "./Agent/AgentDockerListContainer";
 import AgentProcessesContainer from "./Agent/AgentProcessesContainer";
 import AgentDetails from "./Agent/AgentDetails";
+
+import { useLocation } from "react-router";
+import { useHTTPDataFetch } from "./utils/hooks";
+import { FACTS_URL } from "./utils/dataRoutes";
+import { Fact } from "./Data/data.interface";
 
 const ScrollToTopComponent = (props) => {
   const location = useLocation();
@@ -36,7 +36,7 @@ const ScrollToTopComponent = (props) => {
 const ScrollToTop = ScrollToTopComponent;
 
 const MyRoutes = () => {
-  const { isLoading, error, data } = useHTTPDataFetch(FACTS_URL, null);
+  const { isLoading, error, data } = useHTTPDataFetch<Fact[]>(FACTS_URL, null);
   const facts = data;
   return (
     <Router>
