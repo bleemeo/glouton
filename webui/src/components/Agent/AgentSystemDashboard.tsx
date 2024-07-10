@@ -99,7 +99,7 @@ const AgentSystemDashboard: FC<AgentSystemDashboardProps> = ({ facts }) => {
             ))}
           </SimpleGrid>
 
-          <Grid templateColumns="5fr 9fr" gap={5} mt={5}>
+          <Grid templateColumns="7fr 9fr" gap={5} mt={5}>
             <Card h="fit-content">
               <ServicesList />
             </Card>

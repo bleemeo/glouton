@@ -9,9 +9,6 @@ import Panel from "../UI/Panel";
 import FaIcon from "../UI/FaIcon";
 import Smiley from "../UI/Smiley";
 import FetchSuspense from "../UI/FetchSuspense";
-import Row from "react-bootstrap/Row";
-import Col from "react-bootstrap/Col";
-import Container from "react-bootstrap/Container";
 
 import { useHTTPDataFetch } from "../utils/hooks";
 import { isNullOrUndefined, Problems } from "../utils";
@@ -40,6 +37,13 @@ import {
   ModalHeader,
   ModalBody,
   ModalFooter,
+  Container,
+  Grid,
+  GridItem,
+  Tag as ChakraTag,
+  Text,
+  Flex,
+  Link,
 } from "@chakra-ui/react";
 import ServiceDetails from "../Service/ServiceDetails";
 
@@ -220,8 +224,33 @@ const AgentDetails: FC<AgentDetailsProps> = ({ facts }) => {
       {expireAgentBanner}
 
       <Container>
-        <Row>
-          <Col sm={4}>
+        <Grid
+          h="200px"
+          templateRows="repeat(4, 1fr)"
+          templateColumns="repeat(9, 1fr)"
+          gap={4}
+        >
+          <GridItem rowSpan={4} colSpan={3}>
+            <Panel>
+              <div className="marginOffset">
+                <h5>Information retrieved from the agent</h5>
+                {factUpdatedAtDate ? (
+                  <p>(last update: {factUpdatedAtDate.toLocaleString()})</p>
+                ) : null}
+                <ul className="list-unstyled">
+                  {facts
+                    .filter((f) => f.name !== "fact_updated_at")
+                    .sort((a, b) => a.name.localeCompare(b.name))
+                    .map((fact) => (
+                      <li key={fact.name}>
+                        <b>{fact.name}:</b> {fact.value}
+                      </li>
+                    ))}
+                </ul>
+              </div>
+            </Panel>
+          </GridItem>
+          <GridItem colSpan={3}>
             <FetchSuspense
               isLoading={isLoading}
               error={
@@ -265,6 +294,51 @@ const AgentDetails: FC<AgentDetailsProps> = ({ facts }) => {
                 </Panel>
               )}
             </FetchSuspense>
+          </GridItem>
+          <GridItem colSpan={3}>
+            <FetchSuspense
+              isLoading={isLoading}
+              error={
+                error ||
+                isNullOrUndefined(services) ||
+                isNullOrUndefined(tags) ||
+                isNullOrUndefined(agentInformation) ||
+                isNullOrUndefined(agentStatus)
+              }
+              tags={tags}
+            >
+              {({ tags }) => (
+                <Panel>
+                  <Flex direction="column">
+                    <Text fontSize="md">
+                      Tags for {facts.find((f) => f.name === "fqdn")?.value}:
+                    </Text>
+                    {tags.length > 0 ? (
+                      <ul className="list-inline">
+                        {tags.map((tag) => (
+                          <ChakraTag
+                            key={tag.id}
+                            w="fit-content"
+                            colorScheme="cyan"
+                          >
+                            {tag.name}
+                          </ChakraTag>
+                        ))}
+                      </ul>
+                    ) : (
+                      <Text as="b" fontSize="lg">
+                        No tags to display
+                      </Text>
+                    )}
+                  </Flex>
+                </Panel>
+              )}
+            </FetchSuspense>
+          </GridItem>
+          <GridItem colSpan={2} rowSpan={2}>
+            {problems ? <Panel>{problems}</Panel> : null}
+          </GridItem>
+          <GridItem colSpan={4} rowSpan={2}>
             {agentInformation && Object.keys(agentInformation).length > 0 ? (
               <Panel>
                 <div className="marginOffset">
@@ -304,8 +378,15 @@ const AgentDetails: FC<AgentDetailsProps> = ({ facts }) => {
                     <li>
                       <div className="d-flex flex-row align-items-center">
                         <b>
-                          Need to troubleshoot ?{" "}
-                          <a href="/diagnostic">/diagnostic</a> may help you.
+                          Need to troubleshoot ? &nbsp;
+                          <Link
+                            textColor="blue.500"
+                            fontSize="xl"
+                            href="/diagnostic"
+                          >
+                            /diagnostic
+                          </Link>
+                          &nbsp; may help you.
                         </b>
                       </div>
                     </li>
@@ -313,67 +394,8 @@ const AgentDetails: FC<AgentDetailsProps> = ({ facts }) => {
                 </div>
               </Panel>
             ) : null}
-          </Col>
-          <Col sm={4}>
-            <FetchSuspense
-              isLoading={isLoading}
-              error={
-                error ||
-                isNullOrUndefined(services) ||
-                isNullOrUndefined(tags) ||
-                isNullOrUndefined(agentInformation) ||
-                isNullOrUndefined(agentStatus)
-              }
-              tags={tags}
-            >
-              {({ tags }) => (
-                <Panel>
-                  <div className="marginOffset">
-                    Tags for {facts.find((f) => f.name === "fqdn")?.value}:
-                    {tags.length > 0 ? (
-                      <ul className="list-inline">
-                        {tags.map((tag) => (
-                          <li key={tag.tagName} className="list-inline-item">
-                            <span className="badge badge-info blee-label">
-                              {tag.tagName}
-                            </span>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <h4>There is no tag to display</h4>
-                    )}
-                  </div>
-                </Panel>
-              )}
-            </FetchSuspense>
-            <Row>
-              <Col xl={6} offset={3}>
-                {problems ? <Panel>{problems}</Panel> : null}
-              </Col>
-            </Row>
-          </Col>
-          <Col sm={4}>
-            <Panel>
-              <div className="marginOffset">
-                <h5>Information retrieved from the agent</h5>
-                {factUpdatedAtDate ? (
-                  <p>(last update: {factUpdatedAtDate.toLocaleString()})</p>
-                ) : null}
-                <ul className="list-unstyled">
-                  {facts
-                    .filter((f) => f.name !== "fact_updated_at")
-                    .sort((a, b) => a.name.localeCompare(b.name))
-                    .map((fact) => (
-                      <li key={fact.name}>
-                        <b>{fact.name}:</b> {fact.value}
-                      </li>
-                    ))}
-                </ul>
-              </div>
-            </Panel>
-          </Col>
-        </Row>
+          </GridItem>
+        </Grid>
       </Container>
     </div>
   );

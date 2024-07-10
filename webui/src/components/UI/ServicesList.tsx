@@ -48,8 +48,8 @@ export const ServicesList: FC = () => {
       {(data: { services: Service[] }) => {
         const services = data.services;
         return (
-          <TableContainer>
-            <Table variant="simple">
+          <TableContainer w="100%">
+            <Table variant="simple" w="100%">
               <Thead>
                 <Tr>
                   <Th>Status</Th>

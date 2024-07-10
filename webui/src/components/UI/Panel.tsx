@@ -1,7 +1,7 @@
 import React, { FC } from "react";
 import Row from "react-bootstrap/Row";
 import Col from "react-bootstrap/Col";
-import Card from "react-bootstrap/Card";
+import { Box, Card, CardBody } from "@chakra-ui/react";
 
 type PanelProps = {
   children: React.ReactNode;
@@ -9,7 +9,6 @@ type PanelProps = {
   xl?: number;
   md?: number;
   offset?: number;
-  noBorder?: boolean;
 };
 
 const Panel: FC<PanelProps> = ({
@@ -18,19 +17,15 @@ const Panel: FC<PanelProps> = ({
   xl = 12,
   md = 12,
   offset = 0,
-  noBorder = false,
 }) => (
   <Row>
     <Col xl={xl} md={md} offset={offset}>
-      <Card
-        className={noBorder ? "no-border" : undefined}
-        style={{ margin: "4px" }}
-      >
-        <div style={{ marginTop: "-0.8rem" }}>
-          <Card.Body>
-            <div className={className}>{children}</div>
-          </Card.Body>
-        </div>
+      <Card m={2}>
+        <Box mt="-0.8rem">
+          <CardBody>
+            <Box className={className}>{children}</Box>
+          </CardBody>
+        </Box>
       </Card>
     </Col>
   </Row>
