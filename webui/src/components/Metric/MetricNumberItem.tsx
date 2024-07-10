@@ -1,7 +1,7 @@
 import React, { FC, useEffect, useRef } from "react";
 import { Card, CardBody, CardFooter, Flex, Text } from "@chakra-ui/react";
 
-import { twoDigitsWithMetricPrefix, unitFormatCallback } from "../utils/formater";
+import { unitFormatCallback } from "../utils/formater";
 
 const SIZE = 100;
 

@@ -6,14 +6,13 @@ import QueryError from "../UI/QueryError";
 
 import { colorForStatus } from "../utils/converter";
 import { unitFormatCallback } from "../utils/formater";
+import { Card, CardBody, CardFooter, Flex, Text } from "@chakra-ui/react";
 
 type MetricGaugeItemProps = {
   unit?: number;
   value?: number;
   name: string;
-  style?: object;
   fontSize?: number;
-  titleFontSize?: number;
   loading?: boolean;
   hasError?: object;
   thresholds?: {
@@ -26,16 +25,14 @@ const MetricGaugeItem = ({
   unit,
   value,
   name,
-  style,
   fontSize,
-  titleFontSize = 30,
   loading,
   hasError,
   thresholds,
 }: MetricGaugeItemProps) => {
   if (loading) {
     return (
-      <div className="card card-body widgetLoading" style={style}>
+      <div className="card card-body widgetLoading">
         <div className="d-flex flex-column flex-nowrap justify-content-center align-items-center">
           <Loading size="xl" />
         </div>
@@ -43,7 +40,7 @@ const MetricGaugeItem = ({
     );
   } else if (hasError) {
     return (
-      <div className="card card-body widgetError" style={style}>
+      <div className="card card-body widgetError">
         <div className="d-flex flex-column flex-nowrap justify-content-center align-items-center">
           <QueryError noBorder style={{ textAlign: "center" }} />
         </div>
@@ -68,29 +65,35 @@ const MetricGaugeItem = ({
   segmentsColor.push("#" + colorForStatus(3));
 
   return (
-    <div className="card card-body widget" style={style}>
-      <div
-        className="d-flex flex-column flex-nowrap justify-content-center align-items-center"
-        style={{ height: "100%" }}
-      >
-        <DonutPieChart
-          value={value ? value : 0}
-          fontSize={fontSize ? fontSize : 12}
-          segmentsStep={segmentsStep}
-          segmentsColor={segmentsColor}
-          formattedValue={
-            unitFormatCallback(unit)(value)
-              ? unitFormatCallback(unit)(value)!
-              : "N/A"
-          }
-        />
-        <div>
-          <b style={{ fontSize: titleFontSize, textOverflow: "ellipsis" }}>
-            {name}
-          </b>
-        </div>
-      </div>
-    </div>
+    <Card>
+      <CardBody>
+        <Flex
+          direction="column"
+          w="100%"
+          h="100%"
+          align="center"
+          justify="center"
+          wrap="nowrap"
+        >
+          <DonutPieChart
+            value={value ? value : 0}
+            fontSize={fontSize ? fontSize : 12}
+            segmentsStep={segmentsStep}
+            segmentsColor={segmentsColor}
+            formattedValue={
+              unitFormatCallback(unit)(value)
+                ? unitFormatCallback(unit)(value)!
+                : "N/A"
+            }
+          />
+        </Flex>
+      </CardBody>
+      <CardFooter justify="center" p={0}>
+        <Text fontSize="3xl" as="b">
+          {name}
+        </Text>
+      </CardFooter>
+    </Card>
   );
 };
 

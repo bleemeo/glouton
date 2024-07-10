@@ -13,7 +13,8 @@ import {
 } from "../Metric/DefaultDashboardMetrics";
 import { chartTypes, useIntersection } from "../utils";
 import { Fact } from "../Data/data.interface";
-import { Box, Flex, SimpleGrid } from "@chakra-ui/react";
+import { Box, Card, Flex, SimpleGrid } from "@chakra-ui/react";
+import { ServicesList } from "../UI/ServicesList";
 
 type AgentSystemDashboardProps = {
   facts: Fact[];
@@ -95,6 +96,13 @@ const AgentSystemDashboard: FC<AgentSystemDashboardProps> = ({ facts }) => {
                 )}
               </Box>
             ))}
+          </SimpleGrid>
+
+          <SimpleGrid columns={2} spacing={5} mt={5}>
+            <Card>
+              <ServicesList />
+            </Card>
+            <Box></Box>
           </SimpleGrid>
         </Flex>
       </div>

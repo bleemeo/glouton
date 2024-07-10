@@ -9,7 +9,7 @@ import { useHTTPPromFetch } from "../utils/hooks";
 import { chartTypes, Period } from "../utils";
 import MetricNumberItem from "../Metric/MetricNumberItem";
 import MetricNumbersItem from "../Metric/MetricNumbersItem";
-import { Metric, MetricFetchResult, MetricPoints } from "../Metric/DefaultDashboardMetrics";
+import { Metric, MetricFetchResult } from "../Metric/DefaultDashboardMetrics";
 import { Box } from "@chakra-ui/react";
 
 type WidgetDashboardItemProps = {
