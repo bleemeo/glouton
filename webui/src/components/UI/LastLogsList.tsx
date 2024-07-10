@@ -56,7 +56,7 @@ export const LastLogsList: FC = () => {
           <>
             <Flex justify="space-between">
               <Text fontSize="xl" as="b">
-                Last logs
+                Lastest logs
               </Text>
               <Select
                 placeholder="Select option"

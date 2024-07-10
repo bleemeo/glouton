@@ -1,18 +1,16 @@
 /* eslint-disable camelcase */
 import React, { FC, useEffect, useState } from "react";
 import * as d3 from "d3";
-import { Tooltip } from "react-tooltip";
 import "react-tooltip/dist/react-tooltip.css";
 import { AxiosError } from "axios";
 
 import Panel from "../UI/Panel";
-import FaIcon from "../UI/FaIcon";
 import Smiley from "../UI/Smiley";
 import FetchSuspense from "../UI/FetchSuspense";
 
 import { useHTTPDataFetch } from "../utils/hooks";
 import { isNullOrUndefined, Problems } from "../utils";
-import { cssClassForStatus, textForStatus } from "../utils/converter";
+import { badgeColorSchemeForStatus, textForStatus } from "../utils/converter";
 import { formatDateTimeWithSeconds } from "../utils/formater";
 import {
   SERVICES_URL,
@@ -44,8 +42,23 @@ import {
   Text,
   Flex,
   Link,
+  Box,
+  Alert,
+  AlertDescription,
+  AlertTitle,
+  AlertIcon,
+  ListItem,
+  List,
+  ListIcon,
+  Spacer,
 } from "@chakra-ui/react";
 import ServiceDetails from "../Service/ServiceDetails";
+import {
+  CheckCircleIcon,
+  ChevronRightIcon,
+  InfoIcon,
+  WarningIcon,
+} from "@chakra-ui/icons";
 
 type AgentDetailsProps = {
   facts: Fact[];
@@ -86,22 +99,25 @@ const AgentDetails: FC<AgentDetailsProps> = ({ facts }) => {
 
     if (agentDate && agentDate < expDate) {
       expireAgentBanner = (
-        <div className="row">
-          <div className="col-xl-12">
-            <div className="alert alert-danger" role="alert">
-              This agent is more than 60 days old. You should update it. See the
-              <a
-                href="https://go.bleemeo.com/l/agent-upgrade"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                {" "}
-                documentation
-              </a>
-              &nbsp; to learn how to do it.
-            </div>
-          </div>
-        </div>
+        <Alert status="error" w="fit-content">
+          <AlertIcon />
+          <AlertTitle>
+            {" "}
+            This agent is more than 60 days old. You should update it!{" "}
+          </AlertTitle>
+          <AlertDescription>
+            {" "}
+            See the{" "}
+            <Link
+              color="teal.500"
+              href="https://go.bleemeo.com/l/agent-upgrade"
+              isExternal
+            >
+              documentation
+            </Link>
+            &nbsp; to learn how to do it.{" "}
+          </AlertDescription>
+        </Alert>
       );
     }
   }
@@ -144,45 +160,28 @@ const AgentDetails: FC<AgentDetailsProps> = ({ facts }) => {
   const agentInformation: AgentInfo | null = agentInformationData;
   const agentStatus: AgentStatus | null = agentStatusData;
 
-  let tooltipType: string = "info";
   let problems: JSX.Element | null = null;
 
   if (agentStatus) {
-    switch (agentStatus.status) {
-      case 0:
-        tooltipType = "success";
-        break;
-      case 1:
-        tooltipType = "warning";
-        break;
-      case 2:
-        tooltipType = "error";
-        break;
-      default:
-        tooltipType = "info";
-        break;
-    }
-
     problems = (
-      <div className="marginOffset">
-        <p className="text-center" id="agentStatus">
+      <Box>
+        <Flex
+          direction="column"
+          justify="center"
+          id="agentStatus"
+          align="center"
+        >
           <Smiley status={agentStatus.status} />
-        </p>
-        <p className="text-center">{textForStatus(agentStatus.status)}</p>
-        {agentStatus.statusDescription &&
-        agentStatus.statusDescription.length > 0 ? (
-          <Tooltip
-            place="bottom"
-            anchorSelect="agentStatus"
-            // effect="solid"
-            data-tooltip-variant={tooltipType}
-          >
-            <div style={{ maxWidth: "80rem", wordBreak: "break-all" }}>
-              <Problems problems={agentStatus.statusDescription} />
-            </div>
-          </Tooltip>
+          <Text textAlign="center" fontSize="xl" as="b">
+            {textForStatus(agentStatus.status)}
+          </Text>
+        </Flex>
+        {agentStatus.statusDescription ? (
+          <Box>
+            <Problems problems={agentStatus.statusDescription} />
+          </Box>
         ) : null}
-      </div>
+      </Box>
     );
   }
 
@@ -218,7 +217,7 @@ const AgentDetails: FC<AgentDetailsProps> = ({ facts }) => {
   );
 
   return (
-    <div id="page-wrapper" style={{ marginTop: "1.5rem" }}>
+    <Container id="page-wrapper" mt={5}>
       {serviceModal}
 
       {expireAgentBanner}
@@ -232,22 +231,27 @@ const AgentDetails: FC<AgentDetailsProps> = ({ facts }) => {
         >
           <GridItem rowSpan={4} colSpan={3}>
             <Panel>
-              <div className="marginOffset">
-                <h5>Information retrieved from the agent</h5>
+              <Box>
+                <Text fontSize="xl" as="b">
+                  Information retrieved from the agent
+                </Text>
                 {factUpdatedAtDate ? (
-                  <p>(last update: {factUpdatedAtDate.toLocaleString()})</p>
+                  <Text>
+                    (last update: {factUpdatedAtDate.toLocaleString()})
+                  </Text>
                 ) : null}
-                <ul className="list-unstyled">
+                <List className="list-unstyled">
                   {facts
                     .filter((f) => f.name !== "fact_updated_at")
                     .sort((a, b) => a.name.localeCompare(b.name))
                     .map((fact) => (
-                      <li key={fact.name}>
-                        <b>{fact.name}:</b> {fact.value}
-                      </li>
+                      <ListItem key={fact.name}>
+                        <ListIcon as={ChevronRightIcon} color="grey.500" />
+                        <Text as="b">{fact.name}:</Text> {fact.value}
+                      </ListItem>
                     ))}
-                </ul>
-              </div>
+                </List>
+              </Box>
             </Panel>
           </GridItem>
           <GridItem colSpan={3}>
@@ -264,33 +268,36 @@ const AgentDetails: FC<AgentDetailsProps> = ({ facts }) => {
             >
               {({ services }) => (
                 <Panel>
-                  <div className="marginOffset">
-                    Services running on this agent:
-                    <ul className="list-inline">
+                  <Box>
+                    <Text fontSize="xl" as="b">
+                      Services running on this agent:
+                    </Text>
+                    <Flex mt={2}>
                       {services
                         .filter((service) => service.active)
                         .sort((a, b) => a.name.localeCompare(b.name))
                         .map((service, idx) => {
                           return (
-                            <li key={idx} className="list-inline-item">
-                              <button
-                                className={`btn blee-label btn-${cssClassForStatus(
-                                  service.status,
-                                )}`}
-                                onClick={() => {
-                                  setShowServiceDetails(service);
-                                  onOpenModal();
-                                }}
-                              >
-                                {service.name}
-                                &nbsp;
-                                <FaIcon icon="fas fa-info-circle" />
-                              </button>
-                            </li>
+                            <Button
+                              key={idx}
+                              ml={2}
+                              mr={2}
+                              colorScheme={badgeColorSchemeForStatus(
+                                service.status,
+                              )}
+                              onClick={() => {
+                                setShowServiceDetails(service);
+                                onOpenModal();
+                              }}
+                            >
+                              {service.name}
+                              &nbsp;
+                              <InfoIcon />
+                            </Button>
                           );
                         })}
-                    </ul>
-                  </div>
+                    </Flex>
+                  </Box>
                 </Panel>
               )}
             </FetchSuspense>
@@ -310,7 +317,7 @@ const AgentDetails: FC<AgentDetailsProps> = ({ facts }) => {
               {({ tags }) => (
                 <Panel>
                   <Flex direction="column">
-                    <Text fontSize="md">
+                    <Text fontSize="xl" as="b">
                       Tags for {facts.find((f) => f.name === "fqdn")?.value}:
                     </Text>
                     {tags.length > 0 ? (
@@ -326,9 +333,7 @@ const AgentDetails: FC<AgentDetailsProps> = ({ facts }) => {
                         ))}
                       </ul>
                     ) : (
-                      <Text as="b" fontSize="lg">
-                        No tags to display
-                      </Text>
+                      <Text fontSize="lg">No tags to display</Text>
                     )}
                   </Flex>
                 </Panel>
@@ -341,63 +346,53 @@ const AgentDetails: FC<AgentDetailsProps> = ({ facts }) => {
           <GridItem colSpan={4} rowSpan={2}>
             {agentInformation && Object.keys(agentInformation).length > 0 ? (
               <Panel>
-                <div className="marginOffset">
-                  <ul className="list-unstyled">
-                    {agentInformation.registrationAt &&
-                    new Date(agentInformation.registrationAt).getFullYear() !==
-                      1 ? (
-                      <li>
-                        <b>Glouton registration at:</b>{" "}
-                        {formatDateTimeWithSeconds(
-                          agentInformation.registrationAt,
-                        )}
-                      </li>
-                    ) : null}
-                    {agentInformation.lastReport &&
-                    new Date(agentInformation.lastReport).getFullYear() !==
-                      1 ? (
-                      <li>
-                        <b>Glouton last report:</b>{" "}
-                        {formatDateTimeWithSeconds(agentInformation.lastReport)}
-                      </li>
-                    ) : null}
-                    <li>
-                      <div className="d-flex flex-row align-items-center">
-                        <b style={{ marginRight: "0.4rem" }}>
-                          Connected to Bleemeo ?
-                        </b>
-                        <div
-                          className={
-                            agentInformation.isConnected
-                              ? "isConnected"
-                              : "isNotConnected"
-                          }
-                        />
-                      </div>
-                    </li>
-                    <li>
-                      <div className="d-flex flex-row align-items-center">
-                        <b>
-                          Need to troubleshoot ? &nbsp;
-                          <Link
-                            textColor="blue.500"
-                            fontSize="xl"
-                            href="/diagnostic"
-                          >
-                            /diagnostic
-                          </Link>
-                          &nbsp; may help you.
-                        </b>
-                      </div>
-                    </li>
-                  </ul>
-                </div>
+                <Flex direction="column" justify="center" align="flex-start">
+                  {agentInformation.registrationAt &&
+                  new Date(agentInformation.registrationAt).getFullYear() !==
+                    1 ? (
+                    <Box>
+                      <Text as="b">Glouton registration at:</Text>{" "}
+                      {formatDateTimeWithSeconds(
+                        agentInformation.registrationAt,
+                      )}
+                    </Box>
+                  ) : null}
+                  {agentInformation.lastReport &&
+                  new Date(agentInformation.lastReport).getFullYear() !== 1 ? (
+                    <Box>
+                      <Text as="b">Glouton last report:</Text>{" "}
+                      {formatDateTimeWithSeconds(agentInformation.lastReport)}
+                    </Box>
+                  ) : null}
+                  <Flex align="center" justify="center">
+                    <Text as="b">Connected to Bleemeo ? &nbsp; </Text>
+                    <Spacer></Spacer>
+                    {agentInformation.isConnected ? (
+                      <CheckCircleIcon color="green.500" />
+                    ) : (
+                      <WarningIcon color="red.500" />
+                    )}
+                  </Flex>
+                  <Box>
+                    <Text as="b">
+                      Need to troubleshoot ? &nbsp;
+                      <Link
+                        textColor="blue.500"
+                        fontSize="xl"
+                        href="/diagnostic"
+                      >
+                        /diagnostic
+                      </Link>
+                      &nbsp; may help you.
+                    </Text>
+                  </Box>
+                </Flex>
               </Panel>
             ) : null}
           </GridItem>
         </Grid>
       </Container>
-    </div>
+    </Container>
   );
 };
 

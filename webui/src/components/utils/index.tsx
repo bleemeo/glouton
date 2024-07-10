@@ -1,3 +1,4 @@
+import { ListItem, UnorderedList } from "@chakra-ui/react";
 import React, { FC, RefObject } from "react";
 
 export const chartTypes = ["gauge", "number", "numbers"];
@@ -20,13 +21,11 @@ type ProblemsProps = {
   problems: string[];
 };
 export const Problems: FC<ProblemsProps> = ({ problems }) => (
-  <div>
-    <ul className="list-unstyled mb-0">
-      {problems
-        ? problems.map((problem, idx) => <li key={idx}>{problem}</li>)
-        : null}
-    </ul>
-  </div>
+  <UnorderedList>
+    {problems
+      ? problems.map((problem, idx) => <ListItem key={idx}>{problem}</ListItem>)
+      : null}
+  </UnorderedList>
 );
 
 type MetricDescriptionProps = {
