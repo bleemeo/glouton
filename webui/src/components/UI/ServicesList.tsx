@@ -19,11 +19,7 @@ import { SERVICES_URL } from "../utils/dataRoutes";
 import QueryError from "./QueryError";
 import FetchSuspense from "./FetchSuspense";
 
-type ServicesListProps = {
-  loading?: boolean;
-};
-
-export const ServicesList: FC<ServicesListProps> = () => {
+export const ServicesList: FC = () => {
   const {
     data: services,
     error,

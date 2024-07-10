@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import axios, { AxiosError } from "axios";
 import { Metric, MetricFetchResult } from "../Metric/DefaultDashboardMetrics";
+import { Log } from "../Data/data.interface";
 
 interface FetchDataParameters {
   [key: string]: any;
@@ -103,6 +104,53 @@ export const useHTTPPromFetch = (
 
   clearTimeout(time);
   return { data, isLoading, error };
+};
+
+export const useHTTPLogFetch = (limit: number, pollInterval: number) => {
+  const [logs, setLogs] = useState<Log[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setIsError] = useState<AxiosError | null>(null);
+  const [isFetching, setIsFetching] = useState(false);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      setIsFetching(true);
+      setIsError(null);
+
+      try {
+        const result = await axios.get(`/diagnostic.txt/log.txt`);
+        const logPattern =
+          /^(\d{4}\/\d{2}\/\d{2} \d{2}:\d{2}:\d{2}\.\d{1,6}) (.*)$/;
+        const logsLines = result.data
+          .slice(result.data.length - limit, result.data.length - 1)
+          .split("\n")
+          .slice(1, -1);
+        const formattedLogs = logsLines.map((line: string) => {
+          const match = logPattern.exec(line);
+          if (match) {
+            return { timestamp: match[1], message: match[2] };
+          }
+          return { timestamp: "", message: line };
+        });
+        setLogs(formattedLogs);
+      } catch (error) {
+        setIsError(error as AxiosError);
+      } finally {
+        setIsLoading(false);
+        setIsFetching(false);
+      }
+    };
+
+    fetchData();
+
+    const intervalId =
+      pollInterval > 0 ? setInterval(fetchData, pollInterval) : null;
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [pollInterval]);
+
+  return { isLoading, error, logs, isFetching };
 };
 
 export const useWindowWidth = () => {

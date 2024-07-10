@@ -122,3 +122,8 @@ export interface Topinfo {
   Memory?: MemoryUsage;
   Swap?: SwapUsage;
 }
+
+export interface Log {
+  timestamp: string;
+  message: string;
+}

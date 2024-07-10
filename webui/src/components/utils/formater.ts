@@ -359,3 +359,8 @@ export const formatMetricName = (metricName: string) => {
   });
   return result;
 };
+
+export const getHoursFromDateString = (dateString: string) => {
+  const date = new Date(dateString).toTimeString().split(" ")[0];
+  return date;
+};

@@ -13,8 +13,9 @@ import {
 } from "../Metric/DefaultDashboardMetrics";
 import { chartTypes, useIntersection } from "../utils";
 import { Fact } from "../Data/data.interface";
-import { Box, Card, Flex, SimpleGrid } from "@chakra-ui/react";
+import { Box, Card, Flex, Grid, SimpleGrid } from "@chakra-ui/react";
 import { ServicesList } from "../UI/ServicesList";
+import { LastLogsList } from "../UI/LastLogsList";
 
 type AgentSystemDashboardProps = {
   facts: Fact[];
@@ -39,7 +40,7 @@ const AgentSystemDashboard: FC<AgentSystemDashboardProps> = ({ facts }) => {
 
   const triggerRef = useRef<HTMLDivElement>(null);
   const isVisible = useIntersection(triggerRef, "0px");
-  const maxHeight = "20rem";
+  const maxHeight = "15rem";
 
   useEffect(() => {
     document.title = "Dashboard | Glouton";
@@ -98,12 +99,15 @@ const AgentSystemDashboard: FC<AgentSystemDashboardProps> = ({ facts }) => {
             ))}
           </SimpleGrid>
 
-          <SimpleGrid columns={2} spacing={5} mt={5}>
-            <Card>
+          <Grid templateColumns="5fr 9fr" gap={5} mt={5}>
+            <Card h="fit-content">
               <ServicesList />
             </Card>
-            <Box></Box>
-          </SimpleGrid>
+            <Box>
+              {/* TODO : Let the limit be editable */}
+              <LastLogsList limit={2000} />
+            </Box>
+          </Grid>
         </Flex>
       </div>
     </>
