@@ -1,9 +1,9 @@
 import React, { FC, RefObject } from "react";
 
-export const chartTypes = ["gauge", "stacked", "line"];
+export const chartTypes = ["gauge", "number", "numbers"];
+export const UNIT_FLOAT = 0;
 export const UNIT_PERCENTAGE = 1;
-export const UNIT_BYTE = 2;
-export const UNIT_NUMBER = 0;
+export const UNIT_INT = 2;
 export const LabelName = "__name__";
 
 export const createFilterFn = (input: string) => {
@@ -72,7 +72,7 @@ export const getThemeBackgroundColorsSelect = (theme: string) =>
     ? ["#045FB4", "#0B3861", "#3a3a3a"]
     : ["#A9D0F5", "#EFF5FB", "#FFF"];
 
-type Period = {
+export type Period = {
   minutes: number;
   from?: Date;
   to?: Date;

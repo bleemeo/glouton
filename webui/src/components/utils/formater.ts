@@ -293,27 +293,26 @@ export const twoDigitsWithMetricPrefix = (value: number) => {
   }
 };
 
+export const intUnit = (value: number) => {
+  return Math.round(value).toString();
+};
+
 export const secondToString = (value: any) =>
   d3FormaterHandlingNull(".3s", "s")(value);
 
 export const unitFormatCallback = function (
   unit?: number,
 ): (arg0?: number) => string | string[] | undefined {
-  // UNIT_UNIT = 0
-  // UNIT_PERCENTAGE = 1
-  // UNIT_BYTE = 2
-  // UNIT_BIT = 3
-  // UNIT_IOPS = 4
-  // UNIT_PS = 5
+  // UNIT_FLOAT = 0;
+  // UNIT_PERCENTAGE = 1;
+  // UNIT_INT = 2;
   switch (unit) {
+    case 0:
+      return twoDigitsWithMetricPrefix;
     case 1:
       return percentToString;
     case 2:
-      return bytesToString;
-    case 3:
-      return bitsToString;
-    case 4:
-      return iopsToString;
+      return intUnit;
     default:
       return defaultToString;
   }

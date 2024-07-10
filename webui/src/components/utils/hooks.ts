@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useEffect, useState } from "react";
 import axios, { AxiosError } from "axios";
+import { Metric, MetricFetchResult } from "../Metric/DefaultDashboardMetrics";
 
 interface FetchDataParameters {
   [key: string]: any;
@@ -51,17 +52,18 @@ export const useHTTPDataFetch = <T>(
   return { isLoading, error, data, isFetching };
 };
 
-interface FetchResult<T> {
-  data: T[] | null;
+interface FetchResult {
+  data: MetricFetchResult[] | null;
   isLoading: boolean;
   error: AxiosError | null;
 }
 
-export const useHTTPPromFetch = <T>(
+export const useHTTPPromFetch = (
   urls: string[],
+  metrics: Metric[],
   delay = 3000,
-): FetchResult<T> => {
-  const [data, setData] = useState<T[] | null>([]);
+): FetchResult => {
+  const [data, setData] = useState<MetricFetchResult[] | null>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setIsError] = useState(null);
   const [delayState, setIsDelayState] = useState(false);
@@ -87,7 +89,7 @@ export const useHTTPPromFetch = <T>(
         for (const idx in values) {
           const arrayData = await fetchData(values[idx]);
           for (const value in arrayData) {
-            arrayData[value].metric.legendId = idx;
+            arrayData[value].metric = metrics[idx];
             array_tmp.push(arrayData[value]);
           }
         }

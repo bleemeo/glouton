@@ -1,18 +1,26 @@
 import React, { FC, useEffect, useRef } from "react";
-import { Card, CardBody, CardFooter, Flex, Text } from "@chakra-ui/react";
 
-import { twoDigitsWithMetricPrefix, unitFormatCallback } from "../utils/formater";
+import { unitFormatCallback } from "../utils/formater";
+import {
+  Flex,
+  Box,
+  CardFooter,
+  CardBody,
+  Card,
+  Text,
+  Spacer,
+} from "@chakra-ui/react";
 
 const SIZE = 100;
 
 type MetricNumberItemProps = {
-  value: number;
+  data: { value: number; legend: string }[];
   title: string;
   unit?: number;
 };
 
-const MetricNumberItem: FC<MetricNumberItemProps> = ({
-  value,
+const MetricNumbersItem: FC<MetricNumberItemProps> = ({
+  data,
   title,
   unit,
 }) => {
@@ -55,14 +63,16 @@ const MetricNumberItem: FC<MetricNumberItemProps> = ({
     resize();
   });
 
-  let formattedValue = unitFormatCallback(unit)(value);
-  if (formattedValue === undefined) {
-    formattedValue = "\u00A0\u00A0\u00A0";
-  }
+  const formattedData = data.map((d: { value: number; legend: string }) => {
+    const v = unitFormatCallback(unit)(d.value)
+      ? unitFormatCallback(unit)(d.value)
+      : "\u00A0\u00A0\u00A0";
+    return { value: v, legend: d.legend };
+  });
 
   return (
     <Card h="100%">
-      <CardBody>
+      <CardBody pb={0}>
         <Flex
           direction="column"
           w="100%"
@@ -71,11 +81,19 @@ const MetricNumberItem: FC<MetricNumberItemProps> = ({
           justify="center"
           wrap="nowrap"
         >
-          <Flex w="100%" h="100%" align="center" justify="center">
-            <Text mt={-3} fontSize="7rem" as="b" mb={0}>
-              {formattedValue}
-            </Text>
-          </Flex>
+          <Box w="100%" h="100%">
+            {formattedData.map((d, idx) => (
+              <Flex direction="column" key={idx} align="baseline">
+                <Text fontSize="md" mb={0}>
+                  {d.legend}
+                </Text>
+                <Text mt={-3} fontSize="5xl" as="b" mb={0}>
+                  {d.value}
+                </Text>
+                <Spacer />
+              </Flex>
+            ))}
+          </Box>
         </Flex>
       </CardBody>
       <CardFooter justify="center" p={0}>
@@ -87,4 +105,4 @@ const MetricNumberItem: FC<MetricNumberItemProps> = ({
   );
 };
 
-export default MetricNumberItem;
+export default MetricNumbersItem;

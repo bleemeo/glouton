@@ -6,16 +6,19 @@ import MetricGaugeItem from "../Metric/MetricGaugeItem";
 import LineChart from "./LineChart";
 
 import { useHTTPPromFetch } from "../utils/hooks";
-import { chartTypes } from "../utils";
+import { chartTypes, Period } from "../utils";
+import MetricNumberItem from "../Metric/MetricNumberItem";
+import MetricNumbersItem from "../Metric/MetricNumbersItem";
+import { Metric, MetricFetchResult, MetricPoints } from "../Metric/DefaultDashboardMetrics";
+import { Box } from "@chakra-ui/react";
 
 type WidgetDashboardItemProps = {
   type: string;
   title: string;
-  metrics: any;
+  metrics: Metric[];
   unit: number;
   period: any;
-  handleBackwardForward?: (isForward: boolean) => void;
-  windowWidth?: number;
+  maxHeight: string;
 };
 
 const WidgetDashboardItem: FC<WidgetDashboardItemProps> = ({
@@ -24,15 +27,11 @@ const WidgetDashboardItem: FC<WidgetDashboardItemProps> = ({
   metrics,
   unit,
   period,
-  handleBackwardForward,
-  windowWidth,
+  maxHeight,
 }) => {
   const previousError = useRef<any | null>(null);
-  const handleBackwardForwardFunc = (isForward = false) => {
-    handleBackwardForward ? handleBackwardForward(isForward) : null;
-  };
 
-  const displayWidget = (points) => {
+  const displayWidget = (points: MetricFetchResult[]) => {
     switch (type) {
       case chartTypes[0]: {
         let lastPoint: number = 0;
@@ -55,39 +54,39 @@ const WidgetDashboardItem: FC<WidgetDashboardItemProps> = ({
         );
       }
       case chartTypes[1]: {
-        const resultStacked = points;
-        return (
-          <LineChart
-            stacked
-            metrics={resultStacked}
-            metrics_param={metrics}
-            title={title}
-            unit={unit}
-            period={period}
-            handleBackwardForward={handleBackwardForwardFunc}
-            windowWidth={windowWidth}
-          />
-        );
+        let lastPoint: number = 0;
+        if (points[0]) {
+          lastPoint = parseFloat(
+            points[0].values[points[0].values.length - 1][1],
+          );
+        }
+        return <MetricNumberItem unit={unit} value={lastPoint} title={title} />;
       }
       case chartTypes[2]: {
-        const resultsLines = points;
-        return (
-          <LineChart
-            metrics={resultsLines}
-            metrics_param={metrics}
-            title={title}
-            unit={unit}
-            period={period}
-            handleBackwardForward={handleBackwardForwardFunc}
-            windowWidth={windowWidth}
-            stacked={false}
-          />
-        );
+        const data: { value: number; legend: string }[] = [];
+        metrics.forEach((metric) => {
+          const pointsWithMetric = points.filter((point) =>
+            point.metric.query.includes(metric.query),
+          );
+          let lastPoint: number = 0;
+          if (pointsWithMetric[0]) {
+            lastPoint = parseFloat(
+              pointsWithMetric[0].values[
+                pointsWithMetric[0].values.length - 1
+              ][1],
+            );
+          }
+          data.push({
+            value: lastPoint,
+            legend: metric.legend ? metric.legend : "",
+          });
+        });
+        return <MetricNumbersItem unit={unit} data={data} title={title} />;
       }
     }
   };
 
-  const urls = (metrics, period) => {
+  const urls = (metrics: Metric[], period: Period) => {
     const start = period.from
       ? new Date(period.from).toISOString()
       : new Date(
@@ -113,16 +112,20 @@ const WidgetDashboardItem: FC<WidgetDashboardItemProps> = ({
 
   const { isLoading, data, error } = useHTTPPromFetch(
     urls(metrics, period),
+    metrics,
     10000,
   );
+
   const points = data;
+
   let hasError = error;
   if (previousError.current && !error) {
     hasError = previousError.current;
   }
   previousError.current = error;
+
   return (
-    <div>
+    <Box maxH={maxHeight} h="100%">
       {/* See Issue : https://github.com/apollographql/apollo-client/pull/4974 */}
       <FetchSuspense
         isLoading={isLoading || !points || typeof points[0] === "undefined"}
@@ -146,13 +149,13 @@ const WidgetDashboardItem: FC<WidgetDashboardItemProps> = ({
               metrics_param={metrics}
               hasError={hasError}
             />
-          ) /* eslint-disable-line react/jsx-indent */
+          )
         }
         points={points}
       >
         {({ points }) => displayWidget(points)}
       </FetchSuspense>
-    </div>
+    </Box>
   );
 };
 

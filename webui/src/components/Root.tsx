@@ -8,13 +8,14 @@ import {
 import Routes from "./Routes";
 import TopNavBar from "./App/TopNavBar";
 
-const { Button, Modal, Badge } = chakraTheme.components;
+const { Button, Modal, Badge, Card } = chakraTheme.components;
 
 const theme = extendBaseTheme({
   components: {
     Button,
     Modal,
     Badge,
+    Card,
   },
 });
 
