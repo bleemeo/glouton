@@ -48,53 +48,58 @@ export const ServicesList: FC = () => {
       {(data: { services: Service[] }) => {
         const services = data.services;
         return (
-          <TableContainer w="100%">
-            <Table variant="simple" w="100%">
-              <Thead>
-                <Tr>
-                  <Th>Status</Th>
-                  <Th>Service</Th>
-                  <Th>IP Address</Th>
-                  <Th>Exe path</Th>
-                </Tr>
-              </Thead>
-              <Tbody>
-                {services.map((service) => (
-                  <Tr key={service.name}>
-                    <Td>
-                      {service.active ? (
-                        <Badge colorScheme="green">Active</Badge>
-                      ) : (
-                        <Badge colorScheme="red">Inactive</Badge>
-                      )}
-                    </Td>
-                    <Td>
-                      <Text pb={0} as="b">
-                        {service.name}
-                      </Text>
-                    </Td>
-                    <Td>{service.ipAddress}</Td>
-                    <Td maxW={0}>
-                      <Tooltip
-                        label={service.exePath}
-                        aria-label="Exe path tooltip"
-                      >
-                        <Text
-                          overflow="hidden"
-                          textOverflow="ellipsis"
-                          whiteSpace="nowrap"
-                          mb={0}
-                          fontSize="xs"
-                        >
-                          {service.exePath}
-                        </Text>
-                      </Tooltip>
-                    </Td>
+          <>
+            <Text fontSize="xl" as="b">
+              Services
+            </Text>
+            <TableContainer w="100%">
+              <Table variant="simple" w="100%">
+                <Thead>
+                  <Tr>
+                    <Th>Status</Th>
+                    <Th>Service</Th>
+                    <Th>IP Address</Th>
+                    <Th>Exe path</Th>
                   </Tr>
-                ))}
-              </Tbody>
-            </Table>
-          </TableContainer>
+                </Thead>
+                <Tbody>
+                  {services.map((service) => (
+                    <Tr key={service.name}>
+                      <Td>
+                        {service.active ? (
+                          <Badge colorScheme="green">Active</Badge>
+                        ) : (
+                          <Badge colorScheme="red">Inactive</Badge>
+                        )}
+                      </Td>
+                      <Td>
+                        <Text pb={0} as="b">
+                          {service.name}
+                        </Text>
+                      </Td>
+                      <Td>{service.ipAddress}</Td>
+                      <Td maxW={0}>
+                        <Tooltip
+                          label={service.exePath}
+                          aria-label="Exe path tooltip"
+                        >
+                          <Text
+                            overflow="hidden"
+                            textOverflow="ellipsis"
+                            whiteSpace="nowrap"
+                            mb={0}
+                            fontSize="xs"
+                          >
+                            {service.exePath}
+                          </Text>
+                        </Tooltip>
+                      </Td>
+                    </Tr>
+                  ))}
+                </Tbody>
+              </Table>
+            </TableContainer>
+          </>
         );
       }}
     </FetchSuspense>

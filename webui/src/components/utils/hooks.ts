@@ -121,18 +121,17 @@ export const useHTTPLogFetch = (limit: number, pollInterval: number) => {
         const result = await axios.get(`/diagnostic.txt/log.txt`);
         const logPattern =
           /^(\d{4}\/\d{2}\/\d{2} \d{2}:\d{2}:\d{2}\.\d{1,6}) (.*)$/;
-        const logsLines = result.data
-          .slice(result.data.length - limit, result.data.length - 1)
-          .split("\n")
-          .slice(1, -1);
-        const formattedLogs = logsLines.map((line: string) => {
-          const match = logPattern.exec(line);
-          if (match) {
-            return { timestamp: match[1], message: match[2] };
-          }
-          return { timestamp: "", message: line };
-        });
-        setLogs(formattedLogs);
+        const logsLines = result.data.split("\n").slice(0, -2); // Remove last 2 lines that are not logs
+        const formattedLogs = logsLines
+          .slice(logsLines.length - limit, logsLines.length)
+          .map((line: string) => {
+            const match = logPattern.exec(line);
+            if (match) {
+              return { timestamp: match[1], message: match[2] };
+            }
+            return { timestamp: "", message: line };
+          });
+          setLogs(formattedLogs);
       } catch (error) {
         setIsError(error as AxiosError);
       } finally {
@@ -148,7 +147,7 @@ export const useHTTPLogFetch = (limit: number, pollInterval: number) => {
     return () => {
       if (intervalId) clearInterval(intervalId);
     };
-  }, [pollInterval]);
+  }, [pollInterval, limit]);
 
   return { isLoading, error, logs, isFetching };
 };

@@ -8,7 +8,7 @@ import {
 import Routes from "./Routes";
 import TopNavBar from "./App/TopNavBar";
 
-const { Button, Modal, Badge, Card, Table, Tooltip, Tag } =
+const { Button, Modal, Badge, Card, Table, Tooltip, Tag, Select } =
   chakraTheme.components;
 
 const theme = extendBaseTheme({
@@ -20,6 +20,7 @@ const theme = extendBaseTheme({
     Table,
     Tooltip,
     Tag,
+    Select,
   },
 });
 

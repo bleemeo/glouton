@@ -13,7 +13,7 @@ import {
 } from "../Metric/DefaultDashboardMetrics";
 import { chartTypes, useIntersection } from "../utils";
 import { Fact } from "../Data/data.interface";
-import { Box, Card, Flex, Grid, SimpleGrid } from "@chakra-ui/react";
+import { Box, Flex, Grid, SimpleGrid } from "@chakra-ui/react";
 import { ServicesList } from "../UI/ServicesList";
 import { LastLogsList } from "../UI/LastLogsList";
 
@@ -40,7 +40,8 @@ const AgentSystemDashboard: FC<AgentSystemDashboardProps> = ({ facts }) => {
 
   const triggerRef = useRef<HTMLDivElement>(null);
   const isVisible = useIntersection(triggerRef, "0px");
-  const maxHeight = "15rem";
+  const metricsWidgetMaxHeight = "15rem";
+  const otherMetricsWidgetMaxHeight = "16rem";
 
   useEffect(() => {
     document.title = "Dashboard | Glouton";
@@ -60,7 +61,7 @@ const AgentSystemDashboard: FC<AgentSystemDashboardProps> = ({ facts }) => {
                     metrics={gaugeItem.metrics}
                     unit={gaugeItem.unit}
                     period={{ minutes: 60 }}
-                    maxHeight={maxHeight}
+                    maxHeight={metricsWidgetMaxHeight}
                   />
                 ) : (
                   <MetricGaugeItem name={gaugeItem.title} loading />
@@ -71,7 +72,11 @@ const AgentSystemDashboard: FC<AgentSystemDashboardProps> = ({ facts }) => {
 
           <SimpleGrid columns={numberMetrics.length} spacing={5} mt={5}>
             {numberMetrics.map((numberMetric) => (
-              <Box h={maxHeight} ref={triggerRef} key={numberMetric.title}>
+              <Box
+                h={metricsWidgetMaxHeight}
+                ref={triggerRef}
+                key={numberMetric.title}
+              >
                 {isVisible ? (
                   numberMetric.metrics?.length > 1 ? (
                     <WidgetDashboardItem
@@ -80,7 +85,7 @@ const AgentSystemDashboard: FC<AgentSystemDashboardProps> = ({ facts }) => {
                       metrics={numberMetric.metrics}
                       unit={numberMetric.unit}
                       period={{ minutes: 60 }}
-                      maxHeight={maxHeight}
+                      maxHeight={metricsWidgetMaxHeight}
                     />
                   ) : (
                     <WidgetDashboardItem
@@ -89,7 +94,7 @@ const AgentSystemDashboard: FC<AgentSystemDashboardProps> = ({ facts }) => {
                       metrics={numberMetric.metrics}
                       unit={numberMetric.unit}
                       period={{ minutes: 60 }}
-                      maxHeight={maxHeight}
+                      maxHeight={metricsWidgetMaxHeight}
                     />
                   )
                 ) : (
@@ -100,12 +105,12 @@ const AgentSystemDashboard: FC<AgentSystemDashboardProps> = ({ facts }) => {
           </SimpleGrid>
 
           <Grid templateColumns="7fr 9fr" gap={5} mt={5}>
-            <Card h="fit-content">
+            <Box h="fit-content">
               <ServicesList />
-            </Card>
-            <Box>
+            </Box>
+            <Box h={otherMetricsWidgetMaxHeight}>
               {/* TODO : Let the limit be editable */}
-              <LastLogsList limit={2000} />
+              <LastLogsList />
             </Box>
           </Grid>
         </Flex>
