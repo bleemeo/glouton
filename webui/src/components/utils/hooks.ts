@@ -120,7 +120,7 @@ export const useHTTPLogFetch = (limit: number, pollInterval: number) => {
       try {
         const result = await axios.get(`/diagnostic.txt/log.txt`);
         const logPattern =
-          /^(\d{4}\/\d{2}\/\d{2} \d{2}:\d{2}:\d{2}\.\d{1,6}) (.*)$/;
+          /^(\d{4}\/\d{2}\/\d{2} \d{2}:\d{2}:\d{2}\.\d{1,12}) (.*)$/;
         const logsLines = result.data.split("\n").slice(0, -2); // Remove last 2 lines that are not logs
         const formattedLogs = logsLines
           .slice(logsLines.length - limit, logsLines.length)
