@@ -1,5 +1,5 @@
 /* eslint-disable camelcase */
-import React, { FC, useRef, useState } from "react";
+import React, { FC, useEffect, useRef, useState } from "react";
 import * as d3 from "d3";
 import "react-tooltip/dist/react-tooltip.css";
 import { AxiosError } from "axios";
@@ -263,6 +263,19 @@ const AgentDetails: FC<AgentDetailsProps> = ({ facts }) => {
       );
     }
   }
+
+  useEffect(() => {
+    const handleResize = () => {
+      if (svgStatusChart.current) {
+        const svg = echarts.init(svgStatusChart.current);
+        svg.resize();
+      }
+    };
+    window.addEventListener("resize", handleResize);
+    return () => {
+      window.removeEventListener("resize", handleResize);
+    };
+  }, []);
 
   const {
     isOpen: isOpenModal,
