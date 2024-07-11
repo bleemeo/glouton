@@ -18,6 +18,7 @@ import { Table as BTable } from "react-bootstrap";
 
 import { Process } from "../Data/data.interface";
 import { formatToBytes, percentToString2Digits } from "../utils/formater";
+import { Box, Center, Divider, Flex, Text, Tooltip } from "@chakra-ui/react";
 
 const cmdLineCommand = ["#C9B202", "#2ecc71", "#3498db"];
 
@@ -167,7 +168,9 @@ type ProcessesTableProps = {
 };
 
 const ProcessesTable: FC<ProcessesTableProps> = ({ data, widthLastColumn }) => {
-  const [sorting, setSorting] = useState<SortingState>([]);
+  const [sorting, setSorting] = useState<SortingState>([
+    { id: "cpu_percent", desc: true },
+  ]);
   const [expanded, setExpanded] = useState<ExpandedState>({});
   const [pagination, setPagination] = useState<PaginationState>({
     pageIndex: 0,
@@ -256,11 +259,14 @@ const ProcessesTable: FC<ProcessesTableProps> = ({ data, widthLastColumn }) => {
       columnHelper.accessor("cmdline", {
         id: "cmdline",
         header: "Name",
-        cell: (info) =>
-          formatCmdLine({
-            input: info.getValue() as string,
-            widthLastColumn: widthLastColumn,
-          }),
+        cell: (info) => (
+          <Tooltip label={info.getValue()}>
+            {formatCmdLine({
+              input: info.getValue() as string,
+              widthLastColumn: widthLastColumn,
+            })}
+          </Tooltip>
+        ),
       }),
     ],
     [],
@@ -299,7 +305,7 @@ const ProcessesTable: FC<ProcessesTableProps> = ({ data, widthLastColumn }) => {
   });
 
   return (
-    <div className="p-2">
+    <Box pl={2} w="100%">
       <BTable striped bordered hover responsive size="sm">
         <thead>
           {table.getHeaderGroups().map((headerGroup) => (
@@ -358,56 +364,62 @@ const ProcessesTable: FC<ProcessesTableProps> = ({ data, widthLastColumn }) => {
           ))}
         </tfoot>
       </BTable>
-      <div className="flex items-center gap-2">
-        <button
-          className="border rounded p-1"
-          onClick={() => table.firstPage()}
-          disabled={!table.getCanPreviousPage()}
-        >
-          {"<<"}
-        </button>
-        <button
-          className="border rounded p-1"
-          onClick={() => table.previousPage()}
-          disabled={!table.getCanPreviousPage()}
-        >
-          {"<"}
-        </button>
-        <button
-          className="border rounded p-1"
-          onClick={() => table.nextPage()}
-          disabled={!table.getCanNextPage()}
-        >
-          {">"}
-        </button>
-        <button
-          className="border rounded p-1"
-          onClick={() => table.lastPage()}
-          disabled={!table.getCanNextPage()}
-        >
-          {">>"}
-        </button>
-        <span className="flex items-center gap-1">
-          <div>Page</div>
-          <strong>
-            {table.getState().pagination.pageIndex + 1} of{" "}
-            {table.getPageCount().toLocaleString()}
-          </strong>
-        </span>
-        <span className="flex items-center gap-1">
-          | Go to page:
-          <input
-            type="number"
-            defaultValue={table.getState().pagination.pageIndex + 1}
-            onChange={(e) => {
-              const page = e.target.value ? Number(e.target.value) - 1 : 0;
-              table.setPageIndex(page);
-            }}
-            className="border p-1 rounded w-16"
-          />
-        </span>
-      </div>
-    </div>
+      <Flex justify="space-between" align="center">
+        <Box>
+          <button
+            className="border rounded p-1"
+            onClick={() => table.firstPage()}
+            disabled={!table.getCanPreviousPage()}
+          >
+            {"<<"}
+          </button>
+          <button
+            className="border rounded p-1"
+            onClick={() => table.previousPage()}
+            disabled={!table.getCanPreviousPage()}
+          >
+            {"<"}
+          </button>
+          <button
+            className="border rounded p-1"
+            onClick={() => table.nextPage()}
+            disabled={!table.getCanNextPage()}
+          >
+            {">"}
+          </button>
+          <button
+            className="border rounded p-1"
+            onClick={() => table.lastPage()}
+            disabled={!table.getCanNextPage()}
+          >
+            {">>"}
+          </button>
+        </Box>
+
+        <Flex alignItems="center">
+          <Center flexDir="column" alignItems="flex-start">
+            <Text mb={0}>Page</Text>
+            <Text as="b">
+              {table.getState().pagination.pageIndex + 1} of{" "}
+              {table.getPageCount().toLocaleString()}
+            </Text>
+          </Center>
+          <Divider orientation="vertical" mx={3} />
+          <Center alignItems="center">
+            <Text mb={0}>Go to page:</Text>
+            <input
+              type="number"
+              defaultValue={table.getState().pagination.pageIndex + 1}
+              onChange={(e) => {
+                const page = e.target.value ? Number(e.target.value) - 1 : 0;
+                table.setPageIndex(page);
+              }}
+              className="border p-1 rounded w-16"
+            />
+          </Center>
+        </Flex>
+      </Flex>
+    </Box>
   );
 };
 

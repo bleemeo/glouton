@@ -32,19 +32,19 @@ const MetricGaugeItem = ({
 }: MetricGaugeItemProps) => {
   if (loading) {
     return (
-      <div className="card card-body widgetLoading">
-        <div className="d-flex flex-column flex-nowrap justify-content-center align-items-center">
+      <Card>
+        <CardBody>
           <Loading size="xl" />
-        </div>
-      </div>
+        </CardBody>
+      </Card>
     );
   } else if (hasError) {
     return (
-      <div className="card card-body widgetError">
-        <div className="d-flex flex-column flex-nowrap justify-content-center align-items-center">
+      <Card>
+        <CardBody>
           <QueryError noBorder style={{ textAlign: "center" }} />
-        </div>
-      </div>
+        </CardBody>
+      </Card>
     );
   }
   const segmentsStep: number[] = [0];
@@ -66,7 +66,7 @@ const MetricGaugeItem = ({
 
   return (
     <Card>
-      <CardBody>
+      <CardBody p={1}>
         <Flex
           direction="column"
           w="100%"
@@ -74,6 +74,7 @@ const MetricGaugeItem = ({
           align="center"
           justify="center"
           wrap="nowrap"
+          p={1}
         >
           <DonutPieChart
             value={value ? value : 0}

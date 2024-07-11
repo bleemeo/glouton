@@ -146,10 +146,6 @@ const AgentProcesses: FC<AgentProcessesProps> = ({ top, sizePage }) => {
       });
 
     const getProcessesWithSamePPID = (ppid: number) => {
-      console.log(
-        "starting getProcessesWithSamePPID at time ",
-        new Date().getTime().toLocaleString(),
-      );
       const processesWithSamePPID = finalProcesses.filter(
         (p) => ppid === p.ppid,
       );

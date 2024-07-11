@@ -40,7 +40,7 @@ const AgentSystemDashboard: FC<AgentSystemDashboardProps> = ({ facts }) => {
 
   const triggerRef = useRef<HTMLDivElement>(null);
   const isVisible = useIntersection(triggerRef, "0px");
-  const metricsWidgetMaxHeight = "15rem";
+  const metricsWidgetMaxHeight = "14rem";
   const otherMetricsWidgetMaxHeight = "16rem";
 
   useEffect(() => {

@@ -21,6 +21,9 @@ import { colorForStatus } from "../utils/converter";
 import { UNIT_PERCENTAGE } from "../utils";
 import {
   Button,
+  Center,
+  Code,
+  Flex,
   Modal,
   ModalBody,
   ModalCloseButton,
@@ -28,6 +31,7 @@ import {
   ModalFooter,
   ModalHeader,
   ModalOverlay,
+  Text,
   useDisclosure,
 } from "@chakra-ui/react";
 
@@ -41,24 +45,27 @@ const DockerProcesses: FC<DockerProcessesProps> = ({ containerId, name }) => {
     isLoading,
     error,
     data: processes,
-  } = useHTTPDataFetch<Topinfo>(PROCESSES_URL, { containerId }, 10000);
+  } = useHTTPDataFetch<Topinfo>(PROCESSES_URL, { search: containerId }, 10000);
 
   return (
-    <div
-      className="d-flex flex-column align-items-center mt-3"
-      style={{ minHeight: "10rem" }}
-    >
-      <h3>Processes</h3>
+    // className="d-flex flex-column align-items-center mt-3"
+    // style={{ minHeight: "10rem" }}
+    <Flex direction="column" pl={2} justify="center" align="center">
       <FetchSuspense isLoading={isLoading} error={error} processes={processes}>
         {({ processes }) => {
           const result = processes;
           const dockerProcesses =
             result && result["Processes"] ? result["Processes"] : [];
           if (!dockerProcesses || dockerProcesses.length === 0) {
-            return <h4>There are no processes related to {name}</h4>;
+            return (
+              <Text textAlign="center" fontSize="2xl">
+                There are no processes related to{" "}
+                <Code colorScheme="cyan">{name}</Code>
+              </Text>
+            );
           } else {
             const memTotal = result["Memory"]["Total"];
-            dockerProcesses.map((process: Process) => {
+            const finalProcesses = dockerProcesses.map((process: Process) => {
               return {
                 ...process,
                 mem_percent: d3.format(".2r")(
@@ -68,20 +75,22 @@ const DockerProcesses: FC<DockerProcessesProps> = ({ containerId, name }) => {
               };
             });
             return (
-              <div style={{ overflow: "auto" }}>
+              <Center flexDirection="column" overflow="auto" w="100%">
+                <Text fontSize="xl" as="b">
+                  Processes
+                </Text>
                 <ProcessesTable
-                  data={dockerProcesses}
+                  data={finalProcesses}
                   sizePage={10}
                   classNames="dockerTable"
-                  widthLastColumn={40}
                   renderLoadMoreButton={false}
                 />
-              </div>
+              </Center>
             );
           }
         }}
       </FetchSuspense>
-    </div>
+    </Flex>
   );
 };
 

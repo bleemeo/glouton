@@ -34,7 +34,7 @@ const AgentDockerList: FC = () => {
     error,
     data: containers,
     isFetching,
-  } = useHTTPDataFetch<Containers>(CONTAINERS_URL, parameters, 2000);
+  } = useHTTPDataFetch<Containers>(CONTAINERS_URL, parameters, 10000);
 
   useEffect(() => {
     if (containers && nbContainers !== containers.count) {

@@ -1,5 +1,5 @@
 /* eslint-disable camelcase */
-import React, { FC, useEffect, useState } from "react";
+import React, { FC, useState } from "react";
 import * as d3 from "d3";
 import "react-tooltip/dist/react-tooltip.css";
 import { AxiosError } from "axios";
@@ -190,10 +190,6 @@ const AgentDetails: FC<AgentDetailsProps> = ({ facts }) => {
     onOpen: onOpenModal,
     onClose: onCloseModal,
   } = useDisclosure();
-
-  useEffect(() => {
-    console.log("isOpenModal", isOpenModal);
-  }, [isOpenModal]);
 
   const serviceModal = (
     <Modal isOpen={isOpenModal} onClose={onCloseModal}>
