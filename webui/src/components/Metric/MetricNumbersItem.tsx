@@ -76,8 +76,8 @@ const MetricNumbersItem: FC<MetricNumberItemProps> = ({
           ))}
         </Flex>
       </CardBody>
-      <CardFooter h="15%" justify="center" p={0}>
-        <Text lineHeight="80%" fontSize="3xl" as="b">
+      <CardFooter h="25%" justify="center" p={0}>
+        <Text fontSize="5vh" as="b">
           {title}
         </Text>
       </CardFooter>

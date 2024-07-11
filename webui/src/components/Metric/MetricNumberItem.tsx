@@ -45,7 +45,7 @@ const MetricNumberItem: FC<MetricNumberItemProps> = ({
 
   return (
     <Card h="100%">
-      <CardBody h="80%">
+      <CardBody h="75%">
         <Flex
           direction="column"
           w="100%"
@@ -55,14 +55,14 @@ const MetricNumberItem: FC<MetricNumberItemProps> = ({
           wrap="nowrap"
         >
           <Flex w="100%" h="100%" align="center" justify="center">
-            <Text mt={-3} fontSize="8em" as="b" mb={0}>
+            <Text mt={-3} fontSize="8rem" as="b" mb={0}>
               {formattedValue}
             </Text>
           </Flex>
         </Flex>
       </CardBody>
-      <CardFooter h="15%" justify="center" p={0}>
-        <Text lineHeight="80%" fontSize="3xl" as="b">
+      <CardFooter h="25%" justify="center" p={0}>
+        <Text fontSize="5vh" as="b">
           {title}
         </Text>
       </CardFooter>
