@@ -39,7 +39,7 @@ const theme = extendBaseTheme({
 const Root = () => {
   return (
     <ChakraBaseProvider theme={theme}>
-      <div className="marginOffset">
+      <div>
         <TopNavBar />
         <div className="main-content">
           <Routes />

@@ -53,6 +53,8 @@ import {
   Tooltip,
   Badge,
   Center,
+  Wrap,
+  WrapItem,
 } from "@chakra-ui/react";
 import ServiceDetails from "../Service/ServiceDetails";
 import {
@@ -138,7 +140,7 @@ const AgentDetails: FC<AgentDetailsProps> = ({ facts }) => {
     isLoading: isLoadingTags,
     error: errorTags,
     data: tagsData,
-  } = useHTTPDataFetch<Tag>(TAGS_URL, null, 60000);
+  } = useHTTPDataFetch<Tag[]>(TAGS_URL, null, 60000);
 
   const {
     isLoading: isLoadingAgentInformation,
@@ -162,7 +164,7 @@ const AgentDetails: FC<AgentDetailsProps> = ({ facts }) => {
     errorServices || errorTags || errorAgentInformation || errorAgentStatus;
 
   const services: Service | null = servicesData;
-  const tags: Tag | null = tagsData;
+  const tags: Tag[] | null = tagsData;
   const agentInformation: AgentInfo | null = agentInformationData;
   const agentStatus: AgentStatus[] | null = agentStatusData;
 
@@ -317,7 +319,7 @@ const AgentDetails: FC<AgentDetailsProps> = ({ facts }) => {
           templateColumns="repeat(9, 1fr)"
           gap={4}
         >
-          <GridItem rowSpan={4} colSpan={3}>
+          <GridItem rowSpan={6} colSpan={3}>
             <Panel>
               <Box>
                 <Text fontSize="xl" as="b">
@@ -335,7 +337,10 @@ const AgentDetails: FC<AgentDetailsProps> = ({ facts }) => {
                     .map((fact) => (
                       <ListItem key={fact.name}>
                         <ListIcon as={ChevronRightIcon} color="grey.500" />
-                        <Text as="b">{fact.name}:</Text> {fact.value}
+                        <Text fontSize="md" as="b">
+                          {fact.name}:
+                        </Text>{" "}
+                        {fact.value}
                       </ListItem>
                     ))}
                 </List>
@@ -360,31 +365,32 @@ const AgentDetails: FC<AgentDetailsProps> = ({ facts }) => {
                     <Text fontSize="xl" as="b">
                       Services running on this agent:
                     </Text>
-                    <Flex mt={2}>
+                    <Wrap mt={2}>
                       {services
                         .filter((service) => service.active)
                         .sort((a, b) => a.name.localeCompare(b.name))
                         .map((service, idx) => {
                           return (
-                            <Button
-                              key={idx}
-                              ml={2}
-                              mr={2}
-                              colorScheme={badgeColorSchemeForStatus(
-                                service.status,
-                              )}
-                              onClick={() => {
-                                setShowServiceDetails(service);
-                                onOpenModal();
-                              }}
-                            >
-                              {service.name}
-                              &nbsp;
-                              <InfoIcon />
-                            </Button>
+                            <WrapItem key={idx}>
+                              <Button
+                                ml={2}
+                                mr={2}
+                                colorScheme={badgeColorSchemeForStatus(
+                                  service.status,
+                                )}
+                                onClick={() => {
+                                  setShowServiceDetails(service);
+                                  onOpenModal();
+                                }}
+                              >
+                                {service.name}
+                                &nbsp;
+                                <InfoIcon />
+                              </Button>
+                            </WrapItem>
                           );
                         })}
-                    </Flex>
+                    </Wrap>
                   </Box>
                 </Panel>
               )}
@@ -409,17 +415,15 @@ const AgentDetails: FC<AgentDetailsProps> = ({ facts }) => {
                       Tags for {facts.find((f) => f.name === "fqdn")?.value}:
                     </Text>
                     {tags.length > 0 ? (
-                      <ul className="list-inline">
-                        {tags.map((tag) => (
-                          <ChakraTag
-                            key={tag.id}
-                            w="fit-content"
-                            colorScheme="cyan"
-                          >
-                            {tag.name}
-                          </ChakraTag>
+                      <Wrap mt={2}>
+                        {tags.map((tag, idx) => (
+                          <WrapItem key={idx}>
+                            <ChakraTag w="fit-content" colorScheme="cyan">
+                              {tag.tagName}
+                            </ChakraTag>
+                          </WrapItem>
                         ))}
-                      </ul>
+                      </Wrap>
                     ) : (
                       <Text fontSize="lg">No tags to display</Text>
                     )}
@@ -437,7 +441,7 @@ const AgentDetails: FC<AgentDetailsProps> = ({ facts }) => {
               </Center>
             </Panel>
           </GridItem>
-          <GridItem colSpan={3} rowSpan={2}>
+          <GridItem colSpan={3} rowSpan={4}>
             {agentInformation && Object.keys(agentInformation).length > 0 ? (
               <Panel>
                 <Flex direction="column" justify="center" align="flex-start">

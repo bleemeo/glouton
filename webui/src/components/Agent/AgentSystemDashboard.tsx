@@ -13,7 +13,7 @@ import {
 } from "../Metric/DefaultDashboardMetrics";
 import { chartTypes, useIntersection } from "../utils";
 import { Fact } from "../Data/data.interface";
-import { Box, Flex, Grid, SimpleGrid } from "@chakra-ui/react";
+import { Box, Container, Flex, Grid, SimpleGrid } from "@chakra-ui/react";
 import { ServicesList } from "../UI/ServicesList";
 import { LastLogsList } from "../UI/LastLogsList";
 
@@ -49,8 +49,8 @@ const AgentSystemDashboard: FC<AgentSystemDashboardProps> = ({ facts }) => {
 
   return (
     <>
-      <div className="marginOffset">
-        <Flex direction="column">
+      <Container h="100%">
+        <Flex direction="column" h="100%">
           <SimpleGrid columns={gaugesBar.length} spacing={5}>
             {gaugesBar.map((gaugeItem) => (
               <Box ref={triggerRef} key={gaugeItem.title}>
@@ -61,7 +61,6 @@ const AgentSystemDashboard: FC<AgentSystemDashboardProps> = ({ facts }) => {
                     metrics={gaugeItem.metrics}
                     unit={gaugeItem.unit}
                     period={{ minutes: 60 }}
-                    maxHeight={metricsWidgetMaxHeight}
                   />
                 ) : (
                   <MetricGaugeItem name={gaugeItem.title} loading />
@@ -85,7 +84,6 @@ const AgentSystemDashboard: FC<AgentSystemDashboardProps> = ({ facts }) => {
                       metrics={numberMetric.metrics}
                       unit={numberMetric.unit}
                       period={{ minutes: 60 }}
-                      maxHeight={metricsWidgetMaxHeight}
                     />
                   ) : (
                     <WidgetDashboardItem
@@ -94,7 +92,6 @@ const AgentSystemDashboard: FC<AgentSystemDashboardProps> = ({ facts }) => {
                       metrics={numberMetric.metrics}
                       unit={numberMetric.unit}
                       period={{ minutes: 60 }}
-                      maxHeight={metricsWidgetMaxHeight}
                     />
                   )
                 ) : (
@@ -114,7 +111,7 @@ const AgentSystemDashboard: FC<AgentSystemDashboardProps> = ({ facts }) => {
             </Box>
           </Grid>
         </Flex>
-      </div>
+      </Container>
     </>
   );
 };

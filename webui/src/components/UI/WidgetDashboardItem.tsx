@@ -18,7 +18,6 @@ type WidgetDashboardItemProps = {
   metrics: Metric[];
   unit: number;
   period: any;
-  maxHeight: string;
 };
 
 const WidgetDashboardItem: FC<WidgetDashboardItemProps> = ({
@@ -27,7 +26,6 @@ const WidgetDashboardItem: FC<WidgetDashboardItemProps> = ({
   metrics,
   unit,
   period,
-  maxHeight,
 }) => {
   const previousError = useRef<any | null>(null);
 
@@ -125,7 +123,7 @@ const WidgetDashboardItem: FC<WidgetDashboardItemProps> = ({
   previousError.current = error;
 
   return (
-    <Box maxH={maxHeight} h="100%">
+    <Box h="100%">
       {/* See Issue : https://github.com/apollographql/apollo-client/pull/4974 */}
       <FetchSuspense
         isLoading={isLoading || !points || typeof points[0] === "undefined"}
