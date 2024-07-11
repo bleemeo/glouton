@@ -131,7 +131,7 @@ export const useHTTPLogFetch = (limit: number, pollInterval: number) => {
             }
             return { timestamp: "", message: line };
           });
-          setLogs(formattedLogs);
+        setLogs(formattedLogs);
       } catch (error) {
         setIsError(error as AxiosError);
       } finally {

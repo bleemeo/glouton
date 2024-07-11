@@ -48,8 +48,6 @@ const DockerProcesses: FC<DockerProcessesProps> = ({ containerId, name }) => {
   } = useHTTPDataFetch<Topinfo>(PROCESSES_URL, { search: containerId }, 10000);
 
   return (
-    // className="d-flex flex-column align-items-center mt-3"
-    // style={{ minHeight: "10rem" }}
     <Flex direction="column" pl={2} justify="center" align="center">
       <FetchSuspense isLoading={isLoading} error={error} processes={processes}>
         {({ processes }) => {

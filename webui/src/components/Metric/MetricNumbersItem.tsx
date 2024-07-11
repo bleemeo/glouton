@@ -30,7 +30,7 @@ const MetricNumbersItem: FC<MetricNumberItemProps> = ({
 
   return (
     <Card h="100%">
-      <CardBody px={2} pt={2} pb={0} h="80%">
+      <CardBody px={4} pt={2} pb={0} h="80%">
         <Flex
           direction="column"
           w="100%"
