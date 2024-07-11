@@ -37,7 +37,7 @@ docker tag glouton:latest bleemeo/bleemeo-agent:proposed
 
 ### Developing on MacOS
 
-If you can't run `./glouton` because it is a Linux binary, you can simply run `go run main.go`.
+If you can't run `./glouton` because it is a Linux binary, you can simply run `go run .`.
 
 When loading the UI, if Glouton is not able to discover your Docker containers, try changing the Docker socket with :
 
