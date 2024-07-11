@@ -53,22 +53,22 @@ const MetricNumbersItem: FC<MetricNumberItemProps> = ({
 
   return (
     <Card h="100%">
-      <CardBody px={4} pt={2} pb={0} h="80%">
+      <CardBody px={4} pt={2} pb={6} h="75%">
         <Flex
-          direction="column"
           w="100%"
           h="100%"
           align="right"
+          direction="column"
           justify="center"
+          justifyContent="space-between"
           flexWrap="wrap"
-          justifyContent="flex-start"
         >
           {formattedData.map((d, idx) => (
             <Flex w="fit-content" direction="column" key={idx} align="baseline">
               <Text fontSize="md" mb={0}>
                 {d.legend}
               </Text>
-              <Text mt={-4} fontSize="5xl" as="b" mb={0}>
+              <Text mt={-1} lineHeight="80%" fontSize="6vh" as="b" mb={0}>
                 {d.value}
               </Text>
               <Spacer />
@@ -76,8 +76,8 @@ const MetricNumbersItem: FC<MetricNumberItemProps> = ({
           ))}
         </Flex>
       </CardBody>
-      <CardFooter h="20%" justify="center" p={0}>
-        <Text fontSize="3xl" as="b">
+      <CardFooter h="15%" justify="center" p={0}>
+        <Text lineHeight="80%" fontSize="3xl" as="b">
           {title}
         </Text>
       </CardFooter>

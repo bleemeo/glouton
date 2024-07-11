@@ -55,14 +55,14 @@ const MetricNumberItem: FC<MetricNumberItemProps> = ({
           wrap="nowrap"
         >
           <Flex w="100%" h="100%" align="center" justify="center">
-            <Text mt={-3} fontSize="7vw" as="b" mb={0}>
+            <Text mt={-3} fontSize="8em" as="b" mb={0}>
               {formattedValue}
             </Text>
           </Flex>
         </Flex>
       </CardBody>
-      <CardFooter h="20%" justify="center" p={0}>
-        <Text fontSize="3xl" as="b">
+      <CardFooter h="15%" justify="center" p={0}>
+        <Text lineHeight="80%" fontSize="3xl" as="b">
           {title}
         </Text>
       </CardFooter>
