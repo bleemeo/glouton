@@ -5,8 +5,9 @@ export interface AgentInfo {
 }
 
 export interface AgentStatus {
+  serviceName: string;
   status: number;
-  statusDescription: string[];
+  statusDescription: string;
 }
 
 export interface CPUUsage {

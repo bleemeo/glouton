@@ -1,16 +1,15 @@
 /* eslint-disable camelcase */
-import React, { FC, useState } from "react";
+import React, { FC, useRef, useState } from "react";
 import * as d3 from "d3";
 import "react-tooltip/dist/react-tooltip.css";
 import { AxiosError } from "axios";
 
 import Panel from "../UI/Panel";
-import Smiley from "../UI/Smiley";
 import FetchSuspense from "../UI/FetchSuspense";
 
 import { useHTTPDataFetch } from "../utils/hooks";
-import { isNullOrUndefined, Problems } from "../utils";
-import { badgeColorSchemeForStatus, textForStatus } from "../utils/converter";
+import { isNullOrUndefined } from "../utils";
+import { badgeColorSchemeForStatus } from "../utils/converter";
 import { formatDateTimeWithSeconds } from "../utils/formater";
 import {
   SERVICES_URL,
@@ -51,6 +50,9 @@ import {
   List,
   ListIcon,
   Spacer,
+  Tooltip,
+  Badge,
+  Center,
 } from "@chakra-ui/react";
 import ServiceDetails from "../Service/ServiceDetails";
 import {
@@ -59,6 +61,8 @@ import {
   InfoIcon,
   WarningIcon,
 } from "@chakra-ui/icons";
+import * as echarts from "echarts";
+import type { EChartsOption } from "echarts";
 
 type AgentDetailsProps = {
   facts: Fact[];
@@ -68,6 +72,8 @@ const AgentDetails: FC<AgentDetailsProps> = ({ facts }) => {
   const [showServiceDetails, setShowServiceDetails] = useState<Service | null>(
     null,
   );
+
+  const svgStatusChart = useRef<HTMLDivElement | null>(null);
 
   const factUpdatedAt: string | undefined = facts.find(
     (f: { name: string }) => f.name === "fact_updated_at",
@@ -144,7 +150,7 @@ const AgentDetails: FC<AgentDetailsProps> = ({ facts }) => {
     isLoading: isLoadingAgentStatus,
     error: errorAgentStatus,
     data: agentStatusData,
-  } = useHTTPDataFetch<AgentStatus>(AGENT_STATUS_URL, null, 60000);
+  } = useHTTPDataFetch<AgentStatus[]>(AGENT_STATUS_URL, null, 60000);
 
   const isLoading: boolean =
     isLoadingServices ||
@@ -158,31 +164,104 @@ const AgentDetails: FC<AgentDetailsProps> = ({ facts }) => {
   const services: Service | null = servicesData;
   const tags: Tag | null = tagsData;
   const agentInformation: AgentInfo | null = agentInformationData;
-  const agentStatus: AgentStatus | null = agentStatusData;
+  const agentStatus: AgentStatus[] | null = agentStatusData;
 
-  let problems: JSX.Element | null = null;
+  const problemsChart = (
+    <div
+      ref={svgStatusChart}
+      style={{
+        width: "100%",
+        height: "49vh",
+      }}
+    />
+  );
+
+  let problemsBadges: JSX.Element | null = null;
 
   if (agentStatus) {
-    problems = (
-      <Box>
-        <Flex
-          direction="column"
-          justify="center"
-          id="agentStatus"
-          align="center"
-        >
-          <Smiley status={agentStatus.status} />
-          <Text textAlign="center" fontSize="xl" as="b">
-            {textForStatus(agentStatus.status)}
-          </Text>
-        </Flex>
-        {agentStatus.statusDescription ? (
-          <Box>
-            <Problems problems={agentStatus.statusDescription} />
-          </Box>
-        ) : null}
-      </Box>
-    );
+    // options for the echarts pie chart
+    const agentOKCount = agentStatus.filter(
+      (status) => status.status === 0,
+    ).length;
+    const agentWarningCount = agentStatus.filter(
+      (status) => status.status === 1,
+    ).length;
+    const agentCriticalCount = agentStatus.filter(
+      (status) => status.status === 2,
+    ).length;
+
+    // options for echarts pie chart
+    const option: EChartsOption = {
+      tooltip: {
+        trigger: "item",
+        formatter: "{a} <br/>{b} : {c} ({d}%)",
+      },
+      legend: {
+        top: "5%",
+        selectedMode: false,
+        data: ["OK", "Warning", "Critical"],
+      },
+      series: [
+        {
+          name: "Status",
+          type: "pie",
+          top: "-200px",
+          bottom: "-100px",
+          radius: "55%",
+          center: ["50%", "60%"],
+          label: {
+            show: false,
+            position: "center",
+          },
+          data: [
+            { value: agentOKCount, name: "OK" },
+            { value: agentWarningCount, name: "Warning" },
+            { value: agentCriticalCount, name: "Critical" },
+          ],
+          labelLine: {
+            show: false,
+          },
+          color: ["#38a169", "#FFA500", "#e53e3e"],
+          emphasis: {
+            itemStyle: {
+              shadowBlur: 10,
+              shadowOffsetX: 0,
+              shadowColor: "rgba(0, 0, 0, 0.5)",
+            },
+          },
+        },
+      ],
+    };
+
+    const svg = echarts.init(svgStatusChart.current);
+    svg.setOption(option);
+
+    const warningMessages = agentStatus
+      .filter((status) => status.status === 1)
+      .map((status) => status.statusDescription)
+      .join("\n");
+
+    const criticalMessages = agentStatus
+      .filter((status) => status.status === 2)
+      .map((status) => `${status.statusDescription} (${status.serviceName})`)
+      .join("\n");
+
+    if (warningMessages || criticalMessages) {
+      problemsBadges = (
+        <Box>
+          {warningMessages ? (
+            <Tooltip label={warningMessages} fontSize="md">
+              <Badge colorScheme="orange">Warning</Badge>
+            </Tooltip>
+          ) : null}
+          {criticalMessages ? (
+            <Tooltip label={criticalMessages} fontSize="md">
+              <Badge colorScheme="red">Critical</Badge>
+            </Tooltip>
+          ) : null}
+        </Box>
+      );
+    }
   }
 
   const {
@@ -220,8 +299,8 @@ const AgentDetails: FC<AgentDetailsProps> = ({ facts }) => {
 
       <Container>
         <Grid
-          h="200px"
-          templateRows="repeat(4, 1fr)"
+          h="100%"
+          templateRows="repeat(6, 1fr)"
           templateColumns="repeat(9, 1fr)"
           gap={4}
         >
@@ -336,10 +415,16 @@ const AgentDetails: FC<AgentDetailsProps> = ({ facts }) => {
               )}
             </FetchSuspense>
           </GridItem>
-          <GridItem colSpan={2} rowSpan={2}>
-            {problems ? <Panel>{problems}</Panel> : null}
+          <GridItem colSpan={3} rowSpan={4}>
+            <Panel>
+              <Center flexDir="column">
+                {problemsChart}
+                <Spacer></Spacer>
+                {problemsBadges}
+              </Center>
+            </Panel>
           </GridItem>
-          <GridItem colSpan={4} rowSpan={2}>
+          <GridItem colSpan={3} rowSpan={2}>
             {agentInformation && Object.keys(agentInformation).length > 0 ? (
               <Panel>
                 <Flex direction="column" justify="center" align="flex-start">

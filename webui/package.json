@@ -22,7 +22,6 @@
     "@chakra-ui/icons": "^2.1.1",
     "@chakra-ui/react": "^2.8.2",
     "@emotion/react": "^11.11.4",
-    "@emotion/styled": "^11.11.5",
     "@tanstack/react-table": "^8.19.2",
     "@types/d3": "^7.4.3",
     "@types/d3-time-format": "^4.0.3",
@@ -49,7 +48,8 @@
     "react-router-dom": "^6.21.1",
     "react-tooltip": "^5.25.1",
     "react-visibility-sensor": "^5.1.1",
-    "serialize-javascript": "^6.0.2"
+    "serialize-javascript": "^6.0.2",
+    "styled-components": "^6.1.11"
   },
   "devDependencies": {
     "@babel/core": "^7.23.7",

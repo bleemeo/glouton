@@ -147,11 +147,11 @@ export const numberMetricsBLEEMEO: NumberMetric[] = [
     metrics: [
       {
         legend: "Received",
-        query: "sum(net_packets_recv)",
+        query: "sum(net_bits_recv)",
       },
       {
         legend: "Sent",
-        query: "sum(net_packets_sent)",
+        query: "sum(net_bits_sent)",
       },
     ],
     unit: UNIT_FLOAT,
