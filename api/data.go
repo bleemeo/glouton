@@ -256,7 +256,7 @@ func (d *Data) containerInformation(container facts.Container, c *Container) (*C
 // - search (string) : The container ID to filter processes.
 func (d *Data) Processes(w http.ResponseWriter, r *http.Request) {
 	var containerID *string
-	if containerIDParam := r.URL.Query().Get("search"); containerIDParam == "" {
+	if containerIDParam := r.URL.Query().Get("search"); containerIDParam != "" {
 		containerID = &containerIDParam
 	}
 
