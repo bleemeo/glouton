@@ -3,7 +3,6 @@ import React, { FC, useRef } from "react";
 
 import FetchSuspense from "./FetchSuspense";
 import MetricGaugeItem from "../Metric/MetricGaugeItem";
-import LineChart from "./LineChart";
 
 import { useHTTPPromFetch } from "../utils/hooks";
 import { chartTypes, Period } from "../utils";
@@ -122,33 +121,34 @@ const WidgetDashboardItem: FC<WidgetDashboardItemProps> = ({
   }
   previousError.current = error;
 
+  const loadingComponent = () => {
+    if (type === chartTypes[0]) {
+      return <MetricGaugeItem name={title} loading />;
+    } else if (type == chartTypes[1]) {
+      return <MetricNumberItem title={title} loading />;
+    } else if (type == chartTypes[2]) {
+      return <MetricNumbersItem title={title} loading />;
+    }
+  };
+
+  const errorComponent = () => {
+    if (type === chartTypes[0]) {
+      return <MetricGaugeItem name={title} hasError={hasError} />;
+    } else if (type == chartTypes[1]) {
+      return <MetricNumberItem title={title} hasError={hasError} />;
+    } else if (type == chartTypes[2]) {
+      return <MetricNumbersItem title={title} hasError={hasError} />;
+    }
+  };
+
   return (
     <Box h="100%">
       {/* See Issue : https://github.com/apollographql/apollo-client/pull/4974 */}
       <FetchSuspense
         isLoading={isLoading || !points || typeof points[0] === "undefined"}
         error={hasError}
-        loadingComponent={
-          type === chartTypes[0] ? (
-            <MetricGaugeItem loading name={title} />
-          ) : (
-            <LineChart title={title} metrics_param={metrics} loading />
-          )
-        }
-        fallbackComponent={
-          type === chartTypes[0] ? (
-            <MetricGaugeItem
-              hasError={hasError ? hasError : undefined}
-              name={title}
-            />
-          ) : (
-            <LineChart
-              title={title}
-              metrics_param={metrics}
-              hasError={hasError}
-            />
-          )
-        }
+        loadingComponent={loadingComponent()}
+        errorComponent={errorComponent()}
         points={points}
       >
         {({ points }) => displayWidget(points)}

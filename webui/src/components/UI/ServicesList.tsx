@@ -63,39 +63,41 @@ export const ServicesList: FC = () => {
                   </Tr>
                 </Thead>
                 <Tbody>
-                  {services.map((service) => (
-                    <Tr key={service.name}>
-                      <Td>
-                        {service.active ? (
-                          <Badge colorScheme="green">Active</Badge>
-                        ) : (
-                          <Badge colorScheme="red">Inactive</Badge>
-                        )}
-                      </Td>
-                      <Td>
-                        <Text pb={0} as="b">
-                          {service.name}
-                        </Text>
-                      </Td>
-                      <Td>{service.ipAddress}</Td>
-                      <Td maxW={0}>
-                        <Tooltip
-                          label={service.exePath}
-                          aria-label="Exe path tooltip"
-                        >
-                          <Text
-                            overflow="hidden"
-                            textOverflow="ellipsis"
-                            whiteSpace="nowrap"
-                            mb={0}
-                            fontSize="xs"
-                          >
-                            {service.exePath}
-                          </Text>
-                        </Tooltip>
-                      </Td>
-                    </Tr>
-                  ))}
+                  {services
+                    ? services.map((service) => (
+                        <Tr key={service.name}>
+                          <Td>
+                            {service.active ? (
+                              <Badge colorScheme="green">Active</Badge>
+                            ) : (
+                              <Badge colorScheme="red">Inactive</Badge>
+                            )}
+                          </Td>
+                          <Td>
+                            <Text pb={0} as="b">
+                              {service.name}
+                            </Text>
+                          </Td>
+                          <Td>{service.ipAddress}</Td>
+                          <Td maxW={0}>
+                            <Tooltip
+                              label={service.exePath}
+                              aria-label="Exe path tooltip"
+                            >
+                              <Text
+                                overflow="hidden"
+                                textOverflow="ellipsis"
+                                whiteSpace="nowrap"
+                                mb={0}
+                                fontSize="xs"
+                              >
+                                {service.exePath}
+                              </Text>
+                            </Tooltip>
+                          </Td>
+                        </Tr>
+                      ))
+                    : null}
                 </Tbody>
               </Table>
             </TableContainer>

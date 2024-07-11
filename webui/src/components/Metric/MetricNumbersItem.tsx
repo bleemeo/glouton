@@ -9,19 +9,42 @@ import {
   Text,
   Spacer,
 } from "@chakra-ui/react";
+import Loading from "../UI/Loading";
+import QueryError from "../UI/QueryError";
 
 type MetricNumberItemProps = {
-  data: { value: number; legend: string }[];
+  data?: { value: number; legend: string }[];
   title: string;
   unit?: number;
+  loading?: boolean;
+  hasError?: object | null;
 };
 
 const MetricNumbersItem: FC<MetricNumberItemProps> = ({
   data,
   title,
   unit,
+  loading,
+  hasError,
 }) => {
-  const formattedData = data.map((d: { value: number; legend: string }) => {
+  if (loading) {
+    return (
+      <Card h="100%">
+        <CardBody>
+          <Loading size="xl" />
+        </CardBody>
+      </Card>
+    );
+  } else if (hasError) {
+    return (
+      <Card h="100%">
+        <CardBody>
+          <QueryError noBorder style={{ textAlign: "center" }} />
+        </CardBody>
+      </Card>
+    );
+  }
+  const formattedData = data!.map((d: { value: number; legend: string }) => {
     const v = unitFormatCallback(unit)(d.value)
       ? unitFormatCallback(unit)(d.value)
       : "\u00A0\u00A0\u00A0";

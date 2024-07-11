@@ -14,7 +14,7 @@ type MetricGaugeItemProps = {
   name: string;
   fontSize?: number;
   loading?: boolean;
-  hasError?: object;
+  hasError?: object | null;
   thresholds?: {
     highWarning?: number;
     highCritical?: number;

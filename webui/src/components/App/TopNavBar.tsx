@@ -17,7 +17,12 @@ const TopNavBar: FC = () => {
   navbar-light bg-light navbar-fixed-top fixed-top
   navbar-toggleable-md justify-content-end"
     >
-      <FetchSuspense isLoading={isLoading} error={error} facts={facts}>
+      <FetchSuspense
+        isLoading={isLoading}
+        error={error}
+        facts={facts}
+        fallbackComponent={<></>}
+      >
         {({ facts }) => (
           <h2
             style={{
@@ -26,7 +31,7 @@ const TopNavBar: FC = () => {
               marginRight: "1rem",
             }}
           >
-            {facts.find((f: Fact) => f.name === "fqdn").value}
+            {facts ? facts.find((f: Fact) => f.name === "fqdn").value : ""}
           </h2>
         )}
       </FetchSuspense>
