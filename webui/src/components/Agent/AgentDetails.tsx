@@ -484,6 +484,19 @@ const AgentDetails: FC<AgentDetailsProps> = ({ facts }) => {
                       &nbsp; may help you.
                     </Text>
                   </Box>
+                  <Box>
+                    <Text as="b">
+                      Need more logs ? &nbsp;
+                      <Link
+                        textColor="blue.500"
+                        fontSize="xl"
+                        href="/diagnostic.txt/log.txt"
+                      >
+                        /log.txt
+                      </Link>
+                      &nbsp; may help you.
+                    </Text>
+                  </Box>
                 </Flex>
               </Panel>
             ) : null}
