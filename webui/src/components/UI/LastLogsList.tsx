@@ -72,7 +72,7 @@ export const LastLogsList: FC = () => {
                 ))}
               </Select>
             </Flex>
-            <Box h="100%" overflow="scroll">
+            <Box h="100%" overflowY="scroll">
               {logs.map((log, index) => (
                 <Card key={index}>
                   <CardBody p={1}>

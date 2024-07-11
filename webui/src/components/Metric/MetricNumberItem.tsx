@@ -31,7 +31,7 @@ const MetricNumberItem: FC<MetricNumberItemProps> = ({
           wrap="nowrap"
         >
           <Flex w="100%" h="100%" align="center" justify="center">
-            <Text mt={-3} fontSize="8vw" as="b" mb={0}>
+            <Text mt={-3} fontSize="7vw" as="b" mb={0}>
               {formattedValue}
             </Text>
           </Flex>
