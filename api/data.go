@@ -18,7 +18,6 @@ package api
 
 import (
 	"errors"
-	"math"
 	"net/http"
 	"sort"
 	"strconv"
@@ -538,8 +537,7 @@ func (d *Data) AgentStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	statuses := []float64{}
-	statusDescription := []string{}
+	agentStatus := []render.Renderer{}
 
 	for _, metric := range metrics {
 		status := metric.Annotations().Status
@@ -547,20 +545,17 @@ func (d *Data) AgentStatus(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		statuses = append(statuses, float64(status.CurrentStatus.NagiosCode()))
-
-		if status.CurrentStatus != types.StatusOk {
-			statusDescription = append(statusDescription, status.StatusDescription)
+		name := metric.Annotations().ServiceName
+		a := &AgentStatus{
+			ServiceName:       name,
+			Status:            float64(status.CurrentStatus.NagiosCode()),
+			StatusDescription: status.StatusDescription,
 		}
+
+		agentStatus = append(agentStatus, a)
 	}
 
-	var finalStatus float64
-
-	for _, status := range statuses {
-		finalStatus = math.Max(status, finalStatus)
-	}
-
-	err = render.Render(w, r, &AgentStatus{Status: finalStatus, StatusDescription: statusDescription})
+	err = render.RenderList(w, r, agentStatus)
 	if err != nil {
 		logger.V(2).Printf("Can not render error: %v", err)
 	}

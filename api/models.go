@@ -16,8 +16,9 @@ func (a *AgentInfo) Render(_ http.ResponseWriter, _ *http.Request) error {
 }
 
 type AgentStatus struct {
-	Status            float64  `json:"status"`
-	StatusDescription []string `json:"statusDescription"`
+	ServiceName       string  `json:"serviceName"`
+	Status            float64 `json:"status"`
+	StatusDescription string  `json:"statusDescription"`
 }
 
 func (a *AgentStatus) Render(_ http.ResponseWriter, _ *http.Request) error {
