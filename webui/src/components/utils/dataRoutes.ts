@@ -7,3 +7,4 @@ export const TAGS_URL = "/data/tags";
 export const METRICS_URL = "/data/metrics";
 export const SERVICES_URL = "/data/services";
 export const TOPINFO_URL = "/data/topinfo";
+export const LOGS_URL = "/data/logs";

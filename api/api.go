@@ -167,6 +167,7 @@ func (api *API) init() {
 		router.Get("/data/agent-status", data.AgentStatus)
 		router.Get("/data/tags", data.Tags)
 		router.Get("/data/processes", data.Processes)
+		router.Get("/data/logs", data.Logs)
 	}
 
 	router.HandleFunc("/diagnostic", func(w http.ResponseWriter, r *http.Request) {

@@ -14,10 +14,15 @@ import Loading from "./Loading";
 import QueryError from "./QueryError";
 import { getHoursFromDateString } from "../utils/formater";
 import { Text } from "@chakra-ui/react";
+import { LOGS_URL } from "../utils/dataRoutes";
 
 export const LastLogsList: FC = () => {
   const [logsCount, setLogsCount] = useState(10);
-  const { isLoading, error, logs } = useHTTPLogFetch(logsCount, 10000);
+  const { isLoading, error, logs } = useHTTPLogFetch(
+    LOGS_URL,
+    logsCount,
+    10000,
+  );
 
   const loadingComponent = (
     <Box>

@@ -63,6 +63,7 @@ func V(level int) Logger {
 func (l Logger) Printf(fmtArg string, a ...interface{}) {
 	if l {
 		loggerPrintf(fmtArg, a...)
+		fmt.Fprintf(logCurrLevelBuffer, fmtArg+"\n", a...)
 	} else {
 		fmt.Fprintf(logBuffer, fmtArg+"\n", a...)
 	}
@@ -72,6 +73,7 @@ func (l Logger) Printf(fmtArg string, a ...interface{}) {
 func (l Logger) Println(v ...interface{}) {
 	if l {
 		loggerPrintln(v...)
+		fmt.Fprintln(logCurrLevelBuffer, v...)
 	} else {
 		fmt.Fprintln(logBuffer, v...)
 	}
@@ -116,10 +118,11 @@ type config struct {
 
 //nolint:gochecknoglobals
 var (
-	logBuffer = &buffer{}
-	cfg       = config{
+	logBuffer          = &buffer{}
+	logCurrLevelBuffer = &buffer{} // buffer for current level of logs
+	cfg                = config{
 		writer:    os.Stdout,
-		teeWriter: io.MultiWriter(logBuffer, os.Stdout),
+		teeWriter: io.MultiWriter(logBuffer, logCurrLevelBuffer, os.Stdout),
 	}
 )
 
@@ -139,7 +142,7 @@ func setLogger(cb func() error) error {
 		cfg.writer = os.Stdout
 	}
 
-	cfg.teeWriter = io.MultiWriter(logBuffer, cfg.writer)
+	cfg.teeWriter = io.MultiWriter(logBuffer, logCurrLevelBuffer, cfg.writer)
 
 	log.SetOutput(cfg.writer)
 
@@ -174,12 +177,18 @@ func Buffer() []byte {
 	return logBuffer.Content()
 }
 
+// BufferCurrLevel return content of the log buffer for the current level.
+func BufferCurrLevel() []byte {
+	return logCurrLevelBuffer.Content()
+}
+
 // SetBufferCapacity define the size of the buffer
 // The buffer had two part, the head (first line ever logger, never dropped) and
 // the tail (oldest lines dropped when tail is full).
 // Changing capacity will always drop the tail.
 func SetBufferCapacity(headSizeBytes int, tailSizeBytes int) {
 	logBuffer.SetCapacity(headSizeBytes, tailSizeBytes)
+	logCurrLevelBuffer.SetCapacity(headSizeBytes, tailSizeBytes)
 }
 
 func CompressedSize() int {

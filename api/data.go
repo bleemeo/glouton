@@ -561,6 +561,15 @@ func (d *Data) AgentStatus(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (d *Data) Logs(w http.ResponseWriter, _ *http.Request) {
+	buffer := logger.BufferCurrLevel()
+
+	_, err := w.Write(buffer)
+	if err != nil {
+		logger.V(2).Printf("Can not write logs: %v", err)
+	}
+}
+
 type ErrResponse struct {
 	Err            error `json:"-"` // low-level runtime error
 	HTTPStatusCode int   `json:"-"` // http response status code

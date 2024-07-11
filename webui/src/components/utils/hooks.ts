@@ -106,7 +106,11 @@ export const useHTTPPromFetch = (
   return { data, isLoading, error };
 };
 
-export const useHTTPLogFetch = (limit: number, pollInterval: number) => {
+export const useHTTPLogFetch = (
+  url: string,
+  limit: number,
+  pollInterval: number,
+) => {
   const [logs, setLogs] = useState<Log[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setIsError] = useState<AxiosError | null>(null);
@@ -118,7 +122,7 @@ export const useHTTPLogFetch = (limit: number, pollInterval: number) => {
       setIsError(null);
 
       try {
-        const result = await axios.get(`/diagnostic.txt/log.txt`);
+        const result = await axios.get(url);
         const logPattern =
           /^(\d{4}\/\d{2}\/\d{2} \d{2}:\d{2}:\d{2}\.\d{1,12}) (.*)$/;
         const logsLines = result.data.split("\n").slice(0, -2); // Remove last 2 lines that are not logs
