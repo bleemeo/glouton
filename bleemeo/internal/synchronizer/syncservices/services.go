@@ -42,7 +42,6 @@ const (
 )
 
 type SyncServices struct {
-	currentExecution    types.SynchronizationExecution
 	lastDenyReasonLogAt time.Time
 }
 
@@ -63,12 +62,22 @@ func (s *SyncServices) EnabledInSuspendedMode() bool {
 }
 
 func (s *SyncServices) PrepareExecution(_ context.Context, execution types.SynchronizationExecution) (types.EntitySynchronizerExecution, error) {
-	s.currentExecution = execution
+	r := &syncServicesExecution{
+		currentExecution:     execution,
+		parent:               s,
+		previousKnownService: execution.Option().Cache.ServicesByUUID(),
+	}
 
-	return s, nil
+	return r, nil
 }
 
-func (s *SyncServices) NeedSynchronization(_ context.Context) (bool, error) {
+type syncServicesExecution struct {
+	currentExecution     types.SynchronizationExecution
+	previousKnownService map[string]bleemeoTypes.Service
+	parent               *SyncServices
+}
+
+func (s *syncServicesExecution) NeedSynchronization(_ context.Context) (bool, error) {
 	if s.currentExecution == nil {
 		return false, fmt.Errorf("%w: currentExecution is nil", types.ErrUnexpectedWorkflow)
 	}
@@ -87,7 +96,7 @@ func (s *SyncServices) NeedSynchronization(_ context.Context) (bool, error) {
 	return false, nil
 }
 
-func (s *SyncServices) RefreshCache(ctx context.Context, syncType types.SyncType) error {
+func (s *syncServicesExecution) RefreshCache(ctx context.Context, syncType types.SyncType) error {
 	if s.currentExecution == nil {
 		return fmt.Errorf("%w: currentExecution is nil", types.ErrUnexpectedWorkflow)
 	}
@@ -107,7 +116,7 @@ func (s *SyncServices) RefreshCache(ctx context.Context, syncType types.SyncType
 	return nil
 }
 
-func (s *SyncServices) SyncRemoteAndLocal(ctx context.Context, syncType types.SyncType) error {
+func (s *syncServicesExecution) SyncRemoteAndLocal(ctx context.Context, syncType types.SyncType) error {
 	_ = syncType
 
 	if s.currentExecution == nil {
@@ -117,7 +126,7 @@ func (s *SyncServices) SyncRemoteAndLocal(ctx context.Context, syncType types.Sy
 	return s.syncRemoteAndLocal(ctx, s.currentExecution)
 }
 
-func (s *SyncServices) FinishExecution(_ context.Context) {
+func (s *syncServicesExecution) FinishExecution(_ context.Context) {
 	s.currentExecution = nil
 }
 
@@ -166,16 +175,15 @@ func getListenAddress(addresses []facts.ListenAddress) string {
 	return strings.Join(stringList, ",")
 }
 
-func (s *SyncServices) syncRemoteAndLocal(ctx context.Context, execution types.SynchronizationExecution) error {
+func (s *syncServicesExecution) syncRemoteAndLocal(ctx context.Context, execution types.SynchronizationExecution) error {
 	localServices, err := execution.Option().Discovery.Discovery(ctx, 24*time.Hour)
 	if err != nil {
 		return err
 	}
 
-	localServices = ServiceExcludeUnregistrable(localServices, s.logThrottle)
-	previousServices := execution.Option().Cache.ServicesByUUID()
+	localServices = ServiceExcludeUnregistrable(localServices, s.parent.logThrottle)
 
-	serviceRemoveDeletedFromRemote(ctx, execution, localServices, previousServices)
+	serviceRemoveDeletedFromRemote(ctx, execution, localServices, s.previousKnownService)
 
 	if execution.IsOnlyEssential() {
 		// no essential services, skip registering.
@@ -187,7 +195,7 @@ func (s *SyncServices) syncRemoteAndLocal(ctx context.Context, execution types.S
 		return err
 	}
 
-	localServices = ServiceExcludeUnregistrable(localServices, s.logThrottle)
+	localServices = ServiceExcludeUnregistrable(localServices, s.parent.logThrottle)
 
 	if err := s.serviceRegisterAndUpdate(ctx, execution, localServices); err != nil {
 		return err
@@ -240,7 +248,7 @@ func serviceRemoveDeletedFromRemote(ctx context.Context, execution types.Synchro
 	execution.Option().Discovery.RemoveIfNonRunning(ctx, localServiceToDelete)
 }
 
-func (s *SyncServices) serviceRegisterAndUpdate(ctx context.Context, execution types.SynchronizationExecution, localServices []discovery.Service) error {
+func (s *syncServicesExecution) serviceRegisterAndUpdate(ctx context.Context, execution types.SynchronizationExecution, localServices []discovery.Service) error {
 	remoteServices := execution.Option().Cache.Services()
 	remoteServicesByKey := common.ServiceLookupFromList(remoteServices)
 	registeredServices := execution.Option().Cache.ServicesByUUID()
