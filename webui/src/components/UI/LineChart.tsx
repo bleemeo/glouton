@@ -3,7 +3,6 @@ import React, { useRef, useEffect, useState, FC } from "react";
 import Card from "react-bootstrap/Card";
 import * as echarts from "echarts";
 import type { EChartsOption, CustomSeriesOption } from "echarts";
-import cn from "classnames";
 
 import Loading from "./Loading";
 import FaIcon from "./FaIcon";
@@ -209,7 +208,6 @@ export const renderLegend = (
         {series.map((s, idx) => (
           <span
             key={idx}
-            className={cn("legend-label", { "no-pointer": noPointer })}
           >
             <div
               className="legend-pill no-selection"

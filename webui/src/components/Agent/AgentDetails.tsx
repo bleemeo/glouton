@@ -1,7 +1,6 @@
 /* eslint-disable camelcase */
 import React, { FC, useEffect, useRef, useState } from "react";
 import * as d3 from "d3";
-import "react-tooltip/dist/react-tooltip.css";
 import { AxiosError } from "axios";
 
 import Panel from "../UI/Panel";
