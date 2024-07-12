@@ -63,7 +63,7 @@ if [ "${SKIP_JS}" != "1" -a "${ONLY_GO}" != "1" ]; then
       sh -exc "
       mkdir -p /go/pkg/node
       chown node -R /go/pkg/node
-      npm install --legacy-peer-deps
+      npm install
       npm run deploy
       chown -R $USER_UID dist ../api/static/assets/js/ ../api/static/assets/css/
       "
@@ -83,20 +83,6 @@ COMMIT=`git rev-parse --short HEAD || echo "unknown"`
 
 
 if [ "${ONLY_JS}" = "1" ]; then
-   echo "Run go generate to pack JS ui into Go files"
-
-   docker run --rm -e HOME=/go/pkg -e CGO_ENABLED=0 \
-      -v $(pwd):/src -w /src ${GO_MOUNT_CACHE} \
-      -v /var/run/docker.sock:/var/run/docker.sock \
-      --entrypoint '' \
-      -e GLOUTON_VERSION \
-      -e GORELEASER_PREVIOUS_TAG=0.1.0 \
-      -e GORELEASER_CURRENT_TAG=0.1.1 \
-      goreleaser/goreleaser:${GORELEASER_VERSION} \
-      tini -g -- sh -exc "
-      mkdir -p /go/pkg
-      go generate ./...
-      chown -R $USER_UID api/models_gen.go"
    exit 0
 fi
 
@@ -138,7 +124,6 @@ else
       go generate ./...
       go test ./...
       goreleaser --clean --snapshot --parallelism 2
-      chown -R $USER_UID dist api/models_gen.go
       "
 
    echo $GLOUTON_VERSION > dist/VERSION

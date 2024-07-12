@@ -63,18 +63,6 @@ a {
   margin: 0.8rem;
 }
 
-.modal-xlg {
-  min-width: 80% !important;
-}
-
-.modal-lg {
-  min-width: 60% !important;
-}
-
-.modal-header > .close > span {
-  display: none;
-}
-
 .no-border {
   border: 0px solid white !important;
 }
@@ -164,7 +152,7 @@ $left-side-navbar-background-color: #2a3f54;
 }
 
 .main-content {
-  margin: 4rem 5rem 0 $left-side-navbar-width;
+  margin: 4rem 1rem 0 $left-side-navbar-width;
   padding: 0 1rem;
 }
 

@@ -39,11 +39,8 @@ import (
 	"github.com/bleemeo/glouton/types"
 	"github.com/bleemeo/glouton/utils/archivewriter"
 
-	"github.com/99designs/gqlgen/graphql/handler"
-	"github.com/99designs/gqlgen/graphql/playground"
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/cors"
-	_ "github.com/urfave/cli/v2" // Prevent go mod tidy from removing gqlgen dependencies
 )
 
 //go:embed static
@@ -158,8 +155,21 @@ func (api *API) init() {
 	promql := promql.PromQL{}
 	router.Mount("/api/v1", promql.Register(api.DB))
 	router.Handle("/metrics", api.PrometheurExporter)
-	router.Handle("/playground", playground.Handler("GraphQL playground", "/graphql"))
-	router.Handle("/graphql", handler.NewDefaultServer(NewExecutableSchema(Config{Resolvers: &Resolver{api: api}})))
+
+	// Register the API endpoints for data fetching
+	data := Data{api}
+	if !api.LocalUIDisabled {
+		router.Get("/data/docker-containers", data.Containers)
+		router.Get("/data/topinfo", data.Processes)
+		router.Get("/data/facts", data.Facts)
+		router.Get("/data/services", data.Services)
+		router.Get("/data/agent-informations", data.AgentInformation)
+		router.Get("/data/agent-status", data.AgentStatus)
+		router.Get("/data/tags", data.Tags)
+		router.Get("/data/processes", data.Processes)
+		router.Get("/data/logs", data.Logs)
+	}
+
 	router.HandleFunc("/diagnostic", func(w http.ResponseWriter, r *http.Request) {
 		content := api.DiagnosticPage(r.Context())
 

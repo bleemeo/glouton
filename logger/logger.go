@@ -82,6 +82,7 @@ func loggerPrintf(fmtArg string, a ...interface{}) {
 	defer cfg.l.Unlock()
 
 	if !cfg.useSyslog {
+		// Add timestamp to the default writer if not using syslog
 		_, _ = fmt.Fprintf(cfg.writer, "%s ", time.Now().Format("2006-01-02 15:04:05.000"))
 	}
 
@@ -93,6 +94,7 @@ func loggerPrintln(v ...interface{}) {
 	defer cfg.l.Unlock()
 
 	if !cfg.useSyslog {
+		// Add timestamp to the default writer if not using syslog
 		_, _ = fmt.Fprintf(cfg.writer, "%s ", time.Now().Format("2006-01-02 15:04:05.000"))
 	}
 
@@ -116,10 +118,11 @@ type config struct {
 
 //nolint:gochecknoglobals
 var (
-	logBuffer = &buffer{}
-	cfg       = config{
+	logBuffer          = &buffer{}
+	logCurrLevelBuffer = &buffer{} // buffer for current level of logs
+	cfg                = config{
 		writer:    os.Stdout,
-		teeWriter: io.MultiWriter(logBuffer, os.Stdout),
+		teeWriter: io.MultiWriter(logBuffer, logCurrLevelBuffer, os.Stdout),
 	}
 )
 
@@ -139,7 +142,7 @@ func setLogger(cb func() error) error {
 		cfg.writer = os.Stdout
 	}
 
-	cfg.teeWriter = io.MultiWriter(logBuffer, cfg.writer)
+	cfg.teeWriter = io.MultiWriter(logBuffer, logCurrLevelBuffer, cfg.writer)
 
 	log.SetOutput(cfg.writer)
 
@@ -174,12 +177,18 @@ func Buffer() []byte {
 	return logBuffer.Content()
 }
 
+// BufferCurrLevel return content of the log buffer for the current level.
+func BufferCurrLevel() []byte {
+	return logCurrLevelBuffer.Content()
+}
+
 // SetBufferCapacity define the size of the buffer
 // The buffer had two part, the head (first line ever logger, never dropped) and
 // the tail (oldest lines dropped when tail is full).
 // Changing capacity will always drop the tail.
 func SetBufferCapacity(headSizeBytes int, tailSizeBytes int) {
 	logBuffer.SetCapacity(headSizeBytes, tailSizeBytes)
+	logCurrLevelBuffer.SetCapacity(5000, 20000)
 }
 
 func CompressedSize() int {
