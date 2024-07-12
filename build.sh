@@ -124,6 +124,7 @@ else
       go generate ./...
       go test ./...
       goreleaser --clean --snapshot --parallelism 2
+      chown -R $USER_UID dist
       "
 
    echo $GLOUTON_VERSION > dist/VERSION
