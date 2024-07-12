@@ -163,16 +163,14 @@ export const numberMetricsBLEEMEO: NumberMetric[] = [
     title: "Processes",
     metrics: [
       {
-        legend: "Total",
-        query: "process_total",
-      },
-      {
         legend: "Running",
         query: "process_status_running",
+        icon: { name: "process-running", color: "green" },
       },
       {
         legend: "Sleeping",
         query: "process_status_sleeping",
+        icon: { name: "process-sleeping", color: "blue" },
       },
     ],
     unit: UNIT_INT,

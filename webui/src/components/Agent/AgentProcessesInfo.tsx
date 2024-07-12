@@ -29,7 +29,7 @@ const formatUptime = (uptimeSeconds: number) => {
   const textHours = uptimeHours > 1 ? "hours" : "hour";
   const textDays = uptimeMinutes > 1 ? "days" : "day";
 
-  let uptimeString;
+  let uptimeString: string;
   if (uptimeDays === 0 && uptimeHours === 0) {
     uptimeString = `${uptimeMinutes} ${textMinutes}`;
   } else if (uptimeDays === 0) {

@@ -1,6 +1,7 @@
-import { ArrowDownIcon, ArrowUpIcon } from "@chakra-ui/icons";
-import { ListItem, UnorderedList } from "@chakra-ui/react";
+import { ArrowDownIcon, ArrowUpIcon, CheckIcon } from "@chakra-ui/icons";
+import { Icon, ListItem, UnorderedList } from "@chakra-ui/react";
 import React, { FC, RefObject } from "react";
+import { GiNightSleep } from "react-icons/gi";
 
 export const chartTypes = ["gauge", "number", "numbers"];
 export const UNIT_FLOAT = 0;
@@ -230,6 +231,10 @@ export const iconFromName = (
       return (
         <ArrowDownIcon w={w} h={h} color={color} transform="rotate(180)" />
       );
+    case "process-sleeping":
+      return <Icon as={GiNightSleep} w={w} h={h} color={color} />;
+    case "process-running":
+      return <CheckIcon w={w} h={h} color={color} />;
     default:
       return <></>;
   }
