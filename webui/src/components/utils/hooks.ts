@@ -125,16 +125,26 @@ export const useHTTPLogFetch = (
         const result = await axios.get(url);
         const logPattern =
           /^(\d{4}\/\d{2}\/\d{2} \d{2}:\d{2}:\d{2}\.\d{1,12}) (.*)$/;
-        const logsLines = result.data.split("\n").slice(0, -2); // Remove last 2 lines that are not logs
-        const formattedLogs = logsLines
-          .slice(logsLines.length - limit, logsLines.length)
-          .map((line: string) => {
-            const match = logPattern.exec(line);
-            if (match) {
-              return { timestamp: match[1], message: match[2] };
+        const logsLines = result.data.split("\n"); // Remove last 2 lines that are not logs
+        const formattedLogs: Log[] = [];
+        const logsLinesReversed: string[] = logsLines.reverse().slice(0, limit);
+        let lastBrokenLine = "";
+        logsLinesReversed.forEach((line: string) => {
+          const match = logPattern.exec(line);
+          if (match) {
+            if (lastBrokenLine) {
+              formattedLogs.push({
+                timestamp: match[1],
+                message: match[2] + lastBrokenLine,
+              });
+              lastBrokenLine = "";
+            } else {
+              formattedLogs.push({ timestamp: match[1], message: match[2] });
             }
-            return { timestamp: "", message: line };
-          });
+          } else {
+            lastBrokenLine = line;
+          }
+        });
         setLogs(formattedLogs);
       } catch (error) {
         setIsError(error as AxiosError);

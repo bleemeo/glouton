@@ -63,7 +63,6 @@ func V(level int) Logger {
 func (l Logger) Printf(fmtArg string, a ...interface{}) {
 	if l {
 		loggerPrintf(fmtArg, a...)
-		fmt.Fprintf(logCurrLevelBuffer, fmtArg+"\n", a...)
 	} else {
 		fmt.Fprintf(logBuffer, fmtArg+"\n", a...)
 	}
@@ -73,7 +72,6 @@ func (l Logger) Printf(fmtArg string, a ...interface{}) {
 func (l Logger) Println(v ...interface{}) {
 	if l {
 		loggerPrintln(v...)
-		fmt.Fprintln(logCurrLevelBuffer, v...)
 	} else {
 		fmt.Fprintln(logBuffer, v...)
 	}
@@ -88,6 +86,7 @@ func loggerPrintf(fmtArg string, a ...interface{}) {
 	}
 
 	_, _ = fmt.Fprintf(cfg.teeWriter, fmtArg+"\n", a...)
+	fmt.Fprintf(logCurrLevelBuffer, fmtArg+"\n", a...)
 }
 
 func loggerPrintln(v ...interface{}) {
@@ -99,6 +98,7 @@ func loggerPrintln(v ...interface{}) {
 	}
 
 	_, _ = fmt.Fprintln(cfg.teeWriter, v...)
+	fmt.Fprintln(logCurrLevelBuffer, v...)
 }
 
 // Printf behave like fmt.Printf.
