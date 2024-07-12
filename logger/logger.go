@@ -82,11 +82,11 @@ func loggerPrintf(fmtArg string, a ...interface{}) {
 	defer cfg.l.Unlock()
 
 	if !cfg.useSyslog {
+		// Add timestamp to the default writer if not using syslog
 		_, _ = fmt.Fprintf(cfg.writer, "%s ", time.Now().Format("2006-01-02 15:04:05.000"))
 	}
 
 	_, _ = fmt.Fprintf(cfg.teeWriter, fmtArg+"\n", a...)
-	fmt.Fprintf(logCurrLevelBuffer, fmtArg+"\n", a...)
 }
 
 func loggerPrintln(v ...interface{}) {
@@ -94,11 +94,11 @@ func loggerPrintln(v ...interface{}) {
 	defer cfg.l.Unlock()
 
 	if !cfg.useSyslog {
+		// Add timestamp to the default writer if not using syslog
 		_, _ = fmt.Fprintf(cfg.writer, "%s ", time.Now().Format("2006-01-02 15:04:05.000"))
 	}
 
 	_, _ = fmt.Fprintln(cfg.teeWriter, v...)
-	fmt.Fprintln(logCurrLevelBuffer, v...)
 }
 
 // Printf behave like fmt.Printf.
