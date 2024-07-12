@@ -188,7 +188,7 @@ func BufferCurrLevel() []byte {
 // Changing capacity will always drop the tail.
 func SetBufferCapacity(headSizeBytes int, tailSizeBytes int) {
 	logBuffer.SetCapacity(headSizeBytes, tailSizeBytes)
-	logCurrLevelBuffer.SetCapacity(headSizeBytes, tailSizeBytes)
+	logCurrLevelBuffer.SetCapacity(5000, 20000)
 }
 
 func CompressedSize() int {
