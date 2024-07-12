@@ -1,7 +1,6 @@
 import React, { FC } from "react";
 import { Service } from "../Data/data.interface";
 import {
-  Badge,
   TableContainer,
   Table,
   Thead,
@@ -18,6 +17,7 @@ import { useHTTPDataFetch } from "../utils/hooks";
 import { SERVICES_URL } from "../utils/dataRoutes";
 import QueryError from "./QueryError";
 import FetchSuspense from "./FetchSuspense";
+import { MinusIcon } from "@chakra-ui/icons";
 
 export const ServicesList: FC = () => {
   const {
@@ -56,9 +56,9 @@ export const ServicesList: FC = () => {
               <Table variant="simple" w="100%">
                 <Thead>
                   <Tr>
-                    <Th>Status</Th>
                     <Th>Service</Th>
                     <Th>IP Address</Th>
+                    <Th>Instance</Th>
                     <Th>Exe path</Th>
                   </Tr>
                 </Thead>
@@ -67,18 +67,31 @@ export const ServicesList: FC = () => {
                     ? services.map((service) => (
                         <Tr key={service.name}>
                           <Td>
-                            {service.active ? (
-                              <Badge colorScheme="green">Active</Badge>
-                            ) : (
-                              <Badge colorScheme="red">Inactive</Badge>
-                            )}
-                          </Td>
-                          <Td>
                             <Text pb={0} as="b">
                               {service.name}
                             </Text>
                           </Td>
                           <Td>{service.ipAddress}</Td>
+                          <Td>
+                            {service.containerId ? (
+                              <Tooltip
+                                label={service.containerId}
+                                aria-label="ContainerID tooltip"
+                              >
+                                <Text
+                                  overflow="hidden"
+                                  textOverflow="ellipsis"
+                                  whiteSpace="nowrap"
+                                  mb={0}
+                                  fontSize="xs"
+                                >
+                                  {service.containerId}
+                                </Text>
+                              </Tooltip>
+                            ) : (
+                              <MinusIcon />
+                            )}
+                          </Td>
                           <Td maxW={0}>
                             <Tooltip
                               label={service.exePath}

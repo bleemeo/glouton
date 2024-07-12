@@ -1,3 +1,4 @@
+import { ArrowDownIcon, ArrowUpIcon } from "@chakra-ui/icons";
 import { ListItem, UnorderedList } from "@chakra-ui/react";
 import React, { FC, RefObject } from "react";
 
@@ -214,4 +215,22 @@ export const useIntersection = (element: RefObject<any>, rootMargin) => {
   }, []);
 
   return isVisible;
+};
+
+export const iconFromName = (
+  name: string,
+  w: number,
+  h: number,
+  color: string,
+) => {
+  switch (name) {
+    case "arrow-up":
+      return <ArrowUpIcon w={w} h={h} color={color} />;
+    case "arrow-down":
+      return (
+        <ArrowDownIcon w={w} h={h} color={color} transform="rotate(180)" />
+      );
+    default:
+      return <></>;
+  }
 };

@@ -60,7 +60,11 @@ const WidgetDashboardItem: FC<WidgetDashboardItemProps> = ({
         return <MetricNumberItem unit={unit} value={lastPoint} title={title} />;
       }
       case chartTypes[2]: {
-        const data: { value: number; legend: string }[] = [];
+        const data: {
+          value: number;
+          legend: string;
+          icon?: { name: string; color: string };
+        }[] = [];
         metrics.forEach((metric) => {
           const pointsWithMetric = points.filter((point) =>
             point.metric.query.includes(metric.query),
@@ -76,6 +80,7 @@ const WidgetDashboardItem: FC<WidgetDashboardItemProps> = ({
           data.push({
             value: lastPoint,
             legend: metric.legend ? metric.legend : "",
+            icon: metric.icon,
           });
         });
         return <MetricNumbersItem unit={unit} data={data} title={title} />;

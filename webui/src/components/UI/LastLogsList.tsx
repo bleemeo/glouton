@@ -1,26 +1,20 @@
-import React, { FC, useState } from "react";
+import React, { FC } from "react";
 import { useHTTPLogFetch } from "../utils/hooks";
-import {
-  Badge,
-  Box,
-  Code,
-  Card,
-  CardBody,
-  Select,
-  Flex,
-} from "@chakra-ui/react";
+import { Badge, Box, Code, Card, CardBody, Flex, Link } from "@chakra-ui/react";
 import FetchSuspense from "./FetchSuspense";
 import Loading from "./Loading";
 import QueryError from "./QueryError";
 import { getHoursFromDateString } from "../utils/formater";
 import { Text } from "@chakra-ui/react";
 import { LOGS_URL } from "../utils/dataRoutes";
+import { ChevronRightIcon } from "@chakra-ui/icons";
+
+const LOGS_COUNT = 20;
 
 export const LastLogsList: FC = () => {
-  const [logsCount, setLogsCount] = useState(10);
   const { isLoading, error, logs } = useHTTPLogFetch(
     LOGS_URL,
-    logsCount,
+    LOGS_COUNT,
     10000,
   );
 
@@ -36,18 +30,6 @@ export const LastLogsList: FC = () => {
     </Box>
   );
 
-  const options = [
-    { label: "10", value: 10 },
-    { label: "20", value: 20 },
-    { label: "30", value: 30 },
-    { label: "40", value: 40 },
-    { label: "50", value: 50 },
-  ];
-
-  const handleOptionChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
-    setLogsCount(parseInt(event.target.value));
-  };
-
   return (
     <FetchSuspense
       isLoading={isLoading}
@@ -59,23 +41,10 @@ export const LastLogsList: FC = () => {
       {({ logs }) => {
         return (
           <>
-            <Flex justify="space-between">
+            <Flex justify="flex-start">
               <Text fontSize="xl" as="b">
-                Lastest logs
+                Latest logs
               </Text>
-              <Select
-                placeholder="Select option"
-                value={logsCount}
-                onChange={handleOptionChange}
-                w="fit-content"
-                size="sm"
-              >
-                {options.map((option, index) => (
-                  <option key={index} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </Select>
             </Flex>
             <Box h="100%" overflowY="scroll">
               {logs.map((log, index) => (
@@ -90,6 +59,19 @@ export const LastLogsList: FC = () => {
                 </Card>
               ))}
             </Box>
+            <Flex mt={1} justify="flex-end">
+              <Text fontSize="lg">
+                <ChevronRightIcon />
+                View{" "}
+                <Link
+                  fontWeight="700"
+                  color="teal.500"
+                  href="/diagnostic.txt/log.txt"
+                >
+                  full logs
+                </Link>
+              </Text>
+            </Flex>
           </>
         );
       }}

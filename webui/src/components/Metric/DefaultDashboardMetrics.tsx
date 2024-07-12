@@ -3,6 +3,7 @@ import { UNIT_PERCENTAGE, UNIT_FLOAT, UNIT_INT } from "../utils";
 export interface Metric {
   query: string;
   color?: string;
+  icon?: { name: string; color: string };
   legend?: string;
 }
 
@@ -148,10 +149,12 @@ export const numberMetricsBLEEMEO: NumberMetric[] = [
       {
         legend: "Received",
         query: "sum(net_bits_recv)",
+        icon: { name: "arrow-down", color: "green" },
       },
       {
         legend: "Sent",
         query: "sum(net_bits_sent)",
+        icon: { name: "arrow-up", color: "red" },
       },
     ],
     unit: UNIT_FLOAT,

@@ -40,7 +40,6 @@ const AgentSystemDashboard: FC<AgentSystemDashboardProps> = ({ facts }) => {
 
   const triggerRef = useRef<HTMLDivElement>(null);
   const isVisible = useIntersection(triggerRef, "0px");
-  const metricsWidgetMaxHeight = "30vh";
   const otherMetricsWidgetMaxHeight = "40vh";
 
   useEffect(() => {
@@ -71,11 +70,7 @@ const AgentSystemDashboard: FC<AgentSystemDashboardProps> = ({ facts }) => {
 
           <SimpleGrid columns={numberMetrics.length} spacing={5} mt={5}>
             {numberMetrics.map((numberMetric) => (
-              <Box
-                h={metricsWidgetMaxHeight}
-                ref={triggerRef}
-                key={numberMetric.title}
-              >
+              <Box ref={triggerRef} key={numberMetric.title}>
                 {isVisible ? (
                   numberMetric.metrics?.length > 1 ? (
                     <WidgetDashboardItem
