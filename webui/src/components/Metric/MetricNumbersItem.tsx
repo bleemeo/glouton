@@ -52,7 +52,6 @@ const MetricNumbersItem: FC<MetricNumberItemProps> = ({
       legend: string;
       icon?: { name: string; color: string };
     }) => {
-      console.log(d);
       const v = unitFormatCallback(unit)(d.value)
         ? unitFormatCallback(unit)(d.value)
         : "\u00A0\u00A0\u00A0";

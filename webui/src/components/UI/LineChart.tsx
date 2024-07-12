@@ -197,18 +197,13 @@ const selectUnitConverter = (unit) => {
   }
 };
 
-export const renderLegend = (
-  series: CustomSeriesOption[],
-  noPointer = true,
-) => {
+export const renderLegend = (series: CustomSeriesOption[]) => {
   let legend: JSX.Element | null = null;
   if (series.length > 0) {
     legend = (
       <div className="chart-legend">
         {series.map((s, idx) => (
-          <span
-            key={idx}
-          >
+          <span key={idx}>
             <div
               className="legend-pill no-selection"
               style={{
