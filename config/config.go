@@ -653,7 +653,7 @@ func dumpMap(root map[string]interface{}) map[string]interface{} {
 // CensorSecretItem returns the censored item value with secrets
 // and password removed for safe external use.
 func CensorSecretItem(key string, value interface{}) interface{} {
-	if isSecret(key) {
+	if IsSecret(key) {
 		// Don't censor unset secrets.
 		if valueStr, ok := value.(string); ok && valueStr == "" {
 			return ""
@@ -672,8 +672,8 @@ func CensorSecretItem(key string, value interface{}) interface{} {
 	}
 }
 
-// isSecret returns whether the given config key corresponds to a secret.
-func isSecret(key string) bool {
+// IsSecret returns whether the given config key corresponds to a secret.
+func IsSecret(key string) bool {
 	for _, name := range []string{"key", "secret", "password", "passwd"} {
 		if strings.Contains(key, name) {
 			return true
