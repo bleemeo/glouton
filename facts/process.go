@@ -592,11 +592,46 @@ func (pp *ProcessProvider) updateProcesses(ctx context.Context, now time.Time, m
 	}
 
 	if len(topinfo.Processes) > maxTopInfoProcesses {
-		// Limit the number of processes, because too large list of processes
+		// Limit the number of processes, because a too large list of processes
 		// won't be usable and will be rejected by the Bleemeo Cloud.
 		// We start by sorting them to always return the same processes.
+		gloutonPID := os.Getpid()
+
+		type pidComp struct {
+			pid  int
+			date time.Time
+		}
+
+		firstPIDByContainer := make(map[string]pidComp)
+
+		for _, p := range topinfo.Processes {
+			if p.ContainerName != "" {
+				if comp, found := firstPIDByContainer[p.ContainerName]; !found || p.CreateTime.Before(comp.date) {
+					firstPIDByContainer[p.ContainerName] = pidComp{p.PID, p.CreateTime}
+				}
+			}
+		}
+
 		sort.Slice(topinfo.Processes, func(i, j int) bool {
-			return topinfo.Processes[i].PID < topinfo.Processes[j].PID
+			switch processI, processJ := topinfo.Processes[i], topinfo.Processes[j]; {
+			case processI.PID == 1:
+				return true
+			case processJ.PID == 1:
+				return false
+			case processI.PID == gloutonPID:
+				return true
+			case processJ.PID == gloutonPID:
+				return false
+			case processI.PID == firstPIDByContainer[processI.ContainerName].pid:
+				return true
+			case processJ.PID == firstPIDByContainer[processJ.ContainerName].pid:
+				return false
+			default:
+				memI := (float64(processI.MemoryRSS) / topinfo.Memory.Total) * 100
+				memJ := (float64(processJ.MemoryRSS) / topinfo.Memory.Total) * 100
+
+				return processI.CPUPercent+memI < processJ.CPUPercent+memJ
+			}
 		})
 
 		topinfo.Processes = topinfo.Processes[:maxTopInfoProcesses]
