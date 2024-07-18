@@ -16,11 +16,12 @@ func isSensitive(key string) bool {
 	}
 
 	for potentiallySensitive, unless := range sensitiveKeywords {
+		keyWithoutNonSensitives := key
 		for _, nonSensitive := range unless {
-			key = strings.ReplaceAll(key, nonSensitive, "")
+			keyWithoutNonSensitives = strings.ReplaceAll(keyWithoutNonSensitives, nonSensitive, "")
 		}
 
-		if strings.Contains(key, potentiallySensitive) {
+		if strings.Contains(keyWithoutNonSensitives, potentiallySensitive) {
 			return true
 		}
 	}
