@@ -1573,9 +1573,9 @@ func TestUpdateProccesesTime(t *testing.T) { //nolint: maintidx
 							seemsCGroup: true,
 						},
 					},
-					fromCGroupErr: context.DeadlineExceeded,
-					fromPIDErr:    context.DeadlineExceeded,
-					otherErr:      context.DeadlineExceeded,
+					fromCGroupErr:   context.DeadlineExceeded,
+					fromPIDErr:      context.DeadlineExceeded,
+					otherErr:        context.DeadlineExceeded,
 					wantProcesseses: []Process{
 						// No process are present because container runtime had error
 					},
@@ -1662,9 +1662,9 @@ func TestUpdateProccesesTime(t *testing.T) { //nolint: maintidx
 							seemsCGroup: true,
 						},
 					},
-					fromCGroupErr: errArbitraryErrorForTest,
-					fromPIDErr:    errArbitraryErrorForTest,
-					otherErr:      errArbitraryErrorForTest,
+					fromCGroupErr:   errArbitraryErrorForTest,
+					fromPIDErr:      errArbitraryErrorForTest,
+					otherErr:        errArbitraryErrorForTest,
 					wantProcesseses: []Process{
 						// No process are present because container runtime had error
 					},
@@ -1752,9 +1752,9 @@ func TestUpdateProccesesTime(t *testing.T) { //nolint: maintidx
 					// the ErrContainerDoesNotExists when the cgroup data matches a container and NOT NoRuntimeError.
 					// The mock will behave as such: for init it returns nil because cgroup matches nothing and error is only returned
 					// when cgroup data matches something.
-					fromCGroupErr: ErrContainerDoesNotExists,
-					fromPIDErr:    NewNoRuntimeError(errArbitraryErrorForTest),
-					otherErr:      NewNoRuntimeError(errArbitraryErrorForTest),
+					fromCGroupErr:   ErrContainerDoesNotExists,
+					fromPIDErr:      NewNoRuntimeError(errArbitraryErrorForTest),
+					otherErr:        NewNoRuntimeError(errArbitraryErrorForTest),
 					wantProcesseses: []Process{
 						// No process are present because container runtime had an error.
 					},
