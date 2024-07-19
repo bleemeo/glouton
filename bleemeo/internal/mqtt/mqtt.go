@@ -20,6 +20,7 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"math/rand"
@@ -49,7 +50,11 @@ const (
 	cleanupBatchSize = 1000
 
 	pointsBatchSize = 1000
+
+	logsAckBackPressureDelay = 1 * time.Minute
 )
+
+var ErrLogsBackPressureSignal = errors.New("logs back-pressure signal")
 
 // Option are parameter for the MQTT client.
 type Option struct {
@@ -98,6 +103,7 @@ type Client struct {
 	// Stop buffering failed points, used when the account is suspended.
 	bufferingSuspended bool
 	disableReason      bleemeoTypes.DisableReason
+	lastLogsAck        time.Time
 }
 
 type metricPayload struct {
@@ -484,6 +490,8 @@ func (c *Client) run(ctx context.Context) error {
 
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
+	// Every minute (6 * 10s), we send a ping message to inform mqtt_connector that we're still up
+	logsPingInc := 6
 
 	for ctx.Err() == nil {
 		cfg, ok := c.opts.Cache.CurrentAccountConfig()
@@ -498,6 +506,16 @@ func (c *Client) run(ctx context.Context) error {
 
 		select {
 		case <-ticker.C:
+			logsPingInc--
+			if logsPingInc == 0 {
+				logsPingInc = 6
+				ts := time.Now().Format(time.RFC3339)
+
+				err := c.mqtt.Publish(fmt.Sprintf("v1/agent/%s/ping", c.opts.AgentID), ts, false)
+				if err != nil {
+					logger.V(1).Printf("Failed to send ping message on MQTT: %v", err)
+				}
+			}
 		case <-ctx.Done():
 		}
 	}
@@ -542,6 +560,21 @@ func (c *Client) PopPoints(includeFailedPoints bool) []types.MetricPoint {
 	c.pendingPoints = nil
 
 	return points
+}
+
+func (c *Client) PushLogs(_ context.Context, payload []byte) error {
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	if time.Since(c.lastLogsAck) > logsAckBackPressureDelay {
+		return ErrLogsBackPressureSignal
+	}
+
+	if err := c.mqtt.Publish(fmt.Sprintf("v1/agent/%s/logs", c.opts.AgentID), payload, true); err != nil {
+		return nil
+	}
+
+	return nil
 }
 
 func (c *Client) sendPoints() {
@@ -755,6 +788,7 @@ type notificationPayload struct {
 	MonitorUUID            string `json:"monitor_uuid,omitempty"`
 	MonitorOperationType   string `json:"monitor_operation_type,omitempty"`
 	DiagnosticRequestToken string `json:"request_token,omitempty"`
+	LogsAckTimestamp       string `json:"logs_ack_timestamp,omitempty"`
 }
 
 func (c *Client) onNotification(ctx context.Context, msg paho.Message) {
@@ -790,6 +824,17 @@ func (c *Client) onNotification(ctx context.Context, msg paho.Message) {
 			defer crashreport.ProcessPanic()
 			c.opts.HandleDiagnosticRequest(ctx, payload.DiagnosticRequestToken)
 		}()
+	case "logs-ack":
+		ts, err := time.Parse(time.RFC3339, payload.LogsAckTimestamp)
+		if err != nil {
+			logger.V(1).Printf("Failed to parse logs ACK timestamp: %v", err)
+
+			return
+		}
+
+		c.l.Lock()
+		c.lastLogsAck = ts
+		c.l.Unlock()
 	}
 }
 
