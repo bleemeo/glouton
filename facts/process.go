@@ -595,44 +595,7 @@ func (pp *ProcessProvider) updateProcesses(ctx context.Context, now time.Time, m
 		// Limit the number of processes, because a too large list of processes
 		// won't be usable and will be rejected by the Bleemeo Cloud.
 		// We start by sorting them to always return the same processes.
-		gloutonPID := os.Getpid()
-
-		type pidComp struct {
-			pid  int
-			date time.Time
-		}
-
-		firstPIDByContainer := make(map[string]pidComp)
-
-		for _, p := range topinfo.Processes {
-			if p.ContainerName != "" {
-				if comp, found := firstPIDByContainer[p.ContainerName]; !found || p.CreateTime.Before(comp.date) {
-					firstPIDByContainer[p.ContainerName] = pidComp{p.PID, p.CreateTime}
-				}
-			}
-		}
-
-		sort.Slice(topinfo.Processes, func(i, j int) bool {
-			switch processI, processJ := topinfo.Processes[i], topinfo.Processes[j]; {
-			case processI.PID == 1:
-				return true
-			case processJ.PID == 1:
-				return false
-			case processI.PID == gloutonPID:
-				return true
-			case processJ.PID == gloutonPID:
-				return false
-			case processI.PID == firstPIDByContainer[processI.ContainerName].pid:
-				return true
-			case processJ.PID == firstPIDByContainer[processJ.ContainerName].pid:
-				return false
-			default:
-				memI := (float64(processI.MemoryRSS) / topinfo.Memory.Total) * 100
-				memJ := (float64(processJ.MemoryRSS) / topinfo.Memory.Total) * 100
-
-				return processI.CPUPercent+memI < processJ.CPUPercent+memJ
-			}
-		})
+		sortProcessesArbitrarily(topinfo.Processes, os.Getpid(), topinfo.Memory.Total)
 
 		topinfo.Processes = topinfo.Processes[:maxTopInfoProcesses]
 		at := maxTopInfoProcesses
@@ -704,6 +667,48 @@ func addChildrens(childrens [][]int, proccesses []Process, result []Process, ind
 	}
 
 	return result
+}
+
+// sortProcessesArbitrarily sorts the given processes by CPU & memory usage,
+// while putting on top the PID 1 process, the Glouton process,
+// and the first (oldest) process of each container.
+func sortProcessesArbitrarily(processes []Process, gloutonPID int, memTotal float64) {
+	type pidComp struct {
+		pid  int
+		date time.Time
+	}
+
+	firstPIDByContainer := make(map[string]pidComp)
+
+	for _, p := range processes {
+		if p.ContainerName != "" {
+			if comp, found := firstPIDByContainer[p.ContainerName]; !found || p.CreateTime.Before(comp.date) {
+				firstPIDByContainer[p.ContainerName] = pidComp{p.PID, p.CreateTime}
+			}
+		}
+	}
+
+	sort.Slice(processes, func(i, j int) bool {
+		switch processI, processJ := processes[i], processes[j]; {
+		case processI.PID == 1:
+			return true
+		case processJ.PID == 1:
+			return false
+		case processI.PID == gloutonPID:
+			return true
+		case processJ.PID == gloutonPID:
+			return false
+		case processI.PID == firstPIDByContainer[processI.ContainerName].pid:
+			return true
+		case processJ.PID == firstPIDByContainer[processJ.ContainerName].pid:
+			return false
+		default:
+			memI := (float64(processI.MemoryRSS) / memTotal) * 100
+			memJ := (float64(processJ.MemoryRSS) / memTotal) * 100
+			// If process I consumes more resources than J, it must be sorted before J.
+			return processI.CPUPercent+memI > processJ.CPUPercent+memJ
+		}
+	})
 }
 
 func (pp *ProcessProvider) baseTopinfo() (result TopInfo, err error) {

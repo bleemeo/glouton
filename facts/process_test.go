@@ -1573,9 +1573,9 @@ func TestUpdateProccesesTime(t *testing.T) { //nolint: maintidx
 							seemsCGroup: true,
 						},
 					},
-					fromCGroupErr:   context.DeadlineExceeded,
-					fromPIDErr:      context.DeadlineExceeded,
-					otherErr:        context.DeadlineExceeded,
+					fromCGroupErr: context.DeadlineExceeded,
+					fromPIDErr:    context.DeadlineExceeded,
+					otherErr:      context.DeadlineExceeded,
 					wantProcesseses: []Process{
 						// No process are present because container runtime had error
 					},
@@ -1662,9 +1662,9 @@ func TestUpdateProccesesTime(t *testing.T) { //nolint: maintidx
 							seemsCGroup: true,
 						},
 					},
-					fromCGroupErr:   errArbitraryErrorForTest,
-					fromPIDErr:      errArbitraryErrorForTest,
-					otherErr:        errArbitraryErrorForTest,
+					fromCGroupErr: errArbitraryErrorForTest,
+					fromPIDErr:    errArbitraryErrorForTest,
+					otherErr:      errArbitraryErrorForTest,
 					wantProcesseses: []Process{
 						// No process are present because container runtime had error
 					},
@@ -1752,9 +1752,9 @@ func TestUpdateProccesesTime(t *testing.T) { //nolint: maintidx
 					// the ErrContainerDoesNotExists when the cgroup data matches a container and NOT NoRuntimeError.
 					// The mock will behave as such: for init it returns nil because cgroup matches nothing and error is only returned
 					// when cgroup data matches something.
-					fromCGroupErr:   ErrContainerDoesNotExists,
-					fromPIDErr:      NewNoRuntimeError(errArbitraryErrorForTest),
-					otherErr:        NewNoRuntimeError(errArbitraryErrorForTest),
+					fromCGroupErr: ErrContainerDoesNotExists,
+					fromPIDErr:    NewNoRuntimeError(errArbitraryErrorForTest),
+					otherErr:      NewNoRuntimeError(errArbitraryErrorForTest),
 					wantProcesseses: []Process{
 						// No process are present because container runtime had an error.
 					},
@@ -2220,6 +2220,105 @@ func Test_sortParentFirst(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestSortProcessesArbitrarily(t *testing.T) {
+	const (
+		gloutonPID = 7
+		memTotal   = 1024
+	)
+
+	processes := []Process{
+		{
+			PID:           8,
+			CreateTime:    time.Date(2024, time.July, 19, 10, 20, 0, 0, time.Local),
+			MemoryRSS:     50,
+			CPUPercent:    2,
+			ContainerName: "C-1",
+		},
+		{
+			PID:           3,
+			CreateTime:    time.Date(2024, time.July, 19, 10, 21, 0, 0, time.Local),
+			MemoryRSS:     20,
+			CPUPercent:    1,
+			ContainerName: "C-2",
+		},
+		{
+			PID:        1,
+			CreateTime: time.Date(2024, time.July, 19, 10, 20, 0, 0, time.Local),
+			MemoryRSS:  20,
+			CPUPercent: 5,
+		},
+		{
+			PID:           6,
+			CreateTime:    time.Date(2024, time.July, 19, 10, 22, 0, 0, time.Local),
+			MemoryRSS:     100,
+			CPUPercent:    15,
+			ContainerName: "C-1",
+		},
+		{
+			PID:        9,
+			CreateTime: time.Date(2024, time.July, 19, 10, 21, 0, 0, time.Local),
+			MemoryRSS:  20,
+			CPUPercent: 50,
+		},
+		{
+			PID:        10,
+			CreateTime: time.Date(2024, time.July, 19, 10, 23, 0, 0, time.Local),
+			MemoryRSS:  50,
+			CPUPercent: 40,
+		},
+		{
+			PID:           4,
+			CreateTime:    time.Date(2024, time.July, 19, 10, 22, 0, 0, time.Local),
+			MemoryRSS:     7,
+			CPUPercent:    5,
+			ContainerName: "C-1",
+		},
+		{
+			PID:        5,
+			CreateTime: time.Date(2024, time.July, 19, 10, 22, 0, 0, time.Local),
+			MemoryRSS:  20,
+			CPUPercent: 30,
+		},
+		{
+			PID:        2,
+			CreateTime: time.Date(2024, time.July, 19, 10, 21, 0, 0, time.Local),
+			MemoryRSS:  30,
+			CPUPercent: 5,
+		},
+		{
+			PID:        7, // Glouton
+			CreateTime: time.Date(2024, time.July, 19, 10, 23, 0, 0, time.Local),
+			MemoryRSS:  16,
+			CPUPercent: 6,
+		},
+	}
+
+	expectedPIDOrder := []int{
+		1,  // PID 1
+		7,  // Glouton
+		3,  // Oldest (and only) process of container C-2
+		8,  // Oldest process of container C-1
+		9,  // %CPU + %Mem ~= 52
+		10, // %CPU + %Mem ~= 45
+		5,  // %CPU + %Mem ~= 32
+		6,  // %CPU + %Mem ~= 25
+		2,  // %CPU + %Mem ~= 8
+		4,  // %CPU + %Mem ~= 6
+	}
+
+	sortProcessesArbitrarily(processes, gloutonPID, memTotal)
+
+	resultPIDOrder := make([]int, len(processes))
+
+	for i, p := range processes {
+		resultPIDOrder[i] = p.PID
+	}
+
+	if diff := cmp.Diff(expectedPIDOrder, resultPIDOrder); diff != "" {
+		t.Fatalf("Unexpected process order:\nwant %v\n got %v", expectedPIDOrder, resultPIDOrder)
 	}
 }
 
