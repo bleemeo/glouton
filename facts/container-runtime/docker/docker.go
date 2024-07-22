@@ -35,6 +35,7 @@ import (
 
 	"github.com/bleemeo/glouton/config"
 	"github.com/bleemeo/glouton/facts"
+	"github.com/bleemeo/glouton/facts/container-runtime/internal/obfuscation"
 	containerTypes "github.com/bleemeo/glouton/facts/container-runtime/types"
 	"github.com/bleemeo/glouton/logger"
 	"github.com/bleemeo/glouton/types"
@@ -950,7 +951,19 @@ func (c dockerContainer) Command() []string {
 }
 
 func (c dockerContainer) ContainerJSON() string {
-	result, err := json.Marshal(c.inspect)
+	inspect := c.inspect
+	if inspect.Config != nil {
+		// Making a copy of the config not to modify c.inspect.Config
+		cfg := *inspect.Config
+		cfg.Env = make([]string, len(inspect.Config.Env))
+		copy(cfg.Env, inspect.Config.Env)
+
+		obfuscation.ObfuscateEnv(cfg.Env)
+
+		inspect.Config = &cfg
+	}
+
+	result, err := json.Marshal(inspect)
 	if err != nil {
 		return ""
 	}

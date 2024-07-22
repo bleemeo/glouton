@@ -31,10 +31,10 @@ import (
 
 	"github.com/bleemeo/glouton/config"
 	"github.com/bleemeo/glouton/facts"
+	"github.com/bleemeo/glouton/facts/container-runtime/internal/obfuscation"
 	containerTypes "github.com/bleemeo/glouton/facts/container-runtime/types"
 	"github.com/bleemeo/glouton/logger"
 	"github.com/bleemeo/glouton/types"
-
 	v1 "github.com/containerd/cgroups/v3/cgroup1/stats"
 	v2 "github.com/containerd/cgroups/v3/cgroup2/stats"
 	"github.com/containerd/containerd"
@@ -47,6 +47,7 @@ import (
 	"github.com/containerd/containerd/namespaces"
 	"github.com/containerd/containerd/oci"
 	"github.com/containerd/typeurl/v2"
+	"github.com/mitchellh/copystructure"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/shirou/gopsutil/v3/mem"
 	"github.com/shirou/gopsutil/v3/process"
@@ -1014,9 +1015,19 @@ func (c containerObject) Command() []string {
 }
 
 func (c containerObject) ContainerJSON() string {
-	buffer, err := json.MarshalIndent(c.info, "", "  ")
+	cpy, err := copystructure.Copy(c.info)
 	if err != nil {
-		logger.V(2).Printf("unable to marshel container info: %v", err)
+		logger.V(2).Printf("Can't copy container info: %v", err)
+	}
+
+	info, ok := cpy.(ContainerOCISpec)
+	if ok && info.Spec != nil && info.Spec.Process != nil {
+		obfuscation.ObfuscateEnv(info.Spec.Process.Env)
+	}
+
+	buffer, err := json.MarshalIndent(info, "", "  ")
+	if err != nil {
+		logger.V(2).Printf("unable to marshal container info: %v", err)
 	}
 
 	return string(buffer)

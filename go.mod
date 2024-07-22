@@ -33,6 +33,7 @@ require (
 	github.com/json-iterator/go v1.1.12
 	github.com/knadh/koanf v1.5.0
 	github.com/knadh/koanf/v2 v2.1.1
+	github.com/mitchellh/copystructure v1.2.0
 	github.com/mitchellh/mapstructure v1.5.1-0.20220423185008-bf980b35cac4
 	github.com/ncabatoff/process-exporter v0.8.2
 	github.com/opencontainers/go-digest v1.0.0
@@ -179,7 +180,6 @@ require (
 	github.com/mdlayher/wifi v0.2.0 // indirect
 	github.com/miekg/dns v1.1.61 // indirect
 	github.com/minio/highwayhash v1.0.3 // indirect
-	github.com/mitchellh/copystructure v1.2.0 // indirect
 	github.com/mitchellh/reflectwalk v1.0.2 // indirect
 	github.com/moby/docker-image-spec v1.3.1 // indirect
 	github.com/moby/locker v1.0.1 // indirect
