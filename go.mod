@@ -13,12 +13,14 @@ require (
 	github.com/containerd/cgroups/v3 v3.0.3
 	github.com/containerd/containerd v1.7.19
 	github.com/containerd/containerd/api v1.7.19
+	github.com/containerd/platforms v0.2.1
 	github.com/containerd/typeurl/v2 v2.2.0
 	github.com/docker/docker v27.0.3+incompatible
 	github.com/eclipse/paho.mqtt.golang v1.4.3
 	github.com/fsnotify/fsnotify v1.7.0
 	github.com/getsentry/sentry-go v0.28.1
 	github.com/go-chi/chi/v5 v5.1.0
+	github.com/go-chi/render v1.0.3
 	github.com/go-kit/log v0.2.1
 	github.com/go-viper/mapstructure/v2 v2.0.0
 	github.com/google/go-cmp v0.6.0
@@ -94,7 +96,6 @@ require (
 	github.com/containerd/errdefs v0.1.0 // indirect
 	github.com/containerd/fifo v1.1.0 // indirect
 	github.com/containerd/log v0.1.0 // indirect
-	github.com/containerd/platforms v0.2.1 // indirect
 	github.com/containerd/ttrpc v1.2.5 // indirect
 	github.com/coreos/go-semver v0.3.1 // indirect
 	github.com/coreos/go-systemd/v22 v22.5.0 // indirect
@@ -116,7 +117,6 @@ require (
 	github.com/fatih/structs v1.1.0 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/go-asn1-ber/asn1-ber v1.5.7 // indirect
-	github.com/go-chi/render v1.0.3
 	github.com/go-ldap/ldap/v3 v3.4.8 // indirect
 	github.com/go-logfmt/logfmt v0.6.0 // indirect
 	github.com/go-logr/logr v1.4.2 // indirect
