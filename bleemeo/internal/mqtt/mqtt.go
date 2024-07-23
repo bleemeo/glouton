@@ -51,10 +51,13 @@ const (
 
 	pointsBatchSize = 1000
 
-	logsAckBackPressureDelay = 1 * time.Minute
+	logsAckBackPressureDelay = 1*time.Minute + 10*time.Second
 )
 
-var ErrLogsBackPressureSignal = errors.New("logs back-pressure signal")
+var (
+	ErrNotConnected           = errors.New("currently not connected to MQTT")
+	ErrLogsBackPressureSignal = errors.New("logs back-pressure signal")
+)
 
 // Option are parameter for the MQTT client.
 type Option struct {
@@ -484,8 +487,11 @@ func (c *Client) isSendingSuspended() bool {
 func (c *Client) run(ctx context.Context) error {
 	storeNotifieeID := c.opts.Store.AddNotifiee(c.addPoints)
 
+	c.sendPing()
+
 	var topinfoSendAt time.Time
 
+	// Avoiding that all the Glouton started at the same time send their points all together.
 	time.Sleep(time.Duration(rand.Intn(10000)) * time.Millisecond) //nolint:gosec
 
 	ticker := time.NewTicker(10 * time.Second)
@@ -509,12 +515,8 @@ func (c *Client) run(ctx context.Context) error {
 			logsPingInc--
 			if logsPingInc == 0 {
 				logsPingInc = 6
-				ts := time.Now().Format(time.RFC3339)
 
-				err := c.mqtt.Publish(fmt.Sprintf("v1/agent/%s/ping", c.opts.AgentID), ts, false)
-				if err != nil {
-					logger.V(1).Printf("Failed to send ping message on MQTT: %v", err)
-				}
+				c.sendPing()
 			}
 		case <-ctx.Done():
 		}
@@ -523,6 +525,15 @@ func (c *Client) run(ctx context.Context) error {
 	c.opts.Store.RemoveNotifiee(storeNotifieeID)
 
 	return nil
+}
+
+func (c *Client) sendPing() {
+	ts := time.Now().Format(time.RFC3339)
+
+	err := c.mqtt.Publish(fmt.Sprintf("v1/agent/%s/ping", c.opts.AgentID), ts, false)
+	if err != nil {
+		logger.V(1).Printf("Failed to send ping message on MQTT: %v", err)
+	}
 }
 
 // addPoints preprocesses and appends a list of metric points to those pending transmission over MQTT.
@@ -565,6 +576,10 @@ func (c *Client) PopPoints(includeFailedPoints bool) []types.MetricPoint {
 func (c *Client) PushLogs(_ context.Context, payload []byte) error {
 	c.l.Lock()
 	defer c.l.Unlock()
+
+	if !c.connected() {
+		return ErrNotConnected
+	}
 
 	if time.Since(c.lastLogsAck) > logsAckBackPressureDelay {
 		return ErrLogsBackPressureSignal
@@ -830,6 +845,10 @@ func (c *Client) onNotification(ctx context.Context, msg paho.Message) {
 			logger.V(1).Printf("Failed to parse logs ACK timestamp: %v", err)
 
 			return
+		}
+
+		if ts.After(time.Now()) {
+			ts = time.Now()
 		}
 
 		c.l.Lock()
