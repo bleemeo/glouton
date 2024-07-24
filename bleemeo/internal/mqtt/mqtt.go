@@ -487,12 +487,12 @@ func (c *Client) isSendingSuspended() bool {
 func (c *Client) run(ctx context.Context) error {
 	storeNotifieeID := c.opts.Store.AddNotifiee(c.addPoints)
 
-	c.sendPing()
-
 	var topinfoSendAt time.Time
 
 	// Avoiding that all the Glouton started at the same time send their points all together.
 	time.Sleep(time.Duration(rand.Intn(10000)) * time.Millisecond) //nolint:gosec
+
+	c.sendPing()
 
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
