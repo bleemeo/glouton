@@ -184,6 +184,7 @@ func mockClient(t *testing.T) *Client {
 			Cache:                cache,
 			LastMetricActivation: func() time.Time { return time.Time{} },
 		},
+		dataStreamAvailable: true,
 	}
 
 	c.failedPoints = failedPointsCache{

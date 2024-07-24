@@ -51,12 +51,14 @@ const (
 
 	pointsBatchSize = 1000
 
-	logsAckBackPressureDelay = 1*time.Minute + 10*time.Second
+	dataAckBackPressureDelay    = 6*time.Minute + 10*time.Second
+	topinfoAckBackPressureDelay = 6*time.Minute + 10*time.Second
+	logsAckBackPressureDelay    = 1*time.Minute + 10*time.Second
 )
 
 var (
-	ErrNotConnected           = errors.New("currently not connected to MQTT")
-	ErrLogsBackPressureSignal = errors.New("logs back-pressure signal")
+	ErrNotConnected       = errors.New("currently not connected to MQTT")
+	ErrBackPressureSignal = errors.New("back-pressure signal")
 )
 
 // Option are parameter for the MQTT client.
@@ -135,6 +137,9 @@ func New(opts Option) *Client {
 
 	c := &Client{
 		opts: opts,
+		// By default, we allow sending metric points and top-info on MQTT.
+		dataStreamAvailable:    true,
+		topinfoStreamAvailable: true,
 	}
 
 	c.failedPoints = failedPointsCache{
@@ -585,7 +590,7 @@ func (c *Client) PushLogs(_ context.Context, payload []byte) error {
 	}
 
 	if !c.logsStreamAvailable || time.Since(c.lastAck) > logsAckBackPressureDelay {
-		return ErrLogsBackPressureSignal
+		return ErrBackPressureSignal
 	}
 
 	if err := c.mqtt.Publish(fmt.Sprintf("v1/agent/%s/logs", c.opts.AgentID), payload, true); err != nil {
@@ -618,7 +623,7 @@ func (c *Client) sendPointsMakePayload(points []types.MetricPoint) map[bleemeoTy
 	c.l.Lock()
 	defer c.l.Unlock()
 
-	if !c.connected() || c.isSendingSuspended() {
+	if !c.connected() || c.isSendingSuspended() || !c.dataStreamAvailable || (!c.lastAck.IsZero() && time.Since(c.lastAck) > dataAckBackPressureDelay) {
 		// store all new points as failed ones
 		c.addFailedPoints(c.filterPoints(points)...)
 
@@ -871,6 +876,15 @@ func (c *Client) sendTopinfo(ctx context.Context, cfg bleemeoTypes.GloutonAccoun
 	if err != nil {
 		logger.V(1).Printf("Unable to get topinfo: %v", err)
 
+		return
+	}
+
+	c.l.Lock()
+	topinfoStreamAvailable := c.topinfoStreamAvailable
+	lastAck := c.lastAck
+	c.l.Unlock()
+
+	if !topinfoStreamAvailable || (!lastAck.IsZero() && time.Since(lastAck) > topinfoAckBackPressureDelay) {
 		return
 	}
 
