@@ -1,20 +1,13 @@
-$remoteUrl = "https://packages.bleemeo.com/bleemeo-agent/windows/"
-$msiName = "bleemeo-agent_latest.msi"
-$msiUrl = "$remoteUrl$msiName"
-$tempPath = "$env:TEMP\$msiName"
+$versionUrl = "https://packages.bleemeo.com/bleemeo-agent/VERSION"
+$baseMsiUrl = "https://packages.bleemeo.com/bleemeo-agent/windows/"
 $localPackageName = "Glouton"
+$tempPath = [System.IO.Path]::GetTempPath()
 
 # Function to retrieve the remote version
-# Recall that the Glouton version is defined as : GLOUTON_VERSION=$(date -u +%y.%m.%d.%H%M%S)
-# Example : 24.07.15.121603
 function Get-RemoteVersion {
-    $response = Invoke-WebRequest -Uri $remoteUrl
+    $response = Invoke-WebRequest -Uri $versionUrl
     if ($response.StatusCode -eq 200) {
-        $htmlContent = $response.Content
-        $regex = [regex]::Escape($msiName) + ".*?(\d{2}-[A-Za-z]{3}-\d{4} \d{2}:\d{2})"
-        if ($htmlContent -match $regex) {
-            return (([datetime] $matches[1].Trim()).ToString('yy.MM.dd.HHmmss'))
-        }
+        return $response.Content.Trim()
     }
     return $null
 }
@@ -30,14 +23,18 @@ function Get-LocalVersion {
 
 # Function to download the MSI
 function Download-MSI {
-    Invoke-WebRequest -Uri $msiUrl -OutFile $tempPath
+    param([string]$version)
+    $msiName = "glouton_$version.msi"
+    $msiUrl = "$baseMsiUrl$msiName"
+    $destinationPath = [System.IO.Path]::Combine($tempPath, $msiName)
+    Invoke-WebRequest -Uri $msiUrl -OutFile $destinationPath
+    return $destinationPath
 }
 
 # Function to update the package
 function Update-Package {
-    Start-Process msiexec.exe -ArgumentList "/i `"$tempPath`" /quiet /norestart" -Wait
-    # msiexec.exe -ArgumentList "/i bleemeo-agent_latest.msi /quiet /norestart" -Wait
-    return $null
+    param([string]$msiPath)
+    Start-Process msiexec.exe -ArgumentList "/i `"$msiPath`" /quiet /norestart" -Wait
 }
 
 # Main logic
@@ -48,10 +45,16 @@ Write-Output "Local version: $localVersion"
 
 if ($remoteVersion -and $localVersion -and ([Version]($remoteVersion) -gt [Version]($localVersion))) {
     Write-Output "New version available. Updating package..."
-    Download-MSI
-    Update-Package
-    Remove-Item $tempPath
+    $msiPath = Download-MSI -version $remoteVersion
+    Update-Package -msiPath $msiPath
+    Remove-Item $msiPath
     Write-Output "Package updated successfully."
+} elseif ($remoteVersion -and -not $localVersion) {
+    Write-Output "Local version not found. Installing package..."
+    $msiPath = Download-MSI -version $remoteVersion
+    Update-Package -msiPath $msiPath
+    Remove-Item $msiPath
+    Write-Output "Package installed successfully."
 } else {
     Write-Output "No update required. The local version is up to date."
 }
