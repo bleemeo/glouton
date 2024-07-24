@@ -104,9 +104,12 @@ type Client struct {
 	// Stop sending points, used when the user is read-only mode.
 	sendingSuspended bool
 	// Stop buffering failed points, used when the account is suspended.
-	bufferingSuspended bool
-	disableReason      bleemeoTypes.DisableReason
-	lastLogsAck        time.Time
+	bufferingSuspended     bool
+	disableReason          bleemeoTypes.DisableReason
+	lastAck                time.Time
+	dataStreamAvailable    bool
+	topinfoStreamAvailable bool
+	logsStreamAvailable    bool
 }
 
 type metricPayload struct {
@@ -581,7 +584,7 @@ func (c *Client) PushLogs(_ context.Context, payload []byte) error {
 		return ErrNotConnected
 	}
 
-	if time.Since(c.lastLogsAck) > logsAckBackPressureDelay {
+	if !c.logsStreamAvailable || time.Since(c.lastAck) > logsAckBackPressureDelay {
 		return ErrLogsBackPressureSignal
 	}
 
@@ -803,7 +806,10 @@ type notificationPayload struct {
 	MonitorUUID            string `json:"monitor_uuid,omitempty"`
 	MonitorOperationType   string `json:"monitor_operation_type,omitempty"`
 	DiagnosticRequestToken string `json:"request_token,omitempty"`
-	LogsAckTimestamp       string `json:"logs_ack_timestamp,omitempty"`
+	AckTimestamp           string `json:"ack_timestamp,omitempty"`
+	DataStreamAvailable    bool   `json:"data_stream_available,omitempty"`
+	TopInfoStreamAvailable bool   `json:"topinfo_stream_available,omitempty"`
+	LogsStreamAvailable    bool   `json:"logs_stream_available,omitempty"`
 }
 
 func (c *Client) onNotification(ctx context.Context, msg paho.Message) {
@@ -839,10 +845,10 @@ func (c *Client) onNotification(ctx context.Context, msg paho.Message) {
 			defer crashreport.ProcessPanic()
 			c.opts.HandleDiagnosticRequest(ctx, payload.DiagnosticRequestToken)
 		}()
-	case "logs-ack":
-		ts, err := time.Parse(time.RFC3339, payload.LogsAckTimestamp)
+	case "ack":
+		ts, err := time.Parse(time.RFC3339, payload.AckTimestamp)
 		if err != nil {
-			logger.V(1).Printf("Failed to parse logs ACK timestamp: %v", err)
+			logger.V(1).Printf("Failed to parse ACK timestamp: %v", err)
 
 			return
 		}
@@ -852,7 +858,10 @@ func (c *Client) onNotification(ctx context.Context, msg paho.Message) {
 		}
 
 		c.l.Lock()
-		c.lastLogsAck = ts
+		c.lastAck = ts
+		c.dataStreamAvailable = payload.DataStreamAvailable
+		c.topinfoStreamAvailable = payload.TopInfoStreamAvailable
+		c.logsStreamAvailable = payload.LogsStreamAvailable
 		c.l.Unlock()
 	}
 }
