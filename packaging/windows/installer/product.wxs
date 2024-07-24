@@ -1,5 +1,5 @@
 ﻿<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs" xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util" xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui" >
-	<Package Name="Glouton" Language="1033" Version="1.2.3.4" Manufacturer="Bleemeo" UpgradeCode="9A2085DA-6D2E-4D89-938C-625F94EEE312">
+	<Package Name="Glouton" Language="1033" Version="1.2.3.4" Manufacturer="Bleemeo" UpgradeCode="9A2085DA-6D2E-4D89-938C-625F94EEE312" Compressed="yes" Scope="perMachine">
 		<MajorUpgrade AllowDowngrades="no" AllowSameVersionUpgrades="no" DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
 		
 		<!-- Embed the executable and config files in the installer -->
@@ -62,10 +62,9 @@
 				<File Id="_05_system.conf" Source="$(var.AssetsPath)glouton.conf" Name="05-system.conf" />
 			</Component>
 
-			<Component Id="SetCredentials" Directory="ConfigFolder" Permanent="yes" Guid="748B2FFD-5461-4F7E-A93B-6903FE029CEB">
+			<Component Id="SetCredentials" Directory="ConfigFolder" Permanent="yes" Guid="748B2FFD-5461-4F7E-A93B-6903FE029CEB" Condition="NOT WIX_UPGRADE_DETECTED">
 				<!-- Update credentials.xml with the user input during installation -->
 				<!-- Skip this component on upgrades because we don't ask users for their credentials -->
-				
 
 				<File Id="CredentialsFile" Source="$(var.AssetsPath)credentials.xml" KeyPath="yes" />
 				
