@@ -3,7 +3,7 @@
 		<MajorUpgrade AllowDowngrades="no" AllowSameVersionUpgrades="no" DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
 		
 		<!-- Embed the executable and config files in the installer -->
-		<Media Id="1" Cabinet="glouton.cab" EmbedCab="yes" />
+		<Media Id="1" Cabinet="glouton.cab" EmbedCab="yes" CompressionLevel="mszip" />
 
 		<!-- Include app icon in shortcuts and uninstall menu -->
 		<Icon Id="Icon.ico" SourceFile="$(var.AssetsPath)bleemeo.ico" />
@@ -56,6 +56,10 @@
 
 			<Component Id="PreInstallScript" Directory="INSTALLFOLDER" Guid="96665693-905F-4F25-94DF-06830B02DAAE">
 				<File Id="___var.AssetsPath_pre_uninstall.ps1" Source="$(var.AssetsPath)pre_uninstall.ps1" KeyPath="yes" />
+			</Component>
+
+			<Component Id="GloutonAutoUpdateScript" Directory="INSTALLFOLDER" Guid="DFA10ED1-033D-43F6-9AAA-C0E9C4C4F003">
+				<File Id="___var.AssetsPath_glouton_auto_update.ps1" Source="$(var.AssetsPath)glouton_auto_update.ps1" KeyPath="yes" />
 			</Component>
 
 			<Component Id="SystemConfig" Directory="ConfigFolder" Guid="741C2E8E-C3D3-4105-A40A-FF144FC41540">

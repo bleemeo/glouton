@@ -24,13 +24,15 @@ if ($?) {
     schtasks /Delete /F /TN $TaskAutoUpdateName
 }
 
+# Calculate the start time for the Auto Update task to be 24 hours from now
+$startTime = (Get-Date).AddDays(1).ToString("HH:mm")
+
 # Create the scheduled tasks
 schtasks /Create /F /RU System /SC HOURLY /TN $TaskWindowsUpdateCheckerName /TR $WindowsUpdateCheckerScriptLaucnh
-schtasks /Create /F /RU System /SC HOURLY /TN $TaskAutoUpdateName /TR $AutoUpdateScriptLaunch
+schtasks /Create /F /RU System /SC DAILY /ST $startTime /TN $TaskAutoUpdateName /TR $AutoUpdateScriptLaunch
 
-# Run the scheduled tasks immediately
+# Run the Windows Update Checker task immediately
 schtasks /Run /I /TN $TaskWindowsUpdateCheckerName
-schtasks /Run /I /TN $TaskAutoUpdateName
 
 # Make sure all files created in the directory can be read by Glouton.
 icacls "C:\ProgramData\glouton" /grant "NT AUTHORITY\LocalService:(OI)(CI)F"
