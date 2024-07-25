@@ -1,19 +1,3 @@
-param([string]$InstallFolder)
-
-$AutoUpdateScriptPath = "$InstallFolder\glouton_auto_update.ps1"
-$TaskAutoUpdateName = "Bleemeo\Glouton\Auto Update Task"
-$AutoUpdateScriptLaunch = "powershell.exe -ExecutionPolicy Bypass -NonInteractive -File `"$AutoUpdateScriptPath`""
-
-$taskAutoUpdateExists = schtasks /Query /TN $TaskAutoUpdateName 2>$null
-if ($?) {
-    # If the task exists, delete it
-    schtasks /Delete /F /TN $TaskAutoUpdateName
-}
-
-# Calculate the start time for the Auto Update task to be 24 hours from now
-$startTime = (Get-Date).AddDays(1).ToString("HH:mm")
-schtasks /Create /F /RU System /SC DAILY /ST $startTime /TN $TaskAutoUpdateName /TR $AutoUpdateScriptLaunch
-
 $versionUrl = "https://packages.bleemeo.com/bleemeo-agent/VERSION"
 $baseMsiUrl = "https://packages.bleemeo.com/bleemeo-agent/windows/"
 $localPackageName = "Glouton"

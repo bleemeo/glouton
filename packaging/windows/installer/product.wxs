@@ -86,17 +86,18 @@
 			</Component>
 		</ComponentGroup>
 
-		<!-- Auto update script -->
-		<SetProperty Id="EnableAutoUpdate" Value="&quot;powershell.exe&quot; -ExecutionPolicy Bypass -NonInteractive -File &quot;[INSTALLFOLDER]glouton_auto_update.ps1&quot;" Sequence="execute" Before="EnableAutoUpdate" />
-		<CustomAction Id="EnableAutoUpdate" Return="ignore" Impersonate="no" Execute="deferred" DllEntry="WixQuietExec" BinaryRef="Wix4UtilCA_X86" />
 
 		<!-- Add checkbox to open the local web dashboard after the installation -->
 		<Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT" Value="Open Glouton local web dashboard" />
 		<CustomAction Id="OpenDashboard" Directory="TARGETDIR" Execute="immediate" Impersonate="yes" Return="asyncNoWait" ExeCommand="explorer.exe http://localhost:8015" />
 
-		<!-- Post install script -->
-		<SetProperty Id="PostInstall" Value="&quot;powershell.exe&quot; -ExecutionPolicy Bypass -NonInteractive -File &quot;[INSTALLFOLDER]post_install.ps1&quot; &quot;[INSTALLFOLDER]&quot;" Sequence="execute" Before="PostInstall" />
-		<CustomAction Id="PostInstall" Return="ignore" Impersonate="no" Execute="deferred" DllEntry="WixQuietExec" BinaryRef="Wix4UtilCA_X86" />
+		<!-- Post install script auto update -->
+		<SetProperty Id="PostInstallAutoUpdate" Value="&quot;powershell.exe&quot; -ExecutionPolicy Bypass -NonInteractive -File &quot;[INSTALLFOLDER]post_install.ps1&quot; -AutoUpdate &quot;[INSTALLFOLDER]&quot;" Sequence="execute" Before="PostInstallAutoUpdate" />
+		<CustomAction Id="PostInstallAutoUpdate" Return="ignore" Impersonate="no" Execute="deferred" DllEntry="WixQuietExec" BinaryRef="Wix4UtilCA_X86" />
+
+		<!-- Post install script no auto update -->
+		<SetProperty Id="PostInstallNoAutoUpdate" Value="&quot;powershell.exe&quot; -ExecutionPolicy Bypass -NonInteractive -File &quot;[INSTALLFOLDER]post_install.ps1&quot; &quot;[INSTALLFOLDER]&quot;" Sequence="execute" Before="PostInstallNoAutoUpdate" />
+		<CustomAction Id="PostInstallNoAutoUpdate" Return="ignore" Impersonate="no" Execute="deferred" DllEntry="WixQuietExec" BinaryRef="Wix4UtilCA_X86" />
 
 		<!-- Pre uninstall script -->
 		<SetProperty Id="PreUninstall" Value="&quot;powershell.exe&quot; -ExecutionPolicy Bypass -NonInteractive -File &quot;[INSTALLFOLDER]pre_uninstall.ps1&quot;" Sequence="execute" Before="PreUninstall" />
@@ -115,12 +116,10 @@
 		<InstallExecuteSequence>
 			<Custom Action="UninstallOldInstaller" Before="InstallFiles" Condition="NOT WIX_UPGRADE_DETECTED" />
 
-			<Custom Action="PostInstall" After="InstallFiles" Condition="NOT _UNINSTALL" />
-			<Custom Action="PreUninstall" After="InstallInitialize" Condition="_UNINSTALL" />
-		</InstallExecuteSequence>
+			<Custom Action="PostInstallAutoUpdate" After="InstallFiles" Condition="(NOT _UNINSTALL) AND (ENABLEAUTOUPDATE)" />
+			<Custom Action="PostInstallNoAutoUpdate" After="PostInstallAutoUpdate" Condition="(NOT _UNINSTALL) AND (NOT ENABLEAUTOUPDATE)" />
 
-		<InstallExecuteSequence>
-			<Custom Action="EnableAutoUpdate" After="PostInstall" Condition="ENABLEAUTOUPDATE" />
+			<Custom Action="PreUninstall" After="InstallInitialize" Condition="_UNINSTALL" />
 		</InstallExecuteSequence>
 
 		<!-- List components to install -->
