@@ -571,6 +571,17 @@ func autoUpgradeIsEnabled(ctx context.Context) (bool, error) {
 		}
 	}
 
+	if version.IsWindows() {
+		cmd := exec.CommandContext(ctx, "schtasks", "/query", "/tn", `Bleemeo\Glouton\Auto Update Task`)
+		err := cmd.Run()
+
+		if err == nil {
+			return true, nil
+		}
+
+		return false, err
+	}
+
 	if !version.IsLinux() {
 		return false, errAutoUpgradeNotSupported
 	}
