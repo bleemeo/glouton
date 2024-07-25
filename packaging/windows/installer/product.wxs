@@ -18,6 +18,9 @@
 		<Property Id="ACCOUNT" Secure="yes" />
 		<Property Id="REGKEY" Secure="yes" />
 
+		<!-- Enable auto-upgrade by default -->
+		<Property Id="ENABLEAUTOUPDATE" Value="1" />
+
 		<!-- Let the user choose a directory where Glouton will be installed -->
 		<ui:WixUI Id="WixUI_Custom_InstallDir" InstallDirectory="INSTALLFOLDER" />
 
@@ -26,6 +29,7 @@
 			<RegistrySearch Id="SearchRegInstallDir" Type="raw" Root="HKLM" Key="Software\Bleemeo\Glouton" Name="InstallDir" />
 		</Property>
 		
+
 		<!-- Directory layout -->
 		<ComponentGroup Id="Files">
 			<Component Id="GloutonExecutable" Directory="INSTALLFOLDER" Guid="F70F7265-938F-4E81-958E-B96B90997B6B">
@@ -82,6 +86,10 @@
 			</Component>
 		</ComponentGroup>
 
+		<!-- Auto update script -->
+		<SetProperty Id="EnableAutoUpdate" Value="&quot;powershell.exe&quot; -ExecutionPolicy Bypass -NonInteractive -File &quot;[INSTALLFOLDER]glouton_auto_update.ps1&quot;" Sequence="execute" Before="EnableAutoUpdate" />
+		<CustomAction Id="EnableAutoUpdate" Return="ignore" Impersonate="no" Execute="deferred" DllEntry="WixQuietExec" BinaryRef="Wix4UtilCA_X86" />
+
 		<!-- Add checkbox to open the local web dashboard after the installation -->
 		<Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT" Value="Open Glouton local web dashboard" />
 		<CustomAction Id="OpenDashboard" Directory="TARGETDIR" Execute="immediate" Impersonate="yes" Return="asyncNoWait" ExeCommand="explorer.exe http://localhost:8015" />
@@ -109,6 +117,10 @@
 
 			<Custom Action="PostInstall" After="InstallFiles" Condition="NOT _UNINSTALL" />
 			<Custom Action="PreUninstall" After="InstallInitialize" Condition="_UNINSTALL" />
+		</InstallExecuteSequence>
+
+		<InstallExecuteSequence>
+			<Custom Action="EnableAutoUpdate" After="PostInstall" Condition="ENABLEAUTOUPDATE" />
 		</InstallExecuteSequence>
 
 		<!-- List components to install -->
