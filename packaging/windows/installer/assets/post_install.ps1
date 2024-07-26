@@ -36,7 +36,6 @@ if ($AutoUpdate) {
 
     $startTime = (Get-Date).AddDays(1).ToString("HH:mm")
     schtasks /Create /F /RU System /SC DAILY /ST $startTime /TN $TaskAutoUpdateName /TR $AutoUpdateLaunch
-    schtasks /Run /I /TN $TaskAutoUpdateName
 }
 
 # Make sure all files created in the directory can be read by Glouton.
