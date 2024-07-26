@@ -1,4 +1,4 @@
-$versionUrl = "https://gist.githubusercontent.com/Minifixio/dba71027a387c9f33a3246fcad3b2cf7/raw/328e7d70ad194325eb60a1e564d7b15037561ded/VERSION.txt"
+$versionUrl = "https://packages.bleemeo.com/bleemeo-agent/VERSION"
 $baseMsiUrl = "https://packages.bleemeo.com/bleemeo-agent/windows/"
 $localPackageName = "Glouton"
 $tempPath = [System.IO.Path]::GetTempPath()
