@@ -520,8 +520,14 @@ func httpQuery(ctx context.Context, url string, headers []string) string {
 		req.Header.Add(splits[0], splits[1])
 	}
 
+	isAWS := strings.HasPrefix(url, "http://169.254.169.254/latest/meta-data/")
+
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
+		if isAWS {
+			logger.V(0).Printf("Failed to execute AWS fact req to %q: %v", url, err)
+		}
+
 		return ""
 	}
 
@@ -529,12 +535,25 @@ func httpQuery(ctx context.Context, url string, headers []string) string {
 
 	// We refuse to decode messages when the request triggered an error
 	if resp.StatusCode >= http.StatusBadRequest {
+		if isAWS {
+			body, err := io.ReadAll(resp.Body)
+			if err != nil {
+				logger.V(0).Printf("Failed to read AWS fact body (%q - %d): %v", url, resp.StatusCode, err)
+			} else {
+				logger.V(0).Printf("Bad status code for AWS fact req to %q: %d\n%s", url, resp.StatusCode, string(body))
+			}
+		}
+
 		return ""
 	}
 
 	// limit the amount of data to 1mb
 	body, err := io.ReadAll(&io.LimitedReader{R: resp.Body, N: 2 << 20})
 	if err != nil {
+		if isAWS {
+			logger.V(0).Printf("Failed to read AWS fact body (%q): %v", url, err)
+		}
+
 		return ""
 	}
 

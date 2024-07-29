@@ -331,6 +331,8 @@ func gceFacts(ctx context.Context, facts map[string]string) (found bool) {
 }
 
 func awsFacts(ctx context.Context, facts map[string]string) (found bool) {
+	logger.V(0).Println("Gathering AWS facts ...")
+
 	ctx, cancel := context.WithTimeout(ctx, 1*time.Second)
 	defer cancel()
 
