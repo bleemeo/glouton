@@ -12,7 +12,11 @@ function Get-RemoteVersion {
      $response = Invoke-WebRequest -UseBasicParsing -ContentType "text/plain" -Uri $versionUrl
 
     if ($response.StatusCode -eq 200) {
-        $content_text = $response.Content
+        if ($response.Content.GetType() -eq [System.Byte[]]) {
+            $content_text = [System.Text.Encoding]::UTF8.GetString($response.Content)
+        } else {
+            $content_text = $response.Content
+        }
         return $content_text.Trim()
     }
 
