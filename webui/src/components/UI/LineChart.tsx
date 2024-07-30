@@ -258,7 +258,6 @@ const LineChart: FC<LineChartProps> = ({
       metrics[0].metric
     ) {
       const series: CustomSeriesOption[] = [];
-      /* eslint-enable indent */
       metrics.forEach((metric, idx) => {
         const nameDisplay = composeMetricName(
           metric,

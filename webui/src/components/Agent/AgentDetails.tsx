@@ -1,4 +1,3 @@
-/* eslint-disable camelcase */
 import React, { FC, useEffect, useRef, useState } from "react";
 import * as d3 from "d3";
 import { AxiosError } from "axios";

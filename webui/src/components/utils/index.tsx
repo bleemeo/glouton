@@ -210,9 +210,14 @@ export const useIntersection = (element: RefObject<any>, rootMargin) => {
       },
       { rootMargin },
     );
-    current && observer?.observe(current);
 
-    return () => current && observer.unobserve(current);
+    if (current) observer?.observe(current);
+
+    return () => {
+      if (current) {
+        observer.unobserve(current);
+      }
+    };
   }, []);
 
   return isVisible;

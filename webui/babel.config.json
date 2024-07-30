@@ -9,17 +9,5 @@
     ],
     "@babel/preset-react",
     "@babel/preset-typescript"
-  ],
-  "env": {
-    "development": {
-      "plugins": [
-        "lodash"
-      ]
-    },
-    "production": {
-      "plugins": [
-        "lodash"
-      ]
-    }
-  }
+  ]
 }
