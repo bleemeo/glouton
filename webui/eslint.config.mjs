@@ -8,47 +8,52 @@ import { FlatCompat } from "@eslint/eslintrc";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const compat = new FlatCompat({
-    baseDirectory: __dirname,
-    recommendedConfig: js.configs.recommended,
-    allConfig: js.configs.all
+  baseDirectory: __dirname,
+  recommendedConfig: js.configs.recommended,
+  allConfig: js.configs.all,
 });
 
-export default [...compat.extends(
+export default [
+  ...compat.extends(
     "eslint:recommended",
     "plugin:react/recommended",
     "plugin:prettier/recommended",
-), {
+  ),
+  {
     languageOptions: {
-        globals: {
-            ...globals.browser,
-            __DEV__: false,
-            process: true,
-            __DEBUG__: false,
-        },
+      globals: {
+        ...globals.browser,
+        __DEV__: false,
+        process: true,
+        __DEBUG__: false,
+      },
 
-        parser: tsParser,
-        ecmaVersion: 12,
-        sourceType: "module",
+      parser: tsParser,
+      ecmaVersion: 12,
+      sourceType: "module",
 
-        parserOptions: {
-            ecmaFeatures: {
-                jsx: true,
-            },
+      parserOptions: {
+        ecmaFeatures: {
+          jsx: true,
         },
+      },
     },
 
     settings: {
-        react: {
-            version: "detect",
-        },
+      react: {
+        version: "detect",
+      },
     },
-}, ...compat.extends("plugin:@typescript-eslint/recommended").map(config => ({
+  },
+  ...compat.extends("plugin:@typescript-eslint/recommended").map((config) => ({
     ...config,
     files: ["**/*.ts", "**/*.tsx"],
-})), {
+  })),
+  {
     files: ["**/*.ts", "**/*.tsx"],
 
     rules: {
-        "react/prop-types": "off",
+      "react/prop-types": "off",
     },
-}];
+  },
+];

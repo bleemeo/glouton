@@ -1,7 +1,12 @@
-import { ArrowDownIcon, ArrowUpIcon, CheckIcon } from "@chakra-ui/icons";
-import { Icon, ListItem, UnorderedList } from "@chakra-ui/react";
+import {
+  ArrowDownIcon,
+  ArrowUpIcon,
+  CheckIcon,
+  MoonIcon,
+} from "@chakra-ui/icons";
+import { ListItem, UnorderedList } from "@chakra-ui/react";
+import { isNil } from "lodash-es";
 import React, { FC, RefObject } from "react";
-import { GiNightSleep } from "react-icons/gi";
 
 export const chartTypes = ["gauge", "number", "numbers"];
 export const UNIT_FLOAT = 0;
@@ -14,10 +19,9 @@ export const createFilterFn = (input: string) => {
   return (text: string) => text.toLowerCase().includes(i);
 };
 
-export const isNullOrUndefined = (variable: unknown) =>
-  variable === null || variable === undefined;
+export const isNullOrUndefined = (variable: unknown) => isNil(variable);
 
-export const isUndefined = (variable) => variable === undefined;
+export const isUndefined = (variable) => isNil(variable);
 
 type ProblemsProps = {
   problems: string[];
@@ -36,7 +40,7 @@ type MetricDescriptionProps = {
 export const MetricDescription: FC<MetricDescriptionProps> = ({
   description,
 }) => {
-  if (description === undefined) {
+  if (isNil(description)) {
     return <noscript />;
   }
   const descriptionPieces = description.split("\n");
@@ -58,7 +62,7 @@ export const copyToClipboard = (cmd: string) => {
   const el = document.createElement("textarea");
   el.value = cmd;
   const copyElement = document.getElementById("copy");
-  if (copyElement !== null) {
+  if (!isNil(copyElement)) {
     copyElement.appendChild(el);
     el.select();
     document.execCommand("Copy");
@@ -237,7 +241,7 @@ export const iconFromName = (
         <ArrowDownIcon w={w} h={h} color={color} transform="rotate(180)" />
       );
     case "process-sleeping":
-      return <Icon as={GiNightSleep} w={w} h={h} color={color} />;
+      return <MoonIcon w={w} h={h} color={color} />;
     case "process-running":
       return <CheckIcon w={w} h={h} color={color} />;
     default:

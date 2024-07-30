@@ -1,8 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import React, { useRef, useEffect, useState, FC } from "react";
 import Card from "react-bootstrap/Card";
-import * as echarts from "echarts";
-import type { EChartsOption, CustomSeriesOption } from "echarts";
+import { type EChartsOption, type CustomSeriesOption, init } from "echarts";
 
 import Loading from "./Loading";
 import FaIcon from "./FaIcon";
@@ -18,6 +17,7 @@ import {
 } from "../utils/formater";
 import { fillEmptyPoints, UNIT_PERCENTAGE, composeMetricName } from "../utils";
 import { chartColorMap } from "../utils/colors";
+import { isNil } from "lodash-es";
 
 export const getOptions = (
   series: CustomSeriesOption[],
@@ -102,7 +102,7 @@ export const getOptions = (
         total = 0;
         if (Array.isArray(params)) {
           params.map((p) => {
-            if (p.data[1] !== null && p.data[1] !== undefined) {
+            if (!isNil(p.data[1])) {
               total += Number(p.data[1]);
             }
             return params;
@@ -128,9 +128,7 @@ export const getOptions = (
                   </td>
                   <td>
                     <b>${
-                      p.data[1] !== null && p.data[1] !== undefined
-                        ? funcConverter(p.data[1])
-                        : "N/A"
+                      !isNil(p.data[1]) ? funcConverter(p.data[1]) : "N/A"
                     }</b>
                   </td>
                 </tr>
@@ -148,7 +146,7 @@ export const getOptions = (
                 </td>
                 <td>
                   <b>${
-                    params.data[1] !== null && params.data[1] !== undefined
+                    !isNil(params.data[1])
                       ? funcConverter(params.data[1])
                       : "N/A"
                   }</b>
@@ -284,7 +282,7 @@ const LineChart: FC<LineChartProps> = ({
 
         series.push(serie);
       });
-      const svg = echarts.init(svgChart.current);
+      const svg = init(svgChart.current);
       const opts = getOptions(
         series,
         stacked ? stacked : false,
@@ -298,7 +296,7 @@ const LineChart: FC<LineChartProps> = ({
 
   useEffect(() => {
     if (svgChart.current) {
-      const svg = echarts.init(svgChart.current);
+      const svg = init(svgChart.current);
       svg.resize();
     }
   }, [windowWidth]);
