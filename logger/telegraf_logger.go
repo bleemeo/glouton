@@ -20,8 +20,6 @@ import (
 	"fmt"
 	"sync"
 	"time"
-
-	"github.com/influxdata/telegraf"
 )
 
 // To avoid inputs spamming log message, we limit the number of messages
@@ -46,6 +44,7 @@ func NewTelegrafLog(name string) *TelegrafLogger {
 	return &TelegrafLogger{name: name}
 }
 
+/* Will be useful once telegraf is updated (and so is prometheus/procfs)
 func (t *TelegrafLogger) Level() telegraf.LogLevel {
 	t.l.Lock()
 	defer t.l.Unlock()
@@ -59,7 +58,7 @@ func (t *TelegrafLogger) Level() telegraf.LogLevel {
 
 func (t *TelegrafLogger) RegisterErrorCallback(f func()) {
 	t.onError = append(t.onError, f)
-}
+}*/
 
 // Errorf logs an error message, patterned after log.Printf.
 func (t *TelegrafLogger) Errorf(format string, args ...interface{}) {

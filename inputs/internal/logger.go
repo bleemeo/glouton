@@ -18,7 +18,6 @@ package internal
 
 import (
 	"github.com/bleemeo/glouton/logger"
-	"github.com/influxdata/telegraf"
 )
 
 // Logger is an implementation of telegraf.Logger.
@@ -27,13 +26,14 @@ type Logger struct {
 	onError []func()
 }
 
+/* Will be useful once telegraf is updated (and so is prometheus/procfs)
 func (l Logger) Level() telegraf.LogLevel {
 	return telegraf.Debug
 }
 
 func (l Logger) RegisterErrorCallback(f func()) {
 	l.onError = append(l.onError, f)
-}
+}*/
 
 // Errorf logs an error message, patterned after log.Printf.
 func (l Logger) Errorf(format string, args ...interface{}) {
