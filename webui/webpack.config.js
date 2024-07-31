@@ -51,7 +51,7 @@ module.exports = (_, argv) => {
     // (that is when webpack-dev-server 4.0 is release).
     target: isDev ? "web" : "browserslist",
     entry: {
-      "panel-glouton-main": ["./src/index.js"],
+      "panel-glouton-main": ["./src/index.ts"],
     },
     output: {
       // hack. publicPath is used to generate URL in CSS & JS.
