@@ -64,8 +64,12 @@ import {
 import * as echarts from "echarts/core";
 import { PieChart } from "echarts/charts";
 import { EChartsOption } from "echarts";
+import {
+  CanvasRenderer
+} from 'echarts/renderers';
+import { TooltipComponent } from 'echarts/components';
 
-echarts.use([PieChart]);
+echarts.use([PieChart, CanvasRenderer, TooltipComponent]);
 
 type AgentDetailsProps = {
   facts: Fact[];
