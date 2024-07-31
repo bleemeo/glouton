@@ -20,6 +20,7 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"math/rand"
@@ -49,6 +50,15 @@ const (
 	cleanupBatchSize = 1000
 
 	pointsBatchSize = 1000
+
+	dataAckBackPressureDelay    = 6*time.Minute + 10*time.Second
+	topinfoAckBackPressureDelay = 6*time.Minute + 10*time.Second
+	logsAckBackPressureDelay    = 1*time.Minute + 10*time.Second
+)
+
+var (
+	ErrNotConnected       = errors.New("currently not connected to MQTT")
+	ErrBackPressureSignal = errors.New("back-pressure signal")
 )
 
 // Option are parameter for the MQTT client.
@@ -96,8 +106,12 @@ type Client struct {
 	// Stop sending points, used when the user is read-only mode.
 	sendingSuspended bool
 	// Stop buffering failed points, used when the account is suspended.
-	bufferingSuspended bool
-	disableReason      bleemeoTypes.DisableReason
+	bufferingSuspended     bool
+	disableReason          bleemeoTypes.DisableReason
+	lastAck                time.Time
+	dataStreamAvailable    bool
+	topinfoStreamAvailable bool
+	logsStreamAvailable    bool
 }
 
 type metricPayload struct {
@@ -123,6 +137,9 @@ func New(opts Option) *Client {
 
 	c := &Client{
 		opts: opts,
+		// By default, we allow sending metric points and top-info on MQTT.
+		dataStreamAvailable:    true,
+		topinfoStreamAvailable: true,
 	}
 
 	c.failedPoints = failedPointsCache{
@@ -480,10 +497,15 @@ func (c *Client) run(ctx context.Context) error {
 
 	var topinfoSendAt time.Time
 
+	// Avoiding that all the Glouton started at the same time send their points all together.
 	time.Sleep(time.Duration(rand.Intn(10000)) * time.Millisecond) //nolint:gosec
+
+	c.sendPing()
 
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
+	// Every minute (6 * 10s), we send a ping message to inform mqtt_connector that we're still up
+	logsPingInc := 6
 
 	for ctx.Err() == nil {
 		cfg, ok := c.opts.Cache.CurrentAccountConfig()
@@ -498,6 +520,12 @@ func (c *Client) run(ctx context.Context) error {
 
 		select {
 		case <-ticker.C:
+			logsPingInc--
+			if logsPingInc == 0 {
+				logsPingInc = 6
+
+				c.sendPing()
+			}
 		case <-ctx.Done():
 		}
 	}
@@ -505,6 +533,15 @@ func (c *Client) run(ctx context.Context) error {
 	c.opts.Store.RemoveNotifiee(storeNotifieeID)
 
 	return nil
+}
+
+func (c *Client) sendPing() {
+	ts := time.Now().Format(time.RFC3339)
+
+	err := c.mqtt.Publish(fmt.Sprintf("v1/agent/%s/ping", c.opts.AgentID), ts, false)
+	if err != nil {
+		logger.V(1).Printf("Failed to send ping message on MQTT: %v", err)
+	}
 }
 
 // addPoints preprocesses and appends a list of metric points to those pending transmission over MQTT.
@@ -544,6 +581,25 @@ func (c *Client) PopPoints(includeFailedPoints bool) []types.MetricPoint {
 	return points
 }
 
+func (c *Client) PushLogs(_ context.Context, payload []byte) error {
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	if !c.connected() {
+		return ErrNotConnected
+	}
+
+	if !c.logsStreamAvailable || time.Since(c.lastAck) > logsAckBackPressureDelay {
+		return ErrBackPressureSignal
+	}
+
+	if err := c.mqtt.Publish(fmt.Sprintf("v1/agent/%s/logs", c.opts.AgentID), payload, true); err != nil {
+		return nil
+	}
+
+	return nil
+}
+
 func (c *Client) sendPoints() {
 	points := c.PopPoints(false)
 
@@ -567,7 +623,7 @@ func (c *Client) sendPointsMakePayload(points []types.MetricPoint) map[bleemeoTy
 	c.l.Lock()
 	defer c.l.Unlock()
 
-	if !c.connected() || c.isSendingSuspended() {
+	if !c.connected() || c.isSendingSuspended() || !c.dataStreamAvailable || (!c.lastAck.IsZero() && time.Since(c.lastAck) > dataAckBackPressureDelay) {
 		// store all new points as failed ones
 		c.addFailedPoints(c.filterPoints(points)...)
 
@@ -755,6 +811,10 @@ type notificationPayload struct {
 	MonitorUUID            string `json:"monitor_uuid,omitempty"`
 	MonitorOperationType   string `json:"monitor_operation_type,omitempty"`
 	DiagnosticRequestToken string `json:"request_token,omitempty"`
+	AckTimestamp           string `json:"ack_timestamp,omitempty"`
+	DataStreamAvailable    bool   `json:"data_stream_available,omitempty"`
+	TopInfoStreamAvailable bool   `json:"topinfo_stream_available,omitempty"`
+	LogsStreamAvailable    bool   `json:"logs_stream_available,omitempty"`
 }
 
 func (c *Client) onNotification(ctx context.Context, msg paho.Message) {
@@ -790,6 +850,24 @@ func (c *Client) onNotification(ctx context.Context, msg paho.Message) {
 			defer crashreport.ProcessPanic()
 			c.opts.HandleDiagnosticRequest(ctx, payload.DiagnosticRequestToken)
 		}()
+	case "ack":
+		ts, err := time.Parse(time.RFC3339, payload.AckTimestamp)
+		if err != nil {
+			logger.V(1).Printf("Failed to parse ACK timestamp: %v", err)
+
+			return
+		}
+
+		if ts.After(time.Now()) {
+			ts = time.Now()
+		}
+
+		c.l.Lock()
+		c.lastAck = ts
+		c.dataStreamAvailable = payload.DataStreamAvailable
+		c.topinfoStreamAvailable = payload.TopInfoStreamAvailable
+		c.logsStreamAvailable = payload.LogsStreamAvailable
+		c.l.Unlock()
 	}
 }
 
@@ -798,6 +876,15 @@ func (c *Client) sendTopinfo(ctx context.Context, cfg bleemeoTypes.GloutonAccoun
 	if err != nil {
 		logger.V(1).Printf("Unable to get topinfo: %v", err)
 
+		return
+	}
+
+	c.l.Lock()
+	topinfoStreamAvailable := c.topinfoStreamAvailable
+	lastAck := c.lastAck
+	c.l.Unlock()
+
+	if !topinfoStreamAvailable || (!lastAck.IsZero() && time.Since(lastAck) > topinfoAckBackPressureDelay) {
 		return
 	}
 

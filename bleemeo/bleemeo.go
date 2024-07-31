@@ -1105,3 +1105,15 @@ func (c *Connector) HandleDiagnosticRequest(ctx context.Context, requestToken st
 	datetime := time.Now().Format("20060102-150405")
 	c.sync.ScheduleDiagnosticUpload("on_demand_"+datetime+".zip", requestToken, archiveBuf.Bytes())
 }
+
+func (c *Connector) PushLogs(ctx context.Context, payload []byte) error {
+	c.l.Lock()
+	mqttClient := c.mqtt
+	c.l.Unlock()
+
+	if mqttClient != nil {
+		return mqttClient.PushLogs(ctx, payload)
+	}
+
+	return nil
+}
