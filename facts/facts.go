@@ -501,8 +501,8 @@ func guessVirtual(facts map[string]string) string {
 	}
 }
 
-func urlContent(ctx context.Context, url string) string {
-	return httpQuery(ctx, url, []string{})
+func urlContent(ctx context.Context, url string, headers ...string) string {
+	return httpQuery(ctx, url, headers)
 }
 
 func httpQuery(ctx context.Context, url string, headers []string) string {

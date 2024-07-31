@@ -20,7 +20,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net"
+	"net/http"
 	"sort"
 	"strconv"
 	"strings"
@@ -334,23 +336,24 @@ func awsFacts(ctx context.Context, facts map[string]string) (found bool) {
 	ctx, cancel := context.WithTimeout(ctx, 1*time.Second)
 	defer cancel()
 
-	facts["aws_ami_id"] = urlContent(ctx, "http://169.254.169.254/latest/meta-data/ami-id")
-
-	if facts["aws_ami_id"] == "" {
-		// If first request fail, don't try other one, it's probably not an
-		// AWS EC2.
+	awsToken, ok := awsRetrieveToken(ctx)
+	if !ok {
+		// If token retrieval fails, don't try gathering facts: it is probably not an AWS EC2.
 		return false
 	}
 
-	facts["aws_instance_id"] = urlContent(ctx, "http://169.254.169.254/latest/meta-data/instance-id")
-	facts["aws_instance_type"] = urlContent(ctx, "http://169.254.169.254/latest/meta-data/instance-type")
-	facts["aws_local_hostname"] = urlContent(ctx, "http://169.254.169.254/latest/meta-data/local-hostname")
-	facts["aws_public_ipv4"] = urlContent(ctx, "http://169.254.169.254/latest/meta-data/public-ipv4")
-	facts["aws_placement"] = urlContent(ctx, "http://169.254.169.254/latest/meta-data/placement/availability-zone")
+	tokenHeader := "X-Aws-Ec2-Metadata-Token:" + awsToken
+
+	facts["aws_ami_id"] = urlContent(ctx, "http://169.254.169.254/latest/meta-data/ami-id", tokenHeader)
+	facts["aws_instance_id"] = urlContent(ctx, "http://169.254.169.254/latest/meta-data/instance-id", tokenHeader)
+	facts["aws_instance_type"] = urlContent(ctx, "http://169.254.169.254/latest/meta-data/instance-type", tokenHeader)
+	facts["aws_local_hostname"] = urlContent(ctx, "http://169.254.169.254/latest/meta-data/local-hostname", tokenHeader)
+	facts["aws_public_ipv4"] = urlContent(ctx, "http://169.254.169.254/latest/meta-data/public-ipv4", tokenHeader)
+	facts["aws_placement"] = urlContent(ctx, "http://169.254.169.254/latest/meta-data/placement/availability-zone", tokenHeader)
 
 	baseURL := "http://169.254.169.254/latest/meta-data/network/interfaces/macs/"
 
-	macs := urlContent(ctx, baseURL)
+	macs := urlContent(ctx, baseURL, tokenHeader)
 	if macs == "" {
 		return false
 	}
@@ -359,12 +362,12 @@ func awsFacts(ctx context.Context, facts map[string]string) (found bool) {
 	resultIPv4 := make([]string, 0)
 
 	for _, line := range strings.Split(macs, "\n") {
-		t := urlContent(ctx, baseURL+line+"vpc-id")
+		t := urlContent(ctx, baseURL+line+"vpc-id", tokenHeader)
 		if t != "" {
 			resultVPC = append(resultVPC, t)
 		}
 
-		t = urlContent(ctx, baseURL+line+"vpc-ipv4-cidr-block")
+		t = urlContent(ctx, baseURL+line+"vpc-ipv4-cidr-block", tokenHeader)
 		if t != "" {
 			resultIPv4 = append(resultIPv4, t)
 		}
@@ -379,6 +382,37 @@ func awsFacts(ctx context.Context, facts map[string]string) (found bool) {
 	}
 
 	return true
+}
+
+func awsRetrieveToken(ctx context.Context) (string, bool) {
+	const tokenURL = "http://169.254.169.254/latest/api/token" //nolint:gosec
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, tokenURL, nil)
+	if err != nil {
+		logger.V(1).Printf("Failed to parse AWS token request: %v", err)
+
+		return "", false
+	}
+
+	req.Header.Set("X-Aws-Ec2-Metadata-Token-Ttl-Seconds", "60") // mandatory
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", false
+	}
+
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", false
+	}
+
+	token, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", false
+	}
+
+	return string(token), true
 }
 
 func collectCloudProvidersFacts(ctx context.Context, facts map[string]string) {
