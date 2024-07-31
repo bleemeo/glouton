@@ -571,6 +571,15 @@ func autoUpgradeIsEnabled(ctx context.Context) (bool, error) {
 		}
 	}
 
+	if version.IsWindows() {
+		_, err := os.Stat(`C:\ProgramData\glouton\auto_update.txt`)
+		if err != nil {
+			return false, err
+		}
+
+		return true, nil
+	}
+
 	if !version.IsLinux() {
 		return false, errAutoUpgradeNotSupported
 	}

@@ -1,7 +1,6 @@
-<?xml version="1.0" encoding="utf-8"?>
-<WixLocalization Culture="en-us" xmlns="http://schemas.microsoft.com/wix/2006/localization">
+﻿<WixLocalization Culture="en-us" xmlns="http://wixtoolset.org/schemas/v4/wxl">
 	<!-- This file can be used to override default texts in C:\Program Files (x86)\WiX Toolset v3.11\SDK\wixui\WixUI_en-us.wxl -->
-	<String Id="ExitDialogDescription">Glouton has been successfully installed.</String>
+	<String Id="ExitDialogDescription" Value="Glouton has been successfully installed." />
 	
-	<String Id="ProgressDlgTextInstalling">Please wait while the Setup Wizard installs Glouton. This operation may take a minute.</String>
+	<String Id="ProgressDlgTextInstalling" Value="Please wait while the Setup Wizard installs Glouton. This operation may take a minute." />
 </WixLocalization>

@@ -19,15 +19,15 @@ cp -r packaging/windows/* ${WORK_PATH}
 
 # Allow the wine user in the wix container to create files.
 chmod 700 "${WORK_PATH}"
-chmod 777 -R "${INSTALLER_PATH}/obj"
+chmod -R 777 "${INSTALLER_PATH}/obj"
 
 # Create MSI package.
 cp dist/glouton_windows_amd64_v1/glouton.exe ${INSTALLER_PATH}/assets
 
 sed -i -e "s/Version=\"1.2.3.4\"/Version=\"${VERSION}\"/" ${INSTALLER_PATH}/product.wxs
 
-docker run --rm -v "${INSTALLER_PATH}:/wix" dactiv/wix candle -ext WixUtilExtension.dll -ext WixUIExtension -dAssetsPath=/wix/assets/ -dExePath=/wix/assets/ -arch x86 -out 'obj\' *.wxs
-docker run --rm -v "${INSTALLER_PATH}:/wix" dactiv/wix light -sval -ext WixUtilExtension.dll -ext WixUIExtension -cultures:en-US -loc strings.wxl -out obj/glouton.msi obj/*.wixobj
+docker run --rm -v "${INSTALLER_PATH}:/tmp/wix" jkroepke/wixtoolset:main \
+    sh -c "cd tmp/wix && wix build product.wxs ui.wxs credentials.wxs strings.wxl -d AssetsPath=assets/ -ext WixToolset.Util.wixext -ext WixToolset.UI.wixext -arch x86 -o obj/glouton.msi"
 
 cp ${INSTALLER_PATH}/obj/glouton.msi "dist/glouton_${VERSION}.msi"
 
