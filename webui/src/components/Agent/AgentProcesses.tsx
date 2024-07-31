@@ -7,6 +7,7 @@ import AgentProcessesInfo from "./AgentProcessesInfo";
 import { isNullOrUndefined, isEmpty } from "../utils";
 import { _formatCpuTime } from "../utils/formater";
 import { Process, Topinfo } from "../Data/data.interface";
+import { isNil } from "lodash-es";
 
 type AgentProcessesProps = {
   top: Topinfo;
@@ -30,7 +31,7 @@ const AgentProcesses: FC<AgentProcessesProps> = ({ top, sizePage }) => {
     const childrenProcesses: Map<number, Process[]> = new Map();
 
     processesTmp.map((process) => {
-      if (process.ppid !== undefined) {
+      if (!isNil(process.ppid)) {
         const nodeProcessChildrens = childrenProcesses.get(process.ppid) || [];
         nodeProcessChildrens.push(process);
         childrenProcesses.set(process.ppid, nodeProcessChildrens);
@@ -47,7 +48,7 @@ const AgentProcesses: FC<AgentProcessesProps> = ({ top, sizePage }) => {
       );
 
       if (
-        process.ppid === undefined ||
+        isNil(process.ppid) ||
         process.ppid === 1 ||
         !top["Processes"].find((p) => process.ppid === p.pid)
       ) {

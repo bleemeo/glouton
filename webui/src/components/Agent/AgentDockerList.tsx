@@ -10,6 +10,7 @@ import { formatDateTime } from "../utils/formater";
 import { useHTTPDataFetch } from "../utils/hooks";
 import { CONTAINERS_URL } from "../utils/dataRoutes";
 import { Containers } from "../Data/data.interface";
+import { isNil } from "lodash-es";
 
 const PAGE_SIZE = 10;
 
@@ -124,7 +125,7 @@ const AgentDockerList: FC = () => {
 
     const renderContainers = containersList.map((container) => {
       let date: React.ReactNode;
-      if (container.startedAt === null) {
+      if (isNil(container.startedAt)) {
         date = (
           <span>
             <strong>Started&nbsp;at:</strong>

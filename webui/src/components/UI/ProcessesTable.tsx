@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import React, { FC, useMemo, useState } from "react";
 import {
   ColumnDef,

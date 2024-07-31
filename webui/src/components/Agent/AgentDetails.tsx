@@ -1,4 +1,3 @@
-/* eslint-disable camelcase */
 import React, { FC, useEffect, useRef, useState } from "react";
 import * as d3 from "d3";
 import { AxiosError } from "axios";
@@ -62,8 +61,7 @@ import {
   InfoIcon,
   WarningIcon,
 } from "@chakra-ui/icons";
-import * as echarts from "echarts";
-import type { EChartsOption } from "echarts";
+import { init, type EChartsOption } from "echarts";
 
 type AgentDetailsProps = {
   facts: Fact[];
@@ -234,7 +232,7 @@ const AgentDetails: FC<AgentDetailsProps> = ({ facts }) => {
       ],
     };
 
-    const svg = echarts.init(svgStatusChart.current);
+    const svg = init(svgStatusChart.current);
     svg.setOption(option);
 
     const warningMessages = agentStatus
@@ -268,7 +266,7 @@ const AgentDetails: FC<AgentDetailsProps> = ({ facts }) => {
   useEffect(() => {
     const handleResize = () => {
       if (svgStatusChart.current) {
-        const svg = echarts.init(svgStatusChart.current);
+        const svg = init(svgStatusChart.current);
         svg.resize();
       }
     };

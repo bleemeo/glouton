@@ -4,6 +4,7 @@ import { Card, CardBody, CardFooter, Flex, Text } from "@chakra-ui/react";
 import { unitFormatCallback } from "../utils/formater";
 import Loading from "../UI/Loading";
 import QueryError from "../UI/QueryError";
+import { isNil } from "lodash-es";
 
 type MetricNumberItemProps = {
   value?: number;
@@ -39,7 +40,7 @@ const MetricNumberItem: FC<MetricNumberItemProps> = ({
   }
 
   let formattedValue = unitFormatCallback(unit)(value!);
-  if (formattedValue === undefined) {
+  if (isNil(formattedValue)) {
     formattedValue = "\u00A0\u00A0\u00A0";
   }
 

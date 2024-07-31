@@ -2,6 +2,7 @@
 import React, { useEffect, useState, useRef, FC } from "react";
 
 import FaIcon from "./FaIcon";
+import { isNil } from "lodash-es";
 
 type ToggleProps = {
   firstOption: string;
@@ -24,7 +25,7 @@ const Toggle: FC<ToggleProps> = ({
   const flap = useRef<any | null>(null);
 
   const navFlipStyle = (firstSpanOpacity, secondSpanOpacity) => {
-    if (firstSpan.current === null || secondSpan.current === null) {
+    if (isNil(firstSpan.current) || isNil(secondSpan.current)) {
       return;
     }
 

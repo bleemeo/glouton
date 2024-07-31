@@ -1,5 +1,6 @@
 import * as d3 from "d3";
 import React, { FC, useState } from "react";
+import { isNil } from "lodash-es";
 
 import FaIcon from "../UI/FaIcon";
 import A from "../UI/A";
@@ -132,10 +133,12 @@ const Docker: FC<DockerProps> = ({ container, date }) => {
     sentValue: number,
     recvValue: number,
   ) => {
-    const formattedSentValue =
-      sentValue !== null ? formatToBits(sentValue) : null;
-    const formattedRecvValue =
-      recvValue !== null ? formatToBits(recvValue) : null;
+    const formattedSentValue = !isNil(sentValue)
+      ? formatToBits(sentValue)
+      : null;
+    const formattedRecvValue = !isNil(recvValue)
+      ? formatToBits(recvValue)
+      : null;
     if (!formattedSentValue && !formattedRecvValue) {
       return (
         <div className="small-widget">
@@ -183,10 +186,12 @@ const Docker: FC<DockerProps> = ({ container, date }) => {
   };
 
   const renderDisk = (name: string, writeValue: number, readValue: number) => {
-    const formattedWriteValue =
-      writeValue !== null ? formatToBytes(writeValue) : null;
-    const formattedReadValue =
-      readValue !== null ? formatToBytes(readValue) : null;
+    const formattedWriteValue = !isNil(writeValue)
+      ? formatToBytes(writeValue)
+      : null;
+    const formattedReadValue = !isNil(readValue)
+      ? formatToBytes(readValue)
+      : null;
     if (!formattedReadValue && !formattedWriteValue) {
       return (
         <div className="small-widget">
@@ -203,8 +208,7 @@ const Docker: FC<DockerProps> = ({ container, date }) => {
         <div className="small-widget">
           <div className="content wide">
             <div className="content-row">
-              {formattedWriteValue !== null &&
-              formattedWriteValue !== undefined ? (
+              {!isNil(formattedWriteValue) ? (
                 <span>
                   {formattedWriteValue[0]}
                   <small>
@@ -216,8 +220,7 @@ const Docker: FC<DockerProps> = ({ container, date }) => {
               ) : null}
             </div>
             <div className="content-row">
-              {formattedReadValue !== null &&
-              formattedReadValue !== undefined ? (
+              {!isNil(formattedReadValue) ? (
                 <span>
                   {formattedReadValue[0]}
                   <small>

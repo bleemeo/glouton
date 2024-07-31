@@ -1,4 +1,5 @@
 import React, { FC } from "react";
+import { isNil } from "lodash-es";
 
 type ErrorBlockProps = {
   error: Array<string>;
@@ -8,7 +9,7 @@ const ErrorBlock: FC<ErrorBlockProps> = ({ error }) => {
   if (!error) {
     return null;
   }
-  if (error[0] === undefined) {
+  if (isNil(error[0])) {
     return null;
   }
 

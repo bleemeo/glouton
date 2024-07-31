@@ -4,22 +4,10 @@
       "@babel/preset-env",
       {
         "useBuiltIns": "usage",
-        "corejs": "3.32.2"
+        "corejs": "3.37.1"
       }
     ],
     "@babel/preset-react",
     "@babel/preset-typescript"
-  ],
-  "env": {
-    "development": {
-      "plugins": [
-        "lodash"
-      ]
-    },
-    "production": {
-      "plugins": [
-        "lodash"
-      ]
-    }
-  }
+  ]
 }
