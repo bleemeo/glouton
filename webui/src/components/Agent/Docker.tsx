@@ -133,10 +133,10 @@ const Docker: FC<DockerProps> = ({ container, date }) => {
     sentValue: number,
     recvValue: number,
   ) => {
-    const formattedSentValue = isNil(sentValue)
+    const formattedSentValue = !isNil(sentValue)
       ? formatToBits(sentValue)
       : null;
-    const formattedRecvValue = isNil(recvValue)
+    const formattedRecvValue = !isNil(recvValue)
       ? formatToBits(recvValue)
       : null;
     if (!formattedSentValue && !formattedRecvValue) {
@@ -186,10 +186,10 @@ const Docker: FC<DockerProps> = ({ container, date }) => {
   };
 
   const renderDisk = (name: string, writeValue: number, readValue: number) => {
-    const formattedWriteValue = isNil(writeValue)
+    const formattedWriteValue = !isNil(writeValue)
       ? formatToBytes(writeValue)
       : null;
-    const formattedReadValue = isNil(readValue)
+    const formattedReadValue = !isNil(readValue)
       ? formatToBytes(readValue)
       : null;
     if (!formattedReadValue && !formattedWriteValue) {
