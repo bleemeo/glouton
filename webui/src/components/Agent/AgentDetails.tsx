@@ -61,7 +61,11 @@ import {
   InfoIcon,
   WarningIcon,
 } from "@chakra-ui/icons";
-import { init, type EChartsOption } from "echarts";
+import * as echarts from "echarts/core";
+import { PieChart } from "echarts/charts";
+import { EChartsOption } from "echarts";
+
+echarts.use([PieChart]);
 
 type AgentDetailsProps = {
   facts: Fact[];
@@ -232,7 +236,7 @@ const AgentDetails: FC<AgentDetailsProps> = ({ facts }) => {
       ],
     };
 
-    const svg = init(svgStatusChart.current);
+    const svg = echarts.init(svgStatusChart.current);
     svg.setOption(option);
 
     const warningMessages = agentStatus
@@ -266,7 +270,7 @@ const AgentDetails: FC<AgentDetailsProps> = ({ facts }) => {
   useEffect(() => {
     const handleResize = () => {
       if (svgStatusChart.current) {
-        const svg = init(svgStatusChart.current);
+        const svg = echarts.init(svgStatusChart.current);
         svg.resize();
       }
     };
