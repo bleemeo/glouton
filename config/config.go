@@ -392,7 +392,6 @@ func movedKeys() map[string]string {
 		"jmx.enabled":                     "jmx.enable",
 		"nrpe.enabled":                    "nrpe.enable",
 		"zabbix.enabled":                  "zabbix.enable",
-		"influxdb.enabled":                "influxdb.enable",
 		"telegraf.statsd.enabled":         "telegraf.statsd.enable",
 		"agent.telemetry.enabled":         "agent.telemetry.enable",
 		"agent.node_exporter.enabled":     "agent.node_exporter.enable",

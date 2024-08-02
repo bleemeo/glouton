@@ -28,7 +28,6 @@ require (
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510
 	github.com/google/uuid v1.6.0
 	github.com/grafana/regexp v0.0.0-20240518133315-a468a5bfb3bc
-	github.com/influxdata/influxdb1-client v0.0.0-20220302092344-a9ab5670611c
 	github.com/influxdata/telegraf v1.30.3
 	github.com/influxdata/toml v0.0.0-20190415235208-270119a8ce65
 	github.com/json-iterator/go v1.1.12
