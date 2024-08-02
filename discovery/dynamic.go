@@ -190,7 +190,6 @@ var (
 		"freeradius":   FreeradiusService,
 		"haproxy":      HAProxyService,
 		"httpd":        ApacheService,
-		"influxd":      InfluxDBService,
 		"libvirtd":     LibvirtService,
 		"master":       PostfixService,
 		"memcached":    MemcachedService,
