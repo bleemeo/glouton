@@ -115,7 +115,7 @@ func (d *Discovery) createCheck(service Service) {
 	tcpAddresses := make([]string, 0)
 
 	for _, a := range service.ListenAddresses {
-		if a.Network() != tcpPortocol {
+		if a.Network() != tcpProtocol {
 			continue
 		}
 
