@@ -138,7 +138,7 @@ func (d *Discovery) createCheck(service Service) {
 	switch service.ServiceType { //nolint:exhaustive
 	case DovecotService, MemcachedService, RabbitMQService, RedisService, ZookeeperService, NatsService:
 		d.createTCPCheck(service, di, primaryAddress, tcpAddresses, labels, annotations)
-	case ApacheService, NginxService, SquidService:
+	case ApacheService, InfluxDBService, NginxService, SquidService:
 		d.createHTTPCheck(service, di, primaryAddress, tcpAddresses, labels, annotations)
 	case NTPService:
 		if primaryAddress != "" {
@@ -261,6 +261,10 @@ func (d *Discovery) createHTTPCheck(
 		// Agent does a normal HTTP request, but squid expect a proxy. It expects
 		// squid to reply with a 400 - Bad request.
 		expectedStatusCode = 400
+	}
+
+	if service.ServiceType == InfluxDBService {
+		u.Path = "/ping"
 	}
 
 	if service.Config.HTTPPath != "" {

@@ -44,6 +44,10 @@ func TestIsCheckIgnored(t *testing.T) { //nolint:maintidx
 			Instance: "host:*",
 		},
 		{
+			Name:     "influxdb",
+			Instance: "host:*",
+		},
+		{
 			Name:     "prefix",
 			Instance: "container:name-prefix*",
 		},
@@ -196,6 +200,14 @@ func TestIsCheckIgnored(t *testing.T) { //nolint:maintidx
 				Name:          "redis",
 				Instance:      "random-value",
 				ContainerName: "random-value",
+			},
+			expectedResult: false,
+		},
+		{
+			service: Service{
+				Name:          "influxdb",
+				Instance:      "influxdb",
+				ContainerName: "influxdb",
 			},
 			expectedResult: false,
 		},

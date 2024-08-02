@@ -354,6 +354,17 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				Active:          true,
 			},
 		},
+		{
+			testName: "influxdb.deb",
+			cmdLine:  []string{"/opt/influxdb/influxd", "-config", "/etc/opt/influxdb/influxdb.conf"},
+			want: Service{
+				Name:            "influxdb",
+				ServiceType:     InfluxDBService,
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 8086}},
+				IPAddress:       "127.0.0.1",
+				Active:          true,
+			},
+		},
 		// Service from Ubuntu 16.04, default config
 		{
 			testName: "mysql-ubuntu-14.04",

@@ -40,6 +40,7 @@ func mapKeys() []string {
 	return []string{
 		"thresholds",
 		"metric.softstatus_period",
+		"influxdb.tags",
 	}
 }
 
@@ -221,6 +222,13 @@ func DefaultConfig() Config { //nolint:maintidx
 			"^skd[0-9]$",
 			"^rsxx[0-9]$",
 			"^[A-Z]:$",
+		},
+		InfluxDB: InfluxDB{
+			Enable: false,
+			DBName: "glouton",
+			Host:   "localhost",
+			Port:   8086,
+			Tags:   map[string]string{},
 		},
 		IPMI: IPMI{
 			Enable:           true,

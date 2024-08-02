@@ -77,6 +77,7 @@ const (
 	Fail2banService      ServiceName = "fail2ban"
 	FreeradiusService    ServiceName = "freeradius"
 	HAProxyService       ServiceName = "haproxy"
+	InfluxDBService      ServiceName = "influxdb"
 	JenkinsService       ServiceName = "jenkins"
 	JIRAService          ServiceName = "jira"
 	KafkaService         ServiceName = "kafka"
@@ -331,6 +332,10 @@ var (
 		Fail2banService: {},
 		HAProxyService: {
 			IgnoreHighPort:  true, // HAProxy use a random high-port when Syslog over-UDP is enabled.
+			ServiceProtocol: "tcp",
+		},
+		InfluxDBService: {
+			ServicePort:     8086,
 			ServiceProtocol: "tcp",
 		},
 		JenkinsService: {

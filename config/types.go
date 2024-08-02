@@ -29,6 +29,7 @@ type Config struct {
 	DF                       DF                   `yaml:"df"`
 	DiskIgnore               []string             `yaml:"disk_ignore"`
 	DiskMonitor              []string             `yaml:"disk_monitor"`
+	InfluxDB                 InfluxDB             `yaml:"influxdb"`
 	IPMI                     IPMI                 `yaml:"ipmi"`
 	JMX                      JMX                  `yaml:"jmx"`
 	JMXTrans                 JMXTrans             `yaml:"jmxtrans"`
@@ -162,6 +163,14 @@ type JMXTrans struct {
 
 type JMX struct {
 	Enable bool `yaml:"enable"`
+}
+
+type InfluxDB struct {
+	Enable bool              `yaml:"enable"`
+	Host   string            `yaml:"host"`
+	Port   int               `yaml:"port"`
+	DBName string            `yaml:"db_name"`
+	Tags   map[string]string `yaml:"tags"`
 }
 
 type IPMI struct {
