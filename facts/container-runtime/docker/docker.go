@@ -189,6 +189,15 @@ func (d *Docker) DiagnosticArchive(_ context.Context, archive types.ArchiveWrite
 	return enc.Encode(obj)
 }
 
+func (d *Docker) ContainerExists(id string) bool {
+	d.l.Lock()
+	defer d.l.Unlock()
+
+	_, found := d.containers[id]
+
+	return found
+}
+
 // LastUpdate return the last time containers list was updated.
 func (d *Docker) LastUpdate() time.Time {
 	d.l.Lock()

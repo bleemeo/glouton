@@ -159,6 +159,15 @@ func (c *Containerd) DiagnosticArchive(_ context.Context, archive types.ArchiveW
 	return enc.Encode(obj)
 }
 
+func (c *Containerd) ContainerExists(id string) bool {
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	_, found := c.containers[id]
+
+	return found
+}
+
 // LastUpdate return the last time containers list was updated.
 func (c *Containerd) LastUpdate() time.Time {
 	c.l.Lock()
