@@ -873,6 +873,7 @@ func (s *Synchronizer) setClient() error {
 	transportOpts := &gloutonTypes.CustomTransportOptions{
 		UserAgentHeader: version.UserAgent(),
 		RequestCounter:  &s.requestCounter,
+		EnableLogger:    true,
 	}
 	cl := &http.Client{
 		Transport: gloutonTypes.NewHTTPTransport(tlsConfig, transportOpts),

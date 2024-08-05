@@ -63,6 +63,7 @@ func (s *Synchronizer) syncInfoReal(ctx context.Context, execution types.Synchro
 		transportOpts := &gloutonTypes.CustomTransportOptions{
 			UserAgentHeader: version.UserAgent(),
 			RequestCounter:  &s.requestCounter,
+			EnableLogger:    true,
 		}
 
 		insecureClient, cErr := bleemeo.NewClient(
