@@ -142,6 +142,7 @@ type Service struct {
 	HasNetstatInfo  bool
 	LastNetstatInfo time.Time
 	container       facts.Container
+	LastTimeSeen    time.Time
 }
 
 func (s Service) String() string {

@@ -17,6 +17,8 @@
 package config
 
 import (
+	"time"
+
 	"github.com/bleemeo/glouton/version"
 
 	bbConf "github.com/prometheus/blackbox_exporter/config"
@@ -62,18 +64,19 @@ func DefaultConfig() Config { //nolint:maintidx
 			ProcessExporter: ProcessExporter{
 				Enable: true,
 			},
-			PublicIPIndicator:    "https://myip.bleemeo.com",
-			NetstatFile:          "netstat.out",
-			StateDirectory:       "",
-			StateFile:            "state.json",
-			StateCacheFile:       "state.cache.json",
-			StateResetFile:       "state.reset",
-			DeprecatedStateFile:  "",
-			EnableCrashReporting: true,
-			MaxCrashReportsCount: 2,
-			UpgradeFile:          "upgrade",
-			AutoUpgradeFile:      "auto_upgrade",
-			MetricsFormat:        "Bleemeo",
+			PublicIPIndicator:              "https://myip.bleemeo.com",
+			NetstatFile:                    "netstat.out",
+			StateDirectory:                 "",
+			StateFile:                      "state.json",
+			StateCacheFile:                 "state.cache.json",
+			StateResetFile:                 "state.reset",
+			DeprecatedStateFile:            "",
+			EnableCrashReporting:           true,
+			MaxCrashReportsCount:           2,
+			UpgradeFile:                    "upgrade",
+			AutoUpgradeFile:                "auto_upgrade",
+			MetricsFormat:                  "Bleemeo",
+			AbsentServiceDeactivationDelay: 7 * 24 * time.Hour,
 			NodeExporter: NodeExporter{
 				Enable:     true,
 				Collectors: []string{"cpu", "diskstats", "filesystem", "loadavg", "meminfo", "netdev", "uname"},
