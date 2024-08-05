@@ -383,9 +383,9 @@ func (cl *wrapperClient) ListActiveMetrics(ctx context.Context, active bool) ([]
 	}
 
 	if active {
-		params.Set("active", stringFalse)
-	} else {
 		params.Set("active", stringTrue)
+	} else {
+		params.Set("active", stringFalse)
 	}
 
 	metrics := make([]bleemeoapi.MetricPayload, 0)

@@ -433,6 +433,7 @@ type CustomTransportOptions struct {
 	UserAgentHeader string
 	// RequestCounter will be incremented for each HTTP transaction.
 	RequestCounter *atomic.Uint32
+	EnableLogger   bool
 }
 
 type customTransport struct {
@@ -443,6 +444,10 @@ type customTransport struct {
 func (tc *customTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 	r.Header.Set("User-Agent", tc.opts.UserAgentHeader)
 	tc.opts.RequestCounter.Add(1)
+
+	if tc.opts.EnableLogger {
+		logger.Printf("Sending API request %v %v", r.Method, r.URL)
+	}
 
 	return tc.transport.RoundTrip(r)
 }
