@@ -155,7 +155,7 @@ func (s *Synchronizer) syncInfoReal(ctx context.Context, execution types.Synchro
 	if globalInfo.IsTimeDriftTooLarge() && !s.lastInfo.IsTimeDriftTooLarge() {
 		// Mark the agent_status as disconnected with reason being the time drift.
 		metricKey := gloutonTypes.LabelsToText(
-			map[string]string{gloutonTypes.LabelName: "agent_status", gloutonTypes.LabelInstanceUUID: s.agentID},
+			map[string]string{gloutonTypes.LabelName: agentStatusName, gloutonTypes.LabelInstanceUUID: s.agentID},
 		)
 		if metric, ok := s.option.Cache.MetricLookupFromList()[metricKey]; ok {
 			payload := mqttUpdatePayload{
@@ -210,7 +210,7 @@ func (s *Synchronizer) updateMQTTStatus(ctx context.Context, apiClient types.Met
 
 	// Mark the agent_status as disconnected because MQTT is not accessible.
 	metricKey := gloutonTypes.LabelsToText(
-		map[string]string{gloutonTypes.LabelName: "agent_status", gloutonTypes.LabelInstanceUUID: s.agentID},
+		map[string]string{gloutonTypes.LabelName: agentStatusName, gloutonTypes.LabelInstanceUUID: s.agentID},
 	)
 	if metric, ok := s.option.Cache.MetricLookupFromList()[metricKey]; ok {
 		payload := mqttUpdatePayload{
