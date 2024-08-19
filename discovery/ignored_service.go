@@ -23,23 +23,23 @@ import (
 	"github.com/bleemeo/glouton/config"
 )
 
-// IgnoredService saves the ignored checks or metrics imported from the configuration file.
+// IgnoredService saves the ignored services (checks/metrics/everything) imported from the configuration file.
 type IgnoredService struct {
-	ignoredChecks []config.NameInstance
+	ignoredNamesInstances []config.NameInstance
 }
 
-// NewIgnoredService initializes IgnoredCheckOrMetrics struct.
-func NewIgnoredService(ignoredChecks []config.NameInstance) IgnoredService {
+// NewIgnoredService initializes IgnoredService struct.
+func NewIgnoredService(ignoredNamesInstances []config.NameInstance) IgnoredService {
 	return IgnoredService{
-		ignoredChecks: ignoredChecks,
+		ignoredNamesInstances: ignoredNamesInstances,
 	}
 }
 
-// IsServiceIgnored returns if the check or the metrics are ignored or not.
+// IsServiceIgnored returns whether the given service should be ignored or not.
 func (ic IgnoredService) IsServiceIgnored(srv Service) bool {
-	for _, ignoredCheck := range ic.ignoredChecks {
-		if ignoredCheck.Name == srv.Name {
-			instances := strings.Split(ignoredCheck.Instance, " ")
+	for _, ignoredNameInstance := range ic.ignoredNamesInstances {
+		if ignoredNameInstance.Name == srv.Name {
+			instances := strings.Split(ignoredNameInstance.Instance, " ")
 			if len(instances) == 1 && instances[0] == "" {
 				return true
 			}
@@ -63,14 +63,14 @@ func matchInstance(instance, containerName string) bool {
 	}
 
 	instanceName := instanceDetails[0]
-	instancePatern := instanceDetails[1]
+	instancePattern := instanceDetails[1]
 
 	if instanceName == "host" && containerName == "" {
 		return true
 	}
 
 	if instanceName == "container" && containerName != "" {
-		matched, err := filepath.Match(instancePatern, containerName)
+		matched, err := filepath.Match(instancePattern, containerName)
 		if err == nil {
 			return matched
 		}

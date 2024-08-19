@@ -931,6 +931,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 	}
 	a.collector = collector.New(acc, secretInputsGate)
 
+	isServiceIgnored := discovery.NewIgnoredService(a.config.ServiceIgnore).IsServiceIgnored
 	isCheckIgnored := discovery.NewIgnoredService(a.config.ServiceIgnoreCheck).IsServiceIgnored
 	isInputIgnored := discovery.NewIgnoredService(a.config.ServiceIgnoreMetrics).IsServiceIgnored
 	dynamicDiscovery := discovery.NewDynamic(discovery.Option{
@@ -947,6 +948,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		a.state,
 		a.containerRuntime,
 		a.config.Services,
+		isServiceIgnored,
 		isCheckIgnored,
 		isInputIgnored,
 		a.containerFilter.ContainerIgnored,

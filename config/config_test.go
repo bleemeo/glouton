@@ -317,6 +317,12 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 				ExcludedItems: []string{"excluded"},
 			},
 		},
+		ServiceIgnore: []NameInstance{
+			{
+				Name:     "nginx",
+				Instance: "container:*",
+			},
+		},
 		ServiceIgnoreMetrics: []NameInstance{
 			{
 				Name:     "redis",
