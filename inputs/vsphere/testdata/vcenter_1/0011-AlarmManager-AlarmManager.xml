@@ -1,0 +1,11 @@
+<ObjectContent>
+  <obj type="AlarmManager">AlarmManager</obj>
+  <propSet>
+    <name>defaultExpression</name>
+    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="ArrayOfAlarmExpression"></val>
+  </propSet>
+  <propSet>
+    <name>description</name>
+    <val xmlns:XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" XMLSchema-instance:type="AlarmDescription"></val>
+  </propSet>
+</ObjectContent>

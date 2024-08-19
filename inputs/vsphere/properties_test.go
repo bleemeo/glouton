@@ -112,7 +112,9 @@ func TestPropsCaches(t *testing.T) { //nolint:maintidx
 							},
 						},
 					},
-					DnsConfig:   nil,
+					DnsConfig: &types.HostDnsConfig{
+						DomainName: "localdomain",
+					},
 					IpV6Enabled: ptr(false),
 				},
 				DateTimeInfo: nil,
