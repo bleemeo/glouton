@@ -24,11 +24,11 @@ func getLockedMemoryLimit() uint64 {
 	handle := windows.CurrentProcess()
 
 	var (
-		min, max uintptr
-		flag     uint32
+		memMin, memMax uintptr
+		flag           uint32
 	)
 
-	windows.GetProcessWorkingSetSizeEx(handle, &min, &max, &flag)
+	windows.GetProcessWorkingSetSizeEx(handle, &memMin, &memMax, &flag)
 
-	return uint64(max)
+	return uint64(memMax)
 }

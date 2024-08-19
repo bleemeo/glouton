@@ -60,16 +60,16 @@ func (r *Runtime) getRuntime(containerID string) crTypes.RuntimeInterface {
 
 // LastUpdate return the most recent date of update.
 func (r *Runtime) LastUpdate() time.Time {
-	var max time.Time
+	var maxT time.Time
 
 	for _, cr := range r.Runtimes {
 		t := cr.LastUpdate()
-		if max.Before(t) {
-			max = t
+		if maxT.Before(t) {
+			maxT = t
 		}
 	}
 
-	return max
+	return maxT
 }
 
 // CachedContainer call function on container runtimes.

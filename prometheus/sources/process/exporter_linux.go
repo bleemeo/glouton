@@ -262,6 +262,7 @@ func (e *Exporter) init() {
 		false,
 		0,
 		false,
+		false,
 	)
 
 	colErrs, _, err := e.grouper.Update(e.Source.AllProcs())
