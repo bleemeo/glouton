@@ -2,7 +2,7 @@ version: 2
 project_name: glouton
 snapshot:
   # Our version is based on the date.
-  name_template: '{{ .Env.GLOUTON_VERSION }}'
+  version_template: '{{ .Env.GLOUTON_VERSION }}'
 builds:
 - env:
   - CGO_ENABLED=0
