@@ -757,6 +757,11 @@ func (d *Discovery) ignoreServicesAndPorts() {
 			service.MetricsIgnored = d.isInputIgnored(service)
 		}
 
+		if d.isServiceIgnored != nil && d.isServiceIgnored(service) {
+			service.CheckIgnored = true
+			service.MetricsIgnored = true
+		}
+
 		if len(service.IgnoredPorts) > 0 {
 			n := 0
 
