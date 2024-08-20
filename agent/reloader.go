@@ -244,7 +244,7 @@ out:
 				cancel()
 				wg.Wait()
 
-				ctx, cancel = context.WithCancel(context.Background())
+				ctx, cancel = context.WithCancel(context.Background()) //nolint: fatcontext
 			}
 
 			a.l.Lock()

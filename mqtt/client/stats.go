@@ -101,19 +101,19 @@ func (s *mqttStats) ackReceived(token paho.Token, now time.Time) {
 
 // updateStats returns statistics updated with the given ack duration.
 func (s *mqttStats) updateStats(stats bucketStats, ackWait time.Duration) bucketStats {
-	min := stats.min
-	if ackWait < min || min == 0 {
-		min = ackWait
+	statMin := stats.min
+	if ackWait < statMin || statMin == 0 {
+		statMin = ackWait
 	}
 
-	max := stats.max
-	if ackWait > max {
-		max = ackWait
+	statMax := stats.max
+	if ackWait > statMax {
+		statMax = ackWait
 	}
 
 	return bucketStats{
-		min:        min,
-		max:        max,
+		min:        statMin,
+		max:        statMax,
 		avg:        (stats.avg*time.Duration(stats.nbMessages) + ackWait) / time.Duration(stats.nbMessages+1),
 		nbMessages: stats.nbMessages + 1,
 	}

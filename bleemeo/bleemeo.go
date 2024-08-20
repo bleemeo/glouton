@@ -290,7 +290,7 @@ func (c *Connector) mqttRestarter(ctx context.Context) error {
 		case <-mqttRestart:
 			cancel()
 
-			subCtx, cancel = context.WithCancel(ctx)
+			subCtx, cancel = context.WithCancel(ctx) //nolint: fatcontext
 
 			c.l.Lock()
 

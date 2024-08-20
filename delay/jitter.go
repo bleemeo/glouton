@@ -26,7 +26,7 @@ import (
 // The value retuned is "base * powerFactor ^ n". The value is capped at max.
 // powerFactor should be > 1 (or the delay will be smaller and smaller).
 // Exponential works at seconds resolution. Base should be > of few seconds.
-func Exponential(base time.Duration, powerFactor float64, n int, max time.Duration) time.Duration {
+func Exponential(base time.Duration, powerFactor float64, n int, max time.Duration) time.Duration { //nolint: predeclared
 	n--
 	if n < 0 {
 		n = 0
