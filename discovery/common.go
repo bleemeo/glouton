@@ -31,7 +31,7 @@ import (
 	"dario.cat/mergo"
 )
 
-const tcpPortocol = "tcp"
+const tcpProtocol = "tcp"
 
 // Discoverer allow to discover services. See DynamicDiscovery and Discovery.
 type Discoverer interface {

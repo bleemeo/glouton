@@ -146,13 +146,6 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 		},
 		DiskIgnore:  []string{"^(ram|loop|fd|(h|s|v|xv)d[a-z]|nvme\\d+n\\d+p)\\d+$"},
 		DiskMonitor: []string{"sda"},
-		InfluxDB: InfluxDB{
-			Enable: true,
-			Host:   "localhost",
-			Port:   8086,
-			DBName: "metrics",
-			Tags:   map[string]string{"mytag": "myvalue"},
-		},
 		JMX: JMX{
 			Enable: true,
 		},
@@ -782,9 +775,6 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 				},
 				Bleemeo: Bleemeo{
 					Enable: true,
-				},
-				InfluxDB: InfluxDB{
-					Enable: false,
 				},
 				JMX: JMX{
 					Enable: false,

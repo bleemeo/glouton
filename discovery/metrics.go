@@ -531,7 +531,7 @@ func urlForPHPFPM(service Service) string {
 	}
 
 	for _, v := range service.ListenAddresses {
-		if v.Network() != tcpPortocol {
+		if v.Network() != tcpProtocol {
 			continue
 		}
 
