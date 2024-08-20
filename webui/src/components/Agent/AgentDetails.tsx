@@ -67,9 +67,9 @@ import { EChartsOption } from "echarts";
 import {
   CanvasRenderer
 } from 'echarts/renderers';
-import { TooltipComponent } from 'echarts/components';
+import { LegendComponent, TooltipComponent } from 'echarts/components';
 
-echarts.use([PieChart, CanvasRenderer, TooltipComponent]);
+echarts.use([PieChart, CanvasRenderer, TooltipComponent, LegendComponent]);
 
 type AgentDetailsProps = {
   facts: Fact[];
