@@ -58,6 +58,15 @@ func (r *Runtime) getRuntime(containerID string) crTypes.RuntimeInterface {
 	return r.Runtimes[idx]
 }
 
+func (r *Runtime) ContainerExists(id string) bool {
+	r.l.Lock()
+	defer r.l.Unlock()
+
+	_, found := r.idToRuntime[id]
+
+	return found
+}
+
 // LastUpdate return the most recent date of update.
 func (r *Runtime) LastUpdate() time.Time {
 	var max time.Time

@@ -87,6 +87,15 @@ var (
 	errMissingConfig = errors.New("missing configuration")
 )
 
+func (k *Kubernetes) ContainerExists(id string) bool {
+	k.l.Lock()
+	defer k.l.Unlock()
+
+	_, found := k.id2Pod[id]
+
+	return found
+}
+
 // LastUpdate return the last time containers list was updated.
 func (k *Kubernetes) LastUpdate() time.Time {
 	t := k.Runtime.LastUpdate()

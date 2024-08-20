@@ -723,7 +723,11 @@ func (c *Client) preparePoints(
 		// metric is in the failed points. This ensures that points are sent in the right
 		// order when a metric is registered.
 		if !ok || !metric.DeactivatedAt.IsZero() || c.failedPoints.Contains(p.Labels) {
-			c.addFailedPoints(p)
+			// We also want to avoid storing points for containers that no longer exist,
+			// so we only save points for non-container metrics or when the container is still found.
+			if p.Annotations.ContainerID == "" || c.opts.Docker.ContainerExists(p.Annotations.ContainerID) {
+				c.addFailedPoints(p)
+			}
 
 			continue
 		}
