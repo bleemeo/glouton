@@ -10,7 +10,7 @@
   "scripts": {
     "start": "webpack serve --mode development",
     "build": "npm run clean && webpack build --mode production",
-    "deploy": "npm run build && npm run cleanOldJsFiles && mkdir -p ../api/static/assets/js && mkdir -p ../api/static/assets/css && for f in $(find ./dist/js -name '*.js'); do cat $f | gzip > ../api/static/assets/js/$(basename $f); done && cp -r ./dist/css/ ../api/static/assets/",
+    "deploy": "npm run build && npm run cleanOldJsFiles && mkdir -p ../api/static/assets/js && mkdir -p ../api/static/assets/css && for f in $(find ./dist/js -name '*.js'); do cat $f | gzip > ../api/static/assets/js/$(basename $f); done && cp -r ./dist/css/*.css ../api/static/assets/css",
     "cleanOldJsFiles": "rm -rf ../api/static/assets/js && rm -rf ../api/static/assets/css",
     "clean": "rm -rf dist",
     "lint": "eslint src",
@@ -32,7 +32,6 @@
     "echarts": "^5.5.1",
     "framer-motion": "^11.3.6",
     "lodash-es": "^4.17.21",
-    "lodash-webpack-plugin": "^0.11.6",
     "rc-switch": "^4.1.0",
     "react": "^18.2.0",
     "react-bootstrap": "^2.10.4",

@@ -7,8 +7,6 @@ const buildTimestamp = new Date().getTime();
 const src = path.resolve(__dirname, "src");
 const nodeModule = path.resolve(__dirname, "node_modules");
 
-var LodashModuleReplacementPlugin = require("lodash-webpack-plugin");
-
 /*
 // Uncomment the following lines to enable the bundle analyzer
 const BundleAnalyzerPlugin =
@@ -38,8 +36,6 @@ module.exports = (_, argv) => {
     }),
   );
 
-  plugins.push(new LodashModuleReplacementPlugin());
-  plugins.push(new webpack.optimize.ModuleConcatenationPlugin());
   /*
   // Uncomment the following line to enable the bundle analyzer
   plugins.push(new BundleAnalyzerPlugin());
@@ -50,6 +46,7 @@ module.exports = (_, argv) => {
     // TODO: drop this once https://github.com/webpack/webpack-dev-server/issues/2758 is fixed
     // (that is when webpack-dev-server 4.0 is release).
     target: isDev ? "web" : "browserslist",
+    devtool: isDev ? "eval-source-map" : "source-map",
     entry: {
       "panel-glouton-main": ["./src/index.ts"],
     },
@@ -144,10 +141,6 @@ module.exports = (_, argv) => {
       ],
     },
   };
-
-  if (isDev) {
-    result.devtool = "cheap-module-source-map";
-  }
 
   return result;
 };
