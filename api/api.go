@@ -94,6 +94,11 @@ func (f *assetsFileServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.Header().Add("Content-Encoding", "gzip")
 	}
 
+	// let the client browser decode the gzipped css files
+	if strings.HasPrefix(r.URL.Path, "static/assets/css/") {
+		w.Header().Add("Content-Encoding", "gzip")
+	}
+
 	f.fs.ServeHTTP(w, r)
 }
 
