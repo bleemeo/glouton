@@ -165,6 +165,11 @@ func servicesFromState(state State) []Service {
 		if result[i].ContainerName != "" && result[i].Instance == "" {
 			result[i].Instance = result[i].ContainerName
 		}
+
+		if result[i].LastTimeSeen.IsZero() {
+			// First time loading the state with this new field
+			result[i].LastTimeSeen = time.Now()
+		}
 	}
 
 	if version < 1 {

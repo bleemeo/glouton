@@ -463,6 +463,8 @@ func (s *Synchronizer) DiagnosticPage() string {
 	if s.realClient == nil {
 		err = s.setClient()
 		if err != nil {
+			s.l.Unlock()
+
 			fmt.Fprintf(builder, "Can't initialize the API client: %v\n", err)
 
 			return builder.String()

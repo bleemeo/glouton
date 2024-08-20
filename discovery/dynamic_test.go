@@ -207,6 +207,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				Active:          true,
 				HasNetstatInfo:  true,
 				LastNetstatInfo: t0,
+				LastTimeSeen:    t0,
 			},
 		},
 		{
@@ -221,6 +222,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 11211}},
 				IPAddress:       "127.0.0.1",
 				Active:          true,
+				LastTimeSeen:    t0,
 			},
 		},
 		{
@@ -237,6 +239,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				Active:          true,
 				HasNetstatInfo:  true,
 				LastNetstatInfo: t0,
+				LastTimeSeen:    t0,
 			},
 		},
 		{
@@ -253,6 +256,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				Active:          true,
 				HasNetstatInfo:  true,
 				LastNetstatInfo: t0,
+				LastTimeSeen:    t0,
 			},
 		},
 		{
@@ -272,6 +276,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				Active:          true,
 				HasNetstatInfo:  true,
 				LastNetstatInfo: t0,
+				LastTimeSeen:    t0,
 			},
 		},
 		{
@@ -283,6 +288,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 9200}},
 				IPAddress:       "127.0.0.1",
 				Active:          true,
+				LastTimeSeen:    t0,
 			},
 		},
 		{
@@ -303,6 +309,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				},
 				IgnoredPorts: map[int]bool{},
 				Active:       true,
+				LastTimeSeen: t0,
 			},
 		},
 		{
@@ -321,7 +328,8 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 					Password:          "secret",
 					MetricsUnixSocket: "",
 				},
-				Active: true,
+				Active:       true,
+				LastTimeSeen: t0,
 			},
 		},
 		{
@@ -340,7 +348,8 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 					Password:          "secret",
 					MetricsUnixSocket: "/tmp/file.sock",
 				},
-				Active: true,
+				Active:       true,
+				LastTimeSeen: t0,
 			},
 		},
 		{
@@ -352,6 +361,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 5672}},
 				IPAddress:       "127.0.0.1",
 				Active:          true,
+				LastTimeSeen:    t0,
 			},
 		},
 		{
@@ -363,6 +373,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 8086}},
 				IPAddress:       "127.0.0.1",
 				Active:          true,
+				LastTimeSeen:    t0,
 			},
 		},
 		// Service from Ubuntu 16.04, default config
@@ -375,6 +386,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 3306}},
 				IPAddress:       "127.0.0.1",
 				Active:          true,
+				LastTimeSeen:    t0,
 			},
 		},
 		{
@@ -386,6 +398,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "udp", Address: "127.0.0.1", Port: 123}},
 				IPAddress:       "127.0.0.1",
 				Active:          true,
+				LastTimeSeen:    t0,
 			},
 		},
 		{
@@ -397,6 +410,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 389}},
 				IPAddress:       "127.0.0.1",
 				Active:          true,
+				LastTimeSeen:    t0,
 			},
 		},
 		{
@@ -408,6 +422,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 80}},
 				IPAddress:       "127.0.0.1",
 				Active:          true,
+				LastTimeSeen:    t0,
 			},
 		},
 		{
@@ -419,6 +434,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ListenAddresses: nil,
 				IPAddress:       "127.0.0.1",
 				Active:          true,
+				LastTimeSeen:    t0,
 			},
 		},
 		{
@@ -430,6 +446,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 53}},
 				IPAddress:       "127.0.0.1",
 				Active:          true,
+				LastTimeSeen:    t0,
 			},
 		},
 		{
@@ -441,6 +458,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 143}},
 				IPAddress:       "127.0.0.1",
 				Active:          true,
+				LastTimeSeen:    t0,
 			},
 		},
 		{
@@ -457,6 +475,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 5222}},
 				IPAddress:       "127.0.0.1",
 				Active:          true,
+				LastTimeSeen:    t0,
 			},
 		},
 		{
@@ -476,6 +495,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 5672}},
 				IPAddress:       "127.0.0.1",
 				Active:          true,
+				LastTimeSeen:    t0,
 			},
 		},
 		{
@@ -487,6 +507,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 27017}},
 				IPAddress:       "127.0.0.1",
 				Active:          true,
+				LastTimeSeen:    t0,
 			},
 		},
 		{
@@ -498,6 +519,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 1883}},
 				IPAddress:       "127.0.0.1",
 				Active:          true,
+				LastTimeSeen:    t0,
 			},
 		},
 		{
@@ -509,6 +531,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 6379}},
 				IPAddress:       "127.0.0.1",
 				Active:          true,
+				LastTimeSeen:    t0,
 			},
 		},
 		{
@@ -520,6 +543,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 11211}},
 				IPAddress:       "127.0.0.1",
 				Active:          true,
+				LastTimeSeen:    t0,
 			},
 		},
 		{
@@ -531,6 +555,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 3128}},
 				IPAddress:       "127.0.0.1",
 				Active:          true,
+				LastTimeSeen:    t0,
 			},
 		},
 		{
@@ -542,6 +567,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 5432}},
 				IPAddress:       "127.0.0.1",
 				Active:          true,
+				LastTimeSeen:    t0,
 			},
 		},
 		{
@@ -558,6 +584,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 2181}},
 				IPAddress:       "127.0.0.1",
 				Active:          true,
+				LastTimeSeen:    t0,
 			},
 		},
 		{
@@ -569,6 +596,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 4505}},
 				IPAddress:       "127.0.0.1",
 				Active:          true,
+				LastTimeSeen:    t0,
 			},
 		},
 		{
@@ -580,6 +608,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 25}},
 				IPAddress:       "127.0.0.1",
 				Active:          true,
+				LastTimeSeen:    t0,
 			},
 		},
 		{
@@ -591,6 +620,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 80}},
 				IPAddress:       "127.0.0.1",
 				Active:          true,
+				LastTimeSeen:    t0,
 			},
 		},
 		{
@@ -602,6 +632,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 25}},
 				IPAddress:       "127.0.0.1",
 				Active:          true,
+				LastTimeSeen:    t0,
 			},
 		},
 		{
@@ -613,6 +644,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ListenAddresses: nil,
 				IPAddress:       "127.0.0.1",
 				Active:          true,
+				LastTimeSeen:    t0,
 			},
 		},
 		{
@@ -624,6 +656,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 6082}},
 				IPAddress:       "127.0.0.1",
 				Active:          true,
+				LastTimeSeen:    t0,
 			},
 		},
 		// Service from Ubuntu 16.04, default config
@@ -643,6 +676,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 9200}},
 				IPAddress:       "127.0.0.1",
 				Active:          true,
+				LastTimeSeen:    t0,
 			},
 		},
 		{
@@ -654,6 +688,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 3128}},
 				IPAddress:       "127.0.0.1",
 				Active:          true,
+				LastTimeSeen:    t0,
 			},
 		},
 		{
@@ -665,6 +700,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ListenAddresses: nil,
 				IPAddress:       "127.0.0.1",
 				Active:          true,
+				LastTimeSeen:    t0,
 			},
 		},
 		{
@@ -676,6 +712,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ListenAddresses: nil,
 				IPAddress:       "127.0.0.1",
 				Active:          true,
+				LastTimeSeen:    t0,
 			},
 		},
 		{
@@ -687,6 +724,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ListenAddresses: nil,
 				IPAddress:       "127.0.0.1",
 				Active:          true,
+				LastTimeSeen:    t0,
 			},
 		},
 		{
@@ -698,6 +736,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ListenAddresses: nil,
 				IPAddress:       "127.0.0.1",
 				Active:          true,
+				LastTimeSeen:    t0,
 			},
 		},
 		{
@@ -709,6 +748,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ListenAddresses: nil,
 				IPAddress:       "127.0.0.1",
 				Active:          true,
+				LastTimeSeen:    t0,
 			},
 		},
 		{
@@ -720,6 +760,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ListenAddresses: nil,
 				IPAddress:       "127.0.0.1",
 				Active:          true,
+				LastTimeSeen:    t0,
 			},
 		},
 		{
@@ -756,6 +797,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 3306}},
 				IPAddress:       "127.0.0.1",
 				Active:          true,
+				LastTimeSeen:    t0,
 			},
 		},
 		{
@@ -767,6 +809,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ListenAddresses: nil,
 				IPAddress:       "127.0.0.1",
 				Active:          true,
+				LastTimeSeen:    t0,
 			},
 		},
 		{
@@ -792,6 +835,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ContainerID:     "817ec63d4b4f9e28947a323f9fbfc4596500b42c842bf07bd6ad9641e6805cb5",
 				IgnoredPorts:    map[int]bool{},
 				Active:          true,
+				LastTimeSeen:    t0,
 			},
 		},
 		{
@@ -816,6 +860,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				Active:          true,
 				HasNetstatInfo:  true,
 				LastNetstatInfo: t0,
+				LastTimeSeen:    t0,
 			},
 		},
 		{
@@ -845,6 +890,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				Active:          true,
 				HasNetstatInfo:  true,
 				LastNetstatInfo: t0,
+				LastTimeSeen:    t0,
 			},
 		},
 		{
@@ -872,6 +918,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				Active:          true,
 				HasNetstatInfo:  true,
 				LastNetstatInfo: t0,
+				LastTimeSeen:    t0,
 				Config: config.Service{
 					JMXPort: 1099,
 				},
@@ -901,16 +948,18 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				Active:          true,
 				HasNetstatInfo:  true,
 				LastNetstatInfo: t0,
+				LastTimeSeen:    t0,
 			},
 		},
 		{
 			testName: "fail2ban",
 			cmdLine:  []string{"/usr/bin/python3", "/usr/bin/fail2ban-server", "-xf", "start"},
 			want: Service{
-				Name:        "fail2ban",
-				ServiceType: Fail2banService,
-				IPAddress:   "127.0.0.1",
-				Active:      true,
+				Name:         "fail2ban",
+				ServiceType:  Fail2banService,
+				IPAddress:    "127.0.0.1",
+				Active:       true,
+				LastTimeSeen: t0,
 			},
 		},
 		{
@@ -922,6 +971,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ListenAddresses: nil,
 				IPAddress:       "127.0.0.1",
 				Active:          true,
+				LastTimeSeen:    t0,
 			},
 		},
 		{
@@ -936,6 +986,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 8080}},
 				IPAddress:       "127.0.0.1",
 				Active:          true,
+				LastTimeSeen:    t0,
 			},
 		},
 		{
@@ -947,6 +998,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 3493}},
 				IPAddress:       "127.0.0.1",
 				Active:          true,
+				LastTimeSeen:    t0,
 			},
 		},
 		{
@@ -971,6 +1023,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				Active:          true,
 				HasNetstatInfo:  true,
 				LastNetstatInfo: t0,
+				LastTimeSeen:    t0,
 			},
 		},
 		{
@@ -1005,6 +1058,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				Config: config.Service{
 					IgnorePorts: []int{74, 75, 80},
 				},
+				LastTimeSeen: t0,
 			},
 		},
 		{
@@ -1033,6 +1087,7 @@ func TestDynamicDiscoverySingle(t *testing.T) { //nolint:maintidx
 				Config: config.Service{
 					Port: 8080,
 				},
+				LastTimeSeen: t0,
 			},
 		},
 	}
@@ -1144,6 +1199,7 @@ func TestDynamicDiscovery(t *testing.T) { //nolint:maintidx
 					HasNetstatInfo:  true,
 					LastNetstatInfo: t0,
 					Active:          true,
+					LastTimeSeen:    t0,
 				},
 			},
 		},
@@ -1174,6 +1230,7 @@ func TestDynamicDiscovery(t *testing.T) { //nolint:maintidx
 					IgnoredPorts:    map[int]bool{},
 					HasNetstatInfo:  false,
 					Active:          true,
+					LastTimeSeen:    t0,
 				},
 			},
 		},
@@ -1232,6 +1289,7 @@ func TestDynamicDiscovery(t *testing.T) { //nolint:maintidx
 					HasNetstatInfo:  true,
 					LastNetstatInfo: t0,
 					Active:          true,
+					LastTimeSeen:    t0,
 				},
 			},
 		},
@@ -1268,6 +1326,7 @@ func TestDynamicDiscovery(t *testing.T) { //nolint:maintidx
 					HasNetstatInfo:  true,
 					LastNetstatInfo: t0,
 					Active:          true,
+					LastTimeSeen:    t0,
 				},
 			},
 		},
@@ -1304,6 +1363,7 @@ func TestDynamicDiscovery(t *testing.T) { //nolint:maintidx
 					HasNetstatInfo:  true,
 					LastNetstatInfo: t0,
 					Active:          true,
+					LastTimeSeen:    t0,
 				},
 			},
 		},
@@ -1345,6 +1405,7 @@ func TestDynamicDiscovery(t *testing.T) { //nolint:maintidx
 					HasNetstatInfo:  true,
 					LastNetstatInfo: t0,
 					Active:          true,
+					LastTimeSeen:    t0,
 				},
 				{
 					Name:        "phpfpm",
@@ -1358,6 +1419,7 @@ func TestDynamicDiscovery(t *testing.T) { //nolint:maintidx
 					HasNetstatInfo:  true,
 					LastNetstatInfo: t0,
 					Active:          true,
+					LastTimeSeen:    t0,
 				},
 			},
 		},
@@ -1398,6 +1460,7 @@ func TestDynamicDiscovery(t *testing.T) { //nolint:maintidx
 					HasNetstatInfo:  true,
 					LastNetstatInfo: t0,
 					Active:          true,
+					LastTimeSeen:    t0,
 				},
 				{
 					Name:            "phpfpm",
@@ -1408,6 +1471,7 @@ func TestDynamicDiscovery(t *testing.T) { //nolint:maintidx
 					IgnoredPorts:    map[int]bool{},
 					HasNetstatInfo:  false,
 					Active:          true,
+					LastTimeSeen:    t0,
 				},
 			},
 		},
@@ -1446,6 +1510,7 @@ func TestDynamicDiscovery(t *testing.T) { //nolint:maintidx
 					IgnoredPorts:   map[int]bool{},
 					HasNetstatInfo: false,
 					Active:         true,
+					LastTimeSeen:   t0,
 				},
 				{
 					Name:            "phpfpm",
@@ -1456,6 +1521,7 @@ func TestDynamicDiscovery(t *testing.T) { //nolint:maintidx
 					IgnoredPorts:    map[int]bool{},
 					HasNetstatInfo:  false,
 					Active:          true,
+					LastTimeSeen:    t0,
 				},
 			},
 		},
@@ -1496,6 +1562,7 @@ func TestDynamicDiscovery(t *testing.T) { //nolint:maintidx
 					HasNetstatInfo:  true,
 					LastNetstatInfo: t0,
 					Active:          true,
+					LastTimeSeen:    t0,
 				},
 				{
 					Name:            "phpfpm",
@@ -1506,6 +1573,7 @@ func TestDynamicDiscovery(t *testing.T) { //nolint:maintidx
 					IgnoredPorts:    map[int]bool{},
 					HasNetstatInfo:  false,
 					Active:          true,
+					LastTimeSeen:    t0,
 				},
 			},
 		},
@@ -1543,6 +1611,7 @@ func TestDynamicDiscovery(t *testing.T) { //nolint:maintidx
 					HasNetstatInfo:  true,
 					LastNetstatInfo: t0,
 					Active:          true,
+					LastTimeSeen:    t0,
 				},
 				{
 					Name:            "phpfpm",
@@ -1553,6 +1622,7 @@ func TestDynamicDiscovery(t *testing.T) { //nolint:maintidx
 					IgnoredPorts:    map[int]bool{},
 					HasNetstatInfo:  false,
 					Active:          true,
+					LastTimeSeen:    t0,
 				},
 			},
 		},
@@ -1588,6 +1658,7 @@ func TestDynamicDiscovery(t *testing.T) { //nolint:maintidx
 					IgnoredPorts:   map[int]bool{},
 					HasNetstatInfo: false,
 					Active:         true,
+					LastTimeSeen:   t0,
 				},
 				{
 					Name:            "phpfpm",
@@ -1598,6 +1669,7 @@ func TestDynamicDiscovery(t *testing.T) { //nolint:maintidx
 					IgnoredPorts:    map[int]bool{},
 					HasNetstatInfo:  false,
 					Active:          true,
+					LastTimeSeen:    t0,
 				},
 			},
 		},
@@ -1632,6 +1704,7 @@ func TestDynamicDiscovery(t *testing.T) { //nolint:maintidx
 					IgnoredPorts:    map[int]bool{},
 					HasNetstatInfo:  false,
 					Active:          true,
+					LastTimeSeen:    t0,
 				},
 				{
 					Name:            "phpfpm",
@@ -1642,6 +1715,7 @@ func TestDynamicDiscovery(t *testing.T) { //nolint:maintidx
 					IgnoredPorts:    map[int]bool{},
 					HasNetstatInfo:  false,
 					Active:          true,
+					LastTimeSeen:    t0,
 				},
 			},
 		},
@@ -1676,6 +1750,7 @@ func TestDynamicDiscovery(t *testing.T) { //nolint:maintidx
 					IgnoredPorts:    map[int]bool{},
 					HasNetstatInfo:  false,
 					Active:          true,
+					LastTimeSeen:    t0,
 				},
 				{
 					Name:            "apache",
@@ -1686,6 +1761,7 @@ func TestDynamicDiscovery(t *testing.T) { //nolint:maintidx
 					IgnoredPorts:    map[int]bool{},
 					HasNetstatInfo:  false,
 					Active:          true,
+					LastTimeSeen:    t0,
 				},
 			},
 		},
@@ -1723,6 +1799,7 @@ func TestDynamicDiscovery(t *testing.T) { //nolint:maintidx
 					IgnoredPorts:    map[int]bool{},
 					HasNetstatInfo:  false,
 					Active:          true,
+					LastTimeSeen:    t0,
 				},
 				{
 					Name:            "apache",
@@ -1733,6 +1810,7 @@ func TestDynamicDiscovery(t *testing.T) { //nolint:maintidx
 					IgnoredPorts:    map[int]bool{},
 					HasNetstatInfo:  false,
 					Active:          true,
+					LastTimeSeen:    t0,
 				},
 			},
 		},
@@ -1773,6 +1851,7 @@ func TestDynamicDiscovery(t *testing.T) { //nolint:maintidx
 					HasNetstatInfo:  true,
 					LastNetstatInfo: t0,
 					Active:          true,
+					LastTimeSeen:    t0,
 				},
 				{
 					Name:            "phpfpm",
@@ -1783,6 +1862,7 @@ func TestDynamicDiscovery(t *testing.T) { //nolint:maintidx
 					IgnoredPorts:    map[int]bool{},
 					HasNetstatInfo:  false,
 					Active:          true,
+					LastTimeSeen:    t0,
 				},
 			},
 		},
@@ -1823,6 +1903,7 @@ func TestDynamicDiscovery(t *testing.T) { //nolint:maintidx
 					HasNetstatInfo:  true,
 					LastNetstatInfo: t0,
 					Active:          true,
+					LastTimeSeen:    t0,
 				},
 				{
 					Name:        "redis",
@@ -1836,6 +1917,7 @@ func TestDynamicDiscovery(t *testing.T) { //nolint:maintidx
 					HasNetstatInfo:  true,
 					LastNetstatInfo: t0,
 					Active:          true,
+					LastTimeSeen:    t0,
 				},
 			},
 		},
@@ -1873,6 +1955,7 @@ func TestDynamicDiscovery(t *testing.T) { //nolint:maintidx
 					IgnoredPorts:    map[int]bool{},
 					HasNetstatInfo:  false,
 					Active:          true,
+					LastTimeSeen:    t0,
 				},
 				{
 					Name:        "redis",
@@ -1886,6 +1969,7 @@ func TestDynamicDiscovery(t *testing.T) { //nolint:maintidx
 					HasNetstatInfo:  true,
 					LastNetstatInfo: t0,
 					Active:          true,
+					LastTimeSeen:    t0,
 				},
 			},
 		},

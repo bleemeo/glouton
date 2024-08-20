@@ -950,6 +950,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		a.containerFilter.ContainerIgnored,
 		a.metricFormat,
 		psFact,
+		a.config.Agent.AbsentServiceDeactivationDelay,
 	)
 	if warnings != nil {
 		a.addWarnings(warnings...)
