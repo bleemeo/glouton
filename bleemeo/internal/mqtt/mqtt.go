@@ -346,6 +346,10 @@ func (c *Client) DiagnosticArchive(ctx context.Context, archive types.ArchiveWri
 		PendingPointsCount         int
 		SendingSuspended           bool
 		DisableReason              bleemeoTypes.DisableReason
+		LastAck                    time.Time
+		DataStreamAvailable        bool
+		TopinfoStreamAvailable     bool
+		LogsStreamAvailable        bool
 	}{
 		StartedAt:                  c.startedAt,
 		LastRegisteredMetricsCount: c.lastRegisteredMetricsCount,
@@ -353,6 +357,10 @@ func (c *Client) DiagnosticArchive(ctx context.Context, archive types.ArchiveWri
 		PendingPointsCount:         len(c.pendingPoints),
 		SendingSuspended:           c.sendingSuspended,
 		DisableReason:              c.disableReason,
+		LastAck:                    c.lastAck,
+		DataStreamAvailable:        c.dataStreamAvailable,
+		TopinfoStreamAvailable:     c.topinfoStreamAvailable,
+		LogsStreamAvailable:        c.logsStreamAvailable,
 	}
 
 	enc := json.NewEncoder(file)
@@ -378,6 +386,11 @@ func (c *Client) HealthCheck() bool {
 
 	c.l.Lock()
 	defer c.l.Unlock()
+
+	lastAckAge := time.Since(c.lastAck)
+	if lastAckAge > dataAckBackPressureDelay || lastAckAge > topinfoAckBackPressureDelay || lastAckAge > logsAckBackPressureDelay {
+		logger.V(1).Printf("Didn't received recent ack from Bleemeo, latest ack received at %v (%v ago)", c.lastAck, lastAckAge)
+	}
 
 	failedPointsCount := c.failedPoints.Len()
 
@@ -871,6 +884,14 @@ func (c *Client) onNotification(ctx context.Context, msg paho.Message) {
 		c.dataStreamAvailable = payload.DataStreamAvailable
 		c.topinfoStreamAvailable = payload.TopInfoStreamAvailable
 		c.logsStreamAvailable = payload.LogsStreamAvailable
+
+		logger.V(2).Printf(
+			"Received ack with dataStreamAvailable=%v, topinfoStreamAvailable=%v, logsStreamAvailable=%v",
+			payload.DataStreamAvailable,
+			payload.TopInfoStreamAvailable,
+			payload.LogsStreamAvailable,
+		)
+
 		c.l.Unlock()
 	}
 }
