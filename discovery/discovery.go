@@ -758,8 +758,9 @@ func (d *Discovery) ignoreServicesAndPorts() {
 		}
 
 		if d.isServiceIgnored != nil && d.isServiceIgnored(service) {
-			service.CheckIgnored = true
-			service.MetricsIgnored = true
+			delete(d.servicesMap, nameContainer)
+
+			continue
 		}
 
 		if len(service.IgnoredPorts) > 0 {

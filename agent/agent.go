@@ -931,7 +931,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 	}
 	a.collector = collector.New(acc, secretInputsGate)
 
-	isServiceIgnored := discovery.NewIgnoredService(a.config.ServiceIgnore).IsServiceIgnored
+	serviceIgnored := discovery.NewIgnoredService(a.config.ServiceIgnore)
 	isCheckIgnored := discovery.NewIgnoredService(a.config.ServiceIgnoreCheck).IsServiceIgnored
 	isInputIgnored := discovery.NewIgnoredService(a.config.ServiceIgnoreMetrics).IsServiceIgnored
 	dynamicDiscovery := discovery.NewDynamic(discovery.Option{
@@ -939,6 +939,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		Netstat:            netstat,
 		ContainerInfo:      a.containerRuntime,
 		IsContainerIgnored: a.containerFilter.ContainerIgnored,
+		IsServiceIgnored:   serviceIgnored.IsServiceIgnored,
 		FileReader:         discovery.SudoFileReader{HostRootPath: a.hostRootPath},
 	})
 
@@ -948,7 +949,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		a.state,
 		a.containerRuntime,
 		a.config.Services,
-		isServiceIgnored,
+		serviceIgnored.IsServiceIgnored,
 		isCheckIgnored,
 		isInputIgnored,
 		a.containerFilter.ContainerIgnored,
@@ -1078,6 +1079,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 			IsMetricAllowed:                a.metricFilter.isAllowedAndNotDeniedMap,
 			PahoLastPingCheckAt:            a.pahoLogWrapper.LastPingAt,
 			LastMetricAnnotationChange:     a.store.LastAnnotationChange,
+			IsServiceIgnored:               serviceIgnored.IsServiceIgnoredNameAndContainer,
 		})
 		if err != nil {
 			logger.Printf("unable to start Bleemeo SAAS connector: %v", err)

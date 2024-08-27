@@ -201,7 +201,7 @@ func (s *syncServicesExecution) syncRemoteAndLocal(ctx context.Context, executio
 		return err
 	}
 
-	serviceDeactivateNonLocal(ctx, execution, localServices)
+	serviceDeactivateNonLocal(ctx, execution, localServices, execution.Option().IsServiceIgnored)
 
 	return nil
 }
@@ -417,7 +417,7 @@ func ServiceExcludeUnregistrable(services []discovery.Service, logThrottle func(
 }
 
 // serviceDeactivateNonLocal marks inactive the registered services that were not found in the discovery.
-func serviceDeactivateNonLocal(ctx context.Context, execution types.SynchronizationExecution, localServices []discovery.Service) {
+func serviceDeactivateNonLocal(ctx context.Context, execution types.SynchronizationExecution, localServices []discovery.Service, isServiceIgnored func(name, containerName string) bool) {
 	localServiceExists := make(map[common.ServiceNameInstance]bool, len(localServices))
 
 	for _, srv := range localServices {
@@ -435,6 +435,18 @@ func serviceDeactivateNonLocal(ctx context.Context, execution types.Synchronizat
 
 	for _, remoteSrv := range registeredServices {
 		key := common.ServiceNameInstance{Name: remoteSrv.Label, Instance: remoteSrv.Instance}
+
+		if isServiceIgnored != nil && isServiceIgnored(remoteSrv.Label, remoteSrv.Instance) {
+			logger.V(2).Printf("Deleting ignored service %s from Bleemeo API", key)
+
+			err := execution.BleemeoAPIClient().DeleteService(ctx, remoteSrv.ID)
+			if err != nil {
+				logger.V(1).Printf("Failed to delete service %s on Bleemeo API: %v", key, err)
+			}
+
+			continue // now forget it from the local cache
+		}
+
 		if !remoteSrv.Active || (remoteSrv.ID == remoteServicesByKey[key].ID && localServiceExists[key]) {
 			finalServices = append(finalServices, remoteSrv)
 
