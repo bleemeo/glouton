@@ -446,7 +446,7 @@ func (tc *customTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 	tc.opts.RequestCounter.Add(1)
 
 	if tc.opts.EnableLogger {
-		logger.Printf("Sending API request %v %v", r.Method, r.URL)
+		logger.V(2).Printf("Sending API request %v %v", r.Method, r.URL)
 	}
 
 	return tc.transport.RoundTrip(r)

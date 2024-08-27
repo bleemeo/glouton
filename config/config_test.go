@@ -62,7 +62,8 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 				Enable:  true,
 				Address: "http://example.com",
 			},
-			MetricsFormat: "prometheus",
+			MetricsFormat:                  "prometheus",
+			AbsentServiceDeactivationDelay: 7 * 24 * time.Hour,
 		},
 		Blackbox: Blackbox{
 			Enable:          true,
@@ -146,13 +147,6 @@ func TestStructuredConfig(t *testing.T) { //nolint:maintidx
 		},
 		DiskIgnore:  []string{"^(ram|loop|fd|(h|s|v|xv)d[a-z]|nvme\\d+n\\d+p)\\d+$"},
 		DiskMonitor: []string{"sda"},
-		InfluxDB: InfluxDB{
-			Enable: true,
-			Host:   "localhost",
-			Port:   8086,
-			DBName: "metrics",
-			Tags:   map[string]string{"mytag": "myvalue"},
-		},
 		JMX: JMX{
 			Enable: true,
 		},
@@ -789,9 +783,6 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 				Bleemeo: Bleemeo{
 					Enable: true,
 				},
-				InfluxDB: InfluxDB{
-					Enable: false,
-				},
 				JMX: JMX{
 					Enable: false,
 				},
@@ -1009,14 +1000,15 @@ func TestLoad(t *testing.T) { //nolint:maintidx
 func TestStateLoading(t *testing.T) {
 	defaultAgentCfg := DefaultConfig().Agent
 	agentCfg := Agent{ // Avoids repeating all these lines in every test case
-		EnableCrashReporting: defaultAgentCfg.EnableCrashReporting,
-		MaxCrashReportsCount: defaultAgentCfg.MaxCrashReportsCount,
-		ProcessExporter:      defaultAgentCfg.ProcessExporter,
-		PublicIPIndicator:    defaultAgentCfg.PublicIPIndicator,
-		NodeExporter:         defaultAgentCfg.NodeExporter,
-		WindowsExporter:      defaultAgentCfg.WindowsExporter,
-		Telemetry:            defaultAgentCfg.Telemetry,
-		MetricsFormat:        defaultAgentCfg.MetricsFormat,
+		EnableCrashReporting:           defaultAgentCfg.EnableCrashReporting,
+		MaxCrashReportsCount:           defaultAgentCfg.MaxCrashReportsCount,
+		ProcessExporter:                defaultAgentCfg.ProcessExporter,
+		PublicIPIndicator:              defaultAgentCfg.PublicIPIndicator,
+		NodeExporter:                   defaultAgentCfg.NodeExporter,
+		WindowsExporter:                defaultAgentCfg.WindowsExporter,
+		Telemetry:                      defaultAgentCfg.Telemetry,
+		MetricsFormat:                  defaultAgentCfg.MetricsFormat,
+		AbsentServiceDeactivationDelay: defaultAgentCfg.AbsentServiceDeactivationDelay,
 	}
 
 	cases := []struct {

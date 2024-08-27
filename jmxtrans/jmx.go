@@ -167,7 +167,7 @@ func (j *JMX) Run(ctx context.Context) error {
 		if serverCancel == nil && err == nil && !j.jmxConfig.IsEmpty(config) {
 			logger.V(2).Println("JMX configuration not empty, starting graphite server")
 
-			serverContext, serverCancel = context.WithCancel(ctx)
+			serverContext, serverCancel = context.WithCancel(ctx) //nolint: fatcontext
 
 			serverWaitGroup.Add(1)
 

@@ -17,6 +17,8 @@
 package config
 
 import (
+	"time"
+
 	"github.com/bleemeo/glouton/version"
 
 	bbConf "github.com/prometheus/blackbox_exporter/config"
@@ -40,7 +42,6 @@ func mapKeys() []string {
 	return []string{
 		"thresholds",
 		"metric.softstatus_period",
-		"influxdb.tags",
 	}
 }
 
@@ -62,18 +63,19 @@ func DefaultConfig() Config { //nolint:maintidx
 			ProcessExporter: ProcessExporter{
 				Enable: true,
 			},
-			PublicIPIndicator:    "https://myip.bleemeo.com",
-			NetstatFile:          "netstat.out",
-			StateDirectory:       "",
-			StateFile:            "state.json",
-			StateCacheFile:       "state.cache.json",
-			StateResetFile:       "state.reset",
-			DeprecatedStateFile:  "",
-			EnableCrashReporting: true,
-			MaxCrashReportsCount: 2,
-			UpgradeFile:          "upgrade",
-			AutoUpgradeFile:      "auto_upgrade",
-			MetricsFormat:        "Bleemeo",
+			PublicIPIndicator:              "https://myip.bleemeo.com",
+			NetstatFile:                    "netstat.out",
+			StateDirectory:                 "",
+			StateFile:                      "state.json",
+			StateCacheFile:                 "state.cache.json",
+			StateResetFile:                 "state.reset",
+			DeprecatedStateFile:            "",
+			EnableCrashReporting:           true,
+			MaxCrashReportsCount:           2,
+			UpgradeFile:                    "upgrade",
+			AutoUpgradeFile:                "auto_upgrade",
+			MetricsFormat:                  "Bleemeo",
+			AbsentServiceDeactivationDelay: 7 * 24 * time.Hour,
 			NodeExporter: NodeExporter{
 				Enable:     true,
 				Collectors: []string{"cpu", "diskstats", "filesystem", "loadavg", "meminfo", "netdev", "uname"},
@@ -222,13 +224,6 @@ func DefaultConfig() Config { //nolint:maintidx
 			"^skd[0-9]$",
 			"^rsxx[0-9]$",
 			"^[A-Z]:$",
-		},
-		InfluxDB: InfluxDB{
-			Enable: false,
-			DBName: "glouton",
-			Host:   "localhost",
-			Port:   8086,
-			Tags:   map[string]string{},
 		},
 		IPMI: IPMI{
 			Enable:           true,

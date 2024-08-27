@@ -17,6 +17,8 @@
 package config
 
 import (
+	"time"
+
 	bbConf "github.com/prometheus/blackbox_exporter/config"
 )
 
@@ -29,7 +31,6 @@ type Config struct {
 	DF                       DF                   `yaml:"df"`
 	DiskIgnore               []string             `yaml:"disk_ignore"`
 	DiskMonitor              []string             `yaml:"disk_monitor"`
-	InfluxDB                 InfluxDB             `yaml:"influxdb"`
 	IPMI                     IPMI                 `yaml:"ipmi"`
 	JMX                      JMX                  `yaml:"jmx"`
 	JMXTrans                 JMXTrans             `yaml:"jmxtrans"`
@@ -166,14 +167,6 @@ type JMX struct {
 	Enable bool `yaml:"enable"`
 }
 
-type InfluxDB struct {
-	Enable bool              `yaml:"enable"`
-	Host   string            `yaml:"host"`
-	Port   int               `yaml:"port"`
-	DBName string            `yaml:"db_name"`
-	Tags   map[string]string `yaml:"tags"`
-}
-
 type IPMI struct {
 	Enable           bool   `yaml:"enable"`
 	BinarySearchPath string `yaml:"bin_search_path"`
@@ -229,25 +222,26 @@ type BlackboxTarget struct {
 }
 
 type Agent struct {
-	CloudImageCreationFile string          `yaml:"cloudimage_creation_file"`
-	InstallationFormat     string          `yaml:"installation_format"`
-	FactsFile              string          `yaml:"facts_file"`
-	NetstatFile            string          `yaml:"netstat_file"`
-	StateFile              string          `yaml:"state_file"`
-	StateCacheFile         string          `yaml:"state_cache_file"`
-	StateResetFile         string          `yaml:"state_reset_file"`
-	DeprecatedStateFile    string          `yaml:"deprecated_state_file"`
-	StateDirectory         string          `yaml:"state_directory"`
-	EnableCrashReporting   bool            `yaml:"enable_crash_reporting"`
-	MaxCrashReportsCount   int             `yaml:"max_crash_reports_count"`
-	UpgradeFile            string          `yaml:"upgrade_file"`
-	AutoUpgradeFile        string          `yaml:"auto_upgrade_file"`
-	ProcessExporter        ProcessExporter `yaml:"process_exporter"`
-	PublicIPIndicator      string          `yaml:"public_ip_indicator"`
-	NodeExporter           NodeExporter    `yaml:"node_exporter"`
-	WindowsExporter        NodeExporter    `yaml:"windows_exporter"`
-	Telemetry              Telemetry       `yaml:"telemetry"`
-	MetricsFormat          string          `yaml:"metrics_format"`
+	CloudImageCreationFile         string          `yaml:"cloudimage_creation_file"`
+	InstallationFormat             string          `yaml:"installation_format"`
+	FactsFile                      string          `yaml:"facts_file"`
+	NetstatFile                    string          `yaml:"netstat_file"`
+	StateFile                      string          `yaml:"state_file"`
+	StateCacheFile                 string          `yaml:"state_cache_file"`
+	StateResetFile                 string          `yaml:"state_reset_file"`
+	DeprecatedStateFile            string          `yaml:"deprecated_state_file"`
+	StateDirectory                 string          `yaml:"state_directory"`
+	EnableCrashReporting           bool            `yaml:"enable_crash_reporting"`
+	MaxCrashReportsCount           int             `yaml:"max_crash_reports_count"`
+	UpgradeFile                    string          `yaml:"upgrade_file"`
+	AutoUpgradeFile                string          `yaml:"auto_upgrade_file"`
+	ProcessExporter                ProcessExporter `yaml:"process_exporter"`
+	PublicIPIndicator              string          `yaml:"public_ip_indicator"`
+	NodeExporter                   NodeExporter    `yaml:"node_exporter"`
+	WindowsExporter                NodeExporter    `yaml:"windows_exporter"`
+	Telemetry                      Telemetry       `yaml:"telemetry"`
+	MetricsFormat                  string          `yaml:"metrics_format"`
+	AbsentServiceDeactivationDelay time.Duration   `yaml:"absent_service_deactivation_delay"`
 }
 
 type Telemetry struct {

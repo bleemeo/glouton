@@ -421,6 +421,7 @@ func (dd *DynamicDiscovery) serviceFromProcess(process facts.Process, netstat ma
 		Instance:      process.ContainerName,
 		ExePath:       process.Executable,
 		Active:        true,
+		LastTimeSeen:  dd.now(),
 	}
 
 	if service.ContainerID != "" {

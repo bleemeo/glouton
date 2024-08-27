@@ -48,6 +48,7 @@ type RuntimeInterface interface {
 	MetricsMinute(ctx context.Context, now time.Time) ([]types.MetricPoint, error)
 	IsContainerNameRecentlyDeleted(name string) bool
 	DiagnosticArchive(ctx context.Context, archive types.ArchiveWriter) error
+	ContainerExists(containerID string) bool
 }
 
 // ExpandRuntimeAddresses adds the host root to the socket addresses if PrefixHostRoot is true.

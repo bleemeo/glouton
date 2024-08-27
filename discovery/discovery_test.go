@@ -274,7 +274,7 @@ func TestDiscoverySingle(t *testing.T) {
 		state := mockState{
 			DiscoveredService: previousService,
 		}
-		disc, _ := New(&MockDiscoverer{result: []Service{c.dynamicResult}}, nil, state, mockContainerInfo{}, nil, nil, nil, nil, facts.ContainerFilter{}.ContainerIgnored, types.MetricFormatBleemeo, nil)
+		disc, _ := New(&MockDiscoverer{result: []Service{c.dynamicResult}}, nil, state, mockContainerInfo{}, nil, nil, nil, nil, facts.ContainerFilter{}.ContainerIgnored, types.MetricFormatBleemeo, nil, time.Hour)
 
 		srv, err := disc.Discovery(ctx, 0)
 		if err != nil {
@@ -864,7 +864,7 @@ func TestUpdateMetricsAndCheck(t *testing.T) {
 	}
 	state := mockState{}
 
-	disc, _ := New(mockDynamic, reg, state, nil, nil, nil, nil, nil, facts.ContainerFilter{}.ContainerIgnored, types.MetricFormatBleemeo, nil)
+	disc, _ := New(mockDynamic, reg, state, nil, nil, nil, nil, nil, facts.ContainerFilter{}.ContainerIgnored, types.MetricFormatBleemeo, nil, time.Hour)
 	disc.containerInfo = docker
 
 	mockDynamic.result = []Service{
@@ -1367,6 +1367,7 @@ func Test_servicesFromState(t *testing.T) {
 
 			cmpOptions := []cmp.Option{
 				cmpopts.IgnoreUnexported(Service{}),
+				cmpopts.IgnoreFields(Service{}, "LastTimeSeen"),
 				cmpopts.EquateEmpty(),
 				cmpopts.SortSlices(func(x Service, y Service) bool {
 					if x.Name < y.Name {

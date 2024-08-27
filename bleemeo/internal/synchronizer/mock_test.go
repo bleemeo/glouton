@@ -140,6 +140,16 @@ func (d mockDocker) LastUpdate() time.Time {
 	return d.helper.s.now()
 }
 
+func (d mockDocker) ContainerExists(containerID string) bool {
+	for _, c := range d.helper.containers {
+		if c.ID() == containerID {
+			return true
+		}
+	}
+
+	return false
+}
+
 func (m mockMonitorManager) UpdateDynamicTargets([]gloutonTypes.Monitor) error {
 	return nil
 }

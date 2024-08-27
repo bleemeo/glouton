@@ -106,14 +106,6 @@ func TestLoader(t *testing.T) {
 			Priority: 1,
 		},
 		{
-			Key:      "influxdb.port",
-			Value:    8086.0,
-			Type:     TypeInt,
-			Source:   SourceFile,
-			Path:     path,
-			Priority: 1,
-		},
-		{
 			Key: "metric.softstatus_period",
 			Value: map[string]any{
 				"cpu_used": 60.0,

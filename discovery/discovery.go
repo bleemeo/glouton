@@ -75,6 +75,8 @@ type Discovery struct {
 	processFact           processFact
 	pendingUpdateCond     *sync.Cond
 	pendingUpdate         bool
+
+	absentServiceDeactivationDelay time.Duration
 }
 
 // Collector will gather metrics for added inputs.
@@ -109,6 +111,7 @@ func New(
 	isContainerIgnored func(c facts.Container) bool,
 	metricFormat types.MetricFormat,
 	processFact processFact,
+	absentServiceDeactivationDelay time.Duration,
 ) (*Discovery, prometheus.MultiError) {
 	initialServices := servicesFromState(state)
 	discoveredServicesMap := make(map[NameInstance]Service, len(initialServices))
@@ -124,20 +127,21 @@ func New(
 	servicesOverrideMap, warnings := validateServices(servicesOverride)
 
 	discovery := &Discovery{
-		dynamicDiscovery:      dynamicDiscovery,
-		discoveredServicesMap: discoveredServicesMap,
-		metricRegistry:        metricRegistry,
-		containerInfo:         containerInfo,
-		activeCollector:       make(map[NameInstance]collectorDetails),
-		activeCheck:           make(map[NameInstance]CheckDetails),
-		state:                 state,
-		servicesOverride:      servicesOverrideMap,
+		dynamicDiscovery:               dynamicDiscovery,
+		discoveredServicesMap:          discoveredServicesMap,
+		metricRegistry:                 metricRegistry,
+		containerInfo:                  containerInfo,
+		activeCollector:                make(map[NameInstance]collectorDetails),
+		activeCheck:                    make(map[NameInstance]CheckDetails),
+		state:                          state,
+		servicesOverride:               servicesOverrideMap,
 		isServiceIgnored:      isServiceIgnored,
-		isCheckIgnored:        isCheckIgnored,
-		isInputIgnored:        isInputIgnored,
-		isContainerIgnored:    isContainerIgnored,
-		metricFormat:          metricFormat,
-		processFact:           processFact,
+		isCheckIgnored:                 isCheckIgnored,
+		isInputIgnored:                 isInputIgnored,
+		isContainerIgnored:             isContainerIgnored,
+		metricFormat:                   metricFormat,
+		processFact:                    processFact,
+		absentServiceDeactivationDelay: absentServiceDeactivationDelay,
 	}
 
 	discovery.pendingUpdateCond = sync.NewCond(&discovery.l)
@@ -533,7 +537,8 @@ func usePreviousNetstat(now time.Time, previousService Service, newService Servi
 }
 
 func (d *Discovery) setServiceActiveAndContainer(service Service) Service {
-	if service.ContainerID != "" {
+	switch {
+	case service.ContainerID != "":
 		container, found := d.containerInfo.CachedContainer(service.ContainerID)
 
 		if found {
@@ -545,8 +550,14 @@ func (d *Discovery) setServiceActiveAndContainer(service Service) Service {
 		} else if container.StoppedAndReplaced() {
 			service.Active = false
 		}
-	} else if service.ExePath != "" {
+	case service.ExePath != "":
 		if _, err := os.Stat(service.ExePath); os.IsNotExist(err) {
+			service.Active = false
+		}
+	case service.ExePath == "" && service.Active:
+		if since := time.Since(service.LastTimeSeen); since > d.absentServiceDeactivationDelay {
+			logger.V(2).Printf("Service %q hasn't been seen since %s, deactivating it.", service.Name, since.Round(time.Second))
+
 			service.Active = false
 		}
 	}

@@ -249,8 +249,7 @@ func serviceRemoveDeletedFromRemote(ctx context.Context, execution types.Synchro
 }
 
 func (s *syncServicesExecution) serviceRegisterAndUpdate(ctx context.Context, execution types.SynchronizationExecution, localServices []discovery.Service) error {
-	remoteServices := execution.Option().Cache.Services()
-	remoteServicesByKey := common.ServiceLookupFromList(remoteServices)
+	remoteServicesByKey := execution.Option().Cache.ServiceLookupFromList()
 	registeredServices := execution.Option().Cache.ServicesByUUID()
 	delayedContainer, _ := execution.GlobalState().DelayedContainers()
 	apiClient := execution.BleemeoAPIClient()

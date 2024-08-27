@@ -180,7 +180,8 @@ func TestVSphereSteps(t *testing.T) {
 			facts: map[string]string{
 				"cpu_cores":               "2",
 				"cpu_model_name":          "Intel(R) Core(TM) i7-3615QM CPU @ 2.30GHz",
-				"fqdn":                    "DC0_C0_H0",
+				"domain":                  "localdomain",
+				"fqdn":                    "DC0_C0_H0.localdomain",
 				"hostname":                "DC0_C0_H0",
 				"ipv6_enabled":            "false",
 				"memory":                  "4.00 GB",
@@ -270,7 +271,8 @@ func TestVSphereLifecycle(t *testing.T) { //nolint:maintidx
 						facts: map[string]string{
 							"cpu_cores":               "4",
 							"cpu_model_name":          "Intel(R) Core(TM) i7-8550U CPU @ 1.80GHz",
-							"fqdn":                    "esxi.test",
+							"domain":                  "test",
+							"fqdn":                    "esxi.test.test",
 							"hostname":                "esxi.test",
 							"ipv6_enabled":            "false",
 							"memory":                  "4.00 GB",
@@ -387,7 +389,8 @@ func TestVSphereLifecycle(t *testing.T) { //nolint:maintidx
 						facts: map[string]string{
 							"cpu_cores":               "2",
 							"cpu_model_name":          "Intel(R) Core(TM) i7-3615QM CPU @ 2.30GHz",
-							"fqdn":                    "DC0_C0_H0",
+							"domain":                  "localdomain",
+							"fqdn":                    "DC0_C0_H0.localdomain",
 							"hostname":                "DC0_C0_H0",
 							"ipv6_enabled":            "false",
 							"memory":                  "4.00 GB",

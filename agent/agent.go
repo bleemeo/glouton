@@ -54,7 +54,6 @@ import (
 	"github.com/bleemeo/glouton/facts/container-runtime/merge"
 	"github.com/bleemeo/glouton/facts/container-runtime/veth"
 	"github.com/bleemeo/glouton/fluentbit"
-	"github.com/bleemeo/glouton/influxdb"
 	"github.com/bleemeo/glouton/inputs"
 	"github.com/bleemeo/glouton/inputs/docker"
 	"github.com/bleemeo/glouton/inputs/mdstat"
@@ -134,7 +133,6 @@ type agent struct {
 	collector              *collector.Collector
 	factProvider           *facts.FactProvider
 	bleemeoConnector       *bleemeo.Connector
-	influxdbConnector      *influxdb.Client
 	threshold              *threshold.Registry
 	jmx                    *jmxtrans.JMX
 	snmpManager            *snmp.Manager
@@ -955,6 +953,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		a.containerFilter.ContainerIgnored,
 		a.metricFormat,
 		psFact,
+		a.config.Agent.AbsentServiceDeactivationDelay,
 	)
 	if warnings != nil {
 		a.addWarnings(warnings...)
@@ -1241,19 +1240,6 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 			zabbixResponse,
 		)
 		tasks = append(tasks, taskInfo{server.Run, "Zabbix server"})
-	}
-
-	if a.config.InfluxDB.Enable {
-		server := influxdb.New(
-			"http://"+net.JoinHostPort(a.config.InfluxDB.Host, strconv.Itoa(a.config.InfluxDB.Port)),
-			a.config.InfluxDB.DBName,
-			a.store,
-			a.config.InfluxDB.Tags,
-		)
-		a.influxdbConnector = server
-		tasks = append(tasks, taskInfo{server.Run, "influxdb"})
-
-		logger.V(2).Printf("Influxdb is activated !")
 	}
 
 	if a.bleemeoConnector == nil {
@@ -1695,10 +1681,6 @@ func (a *agent) healthCheck(ctx context.Context) error {
 
 		if a.gathererRegistry != nil {
 			a.gathererRegistry.HealthCheck()
-		}
-
-		if a.influxdbConnector != nil {
-			a.influxdbConnector.HealthCheck()
 		}
 
 		a.l.Lock()
