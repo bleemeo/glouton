@@ -135,7 +135,7 @@ func New(
 		activeCheck:                    make(map[NameInstance]CheckDetails),
 		state:                          state,
 		servicesOverride:               servicesOverrideMap,
-		isServiceIgnored:      isServiceIgnored,
+		isServiceIgnored:               isServiceIgnored,
 		isCheckIgnored:                 isCheckIgnored,
 		isInputIgnored:                 isInputIgnored,
 		isContainerIgnored:             isContainerIgnored,
