@@ -1,8 +1,8 @@
 $versionUrl = "https://packages.bleemeo.com/bleemeo-agent/VERSION"
 $baseMsiUrl = "https://packages.bleemeo.com/bleemeo-agent/windows/"
 $localPackageName = "Glouton"
-$tempPath = [System.IO.Path]::GetTempPath()
 $logOutFile = "C:\ProgramData\glouton\auto_update.txt"
+New-Item -Path $logOutFile # Make it visible by Glouton so it can see it as the cause of its shutdown
 $logTmpFile = New-TemporaryFile
 Out-File -FilePath $logTmpFile -Encoding ascii
 Add-Content -Path $logTmpFile -Value "Auto update started at $(Get-Date)"
