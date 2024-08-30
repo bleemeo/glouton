@@ -586,7 +586,7 @@ func (s *Synchronizer) syncMetrics(ctx context.Context, syncType types.SyncType,
 
 func (s *Synchronizer) metricUpdatePendingOrSync(ctx context.Context, apiClient types.MetricClient, fullSync bool, pendingMetricsUpdate *[]string) error {
 	if fullSync {
-		err := s.metricUpdateAll(ctx, apiClient, false)
+		err := s.metricUpdateAll(ctx, apiClient, false, nil)
 		if err != nil {
 			// Re-add the metric on the pending update
 			s.UpdateMetrics(*pendingMetricsUpdate...)
@@ -698,10 +698,10 @@ func (s *Synchronizer) isOwnedMetric(metric bleemeoapi.MetricPayload) bool {
 }
 
 // metricsListWithAgentID fetches the list of all metrics for a given agent, and returns a UUID:metric mapping.
-func (s *Synchronizer) metricsListWithAgentID(ctx context.Context, apiClient types.MetricClient, fetchInactive bool) (map[string]bleemeoTypes.Metric, error) {
+func (s *Synchronizer) metricsListWithAgentID(ctx context.Context, apiClient types.MetricClient, fetchInactive bool, stopSearchingPredicate func(labelsText string) bool) (map[string]bleemeoTypes.Metric, error) {
 	// If the metric is associated with another agent, make sure we "own" the metric.
 	// This may not be the case for monitor because multiple agents will process such metrics.
-	result, err := apiClient.ListActiveMetrics(ctx, !fetchInactive)
+	result, err := apiClient.ListActiveMetrics(ctx, !fetchInactive, stopSearchingPredicate)
 	if err != nil {
 		return nil, err
 	}
@@ -727,8 +727,8 @@ func (s *Synchronizer) metricsListWithAgentID(ctx context.Context, apiClient typ
 	return metricsByUUID, nil
 }
 
-func (s *Synchronizer) metricUpdateAll(ctx context.Context, apiClient types.MetricClient, fetchInactive bool) error {
-	metricsMap, err := s.metricsListWithAgentID(ctx, apiClient, fetchInactive)
+func (s *Synchronizer) metricUpdateAll(ctx context.Context, apiClient types.MetricClient, fetchInactive bool, stopSearchingPredicate func(labelsText string) bool) error {
+	metricsMap, err := s.metricsListWithAgentID(ctx, apiClient, fetchInactive, stopSearchingPredicate)
 	if err != nil {
 		return err
 	}
@@ -763,8 +763,24 @@ func (s *Synchronizer) metricUpdateInactiveList(ctx context.Context, apiClient t
 		return s.metricUpdateList(ctx, apiClient, metrics)
 	}
 
-	// fewer query with fetching the whole list
-	return s.metricUpdateAll(ctx, apiClient, true)
+	// Creating a hash-table of the metrics to find,
+	// to allow ending the listing when they're all found.
+	metricsToFind := make(map[string]struct{}, len(metrics))
+
+	for _, metric := range metrics {
+		metricsToFind[gloutonTypes.LabelsToText(metric.Labels())] = struct{}{}
+	}
+
+	// This stop-searching predicate returns true when
+	// all the specified metrics have been found.
+	predicate := func(labelsText string) bool {
+		delete(metricsToFind, labelsText)
+
+		return len(metricsToFind) == 0
+	}
+
+	// fewer queries with fetching the whole list
+	return s.metricUpdateAll(ctx, apiClient, true, predicate)
 }
 
 // metricUpdateList fetches a list of metrics, and updates the cache.

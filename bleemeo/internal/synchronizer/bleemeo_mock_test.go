@@ -394,7 +394,7 @@ func (wcm *wrapperClientMock) UpdateMetric(_ context.Context, id string, payload
 	return wcm.resources.metrics.applyPatchHook(metric, &wcm.errorsCount)
 }
 
-func (wcm *wrapperClientMock) ListActiveMetrics(_ context.Context, active bool) ([]bleemeoapi.MetricPayload, error) {
+func (wcm *wrapperClientMock) ListActiveMetrics(_ context.Context, active bool, _ func(string) bool) ([]bleemeoapi.MetricPayload, error) {
 	wcm.requestCounts[mockAPIResourceMetric]++
 
 	metrics := wcm.resources.metrics.filterResources(func(m bleemeoapi.MetricPayload) bool {
