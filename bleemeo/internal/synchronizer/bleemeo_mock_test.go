@@ -561,12 +561,6 @@ func (wcm *wrapperClientMock) RegisterService(_ context.Context, payload bleemeo
 	return payload.Service, wcm.resources.services.createResource(&payload, &wcm.errorsCount)
 }
 
-func (wcm *wrapperClientMock) DeleteService(_ context.Context, id string) error {
-	wcm.requestCounts[mockAPIResourceService]++
-
-	return wcm.resources.services.deleteResource(func(s bleemeoapi.ServicePayload) bool { return s.ID == id })
-}
-
 func (wcm *wrapperClientMock) RegisterSNMPAgent(_ context.Context, payload bleemeoapi.AgentPayload) (bleemeoTypes.Agent, error) {
 	wcm.requestCounts[mockAPIResourceAgent]++
 

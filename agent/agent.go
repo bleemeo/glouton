@@ -1078,7 +1078,6 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 			IsMetricAllowed:                a.metricFilter.isAllowedAndNotDeniedMap,
 			PahoLastPingCheckAt:            a.pahoLogWrapper.LastPingAt,
 			LastMetricAnnotationChange:     a.store.LastAnnotationChange,
-			IsServiceIgnored:               serviceIgnored.IsServiceIgnoredNameAndContainer,
 		})
 		if err != nil {
 			logger.Printf("unable to start Bleemeo SAAS connector: %v", err)

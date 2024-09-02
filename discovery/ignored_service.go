@@ -37,21 +37,15 @@ func NewIgnoredService(ignoredNamesInstances []config.NameInstance) IgnoredServi
 
 // IsServiceIgnored returns whether the given service should be ignored or not.
 func (ic IgnoredService) IsServiceIgnored(srv Service) bool {
-	return ic.IsServiceIgnoredNameAndContainer(srv.Name, srv.ContainerName)
-}
-
-// IsServiceIgnoredNameAndContainer does the same as IsServiceIgnored,
-// but without the whole Service type.
-func (ic IgnoredService) IsServiceIgnoredNameAndContainer(name, containerName string) bool {
 	for _, ignoredNameInstance := range ic.ignoredNamesInstances {
-		if ignoredNameInstance.Name == name {
+		if ignoredNameInstance.Name == srv.Name {
 			instances := strings.Split(ignoredNameInstance.Instance, " ")
 			if len(instances) == 1 && instances[0] == "" {
 				return true
 			}
 
 			for _, instance := range instances {
-				hasMatched := matchInstance(instance, containerName)
+				hasMatched := matchInstance(instance, srv.ContainerName)
 				if hasMatched {
 					return true
 				}

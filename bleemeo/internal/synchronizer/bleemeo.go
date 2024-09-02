@@ -533,10 +533,6 @@ func (cl *wrapperClient) RegisterService(ctx context.Context, payload bleemeoapi
 	return result, err
 }
 
-func (cl *wrapperClient) DeleteService(ctx context.Context, id string) error {
-	return cl.Delete(ctx, bleemeo.ResourceService, id)
-}
-
 func (cl *wrapperClient) RegisterSNMPAgent(ctx context.Context, payload bleemeoapi.AgentPayload) (bleemeoTypes.Agent, error) {
 	var result bleemeoTypes.Agent
 
