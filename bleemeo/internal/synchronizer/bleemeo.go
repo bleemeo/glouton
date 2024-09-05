@@ -378,7 +378,15 @@ func (cl *wrapperClient) UpdateMetric(ctx context.Context, id string, payload an
 	return cl.Update(ctx, bleemeo.ResourceMetric, id, payload, fields, nil)
 }
 
-func (cl *wrapperClient) ListActiveMetrics(ctx context.Context, active bool, stopSearchingPredicate func(labelsText string) bool) ([]bleemeoapi.MetricPayload, error) {
+func (cl *wrapperClient) ListActiveMetrics(ctx context.Context) ([]bleemeoapi.MetricPayload, error) {
+	return cl.listMetrics(ctx, true, nil)
+}
+
+func (cl *wrapperClient) ListInactiveMetrics(ctx context.Context, stopSearchingPredicate func(labelsText string) bool) ([]bleemeoapi.MetricPayload, error) {
+	return cl.listMetrics(ctx, false, stopSearchingPredicate)
+}
+
+func (cl *wrapperClient) listMetrics(ctx context.Context, active bool, stopSearchingPredicate func(labelsText string) bool) ([]bleemeoapi.MetricPayload, error) {
 	params := url.Values{
 		"fields": {metricFields},
 	}

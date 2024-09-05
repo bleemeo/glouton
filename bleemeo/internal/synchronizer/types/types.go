@@ -226,7 +226,8 @@ type FactClient interface {
 
 type MetricClient interface {
 	UpdateMetric(ctx context.Context, id string, payload any, fields string) error
-	ListActiveMetrics(ctx context.Context, active bool, continueSearchingPredicate func(labelsText string) bool) ([]bleemeoapi.MetricPayload, error)
+	ListActiveMetrics(ctx context.Context) ([]bleemeoapi.MetricPayload, error)
+	ListInactiveMetrics(ctx context.Context, stopSearchingPredicate func(labelsText string) bool) ([]bleemeoapi.MetricPayload, error)
 	CountInactiveMetrics(ctx context.Context) (int, error)
 	ListMetricsBy(ctx context.Context, params url.Values) (map[string]bleemeoTypes.Metric, error)
 	GetMetricByID(ctx context.Context, id string) (bleemeoapi.MetricPayload, error)

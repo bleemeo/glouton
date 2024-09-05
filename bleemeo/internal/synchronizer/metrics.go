@@ -699,9 +699,17 @@ func (s *Synchronizer) isOwnedMetric(metric bleemeoapi.MetricPayload) bool {
 
 // metricsListWithAgentID fetches the list of all metrics for a given agent, and returns a UUID:metric mapping.
 func (s *Synchronizer) metricsListWithAgentID(ctx context.Context, apiClient types.MetricClient, fetchInactive bool, stopSearchingPredicate func(labelsText string) bool) (map[string]bleemeoTypes.Metric, error) {
-	// If the metric is associated with another agent, make sure we "own" the metric.
-	// This may not be the case for monitor because multiple agents will process such metrics.
-	result, err := apiClient.ListActiveMetrics(ctx, !fetchInactive, stopSearchingPredicate)
+	var (
+		result []bleemeoapi.MetricPayload
+		err    error
+	)
+
+	if fetchInactive {
+		result, err = apiClient.ListInactiveMetrics(ctx, stopSearchingPredicate)
+	} else {
+		result, err = apiClient.ListActiveMetrics(ctx)
+	}
+
 	if err != nil {
 		return nil, err
 	}
@@ -716,7 +724,7 @@ func (s *Synchronizer) metricsListWithAgentID(ctx context.Context, apiClient typ
 
 	for _, metric := range result {
 		// If the metric is associated with another agent, make sure we "own" the metric.
-		// This may not be the case for monitor because multiple agent will process such metrics.
+		// This may not be the case for monitor because multiple agents will process such metrics.
 		if !s.isOwnedMetric(metric) {
 			continue
 		}
