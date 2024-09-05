@@ -930,8 +930,8 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 	a.collector = collector.New(acc, secretInputsGate)
 
 	serviceIgnored := discovery.NewIgnoredService(a.config.ServiceIgnore)
+	metricsIgnored := discovery.NewIgnoredService(a.config.ServiceIgnoreMetrics)
 	isCheckIgnored := discovery.NewIgnoredService(a.config.ServiceIgnoreCheck).IsServiceIgnored
-	isInputIgnored := discovery.NewIgnoredService(a.config.ServiceIgnoreMetrics).IsServiceIgnored
 	dynamicDiscovery := discovery.NewDynamic(discovery.Option{
 		PS:                 psFact,
 		Netstat:            netstat,
@@ -949,7 +949,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 		a.config.Services,
 		serviceIgnored.IsServiceIgnored,
 		isCheckIgnored,
-		isInputIgnored,
+		metricsIgnored.IsServiceIgnored,
 		a.containerFilter.ContainerIgnored,
 		a.metricFormat,
 		psFact,
@@ -1188,7 +1188,7 @@ func (a *agent) run(ctx context.Context, sighupChan chan os.Signal) { //nolint:m
 	}
 
 	if a.config.Agent.ProcessExporter.Enable {
-		processSource.RegisterExporter(ctx, a.gathererRegistry, psLister, dynamicDiscovery, a.metricFormat == types.MetricFormatBleemeo)
+		processSource.RegisterExporter(ctx, a.gathererRegistry, psLister, dynamicDiscovery, metricsIgnored, serviceIgnored, a.metricFormat == types.MetricFormatBleemeo)
 	}
 
 	prometheusTargets, warnings := prometheusConfigToURLs(a.config.Metric.Prometheus.Targets)

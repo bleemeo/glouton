@@ -44,9 +44,10 @@ func RegisterExporter(
 	reg *registry.Registry,
 	psLister interface{},
 	dynamicDiscovery *discovery.DynamicDiscovery,
+	metricsIgnore, serviceIgnore discovery.IgnoredService,
 	bleemeoFormat bool,
 ) {
-	processExporter := newExporter(psLister, dynamicDiscovery)
+	processExporter := newExporter(psLister, dynamicDiscovery, metricsIgnore, serviceIgnore)
 	if processExporter == nil {
 		return
 	}
@@ -89,11 +90,13 @@ func RegisterExporter(
 }
 
 // newExporter creates a new Prometheus exporter using the specified parameters.
-func newExporter(psLister interface{}, processQuerier *discovery.DynamicDiscovery) *Exporter {
+func newExporter(psLister interface{}, processQuerier *discovery.DynamicDiscovery, metricsIgnore, serviceIgnore discovery.IgnoredService) *Exporter {
 	if source, ok := psLister.(*process.Processes); ok {
 		return &Exporter{
 			Source:         source,
 			ProcessQuerier: processQuerier,
+			metricsIgnore:  metricsIgnore,
+			serviceIgnore:  serviceIgnore,
 		}
 	}
 
@@ -109,6 +112,8 @@ type processorQuerier interface {
 type Exporter struct {
 	ProcessQuerier processorQuerier
 	Source         proc.Source
+
+	metricsIgnore, serviceIgnore discovery.IgnoredService
 
 	l sync.Mutex
 
@@ -256,7 +261,11 @@ func (e *Exporter) init() {
 	}
 
 	e.grouper = proc.NewGrouper(
-		matchNamer{querier: e.ProcessQuerier},
+		matchNamer{
+			querier:       e.ProcessQuerier,
+			metricsIgnore: e.metricsIgnore,
+			serviceIgnore: e.serviceIgnore,
+		},
 		true,
 		false,
 		false,
@@ -391,7 +400,9 @@ func (e *Exporter) Collect(ch chan<- prometheus.Metric) {
 }
 
 type matchNamer struct {
-	querier processorQuerier
+	querier       processorQuerier
+	metricsIgnore discovery.IgnoredService
+	serviceIgnore discovery.IgnoredService
 }
 
 func (m matchNamer) MatchAndName(attr common.ProcAttributes) (bool, string) {
@@ -406,6 +417,11 @@ func (m matchNamer) MatchAndName(attr common.ProcAttributes) (bool, string) {
 
 	serviceName, containerName := m.querier.ProcessServiceInfo(cmdLine, attr.PID, attr.StartTime)
 	if serviceName == "" {
+		return false, ""
+	}
+
+	if m.metricsIgnore.IsServiceIgnoredNameAndContainer(string(serviceName), containerName) ||
+		m.serviceIgnore.IsServiceIgnoredNameAndContainer(string(serviceName), containerName) {
 		return false, ""
 	}
 

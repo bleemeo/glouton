@@ -31,6 +31,8 @@ func RegisterExporter(
 	*registry.Registry,
 	interface{},
 	*discovery.DynamicDiscovery,
+	discovery.IgnoredService,
+	discovery.IgnoredService,
 	bool,
 ) {
 }
