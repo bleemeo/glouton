@@ -572,22 +572,16 @@ func autoUpgradeIsEnabled(ctx context.Context) (bool, error) {
 	}
 
 	if version.IsWindows() {
-		cmd := exec.Command("schtasks", "/Query", "/TN", `Bleemeo\Glouton\Auto Update`)
-
-		var out, stderr bytes.Buffer
-
-		cmd.Stdout = &out
-		cmd.Stderr = &stderr
-
-		if err := cmd.Run(); err != nil {
-			if stderr.Len() != 0 && bytes.Contains(stderr.Bytes(), []byte("ERROR: The system cannot find the file specified.")) {
-				return false, nil // task not found -> auto-upgrade is not enabled
-			}
-
-			return false, fmt.Errorf("error running schtasks command: %w - %s", err, stderr.String())
+		_, err := os.Stat(`C:\ProgramData\glouton\auto_update.txt`)
+		if err == nil {
+			return true, nil
 		}
 
-		return true, nil
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+
+		return false, err
 	}
 
 	if !version.IsLinux() {
