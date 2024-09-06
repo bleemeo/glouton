@@ -16,6 +16,7 @@ linters:
     - interfacebloat # Warn when an interface has too many methods, not useful.
     # Deprecated and replaced linter.
     - execinquery
+    - exportloopref
     # We use maintidx to lint function complexity.
     - gocyclo
     - cyclop

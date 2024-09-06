@@ -147,7 +147,7 @@ func scrapeLoopOffset(now time.Time, interval time.Duration, jitterSeed uint64) 
 	var (
 		base   = int64(interval) - nowNano%int64(interval)
 		offset = jitterSeed % uint64(interval)
-		next   = base + int64(offset)
+		next   = base + int64(offset) //nolint:gosec
 	)
 
 	if next > int64(interval) {

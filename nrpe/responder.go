@@ -107,7 +107,7 @@ func (r Responder) responseCustomCheck(ctx context.Context, request string) (str
 
 	statusDescription := checkNow(ctx)
 
-	return statusDescription.StatusDescription, int16(statusDescription.CurrentStatus.NagiosCode()), nil
+	return statusDescription.StatusDescription, int16(statusDescription.CurrentStatus.NagiosCode()), nil //nolint:gosec
 }
 
 func (r Responder) responseNRPEConf(ctx context.Context, requestArgs []string) (string, int16, error) {
@@ -141,7 +141,7 @@ func (r Responder) responseNRPEConf(ctx context.Context, requestArgs []string) (
 	output := string(out)
 	output = strings.TrimSuffix(output, "\n")
 
-	return output, int16(nagiosCode), nil
+	return output, int16(nagiosCode), nil //nolint:gosec
 }
 
 func (r Responder) returnCommand(requestArgs []string) ([]string, error) {
